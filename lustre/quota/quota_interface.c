@@ -195,9 +195,17 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
 
                 lqs = quota_search_lqs(LQS_KEY(cnt, GET_OA_ID(cnt, oa)),
                                        qctxt, 0);
-                if (lqs == NULL || IS_ERR(lqs)) {
+                if (IS_ERR(lqs)) {
                         rc = PTR_ERR(lqs);
+                        CDEBUG(D_QUOTA, "search lqs for %s %d failed,"
+                               "(rc = %d)\n",
+                               cnt == USRQUOTA ? "user" : "group",
+                               GET_OA_ID(cnt, oa), rc);
                         break;
+                } else if (lqs == NULL) {
+                        /* continue to check group quota if quota limit
+                         * of the file's user owner isn't set. LU-530 */
+                        continue;
                 } else {
                         spin_lock(&lqs->lqs_lock);
                         if (lqs->lqs_bunit_sz <= qctxt->lqc_sync_blk) {
