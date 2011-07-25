@@ -561,7 +561,7 @@ Debug log: 324 lines, 258 kept, 66 dropped.
     </section>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>kernel debug log</secondary></indexterm>Controlling Information Written to the Kernel Debug Log</title>
-      <para>Running <literal>lctl set_param subsystem_debug={subsystem_mask}</literal> and <literal>lcdebug</literal> to be used with the systctl command to determine what information is to be written to the debug log. The subsystem_debug mask determines the information written to the log based on the subsystem (such as iobdfilter, net, portals, or OSC). The debug mask controls information based on debug type (such as info, error, trace, or alloc).</para>
+      <para>The <literal>lctl set_param subsystem_debug={subsystem_mask}</literal> and <literal>lctl set_param debug={debug_mask}</literal> are used to determine which information is written to the debug log. The subsystem_debug mask determines the information written to the log based on the functional area of the code (such as lnet, osc, or ldlm). The debug mask controls information based on the message type (such as info, error, trace, or malloc).</para>
       <para>To turn off Lustre debugging completely:</para>
       <screen>lctl set_param debug=0 </screen>
       <para>To turn on full Lustre debugging:</para>
