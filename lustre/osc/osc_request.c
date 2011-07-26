@@ -2584,11 +2584,8 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
 
                 /* now put the page back in our accounting */
                 cfs_list_add_tail(&oap->oap_rpc_item, &rpc_list);
-                if (page_count++ == 0) {
+                if (page_count++ == 0)
                         srvlock = !!(oap->oap_brw_flags & OBD_BRW_SRVLOCK);
-                        starting_offset = (oap->oap_obj_off+oap->oap_page_off) &
-                                          (PTLRPC_MAX_BRW_SIZE - 1);
-                }
 
                 if (oap->oap_brw_flags & OBD_BRW_MEMALLOC)
                         mem_tight = 1;
