@@ -666,6 +666,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         int rc = 0;
         int mds_conn = 0;
         struct obd_connect_data *data, *tmpdata;
+        int size, tmpsize;
         lnet_nid_t *client_nid = NULL;
         ENTRY;
 
@@ -733,6 +734,8 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         conn = *tmp;
 
+        size = req_capsule_get_size(&req->rq_pill, &RMF_CONNECT_DATA,
+                                    RCL_CLIENT);
         data = req_capsule_client_get(&req->rq_pill, &RMF_CONNECT_DATA);
         if (!data)
                 GOTO(out, rc = -EPROTO);
@@ -926,10 +929,14 @@ dont_check_exports:
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
         if (data) {
-                 tmpdata = req_capsule_server_get(&req->rq_pill,
-                                                  &RMF_CONNECT_DATA);
-                  //data->ocd_connect_flags &= OBD_CONNECT_SUPPORTED;
-                 *tmpdata = *data;
+                tmpsize = req_capsule_get_size(&req->rq_pill, &RMF_CONNECT_DATA,
+                                               RCL_SERVER);
+                tmpdata = req_capsule_server_get(&req->rq_pill,
+                                                 &RMF_CONNECT_DATA);
+                /* Don't use struct assignment here, because the client reply
+                 * buffer may be smaller/larger than the local struct
+                 * obd_connect_data. */
+                memcpy(tmpdata, data, min(tmpsize, size));
         }
 
         /* If all else goes well, this is our RPC return code. */
