@@ -137,7 +137,7 @@ struct obd_statfs {
 /* LL_IOC_POLL_QUOTACHECK: See also OBD_IOC_POLL_QUOTACHECK */
 #define LL_IOC_POLL_QUOTACHECK          _IOR ('f', 161, struct if_quotacheck *)
 /* LL_IOC_QUOTACTL: See also OBD_IOC_QUOTACTL */
-#define LL_IOC_QUOTACTL                 _IOWR('f', 162, struct if_quotactl *)
+#define LL_IOC_QUOTACTL                 _IOWR('f', 162, struct if_quotactl)
 #define IOC_OBD_STATFS                  _IOWR('f', 164, struct obd_statfs *)
 #define IOC_LOV_GETINFO                 _IOWR('f', 165, struct lov_user_mds_data *)
 #define LL_IOC_FLUSHCTX                 _IOW ('f', 166, long)

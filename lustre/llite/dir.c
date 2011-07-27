@@ -1383,6 +1383,60 @@ out_free:
                 OBD_FREE_PTR(check);
                 RETURN(rc);
         }
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+        case LL_IOC_QUOTACTL_18: {
+                /* copy the old 1.x quota struct for internal use, then copy
+                 * back into old format struct.  For 1.8 compatibility. */
+                struct if_quotactl_18 *qctl_18;
+                struct if_quotactl *qctl_20;
+
+                OBD_ALLOC_PTR(qctl_18);
+                if (!qctl_18)
+                        RETURN(-ENOMEM);
+
+                OBD_ALLOC_PTR(qctl_20);
+                if (!qctl_20)
+                        GOTO(out_quotactl_18, rc = -ENOMEM);
+
+                if (cfs_copy_from_user(qctl_18, (void *)arg, sizeof(*qctl_18)))
+                        GOTO(out_quotactl_20, rc = -ENOMEM);
+
+                QCTL_COPY(qctl_20, qctl_18);
+                qctl_20->qc_idx = 0;
+
+                /* XXX: dqb_valid was borrowed as a flag to mark that
+                 *      only mds quota is wanted */
+                if (qctl_18->qc_cmd == Q_GETQUOTA &&
+                    qctl_18->qc_dqblk.dqb_valid) {
+                        qctl_20->qc_valid = QC_MDTIDX;
+                        qctl_20->qc_dqblk.dqb_valid = 0;
+                } else if (qctl_18->obd_uuid.uuid[0] != '\0') {
+                        qctl_20->qc_valid = QC_UUID;
+                        qctl_20->obd_uuid = qctl_18->obd_uuid;
+                } else {
+                        qctl_20->qc_valid = QC_GENERAL;
+                }
+
+                rc = quotactl_ioctl(sbi, qctl_20);
+
+                if (rc == 0) {
+                        QCTL_COPY(qctl_18, qctl_20);
+                        qctl_18->obd_uuid = qctl_20->obd_uuid;
+
+                        if (cfs_copy_to_user((void *)arg, qctl_18,
+                                             sizeof(*qctl_18)))
+                                rc = -EFAULT;
+                }
+
+        out_quotactl_20:
+                OBD_FREE_PTR(qctl_20);
+        out_quotactl_18:
+                OBD_FREE_PTR(qctl_18);
+                RETURN(rc);
+        }
+#else
+#warning "remove old LL_IOC_QUOTACTL_18 compatibility code"
+#endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0) */
         case LL_IOC_QUOTACTL: {
                 struct if_quotactl *qctl;
 

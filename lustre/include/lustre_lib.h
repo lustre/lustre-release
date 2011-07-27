@@ -507,7 +507,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 /* OBD_IOC_POLL_QUOTACHECK: See also LL_IOC_POLL_QUOTACHECK */
 #define OBD_IOC_POLL_QUOTACHECK        _IOR ('f', 161, struct if_quotacheck *)
 /* OBD_IOC_QUOTACTL: See also LL_IOC_QUOTACTL */
-#define OBD_IOC_QUOTACTL               _IOWR('f', 162, struct if_quotactl *)
+#define OBD_IOC_QUOTACTL               _IOWR('f', 162, struct if_quotactl)
 /* see  also <lustre/lustre_user.h> for ioctls 163-176 */
 #define OBD_IOC_CHANGELOG_REG          _IOW ('f', 177, struct obd_ioctl_data)
 #define OBD_IOC_CHANGELOG_DEREG        _IOW ('f', 178, struct obd_ioctl_data)
