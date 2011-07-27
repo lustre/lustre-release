@@ -2588,17 +2588,16 @@ kiblnd_create_dev(char *ifname)
 
         memset(dev, 0, sizeof(*dev));
 #ifdef HAVE_DEV_GET_BY_NAME_2ARG
-        if ((netdev = dev_get_by_name(&init_net, ifname)) == NULL) {
+        netdev = dev_get_by_name(&init_net, ifname);
 #else
-        if ((netdev = dev_get_by_name(ifname)) == NULL) {
+        netdev = dev_get_by_name(ifname);
 #endif
-                CERROR("Can't find netdev of IF: %s\n", ifname);
-                LIBCFS_FREE(dev, sizeof(*dev));
-                return NULL;
+        if (netdev == NULL) {
+                dev->ibd_can_failover = 0;
+        } else {
+                dev->ibd_can_failover = !!(netdev->flags & IFF_MASTER);
+                dev_put(netdev);
         }
-
-        dev->ibd_can_failover = !!(netdev->flags & IFF_MASTER);
-        dev_put(netdev);
 
         CFS_INIT_LIST_HEAD(&dev->ibd_nets);
         CFS_INIT_LIST_HEAD(&dev->ibd_list); /* not yet in kib_devs */
