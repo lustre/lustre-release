@@ -3897,6 +3897,8 @@ swap_used() {
 # test case for lloop driver, basic function
 test_68a() {
 	[ "$UID" != 0 ] && skip_env "must run as root" && return
+	llite_lloop_enabled || \
+ 		{ skip_env "llite_lloop module disabled" && return; }
 
 	trap cleanup_68 EXIT
 

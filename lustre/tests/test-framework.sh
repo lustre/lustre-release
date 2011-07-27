@@ -330,6 +330,20 @@ load_module() {
     fi
 }
 
+llite_lloop_enabled() {
+    local n1=$(uname -r | cut -d. -f1)
+    local n2=$(uname -r | cut -d. -f2)
+    local n3=$(uname -r | cut -d- -f1 | cut -d. -f3)
+
+    # load the llite_lloop module for < 2.6.32 kernels
+    if [[ $n1 -lt 2 ]] || [[ $n1 -eq 2 && $n2 -lt 6 ]] || \
+       [[ $n1 -eq 2 && $n2 -eq 6 && $n3 -lt 32 ]] || \
+        $LOAD_LLOOP; then
+        return 0
+    fi
+    return 1
+}
+
 load_modules_local() {
     if [ -n "$MODPROBE" ]; then
         # use modprobe
@@ -372,21 +386,9 @@ load_modules_local() {
         load_module obdfilter/obdfilter
     fi
 
-    load_module_llite_lloop() {
-        local n1=$(uname -r | cut -d. -f1)
-        local n2=$(uname -r | cut -d. -f2)
-        local n3=$(uname -r | cut -d- -f1 | cut -d. -f3)
-
-    # load the llite_lloop module for < 2.6.32 kernels
-        if [[ $n1 -lt 2 ]] || [[ $n1 -eq 2 && $n2 -lt 6 ]] || \
-            [[ $n1 -eq 2 && $n2 -eq 6 && $n3 -lt 32 ]] || \
-            $LOAD_LLOOP; then
-                load_module llite/llite_lloop
-        fi
-    }
 
     load_module llite/lustre
-    load_module_llite_lloop
+    llite_lloop_enabled && load_module llite/llite_lloop
     [ -d /r ] && OGDB=${OGDB:-"/r/tmp"}
     OGDB=${OGDB:-$TMP}
     rm -f $OGDB/ogdb-$HOSTNAME
