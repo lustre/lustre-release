@@ -2455,7 +2455,7 @@ int jt_blockdev_info(int argc, char **argv)
 {
         char *filename;
         int rc, fd;
-        __u64  ino;
+        struct lu_fid fid;
 
         if (argc != 2)
                 return CMD_HELP;
@@ -2468,17 +2468,17 @@ int jt_blockdev_info(int argc, char **argv)
                 return CMD_HELP;
         }
 
-        rc = ioctl(fd, LL_IOC_LLOOP_INFO, &ino);
+        rc = ioctl(fd, LL_IOC_LLOOP_INFO, &fid);
         if (rc < 0) {
                 rc = errno;
                 fprintf(stderr, "error: %s\n", strerror(errno));
                 goto out;
         }
         fprintf(stdout, "lloop device info: ");
-        if (ino == 0ULL)
+        if (fid_is_zero(&fid))
                 fprintf(stdout, "Not attached\n");
         else
-                fprintf(stdout, "attached to inode "LPU64"\n", ino);
+                fprintf(stdout, "attached to inode "DFID"\n", PFID(&fid));
 out:
         close(fd);
         return -rc;

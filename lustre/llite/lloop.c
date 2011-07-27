@@ -641,6 +641,7 @@ static int lo_ioctl(struct block_device *bdev, fmode_t mode,
                     unsigned int cmd, unsigned long arg)
 {
         struct lloop_device *lo = bdev->bd_disk->private_data;
+        struct inode *inode = lo->lo_backing_file->f_dentry->d_inode;
 #else
 static int lo_ioctl(struct inode *inode, struct file *unused,
                     unsigned int cmd, unsigned long arg)
@@ -660,12 +661,14 @@ static int lo_ioctl(struct inode *inode, struct file *unused,
         }
 
         case LL_IOC_LLOOP_INFO: {
-                __u64 ino = 0;
+                struct lu_fid fid;
 
                 if (lo->lo_state == LLOOP_BOUND)
-                        ino = lo->lo_backing_file->f_dentry->d_inode->i_ino;
+                        fid = ll_i2info(inode)->lli_fid;
+                else
+                        fid_zero(&fid);
 
-                if (put_user(ino, (__u64 *)arg))
+                if (copy_to_user((struct lu_fid *)arg, &fid, sizeof(fid)))
                         err = -EFAULT;
                 break;
         }

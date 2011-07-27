@@ -142,7 +142,7 @@ struct obd_statfs {
 #define LL_IOC_GETOBDCOUNT              _IOR ('f', 168, long)
 #define LL_IOC_LLOOP_ATTACH             _IOWR('f', 169, long)
 #define LL_IOC_LLOOP_DETACH             _IOWR('f', 170, long)
-#define LL_IOC_LLOOP_INFO               _IOWR('f', 171, long)
+#define LL_IOC_LLOOP_INFO               _IOWR('f', 171, struct lu_fid)
 #define LL_IOC_LLOOP_DETACH_BYDEV       _IOWR('f', 172, long)
 #define LL_IOC_PATH2FID                 _IOR ('f', 173, long)
 #define LL_IOC_GET_CONNECT_FLAGS        _IOWR('f', 174, __u64 *)
