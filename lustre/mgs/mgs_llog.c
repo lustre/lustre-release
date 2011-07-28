@@ -1125,6 +1125,8 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
                 if (!strncmp(marker->cm_comment,"add osc",7) &&
                     (marker->cm_flags & CM_START)){
                         got_an_osc_or_mdc = 1;
+                        strncpy(tmti->mti_svname, marker->cm_tgtname,
+                                sizeof(tmti->mti_svname));
                         rc = record_start_log(obd, &mdt_llh, mti->mti_svname);
                         rc = record_marker(obd, mdt_llh, fsdb, CM_START,
                                            mti->mti_svname,"add osc(copied)");
@@ -1202,12 +1204,21 @@ static int mgs_steal_llog_handler(struct llog_handle *llh,
         }
 
         if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD) {
+                int index;
                 char mdt_index[9];
                 char *logname, *lovname;
 
-                name_create_mdt_and_lov(&logname, &lovname, fsdb, mti->mti_stripe_index);
+                name_create_mdt_and_lov(&logname, &lovname, fsdb,
+                                        mti->mti_stripe_index);
                 sprintf(mdt_index, "-MDT%04x", mti->mti_stripe_index);
 
+                if (sscanf(lustre_cfg_buf(lcfg, 2), "%d", &index) != 1) {
+                        name_destroy(&logname);
+                        name_destroy(&lovname);
+                        RETURN(-EINVAL);
+                }
+
+                tmti->mti_stripe_index = index;
                 mgs_write_log_osc_to_lov(obd, fsdb, tmti, logname,
                                          mdt_index, lovname,
                                          LUSTRE_SP_MDT, 0);
