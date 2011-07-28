@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -61,11 +64,14 @@ enum llapi_message_level {
 
 /* the bottom three bits reserved for llapi_message_level */
 #define LLAPI_MSG_MASK          0x00000007
-#define LLAPI_MSG_NO_ERRNO      0x00000010 
+#define LLAPI_MSG_NO_ERRNO      0x00000010
 
 /* liblustreapi.c */
 extern void llapi_msg_set_level(int level);
-extern void llapi_err(int level, char *fmt, ...);
+extern void llapi_error(int level, int rc, char *fmt, ...);
+#define llapi_err(level, fmt, a...) llpai_error(level, -errno, fmt, ##a)
+#define llapi_err_noerrno(level, fmt, a...)                             \
+	llapi_error((level) | LLAPI_MSG_NO_ERRNO, 0, fmt, ## a)
 extern void llapi_printf(int level, char *fmt, ...);
 extern int llapi_file_create(const char *name, unsigned long long stripe_size,
                              int stripe_offset, int stripe_count,
@@ -88,10 +94,10 @@ extern int llapi_file_lookup(int dirfd, const char *name);
 
 #define VERBOSE_COUNT   0x1
 #define VERBOSE_SIZE    0x2
-#define VERBOSE_OFFSET  0x4 
+#define VERBOSE_OFFSET  0x4
 #define VERBOSE_POOL    0x8
 #define VERBOSE_OBJID   0x10
-#define VERBOSE_DETAIL  0x20 
+#define VERBOSE_DETAIL  0x20
 #define VERBOSE_ALL     (VERBOSE_COUNT | VERBOSE_SIZE | VERBOSE_OFFSET | \
                          VERBOSE_POOL | VERBOSE_OBJID)
 
@@ -169,7 +175,7 @@ extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
 extern int llapi_is_lustre_mnttype(const char *type);
 extern int llapi_search_ost(char *fsname, char *poolname, char *ostname);
-extern int llapi_search_mounts(const char *pathname, int index, 
+extern int llapi_search_mounts(const char *pathname, int index,
                                char *mntdir, char *fsname);
 extern int llapi_search_fsname(const char *pathname, char *fsname);
 extern int parse_size(char *optarg, unsigned long long *size,
