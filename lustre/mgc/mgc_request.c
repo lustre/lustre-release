@@ -633,6 +633,7 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                         cfs_spin_unlock(&config_list_lock);
                         cfs_waitq_signal(&rq_waitq);
                 }
+                obd_cleanup_client_import(obd);
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");

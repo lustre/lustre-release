@@ -93,6 +93,7 @@ static int mgc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         switch (stage) {
         case OBD_CLEANUP_EARLY:
         case OBD_CLEANUP_EXPORTS:
+                obd_cleanup_client_import(obd);
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");

@@ -2060,18 +2060,8 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 if (obd->obd_type->typ_refcnt <= 1)
                         libcfs_kkuc_group_rem(0, KUC_GRP_HSM);
 
-                /* If we set up but never connected, the
-                   client import will not have been cleaned. */
-                if (obd->u.cli.cl_import) {
-                        struct obd_import *imp;
-                        cfs_down_write(&obd->u.cli.cl_sem);
-                        imp = obd->u.cli.cl_import;
-                        CERROR("client import never connected\n");
-                        ptlrpc_invalidate_import(imp);
-                        class_destroy_import(imp);
-                        cfs_up_write(&obd->u.cli.cl_sem);
-                        obd->u.cli.cl_import = NULL;
-                }
+                obd_cleanup_client_import(obd);
+
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
