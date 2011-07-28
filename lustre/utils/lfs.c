@@ -1307,7 +1307,7 @@ static int lfs_quotacheck(int argc, char **argv)
 
         rc = llapi_quotacheck(mnt, check_type);
         if (rc) {
-                fprintf(stderr, "quotacheck failed: %s\n", strerror(errno));
+                fprintf(stderr, "quotacheck failed: %s\n", strerror(-rc));
                 return rc;
         }
 
@@ -1316,7 +1316,7 @@ static int lfs_quotacheck(int argc, char **argv)
                 if (*obd_type)
                         fprintf(stderr, "%s %s ", obd_type,
                                 obd_uuid2str(&qchk.obd_uuid));
-                fprintf(stderr, "quota check failed: %s\n", strerror(errno));
+                fprintf(stderr, "quota check failed: %s\n", strerror(-rc));
                 return rc;
         }
 
@@ -1324,12 +1324,12 @@ static int lfs_quotacheck(int argc, char **argv)
         qctl.qc_cmd = LUSTRE_Q_QUOTAON;
         qctl.qc_type = check_type;
         rc = llapi_quotactl(mnt, &qctl);
-        if (rc && errno != EALREADY) {
+        if (rc && rc != -EALREADY) {
                 if (*obd_type)
                         fprintf(stderr, "%s %s ", (char *)qctl.obd_type,
                                 obd_uuid2str(&qctl.obd_uuid));
                 fprintf(stderr, "%s turn on quota failed: %s\n",
-                        argv[0], strerror(errno));
+                        argv[0], strerror(-rc));
                 return rc;
         }
 
@@ -1378,9 +1378,9 @@ static int lfs_quotaon(int argc, char **argv)
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (errno == EALREADY) {
+                if (rc == -EALREADY) {
                         rc = 0;
-                } else if (errno == ENOENT) {
+                } else if (rc == -ENOENT) {
                         fprintf(stderr, "error: cannot find quota database, "
                                         "make sure you have run quotacheck\n");
                 } else {
@@ -1388,7 +1388,7 @@ static int lfs_quotaon(int argc, char **argv)
                                 fprintf(stderr, "%s %s ", obd_type,
                                         obd_uuid2str(&qctl.obd_uuid));
                         fprintf(stderr, "%s failed: %s\n", argv[0],
-                                strerror(errno));
+                                strerror(-rc));
                 }
         }
 
@@ -1434,14 +1434,14 @@ static int lfs_quotaoff(int argc, char **argv)
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (errno == EALREADY) {
+                if (rc == -EALREADY) {
                         rc = 0;
                 } else {
                         if (*obd_type)
                                 fprintf(stderr, "%s %s ", obd_type,
                                         obd_uuid2str(&qctl.obd_uuid));
                         fprintf(stderr, "quotaoff failed: %s\n",
-                                strerror(errno));
+                                strerror(-rc));
                 }
         }
 
@@ -1489,7 +1489,7 @@ static int lfs_quotainv(int argc, char **argv)
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                fprintf(stderr, "quotainv failed: %s\n", strerror(errno));
+                fprintf(stderr, "quotainv failed: %s\n", strerror(-rc));
                 return rc;
         }
 
@@ -1660,7 +1660,7 @@ int lfs_setquota_times(int argc, char **argv)
                 if (*obd_type)
                         fprintf(stderr, "%s %s ", obd_type,
                                 obd_uuid2str(&qctl.obd_uuid));
-                fprintf(stderr, "setquota failed: %s\n", strerror(errno));
+                fprintf(stderr, "setquota failed: %s\n", strerror(-rc));
                 return rc;
         }
 
@@ -1772,7 +1772,7 @@ int lfs_setquota(int argc, char **argv)
                 if (rc < 0) {
                         fprintf(stderr, "error: setquota failed while retrieving"
                                         " current quota settings (%s)\n",
-                                        strerror(errno));
+                                        strerror(-rc));
                         return rc;
                 }
 
@@ -1805,7 +1805,7 @@ int lfs_setquota(int argc, char **argv)
                 if (*obd_type)
                         fprintf(stderr, "%s %s ", obd_type,
                                 obd_uuid2str(&qctl.obd_uuid));
-                fprintf(stderr, "setquota failed: %s\n", strerror(errno));
+                fprintf(stderr, "setquota failed: %s\n", strerror(-rc));
                 return rc;
         }
 
@@ -1936,7 +1936,7 @@ static void print_quota(char *mnt, struct if_quotactl *qctl, int type, int rc)
 
                         if (bover)
                                 diff2str(dqb->dqb_btime, timebuf, now);
-                        if (rc == -1 && errno == EREMOTEIO)
+                        if (rc == -EREMOTEIO)
                                 sprintf(numbuf[0], LPU64"*",
                                         toqb(dqb->dqb_curspace));
                         else
@@ -1997,7 +1997,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt)
         rc = llapi_get_obd_count(mnt, &count, is_mdt);
         if (rc) {
                 fprintf(stderr, "can not get %s count: %s\n",
-                        is_mdt ? "mdt": "ost", strerror(errno));
+                        is_mdt ? "mdt": "ost", strerror(-rc));
                 return rc;
         }
 
@@ -2006,7 +2006,7 @@ static int print_obd_quota(char *mnt, struct if_quotactl *qctl, int is_mdt)
                 rc = llapi_quotactl(mnt, qctl);
                 if (rc) {
                         /* It is remote client case. */
-                        if (errno == EOPNOTSUPP) {
+                        if (-rc == EOPNOTSUPP) {
                                 rc = 0;
                                 goto out;
                         }
@@ -2130,20 +2130,20 @@ ug_output:
         mnt = argv[optind];
 
         rc1 = llapi_quotactl(mnt, &qctl);
-        if (rc1 == -1) {
-                switch (errno) {
-                case ESRCH:
+        if (rc1 < 0) {
+                switch (rc1) {
+                case -ESRCH:
                         fprintf(stderr, "%s quotas are not enabled.\n",
                                 qctl.qc_type == USRQUOTA ? "user" : "group");
                         goto out;
-                case EPERM:
+                case -EPERM:
                         fprintf(stderr, "Permission denied.\n");
-                case ENOENT:
+                case -ENOENT:
                         /* We already got a "No such file..." message. */
                         goto out;
                 default:
                         fprintf(stderr, "Unexpected quotactl error: %s\n",
-                                strerror(errno));
+                                strerror(-rc1));
                 }
         }
 

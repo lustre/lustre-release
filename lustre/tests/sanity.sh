@@ -9,10 +9,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 12653 12653 5188 16260 19742
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   65a   65e   68b  $SANITY_EXCEPT"
-# bug number for skipped test: 2108 9789 3637 9789 3561 5188/5749 1443
-#ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27m 42a 42b 42c 42d 45 68 76"}
+# bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 5188
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   68b  $SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # Tests that fail on uml

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -70,7 +73,9 @@ enum llapi_message_level {
 
 /* liblustreapi.c */
 extern void llapi_msg_set_level(int level);
-extern void llapi_err(int level, char *fmt, ...);
+extern void llapi_error(int level, int rc, char *fmt, ...);
+#define llapi_err_noerrno(level, fmt, a...)                             \
+	llapi_error((level) | LLAPI_MSG_NO_ERRNO, 0, fmt, ## a)
 extern void llapi_printf(int level, char *fmt, ...);
 extern int llapi_file_create(const char *name, unsigned long long stripe_size,
                              int stripe_offset, int stripe_count,
