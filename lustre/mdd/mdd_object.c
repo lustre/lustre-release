@@ -1690,8 +1690,13 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 
         rc = mdd_xattr_set_txn(env, mdd_obj, buf, name, fl, handle);
 
-        /* Only record user xattr changes */
-        if ((rc == 0) && (strncmp("user.", name, 5) == 0))
+        /* Only record system & user xattr changes */
+        if ((rc == 0) && (strncmp(XATTR_USER_PREFIX, name,
+                                  sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
+                          strncmp(POSIX_ACL_XATTR_ACCESS, name,
+                                  sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
+                          strncmp(POSIX_ACL_XATTR_DEFAULT, name,
+                                  sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0))
                 rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj,
                                               handle);
         mdd_trans_stop(env, mdd, rc, handle);
@@ -1726,8 +1731,13 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
                            mdd_object_capa(env, mdd_obj));
         mdd_write_unlock(env, mdd_obj);
 
-        /* Only record user xattr changes */
-        if ((rc == 0) && (strncmp("user.", name, 5) != 0))
+        /* Only record system & user xattr changes */
+        if ((rc == 0) && (strncmp(XATTR_USER_PREFIX, name,
+                                  sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
+                          strncmp(POSIX_ACL_XATTR_ACCESS, name,
+                                  sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
+                          strncmp(POSIX_ACL_XATTR_DEFAULT, name,
+                                  sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0))
                 rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj,
                                               handle);
 
