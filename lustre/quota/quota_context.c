@@ -1465,13 +1465,13 @@ exit:
 static unsigned
 lqs_hash(lustre_hash_t *lh, void *key, unsigned mask)
 {
-        struct quota_adjust_qunit *lqs_key;
+        unsigned long long id;
         unsigned hash;
         ENTRY;
 
         LASSERT(key);
-        lqs_key = (struct quota_adjust_qunit *)key;
-        hash = (QAQ_IS_GRP(lqs_key) ? 5381 : 5387) * lqs_key->qaq_id;
+        id = *((unsigned long long *)key);
+        hash = (LQS_KEY_GRP(id) ? 5381 : 5387) * (unsigned)LQS_KEY_ID(id);
 
         RETURN(hash & mask);
 }
