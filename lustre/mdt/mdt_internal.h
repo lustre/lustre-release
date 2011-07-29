@@ -818,8 +818,12 @@ enum {
         LPROC_MDT_MKDIR,
         LPROC_MDT_RMDIR,
         LPROC_MDT_RENAME,
+        LPROC_MDT_GETATTR,
+        LPROC_MDT_SETATTR,
         LPROC_MDT_GETXATTR,
         LPROC_MDT_SETXATTR,
+        LPROC_MDT_STATFS,
+        LPROC_MDT_SYNC,
         LPROC_MDT_LAST,
 };
 void mdt_counter_incr(struct obd_export *exp, int opcode);

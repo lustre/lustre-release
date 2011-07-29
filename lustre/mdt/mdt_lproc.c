@@ -839,6 +839,10 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats)
         lprocfs_counter_init(stats, LPROC_MDT_MKDIR, 0, "mkdir", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_RMDIR, 0, "rmdir", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_RENAME, 0, "rename", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_GETATTR, 0, "getattr", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_SETATTR, 0, "setattr", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_GETXATTR, 0, "getxattr", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_SETXATTR, 0, "setxattr", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_STATFS, 0, "statfs", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_SYNC, 0, "sync", "reqs");
 }

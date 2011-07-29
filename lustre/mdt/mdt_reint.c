@@ -598,6 +598,9 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 out_put:
         mdt_object_put(info->mti_env, mo);
 out:
+        if (rc == 0)
+                mdt_counter_incr(req->rq_export, LPROC_MDT_SETATTR);
+
         mdt_shrink_reply(info);
         return rc;
 }

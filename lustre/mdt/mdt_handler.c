@@ -344,6 +344,7 @@ static int mdt_getstatus(struct mdt_thread_info *info)
 
 static int mdt_statfs(struct mdt_thread_info *info)
 {
+        struct ptlrpc_request *req = mdt_info_req(info);
         struct md_device      *next  = info->mti_mdt->mdt_child;
         struct ptlrpc_service *svc;
         struct obd_statfs     *osfs;
@@ -370,6 +371,10 @@ static int mdt_statfs(struct mdt_thread_info *info)
                                               &info->mti_u.ksfs);
                 statfs_pack(osfs, &info->mti_u.ksfs);
         }
+
+        if (rc == 0)
+                mdt_counter_incr(req->rq_export, LPROC_MDT_STATFS);
+
         RETURN(rc);
 }
 
@@ -670,6 +675,7 @@ static int mdt_renew_capa(struct mdt_thread_info *info)
 
 static int mdt_getattr(struct mdt_thread_info *info)
 {
+        struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_object       *obj = info->mti_object;
         struct req_capsule      *pill = info->mti_pill;
         struct mdt_body         *reqbody;
@@ -731,6 +737,9 @@ static int mdt_getattr(struct mdt_thread_info *info)
                 mdt_exit_ucred(info);
         EXIT;
 out_shrink:
+        if (rc == 0)
+                mdt_counter_incr(req->rq_export, LPROC_MDT_GETATTR);
+
         mdt_shrink_reply(info);
         return rc;
 }
@@ -1641,6 +1650,7 @@ static int mdt_object_sync(struct mdt_thread_info *info)
 
 static int mdt_sync(struct mdt_thread_info *info)
 {
+        struct ptlrpc_request *req = mdt_info_req(info);
         struct req_capsule *pill = info->mti_pill;
         struct mdt_body *body;
         int rc;
@@ -1688,6 +1698,9 @@ static int mdt_sync(struct mdt_thread_info *info)
                 } else
                         rc = err_serious(rc);
         }
+        if (rc == 0)
+                mdt_counter_incr(req->rq_export, LPROC_MDT_SYNC);
+
         RETURN(rc);
 }
 
