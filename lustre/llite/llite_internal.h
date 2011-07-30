@@ -631,8 +631,9 @@ int ll_file_punch(struct inode *, loff_t, int);
 ssize_t ll_file_lockless_io(struct file *, char *, size_t, loff_t *, int);
 void ll_clear_file_contended(struct inode*);
 int ll_sync_page_range(struct inode *, struct address_space *, loff_t, size_t);
-int ll_readahead(const struct lu_env *env, struct cl_io *io, struct ll_readahead_state *ras,
-                 struct address_space *mapping, struct cl_page_list *queue, int flags);
+int ll_readahead(const struct lu_env *env, struct cl_io *io,
+                 struct ll_readahead_state *ras, struct address_space *mapping,
+                 struct cl_page_list *queue, int flags);
 
 /* llite/file.c */
 extern struct file_operations ll_file_operations;
@@ -641,10 +642,12 @@ extern struct file_operations ll_file_operations_noflock;
 extern struct inode_operations ll_file_inode_operations;
 extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,
                                   __u64);
-extern int ll_have_md_lock(struct inode *inode, __u64 bits, ldlm_mode_t l_req_mode);
+extern int ll_have_md_lock(struct inode *inode, __u64 *bits,
+                           ldlm_mode_t l_req_mode);
 extern ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
                                    struct lustre_handle *lockh);
-int __ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,  __u64 bits);
+int __ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,
+                             __u64 bits);
 int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd);
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);

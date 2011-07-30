@@ -2127,14 +2127,25 @@ int ll_file_noflock(struct file *file, int cmd, struct file_lock *file_lock)
         RETURN(-ENOSYS);
 }
 
-int ll_have_md_lock(struct inode *inode, __u64 bits,  ldlm_mode_t l_req_mode)
+/**
+ * test if some locks matching bits and l_req_mode are acquired
+ * - bits can be in different locks
+ * - if found clear the common lock bits in *bits
+ * - the bits not found, are kept in *bits
+ * \param inode [IN]
+ * \param bits [IN] searched lock bits [IN]
+ * \param l_req_mode [IN] searched lock mode
+ * \retval boolean, true iff all bits are found
+ */
+int ll_have_md_lock(struct inode *inode, __u64 *bits,  ldlm_mode_t l_req_mode)
 {
         struct lustre_handle lockh;
-        ldlm_policy_data_t policy = { .l_inodebits = {bits}};
+        ldlm_policy_data_t policy;
         ldlm_mode_t mode = (l_req_mode == LCK_MINMODE) ?
                                 (LCK_CR|LCK_CW|LCK_PR|LCK_PW) : l_req_mode;
         struct lu_fid *fid;
         int flags;
+        int i;
         ENTRY;
 
         if (!inode)
@@ -2145,11 +2156,26 @@ int ll_have_md_lock(struct inode *inode, __u64 bits,  ldlm_mode_t l_req_mode)
                ldlm_lockname[mode]);
 
         flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING | LDLM_FL_TEST_LOCK;
-        if (md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS, &policy,
-                          mode, &lockh)) {
-                RETURN(1);
+        for (i = 0; i < MDS_INODELOCK_MAXSHIFT && *bits != 0; i++) {
+                policy.l_inodebits.bits = *bits & (1 << i);
+                if (policy.l_inodebits.bits == 0)
+                        continue;
+
+                if (md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS,
+                                  &policy, mode, &lockh)) {
+                        struct ldlm_lock *lock;
+
+                        lock = ldlm_handle2lock(&lockh);
+                        if (lock) {
+                                *bits &=
+                                      ~(lock->l_policy_data.l_inodebits.bits);
+                                LDLM_LOCK_PUT(lock);
+                        } else {
+                                *bits &= ~policy.l_inodebits.bits;
+                        }
+                }
         }
-        RETURN(0);
+        RETURN(*bits == 0);
 }
 
 ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
@@ -2261,7 +2287,7 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
                 }
 
                 ll_lookup_finish_locks(&oit, dentry);
-        } else if (!ll_have_md_lock(dentry->d_inode, ibits, LCK_MINMODE)) {
+        } else if (!ll_have_md_lock(dentry->d_inode, &ibits, LCK_MINMODE)) {
                 struct ll_sb_info *sbi = ll_i2sbi(dentry->d_inode);
                 obd_valid valid = OBD_MD_FLGETATTR;
                 struct md_op_data *op_data;

@@ -195,6 +195,8 @@ static int capa_thread_main(void *unused)
 
                 cfs_spin_lock(&capa_lock);
                 cfs_list_for_each_entry_safe(ocapa, tmp, ll_capa_list, c_list) {
+                        __u64 ibits;
+
                         LASSERT(ocapa->c_capa.lc_opc != CAPA_OPC_OSS_TRUNC);
 
                         if (!capa_is_to_expire(ocapa)) {
@@ -208,12 +210,14 @@ static int capa_thread_main(void *unused)
                          * dir, or its inode is opened, or client holds LOOKUP
                          * lock.
                          */
+                        /* ibits may be changed by ll_have_md_lock() so we have
+                         * to set it each time */
+                        ibits = MDS_INODELOCK_LOOKUP;
                         if (capa_for_mds(&ocapa->c_capa) &&
                             !S_ISDIR(ocapa->u.cli.inode->i_mode) &&
                             obd_capa_open_count(ocapa) == 0 &&
                             !ll_have_md_lock(ocapa->u.cli.inode,
-                                             MDS_INODELOCK_LOOKUP,
-                                             LCK_MINMODE)) {
+                                             &ibits, LCK_MINMODE)) {
                                 DEBUG_CAPA(D_SEC, &ocapa->c_capa,
                                            "skip renewal for");
                                 sort_add_capa(ocapa, &ll_idle_capas);
@@ -259,7 +263,8 @@ static int capa_thread_main(void *unused)
                                              c_list) {
                         if (!capa_is_expired(ocapa)) {
                                 if (!next)
-                                        update_capa_timer(ocapa, ocapa->c_expiry);
+                                        update_capa_timer(ocapa,
+                                                          ocapa->c_expiry);
                                 break;
                         }
 
@@ -545,7 +550,8 @@ int ll_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
                         if (rc == -EIO && !capa_is_expired(ocapa)) {
                                 delay_capa_renew(ocapa, 120);
                                 DEBUG_CAPA(D_ERROR, &ocapa->c_capa,
-                                           "renewal failed: -EIO, retry in 2 mins");
+                                           "renewal failed: -EIO, "
+                                           "retry in 2 mins");
                                 ll_capa_renewal_retries++;
                                 GOTO(retry, rc);
                         } else {

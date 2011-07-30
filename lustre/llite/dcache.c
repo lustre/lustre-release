@@ -413,6 +413,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                LL_IT2STR(it));
 
         if (de->d_inode == NULL) {
+                __u64 ibits;
+
                 /* We can only use negative dentries if this is stat or lookup,
                    for opens and stuff we do need to query server. */
                 /* If there is IT_CREAT in intent op set, then we must throw
@@ -424,7 +426,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 if (de->d_flags & DCACHE_LUSTRE_INVALID)
                         RETURN(0);
 
-                rc = ll_have_md_lock(parent, MDS_INODELOCK_UPDATE, LCK_MINMODE);
+                ibits = MDS_INODELOCK_UPDATE;
+                rc = ll_have_md_lock(parent, &ibits, LCK_MINMODE);
                 GOTO(out_sa, rc);
         }
 
@@ -461,6 +464,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 struct ll_inode_info *lli = ll_i2info(inode);
                 struct obd_client_handle **och_p;
                 __u64 *och_usecount;
+                __u64 ibits;
 
                 /*
                  * We used to check for MDS_INODELOCK_OPEN here, but in fact
@@ -484,7 +488,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                         och_usecount = &lli->lli_open_fd_read_count;
                 }
                 /* Check for the proper lock. */
-                if (!ll_have_md_lock(inode, MDS_INODELOCK_LOOKUP, LCK_MINMODE))
+                ibits = MDS_INODELOCK_LOOKUP;
+                if (!ll_have_md_lock(inode, &ibits, LCK_MINMODE))
                         goto do_lock;
                 cfs_down(&lli->lli_och_sem);
                 if (*och_p) { /* Everything is open already, do nothing */
