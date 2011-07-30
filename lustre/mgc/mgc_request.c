@@ -160,34 +160,31 @@ struct config_llog_data *config_log_find(char *logname,
                                          struct config_llog_instance *cfg)
 {
         struct config_llog_data *cld;
-        char *logid = logname;
+        struct config_llog_data *found = NULL;
+        void *                   instance;
         ENTRY;
 
-        if (cfg)
-                logid = cfg->cfg_instance;
+        LASSERT(logname != NULL);
 
-        if (!logid) {
-                CERROR("No log specified\n");
-                RETURN(ERR_PTR(-EINVAL));
-        }
-
+        instance = cfg ? cfg->cfg_instance : NULL;
         cfs_spin_lock(&config_list_lock);
         cfs_list_for_each_entry(cld, &config_llog_list, cld_list_chain) {
-                char *name = cld->cld_logname;
-                if (cfg)
-                        name = cld->cld_cfg.cfg_instance;
-                if (strcmp(logid, name) == 0)
-                        goto out_found;
+                /* check if instance equals */
+                if (instance != cld->cld_cfg.cfg_instance)
+                        continue;
+
+                /* instance may be NULL, should check name */
+                if (strcmp(logname, cld->cld_logname) == 0) {
+                        found = cld;
+                        break;
+                }
+        }
+        if (found) {
+                cfs_atomic_inc(&found->cld_refcount);
+                LASSERT(found->cld_stopping == 0 || found->cld_is_sptlrpc == 0);
         }
         cfs_spin_unlock(&config_list_lock);
-
-        CDEBUG(D_CONFIG, "can't get log %s\n", logid);
-        RETURN(ERR_PTR(-ENOENT));
-out_found:
-        cfs_atomic_inc(&cld->cld_refcount);
-        cfs_spin_unlock(&config_list_lock);
-        LASSERT(cld->cld_stopping == 0 || cld->cld_is_sptlrpc == 0);
-        RETURN(cld);
+        RETURN(found);
 }
 
 static
@@ -201,8 +198,8 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
         int                      rc;
         ENTRY;
 
-        CDEBUG(D_MGC, "do adding config log %s:%s\n", logname,
-               cfg ? cfg->cfg_instance : "NULL");
+        CDEBUG(D_MGC, "do adding config log %s:%p\n", logname,
+               cfg ? cfg->cfg_instance : 0);
 
         OBD_ALLOC(cld, sizeof(*cld));
         if (!cld)
@@ -264,7 +261,7 @@ static int config_log_add(struct obd_device *obd, char *logname,
         char                    *ptr;
         ENTRY;
 
-        CDEBUG(D_MGC, "adding config log %s:%s\n", logname, cfg->cfg_instance);
+        CDEBUG(D_MGC, "adding config log %s:%p\n", logname, cfg->cfg_instance);
 
         /*
          * for each regular log, the depended sptlrpc log name is
@@ -280,7 +277,7 @@ static int config_log_add(struct obd_device *obd, char *logname,
         strcpy(seclogname + (ptr - logname), "-sptlrpc");
 
         sptlrpc_cld = config_log_find(seclogname, NULL);
-        if (IS_ERR(sptlrpc_cld)) {
+        if (sptlrpc_cld == NULL) {
                 sptlrpc_cld = do_config_log_add(obd, seclogname, 1, NULL, NULL);
                 if (IS_ERR(sptlrpc_cld)) {
                         CERROR("can't create sptlrpc log: %s\n", seclogname);
@@ -311,8 +308,8 @@ static int config_log_end(char *logname, struct config_llog_instance *cfg)
         ENTRY;
 
         cld = config_log_find(logname, cfg);
-        if (IS_ERR(cld))
-                RETURN(PTR_ERR(cld));
+        if (cld == NULL)
+                RETURN(-ENOENT);
 
         cfs_mutex_lock(&cld->cld_lock);
         /*
@@ -1269,7 +1266,7 @@ int mgc_process_log(struct obd_device *mgc,
         if (cld->cld_cfg.cfg_sb)
                 lsi = s2lsi(cld->cld_cfg.cfg_sb);
 
-        CDEBUG(D_MGC, "Process log %s:%s from %d\n", cld->cld_logname,
+        CDEBUG(D_MGC, "Process log %s:%p from %d\n", cld->cld_logname,
                cld->cld_cfg.cfg_instance, cld->cld_cfg.cfg_last_idx + 1);
 
         ctxt = llog_get_context(mgc, LLOG_CONFIG_REPL_CTXT);
@@ -1426,8 +1423,8 @@ static int mgc_process_config(struct obd_device *obd, obd_count len, void *buf)
                 if (rc)
                         break;
                 cld = config_log_find(logname, cfg);
-                if (IS_ERR(cld)) {
-                        rc = PTR_ERR(cld);
+                if (cld == NULL) {
+                        rc = -ENOENT;
                         break;
                 }
 

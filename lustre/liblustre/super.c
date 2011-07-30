@@ -1879,7 +1879,7 @@ llu_fsswop_mount(const char *source,
 
         /* generate a string unique to this super, let's try
          the address of the super itself.*/
-        snprintf(cfg.cfg_instance, sizeof(cfg.cfg_instance), "%p", sbi);
+        cfg.cfg_instance = sbi;
 
         /* retrive & parse config log */
         cfg.cfg_uuid = sbi->ll_sb_uuid;
@@ -1894,11 +1894,11 @@ llu_fsswop_mount(const char *source,
                 CERROR("No profile found: %s\n", zconf_profile);
                 GOTO(out_free, err = -EINVAL);
         }
-        OBD_ALLOC(osc, strlen(lprof->lp_dt) + strlen(cfg.cfg_instance) + 2);
-        sprintf(osc, "%s-%s", lprof->lp_dt, cfg.cfg_instance);
+        OBD_ALLOC(osc, strlen(lprof->lp_dt) + sizeof(cfg.cfg_instance)*2 + 1);
+        sprintf(osc, "%s-%p", lprof->lp_dt, cfg.cfg_instance);
 
-        OBD_ALLOC(mdc, strlen(lprof->lp_md) + strlen(cfg.cfg_instance) + 2);
-        sprintf(mdc, "%s-%s", lprof->lp_md, cfg.cfg_instance);
+        OBD_ALLOC(mdc, strlen(lprof->lp_md) + sizeof(cfg.cfg_instance)*2 + 1);
+        sprintf(mdc, "%s-%p", lprof->lp_md, cfg.cfg_instance);
 
         if (!osc) {
                 CERROR("no osc\n");

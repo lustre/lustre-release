@@ -1236,7 +1236,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                     !(clli->cfg_flags & CFG_F_MARKER) &&
                     (lcfg->lcfg_command != LCFG_MARKER)) {
                         CWARN("Config not inside markers, ignoring! "
-                              "(inst: %s, uuid: %s, flags: %#x)\n",
+                              "(inst: %p, uuid: %s, flags: %#x)\n",
                               clli->cfg_instance,
                               clli->cfg_uuid.uuid, clli->cfg_flags);
                         clli->cfg_flags |= CFG_F_SKIP;
@@ -1279,15 +1279,15 @@ static int class_config_llog_handler(struct llog_handle * handle,
 
                 lustre_cfg_bufs_init(&bufs, lcfg);
 
-                if (clli && clli->cfg_instance[0] != '\0' &&
+                if (clli && clli->cfg_instance &&
                     LUSTRE_CFG_BUFLEN(lcfg, 0) > 0){
                         inst = 1;
                         inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
-                                strlen(clli->cfg_instance) + 1;
+                                   sizeof(clli->cfg_instance) * 2 + 1;
                         OBD_ALLOC(inst_name, inst_len);
                         if (inst_name == NULL)
                                 GOTO(out, rc = -ENOMEM);
-                        sprintf(inst_name, "%s-%s",
+                        sprintf(inst_name, "%s-%p",
                                 lustre_cfg_string(lcfg, 0),
                                 clli->cfg_instance);
                         lustre_cfg_bufs_set_string(&bufs, 0, inst_name);
@@ -1297,7 +1297,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
 
                 /* we override the llog's uuid for clients, to insure they
                 are unique */
-                if (clli && clli->cfg_instance[0] != '\0' &&
+                if (clli && clli->cfg_instance != NULL &&
                     lcfg->lcfg_command == LCFG_ATTACH) {
                         lustre_cfg_bufs_set_string(&bufs, 2,
                                                    clli->cfg_uuid.uuid);
@@ -1309,7 +1309,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                  * moving them to index [1] and [2], and insert MGC's
                  * obdname at index [0].
                  */
-                if (clli && clli->cfg_instance[0] == '\0' &&
+                if (clli && clli->cfg_instance == NULL &&
                     lcfg->lcfg_command == LCFG_SPTLRPC_CONF) {
                         lustre_cfg_bufs_set(&bufs, 2, bufs.lcfg_buf[1],
                                             bufs.lcfg_buflen[1]);
