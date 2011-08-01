@@ -2279,15 +2279,22 @@ not $file_size"
 run_test 55 "check lov_objid size"
 
 test_56() {
-	add mds $MDS_MKFS_OPTS --mkfsoptions='\"-J size=16\"' --reformat $MDSDEV
-	add ost1 $OST_MKFS_OPTS --index=1000 --reformat `ostdevname 1`
-	add ost2 $OST_MKFS_OPTS --index=10000 --reformat `ostdevname 2`
+	add mds $MDS_MKFS_OPTS \
+		--mkfsoptions='\"-J size=8 -E lazy_itable_init\"' \
+		--reformat $MDSDEV || error "failed to reformat mds"
+	add ost1 $OST_MKFS_OPTS --mkfsoptions='\"-E lazy_itable_init\"' \
+		--index=1000 --reformat $(ostdevname 1) || \
+		error "failed to reformat ost1"
+	add ost2 $OST_MKFS_OPTS --mkfsoptions='\"-E lazy_itable_init\"' \
+		--index=10000 --reformat $(ostdevname 2) || \
+		error "failed to reformat ost2"
 
 	start_mds
 	start_ost
 	start_ost2 || error "Unable to start second ost"
 	mount_client $MOUNT || error "Unable to mount client"
-	[ -n "$ENABLE_QUOTA" ] && { $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
+	[ -n "$ENABLE_QUOTA" ] && \
+		{ $LFS quotacheck -ug $MOUNT || error "quotacheck has failed"; }
 
 	stopall
 	reformat
