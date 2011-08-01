@@ -2695,7 +2695,6 @@ int ptlrpc_unregister_service(struct ptlrpc_service *service)
 
                 req = ptlrpc_server_request_get(service, 1);
                 cfs_list_del(&req->rq_list);
-                service->srv_n_queued_reqs--;
                 service->srv_n_active_reqs++;
                 ptlrpc_hpreq_fini(req);
                 ptlrpc_server_finish_request(service, req);
