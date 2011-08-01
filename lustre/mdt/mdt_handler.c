@@ -3380,6 +3380,10 @@ static int mdt_intent_reint(enum mdt_it_code opcode,
         }
         rep->lock_policy_res2 = clear_serious(rc);
 
+        if (rep->lock_policy_res2 == -ENOENT &&
+            mdt_get_disposition(rep, DISP_LOOKUP_NEG))
+                rep->lock_policy_res2 = 0;
+
         if (rc == -ENOTCONN || rc == -ENODEV ||
             rc == -EOVERFLOW) { /**< if VBR failure then return error */
                 /*
