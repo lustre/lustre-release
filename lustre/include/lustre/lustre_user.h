@@ -374,7 +374,7 @@ struct if_quotacheck {
         struct obd_uuid         obd_uuid;
 };
 
-#define IDENTITY_DOWNCALL_MAGIC 0x6d6dd620
+#define IDENTITY_DOWNCALL_MAGIC 0x6d6dd629
 
 /* permission */
 #define N_PERMS_MAX      64
@@ -382,6 +382,7 @@ struct if_quotacheck {
 struct perm_downcall_data {
         __u64 pdd_nid;
         __u32 pdd_perm;
+        __u32 pdd_padding;
 };
 
 struct identity_downcall_data {
@@ -390,8 +391,8 @@ struct identity_downcall_data {
         __u32                            idd_uid;
         __u32                            idd_gid;
         __u32                            idd_nperms;
-        struct perm_downcall_data idd_perms[N_PERMS_MAX];
         __u32                            idd_ngroups;
+        struct perm_downcall_data idd_perms[N_PERMS_MAX];
         __u32                            idd_groups[0];
 };
 

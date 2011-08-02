@@ -76,7 +76,7 @@ static void usage(void)
         fprintf(stderr,
                 "\nusage: %s {mdtname} {uid}\n"
                 "Normally invoked as an upcall from Lustre, set via:\n"
-                "  /proc/fs/lustre/mdt/{mdtname}/identity_upcall\n",
+                "/proc/fs/lustre/mdt/${mdtname}/identity_upcall\n",
                 progname);
 }
 
@@ -98,9 +98,9 @@ static void errlog(const char *fmt, ...)
         closelog();
 }
 
-int get_groups_local(struct identity_downcall_data *data)
+int get_groups_local(struct identity_downcall_data *data,
+                     unsigned int maxgroups)
 {
-        int maxgroups;
         gid_t *groups;
         unsigned int ngroups = 0;
         struct passwd *pw;
@@ -115,27 +115,24 @@ int get_groups_local(struct identity_downcall_data *data)
                 data->idd_err = errno ? errno : EIDRM;
                 return -1;
         }
-        data->idd_gid = pw->pw_gid;
 
+        data->idd_gid = pw->pw_gid;
         namelen = sysconf(_SC_LOGIN_NAME_MAX);
         if (namelen < _POSIX_LOGIN_NAME_MAX)
                 namelen = _POSIX_LOGIN_NAME_MAX;
+
         pw_name = (char *)malloc(namelen);
         if (!pw_name) {
                 errlog("malloc error\n");
                 data->idd_err = errno;
                 return -1;
         }
+
         memset(pw_name, 0, namelen);
         strncpy(pw_name, pw->pw_name, namelen - 1);
-
-        maxgroups = sysconf(_SC_NGROUPS_MAX);
-        if (maxgroups > NGROUPS_MAX)
-                maxgroups = NGROUPS_MAX;
         groups = data->idd_groups;
 
-        groups[ngroups++] = pw->pw_gid;
-        while ((gr = getgrent())) {
+        while ((gr = getgrent()) && ngroups < maxgroups) {
                 if (gr->gr_gid == groups[0])
                         continue;
                 if (!gr->gr_mem)
@@ -146,11 +143,10 @@ int get_groups_local(struct identity_downcall_data *data)
                                 break;
                         }
                 }
-                if (ngroups == maxgroups)
-                        break;
         }
         endgrent();
-        qsort(groups, ngroups, sizeof(*groups), compare_u32);
+        if (ngroups > 0)
+                qsort(groups, ngroups, sizeof(*groups), compare_u32);
         data->idd_ngroups = ngroups;
 
         free(pw_name);
@@ -179,7 +175,6 @@ static inline int match_uid(uid_t uid, const char *str)
         uid2 = strtoul(str, &end, 0);
         if (*end)
                 return 0;
-
         return (uid == uid2);
 }
 
@@ -340,9 +335,22 @@ int parse_perm_line(struct identity_downcall_data *data, char *line)
         return 0;
 }
 
-int get_perms(FILE *fp, struct identity_downcall_data *data)
+int get_perms(struct identity_downcall_data *data)
 {
+        FILE *fp;
         char line[1024];
+
+        fp = fopen(PERM_PATHNAME, "r");
+        if (fp == NULL) {
+                if (errno == ENOENT) {
+                        return 0;
+                } else {
+                        errlog("open %s failed: %s\n",
+                               PERM_PATHNAME, strerror(errno));
+                        data->idd_err = errno;
+                        return -1;
+                }
+        }
 
         while (fgets(line, 1024, fp)) {
                 if (comment_line(line))
@@ -350,10 +358,13 @@ int get_perms(FILE *fp, struct identity_downcall_data *data)
 
                 if (parse_perm_line(data, line)) {
                         errlog("parse line %s failed!\n", line);
+                        data->idd_err = EINVAL;
+                        fclose(fp);
                         return -1;
                 }
         }
 
+        fclose(fp);
         return 0;
 }
 
@@ -367,9 +378,9 @@ static void show_result(struct identity_downcall_data *data)
                 return;
         }
 
-        printf("uid=%d gid=", data->idd_uid);
+        printf("uid=%d gid=%d", data->idd_uid, data->idd_gid);
         for (i = 0; i < data->idd_ngroups; i++)
-                printf("%s%u", i > 0 ? "," : "", data->idd_groups[i]);
+                printf(",%u", data->idd_groups[i]);
         printf("\n");
         printf("permissions:\n"
                "  nid\t\t\tperm\n");
@@ -385,56 +396,54 @@ static void show_result(struct identity_downcall_data *data)
 
 int main(int argc, char **argv)
 {
-        FILE *perms_fp;
         char *end;
-        struct identity_downcall_data *data;
+        struct identity_downcall_data *data = NULL;
         char procname[1024];
         unsigned long uid;
-        int fd, rc;
+        int fd, rc = -EINVAL, size, maxgroups;
 
         progname = basename(argv[0]);
-
         if (argc != 3) {
                 usage();
-                return 1;
+                goto out;
         }
 
         uid = strtoul(argv[2], &end, 0);
         if (*end) {
                 errlog("%s: invalid uid '%s'\n", progname, argv[2]);
-                usage();
-                return 1;
+                goto out;
         }
 
-        data = malloc(sizeof(*data));
+        maxgroups = sysconf(_SC_NGROUPS_MAX);
+        if (maxgroups > NGROUPS_MAX)
+                maxgroups = NGROUPS_MAX;
+
+        size = offsetof(struct identity_downcall_data, idd_groups[maxgroups]);
+        data = malloc(size);
         if (!data) {
-                errlog("malloc identity downcall data(%d) failed!\n",
-                       sizeof(*data));
-                return 1;
+                errlog("malloc identity downcall data(%d) failed!\n", size);
+                rc = -ENOMEM;
+                goto out;
         }
-        memset(data, 0, sizeof(*data));
+
+        memset(data, 0, size);
         data->idd_magic = IDENTITY_DOWNCALL_MAGIC;
         data->idd_uid = uid;
-
         /* get groups for uid */
-        rc = get_groups_local(data);
+        rc = get_groups_local(data, maxgroups);
         if (rc)
                 goto downcall;
 
+        size = offsetof(struct identity_downcall_data,
+                        idd_groups[data->idd_ngroups]);
         /* read permission database */
-        perms_fp = fopen(PERM_PATHNAME, "r");
-        if (perms_fp) {
-                get_perms(perms_fp, data);
-                fclose(perms_fp);
-        } else if (errno != ENOENT) {
-                errlog("open %s failed: %s\n",
-                       PERM_PATHNAME, strerror(errno));
-        }
+        rc = get_perms(data);
 
 downcall:
         if (getenv("L_GETIDENTITY_TEST")) {
                 show_result(data);
-                return 0;
+                rc = 0;
+                goto out;
         }
 
         snprintf(procname, sizeof(procname),
@@ -442,15 +451,21 @@ downcall:
         fd = open(procname, O_WRONLY);
         if (fd < 0) {
                 errlog("can't open file %s: %s\n", procname, strerror(errno));
-                return 1;
+                rc = -1;
+                goto out;
         }
 
-        rc = write(fd, data, sizeof(*data));
+        rc = write(fd, data, size);
         close(fd);
-        if (rc != sizeof(*data)) {
+        if (rc != size) {
                 errlog("partial write ret %d: %s\n", rc, strerror(errno));
-                return 1;
+                rc = -1;
+        } else {
+                rc = 0;
         }
 
-        return 0;
+out:
+        if (data != NULL)
+                free(data);
+        return rc;
 }

@@ -281,52 +281,51 @@ static int lprocfs_wr_identity_info(struct file *file, const char *buffer,
 {
         struct obd_device *obd = data;
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        struct identity_downcall_data sparam, *param = &sparam;
-        int size = 0, rc = 0;
+        struct identity_downcall_data *param;
+        int size = sizeof(*param), rc, checked = 0;
 
-        if (count < sizeof(*param)) {
-                CERROR("%s: invalid data size %lu\n", obd->obd_name, count);
-                return count;
+again:
+        if (count < size) {
+                CERROR("%s: invalid data count = %lu, size = %d\n",
+                       obd->obd_name, count, size);
+                return -EINVAL;
         }
 
-        if (cfs_copy_from_user(&sparam, buffer, sizeof(sparam))) {
+        OBD_ALLOC(param, size);
+        if (param == NULL)
+                return -ENOMEM;
+
+        if (cfs_copy_from_user(param, buffer, size)) {
                 CERROR("%s: bad identity data\n", obd->obd_name);
                 GOTO(out, rc = -EFAULT);
         }
 
-        if (sparam.idd_magic != IDENTITY_DOWNCALL_MAGIC) {
-                CERROR("%s: MDS identity downcall bad params\n", obd->obd_name);
-                GOTO(out, rc = -EINVAL);
-        }
+        if (checked == 0) {
+                checked = 1;
+                if (param->idd_magic != IDENTITY_DOWNCALL_MAGIC) {
+                        CERROR("%s: MDS identity downcall bad params\n",
+                               obd->obd_name);
+                        GOTO(out, rc = -EINVAL);
+                }
 
-        if (sparam.idd_nperms > N_PERMS_MAX) {
-                CERROR("%s: perm count %d more than maximum %d\n",
-                       obd->obd_name, sparam.idd_nperms, N_PERMS_MAX);
-                GOTO(out, rc = -EINVAL);
-        }
+                if (param->idd_nperms > N_PERMS_MAX) {
+                        CERROR("%s: perm count %d more than maximum %d\n",
+                               obd->obd_name, param->idd_nperms, N_PERMS_MAX);
+                        GOTO(out, rc = -EINVAL);
+                }
 
-        if (sparam.idd_ngroups > NGROUPS_MAX) {
-                CERROR("%s: group count %d more than maximum %d\n",
-                       obd->obd_name, sparam.idd_ngroups, NGROUPS_MAX);
-                GOTO(out, rc = -EINVAL);
-        }
+                if (param->idd_ngroups > NGROUPS_MAX) {
+                        CERROR("%s: group count %d more than maximum %d\n",
+                               obd->obd_name, param->idd_ngroups, NGROUPS_MAX);
+                        GOTO(out, rc = -EINVAL);
+                }
 
-        if (sparam.idd_ngroups) {
-                size = offsetof(struct identity_downcall_data,
-                                idd_groups[sparam.idd_ngroups]);
-                OBD_ALLOC(param, size);
-                if (!param) {
-                        CERROR("%s: fail to alloc %d bytes for uid %u"
-                               " with %d groups\n", obd->obd_name, size,
-                               sparam.idd_uid, sparam.idd_ngroups);
-                        param = &sparam;
-                        param->idd_ngroups = 0;
-                } else if (cfs_copy_from_user(param, buffer, size)) {
-                        CERROR("%s: uid %u bad supplementary group data\n",
-                               obd->obd_name, sparam.idd_uid);
+                if (param->idd_ngroups) {
+                        rc = param->idd_ngroups; /* save idd_ngroups */
                         OBD_FREE(param, size);
-                        param = &sparam;
-                        param->idd_ngroups = 0;
+                        size = offsetof(struct identity_downcall_data,
+                                        idd_groups[rc]);
+                        goto again;
                 }
         }
 
@@ -334,10 +333,10 @@ static int lprocfs_wr_identity_info(struct file *file, const char *buffer,
                                    param->idd_uid, param);
 
 out:
-        if (param && (param != &sparam))
+        if (param != NULL)
                 OBD_FREE(param, size);
 
-        return rc ?: count;
+        return rc ? rc : count;
 }
 
 /* for debug only */
