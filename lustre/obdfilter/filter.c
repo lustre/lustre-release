@@ -4023,7 +4023,17 @@ int filter_create(struct obd_export *exp, struct obdo *oa,
         fed = &exp->exp_filter_data;
         filter = &obd->u.filter;
 
-        if (fed->fed_group != oa->o_seq) {
+        /* 1.8 client doesn't carry the ocd_group with connect request,
+         * so the fed_group will always be zero for 1.8 client. */
+        if (!(exp->exp_connect_flags & OBD_CONNECT_FULL20)) {
+                if (oa->o_seq != FID_SEQ_OST_MDT0 &&
+                    oa->o_seq != FID_SEQ_LLOG &&
+                    oa->o_seq != FID_SEQ_ECHO) {
+                        CERROR("The request from older client has invalid"
+                               " group "LPU64"!\n", oa->o_seq);
+                        RETURN(-EINVAL);
+                }
+        } else if (fed->fed_group != oa->o_seq) {
                 CERROR("%s: this export (nid %s) used object group %d "
                         "earlier; now it's trying to use group "LPU64"!"
                         " This could be a bug in the MDS. Please report to "

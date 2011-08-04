@@ -83,17 +83,15 @@ static void ost_drop_id(struct obd_export *exp, struct obdo *oa)
 
 /**
  * Validate oa from client.
- * 1. If the request comes from 1.8 clients, it will reset o_seq with MDT0.
- * 2. If the request comes from 2.0 clients, currently only RSVD seq and IDIF
- *    req are valid.
- *      a. for single MDS  seq = FID_SEQ_OST_MDT0,
- *      b. for CMD, seq = FID_SEQ_OST_MDT0, FID_SEQ_OST_MDT1 - FID_SEQ_OST_MAX
+ * If the request comes from 2.0 clients, currently only RSVD seq and IDIF
+ * req are valid.
+ *    a. for single MDS  seq = FID_SEQ_OST_MDT0,
+ *    b. for CMD, seq = FID_SEQ_OST_MDT0, FID_SEQ_OST_MDT1 - FID_SEQ_OST_MAX
  */
 static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
                              struct obd_ioobj *ioobj)
 {
-        if (oa != NULL && (!(oa->o_valid & OBD_MD_FLGROUP) ||
-            !(exp->exp_connect_flags & OBD_CONNECT_FULL20))) {
+        if (oa != NULL && !(oa->o_valid & OBD_MD_FLGROUP)) {
                 oa->o_seq = FID_SEQ_OST_MDT0;
                 if (ioobj)
                         ioobj->ioo_seq = FID_SEQ_OST_MDT0;
