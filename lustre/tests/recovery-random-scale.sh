@@ -34,6 +34,9 @@ set -x
 [ "$SHARED_DIRECTORY" ] || \
     { FAIL_ON_ERROR=true skip_env "$0 Empty SHARED_DIRECTORY" && exit 0; }
 
+check_shared_dir $SHARED_DIRECTORY ||
+    error "$SHARED_DIRECTORY isn't a shared directory"
+
 [ -n "$CLIENTS" ] || \
     { FAIL_ON_ERROR=true skip_env "$0 Need two or more remote clients" && exit 0; }
 
