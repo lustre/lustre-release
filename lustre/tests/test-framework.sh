@@ -130,13 +130,6 @@ init_test_env() {
     export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check fs after each test suite
     export FSCK_MAX_ERR=4   # File system errors left uncorrected
 
-    # This is used by a small number of tests to share state between the client
-    # running the tests, or in some cases between the servers (e.g. lfsck.sh).
-    # It needs to be a non-lustre filesystem that is available on all the nodes.
-    export SHARED_DIRECTORY=${SHARED_DIRECTORY:-"/tmp"}
-    export MDSDB=${MDSDB:-$SHARED_DIRECTORY/mdsdb}
-    export OSTDB=${OSTDB:-$SHARED_DIRECTORY/ostdb}
-
     #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
@@ -2644,24 +2637,29 @@ run_e2fsck() {
     return 0
 }
 
+# verify a directory is shared among nodes.
+check_shared_dir() {
+    local dir=$1
+
+    [ -z "$dir" ] && return 1
+    do_rpc_nodes $(comma_list $(nodes_list)) check_logdir $dir
+    check_write_access $dir || return 1
+    return 0
+}
+
 # Run e2fsck on MDT and OST(s) to generate databases used for lfsck.
 generate_db() {
     local i
     local ostidx
     local dev
-    local tmp_file
+
+    check_shared_dir $SHARED_DIRECTORY ||
+        error "$SHARED_DIRECTORY isn't a shared directory"
+
+    export MDSDB=$SHARED_DIRECTORY/mdsdb
+    export OSTDB=$SHARED_DIRECTORY/ostdb
 
     [ $MDSCOUNT -eq 1 ] || error "CMD is not supported"
-    tmp_file=$(mktemp -p $SHARED_DIRECTORY || 
-        error "fail to create file in $SHARED_DIRECTORY")
-
-    # make sure everything gets to the backing store
-    local list=$(comma_list $CLIENTS $(facet_host $SINGLEMDS) $(osts_nodes))
-    do_nodes $list "sync; sleep 2; sync"
-
-    do_nodes $list ls $tmp_file || \
-        error "$SHARED_DIRECTORY is not a shared directory"
-    rm $tmp_file
 
     run_e2fsck $(mdts_nodes) $MDTDEV "--mdsdb $MDSDB"
 
@@ -4632,6 +4630,7 @@ check_write_access() {
             return 1
         fi
     done
+    rm -f $dir/node.*.yml
     return 0
 }
 
@@ -4646,8 +4645,7 @@ init_logging() {
     mkdir -p $LOGDIR
     init_clients_lists
 
-    do_rpc_nodes $(comma_list $(nodes_list)) check_logdir $LOGDIR
-    if check_write_access $LOGDIR; then
+    if check_shared_dir $LOGDIR; then
         touch $LOGDIR/shared
         echo "Logging to shared log directory: $LOGDIR"
     else
