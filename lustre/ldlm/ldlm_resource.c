@@ -619,6 +619,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
         ns->ns_timeouts           = 0;
         ns->ns_orig_connect_flags = 0;
         ns->ns_connect_flags      = 0;
+        ns->ns_stopping           = 0;
         rc = ldlm_namespace_proc_register(ns);
         if (rc != 0) {
                 CERROR("Can't initialize ns proc, rc %d\n", rc);
@@ -832,6 +833,9 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
+        cfs_spin_lock(&ns->ns_lock);
+        ns->ns_stopping = 1;
+        cfs_spin_unlock(&ns->ns_lock);
 
         /*
          * Can fail with -EINTR when force == 0 in which case try harder.

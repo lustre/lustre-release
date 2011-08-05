@@ -514,6 +514,8 @@ struct ldlm_namespace {
          * ldlm lock stats
          */
         struct lprocfs_stats  *ns_stats;
+
+        unsigned               ns_stopping:1;   /* namespace cleanup */
 };
 
 static inline int ns_is_client(struct ldlm_namespace *ns)

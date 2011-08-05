@@ -1269,9 +1269,9 @@ void ldlm_pools_recalc(ldlm_side_t client)
                 cfs_spin_lock(&ns->ns_lock);
                 /*
                  * skip ns which is being freed, and we don't want to increase
-                 * its refcount again, not even temporarily. bz21519.
+                 * its refcount again, not even temporarily. bz21519 & LU-499.
                  */
-                if (cfs_atomic_read(&ns->ns_bref) == 0) {
+                if (ns->ns_stopping) {
                         skip = 1;
                 } else {
                         skip = 0;
