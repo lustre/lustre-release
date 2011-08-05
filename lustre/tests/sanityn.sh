@@ -451,7 +451,7 @@ test_24a() {
 #	OSC=`lctl dl | awk '/-osc-/ {print $4}' | head -n 1`
 	lctl --device %$OSC deactivate
 	lfs df -i || error "lfs df -i with deactivated OSC failed"
-	lctl --device %$OSC recover
+	lctl --device %$OSC activate
 	lfs df || error "lfs df with reactivated OSC failed"
 }
 run_test 24a "lfs df [-ih] [path] test ========================="
