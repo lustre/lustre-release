@@ -1767,6 +1767,8 @@ run_test 41a "mount mds with --nosvc and --nomgs"
 test_41b() {
         echo $MDS_MOUNT_OPTS | grep "loop" && skip " loop devices does not work with nosvc option" && return
 
+        ! combined_mgs_mds && skip "needs combined mgs device" && return 0
+
         stopall
         reformat
         local MDSDEV=$(mdsdevname ${SINGLEMDS//mds/})
