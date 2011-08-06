@@ -735,6 +735,7 @@ test_21d() {
         stop_mgs
         #writeconf to remove all ost2 traces for subsequent tests
         writeconf
+        start_mgs
 }
 run_test 21d "start mgs then ost and then mds"
 
@@ -764,6 +765,8 @@ test_22() {
 		sleep $((TIMEOUT + TIMEOUT + TIMEOUT))
 	fi
 	mount_client $MOUNT
+        wait_osc_import_state mds ost FULL
+        wait_osc_import_state client ost FULL
 	check_mount || return 41
 	pass
 
