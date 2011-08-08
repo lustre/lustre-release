@@ -47,6 +47,10 @@
 
 #if !defined(HAVE_LINUX_FIEMAP_H) || !defined(__KERNEL__)
 
+#ifndef __KERNEL__
+#include <libcfs/posix/posix-types.h>
+#endif
+
 struct ll_fiemap_extent {
         __u64 fe_logical;  /* logical offset in bytes for the start of
                             * the extent from the beginning of the file */

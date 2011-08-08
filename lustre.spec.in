@@ -226,6 +226,7 @@ cat >lustre.files <<EOF
 %attr(-, root, root) %{_libdir}/libptlctl.a
 %attr(-, root, root) %{_libdir}/liblustreapi.a
 %attr(-, root, root) /usr/include/lustre
+%attr(-, root, root) /usr/include/libcfs
 
 %attr(-, root, root) %{_mandir}/man?/*
 
