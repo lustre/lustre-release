@@ -216,7 +216,7 @@ cleanup_nocli() {
 }
 
 cleanup() {
- 	umount_client $MOUNT || return 200
+	umount_client $MOUNT || return 200
 	cleanup_nocli || return $?
 }
 
@@ -317,7 +317,7 @@ test_5a() {	# was test_5
 	# cleanup may return an error from the failed
 	# disconnects; for now I'll consider this successful
 	# if all the modules have unloaded.
- 	umount -d $MOUNT &
+	umount -d $MOUNT &
 	UMOUNT_PID=$!
 	sleep 6
 	echo "killing umount"
@@ -348,7 +348,7 @@ test_5a() {	# was test_5
 	while [ "$WAIT" -ne "$MAX_WAIT" ]; do
 		sleep $sleep
 		grep -q $MOUNT" " /etc/mtab || break
-        	echo "Waiting /etc/mtab updated ... "
+		echo "Waiting /etc/mtab updated ... "
 		WAIT=$(( WAIT + sleep))
 	done
 	[ "$WAIT" -eq "$MAX_WAIT" ] && error "/etc/mtab is not updated in $WAIT secs"
@@ -767,10 +767,10 @@ test_23a() {	# was test_23
 	stop $SINGLEMDS
 	# force down client so that recovering mds waits for reconnect
 	local running=$(grep -c $MOUNT /proc/mounts) || true
-    	if [ $running -ne 0 ]; then
-        	echo "Stopping client $MOUNT (opts: -f)"
-        	umount -f $MOUNT
-    	fi
+	if [ $running -ne 0 ]; then
+		echo "Stopping client $MOUNT (opts: -f)"
+		umount -f $MOUNT
+	fi
 
 	# enter recovery on mds
 	start_mds
@@ -880,7 +880,7 @@ test_24a() {
 	facet_failover fs2mds
 	facet_failover fs2ost
 	df
- 	umount_client $MOUNT
+	umount_client $MOUNT
 	# the MDS must remain up until last MDT
 	stop_mds
 	MDS=$(do_facet $SINGLEMDS "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
@@ -981,7 +981,7 @@ test_28() {
 	set_and_check client "$TEST" "$PARAM" $FINAL || return 3
 	FINAL=$(($FINAL + 1))
 	set_and_check client "$TEST" "$PARAM" $FINAL || return 4
- 	umount_client $MOUNT || return 200
+	umount_client $MOUNT || return 200
 	mount_client $MOUNT
 	RESULT=$($TEST)
 	if [ $RESULT -ne $FINAL ]; then
@@ -1043,7 +1043,7 @@ test_29() {
 	[ -n "$ENABLE_QUOTA" ] && { $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
 
         # test new client starts deactivated
- 	umount_client $MOUNT || return 200
+	umount_client $MOUNT || return 200
 	mount_client $MOUNT
 	RESULT=$(lctl get_param -n $PROC_UUID | grep DEACTIV | grep NEW)
 	if [ -z "$RESULT" ]; then
@@ -1059,7 +1059,7 @@ test_29() {
 	# make sure it reactivates
 	set_and_check client "lctl get_param -n $PROC_ACT" "$PARAM" $ACTV || return 6
 
- 	umount_client $MOUNT
+	umount_client $MOUNT
 	stop_ost2
 	cleanup_nocli
 	#writeconf to remove all ost2 traces for subsequent tests
@@ -1078,7 +1078,7 @@ test_30a() {
 	    set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $i || return 3
 	done
 	# make sure client restart still works
- 	umount_client $MOUNT
+	umount_client $MOUNT
 	mount_client $MOUNT || return 4
 	[ "$($TEST)" -ne "$i" ] && error "Param didn't stick across restart $($TEST) != $i"
 	pass
@@ -1393,7 +1393,7 @@ test_34b() {
 	touch $DIR/$tfile || return 1
 	stop_mds --force || return 2
 
- 	manual_umount_client --force
+	manual_umount_client --force
 	rc=$?
 	if [ $rc -ne 0 ]; then
 		error "mtab after failed umount - rc $rc"
@@ -1409,7 +1409,7 @@ test_34c() {
 	touch $DIR/$tfile || return 1
 	stop_ost --force || return 2
 
- 	manual_umount_client --force
+	manual_umount_client --force
 	rc=$?
 	if [ $rc -ne 0 ]; then
 		error "mtab after failed umount - rc $rc"
@@ -1487,7 +1487,7 @@ test_35b() { # bug 18674
 		return 1
 
 	local at_max_saved=0
-	# adaptive timeouts may prevent seeing the issue 
+	# adaptive timeouts may prevent seeing the issue
 	if at_is_enabled; then
 		at_max_saved=$(at_max_get mds)
 		at_max_set 0 mds client
@@ -1500,7 +1500,7 @@ test_35b() { # bug 18674
 	do_facet $SINGLEMDS "$LCTL set_param fail_loc=0x80000136" || return 2
 
 	$LCTL set_param mdc.${FSNAME}*.stats=clear
-  
+
 	log "Creating a test file and stat it"
 	touch $MOUNT/$tdir/$tfile
 	stat $MOUNT/$tdir/$tfile
@@ -1777,8 +1777,8 @@ test_41b() {
         stop_mds -f || return 203
 
 }
-
 run_test 41b "mount mds with --nosvc and --nomgs on first mount"
+
 test_42() { #bug 14693
         setup
         check_mount || return 2
@@ -1942,7 +1942,7 @@ cleanup_46a() {
 		stop ost${count} -f || rc=$?
 		let count=count-1
 	done	
-	stop_mds || rc=$? 
+	stop_mds || rc=$?
 	cleanup_nocli || rc=$?
 	#writeconf to remove all ost2 traces for subsequent tests
 	writeconf
@@ -1960,7 +1960,7 @@ test_46a() {
 	mount_client $MOUNT || return 3
 	trap "cleanup_46a $OSTCOUNT" EXIT ERR
 
-	local i 
+	local i
 	for (( i=2; i<=$OSTCOUNT; i++ )); do
 	    start ost$i `ostdevname $i` $OST_MOUNT_OPTS || return $((i+2))
 	done
@@ -2183,7 +2183,7 @@ test_50c() {
         wait_osc_import_state mds ost DISCONN
 	lazystatfs $MOUNT || error "lazystatfs failed with one down server"
 
- 	umount_client $MOUNT || error "Unable to unmount client"
+	umount_client $MOUNT || error "Unable to unmount client"
 	stop_ost2 || error "Unable to stop OST2"
 	stop_mds || error "Unable to stop MDS"
 	#writeconf to remove all ost2 traces for subsequent tests
@@ -2205,7 +2205,7 @@ test_50d() {
 	stop_ost || error "Unable to stop OST1"
 	lazystatfs $MOUNT || error "lazystatfs failed with one down server"
 
- 	umount_client $MOUNT || error "Unable to unmount client"
+	umount_client $MOUNT || error "Unable to unmount client"
 	stop_ost2 || error "Unable to stop OST2"
 	stop_mds || error "Unable to stop MDS"
 	#writeconf to remove all ost2 traces for subsequent tests
