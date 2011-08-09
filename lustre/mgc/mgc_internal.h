@@ -55,4 +55,9 @@ static void lprocfs_mgc_init_vars(struct lprocfs_static_vars *lvars)
 
 int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld);
 
+static inline int cld_is_sptlrpc(struct config_llog_data *cld)
+{
+        return cld->cld_type == CONFIG_T_SPTLRPC;
+}
+
 #endif  /* _MGC_INTERNAL_H */

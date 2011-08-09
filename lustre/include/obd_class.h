@@ -157,9 +157,14 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
 int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
                            struct config_llog_instance *cfg);
 
+enum {
+        CONFIG_T_CONFIG  = 0,
+        CONFIG_T_SPTLRPC = 1,
+        CONFIG_T_MAX     = 2
+};
+
 /* list of active configuration logs  */
 struct config_llog_data {
-        char                       *cld_logname;
         struct ldlm_res_id          cld_resid;
         struct config_llog_instance cld_cfg;
         cfs_list_t                  cld_list_chain;
@@ -167,10 +172,11 @@ struct config_llog_data {
         struct config_llog_data    *cld_sptlrpc;/* depended sptlrpc log */
         struct obd_export          *cld_mgcexp;
         cfs_mutex_t                 cld_lock;
+        int                         cld_type;
         unsigned int                cld_stopping:1, /* we were told to stop
                                                      * watching */
-                                    cld_lostlock:1, /* lock not requeued */
-                                    cld_is_sptlrpc:1;
+                                    cld_lostlock:1; /* lock not requeued */
+        char                        cld_logname[0];
 };
 
 struct lustre_profile {

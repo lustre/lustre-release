@@ -486,7 +486,7 @@ struct mgs_target_info;
 int server_mti_print(char *title, struct mgs_target_info *mti);
 
 /* mgc_request.c */
-int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id);
+int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id, int type);
 
 #endif
 

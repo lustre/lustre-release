@@ -332,7 +332,7 @@ static int mgs_get_cfg_lock(struct obd_device *obd, char *fsname,
         int rc, flags = 0;
         ENTRY;
 
-        rc = mgc_fsname2resid(fsname, &res_id);
+        rc = mgc_fsname2resid(fsname, &res_id, CONFIG_T_CONFIG);
         if (!rc)
                 rc = ldlm_cli_enqueue_local(obd->obd_namespace, &res_id,
                                             LDLM_PLAIN, NULL, LCK_EX,
