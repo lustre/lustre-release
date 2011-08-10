@@ -1792,6 +1792,8 @@ int client_disconnect_export(struct obd_export *exp);
 int client_import_add_conn(struct obd_import *imp, struct obd_uuid *uuid,
                            int priority);
 int client_import_del_conn(struct obd_import *imp, struct obd_uuid *uuid);
+int client_import_find_conn(struct obd_import *imp, lnet_nid_t peer,
+                            struct obd_uuid *uuid);
 int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 void client_destroy_import(struct obd_import *imp);
 /** @} */

@@ -193,6 +193,31 @@ out:
         RETURN(rc);
 }
 
+/**
+ * Find conn uuid by peer nid. @peer is a server nid. This function is used
+ * to find a conn uuid of @imp which can reach @peer.
+ */
+int client_import_find_conn(struct obd_import *imp, lnet_nid_t peer,
+                            struct obd_uuid *uuid)
+{
+        struct obd_import_conn *conn;
+        int rc = -ENOENT;
+        ENTRY;
+
+        cfs_spin_lock(&imp->imp_lock);
+        cfs_list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
+                /* check if conn uuid does have this peer nid */
+                if (class_check_uuid(&conn->oic_uuid, peer)) {
+                        *uuid = conn->oic_uuid;
+                        rc = 0;
+                        break;
+                }
+        }
+        cfs_spin_unlock(&imp->imp_lock);
+        RETURN(rc);
+}
+EXPORT_SYMBOL(client_import_find_conn);
+
 void client_destroy_import(struct obd_import *imp)
 {
         /* drop security policy instance after all rpc finished/aborted
