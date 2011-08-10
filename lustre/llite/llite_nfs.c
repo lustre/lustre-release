@@ -77,9 +77,21 @@ static struct inode * search_inode_for_lustre(struct super_block *sb,
         unsigned long valid = 0;
         int eadatalen = 0, rc;
         struct inode *inode = NULL;
+        struct ll_fid *fid = iid;
         ENTRY;
 
-        inode = ILOOKUP(sb, iid->id, ll_nfs_test_inode, iid);
+        if (!fid_is_igif((struct lu_fid*)iid)) {
+                OBD_ALLOC_PTR(fid);
+                if (!fid)
+                        RETURN(ERR_PTR(-ENOMEM));
+                fid->id = ll_fid_build_ino(iid, 0);
+                fid->generation = ll_fid_build_gen(sbi, iid);
+        }
+
+        inode = ILOOKUP(sb, fid->id, ll_nfs_test_inode, fid);
+
+        if (fid != iid)
+                OBD_FREE_PTR(fid);
 
         if (inode)
                 RETURN(inode);
@@ -122,7 +134,8 @@ static struct dentry *ll_iget_for_nfs(struct super_block *sb,
                 RETURN(ERR_PTR(PTR_ERR(inode)));
 
         if (is_bad_inode(inode) ||
-            (iid->generation && inode->i_generation != iid->generation)) {
+            ((fid_is_igif((struct lu_fid*)iid) && iid->generation) &&
+             inode->i_generation != iid->generation)) {
                 /* we didn't find the right inode.. */
                 CERROR("Inode %lu, Bad count: %lu %d or version  %u %u\n",
                        inode->i_ino, (unsigned long)inode->i_nlink,
