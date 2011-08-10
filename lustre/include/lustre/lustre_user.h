@@ -248,8 +248,9 @@ struct ll_fid {
                            * OST for saving into EA. */
 };
 
+#define UUID_MAX        40
 struct obd_uuid {
-        char uuid[40];
+        char uuid[UUID_MAX];
 };
 
 static inline int obd_uuid_equals(const struct obd_uuid *u1,

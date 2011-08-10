@@ -2280,6 +2280,7 @@ void class_uuid_unparse(class_uuid_t in, struct obd_uuid *out);
 int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index);
 int class_add_uuid(const char *uuid, __u64 nid);
 int class_del_uuid (const char *uuid);
+int class_check_uuid(struct obd_uuid *uuid, __u64 nid);
 void class_init_uuidlist(void);
 void class_exit_uuidlist(void);
 
