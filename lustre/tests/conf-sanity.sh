@@ -49,6 +49,16 @@ if [ -n "$MDSSIZE" ]; then
     STORED_MDSSIZE=$MDSSIZE
 fi
 
+# pass "-E lazy_itable_init" to mke2fs to speed up the formatting time
+for facet in MGS MDS OST; do
+    opts=${facet}_MKFS_OPTS
+    if [[ ${!opts} != *lazy_itable_init* ]]; then
+        eval SAVED_${facet}_MKFS_OPTS=\"${!opts}\"
+        eval ${facet}_MKFS_OPTS=\"${!opts} \
+--mkfsoptions='\\\"-E lazy_itable_init\\\"'\"
+    fi
+done
+
 init_logging
 
 #
@@ -2759,6 +2769,14 @@ if ! combined_mgs_mds ; then
 fi
 
 cleanup_gss
+
+# restore the ${facet}_MKFS_OPTS variables
+for facet in MGS MDS OST; do
+    opts=SAVED_${facet}_MKFS_OPTS
+    if [[ -n ${!opts} ]]; then
+        eval ${facet}_MKFS_OPTS=\"${!opts}\"
+    fi
+done
 
 complete $(basename $0) $SECONDS
 exit_status
