@@ -129,11 +129,12 @@ static int mgs_disconnect(struct obd_export *exp)
 
         LASSERT(exp);
 
+        mgs_fsc_cleanup(exp);
+
         class_export_get(exp);
         mgs_counter_incr(exp, LPROC_MGS_DISCONNECT);
 
         rc = server_disconnect_export(exp);
-
         class_export_put(exp);
         RETURN(rc);
 }
@@ -714,6 +715,37 @@ static int mgs_handle_exception(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static int mgs_handle_fslog_hack(struct ptlrpc_request *req)
+{
+        char *logname;
+        char fsname[16];
+        char *ptr;
+        int rc;
+
+        /* XXX: We suppose that llog at mgs is only used for
+         * fetching file system log */
+        logname = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
+        if (logname == NULL) {
+                CERROR("No logname, is llog on MGS used for something else?\n");
+                return -EINVAL;
+        }
+
+        ptr = strchr(logname, '-');
+        rc = (int)(ptr - logname);
+        if (ptr == NULL || rc >= sizeof(fsname)) {
+                CERROR("Invalid logname received: %s\n", logname);
+                return -EINVAL;
+        }
+
+        strncpy(fsname, logname, rc);
+        fsname[rc] = 0;
+        rc = mgs_fsc_attach(req->rq_export, fsname);
+        if (rc < 0 && rc != -EEXIST)
+                CERROR("add fs client %s returns %d\n", fsname, rc);
+
+        return rc;
+}
+
 /* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
 int mgs_handle(struct ptlrpc_request *req)
 {
@@ -815,6 +847,8 @@ int mgs_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_MGS, req, "llog_init");
                 req_capsule_set(&req->rq_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
                 rc = llog_origin_handle_create(req);
+                if (rc == 0)
+                        (void)mgs_handle_fslog_hack(req);
                 break;
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
                 DEBUG_REQ(D_MGS, req, "llog next block");
@@ -855,6 +889,12 @@ out:
 
 static inline int mgs_init_export(struct obd_export *exp)
 {
+        struct mgs_export_data *data = &exp->u.eu_mgs_data;
+
+        /* init mgs_export_data for fsc */
+        cfs_spin_lock_init(&data->med_lock);
+        CFS_INIT_LIST_HEAD(&data->med_clients);
+
         cfs_spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         cfs_spin_unlock(&exp->exp_lock);

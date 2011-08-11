@@ -116,6 +116,11 @@ struct filter_export_data {
         __u32                      fed_group;
 };
 
+struct mgs_export_data {
+        cfs_list_t                 med_clients; /* mgc fs client via this exp */
+        cfs_spinlock_t             med_lock;    /* protect med_clients */
+};
+
 /**
  * per-NID statistics structure.
  * It tracks access patterns to this export on a per-client-NID basis
@@ -254,6 +259,7 @@ struct obd_export {
                 struct mdt_export_data    eu_mdt_data;
                 struct filter_export_data eu_filter_data;
                 struct ec_export_data     eu_ec_data;
+                struct mgs_export_data    eu_mgs_data;
         } u;
 };
 
