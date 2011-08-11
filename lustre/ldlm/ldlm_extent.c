@@ -711,12 +711,13 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 if (cfs_list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
-                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
+                rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &rpc_list,
+                                       LDLM_WORK_BL_AST);
 
                 if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_FAIL_RACE) &&
                     !ns_is_client(ldlm_res_to_ns(res)))
                         class_fail_export(lock->l_export);
- 
+
                 lock_res(res);
                 if (rc == -ERESTART) {
 

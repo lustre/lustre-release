@@ -508,6 +508,12 @@ struct ldlm_namespace {
          * Limit size of nolock requests, in bytes.
          */
         unsigned               ns_max_nolock_size;
+
+        /**
+         * Limit of parallel AST RPC count.
+         */
+        unsigned               ns_max_parallel_ast;
+
         /* callback to cancel locks before replaying it during recovery */
         ldlm_cancel_for_recovery ns_cancel_for_recovery;
         /**

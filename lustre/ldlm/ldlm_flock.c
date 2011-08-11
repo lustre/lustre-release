@@ -460,7 +460,7 @@ restart:
                                                      &rpc_list);
 
                                 unlock_res_and_lock(req);
-                                rc = ldlm_run_ast_work(&rpc_list,
+                                rc = ldlm_run_ast_work(ns, &rpc_list,
                                                        LDLM_WORK_CP_AST);
                                 lock_res_and_lock(req);
                                 if (rc == -ERESTART)

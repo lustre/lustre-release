@@ -365,6 +365,13 @@ int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
                 lock_vars[0].read_fptr = lprocfs_rd_uint;
                 lock_vars[0].write_fptr = lprocfs_wr_uint;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
+                snprintf(lock_name, MAX_STRING_SIZE, "%s/max_parallel_ast",
+                         ldlm_ns_name(ns));
+                lock_vars[0].data = &ns->ns_max_parallel_ast;
+                lock_vars[0].read_fptr = lprocfs_rd_uint;
+                lock_vars[0].write_fptr = lprocfs_wr_uint;
+                lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
         }
         return 0;
 }

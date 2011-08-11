@@ -150,7 +150,8 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
                 if (cfs_list_empty(&lock->l_res_link))
                         ldlm_resource_add_lock(res, &res->lr_waiting, lock);
                 unlock_res(res);
-                rc = ldlm_run_ast_work(&rpc_list, LDLM_WORK_BL_AST);
+                rc = ldlm_run_ast_work(ldlm_res_to_ns(res), &rpc_list,
+                                       LDLM_WORK_BL_AST);
                 lock_res(res);
                 if (rc == -ERESTART)
                         GOTO(restart, -ERESTART);

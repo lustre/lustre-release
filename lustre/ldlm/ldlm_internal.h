@@ -97,14 +97,11 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
 void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 /* ldlm_lock.c */
 
-/* Number of blocking/completion callbacks that will be sent in
- * parallel (see bug 11301). */
-#define PARALLEL_AST_LIMIT      200
-
 struct ldlm_cb_set_arg {
         struct ptlrpc_request_set *set;
-        cfs_atomic_t restart;
-        __u32 type; /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
+        cfs_atomic_t    restart;
+        int             type;  /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
+        int             rpcs;  /* # of rpcs in set */
 };
 
 typedef enum {
@@ -129,7 +126,8 @@ void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
                             cfs_list_t *work_list);
 int ldlm_reprocess_queue(struct ldlm_resource *res, cfs_list_t *queue,
                          cfs_list_t *work_list);
-int ldlm_run_ast_work(cfs_list_t *rpc_list, ldlm_desc_ast_t ast_type);
+int ldlm_run_ast_work(struct ldlm_namespace *ns, cfs_list_t *rpc_list,
+                      ldlm_desc_ast_t ast_type);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *lock);
 int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock);

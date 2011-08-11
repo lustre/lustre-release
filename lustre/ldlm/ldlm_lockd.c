@@ -649,9 +649,10 @@ static int ldlm_handle_ast_error(struct ldlm_lock *lock,
 static int ldlm_cb_interpret(const struct lu_env *env,
                              struct ptlrpc_request *req, void *data, int rc)
 {
-        struct ldlm_cb_async_args *ca = data;
-        struct ldlm_cb_set_arg *arg = ca->ca_set_arg;
-        struct ldlm_lock *lock = ca->ca_lock;
+        struct ldlm_cb_async_args *ca   = data;
+        struct ldlm_lock          *lock = ca->ca_lock;
+        struct ldlm_cb_set_arg    *arg  = ca->ca_set_arg;
+        struct ptlrpc_request_set *set  = arg->set;
         ENTRY;
 
         LASSERT(lock != NULL);
@@ -659,17 +660,16 @@ static int ldlm_cb_interpret(const struct lu_env *env,
                 rc = ldlm_handle_ast_error(lock, req, rc,
                                            arg->type == LDLM_BL_CALLBACK
                                            ? "blocking" : "completion");
+                if (rc == -ERESTART)
+                        cfs_atomic_inc(&arg->restart);
         }
-
         LDLM_LOCK_RELEASE(lock);
 
-        if (rc == -ERESTART)
-                cfs_atomic_set(&arg->restart, 1);
-
+        cfs_waitq_signal(&set->set_waitq);
         RETURN(0);
 }
 
-static inline int ldlm_bl_and_cp_ast_fini(struct ptlrpc_request *req,
+static inline int ldlm_bl_and_cp_ast_tail(struct ptlrpc_request *req,
                                           struct ldlm_cb_set_arg *arg,
                                           struct ldlm_lock *lock,
                                           int instant_cancel)
@@ -681,12 +681,11 @@ static inline int ldlm_bl_and_cp_ast_fini(struct ptlrpc_request *req,
                 rc = ptl_send_rpc(req, 1);
                 ptlrpc_req_finished(req);
                 if (rc == 0)
-                        /* If we cancelled the lock, we need to restart
-                         * ldlm_reprocess_queue */
-                        cfs_atomic_set(&arg->restart, 1);
+                        cfs_atomic_inc(&arg->restart);
         } else {
                 LDLM_LOCK_GET(lock);
                 ptlrpc_set_add_req(arg->set, req);
+                ++arg->rpcs;
         }
 
         RETURN(rc);
@@ -810,7 +809,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
                 lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
                                      LDLM_BL_CALLBACK - LDLM_FIRST_OPC);
 
-        rc = ldlm_bl_and_cp_ast_fini(req, arg, lock, instant_cancel);
+        rc = ldlm_bl_and_cp_ast_tail(req, arg, lock, instant_cancel);
 
         RETURN(rc);
 }
@@ -925,7 +924,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data)
                 lprocfs_counter_incr(lock->l_export->exp_nid_stats->nid_ldlm_stats,
                                      LDLM_CP_CALLBACK - LDLM_FIRST_OPC);
 
-        rc = ldlm_bl_and_cp_ast_fini(req, arg, lock, instant_cancel);
+        rc = ldlm_bl_and_cp_ast_tail(req, arg, lock, instant_cancel);
 
         RETURN(rc);
 }
@@ -1604,7 +1603,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
          * l_ast_data */
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_CP_ENQ_RACE, 2);
 
-        ldlm_run_ast_work(&ast_list, LDLM_WORK_CP_AST);
+        ldlm_run_ast_work(ns, &ast_list, LDLM_WORK_CP_AST);
 
         LDLM_DEBUG_NOLOCK("client completion callback handler END (lock %p)",
                           lock);
@@ -2147,7 +2146,8 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
         CFS_INIT_LIST_HEAD(&rpc_list);
         cfs_hash_for_each_empty(exp->exp_lock_hash,
                                 ldlm_revoke_lock_cb, &rpc_list);
-        ldlm_run_ast_work(&rpc_list, LDLM_WORK_REVOKE_AST);
+        ldlm_run_ast_work(exp->exp_obd->obd_namespace, &rpc_list,
+                          LDLM_WORK_REVOKE_AST);
 
         EXIT;
 }
