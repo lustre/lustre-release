@@ -1,11 +1,15 @@
 xxxx-xx-xx Whamcloud, Inc.
 	* version 1.8.6.80-wc1
 	* Support for kernels:
-	  2.6.18-238.12.1.el5 (RHEL 5)
+	  2.6.18-274.3.1.el5 (RHEL 5)
 	  2.6.32-131.2.1.el6 (RHEL 6) - patchless client only
 	* Recommended e2fsprogs version: 1.41.90.wc3
 	* Use ext4-based ldiskfs as default for RHEL5
 	* Add support for 24TB LUN (RHEL5 server only)
+
+Severity   : enhancement
+Jira       : LU-674
+Description: Add support for RHEL5.7 [2.6.18-274.3.1.el5]
 
 -------------------------------------------------------------------------------
 

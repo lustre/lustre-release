@@ -5,7 +5,7 @@ Index: linux-2.6.18-128.1.14/drivers/md/raid5.c
 @@ -1456,6 +1456,8 @@
  		bi->bi_next = *bip;
  	*bip = bi;
- 	bi->bi_phys_segments ++;
+ 	bi->bi_phys_segments++;
 +	if (bio_sync(bi) && !forwrite)
 +		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags); /* force to read from disk. */
  	spin_unlock_irq(&conf->device_lock);

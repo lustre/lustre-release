@@ -9,7 +9,7 @@ BUILD_GEN+=".0"
 
 source ${0%/*}/lbuild-rhel
 
-SPEC_NAME="kernel-2.6.spec"
+SPEC_NAME="kernel.spec"
 
 patch_spec() {
     local buildid="$1"
@@ -18,7 +18,7 @@ patch_spec() {
     patch_spec_common "$buildid"
     sed -i -e '/^# empty final patch file to facilitate testing of kernel patches/i\
 # adds Lustre patches\
-Patch99995: linux-%{kversion}-lustre.patch' \
+Patch99995: linux-%{version}-lustre.patch' \
            -e '/^# conditionally applied test patch for debugging convenience/i\
 # lustre patch\
 %patch99995 -p1\

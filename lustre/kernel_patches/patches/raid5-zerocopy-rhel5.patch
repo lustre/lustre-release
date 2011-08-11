@@ -351,30 +351,23 @@ Index: linux-2.6.18-128.1.14/include/linux/backing-dev.h
 --- linux-2.6.18-128.1.14.orig/include/linux/backing-dev.h	2009-06-19 12:33:11.000000000 -0600
 +++ linux-2.6.18-128.1.14/include/linux/backing-dev.h	2009-06-19 12:34:50.000000000 -0600
 @@ -48,6 +48,7 @@
- #define BDI_CAP_READ_MAP	0x00000010	/* Can be mapped for reading */
- #define BDI_CAP_WRITE_MAP	0x00000020	/* Can be mapped for writing */
- #define BDI_CAP_EXEC_MAP	0x00000040	/* Can be mapped for execution */
-+#define BDI_CAP_PAGE_CONSTANT_WRITE	0x00000080	/* Zcopy write - for raid5 */
+ #define BDI_CAP_THROTTLE_DIRTY	0x00010000	/* throttle in balance_dirty_pages when BDI is congested */
  #define BDI_CAP_VMFLAGS \
  	(BDI_CAP_READ_MAP | BDI_CAP_WRITE_MAP | BDI_CAP_EXEC_MAP)
++#define BDI_CAP_PAGE_CONSTANT_WRITE	0x00000080	/* Zcopy write - for raid5 */
  
-@@ -94,11 +95,18 @@
- #define bdi_cap_account_dirty(bdi) \
- 	(!((bdi)->capabilities & BDI_CAP_NO_ACCT_DIRTY))
+ #if defined(VM_MAYREAD) && \
+	(BDI_CAP_READ_MAP != VM_MAYREAD || \
+@@ -94,5 +95,11 @@
+ #define mapping_cap_account_dirty(mapping) \
+	bdi_cap_account_dirty((mapping)->backing_dev_info)
  
 +#define bdi_cap_page_constant_write(bdi) \
 +	((bdi)->capabilities & BDI_CAP_PAGE_CONSTANT_WRITE)
 +
- #define mapping_cap_writeback_dirty(mapping) \
- 	bdi_cap_writeback_dirty((mapping)->backing_dev_info)
- 
- #define mapping_cap_account_dirty(mapping) \
- 	bdi_cap_account_dirty((mapping)->backing_dev_info)
- 
 +#define mapping_cap_page_constant_write(mapping) \
 +	bdi_cap_page_constant_write((mapping)->backing_dev_info)
 +	
-+
  
  #endif		/* _LINUX_BACKING_DEV_H */
 Index: linux-2.6.18-128.1.14/include/linux/page-flags.h

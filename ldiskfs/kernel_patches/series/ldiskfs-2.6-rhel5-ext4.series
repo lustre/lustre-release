@@ -28,7 +28,6 @@ ext4_data_in_dirent.patch
 ext4-extents-mount-option-rhel5.patch
 ext4-fiemap-2.6-rhel5.patch
 ext4-mballoc-skip-grps.patch
-ext4-back-dquot-to-rhel54.patch
 ext4-disable-mb-cache-rhel5.patch
 ext4-remove-extents-warning-rhel5.patch
 ext4-disable-delalloc-rhel5.patch
