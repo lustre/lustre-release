@@ -41,6 +41,16 @@ MDSSIZE=40000
 OSTSIZE=40000
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
+# pass "-E lazy_itable_init" to mke2fs to speed up the formatting time
+for facet in MGS MDS OST; do
+    opts=${facet}_MKFS_OPTS
+    if [[ ${!opts} != *lazy_itable_init* ]]; then
+        eval SAVED_${facet}_MKFS_OPTS=\"${!opts}\"
+        eval ${facet}_MKFS_OPTS=\"${!opts} \
+--mkfsoptions='\\\"-E lazy_itable_init\\\"'\"
+    fi
+done
+
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
@@ -2279,14 +2289,11 @@ not $file_size"
 run_test 55 "check lov_objid size"
 
 test_56() {
-	add mds $MDS_MKFS_OPTS \
-		--mkfsoptions='\"-J size=8 -E lazy_itable_init\"' \
+	add mds $MDS_MKFS_OPTS --mkfsoptions='\"-J size=8\"' \
 		--reformat $MDSDEV || error "failed to reformat mds"
-	add ost1 $OST_MKFS_OPTS --mkfsoptions='\"-E lazy_itable_init\"' \
-		--index=1000 --reformat $(ostdevname 1) || \
+	add ost1 $OST_MKFS_OPTS --index=1000 --reformat $(ostdevname 1) || \
 		error "failed to reformat ost1"
-	add ost2 $OST_MKFS_OPTS --mkfsoptions='\"-E lazy_itable_init\"' \
-		--index=10000 --reformat $(ostdevname 2) || \
+	add ost2 $OST_MKFS_OPTS --index=10000 --reformat $(ostdevname 2) || \
 		error "failed to reformat ost2"
 
 	start_mds
@@ -2405,6 +2412,14 @@ run_test 60 "check mkfs.lustre --mkfsoptions -E -O options setting"
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
+
+# restore the ${facet}_MKFS_OPTS variables
+for facet in MGS MDS OST; do
+    opts=SAVED_${facet}_MKFS_OPTS
+    if [[ -n ${!opts} ]]; then
+        eval ${facet}_MKFS_OPTS=\"${!opts}\"
+    fi
+done
 
 complete $(basename $0) $SECONDS
 exit_status
