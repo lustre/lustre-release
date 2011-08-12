@@ -132,6 +132,12 @@ static int osc_interpret_create(const struct lu_env *env,
                         if (body && rc == -ENOSPC) {
                                 oscc->oscc_last_id = body->oa.o_id;
                                 oscc->oscc_grow_count = OST_MIN_PRECREATE;
+
+                                if ((body->oa.o_valid & OBD_MD_FLFLAGS) &&
+                                    (body->oa.o_flags & OBD_FL_NOSPC_BLK))
+                                        oscc->oscc_flags |= OSCC_FLAG_NOSPC_BLK;
+                                else
+                                        rc = 0;
                         }
                 }
                 cfs_spin_unlock(&oscc->oscc_lock);
@@ -359,7 +365,7 @@ int osc_precreate(struct obd_export *exp)
 
         /* Handle critical states first */
         cfs_spin_lock(&oscc->oscc_lock);
-        if (oscc->oscc_flags & OSCC_FLAG_NOSPC ||
+        if (oscc->oscc_flags & OSCC_FLAG_NOSPC_BLK ||
             oscc->oscc_flags & OSCC_FLAG_RDONLY ||
             oscc->oscc_flags & OSCC_FLAG_EXITING)
                 GOTO(out, rc = 1000);
@@ -373,6 +379,9 @@ int osc_precreate(struct obd_export *exp)
 
         /* Return 0, if we have at least one object - bug 22884 */
         rc = oscc_has_objects_nolock(oscc, 1) ? 0 : 1;
+
+        if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
+                GOTO(out, (rc == 0) ? 0 : 1000);
 
         /* Do not check for OSCC_FLAG_CREATING flag here, let
          * osc_precreate() call oscc_internal_create() and
@@ -408,7 +417,7 @@ static int handle_async_create(struct ptlrpc_request *req, int rc)
         if (oscc->oscc_flags & OSCC_FLAG_EXITING)
                 GOTO(out_wake, rc = -EIO);
 
-        if (oscc->oscc_flags & OSCC_FLAG_NOSPC)
+        if (oscc->oscc_flags & OSCC_FLAG_NOSPC_BLK)
                 GOTO(out_wake, rc = -ENOSPC);
 
         if (oscc->oscc_flags & OSCC_FLAG_RDONLY)
@@ -577,8 +586,12 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                 if (rc == 0 || rc == -ENOSPC) {
                         struct obd_connect_data *ocd;
 
-                        if (rc == -ENOSPC)
+                        if (rc == -ENOSPC) {
                                 oscc->oscc_flags |= OSCC_FLAG_NOSPC;
+                                if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+                                    (oa->o_flags & OBD_FL_NOSPC_BLK))
+                                        oscc->oscc_flags |= OSCC_FLAG_NOSPC_BLK;
+                        }
                         oscc->oscc_flags &= ~OSCC_FLAG_RECOVERING;
 
                         oscc->oscc_last_id = oa->o_id;
@@ -639,7 +652,7 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
                         break;
                 }
 
-                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC_BLK) {
                         rc = -ENOSPC;
                         cfs_spin_unlock(&oscc->oscc_lock);
                         break;
@@ -679,6 +692,12 @@ int osc_create(struct obd_export *exp, struct obdo *oa,
 
                         CDEBUG(D_RPCTRACE, "%s: set oscc_next_id = "LPU64"\n",
                                exp->exp_obd->obd_name, oscc->oscc_next_id);
+                        break;
+                }
+
+                if (oscc->oscc_flags & OSCC_FLAG_NOSPC) {
+                        rc = -ENOSPC;
+                        cfs_spin_unlock(&oscc->oscc_lock);
                         break;
                 }
 

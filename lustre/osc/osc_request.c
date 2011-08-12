@@ -3632,8 +3632,15 @@ static int osc_statfs_interpret(const struct lu_env *env,
                      ((msfs->os_ffree < 32) || (msfs->os_bavail < used))))
                 cli->cl_oscc.oscc_flags |= OSCC_FLAG_NOSPC;
         else if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) != 0) &&
-                (msfs->os_ffree > 64) && (msfs->os_bavail > (used << 1))))
-                        cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_NOSPC;
+                          (msfs->os_ffree > 64) &&
+                          (msfs->os_bavail > (used << 1)))) {
+                cli->cl_oscc.oscc_flags &= ~(OSCC_FLAG_NOSPC |
+                                             OSCC_FLAG_NOSPC_BLK);
+        }
+
+        if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) != 0) &&
+                     (msfs->os_bavail < used)))
+                cli->cl_oscc.oscc_flags |= OSCC_FLAG_NOSPC_BLK;
 
         cfs_spin_unlock(&cli->cl_oscc.oscc_lock);
 
@@ -4381,7 +4388,8 @@ static int osc_import_event(struct obd_device *obd,
                         struct osc_creator *oscc = &obd->u.cli.cl_oscc;
 
                         cfs_spin_lock(&oscc->oscc_lock);
-                        oscc->oscc_flags &= ~OSCC_FLAG_NOSPC;
+                        oscc->oscc_flags &= ~(OSCC_FLAG_NOSPC |
+                                              OSCC_FLAG_NOSPC_BLK);
                         cfs_spin_unlock(&oscc->oscc_lock);
                 }
                 rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);

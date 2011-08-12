@@ -3833,6 +3833,13 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                LPU64"\n", obd->obd_name, osfs->os_bavail <<
                                obd->u.obt.obt_vfsmnt->mnt_sb->s_blocksize_bits);
                         *num = 0;
+                        if (oa->o_valid & OBD_MD_FLFLAGS)
+                                oa->o_flags |= OBD_FL_NOSPC_BLK;
+                        else {
+                                oa->o_valid |= OBD_MD_FLFLAGS;
+                                oa->o_flags = OBD_FL_NOSPC_BLK;
+                        }
+
                         rc = -ENOSPC;
                 }
                 OBD_FREE(osfs, sizeof(*osfs));
@@ -3937,9 +3944,21 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         CERROR("create failed rc = %d\n", rc);
                         if (rc == -ENOSPC) {
                                 os_ffree = filter_calc_free_inodes(obd);
-                                if (os_ffree != -1)
+                                if (os_ffree == -1) 
+                                        GOTO(cleanup, rc);
+
+                                if (obd->obd_osfs.os_bavail <
+                                    (obd->obd_osfs.os_blocks >> 10)) {
+                                        if (oa->o_valid & OBD_MD_FLFLAGS)
+                                                oa->o_flags |= OBD_FL_NOSPC_BLK;
+                                        else {
+                                                oa->o_valid |= OBD_MD_FLFLAGS;
+                                                oa->o_flags = OBD_FL_NOSPC_BLK;
+                                        }
+
                                         CERROR("%s: free inode "LPU64"\n",
                                                obd->obd_name, os_ffree);
+                                }
                         }
                         GOTO(cleanup, rc);
                 }

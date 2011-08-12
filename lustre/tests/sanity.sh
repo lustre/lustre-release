@@ -8231,6 +8231,53 @@ test_219() {
 }
 run_test 219 "LU-394: Write partial won't cause uncontiguous pages vec at LND"
 
+test_220() { #LU-325
+	local OSTIDX=0
+
+	mkdir -p $DIR/$tdir
+	local OST=$(lfs osts | grep ${OSTIDX}": " | \
+		awk '{print $2}' | sed -e 's/_UUID$//')
+
+        # on the mdt's osc
+	local mdtosc_proc1=$(get_mdtosc_proc_path $SINGLEMDS $OST)
+	local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
+			osc.$mdtosc_proc1.prealloc_last_id)
+	local next_id=$(do_facet $SINGLEMDS lctl get_param -n \
+			osc.$mdtosc_proc1.prealloc_next_id)
+
+	$LFS df -i
+
+	do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME || return 1
+	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $OST || return 2
+
+	$SETSTRIPE $DIR/$tdir -i $OSTIDX -c 1 -p $FSNAME.$TESTNAME
+
+	echo "preallocated objects in MDS is $((last_id - next_id))" \
+             "($last_id - $next_id)"
+
+	count=$($LFS df -i $MOUNT | grep ^$OST | awk '{print $4}')
+	echo "OST still has $count objects"
+
+	free=$((count + last_id - next_id))
+	echo "create $free files..."
+	createmany -o $DIR/$tdir/f $next_id $free || return 3
+
+	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n \
+			osc.$mdtosc_proc1.prealloc_last_id)
+	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n \
+			osc.$mdtosc_proc1.prealloc_next_id)
+
+	echo "after creation, last_id=$last_id, next_id=$next_id"
+	$LFS df -i
+
+	echo "cleanup..."
+
+	do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $OST || return 4
+	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME || return 5
+	rm -fr $DIR/$tdir
+}
+run_test 220 "the preallocated objects in MDS still can be used if ENOSPC is returned by OST with enough disk space"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
