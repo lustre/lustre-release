@@ -915,8 +915,8 @@ void mdt_reconstruct_open(struct mdt_thread_info *info,
         mdt_req_from_lcd(req, lcd);
         mdt_set_disposition(info, ldlm_rep, lcd->lcd_last_data);
 
-        CERROR("This is reconstruct open: disp="LPX64", result=%d\n",
-                ldlm_rep->lock_policy_res1, req->rq_status);
+        CDEBUG(D_INODE, "This is reconstruct open: disp="LPX64", result=%d\n",
+               ldlm_rep->lock_policy_res1, req->rq_status);
 
         if (mdt_get_disposition(ldlm_rep, DISP_OPEN_CREATE) &&
             req->rq_status != 0)
