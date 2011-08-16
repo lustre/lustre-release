@@ -2650,6 +2650,9 @@ static int lov_get_info(struct obd_export *exp, __u32 keylen,
 
                 *((__u64*)val) = tgt->ltd_exp->exp_connect_flags;
                 GOTO(out, rc = 0);
+        } else if (KEY_IS(KEY_TGT_COUNT)) {
+                *((int *)val) = lov->desc.ld_tgt_count;
+                GOTO(out, rc = 0);
         }
 
         rc = -EINVAL;

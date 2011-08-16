@@ -1483,19 +1483,20 @@ out_free:
         }
 #endif
         case LL_IOC_GETOBDCOUNT: {
-                int count;
+                int count, vallen;
+                struct obd_export *exp;
 
                 if (cfs_copy_from_user(&count, (int *)arg, sizeof(int)))
                         RETURN(-EFAULT);
 
-                if (!count) {
-                        /* get ost count */
-                        struct lov_obd *lov = &sbi->ll_dt_exp->exp_obd->u.lov;
-                        count = lov->desc.ld_tgt_count;
-                } else {
-                        /* get mdt count */
-                        struct lmv_obd *lmv = &sbi->ll_md_exp->exp_obd->u.lmv;
-                        count = lmv->desc.ld_tgt_count;
+                /* get ost count when count is zero, get mdt count otherwise */
+                exp = count ? sbi->ll_md_exp : sbi->ll_dt_exp;
+                vallen = sizeof(count);
+                rc = obd_get_info(exp, sizeof(KEY_TGT_COUNT), KEY_TGT_COUNT,
+                                  &vallen, &count, NULL);
+                if (rc) {
+                        CERROR("get target count failed: %d\n", rc);
+                        RETURN(rc);
                 }
 
                 if (cfs_copy_to_user((int *)arg, &count, sizeof(int)))

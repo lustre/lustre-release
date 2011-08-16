@@ -2707,6 +2707,9 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                         ((struct obd_connect_data *)val)->ocd_connect_flags;
                 }
                 RETURN(rc);
+        } else if (KEY_IS(KEY_TGT_COUNT)) {
+                *((int *)val) = lmv->desc.ld_tgt_count;
+                RETURN(0);
         }
 
         CDEBUG(D_IOCTL, "Invalid key\n");

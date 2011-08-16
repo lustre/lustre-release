@@ -1160,6 +1160,7 @@ enum obd_cleanup_stage {
 #define KEY_REGISTER_TARGET     "register_target"
 #define KEY_REVIMP_UPD          "revimp_update"
 #define KEY_SET_FS              "set_fs"
+#define KEY_TGT_COUNT           "tgt_count"
 /*      KEY_SET_INFO in lustre_idl.h */
 #define KEY_SPTLRPC_CONF        "sptlrpc_conf"
 #define KEY_CONNECT_FLAG        "connect_flags"
