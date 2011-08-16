@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -388,6 +391,9 @@ static int ll_intent_file_open(struct file *file, void *lmm,
                 GOTO(out, rc);
         }
 
+        if (it_disposition(itp, DISP_LOOKUP_NEG))
+                GOTO(out, rc = -ENOENT);
+
         if (rc != 0 || it_open_error(DISP_OPEN_OPEN, itp)) {
                 rc = rc ? rc : it_open_error(DISP_OPEN_OPEN, itp);
                 CDEBUG(D_VFSTRACE, "lock enqueue: err: %d\n", rc);
@@ -496,9 +502,8 @@ int ll_file_open(struct inode *inode, struct file *file)
         struct lookup_intent *it, oit = { .it_op = IT_OPEN,
                                           .it_flags = file->f_flags };
         struct lov_stripe_md *lsm;
-        struct ptlrpc_request *req = NULL;
-        struct obd_client_handle **och_p;
-        __u64 *och_usecount;
+        struct obd_client_handle **och_p = NULL;
+        __u64 *och_usecount = NULL;
         struct ll_file_data *fd;
         int rc = 0, opendir_set = 0;
         ENTRY;
@@ -511,7 +516,7 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         fd = ll_file_data_get();
         if (fd == NULL)
-                RETURN(-ENOMEM);
+                GOTO(out_och_free, rc = -ENOMEM);
 
         fd->fd_file = file;
         if (S_ISDIR(inode->i_mode)) {
@@ -580,9 +585,9 @@ restart:
                         rc = it_open_error(DISP_OPEN_OPEN, it);
                         if (rc) {
                                 cfs_up(&lli->lli_och_sem);
-                                ll_file_data_put(fd);
                                 GOTO(out_openerr, rc);
                         }
+
                         ll_release_openhandle(file->f_dentry, it);
                         lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
                                              LPROC_LL_OPEN);
@@ -593,7 +598,6 @@ restart:
                 if (rc) {
                         (*och_usecount)--;
                         cfs_up(&lli->lli_och_sem);
-                        ll_file_data_put(fd);
                         GOTO(out_openerr, rc);
                 }
         } else {
@@ -608,25 +612,16 @@ restart:
                         it->it_create_mode |= M_CHECK_STALE;
                         rc = ll_intent_file_open(file, NULL, 0, it);
                         it->it_create_mode &= ~M_CHECK_STALE;
-                        if (rc) {
-                                ll_file_data_put(fd);
+                        if (rc)
                                 GOTO(out_openerr, rc);
-                        }
 
-                        /* Got some error? Release the request */
-                        if (it->d.lustre.it_status < 0) {
-                                req = it->d.lustre.it_data;
-                                ptlrpc_req_finished(req);
-                        }
                         goto restart;
                 }
                 OBD_ALLOC(*och_p, sizeof (struct obd_client_handle));
-                if (!*och_p) {
-                        ll_file_data_put(fd);
+                if (!*och_p)
                         GOTO(out_och_free, rc = -ENOMEM);
-                }
+
                 (*och_usecount)++;
-                req = it->d.lustre.it_data;
 
                 /* md_intent_lock() didn't get a request ref if there was an
                  * open error, so don't do cleanup on the request here
@@ -634,25 +629,24 @@ restart:
                 /* XXX (green): Should not we bail out on any error here, not
                  * just open error? */
                 rc = it_open_error(DISP_OPEN_OPEN, it);
-                if (rc) {
-                        ll_file_data_put(fd);
+                if (rc)
                         GOTO(out_och_free, rc);
-                }
+
+                LASSERT(it_disposition(it, DISP_ENQ_OPEN_REF));
 
                 ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_OPEN, 1);
                 rc = ll_local_open(file, it, fd, *och_p);
-                if (rc) {
-                        ll_file_data_put(fd);
+                if (rc)
                         GOTO(out_och_free, rc);
-                }
         }
         cfs_up(&lli->lli_och_sem);
+        fd = NULL;
 
         /* Must do this outside lli_och_sem lock to prevent deadlock where
            different kind of OPEN lock for this same inode gets cancelled
            by ldlm_cancel_lru */
         if (!S_ISREG(inode->i_mode))
-                GOTO(out, rc);
+                GOTO(out_och_free, rc);
 
         ll_capa_open(inode);
 
@@ -661,26 +655,31 @@ restart:
                 if (file->f_flags & O_LOV_DELAY_CREATE ||
                     !(file->f_mode & FMODE_WRITE)) {
                         CDEBUG(D_INODE, "object creation was delayed\n");
-                        GOTO(out, rc);
+                        GOTO(out_och_free, rc);
                 }
         }
         file->f_flags &= ~O_LOV_DELAY_CREATE;
-        GOTO(out, rc);
-out:
-        ptlrpc_req_finished(req);
-        if (req)
-                it_clear_disposition(it, DISP_ENQ_OPEN_REF);
+        GOTO(out_och_free, rc);
+
 out_och_free:
+        if (it && it_disposition(it, DISP_ENQ_OPEN_REF)) {
+                ptlrpc_req_finished(it->d.lustre.it_data);
+                it_clear_disposition(it, DISP_ENQ_OPEN_REF);
+        }
+
         if (rc) {
-                if (*och_p) {
+                if (och_p && *och_p) {
                         OBD_FREE(*och_p, sizeof (struct obd_client_handle));
                         *och_p = NULL; /* OBD_FREE writes some magic there */
                         (*och_usecount)--;
                 }
                 cfs_up(&lli->lli_och_sem);
+
 out_openerr:
                 if (opendir_set != 0)
                         ll_stop_statahead(inode, lli->lli_opendir_key);
+                if (fd != NULL)
+                        ll_file_data_put(fd);
         }
 
         return rc;
@@ -1318,8 +1317,6 @@ int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
         rc = ll_intent_file_open(file, lum, lum_size, &oit);
         if (rc)
                 GOTO(out, rc);
-        if (it_disposition(&oit, DISP_LOOKUP_NEG))
-                GOTO(out_req_free, rc = -ENOENT);
         rc = oit.d.lustre.it_status;
         if (rc < 0)
                 GOTO(out_req_free, rc);
@@ -1599,9 +1596,10 @@ int ll_release_openhandle(struct dentry *dentry, struct lookup_intent *it)
                                        inode, och);
  out:
         /* this one is in place of ll_file_open */
-        if (it_disposition(it, DISP_ENQ_OPEN_REF))
+        if (it_disposition(it, DISP_ENQ_OPEN_REF)) {
                 ptlrpc_req_finished(it->d.lustre.it_data);
-        it_clear_disposition(it, DISP_ENQ_OPEN_REF);
+                it_clear_disposition(it, DISP_ENQ_OPEN_REF);
+        }
         RETURN(rc);
 }
 
