@@ -950,7 +950,8 @@ static int mds_getattr_lock(struct ptlrpc_request *req, int offset,
                                                          MDS_INODELOCK_UPDATE,
                                                          name, namesize,
                                                          child_lockh, &dchild,
-                                                         LCK_CR, child_part);
+                                                         LCK_CR, child_part,
+                                                         IT_GETATTR, 0);
                 } else {
                         /* For revalidate by fid we always take UPDATE lock */
                         dchild = mds_fid2locked_dentry(obd, &body->fid2, NULL,
