@@ -86,7 +86,7 @@ Mounting by Label</title>
     <screen>LABEL=testfs-MDT0000 /mnt/test/mdt lustre defaults,_netdev,noauto 0 0
 LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
     <para>In general, it is wise to specify noauto and let your high-availability (HA) package manage when to mount the device. If you are not using failover, make sure that networking has been started before mounting a Lustre server. RedHat, SuSE, Debian (and perhaps others) use the <literal>_netdev</literal> flag to ensure that these disks are mounted after the network is up.</para>
-    <para>We are mounting by disk label here--the label of a device can be read with <literal>e2label</literal>. The label of a newly-formatted Lustre server ends in <literal>FFFF</literal>, meaning that it has yet to be assigned. The assignment takes place when the server is first started, and the disk label is updated.</para>
+    <para>We are mounting by disk label here. The label of a device can be read with <literal>e2label</literal>. The label of a newly-formatted Lustre server may end in <literal>FFFF</literal> if the <literal>--index</literal> option is not specified to <literal>mkfs.lustre</literal>, meaning that it has yet to be assigned. The assignment takes place when the server is first started, and the disk label is updated.  It is recommended that the <literal>--index</literal> option always be used, which will also ensure that the label is set at format time.</para>
     <caution>
       <para>Do not do this when the client and OSS are on the same node, as memory pressure between the client and OSS can lead to deadlocks.</para>
     </caution>
@@ -117,9 +117,9 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
       </listitem>
     </itemizedlist>
     <para>By default, the Lustre file system uses failover mode for OSTs. To specify failout mode instead, run this command:</para>
-    <screen>$ mkfs.lustre --fsname=&lt;fsname&gt; --ost --mgsnode=&lt;MGS node NID&gt; --param=&quot;failover.mode=failout&quot; &lt;block device name&gt;</screen>
+    <screen>$ mkfs.lustre --fsname=&lt;fsname&gt; --mgsnode=&lt;MGS node NID&gt; --param=&quot;failover.mode=failout&quot; --ost --index=&quot;OST index&quot; &lt;block device name&gt;</screen>
     <para>In this example, failout mode is specified for the OSTs on MGS <literal>uml1</literal>, file system <literal>testfs</literal>.</para>
-    <screen>$ mkfs.lustre --fsname=testfs --ost --mgsnode=uml1 --param=&quot;failover.mode=failout&quot; /dev/sdb </screen>
+    <screen>$ mkfs.lustre --fsname=testfs --mgsnode=uml1 --param=&quot;failover.mode=failout&quot; --ost --index=3 /dev/sdb </screen>
     <caution>
       <para>Before running this command, unmount all OSTs that will be affected by the change in the failover/failout mode.</para>
     </caution>
@@ -146,15 +146,15 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
   <section xml:id="dbdoclet.50438194_88063">
     <title><indexterm><primary>operations</primary><secondary>multiple file systems</secondary></indexterm>Running Multiple Lustre File Systems</title>
     <para>There may be situations in which you want to run multiple file systems. This is doable, as long as you follow specific naming conventions.</para>
-    <para>By default, the <literal>mkfs.lustre</literal> command creates a file system named <literal>lustre</literal>. To specify a different file system name (limited to 8 characters), run this command:</para>
-    <para><screen>mkfs.lustre --fsname=&lt;new file system name&gt;</screen></para>
+    <para>By default, the <literal>mkfs.lustre</literal> command creates a file system named <literal>lustre</literal>. To specify a different file system name (limited to 8 characters) at format time, use the <literal>--fsname</literal> option:</para>
+    <para><screen>mkfs.lustre --fsname=&lt;file system name&gt;</screen></para>
     <note>
-      <para>The MDT, OSTs and clients in the new file system must share the same name (prepended to the device name). For example, for a new file system named <literal>foo</literal>, the MDT and two OSTs would be named <literal>foo-MDT0000</literal>, <literal>foo-OST0000</literal>, and <literal>foo-OST0001</literal>.</para>
+      <para>The MDT, OSTs and clients in the new file system must use the same filesystem name (prepended to the device name). For example, for a new file system named <literal>foo</literal>, the MDT and two OSTs would be named <literal>foo-MDT0000</literal>, <literal>foo-OST0000</literal>, and <literal>foo-OST0001</literal>.</para>
     </note>
     <para>To mount a client on the file system, run:</para>
     <screen>mount -t lustre mgsnode:/&lt;new fsname&gt; &lt;mountpoint&gt;</screen>
-    <para>For example, to mount a client on file system foo at mount point /mnt/lustre1, run:</para>
-    <screen>mount -t lustre mgsnode:/foo /mnt/lustre1</screen>
+    <para>For example, to mount a client on file system foo at mount point /mnt/foo, run:</para>
+    <screen>mount -t lustre mgsnode:/foo /mnt/foo</screen>
     <note>
       <para>If a client(s) will be mounted on several file systems, add the following line to <literal>/etc/xattr.conf</literal> file to avoid problems when files are moved between the file systems: <literal>lustre.* skip</literal></para>
     </note>
@@ -162,26 +162,20 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
       <para>The MGS is universal; there is only one MGS per Lustre installation, not per file system.</para>
     </note>
     <note>
-      <para>There is only one file system per MDT. Therefore, specify <literal>--mdt --mgs</literal> on one file system and -<literal>-mdt --mgsnode=&lt;MGS node NID&gt;</literal> on the other file systems.</para>
+      <para>There is only one file system per MDT. Therefore, specify <literal>--mdt --mgs</literal> on one file system and <literal>--mdt --mgsnode=&lt;MGS node NID&gt;</literal> on the other file systems.</para>
     </note>
-    <para>A Lustre installation with two file systems (<literal>foo</literal> and <literal>bar</literal>) could look like this, where the MGS node is <literal>mgsnode@tcp0</literal> and the mount points are <literal>/mnt/lustre1</literal> and <literal>/mnt/lustre2</literal>.</para>
-    <screen>mgsnode# mkfs.lustre --mgs /mnt/lustre1
-mdtfoonode# mkfs.lustre --fsname=foo --mdt --mgsnode=mgsnode@tcp0 /mnt/lust\
-re1
-ossfoonode# mkfs.lustre --fsname=foo --ost --mgsnode=mgsnode@tcp0 /mnt/lust\
-re1
-ossfoonode# mkfs.lustre --fsname=foo --ost --mgsnode=mgsnode@tcp0 /mnt/lust\
-re2
-mdtbarnode# mkfs.lustre --fsname=bar --mdt --mgsnode=mgsnode@tcp0 /mnt/lust\
-re1
-ossbarnode# mkfs.lustre --fsname=bar --ost --mgsnode=mgsnode@tcp0 /mnt/lust\
-re1
-ossbarnode# mkfs.lustre --fsname=bar --ost --mgsnode=mgsnode@tcp0 /mnt/lust\
-re2</screen>
-    <para>To mount a client on file system foo at mount point <literal>/mnt/lustre1</literal>, run:</para>
-    <screen>mount -t lustre mgsnode@tcp0:/foo /mnt/lustre1</screen>
-    <para>To mount a client on file system bar at mount point <literal>/mnt/lustre2</literal>, run:</para>
-    <screen>mount -t lustre mgsnode@tcp0:/bar /mnt/lustre2</screen>
+    <para>A Lustre installation with two file systems (<literal>foo</literal> and <literal>bar</literal>) could look like this, where the MGS node is <literal>mgsnode@tcp0</literal> and the mount points are <literal>/mnt/foo</literal> and <literal>/mnt/bar</literal>.</para>
+    <screen>mgsnode# mkfs.lustre --mgs /dev/sda
+mdtfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --mdt --index=0 /dev/sdb
+ossfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --ost --index=0 /dev/sda
+ossfoonode# mkfs.lustre --fsname=foo --mgsnode=mgsnode@tcp0 --ost --index=1 /dev/sdb
+mdtbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --mdt --index=0 /dev/sda
+ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=0 /dev/sdc
+ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=1 /dev/sdd</screen>
+    <para>To mount a client on file system foo at mount point <literal>/mnt/foo</literal>, run:</para>
+    <screen>mount -t lustre mgsnode@tcp0:/foo /mnt/foo</screen>
+    <para>To mount a client on file system bar at mount point <literal>/mnt/bar</literal>, run:</para>
+    <screen>mount -t lustre mgsnode@tcp0:/bar /mnt/bar</screen>
   </section>
   <section xml:id="dbdoclet.50438194_88980">
     <title><indexterm><primary>operations</primary><secondary>parameters</secondary></indexterm>Setting and Retrieving Lustre Parameters</title>
@@ -281,10 +275,10 @@ osc.myth-OST0004-osc-ffff88006dd20000.filesfree=129651</screen>
     <screen>lctl list_nids</screen>
     <para>This displays the server&apos;s NIDs (networks configured to work with Lustre).</para>
     <para>This example has a combined MGS/MDT failover pair on uml1 and uml2, and a OST failover pair on uml3 and uml4. There are corresponding Elan addresses on uml1 and uml2.</para>
-    <screen>uml1&gt; mkfs.lustre --fsname=testfs --mdt --mgs --failnode=uml2,2@elan /dev/sda1
+    <screen>uml1&gt; mkfs.lustre --fsname=testfs --mgs --mdt --index=0 --failnode=uml2,2@elan /dev/sda1
 uml1&gt; mount -t lustre /dev/sda1 /mnt/test/mdt
-uml3&gt; mkfs.lustre --fsname=testfs --ost --failnode=uml4 --mgsnode=uml1,1@ela\
-n --mgsnode=uml2,2@elan /dev/sdb
+uml3&gt; mkfs.lustre --fsname=testfs --failnode=uml4 --mgsnode=uml1,1@elan \
+--mgsnode=uml2,2@elan --ost --index=0 /dev/sdb
 uml3&gt; mount -t lustre /dev/sdb /mnt/test/ost0
 client&gt; mount -t lustre uml1,1@elan:uml2,2@elan:/testfs /mnt/testfs
 uml1&gt; umount /mnt/mdt
@@ -296,8 +290,8 @@ uml2&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
       <orderedlist>
         <listitem>
           <para>On the OST, list the NIDs of all MGS nodes at <literal>mkfs</literal> time.</para>
-          <screen>OST# mkfs.lustre --fsname sunfs --ost --mgsnode=10.0.0.1 \
-  --mgsnode=10.0.0.2 /dev/{device}</screen>
+          <screen>OST# mkfs.lustre --fsname sunfs --mgsnode=10.0.0.1 \
+  --mgsnode=10.0.0.2 --ost --index=0 /dev/sdb</screen>
         </listitem>
         <listitem>
           <para>On the client, mount the file system.</para>
@@ -319,11 +313,11 @@ uml2&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
       </listitem>
       <listitem>
         <para>Erase the file system and, presumably, replace it with another file system, run:</para>
-        <screen>$ mkfs.lustre -reformat --fsname spfs --mdt --mgs /dev/sda</screen>
+        <screen>$ mkfs.lustre --reformat --fsname spfs --mgs --mdt --index=0 /dev/sda</screen>
       </listitem>
       <listitem>
         <para>If you have a separate MGS (that you do not want to reformat), then add the &quot;writeconf&quot; flag to <literal>mkfs.lustre</literal> on the MDT, run:</para>
-        <screen>$ mkfs.lustre --reformat --writeconf -fsname spfs --mdt \ --mgs /dev/sda</screen>
+        <screen>$ mkfs.lustre --reformat --writeconf -fsname spfs --mgs --mdt --index=0 /dev/sda</screen>
       </listitem>
     </orderedlist>
     <note>

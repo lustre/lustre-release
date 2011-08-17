@@ -126,9 +126,8 @@
         <listitem>
           <para>Create the OST.</para>
           <para>In this example, <literal>/dev/sdc</literal> is the RAID 6 device to be used as the OST, run:</para>
-          <screen>[oss#] mkfs.lustre --ost --mgsnode=mds@osib --mkfsoptions=&quot;-J device=/dev/sd\
-b1&quot; /dev/sdc
-</screen>
+          <screen>[oss#] mkfs.lustre --mgsnode=mds@osib --ost --index=0 \
+--mkfsoptions=&quot;-J device=/dev/sdb1&quot; /dev/sdc</screen>
         </listitem>
         <listitem>
           <para>Mount the OST as usual.</para>

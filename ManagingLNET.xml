@@ -154,10 +154,10 @@ $ mkfs.lustre --fsname lustre --mdt --mgs /dev/sda
 $ mkdir -p /mnt/test/mdt
 $ mount -t lustre /dev/sda /mnt/test/mdt   
 $ mount -t lustre mgs@o2ib0:/lustre /mnt/mdt
-$ mkfs.lustre --fsname lustre --ost --mgsnode=mds@o2ib0 /dev/sda
+$ mkfs.lustre --fsname lustre --mgsnode=mds@o2ib0 --ost --index=0 /dev/sda
 $ mkdir -p /mnt/test/mdt
 $ mount -t lustre /dev/sda /mnt/test/ost   
-$ mount -t lustre mgs@o2ib0:/lustre /mnt/ost</screen>
+$ mount -t lustre mgs@o2ib0:/lustre /mnt/ost0</screen>
         </listitem>
         <listitem>
           <para>Mount the clients.</para>

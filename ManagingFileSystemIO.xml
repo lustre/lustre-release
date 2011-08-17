@@ -297,9 +297,9 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
     <orderedlist>
       <listitem>
         <para>Add a new OST by passing on the following commands, run:</para>
-        <screen>$ mkfs.lustre --fsname=spfs --ost --mgsnode=mds16@tcp0 /dev/sda
-$ mkdir -p /mnt/test/ost0
-$ mount -t lustre /dev/sda /mnt/test/ost0</screen>
+        <screen>$ mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
+$ mkdir -p /mnt/test/ost12
+$ mount -t lustre /dev/sda /mnt/test/ost12</screen>
       </listitem>
       <listitem>
         <para>Migrate the data (possibly).</para>

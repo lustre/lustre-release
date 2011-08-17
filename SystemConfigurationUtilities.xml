@@ -1592,7 +1592,7 @@ mkfs.lustre</title>
                 <para> <emphasis role="bold">--index</emphasis>=<emphasis>index</emphasis></para>
               </entry>
               <entry>
-                <para>  Forces a particular OST or MDT index.</para>
+                <para>  Specifies the OST or MDT number.  This should always be used when formatting OSTs, in order to ensure that there is a simple mapping between the OST index and the OSS node and device it is located on.</para>
               </entry>
             </row>
             <row>
@@ -1611,7 +1611,7 @@ mkfs.lustre</title>
                 <para>  Sets the mount options used when the backing file system is mounted.</para>
                 <para><emphasis role="bold">CAUTION</emphasis>: Unlike earlier versions of mkfs.lustre, this version completely replaces the default mount options with those specified on the command line, and issues a warning on stderr if any default mount options are omitted.</para>
                 <para>The defaults for ldiskfs are:</para>
-                <para>OST: <emphasis>errors=remount-ro,mballoc,extents</emphasis>;</para>
+                <para>OST: <emphasis>errors=remount-ro</emphasis>;</para>
                 <para>MGS/MDT: <emphasis>errors=remount-ro,iopen_nopriv,user_xattr</emphasis></para>
                 <para>Do not alter the default mount options unless you know what you are doing.</para>
               </entry>
@@ -1726,7 +1726,7 @@ mkfs.lustre</title>
       <para>Creates a combined MGS and MDT for file system <emphasis role="bold">testfs</emphasis> on, e.g., node <emphasis role="bold">cfs21</emphasis>:</para>
       <screen>mkfs.lustre --fsname=testfs --mdt --mgs /dev/sda1</screen>
       <para>Creates an OST for file system <emphasis role="bold">testfs</emphasis> on any node (using the above MGS):</para>
-      <screen>mkfs.lustre --fsname=testfs --ost --mgsnode=cfs21@tcp0 /dev/sdb</screen>
+      <screen>mkfs.lustre --fsname=testfs --mgsnode=cfs21@tcp0 --ost --index=0 /dev/sdb</screen>
       <para>Creates a standalone MGS on, e.g., node <emphasis role="bold">cfs22</emphasis>:</para>
       <screen>mkfs.lustre --mgs /dev/sda1</screen>
       <para>Creates an MDT for file system <emphasis role="bold">myfs1</emphasis> on any node (using the above MGS):</para>

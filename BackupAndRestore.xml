@@ -159,8 +159,8 @@
         <screen># lctl --device lustre-MDT0000 changelog_register lustre-MDT0000 Registered\
  changelog userid &apos;cl1&apos;</screen>
         <para>Synchronize a Lustre file system (<literal>/mnt/lustre</literal>) to a target file system (<literal>/mnt/target</literal>).</para>
-        <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target --mdt=lustre-MDT00\
-00 --user=cl1 --statuslog sync.log  --verbose 
+        <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target --mdt=lustre-MDT0000 \
+--user=cl1 --statuslog sync.log  --verbose 
 Lustre filesystem: lustre 
 MDT device: lustre-MDT0000 
 Source: /mnt/lustre 
@@ -332,15 +332,15 @@ cfs21:~# lvscan
         <listitem>
           <para>Format the LVM volumes as Lustre targets.</para>
           <para>In this example, the backup file system is called &apos;main&apos; and designates the current, most up-to-date backup.</para>
-          <screen>cfs21:~# mkfs.lustre --mdt --fsname=main /dev/volgroup/MDT
+          <screen>cfs21:~# mkfs.lustre --fsname=main --mdt --index=0 /dev/volgroup/MDT
  No management node specified, adding MGS to this MDT.
     Permanent disk data:
- Target:     main-MDTffff
- Index:      unassigned
+ Target:     main-MDT0000
+ Index:      0
  Lustre FS:  main
  Mount type: ldiskfs
  Flags:      0x75
-               (MDT MGS needs_index first_time update )
+               (MDT MGS first_time update )
  Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
  Parameters:
 checking for existing Lustre data
@@ -349,27 +349,28 @@ checking for existing Lustre data
          target name  main-MDTffff
          4k blocks     0
          options        -i 4096 -I 512 -q -O dir_index -F
- mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-MDTffff  -i 4096 -I 512 -q -O dir_\
-index -F /dev/volgroup/MDT
+ mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-MDTffff  -i 4096 -I 512 -q
+ -O dir_index -F /dev/volgroup/MDT
  Writing CONFIGS/mountdata
-cfs21:~# mkfs.lustre --ost --mgsnode=cfs21 --fsname=main /dev/volgroup/OST0
+cfs21:~# mkfs.lustre --mgsnode=cfs21 --fsname=main --ost --index=0 /dev/volgroup/OST0
     Permanent disk data:
- Target:     main-OSTffff
-Index:      unassigned
+ Target:     main-OST0000
+ Index:      0
  Lustre FS:  main
  Mount type: ldiskfs
  Flags:      0x72
-               (OST needs_index first_time update )
+               (OST first_time update )
  Persistent mount opts: errors=remount-ro,extents,mballoc
  Parameters: mgsnode=192.168.0.21@tcp
 checking for existing Lustre data
  device size = 200MB
  formatting backing filesystem ldiskfs on /dev/volgroup/OST0
-         target name  main-OSTffff
+         target name  main-OST0000
          4k blocks     0
          options        -I 256 -q -O dir_index -F
- mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-OSTffff  -I 256 -q -O dir_index -F\
- /dev/ volgroup/OST0
+ mkfs_cmd = mkfs.ext2 -j -b 4096 -L lustre-OSTffff -J size=400 -I 256 
+  -i 262144 -O extents,uninit_bg,dir_nlink,huge_file,flex_bg -G 256 
+  -E resize=4290772992,lazy_journal_init, -F /dev/volgroup/OST0
  Writing CONFIGS/mountdata
 cfs21:~# mount -t lustre /dev/volgroup/MDT /mnt/mdt
 cfs21:~# mount -t lustre /dev/volgroup/OST0 /mnt/ost
@@ -411,8 +412,7 @@ fstab  passwd  termcap</screen>
         <listitem>
           <para>Rename the LVM snapshot.</para>
           <para>Rename the file system snapshot from &quot;main&quot; to &quot;back&quot; so you can mount it without unmounting &quot;main&quot;. This is recommended, but not required. Use the <literal>--reformat</literal> flag to <literal>tunefs.lustre</literal> to force the name change. For example:</para>
-          <screen>cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/volgroup/M\
-DTb1
+          <screen>cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/volgroup/MDTb1
  checking for existing Lustre data
  found Lustre data
  Reading CONFIGS/mountdata
@@ -435,8 +435,7 @@ Permanent disk data:
  Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
  Parameters:
 Writing CONFIGS/mountdata
-cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/volgroup/O\
-STb1
+cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/volgroup/OSTb1
  checking for existing Lustre data
  found Lustre data
  Reading CONFIGS/mountdata
@@ -459,8 +458,7 @@ Permanent disk data:
  Persistent mount opts: errors=remount-ro,extents,mballoc
  Parameters: mgsnode=192.168.0.21@tcp
 Writing CONFIGS/mountdata
-When renaming an FS, we must also erase the last_rcvd file from the snapsho\
-ts
+When renaming an FS, we must also erase the last_rcvd file from the snapshots
 cfs21:~# mount -t ldiskfs /dev/volgroup/MDTb1 /mnt/mdtback
 cfs21:~# rm /mnt/mdtback/last_rcvd
 cfs21:~# umount /mnt/mdtback
@@ -471,7 +469,7 @@ cfs21:~# umount /mnt/ostback</screen>
         <listitem>
           <para>Mount the file system from the LVM snapshot.</para>
           <para>For example:</para>
-          <screen>cfs21:~# mount -t lustre /dev/volgroup/MDTb1 /mnt/mdtback                  \
+          <screen>cfs21:~# mount -t lustre /dev/volgroup/MDTb1 /mnt/mdtback
                                                             
 cfs21:~# mount -t lustre /dev/volgroup/OSTb1 /mnt/ostback
 cfs21:~# mount -t lustre cfs21:/back /mnt/back</screen>

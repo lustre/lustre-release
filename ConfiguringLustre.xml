@@ -53,7 +53,7 @@
     <orderedlist>
       <listitem>
         <para>Create a combined MGS/MDT file system on a block device. On the MDS node, run:</para>
-        <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgs --mdt &lt;<emphasis>block device name</emphasis>&gt;</screen>
+        <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgs --mdt --index=0 &lt;<emphasis>block device name</emphasis>&gt;</screen>
         <para>The default file system name (<literal>fsname</literal>) is <literal>lustre</literal>.</para>
         <note>
           <para>If you plan to generate multiple file systems, the MGS should be created separately on its own dedicated block device, by running:</para>
@@ -69,13 +69,14 @@
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1290915">
         <para>Create the OST. On the OSS node, run:</para>
-        <screen>mkfs.lustre --ost --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgsnode=&lt;<emphasis>NID</emphasis>&gt; &lt;<emphasis>block device name</emphasis>&gt;</screen>
+        <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgsnode=&lt;<emphasis>NID</emphasis>&gt; --ost --index=&lt;<emphasis>OST index</emphasis>&gt; &lt;<emphasis>block device name</emphasis>&gt;</screen>
         <para>When you create an OST, you are formatting a <literal>ldiskfs</literal> file system on a block storage device like you would with any local file system.</para>
         <para>You can have as many OSTs per OSS as the hardware or drivers allow. For more information about storage and memory requirements for a Lustre file system, see <xref linkend="settinguplustresystem"/>.</para>
         <para>You can only configure one OST per block device. You should create an OST that uses the raw block device and does not use partitioning.</para>
+        <para>You should specify the OST index number at format time in order to simplify the translating the OST number in error messages or file striping to the OSS node and block device later on.</para>
         <para>If you are using block devices that are accessible from multiple OSS nodes, ensure that you mount the OSTs from only one OSS node at at time. It is strongly recommended that multiple-mount protection be enabled for such devices to prevent serious data corruption. For more information about multiple-mount protection, see <xref linkend="managingfailover"/>.</para>
         <note>
-          <para>Lustre currently supports block devices up to 16 TB on OEL 5/RHEL 5 (up to 8 TB on other distributions). If the device size is only slightly larger that 16 TB, it is recommended that you limit the file system size to 16 TB at format time. If the size is significantly larger than 16 TB, you should reconfigure the storage into devices smaller than 16 TB. We recommend that you not place partitions on top of RAID 5/6 block devices due to negative impacts on performance.</para>
+          <para>Lustre currently supports block devices up to 128 TB on RHEL 5/6 (up to 8 TB on other distributions). If the device size is only slightly larger that 16 TB, it is recommended that you limit the file system size to 16 TB at format time.  We recommend that you not place DOS partitions on top of RAID 5/6 block devices due to negative impacts on performance, but instead format the whole disk for the filesystem.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1293955">
@@ -83,7 +84,7 @@
         <screen>mount -t lustre <emphasis>&lt;block device name&gt; &lt;mount point&gt;</emphasis></screen>
         <note>
           <para>
-              To create additional OSTs, repeat <xref linkend="dbdoclet.50438267_pgfId-1290915"/>Step 3 and <xref linkend="dbdoclet.50438267_pgfId-1293955"/>Step 4.</para>
+              To create additional OSTs, repeat <xref linkend="dbdoclet.50438267_pgfId-1290915"/>Step 3 and <xref linkend="dbdoclet.50438267_pgfId-1293955"/>Step 4, specifying the next higher OST index number.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1290934">
@@ -411,15 +412,15 @@
       <orderedlist>
         <listitem>
           <para>Create a combined MGS/MDT file system on the block device. On the MDS node, run:</para>
-          <screen>[root@mds /]# mkfs.lustre --fsname=temp --mgs --mdt /dev/sdb</screen>
+          <screen>[root@mds /]# mkfs.lustre --fsname=temp --mgs --mdt --index=0 /dev/sdb</screen>
           <para>This command generates this output:</para>
           <screen>    Permanent disk data:
-Target:            temp-MDTffff
-Index:             unassigned
+Target:            temp-MDT0000
+Index:             0
 Lustre FS: temp
 Mount type:        ldiskfs
 Flags:             0x75
-   (MDT MGS needs_index first_time update )
+   (MDT MGS first_time update )
 Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
 Parameters: mdt.group_upcall=/usr/sbin/l_getgroups
  
@@ -450,15 +451,15 @@ Lustre: Server temp-MDT0000 on device /dev/sdb has started </screen>
           <orderedlist>
             <listitem>
               <para>Create <literal>ost1</literal>. On <literal>oss1</literal> node, run:</para>
-              <screen>[root@oss1 /]# mkfs.lustre --ost --fsname=temp --mgsnode=10.2.0.1@tcp0 /dev/sdc</screen>
+              <screen>[root@oss1 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 --ost --index=0 /dev/sdc</screen>
               <para>The command generates this output:</para>
               <screen>    Permanent disk data:
-Target:            temp-OSTffff
-Index:             unassigned
+Target:            temp-OST0000
+Index:             0
 Lustre FS: temp
 Mount type:        ldiskfs
 Flags:             0x72
-(OST needs_index first_time update)
+(OST first_time update)
 Persistent mount opts: errors=remount-ro,extents,mballoc
 Parameters: mgsnode=10.2.0.1@tcp
  
@@ -466,10 +467,10 @@ checking for existing Lustre data: not found
 device size = 16MB
 2 6 18
 formatting backing filesystem ldiskfs on /dev/sdc
-   target name             temp-OSTffff
+   target name             temp-OST0000
    4k blocks               0
    options                 -I 256 -q -O dir_index,uninit_groups -F
-mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OSTffff  -I 256 -q -O
+mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OST0000  -I 256 -q -O
 dir_index,uninit_groups -F /dev/sdc
 Writing CONFIGS/mountdata </screen>
             </listitem>
@@ -492,16 +493,16 @@ Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans </scre
           <orderedlist>
             <listitem>
               <para>Create ost2. On <literal>oss2</literal> node, run:</para>
-              <screen>[root@oss2 /]# mkfs.lustre --ost --fsname=temp --mgsnode=10.2.0.1@tcp0 /dev\
-/sdd</screen>
+              <screen>[root@oss2 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 \
+--ost --index=1 /dev/sdd</screen>
               <para>The command generates this output:</para>
               <screen>    Permanent disk data:
-Target:            temp-OSTffff
-Index:             unassigned
+Target:            temp-OST0001
+Index:             1
 Lustre FS: temp
 Mount type:        ldiskfs
 Flags:             0x72
-(OST needs_index first_time update)
+(OST first_time update)
 Persistent mount opts: errors=remount-ro,extents,mballoc
 Parameters: mgsnode=10.2.0.1@tcp
  
@@ -509,10 +510,10 @@ checking for existing Lustre data: not found
 device size = 16MB
 2 6 18
 formatting backing filesystem ldiskfs on /dev/sdd
-   target name             temp-OSTffff
+   target name             temp-OST0001
    4k blocks               0
    options                 -I 256 -q -O dir_index,uninit_groups -F
-mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OSTffff  -I 256 -q -O
+mkfs_cmd = mkfs.ext2 -j -b 4096 -L temp-OST0001  -I 256 -q -O
 dir_index,uninit_groups -F /dev/sdc
 Writing CONFIGS/mountdata </screen>
             </listitem>
@@ -522,11 +523,11 @@ Writing CONFIGS/mountdata </screen>
               <para>The command generates this output:</para>
               <screen>LDISKFS-fs: file extents enabled 
 LDISKFS-fs: mballoc enabled
-Lustre: temp-OST0000: new disk, initializing
-Lustre: Server temp-OST0000 on device /dev/sdb has started</screen>
+Lustre: temp-OST0001: new disk, initializing
+Lustre: Server temp-OST0001 on device /dev/sdb has started</screen>
               <para>Shortly afterwards, this output appears:</para>
-              <screen>Lustre: temp-OST0000: received MDS connection from 10.2.0.1@tcp0
-Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans </screen>
+              <screen>Lustre: temp-OST0001: received MDS connection from 10.2.0.1@tcp0
+Lustre: MDS temp-MDT0000: temp-OST0001_UUID now active, resetting orphans </screen>
             </listitem>
           </orderedlist>
         </listitem>
