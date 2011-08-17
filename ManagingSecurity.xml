@@ -148,7 +148,7 @@ lctl get_param mds.Lustre-MDT000*.nosquash_nids</screen>
           <para>The <literal>lctl conf_param</literal> value overwrites the parameter&apos;s previous value. If the new value uses an incorrect syntax, then the system continues with the old parameters and the previously-correct value is lost on remount. That is, be careful doing root squash tuning.</para>
         </listitem>
         <listitem>
-          <para><literal>mkfs.lustre</literal>  and <literal>tunefs.lustre</literal> do not perform syntax checking. If the root squash parameters are incorrect, they are ignored on mount and the default values are used instead.</para>
+          <para><literal>mkfs.lustre</literal> and <literal>tunefs.lustre</literal> do not perform parameter syntax checking. If the root squash parameters are incorrect, they are ignored on mount and the default values are used instead.</para>
         </listitem>
         <listitem>
           <para>Root squash parameters are parsed with rigorous syntax checking. The root_squash parameter should be specified as <literal>&lt;decnum&gt;&apos;:&apos;&lt;decnum&gt;</literal>. The <literal>nosquash_nids</literal> parameter should follow LNET NID range list syntax.</para>

@@ -143,8 +143,8 @@
         </listitem>
       </itemizedlist>
       <para>The <literal>stdout</literal> and the <literal>.summary</literal> file will contain lines like this:</para>
-      <screen>total_size 8388608K rsz 1024 thr 1 crg 1 180.45 MB/s 1 x 180.50 \=/ 180.50 \
-MB/s
+      <screen>total_size 8388608K rsz 1024 thr 1 crg 1 180.45 MB/s 1 x 180.50 \
+        = 180.50 MB/s
 </screen>
       <para>Each line corresponds to a run of the test. Each test run will have a different number of threads, record size, or number of regions.</para>
       <itemizedlist>
@@ -256,8 +256,8 @@ MB/s
         <listitem>
           <para>Run the <literal>obdfilter_survey</literal> script with the <literal>target=parameter</literal>.</para>
           <para>For example, to run a local test with up to two objects (<literal>nobjhi</literal>), up to two threads (<literal>thrhi</literal>), and 1024 Mb (size) transfer size:</para>
-          <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&apos;lustre-OST0001 \
-lustre-OST0002&apos; sh obdfilter-survey</screen>
+          <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;lustre-OST0001 \
+	   lustre-OST0002&quot; sh obdfilter-survey</screen>
         </listitem>
       </orderedlist>
     </section>
@@ -281,8 +281,8 @@ lustre-OST0002&apos; sh obdfilter-survey</screen>
         </listitem>
         <listitem>
           <para>Run the <literal>obdfilter_survey</literal> script with the parameters <literal>case=network</literal> and <literal>targets=<replaceable>&lt;hostname</replaceable>|<replaceable>ip_of_server&gt;</replaceable></literal>. For example:</para>
-          <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&apos;oss1 oss2&apos; case=network sh obdfilte\
-sh odbfilter-survey</screen>
+          <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;oss0 oss1&quot; \
+	   case=network sh odbfilter-survey</screen>
         </listitem>
         <listitem>
           <para>On the server side, view the statistics at:</para>
@@ -327,9 +327,9 @@ sh odbfilter-survey</screen>
           <para>On the OSS nodes to be tested, run the <literal>lctl dl</literal> command. The OSC device names are listed in the fourth column of the output. For example:</para>
           <screen>$ lctl dl |grep obdfilter
 3 UP osc lustre-OST0000-osc-ffff88007754bc00 \
-  54b91eab-0ea9-1516-b571-5e6df349592e 5
+           54b91eab-0ea9-1516-b571-5e6df349592e 5
 4 UP osc lustre-OST0001-osc-ffff88007754bc00 \
-  54b91eab-0ea9-1516-b571-5e6df349592e 5
+           54b91eab-0ea9-1516-b571-5e6df349592e 5
 ...
 </screen>
         </listitem>
@@ -341,9 +341,8 @@ sh odbfilter-survey</screen>
           <para>Run the <literal><replaceable role="bold">o</replaceable>bdfilter_survey</literal> script with the <literal>target=parameter</literal> and <literal>case=netdisk</literal>.</para>
           <para>An example of a local test run with up to two objects (<literal>nobjhi</literal>), up to two threads (<literal>thrhi</literal>), and 1024 Mb (size) transfer size is shown below:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 \
-  targets=&quot;lustre-OST0000-osc-ffff88007754bc00 \
-  lustre-OST0001-osc-ffff88007754bc00&quot; \ 
-  sh obdfilter-survey
+           targets=&quot;lustre-OST0000-osc-ffff88007754bc00 \
+           lustre-OST0001-osc-ffff88007754bc00&quot; sh obdfilter-survey
 </screen>
         </listitem>
       </orderedlist>
@@ -516,25 +515,20 @@ sh odbfilter-survey</screen>
     <screen>$ ./ost-survey.sh 10 /mnt/lustre
 </screen>
     <para>Typical output is:</para>
-    <screen>Average read Speed:                  6.73
-Average write Speed:                       5.41
-read - Worst OST indx 0                    5.84 MB/s
-write - Worst OST indx 0           3.77 MB/s
-read - Best OST indx 1                     7.38 MB/s
-write - Best OST indx 1                    6.31 MB/s
+    <screen>
+Average read Speed:                  6.73
+Average write Speed:                 5.41
+read - Worst OST indx 0              5.84 MB/s
+write - Worst OST indx 0             3.77 MB/s
+read - Best OST indx 1               7.38 MB/s
+write - Best OST indx 1              6.31 MB/s
 3 OST devices found
-Ost index 0 Read speed                     5.84            Write speed     \
-        3.77
-Ost index 0 Read time                      0.17            Write time      \
-        0.27
-Ost index 1 Read speed                     7.38            Write speed     \
-        6.31
-Ost index 1 Read time                      0.14            Write time      \
-        0.16
-Ost index 2 Read speed                     6.98            Write speed     \
-        6.16
-Ost index 2 Read time                      0.14            Write time      \
-        0.16 
+Ost index 0 Read speed               5.84         Write speed     3.77
+Ost index 0 Read time                0.17         Write time      0.27
+Ost index 1 Read speed               7.38         Write speed     6.31
+Ost index 1 Read time                0.14         Write time      0.16
+Ost index 2 Read speed               6.98         Write speed     6.16
+Ost index 2 Read time                0.14         Write time      0.16 
 </screen>
   </section>
   <section xml:id="dbdoclet.50438212_58201">

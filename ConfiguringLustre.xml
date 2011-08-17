@@ -215,7 +215,7 @@
                 <para> <emphasis role="bold">MGS/MDS node</emphasis></para>
               </entry>
               <entry>
-                <para> <literal>mdt1</literal></para>
+                <para> <literal>mdt0</literal></para>
               </entry>
               <entry>
                 <para>MDS in Lustre file system temp</para>
@@ -246,7 +246,7 @@
                 <para> <literal>/mnt/mdt</literal></para>
               </entry>
               <entry>
-                <para>Mount point for the <literal>mdt1</literal> block device (<literal>/dev/sdb</literal>) on the MGS/MDS node</para>
+                <para>Mount point for the <literal>mdt0</literal> block device (<literal>/dev/sdb</literal>) on the MGS/MDS node</para>
               </entry>
             </row>
             <row>
@@ -262,7 +262,7 @@
                 <para> <emphasis role="bold">OSS node</emphasis></para>
               </entry>
               <entry>
-                <para><literal> oss1</literal></para>
+                <para><literal> oss0</literal></para>
               </entry>
               <entry>
                 <para>First OSS node in Lustre file system temp</para>
@@ -276,7 +276,7 @@
                 <para> <emphasis role="bold">OST</emphasis></para>
               </entry>
               <entry>
-                <para><literal> ost1</literal></para>
+                <para><literal>ost0</literal></para>
               </entry>
               <entry>
                 <para>First OST in Lustre file system temp</para>
@@ -293,7 +293,7 @@
                 <para> <literal>/dev/sdc</literal></para>
               </entry>
               <entry>
-                <para>Block device for the first OSS node (<literal>oss1</literal>)</para>
+                <para>Block device for the first OSS node (<literal>oss0</literal>)</para>
               </entry>
             </row>
             <row>
@@ -304,10 +304,10 @@
                 <para> <emphasis role="bold">mount point</emphasis></para>
               </entry>
               <entry>
-                <para> <literal>/mnt/ost1</literal></para>
+                <para> <literal>/mnt/ost0</literal></para>
               </entry>
               <entry>
-                <para> Mount point for the <literal>ost1</literal> block device (<literal>/dev/sdc</literal>) on the <literal>oss1</literal> node</para>
+                <para> Mount point for the <literal>ost0</literal> block device (<literal>/dev/sdc</literal>) on the <literal>oss1</literal> node</para>
               </entry>
             </row>
             <row>
@@ -323,7 +323,7 @@
                 <para> <emphasis role="bold">OSS node</emphasis></para>
               </entry>
               <entry>
-                <para><literal>oss2</literal></para>
+                <para><literal>oss1</literal></para>
               </entry>
               <entry>
                 <para>Second OSS node in Lustre file system temp</para>
@@ -337,7 +337,7 @@
                 <para> <emphasis role="bold">OST</emphasis></para>
               </entry>
               <entry>
-                <para> <literal>ost2</literal></para>
+                <para> <literal>ost1</literal></para>
               </entry>
               <entry>
                 <para>Second OST in Lustre file system temp</para>
@@ -352,7 +352,7 @@
                 <para><literal>/dev/sdd</literal></para>
               </entry>
               <entry>
-                <para>Block device for the second OSS node (oss2)</para>
+                <para>Block device for the second OSS node (oss1)</para>
               </entry>
             </row>
             <row>
@@ -363,10 +363,10 @@
                 <para> <emphasis role="bold">mount point</emphasis></para>
               </entry>
               <entry>
-                <para><literal>/mnt/ost2</literal></para>
+                <para><literal>/mnt/ost1</literal></para>
               </entry>
               <entry>
-                <para> Mount point for the <literal>ost2</literal> block device (<literal>/dev/sdd</literal>) on the <literal>oss2</literal> node</para>
+                <para> Mount point for the <literal>ost1</literal> block device (<literal>/dev/sdd</literal>) on the <literal>oss1</literal> node</para>
               </entry>
             </row>
             <row>
@@ -440,18 +440,18 @@ Writing CONFIGS/mountdata </screen>
           <screen>[root@mds /]# mount -t lustre /dev/sdb /mnt/mdt</screen>
           <para>This command generates this output:</para>
           <screen>Lustre: temp-MDT0000: new disk, initializing 
-Lustre: 3009:0:(lproc_mds.c:262:lprocfs_wr_group_upcall()) temp-MDT0000: gr\
-oup upcall set to /usr/sbin/l_getgroups
+Lustre: 3009:0:(lproc_mds.c:262:lprocfs_wr_group_upcall()) temp-MDT0000:
+group upcall set to /usr/sbin/l_getgroups
 Lustre: temp-MDT0000.mdt: set parameter group_upcall=/usr/sbin/l_getgroups
 Lustre: Server temp-MDT0000 on device /dev/sdb has started </screen>
         </listitem>
         <listitem xml:id="dbdoclet.50438267_pgfId-1291170">
-          <para>Create and mount <literal>ost1</literal>.</para>
-          <para>In this example, the OSTs (<literal>ost1</literal> and <literal>ost2</literal>) are being created on different OSSs (<literal>oss1</literal> and <literal>oss2</literal> respectively).</para>
+          <para>Create and mount <literal>ost0</literal>.</para>
+          <para>In this example, the OSTs (<literal>ost0</literal> and <literal>ost1</literal>) are being created on different OSS nodes (<literal>oss0</literal> and <literal>oss1</literal> respectively).</para>
           <orderedlist>
             <listitem>
-              <para>Create <literal>ost1</literal>. On <literal>oss1</literal> node, run:</para>
-              <screen>[root@oss1 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 --ost --index=0 /dev/sdc</screen>
+              <para>Create <literal>ost0</literal>. On <literal>oss0</literal> node, run:</para>
+              <screen>[root@oss0 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 --ost --index=0 /dev/sdc</screen>
               <para>The command generates this output:</para>
               <screen>    Permanent disk data:
 Target:            temp-OST0000
@@ -475,8 +475,8 @@ dir_index,uninit_groups -F /dev/sdc
 Writing CONFIGS/mountdata </screen>
             </listitem>
             <listitem>
-              <para>Mount ost1 on the OSS on which it was created. On <literal>oss1</literal> node, run:</para>
-              <screen>root@oss1 /] mount -t lustre /dev/sdc /mnt/ost1 </screen>
+              <para>Mount ost0 on the OSS on which it was created. On <literal>oss0</literal> node, run:</para>
+              <screen>root@oss0 /] mount -t lustre /dev/sdc /mnt/ost0</screen>
               <para>The command generates this output:</para>
               <screen>LDISKFS-fs: file extents enabled 
 LDISKFS-fs: mballoc enabled
@@ -489,12 +489,12 @@ Lustre: MDS temp-MDT0000: temp-OST0000_UUID now active, resetting orphans </scre
           </orderedlist>
         </listitem>
         <listitem>
-          <para>Create and mount <literal>ost2</literal>.</para>
+          <para>Create and mount <literal>ost1</literal>.</para>
           <orderedlist>
             <listitem>
-              <para>Create ost2. On <literal>oss2</literal> node, run:</para>
-              <screen>[root@oss2 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 \
---ost --index=1 /dev/sdd</screen>
+              <para>Create ost1. On <literal>oss1</literal> node, run:</para>
+              <screen>[root@oss1 /]# mkfs.lustre --fsname=temp --mgsnode=10.2.0.1@tcp0 \
+           --ost --index=1 /dev/sdd</screen>
               <para>The command generates this output:</para>
               <screen>    Permanent disk data:
 Target:            temp-OST0001
@@ -518,8 +518,8 @@ dir_index,uninit_groups -F /dev/sdc
 Writing CONFIGS/mountdata </screen>
             </listitem>
             <listitem>
-              <para>Mount ost2 on the OSS on which it was created. On <literal>oss2</literal> node, run:</para>
-              <screen>root@oss2 /] mount -t lustre /dev/sdd /mnt/ost2 </screen>
+              <para>Mount ost1 on the OSS on which it was created. On <literal>oss1</literal> node, run:</para>
+              <screen>root@oss1 /] mount -t lustre /dev/sdd /mnt/ost1 </screen>
               <para>The command generates this output:</para>
               <screen>LDISKFS-fs: file extents enabled 
 LDISKFS-fs: mballoc enabled
@@ -544,27 +544,23 @@ Lustre: MDS temp-MDT0000: temp-OST0001_UUID now active, resetting orphans </scre
               <para>Run the <literal>lfs df -h</literal> command:</para>
               <screen>[root@client1 /] lfs df -h </screen>
               <para>The <literal>lfs df -h</literal> command lists space usage per OST and the MDT in human-readable format. This command generates output similar to this:</para>
-              <screen>UUID                        bytes           Used            Available      \
- Use%    Mounted on
-temp-MDT0000_UUID  8.0G            400.0M          7.6G            0%      \
-/lustre[MDT:0]
-temp-OST0000_UUID  800.0G          400.0M          799.6G          0%      \
-/lustre[OST:0]
-temp-OST0001_UUID  800.0G          400.0M          799.6G          0%      \
-/lustre[OST:1]
-filesystem summary:        1.6T            800.0M          1.6T            \
-0%      /lustre</screen>
+              <screen>
+UUID               bytes      Used      Available   Use%    Mounted on
+temp-MDT0000_UUID  8.0G      400.0M       7.6G        0%      /lustre[MDT:0]
+temp-OST0000_UUID  800.0G    400.0M     799.6G        0%      /lustre[OST:0]
+temp-OST0001_UUID  800.0G    400.0M     799.6G        0%      /lustre[OST:1]
+filesystem summary:  1.6T    800.0M       1.6T        0%      /lustre</screen>
             </listitem>
             <listitem>
               <para>Run the <literal>lfs df -ih</literal> command.</para>
               <screen>[root@client1 /] lfs df -ih</screen>
               <para>The <literal>lfs df -ih</literal> command lists inode usage per OST and the MDT. This command generates output similar to this:</para>
-              <screen>UUID                        Inodes       IUsed      IFree   IUse%   Mounted\
- on
-temp-MDT0000_UUID  2.5M         32         2.5M    0%      /lustre[MDT:0]
-temp-OST0000_UUID  5.5M         54         5.5M    0%      /lustre[OST:0]
-temp-OST0001_UUID  5.5M         54         5.5M    0%      /lustre[OST:1]
-filesystem summary:        2.5M         32         2.5M    0%      /lustre</screen>
+              <screen>
+UUID              Inodes      IUsed       IFree   IUse%     Mounted on
+temp-MDT0000_UUID   2.5M        32         2.5M      0%       /lustre[MDT:0]
+temp-OST0000_UUID   5.5M        54         5.5M      0%       /lustre[OST:0]
+temp-OST0001_UUID   5.5M        54         5.5M      0%       /lustre[OST:1]
+filesystem summary: 2.5M        32         2.5M      0%       /lustre</screen>
             </listitem>
             <listitem>
               <para>Run the <literal>dd</literal> command:</para>

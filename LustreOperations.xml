@@ -57,7 +57,7 @@ Mounting by Label</title>
       <para>Mount-by-label should NOT be used in a multi-path environment.</para>
     </caution>
     <para>Although the file system name is internally limited to 8 characters, you can mount the clients at any mount point, so file system users are not subjected to short names. Here is an example:</para>
-    <screen>mount -t lustre uml1@tcp0:/shortfs /mnt/&lt;long-file_system-name&gt;</screen>
+    <screen>mount -t lustre mds0@tcp0:/shortfs /mnt/&lt;long-file_system-name&gt;</screen>
   </section>
   <section xml:id="dbdoclet.50438194_24122">
     <title><indexterm><primary>operations</primary><secondary>starting</secondary></indexterm>Starting Lustre</title>
@@ -116,10 +116,10 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
         <para> In <emphasis>failover</emphasis> mode, Lustre clients wait for the OST to recover.</para>
       </listitem>
     </itemizedlist>
-    <para>By default, the Lustre file system uses failover mode for OSTs. To specify failout mode instead, run this command:</para>
+    <para>By default, the Lustre file system uses failover mode for OSTs. To specify failout mode instead, use the <literal>--param=&quot;failover.mode=failout&quot;</literal> option:</para>
     <screen>$ mkfs.lustre --fsname=&lt;fsname&gt; --mgsnode=&lt;MGS node NID&gt; --param=&quot;failover.mode=failout&quot; --ost --index=&quot;OST index&quot; &lt;block device name&gt;</screen>
-    <para>In this example, failout mode is specified for the OSTs on MGS <literal>uml1</literal>, file system <literal>testfs</literal>.</para>
-    <screen>$ mkfs.lustre --fsname=testfs --mgsnode=uml1 --param=&quot;failover.mode=failout&quot; --ost --index=3 /dev/sdb </screen>
+    <para>In this example, failout mode is specified for the OSTs on MGS <literal>mds0</literal>, file system <literal>testfs</literal>.</para>
+    <screen>$ mkfs.lustre --fsname=testfs --mgsnode=mds0 --param=&quot;failover.mode=failout&quot; --ost --index=3 /dev/sdb </screen>
     <caution>
       <para>Before running this command, unmount all OSTs that will be affected by the change in the failover/failout mode.</para>
     </caution>
@@ -192,14 +192,14 @@ ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=1 /dev
       </listitem>
     </itemizedlist>
     <section xml:id="dbdoclet.50438194_17237">
-      <title>Setting Parameters with <literal>mkfs.lustre</literal></title>
-      <para>When the file system is created, parameters can simply be added as a <literal>--param</literal> option to the <literal>mkfs.lustre</literal> command. For example:</para>
+      <title>Setting Tunable Parameters with <literal>mkfs.lustre</literal></title>
+      <para>When the file system is first formatted, parameters can simply be added as a <literal>--param</literal> option to the <literal>mkfs.lustre</literal> command. For example:</para>
       <screen>$ mkfs.lustre --mdt --param=&quot;sys.timeout=50&quot; /dev/sda</screen>
       <para>For more details about creating a file system,see <xref linkend="configuringlustre"/>. For more details about <literal>mkfs.lustre</literal>, see <xref linkend="systemconfigurationutilities"/>.</para>
     </section>
     <section xml:id="dbdoclet.50438194_55253">
       <title>Setting Parameters with <literal>tunefs.lustre</literal></title>
-      <para>If a server (OSS or MDS) is stopped, parameters can be added using the <literal>--param</literal> option to the <literal>tunefs.lustre</literal> command. For example:</para>
+      <para>If a server (OSS or MDS) is stopped, parameters can be added to an existing filesystem using the <literal>--param</literal> option to the <literal>tunefs.lustre</literal> command. For example:</para>
       <screen>$ tunefs.lustre --param=&quot;failover.node=192.168.0.13@tcp0&quot; /dev/sda</screen>
       <para>With <literal>tunefs.lustre</literal>, parameters are &quot;additive&quot; -- new parameters are specified in addition to old parameters, they do not replace them. To erase all old <literal>tunefs.lustre</literal> parameters and just use newly-specified parameters, run:</para>
       <screen>$ tunefs.lustre --erase-params --param=&lt;new parameters&gt; </screen>
@@ -259,13 +259,13 @@ $ lctl conf_param testfs.sys.timeout=40 </screen>
         <para>This example reports data on RPC service times.</para>
         <screen>$ lctl get_param -n ost.*.ost_io.timeouts 
 service : cur 1 worst 30 (at 1257150393, 85d23h58m54s ago) 1 1 1 1 </screen>
-        <para>This example reports the number of inodes available on each OST.</para>
-        <screen># lctl get_param osc.*.filesfree
-osc.myth-OST0000-osc-ffff88006dd20000.filesfree=217623 
-osc.myth-OST0001-osc-ffff88006dd20000.filesfree=5075042 
-osc.myth-OST0002-osc-ffff88006dd20000.filesfree=3762034 
-osc.myth-OST0003-osc-ffff88006dd20000.filesfree=91052 
-osc.myth-OST0004-osc-ffff88006dd20000.filesfree=129651</screen>
+        <para>This example reports the amount of space this client has reserved for writeback cache with each OST:</para>
+        <screen># lctl get_param osc.*.cur_grant_bytes
+osc.myth-OST0000-osc-ffff8800376bdc00.cur_grant_bytes=2097152
+osc.myth-OST0001-osc-ffff8800376bdc00.cur_grant_bytes=33890304
+osc.myth-OST0002-osc-ffff8800376bdc00.cur_grant_bytes=35418112
+osc.myth-OST0003-osc-ffff8800376bdc00.cur_grant_bytes=2097152
+osc.myth-OST0004-osc-ffff8800376bdc00.cur_grant_bytes=33808384</screen>
       </section>
     </section>
   </section>
@@ -274,23 +274,23 @@ osc.myth-OST0004-osc-ffff88006dd20000.filesfree=129651</screen>
     <para>If a node has multiple network interfaces, it may have multiple NIDs. When a node is specified, all of its NIDs must be listed, delimited by commas (<literal>,</literal>) so other nodes can choose the NID that is appropriate for their network interfaces. When failover nodes are specified, they are delimited by a colon (<literal>:</literal>) or by repeating a keyword (<literal>--mgsnode=</literal> or <literal>--failnode=</literal>). To obtain all NIDs from a node (while LNET is running), run:</para>
     <screen>lctl list_nids</screen>
     <para>This displays the server&apos;s NIDs (networks configured to work with Lustre).</para>
-    <para>This example has a combined MGS/MDT failover pair on uml1 and uml2, and a OST failover pair on uml3 and uml4. There are corresponding Elan addresses on uml1 and uml2.</para>
-    <screen>uml1&gt; mkfs.lustre --fsname=testfs --mgs --mdt --index=0 --failnode=uml2,2@elan /dev/sda1
-uml1&gt; mount -t lustre /dev/sda1 /mnt/test/mdt
-uml3&gt; mkfs.lustre --fsname=testfs --failnode=uml4 --mgsnode=uml1,1@elan \
---mgsnode=uml2,2@elan --ost --index=0 /dev/sdb
-uml3&gt; mount -t lustre /dev/sdb /mnt/test/ost0
-client&gt; mount -t lustre uml1,1@elan:uml2,2@elan:/testfs /mnt/testfs
-uml1&gt; umount /mnt/mdt
-uml2&gt; mount -t lustre /dev/sda1 /mnt/test/mdt
-uml2&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
-    <para>Where multiple NIDs are specified, comma-separation (for example, <literal>uml2,2@elan</literal>) means that the two NIDs refer to the same host, and that Lustre needs to choose the &quot;best&quot; one for communication. Colon-separation (for example, <literal>uml1:uml2</literal>) means that the two NIDs refer to two different hosts, and should be treated as failover locations (Lustre tries the first one, and if that fails, it tries the second one.)</para>
+    <para>This example has a combined MGS/MDT failover pair on mds0 and mds1, and a OST failover pair on oss0 and oss1. There are corresponding Elan addresses on mds0 and mds1.</para>
+    <screen>mds0&gt; mkfs.lustre --fsname=testfs --mdt --mgs --failnode=mds1,2@elan /dev/sda1
+mds0&gt; mount -t lustre /dev/sda1 /mnt/test/mdt
+oss0&gt; mkfs.lustre --fsname=testfs --failnode=oss1 --ost --index=0 \
+    --mgsnode=mds0,1@elan --mgsnode=mds1,2@elan /dev/sdb
+oss0&gt; mount -t lustre /dev/sdb /mnt/test/ost0
+client&gt; mount -t lustre mds0,1@elan:mds1,2@elan:/testfs /mnt/testfs
+mds0&gt; umount /mnt/mdt
+mds1&gt; mount -t lustre /dev/sda1 /mnt/test/mdt
+mds1&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
+    <para>Where multiple NIDs are specified, comma-separation (for example, <literal>mds1,2@elan</literal>) means that the two NIDs refer to the same host, and that Lustre needs to choose the &quot;best&quot; one for communication. Colon-separation (for example, <literal>mds0:mds1</literal>) means that the two NIDs refer to two different hosts, and should be treated as failover locations (Lustre tries the first one, and if that fails, it tries the second one.)</para>
     <note>
       <para>If you have an MGS or MDT configured for failover, perform these steps:</para>
       <orderedlist>
         <listitem>
-          <para>On the OST, list the NIDs of all MGS nodes at <literal>mkfs</literal> time.</para>
-          <screen>OST# mkfs.lustre --fsname sunfs --mgsnode=10.0.0.1 \
+          <para>On the oss0 node, list the NIDs of all MGS nodes at <literal>mkfs</literal> time.</para>
+          <screen>oss0# mkfs.lustre --fsname sunfs --mgsnode=10.0.0.1 \
   --mgsnode=10.0.0.2 --ost --index=0 /dev/sdb</screen>
         </listitem>
         <listitem>
@@ -303,7 +303,7 @@ uml2&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
   <section xml:id="dbdoclet.50438194_70905">
     <title><indexterm><primary>operations</primary><secondary>erasing a file system</secondary></indexterm>Erasing a File System</title>
     <para>If you want to erase a file system, run this command on your targets:</para>
-    <screen>$ &quot;mkfs.lustre -reformat&quot;</screen>
+    <screen>$ &quot;mkfs.lustre --reformat&quot;</screen>
     <para>If you are using a separate MGS and want to keep other file systems defined on that MGS, then set the <literal>writeconf</literal> flag on the MDT for that file system. The <literal>writeconf</literal> flag causes the configuration logs to be erased; they are regenerated the next time the servers start.</para>
     <para>To set the <literal>writeconf</literal> flag on the MDT:</para>
     <orderedlist>
@@ -316,8 +316,8 @@ uml2&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
         <screen>$ mkfs.lustre --reformat --fsname spfs --mgs --mdt --index=0 /dev/sda</screen>
       </listitem>
       <listitem>
-        <para>If you have a separate MGS (that you do not want to reformat), then add the &quot;writeconf&quot; flag to <literal>mkfs.lustre</literal> on the MDT, run:</para>
-        <screen>$ mkfs.lustre --reformat --writeconf -fsname spfs --mgs --mdt --index=0 /dev/sda</screen>
+        <para>If you have a separate MGS (that you do not want to reformat), then add the &quot;--writeconf&quot; flag to <literal>mkfs.lustre</literal> on the MDT, run:</para>
+        <screen>$ mkfs.lustre --reformat --writeconf --fsname spfs --mgs --mdt /dev/sda</screen>
       </listitem>
     </orderedlist>
     <note>

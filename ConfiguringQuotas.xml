@@ -81,9 +81,6 @@ ksocklnd           111812                  1</screen>
     </orderedlist>
     <para>The Lustre mount command no longer recognizes the <literal>usrquota</literal> and <literal>grpquota</literal> options. If they were previously specified, remove them from <literal>/etc/fstab</literal>.</para>
     <para>When quota is enabled, it is enabled for all file system clients (started automatically using <literal>quota_type</literal> or manually with <literal>lfs quotaon</literal>).</para>
-    <note>
-      <para>Lustre with the Linux kernel 2.4 does <emphasis>not</emphasis> support quotas.</para>
-    </note>
     <para>To enable quotas automatically when the file system is started, you must set the <literal>mdt.quota_type</literal> and <literal>ost.quota_type</literal> parameters, respectively, on the MDT and OSTs. The parameters can be set to the string <literal>u</literal> (user), <literal>g</literal> (group) or <literal>ug</literal> for both users and groups.</para>
     <para>You can enable quotas at <literal>mkfs</literal> time (<literal>mkfs.lustre --param mdt.quota_type=ug</literal>) or with <literal>tunefs.lustre</literal>. As an example:</para>
     <screen>tunefs.lustre --param ost.quota_type=ug $ost_dev</screen>

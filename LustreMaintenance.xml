@@ -43,7 +43,8 @@
           <indexterm><primary>maintance</primary><secondary>inactive OSTs</secondary></indexterm>
           Working with Inactive OSTs</title>
     <para>To mount a client or an MDT with one or more inactive OSTs, run commands similar to this:</para>
-    <screen>client&gt; mount -o exclude=testfs-OST0000 -t lustre uml1:/testfs\ /mnt/testfs
+    <screen>client&gt; mount -o exclude=testfs-OST0000 -t lustre \
+           uml1:/testfs /mnt/testfs
             client&gt; cat /proc/fs/lustre/lov/testfs-clilov-*/target_obd</screen>
     <para>To activate an inactive OST on a live client or MDT, use the <literal>lctl activate</literal> command on the OSC device. For example:</para>
     <screen>lctl --device 7 activate</screen>
@@ -359,8 +360,10 @@ Removing and Restoring OSTs</title>
                 <screen>[client]# lfs find --obd &lt;OST UUID&gt; &lt;mount_point&gt; | lfs_migrate -y</screen>
               </listitem>
               <listitem>
-                <para>If the OST is no longer available, delete the files on that OST and restore them from backup: <screen>[client]# lfs find --obd &lt;OST UUID&gt; -print0 &lt;mount_point&gt; | \
-                          tee /tmp/files_to_restore | xargs -0 -n 1 unlink</screen>The list of files that need to be restored from backup is stored in <literal>/tmp/files_to_restore</literal>. Restoring these files is beyond the scope of this document. </para>
+                <para>If the OST is no longer available, delete the files on that OST and restore them from backup:
+		  <screen>[client]# lfs find --obd &lt;OST UUID&gt; -print0 &lt;mount_point&gt; | \
+           tee /tmp/files_to_restore | xargs -0 -n 1 unlink</screen>
+	          The list of files that need to be restored from backup is stored in <literal>/tmp/files_to_restore</literal>. Restoring these files is beyond the scope of this document.</para>
               </listitem>
             </orderedlist>
           </listitem>
@@ -398,7 +401,7 @@ Backing Up OST Configuration Files</title>
           <listitem>
             <para>Back up the OST configuration files.
              <screen>[oss]# tar cvf {ostname}.tar -C /mnt/ost last_rcvd \
-CONFIGS/ O/0/LAST_ID</screen>
+           CONFIGS/ O/0/LAST_ID</screen>
               </para>
           </listitem>
           <listitem>
@@ -423,8 +426,8 @@ Restoring OST Configuration Files</title>
           <listitem>
             <para>
             Format the OST file system. 
-            <screen>[oss]# mkfs.lustre --ost --index {OST index} {other options} \
-{newdev}</screen>
+            <screen>[oss]# mkfs.lustre --ost --index={old OST index} {other options} \
+            {newdev}</screen>
             </para>
           </listitem>
           <listitem>
@@ -445,9 +448,9 @@ Restoring OST Configuration Files</title>
 
 The <literal>CONFIGS/mountdata</literal> file is created by <literal>mkfs.lustre</literal> at format time, but has flags set that request it to register itself with the MGS. It is possible to copy these flags from another working OST (which should be the same):
 
-<screen>[oss2]# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp/ldd&quot; {other_osdev}
-[oss2]# scp /tmp/ldd oss:/tmp/ldd
-[oss]# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5</screen></para>
+<screen>[oss1]# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp/ldd&quot; {other_osdev}
+[oss1]# scp /tmp/ldd oss:/tmp/ldd
+[oss0]# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5</screen></para>
           </listitem>
           <listitem>
             <para>

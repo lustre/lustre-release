@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="backupandrestore">
   <title xml:id="backupandrestore.title">Backing Up and Restoring a File System</title>
-  <para>Lustre provides backups at the file system-level, device-level and file-level. This chapter describes how to backup and restore on Lustre, and includes the following sections:</para>
+  <para>Lustre provides backups at the filesystem-level, device-level and file-level. This chapter describes how to backup and restore on Lustre, and includes the following sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438207_56395"/></para>
@@ -29,7 +29,7 @@
           <indexterm><primary>rsync</primary><see>backup</see></indexterm>
           
           Backing up a File System</title>
-    <para>Backing up a complete file system gives you full control over the files to back up, and allows restoration of individual files as needed. File system-level backups are also the easiest to integrate into existing backup solutions.</para>
+    <para>Backing up a complete file system gives you full control over the files to back up, and allows restoration of individual files as needed. Filesystem-level backups are also the easiest to integrate into existing backup solutions.</para>
     <para>File system backups are performed from a Lustre client (or many clients working parallel in different directories) rather than on individual server nodes; this is no different than backing up any other file system.</para>
     <para>However, due to the large size of most Lustre file systems, it is not always possible to get a complete backup. We recommend that you back up subsets of a file system. This includes subdirectories of the entire file system, filesets for a single user, files incremented by date, and so on.</para>
     <note>
@@ -156,11 +156,11 @@
           <title><indexterm><primary>backup</primary><secondary>rsync</secondary><tertiary>examples</tertiary></indexterm><literal>lustre_rsync</literal> Examples</title>
         <para>Sample <literal>lustre_rsync</literal> commands are listed below.</para>
         <para>Register a changelog user for an MDT (e.g. <literal>lustre-MDT0000</literal>).</para>
-        <screen># lctl --device lustre-MDT0000 changelog_register lustre-MDT0000 Registered\
- changelog userid &apos;cl1&apos;</screen>
+        <screen># lctl --device lustre-MDT0000 changelog_register lustre-MDT0000
+Registered changelog userid &apos;cl1&apos;</screen>
         <para>Synchronize a Lustre file system (<literal>/mnt/lustre</literal>) to a target file system (<literal>/mnt/target</literal>).</para>
-        <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target --mdt=lustre-MDT0000 \
---user=cl1 --statuslog sync.log  --verbose 
+        <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target \
+           --mdt=lustre-MDT0000 --user=cl1 --statuslog sync.log  --verbose 
 Lustre filesystem: lustre 
 MDT device: lustre-MDT0000 
 Source: /mnt/lustre 
@@ -184,9 +184,8 @@ Errors: 0
 lustre_rsync took 2 seconds 
 Changelog records consumed: 42</screen>
         <para>To synchronize a Lustre file system (<literal>/mnt/lustre</literal>) to two target file systems (<literal>/mnt/target1</literal> and <literal>/mnt/target2</literal>).</para>
-        <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target1 --target=/mnt/tar\
-get2 \ 
-           --mdt=lustre-MDT0000 --user=cl1 
+        <screen>$ lustre_rsync --source=/mnt/lustre --target=/mnt/target1 \
+           --target=/mnt/target2 --mdt=lustre-MDT0000 --user=cl1  \
            --statuslog sync.log</screen>
       </section>
     </section>
@@ -203,8 +202,8 @@ get2 \
     <para>If hardware replacement is the reason for the backup or if a spare storage device is available, it is possible to do a raw copy of the MDT or OST from one block device to the other, as long as the new device is at least as large as the original device. To do this, run:</para>
     <screen>dd if=/dev/{original} of=/dev/{new} bs=1M</screen>
     <para>If hardware errors cause read problems on the original device, use the command below to allow as much data as possible to be read from the original device while skipping sections of the disk with errors:</para>
-    <screen>dd if=/dev/{original} of=/dev/{new} bs=4k conv=sync,noerror count={original\
- size in 4kB blocks}</screen>
+    <screen>dd if=/dev/{original} of=/dev/{new} bs=4k conv=sync,noerror /
+      count={original size in 4kB blocks}</screen>
     <para>Even in the face of hardware errors, the <literal>ldiskfs</literal> file system is very robust and it may be possible to recover the file system data after running <literal>e2fsck -f</literal> on the new device.</para>
   </section>
   <section xml:id="dbdoclet.50438207_21638">
@@ -230,7 +229,7 @@ get2 \
         <para><emphasis role="bold">Back up the extended attributes.</emphasis></para>
         <screen>[oss]# getfattr -R -d -m &apos;.*&apos; -e hex -P . &gt; ea-$(date +%Y%m%d).bak</screen>
         <note>
-          <para>If the <literal>tar(1)</literal> command supports the <literal>--xattr</literal> option, the <literal>getfattr</literal> step may be unnecessary as long as it does a backup of the &quot;trusted&quot; attributes. However, completing this step is not harmful and can serve as an added safety measure.</para>
+          <para>If the <literal>tar(1)</literal> command supports the <literal>--xattr</literal> option, the <literal>getfattr</literal> step may be unnecessary as long as tar does a backup of the &quot;trusted.*&quot; attributes. However, completing this step is not harmful and can serve as an added safety measure.</para>
         </note>
         <note>
           <para>In most distributions, the <literal>getfattr</literal> command is part of the &quot;<literal>attr</literal>&quot; package. If the <literal>getfattr</literal> command returns errors like <literal>Operation not supported</literal>, then the kernel does not correctly support EAs. Stop and use a different backup method.</para>
@@ -319,20 +318,20 @@ trusted.fid= \
           <para>Create LVM devices for your MDT and OST targets. Make sure not to use the entire disk for the targets; save some room for the snapshots. The snapshots start out as 0 size, but grow as you make changes to the current file system. If you expect to change 20% of the file system between backups, the most recent snapshot will be 20% of the target size, the next older one will be 40%, etc. Here is an example:</para>
           <screen>cfs21:~# pvcreate /dev/sda1
    Physical volume &quot;/dev/sda1&quot; successfully created
-cfs21:~# vgcreate volgroup /dev/sda1
-   Volume group &quot;volgroup&quot; successfully created
-cfs21:~# lvcreate -L200M -nMDT volgroup
-   Logical volume &quot;MDT&quot; created
-cfs21:~# lvcreate -L200M -nOST0 volgroup
+cfs21:~# vgcreate vgmain /dev/sda1
+   Volume group &quot;vgmain&quot; successfully created
+cfs21:~# lvcreate -L200G -nMDT0 vgmain
+   Logical volume &quot;MDT0&quot; created
+cfs21:~# lvcreate -L200G -nOST0 vgmain
    Logical volume &quot;OST0&quot; created
 cfs21:~# lvscan
-   ACTIVE                  &apos;/dev/volgroup/MDT&apos; [200.00 MB] inherit
-   ACTIVE                  &apos;/dev/volgroup/OST0&apos; [200.00 MB] inherit</screen>
+   ACTIVE                  &apos;/dev/vgmain/MDT0&apos; [200.00 GB] inherit
+   ACTIVE                  &apos;/dev/vgmain/OST0&apos; [200.00 GB] inherit</screen>
         </listitem>
         <listitem>
           <para>Format the LVM volumes as Lustre targets.</para>
           <para>In this example, the backup file system is called &apos;main&apos; and designates the current, most up-to-date backup.</para>
-          <screen>cfs21:~# mkfs.lustre --fsname=main --mdt --index=0 /dev/volgroup/MDT
+          <screen>cfs21:~# mkfs.lustre --fsname=main --mdt --index=0 /dev/vgmain/MDT0
  No management node specified, adding MGS to this MDT.
     Permanent disk data:
  Target:     main-MDT0000
@@ -344,15 +343,15 @@ cfs21:~# lvscan
  Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
  Parameters:
 checking for existing Lustre data
- device size = 200MB
- formatting backing filesystem ldiskfs on /dev/volgroup/MDT
-         target name  main-MDTffff
+ device size = 200GB
+ formatting backing filesystem ldiskfs on /dev/vgmain/MDT0
+         target name  main-MDT0000
          4k blocks     0
          options        -i 4096 -I 512 -q -O dir_index -F
  mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-MDTffff  -i 4096 -I 512 -q
- -O dir_index -F /dev/volgroup/MDT
+  -O dir_index -F /dev/vgmain/MDT0
  Writing CONFIGS/mountdata
-cfs21:~# mkfs.lustre --mgsnode=cfs21 --fsname=main --ost --index=0 /dev/volgroup/OST0
+cfs21:~# mkfs.lustre --mgsnode=cfs21 --fsname=main --ost --index=0 /dev/vgmain/OST0
     Permanent disk data:
  Target:     main-OST0000
  Index:      0
@@ -363,17 +362,17 @@ cfs21:~# mkfs.lustre --mgsnode=cfs21 --fsname=main --ost --index=0 /dev/volgroup
  Persistent mount opts: errors=remount-ro,extents,mballoc
  Parameters: mgsnode=192.168.0.21@tcp
 checking for existing Lustre data
- device size = 200MB
- formatting backing filesystem ldiskfs on /dev/volgroup/OST0
+ device size = 200GB
+ formatting backing filesystem ldiskfs on /dev/vgmain/OST0
          target name  main-OST0000
          4k blocks     0
          options        -I 256 -q -O dir_index -F
  mkfs_cmd = mkfs.ext2 -j -b 4096 -L lustre-OSTffff -J size=400 -I 256 
   -i 262144 -O extents,uninit_bg,dir_nlink,huge_file,flex_bg -G 256 
-  -E resize=4290772992,lazy_journal_init, -F /dev/volgroup/OST0
+  -E resize=4290772992,lazy_journal_init, -F /dev/vgmain/OST0
  Writing CONFIGS/mountdata
-cfs21:~# mount -t lustre /dev/volgroup/MDT /mnt/mdt
-cfs21:~# mount -t lustre /dev/volgroup/OST0 /mnt/ost
+cfs21:~# mount -t lustre /dev/vgmain/MDT0 /mnt/mdt
+cfs21:~# mount -t lustre /dev/vgmain/OST0 /mnt/ost
 cfs21:~# mount -t lustre cfs21:/main /mnt/main</screen>
         </listitem>
       </orderedlist>
@@ -394,12 +393,12 @@ fstab  passwd</screen>
       <para>You can create as many snapshots as you have room for in the volume group. If necessary, you can dynamically add disks to the volume group.</para>
       <para>The snapshots of the target MDT and OSTs should be taken at the same point in time. Make sure that the cronjob updating the backup file system is not running, since that is the only thing writing to the disks. Here is an example:</para>
       <screen>cfs21:~# modprobe dm-snapshot
-cfs21:~# lvcreate -L50M -s -n MDTb1 /dev/volgroup/MDT
+cfs21:~# lvcreate -L50M -s -n MDT0.b1 /dev/vgmain/MDT0
    Rounding up size to full physical extent 52.00 MB
-   Logical volume &quot;MDTb1&quot; created
-cfs21:~# lvcreate -L50M -s -n OSTb1 /dev/volgroup/OST0
+   Logical volume &quot;MDT0.b1&quot; created
+cfs21:~# lvcreate -L50M -s -n OST0.b1 /dev/vgmain/OST0
    Rounding up size to full physical extent 52.00 MB
-   Logical volume &quot;OSTb1&quot; created</screen>
+   Logical volume &quot;OST.b1&quot; created</screen>
       <para>After the snapshots are taken, you can continue to back up new/changed files to &quot;main&quot;. The snapshots will not contain the new files.</para>
       <screen>cfs21:~# cp /etc/termcap /mnt/main
 cfs21:~# ls /mnt/main
@@ -412,7 +411,7 @@ fstab  passwd  termcap</screen>
         <listitem>
           <para>Rename the LVM snapshot.</para>
           <para>Rename the file system snapshot from &quot;main&quot; to &quot;back&quot; so you can mount it without unmounting &quot;main&quot;. This is recommended, but not required. Use the <literal>--reformat</literal> flag to <literal>tunefs.lustre</literal> to force the name change. For example:</para>
-          <screen>cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/volgroup/MDTb1
+          <screen>cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/vgmain/MDT0.b1
  checking for existing Lustre data
  found Lustre data
  Reading CONFIGS/mountdata
@@ -435,7 +434,7 @@ Permanent disk data:
  Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
  Parameters:
 Writing CONFIGS/mountdata
-cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/volgroup/OSTb1
+cfs21:~# tunefs.lustre --reformat --fsname=back --writeconf /dev/vgmain/OST0.b1
  checking for existing Lustre data
  found Lustre data
  Reading CONFIGS/mountdata
@@ -459,24 +458,23 @@ Permanent disk data:
  Parameters: mgsnode=192.168.0.21@tcp
 Writing CONFIGS/mountdata
 When renaming an FS, we must also erase the last_rcvd file from the snapshots
-cfs21:~# mount -t ldiskfs /dev/volgroup/MDTb1 /mnt/mdtback
+cfs21:~# mount -t ldiskfs /dev/vgmain/MDT0.b1 /mnt/mdtback
 cfs21:~# rm /mnt/mdtback/last_rcvd
 cfs21:~# umount /mnt/mdtback
-cfs21:~# mount -t ldiskfs /dev/volgroup/OSTb1 /mnt/ostback
+cfs21:~# mount -t ldiskfs /dev/vgmain/OST0.b1 /mnt/ostback
 cfs21:~# rm /mnt/ostback/last_rcvd
 cfs21:~# umount /mnt/ostback</screen>
         </listitem>
         <listitem>
           <para>Mount the file system from the LVM snapshot.</para>
           <para>For example:</para>
-          <screen>cfs21:~# mount -t lustre /dev/volgroup/MDTb1 /mnt/mdtback
+          <screen>cfs21:~# mount -t lustre /dev/vgmain/MDT0.b1 /mnt/mdtback
                                                             
-cfs21:~# mount -t lustre /dev/volgroup/OSTb1 /mnt/ostback
+cfs21:~# mount -t lustre /dev/vgmain/OST0.b1 /mnt/ostback
 cfs21:~# mount -t lustre cfs21:/back /mnt/back</screen>
         </listitem>
         <listitem>
-          <para>Note the old directory contents, as of the snapshot time.</para>
-          <para>For example:</para>
+          <para>Note the old directory contents, as of the snapshot time.  For example:</para>
           <screen>cfs21:~/cfs/b1_5/lustre/utils# ls /mnt/back
 fstab  passwds</screen>
         </listitem>
@@ -485,12 +483,12 @@ fstab  passwds</screen>
     <section remap="h3">
         <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>deleting</tertiary></indexterm>Deleting Old Snapshots</title>
       <para>To reclaim disk space, you can erase old snapshots as your backup policy dictates. Run:</para>
-      <screen>lvremove /dev/volgroup/MDTb1</screen>
+      <screen>lvremove /dev/vgmain/MDT0.b1</screen>
     </section>
     <section remap="h3">
       <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>resizing</tertiary></indexterm>Changing Snapshot Volume Size</title>
       <para>You can also extend or shrink snapshot volumes if you find your daily deltas are smaller or larger than expected. Run:</para>
-      <screen>lvextend -L10G /dev/volgroup/MDTb1</screen>
+      <screen>lvextend -L10G /dev/vgmain/MDT0.b1</screen>
       <note>
         <para>Extending snapshots seems to be broken in older LVM. It is working in LVM v2.02.01.</para>
       </note>
