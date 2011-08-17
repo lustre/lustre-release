@@ -204,7 +204,7 @@ static int mdt_identity_parse_downcall(struct upcall_cache *cache,
 
         CDEBUG(D_OTHER, "parse mdt identity@%p: %d:%d, ngroups %u, nperms %u\n",
                identity, identity->mi_uid, identity->mi_gid,
-               identity->mi_ginfo->ngroups, identity->mi_nperms);
+               data->idd_ngroups, data->idd_nperms);
 
         RETURN(0);
 }
