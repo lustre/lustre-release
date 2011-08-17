@@ -368,7 +368,7 @@ checking for existing Lustre data
          target name  main-MDT0000
          4k blocks     0
          options        -i 4096 -I 512 -q -O dir_index -F
- mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-MDTffff  -i 4096 -I 512 -q
+ mkfs_cmd = mkfs.ext2 -j -b 4096 -L main-MDT0000  -i 4096 -I 512 -q
   -O dir_index -F /dev/vgmain/MDT0
  Writing CONFIGS/mountdata
 cfs21:~# mkfs.lustre --mgsnode=cfs21 --fsname=main --ost --index=0 /dev/vgmain/OST0
@@ -387,7 +387,7 @@ checking for existing Lustre data
          target name  main-OST0000
          4k blocks     0
          options        -I 256 -q -O dir_index -F
- mkfs_cmd = mkfs.ext2 -j -b 4096 -L lustre-OSTffff -J size=400 -I 256 
+ mkfs_cmd = mkfs.ext2 -j -b 4096 -L lustre-OST0000 -J size=400 -I 256 
   -i 262144 -O extents,uninit_bg,dir_nlink,huge_file,flex_bg -G 256 
   -E resize=4290772992,lazy_journal_init, -F /dev/vgmain/OST0
  Writing CONFIGS/mountdata
@@ -418,7 +418,7 @@ cfs21:~# lvcreate -L50M -s -n MDT0.b1 /dev/vgmain/MDT0
    Logical volume &quot;MDT0.b1&quot; created
 cfs21:~# lvcreate -L50M -s -n OST0.b1 /dev/vgmain/OST0
    Rounding up size to full physical extent 52.00 MB
-   Logical volume &quot;OST.b1&quot; created</screen>
+   Logical volume &quot;OST0.b1&quot; created</screen>
       <para>After the snapshots are taken, you can continue to back up new/changed files to &quot;main&quot;. The snapshots will not contain the new files.</para>
       <screen>cfs21:~# cp /etc/termcap /mnt/main
 cfs21:~# ls /mnt/main
@@ -476,9 +476,9 @@ Permanent disk data:
               (OST writeconf )
  Persistent mount opts: errors=remount-ro,extents,mballoc
  Parameters: mgsnode=192.168.0.21@tcp
-Writing CONFIGS/mountdata
-When renaming an FS, we must also erase the last_rcvd file from the snapshots
-cfs21:~# mount -t ldiskfs /dev/vgmain/MDT0.b1 /mnt/mdtback
+Writing CONFIGS/mountdata</screen>
+        <para>When renaming an FS, we must also erase the last_rcvd file from the snapshots</para>
+          <screen>cfs21:~# mount -t ldiskfs /dev/vgmain/MDT0.b1 /mnt/mdtback
 cfs21:~# rm /mnt/mdtback/last_rcvd
 cfs21:~# umount /mnt/mdtback
 cfs21:~# mount -t ldiskfs /dev/vgmain/OST0.b1 /mnt/ostback
@@ -486,10 +486,8 @@ cfs21:~# rm /mnt/ostback/last_rcvd
 cfs21:~# umount /mnt/ostback</screen>
         </listitem>
         <listitem>
-          <para>Mount the file system from the LVM snapshot.</para>
-          <para>For example:</para>
+          <para>Mount the file system from the LVM snapshot.  For example:</para>
           <screen>cfs21:~# mount -t lustre /dev/vgmain/MDT0.b1 /mnt/mdtback
-                                                            
 cfs21:~# mount -t lustre /dev/vgmain/OST0.b1 /mnt/ostback
 cfs21:~# mount -t lustre cfs21:/back /mnt/back</screen>
         </listitem>

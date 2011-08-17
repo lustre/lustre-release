@@ -333,7 +333,7 @@ mds1# cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
         <screen>$ mkfs.lustre --reformat --fsname spfs --mgs --mdt --index=0 /dev/<emphasis>{mdsdev}</emphasis></screen>
       </listitem>
       <listitem>
-        <para>If you have a separate MGS (that you do not want to reformat), then add the &quot;--writeconf&quot; flag to <literal>mkfs.lustre</literal> on the MDT, run:</para>
+        <para>If you have a separate MGS (that you do not want to reformat), then add the <literal>--writeconf</literal> flag to <literal>mkfs.lustre</literal> on the MDT, run:</para>
         <screen>$ mkfs.lustre --reformat --writeconf --fsname spfs --mgsnode=<replaceable>mgs_nid</replaceable> --mdt --index=0 <replaceable>/dev/mds_device</replaceable></screen>
       </listitem>
     </orderedlist>
