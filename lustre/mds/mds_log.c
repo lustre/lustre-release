@@ -121,7 +121,10 @@ static int llog_changelog_cancel_cb(struct llog_handle *llh,
         struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
         struct llog_cookie cookie;
         long long endrec = *(long long *)data;
-        int rc;
+        int rc, err;
+        struct obd_device *obd;
+        void *trans_h;
+        struct inode *inode;
         ENTRY;
 
         /* This is always a (sub)log, not the catalog */
@@ -133,11 +136,34 @@ static int llog_changelog_cancel_cb(struct llog_handle *llh,
 
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_index = hdr->lrh_index;
+        obd = llh->lgh_ctxt->loc_exp->exp_obd;
+        inode = llh->lgh_file->f_dentry->d_inode;
+
+        /* XXX This is a workaround for the deadlock of changelog adding vs.
+         * changelog cancelling. Changelog adding always start transaction
+         * before acquiring the catlog lock (lgh_lock), whereas, changelog
+         * cancelling do start transaction after holding catlog lock.
+         *
+         * We start the transaction earlier here to keep the locking ordering:
+         * 'start transaction -> catlog lock'. LU-81. */
+        trans_h = fsfilt_start_log(obd, inode, FSFILT_OP_CANCEL_UNLINK,
+                                   NULL, 1);
+        if (IS_ERR(trans_h)) {
+                CERROR("fsfilt_start_log failed: %ld\n", PTR_ERR(trans_h));
+                RETURN(PTR_ERR(trans_h));
+        }
 
         /* cancel them one at a time.  I suppose we could store up the cookies
            and cancel them all at once; probably more efficient, but this is
            done as a user call, so who cares... */
         rc = llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
+
+        err = fsfilt_commit(obd, inode, trans_h, 0);
+        if (err) {
+                CERROR("fsfilt_commit failed: %d\n", err);
+                rc = (rc >= 0) ? err : rc;
+        }
+
         RETURN(rc < 0 ? rc : 0);
 }
 
