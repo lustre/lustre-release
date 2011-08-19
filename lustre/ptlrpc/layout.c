@@ -97,6 +97,16 @@ static const struct req_msg_field *mgs_set_info[] = {
         &RMF_MGS_SEND_PARAM
 };
 
+static const struct req_msg_field *mgs_config_read_client[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_MGS_CONFIG_BODY
+};
+
+static const struct req_msg_field *mgs_config_read_server[] = {
+        &RMF_PTLRPC_BODY,
+        &RMF_MGS_CONFIG_RES
+};
+
 static const struct req_msg_field *log_cancel_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_LOGCOOKIES
@@ -555,6 +565,7 @@ static struct req_format *req_formats[] = {
         &RQF_SEC_CTX,
         &RQF_MGS_TARGET_REG,
         &RQF_MGS_SET_INFO,
+        &RQF_MGS_CONFIG_READ,
         &RQF_SEQ_QUERY,
         &RQF_FLD_QUERY,
         &RQF_MDS_CONNECT,
@@ -689,6 +700,23 @@ struct req_msg_field RMF_MGS_SEND_PARAM =
                     sizeof(struct mgs_send_param),
                     NULL, NULL);
 EXPORT_SYMBOL(RMF_MGS_SEND_PARAM);
+
+struct req_msg_field RMF_MGS_CONFIG_BODY =
+        DEFINE_MSGF("mgs_config_read request", 0,
+                    sizeof(struct mgs_config_body),
+                    lustre_swab_mgs_config_body, NULL);
+EXPORT_SYMBOL(RMF_MGS_CONFIG_BODY);
+
+struct req_msg_field RMF_MGS_CONFIG_RES =
+        DEFINE_MSGF("mgs_config_read reply ", 0,
+                    sizeof(struct mgs_config_res),
+                    lustre_swab_mgs_config_res, NULL);
+EXPORT_SYMBOL(RMF_MGS_CONFIG_RES);
+
+struct req_msg_field RMF_U32 =
+        DEFINE_MSGF("generic u32", 0,
+                    sizeof(__u32), lustre_swab_generic_32s, NULL);
+EXPORT_SYMBOL(RMF_U32);
 
 struct req_msg_field RMF_SETINFO_VAL =
         DEFINE_MSGF("setinfo_val", 0, -1, NULL, NULL);
@@ -981,6 +1009,11 @@ struct req_format RQF_MGS_SET_INFO =
         DEFINE_REQ_FMT0("MGS_SET_INFO", mgs_set_info,
                          mgs_set_info);
 EXPORT_SYMBOL(RQF_MGS_SET_INFO);
+
+struct req_format RQF_MGS_CONFIG_READ =
+        DEFINE_REQ_FMT0("MGS_CONFIG_READ", mgs_config_read_client,
+                         mgs_config_read_server);
+EXPORT_SYMBOL(RQF_MGS_CONFIG_READ);
 
 struct req_format RQF_SEQ_QUERY =
         DEFINE_REQ_FMT0("SEQ_QUERY", seq_query_client, seq_query_server);

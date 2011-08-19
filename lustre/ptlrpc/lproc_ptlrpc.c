@@ -107,6 +107,7 @@ struct ll_rpc_opcode {
         { MGS_TARGET_REG,   "mgs_target_reg" },
         { MGS_TARGET_DEL,   "mgs_target_del" },
         { MGS_SET_INFO,     "mgs_set_info" },
+        { MGS_CONFIG_READ,  "mgs_config_read" },
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
         { OBD_QC_CALLBACK,  "obd_quota_callback" },
@@ -798,5 +799,71 @@ int lprocfs_wr_ping(struct file *file, const char *buffer,
         RETURN(rc);
 }
 EXPORT_SYMBOL(lprocfs_wr_ping);
+
+/* Write the connection UUID to this file to attempt to connect to that node.
+ * The connection UUID is a node's primary NID. For example,
+ * "echo connection=192.168.0.1@tcp0::instance > .../import".
+ */
+int lprocfs_wr_import(struct file *file, const char *buffer,
+                      unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_import *imp = obd->u.cli.cl_import;
+        char *kbuf = NULL;
+        char *uuid;
+        char *ptr;
+        int do_reconn = 1;
+        const char prefix[] = "connection=";
+        const int prefix_len = sizeof(prefix) - 1;
+
+        if (count > CFS_PAGE_SIZE - 1 || count <= prefix_len)
+                return -EINVAL;
+
+        OBD_ALLOC(kbuf, count + 1);
+        if (kbuf == NULL)
+                return -ENOMEM;
+
+        if (cfs_copy_from_user(kbuf, buffer, count))
+                GOTO(out, count = -EFAULT);
+
+        kbuf[count] = 0;
+
+        /* only support connection=uuid::instance now */
+        if (strncmp(prefix, kbuf, prefix_len) != 0)
+                GOTO(out, count = -EINVAL);
+
+        uuid = kbuf + prefix_len;
+        ptr = strstr(uuid, "::");
+        if (ptr) {
+                __u32 inst;
+                char *endptr;
+
+                *ptr = 0;
+                do_reconn = 0;
+                ptr += strlen("::");
+                inst = simple_strtol(ptr, &endptr, 10);
+                if (*endptr) {
+                        CERROR("config: wrong instance # %s\n", ptr);
+                } else if (inst != imp->imp_connect_data.ocd_instance) {
+                        CDEBUG(D_INFO, "IR: %s is connecting to an obsoleted "
+                               "target(%u/%u), reconnecting...\n",
+                               imp->imp_obd->obd_name,
+                               imp->imp_connect_data.ocd_instance, inst);
+                        do_reconn = 1;
+                } else {
+                        CDEBUG(D_INFO, "IR: %s has already been connecting to "
+                               "new target(%u)\n",
+                               imp->imp_obd->obd_name, inst);
+                }
+        }
+
+        if (do_reconn)
+                ptlrpc_recover_import(imp, uuid, 1);
+
+out:
+        OBD_FREE(kbuf, count + 1);
+        return count;
+}
+EXPORT_SYMBOL(lprocfs_wr_import);
 
 #endif /* LPROCFS */

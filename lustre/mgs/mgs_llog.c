@@ -324,7 +324,7 @@ static void mgs_free_fsdb_srpc(struct fs_db *fsdb)
         sptlrpc_rule_set_free(&fsdb->fsdb_srpc_gen);
 }
 
-static struct fs_db *mgs_find_fsdb(struct obd_device *obd, char *fsname)
+struct fs_db *mgs_find_fsdb(struct obd_device *obd, char *fsname)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         struct fs_db *fsdb;
@@ -382,6 +382,9 @@ static struct fs_db *mgs_new_fsdb(struct obd_device *obd, char *fsname)
                 if (rc)
                         GOTO(err, rc);
 
+                /* initialise data for NID table */
+                mgs_ir_init_fs(obd, fsdb);
+
                 lproc_mgs_add_live(obd, fsdb);
         }
 
@@ -407,6 +410,10 @@ static void mgs_free_fsdb(struct obd_device *obd, struct fs_db *fsdb)
         cfs_down(&fsdb->fsdb_sem);
         lproc_mgs_del_live(obd, fsdb);
         cfs_list_del(&fsdb->fsdb_list);
+
+        /* deinitialize fsr */
+        mgs_ir_fini_fs(obd, fsdb);
+
         if (fsdb->fsdb_ost_index_map)
                 OBD_FREE(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
         if (fsdb->fsdb_mdt_index_map)
@@ -2894,7 +2901,7 @@ int mgs_erase_log(struct obd_device *obd, char *name)
 int mgs_erase_logs(struct obd_device *obd, char *fsname)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
-        static struct fs_db *fsdb;
+        struct fs_db *fsdb;
         cfs_list_t dentry_list;
         struct l_linux_dirent *dirent, *n;
         int rc, len = strlen(fsname);

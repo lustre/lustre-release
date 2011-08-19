@@ -1519,6 +1519,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
                 break;
         case MDS_READPAGE:
         case OST_READ:
+        case MGS_CONFIG_READ:
                 req->rq_bulk_read = 1;
                 break;
         }

@@ -810,6 +810,7 @@ static const char *obd_connect_names[] = {
         "layout_lock",
         "64bithash",
         "object_max_bytes",
+        "imp_recov",
         NULL
 };
 
@@ -850,10 +851,12 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                      "    name: %s\n"
                      "    target: %s\n"
                      "    state: %s\n"
+                     "    instance: %u\n"
                      "    connect_flags: [",
                      obd->obd_name,
                      obd2cli_tgt(obd),
-                     ptlrpc_import_state_name(imp->imp_state));
+                     ptlrpc_import_state_name(imp->imp_state),
+                     imp->imp_connect_data.ocd_instance);
         i += obd_connect_flags2str(page + i, count - i,
                                    imp->imp_connect_data.ocd_connect_flags,
                                    ", ");
@@ -2267,6 +2270,9 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                 if (lprocfs_obd_snprintf(&page, size, &len, "VBR: %s\n",
                                          obd->obd_version_recov ? "ON" : "OFF")<=0)
                         goto out;
+                if (lprocfs_obd_snprintf(&page, size, &len, "IR: %s\n",
+                                         obd->obd_no_ir ? "OFF" : "ON") <= 0)
+                        goto out;
                 goto fclose;
         }
 
@@ -2318,6 +2324,36 @@ out:
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_recovery_status);
 
+int lprocfs_obd_rd_ir_factor(char *page, char **start, off_t off,
+                             int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        LASSERT(obd != NULL);
+
+        return snprintf(page, count, "%d\n",
+                        obd->obd_recovery_ir_factor);
+}
+EXPORT_SYMBOL(lprocfs_obd_rd_ir_factor);
+
+int lprocfs_obd_wr_ir_factor(struct file *file, const char *buffer,
+                             unsigned long count, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        int val, rc;
+        LASSERT(obd != NULL);
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc)
+                return rc;
+
+        if (val < OBD_IR_FACTOR_MIN || val > OBD_IR_FACTOR_MAX)
+                return -EINVAL;
+
+        obd->obd_recovery_ir_factor = val;
+        return count;
+}
+EXPORT_SYMBOL(lprocfs_obd_wr_ir_factor);
+
 int lprocfs_obd_rd_recovery_time_soft(char *page, char **start, off_t off,
                                       int count, int *eof, void *data)
 {
@@ -2351,7 +2387,7 @@ int lprocfs_obd_rd_recovery_time_hard(char *page, char **start, off_t off,
         struct obd_device *obd = data;
         LASSERT(obd != NULL);
 
-        return snprintf(page, count, "%lu\n", obd->obd_recovery_time_hard);
+        return snprintf(page, count, "%u\n", obd->obd_recovery_time_hard);
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_recovery_time_hard);
 
@@ -2423,6 +2459,19 @@ int lprocfs_obd_wr_max_pages_per_rpc(struct file *file, const char *buffer,
         return count;
 }
 EXPORT_SYMBOL(lprocfs_obd_wr_max_pages_per_rpc);
+
+int lprocfs_target_rd_instance(char *page, char **start, off_t off,
+                               int count, int *eof, void *data)
+{
+        struct obd_device *obd = (struct obd_device *)data;
+        struct obd_device_target *target = &obd->u.obt;
+
+        LASSERT(obd != NULL);
+        LASSERT(target->obt_magic == OBT_MAGIC);
+        *eof = 1;
+        return snprintf(page, count, "%u\n", obd->u.obt.obt_instance);
+}
+EXPORT_SYMBOL(lprocfs_target_rd_instance);
 
 EXPORT_SYMBOL(lprocfs_register);
 EXPORT_SYMBOL(lprocfs_srch);

@@ -477,6 +477,9 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
                           lprocfs_filter_wr_syncjournal, 0 },
         { "sync_on_lock_cancel", lprocfs_filter_rd_sync_lock_cancel,
                                  lprocfs_filter_wr_sync_lock_cancel, 0 },
+        { "instance",     lprocfs_target_rd_instance, 0 },
+        { "ir_factor",    lprocfs_obd_rd_ir_factor,
+                          lprocfs_obd_wr_ir_factor, 0},
         { 0 }
 };
 

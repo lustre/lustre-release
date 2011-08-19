@@ -476,6 +476,7 @@ static int mdt_server_data_init(const struct lu_env *env,
         cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
 
         obd->u.obt.obt_mount_count = mount_count + 1;
+        obd->u.obt.obt_instance = (__u32)obd->u.obt.obt_mount_count;
         lsd->lsd_mount_count = obd->u.obt.obt_mount_count;
 
         /* save it, so mount count and last_transno is current */

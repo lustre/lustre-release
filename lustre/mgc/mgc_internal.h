@@ -60,4 +60,9 @@ static inline int cld_is_sptlrpc(struct config_llog_data *cld)
         return cld->cld_type == CONFIG_T_SPTLRPC;
 }
 
+static inline int cld_is_recover(struct config_llog_data *cld)
+{
+        return cld->cld_type == CONFIG_T_RECOVER;
+}
+
 #endif  /* _MGC_INTERNAL_H */

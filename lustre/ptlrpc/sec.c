@@ -822,6 +822,7 @@ void sptlrpc_req_set_flavor(struct ptlrpc_request *req, int opcode)
         switch (opcode) {
         case OST_READ:
         case MDS_READPAGE:
+        case MGS_CONFIG_READ:
                 req->rq_bulk_read = 1;
                 break;
         case OST_WRITE:

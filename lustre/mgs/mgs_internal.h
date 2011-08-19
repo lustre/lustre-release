@@ -47,12 +47,43 @@
 #include <lustre_log.h>
 #include <lustre_export.h>
 
-/* mgs_llog.c */
-int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
-                         struct vfsmount *inmnt,
-                         cfs_list_t *dentry_list);
-
 #define MGSSELF_NAME    "_mgs"
+
+/* -- imperative recovery control data structures -- */
+/**
+ * restarting targets.
+ */
+struct mgs_nidtbl;
+struct mgs_nidtbl_target {
+        cfs_list_t              mnt_list;
+        struct mgs_nidtbl      *mnt_fs;
+        u64                     mnt_version;
+        int                     mnt_type; /* OST or MDT */
+        cfs_time_t              mnt_last_active;
+        struct mgs_target_info  mnt_mti;
+};
+
+enum {
+        IR_FULL = 0,
+        IR_STARTUP,
+        IR_DISABLED,
+        IR_PARTIAL
+};
+
+#define IR_STRINGS { "full", "startup", "disabled", "partial" }
+
+/**
+ */
+struct fs_db;
+
+struct mgs_nidtbl {
+        struct fs_db *mn_fsdb;
+        struct file  *mn_version_file;
+        cfs_mutex_t   mn_lock;
+        u64           mn_version;
+        int           mn_nr_targets;
+        cfs_list_t    mn_targets;
+};
 
 struct mgs_tgt_srpc_conf {
         struct mgs_tgt_srpc_conf  *mtsc_next;
@@ -68,7 +99,6 @@ struct mgs_tgt_srpc_conf {
 #define FSDB_MGS_SELF           (3)  /* for '_mgs', used by sptlrpc */
 #define FSDB_OSCNAME18          (4)  /* old 1.8 style OSC naming */
 #define FSDB_UDESC              (5)  /* sptlrpc user desc, will be obsolete */
-
 
 struct fs_db {
         char              fsdb_name[9];
@@ -87,15 +117,38 @@ struct fs_db {
         unsigned long     fsdb_flags;
         __u32             fsdb_gen;
 
-        /* in-memory copy of the srpc rules, guarded by fsdb_sem */
+        /* in-memory copy of the srpc rules, guarded by fsdb_lock */
         struct sptlrpc_rule_set   fsdb_srpc_gen;
         struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
+
+        int                  fsdb_ir_state;
+
+        /* Target NIDs Table */
+        struct mgs_nidtbl    fsdb_nidtbl;
+
+        /* async thread to notify clients */
+        struct obd_device   *fsdb_obd;
+        cfs_waitq_t          fsdb_notify_waitq;
+        cfs_completion_t     fsdb_notify_comp;
+        cfs_atomic_t         fsdb_notify_phase;
+        volatile int         fsdb_notify_async:1,
+                             fsdb_notify_stop:1;
+        /* statistic data */
+        unsigned int         fsdb_notify_total;
+        unsigned int         fsdb_notify_max;
+        unsigned int         fsdb_notify_count;
 };
+
+/* mgs_llog.c */
+int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
+                         struct vfsmount *inmnt,
+                         cfs_list_t *dentry_list);
 
 int mgs_init_fsdb_list(struct obd_device *obd);
 int mgs_cleanup_fsdb_list(struct obd_device *obd);
-int mgs_find_or_make_fsdb(struct obd_device *obd, char *name, 
+int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
                           struct fs_db **dbh);
+struct fs_db *mgs_find_fsdb(struct obd_device *obd, char *fsname);
 int mgs_get_fsdb_srpc_from_llog(struct obd_device *obd, struct fs_db *fsdb);
 int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
 int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti);
@@ -112,6 +165,22 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
 
 /* mgs_handler.c */
 void mgs_revoke_lock(struct obd_device *obd, struct fs_db *fsdb);
+int  mgs_get_lock(struct obd_device *obd, struct ldlm_res_id *res,
+                  struct lustre_handle *lockh);
+int  mgs_put_lock(struct lustre_handle *lockh);
+
+/* mgs_nids.c */
+int  mgs_ir_update(struct obd_device *obd, struct mgs_target_info *mti);
+int  mgs_ir_init_fs(struct obd_device *obd, struct fs_db *fsdb);
+void mgs_ir_fini_fs(struct obd_device *obd, struct fs_db *fsdb);
+int  mgs_get_ir_logs(struct ptlrpc_request *req);
+int  lprocfs_wr_ir_state(struct file *file, const char *buffer,
+                           unsigned long count, void *data);
+int  lprocfs_rd_ir_state(struct seq_file *seq, void *data);
+int  lprocfs_wr_ir_timeout(struct file *file, const char *buffer,
+                           unsigned long count, void *data);
+int  lprocfs_rd_ir_timeout(char *page, char **start, off_t off, int count,
+                           int *eof, void *data);
 
 /* mgs_fs.c */
 int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,

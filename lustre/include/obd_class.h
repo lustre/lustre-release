@@ -160,7 +160,8 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
 enum {
         CONFIG_T_CONFIG  = 0,
         CONFIG_T_SPTLRPC = 1,
-        CONFIG_T_MAX     = 2
+        CONFIG_T_RECOVER = 2,
+        CONFIG_T_MAX     = 3
 };
 
 /* list of active configuration logs  */
@@ -170,6 +171,7 @@ struct config_llog_data {
         cfs_list_t                  cld_list_chain;
         cfs_atomic_t                cld_refcount;
         struct config_llog_data    *cld_sptlrpc;/* depended sptlrpc log */
+        struct config_llog_data    *cld_recover;    /* imperative recover log */
         struct obd_export          *cld_mgcexp;
         cfs_mutex_t                 cld_lock;
         int                         cld_type;

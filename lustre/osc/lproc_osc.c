@@ -608,7 +608,7 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
                                 osc_wr_contention_seconds, 0 },
         { "lockless_truncate",  osc_rd_lockless_truncate,
                                 osc_wr_lockless_truncate, 0 },
-        { "import",          lprocfs_rd_import,        0, 0 },
+        { "import",          lprocfs_rd_import,        lprocfs_wr_import, 0 },
         { "state",           lprocfs_rd_state,         0, 0 },
         { 0 }
 };

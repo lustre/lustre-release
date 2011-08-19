@@ -808,6 +808,9 @@ static struct lprocfs_vars lprocfs_mdt_obd_vars[] = {
         { "som",                        lprocfs_rd_mdt_som,
                                         lprocfs_wr_mdt_som, 0 },
         { "mdccomm",                    0, lprocfs_mdt_wr_mdc,              0 },
+        { "instance",                   lprocfs_target_rd_instance,         0 },
+        { "ir_factor",                  lprocfs_obd_rd_ir_factor,
+                                        lprocfs_obd_wr_ir_factor,           0 },
         { 0 }
 };
 

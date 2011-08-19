@@ -66,6 +66,7 @@
 #define HEALTH_CHECK      "health_check"
 #define CAPA_KEYS         "capa_keys"
 #define CHANGELOG_USERS   "changelog_users"
+#define MGS_NIDTBL_DIR    "NIDTBL_VERSIONS"
 
 
 /****************** persistent mount data *********************/
@@ -73,6 +74,9 @@
 #define LDD_F_SV_TYPE_MDT   0x0001
 #define LDD_F_SV_TYPE_OST   0x0002
 #define LDD_F_SV_TYPE_MGS   0x0004
+#define LDD_F_SV_TYPE_MASK (LDD_F_SV_TYPE_MDT  | \
+                            LDD_F_SV_TYPE_OST  | \
+                            LDD_F_SV_TYPE_MGS)
 #define LDD_F_SV_ALL        0x0008
 /** need an index assignment */
 #define LDD_F_NEED_INDEX    0x0010
@@ -92,6 +96,18 @@
 #define LDD_F_IAM_DIR       0x0800
 /** all nodes are specified as service nodes */
 #define LDD_F_NO_PRIMNODE   0x1000
+/** IR enable flag */
+#define LDD_F_IR_CAPABLE    0x2000
+/** the MGS refused to register the target. */
+#define LDD_F_ERROR         0x4000
+
+/* opc for target register */
+#define LDD_F_OPC_REG   0x10000000
+#define LDD_F_OPC_UNREG 0x20000000
+#define LDD_F_OPC_READY 0x40000000
+#define LDD_F_OPC_MASK  0xf0000000
+
+#define LDD_F_ONDISK_MASK  (LDD_F_SV_TYPE_MASK | LDD_F_IAM_DIR)
 
 enum ldd_mount_type {
         LDD_MT_EXT3 = 0,
@@ -200,6 +216,7 @@ struct lustre_mount_data {
 #define LMD_FLG_NOMGS        0x0020  /* Only start target for servers, reusing
                                         existing MGS services */
 #define LMD_FLG_WRITECONF    0x0040  /* Rewrite config log */
+#define LMD_FLG_NOIR         0x0080  /* NO imperative recovery */
 
 #define lmd_is_client(x) ((x)->lmd_flags & LMD_FLG_CLIENT)
 
@@ -441,13 +458,15 @@ struct lustre_sb_info {
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
         struct vfsmount          *lsi_srv_mnt; /* the one server mount */
         cfs_atomic_t              lsi_mounts;  /* references to the srv_mnt */
-        struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs own backing_dev_info */
+        struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs
+                                                  own backing_dev_info */
 };
 
 #define LSI_SERVER                       0x00000001
 #define LSI_UMOUNT_FORCE                 0x00000010
 #define LSI_UMOUNT_FAILOVER              0x00000020
 #define LSI_BDI_INITIALIZED              0x00000040
+#define LSI_IR_CAPABLE                   0x00000080
 
 #define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
 #define     s2lsi_nocast(sb) ((sb)->s_fs_info)
@@ -484,6 +503,7 @@ int server_put_mount_2(const char *name, struct vfsmount *mnt);
 int server_register_target(struct super_block *sb);
 struct mgs_target_info;
 int server_mti_print(char *title, struct mgs_target_info *mti);
+void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd);
 
 /* mgc_request.c */
 int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id, int type);

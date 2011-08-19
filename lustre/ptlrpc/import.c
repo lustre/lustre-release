@@ -948,6 +948,8 @@ finish:
                 }
 
                 imp->imp_connect_data = *ocd;
+                CDEBUG(D_HA, "obd %s to target with inst %u\n",
+                       imp->imp_obd->obd_name, ocd->ocd_instance);
 
                 exp = class_conn2export(&imp->imp_dlm_handle);
                 cfs_spin_unlock(&imp->imp_lock);

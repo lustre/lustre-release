@@ -147,6 +147,13 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 /* The max delay between connects is SWITCH_MAX + SWITCH_INC + INITIAL */
 #define RECONNECT_DELAY_MAX (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC + \
                              INITIAL_CONNECT_TIMEOUT)
+/* The min time a target should wait for clients to reconnect in recovery */
+#define OBD_RECOVERY_TIME_MIN    (2*RECONNECT_DELAY_MAX)
+#define OBD_IR_FACTOR_MIN         1
+#define OBD_IR_FACTOR_MAX         10
+#define OBD_IR_FACTOR_DEFAULT    (OBD_IR_FACTOR_MAX/2)
+/* default timeout for the MGS to become IR_FULL */
+#define OBD_IR_MGS_TIMEOUT       (4*obd_timeout)
 #define LONG_UNLINK 300          /* Unlink should happen before now */
 
 /**

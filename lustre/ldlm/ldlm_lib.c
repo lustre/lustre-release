@@ -951,6 +951,10 @@ dont_check_exports:
         }
         if (rc)
                 GOTO(out, rc);
+
+        LASSERT(target->u.obt.obt_magic == OBT_MAGIC);
+        data->ocd_instance = target->u.obt.obt_instance;
+
         /* Return only the parts of obd_connect_data that we understand, so the
          * client knows that we don't understand the rest. */
         if (data) {

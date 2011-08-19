@@ -539,6 +539,8 @@ extern int lprocfs_wr_evict_client(struct file *file, const char *buffer,
                                    unsigned long count, void *data);
 extern int lprocfs_wr_ping(struct file *file, const char *buffer,
                            unsigned long count, void *data);
+extern int lprocfs_wr_import(struct file *file, const char *buffer,
+                             unsigned long count, void *data);
 
 /* Statfs helpers */
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
@@ -582,6 +584,12 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
 /* lprocfs_statuc.c: hash statistics */
 int lprocfs_obd_rd_hash(char *page, char **start, off_t off,
                         int count, int *eof, void *data);
+
+/* lprocfs_status.c: IR factor */
+int lprocfs_obd_rd_ir_factor(char *page, char **start, off_t off,
+                             int count, int *eof, void *data);
+int lprocfs_obd_wr_ir_factor(struct file *file, const char *buffer,
+                             unsigned long count, void *data);
 
 extern int lprocfs_seq_release(cfs_inode_t *, struct file *);
 
@@ -648,6 +656,9 @@ int lprocfs_obd_rd_max_pages_per_rpc(char *page, char **start, off_t off,
                                      int count, int *eof, void *data);
 int lprocfs_obd_wr_max_pages_per_rpc(struct file *file, const char *buffer,
                                      unsigned long count, void *data);
+int lprocfs_target_rd_instance(char *page, char **start, off_t off,
+                               int count, int *eof, void *data);
+
 /* all quota proc functions */
 extern int lprocfs_quota_rd_bunit(char *page, char **start,
                                   off_t off, int count,
@@ -864,7 +875,9 @@ static inline int lprocfs_wr_evict_client(struct file *file,
 static inline int lprocfs_wr_ping(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 { return 0; }
-
+static inline int lprocfs_wr_import(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{ return 0; }
 
 /* Statfs helpers */
 static inline
