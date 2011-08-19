@@ -20,13 +20,13 @@ LFS=${LFS:-lfs}
 
 usage() {
     cat -- <<USAGE 1>&2
-usage: lfs_migrate [-c|-s] [-h] [-l] [-n] [-y] [file|dir ...]
-    -c compare file data after migrate (default)
-    -s skip file data comparison after migrate
+usage: lfs_migrate [-h] [-l] [-n] [-R] [-s] [-y] [file|dir ...]
     -h show this usage message
     -l migrate files with hard links (skip by default)
     -n only print the names of files to be migrated
     -q run quietly (don't print filenames or status)
+    -R restripe file using default directory striping
+    -s skip file data comparison after migrate
     -y answer 'y' to usage question
 
 If a directory is an argument, all files in the directory are migrated.
@@ -40,12 +40,13 @@ USAGE
 
 OPT_CHECK=y
 
-while getopts "chlnqsy" opt $*; do
+while getopts "chlnRqsSy" opt $*; do
     case $opt in
-	c) OPT_CHECK=y;;
+	c) echo "'-c' option deprecated, checking enabled by default" 1>&2;;
 	l) OPT_NLINK=y;;
 	n) OPT_DRYRUN=n; OPT_YES=y;;
 	q) ECHO=:;;
+	R) OPT_RESTRIPE=y;;
 	s) OPT_CHECK="";;
 	y) OPT_YES=y;;
 	h|\?) usage;;
@@ -104,13 +105,17 @@ lfs_migrate() {
 		fi
 
 
+		if [ "$OPT_RESTRIPE" ]; then
+			UNLINK=""
+		else
 		# if rsync copies Lustre xattrs properly in the future
 		# (i.e. before the file data, so that it preserves striping)
 		# then we don't need to do this getstripe/mktemp stuff.
-		UNLINK="-u"
-		COUNT=$($LFS getstripe -c "$OLDNAME" 2> /dev/null)
-		SIZE=$($LFS getstripe -s "$OLDNAME" 2> /dev/null)
-		[ -z "$COUNT" -o -z "$SIZE" ] && UNLINK=""
+			UNLINK="-u"
+			COUNT=$($LFS getstripe -c "$OLDNAME" 2> /dev/null)
+			SIZE=$($LFS getstripe -s "$OLDNAME" 2> /dev/null)
+			[ -z "$COUNT" -o -z "$SIZE" ] && UNLINK=""
+		fi
 		NEWNAME=$(mktemp $UNLINK "$OLDNAME.tmp.XXXXXX")
 		if [ $? -ne 0 -o -z "$NEWNAME" ]; then
 			echo -e "\r$OLDNAME: can't make temp file, skipped" 1>&2
