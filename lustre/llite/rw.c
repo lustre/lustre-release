@@ -75,17 +75,12 @@
  * must be called under ->lli_size_sem */
 void ll_truncate(struct inode *inode)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %Lu\n",inode->i_ino,
                inode->i_generation, inode, i_size_read(inode));
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_TRUNC, 1);
-        if (lli->lli_size_sem_owner == cfs_current()) {
-                LASSERT_SEM_LOCKED(&lli->lli_size_sem);
-                ll_inode_size_unlock(inode, 0);
-        }
 
         EXIT;
         return;

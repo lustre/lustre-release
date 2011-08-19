@@ -814,22 +814,20 @@ void ccc_io_advance(const struct lu_env *env,
         }
 }
 
-static void ccc_object_size_lock(struct cl_object *obj, int vfslock)
+static void ccc_object_size_lock(struct cl_object *obj)
 {
         struct inode *inode = ccc_object_inode(obj);
 
-        if (vfslock)
-                cl_isize_lock(inode, 0);
+        cl_isize_lock(inode, 0);
         cl_object_attr_lock(obj);
 }
 
-static void ccc_object_size_unlock(struct cl_object *obj, int vfslock)
+static void ccc_object_size_unlock(struct cl_object *obj)
 {
         struct inode *inode = ccc_object_inode(obj);
 
         cl_object_attr_unlock(obj);
-        if (vfslock)
-                cl_isize_unlock(inode, 0);
+        cl_isize_unlock(inode, 0);
 }
 
 /**
@@ -842,13 +840,9 @@ static void ccc_object_size_unlock(struct cl_object *obj, int vfslock)
  * protect consistency between inode size and cl_object
  * attributes. cl_object_size_lock() protects consistency between cl_attr's of
  * top-object and sub-objects.
- *
- * In page fault path cl_isize_lock cannot be taken, client has to live with
- * the resulting races.
  */
 int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
-                  struct cl_io *io, loff_t start, size_t count, int vfslock,
-                  int *exceed)
+                  struct cl_io *io, loff_t start, size_t count, int *exceed)
 {
         struct cl_attr *attr  = ccc_env_thread_attr(env);
         struct inode   *inode = ccc_object_inode(obj);
@@ -875,7 +869,7 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
          * ll_inode_size_lock(). This guarantees that short reads are handled
          * correctly in the face of concurrent writes and truncates.
          */
-        ccc_object_size_lock(obj, vfslock);
+        ccc_object_size_lock(obj);
         result = cl_object_attr_get(env, obj, attr);
         if (result == 0) {
                 kms = attr->cat_kms;
@@ -885,7 +879,7 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                          * return a short read (B) or some zeroes at the end
                          * of the buffer (C)
                          */
-                        ccc_object_size_unlock(obj, vfslock);
+                        ccc_object_size_unlock(obj);
                         result = cl_glimpse_lock(env, io, inode, obj);
                         if (result == 0 && exceed != NULL) {
                                 /* If objective page index exceed end-of-file
@@ -912,24 +906,8 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                          * which will always be >= the kms value here.
                          * b=11081
                          */
-                        /*
-                         * XXX in a page fault path, change inode size without
-                         * ll_inode_size_lock() held!  there is a race
-                         * condition with truncate path. (see ll_extent_lock)
-                         */
-                        /*
-                         * XXX i_size_write() is not used because it is not
-                         * safe to take the ll_inode_size_lock() due to a
-                         * potential lock inversion (bug 6077).  And since
-                         * it's not safe to use i_size_write() without a
-                         * covering mutex we do the assignment directly.  It
-                         * is not critical that the size be correct.
-                         */
                         if (cl_isize_read(inode) < kms) {
-                                if (vfslock)
-                                        cl_isize_write_nolock(inode, kms);
-                                else
-                                        cl_isize_write(inode, kms);
+                                cl_isize_write_nolock(inode, kms);
                                 CDEBUG(D_VFSTRACE,
                                        DFID" updating i_size "LPU64"\n",
                                        PFID(lu_object_fid(&obj->co_lu)),
@@ -938,7 +916,7 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                         }
                 }
         }
-        ccc_object_size_unlock(obj, vfslock);
+        ccc_object_size_unlock(obj);
         return result;
 }
 

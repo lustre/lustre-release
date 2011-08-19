@@ -646,7 +646,7 @@ static int slp_io_start(const struct lu_env *env, const struct cl_io_slice *ios)
         if (IS_ERR(iogroup))
                 RETURN(PTR_ERR(iogroup));
 
-        err = ccc_prep_size(env, obj, io, pos, cnt, 0, &exceed);
+        err = ccc_prep_size(env, obj, io, pos, cnt, &exceed);
         if (err != 0 || (write == 0 && exceed != 0))
                 GOTO(out, err);
 
