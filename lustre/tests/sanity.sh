@@ -8274,7 +8274,7 @@ test_220() { #LU-325
 
 	do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $OST || return 4
 	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME || return 5
-	rm -fr $DIR/$tdir
+	unlinkmany $DIR/$tdir/f $next_id $free || return 3
 }
 run_test 220 "the preallocated objects in MDS still can be used if ENOSPC is returned by OST with enough disk space"
 

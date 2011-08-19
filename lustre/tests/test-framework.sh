@@ -4505,6 +4505,7 @@ log_sub_test_end() {
 run_llverdev()
 {
         local dev=$1
+        local llverdev_opts=$2
         local devname=$(basename $1)
         local size=$(grep "$devname"$ /proc/partitions | awk '{print $3}')
         # loop devices aren't in /proc/partitions
@@ -4514,10 +4515,24 @@ run_llverdev()
 
         local partial_arg=""
         # Run in partial (fast) mode if the size
-        # of a partition > 10 GB
-        [ $size -gt 10 ] && partial_arg="-p"
+        # of a partition > 1 GB
+        [ $size -gt 1 ] && partial_arg="-p"
 
-        llverdev --force $partial_arg $dev
+        llverdev --force $partial_arg $llverdev_opts $dev
+}
+
+run_llverfs()
+{
+        local dir=$1
+        local llverfs_opts=$2
+        local partial_arg=""
+        local size=$(df -B G $dir |tail -n 1 |awk '{print $2}' |sed 's/G//') #GB
+
+        # Run in partial (fast) mode if the size
+        # of a partition > 1 GB
+        [ $size -gt 1 ] && partial_arg="-p"
+
+        llverfs $partial_arg $llverfs_opts $dir
 }
 
 remove_mdt_files() {
