@@ -36,6 +36,9 @@
  * libcfs/libcfs/debug.c
  *
  * Author: Phil Schwan <phil@clusterfs.com>
+ *
+ * Copyright (c) 2011 Whamcloud, Inc.
+ *
  */
 
 #ifndef EXPORT_SYMTAB

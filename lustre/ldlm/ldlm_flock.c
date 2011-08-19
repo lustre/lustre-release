@@ -32,6 +32,9 @@
  * Copyright (c) 2003 Hewlett-Packard Development Company LP.
  * Developed under the sponsorship of the US Government under
  * Subcontract No. B514193
+ *
+ * Copyright (c) 2011 Whamcloud, Inc.
+ *
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
