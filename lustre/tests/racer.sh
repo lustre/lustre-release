@@ -12,20 +12,23 @@ init_logging
 racer=$LUSTRE/tests/racer/racer.sh
 echo racer: $racer
 
+DURATION=${DURATION:-900}
+[ "$SLOW" = "no" ] && DURATION=300
+MOUNT_2=${MOUNT_2:-"yes"}
+
+build_test_filter
+check_and_setup_lustre
+
 CLIENTS=${CLIENTS:-$HOSTNAME}
-RACERDIRS=${RACERDIRS:-$DIR}
+RACERDIRS=${RACERDIRS:-"$DIR $DIR2"}
 echo RACERDIRS=$RACERDIRS
 for d in ${RACERDIRS}; do
+        is_mounted $d || continue
+
 	RDIRS="$RDIRS $d/racer"
 	mkdir -p $d/racer
 #	lfs setstripe $d/racer -c -1
 done
-
-DURATION=${DURATION:-900}
-[ "$SLOW" = "no" ] && DURATION=300
-
-build_test_filter
-check_and_setup_lustre
 
 # run racer
 test_1() {

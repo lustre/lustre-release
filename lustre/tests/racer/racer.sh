@@ -12,7 +12,7 @@ NUM_THREADS=${NUM_THREADS:-3}
 mkdir -p $DIR
 
 RACER_PROGS="file_create dir_create file_rm file_rename file_link file_symlink \
-file_list file_concat"
+file_list file_concat file_exec"
 
 racer_cleanup()
 {
