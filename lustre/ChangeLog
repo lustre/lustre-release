@@ -10,7 +10,7 @@ TBD  Oracle, Inc.
          2.6.29.4-167.fc11  (FC11)
          2.6.16.60-0.69.1 (SLES10)
          2.6.27.19-5      (SLES11)
-       * Recommended e2fsprogs version: 1.41.10-sun2
+       * Recommended e2fsprogs version: 1.41.90.wc3
        * NFS export disabled when stack size < 8192. Since the NFSv4 export of
          Lustre filesystem with 4K stack may cause a stack overflow. For more
          information, please refer to bugzilla 17630.
