@@ -1207,9 +1207,9 @@ test_27u() { # bug 4900
 run_test 27u "skip object creation on OSC w/o objects =========="
 
 test_27v() { # bug 4900
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
-	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	remote_ost_nodsh && skip "remote OST with nodsh" && return
+        [ "$OSTCOUNT" -lt "2" ] && skip_env "too few OSTs" && return
+        remote_mds_nodsh && skip "remote MDS with nodsh" && return
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
 
         exhaust_all_precreations 0x215
         reset_enospc
@@ -1228,9 +1228,10 @@ test_27v() { # bug 4900
 
         local FINISH=`date +%s`
         local TIMEOUT=`lctl get_param -n timeout`
-        [ $((FINISH - START)) -ge $((TIMEOUT / 2)) ] && \
+        local PROCESS=$((FINISH - START))
+        [ $PROCESS -ge $((TIMEOUT / 2)) ] && \
                error "$FINISH - $START >= $TIMEOUT / 2"
-
+        sleep $((TIMEOUT / 2 - PROCESS))
         reset_enospc
 }
 run_test 27v "skip object creation on slow OST ================="
