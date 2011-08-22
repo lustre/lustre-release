@@ -2348,9 +2348,10 @@ kiblnd_hdev_setup_mrs(kib_hca_dev_t *hdev)
         }
 
 out:
-        CDEBUG(D_CONSOLE, "Register global MR array, MR size: "
-                          LPX64", array size: %d\n",
-                          hdev->ibh_mr_size, hdev->ibh_nmrs);
+        if (hdev->ibh_mr_size != ~0ULL || hdev->ibh_nmrs != 1)
+                LCONSOLE_INFO("Register global MR array, MR size: "
+                              LPX64", array size: %d\n",
+                              hdev->ibh_mr_size, hdev->ibh_nmrs);
         return 0;
 }
 

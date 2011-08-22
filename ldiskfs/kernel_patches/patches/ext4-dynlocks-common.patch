@@ -37,7 +37,7 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext4/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +{
 +	int rc = 0;
 +
-+	printk(KERN_INFO "init dynlocks cache\n");
++	/* printk(KERN_INFO "init dynlocks cache\n"); */
 +	dynlock_cachep = kmem_cache_create("dynlock_cache",
 +					 sizeof(struct dynlock_handle),
 +					 0,
@@ -52,7 +52,7 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext4/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +
 +void __exit dynlock_cache_exit(void)
 +{
-+	printk(KERN_INFO "exit dynlocks cache\n");
++	/* printk(KERN_INFO "exit dynlocks cache\n"); */
 +	kmem_cache_destroy(dynlock_cachep);
 +}
 +
