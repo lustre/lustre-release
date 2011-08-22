@@ -1752,7 +1752,7 @@ int lu_global_init(void)
 {
         int result;
 
-        CDEBUG(D_CONSOLE, "Lustre LU module (%p).\n", &lu_keys);
+        CDEBUG(D_INFO, "Lustre LU module (%p).\n", &lu_keys);
 
         result = lu_ref_global_init();
         if (result != 0)

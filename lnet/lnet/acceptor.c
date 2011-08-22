@@ -487,7 +487,7 @@ lnet_acceptor(void *arg)
         libcfs_sock_release(lnet_acceptor_state.pta_sock);
         lnet_acceptor_state.pta_sock = NULL;
 
-        LCONSOLE(0, "Acceptor stopping\n");
+        CDEBUG(D_NET, "Acceptor stopping\n");
 
         /* unblock lnet_acceptor_stop() */
         cfs_mt_complete(&lnet_acceptor_state.pta_signal);

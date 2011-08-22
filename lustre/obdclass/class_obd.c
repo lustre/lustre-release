@@ -507,13 +507,7 @@ int init_obdclass(void)
                 CFS_INIT_LIST_HEAD(&capa_list[i]);
 #endif
 
-#ifdef CRAY_XT3
         LCONSOLE_INFO("Lustre: Build Version: "BUILD_VERSION"\n");
-#else
-        LCONSOLE_INFO("OBD class driver, http://wiki.whamcloud.com/\n");
-        LCONSOLE_INFO("        Lustre Version: "LUSTRE_VERSION_STRING"\n");
-        LCONSOLE_INFO("        Build Version: "BUILD_VERSION"\n");
-#endif
 
         cfs_spin_lock_init(&obd_types_lock);
         obd_zombie_impexp_init();

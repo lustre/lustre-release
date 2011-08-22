@@ -710,7 +710,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         if (!target || target->obd_stopping || !target->obd_set_up) {
                 LCONSOLE_ERROR_MSG(0x137, "UUID '%s' is not available "
-                                   " for connect (%s)\n", str,
+                                   "for connect (%s)\n", str,
                                    !target ? "no target" :
                                    (target->obd_stopping ? "stopping" :
                                    "not set up"));
@@ -1768,7 +1768,7 @@ static int target_recovery_thread(void *arg)
         thread->t_data = NULL;
         thread->t_watchdog = NULL;
 
-        CERROR("%s: started recovery thread pid %d\n", obd->obd_name,
+        CDEBUG(D_HA, "%s: started recovery thread pid %d\n", obd->obd_name,
                cfs_curproc_pid());
         trd->trd_processing_task = cfs_curproc_pid();
 

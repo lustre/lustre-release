@@ -1210,10 +1210,10 @@ static int filter_prep_groups(struct obd_device *obd)
 
         O_dentry = simple_mkdir(cfs_fs_pwd(current->fs), obd->u.obt.obt_vfsmnt,
                                 "O", 0700, 1);
-        CDEBUG(D_INODE, "got/created O: %p\n", O_dentry);
+        CDEBUG(D_INODE, "%s: got/created O: %p\n", obd->obd_name, O_dentry);
         if (IS_ERR(O_dentry)) {
                 rc = PTR_ERR(O_dentry);
-                CERROR("cannot open/create O: rc = %d\n", rc);
+                CERROR("%s: cannot open/create O: rc = %d\n", obd->obd_name,rc);
                 GOTO(cleanup, rc);
         }
         filter->fo_dentry_O = O_dentry;
@@ -1223,22 +1223,24 @@ static int filter_prep_groups(struct obd_device *obd)
          * clients because they may send create/destroy for any group -bzzz */
         filp = filp_open("LAST_GROUP", O_CREAT | O_RDWR, 0700);
         if (IS_ERR(filp)) {
-                CERROR("cannot create LAST_GROUP: rc = %ld\n", PTR_ERR(filp));
+                CERROR("%s: cannot create LAST_GROUP: rc = %ld\n",
+                       obd->obd_name, PTR_ERR(filp));
                 GOTO(cleanup, rc = PTR_ERR(filp));
         }
         cleanup_phase = 2; /* filp */
 
         rc = fsfilt_read_record(obd, filp, &last_group, sizeof(__u32), &off);
         if (rc) {
-                CDEBUG(D_INODE, "error reading LAST_GROUP: rc %d\n", rc);
+                CERROR("%s: error reading LAST_GROUP: rc %d\n",
+                       obd->obd_name, rc);
                 GOTO(cleanup, rc);
         }
 
         if (off == 0)
                 last_group = FID_SEQ_OST_MDT0;
 
-        CWARN("%s: initialize groups [%u,%u]\n", obd->obd_name,
-              FID_SEQ_OST_MDT0, last_group);
+        CDEBUG(D_INODE, "%s: initialize group %u (max %u)\n", obd->obd_name,
+               FID_SEQ_OST_MDT0, last_group);
         filter->fo_committed_group = last_group;
         rc = filter_read_groups(obd, last_group, 1);
         if (rc)
@@ -1421,7 +1423,7 @@ struct dentry *filter_parent(struct obd_device *obd, obd_seq group, obd_id objid
         struct filter_subdirs *subdirs;
 
         if (group >= filter->fo_group_count) /* FIXME: object groups */
-		return ERR_PTR(-EBADF);
+                return ERR_PTR(-EBADF);
 
         if (!fid_seq_is_mdt(group) || filter->fo_subdir_count == 0)
                 return filter->fo_dentry_O_groups[group];
