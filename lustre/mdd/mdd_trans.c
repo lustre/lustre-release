@@ -28,6 +28,9 @@
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2011 Whamcloud, Inc.
+ *
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -104,30 +107,65 @@ int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
 }
 
 void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
-                         enum mdd_txn_op op)
+                         enum mdd_txn_op op, int changelog_cnt)
 {
         LASSERT(0 <= op && op < MDD_TXN_LAST_OP);
 
         txn_param_init(&mdd_env_info(env)->mti_param,
                        mdd->mdd_tod[op].mod_credits);
+        if (changelog_cnt > 0) {
+                txn_param_credit_add(&mdd_env_info(env)->mti_param,
+                                  changelog_cnt * dto_txn_credits[DTO_LOG_REC]);
+        }
+}
+
+int mdd_create_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
+                               struct lov_mds_md *lmm, enum mdd_txn_op op,
+                               int changelog_cnt)
+{
+        int stripes = 0;
+        ENTRY;
+
+        LASSERT(op == MDD_TXN_CREATE_DATA_OP || op == MDD_TXN_MKDIR_OP);
+
+        if (lmm == NULL)
+                GOTO(out, 0);
+        /* only replay create request will cause lov_objid update */
+        if (!mdd->mdd_obd_dev->obd_recovering)
+                GOTO(out, 0);
+
+        /* add possible orphan unlink rec credits used in lov_objid update */
+        if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V1) {
+                stripes = le32_to_cpu(((struct lov_mds_md_v1*)lmm)
+                                      ->lmm_stripe_count);
+        } else if (le32_to_cpu(lmm->lmm_magic) == LOV_MAGIC_V3){
+                stripes = le32_to_cpu(((struct lov_mds_md_v3*)lmm)
+                                      ->lmm_stripe_count);
+        } else {
+                CERROR("Unknown lmm type %X\n", le32_to_cpu(lmm->lmm_magic));
+                LBUG();
+        }
+out:
+        mdd_txn_param_build(env, mdd, op, stripes + changelog_cnt);
+        RETURN(0);
 }
 
 int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
-                            struct md_attr *ma, enum mdd_txn_op op)
+                            struct md_attr *ma, enum mdd_txn_op op,
+                            int changelog_cnt)
 {
         struct mdd_device *mdd = mdo2mdd(&md2mdd_obj(obj)->mod_obj);
-        int rc, log_credits, stripe;
+        int rc, stripe = 0;
         ENTRY;
 
-        mdd_txn_param_build(env, mdd, op);
-
         if (S_ISDIR(lu_object_attr(&obj->mo_lu)))
-                RETURN(0);
+                GOTO(out, rc = 0);
 
-        LASSERT(op == MDD_TXN_UNLINK_OP || op == MDD_TXN_RENAME_OP);
+        LASSERT(op == MDD_TXN_UNLINK_OP || op == MDD_TXN_RENAME_OP ||
+                op == MDD_TXN_RENAME_TGT_OP);
         rc = mdd_lmm_get_locked(env, md2mdd_obj(obj), ma);
         if (rc || !(ma->ma_valid & MA_LOV))
-                RETURN(rc);
+                GOTO(out, rc);
 
         LASSERTF(le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC_V1 ||
                  le32_to_cpu(ma->ma_lmm->lmm_magic) == LOV_MAGIC_V3,
@@ -138,18 +176,20 @@ int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
         else
                 stripe = le32_to_cpu(ma->ma_lmm->lmm_stripe_count);
 
-        log_credits = stripe * dto_txn_credits[DTO_LOG_REC];
-        txn_param_credit_add(&mdd_env_info(env)->mti_param, log_credits);
+out:
+        mdd_txn_param_build(env, mdd, op, stripe + changelog_cnt);
+
         RETURN(rc);
 }
 
 int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
-                                struct md_attr *ma, enum mdd_txn_op op)
+                                struct md_attr *ma, enum mdd_txn_op op,
+                                int changelog_cnt)
 {
         struct mdd_device *mdd = mdo2mdd(&md2mdd_obj(obj)->mod_obj);
         ENTRY;
 
-        mdd_txn_param_build(env, mdd, op);
+        mdd_txn_param_build(env, mdd, op, changelog_cnt);
         if (ma->ma_attr.la_valid & (LA_UID | LA_GID))
                 txn_param_credit_add(&mdd_env_info(env)->mti_param,
                                      dto_txn_credits[DTO_ATTR_SET_CHOWN]);
