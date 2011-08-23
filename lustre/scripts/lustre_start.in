@@ -31,6 +31,10 @@ Usage: $(basename $0) [options] <-a|-w|-x> <CSV file>
                 in the cluster
     -m          pass "mount options" item in the CSV file to mount command line
     -k          stop the services on Lustre server targets
+    -s          start services in the reverse order MGS->OST(s)->MDT(s).
+                The default primary order is MGS->MDT(s)->OST(s).
+                Due to Lustre limitation the reverse order can not be used when
+                starting the services after a writeconf or reformat
     -v          verbose mode
     -h          help
     CSV file    a comma-separated value file that contains configuration
@@ -46,8 +50,9 @@ EOF
 
 SPECIFY_MNTOPTS=false
 STOP_SERVICE=false
+PRI_ORDER=true
 # Get and check the positional parameters
-while getopts "aw:x:nmkhv" OPTION; do
+while getopts "aw:x:nmskhv" OPTION; do
     case $OPTION in
     a)
         [ -z "$SPECIFIED_NODELIST" ] && [ -z "$EXCLUDED_NODELIST" ] \
@@ -69,6 +74,9 @@ while getopts "aw:x:nmkhv" OPTION; do
         ;;
     m)
         SPECIFY_MNTOPTS=true
+        ;;
+    s)
+        PRI_ORDER=false
         ;;
     k)
         STOP_SERVICE=true 
@@ -142,9 +150,9 @@ start_service() {
         [ ${PIPESTATUS[0]} -ne 0 ] && error_output "$mntopts" && return 1
     fi
 
+    [ -n "$extra_mntopts" ] && mntopts="${mntopts:+$mntopts,}$extra_mntopts"
     [ -n "$mntopts" ] && mntopts="-o $mntopts"
-    [ -n "$extra_mntopts" ] && mntopts="$mntopts $extra_mntopts"
-    # Strip of any leading space
+    # Strip off any leading space
     mntopts=${mntopts# }
 
     # Execute remote command to start the service
@@ -225,32 +233,52 @@ mass_op() {
 
 # Unload the modules to make cleanup
 unload_modules() {
-    local command
-    local host
-    local host_list
+    local command="if grep -q libcfs /proc/modules; then
+                       lctl net down 1>/dev/null 2>&1
+                       lustre_rmmod
+                   fi"
 
-    host_list=$(comma_list "${HOST_NAME[@]}")
-    [ -z "$host_list" ] && return 0
+    remote_exec $(comma_list ${HOST_NAME[@]}) "$command"
+}
 
-    command="PATH=\$PATH:/sbin:/usr/sbin
-if grep -q libcfs /proc/modules; then
-    lctl net down 1>/dev/null 2>&1
-    lustre_rmmod
-fi"
+# Load lustre modules on all the nodes
+load_modules() {
+    local command="modprobe lustre && lsmod | grep -q ^lustre 2>&1"
 
-    if is_pdsh; then
-        $REMOTE $host_list "$command"
-    else
-        for host in ${host_list//,/ }; do
-            $REMOTE $host "$command"
-        done
+    remote_exec $(comma_list ${HOST_NAME[@]}) "$command"
+}
+
+is_combo_mgs_mdt() {
+    if [ -n "${MGS_NODENAME[0]}" ]; then
+        local idx=${MGS_IDX[0]}
+        if [ "${DEVICE_TYPE[idx]#*mdt*}" != "${DEVICE_TYPE[idx]}" ]; then
+            return 0
+        fi
     fi
+    return 1
+}
+
+start_mgs() {
+    local mgs_extra_mntopts=""
+    if $(is_combo_mgs_mdt); then
+        mgs_extra_mntopts="nosvc -n"
+    fi
+    if [ -n "${MGS_NODENAME[0]}" ]; then
+        start_service ${MGS_IDX[0]} "$mgs_extra_mntopts" || \
+            return ${PIPESTATUS[0]}
+    fi
+}
+
+start_mdt() {
+    if $(is_combo_mgs_mdt); then
+        start_service ${MGS_IDX[0]} "nomgs" || return ${PIPESTATUS[0]}
+    fi
+    mass_op "start" "mdt" || return ${PIPESTATUS[0]}
 }
 
 # Start the services on Lustre server targets
 mass_start() {
     declare -i i
-    local combo_mgs_mdt=false
 
     if [ ${#HOST_NAME[@]} -eq 0 ]; then
         verbose_output "There are no Lustre targets specified."
@@ -274,28 +302,18 @@ mass_start() {
         fi
     done
 
-    # Start MGS or the MGS service on combo MGS/MDT (with "-o nosvc -n" options)
-    if [ -n "${MGS_NODENAME[0]}" ]; then
-        local idx=${MGS_IDX[0]}
-        if [ "${DEVICE_TYPE[idx]#*mdt*}" != "${DEVICE_TYPE[idx]}" ]; then
-            # Combo MGS/MDT
-            combo_mgs_mdt=true
-            start_service ${MGS_IDX[0]} "-o nosvc -n" || return ${PIPESTATUS[0]}
-        else
-            start_service ${MGS_IDX[0]} || return ${PIPESTATUS[0]}
-        fi
+    # load modules explicitly to prevent multiple devices from racing - b24464.
+    load_modules || return ${PIPESTATUS[0]}
+
+    if $PRI_ORDER ; then
+        start_mgs || return ${PIPESTATUS[0]}
+        start_mdt || return ${PIPESTATUS[0]}
+        mass_op "start" "ost" || return ${PIPESTATUS[0]}
+    else
+        start_mgs || return ${PIPESTATUS[0]}
+        mass_op "start" "ost" || return ${PIPESTATUS[0]}
+        start_mdt || return ${PIPESTATUS[0]}
     fi
-
-    # Start the MDT service on combo MGS/MDT (with "-o nomgs" option)
-    if $combo_mgs_mdt; then
-        start_service ${MGS_IDX[0]} "-o nomgs" || return ${PIPESTATUS[0]}
-    fi
-
-    # Start MDT(s)
-    mass_op "start" "mdt" || return ${PIPESTATUS[0]}
-
-    # Start OST(s)
-    mass_op "start" "ost" || return ${PIPESTATUS[0]}
 
     verbose_output "Success on all Lustre targets!"
     return 0
