@@ -28,6 +28,9 @@
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2011 Whamcloud, Inc.
+ *
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -420,11 +423,16 @@ int mdd_quota_finvalidate(const struct lu_env *env, struct md_device *m,
 
 /* mdd_trans.c */
 void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
-                         enum mdd_txn_op);
+                         enum mdd_txn_op, int changelog_cnt);
+int mdd_create_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
+                               struct lov_mds_md *lmm, enum mdd_txn_op op,
+                               int changelog_cnt);
 int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
-                            struct md_attr *ma, enum mdd_txn_op);
+                            struct md_attr *ma, enum mdd_txn_op,
+                            int changelog_cnt);
 int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
-                                struct md_attr *ma, enum mdd_txn_op);
+                                struct md_attr *ma, enum mdd_txn_op,
+                                int changelog_cnt);
 
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
                     struct mdd_object *obj, struct lu_attr *la);

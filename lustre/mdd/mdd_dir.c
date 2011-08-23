@@ -713,7 +713,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         }
 #endif
 
-        mdd_txn_param_build(env, mdd, MDD_TXN_LINK_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_LINK_OP, 1);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
@@ -857,7 +857,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
         LASSERTF(mdd_object_exists(mdd_cobj) > 0, "FID is "DFID"\n",
                  PFID(mdd_object_fid(mdd_cobj)));
 
-        rc = mdd_log_txn_param_build(env, cobj, ma, MDD_TXN_UNLINK_OP);
+        rc = mdd_log_txn_param_build(env, cobj, ma, MDD_TXN_UNLINK_OP, 1);
         if (rc)
                 RETURN(rc);
 
@@ -1019,7 +1019,7 @@ static int mdd_name_insert(const struct lu_env *env,
                 }
         }
 #endif
-        mdd_txn_param_build(env, mdd, MDD_TXN_INDEX_INSERT_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_INDEX_INSERT_OP, 0);
         handle = mdd_trans_start(env, mdo2mdd(pobj));
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
@@ -1124,7 +1124,7 @@ static int mdd_name_remove(const struct lu_env *env,
                 }
         }
 #endif
-        mdd_txn_param_build(env, mdd, MDD_TXN_INDEX_DELETE_OP);
+        mdd_txn_param_build(env, mdd, MDD_TXN_INDEX_DELETE_OP, 0);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
@@ -1240,7 +1240,10 @@ static int mdd_rename_tgt(const struct lu_env *env,
                 }
         }
 #endif
-        mdd_txn_param_build(env, mdd, MDD_TXN_RENAME_TGT_OP);
+        if (tobj && mdd_object_exists(mdd_tobj))
+                mdd_log_txn_param_build(env, tobj, ma, MDD_TXN_RENAME_TGT_OP,1);
+        else
+                mdd_txn_param_build(env, mdd, MDD_TXN_RENAME_TGT_OP, 1);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
@@ -1378,7 +1381,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         if (rc)
                 RETURN(rc);
 
-        mdd_txn_param_build(env, mdd, MDD_TXN_CREATE_DATA_OP);
+        mdd_create_txn_param_build(env, mdd, lmm, MDD_TXN_CREATE_DATA_OP, 0);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_free, rc = PTR_ERR(handle));
@@ -1735,7 +1738,7 @@ static int mdd_create(const struct lu_env *env,
                         got_def_acl = 1;
         }
 
-        mdd_txn_param_build(env, mdd, MDD_TXN_MKDIR_OP);
+        mdd_create_txn_param_build(env, mdd, lmm, MDD_TXN_MKDIR_OP, 1);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_free, rc = PTR_ERR(handle));
@@ -2037,7 +2040,10 @@ static int mdd_rename(const struct lu_env *env,
                 }
         }
 #endif
-        mdd_txn_param_build(env, mdd, MDD_TXN_RENAME_OP);
+        if (tobj && mdd_object_exists(mdd_tobj))
+                mdd_log_txn_param_build(env, tobj, ma, MDD_TXN_RENAME_OP, 2);
+        else
+                mdd_txn_param_build(env, mdd, MDD_TXN_RENAME_OP, 2);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 GOTO(out_pending, rc = PTR_ERR(handle));
