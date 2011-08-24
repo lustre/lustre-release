@@ -220,8 +220,8 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_STATUS_CONN);
         LASSERTF(MDS_STATUS_LOV == 2, "found %lld\n",
                  (long long)MDS_STATUS_LOV);
-        LASSERTF(MDS_BFLAG_UNCOMMITTED_WRITES == 1, "found %lld\n",
-                 (long long)MDS_BFLAG_UNCOMMITTED_WRITES);
+        LASSERTF(LUSTRE_BFLAG_UNCOMMITTED_WRITES == 1, "found %lld\n",
+                 (long long)LUSTRE_BFLAG_UNCOMMITTED_WRITES);
         LASSERTF(MF_SOM_CHANGE == 0x00000001UL, "found 0x%.8xUL\n",
                  (unsigned)MF_SOM_CHANGE);
         LASSERTF(MF_EPOCH_OPEN == 0x00000002UL, "found 0x%.8xUL\n",
@@ -1762,16 +1762,16 @@ void lustre_assert_wire_constants(void)
                  (long long)MDS_OPEN_NORESTORE);
         LASSERTF(MDS_OPEN_NEWSTRIPE == 00000000000200000000000ULL, "found 0%.22lloULL\n",
                  (long long)MDS_OPEN_NEWSTRIPE);
-        LASSERTF(MDS_SYNC_FL == 0x00000008, "found 0x%.8x\n",
-                 MDS_SYNC_FL);
-        LASSERTF(MDS_IMMUTABLE_FL == 0x00000010, "found 0x%.8x\n",
-                 MDS_IMMUTABLE_FL);
-        LASSERTF(MDS_APPEND_FL == 0x00000020, "found 0x%.8x\n",
-                 MDS_APPEND_FL);
-        LASSERTF(MDS_NOATIME_FL == 0x00000080, "found 0x%.8x\n",
-                 MDS_NOATIME_FL);
-        LASSERTF(MDS_DIRSYNC_FL == 0x00010000, "found 0x%.8x\n",
-                 MDS_DIRSYNC_FL);
+        LASSERTF(LUSTRE_SYNC_FL == 0x00000008, "found 0x%.8x\n",
+                 LUSTRE_SYNC_FL);
+        LASSERTF(LUSTRE_IMMUTABLE_FL == 0x00000010, "found 0x%.8x\n",
+                 LUSTRE_IMMUTABLE_FL);
+        LASSERTF(LUSTRE_APPEND_FL == 0x00000020, "found 0x%.8x\n",
+                 LUSTRE_APPEND_FL);
+        LASSERTF(LUSTRE_NOATIME_FL == 0x00000080, "found 0x%.8x\n",
+                 LUSTRE_NOATIME_FL);
+        LASSERTF(LUSTRE_DIRSYNC_FL == 0x00010000, "found 0x%.8x\n",
+                 LUSTRE_DIRSYNC_FL);
         LASSERTF(MDS_INODELOCK_LOOKUP == 0x000001, "found 0x%.8x\n",
                  MDS_INODELOCK_LOOKUP);
         LASSERTF(MDS_INODELOCK_UPDATE == 0x000002, "found 0x%.8x\n",

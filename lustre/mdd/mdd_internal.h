@@ -147,10 +147,6 @@ enum mod_flags {
         MNLINK_OBJ = 1 << 4
 };
 
-#define LUSTRE_APPEND_FL LDISKFS_APPEND_FL
-#define LUSTRE_IMMUTABLE_FL LDISKFS_IMMUTABLE_FL
-#define LUSTRE_DIRSYNC_FL LDISKFS_DIRSYNC_FL
-
 enum mdd_object_role {
         MOR_SRC_PARENT,
         MOR_SRC_CHILD,

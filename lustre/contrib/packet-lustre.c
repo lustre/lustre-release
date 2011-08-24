@@ -1028,13 +1028,13 @@ const value_string lustre_llog_hdr_llh_flags[]= {
 };
 
 const value_string lustre_mds_flags_vals[] = {
-  {0x1,"MDS_BFLAG_UNCOMMITTED_WRITES"},
-  {0x80000000, "MDS_BFLAG_EXT_FLAGS"},      /* == EXT3_RESERVED_FL */
-  {0x00000008, "MDS_SYNC_FL        "},      /* Synchronous updates */
-  {0x00000010, "MDS_IMMUTABLE_FL   "},      /* Immutable file */
-  {0x00000020, "MDS_APPEND_FL      "},      /* writes to file may only append */
-  {0x00000080, "MDS_NOATIME_FL     "},      /* do not update atime */
-  {0x00010000, "MDS_DIRSYNC_FL     "},       /* dirsync behaviour (dir only) */
+  {0x1,        "LUSTRE_BFLAG_UNCOMMITTED_WRITES"},
+  {0x80000000, "LUSTRE_BFLAG_EXT_FLAGS"},   /* == EXT3_RESERVED_FL */
+  {0x00000008, "LUSTRE_SYNC_FL        "},   /* Synchronous updates */
+  {0x00000010, "LUSTRE_IMMUTABLE_FL   "},   /* Immutable file */
+  {0x00000020, "LUSTRE_APPEND_FL      "},   /* writes to file may only append */
+  {0x00000080, "LUSTRE_NOATIME_FL     "},   /* do not update atime */
+  {0x00010000, "LUSTRE_DIRSYNC_FL     "},   /* dirsync behaviour (dir only) */
   { 0, NULL }
 };
 
