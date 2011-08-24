@@ -62,7 +62,11 @@ if [ "$scsidevs" ]; then
     fi
 
     for d in $scsidevs; do
-	devs[$i]=`sg_map | awk "{if (\\\$2 == \"$d\") print \\\$1}"`
+        if [[ -L "$d" ]]; then
+            echo "Device $d specified by alias. Will 'readlink' for device name"
+            d=$(readlink -f $d)
+        fi
+        devs[$i]=`sg_map | awk "{if (\\\$2 == \"$d\") print \\\$1}"`
         if [ -z "${devs[i]}" ]; then
             echo "Can't find SG device for $d, testing for partition"
             pt=`echo $d | sed 's/[0-9]*$//'`
