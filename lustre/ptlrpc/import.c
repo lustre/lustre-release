@@ -583,7 +583,7 @@ static int ptlrpc_first_transno(struct obd_import *imp, __u64 *transno)
  * actual sending.
  * Returns 0 on success or error code.
  */
-int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
+int ptlrpc_connect_import(struct obd_import *imp)
 {
         struct obd_device *obd = imp->imp_obd;
         int initial_connect = 0;
@@ -627,15 +627,6 @@ int ptlrpc_connect_import(struct obd_import *imp, char *new_uuid)
         set_transno = ptlrpc_first_transno(imp,
                                            &imp->imp_connect_data.ocd_transno);
         cfs_spin_unlock(&imp->imp_lock);
-
-        if (new_uuid) {
-                struct obd_uuid uuid;
-
-                obd_str2uuid(&uuid, new_uuid);
-                rc = import_set_conn_priority(imp, &uuid);
-                if (rc)
-                        GOTO(out, rc);
-        }
 
         rc = import_select_connection(imp);
         if (rc)
@@ -728,8 +719,14 @@ EXPORT_SYMBOL(ptlrpc_connect_import);
 static void ptlrpc_maybe_ping_import_soon(struct obd_import *imp)
 {
 #ifdef __KERNEL__
-        /* the pinger takes care of issuing the next reconnect request */
-        return;
+        int force_verify;
+
+        cfs_spin_lock(&imp->imp_lock);
+        force_verify = imp->imp_force_verify != 0;
+        cfs_spin_unlock(&imp->imp_lock);
+
+        if (force_verify)
+                ptlrpc_pinger_wake_up();
 #else
         /* liblustre has no pinger thread, so we wakeup pinger anyway */
         ptlrpc_pinger_wake_up();
@@ -780,6 +777,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
         /* All imports are pingable */
         imp->imp_pingable = 1;
         imp->imp_force_reconnect = 0;
+        imp->imp_force_verify = 0;
 
         if (aa->pcaa_initial_connect) {
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
@@ -920,7 +918,7 @@ finish:
                                "invalidating and reconnecting\n",
                                obd2cli_tgt(imp->imp_obd),
                                imp->imp_connection->c_remote_uuid.uuid);
-                        ptlrpc_connect_import(imp, NULL);
+                        ptlrpc_connect_import(imp);
                         RETURN(0);
                 }
         } else {
@@ -1157,7 +1155,7 @@ static int completed_replay_interpret(const struct lu_env *env,
                                req->rq_import->imp_obd->obd_name,
                                req->rq_status);
                 }
-                ptlrpc_connect_import(req->rq_import, NULL);
+                ptlrpc_connect_import(req->rq_import);
         }
 
         RETURN(0);

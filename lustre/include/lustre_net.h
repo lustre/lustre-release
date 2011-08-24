@@ -1518,7 +1518,7 @@ struct ptlrpc_svc_data {
  * Import API
  * @{
  */
-int ptlrpc_connect_import(struct obd_import *imp, char * new_uuid);
+int ptlrpc_connect_import(struct obd_import *imp);
 int ptlrpc_init_import(struct obd_import *imp);
 int ptlrpc_disconnect_import(struct obd_import *imp, int noclose);
 int ptlrpc_import_recovery_state_machine(struct obd_import *imp);

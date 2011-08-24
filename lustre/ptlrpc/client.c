@@ -2590,7 +2590,7 @@ static int ptlrpc_replay_interpret(const struct lu_env *env,
 
         if (rc != 0)
                 /* this replay failed, so restart recovery */
-                ptlrpc_connect_import(imp, NULL);
+                ptlrpc_connect_import(imp);
 
         RETURN(rc);
 }

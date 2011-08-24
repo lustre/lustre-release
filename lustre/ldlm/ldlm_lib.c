@@ -471,7 +471,7 @@ int client_connect_import(const struct lu_env *env,
                 imp->imp_connect_flags_orig = data->ocd_connect_flags;
         }
 
-        rc = ptlrpc_connect_import(imp, NULL);
+        rc = ptlrpc_connect_import(imp);
         if (rc != 0) {
                 LASSERT (imp->imp_state == LUSTRE_IMP_DISCON);
                 GOTO(out_ldlm, rc);

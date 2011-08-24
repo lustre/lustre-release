@@ -67,7 +67,7 @@ void ptlrpc_initiate_recovery(struct obd_import *imp)
         ENTRY;
 
         CDEBUG(D_HA, "%s: starting recovery\n", obd2cli_tgt(imp->imp_obd));
-        ptlrpc_connect_import(imp, NULL);
+        ptlrpc_connect_import(imp);
 
         EXIT;
 }
@@ -223,7 +223,7 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
                 }
                 /* to control recovery via lctl {disable|enable}_recovery */
                 if (imp->imp_deactive == 0)
-                        ptlrpc_connect_import(imp, NULL);
+                        ptlrpc_connect_import(imp);
         }
 
         /* Wait for recovery to complete and resend. If evicted, then
@@ -301,15 +301,27 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
         /* force import to be disconnected. */
         ptlrpc_set_import_discon(imp, 0);
 
+        if (new_uuid) {
+                struct obd_uuid uuid;
+
+                /* intruct import to use new uuid */
+                obd_str2uuid(&uuid, new_uuid);
+                rc = import_set_conn_priority(imp, &uuid);
+                if (rc)
+                        GOTO(out, rc);
+        }
+
         /* Check if reconnect is already in progress */
         cfs_spin_lock(&imp->imp_lock);
-        if (imp->imp_state != LUSTRE_IMP_DISCON)
+        if (imp->imp_state != LUSTRE_IMP_DISCON) {
+                imp->imp_force_verify = 1;
                 rc = -EALREADY;
+        }
         cfs_spin_unlock(&imp->imp_lock);
         if (rc)
                 GOTO(out, rc);
 
-        rc = ptlrpc_connect_import(imp, new_uuid);
+        rc = ptlrpc_connect_import(imp);
         if (rc)
                 GOTO(out, rc);
 

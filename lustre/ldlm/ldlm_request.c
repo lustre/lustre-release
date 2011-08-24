@@ -2060,7 +2060,7 @@ static int replay_lock_interpret(const struct lu_env *env,
         LDLM_LOCK_PUT(lock);
 out:
         if (rc != ELDLM_OK)
-                ptlrpc_connect_import(req->rq_import, NULL);
+                ptlrpc_connect_import(req->rq_import);
 
         RETURN(rc);
 }
