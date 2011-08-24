@@ -2274,36 +2274,43 @@ void _debug_req(struct ptlrpc_request *req,
                 struct libcfs_debug_msg_data *msgdata,
                 const char *fmt, ... )
 {
+        int req_ok = req->rq_reqmsg != NULL;
+        int rep_ok = req->rq_repmsg != NULL;
         va_list args;
+
+        if (ptlrpc_req_need_swab(req)) {
+                req_ok = req_ok && req_ptlrpc_body_swabbed(req);
+                rep_ok = rep_ok && rep_ptlrpc_body_swabbed(req);
+        }
+
         va_start(args, fmt);
         libcfs_debug_vmsg2(msgdata, fmt, args,
                            " req@%p x"LPU64"/t"LPD64"("LPD64") o%d->%s@%s:%d/%d"
                            " lens %d/%d e %d to %d dl "CFS_TIME_T" ref %d "
                            "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",
                            req, req->rq_xid, req->rq_transno,
-                           req->rq_reqmsg ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
-                           req->rq_reqmsg && req_ptlrpc_body_swabbed(req) ?
-                           lustre_msg_get_opc(req->rq_reqmsg) : -1,
-                           req->rq_import ? obd2cli_tgt(req->rq_import->imp_obd) :
-                           req->rq_export ?
-                           (char*)req->rq_export->exp_client_uuid.uuid : "<?>",
+                           req_ok ? lustre_msg_get_transno(req->rq_reqmsg) : 0,
+                           req_ok ? lustre_msg_get_opc(req->rq_reqmsg) : -1,
                            req->rq_import ?
-                           (char *)req->rq_import->imp_connection->c_remote_uuid.uuid :
-                           req->rq_export ?
-                           (char *)req->rq_export->exp_connection->c_remote_uuid.uuid : "<?>",
+                                req->rq_import->imp_obd->obd_name :
+                                req->rq_export ?
+                                     req->rq_export->exp_client_uuid.uuid :
+                                     "<?>",
+                           libcfs_nid2str(req->rq_import ?
+                                req->rq_import->imp_connection->c_peer.nid :
+                                req->rq_export ?
+                                     req->rq_export->exp_connection->c_peer.nid:
+                                     LNET_NID_ANY),
                            req->rq_request_portal, req->rq_reply_portal,
                            req->rq_reqlen, req->rq_replen,
                            req->rq_early_count, req->rq_timedout,
                            req->rq_deadline,
                            cfs_atomic_read(&req->rq_refcount),
                            DEBUG_REQ_FLAGS(req),
-                           req->rq_reqmsg && req_ptlrpc_body_swabbed(req) ?
-                           lustre_msg_get_flags(req->rq_reqmsg) : -1,
-                           req->rq_repmsg && rep_ptlrpc_body_swabbed(req) ?
-                           lustre_msg_get_flags(req->rq_repmsg) : -1,
+                           req_ok ? lustre_msg_get_flags(req->rq_reqmsg) : -1,
+                           rep_ok ? lustre_msg_get_flags(req->rq_repmsg) : -1,
                            req->rq_status,
-                           req->rq_repmsg && rep_ptlrpc_body_swabbed(req) ?
-                           lustre_msg_get_status(req->rq_repmsg) : -1);
+                           rep_ok ? lustre_msg_get_status(req->rq_repmsg) : -1);
 }
 EXPORT_SYMBOL(_debug_req);
 

@@ -441,7 +441,7 @@ libcfs_nid2str(lnet_nid_t nid)
         int               nob;
 
         if (nid == LNET_NID_ANY)
-                return "LNET_NID_ANY";
+                return "<?>";
 
         nf = libcfs_lnd2netstrfns(lnd);
         str = libcfs_next_nidstring();
