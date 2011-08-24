@@ -900,7 +900,8 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
         char  *dt = NULL, *md = NULL;
         char  *profilenm = get_profile_name(sb);
         struct config_llog_instance *cfg;
-        const int instlen = sizeof(cfg->cfg_instance) * 2 + 1;
+        /* %p for void* in printf needs 16+2 characters: 0xffffffffffffffff */
+        const int instlen = sizeof(cfg->cfg_instance) * 2 + 2;
         int    err;
         ENTRY;
 
@@ -961,12 +962,12 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
         CDEBUG(D_CONFIG, "Found profile %s: mdc=%s osc=%s\n", profilenm,
                lprof->lp_md, lprof->lp_dt);
 
-        OBD_ALLOC(dt, strlen(lprof->lp_dt) + instlen);
+        OBD_ALLOC(dt, strlen(lprof->lp_dt) + instlen + 2);
         if (!dt)
                 GOTO(out_free, err = -ENOMEM);
         sprintf(dt, "%s-%p", lprof->lp_dt, cfg->cfg_instance);
 
-        OBD_ALLOC(md, strlen(lprof->lp_md) + instlen);
+        OBD_ALLOC(md, strlen(lprof->lp_md) + instlen + 2);
         if (!md)
                 GOTO(out_free, err = -ENOMEM);
         sprintf(md, "%s-%p", lprof->lp_md, cfg->cfg_instance);
@@ -976,9 +977,9 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
 
 out_free:
         if (md)
-                OBD_FREE(md, strlen(lprof->lp_md) + instlen);
+                OBD_FREE(md, strlen(lprof->lp_md) + instlen + 2);
         if (dt)
-                OBD_FREE(dt, strlen(lprof->lp_dt) + instlen);
+                OBD_FREE(dt, strlen(lprof->lp_dt) + instlen + 2);
         if (err)
                 ll_put_super(sb);
         else

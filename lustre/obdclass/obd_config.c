@@ -1286,7 +1286,7 @@ static int class_config_llog_handler(struct llog_handle * handle,
                     LUSTRE_CFG_BUFLEN(lcfg, 0) > 0){
                         inst = 1;
                         inst_len = LUSTRE_CFG_BUFLEN(lcfg, 0) +
-                                   sizeof(clli->cfg_instance) * 2 + 1;
+                                   sizeof(clli->cfg_instance) * 2 + 4;
                         OBD_ALLOC(inst_name, inst_len);
                         if (inst_name == NULL)
                                 GOTO(out, rc = -ENOMEM);

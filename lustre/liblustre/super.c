@@ -1858,6 +1858,8 @@ llu_fsswop_mount(const char *source,
         int async = 1, err = -EINVAL;
         struct obd_connect_data ocd = {0,};
         struct md_op_data op_data = {{0}};
+        /* %p for void* in printf needs 16+2 characters: 0xffffffffffffffff */
+        const int instlen = sizeof(cfg.cfg_instance) * 2 + 2;
 
         ENTRY;
 
@@ -1897,10 +1899,10 @@ llu_fsswop_mount(const char *source,
                 CERROR("No profile found: %s\n", zconf_profile);
                 GOTO(out_free, err = -EINVAL);
         }
-        OBD_ALLOC(osc, strlen(lprof->lp_dt) + sizeof(cfg.cfg_instance)*2 + 1);
+        OBD_ALLOC(osc, strlen(lprof->lp_dt) + instlen + 2);
         sprintf(osc, "%s-%p", lprof->lp_dt, cfg.cfg_instance);
 
-        OBD_ALLOC(mdc, strlen(lprof->lp_md) + sizeof(cfg.cfg_instance)*2 + 1);
+        OBD_ALLOC(mdc, strlen(lprof->lp_md) + instlen + 2);
         sprintf(mdc, "%s-%p", lprof->lp_md, cfg.cfg_instance);
 
         if (!osc) {
@@ -2034,9 +2036,8 @@ llu_fsswop_mount(const char *source,
         ptlrpc_req_finished(request);
 
         CDEBUG(D_SUPER, "LibLustre: %s mounted successfully!\n", source);
-        liblustre_wait_idle();
-
-        return 0;
+        err = 0;
+        goto out_free;
 
 out_inode:
         _sysio_i_gone(root);
@@ -2048,9 +2049,9 @@ out_md:
         obd_disconnect(sbi->ll_md_exp);
 out_free:
         if (osc)
-                OBD_FREE(osc, strlen(osc) + 1);
+                OBD_FREE(osc, strlen(lprof->lp_dt) + instlen + 2);
         if (mdc)
-                OBD_FREE(mdc, strlen(mdc) + 1);
+                OBD_FREE(mdc, strlen(lprof->lp_md) + instlen + 2);
         OBD_FREE(sbi, sizeof(*sbi));
         liblustre_wait_idle();
         return err;
