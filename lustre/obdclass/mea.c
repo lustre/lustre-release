@@ -48,20 +48,6 @@
 #include <lprocfs_status.h>
 #include <lustre/lustre_idl.h>
 
-#ifdef __KERNEL__
-
-#ifdef HAVE_SERVER_SUPPORT
-
-#ifdef HAVE_EXT4_LDISKFS
-#include <ldiskfs/ldiskfs_jbd2.h>
-#include <ldiskfs/ldiskfs.h>
-#else
-#include <linux/jbd.h>
-#include <linux/ldiskfs_fs.h>
-#endif
-
-#endif
-#endif
 static int mea_last_char_hash(int count, char *name, int namelen)
 {
         unsigned int c;
@@ -83,79 +69,6 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
         return c;
 }
 
-#ifdef __KERNEL__
-/* This hash calculate method must be same as the lvar hash method */
-
-#define LVAR_HASH_SANDWICH  (0)
-#define LVAR_HASH_PREFIX    (0)
-
-static __u32 hash_build0(const char *name, int namelen)
-{
-        __u32 result;
-
-        if (namelen == 0)
-                return 0;
-        if (strncmp(name, ".", 1) == 0 && namelen == 1)
-                return 1;
-        if (strncmp(name, "..", 2) == 0 && namelen == 2)
-                return 2;
-
-        if (LVAR_HASH_PREFIX) {
-                result = 0;
-                strncpy((void *)&result,
-                        name, min(namelen, (int)sizeof result));
-        } else {
-                struct ldiskfs_dx_hash_info hinfo;
-
-                hinfo.hash_version = LDISKFS_DX_HASH_TEA;
-                hinfo.seed = 0;
-                ldiskfsfs_dirhash(name, namelen, &hinfo);
-                result = hinfo.hash;
-                if (LVAR_HASH_SANDWICH) {
-                        __u32 result2;
-
-                        hinfo.hash_version = LDISKFS_DX_HASH_TEA;
-                        hinfo.seed = 0;
-                        ldiskfsfs_dirhash(name, namelen, &hinfo);
-                        result2 = hinfo.hash;
-                        result = (0xfc000000 & result2) | (0x03ffffff & result);
-                }
-        }
-
-        return result;
-}
-
-enum {
-        HASH_GRAY_AREA = 1024
-};
-
-static __u32 hash_build(const char *name, int namelen)
-{
-        __u32 hash;
-
-        hash = (hash_build0(name, namelen) << 1) & MAX_HASH_SIZE_32;
-        if (hash > MAX_HASH_SIZE_32 - HASH_GRAY_AREA)
-                hash &= HASH_GRAY_AREA - 1;
-        return hash;
-}
-
-static int mea_hash_segment(int count, const char *name, int namelen)
-{
-        __u32 hash;
-
-        LASSERT(IS_PO2(MAX_HASH_SIZE_32 + 1));
-
-        hash = hash_build(name, namelen) / (MAX_HASH_SIZE_32 / count);
-        LASSERTF(hash < count, "hash %x count %d \n", hash, count);
-
-        return hash;
-}
-#else
-static int mea_hash_segment(int count, char *name, int namelen)
-{
-        return 0;
-}
-#endif
 int raw_name2idx(int hashtype, int count, const char *name, int namelen)
 {
         unsigned int c = 0;
@@ -172,12 +85,12 @@ int raw_name2idx(int hashtype, int count, const char *name, int namelen)
                         c = mea_all_chars_hash(count, (char *)name, namelen);
                         break;
                 case MEA_MAGIC_HASH_SEGMENT:
-                        c = mea_hash_segment(count, (char *)name, namelen);
+                        CERROR("Unsupported hash type MEA_MAGIC_HASH_SEGMENT\n");
                         break;
                 default:
                         CERROR("Unknown hash type 0x%x\n", hashtype);
         }
-	
+
         LASSERT(c < count);
         return c;
 }
