@@ -94,36 +94,32 @@ unsigned long mdd_name2hash(const char *name)
 /* Methods for parallel directory locking */
 #if MDD_DISABLE_PDO_LOCK
 
-static struct dynlock_handle *pdo_handle = (struct dynlock_handle *)0xbabecafe;
+static void *pdo_handle = (void *)0xbabecafe;
 
 void mdd_pdlock_init(struct mdd_object *obj)
 {
 }
 
-struct dynlock_handle *mdd_pdo_write_lock(const struct lu_env *env,
-                                          struct mdd_object *obj,
-                                          const char *name,
-                                          enum mdd_object_role role)
+void *mdd_pdo_write_lock(const struct lu_env *env, struct mdd_object *obj,
+                         const char *name, enum mdd_object_role role)
 {
         return pdo_handle;
 }
 
-struct dynlock_handle *mdd_pdo_read_lock(const struct lu_env *env,
-                                         struct mdd_object *obj,
-                                         const char *name,
-                                         enum mdd_object_role role)
+void *mdd_pdo_read_lock(const struct lu_env *env, struct mdd_object *obj,
+                        const char *name, enum mdd_object_role role)
 {
         return pdo_handle;
 }
 
 void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
-                          struct dynlock_handle *dlh)
+                          void *dlh)
 {
         LASSERT(dlh == pdo_handle);
 }
 
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
-                         struct dynlock_handle *dlh)
+                         void *dlh)
 {
         LASSERT(dlh == pdo_handle);
 }
@@ -177,10 +173,8 @@ void mdd_pdlock_init(struct mdd_object *obj)
         mdd_lockdep_init(obj);
 }
 
-struct dynlock_handle *mdd_pdo_write_lock(const struct lu_env *env,
-                                          struct mdd_object *obj,
-                                          const char *name,
-                                          enum mdd_object_role role)
+void *mdd_pdo_write_lock(const struct lu_env *env, struct mdd_object *obj,
+                         const char *name, enum mdd_object_role role)
 {
         struct dynlock_handle *handle;
         unsigned long value = mdd_name2hash(name);
@@ -191,10 +185,8 @@ struct dynlock_handle *mdd_pdo_write_lock(const struct lu_env *env,
         return handle;
 }
 
-struct dynlock_handle *mdd_pdo_read_lock(const struct lu_env *env,
-                                         struct mdd_object *obj,
-                                         const char *name,
-                                         enum mdd_object_role role)
+void *mdd_pdo_read_lock(const struct lu_env *env, struct mdd_object *obj,
+                        const char *name, enum mdd_object_role role)
 {
         struct dynlock_handle *handle;
         unsigned long value = mdd_name2hash(name);
@@ -205,14 +197,14 @@ struct dynlock_handle *mdd_pdo_read_lock(const struct lu_env *env,
 }
 
 void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
-                          struct dynlock_handle *dlh)
+                          void *dlh)
 {
         mdd_lockdep_pd_release(obj);
         return dynlock_unlock(&obj->mod_pdlock, dlh);
 }
 
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
-                         struct dynlock_handle *dlh)
+                         void *dlh)
 {
         mdd_lockdep_pd_release(obj);
         return dynlock_unlock(&obj->mod_pdlock, dlh);

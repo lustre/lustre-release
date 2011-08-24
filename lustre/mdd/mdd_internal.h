@@ -48,7 +48,6 @@
 #include <dt_object.h>
 #include <linux/sched.h>
 #include <linux/capability.h>
-#include <linux/dynlocks.h>
 #ifdef HAVE_QUOTA_SUPPORT
 # include <lustre_quota.h>
 #endif
@@ -164,7 +163,9 @@ struct mdd_object {
         __u32             mod_valid;
         __u64             mod_cltime;
         unsigned long     mod_flags;
+#ifndef MDD_DISABLE_PDO_LOCK
         struct dynlock    mod_pdlock;
+#endif
 #ifdef CONFIG_LOCKDEP
         /* "dep_map" name is assumed by lockdep.h macros. */
         struct lockdep_map dep_map;
@@ -282,18 +283,14 @@ int mdd_write_locked(const struct lu_env *env, struct mdd_object *obj);
 
 void mdd_pdlock_init(struct mdd_object *obj);
 unsigned long mdd_name2hash(const char *name);
-struct dynlock_handle *mdd_pdo_write_lock(const struct lu_env *env,
-                                          struct mdd_object *obj,
-                                          const char *name,
-                                          enum mdd_object_role role);
-struct dynlock_handle *mdd_pdo_read_lock(const struct lu_env *env,
-                                         struct mdd_object *obj,
-                                         const char *name,
-                                         enum mdd_object_role role);
+void *mdd_pdo_write_lock(const struct lu_env *env, struct mdd_object *obj,
+                         const char *name, enum mdd_object_role role);
+void *mdd_pdo_read_lock(const struct lu_env *env, struct mdd_object *obj,
+                        const char *name, enum mdd_object_role role);
 void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
-                          struct dynlock_handle *dlh);
+                          void *dlh);
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
-                         struct dynlock_handle *dlh);
+                         void *dlh);
 /* mdd_dir.c */
 int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
                   const struct lu_fid *fid, struct lu_fid *sfid);
