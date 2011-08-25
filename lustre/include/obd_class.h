@@ -63,7 +63,7 @@
 
 /* OBD Device Declarations */
 extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
-extern cfs_spinlock_t obd_dev_lock;
+extern cfs_rwlock_t obd_dev_lock;
 
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);

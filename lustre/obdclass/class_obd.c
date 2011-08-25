@@ -60,7 +60,7 @@ cfs_atomic_t libcfs_kmemory = {0};
 
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 cfs_list_t obd_types;
-cfs_spinlock_t obd_dev_lock = CFS_SPIN_LOCK_UNLOCKED;
+cfs_rwlock_t obd_dev_lock = CFS_RW_LOCK_UNLOCKED;
 
 #ifndef __KERNEL__
 __u64 obd_max_pages = 0;
@@ -368,24 +368,6 @@ EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
 EXPORT_SYMBOL(proc_lustre_root);
 
-EXPORT_SYMBOL(class_register_type);
-EXPORT_SYMBOL(class_unregister_type);
-EXPORT_SYMBOL(class_get_type);
-EXPORT_SYMBOL(class_put_type);
-EXPORT_SYMBOL(class_name2dev);
-EXPORT_SYMBOL(class_name2obd);
-EXPORT_SYMBOL(class_uuid2dev);
-EXPORT_SYMBOL(class_uuid2obd);
-EXPORT_SYMBOL(class_find_client_obd);
-EXPORT_SYMBOL(class_devices_in_group);
-EXPORT_SYMBOL(class_conn2export);
-EXPORT_SYMBOL(class_exp2obd);
-EXPORT_SYMBOL(class_conn2obd);
-EXPORT_SYMBOL(class_exp2cliimp);
-EXPORT_SYMBOL(class_conn2cliimp);
-EXPORT_SYMBOL(class_disconnect);
-EXPORT_SYMBOL(class_num2obd);
-
 /* uuid.c */
 EXPORT_SYMBOL(class_uuid_unparse);
 EXPORT_SYMBOL(lustre_uuid_to_peer);
@@ -541,7 +523,6 @@ int init_obdclass(void)
         if (err)
                 return err;
 
-        cfs_spin_lock_init(&obd_dev_lock);
         CFS_INIT_LIST_HEAD(&obd_types);
 
         err = cfs_psdev_register(&obd_psdev);
