@@ -28,6 +28,7 @@ Patch99995: linux-%{kversion}-lustre.patch' \
            -e '/_sourcedir\/kabitool -b \./a\
     cp $RPM_BUILD_ROOT/kabi_whitelist $RPM_SOURCE_DIR/kabi_whitelist_%{_target_cpu}$Flavour' \
            -e '/^%prep$/,/^# END OF PATCH APPLICATIONS$/s/kernel-%{kversion}/%{name}-%{kversion}/g' \
+    -e 's/^\(%define signmodules \).*/\10/' \
           SPECS/$SPEC_NAME 2>&1 || \
         fatal 1 "Error while editing SPECS/$SPEC_NAME"
 
