@@ -1,3 +1,13 @@
 Instructions for building, configuring and running Lustre can be found at:
-    http://wiki.lustre.org/index.php/Use
+    http://wiki.whamcloud.com/display/PUB/Submitting+Changes
+and:
+    http://wiki.whamcloud.com/display/PUB/Using+Gerrit
 
+The Lustre Coding Style Guidelines can be found at:
+    http://wiki.whamcloud.com/display/PUB/Coding+Guidelines
+
+In order to improve the quality of patches submitted to the Lustre tree,
+it is possible to automatically check every patch and commit against the
+Lustre Coding Guidelines.  To do this, run in the top-level lustre/ tree:
+
+    cp build/{prepare-,}commit-msg .git/hooks/

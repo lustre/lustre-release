@@ -1,0 +1,119 @@
+#!/bin/bash
+#
+# A hook script to check the commit log message to ensure that it has
+# a well-formed commit summary and body, a valid Signed-off-by: line,
+# and a Gerrit Change-Id: line (added automatically if missing).
+#
+# Called by git-commit with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+#
+# Should be installed as .git/hooks/commit-msg.
+#
+
+ORIGINAL="$1"
+REVISED="$(mktemp "$1.XXXXXX")"
+SIGNOFF="Signed-off-by:"
+CHANGEID="Change-Id:"
+
+# Check for, and add if missing, a unique Change-Id
+new_changeid() {
+	{
+		git var GIT_AUTHOR_IDENT
+		git var GIT_COMMITTER_IDENT
+		git write-tree
+		git rev-parse HEAD 2>/dev/null
+		grep -v "$SIGNOFF" "$ORIGINAL" | git stripspace -s
+	} | git hash-object -t commit --stdin
+}
+
+usage() {
+	[ "$LINE" ] && echo "error:$NUM: $LINE" 1>&2 && echo "" 1>&2
+
+	cat 1>&2 <<- EOF
+	Commit message $1
+	$2
+	See http://wiki.whamcloud.com/display/PUB/Submitting+Changes
+	for full details.  An example valid commit comment is:
+
+	LU-nnn component: short description of change under 64 columns
+
+	A more detailed explanation.  This can be as detailed as you'd like.
+	Please explain both what problem was solved and a good high-level
+	description of how it was solved.  Wrap lines at 70 columns or less.
+
+	$SIGNOFF Your Real Name <your_email@domain.name>
+	$CHANGEID Ixxxx(added automatically if missing)xxxx
+	EOF
+
+	exit 1
+}
+
+export HAS_SIGNOFF=false
+export HAS_SUMMARY=false
+export HAS_BLANK=false
+export HAS_COMMENTS=false
+
+grep -q "^$CHANGEID" "$ORIGINAL" && HAS_CHANGEID=true || HAS_CHANGEID=false
+
+export LINE=""
+export NUM=1
+
+IFS=""
+while read LINE; do
+	LENGTH=$(echo $LINE | wc -c)
+
+	case "$LINE" in
+	$SIGNOFF*)
+		$HAS_SUMMARY || usage "missing summary before $SIGNOFF."
+		$HAS_BLANK || usage "missing blank line before $SIGNOFF."
+		GOOD=$(echo "$LINE" | grep "^$SIGNOFF .* .* <.*@.*>")
+		[ -z "$GOOD" ] &&
+			usage "missing valid commit summary line to show" \
+			      "agreement with code submission requirements at"
+		HAS_SIGNOFF=true
+		echo $LINE
+		$HAS_CHANGEID || echo "$CHANGEID I$(new_changeid)"
+		;;
+	$CHANGEID*)
+		$HAS_SUMMARY || usage "missing summary before $CHANGEID line."
+		$HAS_BLANK || usage "missing blank line before $CHANGEID line."
+		HAS_CHANGEID=true
+		echo $LINE
+		;;
+	"")	[ $HAS_SUMMARY -a $NUM -eq 2 ] && HAS_BLANK=true
+		echo $LINE
+		;;
+	\#*)	HAS_COMMENTS=true
+		continue
+		;;
+	*)	if [ $NUM -eq 1 ]; then
+			FMT="^[A-Z]\{2,5\}-[0-9]\{1,5\} [-a-z0-9]\{2,9\}: "
+			GOOD=$(echo "$LINE" | grep "$FMT")
+			[ $LENGTH -gt 64 ] &&
+				usage "summary longer than 64 columns."
+			if [ -z "$GOOD" ]; then
+				FMT="^[A-Z]\{2,5\}-[0-9]\{1,5\} "
+				NO_SUBSYS=$(echo "$LINE" | grep "$FMT")
+				[ "$NO_SUBSYS" ] &&
+					usage "has no subsys: in commit summary"
+				usage "missing valid commit summary line."
+			fi
+			HAS_SUMMARY=true
+		elif [ $LENGTH -gt 70 ]; then
+			usage "has lines longer than 70 columns."
+		fi
+		echo $LINE
+		;;
+	esac
+
+	NUM=$((NUM + 1))
+done < "$ORIGINAL" > "$REVISED"
+
+[ $NUM -eq 1 ] && exit 1 # empty file
+
+LINE=""
+$HAS_SUMMARY || usage "missing commit summary line."
+$HAS_SIGNOFF || usage "missing $SIGNOFF line."
+$HAS_CHANGEID && rm "$REVISED" || mv "$REVISED" "$ORIGINAL"
