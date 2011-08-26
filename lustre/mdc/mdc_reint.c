@@ -108,12 +108,6 @@ static int mdc_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
                                  0, cancels, count);
 }
 
-/* If mdc_setattr is called with an 'iattr', then it is a normal RPC that
- * should take the normal semaphore and go to the normal portal.
- *
- * If it is called with iattr->ia_valid & ATTR_FROM_OPEN, then it is a
- * magic open-path setattr that should take the setattr semaphore and
- * go to the setattr portal. */
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request, struct md_open_data **mod)
@@ -156,13 +150,7 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 RETURN(rc);
         }
 
-        if (op_data->op_attr.ia_valid & ATTR_FROM_OPEN) {
-                req->rq_request_portal = MDS_SETATTR_PORTAL;
-                ptlrpc_at_set_req_timeout(req);
-                rpc_lock = obd->u.cli.cl_setattr_lock;
-        } else {
-                rpc_lock = obd->u.cli.cl_rpc_lock;
-        }
+        rpc_lock = obd->u.cli.cl_rpc_lock;
 
         if (op_data->op_attr.ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime "CFS_TIME_T

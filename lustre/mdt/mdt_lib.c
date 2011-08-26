@@ -728,7 +728,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
                 out |= LA_BLOCKS;
 
         if (in & ATTR_FROM_OPEN)
-                rr->rr_flags |= MRF_SETATTR_LOCKED;
+                rr->rr_flags |= MRF_OPEN_TRUNC;
 
         if (in & ATTR_ATIME_SET)
                 out |= LA_ATIME;

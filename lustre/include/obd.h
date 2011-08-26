@@ -463,7 +463,6 @@ struct client_obd {
         cfs_waitq_t              cl_destroy_waitq;
 
         struct mdc_rpc_lock     *cl_rpc_lock;
-        struct mdc_rpc_lock     *cl_setattr_lock;
         struct mdc_rpc_lock     *cl_close_lock;
         struct osc_creator       cl_oscc;
 
