@@ -758,16 +758,18 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
             lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
                 if (mti->mti_transno != 0) {
                         if (lcd->lcd_last_close_transno > mti->mti_transno) {
-                                LASSERT(req_is_replay(req));
                                 CERROR("Trying to overwrite bigger transno:"
-                                       "on-disk: "LPU64", new: "LPU64"\n",
+                                       "on-disk: "LPU64", new: "LPU64" "
+                                       "replay: %d. see LU-617.\n",
                                        lcd->lcd_last_close_transno,
-                                       mti->mti_transno);
-                                cfs_spin_lock(&req->rq_export->exp_lock);
-                                req->rq_export->exp_vbr_failed = 1;
-                                cfs_spin_unlock(&req->rq_export->exp_lock);
+                                       mti->mti_transno, req_is_replay(req));
+                                if (req_is_replay(req)) {
+                                        cfs_spin_lock(&req->rq_export->exp_lock);
+                                        req->rq_export->exp_vbr_failed = 1;
+                                        cfs_spin_unlock(&req->rq_export->exp_lock);
+                                }
                                 cfs_mutex_up(&ted->ted_lcd_lock);
-                                RETURN(-EOVERFLOW);
+                                RETURN(req_is_replay(req) ? -EOVERFLOW : 0);
                         }
                         lcd->lcd_last_close_transno = mti->mti_transno;
                 }
@@ -784,16 +786,18 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
                 }
                 if (mti->mti_transno != 0) {
                         if (lcd->lcd_last_transno > mti->mti_transno) {
-                                LASSERT(req_is_replay(req));
                                 CERROR("Trying to overwrite bigger transno:"
-                                       "on-disk: "LPU64", new: "LPU64"\n",
+                                       "on-disk: "LPU64", new: "LPU64" "
+                                       "replay: %d. see LU-617.\n",
                                        lcd->lcd_last_transno,
-                                       mti->mti_transno);
-                                cfs_spin_lock(&req->rq_export->exp_lock);
-                                req->rq_export->exp_vbr_failed = 1;
-                                cfs_spin_unlock(&req->rq_export->exp_lock);
+                                       mti->mti_transno, req_is_replay(req));
+                                if (req_is_replay(req)) {
+                                        cfs_spin_lock(&req->rq_export->exp_lock);
+                                        req->rq_export->exp_vbr_failed = 1;
+                                        cfs_spin_unlock(&req->rq_export->exp_lock);
+                                }
                                 cfs_mutex_up(&ted->ted_lcd_lock);
-                                RETURN(-EOVERFLOW);
+                                RETURN(req_is_replay(req) ? -EOVERFLOW : 0);
                         }
                         lcd->lcd_last_transno = mti->mti_transno;
                 }
