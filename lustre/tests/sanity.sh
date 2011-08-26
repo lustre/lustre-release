@@ -8260,21 +8260,22 @@ test_220() { #LU-325
 	echo "OST still has $count objects"
 
 	free=$((count + last_id - next_id))
-	echo "create $free files..."
+	echo "create $((free - next_id)) files @next_id..."
 	createmany -o $DIR/$tdir/f $next_id $free || return 3
 
-	local last_id=$(do_facet mds${MDSIDX} lctl get_param -n \
+	local last_id2=$(do_facet mds${MDSIDX} lctl get_param -n \
 			osc.$mdtosc_proc1.prealloc_last_id)
-	local next_id=$(do_facet mds${MDSIDX} lctl get_param -n \
+	local next_id2=$(do_facet mds${MDSIDX} lctl get_param -n \
 			osc.$mdtosc_proc1.prealloc_next_id)
 
-	echo "after creation, last_id=$last_id, next_id=$next_id"
+	echo "after creation, last_id=$last_id2, next_id=$next_id2"
 	$LFS df -i
 
 	echo "cleanup..."
 
 	do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $OST || return 4
 	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME || return 5
+	echo "unlink $((free - next_id)) files @ $next_id..."
 	unlinkmany $DIR/$tdir/f $next_id $free || return 3
 }
 run_test 220 "the preallocated objects in MDS still can be used if ENOSPC is returned by OST with enough disk space"
