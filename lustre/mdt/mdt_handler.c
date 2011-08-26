@@ -5297,11 +5297,11 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
         RETURN(rc);
 }
 
-static int mdt_obd_notify(struct obd_device *host,
+static int mdt_obd_notify(struct obd_device *obd,
                           struct obd_device *watched,
                           enum obd_notify_event ev, void *data)
 {
-        struct mdt_device *mdt = mdt_dev(host->obd_lu_dev);
+        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
 #ifdef HAVE_QUOTA_SUPPORT
         struct md_device *next = mdt->mdt_child;
 #endif
@@ -5309,6 +5309,9 @@ static int mdt_obd_notify(struct obd_device *host,
 
         switch (ev) {
         case OBD_NOTIFY_CONFIG:
+                /* reset recovery timeout in case it has already started */
+                target_start_recovery_timer(obd);
+
                 mdt_allow_cli(mdt, (unsigned long)data);
 
 #ifdef HAVE_QUOTA_SUPPORT

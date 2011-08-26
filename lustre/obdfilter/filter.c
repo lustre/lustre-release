@@ -4702,6 +4702,22 @@ static int filter_process_config(struct obd_device *obd, obd_count len,
         return rc;
 }
 
+static int filter_notify(struct obd_device *obd,
+                         struct obd_device *unused,
+                         enum obd_notify_event ev, void *data)
+{
+        switch (ev) {
+        case OBD_NOTIFY_CONFIG:
+                /* reset recovery timeout in case it has already started */
+                target_start_recovery_timer(obd);
+                break;
+        default:
+                CDEBUG(D_INFO, "%s: Unhandled notification %#x\n",
+                       obd->obd_name, ev);
+        }
+        return 0;
+}
+
 static struct lvfs_callback_ops filter_lvfs_ops = {
         l_fid2dentry:     filter_lvfs_fid2dentry,
 };
@@ -4736,6 +4752,7 @@ static struct obd_ops filter_obd_ops = {
         .o_iocontrol      = filter_iocontrol,
         .o_health_check   = filter_health_check,
         .o_process_config = filter_process_config,
+        .o_notify         = filter_notify,
 };
 
 quota_interface_t *filter_quota_interface_ref;
