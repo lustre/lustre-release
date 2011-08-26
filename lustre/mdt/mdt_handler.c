@@ -3912,6 +3912,10 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 
         /*
          * setattr service configuration.
+         *
+         * XXX To keep the compatibility with old client(< 2.2), we need to
+         * preserve this portal for a certain time, it should be removed
+         * eventually. LU-617.
          */
         conf = (typeof(conf)) {
                 .psc_nbufs           = MDS_NBUFS,

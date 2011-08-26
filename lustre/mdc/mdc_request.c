@@ -2007,14 +2007,9 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
         ptlrpcd_addref();
 
-        OBD_ALLOC(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
-        if (!cli->cl_setattr_lock)
-                GOTO(err_rpc_lock, rc = -ENOMEM);
-        mdc_init_rpc_lock(cli->cl_setattr_lock);
-
         OBD_ALLOC(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
         if (!cli->cl_close_lock)
-                GOTO(err_setattr_lock, rc = -ENOMEM);
+                GOTO(err_rpc_lock, rc = -ENOMEM);
         mdc_init_rpc_lock(cli->cl_close_lock);
 
         rc = client_obd_setup(obd, cfg);
@@ -2037,8 +2032,6 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
 
 err_close_lock:
         OBD_FREE(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
-err_setattr_lock:
-        OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
 err_rpc_lock:
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
         ptlrpcd_decref();
@@ -2098,7 +2091,6 @@ static int mdc_cleanup(struct obd_device *obd)
         struct client_obd *cli = &obd->u.cli;
 
         OBD_FREE(cli->cl_rpc_lock, sizeof (*cli->cl_rpc_lock));
-        OBD_FREE(cli->cl_setattr_lock, sizeof (*cli->cl_setattr_lock));
         OBD_FREE(cli->cl_close_lock, sizeof (*cli->cl_close_lock));
 
         ptlrpcd_decref();
