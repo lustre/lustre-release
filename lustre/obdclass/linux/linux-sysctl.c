@@ -35,7 +35,6 @@
  */
 
 #include <linux/module.h>
-#include <linux/autoconf.h>
 #include <linux/sysctl.h>
 #include <linux/sched.h>
 #include <linux/mm.h>

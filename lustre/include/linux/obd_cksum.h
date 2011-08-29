@@ -41,10 +41,6 @@
 #error Do not #include this file directly. #include <obd_chsum.h> instead
 #endif
 
-#ifdef __KERNEL__
-#include <linux/autoconf.h>
-#endif
-
 #include <libcfs/libcfs.h>
 
 /* Prefer the kernel's version, if it exports it, because it might be

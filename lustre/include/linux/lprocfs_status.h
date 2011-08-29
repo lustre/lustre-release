@@ -50,7 +50,6 @@
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif
-#include <linux/autoconf.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/version.h>

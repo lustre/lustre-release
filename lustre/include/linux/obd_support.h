@@ -49,7 +49,6 @@
 #endif
 #include <linux/seq_file.h>
 #include <linux/module.h>
-#include <linux/autoconf.h>
 #include <linux/slab.h>
 #include <linux/highmem.h>
 #include <linux/swap.h>
