@@ -263,6 +263,8 @@ command_t cmdlist[] = {
          "usage: del_conn <conn_uuid> \n"},
         {"disconnect", jt_ptl_disconnect, 0, "disconnect from a remote nid\n"
          "usage: disconnect [<nid>]"},
+        {"push", jt_ptl_push_connection, 0, "flush connection to a remote nid\n"
+         "usage: push [<nid>]"},
         {"mynid", jt_ptl_mynid, 0, "inform the socknal of the local nid. "
          "The nid defaults to hostname for tcp networks and is automatically "
          "setup for elan/myrinet networks.\n"
