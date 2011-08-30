@@ -2821,6 +2821,22 @@ test_61() { # LU-80
 }
 run_test 61 "large xattr"
 
+test_62() {
+    # MRP-118
+    local mdsdev=$(mdsdevname 1)
+    local ostdev=$(ostdevname 1)
+
+    echo "disable journal for mds"
+    do_facet mds tune2fs -O ^has_journal $mdsdev || error "tune2fs failed"
+    start_mds && error "MDT start should fail"
+    echo "disable journal for ost"
+    do_facet ost1 tune2fs -O ^has_journal $ostdev || error "tune2fs failed"
+    start_ost && error "OST start should fail"
+    cleanup || return $?
+    reformat_and_config
+}
+run_test 62 "start with disabled journal"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

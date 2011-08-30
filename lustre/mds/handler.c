@@ -262,22 +262,25 @@ struct lvfs_callback_ops mds_lvfs_ops = {
         l_fid2dentry:     mds_lvfs_fid2dentry,
 };
 
-static void mds_init_ctxt(struct obd_device *obd, struct vfsmount *mnt)
+static int mds_init_ctxt(struct obd_device *obd, struct vfsmount *mnt)
 {
         struct mds_obd *mds = &obd->u.mds;
+        int rc;
 
         mds->mds_obt.obt_vfsmnt = mnt;
         /* why not mnt->mnt_sb instead of mnt->mnt_root->d_inode->i_sb? */
         obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
         obd->u.obt.obt_magic = OBT_MAGIC;
-        fsfilt_setup(obd, obd->u.obt.obt_sb);
+        rc = fsfilt_setup(obd, obd->u.obt.obt_sb);
+        if (rc)
+                return rc;
 
         OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
         obd->obd_lvfs_ctxt.pwdmnt = mnt;
         obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
         obd->obd_lvfs_ctxt.fs = get_ds();
         obd->obd_lvfs_ctxt.cb_ops = mds_lvfs_ops;
-        return;
+        return 0;
 }
 
 /*mds still need lov setup here*/
@@ -316,14 +319,16 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         cfs_init_rwsem(&mds->mds_notify_lock);
 
         obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
-        mds_init_ctxt(obd, mnt);
+        rc = mds_init_ctxt(obd, mnt);
+        if (rc)
+                GOTO(err_putfs, rc);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, "OBJECTS", 0777, 1);
         if (IS_ERR(dentry)) {
                 rc = PTR_ERR(dentry);
                 CERROR("cannot create OBJECTS directory: rc = %d\n", rc);
-                GOTO(err_putfs, rc);
+                GOTO(err_pop, rc);
         }
         mds->mds_objects_dir = dentry;
 
@@ -348,14 +353,16 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         if (rc)
                 GOTO(err_objects, rc);
 
-err_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        RETURN(rc);
+        RETURN(0);
+
 err_objects:
         dput(mds->mds_objects_dir);
+err_pop:
+        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 err_putfs:
         fsfilt_put_ops(obd->obd_fsops);
-        goto err_pop;
+        return rc;
 }
 
 static int mds_cmd_cleanup(struct obd_device *obd)

@@ -1450,6 +1450,12 @@ static int fsfilt_ext3_setup(struct super_block *sb)
         sbi->dx_unlock = fsfilt_ext3_dx_unlock;
 #endif
 #endif
+        if (!EXT3_HAS_COMPAT_FEATURE(sb,
+                                EXT3_FEATURE_COMPAT_HAS_JOURNAL)) {
+                CERROR("ext3 mounted without journal\n");
+                return -EINVAL;
+        }
+
 #ifdef S_PDIROPS
         CWARN("Enabling PDIROPS\n");
         set_opt(sbi->s_mount_opt, PDIROPS);
