@@ -20,7 +20,7 @@
       <title>
           <indexterm><primary>installing</primary><secondary>from source</secondary></indexterm>
           Overview and Prerequisites</title>
-    <para>Lustre can be installed from either pre-built binary packages (RPMs) or freely-available source code. Installing from the package release is recommended unless you need to customize the Lustre server kernel or will be using an Linux kernel that has not been tested with Lustre. For a list of supported Linux distributions and architectures, see the topic <link xl:href="http://wiki.lustre.org/index.php/Lustre_2.0">Lustre_2.0</link> on the Lustre wiki. The procedure for installing Lustre from RPMs is describe in <xref linkend="installinglustre"/>.</para>
+      <para>Lustre can be installed from either pre-built binary packages (RPMs) or freely-available source code. Installing from the package release is recommended unless you need to customize the Lustre server kernel or will be using an Linux kernel that has not been tested with Lustre. For a list of supported Linux distributions and architectures, visit the <link xl:href="http://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix">Lustre Support Matrix</link> on the Lustre wiki. The procedure for installing Lustre from RPMs is describe in <xref linkend="installinglustre"/>.</para>
     <para>To install Lustre from source code, the following are required:</para>
     <itemizedlist>
       <listitem>
