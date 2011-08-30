@@ -5835,6 +5835,15 @@ test_118k()
 }
 run_test 118k "bio alloc -ENOMEM and IO TERM handling ========="
 
+test_118l()
+{
+	# LU-646
+	mkdir -p $DIR/$tdir
+	multiop $DIR/$tdir Dy || error "fsync dir failed"
+	rm -rf $DIR/$tdir
+}
+run_test 118l "fsync dir ========="
+
 [ "$SLOW" = "no" ] && [ -n "$OLD_RESENDCOUNT" ] && set_resend_count $OLD_RESENDCOUNT
 
 test_119a() # bug 11737
