@@ -2103,6 +2103,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 2.6.36 super_operations add evict_inode method. it hybird of
+# delete_inode & clear_inode.
+#
+AC_DEFUN([LC_SBOPS_EVICT_INODE],
+[AC_MSG_CHECKING([if super_operations.evict_inode exist])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        ((struct super_operations *)0)->evict_inode(NULL);
+],[
+        AC_DEFINE(HAVE_SBOPS_EVICT_INODE, 1,
+                [super_operations.evict_inode() is exist in kernel])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # 2.6.38 export blkdev_get_by_dev
 #
 AC_DEFUN([LC_BLKDEV_GET_BY_DEV],
@@ -2307,6 +2326,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BLK_QUEUE_MAX_SECTORS
          LC_BLK_QUEUE_MAX_SEGMENTS
          LC_SET_CPUS_ALLOWED
+
+         # 2.6.36
+         LC_SBOPS_EVICT_INODE
 
          # 2.6.38
          LC_BLKDEV_GET_BY_DEV

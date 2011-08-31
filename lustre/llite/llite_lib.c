@@ -1797,7 +1797,12 @@ void ll_delete_inode(struct inode *inode)
         }
         /* Workaround end */
 
+#ifdef HAVE_SBOPS_EVICT_INODE
+        ll_clear_inode(inode);
+        end_writeback(inode);
+#else
         clear_inode(inode);
+#endif
 
         EXIT;
 }
