@@ -1659,18 +1659,19 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.27
 
+#
+# 2.6.27
+#
 AC_DEFUN([LC_INODE_PERMISION_2ARGS],
 [AC_MSG_CHECKING([inode_operations->permission has two args])
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
         struct inode *inode;
-
-        inode->i_op->permission(NULL,0);
+        inode->i_op->permission(NULL, 0);
 ],[
-        AC_DEFINE(HAVE_INODE_PERMISION_2ARGS, 1, 
+        AC_DEFINE(HAVE_INODE_PERMISION_2ARGS, 1,
                   [inode_operations->permission has two args])
         AC_MSG_RESULT([yes])
 ],[
@@ -2125,7 +2126,26 @@ LB_LINUX_TRY_COMPILE([
         memset(rq.unplug_fn, 0, sizeof(rq.unplug_fn));
 ],[
         AC_DEFINE(HAVE_REQUEST_QUEUE_UNPLUG_FN, 1,
-                  [request_queue has unplug_fn field]),
+                  [request_queue has unplug_fn field])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
+# 2.6.38 generic_permission taken 4 paremater.
+# in fact, it means rcu-walk aware permission bring.
+#
+AC_DEFUN([LC_GENERIC_PERMISSION],
+[AC_MSG_CHECKING([if generic_permission take 4 arguments])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        generic_permission(NULL, 0, 0, NULL);
+],[
+        AC_DEFINE(HAVE_GENERIC_PERMISSION_4ARGS, 1,
+                  [generic_permission taken 4 arguments])
         AC_MSG_RESULT([yes])
 ],[
         AC_MSG_RESULT([no])
@@ -2240,9 +2260,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_VM_OP_FAULT
          LC_PROCFS_USERS
          LC_EXPORTFS_DECODE_FH
-  
-  	 # 2.6.24
-  	 LC_HAVE_MMTYPES_H
+
+         # 2.6.24
+         LC_HAVE_MMTYPES_H
          LC_BIO_ENDIO_2ARG
          LC_FH_TO_DENTRY
          LC_PROCFS_DELETED
@@ -2250,7 +2270,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
          #2.6.25
          LC_MAPPING_CAP_WRITEBACK_DIRTY
-  
+
          # 2.6.26
          LC_FS_STRUCT_USE_PATH
 
@@ -2290,6 +2310,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.38
          LC_BLKDEV_GET_BY_DEV
+         LC_GENERIC_PERMISSION
 
          # 2.6.39
          LC_REQUEST_QUEUE_UNPLUG_FN

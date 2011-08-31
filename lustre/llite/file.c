@@ -2440,8 +2440,12 @@ int ll_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 #endif
 
 
-static
-int lustre_check_acl(struct inode *inode, int mask)
+static int
+#ifdef HAVE_GENERIC_PERMISSION_4ARGS
+lustre_check_acl(struct inode *inode, int mask, unsigned int flags)
+#else
+lustre_check_acl(struct inode *inode, int mask)
+#endif
 {
 #ifdef CONFIG_FS_POSIX_ACL
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -2449,6 +2453,10 @@ int lustre_check_acl(struct inode *inode, int mask)
         int rc;
         ENTRY;
 
+#ifdef HAVE_GENERIC_PERMISSION_4ARGS
+        if (flags & IPERM_FLAG_RCU)
+                return -ECHILD;
+#endif
         cfs_spin_lock(&lli->lli_lock);
         acl = posix_acl_dup(lli->lli_posix_acl);
         cfs_spin_unlock(&lli->lli_lock);
@@ -2465,11 +2473,14 @@ int lustre_check_acl(struct inode *inode, int mask)
 #endif
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
-#ifndef HAVE_INODE_PERMISION_2ARGS
-int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+#ifdef HAVE_GENERIC_PERMISSION_4ARGS
+int ll_inode_permission(struct inode *inode, int mask, unsigned int flags)
 #else
+# ifdef HAVE_INODE_PERMISION_2ARGS
 int ll_inode_permission(struct inode *inode, int mask)
+# else
+int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
+# endif
 #endif
 {
         int rc = 0;
@@ -2494,61 +2505,10 @@ int ll_inode_permission(struct inode *inode, int mask)
                 return lustre_check_remote_perm(inode, mask);
 
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_INODE_PERM, 1);
-        rc = generic_permission(inode, mask, lustre_check_acl);
+        rc = ll_generic_permission(inode, mask, flags, lustre_check_acl);
 
         RETURN(rc);
 }
-#else
-int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
-{
-        int mode = inode->i_mode;
-        int rc;
-
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), mask %o\n",
-               inode->i_ino, inode->i_generation, inode, mask);
-
-        if (ll_i2sbi(inode)->ll_flags & LL_SBI_RMT_CLIENT)
-                return lustre_check_remote_perm(inode, mask);
-
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_INODE_PERM, 1);
-
-        if ((mask & MAY_WRITE) && IS_RDONLY(inode) &&
-            (S_ISREG(mode) || S_ISDIR(mode) || S_ISLNK(mode)))
-                return -EROFS;
-        if ((mask & MAY_WRITE) && IS_IMMUTABLE(inode))
-                return -EACCES;
-        if (cfs_curproc_fsuid() == inode->i_uid) {
-                mode >>= 6;
-        } else if (1) {
-                if (((mode >> 3) & mask & S_IRWXO) != mask)
-                        goto check_groups;
-                rc = lustre_check_acl(inode, mask);
-                if (rc == -EAGAIN)
-                        goto check_groups;
-                if (rc == -EACCES)
-                        goto check_capabilities;
-                return rc;
-        } else {
-check_groups:
-                if (cfs_curproc_is_in_groups(inode->i_gid))
-                        mode >>= 3;
-        }
-        if ((mode & mask & S_IRWXO) == mask)
-                return 0;
-
-check_capabilities:
-        if (!(mask & MAY_EXEC) ||
-            (inode->i_mode & S_IXUGO) || S_ISDIR(inode->i_mode))
-                if (cfs_capable(CFS_CAP_DAC_OVERRIDE))
-                        return 0;
-
-        if (cfs_capable(CFS_CAP_DAC_READ_SEARCH) && ((mask == MAY_READ) ||
-            (S_ISDIR(inode->i_mode) && !(mask & MAY_WRITE))))
-                return 0;
-
-        return -EACCES;
-}
-#endif
 
 #ifdef HAVE_FILE_READV
 #define READ_METHOD readv

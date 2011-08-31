@@ -197,6 +197,14 @@ do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define ll_permission(inode,mask,nd)    permission(inode,mask,nd)
 #endif
 
+#ifdef HAVE_GENERIC_PERMISSION_4ARGS
+#define ll_generic_permission(inode, mask, flags, check_acl) \
+        generic_permission(inode, mask, flags, check_acl)
+#else
+#define ll_generic_permission(inode, mask, flags, check_acl) \
+        generic_permission(inode, mask, check_acl)
+#endif
+
 #define ll_pgcache_lock(mapping)          cfs_spin_lock(&mapping->page_lock)
 #define ll_pgcache_unlock(mapping)        cfs_spin_unlock(&mapping->page_lock)
 #define ll_call_writepage(inode, page)  \
