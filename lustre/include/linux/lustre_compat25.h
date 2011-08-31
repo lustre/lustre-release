@@ -771,6 +771,10 @@ static inline long labs(long x)
 #define INODE_PRIVATE_DATA(inode)       ((inode)->u.generic_ip)
 #endif
 
+#ifndef HAVE_SIMPLE_SETATTR
+#define simple_setattr(dentry, ops) inode_setattr((dentry)->d_inode, ops)
+#endif
+
 #ifndef SLAB_DESTROY_BY_RCU
 #define CFS_SLAB_DESTROY_BY_RCU 0
 #else

@@ -628,7 +628,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         } else {
                 rc = inode_change_ok(inode, iattr);
                 if (!rc)
-                        rc = inode_setattr(inode, iattr);
+                        rc = simple_setattr(dentry, iattr);
         }
 
  out:

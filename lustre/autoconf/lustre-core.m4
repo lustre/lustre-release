@@ -2242,6 +2242,18 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 2.6.38 export simple_setattr
+#
+AC_DEFUN([LC_EXPORT_SIMPLE_SETATTR],
+[LB_CHECK_SYMBOL_EXPORT([simple_setattr],
+[fs/libfs.c],[
+AC_DEFINE(HAVE_SIMPLE_SETATTR, 1,
+            [simple_setattr is exported by the kernel])
+],[
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2401,6 +2413,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.35
          LC_FILE_FSYNC
+         LC_EXPORT_SIMPLE_SETATTR
 
          # 2.6.36
          LC_FS_STRUCT_RWLOCK

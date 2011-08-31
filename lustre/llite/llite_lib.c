@@ -1193,10 +1193,11 @@ void ll_clear_inode(struct inode *inode)
         EXIT;
 }
 
-int ll_md_setattr(struct inode *inode, struct md_op_data *op_data,
+int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
                   struct md_open_data **mod)
 {
         struct lustre_md md;
+        struct inode *inode = dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
         struct ptlrpc_request *request = NULL;
         int rc;
@@ -1217,7 +1218,7 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data,
                          * Pretend we done everything. */
                         if (!S_ISREG(inode->i_mode) &&
                             !S_ISDIR(inode->i_mode))
-                                rc = inode_setattr(inode, &op_data->op_attr);
+                                rc = simple_setattr(dentry, &op_data->op_attr);
                 } else if (rc != -EPERM && rc != -EACCES && rc != -ETXTBSY) {
                         CERROR("md_setattr fails: rc = %d\n", rc);
                 }
@@ -1236,7 +1237,7 @@ int ll_md_setattr(struct inode *inode, struct md_op_data *op_data,
          * above to avoid invoking vmtruncate, otherwise it is important
          * to call vmtruncate in inode_setattr to update inode->i_size
          * (bug 6196) */
-        rc = inode_setattr(inode, &op_data->op_attr);
+        rc = simple_setattr(dentry, &op_data->op_attr);
 
         /* Extract epoch data if obtained. */
         op_data->op_handle = md.body->handle;
@@ -1313,8 +1314,9 @@ static int ll_setattr_ost(struct inode *inode, struct iattr *attr)
  * I don't believe it is possible to get e.g. ATTR_MTIME_SET and ATTR_SIZE
  * at the same time.
  */
-int ll_setattr_raw(struct inode *inode, struct iattr *attr)
+int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 {
+        struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct lov_stripe_md *lsm = lli->lli_smd;
         struct md_op_data *op_data = NULL;
@@ -1391,7 +1393,7 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
             (ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)))
                 op_data->op_flags = MF_EPOCH_OPEN;
 
-        rc = ll_md_setattr(inode, op_data, &mod);
+        rc = ll_md_setattr(dentry, op_data, &mod);
         if (rc)
                 GOTO(out, rc);
 
@@ -1450,7 +1452,7 @@ int ll_setattr(struct dentry *de, struct iattr *attr)
             !(attr->ia_valid & ATTR_KILL_SGID))
                 attr->ia_valid |= ATTR_KILL_SGID;
 
-        return ll_setattr_raw(de->d_inode, attr);
+        return ll_setattr_raw(de, attr);
 }
 
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,

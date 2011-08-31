@@ -715,7 +715,7 @@ void ll_done_writing_attr(struct inode *inode, struct md_op_data *op_data);
 int ll_som_update(struct inode *inode, struct md_op_data *op_data);
 int ll_inode_getattr(struct inode *inode, struct obdo *obdo,
                      __u64 ioepoch, int sync);
-int ll_md_setattr(struct inode *inode, struct md_op_data *op_data,
+int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
                   struct md_open_data **mod);
 void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
                           struct lustre_handle *fh);
@@ -781,7 +781,7 @@ void ll_put_super(struct super_block *sb);
 void ll_kill_super(struct super_block *sb);
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
-int ll_setattr_raw(struct inode *inode, struct iattr *attr);
+int ll_setattr_raw(struct dentry *dentry, struct iattr *attr);
 int ll_setattr(struct dentry *de, struct iattr *attr);
 #ifndef HAVE_STATFS_DENTRY_PARAM
 int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
