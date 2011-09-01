@@ -1014,7 +1014,8 @@ dont_check_exports:
                         CWARN("Connect with zero transno!\n");
 
                 if ((lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_TRANSNO)
-                     && data->ocd_transno < target->obd_next_recovery_transno)
+                     && data->ocd_transno < target->obd_next_recovery_transno &&
+                     data->ocd_transno > target->obd_last_committed)
                         target->obd_next_recovery_transno = data->ocd_transno;
                 target->obd_connected_clients++;
                 cfs_atomic_inc(&target->obd_req_replay_clients);
