@@ -2105,6 +2105,26 @@ AC_DEFINE(HAVE_BLKDEV_GET_BY_DEV, 1,
 ])
 
 #
+# 2.6.38 vfsmount.mnt_count doesn't use atomic_t
+#
+AC_DEFUN([LC_ATOMIC_MNT_COUNT],
+[AC_MSG_CHECKING([if vfsmount.mnt_count is atomic_t])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/atomic.h>
+        #include <linux/fs.h>
+        #include <linux/mount.h>
+],[
+        ((struct vfsmount *)0)->mnt_count = ((atomic_t) { 0 });
+],[
+        AC_DEFINE(HAVE_ATOMIC_MNT_COUNT, 1,
+                [vfsmount.mnt_count is atomic_t])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # 2.6.39 remove unplug_fn from request_queue.
 #
 AC_DEFUN([LC_REQUEST_QUEUE_UNPLUG_FN],
@@ -2301,6 +2321,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SBOPS_EVICT_INODE
 
          # 2.6.38
+         LC_ATOMIC_MNT_COUNT
          LC_BLKDEV_GET_BY_DEV
          LC_GENERIC_PERMISSION
 

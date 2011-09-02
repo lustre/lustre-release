@@ -401,6 +401,26 @@ ll_kern_mount(const char *fstype, int flags, const char *name, void *data)
 #define ll_kern_mount(fstype, flags, name, data) do_kern_mount((fstype), (flags), (name), (data))
 #endif
 
+#ifndef HAVE_ATOMIC_MNT_COUNT
+static inline unsigned int mnt_get_count(struct vfsmount *mnt)
+{
+#ifdef CONFIG_SMP
+        unsigned int count = 0;
+        int cpu;
+
+        for_each_possible_cpu(cpu) {
+                count += per_cpu_ptr(mnt->mnt_pcp, cpu)->mnt_count;
+        }
+
+        return count;
+#else
+        return mnt->mnt_count;
+#endif
+}
+#else
+# define mnt_get_count(mnt)      cfs_atomic_read(&mnt->mnt_count)
+#endif
+
 #ifdef HAVE_STATFS_DENTRY_PARAM
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb)->s_root, (sfs))
 #else
