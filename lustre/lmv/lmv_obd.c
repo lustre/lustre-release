@@ -3043,7 +3043,7 @@ int lmv_intent_getattr_async(struct obd_export *exp,
         struct obd_device       *obd = exp->exp_obd;
         struct lmv_obd          *lmv = &obd->u.lmv;
         struct lmv_object       *obj;
-        struct lmv_tgt_desc     *tgt;
+        struct lmv_tgt_desc     *tgt = NULL;
         int                      rc;
         int                      sidx;
         ENTRY;
@@ -3052,35 +3052,20 @@ int lmv_intent_getattr_async(struct obd_export *exp,
         if (rc)
                 RETURN(rc);
 
-        if (!fid_is_sane(&op_data->op_fid2)) {
+        if (op_data->op_namelen) {
                 obj = lmv_object_find(obd, &op_data->op_fid1);
-                if (obj && op_data->op_namelen) {
-                        sidx = raw_name2idx(obj->lo_hashtype,
-                                            obj->lo_objcount,
+                if (obj) {
+                        sidx = raw_name2idx(obj->lo_hashtype, obj->lo_objcount,
                                             (char *)op_data->op_name,
                                             op_data->op_namelen);
                         op_data->op_fid1 = obj->lo_stripes[sidx].ls_fid;
-                        tgt = lmv_get_target(lmv,
-                                             obj->lo_stripes[sidx].ls_mds);
-                        CDEBUG(D_INODE,
-                               "Choose slave dir ("DFID") -> mds #%d\n",
-                               PFID(&op_data->op_fid1), tgt->ltd_idx);
-                } else {
-                        tgt = lmv_find_target(lmv, &op_data->op_fid1);
-                }
-                if (obj)
+                        tgt = lmv_get_target(lmv, obj->lo_stripes[sidx].ls_mds);
                         lmv_object_put(obj);
-        } else {
-                op_data->op_fid1 = op_data->op_fid2;
-                tgt = lmv_find_target(lmv, &op_data->op_fid2);
-                op_data->op_bias = MDS_CROSS_REF;
-                /*
-                 * Unfortunately, we have to lie to MDC/MDS to retrieve
-                 * attributes llite needs.
-                */
-                if (minfo->mi_it.it_op & IT_LOOKUP)
-                        minfo->mi_it.it_op = IT_GETATTR;
+                }
         }
+
+        if (tgt == NULL)
+                tgt = lmv_find_target(lmv, &op_data->op_fid1);
 
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));

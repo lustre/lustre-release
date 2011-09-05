@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -241,15 +244,19 @@ static struct lmv_object *__lmv_object_find(struct obd_device *obd, const struct
         return NULL;
 }
 
-struct lmv_object *lmv_object_find(struct obd_device *obd, 
+struct lmv_object *lmv_object_find(struct obd_device *obd,
                                    const struct lu_fid *fid)
 {
-        struct lmv_object       *obj;
+        struct lmv_obd          *lmv = &obd->u.lmv;
+        struct lmv_object       *obj = NULL;
         ENTRY;
 
-        cfs_spin_lock(&obj_list_lock);
-        obj = __lmv_object_find(obd, fid);
-        cfs_spin_unlock(&obj_list_lock);
+        /* For single MDT case, lmv_object list is always empty. */
+        if (lmv->desc.ld_tgt_count > 1) {
+                cfs_spin_lock(&obj_list_lock);
+                obj = __lmv_object_find(obd, fid);
+                cfs_spin_unlock(&obj_list_lock);
+        }
 
         RETURN(obj);
 }
