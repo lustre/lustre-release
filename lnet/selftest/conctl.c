@@ -70,15 +70,15 @@ lst_session_new_ioctl(lstio_session_new_args_t *args)
 
         name[args->lstio_ses_nmlen] = 0;
 
-        rc = lstcon_session_new(name,
-                             args->lstio_ses_key,
-                             args->lstio_ses_timeout,
-                             args->lstio_ses_force,
-                             args->lstio_ses_idp);
+	rc = lstcon_session_new(name,
+				args->lstio_ses_key,
+				args->lstio_ses_feats,
+				args->lstio_ses_force,
+				args->lstio_ses_timeout,
+				args->lstio_ses_idp);
 
-        LIBCFS_FREE(name, args->lstio_ses_nmlen + 1);
-
-        return rc;
+	LIBCFS_FREE(name, args->lstio_ses_nmlen + 1);
+	return rc;
 }
 
 int
@@ -97,6 +97,7 @@ lst_session_info_ioctl(lstio_session_info_args_t *args)
 
         if (args->lstio_ses_idp   == NULL || /* address for ouput sid */
             args->lstio_ses_keyp  == NULL || /* address for ouput key */
+	    args->lstio_ses_featp  == NULL || /* address for ouput features */
             args->lstio_ses_ndinfo == NULL || /* address for output ndinfo */
             args->lstio_ses_namep == NULL || /* address for ouput name */
             args->lstio_ses_nmlen <= 0 ||
@@ -105,6 +106,7 @@ lst_session_info_ioctl(lstio_session_info_args_t *args)
 
         return lstcon_session_info(args->lstio_ses_idp,
                                    args->lstio_ses_keyp,
+				   args->lstio_ses_featp,
                                    args->lstio_ses_ndinfo,
                                    args->lstio_ses_namep,
                                    args->lstio_ses_nmlen);
@@ -320,6 +322,7 @@ lst_group_update_ioctl(lstio_group_update_args_t *args)
 int
 lst_nodes_add_ioctl(lstio_group_nodes_args_t *args)
 {
+	unsigned feats;
         int     rc;
         char   *name;
 
@@ -329,8 +332,9 @@ lst_nodes_add_ioctl(lstio_group_nodes_args_t *args)
         if (args->lstio_grp_idsp == NULL || /* array of ids */
             args->lstio_grp_count <= 0 ||
             args->lstio_grp_resultp == NULL ||
-            args->lstio_grp_namep == NULL ||
-            args->lstio_grp_nmlen <= 0 || 
+	    args->lstio_grp_featp == NULL ||
+	    args->lstio_grp_namep == NULL ||
+	    args->lstio_grp_nmlen <= 0 ||
             args->lstio_grp_nmlen > LST_NAME_SIZE)
                 return -EINVAL;
 
@@ -348,10 +352,14 @@ lst_nodes_add_ioctl(lstio_group_nodes_args_t *args)
         name[args->lstio_grp_nmlen] = 0;
 
         rc = lstcon_nodes_add(name, args->lstio_grp_count,
-                              args->lstio_grp_idsp,
-                              args->lstio_grp_resultp);
+			      args->lstio_grp_idsp, &feats,
+			      args->lstio_grp_resultp);
 
-        LIBCFS_FREE(name, args->lstio_grp_nmlen + 1);
+	LIBCFS_FREE(name, args->lstio_grp_nmlen + 1);
+	if (rc == 0 &&
+	    cfs_copy_to_user(args->lstio_grp_featp, &feats, sizeof(feats))) {
+		return -EINVAL;
+	}
 
         return rc;
 }
@@ -733,6 +741,12 @@ int lst_test_add_ioctl(lstio_test_args_t *args)
             args->lstio_tes_dgrp_nmlen <= 0 ||
             args->lstio_tes_dgrp_nmlen > LST_NAME_SIZE)
                 return -EINVAL;
+
+	if (args->lstio_tes_loop == 0 || /* negative is infinite */
+	    args->lstio_tes_concur <= 0 ||
+	    args->lstio_tes_dist <= 0 ||
+	    args->lstio_tes_span <= 0)
+		return -EINVAL;
 
         /* have parameter, check if parameter length is valid */
         if (args->lstio_tes_param != NULL &&

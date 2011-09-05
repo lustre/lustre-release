@@ -41,11 +41,21 @@
 #include <libcfs/libcfsutil.h>
 #include <lnet/lnetctl.h>
 #include <lnet/lnetst.h>
-
+/* NB: these includes are layering violation */
+#include <lustre_ver.h>
+#include <lustre/lustre_idl.h>
 
 lst_sid_t LST_INVALID_SID = {LNET_NID_ANY, -1};
 static lst_sid_t           session_id;
 static int                 session_key;
+
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 6, 50, 0)
+/* assume all nodes can understand feature LST_FEAT_BULK_LEN */
+static unsigned		   session_features = LST_FEATS_MASK;
+#else
+static unsigned		   session_features = LST_FEATS_EMPTY;
+#endif
+
 static lstcon_trans_stat_t trans_stat;
 
 typedef struct list_string {
@@ -454,7 +464,7 @@ lst_print_transerr(cfs_list_t *head, char *optstr)
                         continue;
                 }
 
-                fprintf(stderr, "%s failed on %s: %s\n",
+		fprintf(stderr, "operation %s failed on %s: %s\n",
                         optstr, libcfs_id2str(ent->rpe_peer),
                         strerror(ent->rpe_fwk_errno));
         }
@@ -503,7 +513,7 @@ lst_ioctl(unsigned int opc, void *buf, int len)
 }
 
 int
-lst_new_session_ioctl (char *name, int timeout, int force, lst_sid_t *sid)
+lst_new_session_ioctl(char *name, int timeout, int force, lst_sid_t *sid)
 {
         lstio_session_new_args_t args = {0};
 
@@ -511,6 +521,7 @@ lst_new_session_ioctl (char *name, int timeout, int force, lst_sid_t *sid)
         args.lstio_ses_timeout = timeout;
         args.lstio_ses_force   = force;
         args.lstio_ses_idp     = sid;
+	args.lstio_ses_feats   = session_features;
         args.lstio_ses_nmlen   = strlen(name);
         args.lstio_ses_namep   = name;
 
@@ -598,32 +609,31 @@ jt_lst_new_session(int argc,  char **argv)
         }
 
         rc = lst_new_session_ioctl(name, timeout, force, &session_id);
-
         if (rc != 0) {
                 lst_print_error("session", "Failed to create session: %s\n",
                                 strerror(errno));
                 return rc;
         }
 
-        fprintf(stdout, "SESSION: %s TIMEOUT: %d FORCE: %s\n",
-                name, timeout, force ? "Yes": "No");
-
-        return rc;
+	fprintf(stdout, "SESSION: %s FEATURES: %x TIMEOUT: %d FORCE: %s\n",
+		name, session_features, timeout, force ? "Yes" : "No");
+	return 0;
 }
 
 int
-lst_session_info_ioctl(char *name, int len, int *key,
-                       lst_sid_t *sid, lstcon_ndlist_ent_t *ndinfo)
+lst_session_info_ioctl(char *name, int len, int *key, unsigned *featp,
+		       lst_sid_t *sid, lstcon_ndlist_ent_t *ndinfo)
 {
-        lstio_session_info_args_t args = {0};
+	lstio_session_info_args_t args = {0};
 
-        args.lstio_ses_idp    = sid;
-        args.lstio_ses_keyp   = key;
-        args.lstio_ses_ndinfo = ndinfo;
-        args.lstio_ses_nmlen  = len;
-        args.lstio_ses_namep  = name;
+	args.lstio_ses_idp     = sid;
+	args.lstio_ses_keyp    = key;
+	args.lstio_ses_featp   = featp;
+	args.lstio_ses_ndinfo  = ndinfo;
+	args.lstio_ses_nmlen   = len;
+	args.lstio_ses_namep   = name;
 
-        return lst_ioctl(LSTIO_SESSION_INFO, &args, sizeof(args));
+	return lst_ioctl(LSTIO_SESSION_INFO, &args, sizeof(args));
 }
 
 int
@@ -632,10 +642,12 @@ jt_lst_show_session(int argc, char **argv)
         lstcon_ndlist_ent_t ndinfo;
         lst_sid_t           sid;
         char                name[LST_NAME_SIZE];
-        int                 key;
-        int                 rc;
+	unsigned	    feats;
+	int		    key;
+	int		    rc;
 
-        rc = lst_session_info_ioctl(name, LST_NAME_SIZE, &key, &sid, &ndinfo);
+	rc = lst_session_info_ioctl(name, LST_NAME_SIZE, &key,
+				    &feats, &sid, &ndinfo);
 
         if (rc != 0) {
                 lst_print_error("session", "Failed to show session: %s\n",
@@ -643,9 +655,9 @@ jt_lst_show_session(int argc, char **argv)
                 return -1;
         }
 
-        fprintf(stdout, "%s ID: "LPU64"@%s, KEY: %d NODES: %d\n",
-                name, sid.ses_stamp, libcfs_nid2str(sid.ses_nid),
-                key, ndinfo.nle_nnode);
+	fprintf(stdout, "%s ID: "LPU64"@%s, KEY: %d FEATURES: %x NODES: %d\n",
+		name, sid.ses_stamp, libcfs_nid2str(sid.ses_nid),
+		key, feats, ndinfo.nle_nnode);
 
         return 0;
 }
@@ -726,14 +738,15 @@ lst_get_node_count(int type, char *str, int *countp, lnet_process_id_t **idspp)
         lstcon_test_batch_ent_t ent;
         lstcon_ndlist_ent_t    *entp = &ent.tbe_cli_nle;
         lst_sid_t               sid;
-        int                     key;
-        int                     rc;
+	unsigned		feats;
+	int			key;
+	int			rc;
 
-        switch (type) {
-        case LST_OPC_SESSION:
-                rc = lst_session_info_ioctl(buf, LST_NAME_SIZE,
-                                            &key, &sid, entp);
-                break;
+	switch (type) {
+	case LST_OPC_SESSION:
+		rc = lst_session_info_ioctl(buf, LST_NAME_SIZE,
+					    &key, &feats, &sid, entp);
+		break;
 
         case LST_OPC_BATCHSRV:
                 entp = &ent.tbe_srv_nle;
@@ -896,7 +909,7 @@ out:
 
 int
 lst_add_nodes_ioctl (char *name, int count, lnet_process_id_t *ids,
-                     cfs_list_t *resultp)
+		     unsigned *featp, cfs_list_t *resultp)
 {
         lstio_group_nodes_args_t args = {0};
 
@@ -904,6 +917,7 @@ lst_add_nodes_ioctl (char *name, int count, lnet_process_id_t *ids,
         args.lstio_grp_nmlen   = strlen(name);
         args.lstio_grp_namep   = name;
         args.lstio_grp_count   = count;
+	args.lstio_grp_featp   = featp;
         args.lstio_grp_idsp    = ids;
         args.lstio_grp_resultp = resultp;
 
@@ -928,6 +942,7 @@ jt_lst_add_group(int argc, char **argv)
         cfs_list_t         head;
         lnet_process_id_t *ids;
         char              *name;
+	unsigned	   feats = session_features;
         int                count;
         int                rc;
         int                i;
@@ -974,31 +989,50 @@ jt_lst_add_group(int argc, char **argv)
                 rc = lst_alloc_rpcent(&head, count, 0);
                 if (rc != 0) {
                         fprintf(stderr, "Out of memory\n");
-                        break;
-                }
+			return -1;
+		}
 
-                rc = lst_add_nodes_ioctl(name, count, ids, &head);
+		rc = lst_add_nodes_ioctl(name, count, ids, &feats, &head);
 
-                free(ids);
+		free(ids);
 
-                if (rc == 0) {
-                        lst_free_rpcent(&head);
-                        fprintf(stderr, "%s are added to session\n", argv[i]);
-                        continue;
-                }
+		if (rc != 0)
+			goto failed;
 
-                if (rc == -1) {
-                        lst_free_rpcent(&head);
-                        lst_print_error("group", "Failed to add nodes %s: %s\n",
-                                        argv[i], strerror(errno));
-                        break;
-                }
+		fprintf(stdout, "%s are added to session\n", argv[i]);
 
-                lst_print_transerr(&head, "create session");
-                lst_free_rpcent(&head);
-        }
+		if ((feats & session_features) != session_features) {
+			fprintf(stdout,
+				"Warning, this session will run with "
+				"compatible mode because some test nodes "
+				"might not understand these features: %x\n",
+				(~feats & session_features));
+		}
 
-        return rc;
+		lst_free_rpcent(&head);
+	}
+
+	return 0;
+
+failed:
+	if (rc == -1) {
+		lst_print_error("group", "Failed to add nodes %s: %s\n",
+				argv[i], strerror(errno));
+
+	} else {
+		if (trans_stat.trs_fwk_errno == EPROTO) {
+			fprintf(stderr,
+				"test nodes might have different LST "
+				"features, please disable some features by "
+				"setting LST_FEATURES\n");
+		}
+
+		lst_print_transerr(&head, "create session");
+	}
+
+	lst_free_rpcent(&head);
+
+	return rc;
 }
 
 int
@@ -3194,7 +3228,20 @@ static command_t lst_cmdlist[] = {
 int
 lst_initialize(void)
 {
-        char   *key;
+	char   *key;
+	char   *feats;
+
+	feats = getenv("LST_FEATURES");
+	if (feats != NULL)
+		session_features = strtol(feats, NULL, 16);
+
+	if ((session_features & ~LST_FEATS_MASK) != 0) {
+		fprintf(stderr,
+			"Unsupported session features %x, "
+			"only support these features so far: %x\n",
+			(session_features & ~LST_FEATS_MASK), LST_FEATS_MASK);
+		return -1;
+	}
 
         key = getenv("LST_SESSION");
 

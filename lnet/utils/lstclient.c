@@ -56,6 +56,7 @@ static struct option lstjn_options[] =
 {
         {"sesid",       required_argument,  0, 's' },
         {"group",       required_argument,  0, 'g' },
+	{"features",	required_argument,  0, 'f' },
         {"server_mode", no_argument,        0, 'm' },
         {0,             0,                  0,  0  }
 };
@@ -74,7 +75,7 @@ lstjn_rpc_done(srpc_client_rpc_t *rpc)
 }
 
 int
-lstjn_join_session(char *ses, char *grp)
+lstjn_join_session(char *ses, char *grp, unsigned feats)
 {
         lnet_process_id_t  sesid;
         srpc_client_rpc_t *rpc;
@@ -91,8 +92,8 @@ lstjn_join_session(char *ses, char *grp)
                 return -1;
         }
 
-        rpc = sfw_create_rpc(sesid, SRPC_SERVICE_JOIN, 0,
-                             0, lstjn_rpc_done, NULL);
+	rpc = sfw_create_rpc(sesid, SRPC_SERVICE_JOIN, feats,
+			     0, 0, lstjn_rpc_done, NULL);
         if (rpc == NULL) {
                 fprintf(stderr, "Out of memory\n");
                 return -1;
@@ -129,6 +130,17 @@ lstjn_join_session(char *ses, char *grp)
                 return -1;
         }
 
+	if (rpc->crpc_replymsg.msg_ses_feats != feats) {
+		/* this can only happen when connecting to old console
+		 * which will ignore features */
+		fprintf(stderr, "Can't join session %s group %s because "
+			"feature bits can't match: %x/%x, please set "
+			"feature bits by -f FEATURES and retry\n",
+			ses, grp, feats, rpc->crpc_replymsg.msg_ses_feats);
+		srpc_client_rpc_decref(rpc);
+		return -1;
+	}
+
         sreq = &rpc->crpc_reqstmsg.msg_body.mksn_reqst;
         sreq->mksn_sid     = rep->join_sid;
         sreq->mksn_force   = 0;
@@ -156,19 +168,21 @@ lstjn_join_session(char *ses, char *grp)
 int
 main(int argc, char **argv)
 {
-        char   *ses = NULL;
-        char   *grp = NULL;
-        int     server_mode_flag = 0;
-        int     optidx;
-        int     c;
-        int     rc;
+	char	*ses = NULL;
+	char	*grp = NULL;
+	unsigned feats = LST_FEATS_MASK;
+	int	 server_mode_flag = 0;
+	int	 optidx;
+	int	 c;
+	int	 rc;
 
-        const char *usage_string =
-                "Usage: lstclient --sesid ID --group GROUP [--server_mode]\n";
+	const char *usage_string =
+		   "Usage: lstclient --sesid ID --group GROUP "
+		   "--features FEATURES [--server_mode]\n";
 
-        while (1) {
-                c = getopt_long(argc, argv, "s:g:m",
-                                lstjn_options, &optidx);
+	while (1) {
+		c = getopt_long(argc, argv, "s:g:f:m",
+				lstjn_options, &optidx);
 
                 if (c == -1)
                         break;
@@ -180,6 +194,10 @@ main(int argc, char **argv)
                 case 'g':
                         grp = optarg;
                         break;
+		case 'f':
+			feats = strtol(optarg, NULL, 16);
+			break;
+
                 case 'm':
                         server_mode_flag = 1;
                         break;
@@ -194,26 +212,33 @@ main(int argc, char **argv)
                 return -1;
         }
 
-        rc = libcfs_debug_init(5 * 1024 * 1024);
-        if (rc != 0) {
-                CERROR("libcfs_debug_init() failed: %d\n", rc);
-                return -1;
-        }
+	if ((feats & ~LST_FEATS_MASK) != 0) {
+		fprintf(stderr,
+			"lstclient can't understand these feature bits: %x\n",
+			(feats & ~LST_FEATS_MASK));
+		return -1;
+	}
 
-        rc = cfs_wi_startup();
-        if (rc != 0) {
-                CERROR("cfs_wi_startup() failed: %d\n", rc);
-                libcfs_debug_cleanup();
-                return -1;
-        }
+	rc = libcfs_debug_init(5 * 1024 * 1024);
+	if (rc != 0) {
+		fprintf(stderr, "libcfs_debug_init() failed: %d\n", rc);
+		return -1;
+	}
 
-        rc = LNetInit();
-        if (rc != 0) {
-                CERROR("LNetInit() failed: %d\n", rc);
-                cfs_wi_shutdown();
-                libcfs_debug_cleanup();
-                return -1;
-        }
+	rc = cfs_wi_startup();
+	if (rc != 0) {
+		fprintf(stderr, "cfs_wi_startup() failed: %d\n", rc);
+		libcfs_debug_cleanup();
+		return -1;
+	}
+
+	rc = LNetInit();
+	if (rc != 0) {
+		fprintf(stderr, "LNetInit() failed: %d\n", rc);
+		cfs_wi_shutdown();
+		libcfs_debug_cleanup();
+		return -1;
+	}
 
         if (server_mode_flag)
                 lnet_server_mode();
@@ -227,7 +252,7 @@ main(int argc, char **argv)
                 return -1;
         }
 
-        rc = lstjn_join_session(ses, grp);
+	rc = lstjn_join_session(ses, grp, feats);
         if (rc != 0)
                 goto out;
 

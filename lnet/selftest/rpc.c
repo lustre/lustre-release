@@ -85,23 +85,26 @@ void srpc_set_counters (const srpc_counters_t *cnt)
         cfs_spin_unlock(&srpc_data.rpc_glock);
 }
 
-void
-srpc_add_bulk_page (srpc_bulk_t *bk, cfs_page_t *pg, int i)
+int
+srpc_add_bulk_page(srpc_bulk_t *bk, cfs_page_t *pg, int i, int nob)
 {
-        LASSERT (i >= 0 && i < bk->bk_niov);
+	nob = min(nob, (int)CFS_PAGE_SIZE);
+
+	LASSERT(nob > 0);
+	LASSERT(i >= 0 && i < bk->bk_niov);
 
 #ifdef __KERNEL__
-        bk->bk_iovs[i].kiov_offset = 0;
-        bk->bk_iovs[i].kiov_page   = pg;
-        bk->bk_iovs[i].kiov_len    = CFS_PAGE_SIZE;
+	bk->bk_iovs[i].kiov_offset = 0;
+	bk->bk_iovs[i].kiov_page   = pg;
+	bk->bk_iovs[i].kiov_len    = nob;
 #else
-        LASSERT (bk->bk_pages != NULL);
+	LASSERT(bk->bk_pages != NULL);
 
-        bk->bk_pages[i] = pg;
-        bk->bk_iovs[i].iov_len  = CFS_PAGE_SIZE;
-        bk->bk_iovs[i].iov_base = cfs_page_address(pg);
+	bk->bk_pages[i] = pg;
+	bk->bk_iovs[i].iov_len  = nob;
+	bk->bk_iovs[i].iov_base = cfs_page_address(pg);
 #endif
-        return;
+	return nob;
 }
 
 void
@@ -134,54 +137,56 @@ srpc_free_bulk (srpc_bulk_t *bk)
 }
 
 srpc_bulk_t *
-srpc_alloc_bulk(int cpt, int npages, int sink)
+srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len, int sink)
 {
-        srpc_bulk_t  *bk;
-        cfs_page_t  **pages;
-        int           i;
+	srpc_bulk_t  *bk;
+	cfs_page_t  **pages;
+	int	      i;
 
-        LASSERT (npages > 0 && npages <= LNET_MAX_IOV);
+	LASSERT(bulk_npg > 0 && bulk_npg <= LNET_MAX_IOV);
 
 	LIBCFS_CPT_ALLOC(bk, lnet_cpt_table(), cpt,
-			 offsetof(srpc_bulk_t, bk_iovs[npages]));
-        if (bk == NULL) {
-                CERROR ("Can't allocate descriptor for %d pages\n", npages);
-                return NULL;
-        }
+			 offsetof(srpc_bulk_t, bk_iovs[bulk_npg]));
+	if (bk == NULL) {
+		CERROR("Can't allocate descriptor for %d pages\n", bulk_npg);
+		return NULL;
+	}
 
-        memset(bk, 0, offsetof(srpc_bulk_t, bk_iovs[npages]));
-        bk->bk_sink = sink;
-        bk->bk_niov = npages;
-        bk->bk_len  = npages * CFS_PAGE_SIZE;
+	memset(bk, 0, offsetof(srpc_bulk_t, bk_iovs[bulk_npg]));
+	bk->bk_sink   = sink;
+	bk->bk_len    = bulk_len;
+	bk->bk_niov   = bulk_npg;
 #ifndef __KERNEL__
 	LIBCFS_CPT_ALLOC(pages, lnet_cpt_table(), cpt,
-			 sizeof(cfs_page_t *) * npages);
-        if (pages == NULL) {
-                LIBCFS_FREE(bk, offsetof(srpc_bulk_t, bk_iovs[npages]));
-                CERROR ("Can't allocate page array for %d pages\n", npages);
-                return NULL;
-        }
+			 sizeof(cfs_page_t *) * bulk_npg);
+	if (pages == NULL) {
+		LIBCFS_FREE(bk, offsetof(srpc_bulk_t, bk_iovs[bulk_npg]));
+		CERROR("Can't allocate page array for %d pages\n", bulk_npg);
+		return NULL;
+	}
 
-        memset(pages, 0, sizeof(cfs_page_t *) * npages);
-        bk->bk_pages = pages;
+	memset(pages, 0, sizeof(cfs_page_t *) * bulk_npg);
+	bk->bk_pages = pages;
 #else
-        UNUSED (pages);
+	UNUSED(pages);
 #endif
 
-        for (i = 0; i < npages; i++) {
+	for (i = 0; i < bulk_npg; i++) {
 		cfs_page_t *pg;
+		int	    nob;
 
 		pg = cfs_page_cpt_alloc(lnet_cpt_table(), cpt, CFS_ALLOC_STD);
-                if (pg == NULL) {
-                        CERROR ("Can't allocate page %d of %d\n", i, npages);
-                        srpc_free_bulk(bk);
-                        return NULL;
-                }
+		if (pg == NULL) {
+			CERROR("Can't allocate page %d of %d\n", i, bulk_npg);
+			srpc_free_bulk(bk);
+			return NULL;
+		}
 
-                srpc_add_bulk_page(bk, pg, i);
-        }
+		nob = srpc_add_bulk_page(bk, pg, i, bulk_len);
+		bulk_len -= nob;
+	}
 
-        return bk;
+	return bk;
 }
 
 static inline __u64
@@ -1026,22 +1031,25 @@ srpc_handle_rpc(swi_workitem_t *wi)
 
                 if (msg->msg_magic == 0) {
                         /* moaned already in srpc_lnet_ev_handler */
-                        rc = EBADMSG;
-                } else if (msg->msg_version != SRPC_MSG_VERSION &&
-                           msg->msg_version != __swab32(SRPC_MSG_VERSION)) {
-                        CWARN ("Version mismatch: %u, %u expected, from %s\n",
-                               msg->msg_version, SRPC_MSG_VERSION,
-                               libcfs_id2str(rpc->srpc_peer));
-                        reply->status = EPROTO;
-                } else {
-                        reply->status = 0;
-                        rc = (*sv->sv_handler) (rpc);
-                        LASSERT (reply->status == 0 || !rpc->srpc_bulk);
-                }
+			srpc_server_rpc_done(rpc, EBADMSG);
+			return 1;
+		}
 
-                if (rc != 0) {
-                        srpc_server_rpc_done(rpc, rc);
-                        return 1;
+		srpc_unpack_msg_hdr(msg);
+		if (msg->msg_version != SRPC_MSG_VERSION) {
+			CWARN("Version mismatch: %u, %u expected, from %s\n",
+			      msg->msg_version, SRPC_MSG_VERSION,
+			      libcfs_id2str(rpc->srpc_peer));
+			reply->status = EPROTO;
+			/* drop through and send reply */
+		} else {
+			reply->status = 0;
+			rc = (*sv->sv_handler)(rpc);
+			LASSERT(reply->status == 0 || !rpc->srpc_bulk);
+			if (rc != 0) {
+				srpc_server_rpc_done(rpc, rc);
+				return 1;
+			}
                 }
 
                 wi->swi_state = SWI_STATE_BULK_STARTED;
@@ -1257,10 +1265,9 @@ srpc_send_rpc (swi_workitem_t *wi)
                 rc = rpc->crpc_replyev.ev_status;
                 if (rc != 0) break;
 
-                if ((reply->msg_type != type &&
-                     reply->msg_type != __swab32(type)) ||
-                    (reply->msg_magic != SRPC_MSG_MAGIC &&
-                     reply->msg_magic != __swab32(SRPC_MSG_MAGIC))) {
+		srpc_unpack_msg_hdr(reply);
+		if (reply->msg_type != type ||
+		    reply->msg_magic != SRPC_MSG_MAGIC) {
                         CWARN ("Bad message from %s: type %u (%d expected),"
                                " magic %u (%d expected).\n",
                                libcfs_id2str(rpc->crpc_dest),
@@ -1363,7 +1370,6 @@ srpc_post_rpc (srpc_client_rpc_t *rpc)
 {
         LASSERT (!rpc->crpc_aborted);
         LASSERT (srpc_data.rpc_state == SRPC_STATE_RUNNING);
-        LASSERT ((rpc->crpc_bulk.bk_len & ~CFS_PAGE_MASK) == 0);
 
         CDEBUG (D_NET, "Posting RPC: peer %s, service %d, timeout %d\n",
                 libcfs_id2str(rpc->crpc_dest), rpc->crpc_service,

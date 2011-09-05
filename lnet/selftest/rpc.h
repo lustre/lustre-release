@@ -175,32 +175,44 @@ typedef struct {
 } WIRE_ATTR test_bulk_req_t;
 
 typedef struct {
-        __u32                   png_size;       /* size of ping message */
-        __u32                   png_flags;      /* reserved flags */
+	/** bulk operation code */
+	__u16			blk_opc;
+	/** data check flags */
+	__u16			blk_flags;
+	/** data length */
+	__u32			blk_len;
+	/** reserved: offset */
+	__u32                   blk_offset;
+} WIRE_ATTR test_bulk_req_v1_t;
+
+typedef struct {
+	__u32			png_size;       /* size of ping message */
+	__u32			png_flags;      /* reserved flags */
 } WIRE_ATTR test_ping_req_t;
 
 typedef struct {
-        __u64                   tsr_rpyid;      /* reply buffer matchbits */
-        __u64 			tsr_bulkid; 	/* bulk buffer matchbits */
-        lst_sid_t               tsr_sid;        /* session id */
-        lst_bid_t               tsr_bid;        /* batch id */
-        __u32                   tsr_service;    /* test type: bulk|ping|... */
-        /* test client loop count or # server buffers needed */
-        __u32                   tsr_loop;       
-        __u32                   tsr_concur;     /* concurrency of test */
-        __u8                    tsr_is_client;  /* is test client or not */
-        __u8                    tsr_stop_onerr; /* stop on error */
-        __u32                   tsr_ndest;      /* # of dest nodes */
+	__u64			tsr_rpyid;      /* reply buffer matchbits */
+	__u64			tsr_bulkid;     /* bulk buffer matchbits */
+	lst_sid_t		tsr_sid;        /* session id */
+	lst_bid_t		tsr_bid;        /* batch id */
+	__u32			tsr_service;    /* test type: bulk|ping|... */
+	/* test client loop count or # server buffers needed */
+	__u32			tsr_loop;
+	__u32			tsr_concur;     /* concurrency of test */
+	__u8			tsr_is_client;  /* is test client or not */
+	__u8			tsr_stop_onerr; /* stop on error */
+	__u32			tsr_ndest;      /* # of dest nodes */
 
 	union {
-		test_bulk_req_t bulk;
-		test_ping_req_t ping;
-	} 			tsr_u;
+		test_ping_req_t		ping;
+		test_bulk_req_t		bulk_v0;
+		test_bulk_req_v1_t	bulk_v1;
+	}		tsr_u;
 } WIRE_ATTR srpc_test_reqst_t;
 
 typedef struct {
-        __u32                   tsr_status;     /* returned code */
-        lst_sid_t               tsr_sid;        
+	__u32			tsr_status;     /* returned code */
+	lst_sid_t		tsr_sid;
 } WIRE_ATTR srpc_test_reply_t;
 
 /* TEST RPCs */
@@ -232,14 +244,18 @@ typedef struct {
 
 #define SRPC_MSG_MAGIC                  0xeeb0f00d
 #define SRPC_MSG_VERSION                1
+
 typedef struct srpc_msg {
-	__u32	msg_magic;		/* magic */
-	__u32	msg_version;		/* # version */
-	/* what's in msg_body? srpc_msg_type_t */
+	/** magic number */
+	__u32	msg_magic;
+	/** message version number */
+	__u32	msg_version;
+	/** type of message body: srpc_msg_type_t */
 	__u32	msg_type;
-        __u32   msg_reserved0;          /* reserved seats */
-        __u32   msg_reserved1;
-        __u32   msg_reserved2;
+	__u32	msg_reserved0;
+	__u32	msg_reserved1;
+	/** test session features */
+	__u32	msg_ses_feats;
         union {
                 srpc_generic_reqst_t reqst;
                 srpc_generic_reply_t reply;
@@ -267,5 +283,19 @@ typedef struct srpc_msg {
 } WIRE_ATTR srpc_msg_t;
 
 #include <libcfs/libcfs_unpack.h>
+
+static inline void
+srpc_unpack_msg_hdr(srpc_msg_t *msg)
+{
+	if (msg->msg_magic == SRPC_MSG_MAGIC)
+		return; /* no flipping needed */
+
+	__swab32s(&msg->msg_magic);
+	__swab32s(&msg->msg_type);
+	__swab32s(&msg->msg_version);
+	__swab32s(&msg->msg_ses_feats);
+	__swab32s(&msg->msg_reserved0);
+	__swab32s(&msg->msg_reserved1);
+}
 
 #endif /* __SELFTEST_RPC_H__ */

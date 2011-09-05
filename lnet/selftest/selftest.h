@@ -338,6 +338,7 @@ typedef struct {
         lst_sid_t         sn_id;      /* unique identifier */
         unsigned int      sn_timeout; /* # seconds' inactivity to expire */
         int               sn_timer_active;
+	unsigned int	  sn_features;
         stt_timer_t       sn_timer;
         cfs_list_t        sn_batches; /* list of batches */
         char              sn_name[LST_NAME_SIZE];
@@ -389,10 +390,11 @@ typedef struct sfw_test_instance {
         cfs_list_t              tsi_free_rpcs;    /* free rpcs */
         cfs_list_t              tsi_active_rpcs;  /* active rpcs */
 
-        union {
-                test_bulk_req_t bulk;             /* bulk parameter */
-                test_ping_req_t ping;             /* ping parameter */
-        } tsi_u;
+	union {
+		test_ping_req_t		ping;	  /* ping parameter */
+		test_bulk_req_t		bulk_v0;  /* bulk parameter */
+		test_bulk_req_v1_t	bulk_v1;  /* bulk v1 parameter */
+	} tsi_u;
 } sfw_test_instance_t;
 
 /* XXX: trailing (CFS_PAGE_SIZE % sizeof(lnet_process_id_t)) bytes at
@@ -418,17 +420,20 @@ typedef struct sfw_test_case {
 } sfw_test_case_t;
 
 srpc_client_rpc_t *
-sfw_create_rpc(lnet_process_id_t peer, int service, int nbulkiov, int bulklen,
-               void (*done) (srpc_client_rpc_t *), void *priv);
-int sfw_create_test_rpc(sfw_test_unit_t *tsu, lnet_process_id_t peer,
-                        int nblk, int blklen, srpc_client_rpc_t **rpc);
+sfw_create_rpc(lnet_process_id_t peer, int service,
+	       unsigned features, int nbulkiov, int bulklen,
+	       void (*done) (srpc_client_rpc_t *), void *priv);
+int sfw_create_test_rpc(sfw_test_unit_t *tsu,
+			lnet_process_id_t peer, unsigned features,
+			int nblk, int blklen, srpc_client_rpc_t **rpc);
 void sfw_abort_rpc(srpc_client_rpc_t *rpc);
 void sfw_post_rpc(srpc_client_rpc_t *rpc);
 void sfw_client_rpc_done(srpc_client_rpc_t *rpc);
 void sfw_unpack_message(srpc_msg_t *msg);
 void sfw_free_pages(srpc_server_rpc_t *rpc);
 void sfw_add_bulk_page(srpc_bulk_t *bk, cfs_page_t *pg, int i);
-int sfw_alloc_pages(srpc_server_rpc_t *rpc, int cpt, int npages, int sink);
+int sfw_alloc_pages(srpc_server_rpc_t *rpc, int cpt, int npages, int len,
+		    int sink);
 int sfw_make_session (srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply);
 
 srpc_client_rpc_t *
@@ -439,7 +444,8 @@ srpc_create_client_rpc(lnet_process_id_t peer, int service,
 void srpc_post_rpc(srpc_client_rpc_t *rpc);
 void srpc_abort_rpc(srpc_client_rpc_t *rpc, int why);
 void srpc_free_bulk(srpc_bulk_t *bk);
-srpc_bulk_t *srpc_alloc_bulk(int cpt, int npages, int sink);
+srpc_bulk_t *srpc_alloc_bulk(int cpt, unsigned bulk_npg, unsigned bulk_len,
+			     int sink);
 int srpc_send_rpc(swi_workitem_t *wi);
 int srpc_send_reply(srpc_server_rpc_t *rpc);
 int srpc_add_service(srpc_service_t *sv);

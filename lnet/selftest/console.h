@@ -138,9 +138,16 @@ typedef struct {
         int                     ses_state;      /* state of session */
         int                     ses_timeout;    /* timeout in seconds */
         time_t                  ses_laststamp;  /* last operation stamp (seconds) */
-        int                     ses_force:1;    /* force creating */
-        int                     ses_shutdown:1; /* session is shutting down */
-        int                     ses_expired:1;  /* console is timedout */
+	/** tests features of the session */
+	unsigned		ses_features;
+	/** features are synced with remote test nodes */
+	unsigned		ses_feats_updated:1;
+	/** force creating */
+	unsigned		ses_force:1;
+	/** session is shutting down */
+	unsigned		ses_shutdown:1;
+	/** console is timedout */
+	unsigned		ses_expired:1;
         __u64                   ses_id_cookie;  /* batch id cookie */
         char                    ses_name[LST_NAME_SIZE];  /* session name */
         lstcon_rpc_trans_t     *ses_ping;       /* session pinger */
@@ -159,6 +166,7 @@ typedef struct {
 } lstcon_session_t;                             /*** session descriptor */
 
 extern lstcon_session_t         console_session;
+
 static inline lstcon_trans_stat_t *
 lstcon_trans_stat(void)
 {
@@ -174,13 +182,14 @@ lstcon_id2hash (lnet_process_id_t id, cfs_list_t *hash)
 }
 
 extern int lstcon_session_match(lst_sid_t sid);
-extern int lstcon_session_new(char *name, int key,
+extern int lstcon_session_new(char *name, int key, unsigned version,
                               int timeout, int flags, lst_sid_t *sid_up);
-extern int lstcon_session_info(lst_sid_t *sid_up, int *key,
+extern int lstcon_session_info(lst_sid_t *sid_up, int *key, unsigned *verp,
                                lstcon_ndlist_ent_t *entp, char *name_up, int len);
 extern int lstcon_session_end(void);
 extern int lstcon_session_debug(int timeout, cfs_list_t *result_up);
-extern int lstcon_batch_debug(int timeout, char *name, 
+extern int lstcon_session_feats_check(unsigned feats);
+extern int lstcon_batch_debug(int timeout, char *name,
                               int client, cfs_list_t *result_up);
 extern int lstcon_group_debug(int timeout, char *name,
                               cfs_list_t *result_up);
@@ -191,7 +200,7 @@ extern int lstcon_group_del(char *name);
 extern int lstcon_group_clean(char *name, int args);
 extern int lstcon_group_refresh(char *name, cfs_list_t *result_up);
 extern int lstcon_nodes_add(char *name, int nnd, lnet_process_id_t *nds_up,
-                            cfs_list_t *result_up);
+			    unsigned *featp, cfs_list_t *result_up);
 extern int lstcon_nodes_remove(char *name, int nnd, lnet_process_id_t *nds_up,
                                cfs_list_t *result_up);
 extern int lstcon_group_info(char *name, lstcon_ndlist_ent_t *gent_up, 
