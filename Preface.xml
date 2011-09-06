@@ -14,10 +14,13 @@
           <para> Software documentation that you received with your system</para>
         </listitem>
         <listitem>
-          <para> Oracle Solaris Operating System documentation, which is at:</para>
+          <para> Red Hat Enterprise Linux documentation, which is at:
+      <link xl:href="http://docs.redhat.com/docs/en-US/index.html">http://docs.redhat.com/docs/en-US/index.html</link></para>
+  <note><para>
+          The Lustre client module is available for many different Linux versions and distributions. Red Hat Enterprise is the best supported and tested platform for Lustre Servers.
+  </para></note>
         </listitem>
       </itemizedlist>
-      <para><link xl:href="http://www.oracle.com/technetwork/indexes/documentation/index.html">http://www.oracle.com/technetwork/indexes/documentation/index.html</link></para>
     </section>
     <section remap="h2">
       <title>Shell Prompts</title>

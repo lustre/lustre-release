@@ -65,7 +65,7 @@ lustre-ldiskfs-&lt;ver&gt;</screen>
               <screen>$ rpm -Uvh e2fsprogs-&lt;ver&gt;
 </screen>
               <para>Use e2fsprogs-1.41-10 or later, available at:</para>
-              <para><link xl:href="http://downloads.lustre.org/public/tools/e2fsprogs/">http://downloads.lustre.org/public/tools/e2fsprogs/</link></para>
+              <para><link xl:href="http://downloads.whamcloud.com/public/e2fsprogs/latest/">http://downloads.whamcloud.com/public/e2fsprogs/latest/</link></para>
             </listitem>
             <listitem>
               <para>(Optional) If you want to add optional packages to your Lustre system, install them now.</para>
