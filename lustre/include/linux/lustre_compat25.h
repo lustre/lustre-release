@@ -692,10 +692,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define cfs_for_each_possible_cpu(cpu) for_each_cpu(cpu)
 #endif
 
-#ifndef cpu_to_node
-#define cpu_to_node(cpu)         0
-#endif
-
 #ifdef HAVE_BIO_ENDIO_2ARG
 #define cfs_bio_io_error(a,b)   bio_io_error((a))
 #define cfs_bio_endio(a,b,c)    bio_endio((a),(c))
@@ -854,6 +850,11 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define ll_pagevec_init(pv, cold)       pagevec_init(&lru_pvec, cold);
 #define ll_pagevec_add(pv, pg)          pagevec_add(pv, pg)
 #define ll_pagevec_lru_add_file(pv)     pagevec_lru_add_file(pv)
+#endif
+
+#if !defined(HAVE_NODE_TO_CPUMASK) && defined(HAVE_CPUMASK_OF_NODE)
+#define node_to_cpumask(i)         (*(cpumask_of_node(i)))
+#define HAVE_NODE_TO_CPUMASK
 #endif
 
 #endif /* __KERNEL__ */

@@ -2306,7 +2306,7 @@ static int ptlrpc_hr_main(void *arg)
                  "ptlrpc_hr_%d", hr_args->thread_index);
 
         cfs_daemonize_ctxt(threadname);
-#if defined(CONFIG_SMP) && defined(HAVE_NODE_TO_CPUMASK)
+#if defined(CONFIG_NUMA) && defined(HAVE_NODE_TO_CPUMASK)
         cfs_set_cpus_allowed(cfs_current(),
                              node_to_cpumask(cpu_to_node(hr_args->cpu_index)));
 #endif

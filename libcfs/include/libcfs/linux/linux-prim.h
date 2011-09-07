@@ -96,7 +96,12 @@
 #define CFS_NR_CPUS     1
 #endif
 
+#ifdef HAVE_SET_CPUS_ALLOWED
 #define cfs_set_cpus_allowed(t, mask)  set_cpus_allowed(t, mask)
+#else
+#define cfs_set_cpus_allowed(t, mask)  set_cpus_allowed_ptr(t, &(mask))
+#endif
+
 /*
  * cache
  */

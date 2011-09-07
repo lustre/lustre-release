@@ -1996,6 +1996,15 @@ AC_DEFUN([LC_EXPORT_ADD_TO_PAGE_CACHE_LRU],
 
 # 2.6.31
 
+# 2.6.30 x86 node_to_cpumask has been removed. must use cpumask_of_node
+AC_DEFUN([LC_EXPORT_CPUMASK_OF_NODE],
+         [LB_CHECK_SYMBOL_EXPORT([node_to_cpumask_map],
+                                 [arch/$LINUX_ARCH/mm/numa.c],
+                                 [AC_DEFINE(HAVE_CPUMASK_OF_NODE, 1,
+                                            [node_to_cpumask_map is exported by
+                                             the kernel])]) # x86_64
+         ])
+
 # 2.6.31 replaces blk_queue_hardsect_size by blk_queue_logical_block_size function
 AC_DEFUN([LC_BLK_QUEUE_LOG_BLK_SIZE],
 [AC_MSG_CHECKING([if blk_queue_logical_block_size is defined])
@@ -2176,6 +2185,19 @@ EXTRA_KCFLAGS="-I$LINUX/fs"
 EXTRA_KCFLAGS=$tmp_flags
 ])
 
+# 2.6.32 set_cpus_allowed is no more defined if CONFIG_CPUMASK_OFFSTACK=yes
+AC_DEFUN([LC_SET_CPUS_ALLOWED],
+         [AC_MSG_CHECKING([if kernel defines set_cpus_allowed])
+          LB_LINUX_TRY_COMPILE(
+                [#include <linux/sched.h>],
+                [struct task_struct *p = NULL;
+                 cpumask_t mask = { { 0 } };
+                 (void) set_cpus_allowed(p, mask);],
+                [AC_MSG_RESULT([yes])
+                 AC_DEFINE(HAVE_SET_CPUS_ALLOWED, 1,
+                           [set_cpus_allowed is exported by the kernel])],
+                [AC_MSG_RESULT([no])] )])
+
 #
 # LC_D_OBTAIN_ALIAS
 # starting from 2.6.28 kernel replaces d_alloc_anon() with
@@ -2341,6 +2363,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SB_HAS_QUOTA_ACTIVE
          LC_EXPORT_ADD_TO_PAGE_CACHE_LRU
 
+         # 2.6.30
+         LC_EXPORT_CPUMASK_OF_NODE
+
          # 2.6.31
          LC_BLK_QUEUE_LOG_BLK_SIZE
 
@@ -2350,6 +2375,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SB_BDI
          LC_BLK_QUEUE_MAX_SECTORS
          LC_BLK_QUEUE_MAX_SEGMENTS
+         LC_SET_CPUS_ALLOWED
          LC_EXT4_SINGLEDATA_TRANS_BLOCKS_SB
          LC_WALK_SPACE_HAS_DATA_SEM
 
