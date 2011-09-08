@@ -1127,12 +1127,9 @@ lnet_router_checker(void *arg)
         int                rc;
         lnet_peer_t       *rtr;
         cfs_list_t        *entry;
-        lnet_process_id_t  rtr_id;
 
         cfs_daemonize("router_checker");
         cfs_block_allsigs();
-
-        rtr_id.pid = LUSTRE_SRV_LNET_PID;
 
         LASSERT (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING);
 

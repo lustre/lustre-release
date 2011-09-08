@@ -2211,7 +2211,6 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 {
         int                        netrc;
         struct ptlrpc_reply_state *rs;
-        struct obd_device         *obd;
         struct obd_export         *exp;
         struct ptlrpc_service     *svc;
         ENTRY;
@@ -2245,7 +2244,6 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         LASSERT (cfs_list_empty(&rs->rs_exp_list));
 
         exp = class_export_get (req->rq_export);
-        obd = exp->exp_obd;
 
         /* disable reply scheduling while I'm setting up */
         rs->rs_scheduled = 1;

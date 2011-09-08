@@ -265,7 +265,7 @@ do {                                                                           \
 # else
 #  define LIBCFS_ALLOC(ptr, size) do { (ptr) = calloc(1,size); } while (0)
 # endif
-# define LIBCFS_FREE(a, b) do { free(a); } while (0)
+# define LIBCFS_FREE(ptr, size) do { free(ptr); } while((size) - (size))
 
 void libcfs_debug_dumplog(void);
 int libcfs_debug_init(unsigned long bufsize);

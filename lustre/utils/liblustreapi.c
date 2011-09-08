@@ -2538,7 +2538,6 @@ int llapi_target_iterate(int type_num, char **obd_type,
                 char *obd_name = NULL;
                 char *obd_uuid = NULL;
                 char *bufp = buf;
-                struct obd_ioctl_data datal = { 0, };
                 struct obd_statfs osfs_buffer;
 
                 while(bufp[0] == ' ')
@@ -2551,9 +2550,6 @@ int llapi_target_iterate(int type_num, char **obd_type,
                 obd_uuid = strsep(&bufp, " ");
 
                 memset(&osfs_buffer, 0, sizeof (osfs_buffer));
-
-                datal.ioc_pbuf1 = (char *)&osfs_buffer;
-                datal.ioc_plen1 = sizeof(osfs_buffer);
 
                 for (i = 0; i < type_num; i++) {
                         if (strcmp(obd_type_name, obd_type[i]) != 0)

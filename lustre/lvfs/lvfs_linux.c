@@ -388,13 +388,8 @@ struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
 }
 EXPORT_SYMBOL(l_dentry_open);
 
-#ifdef HAVE_VFS_READDIR_U64_INO
 static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
                      u64 ino, unsigned int d_type)
-#else
-static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
-                     ino_t ino, unsigned int d_type)
-#endif
 {
         struct l_linux_dirent *dirent;
         struct l_readdir_callback *buf = (struct l_readdir_callback *)__buf;

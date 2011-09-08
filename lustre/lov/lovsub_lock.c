@@ -205,7 +205,6 @@ int lov_sublock_modify(const struct lu_env *env, struct lov_lock *lov,
                        const struct cl_lock_descr *d, int idx)
 {
         struct cl_lock       *parent;
-        struct cl_lock       *child;
         struct lovsub_object *subobj;
         struct cl_lock_descr *pd;
         struct cl_lock_descr *parent_descr;
@@ -215,7 +214,6 @@ int lov_sublock_modify(const struct lu_env *env, struct lov_lock *lov,
         parent_descr = &parent->cll_descr;
         LASSERT(cl_lock_mode_match(d->cld_mode, parent_descr->cld_mode));
 
-        child  = sublock->lss_cl.cls_lock;
         subobj = cl2lovsub(sublock->lss_cl.cls_obj);
         pd     = &lov_env_info(env)->lti_ldescr;
 

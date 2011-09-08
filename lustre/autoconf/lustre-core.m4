@@ -1220,34 +1220,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# LC_VFS_READDIR_U64_INO
-# 2.6.19 use u64 for inode number instead of inode_t
-AC_DEFUN([LC_VFS_READDIR_U64_INO],
-[AC_MSG_CHECKING([check vfs_readdir need 64bit inode number])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-#include <linux/fs.h>
-	int fillonedir(void * __buf, const char * name, int namlen, loff_t offset,
-                      u64 ino, unsigned int d_type)
-	{
-		return 0;
-	}
-],[
-	filldir_t filter;
-
-	filter = fillonedir;
-	return 1;
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_VFS_READDIR_U64_INO, 1,
-                [if vfs_readdir need 64bit inode number])
-],[
-        AC_MSG_RESULT(no)
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
 # LC_FILE_WRITEV
 # 2.6.19 replaced writev with aio_write
 AC_DEFUN([LC_FILE_WRITEV],
@@ -1365,7 +1337,7 @@ LB_LINUX_TRY_COMPILE([
         #include <linux/crypto.h>
 ],[
         struct crypto_blkcipher *tfm;
-        tfm = crypto_alloc_blkcipher("aes", 0, 0 );
+        tfm = crypto_alloc_blkcipher("aes", 0, sizeof(tfm) );
 ],[
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_ASYNC_BLOCK_CIPHER, 1, [kernel has block cipher support])
@@ -1570,15 +1542,13 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_FH_TO_DENTRY],
 [AC_MSG_CHECKING([if kernel has .fh_to_dentry member in export_operations struct])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
 #ifdef HAVE_LINUX_EXPORTFS_H
         #include <linux/exportfs.h>
-#else
-        #include <linux/fs.h>
 #endif
 ],[
         struct export_operations exp;
-
-        exp.fh_to_dentry   = NULL;
+        memset(exp.fh_to_dentry, 0, sizeof(exp.fh_to_dentry));
 ], [
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_FH_TO_DENTRY, 1,
@@ -1596,7 +1566,7 @@ LB_LINUX_TRY_COMPILE([
 ],[
         struct proc_dir_entry pde;
 
-        pde.deleted   = NULL;
+        pde.deleted = sizeof(pde);
 ], [
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_PROCFS_DELETED, 1,
@@ -1650,6 +1620,7 @@ LB_LINUX_TRY_COMPILE([
         struct fs_struct fs;
 
         fs.pwd = path;
+        memset(&fs, 0, sizeof(fs));
 ], [
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_FS_STRUCT_USE_PATH, 1,
@@ -1813,7 +1784,7 @@ LB_LINUX_TRY_COMPILE([
         #include <linux/bio.h>
 ],[
         struct bio io;
-        io.bi_hw_segments = 0;
+        io.bi_hw_segments = sizeof(io);
 ],[
         AC_DEFINE(HAVE_BI_HW_SEGMENTS, 1,
                 [struct bio has a bi_hw_segments field])
@@ -2254,7 +2225,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.19
          LC_INODE_BLKSIZE
-         LC_VFS_READDIR_U64_INO
          LC_FILE_WRITEV
          LC_FILE_READV
 

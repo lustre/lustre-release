@@ -127,7 +127,6 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
         struct lvfs_run_ctxt  saved;
         struct llog_logid    *logid = NULL;
         struct llog_ctxt     *ctxt;
-        __u32                 flags;
         int                   rc;
         ENTRY;
 
@@ -155,7 +154,6 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
 
         body = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
         body->lgd_logid = loghandle->lgh_id;
-        flags = body->lgd_llh_flags;
         rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
         if (rc)
                 GOTO(out_close, rc);

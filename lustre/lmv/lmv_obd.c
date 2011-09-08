@@ -2073,7 +2073,6 @@ static int lmv_rename(struct obd_export *exp, struct md_op_data *op_data,
         struct obd_device       *obd = exp->exp_obd;
         struct lmv_obd          *lmv = &obd->u.lmv;
         struct lmv_tgt_desc     *src_tgt;
-        struct lmv_tgt_desc     *tgt_tgt;
         int                      rc;
         int                      sidx;
         int                      loop = 0;
@@ -2133,7 +2132,6 @@ repeat:
         op_data->op_cap = cfs_curproc_cap_pack();
 
         src_tgt = lmv_get_target(lmv, mds1);
-        tgt_tgt = lmv_get_target(lmv, mds2);
 
         /*
          * LOOKUP lock on src child (fid3) should also be cancelled for
@@ -2534,6 +2532,8 @@ repeat:
                 first->ldp_hash_end = hash_end;
                 first->ldp_flags &= ~cpu_to_le32(LDF_COLLIDE);
                 first->ldp_flags |= flags & cpu_to_le32(LDF_COLLIDE);
+#else
+                SET_BUT_UNUSED(tmp);
 #endif
                 cfs_kunmap(pages[i]);
         }

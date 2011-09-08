@@ -153,7 +153,6 @@ int fld_index_create(struct lu_server_fld *fld,
                      struct thandle *th)
 {
         struct dt_object *dt_obj = fld->lsf_obj;
-        struct dt_device *dt_dev;
         seqno_t start;
         int rc;
 
@@ -161,7 +160,6 @@ int fld_index_create(struct lu_server_fld *fld,
 
         start = range->lsr_start;
         LASSERT(range_is_sane(range));
-        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
 
         rc = dt_obj->do_index_ops->dio_insert(env, dt_obj,
                                               fld_rec(env, range),
@@ -189,13 +187,11 @@ int fld_index_delete(struct lu_server_fld *fld,
                      struct thandle   *th)
 {
         struct dt_object *dt_obj = fld->lsf_obj;
-        struct dt_device *dt_dev;
         seqno_t seq = range->lsr_start;
         int rc;
 
         ENTRY;
 
-        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
         rc = dt_obj->do_index_ops->dio_delete(env, dt_obj,
                                               fld_key(env, seq), th,
                                               BYPASS_CAPA);

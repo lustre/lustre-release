@@ -486,6 +486,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 if (*och_p) { /* Everything is open already, do nothing */
                         /*(*och_usecount)++;  Do not let them steal our open
                           handle from under us */
+                        SET_BUT_UNUSED(och_usecount);
                         /* XXX The code above was my original idea, but in case
                            we have the handle, but we cannot use it due to later
                            checks (e.g. O_CREAT|O_EXCL flags set), nobody

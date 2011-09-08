@@ -700,6 +700,8 @@ out:
                 if (env != 0)
                         lu_context_fini(&pc->pc_env.le_ctx);
                 cfs_clear_bit(LIOD_BIND, &pc->pc_flags);
+#else
+                SET_BUT_UNUSED(env);
 #endif
                 cfs_clear_bit(LIOD_START, &pc->pc_flags);
         }

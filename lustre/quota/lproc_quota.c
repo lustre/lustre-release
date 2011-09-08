@@ -181,11 +181,8 @@ int lprocfs_quota_rd_type(char *page, char **start, off_t off, int count,
         struct obd_device *obd = (struct obd_device *)data;
         char stype[MAX_STYPE_SIZE + 1] = "";
         int oq_type;
-        struct obd_device_target *obt;
 
         LASSERT(obd != NULL);
-
-        obt = &obd->u.obt;
 
         /* Collect the needed information */
         oq_type = obd->u.obt.obt_qctxt.lqc_flags;
@@ -291,16 +288,11 @@ int lprocfs_quota_wr_type(struct file *file, const char *buffer,
                           unsigned long count, void *data)
 {
         struct obd_device *obd = (struct obd_device *)data;
-        struct obd_device_target *obt;
-        int type = 0, is_mds;
+        int type = 0;
         unsigned long i;
         char stype[MAX_STYPE_SIZE + 1] = "";
 
         LASSERT(obd != NULL);
-
-        obt = &obd->u.obt;
-
-        is_mds = !strcmp(obd->obd_type->typ_name, LUSTRE_MDS_NAME);
 
         if (count > MAX_STYPE_SIZE)
                 return -EINVAL;

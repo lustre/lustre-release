@@ -189,7 +189,6 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         struct inode *inode = pnode->p_base->pb_ino;
         struct llu_inode_info *lli = llu_i2info(inode);
         struct intnl_stat *st = llu_i2stat(inode);
-        struct ll_file_data *fd;
         struct ptlrpc_request *request;
         struct lookup_intent *it;
         struct lov_stripe_md *lsm;
@@ -219,8 +218,6 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
 
         if (!S_ISREG(st->st_mode))
                 GOTO(out_release, rc = 0);
-
-        fd = lli->lli_file_data;
 
         lsm = lli->lli_smd;
         if (lsm)

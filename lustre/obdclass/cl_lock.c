@@ -298,14 +298,12 @@ static void cl_lock_free(const struct lu_env *env, struct cl_lock *lock)
 void cl_lock_put(const struct lu_env *env, struct cl_lock *lock)
 {
         struct cl_object        *obj;
-        struct cl_object_header *head;
         struct cl_site          *site;
 
         LINVRNT(cl_lock_invariant(env, lock));
         ENTRY;
         obj = lock->cll_descr.cld_obj;
         LINVRNT(obj != NULL);
-        head = cl_object_header(obj);
         site = cl_object_site(obj);
 
         CDEBUG(D_TRACE, "releasing reference: %d %p %lu\n",

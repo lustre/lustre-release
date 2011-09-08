@@ -427,7 +427,6 @@ void
 lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, lstcon_trans_stat_t *stat)
 {
         lstcon_rpc_t      *crpc;
-        srpc_client_rpc_t *rpc;
         srpc_msg_t        *rep;
         int                error;
 
@@ -438,8 +437,6 @@ lstcon_rpc_trans_stat(lstcon_rpc_trans_t *trans, lstcon_trans_stat_t *stat)
         cfs_list_for_each_entry_typed(crpc, &trans->tas_rpcs_list,
                                       lstcon_rpc_t, crp_link) {
                 lstcon_rpc_stat_total(stat, 1);
-
-                rpc = crpc->crp_rpc;
 
                 LASSERT (crpc->crp_stamp != 0);
 
@@ -478,7 +475,6 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
         cfs_list_t           *next;
         lstcon_rpc_ent_t     *ent;
         srpc_generic_reply_t *rep;
-        srpc_client_rpc_t    *rpc;
         lstcon_rpc_t         *crpc;
         srpc_msg_t           *msg;
         lstcon_node_t        *nd;
@@ -502,8 +498,6 @@ lstcon_rpc_trans_interpreter(lstcon_rpc_trans_t *trans,
                 next = tmp.next;
 
                 ent = cfs_list_entry(next, lstcon_rpc_ent_t, rpe_link);
-
-                rpc = crpc->crp_rpc;
 
                 LASSERT (crpc->crp_stamp != 0);
 

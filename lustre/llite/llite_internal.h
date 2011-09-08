@@ -1324,7 +1324,7 @@ struct ll_dio_pages {
 static inline void cl_stats_tally(struct cl_device *dev, enum cl_req_type crt,
                                   int rc)
 {
-        int opc = (crt == CIT_READ) ? LPROC_LL_OSC_READ :
+        int opc = (crt == CRT_READ) ? LPROC_LL_OSC_READ :
                                       LPROC_LL_OSC_WRITE;
 
         ll_stats_ops_tally(ll_s2sbi(cl2ccc_dev(dev)->cdv_sb), opc, rc);

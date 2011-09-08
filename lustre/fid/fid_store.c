@@ -113,12 +113,10 @@ int seq_store_write(struct lu_server_seq *seq,
 {
         struct dt_object *dt_obj = seq->lss_obj;
         struct seq_thread_info *info;
-        struct dt_device *dt_dev;
         loff_t pos = 0;
         int rc;
         ENTRY;
 
-        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
         info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 

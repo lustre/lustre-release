@@ -148,7 +148,6 @@ static struct ll_cl_context *ll_cl_init(struct file *file,
         cio = ccc_env_io(env);
         io = cio->cui_cl.cis_io;
         if (io == NULL && create) {
-                struct vvp_io *vio;
                 loff_t pos;
 
                 /*
@@ -156,9 +155,7 @@ static struct ll_cl_context *ll_cl_init(struct file *file,
                  * methods directly, bypassing file system ->write() operation,
                  * so cl_io has to be created here.
                  */
-
                 io = ccc_env_thread_io(env);
-                vio = vvp_env_io(env);
                 ll_io_init(io, file, 1);
 
                 /* No lock at all for this kind of IO - we can't do it because

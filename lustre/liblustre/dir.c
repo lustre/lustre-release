@@ -200,7 +200,6 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
         int filled = 0;
         int rc;
         int done;
-        int shift;
         __u16 type;
         ENTRY;
 
@@ -219,7 +218,6 @@ ssize_t llu_iop_filldirentries(struct inode *dir, _SYSIO_OFF_T *basep,
 
         rc    = 0;
         done  = 0;
-        shift = 0;
         ll_dir_chain_init(&chain);
 
         page = llu_dir_read_page(dir, pos, 0, &chain);

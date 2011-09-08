@@ -790,7 +790,6 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         int stripe_cnt_min = min_stripe_count(*stripe_cnt, flags);
         struct pool_desc *pool;
         struct ost_pool *osts;
-        struct lov_qos_rr *lqr;
         ENTRY;
 
         if (stripe_cnt_min < 1)
@@ -799,11 +798,9 @@ static int alloc_qos(struct obd_export *exp, int *idx_arr, int *stripe_cnt,
         pool = lov_find_pool(lov, poolname);
         if (pool == NULL) {
                 osts = &(lov->lov_packed);
-                lqr = &(lov->lov_qos.lq_rr);
         } else {
                 cfs_down_read(&pool_tgt_rw_sem(pool));
                 osts = &(pool->pool_obds);
-                lqr = &(pool->pool_rr);
         }
 
         obd_getref(exp->exp_obd);

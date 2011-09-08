@@ -279,7 +279,7 @@ static int ldlm_lock_busy(struct ldlm_lock *lock)
 /* This is called from within a timer interrupt and cannot schedule */
 static void waiting_locks_callback(unsigned long unused)
 {
-        struct ldlm_lock *lock, *last = NULL;
+        struct ldlm_lock *lock;
 
 repeat:
         cfs_spin_lock_bh(&waiting_locks_spinlock);
@@ -354,8 +354,6 @@ repeat:
                            cfs_time_current_sec()- lock->l_last_activity,
                            libcfs_nid2str(
                                    lock->l_export->exp_connection->c_peer.nid));
-
-                last = lock;
 
                 /* no needs to take an extra ref on the lock since it was in
                  * the waiting_locks_list and ldlm_add_waiting_lock()

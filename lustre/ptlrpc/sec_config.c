@@ -795,14 +795,13 @@ EXPORT_SYMBOL(sptlrpc_conf_log_update_end);
 
 void sptlrpc_conf_log_start(const char *logname)
 {
-        struct sptlrpc_conf *conf;
         char                 fsname[16];
 
         if (logname2fsname(logname, fsname, sizeof(fsname)))
                 return;
 
         cfs_mutex_lock(&sptlrpc_conf_lock);
-        conf = sptlrpc_conf_get(fsname, 1);
+        sptlrpc_conf_get(fsname, 1);
         cfs_mutex_unlock(&sptlrpc_conf_lock);
 }
 EXPORT_SYMBOL(sptlrpc_conf_log_start);

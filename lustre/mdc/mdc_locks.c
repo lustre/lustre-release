@@ -633,7 +633,6 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 {
         struct obd_device     *obddev = class_exp2obd(exp);
         struct ptlrpc_request *req = NULL;
-        struct req_capsule    *pill;
         int                    flags = extra_lock_flags;
         int                    rc;
         struct ldlm_res_id res_id;
@@ -684,7 +683,6 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 
         if (IS_ERR(req))
                 RETURN(PTR_ERR(req));
-        pill = &req->rq_pill;
 
         /* It is important to obtain rpc_lock first (if applicable), so that
          * threads that are serialised with rpc_lock are not polluting our

@@ -124,10 +124,9 @@ LB_LINUX_TRY_COMPILE([
 	#include <linux/types.h>
 	#include <linux/stddef.h>
 ],[
-	unsigned long long *data1;
-	__u64 *data2 = NULL;
+	unsigned long long *data;
 
-	data1 = data2;
+	data = (__u64*)sizeof(data);
 ],[
 	AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_KERN__U64_LONG_LONG, 1,
@@ -144,13 +143,10 @@ AC_DEFUN([LIBCFS_TASK_RCU],
 LB_LINUX_TRY_COMPILE([
 	#include <linux/sched.h>
 ],[
-        struct task_struct tsk;
-
-        tsk.rcu.next = NULL;
+        memset(((struct task_struct *)0)->rcu.next, 0, 0);
 ],[
         AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_TASK_RCU, 1,
-                  [task_struct has rcu field])
+        AC_DEFINE(HAVE_TASK_RCU, 1, [task_struct has rcu field])
 ],[
         AC_MSG_RESULT([no])
 ])
@@ -482,11 +478,9 @@ AC_DEFUN([LIBCFS_FUNC_DUMP_TRACE],
 	LB_LINUX_TRY_COMPILE([
 		struct task_struct;
 		struct pt_regs;
-		void print_addr(void *data, unsigned long addr, int reliable);
 		#include <asm/stacktrace.h>
 	],[
-		struct stacktrace_ops ops;
-		ops.address = print_addr;
+		((struct stacktrace_ops *)0)->address(NULL, 0, 0);
 	],[
 		AC_MSG_RESULT(yes)
 		AC_DEFINE(HAVE_TRACE_ADDRESS_RELIABLE, 1,
@@ -561,7 +555,7 @@ LB_LINUX_TRY_COMPILE([
 ],[
        uid_t uid;
 
-       uid = current_uid();
+       uid = current_uid() + sizeof(uid);
 ],[
        AC_MSG_RESULT([yes])
        AC_DEFINE(HAVE_CRED_WRAPPERS, 1, [task's cred wrappers found])
@@ -643,17 +637,8 @@ AC_DEFUN([LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK],
 [AC_MSG_CHECKING([if 'struct stacktrace_ops' has 'walk_stack' field])
 LB_LINUX_TRY_COMPILE([
         #include <asm/stacktrace.h>
-	unsigned long walkstack(struct thread_info *tinfo,
-                                           unsigned long *stack,
-                                           unsigned long bp,
-                                           const struct stacktrace_ops *ops,
-                                           void *data,
-                                           unsigned long *end,
-                                           int *graph);
 ],[
-        struct stacktrace_ops ops;
-
-	ops.walk_stack = walkstack;
+        ((struct stacktrace_ops *)0)->walk_stack(NULL, NULL, 0, NULL, NULL, NULL, NULL);
 ],[
         AC_MSG_RESULT([yes])
         AC_DEFINE(STACKTRACE_OPS_HAVE_WALK_STACK, 1, ['struct stacktrace_ops' has 'walk_stack' field])
@@ -697,9 +682,7 @@ AC_DEFUN([LIBCFS_OOMADJ_IN_SIG],
 LB_LINUX_TRY_COMPILE([
         #include <linux/sched.h>
 ],[
-        struct signal_struct s;
-
-        s.oom_adj = 0;
+        ((struct signal_struct *)0)->oom_adj = 0;
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_OOMADJ_IN_SIG, 1,

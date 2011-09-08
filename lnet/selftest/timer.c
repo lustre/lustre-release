@@ -181,6 +181,8 @@ stt_timer_main (void *arg)
         int rc = 0;
         UNUSED(arg);
 
+        SET_BUT_UNUSED(rc);
+
         cfs_daemonize("st_timer");
         cfs_block_allsigs();
 

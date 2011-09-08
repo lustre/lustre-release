@@ -51,11 +51,8 @@
 
 int main(int argc, char *argv[])
 {
-	char *prog;
 	int rc = 0;
 	int i;
-
-	prog = basename(argv[0]);
 
 	for (i = 1; i < argc; i++) {
 		char buf[1024]; /* allow xattr that may be larger */

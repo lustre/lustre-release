@@ -163,9 +163,7 @@ cfs_duration_t pinger_check_timeout(cfs_time_t time)
                                          cfs_time_current());
 }
 
-#ifdef __KERNEL__
 static cfs_waitq_t suspend_timeouts_waitq;
-#endif
 
 cfs_time_t ptlrpc_suspend_wakeup_time(void)
 {

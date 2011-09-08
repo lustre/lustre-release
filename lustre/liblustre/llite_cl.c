@@ -488,15 +488,12 @@ static int llu_queue_pio(const struct lu_env *env, struct cl_io *io,
         struct obd_export *exp = llu_i2obdexp(inode);
         struct page *page;
         int  rc = 0, ret_bytes = 0;
-        int local_lock;
         struct cl_page *clp;
         struct cl_2queue *queue;
         ENTRY;
 
         if (!exp)
                 RETURN(-EINVAL);
-
-        local_lock = group->lig_params->lrp_lock_mode != LCK_NL;
 
         queue = &io->ci_queue;
         cl_2queue_init(queue);

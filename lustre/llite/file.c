@@ -1883,10 +1883,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK, 1);
 
         if (origin == 2) { /* SEEK_END */
-                int nonblock = 0, rc;
-
-                if (file->f_flags & O_NONBLOCK)
-                        nonblock = LDLM_FL_BLOCK_NOWAIT;
+                int rc;
 
                 rc = cl_glimpse_size(inode);
                 if (rc != 0)
@@ -2230,7 +2227,6 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
 {
         struct inode *inode = dentry->d_inode;
         struct ptlrpc_request *req = NULL;
-        struct ll_sb_info *sbi;
         struct obd_export *exp;
         int rc = 0;
         ENTRY;
@@ -2239,7 +2235,6 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
                 CERROR("REPORT THIS LINE TO PETER\n");
                 RETURN(0);
         }
-        sbi = ll_i2sbi(inode);
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);

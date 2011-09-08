@@ -137,8 +137,8 @@ lnet_get_networks (void)
                 return (rc == 0) ? networks : NULL;
         }
 #else
-        ip2nets = NULL;
-        rc = 0;
+        SET_BUT_UNUSED(ip2nets);
+        SET_BUT_UNUSED(rc);
 #endif
         if (networks != NULL)
                 return networks;

@@ -1595,7 +1595,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         struct timeval         work_start;
         struct timeval         work_end;
         long                   timediff;
-        int                    opc, rc;
+        int                    rc;
         int                    fail_opc = 0;
         ENTRY;
 
@@ -1615,7 +1615,6 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
                 RETURN(0);
         }
 
-        opc = lustre_msg_get_opc(request->rq_reqmsg);
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT))
                 fail_opc = OBD_FAIL_PTLRPC_HPREQ_NOTIMEOUT;
         else if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_HPREQ_TIMEOUT))
@@ -1787,13 +1786,11 @@ ptlrpc_handle_rs (struct ptlrpc_reply_state *rs)
 {
         struct ptlrpc_service     *svc = rs->rs_service;
         struct obd_export         *exp;
-        struct obd_device         *obd;
         int                        nlocks;
         int                        been_handled;
         ENTRY;
 
         exp = rs->rs_export;
-        obd = exp->exp_obd;
 
         LASSERT (rs->rs_difficult);
         LASSERT (rs->rs_scheduled);

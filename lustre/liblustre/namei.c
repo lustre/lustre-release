@@ -208,7 +208,6 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
                              struct lookup_intent *it)
 {
         struct pnode_base *pb = pnode->p_base;
-        struct it_cb_data icbd;
         struct md_op_data op_data = {{ 0 }};
         struct ptlrpc_request *req = NULL;
         struct lookup_intent lookup_it = { .it_op = IT_LOOKUP };
@@ -245,8 +244,6 @@ static int llu_pb_revalidate(struct pnode *pnode, int flags,
         }
 
         exp = llu_i2mdexp(pb->pb_ino);
-        icbd.icbd_parent = pnode->p_parent->p_base->pb_ino;
-        icbd.icbd_child = pnode;
 
         if (!it) {
                 it = &lookup_it;

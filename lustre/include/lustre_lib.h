@@ -806,6 +806,7 @@ do {                                                                    \
                         }                                               \
                 }                                                       \
         }                                                               \
+        SET_BUT_UNUSED(wq);                                             \
 } while (0)
 
 #endif /* __KERNEL__ */
