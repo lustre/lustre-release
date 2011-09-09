@@ -316,8 +316,24 @@ EXPORT_SYMBOL(seq_client_alloc_fid);
  */
 void seq_client_flush(struct lu_client_seq *seq)
 {
+        cfs_waitlink_t link;
+
         LASSERT(seq != NULL);
+        cfs_waitlink_init(&link);
         cfs_down(&seq->lcs_sem);
+
+        while (seq->lcs_update) {
+                cfs_waitq_add(&seq->lcs_waitq, &link);
+                cfs_set_current_state(CFS_TASK_UNINT);
+                cfs_up(&seq->lcs_sem);
+
+                cfs_waitq_wait(&link, CFS_TASK_UNINT);
+
+                cfs_down(&seq->lcs_sem);
+                cfs_waitq_del(&seq->lcs_waitq, &link);
+                cfs_set_current_state(CFS_TASK_RUNNING);
+        }
+
         fid_zero(&seq->lcs_fid);
         /**
          * this id shld not be used for seq range allocation.

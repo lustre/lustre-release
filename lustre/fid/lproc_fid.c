@@ -272,8 +272,10 @@ seq_client_proc_write_width(struct file *file, const char *buffer,
         cfs_down(&seq->lcs_sem);
 
         rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
+        if (rc) {
+                cfs_up(&seq->lcs_sem);
                 RETURN(rc);
+        }
 
         if (val <= LUSTRE_SEQ_MAX_WIDTH && val > 0) {
                 seq->lcs_width = val;
