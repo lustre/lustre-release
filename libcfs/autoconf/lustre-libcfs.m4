@@ -671,6 +671,25 @@ AC_DEFUN([LIBCFS_HAVE_OOM_H],
 ])
 ])
 
+#
+# RHEL6/2.6.32 want to have pointer to shrinker self pointer in handler function
+#
+AC_DEFUN([LC_SHRINKER_WANT_SHRINK_PTR],
+[AC_MSG_CHECKING([shrinker want self pointer in handler])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
+],[
+        struct shrinker *tmp = NULL;
+        tmp->shrink(tmp, 0, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SHRINKER_WANT_SHRINK_PTR, 1,
+                  [shrinker want self pointer in handler])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 # 2.6.18 store oom parameters in task struct.
 # 2.6.32 store oom parameters in signal struct
 AC_DEFUN([LIBCFS_OOMADJ_IN_SIG],
@@ -713,18 +732,22 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# RHEL6/2.6.32 want to have pointer to shrinker self pointer in handler function
-AC_DEFUN([LC_SHRINKER_WANT_SHRINK_PTR],
-[AC_MSG_CHECKING([shrinker want self pointer in handler])
+
+#
+# FC15 2.6.40-5 backported the "shrink_control" parameter to the memory
+# pressure shrinker from Linux 3.0
+#
+AC_DEFUN([LC_SHRINK_CONTROL],
+[AC_MSG_CHECKING([shrink_control is present])
 LB_LINUX_TRY_COMPILE([
         #include <linux/mm.h>
 ],[
-        struct shrinker tmp = {0};
-        tmp.shrink(NULL, 0, 0);
+        struct shrink_control tmp = {0};
+        tmp.nr_to_scan = sizeof(tmp);
 ],[
         AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SHRINKER_WANT_SHRINK_PTR, 1,
-                  [shrinker want self pointer in handler])
+        AC_DEFINE(HAVE_SHRINK_CONTROL, 1,
+                  [shrink_control is present])
 ],[
         AC_MSG_RESULT(no)
 ])
@@ -784,6 +807,8 @@ LIBCFS_HAVE_OOM_H
 LIBCFS_OOMADJ_IN_SIG
 # 2.6.34
 LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
+# 2.6.40 fc15
+LC_SHRINK_CONTROL
 ])
 
 #

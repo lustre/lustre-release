@@ -1675,25 +1675,25 @@ static void lu_site_stats_get(cfs_hash_t *hs,
 }
 
 #ifdef __KERNEL__
-static int lu_cache_shrink(SHRINKER_FIRST_ARG int nr_to_scan,
-                           unsigned int gfp_mask)
+
+static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 {
         lu_site_stats_t stats;
         struct lu_site *s;
         struct lu_site *tmp;
         int cached = 0;
-        int remain = nr_to_scan;
+        int remain = shrink_param(sc, nr_to_scan);
         CFS_LIST_HEAD(splice);
 
-        if (nr_to_scan != 0) {
-                if (!(gfp_mask & __GFP_FS))
+        if (remain != 0) {
+                if (!(shrink_param(sc, gfp_mask) & __GFP_FS))
                         return -1;
-                CDEBUG(D_INODE, "Shrink %d objects\n", nr_to_scan);
+                CDEBUG(D_INODE, "Shrink %d objects\n", remain);
         }
 
         cfs_down(&lu_sites_guard);
         cfs_list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
-                if (nr_to_scan != 0) {
+                if (shrink_param(sc, nr_to_scan) != 0) {
                         remain = lu_site_purge(&lu_shrink_env, s, remain);
                         /*
                          * Move just shrunk site to the tail of site list to
@@ -1705,14 +1705,14 @@ static int lu_cache_shrink(SHRINKER_FIRST_ARG int nr_to_scan,
                 memset(&stats, 0, sizeof(stats));
                 lu_site_stats_get(s->ls_obj_hash, &stats, 0);
                 cached += stats.lss_total - stats.lss_busy;
-                if (nr_to_scan && remain <= 0)
+                if (shrink_param(sc, nr_to_scan) && remain <= 0)
                         break;
         }
         cfs_list_splice(&splice, lu_sites.prev);
         cfs_up(&lu_sites_guard);
 
         cached = (cached / 100) * sysctl_vfs_cache_pressure;
-        if (nr_to_scan == 0)
+        if (shrink_param(sc, nr_to_scan) == 0)
                 CDEBUG(D_INODE, "%d objects cached\n", cached);
         return cached;
 }
