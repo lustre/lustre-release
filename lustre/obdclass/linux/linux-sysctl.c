@@ -312,7 +312,7 @@ int LL_PROC_PROTO(proc_at_history)
 #ifdef CONFIG_SYSCTL
 static cfs_sysctl_table_t obd_table[] = {
         {
-                .ctl_name = OBD_TIMEOUT,
+                INIT_CTL_NAME(OBD_TIMEOUT)
                 .procname = "timeout",
                 .data     = &obd_timeout,
                 .maxlen   = sizeof(int),
@@ -320,7 +320,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_set_timeout
         },
         {
-                .ctl_name = OBD_DEBUG_PEER_ON_TIMEOUT,
+                INIT_CTL_NAME(OBD_DEBUG_PEER_ON_TIMEOUT)
                 .procname = "debug_peer_on_timeout",
                 .data     = &obd_debug_peer_on_timeout,
                 .maxlen   = sizeof(int),
@@ -328,7 +328,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = OBD_DUMP_ON_TIMEOUT,
+                INIT_CTL_NAME(OBD_DUMP_ON_TIMEOUT)
                 .procname = "dump_on_timeout",
                 .data     = &obd_dump_on_timeout,
                 .maxlen   = sizeof(int),
@@ -336,7 +336,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = OBD_DUMP_ON_EVICTION,
+                INIT_CTL_NAME(OBD_DUMP_ON_EVICTION)
                 .procname = "dump_on_eviction",
                 .data     = &obd_dump_on_eviction,
                 .maxlen   = sizeof(int),
@@ -344,7 +344,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = OBD_MEMUSED,
+                INIT_CTL_NAME(OBD_MEMUSED)
                 .procname = "memused",
                 .data     = NULL,
                 .maxlen   = 0,
@@ -352,7 +352,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_memory_alloc
         },
         {
-                .ctl_name = OBD_PAGESUSED,
+                INIT_CTL_NAME(OBD_PAGESUSED)
                 .procname = "pagesused",
                 .data     = NULL,
                 .maxlen   = 0,
@@ -360,7 +360,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_pages_alloc
         },
         {
-                .ctl_name = OBD_MAXMEMUSED,
+                INIT_CTL_NAME(OBD_MAXMEMUSED)
                 .procname = "memused_max",
                 .data     = NULL,
                 .maxlen   = 0,
@@ -368,7 +368,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_mem_max
         },
         {
-                .ctl_name = OBD_MAXPAGESUSED,
+                INIT_CTL_NAME(OBD_MAXPAGESUSED)
                 .procname = "pagesused_max",
                 .data     = NULL,
                 .maxlen   = 0,
@@ -376,7 +376,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_pages_max
         },
         {
-                .ctl_name = OBD_LDLM_TIMEOUT,
+                INIT_CTL_NAME(OBD_LDLM_TIMEOUT)
                 .procname = "ldlm_timeout",
                 .data     = &ldlm_timeout,
                 .maxlen   = sizeof(int),
@@ -385,7 +385,7 @@ static cfs_sysctl_table_t obd_table[] = {
         },
 #ifdef RANDOM_FAIL_ALLOC
         {
-                .ctl_name = OBD_ALLOC_FAIL_RATE,
+                INIT_CTL_NAME(OBD_ALLOC_FAIL_RATE)
                 .procname = "alloc_fail_rate",
                 .data     = &obd_alloc_fail_rate,
                 .maxlen   = sizeof(int),
@@ -394,7 +394,7 @@ static cfs_sysctl_table_t obd_table[] = {
         },
 #endif
         {
-                .ctl_name = OBD_MAX_DIRTY_PAGES,
+                INIT_CTL_NAME(OBD_MAX_DIRTY_PAGES)
                 .procname = "max_dirty_mb",
                 .data     = &obd_max_dirty_pages,
                 .maxlen   = sizeof(int),
@@ -402,7 +402,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_max_dirty_pages_in_mb
         },
         {
-                .ctl_name = OBD_AT_MIN,
+                INIT_CTL_NAME(OBD_AT_MIN)
                 .procname = "at_min",
                 .data     = &at_min,
                 .maxlen   = sizeof(int),
@@ -410,7 +410,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_at_min
         },
         {
-                .ctl_name = OBD_AT_MAX,
+                INIT_CTL_NAME(OBD_AT_MAX)
                 .procname = "at_max",
                 .data     = &at_max,
                 .maxlen   = sizeof(int),
@@ -418,7 +418,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_at_max
         },
         {
-                .ctl_name = OBD_AT_EXTRA,
+                INIT_CTL_NAME(OBD_AT_EXTRA)
                 .procname = "at_extra",
                 .data     = &at_extra,
                 .maxlen   = sizeof(int),
@@ -426,7 +426,7 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_at_extra
         },
         {
-                .ctl_name = OBD_AT_EARLY_MARGIN,
+                INIT_CTL_NAME(OBD_AT_EARLY_MARGIN)
                 .procname = "at_early_margin",
                 .data     = &at_early_margin,
                 .maxlen   = sizeof(int),
@@ -434,26 +434,26 @@ static cfs_sysctl_table_t obd_table[] = {
                 .proc_handler = &proc_at_early_margin
         },
         {
-                .ctl_name = OBD_AT_HISTORY,
+                INIT_CTL_NAME(OBD_AT_HISTORY)
                 .procname = "at_history",
                 .data     = &at_history,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_at_history
         },
-        { 0 }
+        {       INIT_CTL_NAME(0)    }
 };
 
 static cfs_sysctl_table_t parent_table[] = {
         {
-                .ctl_name = OBD_SYSCTL,
+                INIT_CTL_NAME(OBD_SYSCTL)
                 .procname = "lustre",
                 .data     = NULL,
                 .maxlen   = 0,
                 .mode     = 0555,
                 .child    = obd_table
         },
-        {0}
+        {       INIT_CTL_NAME(0)   }
 };
 #endif
 

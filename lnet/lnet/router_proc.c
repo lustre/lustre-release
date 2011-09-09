@@ -691,47 +691,49 @@ static cfs_sysctl_table_t lnet_table[] = {
          * to go via /proc for portability.
          */
         {
-                .ctl_name = PSDEV_LNET_STATS,
+                INIT_CTL_NAME(PSDEV_LNET_STATS)
                 .procname = "stats",
                 .mode     = 0644,
                 .proc_handler = &proc_lnet_stats,
         },
         {
-                .ctl_name = PSDEV_LNET_ROUTES,
+                INIT_CTL_NAME(PSDEV_LNET_ROUTES)
                 .procname = "routes",
                 .mode     = 0444,
                 .proc_handler = &proc_lnet_routes,
         },
         {
-                .ctl_name = PSDEV_LNET_ROUTERS,
+                INIT_CTL_NAME(PSDEV_LNET_ROUTERS)
                 .procname = "routers",
                 .mode     = 0444,
                 .proc_handler = &proc_lnet_routers,
         },
         {
-                .ctl_name = PSDEV_LNET_PEERS,
+                INIT_CTL_NAME(PSDEV_LNET_PEERS)
                 .procname = "peers",
                 .mode     = 0444,
                 .proc_handler = &proc_lnet_peers,
         },
         {
-                .ctl_name = PSDEV_LNET_PEERS,
+                INIT_CTL_NAME(PSDEV_LNET_PEERS)
                 .procname = "buffers",
                 .mode     = 0444,
                 .proc_handler = &proc_lnet_buffers,
         },
         {
-                .ctl_name = PSDEV_LNET_NIS,
+                INIT_CTL_NAME(PSDEV_LNET_NIS)
                 .procname = "nis",
                 .mode     = 0444,
                 .proc_handler = &proc_lnet_nis,
         },
-        {0}
+        {
+                INIT_CTL_NAME(0)
+        }
 };
 
 static cfs_sysctl_table_t top_table[] = {
         {
-                .ctl_name = CTL_LNET,
+                INIT_CTL_NAME(CTL_LNET)
                 .procname = "lnet",
                 .mode     = 0555,
                 .data     = NULL,
@@ -739,7 +741,7 @@ static cfs_sysctl_table_t top_table[] = {
                 .child    = lnet_table,
         },
         {
-                .ctl_name = 0
+                INIT_CTL_NAME(0)
         }
 };
 

@@ -362,7 +362,7 @@ static cfs_sysctl_table_t lnet_table[] = {
          * to go via /proc for portability.
          */
         {
-                .ctl_name = PSDEV_DEBUG,
+                INIT_CTL_NAME(PSDEV_DEBUG)
                 .procname = "debug",
                 .data     = &libcfs_debug,
                 .maxlen   = sizeof(int),
@@ -370,7 +370,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_dobitmasks,
         },
         {
-                .ctl_name = PSDEV_SUBSYSTEM_DEBUG,
+                INIT_CTL_NAME(PSDEV_SUBSYSTEM_DEBUG)
                 .procname = "subsystem_debug",
                 .data     = &libcfs_subsystem_debug,
                 .maxlen   = sizeof(int),
@@ -378,7 +378,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_dobitmasks,
         },
         {
-                .ctl_name = PSDEV_PRINTK,
+                INIT_CTL_NAME(PSDEV_PRINTK)
                 .procname = "printk",
                 .data     = &libcfs_printk,
                 .maxlen   = sizeof(int),
@@ -386,7 +386,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_dobitmasks,
         },
         {
-                .ctl_name = PSDEV_CONSOLE_RATELIMIT,
+                INIT_CTL_NAME(PSDEV_CONSOLE_RATELIMIT)
                 .procname = "console_ratelimit",
                 .data     = &libcfs_console_ratelimit,
                 .maxlen   = sizeof(int),
@@ -394,21 +394,21 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_dointvec
         },
         {
-                .ctl_name = PSDEV_CONSOLE_MAX_DELAY_CS,
+                INIT_CTL_NAME(PSDEV_CONSOLE_MAX_DELAY_CS)
                 .procname = "console_max_delay_centisecs",
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_console_max_delay_cs
         },
         {
-                .ctl_name = PSDEV_CONSOLE_MIN_DELAY_CS,
+                INIT_CTL_NAME(PSDEV_CONSOLE_MIN_DELAY_CS)
                 .procname = "console_min_delay_centisecs",
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_console_min_delay_cs
         },
         {
-                .ctl_name = PSDEV_CONSOLE_BACKOFF,
+                INIT_CTL_NAME(PSDEV_CONSOLE_BACKOFF)
                 .procname = "console_backoff",
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
@@ -416,7 +416,7 @@ static cfs_sysctl_table_t lnet_table[] = {
         },
 
         {
-                .ctl_name = PSDEV_DEBUG_PATH,
+                INIT_CTL_NAME(PSDEV_DEBUG_PATH)
                 .procname = "debug_path",
                 .data     = libcfs_debug_file_path_arr,
                 .maxlen   = sizeof(libcfs_debug_file_path_arr),
@@ -425,7 +425,7 @@ static cfs_sysctl_table_t lnet_table[] = {
         },
 
         {
-                .ctl_name = PSDEV_LNET_UPCALL,
+                INIT_CTL_NAME(PSDEV_LNET_UPCALL)
                 .procname = "upcall",
                 .data     = lnet_upcall,
                 .maxlen   = sizeof(lnet_upcall),
@@ -433,7 +433,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_dostring,
         },
         {
-                .ctl_name = PSDEV_LNET_DEBUG_LOG_UPCALL,
+                INIT_CTL_NAME(PSDEV_LNET_DEBUG_LOG_UPCALL)
                 .procname = "debug_log_upcall",
                 .data     = lnet_debug_log_upcall,
                 .maxlen   = sizeof(lnet_debug_log_upcall),
@@ -441,54 +441,54 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_dostring,
         },
         {
-                .ctl_name = PSDEV_LNET_MEMUSED,
+                INIT_CTL_NAME(PSDEV_LNET_MEMUSED)
                 .procname = "lnet_memused",
                 .data     = (int *)&libcfs_kmemory.counter,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
+                INIT_STRATEGY(&sysctl_intvec)
         },
         {
-                .ctl_name = PSDEV_LNET_CATASTROPHE,
+                INIT_CTL_NAME(PSDEV_LNET_CATASTROPHE)
                 .procname = "catastrophe",
                 .data     = &libcfs_catastrophe,
                 .maxlen   = sizeof(int),
                 .mode     = 0444,
                 .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
+                INIT_STRATEGY(&sysctl_intvec)
         },
         {
-                .ctl_name = PSDEV_LNET_PANIC_ON_LBUG,
+                INIT_CTL_NAME(PSDEV_LNET_PANIC_ON_LBUG)
                 .procname = "panic_on_lbug",
                 .data     = &libcfs_panic_on_lbug,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec,
-                .strategy = &sysctl_intvec,
+                INIT_STRATEGY(&sysctl_intvec)
         },
         {
-                .ctl_name = PSDEV_LNET_DUMP_KERNEL,
+                INIT_CTL_NAME(PSDEV_LNET_DUMP_KERNEL)
                 .procname = "dump_kernel",
                 .maxlen   = 256,
                 .mode     = 0200,
                 .proc_handler = &proc_dump_kernel,
         },
         {
-                .ctl_name = PSDEV_LNET_DAEMON_FILE,
+                INIT_CTL_NAME(PSDEV_LNET_DAEMON_FILE)
                 .procname = "daemon_file",
                 .mode     = 0644,
                 .maxlen   = 256,
                 .proc_handler = &proc_daemon_file,
         },
         {
-                .ctl_name = PSDEV_LNET_DEBUG_MB,
+                INIT_CTL_NAME(PSDEV_LNET_DEBUG_MB)
                 .procname = "debug_mb",
                 .mode     = 0644,
                 .proc_handler = &proc_debug_mb,
         },
         {
-                .ctl_name = PSDEV_LNET_WATCHDOG_RATELIMIT,
+                INIT_CTL_NAME(PSDEV_LNET_WATCHDOG_RATELIMIT)
                 .procname = "watchdog_ratelimit",
                 .data     = &libcfs_watchdog_ratelimit,
                 .maxlen   = sizeof(int),
@@ -497,7 +497,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .extra1   = &min_watchdog_ratelimit,
                 .extra2   = &max_watchdog_ratelimit,
         },
-        {       .ctl_name = PSDEV_LNET_FORCE_LBUG,
+        {       INIT_CTL_NAME(PSDEV_LNET_FORCE_LBUG)
                 .procname = "force_lbug",
                 .data     = NULL,
                 .maxlen   = 0,
@@ -505,7 +505,7 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &libcfs_force_lbug
         },
         {
-                .ctl_name = PSDEV_LNET_FAIL_LOC,
+                INIT_CTL_NAME(PSDEV_LNET_FAIL_LOC)
                 .procname = "fail_loc",
                 .data     = &cfs_fail_loc,
                 .maxlen   = sizeof(cfs_fail_loc),
@@ -513,20 +513,22 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_fail_loc
         },
         {
-                .ctl_name = PSDEV_LNET_FAIL_VAL,
+                INIT_CTL_NAME(PSDEV_LNET_FAIL_VAL)
                 .procname = "fail_val",
                 .data     = &cfs_fail_val,
                 .maxlen   = sizeof(int),
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec
         },
-        {0}
+        {
+                INIT_CTL_NAME(0)
+        }
 };
 
 #ifdef CONFIG_SYSCTL
 static cfs_sysctl_table_t top_table[] = {
         {
-                .ctl_name = CTL_LNET,
+                INIT_CTL_NAME(CTL_LNET)
                 .procname = "lnet",
                 .mode     = 0555,
                 .data     = NULL,
@@ -534,7 +536,7 @@ static cfs_sysctl_table_t top_table[] = {
                 .child    = lnet_table,
         },
         {
-                .ctl_name = 0
+                INIT_CTL_NAME(0)
         }
 };
 

@@ -360,4 +360,12 @@ static inline void sg_set_page(struct scatterlist *sg, struct page *page,
 # define cfs_put_cpu()   put_cpu()
 #endif /* get_cpu & put_cpu */
 
+#ifdef HAVE_SYSCTL_CTLNAME
+#define INIT_CTL_NAME(a) .ctl_name = a,
+#define INIT_STRATEGY(a) .strategy = a,
+#else
+#define INIT_CTL_NAME(a)
+#define INIT_STRATEGY(a)
+#endif
+
 #endif
