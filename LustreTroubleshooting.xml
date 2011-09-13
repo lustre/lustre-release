@@ -22,7 +22,7 @@
     <para>Several resources are available to help troubleshoot Lustre. This section describes error numbers, error messages and logs.</para>
     <section remap="h3">
       <title><indexterm><primary>troubleshooting</primary><secondary>error numbers</secondary></indexterm>Error Numbers</title>
-      <para>Error numbers for Lustre come from the Linux errno.h, and are located in <literal>/usr/include/asm/errno.h</literal>. Lustre does not use all of the available Linux error numbers. The exact meaning of an error number depends on where it is used. Here is a summary of the basic errors that Lustre users may encounter.</para>
+      <para>Error numbers for Lustre come from the Linux errno.h, and are located in <literal>/usr/include/asm-generic/errno.h</literal>. Lustre does not use all of the available Linux error numbers. The exact meaning of an error number depends on where it is used. Here is a summary of the basic errors that Lustre users may encounter.</para>
       <informaltable frame="all">
         <tgroup cols="3">
           <colspec colname="c1" colwidth="33*"/>
@@ -159,6 +159,17 @@
               </entry>
               <entry>
                 <para> The operation took too long and timed out.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> -122</para>
+              </entry>
+              <entry>
+                <literal> -EDQUOT </literal>
+              </entry>
+              <entry>
+                <para> The operation exceeded the user disk quota and was aborted.</para>
               </entry>
             </row>
           </tbody>
