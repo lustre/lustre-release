@@ -980,7 +980,47 @@ static int quotactl_ioctl(struct ll_sb_info *sbi, struct if_quotactl *qctl)
                         OBD_FREE_PTR(oqctl);
                         RETURN(rc);
                 }
+                /* If QIF_SPACE is not set, client should collect the
+                 * space usage from OSSs by itself */
+                if (cmd == Q_GETQUOTA &&
+                    !(oqctl->qc_dqblk.dqb_valid & QIF_SPACE) &&
+                    !oqctl->qc_dqblk.dqb_curspace) {
+                        struct obd_quotactl *oqctl_tmp;
 
+                        OBD_ALLOC_PTR(oqctl_tmp);
+                        if (oqctl_tmp == NULL)
+                                GOTO(out, rc = -ENOMEM);
+
+                        oqctl_tmp->qc_cmd = Q_GETOQUOTA;
+                        oqctl_tmp->qc_id = oqctl->qc_id;
+                        oqctl_tmp->qc_type = oqctl->qc_type;
+
+                        /* collect space usage from OSTs */
+                        oqctl_tmp->qc_dqblk.dqb_curspace = 0;
+                        rc = obd_quotactl(sbi->ll_dt_exp, oqctl_tmp);
+                        if (!rc || rc == -EREMOTEIO) {
+                                oqctl->qc_dqblk.dqb_curspace =
+                                        oqctl_tmp->qc_dqblk.dqb_curspace;
+                                oqctl->qc_dqblk.dqb_valid |= QIF_SPACE;
+                        }
+
+                        /* collect space & inode usage from MDTs */
+                        oqctl_tmp->qc_dqblk.dqb_curspace = 0;
+                        oqctl_tmp->qc_dqblk.dqb_curinodes = 0;
+                        rc = obd_quotactl(sbi->ll_md_exp, oqctl_tmp);
+                        if (!rc || rc == -EREMOTEIO) {
+                                oqctl->qc_dqblk.dqb_curspace +=
+                                        oqctl_tmp->qc_dqblk.dqb_curspace;
+                                oqctl->qc_dqblk.dqb_curinodes =
+                                        oqctl_tmp->qc_dqblk.dqb_curinodes;
+                                oqctl->qc_dqblk.dqb_valid |= QIF_INODES;
+                        } else {
+                                oqctl->qc_dqblk.dqb_valid &= ~QIF_SPACE;
+                        }
+
+                        OBD_FREE_PTR(oqctl_tmp);
+                }
+out:
                 QCTL_COPY(qctl, oqctl);
                 OBD_FREE_PTR(oqctl);
         }

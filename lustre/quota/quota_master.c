@@ -1562,17 +1562,6 @@ int mds_get_dqblk(struct obd_device *obd, struct obd_quotactl *oqctl)
         dqblk->dqb_curspace = 0;
         rc = mds_get_space(obd, oqctl);
 
-        /*
-         * Querying of curinodes and/or curspace may have failed, administrative
-         * quota data are likely to be better approximation to the real usage in
-         * this case.
-         */
-        if (!(dqblk->dqb_valid & QIF_INODES) && dquot->dq_dqb.dqb_curinodes > 0)
-                dqblk->dqb_curinodes = dquot->dq_dqb.dqb_curinodes;
-
-        if (!(dqblk->dqb_valid & QIF_SPACE) && dquot->dq_dqb.dqb_curspace > 0)
-                dqblk->dqb_curspace = dquot->dq_dqb.dqb_curspace;
-
         RETURN(rc);
 
 out:
