@@ -506,11 +506,12 @@ static int ll_write_end(struct file *file, struct address_space *mapping,
 {
         unsigned from = pos & (PAGE_CACHE_SIZE - 1);
         int rc;
-        rc = ll_commit_write(file, page, from, from + copied);
 
+        rc = ll_commit_write(file, page, from, from + copied);
         unlock_page(page);
         page_cache_release(page);
-        return rc?rc:copied;
+
+        return rc ?: copied;
 }
 #endif
 

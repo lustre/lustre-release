@@ -294,7 +294,7 @@ int ll_commit_write(struct file *file, struct page *vmpage, unsigned from,
         struct lu_env    *env;
         struct cl_io     *io;
         struct cl_page   *page;
-        int result;
+        int result = 0;
         ENTRY;
 
         lcc  = ll_cl_get();
@@ -303,11 +303,14 @@ int ll_commit_write(struct file *file, struct page *vmpage, unsigned from,
         io   = lcc->lcc_io;
 
         LASSERT(cl_page_is_owned(page, io));
-        result = cl_io_commit_write(env, io, page, from, to);
+        LASSERT(from <= to);
+        if (from != to) /* handle short write case. */
+                result = cl_io_commit_write(env, io, page, from, to);
         if (cl_page_is_owned(page, io))
                 cl_page_unassume(env, io, page);
+
         /*
-         * Release reference acquired by cl_io_prepare_write().
+         * Release reference acquired by ll_prepare_write().
          */
         lu_ref_del(&page->cp_reference, "prepare_write", cfs_current());
         cl_page_put(env, page);
