@@ -352,7 +352,9 @@ int lmv_quota_ctl(struct obd_device *unused, struct obd_export *exp,
         struct obd_device *obd = class_exp2obd(exp);
         struct lmv_obd *lmv = &obd->u.lmv;
         struct lmv_tgt_desc *tgt = &lmv->tgts[0];
-        int rc;
+        int rc = 0, i;
+        __u64 curspace;
+        __u64 curinodes;
         ENTRY;
 
         if (!lmv->desc.ld_tgt_count || !tgt->ltd_active) {
@@ -360,7 +362,36 @@ int lmv_quota_ctl(struct obd_device *unused, struct obd_export *exp,
                 RETURN(-EIO);
         }
 
-        rc = obd_quotactl(tgt->ltd_exp, oqctl);
+        if (oqctl->qc_cmd != Q_GETOQUOTA) {
+                rc = obd_quotactl(tgt->ltd_exp, oqctl);
+                RETURN(rc);
+        }
+
+        curspace = curinodes = 0;
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                int err;
+                tgt = &lmv->tgts[i];
+
+                if (tgt->ltd_exp == NULL)
+                        continue;
+                if (!tgt->ltd_active) {
+                        CDEBUG(D_HA, "mdt %d is inactive.\n", i);
+                        continue;
+                }
+
+                err = obd_quotactl(tgt->ltd_exp, oqctl);
+                if (err) {
+                        CERROR("getquota on mdt %d failed. %d\n", i, err);
+                        if (!rc)
+                                rc = err;
+                } else {
+                        curspace += oqctl->qc_dqblk.dqb_curspace;
+                        curinodes += oqctl->qc_dqblk.dqb_curinodes;
+                }
+        }
+        oqctl->qc_dqblk.dqb_curspace = curspace;
+        oqctl->qc_dqblk.dqb_curinodes = curinodes;
+
         RETURN(rc);
 }
 
