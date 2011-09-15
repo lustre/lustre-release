@@ -300,8 +300,8 @@ quota_init() {
 	log "do the quotacheck ..."
 	$LFS quotacheck -ug $DIR
 
- 	resetquota -u $TSTUSR
- 	resetquota -g $TSTUSR
+	resetquota -u $TSTUSR
+	resetquota -g $TSTUSR
 }
 quota_init
 
@@ -2201,6 +2201,165 @@ test_32()
         done
 }
 run_test 32 "check lqs hash(bug 21846) =========================================="
+
+cleanup_quota_test() {
+        trap 0
+        echo "Delete files..."
+        rm -rf $DIR/$tdir
+}
+
+# basic usage tracking for user & group
+test_33() {
+        mkdir -p $DIR/$tdir
+        chmod 0777 $DIR/$tdir
+        INODES=10
+        BLK_CNT=1024
+        TOTAL_BLKS=$(($INODES * $BLK_CNT))
+
+        trap cleanup_quota_test EXIT
+
+        # make sure the system is clean
+        USED=`getquota -u $TSTID global curspace`
+        [ $USED -ne 0 ] && \
+                error "Used space ($USED) for user $TSTID isn't 0."
+        USED=`getquota -g $TSTID global curspace`
+        [ $USED -ne 0 ] && \
+                error "Used space ($USED) for group $TSTID isn't 0."
+
+        echo "Write files..."
+        for i in `seq 0 $INODES`; do
+                $RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=$BLK_SZ \
+                   count=$BLK_CNT oflag=sync 2>/dev/null || error "write failed"
+        done
+
+        echo "Verify disk usage after write"
+        USED=`getquota -u $TSTID global curspace`
+        [ $USED -lt $TOTAL_BLKS ] && \
+               error "Used space for user $TSTID is $USED, expected $TOTAL_BLKS"
+        USED=`getquota -u $TSTID global curinodes`
+        [ $USED -lt $INODES ] && \
+               error "Used inode for user $TSTID is $USED, expected $INODES"
+
+        USED=`getquota -g $TSTID global curspace`
+        [ $USED -lt $TOTAL_BLKS ] && \
+              error "Used space for group $TSTID is $USED, expected $TOTAL_BLKS"
+        USED=`getquota -g $TSTID global curinodes`
+        [ $USED -lt $INODES ] && \
+              error "Used inode for group $TSTID is $USED, expected $INODES"
+
+        cleanup_quota_test
+
+        echo "Verify disk usage after delete"
+        USED=`getquota -u $TSTID global curspace`
+        [ $USED -eq 0 ] || error "Used space for user $TSTID isn't 0. $USED"
+        USED=`getquota -u $TSTID global curinodes`
+        [ $USED -eq 0 ] || error "Used inodes for user $TSTID isn't 0. $USED"
+        USED=`getquota -g $TSTID global curspace`
+        [ $USED -eq 0 ] || error "Used space for group $TSTID isn't 0. $USED"
+        USED=`getquota -g $TSTID global curinodes`
+        [ $USED -eq 0 ] || error "Used inodes for group $TSTID isn't 0. $USED"
+}
+run_test 33 "basic usage tracking for user & group =============================="
+
+# usage transfer test for user & group
+test_34() {
+        BLK_CNT=1024
+        mkdir -p $DIR/$tdir
+        chmod 0777 $DIR/$tdir
+        
+        trap cleanup_quota_test EXIT
+
+        # make sure the system is clean
+        USED=`getquota -u $TSTID global curspace`
+        [ $USED -ne 0 ] && error "Used space ($USED) for user $TSTID isn't 0."
+        USED=`getquota -g $TSTID global curspace`
+        [ $USED -ne 0 ] && error "Used space ($USED) for group $TSTID isn't 0."
+
+        echo "Write file..."
+        dd if=/dev/zero of=$DIR/$tdir/$tfile bs=$BLK_SZ count=$BLK_CNT \
+                oflag=sync 2>/dev/null || error "write failed"
+
+        echo "chown the file to user $TSTID"
+        chown $TSTID $DIR/$tdir/$tfile || error "chown failed"
+
+        echo "Verify disk usage for user $TSTID"
+        USED=`getquota -u $TSTID global curspace`
+        [ $USED -lt $BLK_CNT ] && \
+                error "Used space for user $TSTID is $USED, expected $BLK_CNT"
+        USED=`getquota -u $TSTID global curinodes`
+        [ $USED -ne 1 ] && \
+                error "Used inodes for user $TSTID is $USED, expected 1"
+
+        echo "chgrp the file to group $TSTID"
+        chgrp $TSTID $DIR/$tdir/$tfile || error "chgrp failed"
+
+        echo "Verify disk usage for group $TSTID"
+        USED=`getquota -g $TSTID global curspace`
+        [ $USED -ge $BLK_CNT ] || \
+                error "Used space for group $TSTID is $USED, expected $BLK_CNT"
+        USED=`getquota -g $TSTID global curinodes`
+        [ $USED -eq 1 ] || \
+                error "Used inodes for group $TSTID is $USED, expected 1"
+
+        cleanup_quota_test
+}
+run_test 34 "usage transfer for user & group ===================================="
+
+# usage is still accessible across restart
+test_35() {
+        mkdir -p $DIR/$tdir
+        chmod 0777 $DIR/$tdir
+        BLK_CNT=1024
+
+        trap cleanup_quota_test EXIT
+
+        echo "Write file..."
+        $RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=$BLK_SZ \
+                count=$BLK_CNT oflag=sync 2>/dev/null || error "write failed"
+
+        echo "Save disk usage before restart"
+        ORIG_USR_SPACE=`getquota -u $TSTID global curspace`
+        [ $ORIG_USR_SPACE -eq 0 ] && \
+                error "Used space for user $TSTID is 0, expected $BLK_CNT"
+        ORIG_USR_INODES=`getquota -u $TSTID global curinodes`
+        [ $ORIG_USR_INODES -eq 0 ] && \
+                error "Used inodes for user $TSTID is 0, expected 1"
+        ORIG_GRP_SPACE=`getquota -g $TSTID global curspace`
+        [ $ORIG_GRP_SPACE -eq 0 ] && \
+                error "Used space for group $TSTID is 0, expected $BLK_CNT"
+        ORIG_GRP_INODES=`getquota -g $TSTID global curinodes`
+        [ $ORIG_GRP_INODES -eq 0 ] && \
+                error "Used inodes for group $TSTID is 0, expected 1"
+
+        log "Restart..."
+        local ORIG_REFORMAT=$REFORMAT
+        REFORMAT=""
+        cleanup_and_setup_lustre
+        REFORMAT=$ORIG_REFORMAT
+        quota_init
+
+        echo "Verify disk usage after restart"
+        USED=`getquota -u $TSTID global curspace`
+        [ $USED -eq $ORIG_USR_SPACE ] || \
+                error "Used space for user $TSTID changed from " \
+                        "$ORIG_USR_SPACE to $USED"
+        USED=`getquota -u $TSTID global curinodes`
+        [ $USED -eq $ORIG_USR_INODES ] || \
+                error "Used inodes for user $TSTID changed from " \
+                        "$ORIG_USR_INODES to $USED"
+        USED=`getquota -g $TSTID global curspace`
+        [ $USED -eq $ORIG_GRP_SPACE ] || \
+                error "Used space for group $TSTID changed from " \
+                        "$ORIG_GRP_SPACE to $USED"
+        USED=`getquota -g $TSTID global curinodes`
+        [ $USED -eq $ORIG_GRP_INODES ] || \
+                error "Used inodes for group $TSTID changed from " \
+                        "$ORIG_GRP_INODES to $USED"
+
+        cleanup_quota_test
+}
+run_test 35 "usage is still accessible across reboot ============================"
+
 
 # turn off quota
 quota_fini()
