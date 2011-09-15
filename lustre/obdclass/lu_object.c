@@ -110,6 +110,8 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
         }
 
         if (!lu_object_is_dying(top)) {
+                LASSERT(cfs_list_empty(&top->loh_lru));
+                cfs_list_add_tail(&top->loh_lru, &bkt->lsb_lru);
                 cfs_hash_bd_unlock(site->ls_obj_hash, &bd, 1);
                 return;
         }
@@ -126,7 +128,6 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
          * and we can safely destroy object below.
          */
         cfs_hash_bd_del_locked(site->ls_obj_hash, &bd, &top->loh_hash);
-        cfs_list_del_init(&top->loh_lru);
         cfs_hash_bd_unlock(site->ls_obj_hash, &bd, 1);
         /*
          * Object was already removed from hash and lru above, can
@@ -282,20 +283,7 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
                 bkt = cfs_hash_bd_extra_get(s->ls_obj_hash, &bd);
 
                 cfs_list_for_each_entry_safe(h, temp, &bkt->lsb_lru, loh_lru) {
-                        /*
-                         * Objects are sorted in lru order, and "busy"
-                         * objects (ones with h->loh_ref > 0) naturally tend to
-                         * live near hot end that we scan last. Unfortunately,
-                         * sites usually have small (less then ten) number of
-                         * busy yet rarely accessed objects (some global
-                         * objects, accessed directly through pointers,
-                         * bypassing hash table).
-                         * Currently algorithm scans them over and over again.
-                         * Probably we should move busy objects out of LRU,
-                         * or we can live with that.
-                         */
-                        if (cfs_atomic_read(&h->loh_ref) > 0)
-                                continue;
+                        LASSERT(cfs_atomic_read(&h->loh_ref) == 0);
 
                         cfs_hash_bd_get(s->ls_obj_hash, &h->loh_fid, &bd2);
                         LASSERT(bd.bd_bucket == bd2.bd_bucket);
@@ -579,6 +567,8 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
         hs = s->ls_obj_hash;
         cfs_hash_bd_get_and_lock(hs, (void *)f, &bd, 1);
         o = htable_lookup(s, &bd, f, waiter, &version);
+        if (o != NULL && !cfs_list_empty(&o->lo_header->loh_lru))
+                cfs_list_del_init(&o->lo_header->loh_lru);
         cfs_hash_bd_unlock(hs, &bd, 1);
         if (o != NULL)
                 return o;
@@ -601,7 +591,6 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
 
                 bkt = cfs_hash_bd_extra_get(hs, &bd);
                 cfs_hash_bd_add_locked(hs, &bd, &o->lo_header->loh_hash);
-                cfs_list_add_tail(&o->lo_header->loh_lru, &bkt->lsb_lru);
                 bkt->lsb_busy++;
                 cfs_hash_bd_unlock(hs, &bd, 1);
                 return o;
