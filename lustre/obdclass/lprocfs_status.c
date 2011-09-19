@@ -2286,7 +2286,7 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                            obd->obd_recovery_end - cfs_time_current_sec()) <= 0)
                 goto out;
         if (lprocfs_obd_snprintf(&page, size, &len,"connected_clients: %d/%d\n",
-                                 obd->obd_connected_clients,
+                                 cfs_atomic_read(&obd->obd_connected_clients),
                                  obd->obd_max_recoverable_clients) <= 0)
                 goto out;
         /* Number of clients that have completed recovery */
@@ -2299,7 +2299,7 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                 <=0)
                 goto out;
         if (lprocfs_obd_snprintf(&page, size, &len,"completed_clients: %d\n",
-                                 obd->obd_connected_clients -
+                                 cfs_atomic_read(&obd->obd_connected_clients) -
                                  cfs_atomic_read(&obd->obd_lock_replay_clients))
                 <=0)
                 goto out;
