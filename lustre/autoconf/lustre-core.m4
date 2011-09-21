@@ -269,14 +269,23 @@ AC_DEFUN([LC_QUOTA_MODULE],
 fi
 ])
 
+# truncate_complete_page() was exported from RHEL5/SLES10/SLES11
+# remove_from_page_cache() was exported between 2.6.35 and 2.6.38
+# delete_from_page_cache() is exported from 2.6.39
 AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE],
-[LB_CHECK_SYMBOL_EXPORT([truncate_complete_page],
-[mm/truncate.c],[
-AC_DEFINE(HAVE_TRUNCATE_COMPLETE_PAGE, 1,
-            [kernel export truncate_complete_page])
-],[
-])
-])
+         [LB_CHECK_SYMBOL_EXPORT([truncate_complete_page],
+                                 [mm/truncate.c],
+                                 [AC_DEFINE(HAVE_TRUNCATE_COMPLETE_PAGE, 1,
+                                            [kernel export truncate_complete_page])])
+          LB_CHECK_SYMBOL_EXPORT([remove_from_page_cache],
+                                 [mm/filemap.c],
+                                 [AC_DEFINE(HAVE_REMOVE_FROM_PAGE_CACHE, 1,
+                                            [kernel export remove_from_page_cache])])
+          LB_CHECK_SYMBOL_EXPORT([delete_from_page_cache],
+                                 [mm/filemap.c],
+                                 [AC_DEFINE(HAVE_DELETE_FROM_PAGE_CACHE, 1,
+                                            [kernel export delete_from_page_cache])])
+         ])
 
 AC_DEFUN([LC_EXPORT_TRUNCATE_RANGE],
 [LB_CHECK_SYMBOL_EXPORT([truncate_inode_pages_range],

@@ -285,7 +285,7 @@ void ll_release_page(struct page *page, int remove)
         if (remove) {
                 lock_page(page);
                 if (likely(page->mapping != NULL))
-                        ll_truncate_complete_page(page);
+                        truncate_complete_page(page->mapping, page);
                 unlock_page(page);
         }
         page_cache_release(page);
