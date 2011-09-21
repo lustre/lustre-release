@@ -2276,7 +2276,8 @@ static int brw_interpret(const struct lu_env *env,
         osc_check_rpcs(env, cli);
         client_obd_list_unlock(&cli->cl_loi_list_lock);
         if (!async)
-                cl_req_completion(env, aa->aa_clerq, rc);
+                cl_req_completion(env, aa->aa_clerq, rc < 0 ? rc :
+                                  req->rq_bulk->bd_nob_transferred);
         osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
 
         RETURN(rc);

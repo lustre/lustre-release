@@ -949,6 +949,9 @@ void ccc_req_completion(const struct lu_env *env,
 {
         struct ccc_req *vrq;
 
+        if (ioret > 0)
+                cl_stats_tally(slice->crs_dev, slice->crs_req->crq_type, ioret);
+
         vrq = cl2ccc_req(slice);
         OBD_SLAB_FREE_PTR(vrq, ccc_req_kmem);
 }

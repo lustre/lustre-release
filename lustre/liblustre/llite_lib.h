@@ -428,4 +428,9 @@ static inline struct obd_capa *cl_capa_lookup(struct inode *inode,
         return NULL;
 }
 
+static inline void cl_stats_tally(struct cl_device *dev, enum cl_req_type crt,
+                                  int rc)
+{
+}
+
 #endif

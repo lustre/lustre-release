@@ -99,6 +99,8 @@ enum {
          LPROC_LL_WRITE_BYTES,
          LPROC_LL_BRW_READ,
          LPROC_LL_BRW_WRITE,
+         LPROC_LL_OSC_READ,
+         LPROC_LL_OSC_WRITE,
          LPROC_LL_IOCTL,
          LPROC_LL_OPEN,
          LPROC_LL_RELEASE,
