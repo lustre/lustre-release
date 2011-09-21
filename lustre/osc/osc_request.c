@@ -2279,6 +2279,7 @@ static int brw_interpret(const struct lu_env *env,
                 cl_req_completion(env, aa->aa_clerq, rc < 0 ? rc :
                                   req->rq_bulk->bd_nob_transferred);
         osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
+        ptlrpc_lprocfs_brw(req, req->rq_bulk->bd_nob_transferred);
 
         RETURN(rc);
 }
@@ -2642,7 +2643,6 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                 lprocfs_oh_tally_log2(&cli->cl_write_offset_hist,
                                       (starting_offset >> CFS_PAGE_SHIFT) + 1);
         }
-        ptlrpc_lprocfs_brw(req, aa->aa_requested_nob);
 
         client_obd_list_lock(&cli->cl_loi_list_lock);
 
