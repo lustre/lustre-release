@@ -293,7 +293,7 @@ static void ll_release_page(struct page *page, __u64 hash,
         kunmap(page);
         lock_page(page);
         if (likely(page->mapping != NULL)) {
-                ll_truncate_complete_page(page);
+                truncate_complete_page(page->mapping, page);
                 unlock_page(page);
         } else {
                 unlock_page(page);

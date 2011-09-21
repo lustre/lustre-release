@@ -203,8 +203,6 @@ do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
                                 (inode)->i_mapping->a_ops->writepage(page, NULL)
 #define ll_invalidate_inode_pages(inode) \
                                 invalidate_inode_pages((inode)->i_mapping)
-#define ll_truncate_complete_page(page) \
-                                truncate_complete_page(page->mapping, page)
 
 #define ll_vfs_create(a,b,c,d)          vfs_create(a,b,c,d)
 #define ll_dev_t                        dev_t

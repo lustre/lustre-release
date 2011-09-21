@@ -45,6 +45,16 @@
 #include <linux/mm.h>
 #include <linux/hash.h>
 
+#ifndef HAVE_CANCEL_DIRTY_PAGE /* 2.6.20 */
+#define cancel_dirty_page(page, size) clear_page_dirty(page)
+#endif
+
+#ifndef HAVE_DELETE_FROM_PAGE_CACHE /* 2.6.39 */
+#ifndef HAVE_REMOVE_FROM_PAGE_CACHE /* 2.6.35 - 2.6.38 */
+#ifdef HAVE_NR_PAGECACHE /* 2.6.18 */
+#define __dec_zone_page_state(page, flag) atomic_add(-1, &nr_pagecache);
+#endif /* HAVE_NR_PAGECACHE */
+
 /* XXX copy & paste from 2.6.15 kernel */
 static inline void ll_remove_from_page_cache(struct page *page)
 {
@@ -60,11 +70,7 @@ static inline void ll_remove_from_page_cache(struct page *page)
         radix_tree_delete(&mapping->page_tree, page->index);
         page->mapping = NULL;
         mapping->nrpages--;
-#ifdef HAVE_NR_PAGECACHE
-        cfs_atomic_add(-1, &nr_pagecache); // XXX pagecache_acct(-1);
-#else
         __dec_zone_page_state(page, NR_FILE_PAGES);
-#endif
 
 #ifdef HAVE_RW_TREE_LOCK
         write_unlock_irq(&mapping->tree_lock);
@@ -72,6 +78,18 @@ static inline void ll_remove_from_page_cache(struct page *page)
 	cfs_spin_unlock_irq(&mapping->tree_lock);
 #endif
 }
+#else /* HAVE_REMOVE_FROM_PAGE_CACHE */
+#define ll_remove_from_page_cache(page) remove_from_page_cache(page)
+#endif /* !HAVE_REMOVE_FROM_PAGE_CACHE */
+
+static inline void ll_delete_from_page_cache(struct page *page)
+{
+        ll_remove_from_page_cache(page);
+        page_cache_release(page);
+}
+#else /* HAVE_DELETE_FROM_PAGE_CACHE */
+#define ll_delete_from_page_cache(page) delete_from_page_cache(page)
+#endif /* !HAVE_DELETE_FROM_PAGE_CACHE */
 
 static inline void
 truncate_complete_page(struct address_space *mapping, struct page *page)
@@ -82,16 +100,11 @@ truncate_complete_page(struct address_space *mapping, struct page *page)
         if (PagePrivate(page))
                 page->mapping->a_ops->invalidatepage(page, 0);
 
-#ifdef HAVE_CANCEL_DIRTY_PAGE
         cancel_dirty_page(page, PAGE_SIZE);
-#else
-        clear_page_dirty(page);
-#endif
         ClearPageMappedToDisk(page);
-        ll_remove_from_page_cache(page);
-        page_cache_release(page);       /* pagecache ref */
+        ll_delete_from_page_cache(page);
 }
-#endif /* HAVE_TRUNCATE_COMPLETE_PAGE */
+#endif /* !HAVE_TRUNCATE_COMPLETE_PAGE */
 
 #if !defined(HAVE_D_REHASH_COND) && !defined(HAVE___D_REHASH)
 /* megahack */
