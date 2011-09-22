@@ -93,6 +93,24 @@ get_version() {
 cos_param_file=$TMP/rvbr-cos-params
 save_lustre_params $(comma_list $(mdts_nodes)) "mdt.*.commit_on_sharing" > $cos_param_file
 
+test_0a() {
+        get_version $CLIENT1 $DIR/$tdir/1a || true
+}
+run_test 0a "getversion for non existent file shouldn't cause kernel panic"
+
+test_0b() {
+        local var=${SINGLEMDS}_svc
+        local fid
+        local file=$DIR/$tdir/f
+
+        do_node $CLIENT1 mkdir -p $DIR/$tdir/
+        do_node $CLIENT1 touch $file
+        fid=$(do_node $CLIENT1 $LFS path2fid $file)
+        do_node $CLIENT1 rm -rf $file
+        do_facet $SINGLEMDS $LCTL --device ${!var} getobjversion \\\"$fid\\\" || true
+}
+run_test 0b "getversion for non existent fid shouldn't cause kernel panic"
+
 # test set #1: OPEN
 test_1a() { # former test_0a
     local file=$DIR/$tfile

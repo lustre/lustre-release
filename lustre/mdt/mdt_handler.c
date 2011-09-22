@@ -5462,6 +5462,7 @@ static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
         struct mdt_lock_handle  *lh;
         int rc;
         ENTRY;
+
         CDEBUG(D_IOCTL, "getting version for "DFID"\n", PFID(fid));
         if (!fid_is_sane(fid))
                 RETURN(-EINVAL);
@@ -5481,6 +5482,9 @@ static int mdt_ioc_version_get(struct mdt_thread_info *mti, void *karg)
                  * fid, this is error to find remote object here
                  */
                 CERROR("nonlocal object "DFID"\n", PFID(fid));
+        } else if (rc == 0) {
+                 *(__u64 *)data->ioc_inlbuf2 = ENOENT_VERSION;
+                rc = -ENOENT;
         } else {
                 version = mo_version_get(mti->mti_env, mdt_object_child(obj));
                *(__u64 *)data->ioc_inlbuf2 = version;

@@ -832,6 +832,7 @@ int lu_object_invariant(const struct lu_object *o);
 
 /**
  * \retval  1 iff object \a o exists on stable storage,
+ * \retval  0 iff object \a o not exists on stable storage.
  * \retval -1 iff object \a o is on remote server.
  */
 static inline int lu_object_exists(const struct lu_object *o)
