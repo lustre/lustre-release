@@ -215,8 +215,9 @@ lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd)
 int
 lnet_md_validate(lnet_md_t *umd)
 {
-        if (umd->start == NULL) {
-                CERROR("MD start pointer can not be NULL\n");
+        if (umd->start == NULL && umd->length != 0) {
+                CERROR("MD start pointer can not be NULL with length %u\n",
+                       umd->length);
                 return -EINVAL;
         }
 
