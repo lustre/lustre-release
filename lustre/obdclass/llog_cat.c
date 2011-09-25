@@ -82,7 +82,7 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
                 RETURN(ERR_PTR(-ENOSPC));
         }
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_LLOG_CREATE_FAILED))
                 RETURN(ERR_PTR(-ENOSPC));
 
         rc = llog_create(cathandle->lgh_ctxt, &loghandle, NULL, NULL);

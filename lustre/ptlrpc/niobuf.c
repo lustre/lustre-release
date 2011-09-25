@@ -105,7 +105,7 @@ int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
         __u64                     xid;
         ENTRY;
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_BULK_PUT_NET))
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_PUT_NET))
                 RETURN(0);
 
         /* NB no locking required until desc is on the network */
@@ -213,7 +213,7 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
         lnet_md_t         md;
         ENTRY;
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_BULK_GET_NET))
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_GET_NET))
                 RETURN(0);
 
         /* NB no locking required until desc is on the network */
@@ -678,7 +678,7 @@ int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
         CDEBUG(D_NET, "LNetMEAttach: portal %d\n",
                service->srv_req_portal);
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_PTLRPC_RQBD))
+        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_RQBD))
                 return (-ENOMEM);
 
         rc = LNetMEAttach(service->srv_req_portal,

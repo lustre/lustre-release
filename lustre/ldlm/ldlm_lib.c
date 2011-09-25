@@ -2071,7 +2071,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req)
         int repsize[2] = { sizeof(struct ptlrpc_body), 0 };
         ENTRY;
 
-        if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_DROP_QUOTA_REQ))
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DROP_QUOTA_REQ))
                 RETURN(rc);
 
         repsize[1] = quota_get_qunit_data_size(req->rq_export->

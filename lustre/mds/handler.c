@@ -1622,7 +1622,7 @@ int mds_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_MDS_READPAGE_NET, 0);
                 rc = mds_readpage(req, REQ_REC_OFF);
 
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_SENDPAGE)) {
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SENDPAGE)) {
                         RETURN(0);
                 }
 

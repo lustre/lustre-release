@@ -370,9 +370,6 @@ int obd_fail_check(__u32 id);
 #define OBD_FAIL_CHECK_QUIET(id)                                             \
         (unlikely(obd_fail_loc) ? obd_fail_check(id) : 0)
 
-/* deprecated - just use OBD_FAIL_CHECK */
-#define OBD_FAIL_CHECK_ONCE OBD_FAIL_CHECK
-
 #define OBD_FAIL_RETURN(id, ret)                                             \
 do {                                                                         \
         if (unlikely(obd_fail_loc && obd_fail_check(id))) {                  \

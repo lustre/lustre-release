@@ -811,7 +811,7 @@ static int dqacq_interpret(struct ptlrpc_request *req, void *data, int rc)
         QDATA_DEBUG((&qunit->lq_data), "lq_data: \n");
 
         if (qdata->qd_id != qunit->lq_data.qd_id ||
-            OBD_FAIL_CHECK_ONCE(OBD_FAIL_QUOTA_RET_QDATA)) {
+            OBD_FAIL_CHECK(OBD_FAIL_QUOTA_RET_QDATA)) {
                 CERROR("the returned qd_id isn't expected!"
                        "(qdata: %u, lq_data: %u)\n", qdata->qd_id,
                        qunit->lq_data.qd_id);

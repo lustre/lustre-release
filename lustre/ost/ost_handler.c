@@ -422,13 +422,13 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
                 /* corrupt the data before we compute the checksum, to
                  * simulate a client->OST data error */
                 if (i == 0 && opc == OST_WRITE &&
-                    OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_CHECKSUM_RECEIVE))
+                    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE))
                         memcpy(ptr, "bad3", min(4, len));
                 cksum = compute_checksum(cksum, ptr, len, cksum_type);
                 /* corrupt the data after we compute the checksum, to
                  * simulate an OST->client data error */
                 if (i == 0 && opc == OST_READ &&
-                    OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_CHECKSUM_SEND)) {
+                    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
                         memcpy(ptr, "bad4", min(4, len));
                         /* nobody should use corrupted page again */
                         ClearPageUptodate(page);
@@ -1830,14 +1830,14 @@ static int ost_handle(struct ptlrpc_request *req)
                 CDEBUG(D_INODE, "create\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_CREATE_NET, 0);
                 OBD_FAIL_TIMEOUT_MS(OBD_FAIL_OST_PAUSE_CREATE, obd_fail_val);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
+                if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
                 rc = ost_create(req->rq_export, req, oti);
                 break;
         case OST_DESTROY:
                 CDEBUG(D_INODE, "destroy\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_DESTROY_NET, 0);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
+                if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
                 rc = ost_destroy(req->rq_export, req, oti);
                 break;
@@ -1864,7 +1864,7 @@ static int ost_handle(struct ptlrpc_request *req)
                 OBD_FAIL_RETURN(OBD_FAIL_OST_BRW_NET, 0);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
                         GOTO(out, rc = -ENOSPC);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
+                if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
                 rc = ost_brw_write(req, oti);
                 LASSERT(current->journal_info == NULL);
@@ -1888,7 +1888,7 @@ static int ost_handle(struct ptlrpc_request *req)
         case OST_PUNCH:
                 CDEBUG(D_INODE, "punch\n");
                 OBD_FAIL_RETURN(OBD_FAIL_OST_PUNCH_NET, 0);
-                if (OBD_FAIL_CHECK_ONCE(OBD_FAIL_OST_EROFS))
+                if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
                         GOTO(out, rc = -EROFS);
                 rc = ost_punch(req->rq_export, req, oti);
                 break;

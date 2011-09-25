@@ -187,7 +187,7 @@ int mds_client_add(struct obd_device *obd, struct obd_export *exp,
                 cl_idx = find_first_zero_bit(bitmap, LR_MAX_CLIENTS);
         repeat:
                 if (cl_idx >= LR_MAX_CLIENTS ||
-                    OBD_FAIL_CHECK_ONCE(OBD_FAIL_MDS_CLIENT_ADD)) {
+                    OBD_FAIL_CHECK(OBD_FAIL_MDS_CLIENT_ADD)) {
                         CERROR("no room for %u clients - fix LR_MAX_CLIENTS\n",
                                cl_idx);
                         return -EOVERFLOW;
