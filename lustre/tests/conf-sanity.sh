@@ -830,13 +830,14 @@ test_23a() {	# was test_23
 	local sleep=1
 	while [ "$WAIT" -lt "$MAX_WAIT" ]; do
 		sleep $sleep
+		ps -ef | grep mount
 		PID1=$(ps -ef | awk '{print $2}' | grep -w $MOUNT_PID)
 		PID2=$(ps -ef | awk '{print $2}' | grep -w $MOUNT_LUSTRE_PID)
 		echo PID1=$PID1
 		echo PID2=$PID2
 		[ -z "$PID1" -a -z "$PID2" ] && break
-		echo "waiting for mount to finish ... "
 		WAIT=$(( WAIT + sleep))
+		echo "waited $WAIT seconds for mount to finish ... "
 	done
 	if [ "$WAIT" -eq "$MAX_WAIT" ]; then
 		error "MOUNT_PID $MOUNT_PID and \
