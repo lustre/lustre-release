@@ -201,8 +201,6 @@ static void osc_page_transfer_add(const struct lu_env *env,
 {
         struct osc_object *obj;
 
-        LINVRNT(cl_page_is_vmlocked(env, opg->ops_cl.cpl_page));
-
         obj = cl2osc(opg->ops_cl.cpl_obj);
         cfs_spin_lock(&obj->oo_seatbelt);
         cfs_list_add(&opg->ops_inflight, &obj->oo_inflight[crt]);
@@ -549,9 +547,9 @@ static int osc_completion(const struct lu_env *env,
         struct cl_page        *page = cl_page_top(opg->ops_cl.cpl_page);
         struct osc_object     *obj  = cl2osc(opg->ops_cl.cpl_obj);
         enum cl_req_type crt;
+        int srvlock;
 
         LINVRNT(osc_page_protected(env, opg, CLM_READ, 1));
-        LINVRNT(cl_page_is_vmlocked(env, page));
 
         ENTRY;
 
@@ -584,11 +582,12 @@ static int osc_completion(const struct lu_env *env,
         cfs_spin_unlock(&obj->oo_seatbelt);
 
         opg->ops_submit_time = 0;
+        srvlock = oap->oap_brw_flags & OBD_BRW_SRVLOCK;
 
         cl_page_completion(env, page, crt, rc);
 
         /* statistic */
-        if (rc == 0 && oap->oap_brw_flags & OBD_BRW_SRVLOCK) {
+        if (rc == 0 && srvlock) {
                 struct lu_device *ld    = opg->ops_cl.cpl_obj->co_lu.lo_dev;
                 struct osc_stats *stats = &lu2osc_dev(ld)->od_stats;
                 int bytes = oap->oap_count;

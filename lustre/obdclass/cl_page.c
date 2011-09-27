@@ -423,7 +423,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
         struct cl_site          *site = cl_object_site(o);
         int err;
 
-        LINVRNT(type == CPT_CACHEABLE || type == CPT_TRANSIENT);
+        LASSERT(type == CPT_CACHEABLE || type == CPT_TRANSIENT);
         cfs_might_sleep();
 
         ENTRY;
@@ -560,7 +560,7 @@ static inline int cl_page_invariant(const struct cl_page *pg)
                  * Either page is early in initialization (has neither child
                  * nor parent yet), or it is in the object radix tree.
                  */
-                ergo(pg->cp_state < CPS_FREEING,
+                ergo(pg->cp_state < CPS_FREEING && pg->cp_type == CPT_CACHEABLE,
                      (void *)radix_tree_lookup(&header->coh_tree,
                                                pg->cp_index) == pg ||
                      (child == NULL && parent == NULL));
@@ -637,7 +637,6 @@ static void cl_page_state_set0(const struct lu_env *env,
 static void cl_page_state_set(const struct lu_env *env,
                               struct cl_page *page, enum cl_page_state state)
 {
-        PINVRNT(env, page, cl_page_invariant(page));
         cl_page_state_set0(env, page, state);
 }
 
@@ -1044,7 +1043,6 @@ EXPORT_SYMBOL(cl_page_own_try);
 void cl_page_assume(const struct lu_env *env,
                     struct cl_io *io, struct cl_page *pg)
 {
-        PASSERT(env, pg, pg->cp_state < CPS_OWNED);
         PASSERT(env, pg, pg->cp_owner == NULL);
         PINVRNT(env, pg, cl_object_same(pg->cp_obj, io->ci_obj));
         PINVRNT(env, pg, cl_page_invariant(pg));
@@ -1363,7 +1361,6 @@ void cl_page_completion(const struct lu_env *env,
         /* cl_page::cp_req already cleared by the caller (osc_completion()) */
         PASSERT(env, pg, pg->cp_req == NULL);
         PASSERT(env, pg, pg->cp_state == cl_req_type_state(crt));
-        PINVRNT(env, pg, cl_page_invariant(pg));
 
         ENTRY;
         CL_PAGE_HEADER(D_TRACE, env, pg, "%d %d\n", crt, ioret);
@@ -1377,6 +1374,7 @@ void cl_page_completion(const struct lu_env *env,
                                (const struct lu_env *,
                                 const struct cl_page_slice *, int), ioret);
         if (anchor) {
+                LASSERT(cl_page_is_vmlocked(env, pg));
                 LASSERT(pg->cp_sync_io == anchor);
                 pg->cp_sync_io = NULL;
                 cl_sync_io_note(anchor, ioret);

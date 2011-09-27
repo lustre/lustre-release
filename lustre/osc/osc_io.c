@@ -100,7 +100,6 @@ static void osc_io_unplug(const struct lu_env *env, struct osc_object *osc,
 {
         loi_list_maint(cli, osc->oo_oinfo);
         osc_check_rpcs(env, cli);
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
 }
 
 /**
@@ -153,26 +152,24 @@ static int osc_io_submit(const struct lu_env *env,
                         oap->oap_async_flags |= ASYNC_HP;
                         cfs_spin_unlock(&oap->oap_lock);
                 }
-                /*
-                 * This can be checked without cli->cl_loi_list_lock, because
-                 * ->oap_*_item are always manipulated when the page is owned.
-                 */
+
+                if (osc0 == NULL) { /* first iteration */
+                        cli = &exp->exp_obd->u.cli;
+                        osc0 = osc;
+                        client_obd_list_lock(&cli->cl_loi_list_lock);
+                } else /* check that all pages are against the same object
+                        * (for now) */
+                        LASSERT(osc == osc0);
+
                 if (!cfs_list_empty(&oap->oap_urgent_item) ||
                     !cfs_list_empty(&oap->oap_rpc_item)) {
                         result = -EBUSY;
                         break;
                 }
 
-                if (osc0 == NULL) { /* first iteration */
-                        cli = &exp->exp_obd->u.cli;
-                        osc0 = osc;
-                } else /* check that all pages are against the same object
-                        * (for now) */
-                        LASSERT(osc == osc0);
-                if (queued++ == 0)
-                        client_obd_list_lock(&cli->cl_loi_list_lock);
                 result = cl_page_prep(env, io, page, crt);
                 if (result == 0) {
+                        ++queued;
                         cl_page_list_move(qout, qin, page);
                         if (cfs_list_empty(&oap->oap_pending_item)) {
                                 osc_io_submit_page(env, cl2osc_io(env, ios),
@@ -224,6 +221,8 @@ static int osc_io_submit(const struct lu_env *env,
 
         if (queued > 0)
                 osc_io_unplug(env, osc, cli);
+        if (osc0)
+                client_obd_list_unlock(&cli->cl_loi_list_lock);
         CDEBUG(D_INFO, "%d/%d %d\n", qin->pl_nr, qout->pl_nr, result);
         return qout->pl_nr > 0 ? 0 : result;
 }

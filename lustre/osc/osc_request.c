@@ -2203,9 +2203,9 @@ static void osc_ap_completion(const struct lu_env *env,
         rc = oap->oap_caller_ops->ap_completion(env, oap->oap_caller_data,
                                                 oap->oap_cmd, oa, rc);
 
-        /* ll_ap_completion (from llite) drops PG_locked. so, a new
-         * I/O on the page could start, but OSC calls it under lock
-         * and thus we can add oap back to pending safely */
+        /* cl_page_completion() drops PG_locked. so, a new I/O on the page could
+         * start, but OSC calls it under lock and thus we can add oap back to
+         * pending safely */
         if (rc)
                 /* upper layer wants to leave the page on pending queue */
                 osc_oap_to_pending(oap);
@@ -2539,27 +2539,6 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                 }
                 if (oap == NULL)
                         break;
-                /*
-                 * Page submitted for IO has to be locked. Either by
-                 * ->ap_make_ready() or by higher layers.
-                 */
-#if defined(__KERNEL__) && defined(__linux__)
-                {
-                        struct cl_page *page;
-
-                        page = osc_oap2cl_page(oap);
-
-                        if (page->cp_type == CPT_CACHEABLE &&
-                            !(PageLocked(oap->oap_page) &&
-                              (CheckWriteback(oap->oap_page, cmd)))) {
-                                CDEBUG(D_PAGE, "page %p lost wb %lx/%x\n",
-                                       oap->oap_page,
-                                       (long)oap->oap_page->flags,
-                                       oap->oap_async_flags);
-                                LBUG();
-                        }
-                }
-#endif
 
                 /* take the page out of our book-keeping */
                 cfs_list_del_init(&oap->oap_pending_item);

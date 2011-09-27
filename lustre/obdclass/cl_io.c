@@ -1543,7 +1543,6 @@ void cl_req_page_add(const struct lu_env *env,
         ENTRY;
         page = cl_page_top(page);
 
-        LINVRNT(cl_page_is_vmlocked(env, page));
         LASSERT(cfs_list_empty(&page->cp_flight));
         LASSERT(page->cp_req == NULL);
 
@@ -1578,7 +1577,6 @@ void cl_req_page_done(const struct lu_env *env, struct cl_page *page)
         ENTRY;
         page = cl_page_top(page);
 
-        LINVRNT(cl_page_is_vmlocked(env, page));
         LASSERT(!cfs_list_empty(&page->cp_flight));
         LASSERT(req->crq_nrpages > 0);
 

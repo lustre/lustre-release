@@ -225,13 +225,18 @@ static int vvp_page_prep_write(const struct lu_env *env,
                                const struct cl_page_slice *slice,
                                struct cl_io *unused)
 {
-        cfs_page_t *vmpage = cl2vm_page(slice);
+        struct cl_page *cp     = slice->cpl_page;
+        cfs_page_t     *vmpage = cl2vm_page(slice);
         int result;
 
         if (clear_page_dirty_for_io(vmpage)) {
                 set_page_writeback(vmpage);
                 vvp_write_pending(cl2ccc(slice->cpl_obj), cl2ccc_page(slice));
                 result = 0;
+
+                /* only turn on writeback for async write. */
+                if (cp->cp_sync_io == NULL)
+                        unlock_page(vmpage);
         } else
                 result = -EALREADY;
         return result;
@@ -256,59 +261,47 @@ static void vvp_vmpage_error(struct inode *inode, cfs_page_t *vmpage, int ioret)
         }
 }
 
-static void vvp_page_completion_common(const struct lu_env *env,
-                                       struct ccc_page *cp, int ioret)
-{
-        struct cl_page    *clp    = cp->cpg_cl.cpl_page;
-        cfs_page_t        *vmpage = cp->cpg_page;
-        struct inode      *inode  = ccc_object_inode(clp->cp_obj);
-
-        LINVRNT(cl_page_is_vmlocked(env, clp));
-
-        if (!clp->cp_sync_io && clp->cp_type == CPT_CACHEABLE) {
-                /*
-                 * Only mark the page error only when it's a cacheable page
-                 * and NOT a sync io.
-                 *
-                 * For sync IO and direct IO(CPT_TRANSIENT), the error is able
-                 * to be seen by application, so we don't need to mark a page
-                 * as error at all.
-                 */
-                vvp_vmpage_error(inode, vmpage, ioret);
-                unlock_page(vmpage);
-        }
-}
-
 static void vvp_page_completion_read(const struct lu_env *env,
                                      const struct cl_page_slice *slice,
                                      int ioret)
 {
-        struct ccc_page *cp    = cl2ccc_page(slice);
-        struct cl_page  *page  = cl_page_top(slice->cpl_page);
-        struct inode    *inode = ccc_object_inode(page->cp_obj);
+        struct ccc_page *cp     = cl2ccc_page(slice);
+        cfs_page_t      *vmpage = cp->cpg_page;
+        struct cl_page  *page   = cl_page_top(slice->cpl_page);
+        struct inode    *inode  = ccc_object_inode(page->cp_obj);
         ENTRY;
 
+        LASSERT(PageLocked(vmpage));
         CL_PAGE_HEADER(D_PAGE, env, page, "completing READ with %d\n", ioret);
 
         if (cp->cpg_defer_uptodate)
                 ll_ra_count_put(ll_i2sbi(inode), 1);
 
         if (ioret == 0)  {
-                /* XXX: do we need this for transient pages? */
                 if (!cp->cpg_defer_uptodate)
                         cl_page_export(env, page, 1);
         } else
                 cp->cpg_defer_uptodate = 0;
-        vvp_page_completion_common(env, cp, ioret);
+
+        if (page->cp_sync_io == NULL)
+                unlock_page(vmpage);
 
         EXIT;
 }
 
-static void vvp_page_completion_write_common(const struct lu_env *env,
-                                             const struct cl_page_slice *slice,
-                                             int ioret)
+static void vvp_page_completion_write(const struct lu_env *env,
+                                      const struct cl_page_slice *slice,
+                                      int ioret)
 {
-        struct ccc_page *cp = cl2ccc_page(slice);
+        struct ccc_page *cp     = cl2ccc_page(slice);
+        struct cl_page  *pg     = slice->cpl_page;
+        cfs_page_t      *vmpage = cp->cpg_page;
+        ENTRY;
+
+        LASSERT(ergo(pg->cp_sync_io != NULL, PageLocked(vmpage)));
+        LASSERT(PageWriteback(vmpage));
+
+        CL_PAGE_HEADER(D_PAGE, env, pg, "completing WRITE with %d\n", ioret);
 
         /*
          * TODO: Actually it makes sense to add the page into oap pending
@@ -319,28 +312,17 @@ static void vvp_page_completion_write_common(const struct lu_env *env,
          * ->cpo_completion method. The underlying transfer should be notified
          * and then re-add the page into pending transfer queue.  -jay
          */
+
         cp->cpg_write_queued = 0;
         vvp_write_complete(cl2ccc(slice->cpl_obj), cp);
 
-        vvp_page_completion_common(env, cp, ioret);
-}
+        /*
+         * Only mark the page error only when it's an async write because
+         * applications won't wait for IO to finish.
+         */
+        if (pg->cp_sync_io == NULL)
+                vvp_vmpage_error(ccc_object_inode(pg->cp_obj), vmpage, ioret);
 
-static void vvp_page_completion_write(const struct lu_env *env,
-                                      const struct cl_page_slice *slice,
-                                      int ioret)
-{
-        struct ccc_page *cp     = cl2ccc_page(slice);
-        struct cl_page  *pg     = slice->cpl_page;
-        cfs_page_t      *vmpage = cp->cpg_page;
-
-        ENTRY;
-
-        LINVRNT(cl_page_is_vmlocked(env, pg));
-        LASSERT(PageWriteback(vmpage));
-
-        CL_PAGE_HEADER(D_PAGE, env, pg, "completing WRITE with %d\n", ioret);
-
-        vvp_page_completion_write_common(env, slice, ioret);
         end_page_writeback(vmpage);
         EXIT;
 }
@@ -388,6 +370,7 @@ static int vvp_page_make_ready(const struct lu_env *env,
                          * Page was concurrently truncated.
                          */
                         LASSERT(pg->cp_state == CPS_FREEING);
+                unlock_page(vmpage);
         }
         RETURN(result);
 }
@@ -506,14 +489,12 @@ static int vvp_transient_page_is_vmlocked(const struct lu_env *env,
 }
 
 static void
-vvp_transient_page_completion_write(const struct lu_env *env,
-                                    const struct cl_page_slice *slice,
-                                    int ioret)
+vvp_transient_page_completion(const struct lu_env *env,
+                              const struct cl_page_slice *slice,
+                              int ioret)
 {
         vvp_transient_page_verify(slice->cpl_page);
-        vvp_page_completion_write_common(env, slice, ioret);
 }
-
 
 static void vvp_transient_page_fini(const struct lu_env *env,
                                     struct cl_page_slice *slice)
@@ -541,11 +522,11 @@ static const struct cl_page_operations vvp_transient_page_ops = {
         .io = {
                 [CRT_READ] = {
                         .cpo_prep        = ccc_transient_page_prep,
-                        .cpo_completion  = vvp_page_completion_read,
+                        .cpo_completion  = vvp_transient_page_completion,
                 },
                 [CRT_WRITE] = {
                         .cpo_prep        = ccc_transient_page_prep,
-                        .cpo_completion  = vvp_transient_page_completion_write,
+                        .cpo_completion  = vvp_transient_page_completion,
                 }
         }
 };
