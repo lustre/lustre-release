@@ -450,11 +450,9 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
                         continue;
 
                 dget_locked(dentry);
-                lock_dentry(dentry);
-                __d_drop(dentry);
-                unlock_dentry(dentry);
                 ll_dops_init(dentry, 0, 1);
-                d_rehash_cond(dentry, 0); /* avoid taking dcache_lock inside */
+                if (d_unhashed(dentry))
+                        d_rehash_cond(dentry, 0); /* avoid taking dcache_lock inside */
                 spin_unlock(&dcache_lock);
                 spin_unlock(&ll_lookup_lock);
                 iput(inode);
