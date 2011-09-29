@@ -1197,21 +1197,21 @@ struct obd_connect_data {
          * if the corresponding flag in ocd_connect_flags is set. Accessing
          * any field after ocd_maxbytes on the receiver without a valid flag
          * may result in out-of-bound memory access and kernel oops. */
-        __u64 padding1;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 padding2;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 padding3;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 padding4;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 padding5;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 padding6;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 padding7;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 padding8;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 padding9;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 paddingA;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 paddingB;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 paddingC;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 paddingD;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 paddingE;          /* added 2.2.0. also fix lustre_swab_connect */
-        __u64 paddingF;          /* added 2.2.0. also fix lustre_swab_connect */
+        __u64 padding1;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 padding2;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 padding3;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 padding4;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 padding5;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 padding6;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 padding7;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 padding8;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 padding9;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 paddingA;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 paddingB;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 paddingC;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 paddingD;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 paddingE;          /* added 2.1.0. also fix lustre_swab_connect */
+        __u64 paddingF;          /* added 2.1.0. also fix lustre_swab_connect */
 };
 
 

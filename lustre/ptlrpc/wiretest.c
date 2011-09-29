@@ -847,6 +847,57 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obd_connect_data, padding2));
         LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding2) == 8, "found %lld\n",
                  (long long)(int)sizeof(((struct obd_connect_data *)0)->padding2));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding3) == 88, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, padding3));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding3) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding3));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding4) == 96, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, padding4));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding4) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding4));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding5) == 104, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, padding5));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding5) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding5));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding6) == 112, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, padding6));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding6) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding6));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding7) == 120, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, padding7));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding7) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding7));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding8) == 128, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, padding8));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding8) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding8));
+        LASSERTF((int)offsetof(struct obd_connect_data, padding9) == 136, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, padding9));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->padding9) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->padding9));
+        LASSERTF((int)offsetof(struct obd_connect_data, paddingA) == 144, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, paddingA));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->paddingA) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->paddingA));
+        LASSERTF((int)offsetof(struct obd_connect_data, paddingB) == 152, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, paddingB));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->paddingB) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->paddingB));
+        LASSERTF((int)offsetof(struct obd_connect_data, paddingC) == 160, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, paddingC));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->paddingC) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->paddingC));
+        LASSERTF((int)offsetof(struct obd_connect_data, paddingD) == 168, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, paddingD));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->paddingD) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->paddingD));
+        LASSERTF((int)offsetof(struct obd_connect_data, paddingE) == 176, "found %lld\n",
+                 (long long)(int)offsetof(struct obd_connect_data, paddingE));
+        LASSERTF((int)sizeof(((struct obd_connect_data *)0)->paddingE) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->paddingE));
+        LASSERTF((int)offsetof(struct obd_connect_data, paddingF) == 184, "found %lld\n",
+                 (long long)(int)sizeof(((struct obd_connect_data *)0)->paddingF));
+
         LASSERTF(OBD_CONNECT_RDONLY == 0x1ULL, "found 0x%.16llxULL\n",
                  OBD_CONNECT_RDONLY);
         LASSERTF(OBD_CONNECT_INDEX == 0x2ULL, "found 0x%.16llxULL\n",

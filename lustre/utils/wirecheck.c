@@ -388,6 +388,19 @@ check_obd_connect_data(void)
         CHECK_MEMBER(obd_connect_data, ocd_maxbytes);
         CHECK_MEMBER(obd_connect_data, padding1);
         CHECK_MEMBER(obd_connect_data, padding2);
+        CHECK_MEMBER(obd_connect_data, padding3);
+        CHECK_MEMBER(obd_connect_data, padding4);
+        CHECK_MEMBER(obd_connect_data, padding5);
+        CHECK_MEMBER(obd_connect_data, padding6);
+        CHECK_MEMBER(obd_connect_data, padding7);
+        CHECK_MEMBER(obd_connect_data, padding8);
+        CHECK_MEMBER(obd_connect_data, padding9);
+        CHECK_MEMBER(obd_connect_data, paddingA);
+        CHECK_MEMBER(obd_connect_data, paddingB);
+        CHECK_MEMBER(obd_connect_data, paddingC);
+        CHECK_MEMBER(obd_connect_data, paddingD);
+        CHECK_MEMBER(obd_connect_data, paddingE);
+        CHECK_MEMBER(obd_connect_data, paddingF);
 
         CHECK_DEFINE_64X(OBD_CONNECT_RDONLY);
         CHECK_DEFINE_64X(OBD_CONNECT_INDEX);
