@@ -696,6 +696,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 rc = mdc_enter_request(&obddev->u.cli);
                 if (rc != 0) {
                         mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
+                        mdc_clear_replay_flag(req, 0);
                         ptlrpc_req_finished(req);
                         RETURN(rc);
                 }
