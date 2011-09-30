@@ -3097,6 +3097,83 @@ int lmv_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
         RETURN(rc);
 }
 
+/**
+ * For lmv, only need to send request to master MDT, and the master MDT will
+ * process with other slave MDTs. The only exception is Q_GETOQUOTA for which
+ * we directly fetch data from the slave MDTs.
+ */
+int lmv_quotactl(struct obd_device *unused, struct obd_export *exp,
+                 struct obd_quotactl *oqctl)
+{
+        struct obd_device   *obd = class_exp2obd(exp);
+        struct lmv_obd      *lmv = &obd->u.lmv;
+        struct lmv_tgt_desc *tgt = &lmv->tgts[0];
+        int                  rc = 0, i;
+        __u64                curspace, curinodes;
+        ENTRY;
+
+        if (!lmv->desc.ld_tgt_count || !tgt->ltd_active) {
+                CERROR("master lmv inactive\n");
+                RETURN(-EIO);
+        }
+
+        if (oqctl->qc_cmd != Q_GETOQUOTA) {
+                rc = obd_quotactl(tgt->ltd_exp, oqctl);
+                RETURN(rc);
+        }
+
+        curspace = curinodes = 0;
+        for (i = 0; i < lmv->desc.ld_tgt_count; i++) {
+                int err;
+                tgt = &lmv->tgts[i];
+
+                if (tgt->ltd_exp == NULL)
+                        continue;
+                if (!tgt->ltd_active) {
+                        CDEBUG(D_HA, "mdt %d is inactive.\n", i);
+                        continue;
+                }
+
+                err = obd_quotactl(tgt->ltd_exp, oqctl);
+                if (err) {
+                        CERROR("getquota on mdt %d failed. %d\n", i, err);
+                        if (!rc)
+                                rc = err;
+                } else {
+                        curspace += oqctl->qc_dqblk.dqb_curspace;
+                        curinodes += oqctl->qc_dqblk.dqb_curinodes;
+                }
+        }
+        oqctl->qc_dqblk.dqb_curspace = curspace;
+        oqctl->qc_dqblk.dqb_curinodes = curinodes;
+
+        RETURN(rc);
+}
+
+int lmv_quotacheck(struct obd_device *unused, struct obd_export *exp,
+                   struct obd_quotactl *oqctl)
+{
+        struct obd_device   *obd = class_exp2obd(exp);
+        struct lmv_obd      *lmv = &obd->u.lmv;
+        struct lmv_tgt_desc *tgt;
+        int                  i, rc = 0;
+        ENTRY;
+
+        for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgt++) {
+                int err;
+
+                if (!tgt->ltd_active) {
+                        CERROR("lmv idx %d inactive\n", i);
+                        RETURN(-EIO);
+                }
+
+                err = obd_quotacheck(tgt->ltd_exp, oqctl);
+                if (err && !rc)
+                        rc = err;
+        }
+
+        RETURN(rc);
+}
 
 struct obd_ops lmv_obd_ops = {
         .o_owner                = THIS_MODULE,
@@ -3114,7 +3191,9 @@ struct obd_ops lmv_obd_ops = {
         .o_notify               = lmv_notify,
         .o_get_uuid             = lmv_get_uuid,
         .o_iocontrol            = lmv_iocontrol,
-        .o_fid_delete           = lmv_fid_delete
+        .o_fid_delete           = lmv_fid_delete,
+        .o_quotacheck           = lmv_quotacheck,
+        .o_quotactl             = lmv_quotactl
 };
 
 struct md_ops lmv_md_ops = {
@@ -3151,9 +3230,6 @@ struct md_ops lmv_md_ops = {
         .m_revalidate_lock      = lmv_revalidate_lock
 };
 
-static quota_interface_t *quota_interface;
-extern quota_interface_t lmv_quota_interface;
-
 int __init lmv_init(void)
 {
         struct lprocfs_static_vars lvars;
@@ -3169,17 +3245,10 @@ int __init lmv_init(void)
 
         lprocfs_lmv_init_vars(&lvars);
 
-        cfs_request_module("lquota");
-        quota_interface = PORTAL_SYMBOL_GET(lmv_quota_interface);
-        init_obd_quota_ops(quota_interface, &lmv_obd_ops);
-
         rc = class_register_type(&lmv_obd_ops, &lmv_md_ops,
                                  lvars.module_vars, LUSTRE_LMV_NAME, NULL);
-        if (rc) {
-                if (quota_interface)
-                        PORTAL_SYMBOL_PUT(lmv_quota_interface);
+        if (rc)
                 cfs_mem_cache_destroy(lmv_object_cache);
-        }
 
         return rc;
 }
@@ -3187,9 +3256,6 @@ int __init lmv_init(void)
 #ifdef __KERNEL__
 static void lmv_exit(void)
 {
-        if (quota_interface)
-                PORTAL_SYMBOL_PUT(lmv_quota_interface);
-
         class_unregister_type(LUSTRE_LMV_NAME);
 
         LASSERTF(cfs_atomic_read(&lmv_object_count) == 0,

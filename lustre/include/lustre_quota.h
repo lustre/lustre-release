@@ -657,41 +657,6 @@ static inline int lquota_adjust(quota_interface_t *interface,
         RETURN(ret);
 }
 
-static inline int lquota_chkdq(quota_interface_t *interface,
-                               struct client_obd *cli, const unsigned int qid[])
-{
-        int rc;
-        ENTRY;
-
-        QUOTA_CHECK_OP(interface, chkdq);
-        rc = QUOTA_OP(interface, chkdq)(cli, qid);
-        RETURN(rc);
-}
-
-static inline int lquota_setdq(quota_interface_t *interface,
-                               struct client_obd *cli, const unsigned int qid[],
-                               obd_flag valid, obd_flag flags)
-{
-        int rc;
-        ENTRY;
-
-        QUOTA_CHECK_OP(interface, setdq);
-        rc = QUOTA_OP(interface, setdq)(cli, qid, valid, flags);
-        RETURN(rc);
-}
-
-static inline int lquota_poll_check(quota_interface_t *interface,
-                                    struct obd_export *exp,
-                                    struct if_quotacheck *qchk)
-{
-        int rc;
-        ENTRY;
-
-        QUOTA_CHECK_OP(interface, poll_check);
-        rc = QUOTA_OP(interface, poll_check)(exp, qchk);
-        RETURN(rc);
-}
-
 static inline int lquota_setinfo(quota_interface_t *interface,
                                  struct obd_device *obd,
                                  void *data)
@@ -773,11 +738,6 @@ static inline int lquota_pending_commit(quota_interface_t *interface,
 #endif
 
 #ifndef __KERNEL__
-extern quota_interface_t osc_quota_interface;
-extern quota_interface_t lov_quota_interface;
-extern quota_interface_t mdc_quota_interface;
-extern quota_interface_t lmv_quota_interface;
-
 #ifndef MAXQUOTAS
 #define MAXQUOTAS 2
 #endif

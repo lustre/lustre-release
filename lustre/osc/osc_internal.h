@@ -224,4 +224,19 @@ static inline struct osc_device *obd2osc_dev(const struct obd_device *d)
 
 int osc_dlm_lock_pageref(struct ldlm_lock *dlm);
 
+int osc_quota_init(void);
+int osc_quota_exit(void);
+int osc_quota_cleanup(struct obd_device *obd);
+int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
+                    obd_flag valid, obd_flag flags);
+int osc_quota_chkdq(struct client_obd *cli, const unsigned int qid[]);
+int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
+                 struct obd_quotactl *oqctl);
+int osc_quotacheck(struct obd_device *unused, struct obd_export *exp,
+                   struct obd_quotactl *oqctl);
+int osc_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
+int osc_quota_adjust_qunit(struct obd_export *exp,
+                           struct quota_adjust_qunit *oqaq,
+                           struct lustre_quota_ctxt *qctxt,
+                           struct ptlrpc_request_set *rqset);
 #endif /* OSC_INTERNAL_H */

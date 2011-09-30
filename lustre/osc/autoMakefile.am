@@ -36,7 +36,7 @@
 
 if LIBLUSTRE
 noinst_LIBRARIES = libosc.a
-libosc_a_SOURCES = osc_request.c osc_create.c osc_internal.h osc_cl_internal.h osc_dev.c osc_object.c osc_page.c osc_lock.c osc_io.c
+libosc_a_SOURCES = osc_request.c osc_create.c osc_internal.h osc_cl_internal.h osc_dev.c osc_object.c osc_page.c osc_lock.c osc_io.c osc_quota.c
 
 libosc_a_CPPFLAGS = $(LLCPPFLAGS)
 libosc_a_CFLAGS = $(LLCFLAGS)
@@ -58,7 +58,8 @@ osc_SOURCES := \
         osc_page.c   \
         osc_lock.c   \
         osc_io.c     \
-        osc_request.c
+        osc_request.c \
+        osc_quota.c
 
 osc_CFLAGS := $(EXTRA_KCFLAGS)
 osc_LDFLAGS := $(EXTRA_KLDFLAGS)

@@ -2827,6 +2827,163 @@ void lov_stripe_unlock(struct lov_stripe_md *md)
 }
 EXPORT_SYMBOL(lov_stripe_unlock);
 
+static int lov_quotactl(struct obd_device *obd, struct obd_export *exp,
+                        struct obd_quotactl *oqctl)
+{
+        struct lov_obd      *lov = &obd->u.lov;
+        struct lov_tgt_desc *tgt;
+        __u64                curspace = 0;
+        __u64                bhardlimit = 0;
+        int                  i, rc = 0;
+        ENTRY;
+
+        if (oqctl->qc_cmd != LUSTRE_Q_QUOTAON &&
+            oqctl->qc_cmd != LUSTRE_Q_QUOTAOFF &&
+            oqctl->qc_cmd != Q_GETOQUOTA &&
+            oqctl->qc_cmd != Q_INITQUOTA &&
+            oqctl->qc_cmd != LUSTRE_Q_SETQUOTA &&
+            oqctl->qc_cmd != Q_FINVALIDATE) {
+                CERROR("bad quota opc %x for lov obd", oqctl->qc_cmd);
+                RETURN(-EFAULT);
+        }
+
+        /* for lov tgt */
+        obd_getref(obd);
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                int err;
+
+                tgt = lov->lov_tgts[i];
+
+                if (!tgt)
+                        continue;
+
+                if (!tgt->ltd_active || tgt->ltd_reap) {
+                        if (oqctl->qc_cmd == Q_GETOQUOTA &&
+                            lov->lov_tgts[i]->ltd_activate) {
+                                rc = -EREMOTEIO;
+                                CERROR("ost %d is inactive\n", i);
+                        } else {
+                                CDEBUG(D_HA, "ost %d is inactive\n", i);
+                        }
+                        continue;
+                }
+
+                err = obd_quotactl(tgt->ltd_exp, oqctl);
+                if (err) {
+                        if (tgt->ltd_active && !rc)
+                                rc = err;
+                        continue;
+                }
+
+                if (oqctl->qc_cmd == Q_GETOQUOTA) {
+                        curspace += oqctl->qc_dqblk.dqb_curspace;
+                        bhardlimit += oqctl->qc_dqblk.dqb_bhardlimit;
+                }
+        }
+        obd_putref(obd);
+
+        if (oqctl->qc_cmd == Q_GETOQUOTA) {
+                oqctl->qc_dqblk.dqb_curspace = curspace;
+                oqctl->qc_dqblk.dqb_bhardlimit = bhardlimit;
+        }
+        RETURN(rc);
+}
+
+static int lov_quotacheck(struct obd_device *obd, struct obd_export *exp,
+                          struct obd_quotactl *oqctl)
+{
+        struct lov_obd *lov = &obd->u.lov;
+        int             i, rc = 0;
+        ENTRY;
+
+        obd_getref(obd);
+
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                if (!lov->lov_tgts[i])
+                        continue;
+
+                /* Skip quota check on the administratively disabled OSTs. */
+                if (!lov->lov_tgts[i]->ltd_activate) {
+                        CWARN("lov idx %d was administratively disabled, "
+                              "skip quotacheck on it.\n", i);
+                        continue;
+                }
+
+                if (!lov->lov_tgts[i]->ltd_active) {
+                        CERROR("lov idx %d inactive\n", i);
+                        rc = -EIO;
+                        goto out;
+                }
+        }
+
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+                int err;
+
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_activate)
+                        continue;
+
+                err = obd_quotacheck(lov->lov_tgts[i]->ltd_exp, oqctl);
+                if (err && !rc)
+                        rc = err;
+        }
+
+out:
+        obd_putref(obd);
+
+        RETURN(rc);
+}
+
+int lov_quota_adjust_qunit(struct obd_export *exp,
+                           struct quota_adjust_qunit *oqaq,
+                           struct lustre_quota_ctxt *qctxt,
+                           struct ptlrpc_request_set *rqset)
+{
+        struct obd_device *obd = class_exp2obd(exp);
+        struct lov_obd    *lov = &obd->u.lov;
+        int                i, err, rc = 0;
+        unsigned           no_set = 0;
+        ENTRY;
+
+        if (!QAQ_IS_ADJBLK(oqaq)) {
+                CERROR("bad qaq_flags %x for lov obd.\n", oqaq->qaq_flags);
+                RETURN(-EFAULT);
+        }
+
+        if (rqset == NULL) {
+                rqset = ptlrpc_prep_set();
+                if (!rqset)
+                        RETURN(-ENOMEM);
+                no_set = 1;
+        }
+
+        obd_getref(obd);
+        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
+
+                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
+                        CDEBUG(D_HA, "ost %d is inactive\n", i);
+                        continue;
+                }
+
+                err = obd_quota_adjust_qunit(lov->lov_tgts[i]->ltd_exp, oqaq,
+                                             NULL, rqset);
+                if (err) {
+                        if (lov->lov_tgts[i]->ltd_active && !rc)
+                                rc = err;
+                        continue;
+                }
+        }
+
+        err = ptlrpc_set_wait(rqset);
+        if (!rc)
+                rc = err;
+
+        /* Destroy the set if none was provided by the caller */
+        if (no_set)
+                ptlrpc_set_destroy(rqset);
+
+        obd_putref(obd);
+        RETURN(rc);
+}
 
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,
@@ -2869,6 +3026,9 @@ struct obd_ops lov_obd_ops = {
         .o_pool_del            = lov_pool_del,
         .o_getref              = lov_getref,
         .o_putref              = lov_putref,
+        .o_quotactl            = lov_quotactl,
+        .o_quotacheck          = lov_quotacheck,
+        .o_quota_adjust_qunit  = lov_quota_adjust_qunit,
 };
 
 static quota_interface_t *quota_interface;

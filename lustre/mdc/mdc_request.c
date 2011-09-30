@@ -68,9 +68,6 @@ struct mdc_renew_capa_args {
         renew_capa_cb_t         ra_cb;
 };
 
-static quota_interface_t *quota_interface;
-extern quota_interface_t mdc_quota_interface;
-
 static int mdc_cleanup(struct obd_device *obd);
 
 int mdc_unpack_capa(struct obd_export *exp, struct ptlrpc_request *req,
@@ -1362,6 +1359,90 @@ static int mdc_ioc_changelog_send(struct obd_device *obd,
 static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
                                 struct lustre_kernelcomm *lk);
 
+static int mdc_quotacheck(struct obd_device *unused, struct obd_export *exp,
+                          struct obd_quotactl *oqctl)
+{
+        struct client_obd       *cli = &exp->exp_obd->u.cli;
+        struct ptlrpc_request   *req;
+        struct obd_quotactl     *body;
+        int                      rc;
+        ENTRY;
+
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+                                        &RQF_MDS_QUOTACHECK, LUSTRE_MDS_VERSION,
+                                        MDS_QUOTACHECK);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        body = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+        *body = *oqctl;
+
+        ptlrpc_request_set_replen(req);
+
+        /* the next poll will find -ENODATA, that means quotacheck is
+         * going on */
+        cli->cl_qchk_stat = -ENODATA;
+        rc = ptlrpc_queue_wait(req);
+        if (rc)
+                cli->cl_qchk_stat = rc;
+        ptlrpc_req_finished(req);
+        RETURN(rc);
+}
+
+static int mdc_quota_poll_check(struct obd_export *exp,
+                                struct if_quotacheck *qchk)
+{
+        struct client_obd *cli = &exp->exp_obd->u.cli;
+        int rc;
+        ENTRY;
+
+        qchk->obd_uuid = cli->cl_target_uuid;
+        memcpy(qchk->obd_type, LUSTRE_MDS_NAME, strlen(LUSTRE_MDS_NAME));
+
+        rc = cli->cl_qchk_stat;
+        /* the client is not the previous one */
+        if (rc == CL_NOT_QUOTACHECKED)
+                rc = -EINTR;
+        RETURN(rc);
+}
+
+static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
+                        struct obd_quotactl *oqctl)
+{
+        struct ptlrpc_request   *req;
+        struct obd_quotactl     *oqc;
+        int                      rc;
+        ENTRY;
+
+        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp),
+                                        &RQF_MDS_QUOTACTL, LUSTRE_MDS_VERSION,
+                                        MDS_QUOTACTL);
+        if (req == NULL)
+                RETURN(-ENOMEM);
+
+        oqc = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+        *oqc = *oqctl;
+
+        ptlrpc_request_set_replen(req);
+        ptlrpc_at_set_req_timeout(req);
+        req->rq_no_resend = 1;
+
+        rc = ptlrpc_queue_wait(req);
+        if (rc)
+                CERROR("ptlrpc_queue_wait failed, rc: %d\n", rc);
+
+        if (req->rq_repmsg &&
+            (oqc = req_capsule_server_get(&req->rq_pill, &RMF_OBD_QUOTACTL))) {
+                *oqctl = *oqc;
+        } else if (!rc) {
+                CERROR ("Can't unpack obd_quotactl\n");
+                rc = -EPROTO;
+        }
+        ptlrpc_req_finished(req);
+
+        RETURN(rc);
+}
+
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -1420,8 +1501,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         }
 #endif
         case OBD_IOC_POLL_QUOTACHECK:
-                rc = lquota_poll_check(quota_interface, exp,
-                                       (struct if_quotacheck *)karg);
+                rc = mdc_quota_poll_check(exp, (struct if_quotacheck *)karg);
                 GOTO(out, rc);
         case OBD_IOC_PING_TARGET:
                 rc = ptlrpc_obd_ping(obd);
@@ -2303,6 +2383,8 @@ struct obd_ops mdc_obd_ops = {
         .o_get_info         = mdc_get_info,
         .o_process_config   = mdc_process_config,
         .o_get_uuid         = mdc_get_uuid,
+        .o_quotactl         = mdc_quotactl,
+        .o_quotacheck       = mdc_quotacheck
 };
 
 struct md_ops mdc_md_ops = {
@@ -2346,24 +2428,14 @@ int __init mdc_init(void)
         struct lprocfs_static_vars lvars = { 0 };
         lprocfs_mdc_init_vars(&lvars);
 
-        cfs_request_module("lquota");
-        quota_interface = PORTAL_SYMBOL_GET(mdc_quota_interface);
-        init_obd_quota_ops(quota_interface, &mdc_obd_ops);
-
         rc = class_register_type(&mdc_obd_ops, &mdc_md_ops, lvars.module_vars,
                                  LUSTRE_MDC_NAME, NULL);
-        if (rc && quota_interface)
-                PORTAL_SYMBOL_PUT(mdc_quota_interface);
-
         RETURN(rc);
 }
 
 #ifdef __KERNEL__
 static void /*__exit*/ mdc_exit(void)
 {
-        if (quota_interface)
-                PORTAL_SYMBOL_PUT(mdc_quota_interface);
-
         class_unregister_type(LUSTRE_MDC_NAME);
 }
 
