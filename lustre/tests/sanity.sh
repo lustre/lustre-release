@@ -986,8 +986,7 @@ exhaust_precreations() {
 	local FAILLOC=$2
 	local FAILIDX=${3:-$OSTIDX}
 
-	local OST=$(lfs osts | grep ${OSTIDX}": " | \
-		awk '{print $2}' | sed -e 's/_UUID$//')
+	local OST=$(ostname_from_index $OSTIDX)
 
 	# on the mdt's osc
 	local mdtosc=$(get_mdtosc_proc_path $OST)
@@ -1155,7 +1154,7 @@ test_27v() { # bug 4900
         touch $DIR/$tdir/$tfile
         #define OBD_FAIL_TGT_DELAY_PRECREATE     0x705
         # all except ost1
-        for (( i=0; i < OSTCOUNT; i++ )) ; do
+        for (( i=1; i < OSTCOUNT; i++ )); do
                 do_facet ost$i lctl set_param fail_loc=0x705
         done
         local START=`date +%s`
@@ -1196,7 +1195,7 @@ test_27x() {
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
 	OFFSET=$(($OSTCOUNT - 1))
 	OSTIDX=0
-	local OST=$(lfs osts | awk '/'${OSTIDX}': / { print $2 }' | sed -e 's/_UUID$//')
+	local OST=$(ostname_from_index $OSTIDX)
 
 	mkdir -p $DIR/$tdir
 	$SETSTRIPE $DIR/$tdir -c 1	# 1 stripe per file
@@ -1227,14 +1226,14 @@ test_27y() {
                 } fi
         done
 
-        OSTIDX=$(lfs osts | grep ${OST} | awk '{print $1}' | sed -e 's/://')
+        OSTIDX=$(index_from_ostuuid $OST)
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c 1      # 1 stripe / file
 
-        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 1
+        do_facet ost$((OSTIDX+1)) lctl set_param -n obdfilter.$OST.degraded 1
         sleep_maxage
         createmany -o $DIR/$tdir/$tfile $OSTCOUNT
-        do_facet ost$OSTIDX lctl set_param -n obdfilter.$OST.degraded 0
+        do_facet ost$((OSTIDX+1)) lctl set_param -n obdfilter.$OST.degraded 0
 
         for i in `seq 0 $OFFSET`; do
                 [ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "$OSTIDX"` ] || \
@@ -2660,7 +2659,7 @@ test_56a() {	# was test_56
         [  "$OSTCOUNT" -lt 2 ] && \
                 skip_env "skipping other lfs getstripe --obd test" && return
         OSTIDX=1
-        OBDUUID=$(lfs osts | grep ${OSTIDX}": " | awk '{print $2}')
+        OBDUUID=$(ostuuid_from_index $OSTIDX)
         FILENUM=`$GETSTRIPE -ir $DIR/d56 | grep -x $OSTIDX | wc -l`
         FOUND=`$GETSTRIPE -r --obd $OBDUUID $DIR/d56 | grep obdidx | wc -l`
         [ $FOUND -eq $FILENUM ] || \
@@ -6092,17 +6091,18 @@ test_130e() {
 }
 run_test 130e "FIEMAP (test continuation FIEMAP calls)"
 
-check_stats() {
+check_stats_facet() {
 	local res
 	local count
-	case $1 in
-	mds) local dev=$(get_mds_mdt_device_proc_path)
-	     res=`do_facet mds $LCTL get_param $dev.$FSNAME-MDT0000.stats | grep "$2"`
-		 ;;
-	ost) res=`do_facet ost0 $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$2"`
-		 ;;
-	*) error "Wrong argument $1" ;;
-	esac
+	local facet=$1
+	local svc=${facet}_svc
+
+	local dev=obdfilter
+
+	[[ $facet = mds ]] && dev=$(get_mds_mdt_device_proc_path)
+	param=$dev.${!svc}.stats
+
+	res=$(do_facet $facet $LCTL get_param $param | grep "$2")
 	echo $res
 	count=`echo $res | awk '{print $2}'`
 	[ -z "$res" ] && error "The counter for $2 on $1 was not incremented"
@@ -6126,25 +6126,25 @@ test_133a() {
 	# clear stats.
 	local dev=$(get_mds_mdt_device_proc_path)
 	do_facet mds $LCTL set_param $dev.*.stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 
 	# verify mdt stats first.
 	mkdir ${testdir} || error "mkdir failed"
-	check_stats mds "mkdir" 1
+	check_stats_facet mds "mkdir" 1
 	touch ${testdir}/${tfile} || "touch failed"
 	# LPROC_MDS_OPEN is incremented by 2 - in mds_open() and mds_intent_policy()
-	check_stats mds "open" 2
-	check_stats mds "close" 1
+	check_stats_facet mds "open" 2
+	check_stats_facet mds "close" 1
 	mknod ${testdir}/${tfile}-pipe p || "mknod failed"
-	check_stats mds "mknod" 1
+	check_stats_facet mds "mknod" 1
 	rm -f ${testdir}/${tfile}-pipe || "pipe remove failed"
-	check_stats mds "unlink" 1
+	check_stats_facet mds "unlink" 1
 	rm -f ${testdir}/${tfile} || error "file remove failed"
-	check_stats mds "unlink" 2
+	check_stats_facet mds "unlink" 2
 
 	# remove working dir and check mdt stats again.
 	rmdir ${testdir} || error "rmdir failed"
-	check_stats mds "rmdir" 1
+	check_stats_facet mds "rmdir" 1
 
 	rm -rf $DIR/${tdir}
 }
@@ -6166,15 +6166,15 @@ test_133b() {
 	# clear stats.
 	local dev=$(get_mds_mdt_device_proc_path)
 	do_facet mds $LCTL set_param $dev.*.stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 
 	# extra mdt stats verification.
 	stat ${testdir}/${tfile} || error "stat failed"
-	check_stats mds "getattr" 0
+	check_stats_facet mds "getattr" 0
 	chmod 444 ${testdir}/${tfile} || error "chmod failed"
-	check_stats mds "setattr" 1
+	check_stats_facet mds "setattr" 1
 	$LFS df || error "lfs failed"
-	check_stats mds "statfs" 1
+	check_stats_facet mds "statfs" 1
 
 	rm -rf $DIR/${tdir}
 }
@@ -6199,21 +6199,21 @@ test_133c() {
 	# clear stats.
 	local dev=$(get_mds_mdt_device_proc_path)
 	do_facet mds $LCTL set_param $dev.*.stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 
 	dd if=/dev/zero of=${testdir}/${tfile} bs=1024k count=1 || error "dd failed"
 	sync
 	cancel_lru_locks osc
-	check_stats ost "write" 1
+	check_stats_facet ost1 "write" 1
 
 	dd if=${testdir}/${tfile} of=/dev/null bs=1k count=1 || error "dd failed"
-	check_stats ost "read" 1
+	check_stats_facet ost1 "read" 1
 
 	> ${testdir}/${tfile} || error "truncate failed"
-	check_stats ost "punch" 1
+	check_stats_facet ost1 "punch" 1
 
 	rm -f ${testdir}/${tfile} || error "file remove failed"
-	check_stats ost "destroy" 1
+	check_stats_facet ost1 "destroy" 1
 
 	rm -rf $DIR/${tdir}
 }
@@ -6700,11 +6700,14 @@ test_180() {
         [ $rmmod_local -eq 1 ] && rmmod obdecho
         [ $rc -ne 0 ] && return $rc
 
-        do_facet ost "lsmod | grep -q obdecho || { insmod ${LUSTRE}/obdecho/obdecho.ko || modprobe obdecho; }" && rmmod_remote=1
+        do_facet ost1 "lsmod | grep -q obdecho || \
+		{ insmod $LUSTRE/obdecho/obdecho.ko || modprobe obdecho; }" && \
+		rmmod_remote=1
 
-        OBD=$(do_facet ost "$LCTL  dl | awk '/obdfilter/ { print; exit; }'" | awk '{print $4;}')
-        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD ost || rc=3; }
-        [ $rmmod_remote -eq 1 ] && do_facet ost "rmmod obdecho"
+        OBD=$(do_facet ost1 "$LCTL dl | awk '/obdfilter/ { print; exit; }'" | \
+		awk '{print $4;}')
+        [ "x$OBD" != "x" ] && { obdecho_create_test $OBD ost1 || rc=3; }
+        [ $rmmod_remote -eq 1 ] && do_facet ost1 "rmmod obdecho"
         [ $rc -ne 0 ] && return $rc
 
         true

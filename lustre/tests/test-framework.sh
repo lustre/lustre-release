@@ -2944,7 +2944,17 @@ osc_to_ost()
 
 ostuuid_from_index()
 {
-    $LFS osts $2 | awk '/^'$1'/ { print $2 }'
+    $LFS osts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"
+}
+
+ostname_from_index() {
+    local uuid=$(ostuuid_from_index $1)
+    echo ${uuid/_UUID/}
+}
+
+index_from_ostuuid()
+{
+    $LFS osts $2 | sed -ne "/${1}/s/\(.*\): .* .*$/\1/p"
 }
 
 remote_node () {

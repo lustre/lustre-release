@@ -1437,12 +1437,12 @@ test_61a() {
     replay_barrier ost1
 #   OBD_FAIL_OST_LLOG_RECOVERY_TIMEOUT 0x221
     unlinkmany $DIR/$tdir/$tfile-%d 800
-    do_facet ost "lctl set_param fail_loc=0x80000221"
+    set_nodes_failloc "$(osts_nodes)" 0x80000221
     facet_failover ost1
     sleep 10
     fail ost1
     sleep 30
-    do_facet ost "lctl set_param fail_loc=0x0"
+    set_nodes_failloc "$(osts_nodes)" 0x0
     $CHECKSTAT -t file $DIR/$tdir/$tfile-* && return 1
     rmdir $DIR/$tdir
 }
@@ -1465,10 +1465,11 @@ test_61c() {
 
 #   OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT 0x222
     touch $DIR/$tfile
-    do_facet ost "lctl set_param fail_loc=0x80000222"
+    set_nodes_failloc "$(osts_nodes)" 0x80000222
     rm $DIR/$tfile
     sleep 10
     fail ost1
+    set_nodes_failloc "$(osts_nodes)" 0x0
 }
 run_test 61c "test race mds llog sync vs llog cleanup"
 
@@ -1697,7 +1698,7 @@ test_67b() #bug 3055
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
 
     # exhaust precreations on ost1
-    local OST=$(lfs osts | grep ^0": " | awk '{print $2}' | sed -e 's/_UUID$//')
+    local OST=$(ostname_from_index 0)
     local mdtosc=$(get_mdtosc_proc_path $OST)
     local last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
     local next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
@@ -2199,7 +2200,7 @@ test_87() { #bug 17485
     replay_barrier mds
 
     # exhaust precreations on ost1
-    local OST=$(lfs osts | grep ^0": " | awk '{print $2}' | sed -e 's/_UUID$//')
+    local OST=$(ostname_from_index 0)
     local mdtosc=$(get_mdtosc_proc_path $OST)
     local last_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_last_id)
     local next_id=$(do_facet mds lctl get_param -n osc.$mdtosc.prealloc_next_id)
