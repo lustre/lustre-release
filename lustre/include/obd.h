@@ -132,11 +132,13 @@ struct lov_stripe_md {
         cfs_spinlock_t   lsm_lock;
         pid_t            lsm_lock_owner; /* debugging */
 
+        /* maximum possible file size, might change as OSTs status changes,
+         * e.g. disconnected, deactivated */
+        __u64            lsm_maxbytes;
         struct {
                 /* Public members. */
                 __u64 lw_object_id;        /* lov object id */
                 __u64 lw_object_seq;       /* lov object seq */
-                __u64 lw_maxbytes;         /* maximum possible file size */
 
                 /* LOV-private members start here -- only for use in lov/. */
                 __u32 lw_magic;
@@ -151,7 +153,6 @@ struct lov_stripe_md {
 
 #define lsm_object_id    lsm_wire.lw_object_id
 #define lsm_object_seq   lsm_wire.lw_object_seq
-#define lsm_maxbytes     lsm_wire.lw_maxbytes
 #define lsm_magic        lsm_wire.lw_magic
 #define lsm_stripe_size  lsm_wire.lw_stripe_size
 #define lsm_pattern      lsm_wire.lw_pattern
