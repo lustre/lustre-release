@@ -455,8 +455,6 @@ static inline void obd_fail_write(int id, struct super_block *sb)
 #define OBD_FAIL_WRITE(id, sb) obd_fail_write(id, sb)
 #endif
 
-#define fixme() CDEBUG(D_OTHER, "FIXME\n");
-
 extern cfs_atomic_t libcfs_kmemory;
 
 #ifdef LPROCFS

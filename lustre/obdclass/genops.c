@@ -1144,8 +1144,7 @@ int class_disconnect(struct obd_export *export)
         ENTRY;
 
         if (export == NULL) {
-                fixme();
-                CDEBUG(D_IOCTL, "attempting to free NULL export %p\n", export);
+                CWARN("attempting to free NULL export %p\n", export);
                 RETURN(-EINVAL);
         }
 
