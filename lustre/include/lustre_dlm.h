@@ -984,6 +984,7 @@ void ldlm_lock2handle(const struct ldlm_lock *lock,
 struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *, int flags);
 void ldlm_cancel_callback(struct ldlm_lock *);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *);
+int ldlm_lock_set_data(struct lustre_handle *, void *);
 
 static inline struct ldlm_lock *ldlm_handle2lock(const struct lustre_handle *h)
 {

@@ -1711,15 +1711,19 @@ void ldlm_lock_cancel(struct ldlm_lock *lock)
 int ldlm_lock_set_data(struct lustre_handle *lockh, void *data)
 {
         struct ldlm_lock *lock = ldlm_handle2lock(lockh);
+        int rc = -EINVAL;
         ENTRY;
 
-        if (lock == NULL)
-                RETURN(-EINVAL);
-
-        lock->l_ast_data = data;
-        LDLM_LOCK_PUT(lock);
-        RETURN(0);
+        if (lock) {
+                if (lock->l_ast_data == NULL)
+                        lock->l_ast_data = data;
+                if (lock->l_ast_data == data)
+                        rc = 0;
+                LDLM_LOCK_PUT(lock);
+        }
+        RETURN(rc);
 }
+EXPORT_SYMBOL(ldlm_lock_set_data);
 
 int ldlm_cancel_locks_for_export_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                                     cfs_hlist_node_t *hnode, void *data)
