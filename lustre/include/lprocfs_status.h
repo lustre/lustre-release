@@ -541,6 +541,10 @@ extern int lprocfs_wr_ping(struct file *file, const char *buffer,
                            unsigned long count, void *data);
 extern int lprocfs_wr_import(struct file *file, const char *buffer,
                              unsigned long count, void *data);
+extern int lprocfs_rd_pinger_recov(char *page, char **start, off_t off,
+                                   int count, int *eof, void *data);
+extern int lprocfs_wr_pinger_recov(struct file *file, const char *buffer,
+                                   unsigned long count, void *data);
 
 /* Statfs helpers */
 extern int lprocfs_rd_blksize(char *page, char **start, off_t off,
@@ -845,6 +849,9 @@ static inline int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
 static inline int lprocfs_rd_import(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 { return 0; }
+static inline int lprocfs_rd_pinger_recov(char *page, char **start, off_t off,
+                                          int count, int *eof, void *data)
+{ return 0; }
 static inline int lprocfs_rd_state(char *page, char **start, off_t off,
                                    int count, int *eof, void *data)
 { return 0; }
@@ -876,6 +883,9 @@ static inline int lprocfs_wr_ping(struct file *file, const char *buffer,
                                   unsigned long count, void *data)
 { return 0; }
 static inline int lprocfs_wr_import(struct file *file, const char *buffer,
+                                    unsigned long count, void *data)
+{ return 0; }
+static inline int lprocfs_wr_pinger_recov(struct file *file, const char *buffer,
                                     unsigned long count, void *data)
 { return 0; }
 

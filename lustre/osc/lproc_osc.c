@@ -610,6 +610,8 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
                                 osc_wr_lockless_truncate, 0 },
         { "import",          lprocfs_rd_import,        lprocfs_wr_import, 0 },
         { "state",           lprocfs_rd_state,         0, 0 },
+        { "pinger_recov",    lprocfs_rd_pinger_recov,
+                             lprocfs_wr_pinger_recov,  0, 0 },
         { 0 }
 };
 

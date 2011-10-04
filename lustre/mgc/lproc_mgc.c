@@ -39,6 +39,7 @@
 #include <linux/vfs.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
+#include "mgc_internal.h"
 
 #ifdef LPROCFS
 
@@ -50,6 +51,7 @@ static struct lprocfs_vars lprocfs_mgc_obd_vars[] = {
         { "mgs_conn_uuid",   lprocfs_rd_conn_uuid,     0, 0 },
         { "import",          lprocfs_rd_import,        0, 0 },
         { "state",           lprocfs_rd_state,         0, 0 },
+        { "ir_state",        lprocfs_mgc_rd_ir_state,  0, 0 },
         { 0 }
 };
 

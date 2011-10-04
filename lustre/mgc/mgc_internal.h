@@ -46,10 +46,17 @@
 
 #ifdef LPROCFS
 void lprocfs_mgc_init_vars(struct lprocfs_static_vars *lvars);
+int lprocfs_mgc_rd_ir_state(char *page, char **start, off_t off,
+                            int count, int *eof, void *data);
 #else
 static void lprocfs_mgc_init_vars(struct lprocfs_static_vars *lvars)
 {
         memset(lvars, 0, sizeof(*lvars));
+}
+static inline int lprocfs_mgc_rd_ir_state(char *page, char **start,
+        off_t off, int count, int *eof, void *data)
+{
+        return 0;
 }
 #endif  /* LPROCFS */
 

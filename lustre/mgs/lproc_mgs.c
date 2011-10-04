@@ -217,8 +217,6 @@ static int mgs_live_seq_show(struct seq_file *seq, void *v)
         }
         seq_show_srpc_rules(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
 
-        seq_printf(seq, "\nImperative Recovery Status:\n");
-
         lprocfs_rd_ir_state(seq, fsdb);
 
         cfs_up(&fsdb->fsdb_sem);
@@ -270,6 +268,7 @@ struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
         { "hash_stats",      lprocfs_obd_rd_hash,    0, 0 },
         { "evict_client",    0, lprocfs_wr_evict_client, 0 },
+        { "ir_timeout",      lprocfs_rd_ir_timeout, lprocfs_wr_ir_timeout, 0 },
         { 0 }
 };
 

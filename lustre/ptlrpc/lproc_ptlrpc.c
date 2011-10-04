@@ -866,4 +866,45 @@ out:
 }
 EXPORT_SYMBOL(lprocfs_wr_import);
 
+int lprocfs_rd_pinger_recov(char *page, char **start, off_t off,
+                            int count, int *eof, void *data)
+{
+        struct obd_device *obd = data;
+        struct obd_import *imp = obd->u.cli.cl_import;
+        int rc;
+
+        LPROCFS_CLIMP_CHECK(obd);
+        rc = snprintf(page, count, "%d\n", !imp->imp_no_pinger_recover);
+        LPROCFS_CLIMP_EXIT(obd);
+
+        return rc;
+}
+EXPORT_SYMBOL(lprocfs_rd_pinger_recov);
+
+int lprocfs_wr_pinger_recov(struct file *file, const char *buffer,
+                      unsigned long count, void *data)
+{
+        struct obd_device *obd = data;
+        struct client_obd *cli = &obd->u.cli;
+        struct obd_import *imp = cli->cl_import;
+        int rc, val;
+
+        rc = lprocfs_write_helper(buffer, count, &val);
+        if (rc < 0)
+                return rc;
+
+        if (val != 0 && val != 1)
+                return -ERANGE;
+
+        LPROCFS_CLIMP_CHECK(obd);
+        cfs_spin_lock(&imp->imp_lock);
+        imp->imp_no_pinger_recover = !val;
+        cfs_spin_unlock(&imp->imp_lock);
+        LPROCFS_CLIMP_EXIT(obd);
+
+        return count;
+
+}
+EXPORT_SYMBOL(lprocfs_wr_pinger_recov);
+
 #endif /* LPROCFS */

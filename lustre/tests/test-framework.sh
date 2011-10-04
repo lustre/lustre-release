@@ -3780,10 +3780,7 @@ convert_facet2label() {
 }
 
 get_clientosc_proc_path() {
-    local ost=$1
-
-    # exclude -osc-M*
-    echo "${1}-osc-[!M]*"
+    echo "${1}-osc-[^M]*"
 }
 
 get_lustre_version () {
