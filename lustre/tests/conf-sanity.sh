@@ -2478,7 +2478,7 @@ test_52() {
 	diff_files_xattrs $ost1node $ost1tmp/objects $ost1tmp/object_xattrs $objects
 	[ $? -eq 0 ] || { error "Unable to diff objects"; return 16; }
 
-	do_node $ost1node "umount $ost1_dev"
+	do_node $ost1node "umount $ost1mnt"
 	[ $? -eq 0 ] || { error "Unable to umount ost1 as ldiskfs"; return 17; }
 
 	start_ost
