@@ -8280,6 +8280,17 @@ test_220() { #LU-325
 }
 run_test 220 "the preallocated objects in MDS still can be used if ENOSPC is returned by OST with enough disk space"
 
+test_221() {
+        cp `which date` $MOUNT
+
+        #define OBD_FAIL_LLITE_FAULT_TRUNC_RACE  0x1401
+        $LCTL set_param fail_loc=0x80001401
+
+        $MOUNT/date > /dev/null
+        rm -f $MOUNT/date
+}
+run_test 221 "make sure fault and truncate race to not cause OOM"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
