@@ -234,13 +234,10 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         result = cl_io_loop(env, io);
 
 out_err:
-        if (result == 0) {
-                LASSERT(io->u.ci_fault.ft_page != NULL);
+        if (result == 0)
                 page = vio->u.fault.ft_vmpage;
-        } else {
-                if (result == -ENOMEM)
-                        page = NOPAGE_OOM;
-        }
+        else if (result == -ENOMEM)
+                page = NOPAGE_OOM;
 
         vma->vm_flags &= ~VM_RAND_READ;
         vma->vm_flags |= ra_flags;
