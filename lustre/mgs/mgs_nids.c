@@ -385,6 +385,25 @@ static int mgs_nidtbl_init_fs(struct fs_db *fsdb)
 }
 
 /* --------- Imperative Recovery relies on nidtbl stuff ------- */
+void mgs_ir_notify_complete(struct fs_db *fsdb)
+{
+        struct timeval tv;
+        cfs_duration_t delta;
+
+        cfs_atomic_set(&fsdb->fsdb_notify_phase, 0);
+
+        /* do statistic */
+        fsdb->fsdb_notify_count++;
+        delta = cfs_time_sub(cfs_time_current(), fsdb->fsdb_notify_start);
+        fsdb->fsdb_notify_total += delta;
+        if (delta > fsdb->fsdb_notify_max)
+                fsdb->fsdb_notify_max = delta;
+
+        cfs_duration_usec(delta, &tv);
+        CDEBUG(D_MGS, "Revoke recover lock of %s completed after %ld.%06lds\n",
+               fsdb->fsdb_name, tv.tv_sec, tv.tv_usec);
+}
+
 static int mgs_ir_notify(void *arg)
 {
         struct fs_db      *fsdb   = arg;
@@ -398,13 +417,11 @@ static int mgs_ir_notify(void *arg)
 
         cfs_complete(&fsdb->fsdb_notify_comp);
 
+        set_user_nice(current, -2);
+
         mgc_fsname2resid(fsdb->fsdb_name, &resid, CONFIG_T_RECOVER);
         while (1) {
                 struct l_wait_info   lwi = { 0 };
-                struct lustre_handle lockh;
-                cfs_time_t           curtime;
-                int                  lockrc;
-                int                  delta;
 
                 l_wait_event(fsdb->fsdb_notify_waitq,
                              fsdb->fsdb_notify_stop ||
@@ -416,24 +433,8 @@ static int mgs_ir_notify(void *arg)
                 CDEBUG(D_MGS, "%s woken up, phase is %d\n",
                        name, cfs_atomic_read(&fsdb->fsdb_notify_phase));
 
-                curtime = cfs_time_current();
-                lockrc = mgs_get_lock(fsdb->fsdb_obd, &resid, &lockh);
-                if (lockrc == ELDLM_OK) {
-                        cfs_atomic_set(&fsdb->fsdb_notify_phase, 0);
-                        mgs_put_lock(&lockh);
-
-                        /* do statistic */
-                        fsdb->fsdb_notify_count++;
-                        delta = cfs_time_current() - curtime;
-                        fsdb->fsdb_notify_total += delta;
-                        if (delta > fsdb->fsdb_notify_max)
-                                fsdb->fsdb_notify_max = delta;
-                        CDEBUG(D_MGS, "Revoke recover lock of %s %dT\n",
-                               fsdb->fsdb_name, delta);
-                } else {
-                        CERROR("Fatal error %d for fs %s\n",
-                               lockrc, fsdb->fsdb_name);
-                }
+                fsdb->fsdb_notify_start = cfs_time_current();
+                mgs_revoke_lock(fsdb->fsdb_obd, fsdb, CONFIG_T_RECOVER);
         }
 
         cfs_complete(&fsdb->fsdb_notify_comp);

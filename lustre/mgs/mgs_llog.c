@@ -3056,7 +3056,7 @@ int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname)
          * so we don't really need to hold the lock while we're
          * writing (above).
          */
-        mgs_revoke_lock(obd, fsdb);
+        mgs_revoke_lock(obd, fsdb, CONFIG_T_CONFIG);
 out:
         OBD_FREE_PTR(mti);
         RETURN(rc);
@@ -3196,7 +3196,7 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
 
         cfs_up(&fsdb->fsdb_sem);
         /* request for update */
-        mgs_revoke_lock(obd, fsdb);
+        mgs_revoke_lock(obd, fsdb, CONFIG_T_CONFIG);
 
         EXIT;
 out:

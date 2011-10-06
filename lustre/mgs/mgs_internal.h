@@ -154,6 +154,7 @@ struct fs_db {
         struct obd_device   *fsdb_obd;
         cfs_waitq_t          fsdb_notify_waitq;
         cfs_completion_t     fsdb_notify_comp;
+        cfs_time_t           fsdb_notify_start;
         cfs_atomic_t         fsdb_notify_phase;
         volatile int         fsdb_notify_async:1,
                              fsdb_notify_stop:1;
@@ -188,15 +189,16 @@ int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
                  char *poolname, char *fsname, char *ostname);
 
 /* mgs_handler.c */
-void mgs_revoke_lock(struct obd_device *obd, struct fs_db *fsdb);
 int  mgs_get_lock(struct obd_device *obd, struct ldlm_res_id *res,
                   struct lustre_handle *lockh);
 int  mgs_put_lock(struct lustre_handle *lockh);
+void mgs_revoke_lock(struct obd_device *obd, struct fs_db *fsdb, int type);
 
 /* mgs_nids.c */
 int  mgs_ir_update(struct obd_device *obd, struct mgs_target_info *mti);
 int  mgs_ir_init_fs(struct obd_device *obd, struct fs_db *fsdb);
 void mgs_ir_fini_fs(struct obd_device *obd, struct fs_db *fsdb);
+void mgs_ir_notify_complete(struct fs_db *fsdb);
 int  mgs_get_ir_logs(struct ptlrpc_request *req);
 int  lprocfs_wr_ir_state(struct file *file, const char *buffer,
                            unsigned long count, void *data);

@@ -152,6 +152,10 @@ typedef enum {
  * list. */
 #define LDLM_FL_KMS_IGNORE     0x200000
 
+/* Don't put lock into the LRU list, so that it is not canceled due to aging.
+ * Used by MGC locks, they are cancelled only at unmount or by callback. */
+#define LDLM_FL_NO_LRU         0x400000
+
 /* Immediatelly cancel such locks when they block some other locks. Send
  * cancel notification to original lock holder, but expect no reply. This is
  * for clients (like liblustre) that cannot be expected to reliably response

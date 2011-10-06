@@ -1773,7 +1773,7 @@ out_pop:
 int mgc_process_log(struct obd_device *mgc, struct config_llog_data *cld)
 {
         struct lustre_handle lockh = { 0 };
-        int rc = 0, rcl, flags = 0;
+        int rc = 0, rcl, flags = LDLM_FL_NO_LRU;
         ENTRY;
 
         LASSERT(cld);
