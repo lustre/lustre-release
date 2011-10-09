@@ -255,9 +255,9 @@ test_1() {
     create_pool_fail p1234567891234567
 
     echo "Creating a pool with a 1000 character pool name; should fail"
-    NAME="p"
-    for i in `seq 1 999`; do NAME=${NAME}"o"; done
-    create_pool_fail $NAME
+    local pool_name="p"
+    for i in $(seq 1 999); do pool_name=${pool_name}"o"; done
+    create_pool_fail $pool_name
 
     echo "pool_new should fail if fs-name or poolname are missing."
     do_facet $SINGLEMDS lctl pool_new .pool1 2>/dev/null
