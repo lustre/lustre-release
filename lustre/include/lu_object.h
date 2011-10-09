@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -169,11 +172,23 @@ struct lu_device_operations {
 };
 
 /**
+ * For lu_object_conf flags
+ */
+typedef enum {
+        /* Currently, only used for client-side object initialization. */
+        LOC_F_NEW = 0x1,
+} loc_flags_t;
+
+/**
  * Object configuration, describing particulars of object being created. On
  * server this is not used, as server objects are full identified by fid. On
  * client configuration contains struct lustre_md.
  */
 struct lu_object_conf {
+        /**
+         * Some hints for obj find and alloc.
+         */
+        loc_flags_t     loc_flags;
 };
 
 /**

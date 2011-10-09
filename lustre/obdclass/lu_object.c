@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -543,6 +546,30 @@ struct lu_object *lu_object_find(const struct lu_env *env,
 }
 EXPORT_SYMBOL(lu_object_find);
 
+static struct lu_object *lu_object_new(const struct lu_env *env,
+                                       struct lu_device *dev,
+                                       const struct lu_fid *f,
+                                       const struct lu_object_conf *conf)
+{
+        struct lu_object        *o;
+        cfs_hash_t              *hs;
+        cfs_hash_bd_t            bd;
+        struct lu_site_bkt_data *bkt;
+
+        o = lu_object_alloc(env, dev, f, conf);
+        if (unlikely(IS_ERR(o)))
+                return o;
+
+        hs = dev->ld_site->ls_obj_hash;
+        cfs_hash_bd_get_and_lock(hs, (void *)f, &bd, 1);
+        bkt = cfs_hash_bd_extra_get(hs, &bd);
+        cfs_hash_bd_add_locked(hs, &bd, &o->lo_header->loh_hash);
+        cfs_list_add_tail(&o->lo_header->loh_lru, &bkt->lsb_lru);
+        bkt->lsb_busy++;
+        cfs_hash_bd_unlock(hs, &bd, 1);
+        return o;
+}
+
 /**
  * Core logic of lu_object_find*() functions.
  */
@@ -572,9 +599,16 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
          *     - unlock index;
          *     - return object.
          *
+         * For "LOC_F_NEW" case, we are sure the object is new established.
+         * It is unnecessary to perform lookup-alloc-lookup-insert, instead,
+         * just alloc and insert directly.
+         *
          * If dying object is found during index search, add @waiter to the
          * site wait-queue and return ERR_PTR(-EAGAIN).
          */
+        if (conf != NULL && conf->loc_flags & LOC_F_NEW)
+                return lu_object_new(env, dev, f, conf);
+
         s  = dev->ld_site;
         hs = s->ls_obj_hash;
         cfs_hash_bd_get_and_lock(hs, (void *)f, &bd, 1);
