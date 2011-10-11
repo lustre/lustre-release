@@ -1708,8 +1708,9 @@ int llapi_file_lookup(int dirfd, const char *name)
  * --------------------------------------
  * Note: 5th actually means that the value is within the interval
  * (limit - margin, limit]. */
-static int find_value_cmp(unsigned int file, unsigned int limit, int sign,
-                          int negopt, unsigned long long margin, int mds)
+static int find_value_cmp(unsigned long long file, unsigned long long limit,
+                          int sign, int negopt, unsigned long long margin,
+                          int mds)
 {
         int ret = -1;
 
