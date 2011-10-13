@@ -2104,10 +2104,16 @@ int echo_client_init(void)
         int rc;
 
         lprocfs_echo_init_vars(&lvars);
-        rc = class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_ECHO_CLIENT_NAME, &echo_device_type);
+
+        rc = lu_kmem_init(echo_caches);
         if (rc == 0)
-                lu_kmem_init(echo_caches);
+                rc = class_register_type(&echo_obd_ops, NULL,
+                                         lvars.module_vars,
+                                         LUSTRE_ECHO_CLIENT_NAME,
+                                         &echo_device_type);
+        if (rc)
+                lu_kmem_fini(echo_caches);
+
         return rc;
 }
 
