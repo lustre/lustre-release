@@ -1,0 +1,70 @@
+# Configuration options for /etc/init.d/lustre
+
+# The command in PREEXEC_SCRIPT is run before starting services.  Its first
+# parameter is mode of the init script (start|restart|condrestart).  If the
+# command has a non-zero return code, then the init script will abort without
+# taking any action.
+#PREEXEC_SCRIPT="/usr/bin/somescript"
+
+# The command in PREEXEC_CHECK is run before starting services.  It is not
+# passed any arguments.  If the command has a non-zero return code, then the
+# init script will abort without taking any action.
+#PREEXEC_CHECK="command"
+
+# The commands in POSTEXEC_SCRIPT and/or POSTEXEC_CHECK are run after starting
+# services.  If the command has a non-zero return code, then the init script
+# will terminate with an exit status of 1.
+#POSTEXEC_SCRIPT="/usr/bin/somescript"
+#POSTEXEC_CHECK="command"
+
+# If SCSI_DEVICE_TIMEOUT is set, its value is echoed into
+#  /sys/block/sdXX/device/timeout
+# before checking file systems or starting Lustre
+#SCSI_DEVICE_TIMEOUT=60
+
+# LOCAL_SRV or FOREIGN_SRV can be set to a space-delimited list of
+# labels that will be mounted as local and foreign (failover) lustre services.
+# If unset or null, /etc/ldev.conf establishes the labels for these services.
+#LOCAL_SRV="`shopt -s nullglob && cd /dev/disk/by-label 2>/dev/null && echo *-OST* *-MDT* *MGS* *MGT*`"
+
+# Before mounting any lustre backend devices, the init script will
+# run pfsck.ldiskfs only if the following FSCK_ARGS variable is a
+# non-empty string.  There are no default options for this fsck.
+# The command takes the form:
+#
+#     /sbin/pfsck.ldiskfs $devices -- ${FSCK_ARGS}
+#
+#FSCK_ARGS="-p"
+
+# Uncomment to insert server mount options - see mount.lustre(8)
+#MOUNT_OPTIONS="-o abort_recov"
+
+# Stagger mounts by MOUNT_DELAY seconds to avoid possible module loading races
+# due to multiple mount commands running in parallel.  This obviously does not
+# eliminate the race but provides a safety buffer.  The default is 2 seconds.
+# Set to 0 or empty string to disable staggering of mounts.
+#MOUNT_DELAY=0
+
+# Uncomment to disable the check for the mmp ldiskfs feature (only
+# applies if foreign # devices are configured).
+# REQUIRE_MMP_FEATURE=no
+
+# Override default mount points for lustre services
+#LOCAL_MOUNT_DIR=/mnt/lustre/local
+#FOREIGN_MOUNT_DIR=/mnt/lustre/foreign
+
+# Uncomment to cause the lustre init scripts to explicitly modprobe the zfs
+# module when starting services.  The zfs module is normally loaded
+# automatically by the zfs command line utilities, for example when the zpool
+# is imported.
+#LOAD_ZFS="yes"
+
+# Uncomment to pass additional arguments to 'zpool import'.  For example,
+# the -m option can be used to allow the pool to be imported even if its
+# missing a non-critical log device.
+#ZPOOL_IMPORT_ARGS="-m"
+
+# Uncomment to force ZFS to import the pool using the device names in the
+# given directory.  By default, the /dev/disk/by-vdev/ device names will be
+# used if they are configured followed by the /dev/mapper device names.
+#ZPOOL_IMPORT_DIR="/dev/disk/by-id"

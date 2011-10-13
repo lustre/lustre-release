@@ -1,0 +1,67 @@
+.TH ldev.conf 5 Lustre ldev.conf /etc/ldev.conf
+.SH NAME
+/etc/ldev.conf \- lustre device configuration file
+.SH DESCRIPTION
+The ldev.conf file contains a list of Lustre devices used by the
+\fBldev\fR utility.
+.SH FORMAT
+Comments beginning with a hash (#) are ignored.  Each line represents one
+device and includes the following information separated by white space:
+.TP
+.I "local hostname"
+The name of the host where the device normally runs.
+.TP
+.I "foreign hostname"
+The name of the host where the device runs when failed over.
+If failover is not used, insert a hypen as a placeholder.
+.TP
+.I "label"
+The Lustre label associated with the device in the form \fIfsname-SRVnnnn\fR
+where \fIfsname\fR is the file system name, \fISRV\fR is \fBOST\fR or
+\fBMDT\fR, and \fInnnn\fR is the four-digit hex index of the device.
+.TP
+.I "path"
+The path name of the device.  In failover configurations it should be available
+on both local and foreign hosts, e.g. use the symlinks maintained by udev
+in \fI/dev/disk/by-id\fR.
+.TP
+.I "journal-path"
+The path name of the journal device, if any.  This field may be omitted unless
+the raidtab field is present.  If a journal device is not used a hyphen may be
+inserted as a placeholder.
+.TP
+.I "raidtab"
+The path name of a Linux software raid configuration file or ZFS cache file.
+Using non-default names for these files may help prevent arrays from being
+automatically started by the system.  This is important in failover
+configurations where the timing of device initialization must be strictly
+controlled.  This field may be omitted.
+.SH EXAMPLES
+.nf
+
+#local  foreign/-  label    [md:|zfs:]device-path   [journal-path]/- [raidtab]
+
+# ldiskfs on block device example
+tycho-mds1 -    lc1-MDT0000 /dev/sda                /dev/sdc
+tycho1  tycho5  lc1-OST0000 /dev/disk/by-id/scsi-10103a262891d340100
+tycho1  tycho5  lc1-OST0008 /dev/disk/by-id/scsi-10103a262681d340200
+tycho1  tycho5  lc1-OST0010 /dev/disk/by-id/scsi-10103a2629e1d340300
+tycho5  tycho1  lc1-OST0004 /dev/disk/by-id/scsi-101046e6b401d341100
+tycho5  tycho1  lc1-OST000c /dev/disk/by-id/scsi-101046e6b591d341200
+tycho5  tycho1  lc1-OST0014 /dev/disk/by-id/scsi-101046e6bb41d341300
+
+# ldiskfs on Linux software RAID example
+#local  foreign/-  label    [md:|zfs:]device-path   [journal-path]/- [raidtab]
+zwicky-mds1  -    zwicky-MDT0000 md:/dev/md0 -         /etc/mdadm.conf.mds
+zwicky1  zwicky2  zwicky-OST0000 md:/dev/md0 /dev/md10 /etc/mdadm.conf.oss
+zwicky2  zwicky1  zwicky-OST0001 md:/dev/md1 /dev/md20 /etc/mdadm.conf.oss
+
+# ZFS example
+#local  foreign/-  label    [md:|zfs:]device-path   [journal-path]/- [raidtab]
+zeno-mds1 -   zeno-MDT0000 zfs:lustre-zeno-mds1/mdt1 - /etc/zfs/zpool.cache.zeno
+zeno1  zeno5  zeno-OST0000 zfs:lustre-zeno1/ost1     - /etc/zfs/zpool.cache.zeno
+zeno5  zeno1  zeno-OST0001 zfs:lustre-zeno5/ost1     - /etc/zfs/zpool.cache.zeno
+
+.fi
+.SH "SEE ALSO"
+.BR ldev (8)

@@ -1,0 +1,33 @@
+.TH nids 5 Lustre nids /etc/nids
+.SH NAME
+/etc/nids \- The static lookup table for Lustre NIDs
+.SH DESCRIPTION
+The nids file maps host names to NIDs and vice-versa.
+.SH FORMAT
+Comments beginning with a hash (#) are ignored.  Each line represents one
+host and includes the following information separated by white space:
+.TP
+.I "hostname"
+The primary hostname of the node, e.g. \fIuname -n\fR.
+.TP
+.I "primary nid"
+The primary NID of the node.
+.TP
+.I "other nid ..."
+Any additional NIDs.
+.SH EXAMPLE
+.nf
+## Tycho
+tycho-mds1 172.16.2.200@tcp 172.16.10.200@tcp
+tycho1     172.16.2.1@tcp   172.16.10.1@tcp
+tycho2     172.16.2.2@tcp   172.16.10.2@tcp
+tycho3     172.16.2.3@tcp   172.16.10.3@tcp
+tycho4     172.16.2.4@tcp   172.16.10.4@tcp
+tycho5     172.16.2.5@tcp   172.16.10.5@tcp
+tycho6     172.16.2.6@tcp   172.16.10.6@tcp
+tycho7     172.16.2.7@tcp   172.16.10.7@tcp
+tycho8     172.16.2.8@tcp   172.16.10.8@tcp
+.fi
+
+.SH FILES
+/etc/nids

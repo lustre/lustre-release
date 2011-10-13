@@ -1,0 +1,73 @@
+#!/bin/bash
+#
+# Lustre - Heartbeat R1 Resource Agent for the Lustre file system
+#
+# Usage: Lustre <resource-name> start|stop|status
+#  where <resource-name> has the form "<hostname>-targets"
+#
+
+warn ()
+{
+    if [ -e /etc/logd.cf ] && [ -x /usr/sbin/ha_logger ]; then
+        /usr/sbin/ha_logger -t heartbeat "Lustre: $*"
+    elif [ -x /usr/bin/logger ]; then
+        /usr/bin/logger -t heartbeat "Lustre: $*"
+    elif [ -x /bin/logger ]; then
+        /bin/logger -t heartbeat "Lustre: $*"
+    else
+       echo "Lustre: $*"
+    fi
+}
+
+die ()
+{
+    warn "$*"
+    exit 1
+}
+
+
+if [ $# != 2 ]; then
+    die "wrong number of arguments: $*"
+fi
+if ! [ "$2" == "start" -o "$2" == "stop" -o "$2" == "status" ]; then
+    die "bad action arg[2]: $*"
+fi
+
+if ! [ -x /usr/sbin/ldev ]; then
+    die "/usr/sbin/ldev is missing or not executable"
+fi
+if ! [ -x /etc/init.d/lustre ]; then
+    die "/etc/init.d/lustre is missing or not executable"
+fi
+
+action=$2
+if [ "`uname -n`-targets" == "$1" ]; then
+    service=local
+elif [ "`/usr/sbin/ldev -p`-targets" == "$1" ]; then
+    service=foreign
+else
+    die: "bad service arg[1]: $*"
+fi
+
+# Until multi-mount protect is implemented for ZFS we allow heartbeat to
+# force import a pool.  This is required because ZFS will not allow you to
+# import a pool on a new host unless you have cleanly exported it.
+export ZPOOL_IMPORT_ARGS='-f'
+
+# N.B. If status action reports "running", this must pass through to
+# heartbeat unmodified.  Otherwise, stdout/stderr is discarded by heartbeat,
+# so if we want to log diagnostic output from init scripts, we have to
+# redirect it here.
+
+warn /etc/init.d/lustre $action $service
+
+tmpout=`mktemp` || die "mktemp failed"
+/etc/init.d/lustre $action $service >$tmpout
+result=$?
+cat $tmpout | while read line; do
+    echo "$line"
+    warn "$line"
+done
+rm -f $tmpout
+
+exit $result

@@ -34,11 +34,17 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-sbinscripts = lc_servip lustre_up14 lustre_rmmod
+sbinscripts = lc_servip lustre_up14 lustre_rmmod lhbadm ldev
 
 # These are scripts that are generated from .in files
 genscripts = lustre_config lc_modprobe lc_net lc_hb lc_cluman lustre_createcsv \
-    lc_md lc_lvm lustre_start
+    lc_md lc_lvm lustre_start lustre
+
+initdir = $(sysconfdir)/init.d
+init_SCRIPTS = lustre lnet
+
+hadir = $(sysconfdir)/ha.d/resource.d
+ha_SCRIPTS = Lustre
 
 sbin_SCRIPTS = $(genscripts) $(sbinscripts)
 bin_SCRIPTS = lustre_req_history lfs_migrate
@@ -46,9 +52,11 @@ bin_SCRIPTS = lustre_req_history lfs_migrate
 EXTRA_DIST = license-status maketags.sh version_tag.pl version_tag-git.pl \
 	     version_tag-cvs.pl version_tag-none.pl lc_common \
 	     $(addsuffix .in,$(genscripts)) lc_mon $(sbinscripts) \
-	     $(bin_SCRIPTS) make_META.pl
+	     $(bin_SCRIPTS) make_META.pl lustre.in lnet lhbadm \
+	     haconfig ldev Lustre
 
 scriptlibdir = @libexecdir@/@PACKAGE@
+scriptlib_SCRIPTS = haconfig
 scriptlib_DATA = lc_common
 
 CLEANFILES = $(genscripts)

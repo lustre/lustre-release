@@ -1,0 +1,112 @@
+.TH ldev 8 Lustre ldev ldev
+.SH NAME
+ldev \- lustre device utility
+.SH SYNOPSIS
+.B "ldev [OPTIONS]"
+.br
+.SH DESCRIPTION
+.B ldev
+can be used to query information about lustre devices configured in
+/etc/ldev.conf.  It is used by the lustre init script.
+.SH OPTIONS
+.B ldev
+accepts the following options:
+.TP
+.I "-h, --help"
+Display help message.
+.TP
+.I "-c, --config FILE"
+Set path to config file.
+.TP
+.I "-H, --hostname NAME"
+Use NAME instead of local hostname for queries.
+.TP
+.I "-p, --partner"
+Print hostname of failover partner.
+.TP
+.I "-l, --local"
+Print labels for local devices.
+.TP
+.I "-f, --foreign"
+Print labels for foreign devices.
+.TP
+.I "-a, --all"
+Print labels for local and foreign devices.
+.TP
+.I "-s, --sanity"
+Sanity check config on this node.
+If any expected local or foreign devices are not present, print an error.
+If devices do not contain the expected labels, print an error.
+.TP
+.I "-d, --device LABEL"
+Print storage device of label.
+.TP
+.I "-j, --journal LABEL"
+Print journal device corresponding to label if defined.
+.TP
+.I "-r, --raidtab LABEL"
+Print Linux software raid configuration file or ZFS cache file associated with
+LABEL, if any.  Using non-default names for these files may help prevent arrays
+from being automatically started by the system.  This is important in failover
+configurations where the timing of device initialization must be strictly
+controlled.
+.TP
+.I "-t, --type LABEL"
+Print device type of LABEL, i.e. "zfs" or "md".
+.TP
+.I "-z, --zpool LABEL"
+Print zpool containing LABEL.
+.TP
+.I "CMD [ARGS...]"
+Run one instance of \fICMD [ARGS]\fR for each label in parallel.
+Only the local labels are used by default, but foreign or all labels
+may be selected by adding the \fI--foreign\fR or \fI--all\fR options.
+The following substitutions are made:
+%f=fsname, %d=device, %j=journal, %i=index, %I=hex-index, %t=type, %l=label,
+%n=nid, %N=failnid.  On failure of any child processes, \fBldev\fR will
+return a non-zero exit code.
+.LP
+It is an error if %n or %N is used in a command and /etc/nids does not
+contain appropriate host to NID mappings.
+.SH EXAMPLES
+To run a preen check on all devices in a cluster in parallel:
+.IP
+.nf
+pdsh -S -g ost ldev fsck.ldiskfs -p %d
+.fi
+.LP
+To re-format an entire file system:
+.IP
+.nf
+#!/bin/bash -xe
+export FANOUT=64
+
+# MDTs
+pdsh -S -g mds service lustre stop
+pdsh -S -g mds ldev "yes \\| mkfs.ldiskfs -q -b4096 \\
+         -Ojournal_dev %j"
+pdsh -S -g mds ldev dd if=/dev/zero of=%d count=8
+pdsh -S -g mds ldev mkfs.lustre --mdt --mgs --fsname=%f \\
+         --index=%i --mkfsoptions=-Jdevice=%j \\
+         --mkfsoptions=-i2048 \\
+         --mountfsoptions=errors=panic,iopen_nopriv,user_xattr,\\
+                          maxdirsize=20000000 %d
+pdsh -S -g mds ldev tune.ldiskfs -i0 -m0 -c0 %d
+
+# OSTs
+mgs=172.16.2.200@tcp0
+pdsh -S -g ost service heartbeat stop
+pdsh -S -g ost service lustre stop
+pdsh -S -g ost ldev dd if=/dev/zero of=%d count=8
+pdsh -S -g ost ldev mkfs.lustre --ost --mgsnode=$mgs --fsname=%f \\
+         --index=%i --param=lov.stripecount=2 --failnode=%N \\
+         --mountfsoptions=errors=panic,extents,mballoc %d
+pdsh -S -g ost ldev tune.ldiskfs -epanic -i0 -m0 -c0 %d
+.fi
+.SH FILES
+/etc/ldev.conf
+.br
+/etc/nids
+.SH "SEE ALSO"
+.BR ldev.conf (5)
+.BR nids (5)

@@ -1,0 +1,214 @@
+#!/bin/bash
+#
+# lnet	This shell script takes care of starting and stopping
+#       the lnet (Lustre networking) services.
+#
+# chkconfig: - 59 76
+# description:  Part of the lustre file system.
+# probe: true
+# config: /etc/sysconfig/lustre
+
+# Source function library.
+[ -f /etc/rc.d/init.d/functions ] && . /etc/rc.d/init.d/functions
+
+# Source networking configuration and check that networking is up.
+[ -f /etc/sysconfig/network ] && . /etc/sysconfig/network && \
+[ "${NETWORKING}" = "no" ] && exit 0
+
+# Check for and source configuration file otherwise set defaults
+[ -f /etc/sysconfig/lnet ] && . /etc/sysconfig/lnet
+
+declare -r TOP_MODULES=(	\
+	obdecho			\
+	llite			\
+	lustre			\
+	osc			\
+	lov			\
+	mds			\
+	mdc			\
+	mgs			\
+	mgc			\
+	ost			\
+	obdfilter		\
+	lquota			\
+	ptlrpc			\
+)
+declare -r BOTTOM_MODULES=(	\
+	ksocklnd		\
+	kqswlnd			\
+	ko2iblnd		\
+	fsfilt_ldiskfs		\
+	obdclass		\
+	lnet			\
+	lvfs			\
+	libcfs			\
+	ldiskfs			\
+)
+
+declare -r awkprog='BEGIN { rc = -1 }
+		       { if ( $1 == module_name ) { rc = $3; exit; } }
+		    END { print rc }'
+
+# Usage: run_preexec_check [ start | restart | condrestart ]
+# The single parameter will be passed to the PREEXEC_SCRIPT
+run_preexec_check ()
+{
+	if [ -n "$PREEXEC_CHECK" ] && ! $PREEXEC_CHECK ; then
+		echo "Pre-exec check \"$PREEXEC_CHECK\" failed.  Aborting."
+		exit 1
+	fi
+
+	if [ -n "$PREEXEC_SCRIPT" ] && ! "$PREEXEC_SCRIPT" "$1" ; then
+		echo "Pre-exec script \"$PREEXEC_SCRIPT\" failed.  Aborting."
+		exit 1
+	fi
+}
+
+# Usage: run_postexec_check [ start | restart | condrestart ]
+# The single parameter will be passed to the POSTEXEC_SCRIPT
+run_postexec_check ()
+{
+	if [ -n "$POSTEXEC_CHECK" ] && ! $POSTEXEC_CHECK ; then
+		echo "Post-exec check \"$POSTEXEC_CHECK\" failed.  Aborting."
+		exit 1
+	fi
+
+	if [ -n "$POSTEXEC_SCRIPT" ] && ! "$POSTEXEC_SCRIPT" "$1" ; then
+		echo "Post-exec script \"$POSTEXEC_SCRIPT\" failed.  Aborting."
+		exit 1
+	fi
+}
+
+remove_modules ()
+{
+	local modules="${@}"
+	local ref_cnt
+
+	for mod in $modules; do
+		ref_cnt=`/sbin/lsmod | awk "$awkprog" "module_name=$mod"`
+		if [ $ref_cnt -lt 0 ]; then
+			# module not loaded, skip it
+			continue
+		fi
+		if [ $ref_cnt -gt 0 ]; then
+			# module in use.  maybe it just needs a few seconds
+			# after removal of previous modules.
+			sleep 5
+			ref_cnt=`/sbin/lsmod | awk "$awkprog" module_name=$mod`
+		fi
+		if [ $ref_cnt -eq 0 ]; then
+			# unload the module
+			echo "Removing module $mod"
+			/sbin/rmmod $mod
+			if [ $? -ne 0 ]; then
+				echo "ERROR: Failed to remove module $mod."
+				return 1
+			fi
+		else
+			# boo!  module still in use.
+			echo "ERROR: Module $mod has non-zero reference count."
+			return 1
+		fi
+	done
+
+	return 0
+}
+
+stop_lnet ()
+{
+	local errmsg=`/usr/sbin/lctl network unconfigure 2>&1`
+	if [ $? -gt 0 ]; then
+		# The following error message means that lnet is already
+		# unconfigured, and the modules are not loaded.
+		echo $errmsg | grep "LNET unconfigure error 19" > /dev/null
+		if [ $? -gt 0 ]; then
+			return 0
+		else
+			echo "$errmsg"
+			return 1
+		fi
+	fi
+	return 0
+}
+
+status ()
+{
+	old_nullglob="`shopt -p nullglob`"
+	shopt -u nullglob
+
+	STATE="stopped"
+	# LSB compliance - return 3 if service is not running
+	# Lustre-specific returns
+	# 150 - partial startup
+	# 151 - health_check unhealthy
+	# 152 - LBUG
+	RETVAL=3
+	egrep -q "lnet" /proc/modules && STATE="loaded"
+
+	# check for any routes - on a portals router this is the only thing
+	[ "`cat /proc/sys/lnet/routes 2> /dev/null`" ] && STATE="running" && RETVAL=0
+
+	# check if this is a router
+	if [ -d /proc/sys/lnet ]; then
+		ROUTER="`cat /proc/sys/lnet/routes | head -1 | grep -i -c \"Routing enabled\"`"
+		if [[ ! -z ${ROUTER} && ${ROUTER} -ge 1 ]]; then
+			STATE="running"
+			RETVAL=0
+		fi
+	fi
+
+	# check for error in health_check
+	HEALTH="/proc/fs/lustre/health_check"
+	[ -f "$HEALTH" ] && grep -q "NOT HEALTHY" $HEALTH && STATE="unhealthy" && RETVAL=1
+
+	# check for LBUG
+	[ -f  "$HEALTH" ] && grep -q "LBUG" $HEALTH && STATE="LBUG" && RETVAL=152
+
+	echo $STATE
+	eval $old_nullglob
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	run_preexec_check "start"
+	touch /var/lock/subsys/lnet
+	modprobe lnet || exit 1
+	lctl network up || exit 1
+	run_postexec_check "start"
+	;;
+  stop)
+	run_preexec_check "stop"
+	remove_modules ${TOP_MODULES[*]} || exit 1
+	stop_lnet || exit 1
+	remove_modules ${BOTTOM_MODULES[*]} || exit 1
+	rm -f /var/lock/subsys/lnet
+	run_postexec_check "stop"
+	;;
+  status)
+	status
+	;;
+  restart)
+	$0 stop
+	$0 start
+	;;
+  reload)
+	touch /var/lock/subsys/lnet
+	;;
+  probe)
+	if [ ! -f /var/lock/subsys/lnet ] ; then
+	  echo $"start"; exit 0
+	fi
+	;;
+  condrestart)
+	[ -f /var/lock/subsys/lnet ] && {
+		$0 stop
+		$0 start
+	}
+	;;
+  *)
+	echo $"Usage: lustre {start|stop|status|restart|reload|condrestart}"
+	exit 1
+esac
+
+exit 0

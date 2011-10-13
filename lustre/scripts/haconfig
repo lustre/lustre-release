@@ -1,0 +1,21 @@
+#!/bin/bash
+
+# haconfig - config helper to process heartbeat V1 config skel files
+
+local=`uname -n`
+
+[ -x /usr/sbin/ldev ] || exit 0
+foreign=`/usr/sbin/ldev -p`
+[ -n "$foreign" ] || exit 0
+
+
+umask 022
+
+for file in /etc/ha.d/haresources /etc/ha.d/ha.cf; do
+    if [ -r ${file}.in ]; then
+        sed -e "s!@LOCAL@!$local!g" -e "s!@FOREIGN@!$foreign!g" \
+	    < ${file}.in >${file}
+     fi
+done
+
+exit 0

@@ -1,0 +1,137 @@
+#!/bin/bash
+
+# lhbadm - handle some common heartbeat/lustre failover ops
+
+PATH=/sbin:/usr/sbin:/usr/bin:$PATH:/usr/lib64/heartbeat:/usr/lib/heartbeat
+
+declare -r prog=lhbadm
+
+die ()
+{
+    echo "$prog: $@"
+    exit 1
+}
+
+warn ()
+{
+    echo "$prog: $@"
+}
+
+usage ()
+{
+    echo "Usage: $prog status|lstatus|failback|failover"
+    echo "  status -   print one-line heartbeat-lustre status"
+    echo "  failover - fail all my active resources over to partner"
+    echo "  failback - fail my normal resources back"
+    exit 1
+}
+
+test_mounts ()
+{
+    local label
+    local lcount=0
+    local fcount=0
+    local ltot=0
+    local ftot=0
+
+    for label in $(ldev -l); do
+        ltot=$((ltot + 1))
+        if [ "$(service lustre status $label)" == "running" ]; then
+            lcount=$((lcount + 1))
+        fi
+    done
+    for label in $(ldev -f); do
+        ftot=$((ftot+ 1))
+        if [ "$(service lustre status $label)" == "running" ]; then
+            fcount=$((fcount + 1))
+        fi
+    done
+
+    if [ $(($lcount + $fcount)) == 0 ]; then
+        echo none
+    elif [ $lcount == $ltot -a $fcount == 0 ]; then
+        echo local
+    elif [ $lcount == 0     -a $fcount == $ftot ]; then
+        echo foreign
+    elif [ $lcount == $ltot -a $fcount == $ftot ]; then
+        echo all
+    else
+        echo partial
+    fi
+}
+
+status ()
+{
+    local rstat fstat
+    local labels
+
+    rstat=$(cl_status rscstatus) || die "cl_status rscstatus failed"
+    fstat=$(service lustre status)
+
+    if [ "$fstat" == "running" ]; then
+        fstat=$(test_mounts)
+    fi
+
+    echo $rstat-$fstat
+}
+
+wait_for_transition ()
+{
+    while sleep 5; do
+        state=$(cl_status rscstatus) || die "cl_status rscstatus failed"
+        [ "$state" == "transition" ] || break
+    done
+}
+
+failover ()
+{
+    local s
+
+    [ "$(id -un)" == "root" ] || die "failover requires root privileges"
+    [ $# -gt 0 ] || die "please include a descriptive reason for the logs"
+
+    s=$(status)
+    logger -s -t Lustre-ha -p user.err "failover start, status=$s, reason: $*"
+
+    hb_standby all 2>/dev/null 1>&2 || die "hb_standby all failed"
+    wait_for_transition
+
+    s=$(status)
+    logger -s -t Lustre-ha -p user.err "failover complete, status=$s"
+}
+
+failback ()
+{
+    local s
+
+    [ "$(id -un)" == "root" ] || die "failback requires root privileges"
+    [ $# -gt 0 ] || die "please include a descriptive reason for the logs"
+
+    s=$(status)
+    logger -s -t Lustre-ha -p user.err "failback start, status=$s, reason: $*"
+
+    hb_takeover local || die "hb_takeover local failed"
+    wait_for_transition
+
+    s=$(status)
+    logger -s -t Lustre-ha -p user.err "failover complete, status=$s"
+}
+
+
+#
+# MAIN
+#
+
+[ $# == 0 ] && usage
+[ -x /usr/bin/cl_status ] || die "Heartbeat is not installed"
+hstat=$(cl_status hbstatus) || die "$hstat"
+
+case "$1" in
+    status)   status ;;
+    lstatus)  lstatus ;;
+    failback) shift; failback $*;;
+    failover) shift; failover $*;;
+    *) usage ;;
+esac
+
+#  vi: ts=4 sw=4 expandtab

@@ -1,0 +1,82 @@
+.TH lhbadm 8 "2009 Apr 29" Lustre "System Administration Utilities"
+.SH NAME
+lhbadm \- Lustre failover utility
+.SH SYNOPSIS
+.B lhbadm {failover|failback} reason ...
+.br
+.B pdsh -g lustre lhbadm status | dshbak -c
+.br
+.SH DESCRIPTION
+.B lhbadm
+simlifies heartbeat administration on Lustre clusters.
+It offers the following operations:
+.TP
+.B status
+Print a single line status message consisting of the heartbeat resource
+status a hyphen, and lustre status.
+Under normal circumstatus, server status should be \fIlocal-local\fR.
+.TP
+.B failover \fIreason ...\fR
+Initiate failover of local services (and foreign if active) to the
+failover partner.
+The command blocks until the transition is complete, which includes
+starting lustre on the partner node.
+Initiation and completion of failover is logged to the syslog
+\fRuser.err\fI facility.
+.TP
+.B failback \fIreason ...\fR
+Initiate failback of the local services from the failover
+partner.  The command blocks until the transition is complete, which
+includes starting lustre.
+Initiation and completion of failback is logged to the syslog
+\fRuser.err\fI facility.
+.SH "HEARTBEAT STATUS VALUES"
+The heartbeat resource status values returned by \fBlhbadm status\fR
+may be one of the following:
+.TP
+.B local
+Hearbeat expects only the local services to be running.
+.TP
+.B none
+Hearbeat expects no services to be running.
+.TP
+.B all
+Hearbeat expects local and foreign services to be running.
+.TP
+.B foreign
+Hearbeat expects only the foreign services to be running.
+.TP
+.B transition
+Resources are in transition.
+.SH "LUSTRE STATUS VALUES"
+The lustre status values returned by \fBlhbadm status\fR
+may be one of the following:
+.TP
+.B loaded
+Lustre modules are loaded but that's about it.
+.TP
+.B recovery
+One or more Lustre services is in recovery.
+.TP
+.B unhealthy
+Lustre is not healthy.
+.TP
+.B none
+Lustre is not running any services
+.TP
+.B local
+Lustre is running only the local services.
+.TP
+.B foreign
+Lustre is running only the foreign services.
+.TP
+.B all
+Lustre is running both the local and foreign services.
+.TP
+.B partial
+Lustre is partially started and may be running one or more services,
+but not exactly the local, foreign, or all sets.
+.SH SEE ALSO
+.BR cl_status (1)
+.BR hb_takeover (1)
+.BR hb_standby (1)

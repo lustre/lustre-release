@@ -233,6 +233,13 @@ cat >lustre.files <<EOF
 %attr(-, root, root) %{_libexecdir}/lustre/lc_common
 
 %attr(-, root, root) %{_sysconfdir}/udev/rules.d/99-lustre.rules
+
+%attr(-, root, root) %{_sysconfdir}/init.d/lnet
+%attr(-, root, root) %{_sysconfdir}/init.d/lustre
+%attr(-, root, root) %{_sysconfdir}/ldev.conf
+%attr(-, root, root) %{_sysconfdir}/sysconfig/lustre
+%attr(-, root, root) %{_libexecdir}/lustre/haconfig
+%attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre
 EOF
 
 if [ -f $RPM_BUILD_ROOT%{_libdir}/libcfsutil.a ] ; then

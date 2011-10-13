@@ -24,5 +24,6 @@
 /lc_net
 /lustre_config
 /lustre_createcsv
+/lustre
 /lustre_start
 /tree_status.pl

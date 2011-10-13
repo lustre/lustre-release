@@ -1,0 +1,740 @@
+#!/bin/bash
+#
+# lustre	This shell script takes care of starting and stopping
+#	       the lustre services.
+#
+# chkconfig: - 60 20
+# description:  Part of the lustre file system.
+# probe: true
+# config: /etc/sysconfig/lustre
+
+# Source function library.
+. /etc/rc.d/init.d/functions
+
+# Source networking configuration.
+if [ ! -f /etc/sysconfig/network ]; then
+	exit 0
+fi
+
+. /etc/sysconfig/network
+
+LDEV=${LDEV:-"/usr/sbin/ldev"}
+ZPOOL_LAYOUT=/usr/bin/zpool_layout
+UDEVADM=${UDEVADM:-/sbin/udevadm}
+
+# Check that networking is up.
+[ "${NETWORKING}" = "no" ] && exit 0
+
+# Check for and source configuration file otherwise set defaults
+[ -f /etc/sysconfig/lustre ] && . /etc/sysconfig/lustre
+FSCK_ARGS=${FSCK_ARGS:-""}
+MOUNT_OPTIONS=${MOUNT_OPTIONS:-""}
+LOCAL_SRV=${LOCAL_SRV:-"`$LDEV -l 2>/dev/null`"}
+FOREIGN_SRV=${FOREIGN_SRV:-"`$LDEV -f 2>/dev/null`"}
+REQUIRE_MMP_FEATURE=${REQUIRE_MMP_FEATURE:-${FOREIGN_SRV:+"yes"}}
+LOCAL_MOUNT_DIR=${LOCAL_MOUNT_DIR:-"/mnt/lustre/local"}
+FOREIGN_MOUNT_DIR=${FOREIGN_MOUNT_DIR:-"/mnt/lustre/foreign"}
+SETUP_DEVICES=${SETUP_DEVICES:-""}
+ZPOOL_LAYOUT_BUSES=${ZPOOL_LAYOUT_BUSES:-""}
+ZPOOL_LAYOUT_PORTS=${ZPOOL_LAYOUT_PORTS:-""}
+ZPOOL_LAYOUT_MAP=${ZPOOL_LAYOUT_MAP:-""}
+MOUNT_DELAY=${MOUNT_DELAY:-2}
+LOAD_ZFS=${LOAD_ZFS:-""}
+
+shopt -s nullglob
+
+start_zfs_services ()
+{
+	if [ -n "$ZPOOL_LAYOUT_BUSES" -a -n "$ZPOOL_LAYOUT_PORTS" ] ; then
+		MAP_ARG=${ZPOOL_LAYOUT_MAP:+"-m $ZPOOL_LAYOUT_MAP"}
+		$ZPOOL_LAYOUT -t -b "$ZPOOL_LAYOUT_BUSES" \
+			-p "$ZPOOL_LAYOUT_PORTS" $MAP_ARG
+	fi
+	if [ "$LOAD_ZFS" = "yes" ] && ! modprobe zfs ; then
+		echo "Failed to load zfs module.  Aborting."
+		exit 1
+	fi
+}
+
+stop_devices ()
+{
+	local labels=$*
+	local result=0
+	local label devtype
+	for label in $labels; do
+		devtype=`$LDEV -t $label`
+		if [ "$devtype" = "zfs" ] ; then
+			export_zpool $label
+		elif [ "$devtype" = "md" ] ; then
+			dev=`label_to_device $label`
+			journal=`$LDEV -j $label`
+			stop_md_device $dev
+			stop_md_device $journal
+		fi
+	done
+}
+
+import_zpool ()
+{
+	local result=1
+	local label=$1
+	local pool=`$LDEV -z $label`
+	local args="-N $ZPOOL_IMPORT_ARGS"
+	local cache=`$LDEV -r $label`
+	# -c is incompatible with -d
+	if [ -n "$cache" ] ; then
+		args="$args -c $cache"
+	elif [ -n "$ZPOOL_IMPORT_DIR" ] ; then
+		args="$args -d $ZPOOL_IMPORT_DIR"
+	elif [ -d "/dev/disk/by-vdev" ] ; then
+		args="$args -d /dev/disk/by-vdev"
+	elif [ -d "/dev/mapper" ] ; then
+		args="$args -d /dev/mapper"
+	fi
+
+	if zpool status $pool >/dev/null 2>&1 ; then
+		result=0
+	elif [ -n "$pool" ] ; then
+		zpool import $pool $args 2>/dev/null
+		result=$?
+	fi
+	return $result
+}
+
+export_zpool ()
+{
+	local label=$1
+	local pool=`$LDEV -z $label`
+	zpool export $pool 2>/dev/null
+}
+
+# Trigger udev and wait for it to settle.
+udev_trigger()
+{
+	if [ -x ${UDEVADM} ]; then
+		${UDEVADM} trigger --action=change --subsystem-match=block
+		${UDEVADM} settle
+	else
+		/sbin/udevtrigger
+		/sbin/udevsettle
+	fi
+}
+
+# Usage: run_preexec_check [ start | restart | condrestart ]
+# The single parameter will be passed to the PREEXEC_SCRIPT
+run_preexec_check ()
+{
+	if [ -n "$PREEXEC_CHECK" ] && ! $PREEXEC_CHECK ; then
+		echo "Pre-exec check \"$PREEXEC_CHECK\" failed.  Aborting."
+		exit 1
+	fi
+
+	if [ -n "$PREEXEC_SCRIPT" ] && ! "$PREEXEC_SCRIPT" "$1" ; then
+		echo "Pre-exec script \"$PREEXEC_SCRIPT\" failed.  Aborting."
+		exit 1
+	fi
+}
+
+# Usage: run_postexec_check [ start | restart | condrestart ]
+# The single parameter will be passed to the PREEXEC_SCRIPT
+run_postexec_check ()
+{
+	if [ -n "$POSTEXEC_CHECK" ] && ! $POSTEXEC_CHECK ; then
+		echo "Post-exec check \"$POSTEXEC_CHECK\" failed.  Aborting."
+		exit 1
+	fi
+
+	if [ -n "$POSTEXEC_SCRIPT" ] && ! "$POSTEXEC_SCRIPT" "$1" ; then
+		echo "Post-exec script \"$POSTEXEC_SCRIPT\" failed.  Aborting."
+		exit 1
+	fi
+}
+
+# Usage: adjust_scsi_timeout <dev>
+adjust_scsi_timeout ()
+{
+	local dev=$1
+
+	if [ -n "$SCSI_DEVICE_TIMEOUT" ]; then
+		# make sure that it is actually a SCSI (sd) device
+		local name=`basename $dev`
+		local proc=/sys/block/${name}/device/timeout
+		local driver=`readlink /sys/block/${name}/device/driver`
+		if [ -n "$driver" ] && [ "`basename $driver`" == "sd" ]; then
+			if ! echo $SCSI_DEVICE_TIMEOUT >$proc; then
+				echo "FAILED: could not adjust ${dev} timeout"
+				return 1
+			fi
+		fi
+	fi
+	return 0
+}
+
+# Usage: fsck_test <dev> [ <dev> ... ]
+# Checks all devices in parallel if FSCK_ARGS is set.
+fsck_test ()
+{
+	local devices="$*"
+
+	# Filter out non-absolute paths, which are probably ZFS datasets
+	devices=`echo $devices |xargs -n 1|grep '^/'|xargs`
+
+	if [ -n "${FSCK_ARGS}" -a -n "$devices" ]; then
+		if [ -x /sbin/@PFSCK@ ] ; then
+			echo "@PFSCK@ $devices -- ${FSCK_ARGS}"
+			/sbin/@PFSCK@ $devices -- ${FSCK_ARGS}
+			if [ $? -ne 0 -a $? -ne 1 ] ; then
+				echo "FAILED: @PFSCK@ -- ${FSCK_ARGS}: $?"
+				return 1
+			fi
+		else
+			echo "/sbin/@PFSCK@ not found"
+			return 1
+		fi
+	fi
+	return 0
+}
+
+# Usage: test_feature_flag <dev> <flag>
+test_feature_flag()
+{
+	local dev=$1
+	local flag=$2
+	local result=1
+	local feature
+
+	for feature in `/sbin/@TUNE2FS@ -l $dev 2>/dev/null \
+				| grep features: | sed -e 's/^.*: //'`; do
+		if [ "$feature" == "$flag" ]; then
+			result=0
+			break
+		fi
+	done
+
+	return $result
+}
+
+# Usage: mmp_test <dev>
+# Returns 0 if it is set or not required, 1 if unset and required or error.
+mmp_test ()
+{
+	local dev=$1
+	local result=0
+
+	if [ "$REQUIRE_MMP_FEATURE" == "yes" ]; then
+		if [ -x /sbin/@TUNE2FS@ ]; then
+			if ! test_feature_flag $dev "mmp"; then
+				echo "mmp feature flag is not set on $dev"
+				result=1
+			fi
+		else
+			echo "/sbin/@TUNE2FS@ not found"
+			result=1
+		fi
+	fi
+
+	return $result
+}
+
+# Usage: label_to_mountpt <label>
+# Prints mount point path, if label matches a local or foreign server.
+label_to_mountpt ()
+{
+	local label=$1
+	local serv
+
+	for serv in $LOCAL_SRV; do
+		if [ "$serv" == "$label" ]; then
+			echo "$LOCAL_MOUNT_DIR/$label"
+			return
+		fi
+	done
+	for serv in $FOREIGN_SRV; do
+		if [ "$serv" == "$label" ]; then
+			echo "$FOREIGN_MOUNT_DIR/$label"
+			return
+		fi
+	done
+}
+
+# Usage: label_to_device <label>
+# Prints canonical device path.
+label_to_device ()
+{
+	local label=$1
+	local path=/dev/disk/by-label/$label
+
+	if [ -h $path ] ; then
+		readlink --canonicalize $path
+	else
+		$LDEV -d $label
+	fi
+}
+
+# helper for mountpt_is_active() and device_is_active()
+declare -r awkprog='BEGIN {rc = 1;}
+			{ if ($field == path) {rc = 0;} }
+		    END { exit rc;}'
+
+# Usage: mountpt_is_active <label>
+# Return 1 (inactive) on invalid label.
+mountpt_is_active ()
+{
+	local dir=`label_to_mountpt $1`
+	local result=1
+
+	if [ -n "$dir" ]; then
+		cat /proc/mounts | awk "$awkprog" field=2 path=$dir
+		result=$?
+	fi
+	return $result
+}
+
+# Usage: device_is_active <label>
+# Return 1 (inactive) on invalid label.
+device_is_active ()
+{
+	local dev=`label_to_device $1`
+	local result=1
+
+	if [ -n "$dev" ]; then
+		cat /proc/mounts | awk "$awkprog" field=1 path=$dir
+		result=$?
+	fi
+	return $result
+}
+
+# Usage: mount_one_device <label> <successflag> [devtype]
+# Remove <succesflag> on error (trick to detect errors after parallel runs).
+mount_one_device ()
+{
+	local label=$1
+	local successflag=$2
+	local devtype=$3
+	local dev=`label_to_device $label`
+	local dir=`label_to_mountpt $label`
+
+	# $dir and $dev have already been checked at ths point
+	if [ ! -d $dir ] && ! mkdir -p $dir; then
+		rm -f $successflag
+		return
+	fi
+	echo "Mounting $dev on $dir"
+	if ! mount -t lustre $MOUNT_OPTIONS $dev $dir; then
+		rm -f $successflag
+		return
+	fi
+}
+
+# Usage: assemble_md_device <device>
+# Assemble the md device backing device.
+# Return 0 if the array is assembled successfully or was already active,
+# otherwise return error code from mdadm.
+assemble_md_device ()
+{
+	local dev=$1
+	local raidtab=$2
+	local args="-Aq"
+	local result=0
+
+	if [ -n "$raidtab" ] ; then
+		args="$args -c $raidtab"
+	fi
+
+	if ! md_array_is_active $dev ; then
+		mdadm $args $dev
+		result=$?
+	fi
+
+	udev_trigger
+	return $result
+}
+
+# Usage: stop_md_device <device>
+# Stop the md device backing device.
+# Return 0 if the array is stopped successfully or was not active,
+# otherwise return error code from mdadm.
+stop_md_device ()
+{
+	local dev=$1
+	local raidtab=$2
+	local args="-Sq"
+	local result=0
+
+	if [ -n "$raidtab" ] ; then
+		args="$args -c $raidtab"
+	fi
+
+	if [ -e $dev ] && md_array_is_active $dev ; then
+		mdadm $args $dev
+		result=$?
+	fi
+
+	return $result
+}
+
+# Usage: md_array_is_active <device>
+# return 0 if device is an active md RAID array, or 1 otherwise
+md_array_is_active ()
+{
+	local device=$1
+
+	[ -e "$device" ] || return 1
+
+	mdadm --detail -t $device > /dev/null 2>&1
+	if [ $? -eq 4 ] ; then
+		return 1
+	fi
+	return 0
+}
+
+# Usage: start_services <label> [ <label> ... ]
+# fsck and mount any devices listed as arguments (in parallel).
+# Attempt to assemble software raid arrays or zfs pools backing
+# Lustre devices.
+start_services ()
+{
+	local result=0
+	local devices=""
+	local dir dev label
+	local successflag
+	local labels
+
+	start_zfs_services
+	for label in $*; do
+		dir=`label_to_mountpt $label`
+		devtype=`$LDEV -t $label`
+		dev=`label_to_device $label`
+		journal=`$LDEV -j $label`
+		raidtab=`$LDEV -r $label`
+
+		if [ -z "$dir" ] || [ -z "$dev" ]; then
+			echo "$label is not a valid lustre label on this node"
+			result=2
+			continue
+		fi
+
+		if [ "$devtype" = "md" ] ; then
+			if ! assemble_md_device $dev $raidtab ; then
+				echo "failed to assemble array $dev backing $label"
+				result=2
+				continue
+			fi
+		elif [ "$devtype" = "zfs" ] ; then
+			if ! import_zpool $label ; then
+				result=2
+			fi
+		fi
+
+		# Journal device field in ldev.conf may be "-" or empty,
+		# so only attempt to assemble if its an absolute path.
+		# Ignore errors since the journal device may not be an
+		# md device.
+		if echo $journal | grep -q ^/ ; then
+			assemble_md_device $journal $raidtab 2>/dev/null
+		fi
+
+		if [ "x$devtype" != "xzfs" ] ; then
+			if mountpt_is_active $label || \
+			   device_is_active $label; then
+				echo "$label is already mounted"
+				# no error
+				continue
+			fi
+			if ! mmp_test $dev; then
+				result=2
+				continue
+			fi
+			if ! adjust_scsi_timeout $dev; then
+				result=2
+				continue
+			fi
+		fi
+		devices="$devices $dev"
+		labels="$labels $label"
+	done
+	if [ $result == 0 ]; then
+		fsck_test $devices || return 2
+
+		# Fork to handle multiple mount_one_device()'s in parallel.
+		# Errors occurred if $successflag comes up missing afterwards.
+		successflag=`mktemp`
+		[ -e $successflag ] || return 2
+		for label in $labels; do
+			mount_one_device $label $successflag `$LDEV -t $label` &
+			# stagger to avoid module loading races
+			if [[ -n $MOUNT_DELAY && $MOUNT_DELAY -gt 0 ]] ; then
+				sleep $MOUNT_DELAY
+			fi
+		done
+		for label in $labels; do
+			wait
+		done
+		[ -e $successflag ] || return 2
+		rm -f $successflag
+	fi
+
+	return $result
+}
+
+# Usage: stop_services <label> [ <label> ... ]
+# Unmount any devices listed as arguments (serially).
+# Any devices which are not mounted or don't exist are skipped with no error.
+stop_services ()
+{
+	local labels=$*
+	local result=0
+	local dir dev label
+
+	for label in $labels; do
+		dir=`label_to_mountpt $label`
+		if [ -z "$dir" ]; then
+			echo "$label is not a valid lustre label on this node"
+			result=2
+			continue
+		fi
+		if ! mountpt_is_active $label; then
+			#echo "$label is not mounted"
+			# no error
+			continue
+		fi
+		echo "Unmounting $dir"
+		umount $dir || result=2
+	done
+	# double check!
+	for label in $labels; do
+		if mountpt_is_active $label; then
+			dir=`label_to_mountpt $label`
+			echo "Mount point $dir is still active"
+			result=2
+		fi
+		if device_is_active $label; then
+			dev=`label_to_device $label`
+			echo "Device $dev is still active"
+			result=2
+		fi
+	done
+	stop_devices $labels
+
+	return $result
+}
+
+# Usage: start_lustre_services [local|foreign|all|<label>]
+# If no parameter is specified, local devices will be started.
+start_lustre_services ()
+{
+	local labels=""
+
+	case "$1" in
+		""|local)
+			labels=$LOCAL_SRV
+			;;
+		foreign)
+			labels=$FOREIGN_SRV
+			;;
+		all)	labels="$LOCAL_SRV $FOREIGN_SRV"
+			;;
+		*)	labels="$1"
+			;;
+	esac
+	# for use by heartbeat V1 resource agent:
+	# starting an already-started service must not be an error
+	start_services $labels || exit 2
+}
+
+# Usage: stop_lustre_services [local|foreign|all|<label>]
+# If no parameter is specified all devices will be stopped.
+stop_lustre_services ()
+{
+	local labels=""
+
+	case "$1" in
+		local) labels=$LOCAL_SRV
+			;;
+		foreign)
+			labels=$FOREIGN_SRV
+			;;
+		""|all)	labels="$LOCAL_SRV $FOREIGN_SRV"
+			;;
+		*)	labels="$1"
+			;;
+	esac
+	# for use by heartbeat V1 resource agent:
+	# stopping already-stopped service must not be an error
+	stop_services $labels || exit 2
+}
+
+# General lustre health check - not device specific.
+health_check ()
+{
+	old_nullglob="`shopt -p nullglob`"
+	shopt -u nullglob
+
+	STATE="stopped"
+	# LSB compliance - return 3 if service is not running
+	# Lustre-specific returns
+	# 150 - partial startup
+	# 151 - health_check unhealthy
+	# 152 - LBUG
+	RETVAL=3
+	egrep -q "libcfs|lvfs|portals" /proc/modules && STATE="loaded"
+
+	# check for any configured devices (may indicate partial startup)
+	if [ -d /proc/fs/lustre ]; then
+		if [ -n "`cat /proc/fs/lustre/devices 2> /dev/null`" ] ; then
+			STATE="partial"
+			RETVAL=150
+		fi
+
+		# check for either a server or a client filesystem
+		MDT="`ls /proc/fs/lustre/mdt/*/recovery_status 2> /dev/null`"
+		OST="`ls /proc/fs/lustre/obdfilter/*/recovery_status \
+			2> /dev/null`"
+		LLITE="`ls /proc/fs/lustre/llite/fs* 2> /dev/null`"
+		if [ "$MDT" -o "$OST" -o "$LLITE" ]; then
+			STATE="running"
+			RETVAL=0
+		fi
+	else
+		# check if this is a router
+		if [ -d /proc/sys/lnet ]; then
+			ROUTER="`cat /proc/sys/lnet/routes | head -1 |
+				grep -i -c \"Routing enabled\"`"
+			if [[ ! -z ${ROUTER} && ${ROUTER} -ge 1 ]]; then
+				STATE="running"
+				RETVAL=0
+			fi
+		fi
+	fi
+
+	# check for server disconnections
+	DISCON="`grep -v FULL /proc/fs/lustre/*c/*/*server_uuid 2> /dev/null`"
+	if [ -n "$DISCON" ] ; then
+		STATE="disconnected"
+		RETVAL=0
+	fi
+
+	# check for servers in recovery
+	if [ -n "$MDT$OST" ] && grep -q RECOV $MDT $OST ; then
+		STATE="recovery"
+		RETVAL=0
+	fi
+
+	# check for error in health_check
+	HEALTH="/proc/fs/lustre/health_check"
+	if [ -f "$HEALTH" ] && grep -q "NOT HEALTHY" $HEALTH ; then
+		STATE="unhealthy"
+		RETVAL=1
+	fi
+
+	# check for LBUG
+	if [ -f  "$HEALTH" ] && grep -q "LBUG" $HEALTH ; then
+		STATE="LBUG"
+		RETVAL=152
+	fi
+
+	echo $STATE
+	eval $old_nullglob
+	return $RETVAL
+}
+
+# Usage: status [local|foreign|all|<label>]
+# If no parameter is specified, general lustre health status will be reported.
+status ()
+{
+	local labels=""
+	local label dir
+	local valid_devs=0
+
+	case "$1" in
+		local) labels=$LOCAL_SRV;
+			;;
+		foreign)
+			labels=$FOREIGN_SRV;
+			;;
+		all)	labels="$LOCAL_SRV $FOREIGN_SRV"
+			;;
+		"")	# ASSUMPTION: this is not the heartbeat res agent
+			health_check
+			exit $?
+			;;
+		*)	labels=$1
+			;;
+	esac
+	# for use by heartbeat V1 resource agent:
+	# print "running" if *anything* is running.
+	for label in $labels; do
+		dir=`label_to_device $label`
+		if [ -z "$dir" ]; then
+			echo "$label is not a valid lustre label on this node"
+			# no error
+			continue
+		fi
+		valid_devs=1
+		if mountpt_is_active $label || device_is_active $label; then
+			echo "running"
+			exit 0
+		fi
+	done
+	[ $valid_devs == 1 ] && echo "stopped"
+	exit 3
+}
+
+usage ()
+{
+	cat <<EOF
+Usage: lustre {start|stop|status|restart|reload|condrestart}
+
+       lustre start  [local|foreign|<label>]
+       lustre stop   [local|foreign|<label>]
+       lustre status [local|foreign|<label>]
+EOF
+	exit 1
+}
+
+# See how we were called.
+case "$1" in
+  start)
+	if [ $# -gt 2 ] ; then
+		echo "ERROR: Too many arguments."
+		usage
+	fi
+	run_preexec_check "start"
+	start_lustre_services $2
+	run_postexec_check "start"
+	;;
+  stop)
+	if [ $# -gt 2 ] ; then
+		echo "ERROR: Too many arguments."
+		usage
+	fi
+	run_preexec_check "stop"
+	stop_lustre_services $2
+	run_postexec_check "stop"
+	;;
+  status)
+	if [ $# -gt 2 ] ; then
+		echo "ERROR: Too many arguments."
+		usage
+	fi
+	status $2
+	;;
+  restart)
+	$0 stop
+	$0 start
+	;;
+  reload)
+	;;
+  probe)
+	;;
+  condrestart)
+	if grep lustre /proc/mounts ; then
+		$0 stop
+		$0 start
+	fi
+	;;
+  *)
+	usage
+esac
+
+exit 0

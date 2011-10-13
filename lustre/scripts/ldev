@@ -1,0 +1,459 @@
+#!/usr/bin/perl
+#
+# ldev - parser for /etc/ldev.conf
+#
+use strict;
+use File::Basename;
+use Getopt::Long qw/ :config posix_default no_ignore_case/;
+
+$ENV{PATH} = "/sbin:/usr/sbin:/bin:/usr/bin";
+
+my $prog = basename($0);
+
+my $usage = <<EOF;
+Usage: $prog [OPTIONS]...
+
+Parse ldev.conf and answer the following queries:
+
+  -h, --help          Display this help.
+  -c, --config FILE   Set path to config file.
+  -H, --hostname NAME Use NAME instead of local hostname for queries.
+  -p, --partner       Print hostname of failover partner.
+  -l, --local         Print labels for local devices.
+  -f, --foreign       Print labels for foreign devices.
+  -a, --all           Print labels for local and foreign devices.
+  -s, --sanity        Sanity check config on this node.
+  -d, --device LABEL  Print storage device of LABEL.
+  -j, --journal LABEL Print journal device of LABEL if it exists.
+  -r, --raidtab LABEL Print raidtab of LABEL if it exists.
+  -t, --type LABEL    Print device type of LABEL, i.e. "zfs" or "md".
+  -z, --zpool LABEL   Print zpool containing LABEL.
+  CMD [ARGS] ...      Run CMD in parallel for each device substituting:
+                      %f=fsname  %d=device  %i=dec-index %n=main-nid %l=label
+                      %t=srvtype %j=journal %I=hex-index %N=fail-nid
+                      May be used in combination with -l, -f, -a options.
+EOF
+
+my %eparse = (
+   elabel_uniq  =>    "label used more than once",
+   epairwise    =>    "local and foreign host not mapped to each other",
+   efieldcount  =>    "line has less than the minimum number of fields (4)",
+   ekeyval      =>    "malformed id=name",
+);
+
+my %conf = ();
+
+#
+# Main
+#
+
+parse_cmdline ();
+
+parse_config ();
+
+sanity ()         if $conf{sanity};
+exec_cmd ()       if $conf{execcmd};
+query_partner ()  if $conf{partner};
+query_local ()    if $conf{local};
+query_foreign ()  if $conf{foreign};
+query_all ()      if $conf{all};
+query_device ()   if $conf{device};
+query_journal ()  if $conf{journal};
+query_raidtab ()  if $conf{raidtab};
+query_type ()     if $conf{type};
+query_zpool ()    if $conf{zpool};
+
+exit(0);
+
+#
+# Subroutines
+#
+
+sub parse_cmdline
+{
+    my $help = 0;
+    my $host = "";
+
+    $conf{partner} = 0;
+    $conf{all} = 0;
+    $conf{local} = 0;
+    $conf{foreign} = 0;
+    $conf{config} = "/etc/ldev.conf";
+    $conf{nidsfile} = "/etc/nids";
+    $conf{hostname} = `uname -n`; chomp $conf{hostname};
+    $conf{device} = "";
+    $conf{sanity} = 0;
+    $conf{execcmd} = "";
+    $conf{journal} = "";
+
+    my $rc = GetOptions (
+        "help|h!"         => \$help,
+        "partner|p!"      => \$conf{partner},
+        "all|a!"          => \$conf{all},
+        "local|l!"        => \$conf{local},
+        "foreign|f!"      => \$conf{foreign},
+        "config|c=s"      => \$conf{config},
+        "nidsfile|n=s"    => \$conf{nidsfile},
+        "hostname|H=s"    => \$conf{hostname},
+        "sanity|s!"       => \$conf{sanity},
+        "device|d=s"      => \$conf{device},
+        "journal|j=s"     => \$conf{journal},
+        "raidtab|r=s"     => \$conf{raidtab},
+        "type|t=s"        => \$conf{type},
+        "zpool|z=s"       => \$conf{zpool},
+    );
+
+    usage() if $help || !$rc;
+
+    log_fatal ("cannot read config file\n") if (! -r $conf{config});
+
+    if (@ARGV) {
+        $conf{execcmd} = " " . join " ", @ARGV;
+    }
+
+    parse_nids () if ($conf{execcmd} =~ /(%n|%N)/);
+}
+
+sub parse_config
+{
+    my $line = 0;
+    my %l2f = ();
+    my %label2local = ();
+    my %label2dev = ();
+    my %label2journal = ();
+    my %label2raidtab = ();
+    my %label2type = ();
+    my %label2zpool = ();
+    my @local_labels = ();
+    my @foreign_labels = ();
+
+    open (CONF, "< $conf{config}") or log_fatal ("$conf{config}: $!\n");
+
+    while (<CONF>) {
+        my $type;
+        $line++;
+        s/#.*//;
+        s/(\s)*$//;
+        next if (/^(\s)*$/);
+        chomp;
+        my ($local, $foreign, $label, $dev, $j, $raidtab) = split;
+        if ($dev !~ /^\// && $dev =~ /^([^:]+):(.+)$/) {
+            $type = $1;
+            $dev = $2;
+        }
+        eparse_line ($line, "efieldcount") if (!defined $dev);
+        eparse_line ($line, "epairwise") if (exists $l2f{$local}
+                                         && $l2f{$local} ne $foreign);
+        $l2f{$local} = $foreign;
+
+        eparse_line ($line, "elabel_uniq") if (exists $label2dev{$label}
+                                         || exists $label2local{$label});
+        $label2dev{$label} = $dev;
+        $label2local{$label} = $local;
+        $label2journal{$label} = $j if defined $j;
+        $label2raidtab{$label} = $raidtab if defined $raidtab;
+        if (defined $type) {
+            $label2type{$label} = $type;
+            if ($type eq "zfs" && $dev =~ m{^([^/]+)/[^/]+$}) {
+                $label2zpool{$label} = $1;
+            }
+        }
+
+        if ($local eq $conf{hostname}) {
+            push @local_labels, $label;
+        } elsif ($foreign eq $conf{hostname}) {
+            push @foreign_labels, $label;
+        }
+    }
+    close CONF;
+
+    foreach (keys %l2f) {
+        my $foreign = $l2f{$_};
+        next if ($foreign eq "-");
+        eparse_str ($_, "epairwise")
+                    unless (!exists $l2f{$foreign} or $l2f{$foreign} eq $_);
+    }
+
+    @{$conf{local_labels}} = @local_labels;
+    @{$conf{foreign_labels}} = @foreign_labels;
+    %{$conf{l2f}} = %l2f;
+    %{$conf{label2dev}} = %label2dev;
+    %{$conf{label2local}} = %label2local;
+    %{$conf{label2journal}} = %label2journal;
+    %{$conf{label2raidtab}} = %label2raidtab;
+    %{$conf{label2type}} = %label2type;
+    %{$conf{label2zpool}} = %label2zpool;
+}
+
+sub parse_nids ()
+{
+    my $line = 0;
+    my %host2nid = ();
+    my %nid2host = ();
+
+    open (NIDS, "< $conf{nidsfile}") or log_fatal ("$conf{nidsfile}: $!\n");
+
+    while (<NIDS>) {
+        $line++;
+        s/#.*//;
+        next if (/^(\s)*$/);
+        chomp;
+        my ($host, $nid, $morenids) = split (/\s+/, $_, 3);
+        if (!defined $nid) {
+            log_fatal ("$conf{nidsfile} line $line: incomplete line\n");
+        }
+        $host2nid{$host} = $nid;
+        $nid2host{$nid} = $host;
+        map { $nid2host{$_} = $host; } split (/\s+/, $morenids);
+    }
+    close NIDS;
+
+    %{$conf{host2nid}} = %host2nid;
+    %{$conf{nid2host}} = %nid2host;
+}
+
+sub query_partner
+{
+    my %l2f = %{$conf{l2f}};
+    my $hostname = $conf{hostname};
+    if (exists $l2f{$hostname} && $l2f{$hostname} ne "-") {
+        print "$l2f{$hostname}\n";
+    }
+}
+
+sub query_local
+{
+    map { print "$_\n"; } @{$conf{local_labels}};
+}
+
+sub query_foreign
+{
+    map { print "$_\n"; } @{$conf{foreign_labels}};
+}
+
+sub query_all
+{
+    query_local ();
+    query_foreign ();
+}
+
+sub query_device
+{
+    my %label2dev = %{$conf{label2dev}};
+
+    if (exists $label2dev{$conf{device}}) {
+        print "$label2dev{$conf{device}}\n";
+    }
+}
+
+sub query_raidtab
+{
+    my %label2raidtab = %{$conf{label2raidtab}};
+
+    if (exists $label2raidtab{$conf{raidtab}}) {
+        print "$label2raidtab{$conf{raidtab}}\n";
+    }
+}
+
+sub query_journal
+{
+    my %label2journal = %{$conf{label2journal}};
+
+    if (exists $label2journal{$conf{journal}} &&
+       $label2journal{$conf{journal}} ne "-") {
+        print "$label2journal{$conf{journal}}\n";
+    }
+}
+
+sub query_type
+{
+    my %label2type = %{$conf{label2type}};
+
+    if (exists $label2type{$conf{type}}) {
+        print "$label2type{$conf{type}}\n";
+    }
+}
+
+sub query_zpool
+{
+    my %label2zpool = %{$conf{label2zpool}};
+
+    if (exists $label2zpool{$conf{zpool}}) {
+        print "$label2zpool{$conf{zpool}}\n";
+    }
+}
+
+sub dd_test
+{
+    my ($dpath) = @_;
+    my $retval = 0;
+    my $bs =      `blockdev --getss   $dpath 2>/dev/null`; chomp $bs;
+    my $max512  = `blockdev --getsize $dpath 2>/dev/null`; chomp $max512;
+    if ($? == 0 && $bs > 0 && $max512 > 0) {
+        my $maxb = ($max512 / $bs) * 512;
+        my $count = 10 * 1024 * 1024 / $bs;  # read first 10mb
+        my $dev = `readlink -f $dpath`; chomp $dev;
+        $count = $maxb if ($count > $maxb);
+        `dd if=$dev of=/dev/null bs=$bs count=$count >/dev/null 2>&1`;
+        $retval = ($? == 0);
+    }
+    return $retval;
+}
+
+sub sanity
+{
+    my $exit_val = 0;
+
+    my @local_labels = @{$conf{local_labels}};
+    my @foreign_labels = @{$conf{foreign_labels}};
+    my %label2dev = %{$conf{label2dev}};
+    my %label2journal = %{$conf{label2journal}};
+
+    foreach (@local_labels, @foreign_labels) {
+        my $lpath = "/dev/disk/by-label/$_";
+        my $dpath = $label2dev{$_};
+        my $jpath = $label2journal{$_};
+        my $label = $_;
+        if (! -e $lpath) {
+            log_error ("$lpath does not exist\n");
+            $exit_val = 1;
+        }
+        if (! -e $dpath) {
+            log_error ("$dpath does not exist\n");
+            $exit_val = 1;
+        } elsif (!dd_test ($dpath)) {
+            log_error ("$dpath failed dd test\n");
+            $exit_val = 1;
+        }
+        if (`readlink -f $lpath` ne `readlink -f $dpath`) {
+            log_error ("$lpath and $dpath point to different things\n");
+            $exit_val = 1;
+        }
+        if ($jpath) {
+            if (! -e $jpath) {
+                log_error ("$jpath (journal for $label) does not exist\n");
+                $exit_val = 1;
+            } elsif (!dd_test ($jpath)) {
+                log_error ("$jpath failed dd test\n");
+                $exit_val = 1;
+            }
+        }
+    }
+    exit($exit_val);
+}
+
+sub par_exec
+{
+    my @pids = ();
+    my %pid2label = ();
+    my %pid2cmd = ();
+    my $pid;
+    my $result = 0;
+
+    my $tmpfile = `mktemp \${TMPDIR:-/tmp}/ldev.XXXXXXXXXX`; chomp $tmpfile;
+    log_fatal ("failed to create $tmpfile\n") if (! -e $tmpfile);
+
+    foreach (@_) {
+        my ($label, $cmd) = split (/\s+/, $_, 2);
+        my ($basecmd) = split (/\s+/, $cmd);
+        if (($pid = fork)) {       # parent
+            $pid2label{$pid} = $label;
+            $pid2cmd{$pid} = $basecmd;
+        } elsif (defined $pid) {   # child
+            #print STDERR "$label: running $cmd\n";
+            exec "($cmd 2>&1 || rm -f $tmpfile) | sed -e 's/^/$label: /'";
+            print STDERR "$label: exec $basecmd: $!\n"; unlink $tmpfile;
+        } else {                   # error
+            log_fatal ("label: fork: $!\n"); unlink $tmpfile;
+        }
+    }
+    while (($pid = wait) != -1) {
+        #print STDERR "$pid2label{$pid}: completed\n";
+    }
+
+    # sentinel is intact, so there were no errors
+    if (-e $tmpfile) {
+        unlink $tmpfile;
+        $result = 1;
+    }
+
+    return $result;
+}
+
+sub exec_cmd
+{
+    my @labels = ();
+    my @cmds = ();
+    my %label2dev = %{$conf{label2dev}};
+    my %label2journal = %{$conf{label2journal}};
+    my %l2f = %{$conf{l2f}};
+    my ($nid, $failnid);
+
+    if ($conf{execcmd} =~ /%n/) {
+        my %host2nid = %{$conf{host2nid}};
+        if (!defined $host2nid{$conf{hostname}}) {
+            log_fatal ("%n used but no nid defined for this host\n");
+        }
+        $nid = $host2nid{$conf{hostname}};
+    }
+    if ($conf{execcmd} =~ /%N/) {
+        if (!defined $l2f{$conf{hostname}}) {
+            log_fatal ("%N used but foreign host is undefined\n");
+        }
+        my %host2nid = %{$conf{host2nid}};
+        if (!defined $host2nid{$l2f{$conf{hostname}}}) {
+            log_fatal ("%N used but foreign nid is undefined\n");
+        }
+        $failnid = $host2nid{$l2f{$conf{hostname}}};
+    }
+
+    if ($conf{foreign} and !$conf{local} and !$conf{all}) {
+        @labels = @{$conf{foreign_labels}};
+    } elsif (!$conf{foreign} and !$conf{all}) {
+        @labels = @{$conf{local_labels}};
+    } else {
+        @labels = (@{$conf{local_labels}}, @{$conf{foreign_labels}});
+    }
+    foreach (@labels) {
+        /(\w+)-(OST|MDT|MGT)([0-9a-fA-F]{4})/;
+
+        my $fsname = $1;
+        my $type = $2; $type =~ tr/A-Z/a-z/;
+        my $hexindex = $3;
+        my $decindex = hex($3);
+        my $label = $_;
+        my $cmd = $conf{execcmd};
+        my $device = $label2dev{$_};
+        if ($conf{execcmd} =~ /%j/ && !defined $label2journal{$_}) {
+            log_fatal ("%j used but no journal defined for $_\n");
+        }
+        my $journal = $label2journal{$_};
+
+        $cmd =~ s/%f/$fsname/g;  # %f = fsname
+        $cmd =~ s/%t/$type/g;    # %t = server type
+        $cmd =~ s/%I/$hexindex/g;# %I = index (hex)
+        $cmd =~ s/%i/$decindex/g;# %i = index (dec)
+        $cmd =~ s/%l/$label/g;   # %l = label
+        $cmd =~ s/%d/$device/g;  # %d = device
+        $cmd =~ s/%j/$journal/g; # %j = journal device
+        $cmd =~ s/%n/$nid/g;     # %n = nid
+        $cmd =~ s/%N/$failnid/g; # %N = failnid
+
+        push @cmds, "$_ $cmd";
+    }
+
+    par_exec (@cmds) or log_fatal ("parallel command execution failed\n");
+    exit 0;
+}
+
+sub usage
+{
+    print STDERR "$usage";
+    exit 0;
+}
+
+sub log_msg     { print STDERR "$prog: ", @_; }
+sub log_error   { log_msg ("Error: ", @_) }
+sub log_fatal   { log_msg ("Fatal: ", @_); exit 1; }
+sub eparse_line { log_fatal ("$conf{config} line $_[0]: $eparse{$_[1]}\n"); }
+sub eparse_str  { log_fatal ("$conf{config}: $_[0]: $eparse{$_[1]}\n"); }
