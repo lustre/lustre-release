@@ -7629,8 +7629,10 @@ test_180a() {
         fi
 
         local osc=$($LCTL dl | grep -v mdt | awk '$3 == "osc" {print $4; exit}')
-        local host=$(awk '/current_connection:/ {print $2}' /proc/fs/lustre/osc/$osc/import)
-        local target=$(awk '/target:/ {print $2}' /proc/fs/lustre/osc/$osc/import)
+        local host=$(lctl get_param -n osc.$osc.import |
+                             awk '/current_connection:/ {print $2}' )
+        local target=$(lctl get_param -n osc.$osc.import |
+                             awk '/target:/ {print $2}' )
         target=${target%_UUID}
 
         [[ -n $target ]]  && { setup_obdecho_osc $host $target || rc=1; } || rc=1
