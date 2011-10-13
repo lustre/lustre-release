@@ -1348,8 +1348,8 @@ int ll_lov_getstripe_ea_info(struct inode *inode, const char *filename,
         op_data = ll_prep_md_op_data(NULL, inode, NULL, filename,
                                      strlen(filename), lmmsize,
                                      LUSTRE_OPC_ANY, NULL);
-        if (op_data == NULL)
-                RETURN(-ENOMEM);
+        if (IS_ERR(op_data))
+                RETURN(PTR_ERR(op_data));
 
         op_data->op_valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
         rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
@@ -2301,8 +2301,8 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
                 op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
                                              0, ealen, LUSTRE_OPC_ANY,
                                              NULL);
-                if (op_data == NULL)
-                        RETURN(-ENOMEM);
+                if (IS_ERR(op_data))
+                        RETURN(PTR_ERR(op_data));
 
                 op_data->op_valid = valid;
                 /* Once OBD_CONNECT_ATTRFID is not supported, we can't find one

@@ -1818,8 +1818,8 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
                                              0, 0, LUSTRE_OPC_ANY,
                                              NULL);
-                if (op_data == NULL)
-                        RETURN(-ENOMEM);
+                if (IS_ERR(op_data))
+                        RETURN(PTR_ERR(op_data));
 
                 op_data->op_valid = OBD_MD_FLFLAGS;
                 rc = md_getattr(sbi->ll_md_exp, op_data, &req);

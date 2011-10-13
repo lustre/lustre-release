@@ -337,8 +337,8 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
         op_data = ll_prep_md_op_data(NULL, dir, NULL, dotdot,
                                      strlen(dotdot), 0,
                                      LUSTRE_OPC_ANY, NULL);
-        if (op_data == NULL)
-                RETURN(ERR_PTR(-ENOMEM));
+        if (IS_ERR(op_data))
+                RETURN((void *)op_data);
 
         rc = md_getattr_name(sbi->ll_md_exp, op_data, &req);
         ll_finish_md_op_data(op_data);

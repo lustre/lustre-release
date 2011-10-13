@@ -64,6 +64,9 @@ static int ll_readlink_internal(struct inode *inode,
 
         op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, symlen,
                                      LUSTRE_OPC_ANY, NULL);
+        if (IS_ERR(op_data))
+                RETURN(PTR_ERR(op_data));
+
         op_data->op_valid = OBD_MD_LINKNAME;
         rc = md_getattr(sbi->ll_md_exp, op_data, request);
         ll_finish_md_op_data(op_data);

@@ -798,8 +798,8 @@ int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
         op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL,
                                      0, lmmsize, LUSTRE_OPC_ANY,
                                      NULL);
-        if (op_data == NULL)
-                RETURN(-ENOMEM);
+        if (IS_ERR(op_data))
+                RETURN(PTR_ERR(op_data));
 
         op_data->op_valid = OBD_MD_FLEASIZE | OBD_MD_FLDIREA;
         rc = md_getattr(sbi->ll_md_exp, op_data, &req);
@@ -863,8 +863,8 @@ int ll_get_mdt_idx(struct inode *inode)
 
         op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0,
                                      0, LUSTRE_OPC_ANY, NULL);
-        if (op_data == NULL)
-                RETURN(-ENOMEM);
+        if (IS_ERR(op_data))
+                RETURN(PTR_ERR(op_data));
 
         op_data->op_valid |= OBD_MD_MDTIDX;
         rc = md_getattr(sbi->ll_md_exp, op_data, NULL);
@@ -1053,8 +1053,8 @@ static int ll_dir_ioctl(struct inode *inode, struct file *file,
 
                 op_data = ll_prep_md_op_data(NULL, inode, NULL, filename, namelen,
                                              0, LUSTRE_OPC_ANY, NULL);
-                if (op_data == NULL)
-                        GOTO(out_free, rc = -ENOMEM);
+                if (IS_ERR(op_data))
+                        GOTO(out_free, rc = PTR_ERR(op_data));
 
                 op_data->op_valid = OBD_MD_FLID;
                 rc = md_getattr_name(sbi->ll_md_exp, op_data, &request);
