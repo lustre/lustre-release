@@ -281,6 +281,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
         struct obd_type *type = NULL;
         int i;
         int new_obd_minor = 0;
+        ENTRY;
 
         if (strlen(name) >= MAX_OBD_NAME) {
                 CERROR("name/uuid must be < %u bytes long\n", MAX_OBD_NAME);
@@ -306,7 +307,8 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
 
                 if (obd && obd->obd_name &&
                     (strcmp(name, obd->obd_name) == 0)) {
-                        CERROR("Device %s already exists, won't add\n", name);
+                        CERROR("Device %s already exists at %d, won't add\n",
+                               name, i);
                         if (result) {
                                 LASSERTF(result->obd_magic == OBD_DEVICE_MAGIC,
                                          "%p obd_magic %08x != %08x\n", result,
@@ -336,7 +338,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
         if (result == NULL && i >= class_devno_max()) {
                 CERROR("all %u OBD devices used, increase MAX_OBD_DEVICES\n",
                        class_devno_max());
-                result = ERR_PTR(-EOVERFLOW);
+                RETURN(ERR_PTR(-EOVERFLOW));
         }
 
         if (IS_ERR(result)) {
@@ -346,7 +348,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
                 CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
                        result->obd_name, result);
         }
-        return result;
+        RETURN(result);
 }
 
 void class_release_dev(struct obd_device *obd)
@@ -359,8 +361,8 @@ void class_release_dev(struct obd_device *obd)
                  obd, obd->obd_minor, obd_devs[obd->obd_minor]);
         LASSERT(obd_type != NULL);
 
-        CDEBUG(D_INFO, "Release obd device %s obd_type name =%s\n",
-               obd->obd_name,obd->obd_type->typ_name);
+        CDEBUG(D_INFO, "Release obd device %s at %d obd_type name =%s\n",
+               obd->obd_name, obd->obd_minor, obd->obd_type->typ_name);
 
         cfs_write_lock(&obd_dev_lock);
         obd_devs[obd->obd_minor] = NULL;

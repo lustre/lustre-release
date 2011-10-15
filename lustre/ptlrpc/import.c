@@ -705,7 +705,7 @@ int ptlrpc_connect_import(struct obd_import *imp)
 
         DEBUG_REQ(D_RPCTRACE, request, "(re)connect request (timeout %d)",
                   request->rq_timeout);
-        ptlrpcd_add_req(request, PSCOPE_OTHER);
+        ptlrpcd_add_req(request, PDL_POLICY_ROUND, -1);
         rc = 0;
 out:
         if (rc != 0) {
@@ -1191,7 +1191,7 @@ static int signal_completed_replay(struct obd_import *imp)
                 req->rq_timeout *= 3;
         req->rq_interpret_reply = completed_replay_interpret;
 
-        ptlrpcd_add_req(req, PSCOPE_OTHER);
+        ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
         RETURN(0);
 }
 

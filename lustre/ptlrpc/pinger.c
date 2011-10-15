@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -100,7 +103,7 @@ int ptlrpc_ping(struct obd_import *imp)
 
         DEBUG_REQ(D_INFO, req, "pinging %s->%s",
                   imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
-        ptlrpcd_add_req(req, PSCOPE_OTHER);
+        ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
 
         RETURN(0);
 }

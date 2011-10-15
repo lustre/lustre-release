@@ -184,7 +184,7 @@ static int osc_interpret_create(const struct lu_env *env,
         cfs_spin_lock(&oscc->oscc_lock);
         cfs_list_for_each_entry_safe(fake_req, pos,
                                      &oscc->oscc_wait_create_list, rq_list) {
-                if (handle_async_create(fake_req, rc)  == -EAGAIN) {
+                if (handle_async_create(fake_req, rc) == -EAGAIN) {
                         oscc_internal_create(oscc);
                         /* sending request should be never fail because
                          * osc use preallocated requests pool */
@@ -275,7 +275,7 @@ static int oscc_internal_create(struct osc_creator *oscc)
         ptlrpc_request_set_replen(request);
 
         request->rq_interpret_reply = osc_interpret_create;
-        ptlrpcd_add_req(request, PSCOPE_OTHER);
+        ptlrpcd_add_req(request, PDL_POLICY_ROUND, -1);
 
         RETURN(0);
 }
@@ -284,7 +284,6 @@ static int oscc_has_objects_nolock(struct osc_creator *oscc, int count)
 {
         return ((__s64)(oscc->oscc_last_id - oscc->oscc_next_id) >= count);
 }
-
 
 static int oscc_has_objects(struct osc_creator *oscc, int count)
 {
@@ -512,24 +511,19 @@ int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
         /* try fast path */
         rc = handle_async_create(fake_req, 0);
         if (rc == -EAGAIN) {
-                int is_add;
-                /* we not have objects - try wait */
-                is_add = ptlrpcd_add_req(fake_req, PSCOPE_OTHER);
-                if (!is_add)
-                        cfs_list_add(&fake_req->rq_list,
-                                     &oscc->oscc_wait_create_list);
-                else
-                        rc = is_add;
-        }
-        cfs_spin_unlock(&oscc->oscc_lock);
-
-        if (rc != -EAGAIN)
+                /* We don't have any objects, wait until we get a reply. */
+                ptlrpcd_add_req(fake_req, PDL_POLICY_ROUND, -1);
+                cfs_list_add(&fake_req->rq_list,
+                             &oscc->oscc_wait_create_list);
+                cfs_spin_unlock(&oscc->oscc_lock);
+                /* EAGAIN mean - request is delayed */
+                rc = 0;
+        } else {
+                cfs_spin_unlock(&oscc->oscc_lock);
                 /* need free request if was error hit or
                  * objects already allocated */
                 ptlrpc_req_finished(fake_req);
-        else
-                /* EAGAIN mean - request is delayed */
-                rc = 0;
+        }
 
         RETURN(rc);
 }

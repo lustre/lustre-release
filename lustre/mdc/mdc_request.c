@@ -2262,7 +2262,7 @@ static int mdc_renew_capa(struct obd_export *exp, struct obd_capa *oc,
         ra->ra_oc = oc;
         ra->ra_cb = cb;
         req->rq_interpret_reply = mdc_interpret_renew_capa;
-        ptlrpcd_add_req(req, PSCOPE_OTHER);
+        ptlrpcd_add_req(req, PDL_POLICY_LOCAL, -1);
         RETURN(0);
 }
 

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -286,11 +289,7 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
          * first from replay llog, second for resended rpc */
         req->rq_no_delay = req->rq_no_resend = 1;
 
-        rc = ptlrpc_set_add_new_req(&lcm->lcm_pc, req);
-        if (rc) {
-                ptlrpc_request_free(req);
-                GOTO(exit, rc);
-        }
+        ptlrpc_set_add_new_req(&lcm->lcm_pc, req);
         RETURN(0);
 exit:
         CDEBUG(D_RPCTRACE, "Refused llcd %p\n", llcd);
@@ -405,7 +404,7 @@ int llog_recov_thread_start(struct llog_commit_master *lcm)
         int rc;
         ENTRY;
 
-        rc = ptlrpcd_start(lcm->lcm_name, &lcm->lcm_pc);
+        rc = ptlrpcd_start(-1, 1, lcm->lcm_name, &lcm->lcm_pc);
         if (rc) {
                 CERROR("Error %d while starting recovery thread %s\n",
                        rc, lcm->lcm_name);

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -258,6 +261,9 @@ typedef int (*set_interpreter_func)(struct ptlrpc_request_set *, void *, int);
  * returned.
  */
 struct ptlrpc_request_set {
+        cfs_atomic_t          set_refcount;
+        /** number of in queue requests */
+        cfs_atomic_t          set_new_count;
         /** number of uncompleted requests */
         cfs_atomic_t          set_remaining;
         /** wait queue to wait on for request events */
@@ -1237,6 +1243,22 @@ struct ptlrpcd_ctl {
          * Environment for request interpreters to run in.
          */
         struct lu_env               pc_env;
+        /**
+         * Index of ptlrpcd thread in the array.
+         */
+        int                         pc_index;
+        /**
+         * Number of the ptlrpcd's partners.
+         */
+        int                         pc_npartners;
+        /**
+         * Pointer to the array of partners' ptlrpcd_ctl structure.
+         */
+        struct ptlrpcd_ctl        **pc_partners;
+        /**
+         * Record the partner index to be processed next.
+         */
+        int                         pc_cursor;
 #ifndef __KERNEL__
         /**
          * Async rpcs flag to make sure that ptlrpcd_check() is called only
@@ -1277,7 +1299,11 @@ enum ptlrpcd_ctl_flags {
         /**
          * This is a recovery ptlrpc thread.
          */
-        LIOD_RECOVERY    = 1 << 3
+        LIOD_RECOVERY    = 1 << 3,
+        /**
+         * The ptlrpcd is bound to some CPU core.
+         */
+        LIOD_BIND        = 1 << 4,
 };
 
 /* ptlrpc/events.c */
@@ -1391,8 +1417,8 @@ void ptlrpc_interrupted_set(void *data);
 void ptlrpc_mark_interrupted(struct ptlrpc_request *req);
 void ptlrpc_set_destroy(struct ptlrpc_request_set *);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *, struct ptlrpc_request *);
-int ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
-                           struct ptlrpc_request *req);
+void ptlrpc_set_add_new_req(struct ptlrpcd_ctl *pc,
+                            struct ptlrpc_request *req);
 
 void ptlrpc_free_rq_pool(struct ptlrpc_request_pool *pool);
 void ptlrpc_add_rqs_to_pool(struct ptlrpc_request_pool *pool, int num_rq);
@@ -1826,26 +1852,40 @@ void ping_evictor_stop(void);
 int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req);
 /** @} */
 
+/* ptlrpc daemon bind policy */
+typedef enum {
+        /* all ptlrpcd threads are free mode */
+        PDB_POLICY_NONE          = 1,
+        /* all ptlrpcd threads are bound mode */
+        PDB_POLICY_FULL          = 2,
+        /* <free1 bound1> <free2 bound2> ... <freeN boundN> */
+        PDB_POLICY_PAIR          = 3,
+        /* <free1 bound1> <bound1 free2> ... <freeN boundN> <boundN free1>,
+         * means each ptlrpcd[X] has two partners: thread[X-1] and thread[X+1]*/
+        PDB_POLICY_NEIGHBOR      = 4,
+} pdb_policy_t;
+
+/* ptlrpc daemon load policy
+ * It is caller's duty to specify how to push the async RPC into some ptlrpcd
+ * queue, but it is not enforced, affected by "ptlrpcd_bind_policy". If it is
+ * "PDB_POLICY_FULL", then the RPC will be processed by the selected ptlrpcd,
+ * Otherwise, the RPC may be processed by the selected ptlrpcd or its partner,
+ * depends on which is scheduled firstly, to accelerate the RPC processing. */
+typedef enum {
+        /* on the same CPU core as the caller */
+        PDL_POLICY_SAME         = 1,
+        /* within the same CPU partition, but not the same core as the caller */
+        PDL_POLICY_LOCAL        = 2,
+        /* round-robin on all CPU cores, but not the same core as the caller */
+        PDL_POLICY_ROUND        = 3,
+        /* the specified CPU core is preferred, but not enforced */
+        PDL_POLICY_PREFERRED    = 4,
+} pdl_policy_t;
+
 /* ptlrpc/ptlrpcd.c */
-
-/**
- * Ptlrpcd scope is a set of two threads: ptlrpcd-foo and ptlrpcd-foo-rcv,
- * these threads are used to asynchronously send requests queued with
- * ptlrpcd_add_req(req, PCSOPE_FOO), and to handle completion call-backs for
- * such requests. Multiple scopes are needed to avoid dead-locks.
- */
-enum ptlrpcd_scope {
-        /** Scope of bulk read-write rpcs. */
-        PSCOPE_BRW,
-        /** Everything else. */
-        PSCOPE_OTHER,
-        PSCOPE_NR
-};
-
-int ptlrpcd_start(const char *name, struct ptlrpcd_ctl *pc);
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force);
 void ptlrpcd_wake(struct ptlrpc_request *req);
-int ptlrpcd_add_req(struct ptlrpc_request *req, enum ptlrpcd_scope scope);
+void ptlrpcd_add_req(struct ptlrpc_request *req, pdl_policy_t policy, int idx);
 void ptlrpcd_add_rqset(struct ptlrpc_request_set *set);
 int ptlrpcd_addref(void);
 void ptlrpcd_decref(void);

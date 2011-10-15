@@ -1132,11 +1132,12 @@ void qos_update(struct lov_obd *lov)
 
 void qos_statfs_done(struct lov_obd *lov)
 {
-        LASSERT(lov->lov_qos.lq_statfs_in_progress);
         cfs_down_write(&lov->lov_qos.lq_rw_sem);
-        lov->lov_qos.lq_statfs_in_progress = 0;
-        /* wake up any threads waiting for the statfs rpcs to complete */
-        cfs_waitq_signal(&lov->lov_qos.lq_statfs_waitq);
+        if (lov->lov_qos.lq_statfs_in_progress) {
+                lov->lov_qos.lq_statfs_in_progress = 0;
+                /* wake up any threads waiting for the statfs rpcs to complete*/
+                cfs_waitq_signal(&lov->lov_qos.lq_statfs_waitq);
+        }
         cfs_up_write(&lov->lov_qos.lq_rw_sem);
 }
 

@@ -75,8 +75,8 @@ struct lov_request_set {
            only. */
         struct obd_device       *set_obd;
         int                      set_count;
-        int                      set_completes;
-        int                      set_success;
+        cfs_atomic_t             set_completes;
+        cfs_atomic_t             set_success;
         struct llog_cookie      *set_cookies;
         int                      set_cookie_sent;
         struct obd_trans_info   *set_oti;
@@ -243,8 +243,6 @@ int lov_prep_match_set(struct obd_export *exp, struct obd_info *oinfo,
                        ldlm_policy_data_t *policy, __u32 mode,
                        struct lustre_handle *lockh,
                        struct lov_request_set **reqset);
-int lov_update_match_set(struct lov_request_set *set, struct lov_request *req,
-                         int rc);
 int lov_fini_match_set(struct lov_request_set *set, __u32 mode, int flags);
 int lov_prep_cancel_set(struct obd_export *exp, struct obd_info *oinfo,
                         struct lov_stripe_md *lsm,
