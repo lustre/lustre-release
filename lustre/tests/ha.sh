@@ -276,27 +276,27 @@ ha_repeat_mpi_load()
 
     ha_info "Starting $tag"
 
-    while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
-        {
-            ha_on ${ha_clients[0]} mkdir -p "$dir" &&                       \
-            mpirun -np ${#ha_clients[@]} -machinefile "$ha_machine_file"    \
-                   $cmd &&                                                  \
-            ha_on ${ha_clients[0]} rm -rf "$dir"
-        } >>"$log" 2>&1 || rc=$?
+	while [ ! -e "$ha_stop_file" ] && ((rc == 0)); do
+		{
+		ha_on ${ha_clients[0]} mkdir -p "$dir" &&		\
+		mpirun -np ${#ha_clients[@]} ${MACHINEFILE_OPTION}	\
+			"$ha_machine_file" $cmd &&			\
+		ha_on ${ha_clients[0]} rm -rf "$dir"
+		} >>"$log" 2>&1 || rc=$?
 
-        if ((rc != 0)); then
-            ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
-            touch "$ha_fail_file"
-            touch "$ha_stop_file"
-        fi
-        echo $rc >"$status"
+		if ((rc != 0)); then
+			ha_dump_logs "${ha_clients[*]} ${ha_servers[*]}"
+			touch "$ha_fail_file"
+			touch "$ha_stop_file"
+		fi
+		echo $rc >"$status"
 
-        nr_loops=$((nr_loops + 1))
-    done
+		nr_loops=$((nr_loops + 1))
+	done
 
-    avg_loop_time=$((($(date +%s) - start_time) / nr_loops))
+	avg_loop_time=$((($(date +%s) - start_time) / nr_loops))
 
-    ha_info "$tag stopped: rc $rc avg loop time $avg_loop_time"
+	ha_info "$tag stopped: rc $rc avg loop time $avg_loop_time"
 }
 
 ha_start_mpi_loads()

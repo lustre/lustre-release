@@ -55,16 +55,17 @@ else
 
     log "===== $0 ### 1 NODE CREATE ###"
 
-    COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
-                --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
-    echo "+ ${COMMAND}"
-    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
+		--nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
+	echo "+ ${COMMAND}"
+	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
+		tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && sed -e "s/^/log: /" $LOG
 	error "mdsrate creates for a single client failed, aborting"
     fi
-    
+
     log "===== $0 ### 1 NODE UNLINK ###"
 
     if [ -f "$LOG" ]; then
@@ -72,11 +73,12 @@ else
         [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
     fi
 
-    COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
-                --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
-    echo "+ ${COMMAND}"
-    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
- 
+	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
+		--nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
+	echo "+ ${COMMAND}"
+	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
+		tee ${LOG}
+
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && sed -e "s/^/log: /" $LOG
 	error "mdsrate unlink on a single client failed, aborting"
@@ -98,10 +100,11 @@ else
 
     log "===== $0 ### $NUM_CLIENTS NODES CREATE ###"
 
-    COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
-                --nfiles $NUM_FILES --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
-    echo "+ ${COMMAND}"
-    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --create --time ${TIME_PERIOD}
+		--nfiles $NUM_FILES --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
+	echo "+ ${COMMAND}"
+	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && sed -e "s/^/log: /" $LOG
@@ -115,10 +118,11 @@ else
         [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
     fi
 
-    COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
-                --nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
-    echo "+ ${COMMAND}"
-    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+	COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
+		--nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"
+	echo "+ ${COMMAND}"
+	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
 	[ -f $LOG ] && sed -e "s/^/log: /" $LOG

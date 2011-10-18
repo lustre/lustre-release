@@ -4120,10 +4120,11 @@ get_mds_dir () {
 }
 
 mdsrate_cleanup () {
-    if [ -d $4 ]; then
-        mpi_run -np $1 -machinefile $2 ${MDSRATE} --unlink --nfiles $3 --dir $4 --filefmt $5 $6
-        rmdir $4
-    fi
+	if [ -d $4 ]; then
+		mpi_run -np $1 ${MACHINEFILE_OPTION} $2 ${MDSRATE} --unlink \
+			--nfiles $3 --dir $4 --filefmt $5 $6
+		rmdir $4
+	fi
 }
 
 delayed_recovery_enabled () {

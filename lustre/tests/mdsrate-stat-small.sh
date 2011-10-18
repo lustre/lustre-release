@@ -68,8 +68,10 @@ else
         NUM_THREADS=$NUM_CLIENTS
     fi
 
-    mpi_run -np ${NUM_THREADS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1
-    [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
+	mpi_run -np ${NUM_THREADS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		${COMMAND} 2>&1
+	[ ${PIPESTATUS[0]} != 0 ] &&
+		error "mdsrate file creation failed, aborting"
 
 fi
 
@@ -83,8 +85,9 @@ else
     log "===== $0 ### 1 NODE STAT ###"
     echo "+" ${COMMAND}
 
-    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
-    
+	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
+		tee ${LOG}
+
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && sed -e "s/^/log: /" $LOG
         error "mdsrate on a single client failed, aborting"
@@ -99,7 +102,8 @@ else
     log "===== $0 ### ${NUM_CLIENTS} NODES STAT ###"
     echo "+" ${COMMAND}
 
-    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && sed -e "s/^/log: /" $LOG
