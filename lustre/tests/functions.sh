@@ -346,14 +346,15 @@ run_metabench() {
     local cmd="$METABENCH -w $testdir -c $mbench_NFILES -C -S -k"
     echo "+ $cmd"
 
-    # find out if we need to use srun by checking $SRUN_PARTITION
-    if [ "$SRUN_PARTITION" ]; then
-        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
-            -n $((num_clients * mbench_THREADS)) -p $SRUN_PARTITION -- $cmd
-    else
-        mpi_run -np $((num_clients * $mbench_THREADS)) \
-            -machinefile ${MACHINEFILE} $cmd
-    fi
+	# find out if we need to use srun by checking $SRUN_PARTITION
+	if [ "$SRUN_PARTITION" ]; then
+		$SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+			-n $((num_clients * mbench_THREADS)) \
+			-p $SRUN_PARTITION -- $cmd
+	else
+		mpi_run -np $((num_clients * $mbench_THREADS)) \
+			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+	fi
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -392,15 +393,16 @@ run_simul() {
 
     local cmd="$SIMUL -d $testdir -n $simul_REP -N $simul_REP"
 
-    echo "+ $cmd"
-    # find out if we need to use srun by checking $SRUN_PARTITION
-    if [ "$SRUN_PARTITION" ]; then
-        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
-            -n $((num_clients * simul_THREADS)) -p $SRUN_PARTITION -- $cmd
-    else
-        mpi_run -np $((num_clients * simul_THREADS)) \
-            -machinefile ${MACHINEFILE} $cmd
-    fi
+	echo "+ $cmd"
+	# find out if we need to use srun by checking $SRUN_PARTITION
+	if [ "$SRUN_PARTITION" ]; then
+		$SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+			-n $((num_clients * simul_THREADS)) -p $SRUN_PARTITION \
+			-- $cmd
+	else
+		mpi_run -np $((num_clients * simul_THREADS)) \
+			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+	fi
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -447,15 +449,16 @@ run_mdtest() {
     local cmd="$MDTEST -d $testdir -i $mdtest_iteration -n $mdtest_nFiles"
     [ $type = "fpp" ] && cmd="$cmd -u"
 
-    echo "+ $cmd"
-    # find out if we need to use srun by checking $SRUN_PARTITION
-    if [ "$SRUN_PARTITION" ]; then
-        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
-            -n $((num_clients * mdtest_THREADS)) -p $SRUN_PARTITION -- $cmd
-    else
-        mpi_run -np $((num_clients * mdtest_THREADS)) \
-            -machinefile ${MACHINEFILE} $cmd
-    fi
+	echo "+ $cmd"
+	# find out if we need to use srun by checking $SRUN_PARTITION
+	if [ "$SRUN_PARTITION" ]; then
+		$SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+			-n $((num_clients * mdtest_THREADS)) \
+			-p $SRUN_PARTITION -- $cmd
+	else
+		mpi_run -np $((num_clients * mdtest_THREADS)) \
+			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+	fi
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -580,15 +583,16 @@ run_ior() {
          -t $ior_xferSize -v -w -r -i $ior_iteration -T $ior_DURATION -k"
     [ $type = "fpp" ] && cmd="$cmd -F"
 
-    echo "+ $cmd"
-    # find out if we need to use srun by checking $SRUN_PARTITION
-    if [ "$SRUN_PARTITION" ]; then
-        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
-            -n $((num_clients * ior_THREADS)) -p $SRUN_PARTITION -- $cmd
-    else
-        mpi_run -np $((num_clients * $ior_THREADS)) \
-            -machinefile ${MACHINEFILE} $cmd
-    fi
+	echo "+ $cmd"
+	# find out if we need to use srun by checking $SRUN_PARTITION
+	if [ "$SRUN_PARTITION" ]; then
+		$SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+			-n $((num_clients * ior_THREADS)) -p $SRUN_PARTITION \
+			-- $cmd
+	else
+		mpi_run -np $((num_clients * $ior_THREADS)) \
+			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+	fi
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -633,15 +637,16 @@ run_mib() {
     local cmd="$MIB -t $testdir -s $mib_xferSize -l $mib_xferLimit \
         -L $mib_timeLimit -HI -p mib.$(date +%Y%m%d%H%M%S)"
 
-    echo "+ $cmd"
-    # find out if we need to use srun by checking $SRUN_PARTITION
-    if [ "$SRUN_PARTITION" ]; then
-        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
-            -n $((num_clients * mib_THREADS)) -p $SRUN_PARTITION -- $cmd
-    else
-        mpi_run -np $((num_clients * mib_THREADS)) \
-            -machinefile ${MACHINEFILE} $cmd
-    fi
+	echo "+ $cmd"
+	# find out if we need to use srun by checking $SRUN_PARTITION
+	if [ "$SRUN_PARTITION" ]; then
+		$SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+			-n $((num_clients * mib_THREADS)) -p $SRUN_PARTITION \
+			-- $cmd
+	else
+		mpi_run -np $((num_clients * mib_THREADS)) \
+			${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
+	fi
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -680,9 +685,9 @@ run_cascading_rw() {
 
     local cmd="$CASC_RW -g -d $testdir -n $casc_REP"
 
-    echo "+ $cmd"
-    mpi_run -np $((num_clients * $casc_THREADS)) \
-        -machinefile ${MACHINEFILE} $cmd
+	echo "+ $cmd"
+	mpi_run -np $((num_clients * $casc_THREADS)) ${MACHINEFILE_OPTION} \
+		${MACHINEFILE} $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -722,9 +727,9 @@ run_write_append_truncate() {
 
     local cmd="write_append_truncate -n $write_REP $file"
 
-    echo "+ $cmd"
-    mpi_run -np $((num_clients * $write_THREADS)) \
-        -machinefile ${MACHINEFILE} $cmd
+	echo "+ $cmd"
+	mpi_run -np $((num_clients * $write_THREADS)) ${MACHINEFILE_OPTION} \
+		${MACHINEFILE} $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -762,9 +767,9 @@ run_write_disjoint() {
 
     local cmd="$WRITE_DISJOINT -f $testdir/file -n $wdisjoint_REP"
 
-    echo "+ $cmd"
-    mpi_run -np $((num_clients * $wdisjoint_THREADS)) \
-        -machinefile ${MACHINEFILE} $cmd
+	echo "+ $cmd"
+	mpi_run -np $((num_clients * $wdisjoint_THREADS)) \
+		${MACHINEFILE_OPTION} ${MACHINEFILE} $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -800,25 +805,26 @@ run_parallel_grouplock() {
     local cmd
     local status=0
     local subtest
-    for i in $(seq 12); do
-        subtest="-t $i"
-        local cmd="$PARALLEL_GROUPLOCK -g -v -d $testdir $subtest"
-        echo "+ $cmd"
+	for i in $(seq 12); do
+		subtest="-t $i"
+		local cmd="$PARALLEL_GROUPLOCK -g -v -d $testdir $subtest"
+		echo "+ $cmd"
 
-        mpi_run -np $parallel_grouplock_MINTASKS \
-            -machinefile ${MACHINEFILE} $cmd
-        local rc=$?
-        if [ $rc != 0 ] ; then
-            error_noexit "parallel_grouplock subtests $subtest failed! $rc"
-        else
-            echo "parallel_grouplock subtests $subtest PASS"
-        fi
-        let status=$((status + rc))
-        # clear debug to collect one log per one test
-        do_nodes $(comma_list $(nodes_list)) lctl clear
-     done
-    [ $status -eq 0 ] || error "parallel_grouplock status: $status"
-    rm -rf $testdir
+		mpi_run -np $parallel_grouplock_MINTASKS ${MACHINEFILE_OPTION} \
+			${MACHINEFILE} $cmd
+		local rc=$?
+		if [ $rc != 0 ] ; then
+			error_noexit "parallel_grouplock subtests $subtest " \
+				     "failed! $rc"
+		else
+			echo "parallel_grouplock subtests $subtest PASS"
+		fi
+		let status=$((status + rc))
+		# clear debug to collect one log per one test
+		do_nodes $(comma_list $(nodes_list)) lctl clear
+	done
+	[ $status -eq 0 ] || error "parallel_grouplock status: $status"
+	rm -rf $testdir
 }
 
 cleanup_statahead () {
@@ -881,7 +887,8 @@ run_statahead () {
     local cmd="$cmd1 $cmd2"
     echo "+ $cmd"
 
-    mpi_run -np $((num_clients * 32)) -machinefile ${MACHINEFILE} $cmd
+	mpi_run -np $((num_clients * 32)) ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		$cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then

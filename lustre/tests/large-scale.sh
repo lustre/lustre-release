@@ -71,42 +71,46 @@ test_3a() {
 
     local num=$increment
 
-    while [ $num -le $CLIENTCOUNT ]; do
-        list=$(comma_list ${nodes[@]:0:$num}) 
+	while [ $num -le $CLIENTCOUNT ]; do
+		list=$(comma_list ${nodes[@]:0:$num})
 
-        generate_machine_file $list $machinefile ||
-            { error "can not generate machinefile"; exit 1; }
+		generate_machine_file $list $machinefile ||
+			{ error "can not generate machinefile"; exit 1; }
 
-        for i in $(seq $iters); do
-            mdsrate_cleanup $num $machinefile $nfiles $dir 'f%%d' --ignore
+		for i in $(seq $iters); do
+			mdsrate_cleanup $num $machinefile $nfiles $dir 'f%%d' \
+				--ignore
 
-            COMMAND="${MDSRATE} --create --nfiles $nfiles --dir $dir --filefmt 'f%%d'"
-            mpi_run -np $((num * nthreads)) -machinefile $machinefile ${COMMAND} | tee ${LOG} &
+			COMMAND="${MDSRATE} --create --nfiles $nfiles --dir
+				 $dir --filefmt 'f%%d'"
+			mpi_run -np $((num * nthreads)) ${MACHINEFILE_OPTION} \
+				$machinefile ${COMMAND} | tee ${LOG} &
 
-            pid=$!
-            echo "pid=$pid"
+			pid=$!
+			echo "pid=$pid"
 
-            # 2 threads 100000 creates 117 secs
-            sleep 20
+			# 2 threads 100000 creates 117 secs
+			sleep 20
 
-            log "$i : Starting failover on $SINGLEMDS"
-            facet_failover $SINGLEMDS
-            if ! wait_recovery_complete $SINGLEMDS $((TIMEOUT * 10)); then
-                echo "$SINGLEMDS recovery is not completed!"
-                kill -9 $pid
-                exit 7
-            fi
+			log "$i : Starting failover on $SINGLEMDS"
+			facet_failover $SINGLEMDS
+			if ! wait_recovery_complete $SINGLEMDS \
+			     $((TIMEOUT * 10)); then
+				echo "$SINGLEMDS recovery is not completed!"
+				kill -9 $pid
+				exit 7
+			fi
 
-            duration=$(do_facet $SINGLEMDS lctl get_param -n $procfile | grep recovery_duration)
-            
-            res=( "${res[@]}" "$num" )
-            res=( "${res[@]}" "$duration" )
-            echo "RECOVERY TIME: NFILES=$nfiles number of clients: $num  $duration"
-            wait $pid
+			duration=$(do_facet $SINGLEMDS lctl get_param -n \
+				$procfile | grep recovery_duration)
 
-        done
-        num=$((num + increment))
-    done
+			res=( "${res[@]}" "$num" )
+			res=( "${res[@]}" "$duration" )
+			echo "RECOVERY TIME: NFILES=$nfiles number of clients: $num $duration"
+			wait $pid
+		done
+		num=$((num + increment))
+	done
 
     mdsrate_cleanup $num $machinefile $nfiles $dir 'f%%d' --ignore
 

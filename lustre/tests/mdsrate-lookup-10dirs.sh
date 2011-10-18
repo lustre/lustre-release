@@ -66,11 +66,13 @@ else
                         --ndirs ${NUM_DIRS} --dirfmt '${DIRfmt}'
                         --nfiles ${NUM_FILES} --filefmt 'f%%d'"
 
-    echo "+" ${COMMAND}
-    # For files creation we can use -np equal to NUM_DIRS 
-    # This is just a test preparation, does not matter how many threads we use for files creation;
-    # we just should be aware that NUM_DIRS is less than or equal to the number of threads np
-    mpi_run -np ${NUM_DIRS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1 
+	echo "+" ${COMMAND}
+	# For files creation we can use -np equal to NUM_DIRS
+	# This is just a test preparation, does not matter how many threads we
+	# use for files creation; we just should be aware that NUM_DIRS is less
+	# than or equal to the number of threads np
+	mpi_run -np ${NUM_DIRS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		${COMMAND} 2>&1
 
     # No lookup if error occurs on file creation, abort.
     [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
@@ -84,9 +86,10 @@ COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --lookup --time ${TIME_PERIOD} ${SEED_OPTIO
 if [ -n "$NOSINGLE" ]; then
     echo "NO Test for lookups on a single client."
 else
-    log "===== $0 ### 1 NODE LOOKUPS ###"
-    echo "+" ${COMMAND}
-    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+	log "===== $0 ### 1 NODE LOOKUPS ###"
+	echo "+" ${COMMAND}
+	mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} |
+		tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && sed -e "s/^/log: /" $LOG
@@ -99,9 +102,10 @@ fi
 if [ -n "$NOMULTI" ]; then
     echo "NO test for lookups on multiple nodes."
 else
-    log "===== $0 ### ${NUM_CLIENTS} NODES LOOKUPS ###"
-    echo "+" ${COMMAND}
-    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+	log "===== $0 ### ${NUM_CLIENTS} NODES LOOKUPS ###"
+	echo "+" ${COMMAND}
+	mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} \
+		${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && sed -e "s/^/log: /" $LOG
