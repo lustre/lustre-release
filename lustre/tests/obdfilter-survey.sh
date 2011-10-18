@@ -95,11 +95,14 @@ print_jbd () {
 check_jbd_values () {
 	local facet=$1
 	local thrhi=$2
+	local rtime=$3
 
 	# last two lines from history
 	# $4: run >= 5000
 	# $8: hndls >= thrhi * 2
-	local hist=("$(print_jbd history $facet | tail -3 | head -2)")
+	# display history of rtime/4 before, in case obd cleanup consumes time
+	local tlines=$((rtime / 5 / 4 + 1))
+	local hist=("$(print_jbd history $facet | tail -$tlines | head -1)")
 	echo "$hist"
 	local run=($(echo "${hist[*]}" | awk '{print $4}'))
 	local hndls=($(echo "${hist[*]}" | awk '{print $8}'))
@@ -117,10 +120,11 @@ check_jbd_values () {
 check_jbd_values_facets () {
 	local facets=$1
 	local thrhi=$2
+	local rtime=$3
 	local facet
 	local rc=0
 	for facet in  ${facets//,/ }; do
-		check_jbd_values $facet $thrhi || rc=$((rc+$?))
+		check_jbd_values $facet $thrhi $rtime || rc=$((rc+$?))
 	done
 	return $rc
 }
@@ -137,9 +141,14 @@ test_1b () {
 	save_lustre_params $(comma_list $(osts_nodes)) "obdfilter.${FSNAME}-*.sync_journal" >$param_file
 	do_nodesv $(comma_list $(osts_nodes)) lctl set_param obdfilter.${FSNAME}-*.sync_journal=0
 
+	local stime=$(date +%s)
 	thrlo=4 nobjhi=1 thrhi=4 obdflter_survey_run disk
+	local etime=$(date +%s)
+	# run time of obd survey
+	local rtime=$((etime - stime))
 
-	check_jbd_values_facets $(get_facets OST) 4 || rc=$((rc+$?))
+	echo "obd survey finished in $rtime seconds"
+	check_jbd_values_facets $(get_facets OST) 4 $rtime || rc=$((rc+$?))
 
 	restore_lustre_params < $param_file
 
@@ -165,9 +174,13 @@ test_2b () {
 	save_lustre_params $(comma_list $(osts_nodes)) "obdfilter.${FSNAME}-*.sync_journal" >$param_file
 	do_nodesv $(comma_list $(osts_nodes)) lctl set_param obdfilter.${FSNAME}-*.sync_journal=0
 
+	local stime=$(date +%s)
 	thrlo=4 nobjhi=1 thrhi=4 obdflter_survey_run netdisk
+	local etime=$(date +%s)
+	local rtime=$((etime - stime))
 
-	check_jbd_values_facets $(get_facets OST) 4 || rc=$((rc+$?))
+	echo "obd survey finished in $rtime seconds"
+	check_jbd_values_facets $(get_facets OST) 4 $rtime || rc=$((rc+$?))
 
 	restore_lustre_params < $param_file
 
