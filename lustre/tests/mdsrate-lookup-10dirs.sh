@@ -70,7 +70,7 @@ else
     # For files creation we can use -np equal to NUM_DIRS 
     # This is just a test preparation, does not matter how many threads we use for files creation;
     # we just should be aware that NUM_DIRS is less than or equal to the number of threads np
-    mpi_run -np ${NUM_DIRS} -machinefile ${MACHINEFILE} ${COMMAND} 2>&1 
+    mpi_run -np ${NUM_DIRS} ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} 2>&1
 
     # No lookup if error occurs on file creation, abort.
     [ ${PIPESTATUS[0]} != 0 ] && error "mdsrate file creation failed, aborting"
@@ -86,7 +86,7 @@ if [ -n "$NOSINGLE" ]; then
 else
     log "===== $0 ### 1 NODE LOOKUPS ###"
     echo "+" ${COMMAND}
-    mpi_run -np 1 -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+    mpi_run -np 1 ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && sed -e "s/^/log: /" $LOG
@@ -101,7 +101,8 @@ if [ -n "$NOMULTI" ]; then
 else
     log "===== $0 ### ${NUM_CLIENTS} NODES LOOKUPS ###"
     echo "+" ${COMMAND}
-    mpi_run -np ${NUM_CLIENTS} -machinefile ${MACHINEFILE} ${COMMAND} | tee ${LOG}
+    mpi_run -np ${NUM_CLIENTS} ${MACHINEFILE_OPTION} ${MACHINEFILE} ${COMMAND} \
+            | tee ${LOG}
 
     if [ ${PIPESTATUS[0]} != 0 ]; then
         [ -f $LOG ] && sed -e "s/^/log: /" $LOG

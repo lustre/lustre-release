@@ -215,7 +215,8 @@ test_3a() {
             mdsrate_cleanup $num $machinefile $nfiles $dir 'f%%d' --ignore
 
             COMMAND="${MDSRATE} --create --nfiles $nfiles --dir $dir --filefmt 'f%%d'"
-            mpi_run -np $((num * nthreads)) -machinefile $machinefile ${COMMAND} | tee ${LOG} &
+            mpi_run -np $((num * nthreads)) ${MACHINEFILE_OPTION} $machinefile \
+                        ${COMMAND} | tee ${LOG} &
 
             pid=$!
             echo "pid=$pid"

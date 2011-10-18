@@ -25,6 +25,7 @@ noinst_SCRIPTS += recovery-random-scale.sh parallel-scale.sh metadata-updates.sh
 noinst_SCRIPTS += ost-pools.sh rpc.sh lnet-selftest.sh obdfilter-survey.sh mmp.sh mmp_mark.sh
 noinst_SCRIPTS += sgpdd-survey.sh auster yaml.sh maloo_upload.sh setup-nfs.sh
 noinst_SCRIPTS += parallel-scale-nfs.sh parallel-scale-nfsv3.sh parallel-scale-nfsv4.sh
+noinst_SCRIPTS += ha.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += test-groups/regression test-groups/regression-mpi
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh

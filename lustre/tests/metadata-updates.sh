@@ -254,8 +254,9 @@ if [ -f "$WRITE_DISJOINT" ]; then
     set $TRACE
     MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
     generate_machine_file $NODES_TO_USE $MACHINEFILE
-    mpi_run -np $(get_node_count ${NODES_TO_USE//,/ }) -machinefile $MACHINEFILE \
-    $WRITE_DISJOINT -f $WRITE_DISJOINT_FILE -n $NUMLOOPS || STATUS=1
+    mpi_run -np $(get_node_count ${NODES_TO_USE//,/ }) ${MACHINEFILE_OPTION} \
+            $MACHINEFILE $WRITE_DISJOINT -f $WRITE_DISJOINT_FILE -n $NUMLOOPS \
+            || STATUS=1
 else
     skip_env "$0 : write_disjoint not found "
 fi

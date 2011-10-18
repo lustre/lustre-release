@@ -3433,7 +3433,8 @@ get_stripe_info() {
 }
 
 mdsrate_cleanup () {
-    mpi_run -np $1 -machinefile $2 ${MDSRATE} --unlink --nfiles $3 --dir $4 --filefmt $5 $6
+    mpi_run -np $1 ${MACHINEFILE_OPTION} $2 ${MDSRATE} --unlink --nfiles $3 \
+            --dir $4 --filefmt $5 $6
 }
 
 delayed_recovery_enabled () {
