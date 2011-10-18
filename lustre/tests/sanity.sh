@@ -466,6 +466,7 @@ test_17g() {
 run_test 17g "symlinks: really long symlink name ==============================="
 
 test_17h() { #bug 17378
+        remote_mds_nodsh && skip "remote MDS with nodsh" && return
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir -c -1
 #define OBD_FAIL_MDS_LOV_PREP_CREATE 0x141
@@ -475,6 +476,7 @@ test_17h() { #bug 17378
 run_test 17h "create objects: lov_free_memmd() doesn't lbug"
 
 test_17i() { #bug 20018
+        remote_mds_nodsh && skip "remote MDS with nodsh" && return
         mkdir -p $DIR/$tdir
 	local foo=$DIR/$tdir/$tfile
 	ln -s $foo $foo || error "create symlink failed"
@@ -1257,6 +1259,7 @@ test_27w() { # bug 10997
 run_test 27w "check lfs setstripe -c -s -i options ============="
 
 test_27x() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
 	OFFSET=$(($OSTCOUNT - 1))
 	OSTIDX=0
@@ -1278,6 +1281,7 @@ run_test 27x "create files while OST0 is degraded"
 test_27y() {
         [ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
         remote_mds_nodsh && skip "remote MDS with nodsh" && return
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
 
         local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $FSNAME-OST0000)
         local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
@@ -1376,6 +1380,7 @@ check_seq_oid()
 }
 
 test_27z() {
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir/$tfile-1 -c 1 -o 0 -s 1m ||
                 { error "setstripe -c -1 failed"; return 1; }
@@ -1877,6 +1882,7 @@ test_33c() {
         local write_bytes
         local all_zeros
 
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
         all_zeros=:
         rm -fr $DIR/d33
         mkdir -p $DIR/d33
@@ -2412,6 +2418,7 @@ run_test 39k "write, utime, close, stat ========================"
 TEST_39_ATIME=`date -d "1 year" +%s`
 
 test_39l() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local atime_diff=$(do_facet $SINGLEMDS lctl get_param -n mdd.*.atime_diff)
 
 	mkdir -p $DIR/$tdir
@@ -3513,6 +3520,7 @@ test_57a() {
 run_test 57a "verify MDS filesystem created with large inodes =="
 
 test_57b() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local dir=$DIR/d57b
 
 	local FILECOUNT=100
@@ -3584,6 +3592,7 @@ run_test 59 "verify cancellation of llog records async ========="
 
 TEST60_HEAD="test_60 run $RANDOM"
 test_60a() {
+	remote_mgs_nodsh && skip "remote MGS with nodsh" && return
         [ ! -f run-llog.sh ] && skip_env "missing subtest run-llog.sh" && return
 	log "$TEST60_HEAD - from kernel mode"
 	do_facet mgs sh run-llog.sh
@@ -4427,6 +4436,7 @@ test_80() { # bug 10718
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
 
 test_81a() { # LU-456
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
         # define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
         # MUST OR with the OBD_FAIL_ONCE (0x80000000)
         do_facet ost0 lctl set_param fail_loc=0x80000228
@@ -4442,6 +4452,7 @@ test_81a() { # LU-456
 run_test 81a "OST should retry write when get -ENOSPC ==============="
 
 test_81b() { # LU-456
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
         # define OBD_FAIL_OST_MAPBLK_ENOSPC    0x228
         # Don't OR with the OBD_FAIL_ONCE (0x80000000)
         do_facet ost0 lctl set_param fail_loc=0x228
@@ -6736,6 +6747,7 @@ som_mode_switch() {
 }
 
 test_132() { #1028, SOM
+        remote_mds_nodsh && skip "remote MDS with nodsh" && return
         local num=$(get_mds_dir $DIR)
         local mymds=mds${num}
         local MOUNTOPT_SAVE=$MOUNTOPT
@@ -6794,6 +6806,8 @@ check_stats() {
 }
 
 test_133a() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p $DIR/${tdir}
 
@@ -6823,6 +6837,8 @@ test_133a() {
 run_test 133a "Verifying MDT stats ========================================"
 
 test_133b() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p ${testdir} || error "mkdir failed"
 	touch ${testdir}/${tfile} || "touch failed"
@@ -6843,6 +6859,8 @@ test_133b() {
 run_test 133b "Verifying extra MDT stats =================================="
 
 test_133c() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local testdir=$DIR/${tdir}/stats_testdir
 	mkdir -p ${testdir} || error "mkdir failed"
 
@@ -7072,6 +7090,7 @@ test_155_small_load() {
 }
 
 test_155_big_load() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return
     local temp=$TMP/$tfile
     local file=$DIR/$tfile
 
@@ -7303,6 +7322,7 @@ err17935 () {
     fi
 }
 test_160() {
+    remote_mds_nodsh && skip "remote MDS with nodsh" && return
     USER=$(do_facet $SINGLEMDS lctl --device $MDT0 changelog_register -n)
     echo "Registered as changelog user $USER"
     do_facet $SINGLEMDS lctl get_param -n mdd.$MDT0.changelog_users | \
@@ -7628,6 +7648,7 @@ obdecho_create_test() {
 }
 
 test_180a() {
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
         local rc=0
         local rmmod_local=0
 
@@ -7652,6 +7673,7 @@ test_180a() {
 run_test 180a "test obdecho on osc"
 
 test_180b() {
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
         local rc=0
         local rmmod_remote=0
 
@@ -8162,6 +8184,7 @@ test_215() { # for bugs 18102, 21079, 21517
 run_test 215 "/proc/sys/lnet exists and has proper content - bugs 18102, 21079, 21517"
 
 test_216() { # bug 20317
+        remote_ost_nodsh && skip "remote OST with nodsh" && return
         local node
         local p="$TMP/sanityN-$TESTNAME.parameters"
         save_lustre_params $HOSTNAME "osc.*.contention_seconds" > $p
