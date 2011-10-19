@@ -45,7 +45,6 @@
 
 #define l_file file
 #define l_dentry dentry
-#define l_inode inode
 
 #define l_filp_open filp_open
 
@@ -64,29 +63,12 @@ struct l_readdir_callback {
         cfs_list_t            *lrc_list;
 };
 
-#define LVFS_DENTRY_PARAM_MAGIC         20070216UL
-struct lvfs_dentry_params
-{
-        unsigned long    ldp_inum;
-        void            *ldp_ptr;
-        __u32            ldp_magic;
-};
-#define LVFS_DENTRY_PARAMS_INIT         { .ldp_magic = LVFS_DENTRY_PARAM_MAGIC }
-
 #define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
 #define lvfs_sbdev(SB)       ((SB)->s_bdev)
 #define lvfs_sbdev_type      struct block_device *
-#define lvfs_sbdev_sync      fsync_bdev
-
-int fsync_bdev(struct block_device *);
-
-/* Instead of calling within lvfs (a layering violation) */
-#define lvfs_set_rdonly(obd, sb) \
-        __lvfs_set_rdonly(lvfs_sbdev(sb), fsfilt_journal_sbdev(obd, sb))
 
 int __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev);
 
 int lvfs_check_rdonly(lvfs_sbdev_type dev);
-void lvfs_clear_rdonly(lvfs_sbdev_type dev);
 
 #endif /*  __LVFS_LINUX_H__ */
