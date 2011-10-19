@@ -356,6 +356,20 @@ AC_SUBST(MXLND)
 # LN_CONFIG_O2IB
 #
 AC_DEFUN([LN_CONFIG_O2IB],[
+
+# In RHEL 6.2, rdma_create_id() takes the queue-pair type as a fourth argument
+AC_MSG_CHECKING([if rdma_create_id wants four args])
+LB_LINUX_TRY_COMPILE([
+	#include <rdma/rdma_cm.h>
+],[
+	rdma_create_id(NULL, NULL, 0, 0);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_RDMA_CREATE_ID_4ARG, 1, [rdma_create_id wants 4 args])
+],[
+	AC_MSG_RESULT([no])
+])
+
 AC_MSG_CHECKING([whether to enable OpenIB gen2 support])
 # set default
 AC_ARG_WITH([o2ib],
@@ -426,7 +440,11 @@ else
 		        struct ib_pool_fmr          pool_fmr;
 		        enum   ib_cm_rej_reason     rej_reason;
 
+		        #ifdef HAVE_RDMA_CREATE_ID_4ARG
+		        cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP, 0);
+		        #else
 		        cm_id = rdma_create_id(NULL, NULL, RDMA_PS_TCP);
+		        #endif
 		        return PTR_ERR(cm_id);
 		],[
 		        AC_MSG_RESULT([yes])

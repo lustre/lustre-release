@@ -2383,8 +2383,8 @@ kiblnd_dev_need_failover(kib_dev_t *dev)
          *
          * a. rdma_bind_addr(), it will conflict with listener cmid
          * b. rdma_resolve_addr() to zero addr */
-        cmid = rdma_create_id(kiblnd_dummy_callback,
-                              dev, RDMA_PS_TCP);
+        cmid = kiblnd_rdma_create_id(kiblnd_dummy_callback, dev, RDMA_PS_TCP,
+                                     IB_QPT_RC);
         if (IS_ERR(cmid)) {
                 rc = PTR_ERR(cmid);
                 CERROR("Failed to create cmid for failover: %d\n", rc);
@@ -2456,7 +2456,8 @@ kiblnd_dev_failover(kib_dev_t *dev)
                 rdma_destroy_id(cmid);
         }
 
-        cmid = rdma_create_id(kiblnd_cm_callback, dev, RDMA_PS_TCP);
+        cmid = kiblnd_rdma_create_id(kiblnd_cm_callback, dev, RDMA_PS_TCP,
+                                     IB_QPT_RC);
         if (IS_ERR(cmid)) {
                 rc = PTR_ERR(cmid);
                 CERROR("Failed to create cmid for failover: %d\n", rc);

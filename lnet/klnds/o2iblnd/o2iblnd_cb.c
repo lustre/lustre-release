@@ -1262,7 +1262,9 @@ kiblnd_connect_peer (kib_peer_t *peer)
         LASSERT (net != NULL);
         LASSERT (peer->ibp_connecting > 0);
 
-        cmid = rdma_create_id(kiblnd_cm_callback, peer, RDMA_PS_TCP);
+        cmid = kiblnd_rdma_create_id(kiblnd_cm_callback, peer, RDMA_PS_TCP,
+                                     IB_QPT_RC);
+
         if (IS_ERR(cmid)) {
                 CERROR("Can't create CMID for %s: %ld\n",
                        libcfs_nid2str(peer->ibp_nid), PTR_ERR(cmid));
