@@ -137,12 +137,6 @@ static inline struct dentry *ll_lookup_one_len(const char *fid_name,
 	return dchild;
 }
 
-static inline void ll_sleep(int t)
-{
-        cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-        cfs_schedule_timeout(t * CFS_HZ);
-        cfs_set_current_state(CFS_TASK_RUNNING);
-}
 #endif
 
 #endif
