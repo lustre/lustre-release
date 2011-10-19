@@ -975,6 +975,19 @@ void policy_from_vma(ldlm_policy_data_t *policy,
                 struct vm_area_struct *vma, unsigned long addr, size_t count);
 struct vm_area_struct *our_vma(unsigned long addr, size_t count);
 
+static inline void ll_invalidate_page(struct page *vmpage)
+{
+        struct address_space *mapping = vmpage->mapping;
+        loff_t offset = vmpage->index << PAGE_CACHE_SHIFT;
+
+        LASSERT(PageLocked(vmpage));
+        if (mapping == NULL)
+                return;
+
+        ll_teardown_mmaps(mapping, offset, offset + CFS_PAGE_SIZE);
+        truncate_complete_page(mapping, vmpage);
+}
+
 #define    ll_s2sbi(sb)        (s2lsi(sb)->lsi_llsbi)
 
 /* don't need an addref as the sb_info should be holding one */

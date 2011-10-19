@@ -1025,17 +1025,6 @@ void ccc_req_attr_set(const struct lu_env *env,
         }
         obdo_from_inode(oa, inode, &cl_i2info(inode)->lli_fid,
                         valid_flags & flags);
-#ifdef __KERNEL__
-        /* Bug11742 - set the OBD_FL_MMAP flag for memory mapped files */
-        if (cfs_atomic_read(&(cl_inode2ccc(inode)->cob_mmap_cnt)) != 0) {
-                if (!(oa->o_valid & OBD_MD_FLFLAGS)) {
-                        oa->o_valid |= OBD_MD_FLFLAGS;
-                        oa->o_flags = OBD_FL_MMAP;
-                } else {
-                        oa->o_flags |= OBD_FL_MMAP;
-                }
-        }
-#endif
 }
 
 const struct cl_req_operations ccc_req_ops = {

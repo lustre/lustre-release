@@ -2222,7 +2222,9 @@ enum cl_io_lock_dmd {
         /** Layers are free to decide between local and global locking. */
         CILR_MAYBE,
         /** Never lock: there is no cache (e.g., liblustre). */
-        CILR_NEVER
+        CILR_NEVER,
+        /** Peek lock: use existing locks, don't queue new ones */
+        CILR_PEEK
 };
 
 struct cl_io_rw_common {
@@ -2283,10 +2285,12 @@ struct cl_io {
                         pgoff_t         ft_index;
                         /** bytes valid byte on a faulted page. */
                         int             ft_nob;
-                        /** writable page? */
+                        /** writable page? for nopage() only */
                         int             ft_writable;
                         /** page of an executable? */
                         int             ft_executable;
+                        /** page_mkwrite() */
+                        int             ft_mkwrite;
                         /** resulting page */
                         struct cl_page *ft_page;
                 } ci_fault;

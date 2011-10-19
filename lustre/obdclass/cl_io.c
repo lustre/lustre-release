@@ -377,7 +377,13 @@ static int cl_lockset_lock_one(const struct lu_env *env,
 
         ENTRY;
 
-        lock = cl_lock_request(env, io, &link->cill_descr, "io", io);
+        if (io->ci_lockreq == CILR_PEEK) {
+                lock = cl_lock_peek(env, io, &link->cill_descr, "io", io);
+                if (lock == NULL)
+                        lock = ERR_PTR(-ENODATA);
+        } else
+                lock = cl_lock_request(env, io, &link->cill_descr, "io", io);
+
         if (!IS_ERR(lock)) {
                 link->cill_lock = lock;
                 cfs_list_move(&link->cill_linkage, &set->cls_curr);
