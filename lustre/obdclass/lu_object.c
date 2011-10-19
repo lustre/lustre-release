@@ -1925,13 +1925,16 @@ EXPORT_SYMBOL(lu_time_names);
 int lu_kmem_init(struct lu_kmem_descr *caches)
 {
         int result;
+        struct lu_kmem_descr *iter = caches;
 
-        for (result = 0; caches->ckd_cache != NULL; ++caches) {
-                *caches->ckd_cache = cfs_mem_cache_create(caches->ckd_name,
-                                                          caches->ckd_size,
-                                                          0, 0);
-                if (*caches->ckd_cache == NULL) {
+        for (result = 0; iter->ckd_cache != NULL; ++iter) {
+                *iter->ckd_cache = cfs_mem_cache_create(iter->ckd_name,
+                                                        iter->ckd_size,
+                                                        0, 0);
+                if (*iter->ckd_cache == NULL) {
                         result = -ENOMEM;
+                        /* free all previously allocated caches */
+                        lu_kmem_fini(caches);
                         break;
                 }
         }

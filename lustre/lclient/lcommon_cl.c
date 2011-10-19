@@ -301,15 +301,26 @@ int ccc_global_init(struct lu_device_type *device_type)
         int result;
 
         result = lu_kmem_init(ccc_caches);
-        if (result == 0) {
-                result = lu_device_type_init(device_type);
-                ccc_inode_fini_env = cl_env_alloc(&dummy_refcheck,
-                                                  LCT_REMEMBER|LCT_NOREF);
-                if (IS_ERR(ccc_inode_fini_env))
-                        result = PTR_ERR(ccc_inode_fini_env);
-                else
-                        ccc_inode_fini_env->le_ctx.lc_cookie = 0x4;
+        if (result)
+                return result;
+
+        result = lu_device_type_init(device_type);
+        if (result)
+                goto out_kmem;
+
+        ccc_inode_fini_env = cl_env_alloc(&dummy_refcheck,
+                                          LCT_REMEMBER|LCT_NOREF);
+        if (IS_ERR(ccc_inode_fini_env)) {
+                result = PTR_ERR(ccc_inode_fini_env);
+                goto out_device;
         }
+
+        ccc_inode_fini_env->le_ctx.lc_cookie = 0x4;
+        return 0;
+out_device:
+        lu_device_type_fini(device_type);
+out_kmem:
+        lu_kmem_fini(ccc_caches);
         return result;
 }
 

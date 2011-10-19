@@ -1243,17 +1243,31 @@ int cl_global_init(void)
                 return result;
 
         result = lu_kmem_init(cl_object_caches);
-        if (result == 0) {
-                LU_CONTEXT_KEY_INIT(&cl_key);
-                result = lu_context_key_register(&cl_key);
-                if (result == 0) {
-                        result = cl_lock_init();
-                        if (result == 0)
-                                result = cl_page_init();
-                }
-        }
         if (result)
-                cl_env_store_fini();
+                goto out_store;
+
+        LU_CONTEXT_KEY_INIT(&cl_key);
+        result = lu_context_key_register(&cl_key);
+        if (result)
+                goto out_kmem;
+
+        result = cl_lock_init();
+        if (result)
+                goto out_context;
+
+        result = cl_page_init();
+        if (result)
+                goto out_lock;
+
+        return 0;
+out_lock:
+        cl_lock_fini();
+out_context:
+        lu_context_key_degister(&cl_key);
+out_kmem:
+        lu_kmem_fini(cl_object_caches);
+out_store:
+        cl_env_store_fini();
         return result;
 }
 
