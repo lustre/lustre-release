@@ -355,7 +355,7 @@ static int ldd_write(struct lvfs_run_ctxt *mount_ctxt,
 
         push_ctxt(&saved, mount_ctxt, NULL);
 
-        file = filp_open(MOUNT_DATA_FILE, O_RDWR, 0644);
+        file = filp_open(MOUNT_DATA_FILE, O_RDWR|O_SYNC, 0644);
         if (IS_ERR(file)) {
                 rc = PTR_ERR(file);
                 CERROR("cannot open %s: rc = %d\n", MOUNT_DATA_FILE, rc);
