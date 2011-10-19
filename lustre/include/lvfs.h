@@ -54,7 +54,6 @@
 
 #include <libcfs/lucache.h>
 
-
 #ifdef LIBLUSTRE
 #include <lvfs_user_fs.h>
 #endif
@@ -66,11 +65,4 @@ void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
                struct lvfs_ucred *cred);
 void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
               struct lvfs_ucred *cred);
-
-
-static inline int ll_fid2str(char *str, __u64 id, __u32 generation)
-{
-        return sprintf(str, "%llx:%08x", (unsigned long long)id, generation);
-}
-
 #endif
