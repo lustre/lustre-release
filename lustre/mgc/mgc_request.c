@@ -1231,7 +1231,7 @@ enum {
         CONFIG_READ_NRPAGES      = 4
 };
 
-static int mgc_apply_recover_logs(struct obd_device *obd,
+static int mgc_apply_recover_logs(struct obd_device *mgc,
                                   struct config_llog_data *cld,
                                   __u64 max_version,
                                   void *data, int datalen)
@@ -1244,26 +1244,29 @@ static int mgc_apply_recover_logs(struct obd_device *obd,
         u64   prev_version = 0;
         char *inst;
         char *buf;
-        int   bufsz = CFS_PAGE_SIZE;
+        int   bufsz;
         int   pos;
         int   rc  = 0;
         int   off = 0;
-
-        OBD_ALLOC(buf, CFS_PAGE_SIZE);
-        if (buf == NULL)
-                return -ENOMEM;
+        ENTRY;
 
         LASSERT(cfg->cfg_instance != NULL);
         LASSERT(cfg->cfg_sb == cfg->cfg_instance);
-        inst = buf;
+
+        OBD_ALLOC(inst, CFS_PAGE_SIZE);
+        if (inst == NULL)
+                RETURN(-ENOMEM);
+
         if (!(lsi->lsi_flags & LSI_SERVER)) {
                 pos = sprintf(inst, "%p", cfg->cfg_instance);
         } else {
                 LASSERT(IS_MDT(lsi->lsi_ldd));
                 pos = sprintf(inst, "MDT%04x", lsi->lsi_ldd->ldd_svindex);
         }
-        buf   += pos + 1;
-        bufsz -= pos + 1;
+
+        ++pos;
+        buf   = inst + pos;
+        bufsz = CFS_PAGE_SIZE - pos;
 
         while (datalen > 0) {
                 int   entry_len = sizeof(*entry);
@@ -1329,7 +1332,8 @@ static int mgc_apply_recover_logs(struct obd_device *obd,
                 strcpy(obdname, cld->cld_logname);
                 cname = strrchr(obdname, '-');
                 if (cname == NULL) {
-                        CERROR("mgc: invalid logname %s\n", obdname);
+                        CERROR("mgc %s: invalid logname %s\n",
+                               mgc->obd_name, obdname);
                         break;
                 }
 
@@ -1345,8 +1349,8 @@ static int mgc_apply_recover_logs(struct obd_device *obd,
                 /* find the obd by obdname */
                 obd = class_name2obd(obdname);
                 if (obd == NULL) {
-                        CDEBUG(D_INFO, "mgc: cannot find obdname %s\n",
-                               obdname);
+                        CDEBUG(D_INFO, "mgc %s: cannot find obdname %s\n",
+                               mgc->obd_name, obdname);
 
                         /* this is a safe race, when the ost is starting up...*/
                         continue;
@@ -1398,7 +1402,7 @@ static int mgc_apply_recover_logs(struct obd_device *obd,
         }
 
         OBD_FREE(inst, CFS_PAGE_SIZE);
-        return rc;
+        RETURN(rc);
 }
 
 /**

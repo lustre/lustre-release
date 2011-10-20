@@ -747,6 +747,21 @@ static int mgs_handle_exception(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+/*
+ * For old clients there is no direct way of knowing which filesystems
+ * a client is operating at the MGS side. But we need to pick up those
+ * clients so that the MGS can mark the corresponding filesystem as
+ * non-IR capable because old clients are not ready to be notified.
+ *
+ * This is why we have this _hack_ function. We detect the filesystem's
+ * name by hacking llog operation which is currently used by the clients
+ * to fetch configuration logs. At present this is fine because this is
+ * the ONLY llog operation between mgc and the MGS.
+ *
+ * If extra llog operation is going to be added, this function needs fixing.
+ *
+ * If releases prior than 2.0 are not supported, we can remove this function.
+ */
 static int mgs_handle_fslog_hack(struct ptlrpc_request *req)
 {
         char *logname;

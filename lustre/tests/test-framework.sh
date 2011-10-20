@@ -3886,7 +3886,7 @@ wait_import_state() {
     done
 }
 
-# One client request could be timeouted because server was not ready
+# One client request could be timed out because server was not ready
 # when request was sent by client.
 # The request timeout calculation details :
 # ptl_send_rpc ()
@@ -3942,7 +3942,7 @@ wait_osc_import_state() {
     local maxtime=$(( 2 * $(request_timeout $facet)))
 
     if ! do_rpc_nodes $(facet_host $facet) \
-_wait_import_state $expected $param $maxtime; then
+                _wait_import_state $expected $param $maxtime; then
         error "import is not in ${expected} state"
         return 1
     fi

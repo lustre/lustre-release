@@ -1102,10 +1102,10 @@ run_test 61 "Verify to not reuse orphan objects - bug 17025"
 
 check_cli_ir_state()
 {
-        local NODE=${1:-`hostname`}
+        local NODE=${1:-$HOSTNAME}
         local st
         st=$(do_node $NODE "lctl get_param mgc.*.ir_state |
-                            awk '/imperative_recovery:/ { print \\\$2}' ")
+                            awk '/imperative_recovery:/ { print \\\$2}'")
         [ $st != ON -o $st != OFF ] ||
                 error "Error state $st, must be ON or OFF"
         echo -n $st
@@ -1148,7 +1148,7 @@ nidtbl_version_mgs()
 nidtbl_version_client()
 {
         local cli=$1
-        local node=${2:-`hostname`}
+        local node=${2:-$HOSTNAME}
 
         if [ X$cli = Xclient ]; then
                 cli=$FSNAME-client
@@ -1156,7 +1156,7 @@ nidtbl_version_client()
                 local obdtype=${cli/%[0-9]*/}
                 [ $obdtype != mds ] && error "wrong parameters $cli"
 
-                node=`facet_active_host $cli`
+                node=$(facet_active_host $cli)
                 local t=${cli}_svc
                 cli=${!t}
         fi
@@ -1172,7 +1172,7 @@ nidtbl_version_client()
 
 nidtbl_versions_match()
 {
-        [ `nidtbl_version_mgs` -eq `nidtbl_version_client ${1:-client}` ]
+        [ $(nidtbl_version_mgs) -eq $(nidtbl_version_client ${1:-client}) ]
 }
 
 target_instance_match()
@@ -1198,11 +1198,11 @@ target_instance_match()
         esac
 
         local target=${srv}_svc
-        local si=`do_facet $srv lctl get_param -n $obdname.${!target}.instance`
-        local ci=`lctl get_param -n $cliname.${!target}-${cliname}-*.import | \
-                  awk '/instance/{ print $2 }' |head -1`
+        local si=$(do_facet $srv lctl get_param -n $obdname.${!target}.instance)
+        local ci=$(lctl get_param -n $cliname.${!target}-${cliname}-*.import | \
+                  awk '/instance/{ print $2 }' |head -1)
 
-        return `[ $si -eq $ci ]`
+        return $([ $si -eq $ci ])
 }
 
 test_100()
@@ -1211,7 +1211,7 @@ test_100()
         set_ir_status disabled
 
         local saved_FAILURE_MODE=$FAILURE_MODE
-        [ `facet_host mgs` = `facet_host ost1` ] && FAILURE_MODE="SOFT"
+        [ $(facet_host mgs) = $(facet_host ost1) ] && FAILURE_MODE="SOFT"
         fail ost1
 
         # valid check
@@ -1245,7 +1245,7 @@ run_test 101 "IR: Make sure IR works w/o normal recovery"
 
 test_102()
 {
-        local clients=${CLIENTS:-`hostname`}
+        local clients=${CLIENTS:-$HOSTNAME}
         local old_version
         local new_version
         local mgsdev=mgs
@@ -1270,7 +1270,7 @@ test_102()
         nidtbl_versions_match || error "nidtbl mismatch"
 
         # get the version #
-        old_version=`nidtbl_version_client client`
+        old_version=$(nidtbl_version_client client)
 
         zconf_umount_clients $clients $MOUNT || error "Cannot umount client"
 
@@ -1282,7 +1282,7 @@ test_102()
         zconf_mount_clients $clients $MOUNT || error "Cannot mount client"
 
         # check new version
-        new_version=`nidtbl_version_client client`
+        new_version=$(nidtbl_version_client client)
         [ $new_version -lt $old_version ] &&
                 error "nidtbl version wrong after mgs restarts"
         return 0
@@ -1313,7 +1313,7 @@ test_103()
         # sleep 30 seconds so the MDS has a chance to detect MGS restarting
         local count=30
         while [ $count -gt 0 ]; do
-                [ `nidtbl_version_client mds1` -ne 0 ] && break
+                [ $(nidtbl_version_client mds1) -ne 0 ] && break
                 sleep 1
                 count=$((count-1))
         done
@@ -1332,13 +1332,12 @@ test_104()
         set_ir_status full
 
         stop ost1
-        start ost1 `ostdevname 1` "$OST_MOUNT_OPTS -onoir" ||
+        start ost1 $(ostdevname 1) "$OST_MOUNT_OPTS -onoir" ||
                 error "OST1 cannot start"
         clients_up
 
         local ir_state=$(check_target_ir_state ost1)
         [ $ir_state = "OFF" ] || error "ir status on ost1 should be OFF"
-        ost1_opt=
 }
 run_test 104 "IR: ost can disable IR voluntarily"
 
@@ -1349,7 +1348,7 @@ test_105()
         set_ir_status full
 
         # get one of the clients from client list
-        rcli=`echo $RCLIENTS |cut -d' ' -f 1`
+        local rcli=$(echo $RCLIENTS |cut -d' ' -f 1)
 
         local old_MOUNTOPT=$MOUNTOPT
         MOUNTOPT=${MOUNTOPT},noir
@@ -1361,7 +1360,7 @@ test_105()
         [ $ir_state = OFF ] || error "IR state must be OFF at $rcli"
 
         # make sure MGS's state is Partial
-        [ `get_ir_status` = "partial" ] || error "MGS IR state must be partial"
+        [ $(get_ir_status) = "partial" ] || error "MGS IR state must be partial"
 
         fail ost1
         # make sure IR on ost1 is OFF
@@ -1374,7 +1373,7 @@ test_105()
         zconf_mount $rcli $MOUNT || error "mount failed"
 
         # make sure MGS's state is full
-        [ `get_ir_status` = "full" ] || error "MGS IR status must be full"
+        [ $(get_ir_status) = "full" ] || error "MGS IR status must be full"
 
         fail ost1
         # make sure IR on ost1 is ON
