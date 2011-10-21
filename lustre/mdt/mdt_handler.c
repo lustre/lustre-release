@@ -5196,35 +5196,42 @@ static int mdt_init_export(struct obd_export *exp)
         cfs_spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         cfs_spin_unlock(&exp->exp_lock);
+
+        /* self-export doesn't need client data and ldlm initialization */
+        if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
+                                     &exp->exp_client_uuid)))
+                RETURN(0);
+
         rc = lut_client_alloc(exp);
         if (rc == 0)
                 rc = ldlm_init_export(exp);
-
         if (rc)
-                CERROR("Error %d while initializing export\n", rc);
+                CERROR("%s: Error %d while initializing export\n",
+                       exp->exp_obd->obd_name, rc);
         RETURN(rc);
 }
 
 static int mdt_destroy_export(struct obd_export *exp)
 {
-        struct mdt_export_data *med;
-        int rc = 0;
         ENTRY;
 
-        med = &exp->exp_mdt_data;
         if (exp_connect_rmtclient(exp))
                 mdt_cleanup_idmap(&exp->exp_mdt_data);
 
         target_destroy_export(exp);
+        /* destroy can be called from failed obd_setup, so
+         * checking uuid is safer than obd_self_export */
+        if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
+                                     &exp->exp_client_uuid)))
+                RETURN(0);
+
         ldlm_destroy_export(exp);
         lut_client_free(exp);
 
         LASSERT(cfs_list_empty(&exp->exp_outstanding_replies));
         LASSERT(cfs_list_empty(&exp->exp_mdt_data.med_open_head));
-        if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
-                RETURN(0);
 
-        RETURN(rc);
+        RETURN(0);
 }
 
 static void mdt_allow_cli(struct mdt_device *m, unsigned int flag)

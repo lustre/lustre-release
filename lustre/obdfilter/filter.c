@@ -648,17 +648,28 @@ static void filter_fmd_cleanup(struct obd_export *exp)
 static int filter_init_export(struct obd_export *exp)
 {
         int rc;
+        ENTRY;
+
         cfs_spin_lock_init(&exp->exp_filter_data.fed_lock);
         CFS_INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
 
         cfs_spin_lock(&exp->exp_lock);
         exp->exp_connecting = 1;
         cfs_spin_unlock(&exp->exp_lock);
+
+        /* self-export doesn't need client data and ldlm initialization */
+        if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
+                                     &exp->exp_client_uuid)))
+                RETURN(0);
+
         rc = lut_client_alloc(exp);
         if (rc == 0)
                 rc = ldlm_init_export(exp);
+        if (rc)
+                CERROR("%s: Can't initialize export: rc %d\n",
+                       exp->exp_obd->obd_name, rc);
 
-        return rc;
+        RETURN(rc);
 }
 
 static int filter_free_server_data(struct obd_device_target *obt)
@@ -2976,11 +2987,13 @@ static int filter_destroy_export(struct obd_export *exp)
         lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
 
         target_destroy_export(exp);
+
+        if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
+                                     &exp->exp_client_uuid)))
+               RETURN(0);
+
         ldlm_destroy_export(exp);
         lut_client_free(exp);
-
-        if (obd_uuid_equals(&exp->exp_client_uuid, &exp->exp_obd->obd_uuid))
-                RETURN(0);
 
         if (!exp->exp_obd->obd_replayable)
                 fsfilt_sync(exp->exp_obd, exp->exp_obd->u.obt.obt_sb);
