@@ -149,7 +149,7 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
  		default:
  			printk(KERN_ERR
  			       "EXT4-fs: Unrecognized mount option \"%s\" "
-@@ -2501,6 +2534,18 @@ static int ext4_fill_super(struct super_
+@@ -2501,6 +2534,14 @@ static int ext4_fill_super(struct super_
  	set_opt(sbi->s_mount_opt, BARRIER);
  
  	/*
@@ -159,10 +159,6 @@ diff -up linux-2.6.18-164/fs/ext4/super.c linux-2.6.18-164/fs/ext4/super.c
 +	*/
 +	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS))
 +		set_opt(sbi->s_mount_opt, EXTENTS);
-+	else
-+		ext4_warning(sb,
-+			"extents feature not enabled on this filesystem, "
-+			"use tune2fs.");
 +
 +	/*
  	 * enable delayed allocation by default
