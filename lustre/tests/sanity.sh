@@ -5097,10 +5097,13 @@ test_104a() {
 	lfs df $DIR/$tfile || error "lfs df $DIR/$tfile failed"
 	lfs df -ih $DIR/$tfile || error "lfs df -ih $DIR/$tfile failed"
 
-	OSC=`lctl get_param -n devices | awk '/-osc-/ {print $4}' | head -n 1`
+        OSC=`lctl dl |grep OST0000-osc-[^M] |awk '{print $4}'`
 	lctl --device %$OSC deactivate
 	lfs df || error "lfs df with deactivated OSC failed"
 	lctl --device %$OSC activate
+        # wait the osc back to normal
+        wait_osc_import_state client ost FULL
+
 	lfs df || error "lfs df with reactivated OSC failed"
 	rm -f $DIR/$tfile
 }
