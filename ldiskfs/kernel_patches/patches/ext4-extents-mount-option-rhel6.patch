@@ -151,7 +151,7 @@ Index: linux-stage/fs/ext4/super.c
  		default:
  			ext4_msg(sb, KERN_ERR,
  			       "Unrecognized mount option \"%s\" "
-@@ -2972,6 +3004,17 @@ static int ext4_fill_super(struct super_
+@@ -2972,6 +3004,14 @@ static int ext4_fill_super(struct super_
  		set_opt(sbi->s_mount_opt, BARRIER);
  
  	/*
@@ -161,9 +161,6 @@ Index: linux-stage/fs/ext4/super.c
 +	 */
 +	if (EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS))
 +		set_opt(sbi->s_mount_opt, EXTENTS);
-+	else
-+		ext4_warning(sb, "extents feature not enabled on this filesystem, "
-+				 "use tune2fs.");
 +
 +	/*
  	 * enable delayed allocation by default

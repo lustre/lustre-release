@@ -17,6 +17,7 @@ ext4-ext_generation-sles11.patch
 ext4-super-warning.patch
 ext4-alloc-policy-2.6-sles11.patch
 ext4-disable-delalloc-sles11.patch
+ext4-remove-extents-warning-rhel5.patch
 ext4-lustre-i_version.patch
 ext4-lock-cached_extent.patch
 ext4-convert-group-lock-sles11.patch
