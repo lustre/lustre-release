@@ -175,10 +175,10 @@ int lustre_msg_size(__u32 magic, int count, __u32 *lens)
 
         LASSERT(count > 0);
 #ifdef PTLRPC_INTEROP_1_6
-        LASSERT(lens[MSG_PTLRPC_BODY_OFF] == sizeof(struct ptlrpc_body) ||
+        LASSERT(lens[MSG_PTLRPC_BODY_OFF] >= sizeof(struct ptlrpc_body) ||
                 lens[MSG_PTLRPC_BODY_OFF] == PTLRPC_BODY_MIN_SIZE);
 #else
-        LASSERT(lens[MSG_PTLRPC_BODY_OFF] == sizeof(struct ptlrpc_body));
+        LASSERT(lens[MSG_PTLRPC_BODY_OFF] >= sizeof(struct ptlrpc_body));
 #endif
         switch (magic) {
         case LUSTRE_MSG_MAGIC_V1:
@@ -1980,8 +1980,8 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         __swab32s(&ocd->ocd_group);
         __swab32s(&ocd->ocd_cksum_types);
         __swab32s(&ocd->ocd_max_easize);
+        __swab32s(&ocd->ocd_instance);
         __swab64s(&ocd->ocd_maxbytes);
-        CLASSERT(offsetof(typeof(*ocd), padding) != 0);
 }
 
 void lustre_swab_obdo (struct obdo  *o)

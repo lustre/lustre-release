@@ -239,6 +239,7 @@ struct lustre_msg_v2 {
 
 /* without gss, ptlrpc_body is put at the first buffer. */
 #define PTLRPC_NUM_VERSIONS     4
+#define JOBSTATS_JOBID_SIZE     32  /* 32 bytes string */
 struct ptlrpc_body {
         struct lustre_handle pb_handle;
         __u32 pb_type;
@@ -260,6 +261,7 @@ struct ptlrpc_body {
         __u64 pb_pre_versions[PTLRPC_NUM_VERSIONS];
         /* padding for future needs */
         __u64 pb_padding[4];
+      /*char  pb_jobid[JOBSTATS_JOBID_SIZE]; LU-694 */
 };
 
 extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
@@ -362,6 +364,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb, int msgsize);
 #define OBD_CONNECT_64BITHASH    0x4000000000ULL /* client supports 64-bits
                                                   * directory hash */
 #define OBD_CONNECT_MAXBYTES     0x8000000000ULL /* max stripe size */
+#define OBD_CONNECT_IMP_RECOV   0x10000000000ULL /* imp recovery support */
+#define OBD_CONNECT_JOBSTATS    0x20000000000ULL /* jobid in ptlrpc_body */
 /* also update obd_connect_names[] for lprocfs_rd_connect_flags()
  * and lustre/utils/wirecheck.c */
 
@@ -413,7 +417,7 @@ struct obd_connect_data {
         __u32 ocd_group;         /* Used in lustre 1.8 */
         __u32 ocd_cksum_types;   /* supported checksum algorithms */
         __u32 ocd_max_easize;    /* How big LOV EA size can be on MDS */
-        __u32 padding;           /* also fix lustre_swab_connect */
+        __u32 ocd_instance;      /* IR instance # of this target */
         __u64 ocd_maxbytes;      /* Maximum object size in bytes */
 };
 
