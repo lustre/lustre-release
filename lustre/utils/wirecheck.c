@@ -320,11 +320,13 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_conn_cnt);
         CHECK_MEMBER(ptlrpc_body, pb_timeout);
         CHECK_MEMBER(ptlrpc_body, pb_service_time);
-        CHECK_MEMBER(ptlrpc_body, pb_slv);
         CHECK_MEMBER(ptlrpc_body, pb_limit);
+	CHECK_MEMBER(ptlrpc_body, pb_slv);
         CHECK_CVALUE(PTLRPC_NUM_VERSIONS);
         CHECK_MEMBER(ptlrpc_body, pb_pre_versions[PTLRPC_NUM_VERSIONS]);
         CHECK_MEMBER(ptlrpc_body, pb_padding[4]);
+	CHECK_CVALUE(JOBSTATS_JOBID_SIZE);
+	CHECK_MEMBER(ptlrpc_body, pb_jobid);
 
         CHECK_VALUE(MSG_PTLRPC_BODY_OFF);
         CHECK_VALUE(REQ_REC_OFF);

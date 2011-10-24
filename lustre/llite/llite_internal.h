@@ -227,6 +227,15 @@ struct ll_inode_info {
                         cfs_time_t                      f_glimpse_time;
                         cfs_list_t                      f_agl_list;
                         __u64                           f_agl_index;
+			/*
+			 * whenever a process try to read/write the file, the
+			 * jobid of the process will be saved here, and it'll
+			 * be packed into the write PRC when flush later.
+			 *
+			 * so the read/write statistics for jobid will not be
+			 * accurate if the file is shared by different jobs.
+			 */
+			char                     f_jobid[JOBSTATS_JOBID_SIZE];
                 } f;
 
 #define lli_size_sem            u.f.f_size_sem
@@ -241,6 +250,7 @@ struct ll_inode_info {
 #define lli_glimpse_time        u.f.f_glimpse_time
 #define lli_agl_list            u.f.f_agl_list
 #define lli_agl_index           u.f.f_agl_index
+#define lli_jobid               u.f.f_jobid
 
         } u;
 

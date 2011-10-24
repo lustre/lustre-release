@@ -8713,6 +8713,106 @@ test_204h() {
 }
 run_test 204h "Print raw stripe count and size ============="
 
+# Figure out which job scheduler is being used, if any,
+# or use a fake one
+if [ -n "$SLURM_JOB_ID" ]; then # SLURM
+	JOBENV=SLURM_JOB_ID
+elif [ -n "$LSB_JOBID" ]; then # Load Sharing Facility
+	JOBENV=LSB_JOBID
+elif [ -n "$PBS_JOBID" ]; then # PBS/Maui/Moab
+	JOBENV=PBS_JOBID
+elif [ -n "$LOADL_STEPID" ]; then # LoadLeveller
+	JOBENV=LOADL_STEP_ID
+elif [ -n "$JOB_ID" ]; then # Sun Grid Engine
+	JOBENV=JOB_ID
+else
+	JOBENV=FAKE_JOBID
+fi
+
+verify_jobstats() {
+	local cmd=$1
+	local target=$2
+
+	# clear old jobstats
+	do_facet $SINGLEMDS lctl set_param mdt.*.job_stats="clear"
+	do_facet ost0 lctl set_param obdfilter.*.job_stats="clear"
+
+	# use a new JobID for this test, or we might see an old one
+	[ "$JOBENV" = "FAKE_JOBID" ] && FAKE_JOBID=test_id.$testnum.$RANDOM
+
+	JOBVAL=${!JOBENV}
+	log "Test: $cmd"
+	log "Using JobID environment variable $JOBENV=$JOBVAL"
+
+	if [ $JOBENV = "FAKE_JOBID" ]; then
+		FAKE_JOBID=$JOBVAL $cmd
+	else
+		$cmd
+	fi
+
+	if [ "$target" = "mdt" -o "$target" = "both" ]; then
+		FACET="$SINGLEMDS" # will need to get MDS number for DNE
+		do_facet $FACET lctl get_param mdt.*.job_stats |
+			grep $JOBVAL || error "No job stats found on MDT $FACET"
+	fi
+	if [ "$target" = "ost" -o "$target" = "both" ]; then
+		FACET=ost0
+		do_facet $FACET lctl get_param obdfilter.*.job_stats |
+			grep $JOBVAL || error "No job stats found on OST $FACET"
+	fi
+}
+
+test_205() { # Job stats
+	local cmd
+	OLD_JOBENV=`$LCTL get_param -n llite.*.jobid_var`
+	if [ $OLD_JOBENV != $JOBENV ]; then
+		do_facet mgs $LCTL conf_param $FSNAME.llite.jobid_var=$JOBENV
+		wait_update $HOSTNAME "$LCTL get_param -n llite.*.jobid_var" \
+			$JOBENV || return 1
+	fi
+
+	# mkdir
+	cmd="mkdir $DIR/$tfile"
+	verify_jobstats "$cmd" "mdt"
+	# rmdir
+	cmd="rm -fr $DIR/$tfile"
+	verify_jobstats "$cmd" "mdt"
+	# mknod
+	cmd="mknod $DIR/$tfile c 1 3"
+	verify_jobstats "$cmd" "mdt"
+	# unlink
+	cmd="rm -f $DIR/$tfile"
+	verify_jobstats "$cmd" "mdt"
+	# open & close
+	cmd="$SETSTRIPE -i 0 -c 1 $DIR/$tfile"
+	verify_jobstats "$cmd" "mdt"
+	# setattr
+	cmd="touch $DIR/$tfile"
+	verify_jobstats "$cmd" "both"
+	# write
+	cmd="dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 oflag=sync"
+	verify_jobstats "$cmd" "ost"
+	# read
+	cmd="dd if=$DIR/$tfile of=/dev/null bs=1M count=1 iflag=direct"
+	verify_jobstats "$cmd" "ost"
+	# truncate
+	cmd="$TRUNCATE $DIR/$tfile 0"
+	verify_jobstats "$cmd" "both"
+	# rename
+	cmd="mv -f $DIR/$tfile $DIR/jobstats_test_rename"
+	verify_jobstats "$cmd" "mdt"
+
+	# cleanup
+	rm -f $DIR/jobstats_test_rename
+
+	if [ $OLD_JOBENV != $JOBENV ]; then
+		do_facet mgs $LCTL conf_param $FSNAME.llite.jobid_var=$OLD_JOBENV
+		wait_update $HOSTNAME "$LCTL get_param -n llite.*.jobid_var" \
+			$OLD_JOBENV || return 1
+	fi
+}
+run_test 205 "Verify job stats"
+
 test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))

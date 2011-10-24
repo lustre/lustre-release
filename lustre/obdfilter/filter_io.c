@@ -472,7 +472,8 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats)
                 lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
                                     LPROC_FILTER_READ_BYTES, tot_bytes);
-
+	filter_counter_incr(exp, LPROC_FILTER_STATS_READ,
+			    oti ? oti->oti_jobid : NULL, tot_bytes);
         EXIT;
 
  cleanup:
@@ -864,6 +865,8 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats)
                 lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
                                     LPROC_FILTER_WRITE_BYTES, tot_bytes);
+	filter_counter_incr(exp, LPROC_FILTER_STATS_WRITE,
+			    oti ? oti->oti_jobid : NULL, tot_bytes);
         EXIT;
 cleanup:
         switch(cleanup_phase) {

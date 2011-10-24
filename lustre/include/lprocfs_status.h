@@ -350,6 +350,21 @@ static inline void s2dhms(struct dhms *ts, time_t secs)
 #define DHMS_FMT "%dd%dh%02dm%02ds"
 #define DHMS_VARS(x) (x)->d, (x)->h, (x)->m, (x)->s
 
+#define JOBSTATS_JOBID_VAR_MAX_LEN	20
+#define JOBSTATS_DISABLE		"disable"
+#define JOBSTATS_PROCNAME_UID		"procname_uid"
+
+typedef void (*cntr_init_callback)(struct lprocfs_stats *stats);
+
+struct obd_job_stats {
+	cfs_hash_t        *ojs_hash;
+	cfs_list_t         ojs_list;
+	cfs_rwlock_t       ojs_lock; /* protect the obj_list */
+	int                ojs_cntr_num;
+	cntr_init_callback ojs_cntr_init_fn;
+	cfs_timer_t        ojs_cleanup_timer;
+	int                ojs_cleanup_interval;
+};
 
 #ifdef LPROCFS
 
@@ -648,6 +663,17 @@ struct file_operations name##_fops = {                                     \
 
 #define LPROC_SEQ_FOPS_RO(name)         __LPROC_SEQ_FOPS(name, NULL)
 #define LPROC_SEQ_FOPS(name)            __LPROC_SEQ_FOPS(name, name##_seq_write)
+
+/* lprocfs_jobstats.c */
+int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
+			  int event, long amount);
+void lprocfs_job_stats_fini(struct obd_device *obd);
+int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
+			   cntr_init_callback fn);
+int lprocfs_rd_job_interval(char *page, char **start, off_t off,
+			    int count, int *eof, void *data);
+int lprocfs_wr_job_interval(struct file *file, const char *buffer,
+			    unsigned long count, void *data);
 
 /* lproc_ptlrpc.c */
 struct ptlrpc_request;
@@ -951,6 +977,20 @@ __u64 lprocfs_stats_collector(struct lprocfs_stats *stats, int idx,
 
 #define LPROC_SEQ_FOPS_RO(name)
 #define LPROC_SEQ_FOPS(name)
+
+/* lprocfs_jobstats.c */
+static inline
+int lprocfs_job_stats_log(struct obd_device *obd, char *jobid, int event,
+			  long amount)
+{ return 0; }
+static inline
+void lprocfs_job_stats_fini(struct obd_device *obd)
+{ return; }
+static inline
+int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
+			   cntr_init_callback fn)
+{ return 0; }
+
 
 /* lproc_ptlrpc.c */
 #define target_print_req NULL

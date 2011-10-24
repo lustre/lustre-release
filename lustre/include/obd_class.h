@@ -79,6 +79,7 @@ extern cfs_rwlock_t obd_dev_lock;
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
 extern struct obd_device *class_exp2obd(struct obd_export *);
 extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
+extern int lustre_get_jobid(char *jobid);
 
 struct lu_device_type;
 

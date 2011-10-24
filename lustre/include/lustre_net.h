@@ -1690,6 +1690,7 @@ int lustre_msg_is_v1(struct lustre_msg *msg);
 __u32 lustre_msg_get_magic(struct lustre_msg *msg);
 __u32 lustre_msg_get_timeout(struct lustre_msg *msg);
 __u32 lustre_msg_get_service_time(struct lustre_msg *msg);
+char *lustre_msg_get_jobid(struct lustre_msg *msg);
 __u32 lustre_msg_get_cksum(struct lustre_msg *msg);
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 0, 0)
 __u32 lustre_msg_calc_cksum(struct lustre_msg *msg, int compat18);
@@ -1710,6 +1711,7 @@ void ptlrpc_req_set_repsize(struct ptlrpc_request *req, int count, __u32 *sizes)
 void ptlrpc_request_set_replen(struct ptlrpc_request *req);
 void lustre_msg_set_timeout(struct lustre_msg *msg, __u32 timeout);
 void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time);
+void lustre_msg_set_jobid(struct lustre_msg *msg, char *jobid);
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum);
 
 static inline void

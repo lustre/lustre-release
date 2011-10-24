@@ -1117,6 +1117,7 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
         result = 0;
         if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
                 size_t count;
+		struct ll_inode_info *lli = ll_i2info(ccc_object_inode(obj));
 
                 count = io->u.ci_rw.crw_count;
                 /* "If nbyte is 0, read() will return 0 and have no other
@@ -1127,6 +1128,13 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                         cio->cui_tot_count = count;
                         cio->cui_tot_nrsegs = 0;
                 }
+		/* for read/write, we store the jobid in the inode, and
+		 * it'll be fetched by osc when building RPC.
+		 *
+		 * it's not accurate if the file is shared by different
+		 * jobs.
+		 */
+		lustre_get_jobid(lli->lli_jobid);
         } else if (io->ci_type == CIT_SETATTR) {
                 if (!cl_io_is_trunc(io))
                         io->ci_lockreq = CILR_MANDATORY;

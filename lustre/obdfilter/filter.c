@@ -2224,10 +2224,15 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 GOTO(free_obd_stats, rc);
         }
 
+	rc = lprocfs_job_stats_init(obd, LPROC_FILTER_STATS_LAST,
+				    filter_stats_counter_init);
+	if (rc)
+		GOTO(remove_entry_clear, rc);
+
         /* 2.6.9 selinux wants a full option page for do_kern_mount (bug6471) */
         OBD_PAGE_ALLOC(page, CFS_ALLOC_STD);
         if (!page)
-                GOTO(remove_entry_clear, rc = -ENOMEM);
+		GOTO(job_stats_fini, rc = -ENOMEM);
         addr = (unsigned long)cfs_page_address(page);
         clear_page((void *)addr);
         memcpy((void *)addr, lustre_cfg_buf(lcfg, 4),
@@ -2237,11 +2242,13 @@ static int filter_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         if (rc) {
                 CERROR("%s: filter_common_setup failed: %d.\n",
                        obd->obd_name, rc);
-                GOTO(remove_entry_clear, rc);
+		GOTO(job_stats_fini, rc);
         }
 
         RETURN(0);
 
+job_stats_fini:
+	lprocfs_job_stats_fini(obd);
 remove_entry_clear:
         lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
 free_obd_stats:
@@ -2618,6 +2625,7 @@ static int filter_precleanup(struct obd_device *obd,
                 obd_zombie_barrier();
 
                 rc = filter_llog_preclean(obd);
+		lprocfs_job_stats_fini(obd);
                 lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
                 lprocfs_free_per_client_stats(obd);
                 lprocfs_obd_cleanup(obd);
@@ -3513,6 +3521,8 @@ int filter_setattr(const struct lu_env *env, struct obd_export *exp,
         obdo_from_inode(oa, dentry->d_inode,
                         FILTER_VALID_FLAGS | OBD_MD_FLUID | OBD_MD_FLGID);
 
+	filter_counter_incr(exp, LPROC_FILTER_STATS_SETATTR,
+			    oti ? oti->oti_jobid : NULL, 1);
         EXIT;
 out_unlock:
         f_dput(dentry);
@@ -4412,6 +4422,7 @@ static int filter_sync(const struct lu_env *env, struct obd_export *exp,
 
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, NULL);
 
+	filter_counter_incr(exp, LPROC_FILTER_STATS_SYNC, oinfo->oi_jobid, 1);
         f_dput(dentry);
         RETURN(rc);
 }

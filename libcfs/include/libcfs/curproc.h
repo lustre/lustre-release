@@ -73,6 +73,7 @@ char  *cfs_curproc_comm(void);
 
 /* check if task is running in compat mode.*/
 int cfs_curproc_is_32bit(void);
+int cfs_get_environ(const char *key, char *value, int *val_len);
 #endif
 
 typedef __u32 cfs_cap_t;

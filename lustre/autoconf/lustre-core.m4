@@ -1796,6 +1796,16 @@ AC_DEFUN([LC_EXPORT_GENERIC_ERROR_REMOVE_PAGE],
          ]
 )
 
+# 2.6.32 if kernel export access_process_vm().
+AC_DEFUN([LC_EXPORT_ACCESS_PROCESS_VM],
+        [LB_CHECK_SYMBOL_EXPORT([access_process_vm],
+                        [mm/memory.c],
+                        [AC_DEFINE(HAVE_ACCESS_PROCESS_VM, 1,
+                                [access_process_vm function is present])],
+                        [])
+        ]
+)
+
 #
 # 2.6.36 fs_struct.lock use spinlock instead of rwlock.
 #
@@ -2126,6 +2136,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CACHE_UPCALL
          LC_EXPORT_GENERIC_ERROR_REMOVE_PAGE
          LC_SELINUX_IS_ENABLED
+         LC_EXPORT_ACCESS_PROCESS_VM
 
          # 2.6.35, 3.0.0
          LC_FILE_FSYNC

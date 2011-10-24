@@ -994,7 +994,33 @@ struct lustre_msg_v2 {
 
 /* without gss, ptlrpc_body is put at the first buffer. */
 #define PTLRPC_NUM_VERSIONS     4
-struct ptlrpc_body {
+#define JOBSTATS_JOBID_SIZE     32  /* 32 bytes string */
+struct ptlrpc_body_v3 {
+	struct lustre_handle pb_handle;
+	__u32 pb_type;
+	__u32 pb_version;
+	__u32 pb_opc;
+	__u32 pb_status;
+	__u64 pb_last_xid;
+	__u64 pb_last_seen;
+	__u64 pb_last_committed;
+	__u64 pb_transno;
+	__u32 pb_flags;
+	__u32 pb_op_flags;
+	__u32 pb_conn_cnt;
+	__u32 pb_timeout;  /* for req, the deadline, for rep, the service est */
+	__u32 pb_service_time; /* for rep, actual service time */
+	__u32 pb_limit;
+	__u64 pb_slv;
+	/* VBR: pre-versions */
+	__u64 pb_pre_versions[PTLRPC_NUM_VERSIONS];
+	/* padding for future needs */
+	__u64 pb_padding[4];
+	char  pb_jobid[JOBSTATS_JOBID_SIZE];
+};
+#define ptlrpc_body     ptlrpc_body_v3
+
+struct ptlrpc_body_v2 {
         struct lustre_handle pb_handle;
         __u32 pb_type;
         __u32 pb_version;
@@ -1159,7 +1185,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_VBR | OBD_CONNECT_LOV_V3 | \
                                 OBD_CONNECT_SOM | OBD_CONNECT_FULL20 | \
                                 OBD_CONNECT_64BITHASH | \
-                                OBD_CONNECT_EINPROGRESS)
+				OBD_CONNECT_EINPROGRESS | OBD_CONNECT_JOBSTATS)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -1174,7 +1200,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_GRANT_SHRINK | OBD_CONNECT_FULL20 | \
                                 OBD_CONNECT_64BITHASH | OBD_CONNECT_MAXBYTES | \
                                 OBD_CONNECT_MAX_EASIZE | \
-                                OBD_CONNECT_EINPROGRESS)
+				OBD_CONNECT_EINPROGRESS | OBD_CONNECT_JOBSTATS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
                                 OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV)

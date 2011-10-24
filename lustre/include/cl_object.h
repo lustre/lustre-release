@@ -2378,10 +2378,12 @@ struct cl_io {
  * Per-transfer attributes.
  */
 struct cl_req_attr {
-        /** Generic attributes for the server consumption. */
-        struct obdo     *cra_oa;
-        /** Capability. */
-        struct obd_capa *cra_capa;
+	/** Generic attributes for the server consumption. */
+	struct obdo	*cra_oa;
+	/** Capability. */
+	struct obd_capa	*cra_capa;
+	/** Jobid */
+	char		 cra_jobid[JOBSTATS_JOBID_SIZE];
 };
 
 /**

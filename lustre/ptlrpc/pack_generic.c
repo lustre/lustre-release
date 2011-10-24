@@ -118,8 +118,17 @@ int lustre_msg_check_version(struct lustre_msg *msg, __u32 version)
 int lustre_msg_early_size()
 {
         static int size = 0;
-        if (!size)
-                size = lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, NULL);
+	if (!size) {
+		/* Always reply old ptlrpc_body_v2 to keep interoprability
+		 * with the old client (< 2.3) which doesn't have pb_jobid
+		 * in the ptlrpc_body.
+		 *
+		 * XXX Remove this whenever we dorp interoprability with such
+		 *     client.
+		 */
+		__u32 pblen = sizeof(struct ptlrpc_body_v2);
+		size = lustre_msg_size(LUSTRE_MSG_MAGIC_V2, 1, &pblen);
+	}
         return size;
 }
 EXPORT_SYMBOL(lustre_msg_early_size);
@@ -153,7 +162,7 @@ int lustre_msg_size(__u32 magic, int count, __u32 *lens)
         }
 
         LASSERT(count > 0);
-        LASSERT(lens[MSG_PTLRPC_BODY_OFF] == sizeof(struct ptlrpc_body));
+	LASSERT(lens[MSG_PTLRPC_BODY_OFF] >= sizeof(struct ptlrpc_body_v2));
 
         switch (magic) {
         case LUSTRE_MSG_MAGIC_V2:
@@ -607,7 +616,7 @@ static inline int lustre_unpack_ptlrpc_body_v2(struct ptlrpc_request *req,
         struct ptlrpc_body *pb;
         struct lustre_msg_v2 *m = inout ? req->rq_reqmsg : req->rq_repmsg;
 
-        pb = lustre_msg_buf_v2(m, offset, sizeof(*pb));
+	pb = lustre_msg_buf_v2(m, offset, sizeof(struct ptlrpc_body_v2));
         if (!pb) {
                 CERROR("error unpacking ptlrpc body\n");
                 return -EFAULT;
@@ -781,7 +790,7 @@ static inline void *__lustre_swab_buf(struct lustre_msg *msg, int index,
 static inline struct ptlrpc_body *lustre_msg_ptlrpc_body(struct lustre_msg *msg)
 {
         return lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
-                                 sizeof(struct ptlrpc_body));
+				 sizeof(struct ptlrpc_body_v2));
 }
 
 __u32 lustre_msghdr_get_flags(struct lustre_msg *msg)
@@ -1241,6 +1250,28 @@ __u32 lustre_msg_get_service_time(struct lustre_msg *msg)
         }
 }
 
+char *lustre_msg_get_jobid(struct lustre_msg *msg)
+{
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V1:
+	case LUSTRE_MSG_MAGIC_V1_SWABBED:
+		return NULL;
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb =
+			lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
+					  sizeof(struct ptlrpc_body));
+		if (!pb)
+			return NULL;
+
+		return pb->pb_jobid;
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return NULL;
+	}
+}
+EXPORT_SYMBOL(lustre_msg_get_jobid);
+
 __u32 lustre_msg_get_cksum(struct lustre_msg *msg)
 {
         switch (msg->lm_magic) {
@@ -1450,6 +1481,33 @@ void lustre_msg_set_service_time(struct lustre_msg *msg, __u32 service_time)
         }
 }
 
+void lustre_msg_set_jobid(struct lustre_msg *msg, char *jobid)
+{
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V1:
+		return;
+	case LUSTRE_MSG_MAGIC_V2: {
+		__u32 opc = lustre_msg_get_opc(msg);
+		struct ptlrpc_body *pb;
+
+		/* Don't set jobid for ldlm ast RPCs, they've been shrinked.
+		 * See the comment in ptlrpc_request_pack(). */
+		if (!opc || opc == LDLM_BL_CALLBACK ||
+		    opc == LDLM_CP_CALLBACK || opc == LDLM_GL_CALLBACK)
+			return;
+
+		pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
+				       sizeof(struct ptlrpc_body));
+		LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+		memcpy(pb->pb_jobid, jobid, JOBSTATS_JOBID_SIZE);
+		return;
+	}
+	default:
+		LASSERTF(0, "incorrect message magic: %08x\n", msg->lm_magic);
+	}
+}
+EXPORT_SYMBOL(lustre_msg_set_jobid);
+
 void lustre_msg_set_cksum(struct lustre_msg *msg, __u32 cksum)
 {
         switch (msg->lm_magic) {
@@ -1555,6 +1613,12 @@ void lustre_swab_ptlrpc_body(struct ptlrpc_body *b)
         __swab64s (&b->pb_pre_versions[2]);
         __swab64s (&b->pb_pre_versions[3]);
         CLASSERT(offsetof(typeof(*b), pb_padding) != 0);
+	/* While we need to maintain compatibility between
+	 * clients and servers without ptlrpc_body_v2 (< 2.3)
+	 * do not swab any fields beyond pb_jobid, as we are
+	 * using this swab function for both ptlrpc_body
+	 * and ptlrpc_body_v2. */
+	CLASSERT(offsetof(typeof(*b), pb_jobid) != 0);
 }
 
 void lustre_swab_connect(struct obd_connect_data *ocd)

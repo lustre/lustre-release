@@ -543,7 +543,6 @@ int osc_punch_base(struct obd_export *exp, struct obd_info *oinfo,
 
         ptlrpc_request_set_replen(req);
 
-
         req->rq_interpret_reply = (ptlrpc_interpterer_t)osc_setattr_interpret;
         CLASSERT (sizeof(*sa) <= sizeof(req->rq_async_args));
         sa = ptlrpc_req_async_args(req);
@@ -2379,6 +2378,7 @@ static struct ptlrpc_request *osc_build_req(const struct lu_env *env,
         LASSERT(ops != NULL);
         crattr.cra_oa = oa;
         crattr.cra_capa = NULL;
+	memset(crattr.cra_jobid, 0, JOBSTATS_JOBID_SIZE);
         cl_req_attr_set(env, clerq, &crattr, ~0ULL);
         if (lock) {
                 oa->o_handle = lock->l_remote_handle;
@@ -2409,6 +2409,8 @@ static struct ptlrpc_request *osc_build_req(const struct lu_env *env,
          * way to do this in a single call.  bug 10150 */
         cl_req_attr_set(env, clerq, &crattr,
                         OBD_MD_FLMTIME|OBD_MD_FLCTIME|OBD_MD_FLATIME);
+
+	lustre_msg_set_jobid(req->rq_reqmsg, crattr.cra_jobid);
 
         CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
         aa = ptlrpc_req_async_args(req);

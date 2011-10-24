@@ -213,6 +213,158 @@ int cfs_curproc_is_32bit(void)
 #endif
 }
 
+static int cfs_access_process_vm(struct task_struct *tsk, unsigned long addr,
+				 void *buf, int len, int write)
+{
+#ifdef HAVE_ACCESS_PROCESS_VM
+	return access_process_vm(tsk, addr, buf, len, write);
+#else
+	/* Just copied from kernel for the kernels which doesn't
+	 * have access_process_vm() exported */
+	struct mm_struct *mm;
+	struct vm_area_struct *vma;
+	struct page *page;
+	void *old_buf = buf;
+
+	mm = get_task_mm(tsk);
+	if (!mm)
+		return 0;
+
+	down_read(&mm->mmap_sem);
+	/* ignore errors, just check how much was sucessfully transfered */
+	while (len) {
+		int bytes, ret, offset;
+		void *maddr;
+
+		ret = get_user_pages(tsk, mm, addr, 1,
+				     write, 1, &page, &vma);
+		if (ret <= 0)
+			break;
+
+		bytes = len;
+		offset = addr & (PAGE_SIZE-1);
+		if (bytes > PAGE_SIZE-offset)
+			bytes = PAGE_SIZE-offset;
+
+		maddr = kmap(page);
+		if (write) {
+			copy_to_user_page(vma, page, addr,
+					  maddr + offset, buf, bytes);
+			set_page_dirty_lock(page);
+		} else {
+			copy_from_user_page(vma, page, addr,
+					    buf, maddr + offset, bytes);
+		}
+		kunmap(page);
+		page_cache_release(page);
+		len -= bytes;
+		buf += bytes;
+		addr += bytes;
+	}
+	up_read(&mm->mmap_sem);
+	mmput(mm);
+
+	return buf - old_buf;
+#endif /* HAVE_ACCESS_PROCESS_VM */
+}
+
+/* Read the environment variable of current process specified by @key. */
+int cfs_get_environ(const char *key, char *value, int *val_len)
+{
+	struct mm_struct *mm;
+	char *buffer, *tmp_buf = NULL;
+	int buf_len = CFS_PAGE_SIZE;
+	unsigned long addr;
+	int ret;
+	ENTRY;
+
+	buffer = (char *)cfs_alloc(buf_len, CFS_ALLOC_USER);
+	if (!buffer)
+		RETURN(-ENOMEM);
+
+	mm = get_task_mm(current);
+	if (!mm) {
+		cfs_free((void *)buffer);
+		RETURN(-EINVAL);
+	}
+
+	addr = mm->env_start;
+	ret = -ENOENT;
+
+	while (addr < mm->env_end) {
+		int this_len, retval, scan_len;
+		char *env_start, *env_end;
+
+		memset(buffer, 0, buf_len);
+
+		this_len = min((int)(mm->env_end - addr), buf_len);
+		retval = cfs_access_process_vm(current, addr, buffer,
+					       this_len, 0);
+		if (retval != this_len)
+			break;
+
+		addr += retval;
+
+		/* Parse the buffer to find out the specified key/value pair.
+		 * The "key=value" entries are separated by '\0'. */
+		env_start = buffer;
+		scan_len = this_len;
+		while (scan_len) {
+			char *entry;
+			int entry_len;
+
+			env_end = (char *)memscan(env_start, '\0', scan_len);
+			LASSERT(env_end >= env_start &&
+				env_end <= env_start + scan_len);
+
+			/* The last entry of this buffer cross the buffer
+			 * boundary, reread it in next cycle. */
+			if (unlikely(env_end - env_start == scan_len)) {
+				/* This entry is too large to fit in buffer */
+				if (unlikely(scan_len == this_len)) {
+					CERROR("Too long env variable.\n");
+					ret = -EINVAL;
+					goto out;
+				}
+				addr -= scan_len;
+				break;
+			}
+
+			entry = env_start;
+			entry_len = env_end - env_start;
+
+			/* Key length + length of '=' */
+			if (entry_len > strlen(key) + 1 &&
+			    !memcmp(entry, key, strlen(key))) {
+				entry += (strlen(key) + 1);
+				entry_len -= (strlen(key) + 1);
+				/* The 'value' buffer passed in is too small.*/
+				if (entry_len >= *val_len) {
+					CERROR("Buffer is too small. "
+					       "entry_len=%d buffer_len=%d\n",
+					       entry_len, *val_len);
+					ret = -EOVERFLOW;
+				} else {
+					memcpy(value, entry, entry_len);
+					*val_len = entry_len;
+					ret = 0;
+				}
+				goto out;
+			}
+
+			scan_len -= (env_end - env_start + 1);
+			env_start = env_end + 1;
+		}
+	}
+out:
+	mmput(mm);
+	cfs_free((void *)buffer);
+	if (tmp_buf)
+		cfs_free((void *)tmp_buf);
+	RETURN(ret);
+}
+EXPORT_SYMBOL(cfs_get_environ);
+
 EXPORT_SYMBOL(cfs_curproc_uid);
 EXPORT_SYMBOL(cfs_curproc_pid);
 EXPORT_SYMBOL(cfs_curproc_euid);

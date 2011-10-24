@@ -1000,6 +1000,10 @@ void ccc_req_attr_set(const struct lu_env *env,
         }
         obdo_from_inode(oa, inode, valid_flags & flags);
         obdo_set_parent_fid(oa, &cl_i2info(inode)->lli_fid);
+#ifdef __KERNEL__
+	memcpy(attr->cra_jobid, cl_i2info(inode)->lli_jobid,
+	       JOBSTATS_JOBID_SIZE);
+#endif
 }
 
 const struct cl_req_operations ccc_req_ops = {
