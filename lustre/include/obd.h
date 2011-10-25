@@ -1688,27 +1688,6 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file);
 #define OBD_CALC_STRIPE_START   1
 #define OBD_CALC_STRIPE_END     2
 
-static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
-                                         struct obd_export *exp, int error)
-{
-        if (error) {
-                CERROR("%s: transno "LPU64" commit error: %d\n",
-                       obd->obd_name, transno, error);
-                return;
-        }
-        if (exp && transno > exp->exp_last_committed) {
-                CDEBUG(D_HA, "%s: transno "LPU64" committed\n",
-                       obd->obd_name, transno);
-                exp->exp_last_committed = transno;
-                ptlrpc_commit_replies(exp);
-        } else {
-                CDEBUG(D_INFO, "%s: transno "LPU64" committed\n",
-                       obd->obd_name, transno);
-        }
-        if (transno > obd->obd_last_committed)
-                obd->obd_last_committed = transno;
-}
-
 static inline struct lustre_capa *oinfo_capa(struct obd_info *oinfo)
 {
         return oinfo->oi_capa;
