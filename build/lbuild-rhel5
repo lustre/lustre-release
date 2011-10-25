@@ -111,6 +111,6 @@ find_linux_rpm-rhel5() {
 
 kernel_srpm_location() {
 
-    echo "http://mirror.centos.org/centos-5/5/updates/SRPMS/"
+    echo "http://ftp.redhat.com/pub/redhat/linux/enterprise/5Server/en/os/SRPMS/"
 
 }
