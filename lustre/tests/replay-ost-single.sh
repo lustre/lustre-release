@@ -177,6 +177,12 @@ test_6() {
     f=$TDIR/$tfile
     rm -f $f
     sync && sleep 2 && sync	# wait for delete thread
+
+    # wait till space is returned, following
+    # (( $before > $after_dd)) test counting on that
+    wait_mds_ost_sync || return 4
+    wait_destroy_complete || return 5
+
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f || return 28
     lfs getstripe $f
@@ -208,6 +214,12 @@ test_7() {
     f=$TDIR/$tfile
     rm -f $f
     sync && sleep 5 && sync	# wait for delete thread
+
+    # wait till space is returned, following
+    # (( $before > $after_dd)) test counting on that
+    wait_mds_ost_sync || return 4
+    wait_destroy_complete || return 5
+
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f || return 4
     sync
