@@ -116,7 +116,6 @@ LB_LINUX_TRY_COMPILE([
 		#error "not redhat kernel"
 		#endif
 	],[
-		RHEL_KENEL="yes"
 		RHEL_KERNEL="yes"
 		AC_MSG_RESULT([yes])
 	],[

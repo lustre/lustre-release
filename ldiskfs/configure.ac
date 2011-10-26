@@ -116,27 +116,16 @@ if test x$enable_dist != xyes; then
 	# don't need to do this if only configuring for make dist
 AC_MSG_CHECKING([which ldiskfs series to use])
 case $LINUXRELEASE in
-2.6.5*) LDISKFS_SERIES="2.6-suse.series" ;;
-2.6.9*) LDISKFS_SERIES="2.6-rhel4.series" ;;
-2.6.10-ac*) LDISKFS_SERIES="2.6-fc3.series" ;;
-2.6.10*) LDISKFS_SERIES="2.6-rhel4.series" ;;
-2.6.12*) LDISKFS_SERIES="2.6.12-vanilla.series" ;;
-2.6.15*) LDISKFS_SERIES="2.6-fc5.series";;
-2.6.16*) LDISKFS_SERIES="2.6-sles10.series";;
 2.6.18*)
-	if test x$RHEL_KENEL = xyes; then
-                if test x$enable_ext4 = xyes; then
-		        LDISKFS_SERIES="2.6-rhel5-ext4.series"
-                else
-		        LDISKFS_SERIES="2.6-rhel5.series"
-                fi
-	else
-		LDISKFS_SERIES="2.6.18-vanilla.series"
+	if test x$RHEL_KERNEL = xyes; then
+		LDISKFS_SERIES="2.6-rhel5-ext4.series"
 	fi
 	;;
-2.6.22*) LDISKFS_SERIES="2.6.22-vanilla.series";;
-2.6.27*) LDISKFS_SERIES="2.6-sles11.series";;
-2.6.32*) LDISKFS_SERIES="2.6-rhel6.series";;
+2.6.32*)
+	if test x$RHEL_KERNEL = xyes; then
+		 LDISKFS_SERIES="2.6-rhel6.series"
+	fi
+	;;
 *) AC_MSG_WARN([Unknown kernel version $LINUXRELEASE, fix ldiskfs/configure.ac])
 esac
 AC_MSG_RESULT([$LDISKFS_SERIES])
