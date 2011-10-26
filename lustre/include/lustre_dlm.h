@@ -75,6 +75,7 @@ struct obd_device;
 #endif
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
 #define LDLM_CTIME_AGE_LIMIT (10)
+#define LDLM_DEFAULT_PARALLEL_AST_LIMIT 1024
 
 typedef enum {
         ELDLM_OK = 0,

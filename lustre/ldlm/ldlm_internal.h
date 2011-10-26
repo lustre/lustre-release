@@ -104,10 +104,11 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 /* ldlm_lock.c */
 
 struct ldlm_cb_set_arg {
-        struct ptlrpc_request_set *set;
-        cfs_atomic_t    restart;
-        int             type;  /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
-        int             rpcs;  /* # of rpcs in set */
+        int          type;      /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
+        unsigned int threshold; /* threshold to wake up the waiting proc */
+        cfs_atomic_t rpcs;      /* # of inflight rpcs in set */
+        cfs_atomic_t restart;
+        cfs_waitq_t  waitq;
 };
 
 typedef enum {
