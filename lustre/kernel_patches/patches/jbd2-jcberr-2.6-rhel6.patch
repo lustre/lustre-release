@@ -1,4 +1,4 @@
-This patch is no longer needed for Lustre, since Lustre 2.1.  It is kept
+This patch is no longer needed for Lustre, since Lustre 2.2.  It is kept
 in the kernel patch series for compatibility with older Lustre releases
 to simplify the upgrade process so that both the kernel and Lustre do
 not need to be upgraded at the same time.  See Jira issue LU-433.
