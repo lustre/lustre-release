@@ -342,11 +342,18 @@ static ssize_t ll_direct_IO_26_seg(const struct lu_env *env, struct cl_io *io,
     return ll_direct_rw_pages(env, io, rw, inode, &pvec);
 }
 
-/* This is the maximum size of a single O_DIRECT request, based on a 128kB
+#ifdef KMALLOC_MAX_SIZE
+#define MAX_MALLOC KMALLOC_MAX_SIZE
+#else
+#define MAX_MALLOC (128 * 1024)
+#endif
+
+/* This is the maximum size of a single O_DIRECT request, based on the
  * kmalloc limit.  We need to fit all of the brw_page structs, each one
  * representing PAGE_SIZE worth of user data, into a single buffer, and
- * then truncate this to be a full-sized RPC.  This is 22MB for 4kB pages. */
-#define MAX_DIO_SIZE ((128 * 1024 / sizeof(struct brw_page) * CFS_PAGE_SIZE) & \
+ * then truncate this to be a full-sized RPC.  For 4kB PAGE_SIZE this is
+ * up to 22MB for 128kB kmalloc and up to 682MB for 4MB kmalloc. */
+#define MAX_DIO_SIZE ((MAX_MALLOC / sizeof(struct brw_page) * CFS_PAGE_SIZE) & \
                       ~(PTLRPC_MAX_BRW_SIZE - 1))
 static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                const struct iovec *iov, loff_t file_offset,
@@ -392,7 +399,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         LASSERT(io != NULL);
 
         /* 0. Need locking between buffered and direct access. and race with
-         *size changing by concurrent truncates and writes.
+         *    size changing by concurrent truncates and writes.
          * 1. Need inode sem to operate transient pages. */
         if (rw == READ)
                 LOCK_INODE_MUTEX(inode);
@@ -414,7 +421,7 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                         int page_count, max_pages = 0;
                         long bytes;
 
-                        bytes = min(size,iov_left);
+                        bytes = min(size, iov_left);
                         page_count = ll_get_user_pages(rw, user_addr, bytes,
                                                        &pages, &max_pages);
                         if (likely(page_count > 0)) {
@@ -422,9 +429,8 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                                         bytes = page_count << CFS_PAGE_SHIFT;
                                 result = ll_direct_IO_26_seg(env, io, rw, inode,
                                                              file->f_mapping,
-                                                             bytes,
-                                                             file_offset, pages,
-                                                             page_count);
+                                                             bytes, file_offset,
+                                                             pages, page_count);
                                 ll_free_user_pages(pages, max_pages, rw==READ);
                         } else if (page_count == 0) {
                                 GOTO(out, result = -EFAULT);
