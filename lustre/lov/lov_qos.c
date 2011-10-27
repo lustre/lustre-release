@@ -199,11 +199,11 @@ static int qos_calc_ppo(struct obd_device *obd)
                         lov->lov_qos.lq_active_oss_count++;
                 lov->lov_tgts[i]->ltd_qos.ltq_oss->lqo_bavail += temp;
 
-                /* per-OST penalty is prio * TGT_bavail / (num_ost - 1) / 2 */
-                temp >>= 1;
-                do_div(temp, num_active);
-                lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj =
-                        (temp * prio_wide) >> 8;
+		/* per-OST penalty is prio * TGT_bavail / (num_ost - 1) / 2 */
+		temp >>= 1;
+		lov_do_div64(temp, num_active);
+		lov->lov_tgts[i]->ltd_qos.ltq_penalty_per_obj =
+			(temp * prio_wide) >> 8;
 
                 age = (now - lov->lov_tgts[i]->ltd_qos.ltq_used) >> 3;
                 if (lov->lov_qos.lq_reset || age > 32 * lov->desc.ld_qos_maxage)
@@ -232,9 +232,9 @@ static int qos_calc_ppo(struct obd_device *obd)
 
         /* Per-OSS penalty is prio * oss_avail / oss_osts / (num_oss - 1) / 2 */
         cfs_list_for_each_entry(oss, &lov->lov_qos.lq_oss_list, lqo_oss_list) {
-                temp = oss->lqo_bavail >> 1;
-                do_div(temp, oss->lqo_ost_count * num_active);
-                oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
+		temp = oss->lqo_bavail >> 1;
+		lov_do_div64(temp, oss->lqo_ost_count * num_active);
+		oss->lqo_penalty_per_obj = (temp * prio_wide) >> 8;
 
                 age = (now - oss->lqo_used) >> 3;
                 if (lov->lov_qos.lq_reset || age > 32 * lov->desc.ld_qos_maxage)

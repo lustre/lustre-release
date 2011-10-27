@@ -2789,9 +2789,9 @@ static int lov_extent_calc(struct obd_export *exp, struct lov_stripe_md *lsm,
         __u32 ssize = lsm->lsm_stripe_size;
         __u64 start;
 
-        start = *offset;
-        do_div(start, ssize);
-        start = start * ssize;
+	start = *offset;
+	lov_do_div64(start, ssize);
+	start = start * ssize;
 
         CDEBUG(D_DLMTRACE, "offset "LPU64", stripe %u, start "LPU64
                            ", end "LPU64"\n", *offset, ssize, start,

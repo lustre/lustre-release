@@ -82,6 +82,37 @@ static inline __u32 lov_mds_md_stripecnt(int ea_size, __u32 lmm_magic)
         return 0;
 }
 
+/* lov_do_div64(a, b) returns a % b, and a = a / b.
+ * The 32-bit code is LOV-specific due to knowing about stripe limits in
+ * order to reduce the divisor to a 32-bit number.  If the divisor is
+ * already a 32-bit value the compiler handles this directly. */
+#if BITS_PER_LONG > 32
+# define lov_do_div64(n,base) ({					\
+	uint64_t __base = (base);					\
+	uint64_t __rem;							\
+	__rem = ((uint64_t)(n)) % __base;				\
+	(n) = ((uint64_t)(n)) / __base;					\
+	__rem;								\
+  })
+#else
+# define lov_do_div64(n,base) ({					\
+	uint64_t __rem;							\
+	if ((sizeof(base) > 4) && (((base) & 0xffffffff00000000ULL) != 0)) {  \
+		int __remainder;					      \
+		LASSERTF(!((base) & (LOV_MIN_STRIPE_SIZE - 1)), "64 bit lov " \
+			 "division %llu / %llu\n", (n), (uint64_t)(base));    \
+		__remainder = (n) & (LOV_MIN_STRIPE_SIZE - 1);		\
+		(n) >>= LOV_MIN_STRIPE_BITS;				\
+		__rem = do_div(n, (base) >> LOV_MIN_STRIPE_BITS);	\
+		__rem <<= LOV_MIN_STRIPE_BITS;				\
+		__rem += __remainder;					\
+	} else {							\
+		__rem = do_div(n, base);				\
+	}								\
+	__rem;								\
+  })
+#endif
+
 #define IOC_LOV_TYPE                   'g'
 #define IOC_LOV_MIN_NR                 50
 #define IOC_LOV_SET_OSC_ACTIVE         _IOWR('g', 50, long)
