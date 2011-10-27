@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -172,7 +175,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
                                        cur_rec->lrh_type, cur_rec->lrh_len);
                 } else {
                         printf("Bit %d of %d not set\n", idx, recs_num);
-                        cur_rec->padding = CANCELLED;
+                        cur_rec->lrh_padding = CANCELLED;
                         /* The header counts only set records */
                         i--;
                 }
@@ -466,7 +469,7 @@ void print_records(struct llog_rec_hdr **recs, int rec_number)
 
                 lopt = le32_to_cpu(recs[i]->lrh_type);
 
-                if (recs[i]->padding == CANCELLED)
+                if (recs[i]->lrh_padding == CANCELLED)
                         printf("NOT SET ");
 
                 if (lopt == OBD_CFG_REC) {

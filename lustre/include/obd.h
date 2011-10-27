@@ -173,6 +173,7 @@ struct obd_info {
            - while lock handling, the flags obtained on the enqueue
            request are set here.
            - while stats, the flags used for control delay/resend.
+           - while setattr, the flags used for distinguish punch operation
          */
         int                     oi_flags;
         /* Lock handle specific for every OSC lock. */

@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  */
@@ -249,12 +252,9 @@ EXPORT_SYMBOL(lustre_swab_niobuf_remote);
 EXPORT_SYMBOL(lustre_swab_ost_body);
 EXPORT_SYMBOL(lustre_swab_ost_last_id);
 EXPORT_SYMBOL(lustre_swab_ost_lvb);
-EXPORT_SYMBOL(lustre_swab_mds_status_req);
-EXPORT_SYMBOL(lustre_swab_mds_body);
 EXPORT_SYMBOL(lustre_swab_mdt_body);
 EXPORT_SYMBOL(lustre_swab_mdt_ioepoch);
 EXPORT_SYMBOL(lustre_swab_obd_quotactl);
-EXPORT_SYMBOL(lustre_swab_mds_remote_perm);
 EXPORT_SYMBOL(lustre_swab_mdt_remote_perm);
 EXPORT_SYMBOL(lustre_swab_mdt_rec_reint);
 EXPORT_SYMBOL(lustre_swab_lov_desc);

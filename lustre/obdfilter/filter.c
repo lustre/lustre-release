@@ -3402,7 +3402,7 @@ int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
         int rc;
         ENTRY;
 
-        if (oa->o_valid & OBD_FL_TRUNC)
+        if (oinfo->oi_flags & OBD_FL_PUNCH)
                 opc |= CAPA_OPC_OSS_TRUNC;
 
         rc = filter_auth_capa(exp, NULL, oa->o_seq, capa, opc);
@@ -4318,9 +4318,7 @@ static int filter_truncate(struct obd_export *exp, struct obd_info *oinfo,
                 oinfo->oi_policy.l_extent.start);
 
         oinfo->oi_oa->o_size = oinfo->oi_policy.l_extent.start;
-        oinfo->oi_oa->o_valid |= OBD_FL_TRUNC;
         rc = filter_setattr(exp, oinfo, oti);
-        oinfo->oi_oa->o_valid &= ~OBD_FL_TRUNC;
         RETURN(rc);
 }
 

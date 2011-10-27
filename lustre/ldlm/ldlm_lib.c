@@ -2079,7 +2079,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
         /* CAVEAT EMPTOR: The incoming request message has been swabbed
          * (i.e. buflens etc are in my own byte order), but type-dependent
-         * buffers (eg mds_body, ost_body etc) have NOT been swabbed. */
+         * buffers (eg mdt_body, ost_body etc) have NOT been swabbed. */
 
         if (!transno) {
                 CFS_INIT_LIST_HEAD(&req->rq_list);

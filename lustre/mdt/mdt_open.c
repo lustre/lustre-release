@@ -416,7 +416,7 @@ error_up:
 }
 
 /**
- * Close IOEpoch (opened file or FMODE_EPOCH state). It happens if:
+ * Close IOEpoch (opened file or MDS_FMODE_EPOCH state). It happens if:
  * - a client closes the IOEpoch;
  * - a client eviction occured.
  * Return values:
@@ -451,8 +451,8 @@ static int mdt_ioepoch_close(struct mdt_thread_info *info, struct mdt_object *o)
 }
 
 /**
- * Close FMODE_SOM state, when IOEpoch is already closed and we are waiting for
- * attribute update. It happens if:
+ * Close MDS_FMODE_SOM state, when IOEpoch is already closed and we are waiting
+ * for attribute update. It happens if:
  * - SOM Attribute Update is obtained;
  * - the client failed to obtain it and informs MDS about it;
  * - a client eviction occured.
@@ -662,7 +662,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 
                 /*
                  * @flags is always not zero. At least it should be FMODE_READ,
-                 * FMODE_WRITE or FMODE_EXEC.
+                 * FMODE_WRITE or MDS_FMODE_EXEC.
                  */
                 LASSERT(flags != 0);
 
@@ -1473,8 +1473,8 @@ out:
         return result;
 }
 
-#define MFD_CLOSED(mode) (((mode) & ~(FMODE_EPOCH | FMODE_SOM | \
-                                      FMODE_TRUNC)) == FMODE_CLOSED)
+#define MFD_CLOSED(mode) (((mode) & ~(MDS_FMODE_EPOCH | MDS_FMODE_SOM | \
+                                      MDS_FMODE_TRUNC)) == MDS_FMODE_CLOSED)
 
 static int mdt_mfd_closed(struct mdt_file_data *mfd)
 {
@@ -1493,14 +1493,14 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
         mode = mfd->mfd_mode;
 
-        if ((mode & FMODE_WRITE) || (mode & FMODE_TRUNC)) {
+        if ((mode & FMODE_WRITE) || (mode & MDS_FMODE_TRUNC)) {
                 mdt_write_put(o);
                 ret = mdt_ioepoch_close(info, o);
         } else if (mode & MDS_FMODE_EXEC) {
                 mdt_write_allow(o);
-        } else if (mode & FMODE_EPOCH) {
+        } else if (mode & MDS_FMODE_EPOCH) {
                 ret = mdt_ioepoch_close(info, o);
-        } else if (mode & FMODE_SOM) {
+        } else if (mode & MDS_FMODE_SOM) {
                 ret = mdt_som_au_close(info, o);
         }
 
@@ -1526,7 +1526,7 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
                  * Put mfd back into the list. */
                 LASSERT(mdt_conn_flags(info) & OBD_CONNECT_SOM);
                 mdt_mfd_set_mode(mfd, ret == MDT_IOEPOCH_OPENED ?
-                                      FMODE_EPOCH : FMODE_SOM);
+                                      MDS_FMODE_EPOCH : MDS_FMODE_SOM);
 
                 LASSERT(mdt_info_req(info));
                 med = &mdt_info_req(info)->rq_export->exp_mdt_data;
@@ -1690,8 +1690,8 @@ int mdt_done_writing(struct mdt_thread_info *info)
                 RETURN(-ESTALE);
         }
 
-        LASSERT(mfd->mfd_mode == FMODE_EPOCH ||
-                mfd->mfd_mode == FMODE_TRUNC);
+        LASSERT(mfd->mfd_mode == MDS_FMODE_EPOCH ||
+                mfd->mfd_mode == MDS_FMODE_TRUNC);
         class_handle_unhash(&mfd->mfd_handle);
         cfs_list_del_init(&mfd->mfd_list);
         cfs_spin_unlock(&med->med_open_lock);

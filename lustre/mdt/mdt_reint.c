@@ -524,7 +524,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 repbody->ioepoch = mo->mot_ioepoch;
 
                 mdt_object_get(info->mti_env, mo);
-                mdt_mfd_set_mode(mfd, FMODE_TRUNC);
+                mdt_mfd_set_mode(mfd, MDS_FMODE_TRUNC);
                 mfd->mfd_object = mo;
                 mfd->mfd_xid = req->rq_xid;
 
@@ -551,7 +551,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                                info->mti_ioepoch->handle.cookie);
                         GOTO(out_put, rc = -ESTALE);
                 }
-                LASSERT(mfd->mfd_mode == FMODE_SOM);
+                LASSERT(mfd->mfd_mode == MDS_FMODE_SOM);
                 LASSERT(!(info->mti_ioepoch->flags & MF_EPOCH_CLOSE));
 
                 class_handle_unhash(&mfd->mfd_handle);

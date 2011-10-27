@@ -51,7 +51,6 @@
 
 #define lustre_swab_generic_32s NULL
 #define lustre_swab_lu_seq_range NULL
-#define lustre_swab_md_fld NULL
 #define lustre_swab_mdt_body NULL
 #define lustre_swab_mdt_ioepoch NULL
 #define lustre_swab_ptlrpc_body NULL

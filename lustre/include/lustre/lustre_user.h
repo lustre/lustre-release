@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -449,7 +452,7 @@ struct obd_dqblk {
         __u64 dqb_btime;
         __u64 dqb_itime;
         __u32 dqb_valid;
-        __u32 padding;
+        __u32 dqb_padding;
 };
 
 enum {
