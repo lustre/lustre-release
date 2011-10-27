@@ -5306,9 +5306,6 @@ static int mdt_obd_notify(struct obd_device *obd,
 
         switch (ev) {
         case OBD_NOTIFY_CONFIG:
-                /* reset recovery timeout in case it has already started */
-                target_start_recovery_timer(obd);
-
                 mdt_allow_cli(mdt, (unsigned long)data);
 
 #ifdef HAVE_QUOTA_SUPPORT
