@@ -100,12 +100,6 @@ int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
         return mds_lov_write_objids(obd);
 }
 
-int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
-                      void *cookie)
-{
-        return 0;
-}
-
 void mdd_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
                          enum mdd_txn_op op, int changelog_cnt)
 {
@@ -182,24 +176,17 @@ out:
         RETURN(rc);
 }
 
-int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
-                                struct md_attr *ma, enum mdd_txn_op op,
-                                int changelog_cnt)
+void mdd_setattr_txn_param_build(const struct lu_env *env,
+                                 struct md_object *obj,
+                                 struct md_attr *ma, enum mdd_txn_op op,
+                                 int changelog_cnt)
 {
         struct mdd_device *mdd = mdo2mdd(&md2mdd_obj(obj)->mod_obj);
-        ENTRY;
 
         mdd_txn_param_build(env, mdd, op, changelog_cnt);
         if (ma->ma_attr.la_valid & (LA_UID | LA_GID))
                 txn_param_credit_add(&mdd_env_info(env)->mti_param,
                                      dto_txn_credits[DTO_ATTR_SET_CHOWN]);
-
-        /* permission changes may require sync operation */
-        if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID) &&
-            mdd->mdd_sync_permission == 1)
-                txn_param_sync(&mdd_env_info(env)->mti_param);
-
-        RETURN(0);
 }
 
 static void mdd_txn_init_dto_credits(const struct lu_env *env,

@@ -136,6 +136,7 @@ struct osd_thandle {
         struct thandle          ot_super;
         handle_t               *ot_handle;
         struct journal_callback ot_jcb;
+        cfs_list_t              ot_dcb_list;
         /* Link to the device, for debugging. */
         struct lu_ref_link     *ot_dev_link;
 
@@ -629,24 +630,19 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 {
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
         struct thandle     *th  = &oh->ot_super;
-        struct dt_device   *dev = th->th_dev;
-        struct lu_device   *lud = &dev->dd_lu_dev;
+        struct lu_device   *lud = &th->th_dev->dd_lu_dev;
+        struct dt_txn_commit_cb *dcb, *tmp;
 
-        LASSERT(dev != NULL);
         LASSERT(oh->ot_handle == NULL);
 
-        if (error) {
+        if (error)
                 CERROR("transaction @0x%p commit error: %d\n", th, error);
-        } else {
-                struct lu_env *env = &osd_dt_dev(dev)->od_env_for_commit;
-                /*
-                 * This od_env_for_commit is only for commit usage.  see
-                 * "struct dt_device"
-                 */
-                lu_context_enter(&env->le_ctx);
-                dt_txn_hook_commit(env, th);
-                lu_context_exit(&env->le_ctx);
-        }
+
+        dt_txn_hook_commit(th);
+
+        /* call per-transaction callbacks if any */
+        cfs_list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage)
+                dcb->dcb_func(NULL, th, dcb, error);
 
         lu_ref_del_at(&lud->ld_reference, oh->ot_dev_link, "osd-tx", th);
         lu_device_put(lud);
@@ -686,6 +682,7 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                          * be used.
                          */
                         oti->oti_dev = dev;
+                        CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
                         osd_th_alloced(oh);
                         jh = ldiskfs_journal_start_sb(osd_sb(dev), p->tp_credits);
                         osd_th_started(oh);
@@ -694,7 +691,7 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                                 th = &oh->ot_super;
                                 th->th_dev = d;
                                 th->th_result = 0;
-                                jh->h_sync = p->tp_sync;
+                                th->th_sync = 0;
                                 lu_device_get(&d->dd_lu_dev);
                                 oh->ot_dev_link = lu_ref_add
                                         (&d->dd_lu_dev.ld_reference,
@@ -702,8 +699,6 @@ static struct thandle *osd_trans_start(const struct lu_env *env,
                                 /* add commit callback */
                                 lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
                                 lu_context_enter(&th->th_ctx);
-                                osd_journal_callback_set(jh,osd_trans_commit_cb,
-                                                         &oh->ot_jcb);
                                 LASSERT(oti->oti_txns == 0);
                                 LASSERT(oti->oti_r_locks == 0);
                                 LASSERT(oti->oti_w_locks == 0);
@@ -737,6 +732,15 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
         if (oh->ot_handle != NULL) {
                 handle_t *hdl = oh->ot_handle;
 
+                hdl->h_sync = th->th_sync;
+                /*
+                 * add commit callback
+                 * notice we don't do this in osd_trans_start()
+                 * as underlying transaction can change during truncate
+                 */
+                osd_journal_callback_set(hdl, osd_trans_commit_cb,
+                                         &oh->ot_jcb);
+
                 LASSERT(oti->oti_txns == 1);
                 oti->oti_txns--;
                 LASSERT(oti->oti_r_locks == 0);
@@ -749,8 +753,20 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
                                   result = ldiskfs_journal_stop(hdl));
                 if (result != 0)
                         CERROR("Failure to stop transaction: %d\n", result);
+        } else {
+                OBD_FREE_PTR(oh);
         }
         EXIT;
+}
+
+static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
+{
+        struct osd_thandle *oh = container_of0(th, struct osd_thandle,
+                                               ot_super);
+
+        cfs_list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
+
+        return 0;
 }
 
 /*
@@ -1137,6 +1153,7 @@ static const struct dt_device_operations osd_dt_ops = {
         .dt_statfs         = osd_statfs,
         .dt_trans_start    = osd_trans_start,
         .dt_trans_stop     = osd_trans_stop,
+        .dt_trans_cb_add   = osd_trans_cb_add,
         .dt_conf_get       = osd_conf_get,
         .dt_sync           = osd_sync,
         .dt_ro             = osd_ro,
@@ -3873,17 +3890,7 @@ static struct lu_context_key osd_key = {
 static int osd_device_init(const struct lu_env *env, struct lu_device *d,
                            const char *name, struct lu_device *next)
 {
-        int rc;
-        struct lu_context *ctx;
-
-        /* context for commit hooks */
-        ctx = &osd_dev(d)->od_env_for_commit.le_ctx;
-        rc = lu_context_init(ctx, LCT_MD_THREAD|LCT_REMEMBER|LCT_NOREF);
-        if (rc == 0) {
-                rc = osd_procfs_init(osd_dev(d), name);
-                ctx->lc_cookie = 0x3;
-        }
-        return rc;
+        return osd_procfs_init(osd_dev(d), name);
 }
 
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
@@ -3957,7 +3964,6 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
                                  osd_dev(d)->od_mount->lmi_mnt);
         osd_dev(d)->od_mount = NULL;
 
-        lu_context_fini(&osd_dev(d)->od_env_for_commit.le_ctx);
         RETURN(NULL);
 }
 

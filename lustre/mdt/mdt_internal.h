@@ -412,32 +412,6 @@ enum mdt_txn_op {
         MDT_TXN_LAST_RCVD_WRITE_OP,
 };
 
-/*
- * Info allocated per-transaction.
- */
-#define MDT_MAX_COMMIT_CB       4
-struct mdt_txn_info {
-        __u64                 txi_transno;
-        unsigned int          txi_cb_count;
-        struct lut_commit_cb  txi_cb[MDT_MAX_COMMIT_CB];
-};
-
-extern struct lu_context_key mdt_txn_key;
-
-static inline void mdt_trans_add_cb(const struct thandle *th,
-                                    lut_cb_t cb_func, void *cb_data)
-{
-        struct mdt_txn_info *txi;
-
-        txi = lu_context_key_get(&th->th_ctx, &mdt_txn_key);
-        LASSERT(txi->txi_cb_count < ARRAY_SIZE(txi->txi_cb));
-
-        /* add new callback */
-        txi->txi_cb[txi->txi_cb_count].lut_cb_func = cb_func;
-        txi->txi_cb[txi->txi_cb_count].lut_cb_data = cb_data;
-        txi->txi_cb_count++;
-}
-
 static inline const struct md_device_operations *
 mdt_child_ops(struct mdt_device * m)
 {

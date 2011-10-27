@@ -67,8 +67,9 @@ struct lut_commit_cb {
 };
 
 void lut_boot_epoch_update(struct lu_target *);
-void lut_cb_last_committed(struct lu_target *, __u64, void *, int);
-void lut_cb_client(struct lu_target *, __u64, void *, int);
+int lut_last_commit_cb_add(struct thandle *th, struct lu_target *lut,
+                           struct obd_export *exp, __u64 transno);
+int lut_new_client_cb_add(struct thandle *th, struct obd_export *exp);
 int lut_init(const struct lu_env *, struct lu_target *,
              struct obd_device *, struct dt_device *);
 void lut_fini(const struct lu_env *, struct lu_target *);

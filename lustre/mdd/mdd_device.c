@@ -93,7 +93,7 @@ static int mdd_device_init(const struct lu_env *env, struct lu_device *d,
         /* Prepare transactions callbacks. */
         mdd->mdd_txn_cb.dtc_txn_start = mdd_txn_start_cb;
         mdd->mdd_txn_cb.dtc_txn_stop = mdd_txn_stop_cb;
-        mdd->mdd_txn_cb.dtc_txn_commit = mdd_txn_commit_cb;
+        mdd->mdd_txn_cb.dtc_txn_commit = NULL;
         mdd->mdd_txn_cb.dtc_cookie = mdd;
         mdd->mdd_txn_cb.dtc_tag = LCT_MD_THREAD;
         CFS_INIT_LIST_HEAD(&mdd->mdd_txn_cb.dtc_linkage);

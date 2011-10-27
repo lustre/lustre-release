@@ -218,8 +218,8 @@ struct lu_server_seq {
          */
         __u64                   lss_set_width;
 
-        /* transaction no of seq update write operation */
-        __u64                   lss_set_transno;
+        /* sync is needed for update operation */
+        __u32                   lss_need_sync;
         /**
          * Pointer to site object, required to access site fld.
          */

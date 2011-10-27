@@ -171,7 +171,6 @@ static int __seq_set_init(const struct lu_env *env,
         range_alloc(&seq->lss_hiwater_set, space, seq->lss_set_width);
 
         rc = seq_store_update(env, seq, NULL, 1);
-        seq->lss_set_transno = 0;
 
         return rc;
 }
@@ -209,31 +208,21 @@ static int range_alloc_set(const struct lu_env *env,
         if (range_is_exhausted(loset)) {
                 /* reached high water mark. */
                 struct lu_device *dev = seq->lss_site->ms_lu.ls_top_dev;
-                struct lu_target *tg = dev->ld_obd->u.obt.obt_lut;
                 int obd_num_clients = dev->ld_obd->obd_num_exports;
                 __u64 set_sz;
-                int sync = 0;
 
                 /* calculate new seq width based on number of clients */
                 set_sz = max(seq->lss_set_width,
-                               obd_num_clients * seq->lss_width);
+                             obd_num_clients * seq->lss_width);
                 set_sz = min(range_space(space), set_sz);
 
                 /* Switch to hiwater range now */
-                loset = hiset;
+                *loset = *hiset;
                 /* allocate new hiwater range */
                 range_alloc(hiset, space, set_sz);
 
-                if (seq->lss_set_transno > dev->ld_obd->obd_last_committed)
-                        sync = 1;
-
                 /* update ondisk seq with new *space */
-                rc = seq_store_update(env, seq, NULL, sync);
-
-                /* set new hiwater transno */
-                cfs_spin_lock(&tg->lut_translock);
-                seq->lss_set_transno = tg->lut_last_transno;
-                cfs_spin_unlock(&tg->lut_translock);
+                rc = seq_store_update(env, seq, NULL, seq->lss_need_sync);
         }
 
         LASSERTF(!range_is_exhausted(loset) || range_is_sane(loset),

@@ -41,6 +41,7 @@
 
 #include <obd.h>
 #include <lustre_fsfilt.h>
+#include <obd_class.h>
 
 /**
  * Update client data in last_rcvd file. An obd API
@@ -338,37 +339,115 @@ EXPORT_SYMBOL(lut_boot_epoch_update);
 /**
  * commit callback, need to update last_commited value
  */
-void lut_cb_last_committed(struct lu_target *lut, __u64 transno,
-                           void *data, int err)
-{
-        struct obd_export *exp = data;
-        LASSERT(exp->exp_obd == lut->lut_obd);
-        cfs_spin_lock(&lut->lut_translock);
-        if (transno > lut->lut_obd->obd_last_committed)
-                lut->lut_obd->obd_last_committed = transno;
+struct lut_last_committed_callback {
+        struct dt_txn_commit_cb llcc_cb;
+        struct lu_target       *llcc_lut;
+        struct obd_export      *llcc_exp;
+        __u64                   llcc_transno;
+};
 
-        LASSERT(exp);
-        if (transno > exp->exp_last_committed) {
-                exp->exp_last_committed = transno;
-                cfs_spin_unlock(&lut->lut_translock);
-                ptlrpc_commit_replies(exp);
+void lut_cb_last_committed(struct lu_env *env, struct thandle *th,
+                           struct dt_txn_commit_cb *cb, int err)
+{
+        struct lut_last_committed_callback *ccb;
+
+        ccb = container_of0(cb, struct lut_last_committed_callback, llcc_cb);
+
+        LASSERT(ccb->llcc_exp->exp_obd == ccb->llcc_lut->lut_obd);
+
+        cfs_spin_lock(&ccb->llcc_lut->lut_translock);
+        if (ccb->llcc_transno > ccb->llcc_lut->lut_obd->obd_last_committed)
+                ccb->llcc_lut->lut_obd->obd_last_committed = ccb->llcc_transno;
+
+        LASSERT(ccb->llcc_exp);
+        if (ccb->llcc_transno > ccb->llcc_exp->exp_last_committed) {
+                ccb->llcc_exp->exp_last_committed = ccb->llcc_transno;
+                cfs_spin_unlock(&ccb->llcc_lut->lut_translock);
+                ptlrpc_commit_replies(ccb->llcc_exp);
         } else {
-                cfs_spin_unlock(&lut->lut_translock);
+                cfs_spin_unlock(&ccb->llcc_lut->lut_translock);
         }
-        class_export_cb_put(exp);
-        if (transno)
+        class_export_cb_put(ccb->llcc_exp);
+        if (ccb->llcc_transno)
                 CDEBUG(D_HA, "%s: transno "LPD64" is committed\n",
-                       lut->lut_obd->obd_name, transno);
+                       ccb->llcc_lut->lut_obd->obd_name, ccb->llcc_transno);
+        cfs_list_del(&ccb->llcc_cb.dcb_linkage);
+        OBD_FREE_PTR(ccb);
 }
-EXPORT_SYMBOL(lut_cb_last_committed);
 
-void lut_cb_client(struct lu_target *lut, __u64 transno,
-                       void *data, int err)
+int lut_last_commit_cb_add(struct thandle *th, struct lu_target *lut,
+                           struct obd_export *exp, __u64 transno)
 {
-        LASSERT(lut->lut_obd);
-        target_client_add_cb(lut->lut_obd, transno, data, err);
+        struct lut_last_committed_callback *ccb;
+        int rc;
+
+        OBD_ALLOC_PTR(ccb);
+        if (ccb == NULL)
+                return -ENOMEM;
+
+        ccb->llcc_cb.dcb_func = lut_cb_last_committed;
+        CFS_INIT_LIST_HEAD(&ccb->llcc_cb.dcb_linkage);
+        ccb->llcc_lut = lut;
+        ccb->llcc_exp = class_export_cb_get(exp);
+        ccb->llcc_transno = transno;
+
+        rc = dt_trans_cb_add(th, &ccb->llcc_cb);
+        if (rc) {
+                class_export_cb_put(exp);
+                OBD_FREE_PTR(ccb);
+        }
+        return rc;
 }
-EXPORT_SYMBOL(lut_cb_client);
+EXPORT_SYMBOL(lut_last_commit_cb_add);
+
+struct lut_new_client_callback {
+        struct dt_txn_commit_cb lncc_cb;
+        struct obd_export      *lncc_exp;
+};
+
+void lut_cb_new_client(struct lu_env *env, struct thandle *th,
+                       struct dt_txn_commit_cb *cb, int err)
+{
+        struct lut_new_client_callback *ccb;
+
+        ccb = container_of0(cb, struct lut_new_client_callback, lncc_cb);
+
+        LASSERT(ccb->lncc_exp->exp_obd);
+
+        CDEBUG(D_RPCTRACE, "%s: committing for initial connect of %s\n",
+               ccb->lncc_exp->exp_obd->obd_name,
+               ccb->lncc_exp->exp_client_uuid.uuid);
+
+        cfs_spin_lock(&ccb->lncc_exp->exp_lock);
+        ccb->lncc_exp->exp_need_sync = 0;
+        cfs_spin_unlock(&ccb->lncc_exp->exp_lock);
+        class_export_cb_put(ccb->lncc_exp);
+
+        cfs_list_del(&ccb->lncc_cb.dcb_linkage);
+        OBD_FREE_PTR(ccb);
+}
+
+int lut_new_client_cb_add(struct thandle *th, struct obd_export *exp)
+{
+        struct lut_new_client_callback *ccb;
+        int rc;
+
+        OBD_ALLOC_PTR(ccb);
+        if (ccb == NULL)
+                return -ENOMEM;
+
+        ccb->lncc_cb.dcb_func = lut_cb_new_client;
+        CFS_INIT_LIST_HEAD(&ccb->lncc_cb.dcb_linkage);
+        ccb->lncc_exp = class_export_cb_get(exp);
+
+        rc = dt_trans_cb_add(th, &ccb->lncc_cb);
+        if (rc) {
+                class_export_cb_put(exp);
+                OBD_FREE_PTR(ccb);
+        }
+        return rc;
+}
+EXPORT_SYMBOL(lut_new_client_cb_add);
 
 int lut_init(const struct lu_env *env, struct lu_target *lut,
              struct obd_device *obd, struct dt_device *dt)

@@ -5669,15 +5669,6 @@ LU_KEY_INIT_FINI(mdt, struct mdt_thread_info);
 /* context key: mdt_thread_key */
 LU_CONTEXT_KEY_DEFINE(mdt, LCT_MD_THREAD);
 
-/* context key constructor/destructor: mdt_txn_key_init, mdt_txn_key_fini */
-LU_KEY_INIT_FINI(mdt_txn, struct mdt_txn_info);
-
-struct lu_context_key mdt_txn_key = {
-        .lct_tags = LCT_TX_HANDLE,
-        .lct_init = mdt_txn_key_init,
-        .lct_fini = mdt_txn_key_fini
-};
-
 struct md_ucred *mdt_ucred(const struct mdt_thread_info *info)
 {
         return md_ucred(info->mti_env);
@@ -5720,7 +5711,7 @@ int mdt_cos_is_enabled(struct mdt_device *mdt)
 }
 
 /* type constructor/destructor: mdt_type_init, mdt_type_fini */
-LU_TYPE_INIT_FINI(mdt, &mdt_thread_key, &mdt_txn_key);
+LU_TYPE_INIT_FINI(mdt, &mdt_thread_key);
 
 static struct lu_device_type_operations mdt_device_type_ops = {
         .ldto_init = mdt_type_init,

@@ -114,14 +114,6 @@ struct osd_device {
          */
         struct dt_object         *od_obj_area;
 
-        /* Environment for transaction commit callback.
-         * Currently, OSD is based on ext3/JBD. Transaction commit in ext3/JBD
-         * is serialized, that is there is no more than one transaction commit
-         * at a time (JBD journal_commit_transaction() is serialized).
-         * This means that it's enough to have _one_ lu_context.
-         */
-        struct lu_env             od_env_for_commit;
-
         /*
          * Fid Capability
          */

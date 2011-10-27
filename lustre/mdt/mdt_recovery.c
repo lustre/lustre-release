@@ -123,17 +123,19 @@ struct thandle* mdt_trans_start(const struct lu_env *env,
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         p = &mti->mti_txn_param;
 
-        /* export can require sync operations */
-        if (mti->mti_exp != NULL)
-                p->tp_sync = mti->mti_exp->exp_need_sync;
-
-        return mdt->mdt_bottom->dd_ops->dt_trans_start(env, mdt->mdt_bottom, p);
+        return dt_trans_start(env, mdt->mdt_bottom, p);
 }
 
 void mdt_trans_stop(const struct lu_env *env,
                     struct mdt_device *mdt, struct thandle *th)
 {
-        mdt->mdt_bottom->dd_ops->dt_trans_stop(env, th);
+        struct mdt_thread_info *mti;
+
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+        /* export can require sync operations */
+        if (mti->mti_exp != NULL)
+                th->th_sync |= mti->mti_exp->exp_need_sync;
+        dt_trans_stop(env, mdt->mdt_bottom, th);
 }
 
 static inline int mdt_last_rcvd_header_read(const struct lu_env *env,
@@ -585,10 +587,15 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
          * transaction so that many connecting clients will not bring
          * server down with lots of sync writes.
          */
-        mdt_trans_add_cb(th, lut_cb_client, class_export_cb_get(mti->mti_exp));
-        cfs_spin_lock(&mti->mti_exp->exp_lock);
-        mti->mti_exp->exp_need_sync = 1;
-        cfs_spin_unlock(&mti->mti_exp->exp_lock);
+        rc = lut_new_client_cb_add(th, mti->mti_exp);
+        if (rc) {
+                /* can't add callback, do sync now */
+                th->th_sync = 1;
+        } else {
+                cfs_spin_lock(&mti->mti_exp->exp_lock);
+                mti->mti_exp->exp_need_sync = 1;
+                cfs_spin_unlock(&mti->mti_exp->exp_lock);
+        }
 
         rc = mdt_last_rcvd_write(env, mdt, ted->ted_lcd, &off, th);
         CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len %u)\n",
@@ -848,17 +855,13 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
                            struct thandle *txn, void *cookie)
 {
         struct mdt_device *mdt = cookie;
-        struct mdt_txn_info *txi;
         struct mdt_thread_info *mti;
         struct ptlrpc_request *req;
 
-        /* transno in two contexts - for commit_cb and for thread */
-        txi = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         req = mdt_info_req(mti);
 
         if (mti->mti_mdt == NULL || req == NULL || mti->mti_no_need_trans) {
-                txi->txi_transno = 0;
                 mti->mti_no_need_trans = 0;
                 return 0;
         }
@@ -899,33 +902,11 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
 
         req->rq_transno = mti->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
-        /* save transno for the commit callback */
-        txi->txi_transno = mti->mti_transno;
-
-        /* add separate commit callback for transaction handling because we need
-         * export as parameter */
-        mdt_trans_add_cb(txn, lut_cb_last_committed,
-                         class_export_cb_get(mti->mti_exp));
-
+        /* if can't add callback, do sync write */
+        txn->th_sync = !!lut_last_commit_cb_add(txn, &mdt->mdt_lut,
+                                                mti->mti_exp,
+                                                mti->mti_transno);
         return mdt_last_rcvd_update(mti, txn);
-}
-
-/* commit callback, need to update last_committed value */
-static int mdt_txn_commit_cb(const struct lu_env *env,
-                             struct thandle *txn, void *cookie)
-{
-        struct mdt_device *mdt = cookie;
-        struct mdt_txn_info *txi;
-        int i;
-
-        txi = lu_context_key_get(&txn->th_ctx, &mdt_txn_key);
-
-        /* iterate through all additional callbacks */
-        for (i = 0; i < txi->txi_cb_count; i++) {
-                txi->txi_cb[i].lut_cb_func(&mdt->mdt_lut, txi->txi_transno,
-                                           txi->txi_cb[i].lut_cb_data, 0);
-        }
-        return 0;
 }
 
 int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
@@ -943,7 +924,7 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
         /* prepare transactions callbacks */
         mdt->mdt_txn_cb.dtc_txn_start = mdt_txn_start_cb;
         mdt->mdt_txn_cb.dtc_txn_stop = mdt_txn_stop_cb;
-        mdt->mdt_txn_cb.dtc_txn_commit = mdt_txn_commit_cb;
+        mdt->mdt_txn_cb.dtc_txn_commit = NULL;
         mdt->mdt_txn_cb.dtc_cookie = mdt;
         mdt->mdt_txn_cb.dtc_tag = LCT_MD_THREAD;
         CFS_INIT_LIST_HEAD(&mdt->mdt_txn_cb.dtc_linkage);

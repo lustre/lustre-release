@@ -126,22 +126,15 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn)
 }
 EXPORT_SYMBOL(dt_txn_hook_stop);
 
-int dt_txn_hook_commit(const struct lu_env *env, struct thandle *txn)
+void dt_txn_hook_commit(struct thandle *txn)
 {
-        struct dt_device       *dev = txn->th_dev;
         struct dt_txn_callback *cb;
-        int                     result;
 
-        result = 0;
-        cfs_list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
-                if (cb->dtc_txn_commit == NULL ||
-                    !(cb->dtc_tag & env->le_ctx.lc_tags))
-                        continue;
-                result = cb->dtc_txn_commit(env, txn, cb->dtc_cookie);
-                if (result < 0)
-                        break;
+        cfs_list_for_each_entry(cb, &txn->th_dev->dd_txn_callbacks,
+                                dtc_linkage) {
+                if (cb->dtc_txn_commit)
+                        cb->dtc_txn_commit(txn, cb->dtc_cookie);
         }
-        return result;
 }
 EXPORT_SYMBOL(dt_txn_hook_commit);
 

@@ -427,9 +427,10 @@ int mdd_create_txn_param_build(const struct lu_env *env, struct mdd_device *mdd,
 int mdd_log_txn_param_build(const struct lu_env *env, struct md_object *obj,
                             struct md_attr *ma, enum mdd_txn_op,
                             int changelog_cnt);
-int mdd_setattr_txn_param_build(const struct lu_env *env, struct md_object *obj,
-                                struct md_attr *ma, enum mdd_txn_op,
-                                int changelog_cnt);
+void mdd_setattr_txn_param_build(const struct lu_env *env,
+                                 struct md_object *obj,
+                                 struct md_attr *ma, enum mdd_txn_op,
+                                 int changelog_cnt);
 
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
                     struct mdd_object *obj, struct lu_attr *la);
@@ -452,8 +453,6 @@ int mdd_txn_start_cb(const struct lu_env *env, struct txn_param *param,
 int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
                     void *cookie);
 
-int mdd_txn_commit_cb(const struct lu_env *env, struct thandle *txn,
-                      void *cookie);
 /* mdd_device.c */
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,

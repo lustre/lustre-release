@@ -1502,11 +1502,16 @@ static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                 chlog_cnt += (lmm->lmm_stripe_count >= 0) ?
                          lmm->lmm_stripe_count : mds->mds_lov_desc.ld_tgt_count;
         }
+
         mdd_setattr_txn_param_build(env, obj, (struct md_attr *)ma,
                                     MDD_TXN_ATTR_SET_OP, chlog_cnt);
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 GOTO(no_trans, rc = PTR_ERR(handle));
+
+        /* permission changes may require sync operation */
+        if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
+                handle->th_sync |= mdd->mdd_sync_permission;
 
         if (ma->ma_attr.la_valid & (LA_MTIME | LA_CTIME))
                 CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
@@ -1665,14 +1670,13 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
                 RETURN(rc);
 
         mdd_txn_param_build(env, mdd, MDD_TXN_XATTR_SET_OP, 1);
-        /* security-replated changes may require sync */
-        if (!strcmp(name, XATTR_NAME_ACL_ACCESS) &&
-            mdd->mdd_sync_permission == 1)
-                txn_param_sync(&mdd_env_info(env)->mti_param);
-
         handle = mdd_trans_start(env, mdd);
         if (IS_ERR(handle))
                 RETURN(PTR_ERR(handle));
+
+        /* security-replated changes may require sync */
+        if (!strcmp(name, XATTR_NAME_ACL_ACCESS))
+                handle->th_sync |= mdd->mdd_sync_permission;
 
         rc = mdd_xattr_set_txn(env, mdd_obj, buf, name, fl, handle);
 
