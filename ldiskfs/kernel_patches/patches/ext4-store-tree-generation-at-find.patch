@@ -1,0 +1,66 @@
+Index: linux-stage/fs/ext4/ext4_extents.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4_extents.h
++++ linux-stage/fs/ext4/ext4_extents.h
+@@ -113,6 +113,7 @@ struct ext4_extent_header {
+  * Truncate uses it to simulate recursive walking.
+  */
+ struct ext4_ext_path {
++	unsigned long			p_generation;
+ 	ext4_fsblk_t			p_block;
+ 	__u16				p_depth;
+ 	struct ext4_extent		*p_ext;
+Index: linux-stage/fs/ext4/extents.c
+===================================================================
+--- linux-stage.orig/fs/ext4/extents.c
++++ linux-stage/fs/ext4/extents.c
+@@ -1855,7 +1855,7 @@ int ext4_ext_walk_space(struct inode *in
+ {
+ 	struct ext4_ext_path *path = NULL;
+ 	struct ext4_ext_cache cbex;
+-	struct ext4_extent *ex;
++	struct ext4_extent _ex, *ex;
+ 	ext4_lblk_t next, start = 0, end = 0;
+ 	ext4_lblk_t last = block + num;
+ 	int depth, exists, err = 0;
+@@ -1868,21 +1868,29 @@ int ext4_ext_walk_space(struct inode *in
+ 		/* find extent for this block */
+ 		down_read(&EXT4_I(inode)->i_data_sem);
+ 		path = ext4_ext_find_extent(inode, block, path);
+-		up_read(&EXT4_I(inode)->i_data_sem);
+ 		if (IS_ERR(path)) {
++			up_read(&EXT4_I(inode)->i_data_sem);
+ 			err = PTR_ERR(path);
+ 			path = NULL;
+ 			break;
+ 		}
+ 
++		path[0].p_generation = EXT4_I(inode)->i_ext_generation;
++
+ 		depth = ext_depth(inode);
+ 		if (unlikely(path[depth].p_hdr == NULL)) {
++			up_read(&EXT4_I(inode)->i_data_sem);
+ 			EXT4_ERROR_INODE(inode, "path[%d].p_hdr == NULL", depth);
+ 			err = -EIO;
+ 			break;
+ 		}
+-		ex = path[depth].p_ext;
++		ex = NULL;
++		if (path[depth].p_ext) {
++			_ex = *path[depth].p_ext;
++			ex = &_ex;
++		}
+ 		next = ext4_ext_next_allocated_block(path);
++		up_read(&EXT4_I(inode)->i_data_sem);
+ 
+ 		exists = 0;
+ 		if (!ex) {
+@@ -1936,7 +1944,7 @@ int ext4_ext_walk_space(struct inode *in
+ 			err = -EIO;
+ 			break;
+ 		}
+-		err = func(inode, path, &cbex, ex, cbdata);
++		err = func(inode, path, &cbex, NULL, cbdata);
+ 		ext4_ext_drop_refs(path);
+ 
+ 		if (err < 0)
