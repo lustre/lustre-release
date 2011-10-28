@@ -767,10 +767,9 @@ static int ll_statahead_thread(void *arg)
         cfs_waitq_signal(&thread->t_ctl_waitq);
         CDEBUG(D_READA, "start doing statahead for %s\n", parent->d_name.name);
 
-        sai->sai_pid = cfs_curproc_pid();
         lli->lli_sa_pos = 0;
         ll_dir_chain_init(&chain);
-        page = ll_get_dir_page(NULL, dir, pos, 0, &chain);
+        page = ll_get_dir_page(NULL, dir, pos, &chain);
 
         while (1) {
                 struct l_wait_info lwi = { 0 };
@@ -846,7 +845,7 @@ keep_de:
                                 do_statahead_interpret(sai);
 
                         if (unlikely(!sa_is_running(sai))) {
-                                ll_put_page(page);
+                                ll_release_page(page, 0);
                                 GOTO(out, rc);
                         }
 
@@ -858,16 +857,16 @@ keep_de:
 
                         rc = ll_statahead_one(parent, name, namelen);
                         if (rc < 0) {
-                                ll_put_page(page);
+                                ll_release_page(page, 0);
                                 GOTO(out, rc);
                         }
                 }
                 pos = le64_to_cpu(dp->ldp_hash_end);
-                ll_put_page(page);
                 if (pos == MDS_DIR_END_OFF) {
                         /*
                          * End of directory reached.
                          */
+                        ll_release_page(page, 0);
                         while (1) {
                                 l_wait_event(thread->t_ctl_waitq,
                                              !sa_is_running(sai) ||
@@ -885,9 +884,13 @@ keep_de:
                          * chain is exhausted.
                          * Normal case: continue to the next page.
                          */
+                        ll_release_page(page, le32_to_cpu(dp->ldp_flags) &
+                                              LDF_COLLIDE);
                         lli->lli_sa_pos = pos;
-                        page = ll_get_dir_page(NULL, dir, pos, 1, &chain);
+                        page = ll_get_dir_page(NULL, dir, pos, &chain);
                 } else {
+                        LASSERT(le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
+                        ll_release_page(page, 1);
                         /*
                          * go into overflow page.
                          */
@@ -985,7 +988,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 
         lli->lli_sa_pos = 0;
         ll_dir_chain_init(&chain);
-        page = ll_get_dir_page(NULL, dir, pos, 0, &chain);
+        page = ll_get_dir_page(NULL, dir, pos, &chain);
 
         while (1) {
                 struct lu_dirpage *dp;
@@ -1048,27 +1051,31 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                         else
                                 rc = LS_FIRST_DOT_DE;
 
-                        ll_put_page(page);
+                        ll_release_page(page, 0);
                         GOTO(out, rc);
                 }
                 pos = le64_to_cpu(dp->ldp_hash_end);
-                ll_put_page(page);
                 if (pos == MDS_DIR_END_OFF) {
                         /*
                          * End of directory reached.
                          */
+                        ll_release_page(page, 0);
                         break;
                 } else if (1) {
                         /*
                          * chain is exhausted
                          * Normal case: continue to the next page.
                          */
+                        ll_release_page(page, le32_to_cpu(dp->ldp_flags) &
+                                              LDF_COLLIDE);
                         lli->lli_sa_pos = pos;
-                        page = ll_get_dir_page(NULL, dir, pos, 1, &chain);
+                        page = ll_get_dir_page(NULL, dir, pos, &chain);
                 } else {
                         /*
                          * go into overflow page.
                          */
+                        LASSERT(le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
+                        ll_release_page(page, 1);
                 }
         }
         EXIT;

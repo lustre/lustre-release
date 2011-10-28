@@ -48,7 +48,6 @@
 #include <lustre_lite.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_dlm.h>
-#include <lustre_mdc.h>
 //#include <lustre_ver.h>
 //#include <lustre_version.h>
 

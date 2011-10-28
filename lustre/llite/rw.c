@@ -61,7 +61,6 @@
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
-//#include <lustre_mdc.h>
 #include <lustre_lite.h>
 #include <obd_cksum.h>
 #include "llite_internal.h"

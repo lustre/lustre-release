@@ -50,6 +50,7 @@
 /* for struct cl_lock_descr and struct cl_io */
 #include <cl_object.h>
 #include <lclient.h>
+#include <lustre_mdc.h>
 
 #ifndef FMODE_EXEC
 #define FMODE_EXEC 0
@@ -594,16 +595,11 @@ static void lprocfs_llite_init_vars(struct lprocfs_static_vars *lvars)
 
 
 /* llite/dir.c */
-static inline void ll_put_page(struct page *page)
-{
-        kunmap(page);
-        page_cache_release(page);
-}
-
+void ll_release_page(struct page *page, int remove);
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
 struct page *ll_get_dir_page(struct file *filp, struct inode *dir, __u64 hash,
-                             int exact, struct ll_dir_chain *chain);
+                             struct ll_dir_chain *chain);
 int ll_readdir(struct file *filp, void *cookie, filldir_t filldir);
 
 int ll_get_mdt_idx(struct inode *inode);
@@ -702,16 +698,11 @@ int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg);
 int ll_fid2path(struct obd_export *exp, void *arg);
 
 /* llite/dcache.c */
-/* llite/namei.c */
-/**
- * protect race ll_find_aliases vs ll_revalidate_it vs ll_unhash_aliases
- */
 int ll_dops_init(struct dentry *de, int block, int init_sa);
 extern cfs_spinlock_t ll_lookup_lock;
 extern struct dentry_operations ll_d_ops;
 void ll_intent_drop_lock(struct lookup_intent *);
 void ll_intent_release(struct lookup_intent *);
-int ll_drop_dentry(struct dentry *dentry);
 int ll_drop_dentry(struct dentry *dentry);
 void ll_unhash_aliases(struct inode *);
 void ll_frob_intent(struct lookup_intent **itp, struct lookup_intent *deft);
@@ -1153,7 +1144,6 @@ struct ll_statahead_info {
         cfs_list_t              sai_entries_sent;     /* entries sent out */
         cfs_list_t              sai_entries_received; /* entries returned */
         cfs_list_t              sai_entries_stated;   /* entries stated */
-        pid_t                   sai_pid;        /* pid of statahead itself */
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry, int lookup);
