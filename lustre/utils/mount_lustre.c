@@ -726,8 +726,6 @@ int main(int argc, char *const argv[])
                                 argv[0], source);
         }
 
-        register_service_tags(usource, source, target);
-
         if (!fake) {
                 /* flags and target get to lustre_get_sb, but not
                    lustre_fill_super.  Lustre ignores the flags, but mount

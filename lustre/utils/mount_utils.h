@@ -42,6 +42,5 @@
 void fatal(void);
 int run_command(char *, int);
 int get_mountdata(char *, struct lustre_disk_data *);
-void register_service_tags(char *, char *, char *);
 
 #endif

@@ -28,6 +28,7 @@
 /*
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2012 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -161,116 +162,4 @@ out_rmdir:
         }
 
         return ret;
-}
-
-#define PARENT_URN "urn:uuid:2bb5bdbf-6c4b-11dc-9b8e-080020a9ed93"
-#define PARENT_PRODUCT "Lustre"
-
-static int stclient(char *type, char *arch)
-{
-
-        char product[64];
-        char *urn = NULL;
-        char cmd[1024];
-        FILE *fp;
-        int i;
-
-        if (strcmp(type, "Client") == 0)
-                urn = CLIENT_URN;
-        else if (strcmp(type, "MDS") == 0)
-                urn = MDS_URN;
-        else if (strcmp(type, "MGS") == 0)
-                urn = MGS_URN;
-        else if (strcmp(type, "OSS") == 0)
-                urn = OSS_URN;
-
-        snprintf(product, 64, "Lustre %s %d.%d.%d", type, LUSTRE_MAJOR,
-                 LUSTRE_MINOR, LUSTRE_PATCH);
-
-        /* need to see if the entry exists first */
-        snprintf(cmd, 1024,
-                 "/opt/sun/servicetag/bin/stclient -f -t '%s' ", urn);
-        fp = popen(cmd, "r");
-        if (!fp) {
-                if (verbose)
-                        fprintf(stderr, "%s: trying to run stclient -f: %s\n",
-                                progname, strerror(errno));
-                return 0;
-        }
-
-        i = fread(cmd, 1, sizeof(cmd), fp);
-        if (i) {
-                cmd[i] = 0;
-                if (strcmp(cmd, "Record not found\n") != 0) {
-                        /* exists, just return */
-                        pclose(fp);
-                        return 0;
-                }
-        }
-        pclose(fp);
-
-        snprintf(cmd, 1024, "/opt/sun/servicetag/bin/stclient -a -p '%s' "
-                 "-e %d.%d.%d -t '%s' -S mount -F '%s' -P '%s' -m SUN "
-                 "-A %s -z global", product, LUSTRE_MAJOR, LUSTRE_MINOR,
-                 LUSTRE_PATCH, urn, PARENT_URN, PARENT_PRODUCT, arch);
-
-        return(run_command(cmd, sizeof(cmd)));
-}
-
-void register_service_tags(char *usource, char *source, char *target)
-{
-        struct lustre_disk_data mo_ldd;
-        struct utsname utsname_buf;
-        struct stat stat_buf;
-        char stclient_loc[] = "/opt/sun/servicetag/bin/stclient";
-        int rc;
-
-        rc = stat(stclient_loc, &stat_buf);
-
-        if (rc) {
-                if (errno != ENOENT && verbose) {
-                        fprintf(stderr,
-                                "%s: trying to stat stclient failed: %s\n",
-                                progname, strerror(errno));
-                }
-
-                return;
-        }
-
-        /* call service tags stclient to show Lustre is in use on this system */
-        rc = uname(&utsname_buf);
-        if (rc) {
-                if (verbose)
-                        fprintf(stderr,
-                                "%s: trying to get uname failed: %s, "
-                                "inventory tags will not be created\n",
-                                progname, strerror(errno));
-                return;
-        }
-
-        /* client or server? */
-        if (strchr(usource, ':')) {
-                stclient("Client", utsname_buf.machine);
-        } else {
-                /* first figure what type of device it is */
-                rc = get_mountdata(source, &mo_ldd);
-                if (rc) {
-                        if (verbose)
-                                fprintf(stderr,
-                                        "%s: trying to read mountdata from %s "
-                                        "failed: %s, inventory tags will not "
-                                        "be created\n",
-                                        progname, target, strerror(errno));
-                        return;
-                }
-
-                if (IS_MDT(&mo_ldd))
-                        stclient("MDS", utsname_buf.machine);
-
-                if (IS_MGS(&mo_ldd))
-                        stclient("MGS", utsname_buf.machine);
-
-                if (IS_OST(&mo_ldd))
-                        stclient("OSS", utsname_buf.machine);
-        }
 }
