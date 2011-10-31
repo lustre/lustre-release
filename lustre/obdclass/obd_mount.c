@@ -1739,7 +1739,7 @@ static int server_fill_super_common(struct super_block *sb)
         sb->s_blocksize = 4096;
         sb->s_blocksize_bits = log2(sb->s_blocksize);
         sb->s_magic = LUSTRE_SUPER_MAGIC;
-        sb->s_maxbytes = 0; //PAGE_CACHE_MAXBYTES;
+        sb->s_maxbytes = 0; /* we don't allow file IO on server mountpoints */
         sb->s_flags |= MS_RDONLY;
         sb->s_op = &server_ops;
 

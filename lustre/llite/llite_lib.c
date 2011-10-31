@@ -316,20 +316,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         sb->s_blocksize = osfs->os_bsize;
         sb->s_blocksize_bits = log2(osfs->os_bsize);
         sb->s_magic = LL_SUPER_MAGIC;
-
-        /* for bug 11559. in $LINUX/fs/read_write.c, function do_sendfile():
-         *         retval = in_file->f_op->sendfile(...);
-         *         if (*ppos > max)
-         *                 retval = -EOVERFLOW;
-         *
-         * it will check if *ppos is greater than max. However, max equals to
-         * s_maxbytes, which is a negative integer in a x86_64 box since loff_t
-         * has been defined as a signed long long integer in linux kernel. */
-#if BITS_PER_LONG == 64
-        sb->s_maxbytes = PAGE_CACHE_MAXBYTES >> 1;
-#else
-        sb->s_maxbytes = PAGE_CACHE_MAXBYTES;
-#endif
+        sb->s_maxbytes = MAX_LFS_FILESIZE;
         sbi->ll_namelen = osfs->os_namelen;
         sbi->ll_max_rw_chunk = LL_DEFAULT_MAX_RW_CHUNK;
 
@@ -857,6 +844,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_inode_magic = LLI_INODE_MAGIC;
         lli->lli_flags = 0;
         lli->lli_ioepoch = 0;
+        lli->lli_maxbytes = MAX_LFS_FILESIZE;
         cfs_spin_lock_init(&lli->lli_lock);
         lli->lli_posix_acl = NULL;
         lli->lli_remote_perms = NULL;
@@ -893,7 +881,6 @@ void ll_lli_init(struct ll_inode_info *lli)
                 cfs_sema_init(&lli->lli_size_sem, 1);
                 lli->lli_size_sem_owner = NULL;
                 lli->lli_symlink_name = NULL;
-                lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 cfs_init_rwsem(&lli->lli_trunc_sem);
                 cfs_mutex_init(&lli->lli_write_mutex);
                 lli->lli_async_rc = 0;
@@ -1337,9 +1324,18 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETATTR, 1);
 
         if (ia_valid & ATTR_SIZE) {
+                /* Check new size against VFS/VM file size limit and rlimit */
+                rc = inode_newsize_ok(inode, attr->ia_size);
+                if (rc)
+                        RETURN(rc);
+
+                /* The maximum Lustre file size is variable, based on the
+                 * OST maximum object size and number of stripes.  This
+                 * needs another check in addition to the VFS check above. */
                 if (attr->ia_size > ll_file_maxbytes(inode)) {
-                        CDEBUG(D_INODE, "file too large %llu > "LPU64"\n",
-                               attr->ia_size, ll_file_maxbytes(inode));
+                        CDEBUG(D_INODE,"file "DFID" too large %llu > "LPU64"\n",
+                               PFID(&lli->lli_fid), attr->ia_size,
+                               ll_file_maxbytes(inode));
                         RETURN(-EFBIG);
                 }
 
@@ -1416,12 +1412,12 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
         if (ia_valid & (ATTR_SIZE |
                         ATTR_ATIME | ATTR_ATIME_SET |
                         ATTR_MTIME | ATTR_MTIME_SET))
-                /* on truncate and utimes send attributes to osts, setting
-                 * mtime/atime to past will be performed under PW 0:EOF extent
-                 * lock (new_size:EOF for truncate)
-                 * it may seem excessive to send mtime/atime updates to osts
-                 * when not setting times to past, but it is necessary due to
-                 * possible time de-synchronization */
+                /* For truncate and utimes sending attributes to OSTs, setting
+                 * mtime/atime to the past will be performed under PW [0:EOF]
+                 * extent lock (new_size:EOF for truncate).  It may seem
+                 * excessive to send mtime/atime updates to OSTs when not
+                 * setting times to past, but it is necessary due to possible
+                 * time de-synchronization between MDT inode and OST objects */
                 rc = ll_setattr_ost(inode, attr);
         EXIT;
 out:
@@ -1622,8 +1618,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         cfs_spin_unlock(&lli->lli_lock);
                         cfs_mutex_unlock(&lli->lli_och_mutex);
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
-                        if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
-                                lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+                        if (lli->lli_maxbytes > MAX_LFS_FILESIZE)
+                                lli->lli_maxbytes = MAX_LFS_FILESIZE;
                 } else {
                         cfs_mutex_unlock(&lli->lli_och_mutex);
                         LASSERT(lli->lli_smd->lsm_magic == lsm->lsm_magic &&

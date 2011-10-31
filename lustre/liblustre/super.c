@@ -153,8 +153,8 @@ void llu_update_inode(struct inode *inode, struct lustre_md *md)
                         cl_file_inode_init(inode, md);
                         lli->lli_smd = lsm;
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
-                        if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
-                                lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+                        if (lli->lli_maxbytes > MAX_LFS_FILESIZE)
+                                lli->lli_maxbytes = MAX_LFS_FILESIZE;
                 } else {
                         if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
                                 CERROR("lsm mismatch for inode %lld\n",
