@@ -175,8 +175,6 @@ static int lut_last_rcvd_write(const struct lu_env *env, struct lu_target *lut,
  */
 int lut_client_alloc(struct obd_export *exp)
 {
-        LASSERT(exp != exp->exp_obd->obd_self_export);
-
         OBD_ALLOC_PTR(exp->exp_target_data.ted_lcd);
         if (exp->exp_target_data.ted_lcd == NULL)
                 RETURN(-ENOMEM);
@@ -193,8 +191,6 @@ void lut_client_free(struct obd_export *exp)
 {
         struct tg_export_data *ted = &exp->exp_target_data;
         struct lu_target *lut = class_exp2tgt(exp);
-
-        LASSERT(exp != exp->exp_obd->obd_self_export);
 
         OBD_FREE_PTR(ted->ted_lcd);
         ted->ted_lcd = NULL;
