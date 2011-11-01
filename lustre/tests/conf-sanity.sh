@@ -2454,6 +2454,8 @@ test_52() {
 	[ $? -eq 0 ] || { error "Unable to stop ost1"; return 11; }
 
 	echo mount ost1 as ldiskfs
+	do_node $ost1node mkdir -p $ost1mnt
+	[ $? -eq 0 ] || { error "Unable to create $ost1mnt"; return 23; }
 	do_node $ost1node mount -t $FSTYPE $ost1_dev $ost1mnt $OST_MOUNT_OPTS
 	[ $? -eq 0 ] || { error "Unable to mount ost1 as ldiskfs"; return 12; }
 
