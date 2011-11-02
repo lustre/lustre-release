@@ -250,6 +250,8 @@ void ptlrpcd_add_req(struct ptlrpc_request *req, pdl_policy_t policy, int idx)
                 cfs_spin_unlock(&req->rq_lock);
                 l_wait_event(req->rq_set_waitq, (req->rq_set == NULL), &lwi);
         } else if (req->rq_set) {
+                /* If we have a vaid "rq_set", just reuse it to avoid double
+                 * linked. */
                 LASSERT(req->rq_phase == RQ_PHASE_NEW);
                 LASSERT(req->rq_send_state == LUSTRE_IMP_REPLAY);
 
@@ -330,6 +332,8 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
                 rc = cfs_atomic_read(&set->set_new_count);
 
 #ifdef __KERNEL__
+                /* If we have nothing to do, check whether we can take some
+                 * work from our partner threads. */
                 if (rc == 0 && pc->pc_npartners > 0) {
                         struct ptlrpcd_ctl *partner;
                         struct ptlrpc_request_set *ps;
