@@ -86,6 +86,7 @@ static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
 static int lfs_df(int argc, char **argv);
+static int lfs_getname(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 static int lfs_catinfo(int argc, char **argv);
 #ifdef HAVE_SYS_QUOTA_H
@@ -169,6 +170,9 @@ command_t cmdlist[] = {
          "report filesystem disk space usage or inodes usage"
          "of each MDS and all OSDs or a batch belonging to a specific pool .\n"
          "Usage: df [-i] [-h] [--pool|-p <fsname>[.<pool>] [path]"},
+        {"getname", lfs_getname, 0, "list instances and specified mount points "
+         "[for specified path only]\n"
+         "Usage: getname [-h]|[path ...] "},
 #ifdef HAVE_SYS_QUOTA_H
         {"quotachown",lfs_quotachown, 0,
          "Change files' owner or group on the specified filesystem.\n"
@@ -1160,6 +1164,46 @@ static int lfs_df(int argc, char **argv)
                 mntdir[0] = '\0'; /* avoid matching in next loop */
         }
 
+        return rc;
+}
+
+static int lfs_getname(int argc, char **argv)
+{
+        char mntdir[PATH_MAX] = "", path[PATH_MAX] = "", fsname[PATH_MAX] = "";
+        int rc = 0, index = 0, c;
+        char buf[sizeof(struct obd_uuid)];
+
+        optind = 0;
+        while ((c = getopt(argc, argv, "h")) != -1)
+                return CMD_HELP;
+
+        if (optind == argc) { /* no paths specified, get all paths. */
+                while (!llapi_search_mounts(path, index++, mntdir, fsname)) {
+                        rc = llapi_getname(mntdir, buf, sizeof(buf));
+                        if (rc < 0) {
+                                fprintf(stderr,
+                                        "cannot get name for `%s': %s\n",
+                                        mntdir, strerror(-rc));
+                                break;
+                        }
+
+                        printf("%s %s\n", buf, mntdir);
+
+                        path[0] = fsname[0] = mntdir[0] = 0;
+                }
+        } else { /* paths specified, only attempt to search these. */
+                for (; optind < argc; optind++) {
+                        rc = llapi_getname(argv[optind], buf, sizeof(buf));
+                        if (rc < 0) {
+                                fprintf(stderr,
+                                        "cannot get name for `%s': %s\n",
+                                        argv[optind], strerror(-rc));
+                                break;
+                        }
+
+                        printf("%s %s\n", buf, argv[optind]);
+                }
+        }
         return rc;
 }
 
