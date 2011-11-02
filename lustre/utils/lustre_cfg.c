@@ -77,13 +77,26 @@ static char * lcfg_devname;
 
 int lcfg_set_devname(char *name)
 {
+        char *ptr;
+        int digit = 1;
+
         if (name) {
                 if (lcfg_devname)
                         free(lcfg_devname);
                 /* quietly strip the unnecessary '$' */
                 if (*name == '$' || *name == '%')
                         name++;
-                if (isdigit(*name)) {
+
+                ptr = name;
+                while (*ptr != '\0') {
+                        if (!isdigit(*ptr)) {
+                            digit = 0;
+                            break;
+                        }
+                        ptr++;
+                }
+
+                if (digit) {
                         /* We can't translate from dev # to name */
                         lcfg_devname = NULL;
                 } else {
