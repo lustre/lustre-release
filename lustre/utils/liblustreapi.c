@@ -664,6 +664,31 @@ int llapi_search_fsname(const char *pathname, char *fsname)
         return rc;
 }
 
+int llapi_getname(const char *path, char *buf, size_t size)
+{
+        struct obd_uuid uuid_buf;
+        char *uuid = uuid_buf.uuid;
+        int rc, nr;
+
+        memset(&uuid_buf, 0, sizeof(uuid_buf));
+        rc = llapi_file_get_lov_uuid(path, &uuid_buf);
+        if (rc)
+                return rc;
+
+        /* We want to turn lustre-clilov-ffff88002738bc00 into
+         * lustre-ffff88002738bc00. */
+
+        nr = snprintf(buf, size, "%.*s-%s",
+                      (int) (strlen(uuid) - 24), uuid,
+                      uuid + strlen(uuid) - 16);
+
+        if (nr >= size)
+                rc = -ENAMETOOLONG;
+
+        return rc;
+}
+
+
 /* return the first file matching this pattern */
 static int first_match(char *pattern, char *buffer)
 {

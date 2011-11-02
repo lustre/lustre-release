@@ -1757,6 +1757,7 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
 #endif
         struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
         int flags;
+
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%x\n", inode->i_ino,
@@ -1835,7 +1836,6 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
         }
         case OBD_IOC_FID2PATH:
                 RETURN(ll_fid2path(ll_i2mdexp(inode), (void *)arg));
-
         case LL_IOC_GET_MDTIDX: {
                 int mdtidx;
 
@@ -1846,6 +1846,16 @@ int ll_file_ioctl(struct inode *inode, struct file *file, unsigned int cmd,
                 if (put_user((int)mdtidx, (int*)arg))
                         RETURN(-EFAULT);
 
+                RETURN(0);
+        }
+        case OBD_IOC_GETNAME: {
+                struct obd_device *obd =
+                                class_exp2obd(ll_i2sbi(inode)->ll_dt_exp);
+                if (!obd)
+                        RETURN(-EFAULT);
+                if (cfs_copy_to_user((void *)arg, obd->obd_name,
+                                     strlen(obd->obd_name) + 1))
+                        RETURN(-EFAULT);
                 RETURN(0);
         }
 
