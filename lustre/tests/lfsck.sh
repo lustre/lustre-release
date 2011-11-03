@@ -106,7 +106,7 @@ get_ost_node() {
     local ost_node
     local node
 
-    ost_uuid=$($LFS osts | grep "^$obdidx: " | cut -d' ' -f2 | head -n1)
+    ost_uuid=$(ostuuid_from_index $obdidx)
 
     for node in $(osts_nodes); do
         do_node $node "lctl get_param -n obdfilter.*.uuid" | grep -q $ost_uuid
@@ -124,10 +124,8 @@ get_ost_dev() {
     local ost_name
     local ost_dev
 
-    ost_name=$($LFS osts | grep "^$obdidx: " | cut -d' ' -f2 | \
-                head -n1 | sed -e 's/_UUID$//')
-
-    ost_dev=$(do_node $node "lctl get_param -n obdfilter.$ost_name.mntdev")
+    ost_name=$(ostname_from_index $obdidx)
+    ost_dev=$(do_node $node "lctl get_param -n obdfilter.${ost_name}.mntdev")
     [ ${PIPESTATUS[0]} -ne 0 ] && \
         echo "failed to find the OST device with index $obdidx on $facet" && \
         return 1

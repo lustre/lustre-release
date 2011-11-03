@@ -1706,7 +1706,7 @@ test_67b() #bug 3055
     CONN1=$(lctl get_param -n osc.*.stats | awk '/_connect/ {total+=$2} END {print total}')
 
     # exhaust precreations on ost1
-    local OST=$(lfs osts | grep ^0": " | awk '{print $2}' | sed -e 's/_UUID$//')
+    local OST=$(ostname_from_index 0)
     local mdtosc=$(get_mdtosc_proc_path mds $OST)
     local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
         osc.$mdtosc.prealloc_last_id)
@@ -2142,7 +2142,7 @@ test_88() { #bug 17485
     replay_barrier $SINGLEMDS
 
     # exhaust precreations on ost1
-    local OST=$(lfs osts | grep ^0": " | awk '{print $2}' | sed -e 's/_UUID$//')
+    local OST=$(ostname_from_index 0)
     local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $OST)
     local last_id=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_last_id)
     local next_id=$(do_facet $SINGLEMDS lctl get_param -n osc.$mdtosc.prealloc_next_id)
