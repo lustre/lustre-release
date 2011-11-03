@@ -364,7 +364,7 @@ enum {
          *
          * XXX overflow is not handled correctly.
          */
-        LU_CDEBUG_LINE = 256
+        LU_CDEBUG_LINE = 512
 };
 
 struct lu_cdebug_data {
