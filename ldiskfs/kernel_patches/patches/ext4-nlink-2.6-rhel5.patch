@@ -1,0 +1,14 @@
+Index: linux-stage/fs/ext4/namei.c
+===================================================================
+--- linux-stage.orig/fs/ext4/namei.c
++++ linux-stage/fs/ext4/namei.c
+@@ -1709,9 +1709,8 @@ static void ext4_inc_count(handle_t *han
+  */
+ static void ext4_dec_count(handle_t *handle, struct inode *inode)
+ {
+-	drop_nlink(inode);
+-	if (S_ISDIR(inode->i_mode) && inode->i_nlink == 0)
+-		inc_nlink(inode);
++	if (!S_ISDIR(inode->i_mode) || inode->i_nlink > 2)
++		drop_nlink(inode);
+ }
