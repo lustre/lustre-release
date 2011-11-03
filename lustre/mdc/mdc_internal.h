@@ -28,6 +28,9 @@
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2011 Whamcloud, Inc.
+ *
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -79,7 +82,7 @@ void mdc_exit_request(struct client_obd *cli);
 
 /* mdc/mdc_locks.c */
 int mdc_set_lock_data(struct obd_export *exp,
-                      __u64 *lockh, void *data, __u32 *bits);
+                      __u64 *lockh, void *data, __u64 *bits);
 
 int mdc_change_cbdata(struct obd_export *exp, const struct lu_fid *fid,
                       ldlm_iterator_t it, void *data);

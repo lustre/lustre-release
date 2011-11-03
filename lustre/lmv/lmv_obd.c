@@ -2885,7 +2885,7 @@ static int lmv_cancel_unused(struct obd_export *exp, const struct lu_fid *fid,
 }
 
 int lmv_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
-                      __u32 *bits)
+                      __u64 *bits)
 {
         struct obd_device       *obd = exp->exp_obd;
         struct lmv_obd          *lmv = &obd->u.lmv;

@@ -375,8 +375,7 @@ void ll_lookup_finish_locks(struct lookup_intent *it, struct dentry *dentry)
 
                 CDEBUG(D_DLMTRACE, "setting l_data to inode %p (%lu/%u)\n",
                        inode, inode->i_ino, inode->i_generation);
-                md_set_lock_data(sbi->ll_md_exp, &it->d.lustre.it_lock_handle,
-                                 inode, NULL);
+                ll_set_lock_data(sbi->ll_md_exp, inode, it, NULL);
         }
 
         /* drop lookup or getattr locks immediately */
@@ -582,11 +581,15 @@ out:
                 /* done in ll_unhash_aliases()
                    dentry->d_flags |= DCACHE_LUSTRE_INVALID; */
         } else {
+                __u64 bits = 0;
+
                 CDEBUG(D_DENTRY, "revalidated dentry %.*s (%p) parent %p "
                        "inode %p refc %d\n", de->d_name.len,
                        de->d_name.name, de, de->d_parent, de->d_inode,
                        atomic_read(&de->d_count));
-                if (de->d_flags & DCACHE_LUSTRE_INVALID) {
+                ll_set_lock_data(exp, de->d_inode, it, &bits);
+                if (de->d_flags & DCACHE_LUSTRE_INVALID &&
+                    bits & MDS_INODELOCK_LOOKUP) {
                         lock_dentry(de);
                         de->d_flags &= ~DCACHE_LUSTRE_INVALID;
                         unlock_dentry(de);

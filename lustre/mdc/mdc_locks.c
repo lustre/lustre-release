@@ -118,7 +118,7 @@ EXPORT_SYMBOL(it_open_error);
 
 /* this must be called on a lockh that is known to have a referenced lock */
 int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
-                      __u32 *bits)
+                      __u64 *bits)
 {
         struct ldlm_lock *lock;
         ENTRY;
@@ -126,10 +126,8 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
         if(bits)
                 *bits = 0;
 
-        if (!*lockh) {
-                EXIT;
+        if (!*lockh)
                 RETURN(0);
-        }
 
         lock = ldlm_handle2lock((struct lustre_handle *)lockh);
 

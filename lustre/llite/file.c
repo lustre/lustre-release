@@ -401,9 +401,8 @@ static int ll_intent_file_open(struct file *file, void *lmm,
 
         rc = ll_prep_inode(&file->f_dentry->d_inode, req, NULL);
         if (!rc && itp->d.lustre.it_lock_mode)
-                md_set_lock_data(sbi->ll_md_exp,
-                                 &itp->d.lustre.it_lock_handle,
-                                 file->f_dentry->d_inode, NULL);
+                ll_set_lock_data(sbi->ll_md_exp, file->f_dentry->d_inode,
+                                 itp, NULL);
 
 out:
         ptlrpc_req_finished(itp->d.lustre.it_data);

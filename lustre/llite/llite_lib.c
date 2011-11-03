@@ -140,8 +140,8 @@ static struct ll_sb_info *ll_init_sbi(void)
 
         /* metadata statahead is enabled by default */
         sbi->ll_sa_max = LL_SA_RPC_DEF;
-        atomic_set(&sbi->ll_sa_total, 0);
-        atomic_set(&sbi->ll_sa_wrong, 0);
+        cfs_atomic_set(&sbi->ll_sa_total, 0);
+        cfs_atomic_set(&sbi->ll_sa_wrong, 0);
 
         RETURN(sbi);
 }
@@ -874,6 +874,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         cfs_sema_init(&lli->lli_rmtperm_sem, 1);
         CFS_INIT_LIST_HEAD(&lli->lli_oss_capas);
         cfs_spin_lock_init(&lli->lli_sa_lock);
+        lli->lli_clob = NULL;
         cfs_sema_init(&lli->lli_readdir_sem, 1);
         fid_zero(&lli->lli_pfid);
 }
@@ -1724,8 +1725,8 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         struct ll_inode_info *lli = ll_i2info(inode);
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n",
-               inode->i_ino, inode->i_generation, inode);
+        CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
+               PFID(&lli->lli_fid), inode);
 
         ll_lli_init(lli);
 
