@@ -1,0 +1,26 @@
+While the stripe in-memory must be in-sync, the stripe on disk might not be
+because if we computed a block rather than reading it from an in-sync disk,
+the in-memory stripe can be different from the on-disk stripe.
+
+If this bug were still in mainline I would probably want a bigger patch which
+would leave this code but also set R5_LOCKED on all blocks that have been
+computed.  But as it is a stablisation patch, the above is simple and more
+clearly correct.
+
+Thanks for you patience - I look forward to your success/failure report.
+
+NeilBrown
+
+diff -up /drivers/md/raid5.c
+===========================================
+--- a/drivers/md/raid5.c
++++ b/drivers/md/raid5.c
+@@ -2466,8 +2466,6 @@
+					locked++;
+					set_bit(R5_Wantwrite, &sh->dev[i].flags);
+				}
+-			/* after a RECONSTRUCT_WRITE, the stripe MUST be in-sync */
+-			set_bit(STRIPE_INSYNC, &sh->state);
+
+			if (test_and_clear_bit(STRIPE_PREREAD_ACTIVE, &sh->state)) {
+				atomic_dec(&conf->preread_active_stripes);
