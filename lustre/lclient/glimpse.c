@@ -80,6 +80,30 @@ static const struct cl_lock_descr whole_file = {
         .cld_mode  = CLM_READ
 };
 
+/*
+ * Check whether file has possible unwriten pages.
+ *
+ * \retval 1    file is mmap-ed or has dirty pages
+ *         0    otherwise
+ */
+blkcnt_t dirty_cnt(struct inode *inode)
+{
+        blkcnt_t cnt = 0;
+#ifdef __KERNEL__
+        struct ccc_object *vob = cl_inode2ccc(inode);
+        void              *results[1];
+
+        if (inode->i_mapping != NULL)
+                cnt += radix_tree_gang_lookup_tag(&inode->i_mapping->page_tree,
+                                                  results, 0, 1,
+                                                  PAGECACHE_TAG_DIRTY);
+        if (cnt == 0 && cfs_atomic_read(&vob->cob_mmap_cnt) > 0)
+                cnt = 1;
+
+#endif
+        return (cnt > 0) ? 1 : 0;
+}
+
 int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                     struct inode *inode, struct cl_object *clob)
 {
@@ -124,18 +148,29 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                         lock = cl_lock_request(env, io, descr, "glimpse",
                                                cfs_current());
                         cio->cui_glimpse = 0;
-                        if (!IS_ERR(lock)) {
-                                result = cl_wait(env, lock);
-                                if (result == 0) {
-                                        cl_merge_lvb(inode);
-                                        cl_unuse(env, lock);
+
+                        if (IS_ERR(lock))
+                                RETURN(PTR_ERR(lock));
+
+                        result = cl_wait(env, lock);
+                        if (result == 0) {
+                                cl_merge_lvb(inode);
+                                if (cl_isize_read(inode) > 0 &&
+                                    inode->i_blocks == 0) {
+                                        /*
+                                         * LU-417: Add dirty pages block count
+                                         * lest i_blocks reports 0, some "cp" or
+                                         * "tar" may think it's a completely
+                                         * sparse file and skip it.
+                                         */
+                                        inode->i_blocks = dirty_cnt(inode);
                                 }
-                                cl_lock_release(env, lock,
-                                                "glimpse", cfs_current());
-                        } else
-                                result = PTR_ERR(lock);
-                } else
+                                cl_unuse(env, lock);
+                        }
+                        cl_lock_release(env, lock, "glimpse", cfs_current());
+                } else {
                         CDEBUG(D_DLMTRACE, "No objects for inode\n");
+                }
         }
 
         RETURN(result);
