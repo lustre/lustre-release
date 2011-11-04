@@ -492,7 +492,10 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_BRW_WRITE              _IOWR('f', 126, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_NAME2DEV               _IOWR('f', 127, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_UUID2DEV               _IOWR('f', 130, OBD_IOC_DATA_TYPE)
+
 #define OBD_IOC_GETNAME                _IOWR('f', 131, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_GETMDNAME              _IOR('f', 131, char[MAX_OBD_NAME])
+#define OBD_IOC_GETDTNAME               OBD_IOC_GETNAME
 
 #define OBD_IOC_LOV_GET_CONFIG         _IOWR('f', 132, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_CLIENT_RECOVER         _IOW ('f', 133, OBD_IOC_DATA_TYPE)

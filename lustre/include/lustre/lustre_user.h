@@ -157,7 +157,7 @@ struct obd_statfs {
 /* see <lustre_lib.h> for ioctl numbers 177-210 */
 
 
-#define LL_STATFS_MDC           1
+#define LL_STATFS_LMV           1
 #define LL_STATFS_LOV           2
 
 #define IOC_MDC_TYPE            'i'
@@ -169,6 +169,9 @@ struct obd_statfs {
 /* Keep these for backward compartability. */
 #define LL_IOC_OBD_STATFS       IOC_OBD_STATFS
 #define IOC_MDC_GETSTRIPE       IOC_MDC_GETFILESTRIPE
+
+
+#define MAX_OBD_NAME 128 /* If this changes, a NEW ioctl must be added */
 
 #define O_LOV_DELAY_CREATE 0100000000  /* hopefully this does not conflict */
 

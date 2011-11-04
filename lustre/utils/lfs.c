@@ -85,6 +85,7 @@ static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);
 static int lfs_getstripe(int argc, char **argv);
 static int lfs_osts(int argc, char **argv);
+static int lfs_mdts(int argc, char **argv);
 static int lfs_df(int argc, char **argv);
 static int lfs_getname(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
@@ -145,8 +146,9 @@ command_t cmdlist[] = {
          "usage: find <directory|filename> ...\n"
          "     [[!] --atime|-A [+-]N] [[!] --mtime|-M [+-]N] [[!] --ctime|-C [+-]N]\n"
          "     [--maxdepth|-D N] [[!] --name|-n <pattern>] [--print0|-P]\n"
-         "     [--print|-p] [[!] --obd|-O <uuid[s]>] [[!] --size|-s [+-]N[bkMGTP]]\n"
-         "     [[!] --type|-t <filetype>] [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
+         "     [--print|-p] [[!] --obd|-O <uuid[s]>] [[!] --mdt|-m <uuid[s]]\n"
+         "     [[!] --size|-s [+-]N[bkMGTP]] [[!] --type|-t <filetype>]\n"
+         "     [[!] --gid|-g|--group|-G <gid>|<gname>]\n"
          "     [[!] --uid|-u|--user|-U <uid>|<uname>]\n"
          "     [[!] --pool <pool>]\n"
          "\t !: used before an option indicates 'NOT' the requested attribute\n"
@@ -166,6 +168,8 @@ command_t cmdlist[] = {
          "obsolete, HEAD does not support it anymore.\n"},
         {"osts", lfs_osts, 0, "list OSTs connected to client "
          "[for specified path only]\n" "usage: osts [path]"},
+        {"mdts", lfs_mdts, 0, "list MDTs connected to client "
+         "[for specified path only]\n" "usage: mdts [path]"},
         {"df", lfs_df, 0,
          "report filesystem disk space usage or inodes usage"
          "of each MDS and all OSDs or a batch belonging to a specific pool .\n"
@@ -506,6 +510,7 @@ static int lfs_find(int argc, char **argv)
                 {"gid",       required_argument, 0, 'g'},
                 {"group",     required_argument, 0, 'G'},
                 {"mtime",     required_argument, 0, 'M'},
+                {"mdt",       required_argument, 0, 'm'},
                 {"name",      required_argument, 0, 'n'},
                 /* --obd is considered as a new option. */
                 {"obd",       required_argument, 0, 'O'},
@@ -535,8 +540,8 @@ static int lfs_find(int argc, char **argv)
 
         optind = 0;
         /* when getopt_long_only() hits '!' it returns 1, puts "!" in optarg */
-        while ((c = getopt_long_only(argc,argv,"-A:C:D:g:G:M:n:O:Ppqrs:t:u:U:v",
-                                     long_opts, NULL)) >= 0) {
+        while ((c = getopt_long_only(argc, argv, "-A:C:D:g:G:M:m:n:O:"
+                                     "Ppqrs:t:u:U:v", long_opts, NULL)) >= 0) {
                 xtime = NULL;
                 xsign = NULL;
                 if (neg_opt)
@@ -659,6 +664,7 @@ static int lfs_find(int argc, char **argv)
                         param.pattern = (char *)optarg;
                         param.exclude_pattern = !!neg_opt;
                         break;
+                case 'm':
                 case 'O': {
                         char *buf, *token, *next, *p;
                         int len = 1;
@@ -680,29 +686,42 @@ static int lfs_find(int argc, char **argv)
                                         token++;
                                 }
                         }
-
-                        param.num_alloc_obds += len;
-                        tmp = realloc(param.obduuid,
-                                      param.num_alloc_obds *
-                                      sizeof(*param.obduuid));
-                        if (tmp == NULL) {
-                                ret = -ENOMEM;
-                                free(buf);
-                                goto err;
+                        if (c == 'O') {
+                                param.exclude_obd = !!neg_opt;
+                                param.num_alloc_obds += len;
+                                tmp = realloc(param.obduuid,
+                                              param.num_alloc_obds *
+                                              sizeof(*param.obduuid));
+                                if (tmp == NULL)
+                                        GOTO(err_free, ret = -ENOMEM);
+                                param.obduuid = tmp;
+                        } else {
+                                param.exclude_mdt = !!neg_opt;
+                                param.num_alloc_mdts += len;
+                                tmp = realloc(param.mdtuuid,
+                                              param.num_alloc_mdts *
+                                              sizeof(*param.mdtuuid));
+                                if (tmp == NULL)
+                                        GOTO(err_free, ret = -ENOMEM);
+                                param.mdtuuid = tmp;
                         }
-                        param.obduuid = tmp;
-
                         for (token = buf; token && *token; token = next) {
+                                char *uuid;
+                                if (c == 'O')
+                                        uuid =
+                                          param.obduuid[param.num_obds++].uuid;
+                                else
+                                        uuid =
+                                          param.mdtuuid[param.num_mdts++].uuid;
                                 p = strchr(token, ',');
                                 next = 0;
                                 if (p) {
                                         *p = 0;
                                         next = p+1;
                                 }
-                                strcpy((char *)&param.obduuid[param.num_obds++].uuid,
-                                       token);
+                                strcpy((char *)uuid, token);
                         }
-
+err_free:
                         if (buf)
                                 free(buf);
                         break;
@@ -812,6 +831,9 @@ err:
         if (param.obduuid && param.num_alloc_obds)
                 free(param.obduuid);
 
+        if (param.mdtuuid && param.num_alloc_mdts)
+                free(param.mdtuuid);
+
         return ret;
 }
 
@@ -894,6 +916,8 @@ static int lfs_getstripe(int argc, char **argv)
                         }
                         break;
                 case 'M':
+                        if (!(param.verbose & VERBOSE_DETAIL))
+                                param.maxdepth = 0;
                         param.get_mdt_index = 1;
                         break;
                 case 'R':
@@ -929,7 +953,7 @@ static int lfs_getstripe(int argc, char **argv)
         return rc;
 }
 
-static int lfs_osts(int argc, char **argv)
+static int lfs_tgts(int argc, char **argv)
 {
         char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
         struct find_param param;
@@ -951,6 +975,9 @@ static int lfs_osts(int argc, char **argv)
                         continue;
 
                 memset(&param, 0, sizeof(param));
+                if (!strcmp(argv[0], "mdts"))
+                        param.get_lmv = 1;
+
                 rc = llapi_ostlist(mntdir, &param);
                 if (rc) {
                         fprintf(stderr, "error: %s: failed on %s\n",
@@ -962,6 +989,16 @@ static int lfs_osts(int argc, char **argv)
         }
 
         return rc;
+}
+
+static int lfs_osts(int argc, char **argv)
+{
+        return lfs_tgts(argc, argv);
+}
+
+static int lfs_mdts(int argc, char **argv)
+{
+        return lfs_tgts(argc, argv);
 }
 
 #define COOK(value)                                                     \
@@ -1071,7 +1108,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
         struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
         struct obd_uuid uuid_buf;
         char *poolname = NULL;
-        struct ll_stat_type types[] = { { LL_STATFS_MDC, "MDT" },
+        struct ll_stat_type types[] = { { LL_STATFS_LMV, "MDT" },
                                         { LL_STATFS_LOV, "OST" },
                                         { 0, NULL } };
         struct ll_stat_type *tp;
@@ -1125,7 +1162,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
 			       ishow, cooked, tp->st_name, index, rc);
 
                         if (rc == 0) {
-                                if (tp->st_op == LL_STATFS_MDC) {
+                                if (tp->st_op == LL_STATFS_LMV) {
                                         sum.os_ffree += stat_buf.os_ffree;
                                         sum.os_files += stat_buf.os_files;
                                 } else /* if (tp->st_op == LL_STATFS_LOV) */ {

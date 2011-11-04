@@ -1373,6 +1373,16 @@ int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_name)
         return rc;
 }
 
+int llapi_file_fget_lmv_uuid(int fd, struct obd_uuid *lov_name)
+{
+        int rc = ioctl(fd, OBD_IOC_GETMDNAME, lov_name);
+        if (rc) {
+                rc = -errno;
+                llapi_error(LLAPI_MSG_ERROR, rc, "error: can't get lmv name.");
+        }
+        return rc;
+}
+
 int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid)
 {
         int fd, rc;
@@ -1390,27 +1400,38 @@ int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid)
         return rc;
 }
 
+enum tgt_type {
+        LOV_TYPE = 1,
+        LMV_TYPE
+};
 /*
  * If uuidp is NULL, return the number of available obd uuids.
  * If uuidp is non-NULL, then it will return the uuids of the obds. If
  * there are more OSTs then allocated to uuidp, then an error is returned with
  * the ost_count set to number of available obd uuids.
  */
-int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
+static int llapi_get_target_uuids(int fd, struct obd_uuid *uuidp,
+                                  int *ost_count, enum tgt_type type)
 {
-        struct obd_uuid lov_name;
+        struct obd_uuid name;
         char buf[1024];
         FILE *fp;
         int rc = 0, index = 0;
 
         /* Get the lov name */
-        rc = llapi_file_fget_lov_uuid(fd, &lov_name);
-        if (rc)
-                return rc;
+        if (type == LOV_TYPE) {
+                rc = llapi_file_fget_lov_uuid(fd, &name);
+                if (rc)
+                        return rc;
+        } else {
+                rc = llapi_file_fget_lmv_uuid(fd, &name);
+                if (rc)
+                        return rc;
+        }
 
         /* Now get the ost uuids from /proc */
-        snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd",
-                 lov_name.uuid);
+        snprintf(buf, sizeof(buf), "/proc/fs/lustre/%s/%s/target_obd",
+                 type == LOV_TYPE ? "lov" : "lmv", name.uuid);
         fp = fopen(buf, "r");
         if (fp == NULL) {
                 rc = -errno;
@@ -1433,6 +1454,11 @@ int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
 
         *ost_count = index;
         return rc;
+}
+
+int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count)
+{
+        return llapi_get_target_uuids(fd, uuidp, ost_count, LOV_TYPE);
 }
 
 int llapi_get_obd_count(char *mnt, int *count, int is_mdt)
@@ -1483,7 +1509,7 @@ int llapi_uuid_match(char *real_uuid, char *search_uuid)
  * returned in param->obdindex */
 static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
 {
-        struct obd_uuid lov_uuid;
+        struct obd_uuid obd_uuid;
         char uuid[sizeof(struct obd_uuid)];
         char buf[1024];
         FILE *fp;
@@ -1492,8 +1518,11 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
         if (param->got_uuids)
                 return rc;
 
-        /* Get the lov name */
-        rc = llapi_file_fget_lov_uuid(dirfd(dir), &lov_uuid);
+        /* Get the lov/lmv name */
+        if (param->get_lmv)
+                rc = llapi_file_fget_lmv_uuid(dirfd(dir), &obd_uuid);
+        else
+                rc = llapi_file_fget_lov_uuid(dirfd(dir), &obd_uuid);
         if (rc) {
                 if (rc != -ENOTTY) {
                         llapi_error(LLAPI_MSG_ERROR, rc,
@@ -1507,8 +1536,8 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
         param->got_uuids = 1;
 
         /* Now get the ost uuids from /proc */
-        snprintf(buf, sizeof(buf), "/proc/fs/lustre/lov/%s/target_obd",
-                 lov_uuid.uuid);
+        snprintf(buf, sizeof(buf), "/proc/fs/lustre/%s/%s/target_obd",
+                 param->get_lmv ? "lmv" : "lov", obd_uuid.uuid);
         fp = fopen(buf, "r");
         if (fp == NULL) {
                 rc = -errno;
@@ -1517,7 +1546,8 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
         }
 
         if (!param->obduuid && !param->quiet && !param->obds_printed)
-                llapi_printf(LLAPI_MSG_NORMAL, "OBDS:\n");
+                llapi_printf(LLAPI_MSG_NORMAL, "%s:\n",
+                             param->get_lmv ? "MDTS" : "OBDS:");
 
         while (fgets(buf, sizeof(buf), fp) != NULL) {
                 if (sscanf(buf, "%d: %s", &index, uuid) < 2)
@@ -1550,14 +1580,17 @@ static int setup_obd_uuid(DIR *dir, char *dname, struct find_param *param)
 /* In this case, param->obduuid will be an array of obduuids and
  * obd index for all these obduuids will be returned in
  * param->obdindexes */
-static int setup_obd_indexes(DIR *dir, char *path, struct find_param *param)
+static int setup_indexes(DIR *dir, char *path, struct obd_uuid *obduuids,
+                         int num_obds, int **obdindexes, int *obdindex,
+                         enum tgt_type type)
 {
         int ret, obdcount, obd_valid = 0, obdnum, i;
         struct obd_uuid *uuids = NULL;
         char buf[16];
+        int *indexes;
 
-        ret = get_param_obdvar(NULL, path, "lov", "numobd",
-                               buf, sizeof(buf));
+        ret = get_param_obdvar(NULL, path, type == LOV_TYPE ? "lov" : "lmv",
+                               "numobd", buf, sizeof(buf));
         if (ret)
                 return ret;
 
@@ -1568,8 +1601,7 @@ static int setup_obd_indexes(DIR *dir, char *path, struct find_param *param)
                 return -ENOMEM;
 
 retry_get_uuids:
-        ret = llapi_lov_get_uuids(dirfd(dir), uuids,
-                                  &obdcount);
+        ret = llapi_get_target_uuids(dirfd(dir), uuids, &obdcount, type);
         if (ret) {
                 struct obd_uuid *uuids_temp;
 
@@ -1583,39 +1615,63 @@ retry_get_uuids:
                 }
 
                 llapi_error(LLAPI_MSG_ERROR, ret, "get ost uuid failed");
-                return ret;
+                goto out_free;
         }
 
-        param->obdindexes = malloc(param->num_obds * sizeof(param->obdindex));
-        if (param->obdindexes == NULL)
-                return -ENOMEM;
+        indexes = malloc(num_obds * sizeof(*obdindex));
+        if (indexes == NULL) {
+                ret = -ENOMEM;
+                goto out_free;
+        }
 
-        for (obdnum = 0; obdnum < param->num_obds; obdnum++) {
+        for (obdnum = 0; obdnum < num_obds; obdnum++) {
                 for (i = 0; i < obdcount; i++) {
                         if (llapi_uuid_match(uuids[i].uuid,
-                                             param->obduuid[obdnum].uuid)) {
-                                param->obdindexes[obdnum] = i;
+                                             obduuids[obdnum].uuid)) {
+                                indexes[obdnum] = i;
                                 obd_valid++;
                                 break;
                         }
                 }
                 if (i >= obdcount) {
-                        param->obdindexes[obdnum] = OBD_NOT_FOUND;
+                        indexes[obdnum] = OBD_NOT_FOUND;
                         llapi_err_noerrno(LLAPI_MSG_ERROR,
                                           "error: %s: unknown obduuid: %s",
-                                          __func__,
-                                          param->obduuid[obdnum].uuid);
+                                          __func__, obduuids[obdnum].uuid);
                         ret = -EINVAL;
                 }
         }
 
         if (obd_valid == 0)
-                param->obdindex = OBD_NOT_FOUND;
+                *obdindex = OBD_NOT_FOUND;
         else
-                param->obdindex = obd_valid;
+                *obdindex = obd_valid;
 
+        *obdindexes = indexes;
+out_free:
+        if (uuids)
+                free(uuids);
+
+        return ret;
+}
+
+static int setup_target_indexes(DIR *dir, char *path, struct find_param *param)
+{
+        int ret = 0;
+
+        if (param->mdtuuid) {
+                ret = setup_indexes(dir, path, param->mdtuuid, param->num_mdts,
+                              &param->mdtindexes, &param->mdtindex, LMV_TYPE);
+                if (ret)
+                        return ret;
+        }
+        if (param->obduuid) {
+                ret = setup_indexes(dir, path, param->obduuid, param->num_obds,
+                              &param->obdindexes, &param->obdindex, LOV_TYPE);
+                if (ret)
+                        return ret;
+        }
         param->got_uuids = 1;
-
         return ret;
 }
 
@@ -2154,6 +2210,104 @@ static int find_time_check(lstat_t *st, struct find_param *param, int mds)
         return rc;
 }
 
+/**
+ * Check whether the stripes matches the indexes user provided
+ *       1   : matched
+ *       0   : Unmatched
+ */
+static int check_obd_match(struct find_param *param)
+{
+        lstat_t *st = &param->lmd->lmd_st;
+        struct lov_user_ost_data_v1 *lmm_objects;
+        int i, j;
+
+        if (param->obduuid && param->obdindex == OBD_NOT_FOUND)
+                return 0;
+
+        if (!S_ISREG(st->st_mode))
+                return 0;
+
+        /* Only those files should be accepted, which have a
+         * stripe on the specified OST. */
+        if (!param->lmd->lmd_lmm.lmm_stripe_count)
+                return 0;
+
+        if (param->lmd->lmd_lmm.lmm_magic ==
+            LOV_USER_MAGIC_V3) {
+                struct lov_user_md_v3 *lmmv3 = (void *)&param->lmd->lmd_lmm;
+
+                lmm_objects = lmmv3->lmm_objects;
+        } else if (param->lmd->lmd_lmm.lmm_magic ==  LOV_USER_MAGIC_V1) {
+                lmm_objects = param->lmd->lmd_lmm.lmm_objects;
+        } else {
+                llapi_err_noerrno(LLAPI_MSG_ERROR, "%s:Unknown magic: 0x%08X\n",
+                                  __func__, param->lmd->lmd_lmm.lmm_magic);
+                return -EINVAL;
+        }
+
+        for (i = 0; i < param->lmd->lmd_lmm.lmm_stripe_count; i++) {
+                for (j = 0; j < param->num_obds; j++) {
+                        if (param->obdindexes[j] ==
+                            lmm_objects[i].l_ost_idx) {
+                                if (param->exclude_obd)
+                                        return 0;
+                                return 1;
+                        }
+                }
+        }
+
+        if (param->exclude_obd)
+                return 1;
+        return 0;
+}
+
+static int check_mdt_match(struct find_param *param)
+{
+        int i;
+
+        if (param->mdtuuid && param->mdtindex == OBD_NOT_FOUND)
+                return 0;
+
+        /* FIXME: For striped dir, we should get stripe information and check */
+        for (i = 0; i < param->num_mdts; i++) {
+                if (param->mdtindexes[i] == param->file_mdtindex)
+                        if (param->exclude_mdt)
+                                return 0;
+                        return 1;
+        }
+
+        if (param->exclude_mdt)
+                return 1;
+        return 0;
+}
+
+/**
+ * Check whether the obd is active or not, if it is
+ * not active, just print the object affected by this
+ * failed target
+ **/
+static int print_failed_tgt(struct find_param *param, char *path, int type)
+{
+        struct obd_statfs stat_buf;
+        struct obd_uuid uuid_buf;
+        int ret;
+
+        LASSERT(type == LL_STATFS_LOV || type == LL_STATFS_LMV);
+
+        memset(&stat_buf, 0, sizeof(struct obd_statfs));
+        memset(&uuid_buf, 0, sizeof(struct obd_uuid));
+        ret = llapi_obd_statfs(path, type,
+                               param->obdindex, &stat_buf,
+                               &uuid_buf);
+        if (ret) {
+                llapi_printf(LLAPI_MSG_NORMAL,
+                             "obd_uuid: %s failed %s ",
+                             param->obduuid->uuid,
+                             strerror(errno));
+        }
+        return ret;
+}
+
 static int cb_find_init(char *path, DIR *parent, DIR *dir,
                         void *data, cfs_dirent_t *de)
 {
@@ -2192,21 +2346,56 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 }
         }
 
-
         ret = 0;
 
         /* Request MDS for the stat info if some of these parameters need
          * to be compared. */
-        if (param->obduuid    || param->check_uid || param->check_gid ||
-            param->check_pool || param->atime     || param->ctime     ||
-            param->mtime      || param->check_size)
+        if (param->obduuid    || param->mdtuuid || param->check_uid ||
+            param->check_gid || param->check_pool || param->atime   ||
+            param->ctime     || param->mtime || param->check_size)
                 decision = 0;
+
         if (param->type && checked_type == 0)
                 decision = 0;
 
         if (param->have_fileinfo == 0 && decision == 0) {
                 ret = get_lmd_info(path, parent, dir, param->lmd,
-                                        param->lumlen);
+                                   param->lumlen);
+                if (ret == 0) {
+                        if (dir) {
+                                ret = llapi_file_fget_mdtidx(dirfd(dir),
+                                                     &param->file_mdtindex);
+                        } else {
+                                int fd;
+                                lstat_t tmp_st;
+
+                                ret = lstat_f(path, &tmp_st);
+                                if (ret) {
+                                        ret = -errno;
+                                        llapi_error(LLAPI_MSG_ERROR, ret,
+                                                    "error: %s: lstat failed"
+                                                    "for %s", __func__, path);
+                                        return ret;
+                                }
+                                if (S_ISREG(tmp_st.st_mode)) {
+                                        fd = open(path, O_RDONLY);
+                                        if (fd > 0) {
+                                                ret = llapi_file_fget_mdtidx(fd,
+                                                         &param->file_mdtindex);
+                                                close(fd);
+                                        } else {
+                                                ret = fd;
+                                        }
+                                } else {
+                                        /* For special inode, it assumes to
+                                         * reside on the same MDT with the
+                                         * parent */
+                                        fd = dirfd(parent);
+                                        ret = llapi_file_fget_mdtidx(fd,
+                                                        &param->file_mdtindex);
+                                }
+                        }
+                }
                 if (ret) {
                         if (ret == -ENOTTY)
                                 lustre_fs = 0;
@@ -2227,18 +2416,18 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
         }
 
         /* Prepare odb. */
-        if (param->obduuid) {
+        if (param->obduuid || param->mdtuuid) {
                 if (lustre_fs && param->got_uuids &&
                     param->st_dev != st->st_dev) {
                         /* A lustre/lustre mount point is crossed. */
                         param->got_uuids = 0;
                         param->obds_printed = 0;
-                        param->obdindex = OBD_NOT_FOUND;
+                        param->obdindex = param->mdtindex = OBD_NOT_FOUND;
                 }
 
                 if (lustre_fs && !param->got_uuids) {
-                        ret = setup_obd_indexes(dir ? dir : parent, path,
-                                                param);
+                        ret = setup_target_indexes(dir ? dir : parent, path,
+                                                   param);
                         if (ret)
                                 return ret;
 
@@ -2246,59 +2435,36 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 } else if (!lustre_fs && param->got_uuids) {
                         /* A lustre/non-lustre mount point is crossed. */
                         param->got_uuids = 0;
-                        param->obdindex = OBD_NOT_FOUND;
+                        param->obdindex = param->mdtindex = OBD_NOT_FOUND;
                 }
         }
 
-        /* If an OBD UUID is specified but no one matches, skip this file. */
-        if (param->obduuid && param->obdindex == OBD_NOT_FOUND)
+        if ((param->obduuid && param->obdindex == OBD_NOT_FOUND) ||
+            (param->mdtuuid && param->mdtindex == OBD_NOT_FOUND))
                 goto decided;
 
-        /* If a OST UUID is given, and some OST matches, check it here. */
-        if (param->obdindex != OBD_NOT_FOUND) {
-                if (!S_ISREG(st->st_mode))
-                        goto decided;
-
-                /* Only those files should be accepted, which have a
-                 * stripe on the specified OST. */
-                if (!param->lmd->lmd_lmm.lmm_stripe_count) {
-                        goto decided;
-                } else {
-                        int i, j;
-                        struct lov_user_ost_data_v1 *lmm_objects;
-
-                        if (param->lmd->lmd_lmm.lmm_magic ==
-                            LOV_USER_MAGIC_V3) {
-                                struct lov_user_md_v3 *lmmv3 =
-                                        (void *)&param->lmd->lmd_lmm;
-
-                                lmm_objects = lmmv3->lmm_objects;
+        /* If a OST or MDT UUID is given, and some OST matches,
+         * check it here. */
+        if (param->obdindex != OBD_NOT_FOUND ||
+            param->mdtindex != OBD_NOT_FOUND) {
+                if (param->obduuid) {
+                        if (check_obd_match(param)) {
+                                /* If no mdtuuid is given, we are done.
+                                 * Otherwise, fall through to the mdtuuid
+                                 * check below. */
+                                if (!param->mdtuuid)
+                                        goto obd_matches;
                         } else {
-                                lmm_objects = param->lmd->lmd_lmm.lmm_objects;
-                        }
-
-                        for (i = 0;
-                             i < param->lmd->lmd_lmm.lmm_stripe_count; i++) {
-                                for (j = 0; j < param->num_obds; j++) {
-                                        if (param->obdindexes[j] ==
-                                            lmm_objects[i].l_ost_idx) {
-                                                if (param->exclude_obd)
-                                                        goto decided;
-                                                break;
-                                        }
-                                }
-                                /* If an OBD matches, just break */
-                                if (j != param->num_obds)
-                                        break;
-                        }
-
-                        if (i == param->lmd->lmd_lmm.lmm_stripe_count) {
-                                if (!param->exclude_obd)
-                                        goto decided;
+                                goto decided;
                         }
                 }
+                if (param->mdtuuid) {
+                        if (check_mdt_match(param))
+                                goto obd_matches;
+                        goto decided;
+                }
         }
-
+obd_matches:
         if (param->check_uid) {
                 if (st->st_uid == param->uid) {
                         if (param->exclude_uid)
@@ -2362,30 +2528,16 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
         while (!decision) {
                 /* For regular files with the stripe the decision may have not
                  * been taken yet if *time or size is to be checked. */
-                LASSERT(S_ISREG(st->st_mode) &&
-                        param->lmd->lmd_lmm.lmm_stripe_count);
+                LASSERT((S_ISREG(st->st_mode) &&
+                        param->lmd->lmd_lmm.lmm_stripe_count) ||
+                        param->mdtindex != OBD_NOT_FOUND);
 
-                if (param->obdindex != OBD_NOT_FOUND) {
-                        /* Check whether the obd is active or not, if it is
-                         * not active, just print the object affected by this
-                         * failed ost
-                         * */
-                        struct obd_statfs stat_buf;
-                        struct obd_uuid uuid_buf;
+                if (param->obdindex != OBD_NOT_FOUND)
+                        print_failed_tgt(param, path, LL_STATFS_LOV);
 
-                        memset(&stat_buf, 0, sizeof(struct obd_statfs));
-                        memset(&uuid_buf, 0, sizeof(struct obd_uuid));
-                        ret = llapi_obd_statfs(path, LL_STATFS_LOV,
-                                               param->obdindex, &stat_buf,
-                                               &uuid_buf);
-                        if (ret) {
-                                llapi_printf(LLAPI_MSG_NORMAL,
-                                             "obd_uuid: %s failed %s ",
-                                             param->obduuid->uuid,
-                                             strerror(errno));
-                                break;
-                        }
-                }
+                if (param->mdtindex != OBD_NOT_FOUND)
+                        print_failed_tgt(param, path, LL_STATFS_LMV);
+
                 if (dir) {
                         ret = ioctl(dirfd(dir), IOC_LOV_GETINFO,
                                     (void *)param->lmd);
@@ -2451,7 +2603,7 @@ int llapi_find(char *path, struct find_param *param)
  */
 int llapi_file_fget_mdtidx(int fd, int *mdtidx)
 {
-        if (ioctl(fd, LL_IOC_GET_MDTIDX, &mdtidx) < 0)
+        if (ioctl(fd, LL_IOC_GET_MDTIDX, mdtidx) < 0)
                 return -errno;
         return 0;
 }
@@ -2502,7 +2654,7 @@ static int cb_get_mdt_index(char *path, DIR *parent, DIR *d, void *data,
                 return ret;
         }
 
-        if (param->quiet)
+        if (param->quiet || !(param->verbose & VERBOSE_DETAIL))
                 llapi_printf(LLAPI_MSG_NORMAL, "%d\n", mdtidx);
         else
                 llapi_printf(LLAPI_MSG_NORMAL, "%s MDT index: %d\n",

@@ -1477,15 +1477,9 @@ out_free:
                 OBD_FREE_PTR(qctl);
                 RETURN(rc);
         }
-        case OBD_IOC_GETNAME: {
-                struct obd_device *obd = class_exp2obd(sbi->ll_dt_exp);
-                if (!obd)
-                        RETURN(-EFAULT);
-                if (cfs_copy_to_user((void *)arg, obd->obd_name,
-                                     strlen(obd->obd_name) + 1))
-                        RETURN (-EFAULT);
-                RETURN(0);
-        }
+        case OBD_IOC_GETDTNAME:
+        case OBD_IOC_GETMDNAME:
+                RETURN(ll_get_obd_name(inode, cmd, arg));
         case LL_IOC_FLUSHCTX:
                 RETURN(ll_flush_ctx(inode));
 #ifdef CONFIG_FS_POSIX_ACL

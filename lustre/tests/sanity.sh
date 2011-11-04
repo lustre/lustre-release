@@ -3375,9 +3375,9 @@ test_56i() {
        mkdir -p $DIR/$tdir
        UUID=$(ostuuid_from_index 0 $DIR/$tdir)
        OUT=$($LFIND -obd $UUID $DIR/$tdir)
-       [ "$OUT" ] && error "$LFIND returned directory '$OUT'" || true
+       [ "$OUT" ] && error "$LFIND -obd returned directory '$OUT'" || true
 }
-run_test 56i "check 'lfs find -ost UUID' skips directories ======="
+run_test 56i "check 'lfs find -obd UUID' skips directories ======="
 
 test_56j() {
 	setup_56_special $NUMFILES $NUMDIRS
@@ -3537,6 +3537,22 @@ test_56r() {
 }
 
 run_test 56r "check lfs find -size works =========================="
+
+test_56v() {
+    local FIND_MDT_IDX=0
+
+    TDIR=${tdir}g
+    rm -rf $TDIR
+    setup_56 $NUMFILES $NUMDIRS
+
+    UUID=$(mdtuuid_from_index $FIND_MDT_IDX $DIR/$TDIR)
+    for file in $($LFIND -mdt $UUID $DIR/$TDIR); do
+        file_mdt_idx=$($GETSTRIPE -M $file)
+        [ $file_mdt_idx -eq $FIND_MDT_IDX ] ||
+            error "wrong lfind -m not match getstripe -M"
+    done
+}
+run_test 56v "check 'lfs find -mdt match with lfs getstripe -M' ======="
 
 test_57a() {
 	# note test will not do anything if MDS is not local
