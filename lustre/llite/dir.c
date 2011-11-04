@@ -686,7 +686,7 @@ static struct page *ll_dir_page_locate(struct inode *dir, __u64 *hash,
                         if (*hash > *end || (*end != *start && *hash == *end)) {
                                 kunmap(page);
                                 lock_page(page);
-                                ll_truncate_complete_page(page);
+                                truncate_complete_page(page->mapping, page);
                                 unlock_page(page);
                                 page_cache_release(page);
                                 page = NULL;
@@ -777,7 +777,7 @@ static struct page *ll_get_dir_page_20(struct file *filp, struct inode *dir,
                         CDEBUG(D_INFO, "Stale readpage page %p: %#lx != %#lx\n",
                               page, (unsigned long)lhash, (unsigned long)start);
                         lock_page(page);
-                        ll_truncate_complete_page(page);
+                        truncate_complete_page(page->mapping, page);
                         unlock_page(page);
                         page_cache_release(page);
                 } else {

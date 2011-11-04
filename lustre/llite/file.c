@@ -740,7 +740,7 @@ int ll_page_removal_cb(void *data, int discard)
                 LL_CDEBUG_PAGE(D_PAGE, page, "truncating\n");
                 if (llap)
                         ll_ra_accounting(llap, page->mapping);
-                ll_truncate_complete_page(page);
+                truncate_complete_page(page->mapping, page);
         }
         EXIT;
 out:

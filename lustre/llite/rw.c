@@ -621,7 +621,7 @@ static inline int llap_shrink_cache_internal(struct ll_sb_info *sbi,
                                           ~CFS_PAGE_MASK);
                         if (!PageDirty(page) && !page_mapped(page)) {
                                 ll_ra_accounting(llap, page->mapping);
-                                ll_truncate_complete_page(page);
+                                truncate_complete_page(page->mapping, page);
                                 ++count;
                         } else {
                                 LL_CDEBUG_PAGE(D_PAGE, page,
@@ -2281,7 +2281,7 @@ int ll_readpage(struct file *filp, struct page *page)
                 /* File with no objects - one big hole */
                 /* We use this just for remove_from_page_cache that is not
                  * exported, we'd make page back up to date. */
-                ll_truncate_complete_page(page);
+                truncate_complete_page(page->mapping, page);
                 clear_page(kmap(page));
                 kunmap(page);
                 SetPageUptodate(page);
