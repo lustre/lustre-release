@@ -536,9 +536,10 @@ static inline const char *changelog_type2str(int type) {
 #define CLF_HSM_SPARE_H     15
 #define CLF_HSM_LAST        15
 
-#define CLF_GET_BITS(_b, _h, _l) \
- _b &= (0xFFFF << (CLF_HSM_LAST - _h)); \
- _b = _b >> (_l + CLF_HSM_LAST - _h)
+/* Remove bits higher than _h, then extract the value
+ * between _h and _l by shifting lower weigth to bit 0. */
+#define CLF_GET_BITS(_b, _h, _l) (((_b << (CLF_HSM_LAST - _h)) & 0xFFFF) \
+                                   >> (CLF_HSM_LAST - _h + _l))
 
 #define CLF_HSM_SUCCESS      0x00
 #define CLF_HSM_MAXERROR     0x7E
@@ -560,11 +561,7 @@ enum hsm_event {
 
 static inline enum hsm_event hsm_get_cl_event(__u16 flags)
 {
-        enum hsm_event he;
-
-        CLF_GET_BITS(flags, CLF_HSM_EVENT_H, CLF_HSM_EVENT_L);
-        he = flags;
-        return he;
+        return CLF_GET_BITS(flags, CLF_HSM_EVENT_H, CLF_HSM_EVENT_L);
 }
 
 static inline void hsm_set_cl_event(int *flags, enum hsm_event he)
@@ -574,8 +571,7 @@ static inline void hsm_set_cl_event(int *flags, enum hsm_event he)
 
 static inline __u16 hsm_get_cl_flags(int flags)
 {
-        CLF_GET_BITS(flags, CLF_HSM_FLAG_H, CLF_HSM_FLAG_L);
-        return flags;
+        return CLF_GET_BITS(flags, CLF_HSM_FLAG_H, CLF_HSM_FLAG_L);
 }
 
 static inline void hsm_set_cl_flags(int *flags, int bits)
@@ -585,8 +581,7 @@ static inline void hsm_set_cl_flags(int *flags, int bits)
 
 static inline int hsm_get_cl_error(int flags)
 {
-        CLF_GET_BITS(flags, CLF_HSM_ERR_H, CLF_HSM_ERR_L);
-        return flags;
+        return CLF_GET_BITS(flags, CLF_HSM_ERR_H, CLF_HSM_ERR_L);
 }
 
 static inline void hsm_set_cl_error(int *flags, int error)
