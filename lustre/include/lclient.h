@@ -43,6 +43,8 @@
 #ifndef LCLIENT_H
 #define LCLIENT_H
 
+blkcnt_t dirty_cnt(struct inode *inode);
+
 int cl_glimpse_size(struct inode *inode);
 int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                     struct inode *inode, struct cl_object *clob);

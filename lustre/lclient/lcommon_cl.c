@@ -427,6 +427,13 @@ int ccc_object_glimpse(const struct lu_env *env,
         lvb->lvb_mtime = cl_inode_mtime(inode);
         lvb->lvb_atime = cl_inode_atime(inode);
         lvb->lvb_ctime = cl_inode_ctime(inode);
+        /*
+         * LU-417: Add dirty pages block count lest i_blocks reports 0, some
+         * "cp" or "tar" on remote node may think it's a completely sparse file
+         * and skip it.
+         */
+        if (lvb->lvb_size > 0 && lvb->lvb_blocks == 0)
+                lvb->lvb_blocks = dirty_cnt(inode);
         RETURN(0);
 }
 
