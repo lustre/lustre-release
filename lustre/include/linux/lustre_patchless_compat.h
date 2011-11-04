@@ -61,7 +61,7 @@ static inline void ll_remove_from_page_cache(struct page *page)
 #ifdef HAVE_RW_TREE_LOCK
         write_lock_irq(&mapping->tree_lock);
 #else
-	cfs_spin_lock_irq(&mapping->tree_lock);
+	spin_lock_irq(&mapping->tree_lock);
 #endif
         radix_tree_delete(&mapping->page_tree, page->index);
         page->mapping = NULL;
@@ -71,7 +71,7 @@ static inline void ll_remove_from_page_cache(struct page *page)
 #ifdef HAVE_RW_TREE_LOCK
         write_unlock_irq(&mapping->tree_lock);
 #else
-	cfs_spin_unlock_irq(&mapping->tree_lock);
+	spin_unlock_irq(&mapping->tree_lock);
 #endif
 }
 #else /* HAVE_REMOVE_FROM_PAGE_CACHE */
