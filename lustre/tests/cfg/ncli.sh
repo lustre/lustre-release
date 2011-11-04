@@ -26,3 +26,9 @@ for i in $LOADS; do
         error "incorrect load: $i"
 done
 CLIENT_LOADS=($LOADS)
+
+# This is used when testing on SLURM environment.
+# Test will use srun when SRUN_PARTITION is set
+SRUN=${SRUN:-$(which srun 2>/dev/null)}
+SRUN_PARTITION=${SRUN_PARTITION:-""}
+SRUN_OPTIONS=${SRUN_OPTIONS:-"-W 1800 -l -O"}

@@ -8,10 +8,17 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-#              bug 20670 
+#              bug 20670
 ALWAYS_EXCEPT="parallel_grouplock $PARALLEL_SCALE_EXCEPT"
 
+# common setup
 #
+MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
+clients=${CLIENTS:-$HOSTNAME}
+generate_machine_file $clients $MACHINEFILE || error "Failed to generate machine file"
+num_clients=$(get_node_count ${clients//,/ })
+
+
 # compilbench
 #
 cbench_DIR=${cbench_DIR:-""}
@@ -29,7 +36,6 @@ fi
 METABENCH=${METABENCH:-$(which metabench 2> /dev/null || true)}
 mbench_NFILES=${mbench_NFILES:-30400}
 [ "$SLOW" = "no" ] && mbench_NFILES=10000
-MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 # threads per client
 mbench_THREADS=${mbench_THREADS:-4}
 
@@ -41,6 +47,27 @@ SIMUL=${SIMUL:=$(which simul 2> /dev/null || true)}
 simul_THREADS=${simul_THREADS:-2}
 simul_REP=${simul_REP:-20}
 [ "$SLOW" = "no" ] && simul_REP=2
+
+#
+# mib
+#
+MIB=${MIB:=$(which mib 2> /dev/null || true)}
+# threads per client
+mib_THREADS=${mib_THREADS:-2}
+mib_xferSize=${mib_xferSize:-1m}
+mib_xferLimit=${mib_xferLimit:-5000}
+mib_timeLimit=${mib_timeLimit:-300}
+
+#
+# MDTEST
+#
+MDTEST=${MDTEST:=$(which mdtest 2> /dev/null || true)}
+# threads per client
+mdtest_THREADS=${mdtest_THREADS:-2}
+mdtest_nFiles=${mdtest_nFiles:-"100000"}
+# We devide the files by number of core
+mdtest_nFiles=$((mdtest_nFiles/mdtest_THREADS/num_clients))
+mdtest_iteration=${mdtest_iteration:-1}
 
 #
 # connectathon
@@ -64,7 +91,10 @@ casc_REP=${casc_REP:-300}
 IOR=${IOR:-$(which IOR 2> /dev/null || true)}
 # threads per client
 ior_THREADS=${ior_THREADS:-2}
+ior_iteration=${ior_iteration:-1}
 ior_blockSize=${ior_blockSize:-6}	# Gb
+ior_xferSize=${ior_xferSize:-2m}
+ior_type=${ior_type:-POSIX}
 ior_DURATION=${ior_DURATION:-30}	# minutes
 [ "$SLOW" = "no" ] && ior_DURATION=5
 
@@ -98,6 +128,7 @@ check_and_setup_lustre
 get_mpiuser_id $MPI_USER
 MPI_RUNAS=${MPI_RUNAS:-"runas -u $MPI_USER_UID -g $MPI_USER_GID"}
 $GSS_KRB5 && refresh_krb5_tgt $MPI_USER_UID $MPI_USER_GID $MPI_RUNAS
+
 
 print_opts () {
     local var
@@ -144,7 +175,7 @@ test_compilebench() {
     mkdir -p $testdir
 
     local savePWD=$PWD
-    cd $cbench_DIR 
+    cd $cbench_DIR
     local cmd="./compilebench -D $testdir -i $cbench_IDIRS -r $cbench_RUNS --makej"
 
     log "$cmd"
@@ -152,7 +183,7 @@ test_compilebench() {
     local rc=0
     eval $cmd
     rc=$?
-        
+
     cd $savePWD
     [ $rc = 0 ] || error "compilebench failed: $rc"
     rm -rf $testdir
@@ -163,15 +194,8 @@ test_metabench() {
     [ x$METABENCH = x ] &&
         { skip_env "metabench not found" && return; }
 
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    num_clients=$(get_node_count ${clients//,/ })
-
     # FIXME
     # Need space estimation here.
-
-    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts METABENCH clients mbench_NFILES mbench_THREADS
 
@@ -186,7 +210,15 @@ test_metabench() {
     # -k             Cleanup.  Remove the test directories.
     local cmd="$METABENCH -w $testdir -c $mbench_NFILES -C -S -k"
     echo "+ $cmd"
-    mpi_run -np $((num_clients * $mbench_THREADS)) -machinefile ${MACHINEFILE} $cmd
+
+    # find out if we need to use srun by checking $SRUN_PARTITION
+    if [ "$SRUN_PARTITION" ]; then
+        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+            -n $((num_clients * mbench_THREADS)) -p $SRUN_PARTITION -- $cmd
+    else
+        mpi_run -np $((num_clients * $mbench_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    fi
+
     local rc=$?
     if [ $rc != 0 ] ; then
         error "metabench failed! $rc"
@@ -204,15 +236,8 @@ test_simul() {
     [ x$SIMUL = x ] &&
         { skip_env "simul not found" && return; }
 
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    local num_clients=$(get_node_count ${clients//,/ })
-
     # FIXME
     # Need space estimation here.
-
-    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts SIMUL clients simul_REP simul_THREADS
 
@@ -227,7 +252,13 @@ test_simul() {
     local cmd="$SIMUL -d $testdir -n $simul_REP -N $simul_REP"
 
     echo "+ $cmd"
-    mpi_run -np $((num_clients * $simul_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    # find out if we need to use srun by checking $SRUN_PARTITION
+    if [ "$SRUN_PARTITION" ]; then
+        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+            -n $((num_clients * simul_THREADS)) -p $SRUN_PARTITION -- $cmd
+    else
+        mpi_run -np $((num_clients * simul_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    fi
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -236,6 +267,61 @@ test_simul() {
     rm -rf $testdir
 }
 run_test simul "simul"
+
+test_mdtest() {
+    local type=${1:-"ssf"}
+
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+        return
+    fi
+
+    [ x$MDTEST = x ] &&
+        { skip_env "mdtest not found" && return; }
+
+    # FIXME
+    # Need space estimation here.
+
+    print_opts MDTEST mdtest_iteration mdtest_THREADS mdtest_nFiles
+
+    local testdir=$DIR/d0.mdtest
+    mkdir -p $testdir
+    # mpi_run uses mpiuser
+    chmod 0777 $testdir
+
+    # -i # : repeat each test # times
+    # -d   : test dir
+    # -n # : number of file/dir to create/stat/remove
+    # -u   : each process create/stat/remove individually
+
+    local cmd="$MDTEST -d $testdir -i $mdtest_iteration -n $mdtest_nFiles"
+    [ $type = "fpp" ] && cmd="$cmd -u"
+
+    echo "+ $cmd"
+    # find out if we need to use srun by checking $SRUN_PARTITION
+    if [ "$SRUN_PARTITION" ]; then
+        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+            -n $((num_clients * mdtest_THREADS)) -p $SRUN_PARTITION -- $cmd
+    else
+        mpi_run -np $((num_clients * mdtest_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    fi
+
+    local rc=$?
+    if [ $rc != 0 ] ; then
+        error "mdtest failed! $rc"
+    fi
+    rm -rf $testdir
+}
+
+test_mdtestssf() {
+    test_mdtest "ssf"
+}
+run_test mdtestssf "mdtestssf"
+
+test_mdtestfpp() {
+    test_mdtest "fpp"
+}
+run_test mdtestfpp "mdtestfpp"
 
 test_connectathon() {
     print_opts cnt_DIR cnt_NRUN
@@ -265,26 +351,26 @@ test_connectathon() {
     #    -s  special
     #    -l  lock
     #    -a  all of the above
-    #   
+    #
     # -f      a quick functionality test
-    # 
+    #
 
     tests="-b -g -s"
     # Include lock tests unless we're running on nfsv4
     local fstype=$(df -TP $testdir | awk 'NR==2  {print $2}')
     echo "$testdir: $fstype"
     if [[ $fstype != "nfs4" ]]; then
-	tests="$tests -l"
+        tests="$tests -l"
     fi
     echo "tests: $tests"
     for test in $tests; do
-	local cmd="./runtests -N $cnt_NRUN $test -f $testdir"
-	local rc=0
+        local cmd="./runtests -N $cnt_NRUN $test -f $testdir"
+        local rc=0
 
-	log "$cmd"
-	eval $cmd
-	rc=$?
-	[ $rc = 0 ] || error "connectathon failed: $rc"
+        log "$cmd"
+        eval $cmd
+        rc=$?
+        [ $rc = 0 ] || error "connectathon failed: $rc"
     done
 
     cd $savePWD
@@ -293,13 +379,10 @@ test_connectathon() {
 run_test connectathon "connectathon"
 
 test_ior() {
+    local type=${1:="ssf"}
+
     [ x$IOR = x ] &&
         { skip_env "IOR not found" && return; }
-
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    local num_clients=$(get_node_count ${clients//,/ })
 
     local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
     echo "+ $ior_blockSize * 1024 * 1024 * $num_clients * $ior_THREADS "
@@ -311,8 +394,6 @@ test_ior() {
 
         echo "free space=$space, Need: $num_clients x $ior_THREADS x $ior_blockSize Gb (blockSize reduced to $ior_blockSize Gb)"
     fi
- 
-    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
 
@@ -321,13 +402,13 @@ test_ior() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
     if [ "$NFSCLIENT" ]; then
-        setstripe_nfsserver $testdir -c -1 || 
-            { error "setstripe on nfsserver failed" && return 1; } 
+        setstripe_nfsserver $testdir -c -1 ||
+            { error "setstripe on nfsserver failed" && return 1; }
     else
         $LFS setstripe $testdir -c -1 ||
             { error "setstripe failed" && return 2; }
     fi
-    # 
+    #
     # -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)"
     # -o S  testFileName
     # -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)"
@@ -335,10 +416,18 @@ test_ior() {
     # -r    readFile -- read existing file"
     # -T    maxTimeDuration -- max time in minutes to run tests"
     # -k    keepFile -- keep testFile(s) on program exit
-    local cmd="$IOR -a POSIX -b ${ior_blockSize}g -o $testdir/iorData -t 2m -v -w -r -T $ior_DURATION -k"
+
+    local cmd="$IOR -a $ior_type -b ${ior_blockSize}g -o $testdir/iorData -t $ior_xferSize -v -w -r -i $ior_iteration -T $ior_DURATION -k"
+    [ $type = "fpp" ] && cmd="$cmd -F"
 
     echo "+ $cmd"
-    mpi_run -np $((num_clients * $ior_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    # find out if we need to use srun by checking $SRUN_PARTITION
+    if [ "$SRUN_PARTITION" ]; then
+        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+            -n $((num_clients * ior_THREADS)) -p $SRUN_PARTITION -- $cmd
+    else
+        mpi_run -np $((num_clients * $ior_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    fi
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -346,8 +435,60 @@ test_ior() {
     fi
     rm -rf $testdir
 }
-run_test ior "ior"
- 
+
+test_iorssf() {
+    test_ior "ssf"
+}
+run_test iorssf "iorssf"
+
+test_iorfpp() {
+    test_ior "fpp"
+}
+run_test iorfpp "iorfpp"
+
+test_mib() {
+    if [ "$NFSCLIENT" ]; then
+        skip "skipped for NFSCLIENT mode"
+        return
+    fi
+
+    [ x$MIB = x ] &&
+        { skip_env "MIB not found" && return; }
+
+    print_opts MIB mib_THREADS mib_xferSize mib_xferLimit mib_timeLimit MACHINEFILE
+
+    local testdir=$DIR/d0.mib
+    mkdir -p $testdir
+    # mpi_run uses mpiuser
+    chmod 0777 $testdir
+    $LFS setstripe $testdir -c -1 ||
+        { error "setstripe failed" && return 2; }
+    #
+    # -I    Show intermediate values in output
+    # -H    Show headers in output
+    # -L    Do not issue new system calls after this many seconds
+    # -s    Use system calls of this size
+    # -t    test dir
+    # -l    Issue no more than this many system calls
+    local cmd="$MIB -t $testdir -s $mib_xferSize -l $mib_xferLimit -L $mib_timeLimit -HI -p mib.$(date +%Y%m%d%H%M%S)"
+
+    echo "+ $cmd"
+    # find out if we need to use srun by checking $SRUN_PARTITION
+    if [ "$SRUN_PARTITION" ]; then
+        $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
+            -n $((num_clients * mib_THREADS)) -p $SRUN_PARTITION -- $cmd
+    else
+        mpi_run -np $((num_clients * mib_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    fi
+
+    local rc=$?
+    if [ $rc != 0 ] ; then
+        error "mib failed! $rc"
+    fi
+    rm -rf $testdir
+}
+run_test mib "mib"
+
 test_cascading_rw() {
     if [ "$NFSCLIENT" ]; then
         skip "skipped for NFSCLIENT mode"
@@ -357,15 +498,8 @@ test_cascading_rw() {
     [ x$CASC_RW = x ] &&
         { skip_env "cascading_rw not found" && return; }
 
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    num_clients=$(get_node_count ${clients//,/ })
-
     # FIXME
     # Need space estimation here.
-
-    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts CASC_RW clients casc_THREADS casc_REP MACHINEFILE
 
@@ -374,7 +508,7 @@ test_cascading_rw() {
     # mpi_run uses mpiuser
     chmod 0777 $testdir
 
-    # -g: debug mode 
+    # -g: debug mode
     # -n: repeat test # times
 
     local cmd="$CASC_RW -g -d $testdir -n $casc_REP"
@@ -396,21 +530,14 @@ test_write_append_truncate() {
         return
     fi
 
-    # location is lustre/tests dir 
+    # location is lustre/tests dir
     if ! which write_append_truncate > /dev/null 2>&1 ; then
         skip_env "write_append_truncate not found"
         return
     fi
 
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    local num_clients=$(get_node_count ${clients//,/ })
-
     # FIXME
     # Need space estimation here.
-
-    generate_machine_file $clients $MACHINEFILE || return $?
 
     local testdir=$DIR/d0.write_append_truncate
     local file=$testdir/f0.wat
@@ -444,15 +571,8 @@ test_write_disjoint() {
     [ x$WRITE_DISJOINT = x ] &&
         { skip_env "write_disjoint not found" && return; }
 
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    local num_clients=$(get_node_count ${clients//,/ })
-
     # FIXME
     # Need space estimation here.
-
-    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts WRITE_DISJOINT clients wdisjoint_THREADS wdisjoint_REP MACHINEFILE
     local testdir=$DIR/d0.write_disjoint
@@ -481,13 +601,6 @@ test_parallel_grouplock() {
 
     [ x$PARALLEL_GROUPLOCK = x ] &&
         { skip "PARALLEL_GROUPLOCK not found" && return; }
-
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    local num_clients=$(get_node_count ${clients//,/ })
-
-    generate_machine_file $clients $MACHINEFILE || return $?
 
     print_opts clients parallel_grouplock_MINTASKS MACHINEFILE
 
@@ -548,13 +661,6 @@ test_statahead () {
     [ x$MDSRATE = x ] &&
         { skip_env "mdsrate not found" && return; }
 
-    local clients=$CLIENTS
-    [ -z $clients ] && clients=$(hostname)
-
-    local num_clients=$(get_node_count ${clients//,/ })
-
-    generate_machine_file $clients $MACHINEFILE || return $?
-
     print_opts MDSRATE clients statahead_NUMMNTPTS statahead_NUMFILES
 
     # create large dir
@@ -583,9 +689,9 @@ test_statahead () {
 
     cancel_lru_locks mdc
 
-    local cmd="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir --nfiles $num_files --filefmt 'f%%d'"    
+    local cmd="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir --nfiles $num_files --filefmt 'f%%d'"
     echo "+ $cmd"
-    
+
     mpi_run -np $((num_clients * 32)) -machinefile ${MACHINEFILE} $cmd
 
     local rc=$?
