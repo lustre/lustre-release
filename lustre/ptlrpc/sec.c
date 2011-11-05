@@ -2499,7 +2499,7 @@ EXPORT_SYMBOL(sptlrpc_flavor_has_bulk);
  * initialize/finalize                  *
  ****************************************/
 
-int __init sptlrpc_init(void)
+int sptlrpc_init(void)
 {
         int rc;
 
@@ -2545,7 +2545,7 @@ out:
         return rc;
 }
 
-void __exit sptlrpc_fini(void)
+void sptlrpc_fini(void)
 {
         sptlrpc_lproc_fini();
         sptlrpc_plain_fini();

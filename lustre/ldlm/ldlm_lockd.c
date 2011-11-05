@@ -2614,7 +2614,7 @@ static int ldlm_cleanup(void)
         RETURN(0);
 }
 
-int __init ldlm_init(void)
+int ldlm_init(void)
 {
         cfs_init_mutex(&ldlm_ref_sem);
         cfs_init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
@@ -2647,7 +2647,7 @@ int __init ldlm_init(void)
         return 0;
 }
 
-void __exit ldlm_exit(void)
+void ldlm_exit(void)
 {
         int rc;
         if (ldlm_refcount)
