@@ -2247,9 +2247,16 @@ cleanup_unlocked:
         if (rc == 0)
                 rc = mdd_changelog_ns_store(env, mdd, CL_RENAME, 0, mdd_tobj,
                                             mdd_spobj, lf, lsname, handle);
-        if (rc == 0)
+        if (rc == 0) {
+                struct lu_fid zero_fid;
+                fid_zero(&zero_fid);
+                /* If the rename target exist, The CL_EXT record should save
+                 * the target fid as tfid, otherwise, use zero fid. LU-543 */
                 rc = mdd_changelog_ns_store(env, mdd, CL_EXT, 0, mdd_tobj,
-                                            mdd_tpobj, lf, ltname, handle);
+                                            mdd_tpobj,
+                                            mdd_tobj ? NULL : &zero_fid,
+                                            ltname, handle);
+        }
 
         mdd_trans_stop(env, mdd, rc, handle);
         if (mdd_sobj)
