@@ -1545,7 +1545,7 @@ obd_name() {
 
 replay_barrier() {
     local facet=$1
-    do_facet $facet sync
+    do_facet $facet "sync; sync; sync"
     df $MOUNT
 
     # make sure there will be no seq change
@@ -1561,7 +1561,7 @@ replay_barrier() {
 
 replay_barrier_nodf() {
     local facet=$1    echo running=${running}
-    do_facet $facet sync
+    do_facet $facet "sync; sync; sync"
     local svc=${facet}_svc
     echo Replay barrier on ${!svc}
     do_facet $facet $LCTL --device %${!svc} notransno
