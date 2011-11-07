@@ -376,7 +376,7 @@ void mdd_lov_create_finish(const struct lu_env *env, struct mdd_device *mdd,
                            const struct md_op_spec *spec)
 {
         if (lmm && !spec->no_create)
-                OBD_FREE(lmm, lmm_size);
+                OBD_FREE_LARGE(lmm, lmm_size);
 }
 
 int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
