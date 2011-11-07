@@ -29,6 +29,9 @@ rszhi=${rszhi:-1024}
 crglo=${crglo:-1}
 crghi=${crghi:-256}
 
+# boundary blocks between concurrent regions per device
+boundary=${boundary:-1024}
+
 # threads to share between concurrent regions per device
 # multiple threads per region simulates a deeper request queue
 # NB survey skips over #thr < #regions and #thr/#regions > SG_MAX_QUEUE
@@ -99,7 +102,7 @@ ndevs=${#devs[@]}
 
 # determine block size. This should also work for raw devices
 # If it fails, set to 512
-bs=$((`sg_readcap -b ${devs[0]} | awk '{print $2}'`))
+bs=$((`sg_readcap -lb ${devs[0]} | awk '{print $2}'`))
 if [ $bs == 0  ];then
 	echo "sg_readcap failed, setting block size to 512"
 	bs=512
@@ -152,7 +155,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		t0=`date +%s.%N`
 		for ((i=0;i<ndevs;i++)); do
 		    dev=${devs[i]}
-		    devsize=$((bs*`sg_readcap -b ${dev} | awk '{print $1}'`/1024))
+		    devsize=$((bs*`sg_readcap -lb ${dev} | awk '{print $1}'`/1024))
 		    if [ $devsize -lt $actual_size ]; then
 			_dev=$(sg_map | grep $dev | awk '{ print $2; }')
 			echo -e "device $_dev not big enough: $devsize <" \
@@ -170,7 +173,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 		    fi
 		    for ((j=0;j<crg;j++)); do 
 			sgp_dd 2> ${tmpf}_${i}_${j} \
-			    $inf $outf ${skip}=$((1024+j*blocks)) \
+			    $inf $outf ${skip}=$((boundary+j*blocks)) \
 			    thr=$((thr/crg)) count=$count bs=$bs bpt=$bpt time=1&
 		    done
 		done 
