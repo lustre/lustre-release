@@ -1896,7 +1896,7 @@ void ptlrpc_interrupted_set(void *data)
         cfs_list_t *tmp;
 
         LASSERT(set != NULL);
-        CERROR("INTERRUPTED SET %p\n", set);
+        CDEBUG(D_RPCTRACE, "INTERRUPTED SET %p\n", set);
 
         cfs_list_for_each(tmp, &set->set_requests) {
                 struct ptlrpc_request *req =
@@ -2012,6 +2012,23 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                                           ptlrpc_expired_set, set);
 
                 rc = l_wait_event(set->set_waitq, ptlrpc_check_set(NULL, set), &lwi);
+
+                /* LU-769 - if we ignored the signal because it was already
+                 * pending when we started, we need to handle it now or we risk
+                 * it being ignored forever */
+                if (rc == -ETIMEDOUT && !lwi.lwi_allow_intr &&
+                    cfs_signal_pending()) {
+                        cfs_sigset_t blocked_sigs =
+                                           cfs_block_sigsinv(LUSTRE_FATAL_SIGS);
+
+                        /* In fact we only interrupt for the "fatal" signals
+                         * like SIGINT or SIGKILL. We still ignore less
+                         * important signals since ptlrpc set is not easily
+                         * reentrant from userspace again */
+                        if (cfs_signal_pending())
+                                ptlrpc_interrupted_set(set);
+                        cfs_block_sigs(blocked_sigs);
+                }
 
                 LASSERT(rc == 0 || rc == -EINTR || rc == -ETIMEDOUT);
 
