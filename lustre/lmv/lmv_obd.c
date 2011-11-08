@@ -3075,7 +3075,7 @@ int lmv_intent_getattr_async(struct obd_export *exp,
 }
 
 int lmv_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
-                        struct lu_fid *fid)
+                        struct lu_fid *fid, __u64 *bits)
 {
         struct obd_device       *obd = exp->exp_obd;
         struct lmv_obd          *lmv = &obd->u.lmv;
@@ -3091,7 +3091,7 @@ int lmv_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
         if (IS_ERR(tgt))
                 RETURN(PTR_ERR(tgt));
 
-        rc = md_revalidate_lock(tgt->ltd_exp, it, fid);
+        rc = md_revalidate_lock(tgt->ltd_exp, it, fid, bits);
         RETURN(rc);
 }
 

@@ -1221,6 +1221,40 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
         return rc ? mode : 0;
 }
 
+ldlm_mode_t ldlm_revalidate_lock_handle(struct lustre_handle *lockh,
+                                        __u64 *bits)
+{
+        struct ldlm_lock *lock;
+        ldlm_mode_t mode = 0;
+        ENTRY;
+
+        lock = ldlm_handle2lock(lockh);
+        if (lock != NULL) {
+                lock_res_and_lock(lock);
+                if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED)
+                        GOTO(out, mode);
+
+                if (lock->l_flags & LDLM_FL_CBPENDING &&
+                    lock->l_readers == 0 && lock->l_writers == 0)
+                        GOTO(out, mode);
+
+                if (bits)
+                        *bits = lock->l_policy_data.l_inodebits.bits;
+                mode = lock->l_granted_mode;
+                ldlm_lock_addref_internal_nolock(lock, mode);
+        }
+
+        EXIT;
+
+out:
+        if (lock != NULL) {
+                unlock_res_and_lock(lock);
+                LDLM_LOCK_PUT(lock);
+        }
+        return mode;
+}
+EXPORT_SYMBOL(ldlm_revalidate_lock_handle);
+
 /* Returns a referenced lock */
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    const struct ldlm_res_id *res_id,

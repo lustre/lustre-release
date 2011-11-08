@@ -159,7 +159,7 @@ static inline void mdc_set_capa_size(struct ptlrpc_request *req,
 }
 
 int mdc_revalidate_lock(struct obd_export *exp, struct lookup_intent *it,
-                        struct lu_fid *fid);
+                        struct lu_fid *fid, __u64 *bits);
 
 int mdc_intent_getattr_async(struct obd_export *exp,
                              struct md_enqueue_info *minfo,

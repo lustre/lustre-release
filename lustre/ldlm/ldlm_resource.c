@@ -427,12 +427,6 @@ static void *ldlm_res_hop_key(cfs_hlist_node_t *hnode)
         return &res->lr_name;
 }
 
-static int ldlm_res_eq(const struct ldlm_res_id *res0,
-                       const struct ldlm_res_id *res1)
-{
-        return !memcmp(res0, res1, sizeof(*res0));
-}
-
 static int ldlm_res_hop_keycmp(const void *key, cfs_hlist_node_t *hnode)
 {
         struct ldlm_resource   *res;

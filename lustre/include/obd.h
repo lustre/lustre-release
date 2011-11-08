@@ -1252,11 +1252,10 @@ struct md_enqueue_info {
         struct md_op_data       mi_data;
         struct lookup_intent    mi_it;
         struct lustre_handle    mi_lockh;
-        struct dentry          *mi_dentry;
         struct inode           *mi_dir;
         md_enqueue_cb_t         mi_cb;
+        __u64                   mi_cbdata;
         unsigned int            mi_generation;
-        void                   *mi_cbdata;
 };
 
 struct obd_ops {
@@ -1565,7 +1564,7 @@ struct md_ops {
                                       struct ldlm_enqueue_info *);
 
         int (*m_revalidate_lock)(struct obd_export *, struct lookup_intent *,
-                                 struct lu_fid *);
+                                 struct lu_fid *, __u64 *bits);
 
         /*
          * NOTE: If adding ops, add another LPROCFS_MD_OP_INIT() line to

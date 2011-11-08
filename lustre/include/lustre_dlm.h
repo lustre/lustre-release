@@ -1084,6 +1084,8 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
                             const struct ldlm_res_id *, ldlm_type_t type,
                             ldlm_policy_data_t *, ldlm_mode_t mode,
                             struct lustre_handle *, int unref);
+ldlm_mode_t ldlm_revalidate_lock_handle(struct lustre_handle *lockh,
+                                        __u64 *bits);
 struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                                         __u32 *flags);
 void ldlm_lock_downgrade(struct ldlm_lock *lock, int new_mode);

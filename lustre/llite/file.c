@@ -519,8 +519,8 @@ int ll_file_open(struct inode *inode, struct file *file)
         fd->fd_file = file;
         if (S_ISDIR(inode->i_mode)) {
                 cfs_spin_lock(&lli->lli_sa_lock);
-                if (lli->lli_opendir_key == NULL && lli->lli_opendir_pid == 0) {
-                        LASSERT(lli->lli_sai == NULL);
+                if (lli->lli_opendir_key == NULL && lli->lli_opendir_pid == 0 &&
+                    lli->lli_sai == NULL) {
                         lli->lli_opendir_key = fd;
                         lli->lli_opendir_pid = cfs_curproc_pid();
                         opendir_set = 1;

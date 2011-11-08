@@ -496,7 +496,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 CERROR("md_getattr failed for root: rc = %d\n", err);
                 GOTO(out_lock_cn_cb, err);
         }
-        memset(&lmd, 0, sizeof(lmd));
         err = md_get_lustre_md(sbi->ll_md_exp, request, sbi->ll_dt_exp,
                                sbi->ll_md_exp, &lmd);
         if (err) {
@@ -2028,8 +2027,6 @@ int ll_prep_inode(struct inode **inode,
 
         LASSERT(*inode || sb);
         sbi = sb ? ll_s2sbi(sb) : ll_i2sbi(*inode);
-        memset(&md, 0, sizeof(struct lustre_md));
-
         rc = md_get_lustre_md(sbi->ll_md_exp, req, sbi->ll_dt_exp,
                               sbi->ll_md_exp, &md);
         if (rc)
