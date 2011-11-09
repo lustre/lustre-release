@@ -732,10 +732,11 @@ test_37() {
 
     replay_barrier $SINGLEMDS
     # clear the dmesg buffer so we only see errors from this recovery
-    dmesg -c >/dev/null
+    do_facet $SINGLEMDS dmesg -c >/dev/null
     fail_abort $SINGLEMDS
     kill -USR1 $pid
-    dmesg | grep  "mds_unlink_orphan.*error .* unlinking orphan" && return 1
+    do_facet $SINGLEMDS dmesg | grep "error .* unlinking .* from PENDING" &&
+    	return 1
     wait $pid || return 3
     sync
     return 0

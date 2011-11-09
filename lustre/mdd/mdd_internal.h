@@ -105,7 +105,7 @@ struct mdd_device {
         struct obd_device               *mdd_obd_dev;
         struct lu_fid                    mdd_root_fid;
         struct dt_device_param           mdd_dt_conf;
-        struct dt_object                *mdd_orphans;
+        struct dt_object                *mdd_orphans; /* PENDING directory */
         struct dt_object                *mdd_capa;
         struct dt_txn_callback           mdd_txn_cb;
         cfs_proc_dir_entry_t            *mdd_proc_entry;

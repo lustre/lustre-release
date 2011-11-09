@@ -117,7 +117,7 @@ static int orphan_key_to_fid(char *key, struct lu_fid *lf)
                 return 0;
         }
 
-        CERROR("can not parse orphan file name %s\n",key);
+        CERROR("can not parse orphan file name %s\n", key);
         return -EINVAL;
 }
 
@@ -270,7 +270,7 @@ out:
 }
 
 /**
- * destroy osd object on mdd and associated ost objects.
+ * Destroy OSD object on MDD and associated OST objects.
  *
  * \param obj orphan object
  * \param mdd used for sending llog msg to osts
@@ -415,7 +415,7 @@ static int orphan_object_destroy(const struct lu_env *env,
         if (likely(obj->mod_count == 0)) {
                 mdd_orphan_write_lock(env, mdd);
                 rc = mdd_orphan_delete_obj(env, mdd, key, th);
-                if (!rc)
+                if (rc == 0)
                         orphan_object_kill(env, obj, mdd, th);
                 else
                         CERROR("could not delete object: rc = %d\n",rc);
@@ -429,6 +429,16 @@ stop:
         RETURN(rc);
 }
 
+/**
+ * Delete unused orphan with FID \a lf from PENDING directory
+ *
+ * \param mdd  MDD device finishing recovery
+ * \param lf   FID of file or directory to delete
+ * \param key  cookie for this entry in index iterator
+ *
+ * \retval 0   success
+ * \retval -ve error
+ */
 static int orph_key_test_and_del(const struct lu_env *env,
                                  struct mdd_device *mdd,
                                  struct lu_fid *lf,
@@ -444,13 +454,17 @@ static int orph_key_test_and_del(const struct lu_env *env,
 
         rc = -EBUSY;
         if (mdo->mod_count == 0) {
-                CWARN("Found orphan! Delete it\n");
+                CDEBUG(D_HA, "Found orphan "DFID", delete it\n", PFID(lf));
                 rc = orphan_object_destroy(env, mdo, key);
+                if (rc) /* so replay-single.sh test_37 works */
+                        CERROR("%s: error unlinking orphan "DFID" from "
+                               "PENDING: rc = %d\n",
+                               mdd->mdd_obd_dev->obd_name, PFID(lf), rc);
         } else {
                 mdd_write_lock(env, mdo, MOR_TGT_CHILD);
                 if (likely(mdo->mod_count > 0)) {
-                        CDEBUG(D_HA, "Found orphan, open count = %d\n",
-                               mdo->mod_count);
+                        CDEBUG(D_HA, "Found orphan "DFID" count %d, skip it\n",
+                               PFID(lf), mdo->mod_count);
                         mdo->mod_flags |= ORPHAN_OBJ;
                 }
                 mdd_write_unlock(env, mdo);
@@ -460,6 +474,18 @@ static int orph_key_test_and_del(const struct lu_env *env,
         return rc;
 }
 
+/**
+ * delete unreferenced files and directories in the PENDING directory
+ *
+ * Files that remain in PENDING after client->MDS recovery has completed
+ * have to be referenced (opened) by some client during recovery, or they
+ * will be deleted here (for clients that did not complete recovery).
+ *
+ * \param mdd  MDD device finishing recovery
+ *
+ * \retval 0   success
+ * \retval -ve error
+ */
 static int orph_index_iterate(const struct lu_env *env,
                               struct mdd_device *mdd)
 {
@@ -476,68 +502,89 @@ static int orph_index_iterate(const struct lu_env *env,
         ENTRY;
 
         /* In recovery phase, do not need for any lock here */
-
         iops = &dor->do_index_ops->dio_it;
         it = iops->init(env, dor, LUDA_64BITHASH, BYPASS_CAPA);
-        if (!IS_ERR(it)) {
-                result = iops->load(env, it, 0);
-                if (result > 0) {
-                        /* main cycle */
-                        do {
-
-                                key = (void *)iops->key(env, it);
-                                if (IS_ERR(key)) {
-                                        CERROR("key failed when clean pending.\n");
-                                        goto next;
-                                }
-                                key_sz = iops->key_size(env, it);
-
-                                /* filter out "." and ".." entries from
-                                 * PENDING dir. */
-                                if (key_sz < 8)
-                                        goto next;
-
-                                memcpy(mti_key, key, key_sz);
-                                mti_key[key_sz] = 0;
-
-                                if (orphan_key_to_fid(mti_key, &fid))
-                                        goto next;
-                                if (!fid_is_sane(&fid)) {
-                                        CERROR("fid is not sane when clean pending.\n");
-                                        goto next;
-                                }
-
-                                /* kill orphan object */
-                                cookie =  iops->store(env, it);
-                                iops->put(env, it);
-                                rc = orph_key_test_and_del(env, mdd, &fid,
-                                                (struct dt_key *)mti_key);
-
-                                /* after index delete reset iterator */
-                                if (!rc)
-                                        result = iops->get(env, it,
-                                                           (const void *)"");
-                                else
-                                        result = iops->load(env, it, cookie);
-next:
-                                result = iops->next(env, it);
-                        } while (result == 0);
-                        result = 0;
-                } else if (result == 0) {
-                        CERROR("Input/Output for clean pending.\n");
-                        /* Index contains no zero key? */
-                        result = -EIO;
-                }
-                iops->put(env, it);
-                iops->fini(env, it);
-        } else {
-                result = PTR_ERR(it);
-                CERROR("Cannot clean pending (%d).\n", result);
+        if (IS_ERR(it)) {
+                rc = PTR_ERR(it);
+                CERROR("%s: cannot clean PENDING: rc = %d\n",
+                       mdd->mdd_obd_dev->obd_name, rc);
+                GOTO(out, rc);
         }
 
-        RETURN(result);
+        rc = iops->load(env, it, 0);
+        if (rc < 0)
+                GOTO(out_put, rc);
+        if (rc == 0) {
+                CERROR("%s: error loading iterator to clean PENDING\n",
+                       mdd->mdd_obd_dev->obd_name);
+                /* Index contains no zero key? */
+                GOTO(out_put, rc = -EIO);
+        }
+
+        do {
+                key = (void *)iops->key(env, it);
+                if (IS_ERR(key)) {
+                        CERROR("%s: key failed when clean PENDING: rc = %ld\n",
+                               mdd->mdd_obd_dev->obd_name, PTR_ERR(key));
+                        goto next;
+                }
+                key_sz = iops->key_size(env, it);
+
+                /* filter out "." and ".." entries from PENDING dir. */
+                if (key_sz < 8)
+                        goto next;
+
+                memcpy(mti_key, key, key_sz);
+                mti_key[key_sz] = 0;
+
+                if (orphan_key_to_fid(mti_key, &fid))
+                        goto next;
+                if (!fid_is_sane(&fid)) {
+                        CERROR("%s: bad FID "DFID" cleaning PENDING\n",
+                               mdd->mdd_obd_dev->obd_name, PFID(&fid));
+                        goto next;
+                }
+
+                /* kill orphan object */
+                cookie = iops->store(env, it);
+                iops->put(env, it);
+                rc = orph_key_test_and_del(env, mdd, &fid,
+                                          (struct dt_key *)mti_key);
+
+                /* after index delete reset iterator */
+                if (rc == 0)
+                        result = iops->get(env, it, (const void *)"");
+                else
+                        result = iops->load(env, it, cookie);
+next:
+                result = iops->next(env, it);
+        } while (result == 0);
+
+        GOTO(out_put, rc = 0);
+out_put:
+        iops->put(env, it);
+        iops->fini(env, it);
+
+out:
+        return rc;
 }
 
+/**
+ * open the PENDING directory for device \a mdd
+ *
+ * The PENDING directory persistently tracks files and directories that were
+ * unlinked from the namespace (nlink == 0) but are still held open by clients.
+ * Those inodes shouldn't be deleted if the MDS crashes, because the clients
+ * would not be able to recover and reopen those files.  Instead, these inodes
+ * are linked into the PENDING directory on disk, and only deleted if all
+ * clients close them, or the MDS finishes client recovery without any client
+ * reopening them (i.e. former clients didn't join recovery).
+ *  \param d   mdd device being started.
+ *
+ *  \retval 0  success
+ *  \retval  -ve index operation error.
+ *
+ */
 int orph_index_init(const struct lu_env *env, struct mdd_device *mdd)
 {
         struct lu_fid fid;
@@ -573,18 +620,16 @@ void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd)
 }
 
 /**
- *  Iterate orphan index to cleanup orphan objects in case of recovery.
+ *  Iterate orphan index to cleanup orphan objects after recovery is done.
  *  \param d   mdd device in recovery.
- *
  */
-
 int __mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d)
 {
         return orph_index_iterate(env, d);
 }
 
 /**
- *  delete an orphan \a obj from orphan index.
+ *  add an orphan \a obj to the orphan index.
  *  \param obj file or directory.
  *  \param th  transaction for index insert.
  *
@@ -593,7 +638,6 @@ int __mdd_orphan_cleanup(const struct lu_env *env, struct mdd_device *d)
  *  \retval 0  success
  *  \retval  -ve index operation error.
  */
-
 int __mdd_orphan_add(const struct lu_env *env,
                      struct mdd_object *obj, struct thandle *th)
 {
@@ -610,7 +654,6 @@ int __mdd_orphan_add(const struct lu_env *env,
  *  \retval 0  success
  *  \retval  -ve index operation error.
  */
-
 int __mdd_orphan_del(const struct lu_env *env,
                      struct mdd_object *obj, struct thandle *th)
 {
