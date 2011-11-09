@@ -16,7 +16,12 @@
 *.[oasi]
 *.so
 *~
+*.dSYM
 *.swp
+*.orig
+*.rej
+*.unsigned
+modules.order
 .DS_Store
 
 #
@@ -56,7 +61,6 @@
 /Module.markers
 /Module.symvers
 /Module.symvers.old
-/modules.order
 /Modules.symvers
 /patches
 /Rules
