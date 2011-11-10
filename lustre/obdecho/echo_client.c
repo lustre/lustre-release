@@ -296,7 +296,9 @@ static void echo_page_discard(const struct lu_env *env,
 static int echo_page_is_vmlocked(const struct lu_env *env,
                                  const struct cl_page_slice *slice)
 {
-        return cfs_mutex_is_locked(&cl2echo_page(slice)->ep_lock);
+        if (cfs_mutex_is_locked(&cl2echo_page(slice)->ep_lock))
+                return -EBUSY;
+        return -ENODATA;
 }
 
 static void echo_page_completion(const struct lu_env *env,
