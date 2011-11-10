@@ -307,7 +307,7 @@ struct filter_obd {
 
         obd_size             fo_readcache_max_filesize;
         cfs_spinlock_t       fo_flags_lock;
-        int                  fo_read_cache:1,   /**< enable read-only cache */
+        unsigned int         fo_read_cache:1,   /**< enable read-only cache */
                              fo_writethrough_cache:1,/**< read cache writes */
                              fo_mds_ost_sync:1, /**< MDS-OST orphan recovery*/
                              fo_raid_degraded:1;/**< RAID device degraded */

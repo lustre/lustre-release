@@ -880,7 +880,6 @@ struct ldlm_enqueue_info {
         void *ei_cb_gl;  /* lock glimpse callback */
         void *ei_cb_wg;  /* lock weigh callback */
         void *ei_cbdata; /* Data to be passed into callbacks. */
-        short ei_async:1; /* async request */
 };
 
 extern struct obd_ops ldlm_obd_ops;
