@@ -1,0 +1,14 @@
+LU-553 improve checks for commit-msg
+
+Improve the checks done by the commit-msg script.  It now ensures
+that all the parts of the commit message are present.
+- validate that the Change-Id: generated from 'git hash-object' is
+  not empty, since this can happen if git is unhappy with the options
+- check for only one Change-Id: line (multiple Signed-off-by: OK)
+- describe the "component:" field better, with examples
+
+If there was an error committing the message, save a copy to a
+temporary file, so that it can be edited and re-used, instead of
+having to recreate it each time, or fetch it from .git/COMMIT_MSG.
+
+Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
