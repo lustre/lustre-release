@@ -4395,52 +4395,6 @@ static int mdt_adapt_sptlrpc_conf(struct obd_device *obd, int initial)
         return 0;
 }
 
-static void fsoptions_to_mdt_flags(struct mdt_device *m, char *options)
-{
-        char *p = options;
-
-        m->mdt_opts.mo_mds_capa = 1;
-        m->mdt_opts.mo_oss_capa = 1;
-#ifdef CONFIG_FS_POSIX_ACL
-        /* ACLs should be enabled by default (b=13829) */
-        m->mdt_opts.mo_acl = 1;
-        LCONSOLE_INFO("Enabling ACL\n");
-#else
-        m->mdt_opts.mo_acl = 0;
-        LCONSOLE_INFO("Disabling ACL\n");
-#endif
-
-        if (!options)
-                return;
-
-        while (*options) {
-                int len;
-
-                while (*p && *p != ',')
-                        p++;
-
-                len = p - options;
-                if ((len == sizeof("user_xattr") - 1) &&
-                    (memcmp(options, "user_xattr", len) == 0)) {
-                        m->mdt_opts.mo_user_xattr = 1;
-                        LCONSOLE_INFO("Enabling user_xattr\n");
-                } else if ((len == sizeof("nouser_xattr") - 1) &&
-                           (memcmp(options, "nouser_xattr", len) == 0)) {
-                        m->mdt_opts.mo_user_xattr = 0;
-                        LCONSOLE_INFO("Disabling user_xattr\n");
-                } else if ((len == sizeof("noacl") - 1) &&
-                           (memcmp(options, "noacl", len) == 0)) {
-                        m->mdt_opts.mo_acl = 0;
-                        LCONSOLE_INFO("Disabling ACL\n");
-                }
-
-                if (!*p)
-                        break;
-
-                options = ++p;
-        }
-}
-
 int mdt_postrecov(const struct lu_env *, struct mdt_device *);
 
 static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
@@ -4456,11 +4410,10 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         struct lu_site            *s;
         struct md_site            *mite;
         const char                *identity_upcall = "NONE";
-#ifdef HAVE_QUOTA_SUPPORT
         struct md_device          *next;
-#endif
         int                        rc;
         int                        node_id;
+        mntopt_t                   mntopts;
         ENTRY;
 
         md_device_init(&m->mdt_md_dev, ldt);
@@ -4486,8 +4439,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_max_cookiesize = sizeof(struct llog_cookie);
         m->mdt_som_conf = 0;
 
-        m->mdt_opts.mo_user_xattr = 0;
-        m->mdt_opts.mo_acl = 0;
         m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
         lmi = server_get_mount_2(dev);
         if (lmi == NULL) {
@@ -4495,7 +4446,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 RETURN(-EFAULT);
         } else {
                 lsi = s2lsi(lmi->lmi_sb);
-                fsoptions_to_mdt_flags(m, lsi->lsi_lmd->lmd_opts);
                 /* CMD is supported only in IAM mode */
                 ldd = lsi->lsi_ldd;
                 LASSERT(num);
@@ -4513,6 +4463,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         cfs_spin_lock_init(&m->mdt_ioepoch_lock);
         m->mdt_opts.mo_compat_resname = 0;
+        m->mdt_opts.mo_mds_capa = 1;
+        m->mdt_opts.mo_oss_capa = 1;
         m->mdt_capa_timeout = CAPA_TIMEOUT;
         m->mdt_capa_alg = CAPA_HMAC_ALG_SHA1;
         m->mdt_ck_timeout = CAPA_KEY_TIMEOUT;
@@ -4597,19 +4549,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         /* set obd_namespace for compatibility with old code */
         obd->obd_namespace = m->mdt_namespace;
 
-        /* XXX: to support suppgid for ACL, we enable identity_upcall
-         * by default, otherwise, maybe got unexpected -EACCESS. */
-        if (m->mdt_opts.mo_acl)
-                identity_upcall = MDT_IDENTITY_UPCALL_PATH;
-
-        m->mdt_identity_cache = upcall_cache_init(obd->obd_name, identity_upcall,
-                                                  &mdt_identity_upcall_cache_ops);
-        if (IS_ERR(m->mdt_identity_cache)) {
-                rc = PTR_ERR(m->mdt_identity_cache);
-                m->mdt_identity_cache = NULL;
-                GOTO(err_free_ns, rc);
-        }
-
         cfs_timer_init(&m->mdt_ck_timer, mdt_ck_timer_callback, m);
 
         rc = mdt_ck_thread_start(m);
@@ -4630,8 +4569,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         mdt_adapt_sptlrpc_conf(obd, 1);
 
-#ifdef HAVE_QUOTA_SUPPORT
         next = m->mdt_child;
+#ifdef HAVE_QUOTA_SUPPORT
         rc = next->md_ops->mdo_quota.mqo_setup(env, next, lmi->lmi_mnt);
         if (rc)
                 GOTO(err_llog_cleanup, rc);
@@ -4639,6 +4578,34 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         server_put_mount_2(dev, lmi->lmi_mnt);
         lmi = NULL;
+
+        rc = next->md_ops->mdo_iocontrol(env, next, OBD_IOC_GET_MNTOPT, 0,
+                                         &mntopts);
+        if (rc)
+                GOTO(err_quota, rc);
+
+        if (mntopts & MNTOPT_USERXATTR)
+                m->mdt_opts.mo_user_xattr = 1;
+        else
+                m->mdt_opts.mo_user_xattr = 0;
+
+        if (mntopts & MNTOPT_ACL)
+                m->mdt_opts.mo_acl = 1;
+        else
+                m->mdt_opts.mo_acl = 0;
+
+        /* XXX: to support suppgid for ACL, we enable identity_upcall
+         * by default, otherwise, maybe got unexpected -EACCESS. */
+        if (m->mdt_opts.mo_acl)
+                identity_upcall = MDT_IDENTITY_UPCALL_PATH;
+
+        m->mdt_identity_cache = upcall_cache_init(obd->obd_name,identity_upcall,
+                                                &mdt_identity_upcall_cache_ops);
+        if (IS_ERR(m->mdt_identity_cache)) {
+                rc = PTR_ERR(m->mdt_identity_cache);
+                m->mdt_identity_cache = NULL;
+                GOTO(err_quota, rc);
+        }
 
         target_recovery_init(&m->mdt_lut, mdt_recovery_handle);
 
@@ -4670,6 +4637,9 @@ err_stop_service:
         mdt_stop_ptlrpc_service(m);
 err_recovery:
         target_recovery_fini(obd);
+        upcall_cache_cleanup(m->mdt_identity_cache);
+        m->mdt_identity_cache = NULL;
+err_quota:
 #ifdef HAVE_QUOTA_SUPPORT
         next->md_ops->mdo_quota.mqo_cleanup(env, next);
 #endif
@@ -4682,8 +4652,6 @@ err_capa:
         cfs_timer_disarm(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);
 err_free_ns:
-        upcall_cache_cleanup(m->mdt_identity_cache);
-        m->mdt_identity_cache = NULL;
         ldlm_namespace_free(m->mdt_namespace, NULL, 0);
         obd->obd_namespace = m->mdt_namespace = NULL;
 err_fini_seq:
