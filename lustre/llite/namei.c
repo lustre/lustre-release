@@ -44,6 +44,7 @@
 #include <linux/quotaops.h>
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
+#include <linux/security.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -334,6 +335,9 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
         if (inode)
                 list_add(&de->d_alias, &inode->i_dentry);
         de->d_inode = inode;
+        /* d_instantiate() replacement code should initialize security
+         * context. */
+        security_d_instantiate(de, inode);
 
         /* d_rehash */
         if (!d_unhashed(de)) {
