@@ -76,6 +76,8 @@ static cfs_lock_class_key_t cl_lock_guard_class;
 /** Lock class of cl_object_header::coh_attr_guard */
 static cfs_lock_class_key_t cl_attr_guard_class;
 
+static __u32 cl_ctx_tags;
+static __u32 cl_ses_tags;
 /**
  * Initialize cl_object_header.
  */
@@ -750,7 +752,7 @@ static inline struct cl_env *cl_env_detach(struct cl_env *cle)
         return cle;
 }
 
-static struct lu_env *cl_env_new(__u32 tags, void *debug)
+static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
 {
         struct lu_env *env;
         struct cl_env *cle;
@@ -762,9 +764,10 @@ static struct lu_env *cl_env_new(__u32 tags, void *debug)
                 CFS_INIT_LIST_HEAD(&cle->ce_linkage);
                 cle->ce_magic = &cl_env_init0;
                 env = &cle->ce_lu;
-                rc = lu_env_init(env, LCT_CL_THREAD|tags);
+                rc = lu_env_init(env, LCT_CL_THREAD|ctx_tags);
                 if (rc == 0) {
-                        rc = lu_context_init(&cle->ce_ses, LCT_SESSION|tags);
+                        rc = lu_context_init(&cle->ce_ses,
+                                             LCT_SESSION | ses_tags);
                         if (rc == 0) {
                                 lu_context_enter(&cle->ce_ses);
                                 env->le_ses = &cle->ce_ses;
@@ -791,6 +794,18 @@ static void cl_env_fini(struct cl_env *cle)
         lu_context_fini(&cle->ce_ses);
         OBD_SLAB_FREE_PTR(cle, cl_env_kmem);
 }
+
+void cl_set_ctx_tags(__u32 tags)
+{
+        cl_ctx_tags = tags;
+}
+EXPORT_SYMBOL(cl_set_ctx_tags);
+
+void cl_set_ses_tags(__u32 tags)
+{
+        cl_ses_tags = tags;
+}
+EXPORT_SYMBOL(cl_set_ses_tags);
 
 static struct lu_env *cl_env_obtain(void *debug)
 {
@@ -820,7 +835,7 @@ static struct lu_env *cl_env_obtain(void *debug)
                 }
         } else {
                 cfs_spin_unlock(&cl_envs_guard);
-                env = cl_env_new(0, debug);
+                env = cl_env_new(cl_ctx_tags, cl_ses_tags, debug);
         }
         RETURN(env);
 }
@@ -895,7 +910,7 @@ struct lu_env *cl_env_alloc(int *refcheck, __u32 tags)
         struct lu_env *env;
 
         LASSERT(cl_env_peek(refcheck) == NULL);
-        env = cl_env_new(tags, __builtin_return_address(0));
+        env = cl_env_new(tags, tags, __builtin_return_address(0));
         if (!IS_ERR(env)) {
                 struct cl_env *cle;
 

@@ -293,6 +293,10 @@ struct lu_device {
          * A list of references to this object, for debugging.
          */
         struct lu_ref                      ld_reference;
+        /**
+         * Link the device to the site.
+         **/
+        cfs_list_t                         ld_linkage;
 };
 
 struct lu_device_type_operations;
@@ -630,6 +634,13 @@ struct lu_site {
          * Linkage into global list of sites.
          */
         cfs_list_t                ls_linkage;
+        /**
+         * List for lu device for this site, protected
+         * by ls_ld_lock.
+         **/
+        cfs_list_t                ls_ld_linkage;
+        cfs_spinlock_t            ls_ld_lock;
+
         /**
          * lu_site stats
          */

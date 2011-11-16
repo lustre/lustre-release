@@ -168,8 +168,8 @@ int seq_client_alloc_super(struct lu_client_seq *seq,
 }
 
 /* Request sequence-controller node to allocate new meta-sequence. */
-static int seq_client_alloc_meta(struct lu_client_seq *seq,
-                                 const struct lu_env *env)
+static int seq_client_alloc_meta(const struct lu_env *env,
+                                 struct lu_client_seq *seq)
 {
         int rc;
         ENTRY;
@@ -189,7 +189,8 @@ static int seq_client_alloc_meta(struct lu_client_seq *seq,
 }
 
 /* Allocate new sequence for client. */
-static int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
+static int seq_client_alloc_seq(const struct lu_env *env,
+                                struct lu_client_seq *seq, seqno_t *seqnr)
 {
         int rc;
         ENTRY;
@@ -197,9 +198,9 @@ static int seq_client_alloc_seq(struct lu_client_seq *seq, seqno_t *seqnr)
         LASSERT(range_is_sane(&seq->lcs_space));
 
         if (range_is_exhausted(&seq->lcs_space)) {
-                rc = seq_client_alloc_meta(seq, NULL);
+                rc = seq_client_alloc_meta(env, seq);
                 if (rc) {
-                        CERROR("%s: Can't allocate new meta-sequence, "
+                        CERROR("%s: Can't allocate new meta-sequence,"
                                "rc %d\n", seq->lcs_name, rc);
                         RETURN(rc);
                 } else {
@@ -248,8 +249,55 @@ static void seq_fid_alloc_fini(struct lu_client_seq *seq)
         cfs_waitq_signal(&seq->lcs_waitq);
 }
 
+/* Allocate the whole seq to the caller*/
+int seq_client_get_seq(const struct lu_env *env,
+                       struct lu_client_seq *seq, seqno_t *seqnr)
+{
+        cfs_waitlink_t link;
+        int rc;
+
+        LASSERT(seqnr != NULL);
+        cfs_down(&seq->lcs_sem);
+        cfs_waitlink_init(&link);
+
+        while (1) {
+                rc = seq_fid_alloc_prep(seq, &link);
+                if (rc == 0)
+                        break;
+        }
+
+        rc = seq_client_alloc_seq(env, seq, seqnr);
+        if (rc) {
+                CERROR("%s: Can't allocate new sequence, "
+                       "rc %d\n", seq->lcs_name, rc);
+                seq_fid_alloc_fini(seq);
+                cfs_up(&seq->lcs_sem);
+                return rc;
+        }
+
+        CDEBUG(D_INFO, "%s: allocate sequence "
+               "[0x%16.16"LPF64"x]\n", seq->lcs_name, *seqnr);
+
+        /*Since the caller require the whole seq,
+         *so marked this seq to be used*/
+        seq->lcs_fid.f_oid = LUSTRE_SEQ_MAX_WIDTH;
+        seq->lcs_fid.f_seq = *seqnr;
+        seq->lcs_fid.f_ver = 0;
+
+        /*
+         * Inform caller that sequence switch is performed to allow it
+         * to setup FLD for it.
+         */
+        seq_fid_alloc_fini(seq);
+        cfs_up(&seq->lcs_sem);
+
+        return rc;
+}
+EXPORT_SYMBOL(seq_client_get_seq);
+
 /* Allocate new fid on passed client @seq and save it to @fid. */
-int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
+int seq_client_alloc_fid(const struct lu_env *env,
+                         struct lu_client_seq *seq, struct lu_fid *fid)
 {
         cfs_waitlink_t link;
         int rc;
@@ -276,7 +324,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
                 if (rc)
                         continue;
 
-                rc = seq_client_alloc_seq(seq, &seqnr);
+                rc = seq_client_alloc_seq(env, seq, &seqnr);
                 if (rc) {
                         CERROR("%s: Can't allocate new sequence, "
                                "rc %d\n", seq->lcs_name, rc);

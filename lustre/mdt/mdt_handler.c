@@ -4185,8 +4185,11 @@ static struct lu_device *mdt_layer_setup(struct lu_env *env,
         lu_device_get(d);
         lu_ref_add(&d->ld_reference, "lu-stack", &lu_site_init);
 
-        RETURN(d);
+        cfs_spin_lock(&d->ld_site->ls_ld_lock);
+        cfs_list_add_tail(&d->ld_linkage, &d->ld_site->ls_ld_linkage);
+        cfs_spin_unlock(&d->ld_site->ls_ld_lock);
 
+        RETURN(d);
 out_alloc:
         ldt->ldt_ops->ldto_device_free(env, d);
         type->typ_refcnt--;

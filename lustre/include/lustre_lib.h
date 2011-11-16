@@ -139,6 +139,20 @@ void l_unlock(struct lustre_lock *);
 int l_has_lock(struct lustre_lock *);
 
 /*
+ * For md echo client
+ */
+enum md_echo_cmd {
+        ECHO_MD_CREATE       = 1, /* Open/Create file on MDT */
+        ECHO_MD_MKDIR        = 2, /* Mkdir on MDT */
+        ECHO_MD_DESTROY      = 3, /* Unlink file on MDT */
+        ECHO_MD_RMDIR        = 4, /* Rmdir on MDT */
+        ECHO_MD_LOOKUP       = 5, /* Lookup on MDT */
+        ECHO_MD_GETATTR      = 6, /* Getattr on MDT */
+        ECHO_MD_SETATTR      = 7, /* Setattr on MDT */
+        ECHO_MD_ALLOC_FID    = 8, /* Get FIDs from MDT */
+};
+
+/*
  *   OBD IOCTLS
  */
 #define OBD_IOCTL_VERSION 0x00010004
@@ -278,8 +292,11 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
         data->ioc_len = obd_ioctl_packlen(data);
         data->ioc_version = OBD_IOCTL_VERSION;
 
-        if (*pbuf && data->ioc_len > max)
+        if (*pbuf && data->ioc_len > max) {
+                fprintf(stderr, "pbuf %p ioc_len %u max %d\n", *pbuf,
+                        data->ioc_len, max);
                 return -EINVAL;
+        }
         if (*pbuf == NULL) {
                 *pbuf = malloc(data->ioc_len);
         }
@@ -297,8 +314,11 @@ static inline int obd_ioctl_pack(struct obd_ioctl_data *data, char **pbuf,
                 LOGL(data->ioc_inlbuf3, data->ioc_inllen3, ptr);
         if (data->ioc_inlbuf4)
                 LOGL(data->ioc_inlbuf4, data->ioc_inllen4, ptr);
-        if (obd_ioctl_is_invalid(overlay))
+        if (obd_ioctl_is_invalid(overlay)) {
+                fprintf(stderr, "ioc_len %u max %d\n",
+                        data->ioc_len, max);
                 return -EINVAL;
+        }
 
         return 0;
 }
@@ -539,6 +559,8 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_GET_MNTOPT             _IOW('f', 220, mntopt_t)
 
+#define OBD_IOC_ECHO_MD                _IOR('f', 221, struct obd_ioctl_data)
+#define OBD_IOC_ECHO_ALLOC_SEQ         _IOWR('f', 222, struct obd_ioctl_data)
 /* XXX _IOWR('f', 250, long) has been defined in
  * libcfs/include/libcfs/libcfs_private.h for debug, don't use it
  */

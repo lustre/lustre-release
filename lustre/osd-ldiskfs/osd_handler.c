@@ -438,7 +438,7 @@ static int osd_fid_lookup(const struct lu_env *env,
 
         LINVRNT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
-        LASSERT(fid_is_sane(fid) || osd_fid_is_root(fid));
+        LASSERTF(fid_is_sane(fid) || osd_fid_is_root(fid), DFID, PFID(fid));
         /*
          * This assertion checks that osd layer sees only local
          * fids. Unfortunately it is somewhat expensive (does a

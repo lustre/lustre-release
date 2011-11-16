@@ -2036,7 +2036,7 @@ int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
         struct client_obd *cli = &exp->exp_obd->u.cli;
         struct lu_client_seq *seq = cli->cl_seq;
         ENTRY;
-        RETURN(seq_client_alloc_fid(seq, fid));
+        RETURN(seq_client_alloc_fid(NULL, seq, fid));
 }
 
 /* XXX This method is used only to clear current fid seq

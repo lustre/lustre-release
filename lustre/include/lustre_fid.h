@@ -262,8 +262,10 @@ void seq_client_fini(struct lu_client_seq *seq);
 
 void seq_client_flush(struct lu_client_seq *seq);
 
-int seq_client_alloc_fid(struct lu_client_seq *seq,
+int seq_client_alloc_fid(const struct lu_env *env, struct lu_client_seq *seq,
                          struct lu_fid *fid);
+int seq_client_get_seq(const struct lu_env *env, struct lu_client_seq *seq,
+                       seqno_t *seqnr);
 
 /* Fids common stuff */
 int fid_is_local(const struct lu_env *env,

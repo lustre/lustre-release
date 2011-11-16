@@ -969,6 +969,13 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
         lu_device_get(top);
         lu_ref_add(&top->ld_reference, "site-top", s);
 
+        CFS_INIT_LIST_HEAD(&s->ls_ld_linkage);
+        cfs_spin_lock_init(&s->ls_ld_lock);
+
+        cfs_spin_lock(&s->ls_ld_lock);
+        cfs_list_add(&top->ld_linkage, &s->ls_ld_linkage);
+        cfs_spin_unlock(&s->ls_ld_lock);
+
         RETURN(0);
 }
 EXPORT_SYMBOL(lu_site_init);
@@ -1044,6 +1051,7 @@ int lu_device_init(struct lu_device *d, struct lu_device_type *t)
         cfs_atomic_set(&d->ld_ref, 0);
         d->ld_type = t;
         lu_ref_init(&d->ld_reference);
+        CFS_INIT_LIST_HEAD(&d->ld_linkage);
         return 0;
 }
 EXPORT_SYMBOL(lu_device_init);
