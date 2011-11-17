@@ -299,6 +299,7 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
         cfs_down_read(&obd->u.cli.cl_sem);
         if (obd->u.cli.cl_import == NULL) {
                 CERROR("obd %s: import has gone\n", obd->obd_name);
+                cfs_up_read(&obd->u.cli.cl_sem);
                 RETURN(-EINVAL);
         }
         imp = class_import_get(obd->u.cli.cl_import);
