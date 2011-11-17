@@ -1,20 +1,25 @@
-TBD Oracle, Inc.
-	* version 2.1.0
+TBD       Whamcloud, Inc.
+	* version 2.2.0
 	* Support for networks:
 	 socklnd   - any kernel supported by Lustre,
-	 qswlnd    - Qsnet kernel modules 5.20 and later,
-	 openiblnd - IbGold 1.8.2,
 	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, 1.3, and 1.4.1
-	 viblnd    - Voltaire ibhost 3.4.5 and later,
-	 ciblnd    - Topspin 3.2.0,
-	 iiblnd    - Infiniserv 3.3 + PathBits patch,
-	 gmlnd     - GM 2.1.22 and later,
-	 mxlnd     - MX 1.2.10 or later,
+	 mxlnd     - MX 1.2.10 or later
 	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
 
 -------------------------------------------------------------------------------
 
-2010-07-15  Sun Microsystems, Inc.
+09-30-2011 Whamcloud, Inc.
+	* version 2.1.0
+	* Support for networks:
+	 socklnd   - any kernel supported by Lustre,
+	 o2iblnd   - OFED 1.1, 1.2.0, 1.2.5, 1.3, and 1.4.1
+	* Available but unsupported:
+	 mxlnd     - MX 1.2.10 or later
+	 ptllnd    - Portals 3.3 / UNICOS/lc 1.5.x, 2.0.x
+
+-------------------------------------------------------------------------------
+
+2010-07-15  Oracle, Inc.
 	* version 2.0.0
 	* Support for networks:
 	 socklnd   - any kernel supported by Lustre,
