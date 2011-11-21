@@ -991,7 +991,8 @@ struct ptlrpc_body {
         __u32 pb_op_flags;
         __u32 pb_conn_cnt;
         __u32 pb_timeout;  /* for req, the deadline, for rep, the service est */
-        __u32 pb_service_time; /* for rep, actual service time */
+        __u32 pb_service_time; /* for rep, actual service time, also used for
+                                  net_latency of req */
         __u32 pb_limit;
         __u64 pb_slv;
         /* VBR: pre-versions */

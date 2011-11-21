@@ -1776,9 +1776,20 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
                  * Add request timeout to the recovery time so next request from
                  * this client may come in recovery time
                  */
-                if (!AT_OFF)
-                        to = lustre_msg_get_timeout(req->rq_reqmsg);
-                 extend_recovery_timer(class_exp2obd(req->rq_export), to);
+                if (!AT_OFF) {
+                        struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
+                        /* If the server sent early reply for this request,
+                         * the client will recalculate the timeout according to
+                         * current server estimate service time, so we will
+                         * use the maxium timeout here for waiting the client
+                         * sending the next req */
+                        to = max((int)at_est2timeout(
+                                 at_get(&svc->srv_at_estimate)),
+                                 (int)lustre_msg_get_timeout(req->rq_reqmsg));
+                        /* Add net_latency (see ptlrpc_replay_req) */
+                        to += lustre_msg_get_service_time(req->rq_reqmsg);
+                }
+                extend_recovery_timer(class_exp2obd(req->rq_export), to);
         }
 reqcopy_put:
         RETURN(rc);

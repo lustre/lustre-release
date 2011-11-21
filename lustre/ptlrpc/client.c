@@ -2650,6 +2650,10 @@ int ptlrpc_replay_req(struct ptlrpc_request *req)
         /* Readjust the timeout for current conditions */
         ptlrpc_at_set_req_timeout(req);
 
+        /* Tell server the net_latency, so the server can calculate how long
+         * it should wait for next replay */
+        lustre_msg_set_service_time(req->rq_reqmsg,
+                                    ptlrpc_at_get_net_latency(req));
         DEBUG_REQ(D_HA, req, "REPLAY");
 
         cfs_atomic_inc(&req->rq_import->imp_replay_inflight);
