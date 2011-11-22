@@ -100,7 +100,8 @@ test_0b() {
     umount -f $MOUNT1
     zconf_mount `hostname` $MOUNT1 || error "mount1 fais"
     zconf_mount `hostname` $MOUNT2 || error "mount2 fais"
-    checkstat $MOUNT1/$tfile-2 && return 1
+    # it is uncertain if file-2 exists or not, remove it if it does
+    checkstat $MOUNT1/$tfile-2 && rm $MOUNT1/$tfile-2
     checkstat $MOUNT2/$tfile && return 2
     return 0
 }
