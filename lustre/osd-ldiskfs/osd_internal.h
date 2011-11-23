@@ -65,6 +65,8 @@
          jbd2_journal_callback_set(handle, func, jcb)
 #endif
 
+/* fsfilt_{get|put}_ops */
+#include <lustre_fsfilt.h>
 
 /* LUSTRE_OSD_NAME */
 #include <obd.h>
@@ -221,6 +223,16 @@ struct osd_device {
          * It will be initialized, using mount param.
          */
         __u32                     od_iop_mode;
+
+        struct fsfilt_operations *od_fsops;
+
+        unsigned long long        od_readcache_max_filesize;
+        int                       od_read_cache;
+        int                       od_writethrough_cache;
+
+        struct brw_stats          od_brw_stats;
+        cfs_atomic_t              od_r_in_flight;
+        cfs_atomic_t              od_w_in_flight;
 };
 
 #define OSD_TRACK_DECLARES
@@ -311,12 +323,20 @@ enum dt_txn_op {
 
 #ifdef LPROCFS
 enum {
+        LPROC_OSD_READ_BYTES    = 0,
+        LPROC_OSD_WRITE_BYTES   = 1,
+        LPROC_OSD_GET_PAGE      = 2,
+        LPROC_OSD_NO_PAGE       = 3,
+        LPROC_OSD_CACHE_ACCESS  = 4,
+        LPROC_OSD_CACHE_HIT     = 5,
+        LPROC_OSD_CACHE_MISS    = 6,
+
 #if OSD_THANDLE_STATS
         LPROC_OSD_THANDLE_STARTING,
         LPROC_OSD_THANDLE_OPEN,
         LPROC_OSD_THANDLE_CLOSING,
 #endif
-        LPROC_OSD_NR
+        LPROC_OSD_LAST,
 };
 #endif
 
@@ -373,6 +393,25 @@ struct osd_it_iam {
         struct osd_object     *oi_obj;
         struct iam_path_descr *oi_ipd;
         struct iam_iterator    oi_it;
+};
+
+#define MAX_BLOCKS_PER_PAGE (CFS_PAGE_SIZE / 512)
+
+struct osd_iobuf {
+        cfs_waitq_t        dr_wait;
+        cfs_atomic_t       dr_numreqs;  /* number of reqs being processed */
+        int                dr_max_pages;
+        int                dr_npages;
+        int                dr_error;
+        int                dr_frags;
+        unsigned int       dr_ignore_quota:1;
+        unsigned int       dr_elapsed_valid:1; /* we really did count time */
+        unsigned int       dr_rw:1;
+        struct page       *dr_pages[PTLRPC_MAX_BRW_PAGES];
+        unsigned long      dr_blocks[PTLRPC_MAX_BRW_PAGES*MAX_BLOCKS_PER_PAGE];
+        unsigned long      dr_start_time;
+        unsigned long      dr_elapsed;  /* how long io took */
+        struct osd_device *dr_dev;
 };
 
 struct osd_thread_info {
@@ -446,6 +485,10 @@ struct osd_thread_info {
         struct lu_buf          oti_buf;
         /** used in osd_ea_fid_set() to set fid into common ea */
         struct lustre_mdt_attrs oti_mdt_attrs;
+        /** 0-copy IO */
+        struct osd_iobuf       oti_iobuf;
+        struct inode           oti_inode;
+        int                    oti_created[PTLRPC_MAX_BRW_PAGES];
 #ifdef HAVE_QUOTA_SUPPORT
         struct osd_ctxt        oti_ctxt;
 #endif
@@ -465,11 +508,17 @@ int osd_procfs_fini(struct osd_device *osd);
 void osd_lprocfs_time_start(const struct lu_env *env);
 void osd_lprocfs_time_end(const struct lu_env *env,
                           struct osd_device *osd, int op);
+void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf);
+
 #endif
 int osd_statfs(const struct lu_env *env, struct dt_device *dev,
                cfs_kstatfs_t *sfs);
 int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
                     struct lustre_capa *capa, __u64 opc);
+void osd_declare_qid(struct dt_object *dt, struct osd_thandle *oh,
+                     int type, uid_t id, struct inode *inode);
+int generic_error_remove_page(struct address_space *mapping,
+                                     struct page *page);
 
 /*
  * Invariants, assertions.
@@ -590,6 +639,8 @@ static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
 {
         return lu_context_key_get(&env->le_ctx, &osd_key);
 }
+
+extern const struct dt_body_operations osd_body_ops_new;
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */

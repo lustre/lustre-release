@@ -1991,6 +1991,19 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# LC_EXPORT_GENERIC_ERROR_REMOVE_PAGE
+#
+AC_DEFUN([LC_EXPORT_GENERIC_ERROR_REMOVE_PAGE],
+         [LB_CHECK_SYMBOL_EXPORT(
+                        [generic_error_remove_page],
+                        [mm/truncate.c],
+                        [AC_DEFINE(HAS_GENERIC_ERROR_REMOVE_PAGE, 1,
+                                [kernel export generic_error_remove_page])],
+                        [])
+         ]
+)
+
+#
 # 2.6.36 fs_struct.lock use spinlock instead of rwlock.
 #
 AC_DEFUN([LC_FS_STRUCT_RWLOCK],
@@ -2304,6 +2317,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BLK_QUEUE_MAX_SEGMENTS
          LC_SET_CPUS_ALLOWED
          LC_CACHE_UPCALL
+         LC_EXPORT_GENERIC_ERROR_REMOVE_PAGE
 
          # 2.6.35
          LC_FILE_FSYNC
