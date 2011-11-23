@@ -115,18 +115,18 @@ typedef struct {
 #if (defined(__KERNEL__) && defined(HAVE_KERN__U64_LONG_LONG)) || \
     (!defined(__KERNEL__) && defined(HAVE_USER__U64_LONG_LONG))
 /* x86_64 defines __u64 as "long" in userspace, but "long long" in the kernel */
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPX64i "%Lx"
-# define LPO64 "%#Lo"
-# define LPF64 "L"
+# define LPU64 "%llu"
+# define LPD64 "%lld"
+# define LPX64 "%#llx"
+# define LPX64i "%llx"
+# define LPO64 "%#llo"
+# define LPF64 "ll"
 #elif (BITS_PER_LONG == 32)
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPX64i "%Lx"
-# define LPO64 "%#Lo"
+# define LPU64 "%llu"
+# define LPD64 "%lld"
+# define LPX64 "%#llx"
+# define LPX64i "%llx"
+# define LPO64 "%#llo"
 # define LPF64 "L"
 #elif (BITS_PER_LONG == 64)
 # define LPU64 "%lu"

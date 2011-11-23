@@ -748,7 +748,7 @@ int ll_inode_getattr(struct inode *inode, struct obdo *obdo,
         if (rc == 0) {
                 obdo_refresh_inode(inode, obdo, obdo->o_valid);
                 CDEBUG(D_INODE,
-                       "objid "LPX64" size %Lu, blocks %llu, blksize %lu\n",
+                       "objid "LPX64" size %llu, blocks %llu, blksize %lu\n",
                        lli->lli_smd->lsm_object_id, i_size_read(inode),
                        (unsigned long long)inode->i_blocks,
                        (unsigned long)ll_inode_blksize(inode));
@@ -1867,7 +1867,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         ENTRY;
         retval = offset + ((origin == 2) ? i_size_read(inode) :
                            (origin == 1) ? file->f_pos : 0);
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%Lu=%#Lx(%s)\n",
+        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%llu=%#llx(%s)\n",
                inode->i_ino, inode->i_generation, inode, retval, retval,
                origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR" : "SEEK_SET");
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK, 1);

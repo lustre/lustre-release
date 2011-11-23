@@ -301,11 +301,11 @@ extern int  lwt_snapshot (cfs_cycles_t *now, int *ncpu, int *total_size,
 
 #if (defined(__KERNEL__) && defined(HAVE_KERN__U64_LONG_LONG)) || \
     (!defined(__KERNEL__) && defined(HAVE_USER__U64_LONG_LONG))
-# define LPU64 "%Lu"
-# define LPD64 "%Ld"
-# define LPX64 "%#Lx"
-# define LPX64i "%Lx"
-# define LPO64 "%#Lo"
+# define LPU64 "%llu"
+# define LPD64 "%lld"
+# define LPX64 "%#llx"
+# define LPX64i "%llx"
+# define LPO64 "%#llo"
 # define LPF64 "L"
 #else
 # define LPU64 "%lu"

@@ -474,7 +474,7 @@ static int lgssc_kr_negotiate(key_serial_t keyid, struct lgss_cred *cred,
         int                     rc = -1;
 
         logmsg(LL_TRACE, "child start on behalf of key %08x: "
-               "cred %p, uid %u, svc %u, nid %Lx, uids: %u:%u/%u:%u\n",
+               "cred %p, uid %u, svc %u, nid %llx, uids: %u:%u/%u:%u\n",
                keyid, cred, cred->lc_uid, cred->lc_tgt_svc, cred->lc_tgt_nid,
                kup->kup_uid, kup->kup_gid, kup->kup_fsuid, kup->kup_fsgid);
 
@@ -590,7 +590,7 @@ static int parse_callout_info(const char *coinfo,
         strncpy(uparam->kup_tgt, data[7], sizeof(uparam->kup_tgt));
 
         logmsg(LL_DEBUG, "parse call out info: secid %d, mech %s, ugid %u:%u "
-               "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%Lx, tgt %s\n",
+               "is_root %d, is_mdt %d, is_ost %d, svc %d, nid 0x%llx, tgt %s\n",
                uparam->kup_secid, uparam->kup_mech,
                uparam->kup_uid, uparam->kup_gid,
                uparam->kup_is_root, uparam->kup_is_mdt, uparam->kup_is_ost,

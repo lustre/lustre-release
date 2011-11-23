@@ -58,7 +58,7 @@
 #define ASSERT_MAX_SIZE_MB 60000ULL
 #define ASSERT_PAGE_INDEX(index, OP)                                    \
 do { if (index > ASSERT_MAX_SIZE_MB << (20 - CFS_PAGE_SHIFT)) {         \
-        CERROR("bad page index %lu > %Lu\n", index,                     \
+        CERROR("bad page index %lu > %llu\n", index,                    \
                ASSERT_MAX_SIZE_MB << (20 - CFS_PAGE_SHIFT));            \
         libcfs_debug = ~0UL;                                            \
         OP;                                                             \
@@ -66,7 +66,7 @@ do { if (index > ASSERT_MAX_SIZE_MB << (20 - CFS_PAGE_SHIFT)) {         \
 
 #define ASSERT_FILE_OFFSET(offset, OP)                                  \
 do { if (offset > ASSERT_MAX_SIZE_MB << 20) {                           \
-        CERROR("bad file offset %Lu > %Lu\n", offset,                   \
+        CERROR("bad file offset %llu > %llu\n", offset,                 \
                ASSERT_MAX_SIZE_MB << 20);                               \
         libcfs_debug = ~0UL;                                            \
         OP;                                                             \

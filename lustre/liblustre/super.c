@@ -314,8 +314,8 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
                                OBD_MD_FLSIZE;
 
         obdo_refresh_inode(inode, oinfo.oi_oa, oinfo.oi_oa->o_valid);
-        CDEBUG(D_INODE, "objid "LPX64" size %Lu, blocks %Lu, "
-               "blksize %Lu\n", lli->lli_smd->lsm_object_id,
+        CDEBUG(D_INODE, "objid "LPX64" size %llu, blocks %llu, "
+               "blksize %llu\n", lli->lli_smd->lsm_object_id,
                (long long unsigned)llu_i2stat(inode)->st_size,
                (long long unsigned)llu_i2stat(inode)->st_blocks,
                (long long unsigned)llu_i2stat(inode)->st_blksize);

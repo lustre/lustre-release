@@ -77,7 +77,8 @@ seq_proc_write_common(struct file *file, const char *buffer,
 
 	LASSERT(range != NULL);
 
-        rc = sscanf(buffer, "[%Lx - %Lx]\n",(long long unsigned *)&tmp.lsr_start,
+        rc = sscanf(buffer, "[%llx - %llx]\n",
+                    (long long unsigned *)&tmp.lsr_start,
                     (long long unsigned *)&tmp.lsr_end);
 	if (rc != 2 || !range_is_sane(&tmp) || range_is_zero(&tmp))
 		RETURN(-EINVAL);
