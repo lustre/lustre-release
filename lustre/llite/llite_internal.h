@@ -1361,10 +1361,8 @@ static inline void ll_dentry_rehash(struct dentry *dentry, int locked)
                 cfs_spin_lock(&ll_lookup_lock);
                 spin_lock(&dcache_lock);
         }
-        lock_dentry(dentry);
-        __d_drop(dentry);
-        unlock_dentry(dentry);
-        d_rehash_cond(dentry, 0);
+        if (d_unhashed(dentry))
+                d_rehash_cond(dentry, 0);
         if (!locked) {
                 spin_unlock(&dcache_lock);
                 cfs_spin_unlock(&ll_lookup_lock);
