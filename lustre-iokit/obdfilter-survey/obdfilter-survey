@@ -272,9 +272,14 @@ for trgt in $targets; do
     ndevs=$((ndevs+1))
 done
 if [ $case == "disk" ]; then
-        for ((i = 0; i < $ndevs; i++)); do
-            ost_names[$i]=${client_names[$i]}
-	done
+    if [ $rszhi -gt 1024 ]; then
+        echo "Test disk case support maximum 1024KB IO data" \
+             "(rszhi=$rszhi is too big) please use a smaller value."
+        exit 1
+    fi
+    for ((i = 0; i < $ndevs; i++)); do
+        ost_names[$i]=${client_names[$i]}
+    done
 fi
 if [ $case == "netdisk" ]; then
         if [ "$targets" ]; then
