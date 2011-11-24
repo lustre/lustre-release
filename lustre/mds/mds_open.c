@@ -1291,7 +1291,7 @@ int mds_open(struct mds_update_record *rec, int offset,
                         ldlm_reply_set_disposition(rep, DISP_OPEN_LOCK);
         }
 
-        LASSERTF(!mds_inode_is_orphan(dchild->d_inode),
+        LASSERTF(use_parent || !mds_inode_is_orphan(dchild->d_inode),
                  "dchild %.*s (%p) inode %p/%lu/%u\n", dchild->d_name.len,
                  dchild->d_name.name, dchild, dchild->d_inode,
                  dchild->d_inode->i_ino, dchild->d_inode->i_generation);
