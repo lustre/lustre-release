@@ -379,6 +379,7 @@ err:
         return 0;
 }
 
+#ifdef HAVE_REQUEST_QUEUE_UNPLUG_FN
 /*
  * kick off io on the underlying address space
  */
@@ -389,6 +390,7 @@ static void loop_unplug(struct request_queue *q)
         clear_bit(QUEUE_FLAG_PLUGGED, &q->queue_flags);
         blk_run_address_space(lo->lo_backing_file->f_mapping);
 }
+#endif
 
 static inline void loop_handle_bio(struct lloop_device *lo, struct bio *bio)
 {
@@ -541,7 +543,9 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
          */
         blk_queue_make_request(lo->lo_queue, loop_make_request);
         lo->lo_queue->queuedata = lo;
+#ifdef HAVE_REQUEST_QUEUE_UNPLUG_FN
         lo->lo_queue->unplug_fn = loop_unplug;
+#endif
 
         /* queue parameters */
         CLASSERT(CFS_PAGE_SIZE < (1 << (sizeof(unsigned short) * 8)));
