@@ -1929,8 +1929,7 @@ int ll_iocontrol(struct inode *inode, struct file *file,
                 oinfo.oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS |
                                        OBD_MD_FLGROUP;
                 oinfo.oi_capa = ll_mdscapa_get(inode);
-                obdo_from_inode(oinfo.oi_oa, inode,
-                                &ll_i2info(inode)->lli_fid, 0);
+                obdo_set_parent_fid(oinfo.oi_oa, &ll_i2info(inode)->lli_fid);
                 rc = obd_setattr_rqset(sbi->ll_dt_exp, &oinfo, NULL);
                 capa_put(oinfo.oi_capa);
                 OBDO_FREE(oinfo.oi_oa);

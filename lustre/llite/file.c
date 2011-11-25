@@ -1249,8 +1249,9 @@ static int ll_lov_recreate(struct inode *inode, obd_id id, obd_seq seq,
         oa->o_nlink = ost_idx;
         oa->o_flags |= OBD_FL_RECREATE_OBJS;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
-        obdo_from_inode(oa, inode, &ll_i2info(inode)->lli_fid, OBD_MD_FLTYPE |
-                        OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        obdo_from_inode(oa, inode, OBD_MD_FLTYPE | OBD_MD_FLATIME |
+                                   OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+        obdo_set_parent_fid(oa, &ll_i2info(inode)->lli_fid);
         memcpy(lsm2, lsm, lsm_size);
         rc = obd_create(exp, oa, &lsm2, &oti);
 
@@ -1641,8 +1642,8 @@ int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
         fm_key.oa.o_seq = lsm->lsm_object_seq;
         fm_key.oa.o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
 
-        obdo_from_inode(&fm_key.oa, inode, &ll_i2info(inode)->lli_fid,
-                        OBD_MD_FLSIZE);
+        obdo_from_inode(&fm_key.oa, inode, OBD_MD_FLSIZE);
+        obdo_set_parent_fid(&fm_key.oa, &ll_i2info(inode)->lli_fid);
         /* If filesize is 0, then there would be no objects for mapping */
         if (fm_key.oa.o_size == 0) {
                 fiemap->fm_mapped_extents = 0;
@@ -2048,10 +2049,11 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                 oinfo->oi_oa->o_id = lsm->lsm_object_id;
                 oinfo->oi_oa->o_seq = lsm->lsm_object_seq;
                 oinfo->oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-                obdo_from_inode(oinfo->oi_oa, inode, &ll_i2info(inode)->lli_fid,
+                obdo_from_inode(oinfo->oi_oa, inode,
                                 OBD_MD_FLTYPE | OBD_MD_FLATIME |
                                 OBD_MD_FLMTIME | OBD_MD_FLCTIME |
                                 OBD_MD_FLGROUP);
+                obdo_set_parent_fid(oinfo->oi_oa, &ll_i2info(inode)->lli_fid);
                 oinfo->oi_md = lsm;
                 oinfo->oi_capa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
                 err = obd_sync_rqset(ll_i2sbi(inode)->ll_dt_exp, oinfo, 0,

@@ -290,8 +290,7 @@ int llu_objects_destroy(struct ptlrpc_request *req, struct inode *dir)
         oa->o_seq = lsm->lsm_object_seq;
         oa->o_mode = body->mode & S_IFMT;
         oa->o_valid = OBD_MD_FLID | OBD_MD_FLTYPE | OBD_MD_FLGROUP;
-        obdo_from_inode(oa, NULL, &llu_i2info(dir)->lli_fid, 0);
-
+        obdo_set_parent_fid(oa, &llu_i2info(dir)->lli_fid);
         if (body->valid & OBD_MD_FLCOOKIE) {
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti.oti_logcookies =

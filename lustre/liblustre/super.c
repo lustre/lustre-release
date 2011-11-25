@@ -289,7 +289,7 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
                                OBD_MD_FLBLKSZ | OBD_MD_FLMTIME |
                                OBD_MD_FLCTIME | OBD_MD_FLGROUP |
                                OBD_MD_FLATIME | OBD_MD_FLEPOCH;
-        obdo_from_inode(oinfo.oi_oa, NULL, &llu_i2info(inode)->lli_fid, 0);
+        obdo_set_parent_fid(oinfo.oi_oa, &llu_i2info(inode)->lli_fid);
         if (sync) {
                 oinfo.oi_oa->o_valid |= OBD_MD_FLFLAGS;
                 oinfo.oi_oa->o_flags |= OBD_FL_SRVLOCK;

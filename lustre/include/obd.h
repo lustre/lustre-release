@@ -1727,8 +1727,8 @@ static inline struct md_open_data *obd_mod_alloc(void)
         }                                                       \
 })
 
-extern void obdo_from_inode(struct obdo *dst, struct inode *src,
-                            struct lu_fid *parent, obd_flag valid);
+void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid);
+void obdo_set_parent_fid(struct obdo *dst, const struct lu_fid *parent);
 
 /* return 1 if client should be resend request */
 static inline int client_should_resend(int resend, struct client_obd *cli)

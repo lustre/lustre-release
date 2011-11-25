@@ -1000,8 +1000,8 @@ void ccc_req_attr_set(const struct lu_env *env,
                                 OBD_MD_FLUID|OBD_MD_FLGID;
                 }
         }
-        obdo_from_inode(oa, inode, &cl_i2info(inode)->lli_fid,
-                        valid_flags & flags);
+        obdo_from_inode(oa, inode, valid_flags & flags);
+        obdo_set_parent_fid(oa, &cl_i2info(inode)->lli_fid);
 }
 
 const struct cl_req_operations ccc_req_ops = {

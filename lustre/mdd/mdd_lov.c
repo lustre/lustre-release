@@ -536,16 +536,14 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
                 /* When setting attr to ost, FLBKSZ is not needed. */
                 oa->o_valid &= ~OBD_MD_FLBLKSZ;
-                obdo_from_la(oa, la, OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                             OBD_MD_FLMTIME | OBD_MD_FLCTIME | OBD_MD_FLSIZE);
-
+                obdo_from_la(oa, la, LA_TYPE | LA_ATIME | LA_MTIME |
+                                     LA_CTIME | LA_SIZE);
                 /*
                  * XXX: Pack lustre id to OST, in OST, it will be packed by
                  * filter_fid, but can not see what is the usages. So just pack
                  * o_seq o_ver here, maybe fix it after this cycle.
                  */
-                obdo_from_inode(oa, NULL,
-                                (struct lu_fid *)mdd_object_fid(child), 0);
+                obdo_set_parent_fid(oa, mdd_object_fid(child));
                 oinfo->oi_oa = oa;
                 oinfo->oi_md = lsm;
                 oinfo->oi_capa = NULL;
@@ -857,7 +855,7 @@ static int mdd_osc_setattr_async(struct obd_device *obd, __u32 uid, __u32 gid,
                 oti.oti_logcookies = logcookies;
         }
 
-        obdo_from_inode(oinfo.oi_oa, NULL, (struct lu_fid *)parent, 0);
+        obdo_set_parent_fid(oinfo.oi_oa, parent);
         oinfo.oi_capa = oc;
 
         /* do async setattr from mds to ost not waiting for responses. */

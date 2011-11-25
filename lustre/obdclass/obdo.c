@@ -54,18 +54,18 @@
 #include <lustre/lustre_idl.h>
 #endif
 
-static void obdo_set_parent_fid(struct obdo *dst, struct lu_fid *parent)
+void obdo_set_parent_fid(struct obdo *dst, const struct lu_fid *parent)
 {
         dst->o_parent_oid = fid_oid(parent);
         dst->o_parent_seq = fid_seq(parent);
         dst->o_parent_ver = fid_ver(parent);
         dst->o_valid |= OBD_MD_FLGENER | OBD_MD_FLFID;
 }
+EXPORT_SYMBOL(obdo_set_parent_fid);
 
 /* WARNING: the file systems must take care not to tinker with
    attributes they don't manage (such as blocks). */
-void obdo_from_inode(struct obdo *dst, struct inode *src, struct lu_fid *parent,
-                     obd_flag valid)
+void obdo_from_inode(struct obdo *dst, struct inode *src, obd_flag valid)
 {
         obd_flag newvalid = 0;
 
@@ -120,8 +120,6 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, struct lu_fid *parent,
                 dst->o_flags = ll_inode_flags(src);
                 newvalid |= OBD_MD_FLFLAGS;
         }
-        if (parent)
-                obdo_set_parent_fid(dst, parent);
         dst->o_valid |= newvalid;
 }
 EXPORT_SYMBOL(obdo_from_inode);
