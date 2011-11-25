@@ -659,7 +659,7 @@ int ll_send_mgc_param(struct obd_export *mgc, char *string)
                 return -ENOMEM;
 
         strncpy(msp->mgs_param, string, MGS_PARAM_MAXLEN);
-        rc = obd_set_info_async(mgc, sizeof(KEY_SET_INFO), KEY_SET_INFO,
+        rc = obd_set_info_async(NULL, mgc, sizeof(KEY_SET_INFO), KEY_SET_INFO,
                                 sizeof(struct mgs_send_param), msp, NULL);
         if (rc)
                 CERROR("Failed to set parameter: %d\n", rc);
@@ -1510,8 +1510,8 @@ out_free:
                 /* get ost count when count is zero, get mdt count otherwise */
                 exp = count ? sbi->ll_md_exp : sbi->ll_dt_exp;
                 vallen = sizeof(count);
-                rc = obd_get_info(exp, sizeof(KEY_TGT_COUNT), KEY_TGT_COUNT,
-                                  &vallen, &count, NULL);
+                rc = obd_get_info(NULL, exp, sizeof(KEY_TGT_COUNT),
+                                  KEY_TGT_COUNT, &vallen, &count, NULL);
                 if (rc) {
                         CERROR("get target count failed: %d\n", rc);
                         RETURN(rc);

@@ -322,7 +322,7 @@ static void lmv_set_timeouts(struct obd_device *obd)
                 if (tgts->ltd_exp == NULL)
                         continue;
 
-                obd_set_info_async(tgts->ltd_exp, sizeof(KEY_INTERMDS),
+                obd_set_info_async(NULL, tgts->ltd_exp, sizeof(KEY_INTERMDS),
                                    KEY_INTERMDS, 0, NULL, NULL);
         }
 }
@@ -757,7 +757,7 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
                                          (int) sizeof(struct obd_uuid))))
                         RETURN(-EFAULT);
 
-                rc = obd_statfs(mdc_obd, &stat_buf,
+                rc = obd_statfs(NULL, lmv->tgts[index].ltd_exp, &stat_buf,
                                 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                                 0);
                 if (rc)
@@ -1170,9 +1170,10 @@ out:
         RETURN(rc);
 }
 
-static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      __u64 max_age, __u32 flags)
+static int lmv_statfs(const struct lu_env *env, struct obd_export *exp,
+                      struct obd_statfs *osfs, __u64 max_age, __u32 flags)
 {
+        struct obd_device     *obd = class_exp2obd(exp);
         struct lmv_obd        *lmv = &obd->u.lmv;
         struct obd_statfs     *temp;
         int                    rc = 0;
@@ -1191,7 +1192,7 @@ static int lmv_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                 if (lmv->tgts[i].ltd_exp == NULL)
                         continue;
 
-                rc = obd_statfs(lmv->tgts[i].ltd_exp->exp_obd, temp,
+                rc = obd_statfs(env, lmv->tgts[i].ltd_exp, temp,
                                 max_age, flags);
                 if (rc) {
                         CERROR("can't stat MDS #%d (%s), error %d\n", i,
@@ -2648,8 +2649,8 @@ static int lmv_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         RETURN(rc);
 }
 
-static int lmv_get_info(struct obd_export *exp, __u32 keylen,
-                        void *key, __u32 *vallen, void *val,
+static int lmv_get_info(const struct lu_env *env, struct obd_export *exp,
+                        __u32 keylen, void *key, __u32 *vallen, void *val,
                         struct lov_stripe_md *lsm)
 {
         struct obd_device       *obd;
@@ -2685,7 +2686,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                                 continue;
                         }
 
-                        if (!obd_get_info(tgts->ltd_exp, keylen, key,
+                        if (!obd_get_info(env, tgts->ltd_exp, keylen, key,
                                           vallen, val, NULL))
                                 RETURN(0);
                 }
@@ -2699,7 +2700,7 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
                  * Forwarding this request to first MDS, it should know LOV
                  * desc.
                  */
-                rc = obd_get_info(lmv->tgts[0].ltd_exp, keylen, key,
+                rc = obd_get_info(env, lmv->tgts[0].ltd_exp, keylen, key,
                                   vallen, val, NULL);
                 if (!rc && KEY_IS(KEY_CONN_DATA)) {
                         exp->exp_connect_flags =
@@ -2715,9 +2716,9 @@ static int lmv_get_info(struct obd_export *exp, __u32 keylen,
         RETURN(-EINVAL);
 }
 
-int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
-                       void *key, obd_count vallen, void *val,
-                       struct ptlrpc_request_set *set)
+int lmv_set_info_async(const struct lu_env *env, struct obd_export *exp,
+                       obd_count keylen, void *key, obd_count vallen,
+                       void *val, struct ptlrpc_request_set *set)
 {
         struct lmv_tgt_desc    *tgt;
         struct obd_device      *obd;
@@ -2742,7 +2743,7 @@ int lmv_set_info_async(struct obd_export *exp, obd_count keylen,
                         if (!tgt->ltd_exp)
                                 continue;
 
-                        err = obd_set_info_async(tgt->ltd_exp,
+                        err = obd_set_info_async(env, tgt->ltd_exp,
                                                  keylen, key, vallen, val, set);
                         if (err && rc == 0)
                                 rc = err;

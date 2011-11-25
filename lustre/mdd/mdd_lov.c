@@ -484,7 +484,7 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 }
 
                 OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_OPEN_WAIT_CREATE, 10);
-                rc = obd_create(lov_exp, oa, &lsm, oti);
+                rc = obd_create(env, lov_exp, oa, &lsm, oti);
                 if (rc) {
                         if (rc > 0) {
                                 CERROR("Create error for "DFID": %d\n",
@@ -632,7 +632,7 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
         CDEBUG(D_INFO, "destroying OSS object "LPU64":"LPU64"\n", oa->o_seq,
                oa->o_id);
 
-        rc = obd_destroy(lov_exp, oa, lsm, oti, NULL, NULL);
+        rc = obd_destroy(env, lov_exp, oa, lsm, oti, NULL, NULL);
 
         obd_free_memmd(lov_exp, &lsm);
         RETURN(rc);

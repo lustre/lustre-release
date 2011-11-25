@@ -1119,8 +1119,9 @@ dont_check_exports:
 
         if (export->exp_imp_reverse != NULL) {
                 /* destroyed import can be still referenced in ctxt */
-                obd_set_info_async(export, sizeof(KEY_REVIMP_UPD),
-                                   KEY_REVIMP_UPD, 0, NULL, NULL);
+                obd_set_info_async(req->rq_svc_thread->t_env, export,
+                                   sizeof(KEY_REVIMP_UPD), KEY_REVIMP_UPD,
+                                   0, NULL, NULL);
 
                 client_destroy_import(export->exp_imp_reverse);
         }
@@ -2240,7 +2241,7 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
 
 int target_handle_ping(struct ptlrpc_request *req)
 {
-        obd_ping(req->rq_export);
+        obd_ping(req->rq_svc_thread->t_env, req->rq_export);
         return req_capsule_server_pack(&req->rq_pill);
 }
 

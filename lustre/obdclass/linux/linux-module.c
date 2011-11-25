@@ -304,7 +304,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                 class_incref(obd, __FUNCTION__, cfs_current());
                 cfs_read_unlock(&obd_dev_lock);
 
-                if (obd_health_check(obd)) {
+                if (obd_health_check(NULL, obd)) {
                         rc += snprintf(page + rc, count - rc,
                                        "device %s reported unhealthy\n",
                                        obd->obd_name);

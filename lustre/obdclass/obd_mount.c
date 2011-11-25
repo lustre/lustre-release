@@ -648,7 +648,7 @@ static int lustre_start_mgc(struct super_block *sb)
 
         obd = class_name2obd(mgcname);
         if (obd && !obd->obd_stopping) {
-                rc = obd_set_info_async(obd->obd_self_export,
+                rc = obd_set_info_async(NULL, obd->obd_self_export,
                                         strlen(KEY_MGSSEC), KEY_MGSSEC,
                                         strlen(mgssec), mgssec, NULL);
                 if (rc)
@@ -663,7 +663,7 @@ static int lustre_start_mgc(struct super_block *sb)
                         int vallen = sizeof(*data);
                         __u32 *flags = &lsi->lsi_lmd->lmd_flags;
 
-                        rc = obd_get_info(obd->obd_self_export,
+                        rc = obd_get_info(NULL, obd->obd_self_export,
                                           strlen(KEY_CONN_DATA), KEY_CONN_DATA,
                                           &vallen, data, NULL);
                         LASSERT(rc == 0);
@@ -697,7 +697,7 @@ static int lustre_start_mgc(struct super_block *sb)
                    if at all possible. */
                 recov_bk++;
                 CDEBUG(D_MOUNT, "%s: Set MGC reconnect %d\n", mgcname,recov_bk);
-                rc = obd_set_info_async(obd->obd_self_export,
+                rc = obd_set_info_async(NULL, obd->obd_self_export,
                                         sizeof(KEY_INIT_RECOV_BACKUP),
                                         KEY_INIT_RECOV_BACKUP,
                                         sizeof(recov_bk), &recov_bk, NULL);
@@ -792,7 +792,7 @@ static int lustre_start_mgc(struct super_block *sb)
                 GOTO(out_free, rc = -ENOTCONN);
         }
 
-        rc = obd_set_info_async(obd->obd_self_export,
+        rc = obd_set_info_async(NULL, obd->obd_self_export,
                                 strlen(KEY_MGSSEC), KEY_MGSSEC,
                                 strlen(mgssec), mgssec, NULL);
         if (rc)
@@ -804,7 +804,7 @@ static int lustre_start_mgc(struct super_block *sb)
 
         /* Try all connections, but only once. */
         recov_bk = 1;
-        rc = obd_set_info_async(obd->obd_self_export,
+        rc = obd_set_info_async(NULL, obd->obd_self_export,
                                 sizeof(KEY_INIT_RECOV_BACKUP),
                                 KEY_INIT_RECOV_BACKUP,
                                 sizeof(recov_bk), &recov_bk, NULL);
@@ -925,7 +925,7 @@ static int server_mgc_set_fs(struct obd_device *mgc, struct super_block *sb)
         CDEBUG(D_MOUNT, "Set mgc disk for %s\n", lsi->lsi_lmd->lmd_dev);
 
         /* cl_mgc_sem in mgc insures we sleep if the mgc_fs is busy */
-        rc = obd_set_info_async(mgc->obd_self_export,
+        rc = obd_set_info_async(NULL, mgc->obd_self_export,
                                 sizeof(KEY_SET_FS), KEY_SET_FS,
                                 sizeof(*sb), sb, NULL);
         if (rc) {
@@ -942,7 +942,7 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
 
         CDEBUG(D_MOUNT, "Unassign mgc disk\n");
 
-        rc = obd_set_info_async(mgc->obd_self_export,
+        rc = obd_set_info_async(NULL, mgc->obd_self_export,
                                 sizeof(KEY_CLEAR_FS), KEY_CLEAR_FS,
                                 0, NULL, NULL);
         RETURN(rc);
@@ -1090,7 +1090,7 @@ int server_register_target(struct super_block *sb)
 
         /* Register the target */
         /* FIXME use mgc_process_config instead */
-        rc = obd_set_info_async(mgc->u.cli.cl_mgc_mgsexp,
+        rc = obd_set_info_async(NULL, mgc->u.cli.cl_mgc_mgsexp,
                                 sizeof(KEY_REGISTER_TARGET), KEY_REGISTER_TARGET,
                                 sizeof(*mti), mti, NULL);
         if (rc) {
@@ -1173,7 +1173,7 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
         mti->mti_flags |= LDD_F_OPC_READY;
 
         /* FIXME use mgc_process_config instead */
-        rc = obd_set_info_async(mgc->u.cli.cl_mgc_mgsexp,
+        rc = obd_set_info_async(NULL, mgc->u.cli.cl_mgc_mgsexp,
                                 sizeof(KEY_REGISTER_TARGET),
                                 KEY_REGISTER_TARGET,
                                 sizeof(*mti), mti, NULL);

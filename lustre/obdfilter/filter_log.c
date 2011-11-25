@@ -184,7 +184,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         }
 
         while (count > 0) {
-                rc = filter_destroy(exp, oa, NULL, NULL, NULL, NULL);
+                rc = filter_destroy(NULL, exp, oa, NULL, NULL, NULL, NULL);
                 if (rc == 0)
                         CDEBUG(D_RPCTRACE, "object "LPU64" is destroyed\n",
                                oid);
@@ -240,7 +240,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         oinfo.oi_oa->o_lcookie = *cookie;
         oid = oinfo.oi_oa->o_id;
 
-        rc = filter_setattr(exp, &oinfo, NULL);
+        rc = filter_setattr(NULL, exp, &oinfo, NULL);
         OBDO_FREE(oinfo.oi_oa);
 
         if (rc == -ENOENT) {

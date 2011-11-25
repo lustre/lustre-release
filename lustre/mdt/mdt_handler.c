@@ -4891,7 +4891,8 @@ static const struct lu_object_operations mdt_obj_ops = {
         .loo_object_print   = mdt_object_print
 };
 
-static int mdt_obd_set_info_async(struct obd_export *exp,
+static int mdt_obd_set_info_async(const struct lu_env *env,
+                                  struct obd_export *exp,
                                   __u32 keylen, void *key,
                                   __u32 vallen, void *val,
                                   struct ptlrpc_request_set *set)

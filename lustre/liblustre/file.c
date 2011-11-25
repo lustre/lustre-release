@@ -302,7 +302,7 @@ int llu_objects_destroy(struct ptlrpc_request *req, struct inode *dir)
                 }
         }
 
-        rc = obd_destroy(llu_i2obdexp(dir), oa, lsm, &oti, NULL, NULL);
+        rc = obd_destroy(NULL, llu_i2obdexp(dir), oa, lsm, &oti, NULL, NULL);
         OBDO_FREE(oa);
         if (rc)
                 CERROR("obd destroy objid 0x"LPX64" error %d\n",

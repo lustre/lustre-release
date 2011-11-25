@@ -1251,7 +1251,7 @@ static int ll_lov_recreate(struct inode *inode, obd_id id, obd_seq seq,
                                    OBD_MD_FLMTIME | OBD_MD_FLCTIME);
         obdo_set_parent_fid(oa, &ll_i2info(inode)->lli_fid);
         memcpy(lsm2, lsm, lsm_size);
-        rc = obd_create(exp, oa, &lsm2, &oti);
+        rc = obd_create(NULL, exp, oa, &lsm2, &oti);
 
         OBD_FREE_LARGE(lsm2, lsm_size);
         GOTO(out, rc);
@@ -1650,7 +1650,8 @@ int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
 
         memcpy(&fm_key.fiemap, fiemap, sizeof(*fiemap));
 
-        rc = obd_get_info(exp, sizeof(fm_key), &fm_key, &vallen, fiemap, lsm);
+        rc = obd_get_info(NULL, exp, sizeof(fm_key), &fm_key, &vallen,
+                          fiemap, lsm);
         if (rc)
                 CERROR("obd_get_info failed: rc = %d\n", rc);
 

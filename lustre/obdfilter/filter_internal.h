@@ -144,16 +144,17 @@ int filter_update_server_data(struct obd_device *);
 int filter_update_last_objid(struct obd_device *, obd_seq, int force_sync);
 int filter_common_setup(struct obd_device *, struct lustre_cfg *lcfg,
                         void *option);
-int filter_destroy(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md *md, struct obd_trans_info *,
-                   struct obd_export *, void *);
+int filter_destroy(const struct lu_env *env, struct obd_export *exp,
+                   struct obdo *oa, struct lov_stripe_md *md,
+                   struct obd_trans_info *, struct obd_export *, void *);
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti);
-int filter_setattr(struct obd_export *exp, struct obd_info *oinfo,
-                   struct obd_trans_info *oti);
+int filter_setattr(const struct lu_env *env, struct obd_export *exp,
+                   struct obd_info *oinfo, struct obd_trans_info *oti);
 
-int filter_create(struct obd_export *exp, struct obdo *oa,
-                  struct lov_stripe_md **ea, struct obd_trans_info *oti);
+int filter_create(const struct lu_env *env, struct obd_export *exp,
+                  struct obdo *oa, struct lov_stripe_md **ea,
+                  struct obd_trans_info *oti);
 
 struct obd_llog_group *filter_find_olg(struct obd_device *obd, int seq);
 
@@ -162,11 +163,13 @@ extern struct ldlm_valblock_ops filter_lvbo;
 
 
 /* filter_io.c */
-int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
+int filter_preprw(const struct lu_env *env, int cmd, struct obd_export *,
+                  struct obdo *, int objcount,
                   struct obd_ioobj *, struct niobuf_remote *,
                   int *, struct niobuf_local *, struct obd_trans_info *,
                   struct lustre_capa *);
-int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
+int filter_commitrw(const struct lu_env *, int cmd, struct obd_export *,
+                    struct obdo *, int objcount,
                     struct obd_ioobj *, struct niobuf_remote *,  int,
                     struct niobuf_local *, struct obd_trans_info *, int rc);
 void filter_release_cache(struct obd_device *, struct obd_ioobj *,

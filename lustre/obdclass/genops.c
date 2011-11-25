@@ -591,7 +591,7 @@ int class_notify_sptlrpc_conf(const char *fsname, int namelen)
 
                 class_incref(obd, __FUNCTION__, obd);
                 cfs_read_unlock(&obd_dev_lock);
-                rc2 = obd_set_info_async(obd->obd_self_export,
+                rc2 = obd_set_info_async(NULL, obd->obd_self_export,
                                          sizeof(KEY_SPTLRPC_CONF),
                                          KEY_SPTLRPC_CONF, 0, NULL, NULL);
                 rc = rc ? rc : rc2;

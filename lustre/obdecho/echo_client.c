@@ -2051,9 +2051,9 @@ static int echo_md_handler(struct echo_device *ed, int command,
         return rc;
 }
 
-static int echo_create_object(struct echo_device *ed, int on_target,
-                              struct obdo *oa, void *ulsm, int ulsm_nob,
-                              struct obd_trans_info *oti)
+static int echo_create_object(const struct lu_env *env, struct echo_device *ed,
+                              int on_target, struct obdo *oa, void *ulsm,
+                              int ulsm_nob, struct obd_trans_info *oti)
 {
         struct echo_object     *eco;
         struct echo_client_obd *ec = ed->ed_ec;
@@ -2112,7 +2112,7 @@ static int echo_create_object(struct echo_device *ed, int on_target,
                 /* Only echo objects are allowed to be created */
                 LASSERT((oa->o_valid & OBD_MD_FLGROUP) &&
                         (oa->o_seq == FID_SEQ_ECHO));
-                rc = obd_create(ec->ec_exp, oa, &lsm, oti);
+                rc = obd_create(env, ec->ec_exp, oa, &lsm, oti);
                 if (rc != 0) {
                         CERROR("Cannot create objects: rc = %d\n", rc);
                         GOTO(failed, rc);
@@ -2134,7 +2134,7 @@ static int echo_create_object(struct echo_device *ed, int on_target,
 
  failed:
         if (created && rc)
-                obd_destroy(ec->ec_exp, oa, lsm, oti, NULL, NULL);
+                obd_destroy(env, ec->ec_exp, oa, lsm, oti, NULL, NULL);
         if (lsm)
                 obd_free_memmd(ec->ec_exp, &lsm);
         if (rc)
@@ -2421,8 +2421,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                 oti->oti_transno = 0;
 
                 lpages = npages;
-                ret = obd_preprw(rw, exp, oa, 1, &ioo, rnb, &lpages, lnb, oti,
-                                 NULL);
+                ret = obd_preprw(NULL, rw, exp, oa, 1, &ioo, rnb, &lpages,
+                                 lnb, oti, NULL);
                 if (ret != 0)
                         GOTO(out, ret);
                 LASSERT(lpages == npages);
@@ -2454,7 +2454,8 @@ static int echo_client_prep_commit(struct obd_export *exp, int rw,
                                                              rnb[i].len);
                 }
 
-                ret = obd_commitrw(rw, exp, oa, 1,&ioo,rnb,npages,lnb,oti,ret);
+                ret = obd_commitrw(NULL, rw, exp, oa, 1, &ioo,
+                                   rnb, npages, lnb, oti, ret);
                 if (ret != 0)
                         GOTO(out, ret);
 
@@ -2576,8 +2577,8 @@ echo_client_cancel(struct obd_export *exp, struct obdo *oa)
 }
 
 static int
-echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
-                      int len, void *karg, void *uarg)
+echo_client_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+                      void *karg, void *uarg)
 {
         struct obd_device      *obd = exp->exp_obd;
         struct echo_device     *ed = obd2echo_dev(obd);
@@ -2585,6 +2586,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         struct echo_object     *eco;
         struct obd_ioctl_data  *data = karg;
         struct obd_trans_info   dummy_oti;
+        struct lu_env          *env;
         struct oti_req_ack_lock *ack_lock;
         struct obdo            *oa;
         struct lu_fid           fid;
@@ -2610,14 +2612,21 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         if (rc < 0)
                 RETURN(rc);
 
+        OBD_ALLOC_PTR(env);
+        if (env == NULL)
+                RETURN(-ENOMEM);
+
+        rc = lu_env_init(env, LCT_DT_THREAD);
+        if (rc)
+                GOTO(out, rc = -ENOMEM);
+
         switch (cmd) {
         case OBD_IOC_CREATE:                    /* may create echo object */
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_create_object (ed, 1, oa,
-                                         data->ioc_pbuf1, data->ioc_plen1,
-                                         &dummy_oti);
+                rc = echo_create_object(env, ed, 1, oa, data->ioc_pbuf1,
+                                        data->ioc_plen1, &dummy_oti);
                 GOTO(out, rc);
 
         case OBD_IOC_ECHO_MD: {
@@ -2650,7 +2659,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
         }
         case OBD_IOC_ECHO_ALLOC_SEQ: {
-                struct lu_env   *env;
+                struct lu_env   *cl_env;
                 int              refcheck;
                 __u64            seq;
                 int              max_count;
@@ -2658,19 +2667,19 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO(out, rc = -EPERM);
 
-                env = cl_env_get(&refcheck);
-                if (IS_ERR(env))
-                        GOTO(out, rc = PTR_ERR(env));
+                cl_env = cl_env_get(&refcheck);
+                if (IS_ERR(cl_env))
+                        GOTO(out, rc = PTR_ERR(cl_env));
 
-                rc = lu_env_refill_by_tags(env, ECHO_MD_CTX_TAG,
+                rc = lu_env_refill_by_tags(cl_env, ECHO_MD_CTX_TAG,
                                             ECHO_MD_SES_TAG);
                 if (rc != 0) {
-                        cl_env_put(env, &refcheck);
+                        cl_env_put(cl_env, &refcheck);
                         GOTO(out, rc);
                 }
 
-                rc = seq_client_get_seq(env, ed->ed_cl_seq, &seq);
-                cl_env_put(env, &refcheck);
+                rc = seq_client_get_seq(cl_env, ed->ed_cl_seq, &seq);
+                cl_env_put(cl_env, &refcheck);
                 if (rc < 0) {
                         CERROR("%s: Can not alloc seq: rc = %d\n",
                                obd->obd_name, rc);
@@ -2690,9 +2699,9 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_get_object (&eco, ed, oa);
+                rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
-                        rc = obd_destroy(ec->ec_exp, oa, eco->eo_lsm,
+                        rc = obd_destroy(env, ec->ec_exp, oa, eco->eo_lsm,
                                          &dummy_oti, NULL, NULL);
                         if (rc == 0)
                                 eco->eo_deleted = 1;
@@ -2701,12 +2710,12 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 GOTO(out, rc);
 
         case OBD_IOC_GETATTR:
-                rc = echo_get_object (&eco, ed, oa);
+                rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
                         struct obd_info oinfo = { { { 0 } } };
                         oinfo.oi_md = eco->eo_lsm;
                         oinfo.oi_oa = oa;
-                        rc = obd_getattr(ec->ec_exp, &oinfo);
+                        rc = obd_getattr(env, ec->ec_exp, &oinfo);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);
@@ -2715,13 +2724,13 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                 if (!cfs_capable(CFS_CAP_SYS_ADMIN))
                         GOTO (out, rc = -EPERM);
 
-                rc = echo_get_object (&eco, ed, oa);
+                rc = echo_get_object(&eco, ed, oa);
                 if (rc == 0) {
                         struct obd_info oinfo = { { { 0 } } };
                         oinfo.oi_oa = oa;
                         oinfo.oi_md = eco->eo_lsm;
 
-                        rc = obd_setattr(ec->ec_exp, &oinfo, NULL);
+                        rc = obd_setattr(env, ec->ec_exp, &oinfo, NULL);
                         echo_put_object(eco);
                 }
                 GOTO(out, rc);
@@ -2756,7 +2765,7 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
                                 echo_put_object(eco);
                         }
                 } else {
-                        rc = echo_create_object(ed, 0, oa,
+                        rc = echo_create_object(env, ed, 0, oa,
                                                 data->ioc_pbuf1,
                                                 data->ioc_plen1, &dummy_oti);
                 }
@@ -2782,7 +2791,9 @@ echo_client_iocontrol(unsigned int cmd, struct obd_export *exp,
         }
 
         EXIT;
- out:
+out:
+        lu_env_fini(env);
+        OBD_FREE_PTR(env);
 
         /* XXX this should be in a helper also called by target_send_reply */
         for (ack_lock = dummy_oti.oti_ack_locks, i = 0; i < 4;

@@ -187,7 +187,8 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
         memcpy(&repbody->oa, &body->oa, sizeof(body->oa));
 
         /* Do the destroy and set the reply status accordingly  */
-        req->rq_status = obd_destroy(exp, &repbody->oa, NULL, oti, NULL, capa);
+        req->rq_status = obd_destroy(req->rq_svc_thread->t_env, exp,
+                                     &repbody->oa, NULL, oti, NULL, capa);
         RETURN(0);
 }
 
@@ -286,7 +287,7 @@ static int ost_getattr(struct obd_export *exp, struct ptlrpc_request *req)
         oinfo->oi_oa = &repbody->oa;
         oinfo->oi_capa = capa;
 
-        req->rq_status = obd_getattr(exp, oinfo);
+        req->rq_status = obd_getattr(req->rq_svc_thread->t_env, exp, oinfo);
 
         OBD_FREE_PTR(oinfo);
 
@@ -309,7 +310,8 @@ static int ost_statfs(struct ptlrpc_request *req)
 
         osfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
 
-        req->rq_status = obd_statfs(req->rq_export->exp_obd, osfs,
+        req->rq_status = obd_statfs(req->rq_svc_thread->t_env, req->rq_export,
+                                    osfs,
                                     cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
                                     0);
         if (req->rq_status != 0)
@@ -341,7 +343,8 @@ static int ost_create(struct obd_export *exp, struct ptlrpc_request *req,
         repbody->oa = body->oa;
         oti->oti_logcookies = &body->oa.o_lcookie;
 
-        req->rq_status = obd_create(exp, &repbody->oa, NULL, oti);
+        req->rq_status = obd_create(req->rq_svc_thread->t_env, exp,
+                                    &repbody->oa, NULL, oti);
         //obd_log_cancel(conn, NULL, 1, oti->oti_logcookies, 0);
         RETURN(0);
 }
@@ -414,7 +417,8 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                 oinfo->oi_capa = capa;
                 oinfo->oi_flags = OBD_FL_PUNCH;
 
-                req->rq_status = obd_punch(exp, oinfo, oti, NULL);
+                req->rq_status = obd_punch(req->rq_svc_thread->t_env, exp,
+                                           oinfo, oti, NULL);
                 OBD_FREE_PTR(oinfo);
 unlock:
                 ost_lock_put(exp, &lh, LCK_PW);
@@ -461,8 +465,9 @@ static int ost_sync(struct obd_export *exp, struct ptlrpc_request *req)
 
         oinfo->oi_oa = &repbody->oa;
         oinfo->oi_capa = capa;
-        req->rq_status = obd_sync(exp, oinfo, repbody->oa.o_size,
-                                  repbody->oa.o_blocks, NULL);
+        req->rq_status = obd_sync(req->rq_svc_thread->t_env, exp, oinfo,
+                                  repbody->oa.o_size, repbody->oa.o_blocks,
+                                  NULL);
         OBD_FREE_PTR(oinfo);
 
         ost_drop_id(exp, &repbody->oa);
@@ -507,7 +512,8 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
         oinfo->oi_oa = &repbody->oa;
         oinfo->oi_capa = capa;
 
-        req->rq_status = obd_setattr(exp, oinfo, oti);
+        req->rq_status = obd_setattr(req->rq_svc_thread->t_env, exp, oinfo,
+                                     oti);
 
         OBD_FREE_PTR(oinfo);
 
@@ -729,8 +735,9 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
 
         npages = OST_THREAD_POOL_SIZE;
-        rc = obd_preprw(OBD_BRW_READ, exp, &repbody->oa, 1, ioo,
-                        remote_nb, &npages, local_nb, oti, capa);
+        rc = obd_preprw(req->rq_svc_thread->t_env, OBD_BRW_READ, exp,
+                        &repbody->oa, 1, ioo, remote_nb, &npages, local_nb,
+                        oti, capa);
         if (rc != 0)
                 GOTO(out_lock, rc);
 
@@ -788,8 +795,9 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
 out_commitrw:
         /* Must commit after prep above in all cases */
-        rc = obd_commitrw(OBD_BRW_READ, exp, &repbody->oa, 1, ioo,
-                          remote_nb, npages, local_nb, oti, rc);
+        rc = obd_commitrw(req->rq_svc_thread->t_env, OBD_BRW_READ, exp,
+                          &repbody->oa, 1, ioo, remote_nb, npages, local_nb,
+                          oti, rc);
 
         if (rc == 0)
                 ost_drop_id(exp, &repbody->oa);
@@ -970,8 +978,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         memcpy(&repbody->oa, &body->oa, sizeof(repbody->oa));
 
         npages = OST_THREAD_POOL_SIZE;
-        rc = obd_preprw(OBD_BRW_WRITE, exp, &repbody->oa, objcount,
-                        ioo, remote_nb, &npages, local_nb, oti, capa);
+        rc = obd_preprw(req->rq_svc_thread->t_env, OBD_BRW_WRITE, exp,
+                        &repbody->oa, objcount, ioo, remote_nb, &npages,
+                        local_nb, oti, capa);
         if (rc != 0)
                 GOTO(out_lock, rc);
 
@@ -1016,8 +1025,9 @@ skip_transfer:
         }
 
         /* Must commit after prep above in all cases */
-        rc = obd_commitrw(OBD_BRW_WRITE, exp, &repbody->oa, objcount, ioo,
-                          remote_nb, npages, local_nb, oti, rc);
+        rc = obd_commitrw(req->rq_svc_thread->t_env, OBD_BRW_WRITE, exp,
+                          &repbody->oa, objcount, ioo, remote_nb, npages,
+                          local_nb, oti, rc);
         if (rc == -ENOTCONN)
                 /* quota acquire process has been given up because
                  * either the client has been evicted or the client
@@ -1203,7 +1213,8 @@ static int ost_set_info(struct obd_export *exp, struct ptlrpc_request *req)
 
         /* OBD will also check if KEY_IS(KEY_GRANT_SHRINK), and will cast val to
          * a struct ost_body * value */
-        rc = obd_set_info_async(exp, keylen, key, vallen, val, NULL);
+        rc = obd_set_info_async(req->rq_svc_thread->t_env, exp, keylen,
+                                key, vallen, val, NULL);
 out:
         lustre_msg_set_status(req->rq_repmsg, 0);
         RETURN(rc);
@@ -1233,7 +1244,8 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
                         RETURN(rc);
         }
 
-        rc = obd_get_info(exp, keylen, key, &replylen, NULL, NULL);
+        rc = obd_get_info(req->rq_svc_thread->t_env, exp, keylen, key,
+                          &replylen, NULL, NULL);
         if (rc)
                 RETURN(rc);
 
@@ -1249,7 +1261,8 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
                 RETURN(-ENOMEM);
 
         /* call again to fill in the reply buffer */
-        rc = obd_get_info(exp, keylen, key, &replylen, reply, NULL);
+        rc = obd_get_info(req->rq_svc_thread->t_env, exp, keylen, key,
+                          &replylen, reply, NULL);
 
         lustre_msg_set_status(req->rq_repmsg, 0);
         RETURN(rc);
@@ -1519,7 +1532,7 @@ int ost_blocking_ast(struct ldlm_lock *lock,
         int rc = 0;
         ENTRY;
 
-        rc = obd_get_info(lock->l_export, sizeof(KEY_SYNC_LOCK_CANCEL),
+        rc = obd_get_info(NULL, lock->l_export, sizeof(KEY_SYNC_LOCK_CANCEL),
                           KEY_SYNC_LOCK_CANCEL, &len, &sync_lock_cancel, NULL);
 
         if (!rc && flag == LDLM_CB_CANCELING &&
@@ -1544,7 +1557,7 @@ int ost_blocking_ast(struct ldlm_lock *lock,
                 oa->o_valid = OBD_MD_FLID|OBD_MD_FLGROUP;
                 oinfo->oi_oa = oa;
 
-                rc = obd_sync(lock->l_export, oinfo,
+                rc = obd_sync(NULL, lock->l_export, oinfo,
                               lock->l_policy_data.l_extent.start,
                               lock->l_policy_data.l_extent.end, NULL);
                 if (rc)
@@ -2528,7 +2541,7 @@ static int ost_cleanup(struct obd_device *obd)
         RETURN(err);
 }
 
-static int ost_health_check(struct obd_device *obd)
+static int ost_health_check(const struct lu_env *env, struct obd_device *obd)
 {
         struct ost_obd *ost = &obd->u.ost;
         int rc = 0;

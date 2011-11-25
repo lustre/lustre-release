@@ -655,7 +655,7 @@ static int llog_lvfs_create(struct llog_ctxt *ctxt, struct llog_handle **res,
                 oa->o_seq = FID_SEQ_LLOG;
                 oa->o_valid = OBD_MD_FLGENER | OBD_MD_FLGROUP;
 
-                rc = obd_create(ctxt->loc_exp, oa, NULL, NULL);
+                rc = obd_create(NULL, ctxt->loc_exp, oa, NULL, NULL);
                 if (rc)
                         GOTO(out, rc);
 
@@ -755,7 +755,8 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 GOTO(out, rc = PTR_ERR(th));
         }
 
-        rc = obd_destroy(handle->lgh_ctxt->loc_exp, oa, NULL, NULL, NULL, NULL);
+        rc = obd_destroy(NULL, handle->lgh_ctxt->loc_exp, oa,
+                         NULL, NULL, NULL, NULL);
 
         rc1 = fsfilt_commit(obd, inode, th, 0);
         if (rc == 0 && rc1 != 0)

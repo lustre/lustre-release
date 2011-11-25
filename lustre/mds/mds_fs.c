@@ -59,8 +59,9 @@
 /* Creates an object with the same name as its fid.  Because this is not at all
  * performance sensitive, it is accomplished by creating a file, checking the
  * fid, and renaming it. */
-int mds_obd_create(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md **ea, struct obd_trans_info *oti)
+int mds_obd_create(const struct lu_env *env, struct obd_export *exp,
+                   struct obdo *oa, struct lov_stripe_md **ea,
+                   struct obd_trans_info *oti)
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;
@@ -154,9 +155,10 @@ out_pop:
         RETURN(rc);
 }
 
-int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                    struct obd_export *md_exp, void *capa)
+int mds_obd_destroy(const struct lu_env *env, struct obd_export *exp,
+                    struct obdo *oa, struct lov_stripe_md *ea,
+                    struct obd_trans_info *oti, struct obd_export *md_exp,
+                    void *capa)
 {
         struct mds_obd *mds = &exp->exp_obd->u.mds;
         struct inode *parent_inode = mds->mds_objects_dir->d_inode;

@@ -434,7 +434,7 @@ static int ll_wr_checksum(struct file *file, const char *buffer,
         else
                 sbi->ll_flags &= ~LL_SBI_CHECKSUM;
 
-        rc = obd_set_info_async(sbi->ll_dt_exp, sizeof(KEY_CHECKSUM),
+        rc = obd_set_info_async(NULL, sbi->ll_dt_exp, sizeof(KEY_CHECKSUM),
                                 KEY_CHECKSUM, sizeof(val), &val, NULL);
         if (rc)
                 CWARN("Failed to set OSC checksum flags: %d\n", rc);

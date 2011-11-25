@@ -497,7 +497,8 @@ static inline int class_devno_max(void)
         return MAX_OBD_DEVICES;
 }
 
-static inline int obd_get_info(struct obd_export *exp, __u32 keylen,
+static inline int obd_get_info(const struct lu_env *env,
+                               struct obd_export *exp, __u32 keylen,
                                void *key, __u32 *vallen, void *val,
                                struct lov_stripe_md *lsm)
 {
@@ -507,11 +508,13 @@ static inline int obd_get_info(struct obd_export *exp, __u32 keylen,
         EXP_CHECK_DT_OP(exp, get_info);
         EXP_COUNTER_INCREMENT(exp, get_info);
 
-        rc = OBP(exp->exp_obd, get_info)(exp, keylen, key, vallen, val, lsm);
+        rc = OBP(exp->exp_obd, get_info)(env, exp, keylen, key, vallen, val,
+                                         lsm);
         RETURN(rc);
 }
 
-static inline int obd_set_info_async(struct obd_export *exp, obd_count keylen,
+static inline int obd_set_info_async(const struct lu_env *env,
+                                     struct obd_export *exp, obd_count keylen,
                                      void *key, obd_count vallen, void *val,
                                      struct ptlrpc_request_set *set)
 {
@@ -521,8 +524,8 @@ static inline int obd_set_info_async(struct obd_export *exp, obd_count keylen,
         EXP_CHECK_DT_OP(exp, set_info_async);
         EXP_COUNTER_INCREMENT(exp, set_info_async);
 
-        rc = OBP(exp->exp_obd, set_info_async)(exp, keylen, key, vallen, val,
-                                               set);
+        rc = OBP(exp->exp_obd, set_info_async)(env, exp, keylen, key, vallen,
+                                               val, set);
         RETURN(rc);
 }
 
@@ -809,8 +812,8 @@ static inline int obd_create_async(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
-                             struct lov_stripe_md **ea,
+static inline int obd_create(const struct lu_env *env, struct obd_export *exp,
+                             struct obdo *obdo, struct lov_stripe_md **ea,
                              struct obd_trans_info *oti)
 {
         int rc;
@@ -819,12 +822,12 @@ static inline int obd_create(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_DT_OP(exp, create);
         EXP_COUNTER_INCREMENT(exp, create);
 
-        rc = OBP(exp->exp_obd, create)(exp, obdo, ea, oti);
+        rc = OBP(exp->exp_obd, create)(env, exp, obdo, ea, oti);
         RETURN(rc);
 }
 
-static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
-                              struct lov_stripe_md *ea,
+static inline int obd_destroy(const struct lu_env *env, struct obd_export *exp,
+                              struct obdo *obdo, struct lov_stripe_md *ea,
                               struct obd_trans_info *oti,
                               struct obd_export *md_exp, void *capa)
 {
@@ -834,11 +837,12 @@ static inline int obd_destroy(struct obd_export *exp, struct obdo *obdo,
         EXP_CHECK_DT_OP(exp, destroy);
         EXP_COUNTER_INCREMENT(exp, destroy);
 
-        rc = OBP(exp->exp_obd, destroy)(exp, obdo, ea, oti, md_exp, capa);
+        rc = OBP(exp->exp_obd, destroy)(env, exp, obdo, ea, oti, md_exp, capa);
         RETURN(rc);
 }
 
-static inline int obd_getattr(struct obd_export *exp, struct obd_info *oinfo)
+static inline int obd_getattr(const struct lu_env *env, struct obd_export *exp,
+                              struct obd_info *oinfo)
 {
         int rc;
         ENTRY;
@@ -846,7 +850,7 @@ static inline int obd_getattr(struct obd_export *exp, struct obd_info *oinfo)
         EXP_CHECK_DT_OP(exp, getattr);
         EXP_COUNTER_INCREMENT(exp, getattr);
 
-        rc = OBP(exp->exp_obd, getattr)(exp, oinfo);
+        rc = OBP(exp->exp_obd, getattr)(env, exp, oinfo);
         RETURN(rc);
 }
 
@@ -864,7 +868,8 @@ static inline int obd_getattr_async(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_setattr(struct obd_export *exp, struct obd_info *oinfo,
+static inline int obd_setattr(const struct lu_env *env, struct obd_export *exp,
+                              struct obd_info *oinfo,
                               struct obd_trans_info *oti)
 {
         int rc;
@@ -873,7 +878,7 @@ static inline int obd_setattr(struct obd_export *exp, struct obd_info *oinfo,
         EXP_CHECK_DT_OP(exp, setattr);
         EXP_COUNTER_INCREMENT(exp, setattr);
 
-        rc = OBP(exp->exp_obd, setattr)(exp, oinfo, oti);
+        rc = OBP(exp->exp_obd, setattr)(env, exp, oinfo, oti);
         RETURN(rc);
 }
 
@@ -1072,7 +1077,7 @@ static inline int obd_fid_delete(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_ping(struct obd_export *exp)
+static inline int obd_ping(const struct lu_env *env, struct obd_export *exp)
 {
         int rc;
         ENTRY;
@@ -1080,7 +1085,7 @@ static inline int obd_ping(struct obd_export *exp)
         OBD_CHECK_DT_OP(exp->exp_obd, ping, 0);
         EXP_COUNTER_INCREMENT(exp, ping);
 
-        rc = OBP(exp->exp_obd, ping)(exp);
+        rc = OBP(exp->exp_obd, ping)(env, exp);
         RETURN(rc);
 }
 
@@ -1207,24 +1212,26 @@ obd_lvfs_open_llog(struct obd_export *exp, __u64 id_ino, struct dentry *dentry)
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
-static inline int obd_statfs_async(struct obd_device *obd,
+static inline int obd_statfs_async(struct obd_export *exp,
                                    struct obd_info *oinfo,
                                    __u64 max_age,
                                    struct ptlrpc_request_set *rqset)
 {
         int rc = 0;
+        struct obd_device *obd;
         ENTRY;
 
-        if (obd == NULL)
+        if (exp == NULL || exp->exp_obd == NULL)
                 RETURN(-EINVAL);
 
+        obd = exp->exp_obd;
         OBD_CHECK_DT_OP(obd, statfs, -EOPNOTSUPP);
         OBD_COUNTER_INCREMENT(obd, statfs);
 
         CDEBUG(D_SUPER, "%s: osfs %p age "LPU64", max_age "LPU64"\n",
                obd->obd_name, &obd->obd_osfs, obd->obd_osfs_age, max_age);
         if (cfs_time_before_64(obd->obd_osfs_age, max_age)) {
-                rc = OBP(obd, statfs_async)(obd, oinfo, max_age, rqset);
+                rc = OBP(obd, statfs_async)(exp, oinfo, max_age, rqset);
         } else {
                 CDEBUG(D_SUPER,"%s: use %p cache blocks "LPU64"/"LPU64
                        " objects "LPU64"/"LPU64"\n",
@@ -1241,7 +1248,7 @@ static inline int obd_statfs_async(struct obd_device *obd,
         RETURN(rc);
 }
 
-static inline int obd_statfs_rqset(struct obd_device *obd,
+static inline int obd_statfs_rqset(struct obd_export *exp,
                                    struct obd_statfs *osfs, __u64 max_age,
                                    __u32 flags)
 {
@@ -1256,7 +1263,7 @@ static inline int obd_statfs_rqset(struct obd_device *obd,
 
         oinfo.oi_osfs = osfs;
         oinfo.oi_flags = flags;
-        rc = obd_statfs_async(obd, &oinfo, max_age, set);
+        rc = obd_statfs_async(exp, &oinfo, max_age, set);
         if (rc == 0)
                 rc = ptlrpc_set_wait(set);
         ptlrpc_set_destroy(set);
@@ -1266,10 +1273,12 @@ static inline int obd_statfs_rqset(struct obd_device *obd,
 /* @max_age is the oldest time in jiffies that we accept using a cached data.
  * If the cache is older than @max_age we will get a new value from the
  * target.  Use a value of "cfs_time_current() + HZ" to guarantee freshness. */
-static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                             __u64 max_age, __u32 flags)
+static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
+                             struct obd_statfs *osfs, __u64 max_age,
+                             __u32 flags)
 {
         int rc = 0;
+        struct obd_device *obd = exp->exp_obd;
         ENTRY;
 
         if (obd == NULL)
@@ -1281,7 +1290,7 @@ static inline int obd_statfs(struct obd_device *obd, struct obd_statfs *osfs,
         CDEBUG(D_SUPER, "osfs "LPU64", max_age "LPU64"\n",
                obd->obd_osfs_age, max_age);
         if (cfs_time_before_64(obd->obd_osfs_age, max_age)) {
-                rc = OBP(obd, statfs)(obd, osfs, max_age, flags);
+                rc = OBP(obd, statfs)(env, exp, osfs, max_age, flags);
                 if (rc == 0) {
                         cfs_spin_lock(&obd->obd_osfs_lock);
                         memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
@@ -1315,15 +1324,15 @@ static inline int obd_sync_rqset(struct obd_export *exp, struct obd_info *oinfo,
         if (set == NULL)
                 RETURN(-ENOMEM);
 
-        rc = OBP(exp->exp_obd, sync)(exp, oinfo, start, end, set);
+        rc = OBP(exp->exp_obd, sync)(NULL, exp, oinfo, start, end, set);
         if (rc == 0)
                 rc = ptlrpc_set_wait(set);
         ptlrpc_set_destroy(set);
         RETURN(rc);
 }
 
-static inline int obd_sync(struct obd_export *exp, struct obd_info *oinfo,
-                           obd_size start, obd_size end,
+static inline int obd_sync(const struct lu_env *env, struct obd_export *exp,
+                           struct obd_info *oinfo, obd_size start, obd_size end,
                            struct ptlrpc_request_set *set)
 {
         int rc;
@@ -1332,7 +1341,7 @@ static inline int obd_sync(struct obd_export *exp, struct obd_info *oinfo,
         OBD_CHECK_DT_OP(exp->exp_obd, sync, -EOPNOTSUPP);
         EXP_COUNTER_INCREMENT(exp, sync);
 
-        rc = OBP(exp->exp_obd, sync)(exp, oinfo, start, end, set);
+        rc = OBP(exp->exp_obd, sync)(env, exp, oinfo, start, end, set);
         RETURN(rc);
 }
 
@@ -1351,15 +1360,15 @@ static inline int obd_punch_rqset(struct obd_export *exp,
         if (set == NULL)
                 RETURN(-ENOMEM);
 
-        rc = OBP(exp->exp_obd, punch)(exp, oinfo, oti, set);
+        rc = OBP(exp->exp_obd, punch)(NULL, exp, oinfo, oti, set);
         if (rc == 0)
                 rc = ptlrpc_set_wait(set);
         ptlrpc_set_destroy(set);
         RETURN(rc);
 }
 
-static inline int obd_punch(struct obd_export *exp, struct obd_info *oinfo,
-                            struct obd_trans_info *oti,
+static inline int obd_punch(const struct lu_env *env, struct obd_export *exp,
+                            struct obd_info *oinfo, struct obd_trans_info *oti,
                             struct ptlrpc_request_set *rqset)
 {
         int rc;
@@ -1368,7 +1377,7 @@ static inline int obd_punch(struct obd_export *exp, struct obd_info *oinfo,
         EXP_CHECK_DT_OP(exp, punch);
         EXP_COUNTER_INCREMENT(exp, punch);
 
-        rc = OBP(exp->exp_obd, punch)(exp, oinfo, oti, rqset);
+        rc = OBP(exp->exp_obd, punch)(env, exp, oinfo, oti, rqset);
         RETURN(rc);
 }
 
@@ -1392,7 +1401,8 @@ static inline int obd_brw(int cmd, struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
+static inline int obd_preprw(const struct lu_env *env, int cmd,
+                             struct obd_export *exp, struct obdo *oa,
                              int objcount, struct obd_ioobj *obj,
                              struct niobuf_remote *remote, int *pages,
                              struct niobuf_local *local,
@@ -1405,12 +1415,13 @@ static inline int obd_preprw(int cmd, struct obd_export *exp, struct obdo *oa,
         EXP_CHECK_DT_OP(exp, preprw);
         EXP_COUNTER_INCREMENT(exp, preprw);
 
-        rc = OBP(exp->exp_obd, preprw)(cmd, exp, oa, objcount, obj, remote,
+        rc = OBP(exp->exp_obd, preprw)(env, cmd, exp, oa, objcount, obj, remote,
                                        pages, local, oti, capa);
         RETURN(rc);
 }
 
-static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
+static inline int obd_commitrw(const struct lu_env *env, int cmd,
+                               struct obd_export *exp, struct obdo *oa,
                                int objcount, struct obd_ioobj *obj,
                                struct niobuf_remote *rnb, int pages,
                                struct niobuf_local *local,
@@ -1421,7 +1432,7 @@ static inline int obd_commitrw(int cmd, struct obd_export *exp, struct obdo *oa,
         EXP_CHECK_DT_OP(exp, commitrw);
         EXP_COUNTER_INCREMENT(exp, commitrw);
 
-        rc = OBP(exp->exp_obd, commitrw)(cmd, exp, oa, objcount, obj,
+        rc = OBP(exp->exp_obd, commitrw)(env, cmd, exp, oa, objcount, obj,
                                          rnb, pages, local, oti, rc);
         RETURN(rc);
 }
@@ -1734,7 +1745,8 @@ static inline int obd_quota_adjust_qunit(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_health_check(struct obd_device *obd)
+static inline int obd_health_check(const struct lu_env *env,
+                                   struct obd_device *obd)
 {
         /* returns: 0 on healthy
          *         >0 on unhealthy + reason code/flag
@@ -1756,7 +1768,7 @@ static inline int obd_health_check(struct obd_device *obd)
         if (!OBP(obd, health_check))
                 RETURN(0);
 
-        rc = OBP(obd, health_check)(obd);
+        rc = OBP(obd, health_check)(env, obd);
         RETURN(rc);
 }
 

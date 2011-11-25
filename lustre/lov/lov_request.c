@@ -664,8 +664,8 @@ cleanup:
                         continue;
 
                 sub_exp = lov->lov_tgts[req->rq_idx]->ltd_exp;
-                err = obd_destroy(sub_exp, req->rq_oi.oi_oa, NULL, oti, NULL,
-                                  NULL);
+                err = obd_destroy(NULL, sub_exp, req->rq_oi.oi_oa, NULL, oti,
+                                  NULL, NULL);
                 if (err)
                         CERROR("Failed to uncreate objid "LPX64" subobj "
                                LPX64" on OST idx %d: rc = %d\n",

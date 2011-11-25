@@ -264,7 +264,8 @@ static int osc_getattr_async(struct obd_export *exp, struct obd_info *oinfo,
         RETURN(0);
 }
 
-static int osc_getattr(struct obd_export *exp, struct obd_info *oinfo)
+static int osc_getattr(const struct lu_env *env, struct obd_export *exp,
+                       struct obd_info *oinfo)
 {
         struct ptlrpc_request *req;
         struct ost_body       *body;
@@ -307,8 +308,8 @@ static int osc_getattr(struct obd_export *exp, struct obd_info *oinfo)
         return rc;
 }
 
-static int osc_setattr(struct obd_export *exp, struct obd_info *oinfo,
-                       struct obd_trans_info *oti)
+static int osc_setattr(const struct lu_env *env, struct obd_export *exp,
+                       struct obd_info *oinfo, struct obd_trans_info *oti)
 {
         struct ptlrpc_request *req;
         struct ost_body       *body;
@@ -557,8 +558,8 @@ int osc_punch_base(struct obd_export *exp, struct obd_info *oinfo,
         RETURN(0);
 }
 
-static int osc_punch(struct obd_export *exp, struct obd_info *oinfo,
-                     struct obd_trans_info *oti,
+static int osc_punch(const struct lu_env *env, struct obd_export *exp,
+                     struct obd_info *oinfo, struct obd_trans_info *oti,
                      struct ptlrpc_request_set *rqset)
 {
         oinfo->oi_oa->o_size   = oinfo->oi_policy.l_extent.start;
@@ -591,8 +592,8 @@ out:
         RETURN(rc);
 }
 
-static int osc_sync(struct obd_export *exp, struct obd_info *oinfo,
-                    obd_size start, obd_size end,
+static int osc_sync(const struct lu_env *env, struct obd_export *exp,
+                    struct obd_info *oinfo, obd_size start, obd_size end,
                     struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request *req;
@@ -702,9 +703,10 @@ static int osc_can_send_destroy(struct client_obd *cli)
  * the records are not cancelled, and when the OST reconnects to the MDS next,
  * it will retrieve the llog unlink logs and then sends the log cancellation
  * cookies to the MDS after committing destroy transactions. */
-static int osc_destroy(struct obd_export *exp, struct obdo *oa,
-                       struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                       struct obd_export *md_export, void *capa)
+static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
+                       struct obdo *oa, struct lov_stripe_md *ea,
+                       struct obd_trans_info *oti, struct obd_export *md_export,
+                       void *capa)
 {
         struct client_obd     *cli = &exp->exp_obd->u.cli;
         struct ptlrpc_request *req;
@@ -955,9 +957,9 @@ static void osc_update_grant(struct client_obd *cli, struct ost_body *body)
         }
 }
 
-static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
-                              void *key, obd_count vallen, void *val,
-                              struct ptlrpc_request_set *set);
+static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
+                              obd_count keylen, void *key, obd_count vallen,
+                              void *val, struct ptlrpc_request_set *set);
 
 static int osc_shrink_grant_interpret(const struct lu_env *env,
                                       struct ptlrpc_request *req,
@@ -1047,7 +1049,7 @@ int osc_shrink_grant_to_target(struct client_obd *cli, long target)
         body->oa.o_flags |= OBD_FL_SHRINK_GRANT;
         osc_update_next_shrink(cli);
 
-        rc = osc_set_info_async(cli->cl_import->imp_obd->obd_self_export,
+        rc = osc_set_info_async(NULL, cli->cl_import->imp_obd->obd_self_export,
                                 sizeof(KEY_GRANT_SHRINK), KEY_GRANT_SHRINK,
                                 sizeof(*body), body, NULL);
         if (rc != 0)
@@ -3698,9 +3700,11 @@ out:
         RETURN(rc);
 }
 
-static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
-                            __u64 max_age, struct ptlrpc_request_set *rqset)
+static int osc_statfs_async(struct obd_export *exp,
+                            struct obd_info *oinfo, __u64 max_age,
+                            struct ptlrpc_request_set *rqset)
 {
+        struct obd_device     *obd = class_exp2obd(exp);
         struct ptlrpc_request *req;
         struct osc_async_args *aa;
         int                    rc;
@@ -3740,9 +3744,10 @@ static int osc_statfs_async(struct obd_device *obd, struct obd_info *oinfo,
         RETURN(0);
 }
 
-static int osc_statfs(struct obd_device *obd, struct obd_statfs *osfs,
-                      __u64 max_age, __u32 flags)
+static int osc_statfs(const struct lu_env *env, struct obd_export *exp,
+                      struct obd_statfs *osfs, __u64 max_age, __u32 flags)
 {
+        struct obd_device     *obd = class_exp2obd(exp);
         struct obd_statfs     *msfs;
         struct ptlrpc_request *req;
         struct obd_import     *imp = NULL;
@@ -3953,8 +3958,8 @@ out:
         return err;
 }
 
-static int osc_get_info(struct obd_export *exp, obd_count keylen,
-                        void *key, __u32 *vallen, void *val,
+static int osc_get_info(const struct lu_env *env, struct obd_export *exp,
+                        obd_count keylen, void *key, __u32 *vallen, void *val,
                         struct lov_stripe_md *lsm)
 {
         ENTRY;
@@ -4084,9 +4089,9 @@ static int osc_setinfo_mds_conn_interpret(const struct lu_env *env,
         RETURN(osc_setinfo_mds_connect_import(req->rq_import));
 }
 
-static int osc_set_info_async(struct obd_export *exp, obd_count keylen,
-                              void *key, obd_count vallen, void *val,
-                              struct ptlrpc_request_set *set)
+static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
+                              obd_count keylen, void *key, obd_count vallen,
+                              void *val, struct ptlrpc_request_set *set)
 {
         struct ptlrpc_request *req;
         struct obd_device     *obd = exp->exp_obd;

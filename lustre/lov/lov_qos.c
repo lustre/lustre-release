@@ -523,7 +523,7 @@ static int lov_check_and_create_object(struct lov_obd *lov, int ost_idx,
 
         if (stripe >= lsm->lsm_stripe_count) {
                 req->rq_idx = ost_idx;
-                rc = obd_create(lov->lov_tgts[ost_idx]->ltd_exp,
+                rc = obd_create(NULL, lov->lov_tgts[ost_idx]->ltd_exp,
                                 req->rq_oi.oi_oa, &req->rq_oi.oi_md,
                                 oti);
         }
@@ -1201,7 +1201,7 @@ void qos_statfs_update(struct obd_device *obd, __u64 max_age, int wait)
         if (!set)
                 GOTO(out_failed, rc = -ENOMEM);
 
-        rc = obd_statfs_async(obd, oinfo, max_age, set);
+        rc = obd_statfs_async(obd->obd_self_export, oinfo, max_age, set);
         if (rc || cfs_list_empty(&set->set_requests)) {
                 if (rc)
                         CWARN("statfs failed with %d\n", rc);

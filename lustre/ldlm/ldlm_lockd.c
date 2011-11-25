@@ -1816,7 +1816,8 @@ static int ldlm_handle_setinfo(struct ptlrpc_request *req)
 
         if (KEY_IS(KEY_HSM_COPYTOOL_SEND))
                 /* Pass it on to mdc (the "export" in this case) */
-                rc = obd_set_info_async(req->rq_export,
+                rc = obd_set_info_async(req->rq_svc_thread->t_env,
+                                        req->rq_export,
                                         sizeof(KEY_HSM_COPYTOOL_SEND),
                                         KEY_HSM_COPYTOOL_SEND,
                                         vallen, val, NULL);

@@ -1105,7 +1105,8 @@ int ll_objects_destroy(struct ptlrpc_request *request, struct inode *dir)
                         GOTO(out_free_memmd, rc);
         }
 
-        rc = obd_destroy(ll_i2dtexp(dir), oa, lsm, &oti, ll_i2mdexp(dir), oc);
+        rc = obd_destroy(NULL, ll_i2dtexp(dir), oa, lsm, &oti,
+                         ll_i2mdexp(dir), oc);
         capa_put(oc);
         OBDO_FREE(oa);
         if (rc)

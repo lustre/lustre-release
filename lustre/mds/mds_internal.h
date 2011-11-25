@@ -64,10 +64,12 @@ int mds_convert_lov_ea(struct obd_device *obd, struct inode *inode,
                        __u64 connect_flags);
 int mds_init_lov_desc(struct obd_device *obd, struct obd_export *osc_exp);
 
-int mds_obd_create(struct obd_export *exp, struct obdo *oa,
-                   struct lov_stripe_md **ea, struct obd_trans_info *oti);
-int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
-                    struct lov_stripe_md *ea, struct obd_trans_info *oti,
+int mds_obd_create(const struct lu_env *env, struct obd_export *exp,
+                   struct obdo *oa, struct lov_stripe_md **ea,
+                   struct obd_trans_info *oti);
+int mds_obd_destroy(const struct lu_env *env, struct obd_export *exp,
+                    struct obdo *oa, struct lov_stripe_md *ea,
+                    struct obd_trans_info *oti,
                     struct obd_export *md_exp, void *capa);
 
 /* mds/handler.c */

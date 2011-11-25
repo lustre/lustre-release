@@ -1095,7 +1095,7 @@ static int llu_statfs_internal(struct llu_sb_info *sbi,
         int rc;
         ENTRY;
 
-        rc = obd_statfs(class_exp2obd(sbi->ll_md_exp), osfs, max_age, 0);
+        rc = obd_statfs(NULL, sbi->ll_md_exp, osfs, max_age, 0);
         if (rc) {
                 CERROR("md_statfs fails: rc = %d\n", rc);
                 RETURN(rc);
@@ -1922,8 +1922,8 @@ llu_fsswop_mount(const char *source,
                 CERROR("MDC %s: not setup or attached\n", mdc);
                 GOTO(out_free, err = -EINVAL);
         }
-        obd_set_info_async(obd->obd_self_export, sizeof(KEY_ASYNC), KEY_ASYNC,
-                           sizeof(async), &async, NULL);
+        obd_set_info_async(NULL, obd->obd_self_export, sizeof(KEY_ASYNC),
+                           KEY_ASYNC, sizeof(async), &async, NULL);
 
         ocd.ocd_connect_flags = OBD_CONNECT_IBITS | OBD_CONNECT_VERSION |
                                 OBD_CONNECT_FID | OBD_CONNECT_AT |
@@ -1942,7 +1942,7 @@ llu_fsswop_mount(const char *source,
                 GOTO(out_free, err);
         }
 
-        err = obd_statfs(obd, &osfs, 100000000, 0);
+        err = obd_statfs(NULL, sbi->ll_md_exp, &osfs, 100000000, 0);
         if (err)
                 GOTO(out_md, err);
 
@@ -1956,8 +1956,8 @@ llu_fsswop_mount(const char *source,
                 CERROR("OSC %s: not setup or attached\n", osc);
                 GOTO(out_md, err = -EINVAL);
         }
-        obd_set_info_async(obd->obd_self_export, sizeof(KEY_ASYNC), KEY_ASYNC,
-                           sizeof(async), &async, NULL);
+        obd_set_info_async(NULL, obd->obd_self_export, sizeof(KEY_ASYNC),
+                           KEY_ASYNC, sizeof(async), &async, NULL);
 
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = cl_ocd_update;
