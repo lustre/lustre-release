@@ -41,35 +41,35 @@
  * Author: Robert Read <rread@clusterfs.com>
  */
 
-#include <stdlib.h>
 #include <sys/ioctl.h>
-#include <fcntl.h>
 #include <sys/socket.h>
-#include <sys/types.h>
-#include <sys/wait.h>
 #include <sys/stat.h>
-#include <stdio.h>
-#include <stdarg.h>
-#include <signal.h>
+#include <sys/time.h>
+#include <sys/types.h>
+#include <sys/un.h>
+#include <sys/wait.h>
+
 #include <ctype.h>
+#include <errno.h>
+#include <fcntl.h>
 #include <glob.h>
+#include <signal.h>
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+#include <unistd.h>
 
 #include "obdctl.h"
 
 #include <obd.h>          /* for struct lov_stripe_md */
 #include <lustre/lustre_build_version.h>
 
-#include <unistd.h>
-#include <sys/un.h>
-#include <time.h>
-#include <sys/time.h>
-#include <errno.h>
-#include <string.h>
-
 #include <obd_class.h>
 #include <lnet/lnetctl.h>
 #include <libcfs/libcfsutil.h>
-#include <stdio.h>
 #include <lustre/liblustreapi.h>
 
 #define MAX_STRING_SIZE 128
@@ -486,17 +486,18 @@ static inline void shmem_reset(int total_threads)
 
 static inline void shmem_bump(void)
 {
-        static int bumped_running;
+        static bool running_not_bumped = true;
 
         if (shared_data == NULL || thread <= 0 || thread > MAX_THREADS)
                 return;
 
         shmem_lock();
         shared_data->counters[thread - 1]++;
-        if (!bumped_running)
+        if (running_not_bumped) {
                 shared_data->running++;
+                running_not_bumped = false;
+        }
         shmem_unlock();
-        bumped_running = 1;
 }
 
 static void shmem_snap(int total_threads, int live_threads)
