@@ -469,7 +469,7 @@ blocksizefilesfree max_dirty_mb ost_server_uuid stats</screen>
       <para>... and so on.</para>
       <para>RPC stream tunables are described below.</para>
       <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/max_dirty_mb </literal></para>
-      <para>This tunable controls how many MBs of dirty data can be written and queued up in the OSC. POSIX file writes that are cached contribute to this count. When the limit is reached, additional writes stall until previously-cached writes are written to the server. This may be changed by writing a single ASCII integer to the file. Only values between 0 and 512 are allowable. If 0 is given, no writes are cached. Performance suffers noticeably unless you use large writes (1 MB or more).</para>
+      <para xml:id='lustreproc.maxdirtymb'>This tunable controls how many MBs of dirty data can be written and queued up in the OSC. POSIX file writes that are cached contribute to this count. When the limit is reached, additional writes stall until previously-cached writes are written to the server. This may be changed by writing a single ASCII integer to the file. Only values between 0 and 512 are allowable. If 0 is given, no writes are cached. Performance suffers noticeably unless you use large writes (1 MB or more).</para>
       <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/cur_dirty_bytes </literal></para>
       <para>This tunable is a read-only value that returns the current amount of bytes written and cached on this OSC.</para>
       <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/max_pages_per_rpc </literal></para>
@@ -646,6 +646,209 @@ R          8385            500                     600                     100  
                 <para>For example, Smallest-Extent indicates that the writes in the range 100 to 1110 were sequential, with a minimum write of 10 and a maximum write of 500. This range was started with an offset of -150. That means this is the difference between the last entry&apos;s range-end and this entry&apos;s range-start for the same file.</para>
                 <para>The <literal>rw_offset_stats</literal> file can be cleared by writing to it:</para>
                 <screen>echo &gt; /proc/fs/lustre/llite/lustre-f57dee00/rw_offset_stats</screen>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+    </section>
+    <section xml:id="lustreproc.clientstats" remap="h3">
+        <title><indexterm><primary>proc</primary><secondary>client stats</secondary></indexterm>Client stats</title>
+      <para>The stats parameter maintains statistics of activity across the VFS interface of the Lustre file system. Only non-zero parameters are displayed in the file. This section of the manual covers the statistics that will accumulate during typical operation of a client.</para>
+      <para>Client statistics are enabled by default. The statistics can be cleared by echoing an empty string into the <literal>stats</literal> file or with the command: <literal>lctl set_param llite.*.stats=0</literal>. Statistics for an individual file system can be displayed, for example:</para>
+      <screen># cat /proc/fs/lustre/llite/lustre-ffff88000449a800/stats
+snapshot_time             1308343279.169704 secs.usecs
+dirty_pages_hits          14819716 samples [regs]
+dirty_pages_misses        81473472 samples [regs]
+read_bytes                36502963 samples [bytes] 1 26843582 55488794
+write_bytes               22985001 samples [bytes] 0 125912 3379002
+brw_read                  2279 samples [pages] 1 1 2270
+ioctl                     186749 samples [regs]
+open                      3304805 samples [regs]
+close                     3331323 samples [regs]
+seek                      48222475 samples [regs]
+fsync                     963 samples [regs]
+truncate                  9073 samples [regs]
+setxattr                  19059 samples [regs]
+getxattr                  61169 samples [regs]
+</screen>
+<note><para>Statistics for all mounted file systems can be discovered by issuing the lctl command: <literal>lctl get_param llite.*.stats</literal></para></note>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="3*"/>
+          <colspec colname="c2" colwidth="7*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">Field</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>snapshot_time</literal></para>
+              </entry>
+              <entry>
+                <para>Unix epoch instant the stats file was read.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>dirty_page_hits</literal></para>
+              </entry>
+              <entry>
+                <para>A count of the number of write operations that have been satisfied by the dirty page cache. See <xref linkend='lustreproc.maxdirtymb'/> for dirty cache behavior in Lustre.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>dirty_page_misses</literal></para>
+              </entry>
+              <entry>
+                <para>A count of the number of write operations that were not satisfied by the dirty page cache.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>read_bytes</literal></para>
+              </entry>
+              <entry>
+                  <para>A count of the number of read operations that have occurred (samples). Three additional parameters are given:</para>
+                  <variablelist>
+                      <varlistentry>
+                          <term>min</term>
+                          <listitem><para>The minimum number of bytes read in a single request since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                      <varlistentry>
+                          <term>max</term>
+                          <listitem><para>The maximum number of bytes read in a single request since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                      <varlistentry>
+                          <term>sum</term>
+                          <listitem><para>The accumulated sum of bytes of all read requests since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                  </variablelist>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>write_bytes</literal></para>
+              </entry>
+              <entry>
+                  <para>A count of the number of write operations that have occurred (samples). Three additional parameters are given:</para>
+                  <variablelist>
+                      <varlistentry>
+                          <term>min</term>
+                          <listitem><para>The minimum number of bytes written in a single request since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                      <varlistentry>
+                          <term>max</term>
+                          <listitem><para>The maximum number of bytes written in a single request since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                      <varlistentry>
+                          <term>sum</term>
+                          <listitem><para>The accumulated sum of bytes of all write requests since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                  </variablelist>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>brw_read</literal></para>
+              </entry>
+              <entry>
+                  <para>A count of the number of pages that have been read.</para> <warning><para><literal>brw_</literal> stats are only tallied when the lloop device driver is present. lloop device is not currently supported.</para></warning><para>Three additional parameters are given:</para>
+                  <variablelist>
+                      <varlistentry>
+                          <term>min</term>
+                          <listitem><para>The minimum number of bytes read in a single brw read requests since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                      <varlistentry>
+                          <term>max</term>
+                          <listitem><para>The maximum number of bytes read in a single brw read requests since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                      <varlistentry>
+                          <term>sum</term>
+                          <listitem><para>The accumulated sum of bytes of all brw read requests since the counter was reset.</para>
+                          </listitem>
+                      </varlistentry>
+                  </variablelist>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>ioctl</literal></para>
+              </entry>
+              <entry>
+                <para>A count of the number of the combined file and directory ioctl operations.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>open</literal></para>
+              </entry>
+              <entry>
+                <para>A count of the number of open operations that have succeeded.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>close</literal></para>
+              </entry>
+              <entry>
+                <para>A count of the number of close operations that have succeeded.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>seek</literal></para>
+              </entry>
+              <entry>
+                  <para>A count of the number of times <literal>seek</literal> has been called.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>fsync</literal></para>
+              </entry>
+              <entry>
+                  <para>A count of the number of times <literal>fsync</literal> has been called.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>truncate</literal></para>
+              </entry>
+              <entry>
+                <para>A count of the total number of calls to both locked and lockless truncate.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>setxattr</literal></para>
+              </entry>
+              <entry>
+                  <para>A count of the number of times <literal>ll_setxattr</literal> has been called.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>getxattr</literal></para>
+              </entry>
+              <entry>
+                  <para>A count of the number of times <literal>ll_getxattr</literal> has been called.</para>
               </entry>
             </row>
           </tbody>
