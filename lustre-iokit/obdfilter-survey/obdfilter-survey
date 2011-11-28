@@ -36,7 +36,7 @@
 #  client systems on which this test runs.]
 
 # include library 
-source libecho
+source $(dirname $0)/libecho
 
 # The following variables can be set in the environment, or on the
 # command line
@@ -71,7 +71,7 @@ export LC_ALL=POSIX
 # End of variables
 
 # create a set of objects, check there are 'n' contiguous ones and
-# return the first or 'ERROR'
+# echo out the first or 'ERROR'
 # parameter: 1. hostname
 #	     2. device number
 #	     3. number of object to be created (specified by user)
@@ -86,36 +86,37 @@ create_objects () {
     prev=0
     count=0
     error=0
-    while read line; do
-        echo "$line" | grep -q 'is object id'
-        if [ $?  -ne 0 ]; then
-            continue
-        fi
-        if [ $first -eq 0 ]; then
-            first=$(echo $line | awk '{print $6}')
-            first=$(printf "%d" $first)
-            prev=$first
-            count=1
-        else
-            obj=$(echo $line | awk '{print $6}') 
-            obj=$(printf "%d" $obj) 
-            diff=$((obj - (prev+1))) 
-            if [ $diff -ne 0 ]; then 
-                error=1 
-            fi 
-            prev=$obj 
-            count=$((count+1)) 
-        fi 
-    done < $rfile 
+
+    # Count number of objects (lines containing " is object id "), and
+    # ensure that the objects numbers are sequential.
+    #
+    exec 3< $rfile
+    while read -u3 line; do
+        case "$line" in
+        ( *' is object id '* )
+            set -- $line
+            if test $(( count += 1 )) -gt 1 ; then
+                (( $6 != prev + 1 )) && error=1
+            else
+                first=$(( $6 + 0 ))
+            fi
+            prev=$6
+            ;;
+        esac
+    done
+    exec 3<&-
+
     if [ $nobj -ne $count ]; then 
         echo "ERROR: $nobj != $count" >&2 
         cat $rfile >&2 
         echo "ERROR" 
     elif [ $error -ne 0 ]; then 
-        echo "ERROR: non contiguous objs found" >&2 
+        echo "ERROR: non contiguous objs found" >&2
+        echo ERROR
     else 
         echo $first 
     fi
+    return $error
 }
 
 # destroys all objects created in create_objects routine

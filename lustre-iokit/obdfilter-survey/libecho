@@ -248,34 +248,38 @@ cleanup () {
 trap cleanup SIGHUP SIGINT SIGTERM
 
 # gets echoclient device number and attach it to the client UUID
-# 
+# Results are  returned by an echo followed by an exit
+# This must run in a subshell.
+#
 # parameter: 1. hostname
 #	     2. client name, ex:- ns8:ECHO_ns8
 #	     3. name of ost instances, ex:- lustre-OST0001 
 get_ec_devno () {
+    exec 8>&1 1>&2
     local host=$1
     local client_name="$2"
     local ost_name="$3"
     if [ -z "$client_name" ]; then
 	if [ -z "$ost_name" ]; then
-	    echo "client and ost name both null" 1>&2
-	    return
+	    echo "client and ost name both null"
+	    exit 1
 	fi
         client_name=${ost_name}_ecc
     fi
     ec=`get_devno $host echo_client $client_name`
     if [ -n "$ec" ]; then
-	echo $ec $client_name $client_name
-	return
+	echo $ec $client_name $client_name >&8
+	exit 0
     fi
     if [ -z "$ost_name" ]; then
-	echo "no echo client and ost_name not set, client: $client_name, host: $host" 1>&2
-	return
+	echo "no echo client and ost_name not set, client:" \
+            "$client_name, host: $host"
+	exit 1
     fi
     ost=`get_devno $host obdfilter $ost_name`
     if [ -z "$ost" ]; then
-	echo "OST $ost_name not setup" 1>&2
-	return
+	echo "OST $ost_name not setup"
+	exit 1
     fi
     client_name=${ost_name}_ecc
     remote_shell $host "$lctl <<EOF
@@ -284,10 +288,11 @@ get_ec_devno () {
 EOF"
     ec=`get_devno $host echo_client $client_name`
     if [ -z "$ec" ]; then
-	echo "Can't setup echo-client" 1>&2
-	return
+	echo "Can't setup echo-client"
+	exit 1
     fi
-    echo $ec $client_name 1
+    echo $ec $client_name 1 >&8
+    exit 0
 }
 
 # Create echo-clients using osc_names and osc_uuid
