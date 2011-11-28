@@ -2422,7 +2422,6 @@ static int mds_intent_policy(struct ldlm_namespace *ns,
         switch ((long)it->opc) {
         case IT_OPEN:
         case IT_CREAT|IT_OPEN:
-                mds_counter_incr(req->rq_export, LPROC_MDS_OPEN);
                 fixup_handle_for_resent_req(req, DLM_LOCKREQ_OFF, lock, NULL,
                                             &lockh);
                 /* XXX swab here to assert that an mds_open reint

@@ -6133,7 +6133,7 @@ test_133a() {
 	check_stats_facet mds "mkdir" 1
 	touch ${testdir}/${tfile} || "touch failed"
 	# LPROC_MDS_OPEN is incremented by 2 - in mds_open() and mds_intent_policy()
-	check_stats_facet mds "open" 2
+	check_stats_facet mds "open" 1
 	check_stats_facet mds "close" 1
 	mknod ${testdir}/${tfile}-pipe p || "mknod failed"
 	check_stats_facet mds "mknod" 1
