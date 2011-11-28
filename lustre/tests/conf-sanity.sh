@@ -2418,7 +2418,7 @@ test_52() {
 	[ $? -eq 0 ] || { error "Unable to mount client"; return 3; }
 
 	local nrfiles=8
-	local ost1mnt=${MOUNT%/*}/ost1
+	local ost1mnt=$(facet_mntpt ost1)
 	local ost1node=$(facet_active_host ost1)
 	local ost1tmp=$TMP/conf52
 

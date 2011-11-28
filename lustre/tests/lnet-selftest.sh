@@ -4,6 +4,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 #
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT $LNET_SELFTEST_EXCEPT"
@@ -25,8 +26,9 @@ if [ "$SLOW" = no ]; then
     [ $smoke_DURATION -le 300 ] || smoke_DURATION=300
 fi
 
-lst_SERVERS=${lst_SERVERS:-$(comma_list $(osts_nodes) $(mdts_nodes))}
-lst_CLIENTS=${lst_CLIENTS:-${CLIENTS:-`hostname`}}
+nodes=$(comma_list "$(osts_nodes) $(mdts_nodes)")
+lst_SERVERS=${lst_SERVERS:-$(comma_list "$(host_nids_address $nodes $NETTYPE)")}
+lst_CLIENTS=${lst_CLIENTS:-$(comma_list "$(host_nids_address $CLIENTS $NETTYPE)")}
 
 is_mounted () {
     local mntpt=$1
