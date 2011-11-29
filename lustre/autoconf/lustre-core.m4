@@ -1972,6 +1972,23 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#  2.6.27.15-2 SuSE 11 sp0 kernels lack the name field for BDI
+AC_DEFUN([LC_BDI_NAME],
+[AC_MSG_CHECKING([if backing_device_info has name field])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/blkkdev.h>
+],[
+        struct backing_dev_info bdi;
+        bdi.name = NULL;
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_BDI_NAME, 1,
+                  [backing_device_info has name field])
+],[
+        AC_MSG_RESULT(no)
+])
+])  
+
 # 2.6.32 removes blk_queue_max_sectors and add blk_queue_max_hw_sectors
 # check blk_queue_max_sectors and use it until disappear.
 AC_DEFUN([LC_BLK_QUEUE_MAX_SECTORS],
@@ -2247,6 +2264,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BI_HW_SEGMENTS
          LC_HAVE_QUOTAIO_H
          LC_VFS_SYMLINK_5ARGS
+         LC_BDI_NAME
          LC_SB_ANY_QUOTA_ACTIVE
          LC_SB_HAS_QUOTA_ACTIVE
          LC_EXPORT_ADD_TO_PAGE_CACHE_LRU

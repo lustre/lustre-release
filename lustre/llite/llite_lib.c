@@ -883,7 +883,9 @@ static inline int ll_bdi_register(struct backing_dev_info *bdi)
 #ifdef HAVE_BDI_REGISTER
         static atomic_t ll_bdi_num = ATOMIC_INIT(0);
 
+#ifdef HAVE_BDI_NAME
         bdi->name = "lustre";
+#endif
         return bdi_register(bdi, NULL, "lustre-%d",
                             atomic_inc_return(&ll_bdi_num));
 #else

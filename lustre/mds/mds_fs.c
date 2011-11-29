@@ -204,7 +204,8 @@ int mds_obd_destroy(struct obd_export *exp, struct obdo *oa,
            vfs_unlink() context. bug 10409 */
         inode = de->d_inode;
         atomic_inc(&inode->i_count);
-        rc = ll_vfs_unlink(mds->mds_objects_dir->d_inode, de, mds->mds_vfsmnt);
+        rc = ll_vfs_unlink(mds->mds_objects_dir->d_inode, de,
+                           mds->mds_obt.obt_vfsmnt);
         if (rc)
                 CERROR("error destroying object "LPU64":%u: rc %d\n",
                        oa->o_id, oa->o_generation, rc);
