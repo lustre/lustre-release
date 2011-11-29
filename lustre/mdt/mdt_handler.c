@@ -2239,7 +2239,7 @@ int mdt_object_lock(struct mdt_thread_info *info, struct mdt_object *o,
         else if (unlikely(OBD_FAIL_PRECHECK(OBD_FAIL_MDS_PDO_LOCK)) &&
                  lh->mlh_pdo_hash != 0 &&
                  (lh->mlh_reg_mode == LCK_PW || lh->mlh_reg_mode == LCK_EX)) {
-                OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK, 10);
+                OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_PDO_LOCK, 15);
         }
 
         RETURN(rc);
