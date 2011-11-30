@@ -54,11 +54,11 @@ NON_EXISTANT_POOL=nonexistantpool
 NON_EXISTANT_FS=nonexistantfs
 INVALID_POOL=some_invalid_pool_name
 TGT_COUNT=$OSTCOUNT
-TGT_FIRST=0
-TGT_MAX=$((TGT_COUNT-1))
+TGT_FIRST=$(printf %04x 0)
+TGT_MAX=$(printf %04x $((TGT_COUNT-1)))
 TGT_STEP=1
-TGT_LIST=$(seq $TGT_FIRST $TGT_STEP $TGT_MAX)
-TGT_LIST2=$(seq $TGT_FIRST 2 $TGT_MAX)
+TGT_LIST=$(seq 0x$TGT_FIRST $TGT_STEP 0x$TGT_MAX)
+TGT_LIST2=$(seq 0x$TGT_FIRST 2 0x$TGT_MAX)
 
 TGT_ALL="$FSNAME-OST[$TGT_FIRST-$TGT_MAX/1]"
 TGT_HALF="$FSNAME-OST[$TGT_FIRST-$TGT_MAX/2]"
@@ -256,7 +256,7 @@ test_1() {
 
     echo "Creating a pool with a 1000 character pool name; should fail"
     local pool_name="p"
-    for i in $(seq 1 999); do pool_name=${pool_name}"o"; done
+    for ((i=1;i<=999;i++)); do pool_name=${pool_name}"o"; done
     create_pool_fail $pool_name
 
     echo "pool_new should fail if fs-name or poolname are missing."
@@ -343,7 +343,7 @@ test_2c() {
 
     # 4. $FSNAME-OST[0,1,2,3,]
     TGT="$FSNAME-OST["
-    for i in $TGT_LIST; do TGT=${TGT}$(printf "$i," $i); done
+    for i in $TGT_LIST; do TGT=${TGT}$(printf "%04x," $i); done
     TGT="${TGT}]"
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL $TGT
     [[ $? -eq 0 ]] || \
@@ -634,7 +634,7 @@ test_11() {
     create_pool_nofail $POOL
     create_pool_nofail $POOL2
 
-    local start=$((TGT_FIRST+1))
+    local start=$(printf %04x $((TGT_FIRST+1)))
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL2 \
         $FSNAME-OST[$start-$TGT_MAX/2]
 
@@ -674,7 +674,7 @@ test_12() {
     create_pool_nofail $POOL
     create_pool_nofail $POOL2
 
-    local start=$((TGT_FIRST+1))
+    local start=$(printf %04x $((TGT_FIRST+1)))
     do_facet $SINGLEMDS lctl pool_add $FSNAME.$POOL2 \
         $FSNAME-OST[$start-$TGT_MAX/2]
 
@@ -704,7 +704,7 @@ test_12() {
     check_dir_in_pool $POOL_ROOT/dir1 $POOL
     check_dir_in_pool $POOL_ROOT/dir2 $POOL2
     check_file_in_osts $POOL_ROOT/file1 "$TGT_LIST2"    
-    check_file_in_osts $POOL_ROOT/file2 "$(seq $start 2 $TGT_MAX)"
+    check_file_in_osts $POOL_ROOT/file2 "$(seq 0x$start 2 0x$TGT_MAX)"
 
     echo Creating some more files
     create_dir $POOL_ROOT/dir3 $POOL
@@ -744,7 +744,7 @@ test_13() {
     check_file_in_pool $POOL_ROOT/dir1/file1 $POOL 1
     check_file_in_pool $POOL_ROOT/dir1/file2 $POOL 1
     create_file $POOL_ROOT/dir1/file3 $POOL 1 $((TGT_FIRST+2))
-    check_file_in_osts $POOL_ROOT/dir1/file1 "$TGT_FIRST"
+    check_file_in_osts $POOL_ROOT/dir1/file1 $((16#$TGT_FIRST))
     check_file_in_osts $POOL_ROOT/dir1/file2 "$((TGT_FIRST+1))"
     check_file_in_osts $POOL_ROOT/dir1/file3 "$((TGT_FIRST+2))"
 
@@ -808,7 +808,7 @@ test_14() {
     while [[ $i -lt $numfiles ]];
     do
         OST=$((OST+2))
-        [[ $OST -gt $TGT_MAX ]] && OST=$TGT_FIRST
+        [[ $OST -gt $((16#$TGT_MAX)) ]] && OST=$TGT_FIRST
 
         # echo "Iteration: $i OST: $OST"
         create_file $POOL_ROOT/dir1/file${i} $POOL 1
@@ -856,7 +856,7 @@ test_15() {
       create_pool_nofail pool${i}
 
       local tgt=$(printf "$FSNAME-OST%04x_UUID " $i)
-      add_pool pool${i} "$FSNAME-OST[$i]" "$tgt"
+      add_pool pool${i} "$FSNAME-OST[$(printf %04x $i)]" "$tgt"
       create_dir $POOL_ROOT/dir${i} pool${i}
       createmany -o $POOL_ROOT/dir$i/$tfile $numfiles || \
           error "createmany $POOL_ROOT/dir$i/$tfile failed!"
@@ -1055,8 +1055,8 @@ test_20() {
 
     add_pool $POOL $TGT_HALF "$TGT_UUID2"
 
-    local start=$((TGT_FIRST+1))
-    TGT=$(for i in `seq $start 2 $TGT_MAX`; \
+    local start=$(printf %04x $((TGT_FIRST+1)))
+    TGT=$(for i in $(seq 0x$start 2 0x$TGT_MAX); \
         do printf "$FSNAME-OST%04x_UUID " $i; done)
     add_pool $POOL2 "$FSNAME-OST[$start-$TGT_MAX/2]" "$TGT"
 
@@ -1121,8 +1121,8 @@ add_loop() {
     do
         echo "Pool $pool, iteration $c"
 	do_facet $SINGLEMDS lctl pool_add $FSNAME.$pool OST[$TGT_FIRST-$TGT_MAX/$step] 2>/dev/null
-	local TGT_SECOND=$(($TGT_FIRST+$step))
-	if [ "$TGT_SECOND" -le "$TGT_MAX" ]; then
+	local TGT_SECOND=$(printf %04x $((TGT_FIRST+$step)))
+	if [ $((16#$TGT_SECOND)) -le $((16#$TGT_MAX)) ]; then
 	    do_facet $SINGLEMDS lctl pool_remove $FSNAME.$pool OST[$TGT_SECOND-$TGT_MAX/$step]
 	fi
     done
@@ -1176,7 +1176,7 @@ test_23() {
 
     create_pool_nofail $POOL
 
-    local TGT=$(for i in `seq $TGT_FIRST 3 $TGT_MAX`; \
+    local TGT=$(for i in $(seq 0x$TGT_FIRST 3 0x$TGT_MAX); \
         do printf "$FSNAME-OST%04x_UUID " $i; done)
     add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
     create_dir $dir $POOL
