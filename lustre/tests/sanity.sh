@@ -4192,7 +4192,7 @@ set_checksums()
 	return 0
 }
 
-export ORIG_CSUM_TYPE="`lctl get_param -n osc/*osc-[^mM]*/checksum_type |
+export ORIG_CSUM_TYPE="`lctl get_param -n osc.*osc-[^mM]*.checksum_type |
                         sed 's/.*\[\(.*\)\].*/\1/g' | head -n1`"
 CKSUM_TYPES=${CKSUM_TYPES:-"crc32 adler"}
 [ "$ORIG_CSUM_TYPE" = "crc32c" ] && CKSUM_TYPES="$CKSUM_TYPES crc32c"
@@ -6176,7 +6176,7 @@ test_124a() {
         done
         echo ""
         lctl set_param -n $NSDIR.pool.lock_volume_factor $OLD_LVF
-        local LRU_SIZE_A=`lctl get_param -n $NSDIR/lru_size`
+        local LRU_SIZE_A=`lctl get_param -n $NSDIR.lru_size`
 
         [ $LRU_SIZE_B -gt $LRU_SIZE_A ] || {
                 error "No locks dropped in ${SLEEP}s. LRU size: $LRU_SIZE_A"
