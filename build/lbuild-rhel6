@@ -7,7 +7,8 @@
 # distributions, update the BUILD_GEN variable in build/lbuild)
 #BUILD_GEN+=".0"
 #BUILD_GEN+=".1"		# added --with firmware to rpmbuild for rhel6
-BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
+#BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
+BUILD_GEN+=".1"	# LU-50: kernel: configurable BH LRU size
 
 source ${0%/*}/lbuild-rhel
 
@@ -33,6 +34,7 @@ ApplyOptionalPatch linux-%{version}-lustre.patch\
     echo "# $Arch" > configs/kernel-%{version}-$Arch.config\
     cat %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6-$Arch.config >> configs/kernel-%{version}-$Arch.config\
   fi'\
+           -e '/^# Dynamically generate kernel/a echo "CONFIG_BH_LRU_SIZE=16" >> config-generic'\
           SPECS/$SPEC_NAME 2>&1 || \
         fatal 1 "Error while editing SPECS/$SPEC_NAME"
 
