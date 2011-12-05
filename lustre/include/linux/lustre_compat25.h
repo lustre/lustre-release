@@ -817,6 +817,10 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define blk_queue_max_hw_sectors(q, sect) blk_queue_max_sectors(q, sect)
 #endif
 
+#ifndef HAVE_BLKDEV_GET_BY_DEV
+# define blkdev_get_by_dev(dev, mode, holder) open_by_devnum(dev, mode)
+#endif
+
 #ifndef HAVE_REQUEST_QUEUE_LIMITS
 #define queue_max_sectors(rq)             ((rq)->max_sectors)
 #define queue_max_hw_sectors(rq)          ((rq)->max_hw_sectors)

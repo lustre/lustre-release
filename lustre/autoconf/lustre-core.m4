@@ -2058,6 +2058,18 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 2.6.38 export blkdev_get_by_dev
+#
+AC_DEFUN([LC_BLKDEV_GET_BY_DEV],
+[LB_CHECK_SYMBOL_EXPORT([blkdev_get_by_dev],
+[fs/block_dev.c],[
+AC_DEFINE(HAVE_BLKDEV_GET_BY_DEV, 1,
+            [blkdev_get_by_dev is exported by the kernel])
+],[
+])
+])
+
+#
 # 2.6.39 remove unplug_fn from request_queue.
 #
 AC_DEFUN([LC_REQUEST_QUEUE_UNPLUG_FN],
@@ -2069,7 +2081,7 @@ LB_LINUX_TRY_COMPILE([
         memset(rq.unplug_fn, 0, sizeof(rq.unplug_fn));
 ],[
         AC_DEFINE(HAVE_REQUEST_QUEUE_UNPLUG_FN, 1,
-                [request_queue has unplug_fn field]),
+                  [request_queue has unplug_fn field]),
         AC_MSG_RESULT([yes])
 ],[
         AC_MSG_RESULT([no])
@@ -2226,6 +2238,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SB_BDI
          LC_BLK_QUEUE_MAX_SECTORS
          LC_BLK_QUEUE_MAX_SEGMENTS
+
+         # 2.6.38
+         LC_BLKDEV_GET_BY_DEV
 
          # 2.6.39
          LC_REQUEST_QUEUE_UNPLUG_FN

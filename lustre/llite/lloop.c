@@ -747,7 +747,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
                 if (put_user((long)old_encode_dev(dev), (long*)arg))
                         GOTO(out, err = -EFAULT);
 
-                bdev = open_by_devnum(dev, file->f_mode);
+                bdev = blkdev_get_by_dev(dev, file->f_mode, NULL);
                 if (IS_ERR(bdev))
                         GOTO(out, err = PTR_ERR(bdev));
 
