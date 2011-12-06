@@ -29,6 +29,6 @@ CLIENT_LOADS=($LOADS)
 
 # This is used when testing on SLURM environment.
 # Test will use srun when SRUN_PARTITION is set
-SRUN=${SRUN:-$(which srun 2>/dev/null)}
+SRUN=${SRUN:-$(which srun 2>/dev/null || true)}
 SRUN_PARTITION=${SRUN_PARTITION:-""}
 SRUN_OPTIONS=${SRUN_OPTIONS:-"-W 1800 -l -O"}
