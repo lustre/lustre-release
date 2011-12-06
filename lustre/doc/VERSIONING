@@ -1,52 +1,32 @@
 Lustre versioning
 =================
 
-0.0.1  2/19/2002 <braam@clusterfs.com>
-0.0.2  3/14/2002 <braam@clusterfs.com> describe branches / stable tag
-0.0.3  6/10/2002 <braam@clusterfs.com> describe release mechanisms
-
 This document describes versioning of source and binaries for Lustre.
+
+Versions
+========
+
+The Lustre build version is set in lustre/autoconf/lustre-version.ac
+file with the LUSTRE_MAJOR, LUSTRE_MINOR, LUSTRE_PATCH, and LUSTRE_FIX
+fields.  These are used to generate the LUSTRE_VERSION string and the
+LUSTRE_VERSION_CODE in lustre/include/lustre_ver.h.
+
+LUSTRE_VERSION_CODE can be used in conjunction with OBD_OCD_VERSION()
+to conditionally enable functionality by Lustre version, or to mark
+some part of code obsolete when a future version of Lustre is built.
+It is preferable to mark code obsolete starting at the x.y.50 build
+so that it is removed early in the development cycle.
 
 Packages
 ========
 
-RPM's that you build should get 3 figure versions, CVS versions will
-be 4 digits, and can correspond to test RPM's, and lead up to the
-package version.  So let's plan on releasing
+Major releases should get a 3-digit version x.y.0, and if a maintenance
+release is needed it will increment the 3rd digit.  During development,
+versions start at x.y.50 and increment toward the x.(y+1).0 release.
 
-So you'd build 2 sets of test rpms this week:
-
-0.0.9.1
-0.0.9.2
-
-we decide it's fine then and we release
-
-0.1.0
-
-We go on developing with
-
-0.1.0.{1,2,3,4,...}
-
-as test releases and then we release:
-
-0.1.1
-
-The 0.1 sequence is an unstable sequence, like 2.5 for the kernel is.
-So we expect lots of 0.1.X releases leading up to a stable 0.2 (or
-1.0) at the time of deployment.
-
-CVS
-===
-
-Versions will have 4 digits:
-                     major.minor.patch.test
-
-Such versions will be tagged in CVS as:
-                     v1_2_11_7
-and referred to as:
-                     1.2.11.7
-encoded as:
-                     0x01021107
+Release candidate versions must have the proper build version for the
+release, but are tagged in Git as v2_1_0_RC1.  Final release versions
+are tagged in Git as both v2_1_0_0 and 2.1.0.
 
 Usage:
 ------
@@ -56,11 +36,9 @@ New numbers are used as follows:
 1. major:
  - increased when major new functionality becomes available
 2. minor:
- - even: for each new release with new functionality
- - odd : when a new development cycle starts after a release
+ - for each new release with new functionality
 3. patch:
- - when a development snapshot or release update becomes available
- - all these are announced on lustre-devel@lists.sf.net
+ - for a stable maintenance release or development snapshot
 4. test:
  - when developers feel it is time to exchange a named version
 
@@ -72,20 +50,3 @@ What will run, what won't ?
 
 2. For three digit releases/tags the code should perform
    according to the announcement.
-
-Moving tags
------------
-
-The last stable release will be tagged:            CVS tag "t_last_stable"
-The last operational development snapshot will be  CVS tag "dstable"
-
-Branches
---------
-
-Any and all development must be done on branches, and can only merge to the
-HEAD if _at_least_ tests/acceptance-small.sh and IOR with 5 SMP nodes and
-2 clients/node with 1GB file/client pass without any errors or cleanup
-problems.  Additional tests may be added in the future, so the tests in the
-current CVS head must pass before a branch can be merged back to the trunk.
-
-See http://lustre.org/docs/branches.html for details on CVS branch usage.
