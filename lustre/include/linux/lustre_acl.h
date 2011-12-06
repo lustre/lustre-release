@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2012 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -50,40 +53,15 @@
 # include <linux/fs.h>
 # include <linux/dcache.h>
 # ifdef CONFIG_FS_POSIX_ACL
-#  ifdef HAVE_XATTR_ACL
-#   include <linux/xattr_acl.h>
-#  endif /* HAVE_XATTR_ACL */
-#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
-#   include <linux/posix_acl_xattr.h>
-#  endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
+#  include <linux/posix_acl_xattr.h>
+#  define LUSTRE_POSIX_ACL_MAX_SIZE   XATTR_ACL_SIZE
 # endif /* CONFIG_FS_POSIX_ACL */
-#include <linux/lustre_intent.h>
-/* XATTR_{REPLACE,CREATE} */
-#include <linux/xattr.h>
+# include <linux/lustre_intent.h>
+# include <linux/xattr.h> /* XATTR_{REPLACE,CREATE} */
 #endif /* __KERNEL__ */
 
-/* ACL */
-#ifdef CONFIG_FS_POSIX_ACL
-# ifdef HAVE_XATTR_ACL
-#  define MDS_XATTR_NAME_ACL_ACCESS XATTR_NAME_ACL_ACCESS
-#  define mds_xattr_acl_size(entry) xattr_acl_size(entry)
-# else /* HAVE_XATTR_ACL */
-#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
-#   define MDS_XATTR_NAME_ACL_ACCESS POSIX_ACL_XATTR_ACCESS
-#   define mds_xattr_acl_size(entry) posix_acl_xattr_size(entry)
-#  endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
-# endif /* HAVE_XATTR_ACL */
-
-# define LUSTRE_POSIX_ACL_MAX_ENTRIES   (32)
-
-#ifdef __KERNEL__
-# define LUSTRE_POSIX_ACL_MAX_SIZE   XATTR_ACL_SIZE
-#else
+#ifndef LUSTRE_POSIX_ACL_MAX_SIZE
 # define LUSTRE_POSIX_ACL_MAX_SIZE   0
 #endif
-
-# else /* CONFIG_FS_POSIX_ACL */
-# define LUSTRE_POSIX_ACL_MAX_SIZE      0
-# endif /* CONFIG_FS_POSIX_ACL */
 
 #endif /* _LUSTRE_LINUX_ACL_H */

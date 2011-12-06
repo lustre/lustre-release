@@ -48,15 +48,7 @@
 # endif
 # ifdef CONFIG_FS_POSIX_ACL
 #  include <linux/fs.h>
-#  ifdef HAVE_XATTR_ACL
-#   include <linux/xattr_acl.h>
-#  else
-#   define xattr_acl_entry  posix_acl_xattr_entry
-#   define xattr_acl_header posix_acl_xattr_header
-#  endif
-#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
-#   include <linux/posix_acl_xattr.h>
-#  endif
+#  include <linux/posix_acl_xattr.h>
 # endif
 #endif
 

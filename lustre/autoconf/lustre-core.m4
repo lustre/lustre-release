@@ -433,45 +433,8 @@ AC_DEFUN([LC_BIT_SPINLOCK_H],
 ])
 
 #
-# After 2.6.26 we no longer have xattr_acl.h
+# LC_CONST_ACL_SIZE
 #
-AC_DEFUN([LC_XATTR_ACL],
-[LB_CHECK_FILE([$LINUX/include/linux/xattr_acl.h],[
-	AC_MSG_CHECKING([if xattr_acl.h can be compiled])
-	LB_LINUX_TRY_COMPILE([
-		#include <linux/xattr_acl.h>
-	],[],[
-		AC_MSG_RESULT([yes])
-		AC_DEFINE(HAVE_XATTR_ACL, 1, [Kernel has xattr_acl])
-	],[
-		AC_MSG_RESULT([no])
-	])
-],
-[])
-])
-
-#
-# After 2.6.16 the xattr_acl API is removed, and posix_acl is used instead
-#
-AC_DEFUN([LC_POSIX_ACL_XATTR_H],
-[LB_CHECK_FILE([$LINUX/include/linux/posix_acl_xattr.h],[
-        AC_MSG_CHECKING([if linux/posix_acl_xattr.h can be compiled])
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/fs.h>
-                #include <linux/posix_acl_xattr.h>
-        ],[],[
-                AC_MSG_RESULT([yes])
-                AC_DEFINE(HAVE_LINUX_POSIX_ACL_XATTR_H, 1, [linux/posix_acl_xattr.h found])
-
-        ],[
-                AC_MSG_RESULT([no])
-        ])
-$1
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 AC_DEFUN([LC_CONST_ACL_SIZE],
 [AC_MSG_CHECKING([calc acl size])
 tmp_flags="$CFLAGS"
@@ -483,22 +446,16 @@ AC_TRY_RUN([
         // block include
         #define __LINUX_POSIX_ACL_H
 
-        # ifdef CONFIG_FS_POSIX_ACL
-        #  ifdef HAVE_XATTR_ACL
-        #   include <linux/xattr_acl.h>
-        #  endif
-        #  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
-        #   include <linux/posix_acl_xattr.h>
-        #  endif
-        # endif
-
-        #include <lustre_acl.h>
+        #ifdef CONFIG_FS_POSIX_ACL
+        # include <linux/posix_acl_xattr.h>
+        #endif
 
         #include <stdio.h>
 
         int main(void)
         {
-            int size = mds_xattr_acl_size(LUSTRE_POSIX_ACL_MAX_ENTRIES);
+                /* LUSTRE_POSIX_ACL_MAX_ENTRIES  = 32 */
+            int size = posix_acl_xattr_size(32);
             FILE *f = fopen("acl.size","w+");
             fprintf(f,"%d", size);
             fclose(f);
@@ -2288,8 +2245,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_D_ADD_UNIQUE
          LC_BIT_SPINLOCK_H
 
-         LC_XATTR_ACL
-         LC_POSIX_ACL_XATTR_H
          LC_CONST_ACL_SIZE
 
          LC_STRUCT_INTENT_FILE

@@ -437,32 +437,27 @@ typedef struct file_lock {
 #define NO_QUOTA 1
 
 /* ACL */
-struct posix_acl_entry {
-        short                   e_tag;
-        unsigned short          e_perm;
-        unsigned int            e_id;
-};
-
-struct posix_acl {
-        cfs_atomic_t            a_refcount;
-        unsigned int            a_count;
-        struct posix_acl_entry  a_entries[0];
-};
-
 typedef struct {
         __u16           e_tag;
         __u16           e_perm;
         __u32           e_id;
-} xattr_acl_entry;
+} posix_acl_xattr_entry;
+
+struct posix_acl {
+        cfs_atomic_t           a_refcount;
+        unsigned int           a_count;
+        posix_acl_xattr_entry  a_entries[0];
+};
 
 typedef struct {
-        __u32           a_version;
-        xattr_acl_entry a_entries[0];
-} xattr_acl_header;
+        __u32                 a_version;
+        posix_acl_xattr_entry a_entries[0];
+} posix_acl_xattr_header;
 
-static inline size_t xattr_acl_size(int count)
+static inline size_t posix_acl_xattr_size(int count)
 {
-        return sizeof(xattr_acl_header) + count * sizeof(xattr_acl_entry);
+        return sizeof(posix_acl_xattr_header) + count *
+               sizeof(posix_acl_xattr_entry);
 }
 
 static inline
@@ -482,19 +477,8 @@ void posix_acl_release(struct posix_acl *acl)
 {
 }
 
-#ifdef LIBLUSTRE_POSIX_ACL
-# ifndef posix_acl_xattr_entry
-#  define posix_acl_xattr_entry xattr_acl_entry
-# endif
-# ifndef posix_acl_xattr_header
-#  define posix_acl_xattr_header xattr_acl_header
-# endif
-# ifndef posix_acl_xattr_size
-#  define posix_acl_xattr_size(entry) xattr_acl_size(entry)
-# endif
-# ifndef CONFIG_FS_POSIX_ACL
-#  define CONFIG_FS_POSIX_ACL 1
-# endif
+#if defined(LIBLUSTRE_POSIX_ACL) && !defined(CONFIG_FS_POSIX_ACL)
+# define CONFIG_FS_POSIX_ACL 1
 #endif
 
 #ifndef ENOTSUPP

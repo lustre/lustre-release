@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2012 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -51,14 +54,9 @@
 # include <linux/fs.h>
 # include <linux/dcache.h>
 # ifdef CONFIG_FS_POSIX_ACL
-#  ifdef HAVE_XATTR_ACL
-#   include <linux/xattr_acl.h>
-#  endif /*HAVE_XATTR_ACL */
-#  ifdef HAVE_LINUX_POSIX_ACL_XATTR_H
-#   include <linux/posix_acl_xattr.h>
-#  endif /* HAVE_LINUX_POSIX_ACL_XATTR_H */
+#  include <linux/posix_acl_xattr.h>
 # endif /* CONFIG_FS_POSIX_ACL */
-#include <linux/lustre_intent.h>
+# include <linux/lustre_intent.h>
 #endif /* __KERNEL__ */
 #include <lustre_handles.h>
 #include <libcfs/libcfs.h>
