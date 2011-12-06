@@ -12,42 +12,160 @@
 # Should be installed as .git/hooks/commit-msg.
 #
 
-ORIGINAL="$1"
-REVISED="$(mktemp "$ORIGINAL.XXXXXX")"
-SAVE="$(basename $ORIGINAL).$(date +%Y%m%d.%H%M%S)"
-SIGNOFF="Signed-off-by"
-CHANGEID="Change-Id"
-WIDTH_SUM=64
-WIDTH_REG=70
+init() {
+        set -a
+        readonly ORIGINAL="$1"
+        readonly REVISED="$(mktemp "$ORIGINAL.XXXXXX")"
+        readonly SAVE="$(basename $ORIGINAL).$(date +%Y%m%d.%H%M%S)"
+        readonly SIGNOFF="Signed-off-by:"
+        readonly CHANGEID="Change-Id:"
+        readonly INNOCUOUS=$(echo \
+                        Acked-by \
+                        Tested-by \
+                        CC \
+                        Reported-by \
+                        Reviewed-by \
+                | tr ' ' '|')
+        readonly WIDTH_SUM=64
+        readonly WIDTH_REG=70
+        readonly JIRA_FMT_A="^[A-Z]\{2,5\}-[0-9]\{1,5\} [-a-z0-9]\{2,9\}: "
+        readonly JIRA_FMT_B="^[A-Z]\{2,5\}-[0-9]\{1,5\} "
 
-# Check for, and add if missing, a unique Change-Id
+        # Identify a name followed by an email address.
+        #
+        readonly EMAILPAT=$'[ \t]*[a-zA-Z][^<>]*[ \t]<[^@ \t>]+@[^@ \t>]+>'
+
+        HAS_ERROR=false
+        HAS_SUMMARY=false
+        HAS_LAST_BLANK=false
+        HAS_BODY=false
+        HAS_SIGNOFF=false
+        HAS_CHANGEID=false
+        HAS_DIFF=false
+
+        IS_WRAPPING_UP=false
+
+        LINE=""
+        NUM=0
+        set +a
+}
+
+# die: commit-msg fatal error: script error or empty input message
+# All output redirected to stderr.
+#
+die() {
+        echo "commit-msg fatal error:  $*"
+        test -f "$REVISED" && rm -f "$REVISED"
+        exit 1
+} 1>&2
+
+# Called when doing the final "wrap up" clause because we've found
+# one of the tagged lines that belongs in the final section.
+#
+function ck_wrapup() {
+        $IS_WRAPPING_UP && return
+
+        $HAS_LAST_BLANK || error "blank line must preceed signoff section"
+        $HAS_SUMMARY    || error "missing commit summary line."
+        $HAS_BODY       || error "missing commit description."
+
+        HAS_LAST_BLANK=false
+        IS_WRAPPING_UP=true
+}
+
+function do_signoff() {
+        ck_wrapup
+        # Signed-off-by: First Last <email@host.domain>
+        local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
+        if (( ${#txt} == 0 )) ; then
+                error "$SIGNOFF line requires name and email address"
+        else
+                HAS_SIGNOFF=true # require at least one
+        fi
+}
+
+function do_changeid() {
+        ck_wrapup
+        $HAS_CHANGEID && error "multiple $CHANGEID lines are not allowed"
+
+        # Change-Id: I1234567890123456789012345678901234567890
+        # capital "I" plus 40 hex digits
+        #
+        local txt=$(echo "$LINE" | grep "^$CHANGEID I[0-9a-fA-F]\{40\}\$")
+        (( ${#txt} > 0 )) || \
+                error "has invalid $CHANGEID line for Gerrit tracking"
+
+        HAS_CHANGEID=true
+}
+
+# All "innocuous" lines specify a person and email address
+#
+function do_innocuous() {
+        ck_wrapup
+        local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
+        (( ${#txt} == 0 )) && error "invalid name and address"
+}
+
+function do_default_line() {
+        $IS_WRAPPING_UP && {
+                error "invalid signoff section line"
+                return
+        }
+        if (( NUM == 1 )) ; then
+                HAS_JIRA_COMPONENT=$(echo "$LINE" | grep "$JIRA_FMT_A")
+
+                if (( ${#HAS_JIRA_COMPONENT} == 0 )) ; then
+                        HAS_JIRA=$(echo "$LINE" | grep "$JIRA_FMT_B")
+                        if (( ${#HAS_JIRA} > 0 )) ; then
+                                error "has no component in summary."
+                        else
+                                error "missing JIRA ticket number."
+                        fi
+                elif (( ${#LINE} > WIDTH_SUM )) ; then
+                        error "summary longer than $WIDTH_SUM columns."
+                else
+                        HAS_SUMMARY=true
+                fi
+
+        elif (( ${#LINE} > WIDTH_REG )) ; then
+                error "has line longer than $WIDTH_REG columns."
+        elif ! $HAS_BODY && ! $HAS_LAST_BLANK; then
+                error "has no blank line after summary."
+        else
+                HAS_BODY=true
+        fi
+        HAS_LAST_BLANK=false
+        HAS_DIFF=false
+}
+
+# Add a new unique Change-Id
+#
 new_changeid() {
-	NEWID=$({
-			git var GIT_AUTHOR_IDENT
-			git var GIT_COMMITTER_IDENT
-			git write-tree
-			git rev-parse HEAD 2>/dev/null
-			grep -v "^$SIGNOFF" "$ORIGINAL" | git stripspace -s
-		} | git hash-object --stdin)
-	if [ -z "$NEWID" ]; then
-		error "$0: git hash-object failed for $CHANGEID:"
-		exit 1
-	fi
+        local NEWID=$({
+                        git var GIT_AUTHOR_IDENT
+                        git var GIT_COMMITTER_IDENT
+                        git write-tree
+                        git rev-parse HEAD 2>/dev/null
+                        grep -v "^$SIGNOFF" "$ORIGINAL" | git stripspace -s
+                } | git hash-object --stdin)
+        (( ${#NEWID} > 0 )) || \
+                die "git hash-object failed for $CHANGEID:"
 
-	echo "$CHANGEID: I$NEWID"
-	HAS_CHANGEID=true
+        echo "$CHANGEID I$NEWID"
 }
 
+# A commit message error was encountered.
+# All output redirected to stderr.
+#
 error() {
-	[ "$LINE" ] && echo "line $NUM: $LINE" 1>&2
-	[ "$1" ] && echo "error: commit message $1" 1>&2
-	[ "$2" ] && echo "$2" 1>&2
-
-	HAS_ERROR=true
-}
+        (( ${#LINE} > 0 )) && echo "line $NUM: $LINE"
+        echo "error: commit message $*" | fmt --split-only
+        HAS_ERROR=true
+} 1>&2
 
 usage() {
-	cat 1>&2 <<- EOF
+        exec 1>&2
+        cat <<- EOF
 
 	See http://wiki.whamcloud.com/display/PUB/Commit+Comments
 	for full details.  An example valid commit comment is:
@@ -69,148 +187,92 @@ usage() {
 	that were changed, if this is useful to understand the patch, and
 	for easier searching).  Wrap lines at/under $WIDTH_REG columns.
 
-	$SIGNOFF: Your Real Name <your_email@domain.name>
-	$CHANGEID: Ixxxx(added automatically if missing)xxxx
+	Finish the comment with a blank line and a blank-line-free
+	sign off section:
 
+	$SIGNOFF Your Real Name <your_email@domain.name>
+	$CHANGEID Ixxxx(added automatically if missing)xxxx
+
+	Included in the "sign off section" may be any of several other
+	tag lines:
+	    $(echo "$INNOCUOUS" | tr '|' ' ')
+	The "$CHANGEID" line should only be there when updating a previous
+	commit/submission.  Copy the one from that commit.
 	EOF
 
-	mv "$ORIGINAL" "$SAVE" &&
-		echo "$0: saved original commit comment to $SAVE" 1>&2
+        mv "$ORIGINAL" "$SAVE" && \
+                echo "$0: saved original commit comment to $SAVE" 1>&2
 }
 
-export HAS_ERROR=false
-export HAS_SUMMARY=false
-export HAS_LAST_BLANK=false
-export HAS_BODY=false
-export HAS_SIGNOFF=false
-case $(grep -c "^$CHANGEID:" "$ORIGINAL") in
-0)	export HAS_CHANGEID=false ;;
-1)	export HAS_CHANGEID=true ;;
-*)	error "with multiple $CHANGEID: lines not allowed."
-	export HAS_CHANGEID=true
-	HAS_ERROR=true ;;
-esac
-export HAS_COMMENTS=false
-export HAS_DIFF=false
+init ${1+"$@"}
+exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
 
-export LINE=""
-export NUM=1
+while IFS= read -u3 LINE; do
+        ((NUM += 1))
+        case "$LINE" in
+        $SIGNOFF* )   do_signoff   ;;
+        $CHANGEID* )  do_changeid  ;;
 
-IFS="" # don't eat whitespace, to preserve message formatting
-while read LINE; do
-	WIDTH=$(($(echo $LINE | wc -c) - 1)) # -1 for end-of-line character
+        "")
+                $IS_WRAPPING_UP && \
+                        error "blank lines not allowed in signoff section"
+                HAS_LAST_BLANK=true
+                ;;
 
-	case "$LINE" in
-	$SIGNOFF*)
-		# Signed-off-by: First Last <email@host.domain>
-		HAS_SOB=$(echo "$LINE" | grep "^$SIGNOFF: .* .* <.*@[^.]*\..*>")
-		if [ -z "$HAS_SOB" ]; then
-			error "missing valid commit summary line to show" \
-			      "agreement with code submission requirements."
-		elif ! $HAS_SUMMARY; then
-			error "missing summary before $SIGNOFF:."
-		elif ! $HAS_LAST_BLANK; then
-			error "missing blank line before $SIGNOFF:."
-		elif ! $HAS_BODY; then
-			error "missing useful comments before $SIGNOFF:."
-		else
-			HAS_SIGNOFF=true # allow multiple signoff lines
-		fi
-		echo $LINE
-		! $HAS_CHANGEID && new_changeid
-		;;
-	$CHANGEID*)
-		# Change-Id: I762ab50568f25527176ae54e92c446cf06112097
-		HAS_ID=$(echo "$LINE" | grep "^$CHANGEID: I[0-9a-fA-F]\{40\}")
-		if [ -z "$HAS_ID" ]; then
-			error "has invalid $CHANGEID: line for Gerrit tracking"
-		elif ! $HAS_SUMMARY; then
-			error "missing summary before $CHANGEID:."
-		elif ! $HAS_BODY; then
-			error "missing useful comments before $CHANGEID:."
+        \#*)
+                continue ## ignore and suppress comments
+                ;;
 
-		# $CHANGEID used to come before $SIGNOFF in old commits.
-		# Allow this to continue for some time, until they are gone.
-		# elif ! $HAS_SIGNOFF; then
-		#	error "missing $SIGNOFF: before $CHANGEID:."
+        "diff --git a/"* )
+                # Beginning of uncommented diffstat from "commit -v".  If
+                # there are diff and index lines, skip the rest of the input:
+                #   diff --git a/build/commit-msg b/build/commit-msg
+                #   index 80a3442..acb4c50 100755
+                # If a "diff --git" line is not followed by an index line,
+                # do the default line processing on both lines.
+                #
+                IFS= read -u3 INDEX || break
+                ((NUM += 1))
+                ln=$(echo "$INDEX" | grep "^index [0-9a-fA-F]\{6,\}\.\.")
+                (( ${#ln} > 1 )) && break
+                LINE=${LINE}$'\n'${INDEX}
+                do_default_line
+                ;;
 
-		# $HAS_CHANGEID was already checked and set above
-		#elif $HAS_CHANGEID; then
-		#	error "does not allow multiple $CHANGEID: lines."
-		#else
-		#	HAS_CHANGEID=true
-		fi
-		echo $LINE
-		;;
-	"")
-		[ $HAS_SUMMARY -a ! $HAS_BODY ] && HAS_LAST_BLANK=true
-		[ $HAS_BODY ] && HAS_LAST_BLANK=true
-		echo $LINE
-		;;
-	diff*|index*)
-		# Beginning of uncommented diffstat from "commit -v".  If
-		# there are diff and index lines, skip the rest of the input.
-		# diff --git a/build/commit-msg b/build/commit-msg
-		# index 80a3442..acb4c50 100755
-		DIFF=$(echo "$LINE" | grep -- "^diff --git a/")
-		[ "$DIFF" ] && HAS_DIFF=true && continue
-		INDEX=$(echo "$LINE" | grep -- "^index [0-9a-fA-F]\{6,\}\.\.")
-		[ $HAS_DIFF -a "$INDEX" ] && break || HAS_DIFF=false
-		;;
-	\#*)
-		HAS_COMMENTS=true
-		continue
-		;;
-	*)	if [ $NUM -eq 1 ]; then
-			FMT="^[A-Z]\{2,5\}-[0-9]\{1,5\} [-a-z0-9]\{2,9\}: "
-			HAS_JIRA_COMPONENT=$(echo "$LINE" | grep "$FMT")
-			if [ -z "$HAS_JIRA_COMPONENT" ]; then
-				FMT="^[A-Z]\{2,5\}-[0-9]\{1,5\} "
-				HAS_JIRA=$(echo "$LINE" | grep "$FMT")
-				if [ "$HAS_JIRA" ]; then
-					error "has no component in summary."
-				else
-					error "missing JIRA ticket number."
-				fi
-			elif [ $WIDTH -gt $WIDTH_SUM ]; then
-				error "summary longer than $WIDTH_SUM columns."
-			else
-				HAS_SUMMARY=true
-			fi
-		elif $HAS_SIGNOFF; then
-			error "trailing garbage after $SIGNOFF: line."
-		elif [ $WIDTH -gt $WIDTH_REG ]; then
-			error "has line longer than $WIDTH_REG columns."
-		elif ! $HAS_BODY && ! $HAS_LAST_BLANK; then
-			error "has no blank line after summary."
-		else
-			HAS_BODY=true
-		fi
-		HAS_LAST_BLANK=false
-		HAS_DIFF=false
-		echo $LINE
-		;;
-	esac
+        *)
+                if [[ "$LINE" =~ ^($INNOCUOUS): ]] ; then
+                        do_innocuous
+                else
+                        do_default_line
+                fi
+                ;;
+        esac
 
-	NUM=$((NUM + 1))
-done < "$ORIGINAL" > "$REVISED"
+        echo "$LINE" >&4
+done
 
-[ $NUM -eq 1 ] && exit 1 # empty file
+(( NUM <= 0 )) && die "empty commit message"
 
-LINE=""
-if ! $HAS_SUMMARY; then
-	error "missing commit summary line."
-elif ! $HAS_BODY; then
-	error "missing commit description."
-elif ! $HAS_SIGNOFF; then
-	error "missing valid $SIGNOFF: line."
-elif ! $HAS_CHANGEID; then
-	error "missing valid $CHANGEID: line."
-fi
+unset LINE
+$HAS_SIGNOFF || error "missing valid $SIGNOFF: line."
+
 if $HAS_ERROR; then
-	usage
-	rm "$REVISED"
-	exit 1
+        exec 3<&- 4>&-
+        usage
+        rm "$REVISED"
+        exit 1
 fi
+
+$HAS_CHANGEID || new_changeid >&4
+exec 3<&- 4>&-
 
 mv "$REVISED" "$ORIGINAL"
+
+## Local Variables:
+## Mode: shell-script
+## sh-basic-offset:          8
+## sh-indent-after-do:       8
+## sh-indentation:           8
+## sh-indent-for-case-label: 0
+## sh-indent-for-case-alt:   8
+## End:

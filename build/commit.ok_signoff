@@ -1,0 +1,12 @@
+LU-553 build: improve checks for commit-msg
+
+message
+body
+
+Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
+Change-Id: I0123456789012345678901234567890123456789
+Acked-by:    Joe Doaks <Joe.Doaks@sample.com>
+Tested-by:   Jane Pain <Jane.Pain@sample.com>
+CC:          Your Mother <mom@sample.com>
+Reported-by: Anony Mouse <mickey@sample.com>
+Reviewed-by: Joe Hacker <joey@hacker-industries.com>

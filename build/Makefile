@@ -54,3 +54,10 @@ endif # PATCHLEVEL
 
 echoarch:
 	echo $(ARCH) >$(ARCHFILE)
+
+TESTS := $(wildcard commit.*)
+check-commit :
+	SHELL="$(SHELL)" $(SHELL) test-commit-msg.sh $(TESTS)
+
+check : check-commit
+.PHONY: check-commit
