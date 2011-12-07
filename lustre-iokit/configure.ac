@@ -13,5 +13,6 @@ sgpdd-survey/Makefile
 obdfilter-survey/Makefile
 ost-survey/Makefile
 ior-survey/Makefile
+mdt-survey/Makefile
 stats-collect/Makefile
 )

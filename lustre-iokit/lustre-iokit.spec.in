@@ -38,6 +38,9 @@ This script will collect IO stats on a defined set of nodes.
 ior-survey:
 A script to run the IOR benchmark. The latest version can be downloaded from http://www.llnl.gov/asci/purple/benchmarks/limited/ior/
 
+mdt-survey:
+A script to run md echo client for mdt performance
+
 %prep
 %setup -qn %{name}-%{version}
 
@@ -62,9 +65,11 @@ make install DESTDIR=$RPM_BUILD_ROOT
 /usr/bin/lstats.sh
 /usr/bin/gather_stats_everywhere.sh
 /usr/bin/config.sh
+/usr/bin/mdt-survey
 %doc obdfilter-survey/README.obdfilter-survey
 %doc ior-survey/README.ior-survey
 %doc ost-survey/README.ost-survey
+%doc mdt-survey/README.mdt-survey
 %doc sgpdd-survey/README.sgpdd-survey
 %doc stats-collect/README.lstats.sh
 
