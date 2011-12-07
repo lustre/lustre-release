@@ -1,0 +1,97 @@
+Overview
+--------
+
+This survey script generates meta-data load on the MDS with varying
+numbers of threads by using the echo_client to drive different layers
+of the MDS stack: mdd,mdt, and osd. Currently, we only support mdd layer.
+
+It can be used with the following classes of operations
+
+1. Open-create/mkdir/create
+2. Lookup/getattr/setxattr
+3. Delete/destroy
+4. Unlink/rmdir
+
+   These operations will be run by a variable number of concurrent
+   threads and will test with the number of directories specified by the user.
+   The run can be executed such that all threads operate in a single
+   directory (dir_count=1) or in private/unique directory
+   (dir_count=x thrlo=x thrhi=x).
+
+   The mdd instance is driven directly.  The script automatically
+   loads the obdecho module if required and creates instance of
+   echo_client.
+
+   This script can also create OST objects by providing
+   stripe_count greater than zero.
+
+Running
+-------
+
+The script must be customised according to the components under test and
+where it should keep its working files. Customization variables are
+described as followed:
+
+thrlo          threads to start testing. skipped if less than dir_count
+thrhi          maximum number of threads to test
+targets        MDT instance
+file_count     total number of files to test
+dir_count      total number of directories to test
+stripe_count   number stripe on OST objects
+tests_str      test operations. Must have at least "create" and "destroy"
+start_number   base number for each thread to prevent name collisions
+
+- Create a Lustre configuraton using your normal methods
+
+1. Run without OST objects creation:
+Setup the Lustre MDS without OST mounted.
+Then invoke the mds-survey script
+e.g. : $ thrhi=64 file_count=200000 sh mds-survey
+
+2. Run with OST objects creation:
+Setup the Lustre MDS with at least one OST mounted.
+Then invoke the mds-survey script with stripe_count parameter
+e.g. : $ thrhi=64 file_count=200000 stripe_count=2 sh mds-survey
+
+Note: a specific mdt instance can be specified using targets variable.
+e.g. : $ targets=lustre-MDT0000 thrhi=64 file_count=200000 stripe_count=2 sh mds-survey
+
+Output files:
+-------------
+
+When the script runs, it creates a number of working files and a pair of
+result files.  All files start with the prefix given by ${rslt}.
+
+${rslt}.summary           same as stdout
+${rslt}.script_*          per-host test script files
+${rslt}.detail_tmp*       per-mdt result files
+${rslt}.detail            collected result files for post-mortem
+
+The script iterates over the given numbers of threads performing
+all the specified tests and checking that all test processes
+completed successfully.
+
+Note that the script may not clean up properly if it is aborted or if it
+encounters an unrecoverable error.  In this case, manual cleanup may be
+required, possibly including killing any running instances of 'lctl' (local
+or remote), removing echo_client instances created by the script and
+unloading obdecho.
+
+
+Script output
+-------------
+
+The summary file and stdout contain lines like...
+
+mdt 1 file  100000 dir    4 thr    4 create 5652.05 [ 999.01,46940.48] destroy 5797.79 [   0.00,52951.55]
+
+mdt 1             is the total number of MDTs under test.
+file 100000       is the total number of files to operate
+dir 4             is the total number of directories to operate
+thr 4             is the total number of threads operate over all directories
+create
+destroy           are the test name. More tests will be displayed on the same line.
+565.05            is the aggregate operations over all MDTs measured by
+                  dividing the total number of operations by the elapsed time.
+[999.01,46940.48] are the minimum and maximum instantaneous operation seen on
+                  any individual MDT.

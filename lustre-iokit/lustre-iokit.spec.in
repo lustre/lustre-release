@@ -38,6 +38,12 @@ This script will collect IO stats on a defined set of nodes.
 ior-survey:
 A script to run the IOR benchmark. The latest version can be downloaded from http://www.llnl.gov/asci/purple/benchmarks/limited/ior/
 
+mds-survey:
+This survey tests the local metadata performance using the echo_client to drive
+the MDD layer to perform operations. It is run with multiple threads (to
+simulate MDT service threads) locally on the MDS node, and does not need Lustre
+clients in order to run
+
 %prep
 %setup -qn %{name}-%{version}
 
@@ -62,14 +68,18 @@ make install DESTDIR=$RPM_BUILD_ROOT
 /usr/bin/lstats.sh
 /usr/bin/gather_stats_everywhere.sh
 /usr/bin/config.sh
+/usr/bin/mds-survey
 %doc obdfilter-survey/README.obdfilter-survey
 %doc ior-survey/README.ior-survey
 %doc ost-survey/README.ost-survey
+%doc mds-survey/README.mds-survey
 %doc sgpdd-survey/README.sgpdd-survey
 %doc stats-collect/README.lstats.sh
 
 
 %changelog
+* Fri Jan 13 2012 Minh Diep
+- Added mds-survey
 * Fri Dec 30 2011 Minh Diep
 - WhamCloud release for bug fixes
 * Tue Jul 24 2007 Cliff White

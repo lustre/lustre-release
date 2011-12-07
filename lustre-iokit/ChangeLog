@@ -30,3 +30,5 @@
     23363  - obdfilter-survey: no echo client and ost_name not set
     LU-349 - set LC_ALL explicitly in obdfilter-survey
     LU-843 - iokit: get_ec_devno returns trash
+2012-01-13
+    - Added mdt-survey script
