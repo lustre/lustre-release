@@ -584,11 +584,12 @@ struct obd_id_info {
 /* */
 
 struct echo_obd {
-        struct obdo          eo_oa;
-        cfs_spinlock_t       eo_lock;
-        __u64                eo_lastino;
-        struct lustre_handle eo_nl_lock;
-        cfs_atomic_t         eo_prep;
+        struct obd_device_target eo_obt;
+        struct obdo              eo_oa;
+        cfs_spinlock_t           eo_lock;
+        __u64                    eo_lastino;
+        struct lustre_handle     eo_nl_lock;
+        cfs_atomic_t             eo_prep;
 };
 
 struct ost_obd {

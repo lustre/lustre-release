@@ -554,6 +554,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         char                       ns_name[48];
         ENTRY;
 
+        obd->u.echo.eo_obt.obt_magic = OBT_MAGIC;
         cfs_spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OID;
 
