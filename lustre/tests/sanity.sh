@@ -1072,6 +1072,7 @@ test_27q() {
 	reset_enospc
 	rm -f $DIR/$tdir/$tfile
 
+	mkdir -p $DIR/$tdir
 	$MCREATE $DIR/$tdir/$tfile || error "mcreate $DIR/$tdir/$tfile failed"
 	$TRUNCATE $DIR/$tdir/$tfile 80000000 ||error "truncate $DIR/$tdir/$tfile failed"
 	$CHECKSTAT -s 80000000 $DIR/$tdir/$tfile || error "checkstat failed"
