@@ -547,16 +547,16 @@ AC_DEFUN([LN_CONFIG_USERSPACE],
 AC_DEFUN([LN_5ARGS_SYSCTL_PROC_HANDLER],
 [AC_MSG_CHECKING([if sysctl proc_handler wants 5 args])
 LB_LINUX_TRY_COMPILE([
-       #include <linux/sysctl.h>
+        #include <linux/sysctl.h>
 ],[
         struct ctl_table *table = NULL;
-       int write = 1;
-       void __user *buffer = NULL;
-       size_t *lenp = NULL;
-       loff_t *ppos = NULL;
+        int write = 1;
+        void __user *buffer = NULL;
+        size_t *lenp = NULL;
+        loff_t *ppos = NULL;
 
-       proc_handler *proc_handler;
-       proc_handler(table, write, buffer, lenp, ppos);
+        proc_handler *proc_handler;
+        proc_handler(table, write, buffer, lenp, ppos);
 
 ],[
         AC_MSG_RESULT(yes)
@@ -565,6 +565,28 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT(no)
 ])
+])
+
+#
+# 2.6.36 tcp_sendpage() first parameter is 'struct sock' instead of 'struct socket'.
+#
+AC_DEFUN([LN_CONFIG_TCP_SENDPAGE],
+[AC_MSG_CHECKING([if tcp_sendpage first parameter is socket])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/net.h>
+        #include <net/tcp.h>
+],[
+        tcp_sendpage((struct socket*)0, NULL, 0, 0, 0);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_TCP_SENDPAGE_USE_SOCKET, 1,
+                  [tcp_sendpage use socket as first parameter])
+],[
+        AC_MSG_RESULT(no)
+])
+EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
@@ -584,6 +606,8 @@ LN_CONFIG_PTLLND
 LN_CONFIG_MX
 # 2.6.32
 LN_5ARGS_SYSCTL_PROC_HANDLER
+# 2.6.36
+LN_CONFIG_TCP_SENDPAGE
 ])
 
 #
