@@ -368,7 +368,8 @@ static int mdt_server_data_init(const struct lu_env *env,
                 lsd->lsd_feature_compat = OBD_COMPAT_MDT;
                 lsd->lsd_feature_rocompat = OBD_ROCOMPAT_LOVOBJID;
                 lsd->lsd_feature_incompat = OBD_INCOMPAT_MDT |
-                                            OBD_INCOMPAT_COMMON_LR;
+                                            OBD_INCOMPAT_COMMON_LR |
+                                            OBD_INCOMPAT_MULTI_OI;
         } else {
                 LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
                 rc = mdt_last_rcvd_header_read(env, mdt);

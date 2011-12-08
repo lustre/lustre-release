@@ -53,6 +53,7 @@
 
 /* struct rw_semaphore */
 #include <linux/rwsem.h>
+#include <lustre_fid.h>
 #include <lu_object.h>
 #include <md_object.h>
 
@@ -62,11 +63,6 @@ struct lu_site;
 struct thandle;
 
 struct dt_device;
-
-enum {
-        OSD_OI_FID_16,
-        OSD_OI_FID_NR
-};
 
 /*
  * Object Index (oi) instance.
@@ -92,10 +88,11 @@ struct osd_inode_id {
 
 int osd_oi_mod_init(void);
 int osd_oi_init(struct osd_thread_info *info,
-                struct osd_oi *oi,
+                struct osd_oi **oi_table,
                 struct dt_device *dev,
                 struct md_device *mdev);
-void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi);
+void osd_oi_fini(struct osd_thread_info *info,
+                 struct osd_oi **oi_table, unsigned oi_count);
 
 int  osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                    const struct lu_fid *fid, struct osd_inode_id *id);

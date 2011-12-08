@@ -155,14 +155,15 @@ struct osd_device {
         struct dt_device          od_dt_dev;
         /* information about underlying file system */
         struct lustre_mount_info *od_mount;
-        /* object index */
-        struct osd_oi             od_oi;
         /*
          * XXX temporary stuff for object index: directory where every object
          * is named by its fid.
          */
         struct dt_object         *od_obj_area;
-
+        /* object index */
+        struct osd_oi            *od_oi_table;
+        /* total number of OI containers */
+        int                       od_oi_count;
         /*
          * Fid Capability
          */
@@ -392,6 +393,16 @@ static inline int osd_fid_is_root(const struct lu_fid *fid)
 static inline int osd_fid_is_igif(const struct lu_fid *fid)
 {
         return fid_is_igif(fid) || osd_fid_is_root(fid);
+}
+
+static inline struct osd_oi *
+osd_fid2oi(struct osd_device *osd, const struct lu_fid *fid)
+{
+        if (!fid_is_norm(fid))
+                return NULL;
+
+        LASSERT(osd->od_oi_table != NULL && osd->od_oi_count >= 1);
+        return &osd->od_oi_table[fid->f_seq % osd->od_oi_count];
 }
 
 #endif /* __KERNEL__ */

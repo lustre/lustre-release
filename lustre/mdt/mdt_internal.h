@@ -179,7 +179,7 @@ struct mdt_device {
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR | \
                                  OBD_INCOMPAT_FID | OBD_INCOMPAT_IAM_DIR | \
-                                 OBD_INCOMPAT_LMM_VER)
+                                 OBD_INCOMPAT_LMM_VER | OBD_INCOMPAT_MULTI_OI)
 #define MDT_COS_DEFAULT         (0)
 
 struct mdt_object {
