@@ -667,22 +667,20 @@ do {                                                                          \
 # define my_call_rcu(rcu, cb)             (cb)(rcu)
 #endif
 
-#define OBD_FREE_RCU_CB(ptr, size, handle, free_cb)                           \
-do {                                                                          \
-        struct portals_handle *__h = (handle);                                \
-        LASSERT(handle);                                                      \
-        __h->h_ptr = (ptr);                                                   \
-        __h->h_size = (size);                                                 \
-        __h->h_free_cb = (void (*)(void *, size_t))(free_cb);                 \
-        my_call_rcu(&__h->h_rcu, class_handle_free_cb);                       \
-        POISON_PTR(ptr);                                                      \
+#define OBD_FREE_RCU(ptr, size, handle)					      \
+do {									      \
+	struct portals_handle *__h = (handle);				      \
+									      \
+	LASSERT(handle != NULL);					      \
+	__h->h_cookie = (unsigned long)(ptr);				      \
+	__h->h_size = (size);						      \
+	my_call_rcu(&__h->h_rcu, class_handle_free_cb);			      \
+	POISON_PTR(ptr);						      \
 } while(0)
-#define OBD_FREE_RCU(ptr, size, handle) OBD_FREE_RCU_CB(ptr, size, handle, NULL)
 
 #else
 #define OBD_FREE(ptr, size) ((void)(size), free((ptr)))
 #define OBD_FREE_RCU(ptr, size, handle) (OBD_FREE(ptr, size))
-#define OBD_FREE_RCU_CB(ptr, size, handle, cb)     ((*(cb))(ptr, size))
 #endif /* ifdef __KERNEL__ */
 
 #ifdef __arch_um__

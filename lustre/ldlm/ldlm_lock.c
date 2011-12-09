@@ -193,12 +193,6 @@ struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock)
         return lock;
 }
 
-static void ldlm_lock_free(struct ldlm_lock *lock, size_t size)
-{
-        LASSERT(size == sizeof(*lock));
-        OBD_SLAB_FREE(lock, ldlm_lock_slab, sizeof(*lock));
-}
-
 void ldlm_lock_put(struct ldlm_lock *lock)
 {
         ENTRY;
@@ -231,8 +225,7 @@ void ldlm_lock_put(struct ldlm_lock *lock)
 
                 ldlm_interval_free(ldlm_interval_detach(lock));
                 lu_ref_fini(&lock->l_reference);
-                OBD_FREE_RCU_CB(lock, sizeof(*lock), &lock->l_handle,
-                                ldlm_lock_free);
+		OBD_FREE_RCU(lock, sizeof(*lock), &lock->l_handle);
         }
 
         EXIT;
@@ -399,6 +392,17 @@ static void lock_handle_addref(void *lock)
         LDLM_LOCK_GET((struct ldlm_lock *)lock);
 }
 
+static void lock_handle_free(void *lock, int size)
+{
+	LASSERT(size == sizeof(struct ldlm_lock));
+	OBD_SLAB_FREE(lock, ldlm_lock_slab, size);
+}
+
+struct portals_handle_ops lock_handle_ops = {
+	.hop_addref = lock_handle_addref,
+	.hop_free   = lock_handle_free,
+};
+
 /*
  * usage: pass in a resource on which you have done ldlm_resource_get
  *        new lock will take over the refcount.
@@ -436,7 +440,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         lprocfs_counter_incr(ldlm_res_to_ns(resource)->ns_stats,
                              LDLM_NSS_LOCKS);
         CFS_INIT_LIST_HEAD(&lock->l_handle.h_link);
-        class_handle_hash(&lock->l_handle, lock_handle_addref);
+	class_handle_hash(&lock->l_handle, &lock_handle_ops);
 
         lu_ref_init(&lock->l_reference);
         lu_ref_add(&lock->l_reference, "hash", lock);

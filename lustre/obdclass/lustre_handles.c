@@ -82,7 +82,8 @@ static struct handle_bucket {
  * Generate a unique 64bit cookie (hash) for a handle and insert it into
  * global (per-node) hash-table.
  */
-void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
+void class_handle_hash(struct portals_handle *h,
+		       struct portals_handle_ops *ops)
 {
         struct handle_bucket *bucket;
         ENTRY;
@@ -108,8 +109,8 @@ void class_handle_hash(struct portals_handle *h, portals_handle_addref_cb cb)
                 handle_base += HANDLE_INCR;
         }
         cfs_spin_unlock(&handle_base_lock);
- 
-        h->h_addref = cb;
+
+	h->h_ops = ops;
         cfs_spin_lock_init(&h->h_lock);
 
         bucket = &handle_hash[h->h_cookie & HANDLE_HASH_MASK];
@@ -189,7 +190,7 @@ void *class_handle2object(__u64 cookie)
 
                 cfs_spin_lock(&h->h_lock);
                 if (likely(h->h_in != 0)) {
-                        h->h_addref(h);
+			h->h_ops->hop_addref(h);
                         retval = h;
                 }
                 cfs_spin_unlock(&h->h_lock);
@@ -202,14 +203,13 @@ void *class_handle2object(__u64 cookie)
 
 void class_handle_free_cb(cfs_rcu_head_t *rcu)
 {
-        struct portals_handle *h = RCU2HANDLE(rcu);
-        if (h->h_free_cb) {
-                h->h_free_cb(h->h_ptr, h->h_size);
-        } else {
-                void *ptr = h->h_ptr;
-                unsigned int size = h->h_size;
-                OBD_FREE(ptr, size);
-        }
+	struct portals_handle *h = RCU2HANDLE(rcu);
+	void *ptr = (void *)(unsigned long)h->h_cookie;
+
+	if (h->h_ops->hop_free != NULL)
+		h->h_ops->hop_free(ptr, h->h_size);
+	else
+		OBD_FREE(ptr, h->h_size);
 }
 
 int class_handle_init(void)
@@ -252,8 +252,8 @@ static int cleanup_all_handles(void)
 
                 cfs_spin_lock(&handle_hash[i].lock);
                 list_for_each_entry_rcu(h, &(handle_hash[i].head), h_link) {
-                        CERROR("force clean handle "LPX64" addr %p addref %p\n",
-                               h->h_cookie, h, h->h_addref);
+			CERROR("force clean handle "LPX64" addr %p ops %p\n",
+			       h->h_cookie, h, h->h_ops);
 
                         class_handle_unhash_nolock(h);
                         rc++;

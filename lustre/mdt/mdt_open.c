@@ -54,6 +54,11 @@ static void mdt_mfd_get(void *mfdp)
 {
 }
 
+static struct portals_handle_ops mfd_handle_ops = {
+	.hop_addref = mdt_mfd_get,
+	.hop_free   = NULL,
+};
+
 /* Create a new mdt_file_data struct, initialize it,
  * and insert it to global hash table */
 struct mdt_file_data *mdt_mfd_new(void)
@@ -65,7 +70,7 @@ struct mdt_file_data *mdt_mfd_new(void)
         if (mfd != NULL) {
                 CFS_INIT_LIST_HEAD(&mfd->mfd_handle.h_link);
                 CFS_INIT_LIST_HEAD(&mfd->mfd_list);
-                class_handle_hash(&mfd->mfd_handle, mdt_mfd_get);
+		class_handle_hash(&mfd->mfd_handle, &mfd_handle_ops);
         }
         RETURN(mfd);
 }

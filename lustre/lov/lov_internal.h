@@ -88,29 +88,6 @@ struct lov_request_set {
 
 extern cfs_mem_cache_t *lov_oinfo_slab;
 
-static inline void lov_llh_addref(void *llhp)
-{
-        struct lov_lock_handles *llh = llhp;
-        cfs_atomic_inc(&llh->llh_refcount);
-        CDEBUG(D_INFO, "GETting llh %p : new refcount %d\n", llh,
-               cfs_atomic_read(&llh->llh_refcount));
-}
-
-static inline struct lov_lock_handles *lov_llh_new(struct lov_stripe_md *lsm)
-{
-        struct lov_lock_handles *llh;
-
-        OBD_ALLOC(llh, sizeof *llh +
-                  sizeof(*llh->llh_handles) * lsm->lsm_stripe_count);
-        if (llh == NULL)
-                return NULL;
-        cfs_atomic_set(&llh->llh_refcount, 2);
-        llh->llh_stripe_count = lsm->lsm_stripe_count;
-        CFS_INIT_LIST_HEAD(&llh->llh_handle.h_link);
-        class_handle_hash(&llh->llh_handle, lov_llh_addref);
-        return llh;
-}
-
 void lov_finish_set(struct lov_request_set *set);
 
 static inline void lov_get_reqset(struct lov_request_set *set)

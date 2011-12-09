@@ -179,13 +179,13 @@ struct obd_export {
          */
         cfs_atomic_t              exp_rpc_count; /* RPC references */
         cfs_atomic_t              exp_cb_count; /* Commit callback references */
+	/** Number of queued replay requests to be processes */
+	cfs_atomic_t		  exp_replay_count;
         cfs_atomic_t              exp_locks_count; /** Lock references */
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
         cfs_list_t                exp_locks_list;
         cfs_spinlock_t            exp_locks_list_guard;
 #endif
-        /** Number of queued replay requests to be processes */
-        cfs_atomic_t              exp_replay_count;
         /** UUID of client connected to this export */
         struct obd_uuid           exp_client_uuid;
         /** To link all exports on an obd device */

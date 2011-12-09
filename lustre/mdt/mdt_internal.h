@@ -84,10 +84,10 @@ struct mdt_object;
 /* file data for open files on MDS */
 struct mdt_file_data {
         struct portals_handle mfd_handle; /* must be first */
+	int		      mfd_mode;   /* open mode provided by client */
         cfs_list_t            mfd_list;   /* protected by med_open_lock */
         __u64                 mfd_xid;    /* xid of the open request */
         struct lustre_handle  mfd_old_handle; /* old handle in replay case */
-        int                   mfd_mode;   /* open mode provided by client */
         struct mdt_object    *mfd_object; /* point to opened object */
 };
 
