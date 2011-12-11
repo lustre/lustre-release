@@ -83,14 +83,14 @@
         <title><indexterm><primary>setup</primary><secondary>MDS/MDT</secondary></indexterm>
           <indexterm><primary>space</primary><secondary>determining MDS/MDT requirements</secondary></indexterm>
       Determining MDS/MDT Space Requirements</title>
-      <para>When calculating the MDT size, the important factor to consider is the number of files to be stored in the file system. This determines the number of inodes needed, which drives the MDT sizing. To be on the safe side, plan for 4 KB per inode on the MDT, which is the default value. Attached storage required for Lustre metadata is typically 1-2 percent of the file system capacity depending upon file size.</para>
+      <para>When calculating the MDT size, the important factor to consider is the number of files to be stored in the file system. This determines the number of inodes needed, which drives the MDT sizing. To be on the safe side, plan for 2 KB per inode on the MDT, which is the default value. Attached storage required for Lustre metadata is typically 1-2 percent of the file system capacity depending upon file size.</para>
       <para>For example, if the average file size is 5 MB and you have 100 TB of usable OST space, then you can calculate the minimum number of inodes as follows:</para>
       <informalexample>
         <para>(100 TB * 1024 GB/TB * 1024 MB/GB) / 5 MB/inode = 20 million inodes</para>
       </informalexample>
       <para>We recommend that you use at least twice the minimum number of inodes to allow for future expansion and allow for an average file size smaller than expected. Thus, the required space is:</para>
       <informalexample>
-        <para>4 KB/inode * 40 million inodes = 160 GB</para>
+        <para>2 KB/inode * 40 million inodes = 80 GB</para>
       </informalexample>
       <para>If the average file size is small, 4 KB for example, Lustre is not very efficient as the MDT uses as much space as the OSTs. However, this is not a common configuration for Lustre.</para>
       <note>
