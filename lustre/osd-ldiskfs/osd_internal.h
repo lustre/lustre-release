@@ -99,6 +99,19 @@ struct osd_directory {
         struct iam_descr     od_descr;
 };
 
+/*
+ * Object Index (oi) instance.
+ */
+struct osd_oi {
+        /*
+         * underlying index object, where fid->id mapping in stored.
+         */
+        struct inode         *oi_inode;
+        struct osd_directory   oi_dir;
+};
+
+extern const int osd_dto_credits_noquota[];
+
 struct osd_object {
         struct dt_object        oo_dt;
         /**
@@ -197,7 +210,7 @@ struct osd_device {
          */
         struct dt_object         *od_obj_area;
         /* object index */
-        struct osd_oi            *od_oi_table;
+        struct osd_oi           **od_oi_table;
         /* total number of OI containers */
         int                       od_oi_count;
         /*
@@ -517,6 +530,9 @@ int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
                     struct lustre_capa *capa, __u64 opc);
 void osd_declare_qid(struct dt_object *dt, struct osd_thandle *oh,
                      int type, uid_t id, struct inode *inode);
+struct inode *osd_iget(struct osd_thread_info *info,
+                       struct osd_device *dev,
+                       const struct osd_inode_id *id);
 int generic_error_remove_page(struct address_space *mapping,
                                      struct page *page);
 
@@ -562,8 +578,8 @@ static inline int osd_fid_is_igif(const struct lu_fid *fid)
         return fid_is_igif(fid) || osd_fid_is_root(fid);
 }
 
-static inline struct osd_oi *
-osd_fid2oi(struct osd_device *osd, const struct lu_fid *fid)
+static inline struct osd_oi *osd_fid2oi(struct osd_device *osd,
+                                        const struct lu_fid *fid)
 {
         if (!fid_is_norm(fid))
                 return NULL;
@@ -571,12 +587,9 @@ osd_fid2oi(struct osd_device *osd, const struct lu_fid *fid)
         LASSERT(osd->od_oi_table != NULL && osd->od_oi_count >= 1);
         /* It can work even od_oi_count equals to 1 although it's unexpected,
          * the only reason we set it to 1 is for performance measurement */
-        return &osd->od_oi_table[fid->f_seq & (osd->od_oi_count - 1)];
+        return osd->od_oi_table[fid->f_seq & (osd->od_oi_count - 1)];
 }
 
-/*
- * Helpers.
- */
 extern const struct lu_device_operations  osd_lu_ops;
 
 static inline int lu_device_is_osd(const struct lu_device *d)
@@ -641,6 +654,82 @@ static inline struct osd_thread_info *osd_oti_get(const struct lu_env *env)
 }
 
 extern const struct dt_body_operations osd_body_ops_new;
+
+/**
+ * IAM Iterator
+ */
+static inline
+struct iam_path_descr *osd_it_ipd_get(const struct lu_env *env,
+                                      const struct iam_container *bag)
+{
+        return bag->ic_descr->id_ops->id_ipd_alloc(bag,
+                                           osd_oti_get(env)->oti_it_ipd);
+}
+
+static inline
+struct iam_path_descr *osd_idx_ipd_get(const struct lu_env *env,
+                                       const struct iam_container *bag)
+{
+        return bag->ic_descr->id_ops->id_ipd_alloc(bag,
+                                           osd_oti_get(env)->oti_idx_ipd);
+}
+
+static inline void osd_ipd_put(const struct lu_env *env,
+                               const struct iam_container *bag,
+                               struct iam_path_descr *ipd)
+{
+        bag->ic_descr->id_ops->id_ipd_free(ipd);
+}
+
+static inline
+struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,
+                                         struct inode *inode,
+                                         const char *name, const int namelen)
+{
+        struct osd_thread_info *info   = osd_oti_get(env);
+        struct dentry *child_dentry = &info->oti_child_dentry;
+        struct dentry *obj_dentry = &info->oti_obj_dentry;
+
+        obj_dentry->d_inode = inode;
+        obj_dentry->d_sb = inode->i_sb;
+        obj_dentry->d_name.hash = 0;
+
+        child_dentry->d_name.hash = 0;
+        child_dentry->d_parent = obj_dentry;
+        child_dentry->d_name.name = name;
+        child_dentry->d_name.len = namelen;
+        return child_dentry;
+}
+
+/**
+ * Helper function to pack the fid, ldiskfs stores fid in packed format.
+ */
+static inline
+void osd_fid_pack(struct osd_fid_pack *pack, const struct dt_rec *fid,
+                  struct lu_fid *befider)
+{
+        fid_cpu_to_be(befider, (struct lu_fid *)fid);
+        memcpy(pack->fp_area, befider, sizeof(*befider));
+        pack->fp_len =  sizeof(*befider) + 1;
+}
+
+static inline
+int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
+{
+        int result;
+
+        result = 0;
+        switch (pack->fp_len) {
+        case sizeof *fid + 1:
+                memcpy(fid, pack->fp_area, sizeof *fid);
+                fid_be_to_cpu(fid, fid);
+                break;
+        default:
+                CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
+                result = -EIO;
+        }
+        return result;
+}
 
 #endif /* __KERNEL__ */
 #endif /* _OSD_INTERNAL_H */

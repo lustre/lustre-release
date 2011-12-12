@@ -110,8 +110,8 @@ static int osd_object_invariant(const struct lu_object *l)
 static inline void
 osd_push_ctxt(const struct lu_env *env, struct osd_ctxt *save)
 {
-        struct md_ucred    *uc = md_ucred(env);
-        struct cred        *tc;
+        struct md_ucred *uc = md_ucred(env);
+        struct cred     *tc;
 
         LASSERT(uc != NULL);
 
@@ -254,9 +254,9 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
 /*
  * retrieve object from backend ext fs.
  **/
-static struct inode *osd_iget(struct osd_thread_info *info,
-                              struct osd_device *dev,
-                              const struct osd_inode_id *id)
+struct inode *osd_iget(struct osd_thread_info *info,
+                       struct osd_device *dev,
+                       const struct osd_inode_id *id)
 {
         struct inode *inode = NULL;
 
@@ -313,17 +313,18 @@ static int osd_fid_lookup(const struct lu_env *env,
         ENTRY;
 
         info = osd_oti_get(env);
+        LASSERT(info);
         dev  = osd_dev(ldev);
         id   = &info->oti_id;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
                 RETURN(-ENOENT);
 
-        result = osd_oi_lookup(info, osd_fid2oi(dev, fid), fid, id);
+        result = osd_oi_lookup(info, dev, fid, id);
         if (result != 0) {
                 if (result == -ENOENT)
                         result = 0;
-                goto out;
+                GOTO(out, result);
         }
 
         inode = osd_iget(info, dev, id);
@@ -336,7 +337,7 @@ static int osd_fid_lookup(const struct lu_env *env,
                  * place holders for objects yet to be created.
                  */
                 result = PTR_ERR(inode);
-                goto out;
+                GOTO(out, result);
         }
 
         obj->oo_inode = inode;
@@ -358,7 +359,6 @@ static int osd_fid_lookup(const struct lu_env *env,
         }
 out:
         LINVRNT(osd_invariant(obj));
-
         RETURN(result);
 }
 
@@ -409,30 +409,6 @@ static void osd_object_free(const struct lu_env *env, struct lu_object *l)
         if (obj->oo_hl_head != NULL)
                 ldiskfs_htree_lock_head_free(obj->oo_hl_head);
         OBD_FREE_PTR(obj);
-}
-
-/**
- * IAM Iterator
- */
-static struct iam_path_descr *osd_it_ipd_get(const struct lu_env *env,
-                                             const struct iam_container *bag)
-{
-        return bag->ic_descr->id_ops->id_ipd_alloc(bag,
-                                           osd_oti_get(env)->oti_it_ipd);
-}
-
-static struct iam_path_descr *osd_idx_ipd_get(const struct lu_env *env,
-                                              const struct iam_container *bag)
-{
-        return bag->ic_descr->id_ops->id_ipd_alloc(bag,
-                                           osd_oti_get(env)->oti_idx_ipd);
-}
-
-static void osd_ipd_put(const struct lu_env *env,
-                        const struct iam_container *bag,
-                        struct iam_path_descr *ipd)
-{
-        bag->ic_descr->id_ops->id_ipd_free(ipd);
 }
 
 /*
@@ -1440,26 +1416,12 @@ static int osd_create_post(struct osd_thread_info *info, struct osd_object *obj,
         return 0;
 }
 
-static struct dentry * osd_child_dentry_get(const struct lu_env *env,
-                                            struct osd_object *obj,
-                                            const char *name,
-                                            const int namelen)
+struct dentry *osd_child_dentry_get(const struct lu_env *env,
+                                    struct osd_object *obj,
+                                    const char *name, const int namelen)
 {
-        struct osd_thread_info *info   = osd_oti_get(env);
-        struct dentry *child_dentry = &info->oti_child_dentry;
-        struct dentry *obj_dentry = &info->oti_obj_dentry;
-
-        obj_dentry->d_inode = obj->oo_inode;
-        obj_dentry->d_sb = osd_sb(osd_obj2dev(obj));
-        obj_dentry->d_name.hash = 0;
-
-        child_dentry->d_name.hash = 0;
-        child_dentry->d_parent = obj_dentry;
-        child_dentry->d_name.name = name;
-        child_dentry->d_name.len = namelen;
-        return child_dentry;
+        return osd_child_dentry_by_inode(env, obj->oo_inode, name, namelen);
 }
-
 
 static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                       cfs_umode_t mode,
@@ -1724,7 +1686,7 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
         id->oii_ino = obj->oo_inode->i_ino;
         id->oii_gen = obj->oo_inode->i_generation;
 
-        return osd_oi_insert(info, osd_fid2oi(osd, fid), fid, id, th,
+        return osd_oi_insert(info, osd, fid, id, th,
                              uc->mu_cap & CFS_CAP_SYS_RESOURCE_MASK);
 }
 
@@ -1857,8 +1819,7 @@ static int osd_object_destroy(const struct lu_env *env,
 
         OSD_EXEC_OP(th, destroy);
 
-        result = osd_oi_delete(osd_oti_get(env),
-                               osd_fid2oi(osd, fid), fid, th);
+        result = osd_oi_delete(osd_oti_get(env), osd, fid, th);
 
         /* XXX: add to ext3 orphan list */
         /* rc = ext3_orphan_add(handle_t *handle, struct inode *inode) */
@@ -1932,17 +1893,6 @@ static inline void osd_igif_get(const struct lu_env *env, struct inode  *inode,
 }
 
 /**
- * Helper function to pack the fid, ldiskfs stores fid in packed format.
- */
-void osd_fid_pack(struct osd_fid_pack *pack, const struct dt_rec *fid,
-                  struct lu_fid *befider)
-{
-        fid_cpu_to_be(befider, (struct lu_fid *)fid);
-        memcpy(pack->fp_area, befider, sizeof(*befider));
-        pack->fp_len =  sizeof(*befider) + 1;
-}
-
-/**
  * ldiskfs supports fid in dirent, it is passed in dentry->d_fsdata.
  * lustre 1.8 also uses d_fsdata for passing other info to ldiskfs.
  * To have compatilibility with 1.8 ldiskfs driver we need to have
@@ -1958,23 +1908,6 @@ void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
 
         fid_cpu_to_be((struct lu_fid *)param->edp_data,
                       (struct lu_fid *)fid);
-}
-
-int osd_fid_unpack(struct lu_fid *fid, const struct osd_fid_pack *pack)
-{
-        int result;
-
-        result = 0;
-        switch (pack->fp_len) {
-        case sizeof *fid + 1:
-                memcpy(fid, pack->fp_area, sizeof *fid);
-                fid_be_to_cpu(fid, fid);
-                break;
-        default:
-                CERROR("Unexpected packed fid size: %d\n", pack->fp_len);
-                result = -EIO;
-        }
-        return result;
 }
 
 /**
@@ -4047,7 +3980,7 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
                 o->od_obj_area = NULL;
         }
         if (o->od_oi_table != NULL)
-                osd_oi_fini(info, &o->od_oi_table, o->od_oi_count);
+                osd_oi_fini(info, o);
 
         if (o->od_fsops) {
                 fsfilt_put_ops(o->od_fsops);
@@ -4211,13 +4144,12 @@ static int osd_prepare(const struct lu_env *env,
 
         ENTRY;
         /* 1. initialize oi before any file create or file open */
-        result = osd_oi_init(oti, &osd->od_oi_table,
-                             &osd->od_dt_dev, lu2md_dev(pdev));
+        result = osd_oi_init(oti, osd);
         if (result < 0)
                 RETURN(result);
 
-        LASSERT(result > 0);
-        osd->od_oi_count = result;
+        if (!lu_device_is_md(pdev))
+                RETURN(0);
 
         lmi = osd->od_mount;
         lsi = s2lsi(lmi->lmi_sb);

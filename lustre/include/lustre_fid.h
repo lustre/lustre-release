@@ -124,12 +124,6 @@ enum local_oid {
         LLOG_CATALOGS_OID       = 4118UL,
         MGS_CONFIGS_OID         = 4119UL,
         OFD_HEALTH_CHECK_OID    = 4120UL,
-
-        /** first OID for first OI fid */
-        OSD_OI_FID_OID_FIRST    = 5000UL,
-        /** reserve enough in case we want to have more in the future */
-        OSD_OI_FID_OID_MAX      = OSD_OI_FID_OID_FIRST +
-                                  (1UL << OSD_OI_FID_OID_BITS_MAX),
 };
 
 static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)
