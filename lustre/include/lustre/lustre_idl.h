@@ -1380,6 +1380,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_NAME_LMA          "trusted.lma"
 #define XATTR_NAME_LMV          "trusted.lmv"
 #define XATTR_NAME_LINK         "trusted.link"
+#define XATTR_NAME_FID          "trusted.fid"
 #define XATTR_NAME_VERSION      "trusted.version"
 
 
