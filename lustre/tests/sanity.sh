@@ -8308,13 +8308,14 @@ test_219() {
 run_test 219 "LU-394: Write partial won't cause uncontiguous pages vec at LND"
 
 test_220() { #LU-325
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 	local OSTIDX=0
 
 	mkdir -p $DIR/$tdir
 	local OST=$(lfs osts | grep ${OSTIDX}": " | \
 		awk '{print $2}' | sed -e 's/_UUID$//')
 
-        # on the mdt's osc
+	# on the mdt's osc
 	local mdtosc_proc1=$(get_mdtosc_proc_path $SINGLEMDS $OST)
 	local last_id=$(do_facet $SINGLEMDS lctl get_param -n \
 			osc.$mdtosc_proc1.prealloc_last_id)
@@ -8323,20 +8324,22 @@ test_220() { #LU-325
 
 	$LFS df -i
 
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=-1
+	#define OBD_FAIL_OST_ENOINO              0x229
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0x229
 	do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME || return 1
 	do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $OST || return 2
 
 	$SETSTRIPE $DIR/$tdir -i $OSTIDX -c 1 -p $FSNAME.$TESTNAME
 
-	echo "preallocated objects in MDS is $((last_id - next_id))" \
-             "($last_id - $next_id)"
+	MDSOBJS=$((last_id - next_id))
+	echo "preallocated objects on MDS is $MDSOBJS" "($last_id - $next_id)"
 
-	count=$($LFS df -i $MOUNT | grep ^$OST | awk '{print $4}')
-	echo "OST still has $count objects"
+	blocks=$($LFS df $MOUNT | awk '($1 == '$OSTIDX') { print $4 }')
+	echo "OST still has $count kbytes free"
 
-	free=$((count + last_id - next_id))
-	echo "create $((free - next_id)) files @next_id..."
-	createmany -o $DIR/$tdir/f $next_id $free || return 3
+	echo "create $MDSOBJS files @next_id..."
+	createmany -o $DIR/$tdir/f $MDSOBJS || return 3
 
 	local last_id2=$(do_facet mds${MDSIDX} lctl get_param -n \
 			osc.$mdtosc_proc1.prealloc_last_id)
@@ -8348,12 +8351,15 @@ test_220() { #LU-325
 
 	echo "cleanup..."
 
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_val=0
+	do_facet ost$((OSTIDX + 1)) lctl set_param fail_loc=0
+
 	do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $OST || return 4
 	do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME || return 5
-	echo "unlink $((free - next_id)) files @ $next_id..."
-	unlinkmany $DIR/$tdir/f $next_id $free || return 3
+	echo "unlink $MDSOBJS files @$next_id..."
+	unlinkmany $DIR/$tdir/f $MDSOBJS || return 6
 }
-run_test 220 "the preallocated objects in MDS still can be used if ENOSPC is returned by OST with enough disk space"
+run_test 220 "preallocated MDS objects still used if ENOSPC from OST"
 
 test_221() {
         cp `which date` $MOUNT

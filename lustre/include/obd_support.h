@@ -285,6 +285,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OST_NOMEM               0x226
 #define OBD_FAIL_OST_BRW_PAUSE_BULK2     0x227
 #define OBD_FAIL_OST_MAPBLK_ENOSPC       0x228
+#define OBD_FAIL_OST_ENOINO              0x229
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
@@ -428,6 +429,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 /* Assign references to moved code to reduce code changes */
 #define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)
 #define OBD_FAIL_CHECK(id)                      CFS_FAIL_CHECK(id)
+#define OBD_FAIL_CHECK_VALUE(id, value)         CFS_FAIL_CHECK_VALUE(id, value)
 #define OBD_FAIL_CHECK_ORSET(id, value)         CFS_FAIL_CHECK_ORSET(id, value)
 #define OBD_FAIL_CHECK_RESET(id, value)         CFS_FAIL_CHECK_RESET(id, value)
 #define OBD_FAIL_RETURN(id, ret)                CFS_FAIL_RETURN(id, ret)

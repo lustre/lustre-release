@@ -3704,6 +3704,7 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
 {
         struct filter_obd *filter = &obd->u.filter;
         int blockbits = obd->u.obt.obt_sb->s_blocksize_bits;
+        struct lr_server_data *lsd = class_server_data(obd);
         int rc;
         ENTRY;
 
@@ -3727,15 +3728,13 @@ static int filter_statfs(struct obd_device *obd, struct obd_statfs *osfs,
                                ((filter->fo_tot_dirty + filter->fo_tot_pending +
                                  osfs->os_bsize - 1) >> blockbits));
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC)) {
-                struct lr_server_data *lsd = class_server_data(obd);
-                int index = le32_to_cpu(lsd->lsd_ost_index);
+        if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOSPC,
+                                 le32_to_cpu(lsd->lsd_ost_index)))
+                osfs->os_bfree = osfs->os_bavail = 2;
 
-                if (cfs_fail_val == -1 || index == cfs_fail_val)
-                        osfs->os_bfree = osfs->os_bavail = 2;
-                else if (cfs_fail_loc & OBD_FAIL_ONCE)
-                        cfs_fail_loc &= ~OBD_FAILED; /* reset flag */
-        }
+        if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOINO,
+                                 le32_to_cpu(lsd->lsd_ost_index)))
+                osfs->os_ffree = 0;
 
         /* set EROFS to state field if FS is mounted as RDONLY. The goal is to
          * stop creating files on MDS if OST is not good shape to create
