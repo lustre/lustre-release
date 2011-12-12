@@ -1140,7 +1140,7 @@ static int mdd_root_get(const struct lu_env *env,
  * No permission check is needed.
  */
 static int mdd_statfs(const struct lu_env *env, struct md_device *m,
-                      cfs_kstatfs_t *sfs)
+                      struct obd_statfs *sfs)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
         int rc;

@@ -117,7 +117,7 @@ struct dt_device_operations {
          * Return device-wide statistics.
          */
         int   (*dt_statfs)(const struct lu_env *env,
-                           struct dt_device *dev, cfs_kstatfs_t *osfs);
+                           struct dt_device *dev, struct obd_statfs *osfs);
         /**
          * Create transaction, described by \a param.
          */
@@ -1062,7 +1062,7 @@ static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,
 }
 
 static inline int dt_statfs(const struct lu_env *env, struct dt_device *dev,
-                            cfs_kstatfs_t *osfs)
+                            struct obd_statfs *osfs)
 {
         LASSERT(dev);
         LASSERT(dev->dd_ops);

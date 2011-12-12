@@ -321,10 +321,10 @@ int lprocfs_osd_rd_blksize(char *page, char **start, off_t off, int count,
         if (unlikely(osd->od_mount == NULL))
                 return -EINPROGRESS;
 
-        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_statfs);
         if (!rc) {
                 *eof = 1;
-                rc = snprintf(page, count, "%ld\n", osd->od_kstatfs.f_bsize);
+                rc = snprintf(page, count, "%u\n", osd->od_statfs.os_bsize);
         }
         return rc;
 }
@@ -338,10 +338,10 @@ int lprocfs_osd_rd_kbytestotal(char *page, char **start, off_t off, int count,
         if (unlikely(osd->od_mount == NULL))
                 return -EINPROGRESS;
 
-        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_statfs);
         if (!rc) {
-                __u32 blk_size = osd->od_kstatfs.f_bsize >> 10;
-                __u64 result = osd->od_kstatfs.f_blocks;
+                __u32 blk_size = osd->od_statfs.os_bsize >> 10;
+                __u64 result = osd->od_statfs.os_blocks;
 
                 while (blk_size >>= 1)
                         result <<= 1;
@@ -361,10 +361,10 @@ int lprocfs_osd_rd_kbytesfree(char *page, char **start, off_t off, int count,
         if (unlikely(osd->od_mount == NULL))
                 return -EINPROGRESS;
 
-        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_statfs);
         if (!rc) {
-                __u32 blk_size = osd->od_kstatfs.f_bsize >> 10;
-                __u64 result = osd->od_kstatfs.f_bfree;
+                __u32 blk_size = osd->od_statfs.os_bsize >> 10;
+                __u64 result = osd->od_statfs.os_bfree;
 
                 while (blk_size >>= 1)
                         result <<= 1;
@@ -384,10 +384,10 @@ int lprocfs_osd_rd_kbytesavail(char *page, char **start, off_t off, int count,
         if (unlikely(osd->od_mount == NULL))
                 return -EINPROGRESS;
 
-        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_statfs);
         if (!rc) {
-                __u32 blk_size = osd->od_kstatfs.f_bsize >> 10;
-                __u64 result = osd->od_kstatfs.f_bavail;
+                __u32 blk_size = osd->od_statfs.os_bsize >> 10;
+                __u64 result = osd->od_statfs.os_bavail;
 
                 while (blk_size >>= 1)
                         result <<= 1;
@@ -407,10 +407,10 @@ int lprocfs_osd_rd_filestotal(char *page, char **start, off_t off, int count,
         if (unlikely(osd->od_mount == NULL))
                 return -EINPROGRESS;
 
-        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_statfs);
         if (!rc) {
                 *eof = 1;
-                rc = snprintf(page, count, LPU64"\n", osd->od_kstatfs.f_files);
+                rc = snprintf(page, count, LPU64"\n", osd->od_statfs.os_files);
         }
 
         return rc;
@@ -425,10 +425,10 @@ int lprocfs_osd_rd_filesfree(char *page, char **start, off_t off, int count,
         if (unlikely(osd->od_mount == NULL))
                 return -EINPROGRESS;
 
-        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_kstatfs);
+        rc = osd_statfs(NULL, &osd->od_dt_dev, &osd->od_statfs);
         if (!rc) {
                 *eof = 1;
-                rc = snprintf(page, count, LPU64"\n", osd->od_kstatfs.f_ffree);
+                rc = snprintf(page, count, LPU64"\n", osd->od_statfs.os_ffree);
         }
         return rc;
 }

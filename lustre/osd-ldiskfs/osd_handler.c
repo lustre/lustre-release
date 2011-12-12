@@ -823,23 +823,38 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
  * Concurrency: shouldn't matter.
  */
 int osd_statfs(const struct lu_env *env, struct dt_device *d,
-               cfs_kstatfs_t *sfs)
+               struct obd_statfs *sfs)
 {
-        struct osd_device *osd = osd_dt_dev(d);
+        struct osd_device  *osd = osd_dt_dev(d);
         struct super_block *sb = osd_sb(osd);
+        struct kstatfs     *ksfs;
         int result = 0;
+
+        /* osd_lproc.c call this without env, allocate ksfs for that case */
+        if (unlikely(env == NULL)) {
+                OBD_ALLOC_PTR(ksfs);
+                if (ksfs == NULL)
+                        return -ENOMEM;
+        } else {
+                ksfs = &osd_oti_get(env)->oti_ksfs;
+        }
 
         cfs_spin_lock(&osd->od_osfs_lock);
         /* cache 1 second */
         if (cfs_time_before_64(osd->od_osfs_age, cfs_time_shift_64(-1))) {
-                result = ll_do_statfs(sb, &osd->od_kstatfs);
-                if (likely(result == 0)) /* N.B. statfs can't really fail */
+                result = ll_do_statfs(sb, ksfs);
+                if (likely(result == 0)) { /* N.B. statfs can't really fail */
                         osd->od_osfs_age = cfs_time_current_64();
+                        statfs_pack(&osd->od_statfs, ksfs);
+                }
         }
 
         if (likely(result == 0))
-                *sfs = osd->od_kstatfs;
+                *sfs = osd->od_statfs;
         cfs_spin_unlock(&osd->od_osfs_lock);
+
+        if (unlikely(env == NULL))
+                OBD_FREE_PTR(ksfs);
 
         return result;
 }
