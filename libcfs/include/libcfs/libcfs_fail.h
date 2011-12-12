@@ -48,7 +48,8 @@ int __cfs_fail_timeout_set(__u32 id, __u32 value, int ms, int set);
 enum {
         CFS_FAIL_LOC_NOSET      = 0,
         CFS_FAIL_LOC_ORSET      = 1,
-        CFS_FAIL_LOC_RESET      = 2
+        CFS_FAIL_LOC_RESET      = 2,
+        CFS_FAIL_LOC_VALUE      = 3
 };
 
 /* Failure injection control */
@@ -86,6 +87,11 @@ static inline int cfs_fail_check_set(__u32 id, __u32 value, int set)
 /* If id hit cfs_fail_loc, return 1, otherwise return 0 */
 #define CFS_FAIL_CHECK(id) \
         cfs_fail_check_set(id, 0, CFS_FAIL_LOC_NOSET)
+
+/* If id hit cfs_fail_loc and cfs_fail_val == (-1 or value) return 1,
+ * otherwise return 0 */
+#define CFS_FAIL_CHECK_VALUE(id, value) \
+        cfs_fail_check_set(id, value, CFS_FAIL_LOC_VALUE)
 
 /* If id hit cfs_fail_loc, cfs_fail_loc |= value and return 1,
  * otherwise return 0 */

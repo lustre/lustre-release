@@ -73,6 +73,12 @@ int __cfs_fail_check_set(__u32 id, __u32 value, int set)
                         return 0;
         }
 
+        /* check cfs_fail_val... */
+        if (set == CFS_FAIL_LOC_VALUE) {
+                if (cfs_fail_val != -1 && cfs_fail_val != value)
+                        return 0;
+        }
+
         /* Fail cfs_fail_val times, overridden by FAIL_ONCE */
         if (cfs_fail_loc & CFS_FAIL_SOME &&
             (!(cfs_fail_loc & CFS_FAIL_ONCE) || cfs_fail_val <= 1)) {
@@ -100,6 +106,7 @@ int __cfs_fail_check_set(__u32 id, __u32 value, int set)
 
         switch (set) {
                 case CFS_FAIL_LOC_NOSET:
+                case CFS_FAIL_LOC_VALUE:
                         break;
                 case CFS_FAIL_LOC_ORSET:
                         cfs_fail_loc |= value & ~(CFS_FAILED | CFS_FAIL_ONCE);
