@@ -374,6 +374,61 @@ struct dt_object *dt_store_open(const struct lu_env *env,
 }
 EXPORT_SYMBOL(dt_store_open);
 
+struct dt_object *dt_find_or_create(const struct lu_env *env,
+                                    struct dt_device *dt,
+                                    const struct lu_fid *fid,
+                                    struct dt_object_format *dof,
+                                    struct lu_attr *at)
+{
+        struct dt_object *dto;
+        struct thandle *th;
+        int rc;
+
+        ENTRY;
+
+        dto = dt_locate(env, dt, fid);
+        if (IS_ERR(dto))
+                RETURN(dto);
+
+        LASSERT(dto != NULL);
+        if (dt_object_exists(dto))
+                RETURN(dto);
+
+        th = dt_trans_create(env, dt);
+        if (IS_ERR(th))
+                GOTO(out, rc = PTR_ERR(th));
+
+        rc = dt_declare_create(env, dto, at, NULL, dof, th);
+        if (rc)
+                GOTO(trans_stop, rc);
+
+        rc = dt_trans_start_local(env, dt, th);
+        if (rc)
+                GOTO(trans_stop, rc);
+
+        dt_write_lock(env, dto, 0);
+        if (dt_object_exists(dto))
+                GOTO(unlock, rc = 0);
+
+        CDEBUG(D_OTHER, "create new object "DFID"\n", PFID(fid));
+
+        rc = dt_create(env, dto, at, NULL, dof, th);
+        if (rc)
+                GOTO(unlock, rc);
+        LASSERT(dt_object_exists(dto));
+unlock:
+        dt_write_unlock(env, dto);
+trans_stop:
+        dt_trans_stop(env, dt, th);
+out:
+        if (rc) {
+                lu_object_put(env, &dto->do_lu);
+                RETURN(ERR_PTR(rc));
+        }
+        RETURN(dto);
+}
+EXPORT_SYMBOL(dt_find_or_create);
+
 /* dt class init function. */
 int dt_global_init(void)
 {

@@ -2820,15 +2820,13 @@ out_unlock:
 static int mdd_object_sync(const struct lu_env *env, struct md_object *obj)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        struct dt_object *next;
 
         if (mdd_object_exists(mdd_obj) == 0) {
                 CERROR("%s: object "DFID" not found: rc = -2\n",
                        mdd_obj_dev_name(mdd_obj),PFID(mdd_object_fid(mdd_obj)));
                 return -ENOENT;
         }
-        next = mdd_object_child(mdd_obj);
-        return next->do_ops->do_object_sync(env, next);
+        return dt_object_sync(env, mdd_object_child(mdd_obj));
 }
 
 const struct md_object_operations mdd_obj_ops = {
