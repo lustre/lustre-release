@@ -41,24 +41,20 @@ lfs find [[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N]
    [[!] --gid|-g|--group|-G &lt;gname&gt;|&lt;gid&gt;]
    [[!] --uid|-u|--user|-U &lt;uname&gt;|&lt;uid&gt;]
    &lt;dirname|filename&gt;
-lfs osts [path]
 lfs getstripe [--obd|-O &lt;uuid&gt;] [--quiet|-q] [--verbose|-v]
                    [--count|-c] [--index|-i | --offset|-o]
                    [--size|-s] [--pool|-p] [--directory|-d]
                    [--recursive|-r] &lt;dirname|filename&gt; ...
-lfs setstripe              [--size|-s stripe_size] [--count|-c stripe_cnt] 
-           [--index|-i|--offset|-o start_ost_index] 
-           [--pool|-p &lt;pool&gt;]
-           &lt;dirname|filename&gt;
-lfs setstripe -d &lt;dir&gt;
+lfs getname [-h]|[path...]
+lfs osts [path]
 lfs poollist &lt;filesystem&gt;[.&lt;pool&gt;]|&lt;pathname&gt;
 lfs quota [-q] [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u &lt;uname&gt;| -u &lt;uid&gt;|-g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
 lfs quota -t &lt;-u|-g&gt; &lt;filesystem&gt;
 lfs quotacheck [-ug] &lt;filesystem&gt;
 lfs quotachown [-i] &lt;filesystem&gt;
+lfs quotainv [-ug] [-f] &lt;filesystem&gt;
 lfs quotaon [-ugf] &lt;filesystem&gt;
 lfs quotaoff [-ug] &lt;filesystem&gt;
-lfs quotainv [-ug] [-f] &lt;filesystem&gt;
 lfs setquota               &lt;-u|--user|-g|--group&gt; &lt;uname|uid|gname|gid&gt;
                    [--block-softlimit &lt;block-softlimit&gt;]
                    [--block-hardlimit &lt;block-hardlimit&gt;]
@@ -76,6 +72,11 @@ lfs setquota -t &lt;-u|-g&gt;
 lfs setquota -t &lt;-u|-g&gt;
            [-b &lt;block-grace&gt;] [-i &lt;inode-grace&gt;]
            &lt;filesystem&gt;
+lfs setstripe              [--size|-s stripe_size] [--count|-c stripe_cnt] 
+           [--index|-i|--offset|-o start_ost_index] 
+           [--pool|-p &lt;pool&gt;]
+           &lt;dirname|filename&gt;
+lfs setstripe -d &lt;dir&gt;
 lfs help
 </screen>
       <note>
@@ -286,6 +287,15 @@ lfs help
               </entry>
               <entry>
                 <para>Lists all OSTs for the file system. If a path located on a Lustre-mounted file system is specified, then only OSTs belonging to this file system are displayed.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <literal>getname [path...]</literal></para>
+              </entry>
+              <entry>
+                  <para>List each Lustre instance associated with each Lustre mount point.
+                      If no path is specified, all Lustre mounts points are interrogated. If a list of paths is provided, the instance of each path is provided. If the path is not a Lustre instance 'No such device' is returned.</para>
               </entry>
             </row>
             <row>
@@ -585,6 +595,8 @@ lfs help
       <screen>$ lfs setstripe -d /mnt/lustre/dir</screen>
       <para>Lists the detailed object allocation of a given file.</para>
       <screen>$ lfs getstripe -v /mnt/lustre/file1</screen>
+      <para>List all the mounted lustre filesystems and corresponding Lustre instances.</para>
+      <screen>$ lfs getname</screen>
       <para>Efficiently lists all files in a given directory and its subdirectories.</para>
       <screen>$ lfs find /mnt/lustre</screen>
       <para>Recursively lists all regular files in a given directory more than 30 days old.</para>
