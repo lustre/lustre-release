@@ -30,7 +30,7 @@
     <section remap="h3">
       <title><indexterm><primary>Lustre</primary><secondary>features</secondary></indexterm>Lustre Features</title>
       <para>Lustre runs on a variety of vendor&apos;s kernels. For more details, see <link xl:href="http://wiki.whamcloud.com/">Lustre Release Information</link> on the Whamcloud wiki.</para>
-      <para>A Lustre installation can be scaled up or down with respect to the number of client nodes, disk storage and bandwidth. Scalability and performance are dependent on available disk and network bandwith and the processing power of the servers in the system. Lustre can be deployed in a wide variety of configurations that can be scaled well beyond the size and performance observed in production systems to date.</para>
+      <para>A Lustre installation can be scaled up or down with respect to the number of client nodes, disk storage and bandwidth. Scalability and performance are dependent on available disk and network bandwidth and the processing power of the servers in the system. Lustre can be deployed in a wide variety of configurations that can be scaled well beyond the size and performance observed in production systems to date.</para>
       <para><xref linkend="understandinglustre.tab1"/> shows the practical range of scalability and performance characteristics of the Lustre file system and some test results in production systems.</para>
       <table frame="all">
         <title xml:id="understandinglustre.tab1">Lustre Scalability and Performance</title>
@@ -154,9 +154,9 @@
               </entry>
               <entry>
                 <para> <emphasis>Single File:</emphasis></para>
-                <para>320 TB max file size</para>
+                <para>2.5 PB max file size</para>
                 <para> <emphasis>Aggregate:</emphasis></para>
-                <para>64 PB space, 4 billion files</para>
+                <para>512 PB space, 4 billion files</para>
               </entry>
               <entry>
                 <para> <emphasis>Single File:</emphasis></para>
@@ -186,7 +186,7 @@
           <para><emphasis role="bold">Security:</emphasis>  By default TCP connections are only allowed from privileged ports. Unix group membership is verified on the MDS.</para>
         </listitem>
         <listitem>
-          <para><emphasis role="bold">Access control list (ACL), exended attributes:</emphasis>  the Lustre security model follows that of a UNIX file system, enhanced with POSIX ACLs. Noteworthy additional features include root squash.</para>
+          <para><emphasis role="bold">Access control list (ACL), extended attributes:</emphasis>  the Lustre security model follows that of a UNIX file system, enhanced with POSIX ACLs. Noteworthy additional features include root squash.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">Interoperability:</emphasis>  Lustre runs on a variety of CPU architectures and mixed-endian clusters and is interoperable between successive major Lustre software releases.</para>
@@ -269,7 +269,7 @@
       </itemizedlist>
       <para>The Lustre client software provides an interface between the Linux virtual file system and the Lustre servers. The client software includes a Management Client (MGC), a Metadata Client (MDC), and multiple Object Storage Clients (OSCs), one corresponding to each OST in the file system.</para>
       <para>A logical object volume (LOV) aggregates the OSCs to provide transparent access across all the OSTs. Thus, a client with the Lustre file system mounted sees a single, coherent, synchronized namespace. Several clients can write to different parts of the same file simultaneously, while, at the same time, other clients can read from the file.</para>
-      <para><xref linkend="understandinglustre.tab.storagerequire"/> provides the requirements for attached storage for each Lustre file system component and describes desirable characterics of the hardware used.</para>
+      <para><xref linkend="understandinglustre.tab.storagerequire"/> provides the requirements for attached storage for each Lustre file system component and describes desirable characteristics of the hardware used.</para>
       <table frame="all">
         <title xml:id="understandinglustre.tab.storagerequire"><indexterm><primary>Lustre</primary><secondary>requirements</secondary></indexterm>Storage and hardware requirements for Lustre components</title>
         <tgroup cols="3">
@@ -387,7 +387,7 @@
         <para>The <emphasis>disk bandwidth</emphasis> equals the sum of the disk bandwidths of the storage targets (OSTs) up to the limit of the network bandwidth.</para>
       </listitem>
       <listitem>
-        <para>The <emphasis>aggregate bandwidth</emphasis> equals the minimium of the disk bandwidth and the network bandwidth.</para>
+        <para>The <emphasis>aggregate bandwidth</emphasis> equals the minimum of the disk bandwidth and the network bandwidth.</para>
       </listitem>
       <listitem>
         <para>The <emphasis>available file system space</emphasis> equals the sum of the available space of all the OSTs.</para>
@@ -399,7 +399,7 @@
             <indexterm><primary>striping</primary><secondary>overview</secondary></indexterm>
             Lustre File System and Striping</title>
       <para>One of the main factors leading to the high performance of Lustre file systems is the ability to stripe data across multiple OSTs in a round-robin fashion. Users can optionally configure for each file the number of stripes, stripe size, and OSTs that are used.</para>
-      <para>Striping can be used to improve performance when the aggregate bandwidth to a single file exeeds the bandwidth of a single OST. The ability to stripe is also useful when a single OST does not have anough free space to hold an entire file. For more information about benefits and drawbacks of file striping, see <xref linkend="dbdoclet.50438209_48033"/>.</para>
+      <para>Striping can be used to improve performance when the aggregate bandwidth to a single file exceeds the bandwidth of a single OST. The ability to stripe is also useful when a single OST does not have enough free space to hold an entire file. For more information about benefits and drawbacks of file striping, see <xref linkend="dbdoclet.50438209_48033"/>.</para>
       <para>Striping allows segments or &apos;chunks&apos; of data in a file to be stored on different OSTs, as shown in <xref linkend="understandinglustre.fig.filestripe"/>. In the Lustre file system, a RAID 0 pattern is used in which data is &quot;striped&quot; across a certain number of objects. The number of objects in a single file is called the <literal>stripe_count</literal>.</para>
       <para>Each object contains a chunk of data from the file. When the chunk of data being written to a particular object exceeds the <literal>stripe_size</literal>, the next chunk of data in the file is stored on the next object.</para>
       <para>Default values for <literal>stripe_count</literal> and <literal>stripe_size</literal> are set for the file system. The default value for <literal>stripe_count</literal> is 1 stripe for file and the default value for <literal>stripe_size</literal> is 1MB. The user may change these values on a per directory or per file basis. For more details, see <xref linkend="dbdoclet.50438209_78664"/>.</para>

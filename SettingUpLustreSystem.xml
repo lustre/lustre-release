@@ -50,7 +50,7 @@
     <para>Only servers running on 64-bit CPUs are tested and supported. 64-bit CPU clients are typically used for testing to match expected customer usage and avoid limitations due to the 4 GB limit for RAM size, 1 GB low-memory limitation, and 16 TB file size limit of 32-bit CPUs. Also, due to kernel API limitations, performing backups of Lustre 2.x. filesystems on 32-bit clients may cause backup tools to confuse files that have the same 32-bit inode number.</para>
     <para>The storage attached to the servers typically uses RAID to provide fault tolerance and can optionally be organized with logical volume management (LVM). It is then formatted by Lustre as a file system. Lustre OSS and MDS servers read, write and modify data in the format imposed by the file system.</para>
     <para>Lustre uses journaling file system technology on both the MDTs and OSTs. For a MDT, as much as a 20 percent performance gain can be obtained by placing the journal on a separate device.</para>
-    <para>The MDS can effectively utilize a lot of CPU cycles. A minimium of four processor cores are recommended. More are advisable for files systems with many clients.</para>
+    <para>The MDS can effectively utilize a lot of CPU cycles. A minimum of four processor cores are recommended. More are advisable for files systems with many clients.</para>
     <note>
       <para>Lustre clients running on architectures with different endianness are supported. One limitation is that the PAGE_SIZE kernel macro on the client must be as large as the PAGE_SIZE of the server. In particular, ia64 or PPC clients with large pages (up to 64kB pages) can run with x86 servers (4kB pages). If you are running x86 clients with ia64 or PPC servers, you must compile the ia64 kernel with a 4kB PAGE_SIZE (so the server page size is not larger than the client page size). </para>
     </note>
@@ -64,7 +64,7 @@
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>OST</secondary></indexterm>OST Storage Hardware Considerations</title>
-      <para>The data access pattern for the OSS storage is a streaming I/O pattern that is dependent on the access patterns of applications being used. Each OSS can manage multiple object storage targets (OSTs), one for each volume with I/O traffic load-balanced between servers and targets. An OSS should be configured to have a balance between the network bandwidth and the attached storage bandwidth to prevent bottlenecks in the I/O path. Depending on the server hardware, an OSS typically serves between 2 and 8 targets, with each target up to 16 terabytes (TBs) in size.</para>
+      <para>The data access pattern for the OSS storage is a streaming I/O pattern that is dependent on the access patterns of applications being used. Each OSS can manage multiple object storage targets (OSTs), one for each volume with I/O traffic load-balanced between servers and targets. An OSS should be configured to have a balance between the network bandwidth and the attached storage bandwidth to prevent bottlenecks in the I/O path. Depending on the server hardware, an OSS typically serves between 2 and 8 targets, with each target up to 128 terabytes (TBs) in size.</para>
       <para>Lustre file system capacity is the sum of the capacities provided by the targets. For example, 64 OSSs, each with two 8 TB targets, provide a file system with a capacity of nearly 1 PB. If each OST uses ten 1 TB SATA disks (8 data disks plus 2 parity disks in a RAID 6 configuration), it may be possible to get 50 MB/sec from each drive, providing up to 400 MB/sec of disk bandwidth per OST. If this system is used as storage backend with a system network like InfiniBand that provides a similar bandwidth, then each OSS could provide 800 MB/sec of end-to-end I/O throughput. (Although the architectural constraints described here are simple, in practice it takes careful hardware selection, benchmarking and integration to obtain such results.)</para>
     </section>
   </section>
@@ -109,6 +109,18 @@
           <indexterm><primary>file system</primary><secondary>formatting options</secondary></indexterm>
           <indexterm><primary>setup</primary><secondary>file system</secondary></indexterm>
           Setting File System Formatting Options</title>
+    <para>The default behavior of <literal>mkfs.lustre</literal> applies options to Ext4 to enhance Lustre performance and scalability. These options include:</para>
+        <itemizedlist>
+            <listitem>
+              <para><literal>flex_bg</literal> aggregates block and inode bitmaps for multiple groups together in order to avoid seeking when reading/writing the bitmaps, and reduce read/modify/write on typical RAID storage with 1MB RAID stripe width.  This is enabled on both OST and MDT filesystems. On MDT filesystems the flex_bg factor (the number of groups' metadata co-located on disk) is left at the default 16. On OSTs the flex_bg factor is set to 256, to allow all of the block or inode bitmaps in a single flex_bg to be read or written in a single IO on typical RAID storage.</para>
+            </listitem>
+            <listitem>
+              <para><literal>huge_file</literal> allows files on OSTs to be larger than 2TB in size.</para>
+            </listitem>
+            <listitem>
+              <para><literal>lazy_journal_init</literal> is an extended option to avoid a full overwrite of the 400MB journal that Lustre allocates by default. This reduces the filesystem format time.</para>
+            </listitem>
+        </itemizedlist>
     <para>To override the default formatting options for any of the Lustre backing file systems, use this argument to <literal>mkfs.lustre</literal> to pass formatting options to the backing <literal>mkfs</literal>:</para>
     <screen>--mkfsoptions=&apos;backing fs options&apos;</screen>
     <para>For other options to format backing ldiskfs filesystems, see the Linux man page for <literal>mke2fs(8)</literal>.</para>
@@ -133,6 +145,74 @@
       <para>When formatting OST file systems, it is normally advantageous to take local file system usage into account. Try to minimize the number of inodes on each OST, while keeping enough margin for potential variance in future usage. This helps reduce the format and file system check time, and makes more space available for data.</para>
       <para>The current default is to create one inode per 16 KB of space in the OST file system, but in many environments, this is far too many inodes for the average file size. As a good rule of thumb, the OSTs should have at least:</para>
       <para>num_ost_inodes = 4 * <emphasis>&lt;num_mds_inodes&gt;</emphasis> * <emphasis>&lt;default_stripe_count&gt;</emphasis> / <emphasis>&lt;number_osts&gt;</emphasis></para>
+      <table frame="all">
+            <title xml:id="settinguplustresystem.tab1">Inode Ratio to be considered</title>
+            <tgroup cols="3">
+              <colspec colname="c1" colwidth="3*"/>
+              <colspec colname="c2" colwidth="2*"/>
+              <colspec colname="c3" colwidth="4*"/>
+              <thead>
+                <row>
+                  <entry>
+                    <para><emphasis role="bold">LUN/OST size</emphasis></para>
+                  </entry>
+                  <entry>
+                    <para><emphasis role="bold">Inode ratio</emphasis></para>
+                  </entry>
+                  <entry>
+                    <para><emphasis role="bold">Total inodes</emphasis></para>
+                  </entry>
+                </row>
+              </thead>
+              <tbody>
+                <row>
+                  <entry>
+                    <para> &lt; 10GB </para>
+                  </entry>
+                  <entry>
+                    <para> 1 inode/16KB </para>
+                  </entry>
+                  <entry>
+                    <para> 640 - 655k </para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para> 10GB - 1TB </para>
+                  </entry>
+                  <entry>
+                    <para> 1 inode/68kiB </para>
+                  </entry>
+                  <entry>
+                    <para> 153k - 15.7M </para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para> 1TB - 8TB </para>
+                  </entry>
+                  <entry>
+                    <para> 1 inode/256kB </para>
+                  </entry>
+                  <entry>
+                    <para> 4.2M - 33.6M </para>
+                  </entry>
+                </row>
+                <row>
+                  <entry>
+                    <para> &gt; 8TB </para>
+                  </entry>
+                  <entry>
+                    <para> 1 inode/1MB </para>
+                  </entry>
+                  <entry>
+                    <para> 8.4M - 134M </para>
+                  </entry>
+                </row>
+            </tbody>
+            </tgroup>
+        </table>
+      <para>&#160;</para>
       <para>You can specify the number of inodes on the OST file systems using the following option to the <literal>--mkfs</literal> option:</para>
       <screen>-N <emphasis>&lt;num_inodes&gt;</emphasis></screen>
       <para> Alternately, if you know the average file size, then you can specify the OST inode count for the OST file systems using:</para>
@@ -145,9 +225,9 @@
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>limits</secondary></indexterm>File and File System Limits</title>
-      <para><xref linkend="settinguplustresystem.tab1"/> describes file and file system size limits. These limits are imposed by either the Lustre architecture or the Linux virtual file system (VFS) and virtual memory subsystems. In a few cases, a limit is defined within the code and can be changed by re-compiling Lustre (see <xref linkend="installinglustrefromsourcecode"/>). In these cases, the indicated limit was used for Lustre testing. </para>
+      <para><xref linkend="settinguplustresystem.tab2"/> describes file and file system size limits. These limits are imposed by either the Lustre architecture or the Linux virtual file system (VFS) and virtual memory subsystems. In a few cases, a limit is defined within the code and can be changed by re-compiling Lustre (see <xref linkend="installinglustrefromsourcecode"/>). In these cases, the indicated limit was used for Lustre testing. </para>
       <table frame="all">
-        <title xml:id="settinguplustresystem.tab1">File and file system limits</title>
+        <title xml:id="settinguplustresystem.tab2">File and file system limits</title>
         <tgroup cols="3">
           <colspec colname="c1" colwidth="3*"/>
           <colspec colname="c2" colwidth="2*"/>
@@ -166,6 +246,62 @@
             </row>
           </thead>
           <tbody>
+            <row>
+              <entry>
+                <para> Maximum number of MDTs</para>
+              </entry>
+              <entry>
+                <para> 1</para>
+              </entry>
+              <entry>
+                <para>Maximum of 1 MDT per file system, but a single MDS can host multiple MDTs, each one for a separate file system.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> Maximum number of OSTs</para>
+              </entry>
+              <entry>
+                <para> 8150</para>
+              </entry>
+              <entry>
+                <para>The maximum number of OSTs is a constant that can be changed at compile time. Lustre has been tested with up to 4000 OSTs.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> Maximum OST size</para>
+              </entry>
+              <entry>
+                <para> 128TB </para>
+              </entry>
+              <entry>
+                <para> This is not a <emphasis>hard</emphasis> limit. Larger OSTs are possible but today typical production systems do not go beyond 128TB per OST. </para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> Maximum number of clients</para>
+              </entry>
+              <entry>
+                <para> 131072</para>
+              </entry>
+              <entry>
+                <para>The maximum number of clients is a constant that can be changed at compile time.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> Maximum size of a file system</para>
+              </entry>
+              <entry>
+                <para> 512 PB</para>
+              </entry>
+              <entry>
+                <para>Each OST or MDT on 64-bit kernel servers can have a file system up to 128 TB. On 32-bit systems, due to page cache limits, 16TB is the maximum block device size, which in turn applies to the size of OSTon 32-bit kernel servers.</para>
+                <para>You can have multiple OST file systems on a single OSS node.</para>
+              </entry>
+            </row>
             <row>
               <entry>
                 <para> Maximum stripe count</para>
@@ -199,60 +335,13 @@
                 <para>Due to the 64 KB PAGE_SIZE on some 64-bit machines, the minimum stripe size is set to 64 KB.</para>
               </entry>
             </row>
-            <row>
+            <row>              <entry>
+                <para> Maximum object size</para>              </entry>
               <entry>
-                <para> Maximum object size</para>
+                <para> 16 TB</para>
               </entry>
               <entry>
-                <para> 2 TB</para>
-              </entry>
-              <entry>
-                <para>The amount of data that can be stored in a single object. The ldiskfs limit of 2TB for a single file applies. Lustre allows 160 stripes of 2 TB each.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum number of OSTs</para>
-              </entry>
-              <entry>
-                <para> 8150</para>
-              </entry>
-              <entry>
-                <para>The maximum number of OSTs is a constant that can be changed at compile time. Lustre has been tested with up to 4000 OSTs.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum number of MDTs</para>
-              </entry>
-              <entry>
-                <para> 1</para>
-              </entry>
-              <entry>
-                <para>Maximum of 1 MDT per file system, but a single MDS can host multiple MDTs, each one for a separate file system.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum number of clients</para>
-              </entry>
-              <entry>
-                <para> 131072</para>
-              </entry>
-              <entry>
-                <para>The number of clients is a constant that can be changed at compile time.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> Maximum size of a file system</para>
-              </entry>
-              <entry>
-                <para> 64 PB</para>
-              </entry>
-              <entry>
-                <para>Each OST or MDT can have a file system up to 16 TB, regardless of whether 32-bit or 64-bit kernels are on the server.</para>
-                <para>You can have multiple OST file systems on a single OSS node.</para>
+                <para>The amount of data that can be stored in a single object. An object corresponds to a stripe. The ldiskfs limit of 16 TB for a single object applies. Lustre allows files to consist of up to 160 stripes, each of 16 TB. </para>
               </entry>
             </row>
             <row>
@@ -262,11 +351,11 @@
               <entry>
                 <para> 16 TB on 32-bit systems</para>
                 <para>&#160;</para>
-                <para>320 TB on 64-bit systems</para>
+                <para> 2.5 PB on 64-bit systems</para>
               </entry>
               <entry>
-                <para>Individual files have a hard limit of nearly 16 TB on 32-bit systems imposed by the kernel memory subsystem. On 64-bit systems this limit does not exist. Hence, files can be 64-bits in size. Lustre imposes an additional size limit of up to the number of stripes, where each stripe is 2 TB.</para>
-                <para>A single file can have a maximum of 160 stripes, which gives an upper single file limit of 320 TB for 64-bit systems. The actual amount of data that can be stored in a file depends upon the amount of free space in each OST on which the file is striped.</para>
+                <para>Individual files have a hard limit of nearly 16 TB on 32-bit systems imposed by the kernel memory subsystem. On 64-bit systems this limit does not exist. Hence, files can be 64-bits in size. Lustre imposes an additional size limit of up to the number of stripes, where each stripe is 16 TB.</para>
+                <para>A single file can have a maximum of 160 stripes, which gives an upper single file limit of 2.5 PB for 64-bit systems. The actual amount of data that can be stored in a file depends upon the amount of free space in each OST on which the file is striped.</para>
               </entry>
             </row>
             <row>
