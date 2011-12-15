@@ -505,7 +505,7 @@ static int lov_check_and_create_object(struct lov_obd *lov, int ost_idx,
                                        struct lov_request *req,
                                        struct obd_trans_info *oti)
 {
-        int stripe;
+        __u16 stripe;
         int rc = -EIO;
         ENTRY;
 
@@ -1005,7 +1005,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         LASSERT(src_oa->o_valid & OBD_MD_FLGROUP);
 
         if (set->set_oi->oi_md == NULL) {
-                __u32 stripes_def = lov_get_stripecnt(lov, LOV_MAGIC, 0);
+                __u16 stripes_def = lov_get_stripecnt(lov, LOV_MAGIC, 0);
 
                 /* If the MDS file was truncated up to some size, stripe over
                  * enough OSTs to allow the file to be created at that size.
@@ -1046,6 +1046,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         lsm = set->set_oi->oi_md;
         lsm->lsm_object_id = src_oa->o_id;
         lsm->lsm_object_seq = src_oa->o_seq;
+        lsm->lsm_layout_gen = 0; /* actual generation set in mdd_lov_create() */
 
         if (!lsm->lsm_stripe_size)
                 lsm->lsm_stripe_size = lov->desc.ld_default_stripe_size;

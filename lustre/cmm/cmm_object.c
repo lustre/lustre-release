@@ -594,6 +594,17 @@ static int cml_unlink(const struct lu_env *env, struct md_object *mo_p,
         RETURN(rc);
 }
 
+/** Call mdo_lum_lmm_cmp() on next layer */
+static int cml_lum_lmm_cmp(const struct lu_env *env, struct md_object *mo_c,
+                           const struct md_op_spec *spec, struct md_attr *ma)
+{
+        int rc;
+        ENTRY;
+
+        rc = mdo_lum_lmm_cmp(env, md_object_next(mo_c), spec, ma);
+        RETURN(rc);
+}
+
 /**
  * \ingroup cmm
  * Get mode of object.
@@ -880,6 +891,7 @@ static const struct md_dir_operations cml_dir_ops = {
         .mdo_create      = cml_create,
         .mdo_link        = cml_link,
         .mdo_unlink      = cml_unlink,
+        .mdo_lum_lmm_cmp = cml_lum_lmm_cmp,
         .mdo_name_insert = cml_name_insert,
         .mdo_rename      = cml_rename,
         .mdo_rename_tgt  = cml_rename_tgt,
@@ -1122,6 +1134,12 @@ static int cmr_file_lock(const struct lu_env *env, struct md_object *mo,
 
 static int cmr_file_unlock(const struct lu_env *env, struct md_object *mo,
                            struct lov_mds_md *lmm, struct lustre_handle *lockh)
+{
+        return -EREMOTE;
+}
+
+static int cmr_lum_lmm_cmp(const struct lu_env *env, struct md_object *mo_c,
+                           const struct md_op_spec *spec, struct md_attr *ma)
 {
         return -EREMOTE;
 }
@@ -1527,6 +1545,7 @@ static const struct md_dir_operations cmr_dir_ops = {
         .mdo_create      = cmr_create,
         .mdo_link        = cmr_link,
         .mdo_unlink      = cmr_unlink,
+        .mdo_lum_lmm_cmp = cmr_lum_lmm_cmp,
         .mdo_rename      = cmr_rename,
         .mdo_rename_tgt  = cmr_rename_tgt
 };

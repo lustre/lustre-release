@@ -264,7 +264,7 @@ void lov_fix_desc_stripe_size(__u64 *val);
 void lov_fix_desc_stripe_count(__u32 *val);
 void lov_fix_desc_pattern(__u32 *val);
 void lov_fix_desc_qos_maxage(__u32 *val);
-__u32 lov_get_stripecnt(struct lov_obd *lov, __u32 magic, __u32 stripe_count);
+__u16 lov_get_stripecnt(struct lov_obd *lov, __u32 magic, __u16 stripe_count);
 int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
                     struct obd_connect_data *data);
 int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg);
@@ -288,7 +288,7 @@ int lov_setea(struct obd_export *exp, struct lov_stripe_md **lsmp,
               struct lov_user_md *lump);
 int lov_getstripe(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct lov_user_md *lump);
-int lov_alloc_memmd(struct lov_stripe_md **lsmp, int stripe_count,
+int lov_alloc_memmd(struct lov_stripe_md **lsmp, __u16 stripe_count,
                     int pattern, int magic);
 void lov_free_memmd(struct lov_stripe_md **lsmp);
 
@@ -297,7 +297,7 @@ void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm);
 void lov_dump_lmm(int level, void *lmm);
 
 /* lov_ea.c */
-struct lov_stripe_md *lsm_alloc_plain(int stripe_count, int *size);
+struct lov_stripe_md *lsm_alloc_plain(__u16 stripe_count, int *size);
 void lsm_free_plain(struct lov_stripe_md *lsm);
 
 int lovea_destroy_object(struct lov_obd *lov, struct lov_stripe_md *lsm,

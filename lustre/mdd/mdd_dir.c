@@ -1561,7 +1561,6 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         struct mdd_device *mdd = mdo2mdd(cobj);
         struct mdd_object *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object *son = md2mdd_obj(cobj);
-        struct lu_attr    *attr = &ma->ma_attr;
         struct lov_mds_md *lmm = NULL;
         int                lmm_size = 0;
         struct thandle    *handle;
@@ -1575,8 +1574,8 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         if (!md_should_create(spec->sp_cr_flags))
                 RETURN(0);
         lmm_size = ma->ma_lmm_size;
-        rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
-                            spec, attr);
+
+        rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size, spec, ma);
         if (rc)
                 RETURN(rc);
 
@@ -1621,6 +1620,8 @@ stop:
         mdd_trans_stop(env, mdd, rc, handle);
 out_free:
         /* Finish mdd_lov_create() stuff. */
+        /* if no_create == 0 (not replay), we free lmm allocated by
+         * mdd_lov_create() */
         mdd_lov_create_finish(env, mdd, lmm, lmm_size, spec);
         RETURN(rc);
 }
@@ -2015,7 +2016,7 @@ static int mdd_create(const struct lu_env *env,
         if (S_ISREG(attr->la_mode)) {
                 lmm_size = ma->ma_lmm_size;
                 rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size,
-                                    spec, attr);
+                                    spec, ma);
                 if (rc)
                         GOTO(out_pending, rc);
         }
@@ -3004,6 +3005,7 @@ const struct md_dir_operations mdd_dir_ops = {
         .mdo_rename        = mdd_rename,
         .mdo_link          = mdd_link,
         .mdo_unlink        = mdd_unlink,
+        .mdo_lum_lmm_cmp   = mdd_lum_lmm_cmp,
         .mdo_name_insert   = mdd_name_insert,
         .mdo_name_remove   = mdd_name_remove,
         .mdo_rename_tgt    = mdd_rename_tgt,

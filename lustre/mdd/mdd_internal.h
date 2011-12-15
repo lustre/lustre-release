@@ -200,7 +200,7 @@ int mdd_lov_set_md(const struct lu_env *env, struct mdd_object *pobj,
 int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                    struct mdd_object *parent, struct mdd_object *child,
                    struct lov_mds_md **lmm, int *lmm_size,
-                   const struct md_op_spec *spec, struct lu_attr *la);
+                   const struct md_op_spec *spec, struct md_attr *ma);
 int mdd_lov_objid_prepare(struct mdd_device *mdd, struct lov_mds_md *lmm);
 int mdd_declare_lov_objid_update(const struct lu_env *, struct mdd_device *,
                                  struct thandle *);
@@ -213,6 +213,8 @@ int mdd_file_lock(const struct lu_env *env, struct md_object *obj,
                   struct lustre_handle *lockh);
 int mdd_file_unlock(const struct lu_env *env, struct md_object *obj,
                     struct lov_mds_md *lmm, struct lustre_handle *lockh);
+int mdd_lum_lmm_cmp(const struct lu_env *env, struct md_object *cobj,
+                    const struct md_op_spec *spec, struct md_attr *ma);
 int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                void *md, int *md_size, const char *name);
 int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,

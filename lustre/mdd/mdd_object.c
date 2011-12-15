@@ -626,7 +626,8 @@ static int __mdd_lmm_get(const struct lu_env *env,
                 rc = mdd_get_default_md(mdd_obj, ma->ma_lmm);
         if (rc > 0) {
                 ma->ma_lmm_size = rc;
-                ma->ma_valid |= MA_LOV;
+                ma->ma_layout_gen = ma->ma_lmm->lmm_layout_gen;
+                ma->ma_valid |= MA_LOV | MA_LAY_GEN;
                 rc = 0;
         }
         RETURN(rc);
@@ -1485,7 +1486,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
                                 struct thandle *handle)
 {
         struct lu_buf  *buf = &mdd_env_info(env)->mti_buf;
-        int             rc, stripe, i;
+        int             rc, i;
 
         rc = mdo_declare_attr_set(env, obj, &ma->ma_attr, handle);
         if (rc)
@@ -1515,6 +1516,8 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 
         /* basically the log is the same as in unlink case */
         if (lmm) {
+                __u16 stripe;
+
                 if (le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_V1 &&
                                 le32_to_cpu(lmm->lmm_magic) != LOV_MAGIC_V3) {
                         CERROR("%s: invalid LOV_MAGIC %08x on object "DFID"\n",
@@ -1524,9 +1527,14 @@ static int mdd_declare_attr_set(const struct lu_env *env,
                         return -EINVAL;
                 }
 
-                stripe = mdd2obd_dev(mdd)->u.mds.mds_lov_desc.ld_tgt_count;
-                if ((int)le32_to_cpu(lmm->lmm_stripe_count) >= 0)
-                        stripe = le32_to_cpu(lmm->lmm_stripe_count);
+                stripe = le16_to_cpu(lmm->lmm_stripe_count);
+                if (stripe == LOV_ALL_STRIPES) {
+                        struct lov_desc *ldesc;
+
+                        ldesc = &mdd->mdd_obd_dev->u.mds.mds_lov_desc;
+                        LASSERT(ldesc != NULL);
+                        stripe = ldesc->ld_tgt_count;
+                }
 
                 for (i = 0; i < stripe; i++) {
                         rc = mdd_declare_llog_record(env, mdd,

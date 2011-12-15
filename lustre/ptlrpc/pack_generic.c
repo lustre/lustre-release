@@ -1944,7 +1944,8 @@ static void print_lum (struct lov_user_md *lum)
         CDEBUG(D_OTHER, "\tlmm_object_gr: "LPU64"\n", lum->lmm_object_seq);
         CDEBUG(D_OTHER, "\tlmm_stripe_size: %#x\n", lum->lmm_stripe_size);
         CDEBUG(D_OTHER, "\tlmm_stripe_count: %#x\n", lum->lmm_stripe_count);
-        CDEBUG(D_OTHER, "\tlmm_stripe_offset: %#x\n", lum->lmm_stripe_offset);
+        CDEBUG(D_OTHER, "\tlmm_stripe_offset/lmm_layout_gen: %#x\n",
+               lum->u.lum_stripe_offset);
 }
 
 static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
@@ -1956,7 +1957,7 @@ static void lustre_swab_lov_user_md_common(struct lov_user_md_v1 *lum)
         __swab64s(&lum->lmm_object_seq);
         __swab32s(&lum->lmm_stripe_size);
         __swab16s(&lum->lmm_stripe_count);
-        __swab16s(&lum->lmm_stripe_offset);
+        __swab16s(&lum->u.lum_stripe_offset);
         print_lum(lum);
         EXIT;
 }
@@ -1987,7 +1988,8 @@ void lustre_swab_lov_mds_md(struct lov_mds_md *lmm)
         __swab64s(&lmm->lmm_object_id);
         __swab64s(&lmm->lmm_object_seq);
         __swab32s(&lmm->lmm_stripe_size);
-        __swab32s(&lmm->lmm_stripe_count);
+        __swab16s(&lmm->lmm_stripe_count);
+        __swab16s(&lmm->lmm_layout_gen);
         EXIT;
 }
 

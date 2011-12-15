@@ -100,14 +100,15 @@ extern int llapi_file_get_stripe(const char *path, struct lov_user_md *lum);
 #define HAVE_LLAPI_FILE_LOOKUP
 extern int llapi_file_lookup(int dirfd, const char *name);
 
-#define VERBOSE_COUNT   0x1
-#define VERBOSE_SIZE    0x2
-#define VERBOSE_OFFSET  0x4
-#define VERBOSE_POOL    0x8
-#define VERBOSE_DETAIL  0x10
-#define VERBOSE_OBJID   0x20
-#define VERBOSE_ALL     (VERBOSE_COUNT | VERBOSE_SIZE | VERBOSE_OFFSET | \
-                         VERBOSE_POOL | VERBOSE_OBJID)
+#define VERBOSE_COUNT      0x1
+#define VERBOSE_SIZE       0x2
+#define VERBOSE_OFFSET     0x4
+#define VERBOSE_POOL       0x8
+#define VERBOSE_DETAIL     0x10
+#define VERBOSE_OBJID      0x20
+#define VERBOSE_GENERATION 0x40
+#define VERBOSE_ALL        (VERBOSE_COUNT | VERBOSE_SIZE | VERBOSE_OFFSET | \
+                            VERBOSE_POOL | VERBOSE_OBJID | VERBOSE_GENERATION)
 
 struct find_param {
         unsigned int maxdepth;

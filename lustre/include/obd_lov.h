@@ -37,12 +37,12 @@
 #ifndef _OBD_LOV_H__
 #define _OBD_LOV_H__
 
-static inline int lov_stripe_md_size(int stripes)
+static inline int lov_stripe_md_size(__u16 stripes)
 {
         return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo*);
 }
 
-static inline __u32 lov_mds_md_size(int stripes, __u32 lmm_magic)
+static inline __u32 lov_mds_md_size(__u16 stripes, __u32 lmm_magic)
 {
         if (lmm_magic == LOV_MAGIC_V3)
                 return sizeof(struct lov_mds_md_v3) +

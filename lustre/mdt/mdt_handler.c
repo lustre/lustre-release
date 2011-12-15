@@ -469,6 +469,32 @@ static inline int mdt_body_has_lov(const struct lu_attr *la,
                 (S_ISDIR(la->la_mode) && (body->valid & OBD_MD_FLDIREA )) );
 }
 
+void mdt_client_compatibility(struct mdt_thread_info *info)
+{
+        struct mdt_body       *body;
+        struct ptlrpc_request *req = mdt_info_req(info);
+        struct obd_export     *exp = req->rq_export;
+        struct md_attr        *ma = &info->mti_attr;
+        struct lu_attr        *la = &ma->ma_attr;
+        ENTRY;
+
+        if (exp->exp_connect_flags & OBD_CONNECT_LAYOUTLOCK)
+                /* the client can deal with 16-bit lmm_stripe_count */
+                RETURN_EXIT;
+
+        body = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
+
+        if (!mdt_body_has_lov(la, body))
+                RETURN_EXIT;
+
+        /* now we have a reply with a lov for a client not compatible with the
+         * layout lock so we have to clean the layout generation number */
+        if (S_ISREG(la->la_mode))
+                ma->ma_lmm->lmm_layout_gen = 0;
+        EXIT;
+}
+
+
 static int mdt_getattr_internal(struct mdt_thread_info *info,
                                 struct mdt_object *o, int ma_need)
 {
@@ -740,6 +766,7 @@ out_shrink:
         if (rc == 0)
                 mdt_counter_incr(req->rq_export, LPROC_MDT_GETATTR);
 
+        mdt_client_compatibility(info);
         mdt_shrink_reply(info);
         return rc;
 }
@@ -1108,6 +1135,7 @@ static int mdt_getattr_name(struct mdt_thread_info *info)
         mdt_exit_ucred(info);
         EXIT;
 out_shrink:
+        mdt_client_compatibility(info);
         mdt_shrink_reply(info);
         return rc;
 }
@@ -1562,6 +1590,7 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
 out_ucred:
         mdt_exit_ucred(info);
 out_shrink:
+        mdt_client_compatibility(info);
         mdt_shrink_reply(info);
         return rc;
 }
@@ -3325,6 +3354,7 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 out_ucred:
         mdt_exit_ucred(info);
 out_shrink:
+        mdt_client_compatibility(info);
         mdt_shrink_reply(info);
         return rc;
 }

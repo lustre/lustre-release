@@ -1347,7 +1347,7 @@ check_seq_oid()
         [ "$FSTYPE" != "ldiskfs" ] && skip "can not check trusted.fid FSTYPE=$FSTYPE" && return 0
 
         # check the trusted.fid attribute of the OST objects of the file
-        for (( i=0, j=19; i < ${lmm[8]}; i++, j+=4 )); do
+        for (( i=0, j=21; i < ${lmm[8]}; i++, j+=4 )); do
                 local obdidx=${lmm[$j]}
                 local devnum=$((obdidx + 1))
                 local objid=${lmm[$((j+1))]}

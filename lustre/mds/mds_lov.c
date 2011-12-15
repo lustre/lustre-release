@@ -234,7 +234,7 @@ static int mds_lov_objinit(struct mds_obd *mds, __u32 index)
 int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         struct lov_ost_data_v1 *data;
-        __u32 count;
+        __u16 count;
         int rc = 0;
         __u32 j;
 
@@ -244,11 +244,11 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 
         switch (le32_to_cpu(lmm->lmm_magic)) {
                 case LOV_MAGIC_V1:
-                        count = le32_to_cpu(((struct lov_mds_md_v1*)lmm)->lmm_stripe_count);
+                        count = le16_to_cpu(((struct lov_mds_md_v1*)lmm)->lmm_stripe_count);
                         data = &(((struct lov_mds_md_v1*)lmm)->lmm_objects[0]);
                         break;
                 case LOV_MAGIC_V3:
-                        count = le32_to_cpu(((struct lov_mds_md_v3*)lmm)->lmm_stripe_count);
+                        count = le16_to_cpu(((struct lov_mds_md_v3*)lmm)->lmm_stripe_count);
                         data = &(((struct lov_mds_md_v3*)lmm)->lmm_objects[0]);
                         break;
                 default:
@@ -277,7 +277,7 @@ EXPORT_SYMBOL(mds_lov_prepare_objids);
  * after use
  */
 static int mds_log_lost_precreated(struct obd_device *obd,
-                                   struct lov_stripe_md **lsmp, int *stripes,
+                                   struct lov_stripe_md **lsmp, __u16 *stripes,
                                    obd_id id, obd_count count, int idx)
 {
         struct lov_stripe_md *lsm = *lsmp;
@@ -308,7 +308,7 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
         int j;
         struct lov_ost_data_v1 *obj;
         struct lov_stripe_md *lsm = NULL;
-        int stripes = 0;
+        __u16 stripes = 0;
         int count;
         ENTRY;
 
@@ -318,11 +318,11 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 
         switch (le32_to_cpu(lmm->lmm_magic)) {
                 case LOV_MAGIC_V1:
-                        count = le32_to_cpu(((struct lov_mds_md_v1*)lmm)->lmm_stripe_count);
+                        count = le16_to_cpu(((struct lov_mds_md_v1*)lmm)->lmm_stripe_count);
                         obj = ((struct lov_mds_md_v1*)lmm)->lmm_objects;
                         break;
                 case LOV_MAGIC_V3:
-                        count = le32_to_cpu(((struct lov_mds_md_v3*)lmm)->lmm_stripe_count);
+                        count = le16_to_cpu(((struct lov_mds_md_v3*)lmm)->lmm_stripe_count);
                         obj = ((struct lov_mds_md_v3*)lmm)->lmm_objects;
                         break;
                 default:

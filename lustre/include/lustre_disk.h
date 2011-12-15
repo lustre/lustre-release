@@ -274,7 +274,12 @@ struct lustre_mount_data {
 #define OBD_INCOMPAT_IAM_DIR    0x00000040
 /** LMA attribute contains per-inode incompatible flags */
 #define OBD_INCOMPAT_LMA        0x00000080
-
+/** lmm_stripe_count has been shrunk from __u32 to __u16 and the remaining 16
+ * bits are now used to store a generation. Once we start changing the layout
+ * and bumping the generation, old versions expecting a 32-bit lmm_stripe_count
+ * will be confused by interpreting stripe_count | gen << 16 as the actual
+ * stripe count */
+#define OBD_INCOMPAT_LMM_VER    0x00000100
 
 /* Data stored per server at the head of the last_rcvd file.  In le32 order.
    This should be common to filter_internal.h, lustre_mds.h */

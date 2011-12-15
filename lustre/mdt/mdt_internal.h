@@ -177,7 +177,8 @@ struct mdt_device {
 #define MDT_SERVICE_WATCHDOG_FACTOR     (2)
 #define MDT_ROCOMPAT_SUPP       (OBD_ROCOMPAT_LOVOBJID)
 #define MDT_INCOMPAT_SUPP       (OBD_INCOMPAT_MDT | OBD_INCOMPAT_COMMON_LR | \
-                                 OBD_INCOMPAT_FID | OBD_INCOMPAT_IAM_DIR)
+                                 OBD_INCOMPAT_FID | OBD_INCOMPAT_IAM_DIR | \
+                                 OBD_INCOMPAT_LMM_VER)
 #define MDT_COS_DEFAULT         (0)
 
 struct mdt_object {
@@ -521,6 +522,8 @@ void mdt_object_unlock_put(struct mdt_thread_info *,
                            struct mdt_object *,
                            struct mdt_lock_handle *,
                            int decref);
+
+void mdt_client_compatibility(struct mdt_thread_info *info);
 
 int mdt_close_unpack(struct mdt_thread_info *info);
 int mdt_reint_unpack(struct mdt_thread_info *info, __u32 op);

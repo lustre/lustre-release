@@ -797,6 +797,7 @@ static int lfs_getstripe(int argc, char **argv)
         struct option long_opts[] = {
                 {"count", 0, 0, 'c'},
                 {"directory", 0, 0, 'd'},
+                {"generation", 0, 0, 'g'},
                 {"index", 0, 0, 'i'},
                 {"mdt", 0, 0, 'M'},
                 {"offset", 0, 0, 'o'},
@@ -814,7 +815,7 @@ static int lfs_getstripe(int argc, char **argv)
 
         param.maxdepth = 1;
         optind = 0;
-        while ((c = getopt_long(argc, argv, "cdhiMoO:pqrRsv",
+        while ((c = getopt_long(argc, argv, "cdghiMoO:pqrRsv",
                                 long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'O':
@@ -860,6 +861,12 @@ static int lfs_getstripe(int argc, char **argv)
                 case 'p':
                         if (!(param.verbose & VERBOSE_DETAIL)) {
                                 param.verbose |= VERBOSE_POOL;
+                                param.maxdepth = 0;
+                        }
+                        break;
+                case 'g':
+                        if (!(param.verbose & VERBOSE_DETAIL)) {
+                                param.verbose |= VERBOSE_GENERATION;
                                 param.maxdepth = 0;
                         }
                         break;

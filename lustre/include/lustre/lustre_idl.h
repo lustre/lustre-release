@@ -1317,7 +1317,9 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
         __u64 lmm_object_id;      /* LOV object ID */
         __u64 lmm_object_seq;     /* LOV object seq number */
         __u32 lmm_stripe_size;    /* size of stripe in bytes */
-        __u32 lmm_stripe_count;   /* num stripes in use for this object */
+        /* lmm_stripe_count used to be __u32 */
+        __u16 lmm_stripe_count;   /* num stripes in use for this object */
+        __u16 lmm_layout_gen;     /* layout generation number */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
 
@@ -1346,7 +1348,9 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
         __u64 lmm_object_id;      /* LOV object ID */
         __u64 lmm_object_seq;     /* LOV object seq number */
         __u32 lmm_stripe_size;    /* size of stripe in bytes */
-        __u32 lmm_stripe_count;   /* num stripes in use for this object */
+        /* lmm_stripe_count used to be __u32 */
+        __u16 lmm_stripe_count;   /* num stripes in use for this object */
+        __u16 lmm_layout_gen;     /* layout generation number */
         char  lmm_pool_name[LOV_MAXPOOLNAME]; /* must be 32bit aligned */
         struct lov_ost_data_v1 lmm_objects[0]; /* per-stripe data */
 };
@@ -2143,6 +2147,7 @@ enum seq_op {
  *
  * (max buffer size - lov+rpc header) / sizeof(struct lov_ost_data_v1) */
 #define LOV_MAX_STRIPE_COUNT 2000  /* ((12 * 4096 - 256) / 24) */
+#define LOV_ALL_STRIPES       0xffff /* only valid for directories */
 #define LOV_V1_INSANE_STRIPE_COUNT 65532 /* maximum stripe count bz13933 */
 
 #define LOV_MAX_UUID_BUFFER_SIZE  8192
