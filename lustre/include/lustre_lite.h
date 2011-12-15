@@ -126,7 +126,7 @@ static inline void lustre_build_lock_params(int cmd, unsigned long open_flags,
 struct lustre_client_ocd {
         /*
          * This is conjunction of connect_flags across all imports (LOVs) this
-         * mount is connected to. This field is updated by ll_ocd_update()
+         * mount is connected to. This field is updated by cl_ocd_update()
          * under ->lco_lock.
          */
         __u64              lco_flags;
