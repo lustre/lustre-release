@@ -1,0 +1,12 @@
+LU-553 build: improve checks for commit-msg
+
+message
+body
+
+Signed-off-by: Orin Scrivello, DDS <ouch@icu4dk.com>
+Change-Id: I0123456789012345678901234567890123456789
+Acked-by:    Joe Doaks <Joe.Doaks@sample.info>
+Tested-by:   Jane Pain <Jane.Pain@sample.co.uk>
+CC:          Your Mother <mutha@home.net>
+Reported-by: Anony Mouse <mickey@steamboat.biz>
+Reviewed-by: Joe Hacker <root@p0wned.com>

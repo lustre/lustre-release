@@ -4,9 +4,11 @@ message
 body
 
 Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
+Signed-off-by: Andreas Eric Dilger <adilger@dilger.ca>
+Signed-off-by: Andreas Eric Dilger <andreas.dilger@mail.my-domain.za>
+Signed-off-by: Andreas Smyth Esq. III <asmyth_iii@my-domain-3.co.uk>
 Change-Id: I0123456789012345678901234567890123456789
-Acked-by:    Joe Doaks <Joe.Doaks@sample.com>
-Tested-by:   Jane Pain <Jane.Pain@sample.com>
-CC:          Your Mother <mom@sample.com>
-Reported-by: Anony Mouse <mickey@sample.com>
-Reviewed-by: Joe Hacker <joey@hacker-industries.com>
+
+# total: 0 errors, 0 warnings, 36 lines checked
+#
+# Your patch has no obvious style problems and is ready for submission.

@@ -1,0 +1,9 @@
+LU-553 build: improve checks for commit-msg
+
+message
+body
+
+Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
+Change-Id: I0123456789012345678901234567890123456789
+Xyratex-bug-id: MRP-123
+Oracle-bug-id: 12345

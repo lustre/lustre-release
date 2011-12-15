@@ -38,4 +38,4 @@ do
         esac
 done
 
-rm -f $TEMPFILE
+rm -f $TEMPFILE $TEMPFILE.*

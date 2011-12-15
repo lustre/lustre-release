@@ -12,4 +12,4 @@ temporary file, so that it can be edited and re-used, instead of
 having to recreate it each time, or fetch it from .git/COMMIT_MSG.
 
 Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
-Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
+Signed-off-by: Andrew Dillinger <adillinger@wild-west.com>

@@ -22,9 +22,9 @@ init() {
         readonly INNOCUOUS=$(echo \
                         Acked-by \
                         Tested-by \
-                        CC \
                         Reported-by \
                         Reviewed-by \
+                        CC \
                 | tr ' ' '|')
         readonly WIDTH_SUM=64
         readonly WIDTH_REG=70
@@ -33,7 +33,7 @@ init() {
 
         # Identify a name followed by an email address.
         #
-        readonly EMAILPAT=$'[ \t]*[a-zA-Z][^<>]*[ \t]<[^@ \t>]+@[^@ \t>]+>'
+        readonly EMAILPAT=$'[ \t]*[^<> ]* [^<>]* <[^@ \t>]+@[a-zA-Z0-9.-]+\.[a-z]+>'
 
         HAS_ERROR=false
         HAS_SUMMARY=false
@@ -77,7 +77,7 @@ function do_signoff() {
         ck_wrapup
         # Signed-off-by: First Last <email@host.domain>
         local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
-        if (( ${#txt} == 0 )) ; then
+        if (( ${#txt} == 0 )); then
                 error "$SIGNOFF line requires name and email address"
         else
                 HAS_SIGNOFF=true # require at least one
@@ -92,7 +92,7 @@ function do_changeid() {
         # capital "I" plus 40 hex digits
         #
         local txt=$(echo "$LINE" | grep "^$CHANGEID I[0-9a-fA-F]\{40\}\$")
-        (( ${#txt} > 0 )) || \
+        (( ${#txt} > 0 )) ||
                 error "has invalid $CHANGEID line for Gerrit tracking"
 
         HAS_CHANGEID=true
@@ -111,23 +111,23 @@ function do_default_line() {
                 error "invalid signoff section line"
                 return
         }
-        if (( NUM == 1 )) ; then
+        if (( NUM == 1 )); then
                 HAS_JIRA_COMPONENT=$(echo "$LINE" | grep "$JIRA_FMT_A")
 
-                if (( ${#HAS_JIRA_COMPONENT} == 0 )) ; then
+                if (( ${#HAS_JIRA_COMPONENT} == 0 )); then
                         HAS_JIRA=$(echo "$LINE" | grep "$JIRA_FMT_B")
-                        if (( ${#HAS_JIRA} > 0 )) ; then
+                        if (( ${#HAS_JIRA} > 0 )); then
                                 error "has no component in summary."
                         else
                                 error "missing JIRA ticket number."
                         fi
-                elif (( ${#LINE} > WIDTH_SUM )) ; then
+                elif (( ${#LINE} > WIDTH_SUM )); then
                         error "summary longer than $WIDTH_SUM columns."
                 else
                         HAS_SUMMARY=true
                 fi
 
-        elif (( ${#LINE} > WIDTH_REG )) ; then
+        elif (( ${#LINE} > WIDTH_REG )); then
                 error "has line longer than $WIDTH_REG columns."
         elif ! $HAS_BODY && ! $HAS_LAST_BLANK; then
                 error "has no blank line after summary."
@@ -148,7 +148,7 @@ new_changeid() {
                         git rev-parse HEAD 2>/dev/null
                         grep -v "^$SIGNOFF" "$ORIGINAL" | git stripspace -s
                 } | git hash-object --stdin)
-        (( ${#NEWID} > 0 )) || \
+        (( ${#NEWID} > 0 )) ||
                 die "git hash-object failed for $CHANGEID:"
 
         echo "$CHANGEID I$NEWID"
@@ -193,14 +193,15 @@ usage() {
 	$SIGNOFF Your Real Name <your_email@domain.name>
 	$CHANGEID Ixxxx(added automatically if missing)xxxx
 
-	Included in the "sign off section" may be any of several other
-	tag lines:
-	    $(echo "$INNOCUOUS" | tr '|' ' ')
 	The "$CHANGEID" line should only be there when updating a previous
-	commit/submission.  Copy the one from that commit.
+	commit/submission.  Copy the one from the original commit.
+
+	The "sign off section" may also include several other tag lines:
+	$(for T in $(tr '|' ' ' <<< "$INNOCUOUS"); do echo "  $T: <email>"; done
+	{Organization}-bug-id: associated ticket identifier
 	EOF
 
-        mv "$ORIGINAL" "$SAVE" && \
+        mv "$ORIGINAL" "$SAVE" &&
                 echo "$0: saved original commit comment to $SAVE" 1>&2
 }
 
@@ -214,9 +215,8 @@ while IFS= read -u3 LINE; do
         $CHANGEID* )  do_changeid  ;;
 
         "")
-                $IS_WRAPPING_UP && \
-                        error "blank lines not allowed in signoff section"
                 HAS_LAST_BLANK=true
+                $IS_WRAPPING_UP && continue
                 ;;
 
         \#*)
@@ -240,9 +240,14 @@ while IFS= read -u3 LINE; do
                 ;;
 
         *)
-                if [[ "$LINE" =~ ^($INNOCUOUS): ]] ; then
+                if [[ "$LINE" =~ ^($INNOCUOUS): ]]; then
                         do_innocuous
-                else
+        	elif [[ "$LINE" =~ ^[A-Za-z0-9_-]+-bug-id: ]]; then
+			ck_wrapup
+        	else
+			# Allow arbitrary external bug identifiers for tracking.
+			# I can't seem to find a pattern for the "case" that
+			# checks for "*-bug-id", so this is checked here.
                         do_default_line
                 fi
                 ;;
