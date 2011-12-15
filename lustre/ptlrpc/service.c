@@ -2017,8 +2017,8 @@ ptlrpc_threads_need_create(struct ptlrpc_service *svc)
 static inline int
 ptlrpc_thread_stopping(struct ptlrpc_thread *thread)
 {
-        return (thread->t_flags & SVC_STOPPING) != 0 ||
-                thread->t_svc->srv_is_stopping;
+        return thread_is_stopping(thread) ||
+               thread->t_svc->srv_is_stopping;
 }
 
 static inline int
@@ -2148,15 +2148,15 @@ static int ptlrpc_main(void *arg)
 
         cfs_spin_lock(&svc->srv_lock);
 
-        LASSERT((thread->t_flags & SVC_STARTING) != 0);
-        thread->t_flags &= ~SVC_STARTING;
+        LASSERT(thread_is_starting(thread));
+        thread_clear_flags(thread, SVC_STARTING);
         svc->srv_threads_starting--;
 
         /* SVC_STOPPING may already be set here if someone else is trying
          * to stop the service while this new thread has been dynamically
          * forked. We still set SVC_RUNNING to let our creator know that
          * we are now running, however we will exit as soon as possible */
-        thread->t_flags |= SVC_RUNNING;
+        thread_add_flags(thread, SVC_RUNNING);
         svc->srv_threads_running++;
         cfs_spin_unlock(&svc->srv_lock);
 
@@ -2233,19 +2233,15 @@ out:
                thread, thread->t_pid, thread->t_id, rc);
 
         cfs_spin_lock(&svc->srv_lock);
-        if ((thread->t_flags & SVC_STARTING) != 0) {
+        if (thread_test_and_clear_flags(thread, SVC_STARTING))
                 svc->srv_threads_starting--;
-                thread->t_flags &= ~SVC_STARTING;
-        }
 
-        if ((thread->t_flags & SVC_RUNNING) != 0) {
+        if (thread_test_and_clear_flags(thread, SVC_RUNNING))
                 /* must know immediately */
                 svc->srv_threads_running--;
-                thread->t_flags &= ~SVC_RUNNING;
-        }
 
         thread->t_id    = rc;
-        thread->t_flags |= SVC_STOPPED;
+        thread_add_flags(thread, SVC_STOPPED);
 
         cfs_waitq_signal(&thread->t_ctl_waitq);
         cfs_spin_unlock(&svc->srv_lock);
@@ -2405,12 +2401,12 @@ static void ptlrpc_stop_thread(struct ptlrpc_service *svc,
 
         cfs_spin_lock(&svc->srv_lock);
         /* let the thread know that we would like it to stop asap */
-        thread->t_flags |= SVC_STOPPING;
+        thread_add_flags(thread, SVC_STOPPING);
         cfs_spin_unlock(&svc->srv_lock);
 
         cfs_waitq_broadcast(&svc->srv_waitq);
         l_wait_event(thread->t_ctl_waitq,
-                     (thread->t_flags & SVC_STOPPED), &lwi);
+                     thread_is_stopped(thread), &lwi);
 
         cfs_spin_lock(&svc->srv_lock);
         cfs_list_del(&thread->t_link);
@@ -2502,7 +2498,7 @@ int ptlrpc_start_thread(struct ptlrpc_service *svc)
 
         svc->srv_threads_starting++;
         thread->t_id    = svc->srv_threads_next_id++;
-        thread->t_flags |= SVC_STARTING;
+        thread_add_flags(thread, SVC_STARTING);
         thread->t_svc   = svc;
 
         cfs_list_add(&thread->t_link, &svc->srv_threads);
@@ -2531,9 +2527,10 @@ int ptlrpc_start_thread(struct ptlrpc_service *svc)
                 RETURN(rc);
         }
         l_wait_event(thread->t_ctl_waitq,
-                     thread->t_flags & (SVC_RUNNING | SVC_STOPPED), &lwi);
+                     thread_is_running(thread) || thread_is_stopped(thread),
+                     &lwi);
 
-        rc = (thread->t_flags & SVC_STOPPED) ? thread->t_id : 0;
+        rc = thread_is_stopped(thread) ? thread->t_id : 0;
         RETURN(rc);
 }
 

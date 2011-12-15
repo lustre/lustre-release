@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -119,7 +122,7 @@ void sptlrpc_gc_add_ctx(struct ptlrpc_cli_ctx *ctx)
         cfs_list_add(&ctx->cc_gc_chain, &sec_gc_ctx_list);
         cfs_spin_unlock(&sec_gc_ctx_list_lock);
 
-        sec_gc_thread.t_flags |= SVC_SIGNAL;
+        thread_add_flags(&sec_gc_thread, SVC_SIGNAL);
         cfs_waitq_signal(&sec_gc_thread.t_ctl_waitq);
 }
 EXPORT_SYMBOL(sptlrpc_gc_add_ctx);
@@ -175,13 +178,13 @@ static int sec_gc_main(void *arg)
         cfs_daemonize_ctxt("sptlrpc_gc");
 
         /* Record that the thread is running */
-        thread->t_flags = SVC_RUNNING;
+        thread_set_flags(thread, SVC_RUNNING);
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
         while (1) {
                 struct ptlrpc_sec *sec;
 
-                thread->t_flags &= ~SVC_SIGNAL;
+                thread_clear_flags(thread, SVC_SIGNAL);
                 sec_process_ctx_list();
 again:
                 /* go through sec list do gc.
@@ -209,16 +212,15 @@ again:
 
                 lwi = LWI_TIMEOUT(SEC_GC_INTERVAL * CFS_HZ, NULL, NULL);
                 l_wait_event(thread->t_ctl_waitq,
-                             thread->t_flags & (SVC_STOPPING | SVC_SIGNAL),
+                             thread_is_stopping(thread) ||
+                             thread_is_signal(thread),
                              &lwi);
 
-                if (thread->t_flags & SVC_STOPPING) {
-                        thread->t_flags &= ~SVC_STOPPING;
+                if (thread_test_and_clear_flags(thread, SVC_STOPPING))
                         break;
-                }
         }
 
-        thread->t_flags = SVC_STOPPED;
+        thread_set_flags(thread, SVC_STOPPED);
         cfs_waitq_signal(&thread->t_ctl_waitq);
         return 0;
 }
@@ -243,7 +245,7 @@ int sptlrpc_gc_init(void)
         }
 
         l_wait_event(sec_gc_thread.t_ctl_waitq,
-                     sec_gc_thread.t_flags & SVC_RUNNING, &lwi);
+                     thread_is_running(&sec_gc_thread), &lwi);
         return 0;
 }
 
@@ -251,11 +253,11 @@ void sptlrpc_gc_fini(void)
 {
         struct l_wait_info lwi = { 0 };
 
-        sec_gc_thread.t_flags = SVC_STOPPING;
+        thread_set_flags(&sec_gc_thread, SVC_STOPPING);
         cfs_waitq_signal(&sec_gc_thread.t_ctl_waitq);
 
         l_wait_event(sec_gc_thread.t_ctl_waitq,
-                     sec_gc_thread.t_flags & SVC_STOPPED, &lwi);
+                     thread_is_stopped(&sec_gc_thread), &lwi);
 }
 
 #else /* !__KERNEL__ */

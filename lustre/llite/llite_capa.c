@@ -30,6 +30,9 @@
  * Use is subject to license terms.
  */
 /*
+ * Copyright (c) 2011 Whamcloud, Inc.
+ */
+/*
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
@@ -119,11 +122,6 @@ static inline int have_expired_capa(void)
         return expired;
 }
 
-static inline int ll_capa_check_stop(void)
-{
-        return (ll_capa_thread.t_flags & SVC_STOPPING) ? 1: 0;
-}
-
 static void sort_add_capa(struct obd_capa *ocapa, cfs_list_t *head)
 {
         struct obd_capa *tmp;
@@ -180,15 +178,16 @@ static int capa_thread_main(void *unused)
 
         cfs_daemonize("ll_capa");
 
-        ll_capa_thread.t_flags = SVC_RUNNING;
+        thread_set_flags(&ll_capa_thread, SVC_RUNNING);
         cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
 
         while (1) {
                 l_wait_event(ll_capa_thread.t_ctl_waitq,
-                             (ll_capa_check_stop() || have_expired_capa()),
+                             !thread_is_running(&ll_capa_thread) ||
+                             have_expired_capa(),
                              &lwi);
 
-                if (ll_capa_check_stop())
+                if (!thread_is_running(&ll_capa_thread))
                         break;
 
                 next = NULL;
@@ -285,7 +284,7 @@ static int capa_thread_main(void *unused)
                 cfs_spin_unlock(&capa_lock);
         }
 
-        ll_capa_thread.t_flags = SVC_STOPPED;
+        thread_set_flags(&ll_capa_thread, SVC_STOPPED);
         cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
         RETURN(0);
 }
@@ -308,17 +307,17 @@ int ll_capa_thread_start(void)
                 RETURN(rc);
         }
         cfs_wait_event(ll_capa_thread.t_ctl_waitq,
-                       ll_capa_thread.t_flags & SVC_RUNNING);
+                       thread_is_running(&ll_capa_thread));
 
         RETURN(0);
 }
 
 void ll_capa_thread_stop(void)
 {
-        ll_capa_thread.t_flags = SVC_STOPPING;
+        thread_set_flags(&ll_capa_thread, SVC_STOPPING);
         cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
         cfs_wait_event(ll_capa_thread.t_ctl_waitq,
-                       ll_capa_thread.t_flags & SVC_STOPPED);
+                       thread_is_stopped(&ll_capa_thread));
 }
 
 struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)

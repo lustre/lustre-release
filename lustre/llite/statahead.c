@@ -150,21 +150,6 @@ static inline int sa_not_full(struct ll_statahead_info *sai)
         return (cfs_atomic_read(&sai->sai_cache_count) < sai->sai_max);
 }
 
-static inline int sa_is_running(struct ll_statahead_info *sai)
-{
-        return !!(sai->sai_thread.t_flags & SVC_RUNNING);
-}
-
-static inline int sa_is_stopping(struct ll_statahead_info *sai)
-{
-        return !!(sai->sai_thread.t_flags & SVC_STOPPING);
-}
-
-static inline int sa_is_stopped(struct ll_statahead_info *sai)
-{
-        return !!(sai->sai_thread.t_flags & SVC_STOPPED);
-}
-
 /**
  * (1) hit ratio less than 80%
  * or
@@ -491,7 +476,7 @@ static void ll_sai_put(struct ll_statahead_info *sai)
                 lli->lli_opendir_pid = 0;
                 cfs_spin_unlock(&lli->lli_sa_lock);
 
-                LASSERT(sa_is_stopped(sai));
+                LASSERT(thread_is_stopped(&sai->sai_thread));
 
                 if (sai->sai_sent > sai->sai_replied)
                         CDEBUG(D_READA,"statahead for dir "DFID" does not "
@@ -630,7 +615,7 @@ static int ll_statahead_interpret(struct ptlrpc_request *req,
                 GOTO(out, rc = -ESTALE);
         } else {
                 sai = ll_sai_get(lli->lli_sai);
-                if (unlikely(!sa_is_running(sai))) {
+                if (unlikely(!thread_is_running(&sai->sai_thread))) {
                         sai->sai_replied++;
                         cfs_spin_unlock(&lli->lli_sa_lock);
                         GOTO(out, rc = -EBADFD);
@@ -895,7 +880,7 @@ static int ll_statahead_thread(void *arg)
 
         atomic_inc(&sbi->ll_sa_total);
         cfs_spin_lock(&lli->lli_sa_lock);
-        thread->t_flags = SVC_RUNNING;
+        thread_set_flags(thread, SVC_RUNNING);
         cfs_spin_unlock(&lli->lli_sa_lock);
         cfs_waitq_signal(&thread->t_ctl_waitq);
         CDEBUG(D_READA, "start doing statahead for %s\n", parent->d_name.name);
@@ -970,13 +955,13 @@ keep_de:
                         l_wait_event(thread->t_ctl_waitq,
                                      sa_not_full(sai) ||
                                      !sa_received_empty(sai) ||
-                                     !sa_is_running(sai),
+                                     !thread_is_running(thread),
                                      &lwi);
 
                         while (!sa_received_empty(sai))
                                 do_statahead_interpret(sai, NULL);
 
-                        if (unlikely(!sa_is_running(sai))) {
+                        if (unlikely(!thread_is_running(thread))) {
                                 ll_release_page(page, 0);
                                 GOTO(out, rc);
                         }
@@ -999,7 +984,7 @@ keep_de:
                                 l_wait_event(thread->t_ctl_waitq,
                                              !sa_received_empty(sai) ||
                                              sai->sai_sent == sai->sai_replied||
-                                             !sa_is_running(sai),
+                                             !thread_is_running(thread),
                                              &lwi);
 
                                 while (!sa_received_empty(sai))
@@ -1007,7 +992,7 @@ keep_de:
 
                                 if ((sai->sai_sent == sai->sai_replied &&
                                      sa_received_empty(sai)) ||
-                                    !sa_is_running(sai))
+                                    !thread_is_running(thread))
                                         GOTO(out, rc = 0);
                         }
                 } else if (1) {
@@ -1035,7 +1020,7 @@ out:
         ll_dir_chain_fini(&chain);
         cfs_spin_lock(&lli->lli_sa_lock);
         if (!sa_received_empty(sai)) {
-                thread->t_flags = SVC_STOPPING;
+                thread_set_flags(thread, SVC_STOPPING);
                 cfs_spin_unlock(&lli->lli_sa_lock);
 
                 /* To release the resources held by received entries. */
@@ -1044,7 +1029,7 @@ out:
 
                 cfs_spin_lock(&lli->lli_sa_lock);
         }
-        thread->t_flags = SVC_STOPPED;
+        thread_set_flags(thread, SVC_STOPPED);
         cfs_spin_unlock(&lli->lli_sa_lock);
         cfs_waitq_signal(&sai->sai_waitq);
         cfs_waitq_signal(&thread->t_ctl_waitq);
@@ -1077,15 +1062,15 @@ void ll_stop_statahead(struct inode *dir, void *key)
                 struct l_wait_info lwi = { 0 };
                 struct ptlrpc_thread *thread = &lli->lli_sai->sai_thread;
 
-                if (!sa_is_stopped(lli->lli_sai)) {
-                        thread->t_flags = SVC_STOPPING;
+                if (!thread_is_stopped(thread)) {
+                        thread_set_flags(thread, SVC_STOPPING);
                         cfs_spin_unlock(&lli->lli_sa_lock);
                         cfs_waitq_signal(&thread->t_ctl_waitq);
 
                         CDEBUG(D_READA, "stopping statahead thread, pid %d\n",
                                cfs_curproc_pid());
                         l_wait_event(thread->t_ctl_waitq,
-                                     sa_is_stopped(lli->lli_sai),
+                                     thread_is_stopped(thread),
                                      &lwi);
                 } else {
                         cfs_spin_unlock(&lli->lli_sa_lock);
@@ -1238,8 +1223,9 @@ out:
 static void
 ll_sai_unplug(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
 {
-        struct ll_sb_info *sbi = ll_i2sbi(sai->sai_inode);
-        int                hit;
+        struct ptlrpc_thread *thread = &sai->sai_thread;
+        struct ll_sb_info    *sbi    = ll_i2sbi(sai->sai_inode);
+        int                  hit;
         ENTRY;
 
         if (entry != NULL && entry->se_stat == SA_ENTRY_SUCC)
@@ -1257,7 +1243,7 @@ ll_sai_unplug(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
 
                 sai->sai_miss++;
                 sai->sai_consecutive_miss++;
-                if (sa_low_hit(sai) && sa_is_running(sai)) {
+                if (sa_low_hit(sai) && thread_is_running(thread)) {
                         atomic_inc(&sbi->ll_sa_wrong);
                         CDEBUG(D_READA, "Statahead for dir "DFID" hit "
                                "ratio too low: hit/miss "LPU64"/"LPU64
@@ -1267,14 +1253,14 @@ ll_sai_unplug(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
                                sai->sai_miss, sai->sai_sent,
                                sai->sai_replied, cfs_curproc_pid());
                         cfs_spin_lock(&lli->lli_sa_lock);
-                        if (!sa_is_stopped(sai))
-                                sai->sai_thread.t_flags = SVC_STOPPING;
+                        if (!thread_is_stopped(thread))
+                                thread_set_flags(thread, SVC_STOPPING);
                         cfs_spin_unlock(&lli->lli_sa_lock);
                 }
         }
 
-        if (!sa_is_stopped(sai))
-                cfs_waitq_signal(&sai->sai_thread.t_ctl_waitq);
+        if (!thread_is_stopped(thread))
+                cfs_waitq_signal(&thread->t_ctl_waitq);
 
         EXIT;
 }
@@ -1295,6 +1281,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
         struct ll_statahead_info *sai   = lli->lli_sai;
         struct dentry            *parent;
         struct ll_sa_entry       *entry;
+        struct ptlrpc_thread     *thread;
         struct l_wait_info        lwi   = { 0 };
         int                       rc    = 0;
         ENTRY;
@@ -1302,7 +1289,8 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
         LASSERT(lli->lli_opendir_pid == cfs_curproc_pid());
 
         if (sai) {
-                if (unlikely(sa_is_stopped(sai) &&
+                thread = &sai->sai_thread;
+                if (unlikely(thread_is_stopped(thread) &&
                              cfs_list_empty(&sai->sai_entries_stated))) {
                         /* to release resource */
                         ll_stop_statahead(dir, lli->lli_opendir_key);
@@ -1353,7 +1341,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
                                                LWI_ON_SIGNAL_NOOP, NULL);
                         rc = l_wait_event(sai->sai_waitq,
                                           ll_sa_entry_stated(entry) ||
-                                          sa_is_stopped(sai),
+                                          thread_is_stopped(thread),
                                           &lwi);
                         if (rc < 0) {
                                 ll_sai_unplug(sai, entry);
@@ -1430,18 +1418,19 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
 
         lli->lli_sai = sai;
         rc = cfs_create_thread(ll_statahead_thread, parent, 0);
+        thread = &sai->sai_thread;
         if (rc < 0) {
                 CERROR("can't start ll_sa thread, rc: %d\n", rc);
                 dput(parent);
                 lli->lli_opendir_key = NULL;
-                sai->sai_thread.t_flags = SVC_STOPPED;
+                thread_set_flags(thread, SVC_STOPPED);
                 ll_sai_put(sai);
                 LASSERT(lli->lli_sai == NULL);
                 RETURN(-EAGAIN);
         }
 
-        l_wait_event(sai->sai_thread.t_ctl_waitq,
-                     sa_is_running(sai) || sa_is_stopped(sai),
+        l_wait_event(thread->t_ctl_waitq,
+                     thread_is_running(thread) || thread_is_stopped(thread),
                      &lwi);
 
         /*

@@ -272,7 +272,7 @@ static int ptlrpc_pinger_main(void *arg)
         cfs_daemonize(data->name);
 
         /* Record that the thread is running */
-        thread->t_flags = SVC_RUNNING;
+        thread_set_flags(thread, SVC_RUNNING);
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
         /* And now, loop forever, pinging as needed. */
@@ -312,27 +312,29 @@ static int ptlrpc_pinger_main(void *arg)
                    next ping time to next_ping + .01 sec, which means
                    we will SKIP the next ping at next_ping, and the
                    ping will get sent 2 timeouts from now!  Beware. */
-                CDEBUG(D_INFO, "next wakeup in "CFS_DURATION_T" ("CFS_TIME_T")\n",
-                                time_to_next_wake,
-                                cfs_time_add(this_ping, cfs_time_seconds(PING_INTERVAL)));
+                CDEBUG(D_INFO, "next wakeup in "CFS_DURATION_T" ("
+                       CFS_TIME_T")\n", time_to_next_wake,
+                       cfs_time_add(this_ping,cfs_time_seconds(PING_INTERVAL)));
                 if (time_to_next_wake > 0) {
-                        lwi = LWI_TIMEOUT(max_t(cfs_duration_t, time_to_next_wake, cfs_time_seconds(1)),
-                                            NULL, NULL);
+                        lwi = LWI_TIMEOUT(max_t(cfs_duration_t,
+                                                time_to_next_wake,
+                                                cfs_time_seconds(1)),
+                                          NULL, NULL);
                         l_wait_event(thread->t_ctl_waitq,
-                                     thread->t_flags & (SVC_STOPPING|SVC_EVENT),
+                                     thread_is_stopping(thread) ||
+                                     thread_is_event(thread),
                                      &lwi);
-                        if (thread->t_flags & SVC_STOPPING) {
-                                thread->t_flags &= ~SVC_STOPPING;
+                        if (thread_test_and_clear_flags(thread, SVC_STOPPING)) {
                                 EXIT;
                                 break;
-                        } else if (thread->t_flags & SVC_EVENT) {
+                        } else {
                                 /* woken after adding import to reset timer */
-                                thread->t_flags &= ~SVC_EVENT;
+                                thread_test_and_clear_flags(thread, SVC_EVENT);
                         }
                 }
         }
 
-        thread->t_flags = SVC_STOPPED;
+        thread_set_flags(thread, SVC_STOPPED);
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
         CDEBUG(D_NET, "pinger thread exiting, process %d\n", cfs_curproc_pid());
@@ -373,7 +375,7 @@ int ptlrpc_start_pinger(void)
                 RETURN(rc);
         }
         l_wait_event(pinger_thread->t_ctl_waitq,
-                     pinger_thread->t_flags & SVC_RUNNING, &lwi);
+                     thread_is_running(pinger_thread), &lwi);
 
         RETURN(0);
 }
@@ -394,12 +396,12 @@ int ptlrpc_stop_pinger(void)
 
         ptlrpc_pinger_remove_timeouts();
         cfs_mutex_down(&pinger_sem);
-        pinger_thread->t_flags = SVC_STOPPING;
+        thread_set_flags(pinger_thread, SVC_STOPPING);
         cfs_waitq_signal(&pinger_thread->t_ctl_waitq);
         cfs_mutex_up(&pinger_sem);
 
         l_wait_event(pinger_thread->t_ctl_waitq,
-                     (pinger_thread->t_flags & SVC_STOPPED), &lwi);
+                     thread_is_stopped(pinger_thread), &lwi);
 
         OBD_FREE_PTR(pinger_thread);
         pinger_thread = NULL;
@@ -573,7 +575,7 @@ int ptlrpc_pinger_remove_timeouts(void)
 void ptlrpc_pinger_wake_up()
 {
 #ifdef ENABLE_PINGER
-        pinger_thread->t_flags |= SVC_EVENT;
+        thread_add_flags(pinger_thread, SVC_EVENT);
         cfs_waitq_signal(&pinger_thread->t_ctl_waitq);
 #endif
 }

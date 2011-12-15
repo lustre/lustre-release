@@ -1300,7 +1300,7 @@ static int ldlm_pools_thread_main(void *arg)
         ENTRY;
 
         cfs_daemonize(t_name);
-        thread->t_flags = SVC_RUNNING;
+        thread_set_flags(thread, SVC_RUNNING);
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
         CDEBUG(D_DLMTRACE, "%s: pool thread starting, process %d\n",
@@ -1321,19 +1321,18 @@ static int ldlm_pools_thread_main(void *arg)
                  */
                 lwi = LWI_TIMEOUT(cfs_time_seconds(LDLM_POOLS_THREAD_PERIOD),
                                   NULL, NULL);
-                l_wait_event(thread->t_ctl_waitq, (thread->t_flags &
-                                                   (SVC_STOPPING|SVC_EVENT)),
+                l_wait_event(thread->t_ctl_waitq,
+                             thread_is_stopping(thread) ||
+                             thread_is_event(thread),
                              &lwi);
 
-                if (thread->t_flags & SVC_STOPPING) {
-                        thread->t_flags &= ~SVC_STOPPING;
+                if (thread_test_and_clear_flags(thread, SVC_STOPPING))
                         break;
-                } else if (thread->t_flags & SVC_EVENT) {
-                        thread->t_flags &= ~SVC_EVENT;
-                }
+                else
+                        thread_test_and_clear_flags(thread, SVC_EVENT);
         }
 
-        thread->t_flags = SVC_STOPPED;
+        thread_set_flags(thread, SVC_STOPPED);
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
         CDEBUG(D_DLMTRACE, "%s: pool thread exiting, process %d\n",
@@ -1372,7 +1371,7 @@ static int ldlm_pools_thread_start(void)
                 RETURN(rc);
         }
         l_wait_event(ldlm_pools_thread->t_ctl_waitq,
-                     (ldlm_pools_thread->t_flags & SVC_RUNNING), &lwi);
+                     thread_is_running(ldlm_pools_thread), &lwi);
         RETURN(0);
 }
 
@@ -1385,7 +1384,7 @@ static void ldlm_pools_thread_stop(void)
                 return;
         }
 
-        ldlm_pools_thread->t_flags = SVC_STOPPING;
+        thread_set_flags(ldlm_pools_thread, SVC_STOPPING);
         cfs_waitq_signal(&ldlm_pools_thread->t_ctl_waitq);
 
         /*

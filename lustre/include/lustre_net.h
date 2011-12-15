@@ -984,6 +984,61 @@ struct ptlrpc_thread {
         struct lu_env *t_env;
 };
 
+static inline int thread_is_stopped(struct ptlrpc_thread *thread)
+{
+        return !!(thread->t_flags & SVC_STOPPED);
+}
+
+static inline int thread_is_stopping(struct ptlrpc_thread *thread)
+{
+        return !!(thread->t_flags & SVC_STOPPING);
+}
+
+static inline int thread_is_starting(struct ptlrpc_thread *thread)
+{
+        return !!(thread->t_flags & SVC_STARTING);
+}
+
+static inline int thread_is_running(struct ptlrpc_thread *thread)
+{
+        return !!(thread->t_flags & SVC_RUNNING);
+}
+
+static inline int thread_is_event(struct ptlrpc_thread *thread)
+{
+        return !!(thread->t_flags & SVC_EVENT);
+}
+
+static inline int thread_is_signal(struct ptlrpc_thread *thread)
+{
+        return !!(thread->t_flags & SVC_SIGNAL);
+}
+
+static inline void thread_clear_flags(struct ptlrpc_thread *thread, __u32 flags)
+{
+        thread->t_flags &= ~flags;
+}
+
+static inline void thread_set_flags(struct ptlrpc_thread *thread, __u32 flags)
+{
+        thread->t_flags = flags;
+}
+
+static inline void thread_add_flags(struct ptlrpc_thread *thread, __u32 flags)
+{
+        thread->t_flags |= flags;
+}
+
+static inline int thread_test_and_clear_flags(struct ptlrpc_thread *thread,
+                                              __u32 flags)
+{
+        if (thread->t_flags & flags) {
+                thread->t_flags &= ~flags;
+                return 1;
+        }
+        return 0;
+}
+
 /**
  * Request buffer descriptor structure.
  * This is a structure that contains one posted request buffer for service.
