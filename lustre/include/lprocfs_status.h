@@ -103,6 +103,16 @@ struct brw_stats {
         struct obd_histogram hist[BRW_LAST];
 };
 
+enum {
+        RENAME_SAMEDIR_SIZE = 0,
+        RENAME_CROSSDIR_SRC_SIZE,
+        RENAME_CROSSDIR_TGT_SIZE,
+        RENAME_LAST,
+};
+
+struct rename_stats {
+        struct obd_histogram hist[RENAME_LAST];
+};
 
 /* An lprocfs counter can be configured using the enum bit masks below.
  *

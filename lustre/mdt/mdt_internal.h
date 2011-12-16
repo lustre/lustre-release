@@ -172,6 +172,7 @@ struct mdt_device {
         cfs_proc_dir_entry_t      *mdt_proc_entry;
         struct lprocfs_stats      *mdt_stats;
         int                        mdt_sec_level;
+        struct rename_stats        mdt_rename_stats;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR     (2)
@@ -812,6 +813,8 @@ enum {
         LPROC_MDT_SETXATTR,
         LPROC_MDT_STATFS,
         LPROC_MDT_SYNC,
+        LPROC_MDT_SAMEDIR_RENAME,
+        LPROC_MDT_CROSSDIR_RENAME,
         LPROC_MDT_LAST,
 };
 void mdt_counter_incr(struct obd_export *exp, int opcode);
@@ -819,6 +822,9 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats);
 void lprocfs_mdt_init_vars(struct lprocfs_static_vars *lvars);
 int mdt_procfs_init(struct mdt_device *mdt, const char *name);
 int mdt_procfs_fini(struct mdt_device *mdt);
+void mdt_rename_counter_tally(struct mdt_thread_info *info,
+                              struct mdt_device *mdt, struct obd_export *exp,
+                              struct mdt_object *src, struct mdt_object *tgt);
 
 void mdt_time_start(const struct mdt_thread_info *info);
 void mdt_time_end(const struct mdt_thread_info *info, int idx);

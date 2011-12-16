@@ -77,6 +77,158 @@ enum {
 static const char *mdt_proc_names[LPROC_MDT_NR] = {
 };
 
+/**
+ * The rename stats output would be YAML formats, like
+ * rename_stats:
+ * - snapshot_time: 1234567890.123456
+ * - same_dir:
+ *     4kB: { samples: 1230, pct: 33, cum_pct: 45 }
+ *     8kB: { samples: 1242, pct: 33, cum_pct: 78 }
+ *     16kB: { samples: 132, pct: 3, cum_pct: 81 }
+ * - crossdir_src:
+ *     4kB: { samples: 123, pct: 33, cum_pct: 45 }
+ *     8kB: { samples: 124, pct: 33, cum_pct: 78 }
+ *     16kB: { samples: 12, pct: 3, cum_pct: 81 }
+ * - crossdir_tgt:
+ *     4kB: { samples: 123, pct: 33, cum_pct: 45 }
+ *     8kB: { samples: 124, pct: 33, cum_pct: 78 }
+ *     16kB: { samples: 12, pct: 3, cum_pct: 81 }
+ **/
+
+#define pct(a, b) (b ? a * 100 / b : 0)
+
+static void display_rename_stats(struct seq_file *seq, char *name,
+                                 struct obd_histogram *hist)
+{
+        unsigned long tot, t, cum = 0;
+        int i;
+
+        tot = lprocfs_oh_sum(hist);
+        if (tot > 0)
+                seq_printf(seq, "- %-15s\n", name);
+        /* dir size start from 4K, start i from 10(2^10) here */
+        for (i = 0; i < OBD_HIST_MAX; i++) {
+                t = hist->oh_buckets[i];
+                cum += t;
+                if (cum == 0)
+                        continue;
+
+                if (i < 10)
+                        seq_printf(seq, "%6s%d%s", " ", 1<< i, "bytes:");
+                else if (i < 20)
+                        seq_printf(seq, "%6s%d%s", " ", 1<<(i-10), "KB:");
+                else
+                        seq_printf(seq, "%6s%d%s", " ", 1<<(i-20), "MB:");
+
+                seq_printf(seq, " { sample: %3lu, pct: %3lu, cum_pct: %3lu }\n",
+                           t, pct(t, tot), pct(cum, tot));
+
+                if (cum == tot)
+                        break;
+        }
+}
+
+static void rename_stats_show(struct seq_file *seq,
+                              struct rename_stats *rename_stats)
+{
+        struct timeval now;
+
+        /* this sampling races with updates */
+        do_gettimeofday(&now);
+        seq_printf(seq, "rename_stats:\n");
+        seq_printf(seq, "- %-15s %lu.%lu\n", "snapshot_time:",
+                   now.tv_sec, now.tv_usec);
+
+        display_rename_stats(seq, "same_dir",
+                             &rename_stats->hist[RENAME_SAMEDIR_SIZE]);
+        display_rename_stats(seq, "crossdir_src",
+                             &rename_stats->hist[RENAME_CROSSDIR_SRC_SIZE]);
+        display_rename_stats(seq, "crossdir_tgt",
+                             &rename_stats->hist[RENAME_CROSSDIR_TGT_SIZE]);
+}
+
+#undef pct
+
+static int mdt_rename_stats_seq_show(struct seq_file *seq, void *v)
+{
+        struct mdt_device *mdt = seq->private;
+
+        rename_stats_show(seq, &mdt->mdt_rename_stats);
+
+        return 0;
+}
+
+static ssize_t mdt_rename_stats_seq_write(struct file *file, const char *buf,
+                                          size_t len, loff_t *off)
+{
+        struct seq_file *seq = file->private_data;
+        struct mdt_device *mdt = seq->private;
+        int i;
+
+        for (i = 0; i < RENAME_LAST; i++)
+                lprocfs_oh_clear(&mdt->mdt_rename_stats.hist[i]);
+
+        return len;
+}
+
+LPROC_SEQ_FOPS(mdt_rename_stats);
+
+static int lproc_mdt_attach_rename_seqstat(struct mdt_device *mdt)
+{
+        struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
+        struct obd_device *obd = ld->ld_obd;
+        int i;
+
+        for (i = 0; i < RENAME_LAST; i++)
+                spin_lock_init(&mdt->mdt_rename_stats.hist[i].oh_lock);
+
+        return lprocfs_obd_seq_create(obd, "rename_stats", 0444,
+                                      &mdt_rename_stats_fops, mdt);
+}
+
+void mdt_rename_counter_tally(struct mdt_thread_info *info,
+                              struct mdt_device *mdt,
+                              struct obd_export *exp,
+                              struct mdt_object *src,
+                              struct mdt_object *tgt)
+{
+        struct md_attr *ma = &info->mti_attr;
+        struct rename_stats *rstats = &mdt->mdt_rename_stats;
+        int rc;
+
+        ma->ma_need = MA_INODE;
+        ma->ma_valid = 0;
+        rc = mo_attr_get(info->mti_env, mdt_object_child(src), ma);
+        if (rc) {
+                CERROR("%s: "DFID" attr_get, rc = %d\n",
+                       exp->exp_obd->obd_name, PFID(mdt_object_fid(src)), rc);
+                return;
+        }
+
+        if (src == tgt) {
+                mdt_counter_incr(exp, LPROC_MDT_SAMEDIR_RENAME);
+                lprocfs_oh_tally_log2(&rstats->hist[RENAME_SAMEDIR_SIZE],
+                                      (unsigned int)ma->ma_attr.la_size);
+                return;
+        }
+
+        mdt_counter_incr(exp, LPROC_MDT_CROSSDIR_RENAME);
+        lprocfs_oh_tally_log2(&rstats->hist[RENAME_CROSSDIR_SRC_SIZE],
+                              (unsigned int)ma->ma_attr.la_size);
+
+        ma->ma_need = MA_INODE;
+        ma->ma_valid = 0;
+        rc = mo_attr_get(info->mti_env, mdt_object_child(tgt), ma);
+        if (rc) {
+                CERROR("%s: "DFID" attr_get, rc = %d\n",
+                       exp->exp_obd->obd_name, PFID(mdt_object_fid(tgt)), rc);
+                return;
+        }
+
+        lprocfs_oh_tally_log2(&rstats->hist[RENAME_CROSSDIR_TGT_SIZE],
+                              (unsigned int)ma->ma_attr.la_size);
+}
+
 int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 {
         struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
@@ -117,6 +269,11 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
         rc = lprocfs_alloc_md_stats(obd, LPROC_MDT_LAST);
         if (rc == 0)
                 mdt_stats_counter_init(obd->md_stats);
+
+        rc = lproc_mdt_attach_rename_seqstat(mdt);
+        if (rc)
+                CERROR("%s: MDT can not create rename stats rc = %d\n",
+                       obd->obd_name, rc);
 
         RETURN(rc);
 }
@@ -851,4 +1008,8 @@ void mdt_stats_counter_init(struct lprocfs_stats *stats)
         lprocfs_counter_init(stats, LPROC_MDT_SETXATTR, 0, "setxattr", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_STATFS, 0, "statfs", "reqs");
         lprocfs_counter_init(stats, LPROC_MDT_SYNC, 0, "sync", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_SAMEDIR_RENAME, 0,
+                             "samedir_rename", "reqs");
+        lprocfs_counter_init(stats, LPROC_MDT_CROSSDIR_RENAME, 0,
+                             "crossdir_rename", "reqs");
 }
