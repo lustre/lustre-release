@@ -508,10 +508,7 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
                 GOTO(out, rc);
 
         if (S_ISREG(inode->i_mode)) {
-                struct ll_inode_info *lli = ll_i2info(inode);
-                struct lov_stripe_md *lsm = NULL;
-                lsm = lli->lli_smd;
-                if (lsm == NULL)
+                if (ll_i2info(inode)->lli_smd == NULL)
                         rc2 = -1;
         } else if (S_ISDIR(inode->i_mode)) {
                 rc2 = ll_dir_getstripe(inode, &lmm, &lmmsize, &request);

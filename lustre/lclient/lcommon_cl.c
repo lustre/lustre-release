@@ -1158,13 +1158,15 @@ struct cl_page *ccc_vmpage_page_transient(cfs_page_t *vmpage)
 }
 
 /**
- * Initializes or updates CLIO part when new meta-data arrives from the
- * server.
+ * Initialize or update CLIO structures for regular files when new
+ * meta-data arrives from the server.
  *
- *     - allocates cl_object if necessary,
- *     - updated layout, if object was already here.
+ * \param inode regular file inode
+ * \param md    new file metadata from MDS
+ * - allocates cl_object if necessary,
+ * - updated layout, if object was already here.
  */
-int cl_inode_init(struct inode *inode, struct lustre_md *md)
+int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
 {
         struct lu_env        *env;
         struct cl_inode_info *lli;
@@ -1181,9 +1183,7 @@ int cl_inode_init(struct inode *inode, struct lustre_md *md)
         int refcheck;
 
         LASSERT(md->body->valid & OBD_MD_FLID);
-
-        if (!S_ISREG(cl_inode_mode(inode)))
-                return 0;
+        LASSERT(S_ISREG(cl_inode_mode(inode)));
 
         env = cl_env_get(&refcheck);
         if (IS_ERR(env))

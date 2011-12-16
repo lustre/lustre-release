@@ -58,8 +58,6 @@ static struct inode *ll_alloc_inode(struct super_block *sb)
                 return NULL;
 
         inode_init_once(&lli->lli_vfs_inode);
-        ll_lli_init(lli);
-
         return &lli->lli_vfs_inode;
 }
 

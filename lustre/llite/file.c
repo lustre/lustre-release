@@ -318,7 +318,8 @@ int ll_file_release(struct inode *inode, struct file *file)
         /* The last ref on @file, maybe not the the owner pid of statahead.
          * Different processes can open the same dir, "ll_opendir_key" means:
          * it is me that should stop the statahead thread. */
-        if (lli->lli_opendir_key == fd && lli->lli_opendir_pid != 0)
+        if (S_ISDIR(inode->i_mode) && lli->lli_opendir_key == fd &&
+            lli->lli_opendir_pid != 0)
                 ll_stop_statahead(inode, lli->lli_opendir_key);
 
         if (inode->i_sb->s_root == file->f_dentry) {
@@ -327,9 +328,11 @@ int ll_file_release(struct inode *inode, struct file *file)
                 RETURN(0);
         }
 
-        if (lsm)
-                lov_test_and_clear_async_rc(lsm);
-        lli->lli_async_rc = 0;
+        if (!S_ISDIR(inode->i_mode)) {
+                if (lsm)
+                        lov_test_and_clear_async_rc(lsm);
+                lli->lli_async_rc = 0;
+        }
 
         rc = ll_md_close(sbi->ll_md_exp, inode, file);
 
@@ -519,8 +522,8 @@ int ll_file_open(struct inode *inode, struct file *file)
         fd->fd_file = file;
         if (S_ISDIR(inode->i_mode)) {
                 cfs_spin_lock(&lli->lli_sa_lock);
-                if (lli->lli_opendir_key == NULL && lli->lli_opendir_pid == 0 &&
-                    lli->lli_sai == NULL) {
+                if (lli->lli_opendir_key == NULL && lli->lli_sai == NULL &&
+                    lli->lli_opendir_pid == 0) {
                         lli->lli_opendir_key = fd;
                         lli->lli_opendir_pid = cfs_curproc_pid();
                         opendir_set = 1;
@@ -1916,6 +1919,8 @@ int ll_flush(struct file *file)
         struct lov_stripe_md *lsm = lli->lli_smd;
         int rc, err;
 
+        LASSERT(!S_ISDIR(inode->i_mode));
+
         /* the application should know write failure already. */
         if (lli->lli_write_rc)
                 return 0;
@@ -1952,14 +1957,16 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 
         /* catch async errors that were recorded back when async writeback
          * failed for pages in this mapping. */
-        err = lli->lli_async_rc;
-        lli->lli_async_rc = 0;
-        if (rc == 0)
-                rc = err;
-        if (lsm) {
-                err = lov_test_and_clear_async_rc(lsm);
+        if (!S_ISDIR(inode->i_mode)) {
+                err = lli->lli_async_rc;
+                lli->lli_async_rc = 0;
                 if (rc == 0)
                         rc = err;
+                if (lsm) {
+                        err = lov_test_and_clear_async_rc(lsm);
+                        if (rc == 0)
+                                rc = err;
+                }
         }
 
         oc = ll_mdscapa_get(inode);
@@ -1998,7 +2005,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                         rc = err;
                 OBDO_FREE(oinfo->oi_oa);
                 OBD_FREE_PTR(oinfo);
-                lli->lli_write_rc = err < 0 ? : 0;
+                lli->lli_write_rc = rc < 0 ? rc : 0;
         }
 
         RETURN(rc);

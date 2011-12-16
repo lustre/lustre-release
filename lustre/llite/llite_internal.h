@@ -120,96 +120,135 @@ enum lli_flags {
          * be sent to MDS. */
         LLIF_SOM_DIRTY          = (1 << 3),
         /* File is contented */
-        LLIF_CONTENDED         = (1 << 4),
+        LLIF_CONTENDED          = (1 << 4),
         /* Truncate uses server lock for this file */
-        LLIF_SRVLOCK           = (1 << 5)
+        LLIF_SRVLOCK            = (1 << 5),
 
 };
 
 struct ll_inode_info {
-        int                     lli_inode_magic;
-        cfs_semaphore_t         lli_size_sem;           /* protect open and change size */
-        void                   *lli_size_sem_owner;
-        cfs_semaphore_t         lli_write_sem;
-        cfs_rw_semaphore_t      lli_trunc_sem;
-        char                   *lli_symlink_name;
-        __u64                   lli_maxbytes;
-        __u64                   lli_ioepoch;
-        unsigned long           lli_flags;
+        __u32                           lli_inode_magic;
+        __u32                           lli_flags;
+        __u64                           lli_ioepoch;
 
-        /* this lock protects posix_acl, pending_write_llaps, mmap_cnt */
-        cfs_spinlock_t          lli_lock;
-        cfs_list_t              lli_close_list;
+        cfs_spinlock_t                  lli_lock;
+        struct posix_acl               *lli_posix_acl;
+
+        cfs_hlist_head_t               *lli_remote_perms;
+        cfs_semaphore_t                 lli_rmtperm_sem;
+
+        /* identifying fields for both metadata and data stacks. */
+        struct lu_fid                   lli_fid;
+        /* Parent fid for accessing default stripe data on parent directory
+         * for allocating OST objects after a mknod() and later open-by-FID. */
+        struct lu_fid                   lli_pfid;
+
+        cfs_list_t                      lli_close_list;
+        cfs_list_t                      lli_oss_capas;
+        /* open count currently used by capability only, indicate whether
+         * capability needs renewal */
+        cfs_atomic_t                    lli_open_count;
+        struct obd_capa                *lli_mds_capa;
+        cfs_time_t                      lli_rmtperm_time;
+
         /* handle is to be sent to MDS later on done_writing and setattr.
          * Open handle data are needed for the recovery to reconstruct
          * the inode state on the MDS. XXX: recovery is not ready yet. */
-        struct obd_client_handle *lli_pending_och;
+        struct obd_client_handle       *lli_pending_och;
 
-        /* for writepage() only to communicate to fsync */
-        int                     lli_async_rc;
-        int                     lli_write_rc;
-
-        struct posix_acl       *lli_posix_acl;
-
-        /* remote permission hash */
-        cfs_hlist_head_t       *lli_remote_perms;
-        unsigned long           lli_rmtperm_utime;
-        cfs_semaphore_t         lli_rmtperm_sem;
-
-        cfs_list_t              lli_dead_list;
-
-        cfs_semaphore_t         lli_och_sem; /* Protects access to och pointers
-                                                and their usage counters, also
-                                                atomicity of check-update of
-                                                lli_smd */
         /* We need all three because every inode may be opened in different
-           modes */
-        struct obd_client_handle *lli_mds_read_och;
-        __u64                   lli_open_fd_read_count;
-        struct obd_client_handle *lli_mds_write_och;
-        __u64                   lli_open_fd_write_count;
-        struct obd_client_handle *lli_mds_exec_och;
-        __u64                   lli_open_fd_exec_count;
+         * modes */
+        struct obd_client_handle       *lli_mds_read_och;
+        struct obd_client_handle       *lli_mds_write_och;
+        struct obd_client_handle       *lli_mds_exec_och;
+        __u64                           lli_open_fd_read_count;
+        __u64                           lli_open_fd_write_count;
+        __u64                           lli_open_fd_exec_count;
+        /* Protects access to och pointers and their usage counters, also
+         * atomicity of check-update of lli_smd */
+        cfs_semaphore_t                 lli_och_sem;
 
-        struct inode            lli_vfs_inode;
+        struct inode                    lli_vfs_inode;
 
-        /* identifying fields for both metadata and data stacks. */
-        struct lu_fid           lli_fid;
-        /* Parent fid for accessing default stripe data on parent directory
-         * for allocating OST objects after a mknod() and later open-by-FID. */
-        struct lu_fid           lli_pfid;
-        struct lov_stripe_md   *lli_smd;
-
-        /* fid capability */
-        /* open count currently used by capability only, indicate whether
-         * capability needs renewal */
-        cfs_atomic_t            lli_open_count;
-        struct obd_capa        *lli_mds_capa;
-        cfs_list_t              lli_oss_capas;
-
-        /* metadata statahead */
-        /* protect statahead stuff: lli_opendir_pid, lli_opendir_key, lli_sai,
-         * and so on. */
-        cfs_spinlock_t          lli_sa_lock;
-        /*
-         * "opendir_pid" is the token when lookup/revalid -- I am the owner of
-         * dir statahead.
-         */
-        pid_t                   lli_opendir_pid;
-        /*
-         * since parent-child threads can share the same @file struct,
-         * "opendir_key" is the token when dir close for case of parent exit
-         * before child -- it is me should cleanup the dir readahead. */
-        void                   *lli_opendir_key;
-        struct ll_statahead_info *lli_sai;
-        __u64                   lli_sa_pos;
-        struct cl_object       *lli_clob;
         /* the most recent timestamps obtained from mds */
-        struct ost_lvb          lli_lvb;
-        /**
-         * serialize normal readdir and statahead-readdir
+        struct ost_lvb                  lli_lvb;
+
+        /* Try to make the d::member and f::member are aligned. Before using
+         * these members, make clear whether it is directory or not. */
+        union {
+                /* for directory */
+                struct {
+                        /* serialize normal readdir and statahead-readdir. */
+                        cfs_semaphore_t                 d_readdir_sem;
+
+                        /* metadata statahead */
+                        /* since parent-child threads can share the same @file
+                         * struct, "opendir_key" is the token when dir close for
+                         * case of parent exit before child -- it is me should
+                         * cleanup the dir readahead. */
+                        void                           *d_opendir_key;
+                        struct ll_statahead_info       *d_sai;
+                        __u64                           d_sa_pos;
+                        struct posix_acl               *d_def_acl;
+                        /* protect statahead stuff. */
+                        cfs_spinlock_t                  d_sa_lock;
+                        /* "opendir_pid" is the token when lookup/revalid
+                         * -- I am the owner of dir statahead. */
+                        pid_t                           d_opendir_pid;
+                } d;
+
+#define lli_readdir_sem         u.d.d_readdir_sem
+#define lli_opendir_key         u.d.d_opendir_key
+#define lli_sai                 u.d.d_sai
+#define lli_sa_pos              u.d.d_sa_pos
+#define lli_def_acl             u.d.d_def_acl
+#define lli_sa_lock             u.d.d_sa_lock
+#define lli_opendir_pid         u.d.d_opendir_pid
+
+                /* for non-directory */
+                struct {
+                        cfs_semaphore_t                 f_size_sem;
+                        void                           *f_size_sem_owner;
+                        char                           *f_symlink_name;
+                        __u64                           f_maxbytes;
+                        /*
+                         * cfs_rw_semaphore_t {
+                         *    signed long      count;     // align u.d.d_def_acl
+                         *    cfs_spinlock_t   wait_lock; // align u.d.d_sa_lock
+                         *    struct list_head wait_list;
+                         * }
+                         */
+                        cfs_rw_semaphore_t              f_trunc_sem;
+                        cfs_semaphore_t                 f_write_sem;
+
+                        /* for writepage() only to communicate to fsync */
+                        int                             f_async_rc;
+                        int                             f_write_rc;
+                } f;
+
+#define lli_size_sem            u.f.f_size_sem
+#define lli_size_sem_owner      u.f.f_size_sem_owner
+#define lli_symlink_name        u.f.f_symlink_name
+#define lli_maxbytes            u.f.f_maxbytes
+#define lli_trunc_sem           u.f.f_trunc_sem
+#define lli_write_sem           u.f.f_write_sem
+#define lli_async_rc            u.f.f_async_rc
+#define lli_write_rc            u.f.f_write_rc
+
+        } u;
+
+        /* XXX: For following frequent used members, although they maybe special
+         *      used for non-directory object, it is some time-wasting to check
+         *      whether the object is directory or not before using them. On the
+         *      other hand, currently, sizeof(f) > sizeof(d), it cannot reduce
+         *      the "ll_inode_info" size even if moving those members into u.f.
+         *      So keep them out side.
+         *
+         *      In the future, if more members are added only for directory,
+         *      some of the following members can be moved into u.f.
          */
-        cfs_semaphore_t         lli_readdir_sem;
+        struct lov_stripe_md           *lli_smd;
+        struct cl_object               *lli_clob;
 };
 
 /*
@@ -1088,12 +1127,8 @@ extern struct lu_device_type vvp_device_type;
 /**
  * Common IO arguments for various VFS I/O interfaces.
  */
-
 int cl_sb_init(struct super_block *sb);
 int cl_sb_fini(struct super_block *sb);
-int cl_inode_init(struct inode *inode, struct lustre_md *md);
-void cl_inode_fini(struct inode *inode);
-
 enum cl_lock_mode  vvp_mode_from_vma(struct vm_area_struct *vma);
 void ll_io_init(struct cl_io *io, const struct file *file, int write);
 

@@ -151,7 +151,7 @@ void llu_update_inode(struct inode *inode, struct lustre_md *md)
 
         if (lsm != NULL) {
                 if (lli->lli_smd == NULL) {
-                        cl_inode_init(inode, md);
+                        cl_file_inode_init(inode, md);
                         lli->lli_smd = lsm;
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)

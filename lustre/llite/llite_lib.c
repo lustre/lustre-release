@@ -854,28 +854,49 @@ next:
 void ll_lli_init(struct ll_inode_info *lli)
 {
         lli->lli_inode_magic = LLI_INODE_MAGIC;
-        cfs_sema_init(&lli->lli_size_sem, 1);
-        cfs_sema_init(&lli->lli_write_sem, 1);
-        cfs_init_rwsem(&lli->lli_trunc_sem);
         lli->lli_flags = 0;
-        lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+        lli->lli_ioepoch = 0;
         cfs_spin_lock_init(&lli->lli_lock);
-        CFS_INIT_LIST_HEAD(&lli->lli_close_list);
-        lli->lli_inode_magic = LLI_INODE_MAGIC;
-        cfs_sema_init(&lli->lli_och_sem, 1);
-        lli->lli_mds_read_och = lli->lli_mds_write_och = NULL;
-        lli->lli_mds_exec_och = NULL;
-        lli->lli_open_fd_read_count = lli->lli_open_fd_write_count = 0;
-        lli->lli_open_fd_exec_count = 0;
-        CFS_INIT_LIST_HEAD(&lli->lli_dead_list);
+        lli->lli_posix_acl = NULL;
         lli->lli_remote_perms = NULL;
-        lli->lli_rmtperm_utime = 0;
         cfs_sema_init(&lli->lli_rmtperm_sem, 1);
-        CFS_INIT_LIST_HEAD(&lli->lli_oss_capas);
-        cfs_spin_lock_init(&lli->lli_sa_lock);
-        lli->lli_clob = NULL;
-        cfs_sema_init(&lli->lli_readdir_sem, 1);
+        /* Do not set lli_fid, it has been initialized already. */
         fid_zero(&lli->lli_pfid);
+        CFS_INIT_LIST_HEAD(&lli->lli_close_list);
+        CFS_INIT_LIST_HEAD(&lli->lli_oss_capas);
+        cfs_atomic_set(&lli->lli_open_count, 0);
+        lli->lli_mds_capa = NULL;
+        lli->lli_rmtperm_time = 0;
+        lli->lli_pending_och = NULL;
+        lli->lli_mds_read_och = NULL;
+        lli->lli_mds_write_och = NULL;
+        lli->lli_mds_exec_och = NULL;
+        lli->lli_open_fd_read_count = 0;
+        lli->lli_open_fd_write_count = 0;
+        lli->lli_open_fd_exec_count = 0;
+        cfs_sema_init(&lli->lli_och_sem, 1);
+        lli->lli_smd = NULL;
+        lli->lli_clob = NULL;
+
+        LASSERT(lli->lli_vfs_inode.i_mode != 0);
+        if (S_ISDIR(lli->lli_vfs_inode.i_mode)) {
+                cfs_sema_init(&lli->lli_readdir_sem, 1);
+                lli->lli_opendir_key = NULL;
+                lli->lli_sai = NULL;
+                lli->lli_sa_pos = 0;
+                lli->lli_def_acl = NULL;
+                cfs_spin_lock_init(&lli->lli_sa_lock);
+                lli->lli_opendir_pid = 0;
+        } else {
+                cfs_sema_init(&lli->lli_size_sem, 1);
+                lli->lli_size_sem_owner = NULL;
+                lli->lli_symlink_name = NULL;
+                lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
+                cfs_init_rwsem(&lli->lli_trunc_sem);
+                cfs_sema_init(&lli->lli_write_sem, 1);
+                lli->lli_async_rc = 0;
+                lli->lli_write_rc = 0;
+        }
 }
 
 static inline int ll_bdi_register(struct backing_dev_info *bdi)
@@ -1103,8 +1124,8 @@ void ll_clear_inode(struct inode *inode)
 
         if (S_ISDIR(inode->i_mode)) {
                 /* these should have been cleared in ll_file_release */
-                LASSERT(lli->lli_sai == NULL);
                 LASSERT(lli->lli_opendir_key == NULL);
+                LASSERT(lli->lli_sai == NULL);
                 LASSERT(lli->lli_opendir_pid == 0);
         }
 
@@ -1123,7 +1144,7 @@ void ll_clear_inode(struct inode *inode)
         if (lli->lli_mds_read_och)
                 ll_md_real_close(inode, FMODE_READ);
 
-        if (lli->lli_symlink_name) {
+        if (S_ISLNK(inode->i_mode) && lli->lli_symlink_name) {
                 OBD_FREE(lli->lli_symlink_name,
                          strlen(lli->lli_symlink_name) + 1);
                 lli->lli_symlink_name = NULL;
@@ -1347,7 +1368,8 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         UNLOCK_INODE_MUTEX(inode);
         if (ia_valid & ATTR_SIZE)
                 UP_WRITE_I_ALLOC_SEM(inode);
-        cfs_down_write(&lli->lli_trunc_sem);
+        if (!S_ISDIR(inode->i_mode))
+                cfs_down_write(&lli->lli_trunc_sem);
         LOCK_INODE_MUTEX(inode);
         if (ia_valid & ATTR_SIZE)
                 DOWN_WRITE_I_ALLOC_SEM(inode);
@@ -1388,7 +1410,8 @@ out:
                         rc1 = ll_setattr_done_writing(inode, op_data, mod);
                 ll_finish_md_op_data(op_data);
         }
-        cfs_up_write(&lli->lli_trunc_sem);
+        if (!S_ISDIR(inode->i_mode))
+                cfs_up_write(&lli->lli_trunc_sem);
         return rc ? rc : rc1;
 }
 
@@ -1519,6 +1542,8 @@ void ll_inode_size_lock(struct inode *inode, int lock_lsm)
         struct ll_inode_info *lli;
         struct lov_stripe_md *lsm;
 
+        LASSERT(!S_ISDIR(inode->i_mode));
+
         lli = ll_i2info(inode);
         LASSERT(lli->lli_size_sem_owner != current);
         cfs_down(&lli->lli_size_sem);
@@ -1556,6 +1581,8 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
         LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
         if (lsm != NULL) {
+                LASSERT(S_ISREG(inode->i_mode));
+
                 cfs_down(&lli->lli_och_sem);
                 if (lli->lli_smd == NULL) {
                         if (lsm->lsm_magic != LOV_MAGIC_V1 &&
@@ -1565,11 +1592,11 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         }
                         CDEBUG(D_INODE, "adding lsm %p to inode %lu/%u(%p)\n",
                                lsm, inode->i_ino, inode->i_generation, inode);
-                        /* cl_inode_init must go before lli_smd or a race is
-                         * possible where client thinks the file has stripes,
+                        /* cl_file_inode_init must go before lli_smd or a race
+                         * is possible where client thinks the file has stripes,
                          * but lov raid0 is not setup yet and parallel e.g.
                          * glimpse would try to use uninitialized lov */
-                        cl_inode_init(inode, md);
+                        cl_file_inode_init(inode, md);
                         cfs_spin_lock(&lli->lli_lock);
                         lli->lli_smd = lsm;
                         cfs_spin_unlock(&lli->lli_lock);
@@ -1685,7 +1712,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                 if (lli->lli_flags & (LLIF_DONE_WRITING |
                                                       LLIF_EPOCH_PENDING |
                                                       LLIF_SOM_DIRTY)) {
-                                        CERROR("ino %lu flags %lu still has "
+                                        CERROR("ino %lu flags %u still has "
                                                "size authority! do not trust "
                                                "the size got from MDS\n",
                                                inode->i_ino, lli->lli_flags);
@@ -1728,8 +1755,6 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode="DFID"(%p)\n",
                PFID(&lli->lli_fid), inode);
-
-        ll_lli_init(lli);
 
         LASSERT(!lli->lli_smd);
 

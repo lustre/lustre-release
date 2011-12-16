@@ -236,7 +236,7 @@ again:
                 lrp->lrp_fsgid       = perm->rp_fsgid;
                 cfs_hlist_add_head(&lrp->lrp_list, head);
         }
-        lli->lli_rmtperm_utime = jiffies;
+        lli->lli_rmtperm_time = cfs_time_current();
         cfs_spin_unlock(&lli->lli_lock);
 
         CDEBUG(D_SEC, "new remote perm@%p: %u/%u/%u/%u - %#x\n",
@@ -253,12 +253,12 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
         struct ptlrpc_request *req = NULL;
         struct mdt_remote_perm *perm;
         struct obd_capa *oc;
-        unsigned long utime;
+        cfs_time_t save;
         int i = 0, rc;
         ENTRY;
 
         do {
-                utime = lli->lli_rmtperm_utime;
+                save = lli->lli_rmtperm_time;
                 rc = do_check_remote_perm(lli, mask);
                 if (!rc || (rc != -ENOENT && i))
                         break;
@@ -267,7 +267,7 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
 
                 cfs_down(&lli->lli_rmtperm_sem);
                 /* check again */
-                if (utime != lli->lli_rmtperm_utime) {
+                if (save != lli->lli_rmtperm_time) {
                         rc = do_check_remote_perm(lli, mask);
                         if (!rc || (rc != -ENOENT && i)) {
                                 cfs_up(&lli->lli_rmtperm_sem);

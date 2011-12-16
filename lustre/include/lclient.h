@@ -358,7 +358,7 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
 
 struct cl_page *ccc_vmpage_page_transient(cfs_page_t *vmpage);
 int ccc_object_invariant(const struct cl_object *obj);
-int cl_inode_init(struct inode *inode, struct lustre_md *md);
+int cl_file_inode_init(struct inode *inode, struct lustre_md *md);
 void cl_inode_fini(struct inode *inode);
 int cl_local_size(struct inode *inode);
 
