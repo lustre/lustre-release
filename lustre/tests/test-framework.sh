@@ -37,8 +37,13 @@ if [ -f "$EXCEPT_LIST_FILE" ]; then
     . $EXCEPT_LIST_FILE
 fi
 
-[ -z "$MODPROBECONF" -a -f /etc/modprobe.conf ] && MODPROBECONF=/etc/modprobe.conf
-[ -z "$MODPROBECONF" -a -f /etc/modprobe.d/Lustre ] && MODPROBECONF=/etc/modprobe.d/Lustre
+# check config files for options in decreasing order of preference
+[ -z "$MODPROBECONF" -a -f /etc/modprobe.d/lustre.conf ] &&
+    MODPROBECONF=/etc/modprobe.d/lustre.conf
+[ -z "$MODPROBECONF" -a -f /etc/modprobe.d/Lustre ] &&
+    MODPROBECONF=/etc/modprobe.d/Lustre
+[ -z "$MODPROBECONF" -a -f /etc/modprobe.conf ] &&
+    MODPROBECONF=/etc/modprobe.conf
 
 assert_DIR () {
     local failed=""
@@ -607,12 +612,12 @@ set_default_debug_nodes () {
     local nodes=$1
 
     if [[ ,$nodes, = *,$HOSTNAME,* ]]; then
-	nodes=$(exclude_items_from_list "$nodes" "$HOSTNAME")
-	set_default_debug
+        nodes=$(exclude_items_from_list "$nodes" "$HOSTNAME")
+            set_default_debug
     fi
 
     [[ -n $nodes ]] && do_rpc_nodes $nodes set_default_debug \
-	\\\"$PTLDEBUG\\\" \\\"$SUBSYSTEM\\\" $DEBUG_SIZE || true
+        \\\"$PTLDEBUG\\\" \\\"$SUBSYSTEM\\\" $DEBUG_SIZE || true
 }
 
 set_default_debug_facet () {
