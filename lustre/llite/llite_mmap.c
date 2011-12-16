@@ -603,7 +603,7 @@ int ll_file_mmap(struct file *file, struct vm_area_struct * vma)
                 vma->vm_ops = &ll_file_vm_ops;
                 vma->vm_ops->open(vma);
                 /* update the inode's size and mtime */
-                rc = cl_glimpse_size(inode);
+                rc = ll_glimpse_size(inode);
         }
 
         RETURN(rc);

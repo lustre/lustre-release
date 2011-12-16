@@ -469,7 +469,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                    2.4 and
                    vfs_getattr_it->ll_getattr()->ll_inode_revalidate_it() in 2.6
                    Everybody else who needs correct file size would call
-                   cl_glimpse_size or some equivalent themselves anyway.
+                   ll_glimpse_size or some equivalent themselves anyway.
                    Also see bug 7198. */
                 ll_dops_init(*de, 1, 1);
                 *de = ll_find_alias(inode, *de);

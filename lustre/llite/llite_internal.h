@@ -172,6 +172,7 @@ struct ll_inode_info {
 
         /* the most recent timestamps obtained from mds */
         struct ost_lvb                  lli_lvb;
+        cfs_spinlock_t                  lli_agl_lock;
 
         /* Try to make the d::member and f::member are aligned. Before using
          * these members, make clear whether it is directory or not. */
@@ -224,6 +225,11 @@ struct ll_inode_info {
                         /* for writepage() only to communicate to fsync */
                         int                             f_async_rc;
                         int                             f_write_rc;
+
+                        cfs_rw_semaphore_t              f_glimpse_sem;
+                        cfs_time_t                      f_glimpse_time;
+                        cfs_list_t                      f_agl_list;
+                        __u64                           f_agl_index;
                 } f;
 
 #define lli_size_sem            u.f.f_size_sem
@@ -234,6 +240,10 @@ struct ll_inode_info {
 #define lli_write_sem           u.f.f_write_sem
 #define lli_async_rc            u.f.f_async_rc
 #define lli_write_rc            u.f.f_write_rc
+#define lli_glimpse_sem         u.f.f_glimpse_sem
+#define lli_glimpse_time        u.f.f_glimpse_time
+#define lli_agl_list            u.f.f_agl_list
+#define lli_agl_index           u.f.f_agl_index
 
         } u;
 
@@ -369,6 +379,7 @@ enum stats_track_type {
 #define LL_SBI_SOM_PREVIEW     0x1000 /* SOM preview mount option */
 #define LL_SBI_32BIT_API       0x2000 /* generate 32 bit inodes. */
 #define LL_SBI_64BIT_HASH      0x4000 /* support 64-bits dir hash/offset */
+#define LL_SBI_AGL_ENABLED     0x8000 /* enable agl */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
@@ -447,8 +458,8 @@ struct ll_sb_info {
         unsigned int              ll_offset_process_count;
         struct ll_rw_process_info ll_rw_offset_info[LL_OFFSET_HIST_MAX];
         unsigned int              ll_rw_offset_entry_count;
-        enum stats_track_type     ll_stats_track_type;
         int                       ll_stats_track_id;
+        enum stats_track_type     ll_stats_track_type;
         int                       ll_rw_stats_on;
 
         /* metadata stat-ahead */
@@ -457,6 +468,7 @@ struct ll_sb_info {
                                                   * count */
         atomic_t                  ll_sa_wrong;   /* statahead thread stopped for
                                                   * low hit ratio */
+        atomic_t                  ll_agl_total;  /* AGL thread started count */
 
         dev_t                     ll_sdev_orig; /* save s_dev before assign for
                                                  * clustred nfs */
@@ -1196,12 +1208,15 @@ struct ll_statahead_info {
         unsigned int            sai_skip_hidden;/* skipped hidden dentry count */
         unsigned int            sai_ls_all:1,   /* "ls -al", do stat-ahead for
                                                  * hidden entries */
-                                sai_in_readpage:1;/* statahead is in readdir()*/
+                                sai_in_readpage:1,/* statahead is in readdir()*/
+                                sai_agl_valid:1;/* AGL is valid for the dir */
         cfs_waitq_t             sai_waitq;      /* stat-ahead wait queue */
         struct ptlrpc_thread    sai_thread;     /* stat-ahead thread */
+        struct ptlrpc_thread    sai_agl_thread; /* AGL thread */
         cfs_list_t              sai_entries_sent;     /* entries sent out */
         cfs_list_t              sai_entries_received; /* entries returned */
         cfs_list_t              sai_entries_stated;   /* entries stated */
+        cfs_list_t              sai_entries_agl; /* AGL entries to be sent */
         cfs_list_t              sai_cache[LL_SA_CACHE_SIZE];
         cfs_spinlock_t          sai_cache_lock[LL_SA_CACHE_SIZE];
         cfs_atomic_t            sai_cache_count;      /* entry count in cache */
@@ -1210,6 +1225,18 @@ struct ll_statahead_info {
 int do_statahead_enter(struct inode *dir, struct dentry **dentry,
                        int only_unplug);
 void ll_stop_statahead(struct inode *dir, void *key);
+
+static inline int ll_glimpse_size(struct inode *inode)
+{
+        struct ll_inode_info *lli = ll_i2info(inode);
+        int rc;
+
+        cfs_down_read(&lli->lli_glimpse_sem);
+        rc = cl_glimpse_size(inode);
+        lli->lli_glimpse_time = cfs_time_current();
+        cfs_up_read(&lli->lli_glimpse_sem);
+        return rc;
+}
 
 static inline void
 ll_statahead_mark(struct inode *dir, struct dentry *dentry)
