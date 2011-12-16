@@ -1277,6 +1277,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 mdt_counter_incr(req->rq_export, LPROC_MDT_RENAME);
                 if (mnew)
                         mdt_handle_last_unlink(info, mnew, ma);
+
+                mdt_rename_counter_tally(info, info->mti_mdt, req->rq_export,
+                                         msrcdir, mtgtdir);
         }
 
         EXIT;
