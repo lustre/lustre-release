@@ -261,7 +261,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         ping_evictor_start();
 
-        LCONSOLE_INFO("MGS %s started\n", obd->obd_name);
+        CDEBUG(D_INFO, "MGS %s started\n", obd->obd_name);
 
         RETURN(0);
 

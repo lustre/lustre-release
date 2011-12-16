@@ -1467,7 +1467,8 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                         sptlrpc_import_sec_adapt_inplace(imp, sec, &sf);
                         GOTO(out, rc);
                 }
-        } else if (sptlrpc_flavor2name_base(sf.sf_rpc) != SPTLRPC_FLVR_NULL) {
+        } else if (SPTLRPC_FLVR_BASE(sf.sf_rpc) !=
+                   SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_NULL)) {
                 LCONSOLE_INFO("import %s->%s netid %x: select flavor %s\n",
                               imp->imp_obd->obd_name,
                               obd_uuid2str(&conn->c_remote_uuid),

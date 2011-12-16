@@ -3047,7 +3047,7 @@ int __init lov_init(void)
         /* print an address of _any_ initialized kernel symbol from this
          * module, to allow debugging with gdb that doesn't support data
          * symbols from modules.*/
-        CDEBUG(D_CONSOLE, "Lustre LOV module (%p).\n", &lov_caches);
+        CDEBUG(D_INFO, "Lustre LOV module (%p).\n", &lov_caches);
 
         rc = lu_kmem_init(lov_caches);
         if (rc)

@@ -4656,7 +4656,7 @@ int __init osc_init(void)
         /* print an address of _any_ initialized kernel symbol from this
          * module, to allow debugging with gdb that doesn't support data
          * symbols from modules.*/
-        CDEBUG(D_CONSOLE, "Lustre OSC module (%p).\n", &osc_caches);
+        CDEBUG(D_INFO, "Lustre OSC module (%p).\n", &osc_caches);
 
         rc = lu_kmem_init(osc_caches);
 
