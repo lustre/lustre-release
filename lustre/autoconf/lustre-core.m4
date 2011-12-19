@@ -1924,6 +1924,24 @@ LB_LINUX_TRY_COMPILE([
 
 # 2.6.32
 
+# 2.6.32 changes cache_detail's member cache_request to cache_upcall
+# in kernel commit bc74b4f5e63a09fb78e245794a0de1e5a2716bbe
+AC_DEFUN([LC_CACHE_UPCALL],
+[AC_MSG_CHECKING([if cache_detail has cache_upcall field])
+        LB_LINUX_TRY_COMPILE([
+                #include <linux/sunrpc/cache.h>
+        ],[
+                struct cache_detail cd;
+                cd.cache_upcall = NULL;
+        ],[
+                AC_MSG_RESULT(yes)
+                AC_DEFINE(HAVE_CACHE_UPCALL, 1,
+                          [cache_detail has cache_upcall field])
+        ],[
+                AC_MSG_RESULT(no)
+        ])
+])
+
 # 2.6.32 add a limits member in struct request_queue.
 AC_DEFUN([LC_REQUEST_QUEUE_LIMITS],
 [AC_MSG_CHECKING([if request_queue has a limits field])
@@ -2410,6 +2428,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BLK_QUEUE_MAX_SECTORS
          LC_BLK_QUEUE_MAX_SEGMENTS
          LC_SET_CPUS_ALLOWED
+         LC_CACHE_UPCALL
 
          # 2.6.35
          LC_FILE_FSYNC

@@ -85,7 +85,7 @@ prepare_krb5_rfc1964_buffer(gss_krb5_lucid_context_v1_t *lctx,
 {
 	char *p, *end;
 	static int constant_zero = 0;
-	unsigned char fakeseed[16];
+	unsigned char fakeseed[16] = { 0 };
 	uint32_t word_send_seq;
 	gss_krb5_lucid_key_t enc_key;
 	int i;

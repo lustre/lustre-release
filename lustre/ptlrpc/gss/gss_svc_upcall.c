@@ -181,6 +181,13 @@ static void rsi_request(struct cache_detail *cd,
         (*bpp)[-1] = '\n';
 }
 
+#ifdef HAVE_CACHE_UPCALL
+static int rsi_upcall(struct cache_detail *cd, struct cache_head *h)
+{
+        return sunrpc_cache_pipe_upcall(cd, h, rsi_request);
+}
+#endif
+
 static inline void __rsi_init(struct rsi *new, struct rsi *item)
 {
         new->out_handle = RAWOBJ_EMPTY;
@@ -472,7 +479,11 @@ static struct cache_detail rsi_cache = {
         .hash_table     = rsi_table,
         .name           = "auth.sptlrpc.init",
         .cache_put      = rsi_put,
+#ifdef HAVE_CACHE_UPCALL
+        .cache_upcall   = rsi_upcall,
+#else
         .cache_request  = rsi_request,
+#endif
         .cache_parse    = rsi_parse,
 #ifdef HAVE_SUNRPC_CACHE_V2
         .match          = rsi_match,
