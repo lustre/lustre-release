@@ -1062,6 +1062,8 @@ int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt,
                         oqaq->qaq_bunit_sz =
                                 QUSG(oqaq->qaq_bunit_sz * cqs_factor, 1)
                                 << QUOTABLOCK_BITS;
+                        if (oqaq->qaq_bunit_sz >= qctxt->lqc_bunit_sz)
+                                break;
                         b_limitation = oqaq->qaq_bunit_sz * ost_num *
                                 shrink_qunit_limit;
                 }
@@ -1096,6 +1098,8 @@ int dquot_create_oqaq(struct lustre_quota_ctxt *qctxt,
                 while (ilimit > dquot->dq_dqb.dqb_curinodes
                        + 2 * i_limitation) {
                         oqaq->qaq_iunit_sz = oqaq->qaq_iunit_sz * cqs_factor;
+                        if (oqaq->qaq_iunit_sz >= qctxt->lqc_iunit_sz)
+                                break;
                         i_limitation = oqaq->qaq_iunit_sz * mdt_num *
                                 shrink_qunit_limit;
                 }
