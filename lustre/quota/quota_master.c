@@ -454,7 +454,7 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         case QUOTA_DQREL:
                 /* The usage in administrative file might be incorrect before
                  * recovery done */
-                if (*usage - qdata->qd_count < 0)
+                if (*usage < qdata->qd_count)
                         *usage = 0;
                 else
                         *usage -= qdata->qd_count;
