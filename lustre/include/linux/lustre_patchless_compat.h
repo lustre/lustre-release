@@ -37,7 +37,6 @@
 #ifndef LUSTRE_PATCHLESS_COMPAT_H
 #define LUSTRE_PATCHLESS_COMPAT_H
 
-#include <linux/lustre_version.h>
 #include <linux/fs.h>
 
 #ifndef HAVE_TRUNCATE_COMPLETE_PAGE

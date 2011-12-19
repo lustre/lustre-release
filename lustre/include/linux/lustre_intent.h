@@ -37,8 +37,6 @@
 #ifndef LUSTRE_INTENT_H
 #define LUSTRE_INTENT_H
 
-#include <linux/lustre_version.h>
-
 /* intent IT_XXX are defined in lustre/include/obd.h */
 struct lustre_intent_data {
         int             it_disposition;

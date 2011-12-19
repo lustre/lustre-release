@@ -46,7 +46,6 @@
 #include <obd_support.h>
 #include <lustre_lite.h>
 #include <lustre_dlm.h>
-#include <linux/lustre_version.h>
 #include "llite_internal.h"
 
 #define SA_OMITTED_ENTRY_MAX 8ULL

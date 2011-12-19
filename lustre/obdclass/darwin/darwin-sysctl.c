@@ -48,9 +48,6 @@
 #ifndef BUILD_VERSION	
 #define BUILD_VERSION		"Unknown"
 #endif
-#ifndef LUSTRE_KERNEL_VERSION
-#define LUSTRE_KERNEL_VERSION	"Unknown Darwin version"
-#endif
 
 cfs_sysctl_table_header_t *obd_table_header = NULL;
 
@@ -62,7 +59,6 @@ extern unsigned int obd_sync_filter;
 extern atomic_t obd_memory;
 
 int read_build_version SYSCTL_HANDLER_ARGS;
-int read_lustre_kernel_version SYSCTL_HANDLER_ARGS;
 
 SYSCTL_NODE (,                  OID_AUTO,       lustre,	    CTLFLAG_RW,
 	     0,                 "lustre sysctl top");
@@ -72,9 +68,6 @@ SYSCTL_PROC(_lustre,		OID_AUTO,       timeout,
 SYSCTL_PROC(_lustre,		OID_AUTO,       build_version, 
 	    CTLTYPE_STRING | CTLFLAG_RD ,	NULL,
 	    0,		&read_build_version,	"A",	"lustre_build_version");
-SYSCTL_PROC(_lustre,		OID_AUTO,       lustre_kernel_version,
-	    CTLTYPE_STRING | CTLFLAG_RD ,	NULL,
-	    0,		&read_lustre_kernel_version,	"A",	"lustre_build_version");
 SYSCTL_INT(_lustre,		OID_AUTO,	dump_on_timeout, 
 	   CTLTYPE_INT | CTLFLAG_RW,		&obd_dump_on_timeout,
 	   0,		"lustre_dump_on_timeout");
@@ -125,19 +118,6 @@ int read_build_version SYSCTL_HANDLER_ARGS
 		printf("sysctl read_build_version is read-only!\n");
 	} else {
 		error = SYSCTL_OUT(req, BUILD_VERSION, strlen(BUILD_VERSION));
-	}
-	return error;
-}
-
-int read_lustre_kernel_version SYSCTL_HANDLER_ARGS
-{
-	int error = 0;
-
-	error = sysctl_handle_long(oidp, oidp->oid_arg1, oidp->oid_arg2, req); 
-	if ( req->newptr != NULL) {
-		printf("sysctl lustre_kernel_version is read-only!\n");
-	} else {
-		error = SYSCTL_OUT(req, LUSTRE_KERNEL_VERSION, strlen(LUSTRE_KERNEL_VERSION));
 	}
 	return error;
 }

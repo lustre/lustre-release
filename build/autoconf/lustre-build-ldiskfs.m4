@@ -209,21 +209,39 @@ AC_SUBST(EXT_DIR)
 AC_DEFUN([LB_LDISKFS_EXT_SOURCE],
 [
 if test x$EXT_DIR = x; then
-	AC_MSG_ERROR([Complete $LDISKFS_BACKFS source must exist.
-
-If you are building using kernel-devel packages then ensure that the
-matching kernel-debuginfo-common and kernel-debuginfo-common-<arch>
-packages are installed.])
+	enable_ldiskfs_build='no'
+else
+	LB_CHECK_FILE([$EXT_DIR/dir.c], [], [
+		enable_ldiskfs_build='no'
+		AC_MSG_WARN([$LDISKFS_BACKFS must exist for ldiskfs build])])
+	LB_CHECK_FILE([$EXT_DIR/file.c], [], [
+		enable_ldiskfs_build='no'
+		AC_MSG_WARN([$LDISKFS_BACKFS must exist for ldiskfs build])])
+	LB_CHECK_FILE([$EXT_DIR/inode.c], [], [
+		enable_ldiskfs_build='no'
+		AC_MSG_WARN([$LDISKFS_BACKFS must exist for ldiskfs build])])
+	LB_CHECK_FILE([$EXT_DIR/super.c], [], [
+		enable_ldiskfs_build='no'
+		AC_MSG_WARN([$LDISKFS_BACKFS must exist for ldiskfs build])])
 fi
 
-LB_CHECK_FILE([$EXT_DIR/dir.c], [], [ AC_MSG_ERROR(
-	[Complete $LDISKFS_BACKFS source must exist for ldiskfs build])])
-LB_CHECK_FILE([$EXT_DIR/file.c], [], [ AC_MSG_ERROR(
-	[Complete $LDISKFS_BACKFS source must exist for ldiskfs build])])
-LB_CHECK_FILE([$EXT_DIR/inode.c], [], [ AC_MSG_ERROR(
-	[Complete $LDISKFS_BACKFS source must exist for ldiskfs build])])
-LB_CHECK_FILE([$EXT_DIR/super.c], [], [ AC_MSG_ERROR(
-	[Complete $LDISKFS_BACKFS source must exist for ldiskfs build])])
+if test x$enable_ldiskfs_build = xno; then
+	enable_server='no'
+	enable_ldiskfs_build='no'
+	with_ldiskfs='no'
+	LDISKFS_SUBDIR=
+
+	AC_MSG_WARN([
+
+Disabling server because complete $LDISKFS_BACKFS source does not exist.
+
+If you are building using kernel-devel packages and require ldiskfs
+server support then ensure that the matching kernel-debuginfo-common
+and kernel-debuginfo-common-<arch> packages are installed.
+
+])
+
+fi
 ])
 
 #
@@ -312,12 +330,12 @@ AC_ARG_ENABLE([ldiskfs-build],
 AC_MSG_CHECKING([whether to build ldiskfs])
 if test x$enable_ldiskfs_build = xyes; then
 	AC_MSG_RESULT([$enable_ldiskfs_build])
+	LDISKFS_SUBDIR="ldiskfs"
 
 	LB_CHECK_FILE([$LDISKFS_DIR/configure], [], [
 		AC_MSG_ERROR([Complete ldiskfs build system must exist])])
 	LB_LDISKFS_EXT_SOURCE
 
-	LDISKFS_SUBDIR="ldiskfs"
 	AC_SUBST(LDISKFS_SUBDIR)
 else
 	enable_ldiskfs_build='no'

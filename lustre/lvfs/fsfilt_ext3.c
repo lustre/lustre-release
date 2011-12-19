@@ -900,8 +900,6 @@ static int fsfilt_ext3_sync(struct super_block *sb)
                         ext3_ext_walk_space(tree, block, num, cb);
 #endif
 
-#include <linux/lustre_version.h>
-
 struct bpointers {
         unsigned long *blocks;
         int *created;

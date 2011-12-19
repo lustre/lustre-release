@@ -486,7 +486,6 @@ out:
 }
 EXPORT_SYMBOL(simple_truncate);
 
-#ifdef LUSTRE_KERNEL_VERSION
 int __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev)
 {
 #ifdef HAVE_DEV_SET_RDONLY
@@ -536,7 +535,6 @@ int lvfs_check_io_health(struct obd_device *obd, struct file *file)
         RETURN(rc);
 }
 EXPORT_SYMBOL(lvfs_check_io_health);
-#endif /* LUSTRE_KERNEL_VERSION */
 
 void obd_update_maxusage()
 {

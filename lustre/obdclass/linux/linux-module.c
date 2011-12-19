@@ -86,7 +86,6 @@
 #include <lustre_ver.h>
 #include <lustre/lustre_build_version.h>
 #ifdef __KERNEL__
-#include <linux/lustre_version.h>
 
 int proc_version;
 
@@ -443,18 +442,4 @@ int class_procfs_clean(void)
         }
         RETURN(0);
 }
-
-
-/* Check that we're building against the appropriate version of the Lustre
- * kernel patch */
-#include <linux/lustre_version.h>
-#ifdef LUSTRE_KERNEL_VERSION
-#define LUSTRE_MIN_VERSION 45
-#define LUSTRE_MAX_VERSION 47
-#if (LUSTRE_KERNEL_VERSION < LUSTRE_MIN_VERSION)
-# error Cannot continue: Your Lustre kernel patch is older than the sources
-#elif (LUSTRE_KERNEL_VERSION > LUSTRE_MAX_VERSION)
-# error Cannot continue: Your Lustre sources are older than the kernel patch
-#endif
-#endif
 #endif

@@ -1,3 +1,8 @@
+This patch is no longer needed since Lustre 2.2.  It is kept here to
+allow older versions of Lustre to build against the same kernel as
+Lustre 2.2 in order to allow upgrade of just Lustre without also
+replacing the kernel at the same time.
+
 Version 47: allow the ext3_map_inode_page() created param to be NULL
 Version 46: Separate ->fs_private in struct file
 Version 45: more robust and general dev_read_only for failover (b=4834)  

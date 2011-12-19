@@ -96,8 +96,7 @@ int ksocknal_nsched(void)
         return 1;
 }
 #else
-#include <linux/lustre_version.h>
-# if !(defined(CONFIG_X86) && (LINUX_VERSION_CODE >= KERNEL_VERSION(2,4,21))) || defined(CONFIG_X86_64) || ((LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,0)) && !defined(CONFIG_X86_HT))
+# if !defined(CONFIG_X86) || defined(CONFIG_X86_64) || !defined(CONFIG_X86_HT)
 static inline int
 ksocknal_nsched(void)
 {
