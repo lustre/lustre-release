@@ -313,6 +313,8 @@ static void mdc_setattr_pack_rec(struct mdt_rec_setattr *rec,
                 rec->sa_suppgid = op_data->op_attr.ia_gid;
         else
                 rec->sa_suppgid = op_data->op_suppgids[0];
+
+	rec->sa_bias = op_data->op_bias;
 }
 
 static void mdc_ioepoch_pack(struct mdt_ioepoch *epoch,

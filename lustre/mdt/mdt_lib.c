@@ -839,6 +839,11 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         la->la_mtime = rec->sa_mtime;
         ma->ma_valid = MA_INODE;
 
+	if (rec->sa_bias & MDS_DATA_MODIFIED)
+		ma->ma_attr_flags |= MDS_DATA_MODIFIED;
+	else
+		ma->ma_attr_flags &= ~MDS_DATA_MODIFIED;
+
         if (req_capsule_get_size(pill, &RMF_CAPA1, RCL_CLIENT))
                 mdt_set_capainfo(info, 0, rr->rr_fid1,
                                  req_capsule_client_get(pill, &RMF_CAPA1));

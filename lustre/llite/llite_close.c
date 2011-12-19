@@ -53,6 +53,7 @@ void vvp_write_pending(struct ccc_object *club, struct ccc_page *page)
 	ENTRY;
 	spin_lock(&lli->lli_lock);
 	lli->lli_flags |= LLIF_SOM_DIRTY;
+	lli->lli_flags |= LLIF_DATA_MODIFIED;
 	if (page != NULL && cfs_list_empty(&page->cpg_pending_linkage))
 		cfs_list_add(&page->cpg_pending_linkage,
 			     &club->cob_pending_list);

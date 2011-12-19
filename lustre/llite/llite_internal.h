@@ -124,7 +124,8 @@ enum lli_flags {
         LLIF_CONTENDED          = (1 << 4),
         /* Truncate uses server lock for this file */
         LLIF_SRVLOCK            = (1 << 5),
-
+	/* File data is modified. */
+	LLIF_DATA_MODIFIED      = (1 << 6),
 };
 
 struct ll_inode_info {

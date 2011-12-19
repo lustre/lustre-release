@@ -81,6 +81,9 @@ void ll_pack_inode2opdata(struct inode *inode, struct md_op_data *op_data,
         if (fh)
                 op_data->op_handle = *fh;
         op_data->op_capa1 = ll_mdscapa_get(inode);
+
+	if (LLIF_DATA_MODIFIED & ll_i2info(inode)->lli_flags)
+		op_data->op_bias |= MDS_DATA_MODIFIED;
 }
 
 /**
@@ -154,6 +157,17 @@ static int ll_close_inode_openhandle(struct obd_export *md_exp,
                 CERROR("inode %lu mdc close failed: rc = %d\n",
                        inode->i_ino, rc);
         }
+
+	/* DATA_MODIFIED flag was successfully sent on close, cancel data
+	 * modification flag. */
+	if (rc == 0 && (op_data->op_bias & MDS_DATA_MODIFIED)) {
+		struct ll_inode_info *lli = ll_i2info(inode);
+
+		spin_lock(&lli->lli_lock);
+		lli->lli_flags &= ~LLIF_DATA_MODIFIED;
+		spin_unlock(&lli->lli_lock);
+	}
+
         ll_finish_md_op_data(op_data);
 
         if (rc == 0) {

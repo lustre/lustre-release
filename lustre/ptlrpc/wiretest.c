@@ -395,8 +395,8 @@ void lustre_assert_wire_constants(void)
                  (long long)LU_SEQ_RANGE_OST);
 
         /* Checks for struct lustre_mdt_attrs */
-	LASSERTF((int)sizeof(struct lustre_mdt_attrs) == 32, "found %lld\n",
-		 (long long)(int)sizeof(struct lustre_mdt_attrs));
+        LASSERTF((int)sizeof(struct lustre_mdt_attrs) == 32, "found %lld\n",
+                 (long long)(int)sizeof(struct lustre_mdt_attrs));
         LASSERTF((int)offsetof(struct lustre_mdt_attrs, lma_compat) == 0, "found %lld\n",
                  (long long)(int)offsetof(struct lustre_mdt_attrs, lma_compat));
         LASSERTF((int)sizeof(((struct lustre_mdt_attrs *)0)->lma_compat) == 4, "found %lld\n",
@@ -415,60 +415,60 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)sizeof(((struct lustre_mdt_attrs *)0)->lma_flags));
         LASSERTF(LMA_INCOMPAT_SUPP == 0x0, "found %lld\n",
                  (long long)LMA_INCOMPAT_SUPP);
-	LASSERTF(LMAI_RELEASED == 0x00000001UL, "found 0x%.8xUL\n",
-		 (unsigned)LMAI_RELEASED);
+        LASSERTF(LMAI_RELEASED == 0x00000001UL, "found 0x%.8xUL\n",
+                 (unsigned)LMAI_RELEASED);
         LASSERTF(LMAC_HSM == 0x00000001UL, "found 0x%.8xUL\n",
                  (unsigned)LMAC_HSM);
         LASSERTF(LMAC_SOM == 0x00000002UL, "found 0x%.8xUL\n",
                  (unsigned)LMAC_SOM);
 
-	/* Checks for struct som_attrs */
-	LASSERTF((int)sizeof(struct som_attrs) == 40, "found %lld\n",
-		 (long long)(int)sizeof(struct som_attrs));
-	LASSERTF((int)offsetof(struct som_attrs, som_compat) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct som_attrs, som_compat));
-	LASSERTF((int)sizeof(((struct som_attrs *)0)->som_compat) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct som_attrs *)0)->som_compat));
-	LASSERTF((int)offsetof(struct som_attrs, som_incompat) == 4, "found %lld\n",
-		 (long long)(int)offsetof(struct som_attrs, som_incompat));
-	LASSERTF((int)sizeof(((struct som_attrs *)0)->som_incompat) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct som_attrs *)0)->som_incompat));
-	LASSERTF((int)offsetof(struct som_attrs, som_ioepoch) == 8, "found %lld\n",
-		 (long long)(int)offsetof(struct som_attrs, som_ioepoch));
-	LASSERTF((int)sizeof(((struct som_attrs *)0)->som_ioepoch) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct som_attrs *)0)->som_ioepoch));
-	LASSERTF((int)offsetof(struct som_attrs, som_size) == 16, "found %lld\n",
-		 (long long)(int)offsetof(struct som_attrs, som_size));
-	LASSERTF((int)sizeof(((struct som_attrs *)0)->som_size) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct som_attrs *)0)->som_size));
-	LASSERTF((int)offsetof(struct som_attrs, som_blocks) == 24, "found %lld\n",
-		 (long long)(int)offsetof(struct som_attrs, som_blocks));
-	LASSERTF((int)sizeof(((struct som_attrs *)0)->som_blocks) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct som_attrs *)0)->som_blocks));
-	LASSERTF((int)offsetof(struct som_attrs, som_mountid) == 32, "found %lld\n",
-		 (long long)(int)offsetof(struct som_attrs, som_mountid));
-	LASSERTF((int)sizeof(((struct som_attrs *)0)->som_mountid) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct som_attrs *)0)->som_mountid));
+        /* Checks for struct som_attrs */
+        LASSERTF((int)sizeof(struct som_attrs) == 40, "found %lld\n",
+                 (long long)(int)sizeof(struct som_attrs));
+        LASSERTF((int)offsetof(struct som_attrs, som_compat) == 0, "found %lld\n",
+                 (long long)(int)offsetof(struct som_attrs, som_compat));
+        LASSERTF((int)sizeof(((struct som_attrs *)0)->som_compat) == 4, "found %lld\n",
+                 (long long)(int)sizeof(((struct som_attrs *)0)->som_compat));
+        LASSERTF((int)offsetof(struct som_attrs, som_incompat) == 4, "found %lld\n",
+                 (long long)(int)offsetof(struct som_attrs, som_incompat));
+        LASSERTF((int)sizeof(((struct som_attrs *)0)->som_incompat) == 4, "found %lld\n",
+                 (long long)(int)sizeof(((struct som_attrs *)0)->som_incompat));
+        LASSERTF((int)offsetof(struct som_attrs, som_ioepoch) == 8, "found %lld\n",
+                 (long long)(int)offsetof(struct som_attrs, som_ioepoch));
+        LASSERTF((int)sizeof(((struct som_attrs *)0)->som_ioepoch) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct som_attrs *)0)->som_ioepoch));
+        LASSERTF((int)offsetof(struct som_attrs, som_size) == 16, "found %lld\n",
+                 (long long)(int)offsetof(struct som_attrs, som_size));
+        LASSERTF((int)sizeof(((struct som_attrs *)0)->som_size) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct som_attrs *)0)->som_size));
+        LASSERTF((int)offsetof(struct som_attrs, som_blocks) == 24, "found %lld\n",
+                 (long long)(int)offsetof(struct som_attrs, som_blocks));
+        LASSERTF((int)sizeof(((struct som_attrs *)0)->som_blocks) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct som_attrs *)0)->som_blocks));
+        LASSERTF((int)offsetof(struct som_attrs, som_mountid) == 32, "found %lld\n",
+                 (long long)(int)offsetof(struct som_attrs, som_mountid));
+        LASSERTF((int)sizeof(((struct som_attrs *)0)->som_mountid) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct som_attrs *)0)->som_mountid));
 
-	/* Checks for struct hsm_attrs */
-	LASSERTF((int)sizeof(struct hsm_attrs) == 24, "found %lld\n",
-		 (long long)(int)sizeof(struct hsm_attrs));
-	LASSERTF((int)offsetof(struct hsm_attrs, hsm_compat) == 0, "found %lld\n",
-		 (long long)(int)offsetof(struct hsm_attrs, hsm_compat));
-	LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_compat) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_compat));
-	LASSERTF((int)offsetof(struct hsm_attrs, hsm_flags) == 4, "found %lld\n",
-		 (long long)(int)offsetof(struct hsm_attrs, hsm_flags));
-	LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_flags) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_flags));
-	LASSERTF((int)offsetof(struct hsm_attrs, hsm_arch_id) == 8, "found %lld\n",
-		 (long long)(int)offsetof(struct hsm_attrs, hsm_arch_id));
-	LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_arch_id) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_arch_id));
-	LASSERTF((int)offsetof(struct hsm_attrs, hsm_arch_ver) == 16, "found %lld\n",
-		 (long long)(int)offsetof(struct hsm_attrs, hsm_arch_ver));
-	LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_arch_ver) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_arch_ver));
+        /* Checks for struct hsm_attrs */
+        LASSERTF((int)sizeof(struct hsm_attrs) == 24, "found %lld\n",
+                 (long long)(int)sizeof(struct hsm_attrs));
+        LASSERTF((int)offsetof(struct hsm_attrs, hsm_compat) == 0, "found %lld\n",
+                 (long long)(int)offsetof(struct hsm_attrs, hsm_compat));
+        LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_compat) == 4, "found %lld\n",
+                 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_compat));
+        LASSERTF((int)offsetof(struct hsm_attrs, hsm_flags) == 4, "found %lld\n",
+                 (long long)(int)offsetof(struct hsm_attrs, hsm_flags));
+        LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_flags) == 4, "found %lld\n",
+                 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_flags));
+        LASSERTF((int)offsetof(struct hsm_attrs, hsm_arch_id) == 8, "found %lld\n",
+                 (long long)(int)offsetof(struct hsm_attrs, hsm_arch_id));
+        LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_arch_id) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_arch_id));
+        LASSERTF((int)offsetof(struct hsm_attrs, hsm_arch_ver) == 16, "found %lld\n",
+                 (long long)(int)offsetof(struct hsm_attrs, hsm_arch_ver));
+        LASSERTF((int)sizeof(((struct hsm_attrs *)0)->hsm_arch_ver) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct hsm_attrs *)0)->hsm_arch_ver));
 
         /* Checks for struct ost_id */
         LASSERTF((int)sizeof(struct ost_id) == 16, "found %lld\n",
@@ -2207,10 +2207,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct mdt_rec_setattr, sa_mode));
         LASSERTF((int)sizeof(((struct mdt_rec_setattr *)0)->sa_mode) == 4, "found %lld\n",
                  (long long)(int)sizeof(((struct mdt_rec_setattr *)0)->sa_mode));
-        LASSERTF((int)offsetof(struct mdt_rec_setattr, sa_padding_2) == 120, "found %lld\n",
-                 (long long)(int)offsetof(struct mdt_rec_setattr, sa_padding_2));
-        LASSERTF((int)sizeof(((struct mdt_rec_setattr *)0)->sa_padding_2) == 4, "found %lld\n",
-                 (long long)(int)sizeof(((struct mdt_rec_setattr *)0)->sa_padding_2));
+        LASSERTF((int)offsetof(struct mdt_rec_setattr, sa_bias) == 120, "found %lld\n",
+                 (long long)(int)offsetof(struct mdt_rec_setattr, sa_bias));
+        LASSERTF((int)sizeof(((struct mdt_rec_setattr *)0)->sa_bias) == 4, "found %lld\n",
+                 (long long)(int)sizeof(((struct mdt_rec_setattr *)0)->sa_bias));
         LASSERTF((int)offsetof(struct mdt_rec_setattr, sa_padding_3) == 124, "found %lld\n",
                  (long long)(int)offsetof(struct mdt_rec_setattr, sa_padding_3));
         LASSERTF((int)sizeof(((struct mdt_rec_setattr *)0)->sa_padding_3) == 4, "found %lld\n",

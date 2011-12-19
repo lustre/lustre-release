@@ -1460,6 +1460,13 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
                        LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
                        cfs_time_current_sec());
 
+	/* If we are changing file size, file content is modified, flag it. */
+	if (attr->ia_valid & ATTR_SIZE) {
+		spin_lock(&lli->lli_lock);
+		lli->lli_flags |= LLIF_DATA_MODIFIED;
+		spin_unlock(&lli->lli_lock);
+	}
+
         /* We always do an MDS RPC, even if we're only changing the size;
          * only the MDS knows whether truncate() should fail with -ETXTBUSY */
 
@@ -1498,6 +1505,13 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
         rc = ll_md_setattr(dentry, op_data, &mod);
         if (rc)
                 GOTO(out, rc);
+
+	/* RPC to MDT is sent, cancel data modification flag */
+	if (rc == 0 && (op_data->op_bias & MDS_DATA_MODIFIED)) {
+		spin_lock(&lli->lli_lock);
+		lli->lli_flags &= ~LLIF_DATA_MODIFIED;
+		spin_unlock(&lli->lli_lock);
+	}
 
         ll_ioepoch_open(lli, op_data->op_ioepoch);
 	if (!S_ISREG(inode->i_mode))
@@ -2303,6 +2317,10 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
 		spin_unlock(&lli->lli_lock);
 		/** We ignore parent's capability temporary. */
 	}
+
+	/* When called by ll_setattr_raw, file is i1. */
+	if (LLIF_DATA_MODIFIED & ll_i2info(i1)->lli_flags)
+		op_data->op_bias |= MDS_DATA_MODIFIED;
 
 	return op_data;
 }

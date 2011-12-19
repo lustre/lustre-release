@@ -410,6 +410,43 @@ out_unlock:
         return rc;
 }
 
+/**
+ * Check HSM flags and add HS_DIRTY flag if relevant.
+ *
+ * A file could be set dirty only if it has a copy in the backend (HS_EXISTS)
+ * and is not RELEASED.
+ */
+int mdt_add_dirty_flag(struct mdt_thread_info *info, struct mdt_object *mo,
+			struct md_attr *ma)
+{
+	int rc;
+	ENTRY;
+
+	/* If the file was modified, add the dirty flag */
+	ma->ma_need = MA_HSM;
+	rc = mdt_attr_get_complex(info, mo, ma);
+	if (rc) {
+		CERROR("file attribute read error for "DFID": %d.\n",
+			PFID(lu_object_fid(&mo->mot_obj.mo_lu)), rc);
+		RETURN(rc);
+	}
+
+	/* If an up2date copy exists in the backend, add dirty flag */
+	if ((ma->ma_valid & MA_HSM) && (ma->ma_hsm.mh_flags & HS_EXISTS)
+	    && !(ma->ma_hsm.mh_flags & (HS_DIRTY|HS_RELEASED))) {
+
+		ma->ma_hsm.mh_flags |= HS_DIRTY;
+		rc = mdt_hsm_attr_set(info, mo, &ma->ma_hsm);
+		if (rc) {
+			CERROR("file attribute change error for "DFID": %d\n",
+				PFID(lu_object_fid(&mo->mot_obj.mo_lu)), rc);
+			RETURN(rc);
+		}
+	}
+
+	RETURN(rc);
+}
+
 static int mdt_reint_setattr(struct mdt_thread_info *info,
                              struct mdt_lock_handle *lhc)
 {
@@ -513,6 +550,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 			GOTO(out_put, rc);
 	} else
 		LBUG();
+
+	/* If file data is modified, add the dirty flag */
+	if (ma->ma_attr_flags & MDS_DATA_MODIFIED)
+		rc = mdt_add_dirty_flag(info, mo, ma);
 
         ma->ma_need = MA_INODE;
         ma->ma_valid = 0;
