@@ -1517,6 +1517,14 @@ facet_failover() {
 
     echo "Failing $facet on node $host"
 
+    # Make sure the client data is synced to disk. LU-924
+    #
+    # We don't write client data synchrnously (to avoid flooding sync writes
+    # when there are many clients connecting), so if the server reboots before
+    # the client data reachs disk, the client data will be lost and the client
+    # will be evicted after recovery, which is not what we expected.
+    do_facet $facet "sync; sync; sync"
+
     local affected=$(affected_facets $facet)
 
     shutdown_facet $facet
