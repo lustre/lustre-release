@@ -333,6 +333,8 @@ static int quota_check_common(struct obd_device *obd, const unsigned int id[],
                                         else
                                                 pending[i] += mb;
                                 }
+                                LASSERTF(pending[i] >= 0, "pending is not valid"
+                                         ", count=%d, mb=%d\n", count, mb);
                                 lqs->lqs_bwrite_pending += pending[i];
                         } else {
                                 pending[i] = count;

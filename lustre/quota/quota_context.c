@@ -322,7 +322,7 @@ check_cur_qunit(struct obd_device *obd,
         limit_org = limit;
         /* when a releasing quota req is sent, before it returned
            limit is assigned a small value. limit will overflow */
-        if (limit + record < 0)
+        if (record < 0)
                 usage -= record;
         else
                 limit += record;
