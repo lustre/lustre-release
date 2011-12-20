@@ -2267,6 +2267,11 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
          */
         cfs_lockdep_off();
 
+        /*
+         * LU-639: the obd cleanup of last mount may not finish yet, wait here.
+         */
+        obd_zombie_barrier();
+
         /* Figure out the lmd from the mount options */
         if (lmd_parse((char *)(lmd2->lmd2_data), lmd)) {
                 lustre_put_lsi(sb);
