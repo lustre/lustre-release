@@ -2006,13 +2006,12 @@ nfs_client_mode () {
         local clients=$CLIENTS
         [ -z $clients ] && clients=$(hostname)
 
-        # FIXME: remove hostname when 19215 fixed
-        do_nodes $clients "echo \\\$(hostname); grep ' '$MOUNT' ' /proc/mounts"
+        do_nodesv $clients "grep ' '$MOUNT' ' /proc/mounts"
         declare -a nfsexport=(`grep ' '$MOUNT' ' /proc/mounts | awk '{print $1}' | awk -F: '{print $1 " "  $2}'`)
         if [[ ${#nfsexport[@]} -eq 0 ]]; then
                 error_exit NFSCLIENT=$NFSCLIENT mode, but no NFS export found!
         fi
-        do_nodes ${nfsexport[0]} "echo \\\$(hostname); df -T  ${nfsexport[1]}"
+        do_nodesv ${nfsexport[0]} "df -T  ${nfsexport[1]}"
         return
     fi
     return 1
@@ -3142,11 +3141,17 @@ get_stripe () {
     rm -f $file
 }
 
-setstripe_nfsserver () {
+nfs_server () {
     local dir=$1
 
     local nfsserver=$(awk '"'$dir'" ~ $2 && $3 ~ "nfs" && $2 != "/" \
-                { print $1 }' /proc/mounts | cut -f 1 -d : | head -1)
+            { print $1 }' /proc/mounts | cut -f 1 -d : | head -1)
+    echo $nfsserver
+}
+
+setstripe_nfsserver () {
+    local dir=$1
+    local nfsserver=$(nfs_server $dir)
 
     [ -z $nfsserver ] && echo "$dir is not nfs mounted" && return 1
 
@@ -3213,6 +3218,61 @@ multiop_bg_pause() {
     fi
 
     return 0
+}
+
+rmultiop_start() {
+    local uniq=$$
+    if [ x$1 = x--uniq ]; then
+        shift
+        uniq=${uniq}_$1
+        shift
+    fi
+
+    local client=$1
+    local file=$2
+    local cmds=$3
+
+    # We need to run do_node in bg, because pdsh does not exit
+    # if child process of run script exists.
+    # I.e. pdsh does not exit when runmultiop_bg_pause exited,
+    # because of multiop_bg_pause -> $MULTIOP_PROG &
+    # By the same reason we need sleep a bit after do_nodes starts
+    # to let runmultiop_bg_pause start muliop and
+    # update /tmp/multiop_bg.pid ;
+    # The rm /tmp/multiop_bg.pid guarantees here that
+    # we have the updated by runmultiop_bg_pause
+    # /tmp/multiop_bg.pid file
+
+    local pid_file=$TMP/multiop_bg.pid.$uniq
+    do_node $client "rm -f $pid_file && MULTIOP_PID_FILE=$pid_file LUSTRE= runmultiop_bg_pause $file $cmds" &
+    local pid=$!
+    sleep 3
+    local multiop_pid
+    multiop_pid=$(do_node $client cat $pid_file)
+    [ -n "$multiop_pid" ] || error "$client : Can not get multiop_pid from $pid_file "
+    eval export $(node_var_name $client)_multiop_pid$uniq=$multiop_pid
+    eval export $(node_var_name $client)_do_node_pid$uniq=$pid
+    local var=$(node_var_name $client)_multiop_pid$uniq
+    echo node $client multiop_bg started multiop_pid=${!var}
+    return $?
+}
+
+rmultiop_stop() {
+    local uniq=$$
+    if [ x$1 = x--uniq ]; then
+        shift
+        uniq=${uniq}_$1
+        shift
+    fi
+
+    local client=$1
+    local multiop_pid=$(node_var_name $client)_multiop_pid$uniq
+    local do_node_pid=$(node_var_name $client)_do_node_pid$uniq
+
+    echo "Stopping multiop_pid=${!multiop_pid} (kill ${!multiop_pid} on $client)"
+    do_node $client kill -USR1 ${!multiop_pid}
+
+    wait ${!do_node_pid}
 }
 
 do_and_time () {

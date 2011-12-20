@@ -720,8 +720,51 @@ test_statahead () {
     rm -rf $testdir
     cleanup_statahead $clients $mntpt_root $num_mntpts
 }
-
 run_test statahead "statahead test, multiple clients"
+
+# bug 17764 accessing files via nfs, ASSERTION(!mds_inode_is_orphan(dchild->d_inode)) failed
+test_nfsread_orphan_file() {
+    if [ ! "$NFSCLIENT" ]; then
+        skip "not NFSCLIENT mode, skipped"
+        return
+    fi
+
+    # copy file to lustre server
+    local nfsserver=$(nfs_server $MOUNT)
+    do_nodev $nfsserver cp /etc/passwd $DIR/$tfile
+    zconf_mount $nfsserver $MOUNT2
+
+    # open, wait, unlink and close
+    rmultiop_start --uniq unlink $nfsserver $DIR/$tfile o_uc
+    echo "1. unlinker on NFS server $nfsserver opened the file $DIR/$tfile"
+    sleep 1
+
+    # open $DIR2/$tfile and wait
+    rmultiop_start --uniq open $nfsserver $DIR2/$tfile o_c
+    echo "2. open on NFS server $nfsserver opened the file $DIR2/$tfile"
+    sleep 1
+
+    # open $DIR/$tfile on nfs client, wait, read
+    multiop_bg_pause $DIR/$tfile o_r10c
+    NFSREADPID=$!
+    echo "3. NFS client readder opened the file $DIR/$tfile"
+    sleep 1
+
+    # let unlink to go
+    rmultiop_stop --uniq unlink $nfsserver
+    echo "4. unlink, close completed"
+    sleep 1
+
+    # let nfs read to go
+    kill -USR1 $NFSREADPID
+    echo "5. NFS client read completed"
+
+    wait $NFSREADPID
+
+    rmultiop_stop --uniq open $nfsserver
+    zconf_umount $nfsserver $MOUNT2
+}
+run_test nfsread_orphan_file "accessing files via nfs, bug 17764"
 
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
