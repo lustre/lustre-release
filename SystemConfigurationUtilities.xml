@@ -1573,6 +1573,16 @@ mkfs.lustre</title>
               </entry>
               <entry>
                 <para> Sets the NID(s) of a failover partner. This option can be repeated as needed.</para>
+                <para><emphasis role="bold">CAUTION</emphasis>: Cannot be used with <emphasis role="bold">--servicenode</emphasis>.</para>
+              </entry>
+            </row>
+            <row>
+              <entry nameend="c2" namest="c1">
+                <para> <emphasis role="bold">--servicenode</emphasis>=<emphasis>nid</emphasis>,...</para>
+              </entry>
+              <entry>
+                <para> Sets the NID(s) of all service node, including failover partner as well as primary node service nids. This option can be repeated as needed.</para>
+                <para><emphasis role="bold">CAUTION</emphasis>: Cannot be used with <emphasis role="bold">--failnode</emphasis>.</para>
               </entry>
             </row>
             <row>
@@ -2252,6 +2262,16 @@ tunefs.lustre</title>
               </entry>
               <entry>
                 <para> Sets the NID(s) of a failover partner. This option can be repeated as needed.</para>
+                <para><emphasis role="bold">CAUTION</emphasis>: Cannot be used with <emphasis role="bold">--servicenode</emphasis>.</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <emphasis role="bold">--servicenode</emphasis>=<emphasis>nid</emphasis>,...</para>
+              </entry>
+              <entry>
+                <para> Sets the NID(s) of all service node, including failover partner as well as local service nids. This option can be repeated as needed.</para>
+                <para><emphasis role="bold">CAUTION</emphasis>: Cannot be used with <emphasis role="bold">--failnode</emphasis>.</para>
               </entry>
             </row>
             <row>

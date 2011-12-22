@@ -271,7 +271,7 @@ osc.myth-OST0004-osc-ffff8800376bdc00.cur_grant_bytes=33808384</screen>
   </section>
   <section xml:id="dbdoclet.50438194_41817">
     <title><indexterm><primary>operations</primary><secondary>failover</secondary></indexterm>Specifying NIDs and Failover</title>
-    <para>If a node has multiple network interfaces, it may have multiple NIDs. When a node is specified, all of its NIDs must be listed, delimited by commas (<literal>,</literal>) so other nodes can choose the NID that is appropriate for their network interfaces. When failover nodes are specified, they are delimited by a colon (<literal>:</literal>) or by repeating a keyword (<literal>--mgsnode=</literal> or <literal>--failnode=</literal>). To obtain all NIDs from a node (while LNET is running), run:</para>
+    <para>If a node has multiple network interfaces, it may have multiple NIDs. When a node is specified, all of its NIDs must be listed, delimited by commas (<literal>,</literal>) so other nodes can choose the NID that is appropriate for their network interfaces. When failover nodes are specified, they are delimited by a colon (<literal>:</literal>) or by repeating a keyword (<literal>--mgsnode=</literal> or <literal>--failnode=</literal> or <literal>--servicenode=</literal>). To obtain all NIDs from a node (while LNET is running), run:</para>
     <screen>lctl list_nids</screen>
     <para>This displays the server&apos;s NIDs (networks configured to work with Lustre).</para>
     <para>This example has a combined MGS/MDT failover pair on mds0 and mds1, and a OST failover pair on oss0 and oss1. There are corresponding Elan addresses on mds0 and mds1.</para>
@@ -285,6 +285,7 @@ mds0&gt; umount /mnt/mdt
 mds1&gt; mount -t lustre /dev/sda1 /mnt/test/mdt
 mds1&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
     <para>Where multiple NIDs are specified, comma-separation (for example, <literal>mds1,2@elan</literal>) means that the two NIDs refer to the same host, and that Lustre needs to choose the &quot;best&quot; one for communication. Colon-separation (for example, <literal>mds0:mds1</literal>) means that the two NIDs refer to two different hosts, and should be treated as failover locations (Lustre tries the first one, and if that fails, it tries the second one.)</para>
+    <para>Two options exist to specify failover nodes. <literal>--failnode</literal> and <literal>--servicenode</literal>. <literal>--failnode</literal> specifies the NIDs of failover nodes. <literal>--servicenode</literal> specifies all service NIDs, including those of the primary node and of failover nodes.  Option <literal>--servicenode</literal> makes the MDT or OST treat all its service nodes equally. The first service node to load the target device becomes the primary service node. Other node NIDs will become failover locations for the target device.</para>
     <note>
       <para>If you have an MGS or MDT configured for failover, perform these steps:</para>
       <orderedlist>

@@ -66,7 +66,7 @@
         <para>For OST failover, multiple OSS nodes are configured to be able to serve the same OST. However, only one OSS node can serve the OST at a time. An OST can be moved between OSS nodes that have access to the same storage device using <literal>umount/mount</literal> commands.</para>
       </listitem>
     </itemizedlist>
-    <para>To add a failover partner to a Lustre configuration, the <literal>--failnode</literal> option is used. This can be done at creation time (using <literal>mkfs.lustre</literal>) or later when the Lustre system is active (using <literal>tunefs.lustre</literal>). For explanations of these utilities, see <xref linkend="dbdoclet.50438219_75432"/> and <xref linkend="dbdoclet.50438219_39574"/>.</para>
+    <para>To add a failover partner to a Lustre configuration, the <literal>--failnode</literal> or <literal>--servicenode</literal> option is used. This can be done at creation time (using <literal>mkfs.lustre</literal>) or later when the Lustre system is active (using <literal>tunefs.lustre</literal>). For explanations of these utilities, see <xref linkend="dbdoclet.50438219_75432"/> and <xref linkend="dbdoclet.50438219_39574"/>.</para>
     <para>Lustre failover capability can be used to upgrade the Lustre software between successive minor versions without cluster downtime. For more information, see <xref linkend="upgradinglustre"/>.</para>
     <para>For information about configuring failover, see <xref linkend="configuringfailover"/>.</para>
     <note>

@@ -490,7 +490,11 @@ osc.lustre-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen></para>
     <section xml:id="dbdoclet.50438199_62333">
       <title><indexterm><primary>maintance</primary><secondary>changing failover node address</secondary></indexterm>
 Changing the Address of a Failover Node</title>
-      <para>To change the address of a failover node (e.g, to use node X instead of node Y), run this command on the OSS/OST partition: <screen>tunefs.lustre --erase-params --failnode=&lt;NID&gt; &lt;device&gt; </screen></para>
+      <para>To change the address of a failover node (e.g, to use node X instead of node Y), run this command on the OSS/OST partition:
+	      <screen>tunefs.lustre --erase-params --failnode=&lt;NID&gt; &lt;device&gt; </screen>
+	      or
+	      <screen>tunefs.lustre --erase-params --servicenode=&lt;NID&gt; &lt;device&gt; </screen>
+      </para>
     </section>
   </section>
 </chapter>
