@@ -245,6 +245,11 @@ if test $LDISKFS_BACKFS = 'ext4'; then
 			with_ldiskfs_pdo=yes
 			AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
 		fi
+		if test x$SUSE_KERNEL = xyes; then
+			with_ldiskfs_pdo=yes
+			AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
+		fi
+        ;;
 	esac
 fi
 
@@ -459,6 +464,9 @@ if $1; then
 	2.6.32*)
 		if test x$RHEL_KERNEL = xyes; then
 			LDISKFS_SERIES="2.6-rhel6.series"
+		fi
+		if test x$SUSE_KERNEL = xyes; then
+			LDISKFS_SERIES="2.6-sles11.series"
 		fi
 		;;
 	*)
