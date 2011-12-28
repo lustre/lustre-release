@@ -1452,6 +1452,9 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                  * fairness; everything else being equal... */
                 cfs_list_del(&best_route->lr_list);
                 cfs_list_add_tail(&best_route->lr_list, &rnet->lrn_routes);
+                CDEBUG(D_NET, "Best route to %s via %s for %s %d\n",
+                       libcfs_nid2str(dst_nid), libcfs_nid2str(lp->lp_nid),
+                       lnet_msgtyp2str(msg->msg_type), msg->msg_len);
 
                 if (src_ni == NULL) {
                         src_ni = lp->lp_ni;

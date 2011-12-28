@@ -235,6 +235,35 @@ lnet_find_net_locked (__u32 net)
         return NULL;
 }
 
+static void lnet_shuffle_seed(void)
+{
+        static int seeded = 0;
+        int lnd_type, seed[2];
+        struct timeval tv;
+        lnet_ni_t *ni;
+        cfs_list_t *tmp;
+
+        if (seeded)
+                return;
+
+        cfs_get_random_bytes(seed, sizeof(seed));
+
+        /* Nodes with small feet have little entropy
+         * the NID for this node gives the most entropy in the low bits */
+        cfs_list_for_each(tmp, &the_lnet.ln_nis) {
+                ni = cfs_list_entry(tmp, lnet_ni_t, ni_list);
+                lnd_type = LNET_NETTYP(LNET_NIDNET(ni->ni_nid));
+
+                if (lnd_type != LOLND)
+                        seed[0] ^= (LNET_NIDADDR(ni->ni_nid) | lnd_type);
+        }
+
+        cfs_gettimeofday(&tv);
+        cfs_srand(tv.tv_sec ^ seed[0], tv.tv_usec ^ seed[1]);
+        seeded = 1;
+        return;
+}
+
 /* NB expects LNET_LOCK held */
 void
 lnet_add_route_to_rnet (lnet_remotenet_t *rnet, lnet_route_t *route)
@@ -242,16 +271,15 @@ lnet_add_route_to_rnet (lnet_remotenet_t *rnet, lnet_route_t *route)
         unsigned int      len = 0;
         unsigned int      offset = 0;
         cfs_list_t       *e;
-        extern __u64 lnet_create_interface_cookie(void);
+
+        lnet_shuffle_seed();
 
         cfs_list_for_each (e, &rnet->lrn_routes) {
                 len++;
         }
 
-        /* FIXME use Lustre random function when it's moved to libcfs.
-         * See bug 18751 */
         /* len+1 positions to add a new entry, also prevents division by 0 */
-        offset = ((unsigned int) lnet_create_interface_cookie()) % (len + 1);
+        offset = cfs_rand() % (len + 1);
         cfs_list_for_each (e, &rnet->lrn_routes) {
                 if (offset == 0)
                         break;
