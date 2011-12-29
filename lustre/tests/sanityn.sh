@@ -630,7 +630,8 @@ test_32a() { # bug 11270
         enable_lockless_truncate 1
         rm -f $DIR1/$tfile
         lfs setstripe -c -1 $DIR1/$tfile
-        dd if=/dev/zero of=$DIR1/$tfile count=10 bs=1M > /dev/null 2>&1
+        dd if=/dev/zero of=$DIR1/$tfile count=$OSTCOUNT bs=$STRIPE_BYTES > \
+                /dev/null 2>&1
         clear_osc_stats
 
         log "checking cached lockless truncate"
