@@ -957,7 +957,7 @@ set_and_check() {
 	    FINAL=$(($ORIG + 5))
 	fi
 	echo "Setting $PARAM from $ORIG to $FINAL"
-	do_facet $SINGLEMDS "$LCTL conf_param $PARAM='$FINAL'" || error conf_param failed
+	do_facet mgs "$LCTL conf_param $PARAM='$FINAL'" || error conf_param failed
 
 	wait_update $(facet_host $myfacet) "$TEST" "$FINAL" || error check failed!
 }
@@ -1442,7 +1442,7 @@ test_35a() { # bug 12459
 	log "Set up a fake failnode for the MDS"
 	FAKENID="127.0.0.2"
 	local device=$(do_facet $SINGLEMDS "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
-	do_facet $SINGLEMDS $LCTL conf_param ${device}.failover.node=$FAKENID || return 4
+	do_facet mgs $LCTL conf_param ${device}.failover.node=$FAKENID || return 4
 
 	log "Wait for RECONNECT_INTERVAL seconds (10s)"
 	sleep 10
@@ -1496,7 +1496,7 @@ test_35b() { # bug 18674
 	FAKENID="127.0.0.2"
 	local device=$(do_facet $SINGLEMDS "$LCTL get_param -n devices" | \
 			awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }' | head -1)
-	do_facet $SINGLEMDS "$LCTL conf_param ${device}.failover.node=$FAKENID" || \
+	do_facet mgs "$LCTL conf_param ${device}.failover.node=$FAKENID" || \
 		return 1
 
 	local at_max_saved=0
