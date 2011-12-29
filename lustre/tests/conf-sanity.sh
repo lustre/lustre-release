@@ -2629,7 +2629,7 @@ test_55() {
 		setup_noconfig
 		stopall
 
-		setup
+		setup_noconfig
 		sync
 		echo checking size of lov_objid for ost index $i
 		LOV_OBJID_SIZE=$(do_facet mds1 "$DEBUGFS -R 'stat lov_objid' $mdsdev 2>/dev/null" | grep ^User | awk '{print $6}')
@@ -2651,7 +2651,7 @@ test_56() {
 	add ost1 $OST_MKFS_OPTS --index=1000 --reformat $(ostdevname 1)
 	add ost2 $OST_MKFS_OPTS --index=10000 --reformat $(ostdevname 2)
 
-	start_mds
+	start_mgsmds
 	start_ost
 	start_ost2 || error "Unable to start second ost"
 	mount_client $MOUNT || error "Unable to mount client"
@@ -2688,8 +2688,8 @@ count_osts() {
 }
 
 test_58() { # bug 22658
-        [ "$FSTYPE" != "ldiskfs" ] && skip "not supported for $FSTYPE" && return
-	setup
+	[ "$FSTYPE" != "ldiskfs" ] && skip "not supported for $FSTYPE" && return
+	setup_noconfig
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/$tfile-%d 100
 	# make sure that OSTs do not cancel llog cookies before we unmount the MDS
