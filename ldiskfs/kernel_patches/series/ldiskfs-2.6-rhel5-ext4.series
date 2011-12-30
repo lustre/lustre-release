@@ -27,6 +27,7 @@ ext4-kill-dx_root.patch
 ext4-fiemap-2.6-rhel5.patch
 ext4-mballoc-pa_free-mismatch.patch
 ext4_data_in_dirent.patch
+ext4-large-eas.patch
 ext4-disable-mb-cache-rhel5.patch
 ext4-disable-delalloc-rhel5.patch
 ext4-back-dquot-to-rhel54.patch
