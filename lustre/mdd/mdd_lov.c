@@ -152,6 +152,9 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         obd->obd_recovering = 1;
         cfs_spin_unlock(&obd->obd_dev_lock);
         obd->u.mds.mds_id = mds_id;
+        obd->u.obt.obt_osd_properties.osd_max_ea_size =
+                                               mdd->mdd_dt_conf.ddp_max_ea_size;
+
         rc = class_setup(obd, lcfg);
         if (rc)
                 GOTO(class_detach, rc);
@@ -163,6 +166,7 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
         obd->obd_upcall.onu_upcall = mdd_notify;
         obd->obd_upcall.onu_owner = mdd;
         mdd->mdd_obd_dev = obd;
+
         EXIT;
 class_detach:
         if (rc)

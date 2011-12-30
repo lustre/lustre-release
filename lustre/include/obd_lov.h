@@ -42,7 +42,7 @@ static inline int lov_stripe_md_size(int stripes)
         return sizeof(struct lov_stripe_md) + stripes*sizeof(struct lov_oinfo*);
 }
 
-static inline int lov_mds_md_size(int stripes, int lmm_magic)
+static inline __u32 lov_mds_md_size(int stripes, __u32 lmm_magic)
 {
         if (lmm_magic == LOV_MAGIC_V3)
                 return sizeof(struct lov_mds_md_v3) +
@@ -50,6 +50,36 @@ static inline int lov_mds_md_size(int stripes, int lmm_magic)
         else
                 return sizeof(struct lov_mds_md_v1) +
                         stripes * sizeof(struct lov_ost_data_v1);
+}
+
+struct lov_version_size {
+        __u32   lvs_magic;
+        size_t  lvs_lmm_size;
+        size_t  lvs_lod_size;
+};
+
+static inline __u32 lov_mds_md_stripecnt(int ea_size, __u32 lmm_magic)
+{
+        static const struct lov_version_size lmm_ver_size[] = {
+                        { .lvs_magic = LOV_MAGIC_V3,
+                          .lvs_lmm_size = sizeof(struct lov_mds_md_v3),
+                          .lvs_lod_size = sizeof(struct lov_ost_data_v1) },
+                        { .lvs_magic = LOV_MAGIC_V1,
+                          .lvs_lmm_size = sizeof(struct lov_mds_md_v1),
+                          .lvs_lod_size = sizeof(struct lov_ost_data_v1)} };
+        int i;
+
+        for (i = 0; i < ARRAY_SIZE(lmm_ver_size); i++) {
+                if (lmm_magic == lmm_ver_size[i].lvs_magic) {
+                        if (ea_size <= lmm_ver_size[i].lvs_lmm_size)
+                                return 0;
+                        return (ea_size - lmm_ver_size[i].lvs_lmm_size) /
+                                lmm_ver_size[i].lvs_lod_size;
+                }
+        }
+
+        /* Invalid LOV magic, so no stripes could fit */
+        return 0;
 }
 
 #define IOC_LOV_TYPE                   'g'

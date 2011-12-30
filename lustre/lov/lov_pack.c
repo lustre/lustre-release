@@ -148,24 +148,7 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 
         if (lsm) {
                 lmm_magic = lsm->lsm_magic;
-
-                /* If we are just sizing the EA, limit the stripe count
-                 * to the actual number of OSTs in this filesystem. */
-                if (!lmmp) {
-                        stripe_count = lov_get_stripecnt(lov,
-                                                         lsm->lsm_stripe_count);
-                        lsm->lsm_stripe_count = stripe_count;
-                } else {
-                        stripe_count = lsm->lsm_stripe_count;
-                }
         } else {
-                /* No needs to allocated more than LOV_MAX_STRIPE_COUNT.
-                 * Anyway, this is pretty inaccurate since ld_tgt_count now
-                 * represents max index and we should rely on the actual number
-                 * of OSTs instead */
-                stripe_count = min((__u32)LOV_MAX_STRIPE_COUNT,
-                                   lov->desc.ld_tgt_count);
-
                 if (lmmp && *lmmp)
                         lmm_magic = le32_to_cpu((*lmmp)->lmm_magic);
                 else
@@ -179,6 +162,27 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                         lmm_magic, LOV_MAGIC_V1, LOV_MAGIC_V3);
                 RETURN(-EINVAL);
 
+        }
+
+        if (lsm) {
+                /* If we are just sizing the EA, limit the stripe count
+                 * to the actual number of OSTs in this filesystem. */
+                if (!lmmp) {
+                        stripe_count = lov_get_stripecnt(lov, lmm_magic,
+                                                         lsm->lsm_stripe_count);
+                        lsm->lsm_stripe_count = stripe_count;
+                } else {
+                        stripe_count = lsm->lsm_stripe_count;
+                }
+        } else {
+                /* No need to allocate more than maximum supported stripes.
+                 * Anyway, this is pretty inaccurate since ld_tgt_count now
+                 * represents max index and we should rely on the actual number
+                 * of OSTs instead */
+                stripe_count = lov_mds_md_stripecnt(lov->lov_ocd.ocd_max_easize,
+                                                    lmm_magic);
+                if (stripe_count > lov->desc.ld_tgt_count)
+                        stripe_count = lov->desc.ld_tgt_count;
         }
 
         /* XXX LOV STACKING call into osc for sizes */
@@ -245,19 +249,26 @@ int lov_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
 }
 
 /* Find the max stripecount we should use */
-int lov_get_stripecnt(struct lov_obd *lov, __u32 stripe_count)
+__u32 lov_get_stripecnt(struct lov_obd *lov, __u32 magic, __u32 stripe_count)
 {
+        __u32 max_stripes = LOV_MAX_STRIPE_COUNT_OLD;
+
         if (!stripe_count)
                 stripe_count = lov->desc.ld_default_stripe_count;
         if (stripe_count > lov->desc.ld_active_tgt_count)
                 stripe_count = lov->desc.ld_active_tgt_count;
         if (!stripe_count)
                 stripe_count = 1;
-        /* for now, we limit the stripe count directly, when bug 4424 is
-         * fixed this needs to be somewhat dynamic based on whether ext3
-         * can handle larger EA sizes. */
-        if (stripe_count > LOV_MAX_STRIPE_COUNT)
-                stripe_count = LOV_MAX_STRIPE_COUNT;
+
+        /* stripe count is based on whether ldiskfs can handle
+         * larger EA sizes */
+        if (lov->lov_ocd.ocd_connect_flags & OBD_CONNECT_MAX_EASIZE &&
+            lov->lov_ocd.ocd_max_easize)
+                max_stripes = lov_mds_md_stripecnt(lov->lov_ocd.ocd_max_easize,
+                                                   magic);
+
+        if (stripe_count > max_stripes)
+                stripe_count = max_stripes;
 
         return stripe_count;
 }
@@ -349,8 +360,8 @@ int lov_unpackmd(struct obd_export *exp,  struct lov_stripe_md **lsmp,
                         RETURN(rc);
                 magic = le32_to_cpu(lmm->lmm_magic);
         } else {
-                stripe_count = lov_get_stripecnt(lov, 0);
                 magic = LOV_MAGIC;
+                stripe_count = lov_get_stripecnt(lov, magic, 0);
         }
 
         /* If we aren't passed an lsmp struct, we just want the size */
@@ -450,7 +461,8 @@ static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
                        lumv1->lmm_stripe_offset, lov->desc.ld_tgt_count);
                 RETURN(-EINVAL);
         }
-        stripe_count = lov_get_stripecnt(lov, lumv1->lmm_stripe_count);
+        stripe_count = lov_get_stripecnt(lov, lmm_magic,
+                                         lumv1->lmm_stripe_count);
 
         if (max_lmm_size) {
                 int max_stripes = (max_lmm_size -

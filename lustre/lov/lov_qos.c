@@ -1005,7 +1005,7 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
         LASSERT(src_oa->o_valid & OBD_MD_FLGROUP);
 
         if (set->set_oi->oi_md == NULL) {
-                int stripes_def = lov_get_stripecnt(lov, 0);
+                __u32 stripes_def = lov_get_stripecnt(lov, LOV_MAGIC, 0);
 
                 /* If the MDS file was truncated up to some size, stripe over
                  * enough OSTs to allow the file to be created at that size.
@@ -1029,8 +1029,8 @@ int qos_prep_create(struct obd_export *exp, struct lov_request_set *set)
                         if (stripes < stripes_def)
                                 stripes = stripes_def;
                 } else {
-                         flag = LOV_USES_DEFAULT_STRIPE;
-                         stripes = stripes_def;
+                        flag = LOV_USES_DEFAULT_STRIPE;
+                        stripes = stripes_def;
                 }
 
                 rc = lov_alloc_memmd(&set->set_oi->oi_md, stripes,

@@ -939,6 +939,14 @@ static void osd_conf_get(const struct lu_env *env,
                 param->ddp_mntopts |= MNTOPT_USERXATTR;
         if (test_opt(sb, POSIX_ACL))
                 param->ddp_mntopts |= MNTOPT_ACL;
+
+#if defined(LDISKFS_FEATURE_INCOMPAT_EA_INODE)
+        if (LDISKFS_HAS_INCOMPAT_FEATURE(sb, LDISKFS_FEATURE_INCOMPAT_EA_INODE))
+                param->ddp_max_ea_size = LDISKFS_XATTR_MAX_LARGE_EA_SIZE;
+        else
+#endif
+                param->ddp_max_ea_size = sb->s_blocksize;
+
 }
 
 /**

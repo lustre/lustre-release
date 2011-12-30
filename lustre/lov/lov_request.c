@@ -1495,8 +1495,8 @@ int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,int success)
         ENTRY;
 
         if (success) {
-                __u32 expected_stripes = lov_get_stripecnt(&obd->u.lov, 0);
-
+                __u32 expected_stripes = lov_get_stripecnt(&obd->u.lov,
+                                                           LOV_MAGIC, 0);
                 if (osfs->os_files != LOV_U64_MAX)
                         do_div(osfs->os_files, expected_stripes);
                 if (osfs->os_ffree != LOV_U64_MAX)

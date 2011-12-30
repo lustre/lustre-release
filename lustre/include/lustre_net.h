@@ -138,11 +138,10 @@
 #define MDT_MAX_THREADS 512UL
 #endif
 #define MDS_NBUFS       (64 * cfs_num_online_cpus())
-#define MDS_BUFSIZE     (8 * 1024)
 /**
  * Assume file name length = FNAME_MAX = 256 (true for ext3).
  *        path name length = PATH_MAX = 4096
- *        LOV MD size max  = EA_MAX = 4000
+ *        LOV MD size max  = EA_MAX = 48000 (2000 stripes)
  * symlink:  FNAME_MAX + PATH_MAX  <- largest
  * link:     FNAME_MAX + PATH_MAX  (mds_rec_link < mds_rec_create)
  * rename:   FNAME_MAX + FNAME_MAX
@@ -157,8 +156,11 @@
  * Realistic size is about 512 bytes (20 character name + 128 char symlink),
  * except in the open case where there are a large number of OSTs in a LOV.
  */
-#define MDS_MAXREQSIZE  (5 * 1024)
-#define MDS_MAXREPSIZE  max(9 * 1024, 362 + LOV_MAX_STRIPE_COUNT * 56)
+#define MDS_MAXREPSIZE  max(10 * 1024, 362 + LOV_MAX_STRIPE_COUNT * 56)
+#define MDS_MAXREQSIZE  MDS_MAXREPSIZE
+
+/** MDS_BUFSIZE = max_reqsize + max sptlrpc payload size */
+#define MDS_BUFSIZE     (MDS_MAXREQSIZE + 1024)
 
 /** FLD_MAXREQSIZE == lustre_msg + __u32 padding + ptlrpc_body + opc */
 #define FLD_MAXREQSIZE  (160)

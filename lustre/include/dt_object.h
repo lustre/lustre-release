@@ -81,6 +81,7 @@ struct dt_device_param {
         unsigned           ddp_max_nlink;
         unsigned           ddp_block_shift;
         mntopt_t           ddp_mntopts;
+        unsigned           ddp_max_ea_size;
 };
 
 /**

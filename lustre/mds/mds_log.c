@@ -297,6 +297,9 @@ static int mds_llog_add_unlink(struct obd_device *obd,
         struct llog_ctxt *ctxt;
         int rc;
 
+        if (cookies < lsm->lsm_stripe_count)
+                RETURN(rc = -EFBIG);
+
         /* first prepare unlink log record */
         OBD_ALLOC_PTR(lur);
         if (!lur)
