@@ -10,7 +10,7 @@ Release: %{release}
 License: GPL
 Group: Applications/System
 Source: %{name}-%{version}.tar.gz
-URL: http://www.sun.com/software/products/lustre/index.xml
+URL: http://wiki.whamcloud.com/
 BuildRoot: /var/tmp/%{name}-%{version}-root
 Provides: %{name} = %{version}
 BuildArch: noarch
@@ -19,21 +19,21 @@ Requires: python > 2.2, sg3_utils
 %description
 This package includes five tools:
 sgpdd-survey:
-A test of the 'bare metal' performance, bypassing as much of the kernel as we can. Uses the sgp_dd utility. 
+A test of the 'bare metal' performance, bypassing as much of the kernel as we can. Uses the sgp_dd utility.
 
-obdfilter-survey 
+obdfilter-survey
 This survey can be run in 3 modes to test disk I/O including the filesystem,
-network I/O, and disk I/O via the network.  The script does sequential I/O 
-with varying numbers of threads and objects (files) by using lctl::test_brw 
-to drive the echo_client connected to local or remote obdfilter instances, 
+network I/O, and disk I/O via the network.  The script does sequential I/O
+with varying numbers of threads and objects (files) by using lctl::test_brw
+to drive the echo_client connected to local or remote obdfilter instances,
 or remote obdecho instances.
 
-ost-survey 
-This survey tests the client-to-disk performance of individual OSTs, and 
+ost-survey
+This survey tests the client-to-disk performance of individual OSTs, and
 ranks then for comparison.
 
 stats-collect
-This script will collect IO stats on a defined set of nodes. 
+This script will collect IO stats on a defined set of nodes.
 
 ior-survey:
 A script to run the IOR benchmark. The latest version can be downloaded from http://www.llnl.gov/asci/purple/benchmarks/limited/ior/
@@ -70,6 +70,8 @@ make install DESTDIR=$RPM_BUILD_ROOT
 
 
 %changelog
+* Fri Dec 30 2011 Minh Diep
+- WhamCloud release for bug fixes
 * Tue Jul 24 2007 Cliff White
 - Added stats-collect
 * Mon Apr 9 2007 Cliff White

@@ -66,6 +66,7 @@ REUSEBUILD=
 USE_BUILD_CACHE=true
 # what does this do exactly?  does it imply no kernel build?
 NORPM=false
+IOKITRPM=true
 LDISKFSRPM=true
 SKIPLDISKFSRPM="v1_4_* b1_4"
 SMPTYPES="smp bigsmp default ''"
@@ -187,6 +188,9 @@ Usage: ${0##*/} [OPTION]... [-- <lustre configure options>]
 
   --ldiskfs
     Do ldiskfs RPM. Now true by default
+
+  --noiokit
+    Do not build lustre-iokit RPM. Now true by default
 
   --publish
     Unused.
@@ -766,6 +770,39 @@ do_patch_linux() {
 
 }
 
+build_iokit() {
+    local rpmbuildopt="$1"
+
+    pushd lustre-iokit > /dev/null || return 255
+
+    if ! ./configure; then
+        echo "failed to configure in lustre-iokit"
+        popd >/dev/null # pushd lustre-iokit
+        return 255
+    fi
+
+    if ! make dist; then
+        echo "failed to make dist in lustre-iokit"
+        popd >/dev/null # pushd lustre-iokit
+        return 255
+    fi
+
+    if ! $RPMBUILD $rpmbuildopt lustre-iokit*.tar.gz \
+        --define "_tmppath /var/tmp" \
+        --define "_topdir $TOPDIR" 2>&1; then
+        popd >/dev/null # pushd lustre-iokit
+        return 255
+    fi
+
+    if $DO_SRC && ! $RPMBUILD -ts lustre-iokit*.tar.gz \
+            --define "_tmppath /var/tmp" \
+            --define "_topdir $TOPDIR" 2>&1; then
+            popd >/dev/null # pushd lustre-iokit
+            return 255
+    fi
+    popd >/dev/null # pushd lustre-iokit
+}
+
 build_lustre() {
     local linux="$1"
     local linuxobj="$2"
@@ -844,6 +881,14 @@ build_lustre() {
         #       to that instead
         confoptions="$confoptions --with-ldiskfs=$(ls -d $TOPDIR/BUILD/lustre-ldiskfs-*)"
     }
+
+    if $IOKITRPM; then
+        if ! build_iokit $rpmbuildopt; then
+            echo "failed to build lustre-iokit"
+            popd >/dev/null # pushd lustre
+            return 255
+        fi
+    fi
 
     # convert the $PATCHLESS boolean to an empty/not-empty boolean
     # as silly as this seems, it makes the syntax of the rpmbuild command
@@ -1619,7 +1664,7 @@ backtrace
 echo
 echo "Environment:"
 set
-) | mail -s "Untrapped error at ${BASH_SOURCE[0]##*/}:$((LINENO-15)) on $HOSTNAME" brian@sun.com >&2; set $xtrace' ERR
+) | mail -s "Untrapped error at ${BASH_SOURCE[0]##*/}:$((LINENO-15)) on $HOSTNAME" brian@whamcloud.com >&2; set $xtrace' ERR
 set -E
 
 [ -r ~/.lbuildrc ] && . ~/.lbuildrc
@@ -1696,6 +1741,10 @@ while [ "$1" ]; do
             ;;
         --ldiskfs)
             LDISKFSRPM=true
+            shift
+            ;;
+        --noiokit)
+            IOKITRPM=false
             shift
             ;;
         --patchless)
