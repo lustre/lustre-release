@@ -5,7 +5,9 @@ TMP?=/tmp
 
 TGT_BASE=lustre_manual
 MASTER_URL=http://build.whamcloud.com/job/lustre-manual/lastSuccessfulBuild/
-MASTER_XHTML=$(MASTER_URL)/artifact/_out/$(TGT_BASE).xhtml
+MASTER_URL_LAB=http://build.lab.whamcloud.com:8080/job/lustre-manual/lastSuccessfulBuild/
+MASTER_XHTML=$(MASTER_URL)/artifact/$(TGT_BASE).xhtml
+MASTER_XHTML_LAB=$(MASTER_URL_LAB)/artifact/$(TGT_BASE).xhtml
 TGT_MASTER=$(TMP)/mastermanual
 
 
@@ -23,7 +25,7 @@ XSL=$(or $(shell ls -d $(XSL_UBN) 2> /dev/null), \
 	 $(shell ls -d $(XSL_MAC) 2> /dev/null))
 
 .PHONY: all
-all: clean xhtml html pdf
+all: clean check xhtml html pdf diff
 
 .PHONY: check
 check: $(SRC_XML)
@@ -53,19 +55,20 @@ pdf: $(TGT_BASE).pdf
 # get the git hash for the last successful build of the manual
 .PHONY: mastermanual.revision
 mastermanual.revision:
-	wget -O mastermanual.index $(MASTER_URL)
+	wget -O mastermanual.index $(MASTER_URL) || wget -O mastermanual.index $(MASTER_URL_LAB)
 	awk '/Revision/ { print $$NF }' mastermanual.index > mastermanual.revision
 
 # only fetch the full manual if we don't have it or the manual changed
 $(TGT_MASTER).xhtml: mastermanual.revision
 	if ! cmp -s mastermanual.revision $(TGT_MASTER).revision ; then\
-		wget -O $(TGT_MASTER).xhtml $(MASTER_XHTML) && \
+		(wget -O $(TGT_MASTER).xhtml $(MASTER_XHTML) || \
+		wget -O $(TGT_MASTER).xhtml $(MASTER_XHTML_LAB)) && \
 		mv mastermanual.revision $(TGT_MASTER).revision;\
 	fi
 
 .PHONY: diff
 diff: $(TGT_BASE).xhtml $(TGT_MASTER).xhtml
-	./tools/diff.py $(TGT_MASTER).xhtml $(TGT_BASE).xhtml > $(TGT_BASE).diff
+	./tools/diff.py $(TGT_MASTER).xhtml $(TGT_BASE).xhtml > $(TGT_BASE).diff.html
 
 
 .PHONY: push
