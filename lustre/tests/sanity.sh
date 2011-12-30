@@ -1382,11 +1382,11 @@ test_27z() {
         remote_ost_nodsh && skip "remote OST with nodsh" && return
         mkdir -p $DIR/$tdir
         $SETSTRIPE $DIR/$tdir/$tfile-1 -c 1 -o 0 -s 1m ||
-                { error "setstripe -c -1 failed"; return 1; }
+                { error "setstripe -c 1 failed"; return 1; }
         dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=1M count=1 ||
                 { error "dd 1 mb failed"; return 2; }
         $SETSTRIPE $DIR/$tdir/$tfile-2 -c -1 -o $(($OSTCOUNT - 1)) -s 1m ||
-                { error "setstripe -c 1 failed"; return 3; }
+                { error "setstripe -c -1 failed"; return 3; }
         dd if=/dev/zero of=$DIR/$tdir/$tfile-2 bs=1M count=$OSTCOUNT ||
                 { error "dd $OSTCOUNT mb failed"; return 4; }
         sync
@@ -3760,9 +3760,9 @@ test_65d() {
 	mkdir -p $DIR/d65
 	if [ $STRIPECOUNT -le 0 ]; then
         	sc=1
-	elif [ $STRIPECOUNT -gt 160 ]; then
-#LOV_MAX_STRIPE_COUNT is 160
-        	[ $OSTCOUNT -gt 160 ] && sc=160 || sc=$(($OSTCOUNT - 1))
+	elif [ $STRIPECOUNT -gt 2000 ]; then
+#LOV_MAX_STRIPE_COUNT is 2000
+		[ $OSTCOUNT -gt 2000 ] && sc=2000 || sc=$(($OSTCOUNT - 1))
 	else
         	sc=$(($STRIPECOUNT - 1))
 	fi
@@ -4829,7 +4829,10 @@ test_102b() {
 	echo "get/set/list trusted.lov xattr ..."
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping 2-stripe test" && return
 	local testfile=$DIR/$tfile
-	$SETSTRIPE -s 65536 -i 1 -c 2 $testfile || error "setstripe failed"
+	$SETSTRIPE -s 65536 -i 1 -c $OSTCOUNT $testfile ||
+		error "setstripe failed"
+	local STRIPECOUNT=$(lfs getstripe -c $testfile) ||
+		error "getstripe failed"
 	getfattr -d -m "^trusted" $testfile 2> /dev/null | \
 	grep "trusted.lov" || error "can't get trusted.lov from $testfile"
 
@@ -4844,7 +4847,8 @@ test_102b() {
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
 	[ "$stripe_size" -eq 65536 ] || error "stripe size $stripe_size != 65536"
-	[ "$stripe_count" -eq 2 ] || error "stripe count $stripe_count != 2"
+	[ "$stripe_count" -eq $STRIPECOUNT ] ||
+		error "stripe count $stripe_count != $STRIPECOUNT"
 	rm -f $DIR/$tfile
 }
 run_test 102b "getfattr/setfattr for trusted.lov EAs ============"
@@ -4856,7 +4860,10 @@ test_102c() {
 	mkdir -p $DIR/$tdir
 	chown $RUNAS_ID $DIR/$tdir
 	local testfile=$DIR/$tdir/$tfile
-	$RUNAS $SETSTRIPE -s 65536 -i 1 -c 2 $testfile||error "setstripe failed"
+	$RUNAS $SETSTRIPE -s 65536 -i 1 -c $OSTCOUNT $testfile ||
+		error "setstripe failed"
+	local STRIPECOUNT=$($RUNAS lfs getstripe -c $testfile) ||
+		error "getstripe failed"
 	$RUNAS getfattr -d -m "^lustre" $testfile 2> /dev/null | \
 	grep "lustre.lov" || error "can't get lustre.lov from $testfile"
 
@@ -4871,7 +4878,8 @@ test_102c() {
 	local stripe_size=`grep "size"  $tmp_file| awk '{print $2}'`
 	local stripe_count=`grep "count"  $tmp_file| awk '{print $2}'`
 	[ $stripe_size -eq 65536 ] || error "stripe size $stripe_size != 65536"
-	[ $stripe_count -eq 2 ] || error "stripe count $stripe_count != 2"
+	[ $stripe_count -eq $STRIPECOUNT ] ||
+		error "stripe count $stripe_count != $STRIPECOUNT"
 }
 run_test 102c "non-root getfattr/setfattr for lustre.lov EAs ==========="
 
@@ -4958,50 +4966,57 @@ test_102f() {
 }
 run_test 102f "tar copy files, not keep osts ==========="
 
-test_102h() { # bug 15777
+grow_xattr() {
+	local xsize=${1:-1024}	# in bytes
+	local file=$DIR/$tfile
+
 	[ -z $(lctl get_param -n mdc.*.connect_flags | grep xattr) ] &&
-		skip "must have user_xattr" && return
+		skip "must have user_xattr" && return 0
 	[ -z "$(which setfattr 2>/dev/null)" ] &&
-		skip_env "could not find setfattr" && return
+		skip_env "could not find setfattr" && return 0
+	[ -z "$(which getfattr 2>/dev/null)" ] &&
+		skip_env "could not find getfattr" && return 0
 
-	XBIG=trusted.big
-	XSIZE=1024
-	touch $DIR/$tfile
-	VALUE=datadatadatadatadatadatadatadata
-	while [ $(echo $VALUE | wc -c) -lt $XSIZE ]; do
-		VALUE="$VALUE$VALUE"
-	done
-	log "save $XBIG on $DIR/$tfile"
-        setfattr -n $XBIG -v "$VALUE" $DIR/$tfile ||
-		error "saving $XBIG on $DIR/$tfile failed"
-        ORIG=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
-	OSIZE=$(echo $ORIG | wc -c)
-	[ $OSIZE -lt $XSIZE ] && error "set $XBIG too small ($OSIZE < $XSIZE)"
+	touch $file
 
-	XSML=trusted.sml
-	log "save $XSML on $DIR/$tfile"
-        setfattr -n $XSML -v val $DIR/$tfile ||
-		error "saving $XSML on $DIR/$tfile failed"
-        NEW=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
-	if [ "$NEW" != "$ORIG" ]; then
-		log "orig: $ORIG"
-		log "new: $NEW"
-		error "$XBIG different after saving $XSML"
-	fi
+	local value="$(generate_string $xsize)"
 
-	log "grow $XSML on $DIR/$tfile"
-        setfattr -n $XSML -v "$VALUE" $DIR/$tfile ||
-		error "growing $XSML on $DIR/$tfile failed"
-        NEW=$(getfattr -n $XBIG $DIR/$tfile 2> /dev/null | grep $XBIG)
-	if [ "$NEW" != "$ORIG" ]; then
-		log "orig: $ORIG"
-		log "new: $NEW"
-		error "$XBIG different after growing $XSML"
-	fi
-	log "$XBIG still valid after growing $XSML"
+	local xbig=trusted.big
+	log "save $xbig on $file"
+	setfattr -n $xbig -v $value $file ||
+		error "saving $xbig on $file failed"
+
+	local orig=$(get_xattr_value $xbig $file)
+	[[ "$orig" != "$value" ]] && error "$xbig different after saving $xbig"
+
+	local xsml=trusted.sml
+	log "save $xsml on $file"
+	setfattr -n $xsml -v val $file || error "saving $xsml on $file failed"
+
+	local new=$(get_xattr_value $xbig $file)
+	[[ "$new" != "$orig" ]] && error "$xbig different after saving $xsml"
+
+	log "grow $xsml on $file"
+	setfattr -n $xsml -v "$value" $file ||
+		error "growing $xsml on $file failed"
+
+	new=$(get_xattr_value $xbig $file)
+	[[ "$new" != "$orig" ]] && error "$xbig different after growing $xsml"
+	log "$xbig still valid after growing $xsml"
+
 	rm -f $file
 }
+
+test_102h() { # bug 15777
+	grow_xattr 1024
+}
 run_test 102h "grow xattr from inside inode to external block"
+
+test_102ha() {
+	large_xattr_enabled || { skip "large_xattr disabled" && return; }
+	grow_xattr $(max_xattr_size)
+}
+run_test 102ha "grow xattr from inside inode to external inode"
 
 test_102i() { # bug 17038
         touch $DIR/$tfile

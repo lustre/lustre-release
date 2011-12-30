@@ -4785,3 +4785,56 @@ is_sanity_benchmark() {
 min_ost_size () {
     $LCTL get_param -n osc.*.kbytesavail | sort -n | head -n1
 }
+
+# Get the block size of the filesystem.
+get_block_size() {
+    local facet=$1
+    local device=$2
+    local size
+
+    size=$(do_facet $facet "$DUMPE2FS -h $device 2>&1" |
+           awk '/^Block size:/ {print $3}')
+    echo $size
+}
+
+# Check whether the "large_xattr" feature is enabled or not.
+large_xattr_enabled() {
+    local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
+
+    do_facet $SINGLEMDS "$DUMPE2FS -h $mds_dev 2>&1 | grep -q large_xattr"
+    return ${PIPESTATUS[0]}
+}
+
+# Get the maximum xattr size supported by the filesystem.
+max_xattr_size() {
+    local size
+
+    if large_xattr_enabled; then
+        # include/linux/limits.h: #define XATTR_SIZE_MAX 65536
+        size=65536
+    else
+        local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
+        local block_size=$(get_block_size $SINGLEMDS $mds_dev)
+
+        # maximum xattr size = size of block - size of header -
+        #                      size of 1 entry - 4 null bytes
+        size=$((block_size - 32 - 32 - 4))
+    fi
+
+    echo $size
+}
+
+# Dump the value of the named xattr from a file.
+get_xattr_value() {
+    local xattr_name=$1
+    local file=$2
+
+    echo "$(getfattr -n $xattr_name --absolute-names --only-values $file)"
+}
+
+# Generate a string with size of $size bytes.
+generate_string() {
+    local size=${1:-1024} # in bytes
+
+    echo "$(head -c $size < /dev/zero | tr '\0' y)"
+}

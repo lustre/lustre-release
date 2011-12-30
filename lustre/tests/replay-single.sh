@@ -1369,14 +1369,20 @@ test_58a() {
 run_test 58a "test recovery from llog for setattr op (test llog_gen_rec)"
 
 test_58b() {
+    local orig
+    local new
+
+    large_xattr_enabled &&
+        orig="$(generate_string $(max_xattr_size))" || orig="bar"
+
     mount_client $MOUNT2
     mkdir -p $DIR/$tdir
     touch $DIR/$tdir/$tfile
     replay_barrier $SINGLEMDS
-    setfattr -n trusted.foo -v bar $DIR/$tdir/$tfile
+    setfattr -n trusted.foo -v $orig $DIR/$tdir/$tfile
     fail $SINGLEMDS
-    VAL=`getfattr --absolute-names --only-value -n trusted.foo $MOUNT2/$tdir/$tfile`
-    [ x$VAL = x"bar" ] || return 1
+    new=$(get_xattr_value trusted.foo $MOUNT2/$tdir/$tfile)
+    [[ "$new" = "$orig" ]] || return 1
     rm -f $DIR/$tdir/$tfile
     rmdir $DIR/$tdir
     zconf_umount `hostname` $MOUNT2
@@ -1384,20 +1390,33 @@ test_58b() {
 run_test 58b "test replay of setxattr op"
 
 test_58c() { # bug 16570
-        mount_client $MOUNT2
-        mkdir -p $DIR/$tdir
-        touch $DIR/$tdir/$tfile
-        drop_request "setfattr -n trusted.foo -v bar $DIR/$tdir/$tfile" || \
-                return 1
-        VAL=`getfattr --absolute-names --only-value -n trusted.foo $MOUNT2/$tdir/$tfile`
-        [ x$VAL = x"bar" ] || return 2
-        drop_reint_reply "setfattr -n trusted.foo1 -v bar1 $DIR/$tdir/$tfile" || \
-                return 3
-        VAL=`getfattr --absolute-names --only-value -n trusted.foo1 $MOUNT2/$tdir/$tfile`
-        [ x$VAL = x"bar1" ] || return 4
-        rm -f $DIR/$tdir/$tfile
-        rmdir $DIR/$tdir
-        zconf_umount `hostname` $MOUNT2
+    local orig
+    local orig1
+    local new
+
+    if large_xattr_enabled; then
+        local xattr_size=$(max_xattr_size)
+        orig="$(generate_string $((xattr_size / 2)))"
+        orig1="$(generate_string $xattr_size)"
+    else
+        orig="bar"
+        orig1="bar1"
+    fi
+
+    mount_client $MOUNT2
+    mkdir -p $DIR/$tdir
+    touch $DIR/$tdir/$tfile
+    drop_request "setfattr -n trusted.foo -v $orig $DIR/$tdir/$tfile" ||
+        return 1
+    new=$(get_xattr_value trusted.foo $MOUNT2/$tdir/$tfile)
+    [[ "$new" = "$orig" ]] || return 2
+    drop_reint_reply "setfattr -n trusted.foo1 -v $orig1 $DIR/$tdir/$tfile" ||
+        return 3
+    new=$(get_xattr_value trusted.foo1 $MOUNT2/$tdir/$tfile)
+    [[ "$new" = "$orig1" ]] || return 4
+    rm -f $DIR/$tdir/$tfile
+    rmdir $DIR/$tdir
+    zconf_umount $HOSTNAME $MOUNT2
 }
 run_test 58c "resend/reconstruct setxattr op"
 

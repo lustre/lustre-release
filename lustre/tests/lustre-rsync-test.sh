@@ -82,14 +82,25 @@ fini_changelog() {
     do_facet $SINGLEMDS lctl --device $MDT0 changelog_deregister $CL_USER
 }
 
+# Check whether the filesystem supports xattr or not.
+# Return value:
+# "large" - large xattr is supported
+# "small" - large xattr is unsupported but small xattr is supported
+# "no"    - xattr is unsupported
 check_xattr() {
     local tgt=$1
-    local xattr="yes"
+    local xattr="no"
+
     touch $tgt
-    setfattr -n user.foo -v 'bar' $tgt 2> /dev/null
-    if [ $? -ne 0 ]; then
-	xattr="no"
+
+    local val="$(generate_string $(max_xattr_size))"
+    if large_xattr_enabled &&
+       setfattr -n user.foo -v $val $tgt 2>/dev/null; then
+            xattr="large"
+    else
+        setfattr -n user.foo -v bar $tgt 2>/dev/null && xattr="small"
     fi
+
     rm -f $tgt
     echo $xattr
 }
@@ -108,7 +119,7 @@ check_diff() {
 test_1() {
     init_src
     init_changelog
-    local xattr=`check_xattr $TGT/foo`
+    local xattr=$(check_xattr $TGT/foo)
 
     # Directory create
     mkdir $DIR/$tdir/d1
@@ -148,32 +159,33 @@ test_1() {
     chown nobody:nobody $DIR/$tdir/d2/file3
 
     # Set xattrs
-    if [ "$xattr" == "yes" ]; then
-	touch $DIR/$tdir/file5
-	setfattr -n user.foo -v 'bar' $DIR/$tdir/file5
+    if [[ "$xattr" != "no" ]]; then
+        local value
+        touch $DIR/$tdir/file5
+        [[ "$xattr" = "large" ]] &&
+            value="$(generate_string $(max_xattr_size))" || value="bar"
+        setfattr -n user.foo -v $value $DIR/$tdir/file5
     fi
 
     echo "Replication #2"
     $LRSYNC -l $LREPL_LOG
 
-    if [ "$xattr" == "yes" ]; then
-	local xval1=$(getfattr -n user.foo --absolute-names --only-values \
-	    $TGT/$tdir/file5)
-	local xval2=$(getfattr -n user.foo --absolute-names --only-values \
-	    $TGT2/$tdir/file5)
+    if [[ "$xattr" != "no" ]]; then
+        local xval1=$(get_xattr_value user.foo $TGT/$tdir/file5)
+        local xval2=$(get_xattr_value user.foo $TGT2/$tdir/file5)
     fi
 
     RC=0
 
     # fid2path and path2fid aren't implemented for block devices
     #if [[ ! -b $TGT/$tdir/dev1 ]] || [[ ! -b $TGT2/$tdir/dev1 ]]; then
-    #	ls -l $DIR/$tdir/dev1 $TGT/$tdir/dev1 $TGT2/$tdir/dev1
+    #   ls -l $DIR/$tdir/dev1 $TGT/$tdir/dev1 $TGT2/$tdir/dev1
     #   error "Error replicating block devices"
     #   RC=1
 
-    if [[ "$xattr" == "yes" ]] &&
-       [[ "$xval1" != "bar" || "$xval2" != "bar" ]]; then
-        error "Error in replicating xattrs. $xval1, $xval2"
+    if [[ "$xattr" != "no" ]] &&
+       [[ "$xval1" != "$value" || "$xval2" != "$value" ]]; then
+        error "Error in replicating xattrs."
         RC=1
     fi
 
@@ -503,7 +515,7 @@ test_7() {
     init_changelog
 
     local NUMFILES=100
-    lfs setstripe -c 2 ${DIR}/$tdir
+    lfs setstripe -c $OSTCOUNT $DIR/$tdir
     createmany -o $DIR/$tdir/$tfile $NUMFILES
 
     # To simulate replication to another lustre filesystem, replicate
@@ -518,7 +530,7 @@ test_7() {
     while [ $i -lt $NUMFILES ];
     do
       local count=$(lfs getstripe $DIR/tgt/$tdir/${tfile}$i | awk '/stripe_count/ {print $2}')
-      if [ $count -ne 2 ]; then
+      if [ $count -ne $OSTCOUNT ]; then
 	  error "Stripe size not replicated" 
       fi
       i=$(expr $i + 1)
