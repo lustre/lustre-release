@@ -2267,7 +2267,7 @@ test_55() {
 		cp /etc/passwd $DIR/1
 		stopall
 
-		setup
+		setup_noconfig
 		cp /etc/passwd $DIR/2
 		sync
 
@@ -2297,7 +2297,7 @@ test_56() {
 	add ost2 $OST_MKFS_OPTS --index=10000 --reformat $(ostdevname 2) || \
 		error "failed to reformat ost2"
 
-	start_mds
+	start_mgsmds
 	start_ost
 	start_ost2 || error "Unable to start second ost"
 	mount_client $MOUNT || error "Unable to mount client"
@@ -2331,7 +2331,7 @@ run_test 57b "initial registration from servicenode should not fail"
 
 test_58() { # bug 22658
         [ "$FSTYPE" != "ldiskfs" ] && skip "not supported for $FSTYPE" && return
-	setup
+	setup_noconfig
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/$tfile-%d 100
 	# make sure that OSTs do not cancel llog cookies before we unmount the MDS
