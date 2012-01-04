@@ -6903,7 +6903,7 @@ test_133c() {
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
 	do_facet ost1 $LCTL set_param obdfilter.*.stats=clear
 
-	dd if=/dev/zero of=${testdir}/${tfile} conv=notrunc bs=1024k count=1 || error "dd failed"
+	dd if=/dev/zero of=${testdir}/${tfile} conv=notrunc bs=512k count=1 || error "dd failed"
 	sync
 	cancel_lru_locks osc
 	check_stats ost "write" 1

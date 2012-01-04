@@ -2269,12 +2269,18 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
 {
         int req_ok = req->rq_reqmsg != NULL;
         int rep_ok = req->rq_repmsg != NULL;
+        lnet_nid_t nid = LNET_NID_ANY;
         va_list args;
 
         if (ptlrpc_req_need_swab(req)) {
                 req_ok = req_ok && req_ptlrpc_body_swabbed(req);
                 rep_ok = rep_ok && rep_ptlrpc_body_swabbed(req);
         }
+
+        if (req->rq_import && req->rq_import->imp_connection)
+                nid = req->rq_import->imp_connection->c_peer.nid;
+        else if (req->rq_export && req->rq_export->exp_connection)
+                nid = req->rq_export->exp_connection->c_peer.nid;
 
         va_start(args, fmt);
         libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys,mask,data->msg_file,
@@ -2290,11 +2296,7 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
                                 req->rq_export ?
                                      req->rq_export->exp_client_uuid.uuid :
                                      "<?>",
-                           libcfs_nid2str(req->rq_import ?
-                                req->rq_import->imp_connection->c_peer.nid :
-                                req->rq_export ?
-                                     req->rq_export->exp_connection->c_peer.nid:
-                                     LNET_NID_ANY),
+                           libcfs_nid2str(nid),
                            req->rq_request_portal, req->rq_reply_portal,
                            req->rq_reqlen, req->rq_replen,
                            req->rq_early_count, req->rq_timedout,
