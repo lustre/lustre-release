@@ -281,12 +281,13 @@ static inline void ptlrpc_reqset_get(struct ptlrpc_request_set *set)
  * Check if there is more work to do on ptlrpcd set.
  * Returns 1 if yes.
  */
-static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
+static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
 {
         cfs_list_t *tmp, *pos;
         struct ptlrpc_request *req;
         struct ptlrpc_request_set *set = pc->pc_set;
         int rc = 0;
+        int rc2;
         ENTRY;
 
         if (cfs_atomic_read(&set->set_new_count)) {
@@ -303,6 +304,25 @@ static int ptlrpcd_check(const struct lu_env *env, struct ptlrpcd_ctl *pc)
                         rc = 1;
                 }
                 cfs_spin_unlock(&set->set_new_req_lock);
+        }
+
+        /* We should call lu_env_refill() before handling new requests to make
+         * sure that env key the requests depending on really exists.
+         */
+        rc2 = lu_env_refill(env);
+        if (rc2 != 0) {
+                /*
+                 * XXX This is very awkward situation, because
+                 * execution can neither continue (request
+                 * interpreters assume that env is set up), nor repeat
+                 * the loop (as this potentially results in a tight
+                 * loop of -ENOMEM's).
+                 *
+                 * Fortunately, refill only ever does something when
+                 * new modules are loaded, i.e., early during boot up.
+                 */
+                CERROR("Failure to refill session: %d\n", rc2);
+                RETURN(rc);
         }
 
         if (cfs_atomic_read(&set->set_remaining))
@@ -424,22 +444,6 @@ static int ptlrpcd(void *arg)
         do {
                 struct l_wait_info lwi;
                 int timeout;
-
-                rc = lu_env_refill(&env);
-                if (rc != 0) {
-                        /*
-                         * XXX This is very awkward situation, because
-                         * execution can neither continue (request
-                         * interpreters assume that env is set up), nor repeat
-                         * the loop (as this potentially results in a tight
-                         * loop of -ENOMEM's).
-                         *
-                         * Fortunately, refill only ever does something when
-                         * new modules are loaded, i.e., early during boot up.
-                         */
-                        CERROR("Failure to refill session: %d\n", rc);
-                        continue;
-                }
 
                 timeout = ptlrpc_set_next_timeout(set);
                 lwi = LWI_TIMEOUT(cfs_time_seconds(timeout ? timeout : 1),

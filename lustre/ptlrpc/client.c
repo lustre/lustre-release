@@ -2115,7 +2115,6 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
         LASSERTF(cfs_list_empty(&request->rq_set_chain), "req %p\n", request);
         LASSERTF(cfs_list_empty(&request->rq_exp_list), "req %p\n", request);
         LASSERTF(!request->rq_replay, "req %p\n", request);
-        LASSERT(request->rq_cli_ctx || request->rq_fake);
 
         req_capsule_fini(&request->rq_pill);
 
@@ -2809,3 +2808,136 @@ __u64 ptlrpc_sample_next_xid(void)
 #endif
 }
 EXPORT_SYMBOL(ptlrpc_sample_next_xid);
+
+/**
+ * Functions for operating ptlrpc workers.
+ *
+ * A ptlrpc work is a function which will be running inside ptlrpc context.
+ * The callback shouldn't sleep otherwise it will block that ptlrpcd thread.
+ *
+ * 1. after a work is created, it can be used many times, that is:
+ *         handler = ptlrpcd_alloc_work();
+ *         ptlrpcd_queue_work();
+ *
+ *    queue it again when necessary:
+ *         ptlrpcd_queue_work();
+ *         ptlrpcd_destroy_work();
+ * 2. ptlrpcd_queue_work() can be called by multiple processes meanwhile, but
+ *    it will only be queued once in any time. Also as its name implies, it may
+ *    have delay before it really runs by ptlrpcd thread.
+ */
+struct ptlrpc_work_async_args {
+        __u64   magic;
+        int   (*cb)(const struct lu_env *, void *);
+        void   *cbdata;
+};
+
+#define PTLRPC_WORK_MAGIC 0x6655436b676f4f44ULL /* magic code */
+
+static int work_interpreter(const struct lu_env *env,
+                            struct ptlrpc_request *req, void *data, int rc)
+{
+        struct ptlrpc_work_async_args *arg = data;
+
+        LASSERT(arg->magic == PTLRPC_WORK_MAGIC);
+        LASSERT(arg->cb != NULL);
+
+        return arg->cb(env, arg->cbdata);
+}
+
+/**
+ * Create a work for ptlrpc.
+ */
+void *ptlrpcd_alloc_work(struct obd_import *imp,
+                         int (*cb)(const struct lu_env *, void *), void *cbdata)
+{
+        struct ptlrpc_request         *req = NULL;
+        struct ptlrpc_work_async_args *args;
+        ENTRY;
+
+        cfs_might_sleep();
+
+        if (cb == NULL)
+                RETURN(ERR_PTR(-EINVAL));
+
+        /* copy some code from deprecated fakereq. */
+        OBD_ALLOC_PTR(req);
+        if (req == NULL) {
+                CERROR("ptlrpc: run out of memory!\n");
+                RETURN(ERR_PTR(-ENOMEM));
+        }
+
+        req->rq_send_state = LUSTRE_IMP_FULL;
+        req->rq_type = PTL_RPC_MSG_REQUEST;
+        req->rq_import = class_import_get(imp);
+        req->rq_export = NULL;
+        req->rq_interpret_reply = work_interpreter;
+        /* don't want reply */
+        req->rq_receiving_reply = 0;
+        req->rq_must_unlink = 0;
+        req->rq_no_delay = req->rq_no_resend = 1;
+
+        cfs_spin_lock_init(&req->rq_lock);
+        CFS_INIT_LIST_HEAD(&req->rq_list);
+        CFS_INIT_LIST_HEAD(&req->rq_replay_list);
+        CFS_INIT_LIST_HEAD(&req->rq_set_chain);
+        CFS_INIT_LIST_HEAD(&req->rq_history_list);
+        CFS_INIT_LIST_HEAD(&req->rq_exp_list);
+        cfs_waitq_init(&req->rq_reply_waitq);
+        cfs_waitq_init(&req->rq_set_waitq);
+        cfs_atomic_set(&req->rq_refcount, 1);
+
+        CLASSERT (sizeof(*args) <= sizeof(req->rq_async_args));
+        args = ptlrpc_req_async_args(req);
+        args->magic  = PTLRPC_WORK_MAGIC;
+        args->cb     = cb;
+        args->cbdata = cbdata;
+
+        RETURN(req);
+}
+EXPORT_SYMBOL(ptlrpcd_alloc_work);
+
+void ptlrpcd_destroy_work(void *handler)
+{
+        struct ptlrpc_request *req = handler;
+
+        if (req)
+                ptlrpc_req_finished(req);
+}
+EXPORT_SYMBOL(ptlrpcd_destroy_work);
+
+int ptlrpcd_queue_work(void *handler)
+{
+        struct ptlrpc_request *req = handler;
+
+        /*
+         * Check if the req is already being queued.
+         *
+         * Here comes a trick: it lacks a way of checking if a req is being
+         * processed reliably in ptlrpc. Here I have to use refcount of req
+         * for this purpose. This is okay because the caller should use this
+         * req as opaque data. - Jinshan
+         */
+        LASSERT(cfs_atomic_read(&req->rq_refcount) > 0);
+        if (cfs_atomic_read(&req->rq_refcount) > 1)
+                return -EBUSY;
+
+        if (cfs_atomic_inc_return(&req->rq_refcount) > 2) { /* race */
+                cfs_atomic_dec(&req->rq_refcount);
+                return -EBUSY;
+        }
+
+        /* re-initialize the req */
+        req->rq_timeout        = obd_timeout;
+        req->rq_sent           = cfs_time_current_sec();
+        req->rq_deadline       = req->rq_sent + req->rq_timeout;
+        req->rq_reply_deadline = req->rq_deadline;
+        req->rq_phase          = RQ_PHASE_INTERPRET;
+        req->rq_next_phase     = RQ_PHASE_COMPLETE;
+        req->rq_xid            = ptlrpc_next_xid();
+        req->rq_import_generation = req->rq_import->imp_generation;
+
+        ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+        return 0;
+}
+EXPORT_SYMBOL(ptlrpcd_queue_work);
