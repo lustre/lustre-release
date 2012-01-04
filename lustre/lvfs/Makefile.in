@@ -13,7 +13,7 @@ $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
 
 EXTRA_DIST = $(lvfs-objs:.o=.c)  $(quotafmt-objs:.o=.c) \
-	fsfilt_ext3.c fsfilt_reiserfs.c \
+	fsfilt_ext3.c \
 	lvfs_internal.h lvfs_userfs.c \
 	lustre_quota_fmt.c lustre_quota_fmt.h quotafmt_test.c
 
