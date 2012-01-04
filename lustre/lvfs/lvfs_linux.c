@@ -375,7 +375,7 @@ int lustre_fsync(struct file *file)
         if (!file || !file->f_op || !file->f_op->fsync)
                 RETURN(-ENOSYS);
 
-        RETURN(file->f_op->fsync(file, file->f_dentry, 0));
+        RETURN(cfs_do_fsync(file, 0));
 }
 EXPORT_SYMBOL(lustre_fsync);
 

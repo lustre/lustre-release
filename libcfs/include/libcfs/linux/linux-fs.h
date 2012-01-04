@@ -66,10 +66,15 @@ typedef struct kstatfs cfs_kstatfs_t;
  * XXX Do we need to parse flags and mode in cfs_filp_open? 
  */
 cfs_file_t *cfs_filp_open (const char *name, int flags, int mode, int *err);
+#ifndef HAVE_FILE_FSYNC_2ARGS
+# define cfs_do_fsync(fp, flag)    ((fp)->f_op->fsync(fp, (fp)->f_dentry, flag))
+#else
+# define cfs_do_fsync(fp, flag)    ((fp)->f_op->fsync(fp, flag))
+#endif
 #define cfs_filp_close(f)                   filp_close(f, NULL)
 #define cfs_filp_read(fp, buf, size, pos)   (fp)->f_op->read((fp), (buf), (size), pos)
 #define cfs_filp_write(fp, buf, size, pos)  (fp)->f_op->write((fp), (buf), (size), pos)
-#define cfs_filp_fsync(fp)                  (fp)->f_op->fsync((fp), (fp)->f_dentry, 1)
+#define cfs_filp_fsync(fp)                  cfs_do_fsync(fp, 1)
 
 #define cfs_get_file(f)                     get_file(f)
 #define cfs_get_fd(x)                       fget(x)
