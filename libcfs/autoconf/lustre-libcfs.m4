@@ -489,6 +489,20 @@ AC_DEFUN([LIBCFS_FUNC_DUMP_TRACE],
 		AC_MSG_RESULT(no)
 	],[
 	])
+	AC_MSG_CHECKING([whether stacktrace_ops.warning is exist])
+	LB_LINUX_TRY_COMPILE([
+		struct task_struct;
+		struct pt_regs;
+		#include <asm/stacktrace.h>
+	],[
+		((struct stacktrace_ops *)0)->warning(NULL, NULL);
+	],[
+		AC_MSG_RESULT(yes)
+		AC_DEFINE(HAVE_STACKTRACE_WARNING, 1, [stacktrace_ops.warning is exist])
+	],[
+		AC_MSG_RESULT(no)
+	],[
+	])
 	AC_MSG_CHECKING([dump_trace want address])
 	LB_LINUX_TRY_COMPILE([
 		struct task_struct;
@@ -734,6 +748,22 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# 2.6.35 kernel has sk_sleep function
+#
+AC_DEFUN([LC_SK_SLEEP],
+[AC_MSG_CHECKING([if kernel has sk_sleep])
+LB_LINUX_TRY_COMPILE([
+        #include <net/sock.h>
+],[
+        sk_sleep(NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SK_SLEEP, 1, [kernel has sk_sleep])
+],[
+        AC_MSG_RESULT(no)
+])
+])
 
 #
 # FC15 2.6.40-5 backported the "shrink_control" parameter to the memory
@@ -811,6 +841,8 @@ LIBCFS_OOMADJ_IN_SIG
 LIBCFS_SYSCTL_CTLNAME
 # 2.6.34
 LIBCFS_ADD_WAIT_QUEUE_EXCLUSIVE
+# 2.6.35
+LC_SK_SLEEP
 # 2.6.40 fc15
 LC_SHRINK_CONTROL
 ])

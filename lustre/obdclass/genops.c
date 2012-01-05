@@ -1581,8 +1581,7 @@ static void obd_zombie_export_add(struct obd_export *exp) {
         cfs_list_add(&exp->exp_obd_chain, &obd_zombie_exports);
         cfs_spin_unlock(&obd_zombie_impexp_lock);
 
-        if (obd_zombie_impexp_notify != NULL)
-                obd_zombie_impexp_notify();
+        obd_zombie_impexp_notify();
 }
 
 /**
@@ -1596,8 +1595,7 @@ static void obd_zombie_import_add(struct obd_import *imp) {
         cfs_list_add(&imp->imp_zombie_chain, &obd_zombie_imports);
         cfs_spin_unlock(&obd_zombie_impexp_lock);
 
-        if (obd_zombie_impexp_notify != NULL)
-                obd_zombie_impexp_notify();
+        obd_zombie_impexp_notify();
 }
 
 /**

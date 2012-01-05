@@ -47,6 +47,7 @@
 #endif
 
 #include <linux/fs_struct.h>
+#include <linux/namei.h>
 #include <libcfs/linux/portals_compat25.h>
 
 #include <linux/lustre_patchless_compat.h>
@@ -68,6 +69,14 @@ struct ll_iattr {
 #define ll_iattr iattr
 #endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
 
+#ifdef HAVE_FS_STRUCT_RWLOCK
+# define LOCK_FS_STRUCT(fs)   cfs_write_lock(&(fs)->lock)
+# define UNLOCK_FS_STRUCT(fs) cfs_write_unlock(&(fs)->lock)
+#else
+# define LOCK_FS_STRUCT(fs)   cfs_spin_lock(&(fs)->lock)
+# define UNLOCK_FS_STRUCT(fs) cfs_spin_unlock(&(fs)->lock)
+#endif
+
 #ifdef HAVE_FS_STRUCT_USE_PATH
 static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
                                  struct dentry *dentry)
@@ -77,11 +86,11 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 
         path.mnt = mnt;
         path.dentry = dentry;
-        write_lock(&fs->lock);
+        LOCK_FS_STRUCT(fs);
         old_pwd = fs->pwd;
         path_get(&path);
         fs->pwd = path;
-        write_unlock(&fs->lock);
+        UNLOCK_FS_STRUCT(fs);
 
         if (old_pwd.dentry)
                 path_put(&old_pwd);
@@ -95,12 +104,12 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
         struct dentry *old_pwd;
         struct vfsmount *old_pwdmnt;
 
-        cfs_write_lock(&fs->lock);
+        LOCK_FS_STRUCT(fs);
         old_pwd = fs->pwd;
         old_pwdmnt = fs->pwdmnt;
         fs->pwdmnt = mntget(mnt);
         fs->pwd = dget(dentry);
-        cfs_write_unlock(&fs->lock);
+        UNLOCK_FS_STRUCT(fs);
 
         if (old_pwd) {
                 dput(old_pwd);
@@ -774,7 +783,9 @@ static inline long labs(long x)
 #define ll_sb_has_quota_active(sb, type) sb_has_quota_enabled(sb, type)
 #endif
 
-#ifdef HAVE_SB_ANY_QUOTA_ACTIVE
+#ifdef DQUOT_USAGE_ENABLED
+#define ll_sb_any_quota_active(sb) sb_any_quota_loaded(sb)
+#elif defined(HAVE_SB_ANY_QUOTA_ACTIVE)
 #define ll_sb_any_quota_active(sb) sb_any_quota_active(sb)
 #else
 #define ll_sb_any_quota_active(sb) sb_any_quota_enabled(sb)
@@ -783,12 +794,30 @@ static inline long labs(long x)
 static inline int
 ll_quota_on(struct super_block *sb, int off, int ver, char *name, int remount)
 {
+        int rc;
+
         if (sb->s_qcop->quota_on) {
-                return sb->s_qcop->quota_on(sb, off, ver, name
+#ifdef HAVE_QUOTA_ON_USE_PATH
+                struct path path;
+
+                rc = kern_path(name, LOOKUP_FOLLOW, &path);
+                if (!rc)
+                        return rc;
+#endif
+                rc = sb->s_qcop->quota_on(sb, off, ver
+#ifdef HAVE_QUOTA_ON_USE_PATH
+                                            , &path
+#else
+                                            , name
+#endif
 #ifdef HAVE_QUOTA_ON_5ARGS
                                             , remount
 #endif
                                            );
+#ifdef HAVE_QUOTA_ON_USE_PATH
+                path_put(&path);
+#endif
+                return rc;
         }
         else
                 return -ENOSYS;
@@ -887,6 +916,21 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #if !defined(HAVE_NODE_TO_CPUMASK) && defined(HAVE_CPUMASK_OF_NODE)
 #define node_to_cpumask(i)         (*(cpumask_of_node(i)))
 #define HAVE_NODE_TO_CPUMASK
+#endif
+
+#ifndef QUOTA_OK
+# define QUOTA_OK 0
+#endif
+#ifndef NO_QUOTA
+# define NO_QUOTA (-EDQUOT)
+#endif
+
+#if !defined(_ASM_GENERIC_BITOPS_EXT2_NON_ATOMIC_H_) && !defined(ext2_set_bit)
+# define ext2_set_bit             __test_and_set_bit_le
+# define ext2_clear_bit           __test_and_clear_bit_le
+# define ext2_test_bit            test_bit_le
+# define ext2_find_first_zero_bit find_first_zero_bit_le
+# define ext2_find_next_zero_bit  find_next_zero_bit_le
 #endif
 
 #endif /* __KERNEL__ */

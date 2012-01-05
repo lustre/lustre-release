@@ -979,11 +979,10 @@ EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-        struct super_operations *sop = NULL;
-        sop->statfs((struct dentry *)0, (struct kstatfs*)0);
+        ((struct super_operations *)0)->statfs((struct dentry *)0, (struct kstatfs*)0);
 ],[
         AC_DEFINE(HAVE_STATFS_DENTRY_PARAM, 1,
-                [super_ops.statfs() first parameter is dentry])
+                  [super_ops.statfs() first parameter is dentry])
         AC_MSG_RESULT([yes])
 ],[
         AC_MSG_RESULT([no])
@@ -1159,19 +1158,20 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_PAGE_CHECKED],
 [AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
 LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
 #ifdef HAVE_LINUX_MMTYPES_H
         #include <linux/mm_types.h>
 #endif
-	#include <linux/page-flags.h>
+        #include <linux/page-flags.h>
 ],[
- 	struct page *p;
+        struct page *p = NULL;
 
         /* before 2.6.26 this define*/
         #ifndef PageChecked	
- 	/* 2.6.26 use function instead of define for it */
- 	SetPageChecked(p);
- 	PageChecked(p);
- 	#endif
+        /* 2.6.26 use function instead of define for it */
+        SetPageChecked(p);
+        PageChecked(p);
+        #endif
 ],[
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_PAGE_CHECKED, 1,
@@ -2077,6 +2077,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 2.6.36 fs_struct.lock use spinlock instead of rwlock.
+#
+AC_DEFUN([LC_FS_STRUCT_RWLOCK],
+[AC_MSG_CHECKING([if fs_struct.lock use rwlock])
+LB_LINUX_TRY_COMPILE([
+        #include <asm/atomic.h>
+        #include <linux/spinlock.h>
+        #include <linux/fs_struct.h>
+],[
+        ((struct fs_struct *)0)->lock = (rwlock_t){ 0 };
+],[
+        AC_DEFINE(HAVE_FS_STRUCT_RWLOCK, 1,
+                  [fs_struct.lock use rwlock])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # 2.6.36 super_operations add evict_inode method. it hybird of
 # delete_inode & clear_inode.
 #
@@ -2143,6 +2163,28 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT([no])
 ])
+])
+
+#
+# 2.6.38 use path as 4th parameter in quota_on.
+#
+AC_DEFUN([LC_QUOTA_ON_USE_PATH],
+[AC_MSG_CHECKING([quota_on use path as parameter])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+        #include <linux/quota.h>
+],[
+        ((struct quotactl_ops *)0)->quota_on(NULL, 0, 0, ((struct path*)0));
+],[
+        AC_DEFINE(HAVE_QUOTA_ON_USE_PATH, 1,
+                [quota_on use path as 4th paramter])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
@@ -2342,12 +2384,14 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_FILE_FSYNC
 
          # 2.6.36
+         LC_FS_STRUCT_RWLOCK
          LC_SBOPS_EVICT_INODE
 
          # 2.6.38
          LC_ATOMIC_MNT_COUNT
          LC_BLKDEV_GET_BY_DEV
          LC_GENERIC_PERMISSION
+         LC_QUOTA_ON_USE_PATH
 
          # 2.6.39
          LC_REQUEST_QUEUE_UNPLUG_FN
