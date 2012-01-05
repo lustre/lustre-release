@@ -2544,7 +2544,7 @@ out:
         return rc;
 }
 
-void __exit sptlrpc_fini(void)
+void sptlrpc_fini(void)
 {
         sptlrpc_lproc_fini();
         sptlrpc_plain_fini();

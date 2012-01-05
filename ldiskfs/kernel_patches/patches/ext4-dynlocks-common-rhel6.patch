@@ -38,7 +38,7 @@ Index: linux-stage/fs/ext4/dynlocks.c
 +{
 +	int rc = 0;
 +
-+	printk(KERN_INFO "init dynlocks cache\n");
++	/* printk(KERN_INFO "init dynlocks cache\n"); */
 +	dynlock_cachep = kmem_cache_create("dynlock_cache",
 +					 sizeof(struct dynlock_handle),
 +					 0,
@@ -51,9 +51,9 @@ Index: linux-stage/fs/ext4/dynlocks.c
 +	return rc;
 +}
 +
-+void __exit dynlock_cache_exit(void)
++void dynlock_cache_exit(void)
 +{
-+	printk(KERN_INFO "exit dynlocks cache\n");
++	/* printk(KERN_INFO "exit dynlocks cache\n"); */
 +	kmem_cache_destroy(dynlock_cachep);
 +}
 +
@@ -122,7 +122,7 @@ Index: linux-stage/fs/ext4/dynlocks.c
 +		goto found;
 +	}
 +	spin_unlock(&dl->dl_list_lock);
-+	
++
 +	/* lock not found and we haven't allocated lock yet. allocate it */
 +	nhl = kmem_cache_alloc(dynlock_cachep, gfp);
 +	if (nhl == NULL)
@@ -179,7 +179,7 @@ Index: linux-stage/fs/ext4/dynlocks.c
 +void dynlock_unlock(struct dynlock *dl, struct dynlock_handle *hl)
 +{
 +	int wakeup = 0;
-+	
++
 +	BUG_ON(dl == NULL);
 +	BUG_ON(hl == NULL);
 +	BUG_ON(dl->dl_magic != DYNLOCK_LIST_MAGIC);
@@ -295,13 +295,16 @@ Index: linux-stage/fs/ext4/super.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c
-@@ -4125,32 +4125,37 @@ static int __init init_ext4_fs(void)
+@@ -4620,20 +4620,23 @@ static int __init init_ext4_fs(void)
  		return err;
  	ext4_kset = kset_create_and_add("ext4", NULL, fs_kobj);
  	if (!ext4_kset)
 -		goto out4;
 +		goto out5;
  	ext4_proc_root = proc_mkdir("fs/ext4", NULL);
+ 
+ 	err = ext4_init_feat_adverts();
+ 
  	err = init_ext4_mballoc();
  	if (err)
 -		goto out3;
@@ -319,7 +322,8 @@ Index: linux-stage/fs/ext4/super.c
  		goto out1;
  	err = register_filesystem(&ext4_fs_type);
  	if (err)
- 		goto out;
+@@ -4643,16 +4646,18 @@ static int __init init_ext4_fs(void)
+ 	mutex_init(&ext4_li_mtx);
  	return 0;
  out:
 -	destroy_inodecache();
@@ -333,6 +337,7 @@ Index: linux-stage/fs/ext4/super.c
  out3:
 +	exit_ext4_mballoc();
 +out4:
+ 	ext4_exit_feat_adverts();
  	remove_proc_entry("fs/ext4", NULL);
  	kset_unregister(ext4_kset);
 -out4:
@@ -340,9 +345,9 @@ Index: linux-stage/fs/ext4/super.c
  	exit_ext4_system_zone();
  	return err;
  }
-@@ -4158,6 +4163,7 @@ out4:
- static void __exit exit_ext4_fs(void)
+@@ -4661,6 +4666,7 @@ static void __exit exit_ext4_fs(void)
  {
+ 	ext4_destroy_lazyinit_thread();
  	unregister_filesystem(&ext4_fs_type);
 +	dynlock_cache_exit();
  	destroy_inodecache();

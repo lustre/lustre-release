@@ -1,26 +1,26 @@
 Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c	2011-03-11 15:27:08.000000000 +0800
-+++ linux-stage/fs/ext4/super.c	2011-03-11 15:29:41.023089829 +0800
-@@ -72,6 +72,8 @@
- static int ext4_freeze(struct super_block *sb);
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -82,6 +82,8 @@ static void ext4_clear_request_list(void
  
+ wait_queue_head_t aio_wq[WQ_HASH_SZ];
  
 +static int bigendian_extents;
 +
  ext4_fsblk_t ext4_block_bitmap(struct super_block *sb,
  			       struct ext4_group_desc *bg)
  {
-@@ -1492,7 +1494,7 @@
+@@ -1178,7 +1180,7 @@ enum {
+ 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_block_validity, Opt_noblock_validity,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
- 	Opt_discard, Opt_nodiscard,
 -	Opt_mballoc,
 +	Opt_mballoc, Opt_bigendian_extents,
+ 	Opt_discard, Opt_nodiscard,
+ 	Opt_init_inode_table, Opt_noinit_inode_table,
  };
- 
- static const match_table_t tokens = {
-@@ -1559,6 +1561,7 @@
+@@ -1250,6 +1252,7 @@ static const match_table_t tokens = {
  	{Opt_auto_da_alloc, "auto_da_alloc=%u"},
  	{Opt_auto_da_alloc, "auto_da_alloc"},
  	{Opt_noauto_da_alloc, "noauto_da_alloc"},
@@ -28,9 +28,9 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_mballoc, "mballoc"},
  	{Opt_discard, "discard"},
  	{Opt_nodiscard, "nodiscard"},
-@@ -1996,6 +1999,9 @@
- 			break;
- 		case Opt_mballoc:
+@@ -1692,6 +1695,9 @@ set_qf_format:
+ 			else
+ 				set_opt(sbi->s_mount_opt,NO_AUTO_DA_ALLOC);
  			break;
 +		case Opt_bigendian_extents:
 +			bigendian_extents = 1;
@@ -38,7 +38,7 @@ Index: linux-stage/fs/ext4/super.c
  		case Opt_discard:
  			set_opt(sbi->s_mount_opt, DISCARD);
  			break;
-@@ -3073,6 +3079,16 @@
+@@ -3179,6 +3185,16 @@ static int ext4_fill_super(struct super_
  		goto failed_mount;
  	}
  

@@ -1,8 +1,8 @@
-Index: linux-2.6.32-el6-beta/fs/ext4/ialloc.c
+Index: linux-stage/fs/ext4/ialloc.c
 ===================================================================
---- linux-2.6.32-el6-beta.orig/fs/ext4/ialloc.c
-+++ linux-2.6.32-el6-beta/fs/ext4/ialloc.c
-@@ -825,11 +825,15 @@ struct inode *ext4_new_inode(handle_t *h
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
+@@ -834,11 +834,15 @@ struct inode *ext4_new_inode(handle_t *h
  	sb = dir->i_sb;
  	ngroups = ext4_get_groups_count(sb);
  	trace_ext4_request_inode(dir, mode);
@@ -19,11 +19,11 @@ Index: linux-2.6.32-el6-beta/fs/ext4/ialloc.c
  
  	if (!goal)
  		goal = sbi->s_inode_goal;
-Index: linux-2.6.32-el6-beta/fs/ext4/super.c
+Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-2.6.32-el6-beta.orig/fs/ext4/super.c
-+++ linux-2.6.32-el6-beta/fs/ext4/super.c
-@@ -2601,6 +2601,7 @@ EXT4_RO_ATTR(lifetime_write_kbytes);
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -2348,6 +2348,7 @@ EXT4_RO_ATTR(lifetime_write_kbytes);
  EXT4_ATTR_OFFSET(inode_readahead_blks, 0644, sbi_ui_show,
  		 inode_readahead_blks_store, s_inode_readahead_blks);
  EXT4_RW_ATTR_SBI_UI(inode_goal, s_inode_goal);
@@ -31,7 +31,7 @@ Index: linux-2.6.32-el6-beta/fs/ext4/super.c
  EXT4_RW_ATTR_SBI_UI(mb_stats, s_mb_stats);
  EXT4_RW_ATTR_SBI_UI(mb_max_to_scan, s_mb_max_to_scan);
  EXT4_RW_ATTR_SBI_UI(mb_min_to_scan, s_mb_min_to_scan);
-@@ -2615,6 +2616,7 @@ static struct attribute *ext4_attrs[] = 
+@@ -2362,6 +2363,7 @@ static struct attribute *ext4_attrs[] = 
  	ATTR_LIST(lifetime_write_kbytes),
  	ATTR_LIST(inode_readahead_blks),
  	ATTR_LIST(inode_goal),
@@ -39,21 +39,21 @@ Index: linux-2.6.32-el6-beta/fs/ext4/super.c
  	ATTR_LIST(mb_stats),
  	ATTR_LIST(mb_max_to_scan),
  	ATTR_LIST(mb_min_to_scan),
-Index: linux-2.6.32-el6-beta/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.32-el6-beta.orig/fs/ext4/ext4.h
-+++ linux-2.6.32-el6-beta/fs/ext4/ext4.h
-@@ -1029,6 +1029,8 @@ struct ext4_sb_info {
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1138,6 +1138,8 @@ struct ext4_sb_info {
+ 	unsigned int s_log_groups_per_flex;
+ 	struct flex_groups *s_flex_groups;
  
- 	/* Kernel thread for multiple mount protection */
- 	struct task_struct *s_mmp_tsk;
-+
 +	unsigned long s_max_dir_size;
- };
++
+ 	/* workqueue for dio unwritten */
+ 	struct workqueue_struct *dio_unwritten_wq;
  
- static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
-@@ -1353,6 +1355,12 @@ struct mmp_struct {
- #define EXT4_MMP_MIN_CHECK_INTERVAL	5
+@@ -1598,6 +1600,12 @@ struct mmpd_data {
+ #define EXT4_MMP_MAX_CHECK_INTERVAL    300UL
  
  /*
 + * max directory size tunable

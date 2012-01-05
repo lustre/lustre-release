@@ -2649,7 +2649,7 @@ int __init ldlm_init(void)
         return 0;
 }
 
-void __exit ldlm_exit(void)
+void ldlm_exit(void)
 {
         int rc;
         if (ldlm_refcount)

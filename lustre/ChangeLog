@@ -1,12 +1,12 @@
-09-16-2011 Whamcloud, Inc.
+09-30-2011 Whamcloud, Inc.
        * version 2.1.0
        * Server support for kernels:
          2.6.18-274.12.1.el5 (RHEL5)
-         2.6.32-131.6.1.el6 (RHEL6)
+         2.6.32-220.el6 (RHEL6)
        * Client support for unpatched kernels:
          (see http://wiki.lustre.org/index.php?title=Patchless_Client)
          2.6.18-274.12.1.el5 (RHEL5)
-         2.6.32-131.6.1.el6 (RHEL6)
+         2.6.32-220.el6 (RHEL6)
          2.6.29.4-167.fc11  (FC11)
          2.6.16.60-0.69.1 (SLES10)
          2.6.27.19-5      (SLES11)
@@ -16,6 +16,10 @@
          information, please refer to bugzilla 17630.
        * NFSv4 reexport requires Lustre client on the re-exporting nodes to be
          mounted with "32bitapi" mount option
+
+Severity   : enhancement
+Jira       : LU-751
+Description: Update RHEL6.2 kernel to 2.6.32-220.el6
 
 Severity   : enhancement
 Jira       : LU-674

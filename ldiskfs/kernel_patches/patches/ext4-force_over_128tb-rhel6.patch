@@ -1,26 +1,26 @@
 Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-stage.orig/fs/ext4/super.c	2011-03-11 15:35:15.680343230 +0800
-+++ linux-stage/fs/ext4/super.c	2011-03-11 15:44:45.037632078 +0800
-@@ -55,6 +55,8 @@
- struct proc_dir_entry *ext4_proc_root;
- static struct kset *ext4_kset;
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -61,6 +61,8 @@ static struct ext4_lazy_init *ext4_li_in
+ static struct mutex ext4_li_mtx;
+ static struct ext4_features *ext4_feat;
  
 +static int force_over_128tb;
 +
  static int ext4_load_journal(struct super_block *, struct ext4_super_block *,
  			     unsigned long journal_devnum);
  static int ext4_commit_super(struct super_block *sb, int sync);
-@@ -1494,7 +1496,7 @@
+@@ -1180,7 +1182,7 @@ enum {
+ 	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_block_validity, Opt_noblock_validity,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
- 	Opt_discard, Opt_nodiscard,
 -	Opt_mballoc, Opt_bigendian_extents,
 +	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
+ 	Opt_discard, Opt_nodiscard,
+ 	Opt_init_inode_table, Opt_noinit_inode_table,
  };
- 
- static const match_table_t tokens = {
-@@ -1562,6 +1564,7 @@
+@@ -1253,6 +1255,7 @@ static const match_table_t tokens = {
  	{Opt_auto_da_alloc, "auto_da_alloc"},
  	{Opt_noauto_da_alloc, "noauto_da_alloc"},
  	{Opt_bigendian_extents, "bigendian_extents"},
@@ -28,7 +28,7 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_mballoc, "mballoc"},
  	{Opt_discard, "discard"},
  	{Opt_nodiscard, "nodiscard"},
-@@ -2008,6 +2011,9 @@
+@@ -1720,6 +1723,9 @@ set_qf_format:
  			break;
  		case Opt_mballoc:
  			break;
@@ -38,7 +38,7 @@ Index: linux-stage/fs/ext4/super.c
  		default:
  			ext4_msg(sb, KERN_ERR,
  			       "Unrecognized mount option \"%s\" "
-@@ -3031,6 +3037,16 @@
+@@ -3137,6 +3143,16 @@ static int ext4_fill_super(struct super_
  		goto failed_mount;
  	}
  

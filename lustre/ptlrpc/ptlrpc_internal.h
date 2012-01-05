@@ -138,7 +138,7 @@ void sptlrpc_conf_fini(void);
 
 /* sec.c */
 int  __init sptlrpc_init(void);
-void __exit sptlrpc_fini(void);
+void sptlrpc_fini(void);
 
 /* recov_thread.c */
 int llog_recov_init(void);

@@ -36,17 +36,17 @@ Index: linux-stage/fs/ext4/dir.c
  	const int rlen = ext4_rec_len_from_disk(de->rec_len,
  						dir->i_sb->s_blocksize);
  
--	if (rlen < EXT4_DIR_REC_LEN(1))
-+	if (rlen < __EXT4_DIR_REC_LEN(1))
+-	if (unlikely(rlen < EXT4_DIR_REC_LEN(1)))
++	if (unlikely(rlen < __EXT4_DIR_REC_LEN(1)))
  		error_msg = "rec_len is smaller than minimal";
- 	else if (rlen % 4 != 0)
+ 	else if (unlikely(rlen % 4 != 0))
  		error_msg = "rec_len % 4 != 0";
--	else if (rlen < EXT4_DIR_REC_LEN(de->name_len))
-+	else if (rlen < EXT4_DIR_REC_LEN(de))
+-	else if (unlikely(rlen < EXT4_DIR_REC_LEN(de->name_len)))
++	else if (unlikely(rlen < EXT4_DIR_REC_LEN(de)))
  		error_msg = "rec_len is too small for name_len";
- 	else if (((char *) de - bh->b_data) + rlen > dir->i_sb->s_blocksize)
+ 	else if (unlikely(((char *) de - bh->b_data) + rlen > dir->i_sb->s_blocksize))
  		error_msg = "directory entry across blocks";
-@@ -182,7 +189,7 @@ revalidate:
+@@ -183,7 +190,7 @@ revalidate:
  				 * failure will be detected in the
  				 * dirent test below. */
  				if (ext4_rec_len_from_disk(de->rec_len,
@@ -55,7 +55,7 @@ Index: linux-stage/fs/ext4/dir.c
  					break;
  				i += ext4_rec_len_from_disk(de->rec_len,
  							    sb->s_blocksize);
-@@ -345,12 +352,17 @@ int ext4_htree_store_dirent(struct file 
+@@ -346,12 +353,17 @@ int ext4_htree_store_dirent(struct file 
  	struct fname *fname, *new_fn;
  	struct dir_private_info *info;
  	int len;
@@ -74,7 +74,7 @@ Index: linux-stage/fs/ext4/dir.c
  	new_fn = kzalloc(len, GFP_KERNEL);
  	if (!new_fn)
  		return -ENOMEM;
-@@ -359,7 +371,7 @@ int ext4_htree_store_dirent(struct file 
+@@ -360,7 +372,7 @@ int ext4_htree_store_dirent(struct file 
  	new_fn->inode = le32_to_cpu(dirent->inode);
  	new_fn->name_len = dirent->name_len;
  	new_fn->file_type = dirent->file_type;
@@ -87,7 +87,7 @@ Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
-@@ -1267,6 +1267,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
+@@ -1293,6 +1293,7 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  #define EXT4_FEATURE_INCOMPAT_64BIT		0x0080
  #define EXT4_FEATURE_INCOMPAT_MMP               0x0100
  #define EXT4_FEATURE_INCOMPAT_FLEX_BG		0x0200
@@ -95,7 +95,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  #define EXT4_FEATURE_COMPAT_SUPP	EXT2_FEATURE_COMPAT_EXT_ATTR
  #define EXT4_FEATURE_INCOMPAT_SUPP	(EXT4_FEATURE_INCOMPAT_FILETYPE| \
-@@ -1275,7 +1276,9 @@ EXT4_INODE_BIT_FNS(state, state_flags)
+@@ -1301,7 +1302,9 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
  					 EXT4_FEATURE_INCOMPAT_FLEX_BG| \
@@ -106,7 +106,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_FEATURE_RO_COMPAT_SUPP	(EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT4_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -1357,6 +1360,43 @@ struct ext4_dir_entry_2 {
+@@ -1387,6 +1390,43 @@ struct ext4_dir_entry_2 {
  #define EXT4_FT_SYMLINK		7
  
  #define EXT4_FT_MAX		8
@@ -150,7 +150,7 @@ Index: linux-stage/fs/ext4/ext4.h
  
  /*
   * EXT4_DIR_PAD defines the directory entries boundaries
-@@ -1365,8 +1405,11 @@ struct ext4_dir_entry_2 {
+@@ -1395,8 +1435,11 @@ struct ext4_dir_entry_2 {
   */
  #define EXT4_DIR_PAD			4
  #define EXT4_DIR_ROUND			(EXT4_DIR_PAD - 1)
@@ -163,7 +163,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_MAX_REC_LEN		((1<<16)-1)
  
  static inline unsigned int
-@@ -1726,7 +1769,7 @@ extern struct buffer_head * ext4_find_en
+@@ -1786,7 +1829,7 @@ extern struct buffer_head * ext4_find_en
  					    struct ext4_dir_entry_2 ** res_dir);
  #define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(inode, &(dentry)->d_name, res_dir)
  extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
@@ -172,7 +172,7 @@ Index: linux-stage/fs/ext4/ext4.h
  extern struct buffer_head *ext4_append(handle_t *handle,
  				       struct inode *inode,
  				       ext4_lblk_t *block, int *err);
-@@ -2069,6 +2112,28 @@ extern wait_queue_head_t aio_wq[];
+@@ -2130,6 +2173,28 @@ extern wait_queue_head_t aio_wq[];
  #define to_aio_wq(v) (&aio_wq[((unsigned long)v) % WQ_HASH_SZ])
  extern void ext4_aio_wait(struct inode *inode);
  
@@ -431,7 +431,7 @@ Index: linux-stage/fs/ext4/namei.c
  
  out_journal:
  	if (journal) {
-@@ -1978,12 +2013,13 @@ retry:
+@@ -1977,12 +2012,13 @@ retry:
  /* Initialize @inode as a subdirectory of @dir, and add the
   * "." and ".." entries into the first directory block. */
  int ext4_add_dot_dotdot(handle_t *handle, struct inode * dir,
@@ -447,7 +447,7 @@ Index: linux-stage/fs/ext4/namei.c
  
  	if (IS_ERR(handle))
  		return PTR_ERR(handle);
-@@ -1996,28 +2032,40 @@ int ext4_add_dot_dotdot(handle_t *handle
+@@ -1995,28 +2031,40 @@ int ext4_add_dot_dotdot(handle_t *handle
  	inode->i_fop = &ext4_dir_operations;
  	inode->i_size = EXT4_I(inode)->i_disksize = inode->i_sb->s_blocksize;
  	dir_block = ext4_bread(handle, inode, 0, 1, &err);
@@ -496,7 +496,7 @@ Index: linux-stage/fs/ext4/namei.c
  	inode->i_nlink = 2;
  	BUFFER_TRACE(dir_block, "call ext4_handle_dirty_metadata");
  	ext4_handle_dirty_metadata(handle, dir, dir_block);
-@@ -2054,9 +2102,12 @@ retry:
+@@ -2053,9 +2101,12 @@ retry:
  	if (IS_ERR(inode))
  		goto out_stop;
  
@@ -510,7 +510,7 @@ Index: linux-stage/fs/ext4/namei.c
  		goto out_stop;
  	}
  
-@@ -2092,7 +2143,7 @@ static int empty_dir(struct inode *inode
+@@ -2091,7 +2142,7 @@ static int empty_dir(struct inode *inode
  	int err = 0;
  
  	sb = inode->i_sb;

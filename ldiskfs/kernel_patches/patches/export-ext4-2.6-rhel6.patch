@@ -1,8 +1,8 @@
-Index: linux-2.6.32.i386/fs/ext4/super.c
+Index: linux-stage/fs/ext4/super.c
 ===================================================================
---- linux-2.6.32.i386.orig/fs/ext4/super.c	2010-04-07 14:18:32.000000000 +0530
-+++ linux-2.6.32.i386/fs/ext4/super.c	2010-04-07 14:19:47.000000000 +0530
-@@ -291,6 +291,8 @@
+--- linux-stage.orig/fs/ext4/super.c
++++ linux-stage/fs/ext4/super.c
+@@ -301,6 +301,8 @@ void ext4_journal_abort_handle(const cha
  	jbd2_journal_abort_handle(handle);
  }
  
@@ -11,7 +11,7 @@ Index: linux-2.6.32.i386/fs/ext4/super.c
  /* Deal with the reporting of failure conditions on a filesystem such as
   * inconsistencies detected or read IO failures.
   *
-@@ -3030,6 +3032,8 @@
+@@ -3498,6 +3500,8 @@ out_fail:
  	return ret;
  }
  
@@ -20,7 +20,7 @@ Index: linux-2.6.32.i386/fs/ext4/super.c
  /*
   * Setup any per-fs journal parameters now.  We'll do this both on
   * initial mount, once the journal has been initialised but before we've
-@@ -4088,6 +4092,12 @@
+@@ -4603,6 +4607,12 @@ int ext4_map_inode_page(struct inode *in
  			unsigned long *blocks, int *created, int create);
  EXPORT_SYMBOL(ext4_map_inode_page);
  
@@ -33,24 +33,24 @@ Index: linux-2.6.32.i386/fs/ext4/super.c
  MODULE_AUTHOR("Remy Card, Stephen Tweedie, Andrew Morton, Andreas Dilger, Theodore Ts'o and others");
  MODULE_DESCRIPTION("Fourth Extended Filesystem");
  MODULE_LICENSE("GPL");
-Index: linux-2.6.32.i386/fs/ext4/ext4.h
+Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-2.6.32.i386.orig/fs/ext4/ext4.h	2010-04-07 14:17:04.000000000 +0530
-+++ linux-2.6.32.i386/fs/ext4/ext4.h	2010-04-07 14:20:34.000000000 +0530
-@@ -1385,6 +1385,8 @@
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1599,6 +1599,8 @@ extern unsigned ext4_init_inode_bitmap(s
  				       struct buffer_head *bh,
  				       ext4_group_t group,
  				       struct ext4_group_desc *desc);
 +extern struct buffer_head *ext4_read_inode_bitmap(struct super_block *sb,
 +						  ext4_group_t block_group);
  extern void mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
- 
- /* mballoc.c */
-Index: linux-2.6.32.i386/fs/ext4/ialloc.c
+ extern int ext4_init_inode_table(struct super_block *sb,
+ 				 ext4_group_t group, int barrier);
+Index: linux-stage/fs/ext4/ialloc.c
 ===================================================================
---- linux-2.6.32.i386.orig/fs/ext4/ialloc.c	2009-12-03 09:21:21.000000000 +0530
-+++ linux-2.6.32.i386/fs/ext4/ialloc.c	2010-04-07 14:19:47.000000000 +0530
-@@ -98,7 +98,7 @@
+--- linux-stage.orig/fs/ext4/ialloc.c
++++ linux-stage/fs/ext4/ialloc.c
+@@ -97,7 +97,7 @@ unsigned ext4_init_inode_bitmap(struct s
   *
   * Return buffer_head of bitmap on success or NULL.
   */
@@ -59,7 +59,7 @@ Index: linux-2.6.32.i386/fs/ext4/ialloc.c
  ext4_read_inode_bitmap(struct super_block *sb, ext4_group_t block_group)
  {
  	struct ext4_group_desc *desc;
-@@ -161,6 +161,7 @@
+@@ -161,6 +161,7 @@ ext4_read_inode_bitmap(struct super_bloc
  	}
  	return bh;
  }
@@ -67,11 +67,11 @@ Index: linux-2.6.32.i386/fs/ext4/ialloc.c
  
  /*
   * NOTE! When we get the inode, we're the only people
-Index: linux-2.6.32.i386/fs/ext4/balloc.c
+Index: linux-stage/fs/ext4/balloc.c
 ===================================================================
---- linux-2.6.32.i386.orig/fs/ext4/balloc.c	2010-03-19 15:43:37.000000000 +0530
-+++ linux-2.6.32.i386/fs/ext4/balloc.c	2010-04-07 14:19:47.000000000 +0530
-@@ -235,6 +235,7 @@
+--- linux-stage.orig/fs/ext4/balloc.c
++++ linux-stage/fs/ext4/balloc.c
+@@ -229,6 +229,7 @@ struct ext4_group_desc * ext4_get_group_
  		*bh = sbi->s_group_desc[group_desc];
  	return desc;
  }

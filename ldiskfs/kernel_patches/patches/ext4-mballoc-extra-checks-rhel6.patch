@@ -1,10 +1,10 @@
 Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
---- linux-stage.orig/fs/ext4/ext4.h	2011-03-14 16:18:28.300241437 +0800
-+++ linux-stage/fs/ext4/ext4.h	2011-03-14 16:33:17.056087375 +0800
-@@ -1770,6 +1770,7 @@
- 	ext4_grpblk_t	bb_free;	/* total free blocks */
+--- linux-stage.orig/fs/ext4/ext4.h
++++ linux-stage/fs/ext4/ext4.h
+@@ -1959,6 +1959,7 @@ struct ext4_group_info {
  	ext4_grpblk_t	bb_fragments;	/* nr of freespace fragments */
+ 	ext4_grpblk_t	bb_largest_free_order;/* order of largest frag in BG */
  	struct          list_head bb_prealloc_list;
 +	unsigned long   bb_prealloc_nr;
  #ifdef DOUBLE_CHECK
@@ -12,8 +12,8 @@ Index: linux-stage/fs/ext4/ext4.h
  #endif
 Index: linux-stage/fs/ext4/mballoc.c
 ===================================================================
---- linux-stage.orig/fs/ext4/mballoc.c	2011-03-14 16:18:28.336242149 +0800
-+++ linux-stage/fs/ext4/mballoc.c	2011-03-14 16:33:27.072292006 +0800
+--- linux-stage.orig/fs/ext4/mballoc.c
++++ linux-stage/fs/ext4/mballoc.c
 @@ -337,7 +337,7 @@
  static struct kmem_cache *ext4_pspace_cachep;
  static struct kmem_cache *ext4_ac_cachep;
@@ -23,7 +23,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  					ext4_group_t group);
  static void ext4_mb_generate_from_freelist(struct super_block *sb, void *bitmap,
  						ext4_group_t group);
-@@ -659,7 +659,7 @@
+@@ -680,7 +680,7 @@ mb_set_largest_free_order(struct super_b
  }
  
  static noinline_for_stack
@@ -32,7 +32,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  				void *buddy, void *bitmap, ext4_group_t group)
  {
  	struct ext4_group_info *grp = ext4_get_group_info(sb, group);
-@@ -691,14 +691,13 @@
+@@ -712,14 +712,13 @@ void ext4_mb_generate_buddy(struct super
  	grp->bb_fragments = fragments;
  
  	if (free != grp->bb_free) {
@@ -52,9 +52,9 @@ Index: linux-stage/fs/ext4/mballoc.c
 +			grp->bb_prealloc_nr);
 +		return -EIO;
  	}
+ 	mb_set_largest_free_order(sb, grp);
  
- 	clear_bit(EXT4_GROUP_INFO_NEED_INIT_BIT, &(grp->bb_state));
-@@ -708,6 +707,8 @@
+@@ -730,6 +729,8 @@ void ext4_mb_generate_buddy(struct super
  	EXT4_SB(sb)->s_mb_buddies_generated++;
  	EXT4_SB(sb)->s_mb_generation_time += period;
  	spin_unlock(&EXT4_SB(sb)->s_bal_lock);
@@ -63,25 +63,25 @@ Index: linux-stage/fs/ext4/mballoc.c
  }
  
  /* The buddy information is attached the buddy cache inode
-@@ -839,7 +840,7 @@
+@@ -876,7 +877,7 @@ static int ext4_mb_init_cache(struct pag
+ 
+ 	err = 0;
  	first_block = page->index * blocks_per_page;
- 	/* init the page  */
- 	memset(page_address(page), 0xff, PAGE_CACHE_SIZE);
 -	for (i = 0; i < blocks_per_page; i++) {
 +	for (i = 0; i < blocks_per_page && err == 0; i++) {
  		int group;
- 		struct ext4_group_info *grinfo;
  
-@@ -874,7 +875,7 @@
- 			 * incore got set to the group block bitmap below
- 			 */
+ 		group = (first_block + i) >> 1;
+@@ -916,7 +917,7 @@ static int ext4_mb_init_cache(struct pag
  			ext4_lock_group(sb, group);
+ 			/* init the buddy */
+ 			memset(data, 0xff, blocksize);
 -			ext4_mb_generate_buddy(sb, data, incore, group);
 +			err = ext4_mb_generate_buddy(sb, data, incore, group);
  			ext4_unlock_group(sb, group);
  			incore = NULL;
  		} else {
-@@ -888,7 +889,7 @@
+@@ -930,7 +931,7 @@ static int ext4_mb_init_cache(struct pag
  			memcpy(data, bitmap, blocksize);
  
  			/* mark all preallocated blks used in in-core bitmap */
@@ -90,7 +90,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  			ext4_mb_generate_from_freelist(sb, data, group);
  			ext4_unlock_group(sb, group);
  
-@@ -898,7 +899,8 @@
+@@ -940,7 +941,8 @@ static int ext4_mb_init_cache(struct pag
  			incore = data;
  		}
  	}
@@ -100,7 +100,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  out:
  	if (bh) {
-@@ -2142,9 +2144,11 @@
+@@ -2123,9 +2125,11 @@ static void *ext4_mb_seq_groups_next(str
  static int ext4_mb_seq_groups_show(struct seq_file *seq, void *v)
  {
  	struct super_block *sb = seq->private;
@@ -112,7 +112,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	struct ext4_buddy e4b;
  	struct sg {
  		struct ext4_group_info info;
-@@ -2153,10 +2157,10 @@
+@@ -2134,10 +2138,10 @@ static int ext4_mb_seq_groups_show(struc
  
  	group--;
  	if (group == 0)
@@ -125,7 +125,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  			   "2^0", "2^1", "2^2", "2^3", "2^4", "2^5", "2^6",
  			   "2^7", "2^8", "2^9", "2^10", "2^11", "2^12", "2^13");
  
-@@ -2167,13 +2171,20 @@
+@@ -2148,13 +2152,20 @@ static int ext4_mb_seq_groups_show(struc
  		seq_printf(seq, "#%-5u: I/O error\n", group);
  		return 0;
  	}
@@ -148,7 +148,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	for (i = 0; i <= 13; i++)
  		seq_printf(seq, " %-5u", i <= sb->s_blocksize_bits + 1 ?
  				sg.info.bb_counters[i] : 0);
-@@ -3354,23 +3365,68 @@
+@@ -3341,23 +3352,68 @@ static void ext4_mb_generate_from_freeli
  }
  
  /*
@@ -218,7 +218,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	/* all form of preallocation discards first load group,
  	 * so the only competing code is preallocation use.
  	 * we don't need any locking here
-@@ -3386,14 +3442,23 @@
+@@ -3373,14 +3429,23 @@ void ext4_mb_generate_from_pa(struct sup
  					     &groupnr, &start);
  		len = pa->pa_len;
  		spin_unlock(&pa->pa_lock);
@@ -243,7 +243,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  }
  
  static void ext4_mb_pa_callback(struct rcu_head *head)
-@@ -3452,6 +3517,7 @@
+@@ -3439,6 +3504,7 @@ static void ext4_mb_put_pa(struct ext4_a
  	 */
  	ext4_lock_group(sb, grp);
  	list_del(&pa->pa_group_list);
@@ -251,7 +251,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	ext4_unlock_group(sb, grp);
  
  	spin_lock(pa->pa_obj_lock);
-@@ -3543,6 +3609,7 @@
+@@ -3530,6 +3596,7 @@ ext4_mb_new_inode_pa(struct ext4_allocat
  
  	ext4_lock_group(sb, ac->ac_b_ex.fe_group);
  	list_add(&pa->pa_group_list, &grp->bb_prealloc_list);
@@ -259,7 +259,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
  
  	spin_lock(pa->pa_obj_lock);
-@@ -3604,6 +3671,7 @@
+@@ -3591,6 +3658,7 @@ ext4_mb_new_group_pa(struct ext4_allocat
  
  	ext4_lock_group(sb, ac->ac_b_ex.fe_group);
  	list_add(&pa->pa_group_list, &grp->bb_prealloc_list);
@@ -267,7 +267,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	ext4_unlock_group(sb, ac->ac_b_ex.fe_group);
  
  	/*
-@@ -3802,6 +3870,8 @@
+@@ -3789,6 +3857,8 @@ repeat:
  
  		spin_unlock(&pa->pa_lock);
  
@@ -276,7 +276,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  		list_del(&pa->pa_group_list);
  		list_add(&pa->u.pa_tmp_list, &list);
  	}
-@@ -3942,7 +4012,7 @@
+@@ -3929,7 +3999,7 @@ repeat:
  		if (err) {
  			ext4_error(sb, "Error loading buddy information for %u",
  					group);
@@ -285,7 +285,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  		}
  
  		bitmap_bh = ext4_read_block_bitmap(sb, group);
-@@ -3954,6 +4024,8 @@
+@@ -3941,6 +4011,8 @@ repeat:
  		}
  
  		ext4_lock_group(sb, group);
@@ -294,7 +294,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  		list_del(&pa->pa_group_list);
  		ext4_mb_release_inode_pa(&e4b, bitmap_bh, pa, ac);
  		ext4_unlock_group(sb, group);
-@@ -4227,6 +4299,7 @@
+@@ -4214,6 +4286,7 @@ ext4_mb_discard_lg_preallocations(struct
  		}
  		ext4_lock_group(sb, group);
  		list_del(&pa->pa_group_list);
@@ -304,9 +304,9 @@ Index: linux-stage/fs/ext4/mballoc.c
  
 Index: linux-stage/fs/ext4/mballoc.h
 ===================================================================
---- linux-stage.orig/fs/ext4/mballoc.h	2011-03-14 16:18:26.670209322 +0800
-+++ linux-stage/fs/ext4/mballoc.h	2011-03-14 16:32:50.859552482 +0800
-@@ -88,7 +88,7 @@
+--- linux-stage.orig/fs/ext4/mballoc.h
++++ linux-stage/fs/ext4/mballoc.h
+@@ -88,7 +88,7 @@ extern u8 mb_enable_debug;
  /*
   * for which requests use 2^N search using buddies
   */

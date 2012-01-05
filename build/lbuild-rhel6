@@ -29,9 +29,9 @@ ApplyOptionalPatch linux-%{version}-lustre.patch\
 ' \
            -e '/rm -f include\/generated\/kernel.cross/i\
   # lustre kernel config.\
-  if [ -f %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6-$Arch.config ]; then\
-    echo "# $Arch" > configs/kernel-%{version}-$Arch.config\
-    cat %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6-$Arch.config >> configs/kernel-%{version}-$Arch.config\
+  if [ -f %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6-%{_target_cpu}.config ]; then\
+    echo "# $Arch" > configs/kernel-%{version}-%{_target_cpu}.config\
+    cat %{_topdir}/lustre/lustre/kernel_patches/kernel_configs/kernel-%{version}-2.6-rhel6-%{_target_cpu}.config >> configs/kernel-%{version}-%{_target_cpu}.config\
   fi'\
           SPECS/$SPEC_NAME 2>&1 || \
         fatal 1 "Error while editing SPECS/$SPEC_NAME"

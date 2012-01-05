@@ -30,7 +30,7 @@ Index: linux-2.6.32-131.0.15.el6.x86_64/block/blk-core.c
  /*
   * Check whether this bio extends beyond the end of the device.
   */
-@@ -1517,6 +1519,23 @@ static inline void __generic_make_reques
+@@ -1517,6 +1519,21 @@ static inline void __generic_make_reques
  		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
  			goto end_io;
  
@@ -45,10 +45,8 @@ Index: linux-2.6.32-131.0.15.el6.x86_64/block/blk-core.c
 +                              bdev->bd_dev, bio->bi_flags, bio->bi_vcnt,
 +                              bio->bi_idx, bio->bi_size,
 +                              atomic_read(&bio->bi_cnt), bio->bi_private);
-+                       set_bit(BIO_RDONLY, &bio->bi_flags);
-+                       bio_endio(bio, 0);
-+                       clear_bit(BIO_RDONLY, &bio->bi_flags);
-+                       break;
++                       err = 0;
++                       goto end_io;
 +               }
 +
  		if (should_fail_request(bio))
@@ -166,18 +164,6 @@ Index: linux-2.6.32-131.0.15.el6.x86_64/fs/block_dev.c
  	}
  	unlock_kernel();
  	mutex_unlock(&bdev->bd_mutex);
-Index: linux-2.6.32-131.0.15.el6.x86_64/include/linux/blk_types.h
-===================================================================
---- linux-2.6.32-131.0.15.el6.x86_64.orig/include/linux/blk_types.h	2011-05-10 21:37:58.000000000 +0300
-+++ linux-2.6.32-131.0.15.el6.x86_64/include/linux/blk_types.h	2011-05-19 21:03:42.000000000 +0300
-@@ -24,6 +24,7 @@
- #define BIO_NULL_MAPPED 9	/* contains invalid user pages */
- #define BIO_FS_INTEGRITY 10	/* fs owns integrity data, not block layer */
- #define BIO_QUIET	11	/* Make BIO Quiet */
-+#define BIO_RDONLY	31	/* device is readonly */
- #define bio_flagged(bio, flag)	((bio)->bi_flags & (1 << (flag)))
- 
- /*
 Index: linux-2.6.32-131.0.15.el6.x86_64/include/linux/fs.h
 ===================================================================
 --- linux-2.6.32-131.0.15.el6.x86_64.orig/include/linux/fs.h	2011-05-10 21:38:29.000000000 +0300
