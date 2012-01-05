@@ -3336,7 +3336,7 @@ run_one_logged() {
 
     echo
     log_sub_test_begin test_${1}
-    (run_one $1 "$2") 2>&1 | tee $test_log
+    (run_one $1 "$2") 2>&1 | tee -i $test_log
     local RC=${PIPESTATUS[0]}
 
     [ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] && \

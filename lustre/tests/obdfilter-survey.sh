@@ -5,7 +5,6 @@ set -e
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@
-init_logging
 
 nobjhi=${nobjhi:-1}
 thrhi=${thrhi:-16}
@@ -13,6 +12,7 @@ size=${size:-1024}
 
 # the summary file a bit smaller than OSTSIZE
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
+init_logging
 
 [ "$SLOW" = no ] && { nobjhi=1; thrhi=4; }
 thrlo=${thrlo:-$(( thrhi / 2))}
@@ -33,6 +33,11 @@ if [ $(( size * 1024 )) -ge $minsize  ]; then
     echo min kbytesavail: $minsize using size=${size} MBytes per obd instance
 fi
 
+get_devs() {
+        echo $(do_nodes $1 'lctl dl | grep obdfilter' | \
+             awk '{print $4}' | sort -u)
+}
+
 get_targets () {
         local targets
         local devs
@@ -40,12 +45,12 @@ get_targets () {
         local oss
 
         for oss in $(osts_nodes); do
-                devs=$(do_node $oss "lctl dl |grep obdfilter |sort" | awk '{print $4}')
+                devs=$(get_devs $oss)
                 nid=$(host_nids_address $oss $NETTYPE)
                 for d in $devs; do
                         # if oss is local -- obdfilter-survey needs dev wo/ host
                         target=$d
-                        [[ $oss = `hostname` ]] || target=$nid:$target
+                        [[ $oss = `hostname` && "$1" == "netdisk" ]] || target=$nid:$target
                         targets="$targets $target"
                 done
         done
@@ -58,8 +63,8 @@ obdflter_survey_targets () {
 	local targets
 
 	case $case in
-		disk)    targets=$(get_targets);;
-		netdisk) targets=$(get_targets);;
+		disk)    targets=$(get_targets $case);;
+		netdisk) targets=$(get_targets $case);;
 		network) targets=$(host_nids_address $(comma_list $(osts_nodes)) $NETTYPE);;
 		*) error "unknown obdflter-survey case!" ;;
 	esac
