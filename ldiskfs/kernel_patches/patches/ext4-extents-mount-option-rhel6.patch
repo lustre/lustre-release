@@ -94,22 +94,22 @@ Index: linux-stage/fs/ext4/super.c
  		seq_puts(seq, ",i_version");
  	if (!test_opt(sb, DELALLOC))
 @@ -1515,6 +1517,7 @@ enum {
+	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
- 	Opt_discard, Opt_nodiscard,
  	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
 +	Opt_extents, Opt_noextents,
+ 	Opt_discard, Opt_nodiscard,
+	Opt_init_inode_table, Opt_noinit_inode_table,
  };
- 
- static const match_table_t tokens = {
 @@ -1589,6 +1592,8 @@ static const match_table_t tokens = {
+	{Opt_noauto_da_alloc, "noauto_da_alloc"},
+	{Opt_bigendian_extents, "bigendian_extents"},
  	{Opt_mballoc, "mballoc"},
- 	{Opt_discard, "discard"},
- 	{Opt_nodiscard, "nodiscard"},
 +	{Opt_extents, "extents"},
 +	{Opt_noextents, "noextents"},
- 	{Opt_err, NULL},
- };
- 
+ 	{Opt_discard, "discard"},
+ 	{Opt_nodiscard, "nodiscard"},
+	{Opt_init_inode_table, "init_itable=%u"},
 @@ -1631,6 +1636,7 @@ static int parse_options(char *options, 
  	int qtype, qfmt;
  	char *qname;

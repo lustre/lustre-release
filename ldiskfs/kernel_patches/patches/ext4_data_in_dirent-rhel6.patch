@@ -36,13 +36,13 @@ Index: linux-stage/fs/ext4/dir.c
  	const int rlen = ext4_rec_len_from_disk(de->rec_len,
  						dir->i_sb->s_blocksize);
  
--	if (rlen < EXT4_DIR_REC_LEN(1))
-+	if (rlen < __EXT4_DIR_REC_LEN(1))
+-	if (unlikely(rlen < EXT4_DIR_REC_LEN(1)))
++	if (unlikely(rlen < __EXT4_DIR_REC_LEN(1)))
  		error_msg = "rec_len is smaller than minimal";
- 	else if (rlen % 4 != 0)
+ 	else if (unlikely(rlen % 4 != 0))
  		error_msg = "rec_len % 4 != 0";
--	else if (rlen < EXT4_DIR_REC_LEN(de->name_len))
-+	else if (rlen < EXT4_DIR_REC_LEN(de))
+-	else if (unlikely(rlen < EXT4_DIR_REC_LEN(de->name_len)))
++	else if (unlikely(rlen < EXT4_DIR_REC_LEN(de)))
  		error_msg = "rec_len is too small for name_len";
  	else if (((char *) de - bh->b_data) + rlen > dir->i_sb->s_blocksize)
  		error_msg = "directory entry across blocks";

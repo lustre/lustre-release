@@ -205,30 +205,29 @@ Index: linux-stage/fs/ext4/super.c
  
  void ext4_block_bitmap_set(struct super_block *sb,
  			   struct ext4_group_desc *bg, ext4_fsblk_t blk)
-@@ -1500,11 +1501,13 @@ enum {
- 	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
- 	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_jqfmt_vfsv1, Opt_quota,
- 	Opt_noquota, Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err,
+@@ -1500,10 +1501,12 @@ enum {
+        Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
+	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_jqfmt_vfsv1, Opt_quota,
+	Opt_noquota, Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err,
 +	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
- 	Opt_resize, Opt_usrquota, Opt_grpquota, Opt_i_version,
+	Opt_resize, Opt_usrquota, Opt_grpquota, Opt_i_version,
  	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_block_validity, Opt_noblock_validity,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
- 	Opt_discard, Opt_nodiscard,
 +	Opt_mballoc,
+ 	Opt_discard, Opt_nodiscard,
+	Opt_init_inode_table, Opt_noinit_inode_table,
  };
- 
- static const match_table_t tokens = {
-@@ -1556,6 +1559,9 @@ static const match_table_t tokens = {
- 	{Opt_noquota, "noquota"},
- 	{Opt_quota, "quota"},
- 	{Opt_usrquota, "usrquota"},
+@@ -1556,6 +1559,9 @@ static const match_table_t tokens = {             
+	{Opt_noquota, "noquota"},
+	{Opt_quota, "quota"},
+	{Opt_usrquota, "usrquota"},
 +	{Opt_iopen, "iopen"},
 +	{Opt_noiopen, "noiopen"},
 +	{Opt_iopen_nopriv, "iopen_nopriv"},
- 	{Opt_barrier, "barrier=%u"},
- 	{Opt_barrier, "barrier"},
- 	{Opt_nobarrier, "nobarrier"},
+	{Opt_barrier, "barrier=%u"},
+	{Opt_barrier, "barrier"},
+	{Opt_nobarrier, "nobarrier"},
 @@ -1571,6 +1577,7 @@ static const match_table_t tokens = {
  	{Opt_auto_da_alloc, "auto_da_alloc=%u"},
  	{Opt_auto_da_alloc, "auto_da_alloc"},
@@ -237,7 +236,7 @@ Index: linux-stage/fs/ext4/super.c
  	{Opt_discard, "discard"},
  	{Opt_nodiscard, "nodiscard"},
  	{Opt_err, NULL},
-@@ -1928,6 +1935,10 @@ set_qf_format:
+@@ -1928,6 +1935,10 @@ set_qf_format:           
  			else
  				clear_opt(sbi->s_mount_opt, BARRIER);
  			break;

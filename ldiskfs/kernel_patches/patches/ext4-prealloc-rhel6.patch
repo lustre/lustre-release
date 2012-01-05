@@ -36,10 +36,11 @@ Index: linux-stage/fs/ext4/mballoc.c
 ===================================================================
 --- linux-stage.orig/fs/ext4/mballoc.c	2011-03-11 14:03:32.000000000 +0800
 +++ linux-stage/fs/ext4/mballoc.c	2011-03-11 14:44:49.106543493 +0800
-@@ -1823,6 +1823,26 @@
+@@ -1823,6 +1823,25 @@
+
  	}
  }
- 
++
 +static void ext4_mb_prealloc_table_add(struct ext4_sb_info *sbi, int value)
 +{
 +	int i;
@@ -58,11 +59,9 @@ Index: linux-stage/fs/ext4/mballoc.c
 +			return;
 +	}
 +}
-+
-+
+ 
  static int ext4_mb_good_group(struct ext4_allocation_context *ac,
  				ext4_group_t group, int cr)
- {
 @@ -2173,6 +2193,80 @@
  	.show   = ext4_mb_seq_groups_show,
  };

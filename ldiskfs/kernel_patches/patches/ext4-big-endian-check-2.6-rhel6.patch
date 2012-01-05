@@ -11,15 +11,16 @@ Index: linux-stage/fs/ext4/super.c
  ext4_fsblk_t ext4_block_bitmap(struct super_block *sb,
  			       struct ext4_group_desc *bg)
  {
-@@ -1492,7 +1494,7 @@
+@@ -1492,8 +1494,8 @@
+	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_block_validity, Opt_noblock_validity,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
- 	Opt_discard, Opt_nodiscard,
 -	Opt_mballoc,
 +	Opt_mballoc, Opt_bigendian_extents,
+ 	Opt_discard, Opt_nodiscard,
+	Opt_init_inode_table, Opt_noinit_inode_table,
  };
  
- static const match_table_t tokens = {
 @@ -1559,6 +1561,7 @@
  	{Opt_auto_da_alloc, "auto_da_alloc=%u"},
  	{Opt_auto_da_alloc, "auto_da_alloc"},

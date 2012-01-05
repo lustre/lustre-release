@@ -44,14 +44,14 @@ Index: linux-2.6.32-el6-beta/fs/ext4/ext4.h
 --- linux-2.6.32-el6-beta.orig/fs/ext4/ext4.h
 +++ linux-2.6.32-el6-beta/fs/ext4/ext4.h
 @@ -1029,6 +1029,8 @@ struct ext4_sb_info {
- 
- 	/* Kernel thread for multiple mount protection */
- 	struct task_struct *s_mmp_tsk;
+
+	unsigned int s_log_groups_per_flex;
+	struct flex_groups *s_flex_groups;
 +
 +	unsigned long s_max_dir_size;
- };
- 
- static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
+
+	/* workqueue for dio unwritten */
+	struct workqueue_struct *dio_unwritten_wq;
 @@ -1353,6 +1355,12 @@ struct mmp_struct {
  #define EXT4_MMP_MIN_CHECK_INTERVAL	5
  

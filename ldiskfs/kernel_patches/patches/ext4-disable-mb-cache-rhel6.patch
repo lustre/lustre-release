@@ -18,20 +18,20 @@ Index: linux-stage/fs/ext4/super.c
 +++ linux-stage/fs/ext4/super.c	2011-03-14 16:18:13.831956469 +0800
 @@ -1502,6 +1502,7 @@
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
- 	Opt_discard, Opt_nodiscard,
  	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
-+	Opt_no_mbcache,
  	Opt_extents, Opt_noextents,
++	Opt_no_mbcache,
+ 	Opt_discard, Opt_nodiscard,
+	Opt_init_inode_table, Opt_noinit_inode_table,
  };
- 
 @@ -1574,6 +1575,7 @@
+	{Opt_noauto_da_alloc, "noauto_da_alloc"},
+	{Opt_bigendian_extents, "bigendian_extents"},
  	{Opt_mballoc, "mballoc"},
- 	{Opt_discard, "discard"},
- 	{Opt_nodiscard, "nodiscard"},
 +	{Opt_no_mbcache, "no_mbcache"},
- 	{Opt_extents, "extents"},
- 	{Opt_noextents, "noextents"},
- 	{Opt_err, NULL},
+	{Opt_extents, "extents"},
+	{Opt_noextents, "noextents"},
+ 	{Opt_discard, "discard"},
 @@ -2049,6 +2051,9 @@
  			}
  			clear_opt(sbi->s_mount_opt, EXTENTS);

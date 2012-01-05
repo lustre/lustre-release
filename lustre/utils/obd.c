@@ -1173,11 +1173,9 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
 {
         struct obd_ioctl_data  data;
         struct timeval         start;
-        struct timeval         next_time;
         struct timeval         end_time;
         char                   rawbuf[MAX_IOC_BUFLEN];
         char                  *buf = rawbuf;
-        int                    verbose = 1;
         int                    mode = 0000644;
         int                    create_mode;
         int                    rc = 0;
@@ -1270,7 +1268,7 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                 case 't':
                         seconds = strtoull(optarg, &end, 0);
                         if (*end) {
-                                fprintf(stderr, "error: %s: senconds '%s'\n",
+                                fprintf(stderr, "error: %s: seconds '%s'\n",
                                         jt_cmdname(argv[0]), optarg);
                                 return CMD_HELP;
                         }
@@ -1281,10 +1279,11 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
                 case 'x':
                         xattr_size = strtoul(optarg, &end, 0);
                         if (*end) {
-                                fprintf(stderr, "error: %s: senconds '%s'\n",
+                                fprintf(stderr, "error: %s: xattr_size '%s'\n",
                                         jt_cmdname(argv[0]), optarg);
                                 return CMD_HELP;
                         }
+                        SET_BUT_UNUSED(xattr_size);
                         break;
                 default:
                         fprintf(stderr, "error: %s: option '%s' "
@@ -1404,8 +1403,6 @@ int jt_obd_md_common(int argc, char **argv, int cmd)
         data.ioc_command = cmd;
 
         gettimeofday(&start, NULL);
-        next_time.tv_sec = start.tv_sec - verbose;
-        next_time.tv_usec = start.tv_usec;
         while (shmem_running()) {
                 struct lu_fid fid;
 

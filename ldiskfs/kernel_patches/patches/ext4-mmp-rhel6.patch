@@ -51,9 +51,9 @@ Index: linux-stage/fs/ext4/ext4.h
 +
 +	/* Kernel thread for multiple mount protection */
 +	struct task_struct *s_mmp_tsk;
- };
  
- static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
+	/* Lazy inode table initialization info */
+	struct ext4_li_request *s_li_request;
 @@ -1176,7 +1179,8 @@ static inline void ext4_clear_inode_stat
  					 EXT4_FEATURE_INCOMPAT_META_BG| \
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \

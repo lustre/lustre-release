@@ -64,18 +64,18 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  /* The buddy information is attached the buddy cache inode
 @@ -839,7 +840,7 @@
- 	first_block = page->index * blocks_per_page;
- 	/* init the page  */
- 	memset(page_address(page), 0xff, PAGE_CACHE_SIZE);
+ 
+	err = 0;
+	first_block = page->index * blocks_per_page;
 -	for (i = 0; i < blocks_per_page; i++) {
 +	for (i = 0; i < blocks_per_page && err == 0; i++) {
  		int group;
  		struct ext4_group_info *grinfo;
  
 @@ -874,7 +875,7 @@
- 			 * incore got set to the group block bitmap below
- 			 */
  			ext4_lock_group(sb, group);
+			/* init the buddy */
+			memset(data, 0xff, blocksize);
 -			ext4_mb_generate_buddy(sb, data, incore, group);
 +			err = ext4_mb_generate_buddy(sb, data, incore, group);
  			ext4_unlock_group(sb, group);

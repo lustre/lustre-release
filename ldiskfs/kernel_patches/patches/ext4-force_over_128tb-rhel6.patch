@@ -12,14 +12,14 @@ Index: linux-stage/fs/ext4/super.c
  			     unsigned long journal_devnum);
  static int ext4_commit_super(struct super_block *sb, int sync);
 @@ -1494,7 +1496,7 @@
+	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_block_validity, Opt_noblock_validity,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
- 	Opt_discard, Opt_nodiscard,
 -	Opt_mballoc, Opt_bigendian_extents,
 +	Opt_mballoc, Opt_bigendian_extents, Opt_force_over_128tb,
+ 	Opt_discard, Opt_nodiscard,
+	Opt_init_inode_table, Opt_noinit_inode_table,
  };
- 
- static const match_table_t tokens = {
 @@ -1562,6 +1564,7 @@
  	{Opt_auto_da_alloc, "auto_da_alloc"},
  	{Opt_noauto_da_alloc, "noauto_da_alloc"},
