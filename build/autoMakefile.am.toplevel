@@ -118,6 +118,9 @@ rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
 	if ! $(BUILD_TESTS); then \
 		RPMARGS="$$RPMARGS --define \"build_lustre_tests 0\""; \
 	fi; \
+	if ! $(BUILD_SERVER); then \
+		RPMARGS="$$RPMARGS --define \"lustre_name lustre-client\""; \
+	fi; \
 	echo "Building Lustre RPM with $$RPMARGS"; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 

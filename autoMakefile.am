@@ -6,6 +6,10 @@ MODULE_SYMVERS_DEPS = module-symvers
 
 @TESTS_TRUE@BUILD_TESTS = true
 @TESTS_FALSE@BUILD_TESTS = false
+@SERVER_TRUE@BUILD_SERVER = true
+@SERVER_FALSE@BUILD_SERVER = false
+@CLIENT_TRUE@BUILD_CLIENT = true
+@CLIENT_FALSE@BUILD_CLIENT = false
 
 include build/autoMakefile.am.toplevel
 
