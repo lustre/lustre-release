@@ -2085,7 +2085,7 @@ static int ptlrpc_main(void *arg)
 #ifdef WITH_GROUP_INFO
         cfs_group_info_t *ginfo = NULL;
 #endif
-        struct lu_env env;
+        struct lu_env *env;
         int counter = 0, rc = 0;
         ENTRY;
 
@@ -2128,14 +2128,20 @@ static int ptlrpc_main(void *arg)
                         goto out;
         }
 
-        rc = lu_context_init(&env.le_ctx,
+        OBD_ALLOC_PTR(env);
+        if (env == NULL) {
+                rc = -ENOMEM;
+                goto out_srv_fini;
+        }
+
+        rc = lu_context_init(&env->le_ctx,
                              svc->srv_ctx_tags|LCT_REMEMBER|LCT_NOREF);
         if (rc)
                 goto out_srv_fini;
 
-        thread->t_env = &env;
-        env.le_ctx.lc_thread = thread;
-        env.le_ctx.lc_cookie = 0x6;
+        thread->t_env = env;
+        env->le_ctx.lc_thread = thread;
+        env->le_ctx.lc_cookie = 0x6;
 
         /* Alloc reply state structure for this one */
         OBD_ALLOC_LARGE(rs, svc->srv_max_reply_size);
@@ -2199,9 +2205,9 @@ static int ptlrpc_main(void *arg)
                         ptlrpc_at_check_timed(svc);
 
                 if (ptlrpc_server_request_pending(svc, 0)) {
-                        lu_context_enter(&env.le_ctx);
+                        lu_context_enter(&env->le_ctx);
                         ptlrpc_server_handle_request(svc, thread);
-                        lu_context_exit(&env.le_ctx);
+                        lu_context_exit(&env->le_ctx);
                 }
 
                 if (ptlrpc_rqbd_pending(svc) &&
@@ -2225,7 +2231,10 @@ out_srv_fini:
         if (svc->srv_done != NULL)
                 svc->srv_done(thread);
 
-        lu_context_fini(&env.le_ctx);
+        if (env != NULL) {
+                lu_context_fini(&env->le_ctx);
+                OBD_FREE_PTR(env);
+        }
 out:
         CDEBUG(D_RPCTRACE, "service thread [ %p : %u ] %d exiting: rc %d\n",
                thread, thread->t_pid, thread->t_id, rc);

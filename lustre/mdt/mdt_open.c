@@ -726,9 +726,9 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
 }
 
 
-static int mdt_finish_open(struct mdt_thread_info *info,
-                           struct mdt_object *p, struct mdt_object *o,
-                           __u64 flags, int created, struct ldlm_reply *rep)
+int mdt_finish_open(struct mdt_thread_info *info,
+                    struct mdt_object *p, struct mdt_object *o,
+                    __u64 flags, int created, struct ldlm_reply *rep)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct obd_export       *exp = req->rq_export;
@@ -998,8 +998,8 @@ out:
         LASSERT(ergo(rc < 0, lustre_msg_get_transno(req->rq_repmsg) == 0));
 }
 
-static int mdt_open_by_fid(struct mdt_thread_info* info,
-                           struct ldlm_reply *rep)
+int mdt_open_by_fid(struct mdt_thread_info* info,
+                    struct ldlm_reply *rep)
 {
         const struct lu_env     *env = info->mti_env;
         __u32                    flags = info->mti_spec.sp_cr_flags;
@@ -1036,9 +1036,9 @@ static int mdt_open_by_fid(struct mdt_thread_info* info,
         RETURN(rc);
 }
 
-static int mdt_open_anon_by_fid(struct mdt_thread_info *info,
-                                struct ldlm_reply *rep,
-                                struct mdt_lock_handle *lhc)
+int mdt_open_anon_by_fid(struct mdt_thread_info *info,
+                         struct ldlm_reply *rep,
+                         struct mdt_lock_handle *lhc)
 {
         const struct lu_env     *env   = info->mti_env;
         struct mdt_device       *mdt   = info->mti_mdt;
@@ -1138,9 +1138,9 @@ int mdt_pin(struct mdt_thread_info* info)
 }
 
 /* Cross-ref request. Currently it can only be a pure open (w/o create) */
-static int mdt_cross_open(struct mdt_thread_info* info,
-                          const struct lu_fid *fid,
-                          struct ldlm_reply *rep, __u32 flags)
+int mdt_cross_open(struct mdt_thread_info* info,
+                   const struct lu_fid *fid,
+                   struct ldlm_reply *rep, __u32 flags)
 {
         struct md_attr    *ma = &info->mti_attr;
         struct mdt_object *o;
