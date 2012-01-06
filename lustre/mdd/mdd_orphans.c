@@ -57,6 +57,7 @@
 #include "mdd_internal.h"
 
 const char orph_index_name[] = "PENDING";
+const char *dotdot = "..";
 
 enum {
         ORPH_OP_UNLINK,
@@ -182,6 +183,41 @@ static inline void mdd_orphan_ref_del(const struct lu_env *env,
 }
 
 
+int orph_declare_index_insert(const struct lu_env *env,
+                              struct mdd_object *obj,
+                              struct thandle *th)
+{
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        int                rc;
+
+        rc = dt_declare_insert(env, mdd->mdd_orphans, NULL, NULL, th);
+        if (rc)
+                return rc;
+
+        rc = mdo_declare_ref_add(env, obj, th);
+        if (rc)
+                return rc;
+
+        if (!S_ISDIR(mdd_object_type(obj)))
+                return 0;
+
+        rc = mdo_declare_ref_add(env, obj, th);
+        if (rc)
+                return rc;
+
+        rc = dt_declare_ref_add(env, mdd->mdd_orphans, th);
+        if (rc)
+                return rc;
+
+        rc = mdo_declare_index_delete(env, obj, dotdot, th);
+        if (rc)
+                return rc;
+
+        rc = mdo_declare_index_insert(env, obj, NULL, dotdot, th);
+
+        return rc;
+}
+
 static int orph_index_insert(const struct lu_env *env,
                              struct mdd_object *obj,
                              __u32 op,
@@ -191,7 +227,6 @@ static int orph_index_insert(const struct lu_env *env,
         struct dt_object        *dor    = mdd->mdd_orphans;
         const struct lu_fid     *lf_dor = lu_object_fid(&dor->do_lu);
         struct dt_object        *next   = mdd_object_child(obj);
-        const struct dt_key     *dotdot = (const struct dt_key *) "..";
         int rc;
         ENTRY;
 
@@ -217,11 +252,13 @@ static int orph_index_insert(const struct lu_env *env,
         if (!dt_try_as_dir(env, next))
                 goto out;
         next->do_index_ops->dio_delete(env, next,
-                                       dotdot, th, BYPASS_CAPA);
+                                       (const struct dt_key *)dotdot,
+                                       th, BYPASS_CAPA);
 
         next->do_index_ops->dio_insert(env, next,
-                                       (struct dt_rec *) lf_dor,
-                                       dotdot, th, BYPASS_CAPA, 1);
+                                       (struct dt_rec *)lf_dor,
+                                       (const struct dt_key *)dotdot,
+                                       th, BYPASS_CAPA, 1);
 
 out:
         if (rc == 0)
@@ -264,7 +301,34 @@ static int orphan_object_kill(const struct lu_env *env,
                 if (rc == 0)
                         rc = mdd_lov_destroy(env, mdd, obj, la);
         }
+        mdo_destroy(env, obj, th);
         RETURN(rc);
+}
+
+int orph_declare_index_delete(const struct lu_env *env,
+                              struct mdd_object *obj,
+                              struct thandle *th)
+{
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        int                rc;
+
+        rc = dt_declare_delete(env, mdd->mdd_orphans, NULL, th);
+        if (rc)
+                return rc;
+
+        rc = mdo_declare_ref_del(env, obj, th);
+        if (rc)
+                return rc;
+
+        if (S_ISDIR(mdd_object_type(obj))) {
+                rc = mdo_declare_ref_del(env, obj, th);
+                if (rc)
+                        return rc;
+
+                rc = dt_declare_ref_del(env, mdd->mdd_orphans, th);
+        }
+
+        return rc;
 }
 
 static int orph_index_delete(const struct lu_env *env,
@@ -330,12 +394,22 @@ static int orphan_object_destroy(const struct lu_env *env,
         ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
         ma->ma_valid = 0;
 
-        mdd_log_txn_param_build(env, &obj->mod_obj, ma, MDD_TXN_UNLINK_OP, 0);
-        th = mdd_trans_start(env, mdd);
+        th = mdd_trans_create(env, mdd);
         if (IS_ERR(th)) {
                 CERROR("Cannot get thandle\n");
                 RETURN(-ENOMEM);
         }
+        rc = orph_declare_index_delete(env, obj, th);
+        if (rc)
+                GOTO(stop, rc);
+
+        rc = mdd_declare_object_kill(env, obj, ma, th);
+        if (rc)
+                GOTO(stop, rc);
+
+        rc = mdd_trans_start(env, mdd, th);
+        if (rc)
+                GOTO(stop, rc);
 
         mdd_write_lock(env, obj, MOR_TGT_CHILD);
         if (likely(obj->mod_count == 0)) {
@@ -348,6 +422,8 @@ static int orphan_object_destroy(const struct lu_env *env,
                 mdd_orphan_write_unlock(env, mdd);
         }
         mdd_write_unlock(env, obj);
+
+stop:
         mdd_trans_stop(env, mdd, 0, th);
 
         RETURN(rc);

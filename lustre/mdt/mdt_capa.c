@@ -28,6 +28,7 @@
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2011 Whamcloud, Inc.
  */
 /*
  * Copyright (c) 2011 Whamcloud, Inc.
@@ -92,10 +93,18 @@ static int write_capa_keys(const struct lu_env *env,
         int i, rc;
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        mdt_trans_credit_init(env, mdt, MDT_TXN_CAPA_KEYS_WRITE_OP);
-        th = mdt_trans_start(env, mdt);
+        th = mdt_trans_create(env, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
+
+        rc = dt_declare_record_write(env, mdt->mdt_ck_obj,
+                                     sizeof(*tmp) * 3, 0, th);
+        if (rc)
+                goto stop;
+
+        rc = mdt_trans_start(env, mdt, th);
+        if (rc)
+                goto stop;
 
         tmp = &mti->mti_capa_key;
 
@@ -109,6 +118,7 @@ static int write_capa_keys(const struct lu_env *env,
                         break;
         }
 
+stop:
         mdt_trans_stop(env, mdt, th);
 
         CDEBUG(D_INFO, "write capability keys rc = %d:\n", rc);

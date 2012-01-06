@@ -28,6 +28,7 @@
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2011 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -88,6 +89,26 @@ void seq_update_cb(struct lu_env *env, struct thandle *th,
         OBD_FREE_PTR(ccb);
 }
 
+struct thandle *seq_store_trans_create(struct lu_server_seq *seq,
+                                       const struct lu_env *env)
+{
+        struct dt_device *dt_dev;
+
+        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
+        return dt_trans_create(env, dt_dev);
+}
+
+int seq_store_trans_start(struct lu_server_seq *seq, const struct lu_env *env,
+                          struct thandle *th)
+{
+        struct dt_device *dt_dev;
+        ENTRY;
+
+        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
+
+        return dt_trans_start(env, dt_dev, th);
+}
+
 int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
 {
         struct seq_update_callback *ccb;
@@ -103,6 +124,20 @@ int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
         rc = dt_trans_cb_add(th, &ccb->suc_cb);
         if (rc)
                 OBD_FREE_PTR(ccb);
+        return rc;
+}
+
+int seq_declare_store_write(struct lu_server_seq *seq,
+                            const struct lu_env *env,
+                            struct thandle *th)
+{
+        struct dt_object *dt_obj = seq->lss_obj;
+        int rc;
+        ENTRY;
+
+        rc = dt_obj->do_body_ops->dbo_declare_write(env, dt_obj,
+                                                    sizeof(struct lu_seq_range),
+                                                    0, th);
         return rc;
 }
 
@@ -141,36 +176,44 @@ int seq_store_write(struct lu_server_seq *seq,
 int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
                      struct lu_seq_range *out, int sync)
 {
-        struct seq_thread_info *info;
         struct dt_device *dt_dev;
         struct thandle *th;
         int rc;
-        int credits = SEQ_TXN_STORE_CREDITS;
         ENTRY;
 
         dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
-        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
 
-        if (out != NULL)
-                credits += FLD_TXN_INDEX_INSERT_CREDITS;
-
-        txn_param_init(&info->sti_txn, credits);
-        th = dt_trans_start(env, dt_dev, &info->sti_txn);
+        th = seq_store_trans_create(seq, env);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
+
+        rc = seq_declare_store_write(seq, env, th);
+        if (rc)
+                GOTO(exit, rc);
+
+        if (out != NULL) {
+                rc = fld_declare_server_create(seq->lss_site->ms_server_fld,
+                                               env, th);
+                if (rc)
+                        GOTO(exit, rc);
+        }
+
+        rc = seq_store_trans_start(seq, env, th);
+        if (rc)
+                GOTO(exit, rc);
 
         rc = seq_store_write(seq, env, th);
         if (rc) {
                 CERROR("%s: Can't write space data, rc %d\n",
                        seq->lss_name, rc);
-                GOTO(out,rc);
+                GOTO(exit,rc);
         } else if (out != NULL) {
                 rc = fld_server_create(seq->lss_site->ms_server_fld,
                                        env, out, th);
                 if (rc) {
                         CERROR("%s: Can't Update fld database, rc %d\n",
                                seq->lss_name, rc);
-                        GOTO(out,rc);
+                        GOTO(exit,rc);
                 }
         }
 
@@ -181,7 +224,7 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
                 sync = !!seq_update_cb_add(th, seq);
 
         th->th_sync |= sync;
-out:
+exit:
         dt_trans_stop(env, dt_dev, th);
         return rc;
 }

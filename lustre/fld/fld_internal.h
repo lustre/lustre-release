@@ -28,6 +28,7 @@
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2011 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -146,12 +147,13 @@ struct fld_thread_info {
         struct lu_seq_range fti_rec;
         struct lu_seq_range fti_lrange;
         struct lu_seq_range fti_irange;
-        struct txn_param    fti_txn_param;
 };
 
 
-struct thandle* fld_trans_start(struct lu_server_fld *fld,
-                                const struct lu_env *env, int credit);
+struct thandle *fld_trans_create(struct lu_server_fld *fld,
+                                const struct lu_env *env);
+int fld_trans_start(struct lu_server_fld *fld,
+                    const struct lu_env *env, struct thandle *th);
 
 void fld_trans_stop(struct lu_server_fld *fld,
                     const struct lu_env *env, struct thandle* th);

@@ -369,6 +369,24 @@ int mdd_lov_objid_prepare(struct mdd_device *mdd, struct lov_mds_md *lmm)
         return mds_lov_prepare_objids(mdd->mdd_obd_dev, lmm);
 }
 
+int mdd_declare_lov_objid_update(const struct lu_env *env,
+                                 struct mdd_device *mdd,
+                                 struct thandle *handle)
+{
+        struct obd_device *obd = mdd2obd_dev(mdd);
+        int size;
+
+        /* in prepare we create local files */
+        if (unlikely(mdd->mdd_capa == NULL))
+                return 0;
+
+        /* XXX: this is a temporary solution to declare llog changes
+         *      will be fixed in 2.3 with new llog implementation */
+
+        size = obd->u.mds.mds_lov_desc.ld_tgt_count * sizeof(obd_id);
+        return dt_declare_record_write(env, mdd->mdd_capa, size, 0, handle);
+}
+
 void mdd_lov_objid_update(struct mdd_device *mdd, struct lov_mds_md *lmm)
 {
         /* copy mds_lov code is using wrong layer */
@@ -659,6 +677,48 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
                                        ma->ma_lmm, ma->ma_lmm_size,
                                        ma->ma_cookie, 1);
         RETURN(rc);
+}
+
+int mdd_declare_unlink_log(const struct lu_env *env, struct mdd_object *obj,
+                           struct md_attr *ma, struct thandle *handle)
+{
+        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
+        int rc, stripe, i;
+
+        LASSERT(obj);
+        LASSERT(ma);
+
+        if (!S_ISREG(lu_object_attr(&obj->mod_obj.mo_lu)))
+                return 0;
+
+        rc = mdd_lmm_get_locked(env, obj, ma);
+        if (rc || !(ma->ma_valid & MA_LOV))
+                return rc;
+
+        LASSERT(ma->ma_lmm);
+        if (le32_to_cpu(ma->ma_lmm->lmm_magic) != LOV_MAGIC_V1 &&
+                        le32_to_cpu(ma->ma_lmm->lmm_magic) != LOV_MAGIC_V3) {
+                CERROR("%s: invalid LOV_MAGIC %08x on object "DFID"\n",
+                                mdd->mdd_obd_dev->obd_name,
+                                le32_to_cpu(ma->ma_lmm->lmm_magic),
+                                PFID(lu_object_fid(&obj->mod_obj.mo_lu)));
+                return -EINVAL;
+        }
+
+        if ((int)le32_to_cpu(ma->ma_lmm->lmm_stripe_count) < 0)
+                stripe = mdd2obd_dev(mdd)->u.mds.mds_lov_desc.ld_tgt_count;
+        else
+                stripe = le32_to_cpu(ma->ma_lmm->lmm_stripe_count);
+
+        for (i = 0; i < stripe; i++) {
+                rc = mdd_declare_llog_record(env, mdd,
+                                             sizeof(struct llog_unlink_rec),
+                                             handle);
+                if (rc)
+                        return rc;
+        }
+
+        return rc;
 }
 
 int mdd_unlink_log(const struct lu_env *env, struct mdd_device *mdd,

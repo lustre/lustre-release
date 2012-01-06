@@ -138,8 +138,24 @@ static       struct lu_context_key            osd_key;
 static const struct dt_object_operations      osd_obj_ops;
 static const struct dt_object_operations      osd_obj_ea_ops;
 static const struct dt_body_operations        osd_body_ops;
+static const struct dt_body_operations        osd_body_ops_new;
 static const struct dt_index_operations       osd_index_iam_ops;
 static const struct dt_index_operations       osd_index_ea_ops;
+
+#define OSD_TRACK_DECLARES
+#ifdef OSD_TRACK_DECLARES
+#define OSD_DECLARE_OP(oh, op)   {                               \
+        LASSERT(oh->ot_handle == NULL);                          \
+        ((oh)->ot_declare_ ##op)++; }
+#define OSD_EXEC_OP(handle, op)     {                            \
+        struct osd_thandle *oh;                                  \
+        oh = container_of0(handle, struct osd_thandle, ot_super);\
+        LASSERT((oh)->ot_declare_ ##op > 0);                     \
+        ((oh)->ot_declare_ ##op)--; }
+#else
+#define OSD_DECLARE_OP(oh, op)
+#define OSD_EXEC_OP(oh, op)
+#endif
 
 struct osd_thandle {
         struct thandle          ot_super;
@@ -148,6 +164,20 @@ struct osd_thandle {
         cfs_list_t              ot_dcb_list;
         /* Link to the device, for debugging. */
         struct lu_ref_link     *ot_dev_link;
+        int                     ot_credits;
+
+#ifdef OSD_TRACK_DECLARES
+        unsigned char           ot_declare_attr_set;
+        unsigned char           ot_declare_punch;
+        unsigned char           ot_declare_xattr_set;
+        unsigned char           ot_declare_create;
+        unsigned char           ot_declare_destroy;
+        unsigned char           ot_declare_ref_add;
+        unsigned char           ot_declare_ref_del;
+        unsigned char           ot_declare_write;
+        unsigned char           ot_declare_insert;
+        unsigned char           ot_declare_delete;
+#endif
 
 #if OSD_THANDLE_STATS
         /** time when this handle was allocated */
@@ -156,6 +186,25 @@ struct osd_thandle {
         /** time when this thanle was started */
         cfs_time_t oth_started;
 #endif
+};
+
+/**
+ * Basic transaction credit op
+ */
+enum dt_txn_op {
+        DTO_INDEX_INSERT,
+        DTO_INDEX_DELETE,
+        DTO_INDEX_UPDATE,
+        DTO_OBJECT_CREATE,
+        DTO_OBJECT_DELETE,
+        DTO_ATTR_SET_BASE,
+        DTO_XATTR_SET,
+        DTO_LOG_REC, /**< XXX temporary: dt layer knows nothing about llog. */
+        DTO_WRITE_BASE,
+        DTO_WRITE_BLOCK,
+        DTO_ATTR_SET_CHOWN,
+
+        DTO_NR
 };
 
 /*
@@ -474,6 +523,7 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
         LINVRNT(osd_invariant(obj));
 
         result = osd_fid_lookup(env, obj, lu_object_fid(l));
+        obj->oo_dt.do_body_ops = &osd_body_ops_new;
         if (result == 0) {
                 if (obj->oo_inode != NULL)
                         osd_object_init0(obj);
@@ -641,9 +691,11 @@ static void __osd_th_check_slow(void *oth, struct osd_device *dev,
  * Concurrency: doesn't access mutable data.
  */
 static int osd_param_is_sane(const struct osd_device *dev,
-                             const struct txn_param *param)
+                             const struct thandle *th)
 {
-        return param->tp_credits <= osd_journal(dev)->j_max_transaction_buffers;
+        struct osd_thandle *oh;
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        return oh->ot_credits <= osd_journal(dev)->j_max_transaction_buffers;
 }
 
 /*
@@ -681,86 +733,129 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
         OBD_FREE_PTR(oh);
 }
 
-/*
- * Concurrency: shouldn't matter.
- */
-static struct thandle *osd_trans_start(const struct lu_env *env,
-                                       struct dt_device *d,
-                                       struct txn_param *p)
+static struct thandle *osd_trans_create(const struct lu_env *env,
+                                        struct dt_device *d)
 {
-        struct osd_device  *dev = osd_dt_dev(d);
-        handle_t           *jh;
-        struct osd_thandle *oh;
-        struct thandle     *th;
-        int hook_res;
-
+        struct osd_thread_info *oti = osd_oti_get(env);
+        struct osd_thandle     *oh;
+        struct thandle         *th;
         ENTRY;
 
-        hook_res = dt_txn_hook_start(env, d, p);
-        if (hook_res != 0)
-                RETURN(ERR_PTR(hook_res));
-
-        if (osd_param_is_sane(dev, p)) {
-                OBD_ALLOC_GFP(oh, sizeof *oh, CFS_ALLOC_IO);
-                if (oh != NULL) {
-                        struct osd_thread_info *oti = osd_oti_get(env);
-
-                        /*
-                         * XXX temporary stuff. Some abstraction layer should
-                         * be used.
-                         */
-                        oti->oti_dev = dev;
-                        CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
-                        osd_th_alloced(oh);
-                        jh = ldiskfs_journal_start_sb(osd_sb(dev), p->tp_credits);
-                        osd_th_started(oh);
-                        if (!IS_ERR(jh)) {
-                                oh->ot_handle = jh;
-                                th = &oh->ot_super;
-                                th->th_dev = d;
-                                th->th_result = 0;
-                                th->th_sync = 0;
-                                lu_device_get(&d->dd_lu_dev);
-                                oh->ot_dev_link = lu_ref_add
-                                        (&d->dd_lu_dev.ld_reference,
-                                         "osd-tx", th);
-                                /* add commit callback */
-                                lu_context_init(&th->th_ctx, LCT_TX_HANDLE);
-                                lu_context_enter(&th->th_ctx);
-                                LASSERT(oti->oti_txns == 0);
-                                LASSERT(oti->oti_r_locks == 0);
-                                LASSERT(oti->oti_w_locks == 0);
-                                oti->oti_txns++;
-                        } else {
-                                OBD_FREE_PTR(oh);
-                                th = (void *)jh;
-                        }
-                } else
-                        th = ERR_PTR(-ENOMEM);
-        } else {
-                CERROR("Invalid transaction parameters\n");
-                th = ERR_PTR(-EINVAL);
+        th = ERR_PTR(-ENOMEM);
+        OBD_ALLOC_GFP(oh, sizeof *oh, CFS_ALLOC_IO);
+        if (oh != NULL) {
+                th = &oh->ot_super;
+                th->th_dev = d;
+                th->th_result = 0;
+                th->th_tags = LCT_TX_HANDLE;
+                oh->ot_credits = 0;
+                oti->oti_dev = osd_dt_dev(d);
+                CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
+                osd_th_alloced(oh);
         }
-
         RETURN(th);
 }
 
 /*
  * Concurrency: shouldn't matter.
  */
-static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
+int osd_trans_start(const struct lu_env *env, struct dt_device *d,
+                    struct thandle *th)
 {
-        int result;
+        struct osd_thread_info *oti = osd_oti_get(env);
+        struct osd_device  *dev = osd_dt_dev(d);
+        handle_t           *jh;
         struct osd_thandle *oh;
+        int rc;
+
+        ENTRY;
+
+        LASSERT(current->journal_info == NULL);
+
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(oh != NULL);
+        LASSERT(oh->ot_handle == NULL);
+
+        rc = dt_txn_hook_start(env, d, th);
+        if (rc != 0)
+                GOTO(out, rc);
+
+        oh->ot_credits += LDISKFS_QUOTA_INIT_BLOCKS(osd_sb(dev));
+
+        if (!osd_param_is_sane(dev, th)) {
+                CWARN("%s: too many transaction credits (%d > %d)\n",
+                      d->dd_lu_dev.ld_obd->obd_name, oh->ot_credits,
+                      osd_journal(dev)->j_max_transaction_buffers);
+#ifdef OSD_TRACK_DECLARES
+                CERROR("  attr_set: %d, punch: %d, xattr_set: %d,\n",
+                       oh->ot_declare_attr_set, oh->ot_declare_punch,
+                       oh->ot_declare_xattr_set);
+                CERROR("  create: %d, ref_add: %d, ref_del: %d, write: %d\n",
+                       oh->ot_declare_create, oh->ot_declare_ref_add,
+                       oh->ot_declare_ref_del, oh->ot_declare_write);
+                CERROR("  insert: %d, delete: %d\n",
+                       oh->ot_declare_insert, oh->ot_declare_delete);
+#endif
+        }
+
+        /*
+         * XXX temporary stuff. Some abstraction layer should
+         * be used.
+         */
+        jh = ldiskfs_journal_start_sb(osd_sb(dev), oh->ot_credits);
+        osd_th_started(oh);
+        if (!IS_ERR(jh)) {
+                oh->ot_handle = jh;
+                LASSERT(oti->oti_txns == 0);
+                lu_context_init(&th->th_ctx, th->th_tags);
+                lu_context_enter(&th->th_ctx);
+
+                lu_device_get(&d->dd_lu_dev);
+                oh->ot_dev_link = lu_ref_add(&d->dd_lu_dev.ld_reference,
+                                             "osd-tx", th);
+
+                /*
+                 * XXX: current rule is that we first start tx,
+                 *      then lock object(s), but we can't use
+                 *      this rule for data (due to locking specifics
+                 *      in ldiskfs). also in long-term we'd like to
+                 *      use usually-used (locks;tx) ordering. so,
+                 *      UGLY thing is that we'll use one ordering for
+                 *      data (ofd) and reverse ordering for metadata
+                 *      (mdd). then at some point we'll fix the latter
+                 */
+                if (lu_device_is_md(&d->dd_lu_dev)) {
+                        LASSERT(oti->oti_r_locks == 0);
+                        LASSERT(oti->oti_w_locks == 0);
+                }
+
+                oti->oti_txns++;
+                rc = 0;
+        } else {
+                rc = PTR_ERR(jh);
+        }
+out:
+        RETURN(rc);
+}
+
+/*
+ * Concurrency: shouldn't matter.
+ */
+static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
+{
+        int                     rc = 0;
+        struct osd_thandle     *oh;
         struct osd_thread_info *oti = osd_oti_get(env);
 
         ENTRY;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
+
         if (oh->ot_handle != NULL) {
                 handle_t *hdl = oh->ot_handle;
 
                 hdl->h_sync = th->th_sync;
+
                 /*
                  * add commit callback
                  * notice we don't do this in osd_trans_start()
@@ -771,20 +866,33 @@ static void osd_trans_stop(const struct lu_env *env, struct thandle *th)
 
                 LASSERT(oti->oti_txns == 1);
                 oti->oti_txns--;
-                LASSERT(oti->oti_r_locks == 0);
-                LASSERT(oti->oti_w_locks == 0);
-                result = dt_txn_hook_stop(env, th);
-                if (result != 0)
-                        CERROR("Failure in transaction hook: %d\n", result);
+                /*
+                 * XXX: current rule is that we first start tx,
+                 *      then lock object(s), but we can't use
+                 *      this rule for data (due to locking specifics
+                 *      in ldiskfs). also in long-term we'd like to
+                 *      use usually-used (locks;tx) ordering. so,
+                 *      UGLY thing is that we'll use one ordering for
+                 *      data (ofd) and reverse ordering for metadata
+                 *      (mdd). then at some point we'll fix the latter
+                 */
+                if (lu_device_is_md(&th->th_dev->dd_lu_dev)) {
+                        LASSERT(oti->oti_r_locks == 0);
+                        LASSERT(oti->oti_w_locks == 0);
+                }
+                rc = dt_txn_hook_stop(env, th);
+                if (rc != 0)
+                        CERROR("Failure in transaction hook: %d\n", rc);
                 oh->ot_handle = NULL;
                 OSD_CHECK_SLOW_TH(oh, oti->oti_dev,
-                                  result = ldiskfs_journal_stop(hdl));
-                if (result != 0)
-                        CERROR("Failure to stop transaction: %d\n", result);
+                                  rc = ldiskfs_journal_stop(hdl));
+                if (rc != 0)
+                        CERROR("Failure to stop transaction: %d\n", rc);
         } else {
                 OBD_FREE_PTR(oh);
         }
-        EXIT;
+
+        RETURN(rc);
 }
 
 static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
@@ -795,35 +903,6 @@ static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
         cfs_list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
 
         return 0;
-}
-
-/*
- * Concurrency: no concurrent access is possible that late in object
- * life-cycle.
- */
-static int osd_inode_remove(const struct lu_env *env, struct osd_object *obj)
-{
-        const struct lu_fid    *fid = lu_object_fid(&obj->oo_dt.do_lu);
-        struct osd_device      *osd = osd_obj2dev(obj);
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct txn_param       *prm = &oti->oti_txn;
-        struct lu_env          *env_del_obj = &oti->oti_obj_delete_tx_env;
-        struct thandle         *th;
-        int result;
-
-        lu_env_init(env_del_obj, LCT_DT_THREAD);
-        txn_param_init(prm, OSD_TXN_OI_DELETE_CREDITS +
-                            OSD_TXN_INODE_DELETE_CREDITS);
-        th = osd_trans_start(env_del_obj, &osd->od_dt_dev, prm);
-        if (!IS_ERR(th)) {
-                result = osd_oi_delete(osd_oti_get(env_del_obj),
-                                       &osd->od_oi, fid, th);
-                osd_trans_stop(env_del_obj, th);
-        } else
-                result = PTR_ERR(th);
-
-        lu_env_fini(env_del_obj);
-        return result;
 }
 
 /*
@@ -846,16 +925,6 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 
         osd_index_fini(obj);
         if (inode != NULL) {
-                int result;
-
-                if (osd_inode_unlinked(inode)) {
-                        result = osd_inode_remove(env, obj);
-                        if (result != 0)
-                                LU_OBJECT_DEBUG(D_ERROR, env, l,
-                                                "Failed to cleanup: %d\n",
-                                                result);
-                }
-
                 iput(inode);
                 obj->oo_inode = NULL;
         }
@@ -867,11 +936,6 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 static void osd_object_release(const struct lu_env *env,
                                struct lu_object *l)
 {
-        struct osd_object *o = osd_obj(l);
-
-        LASSERT(!lu_object_is_dying(l->lo_header));
-        if (o->oo_inode != NULL && osd_inode_unlinked(o->oo_inode))
-                cfs_set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }
 
 /*
@@ -996,19 +1060,17 @@ static int osd_commit_async(const struct lu_env *env,
 /*
  * Concurrency: shouldn't matter.
  */
-lvfs_sbdev_type fsfilt_ldiskfs_journal_sbdev(struct super_block *);
 
 static void osd_ro(const struct lu_env *env, struct dt_device *d)
 {
+        struct super_block *sb = osd_sb(osd_dt_dev(d));
         ENTRY;
 
         CERROR("*** setting device %s read-only ***\n", LUSTRE_OSD_NAME);
 
-        __lvfs_set_rdonly(lvfs_sbdev(osd_sb(osd_dt_dev(d))),
-                          fsfilt_ldiskfs_journal_sbdev(osd_sb(osd_dt_dev(d))));
+        __lvfs_set_rdonly(sb->s_bdev, LDISKFS_SB(sb)->journal_bdev);
         EXIT;
 }
-
 
 /*
  * Concurrency: serialization provided by callers.
@@ -1063,7 +1125,7 @@ static const int osd_dto_credits_noquota[DTO_NR] = {
         /**
          * Unused now
          */
-        [DTO_IDNEX_UPDATE]  = 16,
+        [DTO_INDEX_UPDATE]  = 16,
         /**
          * Create a object. The same as create object in EXT3.
          * DATA_TRANS_BLOCKS(14) +
@@ -1072,14 +1134,13 @@ static const int osd_dto_credits_noquota[DTO_NR] = {
          */
         [DTO_OBJECT_CREATE] = 25,
         /**
-         * Unused now
+         * XXX: real credits to be fixed
          */
         [DTO_OBJECT_DELETE] = 25,
         /**
-         * Attr set credits.
-         * 3(inode bits, group, GDT)
+         * Attr set credits (inode)
          */
-        [DTO_ATTR_SET_BASE] = 3,
+        [DTO_ATTR_SET_BASE] = 1,
         /**
          * Xattr set. The same as xattr of EXT3.
          * DATA_TRANS_BLOCKS(14)
@@ -1089,7 +1150,7 @@ static const int osd_dto_credits_noquota[DTO_NR] = {
         [DTO_XATTR_SET]     = 14,
         [DTO_LOG_REC]       = 14,
         /**
-         * creadits for inode change during write.
+         * credits for inode change during write.
          */
         [DTO_WRITE_BASE]    = 3,
         /**
@@ -1123,7 +1184,7 @@ static const int osd_dto_credits_quota[DTO_NR] = {
         /**
          * Unused now.
          */
-        [DTO_IDNEX_UPDATE]  = 16,
+        [DTO_INDEX_UPDATE]  = 16,
         /*
          * Create a object. Same as create object in EXT3 filesystem.
          * DATA_TRANS_BLOCKS(16) +
@@ -1170,23 +1231,10 @@ static const int osd_dto_credits_quota[DTO_NR] = {
         [DTO_ATTR_SET_CHOWN]= 68,
 };
 
-static int osd_credit_get(const struct lu_env *env, struct dt_device *d,
-                          enum dt_txn_op op)
-{
-        LASSERT(ARRAY_SIZE(osd_dto_credits_noquota) ==
-                ARRAY_SIZE(osd_dto_credits_quota));
-        LASSERT(0 <= op && op < ARRAY_SIZE(osd_dto_credits_noquota));
-#ifdef HAVE_QUOTA_SUPPORT
-        if (test_opt(osd_sb(osd_dt_dev(d)), QUOTA))
-                return osd_dto_credits_quota[op];
-        else
-#endif
-                return osd_dto_credits_noquota[op];
-}
-
 static const struct dt_device_operations osd_dt_ops = {
         .dt_root_get       = osd_root_get,
         .dt_statfs         = osd_statfs,
+        .dt_trans_create   = osd_trans_create,
         .dt_trans_start    = osd_trans_start,
         .dt_trans_stop     = osd_trans_stop,
         .dt_trans_cb_add   = osd_trans_cb_add,
@@ -1194,7 +1242,6 @@ static const struct dt_device_operations osd_dt_ops = {
         .dt_sync           = osd_sync,
         .dt_ro             = osd_ro,
         .dt_commit_async   = osd_commit_async,
-        .dt_credit_get     = osd_credit_get,
         .dt_init_capa_ctxt = osd_init_capa_ctxt,
         .dt_init_quota_ctxt= osd_init_quota_ctxt,
 };
@@ -1422,6 +1469,25 @@ static int osd_attr_get(const struct lu_env *env,
         return 0;
 }
 
+static int osd_declare_attr_set(const struct lu_env *env,
+                                struct dt_object *dt,
+                                const struct lu_attr *attr,
+                                struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(handle != NULL);
+        LASSERT(osd_invariant(obj));
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, attr_set);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
+
+        return 0;
+}
+
 static int osd_inode_setattr(const struct lu_env *env,
                              struct inode *inode, const struct lu_attr *attr)
 {
@@ -1505,6 +1571,8 @@ static int osd_attr_set(const struct lu_env *env,
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
+
+        OSD_EXEC_OP(handle, attr_set);
 
         cfs_spin_lock(&obj->oo_guard);
         rc = osd_inode_setattr(env, obj->oo_inode, attr);
@@ -1824,6 +1892,33 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
                              uc->mu_cap & CFS_CAP_SYS_RESOURCE_MASK);
 }
 
+static int osd_declare_object_create(const struct lu_env *env,
+                                     struct dt_object *dt,
+                                     struct lu_attr *attr,
+                                     struct dt_allocation_hint *hint,
+                                     struct dt_object_format *dof,
+                                     struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(handle != NULL);
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, insert);
+        OSD_DECLARE_OP(oh, create);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_OBJECT_CREATE];
+        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+
+        /* if this is directory, then we expect . and ..
+         * to be inserted as well */
+        OSD_DECLARE_OP(oh, insert);
+        OSD_DECLARE_OP(oh, insert);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+        return 0;
+}
+
 static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
                              struct lu_attr *attr,
                              struct dt_allocation_hint *hint,
@@ -1842,6 +1937,8 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
+        OSD_EXEC_OP(th, create);
+
         result = __osd_object_create(info, obj, attr, hint, dof, th);
         if (result == 0)
                 result = __osd_oi_insert(env, obj, fid, th);
@@ -1849,6 +1946,63 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
         LASSERT(ergo(result == 0, dt_object_exists(dt)));
         LASSERT(osd_invariant(obj));
         RETURN(result);
+}
+
+/**
+ * Called to destroy on-disk representation of the object
+ *
+ * Concurrency: must be locked
+ */
+static int osd_declare_object_destroy(const struct lu_env *env,
+                                      struct dt_object *dt,
+                                      struct thandle *th)
+{
+        struct osd_object      *obj = osd_dt_obj(dt);
+        struct inode           *inode = obj->oo_inode;
+        struct osd_thandle     *oh;
+        ENTRY;
+
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+        LASSERT(inode);
+        LASSERT(!lu_object_is_dying(dt->do_lu.lo_header));
+
+        OSD_DECLARE_OP(oh, destroy);
+        OSD_DECLARE_OP(oh, delete);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_OBJECT_DELETE];
+        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+
+        RETURN(0);
+}
+
+static int osd_object_destroy(const struct lu_env *env,
+                              struct dt_object *dt,
+                              struct thandle *th)
+{
+        const struct lu_fid    *fid = lu_object_fid(&dt->do_lu);
+        struct osd_object      *obj = osd_dt_obj(dt);
+        struct inode           *inode = obj->oo_inode;
+        struct osd_device      *osd = osd_obj2dev(obj);
+        struct osd_thandle     *oh;
+        int                     result;
+        ENTRY;
+
+        oh = container_of0(th, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle);
+        LASSERT(inode);
+        LASSERT(osd_inode_unlinked(inode));
+
+        OSD_EXEC_OP(th, destroy);
+
+        result = osd_oi_delete(osd_oti_get(env), &osd->od_oi, fid, th);
+
+        /* XXX: add to ext3 orphan list */
+        /* rc = ext3_orphan_add(handle_t *handle, struct inode *inode) */
+
+        /* not needed in the cache anymore */
+        set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
+
+        RETURN(0);
 }
 
 /**
@@ -2044,6 +2198,8 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
+        OSD_EXEC_OP(th, create);
+
         result = __osd_object_create(info, obj, attr, hint, dof, th);
 
         /* objects under osd root shld have igif fid, so dont add fid EA */
@@ -2058,12 +2214,30 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
         RETURN(result);
 }
 
+static int osd_declare_object_ref_add(const struct lu_env *env,
+                               struct dt_object *dt,
+                               struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        /* it's possible that object doesn't exist yet */
+        LASSERT(handle != NULL);
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, ref_add);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
+
+        return 0;
+}
+
 /*
  * Concurrency: @dt is write locked.
  */
-static void osd_object_ref_add(const struct lu_env *env,
-                               struct dt_object *dt,
-                               struct thandle *th)
+static int osd_object_ref_add(const struct lu_env *env,
+                              struct dt_object *dt,
+                              struct thandle *th)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct inode *inode = obj->oo_inode;
@@ -2072,6 +2246,8 @@ static void osd_object_ref_add(const struct lu_env *env,
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
+
+        OSD_EXEC_OP(th, ref_add);
 
         cfs_spin_lock(&obj->oo_guard);
         LASSERT(inode->i_nlink < LDISKFS_LINK_MAX);
@@ -2079,14 +2255,34 @@ static void osd_object_ref_add(const struct lu_env *env,
         cfs_spin_unlock(&obj->oo_guard);
         inode->i_sb->s_op->dirty_inode(inode);
         LINVRNT(osd_invariant(obj));
+
+        return 0;
+}
+
+static int osd_declare_object_ref_del(const struct lu_env *env,
+                               struct dt_object *dt,
+                               struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(dt_object_exists(dt));
+        LASSERT(handle != NULL);
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, ref_del);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
+
+        return 0;
 }
 
 /*
  * Concurrency: @dt is write locked.
  */
-static void osd_object_ref_del(const struct lu_env *env,
-                               struct dt_object *dt,
-                               struct thandle *th)
+static int osd_object_ref_del(const struct lu_env *env,
+                              struct dt_object *dt,
+                              struct thandle *th)
 {
         struct osd_object *obj = osd_dt_obj(dt);
         struct inode *inode = obj->oo_inode;
@@ -2096,12 +2292,30 @@ static void osd_object_ref_del(const struct lu_env *env,
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
+        OSD_EXEC_OP(th, ref_del);
+
         cfs_spin_lock(&obj->oo_guard);
         LASSERT(inode->i_nlink > 0);
         inode->i_nlink--;
         cfs_spin_unlock(&obj->oo_guard);
         inode->i_sb->s_op->dirty_inode(inode);
         LINVRNT(osd_invariant(obj));
+
+        return 0;
+}
+
+/*
+ * Get the 64-bit version for an inode.
+ */
+static int osd_object_version_get(const struct lu_env *env,
+                                  struct dt_object *dt, dt_obj_version_t *ver)
+{
+        struct inode *inode = osd_dt_obj(dt)->oo_inode;
+
+        CDEBUG(D_INODE, "Get version "LPX64" for inode %lu\n",
+               LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+        *ver = LDISKFS_I(inode)->i_fs_version;
+        return 0;
 }
 
 /*
@@ -2118,6 +2332,15 @@ static int osd_xattr_get(const struct lu_env *env,
         struct osd_thread_info *info   = osd_oti_get(env);
         struct dentry          *dentry = &info->oti_obj_dentry;
 
+        /* version get is not real XATTR but uses xattr API */
+        if (strcmp(name, XATTR_NAME_VERSION) == 0) {
+                /* for version we are just using xattr API but change inode
+                 * field instead */
+                LASSERT(buf->lb_len == sizeof(dt_obj_version_t));
+                osd_object_version_get(env, dt, buf->lb_buf);
+                return sizeof(dt_obj_version_t);
+        }
+
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
         LASSERT(osd_read_locked(env, obj) || osd_write_locked(env, obj));
@@ -2129,6 +2352,47 @@ static int osd_xattr_get(const struct lu_env *env,
         return inode->i_op->getxattr(dentry, name, buf->lb_buf, buf->lb_len);
 }
 
+
+static int osd_declare_xattr_set(const struct lu_env *env, struct dt_object *dt,
+                                 const struct lu_buf *buf, const char *name,
+                                 int fl, struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(handle != NULL);
+
+        if (strcmp(name, XATTR_NAME_VERSION) == 0) {
+                /* no credits for version */
+                return 0;
+        }
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, xattr_set);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_XATTR_SET];
+
+        return 0;
+}
+
+/*
+ * Set the 64-bit version for object
+ */
+static void osd_object_version_set(const struct lu_env *env,
+                                   struct dt_object *dt,
+                                   dt_obj_version_t *new_version)
+{
+        struct inode *inode = osd_dt_obj(dt)->oo_inode;
+
+        CDEBUG(D_INODE, "Set version "LPX64" (old "LPX64") for inode %lu\n",
+               *new_version, LDISKFS_I(inode)->i_fs_version, inode->i_ino);
+
+        LDISKFS_I(inode)->i_fs_version = *new_version;
+        /** Version is set after all inode operations are finished,
+         *  so we should mark it dirty here */
+        inode->i_sb->s_op->dirty_inode(inode);
+}
+
 /*
  * Concurrency: @dt is write locked.
  */
@@ -2138,9 +2402,19 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 {
         LASSERT(handle != NULL);
 
+        /* version set is not real XATTR */
+        if (strcmp(name, XATTR_NAME_VERSION) == 0) {
+                /* for version we are just using xattr API but change inode
+                 * field instead */
+                LASSERT(buf->lb_len == sizeof(dt_obj_version_t));
+                osd_object_version_set(env, dt, buf->lb_buf);
+                return sizeof(dt_obj_version_t);
+        }
+
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
+        OSD_EXEC_OP(handle, xattr_set);
         return __osd_xattr_set(env, dt, buf, name, fl);
 }
 
@@ -2168,6 +2442,25 @@ static int osd_xattr_list(const struct lu_env *env,
         return inode->i_op->listxattr(dentry, buf->lb_buf, buf->lb_len);
 }
 
+static int osd_declare_xattr_del(const struct lu_env *env,
+                                 struct dt_object *dt,
+                                const char *name,
+                                struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(dt_object_exists(dt));
+        LASSERT(handle != NULL);
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, xattr_set);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_XATTR_SET];
+
+        return 0;
+}
+
 /*
  * Concurrency: @dt is write locked.
  */
@@ -2190,6 +2483,8 @@ static int osd_xattr_del(const struct lu_env *env,
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
+
+        OSD_EXEC_OP(handle, xattr_set);
 
         dentry->d_inode = inode;
         rc = inode->i_op->removexattr(dentry, name);
@@ -2301,35 +2596,6 @@ static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
         rc = file->f_op->fsync(file, dentry, 0);
         UNLOCK_INODE_MUTEX(inode);
         RETURN(rc);
-}
-
-/*
- * Get the 64-bit version for an inode.
- */
-static dt_obj_version_t osd_object_version_get(const struct lu_env *env,
-                                               struct dt_object *dt)
-{
-        struct inode *inode = osd_dt_obj(dt)->oo_inode;
-
-        CDEBUG(D_INFO, "Get version "LPX64" for inode %lu\n",
-               LDISKFS_I(inode)->i_fs_version, inode->i_ino);
-        return LDISKFS_I(inode)->i_fs_version;
-}
-
-/*
- * Set the 64-bit version and return the old version.
- */
-static void osd_object_version_set(const struct lu_env *env, struct dt_object *dt,
-                                   dt_obj_version_t new_version)
-{
-        struct inode *inode = osd_dt_obj(dt)->oo_inode;
-
-        CDEBUG(D_INFO, "Set version "LPX64" (old "LPX64") for inode %lu\n",
-               new_version, LDISKFS_I(inode)->i_fs_version, inode->i_ino);
-        LDISKFS_I(inode)->i_fs_version = new_version;
-        /** Version is set after all inode operations are finished,
-         *  so we should mark it dirty here */
-        inode->i_sb->s_op->dirty_inode(inode);
 }
 
 static int osd_data_get(const struct lu_env *env, struct dt_object *dt,
@@ -2477,27 +2743,33 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 }
 
 static const struct dt_object_operations osd_obj_ops = {
-        .do_read_lock    = osd_object_read_lock,
-        .do_write_lock   = osd_object_write_lock,
-        .do_read_unlock  = osd_object_read_unlock,
-        .do_write_unlock = osd_object_write_unlock,
-        .do_write_locked = osd_object_write_locked,
-        .do_attr_get     = osd_attr_get,
-        .do_attr_set     = osd_attr_set,
-        .do_ah_init      = osd_ah_init,
-        .do_create       = osd_object_create,
-        .do_index_try    = osd_index_try,
-        .do_ref_add      = osd_object_ref_add,
-        .do_ref_del      = osd_object_ref_del,
-        .do_xattr_get    = osd_xattr_get,
-        .do_xattr_set    = osd_xattr_set,
-        .do_xattr_del    = osd_xattr_del,
-        .do_xattr_list   = osd_xattr_list,
-        .do_capa_get     = osd_capa_get,
-        .do_object_sync  = osd_object_sync,
-        .do_version_get  = osd_object_version_get,
-        .do_version_set  = osd_object_version_set,
-        .do_data_get     = osd_data_get,
+        .do_read_lock         = osd_object_read_lock,
+        .do_write_lock        = osd_object_write_lock,
+        .do_read_unlock       = osd_object_read_unlock,
+        .do_write_unlock      = osd_object_write_unlock,
+        .do_write_locked      = osd_object_write_locked,
+        .do_attr_get          = osd_attr_get,
+        .do_declare_attr_set  = osd_declare_attr_set,
+        .do_attr_set          = osd_attr_set,
+        .do_ah_init           = osd_ah_init,
+        .do_declare_create    = osd_declare_object_create,
+        .do_create            = osd_object_create,
+        .do_declare_destroy   = osd_declare_object_destroy,
+        .do_destroy           = osd_object_destroy,
+        .do_index_try         = osd_index_try,
+        .do_declare_ref_add   = osd_declare_object_ref_add,
+        .do_ref_add           = osd_object_ref_add,
+        .do_declare_ref_del   = osd_declare_object_ref_del,
+        .do_ref_del           = osd_object_ref_del,
+        .do_xattr_get         = osd_xattr_get,
+        .do_declare_xattr_set = osd_declare_xattr_set,
+        .do_xattr_set         = osd_xattr_set,
+        .do_declare_xattr_del = osd_declare_xattr_del,
+        .do_xattr_del         = osd_xattr_del,
+        .do_xattr_list        = osd_xattr_list,
+        .do_capa_get          = osd_capa_get,
+        .do_object_sync       = osd_object_sync,
+        .do_data_get          = osd_data_get,
 };
 
 /**
@@ -2505,27 +2777,33 @@ static const struct dt_object_operations osd_obj_ops = {
  * (i.e. to run 2.0 mds on 1.8 disk) (b11826)
  */
 static const struct dt_object_operations osd_obj_ea_ops = {
-        .do_read_lock    = osd_object_read_lock,
-        .do_write_lock   = osd_object_write_lock,
-        .do_read_unlock  = osd_object_read_unlock,
-        .do_write_unlock = osd_object_write_unlock,
-        .do_write_locked = osd_object_write_locked,
-        .do_attr_get     = osd_attr_get,
-        .do_attr_set     = osd_attr_set,
-        .do_ah_init      = osd_ah_init,
-        .do_create       = osd_object_ea_create,
-        .do_index_try    = osd_index_try,
-        .do_ref_add      = osd_object_ref_add,
-        .do_ref_del      = osd_object_ref_del,
-        .do_xattr_get    = osd_xattr_get,
-        .do_xattr_set    = osd_xattr_set,
-        .do_xattr_del    = osd_xattr_del,
-        .do_xattr_list   = osd_xattr_list,
-        .do_capa_get     = osd_capa_get,
-        .do_object_sync  = osd_object_sync,
-        .do_version_get  = osd_object_version_get,
-        .do_version_set  = osd_object_version_set,
-        .do_data_get     = osd_data_get,
+        .do_read_lock         = osd_object_read_lock,
+        .do_write_lock        = osd_object_write_lock,
+        .do_read_unlock       = osd_object_read_unlock,
+        .do_write_unlock      = osd_object_write_unlock,
+        .do_write_locked      = osd_object_write_locked,
+        .do_attr_get          = osd_attr_get,
+        .do_declare_attr_set  = osd_declare_attr_set,
+        .do_attr_set          = osd_attr_set,
+        .do_ah_init           = osd_ah_init,
+        .do_declare_create    = osd_declare_object_create,
+        .do_create            = osd_object_ea_create,
+        .do_declare_destroy   = osd_declare_object_destroy,
+        .do_destroy           = osd_object_destroy,
+        .do_index_try         = osd_index_try,
+        .do_declare_ref_add   = osd_declare_object_ref_add,
+        .do_ref_add           = osd_object_ref_add,
+        .do_declare_ref_del   = osd_declare_object_ref_del,
+        .do_ref_del           = osd_object_ref_del,
+        .do_xattr_get         = osd_xattr_get,
+        .do_declare_xattr_set = osd_declare_xattr_set,
+        .do_xattr_set         = osd_xattr_set,
+        .do_declare_xattr_del = osd_declare_xattr_del,
+        .do_xattr_del         = osd_xattr_del,
+        .do_xattr_list        = osd_xattr_list,
+        .do_capa_get          = osd_capa_get,
+        .do_object_sync       = osd_object_sync,
+        .do_data_get          = osd_data_get,
 };
 
 /*
@@ -2704,6 +2982,23 @@ static int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
         return err;
 }
 
+static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
+                                 const loff_t size, loff_t pos,
+                                 struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(handle != NULL);
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, write);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_WRITE_BLOCK];
+
+        return 0;
+}
+
 static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, loff_t *pos,
                          struct thandle *handle, struct lustre_capa *capa,
@@ -2748,11 +3043,35 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
         return result;
 }
 
-static const struct dt_body_operations osd_body_ops = {
-        .dbo_read  = osd_read,
-        .dbo_write = osd_write
+/*
+ * in some cases we may need declare methods for objects being created
+ * e.g., when we create symlink
+ */
+static const struct dt_body_operations osd_body_ops_new = {
+        .dbo_declare_write = osd_declare_write,
 };
 
+static const struct dt_body_operations osd_body_ops = {
+        .dbo_read          = osd_read,
+        .dbo_declare_write = osd_declare_write,
+        .dbo_write         = osd_write
+};
+
+static int osd_index_declare_iam_delete(const struct lu_env *env,
+                                        struct dt_object *dt,
+                                        const struct dt_key *key,
+                                        struct thandle *handle)
+{
+        struct osd_thandle    *oh;
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, delete);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+
+        return 0;
+}
 
 /**
  *      delete a (key, value) pair from index \a dt specified by \a key
@@ -2786,6 +3105,8 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
                 RETURN(-EACCES);
 
+        OSD_EXEC_OP(handle, delete);
+
         ipd = osd_idx_ipd_get(env, bag);
         if (unlikely(ipd == NULL))
                 RETURN(-ENOMEM);
@@ -2798,6 +3119,25 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
         osd_ipd_put(env, bag, ipd);
         LINVRNT(osd_invariant(obj));
         RETURN(rc);
+}
+
+static int osd_index_declare_ea_delete(const struct lu_env *env,
+                                       struct dt_object *dt,
+                                       const struct dt_key *key,
+                                       struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(dt_object_exists(dt));
+        LASSERT(handle != NULL);
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, delete);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+
+        return 0;
 }
 
 static inline int osd_get_fid_from_dentry(struct ldiskfs_dir_entry_2 *de,
@@ -2842,6 +3182,8 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
         LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
+
+        OSD_EXEC_OP(handle, delete);
 
         oh = container_of(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
@@ -2937,6 +3279,26 @@ static int osd_index_iam_lookup(const struct lu_env *env, struct dt_object *dt,
         RETURN(rc);
 }
 
+static int osd_index_declare_iam_insert(const struct lu_env *env,
+                                        struct dt_object *dt,
+                                        const struct dt_rec *rec,
+                                        const struct dt_key *key,
+                                        struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(dt_object_exists(dt));
+        LASSERT(handle != NULL);
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, insert);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+
+        return 0;
+}
+
 /**
  *      Inserts (key, value) pair in \a dt index object.
  *
@@ -2973,6 +3335,8 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
                 return -EACCES;
+
+        OSD_EXEC_OP(th, insert);
 
         ipd = osd_idx_ipd_get(env, bag);
         if (unlikely(ipd == NULL))
@@ -3262,6 +3626,26 @@ static inline void osd_object_put(const struct lu_env *env,
         lu_object_put(env, &obj->oo_dt.do_lu);
 }
 
+static int osd_index_declare_ea_insert(const struct lu_env *env,
+                                       struct dt_object *dt,
+                                       const struct dt_rec *rec,
+                                       const struct dt_key *key,
+                                       struct thandle *handle)
+{
+        struct osd_thandle *oh;
+
+        LASSERT(dt_object_exists(dt));
+        LASSERT(handle != NULL);
+
+        oh = container_of0(handle, struct osd_thandle, ot_super);
+        LASSERT(oh->ot_handle == NULL);
+
+        OSD_DECLARE_OP(oh, insert);
+        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+
+        return 0;
+}
+
 /**
  * Index add function for interoperability mode (b11826).
  * It will add the directory entry.This entry is needed to
@@ -3488,13 +3872,14 @@ static inline void osd_it_pack_dirent(struct lu_dirent *ent,
  */
 static int osd_it_iam_rec(const struct lu_env *env,
                           const struct dt_it *di,
-                          struct lu_dirent *lde,
+                          struct dt_rec *dtrec,
                           __u32 attr)
 {
         struct osd_it_iam *it        = (struct osd_it_iam *)di;
         struct osd_thread_info *info = osd_oti_get(env);
         struct lu_fid     *fid       = &info->oti_fid;
         const struct osd_fid_pack *rec;
+        struct lu_dirent *lde = (struct lu_dirent *)dtrec;
         char *name;
         int namelen;
         __u64 hash;
@@ -3553,9 +3938,11 @@ static int osd_it_iam_load(const struct lu_env *env,
 }
 
 static const struct dt_index_operations osd_index_iam_ops = {
-        .dio_lookup = osd_index_iam_lookup,
-        .dio_insert = osd_index_iam_insert,
-        .dio_delete = osd_index_iam_delete,
+        .dio_lookup         = osd_index_iam_lookup,
+        .dio_declare_insert = osd_index_declare_iam_insert,
+        .dio_insert         = osd_index_iam_insert,
+        .dio_declare_delete = osd_index_declare_iam_delete,
+        .dio_delete         = osd_index_iam_delete,
         .dio_it     = {
                 .init     = osd_it_iam_init,
                 .fini     = osd_it_iam_fini,
@@ -3840,12 +4227,13 @@ static int osd_it_ea_key_size(const struct lu_env *env, const struct dt_it *di)
  */
 static inline int osd_it_ea_rec(const struct lu_env *env,
                                 const struct dt_it *di,
-                                struct lu_dirent *lde,
+                                struct dt_rec *dtrec,
                                 __u32 attr)
 {
         struct osd_it_ea        *it     = (struct osd_it_ea *)di;
         struct osd_object       *obj    = it->oie_obj;
         struct lu_fid           *fid    = &it->oie_dirent->oied_fid;
+        struct lu_dirent        *lde    = (struct lu_dirent *)dtrec;
         int    rc = 0;
 
         ENTRY;
@@ -3938,9 +4326,11 @@ static int osd_index_ea_lookup(const struct lu_env *env, struct dt_object *dt,
  * mode (i.e. to run 2.0 mds on 1.8 disk) (b11826)
  */
 static const struct dt_index_operations osd_index_ea_ops = {
-        .dio_lookup = osd_index_ea_lookup,
-        .dio_insert = osd_index_ea_insert,
-        .dio_delete = osd_index_ea_delete,
+        .dio_lookup         = osd_index_ea_lookup,
+        .dio_declare_insert = osd_index_declare_ea_insert,
+        .dio_insert         = osd_index_ea_insert,
+        .dio_declare_delete = osd_index_declare_ea_delete,
+        .dio_delete         = osd_index_ea_delete,
         .dio_it     = {
                 .init     = osd_it_ea_init,
                 .fini     = osd_it_ea_fini,

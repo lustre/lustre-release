@@ -110,7 +110,7 @@ static void mdt_obj_version_get(struct mdt_thread_info *info,
         LASSERT(o);
         LASSERT(mdt_object_exists(o) >= 0);
         if (mdt_object_exists(o) > 0)
-                *version = mo_version_get(info->mti_env, mdt_object_child(o));
+                *version = dt_version_get(info->mti_env, mdt_obj2dt(o));
         else
                 *version = ENOENT_VERSION;
         CDEBUG(D_INODE, "FID "DFID" version is "LPX64"\n",

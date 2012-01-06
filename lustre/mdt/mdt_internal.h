@@ -391,7 +391,6 @@ struct mdt_thread_info {
         struct lr_server_data      mti_lsd;
         struct lsd_client_data     mti_lcd;
         loff_t                     mti_off;
-        struct txn_param           mti_txn_param;
         struct lu_buf              mti_buf;
         struct lustre_capa_key     mti_capa_key;
 
@@ -603,11 +602,10 @@ int mdt_handle_last_unlink(struct mdt_thread_info *, struct mdt_object *,
                            const struct md_attr *);
 void mdt_reconstruct_open(struct mdt_thread_info *, struct mdt_lock_handle *);
 
-void mdt_trans_credit_init(const struct lu_env *env,
-                           struct mdt_device *mdt,
-                           enum mdt_txn_op op);
-struct thandle* mdt_trans_start(const struct lu_env *env,
-                                struct mdt_device *mdt);
+struct thandle *mdt_trans_create(const struct lu_env *env,
+                                 struct mdt_device *mdt);
+int mdt_trans_start(const struct lu_env *env, struct mdt_device *mdt,
+                    struct thandle *th);
 void mdt_trans_stop(const struct lu_env *env,
                     struct mdt_device *mdt, struct thandle *th);
 int mdt_record_write(const struct lu_env *env,
@@ -648,6 +646,16 @@ static inline struct mdt_device *mdt_dev(struct lu_device *d)
 {
 //        LASSERT(lu_device_is_mdt(d));
         return container_of0(d, struct mdt_device, mdt_md_dev.md_lu_dev);
+}
+
+static inline struct dt_object *mdt_obj2dt(struct mdt_object *mo)
+{
+        struct lu_object *lo;
+        struct mdt_device *mdt = mdt_dev(mo->mot_obj.mo_lu.lo_dev);
+
+        lo = lu_object_locate(mo->mot_obj.mo_lu.lo_header,
+                              mdt->mdt_bottom->dd_lu_dev.ld_type);
+        return lu2dt(lo);
 }
 
 /* mdt/mdt_identity.c */

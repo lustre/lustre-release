@@ -28,6 +28,7 @@
 /*
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2011 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -149,19 +150,25 @@ static int lut_last_rcvd_write(const struct lu_env *env, struct lu_target *lut,
                                const struct lu_buf *buf, loff_t *off, int sync)
 {
         struct thandle *th;
-        struct txn_param p;
-        int rc, credits;
+        int rc;
         ENTRY;
 
-        credits = lut->lut_bottom->dd_ops->dt_credit_get(env, lut->lut_bottom,
-                                                         DTO_WRITE_BLOCK);
-        txn_param_init(&p, credits);
-
-        th = dt_trans_start(env, lut->lut_bottom, &p);
+        th = dt_trans_create(env, lut->lut_bottom);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
 
+        rc = dt_declare_record_write(env, lut->lut_last_rcvd,
+                                     buf->lb_len, *off, th);
+        if (rc)
+                goto stop;
+
+        rc = dt_trans_start(env, lut->lut_bottom, th);
+        if (rc)
+                goto stop;
+
         rc = dt_record_write(env, lut->lut_last_rcvd, buf, off, th);
+
+stop:
         dt_trans_stop(env, lut->lut_bottom, th);
 
         CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
@@ -239,8 +246,8 @@ int lut_client_data_update(const struct lu_env *env, struct obd_export *exp)
 /**
  * Update server data in last_rcvd
  */
-static int lut_server_data_update(const struct lu_env *env,
-                                  struct lu_target *lut, int sync)
+int lut_server_data_update(const struct lu_env *env,
+                           struct lu_target *lut, int sync)
 {
         struct lr_server_data tmp_lsd;
         loff_t tmp_off = 0;

@@ -2077,7 +2077,10 @@ run_test 85a "check the cancellation of unused locks during recovery(IBITS)"
 test_85b() { #bug 16774
     lctl set_param -n ldlm.cancel_unused_locks_before_replay "1"
 
-    lfs setstripe -o 0 -c 1 $DIR
+    do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME || return 1
+    do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $FSNAME-OST0000 || return 2
+
+    lfs setstripe -c 1 -p $FSNAME.$TESTNAME $DIR
 
     for i in `seq 100`; do
         dd if=/dev/urandom of=$DIR/$tfile-$i bs=4096 count=32 >/dev/null 2>&1
@@ -2093,11 +2096,15 @@ test_85b() { #bug 16774
     addr=`echo $lov_id | awk '{print $4}' | awk -F '-' '{print $3}'`
     count=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
     echo "before recovery: unused locks count = $count"
+    [ $count != 0 ] || return 3
 
     fail ost1
 
     count2=`lctl get_param -n ldlm.namespaces.*OST0000*$addr.lock_unused_count`
     echo "after recovery: unused locks count = $count2"
+
+    do_facet mgs $LCTL pool_remove $FSNAME.$TESTNAME $FSNAME-OST0000 || return 4
+    do_facet mgs $LCTL pool_destroy $FSNAME.$TESTNAME || return 5
 
     if [ $count2 -ge $count ]; then
         error "unused locks are not canceled"

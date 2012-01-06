@@ -28,6 +28,7 @@
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2011 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -110,6 +111,30 @@ static void __exit fld_mod_exit(void)
                 fld_type_proc_dir = NULL;
         }
 }
+
+int fld_declare_server_create(struct lu_server_fld *fld,
+                              const struct lu_env *env,
+                              struct thandle *th)
+{
+        struct dt_object *dt_obj = fld->lsf_obj;
+        int rc;
+
+        ENTRY;
+
+        /* for ldiskfs OSD it's enough to declare operation with any ops
+         * with DMU we'll probably need to specify exact key/value */
+        rc = dt_obj->do_index_ops->dio_declare_delete(env, dt_obj, NULL, th);
+        if (rc)
+                GOTO(out, rc);
+        rc = dt_obj->do_index_ops->dio_declare_delete(env, dt_obj, NULL, th);
+        if (rc)
+                GOTO(out, rc);
+        rc = dt_obj->do_index_ops->dio_declare_insert(env, dt_obj,
+                                                      NULL, NULL, th);
+out:
+        RETURN(rc);
+}
+EXPORT_SYMBOL(fld_declare_server_create);
 
 /**
  * Insert FLD index entry and update FLD cache.
@@ -245,7 +270,6 @@ out:
 
         RETURN(rc);
 }
-
 EXPORT_SYMBOL(fld_server_create);
 
 /**

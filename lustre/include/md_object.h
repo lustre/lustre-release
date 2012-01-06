@@ -278,10 +278,6 @@ struct md_object_operations {
                             struct lustre_capa *, int renewal);
 
         int (*moo_object_sync)(const struct lu_env *, struct md_object *);
-        dt_obj_version_t (*moo_version_get)(const struct lu_env *,
-                                            struct md_object *);
-        void (*moo_version_set)(const struct lu_env *, struct md_object *,
-                                dt_obj_version_t);
         int (*moo_path)(const struct lu_env *env, struct md_object *obj,
                         char *path, int pathlen, __u64 *recno, int *linkno);
         int (*moo_file_lock)(const struct lu_env *env, struct md_object *obj,
@@ -754,20 +750,6 @@ static inline int mo_object_sync(const struct lu_env *env, struct md_object *m)
 {
         LASSERT(m->mo_ops->moo_object_sync);
         return m->mo_ops->moo_object_sync(env, m);
-}
-
-static inline dt_obj_version_t mo_version_get(const struct lu_env *env,
-                                              struct md_object *m)
-{
-        LASSERT(m->mo_ops->moo_version_get);
-        return m->mo_ops->moo_version_get(env, m);
-}
-
-static inline void mo_version_set(const struct lu_env *env,
-                                  struct md_object *m, dt_obj_version_t ver)
-{
-        LASSERT(m->mo_ops->moo_version_set);
-        return m->mo_ops->moo_version_set(env, m, ver);
 }
 
 static inline int mo_file_lock(const struct lu_env *env, struct md_object *m,

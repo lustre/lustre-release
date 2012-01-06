@@ -28,6 +28,7 @@
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ * Copyright (c) 2011 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -89,21 +90,23 @@ void dt_txn_callback_del(struct dt_device *dev, struct dt_txn_callback *cb)
 EXPORT_SYMBOL(dt_txn_callback_del);
 
 int dt_txn_hook_start(const struct lu_env *env,
-                      struct dt_device *dev, struct txn_param *param)
+                      struct dt_device *dev, struct thandle *th)
 {
-        int result;
+        int rc = 0;
         struct dt_txn_callback *cb;
 
-        result = 0;
+        if (th->th_local)
+                return 0;
+
         cfs_list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_start == NULL ||
                     !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
-                result = cb->dtc_txn_start(env, param, cb->dtc_cookie);
-                if (result < 0)
+                rc = cb->dtc_txn_start(env, th, cb->dtc_cookie);
+                if (rc < 0)
                         break;
         }
-        return result;
+        return rc;
 }
 EXPORT_SYMBOL(dt_txn_hook_start);
 
@@ -111,24 +114,29 @@ int dt_txn_hook_stop(const struct lu_env *env, struct thandle *txn)
 {
         struct dt_device       *dev = txn->th_dev;
         struct dt_txn_callback *cb;
-        int                     result;
+        int                     rc = 0;
 
-        result = 0;
+        if (txn->th_local)
+                return 0;
+
         cfs_list_for_each_entry(cb, &dev->dd_txn_callbacks, dtc_linkage) {
                 if (cb->dtc_txn_stop == NULL ||
                     !(cb->dtc_tag & env->le_ctx.lc_tags))
                         continue;
-                result = cb->dtc_txn_stop(env, txn, cb->dtc_cookie);
-                if (result < 0)
+                rc = cb->dtc_txn_stop(env, txn, cb->dtc_cookie);
+                if (rc < 0)
                         break;
         }
-        return result;
+        return rc;
 }
 EXPORT_SYMBOL(dt_txn_hook_stop);
 
 void dt_txn_hook_commit(struct thandle *txn)
 {
         struct dt_txn_callback *cb;
+
+        if (txn->th_local)
+                return;
 
         cfs_list_for_each_entry(cb, &txn->th_dev->dd_txn_callbacks,
                                 dtc_linkage) {
@@ -200,31 +208,21 @@ enum dt_format_type dt_mode_to_dft(__u32 mode)
         }
         return result;
 }
-
 EXPORT_SYMBOL(dt_mode_to_dft);
+
 /**
  * lookup fid for object named \a name in directory \a dir.
  */
 
-static int dt_lookup(const struct lu_env *env, struct dt_object *dir,
-                     const char *name, struct lu_fid *fid)
+int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
+                  const char *name, struct lu_fid *fid)
 {
-        struct dt_rec       *rec = (struct dt_rec *)fid;
-        const struct dt_key *key = (const struct dt_key *)name;
-        int result;
-
-        if (dt_try_as_dir(env, dir)) {
-                result = dir->do_index_ops->dio_lookup(env, dir, rec, key,
-                                                       BYPASS_CAPA);
-                if (result > 0)
-                        result = 0;
-                else if (result == 0)
-                        result = -ENOENT;
-        } else
-                result = -ENOTDIR;
-        return result;
+        if (dt_try_as_dir(env, dir))
+                return dt_lookup(env, dir, (struct dt_rec *)fid,
+                                 (const struct dt_key *)name, BYPASS_CAPA);
+        return -ENOTDIR;
 }
-
+EXPORT_SYMBOL(dt_lookup_dir);
 /**
  * get object for given \a fid.
  */
@@ -257,7 +255,7 @@ static int dt_find_entry(const struct lu_env *env, const char *entry, void *data
         struct dt_object     *obj = dfh->dfh_o;
         int                   result;
 
-        result = dt_lookup(env, obj, entry, fid);
+        result = dt_lookup_dir(env, obj, entry, fid);
         lu_object_put(env, &obj->do_lu);
         if (result == 0) {
                 obj = dt_locate(env, dt, fid);
@@ -341,7 +339,7 @@ static struct dt_object *dt_reg_open(const struct lu_env *env,
         struct dt_object *o;
         int result;
 
-        result = dt_lookup(env, p, name, fid);
+        result = dt_lookup_dir(env, p, name, fid);
         if (result == 0){
                 o = dt_locate(env, dt, fid);
         }
@@ -416,6 +414,8 @@ int dt_record_write(const struct lu_env *env, struct dt_object *dt,
 
         LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
         LASSERT(th != NULL);
+        LASSERT(dt->do_body_ops);
+        LASSERT(dt->do_body_ops->dbo_write);
         rc = dt->do_body_ops->dbo_write(env, dt, buf, pos, th, BYPASS_CAPA, 1);
         if (rc == buf->lb_len)
                 rc = 0;
@@ -424,6 +424,57 @@ int dt_record_write(const struct lu_env *env, struct dt_object *dt,
         return rc;
 }
 EXPORT_SYMBOL(dt_record_write);
+
+int dt_declare_version_set(const struct lu_env *env, struct dt_object *o,
+                           struct thandle *th)
+{
+        struct lu_buf vbuf;
+        char *xname = XATTR_NAME_VERSION;
+
+        LASSERT(o);
+        vbuf.lb_buf = NULL;
+        vbuf.lb_len = sizeof(dt_obj_version_t);
+        return dt_declare_xattr_set(env, o, &vbuf, xname, 0, th);
+
+}
+EXPORT_SYMBOL(dt_declare_version_set);
+
+void dt_version_set(const struct lu_env *env, struct dt_object *o,
+                    dt_obj_version_t version, struct thandle *th)
+{
+        struct lu_buf vbuf;
+        char *xname = XATTR_NAME_VERSION;
+        int rc;
+
+        LASSERT(o);
+        vbuf.lb_buf = &version;
+        vbuf.lb_len = sizeof(version);
+
+        rc = dt_xattr_set(env, o, &vbuf, xname, 0, th, BYPASS_CAPA);
+        if (rc != 0)
+                CDEBUG(D_INODE, "Can't set version, rc %d\n", rc);
+        return;
+}
+EXPORT_SYMBOL(dt_version_set);
+
+dt_obj_version_t dt_version_get(const struct lu_env *env, struct dt_object *o)
+{
+        struct lu_buf vbuf;
+        char *xname = XATTR_NAME_VERSION;
+        dt_obj_version_t version;
+        int rc;
+
+        LASSERT(o);
+        vbuf.lb_buf = &version;
+        vbuf.lb_len = sizeof(version);
+        rc = dt_xattr_get(env, o, &vbuf, xname, BYPASS_CAPA);
+        if (rc != sizeof(version)) {
+                CDEBUG(D_INODE, "Can't get version, rc %d\n", rc);
+                version = 0;
+        }
+        return version;
+}
+EXPORT_SYMBOL(dt_version_get);
 
 const struct dt_index_features dt_directory_features;
 EXPORT_SYMBOL(dt_directory_features);

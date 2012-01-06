@@ -80,50 +80,16 @@ const struct lu_buf *mdt_buf_const(const struct lu_env *env,
         return buf;
 }
 
-static inline int mdt_trans_credit_get(const struct lu_env *env,
-                                       struct mdt_device *mdt,
-                                       enum mdt_txn_op op)
+struct thandle *mdt_trans_create(const struct lu_env *env,
+                                 struct mdt_device *mdt)
 {
-        struct dt_device *dev = mdt->mdt_bottom;
-        int cr;
-        switch (op) {
-                case MDT_TXN_CAPA_KEYS_WRITE_OP:
-                case MDT_TXN_LAST_RCVD_WRITE_OP:
-                        cr = dev->dd_ops->dt_credit_get(env,
-                                                        dev,
-                                                        DTO_WRITE_BLOCK);
-                break;
-                default:
-                        LBUG();
-        }
-        return cr;
+        return mdt->mdt_bottom->dd_ops->dt_trans_create(env, mdt->mdt_bottom);
 }
 
-void mdt_trans_credit_init(const struct lu_env *env,
-                           struct mdt_device *mdt,
-                           enum mdt_txn_op op)
+int mdt_trans_start(const struct lu_env *env, struct mdt_device *mdt,
+                    struct thandle *th)
 {
-        struct mdt_thread_info *mti;
-        struct txn_param *p;
-        int cr;
-
-        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        p = &mti->mti_txn_param;
-
-        cr = mdt_trans_credit_get(env, mdt, op);
-        txn_param_init(p, cr);
-}
-
-struct thandle* mdt_trans_start(const struct lu_env *env,
-                                struct mdt_device *mdt)
-{
-        struct mdt_thread_info *mti;
-        struct txn_param *p;
-
-        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        p = &mti->mti_txn_param;
-
-        return dt_trans_start(env, mdt->mdt_bottom, p);
+        return dt_trans_start(env, mdt->mdt_bottom, th);
 }
 
 void mdt_trans_stop(const struct lu_env *env,
@@ -157,6 +123,18 @@ static inline int mdt_last_rcvd_header_read(const struct lu_env *env,
                "last_transno = "LPU64"\n", rc, mdt->mdt_lut.lut_lsd.lsd_uuid,
                mdt->mdt_lut.lut_lsd.lsd_last_transno);
         return rc;
+}
+
+static int mdt_declare_last_rcvd_header_write(const struct lu_env *env,
+                                              struct mdt_device *mdt,
+                                              struct thandle *th)
+{
+        struct mdt_thread_info *mti;
+
+        mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+
+        return dt_declare_record_write(env, mdt->mdt_lut.lut_last_rcvd,
+                                       sizeof(mti->mti_lsd), 0, th);
 }
 
 static int mdt_last_rcvd_header_write(const struct lu_env *env,
@@ -210,6 +188,14 @@ static int mdt_last_rcvd_read(const struct lu_env *env, struct mdt_device *mdt,
                lcd->lcd_last_close_transno, lcd->lcd_last_close_xid,
                lcd->lcd_last_close_result);
         return rc;
+}
+
+static int mdt_declare_last_rcvd_write(const struct lu_env *env,
+                                       struct mdt_device *mdt,
+                                       loff_t off, struct thandle *th)
+{
+        return dt_declare_record_write(env, mdt->mdt_lut.lut_last_rcvd,
+                                       sizeof(struct lsd_client_data), off, th);
 }
 
 static int mdt_last_rcvd_write(const struct lu_env *env,
@@ -503,10 +489,17 @@ static int mdt_server_data_update(const struct lu_env *env,
 
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
 
-        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
-        th = mdt_trans_start(env, mdt);
+        th = mdt_trans_create(env, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
+
+        rc = mdt_declare_last_rcvd_header_write(env, mdt, th);
+        if (rc)
+                goto out;
+
+        rc = mdt_trans_start(env, mdt, th);
+        if (rc)
+                goto out;
 
         CDEBUG(D_SUPER, "MDS mount_count is "LPU64", last_transno is "LPU64"\n",
                mdt->mdt_lut.lut_obd->u.obt.obt_mount_count,
@@ -517,6 +510,8 @@ static int mdt_server_data_update(const struct lu_env *env,
         cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
 
         rc = mdt_last_rcvd_header_write(env, mdt, th);
+
+out:
         mdt_trans_stop(env, mdt, th);
         return rc;
 }
@@ -575,11 +570,17 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         if (OBD_FAIL_CHECK(OBD_FAIL_TGT_CLIENT_ADD))
                 RETURN(-ENOSPC);
 
-        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
-
-        th = mdt_trans_start(env, mdt);
+        th = mdt_trans_create(env, mdt);
         if (IS_ERR(th))
                 RETURN(PTR_ERR(th));
+
+        rc = mdt_declare_last_rcvd_write(env, mdt, off, th);
+        if (rc)
+                GOTO(stop, rc);
+
+        rc = mdt_trans_start(env, mdt, th);
+        if (rc)
+                GOTO(stop, rc);
 
         /*
          * Until this operations will be committed the sync is needed
@@ -600,6 +601,8 @@ int mdt_client_new(const struct lu_env *env, struct mdt_device *mdt)
         rc = mdt_last_rcvd_write(env, mdt, ted->ted_lcd, &off, th);
         CDEBUG(D_INFO, "wrote client lcd at idx %u off %llu (len %u)\n",
                cl_idx, ted->ted_lr_off, (int)sizeof(*(ted->ted_lcd)));
+
+stop:
         mdt_trans_stop(env, mdt, th);
 
         RETURN(rc);
@@ -709,15 +712,24 @@ int mdt_client_del(const struct lu_env *env, struct mdt_device *mdt)
          * be in server data or in client data in case of failure */
         mdt_server_data_update(env, mdt);
 
-        mdt_trans_credit_init(env, mdt, MDT_TXN_LAST_RCVD_WRITE_OP);
-        th = mdt_trans_start(env, mdt);
+        th = mdt_trans_create(env, mdt);
         if (IS_ERR(th))
                 GOTO(free, rc = PTR_ERR(th));
+
+        rc = mdt_declare_last_rcvd_write(env, mdt, off, th);
+        if (rc)
+                GOTO(stop, rc);
+
+        rc = mdt_trans_start(env, mdt, th);
+        if (rc)
+                GOTO(stop, rc);
 
         cfs_mutex_down(&ted->ted_lcd_lock);
         memset(ted->ted_lcd->lcd_uuid, 0, sizeof ted->ted_lcd->lcd_uuid);
         rc = mdt_last_rcvd_write(env, mdt, ted->ted_lcd, &off, th);
         cfs_mutex_up(&ted->ted_lcd_lock);
+
+stop:
         mdt_trans_stop(env, mdt, th);
 
         CDEBUG(rc == 0 ? D_INFO : D_ERROR, "Zeroing out client idx %u in "
@@ -831,23 +843,13 @@ extern struct lu_context_key mdt_thread_key;
 
 /* add credits for last_rcvd update */
 static int mdt_txn_start_cb(const struct lu_env *env,
-                            struct txn_param *param, void *cookie)
+                            struct thandle *th, void *cookie)
 {
         struct mdt_device *mdt = cookie;
 
-        param->tp_credits += mdt_trans_credit_get(env, mdt,
-                                                  MDT_TXN_LAST_RCVD_WRITE_OP);
-        return 0;
-}
-
-/* Set new object versions */
-static void mdt_version_set(struct mdt_thread_info *info)
-{
-        if (info->mti_mos != NULL) {
-                mo_version_set(info->mti_env, mdt_object_child(info->mti_mos),
-                               info->mti_transno);
-                info->mti_mos = NULL;
-        }
+        /* XXX: later we'll be declaring this at specific offset */
+        return dt_declare_record_write(env, mdt->mdt_lut.lut_last_rcvd,
+                                       sizeof(struct lsd_client_data), 0, th);
 }
 
 /* Update last_rcvd records with latests transaction data */
@@ -893,8 +895,11 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         LASSERT(req != NULL && req->rq_repmsg != NULL);
 
         /** VBR: set new versions */
-        if (txn->th_result == 0)
-                mdt_version_set(mti);
+        if (txn->th_result == 0 && mti->mti_mos != NULL) {
+                dt_version_set(env, mdt_obj2dt(mti->mti_mos),
+                               mti->mti_transno, txn);
+                mti->mti_mos = NULL;
+        }
 
         /* filling reply data */
         CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",

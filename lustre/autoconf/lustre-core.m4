@@ -510,7 +510,10 @@ AC_TRY_RUN([
 	AC_MSG_RESULT([ACL size $acl_size])
         AC_DEFINE_UNQUOTED(XATTR_ACL_SIZE, AS_TR_SH([$acl_size]), [size of xattr acl])
 ],[
-        AC_ERROR([ACL size can't computed])
+        AC_ERROR([ACL size can't be computed])
+],[
+	AC_MSG_RESULT([can't check ACL size, make it 260])
+        AC_DEFINE_UNQUOTED(XATTR_ACL_SIZE,260)
 ])
 CFLAGS="$tmp_flags"
 ])
