@@ -894,7 +894,7 @@ int ccc_prep_size(const struct lu_env *env, struct cl_object *obj,
                          * of the buffer (C)
                          */
                         ccc_object_size_unlock(obj);
-                        result = cl_glimpse_lock(env, io, inode, obj);
+                        result = cl_glimpse_lock(env, io, inode, obj, 0);
                         if (result == 0 && exceed != NULL) {
                                 /* If objective page index exceed end-of-file
                                  * page index, return directly. Do not expect

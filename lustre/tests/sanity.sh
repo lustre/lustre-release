@@ -8387,6 +8387,50 @@ test_221() {
 }
 run_test 221 "make sure fault and truncate race to not cause OOM"
 
+test_222a () {
+       rm -rf $DIR/$tdir
+       mkdir -p $DIR/$tdir
+       $LFS setstripe -c 1 -i 0 $DIR/$tdir
+       createmany -o $DIR/$tdir/$tfile 10
+       cancel_lru_locks mdc
+       cancel_lru_locks osc
+       #define OBD_FAIL_LDLM_AGL_DELAY           0x31a
+       $LCTL set_param fail_loc=0x31a
+       ls -l $DIR/$tdir > /dev/null || error "AGL for ls failed"
+       $LCTL set_param fail_loc=0
+       rm -r $DIR/$tdir
+}
+run_test 222a "AGL for ls should not trigger CLIO lock failure ================"
+
+test_222b () {
+       rm -rf $DIR/$tdir
+       mkdir -p $DIR/$tdir
+       $LFS setstripe -c 1 -i 0 $DIR/$tdir
+       createmany -o $DIR/$tdir/$tfile 10
+       cancel_lru_locks mdc
+       cancel_lru_locks osc
+       #define OBD_FAIL_LDLM_AGL_DELAY           0x31a
+       $LCTL set_param fail_loc=0x31a
+       rm -r $DIR/$tdir || "AGL for rmdir failed"
+       $LCTL set_param fail_loc=0
+}
+run_test 222b "AGL for rmdir should not trigger CLIO lock failure ============="
+
+test_223 () {
+       rm -rf $DIR/$tdir
+       mkdir -p $DIR/$tdir
+       $LFS setstripe -c 1 -i 0 $DIR/$tdir
+       createmany -o $DIR/$tdir/$tfile 10
+       cancel_lru_locks mdc
+       cancel_lru_locks osc
+       #define OBD_FAIL_LDLM_AGL_NOLOCK          0x31b
+       $LCTL set_param fail_loc=0x31b
+       ls -l $DIR/$tdir > /dev/null || error "reenqueue failed"
+       $LCTL set_param fail_loc=0
+       rm -r $DIR/$tdir
+}
+run_test 223 "osc reenqueue if without AGL lock granted ======================="
+
 #
 # tests that do cleanup/setup should be run at the end
 #

@@ -1051,7 +1051,8 @@ static struct ldlm_lock *search_queue(cfs_list_t *queue,
                         continue;
 
                 if (!unref &&
-                    (lock->l_destroyed || (lock->l_flags & LDLM_FL_FAILED)))
+                    (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED ||
+                     lock->l_fail_value != 0))
                         continue;
 
                 if ((flags & LDLM_FL_LOCAL_ONLY) &&
@@ -1070,6 +1071,23 @@ static struct ldlm_lock *search_queue(cfs_list_t *queue,
 
         return NULL;
 }
+
+void ldlm_lock_fail_match_locked(struct ldlm_lock *lock, int rc)
+{
+        if (lock->l_fail_value == 0) {
+                lock->l_fail_value = rc;
+                cfs_waitq_signal(&lock->l_waitq);
+        }
+}
+EXPORT_SYMBOL(ldlm_lock_fail_match_locked);
+
+void ldlm_lock_fail_match(struct ldlm_lock *lock, int rc)
+{
+        lock_res_and_lock(lock);
+        ldlm_lock_fail_match_locked(lock, rc);
+        unlock_res_and_lock(lock);
+}
+EXPORT_SYMBOL(ldlm_lock_fail_match);
 
 void ldlm_lock_allow_match_locked(struct ldlm_lock *lock)
 {
@@ -1183,7 +1201,16 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
 
                         /* XXX FIXME see comment on CAN_MATCH in lustre_dlm.h */
                         l_wait_event(lock->l_waitq,
-                                     (lock->l_flags & LDLM_FL_LVB_READY), &lwi);
+                                     lock->l_flags & LDLM_FL_LVB_READY ||
+                                     lock->l_fail_value != 0,
+                                     &lwi);
+                        if (!(lock->l_flags & LDLM_FL_LVB_READY)) {
+                                if (flags & LDLM_FL_TEST_LOCK)
+                                        LDLM_LOCK_RELEASE(lock);
+                                else
+                                        ldlm_lock_decref_internal(lock, mode);
+                                rc = 0;
+                        }
                 }
         }
  out2:
@@ -1231,7 +1258,8 @@ ldlm_mode_t ldlm_revalidate_lock_handle(struct lustre_handle *lockh,
         lock = ldlm_handle2lock(lockh);
         if (lock != NULL) {
                 lock_res_and_lock(lock);
-                if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED)
+                if (lock->l_destroyed || lock->l_flags & LDLM_FL_FAILED ||
+                    lock->l_fail_value != 0)
                         GOTO(out, mode);
 
                 if (lock->l_flags & LDLM_FL_CBPENDING &&

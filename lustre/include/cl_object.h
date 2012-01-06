@@ -1616,9 +1616,11 @@ struct cl_lock_slice {
  */
 enum cl_lock_transition {
         /** operation cannot be completed immediately. Wait for state change. */
-        CLO_WAIT   = 1,
+        CLO_WAIT        = 1,
         /** operation had to release lock mutex, restart. */
-        CLO_REPEAT = 2
+        CLO_REPEAT      = 2,
+        /** lower layer re-enqueued. */
+        CLO_REENQUEUED  = 3,
 };
 
 /**
@@ -2155,9 +2157,17 @@ enum cl_enq_flags {
          */
         CEF_NEVER        = 0x00000010,
         /**
+         * for async glimpse lock.
+         */
+        CEF_AGL          = 0x00000020,
+        /**
+         * do not trigger re-enqueue.
+         */
+        CEF_NO_REENQUEUE = 0x00000040,
+        /**
          * mask of enq_flags.
          */
-        CEF_MASK         = 0x0000001f
+        CEF_MASK         = 0x0000007f,
 };
 
 /**

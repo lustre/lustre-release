@@ -77,6 +77,7 @@ struct osc_enqueue_args {
         struct ost_lvb           *oa_lvb;
         struct lustre_handle     *oa_lockh;
         struct ldlm_enqueue_info *oa_ei;
+        unsigned int              oa_agl:1;
 };
 
 #if 0

@@ -571,10 +571,6 @@ static void ll_sai_put(struct ll_statahead_info *sai)
         EXIT;
 }
 
-#ifndef HAVE_AGL_SUPPORT
-# define cl_agl(inode)  do {} while (0)
-#endif
-
 /* Do NOT forget to drop inode refcount when into sai_entries_agl. */
 static void ll_agl_trigger(struct inode *inode, struct ll_statahead_info *sai)
 {

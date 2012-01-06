@@ -122,14 +122,15 @@ typedef enum {
 #define LDLM_FL_HAS_INTENT     0x001000 /* lock request has intent */
 #define LDLM_FL_CANCELING      0x002000 /* lock cancel has already been sent */
 #define LDLM_FL_LOCAL          0x004000 /* local lock (ie, no srv/cli split) */
-/* was LDLM_FL_WARN  until 2.0.0  0x008000 */
 #define LDLM_FL_DISCARD_DATA   0x010000 /* discard (no writeback) on cancel */
 
 #define LDLM_FL_NO_TIMEOUT     0x020000 /* Blocked by group lock - wait
                                          * indefinitely */
 
 /* file & record locking */
-#define LDLM_FL_BLOCK_NOWAIT   0x040000 // server told not to wait if blocked
+#define LDLM_FL_BLOCK_NOWAIT   0x040000 /* server told not to wait if blocked.
+                                         * For AGL, OST will not send glimpse
+                                         * callback. */
 #define LDLM_FL_TEST_LOCK      0x080000 // return blocking lock
 
 /* XXX FIXME: This is being added to b_size as a low-risk fix to the fact that
@@ -175,8 +176,6 @@ typedef enum {
 /* optimization hint: LDLM can run blocking callback from current context
  * w/o involving separate thread. in order to decrease cs rate */
 #define LDLM_FL_ATOMIC_CB      0x4000000
-
-/* was LDLM_FL_ASYNC until 2.0.0 0x8000000 */
 
 /* It may happen that a client initiate 2 operations, e.g. unlink and mkdir,
  * such that server send blocking ast for conflict locks to this client for
@@ -736,6 +735,7 @@ struct ldlm_lock {
          * Client-side-only members.
          */
 
+        int                   l_fail_value;
         /**
          * Temporary storage for an LVB received during an enqueue operation.
          */
@@ -763,6 +763,7 @@ struct ldlm_lock {
          */
         __u32                 l_pid;
 
+        int                   l_bl_ast_run;
         /**
          * For ldlm_add_ast_work_item().
          */
@@ -777,7 +778,6 @@ struct ldlm_lock {
         cfs_list_t            l_rk_ast;
 
         struct ldlm_lock     *l_blocking_lock;
-        int                   l_bl_ast_run;
 
         /**
          * Protected by lr_lock, linkages to "skip lists".
@@ -1078,6 +1078,8 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode);
 int  ldlm_lock_addref_try(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
+void ldlm_lock_fail_match_locked(struct ldlm_lock *lock, int rc);
+void ldlm_lock_fail_match(struct ldlm_lock *lock, int rc);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
 void ldlm_lock_allow_match_locked(struct ldlm_lock *lock);
 ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,

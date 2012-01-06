@@ -196,23 +196,32 @@ static int osc_lock_unuse(const struct lu_env *env,
 {
         struct osc_lock *ols = cl2osc_lock(slice);
 
-        LASSERT(ols->ols_state == OLS_GRANTED ||
-                ols->ols_state == OLS_UPCALL_RECEIVED);
         LINVRNT(osc_lock_invariant(ols));
 
-        if (ols->ols_glimpse) {
-                LASSERT(ols->ols_hold == 0);
+        switch (ols->ols_state) {
+        case OLS_NEW:
+                LASSERT(!ols->ols_hold);
+                LASSERT(ols->ols_agl);
                 return 0;
+        case OLS_UPCALL_RECEIVED:
+                LASSERT(!ols->ols_hold);
+                ols->ols_state = OLS_NEW;
+                return 0;
+        case OLS_GRANTED:
+                LASSERT(!ols->ols_glimpse);
+                LASSERT(ols->ols_hold);
+                /*
+                 * Move lock into OLS_RELEASED state before calling
+                 * osc_cancel_base() so that possible synchronous cancellation
+                 * (that always happens e.g., for liblustre) sees that lock is
+                 * released.
+                 */
+                ols->ols_state = OLS_RELEASED;
+                return osc_lock_unhold(ols);
+        default:
+                CERROR("Impossible state: %d\n", ols->ols_state);
+                LBUG();
         }
-        LASSERT(ols->ols_hold);
-
-        /*
-         * Move lock into OLS_RELEASED state before calling osc_cancel_base()
-         * so that possible synchronous cancellation (that always happens
-         * e.g., for liblustre) sees that lock is released.
-         */
-        ols->ols_state = OLS_RELEASED;
-        return osc_lock_unhold(ols);
 }
 
 static void osc_lock_fini(const struct lu_env *env,
@@ -346,10 +355,8 @@ static void osc_lock_lvb_update(const struct lu_env *env, struct osc_lock *olck,
 
         ENTRY;
 
-        if (!(olck->ols_flags & LDLM_FL_LVB_READY)) {
-                EXIT;
-                return;
-        }
+        if (!(olck->ols_flags & LDLM_FL_LVB_READY))
+                RETURN_EXIT;
 
         lvb   = &olck->ols_lvb;
         obj   = olck->ols_cl.cls_obj;
@@ -528,6 +535,7 @@ static int osc_lock_upcall(void *cookie, int errcode)
                                 dlmlock->l_ast_data = NULL;
                                 olck->ols_handle.cookie = 0ULL;
                                 cfs_spin_unlock(&osc_ast_guard);
+                                ldlm_lock_fail_match_locked(dlmlock, rc);
                                 unlock_res_and_lock(dlmlock);
                                 LDLM_LOCK_PUT(dlmlock);
                         }
@@ -556,17 +564,22 @@ static int osc_lock_upcall(void *cookie, int errcode)
                         rc = 0;
                 }
 
-                if (rc == 0)
-                        /* on error, lock was signaled by cl_lock_error() */
+                if (rc == 0) {
                         cl_lock_signal(env, lock);
-                else
+                        /* del user for lock upcall cookie */
+                        cl_unuse_try(env, lock);
+                } else {
+                        /* del user for lock upcall cookie */
+                        cl_lock_user_del(env, lock);
                         cl_lock_error(env, lock, rc);
+                }
 
                 cl_lock_mutex_put(env, lock);
 
                 /* release cookie reference, acquired by osc_lock_enqueue() */
                 lu_ref_del(&lock->cll_reference, "upcall", lock);
                 cl_lock_put(env, lock);
+
                 cl_env_nested_put(&nest, env);
         } else
                 /* should never happen, similar to osc_ldlm_blocking_ast(). */
@@ -1052,7 +1065,6 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
         ENTRY;
 
         LASSERT(cl_lock_is_mutexed(lock));
-        LASSERT(lock->cll_state == CLS_QUEUING);
 
         /* make it enqueue anyway for glimpse lock, because we actually
          * don't need to cancel any conflicting locks. */
@@ -1156,10 +1168,14 @@ static int osc_lock_enqueue(const struct lu_env *env,
         ENTRY;
 
         LASSERT(cl_lock_is_mutexed(lock));
-        LASSERT(lock->cll_state == CLS_QUEUING);
-        LASSERT(ols->ols_state == OLS_NEW);
+        LASSERTF(ols->ols_state == OLS_NEW,
+                 "Impossible state: %d\n", ols->ols_state);
 
         ols->ols_flags = osc_enq2ldlm_flags(enqflags);
+        if (enqflags & CEF_AGL) {
+                ols->ols_flags |= LDLM_FL_BLOCK_NOWAIT;
+                ols->ols_agl = 1;
+        }
         if (ols->ols_flags & LDLM_FL_HAS_INTENT)
                 ols->ols_glimpse = 1;
         if (!osc_lock_is_lockless(ols) && !(enqflags & CEF_MUST))
@@ -1181,6 +1197,8 @@ static int osc_lock_enqueue(const struct lu_env *env,
                         /* a reference for lock, passed as an upcall cookie */
                         cl_lock_get(lock);
                         lu_ref_add(&lock->cll_reference, "upcall", lock);
+                        /* a user for lock also */
+                        cl_lock_user_add(env, lock);
                         ols->ols_state = OLS_ENQUEUED;
 
                         /*
@@ -1196,11 +1214,16 @@ static int osc_lock_enqueue(const struct lu_env *env,
                                           obj->oo_oinfo->loi_kms_valid,
                                           osc_lock_upcall,
                                           ols, einfo, &ols->ols_handle,
-                                          PTLRPCD_SET, 1);
+                                          PTLRPCD_SET, 1, ols->ols_agl);
                         if (result != 0) {
+                                cl_lock_user_del(env, lock);
                                 lu_ref_del(&lock->cll_reference,
                                            "upcall", lock);
                                 cl_lock_put(env, lock);
+                                if (unlikely(result == -ECANCELED)) {
+                                        ols->ols_state = OLS_NEW;
+                                        result = 0;
+                                }
                         }
                 } else {
                         ols->ols_state = OLS_GRANTED;
@@ -1218,8 +1241,34 @@ static int osc_lock_wait(const struct lu_env *env,
         struct cl_lock  *lock = olck->ols_cl.cls_lock;
 
         LINVRNT(osc_lock_invariant(olck));
-        if (olck->ols_glimpse && olck->ols_state >= OLS_UPCALL_RECEIVED)
-                return 0;
+
+        if (olck->ols_glimpse && olck->ols_state >= OLS_UPCALL_RECEIVED) {
+                if (olck->ols_flags & LDLM_FL_LVB_READY) {
+                        return 0;
+                } else if (olck->ols_agl) {
+                        olck->ols_state = OLS_NEW;
+                } else {
+                        LASSERT(lock->cll_error);
+                        return lock->cll_error;
+                }
+        }
+
+        if (olck->ols_state == OLS_NEW) {
+                if (lock->cll_descr.cld_enq_flags & CEF_NO_REENQUEUE) {
+                        return -ENAVAIL;
+                } else {
+                        int rc;
+
+                        LASSERT(olck->ols_agl);
+
+                        rc = osc_lock_enqueue(env, slice, NULL, CEF_ASYNC |
+                                                                CEF_MUST);
+                        if (rc != 0)
+                                return rc;
+                        else
+                                return CLO_REENQUEUED;
+                }
+        }
 
         LASSERT(equi(olck->ols_state >= OLS_UPCALL_RECEIVED &&
                      lock->cll_error == 0, olck->ols_lock != NULL));
@@ -1337,6 +1386,7 @@ static void osc_lock_cancel(const struct lu_env *env,
                                       lock, result);
         }
         olck->ols_state = OLS_CANCELLED;
+        olck->ols_flags &= ~LDLM_FL_LVB_READY;
         osc_lock_detach(env, olck);
 }
 
@@ -1475,6 +1525,9 @@ static int osc_lock_fits_into(const struct lu_env *env,
                 return 0;
 
         if (need->cld_mode == CLM_PHANTOM) {
+                if (ols->ols_agl)
+                        return !(ols->ols_state > OLS_RELEASED);
+
                 /*
                  * Note: the QUEUED lock can't be matched here, otherwise
                  * it might cause the deadlocks.

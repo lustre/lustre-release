@@ -28,6 +28,8 @@
 /*
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2011 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -267,11 +269,11 @@ static int lov_subresult(int result, int rc)
         int result_rank;
         int rc_rank;
 
+        ENTRY;
+
         LASSERT(result <= 0 || result == CLO_REPEAT || result == CLO_WAIT);
         LASSERT(rc <= 0 || rc == CLO_REPEAT || rc == CLO_WAIT);
         CLASSERT(CLO_WAIT < CLO_REPEAT);
-
-        ENTRY;
 
         /* calculate ranks in the ordering above */
         result_rank = result < 0 ? 1 + CLO_REPEAT : result;
@@ -524,7 +526,7 @@ static int lov_lock_enqueue_one(const struct lu_env *env, struct lov_lock *lck,
 
         /* first, try to enqueue a sub-lock ... */
         result = cl_enqueue_try(env, sublock, io, enqflags);
-        if (sublock->cll_state == CLS_ENQUEUED)
+        if ((sublock->cll_state == CLS_ENQUEUED) && !(enqflags & CEF_AGL))
                 /* if it is enqueued, try to `wait' on it---maybe it's already
                  * granted */
                 result = cl_wait_try(env, sublock);
@@ -533,8 +535,8 @@ static int lov_lock_enqueue_one(const struct lu_env *env, struct lov_lock *lck,
          * parallel, otherwise---enqueue has to wait until sub-lock is granted
          * before proceeding to the next one.
          */
-        if (result == CLO_WAIT && sublock->cll_state <= CLS_HELD &&
-            enqflags & CEF_ASYNC && !last)
+        if ((result == CLO_WAIT) && (sublock->cll_state <= CLS_HELD) &&
+            (enqflags & CEF_ASYNC) && (!last || (enqflags & CEF_AGL)))
                 result = 0;
         RETURN(result);
 }
@@ -697,7 +699,21 @@ static int lov_lock_unuse(const struct lu_env *env,
                 rc = lov_sublock_lock(env, lck, lls, closure, &subenv);
                 if (rc == 0) {
                         if (lls->sub_flags & LSF_HELD) {
-                                LASSERT(sublock->cll_state == CLS_HELD);
+                                LASSERT(sublock->cll_state == CLS_HELD ||
+                                        sublock->cll_state == CLS_ENQUEUED);
+                                /* For AGL case, the sublock state maybe not
+                                 * match the lower layer state, so sync them
+                                 * before unuse. */
+                                if (sublock->cll_users == 1 &&
+                                    sublock->cll_state == CLS_ENQUEUED) {
+                                        __u32 save;
+
+                                        save = sublock->cll_descr.cld_enq_flags;
+                                        sublock->cll_descr.cld_enq_flags |=
+                                                        CEF_NO_REENQUEUE;
+                                        cl_wait_try(env, sublock);
+                                        sublock->cll_descr.cld_enq_flags = save;
+                                }
                                 rc = cl_unuse_try(subenv->lse_env, sublock);
                                 rc = lov_sublock_release(env, lck, i, 0, rc);
                         }
@@ -789,12 +805,15 @@ static int lov_lock_wait(const struct lu_env *env,
         struct lov_lock        *lck     = cl2lov_lock(slice);
         struct cl_lock_closure *closure = lov_closure_get(env, slice->cls_lock);
         enum cl_lock_state      minstate;
+        int                     reenqueued;
         int                     result;
         int                     i;
 
         ENTRY;
 
-        for (result = 0, minstate = CLS_FREEING, i = 0; i < lck->lls_nr; ++i) {
+again:
+        for (result = 0, minstate = CLS_FREEING, i = 0, reenqueued = 0;
+             i < lck->lls_nr; ++i) {
                 int rc;
                 struct lovsub_lock     *sub;
                 struct cl_lock         *sublock;
@@ -814,10 +833,18 @@ static int lov_lock_wait(const struct lu_env *env,
                         minstate = min(minstate, sublock->cll_state);
                         lov_sublock_unlock(env, sub, closure, subenv);
                 }
+                if (rc == CLO_REENQUEUED) {
+                        reenqueued++;
+                        rc = 0;
+                }
                 result = lov_subresult(result, rc);
                 if (result != 0)
                         break;
         }
+        /* Each sublock only can be reenqueued once, so will not loop for
+         * ever. */
+        if (result == 0 && reenqueued != 0)
+                goto again;
         cl_lock_closure_fini(closure);
         RETURN(result ?: minstate >= CLS_HELD ? 0 : CLO_WAIT);
 }
@@ -863,6 +890,11 @@ static int lov_lock_use(const struct lu_env *env,
                                 if (rc != 0)
                                         rc = lov_sublock_release(env, lck,
                                                                  i, 1, rc);
+                        } else if (sublock->cll_state == CLS_NEW) {
+                                /* Sub-lock might have been canceled, while
+                                 * top-lock was cached. */
+                                result = -ESTALE;
+                                lov_sublock_release(env, lck, i, 1, result);
                         }
                         lov_sublock_unlock(env, sub, closure, subenv);
                 }

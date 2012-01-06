@@ -28,6 +28,8 @@
 /*
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2011 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -45,9 +47,19 @@
 
 blkcnt_t dirty_cnt(struct inode *inode);
 
-int cl_glimpse_size(struct inode *inode);
+int cl_glimpse_size0(struct inode *inode, int agl);
 int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
-                    struct inode *inode, struct cl_object *clob);
+                    struct inode *inode, struct cl_object *clob, int agl);
+
+static inline int cl_glimpse_size(struct inode *inode)
+{
+        return cl_glimpse_size0(inode, 0);
+}
+
+static inline int cl_agl(struct inode *inode)
+{
+        return cl_glimpse_size0(inode, 1);
+}
 
 /**
  * Locking policy for setattr.

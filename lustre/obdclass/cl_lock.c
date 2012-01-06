@@ -925,7 +925,6 @@ static void cl_lock_hold_release(const struct lu_env *env, struct cl_lock *lock,
         EXIT;
 }
 
-
 /**
  * Waits until lock state is changed.
  *
@@ -1303,7 +1302,8 @@ static int cl_enqueue_locked(const struct lu_env *env, struct cl_lock *lock,
                 cl_lock_user_del(env, lock);
                 cl_lock_error(env, lock, result);
         }
-        LASSERT(ergo(result == 0, lock->cll_state == CLS_ENQUEUED ||
+        LASSERT(ergo(result == 0 && !(enqflags & CEF_AGL),
+                     lock->cll_state == CLS_ENQUEUED ||
                      lock->cll_state == CLS_HELD));
         RETURN(result);
 }
@@ -2150,25 +2150,34 @@ struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
         ENTRY;
         do {
                 lock = cl_lock_hold_mutex(env, io, need, scope, source);
-                if (!IS_ERR(lock)) {
-                        rc = cl_enqueue_locked(env, lock, io, enqflags);
-                        if (rc == 0) {
-                                if (cl_lock_fits_into(env, lock, need, io)) {
+                if (IS_ERR(lock))
+                        break;
+
+                rc = cl_enqueue_locked(env, lock, io, enqflags);
+                if (rc == 0) {
+                        if (cl_lock_fits_into(env, lock, need, io)) {
+                                if (!(enqflags & CEF_AGL)) {
                                         cl_lock_mutex_put(env, lock);
-                                        cl_lock_lockdep_acquire(env,
-                                                                lock, enqflags);
+                                        cl_lock_lockdep_acquire(env, lock,
+                                                                enqflags);
                                         break;
                                 }
-                                cl_unuse_locked(env, lock);
+                                rc = 1;
                         }
-                        cl_lock_trace(D_DLMTRACE, env, "enqueue failed", lock);
-                        cl_lock_hold_release(env, lock, scope, source);
-                        cl_lock_mutex_put(env, lock);
-                        lu_ref_del(&lock->cll_reference, scope, source);
-                        cl_lock_put(env, lock);
+                        cl_unuse_locked(env, lock);
+                }
+                cl_lock_trace(D_DLMTRACE, env,
+                              rc <= 0 ? "enqueue failed" : "agl succeed", lock);
+                cl_lock_hold_release(env, lock, scope, source);
+                cl_lock_mutex_put(env, lock);
+                lu_ref_del(&lock->cll_reference, scope, source);
+                cl_lock_put(env, lock);
+                if (rc > 0) {
+                        LASSERT(enqflags & CEF_AGL);
+                        lock = NULL;
+                } else if (rc != 0) {
                         lock = ERR_PTR(rc);
-                } else
-                        rc = PTR_ERR(lock);
+                }
         } while (rc == 0);
         RETURN(lock);
 }
