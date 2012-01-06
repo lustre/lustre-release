@@ -697,7 +697,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 
-        ll_vfs_dq_init(inode);
         fsfilt_check_slow(obd, now, "quota init");
 
 retry:
@@ -716,6 +715,9 @@ retry:
         /* have to call fsfilt_commit() from this point on */
 
         fsfilt_check_slow(obd, now, "brw_start");
+
+        /* Locking order: i_mutex -> journal_lock -> dqptr_sem. LU-952 */
+        ll_vfs_dq_init(inode);
 
         i = OBD_MD_FLATIME | OBD_MD_FLMTIME | OBD_MD_FLCTIME;
 
