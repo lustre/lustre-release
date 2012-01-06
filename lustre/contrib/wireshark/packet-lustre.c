@@ -435,8 +435,6 @@ static gint ett_lustre_llog_logid_rec = -1;
 static gint ett_lustre_llog_logid = -1;
 static gint ett_lustre_llog_rec_tail = -1;
 static gint ett_lustre_lov_mds_md = -1;
-static gint ett_lustre_llog_create_rec = -1;
-static gint ett_lustre_llog_orphan_rec = -1;
 static gint ett_lustre_llog_unlink_rec = -1;
 static gint ett_lustre_llog_setattr_rec = -1;
 static gint ett_lustre_llog_size_change_rec = -1;
@@ -900,7 +898,6 @@ static int hf_lustre_llog_log_hdr_llh_bitmap = -1;
 static int hf_lustre_obd_quotactl_qc_stat = -1;
 static int hf_lustre_qunit_data_old2_qd_id = -1;
 static int hf_lustre_llog_logid_rec_padding2 = -1;
-static int hf_lustre_llog_orphan_rec_lor_tail = -1;
 static int hf_lustre_llog_logid_rec_padding5 = -1;
 static int hf_lustre_ldlm_intent_opc = -1;
 static int hf_lustre_llog_rec_hdr_lrh_type = -1;
@@ -915,9 +912,7 @@ static int hf_lustre_llog_log_hdr_llh_tail = -1;
 static int hf_lustre_obdo_o_size = -1;
 static int hf_lustre_ldlm_extent_start = -1;
 static int hf_lustre_llog_size_change_rec_lsc_hdr = -1;
-static int hf_lustre_llog_create_rec_lcr_tail = -1;
 static int hf_lustre_llog_logid_lgl_oseq = -1;
-static int hf_lustre_llog_create_rec_lcr_hdr = -1;
 static int hf_lustre_llog_cookie_lgc_padding = -1;
 static int hf_lustre_qunit_data_old_qd_type = -1;
 static int hf_lustre_ldlm_flock_blocking_export = -1;
@@ -929,7 +924,6 @@ static int hf_lustre_obdo_o_mode = -1;
 static int hf_lustre_mgs_target_info_mti_svname = -1;
 static int hf_lustre_llogd_body_lgd_logid = -1;
 static int hf_lustre_llog_log_hdr_llh_size = -1;
-static int hf_lustre_llog_create_rec_padding = -1;
 static int hf_lustre_obdo_o_handle = -1;
 static int hf_lustre_obdo_o_atime = -1;
 static int hf_lustre_quota_adjust_qunit_qaq_id = -1;
@@ -972,15 +966,12 @@ static int hf_lustre_llog_gen_conn_cnt = -1;
 static int hf_lustre_obdo_o_padding_6 = -1;
 static int hf_lustre_llog_cookie_lgc_index = -1;
 static int hf_lustre_lov_desc_ld_uuid = -1;
-static int hf_lustre_llog_create_rec_lcr_oid = -1;
 static int hf_lustre_ldlm_reply_lock_desc = -1;
 static int hf_lustre_lov_desc_ld_padding_0 = -1;
 static int hf_lustre_llog_unlink_rec_lur_ogen = -1;
-static int hf_lustre_llog_orphan_rec_lor_hdr = -1;
 static int hf_lustre_cfg_marker_cm_flags = -1;
 static int hf_lustre_obdo_o_padding_3 = -1;
 static int hf_lustre_ldlm_request_lock_desc = -1;
-static int hf_lustre_llog_orphan_rec_padding = -1;
 static int hf_lustre_obdo_o_flags = -1;
 static int hf_lustre_mgs_target_info_mti_params = -1;
 static int hf_lustre_llog_logid_lgl_ogen = -1;
@@ -1004,11 +995,9 @@ static int hf_lustre_llog_unlink_rec_padding = -1;
 static int hf_lustre_ldlm_lock_desc_l_req_mode = -1;
 static int hf_lustre_ldlm_extent_end = -1;
 static int hf_lustre_llog_gen_rec_lgr_hdr = -1;
-static int hf_lustre_llog_orphan_rec_lor_ogen = -1;
 static int hf_lustre_llogd_body_lgd_llh_flags = -1;
 static int hf_lustre_llog_log_hdr_llh_cat_idx = -1;
 static int hf_lustre_llog_log_hdr_llh_bitmap_offset=-1;
-static int hf_lustre_llog_orphan_rec_lor_oid = -1;
 static int hf_lustre_ldlm_reply_lock_padding = -1;
 static int hf_lustre_obd_quotactl_qc_id = -1;
 static int hf_lustre_llog_logid_rec_padding4 = -1;
@@ -1021,7 +1010,6 @@ static int hf_lustre_llogd_conn_body_lgdc_logid = -1;
 static int hf_lustre_ldlm_flock_blocking_pid = -1;
 static int hf_lustre_lov_desc_ld_tgt_count = -1;
 static int hf_lustre_llogd_body_lgd_cur_offset=-1;
-static int hf_lustre_llog_create_rec_lcr_ogen = -1;
 static int hf_lustre_qunit_data_old2_qd_count = -1;
 static int hf_lustre_qunit_data_old2_qd_flags = -1;
 static int hf_lustre_ldlm_flock_start = -1;
@@ -1031,7 +1019,6 @@ static int hf_lustre_lov_desc_ld_default_stripe_size = -1;
 static int hf_lustre_llog_log_hdr_llh_tgtuuid = -1;
 static int hf_lustre_cfg_marker_cm_step = -1;
 static int hf_lustre_mgs_send_param_mgs_param = -1;
-static int hf_lustre_llog_create_rec_lcr_fid = -1;
 static int hf_lustre_lov_desc_ld_default_stripe_offset=-1;
 static int hf_lustre_ldlm_resource_desc_lr_name = -1;
 static int hf_lustre_llog_rec_tail_lrt_len = -1;
@@ -6722,183 +6709,6 @@ lustre_dissect_struct_llog_logid_rec(tvbuff_t *tvb _U_, int offset _U_, packet_i
   return offset;
 }
 
-/* IDL: struct llog_create_rec { */
-/* IDL: 	struct llog_rec_hdr { */
-/* IDL: } lcr_hdr; */
-/* IDL: 	struct ll_fid { */
-/* IDL: } lcr_fid; */
-/* IDL: 	uint64 lcr_oid; */
-/* IDL: 	uint32 lcr_ogen; */
-/* IDL: 	uint32 padding; */
-/* IDL: 	struct llog_rec_tail { */
-/* IDL: } lcr_tail; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_llog_create_rec_lcr_hdr(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d56e0)(tvb,offset,pinfo,tree,hf_lustre_llog_create_rec_lcr_hdr);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_create_rec_lcr_fid(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d5830)(tvb,offset,pinfo,tree,hf_lustre_llog_create_rec_lcr_fid);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_create_rec_lcr_oid(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_llog_create_rec_lcr_oid);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_create_rec_lcr_ogen(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_llog_create_rec_lcr_ogen);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_create_rec_padding(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_llog_create_rec_padding);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_create_rec_lcr_tail(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d69dc)(tvb,offset,pinfo,tree,hf_lustre_llog_create_rec_lcr_tail);
-
-  return offset;
-}
-
-int
-lustre_dissect_struct_llog_create_rec(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-  int old_offset;
-
-
-
-  old_offset=offset;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_llog_create_rec);
-  }
-
-  offset=lustre_dissect_element_llog_create_rec_lcr_hdr(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_create_rec_lcr_fid(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_create_rec_lcr_oid(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_create_rec_lcr_ogen(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_create_rec_padding(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_create_rec_lcr_tail(tvb, offset, pinfo, tree);
-
-
-  proto_item_set_len(item, offset-old_offset);
-
-  return offset;
-}
-
-
-
-
-/* IDL: struct llog_orphan_rec { */
-/* IDL: 	struct llog_rec_hdr { */
-/* IDL: } lor_hdr; */
-/* IDL: 	uint64 lor_oid; */
-/* IDL: 	uint32 lor_ogen; */
-/* IDL: 	uint32 padding; */
-/* IDL: 	struct llog_rec_tail { */
-/* IDL: } lor_tail; */
-/* IDL: } */
-
-static int
-lustre_dissect_element_llog_orphan_rec_lor_hdr(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d767c)(tvb,offset,pinfo,tree,hf_lustre_llog_orphan_rec_lor_hdr);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_orphan_rec_lor_oid(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_llog_orphan_rec_lor_oid);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_orphan_rec_lor_ogen(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_llog_orphan_rec_lor_ogen);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_orphan_rec_padding(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  offset=dissect_uint32(tvb, offset, pinfo, tree,  hf_lustre_llog_orphan_rec_padding);
-
-  return offset;
-}
-
-static int
-lustre_dissect_element_llog_orphan_rec_lor_tail(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
-{
-  //offset=lustre_dissect_struct_HASH(0x85d8550)(tvb,offset,pinfo,tree,hf_lustre_llog_orphan_rec_lor_tail);
-  return offset;
-}
-
-int
-lustre_dissect_struct_llog_orphan_rec(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *parent_tree _U_, int hf_index _U_)
-{
-  proto_item *item = NULL;
-  proto_tree *tree = NULL;
-  int old_offset;
-
-
-
-  old_offset=offset;
-
-  if (parent_tree) {
-    item = proto_tree_add_item(parent_tree, hf_index, tvb, offset, -1, TRUE);
-    tree = proto_item_add_subtree(item, ett_lustre_llog_orphan_rec);
-  }
-
-  offset=lustre_dissect_element_llog_orphan_rec_lor_hdr(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_orphan_rec_lor_oid(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_orphan_rec_lor_ogen(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_orphan_rec_padding(tvb, offset, pinfo, tree);
-
-  offset=lustre_dissect_element_llog_orphan_rec_lor_tail(tvb, offset, pinfo, tree);
-
-
-  proto_item_set_len(item, offset-old_offset);
-
-  return offset;
-}
 
 
 
@@ -10866,14 +10676,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_llog_size_change_rec_lsc_hdr,
       { "Lsc Hdr", "lustre.llog_size_change_rec.lsc_hdr", FT_NONE,
 		    BASE_NONE, NULL, 0, "", HFILL } },
-    { &hf_lustre_llog_create_rec_lcr_tail,
-      { "Lcr Tail", "lustre.llog_create_rec.lcr_tail", FT_NONE,
-		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_logid_lgl_oseq,
       { "Lgl SEQ", "lustre.llog_logid.lgl_oseq", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_llog_create_rec_lcr_hdr,
-      { "Lcr Hdr", "lustre.llog_create_rec.lcr_hdr", FT_NONE,
-		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_cookie_lgc_padding,
       { "Lgc Padding", "lustre.llog_cookie.lgc_padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_old_qd_type,
@@ -10897,8 +10701,6 @@ void proto_register_dcerpc_lustre(void)
 		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_log_hdr_llh_size,
       { "Llh Size", "lustre.llog_log_hdr.llh_size", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_llog_create_rec_padding,
-      { "Padding", "lustre.llog_create_rec.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_handle,
       { "O Handle", "lustre.obdo.o_handle", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_atime,
@@ -10996,8 +10798,6 @@ void proto_register_dcerpc_lustre(void)
       { "Lgc Index", "lustre.llog_cookie.lgc_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_desc_ld_uuid,
       { "Ld Uuid", "lustre.lov_desc.ld_uuid", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
-    { &hf_lustre_llog_create_rec_lcr_oid,
-      { "Lcr Oid", "lustre.llog_create_rec.lcr_oid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_reply_lock_desc,
       { "Lock Desc", "lustre.ldlm_reply.lock_desc", FT_NONE,
 		    BASE_NONE, NULL, 0, "", HFILL } },
@@ -11075,8 +10875,6 @@ void proto_register_dcerpc_lustre(void)
       { "Llh Cat Idx", "lustre.llog_log_hdr.llh_cat_idx", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_log_hdr_llh_bitmap_offset,
       { "Llh Bitmap Offset", "lustre.llog_log_hdr.llh_bitmap_offset", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_llog_orphan_rec_lor_oid,
-      { "Lor Oid", "lustre.llog_orphan_rec.lor_oid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_reply_lock_padding,
       { "Lock Padding", "lustre.ldlm_reply.lock_padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_quotactl_qc_id,
@@ -11102,8 +10900,6 @@ void proto_register_dcerpc_lustre(void)
       { "Ld Tgt Count", "lustre.lov_desc.ld_tgt_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_body_lgd_cur_offset,
       { "Lgd Cur Offset", "lustre.llogd_body.lgd_cur_offset", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_llog_create_rec_lcr_ogen,
-      { "Lcr Ogen", "lustre.llog_create_rec.lcr_ogen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_old2_qd_count,
       { "Qd Count", "lustre.qunit_data_old2.qd_count", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_opnum,
@@ -11125,9 +10921,6 @@ void proto_register_dcerpc_lustre(void)
       { "Cm Step", "lustre.cfg_marker.cm_step", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mgs_send_param_mgs_param,
       { "Mgs Param", "lustre.mgs_send_param.mgs_param", FT_UINT8, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_llog_create_rec_lcr_fid,
-      { "Lcr Fid", "lustre.llog_create_rec.lcr_fid", FT_NONE,
-		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_lov_desc_ld_default_stripe_offset,
       { "Ld Default Stripe Offset", "lustre.lov_desc.ld_default_stripe_offset", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_resource_desc_lr_name,
@@ -11383,7 +11176,6 @@ void proto_register_dcerpc_lustre(void)
     &ett_lustre_llog_rec_hdr,
     &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_logid_rec,
-    &ett_lustre_llog_create_rec,
     &ett_lustre_llog_orphan_rec,
     &ett_lustre_llog_unlink_rec,
     &ett_lustre_llog_setattr_rec,
