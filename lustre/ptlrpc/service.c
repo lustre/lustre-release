@@ -1278,8 +1278,10 @@ void ptlrpc_hpreq_reorder(struct ptlrpc_request *req)
 
         cfs_spin_lock(&svc->srv_rq_lock);
         /* It may happen that the request is already taken for the processing
-         * but still in the export list, do not re-add it into the HP list. */
-        if (req->rq_phase == RQ_PHASE_NEW)
+         * but still in the export list, or the request is not in the request
+         * queue but in the export list already, do not add it into the
+         * HP list. */
+        if (!cfs_list_empty(&req->rq_list))
                 ptlrpc_hpreq_reorder_nolock(svc, req);
         cfs_spin_unlock(&svc->srv_rq_lock);
         EXIT;
@@ -1314,16 +1316,13 @@ static int ptlrpc_server_request_add(struct ptlrpc_service *svc,
                 RETURN(rc);
 
         cfs_spin_lock(&svc->srv_rq_lock);
-        /* Before inserting the request into the queue, check if it is not
-         * inserted yet, or even already handled -- it may happen due to
-         * a racing ldlm_server_blocking_ast(). */
-        if (req->rq_phase == RQ_PHASE_NEW && cfs_list_empty(&req->rq_list)) {
-                if (rc)
-                        ptlrpc_hpreq_reorder_nolock(svc, req);
-                else
-                        cfs_list_add_tail(&req->rq_list,
-                                          &svc->srv_request_queue);
-        }
+
+        if (rc)
+                ptlrpc_hpreq_reorder_nolock(svc, req);
+        else
+                cfs_list_add_tail(&req->rq_list,
+                                  &svc->srv_request_queue);
+
         cfs_spin_unlock(&svc->srv_rq_lock);
 
         RETURN(0);
@@ -1454,11 +1453,6 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
         svc->srv_n_queued_reqs--;
         /* Consider this still a "queued" request as far as stats are
            concerned */
-        /* ptlrpc_hpreq_init() inserts it to the export list and by the time
-         * of ptlrpc_server_request_add() it could be already handled and
-         * released. To not lose request in between, take an extra reference
-         * on the request. */
-        ptlrpc_request_addref(req);
         cfs_spin_unlock(&svc->srv_lock);
 
         /* go through security check/transform */
@@ -1566,14 +1560,14 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service *svc)
 
         /* Move it over to the request processing queue */
         rc = ptlrpc_server_request_add(svc, req);
-        if (rc)
+        if (rc) {
+                ptlrpc_hpreq_fini(req);
                 GOTO(err_req, rc);
+        }
         cfs_waitq_signal(&svc->srv_waitq);
-        ptlrpc_server_drop_request(req);
         RETURN(1);
 
 err_req:
-        ptlrpc_server_drop_request(req);
         cfs_spin_lock(&svc->srv_rq_lock);
         svc->srv_n_active_reqs++;
         cfs_spin_unlock(&svc->srv_rq_lock);
@@ -1638,11 +1632,9 @@ ptlrpc_server_handle_request(struct ptlrpc_service *svc,
         if (request->rq_hp)
                 svc->srv_n_active_hpreq++;
 
-        /* The phase is changed under the lock here because we need to know
-         * the request is under processing (see ptlrpc_hpreq_reorder()). */
-        ptlrpc_rqphase_move(request, RQ_PHASE_INTERPRET);
         cfs_spin_unlock(&svc->srv_rq_lock);
 
+        ptlrpc_rqphase_move(request, RQ_PHASE_INTERPRET);
         ptlrpc_hpreq_fini(request);
 
         if(OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_DUMP_LOG))

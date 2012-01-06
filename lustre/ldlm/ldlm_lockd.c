@@ -706,7 +706,11 @@ static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
         cfs_spin_lock_bh(&lock->l_export->exp_rpc_lock);
         cfs_list_for_each_entry(req, &lock->l_export->exp_queued_rpc,
                                 rq_exp_list) {
-                if (!req->rq_hp && req->rq_ops->hpreq_lock_match &&
+                /* Do not process requests that were not yet added to there
+                 * incoming queue or were already removed from there for
+                 * processing */
+                if (!req->rq_hp && !cfs_list_empty(&req->rq_list) &&
+                    req->rq_ops->hpreq_lock_match &&
                     req->rq_ops->hpreq_lock_match(req, lock))
                         ptlrpc_hpreq_reorder(req);
         }
