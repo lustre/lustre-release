@@ -1582,9 +1582,7 @@ int filter_vfs_unlink(struct inode *dir, struct dentry *dentry,
             IS_IMMUTABLE(dentry->d_inode))
                 GOTO(out, rc = -EPERM);
 
-        /* NOTE: This might need to go outside i_mutex, though it isn't clear if
-         *       that was done because of journal_start (which is already done
-         *       here) or some other ordering issue. */
+        /* Locking order: i_mutex -> journal_lock -> dqptr_sem. LU-952 */
         ll_vfs_dq_init(dir);
 
         rc = ll_security_inode_unlink(dir, dentry, mnt);
@@ -3243,7 +3241,6 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
         }
         if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
                 unsigned long now = jiffies;
-                ll_vfs_dq_init(inode);
                 /* Filter truncates and writes are serialized by
                  * i_alloc_sem, see the comment in
                  * filter_preprw_write.*/
@@ -3313,6 +3310,11 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                 if (IS_ERR(handle))
                         GOTO(out_unlock, rc = PTR_ERR(handle));
         }
+
+        /* Locking order: i_mutex -> journal_lock -> dqptr_sem. LU-952 */
+        if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID))
+                ll_vfs_dq_init(inode);
+
         if (oa->o_valid & OBD_MD_FLFLAGS) {
                 rc = fsfilt_iocontrol(exp->exp_obd, dentry,
                                       FSFILT_IOC_SETFLAGS, (long)&oa->o_flags);
@@ -4160,7 +4162,6 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 if (fcc != NULL)
                         *fcc = oa->o_lcookie;
         }
-        ll_vfs_dq_init(dchild->d_inode);
 
         /* we're gonna truncate it first in order to avoid possible deadlock:
          *      P1                      P2
@@ -4194,6 +4195,9 @@ int filter_destroy(struct obd_export *exp, struct obdo *oa,
                 up_write(&dchild->d_inode->i_alloc_sem);
                 GOTO(cleanup, rc = PTR_ERR(handle));
         }
+
+        /* Locking order: i_mutex -> journal_lock -> dqptr_sem. LU-952 */
+        ll_vfs_dq_init(dchild->d_inode);
 
         iattr.ia_valid = ATTR_SIZE;
         iattr.ia_size = 0;
