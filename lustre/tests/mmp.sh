@@ -26,6 +26,8 @@ init_logging
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
+[ "$MDSFSTYPE" != "ldiskfs" ] && skip "MDS not running ldiskfs" && exit 0
+[ "$OSTFSTYPE" != "ldiskfs" ] && skip "OST not running ldiskfs" && exit 0
 
 # unmount and cleanup the Lustre filesystem
 MMP_RESTORE_MOUNT=false
