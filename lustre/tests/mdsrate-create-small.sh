@@ -79,11 +79,6 @@ else
     else
         log "===== $0 ### 1 NODE UNLINK ###"
 
-        if [ -f "$LOG" ]; then
-            CREATED=$(sed -n '/^Rate:/s/^.* \([0-9]*\) creates .*/\1/p' $LOG)
-           [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
-        fi
-
         COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
                      --nfiles ${NUM_FILES} --dir ${TESTDIR_SINGLE} --filefmt 'f%%d'"
         echo "+ ${COMMAND}"
@@ -128,11 +123,6 @@ else
         echo "NO Test for unlinks multiple nodes."
     else
         log "===== $0 ### $NUM_CLIENTS NODES UNLINK with $THREADS_PER_CLIENT threads per client ###"
-
-        if [ -f "$LOG" ]; then
-            CREATED=$(sed -n '/^Rate:/s/^.* \([0-9]*\) creates .*/\1/p' $LOG)
-            [ $CREATED -gt 0 ] && NUM_FILES=$CREATED
-        fi
 
         COMMAND="${MDSRATE} ${MDSRATE_DEBUG} --unlink
                       --nfiles ${NUM_FILES} --dir ${TESTDIR_MULTI} --filefmt 'f%%d'"

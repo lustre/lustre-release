@@ -573,7 +573,8 @@ main(int argc, char *argv[])
 
         /* if we're not measuring creation rates then precreate
          * the files we're operating on. */
-        if ((mode != CREATE) && (mode != MKNOD) && !ignore) {
+        if ((mode != CREATE) && (mode != MKNOD) && !ignore &&
+            (mode != UNLINK || recreate)) {
                 /* create the files in reverse order. When we encounter
                  * a file that already exists, assume the remainder of 
                  * the files exist to save time. The timed performance
@@ -737,8 +738,12 @@ main(int argc, char *argv[])
                         if (rc) {
                                 if (((rc = errno) == EINTR) && alarm_caught)
                                         break;
-                                if (((rc = errno) == ENOENT) && ignore)
-                                        continue;
+                                if ((rc = errno) == ENOENT) {
+                                        if (ignore)
+                                                continue;
+                                        /* no more files to unlink */
+                                        break;
+                                }
                                 fatal(myrank, "unlink(%s) error: %s\n",
                                       filename, strerror(rc));
                         }
@@ -785,6 +790,9 @@ main(int argc, char *argv[])
                        "(total: %d threads %d %ss %d dirs %d threads/dir %.2f secs)\n",
                        effective_rate, ag_rate, avg_rate, cmd, nthreads, ag_ops,
                        cmd, ndirs, dirthreads, interval);
+                if (mode == UNLINK && !recreate && !ignore && ag_ops != nfiles)
+                        printf("Warning: only unlinked %d files instead of %d"
+                               "\n", ag_ops, nfiles);
         }
 
         if (recreate) {
