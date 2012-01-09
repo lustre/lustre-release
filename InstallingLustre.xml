@@ -269,7 +269,7 @@ Lustre-Specific Tools and Utilities</title>
         <para>Several third-party utilities are must be installed on servers:</para>
         <itemizedlist>
           <listitem>
-            <para><emphasis role="bold">e2fsprogs</emphasis> : Lustre requires a recent version of e2fsprogs that understands extents. Use <literal>e2fsprogs-1.41-90-wc1</literal> or later, available at:</para>
+            <para><emphasis role="bold">e2fsprogs</emphasis> : Lustre requires a recent version of e2fsprogs that understands extents and large xattr. Use <literal>e2fsprogs-1.41.90.wc4</literal> or later, available at:</para>
             <para><link xl:href="http://build.whamcloud.com/">http://build.whamcloud.com/</link></para>
             <para>A quilt patchset of all changes to the vanilla e2fsprogs is available in <literal>e2fsprogs-{version}-patches.tgz</literal>.</para>
             <note>

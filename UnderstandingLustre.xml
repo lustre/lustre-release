@@ -416,8 +416,11 @@
           </textobject>
         </mediaobject>
       </figure>
-      <para>The maximum file size is not limited by the size of a single target. Lustre can stripe files across multiple objects (up to 160), and each object can be up to 2 TB in size. This leads to a maximum file size of 320 TB. (Note that Lustre itself can support files up to 2^64 bytes depending on the backing storage used by OSTs.)</para>
-      <para>Athough a single file can only be striped over 160 objects, Lustre file systems can have thousands of OSTs. The I/O bandwidth to access a single file is the aggregated I/O bandwidth to the objects in a file, which can be as much as a bandwidth of up to 160 servers. On systems with more than 160 OSTs, clients can do I/O using multiple files to utilize the full file system bandwidth.</para>
+      <para>The maximum file size is not limited by the size of a single target. Lustre can stripe files across multiple objects (up to 2000), and each object can be up to 16 TB in size with ldiskfs. This leads to a maximum file size of 31.25 PB. (Note that Lustre itself can support files up to 2^64 bytes depending on the backing storage used by OSTs.)</para>
+      <note>
+        <para>Versions of Lustre prior to 2.2 had a maximum stripe count for a single file was limited to 160 OSTs.</para>
+      </note>
+      <para>Athough a single file can only be striped over 2000 objects, Lustre file systems can have thousands of OSTs. The I/O bandwidth to access a single file is the aggregated I/O bandwidth to the objects in a file, which can be as much as a bandwidth of up to 2000 servers. On systems with more than 2000 OSTs, clients can do I/O using multiple files to utilize the full file system bandwidth.</para>
       <para>For more information about striping, see <xref linkend="managingstripingfreespace"/>.</para>
     </section>
   </section>

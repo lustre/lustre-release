@@ -40,7 +40,7 @@
     <itemizedlist>
       <listitem>
         <para><emphasis role="bold">Providing high-bandwidth access</emphasis>  - Many applications require high-bandwidth access to a single file - more bandwidth than can be provided by a single OSS. For example, scientific applications that write to a single file from hundreds of nodes, or a binary executable that is loaded by many nodes when an application starts.</para>
-        <para>In cases like these, a file can be striped over as many OSSs as it takes to achieve the required peak aggregate bandwidth for that file. Striping across a larger number of OSSs should only be used when the file size is very large and/or is accessed by many nodes at a time. Currently, Lustre files can be striped across up to 160 OSSs, the maximum stripe count for an ldiskfs file system.</para>
+        <para>In cases like these, a file can be striped over as many OSSs as it takes to achieve the required peak aggregate bandwidth for that file. Striping across a larger number of OSSs should only be used when the file size is very large and/or is accessed by many nodes at a time. Currently, Lustre files can be striped across up to 2000 OSTs, the maximum stripe count for an ldiskfs file system.</para>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Improving performance when OSS bandwidth is exceeded</emphasis>  - Striping across many OSSs can improve performance if the aggregate client bandwidth exceeds the server bandwidth and the application reads and writes data fast enough to take advantage of the additional OSS bandwidth. The largest useful stripe count is bounded by the I/O rate of the clients/jobs divided by the performance per OSS.</para>

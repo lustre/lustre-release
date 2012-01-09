@@ -425,7 +425,7 @@ lfs help
                 <para> <literal>--count stripe_cnt</literal></para>
               </entry>
               <entry>
-                <para>Number of OSTs over which to stripe a file. A <literal>stripe_cnt</literal> of 0 uses the file system-wide default stripe count (default is 1). A <literal>stripe_cnt</literal> of -1 stripes over all available OSTs, and normally results in a file with 80 stripes.</para>
+                <para>Number of OSTs over which to stripe a file. A <literal>stripe_cnt</literal> of 0 uses the file system-wide default stripe count (default is 1). A <literal>stripe_cnt</literal> of -1 stripes over all available OSTs.</para>
               </entry>
             </row>
             <row>

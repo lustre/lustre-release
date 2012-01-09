@@ -73,7 +73,7 @@
           <indexterm><primary>space</primary><secondary>determining requirements</secondary></indexterm>
           Determining Space Requirements</title>
     <para>The desired performance characteristics of the backing file systems on the MDT and OSTs are independent of one another. The size of the MDT backing file system depends on the number of inodes needed in the total Lustre file system, while the aggregate OST space depends on the total amount of data stored on the file system.</para>
-    <para>Each time a file is created on a Lustre file system, it consumes one inode on the MDT and one inode for each OST object over which the file is striped. Normally, each file&apos;s stripe count is based on the system-wide default stripe count. However, this can be changed for individual files using the lfssetstripe option. For more details, see <xref linkend="managingstripingfreespace"/>.</para>
+    <para>Each time a file is created on a Lustre file system, it consumes one inode on the MDT and one inode for each OST object over which the file is striped. Normally, each file&apos;s stripe count is based on the system-wide default stripe count. However, this can be changed for individual files using the <literal>lfs setstripe</literal> option. For more details, see <xref linkend="managingstripingfreespace"/>.</para>
     <para>In a Lustre ldiskfs file system, all the inodes are allocated on the MDT and OSTs when the file system is first formatted. The total number of inodes on a formatted MDT or OST cannot be easily changed, although it is possible to add OSTs with additional space and corresponding inodes. Thus, the number of inodes created at format time should be generous enough to anticipate future expansion.</para>
     <para>When the file system is in use and a file is created, the metadata associated with that file is stored in one of the pre-allocated inodes and does not consume any of the free space used to store file data.</para>
     <note>
@@ -307,10 +307,10 @@
                 <para> Maximum stripe count</para>
               </entry>
               <entry>
-                <para> 160</para>
+                <para> 2000</para>
               </entry>
               <entry>
-                <para>This limit is hard-coded, but is near the upper limit imposed by the underlying ldiskfs file system.</para>
+                <para>This limit is imposed by the size of the layout that needs to be stored on disk and sent in RPC requests, but is not a hard limit of the protocol.</para>
               </entry>
             </row>
             <row>
@@ -341,7 +341,7 @@
                 <para> 16 TB</para>
               </entry>
               <entry>
-                <para>The amount of data that can be stored in a single object. An object corresponds to a stripe. The ldiskfs limit of 16 TB for a single object applies. Lustre allows files to consist of up to 160 stripes, each of 16 TB. </para>
+                <para>The amount of data that can be stored in a single object. An object corresponds to a stripe. The ldiskfs limit of 16 TB for a single object applies. Lustre allows files to consist of up to 2000 stripes, each of 16 TB. </para>
               </entry>
             </row>
             <row>
@@ -351,11 +351,11 @@
               <entry>
                 <para> 16 TB on 32-bit systems</para>
                 <para>&#160;</para>
-                <para> 2.5 PB on 64-bit systems</para>
+                <para> 31.25 PB on 64-bit systems</para>
               </entry>
               <entry>
                 <para>Individual files have a hard limit of nearly 16 TB on 32-bit systems imposed by the kernel memory subsystem. On 64-bit systems this limit does not exist. Hence, files can be 64-bits in size. Lustre imposes an additional size limit of up to the number of stripes, where each stripe is 16 TB.</para>
-                <para>A single file can have a maximum of 160 stripes, which gives an upper single file limit of 2.5 PB for 64-bit systems. The actual amount of data that can be stored in a file depends upon the amount of free space in each OST on which the file is striped.</para>
+                <para>A single file can have a maximum of 2000 stripes, which gives an upper single file limit of 31.25 PB for 64-bit systems. The actual amount of data that can be stored in a file depends upon the amount of free space in each OST on which the file is striped.</para>
               </entry>
             </row>
             <row>
@@ -419,6 +419,9 @@
         </tgroup>
       </table>
       <para>&#160;</para>
+      <note>
+        <para>Versions of Lustre prior to 2.2 had a maximum stripe count for a single file was limited to 160 OSTs. In Lustre version 2.2, the large xattr feature which supports up to 2000 OSTs is disabled by default at mkfs.lustre time. In order to enable this feature, the "-O large_xattr" option needs to be set on MDT either with --mkfsoptions at format time or via tune2fs.</para>
+      </note>
     </section>
   </section>
   <section xml:id="dbdoclet.50438256_26456">
