@@ -1138,7 +1138,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
                                 OBD_CONNECT_CHANGE_QS | \
-                                OBD_CONNECT_OSS_CAPA  | OBD_CONNECT_RMT_CLIENT | \
+                                OBD_CONNECT_OSS_CAPA  | \
+                                OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_RMT_CLIENT_FORCE | OBD_CONNECT_VBR | \
                                 OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN | \
                                 OBD_CONNECT_GRANT_SHRINK | OBD_CONNECT_FULL20 | \
@@ -1553,8 +1554,11 @@ extern void lustre_swab_generic_32s (__u32 *val);
 #define MDS_INODELOCK_LOOKUP 0x000001       /* dentry, mode, owner, group */
 #define MDS_INODELOCK_UPDATE 0x000002       /* size, links, timestamps */
 #define MDS_INODELOCK_OPEN   0x000004       /* For opened files */
+#define MDS_INODELOCK_LAYOUT 0x000008       /* for layout */
 
-/* Do not forget to increase MDS_INODELOCK_MAXSHIFT when adding new bits */
+/* Do not forget to increase MDS_INODELOCK_MAXSHIFT when adding new bits
+ * XXX: MDS_INODELOCK_MAXSHIFT should be increased to 3 once the layout lock is
+ * supported */
 #define MDS_INODELOCK_MAXSHIFT 2
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)

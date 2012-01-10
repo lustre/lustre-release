@@ -421,7 +421,7 @@ typedef struct file_lock {
 #define i_atime                     i_stbuf.st_atime
 #define i_mtime                     i_stbuf.st_mtime
 #define i_ctime                     i_stbuf.st_ctime
-#define i_size                      i_stbuf.st_size
+/* use i_size_read() i_size_write() to access i_stbuf.st_size */
 #define i_blocks                    i_stbuf.st_blocks
 #define i_blksize                   i_stbuf.st_blksize
 #define i_mode                      i_stbuf.st_mode

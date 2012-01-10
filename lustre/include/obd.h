@@ -1246,13 +1246,15 @@ struct lu_context;
 #define IT_GETXATTR (1 << 7)
 #define IT_EXEC     (1 << 8)
 #define IT_PIN      (1 << 9)
+#define IT_LAYOUT   (1 << 10)
 
 static inline int it_to_lock_mode(struct lookup_intent *it)
 {
         /* CREAT needs to be tested before open (both could be set) */
         if (it->it_op & IT_CREAT)
                 return LCK_CW;
-        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP))
+        else if (it->it_op & (IT_READDIR | IT_GETATTR | IT_OPEN | IT_LOOKUP |
+                              IT_LAYOUT))
                 return LCK_CR;
 
         LASSERTF(0, "Invalid it_op: %d\n", it->it_op);

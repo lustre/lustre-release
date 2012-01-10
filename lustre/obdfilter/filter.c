@@ -3908,7 +3908,7 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                         } else {
                                 /* Use these existing objects if they are
                                  * zero length. */
-                                if (dchild->d_inode->i_size == 0) {
+                                if (i_size_read(dchild->d_inode) == 0) {
                                         rc = filter_use_existing_obj(obd,dchild,
                                                       &handle, &cleanup_phase);
                                         if (rc == 0)

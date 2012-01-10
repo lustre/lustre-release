@@ -1731,7 +1731,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                                 } else {
                                         /* Use old size assignment to avoid
                                          * deadlock bz14138 & bz14326 */
-                                        inode->i_size = body->size;
+                                        i_size_write(inode, body->size);
                                         lli->lli_flags |= LLIF_MDS_SIZE_LOCK;
                                 }
                                 ldlm_lock_decref(&lockh, mode);
@@ -1739,7 +1739,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                 } else {
                         /* Use old size assignment to avoid
                          * deadlock bz14138 & bz14326 */
-                        inode->i_size = body->size;
+                        i_size_write(inode, body->size);
 
                         CDEBUG(D_VFSTRACE, "inode=%lu, updating i_size %llu\n",
                                inode->i_ino, (unsigned long long)body->size);

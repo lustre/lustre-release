@@ -1790,6 +1790,8 @@ void lustre_assert_wire_constants(void)
                  MDS_INODELOCK_UPDATE);
         LASSERTF(MDS_INODELOCK_OPEN == 0x000004, "found 0x%.8x\n",
                  MDS_INODELOCK_OPEN);
+        LASSERTF(MDS_INODELOCK_LAYOUT == 0x000008, "found 0x%.8x\n",
+                 MDS_INODELOCK_LAYOUT);
 
         /* Checks for struct mdt_ioepoch */
         LASSERTF((int)sizeof(struct mdt_ioepoch) == 24, "found %lld\n",

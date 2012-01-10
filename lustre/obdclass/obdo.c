@@ -85,7 +85,7 @@ void obdo_from_inode(struct obdo *dst, struct inode *src, struct lu_fid *parent,
                 newvalid |= OBD_MD_FLCTIME;
         }
         if (valid & OBD_MD_FLSIZE) {
-                dst->o_size = src->i_size;
+                dst->o_size = i_size_read(src);
                 newvalid |= OBD_MD_FLSIZE;
         }
         if (valid & OBD_MD_FLBLOCKS) {  /* allocation of space (x512 bytes) */

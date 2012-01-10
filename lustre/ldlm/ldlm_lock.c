@@ -135,6 +135,8 @@ char *ldlm_it2str(int it)
                 return "unlink";
         case IT_GETXATTR:
                 return "getxattr";
+        case IT_LAYOUT:
+                return "layout";
         default:
                 CERROR("Unknown intent %d\n", it);
                 return "UNKNOWN";
@@ -566,7 +568,8 @@ void ldlm_lock2desc(struct ldlm_lock *lock, struct ldlm_lock_desc *desc)
                 /* Make sure all the right bits are set in this lock we
                    are going to pass to client */
                 LASSERTF(lock->l_policy_data.l_inodebits.bits ==
-                         (MDS_INODELOCK_LOOKUP|MDS_INODELOCK_UPDATE),
+                         (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
+                          MDS_INODELOCK_LAYOUT),
                          "Inappropriate inode lock bits during "
                          "conversion " LPU64 "\n",
                          lock->l_policy_data.l_inodebits.bits);

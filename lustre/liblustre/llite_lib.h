@@ -431,4 +431,13 @@ static inline void cl_stats_tally(struct cl_device *dev, enum cl_req_type crt,
 {
 }
 
+static inline loff_t i_size_read(struct inode *inode)
+{
+        return inode->i_stbuf.st_size;
+}
+
+static inline void i_size_write(struct inode *inode, loff_t i_sz)
+{
+        inode->i_stbuf.st_size = i_sz;
+}
 #endif

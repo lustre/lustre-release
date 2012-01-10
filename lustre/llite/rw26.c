@@ -410,10 +410,10 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
                 unsigned long user_addr = (unsigned long)iov[seg].iov_base;
 
                 if (rw == READ) {
-                        if (file_offset >= inode->i_size)
+                        if (file_offset >= i_size_read(inode))
                                 break;
-                        if (file_offset + iov_left > inode->i_size)
-                                iov_left = inode->i_size - file_offset;
+                        if (file_offset + iov_left > i_size_read(inode))
+                                iov_left = i_size_read(inode) - file_offset;
                 }
 
                 while (iov_left > 0) {
