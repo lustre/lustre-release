@@ -77,8 +77,8 @@
 #define OSD_OI_FID_NR         (1UL << OSD_OI_FID_OID_BITS)
 #define OSD_OI_FID_NR_MAX     (1UL << OSD_OI_FID_OID_BITS_MAX)
 
-static unsigned int osd_oi_num = OSD_OI_FID_NR;
-CFS_MODULE_PARM(osd_oi_num, "i", int, 0444,
+static unsigned int osd_oi_count = OSD_OI_FID_NR;
+CFS_MODULE_PARM(osd_oi_count, "i", int, 0444,
                 "Number of Object Index containers to be created, "
                 "it's only valid for new filesystem.");
 
@@ -275,18 +275,20 @@ int osd_oi_init(struct osd_thread_info *info,
         }
 
         /* create OI objects */
-        rc = osd_oi_table_create(info, dev, mdev, osd_oi_num);
+        rc = osd_oi_table_create(info, dev, mdev, osd_oi_count);
         if (rc != 0)
                 goto out;
 
-        rc = osd_oi_table_open(info, dev, oi, osd_oi_num, 0);
-        LASSERT(rc == osd_oi_num || rc < 0);
+        rc = osd_oi_table_open(info, dev, oi, osd_oi_count, 0);
+        LASSERT(rc == osd_oi_count || rc < 0);
 
  out:
-        if (rc < 0)
+        if (rc < 0) {
                 OBD_FREE(oi, sizeof(*oi) * OSD_OI_FID_NR_MAX);
-        else
+        } else {
+                LASSERT((rc & (rc - 1)) == 0);
                 *oi_table = oi;
+        }
 
         cfs_mutex_unlock(&oi_init_lock);
         return rc;
@@ -380,8 +382,14 @@ int osd_oi_delete(struct osd_thread_info *info,
 
 int osd_oi_mod_init()
 {
-        if (osd_oi_num == 0 || osd_oi_num > OSD_OI_FID_NR_MAX)
-                osd_oi_num = OSD_OI_FID_NR;
+        if (osd_oi_count == 0 || osd_oi_count > OSD_OI_FID_NR_MAX)
+                osd_oi_count = OSD_OI_FID_NR;
+
+        if ((osd_oi_count & (osd_oi_count - 1)) != 0) {
+                LCONSOLE_WARN("Round up oi_count %d to power2 %d\n",
+                              osd_oi_count, size_roundup_power2(osd_oi_count));
+                osd_oi_count = size_roundup_power2(osd_oi_count);
+        }
 
         cfs_mutex_init(&oi_init_lock);
         return 0;
