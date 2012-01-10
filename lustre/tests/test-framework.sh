@@ -2055,7 +2055,9 @@ replay_barrier() {
 
     # make sure there will be no seq change
     local clients=${CLIENTS:-$HOSTNAME}
-    do_nodes $clients "f=${MOUNT}/fsa-\\\$(hostname); mcreate \\\$f; rm \\\$f"
+    local f=fsa-\\\$\(hostname\)
+    do_nodes $clients "mcreate $MOUNT/$f; rm $MOUNT/$f"
+    do_nodes $clients "if [ -d $MOUNT2 ]; then mcreate $MOUNT2/$f; rm $MOUNT2/$f; fi"
 
     local svc=${facet}_svc
     do_facet $facet $LCTL --device %${!svc} notransno
