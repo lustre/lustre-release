@@ -3941,3 +3941,33 @@ int llapi_get_version(char *buffer, int buffer_size,
         *version = data->ioc_bulk;
         return 0;
 }
+
+/**
+ * Get a 64-bit value representing the version of file data pointed by fd.
+ *
+ * Each write or truncate, flushed on OST, will change this value. You can use
+ * this value to verify if file data was modified. This only checks the file
+ * data, not metadata.
+ *
+ * \param  flags  If set to LL_DV_NOFLUSH, the data version will be read
+ *                directly from OST without regard to possible dirty cache on
+ *                client nodes.
+ *
+ * \retval 0 on success.
+ * \retval -errno on error.
+ */
+int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
+{
+        int rc;
+        struct ioc_data_version idv;
+
+        idv.idv_flags = flags;
+
+        rc = ioctl(fd, LL_IOC_DATA_VERSION, &idv);
+        if (rc)
+                rc = -errno;
+        else
+                *data_version = idv.idv_version;
+
+        return rc;
+}

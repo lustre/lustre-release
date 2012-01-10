@@ -155,6 +155,7 @@ struct obd_statfs {
 #define LL_IOC_HSM_CT_START             _IOW ('f', 176,struct lustre_kernelcomm)
 /* see <lustre_lib.h> for ioctl numbers 177-210 */
 
+#define LL_IOC_DATA_VERSION             _IOR ('f', 218, struct ioc_data_version)
 
 #define LL_STATFS_LMV           1
 #define LL_STATFS_LOV           2
@@ -631,6 +632,13 @@ enum changelog_message_type {
 };
 
 /********* Misc **********/
+
+struct ioc_data_version {
+        __u64 idv_version;
+        __u64 idv_flags;     /* See LL_DV_xxx */
+};
+#define LL_DV_NOFLUSH 0x01   /* Do not take READ EXTENT LOCK before sampling
+                                version. Dirty caches are left unchanged. */
 
 #ifndef offsetof
 # define offsetof(typ,memb)     ((unsigned long)((char *)&(((typ *)0)->memb)))

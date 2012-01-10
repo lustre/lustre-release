@@ -31,6 +31,7 @@ export TMP=${TMP:-/tmp}
 MOUNT_2=${MOUNT_2:-"yes"}
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
+TSTUSR=${TSTUSR:-"quota_usr"}
 
 SAVE_PWD=$PWD
 
@@ -1876,6 +1877,53 @@ test_50() {
         [ $size -eq $trunc_size ] || error "wrong size"
 }
 run_test 50 "osc lvb attrs: enqueue vs. CP AST =============="
+
+test_60() {
+	# Create a file
+	mkdir -p $DIR1/$tdir
+	file1=$DIR1/$tdir/file
+	file2=$DIR2/$tdir/file
+
+	echo orig > $file2 || error "Could not create $file2"
+	version=$($LFS data_version $file1)
+
+	# Append data
+	echo append >> $file2 || error "Could not append to $file2"
+	version2=$($LFS data_version $file1)
+	[ "$version" != "$version2" ] ||
+	    error "append did not change data version: $version"
+
+	# Overwrite data
+	echo overwrite > $file2 || error "Could not overwrite $file2"
+	version3=$($LFS data_version $file1)
+	[ "$version2" != "$version3" ] ||
+	    error "overwrite did not change data version: $version2"
+
+	# Truncate before EOF
+	$TRUNCATE $file2 3 || error "Could not truncate $file2"
+	version4=$($LFS data_version $file1)
+	[ "$version3" != "$version4" ] ||
+	    error "truncate did not change data version: $version3"
+
+	# Truncate after EOF
+	$TRUNCATE $file2 123456 || error "Could not truncate $file2"
+	version5=$($LFS data_version $file1)
+	[ "$version4" != "$version5" ] ||
+	    error "truncate did not change data version: $version4"
+
+	# Chmod do not change version
+	chmod 400 $file2 || error "Could not chmod 400 $file2"
+	version6=$($LFS data_version $file1)
+	[ "$version5" == "$version6" ] ||
+	    error "chmod should not change data version: $version5 != $version6"
+
+	# Chown do not change version
+	chown $TSTUSR $file2 || error "Could not chown $TSTUSR $file2"
+	version7=$($LFS data_version $file1)
+	[ "$version5" == "$version7" ] ||
+	    error "chown should not change data version: $version5 != $version7"
+}
+run_test 60 "Verify data_version behaviour"
 
 log "cleanup: ======================================================"
 

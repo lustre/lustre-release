@@ -114,6 +114,7 @@ static int lfs_changelog(int argc, char **argv);
 static int lfs_changelog_clear(int argc, char **argv);
 static int lfs_fid2path(int argc, char **argv);
 static int lfs_path2fid(int argc, char **argv);
+static int lfs_data_version(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -252,6 +253,8 @@ command_t cmdlist[] = {
                 /*[--rec <recno>]*/},
         {"path2fid", lfs_path2fid, 0, "Display the fid for a given path.\n"
          "usage: path2fid <path>"},
+        {"data_version", lfs_data_version, 0, "Display file data version for "
+         "a given path.\n" "usage: data_version [-n] <path>"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -2617,6 +2620,53 @@ static int lfs_path2fid(int argc, char **argv)
         }
 
         printf(DFID"\n", PFID(&fid));
+
+        return 0;
+}
+
+static int lfs_data_version(int argc, char **argv)
+{
+        char *path;
+        __u64 data_version;
+        int fd;
+        int rc;
+        int c;
+        int nolock = 0;
+
+        if (argc < 2)
+                return CMD_HELP;
+
+        optind = 0;
+        while ((c = getopt(argc, argv, "n")) != -1) {
+                switch (c) {
+                case 'n':
+                        nolock = LL_DV_NOFLUSH;
+                        break;
+                default:
+                        return CMD_HELP;
+                }
+        }
+        if (optind == argc)
+                return CMD_HELP;
+
+        path = argv[optind];
+        fd = open(path, O_RDONLY);
+        if (fd < 0) {
+                fprintf(stderr, "can't open %s: %s\n", path,
+                        strerror(errno));
+                return errno;
+        }
+
+        rc = llapi_get_data_version(fd, &data_version, nolock);
+        if (rc) {
+                fprintf(stderr, "can't get version for %s: %s\n", path,
+                        strerror(errno = -rc));
+                return rc;
+        }
+
+        printf("%llu\n", data_version);
+
+        close(fd);
 
         return 0;
 }
