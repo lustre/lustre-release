@@ -112,12 +112,11 @@ const int nthreads = 1;
 
 static int cur_device = -1;
 
-#define MAX_STRIPES     170
-struct lov_oinfo lov_oinfos[MAX_STRIPES];
+struct lov_oinfo lov_oinfos[LOV_MAX_STRIPE_COUNT];
 
 struct lsm_buffer {
         struct lov_stripe_md lsm;
-        struct lov_oinfo *ptrs[MAX_STRIPES];
+        struct lov_oinfo *ptrs[LOV_MAX_STRIPE_COUNT];
 } lsm_buffer;
 
 static int l2_ioctl(int dev_id, int opc, void *buf)
@@ -2984,7 +2983,7 @@ int obd_initialize(int argc, char **argv)
 {
         int i;
 
-        for (i = 0; i < MAX_STRIPES; i++)
+        for (i = 0; i < LOV_MAX_STRIPE_COUNT; i++)
                 lsm_buffer.lsm.lsm_oinfo[i] = lov_oinfos + i;
 
         if (shmem_setup() != 0)

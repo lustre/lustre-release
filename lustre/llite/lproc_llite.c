@@ -638,6 +638,21 @@ static int ll_wr_lazystatfs(struct file *file, const char *buffer,
         return count;
 }
 
+static int ll_rd_maxea_size(char *page, char **start, off_t off,
+                            int count, int *eof, void *data)
+{
+        struct super_block *sb = data;
+        struct ll_sb_info *sbi = ll_s2sbi(sb);
+        unsigned int ealen;
+        int rc;
+
+        rc = ll_get_max_mdsize(sbi, &ealen);
+        if (rc)
+                return rc;
+
+        return snprintf(page, count, "%u\n", ealen);
+}
+
 static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -666,7 +681,8 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "statahead_max",    ll_rd_statahead_max, ll_wr_statahead_max, 0 },
         { "statahead_agl",    ll_rd_statahead_agl, ll_wr_statahead_agl, 0 },
         { "statahead_stats",  ll_rd_statahead_stats, 0, 0 },
-        { "lazystatfs",         ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
+        { "lazystatfs",       ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
+        { "max_easize",       ll_rd_maxea_size, 0, 0 },
         { 0 }
 };
 

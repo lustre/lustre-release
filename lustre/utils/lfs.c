@@ -553,7 +553,8 @@ static int lfs_find(int argc, char **argv)
                         fprintf(stderr, "err: %s: filename|dirname must either "
                                         "precede options or follow options\n",
                                         argv[0]);
-                        return CMD_HELP;
+                        ret = CMD_HELP;
+                        goto err;
                 }
                 if (!isoption && pathstart == -1)
                         pathstart = optind - 1;
@@ -593,8 +594,10 @@ static int lfs_find(int argc, char **argv)
                         }
                         new_fashion = 1;
                         ret = set_time(&t, xtime, optarg);
-                        if (ret == INT_MAX)
-                                return -1;
+                        if (ret == INT_MAX) {
+                                ret = -1;
+                                goto err;
+                        }
                         if (ret)
                                 *xsign = ret;
                         break;
@@ -611,7 +614,8 @@ static int lfs_find(int argc, char **argv)
                                 if (*endptr != '\0') {
                                         fprintf(stderr, "Group/GID: %s cannot "
                                                 "be found.\n", optarg);
-                                        return -1;
+                                        ret = -1;
+                                        goto err;
                                 }
                         }
                         param.exclude_gid = !!neg_opt;
@@ -626,7 +630,8 @@ static int lfs_find(int argc, char **argv)
                                 if (*endptr != '\0') {
                                         fprintf(stderr, "User/UID: %s cannot "
                                                 "be found.\n", optarg);
-                                        return -1;
+                                        ret = -1;
+                                        goto err;
                                 }
                         }
                         param.exclude_uid = !!neg_opt;
@@ -639,7 +644,8 @@ static int lfs_find(int argc, char **argv)
                                         "Pool name %s is too long"
                                         " (max is %d)\n", optarg,
                                         LOV_MAXPOOLNAME);
-                                return -1;
+                                ret = -1;
+                                goto err;
                         }
                         /* we do check for empty pool because empty pool
                          * is used to find V1 lov attributes */
@@ -655,23 +661,36 @@ static int lfs_find(int argc, char **argv)
                         break;
                 case 'O': {
                         char *buf, *token, *next, *p;
-                        int len;
+                        int len = 1;
+                        void *tmp;
 
-                        len = strlen((char *)optarg);
-                        buf = malloc(len+1);
-                        if (buf == NULL)
-                                return -ENOMEM;
-                        strcpy(buf, (char *)optarg);
+                        buf = strdup(optarg);
+                        if (buf == NULL) {
+                                ret = -ENOMEM;
+                                goto err;
+                        }
 
                         param.exclude_obd = !!neg_opt;
 
-                        if (param.num_alloc_obds == 0) {
-                                param.obduuid = malloc(FIND_MAX_OSTS *
-                                                       sizeof(struct obd_uuid));
-                                if (param.obduuid == NULL)
-                                        return -ENOMEM;
-                                param.num_alloc_obds = INIT_ALLOC_NUM_OSTS;
+                        token = buf;
+                        while (token && *token) {
+                                token = strchr(token, ',');
+                                if (token) {
+                                        len++;
+                                        token++;
+                                }
                         }
+
+                        param.num_alloc_obds += len;
+                        tmp = realloc(param.obduuid,
+                                      param.num_alloc_obds *
+                                      sizeof(*param.obduuid));
+                        if (tmp == NULL) {
+                                ret = -ENOMEM;
+                                free(buf);
+                                goto err;
+                        }
+                        param.obduuid = tmp;
 
                         for (token = buf; token && *token; token = next) {
                                 p = strchr(token, ',');
@@ -718,7 +737,8 @@ static int lfs_find(int argc, char **argv)
 #endif
                         default: fprintf(stderr, "error: %s: bad type '%s'\n",
                                          argv[0], optarg);
-                                 return CMD_HELP;
+                                 ret = CMD_HELP;
+                                 goto err;
                         };
                         break;
                 case 's':
@@ -734,7 +754,7 @@ static int lfs_find(int argc, char **argv)
                         if (ret) {
                                 fprintf(stderr,"error: bad size '%s'\n",
                                         optarg);
-                                return ret;
+                                goto err;
                         }
                         param.check_size = 1;
                         param.exclude_size = !!neg_opt;
@@ -745,18 +765,21 @@ static int lfs_find(int argc, char **argv)
                         param.quiet = 0;
                         break;
                 case '?':
-                        return CMD_HELP;
+                        ret = CMD_HELP;
+                        goto err;
                 default:
                         fprintf(stderr, "error: %s: option '%s' unrecognized\n",
                                 argv[0], argv[optind - 1]);
-                        return CMD_HELP;
+                        ret = CMD_HELP;
+                        goto err;
                 };
         }
 
         if (pathstart == -1) {
                 fprintf(stderr, "error: %s: no filename|pathname\n",
                         argv[0]);
-                return CMD_HELP;
+                ret = CMD_HELP;
+                goto err;
         } else if (pathend == -1) {
                 /* no options */
                 pathend = argc;
@@ -785,7 +808,7 @@ static int lfs_find(int argc, char **argv)
         if (ret)
                 fprintf(stderr, "error: %s failed for %s.\n",
                         argv[0], argv[optind - 1]);
-
+err:
         if (param.obduuid && param.num_alloc_obds)
                 free(param.obduuid);
 
