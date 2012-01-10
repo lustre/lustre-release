@@ -1879,7 +1879,23 @@ AC_DEFUN([LC_EXPORT_ADD_TO_PAGE_CACHE_LRU],
 ])
 ])
 
-# 2.6.31
+#
+# 2.6.29 introduce sb_any_quota_loaded.
+#
+AC_DEFUN([LC_SB_ANY_QUOTA_LOADED],
+[AC_MSG_CHECKING([Kernel has sb_any_quota_loaded])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/quotaops.h>
+],[
+        sb_any_quota_loaded(NULL);
+],[
+        AC_DEFINE(HAVE_SB_ANY_QUOTA_LOADED, 1,
+                [Kernel has a sb_any_quota_loaded])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
 
 # 2.6.30 x86 node_to_cpumask has been removed. must use cpumask_of_node
 AC_DEFUN([LC_EXPORT_CPUMASK_OF_NODE],
@@ -2365,6 +2381,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SB_ANY_QUOTA_ACTIVE
          LC_SB_HAS_QUOTA_ACTIVE
          LC_EXPORT_ADD_TO_PAGE_CACHE_LRU
+
+         # 2.6.29
+         LC_SB_ANY_QUOTA_LOADED
 
          # 2.6.30
          LC_EXPORT_CPUMASK_OF_NODE

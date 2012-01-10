@@ -783,7 +783,7 @@ static inline long labs(long x)
 #define ll_sb_has_quota_active(sb, type) sb_has_quota_enabled(sb, type)
 #endif
 
-#ifdef DQUOT_USAGE_ENABLED
+#ifdef HAVE_SB_ANY_QUOTA_LOADED
 #define ll_sb_any_quota_active(sb) sb_any_quota_loaded(sb)
 #elif defined(HAVE_SB_ANY_QUOTA_ACTIVE)
 #define ll_sb_any_quota_active(sb) sb_any_quota_active(sb)
