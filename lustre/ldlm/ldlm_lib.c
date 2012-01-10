@@ -902,7 +902,7 @@ no_export:
                 GOTO(out, rc);
         }
 
-        CWARN("%s: connection from %s@%s %st"LPU64" exp %p cur %ld last %ld\n",
+        CDEBUG(D_HA, "%s: connection from %s@%s %st"LPU64" exp %p cur %ld last %ld\n",
                target->obd_name, cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
               target->obd_recovering ? "recovering/" : "", data->ocd_transno,
               export, (long)cfs_time_current_sec(),
