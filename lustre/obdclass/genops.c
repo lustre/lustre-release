@@ -800,7 +800,7 @@ static void import_handle_addref(void *import)
 struct obd_import *class_import_get(struct obd_import *import)
 {
         LASSERT(atomic_read(&import->imp_refcount) >= 0);
-        LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
+        LASSERT(atomic_read(&import->imp_refcount) < LI_POISON);
         atomic_inc(&import->imp_refcount);
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,
                atomic_read(&import->imp_refcount), 
@@ -814,7 +814,7 @@ void class_import_put(struct obd_import *import)
         ENTRY;
 
         LASSERT(atomic_read(&import->imp_refcount) > 0);
-        LASSERT(atomic_read(&import->imp_refcount) < 0x5a5a5a);
+        LASSERT(atomic_read(&import->imp_refcount) < LI_POISON);
         LASSERT(list_empty(&import->imp_zombie_chain));
 
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", import,

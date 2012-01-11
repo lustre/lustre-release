@@ -406,7 +406,7 @@ do {                                                                        \
          if ((ctxt) == NULL)                                                \
                  break;                                                     \
          LASSERT(atomic_read(&(ctxt)->loc_refcount) > 0);                   \
-         LASSERT(atomic_read(&(ctxt)->loc_refcount) < 0x5a5a5a);            \
+         LASSERT(atomic_read(&(ctxt)->loc_refcount) < LI_POISON);           \
          CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", (ctxt),      \
                 atomic_read(&(ctxt)->loc_refcount) - 1);                    \
          __llog_ctxt_put(ctxt);                                             \

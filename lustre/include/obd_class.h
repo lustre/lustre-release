@@ -202,7 +202,7 @@ do {                                                                           \
         CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", (exp),         \
                atomic_read(&(exp)->exp_refcount) - 1);                         \
         LASSERT(atomic_read(&(exp)->exp_refcount) > 0);                        \
-        LASSERT(atomic_read(&(exp)->exp_refcount) < 0x5a5a5a);                 \
+        LASSERT(atomic_read(&(exp)->exp_refcount) < LI_POISON);                \
         __class_export_put(exp);                                               \
 } while (0)
 
