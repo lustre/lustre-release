@@ -753,7 +753,7 @@ EXPORT_SYMBOL(class_export_get);
 void class_export_put(struct obd_export *exp)
 {
         LASSERT(exp != NULL);
-        LASSERT_ATOMIC_GT_LT(&exp->exp_refcount, 0, 0x5a5a5a);
+        LASSERT_ATOMIC_GT_LT(&exp->exp_refcount, 0, LI_POISON);
         CDEBUG(D_INFO, "PUTting export %p : new refcount %d\n", exp,
                cfs_atomic_read(&exp->exp_refcount) - 1);
 
@@ -929,7 +929,7 @@ void class_import_put(struct obd_import *imp)
         ENTRY;
 
         LASSERT(cfs_list_empty(&imp->imp_zombie_chain));
-        LASSERT_ATOMIC_GE_LT(&imp->imp_refcount, 0, 0x5a5a5a);
+        LASSERT_ATOMIC_GT_LT(&imp->imp_refcount, 0, LI_POISON);
 
         CDEBUG(D_INFO, "import %p refcount=%d obd=%s\n", imp,
                cfs_atomic_read(&imp->imp_refcount) - 1,
