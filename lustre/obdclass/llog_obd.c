@@ -136,7 +136,7 @@ int llog_cleanup(struct llog_ctxt *ctxt)
         /* 
          * Banlance the ctxt get when calling llog_cleanup()
          */
-        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) < 0x5a5a5a);
+        LASSERT(cfs_atomic_read(&ctxt->loc_refcount) < LI_POISON);
         LASSERT(cfs_atomic_read(&ctxt->loc_refcount) > 1);
         llog_ctxt_put(ctxt);
 

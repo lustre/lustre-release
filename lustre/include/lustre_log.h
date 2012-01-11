@@ -445,7 +445,7 @@ static inline void llog_ctxt_put(struct llog_ctxt *ctxt)
 {
         if (ctxt == NULL)
                 return;
-        LASSERT_ATOMIC_GT_LT(&ctxt->loc_refcount, 0, 0x5a5a5a);
+        LASSERT_ATOMIC_GT_LT(&ctxt->loc_refcount, 0, LI_POISON);
         CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", ctxt,
                cfs_atomic_read(&ctxt->loc_refcount) - 1);
         __llog_ctxt_put(ctxt);
