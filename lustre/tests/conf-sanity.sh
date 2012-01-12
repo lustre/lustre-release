@@ -54,8 +54,12 @@ for facet in MGS MDS OST; do
     opts=${facet}_MKFS_OPTS
     if [[ ${!opts} != *lazy_itable_init* ]]; then
         eval SAVED_${facet}_MKFS_OPTS=\"${!opts}\"
-        eval ${facet}_MKFS_OPTS=\"${!opts} \
---mkfsoptions='\\\"-E lazy_itable_init\\\"'\"
+        if [[ ${!opts} != *mkfsoptions* ]]; then
+            eval ${facet}_MKFS_OPTS=\"${!opts} --mkfsoptions='\\\"-E lazy_itable_init\\\"'\"
+        else
+            val=${!opts//--mkfsoptions=\\\"/--mkfsoptions=\\\"-E lazy_itable_init }
+            eval ${facet}_MKFS_OPTS='${val}'
+        fi
     fi
 done
 
