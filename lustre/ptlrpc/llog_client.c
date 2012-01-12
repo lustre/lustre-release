@@ -147,6 +147,7 @@ out:
         ptlrpc_req_finished(req);
         return rc;
 err_free:
+        *res = NULL;
         llog_free_handle(handle);
         goto out;
 }
