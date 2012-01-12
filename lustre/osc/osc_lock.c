@@ -1390,11 +1390,27 @@ static void osc_lock_cancel(const struct lu_env *env,
         osc_lock_detach(env, olck);
 }
 
-void cl_lock_page_list_fixup(const struct lu_env *env,
-                             struct cl_io *io, struct cl_lock *lock,
-                             struct cl_page_list *queue);
-
 #ifdef INVARIANT_CHECK
+static int check_cb(const struct lu_env *env, struct cl_io *io,
+                    struct cl_page *page, void *cbdata)
+{
+        struct cl_lock *lock = cbdata;
+
+        if (lock->cll_descr.cld_mode == CLM_READ) {
+                struct cl_lock *tmp;
+                tmp = cl_lock_at_page(env, lock->cll_descr.cld_obj,
+                                     page, lock, 1, 0);
+                if (tmp != NULL) {
+                        cl_lock_put(env, tmp);
+                        return CLP_GANG_OKAY;
+                }
+        }
+
+        CL_LOCK_DEBUG(D_ERROR, env, lock, "still has pages\n");
+        CL_PAGE_DEBUG(D_ERROR, env, page, "\n");
+        return CLP_GANG_ABORT;
+}
+
 /**
  * Returns true iff there are pages under \a olck not protected by other
  * locks.
@@ -1405,44 +1421,39 @@ static int osc_lock_has_pages(struct osc_lock *olck)
         struct cl_lock_descr *descr;
         struct cl_object     *obj;
         struct osc_object    *oob;
-        struct cl_page_list  *plist;
-        struct cl_page       *page;
         struct cl_env_nest    nest;
         struct cl_io         *io;
         struct lu_env        *env;
         int                   result;
 
         env = cl_env_nested_get(&nest);
-        if (!IS_ERR(env)) {
-                obj   = olck->ols_cl.cls_obj;
-                oob   = cl2osc(obj);
-                io    = &oob->oo_debug_io;
-                lock  = olck->ols_cl.cls_lock;
-                descr = &lock->cll_descr;
-                plist = &osc_env_info(env)->oti_plist;
-                cl_page_list_init(plist);
+        if (IS_ERR(env))
+                return 0;
 
-                cfs_mutex_lock(&oob->oo_debug_mutex);
+        obj   = olck->ols_cl.cls_obj;
+        oob   = cl2osc(obj);
+        io    = &oob->oo_debug_io;
+        lock  = olck->ols_cl.cls_lock;
+        descr = &lock->cll_descr;
 
-                io->ci_obj = cl_object_top(obj);
-                cl_io_init(env, io, CIT_MISC, io->ci_obj);
-                cl_page_gang_lookup(env, obj, io,
-                                    descr->cld_start, descr->cld_end, plist);
-                cl_lock_page_list_fixup(env, io, lock, plist);
-                if (plist->pl_nr > 0) {
-                        CL_LOCK_DEBUG(D_ERROR, env, lock, "still has pages\n");
-                        cl_page_list_for_each(page, plist)
-                                CL_PAGE_DEBUG(D_ERROR, env, page, "\n");
-                }
-                result = plist->pl_nr > 0;
-                cl_page_list_disown(env, io, plist);
-                cl_page_list_fini(env, plist);
-                cl_io_fini(env, io);
-                cfs_mutex_unlock(&oob->oo_debug_mutex);
-                cl_env_nested_put(&nest, env);
-        } else
-                result = 0;
-        return result;
+        cfs_mutex_lock(&oob->oo_debug_mutex);
+
+        io->ci_obj = cl_object_top(obj);
+        cl_io_init(env, io, CIT_MISC, io->ci_obj);
+        do {
+                result = cl_page_gang_lookup(env, obj, io,
+                                             descr->cld_start, descr->cld_end,
+                                             check_cb, (void *)lock);
+                if (result == CLP_GANG_ABORT)
+                        break;
+                if (result == CLP_GANG_RESCHED)
+                        cfs_cond_resched();
+        } while (result != CLP_GANG_OKAY);
+        cl_io_fini(env, io);
+        cfs_mutex_unlock(&oob->oo_debug_mutex);
+        cl_env_nested_put(&nest, env);
+
+        return (result == CLP_GANG_ABORT);
 }
 #else
 static int osc_lock_has_pages(struct osc_lock *olck)
