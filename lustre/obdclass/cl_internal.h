@@ -109,6 +109,11 @@ struct cl_thread_info {
          * Used for submitting a sync io.
          */
         struct cl_sync_io    clt_anchor;
+        /**
+         * Fields used by cl_lock_page_out().
+         */
+        pgoff_t              clt_next_index;
+        pgoff_t              clt_fn_index; /* first non-overlapped index */
 };
 
 struct cl_thread_info *cl_env_info(const struct lu_env *env);

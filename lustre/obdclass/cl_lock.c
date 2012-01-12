@@ -1889,65 +1889,79 @@ struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
 EXPORT_SYMBOL(cl_lock_at_page);
 
 /**
- * Returns a list of pages protected (only) by a given lock.
- *
- * Scans an extent of page radix tree, corresponding to the \a lock and queues
- * all pages that are not protected by locks other than \a lock into \a queue.
+ * Calculate the page offset at the layer of @lock.
+ * At the time of this writing, @page is top page and @lock is sub lock.
  */
-void cl_lock_page_list_fixup(const struct lu_env *env,
-                             struct cl_io *io, struct cl_lock *lock,
-                             struct cl_page_list *queue)
+static pgoff_t pgoff_at_lock(struct cl_page *page, struct cl_lock *lock)
 {
-        struct cl_page        *page;
-        struct cl_page        *temp;
-        struct cl_page_list   *plist = &cl_env_info(env)->clt_list;
+        struct lu_device_type *dtype;
+        const struct cl_page_slice *slice;
 
-        LINVRNT(cl_lock_invariant(env, lock));
-        ENTRY;
+        dtype = lock->cll_descr.cld_obj->co_lu.lo_dev->ld_type;
+        slice = cl_page_at(page, dtype);
+        LASSERT(slice != NULL);
+        return slice->cpl_page->cp_index;
+}
 
-        /* No need to fix for WRITE lock because it is exclusive. */
-        if (lock->cll_descr.cld_mode >= CLM_WRITE)
-                RETURN_EXIT;
+/**
+ * Check if page @page is covered by an extra lock or discard it.
+ */
+static int check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
+                                struct cl_page *page, void *cbdata)
+{
+        struct cl_thread_info *info = cl_env_info(env);
+        struct cl_lock *lock = cbdata;
+        pgoff_t index = pgoff_at_lock(page, lock);
 
-        /* For those pages who are still covered by other PR locks, we should
-         * not discard them otherwise a [0, EOF) PR lock will discard all
-         * pages.
-         */
-        cl_page_list_init(plist);
-        cl_page_list_for_each_safe(page, temp, queue) {
-                pgoff_t                idx = page->cp_index;
-                struct cl_lock        *found;
-                struct cl_lock_descr  *descr;
+        if (index >= info->clt_fn_index) {
+                struct cl_lock *tmp;
 
-                /* The algorithm counts on the index-ascending page index. */
-                LASSERT(ergo(&temp->cp_batch != &queue->pl_pages,
-                        page->cp_index < temp->cp_index));
-
-                found = cl_lock_at_page(env, lock->cll_descr.cld_obj,
-                                        page, lock, 1, 0);
-                if (found == NULL)
-                        continue;
-
-                descr = &found->cll_descr;
-                cfs_list_for_each_entry_safe_from(page, temp, &queue->pl_pages,
-                                                  cp_batch) {
-                        idx = page->cp_index;
-                        if (descr->cld_start > idx || descr->cld_end < idx)
-                                break;
-                        cl_page_list_move(plist, queue, page);
+                /* refresh non-overlapped index */
+                tmp = cl_lock_at_page(env, lock->cll_descr.cld_obj, page, lock,
+                                      1, 0);
+                if (tmp != NULL) {
+                        /* Cache the first-non-overlapped index so as to skip
+                         * all pages within [index, clt_fn_index). This
+                         * is safe because if tmp lock is canceled, it will
+                         * discard these pages. */
+                        info->clt_fn_index = tmp->cll_descr.cld_end + 1;
+                        if (tmp->cll_descr.cld_end == CL_PAGE_EOF)
+                                info->clt_fn_index = CL_PAGE_EOF;
+                        cl_lock_put(env, tmp);
+                } else { /* discard the page */
+                        cl_page_own(env, io, page);
+                        cl_page_unmap(env, io, page);
+                        cl_page_discard(env, io, page);
+                        cl_page_disown(env, io, page);
                 }
-                cl_lock_put(env, found);
         }
 
-        /* The pages in plist are covered by other locks, don't handle them
-         * this time.
-         */
-        if (io != NULL)
-                cl_page_list_disown(env, io, plist);
-        cl_page_list_fini(env, plist);
-        EXIT;
+        info->clt_next_index = index + 1;
+        return CLP_GANG_OKAY;
 }
-EXPORT_SYMBOL(cl_lock_page_list_fixup);
+
+static int pageout_cb(const struct lu_env *env, struct cl_io *io,
+                      struct cl_page *page, void *cbdata)
+{
+        struct cl_thread_info *info  = cl_env_info(env);
+        struct cl_page_list   *queue = &info->clt_queue.c2_qin;
+        struct cl_lock        *lock  = cbdata;
+        typeof(cl_page_own)   *page_own;
+        int rc = CLP_GANG_OKAY;
+
+        page_own = queue->pl_nr ? cl_page_own_try : cl_page_own;
+        if (page_own(env, io, page) == 0) {
+                cl_page_list_add(queue, page);
+                info->clt_next_index = pgoff_at_lock(page, lock) + 1;
+        } else if (page->cp_state != CPS_FREEING) {
+                /* cl_page_own() won't fail unless
+                 * the page is being freed. */
+                LASSERT(queue->pl_nr != 0);
+                rc = CLP_GANG_AGAIN;
+        }
+
+        return rc;
+}
 
 /**
  * Invalidate pages protected by the given lock, sending them out to the
@@ -1978,9 +1992,8 @@ int cl_lock_page_out(const struct lu_env *env, struct cl_lock *lock,
         struct cl_io          *io    = &info->clt_io;
         struct cl_2queue      *queue = &info->clt_queue;
         struct cl_lock_descr  *descr = &lock->cll_descr;
-        struct lu_device_type *dtype;
+        cl_page_gang_cb_t      cb;
         long page_count;
-        pgoff_t next_index;
         int res;
         int result;
 
@@ -1992,44 +2005,39 @@ int cl_lock_page_out(const struct lu_env *env, struct cl_lock *lock,
         if (result != 0)
                 GOTO(out, result);
 
-        dtype = descr->cld_obj->co_lu.lo_dev->ld_type;
-        next_index = descr->cld_start;
+        cb = descr->cld_mode == CLM_READ ? check_and_discard_cb : pageout_cb;
+        info->clt_fn_index = info->clt_next_index = descr->cld_start;
         do {
-                const struct cl_page_slice *slice;
-
                 cl_2queue_init(queue);
                 res = cl_page_gang_lookup(env, descr->cld_obj, io,
-                                          next_index, descr->cld_end,
-                                          &queue->c2_qin);
+                                          info->clt_next_index, descr->cld_end,
+                                          cb, (void *)lock);
                 page_count = queue->c2_qin.pl_nr;
-                if (page_count == 0)
-                        break;
+                if (page_count > 0) {
+                        /* must be writeback case */
+                        LASSERTF(descr->cld_mode >= CLM_WRITE, "lock mode %s\n",
+                                 cl_lock_mode_name(descr->cld_mode));
 
-                /* cl_page_gang_lookup() uses subobj and sublock to look for
-                 * covered pages, but @queue->c2_qin contains the list of top
-                 * pages. We have to turn the page back to subpage so as to
-                 * get `correct' next index. -jay */
-                slice = cl_page_at(cl_page_list_last(&queue->c2_qin), dtype);
-                next_index = slice->cpl_page->cp_index + 1;
-
-                result = cl_page_list_unmap(env, io, &queue->c2_qin);
-                if (!discard) {
-                        long timeout = 600; /* 10 minutes. */
-                        /* for debug purpose, if this request can't be
-                         * finished in 10 minutes, we hope it can notify us.
-                         */
-                        result = cl_io_submit_sync(env, io, CRT_WRITE, queue,
-                                                   CRP_CANCEL, timeout);
-                        if (result)
-                                CWARN("Writing %lu pages error: %d\n",
-                                      page_count, result);
+                        result = cl_page_list_unmap(env, io, &queue->c2_qin);
+                        if (!discard) {
+                                long timeout = 600; /* 10 minutes. */
+                                /* for debug purpose, if this request can't be
+                                 * finished in 10 minutes, we hope it can
+                                 * notify us.
+                                 */
+                                result = cl_io_submit_sync(env, io, CRT_WRITE,
+                                                           queue, CRP_CANCEL,
+                                                           timeout);
+                                if (result)
+                                        CWARN("Writing %lu pages error: %d\n",
+                                              page_count, result);
+                        }
+                        cl_2queue_discard(env, io, queue);
+                        cl_2queue_disown(env, io, queue);
+                        cl_2queue_fini(env, queue);
                 }
-                cl_lock_page_list_fixup(env, io, lock, &queue->c2_qout);
-                cl_2queue_discard(env, io, queue);
-                cl_2queue_disown(env, io, queue);
-                cl_2queue_fini(env, queue);
 
-                if (next_index > descr->cld_end)
+                if (info->clt_next_index > descr->cld_end)
                         break;
 
                 if (res == CLP_GANG_RESCHED)

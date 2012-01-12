@@ -192,7 +192,7 @@ EXPORT_SYMBOL(cl_page_lookup);
  */
 int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                         struct cl_io *io, pgoff_t start, pgoff_t end,
-                        struct cl_page_list *queue)
+                        cl_page_gang_cb_t cb, void *cbdata)
 {
         struct cl_object_header *hdr;
         struct cl_page          *page;
@@ -245,7 +245,7 @@ int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                          */
                         cl_page_get_trust(page);
                         lu_ref_add_atomic(&page->cp_reference,
-                                          "page_list", cfs_current());
+                                          "gang_lookup", cfs_current());
                         pvec[j++] = page;
                 }
 
@@ -262,30 +262,16 @@ int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
 
                 for (i = 0; i < j; ++i) {
                         page = pvec[i];
-                        if (res == CLP_GANG_OKAY) {
-                                typeof(cl_page_own) *page_own;
-
-                                page_own = queue->pl_nr ?
-                                           cl_page_own_try : cl_page_own;
-                                if (page_own(env, io, page) == 0) {
-                                        cl_page_list_add(queue, page);
-                                } else if (page->cp_state != CPS_FREEING) {
-                                        /* cl_page_own() won't fail unless
-                                         * the page is being freed. */
-                                        LASSERT(queue->pl_nr != 0);
-                                        res = CLP_GANG_AGAIN;
-                                }
-                        }
+                        if (res == CLP_GANG_OKAY)
+                                res = (*cb)(env, io, page, cbdata);
                         lu_ref_del(&page->cp_reference,
-                                   "page_list", cfs_current());
+                                   "gang_lookup", cfs_current());
                         cl_page_put(env, page);
                 }
                 if (nr < CLT_PVEC_SIZE || end_of_region)
                         break;
 
-                /* if the number of pages is zero, this will mislead the caller
-                 * that there is no page any more. */
-                if (queue->pl_nr && cfs_need_resched())
+                if (res == CLP_GANG_OKAY && cfs_need_resched())
                         res = CLP_GANG_RESCHED;
                 if (res != CLP_GANG_OKAY)
                         break;
@@ -1478,6 +1464,16 @@ int cl_page_is_under_lock(const struct lu_env *env, struct cl_io *io,
 }
 EXPORT_SYMBOL(cl_page_is_under_lock);
 
+static int page_prune_cb(const struct lu_env *env, struct cl_io *io,
+                         struct cl_page *page, void *cbdata)
+{
+        cl_page_own(env, io, page);
+        cl_page_unmap(env, io, page);
+        cl_page_discard(env, io, page);
+        cl_page_disown(env, io, page);
+        return CLP_GANG_OKAY;
+}
+
 /**
  * Purges all cached pages belonging to the object \a obj.
  */
@@ -1486,12 +1482,10 @@ int cl_pages_prune(const struct lu_env *env, struct cl_object *clobj)
         struct cl_thread_info   *info;
         struct cl_object        *obj = cl_object_top(clobj);
         struct cl_io            *io;
-        struct cl_page_list     *plist;
         int                      result;
 
         ENTRY;
         info  = cl_env_info(env);
-        plist = &info->clt_list;
         io    = &info->clt_io;
 
         /*
@@ -1506,18 +1500,8 @@ int cl_pages_prune(const struct lu_env *env, struct cl_object *clobj)
         }
 
         do {
-                cl_page_list_init(plist);
                 result = cl_page_gang_lookup(env, obj, io, 0, CL_PAGE_EOF,
-                                             plist);
-                /*
-                 * Since we're purging the pages of an object, we don't care
-                 * the possible outcomes of the following functions.
-                 */
-                cl_page_list_unmap(env, io, plist);
-                cl_page_list_discard(env, io, plist);
-                cl_page_list_disown(env, io, plist);
-                cl_page_list_fini(env, plist);
-
+                                             page_prune_cb, NULL);
                 if (result == CLP_GANG_RESCHED)
                         cfs_cond_resched();
         } while (result != CLP_GANG_OKAY);

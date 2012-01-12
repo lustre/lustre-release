@@ -2659,15 +2659,19 @@ static inline int cl_object_same(struct cl_object *o0, struct cl_object *o1)
  * @{ */
 enum {
         CLP_GANG_OKAY = 0,
+        CLP_GANG_RESCHED,
         CLP_GANG_AGAIN,
-        CLP_GANG_RESCHED
+        CLP_GANG_ABORT
 };
 
+/* callback of cl_page_gang_lookup() */
+typedef int   (*cl_page_gang_cb_t)  (const struct lu_env *, struct cl_io *,
+                                     struct cl_page *, void *);
 int             cl_page_gang_lookup (const struct lu_env *env,
                                      struct cl_object *obj,
                                      struct cl_io *io,
                                      pgoff_t start, pgoff_t end,
-                                     struct cl_page_list *plist);
+                                     cl_page_gang_cb_t cb, void *cbdata);
 struct cl_page *cl_page_lookup      (struct cl_object_header *hdr,
                                      pgoff_t index);
 struct cl_page *cl_page_find        (const struct lu_env *env,
