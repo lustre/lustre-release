@@ -266,6 +266,7 @@ typedef struct task_struct cfs_task_t;
 #define cfs_curproc_comm()      (current->comm)
 #define cfs_curproc_fsuid()     (current->fsuid)
 #define cfs_curproc_fsgid()     (current->fsgid)
+#define cfs_curproc_umask()     ({ mode_t mask = umask(0); umask(mask); mask; })
 
 extern struct task_struct *current;
 int cfs_curproc_is_in_groups(gid_t gid);

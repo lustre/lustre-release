@@ -495,7 +495,8 @@ do_lock:
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
-        it->it_create_mode &= ~cfs_curproc_umask();
+        if (!IS_POSIXACL(parent) || !exp_connect_umask(exp))
+                it->it_create_mode &= ~cfs_curproc_umask();
         it->it_create_mode |= M_CHECK_STALE;
         rc = md_intent_lock(exp, op_data, NULL, 0, it,
                             lookup_flags,

@@ -680,7 +680,7 @@ check_obd_statfs(void)
         CHECK_MEMBER(obd_statfs, os_bsize);
         CHECK_MEMBER(obd_statfs, os_namelen);
         CHECK_MEMBER(obd_statfs, os_state);
-        CHECK_MEMBER(obd_statfs, os_spare1);
+        CHECK_MEMBER(obd_statfs, os_fprecreated);
         CHECK_MEMBER(obd_statfs, os_spare2);
         CHECK_MEMBER(obd_statfs, os_spare3);
         CHECK_MEMBER(obd_statfs, os_spare4);
@@ -1008,7 +1008,7 @@ check_mdt_rec_create(void)
         CHECK_MEMBER(mdt_rec_create, cr_bias);
         CHECK_MEMBER(mdt_rec_create, cr_flags_l);
         CHECK_MEMBER(mdt_rec_create, cr_flags_h);
-        CHECK_MEMBER(mdt_rec_create, cr_padding_3);
+        CHECK_MEMBER(mdt_rec_create, cr_umask);
         CHECK_MEMBER(mdt_rec_create, cr_padding_4);
 }
 

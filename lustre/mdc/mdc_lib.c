@@ -152,6 +152,7 @@ void mdc_create_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec->cr_suppgid2 = op_data->op_suppgids[1];
         set_mrc_cr_flags(rec, op_data->op_flags & MF_SOM_LOCAL_FLAGS);
         rec->cr_bias     = op_data->op_bias;
+        rec->cr_umask    = cfs_curproc_umask();
 
         mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
 
@@ -223,6 +224,7 @@ void mdc_open_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         rec->cr_suppgid1 = op_data->op_suppgids[0];
         rec->cr_suppgid2 = op_data->op_suppgids[1];
         rec->cr_bias     = op_data->op_bias;
+        rec->cr_umask    = cfs_curproc_umask();
 
         mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
         /* the next buffer is child capa, which is used for replay,

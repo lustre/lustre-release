@@ -516,7 +516,9 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         if (IS_ERR(op_data))
                 RETURN((void *)op_data);
 
-        it->it_create_mode &= ~cfs_curproc_umask();
+        /* enforce umask if acl disabled or MDS doesn't support umask */
+        if (!IS_POSIXACL(parent) || !exp_connect_umask(ll_i2mdexp(parent)))
+                it->it_create_mode &= ~cfs_curproc_umask();
 
         rc = md_intent_lock(ll_i2mdexp(parent), op_data, NULL, 0, it,
                             lookup_flags, &req, ll_md_blocking_ast, 0);
@@ -788,7 +790,8 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
                name->len, name->name, dir->i_ino, dir->i_generation, dir,
                mode, rdev);
 
-        mode &= ~cfs_curproc_umask();
+        if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
+                mode &= ~cfs_curproc_umask();
 
         switch (mode & S_IFMT) {
         case 0:
@@ -912,7 +915,9 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
         CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p)\n",
                name->len, name->name, dir->i_ino, dir->i_generation, dir);
 
-        mode = (mode & (S_IRWXUGO|S_ISVTX) & ~cfs_curproc_umask()) | S_IFDIR;
+        if (!IS_POSIXACL(dir) || !exp_connect_umask(ll_i2mdexp(dir)))
+                mode &= ~cfs_curproc_umask();
+        mode = (mode & (S_IRWXUGO|S_ISVTX)) | S_IFDIR;
         err = ll_new_node(dir, name, NULL, mode, 0, dchild, LUSTRE_OPC_MKDIR);
 
         if (!err)
