@@ -637,7 +637,7 @@ static inline void obd_cleanup_client_import(struct obd_device *obd)
                         ptlrpc_free_rq_pool(imp->imp_rq_pool);
                         imp->imp_rq_pool = NULL;
                 }
-                class_destroy_import(imp);
+                client_destroy_import(imp);
                 obd->u.cli.cl_import = NULL;
         }
         cfs_up_write(&obd->u.cli.cl_sem);
