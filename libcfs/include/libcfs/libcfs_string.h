@@ -58,4 +58,7 @@ int cfs_vsnprintf(char *buf, size_t size, const char *fmt, va_list args);
 
 /* safe snprintf */
 int cfs_snprintf(char *buf, size_t size, const char *fmt, ...);
+
+/* trim leading and trailing space characters */
+char *cfs_firststr(char *str, size_t size);
 #endif

@@ -462,20 +462,43 @@ static int lprocfs_wr_ck_timeout(struct file *file, const char *buffer,
         return count;
 }
 
+#define BUFLEN (UUID_MAX + 4)
+
 static int lprocfs_mdt_wr_evict_client(struct file *file, const char *buffer,
                                        unsigned long count, void *data)
 {
-        char tmpbuf[sizeof(struct obd_uuid)];
+        char *kbuf;
+        char *tmpbuf;
 
-        sscanf(buffer, "%40s", tmpbuf);
+        OBD_ALLOC(kbuf, BUFLEN);
+        if (kbuf == NULL)
+                return -ENOMEM;
 
-        if (strncmp(tmpbuf, "nid:", 4) != 0)
-                return lprocfs_wr_evict_client(file, buffer, count, data);
+        /*
+         * OBD_ALLOC() will zero kbuf, but we only copy BUFLEN - 1
+         * bytes into kbuf, to ensure that the string is NUL-terminated.
+         * UUID_MAX should include a trailing NUL already.
+         */
+        if (cfs_copy_from_user(kbuf, buffer,
+                               min_t(unsigned long, BUFLEN - 1, count))) {
+                count = -EFAULT;
+                goto out;
+        }
+        tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, BUFLEN - 1, count));
+
+        if (strncmp(tmpbuf, "nid:", 4) != 0) {
+                count = lprocfs_wr_evict_client(file, buffer, count, data);
+                goto out;
+        }
 
         CERROR("NOT implement evict client by nid %s\n", tmpbuf);
 
+out:
+        OBD_FREE(kbuf, BUFLEN);
         return count;
 }
+
+#undef BUFLEN
 
 static int lprocfs_rd_sec_level(char *page, char **start, off_t off,
                                 int count, int *eof, void *data)
@@ -759,21 +782,45 @@ static int lprocfs_mdt_wr_mdc(struct file *file, const char *buffer,
 {
         struct obd_device *obd = data;
         struct obd_export *exp = NULL;
-        struct obd_uuid uuid;
-        char tmpbuf[sizeof(struct obd_uuid)];
+        struct obd_uuid   *uuid;
+        char              *kbuf;
+        char              *tmpbuf;
 
-        sscanf(buffer, "%40s", tmpbuf);
+        OBD_ALLOC(kbuf, UUID_MAX);
+        if (kbuf == NULL)
+                return -ENOMEM;
 
-        obd_str2uuid(&uuid, tmpbuf);
-        exp = cfs_hash_lookup(obd->obd_uuid_hash, &uuid);
+        /*
+         * OBD_ALLOC() will zero kbuf, but we only copy UUID_MAX - 1
+         * bytes into kbuf, to ensure that the string is NUL-terminated.
+         * UUID_MAX should include a trailing NUL already.
+         */
+        if (cfs_copy_from_user(kbuf, buffer,
+                               min_t(unsigned long, UUID_MAX - 1, count))) {
+                count = -EFAULT;
+                goto out;
+        }
+        tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, UUID_MAX - 1, count));
+
+        OBD_ALLOC(uuid, UUID_MAX);
+        if (uuid == NULL) {
+                count = -ENOMEM;
+                goto out;
+        }
+
+        obd_str2uuid(uuid, tmpbuf);
+        exp = cfs_hash_lookup(obd->obd_uuid_hash, uuid);
         if (exp == NULL) {
                 CERROR("%s: no export %s found\n",
-                       obd->obd_name, obd_uuid2str(&uuid));
+                       obd->obd_name, obd_uuid2str(uuid));
         } else {
                 mdt_hsm_copytool_send(exp);
                 class_export_put(exp);
         }
 
+        OBD_FREE(uuid, UUID_MAX);
+out:
+        OBD_FREE(kbuf, UUID_MAX);
         return count;
 }
 
