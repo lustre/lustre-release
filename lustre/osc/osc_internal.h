@@ -120,7 +120,8 @@ static inline void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars)
 
 static inline int osc_recoverable_error(int rc)
 {
-        return (rc == -EIO || rc == -EROFS || rc == -ENOMEM || rc == -EAGAIN);
+        return (rc == -EIO || rc == -EROFS || rc == -ENOMEM ||
+                rc == -EAGAIN || rc == -EINPROGRESS);
 }
 
 /* return 1 if osc should be resend request */

@@ -201,13 +201,31 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         CFS_LIST_HEAD(cancels);
         struct obd_device *obd = exp->exp_obd;
         struct ptlrpc_request *req;
-        int level, bufcount = 3, rc;
-        __u32 size[6] = { sizeof(struct ptlrpc_body),
-                        sizeof(struct mds_rec_create),
-                        op_data->namelen + 1, 0, sizeof(struct ldlm_request) };
-        int offset = REQ_REC_OFF + 3;
-        int count;
+        int level, bufcount, rc;
+        __u32 size[6];
+        int offset;
+        int count, resends = 0;
+        struct obd_import *import = obd->u.cli.cl_import;
+        int generation = import->imp_generation;
         ENTRY;
+
+        if (mdc_exp_is_2_0_server(exp)) {
+                struct client_obd *cli = &obd->u.cli;
+                rc = mdc_fid_alloc(cli->cl_seq, (void *)&op_data->fid2);
+                if (rc) {
+                        CERROR("fid allocation result: %d\n", rc);
+                        RETURN(rc);
+                }
+        }
+
+rebuild:
+        size[0] = sizeof(struct ptlrpc_body);
+        size[1] = sizeof(struct mds_rec_create);
+        size[2] = op_data->namelen + 1;
+        size[3] = 0;
+        size[4] = sizeof(struct ldlm_request);
+        offset = REQ_REC_OFF + 3;
+        bufcount = 3;
 
         if (mdc_exp_is_2_0_server(exp)) {
                 size[REQ_REC_OFF] = sizeof(struct mdt_rec_create);
@@ -232,15 +250,6 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
                 }
         }
 
-        if (mdc_exp_is_2_0_server(exp)) {
-                struct client_obd *cli = &obd->u.cli;
-                rc = mdc_fid_alloc(cli->cl_seq, (void *)&op_data->fid2);
-                if (rc) {
-                        CERROR("fid allocation result: %d\n", rc);
-                        RETURN(rc);
-                }
-        }
-
         req = mdc_prep_elc_req(exp, bufcount, size,
                                offset, &cancels, count);
         if (req == NULL)
@@ -255,13 +264,37 @@ int mdc_create(struct obd_export *exp, struct mdc_op_data *op_data,
         size[REPLY_REC_OFF+1] = sizeof(struct ost_lvb);
         ptlrpc_req_set_repsize(req, 3, size);
 
+        /* ask ptlrpc not to resend on EINPROGRESS since we have our own retry
+         * logic here */
+        req->rq_no_retry_einprogress = 1;
+
+        if (resends) {
+                req->rq_generation_set = 1;
+                req->rq_import_generation = generation;
+                req->rq_sent = cfs_time_current_sec() + resends;
+        }
         level = LUSTRE_IMP_FULL;
- resend:
+resend:
         rc = mdc_reint(req, obd->u.cli.cl_rpc_lock, level);
         /* Resend if we were told to. */
         if (rc == -ERESTARTSYS) {
                 level = LUSTRE_IMP_RECOVER;
                 goto resend;
+        } else if (rc == -EINPROGRESS) {
+                /* Retry create infinitely until succeed or get other
+                 * error code. */
+                ptlrpc_req_finished(req);
+                resends++;
+
+                CDEBUG(D_HA, "%s: resend:%d create on "DFID"/"DFID"\n",
+                       obd->obd_name, resends,
+                       PFID((void *)&op_data->fid1),
+                       PFID((void *)&op_data->fid2));
+
+                if (generation == import->imp_generation)
+                        goto rebuild;
+                CDEBUG(D_HA, "resend cross eviction\n");
+                RETURN(-EIO);
         }
 
         if (!rc)

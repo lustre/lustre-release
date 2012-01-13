@@ -1222,6 +1222,9 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
 
         req->rq_request_portal = OST_IO_PORTAL;         /* bug 7198 */
         ptlrpc_at_set_req_timeout(req);
+	/* ask ptlrpc not to resend on EINPROGRESS since BRWs have their own
+	 * retry logic */
+	req->rq_no_retry_einprogress = 1;
 
         if (opc == OST_WRITE)
                 desc = ptlrpc_prep_bulk_imp (req, page_count,
@@ -1573,17 +1576,24 @@ static int osc_brw_internal(int cmd, struct obd_export *exp,struct obdo *oa,
         struct ptlrpc_request *request;
         int                    rc;
         cfs_waitq_t            waitq;
-        int                    resends = 0;
+        int                    generation, resends = 0;
         struct l_wait_info     lwi;
 
         ENTRY;
         init_waitqueue_head(&waitq);
+        generation = exp->exp_obd->u.cli.cl_import->imp_generation;
 
 restart_bulk:
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
                                   page_count, pga, &request, 0, resends);
         if (rc != 0)
                 return (rc);
+
+        if (resends) {
+                request->rq_generation_set = 1;
+                request->rq_import_generation = generation;
+                request->rq_sent = CURRENT_SECONDS + resends;
+        }
 
         rc = ptlrpc_queue_wait(request);
 
@@ -1596,37 +1606,48 @@ restart_bulk:
         rc = osc_brw_fini_request(request, rc);
 
         ptlrpc_req_finished(request);
+        /* When server return -EINPROGRESS, client should always retry
+         * regardless of the number of times the bulk was resent already.*/
         if (osc_recoverable_error(rc)) {
                 resends++;
-                if (!osc_should_resend(resends, &exp->exp_obd->u.cli)) {
-                        CERROR("too many resend retries, returning error\n");
-                        RETURN(-EIO);
+                if (rc != -EINPROGRESS &&
+                    !osc_should_resend(resends, &exp->exp_obd->u.cli)) {
+                        CERROR("%s: too many resend retries for object: "
+                               ""LPU64", rc = %d.\n",
+                               exp->exp_obd->obd_name, oa->o_id, rc);
+                        goto out;
+                }
+                if (generation !=
+                    exp->exp_obd->u.cli.cl_import->imp_generation) {
+                        CDEBUG(D_HA, "%s: resend cross eviction for object: "
+                               ""LPU64", rc = %d.\n",
+                               exp->exp_obd->obd_name, oa->o_id, rc);
+                        goto out;
                 }
 
-                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(resends), NULL, NULL, NULL);
+                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(resends), NULL, NULL,
+                                       NULL);
                 l_wait_event(waitq, 0, &lwi);
 
                 goto restart_bulk;
         }
-        RETURN(rc);
+out:
+        if (rc == -EAGAIN || rc == -EINPROGRESS)
+                rc = -EIO;
+        RETURN (rc);
 }
 
-int osc_brw_redo_request(struct ptlrpc_request *request,
-                         struct osc_brw_async_args *aa)
+static int osc_brw_redo_request(struct ptlrpc_request *request,
+				struct osc_brw_async_args *aa, int rc)
 {
         struct ptlrpc_request *new_req;
         struct ptlrpc_request_set *set = request->rq_set;
         struct osc_brw_async_args *new_aa;
         struct osc_async_page *oap;
-        int rc = 0;
         ENTRY;
 
-        if (!osc_should_resend(aa->aa_resends, aa->aa_cli)) {
-                CERROR("too many resent retries, returning error\n");
-                RETURN(-EIO);
-        }
-
-        DEBUG_REQ(D_ERROR, request, "redo for recoverable error");
+	DEBUG_REQ(rc == -EINPROGRESS ? D_RPCTRACE : D_ERROR, request,
+		  "redo for recoverable error %d", rc);
 
         rc = osc_brw_prep_request(lustre_msg_get_opc(request->rq_reqmsg) ==
                                         OST_WRITE ? OBD_BRW_WRITE :OBD_BRW_READ,
@@ -1656,7 +1677,14 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         aa->aa_resends++;
         new_req->rq_interpret_reply = request->rq_interpret_reply;
         new_req->rq_async_args = request->rq_async_args;
-        new_req->rq_sent = CURRENT_SECONDS + aa->aa_resends;
+	/* cap resend delay to the current request timeout, this is similar to
+	 * what ptlrpc does (see after_reply()) */
+	if (aa->aa_resends > new_req->rq_timeout)
+		new_req->rq_sent = CURRENT_SECONDS + new_req->rq_timeout;
+	else
+		new_req->rq_sent = CURRENT_SECONDS  + aa->aa_resends;
+        new_req->rq_generation_set = 1;
+        new_req->rq_import_generation = request->rq_import_generation;
 
         new_aa = ptlrpc_req_async_args(new_req);
 
@@ -2265,7 +2293,8 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
 
         rc = osc_brw_fini_request(request, rc);
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", request, aa, rc);
-
+        /* When server return -EINPROGRESS, client should always retry
+         * regardless of the number of times the bulk was resent already. */
         if (osc_recoverable_error(rc)) {
                 /* Only retry once for mmaped files since the mmaped page
                  * might be modified at anytime. We have to retry at least
@@ -2276,10 +2305,24 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
                     aa->aa_oa->o_valid & OBD_MD_FLFLAGS &&
                     aa->aa_oa->o_flags & OBD_FL_MMAP) {
                         rc = 0;
+                } else if (request->rq_import_generation !=
+                           request->rq_import->imp_generation) {
+                        CDEBUG(D_HA, "%s: resend cross eviction for object: "
+                               ""LPU64", rc = %d.\n",
+                               request->rq_import->imp_obd->obd_name,
+                               aa->aa_oa->o_id, rc);
+                        rc = -EIO;
+                } else if (rc == -EINPROGRESS ||
+                           osc_should_resend(aa->aa_resends, aa->aa_cli)) {
+                        rc = osc_brw_redo_request(request, aa, rc);
+                        if (rc == 0)
+                                RETURN(0);
                 } else {
-                	rc = osc_brw_redo_request(request, aa);
-                	if (rc == 0)
-                        	RETURN(0);
+                        CERROR("%s: too many resent retries for object: "
+                               ""LPU64", rc = %d.\n",
+                               request->rq_import->imp_obd->obd_name,
+                               aa->aa_oa->o_id, rc);
+                        rc = -EIO;
 		}
         }
 

@@ -2079,7 +2079,8 @@ llu_fsswop_mount(const char *source,
         obd_register_lock_cancel_cb(obd, llu_extent_lock_cancel_cb);
 
         ocd.ocd_connect_flags = OBD_CONNECT_SRVLOCK | OBD_CONNECT_REQPORTAL |
-                OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_AT;
+                                OBD_CONNECT_VERSION | OBD_CONNECT_TRUNCLOCK |
+                                OBD_CONNECT_AT | OBD_CONNECT_EINPROGRESS;
         ocd.ocd_version = LUSTRE_VERSION_CODE;
         err = obd_connect(&osc_conn, obd, &sbi->ll_sb_uuid, &ocd, &sbi->ll_osc_exp);
         if (err) {

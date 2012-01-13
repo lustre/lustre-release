@@ -603,12 +603,18 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         struct obd_device *obddev = class_exp2obd(exp);
         struct ldlm_res_id res_id;
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
-        int flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
+        int flags;
+        int generation, resends = 0;
+        struct ldlm_reply *lockrep;
         int rc;
         ENTRY;
 
         fid_build_reg_res_name((void *)&data->fid1, &res_id);
         LASSERTF(einfo->ei_type == LDLM_IBITS,"lock type %d\n", einfo->ei_type);
+
+        generation = obddev->u.cli.cl_import->imp_generation;
+resend:
+        flags = extra_lock_flags | LDLM_FL_HAS_INTENT;
         if (it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
                 policy.l_inodebits.bits = MDS_INODELOCK_UPDATE;
 
@@ -640,6 +646,17 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         if (!req)
                 RETURN(-ENOMEM);
 
+        if (it->it_op & IT_CREAT)
+                /* ask ptlrpc not to resend on EINPROGRESS since we have our own
+                 * retry logic */
+                req->rq_no_retry_einprogress = 1;
+
+        if (resends) {
+                req->rq_generation_set = 1;
+                req->rq_import_generation = generation;
+                req->rq_sent = CURRENT_SECONDS + resends;
+        }
+
          /* It is important to obtain rpc_lock first (if applicable), so that
           * threads that are serialised with rpc_lock are not polluting our
           * rpcs in flight counter */
@@ -658,6 +675,32 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
+
+        lockrep = lustre_msg_buf(req->rq_repmsg, DLM_LOCKREPLY_OFF,
+                                 sizeof(*lockrep));
+        LASSERT(lockrep != NULL);
+
+        /* Retry the create infinitely when we get -EINPROGRESS from
+         * server. This is required by the new quota design. */
+        if (it->it_op & IT_CREAT &&
+            (int)lockrep->lock_policy_res2 == -EINPROGRESS) {
+                mdc_clear_replay_flag(req, rc);
+                ptlrpc_req_finished(req);
+                resends++;
+
+                CDEBUG(D_HA, "%s: resend:%d op:%d "DFID"/"DFID"\n",
+                       obddev->obd_name, resends, it->it_op,
+                       PFID((void *)&data->fid1),
+                       PFID((void *)&data->fid2));
+
+                if (generation == obddev->u.cli.cl_import->imp_generation) {
+                        goto resend;
+                } else {
+                        CDEBUG(D_HA, "resend cross eviction\n");
+                        RETURN(-EIO);
+                }
+        }
+
         rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
 
         RETURN(rc);

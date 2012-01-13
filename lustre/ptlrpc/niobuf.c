@@ -474,7 +474,8 @@ int ptlrpc_send_error(struct ptlrpc_request *req, int may_be_difficult)
         }
 
         if (req->rq_status != -ENOSPC && req->rq_status != -EACCES &&
-            req->rq_status != -EPERM)
+	    req->rq_status != -EPERM && req->rq_status != -ENOENT &&
+	    req->rq_status != -EINPROGRESS)
                 req->rq_type = PTL_RPC_MSG_ERR;
 
         rc = ptlrpc_send_reply(req, may_be_difficult);

@@ -193,6 +193,7 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_MDS_LOV_PREP_CREATE     0x141
 #define OBD_FAIL_MDS_SPLIT_OPEN          0x142
 #define OBD_FAIL_MDS_READLINK_EPROTO     0x143
+#define OBD_FAIL_MDS_DQACQ_NET           0x187
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -235,6 +236,8 @@ extern unsigned int obd_alloc_fail_rate;
 #define OBD_FAIL_OST_NOMEM               0x226
 #define OBD_FAIL_OST_BRW_PAUSE_BULK2     0x227
 #define OBD_FAIL_OST_MAPBLK_ENOSPC       0x228
+#define OBD_FAIL_OST_DQACQ_NET           0x230
+#define OBD_FAIL_OST_STATFS_EINPROGRESS  0x231
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301

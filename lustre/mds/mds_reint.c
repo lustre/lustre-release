@@ -1083,6 +1083,9 @@ static int mds_reint_create(struct mds_update_record *rec, int offset,
         lquota_chkquota(mds_quota_interface_ref, req->rq_export, ids[0], ids[1],
                         1, quota_pending, NULL, NULL, 0);
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
+                GOTO(cleanup, rc = -EINPROGRESS);
+
         switch (type) {
         case S_IFREG:{
                 handle = fsfilt_start(obd, dir, FSFILT_OP_CREATE, NULL);

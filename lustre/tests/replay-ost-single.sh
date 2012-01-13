@@ -231,6 +231,126 @@ test_7() {
 }
 run_test 7 "Fail OST before obd_destroy"
 
+test_8a() {
+    [ -z "$(lctl get_param -n osc.${FSNAME}-*.connect_flags|grep einprogress)" \
+        ] && skip_env "OSTs don't support EINPROGRESS" && return
+    verify=$ROOT/tmp/verify-$$
+    dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
+        error "Create verify file failed"
+#define OBD_FAIL_OST_DQACQ_NET           0x230
+    do_facet ost1 "lctl set_param fail_loc=0x230"
+    dd if=$verify of=$TDIR/$tfile bs=4096 count=1280 oflag=sync &
+    ddpid=$!
+    sleep $TIMEOUT  # wait for the io to become redo io
+    if ! ps -p $ddpid  > /dev/null 2>&1; then
+            error "redo io finished incorrectly"
+            return 1
+    fi
+    do_facet ost1 "lctl set_param fail_loc=0"
+    wait $ddpid || true
+    cancel_lru_locks osc
+    cmp $verify $TDIR/$tfile || return 2
+    rm -f $verify $TDIR/$tfile
+	message=`dmesg | grep "redo for recoverable error -115"`
+	[ -z "$message" ] || error "redo error messages found in dmesg"
+}
+run_test 8a "Verify redo io: redo io when get -EINPROGRESS error"
+
+test_8b() {
+    [ -z "$(lctl get_param -n osc.${FSNAME}-*.connect_flags|grep einprogress)" \
+        ] && skip_env "OSTs don't support EINPROGRESS" && return
+    verify=$ROOT/tmp/verify-$$
+    dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
+        error "Create verify file failed"
+#define OBD_FAIL_OST_DQACQ_NET           0x230
+    do_facet ost1 "lctl set_param fail_loc=0x230"
+    dd if=$verify of=$TDIR/$tfile bs=4096 count=1280 oflag=sync &
+    ddpid=$!
+    sleep $TIMEOUT  # wait for the io to become redo io
+    fail ost1
+    do_facet ost1 "lctl set_param fail_loc=0"
+    wait $ddpid || return 1
+    cancel_lru_locks osc
+    cmp $verify $TDIR/$tfile || return 2
+    rm -f $verify $TDIR/$tfile
+}
+run_test 8b "Verify redo io: redo io should success after recovery"
+
+test_8c() {
+    [ -z "$(lctl get_param -n osc.${FSNAME}-*.connect_flags|grep einprogress)" \
+        ] && skip_env "OSTs don't support EINPROGRESS" && return
+    verify=$ROOT/tmp/verify-$$
+    dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
+        error "Create verify file failed"
+#define OBD_FAIL_OST_DQACQ_NET           0x230
+    do_facet ost1 "lctl set_param fail_loc=0x230"
+    dd if=$verify of=$TDIR/$tfile bs=4096 count=1280 oflag=sync &
+    ddpid=$!
+    sleep $TIMEOUT  # wait for the io to become redo io
+    ost_evict_client
+    # allow recovery to complete
+    sleep $((TIMEOUT + 2))
+    do_facet ost1 "lctl set_param fail_loc=0"
+    wait $ddpid
+    cancel_lru_locks osc
+    cmp $verify $TDIR/$tfile && return 2
+    rm -f $verify $TDIR/$tfile
+}
+run_test 8c "Verify redo io: redo io should fail after eviction"
+
+test_8d() {
+    [ -z "$(lctl get_param -n mdc.${FSNAME}-*.connect_flags|grep einprogress)" \
+        ] && skip_env "MDS doesn't support EINPROGRESS" && return
+#define OBD_FAIL_MDS_DQACQ_NET           0x187
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x187"
+    # test the non-intent create path
+    mcreate $TDIR/$tfile &
+    cpid=$!
+    sleep $TIMEOUT
+    if ! ps -p $cpid  > /dev/null 2>&1; then
+            error "mknod finished incorrectly"
+            return 1
+    fi
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+    wait $cpid || return 2
+    stat $TDIR/$tfile || error "mknod failed"
+
+    rm $TDIR/$tfile
+
+#define OBD_FAIL_MDS_DQACQ_NET           0x187
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x187"
+    # test the intent create path
+    openfile -f O_RDWR:O_CREAT $TDIR/$tfile &
+    cpid=$!
+    sleep $TIMEOUT
+    if ! ps -p $cpid > /dev/null 2>&1; then
+            error "open finished incorrectly"
+            return 3
+    fi
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+    wait $cpid || return 4
+    stat $TDIR/$tfile || error "open failed"
+}
+run_test 8d "Verify redo creation on -EINPROGRESS"
+
+test_8e() {
+    [ -z "$(lctl get_param -n osc.${FSNAME}-*.connect_flags|grep einprogress)" \
+        ] && skip_env "OSTs don't support EINPROGRESS" && return
+    sleep 1 # ensure we have a fresh statfs
+#define OBD_FAIL_OST_STATFS_EINPROGRESS  0x231
+    do_facet ost1 "lctl set_param fail_loc=0x231"
+    df $MOUNT &
+    dfpid=$!
+    sleep $TIMEOUT
+    if ! ps -p $dfpid  > /dev/null 2>&1; then
+        do_facet ost1 "lctl set_param fail_loc=0"
+        error "df shouldn't have completed!"
+        return 1
+    fi
+    do_facet ost1 "lctl set_param fail_loc=0"
+}
+run_test 8e "Verify that ptlrpc resends request on -EINPROGRESS"
+
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
 exit_status

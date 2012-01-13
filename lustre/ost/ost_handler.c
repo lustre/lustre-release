@@ -183,6 +183,9 @@ static int ost_statfs(struct ptlrpc_request *req)
         if (req->rq_status != 0)
                 CERROR("ost: statfs failed: rc %d\n", req->rq_status);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_STATFS_EINPROGRESS))
+		req->rq_status = -EINPROGRESS;
+
         RETURN(0);
 }
 

@@ -1209,6 +1209,10 @@ int mds_open(struct mds_update_record *rec, int offset,
                                 NULL, NULL, 0);
 
                 ldlm_reply_set_disposition(rep, DISP_OPEN_CREATE);
+
+                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
+                        GOTO(cleanup, rc = -EINPROGRESS);
+
                 handle = fsfilt_start(obd, dparent->d_inode, FSFILT_OP_CREATE,
                                       NULL);
                 if (IS_ERR(handle)) {
