@@ -516,7 +516,8 @@ struct ptlrpc_request {
                 rq_reply_truncate:1,
                 rq_committed:1,
                 /* whether the "rq_set" is a valid one */
-                rq_invalid_rqset:1;
+                rq_invalid_rqset:1,
+                rq_generation_set:1;
 
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */

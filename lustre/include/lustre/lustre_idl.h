@@ -1172,7 +1172,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN | \
                                 OBD_CONNECT_GRANT_SHRINK | OBD_CONNECT_FULL20 | \
                                 OBD_CONNECT_64BITHASH | OBD_CONNECT_MAXBYTES | \
-                                OBD_CONNECT_MAX_EASIZE)
+                                OBD_CONNECT_MAX_EASIZE | \
+                                OBD_CONNECT_EINPROGRESS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
                                 OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV)

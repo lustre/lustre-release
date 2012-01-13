@@ -693,6 +693,9 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         if (rc == -ENOTCONN)
                 GOTO(cleanup, rc);
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_OST_DQACQ_NET))
+                GOTO(cleanup, rc = -EINPROGRESS);
+
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
 

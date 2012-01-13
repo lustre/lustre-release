@@ -245,6 +245,66 @@ test_7() {
 }
 run_test 7 "Fail OST before obd_destroy"
 
+test_8a() {
+    verify=$ROOT/tmp/verify-$$
+    dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
+        error "Create verify file failed"
+#define OBD_FAIL_OST_DQACQ_NET           0x230
+    do_facet ost1 "lctl set_param fail_loc=0x230"
+    dd if=$verify of=$TDIR/$tfile bs=4096 count=1280 oflag=sync &
+    ddpid=$!
+    sleep $TIMEOUT  # wait for the io to become redo io
+    if ! ps -p $ddpid  > /dev/null 2>&1; then
+            error "redo io finished incorrectly"
+            return 1
+    fi
+    do_facet ost1 "lctl set_param fail_loc=0"
+    wait $ddpid || return 1
+    cancel_lru_locks osc
+    cmp $verify $TDIR/$tfile || return 2
+    rm -f $verify $TDIR/$tfile
+}
+run_test 8a "Verify redo io: redo io when get -EINPROGRESS error"
+
+test_8b() {
+    verify=$ROOT/tmp/verify-$$
+    dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
+        error "Create verify file failed"
+#define OBD_FAIL_OST_DQACQ_NET           0x230
+    do_facet ost1 "lctl set_param fail_loc=0x230"
+    dd if=$verify of=$TDIR/$tfile bs=4096 count=1280 oflag=sync &
+    ddpid=$!
+    sleep $TIMEOUT  # wait for the io to become redo io
+    fail ost1
+    do_facet ost1 "lctl set_param fail_loc=0"
+    wait $ddpid || return 1
+    cancel_lru_locks osc
+    cmp $verify $TDIR/$tfile || return 2
+    rm -f $verify $TDIR/$tfile
+}
+run_test 8b "Verify redo io: redo io should success after recovery"
+
+test_8c() {
+    verify=$ROOT/tmp/verify-$$
+    dd if=/dev/urandom of=$verify bs=4096 count=1280 ||
+        error "Create verify file failed"
+#define OBD_FAIL_OST_DQACQ_NET           0x230
+    do_facet ost1 "lctl set_param fail_loc=0x230"
+    dd if=$verify of=$TDIR/$tfile bs=4096 count=1280 oflag=sync &
+    ddpid=$!
+    sleep $TIMEOUT  # wait for the io to become redo io
+    ost_evict_client
+    # allow recovery to complete
+    sleep $((TIMEOUT + 2))
+    do_facet ost1 "lctl set_param fail_loc=0"
+    wait $ddpid
+    cancel_lru_locks osc
+    cmp $verify $TDIR/$tfile && return 2
+    rm -f $verify $TDIR/$tfile
+}
+run_test 8c "Verify redo io: redo io should fail after eviction"
+
+
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
 exit_status

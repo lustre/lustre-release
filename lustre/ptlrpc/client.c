@@ -1317,23 +1317,25 @@ static int after_reply(struct ptlrpc_request *req)
  * Helper function to send request \a req over the network for the first time
  * Also adjusts request phase.
  * Returns 0 on success or error code.
- */ 
+ */
 static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 {
-        struct obd_import     *imp;
+        struct obd_import     *imp = req->rq_import;
         int rc;
         ENTRY;
 
         LASSERT(req->rq_phase == RQ_PHASE_NEW);
-        if (req->rq_sent && (req->rq_sent > cfs_time_current_sec()))
+        if (req->rq_sent && (req->rq_sent > cfs_time_current_sec()) &&
+            (!req->rq_generation_set ||
+             req->rq_import_generation == imp->imp_generation))
                 RETURN (0);
 
         ptlrpc_rqphase_move(req, RQ_PHASE_RPC);
 
-        imp = req->rq_import;
         cfs_spin_lock(&imp->imp_lock);
 
-        req->rq_import_generation = imp->imp_generation;
+        if (!req->rq_generation_set)
+                req->rq_import_generation = imp->imp_generation;
 
         if (ptlrpc_import_delay_req(imp, req, &rc)) {
                 cfs_spin_lock(&req->rq_lock);

@@ -1696,18 +1696,24 @@ static int osc_brw_internal(int cmd, struct obd_export *exp, struct obdo *oa,
         struct ptlrpc_request *req;
         int                    rc;
         cfs_waitq_t            waitq;
-        int                    resends = 0;
+        int                    generation, resends = 0;
         struct l_wait_info     lwi;
 
         ENTRY;
 
         cfs_waitq_init(&waitq);
+        generation = exp->exp_obd->u.cli.cl_import->imp_generation;
 
 restart_bulk:
         rc = osc_brw_prep_request(cmd, &exp->exp_obd->u.cli, oa, lsm,
                                   page_count, pga, &req, ocapa, 0, resends);
         if (rc != 0)
                 return (rc);
+
+        if (resends) {
+                req->rq_generation_set = 1;
+                req->rq_import_generation = generation;
+        }
 
         rc = ptlrpc_queue_wait(req);
 
@@ -1720,19 +1726,34 @@ restart_bulk:
         rc = osc_brw_fini_request(req, rc);
 
         ptlrpc_req_finished(req);
+        /* When server return -EINPROGRESS, client should always retry
+         * regardless of the number of times the bulk was resent already.*/
         if (osc_recoverable_error(rc)) {
                 resends++;
-                if (!client_should_resend(resends, &exp->exp_obd->u.cli)) {
-                        CERROR("too many resend retries, returning error\n");
-                        RETURN(-EIO);
+                if (rc != -EINPROGRESS &&
+                    !client_should_resend(resends, &exp->exp_obd->u.cli)) {
+                        CERROR("%s: too many resend retries for object: "
+                               ""LPU64":"LPU64", rc = %d.\n",
+                               exp->exp_obd->obd_name, oa->o_id, oa->o_seq, rc);
+                        goto out;
+                }
+                if (generation !=
+                    exp->exp_obd->u.cli.cl_import->imp_generation) {
+                        CDEBUG(D_HA, "%s: resend cross eviction for object: "
+                               ""LPU64":"LPU64", rc = %d.\n",
+                               exp->exp_obd->obd_name, oa->o_id, oa->o_seq, rc);
+                        goto out;
                 }
 
-                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(resends), NULL, NULL, NULL);
+                lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(resends), NULL, NULL,
+                                       NULL);
                 l_wait_event(waitq, 0, &lwi);
 
                 goto restart_bulk;
         }
-
+out:
+        if (rc == -EAGAIN || rc == -EINPROGRESS)
+                rc = -EIO;
         RETURN (rc);
 }
 
@@ -1745,11 +1766,6 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         struct osc_async_page *oap;
         int rc = 0;
         ENTRY;
-
-        if (!client_should_resend(aa->aa_resends, aa->aa_cli)) {
-                CERROR("too many resent retries, returning error\n");
-                RETURN(-EIO);
-        }
 
         DEBUG_REQ(D_ERROR, request, "redo for recoverable error");
 
@@ -1782,6 +1798,8 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         new_req->rq_interpret_reply = request->rq_interpret_reply;
         new_req->rq_async_args = request->rq_async_args;
         new_req->rq_sent = cfs_time_current_sec() + aa->aa_resends;
+        new_req->rq_generation_set = 1;
+        new_req->rq_import_generation = request->rq_import_generation;
 
         new_aa = ptlrpc_req_async_args(new_req);
 
@@ -2232,10 +2250,29 @@ static int brw_interpret(const struct lu_env *env,
 
         rc = osc_brw_fini_request(req, rc);
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", req, aa, rc);
+        /* When server return -EINPROGRESS, client should always retry
+         * regardless of the number of times the bulk was resent already. */
         if (osc_recoverable_error(rc)) {
-                rc = osc_brw_redo_request(req, aa);
+                if (req->rq_import_generation !=
+                    req->rq_import->imp_generation) {
+                        CDEBUG(D_HA, "%s: resend cross eviction for object: "
+                               ""LPU64":"LPU64", rc = %d.\n",
+                               req->rq_import->imp_obd->obd_name,
+                               aa->aa_oa->o_id, aa->aa_oa->o_seq, rc);
+                } else if (rc == -EINPROGRESS ||
+                    client_should_resend(aa->aa_resends, aa->aa_cli)) {
+                        rc = osc_brw_redo_request(req, aa);
+                } else {
+                        CERROR("%s: too many resent retries for object: "
+                               ""LPU64":"LPU64", rc = %d.\n",
+                               req->rq_import->imp_obd->obd_name,
+                               aa->aa_oa->o_id, aa->aa_oa->o_seq, rc);
+                }
+
                 if (rc == 0)
                         RETURN(0);
+                else if (rc == -EAGAIN || rc == -EINPROGRESS)
+                        rc = -EIO;
         }
 
         if (aa->aa_ocapa) {
