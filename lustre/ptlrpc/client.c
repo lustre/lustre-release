@@ -1230,6 +1230,36 @@ static int after_reply(struct ptlrpc_request *req)
                 RETURN(rc);
         }
 
+        /* retry indefinitely on EINPROGRESS */
+        if (lustre_msg_get_status(req->rq_repmsg) == -EINPROGRESS &&
+            ptlrpc_no_resend(req) == 0 && !req->rq_no_retry_einprogress) {
+                time_t now = cfs_time_current_sec();
+
+                DEBUG_REQ(D_RPCTRACE, req, "Resending request on EINPROGRESS");
+                req->rq_resend = 1;
+                req->rq_nr_resend++;
+
+                /* allocate new xid to avoid reply reconstruction */
+                if (!req->rq_bulk) {
+                        /* new xid is already allocated for bulk in
+                         * ptlrpc_check_set() */
+                        req->rq_xid = ptlrpc_next_xid();
+                        DEBUG_REQ(D_RPCTRACE, req, "Allocating new xid for "
+                                  "resend on EINPROGRESS");
+                }
+
+                /* Readjust the timeout for current conditions */
+                ptlrpc_at_set_req_timeout(req);
+                /* delay resend to give a chance to the server to get ready.
+                 * The delay is increased by 1s on every resend and is capped to
+                 * the current request timeout (i.e. obd_timeout if AT is off,
+                 * or AT service time x 125% + 5s, see at_est2timeout) */
+                if (req->rq_nr_resend > req->rq_timeout)
+                        req->rq_sent = now + req->rq_timeout;
+                else
+                        req->rq_sent = now + req->rq_nr_resend;
+        }
+
         /*
          * Security layer unwrap might ask resend this request.
          */
@@ -1335,23 +1365,25 @@ static int after_reply(struct ptlrpc_request *req)
  * Helper function to send request \a req over the network for the first time
  * Also adjusts request phase.
  * Returns 0 on success or error code.
- */ 
+ */
 static int ptlrpc_send_new_req(struct ptlrpc_request *req)
 {
-        struct obd_import     *imp;
+        struct obd_import     *imp = req->rq_import;
         int rc;
         ENTRY;
 
         LASSERT(req->rq_phase == RQ_PHASE_NEW);
-        if (req->rq_sent && (req->rq_sent > cfs_time_current_sec()))
+        if (req->rq_sent && (req->rq_sent > cfs_time_current_sec()) &&
+            (!req->rq_generation_set ||
+             req->rq_import_generation == imp->imp_generation))
                 RETURN (0);
 
         ptlrpc_rqphase_move(req, RQ_PHASE_RPC);
 
-        imp = req->rq_import;
         cfs_spin_lock(&imp->imp_lock);
 
-        req->rq_import_generation = imp->imp_generation;
+        if (!req->rq_generation_set)
+                req->rq_import_generation = imp->imp_generation;
 
         if (ptlrpc_import_delay_req(imp, req, &rc)) {
                 cfs_spin_lock(&req->rq_lock);
@@ -1440,7 +1472,12 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                 /* delayed send - skip */
                 if (req->rq_phase == RQ_PHASE_NEW && req->rq_sent)
-                        continue;
+			continue;
+
+		/* delayed resend - skip */
+		if (req->rq_phase == RQ_PHASE_RPC && req->rq_resend &&
+		    req->rq_sent > cfs_time_current_sec())
+			continue;
 
                 if (!(req->rq_phase == RQ_PHASE_RPC ||
                       req->rq_phase == RQ_PHASE_BULK ||
@@ -1952,6 +1989,8 @@ int ptlrpc_set_next_timeout(struct ptlrpc_request_set *set)
 
                 if (req->rq_phase == RQ_PHASE_NEW)
                         deadline = req->rq_sent;
+		else if (req->rq_phase == RQ_PHASE_RPC && req->rq_resend)
+			deadline = req->rq_sent;
                 else
                         deadline = req->rq_sent + req->rq_timeout;
 

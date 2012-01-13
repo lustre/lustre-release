@@ -236,6 +236,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_WRITEPAGE_PACK      0x184
 #define OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS 0x185
 #define OBD_FAIL_MDS_GET_INFO_NET        0x186
+#define OBD_FAIL_MDS_DQACQ_NET           0x187
 
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
@@ -279,6 +280,8 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OST_BRW_PAUSE_BULK2     0x227
 #define OBD_FAIL_OST_MAPBLK_ENOSPC       0x228
 #define OBD_FAIL_OST_ENOINO              0x229
+#define OBD_FAIL_OST_DQACQ_NET           0x230
+#define OBD_FAIL_OST_STATFS_EINPROGRESS  0x231
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301

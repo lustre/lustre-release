@@ -817,7 +817,6 @@ static void osd_object_release(const struct lu_env *env,
 {
         struct osd_object *o = osd_obj(l);
 
-        LASSERT(!lu_object_is_dying(l->lo_header));
         if (o->oo_inode != NULL && osd_inode_unlinked(o->oo_inode))
                 cfs_set_bit(LU_OBJECT_HEARD_BANSHEE, &l->lo_header->loh_flags);
 }

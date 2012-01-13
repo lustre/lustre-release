@@ -636,7 +636,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         struct obd_device     *obddev = class_exp2obd(exp);
         struct ptlrpc_request *req = NULL;
         struct req_capsule    *pill;
-        int                    flags = extra_lock_flags;
+        int                    flags, saved_flags = extra_lock_flags;
         int                    rc;
         struct ldlm_res_id res_id;
         static const ldlm_policy_data_t lookup_policy =
@@ -644,6 +644,8 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         static const ldlm_policy_data_t update_policy =
                             { .l_inodebits = { MDS_INODELOCK_UPDATE } };
         ldlm_policy_data_t const *policy = &lookup_policy;
+        int                    generation, resends = 0;
+        struct ldlm_reply     *lockrep;
         ENTRY;
 
         LASSERTF(!it || einfo->ei_type == LDLM_IBITS, "lock type %d\n",
@@ -652,13 +654,15 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         fid_build_reg_res_name(&op_data->op_fid1, &res_id);
 
         if (it)
-                flags |= LDLM_FL_HAS_INTENT;
+                saved_flags |= LDLM_FL_HAS_INTENT;
         if (it && it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
                 policy = &update_policy;
 
-        if (reqp)
-                req = *reqp;
+        LASSERT(reqp == NULL);
 
+        generation = obddev->u.cli.cl_import->imp_generation;
+resend:
+        flags = saved_flags;
         if (!it) {
                 /* The only way right now is FLOCK, in this case we hide flock
                    policy as lmm, but lmmsize is 0 */
@@ -688,6 +692,17 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 RETURN(PTR_ERR(req));
         pill = &req->rq_pill;
 
+	if (req != NULL && it && it->it_op & IT_CREAT)
+		/* ask ptlrpc not to resend on EINPROGRESS since we have our own
+		 * retry logic */
+		req->rq_no_retry_einprogress = 1;
+
+        if (resends) {
+                req->rq_generation_set = 1;
+                req->rq_import_generation = generation;
+                req->rq_sent = cfs_time_current_sec() + resends;
+        }
+
         /* It is important to obtain rpc_lock first (if applicable), so that
          * threads that are serialised with rpc_lock are not polluting our
          * rpcs in flight counter. We do not do flock request limiting, though*/
@@ -704,13 +719,6 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, policy, &flags, NULL,
                               0, lockh, 0);
-        if (reqp)
-                *reqp = req;
-
-        if (it) {
-                mdc_exit_request(&obddev->u.cli);
-                mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
-        }
         if (!it) {
                 /* For flock requests we immediatelly return without further
                    delay and let caller deal with the rest, since rest of
@@ -719,12 +727,39 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 RETURN(rc);
         }
 
+        mdc_exit_request(&obddev->u.cli);
+        mdc_put_rpc_lock(obddev->u.cli.cl_rpc_lock, it);
+
         if (rc < 0) {
                 CERROR("ldlm_cli_enqueue: %d\n", rc);
                 mdc_clear_replay_flag(req, rc);
                 ptlrpc_req_finished(req);
                 RETURN(rc);
         }
+
+        lockrep = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
+        LASSERT(lockrep != NULL);
+
+        /* Retry the create infinitely when we get -EINPROGRESS from
+         * server. This is required by the new quota design. */
+        if (it && it->it_op & IT_CREAT &&
+            (int)lockrep->lock_policy_res2 == -EINPROGRESS) {
+                mdc_clear_replay_flag(req, rc);
+                ptlrpc_req_finished(req);
+                resends++;
+
+                CDEBUG(D_HA, "%s: resend:%d op:%d "DFID"/"DFID"\n",
+                       obddev->obd_name, resends, it->it_op,
+                       PFID(&op_data->op_fid1), PFID(&op_data->op_fid2));
+
+                if (generation == obddev->u.cli.cl_import->imp_generation) {
+                        goto resend;
+                } else {
+			CDEBUG(D_HA, "resend cross eviction\n");
+                        RETURN(-EIO);
+                }
+        }
+
         rc = mdc_finish_enqueue(exp, req, einfo, it, lockh, rc);
 
         RETURN(rc);

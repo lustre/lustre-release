@@ -509,7 +509,12 @@ struct ptlrpc_request {
                 rq_reply_truncate:1,
                 rq_committed:1,
                 /* whether the "rq_set" is a valid one */
-                rq_invalid_rqset:1;
+                rq_invalid_rqset:1,
+                rq_generation_set:1,
+                /* do not resend request on -EINPROGRESS */
+                rq_no_retry_einprogress:1;
+
+	unsigned int rq_nr_resend;
 
         enum rq_phase rq_phase; /* one of RQ_PHASE_* */
         enum rq_phase rq_next_phase; /* one of RQ_PHASE_* to be used next */
