@@ -896,6 +896,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         uc->mu_cap   = rec->cr_cap;
         uc->mu_suppgids[0] = rec->cr_suppgid1;
         uc->mu_suppgids[1] = -1;
+        uc->mu_umask = rec->cr_umask;
 
         rr->rr_fid1 = &rec->cr_fid1;
         rr->rr_fid2 = &rec->cr_fid2;
@@ -1165,6 +1166,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         uc->mu_cap   = rec->cr_cap;
         uc->mu_suppgids[0] = rec->cr_suppgid1;
         uc->mu_suppgids[1] = rec->cr_suppgid2;
+        uc->mu_umask = rec->cr_umask;
 
         rr->rr_fid1   = &rec->cr_fid1;
         rr->rr_fid2   = &rec->cr_fid2;

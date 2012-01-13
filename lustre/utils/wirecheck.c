@@ -628,7 +628,7 @@ check_mdt_rec_create(void)
         CHECK_MEMBER(mdt_rec_create, cr_bias);
         CHECK_MEMBER(mdt_rec_create, cr_flags_l);
         CHECK_MEMBER(mdt_rec_create, cr_flags_h);
-        CHECK_MEMBER(mdt_rec_create, cr_padding_3);
+        CHECK_MEMBER(mdt_rec_create, cr_umask);
         CHECK_MEMBER(mdt_rec_create, cr_padding_4);
 }
 

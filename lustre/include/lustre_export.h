@@ -319,6 +319,11 @@ static inline int exp_connect_som(struct obd_export *exp)
         return !!(exp->exp_connect_flags & OBD_CONNECT_SOM);
 }
 
+static inline int exp_connect_umask(struct obd_export *exp)
+{
+        return !!(exp->exp_connect_flags & OBD_CONNECT_UMASK);
+}
+
 static inline int imp_connect_lru_resize(struct obd_import *imp)
 {
         struct obd_connect_data *ocd;

@@ -1708,7 +1708,6 @@ static int __osd_object_create(struct osd_thread_info *info,
                                struct dt_object_format *dof,
                                struct thandle *th)
 {
-
         int result;
 
         result = osd_create_pre(info, obj, attr, th);
@@ -1718,6 +1717,7 @@ static int __osd_object_create(struct osd_thread_info *info,
                 if (result == 0)
                         result = osd_create_post(info, obj, attr, th);
         }
+
         return result;
 }
 

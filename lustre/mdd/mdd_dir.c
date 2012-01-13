@@ -1484,6 +1484,13 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
          *  (2) maybe, the child attributes should be set in OSD when creation.
          */
 
+	/*
+	 * inode mode has been set in creation time, and it's based on umask,
+	 * la_mode and acl, don't set here again! (which will go wrong
+	 * because below function doesn't consider umask).
+	 * I'd suggest set all object attributes in creation time, see above.
+	 */
+	ma->ma_attr.la_valid &= ~LA_MODE;
         rc = mdd_attr_set_internal(env, child, &ma->ma_attr, handle, 0);
         if (rc != 0)
                 RETURN(rc);
