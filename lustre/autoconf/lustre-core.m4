@@ -850,17 +850,6 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
-# LC_EXPORT_SYNCHRONIZE_RCU
-# after 2.6.12 synchronize_rcu is preferred over synchronize_kernel
-AC_DEFUN([LC_EXPORT_SYNCHRONIZE_RCU],
-[LB_CHECK_SYMBOL_EXPORT([synchronize_rcu],
-[kernel/rcupdate.c],[
-        AC_DEFINE(HAVE_SYNCHRONIZE_RCU, 1,
-                [in 2.6.12 synchronize_rcu preferred over synchronize_kernel])
-],[
-])
-])
-
 # 2.6.15
 
 # LC_INODE_I_MUTEX

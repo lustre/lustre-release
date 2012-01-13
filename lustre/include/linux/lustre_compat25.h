@@ -684,13 +684,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_crypto_tfm_alg_max_keysize	crypto_tfm_alg_max_keysize
 #endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
-#ifndef HAVE_SYNCHRONIZE_RCU
-/* Linux 2.6.32 provides define when !CONFIG_TREE_PREEMPT_RCU */
-#ifndef synchronize_rcu
-#define synchronize_rcu() synchronize_kernel()
-#endif
-#endif
-
 #ifdef HAVE_FILE_REMOVE_SUID
 # define ll_remove_suid(file, mnt)       file_remove_suid(file)
 #else
