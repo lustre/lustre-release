@@ -259,9 +259,6 @@ get_ec_devno () {
     local host=$1
     local client_name="$2"
     local ost_name="$3"
-    local dev_type="${4:-obdfilter}"
-    local stack_type="${5:-}"
-
     if [ -z "$client_name" ]; then
 	if [ -z "$ost_name" ]; then
 	    echo "client and ost name both null"
@@ -279,7 +276,7 @@ get_ec_devno () {
             "$client_name, host: $host"
 	exit 1
     fi
-    ost=`get_devno $host $dev_type $ost_name`
+    ost=`get_devno $host obdfilter $ost_name`
     if [ -z "$ost" ]; then
 	echo "OST $ost_name not setup"
 	exit 1
@@ -287,7 +284,7 @@ get_ec_devno () {
     client_name=${ost_name}_ecc
     remote_shell $host "$lctl <<EOF
         attach echo_client $client_name ${client_name}_UUID
-	setup $ost_name $stack_type
+	setup $ost_name
 EOF"
     ec=`get_devno $host echo_client $client_name`
     if [ -z "$ec" ]; then
