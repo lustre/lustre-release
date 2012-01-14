@@ -6862,6 +6862,16 @@ test_133a() {
 	rmdir ${testdir} || error "rmdir failed"
 	check_stats $SINGLEMDS "rmdir" 1
 
+	local testdir1=$DIR/${tdir}/stats_testdir1
+	mkdir -p ${testdir}
+	mkdir -p ${testdir1}
+	touch ${testdir1}/test1
+	mv ${testdir1}/test1 ${testdir} || error "file crossdir rename"
+	check_stats $SINGLEMDS "crossdir_rename" 1
+
+	mv ${testdir}/test1 ${testdir}/test0 || error "file samedir rename"
+	check_stats $SINGLEMDS "samedir_rename" 1
+
 	rm -rf $DIR/${tdir}
 }
 run_test 133a "Verifying MDT stats ========================================"
@@ -6920,6 +6930,101 @@ test_133c() {
 	rm -rf $DIR/${tdir}
 }
 run_test 133c "Verifying OST stats ========================================"
+
+order_2() {
+    local value=$1
+    local orig=$value
+    local order=1
+
+    while [ $value -ge 2 ]; do
+        order=$((order*2))
+        value=$((value/2))
+    done
+
+    if [ $orig -gt $order ]; then
+        order=$((order*2))
+    fi
+    echo $order
+}
+
+size_in_KMGT() {
+    local value=$1
+    local size=('K' 'M' 'G' 'T');
+    local i=0
+    local size_string=$value
+
+    while [ $value -ge 1024 ]; do
+        if [ $i -gt 3 ]; then
+            #T is the biggest unit we get here, if that is bigger,
+            #just return XXXT
+            size_string=${value}T
+            break
+        fi
+        value=$((value >> 10))
+        if [ $value -lt 1024 ]; then
+            size_string=${value}${size[$i]}
+            break
+        fi
+        i=$((i + 1))
+    done
+
+    echo $size_string
+}
+
+get_rename_size() {
+    local size=$1
+    local sample=$(do_facet $SINGLEMDS $LCTL get_param mdt.*.rename_stats | \
+                   awk '/ '${size}'/ {print $4}' | sed -e "s/,//g")
+    echo $sample
+}
+
+test_133d() {
+    remote_ost_nodsh && skip "remote OST with nodsh" && return
+    remote_mds_nodsh && skip "remote MDS with nodsh" && return
+    local testdir1=$DIR/${tdir}/stats_testdir1
+    local testdir2=$DIR/${tdir}/stats_testdir2
+
+    do_facet $SINGLEMDS $LCTL set_param mdt.*.rename_stats=clear
+
+    mkdir -p ${testdir1} || error "mkdir failed"
+    mkdir -p ${testdir2} || error "mkdir failed"
+
+    createmany -o $testdir1/test 512 || error "createmany failed"
+    local testdir1_size=$(ls -l $DIR/${tdir} | \
+                          awk '/stats_testdir1/ {print $5}')
+    local testdir2_size=$(ls -l $DIR/${tdir} | \
+                          awk '/stats_testdir2/ {print $5}')
+
+    testdir1_size=$(order_2 $testdir1_size)
+    testdir2_size=$(order_2 $testdir2_size)
+
+    testdir1_size=$(size_in_KMGT $testdir1_size)
+    testdir2_size=$(size_in_KMGT $testdir2_size)
+
+    # check samedir rename size
+    mv ${testdir1}/test0 ${testdir1}/test_0
+    local samedir=$(do_facet $SINGLEMDS $LCTL get_param mdt.*.rename_stats | \
+                    grep 'same_dir')
+    local same_sample=$(get_rename_size $testdir1_size)
+    [ -z "$samedir" ] && error "samedir_rename_size count error"
+    [ $same_sample -eq 1 ] || error "samedir_rename_size count error"
+    echo "Check same dir rename stats success"
+
+    # check crossdir rename size
+    do_facet $SINGLEMDS $LCTL set_param mdt.*.rename_stats=clear
+    mv ${testdir1}/test_0 ${testdir2}/test_0
+    local crossdir=$(do_facet $SINGLEMDS $LCTL get_param mdt.*.rename_stats | \
+                     grep 'crossdir')
+    local src_sample=$(get_rename_size $testdir1_size)
+    local tgt_sample=$(get_rename_size $testdir2_size)
+    [ -z "$crossdir" ] && error "crossdir_rename_size count error"
+    [ $src_sample -eq 1 ] || error "crossdir_rename_size count error"
+    [ $tgt_sample -eq 1 ] || error "crossdir_rename_size count error"
+    echo "Check cross dir rename stats success"
+
+    rm -rf $DIR/${tdir}
+}
+run_test 133d "Verifying rename_stats ========================================"
 
 test_140() { #bug-17379
         mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"
