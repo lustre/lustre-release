@@ -2982,23 +2982,45 @@ test_51a() {	# was test_51
 }
 run_test 51a "special situations: split htree with empty entry =="
 
-#export NUMTEST=70000
-# FIXME: I select a relatively small number to do basic test.
-# large number may give panic(). debugging on this is going on.
-export NUMTEST=70
+export NUMTEST=70000
 test_51b() {
 	NUMFREE=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
 	[ $NUMFREE -lt 21000 ] && \
 		skip "not enough free inodes ($NUMFREE)" && \
 		return
 
-	check_kernel_version 40 || NUMTEST=31000
 	[ $NUMFREE -lt $NUMTEST ] && NUMTEST=$(($NUMFREE - 50))
 
 	mkdir -p $DIR/d51b
 	createmany -d $DIR/d51b/t- $NUMTEST
 }
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
+
+test_51ba() { # LU-993
+        local BASE=$DIR/d51b
+        # unlink all but 100 subdirectories, then check it still works
+        local LEFT=100
+        local DELETE=$((NUMTEST - LEFT))
+
+        ! [ -d "${BASE}/t-$DELETE" ] && skip "test_51b() not run" && return 0
+
+        # for ldiskfs the nlink count should be 1, but this is OSD specific
+        # and so this is listed for informational purposes only
+        log "nlink before: $(stat -c %h $BASE)"
+        unlinkmany -d $BASE/t- $DELETE ||
+                error "unlink of first $DELETE subdirs failed"
+
+        log "nlink between: $(stat -c %h $BASE)"
+        local FOUND=$(ls -l ${BASE} | wc -l)
+        FOUND=$((FOUND - 1))  # trim the first line of ls output
+        [ $FOUND -ne $LEFT ] &&
+                error "can't find subdirs: found only $FOUND/$LEFT"
+
+        unlinkmany -d $BASE/t- $DELETE $LEFT ||
+                error "unlink of second $LEFT subdirs failed"
+        log "nlink after: $(stat -c %h $BASE)"
+}
+run_test 51ba "rmdir .../t-0 --- .../t-$NUMTEST"
 
 test_51bb() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return

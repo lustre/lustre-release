@@ -494,43 +494,6 @@ int mdd_link_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-/**
- * If subdir count is up to ddp_max_nlink, then enable MNLINK_OBJ flag and
- * assign i_nlink to 1 which means the i_nlink for subdir count is incredible
- * (maybe too large to be represented). It is a trick to break through the
- * "i_nlink" limitation for subdir count.
- */
-void __mdd_ref_add(const struct lu_env *env, struct mdd_object *obj,
-                   struct thandle *handle)
-{
-        struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
-        struct mdd_device *m = mdd_obj2mdd_dev(obj);
-
-        if (!mdd_is_mnlink(obj)) {
-                if (S_ISDIR(mdd_object_type(obj))) {
-                        if (mdd_la_get(env, obj, tmp_la, BYPASS_CAPA))
-                                return;
-
-                        if (tmp_la->la_nlink >= m->mdd_dt_conf.ddp_max_nlink) {
-                                obj->mod_flags |= MNLINK_OBJ;
-                                tmp_la->la_nlink = 1;
-                                tmp_la->la_valid = LA_NLINK;
-                                mdd_attr_set_internal(env, obj, tmp_la, handle,
-                                                      0);
-                                return;
-                        }
-                }
-                mdo_ref_add(env, obj, handle);
-        }
-}
-
-void __mdd_ref_del(const struct lu_env *env, struct mdd_object *obj,
-                   struct thandle *handle, int is_dot)
-{
-        if (!mdd_is_mnlink(obj) || is_dot)
-                mdo_ref_del(env, obj, handle);
-}
-
 static int __mdd_index_delete_only(const struct lu_env *env, struct mdd_object *pobj,
                                    const char *name, struct thandle *handle,
                                    struct lustre_capa *capa)
@@ -584,7 +547,7 @@ static int __mdd_index_insert(const struct lu_env *env, struct mdd_object *pobj,
         rc = __mdd_index_insert_only(env, pobj, lf, name, handle, capa);
         if (rc == 0 && is_dir) {
                 mdd_write_lock(env, pobj, MOR_TGT_PARENT);
-                __mdd_ref_add(env, pobj, handle);
+                mdo_ref_add(env, pobj, handle);
                 mdd_write_unlock(env, pobj);
         }
         RETURN(rc);
@@ -600,12 +563,8 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
 
         rc = __mdd_index_delete_only(env, pobj, name, handle, capa);
         if (rc == 0 && is_dir) {
-                int is_dot = 0;
-
-                if (name != NULL && name[0] == '.' && name[1] == 0)
-                        is_dot = 1;
                 mdd_write_lock(env, pobj, MOR_TGT_PARENT);
-                __mdd_ref_del(env, pobj, handle, is_dot);
+                mdo_ref_del(env, pobj, handle);
                 mdd_write_unlock(env, pobj);
         }
 
@@ -834,7 +793,7 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         if (rc)
                 GOTO(out_unlock, rc);
 
-        __mdd_ref_add(env, mdd_sobj, handle);
+        mdo_ref_add(env, mdd_sobj, handle);
 
         LASSERT(ma->ma_attr.la_valid & LA_CTIME);
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
@@ -896,6 +855,7 @@ int mdd_finish_unlink(const struct lu_env *env,
 {
         int rc;
         int reset = 1;
+        int is_dir = S_ISDIR(ma->ma_attr.la_mode);
         ENTRY;
 
         LASSERT(mdd_write_locked(env, obj) != 0);
@@ -903,7 +863,7 @@ int mdd_finish_unlink(const struct lu_env *env,
         /* read HSM flags, needed to set changelogs flags */
         ma->ma_need = MA_HSM | MA_INODE;
         rc = mdd_attr_get_internal(env, obj, ma);
-        if (rc == 0 && ma->ma_attr.la_nlink == 0) {
+        if (rc == 0 && (ma->ma_attr.la_nlink == 0 || is_dir)) {
                 obj->mod_flags |= DEAD_OBJ;
                 /* add new orphan and the object
                  * will be deleted during mdd_close() */
@@ -926,6 +886,9 @@ int mdd_finish_unlink(const struct lu_env *env,
                                 reset = 0;
                 }
 
+                /* get the i_nlink */
+                ma->ma_need = MA_INODE;
+                rc = mdd_attr_get_internal(env, obj, ma);
         }
         if (reset)
                 ma->ma_valid &= ~(MA_LOV | MA_COOKIE);
@@ -1044,10 +1007,10 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        __mdd_ref_del(env, mdd_cobj, handle, 0);
+        mdo_ref_del(env, mdd_cobj, handle);
         if (is_dir)
                 /* unlink dot */
-                __mdd_ref_del(env, mdd_cobj, handle, 1);
+                mdo_ref_del(env, mdd_cobj, handle);
 
         LASSERT(ma->ma_attr.la_valid & LA_CTIME);
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
@@ -1463,11 +1426,11 @@ static int mdd_rename_tgt(const struct lu_env *env,
          * it must be local one.
          */
         if (tobj && mdd_object_exists(mdd_tobj)) {
-                __mdd_ref_del(env, mdd_tobj, handle, 0);
+                mdo_ref_del(env, mdd_tobj, handle);
 
                 /* Remove dot reference. */
                 if (S_ISDIR(ma->ma_attr.la_mode))
-                        __mdd_ref_del(env, mdd_tobj, handle, 1);
+                        mdo_ref_del(env, mdd_tobj, handle);
 
                 la->la_valid = LA_CTIME;
                 rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);
@@ -1718,7 +1681,7 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
 
         if (S_ISDIR(ma->ma_attr.la_mode)) {
                 /* Add "." and ".." for newly created dir */
-                __mdd_ref_add(env, child, handle);
+                mdo_ref_add(env, child, handle);
                 rc = __mdd_index_insert_only(env, child, mdo2fid(child),
                                              dot, handle, BYPASS_CAPA);
                 if (rc == 0)
@@ -1726,7 +1689,7 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                                                      dotdot, handle,
                                                      BYPASS_CAPA);
                 if (rc != 0)
-                        __mdd_ref_del(env, child, handle, 1);
+                        mdo_ref_del(env, child, handle);
         }
         if (rc == 0)
                 mdd_links_add(env, child, pfid, lname, handle, 1);
@@ -2156,9 +2119,9 @@ cleanup:
 
                 if (rc2 == 0) {
                         mdd_write_lock(env, son, MOR_TGT_CHILD);
-                        __mdd_ref_del(env, son, handle, 0);
+                        mdo_ref_del(env, son, handle);
                         if (initialized && S_ISDIR(attr->la_mode))
-                                __mdd_ref_del(env, son, handle, 1);
+                                mdo_ref_del(env, son, handle);
                         mdd_write_unlock(env, son);
                 }
         }
@@ -2576,11 +2539,11 @@ static int mdd_rename(const struct lu_env *env,
                         rc = -EINVAL;
                         goto cleanup;
                 }
-                __mdd_ref_del(env, mdd_tobj, handle, 0);
+                mdo_ref_del(env, mdd_tobj, handle);
 
                 /* Remove dot reference. */
                 if (is_dir)
-                        __mdd_ref_del(env, mdd_tobj, handle, 1);
+                        mdo_ref_del(env, mdd_tobj, handle);
 
                 la->la_valid = LA_CTIME;
                 rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);

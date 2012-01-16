@@ -150,8 +150,10 @@ static const struct dt_index_operations       osd_index_ea_ops;
 #define OSD_EXEC_OP(handle, op)     {                            \
         struct osd_thandle *oh;                                  \
         oh = container_of0(handle, struct osd_thandle, ot_super);\
-        LASSERT((oh)->ot_declare_ ##op > 0);                     \
-        ((oh)->ot_declare_ ##op)--; }
+        if (((oh)->ot_declare_ ##op) > 0) {                      \
+                ((oh)->ot_declare_ ##op)--;                      \
+        }                                                        \
+        }
 #else
 #define OSD_DECLARE_OP(oh, op)
 #define OSD_EXEC_OP(oh, op)
@@ -1988,7 +1990,17 @@ static int osd_object_destroy(const struct lu_env *env,
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle);
         LASSERT(inode);
-        LASSERT(osd_inode_unlinked(inode));
+
+        if (S_ISDIR(inode->i_mode)) {
+                LASSERT(osd_inode_unlinked(inode) ||
+                        inode->i_nlink == 1);
+                cfs_spin_lock(&obj->oo_guard);
+                inode->i_nlink = 0;
+                cfs_spin_unlock(&obj->oo_guard);
+                inode->i_sb->s_op->dirty_inode(inode);
+        } else {
+                LASSERT(osd_inode_unlinked(inode));
+        }
 
         OSD_EXEC_OP(th, destroy);
 
@@ -2248,9 +2260,24 @@ static int osd_object_ref_add(const struct lu_env *env,
 
         OSD_EXEC_OP(th, ref_add);
 
+        /*
+         * DIR_NLINK feature is set for compatibility reasons if:
+         * 1) nlinks > LDISKFS_LINK_MAX, or
+         * 2) nlinks == 2, since this indicates i_nlink was previously 1.
+         *
+         * It is easier to always set this flag (rather than check and set),
+         * since it has less overhead, and the superblock will be dirtied
+         * at some point. Both e2fsprogs and any Lustre-supported ldiskfs
+         * do not actually care whether this flag is set or not.
+         */
         cfs_spin_lock(&obj->oo_guard);
-        LASSERT(inode->i_nlink < LDISKFS_LINK_MAX);
         inode->i_nlink++;
+        if (S_ISDIR(inode->i_mode) && inode->i_nlink > 1) {
+                if (inode->i_nlink >= LDISKFS_LINK_MAX ||
+                    inode->i_nlink == 2)
+                        inode->i_nlink = 1;
+        }
+        LASSERT(inode->i_nlink < LDISKFS_LINK_MAX);
         cfs_spin_unlock(&obj->oo_guard);
         inode->i_sb->s_op->dirty_inode(inode);
         LINVRNT(osd_invariant(obj));
@@ -2296,6 +2323,11 @@ static int osd_object_ref_del(const struct lu_env *env,
         cfs_spin_lock(&obj->oo_guard);
         LASSERT(inode->i_nlink > 0);
         inode->i_nlink--;
+        /* If this is/was a many-subdir directory (nlink > LDISKFS_LINK_MAX)
+         * then the nlink count is 1. Don't let it be set to 0 or the directory
+         * inode will be deleted incorrectly. */
+        if (S_ISDIR(inode->i_mode) && inode->i_nlink == 0)
+                inode->i_nlink++;
         cfs_spin_unlock(&obj->oo_guard);
         inode->i_sb->s_op->dirty_inode(inode);
         LINVRNT(osd_invariant(obj));
