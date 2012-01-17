@@ -100,7 +100,7 @@ enum {
 struct md_capainfo {
         __u32                   mc_auth;
         __u32                   mc_padding;
-        const struct lu_fid    *mc_fid[MD_CAPAINFO_MAX];
+        struct lu_fid           mc_fid[MD_CAPAINFO_MAX];
         struct lustre_capa     *mc_capa[MD_CAPAINFO_MAX];
 };
 
