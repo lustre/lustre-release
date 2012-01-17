@@ -857,7 +857,7 @@ static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
 
         ci = md_capainfo(info->mti_env);
         LASSERT(ci);
-        ci->mc_fid[offset]  = fid;
+        ci->mc_fid[offset]  = *fid;
         ci->mc_capa[offset] = capa;
 }
 
@@ -869,16 +869,14 @@ static inline void mdt_dump_capainfo(struct mdt_thread_info *info)
         if (!ci)
                 return;
         for (i = 0; i < MD_CAPAINFO_MAX; i++) {
-                if (!ci->mc_fid[i])
-                        continue;
                 if (!ci->mc_capa[i]) {
                         CERROR("no capa for index %d "DFID"\n",
-                               i, PFID(ci->mc_fid[i]));
+                               i, PFID(&ci->mc_fid[i]));
                         continue;
                 }
                 if (ci->mc_capa[i] == BYPASS_CAPA) {
                         CERROR("bypass for index %d "DFID"\n",
-                               i, PFID(ci->mc_fid[i]));
+                               i, PFID(&ci->mc_fid[i]));
                         continue;
                 }
                 DEBUG_CAPA(D_ERROR, ci->mc_capa[i], "index %d", i);
