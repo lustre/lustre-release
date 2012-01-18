@@ -1514,6 +1514,29 @@ static int mdd_declare_attr_set(const struct lu_env *env,
                         return rc;
         }
 
+#ifdef CONFIG_FS_POSIX_ACL
+        if (ma->ma_attr.la_valid & LA_MODE) {
+                mdd_read_lock(env, obj, MOR_TGT_CHILD);
+                rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_ACL_ACCESS,
+                                   BYPASS_CAPA);
+                mdd_read_unlock(env, obj);
+                if (rc == -EOPNOTSUPP || rc == -ENODATA)
+                        rc = 0;
+                else if (rc < 0)
+                        return rc;
+
+                if (rc != 0) {
+                        buf->lb_buf = NULL;
+                        buf->lb_len = rc;
+                        rc = mdo_declare_xattr_set(env, obj, buf,
+                                                   XATTR_NAME_ACL_ACCESS, 0,
+                                                   handle);
+                        if (rc)
+                                return rc;
+                }
+        }
+#endif
+
         /* basically the log is the same as in unlink case */
         if (lmm) {
                 __u16 stripe;
