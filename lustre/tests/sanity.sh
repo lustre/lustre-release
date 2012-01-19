@@ -9,16 +9,16 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 15528/2330 5188 10764 16410
-ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u  42a  42b  42c  42d  45   51d   62         68   75 $SANITY_EXCEPT"}
+# bug number for skipped test:  13297 2108 9789 3637 9789 3561 12622 15528/2330 5188 10764 lu-983
+ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"27u   42a  42b  42c  42d  45   51d   62         68   75    101a $SANITY_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # Tests that fail on uml, maybe elsewhere, FIXME
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 #                                    buffer i/o errs             sock spc runas
-[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 27m 27n 27o 27p 27q 27r 31d 54a  64b 99a 99b 99c 99d 99e 99f 101"
+[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 27m 27n 27o 27p 27q 27r 31d 54a  64b 99a 99b 99c 99d 99e 99f"
 
-case `uname -r` in
+case `uname -r` in							      #bug number 16410
 2.4*) FSTYPE=${FSTYPE:-ext3};    ALWAYS_EXCEPT="$ALWAYS_EXCEPT 76"
 	[ "$CPU" = "UML" ] && ALWAYS_EXCEPT="$ALWAYS_EXCEPT 105a";;
 2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT " ;;
@@ -66,7 +66,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 36h 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 27m 36f 36g 36h 51b 51c 60c 63 64b 68 71 73 77f 78 103 115 120g 124b"
 
 FAIL_ON_ERROR=${FAIL_ON_ERROR:-false}
 
@@ -4036,31 +4036,31 @@ function get_named_value()
         line=$REPLY
         case $line in
         $tag*)
-            echo $line | sed "s/^$tag//"
+            echo $line | sed "s/^$tag[ ]*//"
             break
             ;;
         esac
     done
 }
 
-export CACHE_MAX=`lctl get_param -n llite/*/max_cached_mb | head -n 1`
-cleanup_101() {
-	lctl set_param -n llite.*.max_cached_mb $CACHE_MAX
+export CACHE_MAX=`$LCTL get_param -n llite/*/max_cached_mb | head -n 1`
+cleanup_101a() {
+	$LCTL set_param -n llite.*.max_cached_mb $CACHE_MAX
 	trap 0
 }
 
-test_101() {
+test_101a() {
 	local s
 	local discard
 	local nreads=10000
 	[ "$CPU" = "UML" ] && nreads=1000
 	local cache_limit=32
 
-	lctl set_param -n osc.*.rpc_stats 0
-	trap cleanup_101 EXIT
+	$LCTL set_param -n osc.*.rpc_stats 0
+	trap cleanup_101a EXIT
 
-	lctl set_param -n llite.*.read_ahead_stats 0
-	lctl set_param -n llite.*.max_cached_mb $cache_limit
+	$LCTL set_param -n llite.*.read_ahead_stats 0
+	$LCTL set_param -n llite.*.max_cached_mb $cache_limit
 
 	#
 	# randomly read 10000 of 64K chunks from file 3x 32MB in size
@@ -4068,21 +4068,22 @@ test_101() {
 	echo "nreads: $nreads file size: $((cache_limit * 3))MB"
 	$READS -f $DIR/$tfile -s$((cache_limit * 3192 * 1024)) -b65536 -C -n$nreads -t 180
 
-	discard=0
-        for s in `lctl get_param -n llite.*.read_ahead_stats | \
+	local discard=0
+	for s in `$LCTL get_param -n llite.*.read_ahead_stats | \
 		get_named_value 'read but discarded' | cut -d" " -f1`; do
-			discard=$(($discard + $s))
+		discard=$(($discard + $s))
 	done
-	cleanup_101
+
+	cleanup_101a
 
 	if [ $(($discard * 10)) -gt $nreads ] ;then
-		lctl get_param osc.*.rpc_stats
-		lctl get_param llite.*.read_ahead_stats
+		$LCTL get_param osc.*.rpc_stats
+		$LCTL get_param llite.*.read_ahead_stats
 		error "too many ($discard) discarded pages"
 	fi
 	rm -f $DIR/$tfile || true
 }
-run_test 101 "check read-ahead for random reads ================"
+run_test 101a "check read-ahead for random reads ================"
 
 setup_test101bc() {
 	mkdir -p $DIR/$tdir
@@ -4090,6 +4091,8 @@ setup_test101bc() {
 	STRIPE_COUNT=$OSTCOUNT
 	STRIPE_OFFSET=0
 
+	$LCTL set_param -n obdfilter.*.read_cache_enable=0
+	$LCTL set_param -n obdfilter.*.writethrough_cache_enable=0
 	trap cleanup_test101bc EXIT
 	# prepare the read-ahead file
 	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
@@ -4101,6 +4104,8 @@ cleanup_test101bc() {
 	trap 0
 	rm -rf $DIR/$tdir
 	rm -f $DIR/$tfile
+	$LCTL set_param -n obdfilter.*.read_cache_enable=1
+	$LCTL set_param -n obdfilter.*.writethrough_cache_enable=1
 }
 
 calc_total() {
@@ -4115,12 +4120,13 @@ ra_check_101b() {
 	local FILE_LENGTH=$((64*100))
 	local discard_limit=$((((STRIDE_LENGTH - 1)*3/(STRIDE_LENGTH*OSTCOUNT))* \
 			     (STRIDE_LENGTH*OSTCOUNT - STRIDE_LENGTH)))
+
 	DISCARD=`$LCTL get_param -n llite.*.read_ahead_stats | \
 			get_named_value 'read but discarded' | \
 			cut -d" " -f1 | calc_total`
 
 	if [ $DISCARD -gt $discard_limit ]; then
-		lctl get_param llite.*.read_ahead_stats
+		$LCTL get_param llite.*.read_ahead_stats
 		error "Too many ($DISCARD) discarded pages with size $READ_SIZE"
 	else
 		echo "Read-ahead success for size ${READ_SIZE}"
@@ -4153,57 +4159,44 @@ test_101b() {
 run_test 101b "check stride-io mode read-ahead ================="
 
 test_101c() {
-        local STRIPE_SIZE=1048576
-        local FILE_LENGTH=$((STRIPE_SIZE*100))
-        local nreads=10000
+    local STRIPE_SIZE=1048576
+    local FILE_LENGTH=$((STRIPE_SIZE*100))
+    local nreads=10000
 
-        setup_test101bc
+    setup_test101bc
+    cancel_lru_locks osc
+    $LCTL set_param osc.*.rpc_stats 0
+    $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
+    for OSC in `$LCTL  get_param -N osc.*`; do
+        if [ "$OSC" == "osc.num_refs" ]; then
+            continue
+        fi
 
-        cancel_lru_locks osc
-        $LCTL set_param osc.*.rpc_stats 0
-        $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
-        for OSC in `$LCTL  get_param -N osc.*`
-        do
-                if [ "$OSC" == "osc.num_refs" ]; then
-                        continue
-                fi
-                lines=`$LCTL get_param -n ${OSC}.rpc_stats | wc | awk '{print $1}'`
-                if [ $lines -le 20 ]; then
-                        continue
-                fi
+        lines=`$LCTL get_param -n ${OSC}.rpc_stats | wc | awk '{print $1}'`
+        if [ $lines -le 20 ]; then
+		    continue
+        fi
 
-                rpc4k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "1:" { print $2; exit; }')
-                rpc8k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "2:" { print $2; exit; }')
-                rpc16k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "4:" { print $2; exit; }')
-                rpc32k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "8:" { print $2; exit; }')
+        rpc4k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "1:" { print $2; exit; }')
+        rpc8k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "2:" { print $2; exit; }')
+        rpc16k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "4:" { print $2; exit; }')
+        rpc32k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "8:" { print $2; exit; }')
 
-                [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
-                [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
-                [ $rpc16k != 0 ] && error "Small 16k read IO ${rpc16k}!"
-                [ $rpc32k != 0 ] && error "Small 32k read IO ${rpc32k}!"
+        [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
+        [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
+        [ $rpc16k != 0 ] && error "Small 16k read IO ${rpc16k}!"
+        [ $rpc32k != 0 ] && error "Small 32k read IO ${rpc32k}!"
 
-                echo "Small rpc check passed!"
-                rpc64k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "16:" { print $2; exit; }')
-                rpc128k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "32:" { print $2; exit; }')
-                rpc256k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "64:" { print $2; exit; }')
-                rpc512k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "128:" { print $2; exit; }')
-                rpc1024k=$($LCTL get_param -n ${OSC}.rpc_stats | awk '$1 == "256:" { print $2; exit; }')
-
-                [ $rpc64k == 0 ]   && error "No 64k readahead IO ${rpc64k}"
-                [ $rpc128k == 0 ]  && error "No 128k readahead IO ${rpc128k}"
-                [ $rpc256k == 0 ]  && error "No 256k readahead IO ${rpc256k}"
-                [ $rpc512k == 0 ]  && error "No 512k readahead IO ${rpc256k}"
-                [ $rpc1024k == 0 ] && error "No 1024k readahead IO ${rpc1024k}"
-                echo "Big rpc check passed!"
-        done
-        cleanup_test101bc
-        true
+        echo "${OSC} RPC check passed!"
+    done
+    cleanup_test101bc
+    true
 }
 run_test 101c "check stripe_size aligned read-ahead ================="
 
 set_read_ahead() {
-   lctl get_param -n llite.*.max_read_ahead_mb | head -n 1
-   lctl set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
+   $LCTL get_param -n llite.*.max_read_ahead_mb | head -n 1
+   $LCTL set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
 }
 
 test_101d() {
@@ -4245,6 +4238,44 @@ test_101d() {
                read-ahead disabled time read (${time_ra_OFF}s) filesize ${size}M"
 }
 run_test 101d "file read with and without read-ahead enabled  ================="
+
+test_101e() {
+    local file=$DIR/$tfile
+    local size=500  #KB
+    local count=100
+    local blksize=1024
+
+    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
+    local need_space=$((count * size))
+    [ $space -gt $need_space ] ||
+        { skip "Need free space $need_space, have $space" && return; }
+
+    echo Creating $count ${size}K test files
+    for ((i=0;i<$count;i++)); do
+        dd if=/dev/zero of=${file}_${i} bs=$blksize count=$size 2>/dev/null
+    done
+
+    echo Cancel LRU locks on lustre client to flush the client cache
+    cancel_lru_locks osc
+
+    echo Reset readahead stats
+    $LCTL set_param -n llite.*.read_ahead_stats 0
+
+    for ((i=0;i<$count;i++)); do
+        dd if=${file}_${i} of=/dev/null bs=$blksize count=$size 2>/dev/null
+    done
+
+    MISS=`$LCTL get_param -n llite.*.read_ahead_stats | \
+          get_named_value 'misses' | cut -d" " -f1 | calc_total`
+
+    for ((i=0;i<$count;i++)); do
+        rm -rf ${file}_${i} 2>/dev/null
+    done
+
+    #10000 means 20% reads are missing in readahead
+    [ $MISS -lt 10000 ] ||  error "misses too much for small reads"
+}
+run_test 101e "check read-ahead for small read(1k) for small files(500k) ============"
 
 setup_test102() {
 	mkdir -p $DIR/$tdir

@@ -1164,8 +1164,8 @@ static unsigned long ll_ra_count_get(struct ll_sb_info *sbi, struct ra_io_arg *r
                 GOTO(out, ret = 0);
 
         if (ria->ria_pages == 0)
-                /* it needs 1M align again after trimed by ra_max_pages*/
-                if (ret >= ((ria->ria_start + ret) % PTLRPC_MAX_BRW_PAGES))
+                /* it needs 1M align again after trimed by ra_max_pages */
+                if (ret > ((ria->ria_start + ret) % PTLRPC_MAX_BRW_PAGES))
                         ret -= (ria->ria_start + ret) % PTLRPC_MAX_BRW_PAGES;
 
         if (atomic_add_return(ret, &ra->ra_cur_pages) > ra->ra_max_pages) {
@@ -1843,7 +1843,9 @@ static int ll_readahead(struct ll_readahead_state *ras,
         if (reserved < len)
                 ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
 
-        CDEBUG(D_READA, "reserved page %lu \n", reserved);
+        CDEBUG(D_READA, "reserved page %lu ra_cur %d ra_max %lu\n", reserved,
+               cfs_atomic_read(&ll_i2sbi(inode)->ll_ra_info.ra_cur_pages),
+               ll_i2sbi(inode)->ll_ra_info.ra_max_pages);
 
         ret = ll_read_ahead_pages(exp, oig, &ria, &reserved, mapping, &ra_end);
 
