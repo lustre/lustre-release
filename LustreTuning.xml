@@ -20,7 +20,7 @@
     </listitem>
   </itemizedlist>
   <note>
-    <para>Many options in Lustre are set by means of kernel module parameters. These parameters are contained in the <literal>modprobe.conf</literal> file.</para>
+    <para>Many options in Lustre are set by means of kernel module parameters. These parameters are contained in the <literal>/etc/modprobe.d/lustre.conf</literal> file.</para>
   </note>
   <section xml:id="dbdoclet.50438272_55226">
       <title>

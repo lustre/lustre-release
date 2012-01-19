@@ -41,7 +41,7 @@
           
           Overview of LNET Module Parameters</title>
     <para>LNET kernel module (lnet) parameters specify how LNET is to be configured to work with Lustre, including which NICs will be configured to work with Lustre and the routing to be used with Lustre.</para>
-    <para>Parameters for lnet are specified in the <literal>modprobe.conf</literal> or <literal>modules.conf</literal> file (depending on your Linux distribution) in one or more entries with the syntax:</para>
+    <para>Parameters for LNET can be specified in the <literal>/etc/modprobe.d/lustre.conf</literal> file.  In some cases the parameters may have been stored in <literal>/etc/modprobe.conf</literal>, but this has been deprecated since before RHEL5 and SLES10, and having a separate <literal>/etc/modprobe.d/lustre.conf</literal> file simplifies administration and distribution of the Lustre networking configuration.  This file contains one or more entries with the syntax:</para>
     <screen>options lnet &lt;<emphasis>parameter</emphasis>&gt;=&lt;<emphasis>parameter value</emphasis>&gt;</screen>
     <para>To specify the network interfaces that are to be used for Lustre, set either the networks parameter or the <literal>ip2nets</literal> parameter (only one of these parameters can be used at a time):</para>
     <itemizedlist>
@@ -82,7 +82,7 @@
   </section>
   <section xml:id="dbdoclet.50438216_46279">
     <title><indexterm><primary>LNET</primary><secondary>module parameters</secondary></indexterm>Setting the LNET Module networks Parameter</title>
-    <para>If a node has more than one network interface, you&apos;ll typically want to dedicate a specific interface to Lustre. You can do this by including an entry in the <literal>modprobe.conf</literal> file on the node that sets the LNET module <literal>networks</literal> parameter:</para>
+    <para>If a node has more than one network interface, you&apos;ll typically want to dedicate a specific interface to Lustre. You can do this by including an entry in the <literal>lustre.conf</literal> file on the node that sets the LNET module <literal>networks</literal> parameter:</para>
     <screen>options lnet networks=&lt;<emphasis>comma-separated list of networks</emphasis>&gt;</screen>
     <para>This example specifies that a Lustre node will use a TCP/IP interface and an InfiniBand interface:</para>
     <screen>options lnet networks=tcp0(eth0),o2ib(ib0)</screen>
@@ -92,7 +92,7 @@
     <screen>options lnet networks=tcp0(eth2),tcp1(eth3)</screen>
     <para>When more than one interface is available during the network setup, Lustre chooses the best route based on the hop count. Once the network connection is established, Lustre expects the network to stay connected. In a Lustre network, connections do not fail over to another interface, even if multiple interfaces are available on the same node.</para>
     <note>
-      <para>LNET lines in <literal>modprobe.conf</literal> are only used by the local node to determine what to call its interfaces. They are not used for routing decisions.</para>
+      <para>LNET lines in <literal>lustre.conf</literal> are only used by the local node to determine what to call its interfaces. They are not used for routing decisions.</para>
     </note>
     <section remap="h3">
       <title><indexterm><primary>configuing</primary><secondary>multihome</secondary></indexterm>Multihome Server Example</title>
@@ -114,16 +114,16 @@
       <para>To set the <literal>networks</literal> option for this example:</para>
       <itemizedlist>
         <listitem>
-          <para> On each server, <literal>svr1</literal> and <literal>svr2</literal>, include the following line in the modprobe.conf file:</para>
+          <para> On each server, <literal>svr1</literal> and <literal>svr2</literal>, include the following line in the <literal>lustre.conf</literal> file:</para>
         </listitem>
       </itemizedlist>
       <screen>options lnet networks=tcp0(eth0),tcp1(eth1),o2ib</screen>
       <itemizedlist>
         <listitem>
-          <para> For TCP-only clients, the first available non-loopback IP interface is used for <literal>tcp0</literal>. Thus, TCP clients with only one interface do not need to have options defined in the <literal>modprobe.conf</literal> file.</para>
+          <para> For TCP-only clients, the first available non-loopback IP interface is used for <literal>tcp0</literal>. Thus, TCP clients with only one interface do not need to have options defined in the <literal>lustre.conf</literal> file.</para>
         </listitem>
         <listitem>
-          <para> On the InfiniBand clients, include the following line in the <literal>modprobe.conf</literal> file:</para>
+          <para> On the InfiniBand clients, include the following line in the <literal>lustre.conf</literal> file:</para>
         </listitem>
       </itemizedlist>
       <screen>options lnet networks=o2ib</screen>
@@ -137,7 +137,7 @@
   </section>
   <section xml:id="dbdoclet.50438216_31414">
     <title><indexterm><primary>LNET</primary><secondary>ip2nets</secondary></indexterm>Setting the LNET Module ip2nets Parameter</title>
-    <para>The <literal>ip2nets</literal> option is typically used when a single, universal <literal>modprobe.conf</literal> file is run on all servers and clients. Each node identifies the locally available networks based on the listed IP address patterns that match the node&apos;s local IP addresses.</para>
+    <para>The <literal>ip2nets</literal> option is typically used when a single, universal <literal>lustre.conf</literal> file is run on all servers and clients. Each node identifies the locally available networks based on the listed IP address patterns that match the node&apos;s local IP addresses.</para>
     <para>Note that the IP address patterns listed in the <literal>ip2nets</literal> option are <emphasis>only</emphasis> used to identify the networks that an individual node should instantiate. They are <emphasis>not</emphasis> used by LNET for any other communications purpose.</para>
     <para>For the example below, the nodes in the network have these IP addresses:</para>
     <itemizedlist>
@@ -154,11 +154,11 @@
         <para> Infiniband clients have IP over Infiniband (<literal>o2ib</literal>) addresses <literal>132.6.[2-3].2, .4, .6, .8</literal>.</para>
       </listitem>
     </itemizedlist>
-    <para>The following entry is placed in the <literal>modprobe.conf</literal> file on each server and client:</para>
+    <para>The following entry is placed in the <literal>lustre.conf</literal> file on each server and client:</para>
     <screen>options lnet &apos;ip2nets=&quot;tcp0(eth0) 192.168.0.[2,4]; \
 tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     <para>Each entry in <literal>ip2nets</literal> is referred to as a &apos;rule&apos;.</para>
-    <para>The order of LNET entries is important when configuring servers. If a server node can be reached using more than one network, the first network specified in <literal>modprobe.conf</literal> will be used.</para>
+    <para>The order of LNET entries is important when configuring servers. If a server node can be reached using more than one network, the first network specified in <literal>lustre.conf</literal> will be used.</para>
     <para>Because <literal>svr1</literal> and <literal>svr2</literal> match the first rule, LNET uses <literal>eth0</literal> for <literal>tcp0</literal> on those machines. (Although <literal>svr1</literal> and <literal>svr2</literal> also match the second rule, the first matching rule for a particular network is used).</para>
     <para>The <literal>[2-8/2]</literal> format indicates a range of 2-8 stepped by 2; that is 2,4,6,8. Thus, the clients at <literal>132.6.3.5</literal> will not find a matching o2ib network.</para>
   </section>
@@ -175,7 +175,7 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     <para>The number of LNET routers is not limited. Enough routers should be used to handle the required file serving bandwidth plus a 25 percent margin for headroom.</para>
     <section remap="h3">
       <title><indexterm><primary>LNET</primary><secondary>routing example</secondary></indexterm>Routing Example</title>
-      <para>On the clients, place the following entry in the modprobe.conf file</para>
+      <para>On the clients, place the following entry in the <literal>lustre.conf</literal> file</para>
       <screen>lnet networks=&quot;tcp&quot; routes=&quot;o2ib0 192.168.0.[1-8]@tcp0&quot;</screen>
       <para>On the router nodes, use:</para>
       <screen>lnet networks=&quot;tcp o2ib&quot; forwarding=enabled </screen>
@@ -193,7 +193,7 @@ lctl network configure</screen>
   <section xml:id="dbdoclet.50438216_35668">
     <title><indexterm><primary>LNET</primary><secondary>route checker</secondary></indexterm>Configuring the Router Checker</title>
     <para>In a Lustre configuration in which different types of networks, such as a TCP/IP network and an Infiniband network, are connected by routers, a router checker can be run on the clients and servers in the routed configuration to monitor the status of the routers. In a multi-hop routing configuration, router checkers can be configured on routers to monitor the health of their next-hop routers.</para>
-    <para>A router checker is configured by setting lnet parameters in modprobe.conf by including an entry in this form:</para>
+    <para>A router checker is configured by setting lnet parameters in <literal>lustre.conf</literal> by including an entry in this form:</para>
     <screen>options lnet &lt;<emphasis>router checker parameter</emphasis>&gt;=&lt;<emphasis>parameter value</emphasis>&gt;</screen>
     <para>The router checker parameters are:</para>
     <itemizedlist>

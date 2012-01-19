@@ -205,7 +205,7 @@ Changing a Server NID</title>
       <para>To change a server NID:</para>
       <orderedlist>
         <listitem>
-          <para>Update the LNET configuration in the <literal>/etc/modprobe.conf</literal> file so the list of server NIDs (<literal>lctl list_nids</literal>) is correct.</para>
+          <para>Update the LNET configuration in the <literal>/etc/modprobe.d/lustre.conf</literal> file so the list of server NIDs (<literal>lctl list_nids</literal>) is correct.</para>
           <para>The <literal>lctl list_nids</literal> command indicates which network(s) are configured to work with Lustre.</para>
         </listitem>
         <listitem>

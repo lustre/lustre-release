@@ -110,12 +110,12 @@ To remove all Lustre modules, run:</para>
     <title><indexterm><primary>LNET</primary><secondary>Infiniband load balancing</secondary></indexterm>Load Balancing with InfiniBand</title>
     <para>A Lustre file system contains OSSs with two InfiniBand HCAs. Lustre clients have only one InfiniBand HCA using OFED Infiniband &apos;&apos;o2ib&apos;&apos; drivers. Load balancing between the HCAs on the OSS is accomplished through LNET.</para>
     <section remap="h3">
-      <title><indexterm><primary>LNET</primary><secondary>modprobe.conf</secondary></indexterm>Setting Up <literal>modprobe.conf</literal> for Load Balancing</title>
+      <title><indexterm><primary>LNET</primary><secondary>lustre.conf</secondary></indexterm>Setting Up <literal>lustre.conf</literal> for Load Balancing</title>
       <para>To configure LNET for load balancing on clients and servers:</para>
       <orderedlist>
         <listitem>
-          <para>Set the <literal>modprobe.conf</literal> options.</para>
-          <para>Depending on your configuration, set modprobe.conf options as follows:</para>
+          <para>Set the <literal>lustre.conf</literal> options.</para>
+          <para>Depending on your configuration, set <literal>lustre.conf</literal> options as follows:</para>
           <itemizedlist>
             <listitem>
               <para>Dual HCA OSS server</para>

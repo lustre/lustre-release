@@ -17,21 +17,12 @@
           
           
           Introduction</title>
-    <para>LNET network hardware and routing are now configured via module parameters. Parameters should be specified in the <literal>/etc/modprobe.conf </literal>file, for example:</para>
-    <screen>alias lustre llite
-options lnet networks=tcp0,elan0</screen>
-    <para>The above option specifies that this node should use all the available TCP and Elan interfaces.</para>
+    <para>LNET network hardware and routing are now configured via module parameters. Parameters should be specified in the <literal>/etc/modprobe.d/lustre.conf</literal>file, for example:</para>
+    <screen>options lnet networks=tcp0(eth2)</screen>
+    <para>The above option specifies that this node should use the TCP protocol on the eth2 network interface.</para>
     <para>Module parameters are read when the module is first loaded. Type-specific LND modules (for instance, <literal>ksocklnd</literal>) are loaded automatically by the LNET module when LNET starts (typically upon <literal>modprobe ptlrpc</literal>).</para>
-    <para>Under Linux 2.6, LNET configuration parameters can be viewed under <literal>/sys/module/</literal>; generic and acceptor parameters under LNET, and LND-specific parameters under the name of the corresponding LND.</para>
-    <para>Under Linux 2.4, <literal>sysfs</literal> is not available, but the LND-specific parameters are accessible via equivalent paths under <literal>/proc</literal>.</para>
-    <para>Important: All old (pre v.1.4.6) Lustre configuration lines should be removed from the module configuration files and replaced with the following. Make sure that <literal>CONFIG_KMOD</literal> is set in your <literal>linux.config</literal> so LNET can load the following modules it needs. The basic module files are:</para>
-    <para><literal>modprobe.conf </literal>(for Linux 2.6)</para>
-    <screen>alias lustre llite
-options lnet networks=tcp0,elan0</screen>
-    <para><literal>modules.conf</literal> (for Linux 2.4)</para>
-    <screen>alias lustre llite
-options lnet networks=tcp0,elan0</screen>
-    <para>For the following parameters, default option settings are shown in parenthesis. Changes to parameters marked with a W affect running systems. (Unmarked parameters can only be set when LNET loads for the first time.) Changes to parameters marked with <literal>Wc</literal> only have effect when connections are established (existing connections are not affected by these changes.)</para>
+    <para>LNET configuration parameters can be viewed under <literal>/sys/module/lnet/parameters/</literal>, and LND-specific parameters under the name of the corresponding LND, for example <literal>/sys/module/ksocklnd/parameters/</literal> for the socklnd (TCP) LND.</para>
+    <para>For the following parameters, default option settings are shown in parenthesis. Changes to parameters marked with a W affect running systems. Unmarked parameters can only be set when LNET loads for the first time.  Changes to parameters marked with <literal>Wc</literal> only have effect when connections are established (existing connections are not affected by these changes.)</para>
   </section>
   <section xml:id="dbdoclet.50438293_78010">
       <title>
@@ -46,7 +37,7 @@ options lnet networks=tcp0,elan0</screen>
         <para>For a routed network, use the same &apos;routes&apos; configuration everywhere. Nodes specified as routers automatically enable forwarding and any routes that are not relevant to a particular node are ignored. Keep a common configuration to guarantee that all nodes have consistent routing tables.</para>
       </listitem>
       <listitem>
-        <para>A separate <literal>modprobe.conf.lnet</literal> included from <literal>modprobe.conf</literal> makes distributing the configuration much easier.</para>
+        <para>A separate <literal>lustre.conf</literal> file makes distributing the configuration much easier.</para>
       </listitem>
       <listitem>
         <para>If you set <literal>config_on_load=1</literal>, LNET starts at <literal>modprobe</literal> time rather than waiting for Lustre to start. This ensures routers start working at module load time.</para>

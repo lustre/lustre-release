@@ -525,7 +525,7 @@
         <para>Lustre routers to connect the two networks.</para>
       </listitem>
     </itemizedlist>
-    <para>Lustre networks and routing are configured and managed by specifying parameters to the Lustre Networking (lnet) module in <literal>/etc/modprobe.conf</literal> or <literal>/etc/modprobe.conf.local</literal> (depending on your Linux distribution).</para>
+    <para>Lustre networks and routing are configured and managed by specifying parameters to the Lustre Networking (<literal>lnet</literal>) module in <literal>/etc/modprobe.d/lustre.conf</literal>.</para>
     <para>To prepare to configure Lustre Networking, complete the following steps:</para>
     <orderedlist>
       <listitem>
@@ -544,7 +544,7 @@
       </listitem>
       <listitem>
         <para><emphasis role="bold">To ease the setup of networks with complex network configurations, determine a cluster-wide module configuration.</emphasis></para>
-        <para>For large clusters, you can configure the networking setup for all nodes by using a single, unified set of parameters in the modprobe.conf file on each node. Cluster-wide configuration is described in <xref linkend="configuringlnet"/>.</para>
+        <para>For large clusters, you can configure the networking setup for all nodes by using a single, unified set of parameters in the <literal>lustre.conf</literal> file on each node. Cluster-wide configuration is described in <xref linkend="configuringlnet"/>.</para>
       </listitem>
     </orderedlist>
     <note>

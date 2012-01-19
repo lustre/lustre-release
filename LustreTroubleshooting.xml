@@ -407,7 +407,7 @@ tail -30 /tmp/objects.{diskname}</screen>
           <para>Start Lustre before starting any service that uses sunrpc.</para>
         </listitem>
         <listitem>
-          <para>Use a port other than 988 for Lustre. This is configured in /etc/modprobe.conf as an option to the LNET module. For example:</para>
+          <para>Use a port other than 988 for Lustre. This is configured in <literal>/etc/modprobe.d/lustre.conf</literal> as an option to the LNET module. For example:</para>
           <screen>options lnet accept_port=988</screen>
         </listitem>
       </itemizedlist>

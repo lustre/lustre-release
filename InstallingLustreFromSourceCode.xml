@@ -340,7 +340,7 @@ lustre-ldiskfs-3.0.6-2.6.18_92.1.10.el5_lustre.1.6.6\
 smp.x86_64.rpm</screen>
       </listitem>
       <listitem>
-        <para>Add the following lines to the <literal>/etc/modprobe.conf</literal> file.</para>
+        <para>Add the following lines to the <literal>/etc/modprobe.d/lustre.conf</literal> file.</para>
         <screen>options kmxlnd hosts=/etc/hosts.mxlnd
 options lnet networks=mx0(myri0),tcp0(eth0)</screen>
       </listitem>
