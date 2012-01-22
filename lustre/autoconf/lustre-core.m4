@@ -85,27 +85,6 @@ AC_TRY_COMPILE([
 ])
 
 #
-# LC_FUNC_RELEASEPAGE_WITH_GFP
-#
-# 2.6.9 ->releasepage() takes a gfp_t arg
-# This kernel defines gfp_t (HAS_GFP_T) but doesn't use it for this function,
-# while others either don't have gfp_t or pass gfp_t as the parameter.
-#
-AC_DEFUN([LC_FUNC_RELEASEPAGE_WITH_GFP],
-[AC_MSG_CHECKING([if releasepage has a gfp_t parameter])
-RELEASEPAGE_WITH_GFP="$(grep -c 'releasepage.*gfp_t' $LINUX/include/linux/fs.h)"
-if test "$RELEASEPAGE_WITH_GFP" != 0 ; then
-	AC_DEFINE(HAVE_RELEASEPAGE_WITH_GFP, 1,
-                  [releasepage with gfp_t parameter])
-	AC_MSG_RESULT([yes])
-else
-	AC_MSG_RESULT([no])
-fi
-])
-
-
-
-#
 # only for Lustre-patched kernels
 #
 AC_DEFUN([LC_LUSTRE_VERSION_H],
@@ -269,7 +248,7 @@ AC_DEFUN([LC_QUOTA_MODULE],
 fi
 ])
 
-# truncate_complete_page() was exported from RHEL5/SLES10/SLES11
+# truncate_complete_page() was exported from RHEL5/SLES10, but not in SLES11 SP0 (2.6.27)
 # remove_from_page_cache() was exported between 2.6.35 and 2.6.38
 # delete_from_page_cache() is exported from 2.6.39
 AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE],
@@ -286,15 +265,6 @@ AC_DEFUN([LC_EXPORT_TRUNCATE_COMPLETE],
                                  [AC_DEFINE(HAVE_DELETE_FROM_PAGE_CACHE, 1,
                                             [kernel export delete_from_page_cache])])
          ])
-
-AC_DEFUN([LC_EXPORT_TRUNCATE_RANGE],
-[LB_CHECK_SYMBOL_EXPORT([truncate_inode_pages_range],
-[mm/truncate.c],[
-AC_DEFINE(HAVE_TRUNCATE_RANGE, 1,
-            [kernel export truncate_inode_pages_range])
-],[
-])
-])
 
 AC_DEFUN([LC_EXPORT_D_REHASH_COND],
 [LB_CHECK_SYMBOL_EXPORT([d_rehash_cond],
@@ -358,25 +328,6 @@ AC_DEFUN([LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP],
 ])
 
 #
-# LC_STRUCT_STATFS
-#
-# AIX does not have statfs.f_namelen
-#
-AC_DEFUN([LC_STRUCT_STATFS],
-[AC_MSG_CHECKING([if struct statfs has a f_namelen field])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/vfs.h>
-],[
-	struct statfs sfs;
-	sfs.f_namelen = 1;
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_STATFS_NAMELEN, 1, [struct statfs has a namelen field])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
 #
 # between 2.6.5 - 2.6.22 filemap_populate is exported in some kernels
 #
@@ -390,23 +341,6 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_FILEMAP_POPULATE, 1, [Kernel exports filemap_populate])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#
-# added in 2.6.15
-#
-AC_DEFUN([LC_D_ADD_UNIQUE],
-[AC_MSG_CHECKING([for d_add_unique])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/dcache.h>
-],[
-       d_add_unique(NULL, NULL);
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_D_ADD_UNIQUE, 1, [Kernel has d_add_unique])
 ],[
         AC_MSG_RESULT([no])
 ])
@@ -2234,15 +2168,12 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # RHEL4 patches
          LC_EXPORT_TRUNCATE_COMPLETE
-         LC_EXPORT_TRUNCATE_RANGE
          LC_EXPORT_D_REHASH_COND
          LC_EXPORT___D_REHASH
          LC_EXPORT_NODE_TO_CPUMASK
 
          LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
-         LC_STRUCT_STATFS
          LC_FILEMAP_POPULATE
-         LC_D_ADD_UNIQUE
          LC_BIT_SPINLOCK_H
 
          LC_CONST_ACL_SIZE

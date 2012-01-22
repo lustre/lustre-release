@@ -350,19 +350,11 @@ void filter_release_cache(struct obd_device *obd, struct obd_ioobj *obj,
 
         LASSERT(inode != NULL);
         for (i = 0; i < obj->ioo_bufcnt; i++, rnb++) {
-#ifdef HAVE_TRUNCATE_RANGE
                 /* remove pages in which range is fit */
                 truncate_inode_pages_range(inode->i_mapping,
                                            rnb->offset & CFS_PAGE_MASK,
                                            (rnb->offset + rnb->len - 1) |
                                            ~CFS_PAGE_MASK);
-#else
-                /* use invalidate for old kernels */
-                invalidate_mapping_pages(inode->i_mapping,
-                                         rnb->offset >> CFS_PAGE_SHIFT,
-                                         (rnb->offset + rnb->len) >>
-                                         CFS_PAGE_SHIFT);
-#endif
         }
 }
 
