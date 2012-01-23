@@ -265,14 +265,6 @@ static inline int cfs_cleanup_group_info(void)
 extern void __d_rehash(struct dentry *dentry, int lock);
 #endif
 
-#ifdef HAVE_CAN_SLEEP_ARG
-#define ll_flock_lock_file_wait(file, lock, can_sleep) \
-        flock_lock_file_wait(file, lock, can_sleep)
-#else
-#define ll_flock_lock_file_wait(file, lock, can_sleep) \
-        flock_lock_file_wait(file, lock)
-#endif
-
 #define CheckWriteback(page, cmd) \
         ((!PageWriteback(page) && (cmd & OBD_BRW_READ)) || \
          (PageWriteback(page) && (cmd & OBD_BRW_WRITE)))

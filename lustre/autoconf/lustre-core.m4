@@ -474,50 +474,6 @@ AC_DEFUN([LC_CONFIG_GSS],
  fi
 ])
 
-#
-# LC_FUNC_HAVE_CAN_SLEEP_ARG
-#
-# 2.6.5 kernel has third arg can_sleep in fs/locks.c: flock_lock_file_wait()
-#
-AC_DEFUN([LC_FUNC_HAVE_CAN_SLEEP_ARG],
-[AC_MSG_CHECKING([if kernel has third arg can_sleep in fs/locks.c: flock_lock_file_wait()])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        int cansleep;
-        struct file *file;
-        struct file_lock *file_lock;
-        flock_lock_file_wait(file, file_lock, cansleep);
-],[
-        AC_DEFINE(HAVE_CAN_SLEEP_ARG, 1,
-                [kernel has third arg can_sleep in fs/locks.c: flock_lock_file_wait()])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#
-# LC_FUNC_F_OP_FLOCK
-#
-# rhel4.2 kernel has f_op->flock field
-#
-AC_DEFUN([LC_FUNC_F_OP_FLOCK],
-[AC_MSG_CHECKING([if struct file_operations has flock field])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct file_operations ll_file_operations_flock;
-        ll_file_operations_flock.flock = NULL;
-],[
-        AC_DEFINE(HAVE_F_OP_FLOCK, 1,
-                [struct file_operations has flock field])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 AC_DEFUN([LC_QUOTA_READ],
 [AC_MSG_CHECKING([if kernel supports quota_read])
 LB_LINUX_TRY_COMPILE([
@@ -2043,8 +1999,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
-         LC_FUNC_HAVE_CAN_SLEEP_ARG
-         LC_FUNC_F_OP_FLOCK
          LC_QUOTA_READ
          LC_COOKIE_FOLLOW_LINK
          LC_FUNC_RCU
