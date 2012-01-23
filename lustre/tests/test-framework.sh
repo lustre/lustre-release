@@ -376,10 +376,15 @@ load_modules_local() {
     load_module lov/lov
     load_module mgc/mgc
     if ! client_only; then
-        grep -q crc16 /proc/kallsyms || { modprobe crc16 2>/dev/null || true; }
-        grep -q -w jbd /proc/kallsyms || { modprobe jbd 2>/dev/null || true; }
-        grep -q -w jbd2 /proc/kallsyms || { modprobe jbd2 2>/dev/null || true; }
-        [ "$FSTYPE" = "ldiskfs" ] && load_module ../ldiskfs/ldiskfs/ldiskfs
+        SYMLIST=/proc/kallsyms
+        grep -q crc16 $SYMLIST || { modprobe crc16 2>/dev/null || true; }
+        grep -q -w jbd $SYMLIST || { modprobe jbd 2>/dev/null || true; }
+        grep -q -w jbd2 $SYMLIST || { modprobe jbd2 2>/dev/null || true; }
+        if [ "$FSTYPE" = "ldiskfs" ]; then
+            grep -q exportfs_decode_fh $SYMLIST ||
+                { modprobe exportfs 2> /dev/null || true; }
+            load_module ../ldiskfs/ldiskfs/ldiskfs
+        fi
         load_module mgs/mgs
         load_module mds/mds
         load_module mdd/mdd
