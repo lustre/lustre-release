@@ -670,7 +670,6 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
 
                 if (rc && (nd->flags & LOOKUP_OPEN) &&
                     it_disposition(it, DISP_OPEN_OPEN)) {/*Open*/
-#ifdef HAVE_FILE_IN_STRUCT_INTENT
 // XXX Code duplication with ll_lookup_nd
                         if (S_ISFIFO(dentry->d_inode->i_mode)) {
                                 // We cannot call open here as it would
@@ -695,9 +694,6 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
                                 (void)lookup_instantiate_filp(nd, dentry,NULL);
 #endif
                         }
-#else
-                        ll_release_openhandle(dentry, it);
-#endif /* HAVE_FILE_IN_STRUCT_INTENT */
                 }
                 if (!rc && (nd->flags & LOOKUP_CREATE) &&
                     it_disposition(it, DISP_OPEN_CREATE)) {

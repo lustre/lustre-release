@@ -624,14 +624,6 @@ struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                 it->it_op = IT_GETATTR;
         }
 
-#ifndef HAVE_FILE_IN_STRUCT_INTENT
-                /* Since there is no way to pass our intent to ll_file_open,
-                 * just check the file is there. Actual open will be done
-                 * in ll_file_open */
-                if (it->it_op & IT_OPEN)
-                        it->it_op = IT_LOOKUP;
-#endif
-
         return it;
 }
 
@@ -644,7 +636,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
         if (nd && !(nd->flags & (LOOKUP_CONTINUE|LOOKUP_PARENT))) {
                 struct lookup_intent *it;
 
-#if defined(HAVE_FILE_IN_STRUCT_INTENT) && (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17))
+#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,17)
                 /* Did we came here from failed revalidate just to propagate
                  * its error? */
                 if (nd->flags & LOOKUP_OPEN)
@@ -672,7 +664,6 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
                 if ((nd->flags & LOOKUP_OPEN) && !IS_ERR(dentry)) { /* Open */
                         if (dentry->d_inode &&
                             it_disposition(it, DISP_OPEN_OPEN)) { /* nocreate */
-#ifdef HAVE_FILE_IN_STRUCT_INTENT
                                 if (S_ISFIFO(dentry->d_inode->i_mode)) {
                                         // We cannot call open here as it would
                                         // deadlock.
@@ -700,11 +691,6 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 #endif
 
                                 }
-#else /* HAVE_FILE_IN_STRUCT_INTENT */
-                                /* Release open handle as we have no way to
-                                 * pass it to ll_file_open */
-                                ll_release_openhandle(dentry, it);
-#endif /* HAVE_FILE_IN_STRUCT_INTENT */
                         } else if (it_disposition(it, DISP_OPEN_CREATE)) {
                                 // XXX This can only reliably work on assumption
                                 // that there are NO hashed negative dentries.
@@ -923,14 +909,10 @@ static int ll_create_nd(struct inode *dir, struct dentry *dentry,
         }
 
         rc = ll_create_it(dir, dentry, mode, it);
-#ifdef HAVE_FILE_IN_STRUCT_INTENT
         if (nd && (nd->flags & LOOKUP_OPEN) && dentry->d_inode) { /* Open */
                 nd->intent.open.file->private_data = it;
                 lookup_instantiate_filp(nd, dentry, NULL);
         }
-#else
-        ll_release_openhandle(dentry,it);
-#endif
 
 out:
         ll_intent_release(it);

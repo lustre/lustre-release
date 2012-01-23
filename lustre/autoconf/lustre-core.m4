@@ -379,24 +379,6 @@ AC_TRY_RUN([
 CFLAGS="$tmp_flags"
 ])
 
-# added in 2.6.16
-#
-AC_DEFUN([LC_STRUCT_INTENT_FILE],
-[AC_MSG_CHECKING([if struct open_intent has a file field])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/namei.h>
-],[
-        struct open_intent intent;
-        &intent.file;
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_FILE_IN_STRUCT_INTENT, 1, [struct open_intent has a file field])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 #
 # LC_CAPA_CRYPTO
 #
@@ -447,25 +429,9 @@ AC_DEFUN([LC_CONFIG_GSS_KEYRING],
  fi
 ])
 
-AC_DEFUN([LC_SUNRPC_CACHE],
-[AC_MSG_CHECKING([if sunrpc struct cache_head uses kref])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/sunrpc/cache.h>
-],[
-        struct cache_head ch;
-        &ch.ref.refcount;
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_SUNRPC_CACHE_V2, 1, [sunrpc cache facility v2])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 AC_DEFUN([LC_CONFIG_SUNRPC],
 [LB_LINUX_CONFIG_IM([SUNRPC],[],
                     [AC_MSG_ERROR([kernel SUNRPC support is required by using GSS.])])
- LC_SUNRPC_CACHE
 ])
 
 #
@@ -2073,8 +2039,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BIT_SPINLOCK_H
 
          LC_CONST_ACL_SIZE
-
-         LC_STRUCT_INTENT_FILE
 
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT

@@ -134,12 +134,8 @@ struct rsi {
 
 static struct cache_head *rsi_table[RSI_HASHMAX];
 static struct cache_detail rsi_cache;
-#ifdef HAVE_SUNRPC_CACHE_V2
 static struct rsi *rsi_update(struct rsi *new, struct rsi *old);
 static struct rsi *rsi_lookup(struct rsi *item);
-#else
-static struct rsi *rsi_lookup(struct rsi *item, int set);
-#endif
 
 static inline int rsi_hash(struct rsi *item)
 {
@@ -218,8 +214,6 @@ static inline void __rsi_update(struct rsi *new, struct rsi *item)
         new->major_status = item->major_status;
         new->minor_status = item->minor_status;
 }
-
-#ifdef HAVE_SUNRPC_CACHE_V2
 
 static void rsi_put(struct kref *ref)
 {
@@ -358,124 +352,6 @@ out:
         RETURN(status);
 }
 
-#else /* !HAVE_SUNRPC_CACHE_V2 */
-
-static void rsi_put(struct cache_head *item, struct cache_detail *cd)
-{
-        struct rsi *rsi = container_of(item, struct rsi, h);
-
-        LASSERT(cfs_atomic_read(&item->refcnt) > 0);
-
-        if (cache_put(item, cd)) {
-                LASSERT(item->next == NULL);
-                rsi_free(rsi);
-                kfree(rsi); /* created by cache mgmt using kmalloc */
-        }
-}
-
-static inline int rsi_match(struct rsi *item, struct rsi *tmp)
-{
-        return __rsi_match(item, tmp);
-}
-
-static inline void rsi_init(struct rsi *new, struct rsi *item)
-{
-        __rsi_init(new, item);
-}
-
-static inline void rsi_update(struct rsi *new, struct rsi *item)
-{
-        __rsi_update(new, item);
-}
-
-static int rsi_parse(struct cache_detail *cd, char *mesg, int mlen)
-{
-        char           *buf = mesg;
-        char           *ep;
-        int             len;
-        struct rsi      rsii, *rsip = NULL;
-        time_t          expiry;
-        int             status = -EINVAL;
-        ENTRY;
-
-
-        memset(&rsii, 0, sizeof(rsii));
-
-        /* handle */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0)
-                goto out;
-        if (rawobj_alloc(&rsii.in_handle, buf, len)) {
-                status = -ENOMEM;
-                goto out;
-        }
-
-        /* token */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0)
-                goto out;
-        if (rawobj_alloc(&rsii.in_token, buf, len)) {
-                status = -ENOMEM;
-                goto out;
-        }
-
-        /* expiry */
-        expiry = get_expiry(&mesg);
-        if (expiry == 0)
-                goto out;
-
-        len = qword_get(&mesg, buf, mlen);
-        if (len <= 0)
-                goto out;
-
-        /* major */
-        rsii.major_status = simple_strtol(buf, &ep, 10);
-        if (*ep)
-                goto out;
-
-        /* minor */
-        len = qword_get(&mesg, buf, mlen);
-        if (len <= 0)
-                goto out;
-        rsii.minor_status = simple_strtol(buf, &ep, 10);
-        if (*ep)
-                goto out;
-
-        /* out_handle */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0)
-                goto out;
-        if (rawobj_alloc(&rsii.out_handle, buf, len)) {
-                status = -ENOMEM;
-                goto out;
-        }
-
-        /* out_token */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0)
-                goto out;
-        if (rawobj_alloc(&rsii.out_token, buf, len)) {
-                status = -ENOMEM;
-                goto out;
-        }
-
-        rsii.h.expiry_time = expiry;
-        rsip = rsi_lookup(&rsii, 1);
-        status = 0;
-out:
-        rsi_free(&rsii);
-        if (rsip) {
-                cfs_waitq_broadcast(&rsip->waitq);
-                rsi_put(&rsip->h, &rsi_cache);
-        }
-
-        if (status)
-                CERROR("rsi parse error %d\n", status);
-        RETURN(status);
-}
-
-#endif /* HAVE_SUNRPC_CACHE_V2 */
-
 static struct cache_detail rsi_cache = {
         .hash_size      = RSI_HASHMAX,
         .hash_table     = rsi_table,
@@ -487,15 +363,11 @@ static struct cache_detail rsi_cache = {
         .cache_request  = rsi_request,
 #endif
         .cache_parse    = rsi_parse,
-#ifdef HAVE_SUNRPC_CACHE_V2
         .match          = rsi_match,
         .init           = rsi_init,
         .update         = update_rsi,
         .alloc          = rsi_alloc,
-#endif
 };
-
-#ifdef HAVE_SUNRPC_CACHE_V2
 
 static struct rsi *rsi_lookup(struct rsi *item)
 {
@@ -521,12 +393,6 @@ static struct rsi *rsi_update(struct rsi *new, struct rsi *old)
                 return NULL;
 }
 
-#else
-
-static DefineSimpleCacheLookup(rsi, 0)
-
-#endif
-
 /****************************************
  * rsc cache                            *
  ****************************************/
@@ -544,12 +410,8 @@ struct rsc {
 
 static struct cache_head *rsc_table[RSC_HASHMAX];
 static struct cache_detail rsc_cache;
-#ifdef HAVE_SUNRPC_CACHE_V2
 static struct rsc *rsc_update(struct rsc *new, struct rsc *old);
 static struct rsc *rsc_lookup(struct rsc *item);
-#else
-static struct rsc *rsc_lookup(struct rsc *item, int set);
-#endif
 
 static void rsc_free(struct rsc *rsci)
 {
@@ -588,8 +450,6 @@ static inline void __rsc_update(struct rsc *new, struct rsc *tmp)
         memset(&new->ctx.gsc_seqdata, 0, sizeof(new->ctx.gsc_seqdata));
         cfs_spin_lock_init(&new->ctx.gsc_seqdata.ssd_lock);
 }
-
-#ifdef HAVE_SUNRPC_CACHE_V2
 
 static void rsc_put(struct kref *ref)
 {
@@ -765,182 +625,17 @@ out:
         return status;
 }
 
-#else /* !HAVE_SUNRPC_CACHE_V2 */
-
-static void rsc_put(struct cache_head *item, struct cache_detail *cd)
-{
-        struct rsc *rsci = container_of(item, struct rsc, h);
-
-        LASSERT(cfs_atomic_read(&item->refcnt) > 0);
-
-        if (cache_put(item, cd)) {
-                LASSERT(item->next == NULL);
-                rsc_free(rsci);
-                kfree(rsci); /* created by cache mgmt using kmalloc */
-        }
-}
-
-static inline int rsc_match(struct rsc *new, struct rsc *tmp)
-{
-        return __rsc_match(new, tmp);
-}
-
-static inline void rsc_init(struct rsc *new, struct rsc *tmp)
-{
-        __rsc_init(new, tmp);
-}
-
-static inline void rsc_update(struct rsc *new, struct rsc *tmp)
-{
-        __rsc_update(new, tmp);
-}
-
-static int rsc_parse(struct cache_detail *cd, char *mesg, int mlen)
-{
-        char       *buf = mesg;
-        int         len, rv, tmp_int;
-        struct rsc  rsci, *rscp = NULL;
-        time_t      expiry;
-        int         status = -EINVAL;
-
-        memset(&rsci, 0, sizeof(rsci));
-
-        /* context handle */
-        len = qword_get(&mesg, buf, mlen);
-        if (len < 0) goto out;
-        status = -ENOMEM;
-        if (rawobj_alloc(&rsci.handle, buf, len))
-                goto out;
-
-        rsci.h.flags = 0;
-        /* expiry */
-        expiry = get_expiry(&mesg);
-        status = -EINVAL;
-        if (expiry == 0)
-                goto out;
-
-        /* remote flag */
-        rv = get_int(&mesg, &tmp_int);
-        if (rv) {
-                CERROR("fail to get remote flag\n");
-                goto out;
-        }
-        rsci.ctx.gsc_remote = (tmp_int != 0);
-
-        /* root user flag */
-        rv = get_int(&mesg, &tmp_int);
-        if (rv) {
-                CERROR("fail to get oss user flag\n");
-                goto out;
-        }
-        rsci.ctx.gsc_usr_root = (tmp_int != 0);
-
-        /* mds user flag */
-        rv = get_int(&mesg, &tmp_int);
-        if (rv) {
-                CERROR("fail to get mds user flag\n");
-                goto out;
-        }
-        rsci.ctx.gsc_usr_mds = (tmp_int != 0);
-
-        /* oss user flag */
-        rv = get_int(&mesg, &tmp_int);
-        if (rv) {
-                CERROR("fail to get oss user flag\n");
-                goto out;
-        }
-        rsci.ctx.gsc_usr_oss = (tmp_int != 0);
-
-        /* mapped uid */
-        rv = get_int(&mesg, (int *) &rsci.ctx.gsc_mapped_uid);
-        if (rv) {
-                CERROR("fail to get mapped uid\n");
-                goto out;
-        }
-
-        /* uid, or NEGATIVE */
-        rv = get_int(&mesg, (int *) &rsci.ctx.gsc_uid);
-        if (rv == -EINVAL)
-                goto out;
-        if (rv == -ENOENT) {
-                CERROR("NOENT? set rsc entry negative\n");
-                cfs_set_bit(CACHE_NEGATIVE, &rsci.h.flags);
-        } else {
-                struct gss_api_mech *gm;
-                rawobj_t tmp_buf;
-                unsigned long ctx_expiry;
-
-                /* gid */
-                if (get_int(&mesg, (int *) &rsci.ctx.gsc_gid))
-                        goto out;
-
-                /* mech name */
-                len = qword_get(&mesg, buf, mlen);
-                if (len < 0)
-                        goto out;
-                gm = lgss_name_to_mech(buf);
-                status = -EOPNOTSUPP;
-                if (!gm)
-                        goto out;
-
-                status = -EINVAL;
-                /* mech-specific data: */
-                len = qword_get(&mesg, buf, mlen);
-                if (len < 0) {
-                        lgss_mech_put(gm);
-                        goto out;
-                }
-                tmp_buf.len = len;
-                tmp_buf.data = (unsigned char *)buf;
-                if (lgss_import_sec_context(&tmp_buf, gm,
-                                            &rsci.ctx.gsc_mechctx)) {
-                        lgss_mech_put(gm);
-                        goto out;
-                }
-
-                /* currently the expiry time passed down from user-space
-                 * is invalid, here we retrive it from mech. */
-                if (lgss_inquire_context(rsci.ctx.gsc_mechctx, &ctx_expiry)) {
-                        CERROR("unable to get expire time, drop it\n");
-                        lgss_mech_put(gm);
-                        goto out;
-                }
-                expiry = (time_t) ctx_expiry;
-
-                lgss_mech_put(gm);
-        }
-
-        rsci.h.expiry_time = expiry;
-        rscp = rsc_lookup(&rsci, 1);
-        status = 0;
-out:
-        rsc_free(&rsci);
-        if (rscp)
-                rsc_put(&rscp->h, &rsc_cache);
-
-        if (status)
-                CERROR("parse rsc error %d\n", status);
-        return status;
-}
-
-#endif /* HAVE_SUNRPC_CACHE_V2 */
-
-
 static struct cache_detail rsc_cache = {
         .hash_size      = RSC_HASHMAX,
         .hash_table     = rsc_table,
         .name           = "auth.sptlrpc.context",
         .cache_put      = rsc_put,
         .cache_parse    = rsc_parse,
-#ifdef HAVE_SUNRPC_CACHE_V2
         .match          = rsc_match,
         .init           = rsc_init,
         .update         = update_rsc,
         .alloc          = rsc_alloc,
-#endif
 };
-
-#ifdef HAVE_SUNRPC_CACHE_V2
 
 static struct rsc *rsc_lookup(struct rsc *item)
 {
@@ -967,14 +662,6 @@ static struct rsc *rsc_update(struct rsc *new, struct rsc *old)
 }
 
 #define COMPAT_RSC_PUT(item, cd)        cache_put((item), (cd))
-
-#else
-
-static DefineSimpleCacheLookup(rsc, 0);
-
-#define COMPAT_RSC_PUT(item, cd)        rsc_put((item), (cd))
-
-#endif
 
 /****************************************
  * rsc cache flush                      *
@@ -1052,11 +739,7 @@ static struct rsc *gss_svc_searchbyctx(rawobj_t *handle)
         if (rawobj_dup(&rsci.handle, handle))
                 return NULL;
 
-#ifdef HAVE_SUNRPC_CACHE_V2
         found = rsc_lookup(&rsci);
-#else
-        found = rsc_lookup(&rsci, 0);
-#endif
         rsc_free(&rsci);
         if (!found)
                 return NULL;
@@ -1064,8 +747,6 @@ static struct rsc *gss_svc_searchbyctx(rawobj_t *handle)
                 return NULL;
         return found;
 }
-
-#ifdef HAVE_SUNRPC_CACHE_V2
 
 int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
                                    struct gss_sec *gsec,
@@ -1125,65 +806,6 @@ out:
                        gsec->gs_rvs_hdl, rc);
         RETURN(rc);
 }
-
-#else /* !HAVE_SUNRPC_CACHE_V2 */
-
-int gss_svc_upcall_install_rvs_ctx(struct obd_import *imp,
-                                   struct gss_sec *gsec,
-                                   struct gss_cli_ctx *gctx)
-{
-        struct rsc      rsci, *rscp;
-        unsigned long   ctx_expiry;
-        __u32           major;
-        int             rc;
-        ENTRY;
-
-        memset(&rsci, 0, sizeof(rsci));
-
-        if (rawobj_alloc(&rsci.handle, (char *) &gsec->gs_rvs_hdl,
-                         sizeof(gsec->gs_rvs_hdl)))
-                GOTO(out, rc = -ENOMEM);
-
-        major = lgss_copy_reverse_context(gctx->gc_mechctx,
-                                          &rsci.ctx.gsc_mechctx);
-        if (major != GSS_S_COMPLETE)
-                GOTO(out, rc = -ENOMEM);
-
-        if (lgss_inquire_context(rsci.ctx.gsc_mechctx, &ctx_expiry)) {
-                CERROR("unable to get expire time, drop it\n");
-                GOTO(out, rc = -ENOMEM);
-        }
-        rsci.h.expiry_time = (time_t) ctx_expiry;
-
-        if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_MDC_NAME) == 0)
-                rsci.ctx.gsc_usr_mds = 1;
-        else if (strcmp(imp->imp_obd->obd_type->typ_name, LUSTRE_OSC_NAME) == 0)
-                rsci.ctx.gsc_usr_oss = 1;
-        else
-                rsci.ctx.gsc_usr_root = 1;
-
-        rscp = rsc_lookup(&rsci, 1);
-        if (rscp == NULL) {
-                CERROR("rsc lookup failed\n");
-                GOTO(out, rc = -ENOMEM);
-        }
-
-        rscp->target = imp->imp_obd;
-        rawobj_dup(&gctx->gc_svc_handle, &rscp->handle);
-
-        CWARN("create reverse svc ctx %p to %s: idx "LPX64"\n",
-              &rscp->ctx, obd2cli_tgt(imp->imp_obd), gsec->gs_rvs_hdl);
-        rsc_put(&rscp->h, &rsc_cache);
-        rc = 0;
-out:
-        rsc_free(&rsci);
-        if (rc)
-                CERROR("create reverse svc ctx: idx "LPX64", rc %d\n",
-                       gsec->gs_rvs_hdl, rc);
-        RETURN(rc);
-}
-
-#endif /* HAVE_SUNRPC_CACHE_V2 */
 
 int gss_svc_upcall_expire_rvs_ctx(rawobj_t *handle)
 {
@@ -1263,11 +885,7 @@ int gss_svc_upcall_handle_init(struct ptlrpc_request *req,
                 GOTO(out, rc);
         }
 
-#ifdef HAVE_SUNRPC_CACHE_V2
         rsip = rsi_lookup(&rsikey);
-#else
-        rsip = rsi_lookup(&rsikey, 0);
-#endif
         rsi_free(&rsikey);
         if (!rsip) {
                 CERROR("error in rsi_lookup.\n");
