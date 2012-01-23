@@ -57,15 +57,6 @@
 #include <lustre_fid.h>
 #include "llite_internal.h"
 
-#ifndef HAVE_PAGE_CHECKED
-#ifdef HAVE_PG_FS_MISC
-#define PageChecked(page)        test_bit(PG_fs_misc, &(page)->flags)
-#define SetPageChecked(page)     set_bit(PG_fs_misc, &(page)->flags)
-#else
-#error PageChecked or PageFsMisc not defined in kernel
-#endif
-#endif
-
 /*
  * (new) readdir implementation overview.
  *

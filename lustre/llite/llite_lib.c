@@ -1674,9 +1674,6 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         } else {
                 inode->i_blkbits = inode->i_sb->s_blocksize_bits;
         }
-#ifdef HAVE_INODE_BLKSIZE
-        inode->i_blksize = 1<<inode->i_blkbits;
-#endif
         if (body->valid & OBD_MD_FLUID)
                 inode->i_uid = body->uid;
         if (body->valid & OBD_MD_FLGID)

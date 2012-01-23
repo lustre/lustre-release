@@ -516,57 +516,11 @@ EXTRA_KCFLAGS="$tmp_flags"
 
 #2.6.18 + RHEL5 (fc6)
 
-# RHEL5 in FS-cache patch rename PG_checked flag into PG_fs_misc
-AC_DEFUN([LC_PG_FS_MISC],
-[AC_MSG_CHECKING([kernel has PG_fs_misc])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-        #include <linux/page-flags.h>
-],[
-        #ifndef PG_fs_misc
-        #error PG_fs_misc not defined in kernel
-        #endif
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_PG_FS_MISC, 1,
-                  [is kernel have PG_fs_misc])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
-# RHEL5 PageChecked and SetPageChecked defined
-AC_DEFUN([LC_PAGE_CHECKED],
-[AC_MSG_CHECKING([kernel has PageChecked and SetPageChecked])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mm.h>
-#ifdef HAVE_LINUX_MMTYPES_H
-        #include <linux/mm_types.h>
-#endif
-        #include <linux/page-flags.h>
-],[
-        struct page *p = NULL;
-
-        /* before 2.6.26 this define*/
-        #ifndef PageChecked	
-        /* 2.6.26 use function instead of define for it */
-        SetPageChecked(p);
-        PageChecked(p);
-        #endif
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_PAGE_CHECKED, 1,
-                  [does kernel have PageChecked and SetPageChecked])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
 #
 # LC_LINUX_FIEMAP_H
 #
-# If we have fiemap.h
-# after 2.6.27 use fiemap.h in include/linux
+# fiemap.h is added since v2.6.28
+# RHEL5 2.6.18 has it, while SLES10 2.6.27 does not
 #
 AC_DEFUN([LC_LINUX_FIEMAP_H],
 [LB_CHECK_FILE([$LINUX/include/linux/fiemap.h],[
@@ -585,24 +539,6 @@ AC_DEFUN([LC_LINUX_FIEMAP_H],
 ])
 
 # 2.6.19
-
-# 2.6.19 API changes
-# inode don't have i_blksize field
-AC_DEFUN([LC_INODE_BLKSIZE],
-[AC_MSG_CHECKING([inode has i_blksize field])
-LB_LINUX_TRY_COMPILE([
-#include <linux/fs.h>
-],[
-	struct inode i;
-	i.i_blksize = 0;
-],[
-	AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_INODE_BLKSIZE, 1,
-		[struct inode has i_blksize field])
-],[
-	AC_MSG_RESULT(no)
-])
-])
 
 # LC_FILE_WRITEV
 # 2.6.19 replaced writev with aio_write
@@ -1842,12 +1778,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_UMOUNTBEGIN_HAS_VFSMOUNT
 
          #2.6.18 + RHEL5 (fc6)
-         LC_PG_FS_MISC
-         LC_PAGE_CHECKED
          LC_LINUX_FIEMAP_H
 
          # 2.6.19
-         LC_INODE_BLKSIZE
          LC_FILE_WRITEV
          LC_FILE_READV
 

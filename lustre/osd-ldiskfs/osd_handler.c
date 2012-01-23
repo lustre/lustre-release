@@ -1424,8 +1424,8 @@ static void osd_inode_getattr(const struct lu_env *env,
         attr->la_flags      = LDISKFS_I(inode)->i_flags;
         attr->la_nlink      = inode->i_nlink;
         attr->la_rdev       = inode->i_rdev;
-        attr->la_blksize    = ll_inode_blksize(inode);
-        attr->la_blkbits    = inode->i_blkbits;
+	attr->la_blksize    = 1 << inode->i_blkbits;
+	attr->la_blkbits    = inode->i_blkbits;
 }
 
 static int osd_attr_get(const struct lu_env *env,
