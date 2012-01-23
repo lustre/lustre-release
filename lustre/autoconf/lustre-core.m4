@@ -841,7 +841,7 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 # LC_UMOUNTBEGIN_HAS_VFSMOUNT
-# after 2.6.18 umount_begin has different parameters
+# 2.6.18~2.6.25 umount_begin has different parameters
 AC_DEFUN([LC_UMOUNTBEGIN_HAS_VFSMOUNT],
 [AC_MSG_CHECKING([if umount_begin needs vfsmount parameter instead of super_block])
 tmp_flags="$EXTRA_KCFLAGS"
@@ -868,39 +868,6 @@ LB_LINUX_TRY_COMPILE([
 	AC_MSG_RESULT(no)
 ])
 EXTRA_KCFLAGS="$tmp_flags"
-])
-
-# LC_SEQ_LOCK
-# after 2.6.18 seq_file has lock intead of sem
-AC_DEFUN([LC_SEQ_LOCK],
-[AC_MSG_CHECKING([if struct seq_file has lock field])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/seq_file.h>
-],[
-	struct seq_file seq;
-
-	mutex_unlock(&seq.lock);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SEQ_LOCK, 1,
-                [after 2.6.18 seq_file has lock intead of sem])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-#
-# LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
-#
-# No standard kernels export this
-#
-AC_DEFUN([LC_EXPORT_FILEMAP_FDATAWRITE_RANGE],
-[LB_CHECK_SYMBOL_EXPORT([filemap_fdatawrite_range],
-[mm/filemap.c],[
-AC_DEFINE(HAVE_FILEMAP_FDATAWRITE_RANGE, 1,
-            [filemap_fdatawrite_range is exported by the kernel])
-],[
-])
 ])
 
 # LC_FLUSH_OWNER_ID
@@ -2141,8 +2108,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_NR_PAGECACHE
          LC_STATFS_DENTRY_PARAM
          LC_UMOUNTBEGIN_HAS_VFSMOUNT
-         LC_SEQ_LOCK
-         LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
          LC_FLUSH_OWNER_ID
          if test x$enable_server = xyes ; then
                 LC_EXPORT_INVALIDATE_MAPPING_PAGES

@@ -138,14 +138,6 @@ do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define LOCK_INODE_MUTEX_PARENT(inode) LOCK_INODE_MUTEX(inode)
 #endif /* HAVE_INODE_I_MUTEX */
 
-#ifdef HAVE_SEQ_LOCK
-#define LL_SEQ_LOCK(seq) cfs_mutex_lock(&(seq)->lock)
-#define LL_SEQ_UNLOCK(seq) cfs_mutex_unlock(&(seq)->lock)
-#else
-#define LL_SEQ_LOCK(seq) cfs_down(&(seq)->sem)
-#define LL_SEQ_UNLOCK(seq) cfs_up(&(seq)->sem)
-#endif
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
 #define d_child d_u.d_child
 #define d_rcu d_u.d_rcu
@@ -347,43 +339,6 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define LASSERT_I_ALLOC_SEM_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
 
 #include <linux/mpage.h>        /* for generic_writepages */
-#ifndef HAVE_FILEMAP_FDATAWRITE_RANGE
-#include <linux/backing-dev.h>  /* for mapping->backing_dev_info */
-static inline int filemap_fdatawrite_range(struct address_space *mapping,
-                                           loff_t start, loff_t end)
-{
-        int rc;
-        struct writeback_control wbc = {
-                .sync_mode = WB_SYNC_ALL,
-                .nr_to_write = (end - start + PAGE_SIZE - 1) >> PAGE_SHIFT,
-        };
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)
-        wbc.range_start = start;
-        wbc.range_end = end;
-#else
-        wbc.start = start;
-        wbc.end = end;
-#endif
-
-#ifdef HAVE_MAPPING_CAP_WRITEBACK_DIRTY
-        if (!mapping_cap_writeback_dirty(mapping))
-                rc = 0;
-#else
-        if (mapping->backing_dev_info->memory_backed)
-                rc = 0;
-#endif
-        /* do_writepages() */
-        else if (mapping->a_ops->writepages)
-                rc = mapping->a_ops->writepages(mapping, &wbc);
-        else
-                rc = generic_writepages(mapping, &wbc);
-        return rc;
-}
-#else
-int filemap_fdatawrite_range(struct address_space *mapping,
-                             loff_t start, loff_t end);
-#endif /* HAVE_FILEMAP_FDATAWRITE_RANGE */
 
 #ifndef HAVE_ATOMIC_MNT_COUNT
 static inline unsigned int mnt_get_count(struct vfsmount *mnt)
