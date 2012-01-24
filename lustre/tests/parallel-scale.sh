@@ -22,8 +22,9 @@ num_clients=$(get_node_count ${clients//,/ })
 # compilbench
 #
 cbench_DIR=${cbench_DIR:-""}
-cbench_IDIRS=${cbench_IDIRS:-10}
-cbench_RUNS=${cbench_RUNS:-10} # FIXME: wiki page requirements is 30, do we really need 30 ?
+cbench_IDIRS=${cbench_IDIRS:-4}
+# FIXME: wiki page requirements is 30, do we really need 30 ?
+cbench_RUNS=${cbench_RUNS:-4}
 
 if [ "$SLOW" = "no" ]; then
     cbench_IDIRS=2
@@ -119,7 +120,8 @@ wdisjoint_REP=${wdisjoint_REP:-10000}
 # parallel_grouplock
 #
 #
-PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-$(which parallel_grouplock 2> /dev/null || true)}
+PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-\
+    $(which parallel_grouplock 2> /dev/null || true)}
 parallel_grouplock_MINTASKS=${parallel_grouplock_MINTASKS:-5}
 
 build_test_filter
@@ -171,7 +173,8 @@ test_compilebench() {
 
     local savePWD=$PWD
     cd $cbench_DIR
-    local cmd="./compilebench -D $testdir -i $cbench_IDIRS -r $cbench_RUNS --makej"
+    local cmd="./compilebench -D $testdir -i $cbench_IDIRS \
+        -r $cbench_RUNS --makej"
 
     log "$cmd"
 
@@ -211,7 +214,8 @@ test_metabench() {
         $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
             -n $((num_clients * mbench_THREADS)) -p $SRUN_PARTITION -- $cmd
     else
-        mpi_run -np $((num_clients * $mbench_THREADS)) -machinefile ${MACHINEFILE} $cmd
+        mpi_run -np $((num_clients * $mbench_THREADS)) \
+            -machinefile ${MACHINEFILE} $cmd
     fi
 
     local rc=$?
@@ -253,7 +257,8 @@ test_simul() {
         $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
             -n $((num_clients * simul_THREADS)) -p $SRUN_PARTITION -- $cmd
     else
-        mpi_run -np $((num_clients * $simul_THREADS)) -machinefile ${MACHINEFILE} $cmd
+        mpi_run -np $((num_clients * $simul_THREADS)) \
+            -machinefile ${MACHINEFILE} $cmd
     fi
 
     local rc=$?
@@ -299,7 +304,8 @@ test_mdtest() {
         $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
             -n $((num_clients * mdtest_THREADS)) -p $SRUN_PARTITION -- $cmd
     else
-        mpi_run -np $((num_clients * mdtest_THREADS)) -machinefile ${MACHINEFILE} $cmd
+        mpi_run -np $((num_clients * mdtest_THREADS)) \
+            -machinefile ${MACHINEFILE} $cmd
     fi
 
     local rc=$?
@@ -381,14 +387,19 @@ test_ior() {
         { skip_env "IOR not found" && return; }
 
     local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
-    echo "+ $ior_blockSize * 1024 * 1024 * $num_clients * $ior_THREADS "
-    if [ $((space / 2)) -le $(( ior_blockSize * 1024 * 1024 * num_clients * ior_THREADS)) ]; then
+    local total_threads=$(( num_clients * ior_THREADS ))
+    echo "+ $ior_blockSize * 1024 * 1024 * $total_threads "
+    if [ $((space / 2)) -le \
+        $(( ior_blockSize * 1024 * 1024 * total_threads)) ]; then
         echo "+ $space * 9/10 / 1024 / 1024 / $num_clients / $ior_THREADS"
         ior_blockSize=$(( space /2 /1024 /1024 / num_clients / ior_THREADS ))
         [ $ior_blockSize = 0 ] && \
-            skip_env "Need free space more than ($num_clients * $ior_THREADS )Gb: $((num_clients*ior_THREADS *1024 *1024*2)), have $space" && return
+            skip_env "Need free space more than $((2 * total_threads))GB: \
+                $((total_threads *1024 *1024*2)), have $space" && return
 
-        echo "free space=$space, Need: $num_clients x $ior_THREADS x $ior_blockSize Gb (blockSize reduced to $ior_blockSize Gb)"
+        local reduced_size="$num_clients x $ior_THREADS x $ior_blockSize"
+        echo "free space=$space, Need: $reduced_size GB"
+        echo "(blockSize reduced to $ior_blockSize GB)"
     fi
 
     print_opts IOR ior_THREADS ior_DURATION MACHINEFILE
@@ -405,15 +416,17 @@ test_ior() {
             { error "setstripe failed" && return 2; }
     fi
     #
-    # -b N  blockSize -- contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)"
+    # -b N  blockSize --
+    #       contiguous bytes to write per task  (e.g.: 8, 4k, 2m, 1g)"
     # -o S  testFileName
     # -t N  transferSize -- size of transfer in bytes (e.g.: 8, 4k, 2m, 1g)"
     # -w    writeFile -- write file"
     # -r    readFile -- read existing file"
     # -T    maxTimeDuration -- max time in minutes to run tests"
     # -k    keepFile -- keep testFile(s) on program exit
-    local cmd="$IOR -a POSIX -b ${ior_blockSize}g -o $testdir/iorData -t 2m -v -w -r -T $ior_DURATION -k"
-    local cmd="$IOR -a $ior_type -b ${ior_blockSize}g -o $testdir/iorData -t $ior_xferSize -v -w -r -i $ior_iteration -T $ior_DURATION -k"
+
+    local cmd="$IOR -a $ior_type -b ${ior_blockSize}g -o $testdir/iorData \
+-t $ior_xferSize -v -w -r -i $ior_iteration -T $ior_DURATION -k"
     [ $type = "fpp" ] && cmd="$cmd -F"
 
     echo "+ $cmd"
@@ -423,7 +436,8 @@ test_ior() {
         $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
             -n $((num_clients * ior_THREADS)) -p $SRUN_PARTITION -- $cmd
     else
-        mpi_run -np $((num_clients * $ior_THREADS)) -machinefile ${MACHINEFILE} $cmd
+        mpi_run -np $((num_clients * $ior_THREADS)) \
+            -machinefile ${MACHINEFILE} $cmd
     fi
 
     local rc=$?
@@ -452,7 +466,8 @@ test_mib() {
     [ x$MIB = x ] &&
         { skip_env "MIB not found" && return; }
 
-    print_opts MIB mib_THREADS mib_xferSize mib_xferLimit mib_timeLimit MACHINEFILE
+    print_opts MIB mib_THREADS mib_xferSize mib_xferLimit mib_timeLimit \
+        MACHINEFILE
 
     local testdir=$DIR/d0.mib
     mkdir -p $testdir
@@ -467,7 +482,8 @@ test_mib() {
     # -s    Use system calls of this size
     # -t    test dir
     # -l    Issue no more than this many system calls
-    local cmd="$MIB -t $testdir -s $mib_xferSize -l $mib_xferLimit -L $mib_timeLimit -HI -p mib.$(date +%Y%m%d%H%M%S)"
+    local cmd="$MIB -t $testdir -s $mib_xferSize -l $mib_xferLimit \
+-L $mib_timeLimit -HI -p mib.$(date +%Y%m%d%H%M%S)"
 
     echo "+ $cmd"
     # find out if we need to use srun by checking $SRUN_PARTITION
@@ -475,7 +491,8 @@ test_mib() {
         $SRUN $SRUN_OPTIONS -D $testdir -w $clients -N $num_clients \
             -n $((num_clients * mib_THREADS)) -p $SRUN_PARTITION -- $cmd
     else
-        mpi_run -np $((num_clients * mib_THREADS)) -machinefile ${MACHINEFILE} $cmd
+        mpi_run -np $((num_clients * mib_THREADS)) \
+            -machinefile ${MACHINEFILE} $cmd
     fi
 
     local rc=$?
@@ -511,7 +528,8 @@ test_cascading_rw() {
     local cmd="$CASC_RW -g -d $testdir -n $casc_REP"
 
     echo "+ $cmd"
-    mpi_run -np $((num_clients * $casc_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    mpi_run -np $((num_clients * $casc_THREADS)) \
+        -machinefile ${MACHINEFILE} $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -548,7 +566,8 @@ test_write_append_truncate() {
     local cmd="write_append_truncate -n $write_REP $file"
 
     echo "+ $cmd"
-    mpi_run -np $((num_clients * $write_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    mpi_run -np $((num_clients * $write_THREADS)) \
+        -machinefile ${MACHINEFILE} $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -571,7 +590,8 @@ test_write_disjoint() {
     # FIXME
     # Need space estimation here.
 
-    print_opts WRITE_DISJOINT clients wdisjoint_THREADS wdisjoint_REP MACHINEFILE
+    print_opts WRITE_DISJOINT clients wdisjoint_THREADS wdisjoint_REP \
+        MACHINEFILE
     local testdir=$DIR/d0.write_disjoint
     mkdir -p $testdir
     # mpi_run uses mpiuser
@@ -580,7 +600,8 @@ test_write_disjoint() {
     local cmd="$WRITE_DISJOINT -f $testdir/file -n $wdisjoint_REP"
 
     echo "+ $cmd"
-    mpi_run -np $((num_clients * $wdisjoint_THREADS)) -machinefile ${MACHINEFILE} $cmd
+    mpi_run -np $((num_clients * $wdisjoint_THREADS)) \
+        -machinefile ${MACHINEFILE} $cmd
 
     local rc=$?
     if [ $rc != 0 ] ; then
@@ -617,7 +638,8 @@ test_parallel_grouplock() {
         local cmd="$PARALLEL_GROUPLOCK -g -v -d $testdir $subtest"
         echo "+ $cmd"
 
-        mpi_run -np $parallel_grouplock_MINTASKS -machinefile ${MACHINEFILE} $cmd
+        mpi_run -np $parallel_grouplock_MINTASKS \
+            -machinefile ${MACHINEFILE} $cmd
         local rc=$?
         if [ $rc != 0 ] ; then
             error_noexit "parallel_grouplock subtests $subtest failed! $rc"
@@ -671,7 +693,8 @@ test_statahead () {
     # cleanup only $statahead_NUMFILES number of files
     # ignore the other files created by someone else
     [ -d $testdir ] &&
-        mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE $statahead_NUMFILES $testdir 'f%%d' --ignore
+        mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE \
+            $statahead_NUMFILES $testdir 'f%%d' --ignore
 
     mkdir -p $testdir
     # mpi_run uses mpiuser
@@ -686,7 +709,9 @@ test_statahead () {
 
     cancel_lru_locks mdc
 
-    local cmd="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir --nfiles $num_files --filefmt 'f%%d'"
+    local cmd1="${MDSRATE} ${MDSRATE_DEBUG} --mknod --dir $testdir"
+    local cmd2="--nfiles $num_files --filefmt 'f%%d'"
+    local cmd="$cmd1 $cmd2"
     echo "+ $cmd"
 
     mpi_run -np $((num_clients * 32)) -machinefile ${MACHINEFILE} $cmd
@@ -712,7 +737,8 @@ test_statahead () {
 
     do_rpc_nodes $clients do_ls $mntpt_root $num_mntpts $dir
 
-    mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE $num_files $testdir 'f%%d' --ignore
+    mdsrate_cleanup $((num_clients * 32)) $MACHINEFILE \
+        $num_files $testdir 'f%%d' --ignore
 
     # use rm instead of rmdir because of
     # testdir could contain the files created by someone else,
@@ -722,7 +748,8 @@ test_statahead () {
 }
 run_test statahead "statahead test, multiple clients"
 
-# bug 17764 accessing files via nfs, ASSERTION(!mds_inode_is_orphan(dchild->d_inode)) failed
+# bug 17764 accessing files via nfs,
+# ASSERTION(!mds_inode_is_orphan(dchild->d_inode)) failed
 test_nfsread_orphan_file() {
     if [ ! "$NFSCLIENT" ]; then
         skip "not NFSCLIENT mode, skipped"
