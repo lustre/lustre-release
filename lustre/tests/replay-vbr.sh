@@ -58,7 +58,7 @@ rmultiop_start() {
     # /tmp/multiop_bg.pid file
 
     local pid_file=$TMP/multiop_bg.pid.$$
-    do_node $client "MULTIOP_PID_FILE=$pid_file LUSTRE= sh runmultiop_bg_pause $file $cmds" &
+    do_node $client "MULTIOP_PID_FILE=$pid_file LUSTRE= runmultiop_bg_pause $file $cmds" &
     local pid=$!
     sleep 3
     local multiop_pid
