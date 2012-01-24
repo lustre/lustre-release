@@ -103,11 +103,6 @@ void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
         op_data->op_data = NULL;
 }
 
-void llu_finish_md_op_data(struct md_op_data *op_data)
-{
-        OBD_FREE_PTR(op_data);
-}
-
 void obdo_refresh_inode(struct inode *dst,
                         struct obdo *src,
                         obd_flag valid)

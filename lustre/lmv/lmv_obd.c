@@ -2342,16 +2342,14 @@ static __u32 lmv_node_rank(struct obd_export *exp, const struct lu_fid *fid)
         return id ^ (id >> 32);
 }
 
-static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
-                        struct obd_capa *oc, __u64 offset64,
-                        struct page **pages, unsigned npages,
-                        struct ptlrpc_request **request)
+static int lmv_readpage(struct obd_export *exp, struct md_op_data *op_data,
+                        struct page **pages, struct ptlrpc_request **request)
 {
         struct obd_device       *obd = exp->exp_obd;
         struct lmv_obd          *lmv = &obd->u.lmv;
-        struct lu_fid            rid = *fid;
         struct lmv_object       *obj;
-        __u64                    offset;
+        struct lu_fid            rid = op_data->op_fid1;
+        __u64                    offset = op_data->op_offset;
         __u64                    hash_adj = 0;
         __u32                    rank = 0;
         __u64                    seg_size = 0;
@@ -2370,8 +2368,6 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         struct lu_dirpage       *dp;
         struct lu_dirent        *ent;
         ENTRY;
-
-        offset = offset64;
 
         rc = lmv_check_connect(obd);
         if (rc)
@@ -2399,7 +2395,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
          * [R*MAX_HASH/N ... (R + 1)*MAX_HASH/N] there for we do hash_adj
          * on hash  values that we get.
          */
-        obj = lmv_object_find_lock(obd, fid);
+        obj = lmv_object_find_lock(obd, &rid);
         if (obj) {
                 nr       = obj->lo_objcount;
                 LASSERT(nr > 0);
@@ -2407,7 +2403,7 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 do_div(seg_size, nr);
                 los      = obj->lo_stripes;
                 tgt      = lmv_get_target(lmv, los[0].ls_mds);
-                rank     = lmv_node_rank(tgt->ltd_exp, fid) % nr;
+                rank     = lmv_node_rank(tgt->ltd_exp, &rid) % nr;
                 tgt_tmp  = offset;
                 do_div(tgt_tmp, seg_size);
                 tgt0_idx = do_div(tgt_tmp,  nr);
@@ -2442,8 +2438,8 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
         if (IS_ERR(tgt))
                 GOTO(cleanup, rc = PTR_ERR(tgt));
 
-        rc = md_readpage(tgt->ltd_exp, &rid, oc, offset, pages, npages,
-                         request);
+        op_data->op_fid1 = rid;
+        rc = md_readpage(tgt->ltd_exp, op_data, pages, request);
         if (rc)
                 GOTO(cleanup, rc);
 
@@ -2451,9 +2447,10 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                  >> CFS_PAGE_SHIFT;
         nlupgs = (*request)->rq_bulk->bd_nob_transferred >> LU_PAGE_SHIFT;
         LASSERT(!((*request)->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK));
-        LASSERT(nrdpgs > 0 && nrdpgs <= npages);
+        LASSERT(nrdpgs > 0 && nrdpgs <= op_data->op_npages);
 
-        CDEBUG(D_INODE, "read %d(%d)/%d pages\n", nrdpgs, nlupgs, npages);
+        CDEBUG(D_INODE, "read %d(%d)/%d pages\n", nrdpgs, nlupgs,
+               op_data->op_npages);
 
         for (i = 0; i < nrdpgs; i++) {
 #if CFS_PAGE_SIZE > LU_PAGE_SIZE
@@ -2467,7 +2464,8 @@ static int lmv_readpage(struct obd_export *exp, const struct lu_fid *fid,
                 if (obj) {
                         lmv_hash_adjust(&dp->ldp_hash_start, hash_adj);
                         lmv_hash_adjust(&dp->ldp_hash_end,   hash_adj);
-                        LASSERT(le64_to_cpu(dp->ldp_hash_start) <= offset64);
+                        LASSERT(le64_to_cpu(dp->ldp_hash_start) <=
+                                op_data->op_offset);
 
                         if ((tgt0_idx != nr - 1) &&
                             (le64_to_cpu(dp->ldp_hash_end) == MDS_DIR_END_OFF))

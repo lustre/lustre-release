@@ -76,19 +76,16 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         struct lookup_intent   it = { .it_op = IT_READDIR };
         struct md_op_data      op_data = {{ 0 }};
         ldlm_policy_data_t policy = { .l_inodebits = { MDS_INODELOCK_UPDATE } };
-        __u64 offset;
         int rc = 0;
         ENTRY;
 
+        llu_prep_md_op_data(&op_data, inode, NULL, NULL, 0, 0, LUSTRE_OPC_ANY);
         rc = md_lock_match(sbi->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
                            &lli->lli_fid, LDLM_IBITS, &policy, LCK_CR, &lockh);
         if (!rc) {
                 struct ldlm_enqueue_info einfo = {LDLM_IBITS, LCK_CR,
                         llu_md_blocking_ast, ldlm_completion_ast, NULL, NULL,
                         inode};
-
-                llu_prep_md_op_data(&op_data, inode, NULL, NULL, 0, 0,
-                                    LUSTRE_OPC_ANY);
 
                 rc = md_enqueue(sbi->ll_md_exp, &einfo, &it,
                                 &op_data, &lockh, NULL, 0, NULL,
@@ -103,9 +100,9 @@ static int llu_dir_do_readpage(struct inode *inode, struct page *page)
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        offset = (__u64)hash_x_index(page->index, 0);
-        rc = md_readpage(sbi->ll_md_exp, &lli->lli_fid, NULL,
-                         offset, &page, 1, &request);
+        op_data.op_offset = (__u64)hash_x_index(page->index, 0);
+        op_data.op_npages = 1;
+        rc = md_readpage(sbi->ll_md_exp, &op_data, &page, &request);
         if (!rc) {
                 body = req_capsule_server_get(&request->rq_pill, &RMF_MDT_BODY);
                 LASSERT(body != NULL);         /* checked by md_readpage() */

@@ -261,7 +261,6 @@ extern struct fssw_ops llu_fssw_ops;
 void llu_prep_md_op_data(struct md_op_data *op_data, struct inode *i1,
                          struct inode *i2, const char *name, int namelen,
                          int mode, __u32 opc);
-void llu_finish_md_op_data(struct md_op_data *op_data);
 int llu_create(struct inode *dir, struct pnode_base *pnode, int mode);
 int llu_local_open(struct llu_inode_info *lli, struct lookup_intent *it);
 int llu_iop_open(struct pnode *pnode, int flags, mode_t mode);

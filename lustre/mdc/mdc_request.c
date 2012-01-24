@@ -1019,9 +1019,8 @@ out:
 EXPORT_SYMBOL(mdc_sendpage);
 #endif
 
-int mdc_readpage(struct obd_export *exp, const struct lu_fid *fid,
-                 struct obd_capa *oc, __u64 offset, struct page **pages,
-                 unsigned npages, struct ptlrpc_request **request)
+int mdc_readpage(struct obd_export *exp, struct md_op_data *op_data,
+                 struct page **pages, struct ptlrpc_request **request)
 {
         struct ptlrpc_request   *req;
         struct ptlrpc_bulk_desc *desc;
@@ -1040,7 +1039,7 @@ restart_bulk:
         if (req == NULL)
                 RETURN(-ENOMEM);
 
-        mdc_set_capa_size(req, &RMF_CAPA1, oc);
+        mdc_set_capa_size(req, &RMF_CAPA1, op_data->op_capa1);
 
         rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_READPAGE);
         if (rc) {
@@ -1051,7 +1050,7 @@ restart_bulk:
         req->rq_request_portal = MDS_READPAGE_PORTAL;
         ptlrpc_at_set_req_timeout(req);
 
-        desc = ptlrpc_prep_bulk_imp(req, npages, BULK_PUT_SINK,
+        desc = ptlrpc_prep_bulk_imp(req, op_data->op_npages, BULK_PUT_SINK,
                                     MDS_BULK_PORTAL);
         if (desc == NULL) {
                 ptlrpc_request_free(req);
@@ -1059,10 +1058,12 @@ restart_bulk:
         }
 
         /* NB req now owns desc and will free it when it gets freed */
-        for (i = 0; i < npages; i++)
+        for (i = 0; i < op_data->op_npages; i++)
                 ptlrpc_prep_bulk_page(desc, pages[i], 0, CFS_PAGE_SIZE);
 
-        mdc_readdir_pack(req, offset, CFS_PAGE_SIZE * npages, fid, oc);
+        mdc_readdir_pack(req, op_data->op_offset,
+                         CFS_PAGE_SIZE * op_data->op_npages,
+                         &op_data->op_fid1, op_data->op_capa1);
 
         ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);
@@ -1092,7 +1093,7 @@ restart_bulk:
         if (req->rq_bulk->bd_nob_transferred & ~LU_PAGE_MASK) {
                 CERROR("Unexpected # bytes transferred: %d (%ld expected)\n",
                         req->rq_bulk->bd_nob_transferred,
-                        CFS_PAGE_SIZE * npages);
+                        CFS_PAGE_SIZE * op_data->op_npages);
                 ptlrpc_req_finished(req);
                 RETURN(-EPROTO);
         }
