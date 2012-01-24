@@ -307,27 +307,6 @@ AC_DEFUN([LC_EXPORT_NODE_TO_CPUMASK],
           ])
 
 #
-# LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
-#
-# Check for our patched grab_cache_page_nowait_gfp() function
-# after 2.6.29 we can emulate this using add_to_page_cache_lru()
-#
-AC_DEFUN([LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP],
-[LB_CHECK_SYMBOL_EXPORT([grab_cache_page_nowait_gfp],
-[mm/filemap.c],[
-        AC_DEFINE(HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP, 1,
-                  [kernel exports grab_cache_page_nowait_gfp])
-        ],
-        [LB_CHECK_SYMBOL_EXPORT([add_to_page_cache_lru],
-        [mm/filemap.c],[
-                AC_DEFINE(HAVE_ADD_TO_PAGE_CACHE_LRU, 1,
-                        [kernel exports add_to_page_cache_lru])
-        ],[
-        ])
-        ])
-])
-
-#
 #
 # between 2.6.5 - 2.6.22 filemap_populate is exported in some kernels
 #
@@ -1934,6 +1913,7 @@ AC_DEFUN([LC_SET_CPUS_ALLOWED],
 # LC_D_OBTAIN_ALIAS
 # starting from 2.6.28 kernel replaces d_alloc_anon() with
 # d_obtain_alias() for getting anonymous dentries
+# RHEL5(2.6.18) has d_obtain_alias but SLES11SP0(2.6.27) not
 #
 AC_DEFUN([LC_D_OBTAIN_ALIAS],
 [AC_MSG_CHECKING([d_obtain_alias exist in kernel])
@@ -2145,7 +2125,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_EXPORT___D_REHASH
          LC_EXPORT_NODE_TO_CPUMASK
 
-         LC_FUNC_GRAB_CACHE_PAGE_NOWAIT_GFP
          LC_FILEMAP_POPULATE
          LC_BIT_SPINLOCK_H
 
@@ -2170,7 +2149,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.12
          LC_RW_TREE_LOCK
-         LC_EXPORT_SYNCHRONIZE_RCU
 
          # 2.6.15
          LC_INODE_I_MUTEX
@@ -2525,6 +2503,7 @@ if test x$enable_split != xno; then
 fi
 ])
 
+# RHEL5(2.6.18) has tux_info
 AC_DEFUN([LC_TASK_CLENV_TUX_INFO],
 [AC_MSG_CHECKING([tux_info])
 LB_LINUX_TRY_COMPILE([

@@ -346,10 +346,6 @@ static inline int mapping_has_pages(struct address_space *mapping)
 #define DOWN_READ_I_ALLOC_SEM(i)  down_read(&(i)->i_alloc_sem)
 #define LASSERT_I_ALLOC_SEM_READ_LOCKED(i) LASSERT(down_write_trylock(&(i)->i_alloc_sem) == 0)
 
-#ifndef HAVE_GRAB_CACHE_PAGE_NOWAIT_GFP
-#define grab_cache_page_nowait_gfp(x, y, z) grab_cache_page_nowait((x), (y))
-#endif
-
 #include <linux/mpage.h>        /* for generic_writepages */
 #ifndef HAVE_FILEMAP_FDATAWRITE_RANGE
 #include <linux/backing-dev.h>  /* for mapping->backing_dev_info */

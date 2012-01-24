@@ -541,7 +541,7 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 #ifdef __GFP_NOWARN
         gfp_mask |= __GFP_NOWARN;
 #endif
-        vmpage = grab_cache_page_nowait_gfp(mapping, index, gfp_mask);
+        vmpage = grab_cache_page_nowait(mapping, index);
         if (vmpage != NULL) {
                 /* Check if vmpage was truncated or reclaimed */
                 if (vmpage->mapping == mapping) {
