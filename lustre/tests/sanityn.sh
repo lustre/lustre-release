@@ -43,7 +43,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 16 23 33a"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 23 33a"
 
 FAIL_ON_ERROR=false
 
