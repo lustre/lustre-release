@@ -146,6 +146,9 @@ static int vvp_mmap_locks(const struct lu_env *env,
         if (!cl_is_normalio(env, io))
                 RETURN(0);
 
+        if (vio->cui_iov == NULL) /* nfs or loop back device write */
+                RETURN(0);
+
         for (seg = 0; seg < vio->cui_nrsegs; seg++) {
                 const struct iovec *iv = &vio->cui_iov[seg];
 
