@@ -1196,7 +1196,6 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, cfs_list_t *head,
 {
         check_res_locked(res);
 
-        ldlm_resource_dump(D_INFO, res);
         CDEBUG(D_OTHER, "About to add this lock:\n");
         ldlm_lock_dump(D_OTHER, lock, 0);
 

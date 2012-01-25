@@ -437,6 +437,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         lock->l_exp_refs_nr = 0;
         lock->l_exp_refs_target = NULL;
 #endif
+        CFS_INIT_LIST_HEAD(&lock->l_exp_list);
 
         RETURN(lock);
 }

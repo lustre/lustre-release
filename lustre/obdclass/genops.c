@@ -752,7 +752,7 @@ static void class_export_destroy(struct obd_export *exp)
         LASSERT(cfs_list_empty(&exp->exp_outstanding_replies));
         LASSERT(cfs_list_empty(&exp->exp_uncommitted_replies));
         LASSERT(cfs_list_empty(&exp->exp_req_replay_queue));
-        LASSERT(cfs_list_empty(&exp->exp_queued_rpc));
+        LASSERT(cfs_list_empty(&exp->exp_hp_rpcs));
         obd_destroy_export(exp);
         class_decref(obd, "export", exp);
 
@@ -826,13 +826,15 @@ struct obd_export *class_new_export(struct obd_device *obd,
         CFS_INIT_LIST_HEAD(&export->exp_uncommitted_replies);
         CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
         CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
-        CFS_INIT_LIST_HEAD(&export->exp_queued_rpc);
+        CFS_INIT_LIST_HEAD(&export->exp_hp_rpcs);
         class_handle_hash(&export->exp_handle, export_handle_addref);
         export->exp_last_request_time = cfs_time_current_sec();
         cfs_spin_lock_init(&export->exp_lock);
         cfs_spin_lock_init(&export->exp_rpc_lock);
         CFS_INIT_HLIST_NODE(&export->exp_uuid_hash);
         CFS_INIT_HLIST_NODE(&export->exp_nid_hash);
+        cfs_spin_lock_init(&export->exp_bl_list_lock);
+        CFS_INIT_LIST_HEAD(&export->exp_bl_list);
 
         export->exp_sp_peer = LUSTRE_SP_ANY;
         export->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;

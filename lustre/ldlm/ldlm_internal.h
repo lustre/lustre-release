@@ -46,12 +46,6 @@ extern cfs_list_t ldlm_srv_namespace_list;
 extern cfs_semaphore_t ldlm_cli_namespace_lock;
 extern cfs_list_t ldlm_cli_namespace_list;
 
-static inline int ldlm_res_eq(const struct ldlm_res_id *res0,
-                       const struct ldlm_res_id *res1)
-{
-        return !memcmp(res0, res1, sizeof(*res0));
-}
-
 static inline cfs_atomic_t *ldlm_namespace_nr(ldlm_side_t client)
 {
         return client == LDLM_NAMESPACE_SERVER ?

@@ -795,6 +795,11 @@ struct ldlm_lock {
         /** referenced export object */
         struct obd_export    *l_exp_refs_target;
 #endif
+        /** export blocking dlm lock list, protected by
+         * l_export->exp_bl_list_lock.
+         * Lock order of waiting_lists_spinlock, exp_bl_list_lock and res lock
+         * is: res lock -> exp_bl_list_lock -> wanting_lists_spinlock. */
+        cfs_list_t            l_exp_list;
 };
 
 struct ldlm_resource {
