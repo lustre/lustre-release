@@ -15,7 +15,7 @@ cleanup_mount $MOUNT
 # mount lustre on mds
 lustre_client=$(facet_active_host $SINGLEMDS)
 zconf_mount_clients $lustre_client $MOUNT \
-    "-o user_xattr,acl,flock,32bitapi" || \
+    "-o user_xattr,flock,32bitapi" || \
     error "mount lustre on $lustre_client failed"
 
 # setup the nfs

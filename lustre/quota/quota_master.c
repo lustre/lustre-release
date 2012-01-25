@@ -792,7 +792,7 @@ static int close_quota_files(struct obd_quotactl *oqctl,
                 if (!Q_TYPESET(oqctl, i))
                         continue;
                 if (qinfo->qi_files[i] == NULL) {
-                        CWARN("quota[%d] is off already\n", i);
+                        CDEBUG(D_QUOTA, "quota[%d] is off already\n", i);
                         rc = -EALREADY;
                         continue;
                 }

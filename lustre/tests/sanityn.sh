@@ -7,8 +7,9 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT="                14b  19         22    28   29          35    $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# bug number for skipped test:                                                    12652 12652
-grep -q 'Enterprise Server 10' /etc/SuSE-release && ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11    14" || true
+# bug number for skipped test:        12652 12652
+grep -q 'Enterprise Server 10' /etc/SuSE-release 2> /dev/null &&
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 11    14" || true
 
 # Tests that fail on uml
 [ "$UML" = "true" ] && EXCEPT="$EXCEPT 7"
@@ -134,8 +135,9 @@ test_2e() {
 run_test 2e "check chmod on root is propagated to others"
 
 test_3() {
-	( cd $DIR1 ; ln -s this/is/good $tfile )
-	[ "this/is/good" = "`perl -e 'print readlink("'$DIR2/$tfile'");'`" ] ||
+	local target="this/is/good"
+	ln -s $target $DIR1/$tfile || error "ln -s $target $DIR1/$tfile failed"
+	[ "$(ls -l $DIR2/$tfile | sed -e 's/.* -> //')" = "$target" ] ||
 		error "link $DIR2/$tfile not as expected"
 }
 run_test 3 "symlink on one mtpt, readlink on another ==========="
@@ -238,7 +240,6 @@ test_12() {
 run_test 12 "test lock ordering (link, stat, unlink) ==========="
 
 test_13() {	# bug 2451 - directory coherency
-       rm -rf $DIR1/d13
        mkdir $DIR1/d13 || error
        cd $DIR1/d13 || error
        ls
@@ -464,21 +465,25 @@ test_24b() {
 run_test 24b "lfs df should show both filesystems ==============="
 
 test_25() {
-	[ `lctl get_param -n mdc.*-mdc-*.connect_flags | grep -c acl` -lt 2 ] && \
-	    skip "must have acl, skipping" && return
+	[ `lctl get_param -n mdc.*-mdc-*.connect_flags | grep -c acl` -lt 2 ] &&
+		skip "must have acl, skipping" && return
 
 	mkdir -p $DIR1/$tdir
 	touch $DIR1/$tdir/f1 || error "touch $DIR1/$tdir/f1"
 	chmod 0755 $DIR1/$tdir/f1 || error "chmod 0755 $DIR1/$tdir/f1"
 
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #1"
-	setfacl -m u:$RUNAS_ID:--- -m g:$RUNAS_GID:--- $DIR1/$tdir || error "setfacl $DIR2/$tdir #1"
+	setfacl -m u:$RUNAS_ID:--- -m g:$RUNAS_GID:--- $DIR1/$tdir ||
+		error "setfacl $DIR2/$tdir #1"
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #2"
-	setfacl -m u:$RUNAS_ID:r-x -m g:$RUNAS_GID:r-x $DIR1/$tdir || error "setfacl $DIR2/$tdir #2"
+	setfacl -m u:$RUNAS_ID:r-x -m g:$RUNAS_GID:r-x $DIR1/$tdir ||
+		error "setfacl $DIR2/$tdir #2"
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #3"
-	setfacl -m u:$RUNAS_ID:--- -m g:$RUNAS_GID:--- $DIR1/$tdir || error "setfacl $DIR2/$tdir #3"
+	setfacl -m u:$RUNAS_ID:--- -m g:$RUNAS_GID:--- $DIR1/$tdir ||
+		error "setfacl $DIR2/$tdir #3"
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #4"
-	setfacl -x u:$RUNAS_ID: -x g:$RUNAS_GID: $DIR1/$tdir || error "setfacl $DIR2/$tdir #4"
+	setfacl -x u:$RUNAS_ID: -x g:$RUNAS_GID: $DIR1/$tdir ||
+		error "setfacl $DIR2/$tdir #4"
 	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #5"
 
 	rm -rf $DIR1/$tdir

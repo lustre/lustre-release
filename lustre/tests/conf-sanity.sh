@@ -1210,7 +1210,7 @@ test_32a() {
 		{ skip_env "Cannot untar $DISK1_8" && return 0; }
 
 	load_modules
-	$LCTL set_param debug=$PTLDEBUG
+	$LCTL set_param debug="$PTLDEBUG"
 
 	$TUNEFS $tmpdir/mds || error "tunefs failed"
 

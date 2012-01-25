@@ -79,10 +79,11 @@ enum {
 static inline int cfs_fail_check_set(__u32 id, __u32 value, int set)
 {
         int ret = 0;
+
         if (unlikely(CFS_FAIL_PRECHECK(id) &&
-            (ret = __cfs_fail_check_set(id, value, set)))) {
-                CERROR("*** cfs_fail_loc=%x ***\n", id);
-        }
+                     (ret = __cfs_fail_check_set(id, value, set))))
+                LCONSOLE_INFO("*** cfs_fail_loc=%x, val=%u***\n", id, value);
+
         return ret;
 }
 

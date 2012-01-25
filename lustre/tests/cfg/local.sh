@@ -22,7 +22,7 @@ for num in $(seq $MDSCOUNT); do
 done
 MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-200000}
-MDSOPT=${MDSOPT:-"--mountfsoptions=errors=remount-ro,user_xattr,acl"}
+MDSOPT=${MDSOPT:-"--mountfsoptions=user_xattr"}
 
 MGSDEV=${MGSDEV:-$MDSDEV1}
 MGSSIZE=${MGSSIZE:-$MDSSIZE}
@@ -43,7 +43,8 @@ STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
 SINGLEMDS=${SINGLEMDS:-"mds1"}
 TIMEOUT=${TIMEOUT:-20}
-PTLDEBUG=${PTLDEBUG:-0x33f0404}
+PTLDEBUG=${PTLDEBUG:-"vfstrace rpctrace dlmtrace neterror ha config ioctl super"}
+SUBSYSTEM=${SUBSYSTEM:-"all -lnet -lnd -pinger"}
 
 # promise 2MB for every cpu
 _debug_mb=$((($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1)*2))
@@ -56,8 +57,6 @@ elif ((_debug_mb > 512 )); then
 fi
 
 DEBUG_SIZE=${DEBUG_SIZE:-$_debug_mb}
-
-SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 
 ENABLE_QUOTA=${ENABLE_QUOTA:-""}
 QUOTA_TYPE="ug3"
@@ -105,7 +104,7 @@ MKFSOPT=""
     OSTOPT=$OSTOPT" --failnode=`h2$NETTYPE $ostfailover_HOST`"
 OST_MKFS_OPTS="--ost --fsname=$FSNAME --device-size=$OSTSIZE --mgsnode=$MGSNID --param sys.timeout=$TIMEOUT $MKFSOPT $OSTOPT $OST_MKFS_OPTS"
 
-MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr,acl"}
+MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-"-o loop,user_xattr"}
 OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-"-o loop"}
 MGS_MOUNT_OPTS=${MGS_MOUNT_OPTS:-$MDS_MOUNT_OPTS}
 
@@ -113,7 +112,7 @@ MGS_MOUNT_OPTS=${MGS_MOUNT_OPTS:-$MDS_MOUNT_OPTS}
 MOUNT=${MOUNT:-/mnt/${FSNAME}}
 MOUNT1=${MOUNT1:-$MOUNT}
 MOUNT2=${MOUNT2:-${MOUNT}2}
-MOUNTOPT=${MOUNTOPT:-"-o user_xattr,acl,flock"}
+MOUNTOPT=${MOUNTOPT:-"-o user_xattr,flock"}
 DIR=${DIR:-$MOUNT}
 DIR1=${DIR:-$MOUNT1}
 DIR2=${DIR2:-$MOUNT2}
