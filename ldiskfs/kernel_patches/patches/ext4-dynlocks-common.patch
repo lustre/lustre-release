@@ -50,7 +50,7 @@ diff -rupN linux-2.6.18-128.1.6_1/fs/ext4/dynlocks.c linux-2.6.18-128.1.6_2/fs/e
 +	return rc;
 +}
 +
-+void __exit dynlock_cache_exit(void)
++void dynlock_cache_exit(void)
 +{
 +	/* printk(KERN_INFO "exit dynlocks cache\n"); */
 +	kmem_cache_destroy(dynlock_cachep);
