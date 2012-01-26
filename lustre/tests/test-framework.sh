@@ -1261,7 +1261,8 @@ wait_update () {
         while [ true ]; do
             RESULT=$(do_node $node "$TEST")
             if [ "$RESULT" == "$FINAL" ]; then
-                echo "Updated after $WAIT sec: wanted '$FINAL' got '$RESULT'"
+                [ -z "$RESULT" -o $WAIT -le $sleep ] ||
+                    echo "Updated after ${WAIT}s: wanted '$FINAL' got '$RESULT'"
                 return 0
             fi
             [ $WAIT -ge $MAX ] && break
@@ -1269,7 +1270,7 @@ wait_update () {
             WAIT=$((WAIT + sleep))
             sleep $sleep
         done
-        echo "Update not seen after $MAX sec: wanted '$FINAL' got '$RESULT'"
+        echo "Update not seen after ${MAX}s: wanted '$FINAL' got '$RESULT'"
         return 3
 }
 
@@ -4544,7 +4545,7 @@ wait_flavor()
         echo -n "checking $dir..."
         res=$(do_check_flavor $dir $flavor)
         echo "found $res/$expect $flavor connections"
-        [ $res -eq $expect ] && return 0
+        [ $res -ge $expect ] && return 0
         sleep 4
     done
 
