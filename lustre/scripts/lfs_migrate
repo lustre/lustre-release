@@ -40,7 +40,7 @@ USAGE
 
 OPT_CHECK=y
 
-while getopts "chlnRqsSy" opt $*; do
+while getopts "chlnqRsy" opt $*; do
     case $opt in
 	c) echo "'-c' option deprecated, checking enabled by default" 1>&2;;
 	l) OPT_NLINK=y;;
@@ -113,7 +113,7 @@ lfs_migrate() {
 		# then we don't need to do this getstripe/mktemp stuff.
 			UNLINK="-u"
 			COUNT=$($LFS getstripe -c "$OLDNAME" 2> /dev/null)
-			SIZE=$($LFS getstripe -s "$OLDNAME" 2> /dev/null)
+			SIZE=$($LFS getstripe -S "$OLDNAME" 2> /dev/null)
 			[ -z "$COUNT" -o -z "$SIZE" ] && UNLINK=""
 		fi
 		NEWNAME=$(mktemp $UNLINK "$OLDNAME.tmp.XXXXXX")
@@ -122,7 +122,7 @@ lfs_migrate() {
 			continue
 		fi
 
-		[ "$UNLINK" ] && $LFS setstripe -c${COUNT} -s${SIZE} "$NEWNAME"
+		[ "$UNLINK" ] && $LFS setstripe -c${COUNT} -S${SIZE} "$NEWNAME"
 
 		# we use --inplace, since we created our own temp file already
 		if ! $RSYNC -a --inplace $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then

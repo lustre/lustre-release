@@ -36,9 +36,6 @@ assert_DIR
 
 build_test_filter
 
-SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
-GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
-
 MAXFREE=${MAXFREE:-$((2000000 * OSTCOUNT))}
 
 # OST pools tests
@@ -68,8 +65,8 @@ create_dir() {
     local idx=$4
 
     mkdir -p $dir
-    if [[ -n $4 ]]; then
-        $SETSTRIPE -c $count -p $pool $dir -o $idx
+    if [[ -n $idx ]]; then
+        $SETSTRIPE -c $count -p $pool -i $idx $dir
     else
         $SETSTRIPE -c $count -p $pool $dir
     fi
@@ -83,7 +80,7 @@ create_file() {
     local count=${3:-"-1"}
     local index=${4:-"-1"}
     rm -f $file
-    $SETSTRIPE -o $index -c $count -p $pool $file
+    $SETSTRIPE -i $index -c $count -p $pool $file
     [[ $? -eq 0 ]] ||
         error "$SETSTRIPE -p $pool $file failed."
 }
@@ -628,7 +625,7 @@ test_6() {
     # pool is specified.
     create_pool_nofail $POOL2
     add_pool $POOL2 "OST0000" "$FSNAME-OST0000_UUID "
-    $SETSTRIPE -o 1 -p $POOL2 $ROOT_POOL/$tfile 2>/dev/null
+    $SETSTRIPE -i 1 -p $POOL2 $ROOT_POOL/$tfile 2>/dev/null
     [[ $? -ne 0 ]] ||
         error "$SETSTRIPE with start index outside the pool did not fail."
 
@@ -1192,7 +1189,7 @@ test_23a() {
     sleep 3
     $LFS quota -v -u $RUNAS_ID $dir
 
-    $LFS setstripe $file -c 1 -p $POOL
+    $SETSTRIPE -c 1 -p $POOL $file
     chown $RUNAS_ID.$RUNAS_GID $file
     ls -l $file
 
@@ -1295,11 +1292,11 @@ test_24() {
     create_dir $POOL_ROOT/dir1 $POOL $OSTCOUNT
 
     mkdir $POOL_ROOT/dir2
-    $SETSTRIPE $POOL_ROOT/dir2 -p $POOL -s 65536 -i 0 -c 1 ||
+    $SETSTRIPE -p $POOL -S 65536 -i 0 -c 1 $POOL_ROOT/dir2 ||
         error "$SETSTRIPE $POOL_ROOT/dir2 failed"
 
     mkdir $POOL_ROOT/dir3
-    $SETSTRIPE $POOL_ROOT/dir3 -s 65536 -i 0 -c 1 ||
+    $SETSTRIPE -S 65536 -i 0 -c 1 $POOL_ROOT/dir3 ||
         error "$SETSTRIPE $POOL_ROOT/dir3 failed"
 
     mkdir $POOL_ROOT/dir4
@@ -1379,7 +1376,7 @@ test_25() {
         df $POOL_ROOT > /dev/null
         sleep 5
         # Make sure OST0 can be striped on
-        $SETSTRIPE -o 0 -c 1 $POOL_ROOT/$tfile
+        $SETSTRIPE -i 0 -c 1 $POOL_ROOT/$tfile
         STR=$($GETSTRIPE $POOL_ROOT/$tfile | grep 0x | cut -f2 | tr -d " ")
         rm $POOL_ROOT/$tfile
         if [[ "$STR" == "0" ]]; then

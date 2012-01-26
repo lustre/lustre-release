@@ -22,8 +22,6 @@ PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
 SIZE=${SIZE:-40960}
 CHECKSTAT=${CHECKSTAT:-"checkstat -v"}
-GETSTRIPE=${GETSTRIPE:-lfs getstripe}
-SETSTRIPE=${SETSTRIPE:-lstripe}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
@@ -536,8 +534,8 @@ test_28() { # bug 9977
 	ECHO_UUID="ECHO_osc1_UUID"
 	tOST=`$LCTL dl | | awk '/-osc-|OSC.*MNT/ { print $4 }' | head -1`
 
-	lfs setstripe $DIR1/$tfile -s 1048576 -i 0 -c 2
-	tOBJID=`lfs getstripe $DIR1/$tfile |grep "^[[:space:]]\+1" |awk '{print $2}'`
+	$LFS setstripe $DIR1/$tfile -S 1048576 -i 0 -c 2
+	tOBJID=`$LFS getstripe $DIR1/$tfile | awk '$1 == 1 {print $2}'`
 	dd if=/dev/zero of=$DIR1/$tfile bs=1024k count=2
 
 	$LCTL <<-EOF
@@ -546,7 +544,7 @@ test_28() { # bug 9977
 		setup $tOST
 	EOF
 
-	tECHOID=`$LCTL dl | grep $ECHO_UUID | awk '{print $1}'`
+	tECHOID=`$LCTL dl | grep $ECHO_UUID | awk '{ print $1 }'`
 	$LCTL --device $tECHOID destroy "${tOBJID}:0"
 
     	$LCTL <<-EOF

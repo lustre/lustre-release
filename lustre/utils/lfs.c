@@ -583,6 +583,7 @@ static int lfs_find(int argc, char **argv)
                 {"mdt",          required_argument, 0, 'm'},
                 {"mtime",        required_argument, 0, 'M'},
                 {"name",         required_argument, 0, 'n'},
+     /* reserve {"or",           no_argument,     , 0, 'o'}, to match find(1) */
                 {"obd",          required_argument, 0, 'O'},
                 {"ost",          required_argument, 0, 'O'},
                 /* no short option for pool, p/P already used */
@@ -1284,9 +1285,9 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
                          * it in so that we can print an error message. */
                         if (uuid_buf.uuid[0] == '\0')
                                 sprintf(uuid_buf.uuid, "%s%04x",
-					tp->st_name, index);
-			showdf(mntdir,&stat_buf,obd_uuid2str(&uuid_buf),
-			       ishow, cooked, tp->st_name, index, rc);
+                                        tp->st_name, index);
+                        showdf(mntdir, &stat_buf, obd_uuid2str(&uuid_buf),
+                               ishow, cooked, tp->st_name, index, rc);
 
                         if (rc == 0) {
                                 if (tp->st_op == LL_STATFS_LMV) {
@@ -2607,7 +2608,7 @@ static int lfs_changelog(int argc, char **argv)
                        changelog_type2str(rec->cr_type),
                        ts.tm_hour, ts.tm_min, ts.tm_sec,
                        (int)(rec->cr_time & ((1<<30) - 1)),
-                       ts.tm_year+1900, ts.tm_mon+1, ts.tm_mday,
+                       ts.tm_year + 1900, ts.tm_mon + 1, ts.tm_mday,
                        rec->cr_flags & CLF_FLAGMASK, PFID(&rec->cr_tfid));
                 if (rec->cr_namelen)
                         /* namespace rec includes parent and filename */
@@ -2802,8 +2803,6 @@ int main(int argc, char **argv)
         ptl_initialize(argc, argv);
         if (obd_initialize(argc, argv) < 0)
                 exit(2);
-        if (dbg_initialize(argc, argv) < 0)
-                exit(3);
 
         Parser_init("lfs > ", cmdlist);
 

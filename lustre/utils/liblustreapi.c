@@ -185,36 +185,37 @@ int parse_size(char *optarg, unsigned long long *size,
         *size = strtoull(optarg, &end, 0);
 
         if (*end != '\0') {
-                if ((*end == 'b') && *(end+1) == '\0' &&
+                if ((*end == 'b') && *(end + 1) == '\0' &&
                     (*size & (~0ULL << (64 - 9))) == 0 &&
                     !bytes_spec) {
                         *size_units = 1 << 9;
-                } else if ((*end == 'b') && *(end+1) == '\0' &&
+                } else if ((*end == 'b') &&
+                           *(end + 1) == '\0' &&
                            bytes_spec) {
                         *size_units = 1;
                 } else if ((*end == 'k' || *end == 'K') &&
-                           *(end+1) == '\0' && (*size &
-                           (~0ULL << (64 - 10))) == 0) {
+                           *(end + 1) == '\0' &&
+                           (*size & (~0ULL << (64 - 10))) == 0) {
                         *size_units = 1 << 10;
                 } else if ((*end == 'm' || *end == 'M') &&
-                           *(end+1) == '\0' && (*size &
-                           (~0ULL << (64 - 20))) == 0) {
+                           *(end + 1) == '\0' &&
+                           (*size & (~0ULL << (64 - 20))) == 0) {
                         *size_units = 1 << 20;
                 } else if ((*end == 'g' || *end == 'G') &&
-                           *(end+1) == '\0' && (*size &
-                           (~0ULL << (64 - 30))) == 0) {
+                           *(end + 1) == '\0' &&
+                           (*size & (~0ULL << (64 - 30))) == 0) {
                         *size_units = 1 << 30;
                 } else if ((*end == 't' || *end == 'T') &&
-                           *(end+1) == '\0' && (*size &
-                           (~0ULL << (64 - 40))) == 0) {
+                           *(end + 1) == '\0' &&
+                           (*size & (~0ULL << (64 - 40))) == 0) {
                         *size_units = 1ULL << 40;
                 } else if ((*end == 'p' || *end == 'P') &&
-                           *(end+1) == '\0' && (*size &
-                           (~0ULL << (64 - 50))) == 0) {
+                           *(end + 1) == '\0' &&
+                           (*size & (~0ULL << (64 - 50))) == 0) {
                         *size_units = 1ULL << 50;
                 } else if ((*end == 'e' || *end == 'E') &&
-                           *(end+1) == '\0' && (*size &
-                           (~0ULL << (64 - 60))) == 0) {
+                           *(end + 1) == '\0' &&
+                           (*size & (~0ULL << (64 - 60))) == 0) {
                         *size_units = 1ULL << 60;
                 } else {
                         return -1;
@@ -1981,8 +1982,8 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
 
 void lov_dump_user_lmm_v1v3(struct lov_user_md *lum, char *pool_name,
                             struct lov_user_ost_data_v1 *objects,
-                            char *path, int is_dir,
-                            int obdindex, int depth, int header, int raw)
+                            char *path, int is_dir, int obdindex,
+                            int depth, int header, int raw)
 {
         int i, obdstripe = (obdindex != OBD_NOT_FOUND) ? 0 : 1;
 

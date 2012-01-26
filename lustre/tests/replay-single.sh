@@ -409,7 +409,7 @@ test_20b() { # bug 10480
         usleep 60                           # give dd a chance to start
     done
 
-    lfs getstripe $DIR/$tfile || return 1
+    $GETSTRIPE $DIR/$tfile || return 1
     rm -f $DIR/$tfile || return 2       # make it an orphan
     mds_evict_client
     client_up || client_up || true    # reconnect
@@ -819,20 +819,21 @@ run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 # the page, guarnateeing that the unlock from the RPC completion would
 # assert on trying to unlock the unlocked page.
 test_41() {
-    [ $OSTCOUNT -lt 2 ] && \
-	skip_env "skipping test 41: we don't have a second OST to test with" && \
-	return
+    [ $OSTCOUNT -lt 2 ] &&
+        skip_env "skipping test 41: we don't have a second OST to test with" &&
+        return
 
     local f=$MOUNT/$tfile
     # make sure the start of the file is ost1
-    lfs setstripe $f -s $((128 * 1024)) -i 0
+    $SETSTRIPE -S $((128 * 1024)) -i 0 $f
     do_facet client dd if=/dev/zero of=$f bs=4k count=1 || return 3
     cancel_lru_locks osc
     # fail ost2 and read from ost1
     local mdtosc=$(get_mdtosc_proc_path $SINGLEMDS $ost2_svc)
     local osc2dev=$(do_facet $SINGLEMDS "lctl get_param -n devices" | \
         grep $mdtosc | awk '{print $1}')
-    [ -z "$osc2dev" ] && echo "OST: $ost2_svc" && lctl get_param -n devices && return 4
+    [ -z "$osc2dev" ] && echo "OST: $ost2_svc" && lctl get_param -n devices &&
+        return 4
     do_facet $SINGLEMDS $LCTL --device $osc2dev deactivate || return 1
     do_facet client dd if=$f of=/dev/null bs=4k count=1 || return 3
     do_facet $SINGLEMDS $LCTL --device $osc2dev activate || return 2
@@ -1629,7 +1630,7 @@ test_65b() #bug 3055
     $LCTL dk > /dev/null
     # Slow down a request to the current service time, this is critical
     # because previous tests may have caused this value to increase.
-    lfs setstripe $DIR/$tfile --index=0 --count=1
+    $SETSTRIPE --stripe-index=0 --count=1 $DIR/$tfile
     multiop $DIR/$tfile Ow1yc
     REQ_DELAY=`lctl get_param -n osc.${FSNAME}-OST0000-osc-*.timeouts |
                awk '/portal 6/ {print $5}'`
@@ -1640,7 +1641,7 @@ test_65b() #bug 3055
     do_facet ost1 $LCTL set_param fail_loc=0x224
 
     rm -f $DIR/$tfile
-    lfs setstripe $DIR/$tfile --index=0 --count=1
+    $SETSTRIPE --stripe-index=0 --count=1 $DIR/$tfile
     # force some real bulk transfer
     multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 
@@ -1738,7 +1739,7 @@ test_67b() #bug 3055
         osc.$mdtosc.prealloc_next_id)
 
     mkdir -p $DIR/$tdir/${OST}
-    lfs setstripe $DIR/$tdir/${OST} -o 0 -c 1 || error "setstripe"
+    $SETSTRIPE -i 0 -c 1 $DIR/$tdir/${OST} || error "$SETSTRIPE"
     echo "Creating to objid $last_id on ost $OST..."
 #define OBD_FAIL_OST_PAUSE_CREATE        0x223
     do_facet ost1 "$LCTL set_param fail_val=20000"
@@ -1781,7 +1782,7 @@ test_68 () #bug 13813
 
     rm -rf $DIR/$tdir
     mkdir -p $DIR/$tdir
-    lfs setstripe $DIR/$tdir --index=0 --count=1
+    $SETSTRIPE --stripe-index=0 --count=1 $DIR/$tdir
 #define OBD_FAIL_LDLM_PAUSE_CANCEL       0x312
     $LCTL set_param fail_val=$(($TIMEOUT - 1))
     $LCTL set_param fail_loc=0x80000312
@@ -2085,7 +2086,7 @@ test_85b() { #bug 16774
     do_facet mgs $LCTL pool_new $FSNAME.$TESTNAME || return 1
     do_facet mgs $LCTL pool_add $FSNAME.$TESTNAME $FSNAME-OST0000 || return 2
 
-    lfs setstripe -c 1 -p $FSNAME.$TESTNAME $DIR
+    $SETSTRIPE -c 1 -p $FSNAME.$TESTNAME $DIR
 
     for i in `seq 100`; do
         dd if=/dev/urandom of=$DIR/$tfile-$i bs=4096 count=32 >/dev/null 2>&1
@@ -2131,7 +2132,7 @@ test_87() {
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
 
     replay_barrier ost1
-    lfs setstripe -i 0 -c 1 $DIR/$tfile
+    $SETSTRIPE -i 0 -c 1 $DIR/$tfile
     dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
     cksum=`md5sum $DIR/$tfile | awk '{print $1}'`
     cancel_lru_locks osc
@@ -2148,7 +2149,7 @@ test_87b() {
     do_facet ost1 "lctl set_param -n obdfilter.${ost1_svc}.sync_journal 0"
 
     replay_barrier ost1
-    lfs setstripe -i 0 -c 1 $DIR/$tfile
+    $SETSTRIPE -i 0 -c 1 $DIR/$tfile
     dd if=/dev/urandom of=$DIR/$tfile bs=1024k count=8 || error "Cannot write"
     sleep 1 # Give it a chance to flush dirty data
     echo TESTTEST | dd of=$DIR/$tfile bs=1 count=8 seek=64
@@ -2167,7 +2168,7 @@ test_88() { #bug 17485
     mkdir -p $DIR/$tdir
     mkdir -p $TMP/$tdir
 
-    lfs setstripe $DIR/$tdir -o 0 -c 1 || error "setstripe"
+    $SETSTRIPE -i 0 -c 1 $DIR/$tdir || error "$SETSTRIPE"
 
     replay_barrier ost1
     replay_barrier $SINGLEMDS
@@ -2250,7 +2251,7 @@ test_89() {
         wait_mds_ost_sync
         wait_destroy_complete
         BLOCKS1=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
-        lfs setstripe -i 0 -c 1 $DIR/$tdir/$tfile
+        $SETSTRIPE -i 0 -c 1 $DIR/$tdir/$tfile
         dd if=/dev/zero bs=1M count=10 of=$DIR/$tdir/$tfile
         sync
         stop ost1
@@ -2296,17 +2297,18 @@ test_90() { # bug 19494
     # file "f${index}" striped over 1 OST
     # file "all" striped over all OSTs
 
-    $LFS setstripe -c $OSTCOUNT $dir/all || error "setstripe failed to create $dir/all"
+    $SETSTRIPE -c $OSTCOUNT $dir/all ||
+        error "setstripe failed to create $dir/all"
 
     for (( i=0; i<$OSTCOUNT; i++ )); do
         local f=$dir/f$i
-        $LFS setstripe -i $i -c 1 $f || error "setstripe failed to create $f"
+        $SETSTRIPE -i $i -c 1 $f || error "$SETSTRIPE failed to create $f"
 
-        # confirm that setstripe actually created the stripe on the requested OST
+        # confirm setstripe actually created the stripe on the requested OST
         local uuid=$(ostuuid_from_index $i)
         for file in f$i all; do
             if [[ $dir/$file != $($LFS find --obd $uuid --name $file $dir) ]]; then
-                $LFS getstripe $dir/file
+                $GETSTRIPE $dir/file
                 error wrong stripe: $file, uuid: $uuid
             fi
         done
@@ -2343,8 +2345,8 @@ test_90() { # bug 19494
     [[ $(echo $list | wc -w) -eq 2 ]] ||
         error_noexit "lfs find reports the wrong list of affected files ${#list[@]}"
 
-    echo "Check getstripe: lfs getstripe -r --obd $obd"
-    list=$($LFS getstripe -r --obd $obd $dir)
+    echo "Check getstripe: $GETSTRIPE -r --obd $obd"
+    list=$($GETSTRIPE -r --obd $obd $dir)
     echo "$list"
     for file in all f$index; do
         echo "$list" | grep $dir/$file ||

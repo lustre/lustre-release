@@ -165,10 +165,14 @@ init_test_env() {
         export PATH=$LUSTRE/tests/mpi:$PATH
     fi
     export RSYNC_RSH=${RSYNC_RSH:-rsh}
+
     export LCTL=${LCTL:-"$LUSTRE/utils/lctl"}
     [ ! -f "$LCTL" ] && export LCTL=$(which lctl)
     export LFS=${LFS:-"$LUSTRE/utils/lfs"}
     [ ! -f "$LFS" ] && export LFS=$(which lfs)
+    SETSTRIPE=${SETSTRIPE:-"$LFS setstripe"}
+    GETSTRIPE=${GETSTRIPE:-"$LFS getstripe"}
+
     export L_GETIDENTITY=${L_GETIDENTITY:-"$LUSTRE/utils/l_getidentity"}
     if [ ! -f "$L_GETIDENTITY" ]; then
         if `which l_getidentity > /dev/null 2>&1`; then
@@ -3916,25 +3920,6 @@ check_catastrophe() {
 if [ \\\$rc -ne 0 ]; then echo \\\$(hostname): \\\$rc; fi
 exit \\\$rc;"
     fi 
-}
-
-# $1 node
-# $2 file
-# $3 $RUNAS
-get_stripe_info() {
-        local tmp_file
-
-        stripe_size=0
-        stripe_count=0
-        stripe_index=0
-        tmp_file=$(mktemp)
-
-        do_facet $1 $3 lfs getstripe -v $2 > $tmp_file
-
-        stripe_size=`awk '$1 ~ /size/ {print $2}' $tmp_file`
-        stripe_count=`awk '$1 ~ /count/ {print $2}' $tmp_file`
-        stripe_index=`awk '$1 ~ /stripe_offset/ {print $2}' $tmp_file`
-        rm -f $tmp_file
 }
 
 # CMD: determine mds index where directory inode presents

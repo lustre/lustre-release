@@ -248,11 +248,11 @@ test_18a() {
     pgcache_empty || return 1
 
     # 1 stripe on ost2
-    lfs setstripe $f -s $((128 * 1024)) -i 1 -c 1
-    get_stripe_info client $f
+    $LFS setstripe -i 1 -c 1 $f
+    stripe_index=$($LFS getstripe -i $f)
     if [ $stripe_index -ne 1 ]; then
-        lfs getstripe $f
-        error "$f: different stripe offset ($stripe_index)" && return
+        $LFS getstripe $f
+        error "$f: stripe_index $stripe_index != 1" && return
     fi
 
     do_facet client cp $SAMPLE_FILE $f
@@ -278,12 +278,11 @@ test_18b() {
     cancel_lru_locks osc
     pgcache_empty || return 1
 
-    # shouldn't have to set stripe size of count==1
-    lfs setstripe $f -s $((128 * 1024)) -i 0 -c 1
-    get_stripe_info client $f
+    $LFS setstripe -i 0 -c 1 $f
+    stripe_index=$($LFS getstripe -i $f)
     if [ $stripe_index -ne 0 ]; then
-        lfs getstripe $f
-        error "$f: different stripe offset ($stripe_index)" && return
+        $LFS getstripe $f
+        error "$f: stripe_index $stripe_index != 0" && return
     fi
 
     do_facet client cp $SAMPLE_FILE $f
@@ -309,12 +308,11 @@ test_18c() {
     cancel_lru_locks osc
     pgcache_empty || return 1
 
-    # shouldn't have to set stripe size of count==1
-    lfs setstripe $f -s $((128 * 1024)) -i 0 -c 1
-    get_stripe_info client $f
+    $LFS setstripe -i 0 -c 1 $f
+    stripe_index=$($LFS getstripe -i $f)
     if [ $stripe_index -ne 0 ]; then
-        lfs getstripe $f
-        error "$f: different stripe offset ($stripe_index)" && return
+        $LFS getstripe $f
+        error "$f: stripe_index $stripe_index != 0" && return
     fi
 
     do_facet client cp $SAMPLE_FILE $f
@@ -367,7 +365,7 @@ test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
 	mkdir -p $DIR/$tdir
-	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir/${tfile}
 	multiop_bg_pause $DIR/$tdir/${tfile} O_wc || return 1
 	MULTI_PID=$!
 	cancel_lru_locks osc
@@ -384,7 +382,7 @@ test_20b() {	# bug 2986 - ldlm_handle_enqueue error during open
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
 	mkdir -p $DIR/$tdir
-	lfs setstripe $DIR/$tdir/${tfile} -i 0 -c 1
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir/${tfile}
 	cancel_lru_locks osc
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 	do_facet ost1 lctl set_param fail_loc=0x80000308
@@ -625,7 +623,7 @@ test_24() { # bug 11710 details correct fsync() behavior
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
 	mkdir -p $DIR/$tdir
-	lfs setstripe $DIR/$tdir -s 0 -i 0 -c 1
+	$LFS setstripe -i 0 -c 1 $DIR/$tdir
 	cancel_lru_locks osc
 	multiop_bg_pause $DIR/$tdir/$tfile Owy_wyc || return 1
 	MULTI_PID=$!
@@ -893,7 +891,7 @@ test_55() {
 	mkdir -p $DIR/$tdir
 
 	# first dd should be finished quickly
-	lfs setstripe $DIR/$tdir/$tfile-1 -c 1 -i 0
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/$tfile-1
 	dd if=/dev/zero of=$DIR/$tdir/$tfile-1 bs=32M count=4  &
 	DDPID=$!
 	count=0
@@ -908,7 +906,7 @@ test_55() {
 	done	
 	echo "(dd_pid=$DDPID, time=$count)successful"
 
-	lfs setstripe $DIR/$tdir/$tfile-2 -c 1 -i 0
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir/$tfile-2
 	#define OBD_FAIL_OST_DROP_REQ            0x21d
 	do_facet ost1 lctl set_param fail_loc=0x0000021d
 	# second dd will be never finished
@@ -1083,7 +1081,7 @@ test_61()
 
 	mkdir -p $DIR/$tdir || error "mkdir dir $DIR/$tdir failed"
 	# Set the default stripe of $DIR/$tdir to put the files to ost1
-	$LFS setstripe -c 1 --index 0 $DIR/$tdir
+	$LFS setstripe -c 1 -i 0 $DIR/$tdir
 
 	replay_barrier $SINGLEMDS
 	createmany -o $DIR/$tdir/$tfile-%d 10 
@@ -1092,7 +1090,7 @@ test_61()
 	fail_abort $SINGLEMDS
 	
 	touch $DIR/$tdir/$tfile
-	local id=`$LFS getstripe $DIR/$tdir/$tfile |awk '($1 ~ 0 && $2 ~ /^[1-9]+/) {print $2}'`
+	local id=`$LFS getstripe $DIR/$tdir/$tfile | awk '$1 == 0 { print $2 }'`
 	[ $id -le $oid ] && error "the orphan objid was reused, failed"
 
 	# Cleanup
