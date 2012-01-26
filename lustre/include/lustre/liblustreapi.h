@@ -100,6 +100,7 @@ extern int llapi_file_lookup(int dirfd, const char *name);
 #define VERBOSE_DETAIL     0x10
 #define VERBOSE_OBJID      0x20
 #define VERBOSE_GENERATION 0x40
+#define VERBOSE_MDTINDEX   0x80
 #define VERBOSE_ALL        (VERBOSE_COUNT | VERBOSE_SIZE | VERBOSE_OFFSET | \
                             VERBOSE_POOL | VERBOSE_OBJID | VERBOSE_GENERATION)
 
@@ -108,39 +109,41 @@ struct find_param {
         time_t  atime;
         time_t  mtime;
         time_t  ctime;
-        int     asign;
-        int     csign;
+        int     asign;  /* cannot be bitfields due to using pointers to */
+        int     csign;  /* access them during argument parsing. */
         int     msign;
         int     type;
+        int             size_sign:2,        /* these need to be signed values */
+                        stripesize_sign:2,
+                        stripecount_sign:2;
         unsigned long long size;
-        int     size_sign;
         unsigned long long size_units;
         uid_t uid;
         gid_t gid;
 
         unsigned long   zeroend:1,
                         recursive:1,
-                        got_uuids:1,
-                        obds_printed:1,
                         exclude_pattern:1,
                         exclude_type:1,
                         exclude_obd:1,
                         exclude_mdt:1,
-                        have_fileinfo:1,
                         exclude_gid:1,
                         exclude_uid:1,
-                        check_gid:1,
-                        check_uid:1,
-                        check_pool:1,
-                        check_size:1,
+                        check_gid:1,            /* group ID */
+                        check_uid:1,            /* user ID */
+                        check_pool:1,           /* LOV pool name */
+                        check_size:1,           /* file size */
                         exclude_pool:1,
                         exclude_size:1,
                         exclude_atime:1,
                         exclude_mtime:1,
                         exclude_ctime:1,
-                        get_mdt_index:1,
-                        get_lmv:1,
-                        raw:1;
+                        get_lmv:1,              /* get MDT list from LMV */
+                        raw:1,                  /* do not fill in defaults */
+                        check_stripesize:1,     /* LOV stripe size */
+                        exclude_stripesize:1,
+                        check_stripecount:1,    /* LOV stripe count */
+                        exclude_stripecount:1;
 
         int     verbose;
         int     quiet;
@@ -166,11 +169,18 @@ struct find_param {
         int     lumlen;
         struct  lov_user_mds_data *lmd;
 
-        /* In-precess parameters. */
-        unsigned int depth;
-        dev_t   st_dev;
-
         char poolname[LOV_MAXPOOLNAME + 1];
+
+        unsigned long long stripesize;
+        unsigned long long stripesize_units;
+        unsigned long long stripecount;
+
+        /* In-process parameters. */
+        unsigned long   got_uuids:1,
+                        obds_printed:1,
+                        have_fileinfo:1;        /* file attrs and LOV xattr */
+        unsigned int    depth;
+        dev_t           st_dev;
 };
 
 extern int llapi_ostlist(char *path, struct find_param *param);

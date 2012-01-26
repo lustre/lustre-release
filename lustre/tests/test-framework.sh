@@ -3476,7 +3476,7 @@ check_grant() {
 
     # get server grant
     server_grant=`do_nodes $(comma_list $(osts_nodes)) \
-                    "$LCTL get_param -n obdfilter.${FSNAME}-OST*.tot_granted" | \
+                    "$LCTL get_param -n obdfilter.${FSNAME}-OST*.tot_granted" |
                     awk '{total += $1} END{print total}'`
 
     # check whether client grant == server grant
@@ -3522,7 +3522,7 @@ index_from_ostuuid()
 
 mdtuuid_from_index()
 {
-    $LFS mdts $2 | awk '/^'$1'/ { print $2 }'
+    $LFS mdts $2 | sed -ne "/^$1: /s/.* \(.*\) .*$/\1/p"
 }
 
 remote_node () {

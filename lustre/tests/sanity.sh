@@ -3306,17 +3306,20 @@ run_test 56a "check lfs getstripe ===================================="
 NUMFILES=3
 NUMDIRS=3
 setup_56() {
-        LOCAL_NUMFILES=$1
-        LOCAL_NUMDIRS=$2
-        if [ ! -d "$DIR/${tdir}g" ] ; then
-                mkdir -p $DIR/${tdir}g
+        local LOCAL_NUMFILES="$1"
+        local LOCAL_NUMDIRS="$2"
+        local MKDIR_PARAMS="$3"
+
+        if [ ! -d "$TDIR" ] ; then
+                mkdir -p $TDIR
+                [ "$MKDIR_PARAMS" ] && $SETSTRIPE $MKDIR_PARAMS $TDIR
                 for i in `seq 1 $LOCAL_NUMFILES` ; do
-                        touch $DIR/${tdir}g/file$i
+                        touch $TDIR/file$i
                 done
                 for i in `seq 1 $LOCAL_NUMDIRS` ; do
-                        mkdir $DIR/${tdir}g/dir$i
+                        mkdir $TDIR/dir$i
                         for j in `seq 1 $LOCAL_NUMFILES` ; do
-                                touch $DIR/${tdir}g/dir$i/file$j
+                                touch $TDIR/dir$i/file$j
                         done
                 done
         fi
@@ -3325,7 +3328,6 @@ setup_56() {
 setup_56_special() {
 	LOCAL_NUMFILES=$1
 	LOCAL_NUMDIRS=$2
-	TDIR=$DIR/${tdir}g
 	setup_56 $1 $2
 	if [ ! -e "$TDIR/loop1b" ] ; then
 		for i in `seq 1 $LOCAL_NUMFILES` ; do
@@ -3342,34 +3344,36 @@ setup_56_special() {
 }
 
 test_56g() {
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
 
+        TDIR=$DIR/${tdir}g
         setup_56 $NUMFILES $NUMDIRS
 
         EXPECTED=$(($NUMDIRS + 2))
         # test lfs find with -name
-        for i in `seq 1 $NUMFILES` ; do
-                NUMS=`$LFIND -name "*$i" $DIR/${tdir}g | wc -l`
-                [ $NUMS -eq $EXPECTED ] || error \
-                        "lfs find -name \"*$i\" $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+        for i in $(seq 1 $NUMFILES) ; do
+                NUMS=$($LFIND -name "*$i" $TDIR | wc -l)
+                [ $NUMS -eq $EXPECTED ] ||
+                        error "lfs find -name \"*$i\" $TDIR wrong: "\
+                              "found $NUMS, expected $EXPECTED"
         done
-        echo "lfs find -name passed."
 }
 run_test 56g "check lfs find -name ============================="
 
 test_56h() {
-        $LSTRIPE -d $DIR
+        $SETSTRIPE -d $DIR
 
+        TDIR=$DIR/${tdir}g
         setup_56 $NUMFILES $NUMDIRS
 
-        EXPECTED=$((($NUMDIRS+1)*($NUMFILES-1)+$NUMFILES))
+        EXPECTED=$(((NUMDIRS + 1) * (NUMFILES - 1) + NUMFILES))
         # test lfs find with ! -name
-        for i in `seq 1 $NUMFILES` ; do
-                NUMS=`$LFIND ! -name "*$i" $DIR/${tdir}g | wc -l`
-                [ $NUMS -eq $EXPECTED ] || error \
-                        "lfs find ! -name \"*$i\" $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+        for i in $(seq 1 $NUMFILES) ; do
+                NUMS=$($LFIND ! -name "*$i" $TDIR | wc -l)
+                [ $NUMS -eq $EXPECTED ] ||
+                        error "lfs find ! -name \"*$i\" $TDIR wrong: "\
+                              "found $NUMS, expected $EXPECTED"
         done
-        echo "lfs find ! -name passed."
 }
 run_test 56h "check lfs find ! -name ============================="
 
@@ -3377,64 +3381,74 @@ test_56i() {
        tdir=${tdir}i
        mkdir -p $DIR/$tdir
        UUID=$(ostuuid_from_index 0 $DIR/$tdir)
-       OUT=$($LFIND -obd $UUID $DIR/$tdir)
-       [ "$OUT" ] && error "$LFIND -obd returned directory '$OUT'" || true
+       CMD="$LFIND -ost $UUID $DIR/$tdir"
+       OUT=$($CMD)
+       [ -z "$OUT" ] || error "\"$CMD\" returned directory '$OUT'"
 }
-run_test 56i "check 'lfs find -obd UUID' skips directories ======="
+run_test 56i "check 'lfs find -ost UUID' skips directories ======="
 
 test_56j() {
+	TDIR=$DIR/${tdir}g
 	setup_56_special $NUMFILES $NUMDIRS
 
-	EXPECTED=$((NUMDIRS+1))
-	NUMS=`$LFIND -type d $DIR/${tdir}g | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -type d $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+	EXPECTED=$((NUMDIRS + 1))
+	CMD="$LFIND -type d $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
 run_test 56j "check lfs find -type d ============================="
 
 test_56k() {
+	TDIR=$DIR/${tdir}g
 	setup_56_special $NUMFILES $NUMDIRS
 
-	EXPECTED=$(((NUMDIRS+1) * NUMFILES))
-	NUMS=`$LFIND -type f $DIR/${tdir}g | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -type f $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+	EXPECTED=$(((NUMDIRS + 1) * NUMFILES))
+	CMD="$LFIND -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
 run_test 56k "check lfs find -type f ============================="
 
 test_56l() {
+	TDIR=$DIR/${tdir}g
 	setup_56_special $NUMFILES $NUMDIRS
 
 	EXPECTED=$((NUMDIRS + NUMFILES))
-	NUMS=`$LFIND -type b $DIR/${tdir}g | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -type b $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -type b $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
 run_test 56l "check lfs find -type b ============================="
 
 test_56m() {
+	TDIR=$DIR/${tdir}g
 	setup_56_special $NUMFILES $NUMDIRS
 
 	EXPECTED=$((NUMDIRS + NUMFILES))
-	NUMS=`$LFIND -type c $DIR/${tdir}g | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -type c $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -type c $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
 run_test 56m "check lfs find -type c ============================="
 
 test_56n() {
+	TDIR=$DIR/${tdir}g
 	setup_56_special $NUMFILES $NUMDIRS
 
 	EXPECTED=$((NUMDIRS + NUMFILES))
-	NUMS=`$LFIND -type l $DIR/${tdir}g | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -type l $DIR/${tdir}g wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -type l $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
 run_test 56n "check lfs find -type l ============================="
 
 test_56o() {
-	TDIR=$DIR/${tdir}g
-	rm -rf $TDIR
+	TDIR=$DIR/${tdir}o
 	setup_56 $NUMFILES $NUMDIRS
 
 	utime $TDIR/file1 > /dev/null || error "utime (1)"
@@ -3450,109 +3464,250 @@ test_56o() {
 		error "lfs find -mtime +0 $TDIR wrong: found $NUMS, expected $EXPECTED"
 
 	EXPECTED=12
-	NUMS=`$LFIND -mtime 0 $TDIR | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -mtime 0 $TDIR wrong: found $NUMS, expected $EXPECTED"
-
+	CMD="$LFIND -mtime 0 $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
 run_test 56o "check lfs find -mtime for old files =========================="
 
 test_56p() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] &&
+		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 
-	TDIR=$DIR/${tdir}g
-	rm -rf $TDIR
-
+	TDIR=$DIR/${tdir}p
 	setup_56 $NUMFILES $NUMDIRS
 
 	chown $RUNAS_ID $TDIR/file* || error "chown $DIR/${tdir}g/file$i failed"
 	EXPECTED=$NUMFILES
-	NUMS="`$LFIND -uid $RUNAS_ID $TDIR | wc -l`"
+	CMD="$LFIND -uid $RUNAS_ID $TDIR"
+	NUMS=$($CMD | wc -l)
 	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -uid $TDIR wrong: found $NUMS, expected $EXPECTED"
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 
-	EXPECTED=$(( ($NUMFILES+1) * $NUMDIRS + 1))
-	NUMS="`$LFIND ! -uid $RUNAS_ID $TDIR | wc -l`"
+	EXPECTED=$(((NUMFILES + 1) * NUMDIRS + 1))
+	CMD="$LFIND ! -uid $RUNAS_ID $TDIR"
+	NUMS=$($CMD | wc -l)
 	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find ! -uid $TDIR wrong: found $NUMS, expected $EXPECTED"
-
-	echo "lfs find -uid and ! -uid passed."
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
 run_test 56p "check lfs find -uid and ! -uid ==============================="
 
 test_56q() {
-	[ $RUNAS_ID -eq $UID ] && skip_env "RUNAS_ID = UID = $UID -- skipping" && return
+	[ $RUNAS_ID -eq $UID ] &&
+		skip_env "RUNAS_ID = UID = $UID -- skipping" && return
 
-	TDIR=$DIR/${tdir}g
-        rm -rf $TDIR
-
+	TDIR=$DIR/${tdir}q
 	setup_56 $NUMFILES $NUMDIRS
 
-	chgrp $RUNAS_GID $TDIR/file* || error "chown $DIR/${tdir}g/file$i failed"
+	chgrp $RUNAS_GID $TDIR/file* || error "chown $TDIR/file$i failed"
+
 	EXPECTED=$NUMFILES
-	NUMS="`$LFIND -gid $RUNAS_GID $TDIR | wc -l`"
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find -gid $TDIR wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -gid $RUNAS_GID $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 
 	EXPECTED=$(( ($NUMFILES+1) * $NUMDIRS + 1))
-	NUMS="`$LFIND ! -gid $RUNAS_GID $TDIR | wc -l`"
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find ! -gid $TDIR wrong: found $NUMS, expected $EXPECTED"
-
-	echo "lfs find -gid and ! -gid passed."
+	CMD="$LFIND ! -gid $RUNAS_GID $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
 run_test 56q "check lfs find -gid and ! -gid ==============================="
 
 test_56r() {
+	TDIR=$DIR/${tdir}r
 	setup_56 $NUMFILES $NUMDIRS
-	TDIR=$DIR/${tdir}g
 
 	EXPECTED=12
-	NUMS=`$LFIND -size 0 -t f $TDIR | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find $TDIR -size 0 wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -size 0 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 	EXPECTED=0
-	NUMS=`$LFIND ! -size 0 -t f $TDIR | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find $TDIR ! -size 0 wrong: found $NUMS, expected $EXPECTED"
-	echo "test" > $TDIR/56r && sync
-	echo "test2" > $TDIR/56r2 && sync
+	CMD="$LFIND ! -size 0 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+	echo "test" > $TDIR/$tfile
+	echo "test2" > $TDIR/$tfile.2 && sync
 	EXPECTED=1
-	NUMS=`$LFIND -size 5 -t f $TDIR | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find $TDIR -size 5 wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -size 5 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 	EXPECTED=1
-	NUMS=`$LFIND -size +5 -t f $TDIR | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find $TDIR -size +5 wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -size +5 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 	EXPECTED=2
-	NUMS=`$LFIND -size +0 -t f $TDIR | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find $TDIR -size +0 wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -size +0 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 	EXPECTED=2
-	NUMS=`$LFIND ! -size -5 -t f $TDIR | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find $TDIR ! -size -5 wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND ! -size -5 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 	EXPECTED=12
-	NUMS=`$LFIND -size -5 -t f $TDIR | wc -l`
-	[ $NUMS -eq $EXPECTED ] || \
-		error "lfs find $TDIR -size -5 wrong: found $NUMS, expected $EXPECTED"
+	CMD="$LFIND -size -5 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
 }
-
 run_test 56r "check lfs find -size works =========================="
 
-test_56v() {
-    local FIND_MDT_IDX=0
+test_56s() { # LU-611
+	TDIR=$DIR/${tdir}s
+	setup_56 $NUMFILES $NUMDIRS "-c $OSTCOUNT"
 
-    TDIR=${tdir}g
+	if [ $OSTCOUNT -gt 1 ]; then
+		$SETSTRIPE -c 1 $TDIR/$tfile.{0,1,2,3}
+		ONESTRIPE=4
+		EXTRA=4
+	else
+		ONESTRIPE=$(((NUMDIRS + 1) * NUMFILES))
+		EXTRA=0
+	fi
+
+	EXPECTED=$(((NUMDIRS + 1) * NUMFILES))
+	CMD="$LFIND -stripe_count $OSTCOUNT -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=$(((NUMDIRS + 1) * NUMFILES + EXTRA))
+	CMD="$LFIND -stripe_count +0 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=$ONESTRIPE
+	CMD="$LFIND -stripe_count 1 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	CMD="$LFIND -stripe_count -2 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=0
+	CMD="$LFIND -stripe_count $((OSTCOUNT + 1)) -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56s "check lfs find -stripe_count works"
+
+test_56t() { # LU-611
+	TDIR=$DIR/${tdir}t
+	setup_56 $NUMFILES $NUMDIRS "-s 512k"
+
+	$SETSTRIPE -S 256k $TDIR/$tfile.{0,1,2,3}
+
+	EXPECTED=$(((NUMDIRS + 1) * NUMFILES))
+	CMD="$LFIND -stripe_size 512k -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	CMD="$LFIND -stripe_size +320k -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=$(((NUMDIRS + 1) * NUMFILES + 4))
+	CMD="$LFIND -stripe_size +200k -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	CMD="$LFIND -stripe_size -640k -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=4
+	CMD="$LFIND -stripe_size 256k -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	CMD="$LFIND -stripe_size -320k -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=0
+	CMD="$LFIND -stripe_size 1024k -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56t "check lfs find -stripe_size works"
+
+test_56u() { # LU-611
+	TDIR=$DIR/${tdir}u
+	setup_56 $NUMFILES $NUMDIRS "-i 0"
+
+	if [ $OSTCOUNT -gt 1 ]; then
+		$SETSTRIPE -i 1 $TDIR/$tfile.{0,1,2,3}
+		ONESTRIPE=4
+	else
+		ONESTRIPE=0
+	fi
+
+	EXPECTED=$(((NUMDIRS + 1) * NUMFILES))
+	CMD="$LFIND -stripe-index 0 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=$ONESTRIPE
+	CMD="$LFIND -stripe-index 1 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	CMD="$LFIND ! -stripe-index 0 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=0
+	# This should produce an error and not return any files
+	CMD="$LFIND -stripe-index $OSTCOUNT -type f $TDIR"
+	NUMS=$($CMD 2>/dev/null | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+
+	EXPECTED=$(((NUMDIRS + 1) * NUMFILES + ONESTRIPE))
+	CMD="$LFIND -stripe-index 0,1 -type f $TDIR"
+	NUMS=$($CMD | wc -l)
+	[ $NUMS -eq $EXPECTED ] ||
+		error "\"$CMD\" wrong: found $NUMS, expected $EXPECTED"
+}
+run_test 56u "check lfs find -stripe-index works"
+
+test_56v() {
+    local MDT_IDX=0
+
+    TDIR=$DIR/${tdir}v
     rm -rf $TDIR
     setup_56 $NUMFILES $NUMDIRS
 
-    UUID=$(mdtuuid_from_index $FIND_MDT_IDX $DIR/$TDIR)
-    for file in $($LFIND -mdt $UUID $DIR/$TDIR); do
+    UUID=$(mdtuuid_from_index $MDT_IDX $TDIR)
+    [ -z "$UUID" ] && error "mdtuuid_from_index cannot find MDT index $MDT_IDX"
+
+    for file in $($LFIND -mdt $UUID $TDIR); do
         file_mdt_idx=$($GETSTRIPE -M $file)
-        [ $file_mdt_idx -eq $FIND_MDT_IDX ] ||
-            error "wrong lfind -m not match getstripe -M"
+        [ $file_mdt_idx -eq $MDT_IDX ] ||
+            error "'lfind -mdt $UUID' != 'getstripe -M' ($file_mdt_idx)"
     done
 }
 run_test 56v "check 'lfs find -mdt match with lfs getstripe -M' ======="

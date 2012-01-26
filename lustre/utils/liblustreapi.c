@@ -1624,12 +1624,21 @@ retry_get_uuids:
         }
 
         for (obdnum = 0; obdnum < num_obds; obdnum++) {
-                for (i = 0; i < obdcount; i++) {
-                        if (llapi_uuid_match(uuids[i].uuid,
-                                             obduuids[obdnum].uuid)) {
-                                indexes[obdnum] = i;
-                                obd_valid++;
-                                break;
+                char *end = NULL;
+
+                /* The user may have specified a simple index */
+                i = strtol(obduuids[obdnum].uuid, &end, 0);
+                if (end && *end == '\0' && i < obdcount) {
+                        indexes[obdnum] = i;
+                        obd_valid++;
+                } else {
+                        for (i = 0; i < obdcount; i++) {
+                                if (llapi_uuid_match(uuids[i].uuid,
+                                                     obduuids[obdnum].uuid)) {
+                                        indexes[obdnum] = i;
+                                        obd_valid++;
+                                        break;
+                                }
                         }
                 }
                 if (i >= obdcount) {
@@ -2351,7 +2360,8 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
          * to be compared. */
         if (param->obduuid    || param->mdtuuid || param->check_uid ||
             param->check_gid || param->check_pool || param->atime   ||
-            param->ctime     || param->mtime || param->check_size)
+            param->ctime     || param->mtime || param->check_size ||
+            param->check_stripecount || param->check_stripesize)
                 decision = 0;
 
         if (param->type && checked_type == 0)
@@ -2438,6 +2448,26 @@ static int cb_find_init(char *path, DIR *parent, DIR *dir,
                 }
         }
 
+        if (param->check_stripesize) {
+                decision = find_value_cmp(param->lmd->lmd_lmm.lmm_stripe_size,
+                                          param->stripesize,
+                                          param->stripesize_sign,
+                                          param->exclude_stripesize,
+                                          param->stripesize_units, 0);
+                if (decision == -1)
+                        goto decided;
+        }
+
+        if (param->check_stripecount) {
+                decision = find_value_cmp(param->lmd->lmd_lmm.lmm_stripe_count,
+                                          param->stripecount,
+                                          param->stripecount_sign,
+                                          param->exclude_stripecount, 1, 0);
+                if (decision == -1)
+                        goto decided;
+        }
+
+        /* If an OBD UUID is specified but none matches, skip this file. */
         if ((param->obduuid && param->obdindex == OBD_NOT_FOUND) ||
             (param->mdtuuid && param->mdtindex == OBD_NOT_FOUND))
                 goto decided;
@@ -2656,7 +2686,7 @@ static int cb_get_mdt_index(char *path, DIR *parent, DIR *d, void *data,
         if (param->quiet || !(param->verbose & VERBOSE_DETAIL))
                 llapi_printf(LLAPI_MSG_NORMAL, "%d\n", mdtidx);
         else
-                llapi_printf(LLAPI_MSG_NORMAL, "%s MDT index: %d\n",
+                llapi_printf(LLAPI_MSG_NORMAL, "%s\nmdt_index:\t%d\n",
                              path, mdtidx);
 
 out:
@@ -2740,7 +2770,7 @@ static int cb_getstripe(char *path, DIR *parent, DIR *d, void *data,
         }
 
 dump:
-        if (!param->get_mdt_index)
+        if (!(param->verbose & VERBOSE_MDTINDEX))
                 llapi_lov_dump_user_lmm(param, path, d ? 1 : 0);
 
 out:
@@ -2754,7 +2784,7 @@ out:
 
 int llapi_getstripe(char *path, struct find_param *param)
 {
-        return param_callback(path, param->get_mdt_index ?
+        return param_callback(path, (param->verbose & VERBOSE_MDTINDEX) ?
                               cb_get_mdt_index : cb_getstripe,
                               cb_common_fini, param);
 }
