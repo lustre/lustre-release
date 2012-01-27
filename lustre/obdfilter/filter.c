@@ -3136,6 +3136,22 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct ost_id *ostid,
                 RETURN(ERR_PTR(-ENOENT));
         }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+        /* Try to correct for a bug in 2.1.0 (LU-221) that caused negative
+         * timestamps to appear to be in the far future, due old timestamp
+         * being stored on disk as an unsigned value.  This fixes up any
+         * bad values stored on disk before returning them to the client,
+         * and ensures any timestamp updates are correct.  LU-1042 */
+        if (unlikely(LTIME_S(dchild->d_inode->i_atime) == LU221_BAD_TIME))
+                LTIME_S(dchild->d_inode->i_atime) = 0;
+        if (unlikely(LTIME_S(dchild->d_inode->i_mtime) == LU221_BAD_TIME))
+                LTIME_S(dchild->d_inode->i_mtime) = 0;
+        if (unlikely(LTIME_S(dchild->d_inode->i_ctime) == LU221_BAD_TIME))
+                LTIME_S(dchild->d_inode->i_ctime) = 0;
+#else
+#warning "remove old LU-221/LU-1042 workaround code"
+#endif
+
         return dchild;
 }
 
@@ -3942,23 +3958,23 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                 rc = ll_vfs_create(dparent->d_inode, dchild,
                                    S_IFREG |  S_ISUID | S_ISGID | 0666, NULL);
                 if (rc) {
-                        CERROR("create failed rc = %d\n", rc);
+                        CWARN("%s: create failed: rc = %d\n", obd->obd_name,rc);
                         if (rc == -ENOSPC) {
                                 os_ffree = filter_calc_free_inodes(obd);
-                                if (os_ffree == -1) 
+                                if (os_ffree == -1)
                                         GOTO(cleanup, rc);
 
                                 if (obd->obd_osfs.os_bavail <
                                     (obd->obd_osfs.os_blocks >> 10)) {
-                                        if (oa->o_valid & OBD_MD_FLFLAGS)
+                                        if (oa->o_valid & OBD_MD_FLFLAGS) {
                                                 oa->o_flags |= OBD_FL_NOSPC_BLK;
-                                        else {
+                                        } else {
                                                 oa->o_valid |= OBD_MD_FLFLAGS;
                                                 oa->o_flags = OBD_FL_NOSPC_BLK;
                                         }
 
-                                        CERROR("%s: free inode "LPU64"\n",
-                                               obd->obd_name, os_ffree);
+                                        CWARN("%s: free inode "LPU64"\n",
+                                              obd->obd_name, os_ffree);
                                 }
                         }
                         GOTO(cleanup, rc);
@@ -3969,25 +3985,27 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                        dchild->d_inode->i_ino);
 
 set_last_id:
-                /* Set a/c/m time to a insane large negative value at creation
-                 * time so that any timestamp arriving from the client will
-                 * always be newer and update the inode.
-                 * See LU-221 for details */
+                /* Initialize a/c/m time so any client timestamp will always
+                 * be newer and update the inode. ctime = 0 is also handled
+                 * specially in fsfilt_ext3_setattr(). See LU-221, LU-1042 */
                 iattr.ia_valid = ATTR_ATIME | ATTR_MTIME | ATTR_CTIME;
-                LTIME_S(iattr.ia_atime) = INT_MIN + 24 * 3600;
-                LTIME_S(iattr.ia_mtime) = INT_MIN + 24 * 3600;
-                LTIME_S(iattr.ia_ctime) = INT_MIN + 24 * 3600;
+                LTIME_S(iattr.ia_atime) = 0;
+                LTIME_S(iattr.ia_mtime) = 0;
+                LTIME_S(iattr.ia_ctime) = 0;
                 err = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
-                if (err)
-                        CERROR("unable to initialize a/c/m time of newly"
-                               "created inode\n");
+                 if (err)
+                        CWARN("%s: unable to initialize a/c/m time of newly "
+                              "created object %.*s: rc = %d\n",
+                              obd->obd_name, dchild->d_name.len,
+                              dchild->d_name.name, err);
 
                 if (!recreate_obj) {
                         filter_set_last_id(filter, next_id, group);
                         err = filter_update_last_objid(obd, group, 0);
                         if (err)
-                                CERROR("unable to write lastobjid "
-                                       "but file created\n");
+                                CERROR("%s: unable to write lastobjid "
+                                       "but file created: rc = %d\n",
+                                       obd->obd_name, err);
                 }
 
         cleanup:

@@ -581,6 +581,41 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         struct inode *inode = dentry->d_inode;
         int rc = 0;
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+        /* Try to correct for a bug in 2.1.0 (LU-221) that caused negative
+         * timestamps to appear to be in the far future, due old timestamp
+         * being stored on disk as an unsigned value.  This fixes up any
+         * bad values held by the client before storing them on disk,
+         * and ensures any timestamp updates are correct.  LU-1042 */
+        if (unlikely(LTIME_S(inode->i_atime) == LU221_BAD_TIME &&
+                     !(iattr->ia_valid & ATTR_ATIME))) {
+                iattr->ia_valid |= ATTR_ATIME;
+                LTIME_S(iattr->ia_atime) = 0;
+        }
+        if (unlikely(LTIME_S(inode->i_mtime) == LU221_BAD_TIME &&
+                     !(iattr->ia_valid & ATTR_MTIME))) {
+                iattr->ia_valid |= ATTR_MTIME;
+                LTIME_S(iattr->ia_mtime) = 0;
+        }
+        if (unlikely((LTIME_S(inode->i_ctime) == LU221_BAD_TIME ||
+                      LTIME_S(inode->i_ctime) == 0) &&
+                     !(iattr->ia_valid & ATTR_CTIME))) {
+                iattr->ia_valid |= ATTR_CTIME;
+                LTIME_S(iattr->ia_ctime) = 0;
+        }
+#else
+#warning "remove old LU-221/LU-1042 workaround code"
+#endif
+
+        /* When initializating timestamps for new inodes, use the filesystem
+         * mkfs time for ctime to avoid e2fsck ibadness incorrectly thinking
+         * that this is potentially an invalid inode.  Files with an old ctime
+         * migrated to a newly-formatted OST with a newer s_mkfs_time will not
+         * hit this check, since it is only for ctime == 0.  LU-1010/LU-1042 */
+        if ((iattr->ia_valid & ATTR_CTIME) && LTIME_S(iattr->ia_ctime) == 0)
+                LTIME_S(iattr->ia_ctime) =
+                        EXT4_SB(inode->i_sb)->s_es->s_mkfs_time;
+
         /* Avoid marking the inode dirty on the superblock list unnecessarily.
          * We are already writing the inode to disk as part of this
          * transaction and want to avoid a lot of extra inode writeout

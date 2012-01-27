@@ -51,4 +51,6 @@
 #error Unsupported operating system.
 #endif
 
+#define LU221_BAD_TIME (0x80000000U + 24 * 3600)
+
 #endif
