@@ -336,20 +336,12 @@ static struct notifier_block libcfs_panic_notifier = {
 
 void libcfs_register_panic_notifier(void)
 {
-#ifdef HAVE_ATOMIC_PANIC_NOTIFIER
         atomic_notifier_chain_register(&panic_notifier_list, &libcfs_panic_notifier);
-#else
-        notifier_chain_register(&panic_notifier_list, &libcfs_panic_notifier);
-#endif
 }
 
 void libcfs_unregister_panic_notifier(void)
 {
-#ifdef HAVE_ATOMIC_PANIC_NOTIFIER
         atomic_notifier_chain_unregister(&panic_notifier_list, &libcfs_panic_notifier);
-#else
-        notifier_chain_unregister(&panic_notifier_list, &libcfs_panic_notifier);
-#endif
 }
 
 EXPORT_SYMBOL(libcfs_debug_dumpstack);

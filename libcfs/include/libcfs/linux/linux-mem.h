@@ -138,11 +138,7 @@ extern void cfs_free_page(cfs_page_t *page);
  * SLAB allocator
  * XXX Liang: move these declare to public file
  */
-#ifdef HAVE_KMEM_CACHE
 typedef struct kmem_cache cfs_mem_cache_t;
-#else
-typedef kmem_cache_t cfs_mem_cache_t;
-#endif
 extern cfs_mem_cache_t * cfs_mem_cache_create (const char *, size_t, size_t, unsigned long);
 extern int cfs_mem_cache_destroy ( cfs_mem_cache_t * );
 extern void *cfs_mem_cache_alloc ( cfs_mem_cache_t *, int);

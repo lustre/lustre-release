@@ -413,7 +413,7 @@ static int ptlrpcd(void *arg)
                 int index = pc->pc_index;
 
                 if (index >= 0 && index < cfs_num_possible_cpus()) {
-                        while (!cfs_cpu_online(index)) {
+                        while (!cpu_online(index)) {
                                 if (++index >= cfs_num_possible_cpus())
                                         index = 0;
                         }

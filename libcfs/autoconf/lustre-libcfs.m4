@@ -59,61 +59,6 @@ else
 fi
 ])
 
-#
-# LIBCFS_FUNC_CPU_ONLINE
-#
-# cpu_online is different in rh 2.4, vanilla 2.4, and 2.6
-#
-AC_DEFUN([LIBCFS_FUNC_CPU_ONLINE],
-[AC_MSG_CHECKING([if kernel defines cpu_online()])
-LB_LINUX_TRY_COMPILE([
-       #include <linux/sched.h>
-],[
-       cpu_online(0);
-],[
-       AC_MSG_RESULT([yes])
-       AC_DEFINE(HAVE_CPU_ONLINE, 1, [cpu_online found])
-],[
-       AC_MSG_RESULT([no])
-])
-])
-
-#
-# LIBCFS_TYPE_GFP_T
-#
-# check if gfp_t is typedef-ed
-#
-AC_DEFUN([LIBCFS_TYPE_GFP_T],
-[AC_MSG_CHECKING([if kernel defines gfp_t])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/gfp.h>
-],[
-	return sizeof(gfp_t);
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_GFP_T, 1, [gfp_t found])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-#
-# LIBCFS_FUNC_SHOW_TASK
-#
-# we export show_task(), but not all kernels have it (yet)
-#
-AC_DEFUN([LIBCFS_FUNC_SHOW_TASK],
-[LB_CHECK_SYMBOL_EXPORT([show_task],
-[kernel/ksyms.c kernel/sched.c],[
-AC_DEFINE(HAVE_SHOW_TASK, 1, [show_task is exported])
-],[
-        LB_CHECK_SYMBOL_EXPORT([sched_show_task],
-        [kernel/ksyms.c kernel/sched.c],[
-        AC_DEFINE(HAVE_SCHED_SHOW_TASK, 1, [sched_show_task is exported])
-        ],[])
-])
-])
-
 # check kernel __u64 type
 AC_DEFUN([LIBCFS_U64_LONG_LONG_LINUX],
 [
@@ -135,21 +80,6 @@ LB_LINUX_TRY_COMPILE([
 	AC_MSG_RESULT([no])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
-])
-
-# check if task_struct with rcu memeber
-AC_DEFUN([LIBCFS_TASK_RCU],
-[AC_MSG_CHECKING([if task_struct has a rcu field])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/sched.h>
-],[
-        memset(((struct task_struct *)0)->rcu.next, 0, 0);
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_TASK_RCU, 1, [task_struct has rcu field])
-],[
-        AC_MSG_RESULT([no])
-])
 ])
 
 # LIBCFS_TASKLIST_LOCK
@@ -178,70 +108,6 @@ LB_LINUX_TRY_COMPILE([
                 [kmem_cache_destroy(cachep) return int])
 ],[
         AC_MSG_RESULT(NO)
-])
-])
-
-# 2.6.19 API change
-#panic_notifier_list use atomic_notifier operations
-#
-AC_DEFUN([LIBCFS_ATOMIC_PANIC_NOTIFIER],
-[AC_MSG_CHECKING([panic_notifier_list is atomic])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/notifier.h>
-	#include <linux/kernel.h>
-],[
-	struct atomic_notifier_head panic_notifier_list;
-],[
-        AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_ATOMIC_PANIC_NOTIFIER, 1,
-		[panic_notifier_list is atomic_notifier_head])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-# since 2.6.19 nlmsg_multicast() needs 5 argument.
-AC_DEFUN([LIBCFS_NLMSG_MULTICAST],
-[AC_MSG_CHECKING([nlmsg_multicast needs 5 argument])
-LB_LINUX_TRY_COMPILE([
-	#include <net/netlink.h>
-],[
-        nlmsg_multicast(NULL, NULL, 0, 0, 0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_NLMSG_MULTICAST_5ARGS, 1,
-                  [nlmsg_multicast needs 5 argument])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-#
-# LIBCFS_NETLINK
-#
-# If we have netlink.h, and nlmsg_new takes 2 args (2.6.19)
-#
-AC_DEFUN([LIBCFS_NETLINK],
-[AC_MSG_CHECKING([if netlink.h can be compiled])
-LB_LINUX_TRY_COMPILE([
-        #include <net/netlink.h>
-],[],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_NETLINK, 1, [net/netlink.h found])
-
-        AC_MSG_CHECKING([if nlmsg_new takes a 2nd argument])
-        LB_LINUX_TRY_COMPILE([
-                #include <net/netlink.h>
-        ],[
-                nlmsg_new(100, GFP_KERNEL);
-        ],[
-                AC_MSG_RESULT([yes])
-                AC_DEFINE(HAVE_NETLINK_NL2, 1, [nlmsg_new takes 2 args])
-        ],[
-                AC_MSG_RESULT([no])
-        ])
-],[
-        AC_MSG_RESULT([no])
 ])
 ])
 
@@ -281,29 +147,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.21 marks kmem_cache_t deprecated and uses struct kmem_cache
-# instead
-AC_DEFUN([LIBCFS_KMEM_CACHE],
-[AC_MSG_CHECKING([check kernel has struct kmem_cache])
-tmp_flags="$EXTRA_KCFLAGS"
-EXTRA_KCFLAGS="-Werror"
-LB_LINUX_TRY_COMPILE([
-        #include <linux/slab.h>
-        typedef struct kmem_cache cache_t;
-],[
-	cache_t *cachep = NULL;
-
-	kmem_cache_alloc(cachep, 0);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_KMEM_CACHE, 1,
-                  [kernel has struct kmem_cache])
-],[
-        AC_MSG_RESULT(NO)
-])
-EXTRA_KCFLAGS="$tmp_flags"
-])
-
 # 2.6.23 lost dtor argument
 AC_DEFUN([LIBCFS_KMEM_CACHE_CREATE_DTOR],
 [AC_MSG_CHECKING([check kmem_cache_create has dtor argument])
@@ -333,24 +176,6 @@ LB_LINUX_TRY_COMPILE([
                 [kernel has register_shrinker])
 ],[
         AC_MSG_RESULT([no])
-])
-])
-
-# 2.6.24 
-AC_DEFUN([LIBCFS_NETLINK_CBMUTEX],
-[AC_MSG_CHECKING([for mutex in netlink_kernel_create])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/netlink.h>
-],[
-        struct mutex *lock = NULL;
-
-        netlink_kernel_create(0, 0, NULL, lock, NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_NETLINK_CBMUTEX, 1,
-                  [netlink_kernel_create want mutex for callback])
-],[
-        AC_MSG_RESULT(NO)
 ])
 ])
 
@@ -400,51 +225,6 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT(yes)
         AC_DEFINE(HAVE_INIT_NET, 1,
                   [kernel is support network namespaces ])
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-
-# 2.6.24 
-AC_DEFUN([LIBCFS_NETLINK_NETNS],
-[AC_MSG_CHECKING([for netlink support net ns])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/netlink.h>
-],[
-        struct net *net = NULL;
-        struct mutex *lock = NULL;
-
-        netlink_kernel_create(net, 0, 0, NULL,
-                              lock,
-                              NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_NETLINK_NS, 1,
-                  [netlink is support network namespace])
-# XXX
-# for now - if kernel have netlink ns - he uses cbmutex
-        AC_DEFINE(HAVE_NETLINK_CBMUTEX, 1,
-                  [netlink_kernel_create want mutex for callback])
-
-],[
-        AC_MSG_RESULT(NO)
-])
-])
-
-# ~2.6.24
-AC_DEFUN([LIBCFS_NL_BROADCAST_GFP],
-[AC_MSG_CHECKING([for netlink_broadcast is want to have gfp parameter])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/netlink.h>
-],[
-	gfp_t gfp = GFP_KERNEL;
-
-        netlink_broadcast(NULL, NULL, 0, 0, gfp);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_NL_BROADCAST_GFP, 1,
-                  [netlink brouacast is want to have gfp paramter])
 ],[
         AC_MSG_RESULT(NO)
 ])
@@ -792,36 +572,26 @@ LB_LINUX_TRY_COMPILE([
 #
 AC_DEFUN([LIBCFS_PROG_LINUX],
 [
-LIBCFS_FUNC_CPU_ONLINE
-LIBCFS_TYPE_GFP_T
 LIBCFS_CONFIG_PANIC_DUMPLOG
 
-LIBCFS_FUNC_SHOW_TASK
 LIBCFS_U64_LONG_LONG_LINUX
-LIBCFS_TASK_RCU
+
 # 2.6.18
 LIBCFS_TASKLIST_LOCK
 LIBCFS_HAVE_IS_COMPAT_TASK
 # 2.6.19
-LIBCFS_NETLINK
-LIBCFS_NLMSG_MULTICAST
 LIBCFS_KMEM_CACHE_DESTROY_INT
-LIBCFS_ATOMIC_PANIC_NOTIFIER
 # 2.6.20
 LIBCFS_3ARGS_INIT_WORK
 # 2.6.21
 LIBCFS_2ARGS_REGISTER_SYSCTL
-LIBCFS_KMEM_CACHE
 # 2.6.23
 LIBCFS_KMEM_CACHE_CREATE_DTOR
-LIBCFS_NETLINK_CBMUTEX
 LC_REGISTER_SHRINKER
 # 2.6.24
 LIBCFS_SYSCTL_UNNUMBERED
 LIBCFS_SCATTERLIST_SETPAGE
-LIBCFS_NL_BROADCAST_GFP
 LIBCFS_NETWORK_NAMESPACE
-LIBCFS_NETLINK_NETNS
 LIBCFS_FUNC_DUMP_TRACE
 # 2.6.26
 LIBCFS_SEM_COUNT

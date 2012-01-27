@@ -107,11 +107,8 @@ lcw_dump(struct lc_watchdog *lcw)
         ENTRY;
 #if defined(HAVE_TASKLIST_LOCK)
         cfs_read_lock(&tasklist_lock);
-#elif defined(HAVE_TASK_RCU)
-        rcu_read_lock();
 #else
-        CERROR("unable to dump stack because of missing export\n");
-        RETURN_EXIT;
+        rcu_read_lock();
 #endif
        if (lcw->lcw_task == NULL) {
                 LCONSOLE_WARN("Process " LPPID " was not found in the task "
@@ -123,7 +120,7 @@ lcw_dump(struct lc_watchdog *lcw)
 
 #if defined(HAVE_TASKLIST_LOCK)
         cfs_read_unlock(&tasklist_lock);
-#elif defined(HAVE_TASK_RCU)
+#else
         rcu_read_unlock();
 #endif
         EXIT;

@@ -79,10 +79,6 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet-sysctl.h>
 
-#if !HAVE_GFP_T
-typedef int gfp_t;
-#endif
-
 #include <rdma/rdma_cm.h>
 #include <rdma/ib_cm.h>
 #include <rdma/ib_verbs.h>

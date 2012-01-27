@@ -167,10 +167,6 @@ do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define set_page_private(page, v) ((page)->private = (v))
 #endif
 
-#ifndef HAVE_GFP_T
-#define gfp_t int
-#endif
-
 #define lock_dentry(___dentry)          cfs_spin_lock(&(___dentry)->d_lock)
 #define unlock_dentry(___dentry)        cfs_spin_unlock(&(___dentry)->d_lock)
 

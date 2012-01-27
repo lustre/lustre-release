@@ -72,12 +72,6 @@
 #define PAGE_LIST_ENTRY lru
 #define PAGE_LIST(page) ((page)->lru)
 
-#ifndef HAVE_CPU_ONLINE
-#define cfs_cpu_online(cpu) ((1<<cpu) & (cpu_online_map))
-#else
-#define cfs_cpu_online(cpu) cpu_online(cpu)
-#endif
-
 #ifndef __user
 #define __user
 #endif

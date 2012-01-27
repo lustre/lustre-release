@@ -1063,7 +1063,7 @@ static int tracefiled(void *arg)
                         printk(CFS_KERN_ERR "total cpus(%d): ",
                                cfs_num_possible_cpus());
                         for (i = 0; i < cfs_num_possible_cpus(); i++)
-                                if (cfs_cpu_online(i))
+                                if (cpu_online(i))
                                         printk(CFS_KERN_ERR "%d(on) ", i);
                                 else
                                         printk(CFS_KERN_ERR "%d(off) ", i);

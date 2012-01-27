@@ -2110,7 +2110,7 @@ static int ptlrpc_main(void *arg)
 
                 for (cpu = 0, num_cpu = 0; cpu < cfs_num_possible_cpus();
                      cpu++) {
-                        if (!cfs_cpu_online(cpu))
+                        if (!cpu_online(cpu))
                                 continue;
                         if (num_cpu == thread->t_id % cfs_num_online_cpus())
                                 break;
@@ -2383,7 +2383,7 @@ static int ptlrpc_start_hr_threads(struct ptlrpc_hr_service *hr)
 
         for (n = 0, cpu = 0; n < hr->hr_n_threads; n++) {
 #if defined(CONFIG_SMP) && defined(HAVE_NODE_TO_CPUMASK)
-                while(!cfs_cpu_online(cpu)) {
+                while (!cpu_online(cpu)) {
                         cpu++;
                         if (cpu >= cfs_num_possible_cpus())
                                 cpu = 0;
