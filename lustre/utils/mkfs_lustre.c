@@ -305,21 +305,79 @@ int loop_cleanup(struct mkfs_opts *mop)
         return ret;
 }
 
+/* return canonicalized absolute pathname, even if the target file does not
+ * exist, unlike realpath */
+static char *absolute_path(char *devname)
+{
+        char  buf[PATH_MAX + 1];
+        char *path;
+        char *ptr;
+
+        path = malloc(PATH_MAX + 1);
+        if (path == NULL)
+                return NULL;
+
+        if (devname[0] != '/') {
+                if (getcwd(buf, sizeof(buf) - 1) == NULL)
+                        return NULL;
+                strcat(buf, "/");
+                strcat(buf, devname);
+        } else {
+                strcpy(buf, devname);
+        }
+        /* truncate filename before calling realpath */
+        ptr = strrchr(buf, '/');
+        if (ptr == NULL) {
+                free(path);
+                return NULL;
+        }
+        *ptr = '\0';
+        if (path != realpath(buf, path)) {
+                free(path);
+                return NULL;
+        }
+        /* add the filename back */
+        strcat(path, "/");
+        strcat(path, ptr + 1);
+        return path;
+}
+
 /* Determine if a device is a block device (as opposed to a file) */
 int is_block(char* devname)
 {
         struct stat st;
-        int ret = 0;
+        int         ret = 0;
+        char       *devpath;
 
-        ret = access(devname, F_OK);
-        if (ret != 0)
-                return 0;
-        ret = stat(devname, &st);
-        if (ret != 0) {
-                fprintf(stderr, "%s: cannot stat %s\n", progname, devname);
+        devpath = absolute_path(devname);
+        if (devpath == NULL) {
+                fprintf(stderr, "%s: failed to resolve path to %s\n",
+                        progname, devname);
                 return -1;
         }
-        return S_ISBLK(st.st_mode);
+
+        ret = access(devname, F_OK);
+        if (ret != 0) {
+                if (strncmp(devpath, "/dev/", 5) == 0) {
+                    /* nobody sane wants to create a loopback file under
+                     * /dev. Let's just report the device doesn't exist */
+                    fprintf(stderr, "%s: %s apparently does not exist\n",
+                            progname, devpath);
+                    ret = -1;
+                    goto out;
+                }
+                ret = 0;
+                goto out;
+        }
+        ret = stat(devpath, &st);
+        if (ret != 0) {
+                fprintf(stderr, "%s: cannot stat %s\n", progname, devpath);
+                goto out;
+        }
+        ret = S_ISBLK(st.st_mode);
+out:
+        free(devpath);
+        return ret;
 }
 
 __u64 get_device_size(char* device)
@@ -359,7 +417,7 @@ __u64 get_device_size(char* device)
 
 int loop_format(struct mkfs_opts *mop)
 {
-        int ret = 0;
+        int fd;
 
         if (mop->mo_device_sz == 0) {
                 fatal();
@@ -368,23 +426,24 @@ int loop_format(struct mkfs_opts *mop)
                 return EINVAL;
         }
 
-        ret = creat(mop->mo_device, S_IRUSR|S_IWUSR);
-        if (ret < 0) {
-                ret = errno;
-                fprintf(stderr, "%s: Unable to create backing store: %d\n",
-                        progname, ret);
-        } else {
-                close(ret);
+        fd = creat(mop->mo_device, S_IRUSR|S_IWUSR);
+        if (fd < 0) {
+                fatal();
+                fprintf(stderr, "%s: Unable to create backing store: %s\n",
+                        progname, strerror(errno));
+                return errno;
         }
 
-        ret = truncate(mop->mo_device, mop->mo_device_sz * 1024);
-        if (ret != 0) {
-                ret = errno;
-                fprintf(stderr, "%s: Unable to truncate backing store: %d\n",
-                        progname, ret);
+        if (ftruncate(fd, mop->mo_device_sz * 1024) != 0) {
+                close(fd);
+                fatal();
+                fprintf(stderr, "%s: Unable to truncate backing store: %s\n",
+                        progname, strerror(errno));
+                return errno;
         }
 
-        return ret;
+        close(fd);
+        return 0;
 }
 
 /* Display the need for the latest e2fsprogs to be installed. make_backfs
@@ -1722,8 +1781,10 @@ int main(int argc, char *const argv[])
 
         /* Are we using a loop device? */
         ret = is_block(mop.mo_device);
-        if (ret < 0)
+        if (ret < 0) {
+                ret = errno;
                 goto out;
+        }
         if (ret == 0)
                 mop.mo_flags |= MO_IS_LOOP;
 
@@ -1873,8 +1934,11 @@ int main(int argc, char *const argv[])
                         ret = errno;
 #ifndef TUNEFS /* mkfs.lustre */
                 /* Reformat the loopback file */
-                if (ret || (mop.mo_flags & MO_FORCEFORMAT))
+                if (ret || (mop.mo_flags & MO_FORCEFORMAT)) {
                         ret = loop_format(&mop);
+                        if (ret)
+                                goto out;
+                }
 #endif
                 if (ret == 0)
                         ret = loop_setup(&mop);
