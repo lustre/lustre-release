@@ -861,7 +861,16 @@ static void osc_release_write_grant(struct client_obd *cli,
                 cli->cl_dirty_transit -= CFS_PAGE_SIZE;
         }
         if (!sent) {
-                cli->cl_lost_grant += CFS_PAGE_SIZE;
+                /* Reclaim grant from truncated pages. This is used to solve
+                 * write-truncate and grant all gone(to lost_grant) problem.
+                 * For a vfs write this problem can be easily solved by a sync
+                 * write, however, this is not an option for page_mkwrite()
+                 * because grant has to be allocated before a page becomes
+                 * dirty. */
+                if (cli->cl_avail_grant < PTLRPC_MAX_BRW_SIZE)
+                        cli->cl_avail_grant += CFS_PAGE_SIZE;
+                else
+                        cli->cl_lost_grant += CFS_PAGE_SIZE;
                 CDEBUG(D_CACHE, "lost grant: %lu avail grant: %lu dirty: %lu\n",
                        cli->cl_lost_grant, cli->cl_avail_grant, cli->cl_dirty);
         } else if (CFS_PAGE_SIZE != blocksize && pga->count != CFS_PAGE_SIZE) {
@@ -924,6 +933,9 @@ void osc_wake_cache_waiters(struct client_obd *cli)
                         osc_consume_write_grant(cli,
                                                 &ocw->ocw_oap->oap_brw_page);
                 }
+
+                CDEBUG(D_CACHE, "wake up %p for oap %p, avail grant %ld\n",
+                       ocw, ocw->ocw_oap, cli->cl_avail_grant);
 
                 cfs_waitq_signal(&ocw->ocw_waitq);
         }
@@ -2573,8 +2585,6 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
                         break;
         }
 
-        osc_wake_cache_waiters(cli);
-
         loi_list_maint(cli, loi);
 
         client_obd_list_unlock(&cli->cl_loi_list_lock);
@@ -2815,24 +2825,6 @@ void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli)
         osc_check_rpcs0(env, cli, 0);
 }
 
-/* we're trying to queue a page in the osc so we're subject to the
- * 'cl_dirty_max' limit on the number of pages that can be queued in the osc.
- * If the osc's queued pages are already at that limit, then we want to sleep
- * until there is space in the osc's queue for us.  We also may be waiting for
- * write credits from the OST if there are RPCs in flight that may return some
- * before we fall back to sync writes.
- *
- * We need this know our allocation was granted in the presence of signals */
-static int ocw_granted(struct client_obd *cli, struct osc_cache_waiter *ocw)
-{
-        int rc;
-        ENTRY;
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        rc = cfs_list_empty(&ocw->ocw_entry) || rpcs_in_flight(cli) == 0;
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
-        RETURN(rc);
-};
-
 /**
  * Non-blocking version of osc_enter_cache() that consumes grant only when it
  * is available.
@@ -2863,7 +2855,7 @@ static int osc_enter_cache(const struct lu_env *env,
 {
         struct osc_cache_waiter ocw;
         struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
-
+        int rc = -EDQUOT;
         ENTRY;
 
         CDEBUG(D_CACHE, "dirty: %ld/%d dirty_max: %ld/%d dropped: %lu "
@@ -2884,35 +2876,38 @@ static int osc_enter_cache(const struct lu_env *env,
             osc_enter_cache_try(env, cli, loi, oap, 0))
                 RETURN(0);
 
-        /* It is safe to block as a cache waiter as long as there is grant
-         * space available or the hope of additional grant being returned
-         * when an in flight write completes.  Using the write back cache
-         * if possible is preferable to sending the data synchronously
-         * because write pages can then be merged in to large requests.
-         * The addition of this cache waiter will causing pending write
-         * pages to be sent immediately. */
-        if (cli->cl_w_in_flight || cli->cl_avail_grant >= CFS_PAGE_SIZE) {
+        /* We can get here for two reasons: too many dirty pages in cache, or
+         * run out of grants. In both cases we should write dirty pages out.
+         * Adding a cache waiter will trigger urgent write-out no matter what
+         * RPC size will be.
+         * The exiting condition is no avail grants and no dirty pages caching,
+         * that really means there is no space on the OST. */
+        cfs_waitq_init(&ocw.ocw_waitq);
+        ocw.ocw_oap = oap;
+        while (cli->cl_dirty > 0) {
                 cfs_list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
-                cfs_waitq_init(&ocw.ocw_waitq);
-                ocw.ocw_oap = oap;
                 ocw.ocw_rc = 0;
 
                 loi_list_maint(cli, loi);
                 osc_check_rpcs(env, cli);
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-                CDEBUG(D_CACHE, "sleeping for cache space\n");
-                l_wait_event(ocw.ocw_waitq, ocw_granted(cli, &ocw), &lwi);
+                CDEBUG(D_CACHE, "%s: sleeping for cache space @ %p for %p\n",
+                       cli->cl_import->imp_obd->obd_name, &ocw, oap);
+
+                rc = l_wait_event(ocw.ocw_waitq, cfs_list_empty(&ocw.ocw_entry), &lwi);
 
                 client_obd_list_lock(&cli->cl_loi_list_lock);
-                if (!cfs_list_empty(&ocw.ocw_entry)) {
-                        cfs_list_del(&ocw.ocw_entry);
-                        RETURN(-EINTR);
-                }
-                RETURN(ocw.ocw_rc);
+                cfs_list_del_init(&ocw.ocw_entry);
+                if (rc < 0)
+                        break;
+
+                rc = ocw.ocw_rc;
+                if (rc != -EDQUOT)
+                        break;
         }
 
-        RETURN(-EDQUOT);
+        RETURN(rc);
 }
 
 
