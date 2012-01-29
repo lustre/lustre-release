@@ -1,0 +1,16 @@
+LU-1030 build: allow diff/chmod/deleted in commit-msg
+
+message
+body
+
+Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
+Change-Id: I012345678901234567890123456789012345500c
+
+diff --git a/build/commit-msg b/build/commit-msg
+index 02d704d..48323d1 100755
+--- a/build/commit-msg
++++ b/build/commit-msg
+
+# total: 0 errors, 0 warnings, 36 lines checked
+#
+# Your patch has no obvious style problems and is ready for submission.

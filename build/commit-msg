@@ -41,7 +41,6 @@ init() {
         HAS_BODY=false
         HAS_SIGNOFF=false
         HAS_CHANGEID=false
-        HAS_DIFF=false
 
         IS_WRAPPING_UP=false
 
@@ -135,7 +134,6 @@ function do_default_line() {
                 HAS_BODY=true
         fi
         HAS_LAST_BLANK=false
-        HAS_DIFF=false
 }
 
 # Add a new unique Change-Id
@@ -197,8 +195,10 @@ usage() {
 	commit/submission.  Copy the one from the original commit.
 
 	The "sign off section" may also include several other tag lines:
-	$(for T in $(tr '|' ' ' <<< "$INNOCUOUS"); do echo "  $T: <email>"; done
-	{Organization}-bug-id: associated ticket identifier
+	$(for T in $(tr '|' ' ' <<< "$INNOCUOUS"); do       \
+	     echo "    $T: Some Person <email@domain.com>"; \
+	  done)
+	{Organization}-bug-id: associated external change identifier
 	EOF
 
         mv "$ORIGINAL" "$SAVE" &&
@@ -228,13 +228,18 @@ while IFS= read -u3 LINE; do
                 # there are diff and index lines, skip the rest of the input:
                 #   diff --git a/build/commit-msg b/build/commit-msg
                 #   index 80a3442..acb4c50 100755
-                # If a "diff --git" line is not followed by an index line,
-                # do the default line processing on both lines.
+                #   deleted file mode 100644
+                #   old mode 100644
+                # If a "diff --git" line is not followed by one of these
+                # lines, do the default line processing on both lines.
                 #
                 IFS= read -u3 INDEX || break
                 ((NUM += 1))
-                ln=$(echo "$INDEX" | grep "^index [0-9a-fA-F]\{6,\}\.\.")
-                (( ${#ln} > 1 )) && break
+                case "$INDEX" in
+                "index "[0-9a-fA-F]*) break ;;
+                "deleted file mode "*) break  ;;
+                "old mode "*) break ;;
+                esac
                 LINE=${LINE}$'\n'${INDEX}
                 do_default_line
                 ;;
@@ -242,12 +247,12 @@ while IFS= read -u3 LINE; do
         *)
                 if [[ "$LINE" =~ ^($INNOCUOUS): ]]; then
                         do_innocuous
-        	elif [[ "$LINE" =~ ^[A-Za-z0-9_-]+-bug-id: ]]; then
-			ck_wrapup
-        	else
-			# Allow arbitrary external bug identifiers for tracking.
-			# I can't seem to find a pattern for the "case" that
-			# checks for "*-bug-id", so this is checked here.
+                elif [[ "$LINE" =~ ^[A-Za-z0-9_-]+-bug-id: ]]; then
+                        ck_wrapup
+                else
+                        # Allow arbitrary external bug identifiers for tracking.
+                        # I can't seem to find a pattern for the "case" that
+                        # checks for "*-bug-id", so this is checked here.
                         do_default_line
                 fi
                 ;;
