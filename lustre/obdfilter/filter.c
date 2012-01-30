@@ -3804,7 +3804,6 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
         struct dentry *dchild = NULL, *dparent = NULL;
         struct filter_obd *filter;
         struct obd_statfs *osfs;
-        struct iattr iattr;
         int err = 0, rc = 0, recreate_obj = 0, i;
         cfs_time_t enough_time = cfs_time_shift(DISK_TIMEOUT/2);
         __u64 os_ffree;
@@ -3968,19 +3967,6 @@ static int filter_precreate(struct obd_device *obd, struct obdo *oa,
                                        dchild->d_inode->i_ino);
 
 set_last_id:
-                /* Set a/c/m time to a insane large negative value at creation
-                 * time so that any timestamp arriving from the client will
-                 * always be newer and update the inode.
-                 * See LU-221 for details */
-                iattr.ia_valid = ATTR_ATIME | ATTR_MTIME | ATTR_CTIME;
-                LTIME_S(iattr.ia_atime) = INT_MIN + 24 * 3600;
-                LTIME_S(iattr.ia_mtime) = INT_MIN + 24 * 3600;
-                LTIME_S(iattr.ia_ctime) = INT_MIN + 24 * 3600;
-                err = fsfilt_setattr(obd, dchild, handle, &iattr, 0);
-                if (err)
-                        CERROR("unable to initialize a/c/m time of newly"
-                               "created inode\n");
-
                 if (!recreate_obj) {
                         filter_set_last_id(filter, next_id, group);
                         err = filter_update_last_objid(obd, group, 0);
