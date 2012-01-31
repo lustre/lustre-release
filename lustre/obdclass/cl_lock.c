@@ -1928,11 +1928,13 @@ static int check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
                         if (tmp->cll_descr.cld_end == CL_PAGE_EOF)
                                 info->clt_fn_index = CL_PAGE_EOF;
                         cl_lock_put(env, tmp);
-                } else { /* discard the page */
-                        cl_page_own(env, io, page);
+                } else if (cl_page_own(env, io, page) == 0) {
+                        /* discard the page */
                         cl_page_unmap(env, io, page);
                         cl_page_discard(env, io, page);
                         cl_page_disown(env, io, page);
+                } else {
+                        LASSERT(page->cp_state == CPS_FREEING);
                 }
         }
 
