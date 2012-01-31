@@ -617,6 +617,7 @@ enum {
         RALND     = 10,
         VIBLND    = 11,
         MXLND     = 12,
+        GNILND    = 13,
 };
 
 enum {

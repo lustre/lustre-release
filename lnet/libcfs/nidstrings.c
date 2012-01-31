@@ -175,6 +175,11 @@ static struct netstrfns  libcfs_netstrfns[] = {
          /* .nf_modname   */  "kptllnd",
          /* .nf_addr2str  */  libcfs_decnum_addr2str,
          /* .nf_str2addr  */  libcfs_num_str2addr},
+        {/* .nf_type      */  GNILND,
+         /* .nf_name      */  "gni",
+         /* .nf_modname   */  "kgnilnd",
+         /* .nf_addr2str  */  libcfs_decnum_addr2str,
+         /* .nf_str2addr  */  libcfs_num_str2addr},
         /* placeholder for net0 alias.  It MUST BE THE LAST ENTRY */
         {/* .nf_type      */  -1},
 };

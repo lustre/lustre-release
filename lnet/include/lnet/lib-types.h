@@ -159,6 +159,7 @@ typedef struct {
 #define LNET_PROTO_VIB_MAGIC                LNET_PROTO_IB_MAGIC
 #define LNET_PROTO_RA_MAGIC                 0x0be91b92
 #define LNET_PROTO_QSW_MAGIC                0x0be91b93
+#define LNET_PROTO_GNI_MAGIC                0xb00fbabe /* ask Kim */
 #define LNET_PROTO_TCP_MAGIC                0xeebc0ded
 #define LNET_PROTO_PTL_MAGIC                0x50746C4E /* 'PtlN' unique magic */
 #define LNET_PROTO_GM_MAGIC                 0x6d797269 /* 'myri'! */
