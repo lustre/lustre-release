@@ -650,6 +650,7 @@ static int ldlm_cb_interpret(const struct lu_env *env,
         struct ldlm_cb_async_args *ca   = data;
         struct ldlm_lock          *lock = ca->ca_lock;
         struct ldlm_cb_set_arg    *arg  = ca->ca_set_arg;
+        int count;
         ENTRY;
 
         LASSERT(lock != NULL);
@@ -662,8 +663,11 @@ static int ldlm_cb_interpret(const struct lu_env *env,
         }
         LDLM_LOCK_RELEASE(lock);
 
-        if (cfs_atomic_dec_return(&arg->rpcs) < arg->threshold)
+        count = cfs_atomic_dec_return(&arg->rpcs);
+        if (count < arg->threshold)
                 cfs_waitq_signal(&arg->waitq);
+        if (count == 0)
+                ldlm_csa_put(arg);
         RETURN(0);
 }
 
@@ -682,8 +686,9 @@ static inline int ldlm_bl_and_cp_ast_tail(struct ptlrpc_request *req,
                         cfs_atomic_inc(&arg->restart);
         } else {
                 LDLM_LOCK_GET(lock);
+                if (cfs_atomic_inc_return(&arg->rpcs) == 1)
+                        cfs_atomic_inc(&arg->refcount);
                 ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
-                cfs_atomic_inc(&arg->rpcs);
         }
 
         RETURN(rc);
