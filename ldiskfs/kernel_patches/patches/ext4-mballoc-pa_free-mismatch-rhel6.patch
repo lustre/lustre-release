@@ -63,32 +63,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	atomic_add(free, &sbi->s_mb_discarded);
  
  	return err;
-@@ -4450,6 +4462,24 @@
- 
- 	trace_ext4_request_blocks(ar);
- 
-+
-+	if (dev_check_rdonly(sb->s_bdev)) {
-+		struct block_device *bdev = sb->s_bdev;
-+
-+		printk(KERN_WARNING "Alloc from readonly device %s (%#x): "
-+			"[inode %lu] [logic %llu] [goal %llu] [ll %llu] "
-+			"[pl %llu] [lr %llu] [pr %llu] [len %u] [flags %u]\n",
-+			bdev->bd_disk ? bdev->bd_disk->disk_name : "",
-+			bdev->bd_dev, ar->inode->i_ino,
-+			(unsigned long long)ar->logical,
-+			(unsigned long long)ar->goal,
-+			(unsigned long long)ar->lleft,
-+			(unsigned long long)ar->pleft,
-+			(unsigned long long)ar->lright,
-+			(unsigned long long)ar->pright,
-+			ar->len, ar->flags);
-+	}
-+
- 	/*
- 	 * For delayed allocation, we could skip the ENOSPC and
- 	 * EDQUOT check, as blocks and quotas have been already
-@@ -4529,6 +4559,25 @@
+@@ -4511,6 +4541,25 @@
  			ac->ac_b_ex.fe_len = 0;
  			ar->len = 0;
  			ext4_mb_show_ac(ac);
@@ -114,22 +89,6 @@ Index: linux-stage/fs/ext4/mballoc.c
  		} else {
  			block = ext4_grp_offs_to_block(sb, &ac->ac_b_ex);
  			ar->len = ac->ac_b_ex.fe_len;
-@@ -4691,6 +4740,15 @@
- 		goto error_return;
- 	}
- 
-+	if (dev_check_rdonly(sb->s_bdev)) {
-+		struct block_device *bdev = sb->s_bdev;
-+
-+		printk(KERN_WARNING "Release to readonly device %s (%#x): "
-+			"[inode %lu] [block %llu] [count %lu] [is_meta %d]\n",
-+			bdev->bd_disk ? bdev->bd_disk->disk_name : "",
-+			bdev->bd_dev, inode->i_ino, block, count, metadata);
-+	}
-+
- 	ext4_debug("freeing block %llu\n", block);
- 	trace_ext4_free_blocks(inode, block, count, metadata);
- 
 Index: linux-stage/fs/ext4/mballoc.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/mballoc.h	2011-03-14 16:32:50.859552482 +0800

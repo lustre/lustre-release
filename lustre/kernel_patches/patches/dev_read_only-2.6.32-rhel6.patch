@@ -30,29 +30,20 @@ Index: linux-2.6.32-131.0.15.el6.x86_64/block/blk-core.c
  /*
   * Check whether this bio extends beyond the end of the device.
   */
-@@ -1517,6 +1519,21 @@ static inline void __generic_make_reques
+@@ -1517,6 +1519,12 @@ static inline void __generic_make_reques
  		if (unlikely(test_bit(QUEUE_FLAG_DEAD, &q->queue_flags)))
  			goto end_io;
  
-+               /* this is cfs's dev_rdonly check */
-+               if (bio_rw(bio) == WRITE && dev_check_rdonly(bio->bi_bdev)) {
-+                       struct block_device *bdev = bio->bi_bdev;
-+
-+                       printk(KERN_WARNING "Write to readonly device %s (%#x) "
-+                              "bi_flags: %lx, bi_vcnt: %d, bi_idx: %d, "
-+                              "bi->size: %d, bi_cnt: %d, bi_private: %p\n",
-+                              bdev->bd_disk ? bdev->bd_disk->disk_name : "",
-+                              bdev->bd_dev, bio->bi_flags, bio->bi_vcnt,
-+                              bio->bi_idx, bio->bi_size,
-+                              atomic_read(&bio->bi_cnt), bio->bi_private);
-+                       err = 0;
-+                       goto end_io;
-+               }
++		/* this is cfs's dev_rdonly check */
++		if (bio_rw(bio) == WRITE && dev_check_rdonly(bio->bi_bdev)) {
++			err = 0;
++			goto end_io;
++		}
 +
  		if (should_fail_request(bio))
  			goto end_io;
  
-@@ -2628,6 +2647,99 @@ int kblockd_schedule_work(struct request
+@@ -2619,6 +2638,99 @@ int kblockd_schedule_work(struct request
  }
  EXPORT_SYMBOL(kblockd_schedule_work);
  
