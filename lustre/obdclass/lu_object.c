@@ -504,6 +504,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
         h = container_of0(hnode, struct lu_object_header, loh_hash);
         if (likely(!lu_object_is_dying(h))) {
                 lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_HIT);
+                cfs_list_del_init(&h->loh_lru);
                 return lu_object_top(h);
         }
 
@@ -600,8 +601,6 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
         hs = s->ls_obj_hash;
         cfs_hash_bd_get_and_lock(hs, (void *)f, &bd, 1);
         o = htable_lookup(s, &bd, f, waiter, &version);
-        if (o != NULL && !cfs_list_empty(&o->lo_header->loh_lru))
-                cfs_list_del_init(&o->lo_header->loh_lru);
         cfs_hash_bd_unlock(hs, &bd, 1);
         if (o != NULL)
                 return o;
