@@ -16,6 +16,9 @@
       <para><xref linkend="dbdoclet.50438212_85136"/></para>
     </listitem>
     <listitem>
+      <para><xref linkend="mds_survey_ref"/></para>
+    </listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438212_58201"/></para>
     </listitem>
   </itemizedlist>
@@ -530,6 +533,226 @@ Ost index 1 Read time                0.14         Write time      0.16
 Ost index 2 Read speed               6.98         Write speed     6.16
 Ost index 2 Read time                0.14         Write time      0.16 
 </screen>
+  </section>
+  <section xml:id="mds_survey_ref">
+    <title><indexterm><primary>benchmarking</primary><secondary>MDS
+performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey</literal>)</title>
+    <para>The <literal>mds-survey</literal> script tests the local metadata
+performance using the echo_client to drive different layers of the MDS stack:
+mdd, mdt, osd (current lustre version only supports mdd stack). It can be used with the following classes of operations:</para>
+    <itemizedlist>
+      <listitem>
+        <para><literal>Open-create/mkdir/create</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>Lookup/getattr/setxattr</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>Delete/destroy</literal></para>
+      </listitem>
+      <listitem>
+        <para><literal>Unlink/rmdir</literal></para>
+      </listitem>
+    </itemizedlist>
+    <para>These operations will be run by a variable number of concurrent threads and will test with the number of directories specified by the user. The run can be executed such that all threads operate in a single directory (dir_count=1) or in private/unique directory (dir_count=x thrlo=x thrhi=x).</para>
+
+    <para>The mdd instance is driven directly. The script automatically loads the obdecho module if required and creates instance of echo_client.</para>
+
+    <para>This script can also create OST objects by providing stripe_count greater than zero.</para>
+
+    <para><emphasis role="bold">To perform a run:</emphasis></para>
+      <orderedlist>
+        <listitem>
+          <para>Start the Lustre MDT.</para>
+          <para>The Lustre MDT should be mounted on the MDS node to be tested.</para>
+        </listitem>
+        <listitem>
+          <para>Start the Lustre OSTs (optional, only required when test with OST objects)</para>
+          <para>The Lustre OSTs should be mounted on the OSS node(s).</para>
+        </listitem>
+        <listitem>
+          <para>Run the <literal>mds-survey</literal> script as explain below</para>
+          <para>The script must be customized according to the components under test and where it should keep its working files. Customization variables are described as followed:</para>
+          <itemizedlist>
+            <listitem>
+              <para>thrlo - threads to start testing. skipped if less than dir_count</para>
+            </listitem>
+            <listitem>
+              <para>thrhi - maximum number of threads to test</para>
+            </listitem>
+            <listitem>
+              <para>targets - MDT instance</para>
+            </listitem>
+            <listitem>
+              <para>file_count - number of files per thread to test</para>
+            </listitem>
+            <listitem>
+              <para>dir_count - total number of directories to test. Must be less than thrhi</para>
+            </listitem>
+            <listitem>
+              <para>stripe_count - number stripe on OST objects</para>
+            </listitem>
+            <listitem>
+              <para>tests_str - test operations. Must have at least "create" and "destroy"</para>
+            </listitem>
+            <listitem>
+              <para>start_number - base number for each thread to prevent name collisions</para>
+            </listitem>
+            <listitem>
+              <para>layer - MDS stack's layer to be tested</para>
+            </listitem>
+          </itemizedlist>
+          <para>Run without OST objects creation:</para>
+          <para>Setup the Lustre MDS without OST mounted. Then invoke the <literal>mds-survey</literal> script</para>
+          <screen>$ thrhi=64 file_count=200000 sh mds-survey</screen>
+          <para>Run with OST objects creation:</para>
+          <para>Setup the Lustre MDS with at least one OST mounted. Then invoke the <literal>mds-survey</literal> script with stripe_count parameter</para>
+          <screen>$ thrhi=64 file_count=200000 stripe_count=2 sh mds-survey</screen>
+          <para>Note: a specific mdt instance can be specified using targets variable.</para>
+          <screen>$ targets=lustre-MDT0000 thrhi=64 file_count=200000 stripe_count=2 sh mds-survey</screen>
+        </listitem>
+      </orderedlist>
+    <section remap="h3">
+      <title>Output Files</title>
+      <para>When the <literal>mds-survey</literal> script runs, it creates a number of working files and a pair of result files. All files start with the prefix defined in the variable <literal>${rslt}</literal>.</para>
+      <informaltable frame="all">
+        <tgroup cols="2">
+          <colspec colname="c1" colwidth="50*"/>
+          <colspec colname="c2" colwidth="50*"/>
+          <thead>
+            <row>
+              <entry>
+                <para><emphasis role="bold">File</emphasis></para>
+              </entry>
+              <entry>
+                <para><emphasis role="bold">Description</emphasis></para>
+              </entry>
+            </row>
+          </thead>
+          <tbody>
+            <row>
+              <entry>
+                <para> <literal>${rslt}.summary</literal></para>
+              </entry>
+              <entry>
+                <para> Same as stdout</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>${rslt}.script_*</literal></para>
+              </entry>
+              <entry>
+                <para> Per-host test script files</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>${rslt}.detail_tmp*</literal></para>
+              </entry>
+              <entry>
+                <para> Per-mdt result files</para>
+              </entry>
+            </row>
+            <row>
+              <entry>
+                <para> <literal>${rslt}.detail</literal></para>
+              </entry>
+              <entry>
+                <para> Collected result files for post-mortem</para>
+              </entry>
+            </row>
+          </tbody>
+        </tgroup>
+      </informaltable>
+      <para>The <literal>mds-survey</literal> script iterates over the given number of threads performing the specified tests and checks that all test processes have completed successfully.</para>
+      <note>
+      <para>The <literal>mds-survey</literal> script may not clean up properly if it is aborted or if it encounters an unrecoverable error. In this case, a manual cleanup may be required, possibly including killing any running instances of <literal>lctl</literal>, removing <literal>echo_client</literal> instances created by the script and unloading <literal>obdecho</literal>.</para>
+      </note>
+    </section>
+      <section remap="h4">
+        <title>Script Output</title>
+        <para>The <literal>.summary</literal> file and <literal>stdout</literal> of the <literal>mds-survey</literal> script contain lines like:</para>
+        <screen>mdt 1 file 100000 dir 4 thr 4 create 5652.05 [ 999.01,46940.48] destroy 5797.79 [ 0.00,52951.55] </screen>
+        <para>Where:</para>
+        <informaltable frame="all">
+          <tgroup cols="2">
+            <colspec colname="c1" colwidth="50*"/>
+            <colspec colname="c2" colwidth="50*"/>
+            <thead>
+              <row>
+                <entry>
+                  <para><emphasis role="bold">Parameter and value</emphasis></para>
+                </entry>
+                <entry>
+                  <para><emphasis role="bold">Description</emphasis></para>
+                </entry>
+              </row>
+            </thead>
+            <tbody>
+              <row>
+                <entry>
+                  <para>mdt 1</para>
+                </entry>
+                <entry>
+                  <para>Total number of MDT under test</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>file 100000</para>
+                </entry>
+                <entry>
+                  <para>Total number of files per thread to operate</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>dir 4</para>
+                </entry>
+                <entry>
+                  <para>Total number of directories to operate</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>thr 4</para>
+                </entry>
+                <entry>
+                  <para>Total number of threads operate over all directories</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>create, destroy</para>
+                </entry>
+                <entry>
+                  <para>Tests name. More tests will be displayed on the same line.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>565.05</para>
+                </entry>
+                <entry>
+                  <para>Aggregate operations over MDT measured by dividing the total number of operations by the elapsed time.</para>
+                </entry>
+              </row>
+              <row>
+                <entry>
+                  <para>[999.01,46940.48]</para>
+                </entry>
+                <entry>
+                  <para>Minimum and maximum instantaneous operation seen on any individual MDT</para>
+                </entry>
+              </row>
+            </tbody>
+          </tgroup>
+        </informaltable>
+        <note>
+        <para>If script output has "ERROR", this usually means there is issue during the run such as running out of space on the MDT and/or OST. More detailed debug information is available in the ${rslt}.detail file</para>
+      </note>
+      </section>
   </section>
   <section xml:id="dbdoclet.50438212_58201">
     <title><indexterm><primary>benchmarking</primary><secondary>application profiling</secondary></indexterm>Collecting Application Profiling Information (<literal>stats-collect</literal>)</title>
