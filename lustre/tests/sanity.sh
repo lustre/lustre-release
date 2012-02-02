@@ -2061,6 +2061,25 @@ test_34g() {
 }
 run_test 34g "truncate long file ==============================="
 
+test_34h() {
+	local gid=10
+	local sz=1000
+
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10 || error
+	multiop $DIR/$tfile OG${gid}T${sz}g${gid}c &
+	MULTIPID=$!
+	sleep 2
+
+	if [[ `ps h -o comm -p $MULTIPID` == "multiop" ]]; then
+		error "Multiop blocked on ftruncate, pid=$MULTIPID"
+		kill -9 $MULTIPID
+	fi
+	wait $MULTIPID
+	local nsz=`stat -c %s $DIR/$tfile`
+	[[ $nsz == $sz ]] || error "New size wrong $nsz != $sz"
+}
+run_test 34h "ftruncate file under grouplock should not block"
+
 test_35a() {
 	cp /bin/sh $DIR/f35a
 	chmod 444 $DIR/f35a

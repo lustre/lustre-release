@@ -1347,6 +1347,13 @@ void ll_iocontrol_unregister(void *magic);
 #define cl_inode_mode(inode) ((inode)->i_mode)
 #define cl_i2sbi ll_i2sbi
 
+static inline struct ll_file_data *cl_iattr2fd(struct inode *inode,
+                                               const struct iattr *attr)
+{
+        LASSERT(attr->ia_valid & ATTR_FILE);
+        return LUSTRE_FPRIVATE(attr->ia_file);
+}
+
 static inline void cl_isize_lock(struct inode *inode, int lsmlock)
 {
         ll_inode_size_lock(inode, lsmlock);

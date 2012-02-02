@@ -404,6 +404,12 @@ static inline struct slp_io *slp_env_io(const struct lu_env *env)
 #define cl_isize_write(inode,kms)        do{llu_i2stat(inode)->st_size = kms;}while(0)
 #define cl_isize_write_nolock(inode,kms) cl_isize_write(inode,kms)
 
+static inline struct ll_file_data *cl_iattr2fd(struct inode *inode,
+                                               const struct iattr *attr)
+{
+        return llu_i2info(inode)->lli_file_data;
+}
+
 static inline void cl_isize_lock(struct inode *inode, int lsmlock)
 {
 }

@@ -195,6 +195,7 @@ void cfs_get_random_bytes(void *ptr, int size);
 #define ATTR_BLOCKS     0x4000
 #define ATTR_KILL_SUID  0
 #define ATTR_KILL_SGID  0
+#define ATTR_FILE       0
 
 struct iattr {
         unsigned int    ia_valid;

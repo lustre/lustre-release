@@ -1033,10 +1033,18 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
         io->u.ci_setattr.sa_valid = attr->ia_valid;
         io->u.ci_setattr.sa_capa = capa;
 
-        if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0)
+        if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {
+                struct ccc_io *cio = ccc_env_io(env);
+
+                if (attr->ia_valid & ATTR_FILE)
+                        /* populate the file descriptor for ftruncate to honor
+                         * group lock - see LU-787 */
+                        cio->cui_fd = cl_iattr2fd(inode, attr);
+
                 result = cl_io_loop(env, io);
-        else
+        } else {
                 result = io->ci_result;
+        }
         cl_io_fini(env, io);
         cl_env_put(env, &refcheck);
         RETURN(result);
