@@ -2076,10 +2076,22 @@ void cl_locks_prune(const struct lu_env *env, struct cl_object *obj, int cancel)
                 cl_lock_get_trust(lock);
                 cfs_spin_unlock(&head->coh_lock_guard);
                 lu_ref_add(&lock->cll_reference, "prune", cfs_current());
+
+again:
                 cl_lock_mutex_get(env, lock);
                 if (lock->cll_state < CLS_FREEING) {
                         LASSERT(lock->cll_holds == 0);
-                        LASSERT(lock->cll_users == 0);
+                        LASSERT(lock->cll_users <= 1);
+                        if (unlikely(lock->cll_users == 1)) {
+                                struct l_wait_info lwi = { 0 };
+
+                                cl_lock_mutex_put(env, lock);
+                                l_wait_event(lock->cll_wq,
+                                             lock->cll_users == 0,
+                                             &lwi);
+                                goto again;
+                        }
+
                         if (cancel)
                                 cl_lock_cancel(env, lock);
                         cl_lock_delete(env, lock);
@@ -2255,7 +2267,7 @@ void cl_lock_user_add(const struct lu_env *env, struct cl_lock *lock)
 }
 EXPORT_SYMBOL(cl_lock_user_add);
 
-int cl_lock_user_del(const struct lu_env *env, struct cl_lock *lock)
+void cl_lock_user_del(const struct lu_env *env, struct cl_lock *lock)
 {
         LINVRNT(cl_lock_is_mutexed(lock));
         LINVRNT(cl_lock_invariant(env, lock));
@@ -2263,7 +2275,9 @@ int cl_lock_user_del(const struct lu_env *env, struct cl_lock *lock)
 
         ENTRY;
         cl_lock_used_mod(env, lock, -1);
-        RETURN(lock->cll_users == 0);
+        if (lock->cll_users == 0)
+                cfs_waitq_broadcast(&lock->cll_wq);
+        EXIT;
 }
 EXPORT_SYMBOL(cl_lock_user_del);
 

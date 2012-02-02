@@ -2815,7 +2815,7 @@ void  cl_lock_unhold    (const struct lu_env *env, struct cl_lock *lock,
 void  cl_lock_release   (const struct lu_env *env, struct cl_lock *lock,
                          const char *scope, const void *source);
 void  cl_lock_user_add  (const struct lu_env *env, struct cl_lock *lock);
-int   cl_lock_user_del  (const struct lu_env *env, struct cl_lock *lock);
+void  cl_lock_user_del  (const struct lu_env *env, struct cl_lock *lock);
 
 enum cl_lock_state cl_lock_intransit(const struct lu_env *env,
                                      struct cl_lock *lock);

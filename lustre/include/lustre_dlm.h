@@ -699,18 +699,6 @@ struct ldlm_lock {
         __u64                 l_flags;
         __u32                 l_readers;
         __u32                 l_writers;
-        /*
-         * Set for locks that were removed from class hash table and will be
-         * destroyed when last reference to them is released. Set by
-         * ldlm_lock_destroy_internal().
-         *
-         * Protected by lock and resource locks.
-         */
-        __u8                  l_destroyed;
-        /**
-         * flag whether this is a server namespace lock
-         */
-        __u8                  l_ns_srv;
         /**
          * If the lock is granted, a process sleeps on this waitq to learn when
          * it's no longer in use.  If the lock is not granted, a process sleeps
@@ -731,11 +719,24 @@ struct ldlm_lock {
 
         struct ldlm_extent    l_req_extent;
 
+        unsigned int          l_failed:1,
+        /*
+         * Set for locks that were removed from class hash table and will be
+         * destroyed when last reference to them is released. Set by
+         * ldlm_lock_destroy_internal().
+         *
+         * Protected by lock and resource locks.
+         */
+                              l_destroyed:1,
+        /**
+         * flag whether this is a server namespace lock.
+         */
+                              l_ns_srv:1;
+
         /*
          * Client-side-only members.
          */
 
-        int                   l_fail_value;
         /**
          * Temporary storage for an LVB received during an enqueue operation.
          */
@@ -1083,8 +1084,8 @@ void ldlm_lock_addref(struct lustre_handle *lockh, __u32 mode);
 int  ldlm_lock_addref_try(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref(struct lustre_handle *lockh, __u32 mode);
 void ldlm_lock_decref_and_cancel(struct lustre_handle *lockh, __u32 mode);
-void ldlm_lock_fail_match_locked(struct ldlm_lock *lock, int rc);
-void ldlm_lock_fail_match(struct ldlm_lock *lock, int rc);
+void ldlm_lock_fail_match_locked(struct ldlm_lock *lock);
+void ldlm_lock_fail_match(struct ldlm_lock *lock);
 void ldlm_lock_allow_match(struct ldlm_lock *lock);
 void ldlm_lock_allow_match_locked(struct ldlm_lock *lock);
 ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,

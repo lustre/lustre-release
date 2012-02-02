@@ -535,13 +535,15 @@ static int osc_lock_upcall(void *cookie, int errcode)
                                 dlmlock->l_ast_data = NULL;
                                 olck->ols_handle.cookie = 0ULL;
                                 cfs_spin_unlock(&osc_ast_guard);
-                                ldlm_lock_fail_match_locked(dlmlock, rc);
+                                ldlm_lock_fail_match_locked(dlmlock);
                                 unlock_res_and_lock(dlmlock);
                                 LDLM_LOCK_PUT(dlmlock);
                         }
                 } else {
-                        if (olck->ols_glimpse)
+                        if (olck->ols_glimpse) {
                                 olck->ols_glimpse = 0;
+                                olck->ols_agl = 0 ;
+                        }
                         osc_lock_upcall0(env, olck);
                 }
 

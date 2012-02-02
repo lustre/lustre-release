@@ -3332,7 +3332,7 @@ void osc_update_enqueue(struct lustre_handle *lov_lockhp,
 
         if (lock != NULL) {
                 if (rc != ELDLM_OK)
-                        ldlm_lock_fail_match(lock, rc);
+                        ldlm_lock_fail_match(lock);
 
                 LDLM_LOCK_PUT(lock);
         }
