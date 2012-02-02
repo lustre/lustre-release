@@ -1,13 +1,13 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="upgradinglustre">
   <title xml:id="upgradinglustre.title">Upgrading Lustre</title>
-  <para>This chapter describes Lustre interoperability and how to upgrade to Lustre 2.0, and includes the following sections:</para>
+  <para>This chapter describes Lustre interoperability and how to upgrade from Lustre 1.8 to Lustre 2.x, and includes the following sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438205_82079"/>Lustre Interoperability</para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438205_51369"/>Upgrading Lustre 1.8.x to 2.0</para>
+      <para><xref linkend="dbdoclet.50438205_51369"/>Upgrading Lustre 1.8 to 2.x</para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438205_82079">
@@ -15,37 +15,36 @@
       <indexterm><primary>upgrading</primary></indexterm>
           
           Lustre Interoperability</title>
-    <para>Lustre 2.0 is built on a new architectural code base, which is different than the one used with Lustre 1.8. These architectural changes require existing Lustre 1.8.x users to follow a slightly different procedure to upgrade to Lustre 2.0 - requiring clients to be unmounted and the file system be shut down. Once the servers are upgraded and restarted, then the clients can be remounted. After the upgrade, Lustre 2.0 servers can interoperate with compatible 1.8 clients and servers. Lustre 2.0 does <emphasis>not</emphasis> support 2.0 clients interoperating with 1.8 servers.</para>
+    <para>Lustre 2.x is built on a new architectural code base which is different than the one used with Lustre 1.8. These architectural changes require existing Lustre 1.8 users to follow a slightly different procedure to upgrade to Lustre 2.x - requiring clients to be unmounted and the file system be shut down. Once the servers are upgraded and restarted, then the clients can be remounted. After the upgrade, Lustre 2.x servers can interoperate with compatible 1.8 clients and servers. Lustre 2.x does <emphasis>not</emphasis> support 2.x clients interoperating with 1.8 servers.</para>
     <note>
-      <para>Lustre 1.8 clients support a mix of 1.8 and 2.0 OSTs, not all OSSs need to be upgraded at the same time.</para>
+      <para>Lustre 1.8 clients can interoperate with 2.x servers, but the servers should all be upgraded at the same time.</para>
     </note>
     <note>
-      <para>Lustre 2.0 is compatible with version 1.8.4 and above. If you are planning a heterogeneous environment (mixed 1.8 and 2.0 servers), make sure that version 1.8.4 is installed on the client and server nodes that are not upgraded to 2.0.</para>
+      <para>Lustre 2.x servers are compatible with clients 1.8.6 and later, though it is strongly recommended that the clients are upgraded to the latest version of Lustre 1.8 available. If you are planning a heterogeneous environment (mixed 1.8 and 2.x servers), make sure that version 1.8.6 or later is installed on the client nodes that are not upgraded to 2.x.</para>
     </note>
   </section>
   <section xml:id="dbdoclet.50438205_51369">
-    <title><indexterm><primary>upgrading</primary><secondary>1.8 to 2.x</secondary></indexterm>Upgrading Lustre 1.8.x to 2.0</title>
-    <para>Upgrading to Lustre 2.0 involves shutting down the file system and upgrading servers, and optionally clients, all at the same time. Lustre 2.0 does not support a rolling upgrade in which the file system operates continuously while individual servers (or their failover partners) and clients are upgraded one at a time.</para>
+    <title><indexterm><primary>upgrading</primary><secondary>1.8 to 2.x</secondary></indexterm>Upgrading Lustre 1.8 to 2.x</title>
+    <para>Upgrading from 1.8 to Lustre 2.x involves shutting down the file system and upgrading servers, and optionally clients, all at the same time. This upgrade process does <emphasis>not</emphasis> support a rolling upgrade in which the file system operates continuously while individual servers (or their failover partners) and clients are upgraded one at a time.</para>
     <note>
-      <para>Although the Lustre 1.8 to 2.0 upgrade path has been tested, for best results we recommend performing a fresh Lustre 2.0 installation, rather than upgrading from 1.8 to 2.0.</para>
+      <para>Although the Lustre 1.8 to 2.x upgrade path has been tested, optimum performance will be seen with a freshly formatted 2.x filesystem.</para>
     </note>
     <section remap="h3">
       <title><indexterm><primary>upgrading</primary><secondary>file system</secondary></indexterm>Performing a File System Upgrade</title>
-      <para>This procedure describes a file system upgrade in which Lustre 2.0 packages are installed on multiple 1.8.x servers and, optionally, clients, requiring a file system shut down. You can choose to upgrade the entire Lustre file system to 2.0 or just upgrade the Lustre servers to 2.0 and leave the clients at 1.8.x. Lustre 2.0 servers can interoperate with compatible 1.8 clients and servers.</para>
+      <para>This procedure describes a file system upgrade in which Lustre 2.x packages are installed on multiple 1.8 servers and, optionally, clients, requiring a file system shutdown. You can choose to upgrade the entire Lustre file system to 2.x, or just upgrade the servers to Lustre 2.x and leave the clients running 1.8.6 or later.</para>
       <tip>
-        <para>In a Lustre upgrade, the package install and file system unmount steps are reversible; you can do either step first. To minimize downtime, this procedure first performs the 2.0 package installation, and then unmounts the file system.</para>
+        <para>In a Lustre upgrade, the package install/update can be done either before or after the filesystem is unmount.  To minimize downtime, this procedure first performs the 2.x package installation, and then unmounts the file system.</para>
       </tip>
       <orderedlist>
         <listitem>
-          <para>Make a complete, restorable file system backup before upgrading Lustre.</para>
+          <para>Make a complete, restorable file system backup before upgrading Lustre.  The Lustre 2.x on-disk format itself is compatible with the 1.8 on-disk format, but having a backup is always important.  If it is not possible to backup the full filesystem, it is still valuable to have a full device-level backup of the MDT filesystem, as described in <xref linkend="backupandrestore"/>.</para>
         </listitem>
         <listitem>
-          <para>If any Lustre nodes will not be upgraded to 2.0, make sure that these client and server nodes are at version 1.8.4.</para>
-          <para>Lustre 2.0 is compatible with version 1.8.4 and above. If you are planning a heterogeneous environment (mixed 1.8 and 2.0 clients and servers), make sure that version 1.8.4 is installed on nodes that are not upgraded to 2.0.</para>
+          <para>If you are planning a heterogeneous environment (1.8 clients and 2.x servers), make sure that at least version 1.8.6 is installed on clients that are not upgraded to 2.x.</para>
         </listitem>
         <listitem>
-          <para>Install the 2.0 packages on the Lustre servers and, optionally, the clients.</para>
-          <para>Some or all servers can be upgraded. Some or all clients can be upgraded.</para>
+          <para>Install the 2.x packages on the Lustre servers and, optionally, the clients.</para>
+          <para>All servers must be upgraded from 1.8 to 2.x at the same time. Some or all clients can be upgraded to 2.x at this time.</para>
           <para>For help determining where to install a specific package, see <xref linkend="installinglustre.tab.req"/>.</para>
           <orderedlist>
             <listitem>
@@ -64,11 +63,11 @@ lustre-ldiskfs-&lt;ver&gt;</screen>
               <para>If a new <literal>e2fsprogs</literal> package is available, upgrade it. For example:</para>
               <screen>$ rpm -Uvh e2fsprogs-&lt;ver&gt;
 </screen>
-              <para>Use e2fsprogs-1.41-10 or later, available at:</para>
+              <para>Use e2fsprogs-1.41.90-wc3 or later, available at:</para>
               <para><link xl:href="http://downloads.whamcloud.com/public/e2fsprogs/latest/">http://downloads.whamcloud.com/public/e2fsprogs/latest/</link></para>
             </listitem>
             <listitem>
-              <para>(Optional) If you want to add optional packages to your Lustre system, install them now.</para>
+              <para>If you want to add optional packages to your Lustre system, install them now.</para>
             </listitem>
           </orderedlist>
         </listitem>
@@ -78,21 +77,20 @@ lustre-ldiskfs-&lt;ver&gt;</screen>
           <orderedlist>
             <listitem>
               <para>Unmount the clients. On each client node, run:</para>
-              <screen>umount &lt;mount point&gt;</screen>
+              <screen>umount -a -t lustre</screen>
             </listitem>
             <listitem>
               <para>Unmount the MDT. On the MDS node, run:</para>
-              <screen>umount &lt;mount point&gt;</screen>
+              <screen>umount -a -t lustre</screen>
             </listitem>
             <listitem>
               <para>Unmount the OSTs (be sure to unmount all OSTs). On each OSS node, run:</para>
-              <screen>umount &lt;mount point&gt;</screen>
+              <screen>umount -a -t lustre</screen>
             </listitem>
           </orderedlist>
         </listitem>
         <listitem>
-          <para>Unload the old Lustre modules by rebooting the node or manually removing the Lustre modules.</para>
-          <para>Run <literal>lustre_rmmod</literal> several times and use <literal>lsmod</literal> to check the currently loaded modules.</para>
+          <para>Since the kernel will typically be upgraded with a 1.8 to 2.x upgrade, the nodes will need to be rebooted in order to use the new kernel.</para>
         </listitem>
         <listitem>
           <para>Start the upgraded file system.</para>
@@ -100,20 +98,22 @@ lustre-ldiskfs-&lt;ver&gt;</screen>
           <orderedlist>
             <listitem>
               <para>Mount the OSTs (be sure to mount all OSTs). On each OSS node, run:</para>
-              <screen>mount -t lustre &lt;block device name&gt; &lt;mount point&gt;</screen>
-            </listitem>
-            <listitem>
-              <para>Mount the MDT. On the MDS node, run:</para>
+              <screen>mount -a -t lustre</screen>
+              <para>This command assumes that all OSTs are listed in the /etc/fstab file.  If the OSTs are not in the /etc/fstab file, they need to be mounted individually by running the mount command:</para>
               <screen>mount -t lustre &lt;block device name&gt; &lt;mount point&gt; </screen>
             </listitem>
             <listitem>
+              <para>Mount the MDT. On the MDS node, run:</para>
+              <screen>mount -a -t lustre</screen>
+            </listitem>
+            <listitem>
               <para>Mount the file system on the clients. On each client node, run:</para>
-              <screen>mount -t lustre &lt;MGS node&gt;:/&lt;fsname&gt; &lt;mount point&gt; </screen>
+              <screen>mount -a -t lustre</screen>
             </listitem>
           </orderedlist>
         </listitem>
       </orderedlist>
-      <para>If you have a problem upgrading Lustre, contact us via the <link xl:href="https://jira.whamcloud.com">Whamcloud Jira</link> bug tracker.</para>
+      <para>If you have a problem upgrading Lustre, use the <link xl:href="https://groups.google.com/a/whamcloud.com/group/wc-discuss/">wc-discuss</link> mailing list, or file a ticket at the <link xl:href="https://jira.whamcloud.com">Whamcloud Jira</link> bug tracker.</para>
     </section>
   </section>
 </chapter>

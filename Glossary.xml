@@ -416,7 +416,7 @@
       <glossterm>Mountconf
         </glossterm>
       <glossdef>
-        <para>The Lustre configuration protocol (introduced in version 1.6) which formats disk file systems on servers with the mkfs.lustre program, and prepares them for automatic incorporation into a Lustre cluster.</para>
+        <para>The Lustre configuration protocol that formats disk file systems on servers with the mkfs.lustre program, and prepares them for automatic incorporation into a Lustre cluster.  This allows clients to be configured and mounted with a simple <literal>mount</literal> command.</para>
       </glossdef>
     </glossentry>
   </glossdiv>

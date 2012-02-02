@@ -144,7 +144,7 @@ ksocklnd           111812                  1</screen>
       <para>When <literal>lfs quotacheck</literal> runs, it creates a quota file -- a sparse file with a size proportional to the highest UID in use and UID/GID distribution. As a general rule, if the highest UID in use is large, then the sparse file will be large, which may affect functions such as creating a snapshot.</para>
     </note>
     <note>
-      <para>For Lustre 1.6 releases before version 1.6.5, and 1.4 releases before version 1.4.12, if the underlying <literal>ldiskfs</literal> file system has not unmounted gracefully (due to a crash, for example), re-run <literal>quotacheck</literal> to obtain accurate quota information. Lustre 1.6.5 and 1.4.12 use journaled quota, so it is not necessary to run <literal>quotacheck</literal> after an unclean shutdown.</para>
+      <para>Lustre 1.6.5 and later use journaled quota files, so it is not necessary to run <literal>quotacheck</literal> after an unclean shutdown.</para>
       <para>In certain failure situations (e.g., when a broken Lustre installation or build is used), re-run <literal>quotacheck</literal> after checking the server kernel logs and fixing the root problem.</para>
     </note>
     <para>The <literal>lfs</literal> command includes several command options to work with quotas:</para>
@@ -297,110 +297,13 @@ lustre-OST0001_UUID        30720*          -               28872           \
       </orderedlist>
       <para>Because of granted cache, writes always overwrite quota limitations. For example, if you set a 400 GB quota on user A and use IOR to write for user A from a bundle of clients, you will write much more data than 400 GB, and cause an out-of-quota error (<literal>-EDQUOT</literal>).</para>
       <note>
-        <para>The effect of granted cache on quota limits can be mitigated, but not eradicated. Reduce the <literal>max_dirty_buffer</literal> in the clients (can be set from 0 to 512). To set <literal>max_dirty_buffer</literal> to 0:</para>
+        <para>The effect of granted cache on quota limits can be mitigated, but not eradicated. Reduce the maximum amount of dirty data on the clients (can be set from 1 to 512):</para>
         <itemizedlist>
           <listitem>
-            <para>In releases after Lustre 1.6.5, <literal>lctl set_param osc.*.max_dirty_mb=0</literal>.</para>
-          </listitem>
-          <listitem>
-            <para>In releases before Lustre 1.6.5, <literal>proc/fs/lustre/osc/*/max_dirty_mb; do echo 512 &gt; $O</literal></para>
+            <para><literal>lctl set_param osc.*.max_dirty_mb=0</literal></para>
           </listitem>
         </itemizedlist>
       </note>
-    </section>
-    <section remap="h3">
-      <title><indexterm><primary>Quotas</primary><secondary>limits</secondary></indexterm>Quota Limits</title>
-      <para>Available quota limits depend on the Lustre version you are using.</para>
-      <itemizedlist>
-        <listitem>
-          <para> Lustre version 1.4.11 and earlier (for 1.4.x releases) and Lustre version 1.6.4 and earlier (for 1.6.x releases) support quota limits less than 4 TB.</para>
-        </listitem>
-        <listitem>
-          <para> Lustre versions 1.4.12, 1.6.5 and later support quota limits of 4 TB and greater in Lustre configurations with OST storage limits of 4 TB and less.</para>
-        </listitem>
-        <listitem>
-          <para> Future Lustre versions are expected to support quota limits of 4 TB and greater with no OST storage limits.</para>
-        </listitem>
-        <listitem>
-          <informaltable frame="all">
-            <tgroup cols="3">
-              <colspec colname="c1" colwidth="33*"/>
-              <colspec colname="c2" colwidth="33*"/>
-              <colspec colname="c3" colwidth="33*"/>
-              <thead>
-                <row>
-                  <entry>
-                    <para><emphasis role="bold">Lustre Version</emphasis></para>
-                  </entry>
-                  <entry>
-                    <para><emphasis role="bold">Quota Limit Per User/Per Group</emphasis></para>
-                  </entry>
-                  <entry>
-                    <para><emphasis role="bold">OST Storage Limit</emphasis></para>
-                  </entry>
-                </row>
-              </thead>
-              <tbody>
-                <row>
-                  <entry>
-                    <para> 1.4.11 and earlier</para>
-                  </entry>
-                  <entry>
-                    <para> &lt; 4TB</para>
-                  </entry>
-                  <entry>
-                    <para> n/a</para>
-                  </entry>
-                </row>
-                <row>
-                  <entry>
-                    <para> 1.4.12</para>
-                  </entry>
-                  <entry>
-                    <para> =&gt; 4TB</para>
-                  </entry>
-                  <entry>
-                    <para> &lt;= 4TB of storage</para>
-                  </entry>
-                </row>
-                <row>
-                  <entry>
-                    <para> 1.6.4 and earlier</para>
-                  </entry>
-                  <entry>
-                    <para> &lt; 4TB</para>
-                  </entry>
-                  <entry>
-                    <para> n/a</para>
-                  </entry>
-                </row>
-                <row>
-                  <entry>
-                    <para> 1.6.5</para>
-                  </entry>
-                  <entry>
-                    <para> =&gt; 4TB</para>
-                  </entry>
-                  <entry>
-                    <para> &lt;= 4TB of storage</para>
-                  </entry>
-                </row>
-                <row>
-                  <entry>
-                    <para> Future Lustre versions</para>
-                  </entry>
-                  <entry>
-                    <para> =&gt; 4TB</para>
-                  </entry>
-                  <entry>
-                    <para> No storage limit</para>
-                  </entry>
-                </row>
-              </tbody>
-            </tgroup>
-          </informaltable>
-        </listitem>
-      </itemizedlist>
     </section>
     <section xml:id="dbdoclet.50438217_66360">
       <title><indexterm><primary>Quotas</primary><secondary>file formats</secondary></indexterm>Quota File Formats</title>
