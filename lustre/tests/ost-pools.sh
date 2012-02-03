@@ -29,6 +29,8 @@ init_logging
 
 check_and_setup_lustre
 
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="23b"
+
 DIR=${DIR:-$MOUNT}
 assert_DIR
 
@@ -1245,7 +1247,9 @@ test_23b() {
     AVAIL=$($LFS df -p $POOL $dir | awk '/summary/ { print $4 }')
     [ $AVAIL -gt $MAXFREE ] &&
         skip_env "Filesystem space $AVAIL is larger than $MAXFREE limit" &&
-			return 0
+            return 0
+    log "OSTCOUNT=$OSTCOUNT, OSTSIZE=$OSTSIZE"
+    log "MAXFREE=$MAXFREE, AVAIL=$AVAIL, SLOW=$SLOW"
 
     $LFS quotaoff -ug $MOUNT
     chown $RUNAS_ID.$RUNAS_ID $dir
@@ -1258,10 +1262,10 @@ test_23b() {
         RC=$?
 		echo "$i: $stat"
         if [ $RC -eq 1 ]; then
-            echo $stat | grep "Disk quota exceeded"
+            echo $stat | grep -q "Disk quota exceeded"
             [[ $? -eq 0 ]] && error "dd failed with EDQUOT with quota off"
 
-            echo $stat | grep "No space left on device"
+            echo $stat | grep -q "No space left on device"
             [[ $? -ne 0 ]] &&
                 error "dd did not fail with ENOSPC"
         fi
