@@ -2451,10 +2451,14 @@ osc_send_oap_rpc(const struct lu_env *env, struct client_obd *cli,
          * with ASYNC_HP. We have to send out them as soon as possible. */
         cfs_list_for_each_entry_safe(oap, tmp, &lop->lop_urgent, oap_urgent_item) {
                 if (oap->oap_async_flags & ASYNC_HP)
-                        cfs_list_move(&oap->oap_pending_item, &lop->lop_pending);
+                        cfs_list_move(&oap->oap_pending_item, &rpc_list);
+                else if (!(oap->oap_brw_flags & OBD_BRW_SYNC))
+                        /* only do this for writeback pages. */
+                        cfs_list_move_tail(&oap->oap_pending_item, &rpc_list);
                 if (++page_count >= cli->cl_max_pages_per_rpc)
                         break;
         }
+        cfs_list_splice_init(&rpc_list, &lop->lop_pending);
         page_count = 0;
 
         /* first we find the pages we're allowed to work with */
