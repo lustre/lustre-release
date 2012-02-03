@@ -2114,6 +2114,90 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+static int ldlm_cancel_hpreq_lock_match(struct ptlrpc_request *req,
+                                        struct ldlm_lock *lock)
+{
+        struct ldlm_request *dlm_req;
+        struct lustre_handle lockh;
+        int rc = 0;
+        int i;
+        ENTRY;
+
+        dlm_req = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
+        if (dlm_req == NULL)
+                RETURN(0);
+
+        ldlm_lock2handle(lock, &lockh);
+        for (i = 0; i < dlm_req->lock_count; i++) {
+                if (lustre_handle_equal(&dlm_req->lock_handle[i],
+                                        &lockh)) {
+                        DEBUG_REQ(D_RPCTRACE, req,
+                                  "Prio raised by lock "LPX64".", lockh.cookie);
+
+                        rc = 1;
+                        break;
+                }
+        }
+
+        RETURN(rc);
+
+}
+
+static int ldlm_cancel_hpreq_check(struct ptlrpc_request *req)
+{
+        struct ldlm_request *dlm_req;
+        int rc = 0;
+        int i;
+        ENTRY;
+
+        /* no prolong in recovery */
+        if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
+                RETURN(0);
+
+        dlm_req = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
+        if (dlm_req == NULL)
+                RETURN(-EFAULT);
+
+        for (i = 0; i < dlm_req->lock_count; i++) {
+                struct ldlm_lock *lock;
+
+                lock = ldlm_handle2lock(&dlm_req->lock_handle[i]);
+                if (lock == NULL)
+                        continue;
+
+                rc = !!(lock->l_flags & LDLM_FL_AST_SENT);
+                if (rc)
+                        LDLM_DEBUG(lock, "hpreq cancel lock");
+                LDLM_LOCK_PUT(lock);
+
+                if (rc)
+                        break;
+        }
+
+        RETURN(rc);
+}
+
+static struct ptlrpc_hpreq_ops ldlm_cancel_hpreq_ops = {
+        .hpreq_lock_match = ldlm_cancel_hpreq_lock_match,
+        .hpreq_check      = ldlm_cancel_hpreq_check
+};
+
+static int ldlm_hpreq_handler(struct ptlrpc_request *req)
+{
+        ENTRY;
+
+        req_capsule_init(&req->rq_pill, req, RCL_SERVER);
+
+        if (req->rq_export == NULL)
+                RETURN(0);
+
+        if (LDLM_CANCEL == lustre_msg_get_opc(req->rq_reqmsg)) {
+                req_capsule_set(&req->rq_pill, &RQF_LDLM_CANCEL);
+                req->rq_ops = &ldlm_cancel_hpreq_ops;
+        }
+        RETURN(0);
+}
+
 int ldlm_revoke_lock_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                         cfs_hlist_node_t *hnode, void *data)
 
@@ -2502,7 +2586,7 @@ static int ldlm_setup(void)
                                 ldlm_min_threads, ldlm_max_threads,
                                 "ldlm_cn",
                                 LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD,
-                                NULL);
+                                ldlm_hpreq_handler);
 
         if (!ldlm_state->ldlm_cancel_service) {
                 CERROR("failed to start service\n");
