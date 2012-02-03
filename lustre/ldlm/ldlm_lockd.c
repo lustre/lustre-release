@@ -2332,33 +2332,31 @@ static int ldlm_bl_thread_main(void *arg)
         while (1) {
                 struct l_wait_info lwi = { 0 };
                 struct ldlm_bl_work_item *blwi = NULL;
+                int busy;
 
                 blwi = ldlm_bl_get_work(blp);
 
                 if (blwi == NULL) {
-                        int busy;
-
                         cfs_atomic_dec(&blp->blp_busy_threads);
                         l_wait_event_exclusive(blp->blp_waitq,
                                          (blwi = ldlm_bl_get_work(blp)) != NULL,
                                          &lwi);
                         busy = cfs_atomic_inc_return(&blp->blp_busy_threads);
-
-                        if (blwi->blwi_ns == NULL)
-                                /* added by ldlm_cleanup() */
-                                break;
-
-                        /* Not fatal if racy and have a few too many threads */
-                        if (unlikely(busy < blp->blp_max_threads &&
-                            busy >= cfs_atomic_read(&blp->blp_num_threads) &&
-                            !blwi->blwi_mem_pressure))
-                                /* discard the return value, we tried */
-                                ldlm_bl_thread_start(blp);
                 } else {
-                        if (blwi->blwi_ns == NULL)
-                                /* added by ldlm_cleanup() */
-                                break;
+                        busy = cfs_atomic_read(&blp->blp_busy_threads);
                 }
+
+                if (blwi->blwi_ns == NULL)
+                        /* added by ldlm_cleanup() */
+                        break;
+
+                /* Not fatal if racy and have a few too many threads */
+                if (unlikely(busy < blp->blp_max_threads &&
+                             busy >= cfs_atomic_read(&blp->blp_num_threads) &&
+                             !blwi->blwi_mem_pressure))
+                        /* discard the return value, we tried */
+                        ldlm_bl_thread_start(blp);
+
                 if (blwi->blwi_mem_pressure)
                         cfs_memory_pressure_set();
 
