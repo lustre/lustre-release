@@ -264,7 +264,7 @@ static int ldlm_lock_busy(struct ldlm_lock *lock)
                 return 0;
 
         cfs_spin_lock_bh(&lock->l_export->exp_rpc_lock);
-        cfs_list_for_each_entry(req, &lock->l_export->exp_queued_rpc,
+        cfs_list_for_each_entry(req, &lock->l_export->exp_hp_rpcs,
                                 rq_exp_list) {
                 if (req->rq_ops->hpreq_lock_match) {
                         match = req->rq_ops->hpreq_lock_match(req, lock);
@@ -446,11 +446,20 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
         }
 
         ret = __ldlm_add_waiting_lock(lock, timeout);
-        if (ret)
+        if (ret) {
                 /* grab ref on the lock if it has been added to the
                  * waiting list */
                 LDLM_LOCK_GET(lock);
+        }
         cfs_spin_unlock_bh(&waiting_locks_spinlock);
+
+        if (ret) {
+                cfs_spin_lock_bh(&lock->l_export->exp_bl_list_lock);
+                if (cfs_list_empty(&lock->l_exp_list))
+                        cfs_list_add(&lock->l_exp_list,
+                                     &lock->l_export->exp_bl_list);
+                cfs_spin_unlock_bh(&lock->l_export->exp_bl_list_lock);
+        }
 
         LDLM_DEBUG(lock, "%sadding to wait list(timeout: %d, AT: %s)",
                    ret == 0 ? "not re-" : "", timeout,
@@ -506,10 +515,17 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
         cfs_spin_lock_bh(&waiting_locks_spinlock);
         ret = __ldlm_del_waiting_lock(lock);
         cfs_spin_unlock_bh(&waiting_locks_spinlock);
-        if (ret)
+
+        /* remove the lock out of export blocking list */
+        cfs_spin_lock_bh(&lock->l_export->exp_bl_list_lock);
+        cfs_list_del_init(&lock->l_exp_list);
+        cfs_spin_unlock_bh(&lock->l_export->exp_bl_list_lock);
+
+        if (ret) {
                 /* release lock ref if it has indeed been removed
                  * from a list */
                 LDLM_LOCK_RELEASE(lock);
+        }
 
         LDLM_DEBUG(lock, "%s", ret == 0 ? "wasn't waiting" : "removed");
         return ret;
@@ -707,7 +723,7 @@ static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
         }
 
         cfs_spin_lock_bh(&lock->l_export->exp_rpc_lock);
-        cfs_list_for_each_entry(req, &lock->l_export->exp_queued_rpc,
+        cfs_list_for_each_entry(req, &lock->l_export->exp_hp_rpcs,
                                 rq_exp_list) {
                 if (!req->rq_hp && req->rq_ops->hpreq_lock_match &&
                     req->rq_ops->hpreq_lock_match(req, lock))

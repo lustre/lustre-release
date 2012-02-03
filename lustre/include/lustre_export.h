@@ -219,8 +219,6 @@ struct obd_export {
         cfs_list_t                exp_req_replay_queue;
         /** protects exp_flags and exp_outstanding_replies */
         cfs_spinlock_t            exp_lock;
-        /** protects exp_queued_rpc */
-        cfs_spinlock_t            exp_rpc_lock;
         /** Compatibility flags for this export */
         __u64                     exp_connect_flags;
         enum obd_option           exp_flags;
@@ -241,12 +239,19 @@ struct obd_export {
                                   /* client timed out and tried to reconnect,
                                    * but couldn't because of active rpcs */
                                   exp_abort_active_req:1;
-        cfs_list_t                exp_queued_rpc;  /* RPC to be handled */
         /* also protected by exp_lock */
         enum lustre_sec_part      exp_sp_peer;
         struct sptlrpc_flavor     exp_flvr;             /* current */
         struct sptlrpc_flavor     exp_flvr_old[2];      /* about-to-expire */
         cfs_time_t                exp_flvr_expire[2];   /* seconds */
+
+        /** protects exp_hp_rpcs */
+        cfs_spinlock_t            exp_rpc_lock;
+        cfs_list_t                exp_hp_rpcs;  /* (potential) HP RPCs */
+
+        /** blocking dlm lock list, protected by exp_bl_list_lock */
+        cfs_list_t                exp_bl_list;
+        cfs_spinlock_t            exp_bl_list_lock;
 
         /** Target specific data */
         union {
