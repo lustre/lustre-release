@@ -98,8 +98,10 @@ typedef long cfs_task_state_t;
 #define CFS_TASK_UNINT          (1)
 #define CFS_TASK_RUNNING        (2)
 
+static inline void cfs_schedule(void)			{}
+static inline void cfs_schedule_timeout(int64_t t)	{}
 
-/* 
+/*
  * Lproc
  */
 typedef int (cfs_read_proc_t)(char *page, char **start, off_t off,
