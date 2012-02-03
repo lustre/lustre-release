@@ -1267,7 +1267,7 @@ static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
         if (opc == OST_WRITE && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND))
                 cksum++;
 
-        return cksum;
+        return fini_checksum(cksum, cksum_type);
 }
 
 static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,

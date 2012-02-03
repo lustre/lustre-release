@@ -163,6 +163,13 @@ static inline __u32 init_checksum(cksum_type_t cksum_type)
         return 0;
 }
 
+static inline __u32 fini_checksum(__u32 cksum, cksum_type_t cksum_type)
+{
+        if (cksum_type == OBD_CKSUM_CRC32C)
+                return ~cksum;
+        return cksum;
+}
+
 static inline __u32 compute_checksum(__u32 cksum, unsigned char const *p,
                                      size_t len, cksum_type_t cksum_type)
 {

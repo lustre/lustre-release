@@ -545,7 +545,7 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
                 kunmap(page);
         }
 
-        return cksum;
+        return fini_checksum(cksum, cksum_type);
 }
 
 static int ost_brw_lock_get(int mode, struct obd_export *exp,
