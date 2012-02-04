@@ -3137,8 +3137,6 @@ void           cl_env_implant    (struct lu_env *env, int *refcheck);
 void           cl_env_unplant    (struct lu_env *env, int *refcheck);
 unsigned       cl_env_cache_purge(unsigned nr);
 
-void           cl_set_ctx_tags(__u32 tags);
-void           cl_set_ses_tags(__u32 tags);
 /** @} cl_env */
 
 /*

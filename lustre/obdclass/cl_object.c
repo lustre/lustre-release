@@ -76,8 +76,8 @@ static cfs_lock_class_key_t cl_lock_guard_class;
 /** Lock class of cl_object_header::coh_attr_guard */
 static cfs_lock_class_key_t cl_attr_guard_class;
 
-static __u32 cl_ctx_tags;
-static __u32 cl_ses_tags;
+extern __u32 lu_context_tags_default;
+extern __u32 lu_session_tags_default;
 /**
  * Initialize cl_object_header.
  */
@@ -795,18 +795,6 @@ static void cl_env_fini(struct cl_env *cle)
         OBD_SLAB_FREE_PTR(cle, cl_env_kmem);
 }
 
-void cl_set_ctx_tags(__u32 tags)
-{
-        cl_ctx_tags = tags;
-}
-EXPORT_SYMBOL(cl_set_ctx_tags);
-
-void cl_set_ses_tags(__u32 tags)
-{
-        cl_ses_tags = tags;
-}
-EXPORT_SYMBOL(cl_set_ses_tags);
-
 static struct lu_env *cl_env_obtain(void *debug)
 {
         struct cl_env *cle;
@@ -835,7 +823,8 @@ static struct lu_env *cl_env_obtain(void *debug)
                 }
         } else {
                 cfs_spin_unlock(&cl_envs_guard);
-                env = cl_env_new(cl_ctx_tags, cl_ses_tags, debug);
+                env = cl_env_new(lu_context_tags_default,
+                                 lu_session_tags_default, debug);
         }
         RETURN(env);
 }
