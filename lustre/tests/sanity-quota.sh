@@ -50,6 +50,7 @@ SANITY_QUOTA_USERS="quota15_1 quota15_2 quota15_3 quota15_4 quota15_5 quota15_6 
                     quota15_19 quota15_20 quota15_21 quota15_22 quota15_23 quota15_24 \
                     quota15_25 quota15_26 quota15_27 quota15_28 quota15_29 quota15_30"
 
+export MULTIOP=${MULTIOP:-multiop}
 TRACE=${TRACE:-""}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
@@ -1194,10 +1195,10 @@ test_14a() {	# was test_14 b=12223 -- setting quota on root
 	$LFS setquota -u root -b 10 -B 10 -i 10 -I 10 $DIR
 	createmany -m ${TESTFILE} 20 || \
 	    quota_error u root "unexpected: user(root) create files failly!"
-        multiop ${TESTFILE} oO_CREAT:O_WRONLY:O_DIRECT:w$((4096 * 4096))c || \
+        $MULTIOP ${TESTFILE} oO_CREAT:O_WRONLY:O_DIRECT:w$((4096 * 4096))c || \
 	    quota_error u root "unexpected: user(root) write files failly!"
 	chmod 666 $TESTFILE
-        $RUNAS multiop ${TESTFILE} oO_WRONLY:O_APPEND:O_DIRECT:w$((4096 * 4096))c && \
+        $RUNAS $MULTIOP ${TESTFILE} oO_WRONLY:O_APPEND:O_DIRECT:w$((4096 * 4096))c && \
 	    quota_error u root "unexpected: user(quota_usr) write a file successfully!"
 
 	# trigger the llog

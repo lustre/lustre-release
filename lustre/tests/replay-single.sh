@@ -7,6 +7,7 @@ set -e
 # This test needs to be run on the client
 #
 SAVE_PWD=$PWD
+export MULTIOP=${MULTIOP:-multiop}
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 SETUP=${SETUP:-}
 CLEANUP=${CLEANUP:-}

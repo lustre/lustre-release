@@ -27,6 +27,7 @@ PTLDEBUG=${PTLDEBUG:--1}
 SAVE_PWD=$PWD
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 RLUSTRE=${RLUSTRE:-$LUSTRE}
+export MULTIOP=${MULTIOP:-multiop}
 
 . $LUSTRE/tests/test-framework.sh
 init_test_env $@

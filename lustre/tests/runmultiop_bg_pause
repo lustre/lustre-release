@@ -5,6 +5,7 @@
 
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
+MULTIOP=${MULTIOP:-multiop}
 . $LUSTRE/tests/test-framework.sh
 
 TMP=${TMP:-/tmp}

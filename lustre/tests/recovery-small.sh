@@ -5,6 +5,7 @@ set -e
 #         bug  5494 5493
 ALWAYS_EXCEPT="24   52 $RECOVERY_SMALL_EXCEPT"
 
+export MULTIOP=${MULTIOP:-multiop}
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
 . $LUSTRE/tests/test-framework.sh
@@ -120,13 +121,13 @@ run_test 10 "finish request on server after client eviction (bug 1521)"
 #bug 2460
 # wake up a thread waiting for completion after eviction
 test_11(){
-    do_facet client multiop $DIR/$tfile Ow  || return 1
-    do_facet client multiop $DIR/$tfile or  || return 2
+    do_facet client $MULTIOP $DIR/$tfile Ow  || return 1
+    do_facet client $MULTIOP $DIR/$tfile or  || return 2
 
     cancel_lru_locks osc
 
-    do_facet client multiop $DIR/$tfile or  || return 3
-    drop_bl_callback multiop $DIR/$tfile Ow || echo "evicted as expected"
+    do_facet client $MULTIOP $DIR/$tfile or  || return 3
+    drop_bl_callback $MULTIOP $DIR/$tfile Ow || echo "evicted as expected"
 
     do_facet client munlink $DIR/$tfile  || return 4
 }
@@ -134,7 +135,7 @@ run_test 11 "wake up a thread waiting for completion after eviction (b=2460)"
 
 #b=2494
 test_12(){
-    $LCTL mark multiop $DIR/$tfile OS_c 
+    $LCTL mark $MULTIOP $DIR/$tfile OS_c
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x115"
     clear_failloc $SINGLEMDS $((TIMEOUT * 2)) &
     multiop_bg_pause $DIR/$tfile OS_c || return 1
@@ -349,13 +350,13 @@ run_test 19a "test expired_lock_main on mds (2867)"
 
 test_19b() {
     f=$DIR/$tfile
-    do_facet client multiop $f Ow  || return 1
-    do_facet client multiop $f or  || return 2
+    do_facet client $MULTIOP $f Ow  || return 1
+    do_facet client $MULTIOP $f or  || return 2
 
     cancel_lru_locks osc
 
-    do_facet client multiop $f or  || return 3
-    drop_ldlm_cancel multiop $f Ow  || echo "client evicted, as expected"
+    do_facet client $MULTIOP $f or  || return 3
+    drop_ldlm_cancel $MULTIOP $f Ow  || echo "client evicted, as expected"
 
     do_facet client munlink $f  || return 4
 }
@@ -398,7 +399,7 @@ test_21a() {
        close_pid=$!
 
        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000129"
-       multiop $DIR/$tdir-2/f Oc &
+       $MULTIOP $DIR/$tdir-2/f Oc &
        open_pid=$!
        sleep 1
        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
@@ -473,7 +474,7 @@ test_21d() {
        pid=$!
 
        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000129"
-       multiop $DIR/$tdir-2/f Oc &
+       $MULTIOP $DIR/$tdir-2/f Oc &
        sleep 1
        do_facet $SINGLEMDS "lctl set_param fail_loc=0"
 
@@ -590,11 +591,11 @@ test_22() {
     f2=$DIR/${tfile}-2
     
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000115"
-    multiop $f2 Oc &
+    $MULTIOP $f2 Oc &
     close_pid=$!
 
     sleep 1
-    multiop $f1 msu || return 1
+    $MULTIOP $f1 msu || return 1
 
     cancel_lru_locks mdc
     do_facet $SINGLEMDS "lctl set_param fail_loc=0"

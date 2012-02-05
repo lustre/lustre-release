@@ -26,6 +26,8 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$SRCDIR/../utils/gss:$PATH:/sb
 export NAME=${NAME:-local}
 SAVE_PWD=$PWD
 
+export MULTIOP=${MULTIOP:-multiop}
+
 CLEANUP=${CLEANUP:-""}
 SETUP=${SETUP:-""}
 
@@ -241,7 +243,7 @@ test_3() {
     $RUNAS cat $file > /dev/null || error "$RUNAS_ID cat error"
 
     # start multiop
-    $RUNAS multiop $file o_r &
+    $RUNAS $MULTIOP $file o_r &
     OPPID=$!
     # wait multiop finish its open()
     sleep 1
@@ -638,7 +640,7 @@ switch_sec_test()
     do_facet $SINGLEMDS lctl set_param fail_val=36
     do_facet $SINGLEMDS lctl set_param fail_loc=0x513
     log "starting multiop"
-    multiop $filename m &
+    $MULTIOP $filename m &
     multiop_pid=$!
     echo "multiop pid=$multiop_pid"
     sleep 1

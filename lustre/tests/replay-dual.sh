@@ -13,6 +13,7 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 SETUP=${SETUP:-""}
 CLEANUP=${CLEANUP:-""}
 MOUNT_2=${MOUNT_2:-"yes"}
+export MULTIOP=${MULTIOP:-multiop}
 . $LUSTRE/tests/test-framework.sh
 
 init_test_env $@

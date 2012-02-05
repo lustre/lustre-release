@@ -36,6 +36,7 @@ LCTL=${LCTL:-lctl}
 MCREATE=${MCREATE:-mcreate}
 OPENFILE=${OPENFILE:-openfile}
 OPENUNLINK=${OPENUNLINK:-openunlink}
+export MULTIOP=${MULTIOP:-multiop}
 READS=${READS:-"reads"}
 MUNLINK=${MUNLINK:-munlink}
 SOCKETSERVER=${SOCKETSERVER:-socketserver}
@@ -691,13 +692,13 @@ run_test 24k "touch .../R11a/f; mv .../R11a/f .../R11a/d ======="
 # bug 2429 - rename foo foo foo creates invalid file
 test_24l() {
 	f="$DIR/f24l"
-	multiop $f OcNs || error
+	$MULTIOP $f OcNs || error
 }
 run_test 24l "Renaming a file to itself ========================"
 
 test_24m() {
 	f="$DIR/f24m"
-	multiop $f OcLN ${f}2 ${f}2 || error "link ${f}2 ${f}2 failed"
+	$MULTIOP $f OcLN ${f}2 ${f}2 || error "link ${f}2 ${f}2 failed"
 	# on ext3 this does not remove either the source or target files
 	# though the "expected" operation would be to remove the source
 	$CHECKSTAT -t file ${f} || error "${f} missing"
@@ -774,7 +775,7 @@ test_24t() {
 run_test 24t "mkdir .../R16a/b/c; rename .../R16a/b/c .../R16a ="
 
 test_24u() { # bug12192
-        multiop $DIR/$tfile C2w$((2048 * 1024))c || error
+        $MULTIOP $DIR/$tfile C2w$((2048 * 1024))c || error
         $CHECKSTAT -s $((2048 * 1024)) $DIR/$tfile || error "wrong file size"
 }
 run_test 24u "create stripe file"
@@ -1543,7 +1544,7 @@ run_test 31a "open-unlink file =================================="
 test_31b() {
 	touch $DIR/f31 || error
 	ln $DIR/f31 $DIR/f31b || error
-	multiop $DIR/f31b Ouc || error
+	$MULTIOP $DIR/f31b Ouc || error
 	$CHECKSTAT -t file $DIR/f31 || error
 }
 run_test 31b "unlink file with multiple links while open ======="
@@ -1553,7 +1554,7 @@ test_31c() {
 	ln $DIR/f31 $DIR/f31c || error
 	multiop_bg_pause $DIR/f31 O_uc || return 1
 	MULTIPID=$!
-	multiop $DIR/f31c Ouc
+	$MULTIOP $DIR/f31c Ouc
 	kill -USR1 $MULTIPID
 	wait $MULTIPID
 }
@@ -2064,7 +2065,7 @@ test_34h() {
 	local sz=1000
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10 || error
-	multiop $DIR/$tfile OG${gid}T${sz}g${gid}c &
+	$MULTIOP $DIR/$tfile OG${gid}T${sz}g${gid}c &
 	MULTIPID=$!
 	sleep 2
 
@@ -2782,7 +2783,7 @@ run_test 42e "verify sub-RPC writes are not done synchronously"
 test_43() {
 	mkdir -p $DIR/$tdir
 	cp -p /bin/ls $DIR/$tdir/$tfile
-	multiop $DIR/$tdir/$tfile Ow_c &
+	$MULTIOP $DIR/$tdir/$tfile Ow_c &
 	pid=$!
 	# give multiop a chance to open
 	sleep 1
@@ -2794,10 +2795,10 @@ run_test 43 "execution of file opened for write should return -ETXTBSY"
 
 test_43a() {
         mkdir -p $DIR/d43
-	cp -p `which multiop` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
+	cp -p `which $MULTIOP` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
         MULTIOP_PROG=$DIR/d43/multiop multiop_bg_pause $TMP/test43.junk O_c || return 1
         MULTIOP_PID=$!
-        multiop $DIR/d43/multiop Oc && error "expected error, got success"
+        $MULTIOP $DIR/d43/multiop Oc && error "expected error, got success"
         kill -USR1 $MULTIOP_PID || return 2
         wait $MULTIOP_PID || return 3
         rm $TMP/test43.junk
@@ -2806,7 +2807,7 @@ run_test 43a "open(RDWR) of file being executed should return -ETXTBSY"
 
 test_43b() {
         mkdir -p $DIR/d43
-	cp -p `which multiop` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
+	cp -p `which $MULTIOP` $DIR/d43/multiop || cp -p multiop $DIR/d43/multiop
         MULTIOP_PROG=$DIR/d43/multiop multiop_bg_pause $TMP/test43.junk O_c || return 1
         MULTIOP_PID=$!
         $TRUNCATE $DIR/d43/multiop 0 && error "expected error, got success"
@@ -4021,7 +4022,7 @@ test_61() {
 	f="$DIR/f61"
 	dd if=/dev/zero of=$f bs=`page_size` count=1
 	cancel_lru_locks osc
-	multiop $f OSMWUc || error
+	$MULTIOP $f OSMWUc || error
 	sync
 }
 run_test 61 "mmap() writes don't make sync hang ================"
@@ -4067,7 +4068,7 @@ test_63b() {
 
 	#define OBD_FAIL_OSC_BRW_PREP_REQ        0x406
 	lctl set_param fail_loc=0x80000406
-	multiop $DIR/$tfile Owy && \
+	$MULTIOP $DIR/$tfile Owy && \
 		error "sync didn't return ENOMEM"
 	sync; sleep 2; sync	# do a real sync this time to flush page
 	lctl get_param -n llite.*.dump_page_cache | grep locked && \
@@ -4437,11 +4438,11 @@ test_73() {
 	pid1=$!
 
 	lctl set_param fail_loc=0x80000129
-	multiop $DIR/d73-1/f73-2 Oc &
+	$MULTIOP $DIR/d73-1/f73-2 Oc &
 	sleep 1
 	lctl set_param fail_loc=0
 
-	multiop $DIR/d73-2/f73-3 Oc &
+	$MULTIOP $DIR/d73-2/f73-3 Oc &
 	pid3=$!
 
 	kill -USR1 $pid1
@@ -4817,7 +4818,7 @@ test_81a() { # LU-456
 
         # write should trigger a retry and success
         $SETSTRIPE -i 0 -c 1 $DIR/$tfile
-        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
         if [ $RC -ne 0 ] ; then
                 error "write should success, but failed for $RC"
@@ -4833,7 +4834,7 @@ test_81b() { # LU-456
 
         # write should retry several times and return -ENOSPC finally
         $SETSTRIPE -i 0 -c 1 $DIR/$tfile
-        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
         ENOSPC=28
         if [ $RC -ne $ENOSPC ] ; then
@@ -4842,6 +4843,27 @@ test_81b() { # LU-456
 }
 run_test 81b "OST should return -ENOSPC when retry still fails ======="
 
+test_82() { # LU-1031
+	dd if=/dev/zero of=$DIR/$tfile bs=1M count=10
+	local gid1=14091995
+	local gid2=16022000
+
+	multiop_bg_pause $DIR/$tfile OG${gid1}_g${gid1}c || return 1
+	local MULTIPID1=$!
+	multiop_bg_pause $DIR/$tfile O_G${gid2}r10g${gid2}c || return 2
+	local MULTIPID2=$!
+	kill -USR1 $MULTIPID2
+	sleep 2
+	if [[ `ps h -o comm -p $MULTIPID2` == "" ]]; then
+		error "First grouplock does not block second one"
+	else
+		echo "Second grouplock blocks first one"
+	fi
+	kill -USR1 $MULTIPID1
+	wait $MULTIPID1
+	wait $MULTIPID2
+}
+run_test 82 "Basic grouplock test ==============================="
 
 test_99a() {
         [ -z "$(which cvs 2>/dev/null)" ] && skip_env "could not find cvs" && \
@@ -5903,7 +5925,7 @@ test_118a() #bug 11710
 {
 	reset_async
 
- 	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
         WRITEBACK=$(lctl get_param -n llite.*.dump_page_cache | grep -c writeback)
 
@@ -5923,7 +5945,7 @@ test_118b()
 
 	#define OBD_FAIL_OST_ENOENT 0x217
 	set_nodes_failloc "$(osts_nodes)" 0x217
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	RC=$?
 	set_nodes_failloc "$(osts_nodes)" 0
         DIRTY=$(lctl get_param -n llite.*.dump_page_cache | grep -c dirty)
@@ -5944,7 +5966,7 @@ test_118b()
 
 	# Due to the above error the OSC will issue all RPCs syncronously
 	# until a subsequent RPC completes successfully without error.
-	multiop $DIR/$tfile Ow4096yc
+	$MULTIOP $DIR/$tfile Ow4096yc
 	rm -f $DIR/$tfile
 
 	return 0
@@ -5961,7 +5983,7 @@ test_118c()
 	set_nodes_failloc "$(osts_nodes)" 0x216
 
 	# multiop should block due to fsync until pages are written
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	MULTIPID=$!
 	sleep 1
 
@@ -6004,7 +6026,7 @@ test_118d()
 	#define OBD_FAIL_OST_BRW_PAUSE_BULK
 	set_nodes_failloc "$(osts_nodes)" 0x214
 	# multiop should block due to fsync until pages are written
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	MULTIPID=$!
 	sleep 1
 
@@ -6041,7 +6063,7 @@ test_118f() {
         lctl set_param fail_loc=0x8000040a
 
 	# Should simulate EINVAL error which is fatal
-        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
 	if [[ $RC -eq 0 ]]; then
 		error "Must return error due to dropped pages, rc=$RC"
@@ -6076,7 +6098,7 @@ test_118g() {
 	lctl set_param fail_loc=0x406
 
 	# simulate local -ENOMEM
-	multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+	$MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
 	RC=$?
 
 	lctl set_param fail_loc=0
@@ -6112,7 +6134,7 @@ test_118h() {
 	#define OBD_FAIL_OST_BRW_WRITE_BULK      0x20e
         set_nodes_failloc "$(osts_nodes)" 0x20e
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
-        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
 
         set_nodes_failloc "$(osts_nodes)" 0
@@ -6148,7 +6170,7 @@ test_118i() {
         set_nodes_failloc "$(osts_nodes)" 0x20e
 
 	# Should simulate ENOMEM error which is recoverable and should be handled by timeout
-        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
+        $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c &
 	PID=$!
 	sleep 5
 	set_nodes_failloc "$(osts_nodes)" 0
@@ -6186,7 +6208,7 @@ test_118j() {
         set_nodes_failloc "$(osts_nodes)" 0x220
 
 	# return -EIO from OST
-        multiop $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
+        $MULTIOP $DIR/$tfile oO_CREAT:O_RDWR:O_SYNC:w4096c
         RC=$?
         set_nodes_failloc "$(osts_nodes)" 0x0
 	if [[ $RC -eq 0 ]]; then
@@ -6238,7 +6260,7 @@ test_118l()
 {
 	# LU-646
 	mkdir -p $DIR/$tdir
-	multiop $DIR/$tdir Dy || error "fsync dir failed"
+	$MULTIOP $DIR/$tdir Dy || error "fsync dir failed"
 	rm -rf $DIR/$tdir
 }
 run_test 118l "fsync dir ========="
@@ -6268,7 +6290,7 @@ test_119b() # bug 11737
         $SETSTRIPE -c 2 $DIR/$tfile || error "setstripe failed"
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1 || error "dd failed"
         sync
-        multiop $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
+        $MULTIOP $DIR/$tfile oO_RDONLY:O_DIRECT:r$((2048 * 1024)) || \
                 error "direct read failed"
         rm -f $DIR/$tfile
 }
@@ -6906,7 +6928,7 @@ test_129() {
 	I=0
 	J=0
 	while [ ! $I -gt $((MAX * MDSCOUNT)) ]; do
-		multiop $DIR/$tdir/$J Oc
+		$MULTIOP $DIR/$tdir/$J Oc
 		rc=$?
 		if [ $rc -eq $EFBIG ]; then
 			set_dir_limits 0
@@ -7673,7 +7695,7 @@ test_152() {
 run_test 152 "test read/write with enomem ============================"
 
 test_153() {
-        multiop $DIR/$tfile Ow4096Ycu || error "multiop failed"
+        $MULTIOP $DIR/$tfile Ow4096Ycu || error "multiop failed"
 }
 run_test 153 "test if fdatasync does not crash ======================="
 
@@ -8226,11 +8248,11 @@ run_test 163 "kernel <-> userspace comms"
 test_169() {
 	# do directio so as not to populate the page cache
 	log "creating a 10 Mb file"
-	multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
+	$MULTIOP $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
 	log "starting reads"
 	dd if=$DIR/$tfile of=/dev/null bs=4096 &
 	log "truncating the file"
-	multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
+	$MULTIOP $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
 	log "killing dd"
 	kill %+ || true # reads might have finished
 	echo "wait until dd is finished"
@@ -9058,11 +9080,11 @@ run_test 217 "check lctl ping for hostnames with hiphen ('-')"
 test_218() {
        # do directio so as not to populate the page cache
        log "creating a 10 Mb file"
-       multiop $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
+       $MULTIOP $DIR/$tfile oO_CREAT:O_DIRECT:O_RDWR:w$((10*1048576))c || error "multiop failed while creating a file"
        log "starting reads"
        dd if=$DIR/$tfile of=/dev/null bs=4096 &
        log "truncating the file"
-       multiop $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
+       $MULTIOP $DIR/$tfile oO_TRUNC:c || error "multiop failed while truncating the file"
        log "killing dd"
        kill %+ || true # reads might have finished
        echo "wait until dd is finished"

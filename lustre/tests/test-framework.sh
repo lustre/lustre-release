@@ -3835,7 +3835,7 @@ fi"
 # Run multiop in the background, but wait for it to print
 # "PAUSING" to its stdout before returning from this function.
 multiop_bg_pause() {
-    MULTIOP_PROG=${MULTIOP_PROG:-multiop}
+    MULTIOP_PROG=${MULTIOP_PROG:-$MULTIOP}
     FILE=$1
     ARGS=$2
 
