@@ -2053,7 +2053,8 @@ out_free:
                 OBD_FREE(osc, strlen(lprof->lp_dt) + instlen + 2);
         if (mdc)
                 OBD_FREE(mdc, strlen(lprof->lp_md) + instlen + 2);
-        OBD_FREE(sbi, sizeof(*sbi));
+        if (err != 0)
+                OBD_FREE(sbi, sizeof(*sbi));
         liblustre_wait_idle();
         return err;
 }
