@@ -169,9 +169,8 @@ remote_check() {
 	fi
 
 	# Get the IP address of ${HOST_NAMES[i]} from its own ping
-       ip_pattern="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
-       ip_addr=`echo "${ret_str}" | egrep -o "${ip_pattern}"`
-	ip_addr=`echo "${ip_addr}" | sed -e 's/^(//' -e 's/)$//'`
+	ip_pattern="[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}"
+	ip_addr=`echo "${ret_str}" | egrep -m 1 -o "${ip_pattern}"`
 
 	# Compare IP addresses
 	# Check whether ${HOST_NAMES[i]} agrees with the local host
