@@ -81,11 +81,11 @@ ksocklnd           111812                  1</screen>
     </orderedlist>
     <para>The Lustre mount command no longer recognizes the <literal>usrquota</literal> and <literal>grpquota</literal> options. If they were previously specified, remove them from <literal>/etc/fstab</literal>.</para>
     <para>When quota is enabled, it is enabled for all file system clients (started automatically using <literal>quota_type</literal> or manually with <literal>lfs quotaon</literal>).</para>
-    <para>To enable quotas automatically when the file system is started, you must set the <literal>mdt.quota_type</literal> and <literal>ost.quota_type</literal> parameters, respectively, on the MDT and OSTs. The parameters can be set to the string <literal>u</literal> (user), <literal>g</literal> (group) or <literal>ug</literal> for both users and groups.</para>
-    <para>You can enable quotas at <literal>mkfs</literal> time (<literal>mkfs.lustre --param mdt.quota_type=ug</literal>) or with <literal>tunefs.lustre</literal>. As an example:</para>
+    <para>To enable quotas automatically when the file system is started, you must set the <literal>mdd.quota_type</literal> and <literal>ost.quota_type</literal> parameters, respectively, on the MDT and OSTs. The parameters can be set to the string <literal>u</literal> (user), <literal>g</literal> (group) or <literal>ug</literal> for both users and groups.</para>
+    <para>You can enable quotas at <literal>mkfs</literal> time (<literal>mkfs.lustre --param mdd.quota_type=ug</literal>) or with <literal>tunefs.lustre</literal>. As an example:</para>
     <screen>tunefs.lustre --param ost.quota_type=ug $ost_dev</screen>
     <caution>
-      <para>If you are using <literal>mkfs.lustre --param mdt.quota_type=ug</literal> or <literal>tunefs.lustre --param ost.quota_type=ug</literal>, be sure to run the command on all OSTs and the MDT. Otherwise, abnormal results may occur.</para>
+      <para>If you are using <literal>mkfs.lustre --param mdd.quota_type=ug</literal> or <literal>tunefs.lustre --param ost.quota_type=ug</literal>, be sure to run the command on all OSTs and the MDT. Otherwise, abnormal results may occur.</para>
     </caution>
     <section remap="h4">
       <title><indexterm><primary>Quotas</primary><secondary>administrating</secondary></indexterm>Administrative and Operational Quotas</title>
@@ -98,9 +98,9 @@ ksocklnd           111812                  1</screen>
           <para>Operational quotas (for the MDT and OSTs), which contain quota information dedicated to a cluster node.</para>
         </listitem>
       </itemizedlist>
-      <para>Lustre 1.6.5 introduced the v2 file format for administrative quota files, with continued support for the old file format (v1). The mdt.quota_type parameter also handles &apos;1&apos; and &apos;2&apos; options, to specify the Lustre quota versions that will be used. For example:</para>
-      <screen>--param mdt.quota_type=ug1
---param mdt.quota_type=u2</screen>
+      <para>Lustre 1.6.5 introduced the v2 file format for administrative quota files, with continued support for the old file format (v1). The mdd.quota_type parameter also handles &apos;1&apos; and &apos;2&apos; options, to specify the Lustre quota versions that will be used. For example:</para>
+      <screen>--param mdd.quota_type=ug1
+--param mdd.quota_type=u2</screen>
       <para>Lustre 1.6.6 introduced the v2 file format for operational quotas, with continued support for the old file format (v1). The ost.quota_type parameter handles &apos;1&apos; and &apos;2&apos; options, to specify the Lustre quota versions that will be used. For example:</para>
       <screen>--param ost.quota_type=ug2
 --param ost.quota_type=u1</screen>
@@ -405,7 +405,7 @@ lustre-OST0001_UUID        30720*          -               28872           \
     <section xml:id="dbdoclet.50438217_66360">
       <title><indexterm><primary>Quotas</primary><secondary>file formats</secondary></indexterm>Quota File Formats</title>
       <para>Lustre 1.6.5 introduced the v2 file format for administrative quotas, with 64-bit limits that support large-limits handling. The old quota file format (v1), with 32-bit limits, is also supported. Lustre 1.6.6 introduced the v2 file format for operational quotas. A few notes regarding the current quota file formats:</para>
-      <para>Lustre 1.6.5 and later use <literal>mdt.quota_type</literal> to force a specific administrative quota version (v2 or v1).</para>
+      <para>From Lustre 1.6.5 until Lustre 2.0 <literal>mdt.quota_type</literal> is used to force a specific administrative quota version (v2 or v1). From Lustre 2.0 and later <literal>mdd.quota_type</literal> is used for the same effect.</para>
       <itemizedlist>
         <listitem>
           <para> For the v2 quota file format, (<literal>OBJECTS/admin_quotafile_v2.{usr,grp}</literal>)</para>
