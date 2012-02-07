@@ -4,6 +4,7 @@ DIST_SUBDIRS := ldiskfs
 
 # this is in fact irrelevant in this file but needed to keep
 # autoMakefile.am.toplevel happy
+BUILD_SERVER = true
 BUILD_TESTS = false
 
 include build/autoMakefile.am.toplevel
