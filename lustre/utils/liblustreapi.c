@@ -177,6 +177,9 @@ int parse_size(char *optarg, unsigned long long *size,
 {
         char *end;
 
+        if (strncmp(optarg, "-", 1) == 0)
+                return -1;
+
         *size = strtoull(optarg, &end, 0);
 
         if (*end != '\0') {
@@ -1633,7 +1636,7 @@ static void lov_dump_user_lmm_header(struct lov_user_md *lum, char *path,
                                                               &scount, NULL,
                                                               NULL);
                                 if (rc == 0)
-                                        llapi_printf(LLAPI_MSG_NORMAL, "%u%c",
+                                        llapi_printf(LLAPI_MSG_NORMAL, "%d%c",
                                                      scount, nl);
                                 else
                                         llapi_error(LLAPI_MSG_ERROR, rc,
