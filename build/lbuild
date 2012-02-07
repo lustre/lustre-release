@@ -1009,7 +1009,7 @@ build_kernel_ib() {
         K_SRC="KSRC"
     fi
 
-    local OFED_CORE="--with-core-mod --with-ipoib-mod --with-sdp-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-rds-mod --with-qlgc_vnic-mod --with-madeye-mod"
+    local OFED_CORE="--with-core-mod --with-ipoib-mod --with-sdp-mod --with-user_mad-mod --with-user_access-mod --with-addr_trans-mod --with-rds-mod --with-madeye-mod"
     local OFED_HARDWARE="--with-mthca-mod --with-mlx4-mod --with-mlx4_en-mod --with-cxgb3-mod --with-nes-mod"
     # some I/B drivers are architecture dependent and kernel-ib's configure
     # does not figure it out for us ~sigh~
