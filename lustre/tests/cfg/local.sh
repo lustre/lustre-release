@@ -44,10 +44,19 @@ STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
 SINGLEMDS=${SINGLEMDS:-"mds1"}
 TIMEOUT=${TIMEOUT:-20}
 PTLDEBUG=${PTLDEBUG:-0x33f0404}
-DEBUG_SIZE=${DEBUG_SIZE:-10}
-if [ `grep processor /proc/cpuinfo | wc -l` -gt 5 ]; then
-    DEBUG_SIZE=$((`grep processor /proc/cpuinfo | wc -l` * 2))   # promise 2MB for every cpu
+
+# promise 2MB for every cpu
+_debug_mb=$((($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1)*2))
+
+# but not less then 10Mb, and limited by 512Mb in libcfs
+if (( _debug_mb < 10 )); then
+        _debug_mb=10
+elif ((_debug_mb > 512 )); then
+        _debug_mb=512
 fi
+
+DEBUG_SIZE=${DEBUG_SIZE:-$_debug_mb}
+
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 
 ENABLE_QUOTA=${ENABLE_QUOTA:-""}

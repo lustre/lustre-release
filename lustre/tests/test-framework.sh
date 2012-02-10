@@ -591,7 +591,7 @@ ostdevlabel() {
 
 set_debug_size () {
     local dz=${1:-$DEBUG_SIZE}
-    local cpus=$(getconf _NPROCESSORS_CONF)
+    local cpus=$(($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1))
 
     # bug 19944, adjust size to be -gt num_possible_cpus()
     # promise 2MB for every cpu at least
