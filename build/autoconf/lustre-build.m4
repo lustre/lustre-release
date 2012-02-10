@@ -61,7 +61,7 @@ BUILDID=""
 if git branch >/dev/null 2>&1; then
 	ffw=0
 	hash=""
-	ver=$(git describe --match v[[0-9]]_*_[[0-9]] --tags)
+	ver=$(git describe --match v[[0-9]]_*_[[0-9]]* --tags)
 	if [[[ $ver = *-*-* ]]]; then
 		hash=${ver##*-}
 		ffw=${ver#*-}
@@ -71,7 +71,7 @@ if git branch >/dev/null 2>&1; then
 	# it's tempting to use [[ $ver =~ ^v([0-9]+_)+([0-9]+|RC[0-9]+)$ ]]
 	# here but the portability of the regex on the right is dismal
 	# (thanx suse)
-	if echo "$ver" | egrep -q "^v([0-9]+_)+([0-9]+|RC[0-9]+)$"; then
+	if echo "$ver" | egrep -q "^v([[0-9]]+_)+([[0-9]]+|RC[[0-9]]+)$"; then
 		ver=$(echo $ver | sed -e 's/^v\(.*\)/\1/' \
 				      -e 's/_RC[[0-9]].*$//' -e 's/_/./g')
 	fi
