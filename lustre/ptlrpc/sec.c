@@ -146,7 +146,8 @@ struct ptlrpc_sec_policy * sptlrpc_wireflavor2policy(__u32 flavor)
                 cfs_mutex_down(&load_mutex);
                 if (cfs_atomic_read(&loaded) == 0) {
                         if (cfs_request_module("ptlrpc_gss") == 0)
-                                CWARN("module ptlrpc_gss loaded on demand\n");
+                                CDEBUG(D_SEC,
+                                       "module ptlrpc_gss loaded on demand\n");
                         else
                                 CERROR("Unable to load module ptlrpc_gss\n");
 
@@ -469,12 +470,12 @@ int sptlrpc_req_ctx_switch(struct ptlrpc_request *req,
         LASSERT(req->rq_reqlen);
         LASSERT(req->rq_replen);
 
-        CWARN("req %p: switch ctx %p(%u->%s) -> %p(%u->%s), "
-              "switch sec %p(%s) -> %p(%s)\n", req,
-              oldctx, oldctx->cc_vcred.vc_uid, sec2target_str(oldctx->cc_sec),
-              newctx, newctx->cc_vcred.vc_uid, sec2target_str(newctx->cc_sec),
-              oldctx->cc_sec, oldctx->cc_sec->ps_policy->sp_name,
-              newctx->cc_sec, newctx->cc_sec->ps_policy->sp_name);
+        CDEBUG(D_SEC, "req %p: switch ctx %p(%u->%s) -> %p(%u->%s), "
+               "switch sec %p(%s) -> %p(%s)\n", req,
+               oldctx, oldctx->cc_vcred.vc_uid, sec2target_str(oldctx->cc_sec),
+               newctx, newctx->cc_vcred.vc_uid, sec2target_str(newctx->cc_sec),
+               oldctx->cc_sec, oldctx->cc_sec->ps_policy->sp_name,
+               newctx->cc_sec, newctx->cc_sec->ps_policy->sp_name);
 
         /* save flavor */
         old_flvr = req->rq_flvr;
@@ -552,8 +553,9 @@ int sptlrpc_req_replace_dead_ctx(struct ptlrpc_request *req)
                 /*
                  * still get the old dead ctx, usually means system too busy
                  */
-                CWARN("ctx (%p, fl %lx) doesn't switch, relax a little bit\n",
-                      newctx, newctx->cc_flags);
+                CDEBUG(D_SEC,
+                       "ctx (%p, fl %lx) doesn't switch, relax a little bit\n",
+                       newctx, newctx->cc_flags);
 
                 cfs_schedule_timeout_and_set_state(CFS_TASK_INTERRUPTIBLE,
                                                    CFS_HZ);
@@ -1384,11 +1386,11 @@ static void sptlrpc_import_sec_adapt_inplace(struct obd_import *imp,
         char    str1[32], str2[32];
 
         if (sec->ps_flvr.sf_flags != sf->sf_flags)
-                CWARN("changing sec flags: %s -> %s\n",
-                      sptlrpc_secflags2str(sec->ps_flvr.sf_flags,
-                                           str1, sizeof(str1)),
-                      sptlrpc_secflags2str(sf->sf_flags,
-                                           str2, sizeof(str2)));
+                CDEBUG(D_SEC, "changing sec flags: %s -> %s\n",
+                       sptlrpc_secflags2str(sec->ps_flvr.sf_flags,
+                                            str1, sizeof(str1)),
+                       sptlrpc_secflags2str(sf->sf_flags,
+                                            str2, sizeof(str2)));
 
         cfs_spin_lock(&sec->ps_lock);
         flavor_copy(&sec->ps_flvr, sf);
@@ -1454,11 +1456,11 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                 if (flavor_equal(&sf, &sec->ps_flvr))
                         GOTO(out, rc);
 
-                CWARN("import %s->%s: changing flavor %s -> %s\n",
-                      imp->imp_obd->obd_name,
-                      obd_uuid2str(&conn->c_remote_uuid),
-                      sptlrpc_flavor2name(&sec->ps_flvr, str, sizeof(str)),
-                      sptlrpc_flavor2name(&sf, str2, sizeof(str2)));
+                CDEBUG(D_SEC, "import %s->%s: changing flavor %s -> %s\n",
+                       imp->imp_obd->obd_name,
+                       obd_uuid2str(&conn->c_remote_uuid),
+                       sptlrpc_flavor2name(&sec->ps_flvr, str, sizeof(str)),
+                       sptlrpc_flavor2name(&sf, str2, sizeof(str2)));
 
                 if (SPTLRPC_FLVR_POLICY(sf.sf_rpc) ==
                     SPTLRPC_FLVR_POLICY(sec->ps_flvr.sf_rpc) &&
@@ -1469,11 +1471,11 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                 }
         } else if (SPTLRPC_FLVR_BASE(sf.sf_rpc) !=
                    SPTLRPC_FLVR_BASE(SPTLRPC_FLVR_NULL)) {
-                LCONSOLE_INFO("import %s->%s netid %x: select flavor %s\n",
-                              imp->imp_obd->obd_name,
-                              obd_uuid2str(&conn->c_remote_uuid),
-                              LNET_NIDNET(conn->c_self),
-                              sptlrpc_flavor2name(&sf, str, sizeof(str)));
+                CDEBUG(D_SEC, "import %s->%s netid %x: select flavor %s\n",
+                       imp->imp_obd->obd_name,
+                       obd_uuid2str(&conn->c_remote_uuid),
+                       LNET_NIDNET(conn->c_self),
+                       sptlrpc_flavor2name(&sf, str, sizeof(str)));
         }
 
         cfs_mutex_down(&imp->imp_sec_mutex);

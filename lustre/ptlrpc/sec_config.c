@@ -452,8 +452,8 @@ void sptlrpc_rule_set_dump(struct sptlrpc_rule_set *rset)
 
         for (n = 0; n < rset->srs_nrule; n++) {
                 r = &rset->srs_rules[n];
-                CWARN("<%02d> from %x to %x, net %x, rpc %x\n", n,
-                      r->sr_from, r->sr_to, r->sr_netid, r->sr_flvr.sf_rpc);
+                CDEBUG(D_SEC, "<%02d> from %x to %x, net %x, rpc %x\n", n,
+                       r->sr_from, r->sr_to, r->sr_netid, r->sr_flvr.sf_rpc);
         }
 }
 EXPORT_SYMBOL(sptlrpc_rule_set_dump);

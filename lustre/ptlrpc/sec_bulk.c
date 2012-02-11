@@ -773,14 +773,15 @@ void sptlrpc_enc_pool_fini(void)
         enc_pools_free();
 
         if (page_pools.epp_st_access > 0) {
-                CWARN("max pages %lu, grows %u, grow fails %u, shrinks %u, "
-                      "access %lu, missing %lu, max qlen %u, max wait "
-                      CFS_TIME_T"/%d\n",
-                      page_pools.epp_st_max_pages, page_pools.epp_st_grows,
-                      page_pools.epp_st_grow_fails,
-                      page_pools.epp_st_shrinks, page_pools.epp_st_access,
-                      page_pools.epp_st_missings, page_pools.epp_st_max_wqlen,
-                      page_pools.epp_st_max_wait, CFS_HZ);
+                CDEBUG(D_SEC,
+                       "max pages %lu, grows %u, grow fails %u, shrinks %u, "
+                       "access %lu, missing %lu, max qlen %u, max wait "
+                       CFS_TIME_T"/%d\n",
+                       page_pools.epp_st_max_pages, page_pools.epp_st_grows,
+                       page_pools.epp_st_grow_fails,
+                       page_pools.epp_st_shrinks, page_pools.epp_st_access,
+                       page_pools.epp_st_missings, page_pools.epp_st_max_wqlen,
+                       page_pools.epp_st_max_wait, CFS_HZ);
         }
 }
 
