@@ -153,7 +153,7 @@ static void sec_do_gc(struct ptlrpc_sec *sec)
         LASSERT(sec->ps_policy->sp_cops->gc_ctx);
 
         if (unlikely(sec->ps_gc_next == 0)) {
-                CWARN("sec %p(%s) has 0 gc time\n",
+                CDEBUG(D_SEC, "sec %p(%s) has 0 gc time\n",
                       sec, sec->ps_policy->sp_name);
                 return;
         }
@@ -195,7 +195,7 @@ again:
                         /* if someone is waiting to be deleted, let it
                          * proceed as soon as possible. */
                         if (cfs_atomic_read(&sec_gc_wait_del)) {
-                                CWARN("deletion pending, start over\n");
+                                CDEBUG(D_SEC, "deletion pending, start over\n");
                                 cfs_mutex_unlock(&sec_gc_mutex);
                                 goto again;
                         }

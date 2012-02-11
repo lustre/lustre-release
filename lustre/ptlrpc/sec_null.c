@@ -118,8 +118,9 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
                 cksumc = lustre_msg_calc_cksum(req->rq_repmsg);
 #endif
                 if (cksumc != cksums) {
-                        CWARN("early reply checksum mismatch: %08x != %08x\n",
-                              cksumc, cksums);
+                        CDEBUG(D_SEC,
+                               "early reply checksum mismatch: %08x != %08x\n",
+                               cksumc, cksums);
                         return -EINVAL;
                 }
         }
