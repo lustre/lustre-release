@@ -619,7 +619,7 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
         cfs_hash_bd_lock(hs, &bd, 1);
 
         shadow = htable_lookup(s, &bd, f, waiter, &version);
-        if (likely(shadow == NULL)) {
+        if (shadow == NULL) {
                 struct lu_site_bkt_data *bkt;
 
                 bkt = cfs_hash_bd_extra_get(hs, &bd);
@@ -627,12 +627,14 @@ static struct lu_object *lu_object_find_try(const struct lu_env *env,
                 bkt->lsb_busy++;
                 cfs_hash_bd_unlock(hs, &bd, 1);
                 return o;
+        } else {
+                if (!cfs_list_empty(&shadow->lo_header->loh_lru))
+                        cfs_list_del_init(&shadow->lo_header->loh_lru);
+                lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_RACE);
+                cfs_hash_bd_unlock(hs, &bd, 1);
+                lu_object_free(env, o);
+                return shadow;
         }
-
-        lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_RACE);
-        cfs_hash_bd_unlock(hs, &bd, 1);
-        lu_object_free(env, o);
-        return shadow;
 }
 
 /**
