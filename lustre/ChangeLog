@@ -8,7 +8,7 @@ TBD Whamcloud, Inc.
          2.6.27.19-5         (SLES11)
          2.6.18-238.19.1.el5 (RHEL5)
          2.6.16.60-0.69.1    (SLES10)
-       * Recommended e2fsprogs version: 1.41.90.wc3
+       * Recommended e2fsprogs version: 1.41.90.wc4
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
          stack overflow. For more information, please refer to bugzilla 17630.
