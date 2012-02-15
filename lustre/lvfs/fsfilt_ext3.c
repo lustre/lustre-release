@@ -656,13 +656,15 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
 
         /* We set these flags on the client, but have already checked perms
          * so don't confuse inode_change_ok. */
-        iattr->ia_valid &= ~(ATTR_MTIME_SET | ATTR_ATIME_SET);
+        iattr->ia_valid &= ~TIMES_SET_FLAGS;
 
         if (inode->i_op->setattr) {
                 rc = inode->i_op->setattr(dentry, iattr);
         } else {
+#ifndef HAVE_SIMPLE_SETATTR /* simple_setattr() already call it */
                 rc = inode_change_ok(inode, iattr);
                 if (!rc)
+#endif
                         rc = simple_setattr(dentry, iattr);
         }
 
