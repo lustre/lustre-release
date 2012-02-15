@@ -1101,8 +1101,7 @@ static void mdt_reconstruct_create(struct mdt_thread_info *mti,
                 return;
 
         /* if no error, so child was created with requested fid */
-        child = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid2,
-                                MDT_OBJ_MUST_EXIST);
+        child = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid2);
         if (IS_ERR(child)) {
                 rc = PTR_ERR(child);
                 LCONSOLE_WARN("Child "DFID" lookup error %d."
@@ -1144,8 +1143,7 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
                 return;
 
         body = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
-        obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1,
-                              MDT_OBJ_MUST_EXIST);
+        obj = mdt_object_find(mti->mti_env, mdt, mti->mti_rr.rr_fid1);
         if (IS_ERR(obj)) {
                 int rc = PTR_ERR(obj);
                 LCONSOLE_WARN(""DFID" lookup error %d."
