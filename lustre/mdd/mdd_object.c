@@ -72,8 +72,11 @@ static int mdd_xattr_get(const struct lu_env *env,
 int mdd_data_get(const struct lu_env *env, struct mdd_object *obj,
                  void **data)
 {
-        LASSERTF(mdd_object_exists(obj), "FID is "DFID"\n",
-                 PFID(mdd_object_fid(obj)));
+        if (mdd_object_exists(obj) == 0) {
+                CERROR("%s: object "DFID" not found: rc = -2\n",
+                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
+                return -ENOENT;
+        }
         mdo_data_get(env, obj, data);
         return 0;
 }
@@ -81,8 +84,11 @@ int mdd_data_get(const struct lu_env *env, struct mdd_object *obj,
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa)
 {
-        LASSERTF(mdd_object_exists(obj), "FID is "DFID"\n",
-                 PFID(mdd_object_fid(obj)));
+        if (mdd_object_exists(obj) == 0) {
+                CERROR("%s: object "DFID" not found: rc = -2\n",
+                       mdd_obj_dev_name(obj), PFID(mdd_object_fid(obj)));
+                return -ENOENT;
+        }
         return mdo_attr_get(env, obj, la, capa);
 }
 
@@ -819,7 +825,11 @@ static int mdd_xattr_get(const struct lu_env *env,
 
         ENTRY;
 
-        LASSERT(mdd_object_exists(mdd_obj));
+        if (mdd_object_exists(mdd_obj) == 0) {
+                CERROR("%s: object "DFID" not found: rc = -2\n",
+                       mdd_obj_dev_name(mdd_obj),PFID(mdd_object_fid(mdd_obj)));
+                return -ENOENT;
+        }
 
         mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdo_xattr_get(env, mdd_obj, buf, name,
@@ -842,7 +852,11 @@ static int mdd_readlink(const struct lu_env *env, struct md_object *obj,
         int                rc;
         ENTRY;
 
-        LASSERT(mdd_object_exists(mdd_obj));
+        if (mdd_object_exists(mdd_obj) == 0) {
+                CERROR("%s: object "DFID" not found: rc = -2\n",
+                       mdd_obj_dev_name(mdd_obj),PFID(mdd_object_fid(mdd_obj)));
+                return -ENOENT;
+        }
 
         next = mdd_object_child(mdd_obj);
         mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
@@ -1946,8 +1960,11 @@ static int mdd_ref_del(const struct lu_env *env, struct md_object *obj,
          * Check -ENOENT early here because we need to get object type
          * to calculate credits before transaction start
          */
-        if (!mdd_object_exists(mdd_obj))
+        if (mdd_object_exists(mdd_obj) == 0) {
+                CERROR("%s: object "DFID" not found: rc = -2\n",
+                       mdd_obj_dev_name(mdd_obj),PFID(mdd_object_fid(mdd_obj)));
                 RETURN(-ENOENT);
+        }
 
         LASSERT(mdd_object_exists(mdd_obj) > 0);
 
@@ -2719,7 +2736,11 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
         int rc;
         ENTRY;
 
-        LASSERT(mdd_object_exists(mdd_obj));
+        if (mdd_object_exists(mdd_obj) == 0) {
+                CERROR("%s: object "DFID" not found: rc = -2\n",
+                       mdd_obj_dev_name(mdd_obj),PFID(mdd_object_fid(mdd_obj)));
+                return -ENOENT;
+        }
 
         mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
         rc = mdd_readpage_sanity_check(env, mdd_obj);
@@ -2764,7 +2785,11 @@ static int mdd_object_sync(const struct lu_env *env, struct md_object *obj)
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct dt_object *next;
 
-        LASSERT(mdd_object_exists(mdd_obj));
+        if (mdd_object_exists(mdd_obj) == 0) {
+                CERROR("%s: object "DFID" not found: rc = -2\n",
+                       mdd_obj_dev_name(mdd_obj),PFID(mdd_object_fid(mdd_obj)));
+                return -ENOENT;
+        }
         next = mdd_object_child(mdd_obj);
         return next->do_ops->do_object_sync(env, next);
 }

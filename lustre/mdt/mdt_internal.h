@@ -413,11 +413,6 @@ enum mdt_txn_op {
         MDT_TXN_LAST_RCVD_WRITE_OP,
 };
 
-enum mdt_obj_exist{
-        MDT_OBJ_MUST_EXIST,
-        MDT_OBJ_MAY_NOT_EXIST,
-};
-
 static inline const struct md_device_operations *
 mdt_child_ops(struct mdt_device * m)
 {
@@ -490,11 +485,6 @@ static inline void mdt_export_evict(struct obd_export *exp)
         class_export_put(exp);
 }
 
-static inline const char *mdt_obj_dev_name(const struct mdt_object *obj)
-{
-        return lu_dev_name(obj->mot_obj.mo_lu.lo_dev);
-}
-
 int mdt_get_disposition(struct ldlm_reply *rep, int flag);
 void mdt_set_disposition(struct mdt_thread_info *info,
                         struct ldlm_reply *rep, int flag);
@@ -524,13 +514,11 @@ void mdt_object_unlock(struct mdt_thread_info *,
 
 struct mdt_object *mdt_object_find(const struct lu_env *,
                                    struct mdt_device *,
-                                   const struct lu_fid *,
-                                   enum mdt_obj_exist check_exist);
+                                   const struct lu_fid *);
 struct mdt_object *mdt_object_find_lock(struct mdt_thread_info *,
                                         const struct lu_fid *,
                                         struct mdt_lock_handle *,
-                                        __u64 ibits,
-                                        enum mdt_obj_exist check_exist);
+                                        __u64);
 void mdt_object_unlock_put(struct mdt_thread_info *,
                            struct mdt_object *,
                            struct mdt_lock_handle *,

@@ -359,8 +359,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         /* ACLs were sent to clients under LCK_CR locks, so taking LCK_EX
          * to cancel them. */
         mdt_lock_reg_init(lh, LCK_EX);
-        obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart,
-                                   MDT_OBJ_MUST_EXIST);
+        obj = mdt_object_find_lock(info, rr->rr_fid1, lh, lockpart);
         if (IS_ERR(obj))
                 GOTO(out, rc =  PTR_ERR(obj));
 
