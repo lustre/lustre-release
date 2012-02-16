@@ -27,14 +27,14 @@ XSL=$(or $(shell ls -d $(XSL_UBN) 2> /dev/null), \
 	 $(shell ls -d $(XSL_MAC) 2> /dev/null))
 
 .PHONY: all
-all: clean check xhtml html pdf diff
+all: clean check xhtml html pdf epub diff
 
 .PHONY: check
 check: $(SRC_XML)
 	xmllint --noout --xinclude --noent --relaxng $(RNG) ./index.xml
 
 # Note: can't use "suffix" instead of "subst", because it keeps the '.'
-$(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).fo: $(SRCS)
+$(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).fo $(TGT_BASE).epub: $(SRCS)
 	xsltproc --stringparam fop1.extensions  1 \
 		--stringparam section.label.includes.component.label 1 \
 		--stringparam section.autolabel 1 \
@@ -53,6 +53,15 @@ xhtml: $(TGT_BASE).xhtml
 
 .PHONY: pdf
 pdf: $(TGT_BASE).pdf
+
+.PHONY: epub
+epub: $(TGT_BASE).epub
+	echo "application/epub+zip" > mimetype
+	cp -r ./figures ./OEBPS/
+	zip -0Xq $(TGT_BASE).epub mimetype
+	zip -Xr9D $(TGT_BASE).epub OEBPS/*
+	zip -Xr9D $(TGT_BASE).epub META-INF/*
+
 
 # get the git hash for the last successful build of the manual
 .PHONY: mastermanual.revision
@@ -80,4 +89,6 @@ push:
 .PHONY: clean
 clean:
 	rm -f $(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).pdf\
-		mastermanual.revision mastermanual.index
+		mastermanual.revision mastermanual.index mimetype\
+		$(TGT_BASE).diff.html
+	rm -rf ./META-INF ./OEBPS
