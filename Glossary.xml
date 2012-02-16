@@ -159,7 +159,7 @@
       <glossterm>Glimpse callback
         </glossterm>
       <glossdef>
-        <para>An RPC made by an OST or MDT to another system, usually a client, to indicate to tthat an extent lock it is holding should be surrendered if it is not in use. If the system is using the lock, then the system should report the object size in the reply to the glimpse callback. Glimpses are introduced to optimize the acquisition of file sizes.</para>
+        <para>An RPC made by an OST or MDT to another system (usually a client) to indicate a held extent lock should be surrendered. If the system is using the lock, then the system should report the object size in the reply to the glimpse callback. Glimpses are introduced to optimize the acquisition of file sizes.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="grouplock">
