@@ -1,6 +1,6 @@
 ext4-wantedi-2.6-rhel6.patch
 ext4-map_inode_page-2.6.18-rhel5.patch
-export-ext4-2.6-rhel5.patch
+export-ext4-2.6-rhel6.patch
 ext4-remove-cond_resched-calls-rhel5.patch
 ext4-nlink-2.6-rhel5.patch
 ext4-ext_generation-sles11.patch

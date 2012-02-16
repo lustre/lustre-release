@@ -1,6 +1,6 @@
 diff -urpN linux-stage.orig/fs/ext4/balloc.c linux-stage/fs/ext4/balloc.c
---- linux-stage.orig/fs/ext4/balloc.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/balloc.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/balloc.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/balloc.c	2012-02-16 08:05:47.000000000 -0500
 @@ -97,7 +97,7 @@ unsigned ext4_init_block_bitmap(struct s
  		/* If checksum is bad mark all blocks used to prevent allocation
  		 * essentially implementing a per-group read-only flag. */
@@ -79,18 +79,55 @@ diff -urpN linux-stage.orig/fs/ext4/balloc.c linux-stage/fs/ext4/balloc.c
  				   (ext4_fsblk_t)(block + i));
  			BUFFER_TRACE(bitmap_bh, "bit already cleared");
 diff -urpN linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
---- linux-stage.orig/fs/ext4/dir.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/dir.c	2011-12-28 11:24:07.000000000 -0500
-@@ -83,7 +83,7 @@ int ext4_check_dir_entry(const char *fun
- 		error_msg = "inode out of bounds";
+--- linux-stage.orig/fs/ext4/dir.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/dir.c	2012-02-16 08:05:47.000000000 -0500
+@@ -70,28 +70,29 @@ int ext4_check_dir_entry(const char *fun
+ 	const int rlen = ext4_rec_len_from_disk(de->rec_len,
+ 						dir->i_sb->s_blocksize);
  
- 	if (error_msg != NULL)
+-	if (rlen < EXT4_DIR_REC_LEN(1))
++	if (unlikely(rlen < EXT4_DIR_REC_LEN(1)))
+ 		error_msg = "rec_len is smaller than minimal";
+-	else if (rlen % 4 != 0)
++	else if (unlikely(rlen % 4 != 0))
+ 		error_msg = "rec_len % 4 != 0";
+-	else if (rlen < EXT4_DIR_REC_LEN(de->name_len))
++	else if (unlikely(rlen < EXT4_DIR_REC_LEN(de->name_len)))
+ 		error_msg = "rec_len is too small for name_len";
+-	else if (((char *) de - bh->b_data) + rlen > dir->i_sb->s_blocksize)
++	else if (unlikely(((char *) de - bh->b_data) + rlen > dir->i_sb->s_blocksize))
+ 		error_msg = "directory entry across blocks";
+-	else if (le32_to_cpu(de->inode) >
+-			le32_to_cpu(EXT4_SB(dir->i_sb)->s_es->s_inodes_count))
++	else if (unlikely(le32_to_cpu(de->inode) >
++			le32_to_cpu(EXT4_SB(dir->i_sb)->s_es->s_inodes_count)))
+ 		error_msg = "inode out of bounds";
++	else
++		return 1;
+ 
+-	if (error_msg != NULL)
 -		ext4_error(dir->i_sb, function,
-+		ext4_error(dir->i_sb,
- 			"bad entry in directory #%lu: %s - block=%llu"
- 			"offset=%u(%u), inode=%u, rec_len=%d, name_len=%d",
- 			dir->i_ino, error_msg,
-@@ -152,7 +152,7 @@ static int ext4_readdir(struct file *fil
+-			"bad entry in directory #%lu: %s - block=%llu"
+-			"offset=%u(%u), inode=%u, rec_len=%d, name_len=%d",
+-			dir->i_ino, error_msg,
+-			(unsigned long long) bh->b_blocknr,
+-			(unsigned) (offset%bh->b_size), offset,
+-			le32_to_cpu(de->inode),
+-			rlen, de->name_len);
+-	return error_msg == NULL ? 1 : 0;
++	ext4_error(dir->i_sb,
++		"bad entry in directory #%lu: %s - block=%llu"
++		"offset=%u(%u), inode=%u, rec_len=%d, name_len=%d",
++		dir->i_ino, error_msg,
++		(unsigned long long) bh->b_blocknr,
++		(unsigned) (offset%bh->b_size), offset,
++		le32_to_cpu(de->inode),
++		rlen, de->name_len);
++	return 0;
+ }
+ 
+ static int ext4_readdir(struct file *filp,
+@@ -152,7 +153,7 @@ static int ext4_readdir(struct file *fil
  		 */
  		if (!bh) {
  			if (!dir_has_error) {
@@ -100,8 +137,8 @@ diff -urpN linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
  					   inode->i_ino,
  					   (unsigned long long) filp->f_pos);
 diff -urpN linux-stage.orig/fs/ext4/ext4_extents.h linux-stage/fs/ext4/ext4_extents.h
---- linux-stage.orig/fs/ext4/ext4_extents.h	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/ext4_extents.h	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/ext4_extents.h	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/ext4_extents.h	2012-02-16 08:05:47.000000000 -0500
 @@ -138,7 +138,7 @@ typedef int (*ext_prepare_callback)(stru
  #define EXT_REPEAT     2
  
@@ -112,8 +149,8 @@ diff -urpN linux-stage.orig/fs/ext4/ext4_extents.h linux-stage/fs/ext4/ext4_exte
  /*
   * EXT_INIT_MAX_LEN is the maximum number of blocks we can have in an
 diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
---- linux-stage.orig/fs/ext4/ext4.h	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/ext4.h	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/ext4.h	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/ext4.h	2012-02-16 08:06:56.000000000 -0500
 @@ -23,6 +23,7 @@
  #include <linux/quota.h>
  #include <linux/rwsem.h>
@@ -135,15 +172,49 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  /* data type for block offset of block group */
  typedef int ext4_grpblk_t;
  
-@@ -1509,6 +1516,7 @@ extern struct buffer_head *ext4_read_ino
- 						  ext4_group_t block_group);
+@@ -1110,6 +1117,9 @@ struct ext4_sb_info {
+ 
+ 	/* workqueue for dio unwritten */
+ 	struct workqueue_struct *dio_unwritten_wq;
++
++	/* Lazy inode table initialization info */
++	struct ext4_li_request *s_li_request;
+ };
+ 
+ static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
+@@ -1431,6 +1441,23 @@ void ext4_get_group_no_and_offset(struct
+ extern struct proc_dir_entry *ext4_proc_root;
+ 
+ /*
++ * Timeout and state flag for lazy initialization inode thread.
++ */
++#define EXT4_DEF_LI_WAIT_MULT			10
++#define EXT4_DEF_LI_MAX_START_DELAY		5
++#define EXT4_LAZYINIT_QUIT			0x0001
++#define EXT4_LAZYINIT_RUNNING			0x0002
++
++/*
++ * Lazy inode table initialization info
++ */
++struct ext4_lazy_init {
++	unsigned long		li_state;
++	struct list_head	li_request_list;
++	struct mutex		li_list_mtx;
++};
++
++/*
+  * Function prototypes
+  */
+ 
+@@ -1509,6 +1536,7 @@ extern struct buffer_head *ext4_read_ino
+ extern void mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
  
  /* mballoc.c */
 +struct fstrim_range;
  extern long ext4_mb_stats;
  extern long ext4_mb_max_to_scan;
  extern int ext4_mb_init(struct super_block *, int);
-@@ -1526,6 +1534,8 @@ extern int ext4_mb_add_groupinfo(struct 
+@@ -1526,6 +1554,8 @@ extern int ext4_mb_add_groupinfo(struct 
  extern int ext4_mb_get_buddy_cache_lock(struct super_block *, ext4_group_t);
  extern void ext4_mb_put_buddy_cache_lock(struct super_block *,
  						ext4_group_t, int);
@@ -152,7 +223,7 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  /* inode.c */
  int ext4_forget(handle_t *handle, int is_metadata, struct inode *inode,
  		struct buffer_head *bh, ext4_fsblk_t blocknr);
-@@ -1586,13 +1596,17 @@ extern int ext4_group_extend(struct supe
+@@ -1586,13 +1616,17 @@ extern int ext4_group_extend(struct supe
  				ext4_fsblk_t n_blocks_count);
  
  /* super.c */
@@ -173,8 +244,8 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  	__attribute__ ((format (printf, 3, 4)));
  extern void ext4_grp_locked_error(struct super_block *, ext4_group_t,
 diff -urpN linux-stage.orig/fs/ext4/ext4_jbd2.c linux-stage/fs/ext4/ext4_jbd2.c
---- linux-stage.orig/fs/ext4/ext4_jbd2.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/ext4_jbd2.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/ext4_jbd2.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/ext4_jbd2.c	2012-02-16 08:05:47.000000000 -0500
 @@ -96,7 +96,7 @@ int __ext4_handle_dirty_metadata(const c
  		if (inode && inode_needs_sync(inode)) {
  			sync_dirty_buffer(bh);
@@ -185,8 +256,8 @@ diff -urpN linux-stage.orig/fs/ext4/ext4_jbd2.c linux-stage/fs/ext4/ext4_jbd2.c
  					   "inode=%lu, block=%llu",
  					   inode->i_ino,
 diff -urpN linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
---- linux-stage.orig/fs/ext4/extents.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/extents.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/extents.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/extents.c	2012-02-16 08:05:47.000000000 -0500
 @@ -437,7 +437,7 @@ static int __ext4_ext_check(const char *
  	return 0;
  
@@ -387,8 +458,8 @@ diff -urpN linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
  
  		/*
 diff -urpN linux-stage.orig/fs/ext4/ialloc.c linux-stage/fs/ext4/ialloc.c
---- linux-stage.orig/fs/ext4/ialloc.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/ialloc.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/ialloc.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/ialloc.c	2012-02-16 08:05:47.000000000 -0500
 @@ -76,7 +76,7 @@ unsigned ext4_init_inode_bitmap(struct s
  	/* If checksum is bad mark all blocks and inodes use to prevent
  	 * allocation, essentially implementing a per-group read-only flag. */
@@ -477,8 +548,8 @@ diff -urpN linux-stage.orig/fs/ext4/ialloc.c linux-stage/fs/ext4/ialloc.c
  	printk(KERN_NOTICE "ext4_test_bit(bit=%d, block=%llu) = %d\n",
  	       bit, (unsigned long long)bitmap_bh->b_blocknr,
 diff -urpN linux-stage.orig/fs/ext4/inode.c linux-stage/fs/ext4/inode.c
---- linux-stage.orig/fs/ext4/inode.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/inode.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/inode.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/inode.c	2012-02-16 08:05:47.000000000 -0500
 @@ -246,7 +246,7 @@ void ext4_delete_inode(struct inode *ino
  	inode->i_size = 0;
  	err = ext4_mark_inode_dirty(handle, inode);
@@ -601,8 +672,26 @@ diff -urpN linux-stage.orig/fs/ext4/inode.c linux-stage/fs/ext4/inode.c
  					" some EAs or run e2fsck.",
  					inode->i_ino);
 diff -urpN linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
---- linux-stage.orig/fs/ext4/mballoc.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/mballoc.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/mballoc.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/mballoc.c	2012-02-16 08:05:47.000000000 -0500
+@@ -862,8 +862,6 @@ static int ext4_mb_init_cache(struct pag
+ 
+ 	err = 0;
+ 	first_block = page->index * blocks_per_page;
+-	/* init the page  */
+-	memset(page_address(page), 0xff, PAGE_CACHE_SIZE);
+ 	for (i = 0; i < blocks_per_page; i++) {
+ 		int group;
+ 		struct ext4_group_info *grinfo;
+@@ -899,6 +897,8 @@ static int ext4_mb_init_cache(struct pag
+ 			 * incore got set to the group block bitmap below
+ 			 */
+ 			ext4_lock_group(sb, group);
++			/* init the page  */
++			memset(data, 0xff, blocksize);
+ 			ext4_mb_generate_buddy(sb, data, incore, group);
+ 			ext4_unlock_group(sb, group);
+ 			incore = NULL;
 @@ -1862,7 +1862,6 @@ void ext4_mb_scan_aligned(struct ext4_al
  	}
  }
@@ -754,8 +843,8 @@ diff -urpN linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
  			   "Block = %llu, count = %lu", block, count);
  		/* err = 0. ext4_std_error should be a no op */
 diff -urpN linux-stage.orig/fs/ext4/move_extent.c linux-stage/fs/ext4/move_extent.c
---- linux-stage.orig/fs/ext4/move_extent.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/move_extent.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/move_extent.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/move_extent.c	2012-02-16 08:05:47.000000000 -0500
 @@ -152,12 +152,12 @@ mext_check_null_inode(struct inode *inod
  	int ret = 0;
  
@@ -823,8 +912,8 @@ diff -urpN linux-stage.orig/fs/ext4/move_extent.c linux-stage/fs/ext4/move_exten
  					"sum of replaced: %llu requested: %llu",
  					*moved_len, len);
 diff -urpN linux-stage.orig/fs/ext4/namei.c linux-stage/fs/ext4/namei.c
---- linux-stage.orig/fs/ext4/namei.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/namei.c	2011-12-28 11:28:51.000000000 -0500
+--- linux-stage.orig/fs/ext4/namei.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/namei.c	2012-02-16 08:05:47.000000000 -0500
 @@ -394,8 +394,7 @@ dx_probe(const struct qstr *d_name, stru
  	if (root->info.hash_version != DX_HASH_TEA &&
  	    root->info.hash_version != DX_HASH_HALF_MD4 &&
@@ -1051,8 +1140,8 @@ diff -urpN linux-stage.orig/fs/ext4/namei.c linux-stage/fs/ext4/namei.c
  				old_dir->i_ino, old_dir->i_nlink, retval);
  	}
 diff -urpN linux-stage.orig/fs/ext4/resize.c linux-stage/fs/ext4/resize.c
---- linux-stage.orig/fs/ext4/resize.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/resize.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/resize.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/resize.c	2012-02-16 08:05:47.000000000 -0500
 @@ -48,63 +48,63 @@ static int verify_group_input(struct sup
  
  	ext4_get_group_no_and_offset(sb, start, NULL, &offset);
@@ -1311,9 +1400,18 @@ diff -urpN linux-stage.orig/fs/ext4/resize.c linux-stage/fs/ext4/resize.c
  		mutex_unlock(&EXT4_SB(sb)->s_resize_lock);
  		ext4_journal_stop(handle);
 diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
---- linux-stage.orig/fs/ext4/super.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/super.c	2011-12-28 11:24:07.000000000 -0500
-@@ -337,7 +337,7 @@ static void ext4_handle_error(struct sup
+--- linux-stage.orig/fs/ext4/super.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/super.c	2012-02-16 08:05:47.000000000 -0500
+@@ -53,6 +53,8 @@
+ 
+ struct proc_dir_entry *ext4_proc_root;
+ static struct kset *ext4_kset;
++static struct ext4_lazy_init *ext4_li_info;
++static struct mutex ext4_li_mtx;
+ 
+ static int ext4_load_journal(struct super_block *, struct ext4_super_block *,
+ 			     unsigned long journal_devnum);
+@@ -337,7 +339,7 @@ static void ext4_handle_error(struct sup
  			sb->s_id);
  }
  
@@ -1322,7 +1420,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  		const char *fmt, ...)
  {
  	va_list args;
-@@ -351,6 +351,42 @@ void ext4_error(struct super_block *sb, 
+@@ -351,6 +353,42 @@ void ext4_error(struct super_block *sb, 
  	ext4_handle_error(sb);
  }
  
@@ -1365,7 +1463,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  static const char *ext4_decode_error(struct super_block *sb, int errno,
  				     char nbuf[16])
  {
-@@ -454,7 +490,7 @@ void ext4_msg (struct super_block * sb, 
+@@ -454,7 +492,7 @@ void ext4_msg (struct super_block * sb, 
  	va_end(args);
  }
  
@@ -1374,7 +1472,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  		  const char *fmt, ...)
  {
  	va_list args;
-@@ -511,7 +547,7 @@ void ext4_update_dynamic_rev(struct supe
+@@ -511,7 +549,7 @@ void ext4_update_dynamic_rev(struct supe
  	if (le32_to_cpu(es->s_rev_level) > EXT4_GOOD_OLD_REV)
  		return;
  
@@ -1383,7 +1481,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  		     "updating to rev %d because of new feature flag, "
  		     "running e2fsck is recommended",
  		     EXT4_DYNAMIC_REV);
-@@ -1096,9 +1132,9 @@ enum {
+@@ -1096,13 +1134,14 @@ enum {
  	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
  	Opt_data_err_abort, Opt_data_err_ignore,
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
@@ -1396,7 +1494,12 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	Opt_stripe, Opt_delalloc, Opt_nodelalloc,
  	Opt_block_validity, Opt_noblock_validity,
  	Opt_inode_readahead_blks, Opt_journal_ioprio,
-@@ -2709,6 +2745,21 @@ static int ext4_fill_super(struct super_
+ 	Opt_discard, Opt_nodiscard,
++	Opt_init_inode_table, Opt_noinit_inode_table,
+ };
+ 
+ static const match_table_t tokens = {
+@@ -2709,6 +2748,21 @@ static int ext4_fill_super(struct super_
  	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
  	spin_lock_init(&sbi->s_next_gen_lock);
  
@@ -1418,7 +1521,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	sbi->s_stripe = ext4_get_stripe_size(sbi);
  	sbi->s_max_writeback_mb_bump = 128;
  
-@@ -2828,20 +2879,6 @@ static int ext4_fill_super(struct super_
+@@ -2828,20 +2882,6 @@ static int ext4_fill_super(struct super_
  	set_task_ioprio(sbi->s_journal->j_task, journal_ioprio);
  
  no_journal:
@@ -1439,7 +1542,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	if (test_opt(sb, NOBH)) {
  		if (!(test_opt(sb, DATA_FLAGS) == EXT4_MOUNT_WRITEBACK_DATA)) {
  			ext4_msg(sb, KERN_WARNING, "Ignoring nobh option - "
-@@ -2974,10 +3011,6 @@ failed_mount_wq:
+@@ -2974,10 +3014,6 @@ failed_mount_wq:
  		jbd2_journal_destroy(sbi->s_journal);
  		sbi->s_journal = NULL;
  	}
@@ -1450,7 +1553,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  failed_mount3:
  	if (sbi->s_flex_groups) {
  		if (is_vmalloc_addr(sbi->s_flex_groups))
-@@ -2985,6 +3018,10 @@ failed_mount3:
+@@ -2985,6 +3021,10 @@ failed_mount3:
  		else
  			kfree(sbi->s_flex_groups);
  	}
@@ -1461,7 +1564,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  failed_mount2:
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
-@@ -3377,9 +3414,9 @@ static void ext4_clear_journal_err(struc
+@@ -3377,9 +3417,9 @@ static void ext4_clear_journal_err(struc
  		char nbuf[16];
  
  		errstr = ext4_decode_error(sb, j_errno, nbuf);
@@ -1473,9 +1576,67 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  			     "filesystem check.");
  
  		EXT4_SB(sb)->s_mount_state |= EXT4_ERROR_FS;
+@@ -4007,11 +4047,21 @@ static struct file_system_type ext4_fs_t
+ 	.fs_flags	= FS_REQUIRES_DEV,
+ };
+ 
++static int __init ext4_init_feat_adverts(void)
++{
++	return 0;
++}
++
++static void ext4_exit_feat_adverts(void)
++{
++}
++
+ static int __init init_ext4_fs(void)
+ {
+ 	int err;
+ 
+ 	ext4_check_flag_values();
++
+ 	err = init_ext4_system_zone();
+ 	if (err)
+ 		return err;
+@@ -4019,6 +4069,9 @@ static int __init init_ext4_fs(void)
+ 	if (!ext4_kset)
+ 		goto out4;
+ 	ext4_proc_root = proc_mkdir("fs/ext4", NULL);
++
++	err = ext4_init_feat_adverts();
++
+ 	err = init_ext4_mballoc();
+ 	if (err)
+ 		goto out3;
+@@ -4032,6 +4085,9 @@ static int __init init_ext4_fs(void)
+ 	err = register_filesystem(&ext4_fs_type);
+ 	if (err)
+ 		goto out;
++
++	ext4_li_info = NULL;
++	mutex_init(&ext4_li_mtx);
+ 	return 0;
+ out:
+ 	destroy_inodecache();
+@@ -4040,6 +4096,7 @@ out1:
+ out2:
+ 	exit_ext4_mballoc();
+ out3:
++	ext4_exit_feat_adverts();
+ 	remove_proc_entry("fs/ext4", NULL);
+ 	kset_unregister(ext4_kset);
+ out4:
+@@ -4053,6 +4110,7 @@ static void __exit exit_ext4_fs(void)
+ 	destroy_inodecache();
+ 	exit_ext4_xattr();
+ 	exit_ext4_mballoc();
++	ext4_exit_feat_adverts();
+ 	remove_proc_entry("fs/ext4", NULL);
+ 	kset_unregister(ext4_kset);
+ 	exit_ext4_system_zone();
 diff -urpN linux-stage.orig/fs/ext4/xattr.c linux-stage/fs/ext4/xattr.c
---- linux-stage.orig/fs/ext4/xattr.c	2011-12-28 08:18:31.000000000 -0500
-+++ linux-stage/fs/ext4/xattr.c	2011-12-28 11:24:07.000000000 -0500
+--- linux-stage.orig/fs/ext4/xattr.c	2012-02-16 07:54:55.000000000 -0500
++++ linux-stage/fs/ext4/xattr.c	2012-02-16 08:05:47.000000000 -0500
 @@ -227,7 +227,7 @@ ext4_xattr_block_get(struct inode *inode
  	ea_bdebug(bh, "b_count=%d, refcount=%d",
  		atomic_read(&(bh->b_count)), le32_to_cpu(BHDR(bh)->h_refcount));
