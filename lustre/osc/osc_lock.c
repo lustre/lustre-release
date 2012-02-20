@@ -539,10 +539,8 @@ static int osc_lock_upcall(void *cookie, int errcode)
                                 LDLM_LOCK_PUT(dlmlock);
                         }
                 } else {
-                        if (olck->ols_glimpse) {
+                        if (olck->ols_glimpse)
                                 olck->ols_glimpse = 0;
-                                olck->ols_agl = 0 ;
-                        }
                         osc_lock_upcall0(env, olck);
                 }
 
@@ -566,6 +564,17 @@ static int osc_lock_upcall(void *cookie, int errcode)
                 }
 
                 if (rc == 0) {
+                        /* For AGL case, the RPC sponsor may exits the cl_lock
+                        *  processing without wait() called before related OSC
+                        *  lock upcall(). So update the lock status according
+                        *  to the enqueue result inside AGL upcall(). */
+                        if (olck->ols_agl) {
+                                lock->cll_flags |= CLF_FROM_UPCALL;
+                                cl_wait_try(env, lock);
+                                lock->cll_flags &= ~CLF_FROM_UPCALL;
+                                if (!olck->ols_glimpse)
+                                        olck->ols_agl = 0;
+                        }
                         cl_lock_signal(env, lock);
                         /* del user for lock upcall cookie */
                         cl_unuse_try(env, lock);
@@ -1247,7 +1256,12 @@ static int osc_lock_wait(const struct lu_env *env,
                 if (olck->ols_flags & LDLM_FL_LVB_READY) {
                         return 0;
                 } else if (olck->ols_agl) {
-                        olck->ols_state = OLS_NEW;
+                        if (lock->cll_flags & CLF_FROM_UPCALL)
+                                /* It is from enqueue RPC reply upcall for
+                                 * updating state. Do not re-enqueue. */
+                                return -ENAVAIL;
+                        else
+                                olck->ols_state = OLS_NEW;
                 } else {
                         LASSERT(lock->cll_error);
                         return lock->cll_error;
@@ -1255,20 +1269,15 @@ static int osc_lock_wait(const struct lu_env *env,
         }
 
         if (olck->ols_state == OLS_NEW) {
-                if (lock->cll_descr.cld_enq_flags & CEF_NO_REENQUEUE) {
-                        return -ENAVAIL;
-                } else {
-                        int rc;
+                int rc;
 
-                        LASSERT(olck->ols_agl);
+                LASSERT(olck->ols_agl);
 
-                        rc = osc_lock_enqueue(env, slice, NULL, CEF_ASYNC |
-                                                                CEF_MUST);
-                        if (rc != 0)
-                                return rc;
-                        else
-                                return CLO_REENQUEUED;
-                }
+                rc = osc_lock_enqueue(env, slice, NULL, CEF_ASYNC | CEF_MUST);
+                if (rc != 0)
+                        return rc;
+                else
+                        return CLO_REENQUEUED;
         }
 
         LASSERT(equi(olck->ols_state >= OLS_UPCALL_RECEIVED &&

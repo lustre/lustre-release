@@ -701,19 +701,6 @@ static int lov_lock_unuse(const struct lu_env *env,
                         if (lls->sub_flags & LSF_HELD) {
                                 LASSERT(sublock->cll_state == CLS_HELD ||
                                         sublock->cll_state == CLS_ENQUEUED);
-                                /* For AGL case, the sublock state maybe not
-                                 * match the lower layer state, so sync them
-                                 * before unuse. */
-                                if (sublock->cll_users == 1 &&
-                                    sublock->cll_state == CLS_ENQUEUED) {
-                                        __u32 save;
-
-                                        save = sublock->cll_descr.cld_enq_flags;
-                                        sublock->cll_descr.cld_enq_flags |=
-                                                        CEF_NO_REENQUEUE;
-                                        cl_wait_try(env, sublock);
-                                        sublock->cll_descr.cld_enq_flags = save;
-                                }
                                 rc = cl_unuse_try(subenv->lse_env, sublock);
                                 rc = lov_sublock_release(env, lck, i, 0, rc);
                         }
