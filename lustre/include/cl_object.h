@@ -1442,7 +1442,9 @@ enum cl_lock_flags {
         /** cancellation is pending for this lock. */
         CLF_CANCELPEND = 1 << 1,
         /** destruction is pending for this lock. */
-        CLF_DOOMED     = 1 << 2
+        CLF_DOOMED     = 1 << 2,
+        /** from enqueue RPC reply upcall. */
+        CLF_FROM_UPCALL= 1 << 3,
 };
 
 /**
@@ -2160,13 +2162,9 @@ enum cl_enq_flags {
          */
         CEF_AGL          = 0x00000020,
         /**
-         * do not trigger re-enqueue.
-         */
-        CEF_NO_REENQUEUE = 0x00000040,
-        /**
          * mask of enq_flags.
          */
-        CEF_MASK         = 0x0000007f,
+        CEF_MASK         = 0x0000003f,
 };
 
 /**
