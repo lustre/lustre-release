@@ -51,13 +51,6 @@ enum async_flags {
         ASYNC_HP = 0x10,
 };
 
-struct obd_async_page_ops {
-        int  (*ap_make_ready)(const struct lu_env *env, void *data, int cmd);
-        int  (*ap_refresh_count)(const struct lu_env *env, void *data, int cmd);
-        int  (*ap_completion)(const struct lu_env *env,
-                              void *data, int cmd, struct obdo *oa, int rc);
-};
-
 struct osc_async_page {
         int                     oap_magic;
         unsigned short          oap_cmd;
@@ -75,11 +68,8 @@ struct osc_async_page {
 
         struct ptlrpc_request   *oap_request;
         struct client_obd       *oap_cli;
-        struct lov_oinfo        *oap_loi;
+	struct osc_object       *oap_obj;
 
-        const struct obd_async_page_ops *oap_caller_ops;
-        void                    *oap_caller_data;
-        cfs_list_t               oap_page_list;
         struct ldlm_lock        *oap_ldlm_lock;
         cfs_spinlock_t           oap_lock;
 };
@@ -116,6 +106,7 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 void oscc_init(struct obd_device *obd);
 void osc_wake_cache_waiters(struct client_obd *cli);
 int osc_shrink_grant_to_target(struct client_obd *cli, long target);
+void osc_update_next_shrink(struct client_obd *cli);
 
 /*
  * cl integration.
@@ -146,28 +137,10 @@ int osc_punch_base(struct obd_export *exp, struct obd_info *oinfo,
                    obd_enqueue_update_f upcall, void *cookie,
                    struct ptlrpc_request_set *rqset);
 
-int osc_prep_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
-                        struct lov_oinfo *loi, cfs_page_t *page,
-                        obd_off offset, const struct obd_async_page_ops *ops,
-                        void *data, void **res, int nocache,
-                        struct lustre_handle *lockh);
-void osc_oap_to_pending(struct osc_async_page *oap);
-int  osc_oap_interrupted(const struct lu_env *env, struct osc_async_page *oap);
-void loi_list_maint(struct client_obd *cli, struct lov_oinfo *loi);
-void osc_check_rpcs(const struct lu_env *env, struct client_obd *cli);
-int osc_queue_async_io(const struct lu_env *env, struct obd_export *exp,
-                       struct lov_stripe_md *lsm, struct lov_oinfo *loi,
-                       struct osc_async_page *oap, int cmd, int off,
-                       int count,  obd_flag brw_flags, enum async_flags async_flags);
-int osc_teardown_async_page(struct obd_export *exp, struct lov_stripe_md *lsm,
-                            struct lov_oinfo *loi, struct osc_async_page *oap);
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *cfg);
-int osc_set_async_flags_base(struct client_obd *cli,
-                             struct lov_oinfo *loi, struct osc_async_page *oap,
-                             obd_flag async_flags);
-int osc_enter_cache_try(const struct lu_env *env,
-                        struct client_obd *cli, struct lov_oinfo *loi,
-                        struct osc_async_page *oap, int transient);
+int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
+		  cfs_list_t *rpc_list, int page_count, int cmd,
+		  pdl_policy_t p);
 
 struct cl_page *osc_oap2cl_page(struct osc_async_page *oap);
 extern cfs_spinlock_t osc_ast_guard;
@@ -192,6 +165,11 @@ static inline int osc_recoverable_error(int rc)
 {
         return (rc == -EIO || rc == -EROFS || rc == -ENOMEM ||
                 rc == -EAGAIN || rc == -EINPROGRESS);
+}
+
+static inline unsigned long rpcs_in_flight(struct client_obd *cli)
+{
+	return cli->cl_r_in_flight + cli->cl_w_in_flight;
 }
 
 #ifndef min_t

@@ -72,14 +72,6 @@
 
 #define MAX_OBD_DEVICES 8192
 
-/* this is really local to the OSC */
-struct loi_oap_pages {
-        cfs_list_t              lop_pending;
-        cfs_list_t              lop_urgent;
-        cfs_list_t              lop_pending_group;
-        int                     lop_num_pending;
-};
-
 struct osc_async_rc {
         int     ar_rc;
         int     ar_force_sync;
@@ -90,14 +82,6 @@ struct lov_oinfo {                 /* per-stripe data structure */
         struct ost_id   loi_oi;    /* object ID/Sequence on the target OST */
         int loi_ost_idx;           /* OST stripe index in lov_tgt_desc->tgts */
         int loi_ost_gen;           /* generation of this loi_ost_idx */
-
-        /* used by the osc to keep track of what objects to build into rpcs */
-        struct loi_oap_pages loi_read_lop;
-        struct loi_oap_pages loi_write_lop;
-        cfs_list_t loi_ready_item;
-        cfs_list_t loi_hp_ready_item;
-        cfs_list_t loi_write_item;
-        cfs_list_t loi_read_item;
 
         unsigned long loi_kms_valid:1;
         __u64 loi_kms;             /* known minimum size */
@@ -115,16 +99,6 @@ static inline void loi_kms_set(struct lov_oinfo *oinfo, __u64 kms)
 
 static inline void loi_init(struct lov_oinfo *loi)
 {
-        CFS_INIT_LIST_HEAD(&loi->loi_read_lop.lop_pending);
-        CFS_INIT_LIST_HEAD(&loi->loi_read_lop.lop_urgent);
-        CFS_INIT_LIST_HEAD(&loi->loi_read_lop.lop_pending_group);
-        CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending);
-        CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_urgent);
-        CFS_INIT_LIST_HEAD(&loi->loi_write_lop.lop_pending_group);
-        CFS_INIT_LIST_HEAD(&loi->loi_ready_item);
-        CFS_INIT_LIST_HEAD(&loi->loi_hp_ready_item);
-        CFS_INIT_LIST_HEAD(&loi->loi_write_item);
-        CFS_INIT_LIST_HEAD(&loi->loi_read_item);
 }
 
 struct lov_stripe_md {
@@ -501,6 +475,9 @@ struct client_obd {
          * Exact type of ->cl_loi_list_lock is defined in arch/obd.h together
          * with client_obd_list_{un,}lock() and
          * client_obd_list_lock_{init,done}() functions.
+	 *
+	 * NB by Jinshan: though field names are still _loi_, but actually
+	 * osc_object{}s are in the list.
          */
         client_obd_lock_t        cl_loi_list_lock;
         cfs_list_t               cl_loi_ready_list;

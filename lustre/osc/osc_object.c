@@ -83,7 +83,15 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
         cfs_spin_lock_init(&osc->oo_seatbelt);
         for (i = 0; i < CRT_NR; ++i)
                 CFS_INIT_LIST_HEAD(&osc->oo_inflight[i]);
-        return 0;
+
+	osc_oap_pages_init(&osc->oo_read_pages);
+	osc_oap_pages_init(&osc->oo_write_pages);
+	CFS_INIT_LIST_HEAD(&osc->oo_ready_item);
+	CFS_INIT_LIST_HEAD(&osc->oo_hp_ready_item);
+	CFS_INIT_LIST_HEAD(&osc->oo_write_item);
+	CFS_INIT_LIST_HEAD(&osc->oo_read_item);
+
+	return 0;
 }
 
 static void osc_object_free(const struct lu_env *env, struct lu_object *obj)

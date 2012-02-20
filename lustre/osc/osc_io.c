@@ -36,6 +36,7 @@
  * Implementation of cl_io for OSC layer.
  *
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
+ *   Author: Jinshan Xiong <jinshan.xiong@whamcloud.com>
  */
 
 #define DEBUG_SUBSYSTEM S_OSC
@@ -92,19 +93,12 @@ struct cl_page *osc_oap2cl_page(struct osc_async_page *oap)
         return container_of(oap, struct osc_page, ops_oap)->ops_cl.cpl_page;
 }
 
-static void osc_io_unplug(const struct lu_env *env, struct osc_object *osc,
-                          struct client_obd *cli)
-{
-        loi_list_maint(cli, osc->oo_oinfo);
-        osc_check_rpcs(env, cli);
-}
-
 /**
  * An implementation of cl_io_operations::cio_io_submit() method for osc
  * layer. Iterates over pages in the in-queue, prepares each for io by calling
  * cl_page_prep() and then either submits them through osc_io_submit_page()
  * or, if page is already submitted, changes osc flags through
- * osc_set_async_flags_base().
+ * osc_set_async_flags().
  */
 static int osc_io_submit(const struct lu_env *env,
                          const struct cl_io_slice *ios,
@@ -172,19 +166,17 @@ static int osc_io_submit(const struct lu_env *env,
                                 osc_io_submit_page(env, cl2osc_io(env, ios),
                                                    opg, crt);
                         } else {
-                                result = osc_set_async_flags_base(cli,
-                                                                  osc->oo_oinfo,
-                                                                  oap,
-                                                                  OSC_FLAGS);
-                                /*
-                                 * bug 18881: we can't just break out here when
-                                 * error occurs after cl_page_prep has been
-                                 * called against the page. The correct
-                                 * way is to call page's completion routine,
-                                 * as in osc_oap_interrupted.  For simplicity,
-                                 * we just force osc_set_async_flags_base() to
-                                 * not return error.
-                                 */
+				result = osc_set_async_flags(osc, opg,
+							     OSC_FLAGS);
+				/*
+				 * bug 18881: we can't just break out here when
+				 * error occurs after cl_page_prep has been
+				 * called against the page. The correct
+				 * way is to call page's completion routine,
+				 * as in osc_oap_interrupted.  For simplicity,
+				 * we just force osc_set_async_flags() to
+				 * not return error.
+				 */
                                 LASSERT(result == 0);
                         }
                         opg->ops_submit_time = cfs_time_current();
@@ -217,7 +209,7 @@ static int osc_io_submit(const struct lu_env *env,
         LASSERT(ergo(result == 0, osc == osc0));
 
         if (queued > 0)
-                osc_io_unplug(env, osc, cli);
+		osc_io_unplug(env, cli, osc, PDL_POLICY_ROUND);
         if (osc0)
                 client_obd_list_unlock(&cli->cl_loi_list_lock);
         CDEBUG(D_INFO, "%d/%d %d\n", qin->pl_nr, qout->pl_nr, result);

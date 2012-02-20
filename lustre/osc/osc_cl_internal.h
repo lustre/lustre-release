@@ -100,6 +100,22 @@ struct osc_thread_info {
         struct cl_page_list     oti_plist;
 };
 
+/**
+ * Manage osc_async_page
+ */
+struct osc_oap_pages {
+	cfs_list_t      oop_pending;
+	cfs_list_t      oop_urgent;
+	int             oop_num_pending;
+};
+
+static inline void osc_oap_pages_init(struct osc_oap_pages *list)
+{
+	CFS_INIT_LIST_HEAD(&list->oop_pending);
+	CFS_INIT_LIST_HEAD(&list->oop_urgent);
+	list->oop_num_pending = 0;
+}
+
 struct osc_object {
         struct cl_object   oo_cl;
         struct lov_oinfo  *oo_oinfo;
@@ -125,6 +141,16 @@ struct osc_object {
          * locked during take-off and landing.
          */
         cfs_spinlock_t     oo_seatbelt;
+
+	/**
+	 * used by the osc to keep track of what objects to build into rpcs
+	 */
+	struct osc_oap_pages oo_read_pages;
+	struct osc_oap_pages oo_write_pages;
+	cfs_list_t           oo_ready_item;
+	cfs_list_t           oo_hp_ready_item;
+	cfs_list_t           oo_write_item;
+	cfs_list_t           oo_read_item;
 };
 
 /*
@@ -361,9 +387,25 @@ void osc_index2policy  (ldlm_policy_data_t *policy, const struct cl_object *obj,
                         pgoff_t start, pgoff_t end);
 int  osc_lvb_print     (const struct lu_env *env, void *cookie,
                         lu_printer_t p, const struct ost_lvb *lvb);
+
 void osc_io_submit_page(const struct lu_env *env,
                         struct osc_io *oio, struct osc_page *opg,
                         enum cl_req_type crt);
+void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
+		       struct obdo *oa, struct osc_async_page *oap,
+		       int sent, int rc);
+int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops);
+int osc_set_async_flags(struct osc_object *obj, struct osc_page *opg,
+			obd_flag async_flags);
+int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
+			cfs_page_t *page, loff_t offset);
+int osc_queue_async_io(const struct lu_env *env, struct osc_page *ops);
+int osc_teardown_async_page(struct osc_object *obj,
+			    struct osc_page *ops);
+int osc_queue_sync_page(const struct lu_env *env, struct osc_page *ops,
+			int cmd, int brw_flags);
+void osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
+		   struct osc_object *osc, pdl_policy_t pol);
 
 void osc_object_set_contended  (struct osc_object *obj);
 void osc_object_clear_contended(struct osc_object *obj);

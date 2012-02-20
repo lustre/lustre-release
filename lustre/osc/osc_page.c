@@ -209,34 +209,19 @@ static int osc_page_cache_add(const struct lu_env *env,
                               const struct cl_page_slice *slice,
                               struct cl_io *unused)
 {
-        struct osc_page   *opg = cl2osc_page(slice);
-        struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
-        int result;
-        /* All cacheable IO is async-capable */
-        int brw_flags = OBD_BRW_ASYNC;
-        int noquota = 0;
+	struct osc_page *opg = cl2osc_page(slice);
+	int result;
+	ENTRY;
 
-        LINVRNT(osc_page_protected(env, opg, CLM_WRITE, 0));
-        ENTRY;
+	LINVRNT(osc_page_protected(env, opg, CLM_WRITE, 0));
 
-        /* Set the OBD_BRW_SRVLOCK before the page is queued. */
-        brw_flags |= opg->ops_srvlock ? OBD_BRW_SRVLOCK : 0;
-        if (!client_is_remote(osc_export(obj)) &&
-            cfs_capable(CFS_CAP_SYS_RESOURCE)) {
-                brw_flags |= OBD_BRW_NOQUOTA;
-                noquota = OBD_BRW_NOQUOTA;
-        }
-
-        osc_page_transfer_get(opg, "transfer\0cache");
-        result = osc_queue_async_io(env, osc_export(obj), NULL, obj->oo_oinfo,
-                                    &opg->ops_oap, OBD_BRW_WRITE | noquota,
-                                    opg->ops_from, opg->ops_to - opg->ops_from,
-                                    brw_flags, 0);
-        if (result != 0)
-                osc_page_transfer_put(env, opg);
-        else
-                osc_page_transfer_add(env, opg, CRT_WRITE);
-        RETURN(result);
+	osc_page_transfer_get(opg, "transfer\0cache");
+	result = osc_queue_async_io(env, opg);
+	if (result != 0)
+		osc_page_transfer_put(env, opg);
+	else
+		osc_page_transfer_add(env, opg, CRT_WRITE);
+	RETURN(result);
 }
 
 void osc_index2policy(ldlm_policy_data_t *policy, const struct cl_object *obj,
@@ -354,11 +339,10 @@ static int osc_page_print(const struct lu_env *env,
         struct osc_async_page *oap = &opg->ops_oap;
         struct osc_object     *obj = cl2osc(slice->cpl_obj);
         struct client_obd     *cli = &osc_export(obj)->exp_obd->u.cli;
-        struct lov_oinfo      *loi = obj->oo_oinfo;
 
         return (*printer)(env, cookie, LUSTRE_OSC_NAME"-page@%p: "
                           "1< %#x %d %u %s %s %s > "
-                          "2< "LPU64" %u %u %#x %#x | %p %p %p %p %p > "
+			  "2< "LPU64" %u %u %#x %#x | %p %p %p > "
                           "3< %s %p %d %lu %d > "
                           "4< %d %d %d %lu %s | %s %s %s %s > "
                           "5< %s %s %s %s | %d %s %s | %d %s %s>\n",
@@ -372,9 +356,7 @@ static int osc_page_print(const struct lu_env *env,
                           /* 2 */
                           oap->oap_obj_off, oap->oap_page_off, oap->oap_count,
                           oap->oap_async_flags, oap->oap_brw_flags,
-                          oap->oap_request,
-                          oap->oap_cli, oap->oap_loi, oap->oap_caller_ops,
-                          oap->oap_caller_data,
+			  oap->oap_request, oap->oap_cli, obj,
                           /* 3 */
                           osc_list(&opg->ops_inflight),
                           opg->ops_submitter, opg->ops_transfer_pinned,
@@ -389,24 +371,23 @@ static int osc_page_print(const struct lu_env *env,
                           osc_list(&cli->cl_loi_write_list),
                           osc_list(&cli->cl_loi_read_list),
                           /* 5 */
-                          osc_list(&loi->loi_ready_item),
-                          osc_list(&loi->loi_hp_ready_item),
-                          osc_list(&loi->loi_write_item),
-                          osc_list(&loi->loi_read_item),
-                          loi->loi_read_lop.lop_num_pending,
-                          osc_list(&loi->loi_read_lop.lop_pending),
-                          osc_list(&loi->loi_read_lop.lop_urgent),
-                          loi->loi_write_lop.lop_num_pending,
-                          osc_list(&loi->loi_write_lop.lop_pending),
-                          osc_list(&loi->loi_write_lop.lop_urgent));
+			  osc_list(&obj->oo_ready_item),
+			  osc_list(&obj->oo_hp_ready_item),
+			  osc_list(&obj->oo_write_item),
+			  osc_list(&obj->oo_read_item),
+			  obj->oo_read_pages.oop_num_pending,
+			  osc_list(&obj->oo_read_pages.oop_pending),
+			  osc_list(&obj->oo_read_pages.oop_urgent),
+			  obj->oo_write_pages.oop_num_pending,
+			  osc_list(&obj->oo_write_pages.oop_pending),
+			  osc_list(&obj->oo_write_pages.oop_urgent));
 }
 
 static void osc_page_delete(const struct lu_env *env,
                             const struct cl_page_slice *slice)
 {
-        struct osc_page       *opg = cl2osc_page(slice);
-        struct osc_object     *obj = cl2osc(opg->ops_cl.cpl_obj);
-        struct osc_async_page *oap = &opg->ops_oap;
+	struct osc_page   *opg = cl2osc_page(slice);
+	struct osc_object *obj = cl2osc(opg->ops_cl.cpl_obj);
         int rc;
 
         LINVRNT(opg->ops_temp || osc_page_protected(env, opg, CLM_READ, 1));
@@ -414,7 +395,7 @@ static void osc_page_delete(const struct lu_env *env,
         ENTRY;
         CDEBUG(D_TRACE, "%p\n", opg);
         osc_page_transfer_put(env, opg);
-        rc = osc_teardown_async_page(osc_export(obj), NULL, obj->oo_oinfo, oap);
+	rc = osc_teardown_async_page(obj, opg);
         if (rc) {
                 CL_PAGE_DEBUG(D_ERROR, env, cl_page_top(slice->cpl_page),
                               "Trying to teardown failed: %d\n", rc);
@@ -455,7 +436,7 @@ static int osc_page_cancel(const struct lu_env *env,
          * is completed, or not even queued. */
         if (opg->ops_transfer_pinned)
                 /* FIXME: may not be interrupted.. */
-                rc = osc_oap_interrupted(env, oap);
+		rc = osc_cancel_async_page(env, opg);
         LASSERT(ergo(rc == 0, opg->ops_transfer_pinned == 0));
         client_obd_list_unlock(&oap->oap_cli->cl_loi_list_lock);
         return rc;
@@ -480,136 +461,6 @@ static const struct cl_page_operations osc_page_ops = {
         .cpo_cancel         = osc_page_cancel
 };
 
-static int osc_make_ready(const struct lu_env *env, void *data, int cmd)
-{
-        struct osc_page *opg  = data;
-        struct cl_page  *page = cl_page_top(opg->ops_cl.cpl_page);
-        int result;
-
-        LASSERT(cmd == OBD_BRW_WRITE); /* no cached reads */
-        LINVRNT(osc_page_protected(env, opg, CLM_WRITE, 1));
-
-        ENTRY;
-        result = cl_page_make_ready(env, page, CRT_WRITE);
-        if (result == 0)
-                opg->ops_submit_time = cfs_time_current();
-        RETURN(result);
-}
-
-static int osc_refresh_count(const struct lu_env *env, void *data, int cmd)
-{
-        struct cl_page   *page;
-        struct osc_page  *osc = data;
-        struct cl_object *obj;
-        struct cl_attr   *attr = &osc_env_info(env)->oti_attr;
-
-        int result;
-        loff_t kms;
-
-        LINVRNT(osc_page_protected(env, osc, CLM_READ, 1));
-
-        /* readpage queues with _COUNT_STABLE, shouldn't get here. */
-        LASSERT(!(cmd & OBD_BRW_READ));
-        LASSERT(osc != NULL);
-        page = osc->ops_cl.cpl_page;
-        obj = osc->ops_cl.cpl_obj;
-
-        cl_object_attr_lock(obj);
-        result = cl_object_attr_get(env, obj, attr);
-        cl_object_attr_unlock(obj);
-        if (result < 0)
-                return result;
-        kms = attr->cat_kms;
-        if (cl_offset(obj, page->cp_index) >= kms)
-                /* catch race with truncate */
-                return 0;
-        else if (cl_offset(obj, page->cp_index + 1) > kms)
-                /* catch sub-page write at end of file */
-                return kms % CFS_PAGE_SIZE;
-        else
-                return CFS_PAGE_SIZE;
-}
-
-static int osc_completion(const struct lu_env *env,
-                          void *data, int cmd, struct obdo *oa, int rc)
-{
-        struct osc_page       *opg  = data;
-        struct osc_async_page *oap  = &opg->ops_oap;
-        struct cl_page        *page = cl_page_top(opg->ops_cl.cpl_page);
-        struct osc_object     *obj  = cl2osc(opg->ops_cl.cpl_obj);
-        enum cl_req_type crt;
-        int srvlock;
-
-        LINVRNT(osc_page_protected(env, opg, CLM_READ, 1));
-
-        ENTRY;
-
-        cmd &= ~OBD_BRW_NOQUOTA;
-        LASSERT(equi(page->cp_state == CPS_PAGEIN,  cmd == OBD_BRW_READ));
-        LASSERT(equi(page->cp_state == CPS_PAGEOUT, cmd == OBD_BRW_WRITE));
-        LASSERT(opg->ops_transfer_pinned);
-
-        /*
-         * page->cp_req can be NULL if io submission failed before
-         * cl_req was allocated.
-         */
-        if (page->cp_req != NULL)
-                cl_req_page_done(env, page);
-        LASSERT(page->cp_req == NULL);
-
-        /* As the transfer for this page is being done, clear the flags */
-        cfs_spin_lock(&oap->oap_lock);
-        oap->oap_async_flags = 0;
-        cfs_spin_unlock(&oap->oap_lock);
-
-        crt = cmd == OBD_BRW_READ ? CRT_READ : CRT_WRITE;
-        /* Clear opg->ops_transfer_pinned before VM lock is released. */
-        opg->ops_transfer_pinned = 0;
-
-        cfs_spin_lock(&obj->oo_seatbelt);
-        LASSERT(opg->ops_submitter != NULL);
-        LASSERT(!cfs_list_empty(&opg->ops_inflight));
-        cfs_list_del_init(&opg->ops_inflight);
-        cfs_spin_unlock(&obj->oo_seatbelt);
-
-        opg->ops_submit_time = 0;
-        srvlock = oap->oap_brw_flags & OBD_BRW_SRVLOCK;
-
-        cl_page_completion(env, page, crt, rc);
-
-        /* statistic */
-        if (rc == 0 && srvlock) {
-                struct lu_device *ld    = opg->ops_cl.cpl_obj->co_lu.lo_dev;
-                struct osc_stats *stats = &lu2osc_dev(ld)->od_stats;
-                int bytes = oap->oap_count;
-
-                if (crt == CRT_READ)
-                        stats->os_lockless_reads += bytes;
-                else
-                        stats->os_lockless_writes += bytes;
-        }
-
-        /*
-         * This has to be the last operation with the page, as locks are
-         * released in cl_page_completion() and nothing except for the
-         * reference counter protects page from concurrent reclaim.
-         */
-        lu_ref_del(&page->cp_reference, "transfer", page);
-        /*
-         * As page->cp_obj is pinned by a reference from page->cp_req, it is
-         * safe to call cl_page_put() without risking object destruction in a
-         * non-blocking context.
-         */
-        cl_page_put(env, page);
-        RETURN(0);
-}
-
-const static struct obd_async_page_ops osc_async_page_ops = {
-        .ap_make_ready    = osc_make_ready,
-        .ap_refresh_count = osc_refresh_count,
-        .ap_completion    = osc_completion
-};
-
 struct cl_page *osc_page_init(const struct lu_env *env,
                               struct cl_object *obj,
                               struct cl_page *page, cfs_page_t *vmpage)
@@ -620,16 +471,11 @@ struct cl_page *osc_page_init(const struct lu_env *env,
 
         OBD_SLAB_ALLOC_PTR_GFP(opg, osc_page_kmem, CFS_ALLOC_IO);
         if (opg != NULL) {
-                void *oap = &opg->ops_oap;
-
                 opg->ops_from = 0;
                 opg->ops_to   = CFS_PAGE_SIZE;
 
-                result = osc_prep_async_page(osc_export(osc),
-                                             NULL, osc->oo_oinfo, vmpage,
-                                             cl_offset(obj, page->cp_index),
-                                             &osc_async_page_ops,
-                                             opg, (void **)&oap, 1, NULL);
+		result = osc_prep_async_page(osc, opg, vmpage,
+					     cl_offset(obj, page->cp_index));
                 if (result == 0) {
                         struct osc_io *oio = osc_env_io(env);
                         opg->ops_srvlock = osc_io_srvlock(oio);
@@ -657,39 +503,13 @@ void osc_io_submit_page(const struct lu_env *env,
                         struct osc_io *oio, struct osc_page *opg,
                         enum cl_req_type crt)
 {
-        struct osc_async_page *oap = &opg->ops_oap;
-        struct client_obd     *cli = oap->oap_cli;
-        int flags = 0;
-
         LINVRNT(osc_page_protected(env, opg,
                                    crt == CRT_WRITE ? CLM_WRITE : CLM_READ, 1));
 
-        oap->oap_page_off   = opg->ops_from;
-        oap->oap_count      = opg->ops_to - opg->ops_from;
-        /* Give a hint to OST that requests are coming from kswapd - bug19529 */
-        if (cfs_memory_pressure_get())
-                oap->oap_brw_flags |= OBD_BRW_MEMALLOC;
-        oap->oap_brw_flags |= OBD_BRW_SYNC;
-        if (osc_io_srvlock(oio))
-                oap->oap_brw_flags |= OBD_BRW_SRVLOCK;
+	osc_queue_sync_page(env, opg,
+			    crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ,
+			    osc_io_srvlock(oio) ? OBD_BRW_SRVLOCK : 0);
 
-        oap->oap_cmd = crt == CRT_WRITE ? OBD_BRW_WRITE : OBD_BRW_READ;
-        if (!client_is_remote(osc_export(cl2osc(opg->ops_cl.cpl_obj))) &&
-            cfs_capable(CFS_CAP_SYS_RESOURCE)) {
-                oap->oap_brw_flags |= OBD_BRW_NOQUOTA;
-                oap->oap_cmd |= OBD_BRW_NOQUOTA;
-        }
-
-        if (oap->oap_cmd & OBD_BRW_READ)
-                flags = ASYNC_COUNT_STABLE;
-        else if (!(oap->oap_brw_page.flag & OBD_BRW_FROM_GRANT))
-                osc_enter_cache_try(env, cli, oap->oap_loi, oap, 1);
-
-        cfs_spin_lock(&oap->oap_lock);
-        oap->oap_async_flags |= OSC_FLAGS | flags;
-        cfs_spin_unlock(&oap->oap_lock);
-
-        osc_oap_to_pending(oap);
         osc_page_transfer_get(opg, "transfer\0imm");
         osc_page_transfer_add(env, opg, crt);
 }
