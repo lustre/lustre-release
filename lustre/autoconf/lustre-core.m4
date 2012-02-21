@@ -583,22 +583,25 @@ LB_LINUX_TRY_COMPILE([
 
 #
 # LC_STATFS_DENTRY_PARAM
-# starting from 2.6.18 linux kernel uses dentry instead of
-# super_block for first vfs_statfs argument
+# starting from 2.6.18 linux kernel uses dentry instead of super_block
+# for the first parameter of the super_operations->statfs() callback.
 #
 AC_DEFUN([LC_STATFS_DENTRY_PARAM],
-[AC_MSG_CHECKING([first vfs_statfs parameter is dentry])
+[AC_MSG_CHECKING([if super_ops.statfs() first parameter is dentry])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
 LB_LINUX_TRY_COMPILE([
         #include <linux/fs.h>
 ],[
-	int vfs_statfs(struct dentry *, struct kstatfs *);
+	((struct super_operations *)0)->statfs((struct dentry *)0, (struct kstatfs*)0);
 ],[
         AC_DEFINE(HAVE_STATFS_DENTRY_PARAM, 1,
-                [first parameter of vfs_statfs is dentry])
+                [super_ops.statfs() first parameter is dentry])
         AC_MSG_RESULT([yes])
 ],[
         AC_MSG_RESULT([no])
 ])
+EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #

@@ -2513,7 +2513,8 @@ kiblnd_startup (lnet_ni_t *ni)
                 ibdev->ibd_ifip = ip;
                 strcpy(&ibdev->ibd_ifname[0], ifname);
 
-                id = rdma_create_id(kiblnd_cm_callback, ibdev, RDMA_PS_TCP);
+                id = kiblnd_rdma_create_id(kiblnd_cm_callback, ibdev,
+                                           RDMA_PS_TCP, IB_QPT_RC);
                 if (IS_ERR(id)) {
                         CERROR("Can't create listen ID: %ld\n", PTR_ERR(id));
                         goto failed;

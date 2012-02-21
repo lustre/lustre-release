@@ -2,10 +2,14 @@
 	* version 1.8.8-wc1
 	* Support for kernels:
 	  2.6.18-274.3.1.el5 (RHEL 5)
-	  2.6.32-131.12.1.el6 (RHEL 6) - patchless client only
+	  2.6.32-220.4.2.el6 (RHEL 6) - patchless client only
 	* Recommended e2fsprogs version: 1.41.90.wc3
 
 See http://wiki.whamcloud.com/display/PUB/Changelog+1.8 for more information.
+
+Severity   : enhancement
+Jira       : LU-1116
+Description: Add patchless client support for RHEL6.2.
 
 -------------------------------------------------------------------------------
 
