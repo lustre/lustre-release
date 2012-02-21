@@ -1005,7 +1005,7 @@ relock:
                 mdt_lock_reg_init(lhc, LCK_PR);
 
                 if (mdt_object_exists(child) == 0) {
-                        LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
+                        LU_OBJECT_DEBUG(D_INODE, info->mti_env,
                                         &child->mot_obj.mo_lu,
                                         "Object doesn't exist!\n");
                         GOTO(out_child, rc = -ENOENT);
