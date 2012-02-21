@@ -227,15 +227,6 @@ typedef struct mutex cfs_mutex_t;
 #define cfs_mutex_is_locked(x)              mutex_is_locked(x)
 #define cfs_mutex_destroy(x)                mutex_destroy(x)
 
-/*
- * Kernel locking primitives
- *
- * - lock_kernel
- * - unlock_kernel
- */
-#define cfs_lock_kernel()      lock_kernel()
-#define cfs_unlock_kernel()    unlock_kernel()
-
 #ifndef lockdep_set_class
 
 /**************************************************************************

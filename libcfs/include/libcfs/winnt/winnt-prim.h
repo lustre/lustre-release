@@ -899,9 +899,6 @@ libcfs_arch_cleanup(void);
 #define unlikely(exp) (exp)
 #endif
 
-#define cfs_lock_kernel()               do {} while(0)
-#define cfs_unlock_kernel()             do {} while(0)
-
 #define local_irq_save(x)
 #define local_irq_restore(x)
 

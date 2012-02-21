@@ -198,13 +198,16 @@ struct lustre_mount_info *server_get_mount_2(const char *name)
 
 static void unlock_mntput(struct vfsmount *mnt)
 {
-        if (kernel_locked()) {
-                cfs_unlock_kernel();
-                mntput(mnt);
-                cfs_lock_kernel();
-        } else {
-                mntput(mnt);
-        }
+#if HAVE_KERNEL_LOCKED
+	/* for kernel < 2.6.37 */
+	if (kernel_locked()) {
+		unlock_kernel();
+		mntput(mnt);
+		lock_kernel();
+	}
+#else
+	mntput(mnt);
+#endif
 }
 
 static int lustre_put_lsi(struct super_block *sb);

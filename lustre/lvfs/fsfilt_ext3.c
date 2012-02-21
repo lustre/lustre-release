@@ -1288,10 +1288,10 @@ int fsfilt_ext3_read(struct inode *inode, void *buf, int size, loff_t *offs)
         int err, blocksize, csize, boffs, osize = size;
 
         /* prevent reading after eof */
-        cfs_lock_kernel();
+	spin_lock(&inode->i_lock);
         if (i_size_read(inode) < *offs + size) {
                 size = i_size_read(inode) - *offs;
-                cfs_unlock_kernel();
+		spin_unlock(&inode->i_lock);
                 if (size < 0) {
                         CDEBUG(D_EXT2, "size %llu is too short for read @%llu\n",
                                i_size_read(inode), *offs);
@@ -1300,7 +1300,7 @@ int fsfilt_ext3_read(struct inode *inode, void *buf, int size, loff_t *offs)
                         return 0;
                 }
         } else {
-                cfs_unlock_kernel();
+		spin_unlock(&inode->i_lock);
         }
 
         blocksize = 1 << inode->i_blkbits;
@@ -1383,14 +1383,17 @@ int fsfilt_ext3_write_handle(struct inode *inode, void *buf, int bufsize,
 
         /* correct in-core and on-disk sizes */
         if (new_size > i_size_read(inode)) {
-                cfs_lock_kernel();
+		spin_lock(&inode->i_lock);
                 if (new_size > i_size_read(inode))
                         i_size_write(inode, new_size);
                 if (i_size_read(inode) > EXT3_I(inode)->i_disksize)
                         EXT3_I(inode)->i_disksize = i_size_read(inode);
-                if (i_size_read(inode) > old_size)
+                if (i_size_read(inode) > old_size) {
+			spin_unlock(&inode->i_lock);
                         mark_inode_dirty(inode);
-                cfs_unlock_kernel();
+                } else {
+			spin_unlock(&inode->i_lock);
+                }
         }
 
         if (err == 0)

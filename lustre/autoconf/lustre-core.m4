@@ -1865,6 +1865,24 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 2.6.37 remove kernel_locked
+#
+AC_DEFUN([LC_KERNEL_LOCKED],
+[AC_MSG_CHECKING([if kernel_locked is defined])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/smp_lock.h>
+],[
+        kernel_locked();
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_KERNEL_LOCKED, 1,
+                [kernel_locked is defined])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # 2.6.38 export blkdev_get_by_dev
 #
 AC_DEFUN([LC_BLKDEV_GET_BY_DEV],
@@ -2116,6 +2134,9 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.36
          LC_FS_STRUCT_RWLOCK
          LC_SBOPS_EVICT_INODE
+
+         # 2.6.37
+         LC_KERNEL_LOCKED
 
          # 2.6.38
          LC_ATOMIC_MNT_COUNT

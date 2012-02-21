@@ -292,8 +292,6 @@ int cfs_curproc_is_in_groups(gid_t gid);
         ret;                                                            \
 }
 
-#define cfs_lock_kernel() do {} while (0)
-#define cfs_unlock_kernel() do {} while (0)
 #define daemonize(l) do {} while (0)
 #define sigfillset(l) do {} while (0)
 #define recalc_sigpending(l) do {} while (0)

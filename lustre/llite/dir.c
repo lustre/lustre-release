@@ -1031,12 +1031,7 @@ out:
         RETURN(rc);
 }
 
-#ifdef HAVE_UNLOCKED_IOCTL
 static long ll_dir_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
-#else
-static int  ll_dir_ioctl(struct inode *unuse, struct file *file,
-                        unsigned int cmd, unsigned long arg)
-#endif
 {
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_sb_info *sbi = ll_i2sbi(inode);
@@ -1616,10 +1611,6 @@ struct file_operations ll_dir_operations = {
         .release  = ll_dir_release,
         .read     = generic_read_dir,
         .readdir  = ll_readdir,
-#ifdef HAVE_UNLOCKED_IOCTL
         .unlocked_ioctl   = ll_dir_ioctl,
-#else
-        .ioctl          = ll_dir_ioctl,
-#endif
         .fsync    = ll_fsync,
 };
