@@ -573,7 +573,7 @@ typedef struct kib_connvars
 typedef struct kib_conn
 {
         struct kib_peer     *ibc_peer;          /* owning peer */
-        kib_hca_dev_t      *ibc_hdev;           /* HCA bound on */
+        kib_hca_dev_t       *ibc_hdev;          /* HCA bound on */
         cfs_list_t           ibc_list;          /* stash on peer's conn list */
         cfs_list_t           ibc_sched_list;    /* schedule for attention */
         __u16                ibc_version;       /* version of connection */
@@ -589,9 +589,14 @@ typedef struct kib_conn
         int                  ibc_nrx:16;        /* receive buffers owned */
         int                  ibc_scheduled:1;   /* scheduled for attention */
         int                  ibc_ready:1;       /* CQ callback fired */
-        unsigned long        ibc_last_send;     /* time of last send */
-        cfs_list_t           ibc_early_rxs;     /* rxs completed before ESTABLISHED */
-        cfs_list_t          ibc_tx_noops;       /* IBLND_MSG_NOOPs for IBLND_MSG_VERSION_1 */
+        /* time of last send */
+        unsigned long        ibc_last_send;
+        /** link chain for kiblnd_check_conns only */
+        cfs_list_t           ibc_connd_list;
+        /** rxs completed before ESTABLISHED */
+        cfs_list_t           ibc_early_rxs;
+        /** IBLND_MSG_NOOPs for IBLND_MSG_VERSION_1 */
+        cfs_list_t           ibc_tx_noops;
         cfs_list_t           ibc_tx_queue;       /* sends that need a credit */
         cfs_list_t           ibc_tx_queue_nocred;/* sends that don't need a credit */
         cfs_list_t           ibc_tx_queue_rsrvd; /* sends that need to reserve an ACK/DONE msg */
@@ -606,7 +611,7 @@ typedef struct kib_conn
         kib_connvars_t      *ibc_connvars;       /* in-progress connection state */
 } kib_conn_t;
 
-#define IBLND_CONN_INIT               0         /* being intialised */
+#define IBLND_CONN_INIT               0         /* being initialised */
 #define IBLND_CONN_ACTIVE_CONNECT     1         /* active sending req */
 #define IBLND_CONN_PASSIVE_WAIT       2         /* passive waiting for rtu */
 #define IBLND_CONN_ESTABLISHED        3         /* connection established */
@@ -738,7 +743,7 @@ kiblnd_send_keepalive(kib_conn_t *conn)
 }
 
 static inline int
-kiblnd_send_noop(kib_conn_t *conn)
+kiblnd_need_noop(kib_conn_t *conn)
 {
         LASSERT (conn->ibc_state >= IBLND_CONN_ESTABLISHED);
 
@@ -752,11 +757,12 @@ kiblnd_send_noop(kib_conn_t *conn)
                         return 0; /* NOOP can be piggybacked */
 
                 /* No tx to piggyback NOOP onto or no credit to send a tx */
-                return (cfs_list_empty(&conn->ibc_tx_queue) || conn->ibc_credits == 0);
+                return (cfs_list_empty(&conn->ibc_tx_queue) ||
+                        conn->ibc_credits == 0);
         }
 
-        if (!cfs_list_empty(&conn->ibc_tx_noops) ||       /* NOOP already queued */
-            !cfs_list_empty(&conn->ibc_tx_queue_nocred) || /* can be piggybacked */
+        if (!cfs_list_empty(&conn->ibc_tx_noops) || /* NOOP already queued */
+            !cfs_list_empty(&conn->ibc_tx_queue_nocred) || /* piggyback NOOP */
             conn->ibc_credits == 0)                    /* no credit */
                 return 0;
 
