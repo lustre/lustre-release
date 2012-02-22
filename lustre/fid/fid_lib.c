@@ -86,19 +86,19 @@ const struct lu_seq_range LUSTRE_SEQ_ZERO_RANGE = {
 EXPORT_SYMBOL(LUSTRE_SEQ_ZERO_RANGE);
 
 /* Lustre Big Fs Lock fid. */
-const struct lu_fid LUSTRE_BFL_FID = { .f_seq = 0x0000000000000003,
-                                       .f_oid = 0x0000000000000001,
+const struct lu_fid LUSTRE_BFL_FID = { .f_seq = FID_SEQ_SPECIAL,
+                                       .f_oid = FID_OID_SPECIAL_BFL,
                                        .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LUSTRE_BFL_FID);
 
 /** Special fid for ".lustre" directory */
 const struct lu_fid LU_DOT_LUSTRE_FID = { .f_seq = FID_SEQ_DOT_LUSTRE,
-                                          .f_oid = 0x0000000000000001,
+                                          .f_oid = FID_OID_DOT_LUSTRE,
                                           .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LU_DOT_LUSTRE_FID);
 
 /** Special fid for "fid" special object in .lustre */
 const struct lu_fid LU_OBF_FID = { .f_seq = FID_SEQ_DOT_LUSTRE,
-                                   .f_oid = 0x0000000000000002,
+                                   .f_oid = FID_OID_DOT_LUSTRE_OBF,
                                    .f_ver = 0x0000000000000000 };
 EXPORT_SYMBOL(LU_OBF_FID);

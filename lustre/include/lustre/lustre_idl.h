@@ -421,6 +421,8 @@ enum fid_seq {
         FID_SEQ_START      = 0x200000000ULL,
         FID_SEQ_LOCAL_FILE = 0x200000001ULL,
         FID_SEQ_DOT_LUSTRE = 0x200000002ULL,
+        /* XXX 0x200000003ULL is reserved for FID_SEQ_LLOG_OBJ */
+        FID_SEQ_SPECIAL    = 0x200000004ULL,
         FID_SEQ_NORMAL     = 0x200000400ULL,
         FID_SEQ_LOV_DEFAULT= 0xffffffffffffffffULL
 };
@@ -432,6 +434,17 @@ enum fid_seq {
 #define IDIF_MAX_OID                (1ULL << IDIF_OID_MAX_BITS)
 #define IDIF_OID_MASK               ((1ULL << IDIF_OID_MAX_BITS) - 1)
 
+/** OID for FID_SEQ_SPECIAL */
+enum special_oid {
+        /* Big Filesystem Lock to serialize rename operations */
+        FID_OID_SPECIAL_BFL     = 1UL,
+};
+
+/** OID for FID_SEQ_DOT_LUSTRE */
+enum dot_lustre_oid {
+        FID_OID_DOT_LUSTRE  = 1UL,
+        FID_OID_DOT_LUSTRE_OBF = 2UL,
+};
 
 static inline int fid_seq_is_mdt0(obd_seq seq)
 {
