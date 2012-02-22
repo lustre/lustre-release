@@ -1,0 +1,14 @@
+LU-1145 test: allow Test-Parameters tag for autotest
+
+Allow Test-Parameters line to specify extra tests that should be run
+to properly validate a change made to code or a regression test.
+
+The Test-Parameters line can be quite long, depending on the number
+of parameters specified.  A single set of test parameters can be
+split over multiple lines by escaping the linefeed, though the
+individual lines should still be kept below the 70-character limit.
+
+Test-Parameters: ostcount=5 clientarch=i686 clientdistro=rhel5
+Test-Parameters: ostcount=1 testlist=ost-pools,sanity,sanityn,lfsck \
+	filesystemtype=ldiskfs,zfs serverarch=x86_64
+Signed-off-by: Andreas Dilger <adilger@whamcloud.com>

@@ -19,6 +19,7 @@ init() {
         readonly SAVE="$(basename $ORIGINAL).$(date +%Y%m%d.%H%M%S)"
         readonly SIGNOFF="Signed-off-by:"
         readonly CHANGEID="Change-Id:"
+        readonly TESTPARAMS="Test-Parameters:"
         readonly INNOCUOUS=$(echo \
                         Acked-by \
                         Tested-by \
@@ -157,7 +158,7 @@ new_changeid() {
 #
 error() {
         (( ${#LINE} > 0 )) && echo "line $NUM: $LINE"
-        echo "error: commit message $*" | fmt --split-only
+        echo "error: commit message $*" | fmt
         HAS_ERROR=true
 } 1>&2
 
@@ -198,6 +199,7 @@ usage() {
 	$(for T in $(tr '|' ' ' <<< "$INNOCUOUS"); do       \
 	     echo "    $T: Some Person <email@domain.com>"; \
 	  done)
+	$TESTPARAMS optional additional test parameters
 	{Organization}-bug-id: associated external change identifier
 	EOF
 
@@ -213,6 +215,7 @@ while IFS= read -u3 LINE; do
         case "$LINE" in
         $SIGNOFF* )   do_signoff   ;;
         $CHANGEID* )  do_changeid  ;;
+        $TESTPARAMS* ) ck_wrapup   ;;
 
         "")
                 HAS_LAST_BLANK=true
