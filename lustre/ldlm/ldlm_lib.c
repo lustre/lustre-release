@@ -1835,6 +1835,7 @@ static int target_recovery_thread(void *arg)
         thread->t_id = -1; /* force filter_iobuf_get/put to use local buffers */
         env.le_ctx.lc_thread = thread;
         thread->t_data = NULL;
+        thread->t_watchdog = NULL;
 
         CDEBUG(D_HA, "%s: started recovery thread pid %d\n", obd->obd_name,
                cfs_curproc_pid());
