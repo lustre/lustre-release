@@ -27,14 +27,14 @@ XSL=$(or $(shell ls -d $(XSL_UBN) 2> /dev/null), \
 	 $(shell ls -d $(XSL_MAC) 2> /dev/null))
 
 .PHONY: all
-all: clean check xhtml html pdf epub diff
+all: clean check xhtml html pdf epub
 
 .PHONY: check
 check: $(SRC_XML)
 	xmllint --noout --xinclude --noent --relaxng $(RNG) ./index.xml
 
 # Note: can't use "suffix" instead of "subst", because it keeps the '.'
-$(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).fo $(TGT_BASE).epub: $(SRCS)
+$(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).epub $(TGT_BASE).fo: $(SRCS)
 	xsltproc --stringparam fop1.extensions  1 \
 		--stringparam section.label.includes.component.label 1 \
 		--stringparam section.autolabel 1 \
@@ -90,5 +90,5 @@ push:
 clean:
 	rm -f $(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).pdf\
 		mastermanual.revision mastermanual.index mimetype\
-		$(TGT_BASE).diff.html
+		$(TGT_BASE).diff.html $(TGT_BASE).epub
 	rm -rf ./META-INF ./OEBPS
