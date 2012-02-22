@@ -23,13 +23,13 @@ diff -urp linux-2.6.18.rawops/fs/dcache.c linux-2.6.18.races/fs/dcache.c
 +void d_rehash_cond(struct dentry * entry, int lock)
  {
 -	spin_lock(&dcache_lock);
-+ 	if (lock)
++	if (lock)
 +	    spin_lock(&dcache_lock);
  	spin_lock(&entry->d_lock);
  	_d_rehash(entry);
  	spin_unlock(&entry->d_lock);
 -	spin_unlock(&dcache_lock);
-+ 	if (lock)	
++	if (lock)
 +	    spin_unlock(&dcache_lock);
 +}
 +EXPORT_SYMBOL(d_rehash_cond);
@@ -40,20 +40,17 @@ diff -urp linux-2.6.18.rawops/fs/dcache.c linux-2.6.18.races/fs/dcache.c
  }
  
  #define do_switch(x,y) do { \
-@@ -1481,7 +1496,7 @@ static void switch_names(struct dentry *
-  * Update the dcache to reflect the move of a file name. Negative
-  * dcache entries should not be moved in this way.
-  */
--static void d_move_locked(struct dentry * dentry, struct dentry * target)
-+void d_move_locked(struct dentry * dentry, struct dentry * target)
- {
- 	struct hlist_head *list;
- 
-@@ -1549,6 +1563,8 @@ already_unhashed:
+@@ -1481,6 +1496,14 @@ static void switch_names(struct dentry *
+ 	fsnotify_d_move(dentry);
  	spin_unlock(&dentry->d_lock);
- 	write_sequnlock(&rename_lock);
  }
 +
++void d_move_locked(struct dentry * dentry, struct dentry * target)
++{
++	write_seqlock(&rename_lock);
++	__d_move(dentry, target);
++	write_sequnlock(&rename_lock);
++}
 +EXPORT_SYMBOL(d_move_locked);
  
  /**

@@ -24,15 +24,6 @@ diff .prev/drivers/md/bitmap.c ./drivers/md/bitmap.c
  		switch(*bmc) {
  		case 0:
  			bitmap_file_set_bit(bitmap, offset);
-@@ -1169,7 +1185,7 @@ int bitmap_startwrite(struct bitmap *bit
- 		case 1:
- 			*bmc = 2;
- 		}
--		BUG_ON((*bmc & COUNTER_MAX) == COUNTER_MAX);
-+
- 		(*bmc)++;
- 
- 		spin_unlock_irq(&bitmap->lock);
 @@ -1207,6 +1223,9 @@ void bitmap_endwrite(struct bitmap *bitm
  		if (!success && ! (*bmc & NEEDED_MASK))
  			*bmc |= NEEDED_MASK;
@@ -43,14 +34,6 @@ diff .prev/drivers/md/bitmap.c ./drivers/md/bitmap.c
  		(*bmc)--;
  		if (*bmc <= 2) {
  			set_page_attr(bitmap,
-@@ -1431,6 +1450,7 @@ int bitmap_create(mddev_t *mddev)
- 	spin_lock_init(&bitmap->lock);
- 	atomic_set(&bitmap->pending_writes, 0);
- 	init_waitqueue_head(&bitmap->write_wait);
-+	init_waitqueue_head(&bitmap->overflow_wait);
- 
- 	bitmap->mddev = mddev;
- 
 diff .prev/include/linux/raid/bitmap.h ./include/linux/raid/bitmap.h
 --- .prev/include/linux/raid/bitmap.h	2007-02-07 13:03:56.000000000 +1100
 +++ ./include/linux/raid/bitmap.h	2007-02-07 20:57:57.000000000 +1100

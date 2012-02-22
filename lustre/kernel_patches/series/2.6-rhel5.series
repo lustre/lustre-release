@@ -17,7 +17,6 @@ raid5-stripe-by-stripe-handling-rhel5.patch
 raid5-merge-ios-rhel5.patch
 raid5-zerocopy-rhel5.patch
 raid5-maxsectors-rhel5.patch
-raid5-rebuild-corrupt-bug.patch
 md-rebuild-policy.patch
 jbd-journal-chksum-2.6.18-vanilla.patch
 quota-large-limits-rhel5.patch
@@ -25,5 +24,3 @@ md-mmp-unplug-dev.patch
 mpt-fusion-max-sge.patch
 jbd2-jcberr-2.6-rhel5.patch
 jbd2-commit-timer-no-jiffies-rounding.diff
-md-avoid-bug_on-when-bmc-overflow.patch
-fix-forever-in-do_get_write_access.patch

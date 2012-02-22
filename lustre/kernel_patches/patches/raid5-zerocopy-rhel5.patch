@@ -425,9 +425,9 @@ Index: linux-2.6.18-128.1.14/mm/filemap.c
  #include <trace/mm.h>
  #include "internal.h"
 @@ -567,11 +568,55 @@
- 		if (!test_clear_page_writeback(page))
- 			BUG();
- 	}
+ 	if (!test_clear_page_writeback(page))
+ 		BUG();
+ 
 +	clear_page_constant(page);
  	smp_mb__after_clear_bit();
  	wake_up_page(page, PG_writeback);
