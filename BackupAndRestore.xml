@@ -246,7 +246,7 @@ trusted.fid= \
         <para><emphasis role="bold">Back up all file system data.</emphasis></para>
         <screen>[oss]# tar czvf {backup file}.tgz --sparse .</screen>
         <note>
-          <para>In Lustre 1.6.7 and later, the <literal>--sparse</literal> option reduces the size of the backup file. Be sure to use it so the tar command does not mistakenly create an archive full of zeros.</para>
+          <para>The tar <literal>--sparse</literal> option reduces the size of the MDT backup file. Be sure to use it so the tar command does not mistakenly create an archive full of zeros.</para>
         </note>
       </listitem>
       <listitem>

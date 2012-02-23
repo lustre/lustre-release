@@ -2205,7 +2205,7 @@ tunefs.lustre</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>tunefs.lustre is used to modify configuration information on a Lustre target disk. This includes upgrading old (pre-Lustre 1.6) disks. This does not reformat the disk or erase the target information, but modifying the configuration information can result in an unusable file system.</para>
+      <para>tunefs.lustre is used to modify configuration information on a Lustre target disk. This does not reformat the disk or erase the target information, but modifying the configuration information can result in an unusable file system.</para>
       <caution>
         <para>Changes made here affect a file system only when the target is mounted the next time.</para>
       </caution>
@@ -2406,7 +2406,7 @@ Application Profiling Utilities</title>
       <para><emphasis role="bold">lustre_req_history.sh</emphasis></para>
       <para>The lustre_req_history.sh utility (run from a client), assembles as much Lustre RPC request history as possible from the local node and from the servers that were contacted, providing a better picture of the coordinated network activity.</para>
       <para><emphasis role="bold">llstat.sh</emphasis></para>
-      <para>The llstat.sh utility (improved in Lustre 1.6), handles a wider range of /proc files, and has command line switches to produce more graphable output.</para>
+      <para>The llstat.sh utility handles a wider range of statistics files, and has command line switches to produce more graphable output.</para>
       <para><emphasis role="bold">plot-llstat.sh</emphasis></para>
       <para>The plot-llstat.sh utility plots the output from llstat.sh using gnuplot.</para>
     </section>
@@ -2426,7 +2426,7 @@ Application Profiling Utilities</title>
       <para>The client offset_stats utility shows the read/write seek activity of a client by offsets and ranges.</para>
       <screen>/proc/fs/lustre/llite/*/offset_stats
 </screen>
-      <para>Lustre 1.6 included per-client and improved MDT statistics:</para>
+      <para>Lustre includes per-client and improved MDT statistics:</para>
       <itemizedlist>
         <listitem>
           <para> Per-client statistics tracked on the servers</para>
