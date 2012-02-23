@@ -552,6 +552,10 @@ static int vvp_io_read_start(const struct lu_env *env,
                 result = generic_file_splice_read(file, &pos,
                                 vio->u.splice.cui_pipe, cnt,
                                 vio->u.splice.cui_flags);
+                /* LU-1109: do splice read stripe by stripe otherwise if it
+                 * may make nfsd stuck if this read occupied all internal pipe
+                 * buffers. */
+                io->ci_continue = 0;
                 break;
 #endif
         default:
