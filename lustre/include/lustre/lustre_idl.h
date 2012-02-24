@@ -1529,8 +1529,6 @@ struct ost_lvb {
         __u64     lvb_blocks;
 };
 
-extern void lustre_swab_ost_lvb(struct ost_lvb *);
-
 /*
  *   MDS REQ RECORDS
  */
@@ -2335,6 +2333,15 @@ typedef union {
 } ldlm_wire_policy_data_t;
 
 extern void lustre_swab_ldlm_policy_data (ldlm_wire_policy_data_t *d);
+
+/* Similarly to ldlm_wire_policy_data_t, there is one common swabber for all
+ * LVB types. As a result, any new LVB structure must match the fields of the
+ * ost_lvb structure. */
+union ldlm_wire_lvb {
+        struct ost_lvb l_ost;
+};
+
+extern void lustre_swab_lvb(union ldlm_wire_lvb *);
 
 struct ldlm_intent {
         __u64 opc;

@@ -250,7 +250,7 @@ EXPORT_SYMBOL(lustre_swab_obd_ioobj);
 EXPORT_SYMBOL(lustre_swab_niobuf_remote);
 EXPORT_SYMBOL(lustre_swab_ost_body);
 EXPORT_SYMBOL(lustre_swab_ost_last_id);
-EXPORT_SYMBOL(lustre_swab_ost_lvb);
+EXPORT_SYMBOL(lustre_swab_lvb);
 EXPORT_SYMBOL(lustre_swab_mdt_body);
 EXPORT_SYMBOL(lustre_swab_mdt_ioepoch);
 EXPORT_SYMBOL(lustre_swab_obd_quotactl);

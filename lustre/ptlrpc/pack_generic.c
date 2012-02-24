@@ -1686,13 +1686,18 @@ void lustre_swab_generic_32s(__u32 *val)
         __swab32s(val);
 }
 
-void lustre_swab_ost_lvb(struct ost_lvb *lvb)
+void lustre_swab_lvb(union ldlm_wire_lvb *lvb)
 {
-        __swab64s(&lvb->lvb_size);
-        __swab64s(&lvb->lvb_mtime);
-        __swab64s(&lvb->lvb_atime);
-        __swab64s(&lvb->lvb_ctime);
-        __swab64s(&lvb->lvb_blocks);
+        /* The ldlm_wire_lvb union represents all the possible LVB types.
+         * Unfortunately, there is no way to know what member of the union we
+         * are dealing with at this point. Therefore, all LVB structures must
+         * have fields of the same types, although used for different purposes
+         */
+        __swab64s(&lvb->l_ost.lvb_size);
+        __swab64s(&lvb->l_ost.lvb_mtime);
+        __swab64s(&lvb->l_ost.lvb_atime);
+        __swab64s(&lvb->l_ost.lvb_ctime);
+        __swab64s(&lvb->l_ost.lvb_blocks);
 }
 
 void lustre_swab_mdt_body (struct mdt_body *b)

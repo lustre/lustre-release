@@ -878,7 +878,7 @@ struct req_msg_field RMF_LDLM_INTENT =
 EXPORT_SYMBOL(RMF_LDLM_INTENT);
 
 struct req_msg_field RMF_DLM_LVB =
-        DEFINE_MSGF("dlm_lvb", 0, sizeof(struct ost_lvb), lustre_swab_ost_lvb,
+        DEFINE_MSGF("dlm_lvb", 0, sizeof(union ldlm_wire_lvb), lustre_swab_lvb,
         NULL);
 EXPORT_SYMBOL(RMF_DLM_LVB);
 
