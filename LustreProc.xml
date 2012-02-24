@@ -475,7 +475,7 @@ blocksizefilesfree max_dirty_mb ost_server_uuid stats</screen>
       <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/max_pages_per_rpc </literal></para>
       <para>This tunable is the maximum number of pages that will undergo I/O in a single RPC to the OST. The minimum is a single page and the maximum for this setting is platform dependent (256 for i386/x86_64, possibly less for ia64/PPC with larger <literal>PAGE_SIZE</literal>), though generally amounts to a total of 1 MB in the RPC.</para>
       <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/max_rpcs_in_flight </literal></para>
-      <para>This tunable is the maximum number of concurrent RPCs in flight from an OSC to its OST. If the OSC tries to initiate an RPC but finds that it already has the same number of RPCs outstanding, it will wait to issue further RPCs until some complete. The minimum setting is 1 and maximum setting is 32. If you are looking to improve small file I/O performance, increase the <literal>max_rpcs_in_flight</literal> value.</para>
+      <para>This tunable is the maximum number of concurrent RPCs in flight from an OSC to its OST. If the OSC tries to initiate an RPC but finds that it already has the same number of RPCs outstanding, it will wait to issue further RPCs until some complete. The minimum setting is 1 and maximum setting is 256. If you are looking to improve small file I/O performance, increase the <literal>max_rpcs_in_flight</literal> value.</para>
       <para>To maximize performance, the value for <literal>max_dirty_mb</literal> is recommended to be 4 * <literal>max_pages_per_rpc</literal> * <literal>max_rpcs_in_flight</literal>.</para>
       <note>
         <para>The 
