@@ -602,7 +602,7 @@ struct ldlm_flock {
         __u64 end;
         __u64 owner;
         __u64 blocking_owner;
-        void *blocking_export;
+        struct obd_export *blocking_export;
         __u32 pid;
 };
 
@@ -615,7 +615,7 @@ typedef union {
 void ldlm_convert_policy_to_wire(ldlm_type_t type,
                                  const ldlm_policy_data_t *lpolicy,
                                  ldlm_wire_policy_data_t *wpolicy);
-void ldlm_convert_policy_to_local(ldlm_type_t type,
+void ldlm_convert_policy_to_local(struct obd_export *exp, ldlm_type_t type,
                                   const ldlm_wire_policy_data_t *wpolicy,
                                   ldlm_policy_data_t *lpolicy);
 

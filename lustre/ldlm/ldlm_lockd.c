@@ -1197,7 +1197,7 @@ existing_lock:
         }
 
         if (dlm_req->lock_desc.l_resource.lr_type != LDLM_PLAIN)
-                ldlm_convert_policy_to_local(
+                ldlm_convert_policy_to_local(req->rq_export,
                                           dlm_req->lock_desc.l_resource.lr_type,
                                           &dlm_req->lock_desc.l_policy_data,
                                           &lock->l_policy_data);
@@ -1572,7 +1572,7 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
         }
 
         if (lock->l_resource->lr_type != LDLM_PLAIN) {
-                ldlm_convert_policy_to_local(
+                ldlm_convert_policy_to_local(req->rq_export,
                                           dlm_req->lock_desc.l_resource.lr_type,
                                           &dlm_req->lock_desc.l_policy_data,
                                           &lock->l_policy_data);
