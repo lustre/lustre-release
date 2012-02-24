@@ -2250,6 +2250,7 @@ test_33() {
         cleanup_quota_test
 
         echo "Verify disk usage after delete"
+        wait_delete_completed
         USED=`getquota -u $TSTID global curspace`
         [ $USED -eq 0 ] || error "Used space for user $TSTID isn't 0. $USED"
         USED=`getquota -u $TSTID global curinodes`
