@@ -35,23 +35,6 @@ AC_DEFUN([LN_CONFIG_OFED_SPEC],
 		AC_MSG_RESULT(no)
 	])
 
-	AC_MSG_CHECKING([if OFED supports iWarp transport])
-	LB_LINUX_TRY_COMPILE([
-		#include <linux/version.h>
-		#include <linux/pci.h>
-		#include <linux/gfp.h>
-		#include <rdma/ib_verbs.h>
-	],[
-		return RDMA_TRANSPORT_IWARP ==
-		       rdma_node_get_transport(RDMA_NODE_RNIC);
-	],[
-		AC_MSG_RESULT(yes)
-		AC_DEFINE(HAVE_OFED_TRANSPORT_IWARP, 1,
-			  [has transport iWARP])
-	],[
-		AC_MSG_RESULT(no)
-	])
-
 	AC_MSG_CHECKING([if OFED has RDMA_CM_EVENT_ADDR_CHANGE])
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/version.h>

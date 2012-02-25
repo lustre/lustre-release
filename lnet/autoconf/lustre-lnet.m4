@@ -637,11 +637,6 @@ AC_CHECK_FUNCS([gethostbyname socket connect])
 # lnet/utils/debug.c
 AC_CHECK_HEADERS([linux/version.h])
 
-AC_CHECK_TYPE([spinlock_t],
-	[AC_DEFINE(HAVE_SPINLOCK_T, 1, [spinlock_t is defined])],
-	[],
-	[#include <linux/spinlock.h>])
-
 # lnet/utils/wirecheck.c
 AC_CHECK_FUNCS([strnlen])
 

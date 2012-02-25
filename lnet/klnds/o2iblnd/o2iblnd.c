@@ -2207,15 +2207,6 @@ kiblnd_hdev_get_attr(kib_hca_dev_t *hdev)
                 return rc;
         }
 
-#ifdef HAVE_OFED_TRANSPORT_IWARP
-        /* XXX We can't trust this value returned by Chelsio driver, it's wrong
-         * and we have reported the bug, remove these in the future when Chelsio
-         * bug got fixed. */
-        if (rdma_node_get_transport(hdev->ibh_ibdev->node_type) ==
-            RDMA_TRANSPORT_IWARP)
-                hdev->ibh_mr_size = (1ULL << 32) - 1;
-#endif
-
         if (hdev->ibh_mr_size == ~0ULL) {
                 hdev->ibh_mr_shift = 64;
                 return 0;
