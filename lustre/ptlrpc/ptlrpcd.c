@@ -381,8 +381,8 @@ static int ptlrpcd_check(struct lu_env *env, struct ptlrpcd_ctl *pc)
                                         if (rc > 0)
                                                 CDEBUG(D_RPCTRACE, "transfer %d"
                                                        " async RPCs [%d->%d]\n",
-                                                        rc, pc->pc_index,
-                                                        partner->pc_index);
+                                                        rc, partner->pc_index,
+                                                        pc->pc_index);
                                 }
                                 ptlrpc_reqset_put(ps);
                         } while (rc == 0 && pc->pc_cursor != first);
