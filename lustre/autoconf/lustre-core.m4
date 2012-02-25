@@ -1469,26 +1469,6 @@ AC_DEFUN([LC_EXPORT_BDI_INIT],
 ])
 ])
 
-# 2.6.25
-
-# 2.6.25 change define to inline
-AC_DEFUN([LC_MAPPING_CAP_WRITEBACK_DIRTY],
-[AC_MSG_CHECKING([if kernel have mapping_cap_writeback_dirty])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/backing-dev.h>
-],[
-        #ifndef mapping_cap_writeback_dirty
-        mapping_cap_writeback_dirty(NULL);
-        #endif
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_MAPPING_CAP_WRITEBACK_DIRTY, 1,
-                [kernel have mapping_cap_writeback_dirty])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 # 2.6.26
 
 # 2.6.26 isn't export set_fs_pwd and change paramter in fs struct
@@ -1694,26 +1674,6 @@ AC_DEFUN([LC_HAVE_QUOTAIO_H],
         AC_MSG_RESULT([no])
 ])
 ])
-])
-])
-
-# sles10 sp2 need 5 parameter for vfs_symlink
-AC_DEFUN([LC_VFS_SYMLINK_5ARGS],
-[AC_MSG_CHECKING([vfs_symlink need 5 parameter])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct inode *dir = NULL;
-        struct dentry *dentry = NULL;
-        struct vfsmount *mnt = NULL;
-        const char * path = NULL;
-        vfs_symlink(dir, dentry, mnt, path, 0);
-],[
-        AC_DEFINE(HAVE_VFS_SYMLINK_5ARGS, 1,
-                [vfs_symlink need 5 parameteres])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
 ])
 ])
 
@@ -2274,9 +2234,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_PROCFS_DELETED
          LC_EXPORT_BDI_INIT
 
-         #2.6.25
-         LC_MAPPING_CAP_WRITEBACK_DIRTY
-
          # 2.6.26
          LC_FS_STRUCT_USE_PATH
 
@@ -2294,7 +2251,6 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.27.15-2 sles11
          LC_BI_HW_SEGMENTS
          LC_HAVE_QUOTAIO_H
-         LC_VFS_SYMLINK_5ARGS
          LC_BDI_NAME
          LC_SB_ANY_QUOTA_ACTIVE
          LC_SB_HAS_QUOTA_ACTIVE
