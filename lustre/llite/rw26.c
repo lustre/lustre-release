@@ -79,14 +79,13 @@
  * aligned truncate). Lustre leaves partially truncated page in the cache,
  * relying on struct inode::i_size to limit further accesses.
  */
-static int cl_invalidatepage(struct page *vmpage, unsigned long offset)
+static void ll_invalidatepage(struct page *vmpage, unsigned long offset)
 {
         struct inode     *inode;
         struct lu_env    *env;
         struct cl_page   *page;
         struct cl_object *obj;
 
-        int result;
         int refcheck;
 
         LASSERT(PageLocked(vmpage));
@@ -97,7 +96,6 @@ static int cl_invalidatepage(struct page *vmpage, unsigned long offset)
          * below because they are run with page locked and all our io is
          * happening with locked page too
          */
-        result = 0;
         if (offset == 0) {
                 env = cl_env_get(&refcheck);
                 if (!IS_ERR(env)) {
@@ -109,7 +107,6 @@ static int cl_invalidatepage(struct page *vmpage, unsigned long offset)
                                         lu_ref_add(&page->cp_reference,
                                                    "delete", vmpage);
                                         cl_page_delete(env, page);
-                                        result = 1;
                                         lu_ref_del(&page->cp_reference,
                                                    "delete", vmpage);
                                         cl_page_put(env, page);
@@ -119,20 +116,7 @@ static int cl_invalidatepage(struct page *vmpage, unsigned long offset)
                         cl_env_put(env, &refcheck);
                 }
         }
-        return result;
 }
-
-#ifdef HAVE_INVALIDATEPAGE_RETURN_INT
-static int ll_invalidatepage(struct page *page, unsigned long offset)
-{
-        return cl_invalidatepage(page, offset);
-}
-#else /* !HAVE_INVALIDATEPAGE_RETURN_INT */
-static void ll_invalidatepage(struct page *page, unsigned long offset)
-{
-        cl_invalidatepage(page, offset);
-}
-#endif
 
 #ifdef HAVE_RELEASEPAGE_WITH_INT
 #define RELEASEPAGE_ARG_TYPE int

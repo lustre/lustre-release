@@ -1405,6 +1405,7 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         struct lustre_disk_data *ldd;
         struct lustre_mount_data *lmd = lsi->lsi_lmd;
         struct vfsmount *mnt;
+        struct file_system_type *type;
         char *options = NULL;
         unsigned long page, s_flags;
         struct page *__page;
@@ -1436,7 +1437,13 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
 
         /* Pre-mount ldiskfs to read the MOUNT_DATA_FILE */
         CDEBUG(D_MOUNT, "Pre-mount ldiskfs %s\n", lmd->lmd_dev);
-        mnt = ll_kern_mount("ldiskfs", s_flags, lmd->lmd_dev, (void *)options);
+        type = get_fs_type("ldiskfs");
+        if (!type) {
+                CERROR("premount failed: cannot find ldiskfs module\n");
+                GOTO(out_free, rc = -ENODEV);
+        }
+        mnt = vfs_kern_mount(type, s_flags, lmd->lmd_dev, (void *)options);
+        cfs_module_put(type->owner);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
                 CERROR("premount %s:%#lx ldiskfs failed: %d "
@@ -1482,11 +1489,16 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
 
         CDEBUG(D_MOUNT, "kern_mount: %s %s %s\n",
                MT_STR(ldd), lmd->lmd_dev, options);
-        mnt = ll_kern_mount(MT_STR(ldd), s_flags, lmd->lmd_dev,
-                            (void *)options);
+        type = get_fs_type(MT_STR(ldd));
+        if (!type) {
+                CERROR("get_fs_type failed\n");
+                GOTO(out_free, rc = -ENODEV);
+        }
+        mnt = vfs_kern_mount(type, s_flags, lmd->lmd_dev, (void *)options);
+        cfs_module_put(type->owner);
         if (IS_ERR(mnt)) {
                 rc = PTR_ERR(mnt);
-                CERROR("ll_kern_mount failed: rc = %d\n", rc);
+                CERROR("vfs_kern_mount failed: rc = %d\n", rc);
                 GOTO(out_free, rc);
         }
 

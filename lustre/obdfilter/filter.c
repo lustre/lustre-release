@@ -1969,6 +1969,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
 {
         struct filter_obd *filter = &obd->u.filter;
         struct vfsmount *mnt;
+        struct file_system_type *type;
         struct lustre_mount_info *lmi;
         struct obd_uuid uuid;
         __u8 *uuid_ptr;
@@ -1993,9 +1994,14 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         } else {
                 /* old path - used by lctl */
                 CERROR("Using old MDS mount method\n");
-                mnt = ll_kern_mount(lustre_cfg_string(lcfg, 2),
-                                    MS_NOATIME|MS_NODIRATIME,
-                                    lustre_cfg_string(lcfg, 1), option);
+                type = get_fs_type(lustre_cfg_string(lcfg, 2));
+                if (!type) {
+                        CERROR("get_fs_type failed\n");
+                        RETURN(-ENODEV);
+                }
+                mnt = vfs_kern_mount(type, MS_NOATIME|MS_NODIRATIME,
+                                     lustre_cfg_string(lcfg, 1), option);
+                cfs_module_put(type->owner);
                 if (IS_ERR(mnt)) {
                         rc = PTR_ERR(mnt);
                         LCONSOLE_ERROR_MSG(0x135, "Can't mount disk %s (%d)\n",

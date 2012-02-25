@@ -840,45 +840,6 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
-#
-# LC_VFS_KERN_MOUNT
-# starting from 2.6.18 kernel don't export do_kern_mount
-# and want to use vfs_kern_mount instead.
-#
-AC_DEFUN([LC_VFS_KERN_MOUNT],
-[AC_MSG_CHECKING([vfs_kern_mount exist in kernel])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/mount.h>
-],[
-        vfs_kern_mount(NULL, 0, NULL, NULL);
-],[
-        AC_DEFINE(HAVE_VFS_KERN_MOUNT, 1,
-                [vfs_kern_mount exist in kernel])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#
-# LC_INVALIDATEPAGE_RETURN_INT
-# 2.6.17 changes return type for invalidatepage to 'void' from 'int'
-#
-AC_DEFUN([LC_INVALIDATEPAGE_RETURN_INT],
-[AC_MSG_CHECKING([invalidatepage has return int])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/buffer_head.h>
-],[
-	int rc = block_invalidatepage(NULL, 0);
-],[
-	AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_INVALIDATEPAGE_RETURN_INT, 1,
-		[Define if return type of invalidatepage should be int])
-],[
-	AC_MSG_RESULT(no)
-])
-])
-
 # LC_UMOUNTBEGIN_HAS_VFSMOUNT
 # after 2.6.18 umount_begin has different parameters
 AC_DEFUN([LC_UMOUNTBEGIN_HAS_VFSMOUNT],
@@ -2179,8 +2140,6 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.18
          LC_NR_PAGECACHE
          LC_STATFS_DENTRY_PARAM
-         LC_VFS_KERN_MOUNT
-         LC_INVALIDATEPAGE_RETURN_INT
          LC_UMOUNTBEGIN_HAS_VFSMOUNT
          LC_SEQ_LOCK
          LC_EXPORT_FILEMAP_FDATAWRITE_RANGE
