@@ -998,7 +998,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         no_reply = rc != 0;
 
 skip_transfer:
-        if (unlikely(client_cksum != 0 && rc == 0)) {
+        if (client_cksum != 0 && rc == 0) {
                 static int cksum_counter;
                 repbody->oa.o_valid |= OBD_MD_FLCKSUM | OBD_MD_FLFLAGS;
                 repbody->oa.o_flags &= ~OBD_FL_CKSUM_ALL;
@@ -1039,7 +1039,7 @@ skip_transfer:
          */
         repbody->oa.o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLATIME);
 
-        if (unlikely(client_cksum != server_cksum && rc == 0 &&  !mmap)) {
+        if (unlikely(client_cksum != server_cksum && rc == 0 && !mmap)) {
                 int  new_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
                 char *msg;
                 char *via;

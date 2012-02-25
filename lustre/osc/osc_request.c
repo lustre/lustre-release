@@ -1420,7 +1420,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
 
         /* size[REQ_REC_OFF] still sizeof (*body) */
         if (opc == OST_WRITE) {
-                if (unlikely(cli->cl_checksum) &&
+                if (cli->cl_checksum &&
                     !sptlrpc_flavor_has_bulk(&req->rq_flvr)) {
                         /* store cl_cksum_type in a local variable since
                          * it can be changed via lprocfs */
@@ -1451,7 +1451,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 req_capsule_set_size(pill, &RMF_RCS, RCL_SERVER,
                                      sizeof(__u32) * niocount);
         } else {
-                if (unlikely(cli->cl_checksum) &&
+                if (cli->cl_checksum &&
                     !sptlrpc_flavor_has_bulk(&req->rq_flvr)) {
                         if ((body->oa.o_valid & OBD_MD_FLFLAGS) == 0)
                                 body->oa.o_flags = 0;
