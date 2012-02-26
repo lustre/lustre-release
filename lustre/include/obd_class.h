@@ -1619,7 +1619,7 @@ static inline int obd_notify(struct obd_device *obd,
         }
 
         if (!OBP(obd, notify)) {
-                CERROR("obd %s has no notify handler\n", obd->obd_name);
+                CDEBUG(D_HA, "obd %s has no notify handler\n", obd->obd_name);
                 RETURN(-ENOSYS);
         }
 
