@@ -120,8 +120,7 @@ int ptlrpc_init_import(struct obd_import *imp)
 EXPORT_SYMBOL(ptlrpc_init_import);
 
 #define UUID_STR "_UUID"
-static void deuuidify(char *uuid, const char *prefix, char **uuid_start,
-                      int *uuid_len)
+void deuuidify(char *uuid, const char *prefix, char **uuid_start, int *uuid_len)
 {
         *uuid_start = !prefix || strncmp(uuid, prefix, strlen(prefix))
                 ? uuid : uuid + strlen(prefix);
@@ -135,6 +134,7 @@ static void deuuidify(char *uuid, const char *prefix, char **uuid_start,
                     UUID_STR, strlen(UUID_STR)))
                 *uuid_len -= strlen(UUID_STR);
 }
+EXPORT_SYMBOL(deuuidify);
 
 /**
  * Returns true if import was FULL, false if import was already not
@@ -162,15 +162,15 @@ int ptlrpc_set_import_discon(struct obd_import *imp, __u32 conn_cnt)
                           &target_start, &target_len);
 
                 if (imp->imp_replayable) {
-                        LCONSOLE_WARN("%s: Connection to service %.*s via nid "
-                               "%s was lost; in progress operations using this "
-                               "service will wait for recovery to complete.\n",
+                        LCONSOLE_WARN("%s: Connection to %.*s (at %s) was "
+                               "lost; in progress operations using this "
+                               "service will wait for recovery to complete\n",
                                imp->imp_obd->obd_name, target_len, target_start,
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
                 } else {
-                        LCONSOLE_ERROR_MSG(0x166, "%s: Connection to service "
-                               "%.*s via nid %s was lost; in progress "
-                               "operations using this service will fail.\n",
+                        LCONSOLE_ERROR_MSG(0x166, "%s: Connection to "
+                               "%.*s (at %s) was lost; in progress "
+                               "operations using this service will fail\n",
                                imp->imp_obd->obd_name,
                                target_len, target_start,
                                libcfs_nid2str(imp->imp_connection->c_peer.nid));
@@ -460,7 +460,8 @@ static int import_select_connection(struct obd_import *imp)
 {
         struct obd_import_conn *imp_conn = NULL, *conn;
         struct obd_export *dlmexp;
-        int tried_all = 1;
+        char *target_start;
+        int target_len, tried_all = 1;
         ENTRY;
 
         cfs_spin_lock(&imp->imp_lock);
@@ -519,9 +520,9 @@ static int import_select_connection(struct obd_import *imp)
                                     CONNECTION_SWITCH_INC);
                 }
                 LASSERT(imp_conn->oic_last_attempt);
-                CWARN("%s: tried all connections, increasing latency to %ds\n",
-                      imp->imp_obd->obd_name,
-                      at_get(&imp->imp_at.iat_net_latency));
+                CDEBUG(D_HA, "%s: tried all connections, increasing latency "
+                       "to %ds\n", imp->imp_obd->obd_name,
+                       at_get(&imp->imp_at.iat_net_latency));
         }
 
         imp_conn->oic_last_attempt = cfs_time_current_64();
@@ -539,10 +540,17 @@ static int import_select_connection(struct obd_import *imp)
         class_export_put(dlmexp);
 
         if (imp->imp_conn_current != imp_conn) {
-                if (imp->imp_conn_current)
-                        CDEBUG(D_HA, "Changing connection for %s to %s/%s\n",
-                               imp->imp_obd->obd_name, imp_conn->oic_uuid.uuid,
+                if (imp->imp_conn_current) {
+                        deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
+                                  &target_start, &target_len);
+
+                        CDEBUG(D_HA, "%s: Connection changing to"
+                               " %.*s (at %s)\n",
+                               imp->imp_obd->obd_name,
+                               target_len, target_start,
                                libcfs_nid2str(imp_conn->oic_conn->c_peer.nid));
+                }
+
                 imp->imp_conn_current = imp_conn;
         }
 
@@ -817,10 +825,11 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 memset(&old_hdl, 0, sizeof(old_hdl));
                 if (!memcmp(&old_hdl, lustre_msg_get_handle(request->rq_repmsg),
                             sizeof (old_hdl))) {
-                        CERROR("%s@%s didn't like our handle "LPX64
-                               ", failed\n", obd2cli_tgt(imp->imp_obd),
-                               imp->imp_connection->c_remote_uuid.uuid,
-                               imp->imp_dlm_handle.cookie);
+                        LCONSOLE_WARN("Reconnect to %s (at @%s) failed due "
+                                      "bad handle "LPX64"\n",
+                                      obd2cli_tgt(imp->imp_obd),
+                                      imp->imp_connection->c_remote_uuid.uuid,
+                                      imp->imp_dlm_handle.cookie);
                         GOTO(out, rc = -ENOTCONN);
                 }
 
@@ -837,15 +846,27 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                          * eviction. If it is in recovery - we are safe to
                          * participate since we can reestablish all of our state
                          * with server again */
-                        CDEBUG(level,"%s@%s changed server handle from "
-                                     LPX64" to "LPX64"%s\n",
-                                     obd2cli_tgt(imp->imp_obd),
-                                     imp->imp_connection->c_remote_uuid.uuid,
-                                     imp->imp_remote_handle.cookie,
-                                     lustre_msg_get_handle(request->rq_repmsg)->
-                                                                        cookie,
-                                     (MSG_CONNECT_RECOVERING & msg_flags) ?
-                                         " but is still in recovery" : "");
+                        if ((MSG_CONNECT_RECOVERING & msg_flags)) {
+                                CDEBUG(level,"%s@%s changed server handle from "
+                                       LPX64" to "LPX64
+                                       " but is still in recovery\n",
+                                       obd2cli_tgt(imp->imp_obd),
+                                       imp->imp_connection->c_remote_uuid.uuid,
+                                       imp->imp_remote_handle.cookie,
+                                       lustre_msg_get_handle(
+                                       request->rq_repmsg)->cookie);
+                        } else {
+                                LCONSOLE_WARN("Evicted from %s (at %s) "
+                                              "after server handle changed from "
+                                              LPX64" to "LPX64"\n",
+                                              obd2cli_tgt(imp->imp_obd),
+                                              imp->imp_connection-> \
+                                              c_remote_uuid.uuid,
+                                              imp->imp_remote_handle.cookie,
+                                              lustre_msg_get_handle(
+                                              request->rq_repmsg)->cookie);
+                        }
+
 
                         imp->imp_remote_handle =
                                      *lustre_msg_get_handle(request->rq_repmsg);
@@ -1339,8 +1360,8 @@ int ptlrpc_import_recovery_state_machine(struct obd_import *imp)
 
                 deuuidify(obd2cli_tgt(imp->imp_obd), NULL,
                           &target_start, &target_len);
-                LCONSOLE_INFO("%s: Connection restored to service %.*s "
-                              "using nid %s.\n", imp->imp_obd->obd_name,
+                LCONSOLE_INFO("%s: Connection restored to %.*s (at %s)\n",
+                              imp->imp_obd->obd_name,
                               target_len, target_start,
                               libcfs_nid2str(imp->imp_connection->c_peer.nid));
         }
