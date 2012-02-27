@@ -1085,8 +1085,15 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
  */
 static int ptlrpc_console_allow(struct ptlrpc_request *req)
 {
-        __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
+        __u32 opc;
         int err;
+
+        /* Fake requests include no rq_reqmsg */
+        if (req->rq_fake)
+                return 0;
+
+        LASSERT(req->rq_reqmsg != NULL);
+        opc = lustre_msg_get_opc(req->rq_reqmsg);
 
         /* Suppress particular reconnect errors which are to be expected.  No
          * errors are suppressed for the initial connection on an import */

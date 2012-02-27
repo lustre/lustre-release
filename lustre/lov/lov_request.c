@@ -563,8 +563,11 @@ static int lov_update_create_set(struct lov_request_set *set,
 
         if (rc && lov->lov_tgts[req->rq_idx] &&
             lov->lov_tgts[req->rq_idx]->ltd_active) {
-                CERROR("error creating fid "LPX64" sub-object"
-                       " on OST idx %d/%d: rc = %d\n",
+                /* Pre-creating objects may timeout via -ETIMEDOUT or
+                 * -ENOTCONN both are always non-critical events. */
+                CDEBUG(rc == -ETIMEDOUT || rc == -ENOTCONN ? D_HA : D_ERROR,
+                       "error creating fid "LPX64" sub-object "
+                       "on OST idx %d/%d: rc = %d\n",
                        set->set_oi->oi_oa->o_id, req->rq_idx,
                        lsm->lsm_stripe_count, rc);
                 if (rc > 0) {
