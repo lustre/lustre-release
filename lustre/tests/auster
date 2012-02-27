@@ -21,6 +21,7 @@ Run Lustre regression tests suites.
       -D FULLLOGDIR Full directory for logs
       -f STR    Config name (cfg/<name>.sh)
       -g GROUP  Test group file (Overrides tests listed on command line)
+      -S TESTSUITE First test suite to run allows for restarts
       -i N      Repeat tests N times (default 1). A new directory
                 will be created under LOGDIR for each iteration.
       -k        Don't stop when subtests fail
@@ -66,13 +67,14 @@ reformat=false
 test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
 export SLOW=no
 export ${NAME:=local}
-while getopts "c:d:D:nkf:g:i:rRslhv" opt
+while getopts "c:d:D:nkf:S:g:i:rRslhv" opt
 do
     case "$opt" in
         c) CONFIG=$OPTARG;;
         d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
         D) test_logs_dir=$OPTARG;;
         g) test_group_file=$OPTARG;;
+        S) FIRST_SUITE=$OPTARG;;
         k) export FAIL_ON_ERROR=false;;
         n) dry_run=:;;
         v) verbose=:;;
@@ -249,6 +251,7 @@ run_suites() {
     while ((n < repeat_count)); do
         local RC=0
         local logdir=${test_logs_dir}
+        local first_suite=$FIRST_SUITE
         ((repeat_count > 1)) && logdir="$logdir/$n"
         reset_logging $logdir
         set -- "${argv[@]}"
@@ -285,9 +288,12 @@ run_suites() {
                 esac
                 shift
             done
-            echo "running: $suite $opts"
-            run_suite_logged $suite || RC=$?
-            echo $suite returned $RC
+            if [ "x"$first_suite == "x" ] || [ $first_suite == $suite ]; then   # If first_suite not set or this is the first suite
+                echo "running: $suite $opts"
+                run_suite_logged $suite || RC=$?
+                unset first_suite
+                echo $suite returned $RC
+            fi
         done
         if $upload_logs; then
             $upload_script $LOGDIR

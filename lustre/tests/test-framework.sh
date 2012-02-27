@@ -4656,15 +4656,17 @@ init_logging() {
     mkdir -p $LOGDIR
     init_clients_lists
 
-    if check_shared_dir $LOGDIR; then
-        touch $LOGDIR/shared
-        echo "Logging to shared log directory: $LOGDIR"
-    else
-        echo "Logging to local directory: $LOGDIR"
-    fi
+    if [ ! -f $YAML_LOG ]; then       # If the yaml log already exists then we will just append to it
+      if check_shared_dir $LOGDIR; then
+          touch $LOGDIR/shared
+          echo "Logging to shared log directory: $LOGDIR"
+      else
+          echo "Logging to local directory: $LOGDIR"
+      fi
 
-    yml_nodes_file $LOGDIR >> $YAML_LOG
-    yml_results_file >> $YAML_LOG
+      yml_nodes_file $LOGDIR >> $YAML_LOG
+      yml_results_file >> $YAML_LOG
+    fi
 
     umask $SAVE_UMASK
 }
