@@ -65,7 +65,7 @@ CFS_MODULE_PARM(ldlm_num_threads, "i", int, 0444,
 
 extern cfs_mem_cache_t *ldlm_resource_slab;
 extern cfs_mem_cache_t *ldlm_lock_slab;
-static cfs_semaphore_t  ldlm_ref_sem;
+static cfs_mutex_t      ldlm_ref_mutex;
 static int ldlm_refcount;
 
 struct ldlm_cb_async_args {
@@ -2404,13 +2404,13 @@ int ldlm_get_ref(void)
 {
         int rc = 0;
         ENTRY;
-        cfs_mutex_down(&ldlm_ref_sem);
+        cfs_mutex_lock(&ldlm_ref_mutex);
         if (++ldlm_refcount == 1) {
                 rc = ldlm_setup();
                 if (rc)
                         ldlm_refcount--;
         }
-        cfs_mutex_up(&ldlm_ref_sem);
+        cfs_mutex_unlock(&ldlm_ref_mutex);
 
         RETURN(rc);
 }
@@ -2418,7 +2418,7 @@ int ldlm_get_ref(void)
 void ldlm_put_ref(void)
 {
         ENTRY;
-        cfs_mutex_down(&ldlm_ref_sem);
+        cfs_mutex_lock(&ldlm_ref_mutex);
         if (ldlm_refcount == 1) {
                 int rc = ldlm_cleanup();
                 if (rc)
@@ -2428,7 +2428,7 @@ void ldlm_put_ref(void)
         } else {
                 ldlm_refcount--;
         }
-        cfs_mutex_up(&ldlm_ref_sem);
+        cfs_mutex_unlock(&ldlm_ref_mutex);
 
         EXIT;
 }
@@ -2722,9 +2722,9 @@ static int ldlm_cleanup(void)
 
 int ldlm_init(void)
 {
-        cfs_init_mutex(&ldlm_ref_sem);
-        cfs_init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
-        cfs_init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
+        cfs_mutex_init(&ldlm_ref_mutex);
+        cfs_mutex_init(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
+        cfs_mutex_init(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
         ldlm_resource_slab = cfs_mem_cache_create("ldlm_resources",
                                                sizeof(struct ldlm_resource), 0,
                                                CFS_SLAB_HWCACHE_ALIGN);

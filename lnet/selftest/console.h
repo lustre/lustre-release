@@ -134,7 +134,7 @@ typedef struct lstcon_test {
 #define LST_CONSOLE_TIMEOUT     300             /* default console timeout */
 
 typedef struct {
-        cfs_semaphore_t         ses_mutex;      /* lock for session, only one thread can enter session */
+        cfs_mutex_t             ses_mutex;      /* lock for session, only one thread can enter session */
         lst_sid_t               ses_id;         /* global session id */
         int                     ses_key;        /* local session key */
         int                     ses_state;      /* state of session */

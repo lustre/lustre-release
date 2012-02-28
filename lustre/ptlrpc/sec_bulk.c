@@ -398,7 +398,7 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
 
 static int enc_pools_add_pages(int npages)
 {
-        static CFS_DECLARE_MUTEX(sem_add_pages);
+        static CFS_DEFINE_MUTEX(add_pages_mutex);
         cfs_page_t   ***pools;
         int             npools, alloced = 0;
         int             i, j, rc = -ENOMEM;
@@ -406,7 +406,7 @@ static int enc_pools_add_pages(int npages)
         if (npages < PTLRPC_MAX_BRW_PAGES)
                 npages = PTLRPC_MAX_BRW_PAGES;
 
-        cfs_down(&sem_add_pages);
+        cfs_mutex_lock(&add_pages_mutex);
 
         if (npages + page_pools.epp_total_pages > page_pools.epp_max_pages)
                 npages = page_pools.epp_max_pages - page_pools.epp_total_pages;
@@ -448,7 +448,7 @@ out:
                 CERROR("Failed to allocate %d enc pages\n", npages);
         }
 
-        cfs_up(&sem_add_pages);
+        cfs_mutex_unlock(&add_pages_mutex);
         return rc;
 }
 

@@ -370,7 +370,7 @@ MODULE_LICENSE("GPL");
 
 extern cfs_psdev_t libcfs_dev;
 extern cfs_rw_semaphore_t cfs_tracefile_sem;
-extern cfs_semaphore_t cfs_trace_thread_sem;
+extern cfs_mutex_t cfs_trace_thread_mutex;
 
 extern void libcfs_init_nidstrings(void);
 extern int libcfs_arch_init(void);
@@ -383,7 +383,7 @@ static int init_libcfs_module(void)
         libcfs_arch_init();
         libcfs_init_nidstrings();
         cfs_init_rwsem(&cfs_tracefile_sem);
-        cfs_init_mutex(&cfs_trace_thread_sem);
+        cfs_mutex_init(&cfs_trace_thread_mutex);
         cfs_init_rwsem(&ioctl_list_sem);
         CFS_INIT_LIST_HEAD(&ioctl_list);
         cfs_waitq_init(&cfs_race_waitq);

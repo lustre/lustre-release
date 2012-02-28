@@ -230,7 +230,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         /* Internal mgs setup */
         mgs_init_fsdb_list(obd);
-        cfs_sema_init(&mgs->mgs_sem, 1);
+        cfs_mutex_init(&mgs->mgs_mutex);
         mgs->mgs_start_time = cfs_time_current_sec();
 
         /* Setup proc */
@@ -553,7 +553,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         }
 
         /*
-         * Log writing contention is handled by the fsdb_sem.
+         * Log writing contention is handled by the fsdb_mutex.
          *
          * It should be alright if someone was reading while we were
          * updating the logs - if we revoke at the end they will just update
@@ -694,7 +694,7 @@ static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
                 if (rc)
                         return rc;
 
-                cfs_down(&fsdb->fsdb_sem);
+                cfs_mutex_lock(&fsdb->fsdb_mutex);
                 if (sptlrpc_rule_set_choose(&fsdb->fsdb_srpc_gen,
                                             LUSTRE_SP_MGC, LUSTRE_SP_MGS,
                                             req->rq_peer.nid,
@@ -702,7 +702,7 @@ static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
                         /* by defualt allow any flavors */
                         flvr.sf_rpc = SPTLRPC_FLVR_ANY;
                 }
-                cfs_up(&fsdb->fsdb_sem);
+                cfs_mutex_unlock(&fsdb->fsdb_mutex);
 
                 cfs_spin_lock(&exp->exp_lock);
 

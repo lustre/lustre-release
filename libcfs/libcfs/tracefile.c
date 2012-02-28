@@ -52,7 +52,7 @@ union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[CFS_NR_CPUS] __cache
 char cfs_tracefile[TRACEFILE_NAME_SIZE];
 long long cfs_tracefile_size = CFS_TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
-cfs_semaphore_t cfs_trace_thread_sem;
+cfs_mutex_t cfs_trace_thread_mutex;
 static int thread_running = 0;
 
 cfs_atomic_t cfs_tage_allocated = CFS_ATOMIC_INIT(0);
@@ -1103,7 +1103,7 @@ int cfs_trace_start_thread(void)
         struct tracefiled_ctl *tctl = &trace_tctl;
         int rc = 0;
 
-        cfs_mutex_down(&cfs_trace_thread_sem);
+        cfs_mutex_lock(&cfs_trace_thread_mutex);
         if (thread_running)
                 goto out;
 
@@ -1120,7 +1120,7 @@ int cfs_trace_start_thread(void)
         cfs_wait_for_completion(&tctl->tctl_start);
         thread_running = 1;
 out:
-        cfs_mutex_up(&cfs_trace_thread_sem);
+        cfs_mutex_unlock(&cfs_trace_thread_mutex);
         return rc;
 }
 
@@ -1128,7 +1128,7 @@ void cfs_trace_stop_thread(void)
 {
         struct tracefiled_ctl *tctl = &trace_tctl;
 
-        cfs_mutex_down(&cfs_trace_thread_sem);
+        cfs_mutex_lock(&cfs_trace_thread_mutex);
         if (thread_running) {
                 printk(CFS_KERN_INFO
                        "Lustre: shutting down debug daemon thread...\n");
@@ -1136,7 +1136,7 @@ void cfs_trace_stop_thread(void)
                 cfs_wait_for_completion(&tctl->tctl_stop);
                 thread_running = 0;
         }
-        cfs_mutex_up(&cfs_trace_thread_sem);
+        cfs_mutex_unlock(&cfs_trace_thread_mutex);
 }
 
 int cfs_tracefile_init(int max_pages)

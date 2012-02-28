@@ -2396,7 +2396,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         lprocfs_ost_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
-        cfs_sema_init(&ost->ost_health_sem, 1);
+        cfs_mutex_init(&ost->ost_health_mutex);
 
         if (oss_num_threads) {
                 /* If oss_num_threads is set, it is the min and the max. */
@@ -2513,13 +2513,13 @@ static int ost_cleanup(struct obd_device *obd)
         /* there is no recovery for OST OBD, all recovery is controlled by
          * obdfilter OBD */
         LASSERT(obd->obd_recovering == 0);
-        cfs_down(&ost->ost_health_sem);
+        cfs_mutex_lock(&ost->ost_health_mutex);
         ptlrpc_unregister_service(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_create_service);
         ptlrpc_unregister_service(ost->ost_io_service);
         ost->ost_service = NULL;
         ost->ost_create_service = NULL;
-        cfs_up(&ost->ost_health_sem);
+        cfs_mutex_unlock(&ost->ost_health_mutex);
 
         lprocfs_obd_cleanup(obd);
 
@@ -2531,11 +2531,11 @@ static int ost_health_check(struct obd_device *obd)
         struct ost_obd *ost = &obd->u.ost;
         int rc = 0;
 
-        cfs_down(&ost->ost_health_sem);
+        cfs_mutex_lock(&ost->ost_health_mutex);
         rc |= ptlrpc_service_health_check(ost->ost_service);
         rc |= ptlrpc_service_health_check(ost->ost_create_service);
         rc |= ptlrpc_service_health_check(ost->ost_io_service);
-        cfs_up(&ost->ost_health_sem);
+        cfs_mutex_unlock(&ost->ost_health_mutex);
 
         /*
          * health_check to return 0 on healthy

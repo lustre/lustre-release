@@ -91,7 +91,7 @@ struct lmv_object *lmv_object_alloc(struct obd_device *obd,
         obj->lo_state = 0;
         obj->lo_hashtype = mea->mea_magic;
 
-        cfs_init_mutex(&obj->lo_guard);
+        cfs_mutex_init(&obj->lo_guard);
         cfs_atomic_set(&obj->lo_count, 0);
         obj->lo_objcount = mea->mea_count;
 

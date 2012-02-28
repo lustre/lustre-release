@@ -122,7 +122,7 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
-        /* on symlinks lli_open_sem protects lli_symlink_name allocation/data */
+
         ll_inode_size_lock(inode, 0);
         rc = ll_readlink_internal(inode, &request, &symname);
         if (rc)

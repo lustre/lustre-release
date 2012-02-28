@@ -92,6 +92,7 @@ typedef struct cfs_spin_lock cfs_spinlock_t;
 #define LASSERT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
 #define LINVRNT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
 #define LASSERT_SEM_LOCKED(sem) do {(void)sizeof(sem);} while(0)
+#define LASSERT_MUTEX_LOCKED(x) do {(void)sizeof(x);} while(0)
 
 void cfs_spin_lock_init(cfs_spinlock_t *lock);
 void cfs_spin_lock(cfs_spinlock_t *lock);
@@ -118,8 +119,20 @@ typedef struct cfs_semaphore {
 } cfs_semaphore_t;
 
 void cfs_sema_init(cfs_semaphore_t *s, int val);
-void __down(cfs_semaphore_t *s);
 void __up(cfs_semaphore_t *s);
+void __down(cfs_semaphore_t *s);
+int __down_interruptible(cfs_semaphore_t *s);
+
+#define CFS_DEFINE_SEMAPHORE(name)      cfs_semaphore_t name = { 1 }
+
+#define cfs_up(s)                       __up(s)
+#define cfs_down(s)                     __down(s)
+#define cfs_down_interruptible(s)       __down_interruptible(s)
+
+static inline int cfs_down_trylock(cfs_semaphore_t *sem)
+{
+        return 0;
+}
 
 /*
  * Completion:
@@ -275,50 +288,28 @@ void cfs_mt_atomic_sub(int b, cfs_mt_atomic_t *a);
  * Mutex interface.
  *
  **************************************************************************/
-#define CFS_DECLARE_MUTEX(name)     \
-        cfs_semaphore_t name = { 1 }
+typedef struct cfs_semaphore cfs_mutex_t;
 
-#define cfs_mutex_up(s)                     __up(s)
-#define cfs_up(s)                           cfs_mutex_up(s)
-#define cfs_mutex_down(s)                   __down(s)
-#define cfs_down(s)                         cfs_mutex_down(s)
-#define cfs_mutex_down_interruptible(s)     __down_interruptible(s)
-#define cfs_down_interruptible(s)           cfs_mutex_down_interruptible(s)
-
-#define cfs_init_mutex(x)                   cfs_sema_init(x, 1)
-#define cfs_init_mutex_locked(x)            cfs_sema_init(x, 0)
-
-typedef struct cfs_mutex {
-        cfs_semaphore_t m_sem;
-} cfs_mutex_t;
-
-#define CFS_DEFINE_MUTEX(m) cfs_mutex_t m
+#define CFS_DEFINE_MUTEX(m) CFS_DEFINE_SEMAPHORE(m)
 
 static inline void cfs_mutex_init(cfs_mutex_t *mutex)
 {
-        cfs_init_mutex(&mutex->m_sem);
+        cfs_sema_init(mutex, 1);
 }
 
 static inline void cfs_mutex_lock(cfs_mutex_t *mutex)
 {
-        cfs_mutex_down(&mutex->m_sem);
+        cfs_down(mutex);
 }
 
 static inline void cfs_mutex_unlock(cfs_mutex_t *mutex)
 {
-        cfs_mutex_up(&mutex->m_sem);
+        cfs_up(mutex);
 }
 
-/**
- * Try-lock this mutex.
- *
- *
- * \retval 0 try-lock succeeded (lock acquired).
- * \retval errno indicates lock contention.
- */
-static inline int cfs_mutex_down_trylock(cfs_mutex_t *mutex)
+static inline int cfs_mutex_lock_interruptible(cfs_mutex_t *mutex)
 {
-        return 0;
+        return cfs_down_interruptible(mutex);
 }
 
 /**
@@ -332,7 +323,7 @@ static inline int cfs_mutex_down_trylock(cfs_mutex_t *mutex)
  */
 static inline int cfs_mutex_trylock(cfs_mutex_t *mutex)
 {
-        return !cfs_mutex_down_trylock(mutex);
+        return !cfs_down_trylock(mutex);
 }
 
 static inline void cfs_mutex_destroy(cfs_mutex_t *lock)

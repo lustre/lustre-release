@@ -86,7 +86,7 @@ static unsigned long lcw_flags = 0;
  * When it hits 0, we stop the dispatcher.
  */
 static __u32         lcw_refcount = 0;
-static CFS_DECLARE_MUTEX(lcw_refcount_sem);
+static CFS_DEFINE_MUTEX(lcw_refcount_mutex);
 
 /*
  * List of timers that have fired that need their callbacks run by the
@@ -379,10 +379,10 @@ struct lc_watchdog *lc_watchdog_add(int timeout,
         CFS_INIT_LIST_HEAD(&lcw->lcw_list);
         cfs_timer_init(&lcw->lcw_timer, lcw_cb, lcw);
 
-        cfs_down(&lcw_refcount_sem);
+        cfs_mutex_lock(&lcw_refcount_mutex);
         if (++lcw_refcount == 1)
                 lcw_dispatch_start();
-        cfs_up(&lcw_refcount_sem);
+        cfs_mutex_unlock(&lcw_refcount_mutex);
 
         /* Keep this working in case we enable them by default */
         if (lcw->lcw_state == LC_WATCHDOG_ENABLED) {
@@ -487,10 +487,10 @@ void lc_watchdog_delete(struct lc_watchdog *lcw)
         if (dead)
                 LIBCFS_FREE(lcw, sizeof(*lcw));
 
-        cfs_down(&lcw_refcount_sem);
+        cfs_mutex_lock(&lcw_refcount_mutex);
         if (--lcw_refcount == 0)
                 lcw_dispatch_stop();
-        cfs_up(&lcw_refcount_sem);
+        cfs_mutex_unlock(&lcw_refcount_mutex);
 
         EXIT;
 }

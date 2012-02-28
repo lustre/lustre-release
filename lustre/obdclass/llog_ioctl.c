@@ -439,7 +439,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         if (!idarray)
                 RETURN(-ENOMEM);
 
-        cfs_mutex_down(&obd->obd_olg.olg_cat_processing);
+        cfs_mutex_lock(&obd->obd_olg.olg_cat_processing);
         rc = llog_get_cat_list(obd, name, 0, count, idarray);
         if (rc)
                 GOTO(out, rc);
@@ -460,7 +460,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         }
 out:
         /* release semaphore */
-        cfs_mutex_up(&obd->obd_olg.olg_cat_processing);
+        cfs_mutex_unlock(&obd->obd_olg.olg_cat_processing);
 
         OBD_FREE_LARGE(idarray, size);
         RETURN(rc);

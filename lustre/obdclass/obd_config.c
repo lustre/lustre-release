@@ -345,7 +345,7 @@ int class_attach(struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&obd->obd_nid_stats);
         cfs_spin_lock_init(&obd->obd_nid_lock);
         cfs_spin_lock_init(&obd->obd_dev_lock);
-        cfs_sema_init(&obd->obd_dev_sem, 1);
+        cfs_mutex_init(&obd->obd_dev_mutex);
         cfs_spin_lock_init(&obd->obd_osfs_lock);
         /* obd->obd_osfs_age must be set to a value in the distant
          * past to guarantee a fresh statfs is fetched on mount. */

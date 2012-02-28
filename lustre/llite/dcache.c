@@ -481,7 +481,7 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 ibits = MDS_INODELOCK_LOOKUP;
                 if (!ll_have_md_lock(inode, &ibits, LCK_MINMODE))
                         goto do_lock;
-                cfs_down(&lli->lli_och_sem);
+                cfs_mutex_lock(&lli->lli_och_mutex);
                 if (*och_p) { /* Everything is open already, do nothing */
                         /*(*och_usecount)++;  Do not let them steal our open
                           handle from under us */
@@ -493,10 +493,10 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                            hope the lock won't be invalidated in between. But
                            if it would be, we'll reopen the open request to
                            MDS later during file open path */
-                        cfs_up(&lli->lli_och_sem);
+                        cfs_mutex_unlock(&lli->lli_och_mutex);
                         RETURN(1);
                 } else {
-                        cfs_up(&lli->lli_och_sem);
+                        cfs_mutex_unlock(&lli->lli_och_mutex);
                 }
         }
 

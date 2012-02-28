@@ -134,7 +134,7 @@ struct ll_inode_info {
         struct posix_acl               *lli_posix_acl;
 
         cfs_hlist_head_t               *lli_remote_perms;
-        cfs_semaphore_t                 lli_rmtperm_sem;
+        cfs_mutex_t                     lli_rmtperm_mutex;
 
         /* identifying fields for both metadata and data stacks. */
         struct lu_fid                   lli_fid;
@@ -165,7 +165,7 @@ struct ll_inode_info {
         __u64                           lli_open_fd_exec_count;
         /* Protects access to och pointers and their usage counters, also
          * atomicity of check-update of lli_smd */
-        cfs_semaphore_t                 lli_och_sem;
+        cfs_mutex_t                     lli_och_mutex;
 
         struct inode                    lli_vfs_inode;
 
@@ -179,7 +179,7 @@ struct ll_inode_info {
                 /* for directory */
                 struct {
                         /* serialize normal readdir and statahead-readdir. */
-                        cfs_semaphore_t                 d_readdir_sem;
+                        cfs_mutex_t                     d_readdir_mutex;
 
                         /* metadata statahead */
                         /* since parent-child threads can share the same @file
@@ -197,7 +197,7 @@ struct ll_inode_info {
                         pid_t                           d_opendir_pid;
                 } d;
 
-#define lli_readdir_sem         u.d.d_readdir_sem
+#define lli_readdir_mutex       u.d.d_readdir_mutex
 #define lli_opendir_key         u.d.d_opendir_key
 #define lli_sai                 u.d.d_sai
 #define lli_sa_pos              u.d.d_sa_pos
@@ -219,7 +219,7 @@ struct ll_inode_info {
                          * }
                          */
                         cfs_rw_semaphore_t              f_trunc_sem;
-                        cfs_semaphore_t                 f_write_sem;
+                        cfs_mutex_t                     f_write_mutex;
 
                         /* for writepage() only to communicate to fsync */
                         int                             f_async_rc;
@@ -236,7 +236,7 @@ struct ll_inode_info {
 #define lli_symlink_name        u.f.f_symlink_name
 #define lli_maxbytes            u.f.f_maxbytes
 #define lli_trunc_sem           u.f.f_trunc_sem
-#define lli_write_sem           u.f.f_write_sem
+#define lli_write_mutex         u.f.f_write_mutex
 #define lli_async_rc            u.f.f_async_rc
 #define lli_write_rc            u.f.f_write_rc
 #define lli_glimpse_sem         u.f.f_glimpse_sem

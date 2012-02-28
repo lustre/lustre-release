@@ -62,7 +62,7 @@ struct mdt_idmap_table;
  */
 struct tg_export_data {
         /** Protects led_lcd below */
-        cfs_semaphore_t         ted_lcd_lock;
+        cfs_mutex_t             ted_lcd_lock;
         /** Per-client data for each export */
         struct lsd_client_data *ted_lcd;
         /** Offset of record in last_rcvd file */
@@ -81,7 +81,7 @@ struct mdt_export_data {
         cfs_spinlock_t          med_open_lock; /* lock med_open_head, mfd_list*/
         /** Bitmask of all ibit locks this MDT understands */
         __u64                   med_ibits_known;
-        cfs_semaphore_t         med_idmap_sem;
+        cfs_mutex_t             med_idmap_mutex;
         struct lustre_idmap_table *med_idmap;
 };
 

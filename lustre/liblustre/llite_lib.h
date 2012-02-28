@@ -103,7 +103,6 @@ struct llu_inode_info {
 
         struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
-        cfs_semaphore_t         lli_open_sem;
         __u64                   lli_maxbytes;
         unsigned long           lli_flags;
         __u64                   lli_ioepoch;

@@ -202,15 +202,15 @@ int ll_md_real_close(struct inode *inode, int flags)
                 och_usecount = &lli->lli_open_fd_read_count;
         }
 
-        cfs_down(&lli->lli_och_sem);
+        cfs_mutex_lock(&lli->lli_och_mutex);
         if (*och_usecount) { /* There are still users of this handle, so
                                 skip freeing it. */
-                cfs_up(&lli->lli_och_sem);
+                cfs_mutex_unlock(&lli->lli_och_mutex);
                 RETURN(0);
         }
         och=*och_p;
         *och_p = NULL;
-        cfs_up(&lli->lli_och_sem);
+        cfs_mutex_unlock(&lli->lli_och_mutex);
 
         if (och) { /* There might be a race and somebody have freed this och
                       already */
@@ -242,7 +242,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct inode *inode = file->f_dentry->d_inode;
                 ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_OPEN}};
 
-                cfs_down(&lli->lli_och_sem);
+                cfs_mutex_lock(&lli->lli_och_mutex);
                 if (fd->fd_omode & FMODE_WRITE) {
                         lockmode = LCK_CW;
                         LASSERT(lli->lli_open_fd_write_count);
@@ -256,7 +256,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                         LASSERT(lli->lli_open_fd_read_count);
                         lli->lli_open_fd_read_count--;
                 }
-                cfs_up(&lli->lli_och_sem);
+                cfs_mutex_unlock(&lli->lli_och_mutex);
 
                 if (!md_lock_match(md_exp, flags, ll_inode2fid(inode),
                                    LDLM_IBITS, &policy, lockmode,
@@ -483,9 +483,7 @@ int ll_local_open(struct file *file, struct lookup_intent *it,
 
 /* Open a file, and (for the very first open) create objects on the OSTs at
  * this time.  If opened with O_LOV_DELAY_CREATE, then we don't do the object
- * creation or open until ll_lov_setstripe() ioctl is called.  We grab
- * lli_open_sem to ensure no other process will create objects, send the
- * stripe MD to the MDS, or try to destroy the objects if that fails.
+ * creation or open until ll_lov_setstripe() ioctl is called.
  *
  * If we already have the stripe MD locally then we don't request it in
  * md_open(), by passing a lmm_size = 0.
@@ -577,14 +575,14 @@ restart:
                 och_usecount = &lli->lli_open_fd_read_count;
         }
 
-        cfs_down(&lli->lli_och_sem);
+        cfs_mutex_lock(&lli->lli_och_mutex);
         if (*och_p) { /* Open handle is present */
                 if (it_disposition(it, DISP_OPEN_OPEN)) {
                         /* Well, there's extra open request that we do not need,
                            let's close it somehow. This will decref request. */
                         rc = it_open_error(DISP_OPEN_OPEN, it);
                         if (rc) {
-                                cfs_up(&lli->lli_och_sem);
+                                cfs_mutex_unlock(&lli->lli_och_mutex);
                                 GOTO(out_openerr, rc);
                         }
 
@@ -597,7 +595,7 @@ restart:
                 rc = ll_local_open(file, it, fd, NULL);
                 if (rc) {
                         (*och_usecount)--;
-                        cfs_up(&lli->lli_och_sem);
+                        cfs_mutex_unlock(&lli->lli_och_mutex);
                         GOTO(out_openerr, rc);
                 }
         } else {
@@ -606,9 +604,9 @@ restart:
                         /* We cannot just request lock handle now, new ELC code
                            means that one of other OPEN locks for this file
                            could be cancelled, and since blocking ast handler
-                           would attempt to grab och_sem as well, that would
+                           would attempt to grab och_mutex as well, that would
                            result in a deadlock */
-                        cfs_up(&lli->lli_och_sem);
+                        cfs_mutex_unlock(&lli->lli_och_mutex);
                         it->it_create_mode |= M_CHECK_STALE;
                         rc = ll_intent_file_open(file, NULL, 0, it);
                         it->it_create_mode &= ~M_CHECK_STALE;
@@ -639,10 +637,10 @@ restart:
                 if (rc)
                         GOTO(out_och_free, rc);
         }
-        cfs_up(&lli->lli_och_sem);
+        cfs_mutex_unlock(&lli->lli_och_mutex);
         fd = NULL;
 
-        /* Must do this outside lli_och_sem lock to prevent deadlock where
+        /* Must do this outside lli_och_mutex lock to prevent deadlock where
            different kind of OPEN lock for this same inode gets cancelled
            by ldlm_cancel_lru */
         if (!S_ISREG(inode->i_mode))
@@ -673,7 +671,7 @@ out_och_free:
                         *och_p = NULL; /* OBD_FREE writes some magic there */
                         (*och_usecount)--;
                 }
-                cfs_up(&lli->lli_och_sem);
+                cfs_mutex_unlock(&lli->lli_och_mutex);
 
 out_openerr:
                 if (opendir_set != 0)
@@ -841,7 +839,7 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
         if (cl_io_rw_init(env, io, iot, *ppos, count) == 0) {
                 struct vvp_io *vio = vvp_env_io(env);
                 struct ccc_io *cio = ccc_env_io(env);
-                int write_sem_locked = 0;
+                int write_mutex_locked = 0;
 
                 cio->cui_fd  = LUSTRE_FPRIVATE(file);
                 vio->cui_io_subtype = args->via_io_subtype;
@@ -856,9 +854,10 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
 #endif
                         if ((iot == CIT_WRITE) &&
                             !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-                                if(cfs_down_interruptible(&lli->lli_write_sem))
+                                if (cfs_mutex_lock_interruptible(&lli->
+                                                               lli_write_mutex))
                                         GOTO(out, result = -ERESTARTSYS);
-                                write_sem_locked = 1;
+                                write_mutex_locked = 1;
                         } else if (iot == CIT_READ) {
                                 cfs_down_read(&lli->lli_trunc_sem);
                         }
@@ -876,8 +875,8 @@ static ssize_t ll_file_io_generic(const struct lu_env *env,
                         LBUG();
                 }
                 result = cl_io_loop(env, io);
-                if (write_sem_locked)
-                        cfs_up(&lli->lli_write_sem);
+                if (write_mutex_locked)
+                        cfs_mutex_unlock(&lli->lli_write_mutex);
                 else if (args->via_io_subtype == IO_NORMAL && iot == CIT_READ)
                         cfs_up_read(&lli->lli_trunc_sem);
         } else {

@@ -2557,7 +2557,7 @@ mxlnd_tx_queued(void *arg)
         cfs_daemonize("mxlnd_tx_queued");
 
         while (!(cfs_atomic_read(&kmxlnd_data.kmx_shutdown))) {
-                ret = down_interruptible(&kmxlnd_data.kmx_tx_queue_sem);
+                ret = cfs_down_interruptible(&kmxlnd_data.kmx_tx_queue_sem);
                 if (cfs_atomic_read(&kmxlnd_data.kmx_shutdown))
                         break;
                 if (ret != 0) // Should we check for -EINTR?
@@ -3972,7 +3972,7 @@ mxlnd_connd(void *arg)
                 cfs_spinlock_t    *g_conn_lock     = &kmxlnd_data.kmx_conn_lock;
                 cfs_list_t        *conn_reqs       = &kmxlnd_data.kmx_conn_reqs;
 
-                ret = down_interruptible(&kmxlnd_data.kmx_conn_sem);
+                ret = cfs_down_interruptible(&kmxlnd_data.kmx_conn_sem);
 
                 if (cfs_atomic_read(&kmxlnd_data.kmx_shutdown))
                         break;

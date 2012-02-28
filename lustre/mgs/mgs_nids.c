@@ -489,7 +489,7 @@ void mgs_ir_fini_fs(struct obd_device *obd, struct fs_db *fsdb)
         cfs_wait_for_completion(&fsdb->fsdb_notify_comp);
 }
 
-/* caller must have held fsdb_sem */
+/* caller must have held fsdb_mutex */
 static inline void ir_state_graduate(struct fs_db *fsdb)
 {
         struct mgs_obd *mgs = &fsdb->fsdb_obd->u.mgs;
@@ -522,7 +522,7 @@ int mgs_ir_update(struct obd_device *obd, struct mgs_target_info *mti)
                 return rc;
 
         /* check ir state */
-        cfs_down(&fsdb->fsdb_sem);
+        cfs_mutex_lock(&fsdb->fsdb_mutex);
         ir_state_graduate(fsdb);
         switch (fsdb->fsdb_ir_state) {
         case IR_FULL:
@@ -536,7 +536,7 @@ int mgs_ir_update(struct obd_device *obd, struct mgs_target_info *mti)
         default:
                 LBUG();
         }
-        cfs_up(&fsdb->fsdb_sem);
+        cfs_mutex_unlock(&fsdb->fsdb_mutex);
 
         LASSERT(ergo(mti->mti_flags & LDD_F_IR_CAPABLE, notify));
         if (notify) {
@@ -694,11 +694,11 @@ static int lprocfs_ir_set_state(struct fs_db *fsdb, const char *buf)
 
         CDEBUG(D_MGS, "change fsr state of %s from %s to %s\n",
                fsdb->fsdb_name, strings[fsdb->fsdb_ir_state], strings[state]);
-        cfs_down(&fsdb->fsdb_sem);
+        cfs_mutex_lock(&fsdb->fsdb_mutex);
         if (state == IR_FULL && fsdb->fsdb_nonir_clients)
                 state = IR_PARTIAL;
         fsdb->fsdb_ir_state = state;
-        cfs_up(&fsdb->fsdb_sem);
+        cfs_mutex_unlock(&fsdb->fsdb_mutex);
 
         return 0;
 }
@@ -795,7 +795,7 @@ int lprocfs_rd_ir_state(struct seq_file *seq, void *data)
         struct timeval     tv_max;
         struct timeval     tv;
 
-        /* mgs_live_seq_show() already holds fsdb_sem. */
+        /* mgs_live_seq_show() already holds fsdb_mutex. */
         ir_state_graduate(fsdb);
 
         seq_printf(seq, "\nimperative_recovery_state:\n");
@@ -862,7 +862,7 @@ int mgs_fsc_attach(struct obd_export *exp, char *fsname)
                         !!(exp->exp_connect_flags & OBD_CONNECT_IMP_RECOV);
 
         rc = -EEXIST;
-        cfs_down(&fsdb->fsdb_sem);
+        cfs_mutex_lock(&fsdb->fsdb_mutex);
 
         /* tend to find it in export list because this list is shorter. */
         cfs_spin_lock(&data->med_lock);
@@ -889,7 +889,7 @@ int mgs_fsc_attach(struct obd_export *exp, char *fsname)
                 rc = 0;
         }
         cfs_spin_unlock(&data->med_lock);
-        cfs_up(&fsdb->fsdb_sem);
+        cfs_mutex_unlock(&fsdb->fsdb_mutex);
 
         if (new_fsc) {
                 class_export_put(new_fsc->mfc_export);
@@ -913,7 +913,7 @@ void mgs_fsc_cleanup(struct obd_export *exp)
 
                 LASSERT(fsc->mfc_export == exp);
 
-                cfs_down(&fsdb->fsdb_sem);
+                cfs_mutex_lock(&fsdb->fsdb_mutex);
                 cfs_list_del_init(&fsc->mfc_fsdb_list);
                 if (fsc->mfc_ir_capable == 0) {
                         --fsdb->fsdb_nonir_clients;
@@ -922,14 +922,14 @@ void mgs_fsc_cleanup(struct obd_export *exp)
                             fsdb->fsdb_ir_state == IR_PARTIAL)
                                 fsdb->fsdb_ir_state = IR_FULL;
                 }
-                cfs_up(&fsdb->fsdb_sem);
+                cfs_mutex_unlock(&fsdb->fsdb_mutex);
                 cfs_list_del_init(&fsc->mfc_export_list);
                 class_export_put(fsc->mfc_export);
                 OBD_FREE_PTR(fsc);
         }
 }
 
-/* must be called with fsdb->fsdb_sem held */
+/* must be called with fsdb->fsdb_mutex held */
 void mgs_fsc_cleanup_by_fsdb(struct fs_db *fsdb)
 {
         struct mgs_fsc *fsc, *tmp;

@@ -350,7 +350,7 @@ static int config_log_add(struct obd_device *obd, char *logname,
         RETURN(0);
 }
 
-CFS_DECLARE_MUTEX(llog_process_lock);
+CFS_DEFINE_MUTEX(llog_process_lock);
 
 /** Stop watching for updates on this log.
  */

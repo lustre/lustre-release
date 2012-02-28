@@ -190,7 +190,7 @@ struct obd_import {
          * @{
          */
         struct ptlrpc_sec        *imp_sec;
-        cfs_semaphore_t           imp_sec_mutex;
+        cfs_mutex_t               imp_sec_mutex;
         cfs_time_t                imp_sec_expire;
         /** @} */
 

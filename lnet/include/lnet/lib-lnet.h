@@ -98,8 +98,8 @@ lnet_match_to_hash(lnet_process_id_t id, __u64 mbits)
 #ifdef __KERNEL__
 #define LNET_LOCK()        cfs_spin_lock(&the_lnet.ln_lock)
 #define LNET_UNLOCK()      cfs_spin_unlock(&the_lnet.ln_lock)
-#define LNET_MUTEX_DOWN(m) cfs_mutex_down(m)
-#define LNET_MUTEX_UP(m)   cfs_mutex_up(m)
+#define LNET_MUTEX_LOCK(m)   cfs_mutex_lock(m)
+#define LNET_MUTEX_UNLOCK(m) cfs_mutex_unlock(m)
 #else
 # ifndef HAVE_LIBPTHREAD
 #define LNET_SINGLE_THREADED_LOCK(l)            \
@@ -116,13 +116,13 @@ do {                                            \
 
 #define LNET_LOCK()        LNET_SINGLE_THREADED_LOCK(the_lnet.ln_lock)
 #define LNET_UNLOCK()      LNET_SINGLE_THREADED_UNLOCK(the_lnet.ln_lock)
-#define LNET_MUTEX_DOWN(m) LNET_SINGLE_THREADED_LOCK(*(m))
-#define LNET_MUTEX_UP(m)   LNET_SINGLE_THREADED_UNLOCK(*(m))
+#define LNET_MUTEX_LOCK(m)     LNET_SINGLE_THREADED_LOCK(*(m))
+#define LNET_MUTEX_UNLOCK(m)   LNET_SINGLE_THREADED_UNLOCK(*(m))
 # else
 #define LNET_LOCK()        pthread_mutex_lock(&the_lnet.ln_lock)
 #define LNET_UNLOCK()      pthread_mutex_unlock(&the_lnet.ln_lock)
-#define LNET_MUTEX_DOWN(m) pthread_mutex_lock(m)
-#define LNET_MUTEX_UP(m)   pthread_mutex_unlock(m)
+#define LNET_MUTEX_LOCK(m)     pthread_mutex_lock(m)
+#define LNET_MUTEX_UNLOCK(m)   pthread_mutex_unlock(m)
 # endif
 #endif
 

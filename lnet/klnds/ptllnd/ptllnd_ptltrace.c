@@ -37,7 +37,7 @@
 #include "ptllnd.h"
 
 #ifdef CRAY_XT3
-static cfs_semaphore_t    ptltrace_mutex;
+static cfs_mutex_t        ptltrace_mutex;
 static cfs_waitq_t        ptltrace_debug_ctlwq;
 
 void
@@ -139,7 +139,7 @@ kptllnd_dump_ptltrace_thread(void *arg)
         libcfs_daemonize("kpt_ptltrace_dump");
 
         /* serialise with other instances of me */
-        cfs_mutex_down(&ptltrace_mutex);
+        cfs_mutex_lock(&ptltrace_mutex);
 
         snprintf(fname, sizeof(fname), "%s.%ld.%ld",
                  *kptllnd_tunables.kptl_ptltrace_basename,
@@ -147,7 +147,7 @@ kptllnd_dump_ptltrace_thread(void *arg)
 
         kptllnd_ptltrace_to_file(fname);
 
-        cfs_mutex_up(&ptltrace_mutex);
+        cfs_mutex_unlock(&ptltrace_mutex);
 
         /* unblock my creator */
         cfs_waitq_signal(&ptltrace_debug_ctlwq);
@@ -185,6 +185,6 @@ void
 kptllnd_init_ptltrace(void)
 {
         cfs_waitq_init(&ptltrace_debug_ctlwq);
-        cfs_init_mutex(&ptltrace_mutex);
+        cfs_mutex_init(&ptltrace_mutex);
 }
 #endif

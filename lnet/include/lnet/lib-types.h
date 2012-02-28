@@ -542,8 +542,8 @@ typedef struct
 #ifdef __KERNEL__
         cfs_spinlock_t         ln_lock;
         cfs_waitq_t            ln_waitq;
-        cfs_semaphore_t   ln_api_mutex;
-        cfs_semaphore_t   ln_lnd_mutex;
+        cfs_mutex_t            ln_api_mutex;
+        cfs_mutex_t            ln_lnd_mutex;
 #else
 # ifndef HAVE_LIBPTHREAD
         int                    ln_lock;
@@ -608,12 +608,12 @@ typedef struct
         lnet_ping_info_t      *ln_ping_info;
 
 #ifdef __KERNEL__
-        cfs_semaphore_t   ln_rc_signal;        /* serialise startup/shutdown */
+        cfs_semaphore_t        ln_rc_signal;        /* serialise startup/shutdown */
 #endif
-        int                ln_rc_state;         /* router checker startup/shutdown state */
-        lnet_handle_eq_t   ln_rc_eqh;           /* router checker's event queue */
-        lnet_handle_md_t   ln_rc_mdh;
-        cfs_list_t         ln_zombie_rcd;
+        int                    ln_rc_state;         /* router checker startup/shutdown state */
+        lnet_handle_eq_t       ln_rc_eqh;           /* router checker's event queue */
+        lnet_handle_md_t       ln_rc_mdh;
+        cfs_list_t             ln_zombie_rcd;
 
 #ifdef LNET_USE_LIB_FREELIST
         lnet_freelist_t        ln_free_mes;

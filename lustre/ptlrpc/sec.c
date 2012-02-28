@@ -122,7 +122,7 @@ EXPORT_SYMBOL(sptlrpc_unregister_policy);
 static
 struct ptlrpc_sec_policy * sptlrpc_wireflavor2policy(__u32 flavor)
 {
-        static CFS_DECLARE_MUTEX(load_mutex);
+        static CFS_DEFINE_MUTEX(load_mutex);
         static cfs_atomic_t       loaded = CFS_ATOMIC_INIT(0);
         struct ptlrpc_sec_policy *policy;
         __u16                     number = SPTLRPC_FLVR_POLICY(flavor);
@@ -145,7 +145,7 @@ struct ptlrpc_sec_policy * sptlrpc_wireflavor2policy(__u32 flavor)
                         break;
 
                 /* try to load gss module, once */
-                cfs_mutex_down(&load_mutex);
+                cfs_mutex_lock(&load_mutex);
                 if (cfs_atomic_read(&loaded) == 0) {
                         if (cfs_request_module("ptlrpc_gss") == 0)
                                 CDEBUG(D_SEC,
@@ -155,7 +155,7 @@ struct ptlrpc_sec_policy * sptlrpc_wireflavor2policy(__u32 flavor)
 
                         cfs_atomic_set(&loaded, 1);
                 }
-                cfs_mutex_up(&load_mutex);
+                cfs_mutex_unlock(&load_mutex);
         }
 
         return policy;
@@ -1480,7 +1480,7 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                        sptlrpc_flavor2name(&sf, str, sizeof(str)));
         }
 
-        cfs_mutex_down(&imp->imp_sec_mutex);
+        cfs_mutex_lock(&imp->imp_sec_mutex);
 
         newsec = sptlrpc_sec_create(imp, svc_ctx, &sf, sp);
         if (newsec) {
@@ -1492,7 +1492,7 @@ int sptlrpc_import_sec_adapt(struct obd_import *imp,
                 rc = -EPERM;
         }
 
-        cfs_mutex_up(&imp->imp_sec_mutex);
+        cfs_mutex_unlock(&imp->imp_sec_mutex);
 out:
         sptlrpc_sec_put(sec);
         RETURN(rc);

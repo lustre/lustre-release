@@ -95,8 +95,8 @@ lnet_init_locks(void)
 {
         cfs_spin_lock_init (&the_lnet.ln_lock);
         cfs_waitq_init (&the_lnet.ln_waitq);
-        cfs_init_mutex(&the_lnet.ln_lnd_mutex);
-        cfs_init_mutex(&the_lnet.ln_api_mutex);
+        cfs_mutex_init(&the_lnet.ln_lnd_mutex);
+        cfs_mutex_init(&the_lnet.ln_api_mutex);
 }
 
 void
@@ -321,7 +321,7 @@ lnet_find_lnd_by_type (int type)
 void
 lnet_register_lnd (lnd_t *lnd)
 {
-        LNET_MUTEX_DOWN(&the_lnet.ln_lnd_mutex);
+        LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
 
         LASSERT (the_lnet.ln_init);
         LASSERT (libcfs_isknown_lnd(lnd->lnd_type));
@@ -332,13 +332,13 @@ lnet_register_lnd (lnd_t *lnd)
 
         CDEBUG(D_NET, "%s LND registered\n", libcfs_lnd2str(lnd->lnd_type));
 
-        LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
+        LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
 }
 
 void
 lnet_unregister_lnd (lnd_t *lnd)
 {
-        LNET_MUTEX_DOWN(&the_lnet.ln_lnd_mutex);
+        LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
 
         LASSERT (the_lnet.ln_init);
         LASSERT (lnet_find_lnd_by_type(lnd->lnd_type) == lnd);
@@ -347,7 +347,7 @@ lnet_unregister_lnd (lnd_t *lnd)
         cfs_list_del (&lnd->lnd_list);
         CDEBUG(D_NET, "%s LND unregistered\n", libcfs_lnd2str(lnd->lnd_type));
 
-        LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
+        LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
 }
 
 #ifndef LNET_USE_LIB_FREELIST
@@ -1039,19 +1039,19 @@ lnet_startup_lndnis (void)
                         goto failed;
                 }
 
-                LNET_MUTEX_DOWN(&the_lnet.ln_lnd_mutex);
+                LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
                 lnd = lnet_find_lnd_by_type(lnd_type);
 
 #ifdef __KERNEL__
                 if (lnd == NULL) {
-                        LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
+                        LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
                         rc = cfs_request_module("%s",
                                                 libcfs_lnd2modname(lnd_type));
-                        LNET_MUTEX_DOWN(&the_lnet.ln_lnd_mutex);
+                        LNET_MUTEX_LOCK(&the_lnet.ln_lnd_mutex);
 
                         lnd = lnet_find_lnd_by_type(lnd_type);
                         if (lnd == NULL) {
-                                LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
+                                LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
                                 CERROR("Can't load LND %s, module %s, rc=%d\n",
                                        libcfs_lnd2str(lnd_type),
                                        libcfs_lnd2modname(lnd_type), rc);
@@ -1065,7 +1065,7 @@ lnet_startup_lndnis (void)
                 }
 #else
                 if (lnd == NULL) {
-                        LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
+                        LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
                         CERROR("LND %s not supported\n",
                                libcfs_lnd2str(lnd_type));
                         goto failed;
@@ -1082,7 +1082,7 @@ lnet_startup_lndnis (void)
 
                 rc = (lnd->lnd_startup)(ni);
 
-                LNET_MUTEX_UP(&the_lnet.ln_lnd_mutex);
+                LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
 
                 if (rc != 0) {
                         LCONSOLE_ERROR_MSG(0x105, "Error %d starting up LNI %s"
@@ -1253,7 +1253,7 @@ LNetNIInit(lnet_pid_t requested_pid)
         int         im_a_router = 0;
         int         rc;
 
-        LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+        LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
 
         LASSERT (the_lnet.ln_init);
         CDEBUG(D_OTHER, "refs %d\n", the_lnet.ln_refcount);
@@ -1324,7 +1324,7 @@ LNetNIInit(lnet_pid_t requested_pid)
  failed0:
         LASSERT (rc < 0);
  out:
-        LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
+        LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
         return rc;
 }
 
@@ -1340,7 +1340,7 @@ LNetNIInit(lnet_pid_t requested_pid)
 int
 LNetNIFini()
 {
-        LNET_MUTEX_DOWN(&the_lnet.ln_api_mutex);
+        LNET_MUTEX_LOCK(&the_lnet.ln_api_mutex);
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -1363,7 +1363,7 @@ LNetNIFini()
                 lnet_unprepare();
         }
 
-        LNET_MUTEX_UP(&the_lnet.ln_api_mutex);
+        LNET_MUTEX_UNLOCK(&the_lnet.ln_api_mutex);
         return 0;
 }
 

@@ -225,7 +225,7 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
                 llcd_print(llcd, __FUNCTION__, __LINE__);
                 LBUG();
         }
-        LASSERT_SEM_LOCKED(&ctxt->loc_sem);
+        LASSERT_MUTEX_LOCKED(&ctxt->loc_mutex);
 
         if (llcd->llcd_cookiebytes == 0)
                 GOTO(exit, rc = 0);
@@ -304,7 +304,7 @@ static int
 llcd_attach(struct llog_ctxt *ctxt, struct llog_canceld_ctxt *llcd)
 {
         LASSERT(ctxt != NULL && llcd != NULL);
-        LASSERT_SEM_LOCKED(&ctxt->loc_sem);
+        LASSERT_MUTEX_LOCKED(&ctxt->loc_mutex);
         LASSERT(ctxt->loc_llcd == NULL);
         llcd->llcd_ctxt = llog_ctxt_get(ctxt);
         ctxt->loc_llcd = llcd;
@@ -324,7 +324,7 @@ static struct llog_canceld_ctxt *llcd_detach(struct llog_ctxt *ctxt)
         struct llog_canceld_ctxt *llcd;
 
         LASSERT(ctxt != NULL);
-        LASSERT_SEM_LOCKED(&ctxt->loc_sem);
+        LASSERT_MUTEX_LOCKED(&ctxt->loc_mutex);
 
         llcd = ctxt->loc_llcd;
         if (!llcd)
@@ -573,10 +573,10 @@ int llog_obd_repl_connect(struct llog_ctxt *ctxt,
         /*
          * Start recovery in separate thread.
          */
-        cfs_mutex_down(&ctxt->loc_sem);
+        cfs_mutex_lock(&ctxt->loc_mutex);
         ctxt->loc_gen = *gen;
         rc = llog_recov_thread_replay(ctxt, ctxt->llog_proc_cb, logid);
-        cfs_mutex_up(&ctxt->loc_sem);
+        cfs_mutex_unlock(&ctxt->loc_mutex);
 
         RETURN(rc);
 }
@@ -598,7 +598,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 
         LASSERT(ctxt != NULL);
 
-        cfs_mutex_down(&ctxt->loc_sem);
+        cfs_mutex_lock(&ctxt->loc_mutex);
         if (!ctxt->loc_lcm) {
                 CDEBUG(D_RPCTRACE, "No lcm for ctxt %p\n", ctxt);
                 GOTO(out, rc = -ENODEV);
@@ -679,7 +679,7 @@ int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
 out:
         if (rc)
                 llcd_put(ctxt);
-        cfs_mutex_up(&ctxt->loc_sem);
+        cfs_mutex_unlock(&ctxt->loc_mutex);
         return rc;
 }
 EXPORT_SYMBOL(llog_obd_repl_cancel);
@@ -692,7 +692,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
         /*
          * Flush any remaining llcd.
          */
-        cfs_mutex_down(&ctxt->loc_sem);
+        cfs_mutex_lock(&ctxt->loc_mutex);
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
                 /*
                  * This is ost->mds connection, we can't be sure that mds
@@ -700,7 +700,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
                  */
                 CDEBUG(D_RPCTRACE, "Kill cached llcd\n");
                 llcd_put(ctxt);
-                cfs_mutex_up(&ctxt->loc_sem);
+                cfs_mutex_unlock(&ctxt->loc_mutex);
         } else {
                 /*
                  * This is either llog_sync() from generic llog code or sync
@@ -708,7 +708,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
                  * llcds to the target with waiting for completion.
                  */
                 CDEBUG(D_RPCTRACE, "Sync cached llcd\n");
-                cfs_mutex_up(&ctxt->loc_sem);
+                cfs_mutex_unlock(&ctxt->loc_mutex);
                 rc = llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW);
         }
         RETURN(rc);

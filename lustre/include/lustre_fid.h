@@ -149,7 +149,7 @@ struct lu_server_seq;
 struct lu_client_seq {
         /* Sequence-controller export. */
         struct obd_export      *lcs_exp;
-        cfs_semaphore_t         lcs_sem;
+        cfs_mutex_t             lcs_mutex;
 
         /*
          * Range of allowed for allocation sequeces. When using lu_client_seq on
@@ -214,8 +214,8 @@ struct lu_server_seq {
         /* Client interafce to request controller */
         struct lu_client_seq   *lss_cli;
 
-        /* Semaphore for protecting allocation */
-        cfs_semaphore_t         lss_sem;
+        /* Mutex for protecting allocation */
+        cfs_mutex_t             lss_mutex;
 
         /*
          * Service uuid, passed from MDT + seq name to form unique seq name to

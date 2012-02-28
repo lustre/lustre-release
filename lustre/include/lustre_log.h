@@ -289,7 +289,7 @@ struct llog_ctxt {
         struct llog_handle      *loc_handle;
         struct llog_commit_master *loc_lcm;
         struct llog_canceld_ctxt *loc_llcd;
-        cfs_semaphore_t          loc_sem; /* protects loc_llcd and loc_imp */
+        cfs_mutex_t              loc_mutex; /* protects loc_llcd and loc_imp */
         cfs_atomic_t             loc_refcount;
         void                    *llog_proc_cb;
         long                     loc_flags; /* flags, see above defines */
@@ -457,7 +457,7 @@ static inline void llog_group_init(struct obd_llog_group *olg, int group)
 {
         cfs_waitq_init(&olg->olg_waitq);
         cfs_spin_lock_init(&olg->olg_lock);
-        cfs_sema_init(&olg->olg_cat_processing, 1);
+        cfs_mutex_init(&olg->olg_cat_processing);
         olg->olg_seq = group;
 }
 

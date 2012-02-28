@@ -189,9 +189,9 @@ struct mdt_object {
         int                     mot_ioepoch_count;
         int                     mot_writecount;
         /* Lock to protect object's IO epoch. */
-        cfs_semaphore_t         mot_ioepoch_sem;
+        cfs_mutex_t             mot_ioepoch_mutex;
         /* Lock to protect create_data */
-        cfs_semaphore_t         mot_lov_sem;
+        cfs_mutex_t             mot_lov_mutex;
 };
 
 enum mdt_object_flags {

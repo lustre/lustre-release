@@ -359,7 +359,7 @@ lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout)
                 lstcon_rpc_post(crpc);
         }
 
-        cfs_mutex_up(&console_session.ses_mutex);
+        cfs_mutex_unlock(&console_session.ses_mutex);
 
         cfs_waitq_wait_event_interruptible_timeout(trans->tas_waitq,
                                               lstcon_rpc_trans_check(trans),
@@ -367,7 +367,7 @@ lstcon_rpc_trans_postwait(lstcon_rpc_trans_t *trans, int timeout)
 
         rc = (rc > 0)? 0: ((rc < 0)? -EINTR: -ETIMEDOUT);
 
-        cfs_mutex_down(&console_session.ses_mutex);
+        cfs_mutex_lock(&console_session.ses_mutex);
 
         if (console_session.ses_shutdown)
                 rc = -ESHUTDOWN;
@@ -1113,10 +1113,10 @@ lstcon_rpc_pinger(void *arg)
         /* RPC pinger is a special case of transaction,
          * it's called by timer at 8 seconds interval.
          */
-        cfs_mutex_down(&console_session.ses_mutex);
+        cfs_mutex_lock(&console_session.ses_mutex);
 
         if (console_session.ses_shutdown || console_session.ses_expired) {
-                cfs_mutex_up(&console_session.ses_mutex);
+                cfs_mutex_unlock(&console_session.ses_mutex);
                 return;
         }
 
@@ -1201,7 +1201,7 @@ lstcon_rpc_pinger(void *arg)
         }
 
         if (console_session.ses_expired) {
-                cfs_mutex_up(&console_session.ses_mutex);
+                cfs_mutex_unlock(&console_session.ses_mutex);
                 return;
         }
 
@@ -1210,7 +1210,7 @@ lstcon_rpc_pinger(void *arg)
         ptimer->stt_expires = (cfs_time_t)(cfs_time_current_sec() + LST_PING_INTERVAL);
         stt_add_timer(ptimer);
 
-        cfs_mutex_up(&console_session.ses_mutex);
+        cfs_mutex_unlock(&console_session.ses_mutex);
 }
 
 int
@@ -1276,13 +1276,13 @@ lstcon_rpc_cleanup_wait(void)
                         cfs_waitq_signal(&trans->tas_waitq);
                 }
 
-                cfs_mutex_up(&console_session.ses_mutex);
+                cfs_mutex_unlock(&console_session.ses_mutex);
 
                 CWARN("Session is shutting down, "
                       "waiting for termination of transactions\n");
                 cfs_pause(cfs_time_seconds(1));
 
-                cfs_mutex_down(&console_session.ses_mutex);
+                cfs_mutex_lock(&console_session.ses_mutex);
         }
 
         cfs_spin_lock(&console_session.ses_rpc_lock);

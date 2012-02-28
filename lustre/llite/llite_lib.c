@@ -89,7 +89,7 @@ static struct ll_sb_info *ll_init_sbi(void)
                 RETURN(NULL);
 
         cfs_spin_lock_init(&sbi->ll_lock);
-        cfs_init_mutex(&sbi->ll_lco.lco_lock);
+        cfs_mutex_init(&sbi->ll_lco.lco_lock);
         cfs_spin_lock_init(&sbi->ll_pp_extent_lock);
         cfs_spin_lock_init(&sbi->ll_process_lock);
         sbi->ll_rw_stats_on = 0;
@@ -449,11 +449,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 GOTO(out_dt, err);
         }
 
-        cfs_mutex_down(&sbi->ll_lco.lco_lock);
+        cfs_mutex_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
         sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;
-        cfs_mutex_up(&sbi->ll_lco.lco_lock);
+        cfs_mutex_unlock(&sbi->ll_lco.lco_lock);
 
         fid_zero(&sbi->ll_root_fid);
         err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
@@ -860,7 +860,7 @@ void ll_lli_init(struct ll_inode_info *lli)
         cfs_spin_lock_init(&lli->lli_lock);
         lli->lli_posix_acl = NULL;
         lli->lli_remote_perms = NULL;
-        cfs_sema_init(&lli->lli_rmtperm_sem, 1);
+        cfs_mutex_init(&lli->lli_rmtperm_mutex);
         /* Do not set lli_fid, it has been initialized already. */
         fid_zero(&lli->lli_pfid);
         CFS_INIT_LIST_HEAD(&lli->lli_close_list);
@@ -875,14 +875,14 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_open_fd_read_count = 0;
         lli->lli_open_fd_write_count = 0;
         lli->lli_open_fd_exec_count = 0;
-        cfs_sema_init(&lli->lli_och_sem, 1);
+        cfs_mutex_init(&lli->lli_och_mutex);
         cfs_spin_lock_init(&lli->lli_agl_lock);
         lli->lli_smd = NULL;
         lli->lli_clob = NULL;
 
         LASSERT(lli->lli_vfs_inode.i_mode != 0);
         if (S_ISDIR(lli->lli_vfs_inode.i_mode)) {
-                cfs_sema_init(&lli->lli_readdir_sem, 1);
+                cfs_mutex_init(&lli->lli_readdir_mutex);
                 lli->lli_opendir_key = NULL;
                 lli->lli_sai = NULL;
                 lli->lli_sa_pos = 0;
@@ -895,7 +895,7 @@ void ll_lli_init(struct ll_inode_info *lli)
                 lli->lli_symlink_name = NULL;
                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 cfs_init_rwsem(&lli->lli_trunc_sem);
-                cfs_sema_init(&lli->lli_write_sem, 1);
+                cfs_mutex_init(&lli->lli_write_mutex);
                 lli->lli_async_rc = 0;
                 lli->lli_write_rc = 0;
                 cfs_init_rwsem(&lli->lli_glimpse_sem);
@@ -1603,7 +1603,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         if (lsm != NULL) {
                 LASSERT(S_ISREG(inode->i_mode));
 
-                cfs_down(&lli->lli_och_sem);
+                cfs_mutex_lock(&lli->lli_och_mutex);
                 if (lli->lli_smd == NULL) {
                         if (lsm->lsm_magic != LOV_MAGIC_V1 &&
                             lsm->lsm_magic != LOV_MAGIC_V3) {
@@ -1620,12 +1620,12 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         cfs_spin_lock(&lli->lli_lock);
                         lli->lli_smd = lsm;
                         cfs_spin_unlock(&lli->lli_lock);
-                        cfs_up(&lli->lli_och_sem);
+                        cfs_mutex_unlock(&lli->lli_och_mutex);
                         lli->lli_maxbytes = lsm->lsm_maxbytes;
                         if (lli->lli_maxbytes > PAGE_CACHE_MAXBYTES)
                                 lli->lli_maxbytes = PAGE_CACHE_MAXBYTES;
                 } else {
-                        cfs_up(&lli->lli_och_sem);
+                        cfs_mutex_unlock(&lli->lli_och_mutex);
                         LASSERT(lli->lli_smd->lsm_magic == lsm->lsm_magic &&
                                 lli->lli_smd->lsm_stripe_count ==
                                 lsm->lsm_stripe_count);

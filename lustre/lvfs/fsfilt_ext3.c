@@ -1273,7 +1273,7 @@ int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
 int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                 int pages, unsigned long *blocks,
                                 int *created, int create,
-                                cfs_semaphore_t *optional_sem)
+                                cfs_mutex_t *optional_mutex)
 {
         int rc;
 
@@ -1282,12 +1282,12 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                                      blocks, created, create);
                 return rc;
         }
-        if (optional_sem != NULL)
-                cfs_down(optional_sem);
+        if (optional_mutex != NULL)
+                cfs_mutex_lock(optional_mutex);
         rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
                                             created, create);
-        if (optional_sem != NULL)
-                cfs_up(optional_sem);
+        if (optional_mutex != NULL)
+                cfs_mutex_unlock(optional_mutex);
 
         return rc;
 }

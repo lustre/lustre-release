@@ -569,6 +569,7 @@ int lmv_check_connect(struct obd_device *obd)
         }
 
         if (lmv->desc.ld_tgt_count == 0) {
+                lmv_init_unlock(lmv);
                 CERROR("%s: no targets configured.\n", obd->obd_name);
                 RETURN(-EINVAL);
         }
@@ -991,7 +992,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
          * New seq alloc and FLD setup should be atomic. Otherwise we may find
          * on server that seq in new allocated fid is not yet known.
          */
-        cfs_down(&tgt->ltd_fid_sem);
+        cfs_mutex_lock(&tgt->ltd_fid_mutex);
 
         if (!tgt->ltd_active)
                 GOTO(out, rc = -ENODEV);
@@ -1007,7 +1008,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
 
         EXIT;
 out:
-        cfs_up(&tgt->ltd_fid_sem);
+        cfs_mutex_unlock(&tgt->ltd_fid_mutex);
         return rc;
 }
 
@@ -1078,7 +1079,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENOMEM);
 
         for (i = 0; i < LMV_MAX_TGT_COUNT; i++) {
-                cfs_sema_init(&lmv->tgts[i].ltd_fid_sem, 1);
+                cfs_mutex_init(&lmv->tgts[i].ltd_fid_mutex);
                 lmv->tgts[i].ltd_idx = i;
         }
 
@@ -1097,7 +1098,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lmv->lmv_placement = PLACEMENT_CHAR_POLICY;
 
         cfs_spin_lock_init(&lmv->lmv_lock);
-        cfs_sema_init(&lmv->init_sem, 1);
+        cfs_mutex_init(&lmv->init_mutex);
 
         rc = lmv_object_setup(obd);
         if (rc) {

@@ -72,13 +72,13 @@ struct ptlrpc_request;
 struct obd_device;
 
 struct mdc_rpc_lock {
-        cfs_semaphore_t  rpcl_sem;
+        cfs_mutex_t           rpcl_mutex;
         struct lookup_intent *rpcl_it;
 };
 
 static inline void mdc_init_rpc_lock(struct mdc_rpc_lock *lck)
 {
-        cfs_sema_init(&lck->rpcl_sem, 1);
+        cfs_mutex_init(&lck->rpcl_mutex);
         lck->rpcl_it = NULL;
 }
 
@@ -87,7 +87,7 @@ static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck,
 {
         ENTRY;
         if (!it || (it->it_op != IT_GETATTR && it->it_op != IT_LOOKUP)) {
-                cfs_down(&lck->rpcl_sem);
+                cfs_mutex_lock(&lck->rpcl_mutex);
                 LASSERT(lck->rpcl_it == NULL);
                 lck->rpcl_it = it;
         }
@@ -99,7 +99,7 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
         if (!it || (it->it_op != IT_GETATTR && it->it_op != IT_LOOKUP)) {
                 LASSERT(it == lck->rpcl_it);
                 lck->rpcl_it = NULL;
-                cfs_up(&lck->rpcl_sem);
+                cfs_mutex_unlock(&lck->rpcl_mutex);
         }
         EXIT;
 }

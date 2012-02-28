@@ -267,12 +267,12 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
 
                 cfs_might_sleep();
 
-                cfs_down(&lli->lli_rmtperm_sem);
+                cfs_mutex_lock(&lli->lli_rmtperm_mutex);
                 /* check again */
                 if (save != lli->lli_rmtperm_time) {
                         rc = do_check_remote_perm(lli, mask);
                         if (!rc || (rc != -ENOENT && i)) {
-                                cfs_up(&lli->lli_rmtperm_sem);
+                                cfs_mutex_unlock(&lli->lli_rmtperm_mutex);
                                 break;
                         }
                 }
@@ -287,20 +287,20 @@ int lustre_check_remote_perm(struct inode *inode, int mask)
                                         ll_i2suppgid(inode), &req);
                 capa_put(oc);
                 if (rc) {
-                        cfs_up(&lli->lli_rmtperm_sem);
+                        cfs_mutex_unlock(&lli->lli_rmtperm_mutex);
                         break;
                 }
 
                 perm = req_capsule_server_swab_get(&req->rq_pill, &RMF_ACL,
                                                    lustre_swab_mdt_remote_perm);
                 if (unlikely(perm == NULL)) {
-                        cfs_up(&lli->lli_rmtperm_sem);
+                        cfs_mutex_unlock(&lli->lli_rmtperm_mutex);
                         rc = -EPROTO;
                         break;
                 }
 
                 rc = ll_update_remote_perm(inode, perm);
-                cfs_up(&lli->lli_rmtperm_sem);
+                cfs_mutex_unlock(&lli->lli_rmtperm_mutex);
                 if (rc == -ENOMEM)
                         break;
 

@@ -57,8 +57,8 @@ extern cfs_spinlock_t ptlrpc_last_xid_lock;
 extern cfs_spinlock_t ptlrpc_rs_debug_lock;
 #endif
 extern cfs_spinlock_t ptlrpc_all_services_lock;
-extern cfs_semaphore_t pinger_sem;
-extern cfs_semaphore_t ptlrpcd_sem;
+extern cfs_mutex_t pinger_mutex;
+extern cfs_mutex_t ptlrpcd_mutex;
 
 __init int ptlrpc_init(void)
 {
@@ -70,8 +70,8 @@ __init int ptlrpc_init(void)
         cfs_spin_lock_init(&ptlrpc_rs_debug_lock);
 #endif
         cfs_spin_lock_init(&ptlrpc_all_services_lock);
-        cfs_init_mutex(&pinger_sem);
-        cfs_init_mutex(&ptlrpcd_sem);
+        cfs_mutex_init(&pinger_mutex);
+        cfs_mutex_init(&ptlrpcd_mutex);
         ptlrpc_init_xid();
 
         rc = req_layout_init();

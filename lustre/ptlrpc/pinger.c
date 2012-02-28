@@ -50,7 +50,7 @@
 #include <obd_class.h>
 #include "ptlrpc_internal.h"
 
-cfs_semaphore_t pinger_sem;
+cfs_mutex_t pinger_mutex;
 static CFS_LIST_HEAD(pinger_imports);
 static cfs_list_t timeout_list = CFS_LIST_HEAD_INIT(timeout_list);
 struct ptlrpc_request *
@@ -149,14 +149,14 @@ cfs_duration_t pinger_check_timeout(cfs_time_t time)
         cfs_time_t timeout = PING_INTERVAL;
 
         /* The timeout list is a increase order sorted list */
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         cfs_list_for_each_entry(item, &timeout_list, ti_chain) {
                 int ti_timeout = item->ti_timeout;
                 if (timeout > ti_timeout)
                         timeout = ti_timeout;
                 break;
         }
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
 
         return cfs_time_sub(cfs_time_add(time, cfs_time_seconds(timeout)),
                                          cfs_time_current());
@@ -282,7 +282,7 @@ static int ptlrpc_pinger_main(void *arg)
                 struct timeout_item *item;
                 cfs_list_t *iter;
 
-                cfs_mutex_down(&pinger_sem);
+                cfs_mutex_lock(&pinger_mutex);
                 cfs_list_for_each_entry(item, &timeout_list, ti_chain) {
                         item->ti_cb(item, item->ti_cb_data);
                 }
@@ -299,7 +299,7 @@ static int ptlrpc_pinger_main(void *arg)
                                                         cfs_time_seconds(PING_INTERVAL))))
                                 ptlrpc_update_next_ping(imp, 0);
                 }
-                cfs_mutex_up(&pinger_sem);
+                cfs_mutex_unlock(&pinger_mutex);
                 /* update memory usage info */
                 obd_update_maxusage();
 
@@ -394,10 +394,10 @@ int ptlrpc_stop_pinger(void)
                 RETURN(-EALREADY);
 
         ptlrpc_pinger_remove_timeouts();
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         thread_set_flags(pinger_thread, SVC_STOPPING);
         cfs_waitq_signal(&pinger_thread->t_ctl_waitq);
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
 
         l_wait_event(pinger_thread->t_ctl_waitq,
                      thread_is_stopped(pinger_thread), &lwi);
@@ -423,7 +423,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         if (!cfs_list_empty(&imp->imp_pinger_chain))
                 RETURN(-EALREADY);
 
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         CDEBUG(D_HA, "adding pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         /* if we add to pinger we want recovery on this import */
@@ -434,7 +434,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         class_import_get(imp);
 
         ptlrpc_pinger_wake_up();
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
 
         RETURN(0);
 }
@@ -445,14 +445,14 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         if (cfs_list_empty(&imp->imp_pinger_chain))
                 RETURN(-ENOENT);
 
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         cfs_list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         /* if we remove from pinger we don't want recovery on this import */
         imp->imp_obd->obd_no_recov = 1;
         class_import_put(imp);
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
         RETURN(0);
 }
 
@@ -489,7 +489,7 @@ ptlrpc_pinger_register_timeout(int time, enum timeout_event event,
 {
         struct timeout_item *item, *tmp;
 
-        LASSERT_SEM_LOCKED(&pinger_sem);
+        LASSERT_MUTEX_LOCKED(&pinger_mutex);
 
         cfs_list_for_each_entry(item, &timeout_list, ti_chain)
                 if (item->ti_event == event)
@@ -518,14 +518,14 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
 {
         struct timeout_item *ti;
 
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         ti = ptlrpc_pinger_register_timeout(time, event, cb, data);
         if (!ti) {
-                cfs_mutex_up(&pinger_sem);
+                cfs_mutex_unlock(&pinger_mutex);
                 return (-EINVAL);
         }
         cfs_list_add(obd_list, &ti->ti_obd_list);
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
         return 0;
 }
 
@@ -536,7 +536,7 @@ int ptlrpc_del_timeout_client(cfs_list_t *obd_list,
 
         if (cfs_list_empty(obd_list))
                 return 0;
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         cfs_list_del_init(obd_list);
         /**
          * If there are no obd attached to the timeout event
@@ -553,7 +553,7 @@ int ptlrpc_del_timeout_client(cfs_list_t *obd_list,
                 cfs_list_del(&ti->ti_chain);
                 OBD_FREE_PTR(ti);
         }
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
         return 0;
 }
 
@@ -561,13 +561,13 @@ int ptlrpc_pinger_remove_timeouts(void)
 {
         struct timeout_item *item, *tmp;
 
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         cfs_list_for_each_entry_safe(item, tmp, &timeout_list, ti_chain) {
                 LASSERT(cfs_list_empty(&item->ti_obd_list));
                 cfs_list_del(&item->ti_chain);
                 OBD_FREE_PTR(item);
         }
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
         return 0;
 }
 
@@ -770,7 +770,7 @@ static int pinger_check_rpcs(void *arg)
         set = pd->pd_set;
 
         /* add rpcs into set */
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         cfs_list_for_each(iter, &pinger_imports) {
                 struct obd_import *imp = cfs_list_entry(iter, struct obd_import,
                                                         imp_pinger_chain);
@@ -814,7 +814,7 @@ static int pinger_check_rpcs(void *arg)
                 }
         }
         pd->pd_this_ping = curtime;
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
 
         /* Might be empty, that's OK. */
         if (cfs_atomic_read(&set->set_remaining) == 0)
@@ -842,7 +842,7 @@ do_check_set:
         }
 
         /* Expire all the requests that didn't come back. */
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         cfs_list_for_each(iter, &set->set_requests) {
                 req = cfs_list_entry(iter, struct ptlrpc_request,
                                      rq_set_chain);
@@ -868,7 +868,7 @@ do_check_set:
                 cfs_spin_unlock(&imp->imp_lock);
                 cfs_atomic_dec(&set->set_remaining);
         }
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
 
         ptlrpc_set_destroy(set);
         pd->pd_set = NULL;
@@ -909,7 +909,7 @@ int ptlrpc_stop_pinger(void)
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
 #ifdef ENABLE_PINGER
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         ptlrpc_update_next_ping(imp, 0);
         if (pinger_args.pd_set == NULL &&
             cfs_time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
@@ -917,14 +917,14 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
                         imp->imp_next_ping, cfs_time_current());
                 pinger_args.pd_next_ping = imp->imp_next_ping;
         }
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
 #endif
 }
 
 void ptlrpc_pinger_commit_expected(struct obd_import *imp)
 {
 #ifdef ENABLE_PINGER
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         ptlrpc_update_next_ping(imp, 1);
         if (pinger_args.pd_set == NULL &&
             cfs_time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
@@ -932,7 +932,7 @@ void ptlrpc_pinger_commit_expected(struct obd_import *imp)
                         imp->imp_next_ping, cfs_time_current());
                 pinger_args.pd_next_ping = imp->imp_next_ping;
         }
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
 #endif
 }
 
@@ -959,10 +959,10 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         ptlrpc_pinger_sending_on_import(imp);
 
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         cfs_list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
         class_import_get(imp);
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
 
         RETURN(0);
 }
@@ -973,12 +973,12 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         if (cfs_list_empty(&imp->imp_pinger_chain))
                 RETURN(-ENOENT);
 
-        cfs_mutex_down(&pinger_sem);
+        cfs_mutex_lock(&pinger_mutex);
         cfs_list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         class_import_put(imp);
-        cfs_mutex_up(&pinger_sem);
+        cfs_mutex_unlock(&pinger_mutex);
         RETURN(0);
 }
 

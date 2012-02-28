@@ -94,7 +94,7 @@ CFS_MODULE_PARM(ptlrpcd_bind_policy, "i", int, 0644,
 #endif
 static struct ptlrpcd *ptlrpcds;
 
-cfs_semaphore_t ptlrpcd_sem;
+cfs_mutex_t ptlrpcd_mutex;
 static int ptlrpcd_users = 0;
 
 void ptlrpcd_wake(struct ptlrpc_request *req)
@@ -839,18 +839,18 @@ int ptlrpcd_addref(void)
         int rc = 0;
         ENTRY;
 
-        cfs_mutex_down(&ptlrpcd_sem);
+        cfs_mutex_lock(&ptlrpcd_mutex);
         if (++ptlrpcd_users == 1)
                 rc = ptlrpcd_init();
-        cfs_mutex_up(&ptlrpcd_sem);
+        cfs_mutex_unlock(&ptlrpcd_mutex);
         RETURN(rc);
 }
 
 void ptlrpcd_decref(void)
 {
-        cfs_mutex_down(&ptlrpcd_sem);
+        cfs_mutex_lock(&ptlrpcd_mutex);
         if (--ptlrpcd_users == 0)
                 ptlrpcd_fini();
-        cfs_mutex_up(&ptlrpcd_sem);
+        cfs_mutex_unlock(&ptlrpcd_mutex);
 }
 /** @} ptlrpcd */

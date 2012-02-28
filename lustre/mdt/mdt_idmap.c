@@ -213,10 +213,10 @@ int mdt_init_idmap(struct mdt_thread_info *info)
         ENTRY;
 
         if (exp_connect_rmtclient(exp)) {
-                cfs_down(&med->med_idmap_sem);
+                cfs_mutex_lock(&med->med_idmap_mutex);
                 if (!med->med_idmap)
                         med->med_idmap = lustre_idmap_init();
-                cfs_up(&med->med_idmap_sem);
+                cfs_mutex_unlock(&med->med_idmap_mutex);
 
                 if (IS_ERR(med->med_idmap)) {
                         long err = PTR_ERR(med->med_idmap);
@@ -243,12 +243,12 @@ int mdt_init_idmap(struct mdt_thread_info *info)
 
 void mdt_cleanup_idmap(struct mdt_export_data *med)
 {
-        cfs_down(&med->med_idmap_sem);
+        cfs_mutex_lock(&med->med_idmap_mutex);
         if (med->med_idmap != NULL) {
                 lustre_idmap_fini(med->med_idmap);
                 med->med_idmap = NULL;
         }
-        cfs_up(&med->med_idmap_sem);
+        cfs_mutex_unlock(&med->med_idmap_mutex);
 }
 
 static inline void mdt_revoke_export_locks(struct obd_export *exp)

@@ -997,7 +997,7 @@ struct obd_import *class_new_import(struct obd_device *obd)
         imp->imp_last_success_conn = 0;
         imp->imp_state = LUSTRE_IMP_NEW;
         imp->imp_obd = class_incref(obd, "import", imp);
-        cfs_sema_init(&imp->imp_sec_mutex, 1);
+        cfs_mutex_init(&imp->imp_sec_mutex);
         cfs_waitq_init(&imp->imp_recovery_waitq);
 
         cfs_atomic_set(&imp->imp_refcount, 2);

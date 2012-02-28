@@ -346,13 +346,13 @@ struct filter_obd {
         cfs_dentry_t        *fo_dentry_O;
         cfs_dentry_t       **fo_dentry_O_groups;
         struct filter_subdirs   *fo_dentry_O_sub;
-        cfs_semaphore_t      fo_init_lock;      /* group initialization lock */
+        cfs_mutex_t          fo_init_lock;      /* group initialization lock */
         int                  fo_committed_group;
 
         cfs_spinlock_t       fo_objidlock;      /* protect fo_lastobjid */
 
         unsigned long        fo_destroys_in_progress;
-        cfs_semaphore_t      fo_create_locks[FILTER_SUBDIR_COUNT];
+        cfs_mutex_t          fo_create_locks[FILTER_SUBDIR_COUNT];
 
         cfs_list_t fo_export_list;
         int                  fo_subdir_count;
@@ -376,7 +376,7 @@ struct filter_obd {
         __u64               *fo_last_objids; /* last created objid for groups,
                                               * protected by fo_objidlock */
 
-        cfs_semaphore_t      fo_alloc_lock;
+        cfs_mutex_t          fo_alloc_lock;
 
         cfs_atomic_t         fo_r_in_flight;
         cfs_atomic_t         fo_w_in_flight;
@@ -477,7 +477,6 @@ struct client_obd {
         cfs_list_t               cl_cache_waiters; /* waiting for cache/grant */
         cfs_time_t               cl_next_shrink_grant;   /* jiffies */
         cfs_list_t               cl_grant_shrink_list;  /* Timeout event list */
-        cfs_semaphore_t          cl_grant_sem;   /*grant shrink list cfs_semaphore*/
         int                      cl_grant_shrink_interval; /* seconds */
 
         /* keep track of objects that have lois that contain pages which
@@ -564,7 +563,7 @@ struct mgs_obd {
         struct super_block              *mgs_sb;
         struct dentry                   *mgs_configs_dir;
         cfs_list_t                       mgs_fs_db_list;
-        cfs_semaphore_t                  mgs_sem;
+        cfs_mutex_t                      mgs_mutex;
         cfs_proc_dir_entry_t            *mgs_proc_live;
         cfs_time_t                       mgs_start_time;
 };
@@ -579,7 +578,6 @@ struct mds_obd {
         int                              mds_max_cookiesize;
         __u64                            mds_io_epoch;
         unsigned long                    mds_atime_diff;
-        cfs_semaphore_t                  mds_epoch_sem;
         struct ll_fid                    mds_rootfid;
         cfs_dentry_t                    *mds_pending_dir;
         cfs_dentry_t                    *mds_logs_dir;
@@ -606,7 +604,6 @@ struct mds_obd {
 
         struct lustre_quota_info         mds_quota_info;
         cfs_rw_semaphore_t               mds_qonoff_sem;
-        cfs_semaphore_t                  mds_health_sem;
         unsigned long                    mds_fl_user_xattr:1,
                                          mds_fl_acl:1,
                                          mds_evict_ost_nids:1,
@@ -655,7 +652,7 @@ struct ost_obd {
         struct ptlrpc_service *ost_service;
         struct ptlrpc_service *ost_create_service;
         struct ptlrpc_service *ost_io_service;
-        cfs_semaphore_t        ost_health_sem;
+        cfs_mutex_t            ost_health_mutex;
 };
 
 struct echo_client_obd {
@@ -768,7 +765,7 @@ struct lov_obd {
         struct lov_tgt_desc   **lov_tgts;              /* sparse array */
         struct ost_pool         lov_packed;            /* all OSTs in a packed
                                                           array */
-        cfs_semaphore_t         lov_lock;
+        cfs_mutex_t             lov_lock;
         struct obd_connect_data lov_ocd;
         struct lov_qos          lov_qos;               /* qos info per lov */
         cfs_atomic_t            lov_refcount;
@@ -789,7 +786,7 @@ struct lmv_tgt_desc {
         struct obd_export      *ltd_exp;
         int                     ltd_active; /* is this target up for requests */
         int                     ltd_idx;
-        cfs_semaphore_t         ltd_fid_sem;
+        cfs_mutex_t             ltd_fid_mutex;
 };
 
 enum placement_policy {
@@ -815,7 +812,7 @@ struct lmv_obd {
         int                     max_def_easize;
         int                     max_cookiesize;
         int                     server_timeout;
-        cfs_semaphore_t         init_sem;
+        cfs_mutex_t             init_mutex;
 
         struct lmv_tgt_desc     *tgts;
         int                     tgts_size;
@@ -1041,7 +1038,7 @@ struct obd_llog_group {
         cfs_spinlock_t     olg_lock;
         struct obd_export *olg_exp;
         int                olg_initializing;
-        cfs_semaphore_t    olg_cat_processing;
+        cfs_mutex_t        olg_cat_processing;
 };
 
 /* corresponds to one of the obd's */
@@ -1099,7 +1096,7 @@ struct obd_device {
         struct ptlrpc_client    obd_ldlm_client; /* XXX OST/MDS only */
         /* a spinlock is OK for what we do now, may need a semaphore later */
         cfs_spinlock_t          obd_dev_lock; /* protects obd bitfield above */
-        cfs_semaphore_t         obd_dev_sem;
+        cfs_mutex_t             obd_dev_mutex;
         __u64                   obd_last_committed;
         struct fsfilt_operations *obd_fsops;
         cfs_spinlock_t          obd_osfs_lock;

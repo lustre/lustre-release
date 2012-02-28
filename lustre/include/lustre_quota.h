@@ -179,7 +179,7 @@ struct lustre_dquot {
         /** Hash list in memory, protect by dquot_hash_lock */
         cfs_list_t dq_hash;
         /** Protect the data in lustre_dquot */
-        cfs_semaphore_t dq_sem;
+        cfs_mutex_t dq_mutex;
         /** Use count */
         cfs_atomic_t dq_refcnt;
         /** Pointer of quota info it belongs to */

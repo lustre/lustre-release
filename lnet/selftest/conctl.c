@@ -824,7 +824,7 @@ lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_data *data)
                 return -EFAULT;
         }
 
-        cfs_mutex_down(&console_session.ses_mutex);
+        cfs_mutex_lock(&console_session.ses_mutex);
 
         console_session.ses_laststamp = cfs_time_current_sec();
 
@@ -908,7 +908,7 @@ lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_data *data)
                              sizeof(lstcon_trans_stat_t)))
                 rc = -EFAULT;
 out:
-        cfs_mutex_up(&console_session.ses_mutex);
+        cfs_mutex_unlock(&console_session.ses_mutex);
 
         LIBCFS_FREE(buf, data->ioc_plen1);
 

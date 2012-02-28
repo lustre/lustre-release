@@ -483,7 +483,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
         struct inode *inode = dchild->d_inode;
         int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
         int rc, rc2, create;
-        cfs_semaphore_t *sem;
+        cfs_mutex_t *mutex;
         ENTRY;
 
         LASSERTF(iobuf->dr_npages <= iobuf->dr_max_pages, "%d,%d\n",
@@ -494,12 +494,12 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 if (iobuf->dr_npages == 0)
                         RETURN(0);
                 create = 0;
-                sem = NULL;
+                mutex = NULL;
         } else {
                 LASSERTF(rw == OBD_BRW_WRITE, "%x\n", rw);
                 LASSERT(iobuf->dr_npages > 0);
                 create = 1;
-                sem = &obd->u.filter.fo_alloc_lock;
+                mutex = &obd->u.filter.fo_alloc_lock;
 
                 lquota_enforce(filter_quota_interface_ref, obd,
                                iobuf->dr_ignore_quota);
@@ -511,7 +511,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
         } else {
                 rc = fsfilt_map_inode_pages(obd, inode, iobuf->dr_pages,
                                     iobuf->dr_npages, iobuf->dr_blocks,
-                                    obdfilter_created_scratchpad, create, sem);
+                                    obdfilter_created_scratchpad, create, mutex);
         }
 
         if (rw == OBD_BRW_WRITE) {

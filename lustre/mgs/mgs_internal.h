@@ -93,7 +93,7 @@ struct mgs_fsc {
          */
         cfs_list_t         mfc_export_list;
         /**
-         * list of fs clients in the same fsdb, protected by fsdb->fsdb_sem
+         * list of fs clients in the same fsdb, protected by fsdb->fsdb_mutex
          */
         cfs_list_t        mfc_fsdb_list;
         unsigned          mfc_ir_capable:1;
@@ -126,7 +126,7 @@ struct mgs_tgt_srpc_conf {
 struct fs_db {
         char              fsdb_name[9];
         cfs_list_t        fsdb_list;           /* list of databases */
-        cfs_semaphore_t   fsdb_sem;
+        cfs_mutex_t       fsdb_mutex;
         void             *fsdb_ost_index_map;  /* bitmap of used indicies */
         void             *fsdb_mdt_index_map;  /* bitmap of used indicies */
         int               fsdb_mdt_count;
@@ -144,7 +144,7 @@ struct fs_db {
         struct sptlrpc_rule_set   fsdb_srpc_gen;
         struct mgs_tgt_srpc_conf *fsdb_srpc_tgt;
 
-        /* list of fs clients, mgs_fsc. protected by mgs_sem */
+        /* list of fs clients, mgs_fsc. protected by mgs_mutex */
         cfs_list_t           fsdb_clients;
         int                  fsdb_nonir_clients;
         int                  fsdb_ir_state;

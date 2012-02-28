@@ -259,7 +259,7 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
         }
 
 
-        cfs_mutex_down(&obd->obd_dev_sem);
+        cfs_mutex_lock(&obd->obd_dev_mutex);
         for (j = 0; j < count; j++) {
                 __u32 i = le32_to_cpu(data[j].l_ost_idx);
                 if (mds_lov_update_max_ost(&obd->u.mds, i)) {
@@ -267,7 +267,7 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
                         break;
                 }
         }
-        cfs_mutex_up(&obd->obd_dev_sem);
+        cfs_mutex_unlock(&obd->obd_dev_mutex);
 
         RETURN(rc);
 }
@@ -601,9 +601,9 @@ static int mds_lov_update_desc(struct obd_device *obd, int idx,
         CDEBUG(D_CONFIG, "updated lov_desc, tgt_count: %d - idx %d / uuid %s\n",
                mds->mds_lov_desc.ld_tgt_count, idx, uuid->uuid);
 
-        cfs_mutex_down(&obd->obd_dev_sem);
+        cfs_mutex_lock(&obd->obd_dev_mutex);
         rc = mds_lov_update_max_ost(mds, idx);
-        cfs_mutex_up(&obd->obd_dev_sem);
+        cfs_mutex_unlock(&obd->obd_dev_mutex);
         if (rc != 0)
                 GOTO(out, rc );
 
@@ -691,9 +691,9 @@ int mds_lov_connect(struct obd_device *obd, char * lov_name)
                 RETURN(-ENOTCONN);
         }
 
-        cfs_mutex_down(&obd->obd_dev_sem);
+        cfs_mutex_lock(&obd->obd_dev_mutex);
         rc = mds_lov_read_objids(obd);
-        cfs_mutex_up(&obd->obd_dev_sem);
+        cfs_mutex_unlock(&obd->obd_dev_mutex);
         if (rc) {
                 CERROR("cannot read %s: rc = %d\n", "lov_objids", rc);
                 GOTO(err_exit, rc);

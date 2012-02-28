@@ -115,7 +115,7 @@ seq_server_proc_write_space(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lss_sem);
+        cfs_mutex_lock(&seq->lss_mutex);
 	rc = seq_proc_write_common(file, buffer, count,
                                    data, &seq->lss_space);
 	if (rc == 0) {
@@ -123,7 +123,7 @@ seq_server_proc_write_space(struct file *file, const char *buffer,
                        seq->lss_name, PRANGE(&seq->lss_space));
 	}
 
-        cfs_up(&seq->lss_sem);
+        cfs_mutex_unlock(&seq->lss_mutex);
 
         RETURN(count);
 }
@@ -138,10 +138,10 @@ seq_server_proc_read_space(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lss_sem);
+        cfs_mutex_lock(&seq->lss_mutex);
 	rc = seq_proc_read_common(page, start, off, count, eof,
                                   data, &seq->lss_space);
-        cfs_up(&seq->lss_sem);
+        cfs_mutex_unlock(&seq->lss_mutex);
 
 	RETURN(rc);
 }
@@ -184,7 +184,7 @@ seq_server_proc_write_width(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lss_sem);
+        cfs_mutex_lock(&seq->lss_mutex);
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc)
@@ -197,7 +197,7 @@ seq_server_proc_write_width(struct file *file, const char *buffer,
                        seq->lss_name, seq->lss_width);
 	}
 
-        cfs_up(&seq->lss_sem);
+        cfs_mutex_unlock(&seq->lss_mutex);
 
         RETURN(count);
 }
@@ -212,9 +212,9 @@ seq_server_proc_read_width(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lss_sem);
+        cfs_mutex_lock(&seq->lss_mutex);
         rc = snprintf(page, count, LPU64"\n", seq->lss_width);
-        cfs_up(&seq->lss_sem);
+        cfs_mutex_unlock(&seq->lss_mutex);
 
 	RETURN(rc);
 }
@@ -230,7 +230,7 @@ seq_client_proc_write_space(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lcs_sem);
+        cfs_mutex_lock(&seq->lcs_mutex);
 	rc = seq_proc_write_common(file, buffer, count,
                                    data, &seq->lcs_space);
 
@@ -239,7 +239,7 @@ seq_client_proc_write_space(struct file *file, const char *buffer,
                        seq->lcs_name, PRANGE(&seq->lcs_space));
 	}
 
-        cfs_up(&seq->lcs_sem);
+        cfs_mutex_unlock(&seq->lcs_mutex);
 
         RETURN(count);
 }
@@ -254,10 +254,10 @@ seq_client_proc_read_space(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lcs_sem);
+        cfs_mutex_lock(&seq->lcs_mutex);
 	rc = seq_proc_read_common(page, start, off, count, eof,
                                   data, &seq->lcs_space);
-        cfs_up(&seq->lcs_sem);
+        cfs_mutex_unlock(&seq->lcs_mutex);
 
 	RETURN(rc);
 }
@@ -272,11 +272,11 @@ seq_client_proc_write_width(struct file *file, const char *buffer,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lcs_sem);
+        cfs_mutex_lock(&seq->lcs_mutex);
 
         rc = lprocfs_write_helper(buffer, count, &val);
         if (rc) {
-                cfs_up(&seq->lcs_sem);
+                cfs_mutex_unlock(&seq->lcs_mutex);
                 RETURN(rc);
         }
 
@@ -289,7 +289,7 @@ seq_client_proc_write_width(struct file *file, const char *buffer,
                 }
         }
 
-        cfs_up(&seq->lcs_sem);
+        cfs_mutex_unlock(&seq->lcs_mutex);
 
         RETURN(count);
 }
@@ -304,9 +304,9 @@ seq_client_proc_read_width(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lcs_sem);
+        cfs_mutex_lock(&seq->lcs_mutex);
         rc = snprintf(page, count, LPU64"\n", seq->lcs_width);
-        cfs_up(&seq->lcs_sem);
+        cfs_mutex_unlock(&seq->lcs_mutex);
 
 	RETURN(rc);
 }
@@ -321,9 +321,9 @@ seq_client_proc_read_fid(char *page, char **start, off_t off,
 
         LASSERT(seq != NULL);
 
-        cfs_down(&seq->lcs_sem);
+        cfs_mutex_lock(&seq->lcs_mutex);
         rc = snprintf(page, count, DFID"\n", PFID(&seq->lcs_fid));
-        cfs_up(&seq->lcs_sem);
+        cfs_mutex_unlock(&seq->lcs_mutex);
 
 	RETURN(rc);
 }

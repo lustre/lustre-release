@@ -1097,16 +1097,16 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
         for (nr_ns = cfs_atomic_read(ldlm_namespace_nr(client));
              nr_ns > 0; nr_ns--)
         {
-                cfs_mutex_down(ldlm_namespace_lock(client));
+                cfs_mutex_lock(ldlm_namespace_lock(client));
                 if (cfs_list_empty(ldlm_namespace_list(client))) {
-                        cfs_mutex_up(ldlm_namespace_lock(client));
+                        cfs_mutex_unlock(ldlm_namespace_lock(client));
                         cl_env_reexit(cookie);
                         return 0;
                 }
                 ns = ldlm_namespace_first_locked(client);
                 ldlm_namespace_get(ns);
                 ldlm_namespace_move_locked(ns, client);
-                cfs_mutex_up(ldlm_namespace_lock(client));
+                cfs_mutex_unlock(ldlm_namespace_lock(client));
                 total += ldlm_pool_shrink(&ns->ns_pool, 0, gfp_mask);
                 ldlm_namespace_put(ns);
         }
@@ -1127,9 +1127,9 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 /*
                  * Do not call shrink under ldlm_namespace_lock(client)
                  */
-                cfs_mutex_down(ldlm_namespace_lock(client));
+                cfs_mutex_lock(ldlm_namespace_lock(client));
                 if (cfs_list_empty(ldlm_namespace_list(client))) {
-                        cfs_mutex_up(ldlm_namespace_lock(client));
+                        cfs_mutex_unlock(ldlm_namespace_lock(client));
                         /*
                          * If list is empty, we can't return any @cached > 0,
                          * that probably would cause needless shrinker
@@ -1141,7 +1141,7 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 ns = ldlm_namespace_first_locked(client);
                 ldlm_namespace_get(ns);
                 ldlm_namespace_move_locked(ns, client);
-                cfs_mutex_up(ldlm_namespace_lock(client));
+                cfs_mutex_unlock(ldlm_namespace_lock(client));
 
                 nr_locks = ldlm_pool_granted(&ns->ns_pool);
                 cancel = 1 + nr_locks * nr / total;
@@ -1182,7 +1182,7 @@ void ldlm_pools_recalc(ldlm_side_t client)
                 /*
                  * Check all modest namespaces first.
                  */
-                cfs_mutex_down(ldlm_namespace_lock(client));
+                cfs_mutex_lock(ldlm_namespace_lock(client));
                 cfs_list_for_each_entry(ns, ldlm_namespace_list(client),
                                         ns_list_chain)
                 {
@@ -1245,7 +1245,7 @@ void ldlm_pools_recalc(ldlm_side_t client)
                         }
                         ldlm_pool_setup(&ns->ns_pool, l);
                 }
-                cfs_mutex_up(ldlm_namespace_lock(client));
+                cfs_mutex_unlock(ldlm_namespace_lock(client));
         }
 
         /*
@@ -1260,9 +1260,9 @@ void ldlm_pools_recalc(ldlm_side_t client)
                  * rid of potential deadlock on client nodes when canceling
                  * locks synchronously.
                  */
-                cfs_mutex_down(ldlm_namespace_lock(client));
+                cfs_mutex_lock(ldlm_namespace_lock(client));
                 if (cfs_list_empty(ldlm_namespace_list(client))) {
-                        cfs_mutex_up(ldlm_namespace_lock(client));
+                        cfs_mutex_unlock(ldlm_namespace_lock(client));
                         break;
                 }
                 ns = ldlm_namespace_first_locked(client);
@@ -1281,7 +1281,7 @@ void ldlm_pools_recalc(ldlm_side_t client)
                 cfs_spin_unlock(&ns->ns_lock);
 
                 ldlm_namespace_move_locked(ns, client);
-                cfs_mutex_up(ldlm_namespace_lock(client));
+                cfs_mutex_unlock(ldlm_namespace_lock(client));
 
                 /*
                  * After setup is done - recalc the pool.

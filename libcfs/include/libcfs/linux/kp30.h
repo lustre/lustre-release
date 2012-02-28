@@ -113,7 +113,9 @@ do {                                                                          \
 #define LASSERT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
 #define LINVRNT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
 #endif
+
 #define LASSERT_SEM_LOCKED(sem) LASSERT(down_trylock(sem) != 0)
+#define LASSERT_MUTEX_LOCKED(x) LASSERT(mutex_is_locked(x))
 
 #ifdef HAVE_SEM_COUNT_ATOMIC
 #define SEM_COUNT(sem)          (atomic_read(&(sem)->count))

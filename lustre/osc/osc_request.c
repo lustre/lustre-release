@@ -4222,7 +4222,7 @@ static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         LASSERT(olg == &obd->obd_olg);
 
-        cfs_mutex_down(&olg->olg_cat_processing);
+        cfs_mutex_lock(&olg->olg_cat_processing);
         rc = llog_get_cat_list(disk_obd, name, *index, 1, &catid);
         if (rc) {
                 CERROR("rc: %d\n", rc);
@@ -4246,7 +4246,7 @@ static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
         }
 
  out:
-        cfs_mutex_up(&olg->olg_cat_processing);
+        cfs_mutex_unlock(&olg->olg_cat_processing);
 
         return rc;
 }
@@ -4505,7 +4505,6 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                                             ptlrpc_add_rqs_to_pool);
 
                 CFS_INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
-                cfs_sema_init(&cli->cl_grant_sem, 1);
 
                 ns_register_cancel(obd->obd_namespace, osc_cancel_for_recovery);
         }
