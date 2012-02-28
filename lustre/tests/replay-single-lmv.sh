@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 
 set -e
 #set -v
@@ -39,6 +39,10 @@ fi
 
 mkdir -p $DIR
 
+# LU-482 Avert LVM and VM inability to flush caches in pre .33 kernels
+if [ $LINUX_VERSION_CODE -lt $(kernel_version 2 6 33) ]; then
+    sync; sleep 5; sync; sleep 5; sync; sleep 5
+fi
 
 test_0() {
     replay_barrier mds1

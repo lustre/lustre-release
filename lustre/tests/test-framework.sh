@@ -256,6 +256,13 @@ init_test_env() {
     rm -f $TMP/*active
 }
 
+kernel_version() {
+    echo -n $((($1 << 16) | ($2 << 8) | $3))
+}
+
+export LINUX_VERSION=$(uname -r | sed -e "s/[-.]/ /3" -e "s/ .*//")
+export LINUX_VERSION_CODE=$(kernel_version ${LINUX_VERSION//\./ })
+
 case `uname -r` in
 2.4.*) EXT=".o"; USE_QUOTA=no; [ ! "$CLIENTONLY" ] && FSTYPE=ext3;;
     *) EXT=".ko"; USE_QUOTA=yes;;

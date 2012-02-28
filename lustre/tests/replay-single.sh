@@ -35,8 +35,12 @@ mkdir -p $DIR
 assert_DIR
 rm -rf $DIR/[df][0-9]*
 
+# LU-482 Avert LVM and VM inability to flush caches in pre .33 kernels
+if [ $LINUX_VERSION_CODE -lt $(kernel_version 2 6 33) ]; then
+    sync; sleep 5; sync; sleep 5; sync; sleep 5
+fi
+
 test_0a() {	# was test_0
-    sleep 10
     mkdir $DIR/$tfile
     replay_barrier $SINGLEMDS
     fail $SINGLEMDS
