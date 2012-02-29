@@ -7555,12 +7555,68 @@ test_154() {
 	rc=$?
 	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
 
-	echo "open fid $fid"
-	diff /etc/hosts $DIR/.lustre/fid/$fid || error "open by fid failed: did not find expected data in file."
+	ffid=$DIR/.lustre/fid/$fid
 
-	echo "Opening a file by FID succeeded"
+	echo "stat fid $fid"
+	stat $ffid > /dev/null || error "stat $ffid failed."
+	echo "touch fid $fid"
+	touch $ffid || error "touch $ffid failed."
+	echo "write to fid $fid"
+	cat /etc/hosts > $ffid || error "write $ffid failed."
+	echo "read fid $fid"
+	diff /etc/hosts $ffid || error "read $ffid failed."
+	echo "append write to fid $fid"
+	cat /etc/hosts >> $ffid || error "append write $ffid failed."
+	echo "rename fid $fid"
+	mv $ffid $DIR/$tfile.1 && error "rename $ffid to $tfile.1 should fail."
+	touch $DIR/$tfile.1
+	mv $DIR/$tfile.1 $ffid && error "rename $tfile.1 to $ffid should fail."
+	rm -f $DIR/$tfile.1
+	echo "truncate fid $fid"
+	$TRUNCATE $ffid 777 || error "truncate $ffid failed."
+	echo "link fid $fid"
+	ln -f $ffid $DIR/tfile.lnk || error "link $ffid failed."
+	if [ -n $(lctl get_param -n mdc.*-mdc-*.connect_flags | grep acl) ]; then
+		echo "setfacl fid $fid"
+		setfacl -R -m u:bin:rwx $ffid || error "setfacl $ffid failed."
+		echo "getfacl fid $fid"
+		getfacl $ffid >/dev/null || error "getfacl $ffid failed."
+	fi
+	echo "unlink fid $fid"
+	unlink $DIR/.lustre/fid/$fid && error "unlink $ffid should fail."
+	echo "mknod fid $fid"
+	mknod $ffid c 1 3 && error "mknod $ffid should fail."
+
+	fid=[0xf00000400:0x1:0x0]
+	ffid=$DIR/.lustre/fid/$fid
+
+	echo "stat non-exist fid $fid"
+	stat $ffid > /dev/null && error "stat non-exist $ffid should fail."
+	echo "write to non-exist fid $fid"
+	cat /etc/hosts > $ffid && error "write non-exist $ffid should fail."
+	echo "link new fid $fid"
+	ln $DIR/$tfile $ffid && error "link $ffid should fail."
+
+	mkdir -p $DIR/$tdir
+	touch $DIR/$tdir/$tfile
+	fid=$($LFS path2fid $DIR/$tdir)
+	rc=$?
+	[ $rc -ne 0 ] && error "error: could not get fid for $DIR/$tfile."
+
+	ffid=$DIR/.lustre/fid/$fid
+
+	echo "ls $fid"
+	ls $ffid > /dev/null || error "ls $ffid failed."
+	echo "touch $fid/$tfile.1"
+	touch $ffid/$tfile.1 || error "touch $ffid/$tfile.1 failed."
+
+	echo "touch $DIR/.lustre/fid/$tfile"
+	touch $DIR/.lustre/fid/$tfile && \
+		error "touch $DIR/.lustre/fid/$tfile should fail."
+
+	echo "Open-by-FID succeeded"
 }
-run_test 154 "Opening a file by FID"
+run_test 154 "Open-by-FID"
 
 test_155_small_load() {
     local temp=$TMP/$tfile

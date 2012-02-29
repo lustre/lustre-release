@@ -294,6 +294,9 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (IS_ERR(parent))
                 RETURN(PTR_ERR(parent));
 
+        if (mdt_object_obf(parent))
+                GOTO(out_put_parent, rc = -EPERM);
+
         rc = mdt_version_get_check_save(info, parent, 0);
         if (rc)
                 GOTO(out_put_parent, rc);
@@ -698,6 +701,9 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 GOTO(out, rc);
         }
 
+        if (mdt_object_obf(mp))
+                GOTO(out_unlock_parent, rc = -EPERM);
+
         rc = mdt_version_get_check_save(info, mp, 0);
         if (rc)
                 GOTO(out_unlock_parent, rc);
@@ -727,6 +733,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         /* step 2: find & lock the child */
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
         /* lookup child object along with version checking */
+        fid_zero(child_fid);
         rc = mdt_lookup_version_check(info, mp, lname, child_fid, 1);
         if (rc != 0)
                  GOTO(out_unlock_parent, rc);
@@ -843,6 +850,9 @@ static int mdt_reint_link(struct mdt_thread_info *info,
                                   MDS_INODELOCK_UPDATE);
         if (IS_ERR(mp))
                 RETURN(PTR_ERR(mp));
+
+        if (mdt_object_obf(mp))
+                GOTO(out_unlock_parent, rc = -EPERM);
 
         rc = mdt_version_get_check_save(info, mp, 0);
         if (rc)
@@ -1147,6 +1157,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         if (IS_ERR(msrcdir))
                 GOTO(out_rename_lock, rc = PTR_ERR(msrcdir));
 
+        if (mdt_object_obf(msrcdir))
+                GOTO(out_unlock_source, rc = -EPERM);
+
         rc = mdt_version_get_check_save(info, msrcdir, 0);
         if (rc)
                 GOTO(out_unlock_source, rc);
@@ -1171,6 +1184,9 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 if (IS_ERR(mtgtdir))
                         GOTO(out_unlock_source, rc = PTR_ERR(mtgtdir));
 
+                if (mdt_object_obf(mtgtdir))
+                        GOTO(out_put_target, rc = -EPERM);
+
                 /* check early, the real version will be saved after locking */
                 rc = mdt_version_get_check(info, mtgtdir, 1);
                 if (rc)
@@ -1194,6 +1210,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         /* step 3: find & lock the old object. */
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
         mdt_name_copy(&slname, lname);
+        fid_zero(old_fid);
         rc = mdt_lookup_version_check(info, msrcdir, &slname, old_fid, 2);
         if (rc != 0)
                 GOTO(out_unlock_target, rc);
@@ -1223,6 +1240,7 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         /* new target object may not exist now */
         lname = mdt_name(info->mti_env, (char *)rr->rr_tgt, rr->rr_tgtlen);
         /* lookup with version checking */
+        fid_zero(new_fid);
         rc = mdt_lookup_version_check(info, mtgtdir, lname, new_fid, 3);
         if (rc == 0) {
                 /* the new_fid should have been filled at this moment */

@@ -463,9 +463,14 @@ static inline int mdt_object_exists(const struct mdt_object *o)
         return lu_object_exists(&o->mot_obj.mo_lu);
 }
 
-static inline const struct lu_fid *mdt_object_fid(struct mdt_object *o)
+static inline const struct lu_fid *mdt_object_fid(const struct mdt_object *o)
 {
         return lu_object_fid(&o->mot_obj.mo_lu);
+}
+
+static inline int mdt_object_obf(const struct mdt_object *o)
+{
+        return lu_fid_eq(mdt_object_fid(o), &LU_OBF_FID);
 }
 
 static inline struct lu_site *mdt_lu_site(const struct mdt_device *mdt)

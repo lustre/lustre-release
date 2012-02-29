@@ -1375,6 +1375,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
         mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
         if (result == -ENOENT) {
+                if (mdt_object_obf(parent))
+                        GOTO(out_child, result = -EPERM);
+
                 /* save versions in reply */
                 mdt_version_get_save(info, parent, 0);
                 mdt_version_get_save(info, child, 1);
