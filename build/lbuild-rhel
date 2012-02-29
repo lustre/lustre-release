@@ -195,7 +195,9 @@ find_linux_rpm-rhel() {
     if [ "$(lsb_release -s -i)" = "RedHatEnterpriseServer" ]; then
         sudo="sudo"
     fi
-    $sudo yumdownloader --destdir "$tmpdir" kernel-devel-"$wanted_kernel" > /dev/null
+    if ! $sudo yumdownloader --destdir "$tmpdir" kernel-devel-"$wanted_kernel" > /dev/null; then
+        fatal 1 "failed to fetch kernel-devel-$wanted_kernel with yumdownloader."
+    fi
     local rpm=$(cd $tmpdir; echo *)
     mv "$tmpdir/$rpm" "$pathtorpms"
     rmdir $tmpdir
