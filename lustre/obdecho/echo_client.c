@@ -783,7 +783,7 @@ static struct lu_device *echo_device_alloc(const struct lu_env *env,
         if (tgt == NULL) {
                 CERROR("Can not find tgt device %s\n",
                         lustre_cfg_string(cfg, 1));
-                GOTO(out, rc);
+                GOTO(out, rc = -ENODEV);
         }
 
         next = tgt->obd_lu_dev;
