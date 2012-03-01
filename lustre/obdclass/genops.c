@@ -783,6 +783,7 @@ static void class_export_destroy(struct obd_export *exp)
         if (exp->exp_connection)
                 ptlrpc_put_connection_superhack(exp->exp_connection);
 
+        LASSERT(cfs_list_empty(&exp->exp_flock_wait_list));
         LASSERT(cfs_list_empty(&exp->exp_outstanding_replies));
         LASSERT(cfs_list_empty(&exp->exp_uncommitted_replies));
         LASSERT(cfs_list_empty(&exp->exp_req_replay_queue));
@@ -856,6 +857,8 @@ struct obd_export *class_new_export(struct obd_device *obd,
 #endif
         cfs_atomic_set(&export->exp_replay_count, 0);
         export->exp_obd = obd;
+        CFS_INIT_LIST_HEAD(&export->exp_flock_wait_list);
+        cfs_rwlock_init(&export->exp_flock_wait_lock);
         CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
         cfs_spin_lock_init(&export->exp_uncommitted_replies_lock);
         CFS_INIT_LIST_HEAD(&export->exp_uncommitted_replies);
