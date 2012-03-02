@@ -233,8 +233,12 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
                          * This piece of code is definitely needed for RHEL5,
                          * otherwise, SIGBUS will be wrongly returned to
                          * applications. */
-                        ll_invalidate_page(vmpage);
-                        LASSERT(vmpage->mapping == NULL);
+                        write_one_page(vmpage, 1);
+                        lock_page(vmpage);
+                        if (vmpage->mapping != NULL) {
+                                ll_invalidate_page(vmpage);
+                                LASSERT(vmpage->mapping == NULL);
+                        }
                         unlock_page(vmpage);
                 } else if (!PageDirty(vmpage)) {
                         /* race, the page has been cleaned by ptlrpcd after

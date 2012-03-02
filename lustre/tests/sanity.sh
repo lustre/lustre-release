@@ -8532,7 +8532,8 @@ test_220() { #LU-325
 run_test 220 "preallocated MDS objects still used if ENOSPC from OST"
 
 test_221() {
-        cp `which date` $MOUNT
+        dd if=`which date` of=$MOUNT/date oflag=sync
+        chmod +x $MOUNT/date
 
         #define OBD_FAIL_LLITE_FAULT_TRUNC_RACE  0x1401
         $LCTL set_param fail_loc=0x80001401
