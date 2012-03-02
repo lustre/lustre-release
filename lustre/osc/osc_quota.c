@@ -24,7 +24,8 @@
  */
 /*
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
- * Copyright (c) 2011 Whamcloud, Inc.
+ *
+ * Copyright (c) 2012, Whamcloud, Inc.
  *
  * Code originally extracted from quota directory
  */

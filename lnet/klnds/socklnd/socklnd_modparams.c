@@ -3,6 +3,8 @@
  *
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  *
+ * Copyright (c) 2011, Whamcloud, Inc.
+ *
  *   Author: Eric Barton <eric@bartonsoftware.com>
  *
  *   Portals is free software; you can redistribute it and/or

@@ -5,6 +5,8 @@
  *
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  *
+ * Copyright (c) 2011, Whamcloud, Inc.
+ *
  * Author: Eric Mei <ericm@clusterfs.com>
  */
 

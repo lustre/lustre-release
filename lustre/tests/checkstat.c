@@ -28,6 +28,8 @@
 /*
  * Copyright (c) 2002, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2011, Whamcloud, Inc.
  */
 /*
  * Test program to compare the attributes of a files to verify that it
