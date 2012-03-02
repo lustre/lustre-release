@@ -29,6 +29,10 @@
     <note>
       <para>Although the Lustre 1.8 to 2.x upgrade path has been tested, optimum performance will be seen with a freshly formatted 2.x filesystem.</para>
     </note>
+    <note>
+      <para>From Lustre version 2.2, the large xattr (aka wide striping) feature is added to support up to 2000 OSTs. This feature is disabled by default at mkfs.lustre time. To upgrade from an existing filesystem to enable wide striping on the MDT, "<literal>tune2fs -O large_xattr</literal>" needs to be run on the MDT device before mounting it after the upgrade.</para>
+      <para>Then, once the wide striping feature is enabled and in use on the MDT, it will not be possible to directly downgrade the MDT filesystem to an earlier version of Lustre that does not support wide striping. The only way to disable it would be to delete all of the files with large xattrs before downgrade, then unmount the MDT, and then run "<literal>tune2fs -O ^large_xattr</literal>" to turn off this filesystem feature.</para>
+    </note>
     <section remap="h3">
       <title><indexterm><primary>upgrading</primary><secondary>file system</secondary></indexterm>Performing a File System Upgrade</title>
       <para>This procedure describes a file system upgrade in which Lustre 2.x packages are installed on multiple 1.8 servers and, optionally, clients, requiring a file system shutdown. You can choose to upgrade the entire Lustre file system to 2.x, or just upgrade the servers to Lustre 2.x and leave the clients running 1.8.6 or later.</para>
