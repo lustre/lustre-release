@@ -76,6 +76,7 @@ test_0b() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "open succeeded unexpectedly"
     fi
@@ -125,6 +126,7 @@ test_0e() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "create succeeded unexpectedly"
     fi
@@ -158,6 +160,7 @@ test_0g() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "unlink succeeded unexpectedly"
     fi
@@ -208,6 +211,7 @@ test_0j() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if ! do_node $CLIENT1 $CHECKSTAT -u \\\#$UID $file; then
         error "setattr of UID succeeded unexpectedly"
     fi
@@ -228,6 +232,7 @@ test_0k() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if ! do_node $CLIENT1 $CHECKSTAT -g \\\#$UID $file; then
         error "setattr of GID succeeded unexpectedly"
     fi
@@ -263,6 +268,7 @@ test_0m() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if ! do_node $CLIENT1 $CHECKSTAT -p 0644 $file; then
         error "setattr of permission succeeded unexpectedly"
     fi
@@ -430,6 +436,7 @@ test_0t() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "link should fail"
     fi
@@ -449,6 +456,7 @@ test_0u() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if ! do_node $CLIENT1 $CHECKSTAT -a $DIR/$tdir/$tfile; then
         error "link should fail"
     fi
@@ -507,6 +515,7 @@ test_0x() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tfile; then
         error "rename should fail"
     fi
@@ -526,6 +535,7 @@ test_0y() {
     facet_failover mds
 
     client_evicted $CLIENT1 || error "$CLIENT1 not evicted"
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     if do_node $CLIENT1 $CHECKSTAT -a $DIR/$tfile; then
         error "rename should fail"
     fi
@@ -720,6 +730,7 @@ test_3b() {
     # recovery should fail due to missing client 2
     client_evicted $CLIENT1 || return 1
 
+    wait_clients_import_state $CLIENT1 mds FULL || error "$CLIENT1 not up"
     do_node $CLIENT1 $CHECKSTAT -p 0755 $DIR/$tfile && return 2
     zconf_mount $CLIENT2 $DIR || error "mount $CLIENT2 $DIR fail"
 
@@ -945,6 +956,7 @@ test_5b() {
     vbr_activate_client $CLIENT2
     client_evicted $CLIENT2 || return 4
     # file from client2 should fail
+    wait_clients_import_state $CLIENT2 mds FULL || error "$CLIENT2 not up"
     do_node $CLIENT2 $CHECKSTAT $DIR/$tfile-2-0 && error "$tfile-2-0 exists"
 
     # All 50 files from client 1 should have been replayed
