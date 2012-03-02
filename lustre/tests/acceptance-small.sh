@@ -8,7 +8,7 @@ export MSKIPPED=0
 export OSKIPPED=0
 
 # This is the default set of tests to run.
-DEFAULT_SUITES="runtests sanity sanity-benchmark sanityn lfsck liblustre
+DEFAULT_SUITES="runtests sanity sanity-benchmark sanityn lfsck
                 racer replay-single conf-sanity recovery-small
                 replay-ost-single replay-dual replay-vbr insanity sanity-quota
                 sanity-sec sanity-gss performance-sanity large-scale
