@@ -1594,8 +1594,8 @@ repeat:
         } else if (obd->obd_recovery_expired) {
                 obd->obd_recovery_expired = 0;
                 /** If some clients died being recovered, evict them */
-                CDEBUG(D_WARNING,
-                       "recovery is timed out, evict stale exports\n");
+                LCONSOLE_WARN("%s: recovery is timed out, "
+                              "evict stale exports\n", obd->obd_name);
                 /** evict cexports with no replay in queue, they are stalled */
                 class_disconnect_stale_exports(obd, health_check);
                 /** continue with VBR */
@@ -2071,8 +2071,9 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
          * Also, a resent, replayed request that has already been
          * handled will pass through here and be processed immediately.
          */
-        CWARN("Next recovery transno: "LPU64", current: "LPU64", replaying\n",
-              obd->obd_next_recovery_transno, transno);
+        CDEBUG(D_HA, "Next recovery transno: "LPU64
+               ", current: "LPU64", replaying\n",
+               obd->obd_next_recovery_transno, transno);
         cfs_spin_lock(&obd->obd_recovery_task_lock);
         if (transno < obd->obd_next_recovery_transno) {
                 /* Processing the queue right now, don't re-add. */
