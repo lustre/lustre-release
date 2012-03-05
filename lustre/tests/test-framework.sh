@@ -133,10 +133,9 @@ init_test_env() {
     #[ -d /r ] && export ROOT=${ROOT:-/r}
     export TMP=${TMP:-$ROOT/tmp}
     export TESTSUITELOG=${TMP}/${TESTSUITE}.log
-    if [[ -z $LOGDIRSET ]]; then
-        export LOGDIR=${LOGDIR:-${TMP}/test_logs/}/$(date +%s)
-        export LOGDIRSET=true
-    fi
+    export LOGDIR=${LOGDIR:-${TMP}/test_logs/$(date +%s)}
+    export TESTLOG_PREFIX=$LOGDIR/$TESTSUITE
+
     export HOSTNAME=${HOSTNAME:-$(hostname -s)}
     if ! echo $PATH | grep -q $LUSTRE/utils; then
         export PATH=$LUSTRE/utils:$PATH
@@ -1111,11 +1110,14 @@ start_client_load() {
                               BREAK_ON_ERROR=$BREAK_ON_ERROR \
                               END_RUN_FILE=$END_RUN_FILE \
                               LOAD_PID_FILE=$LOAD_PID_FILE \
-                              TESTSUITELOG=$TESTSUITELOG \
+                              TESTLOG_PREFIX=$TESTLOG_PREFIX \
                               run_${load}.sh" &
-    CLIENT_LOAD_PIDS="$CLIENT_LOAD_PIDS $!"
+    local ppid=$!
     log "Started client load: ${load} on $client"
 
+    # get the children process IDs
+    local pids=$(ps --ppid $ppid -o pid= | xargs)
+    CLIENT_LOAD_PIDS="$CLIENT_LOAD_PIDS $ppid $pids"
     return 0
 }
 
@@ -4254,7 +4256,7 @@ gather_logs () {
  
     # dump lustre logs, dmesg
 
-    prefix="$LOGDIR/${TESTSUITE}.${TESTNAME}"
+    prefix="$TESTLOG_PREFIX.$TESTNAME"
     suffix="$ts.log"
     echo "Dumping lctl log to ${prefix}.*.${suffix}"
 
@@ -4278,12 +4280,6 @@ gather_logs () {
 
         echo $archive
     fi
-}
-
-cleanup_logs () {
-    local list=${1:-$(comma_list $(nodes_list))}
-
-    [ -n ${TESTSUITE} ] && do_nodes $list "rm -f $TMP/*${TESTSUITE}*" || true
 }
 
 do_ls () {

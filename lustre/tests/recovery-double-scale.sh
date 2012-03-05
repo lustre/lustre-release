@@ -18,10 +18,8 @@ init_test_env $@
 
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
-TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
-DEBUGLOG=$TESTSUITELOG.debug
 
-cleanup_logs
+DEBUGLOG=$TESTLOG_PREFIX.suite_debug_log.$(hostname -s).log
 
 exec 2>$DEBUGLOG
 echo "--- env ---" >&2
@@ -86,8 +84,9 @@ reboot_recover_node () {
                 ;;
        clients) for c in ${item//,/ }; do
                       # make sure the client loads die
-                      do_nodes $c "set -x; test -f $TMP/client-load.pid && \
-                             { kill -s TERM \$(cat $TMP/client-load.pid) || true; }"
+                      do_nodes $c "set -x; test -f $LOAD_PID_FILE &&
+                          { kill -s TERM \\\$(cat $LOAD_PID_FILE);
+                          rm -f $LOAD_PID_FILE || true; }"
                       shutdown_client $c
                       boot_node $c
                       echo "Reintegrating $c"
@@ -198,6 +197,7 @@ failover_pair() {
 
 summary_and_cleanup () {
     local rc=$?
+    local var
     trap 0
 
     # Having not empty END_RUN_FILE means the failed loads only
@@ -207,17 +207,16 @@ summary_and_cleanup () {
         local END_RUN_NODE=
         read END_RUN_NODE < $END_RUN_FILE
 
-        # a client load will end (i.e. fail) if it finds
-        # the end run file.  that does not mean that that client load
-        # actually failed though.  the first node in the END_RUN_NODE is
-        # the one we are really interested in.
+        # A client load will stop if it found the END_RUN_FILE file.
+        # That does not mean the client load actually failed though.
+        # The first node in END_RUN_FILE is the one we are interested in.
         if [ -n "$END_RUN_NODE" ]; then
             var=$(node_var_name $END_RUN_NODE)_load
             echo "Client load failed on node $END_RUN_NODE"
             echo
-            echo "client $END_RUN_NODE load debug output :"
-            local logfile=${TESTSUITELOG}_run_${!var}.sh-${END_RUN_NODE}.debug 
-            do_node ${END_RUN_NODE} "set -x; [ -e $logfile ] && cat $logfile " || true
+            echo "Client $END_RUN_NODE load stdout and debug files:
+                $TESTLOG_PREFIX.run_${!var}_stdout.$END_RUN_NODE.log
+                $TESTLOG_PREFIX.run_${!var}_debug.$END_RUN_NODE.log"
         fi
         rc=1
     fi
@@ -233,8 +232,9 @@ Exited after:           $ELAPSED seconds
 Status: $result: rc=$rc"
 
     # make sure the client loads die
-    do_nodes $NODES_TO_USE "set -x; test -f $TMP/client-load.pid && \
-        { kill -s TERM \$(cat $TMP/client-load.pid) || true; }"
+    do_nodes $NODES_TO_USE "set -x; test -f $LOAD_PID_FILE &&
+        { kill -s TERM \\\$(cat $LOAD_PID_FILE);
+        rm -f $LOAD_PID_FILE || true; }"
 
     # and free up the pdshes that started them, if any are still around
     if [ -n "$CLIENT_LOAD_PIDS" ]; then
@@ -249,7 +249,7 @@ Status: $result: rc=$rc"
         # FIXME: need ostfailover-s nodes also for FLAVOR=OST
         local product=$(gather_logs $(comma_list $(osts_nodes) \
                         $(mdts_nodes) $mdsfailover_HOST $failedclients) 1)
-        echo logs files $product
+        echo $product
     fi
 
     [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
@@ -277,9 +277,10 @@ FAILOVER_PERIOD=${FAILOVER_PERIOD:-$((60*5))} # 5 minutes
 
 # Start client loads.
 start_client_loads $NODES_TO_USE
+
 echo clients load pids:
-if ! do_nodesv $NODES_TO_USE "cat $TMP/client-load.pid"; then
-        exit 3
+if ! do_nodesv $NODES_TO_USE "cat $LOAD_PID_FILE"; then
+    exit 3
 fi
 
 # FIXME: Do we want to have an initial sleep period where the clients 
