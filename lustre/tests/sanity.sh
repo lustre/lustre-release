@@ -10,13 +10,13 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 # bug number for skipped test: 13297 2108 9789 3637 9789 3561 12622 5188
-ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   68b  $SANITY_EXCEPT"
+ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   68b   $SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # Tests that fail on uml
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 #                                    buffer i/o errs             sock spc runas
-[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 27m 27n 27o 27p 27q 27r 31d 54a  64b 99a 99b 99c 99d 99e 99f 101"
+[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 27m 27n 27o 27p 27q 27r 31d 54a  64b 99a 99b 99c 99d 99e 99f 101a"
 
 case `uname -r` in
 2.4*) FSTYPE=${FSTYPE:-ext3} ;;
@@ -66,7 +66,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24v 27m 36f 36g 36h 51b 51c 60c 63 64b 68 71 73 77f 78 101 103 115 120g 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24v 27m 36f 36g 36h 51b 51c 60c 63 64b 68 71 73 77f 78 101a 103 115 120g 124b"
 
 FAIL_ON_ERROR=false
 
@@ -4557,30 +4557,30 @@ function get_named_value()
         line=$REPLY
         case $line in
         $tag*)
-            echo $line | sed "s/^$tag//"
+            echo $line | sed "s/^$tag[ ]*//"
             break
             ;;
         esac
     done
 }
 
-export CACHE_MAX=`lctl get_param -n llite.*.max_cached_mb | head -n 1`
-cleanup_101() {
-	lctl set_param -n llite.*.max_cached_mb $CACHE_MAX
+export CACHE_MAX=`$LCTL get_param -n llite.*.max_cached_mb | head -n 1`
+cleanup_101a() {
+	$LCTL set_param -n llite.*.max_cached_mb $CACHE_MAX
 	trap 0
 }
 
-test_101() {
+test_101a() {
 	local s
 	local discard
 	local nreads=10000
 	[ "$CPU" = "UML" ] && nreads=1000
 	local cache_limit=32
 
-	lctl set_param -n osc.*-osc*.rpc_stats 0
-	trap cleanup_101 EXIT
-	lctl set_param -n llite.*.read_ahead_stats 0
-	lctl set_param -n llite.*.max_cached_mb $cache_limit
+	$LCTL set_param -n osc.*-osc*.rpc_stats 0
+	trap cleanup_101a EXIT
+	$LCTL set_param -n llite.*.read_ahead_stats 0
+	$LCTL set_param -n llite.*.max_cached_mb $cache_limit
 
 	#
 	# randomly read 10000 of 64K chunks from file 3x 32MB in size
@@ -4589,38 +4589,46 @@ test_101() {
 	$READS -f $DIR/$tfile -s$((cache_limit * 3192 * 1024)) -b65536 -C -n$nreads -t 180
 
 	discard=0
-        for s in `lctl get_param -n llite.*.read_ahead_stats | \
+        for s in `$LCTL get_param -n llite.*.read_ahead_stats | \
 		get_named_value 'read but discarded' | cut -d" " -f1`; do
 			discard=$(($discard + $s))
 	done
-	cleanup_101
+	cleanup_101a
 
 	if [ $(($discard * 10)) -gt $nreads ] ;then
-		lctl get_param osc.*-osc*.rpc_stats
-		lctl get_param llite.*.read_ahead_stats
+		$LCTL get_param osc.*-osc*.rpc_stats
+		$LCTL get_param llite.*.read_ahead_stats
 		error "too many ($discard) discarded pages"
 	fi
 	rm -f $DIR/$tfile || true
 }
-run_test 101 "check read-ahead for random reads ================"
+run_test 101a "check read-ahead for random reads ================"
 
-setup_test101b() {
+setup_test101bc() {
 	mkdir -p $DIR/$tdir
 	STRIPE_SIZE=1048576
 	STRIPE_COUNT=$OSTCOUNT
 	STRIPE_OFFSET=0
 
-	trap cleanup_test101b EXIT
+	local list=$(comma_list $(osts_nodes))
+	do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable=0
+	do_nodes $list $LCTL set_param -n obdfilter.*.writethrough_cache_enable=0
+
+	trap cleanup_test101bc EXIT
 	# prepare the read-ahead file
 	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
 
 	dd if=/dev/zero of=$DIR/$tfile bs=1024k count=100 2> /dev/null
 }
 
-cleanup_test101b() {
+cleanup_test101bc() {
 	trap 0
 	rm -rf $DIR/$tdir
 	rm -f $DIR/$tfile
+
+	local list=$(comma_list $(osts_nodes))
+	do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable=1
+	do_nodes $list $LCTL set_param -n obdfilter.*.writethrough_cache_enable=1
 }
 
 calc_total() {
@@ -4638,9 +4646,8 @@ ra_check_101() {
 	DISCARD=`$LCTL get_param -n llite.*.read_ahead_stats | \
 			get_named_value 'read but discarded' | \
 			cut -d" " -f1 | calc_total`
-
 	if [ $DISCARD -gt $discard_limit ]; then
-		lctl get_param llite.*.read_ahead_stats
+		$LCTL get_param llite.*.read_ahead_stats
 		error "Too many ($DISCARD) discarded pages with size (${READ_SIZE})"
 	else
 		echo "Read-ahead success for size ${READ_SIZE}"
@@ -4654,7 +4661,7 @@ test_101b() {
 	local FILE_LENGTH=$((STRIPE_SIZE*100))
 	local ITERATION=$((FILE_LENGTH/STRIDE_SIZE))
 	# prepare the read-ahead file
-	setup_test101b
+	setup_test101bc
 	cancel_lru_locks osc
 	for BIDX in 2 4 8 16 32 64 128 256
 	do
@@ -4668,14 +4675,55 @@ test_101b() {
 		cancel_lru_locks osc
 		ra_check_101 $BSIZE
 	done
-	cleanup_test101b
+	cleanup_test101bc
 	true
 }
 run_test 101b "check stride-io mode read-ahead ================="
 
+test_101c() {
+    local STRIPE_SIZE=1048576
+    local FILE_LENGTH=$((STRIPE_SIZE*100))
+    local nreads=10000
+    local osc
+
+    setup_test101bc
+
+    cancel_lru_locks osc
+    $LCTL set_param osc.*.rpc_stats 0
+    $READS -f $DIR/$tfile -s$FILE_LENGTH -b65536 -n$nreads -t 180
+    for osc in $($LCTL get_param -N osc.*); do
+        if [ "$osc" == "osc.num_refs" ]; then
+            continue
+        fi
+
+        local lines=$($LCTL get_param -n ${osc}.rpc_stats | wc | awk '{print $1}')
+        if [ $lines -le 20 ]; then
+            continue
+        fi
+
+        local rpc4k=$($LCTL get_param -n ${osc}.rpc_stats |
+                                     awk '$1 == "1:" { print $2; exit; }')
+        local rpc8k=$($LCTL get_param -n ${osc}.rpc_stats |
+                                     awk '$1 == "2:" { print $2; exit; }')
+        local rpc16k=$($LCTL get_param -n ${osc}.rpc_stats |
+                                     awk '$1 == "4:" { print $2; exit; }')
+        local rpc32k=$($LCTL get_param -n ${osc}.rpc_stats |
+                                     awk '$1 == "8:" { print $2; exit; }')
+
+        [ $rpc4k != 0 ]  && error "Small 4k read IO ${rpc4k}!"
+        [ $rpc8k != 0 ]  && error "Small 8k read IO ${rpc8k}!"
+        [ $rpc16k != 0 ] && error "Small 16k read IO ${rpc16k}!"
+        [ $rpc32k != 0 ] && error "Small 32k read IO ${rpc32k}!"
+        echo "${osc} rpc check passed!"
+    done
+    cleanup_test101bc
+    true
+}
+run_test 101c "check stripe_size aligned read-ahead ================="
+
 set_read_ahead() {
-   lctl get_param -n llite.*.max_read_ahead_mb | head -n 1
-   lctl set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
+   $LCTL get_param -n llite.*.max_read_ahead_mb | head -n 1
+   $LCTL set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
 }
 
 test_101d() {
@@ -4717,6 +4765,79 @@ test_101d() {
                read-ahead disabled time read (${time_ra_OFF}s) filesize ${size}M"
 }
 run_test 101d "file read with and without read-ahead enabled  ================="
+
+test_101e() {
+    local file=$DIR/$tfile
+    local size=500  #KB
+    local count=100
+    local blksize=1024
+
+    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
+    local need_space=$((count * size))
+    [ $space -gt $need_space ] ||
+        { skip_env "Need free space $need_space, have $space" && return; }
+
+    echo Creating $count ${size}K test files
+    for ((i = 0; i < $count; i++)); do
+        dd if=/dev/zero of=${file}_${i} bs=$blksize count=$size 2>/dev/null
+    done
+
+    echo Cancel LRU locks on lustre client to flush the client cache
+    cancel_lru_locks osc
+
+    echo Reset readahead stats
+    $LCTL set_param -n llite.*.read_ahead_stats 0
+
+    for ((i = 0; i < $count; i++)); do
+        dd if=${file}_${i} of=/dev/null bs=$blksize count=$size 2>/dev/null
+    done
+
+    local miss=$($LCTL get_param -n llite.*.read_ahead_stats | \
+          get_named_value 'misses' | cut -d" " -f1 | calc_total)
+
+    for ((i = 0; i < $count; i++)); do
+        rm -rf ${file}_${i} 2>/dev/null
+    done
+
+    #10000 means 20% reads are missing in readahead
+    [ $miss -lt 10000 ] ||  error "misses too much for small reads"
+}
+run_test 101e "check read-ahead for small read(1k) for small files(500k)"
+
+cleanup_test101f() {
+    trap 0
+    $LCTL set_param -n llite.*.max_read_ahead_whole_mb $MAX_WHOLE_MB
+    rm -rf $DIR/$tfile 2>/dev/null
+}
+
+test_101f() {
+    local file=$DIR/$tfile
+    local nreads=1000
+
+    MAX_WHOLE_MB=$($LCTL get_param -n llite.*.max_read_ahead_whole_mb)
+    $LCTL set_param -n llite.*.max_read_ahead_whole_mb 2
+    dd if=/dev/zero of=${file} bs=2097152 count=1 2>/dev/null
+    trap cleanup_test101f EXIT
+
+    echo Cancel LRU locks on lustre client to flush the client cache
+    cancel_lru_locks osc
+
+    echo Reset readahead stats
+    $LCTL set_param -n llite.*.read_ahead_stats 0
+    # Random read in a 2M file, because max_read_ahead_whole_mb = 2M,
+    # readahead should read in 2M file on second read, so only miss
+    # 2 pages.
+    echo Random 4K reads on 2M file for 1000 times
+    $READS -f $file -s 2097152 -b 4096 -n $nreads
+
+    echo checking missing pages
+    local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
+          get_named_value 'misses' | cut -d" " -f1 | calc_total)
+
+    [ $miss -lt 3 ] || error "misses too much pages!"
+    cleanup_test101f
+}
+run_test 101f "check read-ahead for max_read_ahead_whole_mb"
 
 setup_test102() {
 	mkdir -p $DIR/$tdir

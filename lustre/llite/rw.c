@@ -323,35 +323,62 @@ struct obd_capa *cl_capa_lookup(struct inode *inode, enum cl_req_type crt)
 
 static void ll_ra_stats_inc_sbi(struct ll_sb_info *sbi, enum ra_stat which);
 
-/* WARNING: This algorithm is used to reduce the contention on
- * sbi->ll_lock. It should work well if the ra_max_pages is much
- * greater than the single file's read-ahead window.
+/**
+ * Get readahead pages from the filesystem readahead pool of the client for a
+ * thread.
  *
- * TODO: There may exist a `global sync problem' in this implementation.
- * Considering the global ra window is 100M, and each file's ra window is 10M,
- * there are over 10 files trying to get its ra budget and reach
- * ll_ra_count_get at the exactly same time. All of them will get a zero ra
- * window, although the global window is 100M. -jay
- */
-static unsigned long ll_ra_count_get(struct ll_sb_info *sbi, unsigned long len)
+ * /param sbi superblock for filesystem readahead state ll_ra_info
+ * /param ria per-thread readahead state
+ * /param pages number of pages requested for readahead for the thread.
+ *
+ * WARNING: This algorithm is used to reduce contention on sbi->ll_lock.
+ * It should work well if the ra_max_pages is much greater than the single
+ * file's read-ahead window, and not too many threads contending for
+ * these readahead pages.
+ *
+ * TODO: There may be a 'global sync problem' if many threads are trying
+ * to get an ra budget that is larger than the remaining readahead pages
+ * and reach here at exactly the same time. They will compute /a ret to
+ * consume the remaining pages, but will fail at atomic_add_return() and
+ * get a zero ra window, although there is still ra space remaining. - Jay */
+
+static unsigned long ll_ra_count_get(struct ll_sb_info *sbi,
+                                     struct ra_io_arg *ria,
+                                     unsigned long pages)
 {
         struct ll_ra_info *ra = &sbi->ll_ra_info;
-        unsigned long ret;
+        long ret;
         ENTRY;
 
-        /**
-         * If read-ahead pages left are less than 1M, do not do read-ahead,
+        /* If read-ahead pages left are less than 1M, do not do read-ahead,
          * otherwise it will form small read RPC(< 1M), which hurt server
-         * performance a lot.
-         */
-        ret = min(ra->ra_max_pages - cfs_atomic_read(&ra->ra_cur_pages), len);
-        if ((int)ret < 0 || ret < min((unsigned long)PTLRPC_MAX_BRW_PAGES, len))
+         * performance a lot. */
+        ret = min(ra->ra_max_pages - cfs_atomic_read(&ra->ra_cur_pages), pages);
+        if (ret < 0 || ret < min_t(long, PTLRPC_MAX_BRW_PAGES, pages))
                 GOTO(out, ret = 0);
+
+        /* If the non-strided (ria_pages == 0) readahead window
+         * (ria_start + ret) has grown across an RPC boundary, then trim
+         * readahead size by the amount beyond the RPC so it ends on an
+         * RPC boundary. If the readahead window is already ending on
+         * an RPC boundary (beyond_rpc == 0), or smaller than a full
+         * RPC (beyond_rpc < ret) the readahead size is unchanged.
+         * The (beyond_rpc != 0) check is skipped since the conditional
+         * branch is more expensive than subtracting zero from the result.
+         *
+         * Strided read is left unaligned to avoid small fragments beyond
+         * the RPC boundary from needing an extra read RPC. */
+        if (ria->ria_pages == 0) {
+                long beyond_rpc = (ria->ria_start + ret) % PTLRPC_MAX_BRW_PAGES;
+                if (/* beyond_rpc != 0 && */ beyond_rpc < ret)
+                        ret -= beyond_rpc;
+        }
 
         if (cfs_atomic_add_return(ret, &ra->ra_cur_pages) > ra->ra_max_pages) {
                 cfs_atomic_sub(ret, &ra->ra_cur_pages);
                 ret = 0;
         }
+
 out:
         RETURN(ret);
 }
@@ -745,7 +772,7 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
                 end = ras->ras_window_start + ras->ras_window_len - 1;
         }
         if (end != 0) {
-                unsigned long tmp_end;
+                unsigned long rpc_boundary;
                 /*
                  * Align RA window to an optimal boundary.
                  *
@@ -754,9 +781,15 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
                  * be aligned to the RAID stripe size in the future and that
                  * is more important than the RPC size.
                  */
-                tmp_end = ((end + 1) & (~(PTLRPC_MAX_BRW_PAGES - 1))) - 1;
-                if (tmp_end > start)
-                        end = tmp_end;
+                /* Note: we only trim the RPC, instead of extending the RPC
+                 * to the boundary, so to avoid reading too much pages during
+                 * random reading. */
+                rpc_boundary = ((end + 1) & (~(PTLRPC_MAX_BRW_PAGES - 1)));
+                if (rpc_boundary > 0)
+                        rpc_boundary--;
+
+                if (rpc_boundary  > start)
+                        end = rpc_boundary;
 
                 /* Truncate RA window to end of file */
                 end = min(end, (unsigned long)((kms - 1) >> CFS_PAGE_SHIFT));
@@ -782,12 +815,14 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
         if (len == 0)
                 RETURN(0);
 
-        reserved = ll_ra_count_get(ll_i2sbi(inode), len);
+        reserved = ll_ra_count_get(ll_i2sbi(inode), ria, len);
 
         if (reserved < len)
                 ll_ra_stats_inc(mapping, RA_STAT_MAX_IN_FLIGHT);
 
-        CDEBUG(D_READA, "reserved page %lu \n", reserved);
+        CDEBUG(D_READA, "reserved page %lu ra_cur %d ra_max %lu\n", reserved,
+               cfs_atomic_read(&ll_i2sbi(inode)->ll_ra_info.ra_cur_pages),
+               ll_i2sbi(inode)->ll_ra_info.ra_max_pages);
 
         ret = ll_read_ahead_pages(env, io, queue,
                                   ria, &reserved, mapping, &ra_end);
