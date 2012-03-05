@@ -1029,7 +1029,9 @@ dont_check_exports:
                              &export->exp_connection->c_peer.nid,
                              &export->exp_nid_hash);
         }
-
+        /**
+          class_disconnect->class_export_recovery_cleanup() race
+         */
         cfs_spin_lock(&target->obd_recovery_task_lock);
         if (target->obd_recovering && !export->exp_in_recovery) {
                 cfs_spin_lock(&export->exp_lock);

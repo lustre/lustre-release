@@ -709,17 +709,52 @@ struct obd_import *class_conn2cliimp(struct lustre_handle *conn)
 }
 
 /* Export management functions */
+
+/* if export is involved in recovery then clean up related things */
+void class_export_recovery_cleanup(struct obd_export *exp)
+{
+        struct obd_device *obd = exp->exp_obd;
+
+        cfs_spin_lock(&obd->obd_recovery_task_lock);
+        if (exp->exp_delayed)
+                obd->obd_delayed_clients--;
+        if (obd->obd_recovering && exp->exp_in_recovery) {
+                cfs_spin_lock(&exp->exp_lock);
+                exp->exp_in_recovery = 0;
+                cfs_spin_unlock(&exp->exp_lock);
+                LASSERT(obd->obd_connected_clients);
+                obd->obd_connected_clients--;
+        }
+        cfs_spin_unlock(&obd->obd_recovery_task_lock);
+        /** Cleanup req replay fields */
+        if (exp->exp_req_replay_needed) {
+                cfs_spin_lock(&exp->exp_lock);
+                exp->exp_req_replay_needed = 0;
+                cfs_spin_unlock(&exp->exp_lock);
+                LASSERT(cfs_atomic_read(&obd->obd_req_replay_clients));
+                cfs_atomic_dec(&obd->obd_req_replay_clients);
+        }
+        /** Cleanup lock replay data */
+        if (exp->exp_lock_replay_needed) {
+                cfs_spin_lock(&exp->exp_lock);
+                exp->exp_lock_replay_needed = 0;
+                cfs_spin_unlock(&exp->exp_lock);
+                LASSERT(cfs_atomic_read(&obd->obd_lock_replay_clients));
+                cfs_atomic_dec(&obd->obd_lock_replay_clients);
+        }
+}
+
 static void class_export_destroy(struct obd_export *exp)
 {
         struct obd_device *obd = exp->exp_obd;
         ENTRY;
 
         LASSERT_ATOMIC_ZERO(&exp->exp_refcount);
+        LASSERT(obd != NULL);
 
         CDEBUG(D_IOCTL, "destroying export %p/%s for %s\n", exp,
                exp->exp_client_uuid.uuid, obd->obd_name);
 
-        LASSERT(obd != NULL);
 
         /* "Local" exports (lctl, LOV->{mdc,osc}) have no connection. */
         if (exp->exp_connection)
@@ -764,6 +799,7 @@ void class_export_put(struct obd_export *exp)
 
                 /* release nid stat refererence */
                 lprocfs_exp_cleanup(exp);
+                class_export_recovery_cleanup(exp);
 
                 obd_zombie_export_add(exp);
         }
@@ -1078,40 +1114,6 @@ int class_connect(struct lustre_handle *conn, struct obd_device *obd,
 }
 EXPORT_SYMBOL(class_connect);
 
-/* if export is involved in recovery then clean up related things */
-void class_export_recovery_cleanup(struct obd_export *exp)
-{
-        struct obd_device *obd = exp->exp_obd;
-
-        cfs_spin_lock(&obd->obd_recovery_task_lock);
-        if (exp->exp_delayed)
-                obd->obd_delayed_clients--;
-        if (obd->obd_recovering && exp->exp_in_recovery) {
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_in_recovery = 0;
-                cfs_spin_unlock(&exp->exp_lock);
-                LASSERT(obd->obd_connected_clients);
-                obd->obd_connected_clients--;
-        }
-        cfs_spin_unlock(&obd->obd_recovery_task_lock);
-        /** Cleanup req replay fields */
-        if (exp->exp_req_replay_needed) {
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_req_replay_needed = 0;
-                cfs_spin_unlock(&exp->exp_lock);
-                LASSERT(cfs_atomic_read(&obd->obd_req_replay_clients));
-                cfs_atomic_dec(&obd->obd_req_replay_clients);
-        }
-        /** Cleanup lock replay data */
-        if (exp->exp_lock_replay_needed) {
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_lock_replay_needed = 0;
-                cfs_spin_unlock(&exp->exp_lock);
-                LASSERT(cfs_atomic_read(&obd->obd_lock_replay_clients));
-                cfs_atomic_dec(&obd->obd_lock_replay_clients);
-        }
-}
-
 /* This function removes 1-3 references from the export:
  * 1 - for export pointer passed
  * and if disconnect really need
@@ -1150,7 +1152,6 @@ int class_disconnect(struct obd_export *export)
                              &export->exp_connection->c_peer.nid,
                              &export->exp_nid_hash);
 
-        class_export_recovery_cleanup(export);
         class_unlink_export(export);
 no_disconn:
         class_export_put(export);
@@ -1255,13 +1256,23 @@ void class_disconnect_stale_exports(struct obd_device *obd,
         CFS_INIT_LIST_HEAD(&work_list);
         cfs_spin_lock(&obd->obd_dev_lock);
         cfs_list_for_each_safe(pos, n, &obd->obd_exports) {
+                int failed;
+
                 exp = cfs_list_entry(pos, struct obd_export, exp_obd_chain);
-                if (test_export(exp))
-                        continue;
 
                 /* don't count self-export as client */
                 if (obd_uuid_equals(&exp->exp_client_uuid,
                                     &exp->exp_obd->obd_uuid))
+                        continue;
+
+                if (test_export(exp))
+                        continue;
+
+                cfs_spin_lock(&exp->exp_lock);
+                failed = exp->exp_failed;
+                exp->exp_failed = 1;
+                cfs_spin_unlock(&exp->exp_lock);
+                if (failed)
                         continue;
 
                 cfs_list_move(&exp->exp_obd_chain, &work_list);
@@ -1306,6 +1317,9 @@ void class_fail_export(struct obd_export *exp)
         if (obd_dump_on_timeout)
                 libcfs_debug_dumplog();
 
+        /* need for safe call CDEBUG after obd_disconnect */
+        class_export_get(exp);
+
         /* Most callers into obd_disconnect are removing their own reference
          * (request, for example) in addition to the one from the hash table.
          * We don't have such a reference here, so make one. */
@@ -1316,6 +1330,7 @@ void class_fail_export(struct obd_export *exp)
         else
                 CDEBUG(D_HA, "disconnected export %p/%s\n",
                        exp, exp->exp_client_uuid.uuid);
+        class_export_put(exp);
 }
 EXPORT_SYMBOL(class_fail_export);
 
