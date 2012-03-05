@@ -20,10 +20,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
-DEBUGLOG=$TESTSUITELOG.debug
-
-cleanup_logs
+DEBUGLOG=$TESTLOG_PREFIX.suite_debug_log.$(hostname -s).log
 
 exec 2>$DEBUGLOG
 echo "--- env ---" >&2
@@ -45,6 +42,7 @@ check_shared_dir $SHARED_DIRECTORY ||
 
 END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY/end_run_file}
 LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
+VMSTAT_PID_FILE=${VMSTAT_PID_FILE:-$TMP/vmstat.pid}
 
 remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
 
@@ -80,8 +78,6 @@ fi
 
 rm -f $END_RUN_FILE
 
-vmstatLOG=${TESTSUITELOG}_$(basename $0 .sh).vmstat
-
 numfailovers () {
     local facet
     local var
@@ -95,21 +91,7 @@ numfailovers () {
     done
 }
 
-# list is comma separated
-print_logs () {
-    local list=$1
-
-    do_nodes $list "node=\\\$(hostname)
-var=\\\${node}_load
-log=${TESTSUITELOG}_run_${!var}.sh-\\\$node.debug
-if [ -e \\\$log ] ; then
-echo Node \\\$node debug log:
-cat \\\$log
-fi"
-}
-
 summary_and_cleanup () {
-
     local rc=$?
     local var
     trap 0
@@ -121,21 +103,19 @@ summary_and_cleanup () {
         local END_RUN_NODE=
         read END_RUN_NODE < $END_RUN_FILE
 
-    # a client load will end (i.e. fail) if it finds
-    # the end run file.  that does not mean that that client load
-    # actually failed though.  the first node in the END_RUN_NODE is
-    # the one we are really interested in.
+        # A client load will stop if it found the END_RUN_FILE file.
+        # That does not mean the client load actually failed though.
+        # The first node in END_RUN_FILE is the one we are interested in.
         if [ -n "$END_RUN_NODE" ]; then
             var=$(node_var_name $END_RUN_NODE)_load
             echo "Client load failed on node $END_RUN_NODE"
             echo
-            echo "client $END_RUN_NODE load stdout and debug files :
-              ${TESTSUITELOG}_run_${!var}.sh-${END_RUN_NODE}
-              ${TESTSUITELOG}_run_${!var}.sh-${END_RUN_NODE}.debug"
+            echo "Client $END_RUN_NODE load stdout and debug files:
+                $TESTLOG_PREFIX.run_${!var}_stdout.$END_RUN_NODE.log
+                $TESTLOG_PREFIX.run_${!var}_debug.$END_RUN_NODE.log"
         fi
         rc=1
     fi
-
 
     echo $(date +'%F %H:%M:%S') Terminating clients loads ...
     echo "$0" >> $END_RUN_FILE
@@ -151,14 +131,15 @@ Status: $result: rc=$rc"
 
     # stop the vmstats on the OSTs
     if [ "$VMSTAT" ]; then
-        do_nodes $(comma_list $(osts_nodes)) "test -f /tmp/vmstat.pid && \
-            { kill -s TERM \$(cat /tmp/vmstat.pid); rm -f /tmp/vmstat.pid; \
-            gzip -f9 $vmstatLOG-\$(hostname); }"
+        do_nodes $(comma_list $(osts_nodes)) "test -f $VMSTAT_PID_FILE &&
+            { kill -s TERM \\\$(cat $VMSTAT_PID_FILE);
+            rm -f $VMSTAT_PID_FILE || true; }"
     fi
 
     # make sure the client loads die
-    do_nodes $NODES_TO_USE "set -x; test -f $LOAD_PID_FILE && \
-        { kill -s TERM \$(cat $LOAD_PID_FILE) || true; }"
+    do_nodes $NODES_TO_USE "set -x; test -f $LOAD_PID_FILE &&
+        { kill -s TERM \\\$(cat $LOAD_PID_FILE);
+        rm -f $LOAD_PID_FILE || true; }"
 
     # and free up the pdshes that started them, if any are still around
     if [ -n "$CLIENT_LOAD_PIDS" ]; then
@@ -168,13 +149,12 @@ Status: $result: rc=$rc"
     fi
 
     if [ $rc -ne 0 ]; then
-        print_logs $NODES_TO_USE
         # we are interested in only on failed clients and servers
         local failedclients=$(cat $END_RUN_FILE | grep -v $0)
         # FIXME: need ostfailover-s nodes also for FLAVOR=OST
         local product=$(gather_logs $(comma_list $(osts_nodes) \
                         $(mdts_nodes) $mdsfailover_HOST $failedclients) 1)
-        echo logs files $product
+        echo $product
     fi
 
     [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
@@ -193,7 +173,9 @@ ELAPSED=0
 
 # vmstat the osts
 if [ "$VMSTAT" ]; then
-    do_nodes $(comma_list $(osts_nodes)) "vmstat 1 > $vmstatLOG-\$(hostname) 2>/dev/null </dev/null & echo \$! > /tmp/vmstat.pid"
+    do_nodes $(comma_list $(osts_nodes)) \
+        "vmstat 1 > $TESTLOG_PREFIX.vmstat.\\\$(hostname -s).log \
+        2>/dev/null </dev/null & echo \\\$! > $VMSTAT_PID_FILE"
 fi
 
 # Start client loads.
@@ -201,7 +183,7 @@ start_client_loads $NODES_TO_USE
 
 echo clients load pids:
 if ! do_nodesv $NODES_TO_USE "cat $LOAD_PID_FILE"; then
-        exit 3
+    exit 3
 fi
 
 START_TS=$(date +%s)

@@ -3,9 +3,9 @@ set -x
 
 TMP=${TMP:-/tmp}
 
-TESTSUITELOG=${TESTSUITELOG:-$TMP/recovery-mds-scale}
-LOG=${TESTSUITELOG}_$(basename $0)-$(hostname)
-DEBUGLOG=${LOG}.debug
+TESTLOG_PREFIX=${TESTLOG_PREFIX:-$TMP/recovery-mds-scale}
+LOG=$TESTLOG_PREFIX.$(basename $0 .sh)_stdout.$(hostname -s).log
+DEBUGLOG=$(echo $LOG | sed 's/\(.*\)stdout/\1debug/')
 
 mkdir -p ${LOG%/*}
 
