@@ -1039,7 +1039,9 @@ dont_check_exports:
                              &export->exp_connection->c_peer.nid,
                              &export->exp_nid_hash);
         }
-
+        /**
+          class_disconnect->class_export_recovery_cleanup() race
+         */
         if (target->obd_recovering && !export->exp_in_recovery) {
                 int has_transno;
                 __u64 transno = data->ocd_transno;
