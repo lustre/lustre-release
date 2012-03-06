@@ -744,11 +744,12 @@ void dt_version_set(const struct lu_env *env, struct dt_object *o,
 dt_obj_version_t dt_version_get(const struct lu_env *env, struct dt_object *o);
 
 
+int dt_read(const struct lu_env *env, struct dt_object *dt,
+            struct lu_buf *buf, loff_t *pos);
 int dt_record_read(const struct lu_env *env, struct dt_object *dt,
                    struct lu_buf *buf, loff_t *pos);
 int dt_record_write(const struct lu_env *env, struct dt_object *dt,
                     const struct lu_buf *buf, loff_t *pos, struct thandle *th);
-
 
 static inline struct thandle *dt_trans_create(const struct lu_env *env,
                                               struct dt_device *d)
@@ -798,6 +799,8 @@ static inline int dt_declare_record_write(const struct lu_env *env,
 
         LASSERTF(dt != NULL, "dt is NULL when we want to write record\n");
         LASSERT(th != NULL);
+        LASSERT(dt->do_body_ops);
+        LASSERT(dt->do_body_ops->dbo_declare_write);
         rc = dt->do_body_ops->dbo_declare_write(env, dt, size, pos, th);
         return rc;
 }

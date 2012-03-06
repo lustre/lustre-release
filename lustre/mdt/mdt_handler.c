@@ -578,7 +578,9 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         } else if (S_ISLNK(la->la_mode) &&
                    reqbody->valid & OBD_MD_LINKNAME) {
                 buffer->lb_buf = ma->ma_lmm;
-                buffer->lb_len = reqbody->eadatasize;
+                /* eadatasize from client includes NULL-terminator, so
+                 * there is no need to read it */
+                buffer->lb_len = reqbody->eadatasize - 1;
                 rc = mo_readlink(env, next, buffer);
                 if (unlikely(rc <= 0)) {
                         CERROR("readlink failed: %d\n", rc);
@@ -587,9 +589,14 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
                                  rc -= 2;
                         repbody->valid |= OBD_MD_LINKNAME;
-                        repbody->eadatasize = rc;
+                        /* we need to report back size with NULL-terminator
+                         * because client expects that */
+                        repbody->eadatasize = rc + 1;
+                        if (repbody->eadatasize != reqbody->eadatasize)
+                                CERROR("Read shorter link %d than expected "
+                                       "%d\n", rc, reqbody->eadatasize - 1);
                         /* NULL terminate */
-                        ((char*)ma->ma_lmm)[rc - 1] = 0;
+                        ((char*)ma->ma_lmm)[rc] = 0;
                         CDEBUG(D_INODE, "symlink dest %s, len = %d\n",
                                (char*)ma->ma_lmm, rc);
                         rc = 0;

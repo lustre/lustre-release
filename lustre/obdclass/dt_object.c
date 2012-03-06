@@ -391,6 +391,38 @@ void dt_global_fini(void)
         lu_context_key_degister(&dt_key);
 }
 
+/**
+ * Generic read helper. May return an error for partial reads.
+ *
+ * \param env  lustre environment
+ * \param dt   object to be read
+ * \param buf  lu_buf to be filled, with buffer pointer and length
+ * \param pos position to start reading, updated as data is read
+ *
+ * \retval real size of data read
+ * \retval -ve errno on failure
+ */
+int dt_read(const struct lu_env *env, struct dt_object *dt,
+            struct lu_buf *buf, loff_t *pos)
+{
+        LASSERTF(dt != NULL, "dt is NULL when we want to read record\n");
+        return dt->do_body_ops->dbo_read(env, dt, buf, pos, BYPASS_CAPA);
+}
+EXPORT_SYMBOL(dt_read);
+
+/**
+ * Read structures of fixed size from storage.  Unlike dt_read(), using
+ * dt_record_read() will return an error for partial reads.
+ *
+ * \param env  lustre environment
+ * \param dt   object to be read
+ * \param buf  lu_buf to be filled, with buffer pointer and length
+ * \param pos position to start reading, updated as data is read
+ *
+ * \retval 0 on successfully reading full buffer
+ * \retval -EFAULT on short read
+ * \retval -ve errno on failure
+ */
 int dt_record_read(const struct lu_env *env, struct dt_object *dt,
                    struct lu_buf *buf, loff_t *pos)
 {
@@ -452,7 +484,7 @@ void dt_version_set(const struct lu_env *env, struct dt_object *o,
         vbuf.lb_len = sizeof(version);
 
         rc = dt_xattr_set(env, o, &vbuf, xname, 0, th, BYPASS_CAPA);
-        if (rc != 0)
+        if (rc < 0)
                 CDEBUG(D_INODE, "Can't set version, rc %d\n", rc);
         return;
 }
