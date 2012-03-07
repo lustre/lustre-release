@@ -523,6 +523,11 @@ static int ptlrpcd_bind(int index, int max)
 {
         struct ptlrpcd_ctl *pc;
         int rc = 0;
+#if defined(CONFIG_NUMA) && defined(HAVE_NODE_TO_CPUMASK)
+        struct ptlrpcd_ctl *ppc;
+        int node, i, pidx;
+        cpumask_t mask;
+#endif
         ENTRY;
 
         LASSERT(index <= max - 1);
@@ -540,8 +545,17 @@ static int ptlrpcd_bind(int index, int max)
                 pc->pc_npartners = 1;
                 break;
         case PDB_POLICY_NEIGHBOR:
+#if defined(CONFIG_NUMA) && defined(HAVE_NODE_TO_CPUMASK)
+                node = cpu_to_node(index);
+                mask = node_to_cpumask(node);
+                for (i = max; i < cfs_num_online_cpus(); i++)
+                        cpu_clear(i, mask);
+                pc->pc_npartners = cpus_weight(mask) - 1;
+                cfs_set_bit(LIOD_BIND, &pc->pc_flags);
+#else
                 LASSERT(max >= 3);
                 pc->pc_npartners = 2;
+#endif
                 break;
         default:
                 CERROR("unknown ptlrpcd bind policy %d\n", ptlrpcd_bind_policy);
@@ -555,12 +569,10 @@ static int ptlrpcd_bind(int index, int max)
                         pc->pc_npartners = 0;
                         rc = -ENOMEM;
                 } else {
-                        if (index & 0x1)
-                                cfs_set_bit(LIOD_BIND, &pc->pc_flags);
-
                         switch (ptlrpcd_bind_policy) {
                         case PDB_POLICY_PAIR:
                                 if (index & 0x1) {
+                                        cfs_set_bit(LIOD_BIND, &pc->pc_flags);
                                         pc->pc_partners[0] = &ptlrpcds->
                                                 pd_threads[index - 1];
                                         ptlrpcds->pd_threads[index - 1].
@@ -568,6 +580,25 @@ static int ptlrpcd_bind(int index, int max)
                                 }
                                 break;
                         case PDB_POLICY_NEIGHBOR:
+#if defined(CONFIG_NUMA) && defined(HAVE_NODE_TO_CPUMASK)
+                                /* partners are cores in the same NUMA node.
+                                 * setup partnership only with ptlrpcd threads
+                                 * that are already initialized
+                                 */
+                                for (pidx = 0, i = 0; i < index; i++) {
+                                        if (cpu_isset(i, mask)) {
+                                                ppc = &ptlrpcds->pd_threads[i];
+                                                pc->pc_partners[pidx++] = ppc;
+                                                ppc->pc_partners[ppc->
+                                                          pc_npartners++] = pc;
+                                        }
+                                }
+                                /* adjust number of partners to the number
+                                 * of partnership really setup */
+                                pc->pc_npartners = pidx;
+#else
+                                if (index & 0x1)
+                                        cfs_set_bit(LIOD_BIND, &pc->pc_flags);
                                 if (index > 0) {
                                         pc->pc_partners[0] = &ptlrpcds->
                                                 pd_threads[index - 1];
@@ -580,6 +611,7 @@ static int ptlrpcd_bind(int index, int max)
                                                 pc_partners[0] = pc;
                                         }
                                 }
+#endif
                                 break;
                         }
                 }

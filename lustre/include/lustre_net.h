@@ -1925,7 +1925,9 @@ typedef enum {
         /* <free1 bound1> <free2 bound2> ... <freeN boundN> */
         PDB_POLICY_PAIR          = 3,
         /* <free1 bound1> <bound1 free2> ... <freeN boundN> <boundN free1>,
-         * means each ptlrpcd[X] has two partners: thread[X-1] and thread[X+1]*/
+         * means each ptlrpcd[X] has two partners: thread[X-1] and thread[X+1].
+         * If kernel supports NUMA, pthrpcd threads are binded and
+         * grouped by NUMA node */
         PDB_POLICY_NEIGHBOR      = 4,
 } pdb_policy_t;
 
