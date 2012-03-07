@@ -1,4 +1,5 @@
 #!/bin/bash
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 # client failure does not affect other clients
 
@@ -9,111 +10,75 @@
 # 10 minute intervals and verify that no application errors occur.
 
 # Test runs one of CLIENT_LOAD progs on remote clients.
+set -e
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
-SETUP=${SETUP:-""}
-CLEANUP=${CLEANUP:-""}
+ONLY=${ONLY:-"$*"}
+
+# bug number for skipped test:
+ALWAYS_EXCEPT="$RECOVERY_RANDOM_SCALE_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-DEBUGLOG=$TESTLOG_PREFIX.suite_debug_log.$(hostname -s).log
+remote_mds_nodsh && skip_env "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip_env "remote OST with nodsh" && exit 0
 
-exec 2>$DEBUGLOG
-echo "--- env ---" >&2
-env >&2
-echo "--- env ---" >&2
-set -x
+[ -z "$CLIENTS" -o $CLIENTCOUNT -lt 3 ] &&
+    skip_env "need three or more clients" && exit 0
 
-[ "$SHARED_DIRECTORY" ] || \
-    { FAIL_ON_ERROR=true skip_env "$0 Empty SHARED_DIRECTORY" && exit 0; }
+if [ -z "$SHARED_DIRECTORY" ] || ! check_shared_dir $SHARED_DIRECTORY; then
+    skip_env "SHARED_DIRECTORY should be specified with a shared directory \
+which is accessable on all of the nodes"
+    exit 0
+fi
 
-check_shared_dir $SHARED_DIRECTORY ||
-    error "$SHARED_DIRECTORY isn't a shared directory"
+[[ $FAILURE_MODE = SOFT ]] && \
+    log "WARNING: $0 is not functional with FAILURE_MODE = SOFT, bz22797"
 
-[ -n "$CLIENTS" ] || \
-    { FAIL_ON_ERROR=true skip_env "$0 Need two or more remote clients" && exit 0; }
+# Application failures are allowed for the failed client
+# but not for other clients.
+ERRORS_OK="yes"
 
-[ $CLIENTCOUNT -ge 3 ] || \
-    { FAIL_ON_ERROR=true skip_env "$0 Need two or more remote clients, have $((CLIENTCOUNT - 1))" && exit 0; }
+if [ "$SLOW" = "no" ]; then
+    DURATION=${DURATION:-$((60 * 30))}
+else
+    DURATION=${DURATION:-$((60 * 60 * 24))}
+fi
+SERVER_FAILOVER_PERIOD=${SERVER_FAILOVER_PERIOD:-$((60 * 10))} # 10 minutes
+
+MINSLEEP=${MINSLEEP:-120}
+REQFAIL_PERCENT=${REQFAIL_PERCENT:-3}    # bug17839 comment 62
+REQFAIL=${REQFAIL:-$((DURATION / SERVER_FAILOVER_PERIOD *
+                      REQFAIL_PERCENT / 100))}
 
 END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY/end_run_file}
 LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
 VMSTAT_PID_FILE=${VMSTAT_PID_FILE:-$TMP/vmstat.pid}
 
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-
-[[ $FAILURE_MODE = SOFT ]] && \
-    log "WARNING: $0 is not functional with FAILURE_MODE = SOFT, bz22797"
-
-build_test_filter
-
-check_and_setup_lustre
-rm -rf $DIR/[df][0-9]*
-
-max_recov_time=$(max_recovery_time)
-
-# the test node needs to be insulated from a lustre failure as much as possible,
-# so not even loading the lustre modules is ideal.
-# -- umount lustre
-# -- remove hostname from clients list
-zconf_umount $(hostname) $MOUNT
-NODES_TO_USE=${NODES_TO_USE:-$CLIENTS}
-NODES_TO_USE=$(exclude_items_from_list $NODES_TO_USE $(hostname))
-
-check_progs_installed $NODES_TO_USE ${CLIENT_LOADS[@]}
-
-MDTS=$(get_facets MDS)
-
-if [ "$SLOW" = "no" ]; then
-    DURATION=${DURATION:-$((60 * 30))}
-    SERVER_FAILOVER_PERIOD=${SERVER_FAILOVER_PERIOD:-$((60 * 5))}
-else
-    DURATION=${DURATION:-$((60 * 60 * 24))}
-    SERVER_FAILOVER_PERIOD=${SERVER_FAILOVER_PERIOD:-$((60 * 10))} # 10 minutes
-fi
-
-rm -f $END_RUN_FILE
-
 numfailovers () {
     local facet
     local var
 
-    for facet in $MDTS ${failed_clients//,/ }; do
+    for facet in $MDTS ${FAILED_CLIENTS//,/ }; do
         var=${facet}_nums
         val=${!var}
         if [ "$val" ] ; then
-            echo "$facet failed  over  $val times"
+            echo "$facet failed over $val times"
         fi
     done
 }
 
 summary_and_cleanup () {
     local rc=$?
-    local var
     trap 0
 
     # Having not empty END_RUN_FILE means the failed loads only
     if [ -s $END_RUN_FILE ]; then
-        echo "Found the END_RUN_FILE file: $END_RUN_FILE"
-        cat $END_RUN_FILE
-        local END_RUN_NODE=
-        read END_RUN_NODE < $END_RUN_FILE
-
-        # A client load will stop if it found the END_RUN_FILE file.
-        # That does not mean the client load actually failed though.
-        # The first node in END_RUN_FILE is the one we are interested in.
-        if [ -n "$END_RUN_NODE" ]; then
-            var=$(node_var_name $END_RUN_NODE)_load
-            echo "Client load failed on node $END_RUN_NODE"
-            echo
-            echo "Client $END_RUN_NODE load stdout and debug files:
-                $TESTLOG_PREFIX.run_${!var}_stdout.$END_RUN_NODE.log
-                $TESTLOG_PREFIX.run_${!var}_debug.$END_RUN_NODE.log"
-        fi
+        print_end_run_file $END_RUN_FILE
         rc=1
     fi
 
@@ -122,183 +87,184 @@ summary_and_cleanup () {
     local result=PASS
     [ $rc -eq 0 ] || result=FAIL
 
-    log "Duration:                $DURATION
+    log "Duration:               $DURATION
 Server failover period: $SERVER_FAILOVER_PERIOD seconds
 Exited after:           $ELAPSED seconds
 Number of failovers before exit:
 $(numfailovers)
 Status: $result: rc=$rc"
 
-    # stop the vmstats on the OSTs
-    if [ "$VMSTAT" ]; then
-        do_nodes $(comma_list $(osts_nodes)) "test -f $VMSTAT_PID_FILE &&
-            { kill -s TERM \\\$(cat $VMSTAT_PID_FILE);
-            rm -f $VMSTAT_PID_FILE || true; }"
-    fi
+    # stop vmstat on OSS nodes
+    [ "$VMSTAT" ] && stop_process $(comma_list $(osts_nodes)) $VMSTAT_PID_FILE
 
-    # make sure the client loads die
-    do_nodes $NODES_TO_USE "set -x; test -f $LOAD_PID_FILE &&
-        { kill -s TERM \\\$(cat $LOAD_PID_FILE);
-        rm -f $LOAD_PID_FILE || true; }"
-
-    # and free up the pdshes that started them, if any are still around
-    if [ -n "$CLIENT_LOAD_PIDS" ]; then
-        kill $CLIENT_LOAD_PIDS || true
-        sleep 5
-        kill -9 $CLIENT_LOAD_PIDS || true
-    fi
+    # stop the client loads
+    stop_client_loads $NODES_TO_USE $LOAD_PID_FILE
 
     if [ $rc -ne 0 ]; then
         # we are interested in only on failed clients and servers
         local failedclients=$(cat $END_RUN_FILE | grep -v $0)
         # FIXME: need ostfailover-s nodes also for FLAVOR=OST
-        local product=$(gather_logs $(comma_list $(osts_nodes) \
-                        $(mdts_nodes) $mdsfailover_HOST $failedclients) 1)
-        echo $product
+        gather_logs $(comma_list $(osts_nodes) $(mdts_nodes) \
+                      $mdsfailover_HOST $failedclients)
     fi
-
-    [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
 
     exit $rc
 }
 
-#
-# MAIN 
-#
-log "-----============= $0 starting =============-----"
+################################## Main Flow ###################################
+build_test_filter
 
-trap summary_and_cleanup EXIT # INT
+check_and_setup_lustre
+rm -rf $DIR/[Rdfs][0-9]*
 
-ELAPSED=0
+MAX_RECOV_TIME=$(max_recovery_time)
 
-# vmstat the osts
-if [ "$VMSTAT" ]; then
-    do_nodes $(comma_list $(osts_nodes)) \
-        "vmstat 1 > $TESTLOG_PREFIX.vmstat.\\\$(hostname -s).log \
-        2>/dev/null </dev/null & echo \\\$! > $VMSTAT_PID_FILE"
-fi
+# The test node needs to be insulated from a lustre failure as much as possible,
+# so not even loading the lustre modules is ideal.
+# -- umount lustre
+# -- remove hostname from clients list
+zconf_umount $HOSTNAME $MOUNT
+NODES_TO_USE=${NODES_TO_USE:-$CLIENTS}
+NODES_TO_USE=$(exclude_items_from_list $NODES_TO_USE $HOSTNAME)
 
-# Start client loads.
-start_client_loads $NODES_TO_USE
+check_progs_installed $NODES_TO_USE ${CLIENT_LOADS[@]}
 
-echo clients load pids:
-if ! do_nodesv $NODES_TO_USE "cat $LOAD_PID_FILE"; then
-    exit 3
-fi
+MDTS=$(get_facets MDS)
 
-START_TS=$(date +%s)
-CURRENT_TS=$START_TS
+# Fail a random client and then failover a random MDS.
+test_fail_client_mds() {
+    local fail_client
+    local serverfacet
+    local client_var
+    local var
 
-MINSLEEP=${MINSLEEP:-120}
-REQFAIL_PERCENT=${REQFAIL_PERCENT:-3}	# bug17839 comment 62
-REQFAIL=${REQFAIL:-$(( DURATION / SERVER_FAILOVER_PERIOD * REQFAIL_PERCENT / 100))}
-reqfail=0
-sleep=0
+    trap summary_and_cleanup EXIT INT
 
-# This is used for FAIL_CLIENT only
-ERRORS_OK="yes"
-while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
+    # start vmstat on OSS nodes
+    [ "$VMSTAT" ] && start_vmstat $(comma_list $(osts_nodes)) $VMSTAT_PID_FILE
 
-    # In order to perform the 
-    # expected number of failovers, we need to account the following :
-    # 1) the time that has elapsed during the client load checking
-    # 2) time takes for failover
+    # start client loads
+    rm -f $END_RUN_FILE
+    start_client_loads $NODES_TO_USE
 
-    it_time_start=$(date +%s)
-    
-    FAIL_CLIENT=$(get_random_entry $NODES_TO_USE)
-    client_var=$(node_var_name $FAIL_CLIENT)_nums
+    echo client loads pids:
+    do_nodesv $NODES_TO_USE "cat $LOAD_PID_FILE" || exit 3
 
-    # store the list of failed clients
-    # lists are comma separated
-    failed_clients=$(expand_list $failed_clients $FAIL_CLIENT)
+    ELAPSED=0
+    local sleep=0
+    local reqfail=0
+    local it_time_start
+    local start_ts=$(date +%s)
+    local current_ts=$start_ts
 
-    SERVERFACET=$(get_random_entry $MDTS)
-    var=${SERVERFACET}_nums
+    while [ $ELAPSED -lt $DURATION -a ! -e $END_RUN_FILE ]; do
+        # In order to perform the
+        # expected number of failovers, we need to account the following:
+        # 1) the time that has elapsed during the client load checking
+        # 2) time takes for failover
+        it_time_start=$(date +%s)
 
-    # Check that our client loads are still running. If any have died, 
-    # that means they have died outside of recovery, which is unacceptable.    
+        fail_client=$(get_random_entry $NODES_TO_USE)
+        client_var=$(node_var_name $fail_client)_nums
 
-    log "==== Checking the clients loads BEFORE failover -- failure NOT OK \
-    ELAPSED=$ELAPSED DURATION=$DURATION PERIOD=$SERVER_FAILOVER_PERIOD" 
+        # store the list of failed clients
+        # lists are comma separated
+        FAILED_CLIENTS=$(expand_list $FAILED_CLIENTS $fail_client)
 
-    if ! check_client_loads $NODES_TO_USE; then
-        exit 4
-    fi
+        serverfacet=$(get_random_entry $MDTS)
+        var=${serverfacet}_nums
 
-    log "FAIL CLIENT $FAIL_CLIENT ... "
-    shutdown_client $FAIL_CLIENT
+        # Check that our client loads are still running. If any have died,
+        # that means they have died outside of recovery, which is unacceptable.
+        log "==== Checking the clients loads BEFORE failover -- failure NOT OK \
+             ELAPSED=$ELAPSED DURATION=$DURATION PERIOD=$SERVER_FAILOVER_PERIOD"
+        check_client_loads $NODES_TO_USE || exit 4
 
-    log "Starting failover on $SERVERFACET"
+        log "FAIL CLIENT $fail_client..."
+        shutdown_client $fail_client
 
-    facet_failover "$SERVERFACET" || exit 1
-    if ! wait_recovery_complete $SERVERFACET ; then
-        echo "$SERVERFACET recovery is not completed!"
-        exit 7
-    fi
+        log "Starting failover on $serverfacet"
+        facet_failover "$serverfacet" || exit 1
 
-    boot_node $FAIL_CLIENT
-    echo "Reintegrating $FAIL_CLIENT"
-    zconf_mount $FAIL_CLIENT $MOUNT || exit $?
+        if ! wait_recovery_complete $serverfacet; then
+            echo "$serverfacet recovery is not completed!"
+            exit 7
+        fi
 
-    # Increment the number of failovers
-    val=$((${!var} + 1))
-    eval $var=$val
-    val=$((${!client_var} + 1))
-    eval $client_var=$val
+        boot_node $fail_client
+        echo "Reintegrating $fail_client"
+        zconf_mount $fail_client $MOUNT || exit $?
+        client_up $fail_client || exit $?
 
-    # load script on failed clients could create END_RUN_FILE
-    # We shuold remove it and ignore the failure if this
-    # file contains the failed client only.
-    # We can not use ERRORS_OK when start all loads at the start of this script
-    # because the application errors allowed for random failed client only, but
-    # not for all clients.
-    if [ -e $END_RUN_FILE ]; then
-        read END_RUN_NODE < $END_RUN_FILE
-        [[ $END_RUN_NODE = $FAIL_CLIENT ]] &&
-            rm -f $END_RUN_FILE || exit 13
-    fi
+        # Increment the number of failovers
+        val=$((${!var} + 1))
+        eval $var=$val
+        val=$((${!client_var} + 1))
+        eval $client_var=$val
 
-    restart_client_loads $FAIL_CLIENT $ERRORS_OK || exit $?
+        # load script on failed clients could create END_RUN_FILE
+        # We shuold remove it and ignore the failure if this
+        # file contains the failed client only.
+        # We can not use ERRORS_OK when start all loads at the start of
+        # this script because the application errors allowed for random
+        # failed client only, but not for all clients.
+        if [ -e $END_RUN_FILE ]; then
+            local end_run_node
+            read end_run_node < $END_RUN_FILE
+            [[ $end_run_node = $fail_client ]] &&
+                rm -f $END_RUN_FILE || exit 13
+        fi
 
-    # Check that not failed clients loads are still running.
-    # No application failures should occur on clients that was not failed.
+        restart_client_loads $fail_client $ERRORS_OK || exit $?
 
-    log "==== Checking the clients loads AFTER failed client reintegrated -- failure NOT OK"
-    if ! ERRORS_OK= check_client_loads $(exclude_items_from_list $NODES_TO_USE $FAIL_CLIENT); then
-        log "Client load failed. Exiting"
-        exit 5
-    fi
+        # Check that not failed clients loads are still running.
+        # No application failures should occur on clients that were not failed.
+        log "==== Checking the clients loads AFTER failed client reintegrated \
+-- failure NOT OK"
+        if ! ERRORS_OK= check_client_loads \
+            $(exclude_items_from_list $NODES_TO_USE $fail_client); then
+            log "Client load failed. Exiting..."
+            exit 5
+        fi
 
-    CURRENT_TS=$(date +%s)
-    ELAPSED=$((CURRENT_TS - START_TS))
-    sleep=$((SERVER_FAILOVER_PERIOD-(CURRENT_TS - it_time_start)))
+        current_ts=$(date +%s)
+        ELAPSED=$((current_ts - start_ts))
+        sleep=$((SERVER_FAILOVER_PERIOD - (current_ts - it_time_start)))
 
-    # keep count the number of itterations when
-    # time spend to failover and two client loads check exceeded 
-    # the value ( SERVER_FAILOVER_PERIOD - MINSLEEP )
-    if [ $sleep -lt $MINSLEEP ]; then
-        reqfail=$((reqfail +1))
-        log "WARNING: failover, client reintegration and check_client_loads time exceeded SERVER_FAILOVER_PERIOD - MINSLEEP !
-Failed to load the filesystem with I/O for a minimum period of $MINSLEEP $reqfail times ( REQFAIL=$REQFAIL ).
+        # Keep counting the number of iterations when
+        # time spent to failover and two client loads check exceeded
+        # the value ( SERVER_FAILOVER_PERIOD - MINSLEEP ).
+        if [ $sleep -lt $MINSLEEP ]; then
+            reqfail=$((reqfail + 1))
+            log "WARNING: failover, client reintegration and \
+check_client_loads time exceeded SERVER_FAILOVER_PERIOD - MINSLEEP!
+Failed to load the filesystem with I/O for a minimum period of \
+$MINSLEEP $reqfail times ( REQFAIL=$REQFAIL ).
 This iteration, the load was only applied for sleep=$sleep seconds.
-Estimated max recovery time : $max_recov_time
-Probably the hardware is taking excessively long to boot.
-Try to increase SERVER_FAILOVER_PERIOD (current is $SERVER_FAILOVER_PERIOD), bug 20918"
-        [ $reqfail -gt $REQFAIL ] && exit 6
-    fi
+Estimated max recovery time : $MAX_RECOV_TIME
+Probably the hardware is taking excessively long time to boot.
+Try to increase SERVER_FAILOVER_PERIOD (current is $SERVER_FAILOVER_PERIOD), \
+bug 20918"
+            [ $reqfail -gt $REQFAIL ] && exit 6
+        fi
 
-    log " Number of failovers:
+        log "Number of failovers:
 $(numfailovers)                and counting..."
 
-    if [ $((ELAPSED + sleep)) -ge $DURATION ]; then
-         break
-    fi
+        [ $((ELAPSED + sleep)) -ge $DURATION ] && break
 
-    if [ $sleep -gt 0 ]; then
-        echo "sleeping $sleep seconds ... "
-        sleep $sleep
-    fi
-done
+        if [ $sleep -gt 0 ]; then
+            echo "sleeping $sleep seconds... "
+            sleep $sleep
+        fi
+    done
+    exit 0
+}
+run_test fail_client_mds "fail client, then failover MDS"
 
-exit 0
+zconf_mount $HOSTNAME $MOUNT || error "mount $MOUNT on $HOSTNAME failed"
+client_up || error "start client on $HOSTNAME failed"
+
+complete $(basename $0) $SECONDS
+check_and_cleanup_lustre
+exit_status
