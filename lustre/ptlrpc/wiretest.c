@@ -338,6 +338,9 @@ void lustre_assert_wire_constants(void)
         CLASSERT(LDLM_FLOCK == 12);
         CLASSERT(LDLM_IBITS == 13);
         CLASSERT(LDLM_MAX_TYPE == 14);
+        CLASSERT(LUSTRE_RES_ID_SEQ_OFF == 0);
+        CLASSERT(LUSTRE_RES_ID_VER_OID_OFF == 1);
+        CLASSERT(LUSTRE_RES_ID_HSH_OFF == 3);
         LASSERTF(OBD_PING == 400, "found %lld\n",
                  (long long)OBD_PING);
         LASSERTF(OBD_LOG_CANCEL == 401, "found %lld\n",
