@@ -1075,6 +1075,7 @@ static void ll_start_agl(struct dentry *parent, struct ll_statahead_info *sai)
         rc = cfs_create_thread(ll_agl_thread, parent, 0);
         if (rc < 0) {
                 CERROR("can't start ll_agl thread, rc: %d\n", rc);
+                thread_set_flags(thread, SVC_STOPPED);
                 RETURN_EXIT;
         }
 
@@ -1093,6 +1094,7 @@ static int ll_statahead_thread(void *arg)
         struct ll_sb_info        *sbi    = ll_i2sbi(dir);
         struct ll_statahead_info *sai    = ll_sai_get(plli->lli_sai);
         struct ptlrpc_thread     *thread = &sai->sai_thread;
+        struct ptlrpc_thread *agl_thread = &sai->sai_agl_thread;
         struct page              *page;
         __u64                     pos    = 0;
         int                       first  = 0;
@@ -1294,8 +1296,6 @@ do_it:
 
 out:
         if (sai->sai_agl_valid) {
-                struct ptlrpc_thread *agl_thread = &sai->sai_agl_thread;
-
                 cfs_spin_lock(&plli->lli_agl_lock);
                 thread_set_flags(agl_thread, SVC_STOPPING);
                 cfs_spin_unlock(&plli->lli_agl_lock);
@@ -1306,8 +1306,10 @@ out:
                 l_wait_event(agl_thread->t_ctl_waitq,
                              thread_is_stopped(agl_thread),
                              &lwi);
+        } else {
+                /* Set agl_thread flags anyway. */
+                thread_set_flags(&sai->sai_agl_thread, SVC_STOPPED);
         }
-
         ll_dir_chain_fini(&chain);
         cfs_spin_lock(&plli->lli_sa_lock);
         if (!sa_received_empty(sai)) {
@@ -1718,6 +1720,7 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
                 dput(parent);
                 lli->lli_opendir_key = NULL;
                 thread_set_flags(thread, SVC_STOPPED);
+                thread_set_flags(&sai->sai_agl_thread, SVC_STOPPED);
                 ll_sai_put(sai);
                 LASSERT(lli->lli_sai == NULL);
                 RETURN(-EAGAIN);
