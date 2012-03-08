@@ -66,7 +66,7 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 init_logging
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24v 27m 36f 36g 36h 51b 51c 60c 63 64b 68 71 73 77f 78 101a 103 115 120g 124b"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="24o 24v 27m 36f 36g 36h 51b 60c 63 64b 68 71 73 77f 78 101a 103 115 120g 124b"
 
 FAIL_ON_ERROR=false
 
@@ -3083,15 +3083,6 @@ test_51bb() {
 		error "Objects/inodes are not distributed over all mds servers"
 }
 run_test 51bb "mkdir createmany CMD $MDSCOUNT  ===================="
-
-
-test_51c() {
-	[ ! -d $DIR/d51b ] && skip "$DIR/51b missing" && \
-		return
-
-	unlinkmany -d $DIR/d51b/t- $NUMTEST
-}
-run_test 51c "rmdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51d() {
         [  "$OSTCOUNT" -lt "3" ] && skip_env "skipping test with few OSTs" && return
