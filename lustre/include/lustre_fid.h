@@ -273,15 +273,12 @@ int fid_is_local(const struct lu_env *env,
 
 struct ldlm_namespace;
 
-enum {
-        LUSTRE_RES_ID_SEQ_OFF = 0,
-        LUSTRE_RES_ID_OID_OFF = 1,
-        LUSTRE_RES_ID_VER_OFF = 2,
-        LUSTRE_RES_ID_HSH_OFF = 3
-};
-
 /*
- * Build (DLM) resource name from fid.
+ * Build (DLM) resource name from FID.
+ *
+ * NOTE: until Lustre 1.8.7/2.1.1 the fid_ver() was packed into name[2],
+ * but was moved into name[1] along with the OID to avoid consuming the
+ * renaming name[2,3] fields that need to be used for the quota identifier.
  */
 static inline struct ldlm_res_id *
 fid_build_reg_res_name(const struct lu_fid *f,
@@ -289,8 +286,7 @@ fid_build_reg_res_name(const struct lu_fid *f,
 {
         memset(name, 0, sizeof *name);
         name->name[LUSTRE_RES_ID_SEQ_OFF] = fid_seq(f);
-        name->name[LUSTRE_RES_ID_OID_OFF] = fid_oid(f);
-        name->name[LUSTRE_RES_ID_VER_OFF] = fid_ver(f);
+        name->name[LUSTRE_RES_ID_VER_OID_OFF] = fid_ver_oid(f);
         return name;
 }
 
@@ -300,10 +296,8 @@ fid_build_reg_res_name(const struct lu_fid *f,
 static inline int fid_res_name_eq(const struct lu_fid *f,
                                   const struct ldlm_res_id *name)
 {
-        return
-                name->name[LUSTRE_RES_ID_SEQ_OFF] == fid_seq(f) &&
-                name->name[LUSTRE_RES_ID_OID_OFF] == fid_oid(f) &&
-                name->name[LUSTRE_RES_ID_VER_OFF] == fid_ver(f);
+        return name->name[LUSTRE_RES_ID_SEQ_OFF] == fid_seq(f) &&
+               name->name[LUSTRE_RES_ID_VER_OID_OFF] == fid_ver_oid(f);
 }
 
 
