@@ -777,13 +777,16 @@ enum lu_dirent_attrs {
 
 extern void lustre_swab_ll_fid (struct ll_fid *fid);
 
+/* NOTE: until Lustre 1.8.7/2.1.1 the fid_ver() was packed into name[2],
+ * but was moved into name[1] along with the OID to avoid consuming the
+ * renaming name[2,3] fields that need to be used for the quota identifier. */
 enum {
         /** put FID sequence at this offset in ldlm_res_id. */
         LUSTRE_RES_ID_SEQ_OFF = 0,
-        /** put FID oid at this offset in ldlm_res_id. */
-        LUSTRE_RES_ID_OID_OFF = 1,
+        /** put FID OID and VER at this offset in ldlm_res_id. */
+        LUSTRE_RES_ID_VER_OID_OFF = 1,
         /** put FID version at this offset in ldlm_res_id. */
-        LUSTRE_RES_ID_VER_OFF = 2,
+        LUSTRE_RES_ID_WAS_VER_OFF = 2,
         /** put pdo hash at this offset in ldlm_res_id. */
         LUSTRE_RES_ID_HSH_OFF = 3
 };

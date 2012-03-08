@@ -388,17 +388,21 @@ void range_be_to_cpu(struct lu_seq_range *dst, const struct lu_seq_range *src)
 }
 EXPORT_SYMBOL(range_be_to_cpu);
 
-/**     
+/**
  * Build (DLM) resource name from fid.
+ *
+ * NOTE: until Lustre 1.8.7/2.1.1 the fid_ver() was packed into name[2],
+ * but was moved into name[1] along with the OID to avoid consuming the
+ * renaming name[2,3] fields that need to be used for the quota identifier.
  */
 struct ldlm_res_id *
 fid_build_reg_res_name(const struct lu_fid *f, struct ldlm_res_id *name)
-{       
+{
         memset(name, 0, sizeof *name);
         name->name[LUSTRE_RES_ID_SEQ_OFF] = fid_seq(f);
-        name->name[LUSTRE_RES_ID_OID_OFF] = fid_oid(f);
+        name->name[LUSTRE_RES_ID_VER_OID_OFF] = fid_oid(f);
         if (!fid_is_igif(f))
-                name->name[LUSTRE_RES_ID_VER_OFF] = fid_ver(f);
+                name->name[LUSTRE_RES_ID_VER_OID_OFF] |= (__u64)fid_ver(f)<<32;
         return name;
 }
 EXPORT_SYMBOL(fid_build_reg_res_name);
@@ -409,11 +413,11 @@ EXPORT_SYMBOL(fid_build_reg_res_name);
 int fid_res_name_eq(const struct lu_fid *f, const struct ldlm_res_id *name)
 {
         int ret;
-        
+
         ret = name->name[LUSTRE_RES_ID_SEQ_OFF] == fid_seq(f) &&
-              name->name[LUSTRE_RES_ID_OID_OFF] == fid_oid(f);
+              name->name[LUSTRE_RES_ID_VER_OID_OFF] == fid_oid(f);
         if (!fid_is_igif(f))
-                ret = ret && name->name[LUSTRE_RES_ID_VER_OFF] == fid_ver(f);
+                ret &= name->name[LUSTRE_RES_ID_VER_OID_OFF] == fid_ver(f);
         return ret;
 }
 EXPORT_SYMBOL(fid_res_name_eq);
