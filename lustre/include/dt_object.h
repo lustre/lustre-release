@@ -153,7 +153,7 @@ struct dt_device_operations {
          *  handling device state, mostly for tests
          */
         int   (*dt_sync)(const struct lu_env *env, struct dt_device *dev);
-        void  (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
+        int   (*dt_ro)(const struct lu_env *env, struct dt_device *dev);
         /**
           * Start a transaction commit asynchronously
           *
@@ -1097,7 +1097,7 @@ static inline int dt_sync(const struct lu_env *env, struct dt_device *dev)
         return dev->dd_ops->dt_sync(env, dev);
 }
 
-static inline void dt_ro(const struct lu_env *env, struct dt_device *dev)
+static inline int dt_ro(const struct lu_env *env, struct dt_device *dev)
 {
         LASSERT(dev);
         LASSERT(dev->dd_ops);

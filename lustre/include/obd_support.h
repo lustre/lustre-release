@@ -445,23 +445,6 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_ONCE                           CFS_FAIL_ONCE
 #define OBD_FAILED                              CFS_FAILED
 
-#ifdef __KERNEL__
-static inline void obd_fail_write(int id, struct super_block *sb)
-{
-        /* We set FAIL_ONCE because we never "un-fail" a device */
-        if (OBD_FAIL_CHECK_ORSET(id & ~OBD_FAIL_ONCE, OBD_FAIL_ONCE)) {
-#ifdef LIBCFS_DEBUG
-                BDEVNAME_DECLARE_STORAGE(tmp);
-                CERROR("cfs_fail_loc=%x, fail write operation on %s\n",
-                       id, ll_bdevname(sb, tmp));
-#endif
-                /* TODO-CMD: fix getting jdev */
-                __lvfs_set_rdonly(lvfs_sbdev(sb), (lvfs_sbdev_type)0);
-        }
-}
-#define OBD_FAIL_WRITE(id, sb) obd_fail_write(id, sb)
-#endif
-
 extern cfs_atomic_t libcfs_kmemory;
 
 #ifdef LPROCFS

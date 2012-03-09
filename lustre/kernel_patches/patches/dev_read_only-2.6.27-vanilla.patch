@@ -1,3 +1,24 @@
+This patch is no longer needed for Lustre.  It is only included
+for testing and ease of using the same kernel with older Lustre
+versions.  This testing functionality was replaced in Linux 3.0
+by the dm-flakey driver.
+
+This functionality is mainly used during testing, in order to
+simulate a server crash for ldiskfs by discarding all of the
+writes to the filesystem.  For recovery testing we could simulate
+this by using a special loopback or DM device that also discards
+writes to the device.
+
+This functionality is also used by target "failback" in order
+to speed up service shutdown and takeover by the other node
+during controlled operation.  However, it would also be possible
+to do this by simply allowing all of the in-flight requests to
+complete and then waiting for the service to stop.  This will
+also be needed by the DMU-OSD, because discarding of writes on
+a DMU-based target is not safe as it could trigger a storage
+failure if the data is ever read from disk again and the
+checksum does not match that expected by the block pointer.
+
 Index: linux-2.6.27.21-0.1/block/blk-core.c
 ===================================================================
 --- linux-2.6.27.21-0.1.orig/block/blk-core.c	2009-04-23 02:12:51.000000000 -0600

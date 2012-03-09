@@ -683,15 +683,17 @@ int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
 
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
-static inline void mdt_fail_write(const struct lu_env *env,
-                                  struct dt_device *dd, int id)
+static inline int mdt_fail_write(const struct lu_env *env,
+                                 struct dt_device *dd, int id)
 {
         if (OBD_FAIL_CHECK_ORSET(id, OBD_FAIL_ONCE)) {
                 CERROR(LUSTRE_MDT_NAME": cfs_fail_loc=%x, fail write ops\n",
                        id);
-                dd->dd_ops->dt_ro(env, dd);
+                return dd->dd_ops->dt_ro(env, dd);
                 /* We set FAIL_ONCE because we never "un-fail" a device */
         }
+
+        return 0;
 }
 
 static inline struct mdt_export_data *mdt_req2med(struct ptlrpc_request *req)

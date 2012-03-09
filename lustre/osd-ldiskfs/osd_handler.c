@@ -924,15 +924,16 @@ static int osd_commit_async(const struct lu_env *env,
  * Concurrency: shouldn't matter.
  */
 
-static void osd_ro(const struct lu_env *env, struct dt_device *d)
+static int osd_ro(const struct lu_env *env, struct dt_device *d)
 {
         struct super_block *sb = osd_sb(osd_dt_dev(d));
+        int rc;
         ENTRY;
 
         CERROR("*** setting device %s read-only ***\n", LUSTRE_OSD_NAME);
 
-        __lvfs_set_rdonly(sb->s_bdev, LDISKFS_SB(sb)->journal_bdev);
-        EXIT;
+        rc = __lvfs_set_rdonly(sb->s_bdev, LDISKFS_SB(sb)->journal_bdev);
+        RETURN(rc);
 }
 
 /*

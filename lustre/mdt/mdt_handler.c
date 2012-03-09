@@ -5554,7 +5554,7 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = mdt_device_sync(&env, mdt);
                 break;
         case OBD_IOC_SET_READONLY:
-                dt->dd_ops->dt_ro(&env, dt);
+                rc = dt->dd_ops->dt_ro(&env, dt);
                 break;
         case OBD_IOC_ABORT_RECOVERY:
                 CERROR("Aborting recovery for device %s\n", obd->obd_name);

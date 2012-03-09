@@ -104,24 +104,15 @@ AC_DEFUN([LC_LUSTRE_VERSION_H],
 #
 # LC_FUNC_DEV_SET_RDONLY
 #
-# check for the old-style dev_set_rdonly which took an extra "devno" param
-# and can only set a single device to discard writes at one time
+# check whether dev_set_rdonly is exported.  This is needed until we
+# have another mechanism to fence IO from the underlying device.
 #
 AC_DEFUN([LC_FUNC_DEV_SET_RDONLY],
-[AC_MSG_CHECKING([if kernel has new dev_set_rdonly])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/blkdev.h>
+[LB_CHECK_SYMBOL_EXPORT([dev_set_rdonly],
+[block/ll_rw_block.c,block/blk-core.c],[
+        AC_DEFINE(HAVE_DEV_SET_RDONLY, 1, [kernel exports dev_set_rdonly])
 ],[
-        #ifndef HAVE_CLEAR_RDONLY_ON_PUT
-        #error needs to be patched by lustre kernel patches from Lustre version 1.4.3 or above.
-        #endif
-],[
-        AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_DEV_SET_RDONLY, 1, [kernel has new dev_set_rdonly])
-],[
-        AC_MSG_ERROR([no, Linux kernel source needs to be patches by lustre
-kernel patches from Lustre version 1.4.3 or above.])
+        AC_MSG_WARN([kernel missing dev_set_rdonly patch for testing])
 ])
 ])
 

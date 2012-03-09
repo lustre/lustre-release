@@ -1,3 +1,8 @@
+This patch is no longer needed for Lustre.  It is only included
+for testing and ease of using the same kernel with older Lustre
+versions.  This testing functionality was replaced in Linux 3.0
+by the dm-flakey driver.
+
 This functionality is mainly used during testing, in order to
 simulate a server crash for ldiskfs by discarding all of the
 writes to the filesystem.  For recovery testing we could simulate
@@ -13,9 +18,6 @@ also be needed by the DMU-OSD, because discarding of writes on
 a DMU-based target is not safe as it could trigger a storage
 failure if the data is ever read from disk again and the
 checksum does not match that expected by the block pointer.
-
-Initial efforts to remove this patch are under way in bug 20776.
-Once this work comes to fruition this patch can be dropped.
 
 Index: linux-2.6.32-131.0.15.el6.x86_64/block/blk-core.c
 ===================================================================

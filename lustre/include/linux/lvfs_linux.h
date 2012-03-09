@@ -87,7 +87,7 @@ int fsync_bdev(struct block_device *);
 #define lvfs_set_rdonly(obd, sb) \
         __lvfs_set_rdonly(lvfs_sbdev(sb), fsfilt_journal_sbdev(obd, sb))
 
-void __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev);
+int __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev);
 
 int lvfs_check_rdonly(lvfs_sbdev_type dev);
 void lvfs_clear_rdonly(lvfs_sbdev_type dev);

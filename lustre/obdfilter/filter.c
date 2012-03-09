@@ -4642,8 +4642,8 @@ int filter_iocontrol(unsigned int cmd, struct obd_export *exp,
                 CDEBUG(D_HA, "syncing ost %s\n", obd->obd_name);
                 rc = fsfilt_sync(obd, obd->u.obt.obt_sb);
 
-                lvfs_set_rdonly(obd, obd->u.obt.obt_sb);
-                RETURN(0);
+                rc = lvfs_set_rdonly(obd, obd->u.obt.obt_sb);
+                RETURN(rc);
         }
 
         case OBD_IOC_CATLOGLIST: {
