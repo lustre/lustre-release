@@ -285,10 +285,7 @@ AC_DEFUN([LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET],
 	[LB_CHECK_SYMBOL_EXPORT([journal_callback_set],
 		[fs/jbd/journal.c],
 		[AC_DEFINE(HAVE_JOURNAL_CALLBACK_SET, 1,
-			[kernel exports journal_callback_set])],
-		[if test x$with_ldiskfs != xno ; then
-			AC_MSG_ERROR([ldiskfs needs jbd2-jcberr patch])
-		fi])])
+			[kernel exports journal_callback_set])])])
 ])
 
 #
