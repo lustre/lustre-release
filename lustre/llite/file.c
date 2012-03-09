@@ -1989,10 +1989,12 @@ int ll_flush(struct file *file)
         return rc ? -EIO : 0;
 }
 
-#ifndef HAVE_FILE_FSYNC_2ARGS
-int ll_fsync(struct file *file, struct dentry *dentry, int data)
-#else
+#ifdef HAVE_FILE_FSYNC_4ARGS
+int ll_fsync(struct file *file, loff_t start, loff_t end, int data)
+#elif defined(HAVE_FILE_FSYNC_2ARGS)
 int ll_fsync(struct file *file, int data)
+#else
+int ll_fsync(struct file *file, struct dentry *dentry, int data)
 #endif
 {
         struct inode *inode = file->f_dentry->d_inode;

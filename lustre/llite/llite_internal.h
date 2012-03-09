@@ -744,10 +744,12 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                      int set_default);
 int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmm,
                      int *lmm_size, struct ptlrpc_request **request);
-#ifndef HAVE_FILE_FSYNC_2ARGS
-int ll_fsync(struct file *file, struct dentry *dentry, int data);
-#else
+#ifdef HAVE_FILE_FSYNC_4ARGS
+int ll_fsync(struct file *file, loff_t start, loff_t end, int data);
+#elif defined(HAVE_FILE_FSYNC_2ARGS)
 int ll_fsync(struct file *file, int data);
+#else
+int ll_fsync(struct file *file, struct dentry *dentry, int data);
 #endif
 int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes);
