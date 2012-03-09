@@ -334,35 +334,6 @@ out_err:
         RETURN(page);
 }
 
-static int ll_page_mkwrite(struct vm_area_struct *vma, struct page *vmpage)
-{
-        int count = 0;
-        bool printed = false;
-        bool retry;
-        int result;
-
-        do {
-                retry = false;
-                result = ll_page_mkwrite0(vma, vmpage, &retry);
-
-                if (!printed && ++count > 16) {
-                        CWARN("app(%s): the page %lu of file %lu is under heavy"
-                              " contention.\n",
-                              current->comm, page_index(vmpage),
-                              vma->vm_file->f_dentry->d_inode->i_ino);
-                        printed = true;
-                }
-        } while (retry);
-
-        if (result == 0)
-                unlock_page(vmpage);
-        else if (result == -ENODATA)
-                result = 0; /* kernel will know truncate has happened and
-                             * retry */
-
-        return result;
-}
-
 #else
 /**
  * Lustre implementation of a vm_operations_struct::fault() method, called by
@@ -457,7 +428,38 @@ restart:
         }
         return result;
 }
+#endif
 
+#ifndef HAVE_PGMKWRITE_USE_VMFAULT
+static int ll_page_mkwrite(struct vm_area_struct *vma, struct page *vmpage)
+{
+        int count = 0;
+        bool printed = false;
+        bool retry;
+        int result;
+
+        do {
+                retry = false;
+                result = ll_page_mkwrite0(vma, vmpage, &retry);
+
+                if (!printed && ++count > 16) {
+                        CWARN("app(%s): the page %lu of file %lu is under heavy"
+                              " contention.\n",
+                              current->comm, page_index(vmpage),
+                              vma->vm_file->f_dentry->d_inode->i_ino);
+                        printed = true;
+                }
+        } while (retry);
+
+        if (result == 0)
+                unlock_page(vmpage);
+        else if (result == -ENODATA)
+                result = 0; /* kernel will know truncate has happened and
+                             * retry */
+
+        return result;
+}
+#else
 static int ll_page_mkwrite(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
         int count = 0;

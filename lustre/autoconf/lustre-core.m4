@@ -1464,6 +1464,24 @@ LB_LINUX_TRY_COMPILE([
 #
 # 2.6.27
 #
+AC_DEFUN([LC_PGMKWRITE_USE_VMFAULT],
+[AC_MSG_CHECKING([kernel .page_mkwrite uses struct vm_fault *])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+        #include <linux/mm.h>
+],[
+        ((struct vm_operations_struct *)0)->page_mkwrite((struct vm_area_struct *)0, (struct vm_fault *)0);
+], [
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_PGMKWRITE_USE_VMFAULT, 1,
+                [kernel vm_operation_struct.page_mkwrite uses struct vm_fault * as second parameter])
+],[
+        AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
 AC_DEFUN([LC_INODE_PERMISION_2ARGS],
 [AC_MSG_CHECKING([inode_operations->permission has two args])
 LB_LINUX_TRY_COMPILE([
@@ -2214,6 +2232,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_FS_STRUCT_USE_PATH
 
          # 2.6.27
+         LC_PGMKWRITE_USE_VMFAULT
          LC_INODE_PERMISION_2ARGS
          LC_FILE_REMOVE_SUID
          LC_TRYLOCKPAGE
