@@ -2618,7 +2618,7 @@ void ldlm_dump_export_locks(struct obd_export *exp)
             CERROR("dumping locks for export %p,"
                    "ignore if the unmount doesn't hang\n", exp);
             cfs_list_for_each_entry(lock, &exp->exp_locks_list, l_exp_refs_link)
-                ldlm_lock_dump(D_ERROR, lock, 0);
+                LDLM_ERROR(lock, "lock:");
         }
         cfs_spin_unlock(&exp->exp_locks_list_guard);
 }

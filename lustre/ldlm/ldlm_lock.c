@@ -327,13 +327,11 @@ int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
 
         if (lock->l_readers || lock->l_writers) {
                 LDLM_ERROR(lock, "lock still has references");
-                ldlm_lock_dump(D_ERROR, lock, 0);
                 LBUG();
         }
 
         if (!cfs_list_empty(&lock->l_res_link)) {
                 LDLM_ERROR(lock, "lock still on resource");
-                ldlm_lock_dump(D_ERROR, lock, 0);
                 LBUG();
         }
 
@@ -948,8 +946,7 @@ static void ldlm_granted_list_add_lock(struct ldlm_lock *lock,
         check_res_locked(res);
 
         ldlm_resource_dump(D_INFO, res);
-        CDEBUG(D_OTHER, "About to add this lock:\n");
-        ldlm_lock_dump(D_OTHER, lock, 0);
+        LDLM_DEBUG(lock, "About to add lock:");
 
         if (lock->l_destroyed) {
                 CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
@@ -1982,61 +1979,6 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         RETURN(res);
 }
 
-void ldlm_lock_dump(int level, struct ldlm_lock *lock, int pos)
-{
-        struct obd_device *obd = NULL;
-
-        if (!((libcfs_debug | D_ERROR) & level))
-                return;
-
-        if (!lock) {
-                CDEBUG(level, "  NULL LDLM lock\n");
-                return;
-        }
-
-        CDEBUG(level," -- Lock dump: %p/"LPX64" (rc: %d) (pos: %d) (pid: %d)\n",
-               lock, lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
-               pos, lock->l_pid);
-        if (lock->l_conn_export != NULL)
-                obd = lock->l_conn_export->exp_obd;
-        if (lock->l_export && lock->l_export->exp_connection) {
-                CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
-                     libcfs_nid2str(lock->l_export->exp_connection->c_peer.nid),
-                     lock->l_remote_handle.cookie);
-        } else if (obd == NULL) {
-                CDEBUG(level, "  Node: local\n");
-        } else {
-                struct obd_import *imp = obd->u.cli.cl_import;
-                CDEBUG(level, "  Node: NID %s (rhandle: "LPX64")\n",
-                       libcfs_nid2str(imp->imp_connection->c_peer.nid),
-                       lock->l_remote_handle.cookie);
-        }
-        CDEBUG(level, "  Resource: %p ("LPU64"/"LPU64"/"LPU64")\n",
-                  lock->l_resource,
-                  lock->l_resource->lr_name.name[0],
-                  lock->l_resource->lr_name.name[1],
-                  lock->l_resource->lr_name.name[2]);
-        CDEBUG(level, "  Req mode: %s, grant mode: %s, rc: %u, read: %d, "
-               "write: %d flags: "LPX64"\n", ldlm_lockname[lock->l_req_mode],
-               ldlm_lockname[lock->l_granted_mode],
-               cfs_atomic_read(&lock->l_refc), lock->l_readers, lock->l_writers,
-               lock->l_flags);
-        if (lock->l_resource->lr_type == LDLM_EXTENT)
-                CDEBUG(level, "  Extent: "LPU64" -> "LPU64
-                       " (req "LPU64"-"LPU64")\n",
-                       lock->l_policy_data.l_extent.start,
-                       lock->l_policy_data.l_extent.end,
-                       lock->l_req_extent.start, lock->l_req_extent.end);
-        else if (lock->l_resource->lr_type == LDLM_FLOCK)
-                CDEBUG(level, "  Pid: %d Extent: "LPU64" -> "LPU64"\n",
-                       lock->l_policy_data.l_flock.pid,
-                       lock->l_policy_data.l_flock.start,
-                       lock->l_policy_data.l_flock.end);
-       else if (lock->l_resource->lr_type == LDLM_IBITS)
-                CDEBUG(level, "  Bits: "LPX64"\n",
-                       lock->l_policy_data.l_inodebits.bits);
-}
-
 void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)
 {
         struct ldlm_lock *lock;
@@ -2048,7 +1990,7 @@ void ldlm_lock_dump_handle(int level, struct lustre_handle *lockh)
         if (lock == NULL)
                 return;
 
-        ldlm_lock_dump(D_OTHER, lock, 0);
+        LDLM_DEBUG_LIMIT(level, lock, "###");
 
         LDLM_LOCK_PUT(lock);
 }
@@ -2058,48 +2000,57 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                       const char *fmt, ...)
 {
         va_list args;
+        struct obd_export *exp = lock->l_export;
+        struct ldlm_resource *resource = lock->l_resource;
+        char *nid = "local";
 
         va_start(args, fmt);
 
-        if (lock->l_resource == NULL) {
+        if (exp && exp->exp_connection) {
+                nid = libcfs_nid2str(exp->exp_connection->c_peer.nid);
+        } else if (exp && exp->exp_obd != NULL) {
+                struct obd_import *imp = exp->exp_obd->u.cli.cl_import;
+                nid = libcfs_nid2str(imp->imp_connection->c_peer.nid);
+        }
+
+        if (resource == NULL) {
                 libcfs_debug_vmsg2(msgdata, fmt, args,
                        " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
-                       "res: \?\? rrc=\?\? type: \?\?\? flags: "LPX64" remote: "
-                       LPX64" expref: %d pid: %u timeout: %lu\n", lock,
+                       "res: \?\? rrc=\?\? type: \?\?\? flags: "LPX64" nid: %s "
+                       "remote: "LPX64" expref: %d pid: %u timeout: %lu\n",
+                       lock,
                        lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
                        lock->l_readers, lock->l_writers,
                        ldlm_lockname[lock->l_granted_mode],
                        ldlm_lockname[lock->l_req_mode],
-                       lock->l_flags, lock->l_remote_handle.cookie,
-                       lock->l_export ?
-                       cfs_atomic_read(&lock->l_export->exp_refcount) : -99,
+                       lock->l_flags, nid, lock->l_remote_handle.cookie,
+                       exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
                        lock->l_pid, lock->l_callback_timeout);
                 va_end(args);
                 return;
         }
 
-        switch (lock->l_resource->lr_type) {
+        switch (resource->lr_type) {
         case LDLM_EXTENT:
                 libcfs_debug_vmsg2(msgdata, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64
-                       "] (req "LPU64"->"LPU64") flags: "LPX64" remote: "LPX64
-                       " expref: %d pid: %u timeout %lu\n",
+                       "] (req "LPU64"->"LPU64") flags: "LPX64" nid: %s remote:"
+                       " "LPX64" expref: %d pid: %u timeout %lu\n",
                        ldlm_lock_to_ns_name(lock), lock,
                        lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
                        lock->l_readers, lock->l_writers,
                        ldlm_lockname[lock->l_granted_mode],
                        ldlm_lockname[lock->l_req_mode],
-                       lock->l_resource->lr_name.name[0],
-                       lock->l_resource->lr_name.name[1],
-                       cfs_atomic_read(&lock->l_resource->lr_refcount),
-                       ldlm_typename[lock->l_resource->lr_type],
+                       resource->lr_name.name[0],
+                       resource->lr_name.name[1],
+                       cfs_atomic_read(&resource->lr_refcount),
+                       ldlm_typename[resource->lr_type],
                        lock->l_policy_data.l_extent.start,
                        lock->l_policy_data.l_extent.end,
                        lock->l_req_extent.start, lock->l_req_extent.end,
-                       lock->l_flags, lock->l_remote_handle.cookie,
-                       lock->l_export ?
-                       cfs_atomic_read(&lock->l_export->exp_refcount) : -99,
+                       lock->l_flags, nid, lock->l_remote_handle.cookie,
+                       exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
                        lock->l_pid, lock->l_callback_timeout);
                 break;
 
@@ -2107,23 +2058,22 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                 libcfs_debug_vmsg2(msgdata, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s pid: %d "
-                       "["LPU64"->"LPU64"] flags: "LPX64" remote: "LPX64
+                       "["LPU64"->"LPU64"] flags: "LPX64" nid: %s remote: "LPX64
                        " expref: %d pid: %u timeout: %lu\n",
                        ldlm_lock_to_ns_name(lock), lock,
                        lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
                        lock->l_readers, lock->l_writers,
                        ldlm_lockname[lock->l_granted_mode],
                        ldlm_lockname[lock->l_req_mode],
-                       lock->l_resource->lr_name.name[0],
-                       lock->l_resource->lr_name.name[1],
-                       cfs_atomic_read(&lock->l_resource->lr_refcount),
-                       ldlm_typename[lock->l_resource->lr_type],
+                       resource->lr_name.name[0],
+                       resource->lr_name.name[1],
+                       cfs_atomic_read(&resource->lr_refcount),
+                       ldlm_typename[resource->lr_type],
                        lock->l_policy_data.l_flock.pid,
                        lock->l_policy_data.l_flock.start,
                        lock->l_policy_data.l_flock.end,
-                       lock->l_flags, lock->l_remote_handle.cookie,
-                       lock->l_export ?
-                       cfs_atomic_read(&lock->l_export->exp_refcount) : -99,
+                       lock->l_flags, nid, lock->l_remote_handle.cookie,
+                       exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
                        lock->l_pid, lock->l_callback_timeout);
                 break;
 
@@ -2131,7 +2081,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                 libcfs_debug_vmsg2(msgdata, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "
-                       "flags: "LPX64" remote: "LPX64" expref: %d "
+                       "flags: "LPX64" nid: %s remote: "LPX64" expref: %d "
                        "pid: %u timeout: %lu\n",
                        ldlm_lock_to_ns_name(lock),
                        lock, lock->l_handle.h_cookie,
@@ -2139,14 +2089,13 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                        lock->l_readers, lock->l_writers,
                        ldlm_lockname[lock->l_granted_mode],
                        ldlm_lockname[lock->l_req_mode],
-                       lock->l_resource->lr_name.name[0],
-                       lock->l_resource->lr_name.name[1],
+                       resource->lr_name.name[0],
+                       resource->lr_name.name[1],
                        lock->l_policy_data.l_inodebits.bits,
-                       cfs_atomic_read(&lock->l_resource->lr_refcount),
-                       ldlm_typename[lock->l_resource->lr_type],
-                       lock->l_flags, lock->l_remote_handle.cookie,
-                       lock->l_export ?
-                       cfs_atomic_read(&lock->l_export->exp_refcount) : -99,
+                       cfs_atomic_read(&resource->lr_refcount),
+                       ldlm_typename[resource->lr_type],
+                       lock->l_flags, nid, lock->l_remote_handle.cookie,
+                       exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
                        lock->l_pid, lock->l_callback_timeout);
                 break;
 
@@ -2154,20 +2103,20 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                 libcfs_debug_vmsg2(msgdata, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s flags: "LPX64" "
-                       "remote: "LPX64" expref: %d pid: %u timeout %lu\n",
+                       "nid: %s remote: "LPX64" expref: %d pid: %u timeout %lu"
+                       "\n",
                        ldlm_lock_to_ns_name(lock),
                        lock, lock->l_handle.h_cookie,
                        cfs_atomic_read (&lock->l_refc),
                        lock->l_readers, lock->l_writers,
                        ldlm_lockname[lock->l_granted_mode],
                        ldlm_lockname[lock->l_req_mode],
-                       lock->l_resource->lr_name.name[0],
-                       lock->l_resource->lr_name.name[1],
-                       cfs_atomic_read(&lock->l_resource->lr_refcount),
-                       ldlm_typename[lock->l_resource->lr_type],
-                       lock->l_flags, lock->l_remote_handle.cookie,
-                       lock->l_export ?
-                       cfs_atomic_read(&lock->l_export->exp_refcount) : -99,
+                       resource->lr_name.name[0],
+                       resource->lr_name.name[1],
+                       cfs_atomic_read(&resource->lr_refcount),
+                       ldlm_typename[resource->lr_type],
+                       lock->l_flags, nid, lock->l_remote_handle.cookie,
+                       exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
                        lock->l_pid, lock->l_callback_timeout);
                 break;
         }

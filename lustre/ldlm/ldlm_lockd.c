@@ -764,10 +764,8 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 
         LASSERT(lock);
         LASSERT(data != NULL);
-        if (lock->l_export->exp_obd->obd_recovering != 0) {
+        if (lock->l_export->exp_obd->obd_recovering != 0)
                 LDLM_ERROR(lock, "BUG 6063: lock collide during recovery");
-                ldlm_lock_dump(D_ERROR, lock, 0);
-        }
 
         ldlm_lock_reorder_req(lock);
 
@@ -2804,7 +2802,6 @@ EXPORT_SYMBOL(ldlm_lock_decref);
 EXPORT_SYMBOL(ldlm_lock_decref_and_cancel);
 EXPORT_SYMBOL(ldlm_lock_change_resource);
 EXPORT_SYMBOL(ldlm_it2str);
-EXPORT_SYMBOL(ldlm_lock_dump);
 EXPORT_SYMBOL(ldlm_lock_dump_handle);
 EXPORT_SYMBOL(ldlm_reprocess_all_ns);
 EXPORT_SYMBOL(ldlm_lock_allow_match_locked);

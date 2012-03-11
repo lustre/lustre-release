@@ -67,6 +67,10 @@ cfs_proc_dir_entry_t *ldlm_svc_proc_dir = NULL;
 
 extern unsigned int ldlm_cancel_unused_locks_before_replay;
 
+/* during debug dump certain amount of granted locks for one resource to avoid
+ * DDOS. */
+unsigned int ldlm_dump_granted_max = 256;
+
 #ifdef LPROCFS
 static int ldlm_proc_dump_ns(struct file *file, const char *buffer,
                              unsigned long count, void *data)
@@ -81,6 +85,9 @@ int ldlm_proc_setup(void)
         int rc;
         struct lprocfs_vars list[] = {
                 { "dump_namespaces", NULL, ldlm_proc_dump_ns, NULL },
+                { "dump_granted_max",
+                  lprocfs_rd_uint, lprocfs_wr_uint,
+                  &ldlm_dump_granted_max, NULL },
                 { "cancel_unused_locks_before_replay",
                   lprocfs_rd_uint, lprocfs_wr_uint,
                   &ldlm_cancel_unused_locks_before_replay, NULL },
@@ -1197,8 +1204,7 @@ void ldlm_resource_add_lock(struct ldlm_resource *res, cfs_list_t *head,
 {
         check_res_locked(res);
 
-        CDEBUG(D_OTHER, "About to add this lock:\n");
-        ldlm_lock_dump(D_OTHER, lock, 0);
+        LDLM_DEBUG(lock, "About to add this lock:\n");
 
         if (lock->l_destroyed) {
                 CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
@@ -1218,8 +1224,7 @@ void ldlm_resource_insert_lock_after(struct ldlm_lock *original,
         check_res_locked(res);
 
         ldlm_resource_dump(D_INFO, res);
-        CDEBUG(D_OTHER, "About to insert this lock after %p:\n", original);
-        ldlm_lock_dump(D_OTHER, new, 0);
+        LDLM_DEBUG(new, "About to insert this lock after %p:\n", original);
 
         if (new->l_destroyed) {
                 CDEBUG(D_OTHER, "Lock destroyed, not adding to resource\n");
@@ -1303,8 +1308,8 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
 
 void ldlm_resource_dump(int level, struct ldlm_resource *res)
 {
-        cfs_list_t *tmp;
-        int pos;
+        struct ldlm_lock *lock;
+        unsigned int granted = 0;
 
         CLASSERT(RES_NAME_SIZE == 4);
 
@@ -1317,33 +1322,26 @@ void ldlm_resource_dump(int level, struct ldlm_resource *res)
                cfs_atomic_read(&res->lr_refcount));
 
         if (!cfs_list_empty(&res->lr_granted)) {
-                pos = 0;
-                CDEBUG(level, "Granted locks:\n");
-                cfs_list_for_each(tmp, &res->lr_granted) {
-                        struct ldlm_lock *lock;
-                        lock = cfs_list_entry(tmp, struct ldlm_lock,
-                                              l_res_link);
-                        ldlm_lock_dump(level, lock, ++pos);
+                CDEBUG(level, "Granted locks (in reverse order):\n");
+                cfs_list_for_each_entry_reverse(lock, &res->lr_granted,
+                                                l_res_link) {
+                        LDLM_DEBUG_LIMIT(level, lock, "###");
+                        if (!(level & D_CANTMASK) &&
+                            ++granted > ldlm_dump_granted_max) {
+                                CDEBUG(level, "only dump %d granted locks to "
+                                       "avoid DDOS.\n", granted);
+                                break;
+                        }
                 }
         }
         if (!cfs_list_empty(&res->lr_converting)) {
-                pos = 0;
                 CDEBUG(level, "Converting locks:\n");
-                cfs_list_for_each(tmp, &res->lr_converting) {
-                        struct ldlm_lock *lock;
-                        lock = cfs_list_entry(tmp, struct ldlm_lock,
-                                              l_res_link);
-                        ldlm_lock_dump(level, lock, ++pos);
-                }
+                cfs_list_for_each_entry(lock, &res->lr_converting, l_res_link)
+                        LDLM_DEBUG_LIMIT(level, lock, "###");
         }
         if (!cfs_list_empty(&res->lr_waiting)) {
-                pos = 0;
                 CDEBUG(level, "Waiting locks:\n");
-                cfs_list_for_each(tmp, &res->lr_waiting) {
-                        struct ldlm_lock *lock;
-                        lock = cfs_list_entry(tmp, struct ldlm_lock,
-                                              l_res_link);
-                        ldlm_lock_dump(level, lock, ++pos);
-                }
+                cfs_list_for_each_entry(lock, &res->lr_waiting, l_res_link)
+                        LDLM_DEBUG_LIMIT(level, lock, "###");
         }
 }
