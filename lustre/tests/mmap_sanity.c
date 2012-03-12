@@ -53,7 +53,6 @@ char *dir = NULL, *dir2 = NULL;
 long page_size;
 char mmap_sanity[256];
 
-
 static void usage(void)
 {
         printf("Usage: mmap_sanity -d dir [-m dir2]\n");
@@ -70,14 +69,14 @@ static int mmap_run(int tc)
 
         child = fork();
         if (child < 0)
-                return errno;
+                return -errno;
         else if (child)
                 return 0;
 
         if (dir2 != NULL) {
                 rc = remote_tst(tc, dir2);
         } else {
-                rc = EINVAL;
+                rc = -EINVAL;
                 fprintf(stderr, "invalid argument!\n");
         }
         _exit(rc);
@@ -87,24 +86,24 @@ static int mmap_initialize(char *myself)
 {
         char buf[1024], *file;
         int fdr, fdw, count, rc = 0;
-        
+
         page_size = sysconf(_SC_PAGESIZE);
         if (page_size == -1) {
                 perror("sysconf(_SC_PAGESIZE)");
-                return errno;
+                return -errno;
         }
 
         /* copy myself to lustre for another client */
         fdr = open(myself, O_RDONLY);
         if (fdr < 0) {
                 perror(myself);
-                return EINVAL;
+                return -EINVAL;
         }
         file = strrchr(myself, '/');
         if (file == NULL) {
                 fprintf(stderr, "can't get test filename\n");
                 close(fdr);
-                return EINVAL;
+                return -EINVAL;
         }
         file++;
         sprintf(mmap_sanity, "%s/%s", dir, file);
@@ -113,20 +112,20 @@ static int mmap_initialize(char *myself)
         if (fdw < 0) {
                 perror(mmap_sanity);
                 close(fdr);
-                return EINVAL;
+                return -EINVAL;
         }
         while ((count = read(fdr, buf, sizeof(buf))) != 0) {
                 int writes;
 
                 if (count < 0) {
                         perror("read()");
-                        rc = errno;
+                        rc = -errno;
                         break;
                 }
                 writes = write(fdw, buf, count);
                 if (writes != count) {
                         perror("write()");
-                        rc = errno;
+                        rc = -errno;
                         break;
                 }
         }
@@ -148,27 +147,27 @@ static int mmap_tst1(char *mnt)
 
         region = page_size * 10;
         sprintf(mmap_file, "%s/%s", mnt, "mmap_file1");
-        
+
         if (unlink(mmap_file) && errno != ENOENT) {
                 perror("unlink()");
-                return errno;
+                return -errno;
         }
 
         fd = open(mmap_file, O_CREAT|O_RDWR, 0600);
         if (fd < 0) {
                 perror(mmap_file);
-                return errno;
+                return -errno;
         }
         if (ftruncate(fd, region) < 0) {
                 perror("ftruncate()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
 
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (ptr == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
         memset(ptr, 'a', region);
@@ -190,24 +189,24 @@ static int mmap_tst2(char *mnt)
 
         if (unlink(mmap_file) && errno != ENOENT) {
                 perror("unlink()");
-                return errno;
+                return -errno;
         }
 
         fd = open(mmap_file, O_CREAT|O_RDWR, 0600);
         if (fd < 0) {
                 perror(mmap_file);
-                return errno;
+                return -errno;
         }
         if (ftruncate(fd, page_size) < 0) {
                 perror("ftruncate()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
 
         ptr = mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd, 0);
         if (ptr == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
         memcpy(ptr, "blah", strlen("blah"));
@@ -216,24 +215,24 @@ static int mmap_tst2(char *mnt)
 out_close:
         close(fd);
         if (rc)
-                return rc;
+                return -rc;
 
         fd = open(mmap_file, O_RDONLY);
         if (fd < 0) {
                 perror(mmap_file);
-                return errno;
+                return -errno;
         }
         rc = read(fd, buf, sizeof(buf));
         if (rc < 0) {
                 perror("read()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
         rc = 0;
-        
+
         if (strncmp("blah", buf, strlen("blah")) == 0) {
                 fprintf(stderr, "mmap write back with MAP_PRIVATE!\n");
-                rc = EFAULT;
+                rc = -EFAULT;
         }
         close(fd);
         unlink(mmap_file);
@@ -248,34 +247,34 @@ static int mmap_tst3(char *mnt)
 
         region = page_size * 100;
         sprintf(mmap_file, "%s/%s", mnt, "mmap_file3");
-        
+
         if (unlink(mmap_file) && errno != ENOENT) {
                 perror("unlink()");
-                return errno;
+                return -errno;
         }
 
         fd = open(mmap_file, O_CREAT|O_RDWR, 0600);
         if (fd < 0) {
                 perror(mmap_file);
-                return errno;
+                return -errno;
         }
         if (ftruncate(fd, region) < 0) {
                 perror("ftruncate()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
 
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (ptr == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
 
         rc = mmap_run(3);
         if (rc)
                 goto out_unmap;
-        
+
         memset(ptr, 'a', region);
         sleep(2);       /* wait for remote test finish */
 out_unmap:
@@ -284,7 +283,7 @@ out_close:
         close(fd);
         unlink(mmap_file);
         return rc;
-}       
+}
 
 static int remote_tst3(char *mnt)
 {
@@ -297,18 +296,18 @@ static int remote_tst3(char *mnt)
         fd = open(mmap_file, O_RDWR, 0600);
         if (fd < 0) {
                 perror(mmap_file);
-                return errno;
+                return -errno;
         }
 
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (ptr == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
         memset(ptr, 'b', region);
         memset(ptr, 'c', region);
-        
+
         munmap(ptr, region);
 out_close:
         close(fd);
@@ -328,53 +327,53 @@ static int mmap_tst4(char *mnt)
 
         if (unlink(filea) && errno != ENOENT) {
                 perror("unlink()");
-                return errno;
+                return -errno;
         }
         if (unlink(fileb) && errno != ENOENT) {
                 perror("unlink()");
-                return errno;
+                return -errno;
         }
 
         fdr = fdw = -1;
         fdr = open(fileb, O_CREAT|O_RDWR, 0600);
         if (fdr < 0) {
                 perror(fileb);
-                return errno;
+                return -errno;
         }
         if (ftruncate(fdr, region) < 0) {
                 perror("ftruncate()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
         fdw = open(filea, O_CREAT|O_RDWR, 0600);
         if (fdw < 0) {
                 perror(filea);
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
         if (ftruncate(fdw, region) < 0) {
                 perror("ftruncate()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
-        
+
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fdr, 0);
         if (ptr == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
 
         rc = mmap_run(4);
         if (rc)
                 goto out_unmap;
-        
+
         memset(ptr, '1', region);
-        
+
         rc = write(fdw, ptr, region);
         if (rc <= 0) {
                 perror("write()");
-                rc = errno;
+                rc = -errno;
         } else
                 rc = 0;
 
@@ -404,19 +403,19 @@ static int remote_tst4(char *mnt)
         fdr = open(filea, O_RDWR, 0600);
         if (fdr < 0) {
                 perror(filea);
-                return errno;
+                return -errno;
         }
         fdw = open(fileb, O_RDWR, 0600);
         if (fdw < 0) {
                 perror(fileb);
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
 
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fdr, 0);
         if (ptr == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
 
@@ -425,10 +424,10 @@ static int remote_tst4(char *mnt)
         rc = write(fdw, ptr, region);
         if (rc <= 0) {
                 perror("write()");
-                rc = errno;
+                rc = -errno;
         } else
                 rc = 0;
-     
+
         munmap(ptr, region);
 out_close:
         if (fdr >= 0)
@@ -447,7 +446,7 @@ static int cancel_lru_locks(char *prefix)
 
         child = fork();
         if (child < 0)
-                return errno;
+                return -errno;
         else if (child) {
                 int status;
                 rc = waitpid(child, &status, WNOHANG);
@@ -457,14 +456,16 @@ static int cancel_lru_locks(char *prefix)
         }
 
         if (prefix)
-                sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*-%s-*/lru_size", prefix);
+                sprintf(cmd,
+                        "ls /proc/fs/lustre/ldlm/namespaces/*-%s-*/lru_size",
+                        prefix);
         else
                 sprintf(cmd, "ls /proc/fs/lustre/ldlm/namespaces/*/lru_size");
 
         file = popen(cmd, "r");
         if (file == NULL) {
                 perror("popen()");
-                return errno;
+                return -errno;
         }
 
         while (fgets(line, len, file)) {
@@ -477,13 +478,13 @@ static int cancel_lru_locks(char *prefix)
                 f = fopen(line, "w");
                 if (f == NULL) {
                         perror("fopen()");
-                        rc = errno;
+                        rc = -errno;
                         break;
                 }
                 rc = fwrite("clear", strlen("clear") + 1, 1, f);
                 if (rc < 1) {
                         perror("fwrite()");
-                        rc = errno;
+                        rc = -errno;
                         fclose(f);
                         break;
                 }
@@ -507,24 +508,24 @@ static int mmap_tst5(char *mnt)
 
         if (unlink(mmap_file) && errno != ENOENT) {
                 perror("unlink()");
-                return errno;
+                return -errno;
         }
 
         fd = open(mmap_file, O_CREAT|O_RDWR, 0600);
         if (fd < 0) {
                 perror(mmap_file);
-                return errno;
+                return -errno;
         }
         if (ftruncate(fd, region) < 0) {
                 perror("ftruncate()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
 
         ptr = mmap(NULL, region, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (ptr == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out_close;
         }
         memset(ptr, 'a', region);
@@ -538,13 +539,13 @@ static int mmap_tst5(char *mnt)
         rc = read(fd, ptr + off, off * 2);
         if (rc != off * 2) {
                 perror("read()");
-                rc = errno;
+                rc = -errno;
                 goto out_unmap;
         }
         rc = write(fd, ptr + off, off * 2);
         if (rc != off * 2) {
                 perror("write()");
-                rc = errno;
+                rc = -errno;
         }
         rc = 0;
 out_unmap:
@@ -566,37 +567,38 @@ static int mmap_tst6(char *mnt)
         sprintf(mmap_file2, "%s/%s", dir2, "mmap_file6");
         if (unlink(mmap_file) && errno != ENOENT) {
                 perror("unlink()");
-                return errno;
+                return -errno;
         }
 
         fd = open(mmap_file, O_CREAT|O_RDWR, 0600);
         if (fd < 0) {
                 perror(mmap_file);
-                return errno;
+                return -errno;
         }
         if (ftruncate(fd, page_size) < 0) {
                 perror("ftruncate()");
-                rc = errno;
+                rc = -errno;
                 goto out;
         }
 
         fd2 = open(mmap_file2, O_RDWR, 0600);
         if (fd2 < 0) {
                 perror(mmap_file2);
+                rc = -errno;
                 goto out;
         }
 
         ptr = mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd, 0);
         if (ptr == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out;
         }
-        
+
         ptr2 = mmap(NULL, page_size, PROT_READ|PROT_WRITE, MAP_SHARED, fd2, 0);
         if (ptr2 == MAP_FAILED) {
                 perror("mmap()");
-                rc = errno;
+                rc = -errno;
                 goto out;
         }
 
@@ -607,13 +609,13 @@ static int mmap_tst6(char *mnt)
         memcpy(ptr, "blah", strlen("blah"));
         if (strncmp(ptr, ptr2, strlen("blah"))) {
                 fprintf(stderr, "client2 mmap mismatch!\n");
-                rc = EFAULT;
+                rc = -EFAULT;
                 goto out;
         }
         memcpy(ptr2, "foo", strlen("foo"));
         if (strncmp(ptr, ptr2, strlen("foo"))) {
                 fprintf(stderr, "client1 mmap mismatch!\n");
-                rc = EFAULT;
+                rc = -EFAULT;
         }
 out:
         if (ptr2)
@@ -636,46 +638,47 @@ static int mmap_tst7_func(char *mnt, int rw)
         int fd = -1;
         int rc = 0;
 
-        if (snprintf(fname, 256, "%s/mmap_tst7.%s",
-                     mnt, (rw == 0) ? "read":"write") >= 256) {
-                fprintf(stderr, "dir name too long\n");
-                rc = ENAMETOOLONG;
-                goto out;
-        }
+        if (snprintf(fname, 256, "%s/mmap_tst7.%s", mnt,
+		     (rw == 0) ? "read" : "write") >= 256) {
+		fprintf(stderr, "dir name too long\n");
+		rc = -ENAMETOOLONG;
+		goto out;
+	}
         fd = open(fname, O_RDWR | O_DIRECT | O_CREAT, 0644);
         if (fd == -1) {
                 perror("open");
-                rc = errno;
+                rc = -errno;
                 goto out;
         }
-        if (ftruncate(fd, 2 * page_size) == -1) {
-                perror("truncate");
-                rc = errno;
-                goto out;
-        }
+	if (ftruncate(fd, 2 * page_size) == -1) {
+		perror("truncate");
+		rc = -errno;
+		goto out;
+	}
         buf = mmap(NULL, page_size,
                    PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
-        if (buf == MAP_FAILED) {
-                perror("mmap");
-                rc = errno;
-                goto out;
-        }
-        /* ensure the second page isn't mapped */
-        munmap(buf + page_size, page_size);
-        bytes = (rw == 0) ? read(fd, buf, 2 * page_size) :
-                write(fd, buf, 2 * page_size);
-        /* Expected behavior */
-        if (bytes == page_size)
-                goto out;
-        fprintf(stderr, "%s returned %zd, errno = %d\n",
-                (rw == 0)?"read":"write", bytes, errno);
-        rc = EIO;
+	if (buf == MAP_FAILED) {
+		perror("mmap");
+		rc = -errno;
+		goto out;
+	}
+	/* ensure the second page isn't mapped */
+	munmap(buf + page_size, page_size);
+	bytes = (rw == 0) ? read(fd, buf, 2 * page_size) :
+			    write(fd, buf, 2 * page_size);
+	/* Expected behavior */
+	if (bytes == page_size)
+		goto out;
+
+	fprintf(stderr, "%s returned %zd, errno = %d\n",
+		(rw == 0) ? "read" : "write", bytes, errno);
+	rc = -EIO;
 out:
-        if (buf != MAP_FAILED)
-                munmap(buf, page_size);
-        if (fd != -1)
-                close(fd);
-        return rc;
+	if (buf != MAP_FAILED)
+		munmap(buf, page_size);
+	if (fd != -1)
+		close(fd);
+	return rc;
 }
 
 static int mmap_tst7(char *mnt)
@@ -692,7 +695,7 @@ static int mmap_tst7(char *mnt)
 static int remote_tst(int tc, char *mnt)
 {
         int rc = 0;
-        switch(tc) {
+        switch (tc) {
         case 3:
                 rc = remote_tst3(mnt);
                 break;
@@ -701,7 +704,7 @@ static int remote_tst(int tc, char *mnt)
                 break;
         default:
                 fprintf(stderr, "wrong test case number %d\n", tc);
-                rc = EINVAL;
+                rc = -EINVAL;
                 break;
         }
         return rc;
@@ -710,7 +713,7 @@ static int remote_tst(int tc, char *mnt)
 struct test_case {
         int     tc;                     /* test case number */
         char    *desc;                  /* test description */
-        int     (* test_fn)(char *mnt); /* test function */
+        int     (*test_fn)(char *mnt);  /* test function */
         int     node_cnt;               /* node count */
 };
 
@@ -718,11 +721,11 @@ struct test_case tests[] = {
         { 1, "mmap test1: basic mmap operation", mmap_tst1, 1 },
         { 2, "mmap test2: MAP_PRIVATE not write back", mmap_tst2, 1 },
         { 3, "mmap test3: concurrent mmap ops on two nodes", mmap_tst3, 2 },
-        { 4, "mmap test4: c1 write to f1 from mmapped f2, " 
+        { 4, "mmap test4: c1 write to f1 from mmapped f2, "
              "c2 write to f1 from mmapped f1", mmap_tst4, 2 },
         { 5, "mmap test5: read/write file to/from the buffer "
              "which mmapped to just this file", mmap_tst5, 1 },
-        { 6, "mmap test6: check mmap write/read content on two nodes", 
+        { 6, "mmap test6: check mmap write/read content on two nodes",
                 mmap_tst6, 2 },
         { 7, "mmap test7: file i/o with an unmapped buffer", mmap_tst7, 1},
         { 0, NULL, 0, 0 }
@@ -730,26 +733,20 @@ struct test_case tests[] = {
 
 int main(int argc, char **argv)
 {
-        extern char *optarg;
         struct test_case *test;
         int c, rc = 0;
 
-        for(;;) {
-                c = getopt(argc, argv, "d:m:");
-                if ( c == -1 )
+        while ((c = getopt(argc, argv, "d:m:")) != -1) {
+                switch (c) {
+                case 'd':
+                        dir = optarg;
                         break;
-
-                switch(c) {
-                        case 'd':
-                                dir = optarg;
-                                break;
-                        case 'm':
-                                dir2 = optarg;
-                                break;
-                        default:
-                        case '?':
-                                usage();
-                                break;
+                case 'm':
+                        dir2 = optarg;
+                        break;
+                default:
+                        usage();
+                        break;
                 }
         }
 
@@ -758,7 +755,7 @@ int main(int argc, char **argv)
 
         if (mmap_initialize(argv[0]) != 0) {
                 fprintf(stderr, "mmap_initialize failed!\n");
-                return EINVAL;
+                return -EINVAL;
         }
 
         for (test = tests; test->tc; test++) {
@@ -785,5 +782,5 @@ int main(int argc, char **argv)
         }
 
         mmap_finalize();
-        return rc;
+        return -rc;
 }
