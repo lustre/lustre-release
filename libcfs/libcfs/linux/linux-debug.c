@@ -149,17 +149,17 @@ void libcfs_run_upcall(char **argv)
         }
 }
 
-void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
+void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *msgdata)
 {
         char *argv[6];
         char buf[32];
 
         ENTRY;
-        snprintf (buf, sizeof buf, "%d", line);
+        snprintf (buf, sizeof buf, "%d", msgdata->msg_line);
 
         argv[1] = "LBUG";
-        argv[2] = (char *)file;
-        argv[3] = (char *)fn;
+        argv[2] = (char *)msgdata->msg_file;
+        argv[3] = (char *)msgdata->msg_fn;
         argv[4] = buf;
         argv[5] = NULL;
 
@@ -167,23 +167,22 @@ void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
 }
 
 #ifdef __arch_um__
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {
         libcfs_catastrophe = 1;
-        libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
-                         "LBUG - trying to dump log to %s\n",
+        libcfs_debug_msg(msgdata, "LBUG - trying to dump log to %s\n",
                          libcfs_debug_file_path);
         libcfs_debug_dumplog();
-        libcfs_run_lbug_upcall(file, func, line);
+        libcfs_run_lbug_upcall(msgdata);
         asm("int $3");
         panic("LBUG");
 }
 #else
 /* coverity[+kill] */
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {
         libcfs_catastrophe = 1;
-        libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line, "LBUG\n");
+        libcfs_debug_msg(msgdata, "LBUG\n");
 
         if (in_interrupt()) {
                 panic("LBUG in interrupt.\n");
@@ -193,7 +192,7 @@ void lbug_with_loc(const char *file, const char *func, const int line)
         libcfs_debug_dumpstack(NULL);
         if (!libcfs_panic_on_lbug)
                 libcfs_debug_dumplog();
-        libcfs_run_lbug_upcall(file, func, line);
+        libcfs_run_lbug_upcall(msgdata);
         if (libcfs_panic_on_lbug)
                 panic("LBUG");
         set_task_state(current, TASK_UNINTERRUPTIBLE);

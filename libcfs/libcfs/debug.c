@@ -78,13 +78,13 @@ CFS_MODULE_PARM(libcfs_console_ratelimit, "i", uint, 0644,
                 "Lustre kernel debug console ratelimit (0 to disable)");
 EXPORT_SYMBOL(libcfs_console_ratelimit);
 
-cfs_duration_t libcfs_console_max_delay;
-CFS_MODULE_PARM(libcfs_console_max_delay, "l", ulong, 0644,
+unsigned int libcfs_console_max_delay;
+CFS_MODULE_PARM(libcfs_console_max_delay, "l", uint, 0644,
                 "Lustre kernel debug console max delay (jiffies)");
 EXPORT_SYMBOL(libcfs_console_max_delay);
 
-cfs_duration_t libcfs_console_min_delay;
-CFS_MODULE_PARM(libcfs_console_min_delay, "l", ulong, 0644,
+unsigned int libcfs_console_min_delay;
+CFS_MODULE_PARM(libcfs_console_min_delay, "l", uint, 0644,
                 "Lustre kernel debug console min delay (jiffies)");
 EXPORT_SYMBOL(libcfs_console_min_delay);
 
@@ -96,7 +96,7 @@ EXPORT_SYMBOL(libcfs_console_backoff);
 unsigned int libcfs_debug_binary = 1;
 EXPORT_SYMBOL(libcfs_debug_binary);
 
-unsigned int libcfs_stack;
+unsigned int libcfs_stack = 3 * THREAD_SIZE / 4;
 EXPORT_SYMBOL(libcfs_stack);
 
 unsigned int portal_enter_debugger;
@@ -386,6 +386,7 @@ void libcfs_debug_dumplog(void)
         cfs_waitq_del(&debug_ctlwq, &wait);
         cfs_set_current_state(CFS_TASK_RUNNING);
 }
+EXPORT_SYMBOL(libcfs_debug_dumplog);
 
 int libcfs_debug_init(unsigned long bufsize)
 {
@@ -458,5 +459,20 @@ void libcfs_debug_set_level(unsigned int debug_level)
         libcfs_debug = debug_level;
 }
 
-EXPORT_SYMBOL(libcfs_debug_dumplog);
 EXPORT_SYMBOL(libcfs_debug_set_level);
+
+long libcfs_log_return(struct libcfs_debug_msg_data *msgdata, long rc)
+{
+        libcfs_debug_msg(msgdata, "Process leaving (rc=%lu : %ld : %lx)\n",
+                         rc, rc, rc);
+        return rc;
+}
+EXPORT_SYMBOL(libcfs_log_return);
+
+void libcfs_log_goto(struct libcfs_debug_msg_data *msgdata, const char *label,
+                     long_ptr_t rc)
+{
+        libcfs_debug_msg(msgdata, "Process leaving via %s (rc=" LPLU " : " LPLD
+                         " : " LPLX ")\n", label, (ulong_ptr_t)rc, rc, rc);
+}
+EXPORT_SYMBOL(libcfs_log_goto);

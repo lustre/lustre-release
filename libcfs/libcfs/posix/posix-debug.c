@@ -53,8 +53,8 @@ static char source_nid[16];
 /* 0 indicates no messages to console, 1 is errors, > 1 is all debug messages */
 static int toconsole = 1;
 unsigned int libcfs_console_ratelimit = 1;
-cfs_duration_t libcfs_console_max_delay;
-cfs_duration_t libcfs_console_min_delay;
+unsigned int libcfs_console_max_delay;
+unsigned int libcfs_console_min_delay;
 unsigned int libcfs_console_backoff = CDEBUG_DEFAULT_BACKOFF;
 #else /* !HAVE_CATAMOUNT_DATA_H */
 #ifdef HAVE_NETDB_H
@@ -243,10 +243,21 @@ void catamount_printline(char *buf, size_t size)
 }
 #endif
 
+int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
+                     const char *format, ...)
+{
+        va_list args;
+        int     rc;
+
+        va_start(args, format);
+        rc = libcfs_debug_vmsg2(msgdata, format, args, NULL);
+        va_end(args);
+
+        return rc;
+}
+
 int
-libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
-                   int subsys, int mask,
-                   const char *file, const char *fn, const int line,
+libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
                    const char *format1, va_list args,
                    const char *format2, ...)
 {
@@ -264,7 +275,7 @@ libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
         /* toconsole == 0 - all messages to debug_file_fd
          * toconsole == 1 - warnings to console, all to debug_file_fd
          * toconsole >  1 - all debug to console */
-        if (((mask & libcfs_printk) && toconsole == 1) || toconsole > 1)
+        if (((msgdata->msg_mask & libcfs_printk) && toconsole == 1) || toconsole > 1)
                 console = 1;
 #endif
 
@@ -272,11 +283,12 @@ libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
                 return 0;
         }
 
-        if (mask & (D_EMERG | D_ERROR))
+        if (msgdata->msg_mask & (D_EMERG | D_ERROR))
                prefix = "LustreError";
 
         nob = snprintf(buf, sizeof(buf), "%s: %u-%s:(%s:%d:%s()): ", prefix,
-                       source_pid, source_nid, file, line, fn);
+                       source_pid, source_nid, msgdata->msg_file,
+                       msgdata->msg_line, msgdata->msg_fn);
 
         remain = sizeof(buf) - nob;
         if (format1) {
@@ -292,6 +304,8 @@ libcfs_debug_vmsg2(cfs_debug_limit_state_t *cdls,
 
 #ifdef HAVE_CATAMOUNT_DATA_H
         if (console) {
+                cfs_debug_limit_state_t *cdls = msgdata->msg_cdls;
+
                 /* check rate limit for console */
                 if (cdls != NULL) {
                         if (libcfs_console_ratelimit &&
@@ -351,16 +365,38 @@ out_file:
 
         fprintf(debug_file_fd, CFS_TIME_T".%06lu:%u:%s:(%s:%d:%s()): %s",
                 tv.tv_sec, tv.tv_usec, source_pid, source_nid,
-                file, line, fn, buf);
+                msgdata->msg_file, msgdata->msg_line, msgdata->msg_fn, buf);
 
         return 0;
 }
 
 void
-libcfs_assertion_failed(const char *expr, const char *file, const char *func,
-                        const int line)
+libcfs_assertion_failed(const char *expr, struct libcfs_debug_msg_data *msgdata)
 {
-        libcfs_debug_msg(NULL, 0, D_EMERG, file, func, line,
-                         "ASSERTION(%s) failed\n", expr);
+        libcfs_debug_msg(msgdata, "ASSERTION(%s) failed\n", expr);
         abort();
+}
+
+/*
+ * a helper function for RETURN(): the sole purpose is to save 8-16 bytes
+ * on the stack - function calling RETURN() doesn't need to allocate two
+ * additional 'rc' on the stack
+ */
+long libcfs_log_return(struct libcfs_debug_msg_data *msgdata, long rc)
+{
+        libcfs_debug_msg(msgdata, "Process leaving (rc=%lu : %ld : %lx)\n",
+                         rc, rc, rc);
+        return rc;
+}
+
+/*
+ * a helper function for GOTO(): the sole purpose is to save 8-16 bytes
+ * on the stack - function calling GOTO() doesn't need to allocate two
+ * additional 'rc' on the stack
+ */
+void libcfs_log_goto(struct libcfs_debug_msg_data *msgdata, const char *l,
+                     long_ptr_t rc)
+{
+        libcfs_debug_msg(msgdata, "Process leaving via %s (rc=" LPLU " : "
+                         LPLD " : " LPLX ")\n", l, (ulong_ptr_t) rc, rc, rc);
 }

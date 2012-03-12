@@ -53,18 +53,18 @@ cfs_task_t *libcfs_current(void)
 	return cfs_current();
 }
 
-void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
+void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *msgdata)
 {
 }
 
-void lbug_with_loc(const char *file, const char *func, const int line)
+void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {
         libcfs_catastrophe = 1;
         CEMERG("LBUG: pid: %u thread: %#x\n",
                cfs_curproc_pid(), PsGetCurrentThread());
         cfs_enter_debugger();
         libcfs_debug_dumplog();
-        libcfs_run_lbug_upcall(file, func, line);
+        libcfs_run_lbug_upcall(msgdata);
 }
 
 void cfs_enter_debugger(void)
