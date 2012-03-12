@@ -206,7 +206,7 @@ typedef struct dirent64 cfs_dirent_t;
 
 #define LUSTRE_TRACE_SIZE (CFS_THREAD_SIZE >> 5)
 
-#define CFS_CHECK_STACK() do { } while(0)
+#define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)
 #define CDEBUG_STACK() (0L)
 
 /* initial pid  */
