@@ -47,6 +47,7 @@
 #include <netdb.h>
 #include <string.h>
 #include <sys/wait.h>
+#include <sys/time.h>
 
 char *dir = NULL, *dir2 = NULL;
 long page_size;
@@ -761,13 +762,24 @@ int main(int argc, char **argv)
         }
 
         for (test = tests; test->tc; test++) {
-                char *rs = "skip";
-                rc = 0;
+                double duration;
+                char *rs;
+
                 if (test->node_cnt == 1 || dir2 != NULL) {
+                        struct timeval start, end;
+
+                        gettimeofday(&start, NULL);
                         rc = test->test_fn(dir);
-                        rs = rc ? "fail" : "pass";
+                        gettimeofday(&end, NULL);
+
+                        duration = (double)(end.tv_sec - start.tv_sec) +
+                                (double)(end.tv_usec - start.tv_usec) / 1000000;
+                        rs = rc ? "FAIL" : "PASS";
+                } else {
+                        duration = 0.0;
+                        rs = "SKIP";
                 }
-                fprintf(stderr, "%s (%s)\n", test->desc, rs);
+                fprintf(stderr, "%s (%s, %.5gs)\n", test->desc, rs, duration);
                 if (rc)
                         break;
         }
