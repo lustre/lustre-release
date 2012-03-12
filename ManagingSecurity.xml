@@ -107,7 +107,7 @@ other::---</screen>
 --param &quot;mds.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
 </screen>
       <para>Root squash parameters can also be changed with the <literal>lctl conf_param</literal> command. For example:</para>
-      <screen>lctl conf_param Lustre.mdt.root_squash=&quot;1000:100&quot;
+      <screen>lctl conf_param Lustre.mdt.root_squash=&quot;1000:101&quot;
 lctl conf_param Lustre.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
       <note>
         <para>When using the lctl conf_param command, keep in mind:</para>
