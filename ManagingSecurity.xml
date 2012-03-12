@@ -101,7 +101,7 @@ other::---</screen>
       <para>Root squash parameters can be set when the MDT is created (<literal>mkfs.lustre --mdt</literal>). For example:</para>
       <screen>mkfs.lustre --reformat --fsname=Lustre --mdt --mgs \
        --param &quot;mdt.root_squash=500:501&quot; \
-       --param &quot;mdt.nosquash_nids=&apos;0@elan1 192.168.1.[10,11]&apos;&quot; /dev/sda1</screen>
+       --param &quot;mdt.nosquash_nids=&apos;0@elan1 192.168.2.[10,11]&apos;&quot; /dev/sda1</screen>
       <para>Root squash parameters can also be changed on an unmounted device with <literal>tunefs.lustre</literal>. For example:</para>
       <screen>tunefs.lustre --param &quot;mdt.root_squash=65534:65534&quot;  \
 --param &quot;mds.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
