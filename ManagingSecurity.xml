@@ -100,15 +100,15 @@ other::---</screen>
       <para>The default value for <literal>nosquash_nids</literal> is NULL, which means that root squashing applies to all clients. Setting the root squash UID and GID to 0 turns root squash off.</para>
       <para>Root squash parameters can be set when the MDT is created (<literal>mkfs.lustre --mdt</literal>). For example:</para>
       <screen>mkfs.lustre --reformat --fsname=Lustre --mdt --mgs \
-       --param &quot;mds.root_squash=500:501&quot; \
-       --param &quot;mds.nosquash_nids=&apos;0@elan1 192.168.1.[10,11]&apos;&quot; /dev/sda1</screen>
+       --param &quot;mdt.root_squash=500:501&quot; \
+       --param &quot;mdt.nosquash_nids=&apos;0@elan1 192.168.1.[10,11]&apos;&quot; /dev/sda1</screen>
       <para>Root squash parameters can also be changed on an unmounted device with <literal>tunefs.lustre</literal>. For example:</para>
-      <screen>tunefs.lustre --param &quot;mds.root_squash=65534:65534&quot;  \
---param &quot;mds.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
+      <screen>tunefs.lustre --param &quot;mdt.root_squash=65534:65534&quot;  \
+--param &quot;mdt.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
 </screen>
       <para>Root squash parameters can also be changed with the <literal>lctl conf_param</literal> command. For example:</para>
-      <screen>lctl conf_param Lustre.mds.root_squash=&quot;1000:100&quot;
-lctl conf_param Lustre.mds.nosquash_nids=&quot;*@tcp&quot;</screen>
+      <screen>lctl conf_param Lustre.mdt.root_squash=&quot;1000:101&quot;
+lctl conf_param Lustre.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
       <note>
         <para>When using the lctl conf_param command, keep in mind:</para>
         <itemizedlist>
@@ -124,18 +124,18 @@ lctl conf_param Lustre.mds.nosquash_nids=&quot;*@tcp&quot;</screen>
         </itemizedlist>
       </note>
       <para>The <literal>nosquash_nids</literal> list can be cleared with:</para>
-      <screen>lctl conf_param Lustre.mds.nosquash_nids=&quot;NONE&quot;</screen>
+      <screen>lctl conf_param Lustre.mdt.nosquash_nids=&quot;NONE&quot;</screen>
       <para>- OR -</para>
-      <screen>lctl conf_param Lustre.mds.nosquash_nids=&quot;clear&quot;</screen>
+      <screen>lctl conf_param Lustre.mdt.nosquash_nids=&quot;clear&quot;</screen>
       <para>If the <literal>nosquash_nids</literal> value consists of several NID ranges (e.g. <literal>0@elan</literal>, <literal>1@elan1</literal>), the list of NID ranges must be quoted with single (&apos;) or double (&apos;&apos;) quotation marks. List elements must be separated with a space. For example:</para>
-      <screen>mkfs.lustre ... --param &quot;mds.nosquash_nids=&apos;0@elan1 1@elan2&apos;&quot; /dev/sda1
-lctl conf_param Lustre.mds.nosquash_nids=&quot;24@elan 15@elan1&quot;</screen>
+      <screen>mkfs.lustre ... --param &quot;mdt.nosquash_nids=&apos;0@elan1 1@elan2&apos;&quot; /dev/sda1
+lctl conf_param Lustre.mdt.nosquash_nids=&quot;24@elan 15@elan1&quot;</screen>
       <para>These are examples of incorrect syntax:</para>
-      <screen>mkfs.lustre ... --param &quot;mds.nosquash_nids=0@elan1 1@elan2&quot; /dev/sda1
-lctl conf_param Lustre.mds.nosquash_nids=24@elan 15@elan1</screen>
+      <screen>mkfs.lustre ... --param &quot;mdt.nosquash_nids=0@elan1 1@elan2&quot; /dev/sda1
+lctl conf_param Lustre.mdt.nosquash_nids=24@elan 15@elan1</screen>
       <para>To check root squash parameters, use the lctl get_param command:</para>
-      <screen>lctl get_param mds.Lustre-MDT0000.root_squash
-lctl get_param mds.Lustre-MDT000*.nosquash_nids</screen>
+      <screen>lctl get_param mdt.Lustre-MDT0000.root_squash
+lctl get_param mdt.*.nosquash_nids</screen>
       <note>
         <para>An empty nosquash_nids list is reported as NONE.</para>
       </note>
