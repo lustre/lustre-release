@@ -17,7 +17,7 @@
 # [ NOTE: It is advised to have automated login (passwordless entry) on server ]
 
 # include library
-source libecho
+source $(dirname $0)/libecho
 
 # Customisation variables
 #####################################################################
@@ -54,7 +54,6 @@ layer=${layer:-"mdd"}
 # leave the rest of this alone unless you know what you're doing...
 export LC_ALL=POSIX
 basedir="tests"
-case=disk
 
 create_directories () {
     local host=$1
@@ -102,34 +101,36 @@ destroy_directories () {
 
 get_stats () {
     local rfile=$1
-    gawk < $rfile                                    \
-    '/start at/ { n=0; next }                        \
-    /error at/ {n = -1; exit}                        \
-    /end/ {exit}                                     \
-    /^[0-9]+\/[0-9]+ Total: [0-9]+\.[0-9]+\/second$/ \
-    {    n++; v=strtonum($3);                        \
-         if (n == 1 || v < min) min = v;             \
-         if (n == 1 || v > max) max = v;             \
-         next;                                       \
-    }                                                \
-    {    if (n != 0) {n = -1; exit } }               \
-    END {printf "%d %f %f\n", n, min, max}'
+    gawk < $rfile                                                               \
+    '/starting/ { n=0; next }                                                   \
+     /error/ {n = -1; exit}                                                     \
+     /^Total: total [0-9]+ threads [0-9]+ sec [0-9\.]+ [0-9]+\.[0-9]+\/second$/ \
+     { ave = strtonum($8); n++; next}                                           \
+     /^[0-9]+\/[0-9]+ Total: [0-9]+\.[0-9]+\/second$/                           \
+     {    n++; v = strtonum($3);                                                \
+          if (n == 1 || v < min) min = v;                                       \
+          if (n == 1 || v > max) max = v;                                       \
+          next;                                                                 \
+     }                                                                          \
+     {    if (n != 0) {n = -1; exit } }                                         \
+     END { if (n == 1) { min = ave; max = ave; }                                \
+           printf "%d %f %f %f\n", n, ave, min, max}'
 }
 
 get_global_stats () {
     local rfile=$1
-    awk < $rfile                                    \
-    'BEGIN {n = 0;}                                 \
-    {    n++;                                       \
-         if (n == 1) { err = $1; min = $2; max = $3}\
-         else                                       \
-         { if ($1 < err) err = $1;                  \
-           if ($2 < min) min = $2;                  \
-           if ($3 > max) max = $3;                  \
-         }                                          \
-    }                                               \
-    END { if (n == 0) err = 0;                      \
-          printf "%d %f %f\n", err, min, max}'
+    awk < $rfile                                               \
+    'BEGIN {n = 0;}                                            \
+    {    n++;                                                  \
+         if (n == 1) { err = $1; ave = $2; min = $3; max = $4} \
+         else                                                  \
+         { if ($1 < err) err = $1;                             \
+           if ($2 < min) min = $2;                             \
+           if ($3 > max) max = $3;                             \
+         }                                                     \
+    }                                                          \
+    END { if (n == 0) err = 0;                                 \
+          printf "%d %f %f %f\n", err, ave, min, max}'
 }
 
 print_summary () {
@@ -171,16 +172,6 @@ if [ -z "$targets" ]; then
     fi
 fi
 
-# check for ost
-if (( $stripe_count > 0 )); then
-    obd=$($lctl device_list | awk "{if (\$2 == \"UP\" && \
-            \$3 == \"obdfilter\") {print \$4} }")
-    if [ -z "$obd" ]; then
-        echo "Need obdfilter to test stripe_count"
-        exit 1
-    fi
-fi
-
 # split out hostnames from mdt names
 ndevs=0
 for trgt in $targets; do
@@ -189,6 +180,19 @@ for trgt in $targets; do
     client_names[$ndevs]=${str[1]}
     ndevs=$((ndevs+1))
 done
+
+# check for ost
+if (( $stripe_count > 0 )); then
+    for ((i=0; i < $ndevs; i++)); do
+        host=${host_names[$i]}
+        obd=$(remote_shell $host $lctl device_list | awk "{if (\$2 == \"UP\" &&
+            \$3 == \"osc\") { print \$4 } }")
+        if [ -z "$obd" ]; then
+            echo "Need obdfilter to test stripe_count"
+            exit 1
+        fi
+    done
+fi
 
 # check and insert obdecho module
 if ! lsmod | grep obdecho > /dev/null; then
@@ -255,6 +259,7 @@ for ((idx = 0; idx < $ndevs; idx++)); do
 done
 
 snap=1
+status=0
 for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
     thr_per_dir=$((${thr}/${dir_count}))
     # skip if no enough thread
@@ -293,8 +298,6 @@ for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
             pidarray[$pidcount]=0
             pidcount=$((pidcount+1))
         done
-        # timed run of all the per-host script files
-        t0=`date +%s.%N`
         pidcount=0
         for host in ${unique_hosts[@]}; do
             remote_shell $host bash < ${cmdsf}_${host} &
@@ -307,16 +310,11 @@ for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
             pidcount=$((pidcount+1))
         done
         #wait
-        t1=`date +%s.%N`
         # clean up per-host script files
         for host in ${unique_hosts[@]}; do
             rm ${cmdsf}_${host}
         done
 
-        # compute bandwidth from total data / elapsed time
-        str=`awk "BEGIN {printf \"%7.2f \", \
-        ( $file_count * $thr_per_dir ) / ( $t1 - $t0 )}"`
-        print_summary -n "$str"
         # collect/check individual MDT stats
         echo -n > $tmpf
         for ((idx = 0; idx < $ndevs; idx++)); do
@@ -335,14 +333,11 @@ for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
         stats=(`get_global_stats $tmpf`)
         rm $tmpf
         if ((stats[0] <= 0)); then
-            if ((stats[0] < 0)); then
-                str=`printf "%17s " ERROR`
-            else
-                str=`printf "%17s " SHORT`
-            fi
+            str=`printf "%17s " ERROR`
+            status=1
         else
-            str=`awk "BEGIN {printf \"[%7.2f,%7.2f] \", \
-            ${stats[1]}, ${stats[2]}; exit}"`
+            str=`awk "BEGIN {printf \"%7.2f [%7.2f,%7.2f] \", \
+            ${stats[1]}, ${stats[2]}, ${stats[3]}; exit}"`
         fi
         print_summary -n "$str"
     done
@@ -358,5 +353,5 @@ for ((idx = 0; idx < $ndevs; idx++)); do
     destroy_directories $host $devno $dir_count $tmpf
 done
 
-cleanup 0
-exit 0
+cleanup $status
+exit $status

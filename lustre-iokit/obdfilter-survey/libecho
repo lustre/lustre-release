@@ -143,10 +143,10 @@ unload_obdecho () {
 }
 
 # returns the device number which is displayed in "lctl device_list"
-# 
+#
 # parameter: 1. hostname
-#	     2. type of device ex: echo_client
-#	     3. name of device ex: ECHO_matrix.linsyssoft.com
+#            2. type of device ex: echo_client
+#            3. name of device ex: ECHO_matrix.linsyssoft.com
 get_devno () {
     local host=$1
     local type=$2
@@ -175,63 +175,68 @@ get_devnos () {
 # do cleanup for netdisk case.
 cleanup_netdisk () {
     for osc in $@; do
-        $lctl <<EOF
-        cfg_device $osc 
-        cleanup
-        detach
-EOF
+	$lctl <<-EOF
+		cfg_device $osc
+		cleanup
+		detach
+	EOF
     done
 }
 
 # do cleanup for network case.
 cleanup_network () {
     local clean_srv_OSS=$1
-    $lctl <<EOF
-    cfg_device echotmp 
-    cleanup
-    detach
-EOF
-    remote_shell "root@$server_nid" "$lctl << EOF
-        cfg_device echo_srv
-        cleanup
-        detach
-EOF"
+	$lctl <<-EOF
+		cfg_device echotmp
+		cleanup
+		detach
+	EOF
+    remote_shell "root@$server_nid" \
+	"$lctl <<-EOF
+		cfg_device echo_srv
+		cleanup
+		detach
+	EOF"
     if [ $clean_srv_OSS ]; then
-        remote_shell "root@$server_nid" "$lctl << EOF
-            cfg_device OSS
-            cleanup
-            detach
-EOF"
+        remote_shell "root@$server_nid" \
+	"$lctl <<-EOF
+		cfg_device OSS
+		cleanup
+		detach
+	EOF"
     fi
 }
 
 # do cleanup and exit.
 cleanup () {
     local exit_status=$1
+    local host
+    case=${case:-"disk"}
     shift
     for ((i = 0; i < $ndevs; i++)); do
-    	host=${host_names[$i]}
-	    if [ -n ${do_teardown_ec[$i]} ]; then
-        	teardown_ec_devno $host ${client_names[$i]}
-	    fi
+        host=${host_names[$i]}
+        if [ -n ${do_teardown_ec[$i]} ]; then
+            teardown_ec_devno $host ${client_names[$i]}
+        fi
     done
     pidcount=0
-    for host in ${unique_hosts[@]}; do
+    for ((i = 0; i < ${#unique_hosts[@]}; i++)); do
+        host=${unique_hosts[$i]}
         remote_shell $host "killall -q vmstat >/dev/null 2>&1" &
         pid=$!
         kill -term ${vmstatpids[$pidcount]} 2>/dev/null
         kill -kill ${vmstatpids[$pidcount]} 2>/dev/null
         wait $pid
         pidcount=$((pidcount+1))
-        if ((${do_unload_obdecho[$host]})); then
-            unload_obdecho $host
+        if ((${do_unload_echo[$i]})); then
+            unload_obdecho $i
         fi
     done
     if [ $case == "network" ]; then
-        cleanup_network $1 
+        cleanup_network $1
     fi
     if [ $case == "netdisk" ]; then
-	shift
+        shift
         cleanup_netdisk $@
     fi
     if [ $exit_status ]; then
@@ -252,8 +257,8 @@ trap 'cleanup 0 $clean_srv_OSS $cleanup_oscs' SIGHUP SIGINT SIGTERM
 # This must run in a subshell.
 #
 # parameter: 1. hostname
-#	     2. client name, ex:- ns8:ECHO_ns8
-#	     3. name of ost instances, ex:- lustre-OST0001 
+#            2. client name, ex:- ns8:ECHO_ns8
+#            3. name of ost instances, ex:- lustre-OST0001
 get_ec_devno () {
     exec 8>&1 1>&2
     local host=$1
@@ -263,36 +268,37 @@ get_ec_devno () {
     local stack_type="${5:-}"
 
     if [ -z "$client_name" ]; then
-	if [ -z "$ost_name" ]; then
-	    echo "client and ost name both null"
-	    exit 1
-	fi
+        if [ -z "$ost_name" ]; then
+            echo "client and ost name both null"
+            exit 1
+    fi
         client_name=${ost_name}_ecc
     fi
     ec=`get_devno $host echo_client $client_name`
     if [ -n "$ec" ]; then
-	echo $ec $client_name $client_name >&8
-	exit 0
+        echo $ec $client_name $client_name >&8
+        exit 0
     fi
     if [ -z "$ost_name" ]; then
-	echo "no echo client and ost_name not set, client:" \
+        echo "no echo client and ost_name not set, client:" \
             "$client_name, host: $host"
-	exit 1
+        exit 1
     fi
     ost=`get_devno $host $dev_type $ost_name`
     if [ -z "$ost" ]; then
-	echo "OST $ost_name not setup"
-	exit 1
+        echo "OST $ost_name not setup"
+        exit 1
     fi
     client_name=${ost_name}_ecc
-    remote_shell $host "$lctl <<EOF
-        attach echo_client $client_name ${client_name}_UUID
-	setup $ost_name $stack_type
-EOF"
+    remote_shell $host \
+	"$lctl <<-EOF
+		attach echo_client $client_name ${client_name}_UUID
+		setup $ost_name $stack_type
+	EOF"
     ec=`get_devno $host echo_client $client_name`
     if [ -z "$ec" ]; then
-	echo "Can't setup echo-client"
-	exit 1
+        echo "Can't setup echo-client"
+        exit 1
     fi
     echo $ec $client_name 1 >&8
     exit 0
@@ -302,11 +308,11 @@ EOF"
 # It creates echoclients for all osc listed using #lctl device_list command
 ec_using_osc () {
     local osc_name=$1
-    $lctl <<EOF
-        attach echo_client ${osc_name}_ecc ${osc_name}_ecc_UUID
-        cfg_device ${osc_name}_ecc
-        setup $osc_name
-EOF
+	$lctl <<-EOF
+		attach echo_client ${osc_name}_ecc ${osc_name}_ecc_UUID
+		cfg_device ${osc_name}_ecc
+		setup $osc_name
+	EOF
 
 }
 
@@ -316,15 +322,15 @@ ec_using_srv_nid () {
     local ocsname=$2
     local oscuuid=$3
     $lctl add_uuid echo_UUID $server_nid@$NETTYPE >/dev/null 2>&1
-    $lctl <<EOF
-        attach osc $ocsname $oscuuid
-        cfg_device $ocsname
-        setup echo_srv_UUID echo_UUID
-EOF
-    $lctl <<EOF
-        attach echo_client ${ocsname}_ecc $oscuuid
-        setup $ocsname 
-EOF
+	$lctl <<-EOF
+		attach osc $ocsname $oscuuid
+		cfg_device $ocsname
+		setup echo_srv_UUID echo_UUID
+	EOF
+	$lctl <<-EOF
+		attach echo_client ${ocsname}_ecc $oscuuid
+		setup $ocsname
+	EOF
 }
 
 setup_osc_for_remote_ost () {
@@ -332,45 +338,48 @@ setup_osc_for_remote_ost () {
     local obdfilter_name=$2
     local host_name=host_$3
     $lctl add_uuid ${host_name}_UUID $ost_nid@$NETTYPE >/dev/null 2>&1
-    $lctl <<EOF
-        attach osc ${obdfilter_name}_osc ${obdfilter_name}_osc_UUID
-        cfg_device ${obdfilter_name}_osc 
-        setup ${obdfilter_name}_UUID ${host_name}_UUID
-EOF
+	$lctl <<-EOF
+		attach osc ${obdfilter_name}_osc ${obdfilter_name}_osc_UUID
+		cfg_device ${obdfilter_name}_osc
+		setup ${obdfilter_name}_UUID ${host_name}_UUID
+	EOF
 }
 
 # setup obdecho on server
 setup_srv_obd () {
     local server_nid=$1
     local test_ostfsnm=$2
-    remote_shell "root@$server_nid" "$lctl << EOF
-        attach obdecho $test_ostfsnm ${test_ostfsnm}_UUID
-        cfg_device $test_ostfsnm
-        setup
-EOF"
+    remote_shell "root@$server_nid" \
+	"$lctl <<-EOF
+		attach obdecho $test_ostfsnm ${test_ostfsnm}_UUID
+		cfg_device $test_ostfsnm
+		setup
+	EOF"
 }
 
 # setup OSS on server
 setup_OSS () {
     local server_nid=$1
-    remote_shell "root@$server_nid" "$lctl << EOF
-        attach ost OSS OSS_UUID
-        cfg_device OSS
-        setup
-EOF"
+    remote_shell "root@$server_nid" \
+	"$lctl <<-EOF
+		attach ost OSS OSS_UUID
+		cfg_device OSS
+		setup
+	EOF"
 }
 
 # cleanup and detach the echo-clients that we have created during the test.
 # parameter: 1. hostname
-#	     2. client name, ex:- ns8:ECHO_ns8
+#            2. client name, ex:- ns8:ECHO_ns8
 teardown_ec_devno () {
     local host=$1
     local client_name=$2
-    remote_shell $host "$lctl <<EOF
-	cfg $client_name
-	cleanup
-	detach
-EOF"
+    remote_shell $host \
+	"$lctl <<-EOF
+		cfg $client_name
+		cleanup
+		detach
+	EOF"
 }
 
 unique () {
@@ -381,10 +390,10 @@ split_hostname () {
     local name=$1
     case $name in
     *:*) host=`echo $name | sed 's/:.*$//'`
-	 name=`echo $name | sed 's/[^:]*://'`
-	 ;;
+         name=`echo $name | sed 's/[^:]*://'`
+         ;;
     *)   host=localhost
-	 ;;
+         ;;
     esac
     echo "$host $name"
 }
@@ -396,11 +405,11 @@ check_cleanup () {
     for name in $osc_names_str; do
         count=$((count+1))
     done
-    
+
     if [ $count != 0 ]; then
         echo "$type_obj could not be cleanup";
         exit 0;
-    fi 
+    fi
 
 }
 
