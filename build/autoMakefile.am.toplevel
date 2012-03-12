@@ -1,3 +1,4 @@
+# -*- Makefile -*-
 # This file is included by each package's toplevel autoMakefile[.am],
 # which must define SUBDIRS as a minimum.
 
@@ -6,6 +7,15 @@ AUTOMAKE_OPTIONS = foreign
 FIND_TAG_FILES_CMD = find $(top_srcdir) \
 		     -path $(top_srcdir)/ldiskfs/ldiskfs/linux-stage -prune -false -o\
 		     -type f -name '*.[hc]'
+
+MAKEEACHSUBDIR =					\
+	for subdir in $(RPM_SUBDIRS) ; do		\
+		echo "Making $@ in $$subdir" ; 		\
+		cd $$subdir ;				\
+		$(MAKE) $(AM_MAKEFLAGS) $@ ;		\
+		cd - ;					\
+		echo "Finished $@ in $$subdir" ;	\
+	done
 
 # these empty rules are needed so that automake doesn't add its own
 # recursive rules
@@ -105,46 +115,42 @@ EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
 	build/funcs.sh build/find_linux_rpms build/exit_traps.sh
 
 rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
-	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | sed -re 's/--(en|dis)able-tests//'); \
+	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | \
+		sed -re 's/--(en|dis)able-tests//'); \
 	if [ -n "@LINUX@" ]; then \
-		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | sed -re 's/--with-linux=[^ ][^ ]*//'); \
+		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
+			sed -re 's/--with-linux=[^ ][^ ]*//'); \
 		RPMARGS="--define \"kdir @LINUX@\""; \
-		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | sed -re 's/--with-linux-obj=[^ ][^ ]*//'); \
+		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
+			sed -re 's/--with-linux-obj=[^ ][^ ]*//'); \
 		if [ -n "@LINUX_OBJ@" -a "@LINUX_OBJ@" != "@LINUX@" ]; then \
 			RPMARGS="$$RPMARGS --define \"kobjdir @LINUX_OBJ@\""; \
 		fi; \
 	fi; \
-	CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | sed -re 's/--with-release=[^ ][^ ]*//'); \
+	CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
+		sed -re 's/--with-release=[^ ][^ ]*//'); \
 	RPMARGS="$$RPMARGS --define \"configure_args $$CONFIGURE_ARGS\""; \
-	if ! $(BUILD_TESTS); then \
+	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
 		RPMARGS="$$RPMARGS --define \"build_lustre_tests 0\""; \
 	fi; \
-	if ! $(BUILD_SERVER); then \
+	if [[ "X$(BUILD_SERVER)" = Xfalse ]]; then \
 		RPMARGS="$$RPMARGS --define \"lustre_name lustre-client\""; \
 	fi; \
 	echo "Building Lustre RPM with $$RPMARGS"; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
 srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
-	if ! $(BUILD_TESTS); then \
+	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
 		RPMARGS="--define \"build_lustre_tests 0\""; \
 	fi; \
 	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
 
 rpms:
-	for subdir in $(RPM_SUBDIRS) ; do				\
-		echo "Making rpms in $$subdir";				\
-		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) rpms);		\
-		echo "Finished rpms in $$subdir";			\
-	done;								\
+	@$(MAKEEACHSUBDIR)
 	$(MAKE) $(AM_MAKEFLAGS) rpms-real
 
 srpm:
-	for subdir in $(RPM_SUBDIRS) ; do				\
-		echo "Making srpm in $$subdir";				\
-		(cd $$subdir && $(MAKE) $(AM_MAKEFLAGS) srpm);		\
-		echo "Finished srpms in $$subdir";			\
-	done;								\
+	@$(MAKEEACHSUBDIR)
 	$(MAKE) $(AM_MAKEFLAGS) srpm-real
 
 # In the debs target, first make sure what's in the changelog reflects
