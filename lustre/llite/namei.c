@@ -898,6 +898,10 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         default:
                 err = -EINVAL;
         }
+
+        if (!err)
+                ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_MKNOD, 1);
+
         RETURN(err);
 }
 
@@ -932,6 +936,9 @@ out:
         ll_intent_release(it);
         OBD_FREE(it, sizeof(*it));
 
+        if (!rc)
+                ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_CREATE, 1);
+
         return rc;
 }
 
@@ -947,6 +954,10 @@ static int ll_symlink_generic(struct inode *dir, struct qstr *name,
 
         err = ll_new_node(dir, name, (char *)tgt, S_IFLNK | S_IRWXUGO,
                           0, dchild, LUSTRE_OPC_SYMLINK);
+
+        if (!err)
+                ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_SYMLINK, 1);
+
         RETURN(err);
 }
 
@@ -977,6 +988,7 @@ static int ll_link_generic(struct inode *src,  struct inode *dir,
                 d_drop(dchild);
 
         ll_update_times(request, dir);
+        ll_stats_ops_tally(sbi, LPROC_LL_LINK, 1);
         EXIT;
 out:
         ptlrpc_req_finished(request);
@@ -995,6 +1007,9 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
 
         mode = (mode & (S_IRWXUGO|S_ISVTX) & ~cfs_curproc_umask()) | S_IFDIR;
         err = ll_new_node(dir, name, NULL, mode, 0, dchild, LUSTRE_OPC_MKDIR);
+
+        if (!err)
+                ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_MKDIR, 1);
 
         RETURN(err);
 }
@@ -1037,8 +1052,11 @@ static int ll_rmdir_generic(struct inode *dir, struct dentry *dparent,
         ll_get_child_fid(dir, name, &op_data->op_fid3);
         rc = md_unlink(ll_i2sbi(dir)->ll_md_exp, op_data, &request);
         ll_finish_md_op_data(op_data);
-        if (rc == 0)
+        if (rc == 0) {
                 ll_update_times(request, dir);
+                ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_RMDIR, 1);
+        }
+
         ptlrpc_req_finished(request);
         RETURN(rc);
 }
@@ -1152,6 +1170,7 @@ static int ll_unlink_generic(struct inode *dir, struct dentry *dparent,
                 GOTO(out, rc);
 
         ll_update_times(request, dir);
+        ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_UNLINK, 1);
 
         rc = ll_objects_destroy(request, dir);
  out:
@@ -1192,6 +1211,7 @@ static int ll_rename_generic(struct inode *src, struct dentry *src_dparent,
         if (!err) {
                 ll_update_times(request, src);
                 ll_update_times(request, tgt);
+                ll_stats_ops_tally(sbi, LPROC_LL_RENAME, 1);
                 err = ll_objects_destroy(request, src);
         }
 

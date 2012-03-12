@@ -695,14 +695,6 @@ struct llite_file_opcode {
         /* file operation */
         { LPROC_LL_DIRTY_HITS,     LPROCFS_TYPE_REGS, "dirty_pages_hits" },
         { LPROC_LL_DIRTY_MISSES,   LPROCFS_TYPE_REGS, "dirty_pages_misses" },
-        { LPROC_LL_WB_WRITEPAGE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "writeback_from_writepage" },
-        { LPROC_LL_WB_PRESSURE,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "writeback_from_pressure" },
-        { LPROC_LL_WB_OK,          LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "writeback_ok_pages" },
-        { LPROC_LL_WB_FAIL,        LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "writeback_failed_pages" },
         { LPROC_LL_READ_BYTES,     LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
                                    "read_bytes" },
         { LPROC_LL_WRITE_BYTES,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
@@ -715,19 +707,27 @@ struct llite_file_opcode {
                                    "osc_read" },
         { LPROC_LL_OSC_WRITE,      LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
                                    "osc_write" },
-
         { LPROC_LL_IOCTL,          LPROCFS_TYPE_REGS, "ioctl" },
         { LPROC_LL_OPEN,           LPROCFS_TYPE_REGS, "open" },
         { LPROC_LL_RELEASE,        LPROCFS_TYPE_REGS, "close" },
         { LPROC_LL_MAP,            LPROCFS_TYPE_REGS, "mmap" },
         { LPROC_LL_LLSEEK,         LPROCFS_TYPE_REGS, "seek" },
         { LPROC_LL_FSYNC,          LPROCFS_TYPE_REGS, "fsync" },
+        { LPROC_LL_READDIR,        LPROCFS_TYPE_REGS, "readdir" },
         /* inode operation */
         { LPROC_LL_SETATTR,        LPROCFS_TYPE_REGS, "setattr" },
         { LPROC_LL_TRUNC,          LPROCFS_TYPE_REGS, "truncate" },
-        { LPROC_LL_LOCKLESS_TRUNC, LPROCFS_TYPE_REGS, "lockless_truncate"},
         { LPROC_LL_FLOCK,          LPROCFS_TYPE_REGS, "flock" },
         { LPROC_LL_GETATTR,        LPROCFS_TYPE_REGS, "getattr" },
+        /* dir inode operation */
+        { LPROC_LL_CREATE,         LPROCFS_TYPE_REGS, "create" },
+        { LPROC_LL_LINK,           LPROCFS_TYPE_REGS, "link" },
+        { LPROC_LL_UNLINK,         LPROCFS_TYPE_REGS, "unlink" },
+        { LPROC_LL_SYMLINK,        LPROCFS_TYPE_REGS, "symlink" },
+        { LPROC_LL_MKDIR,          LPROCFS_TYPE_REGS, "mkdir" },
+        { LPROC_LL_RMDIR,          LPROCFS_TYPE_REGS, "rmdir" },
+        { LPROC_LL_MKNOD,          LPROCFS_TYPE_REGS, "mknod" },
+        { LPROC_LL_RENAME,         LPROCFS_TYPE_REGS, "rename" },
         /* special inode operation */
         { LPROC_LL_STAFS,          LPROCFS_TYPE_REGS, "statfs" },
         { LPROC_LL_ALLOC_INODE,    LPROCFS_TYPE_REGS, "alloc_inode" },
@@ -736,15 +736,6 @@ struct llite_file_opcode {
         { LPROC_LL_LISTXATTR,      LPROCFS_TYPE_REGS, "listxattr" },
         { LPROC_LL_REMOVEXATTR,    LPROCFS_TYPE_REGS, "removexattr" },
         { LPROC_LL_INODE_PERM,     LPROCFS_TYPE_REGS, "inode_permission" },
-        { LPROC_LL_DIRECT_READ,    LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "direct_read" },
-        { LPROC_LL_DIRECT_WRITE,   LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_PAGES,
-                                   "direct_write" },
-        { LPROC_LL_LOCKLESS_READ,  LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
-                                   "lockless_read_bytes" },
-        { LPROC_LL_LOCKLESS_WRITE, LPROCFS_CNTR_AVGMINMAX|LPROCFS_TYPE_BYTES,
-                                   "lockless_write_bytes" },
-
 };
 
 void ll_stats_ops_tally(struct ll_sb_info *sbi, int op, int count)

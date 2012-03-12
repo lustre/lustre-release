@@ -587,8 +587,6 @@ restart:
                         }
 
                         ll_release_openhandle(file->f_dentry, it);
-                        lprocfs_counter_incr(ll_i2sbi(inode)->ll_stats,
-                                             LPROC_LL_OPEN);
                 }
                 (*och_usecount)++;
 
@@ -632,7 +630,6 @@ restart:
 
                 LASSERT(it_disposition(it, DISP_ENQ_OPEN_REF));
 
-                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_OPEN, 1);
                 rc = ll_local_open(file, it, fd, *och_p);
                 if (rc)
                         GOTO(out_och_free, rc);
@@ -678,6 +675,8 @@ out_openerr:
                         ll_stop_statahead(inode, lli->lli_opendir_key);
                 if (fd != NULL)
                         ll_file_data_put(fd);
+        } else {
+                ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_OPEN, 1);
         }
 
         return rc;

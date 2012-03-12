@@ -525,7 +525,7 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                 /*
                  * end-of-file.
                  */
-                RETURN(0);
+                GOTO(out, rc = 0);
 
         rc    = 0;
         done  = 0;
@@ -643,6 +643,10 @@ int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
         touch_atime(filp->f_vfsmnt, filp->f_dentry);
 
         ll_dir_chain_fini(&chain);
+
+out:
+        if (!rc)
+                ll_stats_ops_tally(sbi, LPROC_LL_READDIR, 1);
 
         RETURN(rc);
 }
