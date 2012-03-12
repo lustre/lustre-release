@@ -260,7 +260,7 @@ struct cfs_trace_page {
 };
 
 extern void cfs_set_ptldebug_header(struct ptldebug_header *header,
-                                    int subsys, int mask, const int line,
+                                    struct libcfs_debug_msg_data *m,
                                     unsigned long stack);
 extern void cfs_print_to_console(struct ptldebug_header *hdr, int mask,
                                  const char *buf, int len, const char *file,
@@ -320,25 +320,26 @@ int cfs_trace_refill_stock(struct cfs_trace_cpu_data *tcd, int gfp,
 int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,
                       struct cfs_trace_page *tage);
 
-extern void cfs_trace_assertion_failed(const char *str, const char *fn,
-                                       const char *file, int line);
+extern void cfs_trace_assertion_failed(const char *str,
+                                       struct libcfs_debug_msg_data *m);
 
 /* ASSERTION that is safe to use within the debug system */
 #define __LASSERT(cond)                                                 \
-    do {                                                                \
+do {                                                                    \
         if (unlikely(!(cond))) {                                        \
+                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);     \
                 cfs_trace_assertion_failed("ASSERTION("#cond") failed", \
-                                 __FUNCTION__, __FILE__, __LINE__);     \
+                                           &msgdata);                   \
         }                                                               \
-    } while (0)
+} while (0)
 
 #define __LASSERT_TAGE_INVARIANT(tage)                                  \
-    do {                                                                \
+do {                                                                    \
         __LASSERT(tage != NULL);                                        \
         __LASSERT(tage->page != NULL);                                  \
         __LASSERT(tage->used <= CFS_PAGE_SIZE);                         \
         __LASSERT(cfs_page_count(tage->page) > 0);                      \
-    } while (0)
+} while (0)
 
 #endif	/* LUSTRE_TRACEFILE_PRIVATE */
 

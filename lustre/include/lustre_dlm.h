@@ -894,39 +894,32 @@ extern char *ldlm_lockname[];
 extern char *ldlm_typename[];
 extern char *ldlm_it2str(int it);
 #ifdef LIBCFS_DEBUG
-#define ldlm_lock_debug(cdls, level, lock, file, func, line, fmt, a...) do { \
-        CFS_CHECK_STACK();                                              \
+#define ldlm_lock_debug(msgdata, mask, cdls, lock, fmt, a...) do {      \
+        CFS_CHECK_STACK(msgdata, mask, cdls);                           \
                                                                         \
-        if (((level) & D_CANTMASK) != 0 ||                              \
-            ((libcfs_debug & (level)) != 0 &&                           \
-             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0)) {        \
-                static struct libcfs_debug_msg_data _ldlm_dbg_data =    \
-                DEBUG_MSG_DATA_INIT(cdls, DEBUG_SUBSYSTEM,              \
-                                    file, func, line);                  \
-                _ldlm_lock_debug(lock, level, &_ldlm_dbg_data, fmt,     \
-                                 ##a );                                 \
-        }                                                               \
+        if (((mask) & D_CANTMASK) != 0 ||                               \
+            ((libcfs_debug & (mask)) != 0 &&                            \
+             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
+                _ldlm_lock_debug(lock, msgdata, fmt, ##a);              \
 } while(0)
 
-void _ldlm_lock_debug(struct ldlm_lock *lock, __u32 mask,
-                      struct libcfs_debug_msg_data *data, const char *fmt,
-                      ...)
-        __attribute__ ((format (printf, 4, 5)));
+void _ldlm_lock_debug(struct ldlm_lock *lock,
+                      struct libcfs_debug_msg_data *data,
+                      const char *fmt, ...)
+        __attribute__ ((format (printf, 3, 4)));
 
-#define LDLM_DEBUG_LIMIT(mask, lock, fmt, a...) do {                    \
-        static cfs_debug_limit_state_t _ldlm_cdls;                      \
-        ldlm_lock_debug(&_ldlm_cdls, mask, lock,                        \
-                        __FILE__, __FUNCTION__, __LINE__,               \
-                        "### " fmt , ##a);                              \
+#define LDLM_DEBUG_LIMIT(mask, lock, fmt, a...) do {                         \
+        static cfs_debug_limit_state_t _ldlm_cdls;                           \
+        LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, &_ldlm_cdls);              \
+        ldlm_lock_debug(&msgdata, mask, &_ldlm_cdls, lock, "### " fmt , ##a);\
 } while (0)
 
 #define LDLM_ERROR(lock, fmt, a...) LDLM_DEBUG_LIMIT(D_ERROR, lock, fmt, ## a)
 #define LDLM_WARN(lock, fmt, a...)  LDLM_DEBUG_LIMIT(D_WARNING, lock, fmt, ## a)
 
-#define LDLM_DEBUG(lock, fmt, a...)   do {                              \
-        ldlm_lock_debug(NULL, D_DLMTRACE, lock,                         \
-                        __FILE__, __FUNCTION__, __LINE__,               \
-                         "### " fmt , ##a);                             \
+#define LDLM_DEBUG(lock, fmt, a...)   do {                                  \
+        LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_DLMTRACE, NULL);              \
+        ldlm_lock_debug(&msgdata, D_DLMTRACE, NULL, lock, "### " fmt , ##a);\
 } while (0)
 #else /* !LIBCFS_DEBUG */
 # define LDLM_DEBUG(lock, fmt, a...) ((void)0)

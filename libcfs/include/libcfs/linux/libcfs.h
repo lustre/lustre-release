@@ -78,22 +78,24 @@
                            (THREAD_SIZE - 1)))
 # endif /* __ia64__ */
 
-#define __CHECK_STACK(file, func, line)                                 \
+#define __CHECK_STACK(msgdata, mask, cdls)                              \
 do {                                                                    \
-        unsigned long _stack = CDEBUG_STACK();                          \
-                                                                        \
-        if (_stack > 3*THREAD_SIZE/4 && _stack > libcfs_stack) {        \
-                libcfs_stack = _stack;                                  \
-                libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_WARNING,      \
-                                 file, func, line,                      \
-                                 "maximum lustre stack %lu\n", _stack); \
+        if (unlikely(CDEBUG_STACK() > libcfs_stack)) {                  \
+                libcfs_stack = CDEBUG_STACK();                          \
+                (msgdata)->msg_mask = D_WARNING;                        \
+                (msgdata)->msg_cdls = NULL;                             \
+                libcfs_debug_msg(msgdata,                               \
+                                 "maximum lustre stack %lu\n",          \
+                                 CDEBUG_STACK());                       \
+                (msgdata)->msg_mask = mask;                             \
+                (msgdata)->msg_cdls = cdls;                             \
                 dump_stack();                                           \
               /*panic("LBUG");*/                                        \
         }                                                               \
 } while (0)
-#define CFS_CHECK_STACK()     __CHECK_STACK(__FILE__, __func__, __LINE__)
+#define CFS_CHECK_STACK(msgdata, mask, cdls)  __CHECK_STACK(msgdata, mask, cdls)
 #else /* __x86_64__ */
-#define CFS_CHECK_STACK() do { } while(0)
+#define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)
 #define CDEBUG_STACK() (0L)
 #endif /* __x86_64__ */
 
