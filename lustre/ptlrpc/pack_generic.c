@@ -1568,12 +1568,14 @@ void lustre_swab_connect(struct obd_connect_data *ocd)
         __swab64s(&ocd->ocd_ibits_known);
         __swab32s(&ocd->ocd_index);
         __swab32s(&ocd->ocd_brw_size);
-        __swab32s(&ocd->ocd_nllu);
-        __swab32s(&ocd->ocd_nllg);
+        /* ocd_blocksize and ocd_inodespace don't need to be swabbed because
+         * they are 8-byte values */
+        __swab16s(&ocd->ocd_grant_extent);
+        CLASSERT(offsetof(typeof(*ocd), ocd_unused) != 0);
         __swab64s(&ocd->ocd_transno);
         __swab32s(&ocd->ocd_group);
         __swab32s(&ocd->ocd_cksum_types);
-        /* Fields after ocd_cksum_types are only accessible by the receiver
+        /* Fields after ocd_maxbytes are only accessible by the receiver
          * if the corresponding flag in ocd_connect_flags is set. Accessing
          * any field after ocd_maxbytes on the receiver without a valid flag
          * may result in out-of-bound memory access and kernel oops. */

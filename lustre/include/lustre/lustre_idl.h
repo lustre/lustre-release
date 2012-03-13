@@ -1098,12 +1098,24 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_SKIP_ORPHAN   0x400000000ULL /* don't reuse orphan objids */
 #define OBD_CONNECT_MAX_EASIZE    0x800000000ULL /* preserved for large EA */
 #define OBD_CONNECT_FULL20       0x1000000000ULL /* it is 2.0 client */
-#define OBD_CONNECT_LAYOUTLOCK   0x2000000000ULL /* client supports layout lock */
+#define OBD_CONNECT_LAYOUTLOCK   0x2000000000ULL /* client uses layout lock */
 #define OBD_CONNECT_64BITHASH    0x4000000000ULL /* client supports 64-bits
                                                   * directory hash */
 #define OBD_CONNECT_MAXBYTES     0x8000000000ULL /* max stripe size */
-/* also update obd_connect_names[] for lprocfs_rd_connect_flags()
- * and lustre/utils/wirecheck.c */
+#define OBD_CONNECT_IMP_RECOV   0x10000000000ULL /* imp recovery support */
+#define OBD_CONNECT_JOBSTATS    0x20000000000ULL /* jobid in ptlrpc_body */
+#define OBD_CONNECT_UMASK       0x40000000000ULL /* create uses client umask */
+#define OBD_CONNECT_EINPROGRESS 0x80000000000ULL /* client handles -EINPROGRESS
+                                                  * write RPC error properly */
+#define OBD_CONNECT_GRANT_PARAM 0x100000000000ULL/* extra grant params used for
+                                                  * finer space reservation */
+/* XXX README XXX:
+ * Please DO NOT add flag values here before first ensuring that this same
+ * flag value is not in use on some other branch.  Please clear any such
+ * changes with senior engineers before starting to use a new flag.  Then,
+ * submit a small patch against EVERY branch that ONLY adds the new flag
+ * and updates obd_connect_names[] for lprocfs_rd_connect_flags(), so it
+ * can be approved and landed easily to reserve the flag for future use. */
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
 #define LRU_RESIZE_CONNECT_FLAG OBD_CONNECT_LRU_RESIZE
@@ -1162,8 +1174,10 @@ struct obd_connect_data_v1 {
         __u32 ocd_index;         /* LOV index to connect to */
         __u32 ocd_brw_size;      /* Maximum BRW size in bytes */
         __u64 ocd_ibits_known;   /* inode bits this client understands */
-        __u32 ocd_nllu;          /* non-local-lustre-user */
-        __u32 ocd_nllg;          /* non-local-lustre-group */
+        __u8  ocd_blocksize;     /* log2 of the backend filesystem blocksize */
+        __u8  ocd_inodespace;    /* log2 of the per-inode space consumption */
+        __u16 ocd_grant_extent;  /* per-extent grant overhead, in 1K blocks */
+        __u32 ocd_unused;        /* also fix lustre_swab_connect */
         __u64 ocd_transno;       /* first transno from client to be replayed */
         __u32 ocd_group;         /* MDS group on OST */
         __u32 ocd_cksum_types;   /* supported checksum algorithms */
@@ -1179,8 +1193,10 @@ struct obd_connect_data {
         __u32 ocd_index;         /* LOV index to connect to */
         __u32 ocd_brw_size;      /* Maximum BRW size in bytes */
         __u64 ocd_ibits_known;   /* inode bits this client understands */
-        __u32 ocd_nllu;          /* non-local-lustre-user */
-        __u32 ocd_nllg;          /* non-local-lustre-group */
+        __u8  ocd_blocksize;     /* log2 of the backend filesystem blocksize */
+        __u8  ocd_inodespace;    /* log2 of the per-inode space consumption */
+        __u16 ocd_grant_extent;  /* per-extent grant overhead, in 1K blocks */
+        __u32 ocd_unused;        /* also fix lustre_swab_connect */
         __u64 ocd_transno;       /* first transno from client to be replayed */
         __u32 ocd_group;         /* MDS group on OST */
         __u32 ocd_cksum_types;   /* supported checksum algorithms */
@@ -1207,6 +1223,13 @@ struct obd_connect_data {
         __u64 paddingE;          /* added 2.2.0. also fix lustre_swab_connect */
         __u64 paddingF;          /* added 2.2.0. also fix lustre_swab_connect */
 };
+/* XXX README XXX:
+ * Please DO NOT use any fields here before first ensuring that this same
+ * field is not in use on some other branch.  Please clear any such changes
+ * with senior engineers before starting to use a new field.  Then, submit
+ * a small patch against EVERY branch that ONLY adds the new field along with
+ * the matching OBD_CONNECT flag, so that can be approved and landed easily to
+ * reserve the flag for future use. */
 
 
 extern void lustre_swab_connect(struct obd_connect_data *ocd);
