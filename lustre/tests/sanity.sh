@@ -2427,6 +2427,8 @@ test_39i() {
 run_test 39i "write, rename, stat =============================="
 
 test_39j() {
+	debugsave
+	lctl set_param debug=-1
 	touch $DIR1/$tfile
 	sleep 1
 
@@ -2447,6 +2449,7 @@ test_39j() {
 		cancel_lru_locks osc
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
+	debugrestore
 }
 run_test 39j "write, rename, close, stat ======================="
 
