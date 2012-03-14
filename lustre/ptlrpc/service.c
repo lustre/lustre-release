@@ -122,25 +122,36 @@ int
 ptlrpc_grow_req_bufs(struct ptlrpc_service *svc)
 {
         struct ptlrpc_request_buffer_desc *rqbd;
+        int                                rc = 0;
         int                                i;
 
-        CDEBUG(D_RPCTRACE, "%s: allocate %d new %d-byte reqbufs (%d/%d left)\n",
-               svc->srv_name, svc->srv_nbuf_per_group, svc->srv_buf_size,
-               svc->srv_nrqbd_receiving, svc->srv_nbufs);
         for (i = 0; i < svc->srv_nbuf_per_group; i++) {
+                /* NB: another thread might be doing this as well, we need to
+                 * make sure that it wouldn't over-allocate, see LU-1212. */
+                if (svc->srv_nrqbd_receiving >= svc->srv_nbuf_per_group)
+                        break;
+
                 rqbd = ptlrpc_alloc_rqbd(svc);
 
                 if (rqbd == NULL) {
-                        CERROR ("%s: Can't allocate request buffer\n",
-                                svc->srv_name);
-                        return (-ENOMEM);
+                        CERROR("%s: Can't allocate request buffer\n",
+                               svc->srv_name);
+                        rc = -ENOMEM;
+                        break;
                 }
 
-                if (ptlrpc_server_post_idle_rqbds(svc) < 0)
-                        return (-EAGAIN);
+                if (ptlrpc_server_post_idle_rqbds(svc) < 0) {
+                        rc = -EAGAIN;
+                        break;
+                }
         }
 
-        return (0);
+        CDEBUG(D_RPCTRACE,
+               "%s: allocate %d new %d-byte reqbufs (%d/%d left), rc = %d\n",
+               svc->srv_name, i, svc->srv_buf_size,
+               svc->srv_nrqbd_receiving, svc->srv_nbufs, rc);
+
+        return rc;
 }
 
 /**
@@ -1967,7 +1978,7 @@ ptlrpc_check_rqbd_pool(struct ptlrpc_service *svc)
 {
         int avail = svc->srv_nrqbd_receiving;
         int low_water = test_req_buffer_pressure ? 0 :
-                        svc->srv_nbuf_per_group/2;
+                        svc->srv_nbuf_per_group / 2;
 
         /* NB I'm not locking; just looking. */
 
