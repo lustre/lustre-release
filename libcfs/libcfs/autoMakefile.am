@@ -50,7 +50,7 @@ libcfs_a_CFLAGS = $(LLCFLAGS)
 endif
 
 lib_LIBRARIES = libcfsutil.a
-libcfsutil_a_SOURCES = nidstrings.c util/parser.c \
+libcfsutil_a_SOURCES = nidstrings.c libcfs_string.c util/parser.c \
                        util/l_ioctl.c util/util.c
 libcfsutil_a_CPPFLAGS = $(LLCPPFLAGS) 
 libcfsutil_a_CFLAGS = $(LLCFLAGS) -DLUSTRE_UTILS=1
