@@ -7001,6 +7001,107 @@ test_203() {
 }
 run_test 203 " atime should be updated on the MDS when closing file ===="
 
+# usage: default_attr <count | size | offset>
+default_attr() {
+	$LCTL get_param -n lov.$FSNAME-clilov-\*.stripe${1}
+}
+
+# if there are two arguments, the second must be "--raw"
+check_default_stripe_attr() {
+        ACTUAL=$($GETSTRIPE $* $DIR/$tdir)
+        case $1 in
+        --count)
+                [ -n "$2" ] && EXPECTED=0 || EXPECTED=$(default_attr count);;
+        --size)
+                [ -n "$2" ] && EXPECTED=0 || EXPECTED=$(default_attr size);;
+        --index)
+                EXPECTED=-1;;
+        *)
+                error "unknown getstripe attr '$1'"
+        esac
+
+        [ $ACTUAL != $EXPECTED ] &&
+                error "$DIR/$tdir has $1 '$ACTUAL', not '$EXPECTED'"
+
+}
+
+test_204a() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --count 0 --size 0 --index -1 $DIR/$tdir
+
+	check_default_stripe_attr --count
+	check_default_stripe_attr --size
+	check_default_stripe_attr --index
+
+	return 0
+}
+run_test 204a "Print default stripe attributes ================="
+
+test_204b() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --count 1 $DIR/$tdir
+
+	check_default_stripe_attr --size
+	check_default_stripe_attr --index
+
+	return 0
+}
+run_test 204b "Print default stripe size and index  ==========="
+
+test_204c() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --size 65536 $DIR/$tdir
+
+	check_default_stripe_attr --count
+	check_default_stripe_attr --index
+
+	return 0
+}
+run_test 204c "Print default stripe count and index ==========="
+
+test_204d() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --index 0 $DIR/$tdir
+
+	check_default_stripe_attr --count
+	check_default_stripe_attr --size
+
+	return 0
+}
+run_test 204d "Print default stripe count and size ============="
+
+test_204f() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --count 1 $DIR/$tdir
+
+	check_default_stripe_attr --size --raw
+	check_default_stripe_attr --index --raw
+
+	return 0
+}
+run_test 204f "Print raw stripe size and index  ==========="
+
+test_204g() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --size 65536 $DIR/$tdir
+
+	check_default_stripe_attr --count --raw
+	check_default_stripe_attr --index --raw
+
+	return 0
+}
+run_test 204g "Print raw stripe count and index ==========="
+
+test_204h() {
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE --index 0 $DIR/$tdir
+
+	check_default_stripe_attr --count --raw
+	check_default_stripe_attr --size  --raw
+
+	return 0
+}
+run_test 204h "Print raw stripe count and size ============="
 
 #
 # tests that do cleanup/setup should be run at the end

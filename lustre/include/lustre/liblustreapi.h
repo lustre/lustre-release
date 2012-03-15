@@ -69,7 +69,7 @@ enum llapi_message_level {
 /* liblustreapi.c */
 extern void llapi_msg_set_level(int level);
 extern void llapi_error(int level, int rc, char *fmt, ...);
-#define llapi_err(level, fmt, a...) llpai_error(level, -errno, fmt, ##a)
+#define llapi_err(level, fmt, a...) llapi_error(level, -errno, fmt, ##a)
 #define llapi_err_noerrno(level, fmt, a...)                             \
 	llapi_error((level) | LLAPI_MSG_NO_ERRNO, 0, fmt, ## a)
 extern void llapi_printf(int level, char *fmt, ...);
@@ -134,7 +134,8 @@ struct find_param {
                         exclude_size:1,
                         exclude_atime:1,
                         exclude_mtime:1,
-                        exclude_ctime:1;
+                        exclude_ctime:1,
+                        raw:1;
 
         int     verbose;
         int     quiet;

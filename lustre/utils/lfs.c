@@ -122,7 +122,8 @@ command_t cmdlist[] = {
          "usage: getstripe [--obd|-O <uuid>] [--quiet | -q] [--verbose | -v]\n"
          "                 [--count | -c ] [--index | -i | --offset | -o]\n"
          "                 [--size | -s ] [--pool | -p ] [--directory | -d]\n"
-         "                 [--recursive | -r] <directory|filename> ..."},
+         "                 [--recursive | -r] [--raw | -R]\n"
+         "                 <directory|filename> ..."},
         {"pool_list", lfs_poollist, 0,
          "List pools or pool OSTs\n"
          "usage: pool_list <fsname>[.<pool>] | <pathname>\n"},
@@ -761,6 +762,7 @@ static int lfs_getstripe(int argc, char **argv)
                 {"index", 0, 0, 'i'},
                 {"offset", 0, 0, 'o'},
                 {"pool", 0, 0, 'p'},
+                {"raw", 0, 0, 'R'},
                 {"verbose", 0, 0, 'v'},
                 {"directory", 0, 0, 'd'},
                 {0, 0, 0, 0}
@@ -770,7 +772,7 @@ static int lfs_getstripe(int argc, char **argv)
 
         param.maxdepth = 1;
         optind = 0;
-        while ((c = getopt_long(argc, argv, "cdhioO:pqrsv",
+        while ((c = getopt_long(argc, argv, "cdhioO:pqrRsv",
                                 long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'O':
@@ -815,6 +817,9 @@ static int lfs_getstripe(int argc, char **argv)
                         break;
                 case 'p':
                         param.verbose |= VERBOSE_POOL;
+                        break;
+                case 'R':
+                        param.raw = 1;
                         break;
                 case '?':
                         return CMD_HELP;
