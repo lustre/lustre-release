@@ -680,7 +680,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
         rc = mo_open(info->mti_env, mdt_object_child(o),
                      created ? flags | MDS_OPEN_CREATED : flags);
         if (rc)
-                RETURN(rc);
+                GOTO(err_out, rc);
 
         mfd = mdt_mfd_new();
         if (mfd != NULL) {
@@ -749,12 +749,21 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                 }
 
                 mdt_empty_transno(info, rc);
-        } else
-                rc = -ENOMEM;
+        } else {
+                GOTO(err_out, rc = -ENOMEM);
+        }
 
         RETURN(rc);
-}
 
+err_out:
+        if (flags & FMODE_WRITE)
+                        /* XXX We also need to close io epoch here.
+                         * See LU-1220 - green */
+                mdt_write_put(o);
+        else if (flags & FMODE_EXEC)
+                mdt_write_allow(o);
+        return rc;
+}
 
 int mdt_finish_open(struct mdt_thread_info *info,
                     struct mdt_object *p, struct mdt_object *o,
