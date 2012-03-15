@@ -2282,8 +2282,12 @@ int lprocfs_obd_rd_recovery_status(char *page, char **start, off_t off,
                                  obd->obd_recovery_start) <= 0)
                 goto out;
         if (lprocfs_obd_snprintf(&page, size, &len, "time_remaining: %lu\n",
-                           cfs_time_current_sec() >= obd->obd_recovery_end ? 0 :
-                           obd->obd_recovery_end - cfs_time_current_sec()) <= 0)
+                                 cfs_time_current_sec() >=
+                                 obd->obd_recovery_start +
+                                 obd->obd_recovery_timeout ? 0 :
+                                 obd->obd_recovery_start +
+                                 obd->obd_recovery_timeout -
+                                 cfs_time_current_sec()) <= 0)
                 goto out;
         if (lprocfs_obd_snprintf(&page, size, &len,"connected_clients: %d/%d\n",
                                  cfs_atomic_read(&obd->obd_connected_clients),
