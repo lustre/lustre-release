@@ -4763,7 +4763,6 @@ static struct obd_ops filter_obd_ops = {
         .o_create         = filter_create,
         .o_setattr        = filter_setattr,
         .o_destroy        = filter_destroy,
-        .o_brw            = filter_brw,
         .o_punch          = filter_truncate,
         .o_sync           = filter_sync,
         .o_preprw         = filter_preprw,

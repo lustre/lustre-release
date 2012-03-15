@@ -48,6 +48,11 @@ rslt=${rslt:-"$rslt_loc/obdfilter_survey_`date +%F@%R`_`uname -n`"}
 # Set this true to check file contents
 verify=${verify:-0}
 
+# test targets
+targets=${targets:-""}
+# test case
+case=${case:-"disk"}
+
 # total size (MBytes) per obd instance
 # large enough to avoid cache effects 
 # and to make test startup/shutdown overhead insignificant
@@ -170,6 +175,15 @@ testname2type () {
     esac
 }
 
+# for "echo_client + obdfilter" case, "prep + commit" mode should be used
+# for "echo_client + osc" case, "BRW" mode should be used
+testcase2mode() {
+    case $case in
+    disk) echo "p$1";;
+    *)    echo "g";;
+    esac
+}
+
 print_summary () {
     if [ "$1" = "-n" ]; then
         minusn=$1; shift
@@ -184,8 +198,6 @@ print_summary () {
 #####################################################################
 # One can change variable values in this section as per requirements
 
-targets=${targets:-""}
-case=${case:-"disk"}
 if [ -n "$targets" ]; then
     declare -a ost_names
     declare -a client_names
@@ -468,7 +480,8 @@ for ((rsz = $rszlo; rsz <= $rszhi; rsz*=2)); do
 		    echo >> ${cmdsf}_${host} \
 		        "$lctl > $tmpfi 2>&1 \\
                          --threads $thr -$snap $devno \\
-			 test_brw $count `testname2type $test` q $pages ${thr_per_obj}t${first_obj} &"
+                         test_brw $count `testname2type $test` q $pages \\
+                         ${thr_per_obj}t${first_obj} `testcase2mode $pages` &"
                 done
                 pidcount=0
                 for host in ${unique_hosts[@]}; do

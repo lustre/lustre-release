@@ -171,8 +171,6 @@ int filter_preprw(int cmd, struct obd_export *, struct obdo *, int objcount,
 int filter_commitrw(int cmd, struct obd_export *, struct obdo *, int objcount,
                     struct obd_ioobj *, struct niobuf_remote *,  int,
                     struct niobuf_local *, struct obd_trans_info *, int rc);
-int filter_brw(int cmd, struct obd_export *, struct obd_info *oinfo,
-               obd_count oa_bufs, struct brw_page *pga, struct obd_trans_info *);
 void filter_release_cache(struct obd_device *, struct obd_ioobj *,
                           struct niobuf_remote *, struct inode *);
 
