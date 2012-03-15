@@ -109,11 +109,8 @@ enum local_oid {
         MDD_ORPHAN_OID          = 7UL,
         MDD_LOV_OBJ_OID         = 8UL,
         MDD_CAPA_KEYS_OID       = 9UL,
-        MDD_OBJECTS_OID         = 10UL,
         /** \see mdt_mod_init */
         MDT_LAST_RECV_OID       = 11UL,
-        /** \see osd_mod_init */
-        OSD_REM_OBJ_DIR_OID     = 12UL,
         OSD_FS_ROOT_OID         = 13UL,
         ACCT_USER_OID           = 15UL,
         ACCT_GROUP_OID          = 16UL,

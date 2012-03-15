@@ -464,7 +464,7 @@ static inline int fid_seq_is_mdt(const __u64 seq)
 
 static inline int fid_seq_is_rsvd(const __u64 seq)
 {
-        return seq <= FID_SEQ_RSVD;
+        return (seq > FID_SEQ_OST_MDT0 && seq <= FID_SEQ_RSVD);
 };
 
 static inline int fid_is_mdt0(const struct lu_fid *fid)
@@ -608,21 +608,24 @@ static inline int fid_ostid_unpack(struct lu_fid *fid, struct ost_id *ostid,
 }
 
 /* pack an IDIF FID into an ostid (id/seq) for the wire/disk */
-static inline void ostid_idif_pack(struct lu_fid *fid, struct ost_id *ostid)
+static inline void ostid_idif_pack(const struct lu_fid *fid,
+                                   struct ost_id *ostid)
 {
         ostid->oi_seq = FID_SEQ_OST_MDT0;
         ostid->oi_id  = fid_idif_id(fid->f_seq, fid->f_oid, fid->f_ver);
 }
 
 /* pack a non-IDIF FID into an ostid (id/seq) for the wire/disk */
-static inline void ostid_fid_pack(struct lu_fid *fid, struct ost_id *ostid)
+static inline void ostid_fid_pack(const struct lu_fid *fid,
+                                  struct ost_id *ostid)
 {
         ostid->oi_seq = fid_seq(fid);
         ostid->oi_id  = fid_ver_oid(fid);
 }
 
 /* pack any OST FID into an ostid (id/seq) for the wire/disk */
-static inline int fid_ostid_pack(struct lu_fid *fid, struct ost_id *ostid)
+static inline int fid_ostid_pack(const struct lu_fid *fid,
+                                 struct ost_id *ostid)
 {
         if (unlikely(fid_seq_is_igif(fid->f_seq))) {
                 CERROR("bad IGIF, "DFID"\n", PFID(fid));
@@ -758,7 +761,7 @@ static inline int fid_is_sane(const struct lu_fid *fid)
                 fid != NULL &&
                 ((fid_seq(fid) >= FID_SEQ_START && fid_oid(fid) != 0
                                                 && fid_ver(fid) == 0) ||
-                fid_is_igif(fid));
+                fid_is_igif(fid) || fid_seq_is_rsvd(fid_seq(fid)));
 }
 
 static inline int fid_is_zero(const struct lu_fid *fid)
@@ -775,8 +778,10 @@ static inline int lu_fid_eq(const struct lu_fid *f0,
         /* Check that there is no alignment padding. */
         CLASSERT(sizeof *f0 ==
                  sizeof f0->f_seq + sizeof f0->f_oid + sizeof f0->f_ver);
-        LASSERTF(fid_is_igif(f0) || fid_ver(f0) == 0, DFID, PFID(f0));
-        LASSERTF(fid_is_igif(f1) || fid_ver(f1) == 0, DFID, PFID(f1));
+        LASSERTF((fid_is_igif(f0) || fid_is_idif(f0)) ||
+                 fid_ver(f0) == 0, DFID, PFID(f0));
+        LASSERTF((fid_is_igif(f1) || fid_is_idif(f1)) ||
+                 fid_ver(f1) == 0, DFID, PFID(f1));
         return memcmp(f0, f1, sizeof *f0) == 0;
 }
 

@@ -851,8 +851,7 @@ static int osd_ldiskfs_readlink(struct inode *inode, char *buffer, int buflen)
         return  buflen;
 }
 
-static int osd_ldiskfs_read(struct inode *inode, void *buf, int size,
-                            loff_t *offs)
+int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
 {
         struct buffer_head *bh;
         unsigned long block;

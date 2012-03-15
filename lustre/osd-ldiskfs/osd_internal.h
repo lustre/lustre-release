@@ -107,7 +107,7 @@ struct osd_oi {
          * underlying index object, where fid->id mapping in stored.
          */
         struct inode         *oi_inode;
-        struct osd_directory   oi_dir;
+        struct osd_directory  oi_dir;
 };
 
 extern const int osd_dto_credits_noquota[];
@@ -204,11 +204,7 @@ struct osd_device {
         struct dt_device          od_dt_dev;
         /* information about underlying file system */
         struct lustre_mount_info *od_mount;
-        /*
-         * XXX temporary stuff for object index: directory where every object
-         * is named by its fid.
-         */
-        struct dt_object         *od_obj_area;
+        struct vfsmount          *od_mnt;
         /* object index */
         struct osd_oi           **od_oi_table;
         /* total number of OI containers */
@@ -238,6 +234,11 @@ struct osd_device {
         __u32                     od_iop_mode;
 
         struct fsfilt_operations *od_fsops;
+
+        /*
+         * mapping for legacy OST objids
+         */
+        struct osd_compat_objid  *od_ost_map;
 
         unsigned long long        od_readcache_max_filesize;
         int                       od_read_cache;
@@ -441,6 +442,8 @@ struct osd_thread_info {
 
         struct lu_fid          oti_fid;
         struct osd_inode_id    oti_id;
+        struct ost_id          oti_ostid;
+
         /*
          * XXX temporary: for ->i_op calls.
          */
@@ -533,8 +536,26 @@ void osd_declare_qid(struct dt_object *dt, struct osd_thandle *oh,
 struct inode *osd_iget(struct osd_thread_info *info,
                        struct osd_device *dev,
                        const struct osd_inode_id *id);
-int generic_error_remove_page(struct address_space *mapping,
-                                     struct page *page);
+
+int osd_compat_init(struct osd_device *dev);
+void osd_compat_fini(struct osd_device *dev);
+int osd_compat_objid_lookup(struct osd_thread_info *info,
+                            struct osd_device *osd,
+                            const struct lu_fid *fid, struct osd_inode_id *id);
+int osd_compat_objid_insert(struct osd_thread_info *info,
+                            struct osd_device *osd,
+                            const struct lu_fid *fid,
+                            const struct osd_inode_id *id, struct thandle *th);
+int osd_compat_objid_delete(struct osd_thread_info *info,
+                            struct osd_device *osd,
+                            const struct lu_fid *fid, struct thandle *th);
+int osd_compat_spec_lookup(struct osd_thread_info *info,
+                           struct osd_device *osd,
+                           const struct lu_fid *fid, struct osd_inode_id *id);
+int osd_compat_spec_insert(struct osd_thread_info *info,
+                           struct osd_device *osd,
+                           const struct lu_fid *fid,
+                           const struct osd_inode_id *id, struct thandle *th);
 
 /*
  * Invariants, assertions.
@@ -562,28 +583,11 @@ static inline int osd_invariant(const struct osd_object *obj)
 #define osd_invariant(obj) (1)
 #endif
 
-/* The on-disk extN format reserves inodes 0-11 for internal filesystem
- * use, and these inodes will be invisible on client side, so the valid
- * sequence for IGIF fid is 12-0xffffffff. But root inode (2#) will be seen
- * on server side (osd), and it should be valid too here.
- */
-#define OSD_ROOT_SEQ            2
-static inline int osd_fid_is_root(const struct lu_fid *fid)
-{
-        return fid_seq(fid) == OSD_ROOT_SEQ;
-}
-
-static inline int osd_fid_is_igif(const struct lu_fid *fid)
-{
-        return fid_is_igif(fid) || osd_fid_is_root(fid);
-}
-
 static inline struct osd_oi *osd_fid2oi(struct osd_device *osd,
                                         const struct lu_fid *fid)
 {
-        if (!fid_is_norm(fid))
-                return NULL;
-
+        LASSERT(!fid_is_idif(fid));
+        LASSERT(!fid_is_igif(fid));
         LASSERT(osd->od_oi_table != NULL && osd->od_oi_count >= 1);
         /* It can work even od_oi_count equals to 1 although it's unexpected,
          * the only reason we set it to 1 is for performance measurement */
@@ -681,12 +685,14 @@ static inline void osd_ipd_put(const struct lu_env *env,
         bag->ic_descr->id_ops->id_ipd_free(ipd);
 }
 
+int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs);
+
 static inline
 struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,
                                          struct inode *inode,
                                          const char *name, const int namelen)
 {
-        struct osd_thread_info *info   = osd_oti_get(env);
+        struct osd_thread_info *info = osd_oti_get(env);
         struct dentry *child_dentry = &info->oti_child_dentry;
         struct dentry *obj_dentry = &info->oti_obj_dentry;
 

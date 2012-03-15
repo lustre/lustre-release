@@ -164,10 +164,7 @@ static int osd_write_locked(const struct lu_env *env, struct osd_object *o)
 static int osd_root_get(const struct lu_env *env,
                         struct dt_device *dev, struct lu_fid *f)
 {
-        struct inode *inode;
-
-        inode = osd_sb(osd_dt_dev(dev))->s_root->d_inode;
-        LU_IGIF_BUILD(f, inode->i_ino, inode->i_generation);
+        lu_local_obj_fid(f, OSD_FS_ROOT_OID);
         return 0;
 }
 
@@ -302,7 +299,7 @@ static int osd_fid_lookup(const struct lu_env *env,
 
         LINVRNT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
-        LASSERTF(fid_is_sane(fid) || osd_fid_is_root(fid), DFID, PFID(fid));
+        LASSERTF(fid_is_sane(fid) || fid_is_idif(fid), DFID, PFID(fid));
         /*
          * This assertion checks that osd layer sees only local
          * fids. Unfortunately it is somewhat expensive (does a
@@ -751,7 +748,8 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
          * IMPORTANT: we have to wait till any IO submited by the thread is
          * completed otherwise iobuf may be corrupted by different request
          */
-        cfs_wait_event(iobuf->dr_wait, cfs_atomic_read(&iobuf->dr_numreqs)==0);
+        cfs_wait_event(iobuf->dr_wait,
+                       cfs_atomic_read(&iobuf->dr_numreqs) == 0);
         if (!rc)
                 rc = iobuf->dr_error;
 
@@ -1432,7 +1430,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
         int result;
         struct osd_device  *osd = osd_obj2dev(obj);
         struct osd_thandle *oth;
-        struct dt_object   *parent;
+        struct dt_object   *parent = NULL;
         struct inode       *inode;
 #ifdef HAVE_QUOTA_SUPPORT
         struct osd_ctxt    *save = &info->oti_ctxt;
@@ -1453,15 +1451,13 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
 
         if (hint && hint->dah_parent)
                 parent = hint->dah_parent;
-        else
-                parent = osd->od_obj_area;
 
 #ifdef HAVE_QUOTA_SUPPORT
         osd_push_ctxt(info->oti_env, save);
 #endif
         inode = ldiskfs_create_inode(oth->ot_handle,
-                                     parent ?  osd_dt_obj(parent)->oo_inode :
-                                               osd_sb(osd)->s_root->d_inode,
+                                     parent ? osd_dt_obj(parent)->oo_inode :
+                                              osd_sb(osd)->s_root->d_inode,
                                      mode);
 #ifdef HAVE_QUOTA_SUPPORT
         osd_pop_ctxt(save);
@@ -1999,7 +1995,6 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
         OSD_EXEC_OP(th, create);
 
         result = __osd_object_create(info, obj, attr, hint, dof, th);
-
         /* objects under osd root shld have igif fid, so dont add fid EA */
         if (result == 0 && fid_seq(fid) >= FID_SEQ_NORMAL)
                 result = osd_ea_fid_set(env, dt, fid);
@@ -2957,13 +2952,19 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
 
         child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
 
+        /* XXX: remove fid_is_igif() check here.
+         * IGIF check is just to handle insertion of .. when it is 'ROOT',
+         * it is IGIF now but needs FID in dir entry as well for readdir
+         * to work.
+         * LU-838 should fix that and remove fid_is_igif() check */
         if (fid_is_igif((struct lu_fid *)fid) ||
             fid_is_norm((struct lu_fid *)fid)) {
                 ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
                 osd_get_ldiskfs_dirent_param(ldp, fid);
-                child->d_fsdata = (void*) ldp;
-        } else
+                child->d_fsdata = (void *)ldp;
+        } else {
                 child->d_fsdata = NULL;
+        }
         rc = osd_ldiskfs_add_entry(oth->ot_handle, child, cinode, hlock);
 
         RETURN(rc);
@@ -2988,10 +2989,10 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
                               const struct dt_rec *dot_dot_fid,
                               struct thandle *th)
 {
-        struct inode            *inode  = dir->oo_inode;
+        struct inode                *inode = dir->oo_inode;
         struct ldiskfs_dentry_param *dot_ldp;
         struct ldiskfs_dentry_param *dot_dot_ldp;
-        struct osd_thandle      *oth;
+        struct osd_thandle          *oth;
         int result = 0;
 
         oth = container_of(th, struct osd_thandle, ot_super);
@@ -3012,7 +3013,7 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
 
                 if (!dir->oo_compat_dot_created)
                         return -EINVAL;
-                if (fid_seq((struct lu_fid *)dot_fid) >= FID_SEQ_NORMAL) {
+                if (!fid_is_igif((struct lu_fid *)dot_fid)) {
                         osd_get_ldiskfs_dirent_param(dot_ldp, dot_fid);
                         osd_get_ldiskfs_dirent_param(dot_dot_ldp, dot_dot_fid);
                 } else {
@@ -3975,11 +3976,9 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
         struct osd_thread_info *info = osd_oti_get(env);
+
         ENTRY;
-        if (o->od_obj_area != NULL) {
-                lu_object_put(env, &o->od_obj_area->do_lu);
-                o->od_obj_area = NULL;
-        }
+
         if (o->od_oi_table != NULL)
                 osd_oi_fini(info, o);
 
@@ -3998,6 +3997,7 @@ static int osd_mount(const struct lu_env *env,
         const char               *dev  = lustre_cfg_string(cfg, 0);
         struct lustre_disk_data  *ldd;
         struct lustre_sb_info    *lsi;
+        int                       rc = 0;
 
         ENTRY;
 
@@ -4022,18 +4022,24 @@ static int osd_mount(const struct lu_env *env,
         LASSERT(lmi != NULL);
         /* save lustre_mount_info in dt_device */
         o->od_mount = lmi;
+        o->od_mnt = lmi->lmi_mnt;
 
         lsi = s2lsi(lmi->lmi_sb);
         ldd = lsi->lsi_ldd;
 
         if (ldd->ldd_flags & LDD_F_IAM_DIR) {
                 o->od_iop_mode = 0;
-                LCONSOLE_WARN("OSD: IAM mode enabled\n");
+                LCONSOLE_WARN("%s: OSD: IAM mode enabled\n", dev);
         } else
                 o->od_iop_mode = 1;
 
-        o->od_obj_area = NULL;
-        RETURN(0);
+        if (ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
+                rc = osd_compat_init(o);
+                if (rc)
+                        CERROR("%s: can't initialize compats: %d\n", dev, rc);
+        }
+
+        RETURN(rc);
 }
 
 static struct lu_device *osd_device_fini(const struct lu_env *env,
@@ -4041,6 +4047,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 {
         int rc;
         ENTRY;
+
+        osd_compat_fini(osd_dev(d));
 
         shrink_dcache_sb(osd_sb(osd_dev(d)));
         osd_sync(env, lu2dt_dev(d));
@@ -4131,19 +4139,15 @@ static int osd_recovery_complete(const struct lu_env *env,
         RETURN(0);
 }
 
-static int osd_prepare(const struct lu_env *env,
-                       struct lu_device *pdev,
+static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
                        struct lu_device *dev)
 {
-        struct osd_device *osd = osd_dev(dev);
-        struct lustre_sb_info *lsi;
-        struct lustre_disk_data *ldd;
-        struct lustre_mount_info  *lmi;
+        struct osd_device      *osd = osd_dev(dev);
         struct osd_thread_info *oti = osd_oti_get(env);
-        struct dt_object *d;
-        int result;
+        int                     result;
 
         ENTRY;
+
         /* 1. initialize oi before any file create or file open */
         result = osd_oi_init(oti, osd);
         if (result < 0)
@@ -4152,27 +4156,8 @@ static int osd_prepare(const struct lu_env *env,
         if (!lu_device_is_md(pdev))
                 RETURN(0);
 
-        lmi = osd->od_mount;
-        lsi = s2lsi(lmi->lmi_sb);
-        ldd = lsi->lsi_ldd;
-
         /* 2. setup local objects */
         result = llo_local_objects_setup(env, lu2md_dev(pdev), lu2dt_dev(dev));
-        if (result)
-                goto out;
-
-        /* 3. open remote object dir */
-        d = dt_store_open(env, lu2dt_dev(dev), "",
-                          remote_obj_dir, &oti->oti_fid);
-        if (!IS_ERR(d)) {
-                osd->od_obj_area = d;
-                result = 0;
-        } else {
-                result = PTR_ERR(d);
-                osd->od_obj_area = NULL;
-        }
-
-out:
         RETURN(result);
 }
 
@@ -4220,19 +4205,11 @@ static struct obd_ops osd_obd_device_ops = {
         .o_owner = THIS_MODULE
 };
 
-static struct lu_local_obj_desc llod_osd_rem_obj_dir = {
-        .llod_name      = remote_obj_dir,
-        .llod_oid       = OSD_REM_OBJ_DIR_OID,
-        .llod_is_index  = 1,
-        .llod_feat      = &dt_directory_features,
-};
-
 static int __init osd_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
 
         osd_oi_mod_init();
-        llo_local_obj_register(&llod_osd_rem_obj_dir);
         lprocfs_osd_init_vars(&lvars);
         return class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
                                    LUSTRE_OSD_NAME, &osd_device_type);
@@ -4240,7 +4217,6 @@ static int __init osd_mod_init(void)
 
 static void __exit osd_mod_exit(void)
 {
-        llo_local_obj_unregister(&llod_osd_rem_obj_dir);
         class_unregister_type(LUSTRE_OSD_NAME);
 }
 
