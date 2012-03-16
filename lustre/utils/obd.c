@@ -561,8 +561,8 @@ static void shmem_total(int total_threads)
                         &shared_data->body.start_time);
         shmem_unlock();
 
-        printf("Total: total %llu threads %d sec %f %f/second\n", total,
-                total_threads, secs, total / secs);
+        printf("Total: total "LPU64" threads %d sec %f %f/second\n",
+               total, total_threads, secs, total / secs);
 
         return;
 }
