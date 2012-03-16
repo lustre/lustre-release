@@ -89,30 +89,47 @@ struct dentry *mds_lookup(struct obd_device *obd, const char *fid_name,
 {
         struct dentry *dchild;
         struct lr_server_data *lsd = obd->u.mds.mds_server_data;
+        int rc;
         ENTRY;
 
         dchild = ll_lookup_one_len(fid_name, dparent, fid_namelen);
-        if (!IS_ERR(dchild) &&
+
+        if (!IS_ERR(dchild) && (dchild->d_inode != NULL) &&
             unlikely((lsd->lsd_feature_incompat & OBD_INCOMPAT_FID) ||
                       OBD_FAIL_CHECK(OBD_FAIL_MDS_REMOVE_COMMON_EA))) {
                 struct inode *inode = dchild->d_inode; 
                 void         *handle;
-                if (inode != NULL) {
-                        LOCK_INODE_MUTEX(inode);
-                        handle = fsfilt_start(obd, inode, FSFILT_OP_SETATTR,
-                                              NULL);
-                        if (!IS_ERR(handle)) {
-                                fsfilt_set_md(obd, inode, handle, NULL, 0,
-                                              "lma");
-                                /* result is ignored. */
-                                UNLOCK_INODE_MUTEX(inode);
-                                fsfilt_commit(obd, inode, handle, 0);
-                        } else {
-                                UNLOCK_INODE_MUTEX(inode);
-                        }
+
+                LOCK_INODE_MUTEX(inode);
+                if (fsfilt_get_md(obd, inode, NULL, 0, "lma") > 0) {
+                        handle = fsfilt_start(obd, inode,
+                                              FSFILT_OP_SETATTR, NULL);
+                        if (IS_ERR(handle))
+                                GOTO(err, rc = PTR_ERR(handle));
+
+                        rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lma");
+                        if (rc)
+                                GOTO(err, rc);
+
+                        /* Force sync. Needed to avoid a case when client gets
+                         * IGIF, MDS fails to write this info to disk, upgrade
+                         * happens and FID is alive but client caches IGIF.
+                         * This is a performance killer, but happens only after
+                         * upgrade, downgrade, only for the 1st access to files
+                         * with LMA, i.e. created after upgrade.
+                         * As downgrade is an emergency unexpected case, this
+                         * is a feasible way. */
+                        rc = fsfilt_commit(obd, inode, handle, 1);
+                        if (rc)
+                                GOTO(err, rc);
                 }
+                UNLOCK_INODE_MUTEX(inode);
         }
         RETURN(dchild);
+err:
+        UNLOCK_INODE_MUTEX(dchild->d_inode);
+        l_dput(dchild);
+        return ERR_PTR(rc);
 }
 
 static void mds_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
