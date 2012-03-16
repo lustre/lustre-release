@@ -562,12 +562,6 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
 }
 #else /* !__KERNEL__ */
 
-static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
-{
-        LASSERT(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK));
-        RETURN(1);
-}
-
 int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 {
         RETURN(0);
@@ -578,6 +572,15 @@ int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout)
         RETURN(0);
 }
 #endif /* __KERNEL__ */
+
+#ifdef HAVE_SERVER_SUPPORT
+# ifndef __KERNEL__
+static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
+{
+        LASSERT(!(lock->l_flags & LDLM_FL_CANCEL_ON_BLOCK));
+        RETURN(1);
+}
+# endif
 
 static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
                             const char *ast_type)
@@ -1011,12 +1014,6 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 
         RETURN(rc);
 }
-
-#ifdef __KERNEL__
-extern unsigned long long lu_time_stamp_get(void);
-#else
-#define lu_time_stamp_get() time(NULL)
-#endif
 
 static void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
                        struct lprocfs_stats *srv_stats)
@@ -1498,6 +1495,7 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 
         RETURN(ptlrpc_reply(req));
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
                              struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
@@ -2054,6 +2052,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         RETURN(0);
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 static int ldlm_cancel_handler(struct ptlrpc_request *req)
 {
         int rc;
@@ -2257,6 +2256,7 @@ void ldlm_revoke_export_locks(struct obd_export *exp)
 
         EXIT;
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 #ifdef __KERNEL__
 static struct ldlm_bl_work_item *ldlm_bl_get_work(struct ldlm_bl_pool *blp)
@@ -2581,6 +2581,7 @@ static int ldlm_setup(void)
                 GOTO(out_proc, rc = -ENOMEM);
         }
 
+#ifdef HAVE_SERVER_SUPPORT
         ldlm_state->ldlm_cancel_service =
                 ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
                                 LDLM_MAXREPSIZE, LDLM_CANCEL_REQUEST_PORTAL,
@@ -2596,6 +2597,7 @@ static int ldlm_setup(void)
                 CERROR("failed to start service\n");
                 GOTO(out_proc, rc = -ENOMEM);
         }
+#endif
 
         OBD_ALLOC(blp, sizeof(*blp));
         if (blp == NULL)
@@ -2618,9 +2620,11 @@ static int ldlm_setup(void)
                         GOTO(out_thread, rc);
         }
 
+# ifdef HAVE_SERVER_SUPPORT
         rc = ptlrpc_start_threads(ldlm_state->ldlm_cancel_service);
         if (rc)
                 GOTO(out_thread, rc);
+# endif
 
         rc = ptlrpc_start_threads(ldlm_state->ldlm_cb_service);
         if (rc)
@@ -2653,7 +2657,9 @@ static int ldlm_setup(void)
 
 #ifdef __KERNEL__
  out_thread:
+# ifdef HAVE_SERVER_SUPPORT
         ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
+# endif
         ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
 #endif
 
@@ -2702,17 +2708,21 @@ static int ldlm_cleanup(void)
         OBD_FREE(blp, sizeof(*blp));
 
         ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
+# ifdef HAVE_SERVER_SUPPORT
         ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
+# endif
         ldlm_proc_cleanup();
 
         expired_lock_thread.elt_state = ELT_TERMINATE;
         cfs_waitq_signal(&expired_lock_thread.elt_waitq);
         cfs_wait_event(expired_lock_thread.elt_waitq,
                        expired_lock_thread.elt_state == ELT_STOPPED);
-#else
+#else /* !__KERNEL__ */
         ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
+# ifdef HAVE_SERVER_SUPPORT
         ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
-#endif
+# endif
+#endif /* __KERNEL__ */
 
         OBD_FREE(ldlm_state, sizeof(*ldlm_state));
         ldlm_state = NULL;
@@ -2776,7 +2786,9 @@ void ldlm_exit(void)
 EXPORT_SYMBOL(ldlm_extent_shift_kms);
 
 /* ldlm_lock.c */
+#ifdef HAVE_SERVER_SUPPORT
 EXPORT_SYMBOL(ldlm_get_processing_policy);
+#endif
 EXPORT_SYMBOL(ldlm_lock2desc);
 EXPORT_SYMBOL(ldlm_register_intent);
 EXPORT_SYMBOL(ldlm_lockname);
@@ -2827,6 +2839,7 @@ EXPORT_SYMBOL(ldlm_cli_cancel_list_local);
 EXPORT_SYMBOL(ldlm_cli_cancel_list);
 
 /* ldlm_lockd.c */
+#ifdef HAVE_SERVER_SUPPORT
 EXPORT_SYMBOL(ldlm_server_blocking_ast);
 EXPORT_SYMBOL(ldlm_server_completion_ast);
 EXPORT_SYMBOL(ldlm_server_glimpse_ast);
@@ -2836,11 +2849,12 @@ EXPORT_SYMBOL(ldlm_handle_cancel);
 EXPORT_SYMBOL(ldlm_request_cancel);
 EXPORT_SYMBOL(ldlm_handle_convert);
 EXPORT_SYMBOL(ldlm_handle_convert0);
+EXPORT_SYMBOL(ldlm_revoke_export_locks);
+#endif
 EXPORT_SYMBOL(ldlm_del_waiting_lock);
 EXPORT_SYMBOL(ldlm_get_ref);
 EXPORT_SYMBOL(ldlm_put_ref);
 EXPORT_SYMBOL(ldlm_refresh_waiting_lock);
-EXPORT_SYMBOL(ldlm_revoke_export_locks);
 
 /* ldlm_resource.c */
 EXPORT_SYMBOL(ldlm_namespace_new);

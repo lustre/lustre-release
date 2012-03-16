@@ -134,8 +134,10 @@ void ldlm_lock_decref_internal(struct ldlm_lock *, __u32 mode);
 void ldlm_lock_decref_internal_nolock(struct ldlm_lock *, __u32 mode);
 void ldlm_add_ast_work_item(struct ldlm_lock *lock, struct ldlm_lock *new,
                             cfs_list_t *work_list);
+#ifdef HAVE_SERVER_SUPPORT
 int ldlm_reprocess_queue(struct ldlm_resource *res, cfs_list_t *queue,
                          cfs_list_t *work_list);
+#endif
 int ldlm_run_ast_work(struct ldlm_namespace *ns, cfs_list_t *rpc_list,
                       ldlm_desc_ast_t ast_type);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *lock);
@@ -156,24 +158,28 @@ int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
                              struct ldlm_lock_desc *ld, struct ldlm_lock *lock);
 
+#ifdef HAVE_SERVER_SUPPORT
 /* ldlm_plain.c */
 int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
-                            ldlm_error_t *err, cfs_list_t *work_list);
-
-/* ldlm_extent.c */
-int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
-                             ldlm_error_t *err, cfs_list_t *work_list);
-void ldlm_extent_add_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
-void ldlm_extent_unlink_lock(struct ldlm_lock *lock);
-
-/* ldlm_flock.c */
-int ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
                             ldlm_error_t *err, cfs_list_t *work_list);
 
 /* ldlm_inodebits.c */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
                                 int first_enq, ldlm_error_t *err,
                                 cfs_list_t *work_list);
+#endif
+
+/* ldlm_extent.c */
+#ifdef HAVE_SERVER_SUPPORT
+int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
+                             ldlm_error_t *err, cfs_list_t *work_list);
+#endif
+void ldlm_extent_add_lock(struct ldlm_resource *res, struct ldlm_lock *lock);
+void ldlm_extent_unlink_lock(struct ldlm_lock *lock);
+
+/* ldlm_flock.c */
+int ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
+                            ldlm_error_t *err, cfs_list_t *work_list);
 
 /* l_lock.c */
 void l_check_ns_lock(struct ldlm_namespace *ns);

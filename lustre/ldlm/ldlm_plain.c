@@ -53,6 +53,7 @@
 
 #include "ldlm_internal.h"
 
+#ifdef HAVE_SERVER_SUPPORT
 static inline int
 ldlm_plain_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                         cfs_list_t *work_list)
@@ -161,6 +162,7 @@ int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
         }
         RETURN(0);
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 void ldlm_plain_policy_wire_to_local(const ldlm_wire_policy_data_t *wpolicy,
                                      ldlm_policy_data_t *lpolicy)

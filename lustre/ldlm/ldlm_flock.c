@@ -469,6 +469,7 @@ reprocess:
         }
 
         if (*flags != LDLM_FL_WAIT_NOREPROC) {
+#ifdef HAVE_SERVER_SUPPORT
                 if (first_enq) {
                         /* If this is an unlock, reprocess the waitq and
                          * send completions ASTs for locks that can now be
@@ -497,6 +498,13 @@ restart:
                         LASSERT(req->l_completion_ast);
                         ldlm_add_ast_work_item(req, NULL, work_list);
                 }
+#else /* !HAVE_SERVER_SUPPORT */
+                /* The only one possible case for client-side calls flock
+                 * policy function is ldlm_flock_completion_ast inside which
+                 * carries LDLM_FL_WAIT_NOREPROC flag. */
+                CERROR("Illegal parameter for client-side-only module.\n");
+                LBUG();
+#endif /* HAVE_SERVER_SUPPORT */
         }
 
         /* In case we're reprocessing the requested lock we can't destroy

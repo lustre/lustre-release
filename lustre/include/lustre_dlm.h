@@ -960,28 +960,43 @@ int ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 /* ldlm_extent.c */
 __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms);
 
+struct ldlm_callback_suite {
+        ldlm_completion_callback lcs_completion;
+        ldlm_blocking_callback   lcs_blocking;
+        ldlm_glimpse_callback    lcs_glimpse;
+        ldlm_weigh_callback      lcs_weigh;
+};
 
 /* ldlm_lockd.c */
+#ifdef HAVE_SERVER_SUPPORT
 int ldlm_server_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                              void *data, int flag);
 int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data);
 int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
                         ldlm_blocking_callback, ldlm_glimpse_callback);
+int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
+                         const struct ldlm_request *dlm_req,
+                         const struct ldlm_callback_suite *cbs);
 int ldlm_handle_convert(struct ptlrpc_request *req);
+int ldlm_handle_convert0(struct ptlrpc_request *req,
+                         const struct ldlm_request *dlm_req);
 int ldlm_handle_cancel(struct ptlrpc_request *req);
 int ldlm_request_cancel(struct ptlrpc_request *req,
                         const struct ldlm_request *dlm_req, int first);
+void ldlm_revoke_export_locks(struct obd_export *exp);
+#endif
 int ldlm_del_waiting_lock(struct ldlm_lock *lock);
 int ldlm_refresh_waiting_lock(struct ldlm_lock *lock, int timeout);
-void ldlm_revoke_export_locks(struct obd_export *exp);
 int ldlm_get_ref(void);
 void ldlm_put_ref(void);
 int ldlm_init_export(struct obd_export *exp);
 void ldlm_destroy_export(struct obd_export *exp);
 
 /* ldlm_lock.c */
+#ifdef HAVE_SERVER_SUPPORT
 ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res);
+#endif
 void ldlm_register_intent(struct ldlm_namespace *ns, ldlm_res_policy arg);
 void ldlm_lock2handle(const struct ldlm_lock *lock,
                       struct lustre_handle *lockh);
@@ -1143,13 +1158,6 @@ int ldlm_lock_change_resource(struct ldlm_namespace *, struct ldlm_lock *,
         lu_ref_del(&(res)->lr_reference, __FUNCTION__, cfs_current());  \
 } while (0)
 
-struct ldlm_callback_suite {
-        ldlm_completion_callback lcs_completion;
-        ldlm_blocking_callback   lcs_blocking;
-        ldlm_glimpse_callback    lcs_glimpse;
-        ldlm_weigh_callback      lcs_weigh;
-};
-
 /* ldlm_request.c */
 int ldlm_expired_completion_wait(void *data);
 int ldlm_blocking_ast_nocheck(struct ldlm_lock *lock);
@@ -1172,9 +1180,6 @@ int ldlm_prep_elc_req(struct obd_export *exp,
                       struct ptlrpc_request *req,
                       int version, int opc, int canceloff,
                       cfs_list_t *cancels, int count);
-int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,
-                         const struct ldlm_request *dlm_req,
-                         const struct ldlm_callback_suite *cbs);
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                           ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
                           int *flags, void *lvb, __u32 lvb_len,
@@ -1193,8 +1198,6 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, __u32 *flags);
 int ldlm_cli_update_pool(struct ptlrpc_request *req);
-int ldlm_handle_convert0(struct ptlrpc_request *req,
-                         const struct ldlm_request *dlm_req);
 int ldlm_cli_cancel(struct lustre_handle *lockh);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, const struct ldlm_res_id *,
                            ldlm_cancel_flags_t flags, void *opaque);

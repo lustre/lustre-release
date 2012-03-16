@@ -157,12 +157,13 @@ char *ldlm_it2str(int it)
 
 extern cfs_mem_cache_t *ldlm_lock_slab;
 
+#ifdef HAVE_SERVER_SUPPORT
 static ldlm_processing_policy ldlm_processing_policy_table[] = {
         [LDLM_PLAIN] ldlm_process_plain_lock,
         [LDLM_EXTENT] ldlm_process_extent_lock,
-#ifdef __KERNEL__
+# ifdef __KERNEL__
         [LDLM_FLOCK] ldlm_process_flock_lock,
-#endif
+# endif
         [LDLM_IBITS] ldlm_process_inodebits_lock,
 };
 
@@ -170,6 +171,7 @@ ldlm_processing_policy ldlm_get_processing_policy(struct ldlm_resource *res)
 {
         return ldlm_processing_policy_table[res->lr_type];
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 void ldlm_register_intent(struct ldlm_namespace *ns, ldlm_res_policy arg)
 {
@@ -1363,7 +1365,9 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         struct ldlm_lock *lock = *lockp;
         struct ldlm_resource *res = lock->l_resource;
         int local = ns_is_client(ldlm_res_to_ns(res));
+#ifdef HAVE_SERVER_SUPPORT
         ldlm_processing_policy policy;
+#endif
         ldlm_error_t rc = ELDLM_OK;
         struct ldlm_interval *node = NULL;
         ENTRY;
@@ -1444,6 +1448,7 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                 else
                         ldlm_grant_lock(lock, NULL);
                 GOTO(out, ELDLM_OK);
+#ifdef HAVE_SERVER_SUPPORT
         } else if (*flags & LDLM_FL_REPLAY) {
                 if (*flags & LDLM_FL_BLOCK_CONV) {
                         ldlm_resource_add_lock(res, &res->lr_converting, lock);
@@ -1461,6 +1466,14 @@ ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
         policy = ldlm_processing_policy_table[res->lr_type];
         policy(lock, flags, 1, &rc, NULL);
         GOTO(out, rc);
+#else
+        } else {
+                CERROR("This is client-side-only module, cannot handle "
+                       "LDLM_NAMESPACE_SERVER resource type lock.\n");
+                LBUG();
+        }
+#endif
+
 out:
         unlock_res_and_lock(lock);
         if (node)
@@ -1468,6 +1481,7 @@ out:
         return rc;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /* Must be called with namespace taken: queue is waiting or converting. */
 int ldlm_reprocess_queue(struct ldlm_resource *res, cfs_list_t *queue,
                          cfs_list_t *work_list)
@@ -1498,6 +1512,7 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, cfs_list_t *queue,
 
         RETURN(rc);
 }
+#endif
 
 static int
 ldlm_work_bl_ast_lock(cfs_list_t *tmp, struct ldlm_cb_set_arg *arg)
@@ -1679,16 +1694,17 @@ void ldlm_reprocess_all_ns(struct ldlm_namespace *ns)
 void ldlm_reprocess_all(struct ldlm_resource *res)
 {
         CFS_LIST_HEAD(rpc_list);
+
+#ifdef HAVE_SERVER_SUPPORT
         int rc;
         ENTRY;
-
         /* Local lock trees don't get reprocessed. */
         if (ns_is_client(ldlm_res_to_ns(res))) {
                 EXIT;
                 return;
         }
 
- restart:
+restart:
         lock_res(res);
         rc = ldlm_reprocess_queue(res, &res->lr_converting, &rpc_list);
         if (rc == LDLM_ITER_CONTINUE)
@@ -1701,6 +1717,14 @@ void ldlm_reprocess_all(struct ldlm_resource *res)
                 LASSERT(cfs_list_empty(&rpc_list));
                 goto restart;
         }
+#else
+        ENTRY;
+        if (!ns_is_client(ldlm_res_to_ns(res))) {
+                CERROR("This is client-side-only module, cannot handle "
+                       "LDLM_NAMESPACE_SERVER resource type lock.\n");
+                LBUG();
+        }
+#endif
         EXIT;
 }
 
@@ -1854,9 +1878,8 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         struct ldlm_resource *res;
         struct ldlm_namespace *ns;
         int granted = 0;
-        int old_mode, rc;
+        int old_mode;
         struct sl_insert_point prev;
-        ldlm_error_t err;
         struct ldlm_interval *node;
         ENTRY;
 
@@ -1924,7 +1947,10 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         if (lock->l_completion_ast)
                                 lock->l_completion_ast(lock, 0, NULL);
                 }
+#ifdef HAVE_SERVER_SUPPORT
         } else {
+                int rc;
+                ldlm_error_t err;
                 int pflags = 0;
                 ldlm_processing_policy policy;
                 policy = ldlm_processing_policy_table[res->lr_type];
@@ -1942,6 +1968,13 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                         granted = 1;
                 }
         }
+#else
+        } else {
+                CERROR("This is client-side-only module, cannot handle "
+                       "LDLM_NAMESPACE_SERVER resource type lock.\n");
+                LBUG();
+        }
+#endif
         unlock_res_and_lock(lock);
 
         if (granted)
