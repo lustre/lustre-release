@@ -1277,11 +1277,13 @@ test_32b() {
 		{ skip_env "Cannot untar $DISK1_8" && return ; }
 
 	load_modules
-	$LCTL set_param debug="config"
+	$LCTL set_param debug="+config"
 	local NEWNAME=lustre
 
 	# writeconf will cause servers to register with their current nids
-	$TUNEFS --writeconf --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
+	$TUNEFS --writeconf --erase-params \
+        --param mdt.identity_upcall=$L_GETIDENTITY \
+        --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
 	combined_mgs_mds || stop mgs
 
 	start32 mds1 $tmpdir/mds "-o loop" && \
@@ -1291,7 +1293,8 @@ test_32b() {
 	echo MDS uuid $UUID
 	[ "$UUID" == "${NEWNAME}-MDT0000_UUID" ] || error "UUID is wrong: $UUID"
 
-	$TUNEFS --mgsnode=$HOSTNAME --writeconf --fsname=$NEWNAME $tmpdir/ost1 ||\
+	$TUNEFS  --writeconf --erase-params \
+        --mgsnode=$HOSTNAME --fsname=$NEWNAME $tmpdir/ost1 ||\
 	    error "tunefs failed"
 	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
 	UUID=$($LCTL get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
