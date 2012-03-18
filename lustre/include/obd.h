@@ -59,7 +59,9 @@
 #define IOC_MDC_MAX_NR       50
 
 #include <lustre/lustre_idl.h>
-#include <lu_target.h>
+#ifdef HAVE_SERVER_SUPPORT
+# include <lu_target.h>
+#endif
 #include <lu_ref.h>
 #include <lustre_lib.h>
 #include <lustre_export.h>
@@ -294,7 +296,9 @@ struct obd_device_target {
         struct super_block       *obt_sb;
         /** last_rcvd file */
         struct file              *obt_rcvd_filp;
+#ifdef HAVE_SERVER_SUPPORT
         struct lu_target         *obt_lut;
+#endif
         __u64                     obt_mount_count;
         cfs_semaphore_t           obt_quotachecking;
         struct lustre_quota_ctxt  obt_qctxt;

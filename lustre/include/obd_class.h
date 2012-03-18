@@ -302,6 +302,7 @@ static inline enum obd_option exp_flags_from_obd(struct obd_device *obd)
                 0);
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 static inline struct lu_target *class_exp2tgt(struct obd_export *exp)
 {
         LASSERT(exp->exp_obd);
@@ -313,6 +314,7 @@ static inline struct lr_server_data *class_server_data(struct obd_device *obd)
         LASSERT(obd->u.obt.obt_lut);
         return &obd->u.obt.obt_lut->lut_lsd;
 }
+#endif
 
 void obdo_cpy_md(struct obdo *dst, struct obdo *src, obd_flag valid);
 void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj);

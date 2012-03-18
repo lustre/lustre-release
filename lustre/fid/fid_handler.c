@@ -56,7 +56,6 @@
 
 #include <obd.h>
 #include <obd_class.h>
-#include <lu_target.h>
 #include <dt_object.h>
 #include <md_object.h>
 #include <obd_support.h>
