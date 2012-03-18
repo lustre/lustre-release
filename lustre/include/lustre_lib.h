@@ -66,18 +66,29 @@
 struct ptlrpc_request;
 struct obd_export;
 struct lu_target;
+struct l_wait_info;
 #include <lustre_ha.h>
 #include <lustre_net.h>
 #include <lvfs.h>
 
+#ifdef HAVE_SERVER_SUPPORT
 void target_client_add_cb(struct obd_device *obd, __u64 transno, void *cb_data,
                           int error);
 int target_handle_connect(struct ptlrpc_request *req);
 int target_handle_disconnect(struct ptlrpc_request *req);
 void target_destroy_export(struct obd_export *exp);
-int target_pack_pool_reply(struct ptlrpc_request *req);
 int target_handle_ping(struct ptlrpc_request *req);
 void target_committed_to_req(struct ptlrpc_request *req);
+void target_cancel_recovery_timer(struct obd_device *obd);
+void target_stop_recovery_thread(struct obd_device *obd);
+void target_cleanup_recovery(struct obd_device *obd);
+int target_queue_recovery_request(struct ptlrpc_request *req,
+                                  struct obd_device *obd);
+int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
+                   struct l_wait_info *lwi);
+#endif
+
+int target_pack_pool_reply(struct ptlrpc_request *req);
 int do_set_info_async(struct obd_import *imp,
                       int opcode, int version,
                       obd_count keylen, void *key,
@@ -94,16 +105,7 @@ int target_handle_dqacq_callback(struct ptlrpc_request *req);
 
 #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
 
-struct l_wait_info;
-
-void target_cancel_recovery_timer(struct obd_device *obd);
-void target_stop_recovery_thread(struct obd_device *obd);
-void target_cleanup_recovery(struct obd_device *obd);
-int target_queue_recovery_request(struct ptlrpc_request *req,
-                                  struct obd_device *obd);
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
-int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
-                   struct l_wait_info *lwi);
 
 /* client.c */
 

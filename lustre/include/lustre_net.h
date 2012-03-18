@@ -1373,12 +1373,14 @@ extern int ptlrpc_uuid_to_peer(struct obd_uuid *uuid,
  * underlying buffer
  * @{
  */
-extern void request_out_callback (lnet_event_t *ev);
+extern void request_out_callback(lnet_event_t *ev);
 extern void reply_in_callback(lnet_event_t *ev);
-extern void client_bulk_callback (lnet_event_t *ev);
+extern void client_bulk_callback(lnet_event_t *ev);
 extern void request_in_callback(lnet_event_t *ev);
 extern void reply_out_callback(lnet_event_t *ev);
-extern void server_bulk_callback (lnet_event_t *ev);
+#ifdef HAVE_SERVER_SUPPORT
+extern void server_bulk_callback(lnet_event_t *ev);
+#endif
 /** @} */
 
 /* ptlrpc/connection.c */
@@ -1396,10 +1398,11 @@ extern lnet_pid_t ptl_get_pid(void);
  * Actual interfacing with LNet to put/get/register/unregister stuff
  * @{
  */
+#ifdef HAVE_SERVER_SUPPORT
+struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
+                                              int npages, int type, int portal);
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc);
 void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc);
-int ptlrpc_register_bulk(struct ptlrpc_request *req);
-int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async);
 
 static inline int ptlrpc_server_bulk_active(struct ptlrpc_bulk_desc *desc)
 {
@@ -1412,6 +1415,10 @@ static inline int ptlrpc_server_bulk_active(struct ptlrpc_bulk_desc *desc)
         cfs_spin_unlock(&desc->bd_lock);
         return rc;
 }
+#endif
+
+int ptlrpc_register_bulk(struct ptlrpc_request *req);
+int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async);
 
 static inline int ptlrpc_client_bulk_active(struct ptlrpc_request *req)
 {
@@ -1442,7 +1449,7 @@ int ptlrpc_error(struct ptlrpc_request *req);
 void ptlrpc_resend_req(struct ptlrpc_request *request);
 int ptlrpc_at_get_net_latency(struct ptlrpc_request *req);
 int ptl_send_rpc(struct ptlrpc_request *request, int noreply);
-int ptlrpc_register_rqbd (struct ptlrpc_request_buffer_desc *rqbd);
+int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd);
 /** @} */
 
 /* ptlrpc/client.c */
@@ -1515,9 +1522,7 @@ struct ptlrpc_request *ptlrpc_prep_req_pool(struct obd_import *imp,
 void ptlrpc_req_finished(struct ptlrpc_request *request);
 void ptlrpc_req_finished_with_imp_lock(struct ptlrpc_request *request);
 struct ptlrpc_request *ptlrpc_request_addref(struct ptlrpc_request *req);
-struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp (struct ptlrpc_request *req,
-                                               int npages, int type, int portal);
-struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
+struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp(struct ptlrpc_request *req,
                                               int npages, int type, int portal);
 void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk);
 void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
@@ -1556,11 +1561,11 @@ struct ptlrpc_service_conf {
  *
  * @{
  */
-void ptlrpc_save_lock (struct ptlrpc_request *req,
-                       struct lustre_handle *lock, int mode, int no_ack);
+void ptlrpc_save_lock(struct ptlrpc_request *req,
+                      struct lustre_handle *lock, int mode, int no_ack);
 void ptlrpc_commit_replies(struct obd_export *exp);
-void ptlrpc_dispatch_difficult_reply (struct ptlrpc_reply_state *rs);
-void ptlrpc_schedule_difficult_reply (struct ptlrpc_reply_state *rs);
+void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs);
+void ptlrpc_schedule_difficult_reply(struct ptlrpc_reply_state *rs);
 struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
                                             svc_handler_t h, char *name,
                                             struct proc_dir_entry *proc_entry,
@@ -1582,7 +1587,7 @@ void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_threads(struct ptlrpc_service *svc);
 int ptlrpc_start_thread(struct ptlrpc_service *svc);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
-int liblustre_check_services (void *arg);
+int liblustre_check_services(void *arg);
 void ptlrpc_daemonize(char *name);
 int ptlrpc_service_health_check(struct ptlrpc_service *);
 void ptlrpc_hpreq_reorder(struct ptlrpc_request *req);
@@ -1657,7 +1662,7 @@ void *lustre_msg_buf(struct lustre_msg *m, int n, int minlen);
 int lustre_msg_buflen(struct lustre_msg *m, int n);
 void lustre_msg_set_buflen(struct lustre_msg *m, int n, int len);
 int lustre_msg_bufcount(struct lustre_msg *m);
-char *lustre_msg_string (struct lustre_msg *m, int n, int max_len);
+char *lustre_msg_string(struct lustre_msg *m, int n, int max_len);
 __u32 lustre_msghdr_get_flags(struct lustre_msg *msg);
 void lustre_msghdr_set_flags(struct lustre_msg *msg, __u32 flags);
 __u32 lustre_msg_get_flags(struct lustre_msg *msg);
@@ -1886,7 +1891,9 @@ int import_set_conn_priority(struct obd_import *imp, struct obd_uuid *uuid);
 void client_destroy_import(struct obd_import *imp);
 /** @} */
 
+#ifdef HAVE_SERVER_SUPPORT
 int server_disconnect_export(struct obd_export *exp);
+#endif
 
 /* ptlrpc/pinger.c */
 /**

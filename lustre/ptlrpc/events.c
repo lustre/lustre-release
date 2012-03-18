@@ -367,6 +367,7 @@ void reply_out_callback(lnet_event_t *ev)
         EXIT;
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 /*
  * Server's bulk completion callback
  */
@@ -409,6 +410,7 @@ void server_bulk_callback (lnet_event_t *ev)
         cfs_spin_unlock(&desc->bd_lock);
         EXIT;
 }
+#endif
 
 static void ptlrpc_master_callback(lnet_event_t *ev)
 {
@@ -421,8 +423,11 @@ static void ptlrpc_master_callback(lnet_event_t *ev)
                  callback == reply_in_callback ||
                  callback == client_bulk_callback ||
                  callback == request_in_callback ||
-                 callback == reply_out_callback ||
-                 callback == server_bulk_callback);
+                 callback == reply_out_callback
+#ifdef HAVE_SERVER_SUPPORT
+                 || callback == server_bulk_callback
+#endif
+                 );
 
         callback (ev);
 }

@@ -50,8 +50,11 @@ if DARWIN
 macos_PROGRAMS := obdecho
 obdecho_SOURCES := \
         lproc_echo.c \
-        echo.c \
         echo_client.c
+
+if SERVER
+obdecho_SOURCES += echo.c
+endif
 
 obdecho_CFLAGS := $(EXTRA_KCFLAGS)
 obdecho_LDFLAGS := $(EXTRA_KLDFLAGS)

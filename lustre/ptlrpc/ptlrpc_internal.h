@@ -53,6 +53,7 @@ extern int test_req_buffer_pressure;
 int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc);
 
 /* client.c */
+struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal);
 void ptlrpc_init_xid(void);
 
 /* events.c */

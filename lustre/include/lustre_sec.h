@@ -1119,12 +1119,14 @@ int sptlrpc_cli_unwrap_bulk_read(struct ptlrpc_request *req,
                                  int nob);
 int sptlrpc_cli_unwrap_bulk_write(struct ptlrpc_request *req,
                                   struct ptlrpc_bulk_desc *desc);
+#ifdef HAVE_SERVER_SUPPORT
 int sptlrpc_svc_prep_bulk(struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc);
 int sptlrpc_svc_wrap_bulk(struct ptlrpc_request *req,
                           struct ptlrpc_bulk_desc *desc);
 int sptlrpc_svc_unwrap_bulk(struct ptlrpc_request *req,
                             struct ptlrpc_bulk_desc *desc);
+#endif
 
 /* bulk helpers (internal use only by policies) */
 int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,

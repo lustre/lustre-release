@@ -42,6 +42,7 @@
 #include <lustre_net.h>
 #include <lustre_lib.h>
 #include <obd.h>
+#include <obd_class.h>
 #include "ptlrpc_internal.h"
 
 /**
@@ -98,6 +99,40 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
         }
 
         RETURN (0);
+}
+
+#ifdef HAVE_SERVER_SUPPORT
+/**
+ * Prepare bulk descriptor for specified incoming request \a req that
+ * can fit \a npages * pages. \a type is bulk type. \a portal is where
+ * the bulk to be sent. Used on server-side after request was already
+ * received.
+ * Returns pointer to newly allocatrd initialized bulk descriptor or NULL on
+ * error.
+ */
+struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
+                                              int npages, int type, int portal)
+{
+        struct obd_export *exp = req->rq_export;
+        struct ptlrpc_bulk_desc *desc;
+
+        ENTRY;
+        LASSERT(type == BULK_PUT_SOURCE || type == BULK_GET_SINK);
+
+        desc = new_bulk(npages, type, portal);
+        if (desc == NULL)
+                RETURN(NULL);
+
+        desc->bd_export = class_export_get(exp);
+        desc->bd_req = req;
+
+        desc->bd_cbid.cbid_fn  = server_bulk_callback;
+        desc->bd_cbid.cbid_arg = desc;
+
+        /* NB we don't assign rq_bulk here; server-side requests are
+         * re-used, and the handler frees the bulk desc explicitly. */
+
+        return desc;
 }
 
 /**
@@ -211,6 +246,7 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
                 CWARN("Unexpectedly long timeout: desc %p\n", desc);
         }
 }
+#endif /* HAVE_SERVER_SUPPORT */
 
 /**
  * Register bulk for later transfer

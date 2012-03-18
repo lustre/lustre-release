@@ -121,8 +121,8 @@ static int echo_destroy_export(struct obd_export *exp)
         return id;
 }
 
-int echo_create(struct obd_export *exp, struct obdo *oa,
-                struct lov_stripe_md **ea, struct obd_trans_info *oti)
+static int echo_create(struct obd_export *exp, struct obdo *oa,
+                       struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -148,9 +148,9 @@ int echo_create(struct obd_export *exp, struct obdo *oa,
         return 0;
 }
 
-int echo_destroy(struct obd_export *exp, struct obdo *oa,
-                 struct lov_stripe_md *ea, struct obd_trans_info *oti,
-                 struct obd_export *md_exp, void *capa)
+static int echo_destroy(struct obd_export *exp, struct obdo *oa,
+                        struct lov_stripe_md *ea, struct obd_trans_info *oti,
+                        struct obd_export *md_exp, void *capa)
 {
         struct obd_device *obd = class_exp2obd(exp);
 
@@ -392,10 +392,11 @@ static int echo_finalize_lb(struct obdo *oa, struct obd_ioobj *obj,
         return rc;
 }
 
-int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
-                int objcount, struct obd_ioobj *obj, struct niobuf_remote *nb,
-                int *pages, struct niobuf_local *res,
-                struct obd_trans_info *oti, struct lustre_capa *unused)
+static int echo_preprw(int cmd, struct obd_export *export, struct obdo *oa,
+                       int objcount, struct obd_ioobj *obj,
+                       struct niobuf_remote *nb, int *pages,
+                       struct niobuf_local *res, struct obd_trans_info *oti,
+                       struct lustre_capa *unused)
 {
         struct obd_device *obd;
         int tot_bytes = 0;
@@ -468,10 +469,11 @@ preprw_cleanup:
         return rc;
 }
 
-int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
-                  int objcount, struct obd_ioobj *obj,
-                  struct niobuf_remote *rb, int niocount,
-                  struct niobuf_local *res, struct obd_trans_info *oti, int rc)
+static int echo_commitrw(int cmd, struct obd_export *export, struct obdo *oa,
+                         int objcount, struct obd_ioobj *obj,
+                         struct niobuf_remote *rb, int niocount,
+                         struct niobuf_local *res, struct obd_trans_info *oti,
+                         int rc)
 {
         struct obd_device *obd;
         int pgs = 0;
@@ -616,7 +618,7 @@ static int echo_cleanup(struct obd_device *obd)
         RETURN(0);
 }
 
-static struct obd_ops echo_obd_ops = {
+struct obd_ops echo_obd_ops = {
         .o_owner           = THIS_MODULE,
         .o_connect         = echo_connect,
         .o_disconnect      = echo_disconnect,
@@ -632,11 +634,7 @@ static struct obd_ops echo_obd_ops = {
         .o_cleanup         = echo_cleanup
 };
 
-extern int echo_client_init(void);
-extern void echo_client_exit(void);
-
-static void
-echo_persistent_pages_fini (void)
+void echo_persistent_pages_fini(void)
 {
         int     i;
 
@@ -647,8 +645,7 @@ echo_persistent_pages_fini (void)
                 }
 }
 
-static int
-echo_persistent_pages_init (void)
+int echo_persistent_pages_init(void)
 {
         cfs_page_t *pg;
         int          i;
@@ -671,48 +668,3 @@ echo_persistent_pages_init (void)
 
         return (0);
 }
-
-static int __init obdecho_init(void)
-{
-        struct lprocfs_static_vars lvars;
-        int rc;
-
-        ENTRY;
-        LCONSOLE_INFO("Echo OBD driver; http://www.lustre.org/\n");
-
-        LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
-
-        lprocfs_echo_init_vars(&lvars);
-
-        rc = echo_persistent_pages_init ();
-        if (rc != 0)
-                goto failed_0;
-
-        rc = class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
-                                 LUSTRE_ECHO_NAME, NULL);
-        if (rc != 0)
-                goto failed_1;
-
-        rc = echo_client_init();
-        if (rc == 0)
-                RETURN (0);
-
-        class_unregister_type(LUSTRE_ECHO_NAME);
- failed_1:
-        echo_persistent_pages_fini ();
- failed_0:
-        RETURN(rc);
-}
-
-static void /*__exit*/ obdecho_exit(void)
-{
-        echo_client_exit();
-        class_unregister_type(LUSTRE_ECHO_NAME);
-        echo_persistent_pages_fini ();
-}
-
-MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Testing Echo OBD driver");
-MODULE_LICENSE("GPL");
-
-cfs_module(obdecho, "1.0.0", obdecho_init, obdecho_exit);

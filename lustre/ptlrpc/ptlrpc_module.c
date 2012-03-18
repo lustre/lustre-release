@@ -158,8 +158,11 @@ EXPORT_SYMBOL(ptlrpc_connection_init);
 EXPORT_SYMBOL(ptlrpc_connection_fini);
 
 /* niobuf.c */
+#ifdef HAVE_SERVER_SUPPORT
+EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 EXPORT_SYMBOL(ptlrpc_start_bulk_transfer);
 EXPORT_SYMBOL(ptlrpc_abort_bulk);
+#endif
 EXPORT_SYMBOL(ptlrpc_register_bulk);
 EXPORT_SYMBOL(ptlrpc_unregister_bulk);
 EXPORT_SYMBOL(ptlrpc_send_reply);
@@ -194,7 +197,6 @@ EXPORT_SYMBOL(ptlrpc_req_finished);
 EXPORT_SYMBOL(ptlrpc_req_finished_with_imp_lock);
 EXPORT_SYMBOL(ptlrpc_request_addref);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_imp);
-EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 EXPORT_SYMBOL(ptlrpc_free_bulk);
 EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
 EXPORT_SYMBOL(ptlrpc_abort_inflight);

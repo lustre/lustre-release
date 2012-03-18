@@ -577,6 +577,7 @@ int client_disconnect_export(struct obd_export *exp)
         RETURN(rc);
 }
 
+#ifdef HAVE_SERVER_SUPPORT
 int server_disconnect_export(struct obd_export *exp)
 {
         int rc;
@@ -2069,7 +2070,7 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
 }
 EXPORT_SYMBOL(target_recovery_init);
 
-#endif
+#endif /* __KERNEL__ */
 
 static int target_process_req_flags(struct obd_device *obd,
                                     struct ptlrpc_request *req)
@@ -2238,6 +2239,31 @@ int target_queue_recovery_request(struct ptlrpc_request *req,
         RETURN(0);
 }
 
+int target_handle_ping(struct ptlrpc_request *req)
+{
+        obd_ping(req->rq_export);
+        return req_capsule_server_pack(&req->rq_pill);
+}
+
+void target_committed_to_req(struct ptlrpc_request *req)
+{
+        struct obd_export *exp = req->rq_export;
+
+        if (!exp->exp_obd->obd_no_transno && req->rq_repmsg != NULL)
+                lustre_msg_set_last_committed(req->rq_repmsg,
+                                              exp->exp_last_committed);
+        else
+                DEBUG_REQ(D_IOCTL, req, "not sending last_committed update (%d/"
+                          "%d)", exp->exp_obd->obd_no_transno,
+                          req->rq_repmsg == NULL);
+
+        CDEBUG(D_INFO, "last_committed "LPU64", transno "LPU64", xid "LPU64"\n",
+               exp->exp_last_committed, req->rq_transno, req->rq_xid);
+}
+EXPORT_SYMBOL(target_committed_to_req);
+
+#endif /* HAVE_SERVER_SUPPORT */
+
 /**
  * Packs current SLV and Limit into \a req.
  */
@@ -2379,29 +2405,6 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         cfs_spin_unlock(&svc->srv_rs_lock);
         EXIT;
 }
-
-int target_handle_ping(struct ptlrpc_request *req)
-{
-        obd_ping(req->rq_export);
-        return req_capsule_server_pack(&req->rq_pill);
-}
-
-void target_committed_to_req(struct ptlrpc_request *req)
-{
-        struct obd_export *exp = req->rq_export;
-
-        if (!exp->exp_obd->obd_no_transno && req->rq_repmsg != NULL)
-                lustre_msg_set_last_committed(req->rq_repmsg,
-                                              exp->exp_last_committed);
-        else
-                DEBUG_REQ(D_IOCTL, req, "not sending last_committed update (%d/"
-                          "%d)", exp->exp_obd->obd_no_transno,
-                          req->rq_repmsg == NULL);
-
-        CDEBUG(D_INFO, "last_committed "LPU64", transno "LPU64", xid "LPU64"\n",
-               exp->exp_last_committed, req->rq_transno, req->rq_xid);
-}
-EXPORT_SYMBOL(target_committed_to_req);
 
 int target_handle_qc_callback(struct ptlrpc_request *req)
 {
@@ -2621,6 +2624,7 @@ void ldlm_dump_export_locks(struct obd_export *exp)
 }
 #endif
 
+#ifdef HAVE_SERVER_SUPPORT
 static int target_bulk_timeout(void *data)
 {
         ENTRY;
@@ -2724,3 +2728,5 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
         RETURN(rc);
 }
 EXPORT_SYMBOL(target_bulk_io);
+
+#endif /* HAVE_SERVER_SUPPORT */

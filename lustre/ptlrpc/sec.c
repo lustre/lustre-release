@@ -2301,6 +2301,7 @@ int sptlrpc_cli_unwrap_bulk_write(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(sptlrpc_cli_unwrap_bulk_write);
 
+#ifdef HAVE_SERVER_SUPPORT
 /**
  * Performe transformation upon outgoing bulk read.
  */
@@ -2381,6 +2382,8 @@ int sptlrpc_svc_prep_bulk(struct ptlrpc_request *req,
         return 0;
 }
 EXPORT_SYMBOL(sptlrpc_svc_prep_bulk);
+
+#endif /* HAVE_SERVER_SUPPORT */
 
 /****************************************
  * user descriptor helpers              *

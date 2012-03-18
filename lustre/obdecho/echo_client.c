@@ -270,8 +270,8 @@ static struct lu_kmem_descr echo_caches[] = {
  *
  * @{
  */
-cfs_page_t *echo_page_vmpage(const struct lu_env *env,
-                             const struct cl_page_slice *slice)
+static cfs_page_t *echo_page_vmpage(const struct lu_env *env,
+                                    const struct cl_page_slice *slice)
 {
         return cl2echo_page(slice)->ep_vmpage;
 }
@@ -1884,9 +1884,9 @@ out_free:
         RETURN(rc);
 }
 
-struct lu_object *echo_resolve_path(const struct lu_env *env,
-                                    struct echo_device *ed, char *path,
-                                    int path_len)
+static struct lu_object *echo_resolve_path(const struct lu_env *env,
+                                           struct echo_device *ed, char *path,
+                                           int path_len)
 {
         struct lu_device        *ld = ed->ed_next;
         struct md_device        *md = lu2md_dev(ld);
@@ -2954,7 +2954,7 @@ static int echo_client_disconnect(struct obd_export *exp)
         return rc;
 }
 
-static struct obd_ops echo_obd_ops = {
+static struct obd_ops echo_client_obd_ops = {
         .o_owner       = THIS_MODULE,
 
 #if 0
@@ -2976,7 +2976,7 @@ int echo_client_init(void)
 
         rc = lu_kmem_init(echo_caches);
         if (rc == 0) {
-                rc = class_register_type(&echo_obd_ops, NULL,
+                rc = class_register_type(&echo_client_obd_ops, NULL,
                                          lvars.module_vars,
                                          LUSTRE_ECHO_CLIENT_NAME,
                                          &echo_device_type);
@@ -2991,5 +2991,60 @@ void echo_client_exit(void)
         class_unregister_type(LUSTRE_ECHO_CLIENT_NAME);
         lu_kmem_fini(echo_caches);
 }
+
+#ifdef __KERNEL__
+static int __init obdecho_init(void)
+{
+        struct lprocfs_static_vars lvars;
+        int rc;
+
+        ENTRY;
+        LCONSOLE_INFO("Echo OBD driver; http://www.lustre.org/\n");
+
+        LASSERT(CFS_PAGE_SIZE % OBD_ECHO_BLOCK_SIZE == 0);
+
+        lprocfs_echo_init_vars(&lvars);
+
+# ifdef HAVE_SERVER_SUPPORT
+        rc = echo_persistent_pages_init();
+        if (rc != 0)
+                goto failed_0;
+
+        rc = class_register_type(&echo_obd_ops, NULL, lvars.module_vars,
+                                 LUSTRE_ECHO_NAME, NULL);
+        if (rc != 0)
+                goto failed_1;
+# endif
+
+        rc = echo_client_init();
+
+# ifdef HAVE_SERVER_SUPPORT
+        if (rc == 0)
+                RETURN(0);
+
+        class_unregister_type(LUSTRE_ECHO_NAME);
+failed_1:
+        echo_persistent_pages_fini();
+failed_0:
+# endif
+        RETURN(rc);
+}
+
+static void /*__exit*/ obdecho_exit(void)
+{
+        echo_client_exit();
+
+# ifdef HAVE_SERVER_SUPPORT
+        class_unregister_type(LUSTRE_ECHO_NAME);
+        echo_persistent_pages_fini();
+# endif
+}
+
+MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
+MODULE_DESCRIPTION("Lustre Testing Echo OBD driver");
+MODULE_LICENSE("GPL");
+
+cfs_module(obdecho, LUSTRE_VERSION_STRING, obdecho_init, obdecho_exit);
+#endif /* __KERNEL__ */
 
 /** @} echo_client */
