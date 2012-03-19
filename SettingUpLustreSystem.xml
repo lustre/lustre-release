@@ -92,6 +92,9 @@
       <informalexample>
         <para>2 KB/inode * 40 million inodes = 80 GB</para>
       </informalexample>
+      <note>
+          <para>Inode size depends on stripe count. Without any stripes an inode allocation of 512 bytes might be suffecient. As striping grows to ~80 stripes per file, the inode allocation is around 2KB. At 160 stripes, a rough estimate for inode allocation is 4.5KB.</para>
+      </note>
       <para>If the average file size is small, 4 KB for example, Lustre is not very efficient as the MDT uses as much space as the OSTs. However, this is not a common configuration for Lustre.</para>
       <note>
         <para>If the MDT is too small, this can cause all the space on the OSTs to be unusable. Be sure to determine the appropriate size of the MDT needed to support the file system before formatting the file system. It is difficult to increase the number of inodes after the file system is formatted.</para>
