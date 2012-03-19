@@ -857,7 +857,6 @@ int target_handle_connect(struct ptlrpc_request *req)
                 cfs_spin_lock(&export->exp_lock);
                 export->exp_connecting = 1;
                 cfs_spin_unlock(&export->exp_lock);
-                class_export_put(export);
                 LASSERT(export->exp_obd == target);
 
                 rc = target_handle_reconnect(&conn, export, &cluuid);
@@ -945,8 +944,12 @@ dont_check_exports:
                         rc = obd_connect(req->rq_svc_thread->t_env,
                                          &export, target, &cluuid, data,
                                          client_nid);
-                        if (rc == 0)
+                        if (rc == 0) {
                                 conn.cookie = export->exp_handle.h_cookie;
+                                /* LU-1092 reconnect put export refcount in the
+                                 * end, connect needs take one here too. */
+                                class_export_get(export);
+                        }
                 }
         } else {
                 rc = obd_reconnect(req->rq_svc_thread->t_env,
@@ -1129,6 +1132,8 @@ out:
                 cfs_spin_lock(&export->exp_lock);
                 export->exp_connecting = 0;
                 cfs_spin_unlock(&export->exp_lock);
+
+                class_export_put(export);
         }
         if (targref)
                 class_decref(targref, __FUNCTION__, cfs_current());
