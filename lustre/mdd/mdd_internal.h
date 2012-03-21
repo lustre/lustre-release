@@ -318,6 +318,11 @@ int mdd_get_cookie_size(const struct lu_env *env, struct mdd_device *mdd,
 int mdd_lov_setattr_async(const struct lu_env *env, struct mdd_object *obj,
                           struct lov_mds_md *lmm, int lmm_size,
                           struct llog_cookie *logcookies);
+int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
+                      struct mdd_object *obj, struct lu_attr *la,
+                      struct lov_mds_md *lmm, int lmm_size,
+                      struct llog_cookie *logcookies,
+                      int log_unlink);
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
 

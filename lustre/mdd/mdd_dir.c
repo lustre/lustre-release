@@ -1086,6 +1086,18 @@ out_trans:
 
 stop:
         mdd_trans_stop(env, mdd, rc, handle);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,3,50,0)
+        if (rc == 0 && ma->ma_valid & MA_COOKIE && ma->ma_valid & MA_LOV &&
+            ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_UNLINK_DESTROY)
+                /* Since echo client is incapable of destorying ost object,
+                 * it will destory the object here. */
+                rc = mdd_lovobj_unlink(env, mdd, mdd_cobj, la,
+                                       ma->ma_lmm, ma->ma_lmm_size,
+                                       ma->ma_cookie, 1);
+#else
+#warning "please remove this after 2.4 (LOD/OSP)."
+#endif
+
 #ifdef HAVE_QUOTA_SUPPORT
         if (quota_opc)
                 /* Trigger dqrel on the owner of child and parent. If failed,

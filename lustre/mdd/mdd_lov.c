@@ -595,7 +595,6 @@ out_ids:
  * used when destroying orphans and from mds_reint_unlink() when MDS wants to
  * destroy objects on OSS.
  */
-static
 int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
                       struct mdd_object *obj, struct lu_attr *la,
                       struct lov_mds_md *lmm, int lmm_size,
@@ -644,7 +643,7 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
 }
 
 /*
- * called with obj locked. 
+ * called with obj locked.
  */
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
                     struct mdd_object *obj, struct lu_attr *la)
