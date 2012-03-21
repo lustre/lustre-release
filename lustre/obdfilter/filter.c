@@ -3651,7 +3651,7 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_HA, "filter_last_id() = "LPU64" -> diff = %d\n",
                        last, diff);
 
-                if (-diff > OST_MAX_PRECREATE) {
+                if (-diff > (OST_MAX_PRECREATE * 3) / 2) {
                         CERROR("%s: ignoring bogus orphan destroy request: "
                                "obdid "LPU64" last_id "LPU64"\n", obd->obd_name,
                                oa->o_id, last);
