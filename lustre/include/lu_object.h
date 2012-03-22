@@ -999,7 +999,18 @@ enum lu_context_tag {
          * a client.
          */
         LCT_SESSION   = 1 << 4,
-
+        /**
+         * A per-request data on OSP device
+         */
+        LCT_OSP_THREAD = 1 << 5,
+        /**
+         * MGS device thread
+         */
+        LCT_MG_THREAD = 1 << 6,
+        /**
+         * Context for local operations
+         */
+        LCT_LOCAL = 1 << 7,
         /**
          * Set when at least one of keys, having values in this context has
          * non-NULL lu_context_key::lct_exit() method. This is used to

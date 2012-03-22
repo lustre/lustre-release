@@ -70,7 +70,7 @@ LU_KEY_INIT(dt_global, struct dt_thread_info);
 LU_KEY_FINI(dt_global, struct dt_thread_info);
 
 static struct lu_context_key dt_key = {
-        .lct_tags = LCT_MD_THREAD|LCT_DT_THREAD,
+        .lct_tags = LCT_MD_THREAD | LCT_DT_THREAD | LCT_MG_THREAD | LCT_LOCAL,
         .lct_init = dt_global_key_init,
         .lct_fini = dt_global_key_fini
 };

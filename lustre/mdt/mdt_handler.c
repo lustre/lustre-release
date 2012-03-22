@@ -2190,7 +2190,7 @@ int mdt_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         if (lock->l_req_mode == LCK_COS && lock->l_blocking_lock != NULL) {
                 struct lu_env env;
 
-                rc = lu_env_init(&env, LCT_MD_THREAD);
+                rc = lu_env_init(&env, LCT_LOCAL);
                 if (unlikely(rc != 0))
                         CWARN("lu_env initialization failed with rc = %d,"
                               "cannot start asynchronous commit\n", rc);
@@ -4023,7 +4023,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
                 .psc_watchdog_factor = MDT_SERVICE_WATCHDOG_FACTOR,
                 .psc_min_threads     = mdt_min_threads,
                 .psc_max_threads     = mdt_max_threads,
-                .psc_ctx_tags        = LCT_MD_THREAD|LCT_DT_THREAD
+                .psc_ctx_tags        = LCT_MD_THREAD
         };
 
         m->mdt_mdsc_service =
@@ -5762,7 +5762,7 @@ void mdt_enable_cos(struct mdt_device *mdt, int val)
         int rc;
 
         mdt->mdt_opts.mo_cos = !!val;
-        rc = lu_env_init(&env, LCT_MD_THREAD);
+        rc = lu_env_init(&env, LCT_LOCAL);
         if (unlikely(rc != 0)) {
                 CWARN("lu_env initialization failed with rc = %d,"
                       "cannot sync\n", rc);

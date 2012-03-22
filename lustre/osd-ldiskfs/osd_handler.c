@@ -3977,7 +3977,7 @@ static void osd_key_exit(const struct lu_context *ctx,
 LU_TYPE_INIT_FINI(osd, &osd_key);
 
 struct lu_context_key osd_key = {
-        .lct_tags = LCT_DT_THREAD | LCT_MD_THREAD,
+        .lct_tags = LCT_DT_THREAD | LCT_MD_THREAD | LCT_MG_THREAD | LCT_LOCAL,
         .lct_init = osd_key_init,
         .lct_fini = osd_key_fini,
         .lct_exit = osd_key_exit
@@ -4212,7 +4212,7 @@ static struct lu_device_type osd_device_type = {
         .ldt_tags     = LU_DEVICE_DT,
         .ldt_name     = LUSTRE_OSD_NAME,
         .ldt_ops      = &osd_device_type_ops,
-        .ldt_ctx_tags = LCT_MD_THREAD|LCT_DT_THREAD
+        .ldt_ctx_tags = LCT_LOCAL,
 };
 
 /*
