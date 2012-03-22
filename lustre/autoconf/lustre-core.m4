@@ -1400,8 +1400,7 @@ LB_LINUX_TRY_COMPILE([
         #include <linux/exportfs.h>
 #endif
 ],[
-        struct export_operations exp;
-        memset(exp.fh_to_dentry, 0, sizeof(exp.fh_to_dentry));
+        do{ }while(sizeof(((struct export_operations *)0)->fh_to_dentry));
 ], [
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_FH_TO_DENTRY, 1,
@@ -1449,11 +1448,9 @@ LB_LINUX_TRY_COMPILE([
         #include <linux/spinlock.h>
         #include <linux/fs_struct.h>
 ],[
-        struct path path;
         struct fs_struct fs;
 
-        fs.pwd = path;
-        memset(&fs, 0, sizeof(fs));
+        fs.pwd = *((struct path *)sizeof(fs));
 ], [
         AC_MSG_RESULT([yes])
         AC_DEFINE(HAVE_FS_STRUCT_USE_PATH, 1,
@@ -2064,8 +2061,7 @@ AC_DEFUN([LC_REQUEST_QUEUE_UNPLUG_FN],
 LB_LINUX_TRY_COMPILE([
         #include <linux/blkdev.h>
 ],[
-        struct request_queue rq;
-        memset(rq.unplug_fn, 0, sizeof(rq.unplug_fn));
+        do{ }while(sizeof(((struct request_queue *)0)->unplug_fn));
 ],[
         AC_DEFINE(HAVE_REQUEST_QUEUE_UNPLUG_FN, 1,
                   [request_queue has unplug_fn field])
