@@ -11,7 +11,7 @@ init_logging
 build_test_filter
 check_and_setup_lustre
 
-file_count=${file_count:-100000}
+file_count=${file_count:-150000}
 dir_count=${dir_count:-4}
 thrhi=${thrhi:-8}
 thrlo=${thrlo:-1}
@@ -26,24 +26,37 @@ if [ -z ${MDSSURVEY} ]; then
     skip_env "mds-survey not found" && exit
 fi
 
-# check for available inode, reduce to fit
-inode_per_thr=$((dir_count * file_count))
-require_inode=$((inode_per_thr * thrhi * 11/10))
-avail_inode=$($LFS df -i $MOUNT | grep "filesystem summary:"  | \
-    awk '{print $5}')
+adjust_inode() {
+    local require_inode=0
+    local avail_mdt_inode=0
+    local avail_ost_inode=0
 
-while [ $require_inode -ge $avail_inode  ]; do
-    echo "Require $require_inode inode to run, only have $avail_inode"
-    # reduce 20%
-    file_count=$((file_count * 8 / 10))
-    inode_per_thr=$((dir_count * file_count))
-    require_inode=$((inode_per_thr * thrhi * 11 / 10))
-done
+    require_inode=$((file_count * thrhi))
+    # get available inode for mdt
+    avail_mdt_inode=$($LFS df -i $MOUNT | grep "filesystem summary:"  | \
+        awk '{print $5}')
+    avail_mdt_inode=$((avail_mdt_inode * 9 / 10))
 
-if [ $require_inode -eq 0 ]; then
-    skip_env "Not enough inode to run" && exit
-fi
+    # get available inode for ost
+    for i in $($LFS df -i | grep ${FSNAME}-OST | awk '{print $4}'); do
+        avail_ost_inode=$((avail_ost_inode + i))
+    done
+    avail_ost_inode=$((avail_ost_inode * 9 / 10))
 
+    ((require_inode > avail_mdt_inode)) && require_inode=$avail_mdt_inode
+    ((require_inode > avail_ost_inode)) && require_inode=$avail_ost_inode
+
+    if ((require_inode == 0)); then
+        error "Fail to get the inode count"
+    fi
+    # convert it back to per thread inode
+    require_inode=$((require_inode / thrhi))
+
+    echo $require_inode
+}
+
+
+file_count=$(adjust_inode)
 ost_count=$($LCTL dl | grep -c osc)
 
 # first unmount all the lustre clients
@@ -60,19 +73,20 @@ mds_survey_run() {
     local layer=${1:-mdd}
     local stripe_count=${2:-0}
     local mds=$(facet_host $SINGLEMDS)
+    local rc=0
 
     rm -f ${TMP}/mds_survey*
 
     local target=$(get_target)
-    local cmd1="file_count=$file_count thrlo=$thrlo thrhi=$thrhi"
-    local cmd2="dir_count=$dir_count layer=$layer stripe_count=$stripe_count"
-    local cmd3="rslt_loc=${TMP} targets=\"$mds:$target\" $MDSSURVEY"
-    local cmd="$cmd1 $cmd2 $cmd3"
+    local cmd="file_count=$file_count thrlo=$thrlo thrhi=$thrhi"
+    local cmd+=" dir_count=$dir_count layer=$layer stripe_count=$stripe_count"
+    local cmd+=" rslt_loc=${TMP} targets=\"$mds:$target\" $MDSSURVEY"
 
     echo + $cmd
-    eval $cmd || error "mds-survey failed"
+    eval $cmd || rc=$?
     cat ${TMP}/mds_survey*
     rm -f ${TMP}/mds_survey*
+    ((rc == 0)) || error "mds-survey failed"
 }
 
 test_1() {
