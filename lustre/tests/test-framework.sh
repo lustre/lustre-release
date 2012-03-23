@@ -1116,12 +1116,14 @@ start_client_load() {
     eval export ${var}=$load
 
     do_node $client "PATH=$PATH MOUNT=$MOUNT ERRORS_OK=$ERRORS_OK \
-                              BREAK_ON_ERROR=$BREAK_ON_ERROR \
-                              END_RUN_FILE=$END_RUN_FILE \
-                              LOAD_PID_FILE=$LOAD_PID_FILE \
-                              TESTLOG_PREFIX=$TESTLOG_PREFIX \
-                              TESTNAME=$TESTNAME \
-                              run_${load}.sh" &
+BREAK_ON_ERROR=$BREAK_ON_ERROR \
+END_RUN_FILE=$END_RUN_FILE \
+LOAD_PID_FILE=$LOAD_PID_FILE \
+TESTLOG_PREFIX=$TESTLOG_PREFIX \
+TESTNAME=$TESTNAME \
+DBENCH_LIB=$DBENCH_LIB \
+DBENCH_SRC=$DBENCH_SRC \
+run_${load}.sh" &
     local ppid=$!
     log "Started client load: ${load} on $client"
 
@@ -4294,7 +4296,7 @@ destroy_pools () {
 
     echo destroy the created pools: ${!listvar}
     for poolname in ${!listvar//,/ }; do
-        destroy_pool $fsname.$poolname 
+        destroy_pool $fsname.$poolname
     done
 }
 
@@ -4309,6 +4311,13 @@ gather_logs () {
 
     local ts=$(date +%s)
     local docp=true
+
+    if [[ ! -f "$YAML_LOG" ]]; then
+        # init_logging is not performed before gather_logs,
+        # so the $LOGDIR needs to be checked here
+        check_shared_dir $LOGDIR && touch $LOGDIR/shared
+    fi
+
     [ -f $LOGDIR/shared ] && docp=false
 
     # dump lustre logs, dmesg
@@ -4674,20 +4683,24 @@ check_logdir() {
         # Not found. Create local logdir
         mkdir -p $dir
     else
-        touch $dir/node.$(hostname -s).yml
+        touch $dir/check_file.$(hostname -s)
     fi
     return 0
 }
 
 check_write_access() {
     local dir=$1
+    local node
+    local file
+
     for node in $(nodes_list); do
-        if [ ! -f "$dir/node.$(short_hostname ${node}).yml" ]; then
+        file=$dir/check_file.$(short_hostname $node)
+        if [[ ! -f "$file" ]]; then
             # Logdir not accessible/writable from this node.
             return 1
         fi
+        rm -f $file || return 1
     done
-    rm -f $dir/node.*.yml
     return 0
 }
 
