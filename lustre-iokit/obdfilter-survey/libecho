@@ -217,7 +217,7 @@ cleanup () {
     shift
     for ((i = 0; i < $ndevs; i++)); do
         host=${host_names[$i]}
-        if [ -n ${do_teardown_ec[$i]} ]; then
+        if [[ -n "${do_teardown_ec[$i]}" ]]; then
             teardown_ec_devno $host ${client_names[$i]}
         fi
     done
