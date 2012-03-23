@@ -1,4 +1,4 @@
-2012-03-14 Whamcloud, Inc.
+2012-03-23 Whamcloud, Inc.
        * version 2.2.0
        * See http://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix
        * Server support for kernels:
@@ -12,8 +12,11 @@
        * NFS export disabled when stack size < 8192 (32-bit Lustre clients),
          since the NFSv4 export of Lustre filesystem with 4K stack may cause a
          stack overflow. For more information, please refer to bugzilla 17630.
-       * NFSv4 reexport to 32-bit NFS client nodes requires Lustre client on
-         the re-exporting nodes to be mounted with "32bitapi" mount option
+       * NFS reexport requires Lustre client on the re-exporting nodes
+         to be mounted with "32bitapi" mount option
+       * MDS survey tool has a known problem of not deleting OST objects when
+         run in unlink mode, which might lead to unexpected space and inode
+	 shortage on OSTs in case of multiple runs.
 
 Severity   : enhancement
 Jira       : LU-1120
