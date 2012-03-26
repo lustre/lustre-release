@@ -1162,7 +1162,7 @@ static int filter_prep_groups(struct obd_device *obd)
                 rc = fsfilt_read_record(obd, filp, &filter->fo_last_objids[i],
                                         sizeof(__u64), &off);
                 if (rc) {
-                        CDEBUG(D_INODE,"OBD filter: error reading %s: rc %d\n",
+                        CERROR("OBD filter: error reading %s: rc %d\n",
                                name, rc);
                         GOTO(cleanup, rc);
                 }

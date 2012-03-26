@@ -1173,7 +1173,7 @@ out_free:
         if (err)
                 ll_put_super(sb);
         else
-                LCONSOLE_WARN("Client %s has started\n", profilenm);
+                LCONSOLE_WARN("Client %s(%p) mount complete\n", profilenm, sb);
 
         RETURN(err);
 } /* ll_fill_super */
@@ -1237,7 +1237,7 @@ void ll_put_super(struct super_block *sb)
 
         lustre_common_put_super(sb);
 
-        LCONSOLE_WARN("client %s umount complete\n", ll_instance);
+        LCONSOLE_WARN("client %s(%p) umount complete\n", profilenm, sb);
 
         cfs_module_put();
 

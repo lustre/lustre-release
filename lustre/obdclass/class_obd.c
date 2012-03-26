@@ -516,13 +516,7 @@ int init_obdclass(void)
         int lustre_register_fs(void);
 #endif
 
-#ifdef CRAY_XT3
         printk(KERN_INFO "Lustre: Build Version: "BUILD_VERSION"\n");
-#else
-        LCONSOLE_INFO("OBD class driver, http://wiki.whamcloud.com/\n");
-        LCONSOLE_INFO("    Lustre Version: "LUSTRE_VERSION_STRING"\n");
-        LCONSOLE_INFO("    Build Version: "BUILD_VERSION"\n");
-#endif
 
         spin_lock_init(&obd_types_lock);
         cfs_waitq_init(&obd_race_waitq);

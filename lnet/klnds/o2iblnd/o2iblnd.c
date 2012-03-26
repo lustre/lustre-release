@@ -2203,9 +2203,10 @@ kiblnd_dev_setup(kib_dev_t *ibdev)
         }
 
 out:
-        CDEBUG(D_CONSOLE, "Register global MR array, MR size: "
-                          LPX64", array size: %d\n",
-                          ibdev->ibd_mr_size, ibdev->ibd_nmrs);
+        if (ibdev->ibd_mr_size != ~0ULL || ibdev->ibd_nmrs != 1)
+                LCONSOLE_INFO("Register global MR array, MR size: "
+                              LPX64", array size: %d\n",
+                              ibdev->ibd_mr_size, ibdev->ibd_nmrs);
 
         list_add_tail(&ibdev->ibd_list,
                       &kiblnd_data.kib_devs);
