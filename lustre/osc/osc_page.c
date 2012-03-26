@@ -285,12 +285,6 @@ static void osc_page_putref_lock(const struct lu_env *env,
         cfs_atomic_dec(&olock->ols_pageref);
         opg->ops_lock = NULL;
 
-        /*
-         * Note: usually this won't be the last reference of the lock, but if
-         * it is, then all the lock_put do is at most just freeing some memory,
-         * so it would be OK that caller is holding spinlocks.
-         */
-        LASSERT(cfs_atomic_read(&lock->cll_ref) > 1 || olock->ols_hold == 0);
         cl_lock_put(env, lock);
 }
 
