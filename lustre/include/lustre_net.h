@@ -111,7 +111,9 @@
 
 /* Absolute limits */
 #define MDS_THREADS_MIN 2
+#ifndef MDS_THREADS_MAX
 #define MDS_THREADS_MAX 512
+#endif
 #define MDS_THREADS_MIN_READPAGE 2
 #define MDS_NBUFS       (64 * num_online_cpus())
 #define MDS_BUFSIZE     (8 * 1024)
