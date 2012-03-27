@@ -422,13 +422,17 @@ static inline __u64 lprocfs_stats_collector(struct lprocfs_stats *stats,
                                             int idx,
                                             enum lprocfs_fields_flags field)
 {
-        __u64 ret = 0;
-        int i;
+        __u64        ret = 0;
+        int          i;
+        unsigned int num_cpu;
 
         LASSERT(stats != NULL);
-        for (i = 0; i < cfs_num_possible_cpus(); i++)
+
+        num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU);
+        for (i = 0; i < num_cpu; i++)
                 ret += lprocfs_read_helper(&(stats->ls_percpu[i]->lp_cntr[idx]),
                                            field);
+        lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU);
         return ret;
 }
 
