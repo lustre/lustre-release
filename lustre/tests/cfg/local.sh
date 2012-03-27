@@ -46,7 +46,11 @@ TIMEOUT=${TIMEOUT:-20}
 PTLDEBUG=${PTLDEBUG:-0x33f0404}
 
 # promise 2MB for every cpu
-_debug_mb=$((($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1)*2))
+if [ -f /sys/devices/system/cpu/possible ]; then
+    _debug_mb=$((($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1)*2))
+else
+    _debug_mb=$(($(getconf _NPROCESSORS_CONF)*2))
+fi
 
 # but not less then 10Mb, and limited by 512Mb in libcfs
 if (( _debug_mb < 10 )); then
