@@ -452,26 +452,17 @@ static int do_statahead_interpret(struct ll_statahead_info *sai)
                  * revalidate.
                  */
                 if (!lu_fid_eq(&minfo->mi_data.op_fid2, &body->fid1)) {
-                        ll_unhash_aliases(dentry->d_inode);
+                        ll_invalidate_aliases(dentry->d_inode);
                         GOTO(out, rc = -EAGAIN);
                 }
 
                 rc = ll_revalidate_it_finish(req, it, dentry);
                 if (rc) {
-                        ll_unhash_aliases(dentry->d_inode);
+                        ll_invalidate_aliases(dentry->d_inode);
                         GOTO(out, rc);
                 }
 
-                cfs_spin_lock(&ll_lookup_lock);
-                spin_lock(&dcache_lock);
-                lock_dentry(dentry);
-                __d_drop(dentry);
-                dentry->d_flags &= ~DCACHE_LUSTRE_INVALID;
-                unlock_dentry(dentry);
-                d_rehash_cond(dentry, 0);
-                spin_unlock(&dcache_lock);
-                cfs_spin_unlock(&ll_lookup_lock);
-
+                d_lustre_revalidate(dentry);
                 ll_lookup_finish_locks(it, dentry);
         }
         EXIT;
