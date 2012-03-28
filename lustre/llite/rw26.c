@@ -260,6 +260,10 @@ ssize_t ll_direct_IO(int rw, struct file *file,
         oinfo.oi_oa = &oa;
         oinfo.oi_md = lsm;
 
+        /* need locking between buffered and direct access. and race with 
+         *size changing by concurrent truncates and writes. */
+        if (rw == READ)
+                LOCK_INODE_MUTEX(inode);
         for (seg = 0; seg < nr_segs; seg++) {
                 size_t iov_left = iov[seg].iov_len;
                 unsigned long user_addr = (unsigned long)iov[seg].iov_base;
@@ -339,9 +343,9 @@ out:
                 int rc;
 
                 rc = ptlrpc_set_wait(set);
-                if (unlikely(rc != 0)) {
-                        tot_bytes = rc;
-                } else if (rw == WRITE && locked) {
+                if (unlikely(rc != 0))
+                        GOTO(unlock_mutex, tot_bytes = rc);
+                if (rw == WRITE && locked) {
                         lov_stripe_lock(lsm);
                         obd_adjust_kms(ll_i2obdexp(inode),
                                        lsm, file_offset, 0);
@@ -350,6 +354,10 @@ out:
         } else {
                 tot_bytes = result;
         }
+unlock_mutex:
+        if (rw == READ)
+                UNLOCK_INODE_MUTEX(inode);
+
         ptlrpc_set_destroy(set);
         RETURN(tot_bytes);
 }
