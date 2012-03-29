@@ -175,6 +175,7 @@ extern const char orph_index_name[];
 
 extern const struct dt_index_features orph_index_features;
 
+struct lov_mds_md *mdd_max_lmm_buffer(const struct lu_env *env, int size);
 struct lov_mds_md *mdd_max_lmm_get(const struct lu_env *env,
                                    struct mdd_device *mdd);
 

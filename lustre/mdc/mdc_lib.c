@@ -328,7 +328,7 @@ void mdc_setattr_pack(struct ptlrpc_request *req, struct md_op_data *op_data,
         struct mdt_rec_setattr *rec;
         struct mdt_ioepoch *epoch;
         struct lov_user_md *lum = NULL;
-        
+
         CLASSERT(sizeof(struct mdt_rec_reint) ==sizeof(struct mdt_rec_setattr));
         rec = req_capsule_client_get(&req->rq_pill, &RMF_REC_REINT);
         mdc_setattr_pack_rec(rec, op_data);

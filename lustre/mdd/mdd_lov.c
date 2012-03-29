@@ -222,7 +222,8 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
                 *md_size = 0;
                 rc = 0;
         } else if (rc < 0) {
-                CERROR("Error %d reading eadata - %d\n", rc, *md_size);
+                CDEBUG(D_OTHER, "Error %d reading eadata - %d\n",
+                       rc, *md_size);
         } else {
                 /* XXX: Convert lov EA but fixed after verification test. */
                 *md_size = rc;
@@ -463,24 +464,23 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                 } else {
                         /* get lov ea from parent and set to lov */
                         struct lov_mds_md *_lmm;
-                        int _lmm_size;
+                        int _lmm_size = mdd_lov_mdsize(env, mdd);
 
                         LASSERT(parent != NULL);
 
-                        _lmm_size = mdd_lov_mdsize(env, mdd);
                         _lmm = mdd_max_lmm_get(env, mdd);
-
                         if (_lmm == NULL)
                                 GOTO(out_oti, rc = -ENOMEM);
 
                         rc = mdd_get_md_locked(env, parent, _lmm,
                                                &_lmm_size,
                                                XATTR_NAME_LOV);
-                        if (rc > 0)
+                        if (rc > 0) {
+                                _lmm_size = mdd_lov_mdsize(env, mdd);
                                 rc = obd_iocontrol(OBD_IOC_LOV_SETSTRIPE,
-                                                   lov_exp, *lmm_size,
+                                                   lov_exp, _lmm_size,
                                                    &lsm, _lmm);
-
+                        }
                         if (rc)
                                 GOTO(out_oti, rc);
                 }

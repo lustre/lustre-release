@@ -208,25 +208,35 @@ struct llog_cookie *mdd_max_cookie_get(const struct lu_env *env,
         return mti->mti_max_cookie;
 }
 
+struct lov_mds_md *mdd_max_lmm_buffer(const struct lu_env *env, int size)
+{
+        struct mdd_thread_info *mti = mdd_env_info(env);
+
+        if (unlikely(mti->mti_max_lmm_size < size)) {
+                int rsize = size_roundup_power2(size);
+
+                if (mti->mti_max_lmm_size > 0) {
+                        LASSERT(mti->mti_max_lmm);
+                        OBD_FREE_LARGE(mti->mti_max_lmm,
+                                       mti->mti_max_lmm_size);
+                        mti->mti_max_lmm = NULL;
+                        mti->mti_max_lmm_size = 0;
+                }
+
+                OBD_ALLOC_LARGE(mti->mti_max_lmm, rsize);
+                if (likely(mti->mti_max_lmm != NULL))
+                        mti->mti_max_lmm_size = rsize;
+        }
+        return mti->mti_max_lmm;
+}
+
 struct lov_mds_md *mdd_max_lmm_get(const struct lu_env *env,
                                    struct mdd_device *mdd)
 {
-        struct mdd_thread_info *mti = mdd_env_info(env);
-        int                     max_lmm_size;
+        int max_lmm_size;
 
         max_lmm_size = mdd_lov_mdsize(env, mdd);
-        if (unlikely(mti->mti_max_lmm_size < max_lmm_size)) {
-                if (mti->mti_max_lmm)
-                        OBD_FREE_LARGE(mti->mti_max_lmm, mti->mti_max_lmm_size);
-                mti->mti_max_lmm = NULL;
-                mti->mti_max_lmm_size = 0;
-        }
-        if (unlikely(mti->mti_max_lmm == NULL)) {
-                OBD_ALLOC_LARGE(mti->mti_max_lmm, max_lmm_size);
-                if (likely(mti->mti_max_lmm != NULL))
-                        mti->mti_max_lmm_size = max_lmm_size;
-        }
-        return mti->mti_max_lmm;
+        return mdd_max_lmm_buffer(env, max_lmm_size);
 }
 
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
@@ -613,6 +623,43 @@ static int is_rootdir(struct mdd_object *mdd_obj)
         return lu_fid_eq(&mdd_dev->mdd_root_fid, fid);
 }
 
+int mdd_big_lmm_get(const struct lu_env *env, struct mdd_object *obj,
+                    struct md_attr *ma)
+{
+        struct mdd_thread_info *info = mdd_env_info(env);
+        int size;
+        int rc;
+        ENTRY;
+
+        LASSERT(info != NULL);
+        LASSERT(ma->ma_lmm_size > 0);
+        LASSERT(ma->ma_big_lmm_used == 0);
+
+        rc = mdo_xattr_get(env, obj, &LU_BUF_NULL, XATTR_NAME_LOV,
+                           mdd_object_capa(env, obj));
+        if (rc < 0)
+                RETURN(rc);
+
+        /* big_lmm may need to grow */
+        size = rc;
+        mdd_max_lmm_buffer(env, size);
+        if (info->mti_max_lmm == NULL)
+                RETURN(-ENOMEM);
+
+        LASSERT(info->mti_max_lmm_size >= size);
+        rc = mdd_get_md(env, obj, info->mti_max_lmm, &size,
+                        XATTR_NAME_LOV);
+        if (rc < 0)
+                RETURN(rc);
+
+        ma->ma_big_lmm_used = 1;
+        ma->ma_valid |= MA_LOV;
+        ma->ma_lmm = info->mti_max_lmm;
+        ma->ma_lmm_size = size;
+        LASSERT(size == rc);
+        RETURN(rc);
+}
+
 /* get lov EA only */
 static int __mdd_lmm_get(const struct lu_env *env,
                          struct mdd_object *mdd_obj, struct md_attr *ma)
@@ -625,8 +672,11 @@ static int __mdd_lmm_get(const struct lu_env *env,
 
         rc = mdd_get_md(env, mdd_obj, ma->ma_lmm, &ma->ma_lmm_size,
                         XATTR_NAME_LOV);
-        if (rc == 0 && (ma->ma_need & MA_LOV_DEF) && is_rootdir(mdd_obj))
+        if (rc == -ERANGE)
+                rc = mdd_big_lmm_get(env, mdd_obj, ma);
+        else if (rc == 0 && (ma->ma_need & MA_LOV_DEF) && is_rootdir(mdd_obj))
                 rc = mdd_get_default_md(mdd_obj, ma->ma_lmm);
+
         if (rc > 0) {
                 ma->ma_lmm_size = rc;
                 ma->ma_layout_gen = ma->ma_lmm->lmm_layout_gen;
@@ -2337,7 +2387,6 @@ int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
         if (S_ISREG(mdd_object_type(obj))) {
                 /* Return LOV & COOKIES unconditionally here. We clean evth up.
                  * Caller must be ready for that. */
-
                 rc = __mdd_lmm_get(env, obj, ma);
                 if ((ma->ma_valid & MA_LOV))
                         rc = mdd_unlink_log(env, mdo2mdd(&obj->mod_obj),

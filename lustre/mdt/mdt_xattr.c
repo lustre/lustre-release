@@ -90,13 +90,11 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 RETURN(-EINVAL);
         }
 
-        if (size < 0) {
-                if (size == -ENODATA)
-                        size = 0;
-                else if (size != -EOPNOTSUPP) {
-                        CDEBUG(D_INFO, "Error geting EA size: %d\n", size);
-                        RETURN(size);
-                }
+        if (size == -ENODATA) {
+                size = 0;
+        } else if (size < 0) {
+                CERROR("Error geting EA size: %d\n", size);
+                RETURN(size);
         }
 
         if (info->mti_body->eadatasize != 0 &&
@@ -104,8 +102,7 @@ static int mdt_getxattr_pack_reply(struct mdt_thread_info * info)
                 RETURN(-ERANGE);
 
         req_capsule_set_size(pill, &RMF_EADATA, RCL_SERVER,
-                             min_t(int, size, info->mti_body->eadatasize));
-
+                             info->mti_body->eadatasize == 0 ? 0 : size);
         rc = req_capsule_server_pack(pill);
         if (rc) {
                 LASSERT(rc < 0);
@@ -169,6 +166,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         /* No need further getxattr. */
         if (easize == 0 || reqbody->eadatasize == 0)
                 GOTO(out, rc = easize);
+
 
         buf = &info->mti_buf;
         buf->lb_buf = req_capsule_server_get(info->mti_pill, &RMF_EADATA);
@@ -278,7 +276,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct md_ucred         *uc  = mdt_ucred(info);
         struct mdt_lock_handle  *lh;
-        struct req_capsule      *pill = info->mti_pill;
         const struct lu_env     *env  = info->mti_env;
         struct lu_buf           *buf  = &info->mti_buf;
         struct mdt_reint_record *rr   = &info->mti_rr;
@@ -287,8 +284,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         struct mdt_object       *obj;
         struct md_object        *child;
         __u64                    valid = attr->la_valid;
-        const char              *xattr_name;
-        int                      xattr_len = 0;
+        const char              *xattr_name = rr->rr_name;
+        int                      xattr_len = rr->rr_eadatalen;
         __u64                    lockpart;
         int                      rc;
         posix_acl_xattr_header  *new_xattr = NULL;
@@ -300,8 +297,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_SETXATTR))
                 RETURN(err_serious(-ENOMEM));
-
-        xattr_name = rr->rr_name;
 
         CDEBUG(D_INODE, "%s xattr %s\n",
                valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
@@ -320,11 +315,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                         GOTO(out, rc = err_serious(-EPERM));
         }
 
-        /* various sanity check for xattr name */
-        xattr_name = req_capsule_client_get(pill, &RMF_NAME);
-        if (!xattr_name)
-                GOTO(out, rc = err_serious(-EFAULT));
-
         if (strncmp(xattr_name, XATTR_USER_PREFIX,
                     sizeof(XATTR_USER_PREFIX) - 1) == 0) {
                 if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_XATTR))
@@ -341,8 +331,6 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                     strncmp(xattr_name, XATTR_NAME_ACL_DEFAULT,
                             sizeof(XATTR_NAME_ACL_DEFAULT) - 1) == 0)) {
                 /* currently lustre limit acl access size */
-                xattr_len = req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT);
-
                 if (xattr_len > LUSTRE_POSIX_ACL_MAX_SIZE)
                         GOTO(out, -ERANGE);
         }
@@ -382,18 +370,10 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         attr->la_valid = LA_CTIME;
         child = mdt_object_child(obj);
         if (valid & OBD_MD_FLXATTR) {
-                char * xattr;
+                char *xattr = (void *)rr->rr_eadata;
 
-                if (!req_capsule_field_present(pill, &RMF_EADATA, RCL_CLIENT)) {
-                        CDEBUG(D_INFO, "no xattr data supplied\n");
-                        GOTO(out_unlock, rc = -EFAULT);
-                }
-
-                xattr_len = req_capsule_get_size(pill, &RMF_EADATA, RCL_CLIENT);
-                if (xattr_len) {
+                if (xattr_len > 0) {
                         int flags = 0;
-
-                        xattr = req_capsule_client_get(pill, &RMF_EADATA);
 
                         if (valid & OBD_MD_FLRMTLSETFACL) {
                                 if (unlikely(!remote))

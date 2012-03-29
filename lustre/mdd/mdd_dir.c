@@ -2096,6 +2096,14 @@ static int mdd_create(const struct lu_env *env,
         }
         if (lmm && lmm_size > 0) {
                 /* Set Lov here, do not get lmm again later */
+                if (lmm_size > ma->ma_lmm_size) {
+                        /* Reply buffer is smaller, need bigger one */
+                        mdd_max_lmm_buffer(env, lmm_size);
+                        if (unlikely(info->mti_max_lmm == NULL))
+                                GOTO(cleanup, rc = -ENOMEM);
+                        ma->ma_lmm = info->mti_max_lmm;
+                        ma->ma_big_lmm_used = 1;
+                }
                 memcpy(ma->ma_lmm, lmm, lmm_size);
                 ma->ma_lmm_size = lmm_size;
                 ma->ma_valid |= MA_LOV;
