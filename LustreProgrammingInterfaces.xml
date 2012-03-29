@@ -25,8 +25,8 @@
     </section>
     <section remap="h3">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable that, when installed, is invoked to resolve a numeric UID to a group membership list. This utility should complete the <literal>mds_grp_downcall_data</literal> data structure (see <xref linkend="dbdoclet.50438291_33759"/>) and write it to the <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info</literal> pseudo-file.</para>
-      <para>For a sample upcall program, see <literal>lustre/utils/l_getgroups.c</literal> in the Lustre source distribution.</para>
+      <para>The group upcall file contains the path to an executable that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the releated <literal>identity_downcall_data</literal> data structure (see <xref linkend="dbdoclet.50438291_33759"/>). The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
+      <para>For a sample upcall program, see <literal>lustre/utils/l_getidentity.c</literal> in the Lustre source distribution.</para>
       <section remap="h4">
         <title>Primary and Secondary Groups</title>
         <para>The mechanism for the primary/secondary group is as follows:</para>
@@ -41,7 +41,7 @@
             <para>The default upcall is <literal>/usr/sbin/l_getidentity</literal>, which can interact with the user/group database to obtain UID/GID/suppgid. The user/group database depends on authentication configuration, and can be local <literal>/etc/passwd</literal>, NIS, LDAP, etc. If necessary, the administrator can use a parse utility to set <literal>/proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_upcall</literal>. If the upcall interface is set to NONE, then upcall is disabled. The MDS uses the UID/GID/suppgid supplied by the client.</para>
           </listitem>
           <listitem>
-            <para>The default group upcall is set by mkfs.lustre. Use <literal>tunefs.lustre --param</literal> or <literal>echo{path}&gt;/proc/fs/lustre/mds/{mdsname}/group_upcall</literal></para>
+              <para>The default group upcall is set by mkfs.lustre. Use <literal>tunefs.lustre --param</literal> or <literal>lctl set_param mdt.{mdtname}.identity_upcall={path}</literal></para>
           </listitem>
           <listitem>
             <para>The Lustre administrator can specify permissions for a specific UID by configuring <literal>/etc/lustre/perm.conf</literal> on the MDS. As commented in <literal>lustre/utils/l_getidentity.c</literal></para>
@@ -95,21 +95,21 @@
     </section>
   </section>
   <section xml:id="dbdoclet.50438291_73963">
-    <title><indexterm><primary>programming</primary><secondary>l_getgroups</secondary></indexterm><literal>l_getgroups</literal> Utility</title>
-    <para>The <literal>l_getgroups</literal> utility handles Lustre user/group cache upcall.</para>
+    <title><indexterm><primary>programming</primary><secondary>l_getidentity</secondary></indexterm><literal>l_getidentity</literal> Utility</title>
+    <para>The <literal>l_getidentity</literal> utility handles Lustre user/group cache upcall.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>l_getgroups [-v] [-d|mdsname] uid]
-l_getgroups [-v] -s</screen>
+      <screen>l_getidentity [-v] [-d|mdsname] uid]
+l_getidentity [-v] -s</screen>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable that, when properly installed, is invoked to resolve a numeric UID to a group membership list. This utility should complete the <literal>mds_grp_downcall_data</literal> data structure (see Data structures) and write it to the <literal>/proc/fs/lustre/mds/mds-service/group_info</literal> pseudo-file.</para>
-      <para>l_getgroups is the reference implementation of the user/group cache upcall.</para>
+      <para>The group upcall file contains the path to an executable that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the releated <literal>identity_downcall_data</literal> data structure (see <xref linkend='dbdoclet.50438291_33759'/>). The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
+      <para>l_getidentity is the reference implementation of the user/group cache upcall.</para>
     </section>
     <section remap="h5">
       <title>Files</title>
-      <para><literal>/proc/fs/lustre/mds/mds-service/group_upcall</literal></para>
+      <para><literal>/proc/fs/lustre/mdt/{mdt-name}/identity_upcall</literal></para>
     </section>
   </section>
 </chapter>

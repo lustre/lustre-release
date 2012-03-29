@@ -422,7 +422,7 @@ Mount type:        ldiskfs
 Flags:             0x75
    (MDT MGS first_time update )
 Persistent mount opts: errors=remount-ro,iopen_nopriv,user_xattr
-Parameters: mdt.group_upcall=/usr/sbin/l_getgroups
+Parameters: mdt.identity_upcall=/usr/sbin/l_getidentity
  
 checking for existing Lustre data: not found
 device size = 16MB
@@ -440,9 +440,9 @@ Writing CONFIGS/mountdata </screen>
           <screen>[root@mds /]# mount -t lustre /dev/sdb /mnt/mdt</screen>
           <para>This command generates this output:</para>
           <screen>Lustre: temp-MDT0000: new disk, initializing 
-Lustre: 3009:0:(lproc_mds.c:262:lprocfs_wr_group_upcall()) temp-MDT0000:
-group upcall set to /usr/sbin/l_getgroups
-Lustre: temp-MDT0000.mdt: set parameter group_upcall=/usr/sbin/l_getgroups
+Lustre: 3009:0:(lproc_mds.c:262:lprocfs_wr_identity_upcall()) temp-MDT0000:
+group upcall set to /usr/sbin/l_getidentity
+Lustre: temp-MDT0000.mdt: set parameter identity_upcall=/usr/sbin/l_getidentity
 Lustre: Server temp-MDT0000 on device /dev/sdb has started </screen>
         </listitem>
         <listitem xml:id="dbdoclet.50438267_pgfId-1291170">

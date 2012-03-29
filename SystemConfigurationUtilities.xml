@@ -141,7 +141,7 @@ l_getidentity</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable file that, when properly installed, is invoked to resolve a numeric UID to a group membership list. This utility should complete the mds_grp_downcall_data structure and write it to the /proc/fs/lustre/mdt/${FSNAME}-MDT{xxxx}/identity_info pseudo-file.</para>
+      <para>The group upcall file contains the path to an executable file that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the releated  <literal>identity_downcall_data</literal> structure (see <xref linkend='dbdoclet.50438291_33759'/>.) The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
       <para>The l_getidentity utility is the reference implementation of the user or group cache upcall.</para>
     </section>
     <section remap="h5">
@@ -219,7 +219,7 @@ quit</screen>
       <para>Many permanent parameters can be set with lctl conf_param. In general, lctl conf_param can be used to specify any parameter settable in a /proc/fs/lustre file, with its own OBD device. The lctl conf_param command uses this syntax:</para>
       <screen>&lt;obd|fsname&gt;.&lt;obdtype&gt;.&lt;proc_file_name&gt;=&lt;value&gt;) </screen>
       <para>For example:</para>
-      <screen>$ lctl conf_param testfs-MDT0000.mdt.group_upcall=NONE 
+      <screen>$ lctl conf_param testfs-MDT0000.mdt.identity_upcall=NONE
 $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
       <caution>
         <para>The lctlconf_param command permanently sets parameters in the file system configuration.</para>
@@ -2212,7 +2212,7 @@ tunefs.lustre</title>
       <para>With tunefs.lustre, parameters are &quot;additive&quot; -- new parameters are specified in addition to old parameters, they do not replace them. To erase all old tunefs.lustre parameters and just use newly-specified parameters, run:</para>
       <screen>$ tunefs.lustre --erase-params --param=&lt;new parameters&gt; </screen>
       <para>The tunefs.lustre command can be used to set any parameter settable in a /proc/fs/lustre file and that has its own OBD device, so it can be specified as &lt;obd|fsname&gt;.&lt;obdtype&gt;.&lt;proc_file_name&gt;=&lt;value&gt;. For example:</para>
-      <screen>$ tunefs.lustre --param mdt.group_upcall=NONE /dev/sda1</screen>
+      <screen>$ tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1</screen>
     </section>
     <section remap="h5">
       <title>Options</title>

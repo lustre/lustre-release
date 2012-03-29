@@ -204,7 +204,7 @@ ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=1 /dev
       <para>With <literal>tunefs.lustre</literal>, parameters are &quot;additive&quot; -- new parameters are specified in addition to old parameters, they do not replace them. To erase all old <literal>tunefs.lustre</literal> parameters and just use newly-specified parameters, run:</para>
       <screen>$ tunefs.lustre --erase-params --param=&lt;new parameters&gt; </screen>
       <para>The tunefs.lustre command can be used to set any parameter settable in a /proc/fs/lustre file and that has its own OBD device, so it can be specified as <literal>&lt;obd|fsname&gt;.&lt;obdtype&gt;.&lt;proc_file_name&gt;=&lt;value&gt;</literal>. For example:</para>
-      <screen>$ tunefs.lustre --param mdt.group_upcall=NONE /dev/sda1</screen>
+      <screen>$ tunefs.lustre --param mdt.identity_upcall=NONE /dev/sda1</screen>
       <para>For more details about <literal>tunefs.lustre</literal>, see <xref linkend="systemconfigurationutilities"/>.</para>
     </section>
     <section xml:id="dbdoclet.50438194_51490">
@@ -220,10 +220,10 @@ ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=1 /dev
         <screen>lctl set_param [-n] &lt;obdtype&gt;.&lt;obdname&gt;.&lt;proc_file_name&gt;=&lt;value&gt;</screen>
         <para>For example:</para>
         <screen># lctl set_param osc.*.max_dirty_mb=1024
-osc.myth-OST0000-osc.max_dirty_mb=32 
-osc.myth-OST0001-osc.max_dirty_mb=32 
-osc.myth-OST0002-osc.max_dirty_mb=32 
-osc.myth-OST0003-osc.max_dirty_mb=32 
+osc.myth-OST0000-osc.max_dirty_mb=32
+osc.myth-OST0001-osc.max_dirty_mb=32
+osc.myth-OST0002-osc.max_dirty_mb=32
+osc.myth-OST0003-osc.max_dirty_mb=32
 osc.myth-OST0004-osc.max_dirty_mb=32</screen>
       </section>
       <section xml:id="dbdoclet.50438194_64195">
@@ -232,11 +232,11 @@ osc.myth-OST0004-osc.max_dirty_mb=32</screen>
         <screen>&lt;obd|fsname&gt;.&lt;obdtype&gt;.&lt;proc_file_name&gt;=&lt;value&gt;) </screen>
         <para>Here are a few examples of <literal>lctl conf_param</literal> commands:</para>
         <screen>$ mgs&gt; lctl conf_param testfs-MDT0000.sys.timeout=40
-$ lctl conf_param testfs-MDT0000.mdt.group_upcall=NONE 
-$ lctl conf_param testfs.llite.max_read_ahead_mb=16 
-$ lctl conf_param testfs-MDT0000.lov.stripesize=2M 
-$ lctl conf_param testfs-OST0000.osc.max_dirty_mb=29.15 
-$ lctl conf_param testfs-OST0000.ost.client_cache_seconds=15 
+$ lctl conf_param testfs-MDT0000.mdt.identity_upcall=NONE
+$ lctl conf_param testfs.llite.max_read_ahead_mb=16
+$ lctl conf_param testfs-MDT0000.lov.stripesize=2M
+$ lctl conf_param testfs-OST0000.osc.max_dirty_mb=29.15
+$ lctl conf_param testfs-OST0000.ost.client_cache_seconds=15
 $ lctl conf_param testfs.sys.timeout=40 </screen>
         <caution>
           <para>Parameters specified with the <literal>lctl conf_param</literal> command are set permanently in the file system&apos;s configuration file on the MGS.</para>
@@ -257,7 +257,7 @@ $ lctl conf_param testfs.sys.timeout=40 </screen>
         <para>To report current Lustre parameter values, use the <literal>lctl get_param</literal> command with this syntax:</para>
         <screen>lctl get_param [-n] &lt;obdtype&gt;.&lt;obdname&gt;.&lt;proc_file_name&gt;</screen>
         <para>This example reports data on RPC service times.</para>
-        <screen>$ lctl get_param -n ost.*.ost_io.timeouts 
+        <screen>$ lctl get_param -n ost.*.ost_io.timeouts
 service : cur 1 worst 30 (at 1257150393, 85d23h58m54s ago) 1 1 1 1 </screen>
         <para>This example reports the amount of space this client has reserved for writeback cache with each OST:</para>
         <screen># lctl get_param osc.*.cur_grant_bytes
@@ -369,7 +369,7 @@ s as above&gt;; cd /mnt/mds_new; setfattr \--restore=/tmp/mdsea</screen>
         <para>The command output is:</para>
         <screen>debugfs 1.41.5.sun2 (23-Apr-2009)
 /dev/lustre/ost_test2: catastrophic mode - not reading inode or group bitma\
-ps 
+ps
 Inode: 352365   Type: regular    Mode:  0666   Flags: 0x80000
 Generation: 1574463214    Version: 0xea020000:00000000
 User:   500   Group:   500   Size: 260096
@@ -381,7 +381,7 @@ atime: 0x4a216b48:00000000 -- Sat May 30 13:22:16 2009
 mtime: 0x4a216b48:00000000 -- Sat May 30 13:22:16 2009
 crtime: 0x4a216b3c:975870dc -- Sat May 30 13:22:04 2009
 Size of extra inode fields: 24
-Extended attributes stored in inode body: 
+Extended attributes stored in inode body:
 fid = &quot;e2 00 11 00 00 00 00 00 25 43 c1 87 00 00 00 00 a0 88 00 00 00 00 00 \
 00 00 00 00 00 00 00 00 00 &quot; (32)
 BLOCKS:
@@ -392,10 +392,10 @@ TOTAL: 64</screen>
         <para>Note the FID&apos;s EA and apply it to the <literal>osd_inode_id</literal> mapping.</para>
         <para>In this example, the FID&apos;s EA is:</para>
         <screen>e2001100000000002543c18700000000a0880000000000000000000000000000
-struct osd_inode_id { 
-__u64 oii_ino; /* inode number */ 
-__u32 oii_gen; /* inode generation */ 
-__u32 oii_pad; /* alignment padding */ 
+struct osd_inode_id {
+__u64 oii_ino; /* inode number */
+__u32 oii_gen; /* inode generation */
+__u32 oii_pad; /* alignment padding */
 };</screen>
         <para>After swapping, you get an inode number of <literal>0x001100e2</literal> and generation of <literal>0</literal>.</para>
       </listitem>

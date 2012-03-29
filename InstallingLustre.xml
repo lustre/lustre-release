@@ -313,7 +313,7 @@ Environmental Requirements</title>
               <emphasis role="italic">
                 <emphasis>(Required)</emphasis>
               </emphasis>
-            </emphasis><emphasis role="bold"> Maintain uniform user and group databases on all cluster nodes</emphasis> . Use the same user IDs (UID) and group IDs (GID) on all clients. If use of supplemental groups is required, verify that the group_upcall requirements have been met. See <xref linkend="dbdoclet.50438291_32926"/>.</para>
+            </emphasis><emphasis role="bold"> Maintain uniform user and group databases on all cluster nodes</emphasis> . Use the same user IDs (UID) and group IDs (GID) on all clients. If use of supplemental groups is required, verify that the identity_upcall requirements have been met. See <xref linkend="dbdoclet.50438291_32926"/>.</para>
         </listitem>
         <listitem>
           <para><emphasis role="bold">

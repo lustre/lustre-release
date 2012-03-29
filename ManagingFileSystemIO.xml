@@ -1,5 +1,5 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingfilesystemio">
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="managingfilesystemio">
   <title xml:id="managingfilesystemio.title">Managing the File System and I/O</title>
   <para>This chapter describes file striping and I/O options, and includes the following sections:</para>
   <itemizedlist>

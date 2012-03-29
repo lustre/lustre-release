@@ -1,42 +1,31 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<book version="5.0" xml:lang="en-US" xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xmlns:xi="http://www.w3.org/2001/XInclude">
-
+<?xml version='1.0' encoding='UTF-8'?>
+<!-- This document was created with Syntext Serna Free. -->
+<book xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" xmlns:xi="http://www.w3.org/2001/XInclude" version="5.0" xml:lang="en-US">
   <info>
-      <title>Lustre 2.x Filesystem</title>
+    <title>Lustre 2.x Filesystem</title>
     <subtitle>Operations Manual</subtitle>
-
     <copyright>
-        <year>2010</year>
-        <year>2011</year>
-        <holder>Oracle and/or its affiliates. (The original version of this Operations Manual without the Whamcloud modifications.)</holder>
-        </copyright>
-    <copyright>
-        <year>2011</year>
-        <holder>Whamcloud, Inc. (Whamcloud modifications to the original version of this Operations Manual.)</holder>
+      <year>2010</year>
+      <year>2011</year>
+      <holder>Oracle and/or its affiliates. (The original version of this Operations Manual without the Whamcloud modifications.)</holder>
     </copyright>
-
-    <legalnotice><para>Notwithstanding Whamcloud’s ownership of the copyright in the modifications to the original version of this Operations Manual, as between Whamcloud and Oracle, Oracle and/or its affiliates retain sole ownership of the copyright in the unmodified portions of this Operations Manual.</para></legalnotice>
-
-    <xi:include href="legalnoticeWhamcloud.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
-    <xi:include href="legalnoticeOracle.xml" xmlns:xi="http://www.w3.org/2001/XInclude"/>
+    <copyright>
+      <year>2011</year>
+      <holder>Whamcloud, Inc. (Whamcloud modifications to the original version of this Operations Manual.)</holder>
+    </copyright>
+    <legalnotice>
+      <para>Notwithstanding Whamcloud’s ownership of the copyright in the modifications to the original version of this Operations Manual, as between Whamcloud and Oracle, Oracle and/or its affiliates retain sole ownership of the copyright in the unmodified portions of this Operations Manual.</para>
+    </legalnotice>
+    <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="legalnoticeWhamcloud.xml"/>
+     <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="legalnoticeOracle.xml"/>
   </info>
-
-
-  <xi:include href="Preface.xml" />
-
-  <xi:include href="I_LustreIntro.xml" />
-
-  <xi:include href="II_LustreInstallConfig.xml" />
-
-  <xi:include href="III_LustreAdministration.xml" />
-
-  <xi:include href="IV_LustreTuning.xml" />
-
-  <xi:include href="V_LustreTroubleshooting.xml" />
-
-  <xi:include href="VI_Reference.xml" />
-
-  <xi:include href="Glossary.xml" />
-
-  <xi:include href="ix.xml" />
+  <xi:include href="Preface.xml"/>
+   <xi:include href="I_LustreIntro.xml"/>
+   <xi:include href="II_LustreInstallConfig.xml"/>
+   <xi:include href="III_LustreAdministration.xml"/>
+   <xi:include href="IV_LustreTuning.xml"/>
+   <xi:include href="V_LustreTroubleshooting.xml"/>
+   <xi:include href="VI_Reference.xml"/>
+   <xi:include href="Glossary.xml"/>
+   <xi:include href="ix.xml"/>
 </book>
