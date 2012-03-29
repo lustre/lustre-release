@@ -20,7 +20,10 @@ LFS=${LFS:-lfs}
 
 usage() {
     cat -- <<USAGE 1>&2
-usage: lfs_migrate [-h] [-l] [-n] [-R] [-s] [-y] [file|dir ...]
+usage: lfs_migrate [-c <stripe_count>] [-h] [-l] [-n] [-q] [-R] [-s] [-y]
+                   [file|dir ...]
+    -c <stripe_count>
+       restripe file using the specified stripe count
     -h show this usage message
     -l migrate files with hard links (skip by default)
     -n only print the names of files to be migrated
@@ -29,20 +32,24 @@ usage: lfs_migrate [-h] [-l] [-n] [-R] [-s] [-y] [file|dir ...]
     -s skip file data comparison after migrate
     -y answer 'y' to usage question
 
+The -c <stripe_count> option may not be specified at the same time as
+the -R option.
+
 If a directory is an argument, all files in the directory are migrated.
 If no file/directory is given, the file list is read from standard input.
 
-e.g.: lfs_migrate /mnt/lustre/file
+e.g.: lfs_migrate /mnt/lustre/dir
       lfs find /test -O test-OST0004 -size +4G | lfs_migrate -y
 USAGE
     exit 1
 }
 
 OPT_CHECK=y
+OPT_STRIPE_COUNT=""
 
-while getopts "chlnqRsy" opt $*; do
+while getopts "c:hlnqRsy" opt $*; do
     case $opt in
-	c) echo "'-c' option deprecated, checking enabled by default" 1>&2;;
+	c) OPT_STRIPE_COUNT=$OPTARG;;
 	l) OPT_NLINK=y;;
 	n) OPT_DRYRUN=n; OPT_YES=y;;
 	q) ECHO=:;;
@@ -53,6 +60,13 @@ while getopts "chlnqRsy" opt $*; do
     esac
 done
 shift $((OPTIND - 1))
+
+if [ "$OPT_STRIPE_COUNT" -a "$OPT_RESTRIPE" ]; then
+	echo ""
+	echo "$(basename $0) error: The -c <stripe_count> option may not" 1>&2
+	echo "be specified at the same time as the -R option." 1>&2
+	exit 1
+fi
 
 if [ -z "$OPT_YES" ]; then
 	echo ""
@@ -112,8 +126,12 @@ lfs_migrate() {
 		# (i.e. before the file data, so that it preserves striping)
 		# then we don't need to do this getstripe/mktemp stuff.
 			UNLINK="-u"
-			COUNT=$($LFS getstripe -c "$OLDNAME" 2> /dev/null)
+
+			[ "$OPT_STRIPE_COUNT" ] && COUNT=$OPT_STRIPE_COUNT ||
+				COUNT=$($LFS getstripe -c "$OLDNAME" \
+					2> /dev/null)
 			SIZE=$($LFS getstripe -S "$OLDNAME" 2> /dev/null)
+
 			[ -z "$COUNT" -o -z "$SIZE" ] && UNLINK=""
 		fi
 		NEWNAME=$(mktemp $UNLINK "$OLDNAME.tmp.XXXXXX")

@@ -3775,6 +3775,104 @@ test_56v() {
 }
 run_test 56v "check 'lfs find -mdt match with lfs getstripe -M' ======="
 
+# Get and check the actual stripe count of one file.
+# Usage: check_stripe_count <file> <expected_stripe_count>
+check_stripe_count() {
+    local file=$1
+    local expected=$2
+    local actual
+
+    [[ -z "$file" || -z "$expected" ]] &&
+        error "check_stripe_count: invalid argument!"
+
+    local cmd="$GETSTRIPE -c $file"
+    actual=$($cmd) || error "$cmd failed"
+    actual=${actual%% *}
+
+    if [[ $actual -ne $expected ]]; then
+        [[ $expected -eq -1 ]] ||
+            error "$cmd wrong: found $actual, expected $expected"
+        [[ $actual -eq $OSTCOUNT ]] ||
+            error "$cmd wrong: found $actual, expected $OSTCOUNT"
+    fi
+}
+
+test_56w() {
+    TDIR=$DIR/${tdir}w
+
+    rm -rf $TDIR || error "remove $TDIR failed"
+    setup_56 $NUMFILES $NUMDIRS "-c $OSTCOUNT"
+
+    local stripe_size
+    stripe_size=$($GETSTRIPE -S -d $TDIR) ||
+        error "$GETSTRIPE -S -d $TDIR failed"
+    stripe_size=${stripe_size%% *}
+
+    local file_size=$((stripe_size * OSTCOUNT))
+    local file_num=$((NUMDIRS * NUMFILES + NUMFILES))
+    local required_space=$((file_num * file_size))
+    local free_space=$($LCTL get_param -n lov.$LOVNAME.kbytesavail)
+    [[ $free_space -le $((required_space / 1024)) ]] &&
+        skip_env "need at least $required_space bytes free space," \
+                 "have $free_space kbytes" && return
+
+    local dd_bs=65536
+    local dd_count=$((file_size / dd_bs))
+
+    # write data into the files
+    local i
+    local j
+    local file
+    for i in $(seq 1 $NUMFILES); do
+        file=$TDIR/file$i
+        yes | dd bs=$dd_bs count=$dd_count of=$file >/dev/null 2>&1 ||
+            error "write data into $file failed"
+    done
+    for i in $(seq 1 $NUMDIRS); do
+        for j in $(seq 1 $NUMFILES); do
+            file=$TDIR/dir$i/file$j
+            yes | dd bs=$dd_bs count=$dd_count of=$file \
+                >/dev/null 2>&1 ||
+                error "write data into $file failed"
+        done
+    done
+
+    local expected=-1
+    [[ $OSTCOUNT -gt 1 ]] && expected=$((OSTCOUNT - 1))
+
+    # lfs_migrate file
+    local cmd="$LFS_MIGRATE -y -c $expected $TDIR/file1"
+    echo "$cmd"
+    eval $cmd || error "$cmd failed"
+
+    check_stripe_count $TDIR/file1 $expected
+
+    # lfs_migrate dir
+    cmd="$LFS_MIGRATE -y -c $expected $TDIR/dir1"
+    echo "$cmd"
+    eval $cmd || error "$cmd failed"
+
+    for j in $(seq 1 $NUMFILES); do
+        check_stripe_count $TDIR/dir1/file$j $expected
+    done
+
+    # lfs_migrate works with lfs find
+    cmd="$LFIND -stripe_count $OSTCOUNT -type f $TDIR |
+         $LFS_MIGRATE -y -c $expected"
+    echo "$cmd"
+    eval $cmd || error "$cmd failed"
+
+    for i in $(seq 2 $NUMFILES); do
+        check_stripe_count $TDIR/file$i $expected
+    done
+    for i in $(seq 2 $NUMDIRS); do
+        for j in $(seq 1 $NUMFILES); do
+            check_stripe_count $TDIR/dir$i/file$j $expected
+        done
+    done
+}
+run_test 56w "check lfs_migrate -c stripe_count works"
+
 test_57a() {
 	# note test will not do anything if MDS is not local
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return

@@ -4,9 +4,11 @@
 \- simple tool to migrate files between Lustre OSTs
 .SH SYNOPSIS
 .B lfs_migrate
+.RB [ -c <stripe_count> ]
 .RB [ -h ]
 .RB [ -l ]
 .RB [ -n ]
+.RB [ -q ]
 .RB [ -R ]
 .RB [ -s ]
 .RB [ -y ]
@@ -55,6 +57,10 @@ directory (potentially changing the stripe count, stripe size, OST pool,
 or OST index of a new file).
 .SH OPTIONS
 .TP
+.B \\-c <stripe_count>
+Restripe file using the specified stripe count. This option may not be
+specified at the same time as the -R option.
+.TP
 .B \\-h
 Display help information.
 .TP
@@ -72,6 +78,7 @@ Run quietly (don't print filenames or status)
 .TP
 .B \\-R
 Restripe file using default directory striping instead of keeping striping.
+This option may not be specified at the same time as the -c option.
 .TP
 .B \\-s
 skip file data comparison after migrate.  Default is to compare migrated file
@@ -83,7 +90,7 @@ Answer 'y' to usage warning without prompting (for scripts, use with caution).
 To rebalance all files within
 .IR /mnt/lustre/dir :
 .IP
-lfs_migrate /mnt/lustre/file
+lfs_migrate /mnt/lustre/dir
 .PP
 To migrate files within the
 .I /test

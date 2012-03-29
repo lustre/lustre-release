@@ -189,7 +189,11 @@ init_test_env() {
     [ ! -f "$TUNEFS" ] && export TUNEFS=$(which tunefs.lustre)
     export CHECKSTAT="${CHECKSTAT:-"checkstat -v"} "
     export LUSTRE_RMMOD=${LUSTRE_RMMOD:-$LUSTRE/scripts/lustre_rmmod}
-    [ ! -f "$LUSTRE_RMMOD" ] && export LUSTRE_RMMOD=$(which lustre_rmmod 2> /dev/null)
+    [ ! -f "$LUSTRE_RMMOD" ] &&
+        export LUSTRE_RMMOD=$(which lustre_rmmod 2> /dev/null)
+    export LFS_MIGRATE=${LFS_MIGRATE:-$LUSTRE/scripts/lfs_migrate}
+    [ ! -f "$LFS_MIGRATE" ] &&
+        export LFS_MIGRATE=$(which lfs_migrate 2> /dev/null)
     export FSTYPE=${FSTYPE:-"ldiskfs"}
     export NAME=${NAME:-local}
     export LGSSD=${LGSSD:-"$LUSTRE/utils/gss/lgssd"}
