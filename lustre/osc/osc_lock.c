@@ -836,8 +836,7 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
 
         env = cl_env_nested_get(&nest);
         if (!IS_ERR(env)) {
-                /*
-                 * osc_ast_data_get() has to go after environment is
+                /* osc_ast_data_get() has to go after environment is
                  * allocated, because osc_ast_data() acquires a
                  * reference to a lock, and it can only be released in
                  * environment.
@@ -845,7 +844,12 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
                 olck = osc_ast_data_get(dlmlock);
                 if (olck != NULL) {
                         lock = olck->ols_cl.cls_lock;
-                        cl_lock_mutex_get(env, lock);
+                        /* Do not grab the mutex of cl_lock for glimpse.
+                         * See LU-1274 for details.
+                         * BTW, it's okay for cl_lock to be cancelled during
+                         * this period because server can handle this race.
+                         * See ldlm_server_glimpse_ast() for details.
+                         * cl_lock_mutex_get(env, lock); */
                         cap = &req->rq_pill;
                         req_capsule_extend(cap, &RQF_LDLM_GL_CALLBACK);
                         req_capsule_set_size(cap, &RMF_DLM_LVB, RCL_SERVER,
@@ -856,7 +860,6 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
                                 obj = lock->cll_descr.cld_obj;
                                 result = cl_object_glimpse(env, obj, lvb);
                         }
-                        cl_lock_mutex_put(env, lock);
                         osc_ast_data_put(env, olck);
                 } else {
                         /*
