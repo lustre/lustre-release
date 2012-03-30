@@ -412,9 +412,7 @@ else
 		LB_LINUX_TRY_COMPILE([
 		        #include <linux/version.h>
 		        #include <linux/pci.h>
-		        #if !HAVE_GFP_T
-		        typedef int gfp_t;
-		        #endif
+			#include <linux/gfp.h>
 		        #include <rdma/rdma_cm.h>
 		        #include <rdma/ib_cm.h>
 		        #include <rdma/ib_verbs.h>
