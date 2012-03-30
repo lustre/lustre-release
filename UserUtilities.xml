@@ -34,49 +34,51 @@ lfs changelog [--follow] &lt;mdtname&gt; [startrec [endrec]]
 lfs changelog_clear &lt;mdtname&gt; &lt;id&gt; &lt;endrec&gt;
 lfs check &lt;mds|osts|servers&gt;
 lfs df [-i] [-h] [--pool]-p &lt;fsname&gt;[.&lt;pool&gt;] [path]
-lfs find [[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N] 
-   [[!] --ctime|-C [-+]N] [--maxdepth|-D N] [--name|-n &lt;pattern&gt;]
-   [--print|-p] [--print0|-P] [[!] --obd|-O &lt;uuid[s]&gt;] 
-   [[!] --size|-S [+-]N[kMGTPE]] --type |-t {bcdflpsD}]
-   [[!] --gid|-g|--group|-G &lt;gname&gt;|&lt;gid&gt;]
-   [[!] --uid|-u|--user|-U &lt;uname&gt;|&lt;uid&gt;]
-   &lt;dirname|filename&gt;
-lfs getstripe [--obd|-O &lt;uuid&gt;] [--quiet|-q] [--verbose|-v]
-                   [--count|-c] [--index|-i | --offset|-o]
-                   [--size|-s] [--pool|-p] [--directory|-d]
-                   [--recursive|-r] &lt;dirname|filename&gt; ...
+lfs find [[!] --atime|-A [-+]N] [[!] --mtime|-M [-+]N]
+         [[!] --ctime|-C [-+]N] [--maxdepth|-D N] [--name|-n &lt;pattern&gt;]
+         [--print|-p] [--print0|-P] [[!] --obd|-O &lt;uuid[s]&gt;]
+         [[!] --size|-S [+-]N[kMGTPE]] --type |-t {bcdflpsD}]
+         [[!] --gid|-g|--group|-G &lt;gname&gt;|&lt;gid&gt;]
+         [[!] --uid|-u|--user|-U &lt;uname&gt;|&lt;uid&gt;]
+         &lt;dirname|filename&gt;
 lfs getname [-h]|[path...]
+lfs getstripe [--obd|-O &lt;uuid&gt;] [--quiet|-q] [--verbose|-v]
+              [--count|-c] [--index|-i | --offset|-o]
+              [--size|-s] [--pool|-p] [--directory|-d]
+              [--recursive|-r] [--raw|-R] &lt;dirname|filename&gt; ...
+lfs setstripe [--size|-s stripe_size] [--count|-c stripe_cnt]
+              [--index|-i|--offset|-o start_ost_index]
+              [--pool|-p &lt;pool&gt;]
+              &lt;dirname|filename&gt;
+lfs setstripe -d &lt;dir&gt;
 lfs osts [path]
 lfs poollist &lt;filesystem&gt;[.&lt;pool&gt;]|&lt;pathname&gt;
-lfs quota [-q] [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u &lt;uname&gt;| -u &lt;uid&gt;|-g &lt;gname&gt;| -g &lt;gid&gt;] &lt;filesystem&gt;
+lfs quota [-q] [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx]
+          [-u &lt;uname&gt;|-u &lt;uid&gt;|-g &lt;gname&gt;|-g &lt;gid&gt;]
+          &lt;filesystem&gt;
 lfs quota -t &lt;-u|-g&gt; &lt;filesystem&gt;
 lfs quotacheck [-ug] &lt;filesystem&gt;
 lfs quotachown [-i] &lt;filesystem&gt;
 lfs quotainv [-ug] [-f] &lt;filesystem&gt;
 lfs quotaon [-ugf] &lt;filesystem&gt;
 lfs quotaoff [-ug] &lt;filesystem&gt;
-lfs setquota               &lt;-u|--user|-g|--group&gt; &lt;uname|uid|gname|gid&gt;
-                   [--block-softlimit &lt;block-softlimit&gt;]
-                   [--block-hardlimit &lt;block-hardlimit&gt;]
-                   [--inode-softlimit &lt;inode-softlimit&gt;]
-                   [--inode-hardlimit &lt;inode-hardlimit&gt;]
-                   &lt;filesystem&gt;
 lfs setquota &lt;-u|--user|-g|--group&gt; &lt;uname|uid|gname|gid&gt;
-           [-b &lt;block-softlimit&gt;] [-B &lt;block-hardlimit&gt;]
-           [-i &lt;inode-softlimit&gt;] [-I &lt;inode-hardlimit&gt;] 
-           &lt;filesystem&gt;
+             [--block-softlimit &lt;block-softlimit&gt;]
+             [--block-hardlimit &lt;block-hardlimit&gt;]
+             [--inode-softlimit &lt;inode-softlimit&gt;]
+             [--inode-hardlimit &lt;inode-hardlimit&gt;]
+             &lt;filesystem&gt;
+lfs setquota &lt;-u|--user|-g|--group&gt; &lt;uname|uid|gname|gid&gt;
+             [-b &lt;block-softlimit&gt;] [-B &lt;block-hardlimit&gt;]
+             [-i &lt;inode-softlimit&gt;] [-I &lt;inode-hardlimit&gt;]
+             &lt;filesystem&gt;
 lfs setquota -t &lt;-u|-g&gt;
-           [--block-grace &lt;block-grace&gt;]
-           [--inode-grace &lt;inode-grace&gt;]
-           &lt;filesystem&gt;
+             [--block-grace &lt;block-grace&gt;]
+             [--inode-grace &lt;inode-grace&gt;]
+             &lt;filesystem&gt;
 lfs setquota -t &lt;-u|-g&gt;
-           [-b &lt;block-grace&gt;] [-i &lt;inode-grace&gt;]
-           &lt;filesystem&gt;
-lfs setstripe              [--size|-s stripe_size] [--count|-c stripe_cnt] 
-           [--index|-i|--offset|-o start_ost_index] 
-           [--pool|-p &lt;pool&gt;]
-           &lt;dirname|filename&gt;
-lfs setstripe -d &lt;dir&gt;
+             [-b &lt;block-grace&gt;] [-i &lt;inode-grace&gt;]
+             &lt;filesystem&gt;
 lfs help
 </screen>
       <note>
@@ -305,6 +307,7 @@ lfs help
               <entry>
                 <para>Lists striping information for a given filename or directory. By default, the stripe count, stripe size and offset are returned.</para>
                 <para>If you only want specific striping information, then the options of <literal>--count</literal>,<literal>--size</literal>,<literal>--index</literal> or <literal>--offset</literal> plus various combinations of these options can be used to retrieve specific information.</para>
+                <para>If the <literal>--raw</literal> option is specified, the stripe information is printed without substituting the filesystem's default values for unspecified fields. If the striping EA is not set, 0, 0, and -1 will be printed for the stripe count, size, and offset respectively.</para>
               </entry>
             </row>
             <row>
