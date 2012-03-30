@@ -4,37 +4,37 @@
   <para>Once you have the Lustre file system up and running, you can use the procedures in this section to perform these basic Lustre maintenance tasks:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_42877"/>Working with Inactive OSTs</para>
+      <para><xref linkend="dbdoclet.50438199_42877"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_15240"/>Finding Nodes in the Lustre File System</para>
+      <para><xref linkend="dbdoclet.50438199_15240"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_26070"/>Mounting a Server Without Lustre Service</para>
+      <para><xref linkend="dbdoclet.50438199_26070"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_54623"/>Regenerating Lustre Configuration Logs</para>
+      <para><xref linkend="dbdoclet.50438199_54623"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_31353"/>Changing a Server NID</para>
+      <para><xref linkend="dbdoclet.50438199_31353"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_22527"/>Adding a New OST to a Lustre File System</para>
+      <para><xref linkend="dbdoclet.50438199_22527"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_14978"/>Removing and Restoring OSTs</para>
+      <para><xref linkend="dbdoclet.50438199_14978"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_77819"/>Aborting Recovery</para>
+      <para><xref linkend="dbdoclet.50438199_77819"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_12607"/>Determining Which Machine is Serving an OST</para>
+      <para><xref linkend="dbdoclet.50438199_12607"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438199_62333"/>Changing the Address of a Failover Node</para>
+      <para><xref linkend="dbdoclet.50438199_62333"/></para>
     </listitem>
     <listitem>
-      <para> </para>
+      <para><xref linkend="dbdoclet.50438199_62545"/></para>
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438199_42877">
@@ -51,6 +51,7 @@
     <note>
       <para>A colon-separated list can also be specified. For example, <literal>exclude=testfs-OST0000:testfs-OST0001</literal>.</para>
     </note>
+    </section>
     <section xml:id="dbdoclet.50438199_15240">
       <title><indexterm><primary>maintance</primary><secondary>finding nodes</secondary></indexterm>
 Finding Nodes in the Lustre File System</title>
@@ -496,5 +497,46 @@ Changing the Address of a Failover Node</title>
 	      <screen>tunefs.lustre --erase-params --servicenode=&lt;NID&gt; &lt;device&gt; </screen>
       </para>
     </section>
-  </section>
+    <section xml:id="dbdoclet.50438199_62545">
+      <title><indexterm><primary>maintance</primary><secondary>separate a combined MGS/MDT</secondary></indexterm>
+Separate a combined MGS/MDT</title>
+      <para>These instructions assume the MGS node will be the same as the MDS node. For instructions on how to move MGS to a different node, see <xref linkend="dbdoclet.50438199_31353"/>.</para>
+      <para>These instructions are for doing the split without shutting down other servers and clients.</para>
+      <orderedlist>
+        <listitem>
+          <para>Stop the MDS.</para>
+          <para>Unmount the MDT</para>
+	      <screen>umount -f &lt;device&gt; </screen>
+        </listitem>
+        <listitem>
+          <para>Create the MGS.</para>
+	      <screen>mkfs.lustre --mgs --device-size=&lt;size&gt; &lt;mgs-device&gt; </screen>
+        </listitem>
+        <listitem>
+          <para>Copy the configuration data from MDT disk to the new MGS disk.</para>
+	      <screen>mount -t ext4 -o ro &lt;mdt-device&gt; &lt;mdt-mount-point&gt; </screen>
+	      <screen>mount -t ext4 -o rw &lt;mgs-device&gt; &lt;mgs-mount-point&gt; </screen>
+	      <screen>cp -r &lt;mdt-moint-point&gt;/CONFIGS/&lt;filesystem-name&gt;-* &lt;mgs-mount-point&gt;/CONFIGS/. </screen>
+	      <screen>umount &lt;mgs-mount-point&gt; </screen>
+	      <screen>umount &lt;mdt-mount-point&gt; </screen>
+          <para>See <xref linkend="dbdoclet.50438199_54623"/> for alternative method.</para>
+        </listitem>
+        <listitem>
+          <para>Start the MGS.</para>
+	      <screen>mount -t lustre &lt;mgs-device&gt; &lt;mgs-mount-point&gt;</screen>
+          <para>Check to make sure it knows about all your filesystem</para>
+	      <screen>cat /proc/fs/lustre/mgs/MGS/filesystems</screen>
+        </listitem>
+        <listitem>
+          <para>Remove the MGS option from the MDT, and set the new MGS nid.</para>
+	      <screen>tunefs.lustre --nomgs --mgsnode=&lt;new-MGS-nid&gt; &lt;mdt-device&gt;</screen>
+        </listitem>
+        <listitem>
+          <para>Start the MDT.</para>
+	      <screen>mount -t lustre &lt;mdt-device&gt; &lt;mdt-mount-point&gt;</screen>
+          <para>Check to make sure the MGS configuration look right</para>
+	      <screen>cat /proc/fs/lustre/mgs/MGS/live/&lt;filesystem-name&gt;</screen>
+        </listitem>
+      </orderedlist>
+    </section>
 </chapter>
