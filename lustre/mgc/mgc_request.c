@@ -1231,7 +1231,7 @@ enum {
 static int mgc_apply_recover_logs(struct obd_device *mgc,
                                   struct config_llog_data *cld,
                                   __u64 max_version,
-                                  void *data, int datalen)
+                                  void *data, int datalen, int need_swab)
 {
         struct config_llog_instance *cfg = &cld->cld_cfg;
         struct lustre_sb_info       *lsi = s2lsi(cfg->cfg_sb);
@@ -1292,7 +1292,8 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
                 if (datalen < entry_len) /* must have entry_len at least */
                         break;
 
-                lustre_swab_mgs_nidtbl_entry(entry);
+                if (need_swab)
+                        lustre_swab_mgs_nidtbl_entry(entry);
                 LASSERT(entry->mne_length <= CFS_PAGE_SIZE);
                 if (entry->mne_length < entry_len)
                         break;
@@ -1509,7 +1510,8 @@ again:
 
                 ptr = cfs_kmap(pages[i]);
                 rc2 = mgc_apply_recover_logs(obd, cld, res->mcr_offset, ptr,
-                                             min_t(int, ealen, CFS_PAGE_SIZE));
+                                             min_t(int, ealen, CFS_PAGE_SIZE),
+                                             ptlrpc_rep_need_swab(req));
                 cfs_kunmap(pages[i]);
                 if (rc2 < 0) {
                         CWARN("Process recover log %s error %d\n",
