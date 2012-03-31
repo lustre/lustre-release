@@ -1015,6 +1015,16 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
     <section remap="h3">
       <title><indexterm><primary>proc</primary><secondary>readahead</secondary></indexterm>Using File Readahead and Directory Statahead</title>
       <para>Lustre 1.6.5.1 introduced file readahead and directory statahead functionality that read data into memory in anticipation of a process actually requesting the data. File readahead functionality reads file content data into memory. Directory statahead functionality reads metadata into memory. When readahead and/or statahead work well, a data-consuming process finds that the information it needs is available when requested, and it is unnecessary to wait for network I/O.</para>
+      <para>Since Lustre 2.2.0, the directory statahead feature has been improved to enhance directory traversal performance. The improvements have concentrated on two main issues:</para>
+      <orderedlist>
+        <listitem>
+          <para>A race condition between statahead thread and other VFS operations while processing asynchronous getattr RPC replies.</para>
+        </listitem>
+        <listitem>
+          <para>There is no file size/block attributes pre-fetching and the traversing thread has to send synchronous glimpse size RPCs to OST(s).</para>
+        </listitem>
+      </orderedlist>
+      <para>The first issue is resolved by using statahead local dcache, and the second one is resolved by using asynchronous glimpse lock (AGL) RPCs for per-fetching file size/block attributes from OST(s).</para>
       <section remap="h4">
         <title>Tuning File Readahead</title>
         <para>File readahead is triggered when two or more sequential reads by an application fail to be satisfied by the Linux buffer cache. The size of the initial readahead is 1 MB. Additional readaheads grow linearly, and increment until the readahead cache on the client is full at 40 MB.</para>
@@ -1024,21 +1034,29 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
         <para>This tunable controls the maximum size of a file that is read in its entirety, regardless of the size of the <literal>read()</literal>.</para>
       </section>
       <section remap="h4">
-        <title>Tuning Directory Statahead</title>
-        <para>When the <literal>ls -l</literal> process opens a directory, its process ID is recorded. When the first directory entry is &apos;&apos;stated&apos;&apos; with this recorded process ID, a statahead thread is triggered which stats ahead all of the directory entries, in order. The <literal>ls -l</literal> process can use the stated directory entries directly, improving performance.</para>
+        <title>Tuning Directory Statahead and AGL</title>
+        <para>Many system commands, like <literal>ls –l</literal>, <literal>du</literal>, <literal>find</literal>, etc., will traverse directory sequentially. To make these commands run efficiently, the directory statahead and AGL (asynchronous glimpse lock) can be enabled to improve the performance of traversing.</para>
         <para><literal> /proc/fs/lustre/llite/*/statahead_max </literal></para>
-        <para>This tunable controls whether directory <literal>statahead</literal> is enabled and the maximum statahead count. By default, statahead is active.</para>
-        <para>To disable statahead, set this tunable to:</para>
+        <para>This proc interface controls whether directory statahead is enabled and the maximum statahead windows size (which means how many files can be pre-fetched by the statahead thread). By default, statahead is enabled and the value of <literal>statahead_max</literal> is 32.</para>
+        <para>To disable statahead, run:</para>
         <screen>echo 0 &gt; /proc/fs/lustre/llite/*/statahead_max</screen>
-        <para>To set the maximum statahead count (n), set this tunable to:</para>
+        <para>or</para>
+        <screen>lctl set_param llite.*.statahead_max=0</screen>
+        <para>To set the maximum statahead windows size (n), run:</para>
         <screen>echo n &gt; /proc/fs/lustre/llite/*/statahead_max</screen>
+        <para>or</para>
+        <screen>lctl set_param llite.*.statahead_max=n</screen>
         <para>The maximum value of n is 8192.</para>
-        <para>
-          <literal>
-            <replaceable role="bold"> /proc/fs/lustre/llite/*/statahead_status </replaceable>
-          </literal>
-      </para>
-        <para>This is a read-only interface that indicates the current statahead status.</para>
+        <para>The AGL can be controlled as follows:</para>
+        <screen>echo n &gt; /proc/fs/lustre/llite/*/statahead_agl</screen>
+        <para>or</para>
+        <screen>lctl set_param llite.*.statahead_agl=n</screen>
+        <para>If &quot;n&quot; is 0, then the AGL is disabled, else the AGL is enabled.</para>
+        <para><literal> /proc/fs/lustre/llite/*/statahead_stats </literal></para>
+        <para>This is a read-only interface that indicates the current statahead and AGL status.</para>
+        <note>
+          <para>The AGL is affected by statahead because the inodes processed by AGL are built by the statahead thread, which means the statahead thread is the input of AGL pipeline. So if statahead is disabled, then the AGL is disabled by force.</para>
+        </note>
       </section>
     </section>
     <section remap="h3">
