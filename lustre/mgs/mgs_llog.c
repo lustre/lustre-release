@@ -1862,7 +1862,12 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 	rc = name_create(&svname, mti->mti_svname, "-osc");
 	if (rc)
 		GOTO(out_free, rc);
-	rc = name_create(&oscname, svname, suffix);
+	/* for the system upgraded from old 1.8, keep using the old osc naming
+	 * style for mdt, see name_create_mdt_osc(). LU-1257 */
+	if (cfs_test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
+		rc = name_create(&oscname, svname, "");
+	else
+		rc = name_create(&oscname, svname, suffix);
 	if (rc)
 		GOTO(out_free, rc);
 	rc = name_create(&oscuuid, oscname, "_UUID");
