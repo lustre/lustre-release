@@ -866,7 +866,7 @@ lfs help
     <section remap="h5">
       <title>Description</title>
       <para>The <literal>lfsck</literal> utility is used to check and repair the distributed coherency of a Lustre file system. If an MDS or an OST becomes corrupt, run a distributed check on the file system to determine what sort of problems exist. Use lfsck to correct any defects found.</para>
-      <para>For more information on using <literal>e2fsck</literal> and <literal>lfsck</literal>, including examples, see <xref linkend="dbdoclet.50438268_83826"/> (Commit on Share). For information on resolving orphaned objects, see <xref linkend="dbdoclet.50438225_13916"/> (Working with Orphaned Objects).</para>
+      <para>For more information on using <literal>e2fsck</literal> and <literal>lfsck</literal>, including examples, see <xref linkend="commitonshare"/> (Commit on Share). For information on resolving orphaned objects, see <xref linkend="dbdoclet.50438225_13916"/> (Working with Orphaned Objects).</para>
     </section>
   </section>
   <section xml:id="dbdoclet.50438206_75125">
