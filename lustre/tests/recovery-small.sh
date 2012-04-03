@@ -1205,6 +1205,9 @@ target_instance_match()
 
 test_100()
 {
+        do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
+                { skip "MGS without IR support"; return 0; }
+
         # disable IR
         set_ir_status disabled
 
@@ -1225,6 +1228,9 @@ run_test 100 "IR: Make sure normal recovery still works w/o IR"
 
 test_101()
 {
+        do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
+                { skip "MGS without IR support"; return 0; }
+
         set_ir_status full
 
         local OST1_IMP=$(get_osc_import_name client ost1)
@@ -1243,6 +1249,9 @@ run_test 101 "IR: Make sure IR works w/o normal recovery"
 
 test_102()
 {
+        do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
+                { skip "MGS without IR support"; return 0; }
+
         local clients=${CLIENTS:-$HOSTNAME}
         local old_version
         local new_version
@@ -1289,6 +1298,9 @@ run_test 102 "IR: New client gets updated nidtbl after MGS restart"
 
 test_103()
 {
+        do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
+                { skip "MGS without IR support"; return 0; }
+
         combined_mgs_mds && skip "mgs and mds on the same target" && return 0
 
         # workaround solution to generate config log on the mds
@@ -1327,6 +1339,9 @@ run_test 103 "IR: MDS can start w/o MGS and get updated nidtbl later"
 
 test_104()
 {
+        do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
+                { skip "MGS without IR support"; return 0; }
+
         set_ir_status full
 
         stop ost1
@@ -1342,6 +1357,8 @@ run_test 104 "IR: ost can disable IR voluntarily"
 test_105()
 {
         [ -z "$RCLIENTS" ] && skip "Needs multiple clients" && return 0
+        do_facet mgs $LCTL list_param mgs.*.ir_timeout ||
+                { skip "MGS without IR support"; return 0; }
 
         set_ir_status full
 

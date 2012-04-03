@@ -2768,6 +2768,9 @@ run_test 60 "check mkfs.lustre --mkfsoptions -E -O options setting"
 test_61() { # LU-80
     local reformat=false
 
+    [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.1.53) ] ||
+        { skip "Need MDS version at least 2.1.53"; return 0; }
+
     if ! large_xattr_enabled; then
         reformat=true
         local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
