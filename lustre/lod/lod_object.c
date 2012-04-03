@@ -707,7 +707,10 @@ static void lod_ah_init(const struct lu_env *env,
 			lc->ldo_def_stripe_offset = lp->ldo_def_stripe_offset;
 			lc->ldo_striping_cached = 1;
 			lc->ldo_def_striping_set = 1;
-			CDEBUG(D_OTHER, "inherite striping defaults\n");
+			CDEBUG(D_OTHER, "inherite EA sz:%d off:%d nr:%d\n",
+			       (int)lc->ldo_def_stripenr,
+			       (int)lc->ldo_def_stripe_size,
+			       (int)lc->ldo_def_stripe_offset);
 		}
 		return;
 	}
@@ -901,11 +904,35 @@ static int lod_declare_object_create(const struct lu_env *env,
 	} else if (dof->dof_type == DFT_DIR && lo->ldo_striping_cached) {
 		struct lod_thread_info *info = lod_env_info(env);
 
-		info->lti_buf.lb_buf = NULL;
-		info->lti_buf.lb_len = sizeof(struct lov_user_md_v3);
+		struct lov_user_md_v3 *v3;
+
+		if (LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size,
+					lo->ldo_def_stripenr,
+					lo->ldo_def_stripe_offset))
+			RETURN(0);
+
+		OBD_ALLOC_PTR(v3);
+		if (v3 == NULL)
+			RETURN(-ENOMEM);
+
+		v3->lmm_magic = cpu_to_le32(LOV_MAGIC_V3);
+		v3->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
+		v3->lmm_object_id = fid_oid(lu_object_fid(&dt->do_lu));
+		v3->lmm_object_seq = fid_seq(lu_object_fid(&dt->do_lu));
+		v3->lmm_stripe_size = cpu_to_le32(lo->ldo_def_stripe_size);
+		v3->lmm_stripe_count = cpu_to_le32(lo->ldo_def_stripenr);
+		v3->lmm_stripe_offset = cpu_to_le16(lo->ldo_def_stripe_offset);
+		if (lo->ldo_pool)
+			strncpy(v3->lmm_pool_name, lo->ldo_pool,
+				LOV_MAXPOOLNAME);
+
+		info->lti_buf.lb_buf = v3;
+		info->lti_buf.lb_len = sizeof(*v3);
+
 		/* to transfer default striping from the parent */
 		rc = dt_declare_xattr_set(env, next, &info->lti_buf,
 					  XATTR_NAME_LOV, 0, th);
+		OBD_FREE_PTR(v3);
 	}
 
 out:
