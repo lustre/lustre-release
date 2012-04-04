@@ -27,9 +27,8 @@ SYSIO=$1
 LIBS=$2
 LND_LIBS=$3
 PTHREAD_LIBS=$4
-QUOTA_LIBS=$5
-CAP_LIBS=$6
-ZLIB=$7
+CAP_LIBS=$5
+ZLIB=$6
 
 if [ ! -f $SYSIO/lib/libsysio.a ]; then
   echo "ERROR: $SYSIO/lib/libsysio.a dosen't exist"
@@ -89,10 +88,6 @@ if $(echo "$LND_LIBS" | grep "ptllnd" >/dev/null) ; then
 	build_obj_list ../../lnet/ulnds/ptllnd libptllnd.a
 fi
 build_obj_list ../../lnet/lnet liblnet.a
-
-if [ "x$QUOTA_LIBS" != "x" ]; then
-  build_obj_list ../quota libquota.a
-fi
 
 # create static lib lsupport
 rm -f $CWD/liblsupport.a

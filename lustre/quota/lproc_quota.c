@@ -44,8 +44,6 @@
 
 #include "quota_internal.h"
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 #ifdef LPROCFS
 int lprocfs_quota_rd_bunit(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
@@ -681,4 +679,3 @@ int lquota_proc_cleanup(struct lustre_quota_ctxt *qctxt)
 }
 
 #endif  /* LPROCFS */
-#endif

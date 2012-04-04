@@ -62,8 +62,6 @@
 
 #include "quota_internal.h"
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 /* lock ordering: mds->mds_qonoff_sem > dquot->dq_mutex > lqs->lqs_lock */
 static cfs_list_t lustre_dquot_hash[NR_DQHASH];
 static cfs_rwlock_t dquot_hash_lock = CFS_RW_LOCK_UNLOCKED;
@@ -1770,5 +1768,3 @@ int mds_quota_recovery(struct obd_device *obd)
         cfs_wait_for_completion(&data.comp);
         RETURN(rc);
 }
-
-#endif /* HAVE_QUOTA_SUPPORT */

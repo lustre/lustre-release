@@ -64,8 +64,6 @@ static int hash_lqs_cur_bits = HASH_LQS_CUR_BITS;
 CFS_MODULE_PARM(hash_lqs_cur_bits, "i", int, 0444,
                 "the current bits of lqs hash");
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 static cfs_hash_ops_t lqs_hash_ops;
 
 unsigned long default_bunit_sz = 128 * 1024 * 1024; /* 128M bytes */
@@ -1646,4 +1644,3 @@ static cfs_hash_ops_t lqs_hash_ops = {
         .hs_put_locked  = lqs_put_locked,
         .hs_exit        = lqs_exit
 };
-#endif /* HAVE_QUOTA_SUPPORT */

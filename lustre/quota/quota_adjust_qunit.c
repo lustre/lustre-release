@@ -62,8 +62,6 @@
 #include <linux/lustre_quota.h>
 #include "quota_internal.h"
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 #ifdef __KERNEL__
 /**
  * This function is charge of recording lqs_ino_rec and
@@ -284,4 +282,3 @@ int filter_quota_adjust_qunit(struct obd_export *exp,
         RETURN(rc);
 }
 #endif /* __KERNEL__ */
-#endif

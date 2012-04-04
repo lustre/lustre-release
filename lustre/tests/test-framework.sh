@@ -377,7 +377,6 @@ load_modules_local() {
     load_module obdclass/obdclass
     load_module ptlrpc/ptlrpc
     load_module ptlrpc/gss/ptlrpc_gss
-    [ "$USE_QUOTA" = "yes" -a "$LQUOTA" != "no" ] && load_module quota/lquota $LQUOTAOPTS
     load_module fld/fld
     load_module fid/fid
     load_module lmv/lmv
@@ -395,6 +394,7 @@ load_modules_local() {
                 { modprobe exportfs 2> /dev/null || true; }
             load_module ../ldiskfs/ldiskfs/ldiskfs
         fi
+        [ "$USE_QUOTA" = "yes" -a "$LQUOTA" != "no" ] && load_module quota/lquota $LQUOTAOPTS
         load_module mgs/mgs
         load_module mds/mds
         load_module mdd/mdd

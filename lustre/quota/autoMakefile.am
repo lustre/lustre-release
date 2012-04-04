@@ -34,15 +34,6 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-if LIBLUSTRE
-noinst_LIBRARIES = libquota.a
-libquota_a_SOURCES = quota_check.c quota_ctl.c quota_interface.c quota_adjust_qunit.c
-libquota_a_CPPFLAGS = $(LLCPPFLAGS)
-libquota_a_CFLAGS = $(LLCFLAGS)
-endif
-
-if QUOTA
 modulefs_DATA = lquota$(KMODEXT)
-endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 

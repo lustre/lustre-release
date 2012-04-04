@@ -1,13 +1,13 @@
 MODULES := lvfs
 @SERVER_TRUE@MODULES += fsfilt_ldiskfs
-@QUOTA_TRUE@MODULES += quotafmt_test
+@SERVER_TRUE@MODULES += quotafmt_test
 
 lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o lvfs_lib.o
 
-@QUOTA_TRUE@quotafmt-objs := quotafmt_test.o
+@SERVER_TRUE@quotafmt-objs := quotafmt_test.o
 
 fsfilt_ldiskfs-objs := fsfilt-ldiskfs.o
-@QUOTA_TRUE@fsfilt_ldiskfs-objs += lustre_quota_fmt.o
+@SERVER_TRUE@fsfilt_ldiskfs-objs += lustre_quota_fmt.o
 
 $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@

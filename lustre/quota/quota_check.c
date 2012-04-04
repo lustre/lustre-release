@@ -64,7 +64,6 @@
 #include <lustre_quota.h>
 #include "quota_internal.h"
 
-#ifdef HAVE_QUOTA_SUPPORT
 #ifdef __KERNEL__
 static int target_quotacheck_callback(struct obd_export *exp,
                                       struct obd_quotactl *oqctl)
@@ -196,4 +195,3 @@ out:
 }
 
 #endif /* __KERNEL__ */
-#endif /* HAVE_QUOTA_SUPPORT */

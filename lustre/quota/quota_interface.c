@@ -65,8 +65,6 @@
 
 #ifdef __KERNEL__
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 static cfs_time_t last_print = 0;
 static cfs_spinlock_t last_print_lock = CFS_SPIN_LOCK_UNLOCKED;
 
@@ -727,11 +725,6 @@ static int quota_acquire_common(struct obd_device *obd, const unsigned int id[],
         RETURN(rc);
 }
 
-#endif /* HAVE_QUOTA_SUPPORT */
-#endif /* __KERNEL__ */
-
-#ifdef __KERNEL__
-#ifdef HAVE_QUOTA_SUPPORT
 quota_interface_t mds_quota_interface = {
         .quota_init     = mds_quota_init,
         .quota_exit     = mds_quota_exit,
@@ -763,16 +756,11 @@ quota_interface_t filter_quota_interface = {
         .quota_adjust_qunit   = filter_quota_adjust_qunit,
         .quota_pending_commit = quota_pending_commit,
 };
-#endif
-#endif /* __KERNEL__ */
-
-#ifdef __KERNEL__
 
 cfs_proc_dir_entry_t *lquota_type_proc_dir = NULL;
 
 static int __init init_lustre_quota(void)
 {
-#ifdef HAVE_QUOTA_SUPPORT
         int rc = 0;
 
         lquota_type_proc_dir = lprocfs_register(OBD_LQUOTA_DEVICENAME,
@@ -790,13 +778,12 @@ static int __init init_lustre_quota(void)
 
         PORTAL_SYMBOL_REGISTER(filter_quota_interface);
         PORTAL_SYMBOL_REGISTER(mds_quota_interface);
-#endif
+
         return 0;
 }
 
 static void /*__exit*/ exit_lustre_quota(void)
 {
-#ifdef HAVE_QUOTA_SUPPORT
         PORTAL_SYMBOL_UNREGISTER(filter_quota_interface);
         PORTAL_SYMBOL_UNREGISTER(mds_quota_interface);
 
@@ -804,7 +791,6 @@ static void /*__exit*/ exit_lustre_quota(void)
 
         if (lquota_type_proc_dir)
                 lprocfs_remove(&lquota_type_proc_dir);
-#endif
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
@@ -813,8 +799,6 @@ MODULE_LICENSE("GPL");
 
 cfs_module(lquota, "1.0.0", init_lustre_quota, exit_lustre_quota);
 
-#ifdef HAVE_QUOTA_SUPPORT
 EXPORT_SYMBOL(mds_quota_interface);
 EXPORT_SYMBOL(filter_quota_interface);
-#endif
 #endif /* __KERNEL */

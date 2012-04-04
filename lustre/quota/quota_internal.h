@@ -37,8 +37,6 @@
 
 #include <lustre_quota.h>
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 /* QUSG covnert bytes to blocks when counting block quota */
 #define QUSG(count, isblk)      (isblk ? toqb(count) : count)
 
@@ -190,29 +188,5 @@ extern cfs_proc_dir_entry_t *lquota_type_proc_dir;
 
 /* the return status of quota operation */
 #define QUOTA_REQ_RETURNED 1
-
-#endif
-int client_quota_adjust_qunit(struct obd_export *exp,
-                              struct quota_adjust_qunit *oqaq,
-                              struct lustre_quota_ctxt *qctxt,
-                              struct ptlrpc_request_set *set);
-
-int lov_quota_adjust_qunit(struct obd_export *exp,
-                           struct quota_adjust_qunit *oqaq,
-                           struct lustre_quota_ctxt *qctxt,
-                           struct ptlrpc_request_set *rqset);
-int client_quota_ctl(struct obd_device *unused, struct obd_export *exp,
-                     struct obd_quotactl *oqctl);
-int lmv_quota_ctl(struct obd_device *unused, struct obd_export *exp,
-                  struct obd_quotactl *oqctl);
-int lov_quota_ctl(struct obd_device *unused, struct obd_export *exp,
-                  struct obd_quotactl *oqctl);
-int client_quota_check(struct obd_device *unused, struct obd_export *exp,
-                       struct obd_quotactl *oqctl);
-int lmv_quota_check(struct obd_device *unused, struct obd_export *exp,
-                    struct obd_quotactl *oqctl);
-int lov_quota_check(struct obd_device *unused, struct obd_export *exp,
-                    struct obd_quotactl *oqctl);
-int client_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
 
 #endif

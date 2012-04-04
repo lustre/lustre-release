@@ -209,17 +209,13 @@ if test x$enable_lru_resize != xno; then
 fi
 ])
 
-# whether to enable quota support(kernel modules)
-AC_DEFUN([LC_QUOTA_MODULE],
-[if test x$enable_quota != xno; then
-    LB_LINUX_CONFIG([QUOTA],[
-	enable_quota_module='yes'
-	AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [Enable quota support])
-    ],[
-	enable_quota_module='no'
-	AC_MSG_WARN([quota is not enabled because the kernel - lacks quota support])
-    ])
-fi
+#
+# Quota support. The kernel must support CONFIG_QUOTA.
+#
+AC_DEFUN([LC_QUOTA_CONFIG],
+[LB_LINUX_CONFIG_IM([QUOTA],[AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [support quota])],[
+	AC_MSG_ERROR([Lustre quota requires that CONFIG_QUOTA is enabled in your kernel.])
+])
 ])
 
 # truncate_complete_page() was exported from RHEL5/SLES10, but not in SLES11 SP0 (2.6.27)
@@ -1983,7 +1979,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CONFIG_LIBLUSTRE_RECOVERY
          LC_CONFIG_HEALTH_CHECK_WRITE
          LC_CONFIG_LRU_RESIZE
-         LC_QUOTA_MODULE
          LC_LLITE_LLOOP_MODULE
 
          # RHEL4 patches
@@ -2137,6 +2132,7 @@ AC_DEFUN([LC_PROG_LINUX],
              LC_FUNC_DEV_SET_RDONLY
              LC_STACK_SIZE
              LC_QUOTA64
+             LC_QUOTA_CONFIG
          fi
 ])
 
@@ -2529,7 +2525,6 @@ AM_CONDITIONAL(LIBLUSTRE_TESTS, test x$enable_liblustre_tests = xyes)
 AM_CONDITIONAL(MPITESTS, test x$enable_mpitests = xyes, Build MPI Tests)
 AM_CONDITIONAL(CLIENT, test x$enable_client = xyes)
 AM_CONDITIONAL(SERVER, test x$enable_server = xyes)
-AM_CONDITIONAL(QUOTA, test x$enable_quota_module = xyes)
 AM_CONDITIONAL(SPLIT, test x$enable_split = xyes)
 AM_CONDITIONAL(BLKID, test x$ac_cv_header_blkid_blkid_h = xyes)
 AM_CONDITIONAL(EXT2FS_DEVEL, test x$ac_cv_header_ext2fs_ext2fs_h = xyes)

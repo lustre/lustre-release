@@ -42,11 +42,9 @@ AUTOMAKE_OPTIONS = foreign
 ALWAYS_SUBDIRS := include lvfs obdclass ldlm ptlrpc osc lov obdecho \
 	mgc fid fld doc utils tests scripts autoconf contrib conf
 
-SERVER_SUBDIRS := obdfilter ost mds mgs mdt cmm mdd osd-ldiskfs
+SERVER_SUBDIRS := obdfilter ost mds mgs mdt cmm mdd osd-ldiskfs quota
 
 CLIENT_SUBDIRS := mdc lmv llite lclient
-
-QUOTA_SUBDIRS := quota
 
 LIBLUSTRE_SUBDIRS := liblustre
 
@@ -60,8 +58,6 @@ if CLIENT
 SUBDIRS += $(CLIENT_SUBDIRS)
 endif
 
-SUBDIRS += $(QUOTA_SUBDIRS)
-
 # this needs to be after the client subdirs
 if LIBLUSTRE
 if !CLIENT
@@ -71,7 +67,7 @@ SUBDIRS += $(LIBLUSTRE_SUBDIRS)
 endif
 
 DIST_SUBDIRS := $(ALWAYS_SUBDIRS) $(SERVER_SUBDIRS) $(CLIENT_SUBDIRS)	\
-	$(LIBLUSTRE_SUBDIRS) $(QUOTA_SUBDIRS)
+	$(LIBLUSTRE_SUBDIRS)
 
 EXTRA_DIST = BUGS FDL kernel_patches BUILDING
 
