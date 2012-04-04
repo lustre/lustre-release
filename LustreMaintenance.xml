@@ -514,8 +514,8 @@ Separate a combined MGS/MDT</title>
         </listitem>
         <listitem>
           <para>Copy the configuration data from MDT disk to the new MGS disk.</para>
-	      <screen>mount -t ext4 -o ro &lt;mdt-device&gt; &lt;mdt-mount-point&gt; </screen>
-	      <screen>mount -t ext4 -o rw &lt;mgs-device&gt; &lt;mgs-mount-point&gt; </screen>
+	      <screen>mount -t ldiskfs -o ro &lt;mdt-device&gt; &lt;mdt-mount-point&gt; </screen>
+	      <screen>mount -t ldiskfs -o rw &lt;mgs-device&gt; &lt;mgs-mount-point&gt; </screen>
 	      <screen>cp -r &lt;mdt-moint-point&gt;/CONFIGS/&lt;filesystem-name&gt;-* &lt;mgs-mount-point&gt;/CONFIGS/. </screen>
 	      <screen>umount &lt;mgs-mount-point&gt; </screen>
 	      <screen>umount &lt;mdt-mount-point&gt; </screen>
