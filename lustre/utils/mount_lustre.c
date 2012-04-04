@@ -370,7 +370,7 @@ int set_blockdev_tunables(char *source, int fan_out)
         glob_t glob_info = { 0 };
         struct stat stat_buf;
         char *chk_major, *chk_minor;
-        char *savept, *dev;
+        char *savept = NULL, *dev;
         char *ret_path;
         char buf[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
         char real_path[PATH_MAX] = {'\0'};
