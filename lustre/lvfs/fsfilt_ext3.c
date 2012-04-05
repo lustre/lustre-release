@@ -1024,10 +1024,6 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
 
         i = EXT_DEPTH(base);
         EXT_ASSERT(path[i].p_hdr);
-        LASSERTF(i == path->p_depth ||
-                 EXT_GENERATION(base) != path[0].p_generation,
-                 "base vs path extent depth:%d != %d, generation:%lu == %lu\n",
-                 i, path->p_depth, EXT_GENERATION(base), path[0].p_generation);
 
         if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
                 err = EXT_CONTINUE;
