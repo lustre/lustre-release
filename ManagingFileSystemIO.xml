@@ -340,7 +340,7 @@ $ mount -t lustre /dev/sda /mnt/test/ost12</screen>
   </section>
   <section xml:id="dbdoclet.50438211_61024">
     <title>Other I/O Options</title>
-    <para>This section describes other I/O options, including checksums.</para>
+    <para>This section describes other I/O options, including checksums, and the ptlrpcd thread pool.</para>
     <section remap="h3">
       <title>Lustre Checksums</title>
       <para>To guard against network data corruption, a Lustre client can perform two types of data checksums: in-memory (for data in client memory) and wire (for data sent over the network). For each checksum type, a 32-bit checksum of the data read or written on both the client and server is computed, to ensure that the data has not been corrupted in transit over the network. The <literal>ldiskfs</literal> backing file system does NOT do any persistent checksumming, so it does not detect corruption of data in the OST file system.</para>
@@ -373,6 +373,36 @@ osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=crc32
 $ lctl get_param osc.*.checksum_type
 osc.lustre-OST0000-osc-ffff81012b2c48e0.checksum_type=[crc32] adler</screen>
       </section>
-    </section>
+</section>
+<section remap="h3">
+<title>Ptlrpc Thread Pool </title>
+<para>Releases prior to Lustre 2.2 used two portal RPC daemons for each client/server pair.  One daemon handled all synchronous IO requests, and the second daemon handled all asynchronous (non-IO) RPCs.  The increasing use of large SMP nodes for Lustre servers exposed some scaling issues.   The lack of threads for large SMP nodes resulted in cases where a single CPU would be 100% utilized and other CPUs would be relativity idle.  This is especially noticeable when a single client traverses a large directory. </para>
+<para>Lustre 2.2.x implements a ptlrpc thread pool, so that multiple threads can be created to serve asynchronous RPC requests. The number of threads spawned is controlled at module load time using module options. By default one thread is spawned per CPU,  with a minimum of 2 threads spawned irrespective of module options. </para>
+<para>One of the issues with thread operations is the cost of moving a thread context from one CPU to another with the resulting loss of CPU cache warmth. To reduce this cost, ptlrpc threads can be bound to a CPU. However, if the CPUs are busy, a bound thread may not be able to respond quickly, as the bound CPU may be busy with other tasks and the thread must wait to schedule. </para>
+      <para>Because of these considerations, the pool of ptlrpc threads can be a mixture of bound and unbound threads.   The system operator can balance the thread mixture based on system size and workload. </para>
+<section>
+        <title>ptlrpcd parameters</title>
+        <para>These parameters should be set in <literal>/etc/modprobe.conf </literal>     or in the <literal> etc/modprobe.d</literal> directory, as options for the ptlrpc module. <screen>options ptlrpcd max_ptlrpcds=XXX
+</screen></para>
+<para>Sets the number of ptlrpcd threads created at module load time. The default if not specified is one thread per CPU, including hyper-threaded CPUs.  The lower bound is 2 (old prlrpcd behaviour)  <screen>options ptlrpcd ptlrpcd_bind_policy=[1-4]
+</screen></para>
+<para> Controls the binding of threads to CPUs. There are four policy options. </para>
+	<itemizedlist>
+       <listitem>
+	<para><literal role="bold">PDB_POLICY_NONE </literal>(ptlrpcd_bind_policy=1) All threads are unbound.</para>
+	</listitem>
+        <listitem>
+	<para><literal role="bold">PDB_POLICY_FULL </literal>(ptlrpcd_bind_policy=2) All threads attempt to bind to a CPU. </para>
+	</listitem>
+       <listitem>
+	<para><literal role="bold">PDB_POLICY_PAIR </literal>(ptlrpcd_bind_policy=3) This is the default policy. Threads are allocated as a bound/unbound pair. Each thread (bound or free) has a partner thread. The partnering is used by the ptlrpcd load policy, which determines how threads are allocated to CPUs. </para>
+	</listitem>
+       <listitem>
+	<para><literal role="bold">PDB_POLICY_NEIGHBOR </literal>(ptlrpcd_bind_policy=4) Threads are allocated as a bound/unbound pair. Each thread (bound or free) has two partner threads. </para>
+	</listitem>
+          </itemizedlist>
+
+</section>
+</section>
   </section>
 </chapter>
