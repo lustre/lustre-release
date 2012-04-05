@@ -513,7 +513,8 @@ int init_obdclass(void)
         obd_zombie_impexp_init();
 #ifdef LPROCFS
         obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,
-                                         LPROCFS_STATS_FLAG_NONE);
+					 LPROCFS_STATS_FLAG_NONE |
+					 LPROCFS_STATS_FLAG_IRQ_SAFE);
         if (obd_memory == NULL) {
                 CERROR("kmalloc of 'obd_memory' failed\n");
                 RETURN(-ENOMEM);

@@ -707,10 +707,12 @@ int lprocfs_rd_conn_uuid(char *page, char **start, off_t off, int count,
 void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
                            struct lprocfs_counter *cnt)
 {
-        unsigned int num_cpu;
-        struct lprocfs_counter t;
-        struct lprocfs_counter *percpu_cntr;
-        int centry, i;
+	unsigned int		num_entry;
+	struct lprocfs_counter	t;
+	struct lprocfs_counter *percpu_cntr;
+	int			centry;
+	int			i;
+	unsigned long		flags = 0;
 
         memset(cnt, 0, sizeof(*cnt));
 
@@ -722,10 +724,12 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
 
         cnt->lc_min = LC_MIN_INIT;
 
-        num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU);
+	num_entry = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 
-        for (i = 0; i < num_cpu; i++) {
-                percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[idx];
+	for (i = 0; i < num_entry; i++) {
+		if (stats->ls_percpu[i] == NULL)
+			continue;
+		percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[idx];
 
                 do {
                         centry = cfs_atomic_read(&percpu_cntr-> \
@@ -748,8 +752,8 @@ void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
                 cnt->lc_sumsquare += t.lc_sumsquare;
         }
 
-        cnt->lc_units = stats->ls_percpu[0]->lp_cntr[idx].lc_units;
-        lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU);
+	cnt->lc_units = stats->ls_percpu[0]->lp_cntr[idx].lc_units;
+	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
 
 /**
@@ -1190,10 +1194,9 @@ void lprocfs_free_per_client_stats(struct obd_device *obd)
 struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
                                           enum lprocfs_stats_flags flags)
 {
-        struct lprocfs_stats *stats;
-        unsigned int percpusize;
-        unsigned int i, j;
-        unsigned int num_cpu;
+	struct lprocfs_stats *stats;
+	unsigned int percpusize;
+	unsigned int num_entry;
 
         if (num == 0)
                 return NULL;
@@ -1201,93 +1204,87 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
         if (lprocfs_no_percpu_stats != 0)
                 flags |= LPROCFS_STATS_FLAG_NOPERCPU;
 
-        if (flags & LPROCFS_STATS_FLAG_NOPERCPU)
-                num_cpu = 1;
-        else
-                num_cpu = cfs_num_possible_cpus();
+	if (flags & LPROCFS_STATS_FLAG_NOPERCPU)
+		num_entry = 1;
+	else
+		num_entry = cfs_num_possible_cpus() + 1;
 
-        OBD_ALLOC(stats, offsetof(typeof(*stats), ls_percpu[num_cpu]));
-        if (stats == NULL)
-                return NULL;
+	/* alloc percpu pointers for all possible cpu slots */
+	OBD_ALLOC(stats, offsetof(struct lprocfs_stats, ls_percpu[num_entry]));
+	if (stats == NULL)
+		return NULL;
 
-        if (flags & LPROCFS_STATS_FLAG_NOPERCPU) {
-                stats->ls_flags = flags;
-                cfs_spin_lock_init(&stats->ls_lock);
-                /* Use this lock only if there are no percpu areas */
-        } else {
-                stats->ls_flags = 0;
-        }
+	stats->ls_num = num;
+	stats->ls_biggest_alloc_num = 1;
+	stats->ls_flags = flags;
+	cfs_spin_lock_init(&stats->ls_lock);
 
-        percpusize = offsetof(struct lprocfs_percpu, lp_cntr[num]);
-        if (num_cpu > 1)
-                percpusize = CFS_L1_CACHE_ALIGN(percpusize);
+	percpusize = offsetof(struct lprocfs_percpu, lp_cntr[num]);
+	if (num_entry > 1)
+		percpusize = CFS_L1_CACHE_ALIGN(percpusize);
 
-        for (i = 0; i < num_cpu; i++) {
-                OBD_ALLOC(stats->ls_percpu[i], percpusize);
-                if (stats->ls_percpu[i] == NULL) {
-                        for (j = 0; j < i; j++) {
-                                OBD_FREE(stats->ls_percpu[j], percpusize);
-                                stats->ls_percpu[j] = NULL;
-                        }
-                        break;
-                }
-        }
-        if (stats->ls_percpu[0] == NULL) {
-                OBD_FREE(stats, offsetof(typeof(*stats),
-                                         ls_percpu[num_cpu]));
-                return NULL;
-        }
-
-        stats->ls_num = num;
-        return stats;
+	/* for no percpu area, the 0th entry is for real use,
+	 * for percpu area, the 0th entry is for intialized entry template */
+	OBD_ALLOC(stats->ls_percpu[0], percpusize);
+	if (stats->ls_percpu[0] == NULL) {
+		OBD_FREE(stats,
+			 offsetof(struct lprocfs_stats, ls_percpu[num_entry]));
+		stats = NULL;
+	}
+	return stats;
 }
 
 void lprocfs_free_stats(struct lprocfs_stats **statsh)
 {
-        struct lprocfs_stats *stats = *statsh;
-        unsigned int num_cpu;
-        unsigned int percpusize;
-        unsigned int i;
+	struct lprocfs_stats *stats = *statsh;
+	unsigned int num_entry;
+	unsigned int percpusize;
+	unsigned int i;
 
         if (stats == NULL || stats->ls_num == 0)
                 return;
         *statsh = NULL;
 
-        if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
-                num_cpu = 1;
-        else
-                num_cpu = cfs_num_possible_cpus();
+	if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
+		num_entry = 1;
+	else
+		num_entry = cfs_num_possible_cpus() + 1;
 
-        percpusize = offsetof(struct lprocfs_percpu, lp_cntr[stats->ls_num]);
-        if (num_cpu > 1)
-                percpusize = CFS_L1_CACHE_ALIGN(percpusize);
-        for (i = 0; i < num_cpu; i++)
-                OBD_FREE(stats->ls_percpu[i], percpusize);
-        OBD_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_cpu]));
+	percpusize = offsetof(struct lprocfs_percpu, lp_cntr[stats->ls_num]);
+	if (num_entry > 1)
+		percpusize = CFS_L1_CACHE_ALIGN(percpusize);
+	for (i = 0; i < num_entry; i++)
+		if (stats->ls_percpu[i] != NULL)
+			OBD_FREE(stats->ls_percpu[i], percpusize);
+	OBD_FREE(stats, offsetof(typeof(*stats), ls_percpu[num_entry]));
 }
 
 void lprocfs_clear_stats(struct lprocfs_stats *stats)
 {
-        struct lprocfs_counter *percpu_cntr;
-        int i,j;
-        unsigned int num_cpu;
+	struct lprocfs_counter *percpu_cntr;
+	int			i;
+	int			j;
+	unsigned int		num_entry;
+	unsigned long		flags = 0;
 
-        num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU);
+	num_entry = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 
-        for (i = 0; i < num_cpu; i++) {
-                for (j = 0; j < stats->ls_num; j++) {
-                        percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[j];
-                        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
-                        percpu_cntr->lc_count = 0;
-                        percpu_cntr->lc_sum = 0;
-                        percpu_cntr->lc_min = LC_MIN_INIT;
-                        percpu_cntr->lc_max = 0;
-                        percpu_cntr->lc_sumsquare = 0;
-                        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
-                }
-        }
+	for (i = 0; i < num_entry; i++) {
+		if (stats->ls_percpu[i] == NULL)
+			continue;
+		for (j = 0; j < stats->ls_num; j++) {
+			percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[j];
+			cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+			percpu_cntr->lc_count = 0;
+			percpu_cntr->lc_sum = 0;
+			percpu_cntr->lc_min = LC_MIN_INIT;
+			percpu_cntr->lc_max = 0;
+			percpu_cntr->lc_sumsquare = 0;
+			cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+		}
+	}
 
-        lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU);
+	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
 
 static ssize_t lprocfs_stats_seq_write(struct file *file, const char *buf,
@@ -1422,28 +1419,23 @@ int lprocfs_register_stats(struct proc_dir_entry *root, const char *name,
 }
 
 void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
-                          unsigned conf, const char *name, const char *units)
+			  unsigned conf, const char *name, const char *units)
 {
-        struct lprocfs_counter *c;
-        int i;
-        unsigned int num_cpu;
+	struct lprocfs_counter *c     = &(stats->ls_percpu[0]->lp_cntr[index]);
+	unsigned long           flags = 0;
 
-        LASSERT(stats != NULL);
+	LASSERT(stats != NULL);
+	LASSERT(stats->ls_percpu[0] != NULL);
 
-        num_cpu = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU);
-
-        for (i = 0; i < num_cpu; i++) {
-                c = &(stats->ls_percpu[i]->lp_cntr[index]);
-                c->lc_config = conf;
-                c->lc_count = 0;
-                c->lc_sum = 0;
-                c->lc_min = LC_MIN_INIT;
-                c->lc_max = 0;
-                c->lc_name = name;
-                c->lc_units = units;
-        }
-
-        lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU);
+	lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
+	c->lc_config = conf;
+	c->lc_count = 0;
+	c->lc_sum = 0;
+	c->lc_min = LC_MIN_INIT;
+	c->lc_max = 0;
+	c->lc_name = name;
+	c->lc_units = units;
+	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
 EXPORT_SYMBOL(lprocfs_counter_init);
 
