@@ -161,11 +161,8 @@ do {                                                                          \
 # define printf(format, b...) CDEBUG(D_OTHER, format , ## b)
 # define time(a) CURRENT_TIME
 
-#ifndef num_possible_cpus
-#define cfs_num_possible_cpus() NR_CPUS
-#else
-#define cfs_num_possible_cpus() num_possible_cpus()
-#endif
+# define cfs_num_possible_cpus() num_possible_cpus()
+# define cfs_num_present_cpus()  num_present_cpus()
 
 /******************************************************************************/
 /* Light-weight trace
