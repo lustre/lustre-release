@@ -878,7 +878,6 @@ static int lov_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 break;
         }
         case OBD_CLEANUP_EXPORTS:
-                lprocfs_obd_cleanup(obd);
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
                         CERROR("failed to cleanup llogging subsystems\n");
@@ -904,6 +903,7 @@ static int lov_cleanup(struct obd_device *obd)
         lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
 
+	lprocfs_obd_cleanup(obd);
         if (lov->lov_tgts) {
                 int i;
                 obd_getref(obd);
