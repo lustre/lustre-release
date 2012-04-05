@@ -180,6 +180,16 @@ struct libcfs_debug_msg_data {
         cfs_debug_limit_state_t  *msg_cdls;
 };
 
+#define LIBCFS_DEBUG_MSG_DATA_INIT(data, mask, cdls)        \
+do {                                                        \
+        (data)->msg_subsys = DEBUG_SUBSYSTEM;               \
+        (data)->msg_file   = __FILE__;                      \
+        (data)->msg_fn     = __FUNCTION__;                  \
+        (data)->msg_line   = __LINE__;                      \
+        (data)->msg_cdls   = (cdls);                        \
+        (data)->msg_mask   = (mask);                        \
+} while (0)
+
 #define LIBCFS_DEBUG_MSG_DATA_DECL(dataname, mask, cdls)    \
         static struct libcfs_debug_msg_data dataname = {    \
                .msg_subsys = DEBUG_SUBSYSTEM,               \
@@ -204,12 +214,14 @@ static inline int cfs_cdebug_show(unsigned int mask, unsigned int subsystem)
 
 #define __CDEBUG(cdls, mask, format, ...)                               \
 do {                                                                    \
-        LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, cdls);                \
+        static struct libcfs_debug_msg_data msgdata;                    \
                                                                         \
         CFS_CHECK_STACK(&msgdata, mask, cdls);                          \
                                                                         \
-        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM))                     \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
+                LIBCFS_DEBUG_MSG_DATA_INIT(&msgdata, mask, cdls);       \
                 libcfs_debug_msg(&msgdata, format, ## __VA_ARGS__);     \
+        }                                                               \
 } while (0)
 
 #define CDEBUG(mask, format, ...) __CDEBUG(NULL, mask, format, ## __VA_ARGS__)

@@ -80,9 +80,8 @@
 #define __CHECK_STACK(msgdata, mask, cdls)                              \
 do {                                                                    \
         if (unlikely(CDEBUG_STACK() > libcfs_stack)) {                  \
+                LIBCFS_DEBUG_MSG_DATA_INIT(msgdata, D_WARNING, NULL);   \
                 libcfs_stack = CDEBUG_STACK();                          \
-                (msgdata)->msg_mask = D_WARNING;                        \
-                (msgdata)->msg_cdls = NULL;                             \
                 libcfs_debug_msg(msgdata,                               \
                                  "maximum lustre stack %lu\n",          \
                                  CDEBUG_STACK());                       \
