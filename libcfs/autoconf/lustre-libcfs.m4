@@ -112,6 +112,116 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# check cpumask_size (2.6.28)
+AC_DEFUN([LIBCFS_CPUMASK_SIZE],
+[AC_MSG_CHECKING([whether have cpumask_size()])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/cpumask.h>
+],[
+	int size = cpumask_size();
+],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE(HAVE_CPUMASK_SIZE, 1, [have cpumask_size()])
+],[
+	AC_MSG_RESULT(NO)
+])
+])
+
+# check cpu topology functions
+#
+# topology_core_cpumask (2.6.29, not on all archs)
+# topology_core_siblings (not on all archs)
+# topology_thread_cpumask (2.6.29, not on all archs)
+# topology_thread_siblings (not on all archs)
+# cpumask_of_node/node_to_cpumask (not always exported)
+AC_DEFUN([LIBCFS_CPU_TOPOLOGY],
+[AC_MSG_CHECKING([whether have topology.h])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/topology.h>
+],[],[
+	AC_DEFINE(HAVE_CPU_TOPOLOGY, 1, [have CPU topology])
+	AC_MSG_RESULT(yes)
+
+	AC_MSG_CHECKING([whether have topology_core_cpumask])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/topology.h>
+	],[
+		cpumask_t *mask = topology_core_cpumask(0);
+	],[
+		AC_DEFINE(HAVE_TOPOLOGY_CORE_CPUMASK, 1,
+			  [have topology_core_cpumask])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([whether have topology_core_siblings])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/topology.h>
+	],[
+		cpumask_t mask = topology_core_siblings(0);
+	],[
+		AC_DEFINE(HAVE_TOPOLOGY_CORE_SIBLINGS, 1,
+			  [have topology_core_siblings])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([whether have topology_thread_cpumask])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/topology.h>
+	],[
+		cpumask_t *mask = topology_thread_cpumask(0);
+	],[
+		AC_DEFINE(HAVE_TOPOLOGY_THREAD_CPUMASK, 1,
+			  [have topology_thread_cpumask])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([whether have topology_thread_siblings])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/topology.h>
+	],[
+		cpumask_t mask = topology_thread_siblings(0);
+	],[
+		AC_DEFINE(HAVE_TOPOLOGY_THREAD_SIBLINGS, 1,
+			  [have topology_thread_siblings])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([whether have cpumask_of_node])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/topology.h>
+	],[
+		cpumask_t *mask = cpumask_of_node(0);
+	],[
+		AC_DEFINE(HAVE_CPUMASK_OF_NODE, 1, [have cpumask_of_node])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([whether have node_to_cpumask])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/topology.h>
+	],[
+		cpumask_t mask = node_to_cpumask(0);
+	],[
+		AC_DEFINE(HAVE_NODE_TO_CPUMASK, 1, [have node_to_cpumask])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+],[
+	AC_MSG_RESULT(NO)
+])
+])
+
 # 2.6.20 API change INIT_WORK use 2 args and not
 # store data inside
 AC_DEFUN([LIBCFS_3ARGS_INIT_WORK],
@@ -454,6 +564,27 @@ AC_DEFUN([LIBCFS_HAVE_OOM_H],
 ])
 
 #
+# check set_mems_allowed
+# 2.6.31 adds function set_mems_allowed in cpuset.h
+#
+AC_DEFUN([LIBCFS_HAVE_SET_MEMS_ALLOWED],
+[AC_MSG_CHECKING([whether have set_mems_allowed()])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/cpuset.h>
+],[
+	nodemask_t mask;
+
+	set_mems_allowed(mask);
+],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE(HAVE_SET_MEMS_ALLOWED, 1, [have set_mems_allowed()])
+],[
+	AC_MSG_RESULT(NO)
+])
+])
+
+
+#
 # RHEL6/2.6.32 want to have pointer to shrinker self pointer in handler function
 #
 AC_DEFUN([LC_SHRINKER_WANT_SHRINK_PTR],
@@ -578,7 +709,6 @@ AC_DEFUN([LIBCFS_PROG_LINUX],
 LIBCFS_CONFIG_PANIC_DUMPLOG
 
 LIBCFS_U64_LONG_LONG_LINUX
-
 # 2.6.18
 LIBCFS_TASKLIST_LOCK
 LIBCFS_HAVE_IS_COMPAT_TASK
@@ -600,11 +730,16 @@ LIBCFS_FUNC_DUMP_TRACE
 LIBCFS_SEM_COUNT
 # 2.6.27
 LIBCFS_CRED_WRAPPERS
+# 2.6.28
+LIBCFS_CPUMASK_SIZE
 # 2.6.29
 LIBCFS_STRUCT_CRED_IN_TASK
+LIBCFS_CPU_TOPOLOGY
 # 2.6.30
 LIBCFS_FUNC_UNSHARE_FS_STRUCT
 LIBCFS_SOCK_MAP_FD_2ARG
+# 2.6.31
+LIBCFS_HAVE_SET_MEMS_ALLOWED
 # 2.6.32
 LIBCFS_STACKTRACE_OPS_HAVE_WALK_STACK
 LC_SHRINKER_WANT_SHRINK_PTR

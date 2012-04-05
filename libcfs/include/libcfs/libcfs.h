@@ -302,6 +302,7 @@ void cfs_srand(unsigned int, unsigned int);
 void cfs_get_random_bytes(void *buf, int size);
 
 #include <libcfs/libcfs_debug.h>
+#include <libcfs/libcfs_cpu.h>
 #include <libcfs/libcfs_private.h>
 #include <libcfs/libcfs_ioctl.h>
 #include <libcfs/libcfs_prim.h>

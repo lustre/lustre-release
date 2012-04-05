@@ -45,6 +45,7 @@
 
 
 #include <stdarg.h>
+#include <libcfs/linux/linux-cpu.h>
 #include <libcfs/linux/linux-time.h>
 #include <libcfs/linux/linux-mem.h>
 #include <libcfs/linux/linux-prim.h>

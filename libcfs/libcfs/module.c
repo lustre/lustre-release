@@ -392,6 +392,10 @@ static int init_libcfs_module(void)
                 return (rc);
         }
 
+	rc = cfs_cpu_init();
+	if (rc != 0)
+		goto cleanup_debug;
+
 #if LWT_SUPPORT
         rc = lwt_init();
         if (rc != 0) {
@@ -427,8 +431,8 @@ static int init_libcfs_module(void)
  cleanup_lwt:
 #if LWT_SUPPORT
         lwt_fini();
- cleanup_debug:
 #endif
+ cleanup_debug:
         libcfs_debug_cleanup();
         return rc;
 }
@@ -450,6 +454,7 @@ static void exit_libcfs_module(void)
 #if LWT_SUPPORT
         lwt_fini();
 #endif
+	cfs_cpu_fini();
 
         if (cfs_atomic_read(&libcfs_kmemory) != 0)
                 CERROR("Portals memory leaked: %d bytes\n",

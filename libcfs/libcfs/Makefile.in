@@ -1,7 +1,7 @@
 MODULES = libcfs
 
 libcfs-linux-objs := linux-tracefile.o linux-debug.o
-libcfs-linux-objs += linux-prim.o linux-mem.o
+libcfs-linux-objs += linux-prim.o linux-mem.o linux-cpu.o
 libcfs-linux-objs += linux-fs.o linux-sync.o linux-tcpip.o
 libcfs-linux-objs += linux-lwt.o linux-proc.o linux-curproc.o
 libcfs-linux-objs += linux-utils.o linux-module.o
@@ -22,9 +22,9 @@ libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
 
 endif
 
-libcfs-all-objs := debug.o fail.o nidstrings.o lwt.o module.o tracefile.o watchdog.o \
-		libcfs_string.o hash.o kernel_user_comm.o prng.o workitem.o \
-		upcall_cache.o
+libcfs-all-objs := debug.o fail.o nidstrings.o lwt.o module.o tracefile.o \
+		   watchdog.o libcfs_string.o hash.o kernel_user_comm.o \
+		   prng.o workitem.o upcall_cache.o libcfs_cpu.o
 
 libcfs-objs := $(libcfs-linux-objs) $(libcfs-all-objs)
 
