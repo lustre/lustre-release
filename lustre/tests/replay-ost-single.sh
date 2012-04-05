@@ -176,7 +176,7 @@ test_6() {
 
     f=$TDIR/$tfile
     rm -f $f
-    sync && sleep 2 && sync	# wait for delete thread
+    sync && sleep 2 && sync  # wait for delete thread
 
     # wait till space is returned, following
     # (( $before > $after_dd)) test counting on that
@@ -186,19 +186,21 @@ test_6() {
     before=`kbytesfree`
     dd if=/dev/urandom bs=4096 count=1280 of=$f || return 28
     lfs getstripe $f
-    get_stripe_info client $f
+    stripe_index=$(lfs getstripe -i $f)
 
     sync
     sleep 2 # ensure we have a fresh statfs
     sync
-#define OBD_FAIL_MDS_REINT_NET_REP       0x119
+
+    #define OBD_FAIL_MDS_REINT_NET_REP       0x119
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000119"
     after_dd=`kbytesfree`
     log "before: $before after_dd: $after_dd"
     (( $before > $after_dd )) || return 1
     rm -f $f
     fail ost$((stripe_index + 1))
-    wait_recovery_complete ost$((stripe_index + 1)) || error "OST recovery not done"
+    wait_recovery_complete ost$((stripe_index + 1)) ||
+        error "OST$((stripe_index + 1)) recovery not completed"
     $CHECKSTAT -t file $f && return 2 || true
     sync
     # let the delete happen
@@ -206,7 +208,7 @@ test_6() {
     wait_destroy_complete || return 5
     after=`kbytesfree`
     log "before: $before after: $after"
-    (( $before <= $after + 40 )) || return 3	# take OST logs into account
+    (( $before <= $after + 40 )) || return 3   # take OST logs into account
 }
 run_test 6 "Fail OST before obd_destroy"
 
