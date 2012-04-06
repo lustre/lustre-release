@@ -1324,28 +1324,6 @@ static int osd_inode_setattr(const struct lu_env *env,
 
         LASSERT(!(bits & LA_TYPE)); /* Huh? You want too much. */
 
-#ifdef HAVE_QUOTA_SUPPORT
-        if ((bits & LA_UID && attr->la_uid != inode->i_uid) ||
-            (bits & LA_GID && attr->la_gid != inode->i_gid)) {
-                struct osd_ctxt *save = &osd_oti_get(env)->oti_ctxt;
-                struct iattr iattr;
-                int rc;
-
-                iattr.ia_valid = 0;
-                if (bits & LA_UID)
-                        iattr.ia_valid |= ATTR_UID;
-                if (bits & LA_GID)
-                        iattr.ia_valid |= ATTR_GID;
-                iattr.ia_uid = attr->la_uid;
-                iattr.ia_gid = attr->la_gid;
-                osd_push_ctxt(env, save);
-                rc = ll_vfs_dq_transfer(inode, &iattr) ? -EDQUOT : 0;
-                osd_pop_ctxt(save);
-                if (rc != 0)
-                        return rc;
-        }
-#endif
-
         if (bits & LA_ATIME)
                 inode->i_atime  = *osd_inode_time(env, inode, attr->la_atime);
         if (bits & LA_CTIME)
@@ -1390,6 +1368,7 @@ static int osd_attr_set(const struct lu_env *env,
                         struct lustre_capa *capa)
 {
         struct osd_object *obj = osd_dt_obj(dt);
+        struct inode      *inode;
         int rc;
 
         LASSERT(handle != NULL);
@@ -1401,12 +1380,35 @@ static int osd_attr_set(const struct lu_env *env,
 
         OSD_EXEC_OP(handle, attr_set);
 
+        inode = obj->oo_inode;
+#ifdef HAVE_QUOTA_SUPPORT
+        if ((attr->la_valid & LA_UID && attr->la_uid != inode->i_uid) ||
+            (attr->la_valid & LA_GID && attr->la_gid != inode->i_gid)) {
+                struct osd_ctxt *save = &osd_oti_get(env)->oti_ctxt;
+                struct iattr iattr;
+                int rc;
+
+                iattr.ia_valid = 0;
+                if (attr->la_valid & LA_UID)
+                        iattr.ia_valid |= ATTR_UID;
+                if (attr->la_valid & LA_GID)
+                        iattr.ia_valid |= ATTR_GID;
+                iattr.ia_uid = attr->la_uid;
+                iattr.ia_gid = attr->la_gid;
+                osd_push_ctxt(env, save);
+                rc = ll_vfs_dq_transfer(inode, &iattr) ? -EDQUOT : 0;
+                osd_pop_ctxt(save);
+                if (rc != 0)
+                        return rc;
+        }
+#endif
+
         cfs_spin_lock(&obj->oo_guard);
-        rc = osd_inode_setattr(env, obj->oo_inode, attr);
+        rc = osd_inode_setattr(env, inode, attr);
         cfs_spin_unlock(&obj->oo_guard);
 
         if (!rc)
-                obj->oo_inode->i_sb->s_op->dirty_inode(obj->oo_inode);
+                inode->i_sb->s_op->dirty_inode(inode);
         return rc;
 }
 
