@@ -42,7 +42,6 @@ NFSCLIENT=true
 FAIL_ON_ERROR=false
 
 # common setup
-#
 MACHINEFILE=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
 clients=${CLIENTS:-$HOSTNAME}
 generate_machine_file $clients $MACHINEFILE || \
@@ -50,44 +49,18 @@ generate_machine_file $clients $MACHINEFILE || \
 num_clients=$(get_node_count ${clients//,/ })
 
 # compilbench
-#
-cbench_DIR=${cbench_DIR:-"/usr/bin"}
-cbench_IDIRS=${cbench_IDIRS:-4}
-# FIXME: wiki page requirements is 30, do we really need 30 ?
-cbench_RUNS=${cbench_RUNS:-4}
-
 if [ "$SLOW" = "no" ]; then
     cbench_IDIRS=2
     cbench_RUNS=2
 fi
 
-#
 # metabench
-#
-METABENCH=${METABENCH:-$(which metabench 2> /dev/null || true)}
-mbench_NFILES=${mbench_NFILES:-30400}
 [ "$SLOW" = "no" ] && mbench_NFILES=10000
-# threads per client
-mbench_THREADS=${mbench_THREADS:-4}
 
-#
 # connectathon
-#
-cnt_DIR=${cnt_DIR:-""}
-cnt_NRUN=${cnt_NRUN:-10}
 [ "$SLOW" = "no" ] && cnt_NRUN=2
 
-#
 # IOR
-#
-IOR=${IOR:-$(which IOR 2> /dev/null || true)}
-# threads per client
-ior_THREADS=${ior_THREADS:-2}
-ior_iteration=${ior_iteration:-1}
-ior_blockSize=${ior_blockSize:-6} # Gb
-ior_xferSize=${ior_xferSize:-2m}
-ior_type=${ior_type:-POSIX}
-ior_DURATION=${ior_DURATION:-60} # minutes
 [ "$SLOW" = "no" ] && ior_DURATION=30
 
 # source the common file after all parameters are set to take affect
