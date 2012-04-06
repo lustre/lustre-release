@@ -35,7 +35,7 @@ described as followed:
 thrlo          threads to start testing. skipped if less than dir_count
 thrhi          maximum number of threads to test
 targets        MDT instance
-file_count     total number of files to test
+file_count     total number of files per thread to test
 dir_count      total number of directories to test
 stripe_count   number stripe on OST objects
 tests_str      test operations. Must have at least "create" and "destroy"
