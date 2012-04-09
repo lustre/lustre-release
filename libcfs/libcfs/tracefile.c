@@ -915,15 +915,17 @@ int cfs_trace_set_debug_mb(int mb)
         struct cfs_trace_cpu_data *tcd;
 
         if (mb < cfs_num_possible_cpus()) {
-                printk(KERN_ERR "Cannot set debug_mb to %d, the value should be >= %d\n",
-                       mb, cfs_num_possible_cpus());
-                return -EINVAL;
+                printk(CFS_KERN_WARNING
+                       "Lustre: %d MB is too small for debug buffer size, "
+                       "setting it to %d MB.\n", mb, cfs_num_possible_cpus());
+                mb = cfs_num_possible_cpus();
         }
 
         if (mb > limit) {
-                printk(CFS_KERN_ERR "Lustre: Refusing to set debug buffer size "
-                       "to %dMB - limit is %d\n", mb, limit);
-                return -EINVAL;
+                printk(CFS_KERN_WARNING
+                       "Lustre: %d MB is too large for debug buffer size, "
+                       "setting it to %d MB.\n", mb, limit);
+                mb = limit;
         }
 
         mb /= cfs_num_possible_cpus();

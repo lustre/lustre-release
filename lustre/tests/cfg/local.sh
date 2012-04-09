@@ -52,13 +52,6 @@ else
     _debug_mb=$(($(getconf _NPROCESSORS_CONF)*2))
 fi
 
-# but not less then 10Mb, and limited by 512Mb in libcfs
-if (( _debug_mb < 10 )); then
-        _debug_mb=10
-elif ((_debug_mb > 512 )); then
-        _debug_mb=512
-fi
-
 DEBUG_SIZE=${DEBUG_SIZE:-$_debug_mb}
 
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
