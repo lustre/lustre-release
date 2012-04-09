@@ -1660,9 +1660,20 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
                                         lld = ll_d2d(*dentryp);
                                         if (unlikely(lld == NULL))
                                                 ll_dops_init(*dentryp, 1, 1);
+                                } else if ((*dentryp)->d_inode != inode) {
+                                        /* revalidate, but inode is recreated */
+                                        CDEBUG(D_READA,
+                                              "stale dentry %.*s inode %lu/%u, "
+                                              "statahead inode %lu/%u\n",
+                                              (*dentryp)->d_name.len,
+                                              (*dentryp)->d_name.name,
+                                              (*dentryp)->d_inode->i_ino,
+                                              (*dentryp)->d_inode->i_generation,
+                                              inode->i_ino,
+                                              inode->i_generation);
+                                        ll_sai_unplug(sai, entry);
+                                        RETURN(-ESTALE);
                                 } else {
-                                        LASSERT((*dentryp)->d_inode == inode);
-
                                         ll_dentry_rehash(*dentryp, 0);
                                         iput(inode);
                                 }
@@ -1732,9 +1743,9 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
 
         /*
          * We don't stat-ahead for the first dirent since we are already in
-         * lookup, and -EEXIST also indicates that this is the first dirent.
+         * lookup.
          */
-        RETURN(-EEXIST);
+        RETURN(-EAGAIN);
 
 out:
         if (sai != NULL)

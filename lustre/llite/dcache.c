@@ -504,6 +504,8 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
                 rc = ll_statahead_enter(parent, &de, 0);
                 if (rc == 1)
                         goto mark;
+                else if (rc != -EAGAIN && rc != 0)
+                        GOTO(out, rc = 0);
         }
 
 do_lock:
