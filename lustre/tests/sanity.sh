@@ -4942,6 +4942,16 @@ test_79() { # bug 12743
 run_test 79 "df report consistency check ======================="
 
 test_80() { # bug 10718
+        # relax strong synchronous semantics for slow backends like ZFS
+        local soc="obdfilter.*.sync_on_lock_cancel"
+        local soc_old=$(do_facet ost1 lctl get_param -n $soc | head -n1)
+        local hosts=
+        if [ "$soc_old" != "never" -a "$FSTYPE" != "ldiskfs" ]; then
+                hosts=$(for host in $(seq -f "ost%g" 1 $OSTCOUNT); do
+                          facet_active_host $host; done | sort -u)
+                do_nodes $hosts lctl set_param $soc=never
+        fi
+
         dd if=/dev/zero of=$DIR/$tfile bs=1M count=1 seek=1M
         sync; sleep 1; sync
         local BEFORE=`date +%s`
@@ -4951,6 +4961,9 @@ test_80() { # bug 10718
         if [ $DIFF -gt 1 ] ; then
                 error "elapsed for 1M@1T = $DIFF"
         fi
+
+        [ -n "$hosts" ] && do_nodes $hosts lctl set_param $soc=$soc_old
+
         true
         rm -f $DIR/$tfile
 }
