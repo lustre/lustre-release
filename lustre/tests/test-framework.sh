@@ -122,9 +122,6 @@ init_test_env() {
 
     export LFSCK_ALWAYS=${LFSCK_ALWAYS:-"no"} # check fs after each test suite
     export FSCK_MAX_ERR=4   # File system errors left uncorrected
-    export SHARED_DIRECTORY=${SHARED_DIRECTORY:-"/tmp"}
-    export MDSDB=${MDSDB:-$SHARED_DIRECTORY/mdsdb}
-    export OSTDB=${OSTDB:-$SHARED_DIRECTORY/ostdb}
     declare -a OSTDEVS
 
     #[ -d /r ] && export ROOT=${ROOT:-/r}
@@ -2231,23 +2228,27 @@ run_e2fsck() {
     return 0
 }
 
+# verify a directory is shared among nodes.
+check_shared_dir() {
+    local dir=$1
+
+    [ -z "$dir" ] && return 1
+    do_rpc_nodes $(comma_list $(nodes_list)) check_logdir $dir
+    check_write_access $dir || return 1
+    return 0
+}
+
 # Run e2fsck on MDT and OST(s) to generate databases used for lfsck.
 generate_db() {
     local i
     local ostidx
     local dev
-    local tmp_file
 
-    tmp_file=$(mktemp -p $SHARED_DIRECTORY ||
-        error_exit "fail to create file in $SHARED_DIRECTORY")
+    check_shared_dir $SHARED_DIRECTORY ||
+        error "$SHARED_DIRECTORY isn't a shared directory"
 
-    # make sure everything gets to the backing store
-    local list=$(comma_list $CLIENTS $(facet_host mds) $(osts_nodes))
-    do_nodes $list "sync; sleep 2; sync"
-
-    do_nodes $list ls $tmp_file || \
-        error_exit "$SHARED_DIRECTORY is not a shared directory"
-    rm $tmp_file
+    export MDSDB=$SHARED_DIRECTORY/mdsdb
+    export OSTDB=$SHARED_DIRECTORY/ostdb
 
     run_e2fsck $(facet_host mds) $MDSDEV "--mdsdb $MDSDB"
 
@@ -3887,18 +3888,23 @@ check_logdir() {
         # Not found. Create local logdir
         mkdir -p $dir
     else
-        touch $dir/node.$(hostname).yml
+        touch $dir/check_file.$(hostname)
     fi
     return 0
 }
 
 check_write_access() {
     local dir=$1
+    local node
+    local file
+
     for node in $(nodes_list); do
-        if [ ! -f "$dir/node.${node}.yml" ]; then
+        file=$dir/check_file.$node
+        if [[ ! -f $file ]]; then
             # Logdir not accessible/writable from this node.
             return 1
         fi
+        rm -f $file || return 1
     done
     return 0
 }
@@ -3911,18 +3917,18 @@ init_logging() {
     mkdir -p $LOGDIR
     init_clients_lists
 
-    if [ ! -f $YAML_LOG ]; then       # If the yaml log already exists then we will just append to it
-      do_rpc_nodes $(comma_list $(nodes_list)) check_logdir $LOGDIR
-      if check_write_access $LOGDIR; then
-          touch $LOGDIR/shared
-          echo "Logging to shared log directory: $LOGDIR"
-      else
-          echo "Logging to local directory: $LOGDIR"
-      fi
+    # If the yaml log already exists then we will just append to it.
+    [[ -f $YAML_LOG ]] && return 0
 
-      yml_nodes_file $LOGDIR >> $YAML_LOG
-      yml_results_file >> $YAML_LOG
+    if check_shared_dir $LOGDIR; then
+        touch $LOGDIR/shared
+        echo "Logging to shared log directory: $LOGDIR"
+    else
+        echo "Logging to local directory: $LOGDIR"
     fi
+
+    yml_nodes_file $LOGDIR >> $YAML_LOG
+    yml_results_file >> $YAML_LOG
 }
 
 log_test() {
