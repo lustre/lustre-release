@@ -1598,6 +1598,7 @@ fail_abort() {
     local facet=$1
     stop $facet
     change_active $facet
+    wait_for_facet $facet
     mount_facet $facet -o abort_recovery
     clients_up || echo "first df failed: $?"
     clients_up || error "post-failover df: $?"
@@ -2738,15 +2739,18 @@ at_is_enabled() {
     fi
 }
 
-at_max_get() {
+at_get() {
     local facet=$1
+    local at=$2
 
-    # suppose that all ost-s has the same at_max set
-    if [ $facet == "ost" ]; then
-        do_facet ost1 "lctl get_param -n at_max"
-    else
-        do_facet $facet "lctl get_param -n at_max"
-    fi
+    # suppose that all ost-s have the same $at value set
+    [[ $facet = ost ]] && facet=ost1
+
+    do_facet $facet "lctl get_param -n $at"
+}
+
+at_max_get() {
+    at_get $1 at_max
 }
 
 at_max_set() {
@@ -2754,20 +2758,17 @@ at_max_set() {
     shift
 
     local facet
+    local hosts
     for facet in $@; do
         if [ $facet == "ost" ]; then
-            for i in `seq $OSTCOUNT`; do
-                do_facet ost$i "lctl set_param at_max=$at_max"
-
-            done
+            facet=$(get_facets OST)
         elif [ $facet == "mds" ]; then
-            for i in `seq $MDSCOUNT`; do
-                do_facet mds$i "lctl set_param at_max=$at_max"
-            done
-        else
-            do_facet $facet "lctl set_param at_max=$at_max"
+            facet=$(get_facets MDS)
         fi
+        hosts=$(expand_list $hosts $(facets_hosts $facet))
     done
+
+    do_nodes $hosts lctl set_param at_max=$at_max
 }
 
 ##################################
@@ -3851,12 +3852,19 @@ get_osc_import_name() {
 _wait_import_state () {
     local expected=$1
     local CONN_PROC=$2
-    local maxtime=${3:-max_recovery_time}
+    local maxtime=${3:-$(max_recovery_time)}
     local CONN_STATE
     local i=0
 
     CONN_STATE=$($LCTL get_param -n $CONN_PROC 2>/dev/null | cut -f2)
     while [ "${CONN_STATE}" != "${expected}" ]; do
+        if [ "${expected}" == "DISCONN" ]; then
+            # for disconn we can check after proc entry is removed
+            [ "x${CONN_STATE}" == "x" ] && return 0
+            #  with AT enabled, we can have connect request timeout near of
+            # reconnect timeout and test can't see real disconnect
+            [ "${CONN_STATE}" == "CONNECTING" ] && return 0
+        fi
         [ $i -ge $maxtime ] && \
             error "can't put import for $CONN_PROC into ${expected} state after $i sec, have ${CONN_STATE}" && \
             return 1
@@ -3872,43 +3880,78 @@ _wait_import_state () {
 wait_import_state() {
     local state=$1
     local params=$2
-    local maxtime=${3:-max_recovery_time}
+    local maxtime=${3:-$(max_recovery_time)}
     local param
 
     for param in ${params//,/ }; do
         _wait_import_state $state $param $maxtime || return
     done
 }
+
+# One client request could be timed out because server was not ready
+# when request was sent by client.
+# The request timeout calculation details :
+# ptl_send_rpc ()
+#      /* We give the server rq_timeout secs to process the req, and
+#      add the network latency for our local timeout. */
+#      request->rq_deadline = request->rq_sent + request->rq_timeout +
+#           ptlrpc_at_get_net_latency(request) ;
+#
+# ptlrpc_connect_import ()
+#      request->rq_timeout = INITIAL_CONNECT_TIMEOUT
+#
+# init_imp_at () ->
+#   -> at_init(&at->iat_net_latency, 0, 0) -> iat_net_latency=0
+# ptlrpc_at_get_net_latency(request) ->
+#       at_get (max (iat_net_latency=0, at_min)) = at_min
+#
+# i.e.:
+# request->rq_timeout + ptlrpc_at_get_net_latency(request) =
+# INITIAL_CONNECT_TIMEOUT + at_min
+#
+# We will use obd_timeout instead of INITIAL_CONNECT_TIMEOUT
+# because we can not get this value in runtime,
+# the value depends on configure options, and it is not stored in /proc.
+# obd_support.h:
+# #define CONNECTION_SWITCH_MIN 5U
+# #ifndef CRAY_XT3
+# #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
+# #else
+# #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
+
+request_timeout () {
+    local facet=$1
+
+    # request->rq_timeout = INITIAL_CONNECT_TIMEOUT
+    local init_connect_timeout=$TIMEOUT
+    [[ $init_connect_timeout -ge 5 ]] || init_connect_timeout=5
+
+    local at_min=$(at_get $facet at_min)
+
+    echo $((init_connect_timeout + at_min))
+}
+
 wait_osc_import_state() {
     local facet=$1
     local ost_facet=$2
     local expected=$3
     local ost=$(get_osc_import_name $facet $ost_facet)
-    local CONN_PROC
-    local CONN_STATE
-    local i=0
 
-    CONN_PROC="osc.${ost}.ost_server_uuid"
-    CONN_STATE=$(do_facet $facet lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
-    while [ "${CONN_STATE}" != "${expected}" ]; do
-        if [ "${expected}" == "DISCONN" ]; then 
-            # for disconn we can check after proc entry is removed
-            [ "x${CONN_STATE}" == "x" ] && return 0
-            #  with AT we can have connect request timeout ~ reconnect timeout
-            # and test can't see real disconnect
-            [ "${CONN_STATE}" == "CONNECTING" ] && return 0
-        fi
-        # disconnect rpc should be wait not more obd_timeout
-        [ $i -ge $(($TIMEOUT * 3 / 2)) ] && \
-            error "can't put import for ${ost}(${ost_facet}) into ${expected} state" && return 1
-        sleep 1
-        CONN_STATE=$(do_facet $facet lctl get_param -n $CONN_PROC 2>/dev/null | cut -f2)
-        i=$(($i + 1))
-    done
+    local param="osc.${ost}.ost_server_uuid"
 
-    log "${ost_facet} now in ${CONN_STATE} state"
+    # 1. wait the deadline of client 1st request (it could be skipped)
+    # 2. wait the deadline of client 2nd request
+    local maxtime=$(( 2 * $(request_timeout $facet)))
+
+    if ! do_rpc_nodes $(facet_host $facet) \
+        _wait_import_state $expected $param $maxtime; then
+            error "import is not in ${expected} state"
+            return 1
+    fi
+
     return 0
 }
+
 get_clientmdc_proc_path() {
     echo "${1}-mdc-*"
 }
@@ -4135,12 +4178,13 @@ do_ls () {
 #define CONNECTION_SWITCH_MIN 5U
 
 max_recovery_time () {
-    local init_connect_timeout=$(( TIMEOUT / 20 ))
-    [[ $init_connect_timeout > 5 ]] || init_connect_timeout=5 
+    local init_connect_timeout=$((TIMEOUT / 20))
+    [[ $init_connect_timeout -ge 5 ]] || init_connect_timeout=5
 
-    local service_time=$(( $(at_max_get client) + $(( 2 * $(( 25 + 1  + init_connect_timeout)) )) ))
+    local service_time=$(($(at_max_get client) +
+                          $((2 * $((25 + 1 + init_connect_timeout))))))
 
-    echo $service_time 
+    echo $service_time
 }
 
 get_clients_mount_count () {
