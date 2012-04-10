@@ -38,6 +38,9 @@
 #include <linux/sched.h>
 #include <linux/mm.h>
 #include <linux/smp_lock.h>
+#ifdef HAVE_SELINUX_IS_ENABLED
+#include <linux/selinux.h>
+#endif
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
@@ -133,6 +136,11 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if ((xattr_type == XATTR_SECURITY_T &&
             strcmp(name, "security.capability") == 0))
                 RETURN(0);
+
+        /* LU-549:  Disable security.selinux when selinux is disabled */
+        if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled() &&
+            strcmp(name, "security.selinux") == 0)
+                RETURN(-EOPNOTSUPP);
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
