@@ -535,7 +535,9 @@ ldlm_flock_interrupted_wait(void *data)
         ldlm_flock_blocking_unlink(lock);
 
         /* client side - set flag to prevent lock from being put on lru list */
+        lock_res_and_lock(lock);
         lock->l_flags |= LDLM_FL_CBPENDING;
+        unlock_res_and_lock(lock);
 
         EXIT;
 }
