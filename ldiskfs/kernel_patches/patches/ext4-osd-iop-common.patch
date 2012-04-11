@@ -15,7 +15,7 @@ diff -rupN linux-2.6.27.21-0.1_1//fs/ext4/ext4.h linux-2.6.27.21-0.1_2//fs/ext4/
 +extern struct buffer_head * ext4_find_entry(struct inode *dir,
 +					    const struct qstr *d_name,
 +					    struct ext4_dir_entry_2 ** res_dir);
-+#define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(dir, &(dentry)->d_name, res_dir)
++#define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(inode, &(dentry)->d_name, res_dir)
 +extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 +				  struct inode *inode);
  extern int ext4_orphan_add(handle_t *, struct inode *);

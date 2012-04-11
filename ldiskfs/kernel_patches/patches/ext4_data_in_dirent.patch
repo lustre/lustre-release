@@ -165,7 +165,7 @@ Index: linux-stage/fs/ext4/ext4.h
  static inline unsigned int
 @@ -1611,7 +1654,7 @@ extern struct buffer_head * ext4_find_en
  					    struct ext4_dir_entry_2 ** res_dir);
- #define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(dir, &(dentry)->d_name, res_dir)
+ #define ll_ext4_find_entry(inode, dentry, res_dir) ext4_find_entry(inode, &(dentry)->d_name, res_dir)
  extern int ext4_add_dot_dotdot(handle_t *handle, struct inode *dir,
 -				  struct inode *inode);
 +			  struct inode *inode, const void *, const void *);
