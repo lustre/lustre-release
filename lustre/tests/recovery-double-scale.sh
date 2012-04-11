@@ -1,4 +1,5 @@
 #!/bin/bash
+# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 
 # All pairwise combinations of node failures.
 # Was cmd3-17
@@ -8,95 +9,73 @@
 # Script fails pair of nodes:
 # --  in parallel by default
 # --  in series if SERIAL is set
+set -e
 
-LUSTRE=${LUSTRE:-`dirname $0`/..}
-SETUP=${SETUP:-""}
-CLEANUP=${CLEANUP:-""}
+ONLY=${ONLY:-"$*"}
+
+# bug number for skipped test:
+ALWAYS_EXCEPT="$RECOVERY_DOUBLE_SCALE_EXCEPT"
+# UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
+
+LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
-
 init_test_env $@
-
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
-TESTSUITELOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh)}
-DEBUGLOG=$TESTSUITELOG.debug
 
-cleanup_logs
+remote_mds_nodsh && skip_env "remote MDS with nodsh" && exit 0
+remote_ost_nodsh && skip_env "remote OST with nodsh" && exit 0
 
-exec 2>$DEBUGLOG
-echo "--- env ---" >&2
-env >&2
-echo "--- env ---" >&2
-set -x
+[ -z "$CLIENTS" -o $CLIENTCOUNT -lt 3 ] &&
+    skip_env "need three or more clients" && exit 0
 
-[ "$SHARED_DIRECTORY" ] || \
-    { FAIL_ON_ERROR=true skip_env "$0 Empty SHARED_DIRECTORY" && exit 0; }
-
-check_shared_dir $SHARED_DIRECTORY ||
-    error "$SHARED_DIRECTORY isn't a shared directory"
-
-[ -n "$CLIENTS" ] || \
-    { FAIL_ON_ERROR=true skip_env "$0 Need two or more remote clients" && exit 0; }
-
-[ $CLIENTCOUNT -ge 3 ] || \
-    { FAIL_ON_ERROR=true skip_env "$0 Need two or more remote clients, have $((CLIENTCOUNT - 1))" && exit 0; }
-
-END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY/end_run_file}
-LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
-
-remote_mds_nodsh && skip "remote MDS with nodsh" && exit 0
-remote_ost_nodsh && skip "remote OST with nodsh" && exit 0
-
-check_timeout || exit 1
+if [ -z "$SHARED_DIRECTORY" ] || ! check_shared_dir $SHARED_DIRECTORY; then
+    skip_env "SHARED_DIRECTORY should be specified with a shared directory \
+which is accessable on all of the nodes"
+    exit 0
+fi
 
 [[ $FAILURE_MODE = SOFT ]] && \
     log "WARNING: $0 is not functional with FAILURE_MODE = SOFT, bz22797"
 
-build_test_filter
+# Set SERIAL to serialize the failure through a recovery of the first failure.
+SERIAL=${SERIAL:-""}
+ERRORS_OK="yes"
 
-check_and_setup_lustre
-rm -rf $DIR/[df][0-9]*
+[ "$SERIAL" ] && ERRORS_OK=""
 
-# the test node needs to be insulated from a lustre failure as much as possible,
-# so not even loading the lustre modules is ideal.
-# -- umount lustre
-# -- remove hostname from clients list
-zconf_umount $(hostname) $MOUNT
-NODES_TO_USE=${NODES_TO_USE:-$CLIENTS}
-NODES_TO_USE=$(exclude_items_from_list $NODES_TO_USE $(hostname))
+FAILOVER_PERIOD=${FAILOVER_PERIOD:-$((60 * 5))} # 5 minutes
 
-check_progs_installed $NODES_TO_USE ${CLIENT_LOADS[@]}
-
-MDTS=$(get_facets MDS)
-OSTS=$(get_facets OST)
-
-rm -f $END_RUN_FILE
+END_RUN_FILE=${END_RUN_FILE:-$SHARED_DIRECTORY/end_run_file}
+LOAD_PID_FILE=${LOAD_PID_FILE:-$TMP/client-load.pid}
 
 reboot_recover_node () {
     # item var contains a pair of clients if nodetype=clients
     # I would prefer to have a list here
     local item=$1
-    local nodetype=$2	
-    local timeout=$($LCTL get_param  -n timeout)
+    local nodetype=$2
+    local c
 
     # MDS, OST item contains the facet
     case $nodetype in
-       MDS|OST )    facet_failover $item
-                [ "$SERIAL" ] && wait_recovery_complete $item || true
-                ;;
-       clients) for c in ${item//,/ }; do
-                      shutdown_client $c
-                      boot_node $c
-                      echo "Reintegrating $c"
-                      # one client fails; need dk logs from this client only
-                      zconf_mount $c $MOUNT || NODES="$c $(facet_host mds) $(osts_nodes)" error_exit "zconf_mount failed"
-                 done
-                 start_client_loads $item
-                 ;;
-                # script failure:
-                # don't use error (), the logs from all nodes not needed
-       * )      echo "reboot_recover_node: nodetype=$nodetype. Must be one of 'MDS', 'OST', or 'clients'."
-                exit 1;;
+        MDS|OST )   facet_failover $item
+                    [ "$SERIAL" ] && wait_recovery_complete $item || true
+                    ;;
+        clients)    for c in ${item//,/ }; do
+                        # make sure the client loads die
+                        stop_process $c $LOAD_PID_FILE
+                        shutdown_client $c
+                        boot_node $c
+                        echo "Reintegrating $c"
+                        zconf_mount $c $MOUNT ||
+                            error_exit "mount $MOUNT on $c failed"
+                        client_up $c || error_exit "start client on $c failed"
+                    done
+                    start_client_loads $item
+                    ;;
+        * )         echo "ERROR: invalid nodetype=$nodetype." \
+                         "Must be one of 'MDS', 'OST', or 'clients'."
+                    exit 1;;
     esac
 }
 
@@ -108,11 +87,9 @@ get_item_type () {
     case $type in
        MDS )    list=$MDTS;;
        OST )    list=$OSTS;;
-       clients) list=$NODES_TO_USE
-                ;;
-                # script failure:
-                # don't use error (), the logs from all nodes not needed
-       * )      echo "Invalid type=$type. Must be one of 'MDS', 'OST', or 'clients'."
+       clients) list=$NODES_TO_USE;;
+       * )      echo "ERROR: invalid type=$type." \
+                     "Must be one of 'MDS', 'OST', or 'clients'."
                 exit 1;;
     esac
 
@@ -123,8 +100,8 @@ get_item_type () {
         return
     fi
 
-    item=$(get_random_entry $list)
-    if [ "$type" = clients ] ; then
+    local item=$(get_random_entry $list)
+    if [ "$type" = "clients" ]; then
         item="$item $(get_random_entry $(exclude_items_from_list $list $item))"
         item=$(comma_list $item)
     fi
@@ -148,27 +125,24 @@ failover_pair() {
     local client2=
 
     log "
-==== START === $title "
+==== START === $title"
 
     item1=$(get_item_type $type1)
     [ "$item1" ] || \
         { echo "type1=$type1 item1 is empty" && return 0; }
     item2=$(get_item_type $type2 $item1)
     [ "$item2" ] || \
-        { echo "type1=$type1 item1=$item1 type2=$type2 item2=$item2 is empty" && return 0; }
+        { echo "type1=$type1 item1=$item1 type2=$type2 item2=$item2 is empty" \
+          && return 0; }
 
     # Check that our client loads are still running. If any have died,
     # that means they have died outside of recovery, which is unacceptable.
     log "==== Checking the clients loads BEFORE failover -- failure NOT OK"
-
     # FIXME. need print summary on exit
-    if ! check_client_loads $NODES_TO_USE; then
-        exit 4
-    fi
+    check_client_loads $NODES_TO_USE || exit $?
 
     log "Done checking client loads. Failing type1=$type1 item1=$item1 ... "
-
-    reboot_recover_node $item1 $type1
+    reboot_recover_node $item1 $type1 || exit $?
 
     # Hendrix test17 description:
     # Introduce a failure, wait at
@@ -183,13 +157,13 @@ failover_pair() {
     # do not need a sleep between failures for "double failures"
 
     log "                            Failing type2=$type2 item2=$item2 ... "
-    reboot_recover_node $item2 $type2
+    reboot_recover_node $item2 $type2 || exit $?
 
     # Client loads are allowed to die while in recovery, so we just
     # restart them.
-    log "==== Checking the clients loads AFTER  failovers -- ERRORS_OK=$ERRORS_OK"
-    restart_client_loads $NODES_TO_USE $ERRORS_OK || return $?
-    log "Done checking / re-Starting client loads. PASS"
+    log "==== Checking the clients loads AFTER failover -- ERRORS_OK=$ERRORS_OK"
+    restart_client_loads $NODES_TO_USE $ERRORS_OK || exit $?
+    log "Done checking / re-starting client loads. PASS"
     return 0
 }
 
@@ -197,25 +171,12 @@ summary_and_cleanup () {
     local rc=$?
     trap 0
 
+    CURRENT_TS=$(date +%s)
+    ELAPSED=$((CURRENT_TS - START_TS))
+
     # Having not empty END_RUN_FILE means the failed loads only
     if [ -s $END_RUN_FILE ]; then
-        echo "Found the END_RUN_FILE file: $END_RUN_FILE"
-        cat $END_RUN_FILE
-        local END_RUN_NODE=
-        read END_RUN_NODE < $END_RUN_FILE
-
-        # a client load will end (i.e. fail) if it finds
-        # the end run file.  that does not mean that that client load
-        # actually failed though.  the first node in the END_RUN_NODE is
-        # the one we are really interested in.
-        if [ -n "$END_RUN_NODE" ]; then
-            var=$(node_var_name $END_RUN_NODE)_load
-            echo "Client load failed on node $END_RUN_NODE"
-            echo
-            echo "client $END_RUN_NODE load debug output :"
-            local logfile=${TESTSUITELOG}_run_${!var}.sh-${END_RUN_NODE}.debug
-            do_node ${END_RUN_NODE} "set -x; [ -e $logfile ] && cat $logfile " || true
-        fi
+        print_end_run_file $END_RUN_FILE
         rc=1
     fi
 
@@ -229,109 +190,118 @@ Server failover period: $FAILOVER_PERIOD seconds
 Exited after:           $ELAPSED seconds
 Status: $result: rc=$rc"
 
-    # make sure the client loads die
-    do_nodes $NODES_TO_USE "set -x; test -f $TMP/client-load.pid && \
-        { kill -s TERM \$(cat $TMP/client-load.pid) || true; }"
-
-    # and free up the pdshes that started them, if any are still around
-    if [ -n "$CLIENT_LOAD_PIDS" ]; then
-        kill $CLIENT_LOAD_PIDS || true
-        sleep 5
-        kill -9 $CLIENT_LOAD_PIDS || true
-    fi
+    # stop the client loads
+    stop_client_loads $NODES_TO_USE $LOAD_PID_FILE
 
     if [ $rc -ne 0 ]; then
         # we are interested in only on failed clients and servers
         local failedclients=$(cat $END_RUN_FILE | grep -v $0)
         # FIXME: need ostfailover-s nodes also for FLAVOR=OST
-        local product=$(gather_logs $(comma_list $(osts_nodes) \
-                                 $mds_HOST $mdsfailover_HOST $failedclients))
-        echo logs files $product
+        gather_logs $(comma_list $(osts_nodes) $mds_HOST \
+                      $mdsfailover_HOST $failedclients)
     fi
 
-    [ $rc -eq 0 ] && zconf_mount $(hostname) $MOUNT
     exit $rc
 }
 
-trap summary_and_cleanup EXIT TERM INT
+################################## Main Flow ###################################
+build_test_filter
 
-#
-# MAIN
-#
-log "-----============= $0 starting =============-----"
+check_and_setup_lustre
+rm -rf $DIR/[Rdfs][0-9]*
 
+check_timeout || exit 1
+
+# The test node needs to be insulated from a lustre failure as much as possible,
+# so not even loading the lustre modules is ideal.
+# -- umount lustre
+# -- remove hostname from clients list
+zconf_umount $HOSTNAME $MOUNT
+NODES_TO_USE=${NODES_TO_USE:-$CLIENTS}
+NODES_TO_USE=$(exclude_items_from_list $NODES_TO_USE $HOSTNAME)
+
+check_progs_installed $NODES_TO_USE ${CLIENT_LOADS[@]}
+
+MDTS=$(get_facets MDS)
+OSTS=$(get_facets OST)
+
+ELAPSED=0
 START_TS=$(date +%s)
 CURRENT_TS=$START_TS
-ELAPSED=0
 
-# Set SERIAL to serialize the failure through a recovery of the first failure.
-SERIAL=${SERIAL:-""}
-ERRORS_OK="yes"
+# Every pairwise combination of client failures (2 clients),
+# MDS failure, and OST failure will be tested.
+test_pairwise_fail() {
+    trap summary_and_cleanup EXIT TERM INT
 
-[ "$SERIAL" ] && ERRORS_OK=""
+    # Start client loads.
+    rm -f $END_RUN_FILE
+    start_client_loads $NODES_TO_USE
 
-FAILOVER_PERIOD=${FAILOVER_PERIOD:-$((60*5))} # 5 minutes
+    echo clients load pids:
+    do_nodesv $NODES_TO_USE "cat $LOAD_PID_FILE" || exit 3
 
-# Start client loads.
-start_client_loads $NODES_TO_USE
-echo clients load pids:
-if ! do_nodesv $NODES_TO_USE "cat $TMP/client-load.pid"; then
-        exit 3
-fi
-
-# FIXME: Do we want to have an initial sleep period where the clients
-# just run before introducing a failure?
-sleep $FAILOVER_PERIOD
-
-#CMD_TEST_NUM=17.1
-failover_pair MDS OST     "test 1: failover MDS, then OST =========="
-sleep $FAILOVER_PERIOD
-
-#CMD_TEST_NUM=17.2
-failover_pair MDS clients "test 2: failover MDS, then 2 clients ===="
-sleep $FAILOVER_PERIOD
-
-#CMD_TEST_NUM=17.3
-# No test 3 for 1.8.x lustre version
-
-#CMD_TEST_NUM=17.4
-if [ $OSTCOUNT -gt 1 ]; then
-    failover_pair OST OST     "test 4: failover OST, then another OST =="
+    # FIXME: Do we want to have an initial sleep period where the clients
+    # just run before introducing a failure?
     sleep $FAILOVER_PERIOD
-else
-    skip "$0 : $OSTCOUNT < 2 OSTs, test 4 skipped"
-fi
 
-#CMD_TEST_NUM=17.5
-failover_pair OST clients "test 5: failover OST, then 2 clients ===="
-sleep $FAILOVER_PERIOD
-
-#CMD_TEST_NUM=17.6
-failover_pair OST MDS     "test 6: failover OST, then MDS =========="
-sleep $FAILOVER_PERIOD
-
-#CMD_TEST_NUM=17.7
-failover_pair clients MDS "test 7: failover 2 clients, then MDS ===="
-sleep $FAILOVER_PERIOD
-
-#CMD_TEST_NUM=17.8
-#failover_pair clients OST "test 8: failover 2 clients, then OST ===="
-sleep $FAILOVER_PERIOD
-
-#CMD_TEST_NUM=17.9
-if [ $CLIENTCOUNT -ge 5 ]; then
-    failover_pair clients clients "test 9: failover 2 clients, then 2 different clients =="
+    # CMD_TEST_NUM=17.1
+    failover_pair MDS OST "test 1: failover MDS, then OST =========="
     sleep $FAILOVER_PERIOD
-fi
-log "==== Checking the clients loads AFTER  all failovers -- failure NOT OK"
-if ! check_client_loads $NODES_TO_USE; then
-    log "Client load failed after failover. Exiting"
-    exit 5
-fi
 
-CURRENT_TS=$(date +%s)
-ELAPSED=$((CURRENT_TS - START_TS))
+    # CMD_TEST_NUM=17.2
+    failover_pair MDS clients "test 2: failover MDS, then 2 clients ===="
+    sleep $FAILOVER_PERIOD
 
-log "Completed successfully in $ELAPSED seconds"
+    # CMD_TEST_NUM=17.3
+    # No test 3 for 1.8.x Lustre version.
 
-exit 0
+    # CMD_TEST_NUM=17.4
+    if [ $OSTCOUNT -gt 1 ]; then
+        failover_pair OST OST "test 4: failover OST, then another OST =="
+        sleep $FAILOVER_PERIOD
+    else
+        skip_env "has less than 2 OSTs, test 4 skipped"
+    fi
+
+    # CMD_TEST_NUM=17.5
+    failover_pair OST clients "test 5: failover OST, then 2 clients ===="
+    sleep $FAILOVER_PERIOD
+
+    # CMD_TEST_NUM=17.6
+    failover_pair OST MDS "test 6: failover OST, then MDS =========="
+    sleep $FAILOVER_PERIOD
+
+    # CMD_TEST_NUM=17.7
+    failover_pair clients MDS "test 7: failover 2 clients, then MDS ===="
+    sleep $FAILOVER_PERIOD
+
+    # CMD_TEST_NUM=17.8
+    failover_pair clients OST "test 8: failover 2 clients, then OST ===="
+    sleep $FAILOVER_PERIOD
+
+    # CMD_TEST_NUM=17.9
+    if [ $CLIENTCOUNT -gt 4 ]; then
+        failover_pair clients clients \
+            "test 9: failover 2 clients, then 2 different clients =="
+        sleep $FAILOVER_PERIOD
+    else
+        skip_env "has less than 5 Clients, test 9 skipped"
+    fi
+
+    log "==== Checking the clients loads AFTER all failovers -- failure NOT OK"
+    if ! check_client_loads $NODES_TO_USE; then
+        log "Client load failed after failover. Exiting..."
+        exit 5
+    fi
+
+    exit 0
+}
+run_test pairwise_fail "pairwise combination of clients, MDS, and OST failures"
+
+zconf_mount $HOSTNAME $MOUNT || error "mount $MOUNT on $HOSTNAME failed"
+client_up || error "start client on $HOSTNAME failed"
+
+complete $(basename $0) $SECONDS
+check_and_cleanup_lustre
+exit_status

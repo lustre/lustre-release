@@ -44,13 +44,13 @@ for prefix in $CLIENT_PREFIX; do
 	[ "x$CLIENT" != "x" ] && break;
 done
 
-if [ -n "$SRC" -a -s "$SRC" ]; then
-	CLIENT=${SRC}
+if [ -n "$DBENCH_SRC" -a -s "$DBENCH_SRC" ]; then
+    CLIENT=$DBENCH_SRC
 fi
 
-[ ! -s "$CLIENT" ] && \
-    skip_env "$0 : $(hostname) no client file found for dbench DBENCH_LIB=$DBENCH_LIB SRC=$SRC" && \
-        exit 0 
+[ ! -s "$CLIENT" ] &&
+    skip_env "$0: no client file found for dbench on $(hostname): "\
+             "DBENCH_LIB=$DBENCH_LIB DBENCH_SRC=$DBENCH_SRC" && exit 0
 
 [ ! -s "$TGT" ] && echo "copying $CLIENT to $TGT" && cp $CLIENT $TGT
 [ ! -s "$TGT" ] && \
