@@ -88,6 +88,18 @@ void cfs_mem_cache_free(cfs_mem_cache_t *c, void *addr);
 int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem);
 
 /*
+ * NUMA allocators
+ */
+#define cfs_cpt_malloc(cptab, cpt, bytes, flags)	\
+	cfs_alloc(bytes, flags)
+#define cfs_cpt_vmalloc(cptab, cpt, bytes)		\
+	cfs_alloc(bytes)
+#define cfs_page_cpt_alloc(cptab, cpt, mask)		\
+	cfs_alloc_page(mask)
+#define cfs_mem_cache_cpt_alloc(cache, cptab, cpt, gfp)	\
+	cfs_mem_cache_alloc(cache, gfp)
+
+/*
  * Copy to/from user
  */
 static inline int cfs_copy_from_user(void *a,void *b, int c)

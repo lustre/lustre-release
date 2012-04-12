@@ -546,18 +546,21 @@ static inline void obd_pages_sub(int order)
 #define OBD_ALLOC_FAIL_MULT (OBD_ALLOC_FAIL_MASK / 100)
 
 #if defined(LUSTRE_UTILS) /* this version is for utils only */
-#define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
-do {                                                                          \
-        (ptr) = cfs_alloc(size, (gfp_mask));                                  \
-        if (unlikely((ptr) == NULL)) {                                        \
-                CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
-                       (int)(size), __FILE__, __LINE__);                      \
-        } else {                                                              \
-                memset(ptr, 0, size);                                         \
-                CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p\n",          \
-                       (int)(size), ptr);                                     \
-        }                                                                     \
+#define __OBD_MALLOC_VERBOSE(ptr, cptab, cpt, size, flags)		      \
+do {									      \
+	(ptr) = (cptab) == NULL ?					      \
+		cfs_alloc(size, flags) :				      \
+		cfs_cpt_malloc(cptab, cpt, size, flags);		      \
+	if (unlikely((ptr) == NULL)) {                                        \
+		CERROR("kmalloc of '" #ptr "' (%d bytes) failed at %s:%d\n",  \
+		       (int)(size), __FILE__, __LINE__);		      \
+	} else {							      \
+		memset(ptr, 0, size);					      \
+		CDEBUG(D_MALLOC, "kmalloced '" #ptr "': %d at %p\n",	      \
+		       (int)(size), ptr);				      \
+	}								      \
 } while (0)
+
 #else /* this version is for the kernel and liblustre */
 #define OBD_FREE_RTN0(ptr)                                                    \
 ({                                                                            \
@@ -565,9 +568,12 @@ do {                                                                          \
         (ptr) = NULL;                                                         \
         0;                                                                    \
 })
-#define OBD_ALLOC_GFP(ptr, size, gfp_mask)                                    \
-do {                                                                          \
-        (ptr) = cfs_alloc(size, (gfp_mask));                                  \
+
+#define __OBD_MALLOC_VERBOSE(ptr, cptab, cpt, size, flags)		      \
+do {									      \
+	(ptr) = (cptab) == NULL ?					      \
+		cfs_alloc(size, flags) :				      \
+		cfs_cpt_malloc(cptab, cpt, size, flags);		      \
         if (likely((ptr) != NULL &&                                           \
                    (!HAS_FAIL_ALLOC_FLAG || obd_alloc_fail_rate == 0 ||       \
                     !obd_alloc_fail(ptr, #ptr, "km", size,                    \
@@ -579,31 +585,53 @@ do {                                                                          \
 } while (0)
 #endif
 
-#ifndef OBD_ALLOC_MASK
-# define OBD_ALLOC_MASK CFS_ALLOC_IO
-#endif
+#define OBD_ALLOC_GFP(ptr, size, gfp_mask)				      \
+	__OBD_MALLOC_VERBOSE(ptr, NULL, 0, size, gfp_mask)
 
-#define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, OBD_ALLOC_MASK)
+#define OBD_ALLOC(ptr, size) OBD_ALLOC_GFP(ptr, size, CFS_ALLOC_IO)
 #define OBD_ALLOC_WAIT(ptr, size) OBD_ALLOC_GFP(ptr, size, CFS_ALLOC_STD)
 #define OBD_ALLOC_PTR(ptr) OBD_ALLOC(ptr, sizeof *(ptr))
 #define OBD_ALLOC_PTR_WAIT(ptr) OBD_ALLOC_WAIT(ptr, sizeof *(ptr))
 
+#define OBD_CPT_ALLOC_GFP(ptr, cptab, cpt, size, gfp_mask)		      \
+	__OBD_MALLOC_VERBOSE(ptr, cptab, cpt, size, gfp_mask)
+
+#define OBD_CPT_ALLOC(ptr, cptab, cpt, size)				      \
+	OBD_CPT_ALLOC_GFP(ptr, cptab, cpt, size, CFS_ALLOC_IO)
+
+#define OBD_CPT_ALLOC_PTR(ptr, cptab, cpt)				      \
+	OBD_CPT_ALLOC(ptr, cptab, cpt, sizeof *(ptr))
+
 #ifdef __arch_um__
-# define OBD_VMALLOC(ptr, size) OBD_ALLOC(ptr, size)
-#else
-# define OBD_VMALLOC(ptr, size)                                               \
-do {                                                                          \
-        (ptr) = cfs_alloc_large(size);                                        \
+
+# define OBD_VMALLOC(ptr, size)						      \
+	 OBD_ALLOC(ptr, size)
+# define OBD_CPT_VMALLOC(ptr, cptab, cpt, size)				      \
+	 OBD_CPT_ALLOC(ptr, cptab, cpt, size)
+
+#else /* !__arch_um__ */
+
+# define __OBD_VMALLOC_VEROBSE(ptr, cptab, cpt, size)			      \
+do {									      \
+	(ptr) = cptab == NULL ?						      \
+		cfs_alloc_large(size) :					      \
+		cfs_cpt_vmalloc(cptab, cpt, size);			      \
         if (unlikely((ptr) == NULL)) {                                        \
                 CERROR("vmalloc of '" #ptr "' (%d bytes) failed\n",           \
                        (int)(size));                                          \
                 CERROR(LPU64" total bytes allocated by Lustre, %d by LNET\n", \
                        obd_memory_sum(), cfs_atomic_read(&libcfs_kmemory));   \
         } else {                                                              \
-                memset(ptr, 0, size);                                         \
+		memset(ptr, 0, size);                                         \
                 OBD_ALLOC_POST(ptr, size, "vmalloced");                       \
         }                                                                     \
 } while(0)
+
+# define OBD_VMALLOC(ptr, size)						      \
+	 __OBD_VMALLOC_VEROBSE(ptr, NULL, 0, size)
+# define OBD_CPT_VMALLOC(ptr, cptab, cpt, size)				      \
+	 __OBD_VMALLOC_VEROBSE(ptr, cptab, cpt, size)
+
 #endif
 
 #ifdef __KERNEL__
@@ -625,6 +653,14 @@ do {                                                                          \
                 OBD_ALLOC(ptr, size);                                         \
 } while (0)
 
+#define OBD_CPT_ALLOC_LARGE(ptr, cptab, cpt, size)			      \
+do {									      \
+	if (size > OBD_ALLOC_BIG)					      \
+		OBD_CPT_VMALLOC(ptr, cptab, cpt, size);			      \
+	else								      \
+		OBD_CPT_ALLOC(ptr, cptab, cpt, size);			      \
+} while (0)
+
 #define OBD_FREE_LARGE(ptr, size)                                             \
 do {                                                                          \
         if (size > OBD_ALLOC_BIG)                                             \
@@ -632,10 +668,17 @@ do {                                                                          \
         else                                                                  \
                 OBD_FREE(ptr, size);                                          \
 } while (0)
-#else
-#define OBD_ALLOC_LARGE(ptr, size) OBD_ALLOC(ptr, size)
-#define OBD_FREE_LARGE(ptr, size) OBD_FREE(ptr,size)
-#endif
+
+#else /* !__KERNEL__ */
+
+#define OBD_ALLOC_LARGE(ptr, size)					      \
+	OBD_ALLOC(ptr, size)
+#define OBD_CPT_ALLOC_LARGE(ptr, cptab, cpt, size)			      \
+	OBD_ALLOC(ptr, size)
+#define OBD_FREE_LARGE(ptr, size)					      \
+	OBD_FREE(ptr, size)
+
+#endif /* __KERNEL__ */
 
 #ifdef CONFIG_DEBUG_SLAB
 #define POISON(ptr, c, s) do {} while (0)
@@ -707,10 +750,13 @@ do {                                                                          \
         (ptr) = NULL;                                                         \
         0;                                                                    \
 })
-#define OBD_SLAB_ALLOC(ptr, slab, type, size)                                 \
-do {                                                                          \
+
+#define __OBD_SLAB_ALLOC_VERBOSE(ptr, slab, cptab, cpt, size, type)	      \
+do {									      \
         LASSERT(ergo(type != CFS_ALLOC_ATOMIC, !cfs_in_interrupt()));         \
-        (ptr) = cfs_mem_cache_alloc(slab, (type));                            \
+	(ptr) = (cptab) == NULL ?					      \
+		cfs_mem_cache_alloc(slab, type) :			      \
+		cfs_mem_cache_cpt_alloc(slab, cptab, cpt, type);	      \
         if (likely((ptr) != NULL &&                                           \
                    (!HAS_FAIL_ALLOC_FLAG || obd_alloc_fail_rate == 0 ||       \
                     !obd_alloc_fail(ptr, #ptr, "slab-", size,                 \
@@ -721,6 +767,11 @@ do {                                                                          \
         }                                                                     \
 } while(0)
 
+#define OBD_SLAB_ALLOC_GFP(ptr, slab, size, flags)			      \
+	__OBD_SLAB_ALLOC_VERBOSE(ptr, slab, NULL, 0, size, flags)
+#define OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, size, flags)	      \
+	__OBD_SLAB_ALLOC_VERBOSE(ptr, slab, cptab, cpt, size, flags)
+
 #define OBD_FREE_PTR(ptr) OBD_FREE(ptr, sizeof *(ptr))
 
 #define OBD_SLAB_FREE(ptr, slab, size)                                        \
@@ -730,20 +781,36 @@ do {                                                                          \
         POISON_PTR(ptr);                                                      \
 } while(0)
 
-#define OBD_SLAB_ALLOC_PTR(ptr, slab)                                         \
-        OBD_SLAB_ALLOC((ptr), (slab), CFS_ALLOC_STD, sizeof *(ptr))
-#define OBD_SLAB_FREE_PTR(ptr, slab)                                          \
-        OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
-#define OBD_SLAB_ALLOC_PTR_GFP(ptr, slab, gfp)                              \
-        OBD_SLAB_ALLOC((ptr), (slab), (gfp), sizeof *(ptr))
+#define OBD_SLAB_ALLOC(ptr, slab, size)					      \
+	OBD_SLAB_ALLOC_GFP(ptr, slab, size, CFS_ALLOC_IO)
+
+#define OBD_SLAB_CPT_ALLOC(ptr, slab, cptab, cpt, size)			      \
+	OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, size, CFS_ALLOC_IO)
+
+#define OBD_SLAB_ALLOC_PTR(ptr, slab)					      \
+	OBD_SLAB_ALLOC(ptr, slab, sizeof *(ptr))
+
+#define OBD_SLAB_CPT_ALLOC_PTR(ptr, slab, cptab, cpt)			      \
+	OBD_SLAB_CPT_ALLOC(ptr, slab, cptab, cpt, sizeof *(ptr))
+
+#define OBD_SLAB_ALLOC_PTR_GFP(ptr, slab, flags)			      \
+	OBD_SLAB_ALLOC_GFP(ptr, slab, sizeof *(ptr), flags)
+
+#define OBD_SLAB_CPT_ALLOC_PTR_GFP(ptr, slab, ctab, cpt, flags)		      \
+	OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, sizeof *(ptr), flags)
+
+#define OBD_SLAB_FREE_PTR(ptr, slab)					      \
+	OBD_SLAB_FREE((ptr), (slab), sizeof *(ptr))
 
 #define KEY_IS(str) \
         (keylen >= (sizeof(str)-1) && memcmp(key, str, (sizeof(str)-1)) == 0)
 
 /* Wrapper for contiguous page frame allocation */
-#define OBD_PAGE_ALLOC(ptr, gfp_mask)                                         \
-do {                                                                          \
-        (ptr) = cfs_alloc_page(gfp_mask);                                     \
+#define __OBD_PAGE_ALLOC_VERBOSE(ptr, cptab, cpt, gfp_mask)		      \
+do {									      \
+	(ptr) = (cptab) == NULL ?					      \
+		cfs_alloc_page(gfp_mask) :				      \
+		cfs_page_cpt_alloc(cptab, cpt, gfp_mask);		      \
         if (unlikely((ptr) == NULL)) {                                        \
                 CERROR("alloc_pages of '" #ptr "' %d page(s) / "LPU64" bytes "\
                        "failed\n", (int)1,                                    \
@@ -763,6 +830,11 @@ do {                                                                          \
                        (__u64)(1 << CFS_PAGE_SHIFT), ptr);                    \
         }                                                                     \
 } while (0)
+
+#define OBD_PAGE_ALLOC(ptr, gfp_mask)					      \
+	__OBD_PAGE_ALLOC_VERBOSE(ptr, NULL, 0, gfp_mask)
+#define OBD_PAGE_CPT_ALLOC(ptr, cptab, cpt, gfp_mask)			      \
+	__OBD_PAGE_ALLOC_VERBOSE(ptr, cptab, cpt, gfp_mask)
 
 #define OBD_PAGE_FREE(ptr)                                                    \
 do {                                                                          \

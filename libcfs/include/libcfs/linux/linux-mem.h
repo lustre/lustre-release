@@ -153,6 +153,24 @@ extern int cfs_mem_is_in_cache(const void *addr, const cfs_mem_cache_t *kmem);
 #define CFS_SLAB_NOFS                   SLAB_NOFS
 
 /*
+ * NUMA allocators
+ *
+ * NB: we will rename these functions in a separate patch:
+ * - rename cfs_alloc to cfs_malloc
+ * - rename cfs_alloc/free_page to cfs_page_alloc/free
+ * - rename cfs_alloc/free_large to cfs_vmalloc/vfree
+ */
+extern void *cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt,
+			    size_t nr_bytes, unsigned int flags);
+extern void *cfs_cpt_vmalloc(struct cfs_cpt_table *cptab, int cpt,
+			     size_t nr_bytes);
+extern cfs_page_t *cfs_page_cpt_alloc(struct cfs_cpt_table *cptab,
+				      int cpt, unsigned int flags);
+extern void *cfs_mem_cache_cpt_alloc(cfs_mem_cache_t *cachep,
+				     struct cfs_cpt_table *cptab,
+				     int cpt, unsigned int flags);
+
+/*
  * Shrinker
  */
 #define cfs_shrinker    shrinker

@@ -171,3 +171,49 @@ EXPORT_SYMBOL(cfs_mem_cache_create);
 EXPORT_SYMBOL(cfs_mem_cache_destroy);
 EXPORT_SYMBOL(cfs_mem_cache_alloc);
 EXPORT_SYMBOL(cfs_mem_cache_free);
+
+/*
+ * NB: we will rename some of above functions in another patch:
+ * - rename cfs_alloc to cfs_malloc
+ * - rename cfs_alloc/free_page to cfs_page_alloc/free
+ * - rename cfs_alloc/free_large to cfs_vmalloc/vfree
+ */
+
+void *
+cfs_cpt_malloc(struct cfs_cpt_table *cptab, int cpt,
+	       size_t nr_bytes, unsigned int flags)
+{
+	void    *ptr;
+
+	ptr = kmalloc_node(nr_bytes, cfs_alloc_flags_to_gfp(flags),
+			   cfs_cpt_spread_node(cptab, cpt));
+	if (ptr != NULL && (flags & CFS_ALLOC_ZERO) != 0)
+		memset(ptr, 0, nr_bytes);
+
+	return ptr;
+}
+EXPORT_SYMBOL(cfs_cpt_malloc);
+
+void *
+cfs_cpt_vmalloc(struct cfs_cpt_table *cptab, int cpt, size_t nr_bytes)
+{
+	return vmalloc_node(nr_bytes, cfs_cpt_spread_node(cptab, cpt));
+}
+EXPORT_SYMBOL(cfs_cpt_vmalloc);
+
+cfs_page_t *
+cfs_page_cpt_alloc(struct cfs_cpt_table *cptab, int cpt, unsigned int flags)
+{
+	return alloc_pages_node(cfs_cpt_spread_node(cptab, cpt),
+				cfs_alloc_flags_to_gfp(flags), 0);
+}
+EXPORT_SYMBOL(cfs_page_cpt_alloc);
+
+void *
+cfs_mem_cache_cpt_alloc(cfs_mem_cache_t *cachep, struct cfs_cpt_table *cptab,
+			int cpt, unsigned int flags)
+{
+	return kmem_cache_alloc_node(cachep, cfs_alloc_flags_to_gfp(flags),
+				     cfs_cpt_spread_node(cptab, cpt));
+}
+EXPORT_SYMBOL(cfs_mem_cache_cpt_alloc);

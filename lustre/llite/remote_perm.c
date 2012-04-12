@@ -83,9 +83,9 @@ cfs_hlist_head_t *alloc_rmtperm_hash(void)
         cfs_hlist_head_t *hash;
         int i;
 
-        OBD_SLAB_ALLOC(hash, ll_rmtperm_hash_cachep, GFP_KERNEL,
-                       REMOTE_PERM_HASHSIZE * sizeof(*hash));
-
+	OBD_SLAB_ALLOC_GFP(hash, ll_rmtperm_hash_cachep,
+			   REMOTE_PERM_HASHSIZE * sizeof(*hash),
+			   CFS_ALLOC_STD);
         if (!hash)
                 return NULL;
 
