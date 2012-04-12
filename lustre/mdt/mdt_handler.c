@@ -5068,14 +5068,12 @@ static int mdt_obd_connect(const struct lu_env *env,
 
         rc = mdt_connect_internal(lexp, mdt, data);
         if (rc == 0) {
-                struct mdt_thread_info *mti;
                 struct lsd_client_data *lcd = lexp->exp_target_data.ted_lcd;
+
                 LASSERT(lcd);
-                mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-                LASSERT(mti != NULL);
-                mti->mti_exp = lexp;
-                memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
-                rc = mdt_client_new(env, mdt);
+		info->mti_exp = lexp;
+		memcpy(lcd->lcd_uuid, cluuid, sizeof lcd->lcd_uuid);
+		rc = lut_client_new(env, lexp);
                 if (rc == 0)
                         mdt_export_stats_init(obd, lexp, localdata);
         }
@@ -5120,6 +5118,7 @@ static int mdt_obd_reconnect(const struct lu_env *env,
 
         RETURN(rc);
 }
+
 static int mdt_export_cleanup(struct obd_export *exp)
 {
         struct mdt_export_data *med = &exp->exp_mdt_data;
@@ -5199,7 +5198,7 @@ out_lmm:
         /* cleanup client slot early */
         /* Do not erase record for recoverable client. */
         if (!(exp->exp_flags & OBD_OPT_FAILOVER) || exp->exp_failed)
-                mdt_client_del(&env, mdt);
+		lut_client_del(&env, exp);
         lu_env_fini(&env);
 
         RETURN(rc);
@@ -5804,18 +5803,10 @@ static struct lu_device_type mdt_device_type = {
         .ldt_ctx_tags = LCT_MD_THREAD
 };
 
-static struct lu_local_obj_desc mdt_last_recv = {
-        .llod_name      = LAST_RCVD,
-        .llod_oid       = MDT_LAST_RECV_OID,
-        .llod_is_index  = 0,
-};
-
 static int __init mdt_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
         int rc;
-
-        llo_local_obj_register(&mdt_last_recv);
 
         if (mdt_num_threads > 0) {
                 if (mdt_num_threads > MDT_MAX_THREADS)
@@ -5838,7 +5829,6 @@ static int __init mdt_mod_init(void)
 
 static void __exit mdt_mod_exit(void)
 {
-        llo_local_obj_unregister(&mdt_last_recv);
         class_unregister_type(LUSTRE_MDT_NAME);
 }
 
