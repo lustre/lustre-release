@@ -1476,6 +1476,7 @@ static int keys_fill(struct lu_context *ctx)
 {
         int i;
 
+        LINVRNT(ctx->lc_value != NULL);
         for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
                 struct lu_context_key *key;
 
@@ -1599,12 +1600,12 @@ EXPORT_SYMBOL(lu_context_exit);
 
 /**
  * Allocate for context all missing keys that were registered after context
- * creation.
+ * creation. key_set_version is only changed in rare cases when modules
+ * are loaded and removed.
  */
 int lu_context_refill(struct lu_context *ctx)
 {
-        LINVRNT(ctx->lc_value != NULL);
-        return ctx->lc_version == key_set_version ? 0 : keys_fill(ctx);
+        return likely(ctx->lc_version == key_set_version) ? 0 : keys_fill(ctx);
 }
 EXPORT_SYMBOL(lu_context_refill);
 

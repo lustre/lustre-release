@@ -2059,6 +2059,12 @@ int ost_handle(struct ptlrpc_request *req)
         struct obd_device *obd = NULL;
         ENTRY;
 
+        /* OST module is kept between remounts, but the last reference
+         * to specific module (say, osd or ofd) kills all related keys
+         * from the environment. so we have to refill it until the root
+         * cause is fixed properly */
+        lu_env_refill(req->rq_svc_thread->t_env);
+
         LASSERT(current->journal_info == NULL);
 
         /* primordial rpcs don't affect server recovery */
