@@ -57,6 +57,10 @@
 
 #if defined(LPROCFS)
 
+static int lprocfs_no_percpu_stats = 0;
+CFS_MODULE_PARM(lprocfs_no_percpu_stats, "i", int, 0644,
+                "Do not alloc percpu data for lprocfs stats");
+
 #define MAX_STRING_SIZE 128
 
 /* for bug 10866, global variable */
@@ -1194,6 +1198,9 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
 
         if (num == 0)
                 return NULL;
+
+        if (lprocfs_no_percpu_stats != 0)
+                flags |= LPROCFS_STATS_FLAG_NOPERCPU;
 
         if (flags & LPROCFS_STATS_FLAG_NOPERCPU)
                 num_cpu = 1;
