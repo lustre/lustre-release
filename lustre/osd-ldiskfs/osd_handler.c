@@ -3471,37 +3471,44 @@ static int osd_it_iam_rec(const struct lu_env *env,
                           const struct dt_it *di,
                           struct dt_rec *dtrec, __u32 attr)
 {
-        struct osd_it_iam *it        = (struct osd_it_iam *)di;
-        struct osd_thread_info *info = osd_oti_get(env);
-        struct lu_fid     *fid       = &info->oti_fid;
-        const struct osd_fid_pack *rec;
-        struct lu_dirent *lde = (struct lu_dirent *)dtrec;
-        char *name;
-        int namelen;
-        __u64 hash;
-        int rc;
+	struct osd_it_iam      *it   = (struct osd_it_iam *)di;
+	struct osd_thread_info *info = osd_oti_get(env);
+	ENTRY;
 
-        name = (char *)iam_it_key_get(&it->oi_it);
-        if (IS_ERR(name))
-                RETURN(PTR_ERR(name));
+	if (S_ISDIR(it->oi_obj->oo_inode->i_mode)) {
+		const struct osd_fid_pack *rec;
+		struct lu_fid             *fid = &info->oti_fid;
+		struct lu_dirent          *lde = (struct lu_dirent *)dtrec;
+		char                      *name;
+		int                        namelen;
+		__u64                      hash;
+		int                        rc;
 
-        namelen = iam_it_key_size(&it->oi_it);
+		name = (char *)iam_it_key_get(&it->oi_it);
+		if (IS_ERR(name))
+			RETURN(PTR_ERR(name));
 
-        rec = (const struct osd_fid_pack *) iam_it_rec_get(&it->oi_it);
-        if (IS_ERR(rec))
-                RETURN(PTR_ERR(rec));
+		namelen = iam_it_key_size(&it->oi_it);
 
-        rc = osd_fid_unpack(fid, rec);
-        if (rc)
-                RETURN(rc);
+		rec = (const struct osd_fid_pack *)iam_it_rec_get(&it->oi_it);
+		if (IS_ERR(rec))
+			RETURN(PTR_ERR(rec));
 
-        hash = iam_it_store(&it->oi_it);
+		rc = osd_fid_unpack(fid, rec);
+		if (rc)
+			RETURN(rc);
 
-        /* IAM does not store object type in IAM index (dir) */
-        osd_it_pack_dirent(lde, fid, hash, name, namelen,
-                           0, LUDA_FID);
+		hash = iam_it_store(&it->oi_it);
 
-        return 0;
+		/* IAM does not store object type in IAM index (dir) */
+		osd_it_pack_dirent(lde, fid, hash, name, namelen,
+				   0, LUDA_FID);
+	} else {
+		iam_reccpy(&it->oi_it.ii_path.ip_leaf,
+			   (struct iam_rec *)dtrec);
+	}
+
+	RETURN(0);
 }
 
 /**
