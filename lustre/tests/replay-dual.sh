@@ -25,7 +25,7 @@ build_test_filter
 
 check_and_setup_lustre
 MOUNTED=$(mounted_lustre_filesystems)
-if ! $(echo $MOUNTED | grep -w -q $MOUNT2); then
+if ! $(echo $MOUNTED' ' | grep -w -q $MOUNT2' '); then
     zconf_mount $HOSTNAME $MOUNT2
     MOUNTED2=yes
 fi
