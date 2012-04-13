@@ -908,9 +908,9 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         req->rq_transno = mti->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
         /* if can't add callback, do sync write */
-        txn->th_sync = !!lut_last_commit_cb_add(txn, &mdt->mdt_lut,
-                                                mti->mti_exp,
-                                                mti->mti_transno);
+        txn->th_sync |= !!lut_last_commit_cb_add(txn, &mdt->mdt_lut,
+                                                 mti->mti_exp,
+                                                 mti->mti_transno);
         return mdt_last_rcvd_update(mti, txn);
 }
 
