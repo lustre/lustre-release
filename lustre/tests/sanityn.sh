@@ -3,8 +3,8 @@
 set -e
 
 ONLY=${ONLY:-"$*"}
-# bug number for skipped test: 3192 15528/3811 16929 9977 15528/11549 18080
-ALWAYS_EXCEPT="                14b  19         22    28   29          35    $SANITYN_EXCEPT"
+# bug number for skipped test: 3192 LU-1205 15528/3811 16929 9977 15528/11549 18080
+ALWAYS_EXCEPT="                14b  18c     19         22    28   29          35    $SANITYN_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # bug number for skipped test:        12652 12652
@@ -350,7 +350,17 @@ test_17() { # bug 3513, 3667
 run_test 17 "resource creation/LVB creation race ==============="
 
 test_18() {
-	$LUSTRE/tests/mmap_sanity -d $MOUNT1 -m $MOUNT2
+        # turn e.g. ALWAYS_EXCEPT="18c" into "-e 3"
+        local idx
+        local excepts=
+        for idx in {a..z}; do
+                local ptr=EXCEPT_ALWAYS_18$idx
+                [ x${!ptr} = xtrue ] || continue
+
+                excepts="$excepts -e $(($(printf %d \'$idx)-96))"
+        done
+
+	$LUSTRE/tests/mmap_sanity -d $MOUNT1 -m $MOUNT2 $excepts
 	sync; sleep 1; sync
 }
 run_test 18 "mmap sanity check ================================="

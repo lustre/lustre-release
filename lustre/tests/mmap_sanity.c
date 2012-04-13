@@ -55,9 +55,11 @@ char mmap_sanity[256];
 
 static void usage(void)
 {
-        printf("Usage: mmap_sanity -d dir [-m dir2]\n");
-        printf("       dir      lustre mount point\n");
-        printf("       dir2     another mount point\n");
+        printf("Usage: mmap_sanity -d dir [-m dir2] [-e <test cases>]\n");
+        printf("       -d dir        lustre mount point\n");
+        printf("       -m dir2       another mount point\n");
+        printf("       -e testcases  skipped test cases, -e 1 -e 2 to exclude"
+                                    " test cases 1 and 2.\n");
         exit(127);
 }
 
@@ -778,6 +780,7 @@ struct test_case {
         char    *desc;                  /* test description */
         int     (*test_fn)(char *mnt);  /* test function */
         int     node_cnt;               /* node count */
+        int     skipped;                /* skipped by caller */
 };
 
 struct test_case tests[] = {
@@ -791,16 +794,17 @@ struct test_case tests[] = {
         { 6, "mmap test6: check mmap write/read content on two nodes",
                 mmap_tst6, 2 },
         { 7, "mmap test7: file i/o with an unmapped buffer", mmap_tst7, 1},
-        { 8, "mmap test8: SIGBUS for beyond file size", mmap_tst8, 1},
+        { 8, "mmap test8: SIGBUS for beyond file size", mmap_tst8, 1 },
         { 0, NULL, 0, 0 }
 };
 
 int main(int argc, char **argv)
 {
         struct test_case *test;
+        int nr_cases = sizeof(tests)/sizeof(*test);
         int c, rc = 0;
 
-        while ((c = getopt(argc, argv, "d:m:")) != -1) {
+        while ((c = getopt(argc, argv, "d:m:e:")) != -1) {
                 switch (c) {
                 case 'd':
                         dir = optarg;
@@ -808,6 +812,15 @@ int main(int argc, char **argv)
                 case 'm':
                         dir2 = optarg;
                         break;
+                case 'e': {
+                        char *endptr = NULL;
+                        rc = strtol(optarg, &endptr, 10);
+                        if (endptr != NULL && *endptr != '\0')
+                                usage();
+                        if (rc > 0 && rc < nr_cases)
+                                tests[rc - 1].skipped = 1;
+                        break;
+                }
                 default:
                         usage();
                         break;
@@ -822,11 +835,12 @@ int main(int argc, char **argv)
                 return -EINVAL;
         }
 
+        rc = 0;
         for (test = tests; test->tc; test++) {
-                double duration;
-                char *rs;
+                double duration = 0.0;
+                char *rs = "SKIPPED";
 
-                if (test->node_cnt == 1 || dir2 != NULL) {
+                if (!test->skipped && (test->node_cnt == 1 || dir2 != NULL)) {
                         struct timeval start, end;
 
                         gettimeofday(&start, NULL);
@@ -836,10 +850,8 @@ int main(int argc, char **argv)
                         duration = (double)(end.tv_sec - start.tv_sec) +
                                 (double)(end.tv_usec - start.tv_usec) / 1000000;
                         rs = rc ? "FAIL" : "PASS";
-                } else {
-                        duration = 0.0;
-                        rs = "SKIP";
                 }
+
                 fprintf(stderr, "%s (%s, %.5gs)\n", test->desc, rs, duration);
                 if (rc)
                         break;
