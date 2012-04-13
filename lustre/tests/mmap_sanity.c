@@ -55,9 +55,11 @@ char mmap_sanity[256];
 
 static void usage(void)
 {
-        printf("Usage: mmap_sanity -d dir [-m dir2]\n");
-        printf("       dir      lustre mount point\n");
-        printf("       dir2     another mount point\n");
+        printf("Usage: mmap_sanity -d dir [-m dir2] [-e <test cases>]\n");
+        printf("       -d dir        lustre mount point\n");
+        printf("       -m dir2       another mount point\n");
+        printf("       -e testcases  skipped test cases, -e 1 -e 2 to exclude"
+                                    " test cases 1 and 2.\n");
         exit(127);
 }
 
@@ -715,6 +717,7 @@ struct test_case {
         char    *desc;                  /* test description */
         int     (*test_fn)(char *mnt);  /* test function */
         int     node_cnt;               /* node count */
+        int     skipped;                /* skipped by caller */
 };
 
 struct test_case tests[] = {
@@ -733,36 +736,47 @@ struct test_case tests[] = {
 
 int main(int argc, char **argv)
 {
-        struct test_case *test;
-        int c, rc = 0;
+	struct test_case *test;
+	int nr_cases = sizeof(tests)/sizeof(*test);
+	int c, rc = 0;
 
-        while ((c = getopt(argc, argv, "d:m:")) != -1) {
-                switch (c) {
-                case 'd':
-                        dir = optarg;
-                        break;
-                case 'm':
-                        dir2 = optarg;
-                        break;
-                default:
-                        usage();
-                        break;
-                }
-        }
+	while ((c = getopt(argc, argv, "d:m:e:")) != -1) {
+		switch (c) {
+		case 'd':
+			dir = optarg;
+			break;
+		case 'm':
+			dir2 = optarg;
+			break;
+		case 'e': {
+			char *endptr = NULL;
+			rc = strtol(optarg, &endptr, 10);
+			if (endptr != NULL && *endptr != '\0')
+				usage();
+			if (rc > 0 && rc < nr_cases)
+				tests[rc - 1].skipped = 1;
+			break;
+		}
+		default:
+			usage();
+			break;
+		}
+	}
 
-        if (dir == NULL)
-                usage();
+	if (dir == NULL)
+		usage();
 
         if (mmap_initialize(argv[0]) != 0) {
                 fprintf(stderr, "mmap_initialize failed!\n");
                 return -EINVAL;
         }
 
+        rc = 0;
         for (test = tests; test->tc; test++) {
-                double duration;
-                char *rs;
+                double duration = 0.0;
+                char *rs = "SKIPPED";
 
-                if (test->node_cnt == 1 || dir2 != NULL) {
+                if (!test->skipped && (test->node_cnt == 1 || dir2 != NULL)) {
                         struct timeval start, end;
 
                         gettimeofday(&start, NULL);
@@ -772,10 +786,8 @@ int main(int argc, char **argv)
                         duration = (double)(end.tv_sec - start.tv_sec) +
                                 (double)(end.tv_usec - start.tv_usec) / 1000000;
                         rs = rc ? "FAIL" : "PASS";
-                } else {
-                        duration = 0.0;
-                        rs = "SKIP";
                 }
+
                 fprintf(stderr, "%s (%s, %.5gs)\n", test->desc, rs, duration);
                 if (rc)
                         break;
