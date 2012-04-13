@@ -76,17 +76,15 @@ void policy_from_vma(ldlm_policy_data_t *policy,
                                ~CFS_PAGE_MASK;
 }
 
-struct vm_area_struct * our_vma(unsigned long addr, size_t count)
+struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
+                               size_t count)
 {
-        struct mm_struct *mm = current->mm;
         struct vm_area_struct *vma, *ret = NULL;
         ENTRY;
 
-        /* No MM (e.g. NFS)? No vmas too. */
-        if (!mm)
-                RETURN(NULL);
+        /* mmap_sem must have been held by caller. */
+        LASSERT(!down_write_trylock(&mm->mmap_sem));
 
-        spin_lock(&mm->page_table_lock);
         for(vma = find_vma(mm, addr);
             vma != NULL && vma->vm_start < (addr + count); vma = vma->vm_next) {
                 if (vma->vm_ops && vma->vm_ops == &ll_file_vm_ops &&
@@ -95,7 +93,6 @@ struct vm_area_struct * our_vma(unsigned long addr, size_t count)
                         break;
                 }
         }
-        spin_unlock(&mm->page_table_lock);
         RETURN(ret);
 }
 

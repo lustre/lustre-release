@@ -1039,7 +1039,8 @@ struct ll_lock_tree_node * ll_node_from_inode(struct inode *inode, __u64 start,
                                               __u64 end, ldlm_mode_t mode);
 void policy_from_vma(ldlm_policy_data_t *policy,
                 struct vm_area_struct *vma, unsigned long addr, size_t count);
-struct vm_area_struct *our_vma(unsigned long addr, size_t count);
+struct vm_area_struct *our_vma(struct mm_struct *mm, unsigned long addr,
+                               size_t count);
 
 static inline void ll_invalidate_page(struct page *vmpage)
 {

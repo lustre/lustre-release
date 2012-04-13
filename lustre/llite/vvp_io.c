@@ -130,6 +130,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
                           struct ccc_io *vio, struct cl_io *io)
 {
         struct ccc_thread_info *cti = ccc_env_info(env);
+        struct mm_struct       *mm = current->mm;
         struct vm_area_struct  *vma;
         struct cl_lock_descr   *descr = &cti->cti_descr;
         ldlm_policy_data_t      policy;
@@ -147,6 +148,10 @@ static int vvp_mmap_locks(const struct lu_env *env,
         if (vio->cui_iov == NULL) /* nfs or loop back device write */
                 RETURN(0);
 
+        /* No MM (e.g. NFS)? No vmas too. */
+        if (mm == NULL)
+                RETURN(0);
+
         for (seg = 0; seg < vio->cui_nrsegs; seg++) {
                 const struct iovec *iv = &vio->cui_iov[seg];
 
@@ -157,12 +162,14 @@ static int vvp_mmap_locks(const struct lu_env *env,
 
                 count += addr & (~CFS_PAGE_MASK);
                 addr &= CFS_PAGE_MASK;
-                while((vma = our_vma(addr, count)) != NULL) {
+
+                down_read(&mm->mmap_sem);
+                while((vma = our_vma(mm, addr, count)) != NULL) {
                         struct inode *inode = vma->vm_file->f_dentry->d_inode;
                         int flags = CEF_MUST;
 
                         if (ll_file_nolock(vma->vm_file)) {
-                                /* 
+                                /*
                                  * For no lock case, a lockless lock will be
                                  * generated.
                                  */
@@ -197,6 +204,7 @@ static int vvp_mmap_locks(const struct lu_env *env,
                         count -= vma->vm_end - addr;
                         addr = vma->vm_end;
                 }
+                up_read(&mm->mmap_sem);
         }
         RETURN(0);
 }
