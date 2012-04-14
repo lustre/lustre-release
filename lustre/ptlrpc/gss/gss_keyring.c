@@ -36,9 +36,6 @@
  * Author: Eric Mei <ericm@clusterfs.com>
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_SEC
 #ifdef __KERNEL__
 #include <linux/init.h>

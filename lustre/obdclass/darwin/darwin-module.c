@@ -35,9 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 
 #include <mach/mach_types.h>
 #include <string.h>

@@ -41,9 +41,6 @@
  *         Pravin Shelar <pravin.shelar@sun.com> : Added fid in dirent
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>

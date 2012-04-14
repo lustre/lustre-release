@@ -37,10 +37,6 @@
  * from linux/fs/quota_v2.c
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #include <linux/errno.h>
 #include <linux/fs.h>
 #include <linux/mount.h>

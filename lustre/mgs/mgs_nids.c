@@ -40,9 +40,6 @@
  * Author: Jinshan Xiong <jinshan.xiong@whamcloud.com>
  */
 
-#ifndef EXPORT_SYMTAB
-#define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_MGS
 #define D_MGS D_CONFIG
 

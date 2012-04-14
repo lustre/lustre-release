@@ -39,9 +39,6 @@
  * Author: Scott Atchley <atchley at myri.com>
  */
 
-#ifndef EXPORT_SYMTAB
-#define EXPORT_SYMTAB
-#endif
 #ifndef AUTOCONF_INCLUDED
 #include <linux/config.h>
 #endif

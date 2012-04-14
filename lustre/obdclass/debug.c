@@ -40,9 +40,6 @@
 
 #define DEBUG_SUBSYSTEM D_OTHER
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #ifndef __KERNEL__
 # include <liblustre.h>
 #endif

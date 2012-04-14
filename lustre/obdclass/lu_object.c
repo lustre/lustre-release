@@ -43,9 +43,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 
 #include <libcfs/libcfs.h>
 

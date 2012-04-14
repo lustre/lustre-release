@@ -44,10 +44,6 @@
 
 #define DEBUG_SUBSYSTEM S_LOG
 
-#ifndef EXPORT_SYMTAB
-#define EXPORT_SYMTAB
-#endif
-
 #ifdef __KERNEL__
 #include <libcfs/libcfs.h>
 #else

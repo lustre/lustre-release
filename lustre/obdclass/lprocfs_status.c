@@ -38,9 +38,6 @@
  * Author: Hariharan Thantry <thantry@users.sourceforge.net>
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #ifndef __KERNEL__

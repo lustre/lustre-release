@@ -35,10 +35,6 @@
 #ifndef _LUCACHE_H
 #define _LUCACHE_H
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #include <libcfs/libcfs.h>
 
 /** \defgroup ucache ucache

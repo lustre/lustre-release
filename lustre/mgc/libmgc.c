@@ -42,9 +42,6 @@
 /* Minimal MGC for liblustre: only used to read the config log from the MGS
    at setup time, no updates. */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_MGC
 
 #include <liblustre.h>

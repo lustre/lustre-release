@@ -39,10 +39,6 @@
  * from the OBD setup function
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/errno.h>

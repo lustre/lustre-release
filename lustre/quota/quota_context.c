@@ -40,10 +40,6 @@
  * Author: Niu YaWei <niu@clusterfs.com>
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
 #include <linux/version.h>

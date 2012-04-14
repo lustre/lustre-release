@@ -48,9 +48,6 @@
 
 #if !defined(__REQ_LAYOUT_USER__)
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_RPC
 
 #ifdef __KERNEL__

@@ -38,9 +38,7 @@
  * Author: WangDi <wangdi@clusterfs.com>
  * Author: Yury Umanets <umka@clusterfs.com>
  */
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
+
 #define DEBUG_SUBSYSTEM S_FLD
 
 #ifdef __KERNEL__

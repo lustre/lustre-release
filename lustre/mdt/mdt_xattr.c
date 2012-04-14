@@ -43,9 +43,6 @@
  * Author: Huang Hua <huanghua@clusterfs.com>
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <lustre_acl.h>

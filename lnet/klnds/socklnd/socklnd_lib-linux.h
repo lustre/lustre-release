@@ -33,9 +33,6 @@
  */
 
 #define DEBUG_PORTAL_ALLOC
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 
 #ifndef __LINUX_SOCKNAL_LIB_H__
 #define __LINUX_SOCKNAL_LIB_H__

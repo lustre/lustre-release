@@ -38,9 +38,6 @@
 
 #ifndef _QSWNAL_H
 #define _QSWNAL_H
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 
 #include <qsnet/kernel.h>
 #undef printf                                   /* nasty QSW #define */

@@ -26,10 +26,6 @@
  */
 
 #define DEBUG_PORTAL_ALLOC
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #define DEBUG_SUBSYSTEM S_LND
 
 #if defined(__linux__)

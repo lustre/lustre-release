@@ -38,9 +38,6 @@
  * Author: Nathan Rutman <nathan@clusterfs.com>
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_MGC
 #define D_MGC D_CONFIG /*|D_WARNING*/
 

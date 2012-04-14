@@ -36,9 +36,6 @@
  * Author: Eric Mei <eric.mei@sun.com>
  */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 #define DEBUG_SUBSYSTEM S_SEC
 #ifdef __KERNEL__
 #include <linux/init.h>

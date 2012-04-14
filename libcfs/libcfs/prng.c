@@ -39,10 +39,6 @@
  * algorithm recommended by Marsaglia
 */
 
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
-
 #include <libcfs/libcfs.h>
 
 /*

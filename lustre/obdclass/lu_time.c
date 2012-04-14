@@ -41,9 +41,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_CLASS
-#ifndef EXPORT_SYMTAB
-# define EXPORT_SYMTAB
-#endif
 
 #include <obd_class.h>
 /* OBD_{ALLOC,FREE}_PTR() */
