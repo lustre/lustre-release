@@ -119,6 +119,7 @@ int lustre_check_quota_file(struct lustre_quota_info *lqi, int type)
         struct file *f = lqi->qi_files[type];
         return check_quota_file(f, NULL, type, lqi->qi_version);
 }
+EXPORT_SYMBOL(lustre_check_quota_file);
 
 int lustre_read_quota_file_info(struct file* f, struct lustre_mem_dqinfo* info)
 {
@@ -151,6 +152,7 @@ int lustre_read_quota_info(struct lustre_quota_info *lqi, int type)
         return lustre_read_quota_file_info(lqi->qi_files[type],
                                            &lqi->qi_info[type]);
 }
+EXPORT_SYMBOL(lustre_read_quota_info);
 
 /**
  * Write information header to quota file
@@ -175,13 +177,14 @@ int lustre_write_quota_info(struct lustre_quota_info *lqi, int type)
                                   LUSTRE_DQINFOOFF);
 
         if (size != sizeof(struct lustre_disk_dqinfo)) {
-                CDEBUG(D_WARNING, 
+                CDEBUG(D_WARNING,
                        "Can't write info structure on device %s.\n",
                        f->f_vfsmnt->mnt_sb->s_id);
                 return -1;
         }
         return 0;
 }
+EXPORT_SYMBOL(lustre_write_quota_info);
 
 void disk2memdqb(struct lustre_mem_dqblk *m, void *d,
                  lustre_quota_version_t version)
@@ -797,7 +800,7 @@ out_buf:
 /**
  * Find entry for given id in the tree - wrapper function
  */
-static inline loff_t find_dqentry(struct lustre_dquot *dquot, 
+static inline loff_t find_dqentry(struct lustre_dquot *dquot,
                                   lustre_quota_version_t version)
 {
         return find_tree_dqentry(dquot, LUSTRE_DQTREEOFF, 0, version);
@@ -855,6 +858,7 @@ int lustre_read_dquot(struct lustre_dquot *dquot)
 
         return ret;
 }
+EXPORT_SYMBOL(lustre_read_dquot);
 
 /**
  * Commit changes of dquot to disk - it might also mean deleting
@@ -897,6 +901,7 @@ int lustre_commit_dquot(struct lustre_dquot *dquot)
 
         return rc;
 }
+EXPORT_SYMBOL(lustre_commit_dquot);
 
 int lustre_init_quota_header(struct lustre_quota_info *lqi, int type,
                              int fakemagics)
@@ -951,6 +956,7 @@ int lustre_init_quota_info(struct lustre_quota_info *lqi, int type)
 {
         return lustre_init_quota_info_generic(lqi, type, 0);
 }
+EXPORT_SYMBOL(lustre_init_quota_info);
 
 static int walk_block_dqentry(struct file *filp, struct inode *inode, int type,
                               uint blk, cfs_list_t *list)
@@ -1121,13 +1127,5 @@ out_free:
 
         RETURN(rc);
 }
-
-
-EXPORT_SYMBOL(lustre_read_quota_info);
-EXPORT_SYMBOL(lustre_write_quota_info);
-EXPORT_SYMBOL(lustre_check_quota_file);
-EXPORT_SYMBOL(lustre_read_dquot);
-EXPORT_SYMBOL(lustre_commit_dquot);
-EXPORT_SYMBOL(lustre_init_quota_info);
 EXPORT_SYMBOL(lustre_get_qids);
 #endif
