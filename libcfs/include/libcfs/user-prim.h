@@ -143,6 +143,8 @@ static inline int cfs_psdev_deregister(cfs_psdev_t *foo)
 
 #define CFS_DAEMON_FLAGS                0
 
+#define CFS_L1_CACHE_ALIGN(x)		(x)
+
 #ifdef HAVE_LIBPTHREAD
 typedef int (*cfs_thread_t)(void *);
 int cfs_create_thread(cfs_thread_t func, void *arg, unsigned long flags);
