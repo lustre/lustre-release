@@ -120,15 +120,15 @@ int class_add_uuid(const char *uuid, __u64 nid)
                         int i;
 
                         found = 1;
-                        for (i = 0; i < data->un_nid_count; i++)
+                        for (i = 0; i < entry->un_nid_count; i++)
                                 if (nid == entry->un_nids[i])
                                         break;
 
-                        if (i == data->un_nid_count) {
-                                LASSERT(data->un_nid_count < NIDS_MAX);
-                                data->un_nids[++data->un_nid_count] = nid;
-                                break;
+                        if (i == entry->un_nid_count) {
+                                LASSERT(entry->un_nid_count < NIDS_MAX);
+                                entry->un_nids[++entry->un_nid_count] = nid;
                         }
+                        break;
                 }
         }
         if (!found)
@@ -211,6 +211,7 @@ int class_check_uuid(struct obd_uuid *uuid, __u64 nid)
                                 break;
                         }
                 }
+                break;
         }
         cfs_spin_unlock (&g_uuid_lock);
         RETURN(found);
