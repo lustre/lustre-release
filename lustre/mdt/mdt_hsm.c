@@ -69,6 +69,12 @@ static int mdt_hsm_agent_unregister(struct mdt_thread_info *info,
 	return 0;
 }
 
+static int mdt_hsm_coordinator_get_actions(struct mdt_thread_info *mti,
+					   struct hsm_action_list *hal)
+{
+	return 0;
+}
+
 /**
  * Update on-disk HSM attributes.
  */
@@ -303,5 +309,98 @@ out_ucred:
 	mdt_exit_ucred(info);
 out_obj:
 	mdt_object_unlock(info, obj, lh, 1);
+	return rc;
+}
+
+/**
+ * Retrieve undergoing HSM requests for the fid provided in RPC body.
+ * Current requests are read from coordinator states.
+ *
+ * This is MDS_HSM_ACTION RPC handler.
+ */
+int mdt_hsm_action(struct mdt_thread_info *info)
+{
+	struct hsm_current_action	*hca;
+	struct hsm_action_list		*hal = NULL;
+	struct hsm_action_item		*hai;
+	int				 rc, len;
+	ENTRY;
+
+	/* Only valid if client is remote */
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc)
+		RETURN(rc = err_serious(rc));
+
+	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
+		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
+				 req_capsule_client_get(info->mti_pill,
+							&RMF_CAPA1));
+
+	hca = req_capsule_server_get(info->mti_pill,
+				     &RMF_MDS_HSM_CURRENT_ACTION);
+	LASSERT(hca);
+
+	/* Coordinator information */
+	len = sizeof(*hal) + MTI_NAME_MAXLEN /* fsname */ +
+		cfs_size_round(sizeof(*hai));
+
+	OBD_ALLOC(hal, len);
+	if (hal == NULL)
+		GOTO(out_ucred, -ENOMEM);
+
+	hal->hal_version = HAL_VERSION;
+	hal->hal_archive_num = 0;
+	hal->hal_flags = 0;
+	obd_uuid2fsname(hal->hal_fsname, mdt2obd_dev(info->mti_mdt)->obd_name,
+			MTI_NAME_MAXLEN);
+	hal->hal_count = 1;
+	hai = hai_zero(hal);
+	hai->hai_action = HSMA_NONE;
+	hai->hai_cookie = 0;
+	hai->hai_gid = 0;
+	hai->hai_fid = info->mti_body->fid1;
+	hai->hai_len = sizeof(*hai);
+
+	rc = mdt_hsm_coordinator_get_actions(info, hal);
+	if (rc)
+		GOTO(out_free, rc);
+
+	/* cookie is used to give back request status */
+	if (hai->hai_cookie == 0)
+		hca->hca_state = HPS_WAITING;
+	else
+		hca->hca_state = HPS_RUNNING;
+
+	switch (hai->hai_action) {
+	case HSMA_NONE:
+		hca->hca_action = HUA_NONE;
+		break;
+	case HSMA_ARCHIVE:
+		hca->hca_action = HUA_ARCHIVE;
+		break;
+	case HSMA_RESTORE:
+		hca->hca_action = HUA_RESTORE;
+		break;
+	case HSMA_REMOVE:
+		hca->hca_action = HUA_REMOVE;
+		break;
+	case HSMA_CANCEL:
+		hca->hca_action = HUA_CANCEL;
+		break;
+	default:
+		hca->hca_action = HUA_NONE;
+		CERROR("%s: Unknown hsm action: %d on "DFID"\n",
+		       mdt2obd_dev(info->mti_mdt)->obd_name,
+		       hai->hai_action, PFID(&hai->hai_fid));
+		break;
+	}
+
+	hca->hca_location = hai->hai_extent;
+
+	EXIT;
+out_free:
+	OBD_FREE(hal, len);
+out_ucred:
+	mdt_exit_ucred(info);
 	return rc;
 }

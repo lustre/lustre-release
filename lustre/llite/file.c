@@ -2009,12 +2009,37 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		OBD_FREE_PTR(hss);
 		RETURN(rc);
 	}
+	case LL_IOC_HSM_ACTION: {
+		struct md_op_data		*op_data;
+		struct hsm_current_action	*hca;
+		int				 rc;
 
+		OBD_ALLOC_PTR(hca);
+		if (hca == NULL)
+			RETURN(-ENOMEM);
+
+		op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+					     LUSTRE_OPC_ANY, hca);
+		if (op_data == NULL) {
+			OBD_FREE_PTR(hca);
+			RETURN(-ENOMEM);
+		}
+
+		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
+				   op_data, NULL);
+
+		if (cfs_copy_to_user((char *)arg, hca, sizeof(*hca)))
+			rc = -EFAULT;
+
+		ll_finish_md_op_data(op_data);
+		OBD_FREE_PTR(hca);
+		RETURN(rc);
+	}
 	default: {
 		int err;
 
 		if (LLIOC_STOP ==
-			ll_iocontrol_call(inode, file, cmd, arg, &err))
+		     ll_iocontrol_call(inode, file, cmd, arg, &err))
 			RETURN(err);
 
 		RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,

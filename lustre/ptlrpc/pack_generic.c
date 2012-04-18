@@ -2499,6 +2499,14 @@ void lustre_swab_hsm_extent(struct hsm_extent *extent)
 	__swab64s(&extent->length);
 }
 
+void lustre_swab_hsm_current_action(struct hsm_current_action *action)
+{
+	__swab32s(&action->hca_state);
+	__swab32s(&action->hca_action);
+	lustre_swab_hsm_extent(&action->hca_location);
+}
+EXPORT_SYMBOL(lustre_swab_hsm_current_action);
+
 void lustre_swab_hsm_user_item(struct hsm_user_item *hui)
 {
 	lustre_swab_lu_fid(&hui->hui_fid);

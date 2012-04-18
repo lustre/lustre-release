@@ -4374,5 +4374,21 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct hsm_state_set, hss_clearmask));
 	LASSERTF((int)sizeof(((struct hsm_state_set *)0)->hss_clearmask) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_state_set *)0)->hss_clearmask));
+
+	/* Checks for struct hsm_current_action */
+	LASSERTF((int)sizeof(struct hsm_current_action) == 24, "found %lld\n",
+		 (long long)(int)sizeof(struct hsm_current_action));
+	LASSERTF((int)offsetof(struct hsm_current_action, hca_state) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_current_action, hca_state));
+	LASSERTF((int)sizeof(((struct hsm_current_action *)0)->hca_state) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_current_action *)0)->hca_state));
+	LASSERTF((int)offsetof(struct hsm_current_action, hca_action) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_current_action, hca_action));
+	LASSERTF((int)sizeof(((struct hsm_current_action *)0)->hca_action) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_current_action *)0)->hca_action));
+	LASSERTF((int)offsetof(struct hsm_current_action, hca_location) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_current_action, hca_location));
+	LASSERTF((int)sizeof(((struct hsm_current_action *)0)->hca_location) == 16, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_current_action *)0)->hca_location));
 }
 

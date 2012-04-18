@@ -1967,6 +1967,16 @@ check_hsm_state_set(void)
 }
 
 static void
+check_hsm_current_action(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(hsm_current_action);
+	CHECK_MEMBER(hsm_current_action, hca_state);
+	CHECK_MEMBER(hsm_current_action, hca_action);
+	CHECK_MEMBER(hsm_current_action, hca_location);
+}
+
+static void
 system_string (char *cmdline, char *str, int len)
 {
 	int   fds[2];
@@ -2333,6 +2343,7 @@ main(int argc, char **argv)
 	check_hsm_user_item();
 	check_hsm_user_state();
 	check_hsm_state_set();
+	check_hsm_current_action();
 
 	printf("}\n\n");
 

@@ -865,7 +865,8 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 		break;
 	}
 	case LL_IOC_HSM_STATE_GET:
-	case LL_IOC_HSM_STATE_SET: {
+	case LL_IOC_HSM_STATE_SET:
+	case LL_IOC_HSM_ACTION: {
 		struct md_op_data	*op_data = karg;
 		struct lmv_tgt_desc	*tgt;
 

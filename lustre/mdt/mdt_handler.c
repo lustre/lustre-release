@@ -3106,6 +3106,7 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
 	case MDS_HSM_CT_UNREGISTER:
 	case MDS_HSM_STATE_GET:
 	case MDS_HSM_STATE_SET:
+	case MDS_HSM_ACTION:
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
         case QUOTA_DQACQ:

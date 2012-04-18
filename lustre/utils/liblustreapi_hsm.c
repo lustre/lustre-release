@@ -443,7 +443,6 @@ out_unlink:
 	return rc;
 }
 
-
 /**
  * Return the current HSM states and HSM requests related to file pointed by \a
  * path.
@@ -506,6 +505,33 @@ int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
 		hss.hss_archive_id = archive_id;
 	}
 	rc = ioctl(fd, LL_IOC_HSM_STATE_SET, &hss);
+	/* If error, save errno value */
+	rc = rc ? -errno : 0;
+
+	close(fd);
+	return rc;
+}
+
+
+/**
+ * Return the current HSM request related to file pointed by \a path.
+ *
+ * \param hca  Should be allocated by caller. Will be filled with current file
+ *             actions.
+ *
+ * \retval 0 on success.
+ * \retval -errno on error.
+ */
+int llapi_hsm_current_action(const char *path, struct hsm_current_action *hca)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_RDONLY | O_NONBLOCK);
+	if (fd < 0)
+		return -errno;
+
+	rc = ioctl(fd, LL_IOC_HSM_ACTION, hca);
 	/* If error, save errno value */
 	rc = rc ? -errno : 0;
 

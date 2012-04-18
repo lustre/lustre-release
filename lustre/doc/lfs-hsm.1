@@ -6,6 +6,9 @@ lfs commands used to interact with HSM features
 .B lfs hsm_state
 .RB <FILE> ...
 .br
+.B  lfs hsm_action
+.RI file
+.br
 .B  lfs hsm_set|hsm_clear
 .RB [ --norelease ]
 .RB [ --noarchive ]
@@ -26,6 +29,9 @@ Set provided HSM flags on file list.
 .TP
 .B lfs hsm_clear <FILE>...
 Clear the HSM related flags on file list.
+.TP
+.B lfs hsm_action <FILE>...
+Display the in-progress HSM actions for provided files.
 .PP
 Non-privileged user can only change the following flags:
 .B norelease

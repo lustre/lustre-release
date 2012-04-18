@@ -286,7 +286,9 @@ extern int llapi_hsm_import(const char *dst, int archive, struct stat *st,
 			    unsigned long long stripe_size, int stripe_offset,
 			    int stripe_count, int stripe_pattern,
 			    char *pool_name, lustre_fid *newfid);
-
+/* HSM user interface */
+extern int llapi_hsm_current_action(const char *path,
+				    struct hsm_current_action *hca);
 /** @} llapi */
 
 #endif

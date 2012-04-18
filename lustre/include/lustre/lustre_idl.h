@@ -3333,6 +3333,8 @@ struct hsm_progress_kernel {
 	__u64			hpk_padding2;
 } __attribute__((packed));
 
+extern void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
+extern void lustre_swab_hsm_current_action(struct hsm_current_action *action);
 extern void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk);
 extern void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
 extern void lustre_swab_hsm_user_item(struct hsm_user_item *hui);

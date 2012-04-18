@@ -107,6 +107,7 @@ static int lfs_data_version(int argc, char **argv);
 static int lfs_hsm_state(int argc, char **argv);
 static int lfs_hsm_set(int argc, char **argv);
 static int lfs_hsm_clear(int argc, char **argv);
+static int lfs_hsm_action(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -250,6 +251,8 @@ command_t cmdlist[] = {
 	 "files.\n"
 	 "usage: hsm_clear [--norelease] [--noarchive] [--dirty] [--exists] "
 	 "[--archived] [--lost] <file> ..."},
+	{"hsm_action", lfs_hsm_action, 0, "Display current HSM request for "
+	 "given files.\n" "usage: hsm_action <file> ..."},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -2739,7 +2742,7 @@ static int lfs_hsm_state(int argc, char **argv)
 		if (rc) {
 			fprintf(stderr, "can't get hsm state for %s: %s\n",
 				path, strerror(errno = -rc));
-			return rc;
+                	return rc;
 		}
 
 		/* Display path name and status flags */
@@ -2850,6 +2853,56 @@ static int lfs_hsm_change_flags(int argc, char **argv, int mode)
 		}
 		optind++;
 	}
+
+	return 0;
+}
+
+static int lfs_hsm_action(int argc, char **argv)
+{
+	int				 rc;
+	int				 i = 1;
+	char				*path;
+	struct hsm_current_action	 hca;
+	struct hsm_extent		 he;
+	enum hsm_user_action		 hua;
+	enum hsm_progress_states	 hps;
+
+	if (argc < 2)
+		return CMD_HELP;
+
+	do {
+		path = argv[i];
+
+		rc = llapi_hsm_current_action(path, &hca);
+		if (rc) {
+			fprintf(stderr, "can't get hsm action for %s: %s\n",
+				path, strerror(errno = -rc));
+			return rc;
+		}
+		he = hca.hca_location;
+		hua = hca.hca_action;
+		hps = hca.hca_state;
+
+		printf("%s: %s", path, hsm_user_action2name(hua));
+
+		/* Skip file without action */
+		if (hca.hca_action == HUA_NONE) {
+			printf("\n");
+			continue;
+		}
+
+		printf(" %s ", hsm_progress_state2name(hps));
+
+		if ((hps == HPS_RUNNING) &&
+		    (hua == HUA_ARCHIVE || hua == HUA_RESTORE))
+			printf("("LPX64 " bytes moved)\n", he.length);
+		else if ((he.offset + he.length) == OBD_OBJECT_EOF)
+			printf("(from "LPX64 " to EOF)\n", he.offset);
+		else
+			printf("(from "LPX64 " to "LPX64")\n",
+			       he.offset, he.offset + he.length);
+
+	} while (++i < argc);
 
 	return 0;
 }

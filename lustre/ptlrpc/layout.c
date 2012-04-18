@@ -596,6 +596,11 @@ static const struct req_msg_field *mdt_hsm_ct_register[] = {
 	&RMF_MDS_HSM_ARCHIVE,
 };
 
+static const struct req_msg_field *mdt_hsm_action_server[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDS_HSM_CURRENT_ACTION,
+};
+
 static const struct req_msg_field *mdt_hsm_state_get_server[] = {
 	&RMF_PTLRPC_BODY,
 	&RMF_HSM_USER_STATE,
@@ -652,6 +657,7 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_HSM_CT_UNREGISTER,
 	&RQF_MDS_HSM_STATE_GET,
 	&RQF_MDS_HSM_STATE_SET,
+	&RQF_MDS_HSM_ACTION,
         &RQF_QC_CALLBACK,
         &RQF_OST_CONNECT,
         &RQF_OST_DISCONNECT,
@@ -1045,6 +1051,11 @@ struct req_msg_field RMF_MDS_HSM_PROGRESS =
 		    lustre_swab_hsm_progress_kernel, NULL);
 EXPORT_SYMBOL(RMF_MDS_HSM_PROGRESS);
 
+struct req_msg_field RMF_MDS_HSM_CURRENT_ACTION =
+	DEFINE_MSGF("hsm_current_action", 0, sizeof(struct hsm_current_action),
+		    lustre_swab_hsm_current_action, NULL);
+EXPORT_SYMBOL(RMF_MDS_HSM_CURRENT_ACTION);
+
 struct req_msg_field RMF_MDS_HSM_USER_ITEM =
 	DEFINE_MSGF("hsm_user_item", RMF_F_STRUCT_ARRAY,
 		    sizeof(struct hsm_user_item), lustre_swab_hsm_user_item,
@@ -1354,6 +1365,10 @@ struct req_format RQF_MDS_READPAGE =
         DEFINE_REQ_FMT0("MDS_READPAGE",
                         mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_READPAGE);
+
+struct req_format RQF_MDS_HSM_ACTION =
+	DEFINE_REQ_FMT0("MDS_HSM_ACTION", mdt_body_capa, mdt_hsm_action_server);
+EXPORT_SYMBOL(RQF_MDS_HSM_ACTION);
 
 struct req_format RQF_MDS_HSM_PROGRESS =
 	DEFINE_REQ_FMT0("MDS_HSM_PROGRESS", mdt_hsm_progress, empty);
