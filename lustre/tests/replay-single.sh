@@ -1817,7 +1817,7 @@ test_70b () {
 	local clients=${CLIENTS:-$HOSTNAME}
 
 	zconf_mount_clients $clients $MOUNT
-	
+
 	local duration=300
 	[ "$SLOW" = "no" ] && duration=60
 	# set duration to 900 because it takes some time to boot node
@@ -1826,20 +1826,20 @@ test_70b () {
 	local cmd="rundbench 1 -t $duration"
 	local pid=""
 	do_nodesv $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
-		PATH=:$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
+		PATH=\$PATH:$LUSTRE/utils:$LUSTRE/tests/:$DBENCH_LIB \
 		DBENCH_LIB=$DBENCH_LIB TESTSUITE=$TESTSUITE TESTNAME=$TESTNAME \
-		LCTL=$LCTL $cmd" &
+		MOUNT=$MOUNT DIR=$DIR/$tdir/\\\$(hostname) LCTL=$LCTL $cmd" &
 	pid=$!
 	log "Started rundbench load pid=$pid ..."
 
 	# give rundbench a chance to start, bug 24118
-	sleep 2
+	sleep 12
 	local elapsed=0
 	local num_failovers=0
 	local start_ts=$(date +%s)
 	while [ $elapsed -lt $duration ]; do
-		if ! check_for_process $clients rundbench; then
-			error_noexit "rundbench not found on some of $clients!"
+		if ! check_for_process $clients dbench; then
+			error_noexit "dbench not found on some of $clients!"
 			killall_process $clients dbench
 			break
 		fi

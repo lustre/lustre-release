@@ -1652,6 +1652,7 @@ do_nodes() {
     [ -z "$myPDSH" -o "$myPDSH" = "no_dsh" -o "$myPDSH" = "rsh" ] && \
         echo "cannot run remote command on $rnodes with $myPDSH" && return 128
 
+    export FANOUT=$(get_node_count "${rnodes//,/ }")
     if $VERBOSE; then
         echo "CMD: $rnodes $@" >&2
         $myPDSH $rnodes "$LCTL mark \"$@\"" > /dev/null 2>&1 || :
