@@ -1713,6 +1713,7 @@ restart_bulk:
         if (resends) {
                 req->rq_generation_set = 1;
                 req->rq_import_generation = generation;
+                req->rq_sent = cfs_time_current_sec() + resends;
         }
 
         rc = ptlrpc_queue_wait(req);

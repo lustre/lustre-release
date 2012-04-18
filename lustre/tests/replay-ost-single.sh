@@ -305,6 +305,39 @@ test_8c() {
 run_test 8c "Verify redo io: redo io should fail after eviction"
 
 
+test_9d() {
+#define OBD_FAIL_MDS_DQACQ_NET           0x187
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x187"
+    # test the non-intent create path
+    mcreate $TDIR/$tfile &
+    cpid=$!
+    sleep $TIMEOUT
+    if ! ps -p $cpid  > /dev/null 2>&1; then
+            error "mknod finished incorrectly"
+            return 1
+    fi
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+    wait $cpid || return 2
+    stat $TDIR/$tfile || error "mknod failed"
+
+    rm $TDIR/$tfile
+
+#define OBD_FAIL_MDS_DQACQ_NET           0x187
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0x187"
+    # test the intent create path
+    openfile -f O_RDWR:O_CREAT $TDIR/$tfile &
+    cpid=$!
+    sleep $TIMEOUT
+    if ! ps -p $cpid > /dev/null 2>&1; then
+            error "open finished incorrectly"
+            return 3
+    fi
+    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+    wait $cpid || return 4
+    stat $TDIR/$tfile || error "open failed"
+}
+run_test 9d "Verify redo creation on -EINPROGRESS"
+
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
 exit_status

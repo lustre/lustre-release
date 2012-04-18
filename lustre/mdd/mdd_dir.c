@@ -1998,6 +1998,9 @@ static int mdd_create(const struct lu_env *env,
         }
 #endif
 
+        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_DQACQ_NET))
+                GOTO(out_pending, rc = -EINPROGRESS);
+
         /*
          * No RPC inside the transaction, so OST objects should be created at
          * first.
@@ -2192,6 +2195,10 @@ out_pending:
                               quota_opc);
         }
 #endif
+        /* The child object shouldn't be cached anymore */
+        if (rc)
+                cfs_set_bit(LU_OBJECT_HEARD_BANSHEE,
+                            &child->mo_lu.lo_header->loh_flags);
         return rc;
 }
 
