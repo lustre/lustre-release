@@ -901,6 +901,20 @@ build_lustre() {
         --define "_topdir $TOPDIR" 2>&1 || \
         fatal 1 "Error building rpms for $BUILD_ARCHS."
 
+    if $DO_SRC; then
+        if ! $RPMBUILD -ts "$LUSTRE" \
+                 ${is_patchless:+--define "lustre_name lustre-client"} \
+                 ${lustre_tests:+--define "build_lustre_tests 0"} \
+                 ${FIND_REQUIRES:+--define "__find_requires $FIND_REQUIRES"} \
+                 --define "configure_args $confoptions ${CONFIGURE_FLAGS}" \
+                 --define "kdir $linux" \
+                 ${linuxobj:+--define "kobjdir $linuxobj"} \
+                 --define "_tmppath $TMPDIR" \
+                 --define "_topdir $TOPDIR" 2>&1; then
+            popd
+            return 255
+        fi
+    fi
     popd >/dev/null
 
 }
@@ -1377,7 +1391,8 @@ build_rdac() {
     # note that we use an _, not a . before the spec on purpose.  we are not
     # allowed to have more than one file with a .spec trailer in a tarball
     # that is supposed to be usable with rpmbuild
-    cp lustre/build/rdac_spec ${TOPDIR}/SPECS/rdac.spec || fatal 1 "Could not find rdac.spec in lustre/build" 
+    cp lustre/build/rdac_spec ${TOPDIR}/SPECS/rdac.spec ||
+        fatal 1 "Could not find rdac.spec in lustre/build"
 
     local targets arch
     for arch in $BUILD_ARCHS; do
