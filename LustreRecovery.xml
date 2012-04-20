@@ -4,22 +4,25 @@
   <para>This chapter describes how recovery is implemented in Lustre and includes the following sections:</para>
   <itemizedlist>
     <listitem>
-      <para><xref linkend="dbdoclet.50438268_58047"/></para>
+      <para><xref linkend="recoveryoverview"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438268_65824"/></para>
+      <para><xref linkend="metadatereplay"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438268_23736"/></para>
+      <para><xref linkend="replyreconstruction"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438268_80068"/></para>
+      <para><xref linkend="versionbasedrecovery"/></para>
     </listitem>
     <listitem>
-      <para><xref linkend="dbdoclet.50438268_83826"/></para>
+      <para><xref linkend="commitonshare"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="imperativerecovery"/></para>
     </listitem>
   </itemizedlist>
-  <section xml:id="dbdoclet.50438268_58047">
+  <section xml:id="recoveryoverview">
       <title>
           <indexterm><primary>recovery</primary></indexterm>
           <indexterm><primary>recovery</primary><secondary>VBR</secondary><see>version-based recovery</see></indexterm>
@@ -42,13 +45,13 @@
         <para> Transient network partition</para>
       </listitem>
     </itemizedlist>
-    <para>Currently, all Lustre failure and recovery operations are based on the concept of connection failure; all imports or exports associated with a given connection are considered to fail if any of them fail.</para>
-    <para>For information on Lustre recovery, see <xref linkend="dbdoclet.50438268_65824"/>. For information on recovering from a corrupt file system, see <xref linkend="dbdoclet.50438268_83826"/>. For information on resolving orphaned objects, a common issue after recovery, see <xref linkend="dbdoclet.50438225_13916"/>.</para>
+    <para>For Lustre 2.1.x and all earlier releases, all Lustre failure and recovery operations are based on the concept of connection failure; all imports or exports associated with a given connection are considered to fail if any of them fail. Lustre 2.2.x adds the <xref linkend="imperativerecovery"/> feature which enables the MGS to actively inform clients when a target restarts after a failure, failover or other interruption.</para>
+    <para>For information on Lustre recovery, see <xref linkend="metadatereplay"/>. For information on recovering from a corrupt file system, see <xref linkend="commitonshare"/>. For information on resolving orphaned objects, a common issue after recovery, see <xref linkend="dbdoclet.50438225_13916"/>. For information on imperative recovery see <xref linkend="imperativerecovery"/> </para>
     <section remap="h3">
       <title><indexterm><primary>recovery</primary><secondary>client failure</secondary></indexterm>Client Failure</title>
-      <para>Recovery from client failure in Lustre is based on lock revocation and other resources, so surviving clients can continue their work uninterrupted. If a client fails to timely respond to a blocking lock callback from the Distributed Lock Manager (DLM) or fails to communicate with the server in a long period of time (i.e., no pings), the client is forcibly removed from the cluster (evicted). This enables other clients to acquire locks blocked by the dead client&apos;s locks, and also frees resources (file handles, export data) associated with that client. Note that this scenario can be caused by a network partition, as well as an actual client node system failure. <xref linkend="dbdoclet.50438268_96876"/> describes this case in more detail.</para>
+      <para>Recovery from client failure in Lustre is based on lock revocation and other resources, so surviving clients can continue their work uninterrupted. If a client fails to timely respond to a blocking lock callback from the Distributed Lock Manager (DLM) or fails to communicate with the server in a long period of time (i.e., no pings), the client is forcibly removed from the cluster (evicted). This enables other clients to acquire locks blocked by the dead client&apos;s locks, and also frees resources (file handles, export data) associated with that client. Note that this scenario can be caused by a network partition, as well as an actual client node system failure. <xref linkend="networkpartition"/> describes this case in more detail.</para>
     </section>
-    <section xml:id="dbdoclet.50438268_43796">
+    <section xml:id="clientevictions">
       <title><indexterm><primary>recovery</primary><secondary>client eviction</secondary></indexterm>Client Eviction</title>
       <para>If a client is not behaving properly from the server&apos;s point of view, it will be evicted. This ensures that the whole file system can continue to function in the presence of failed or misbehaving clients. An evicted client must invalidate all locks, which in turn, results in all cached inodes becoming invalidated and all cached data being flushed.</para>
       <para>Reasons why a client might be evicted:</para>
@@ -78,13 +81,13 @@
     <section remap="h3">
       <title><indexterm><primary>recovery</primary><secondary>MDS failure</secondary></indexterm>MDS Failure (Failover)</title>
       <para>Highly-available (HA) Lustre operation requires that the metadata server have a peer configured for failover, including the use of a shared storage device for the MDT backing file system. The actual mechanism for detecting peer failure, power off (STONITH) of the failed peer (to prevent it from continuing to modify the shared disk), and takeover of the Lustre MDS service on the backup node depends on external HA software such as Heartbeat. It is also possible to have MDS recovery with a single MDS node. In this case, recovery will take as long as is needed for the single MDS to be restarted.</para>
-      <para>When clients detect an MDS failure (either by timeouts of in-flight requests or idle-time ping messages), they connect to the new backup MDS and use the Metadata Replay protocol. Metadata Replay is responsible for ensuring that the backup MDS re-acquires state resulting from transactions whose effects were made visible to clients, but which were not committed to the disk.</para>
-      <para>The reconnection to a new (or restarted) MDS is managed by the file system configuration loaded by the client when the file system is first mounted. If a failover MDS has been configured (using the <literal>--failnode=</literal> option to <literal>mkfs.lustre</literal> or <literal>tunefs.lustre</literal>), the client tries to reconnect to both the primary and backup MDS until one of them responds that the failed MDT is again available. At that point, the client begins recovery. For more information, see <xref linkend="dbdoclet.50438268_65824"/>.</para>
+      <para>When <xref linkend="imperativerecovery"/> is enabled, clients are notified of an MDS restart (either the backup or a restored primary). Clients always may detect an MDS failure either by timeouts of in-flight requests or idle-time ping messages. In either case the clients then connect to the new backup MDS and use the Metadata Replay protocol. Metadata Replay is responsible for ensuring that the backup MDS re-acquires state resulting from transactions whose effects were made visible to clients, but which were not committed to the disk.</para>
+      <para>The reconnection to a new (or restarted) MDS is managed by the file system configuration loaded by the client when the file system is first mounted. If a failover MDS has been configured (using the <literal>--failnode=</literal> option to <literal>mkfs.lustre</literal> or <literal>tunefs.lustre</literal>), the client tries to reconnect to both the primary and backup MDS until one of them responds that the failed MDT is again available. At that point, the client begins recovery. For more information, see <xref linkend="metadatereplay"/>.</para>
       <para>Transaction numbers are used to ensure that operations are replayed in the order they were originally performed, so that they are guaranteed to succeed and present the same filesystem state as before the failure. In addition, clients inform the new server of their existing lock state (including locks that have not yet been granted). All metadata and lock replay must complete before new, non-recovery operations are permitted. In addition, only clients that were connected at the time of MDS failure are permitted to reconnect during the recovery window, to avoid the introduction of state changes that might conflict with what is being replayed by previously-connected clients.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>recovery</primary><secondary>OST failure</secondary></indexterm>OST Failure (Failover)</title>
-      <para>When an OST fails or has communication problems with the client, the default action is that the corresponding OSC enters recovery, and I/O requests going to that OST are blocked waiting for OST recovery or failover. It is possible to administratively mark the OSC as <emphasis>inactive</emphasis> on the client, in which case file operations that involve the failed OST will return an IO error (<literal>-EIO</literal>). Otherwise, the application waits until the OST has recovered or the client process is interrupted (e.g. ,with <emphasis>CTRL-C</emphasis>).</para>
+	<para>When an OST fails or has communication problems with the client, the default action is that the corresponding OSC enters recovery, and I/O requests going to that OST are blocked waiting for OST recovery or failover. It is possible to administratively mark the OSC as <emphasis>inactive</emphasis> on the client, in which case file operations that involve the failed OST will return an IO error (<literal>-EIO</literal>). Otherwise, the application waits until the OST has recovered or the client process is interrupted (e.g. ,with <emphasis>CTRL-C</emphasis>).</para>
       <para>The MDS (via the LOV) detects that an OST is unavailable and skips it when assigning objects to new files. When the OST is restarted or re-establishes communication with the MDS, the MDS and OST automatically perform orphan recovery to destroy any objects that belong to files that were deleted while the OST was unavailable. For more information, see <xref linkend="troubleshootingrecovery"/> (Working with Orphaned Objects).</para>
       <para>While the OSC to OST operation recovery protocol is the same as that between the MDC and MDT using the Metadata Replay protocol, typically the OST commits bulk write operations to disk synchronously and each reply indicates that the request is already committed and the data does not need to be saved for recovery. In some cases, the OST replies to the client before the operation is committed to disk (e.g. truncate, destroy, setattr, and I/O operations in very new versions of Lustre), and normal replay and resend handling is done, including resending of the bulk writes. In this case, the client keeps a copy of the data available in memory until the server indicates that the write has committed to disk.</para>
       <para>To force an OST recovery, unmount the OST and then mount it again. If the OST was connected to clients before it failed, then a recovery process starts after the remount, enabling clients to reconnect to the OST and replay transactions in their queue. When the OST is in recovery mode, all new client connections are refused until the recovery finishes. The recovery is complete when either all previously-connected clients reconnect and their transactions are replayed or a client connection attempt times out. If a connection attempt times out, then all clients waiting to reconnect (and their transactions) are lost.</para>
@@ -96,14 +99,14 @@
         <para>In this example, 7 is the OST device number. The device name is <literal>ddn_data-OST0009</literal>. In most instances, the device name can be used in place of the device number.</para>
       </note>
     </section>
-    <section xml:id="dbdoclet.50438268_96876">
+    <section xml:id="networkpartition">
       <title><indexterm><primary>recovery</primary><secondary>network</secondary></indexterm>Network Partition</title>
       <para>Network failures may be transient. To avoid invoking recovery, the client tries, initially, to re-send any timed out request to the server. If the resend also fails, the client tries to re-establish a connection to the server. Clients can detect harmless partition upon reconnect if the server has not had any reason to evict the client.</para>
       <para>If a request was processed by the server, but the reply was dropped (i.e., did not arrive back at the client), the server must reconstruct the reply when the client resends the request, rather than performing the same request twice.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>recovery</primary><secondary>failed recovery</secondary></indexterm>Failed Recovery</title>
-      <para>In the case of failed recovery, a client is evicted by the server and must reconnect after having flushed its saved state related to that server, as described in <xref linkend="dbdoclet.50438268_43796"/>, above. Failed recovery might occur for a number of reasons, including:</para>
+      <para>In the case of failed recovery, a client is evicted by the server and must reconnect after having flushed its saved state related to that server, as described in <xref linkend="clientevictions"/>, above. Failed recovery might occur for a number of reasons, including:</para>
       <itemizedlist>
         <listitem>
           <para> Failure of recovery</para>
@@ -122,7 +125,7 @@
       </itemizedlist>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438268_65824">
+  <section xml:id="metadatereplay">
     <title><indexterm><primary>recovery</primary><secondary>metadata replay</secondary></indexterm>Metadata Replay</title>
     <para>Highly available Lustre operation requires that the MDS have a peer configured for failover, including the use of a shared storage device for the MDS backing file system. When a client detects an MDS failure, it connects to the new MDS and uses the metadata replay protocol to replay its requests.</para>
     <para>Metadata replay ensures that the failover MDS re-accumulates state resulting from transactions whose effects were made visible to clients, but which were not committed to the disk.</para>
@@ -162,7 +165,7 @@
       <title>Gaps in the Replay Sequence</title>
       <para>In some cases, a gap may occur in the reply sequence. This might be caused by lost replies, where the request was processed and committed to disk but the reply was not received by the client. It can also be caused by clients missing from recovery due to partial network failure or client death.</para>
       <para>In the case where all clients have reconnected, but there is a gap in the replay sequence the only possibility is that some requests were processed by the server but the reply was lost. Since the client must still have these requests in its resend list, they are processed after recovery is finished.</para>
-      <para>In the case where all clients have not reconnected, it is likely that the failed clients had requests that will no longer be replayed. The VBR feature is used to determine if a request following a transaction gap is safe to be replayed. Each item in the file system (MDS inode or OST object) stores on disk the number of the last transaction in which it was modified. Each reply from the server contains the previous version number of the objects that it affects. During VBR replay, the server matches the previous version numbers in the resend request against the current version number. If the versions match, the request is the next one that affects the object and can be safely replayed. For more information, see <xref linkend="dbdoclet.50438268_80068"/>.</para>
+      <para>In the case where all clients have not reconnected, it is likely that the failed clients had requests that will no longer be replayed. The VBR feature is used to determine if a request following a transaction gap is safe to be replayed. Each item in the file system (MDS inode or OST object) stores on disk the number of the last transaction in which it was modified. Each reply from the server contains the previous version number of the objects that it affects. During VBR replay, the server matches the previous version numbers in the resend request against the current version number. If the versions match, the request is the next one that affects the object and can be safely replayed. For more information, see <xref linkend="versionbasedrecovery"/>.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>recovery</primary><secondary>locks</secondary></indexterm>Lock Recovery</title>
@@ -174,7 +177,7 @@
       <para>Once all of the previously-shared state has been recovered on the server (the target file system is up-to-date with client cache and the server has recreated locks representing the locks held by the client), the client can resend any requests that did not receive an earlier reply. This processing is done like normal request processing, and, in some cases, the server may do reply reconstruction.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438268_23736">
+  <section xml:id="replyreconstruction">
     <title>Reply Reconstruction</title>
     <para>When a reply is dropped, the MDS needs to be able to reconstruct the reply when the original request is re-sent. This must be done without repeating any non-idempotent operations, while preserving the integrity of the locking system. In the event of MDS failover, the information used to reconstruct the reply must be serialized on the disk in transactions that are joined or nested with those operating on the disk.</para>
     <section remap="h3">
@@ -222,7 +225,7 @@
       </section>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438268_80068">
+  <section xml:id="versionbasedrecovery">
     <title><indexterm><primary>Version-based recovery (VBR)</primary></indexterm>Version-based Recovery</title>
     <para>The Version-based Recovery (VBR) feature improves Lustre reliability in cases where client requests (RPCs) fail to replay during recovery
           <footnote>
@@ -284,7 +287,7 @@
       <para>VBR will be successful for clients which do not share data with other client. Therefore, the strategy for reliable use of VBR is to store a client&apos;s data in its own directory, where possible. VBR can recover these clients, even if other clients are lost.</para>
     </section>
   </section>
-  <section xml:id="dbdoclet.50438268_83826">
+  <section xml:id="commitonshare">
     <title><indexterm><primary>commit on share</primary></indexterm>Commit on Share</title>
     <para>The commit-on-share (COS) feature makes Lustre recovery more reliable by preventing missing clients from causing cascading evictions of other clients. With COS enabled, if some Lustre clients miss the recovery window after a reboot or a server failure, the remaining clients are not evicted.</para>
     <note>
@@ -292,7 +295,7 @@
     </note>
     <section remap="h3">
       <title><indexterm><primary>commit on share</primary><secondary>working with</secondary></indexterm>Working with Commit on Share</title>
-      <para>To illustrate how COS works, let&apos;s first look at the old recovery scenario. After a service restart, the MDS would boot and enter recovery mode. Clients began reconnecting and replaying their uncommitted transactions. Clients could replay transactions independently as long as their transactions did not depend on each other (one client&apos;s transactions did not depend on a different client&apos;s transactions). The MDS is able to determine whether one transaction is dependent on another transaction via the <xref linkend="dbdoclet.50438268_80068"/> feature.</para>
+      <para>To illustrate how COS works, let&apos;s first look at the old recovery scenario. After a service restart, the MDS would boot and enter recovery mode. Clients began reconnecting and replaying their uncommitted transactions. Clients could replay transactions independently as long as their transactions did not depend on each other (one client&apos;s transactions did not depend on a different client&apos;s transactions). The MDS is able to determine whether one transaction is dependent on another transaction via the <xref linkend="versionbasedrecovery"/> feature.</para>
       <para>If there was a dependency between client transactions (for example, creating and deleting the same file), and one or more clients did not reconnect in time, then some clients may have been evicted because their transactions depended on transactions from the missing clients. Evictions of those clients caused more clients to be evicted and so on, resulting in &quot;cascading&quot; client evictions.</para>
       <para>COS addresses the problem of cascading evictions by eliminating dependent transactions between clients. It ensures that one transaction is committed to disk if another client performs a transaction dependent on the first one. With no dependent, uncommitted transactions to apply, the clients replay their requests independently without the risk of being evicted.</para>
     </section>
@@ -310,4 +313,237 @@
       </note>
     </section>
   </section>
+   <section xml:id="imperativerecovery">
+    <title><indexterm><primary>imperative recovery</primary></indexterm>Imperative Recovery</title>
+	<para>Imperative Recovery (IR) was first introduced in Lustre 2.2.0</para>
+	<para>Large-scale lustre implementations have historically experienced problems recovering in a timely manner after a server failure. This is due to the way that clients detect the server failure and how the servers perform their recovery. Many of the processes are driven by the RPC timeout, which must be scaled with system size to prevent false diagnosis of server death. The purpose of imperative recovery is to reduce the recovery window by actively informing clients of server failure. The resulting reduction in the recovery window will minimize target downtime and therefore increase overall system availability. Imperative Recovery does not remove previous recovery mechanisms, and client timeout-based recovery actions can occur in a cluster when IR is enabled as each client can still independently disconnect and reconnect from a target. In case of a mix of IR and non-IR clients connecting to an OST or MDT, the server cannot reduce its recovery timeout window, because it cannot be sure that all clients have been notified of the server restart in a timely manner.  Even in such mixed environments the time to complete recovery may be reduced, since IR-enabled clients will still be notified reconnect to the server promptly and allow recovery to complete as soon as the last the non-IR client detects the server failure.</para>
+	<section remap="h3">
+         <title><indexterm><primary>imperative recovery</primary><secondary>MGS role</secondary></indexterm>MGS role</title>
+	<para>The MGS now holds additional information about Lustre targets, in the form of a Target Status Table. Whenever a target registers with the MGS, there is a corresponding entry in this table identifying the target. This entry includes NID information, and state/version information for the target. When a client mounts the filesystem, it caches a locked copy of this table, in the form of a Lustre configuration log. When a target restart occurs, the MGS revokes the client lock, forcing all clients to reload the table. Any new targets will have an updated version number, the client detects this and reconnects to the restarted target. Since successful IR notification of server restart depends on all clients being registered with the MGS, and there is no other node to notify clients in case of MGS restart, the MGS will disable IR for a period when it first starts. This interval is configurable, as shown in <xref linkend="imperativerecoveryparameters"/></para>
+        <para>Because of the increased importance of the MGS in recovery, it is strongly recommended that the MGS node be separate from the MDS. If the MGS is co-located on the MDS node, then in case of MDS/MGS failure there will be no IR notification for the MDS restart, and clients will always use timeout-based recovery for the MDS.  IR notification would still be used in the case of OSS failure and recovery.</para>
+	<para>Unfortunately, it’s impossible for the MGS to know how many clients have been successfully notified or whether a specific client has received the restarting target information. The only thing the MGS can do is tell the target that, for example, all clients are imperative recovery-capable, so it is not necessary to wait as long for all clients to reconnect. For this reason, we still require a timeout policy on the target side, but this timeout value can be much shorter than normal recovery. </para>
+	</section>
+	<section remap="h3" xml:id="imperativerecoveryparameters">
+	<title><indexterm><primary>imperative recovery</primary><secondary>Tuning</secondary></indexterm>Tuning Imperative Recovery</title>
+	<para>Imperative recovery has a default parameter set which means it can work without any extra configuration. However, the default parameter set only fits a generic configuration. The following sections discuss the configuration items for imperative recovery.</para>
+	<section remap="h5">
+	<title>ir_factor</title>
+	<para>Ir_factor is used to control targets’ recovery window. If imperative recovery is enabled, the recovery timeout window on the restarting target is calculated by: <emphasis>new timeout = recovery_time * ir_factor / 10 </emphasis>Ir_factor must be a value in range of [1, 10]. The default value of ir_factor is 5. The following example will set imperative recovery timeout to 80% of normal recovery timeout on the target testfs-OST0000: </para>
+<screen>lctl conf_param obdfilter.testfs-OST0000.ir_factor=8</screen>
+		<note> <para>If this value is too small for the system, clients may be unnecessarily evicted</para> </note>
+<para>You can read the current value of the parameter in the standard manner with <emphasis>lctl get_param</emphasis>:</para>
+	<screen>
+# lctl get_param obdfilter.testfs-OST0000.ir_factor
+# obdfilter.testfs-OST0000.ir_factor=8
+</screen>
+	</section>
+	<section remap="h5">
+	<title>Disabling Imperative Recovery</title>
+	<para>Imperative recovery can be disabled manually by a mount option. For example, imperative recovery can be disabled on an OST by:</para>
+	<screen># mount -t lustre -onoir /dev/sda /mnt/ost1</screen>
+	<para>Imperative recovery can also be disabled on the client side with the same mount option:</para>
+	<screen># mount -t lustre -onoir mymgsnid@tcp:/testfs /mnt/testfs</screen>
+	<note><para>When a single client is deactivated in this manner, the MGS will deactivate imperative recovery for the whole cluster. IR-enabled clients will still get notification of target restart, but targets will not be allowed to shorten the recovery window. </para></note>
+	<para>You can also disable imperative recovery globally on the MGS by writing `state=disabled’ to the controling procfs entry</para>
+	<screen># lctl set_param mgs.MGS.live.testfs="state=disabled"</screen>
+	<para>The above command will disable imperative recovery for file system named <emphasis>testfs</emphasis></para>
+	</section>
+	<section remap="h5">
+	<title>Checking Imperative Recovery State - MGS</title>
+	<para>You can get the imperative recovery state from the MGS. Let’s take an example and explain states of imperative recovery:</para>
+<screen>
+[mgs]$ lctl get_param mgs.MGS.live.testfs
+...
+imperative_recovery_state:
+    state: full
+    nonir_clients: 0
+    nidtbl_version: 242
+    notify_duration_total: 0.470000
+    notify_duation_max: 0.041000
+    notify_count: 38
+</screen>
+<informaltable frame="all">
+	<tgroup cols="2">
+	<colspec colname="c1" colwidth="50*"/>
+	<colspec colname="c2" colwidth="50*"/>
+	<thead>
+		<row>
+		<entry>
+		<para><emphasis role="bold">Item</emphasis></para>
+		</entry>
+		<entry>
+		<para><emphasis role="bold">Meaning</emphasis></para>
+		</entry>
+		</row>
+	</thead>
+	<tbody>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>state</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para><itemizedlist>
+			<listitem>
+			<para><emphasis role="bold">full: </emphasis>IR is working, all clients are connected and can be notified.</para>
+			</listitem>
+			<listitem>
+			<para><emphasis role="bold">partial: </emphasis>some clients are not IR capable.</para>
+			</listitem>
+			<listitem>
+			<para><emphasis role="bold">disabled: </emphasis>IR is disabled, no client notification.</para>
+			</listitem>
+			<listitem>
+			<para><emphasis role="bold">startup: </emphasis>the MGS was just restarted, so not all clients may reconnect to the MGS.</para>
+			</listitem>
+			</itemizedlist></para>
+		</entry>
+		</row>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>nonir_clients</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para>Number of non-IR capable clients in the system.</para>
+		</entry>
+		</row>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>nidtbl_version</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para>Version number of the target status table. Client version must match MGS.</para>
+		</entry>
+		</row>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>notify_duration_total</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para>[Seconds.microseconds] Total time spent by MGS notifying clients</para>
+		</entry>
+		</row>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>notify_duration_max</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para>[Seconds.microseconds] Maximum notification time for the MGS to notify a single IR client.</para>
+		</entry>
+		</row>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>notify_count</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para>Number of MGS restarts - to obtain average notification time, divide <literal>notify_duration_total</literal> by <literal>notify_count</literal></para>
+		</entry>
+		</row>
+	</tbody>
+	</tgroup>
+</informaltable>
+
+	</section>
+	<section remap="h5">
+	<title>Checking Imperative Recovery State - client</title>
+	<para>A `client’ in IR means a lustre client or a MDT. You can get the IR state on any node which running client or MDT, those nodes will always have an MGC running. An example from a client:</para>
+	<screen>
+[client]$ lctl get_param mgc.*.ir_state
+mgc.MGC192.168.127.6@tcp.ir_state=
+imperative_recovery: ON
+client_state:
+    - { client: testfs-client, nidtbl_version: 242 }
+	</screen>
+	<para>An example from a MDT:</para>
+	<screen>
+mgc.MGC192.168.127.6@tcp.ir_state=
+imperative_recovery: ON
+client_state:
+    - { client: testfs-MDT0000, nidtbl_version: 242 }
+	</screen>
+<informaltable frame="all">
+	<tgroup cols="2">
+	<colspec colname="c1" colwidth="50*"/>
+	<colspec colname="c2" colwidth="50*"/>
+	<thead>
+		<row>
+		<entry>
+		<para><emphasis role="bold">Item</emphasis></para>
+		</entry>
+		<entry>
+		<para><emphasis role="bold">Meaning</emphasis></para>
+		</entry>
+		</row>
+	</thead>
+	<tbody>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>imperative_recovery</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para><literal>imperative_recovery</literal>can be ON or OFF. If it’s OFF state, then IR is disabled by administrator at mount time. Normally this should be ON state.</para>
+		</entry>
+		</row>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>client_state: client:</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para>The name of the client</para>
+		</entry>
+		</row>
+		<row>
+		<entry>
+			<para><emphasis role="bold">
+			<literal>client_state: nidtbl_version</literal>
+			</emphasis></para>
+		</entry>
+		<entry>
+			<para>Version number of the target status table. Client version must match MGS.</para>
+		</entry>
+		</row>
+	</tbody>
+	</tgroup>
+</informaltable>
+	</section>
+	<section remap="h5">
+	<title>Target Instance Number</title>
+	<para>The Target Instance number is used to determine if a client is connecting to the latest instance of a target. We use the lowest 32 bit of mount count as target instance number. For an OST you can get the target instance number of testfs-OST0001 in this way (the command is run from an OSS login prompt):</para>
+<screen>
+$ lctl get_param obdfilter.testfs-OST0001*.instance
+obdfilter.testfs-OST0001.instance=5
+</screen>
+	<para>From a client, query the relevant OSC:</para>
+<screen>
+$ lctl get_param osc.testfs-OST0001-osc-*.import |grep instance
+    instance: 5
+</screen>
+	</section>
+	</section>
+	<section remap="h3" xml:id="imperativerecoveryrecomendations">
+	<title><indexterm><primary>imperative recovery</primary><secondary>Configuration Suggestions</secondary></indexterm>Configuration Suggestions for Imperative Recovery</title>
+<para>We used to build the MGS and MDT0 on the same target to save a server node. However, to make IR work efficiently, we strongly recommend running the MGS node on a separate node for any significant Lustre installation. There are three main advantages of doing this: </para>
+<orderedlist>
+<listitem><para>Be able to notify clients if the MDT0 is dead</para></listitem>
+<listitem><para>Load balance. The load on the MDS may be very high which may make the MGS unable to notify the clients in time</para></listitem>
+<listitem><para>Safety. The MGS code is simpler and much smaller compared to the code of MDT. This means the chance of MGS down time due to a software bug is very low.</para></listitem>
+</orderedlist>
+	</section>
+  </section>
+
 </chapter>
