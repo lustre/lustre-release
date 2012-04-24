@@ -29,6 +29,19 @@ Index: linux-2.6.18-164.11.1/include/scsi/scsi_host.h
  
  
  #define DISABLE_CLUSTERING 0
+Index: linux-2.6.18-164.11.1/drivers/scsi/isci/init.c
+===================================================================
+--- linux-2.6.18-164.11.1/drivers/scsi/isci/init.c
++++ linux-2.6.18-164.11.1/drivers/scsi/isci/init.c
+@@ -38,7 +38,7 @@
+ 	.can_queue			= ISCI_CAN_QUEUE_VAL,
+ 	.cmd_per_lun			= 1,
+ 	.this_id			= -1,
+-	.sg_tablesize			= SG_ALL,
++	.sg_tablesize			= 0x80,
+ 	.max_sectors			= SCSI_DEFAULT_MAX_SECTORS,
+ 	.use_clustering			= ENABLE_CLUSTERING,
+ 	.eh_device_reset_handler	= sas_eh_device_reset_handler,
 Index: linux-2.6.18-164.11.1/drivers/scsi/lpfc/lpfc.h
 ===================================================================
 --- linux-2.6.18-164.11.1.orig/drivers/scsi/lpfc/lpfc.h
