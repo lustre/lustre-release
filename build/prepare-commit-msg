@@ -14,7 +14,7 @@
 # means that they can currently be ignored, but are at least visible.
 
 CHECKPATCH=build/checkpatch.pl
-CHECKPATCH_OPTS="--no-signoff --no-tree --no-tabs"
+CHECKPATCH_OPTS="--no-signoff --no-tree"
 [ -r "$CHECKPATCH" ] || exit 0
 
 # If there are no comments in the commit, it is likely a rebase and
