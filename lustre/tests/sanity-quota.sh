@@ -2001,39 +2001,57 @@ run_test_with_stat 28 "test for consistency for qunit when setquota (18574) ====
 
 test_29()
 {
-        local BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
-        local timeout
-        local pid
+	local BLK_LIMIT=$((100 * 1024 * 1024)) # 100G
+	local timeout
+	local at_max_val
+	local pid
+	local waited
+	local deadline
 
-        if at_is_enabled; then
-                timeout=$(at_max_get client)
-                at_max_set 10 client
-        else
-                timeout=$(lctl get_param -n timeout)
-                lctl set_param timeout=10
-        fi
+	at_max_val=10
+
+	if at_is_enabled; then
+		timeout=$(at_max_get client)
+		[ $(at_min_get client) -gt $at_max_val ] &&
+			at_max_val=$(at_min_get client)
+		at_max_set $at_max_val client
+	else
+		timeout=$(lctl get_param -n timeout)
+		lctl set_param timeout=$at_max_val
+	fi
 	# actually send a RPC to make service at_current confined within at_max
-        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR || error "should succeed"
+	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR ||
+		error "should succeed"
 
-        #define OBD_FAIL_MDS_QUOTACTL_NET 0x12e
-        lustre_fail mds 0x12e
+	#define OBD_FAIL_MDS_QUOTACTL_NET 0x12e
+	lustre_fail mds 0x12e
 
-        $LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR & pid=$!
+	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I 0 $DIR & pid=$!
 
-        echo "sleeping for 10 * 1.25 + 5 + 10 seconds"
-        sleep 28
-        ps -p $pid && error "lfs hadn't finished by timeout"
-        wait $pid && error "succeeded, but should have failed"
+	deadline=$((2 * (($at_max_val << 1) + ($at_max_val >> 2) + 5)))
+	echo "wait at most 2 * ($at_max_val * 2.25 + 5) = $deadline seconds," \
+	     "it is server process time add the network latency."
 
-        lustre_fail mds 0
+	waited=0
+	while [ $waited -lt $deadline ]; do
+		echo -n "."
+		sleep 1
+		waited=$((waited + 1))
+		ps -p $pid > /dev/null || break
+	done
+	echo "waited $waited seconds"
+	ps -p $pid && error "lfs hadn't finished by $deadline seconds"
+	wait $pid && error "succeeded, but should have failed"
 
-        if at_is_enabled; then
-                at_max_set $timeout client
-        else
-                lctl set_param timeout=$timeout
-        fi
+	lustre_fail mds 0
 
-        resetquota -u $TSTUSR
+	if at_is_enabled; then
+		at_max_set $timeout client
+	else
+		lctl set_param timeout=$timeout
+	fi
+
+	resetquota -u $TSTUSR
 }
 run_test_with_stat 29 "unhandled quotactls must not hang lustre client (19778) ========"
 
