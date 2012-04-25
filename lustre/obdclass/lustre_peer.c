@@ -126,7 +126,7 @@ int class_add_uuid(const char *uuid, __u64 nid)
 
                         if (i == entry->un_nid_count) {
                                 LASSERT(entry->un_nid_count < NIDS_MAX);
-                                entry->un_nids[++entry->un_nid_count] = nid;
+                                entry->un_nids[entry->un_nid_count++] = nid;
                         }
                         break;
                 }
