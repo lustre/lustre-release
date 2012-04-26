@@ -882,7 +882,7 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
 
         rc = mdt_object_exists(parent);
         if (unlikely(rc == 0)) {
-                LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
+                LU_OBJECT_DEBUG(D_INODE, info->mti_env,
                                 &parent->mot_obj.mo_lu,
                                 "Parent doesn't exist!\n");
                 RETURN(-ESTALE);
