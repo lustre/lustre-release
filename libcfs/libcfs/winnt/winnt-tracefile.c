@@ -144,13 +144,13 @@ cfs_trace_buf_type_t cfs_trace_buf_idx_get()
                 return CFS_TCD_TYPE_PASSIVE;
 }
 
-int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd)
+int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 {
 	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
 	return 1;
 }
 
-void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd)
+void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 {
 	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
 }

@@ -147,25 +147,35 @@ cfs_trace_buf_type_t cfs_trace_buf_idx_get()
 		return CFS_TCD_TYPE_PROC;
 }
 
-int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd)
+/*
+ * The walking argument indicates the locking comes from all tcd types
+ * iterator and we must lock it and dissable local irqs to avoid deadlocks
+ * with other interrupt locks that might be happening. See LU-1311
+ * for details.
+ */
+int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 {
 	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
         if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
                 cfs_spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
         else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
                 cfs_spin_lock_bh(&tcd->tcd_lock);
+        else if (unlikely(walking))
+                cfs_spin_lock_irq(&tcd->tcd_lock);
         else
                 cfs_spin_lock(&tcd->tcd_lock);
 	return 1;
 }
 
-void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd)
+void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 {
 	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
         if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
                 cfs_spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
         else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
                 cfs_spin_unlock_bh(&tcd->tcd_lock);
+        else if (unlikely(walking))
+                cfs_spin_unlock_irq(&tcd->tcd_lock);
         else
                 cfs_spin_unlock(&tcd->tcd_lock);
 }
