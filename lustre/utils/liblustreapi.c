@@ -3733,13 +3733,13 @@ int llapi_path2fid(const char *path, lustre_fid *fid)
         memset(fid, 0, sizeof(*fid));
         fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
         if (fd < 0) {
-                if (errno == ELOOP) /* symbolic link */
+                if (errno == ELOOP || errno == ENXIO)
                         return path2fid_from_lma(path, fid);
                 return -errno;
         }
 
         rc = ioctl(fd, LL_IOC_PATH2FID, fid) < 0 ? -errno : 0;
-        if (rc == -EINVAL) /* char special device */
+        if (rc == -EINVAL || rc == -ENOTTY)
                 rc = path2fid_from_lma(path, fid);
 
         close(fd);

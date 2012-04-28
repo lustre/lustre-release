@@ -35,25 +35,81 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <getopt.h>
+
+void usage(const char *prog, int status)
+{
+        fprintf(status == 0 ? stdout : stderr,
+                "Usage: %s [OPTION]... FILE\n"
+                "  -d, --device=DEV  use device number DEV\n"
+                "  -h, --help        dispaly help\n"
+                "  -m, --mode=MODE   use mode MODE\n"
+                "  -M, --major=MAJOR use device major MAJOR\n"
+                "  -N, --minor=MINOR use device minor MINOR\n",
+                prog);
+
+        exit(status);
+}
 
 int main(int argc, char ** argv)
 {
+        struct option opts[] = {
+                { "device", 1, NULL, 'd' },
+                { "help",   0, NULL, 'h' },
+                { "mode",   1, NULL, 'm' },
+                { "major",  1, NULL, 'M' },
+                { "minor",  1, NULL, 'N' },
+                { NULL },
+        };
+        const char *path;
+        mode_t mode = S_IFREG | 0644;
+        dev_t dev = 0;
         int rc;
 
-        if (argc < 2) {
-                printf("Usage %s filename\n", argv[0]);
-                return 1;
+        int c;
+        while ((c = getopt_long(argc, argv, "d:hm:M:N:", opts, NULL)) != -1) {
+                switch (c) {
+                case 'd':
+                        dev = strtoul(optarg, NULL, 0);
+                        break;
+                case 'h':
+                        usage(argv[0], 0);
+                case 'm':
+                        mode = strtoul(optarg, NULL, 0);
+                        break;
+                case 'M':
+                        dev = makedev(strtoul(optarg, NULL, 0), minor(dev));
+                        break;
+                case 'N':
+                        dev = makedev(major(dev), strtoul(optarg, NULL, 0));
+                        break;
+                case '?':
+                        usage(argv[0], 1);
+                }
         }
 
-        rc = mknod(argv[1], S_IFREG | 0644, 0);
-        if (rc) {
-                printf("mknod(%s) error: %s\n", argv[1], strerror(errno));
-        }
+        if (argc - optind != 1)
+                usage(argv[0], 1);
+
+        path = argv[optind];
+
+        if ((mode & S_IFMT) == S_IFDIR)
+                rc = mkdir(path, mode & ~S_IFMT);
+        else if ((mode & S_IFMT) == S_IFLNK)
+                rc = symlink("oldpath", path);
+        else
+                rc = mknod(path, mode, dev);
+
+        if (rc)
+                fprintf(stderr, "%s: cannot create `%s' with mode %#o: %s\n",
+                        argv[0], path, mode, strerror(errno));
+
         return rc;
 }

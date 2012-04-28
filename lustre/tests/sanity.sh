@@ -9127,6 +9127,47 @@ test_225b () {
 }
 run_test 225b "Metadata survey sanity with stripe_count = 1"
 
+mcreate_path2fid () {
+	local mode=$1
+	local major=$2
+	local minor=$3
+	local name=$4
+	local desc=$5
+	local path=$DIR/$tdir/$name
+	local fid
+	local rc
+	local fid_path
+
+	$MCREATE --mode=$1 --major=$2 --minor=$3 $path || \
+		error "error: cannot create $desc"
+
+	fid=$($LFS path2fid $path)
+	rc=$?
+	[ $rc -ne 0 ] && error "error: cannot get fid of a $desc"
+
+	fid_path=$($LFS fid2path $DIR $fid)
+	rc=$?
+	[ $rc -ne 0 ] && error "error: cannot get path of a $desc by fid"
+
+	[ "$path" == "$fid_path" ] || \
+		error "error: fid2path returned \`$fid_path', expected \`$path'"
+}
+
+test_226 () {
+	rm -rf $DIR/$tdir
+	mkdir -p $DIR/$tdir
+
+	mcreate_path2fid 0010666 0 0 fifo "FIFO"
+	mcreate_path2fid 0020666 1 3 null "character special file (null)"
+	mcreate_path2fid 0020666 1 255 none "character special file (no device)"
+	mcreate_path2fid 0040666 0 0 dir "directory"
+	mcreate_path2fid 0060666 7 0 loop0 "block special file (loop)"
+	mcreate_path2fid 0100666 0 0 file "regular file"
+	mcreate_path2fid 0120666 0 0 link "symbolic link"
+	mcreate_path2fid 0140666 0 0 sock "socket"
+}
+run_test 226 "call path2fid and fid2path on files of all type"
+
 #
 # tests that do cleanup/setup should be run at the end
 #
