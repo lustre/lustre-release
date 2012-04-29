@@ -579,7 +579,7 @@
         <para>The process that re-establishes the connection state when a client that was previously connected to a server reconnects after the server restarts.</para>
       </glossdef>
     </glossentry>
-    <glossentry xml:id="reply">
+    <glossentry xml:id="replay">
       <glossterm>Reply
         </glossterm>
       <glossdef>
