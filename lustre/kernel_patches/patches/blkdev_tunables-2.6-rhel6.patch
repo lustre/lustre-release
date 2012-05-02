@@ -25,3 +25,16 @@ Index: linux-2.6.32.x86_64/include/scsi/scsi.h
  
  /*
   * Like SCSI_MAX_SG_SEGMENTS, but for archs that have sg chaining. This limit
+Index: linux-2.6.32.x86_64/drivers/scsi/isci/init.c
+===================================================================
+--- linux-2.6.32.x86_64/drivers/scsi/isci/init.c
++++ linux-2.6.32.x86_64/drivers/scsi/isci/init.c
+@@ -19,7 +19,7 @@
+	.can_queue			= ISCI_CAN_QUEUE_VAL,
+	.cmd_per_lun			= 1,
+	.this_id			= -1,
+-	.sg_tablesize			= SG_ALL,
++	.sg_tablesize			= 128,
+	.max_sectors			= SCSI_DEFAULT_MAX_SECTORS,
+	.use_clustering			= ENABLE_CLUSTERING,
+	.eh_device_reset_handler	= sas_eh_device_reset_handler,
