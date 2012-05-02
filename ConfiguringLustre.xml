@@ -84,7 +84,7 @@
         <screen>mount -t lustre <emphasis>&lt;block device name&gt; &lt;mount point&gt;</emphasis></screen>
         <note>
           <para>
-              To create additional OSTs, repeat <xref linkend="dbdoclet.50438267_pgfId-1290915"/>Step 3 and <xref linkend="dbdoclet.50438267_pgfId-1293955"/>Step 4, specifying the next higher OST index number.</para>
+              To create additional OSTs, repeat Step <xref linkend="dbdoclet.50438267_pgfId-1290915"/> and Step <xref linkend="dbdoclet.50438267_pgfId-1293955"/>, specifying the next higher OST index number.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1290934">
@@ -92,16 +92,17 @@
         <screen>mount -t lustre &lt;<emphasis>MGS node</emphasis>&gt;:/&lt;<emphasis>fsname</emphasis>&gt; &lt;<emphasis>mount point</emphasis>&gt; 
 </screen>
         <note>
-          <para>To create additional clients, repeat <xref linkend="dbdoclet.50438267_pgfId-1290934"/>Step 5.</para>
+          <para>To create additional clients, repeat Step <xref linkend="dbdoclet.50438267_pgfId-1290934"/>.</para>
+        </note>
+        <note>
+            <para>If you have a problem mounting the file system, check the syslogs on the client and all the servers for errors and also check the network settings. A common issue with newly-installed systems is that <literal>hosts.deny</literal> or firewall rules may prevent connections on port 988.</para>
         </note>
       </listitem>
       <listitem>
-        <para><note>
-            <para>If you have a problem mounting the file system, check the syslogs on the client and all the servers for errors and also check the network settings. A common issue with newly-installed systems is that hosts.deny or firewall rules may prevent connections on port 988.</para>
-          </note><emphasis role="bold">Verify that the file system started and is working correctly. Do this by running the <literal>lfs</literal><literal> df</literal>, <literal>dd</literal> and <literal>ls</literal> commands on the client node.</emphasis></para>
+          <para>Verify that the file system started and is working correctly. Do this by running <literal>lfs df</literal>, <literal>dd</literal> and <literal>ls</literal> commands on the client node.</para>
       </listitem>
       <listitem>
-        <para><emphasis role="italic">(Optional)</emphasis> Run benchmarking tools to validate the performance of hardware and software layers in the cluster. Available tools include:</para>
+        <para><emphasis>(Optional)</emphasis> Run benchmarking tools to validate the performance of hardware and software layers in the cluster. Available tools include:</para>
         <itemizedlist>
           <listitem>
             <para><literal>obdfilter_survey</literal>  - Characterizes the storage performance of a Lustre file system. For details, see <xref linkend="dbdoclet.50438212_26516"/>.</para>
