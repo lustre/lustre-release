@@ -1870,15 +1870,14 @@ static inline int md_getattr(struct obd_export *exp, struct md_op_data *op_data,
         RETURN(rc);
 }
 
-static inline int md_change_cbdata(struct obd_export *exp,
-                                   const struct lu_fid *fid,
-                                   ldlm_iterator_t it, void *data)
+static inline int md_null_inode(struct obd_export *exp,
+                                   const struct lu_fid *fid)
 {
         int rc;
         ENTRY;
-        EXP_CHECK_MD_OP(exp, change_cbdata);
-        EXP_MD_COUNTER_INCREMENT(exp, change_cbdata);
-        rc = MDP(exp->exp_obd, change_cbdata)(exp, fid, it, data);
+        EXP_CHECK_MD_OP(exp, null_inode);
+        EXP_MD_COUNTER_INCREMENT(exp, null_inode);
+        rc = MDP(exp->exp_obd, null_inode)(exp, fid);
         RETURN(rc);
 }
 

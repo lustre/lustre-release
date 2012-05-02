@@ -1124,6 +1124,31 @@ void ll_put_super(struct super_block *sb)
         EXIT;
 } /* client_put_super */
 
+struct inode *ll_inode_from_resource_lock(struct ldlm_lock *lock)
+{
+	struct inode *inode = NULL;
+
+	/* NOTE: we depend on atomic igrab() -bzzz */
+	lock_res_and_lock(lock);
+	if (lock->l_resource->lr_lvb_inode) {
+		struct ll_inode_info * lli;
+		lli = ll_i2info(lock->l_resource->lr_lvb_inode);
+		if (lli->lli_inode_magic == LLI_INODE_MAGIC) {
+			inode = igrab(lock->l_resource->lr_lvb_inode);
+		} else {
+			inode = lock->l_resource->lr_lvb_inode;
+			LDLM_DEBUG_LIMIT(inode->i_state & I_FREEING ?  D_INFO :
+					 D_WARNING, lock, "lr_lvb_inode %p is "
+					 "bogus: magic %08x",
+					 lock->l_resource->lr_lvb_inode,
+					 lli->lli_inode_magic);
+			inode = NULL;
+		}
+	}
+	unlock_res_and_lock(lock);
+	return inode;
+}
+
 struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
 {
         struct inode *inode = NULL;
@@ -1146,18 +1171,6 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock)
         return inode;
 }
 
-static int null_if_equal(struct ldlm_lock *lock, void *data)
-{
-        if (data == lock->l_ast_data) {
-                lock->l_ast_data = NULL;
-
-                if (lock->l_req_mode != lock->l_granted_mode)
-                        LDLM_ERROR(lock,"clearing inode with ungranted lock");
-        }
-
-        return LDLM_ITER_CONTINUE;
-}
-
 void ll_clear_inode(struct inode *inode)
 {
         struct ll_inode_info *lli = ll_i2info(inode);
@@ -1175,8 +1188,7 @@ void ll_clear_inode(struct inode *inode)
         }
 
         ll_i2info(inode)->lli_flags &= ~LLIF_MDS_SIZE_LOCK;
-        md_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
-                         null_if_equal, inode);
+	md_null_inode(sbi->ll_md_exp, ll_inode2fid(inode));
 
         LASSERT(!lli->lli_open_fd_write_count);
         LASSERT(!lli->lli_open_fd_read_count);

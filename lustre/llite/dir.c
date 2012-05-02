@@ -356,32 +356,43 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash,
         mode = LCK_PR;
         rc = md_lock_match(ll_i2sbi(dir)->ll_md_exp, LDLM_FL_BLOCK_GRANTED,
                            ll_inode2fid(dir), LDLM_IBITS, &policy, mode, &lockh);
-        if (!rc) {
-                struct ldlm_enqueue_info einfo = { LDLM_IBITS, mode,
-                       ll_md_blocking_ast, ldlm_completion_ast,
-                       NULL, NULL, dir };
-                struct lookup_intent it = { .it_op = IT_READDIR };
-                struct ptlrpc_request *request;
-                struct md_op_data *op_data;
+	if (!rc) {
+		struct ldlm_enqueue_info einfo = {.ei_type = LDLM_IBITS,
+						  .ei_mode = mode,
+						  .ei_cb_bl =
+						  ll_md_blocking_ast,
+						  .ei_cb_cp =
+						  ldlm_completion_ast,
+						  .ei_cb_gl = NULL,
+						  .ei_cb_wg = NULL,
+						  .ei_cbdata = NULL};
+		struct lookup_intent it = { .it_op = IT_READDIR };
+		struct ptlrpc_request *request;
+		struct md_op_data *op_data;
 
-                op_data = ll_prep_md_op_data(NULL, dir, NULL, NULL, 0, 0,
-                                             LUSTRE_OPC_ANY, NULL);
-                if (IS_ERR(op_data))
-                        return (void *)op_data;
+		op_data = ll_prep_md_op_data(NULL, dir, NULL, NULL, 0, 0,
+		LUSTRE_OPC_ANY, NULL);
+		if (IS_ERR(op_data))
+			return (void *)op_data;
 
-                rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, &einfo, &it,
-                                op_data, &lockh, NULL, 0, NULL, 0);
+		rc = md_enqueue(ll_i2sbi(dir)->ll_md_exp, &einfo, &it,
+				op_data, &lockh, NULL, 0, NULL, 0);
 
-                ll_finish_md_op_data(op_data);
+		ll_finish_md_op_data(op_data);
 
-                request = (struct ptlrpc_request *)it.d.lustre.it_data;
-                if (request)
-                        ptlrpc_req_finished(request);
-                if (rc < 0) {
-                        CERROR("lock enqueue: "DFID" at "LPU64": rc %d\n",
-                               PFID(ll_inode2fid(dir)), hash, rc);
-                        return ERR_PTR(rc);
-                }
+		request = (struct ptlrpc_request *)it.d.lustre.it_data;
+		if (request)
+			ptlrpc_req_finished(request);
+		if (rc < 0) {
+			CERROR("lock enqueue: "DFID" at "LPU64": rc %d\n",
+				PFID(ll_inode2fid(dir)), hash, rc);
+			return ERR_PTR(rc);
+		}
+
+		CDEBUG(D_INODE, "setting lr_lvb_inode to inode %p (%lu/%u)\n",
+		       dir, dir->i_ino, dir->i_generation);
+		md_set_lock_data(ll_i2sbi(dir)->ll_md_exp,
+				 &it.d.lustre.it_lock_handle, dir, NULL);
         } else {
                 /* for cross-ref object, l_ast_data of the lock may not be set,
                  * we reset it here */

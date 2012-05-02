@@ -212,11 +212,15 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 }
                 break;
         case LDLM_CB_CANCELING: {
-                struct inode *inode = ll_inode_from_lock(lock);
+		struct inode *inode = ll_inode_from_resource_lock(lock);
                 struct ll_inode_info *lli;
                 __u64 bits = lock->l_policy_data.l_inodebits.bits;
                 struct lu_fid *fid;
                 ldlm_mode_t mode = lock->l_req_mode;
+
+		/* Inode is set to lock->l_resource->lr_lvb_inode
+		 * for mdc - bug 24555 */
+		LASSERT(lock->l_ast_data == NULL);
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)

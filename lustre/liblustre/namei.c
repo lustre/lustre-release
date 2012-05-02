@@ -128,11 +128,15 @@ int llu_md_blocking_ast(struct ldlm_lock *lock,
                 }
                 break;
         case LDLM_CB_CANCELING: {
-                struct inode *inode = llu_inode_from_lock(lock);
+		struct inode *inode = llu_inode_from_resource_lock(lock);
                 struct llu_inode_info *lli;
                 struct intnl_stat *st;
                 __u64 bits = lock->l_policy_data.l_inodebits.bits;
                 struct lu_fid *fid;
+
+		/* Inode is set to lock->l_resource->lr_lvb_inode
+		* for mdc - bug 24555 */
+		LASSERT(lock->l_ast_data == NULL);
 
                 /* Invalidate all dentries associated with this inode */
                 if (inode == NULL)
@@ -378,6 +382,21 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
         child->p_base->pb_ino = inode;
 
         RETURN(0);
+}
+
+struct inode *llu_inode_from_resource_lock(struct ldlm_lock *lock)
+{
+	struct inode *inode;
+	lock_res_and_lock(lock);
+
+	if (lock->l_resource->lr_lvb_inode) {
+		inode = (struct inode *)lock->l_resource->lr_lvb_inode;
+		I_REF(inode);
+	} else
+		inode = NULL;
+
+	unlock_res_and_lock(lock);
+	return inode;
 }
 
 struct inode *llu_inode_from_lock(struct ldlm_lock *lock)

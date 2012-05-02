@@ -191,7 +191,8 @@ static int ll_ddelete(HAVE_D_DELETE_CONST struct dentry *de)
 
 	/* Disable this piece of code temproarily because this is called
 	 * inside dcache_lock so it's not appropriate to do lots of work
-	 * here. */
+	 * here. ATTENTION: Before this piece of code enabling, LU-2487 must be
+	 * resolved. */
 #if 0
 	/* if not ldlm lock for this inode, set i_nlink to 0 so that
 	 * this inode can be recycled later b=20433 */

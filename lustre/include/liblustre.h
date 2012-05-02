@@ -494,6 +494,9 @@ static inline void set_fs(mm_segment_t seg)
 #define S_IRWXUGO       (S_IRWXU|S_IRWXG|S_IRWXO)
 #define S_IALLUGO       (S_ISUID|S_ISGID|S_ISVTX|S_IRWXUGO)
 
+struct inode *igrab(struct inode *inode);
+void iput(struct inode *inode);
+
 #include <obd_support.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_lib.h>

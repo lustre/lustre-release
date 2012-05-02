@@ -3247,7 +3247,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 					   .ei_mode = LCK_CR,
 					   .ei_cb_bl = ll_md_blocking_ast,
 					   .ei_cb_cp = ldlm_completion_ast,
-					   .ei_cbdata = inode };
+					   .ei_cbdata = NULL };
 	int rc;
 	ENTRY;
 
@@ -3309,6 +3309,8 @@ again:
 	it.d.lustre.it_data = NULL;
 
 	ll_finish_md_op_data(op_data);
+
+	md_set_lock_data(sbi->ll_md_exp, &it.d.lustre.it_lock_handle, inode, NULL);
 
 	mode = it.d.lustre.it_lock_mode;
 	it.d.lustre.it_lock_mode = 0;

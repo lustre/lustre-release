@@ -295,6 +295,7 @@ int llu_iop_lookup(struct pnode *pnode,
                    struct intent *intnt,
                    const char *path);
 void unhook_stale_inode(struct pnode *pno);
+struct inode *llu_inode_from_resource_lock(struct ldlm_lock *lock);
 struct inode *llu_inode_from_lock(struct ldlm_lock *lock);
 int llu_md_blocking_ast(struct ldlm_lock *lock,
                         struct ldlm_lock_desc *desc,

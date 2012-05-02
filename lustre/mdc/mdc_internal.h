@@ -83,8 +83,7 @@ void mdc_exit_request(struct client_obd *cli);
 int mdc_set_lock_data(struct obd_export *exp,
                       __u64 *lockh, void *data, __u64 *bits);
 
-int mdc_change_cbdata(struct obd_export *exp, const struct lu_fid *fid,
-                      ldlm_iterator_t it, void *data);
+int mdc_null_inode(struct obd_export *exp, const struct lu_fid *fid);
 
 int mdc_find_cbdata(struct obd_export *exp, const struct lu_fid *fid,
                     ldlm_iterator_t it, void *data);

@@ -1515,8 +1515,7 @@ struct lookup_intent;
 struct md_ops {
         int (*m_getstatus)(struct obd_export *, struct lu_fid *,
                            struct obd_capa **);
-        int (*m_change_cbdata)(struct obd_export *, const struct lu_fid *,
-                               ldlm_iterator_t, void *);
+        int (*m_null_inode)(struct obd_export *, const struct lu_fid *);
         int (*m_find_cbdata)(struct obd_export *, const struct lu_fid *,
                              ldlm_iterator_t, void *);
         int (*m_close)(struct obd_export *, struct md_op_data *,
