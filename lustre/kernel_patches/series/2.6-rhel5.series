@@ -24,3 +24,4 @@ md-mmp-unplug-dev.patch
 mpt-fusion-max-sge.patch
 jbd2-jcberr-2.6-rhel5.patch
 jbd2-commit-timer-no-jiffies-rounding.diff
+make-bi_phys_segments-uint.patch

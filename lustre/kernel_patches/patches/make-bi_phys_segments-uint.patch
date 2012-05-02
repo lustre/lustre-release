@@ -1,0 +1,73 @@
+From 5b99c2ffa980528a197f26c7d876cceeccce8dd5 Mon Sep 17 00:00:00 2001
+From: Jens Axboe <jens.axboe@oracle.com>
+Date: Fri, 15 Aug 2008 10:56:11 +0200
+Subject: [PATCH] block: make bi_phys_segments an unsigned int instead of
+ short
+
+raid5 can overflow with more than 255 stripes, and we can increase it
+to an int for free on both 32 and 64-bit archs due to the padding.
+
+Signed-off-by: Jens Axboe <jens.axboe@oracle.com>
+---
+ drivers/md/raid5.c  |   12 ++++++------
+ include/linux/bio.h |    2 +-
+ 2 files changed, 7 insertions(+), 7 deletions(-)
+
+diff --git a/drivers/md/raid5.c b/drivers/md/raid5.c
+index 05b2292..37e5465 100644
+--- a/drivers/md/raid5.c
++++ b/drivers/md/raid5.c
+@@ -102,17 +102,17 @@ const char raid6_empty_zero_page[PAGE_SIZE] __attribute__((aligned(256)));
+ #endif
+ 
+ /*
+- * We maintain a biased count of active stripes in the bottom 8 bits of
+- * bi_phys_segments, and a count of processed stripes in the upper 8 bits
++ * We maintain a biased count of active stripes in the bottom 16 bits of
++ * bi_phys_segments, and a count of processed stripes in the upper 16 bits
+  */
+ static inline int raid5_bi_phys_segments(struct bio *bio)
+ {
+-	return bio->bi_phys_segments & 0xff;
++	return bio->bi_phys_segments & 0xffff;
+ }
+ 
+ static inline int raid5_bi_hw_segments(struct bio *bio)
+ {
+-	return (bio->bi_phys_segments >> 8) & 0xff;
++	return (bio->bi_phys_segments >> 16) & 0xffff;
+ }
+ 
+ static inline int raid5_dec_bi_phys_segments(struct bio *bio)
+@@ -126,13 +126,13 @@ static inline int raid5_dec_bi_hw_segments(struct bio *bio)
+ 	unsigned short val = raid5_bi_hw_segments(bio);
+ 
+ 	--val;
+-	bio->bi_phys_segments = (val << 8) | raid5_bi_phys_segments(bio);
++	bio->bi_phys_segments = (val << 16) | raid5_bi_phys_segments(bio);
+ 	return val;
+ }
+ 
+ static inline void raid5_set_bi_hw_segments(struct bio *bio, unsigned int cnt)
+ {
+-	bio->bi_phys_segments = raid5_bi_phys_segments(bio) || (cnt << 8);
++	bio->bi_phys_segments = raid5_bi_phys_segments(bio) || (cnt << 16);
+ }
+ 
+ static inline int raid6_next_disk(int disk, int raid_disks)
+diff --git a/include/linux/bio.h b/include/linux/bio.h
+index dfc3556..2c0c090 100644
+--- a/include/linux/bio.h
++++ b/include/linux/bio.h
+@@ -75,7 +75,7 @@ struct bio {
+ 	/* Number of segments in this BIO after
+ 	 * physical address coalescing is performed.
+ 	 */
+-	unsigned short		bi_phys_segments;
++	unsigned int		bi_phys_segments;
+ 
+ 	unsigned int		bi_size;	/* residual I/O count */
+ 
+-- 
+1.7.6.5
+
