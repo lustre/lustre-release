@@ -6948,6 +6948,9 @@ test_133b() {
 	# extra mdt stats verification.
 	chmod 444 ${testdir}/${tfile} || error "chmod failed"
 	check_stats $SINGLEMDS "setattr" 1
+	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
+	ls -l ${testdir}/${tfile} > /dev/null|| error "ls failed"
+	check_stats $SINGLEMDS "getattr" 1
 	$LFS df || error "lfs failed"
 	check_stats $SINGLEMDS "statfs" 1
 
