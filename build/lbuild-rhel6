@@ -7,12 +7,14 @@
 # distributions, update the BUILD_GEN variable in build/lbuild)
 #BUILD_GEN+=".0"
 #BUILD_GEN+=".1"		# added --with firmware to rpmbuild for rhel6
-BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
+#BUILD_GEN+=".0"	# TT-107: don't cache the BUILD dir (reset major to 5)
+BUILD_GEN+=".1"	# LU-1361: enable kernel ABI
 
 source ${0%/*}/lbuild-rhel
 
 SPEC_NAME="kernel.spec"
 DEVEL_PATH_ARCH_DELIMETER="."
+USE_KABI=true
 
 patch_spec() {
     local buildid="$1"
