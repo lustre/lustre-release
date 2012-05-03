@@ -335,9 +335,6 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
         if (inode)
                 list_add(&de->d_alias, &inode->i_dentry);
         de->d_inode = inode;
-        /* d_instantiate() replacement code should initialize security
-         * context. */
-        security_d_instantiate(de, inode);
 
         /* d_rehash */
         if (!d_unhashed(de)) {
@@ -346,7 +343,6 @@ static void ll_d_add(struct dentry *de, struct inode *inode)
                        de->d_name.len, de->d_name.name, de, de->d_hash.next);
                 LBUG();
         }
-        d_rehash_cond(de, 0);
 }
 
 /* Search "inode"'s alias list for a dentry that has the same name and parent
@@ -426,9 +422,11 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *de)
         de->d_flags |= DCACHE_LUSTRE_INVALID;
         unlock_dentry(de);
         ll_d_add(de, inode);
-
         spin_unlock(&dcache_lock);
         cfs_spin_unlock(&ll_lookup_lock);
+
+        security_d_instantiate(de, inode);
+        d_rehash(de);
 
         return de;
 }
@@ -483,14 +481,24 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                         unlock_dentry(*de);
                 }
         } else {
+                struct lookup_intent parent_it = {
+                                        .it_op = IT_GETATTR,
+                                        .d.lustre.it_lock_handle = 0 };
+
                 ll_dops_init(*de, 1, 1);
                 /* Check that parent has UPDATE lock. If there is none, we
                    cannot afford to hash this dentry (done by ll_d_add) as it
-                   might get picked up later when UPDATE lock will appear */
-                if (ll_have_md_lock(parent, MDS_INODELOCK_UPDATE, LCK_MINMODE)) {
+                   might get picked up later when UPDATE lock will appear
+                   otherwise, add ref to the parent UPDATE lock, to make sure
+                   ll_d_add() undergoes with parent's UPDATE lock held */
+                if (md_revalidate_lock(ll_i2mdexp(parent), &parent_it,
+                                       &ll_i2info(parent)->lli_fid)) {
                         spin_lock(&dcache_lock);
                         ll_d_add(*de, NULL);
                         spin_unlock(&dcache_lock);
+                        security_d_instantiate(*de, inode);
+                        d_rehash(*de);
+                        ll_intent_release(&parent_it);
                 } else {
                         /* negative lookup - and don't have update lock to
                          * parent */
