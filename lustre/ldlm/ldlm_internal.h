@@ -95,22 +95,11 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 /* ldlm_lock.c */
 
 struct ldlm_cb_set_arg {
-        int          type;      /* LDLM_BL_CALLBACK or LDLM_CP_CALLBACK */
-        unsigned int threshold; /* threshold to wake up the waiting proc */
-        cfs_atomic_t rpcs;      /* # of inflight rpcs in set */
-        cfs_atomic_t restart;
-        cfs_atomic_t refcount;
-        cfs_waitq_t  waitq;
+	struct ptlrpc_request_set *set;
+	int                        type; /* LDLM_{CP,BL}_CALLBACK */
+	cfs_atomic_t               restart;
+	cfs_list_t                *list;
 };
-
-static inline void ldlm_csa_put(struct ldlm_cb_set_arg *arg)
-{
-        if (cfs_atomic_dec_and_test(&arg->refcount)) {
-                LASSERT(cfs_atomic_read(&arg->rpcs) == 0);
-
-                OBD_FREE_PTR(arg);
-        }
-}
 
 typedef enum {
         LDLM_WORK_BL_AST,

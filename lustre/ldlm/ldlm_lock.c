@@ -1514,152 +1514,158 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, cfs_list_t *queue,
 #endif
 
 static int
-ldlm_work_bl_ast_lock(cfs_list_t *tmp, struct ldlm_cb_set_arg *arg)
+ldlm_work_bl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 {
-        struct ldlm_lock_desc d;
-        struct ldlm_lock *lock = cfs_list_entry(tmp, struct ldlm_lock,
-                                                l_bl_ast);
-        int rc;
-        ENTRY;
+	struct ldlm_cb_set_arg *arg = opaq;
+	struct ldlm_lock_desc   d;
+	int                     rc;
+	struct ldlm_lock       *lock;
+	ENTRY;
 
-        /* nobody should touch l_bl_ast */
-        lock_res_and_lock(lock);
-        cfs_list_del_init(&lock->l_bl_ast);
+	if (cfs_list_empty(arg->list))
+		RETURN(-ENOENT);
 
-        LASSERT(lock->l_flags & LDLM_FL_AST_SENT);
-        LASSERT(lock->l_bl_ast_run == 0);
-        LASSERT(lock->l_blocking_lock);
-        lock->l_bl_ast_run++;
-        unlock_res_and_lock(lock);
+	lock = cfs_list_entry(arg->list->next, struct ldlm_lock, l_bl_ast);
 
-        ldlm_lock2desc(lock->l_blocking_lock, &d);
+	/* nobody should touch l_bl_ast */
+	lock_res_and_lock(lock);
+	cfs_list_del_init(&lock->l_bl_ast);
 
-        rc = lock->l_blocking_ast(lock, &d, (void *)arg,
-                                  LDLM_CB_BLOCKING);
-        LDLM_LOCK_RELEASE(lock->l_blocking_lock);
-        lock->l_blocking_lock = NULL;
-        LDLM_LOCK_RELEASE(lock);
+	LASSERT(lock->l_flags & LDLM_FL_AST_SENT);
+	LASSERT(lock->l_bl_ast_run == 0);
+	LASSERT(lock->l_blocking_lock);
+	lock->l_bl_ast_run++;
+	unlock_res_and_lock(lock);
 
-        RETURN(rc);
+	ldlm_lock2desc(lock->l_blocking_lock, &d);
+
+	rc = lock->l_blocking_ast(lock, &d, (void *)arg, LDLM_CB_BLOCKING);
+	LDLM_LOCK_RELEASE(lock->l_blocking_lock);
+	lock->l_blocking_lock = NULL;
+	LDLM_LOCK_RELEASE(lock);
+
+	RETURN(rc);
 }
 
 static int
-ldlm_work_cp_ast_lock(cfs_list_t *tmp, struct ldlm_cb_set_arg *arg)
+ldlm_work_cp_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 {
-        struct ldlm_lock *lock = cfs_list_entry(tmp, struct ldlm_lock, l_cp_ast);
-        ldlm_completion_callback completion_callback;
-        int rc = 0;
-        ENTRY;
+	struct ldlm_cb_set_arg  *arg = opaq;
+	int                      rc = 0;
+	struct ldlm_lock        *lock;
+	ldlm_completion_callback completion_callback;
+	ENTRY;
 
-        /* It's possible to receive a completion AST before we've set
-         * the l_completion_ast pointer: either because the AST arrived
-         * before the reply, or simply because there's a small race
-         * window between receiving the reply and finishing the local
-         * enqueue. (bug 842)
-         *
-         * This can't happen with the blocking_ast, however, because we
-         * will never call the local blocking_ast until we drop our
-         * reader/writer reference, which we won't do until we get the
-         * reply and finish enqueueing. */
+	if (cfs_list_empty(arg->list))
+		RETURN(-ENOENT);
 
-        /* nobody should touch l_cp_ast */
-        lock_res_and_lock(lock);
-        cfs_list_del_init(&lock->l_cp_ast);
-        LASSERT(lock->l_flags & LDLM_FL_CP_REQD);
-        /* save l_completion_ast since it can be changed by
-         * mds_intent_policy(), see bug 14225 */
-        completion_callback = lock->l_completion_ast;
-        lock->l_flags &= ~LDLM_FL_CP_REQD;
-        unlock_res_and_lock(lock);
+	lock = cfs_list_entry(arg->list->next, struct ldlm_lock, l_cp_ast);
 
-        if (completion_callback != NULL)
-                rc = completion_callback(lock, 0, (void *)arg);
-        LDLM_LOCK_RELEASE(lock);
+	/* It's possible to receive a completion AST before we've set
+	 * the l_completion_ast pointer: either because the AST arrived
+	 * before the reply, or simply because there's a small race
+	 * window between receiving the reply and finishing the local
+	 * enqueue. (bug 842)
+	 *
+	 * This can't happen with the blocking_ast, however, because we
+	 * will never call the local blocking_ast until we drop our
+	 * reader/writer reference, which we won't do until we get the
+	 * reply and finish enqueueing. */
 
-        RETURN(rc);
+	/* nobody should touch l_cp_ast */
+	lock_res_and_lock(lock);
+	cfs_list_del_init(&lock->l_cp_ast);
+	LASSERT(lock->l_flags & LDLM_FL_CP_REQD);
+	/* save l_completion_ast since it can be changed by
+	 * mds_intent_policy(), see bug 14225 */
+	completion_callback = lock->l_completion_ast;
+	lock->l_flags &= ~LDLM_FL_CP_REQD;
+	unlock_res_and_lock(lock);
+
+	if (completion_callback != NULL)
+		rc = completion_callback(lock, 0, (void *)arg);
+	LDLM_LOCK_RELEASE(lock);
+
+	RETURN(rc);
 }
 
 static int
-ldlm_work_revoke_ast_lock(cfs_list_t *tmp, struct ldlm_cb_set_arg *arg)
+ldlm_work_revoke_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 {
-        struct ldlm_lock_desc desc;
-        struct ldlm_lock *lock = cfs_list_entry(tmp, struct ldlm_lock,
-                                                l_rk_ast);
-        int rc;
-        ENTRY;
+	struct ldlm_cb_set_arg *arg = opaq;
+	struct ldlm_lock_desc   desc;
+	int                     rc;
+	struct ldlm_lock       *lock;
+	ENTRY;
 
-        cfs_list_del_init(&lock->l_rk_ast);
+	if (cfs_list_empty(arg->list))
+		RETURN(-ENOENT);
 
-        /* the desc just pretend to exclusive */
-        ldlm_lock2desc(lock, &desc);
-        desc.l_req_mode = LCK_EX;
-        desc.l_granted_mode = 0;
+	lock = cfs_list_entry(arg->list->next, struct ldlm_lock, l_rk_ast);
+	cfs_list_del_init(&lock->l_rk_ast);
 
-        rc = lock->l_blocking_ast(lock, &desc, (void*)arg, LDLM_CB_BLOCKING);
-        LDLM_LOCK_RELEASE(lock);
+	/* the desc just pretend to exclusive */
+	ldlm_lock2desc(lock, &desc);
+	desc.l_req_mode = LCK_EX;
+	desc.l_granted_mode = 0;
 
-        RETURN(rc);
+	rc = lock->l_blocking_ast(lock, &desc, (void*)arg, LDLM_CB_BLOCKING);
+	LDLM_LOCK_RELEASE(lock);
+
+	RETURN(rc);
 }
 
 int ldlm_run_ast_work(struct ldlm_namespace *ns, cfs_list_t *rpc_list,
                       ldlm_desc_ast_t ast_type)
 {
-        struct l_wait_info     lwi = { 0 };
-        struct ldlm_cb_set_arg *arg;
-        cfs_list_t *tmp, *pos;
-        int (*work_ast_lock)(cfs_list_t *tmp, struct ldlm_cb_set_arg *arg);
-        unsigned int max_ast_count;
-        int rc;
-        ENTRY;
+	struct ldlm_cb_set_arg *arg;
+	set_producer_func       work_ast_lock;
+	int                     rc;
 
-        if (cfs_list_empty(rpc_list))
-                RETURN(0);
+	if (cfs_list_empty(rpc_list))
+		RETURN(0);
 
-        OBD_ALLOC_PTR(arg);
-        if (arg == NULL)
-                RETURN(-ENOMEM);
+	OBD_ALLOC_PTR(arg);
+	if (arg == NULL)
+		RETURN(-ENOMEM);
 
-        cfs_atomic_set(&arg->restart, 0);
-        cfs_atomic_set(&arg->rpcs, 0);
-        cfs_atomic_set(&arg->refcount, 1);
-        cfs_waitq_init(&arg->waitq);
+	cfs_atomic_set(&arg->restart, 0);
+	arg->list = rpc_list;
 
-        switch (ast_type) {
-        case LDLM_WORK_BL_AST:
-                arg->type = LDLM_BL_CALLBACK;
-                work_ast_lock = ldlm_work_bl_ast_lock;
-                break;
-        case LDLM_WORK_CP_AST:
-                arg->type = LDLM_CP_CALLBACK;
-                work_ast_lock = ldlm_work_cp_ast_lock;
-                break;
-        case LDLM_WORK_REVOKE_AST:
-                arg->type = LDLM_BL_CALLBACK;
-                work_ast_lock = ldlm_work_revoke_ast_lock;
-                break;
-        default:
-                LBUG();
-        }
+	switch (ast_type) {
+		case LDLM_WORK_BL_AST:
+			arg->type = LDLM_BL_CALLBACK;
+			work_ast_lock = ldlm_work_bl_ast_lock;
+			break;
+		case LDLM_WORK_CP_AST:
+			arg->type = LDLM_CP_CALLBACK;
+			work_ast_lock = ldlm_work_cp_ast_lock;
+			break;
+		case LDLM_WORK_REVOKE_AST:
+			arg->type = LDLM_BL_CALLBACK;
+			work_ast_lock = ldlm_work_revoke_ast_lock;
+			break;
+		default:
+			LBUG();
+	}
 
-        max_ast_count = ns->ns_max_parallel_ast ? : UINT_MAX;
-        arg->threshold = max_ast_count;
+	/* We create a ptlrpc request set with flow control extension.
+	 * This request set will use the work_ast_lock function to produce new
+	 * requests and will send a new request each time one completes in order
+	 * to keep the number of requests in flight to ns_max_parallel_ast */
+	arg->set = ptlrpc_prep_fcset(ns->ns_max_parallel_ast ? : UINT_MAX,
+				     work_ast_lock, arg);
+	if (arg->set == NULL)
+		GOTO(out, rc = -ENOMEM);
 
-        cfs_list_for_each_safe(tmp, pos, rpc_list) {
-                (void)work_ast_lock(tmp, arg);
-                if (cfs_atomic_read(&arg->rpcs) < max_ast_count)
-                        continue;
+	ptlrpc_set_wait(arg->set);
+	ptlrpc_set_destroy(arg->set);
 
-                l_wait_event(arg->waitq,
-                             cfs_atomic_read(&arg->rpcs) < arg->threshold,
-                             &lwi);
-        }
-
-        arg->threshold = 1;
-        l_wait_event(arg->waitq, cfs_atomic_read(&arg->rpcs) == 0, &lwi);
-
-        rc = cfs_atomic_read(&arg->restart) ? -ERESTART : 0;
-        ldlm_csa_put(arg);
-        RETURN(rc);
+	rc = cfs_atomic_read(&arg->restart) ? -ERESTART : 0;
+	GOTO(out, rc);
+out:
+	OBD_FREE_PTR(arg);
+	return rc;
 }
 
 static int reprocess_one_queue(struct ldlm_resource *res, void *closure)
