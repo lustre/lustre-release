@@ -8776,12 +8776,12 @@ check_lnet_proc_entry() {
 }
 
 test_215() { # for bugs 18102, 21079, 21517
-	local N='(0|[1-9][0-9]*)'   # non-negative numeric
-	local P='[1-9][0-9]*'       # positive numeric
-	local I='(0|-?[1-9][0-9]*)' # any numeric (0 | >0 | <0)
-	local NET='[a-z][a-z0-9]*'  # LNET net like o2ib2
-	local ADDR='[0-9.]+'        # LNET addr like 10.0.0.1
-	local NID="$ADDR@$NET"      # LNET nid like 10.0.0.1@o2ib2
+	local N='(0|[1-9][0-9]*)'       # non-negative numeric
+	local P='[1-9][0-9]*'           # positive numeric
+	local I='(0|-?[1-9][0-9]*|NA)'  # any numeric (0 | >0 | <0) or NA if no value
+	local NET='[a-z][a-z0-9]*'      # LNET net like o2ib2
+	local ADDR='[0-9.]+'            # LNET addr like 10.0.0.1
+	local NID="$ADDR@$NET"          # LNET nid like 10.0.0.1@o2ib2
 
 	local L1 # regexp for 1st line
 	local L2 # regexp for 2nd line (optional)
