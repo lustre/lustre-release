@@ -912,16 +912,16 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
         }
         mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_EXECD);
 
-        rc = mdt_object_exists(parent);
-        if (unlikely(rc == 0)) {
-                LU_OBJECT_DEBUG(D_WARNING, info->mti_env,
-                                &parent->mot_obj.mo_lu,
-                                "Parent doesn't exist!\n");
-                RETURN(-ESTALE);
-        } else if (!info->mti_cross_ref) {
-                LASSERTF(rc > 0, "Parent "DFID" is on remote server\n",
-                         PFID(mdt_object_fid(parent)));
-        }
+	rc = mdt_object_exists(parent);
+	if (unlikely(rc == 0)) {
+		LU_OBJECT_DEBUG(D_INODE, info->mti_env,
+				&parent->mot_obj.mo_lu,
+				"Parent doesn't exist!\n");
+		RETURN(-ESTALE);
+	} else if (!info->mti_cross_ref) {
+		LASSERTF(rc > 0, "Parent "DFID" is on remote server\n",
+			 PFID(mdt_object_fid(parent)));
+	}
         if (lname) {
                 rc = mdt_raw_lookup(info, parent, lname, ldlm_rep);
                 if (rc != 0) {
