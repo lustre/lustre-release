@@ -138,7 +138,7 @@ init_test_env() {
     export LOGDIR=${LOGDIR:-${TMP}/test_logs/$(date +%s)}
     export TESTLOG_PREFIX=$LOGDIR/$TESTSUITE
 
-    export HOSTNAME=${HOSTNAME:-`hostname`}
+    export HOSTNAME=${HOSTNAME:-`hostname -s`}
     if ! echo $PATH | grep -q $LUSTRE/utils; then
         export PATH=$PATH:$LUSTRE/utils
     fi
@@ -1076,7 +1076,7 @@ start_vmstat() {
     [ -z "$nodes" -o -z "$pid_file" ] && return 0
 
     do_nodes $nodes \
-        "vmstat 1 > $TESTLOG_PREFIX.$TESTNAME.vmstat.\\\$(hostname).log \
+        "vmstat 1 > $TESTLOG_PREFIX.$TESTNAME.vmstat.\\\$(hostname -s).log \
         2>/dev/null </dev/null & echo \\\$! > $pid_file"
 }
 
@@ -2925,9 +2925,11 @@ run_one() {
 run_one_logged() {
     local BEFORE=`date +%s`
     local TEST_ERROR
-    local name=${TESTSUITE}.test_${1}.test_log.$(hostname).log
+    local name=${TESTSUITE}.test_${1}.test_log.$(hostname -s).log
     local test_log=$LOGDIR/$name
     rm -rf $LOGDIR/err
+    local SAVE_UMASK=`umask`
+    umask 0022
 
     log_sub_test_begin test_${1}
     (run_one $1 "$2") 2>&1 | tee $test_log
@@ -2944,6 +2946,8 @@ run_one_logged() {
     if [ -f $LOGDIR/err ]; then
         $FAIL_ON_ERROR && exit $RC
     fi
+
+    umask $SAVE_UMASK
 
     return 0
 }
@@ -3805,14 +3809,14 @@ gather_logs () {
 
     if [ "$CLIENTONLY" -o "$PDSH" == "no_dsh" ]; then
         echo "Dumping logs only on local client."
-        $LCTL dk > ${prefix}.debug_log.$(hostname).${suffix}
-        dmesg > ${prefix}.dmesg.$(hostname).${suffix}
+        $LCTL dk > ${prefix}.debug_log.$(hostname -s).${suffix}
+        dmesg > ${prefix}.dmesg.$(hostname -s).${suffix}
         return
     fi
 
     do_nodes --verbose $list \
-        "$LCTL dk > ${prefix}.debug_log.\\\$(hostname).${suffix};
-         dmesg > ${prefix}.dmesg.\\\$(hostname).${suffix}"
+        "$LCTL dk > ${prefix}.debug_log.\\\$(hostname -s).${suffix};
+         dmesg > ${prefix}.dmesg.\\\$(hostname -s).${suffix}"
     if $docp; then
         do_nodes $list rsync -az "${prefix}.*.${suffix}" $HOSTNAME:$LOGDIR
     fi
@@ -3957,7 +3961,7 @@ check_logdir() {
         # Not found. Create local logdir
         mkdir -p $dir
     else
-        touch $dir/check_file.$(hostname)
+        touch $dir/check_file.$(hostname -s)
     fi
     return 0
 }
@@ -3968,7 +3972,7 @@ check_write_access() {
     local file
 
     for node in $(nodes_list); do
-        file=$dir/check_file.$node
+        file=$dir/check_file.$(short_hostname $node)
         if [[ ! -f $file ]]; then
             # Logdir not accessible/writable from this node.
             return 1
@@ -3982,6 +3986,9 @@ init_logging() {
     if [[ -n $YAML_LOG ]]; then
         return
     fi
+    local SAVE_UMASK=`umask`
+    umask 0000
+
     export YAML_LOG=${LOGDIR}/results.yml
     mkdir -p $LOGDIR
     init_clients_lists
@@ -3998,6 +4005,8 @@ init_logging() {
 
     yml_nodes_file $LOGDIR >> $YAML_LOG
     yml_results_file >> $YAML_LOG
+
+    umask $SAVE_UMASK
 }
 
 log_test() {
