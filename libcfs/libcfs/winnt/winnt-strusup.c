@@ -1,6 +1,4 @@
-/* -*- mode: c; c-basic-offset: 4; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=4:tabstop=4:
- *
+/*
  *  Copyright (C) 2001 Cluster File Systems, Inc. <braam@clusterfs.com>
  *
  *   This file is part of Lustre, http://www.lustre.org.

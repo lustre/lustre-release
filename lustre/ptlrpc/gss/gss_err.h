@@ -1,6 +1,4 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- *
+/*
  * Modifications for Lustre
  *
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.

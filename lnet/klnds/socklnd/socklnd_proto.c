@@ -1,6 +1,4 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- *
+/*
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  *
  *   Author: Zach Brown <zab@zabbo.net>

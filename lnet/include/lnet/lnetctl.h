@@ -1,6 +1,4 @@
-/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
- * vim:expandtab:shiftwidth=8:tabstop=8:
- *
+/*
  *   This file is part of Portals, http://www.sf.net/projects/lustre/
  *
  *   Portals is free software; you can redistribute it and/or
