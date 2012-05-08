@@ -125,6 +125,8 @@ void *kuc_alloc(int payload_len, int transport, int type);
 void kuc_free(void *p, int payload_len);
 
 /* obd_config.c */
+struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
+				     const char *new_name);
 int class_process_config(struct lustre_cfg *lcfg);
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                              struct lustre_cfg *lcfg, void *data);
