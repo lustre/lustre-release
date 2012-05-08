@@ -1243,7 +1243,7 @@ LNetFini(void)
  *
  * \param requested_pid PID requested by the caller.
  *
- * \return 0 on success, and non-zero error code on failures.
+ * \return >= 0 on success, and < 0 error code on failures.
  */
 int
 LNetNIInit(lnet_pid_t requested_pid)

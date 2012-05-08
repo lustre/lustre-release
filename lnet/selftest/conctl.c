@@ -749,7 +749,7 @@ int lst_test_add_ioctl(lstio_test_args_t *args)
                 goto out;
 
         LIBCFS_ALLOC(dstgrp, args->lstio_tes_dgrp_nmlen + 1);
-        if (srcgrp == NULL) 
+	 if (dstgrp == NULL)
                 goto out;
 
         if (args->lstio_tes_param != NULL) {
