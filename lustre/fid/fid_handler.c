@@ -125,26 +125,26 @@ static int __seq_server_alloc_super(struct lu_server_seq *seq,
                                     struct lu_seq_range *out,
                                     const struct lu_env *env)
 {
-        struct lu_seq_range *space = &seq->lss_space;
-        int rc;
-        ENTRY;
+	struct lu_seq_range *space = &seq->lss_space;
+	int rc;
+	ENTRY;
 
-        LASSERT(range_is_sane(space));
+	LASSERT(range_is_sane(space));
 
-        if (range_is_exhausted(space)) {
-                CERROR("%s: Sequences space is exhausted\n",
-                       seq->lss_name);
-                RETURN(-ENOSPC);
-        } else {
-                range_alloc(out, space, seq->lss_width);
-        }
+	if (range_is_exhausted(space)) {
+		CERROR("%s: Sequences space is exhausted\n",
+		       seq->lss_name);
+		RETURN(-ENOSPC);
+	} else {
+		range_alloc(out, space, seq->lss_width);
+	}
 
-        rc = seq_store_update(env, seq, out, 1 /* sync */);
+	rc = seq_store_update(env, seq, out, 1 /* sync */);
 
-        CDEBUG(D_INFO, "%s: super-sequence allocation rc = %d "
-               DRANGE"\n", seq->lss_name, rc, PRANGE(out));
+	LCONSOLE_INFO("%s: super-sequence allocation rc = %d " DRANGE"\n",
+		      seq->lss_name, rc, PRANGE(out));
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int seq_server_alloc_super(struct lu_server_seq *seq,
@@ -249,40 +249,44 @@ static int __seq_server_alloc_meta(struct lu_server_seq *seq,
                                    struct lu_seq_range *out,
                                    const struct lu_env *env)
 {
-        struct lu_seq_range *space = &seq->lss_space;
-        int rc = 0;
+	struct lu_seq_range *space = &seq->lss_space;
+	int rc = 0;
 
-        ENTRY;
+	ENTRY;
 
-        LASSERT(range_is_sane(space));
+	LASSERT(range_is_sane(space));
 
-        /* Check if available space ends and allocate new super seq */
-        if (range_is_exhausted(space)) {
-                if (!seq->lss_cli) {
-                        CERROR("%s: No sequence controller is attached.\n",
-                               seq->lss_name);
-                        RETURN(-ENODEV);
-                }
+	/* Check if available space ends and allocate new super seq */
+	if (range_is_exhausted(space)) {
+		if (!seq->lss_cli) {
+			CERROR("%s: No sequence controller is attached.\n",
+			       seq->lss_name);
+			RETURN(-ENODEV);
+		}
 
-                rc = seq_client_alloc_super(seq->lss_cli, env);
-                if (rc) {
-                        CERROR("%s: Can't allocate super-sequence, rc %d\n",
-                               seq->lss_name, rc);
-                        RETURN(rc);
-                }
+		rc = seq_client_alloc_super(seq->lss_cli, env);
+		if (rc) {
+			CERROR("%s: Can't allocate super-sequence, rc %d\n",
+			       seq->lss_name, rc);
+			RETURN(rc);
+		}
 
-                /* Saving new range to allocation space. */
-                *space = seq->lss_cli->lcs_space;
-                LASSERT(range_is_sane(space));
-        }
+		/* Saving new range to allocation space. */
+		*space = seq->lss_cli->lcs_space;
+		LASSERT(range_is_sane(space));
+	}
 
-        rc = range_alloc_set(env, out, seq);
-        if (rc == 0) {
-                CDEBUG(D_INFO, "%s: Allocated meta-sequence "
-                       DRANGE"\n", seq->lss_name, PRANGE(out));
-        }
+	rc = range_alloc_set(env, out, seq);
+	if (rc != 0) {
+		CERROR("%s: Allocated meta-sequence failed: rc = %d\n",
+			seq->lss_name, rc);
+		RETURN(rc);
+	}
 
-        RETURN(rc);
+	CDEBUG(D_INFO, "%s: Allocated meta-sequence " DRANGE"\n",
+		seq->lss_name, PRANGE(out));
+
+	RETURN(rc);
 }
 
 int seq_server_alloc_meta(struct lu_server_seq *seq,
