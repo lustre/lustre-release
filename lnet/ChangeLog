@@ -1,4 +1,4 @@
-2012-xx-xx Whamcloud, Inc.
+2012-05-31 Whamcloud, Inc.
 	* version 1.8.8-wc1
 	* Support for networks:
 	  socklnd   - any kernel supported by Lustre,
