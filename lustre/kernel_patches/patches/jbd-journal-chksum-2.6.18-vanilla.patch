@@ -1,7 +1,7 @@
-Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
+Index: linux-2.6.18-164.6.1/fs/jbd/commit.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/jbd/commit.c	2009-06-02 23:24:00.000000000 -0600
-+++ linux-2.6.18-128.1.6/fs/jbd/commit.c	2009-06-02 23:26:07.000000000 -0600
+--- linux-2.6.18-164.6.1.orig/fs/jbd/commit.c
++++ linux-2.6.18-164.6.1/fs/jbd/commit.c
 @@ -22,6 +22,7 @@
  #include <linux/mm.h>
  #include <linux/pagemap.h>
@@ -10,7 +10,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  
  
  /*
-@@ -95,19 +96,23 @@
+@@ -108,19 +109,23 @@ static int inverted_lock(journal_t *jour
  	return 1;
  }
  
@@ -38,7 +38,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  	int barrier_done = 0;
  
  	if (is_journal_aborted(journal))
-@@ -119,21 +124,34 @@
+@@ -132,21 +137,34 @@ static int journal_write_commit_record(j
  
  	bh = jh2bh(descriptor);
  
@@ -82,7 +82,11 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  	/* is it possible for another commit to fail at roughly
  	 * the same time as this one?  If so, we don't want to
  	 * trust the barrier flag in the super, but instead want
-@@ -154,12 +172,70 @@
+@@ -164,15 +182,76 @@ static int journal_write_commit_record(j
+ 		spin_unlock(&journal->j_state_lock);
+ 
+ 		/* And try again, without the barrier */
++		lock_buffer(bh);
  		clear_buffer_ordered(bh);
  		set_buffer_uptodate(bh);
  		set_buffer_dirty(bh);
@@ -94,7 +98,8 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
 +	*cbh = bh;
 +	return ret;
 +}
-+
+ 
+-	return (ret == -EIO);
 +/*
 + * This function along with journal_submit_commit_record
 + * allows to write the commit record asynchronously.
@@ -122,8 +127,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
 +{
 +	int ret = 0;
 +	struct journal_head *jh;
- 
--	return (ret == -EIO);
++
 +	while (commit_transaction->t_locked_list) {
 +		struct buffer_head *bh;
 +
@@ -133,16 +137,18 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
 +		if (buffer_locked(bh)) {
 +			spin_unlock(&journal->j_list_lock);
 +			wait_on_buffer(bh);
-+			if (unlikely(!buffer_uptodate(bh)))
-+				ret = -EIO;
 +			spin_lock(&journal->j_list_lock);
 +		}
++		if (unlikely(!buffer_uptodate(bh)))
++			ret = -EIO;
 +		if (!inverted_lock(journal, bh)) {
 +			put_bh(bh);
 +			spin_lock(&journal->j_list_lock);
 +			continue;
 +		}
-+		if (buffer_jbd(bh) && jh->b_jlist == BJ_Locked) {
++		if (buffer_jbd(bh) && bh2jh(bh) == jh &&
++		    jh->b_transaction == commit_transaction &&
++		    jh->b_jlist == BJ_Locked) {
 +			__journal_unfile_buffer(jh);
 +			jbd_unlock_bh_state(bh);
 +			journal_remove_journal_head(bh);
@@ -150,14 +156,14 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
 +		} else {
 +			jbd_unlock_bh_state(bh);
 +		}
-+		put_bh(bh);
++		release_data_buffer(bh);
 +		cond_resched_lock(&journal->j_list_lock);
 +	}
 +	return ret;
  }
  
  void journal_do_submit_data(struct buffer_head **wbuf, int bufs)
-@@ -282,6 +358,20 @@
+@@ -295,6 +372,20 @@ write_out_data:
  	return err;
  }
  
@@ -178,7 +184,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  /*
   * journal_commit_transaction
   *
-@@ -305,6 +395,8 @@
+@@ -318,6 +409,8 @@ void journal_commit_transaction(journal_
  	int first_tag = 0;
  	int tag_flag;
  	int i;
@@ -187,7 +193,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  
  	/*
  	 * First job: lock down the current transaction and wait for
-@@ -431,39 +523,14 @@
+@@ -446,41 +537,14 @@ void journal_commit_transaction(journal_
  	err = journal_submit_data_buffers(journal, commit_transaction);
  
  	/*
@@ -215,7 +221,9 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
 -			spin_lock(&journal->j_list_lock);
 -			continue;
 -		}
--		if (buffer_jbd(bh) && jh->b_jlist == BJ_Locked) {
+-		if (buffer_jbd(bh) && bh2jh(bh) == jh &&
+-		    jh->b_transaction == commit_transaction &&
+-		    jh->b_jlist == BJ_Locked) {
 -			__journal_unfile_buffer(jh);
 -			jbd_unlock_bh_state(bh);
 -			journal_remove_journal_head(bh);
@@ -233,7 +241,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  	spin_unlock(&journal->j_list_lock);
  
  	if (err)
-@@ -642,6 +709,16 @@
+@@ -653,6 +721,16 @@ void journal_commit_transaction(journal_
  start_journal_io:
  			for (i = 0; i < bufs; i++) {
  				struct buffer_head *bh = wbuf[i];
@@ -250,7 +258,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  				lock_buffer(bh);
  				clear_buffer_dirty(bh);
  				set_buffer_uptodate(bh);
-@@ -658,6 +735,23 @@
+@@ -669,6 +747,23 @@ start_journal_io:
  		}
  	}
  
@@ -274,7 +282,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  	/* Lo and behold: we have just managed to send a transaction to
             the log.  Before we can commit it, wait for the IO so far to
             complete.  Control buffers being written are on the
-@@ -759,9 +853,15 @@
+@@ -770,9 +865,15 @@ wait_for_iobuf:
  		journal_abort(journal, err);
  
  	jbd_debug(3, "JBD: commit phase 6\n");
@@ -293,10 +301,73 @@ Index: linux-2.6.18-128.1.6/fs/jbd/commit.c
  
  	if (err)
  		journal_abort(journal, err);
-Index: linux-2.6.18-128.1.6/fs/jbd/recovery.c
+Index: linux-2.6.18-164.6.1/include/linux/jbd.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/jbd/recovery.c	2009-04-14 21:05:39.000000000 -0600
-+++ linux-2.6.18-128.1.6/fs/jbd/recovery.c	2009-06-02 23:26:07.000000000 -0600
+--- linux-2.6.18-164.6.1.orig/include/linux/jbd.h
++++ linux-2.6.18-164.6.1/include/linux/jbd.h
+@@ -148,6 +148,29 @@ typedef struct journal_header_s
+ 	__be32		h_sequence;
+ } journal_header_t;
+ 
++/*
++ * Checksum types.
++ */
++#define JFS_CRC32_CHKSUM   1
++#define JFS_MD5_CHKSUM     2
++#define JFS_SHA1_CHKSUM    3
++
++#define JFS_CRC32_CHKSUM_SIZE 4
++
++#define JFS_CHECKSUM_BYTES (32 / sizeof(u32))
++/*
++ * Commit block header for storing transactional checksums:
++ */
++struct commit_header
++{
++	__be32		h_magic;
++	__be32          h_blocktype;
++	__be32          h_sequence;
++	unsigned char   h_chksum_type;
++	unsigned char   h_chksum_size;
++	unsigned char 	h_padding[2];
++	__be32 		h_chksum[JFS_CHECKSUM_BYTES];
++};
+ 
+ /* 
+  * The block tag: used to describe a single buffer in the journal 
+@@ -234,12 +257,16 @@ typedef struct journal_superblock_s
+ 	((j)->j_format_version >= 2 &&					\
+ 	 ((j)->j_superblock->s_feature_incompat & cpu_to_be32((mask))))
+ 
+-#define JFS_FEATURE_INCOMPAT_REVOKE	0x00000001
++#define JFS_FEATURE_COMPAT_CHECKSUM  	0x00000001
++
++#define JFS_FEATURE_INCOMPAT_REVOKE		0x00000001
++#define JFS_FEATURE_INCOMPAT_ASYNC_COMMIT    	0x00000004
+ 
+ /* Features known to this kernel version: */
+-#define JFS_KNOWN_COMPAT_FEATURES	0
++#define JFS_KNOWN_COMPAT_FEATURES	JFS_FEATURE_COMPAT_CHECKSUM
+ #define JFS_KNOWN_ROCOMPAT_FEATURES	0
+-#define JFS_KNOWN_INCOMPAT_FEATURES	JFS_FEATURE_INCOMPAT_REVOKE
++#define JFS_KNOWN_INCOMPAT_FEATURES	(JFS_FEATURE_INCOMPAT_REVOKE | \
++					JFS_FEATURE_INCOMPAT_ASYNC_COMMIT)
+ 
+ #ifdef __KERNEL__
+ 
+@@ -1053,6 +1080,8 @@ extern int	   journal_check_available_fe
+ 		   (journal_t *, unsigned long, unsigned long, unsigned long);
+ extern int	   journal_set_features 
+ 		   (journal_t *, unsigned long, unsigned long, unsigned long);
++extern int	   journal_clear_features
++		   (journal_t *, unsigned long, unsigned long, unsigned long);
+ extern int	   journal_create     (journal_t *);
+ extern int	   journal_load       (journal_t *journal);
+ #ifndef __GENKSYMS__
+Index: linux-2.6.18-164.6.1/fs/jbd/recovery.c
+===================================================================
+--- linux-2.6.18-164.6.1.orig/fs/jbd/recovery.c
++++ linux-2.6.18-164.6.1/fs/jbd/recovery.c
 @@ -21,6 +21,7 @@
  #include <linux/jbd.h>
  #include <linux/errno.h>
@@ -305,7 +376,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/recovery.c
  #endif
  
  /*
-@@ -310,6 +311,38 @@
+@@ -310,6 +311,38 @@ int journal_skip_recovery(journal_t *jou
  	return err;
  }
  
@@ -344,7 +415,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/recovery.c
  static int do_one_pass(journal_t *journal,
  			struct recovery_info *info, enum passtype pass)
  {
-@@ -321,6 +354,7 @@
+@@ -321,6 +354,7 @@ static int do_one_pass(journal_t *journa
  	struct buffer_head *	bh;
  	unsigned int		sequence;
  	int			blocktype;
@@ -352,7 +423,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/recovery.c
  
  	/* Precompute the maximum metadata descriptors in a descriptor block */
  	int			MAX_BLOCKS_PER_DESC;
-@@ -412,9 +446,24 @@
+@@ -412,9 +446,24 @@ static int do_one_pass(journal_t *journa
  		switch(blocktype) {
  		case JFS_DESCRIPTOR_BLOCK:
  			/* If it is a valid descriptor block, replay it
@@ -379,7 +450,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/recovery.c
  				next_log_block +=
  					count_tags(bh, journal->j_blocksize);
  				wrap(journal, next_log_block);
-@@ -509,9 +558,97 @@
+@@ -509,9 +558,97 @@ static int do_one_pass(journal_t *journa
  			continue;
  
  		case JFS_COMMIT_BLOCK:
@@ -479,7 +550,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/recovery.c
  			brelse(bh);
  			next_commit_ID++;
  			continue;
-@@ -547,9 +684,10 @@
+@@ -547,9 +684,10 @@ static int do_one_pass(journal_t *journa
  	 * transaction marks the end of the valid log.
  	 */
  
@@ -493,11 +564,11 @@ Index: linux-2.6.18-128.1.6/fs/jbd/recovery.c
  		/* It's really bad news if different passes end up at
  		 * different places (but possible due to IO errors). */
  		if (info->end_transaction != next_commit_ID) {
-Index: linux-2.6.18-128.1.6/fs/jbd/journal.c
+Index: linux-2.6.18-164.6.1/fs/jbd/journal.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/jbd/journal.c	2009-06-02 23:24:00.000000000 -0600
-+++ linux-2.6.18-128.1.6/fs/jbd/journal.c	2009-06-02 23:26:07.000000000 -0600
-@@ -67,6 +67,7 @@
+--- linux-2.6.18-164.6.1.orig/fs/jbd/journal.c
++++ linux-2.6.18-164.6.1/fs/jbd/journal.c
+@@ -67,6 +67,7 @@ EXPORT_SYMBOL(journal_update_format);
  EXPORT_SYMBOL(journal_check_used_features);
  EXPORT_SYMBOL(journal_check_available_features);
  EXPORT_SYMBOL(journal_set_features);
@@ -505,7 +576,7 @@ Index: linux-2.6.18-128.1.6/fs/jbd/journal.c
  EXPORT_SYMBOL(journal_create);
  EXPORT_SYMBOL(journal_load);
  EXPORT_SYMBOL(journal_destroy);
-@@ -1583,6 +1584,33 @@
+@@ -1583,6 +1584,33 @@ int journal_set_features (journal_t *jou
  	return 1;
  }
  
@@ -539,11 +610,11 @@ Index: linux-2.6.18-128.1.6/fs/jbd/journal.c
  
  /**
   * int journal_update_format () - Update on-disk journal structure.
-Index: linux-2.6.18-128.1.6/fs/Kconfig
+Index: linux-2.6.18-164.6.1/fs/Kconfig
 ===================================================================
---- linux-2.6.18-128.1.6.orig/fs/Kconfig	2009-04-14 21:05:39.000000000 -0600
-+++ linux-2.6.18-128.1.6/fs/Kconfig	2009-06-02 23:26:07.000000000 -0600
-@@ -206,6 +206,7 @@
+--- linux-2.6.18-164.6.1.orig/fs/Kconfig
++++ linux-2.6.18-164.6.1/fs/Kconfig
+@@ -142,6 +142,7 @@ source "fs/ext4/Kconfig"
  
  config JBD
  	tristate
@@ -551,74 +622,11 @@ Index: linux-2.6.18-128.1.6/fs/Kconfig
  	help
  	  This is a generic journaling layer for block devices.  It is
  	  currently used by the ext3 and OCFS2 file systems, but it could
-Index: linux-2.6.18-128.1.6/include/linux/jbd.h
+Index: linux-2.6.18-164.6.1/Documentation/filesystems/ext3.txt
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/jbd.h	2009-06-02 23:24:00.000000000 -0600
-+++ linux-2.6.18-128.1.6/include/linux/jbd.h	2009-06-02 23:26:07.000000000 -0600
-@@ -148,6 +148,29 @@
- 	__be32		h_sequence;
- } journal_header_t;
- 
-+/*
-+ * Checksum types.
-+ */
-+#define JFS_CRC32_CHKSUM   1
-+#define JFS_MD5_CHKSUM     2
-+#define JFS_SHA1_CHKSUM    3
-+
-+#define JFS_CRC32_CHKSUM_SIZE 4
-+
-+#define JFS_CHECKSUM_BYTES (32 / sizeof(u32))
-+/*
-+ * Commit block header for storing transactional checksums:
-+ */
-+struct commit_header
-+{
-+	__be32		h_magic;
-+	__be32          h_blocktype;
-+	__be32          h_sequence;
-+	unsigned char   h_chksum_type;
-+	unsigned char   h_chksum_size;
-+	unsigned char 	h_padding[2];
-+	__be32 		h_chksum[JFS_CHECKSUM_BYTES];
-+};
- 
- /* 
-  * The block tag: used to describe a single buffer in the journal 
-@@ -234,12 +257,16 @@
- 	((j)->j_format_version >= 2 &&					\
- 	 ((j)->j_superblock->s_feature_incompat & cpu_to_be32((mask))))
- 
--#define JFS_FEATURE_INCOMPAT_REVOKE	0x00000001
-+#define JFS_FEATURE_COMPAT_CHECKSUM  	0x00000001
-+
-+#define JFS_FEATURE_INCOMPAT_REVOKE		0x00000001
-+#define JFS_FEATURE_INCOMPAT_ASYNC_COMMIT    	0x00000004
- 
- /* Features known to this kernel version: */
--#define JFS_KNOWN_COMPAT_FEATURES	0
-+#define JFS_KNOWN_COMPAT_FEATURES	JFS_FEATURE_COMPAT_CHECKSUM
- #define JFS_KNOWN_ROCOMPAT_FEATURES	0
--#define JFS_KNOWN_INCOMPAT_FEATURES	JFS_FEATURE_INCOMPAT_REVOKE
-+#define JFS_KNOWN_INCOMPAT_FEATURES	(JFS_FEATURE_INCOMPAT_REVOKE | \
-+					JFS_FEATURE_INCOMPAT_ASYNC_COMMIT)
- 
- #ifdef __KERNEL__
- 
-@@ -1053,6 +1080,8 @@
- 		   (journal_t *, unsigned long, unsigned long, unsigned long);
- extern int	   journal_set_features 
- 		   (journal_t *, unsigned long, unsigned long, unsigned long);
-+extern int	   journal_clear_features
-+		   (journal_t *, unsigned long, unsigned long, unsigned long);
- extern int	   journal_create     (journal_t *);
- extern int	   journal_load       (journal_t *journal);
- #ifndef __GENKSYMS__
-Index: linux-2.6.18-128.1.6/Documentation/filesystems/ext3.txt
-===================================================================
---- linux-2.6.18-128.1.6.orig/Documentation/filesystems/ext3.txt	2006-09-19 21:42:06.000000000 -0600
-+++ linux-2.6.18-128.1.6/Documentation/filesystems/ext3.txt	2009-06-02 23:26:07.000000000 -0600
-@@ -14,6 +14,16 @@
+--- linux-2.6.18-164.6.1.orig/Documentation/filesystems/ext3.txt
++++ linux-2.6.18-164.6.1/Documentation/filesystems/ext3.txt
+@@ -14,6 +14,16 @@ Options
  When mounting an ext3 filesystem, the following option are accepted:
  (*) == default
  

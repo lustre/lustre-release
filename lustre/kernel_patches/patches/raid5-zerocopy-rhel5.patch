@@ -1,7 +1,7 @@
-Index: linux-2.6.18-128.1.6/drivers/md/raid5.c
+Index: linux-2.6.18-128.1.14/drivers/md/raid5.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/drivers/md/raid5.c	2009-06-02 23:24:52.000000000 -0600
-+++ linux-2.6.18-128.1.6/drivers/md/raid5.c	2009-06-02 23:24:55.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/drivers/md/raid5.c	2009-06-19 12:34:46.000000000 -0600
++++ linux-2.6.18-128.1.14/drivers/md/raid5.c	2009-06-19 12:34:50.000000000 -0600
 @@ -633,6 +633,9 @@
  		clear_buffer_uptodate(bh);
  	}
@@ -322,7 +322,7 @@ Index: linux-2.6.18-128.1.6/drivers/md/raid5.c
  			clear_bit(R5_LOCKED, &sh->dev[i].flags);
  			set_bit(STRIPE_HANDLE, &sh->state);
  		}
-@@ -3451,6 +3595,9 @@
+@@ -3449,6 +3593,9 @@
  	mddev->queue->max_phys_segments = conf->chunk_size * conf->previous_raid_disks >> PAGE_SHIFT;
  	mddev->queue->max_hw_segments = conf->chunk_size * conf->previous_raid_disks >> PAGE_SHIFT;;
  
@@ -332,7 +332,7 @@ Index: linux-2.6.18-128.1.6/drivers/md/raid5.c
  	return 0;
  abort:
  	if (conf) {
-@@ -3537,9 +3684,11 @@
+@@ -3535,9 +3682,11 @@
  			atomic_read(&conf->handled_in_raid5d),
  			atomic_read(&conf->out_of_stripes),
  			atomic_read(&conf->handle_called));
@@ -346,10 +346,10 @@ Index: linux-2.6.18-128.1.6/drivers/md/raid5.c
  	seq_printf (seq, "\n\t\t%u delayed, %u bit delayed, %u active, queues: %u in, %u out\n",
  			atomic_read(&conf->delayed), atomic_read(&conf->bit_delayed),
  			atomic_read(&conf->active_stripes),
-Index: linux-2.6.18-128.1.6/include/linux/backing-dev.h
+Index: linux-2.6.18-128.1.14/include/linux/backing-dev.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/backing-dev.h	2006-09-19 21:42:06.000000000 -0600
-+++ linux-2.6.18-128.1.6/include/linux/backing-dev.h	2009-06-02 23:24:55.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/include/linux/backing-dev.h	2009-06-19 12:33:11.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/backing-dev.h	2009-06-19 12:34:50.000000000 -0600
 @@ -48,6 +48,7 @@
  #define BDI_CAP_THROTTLE_DIRTY	0x00010000	/* throttle in balance_dirty_pages when BDI is congested */
  #define BDI_CAP_VMFLAGS \
@@ -370,11 +370,11 @@ Index: linux-2.6.18-128.1.6/include/linux/backing-dev.h
 +	
  
  #endif		/* _LINUX_BACKING_DEV_H */
-Index: linux-2.6.18-128.1.6/include/linux/page-flags.h
+Index: linux-2.6.18-128.1.14/include/linux/page-flags.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/page-flags.h	2009-04-14 21:05:24.000000000 -0600
-+++ linux-2.6.18-128.1.6/include/linux/page-flags.h	2009-06-02 23:24:55.000000000 -0600
-@@ -86,6 +86,7 @@
+--- linux-2.6.18-128.1.14.orig/include/linux/page-flags.h	2009-06-19 12:33:11.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/page-flags.h	2009-06-19 12:34:50.000000000 -0600
+@@ -87,6 +87,7 @@
  #define PG_reclaim		17	/* To be reclaimed asap */
  #define PG_nosave_free		18	/* Free, should not be written */
  #define PG_buddy		19	/* Page is free, on buddy lists */
@@ -382,7 +382,7 @@ Index: linux-2.6.18-128.1.6/include/linux/page-flags.h
  #define PG_xpmem		27	/* Testing for xpmem. */
  
  /* PG_owner_priv_1 users should have descriptive aliases */
-@@ -283,6 +284,14 @@
+@@ -288,6 +289,14 @@
  
  struct page;	/* forward declaration */
  
@@ -397,10 +397,10 @@ Index: linux-2.6.18-128.1.6/include/linux/page-flags.h
  int test_clear_page_dirty(struct page *page);
  int test_clear_page_writeback(struct page *page);
  int test_set_page_writeback(struct page *page);
-Index: linux-2.6.18-128.1.6/include/linux/raid/raid5.h
+Index: linux-2.6.18-128.1.14/include/linux/raid/raid5.h
 ===================================================================
---- linux-2.6.18-128.1.6.orig/include/linux/raid/raid5.h	2009-06-02 23:24:50.000000000 -0600
-+++ linux-2.6.18-128.1.6/include/linux/raid/raid5.h	2009-06-02 23:24:55.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/include/linux/raid/raid5.h	2009-06-19 12:34:42.000000000 -0600
++++ linux-2.6.18-128.1.14/include/linux/raid/raid5.h	2009-06-19 12:34:50.000000000 -0600
 @@ -156,8 +156,9 @@
  #define	R5_Overlap	7	/* There is a pending overlapping request on this block */
  #define	R5_ReadError	8	/* seen a read error here recently */
@@ -412,10 +412,10 @@ Index: linux-2.6.18-128.1.6/include/linux/raid/raid5.h
  /*
   * Write method
   */
-Index: linux-2.6.18-128.1.6/mm/filemap.c
+Index: linux-2.6.18-128.1.14/mm/filemap.c
 ===================================================================
---- linux-2.6.18-128.1.6.orig/mm/filemap.c	2009-04-14 21:05:46.000000000 -0600
-+++ linux-2.6.18-128.1.6/mm/filemap.c	2009-06-02 23:24:55.000000000 -0600
+--- linux-2.6.18-128.1.14.orig/mm/filemap.c	2009-06-19 12:33:11.000000000 -0600
++++ linux-2.6.18-128.1.14/mm/filemap.c	2009-06-19 12:34:50.000000000 -0600
 @@ -30,6 +30,7 @@
  #include <linux/security.h>
  #include <linux/syscalls.h>
@@ -425,9 +425,9 @@ Index: linux-2.6.18-128.1.6/mm/filemap.c
  #include <trace/mm.h>
  #include "internal.h"
 @@ -567,11 +568,55 @@
- 		if (!test_clear_page_writeback(page))
- 			BUG();
- 	}
+ 	if (!test_clear_page_writeback(page))
+ 		BUG();
+ 
 +	clear_page_constant(page);
  	smp_mb__after_clear_bit();
  	wake_up_page(page, PG_writeback);
