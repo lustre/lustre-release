@@ -64,79 +64,82 @@ static int seq_client_rpc(struct lu_client_seq *seq,
                           struct lu_seq_range *output, __u32 opc,
                           const char *opcname)
 {
-        struct obd_export     *exp = seq->lcs_exp;
-        struct ptlrpc_request *req;
-        struct lu_seq_range   *out, *in;
-        __u32                 *op;
-        int                    rc;
-        ENTRY;
+	struct obd_export     *exp = seq->lcs_exp;
+	struct ptlrpc_request *req;
+	struct lu_seq_range   *out, *in;
+	__u32                 *op;
+	unsigned int           debug_mask;
+	int                    rc;
+	ENTRY;
 
-        req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_SEQ_QUERY,
-                                        LUSTRE_MDS_VERSION, SEQ_QUERY);
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	req = ptlrpc_request_alloc_pack(class_exp2cliimp(exp), &RQF_SEQ_QUERY,
+					LUSTRE_MDS_VERSION, SEQ_QUERY);
+	if (req == NULL)
+		RETURN(-ENOMEM);
 
-        /* Init operation code */
-        op = req_capsule_client_get(&req->rq_pill, &RMF_SEQ_OPC);
-        *op = opc;
+	/* Init operation code */
+	op = req_capsule_client_get(&req->rq_pill, &RMF_SEQ_OPC);
+	*op = opc;
 
-        /* Zero out input range, this is not recovery yet. */
-        in = req_capsule_client_get(&req->rq_pill, &RMF_SEQ_RANGE);
-        range_init(in);
+	/* Zero out input range, this is not recovery yet. */
+	in = req_capsule_client_get(&req->rq_pill, &RMF_SEQ_RANGE);
+	range_init(in);
 
-        ptlrpc_request_set_replen(req);
+	ptlrpc_request_set_replen(req);
 
-       if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
-                req->rq_request_portal = SEQ_METADATA_PORTAL;
-                in->lsr_flags = LU_SEQ_RANGE_MDT;
-        } else {
-                LASSERTF(seq->lcs_type == LUSTRE_SEQ_DATA,
-                         "unknown lcs_type %u\n", seq->lcs_type);
-                req->rq_request_portal = SEQ_DATA_PORTAL;
-                in->lsr_flags = LU_SEQ_RANGE_OST;
-        }
+	if (seq->lcs_type == LUSTRE_SEQ_METADATA) {
+		req->rq_request_portal = SEQ_METADATA_PORTAL;
+		in->lsr_flags = LU_SEQ_RANGE_MDT;
+	} else {
+		LASSERTF(seq->lcs_type == LUSTRE_SEQ_DATA,
+			 "unknown lcs_type %u\n", seq->lcs_type);
+		req->rq_request_portal = SEQ_DATA_PORTAL;
+		in->lsr_flags = LU_SEQ_RANGE_OST;
+	}
 
-        if (opc == SEQ_ALLOC_SUPER) {
-                /* Update index field of *in, it is required for
-                 * FLD update on super sequence allocator node. */
-                in->lsr_index = seq->lcs_space.lsr_index;
-                req->rq_request_portal = SEQ_CONTROLLER_PORTAL;
-        } else {
-                LASSERTF(opc == SEQ_ALLOC_META,
-                         "unknown opcode %u\n, opc", opc);
-        }
+	if (opc == SEQ_ALLOC_SUPER) {
+		/* Update index field of *in, it is required for
+		 * FLD update on super sequence allocator node. */
+		in->lsr_index = seq->lcs_space.lsr_index;
+		req->rq_request_portal = SEQ_CONTROLLER_PORTAL;
+		debug_mask = D_CONSOLE;
+	} else {
+		debug_mask = D_INFO;
+		LASSERTF(opc == SEQ_ALLOC_META,
+			 "unknown opcode %u\n, opc", opc);
+	}
 
-        ptlrpc_at_set_req_timeout(req);
+	ptlrpc_at_set_req_timeout(req);
 
-        mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
-        rc = ptlrpc_queue_wait(req);
-        mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+	mdc_get_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
+	rc = ptlrpc_queue_wait(req);
+	mdc_put_rpc_lock(exp->exp_obd->u.cli.cl_rpc_lock, NULL);
 
-        if (rc)
-                GOTO(out_req, rc);
+	if (rc)
+		GOTO(out_req, rc);
 
-        out = req_capsule_server_get(&req->rq_pill, &RMF_SEQ_RANGE);
-        *output = *out;
+	out = req_capsule_server_get(&req->rq_pill, &RMF_SEQ_RANGE);
+	*output = *out;
 
-        if (!range_is_sane(output)) {
-                CERROR("%s: Invalid range received from server: "
-                       DRANGE"\n", seq->lcs_name, PRANGE(output));
-                GOTO(out_req, rc = -EINVAL);
-        }
+	if (!range_is_sane(output)) {
+		CERROR("%s: Invalid range received from server: "
+		       DRANGE"\n", seq->lcs_name, PRANGE(output));
+		GOTO(out_req, rc = -EINVAL);
+	}
 
-        if (range_is_exhausted(output)) {
-                CERROR("%s: Range received from server is exhausted: "
-                       DRANGE"]\n", seq->lcs_name, PRANGE(output));
-                GOTO(out_req, rc = -EINVAL);
-        }
+	if (range_is_exhausted(output)) {
+		CERROR("%s: Range received from server is exhausted: "
+		       DRANGE"]\n", seq->lcs_name, PRANGE(output));
+		GOTO(out_req, rc = -EINVAL);
+	}
 
-        CDEBUG(D_INFO, "%s: Allocated %s-sequence "DRANGE"]\n",
-               seq->lcs_name, opcname, PRANGE(output));
+	CDEBUG_LIMIT(debug_mask, "%s: Allocated %s-sequence "DRANGE"]\n",
+		     seq->lcs_name, opcname, PRANGE(output));
 
-        EXIT;
+	EXIT;
 out_req:
-        ptlrpc_req_finished(req);
-        return rc;
+	ptlrpc_req_finished(req);
+	return rc;
 }
 
 /* Request sequence-controller node to allocate new super-sequence. */
