@@ -1,14 +1,14 @@
 m4_define([LUSTRE_MAJOR],[1])
 m4_define([LUSTRE_MINOR],[8])
-m4_define([LUSTRE_PATCH],[7])
-m4_define([LUSTRE_FIX],[81])
+m4_define([LUSTRE_PATCH],[8])
+m4_define([LUSTRE_FIX],[0])
 # Note: we're starting prerelease versions at 80 this time.
 
 dnl # don't forget to update the service tags info
-m4_define([CLIENT_URN],["LUSTRE-187-CLT"])
-m4_define([MDS_URN],["LUSTRE-187-MDS"])
-m4_define([MGS_URN],["LUSTRE-187-MGS"])
-m4_define([OSS_URN],["LUSTRE-187-OSS"])
+m4_define([CLIENT_URN],["LUSTRE-188-CLT"])
+m4_define([MDS_URN],["LUSTRE-188-MDS"])
+m4_define([MGS_URN],["LUSTRE-188-MGS"])
+m4_define([OSS_URN],["LUSTRE-188-OSS"])
 
 dnl # liblustre delta is 0.0.1.32 , next version with fixes is ok, but
 dnl # after following release candidate/beta would spill this warning already.
