@@ -2193,6 +2193,9 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 } else if (strncmp(s1, "nomgs", 5) == 0) {
                         lmd->lmd_flags |= LMD_FLG_NOMGS;
                         clear++;
+		} else if (strncmp(s1, "noscrub", 7) == 0) {
+			lmd->lmd_flags |= LMD_FLG_NOSCRUB;
+			clear++;
                 } else if (strncmp(s1, "writeconf", 9) == 0) {
                         lmd->lmd_flags |= LMD_FLG_WRITECONF;
                         clear++;

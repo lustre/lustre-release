@@ -559,7 +559,7 @@ int osd_compat_spec_lookup(struct osd_thread_info *info,
 
         name = oid2name(fid_oid(fid));
         if (name == NULL || strlen(name) == 0)
-                return -ERESTART;
+		RETURN(-ENOENT);
 
         dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
         if (!IS_ERR(dentry)) {

@@ -27,7 +27,7 @@
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2011, Whamcloud, Inc.
+ * Copyright (c) 2011, 2012, Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -249,6 +249,8 @@ libcfs_debug_dbg2str(int debug)
                 return "quota";
         case D_SEC:
                 return "sec";
+	case D_LFSCK:
+		return "lfsck";
         }
 }
 
