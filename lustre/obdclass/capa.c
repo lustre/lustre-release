@@ -286,13 +286,13 @@ int capa_encrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
         char alg[CRYPTO_MAX_ALG_NAME+1] = "aes";
         ENTRY;
 
-        /* passing "aes" in a variable instead of a constant string keeps gcc
-         * 4.3.2 happy */
-        tfm = ll_crypto_alloc_blkcipher(alg, 0, 0 );
-        if (tfm == NULL) {
-                CERROR("failed to load transform for aes\n");
-                RETURN(-EFAULT);
-        }
+	/* passing "aes" in a variable instead of a constant string keeps gcc
+	 * 4.3.2 happy */
+	tfm = ll_crypto_alloc_blkcipher(alg, 0, 0 );
+	if (IS_ERR(tfm)) {
+		CERROR("failed to load transform for aes\n");
+		RETURN(PTR_ERR(tfm));
+	}
 
         min = ll_crypto_tfm_alg_min_keysize(tfm);
         if (keylen < min) {
@@ -338,13 +338,13 @@ int capa_decrypt_id(__u32 *d, __u32 *s, __u8 *key, int keylen)
         char alg[CRYPTO_MAX_ALG_NAME+1] = "aes";
         ENTRY;
 
-        /* passing "aes" in a variable instead of a constant string keeps gcc
-         * 4.3.2 happy */
-        tfm = ll_crypto_alloc_blkcipher(alg, 0, 0 );
-        if (tfm == NULL) {
-                CERROR("failed to load transform for aes\n");
-                RETURN(-EFAULT);
-        }
+	/* passing "aes" in a variable instead of a constant string keeps gcc
+	 * 4.3.2 happy */
+	tfm = ll_crypto_alloc_blkcipher(alg, 0, 0 );
+	if (IS_ERR(tfm)) {
+		CERROR("failed to load transform for aes\n");
+		RETURN(PTR_ERR(tfm));
+	}
 
         min = ll_crypto_tfm_alg_min_keysize(tfm);
         if (keylen < min) {
