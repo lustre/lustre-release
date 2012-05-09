@@ -1,6 +1,4 @@
 #!/bin/bash
-# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
-
 #
 # krb5_login.sh - obtain and cache Kerberos ticket-granting ticket
 #

@@ -1,5 +1,6 @@
 #!/bin/bash
-# vim: expandtab tabstop=4 softtabstop=4 shiftwidth=4 textwidth=80
+# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
+# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 #
 # NAME
 #

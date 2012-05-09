@@ -1,6 +1,4 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:autoindent:shiftwidth=4:tabstop=4:
 
 # FIXME - there is no reason to use all of these different
 #   return codes, espcially when most of them are mapped to something

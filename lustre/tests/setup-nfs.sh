@@ -1,5 +1,4 @@
 #!/bin/bash
-# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
 #set -x
 EXPORT_OPTS=${EXPORT_OPTS:-"rw,async,no_root_squash"}
 

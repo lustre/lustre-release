@@ -1,5 +1,5 @@
 #!/bin/bash
-# vim:expandtab:shiftwidth=4:softtabstop=4:tabstop=4:
+# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
 # All pairwise combinations of node failures.
 # Was cmd3-17
