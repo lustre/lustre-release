@@ -429,8 +429,6 @@ static inline struct dentry *d_obtain_alias(struct inode *inode)
 #define ll_crypto_hash_init(desc)               crypto_hash_init(desc)
 #define ll_crypto_hash_update(desc, sl, bytes)  crypto_hash_update(desc, sl, bytes)
 #define ll_crypto_hash_final(desc, out)         crypto_hash_final(desc, out)
-#define ll_crypto_alloc_blkcipher(name, type, mask) \
-                crypto_alloc_blkcipher(name ,type, mask)
 #define ll_crypto_blkcipher_setkey(tfm, key, keylen) \
                 crypto_blkcipher_setkey(tfm, key, keylen)
 #define ll_crypto_blkcipher_set_iv(tfm, src, len) \
@@ -445,6 +443,15 @@ static inline struct dentry *d_obtain_alias(struct inode *inode)
                 crypto_blkcipher_encrypt_iv(desc, dst, src, bytes)
 #define ll_crypto_blkcipher_decrypt_iv(desc, dst, src, bytes) \
                 crypto_blkcipher_decrypt_iv(desc, dst, src, bytes)
+
+static inline
+struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char *name,
+						   u32 type, u32 mask)
+{
+	struct ll_crypto_cipher *rtn = crypto_alloc_blkcipher(name, type, mask);
+
+	return (rtn == NULL ? ERR_PTR(-ENOMEM) : rtn);
+}
 
 static inline int ll_crypto_hmac(struct ll_crypto_hash *tfm,
                                  u8 *key, unsigned int *keylen,
@@ -515,25 +522,27 @@ static inline
 struct ll_crypto_cipher *ll_crypto_alloc_blkcipher(const char * algname,
                                                    u32 type, u32 mask)
 {
-        char        buf[CRYPTO_MAX_ALG_NAME + 1];
-        const char *pan = algname;
-        u32         flag = 0;
+	struct ll_crypto_cipher *rtn;
+	char        		 buf[CRYPTO_MAX_ALG_NAME + 1];
+	const char 		*pan = algname;
+	u32         		 flag = 0;
 
-        if (strncmp("cbc(", algname, 4) == 0)
-                flag |= CRYPTO_TFM_MODE_CBC;
-        else if (strncmp("ecb(", algname, 4) == 0)
-                flag |= CRYPTO_TFM_MODE_ECB;
-        if (flag) {
-                char *vp = strnchr(algname, CRYPTO_MAX_ALG_NAME, ')');
-                if (vp) {
-                        memcpy(buf, algname + 4, vp - algname - 4);
-                        buf[vp - algname - 4] = '\0';
-                        pan = buf;
-                } else {
-                        flag = 0;
-                }
-        }
-        return crypto_alloc_tfm(pan, flag);
+	if (strncmp("cbc(", algname, 4) == 0)
+		flag |= CRYPTO_TFM_MODE_CBC;
+	else if (strncmp("ecb(", algname, 4) == 0)
+		flag |= CRYPTO_TFM_MODE_ECB;
+	if (flag) {
+		char *vp = strnchr(algname, CRYPTO_MAX_ALG_NAME, ')');
+		if (vp) {
+			memcpy(buf, algname + 4, vp - algname - 4);
+			buf[vp - algname - 4] = '\0';
+			pan = buf;
+		} else {
+			flag = 0;
+		}
+	}
+	rtn = crypto_alloc_tfm(pan, flag);
+	return (rtn == NULL ?  ERR_PTR(-ENOMEM) : rtn);
 }
 
 static inline
