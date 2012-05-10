@@ -79,15 +79,12 @@
 #include <rdma/ib_verbs.h>
 #include <rdma/ib_fmr_pool.h>
 
-/* tunables fixed at compile time */
-#ifdef CONFIG_SMP
-# define IBLND_N_SCHED      cfs_num_online_cpus()   /* # schedulers */
-#else
-# define IBLND_N_SCHED      1                   /* # schedulers */
-#endif
+#define IBLND_PEER_HASH_SIZE		101	/* # peer lists */
+/* # scheduler loops before reschedule */
+#define IBLND_RESCHED			100
 
-#define IBLND_PEER_HASH_SIZE         101        /* # peer lists */
-#define IBLND_RESCHED                100        /* # scheduler loops before reschedule */
+#define IBLND_N_SCHED			2
+#define IBLND_N_SCHED_HIGH		4
 
 typedef struct
 {
@@ -120,6 +117,8 @@ typedef struct
 #endif
         int              *kib_require_priv_port;/* accept only privileged ports */
         int              *kib_use_priv_port;    /* use privileged port for active connect */
+	/* # threads on each CPT */
+	int		 *kib_nscheds;
 } kib_tunables_t;
 
 extern kib_tunables_t  kiblnd_tunables;
@@ -172,6 +171,12 @@ kiblnd_concurrent_sends_v1(void)
 
 /************************/
 /* derived constants... */
+/* Pools (shared by connections on each CPT) */
+/* These pools can grow at runtime, so don't need give a very large value */
+#define IBLND_TX_POOL			256
+#define IBLND_PMR_POOL			256
+#define IBLND_FMR_POOL			256
+#define IBLND_FMR_POOL_FLUSH		192
 
 /* TX messages (shared by all connections) */
 #define IBLND_TX_MSGS()            (*kiblnd_tunables.kib_ntx)
@@ -253,12 +258,11 @@ typedef struct {
 struct kib_pool;
 struct kib_poolset;
 
-typedef int  (*kib_ps_pool_create_t)(struct kib_poolset *ps, int inc, struct kib_pool **pp_po);
+typedef int  (*kib_ps_pool_create_t)(struct kib_poolset *ps,
+				     int inc, struct kib_pool **pp_po);
 typedef void (*kib_ps_pool_destroy_t)(struct kib_pool *po);
-typedef void (*kib_ps_node_init_t)(struct kib_pool *po,
-                                   cfs_list_t *node);
-typedef void (*kib_ps_node_fini_t)(struct kib_pool *po,
-                                   cfs_list_t *node);
+typedef void (*kib_ps_node_init_t)(struct kib_pool *po, cfs_list_t *node);
+typedef void (*kib_ps_node_fini_t)(struct kib_pool *po, cfs_list_t *node);
 
 struct kib_net;
 
@@ -274,6 +278,7 @@ typedef struct kib_poolset
         cfs_time_t              ps_next_retry;          /* time stamp for retry if failed to allocate */
         int                     ps_increasing;          /* is allocating new pool */
         int                     ps_pool_size;           /* new pool size */
+	int			ps_cpt;			/* CPT id */
 
         kib_ps_pool_create_t    ps_pool_create;         /* create a new pool */
         kib_ps_pool_destroy_t   ps_pool_destroy;        /* destroy a pool */
@@ -320,8 +325,13 @@ typedef struct
         cfs_list_t              fps_pool_list;          /* FMR pool list */
         cfs_list_t              fps_failed_pool_list;   /* FMR pool list */
         __u64                   fps_version;            /* validity stamp */
-        int                     fps_increasing;         /* is allocating new pool */
-        cfs_time_t              fps_next_retry;         /* time stamp for retry if failed to allocate */
+	int			fps_cpt;		/* CPT id */
+	int			fps_pool_size;
+	int			fps_flush_trigger;
+	/* is allocating new pool */
+	int			fps_increasing;
+	/* time stamp for retry if failed to allocate */
+	cfs_time_t		fps_next_retry;
 } kib_fmr_poolset_t;
 
 typedef struct
@@ -346,43 +356,64 @@ typedef struct kib_net
         __u64                ibn_incarnation;   /* my epoch */
         int                  ibn_init;          /* initialisation state */
         int                  ibn_shutdown;      /* shutting down? */
-        unsigned int         ibn_with_fmr:1;    /* FMR? */
-        unsigned int         ibn_with_pmr:1;    /* PMR? */
 
-        cfs_atomic_t         ibn_npeers;        /* # peers extant */
-        cfs_atomic_t         ibn_nconns;        /* # connections extant */
+	cfs_atomic_t		ibn_npeers;	/* # peers extant */
+	cfs_atomic_t		ibn_nconns;	/* # connections extant */
 
-        kib_tx_poolset_t     ibn_tx_ps;         /* tx pool-set */
-        kib_fmr_poolset_t    ibn_fmr_ps;        /* fmr pool-set */
-        kib_pmr_poolset_t    ibn_pmr_ps;        /* pmr pool-set */
+	kib_tx_poolset_t	**ibn_tx_ps;	/* tx pool-set */
+	kib_fmr_poolset_t	**ibn_fmr_ps;	/* fmr pool-set */
+	kib_pmr_poolset_t	**ibn_pmr_ps;	/* pmr pool-set */
 
-        kib_dev_t           *ibn_dev;           /* underlying IB device */
+	kib_dev_t		*ibn_dev;	/* underlying IB device */
 } kib_net_t;
+
+#define KIB_THREAD_SHIFT		16
+#define KIB_THREAD_ID(cpt, tid)		((cpt) << KIB_THREAD_SHIFT | (tid))
+#define KIB_THREAD_CPT(id)		((id) >> KIB_THREAD_SHIFT)
+#define KIB_THREAD_TID(id)		((id) & ((1UL << KIB_THREAD_SHIFT) - 1))
+
+struct kib_sched_info {
+	/* serialise */
+	cfs_spinlock_t		ibs_lock;
+	/* schedulers sleep here */
+	cfs_waitq_t		ibs_waitq;
+	/* conns to check for rx completions */
+	cfs_list_t		ibs_conns;
+	/* number of scheduler threads */
+	int			ibs_nthreads;
+	/* max allowed scheduler threads */
+	int			ibs_nthreads_max;
+	int			ibs_cpt;	/* CPT id */
+};
 
 typedef struct
 {
-        int               kib_init;        /* initialisation state */
-        int               kib_shutdown;    /* shut down? */
-        cfs_list_t        kib_devs;        /* IB devices extant */
-        cfs_list_t           kib_failed_devs;   /* list head of failed devices */
-        cfs_atomic_t      kib_nthreads;    /* # live threads */
-        cfs_rwlock_t      kib_global_lock; /* stabilize net/dev/peer/conn ops */
-
-        cfs_list_t       *kib_peers;  /* hash table of all my known peers */
-        int               kib_peer_hash_size;/* size of kib_peers */
-
-        void             *kib_connd;       /* the connd task (serialisation assertions) */
-        cfs_list_t        kib_connd_conns; /* connections to setup/teardown */
-        cfs_list_t        kib_connd_zombies;/* connections with zero refcount */
-        cfs_waitq_t       kib_connd_waitq; /* connection daemon sleeps here */
-        cfs_spinlock_t    kib_connd_lock;  /* serialise */
-
-        cfs_waitq_t       kib_sched_waitq; /* schedulers sleep here */
-        cfs_list_t        kib_sched_conns; /* conns to check for rx completions */
-        cfs_spinlock_t    kib_sched_lock;  /* serialise */
-        cfs_waitq_t          kib_failover_waitq; /* schedulers sleep here */
-
-        struct ib_qp_attr kib_error_qpa;   /* QP->ERROR */
+	int			kib_init;	/* initialisation state */
+	int			kib_shutdown;	/* shut down? */
+	cfs_list_t		kib_devs;	/* IB devices extant */
+	/* list head of failed devices */
+	cfs_list_t		kib_failed_devs;
+	/* schedulers sleep here */
+	cfs_waitq_t		kib_failover_waitq;
+	cfs_atomic_t		kib_nthreads;	/* # live threads */
+	/* stabilize net/dev/peer/conn ops */
+	cfs_rwlock_t		kib_global_lock;
+	/* hash table of all my known peers */
+	cfs_list_t		*kib_peers;
+	/* size of kib_peers */
+	int			kib_peer_hash_size;
+	/* the connd task (serialisation assertions) */
+	void			*kib_connd;
+	/* connections to setup/teardown */
+	cfs_list_t		kib_connd_conns;
+	/* connections with zero refcount */
+	cfs_list_t		kib_connd_zombies;
+	/* connection daemon sleeps here */
+	cfs_waitq_t		kib_connd_waitq;
+	cfs_spinlock_t		kib_connd_lock;	/* serialise */
+	struct ib_qp_attr	kib_error_qpa;	/* QP->ERROR */
+	/* percpt data for schedulers */
+	struct kib_sched_info	**kib_scheds;
 } kib_data_t;
 
 #define IBLND_INIT_NOTHING         0
@@ -565,6 +596,7 @@ typedef struct kib_connvars
 
 typedef struct kib_conn
 {
+	struct kib_sched_info *ibc_sched;	/* scheduler information */
         struct kib_peer     *ibc_peer;          /* owning peer */
         kib_hca_dev_t       *ibc_hdev;          /* HCA bound on */
         cfs_list_t           ibc_list;          /* stash on peer's conn list */
@@ -1040,7 +1072,7 @@ int  kiblnd_scheduler(void *arg);
 int  kiblnd_thread_start (int (*fn)(void *arg), void *arg);
 int  kiblnd_failover_thread (void *arg);
 
-int  kiblnd_alloc_pages (kib_pages_t **pp, int npages);
+int  kiblnd_alloc_pages(kib_pages_t **pp, int cpt, int npages);
 void kiblnd_free_pages (kib_pages_t *p);
 
 int  kiblnd_cm_callback(struct rdma_cm_id *cmid,
