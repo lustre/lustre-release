@@ -649,12 +649,21 @@ set_default_debug_facet () {
 
 # Facet functions
 mount_facets () {
-    local facets=${1:-$(get_facets)}
-    local facet
+	local facets=${1:-$(get_facets)}
+	local facet
 
-    for facet in ${facets//,/ }; do
-        mount_facet $facet || error "Restart of $facet failed!"
-    done
+	for facet in ${facets//,/ }; do
+		mount_facet $facet
+		local RC=$?
+		[ $RC -eq 0 ] && continue
+
+		if [ "$TESTSUITE.$TESTNAME" = "replay-dual.test_0a" ]; then
+			skip "Restart of $facet failed!." && touch $LU482_FAILED
+		else
+			error "Restart of $facet failed!"
+		fi
+		return $RC
+	done
 }
 
 mount_facet() {
@@ -667,6 +676,8 @@ mount_facet() {
     echo "Starting ${facet}: ${!opt} $@ ${!dev} $mntpt"
     do_facet ${facet} "mkdir -p $mntpt; mount -t lustre ${!opt} $@ ${!dev} $mntpt"
     RC=${PIPESTATUS[0]}
+    # to allow testing LU-482 error handling in mount_facets() and test_0a()
+    [ -f $TMP/test-lu482-trigger ] && RC=2
     if [ $RC -ne 0 ]; then
         echo "mount -t lustre $@ ${!dev} $mntpt"
         echo "Start of ${!dev} on ${facet} failed ${RC}"
