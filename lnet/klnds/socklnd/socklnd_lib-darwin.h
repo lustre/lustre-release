@@ -63,11 +63,4 @@
 
 #include <libcfs/libcfs.h>
 
-static inline
-int ksocknal_nsched(void)
-{ 
-	/* XXX Liang: fix it */
-	return 1;
-}
-
 #endif

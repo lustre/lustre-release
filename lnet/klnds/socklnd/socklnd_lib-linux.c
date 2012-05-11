@@ -404,53 +404,6 @@ ksocknal_lib_tunables_fini ()
 }
 #endif /* # if CONFIG_SYSCTL && !CFS_SYSFS_MODULE_PARM */
 
-void
-ksocknal_lib_bind_irq (unsigned int irq)
-{
-#if (defined(CONFIG_SMP) && defined(CPU_AFFINITY))
-        int              bind;
-        int              cpu;
-        char             cmdline[64];
-        ksock_irqinfo_t *info;
-        char            *argv[] = {"/bin/sh",
-                                   "-c",
-                                   cmdline,
-                                   NULL};
-        char            *envp[] = {"HOME=/",
-                                   "PATH=/sbin:/bin:/usr/sbin:/usr/bin",
-                                   NULL};
-
-        LASSERT (irq < NR_IRQS);
-        if (irq == 0)              /* software NIC or affinity disabled */
-                return;
-
-        info = &ksocknal_data.ksnd_irqinfo[irq];
-
-        cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
-
-        LASSERT (info->ksni_valid);
-        bind = !info->ksni_bound;
-        info->ksni_bound = 1;
-
-        cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
-
-        if (!bind)                              /* bound already */
-                return;
-
-        cpu = ksocknal_irqsched2cpu(info->ksni_sched);
-        snprintf (cmdline, sizeof (cmdline),
-                  "echo %d > /proc/irq/%u/smp_affinity", 1 << cpu, irq);
-
-        LCONSOLE_INFO("Binding irq %u to CPU %d with cmd: %s\n",
-                      irq, cpu, cmdline);
-
-        /* FIXME: Find a better method of setting IRQ affinity...
-         */
-
-        USERMODEHELPER(argv[0], argv, envp);
-#endif
-}
-
 int
 ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 {
@@ -474,32 +427,6 @@ ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
         }
 
         return 0;
-}
-
-unsigned int
-ksocknal_lib_sock_irq (struct socket *sock)
-{
-        int                irq = 0;
-#ifdef CPU_AFFINITY
-        struct dst_entry  *dst;
-
-        if (!*ksocknal_tunables.ksnd_irq_affinity)
-                return 0;
-
-        dst = sk_dst_get (sock->sk);
-        if (dst != NULL) {
-                if (dst->dev != NULL) {
-                        irq = dst->dev->irq;
-                        if (irq >= NR_IRQS) {
-                                CERROR ("Unexpected IRQ %x\n", irq);
-                                irq = 0;
-                        }
-                }
-                dst_release (dst);
-        }
-
-#endif
-        return irq;
 }
 
 int
@@ -1269,23 +1196,4 @@ ksocknal_lib_memory_pressure(ksock_conn_t *conn)
         cfs_spin_unlock_bh (&sched->kss_lock);
 
         return rc;
-}
-
-int
-ksocknal_lib_bind_thread_to_cpu(int id)
-{
-#if defined(CONFIG_SMP) && defined(CPU_AFFINITY)
-        id = ksocknal_sched2cpu(id);
-        if (cpu_online(id)) {
-                cpumask_t m = CPU_MASK_NONE;
-                cpu_set(id, m);
-                set_cpus_allowed(current, m);
-                return 0;
-        }
-
-        return -1;
-
-#else
-        return 0;
-#endif
 }

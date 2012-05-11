@@ -161,18 +161,6 @@ ksocknal_lib_tunables_fini ()
  */
 #define KSOCKNAL_MAX_BUFFER        (1152*1024)
 
-void
-ksocknal_lib_bind_irq (unsigned int irq)
-{
-        return;
-}
-
-unsigned int
-ksocknal_lib_sock_irq (cfs_socket_t *sock)
-{
-        return 0;
-}
-
 int
 ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 { 
