@@ -886,6 +886,23 @@ cfs_hash_ops_t lu_site_hash_ops = {
         .hs_put_locked  = lu_obj_hop_put_locked,
 };
 
+void lu_dev_add_linkage(struct lu_site *s, struct lu_device *d)
+{
+	cfs_spin_lock(&s->ls_ld_lock);
+	if (cfs_list_empty(&d->ld_linkage))
+		cfs_list_add(&d->ld_linkage, &s->ls_ld_linkage);
+	cfs_spin_unlock(&s->ls_ld_lock);
+}
+EXPORT_SYMBOL(lu_dev_add_linkage);
+
+void lu_dev_del_linkage(struct lu_site *s, struct lu_device *d)
+{
+	cfs_spin_lock(&s->ls_ld_lock);
+	cfs_list_del_init(&d->ld_linkage);
+	cfs_spin_unlock(&s->ls_ld_lock);
+}
+EXPORT_SYMBOL(lu_dev_del_linkage);
+
 /**
  * Initialize site \a s, with \a d as the top level device.
  */
@@ -964,9 +981,7 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
         CFS_INIT_LIST_HEAD(&s->ls_ld_linkage);
         cfs_spin_lock_init(&s->ls_ld_lock);
 
-        cfs_spin_lock(&s->ls_ld_lock);
-        cfs_list_add(&top->ld_linkage, &s->ls_ld_linkage);
-        cfs_spin_unlock(&s->ls_ld_lock);
+	lu_dev_add_linkage(s, top);
 
         RETURN(0);
 }

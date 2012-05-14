@@ -676,6 +676,9 @@ void lu_object_fini       (struct lu_object *o);
 void lu_object_add_top    (struct lu_object_header *h, struct lu_object *o);
 void lu_object_add        (struct lu_object *before, struct lu_object *o);
 
+void lu_dev_add_linkage(struct lu_site *s, struct lu_device *d);
+void lu_dev_del_linkage(struct lu_site *s, struct lu_device *d);
+
 /**
  * Helpers to initialize and finalize device types.
  */

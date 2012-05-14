@@ -4301,6 +4301,8 @@ static void mdt_stack_fini(const struct lu_env *env,
         info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         LASSERT(info != NULL);
 
+	lu_dev_del_linkage(top->ld_site, top);
+
         bufs = &info->mti_u.bufs;
         /* process cleanup, pass mdt obd name to get obd umount flags */
         lustre_cfg_bufs_reset(bufs, obd->obd_name);
@@ -4314,7 +4316,6 @@ static void mdt_stack_fini(const struct lu_env *env,
                 CERROR("Cannot alloc lcfg!\n");
                 return;
         }
-
         LASSERT(top);
         top->ld_ops->ldo_process_config(env, top, lcfg);
         lustre_cfg_free(lcfg);
@@ -4374,10 +4375,7 @@ static struct lu_device *mdt_layer_setup(struct lu_env *env,
         lu_device_get(d);
         lu_ref_add(&d->ld_reference, "lu-stack", &lu_site_init);
 
-        cfs_spin_lock(&d->ld_site->ls_ld_lock);
-        cfs_list_add_tail(&d->ld_linkage, &d->ld_site->ls_ld_linkage);
-        cfs_spin_unlock(&d->ld_site->ls_ld_lock);
-
+	lu_dev_add_linkage(d->ld_site, d);
         RETURN(d);
 out_alloc:
         ldt->ldt_ops->ldto_device_free(env, d);

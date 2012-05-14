@@ -1015,6 +1015,7 @@ static int mdd_process_config(const struct lu_env *env,
                 mdd_changelog_init(env, m);
                 break;
         case LCFG_CLEANUP:
+		lu_dev_del_linkage(d->ld_site, d);
                 mdd_device_shutdown(env, m, cfg);
         default:
                 rc = next->ld_ops->ldo_process_config(env, next, cfg);

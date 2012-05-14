@@ -629,6 +629,7 @@ static int cmm_process_config(const struct lu_env *env,
         }
         case LCFG_CLEANUP:
         {
+		lu_dev_del_linkage(d->ld_site, d);
                 cmm_device_shutdown(env, m, cfg);
         }
         default:
