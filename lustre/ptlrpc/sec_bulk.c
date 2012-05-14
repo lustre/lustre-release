@@ -420,8 +420,8 @@ static int enc_pools_add_pages(int npages)
                         goto out_pools;
 
                 for (j = 0; j < PAGES_PER_POOL && alloced < npages; j++) {
-                        pools[i][j] = cfs_alloc_page(CFS_ALLOC_IO |
-                                                     CFS_ALLOC_HIGH);
+			pools[i][j] = cfs_alloc_page(CFS_ALLOC_IO |
+						     CFS_ALLOC_HIGHMEM);
                         if (pools[i][j] == NULL)
                                 goto out_pools;
 

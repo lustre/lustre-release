@@ -53,8 +53,8 @@ static unsigned int cfs_alloc_flags_to_gfp(u_int32_t flags)
                 mflags |= __GFP_IO;
         if (flags & CFS_ALLOC_FS)
                 mflags |= __GFP_FS;
-        if (flags & CFS_ALLOC_HIGH)
-                mflags |= __GFP_HIGH;
+	if (flags & CFS_ALLOC_HIGHMEM)
+		mflags |= __GFP_HIGHMEM;
         return mflags;
 }
 

@@ -204,10 +204,11 @@ enum cfs_alloc_flags {
 
 /* flags for cfs_page_alloc() in addition to enum cfs_alloc_flags */
 enum cfs_alloc_page_flags {
-        /* allow to return page beyond KVM. It has to be mapped into KVM by
-         * cfs_page_map(); */
-        CFS_ALLOC_HIGH   = 0x40,
-        CFS_ALLOC_HIGHUSER = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO | CFS_ALLOC_HIGH,
+	/* allow to return page beyond KVM. It has to be mapped into KVM by
+	 * cfs_kmap() and unmapped with cfs_kunmap(). */
+	CFS_ALLOC_HIGHMEM  = 0x40,
+	CFS_ALLOC_HIGHUSER = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO |
+			     CFS_ALLOC_HIGHMEM,
 };
 
 /*
