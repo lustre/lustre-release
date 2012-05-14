@@ -62,6 +62,12 @@
 #ifndef __LIBCFS_WORKITEM_H__
 #define __LIBCFS_WORKITEM_H__
 
+struct cfs_wi_sched;
+
+void cfs_wi_sched_destroy(struct cfs_wi_sched *);
+int cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab, int cpt,
+			int nthrs, struct cfs_wi_sched **);
+
 struct cfs_workitem;
 
 typedef int (*cfs_wi_action_t) (struct cfs_workitem *);
@@ -72,37 +78,27 @@ typedef struct cfs_workitem {
         cfs_wi_action_t  wi_action;
         /** arg for working function */
         void            *wi_data;
-        /** scheduler id, can be negative */
-        short            wi_sched_id;
         /** in running */
         unsigned short   wi_running:1;
         /** scheduled */
         unsigned short   wi_scheduled:1;
 } cfs_workitem_t;
 
-/**
- * positive values are reserved as CPU id of future implementation of
- * per-cpu scheduler, so user can "bind" workitem on specific CPU.
- */
-#define CFS_WI_SCHED_ANY        (-1)
-#define CFS_WI_SCHED_SERIAL     (-2)
-
 static inline void
-cfs_wi_init(cfs_workitem_t *wi, void *data,
-            cfs_wi_action_t action, short sched_id)
+cfs_wi_init(cfs_workitem_t *wi, void *data, cfs_wi_action_t action)
 {
         CFS_INIT_LIST_HEAD(&wi->wi_list);
 
-        wi->wi_sched_id  = sched_id;
         wi->wi_running   = 0;
         wi->wi_scheduled = 0;
         wi->wi_data      = data;
         wi->wi_action    = action;
 }
 
-void cfs_wi_exit(cfs_workitem_t *wi);
-int  cfs_wi_cancel(cfs_workitem_t *wi);
-void cfs_wi_schedule(cfs_workitem_t *wi);
+void cfs_wi_schedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi);
+int  cfs_wi_deschedule(struct cfs_wi_sched *sched, cfs_workitem_t *wi);
+void cfs_wi_exit(struct cfs_wi_sched *sched, cfs_workitem_t *wi);
+
 int  cfs_wi_startup(void);
 void cfs_wi_shutdown(void);
 

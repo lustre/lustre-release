@@ -185,6 +185,7 @@ struct swi_workitem;
 typedef int (*swi_action_t) (struct swi_workitem *);
 
 typedef struct swi_workitem {
+	struct cfs_wi_sched	*swi_sched;
         cfs_workitem_t       swi_workitem;
         swi_action_t         swi_action;
         int                  swi_state;
@@ -412,6 +413,9 @@ void srpc_service_remove_buffers(srpc_service_t *sv, int nbuffer);
 void srpc_get_counters(srpc_counters_t *cnt);
 void srpc_set_counters(const srpc_counters_t *cnt);
 
+extern struct cfs_wi_sched *lst_sched_serial;
+extern struct cfs_wi_sched *lst_sched_test;
+
 static inline int
 swi_wi_action(cfs_workitem_t *wi)
 {
@@ -421,24 +425,25 @@ swi_wi_action(cfs_workitem_t *wi)
 }
 
 static inline void
-swi_init_workitem (swi_workitem_t *swi, void *data,
-                   swi_action_t action, short sched_id)
+swi_init_workitem(swi_workitem_t *swi, void *data,
+		  swi_action_t action, struct cfs_wi_sched *sched)
 {
-        swi->swi_action = action;
-        swi->swi_state  = SWI_STATE_NEWBORN;
-        cfs_wi_init(&swi->swi_workitem, data, swi_wi_action, sched_id);
+	swi->swi_sched  = sched;
+	swi->swi_action = action;
+	swi->swi_state  = SWI_STATE_NEWBORN;
+	cfs_wi_init(&swi->swi_workitem, data, swi_wi_action);
 }
 
 static inline void
 swi_schedule_workitem(swi_workitem_t *wi)
 {
-        cfs_wi_schedule(&wi->swi_workitem);
+	cfs_wi_schedule(wi->swi_sched, &wi->swi_workitem);
 }
 
 static inline void
 swi_kill_workitem(swi_workitem_t *swi)
 {
-        cfs_wi_exit(&swi->swi_workitem);
+	cfs_wi_exit(swi->swi_sched, &swi->swi_workitem);
 }
 
 #ifndef __KERNEL__
@@ -485,8 +490,7 @@ srpc_init_client_rpc (srpc_client_rpc_t *rpc, lnet_process_id_t peer,
                                 crpc_bulk.bk_iovs[nbulkiov]));
 
         CFS_INIT_LIST_HEAD(&rpc->crpc_list);
-        swi_init_workitem(&rpc->crpc_wi, rpc, srpc_send_rpc,
-                          CFS_WI_SCHED_ANY);
+	swi_init_workitem(&rpc->crpc_wi, rpc, srpc_send_rpc, lst_sched_test);
         cfs_spin_lock_init(&rpc->crpc_lock);
         cfs_atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
 

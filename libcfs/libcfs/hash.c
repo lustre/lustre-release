@@ -115,6 +115,8 @@ CFS_MODULE_PARM(warn_on_depth, "i", uint, 0644,
                 "warning when hash depth is high.");
 #endif
 
+struct cfs_wi_sched *cfs_sched_rehash;
+
 static inline void
 cfs_hash_nl_lock(cfs_hash_lock_t *lock, int exclusive) {}
 
@@ -511,7 +513,7 @@ cfs_hash_bd_dep_record(cfs_hash_t *hs, cfs_hash_bd_t *bd, int dep_cur)
         hs->hs_dep_bits = hs->hs_cur_bits;
         cfs_spin_unlock(&hs->hs_dep_lock);
 
-        cfs_wi_schedule(&hs->hs_dep_wi);
+	cfs_wi_schedule(cfs_sched_rehash, &hs->hs_dep_wi);
 # endif
 }
 
@@ -981,14 +983,13 @@ static int cfs_hash_dep_print(cfs_workitem_t *wi)
 
 static void cfs_hash_depth_wi_init(cfs_hash_t *hs)
 {
-        cfs_spin_lock_init(&hs->hs_dep_lock);
-        cfs_wi_init(&hs->hs_dep_wi, hs,
-                    cfs_hash_dep_print, CFS_WI_SCHED_ANY);
+	cfs_spin_lock_init(&hs->hs_dep_lock);
+	cfs_wi_init(&hs->hs_dep_wi, hs, cfs_hash_dep_print);
 }
 
 static void cfs_hash_depth_wi_cancel(cfs_hash_t *hs)
 {
-        if (cfs_wi_cancel(&hs->hs_dep_wi))
+	if (cfs_wi_deschedule(cfs_sched_rehash, &hs->hs_dep_wi))
                 return;
 
         cfs_spin_lock(&hs->hs_dep_lock);
@@ -1065,8 +1066,7 @@ cfs_hash_create(char *name, unsigned cur_bits, unsigned max_bits,
         hs->hs_ops         = ops;
         hs->hs_extra_bytes = extra_bytes;
         hs->hs_rehash_bits = 0;
-        cfs_wi_init(&hs->hs_rehash_wi, hs,
-                    cfs_hash_rehash_worker, CFS_WI_SCHED_ANY);
+	cfs_wi_init(&hs->hs_rehash_wi, hs, cfs_hash_rehash_worker);
         cfs_hash_depth_wi_init(hs);
 
         if (cfs_hash_with_rehash(hs))
@@ -1784,7 +1784,7 @@ cfs_hash_rehash_cancel_locked(cfs_hash_t *hs)
         if (!cfs_hash_is_rehashing(hs))
                 return;
 
-        if (cfs_wi_cancel(&hs->hs_rehash_wi)) {
+	if (cfs_wi_deschedule(cfs_sched_rehash, &hs->hs_rehash_wi)) {
                 hs->hs_rehash_bits = 0;
                 return;
         }
@@ -1828,7 +1828,7 @@ cfs_hash_rehash(cfs_hash_t *hs, int do_rehash)
         hs->hs_rehash_bits = rc;
         if (!do_rehash) {
                 /* launch and return */
-                cfs_wi_schedule(&hs->hs_rehash_wi);
+		cfs_wi_schedule(cfs_sched_rehash, &hs->hs_rehash_wi);
                 cfs_hash_unlock(hs, 1);
                 return 0;
         }
@@ -1958,8 +1958,8 @@ cfs_hash_rehash_worker(cfs_workitem_t *wi)
         hs->hs_cur_bits = hs->hs_rehash_bits;
  out:
         hs->hs_rehash_bits = 0;
-        if (rc == -ESRCH)
-                cfs_wi_exit(wi); /* never be scheduled again */
+	if (rc == -ESRCH) /* never be scheduled again */
+		cfs_wi_exit(cfs_sched_rehash, wi);
         bsize = cfs_hash_bkt_size(hs);
         cfs_hash_unlock(hs, 1);
         /* can't refer to @hs anymore because it could be destroyed */
@@ -1967,8 +1967,8 @@ cfs_hash_rehash_worker(cfs_workitem_t *wi)
                 cfs_hash_buckets_free(bkts, bsize, new_size, old_size);
         if (rc != 0)
                 CDEBUG(D_INFO, "early quit of of rehashing: %d\n", rc);
-        /* cfs_workitem require us to always return 0 */
-        return 0;
+	/* return 1 only if cfs_wi_exit is called */
+	return rc == -ESRCH;
 }
 
 /**

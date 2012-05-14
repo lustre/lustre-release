@@ -366,6 +366,7 @@ MODULE_LICENSE("GPL");
 extern cfs_psdev_t libcfs_dev;
 extern cfs_rw_semaphore_t cfs_tracefile_sem;
 extern cfs_mutex_t cfs_trace_thread_mutex;
+extern struct cfs_wi_sched *cfs_sched_rehash;
 
 extern void libcfs_init_nidstrings(void);
 extern int libcfs_arch_init(void);
@@ -406,11 +407,20 @@ static int init_libcfs_module(void)
                 goto cleanup_lwt;
         }
 
-        rc = cfs_wi_startup();
-        if (rc) {
-                CERROR("startup workitem: error %d\n", rc);
-                goto cleanup_deregister;
-        }
+	rc = cfs_wi_startup();
+	if (rc) {
+		CERROR("initialize workitem: error %d\n", rc);
+		goto cleanup_deregister;
+	}
+
+	/* max to 4 threads, should be enough for rehash */
+	rc = min(cfs_cpt_weight(cfs_cpt_table, CFS_CPT_ANY), 4);
+	rc = cfs_wi_sched_create("cfs_rh", cfs_cpt_table, CFS_CPT_ANY,
+				 rc, &cfs_sched_rehash);
+	if (rc != 0) {
+		CERROR("Startup workitem scheduler: error: %d\n", rc);
+		goto cleanup_deregister;
+	}
 
         rc = insert_proc();
         if (rc) {
@@ -443,7 +453,13 @@ static void exit_libcfs_module(void)
         CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
                cfs_atomic_read(&libcfs_kmemory));
 
-        cfs_wi_shutdown();
+	if (cfs_sched_rehash != NULL) {
+		cfs_wi_sched_destroy(cfs_sched_rehash);
+		cfs_sched_rehash = NULL;
+	}
+
+	cfs_wi_shutdown();
+
         rc = cfs_psdev_deregister(&libcfs_dev);
         if (rc)
                 CERROR("misc_deregister error %d\n", rc);

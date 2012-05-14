@@ -37,15 +37,21 @@
 #include "selftest.h"
 
 
-#define LST_INIT_NONE           0
-#define LST_INIT_RPC            1
-#define LST_INIT_FW             2
-#define LST_INIT_CONSOLE        3
+enum {
+	LST_INIT_NONE		= 0,
+	LST_INIT_WI,
+	LST_INIT_RPC,
+	LST_INIT_FW,
+	LST_INIT_CONSOLE
+};
 
 extern int lstcon_console_init(void);
 extern int lstcon_console_fini(void);
 
 static int lst_init_step = LST_INIT_NONE;
+
+struct cfs_wi_sched *lst_sched_serial;
+struct cfs_wi_sched *lst_sched_test;
 
 void
 lnet_selftest_fini (void)
@@ -59,6 +65,11 @@ lnet_selftest_fini (void)
                         sfw_shutdown();
                 case LST_INIT_RPC:
                         srpc_shutdown();
+		case LST_INIT_WI:
+			cfs_wi_sched_destroy(lst_sched_serial);
+			cfs_wi_sched_destroy(lst_sched_test);
+			lst_sched_serial = NULL;
+			lst_sched_test = NULL;
                 case LST_INIT_NONE:
                         break;
                 default:
@@ -82,7 +93,23 @@ lnet_selftest_structure_assertion(void)
 int
 lnet_selftest_init (void)
 {
+	int	nthrs;
         int	rc;
+
+	rc = cfs_wi_sched_create("lst_s", lnet_cpt_table(), CFS_CPT_ANY,
+				 1, &lst_sched_serial);
+	if (rc != 0)
+		return rc;
+
+	nthrs = cfs_cpt_weight(lnet_cpt_table(), CFS_CPT_ANY);
+	rc = cfs_wi_sched_create("lst_t", lnet_cpt_table(), CFS_CPT_ANY,
+				 nthrs, &lst_sched_test);
+	if (rc != 0) {
+		cfs_wi_sched_destroy(lst_sched_serial);
+		lst_sched_serial = NULL;
+		return rc;
+	}
+	lst_init_step = LST_INIT_WI;
 
         rc = srpc_startup();
         if (rc != 0) {
