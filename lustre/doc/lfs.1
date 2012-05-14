@@ -40,7 +40,7 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .B lfs osts
 .RB [ path ]
 .br
-.B lfs poollist <filesystem>[.<pool>] | <pathname>
+.B lfs pool_list <filesystem>[.<pool>] | <pathname>
 .br
 .B lfs quota [-q] [-v] [-o obd_uuid|-I ost_idx|-i mdt_idx] [-u <uname>| -u <uid>|-g <gname>| -g <gid>] <filesystem>
 .br
@@ -196,7 +196,7 @@ must be part of the pool or an error will be returned.
 .B setstripe -d
 Delete the default striping on the specified directory.
 .TP
-.B poollist
+.B pool_list
 .RI { filesystem }[ .poolname "] | {" pathname }
 List the pools in 
 .I filesystem
