@@ -432,18 +432,18 @@ long l_readdir(struct file *file, cfs_list_t *dentry_list)
 EXPORT_SYMBOL(l_readdir);
 
 int l_notify_change(struct vfsmount *mnt, struct dentry *dchild,
-                 struct iattr *newattrs)
+		    struct iattr *newattrs)
 {
-        int rc;
+	int rc;
 
-        LOCK_INODE_MUTEX(dchild->d_inode);
+	mutex_lock(&dchild->d_inode->i_mutex);
 #ifdef HAVE_SECURITY_PLUG
-        rc = notify_change(dchild, mnt, newattrs);
+	rc = notify_change(dchild, mnt, newattrs);
 #else
-        rc = notify_change(dchild, newattrs);
+	rc = notify_change(dchild, newattrs);
 #endif
-        UNLOCK_INODE_MUTEX(dchild->d_inode);
-        return rc;
+	mutex_unlock(&dchild->d_inode->i_mutex);
+	return rc;
 }
 EXPORT_SYMBOL(l_notify_change);
 

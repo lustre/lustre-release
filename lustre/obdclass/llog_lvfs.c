@@ -719,12 +719,12 @@ static int llog_lvfs_destroy(struct llog_handle *handle)
                 dget(fdentry);
                 rc = llog_lvfs_close(handle);
 
-                if (rc == 0) {
-                        LOCK_INODE_MUTEX_PARENT(inode);
-                        rc = ll_vfs_unlink(inode, fdentry, mnt);
-                        UNLOCK_INODE_MUTEX(inode);
-                }
-                mntput(mnt);
+		if (rc == 0) {
+			mutex_lock_nested(&inode->i_mutex, I_MUTEX_PARENT);
+			rc = ll_vfs_unlink(inode, fdentry, mnt);
+			mutex_unlock(&inode->i_mutex);
+		}
+		mntput(mnt);
 
                 dput(fdentry);
                 pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);

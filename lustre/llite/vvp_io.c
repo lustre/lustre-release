@@ -280,24 +280,24 @@ static int vvp_io_write_lock(const struct lu_env *env,
 }
 
 static int vvp_io_setattr_iter_init(const struct lu_env *env,
-                                    const struct cl_io_slice *ios)
+				    const struct cl_io_slice *ios)
 {
-        struct ccc_io *cio   = ccc_env_io(env);
-        struct inode  *inode = ccc_object_inode(ios->cis_obj);
+	struct ccc_io *cio   = ccc_env_io(env);
+	struct inode  *inode = ccc_object_inode(ios->cis_obj);
 
-        /*
-         * We really need to get our PW lock before we change inode->i_size.
-         * If we don't we can race with other i_size updaters on our node,
-         * like ll_file_read.  We can also race with i_size propogation to
-         * other nodes through dirtying and writeback of final cached pages.
-         * This last one is especially bad for racing o_append users on other
-         * nodes.
-         */
-        UNLOCK_INODE_MUTEX(inode);
-        if (cl_io_is_trunc(ios->cis_io))
-                UP_WRITE_I_ALLOC_SEM(inode);
-        cio->u.setattr.cui_locks_released = 1;
-        return 0;
+	/*
+	 * We really need to get our PW lock before we change inode->i_size.
+	 * If we don't we can race with other i_size updaters on our node,
+	 * like ll_file_read.  We can also race with i_size propogation to
+	 * other nodes through dirtying and writeback of final cached pages.
+	 * This last one is especially bad for racing o_append users on other
+	 * nodes.
+	 */
+	mutex_unlock(&inode->i_mutex);
+	if (cl_io_is_trunc(ios->cis_io))
+		UP_WRITE_I_ALLOC_SEM(inode);
+	cio->u.setattr.cui_locks_released = 1;
+	return 0;
 }
 
 /**
@@ -378,22 +378,22 @@ static int vvp_io_setattr_time(const struct lu_env *env,
 }
 
 static int vvp_io_setattr_start(const struct lu_env *env,
-                                const struct cl_io_slice *ios)
+				const struct cl_io_slice *ios)
 {
-        struct ccc_io        *cio   = cl2ccc_io(env, ios);
-        struct cl_io         *io    = ios->cis_io;
-        struct inode         *inode = ccc_object_inode(io->ci_obj);
+	struct ccc_io	*cio   = cl2ccc_io(env, ios);
+	struct cl_io	*io    = ios->cis_io;
+	struct inode	*inode = ccc_object_inode(io->ci_obj);
 
-        LASSERT(cio->u.setattr.cui_locks_released);
+	LASSERT(cio->u.setattr.cui_locks_released);
 
-        LOCK_INODE_MUTEX(inode);
-        cio->u.setattr.cui_locks_released = 0;
+	mutex_lock(&inode->i_mutex);
+	cio->u.setattr.cui_locks_released = 0;
 
-        if (cl_io_is_trunc(io))
-                return vvp_io_setattr_trunc(env, ios, inode,
-                                            io->u.ci_setattr.sa_attr.lvb_size);
-        else
-                return vvp_io_setattr_time(env, ios);
+	if (cl_io_is_trunc(io))
+		return vvp_io_setattr_trunc(env, ios, inode,
+					    io->u.ci_setattr.sa_attr.lvb_size);
+	else
+		return vvp_io_setattr_time(env, ios);
 }
 
 static void vvp_io_setattr_end(const struct lu_env *env,
@@ -411,19 +411,19 @@ static void vvp_io_setattr_end(const struct lu_env *env,
 }
 
 static void vvp_io_setattr_fini(const struct lu_env *env,
-                                const struct cl_io_slice *ios)
+				const struct cl_io_slice *ios)
 {
-        struct ccc_io *cio   = ccc_env_io(env);
-        struct cl_io  *io    = ios->cis_io;
-        struct inode  *inode = ccc_object_inode(ios->cis_io->ci_obj);
+	struct ccc_io *cio   = ccc_env_io(env);
+	struct cl_io  *io    = ios->cis_io;
+	struct inode  *inode = ccc_object_inode(ios->cis_io->ci_obj);
 
-        if (cio->u.setattr.cui_locks_released) {
-                LOCK_INODE_MUTEX(inode);
-                if (cl_io_is_trunc(io))
-                        DOWN_WRITE_I_ALLOC_SEM(inode);
-                cio->u.setattr.cui_locks_released = 0;
-        }
-        vvp_io_fini(env, ios);
+	if (cio->u.setattr.cui_locks_released) {
+		mutex_lock(&inode->i_mutex);
+		if (cl_io_is_trunc(io))
+			DOWN_WRITE_I_ALLOC_SEM(inode);
+		cio->u.setattr.cui_locks_released = 0;
+	}
+	vvp_io_fini(env, ios);
 }
 
 #ifdef HAVE_FILE_READV

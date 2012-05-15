@@ -107,8 +107,8 @@ int mds_obd_create(const struct lu_env *env, struct obd_export *exp,
         oa->o_generation = filp->f_dentry->d_inode->i_generation;
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
-        LOCK_INODE_MUTEX_PARENT(parent_inode);
-        new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
+	mutex_lock_nested(&parent_inode->i_mutex, I_MUTEX_PARENT);
+	new_child = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
 
         if (IS_ERR(new_child)) {
                 CERROR("getting neg dentry for obj rename: %d\n", rc);
@@ -143,13 +143,13 @@ int mds_obd_create(const struct lu_env *env, struct obd_export *exp,
 out_dput:
         dput(new_child);
 out_close:
-        UNLOCK_INODE_MUTEX(parent_inode);
-        err = filp_close(filp, 0);
-        if (err) {
-                CERROR("closing tmpfile %u: rc %d\n", tmpname, rc);
-                if (!rc)
-                        rc = err;
-        }
+	mutex_unlock(&parent_inode->i_mutex);
+	err = filp_close(filp, 0);
+	if (err) {
+		CERROR("closing tmpfile %u: rc %d\n", tmpname, rc);
+		if (!rc)
+			rc = err;
+	}
 out_pop:
         pop_ctxt(&saved, &exp->exp_obd->obd_lvfs_ctxt, &ucred);
         RETURN(rc);
@@ -177,15 +177,15 @@ int mds_obd_destroy(const struct lu_env *env, struct obd_export *exp,
 
         namelen = ll_fid2str(fidname, oa->o_id, oa->o_generation);
 
-        LOCK_INODE_MUTEX_PARENT(parent_inode);
-        de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
-        if (IS_ERR(de)) {
-                rc = IS_ERR(de);
-                de = NULL;
-                CERROR("error looking up object "LPU64" %s: rc %d\n",
-                       oa->o_id, fidname, rc);
-                GOTO(out_dput, rc);
-        }
+	mutex_lock_nested(&parent_inode->i_mutex, I_MUTEX_PARENT);
+	de = lookup_one_len(fidname, mds->mds_objects_dir, namelen);
+	if (IS_ERR(de)) {
+		rc = IS_ERR(de);
+		de = NULL;
+		CERROR("error looking up object "LPU64" %s: rc %d\n",
+		       oa->o_id, fidname, rc);
+		GOTO(out_dput, rc);
+	}
         if (de->d_inode == NULL) {
                 CERROR("destroying non-existent object "LPU64" %s: rc %d\n",
                        oa->o_id, fidname, rc);
@@ -215,9 +215,9 @@ int mds_obd_destroy(const struct lu_env *env, struct obd_export *exp,
         if (err && !rc)
                 rc = err;
 out_dput:
-        if (de != NULL)
-                l_dput(de);
-        UNLOCK_INODE_MUTEX(parent_inode);
+	if (de != NULL)
+		l_dput(de);
+	mutex_unlock(&parent_inode->i_mutex);
 
         if (inode)
                 iput(inode);

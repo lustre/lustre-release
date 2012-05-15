@@ -417,10 +417,10 @@ static const struct cl_page_operations vvp_page_ops = {
 
 static void vvp_transient_page_verify(const struct cl_page *page)
 {
-        struct inode *inode = ccc_object_inode(page->cp_obj);
+	struct inode *inode = ccc_object_inode(page->cp_obj);
 
-        LASSERT(!TRYLOCK_INODE_MUTEX(inode));
-        /* LASSERT_SEM_LOCKED(&inode->i_alloc_sem); */
+	LASSERT(!mutex_trylock(&inode->i_mutex));
+	/* LASSERT_SEM_LOCKED(&inode->i_alloc_sem); */
 }
 
 static int vvp_transient_page_own(const struct lu_env *env,
@@ -467,15 +467,15 @@ static void vvp_transient_page_discard(const struct lu_env *env,
 }
 
 static int vvp_transient_page_is_vmlocked(const struct lu_env *env,
-                                          const struct cl_page_slice *slice)
+					  const struct cl_page_slice *slice)
 {
-        struct inode    *inode = ccc_object_inode(slice->cpl_obj);
-        int              locked;
+	struct inode    *inode = ccc_object_inode(slice->cpl_obj);
+	int	locked;
 
-        locked = !TRYLOCK_INODE_MUTEX(inode);
-        if (!locked)
-                UNLOCK_INODE_MUTEX(inode);
-        return locked ? -EBUSY : -ENODATA;
+	locked = !mutex_trylock(&inode->i_mutex);
+	if (!locked)
+		mutex_unlock(&inode->i_mutex);
+	return locked ? -EBUSY : -ENODATA;
 }
 
 static void
@@ -487,15 +487,15 @@ vvp_transient_page_completion(const struct lu_env *env,
 }
 
 static void vvp_transient_page_fini(const struct lu_env *env,
-                                    struct cl_page_slice *slice)
+				    struct cl_page_slice *slice)
 {
-        struct ccc_page *cp = cl2ccc_page(slice);
-        struct cl_page *clp = slice->cpl_page;
-        struct ccc_object *clobj = cl2ccc(clp->cp_obj);
+	struct ccc_page *cp = cl2ccc_page(slice);
+	struct cl_page *clp = slice->cpl_page;
+	struct ccc_object *clobj = cl2ccc(clp->cp_obj);
 
-        vvp_page_fini_common(cp);
-        LASSERT(!TRYLOCK_INODE_MUTEX(clobj->cob_inode));
-        clobj->cob_transient_pages--;
+	vvp_page_fini_common(cp);
+	LASSERT(!mutex_trylock(&clobj->cob_inode->i_mutex));
+	clobj->cob_transient_pages--;
 }
 
 static const struct cl_page_operations vvp_transient_page_ops = {
@@ -522,35 +522,35 @@ static const struct cl_page_operations vvp_transient_page_ops = {
 };
 
 struct cl_page *vvp_page_init(const struct lu_env *env, struct cl_object *obj,
-                              struct cl_page *page, cfs_page_t *vmpage)
+			      struct cl_page *page, cfs_page_t *vmpage)
 {
-        struct ccc_page *cpg;
-        int result;
+	struct ccc_page *cpg;
+	int result;
 
-        CLOBINVRNT(env, obj, ccc_object_invariant(obj));
+	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-        OBD_SLAB_ALLOC_PTR_GFP(cpg, vvp_page_kmem, CFS_ALLOC_IO);
-        if (cpg != NULL) {
-                cpg->cpg_page = vmpage;
-                page_cache_get(vmpage);
+	OBD_SLAB_ALLOC_PTR_GFP(cpg, vvp_page_kmem, CFS_ALLOC_IO);
+	if (cpg != NULL) {
+		cpg->cpg_page = vmpage;
+		page_cache_get(vmpage);
 
-                CFS_INIT_LIST_HEAD(&cpg->cpg_pending_linkage);
-                if (page->cp_type == CPT_CACHEABLE) {
-                        SetPagePrivate(vmpage);
-                        vmpage->private = (unsigned long)page;
-                        cl_page_slice_add(page, &cpg->cpg_cl, obj,
-                                          &vvp_page_ops);
-                } else {
-                        struct ccc_object *clobj = cl2ccc(obj);
+		CFS_INIT_LIST_HEAD(&cpg->cpg_pending_linkage);
+		if (page->cp_type == CPT_CACHEABLE) {
+			SetPagePrivate(vmpage);
+			vmpage->private = (unsigned long)page;
+			cl_page_slice_add(page, &cpg->cpg_cl, obj,
+					  &vvp_page_ops);
+		} else {
+			struct ccc_object *clobj = cl2ccc(obj);
 
-                        LASSERT(!TRYLOCK_INODE_MUTEX(clobj->cob_inode));
-                        cl_page_slice_add(page, &cpg->cpg_cl, obj,
-                                          &vvp_transient_page_ops);
-                        clobj->cob_transient_pages++;
-                }
-                result = 0;
-        } else
-                result = -ENOMEM;
-        return ERR_PTR(result);
+			LASSERT(!mutex_trylock(&clobj->cob_inode->i_mutex));
+			cl_page_slice_add(page, &cpg->cpg_cl, obj,
+					  &vvp_transient_page_ops);
+			clobj->cob_transient_pages++;
+		}
+		result = 0;
+	} else
+		result = -ENOMEM;
+	return ERR_PTR(result);
 }
 

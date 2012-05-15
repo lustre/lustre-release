@@ -121,33 +121,10 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
  */
 #define ATTR_BLOCKS    (1 << 27)
 
-#if HAVE_INODE_I_MUTEX
-#define UNLOCK_INODE_MUTEX(inode) \
-do {cfs_mutex_unlock(&(inode)->i_mutex); } while(0)
-#define LOCK_INODE_MUTEX(inode) \
-do {cfs_mutex_lock(&(inode)->i_mutex); } while(0)
-#define LOCK_INODE_MUTEX_PARENT(inode) \
-do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
-#define TRYLOCK_INODE_MUTEX(inode) cfs_mutex_trylock(&(inode)->i_mutex)
-#else
-#define UNLOCK_INODE_MUTEX(inode) do  cfs_up(&(inode)->i_sem); } while(0)
-#define LOCK_INODE_MUTEX(inode) do  cfs_down(&(inode)->i_sem); } while(0)
-#define TRYLOCK_INODE_MUTEX(inode) (!down_trylock(&(inode)->i_sem))
-#define LOCK_INODE_MUTEX_PARENT(inode) LOCK_INODE_MUTEX(inode)
-#endif /* HAVE_INODE_I_MUTEX */
-
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
 #define d_child d_u.d_child
 #define d_rcu d_u.d_rcu
 #endif
-
-#ifdef HAVE_DQUOTOFF_MUTEX
-#define UNLOCK_DQONOFF_MUTEX(dqopt) cfs_mutex_unlock(&(dqopt)->dqonoff_mutex)
-#define LOCK_DQONOFF_MUTEX(dqopt) cfs_mutex_lock(&(dqopt)->dqonoff_mutex)
-#else
-#define UNLOCK_DQONOFF_MUTEX(dqopt) cfs_up(&(dqopt)->dqonoff_sem)
-#define LOCK_DQONOFF_MUTEX(dqopt) cfs_down(&(dqopt)->dqonoff_sem)
-#endif /* HAVE_DQUOTOFF_MUTEX */
 
 #define current_ngroups current_cred()->group_info->ngroups
 #define current_groups current_cred()->group_info->small_block
@@ -662,12 +639,6 @@ static inline long labs(long x)
 
 #ifdef HAVE_INVALIDATE_INODE_PAGES
 #define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
-#endif
-
-#ifdef HAVE_INODE_IPRIVATE
-#define INODE_PRIVATE_DATA(inode)       ((inode)->i_private)
-#else
-#define INODE_PRIVATE_DATA(inode)       ((inode)->u.generic_ip)
 #endif
 
 #ifndef HAVE_SIMPLE_SETATTR

@@ -462,6 +462,7 @@ AC_DEFUN([LC_TASK_CLENV_STORE],
 # 2.6.12
 
 # ~2.6.12 merge patch from oracle to convert tree_lock from spinlock to rwlock
+# yet tree_lock is converted from rwlock to spin_lock since v2.6.26
 AC_DEFUN([LC_RW_TREE_LOCK],
 [AC_MSG_CHECKING([if kernel has tree_lock as rwlock])
 tmp_flags="$EXTRA_KCFLAGS"
@@ -479,89 +480,6 @@ LB_LINUX_TRY_COMPILE([
         AC_MSG_RESULT([no])
 ])
 EXTRA_KCFLAGS="$tmp_flags"
-])
-
-# 2.6.15
-
-# LC_INODE_I_MUTEX
-# after 2.6.15 inode have i_mutex intead of i_sem
-AC_DEFUN([LC_INODE_I_MUTEX],
-[AC_MSG_CHECKING([if inode has i_mutex ])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/mutex.h>
-	#include <linux/fs.h>
-	#undef i_mutex
-],[
-	struct inode i;
-
-	mutex_unlock(&i.i_mutex);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_INODE_I_MUTEX, 1,
-                [after 2.6.15 inode have i_mutex intead of i_sem])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
-# 2.6.16
-
-# LC_SECURITY_PLUG  # for SLES10 SP2
-# check security plug in sles10 sp2 kernel
-AC_DEFUN([LC_SECURITY_PLUG],
-[AC_MSG_CHECKING([If kernel has security plug support])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/stddef.h>
-],[
-        notify_change(NULL, NULL, NULL);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SECURITY_PLUG, 1,
-                [SLES10 SP2 use extra parameter in vfs])
-],[
-        AC_MSG_RESULT(no)
-])
-])
-
-# 2.6.17
-
-# inode have i_private field since 2.6.17
-AC_DEFUN([LC_INODE_IPRIVATE],
-[AC_MSG_CHECKING([if inode has a i_private field])
-LB_LINUX_TRY_COMPILE([
-#include <linux/fs.h>
-],[
-	struct inode i;
-	i.i_private = NULL; 
-],[
-	AC_MSG_RESULT(yes)
-	AC_DEFINE(HAVE_INODE_IPRIVATE, 1,
-		[struct inode has i_private field])
-],[
-	AC_MSG_RESULT(no)
-])
-])
-
-# LC_DQUOTOFF_MUTEX
-# after 2.6.17 dquote use mutex instead if semaphore
-AC_DEFUN([LC_DQUOTOFF_MUTEX],
-[AC_MSG_CHECKING([use dqonoff_mutex])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/mutex.h>
-	#include <linux/fs.h>
-        #include <linux/quota.h>
-],[
-        struct quota_info dq;
-
-        mutex_unlock(&dq.dqonoff_mutex);
-],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_DQUOTOFF_MUTEX, 1,
-                [after 2.6.17 dquote use mutex instead if semaphore])
-],[
-        AC_MSG_RESULT(no)
-])
 ])
 
 # 2.6.18
@@ -1161,6 +1079,25 @@ LB_LINUX_TRY_COMPILE([
 #
 # 2.6.27
 #
+
+# LC_SECURITY_PLUG  # for SLES10 SP2 (2.6.27)
+# check security plug in sles10 sp2 kernel
+AC_DEFUN([LC_SECURITY_PLUG],
+[AC_MSG_CHECKING([If kernel has security plug support])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+        #include <linux/stddef.h>
+],[
+        notify_change(NULL, NULL, NULL);
+],[
+        AC_MSG_RESULT(yes)
+        AC_DEFINE(HAVE_SECURITY_PLUG, 1,
+                [SLES10 SP2 use extra parameter in vfs])
+],[
+        AC_MSG_RESULT(no)
+])
+])
+
 AC_DEFUN([LC_PGMKWRITE_USE_VMFAULT],
 [AC_MSG_CHECKING([kernel .page_mkwrite uses struct vm_fault *])
 tmp_flags="$EXTRA_KCFLAGS"
@@ -1957,16 +1894,6 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.12
          LC_RW_TREE_LOCK
 
-         # 2.6.15
-         LC_INODE_I_MUTEX
-
-         # 2.6.16
-         LC_SECURITY_PLUG  # for SLES10 SP2
-
-         # 2.6.17
-         LC_INODE_IPRIVATE
-         LC_DQUOTOFF_MUTEX
-
          # 2.6.18
          LC_NR_PAGECACHE
          LC_STATFS_DENTRY_PARAM
@@ -2019,6 +1946,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_FS_STRUCT_USE_PATH
 
          # 2.6.27
+         LC_SECURITY_PLUG  # for SLES10 SP2
          LC_PGMKWRITE_USE_VMFAULT
          LC_INODE_PERMISION_2ARGS
          LC_FILE_REMOVE_SUID

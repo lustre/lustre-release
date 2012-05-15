@@ -241,32 +241,32 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
         pvec->ldp_size = page_count << PAGE_CACHE_SHIFT;
         pvec->ldp_nr = page_count;
 
-        /* FIXME: in ll_direct_rw_pages, it has to allocate many cl_page{}s to
-         * write those pages into OST. Even worse case is that more pages
-         * would be asked to write out to swap space, and then finally get here
-         * again.
-         * Unfortunately this is NOT easy to fix.
-         * Thoughts on solution:
-         * 0. Define a reserved pool for cl_pages, which could be a list of
-         *    pre-allocated cl_pages from cl_page_kmem;
-         * 1. Define a new operation in cl_object_operations{}, says clo_depth,
-         *    which measures how many layers for this lustre object. Generally
-         *    speaking, the depth would be 2, one for llite, and one for lovsub.
-         *    However, for SNS, there will be more since we need additional page
-         *    to store parity;
-         * 2. Reserve the # of (page_count * depth) cl_pages from the reserved
-         *    pool. Afterwards, the clio would allocate the pages from reserved 
-         *    pool, this guarantees we neeedn't allocate the cl_pages from
-         *    generic cl_page slab cache.
-         *    Of course, if there is NOT enough pages in the pool, we might
-         *    be asked to write less pages once, this purely depends on
-         *    implementation. Anyway, we should be careful to avoid deadlocking.
-         */
-        LOCK_INODE_MUTEX(inode);
-        bytes = ll_direct_rw_pages(env, io, rw, inode, pvec);
-        UNLOCK_INODE_MUTEX(inode);
-        cl_io_fini(env, io);
-        return (bytes == pvec->ldp_size) ? 0 : (int)bytes;
+	/* FIXME: in ll_direct_rw_pages, it has to allocate many cl_page{}s to
+	 * write those pages into OST. Even worse case is that more pages
+	 * would be asked to write out to swap space, and then finally get here
+	 * again.
+	 * Unfortunately this is NOT easy to fix.
+	 * Thoughts on solution:
+	 * 0. Define a reserved pool for cl_pages, which could be a list of
+	 *    pre-allocated cl_pages from cl_page_kmem;
+	 * 1. Define a new operation in cl_object_operations{}, says clo_depth,
+	 *    which measures how many layers for this lustre object. Generally
+	 *    speaking, the depth would be 2, one for llite, and one for lovsub.
+	 *    However, for SNS, there will be more since we need additional page
+	 *    to store parity;
+	 * 2. Reserve the # of (page_count * depth) cl_pages from the reserved
+	 *    pool. Afterwards, the clio would allocate the pages from reserved
+	 *    pool, this guarantees we neeedn't allocate the cl_pages from
+	 *    generic cl_page slab cache.
+	 *    Of course, if there is NOT enough pages in the pool, we might
+	 *    be asked to write less pages once, this purely depends on
+	 *    implementation. Anyway, we should be careful to avoid deadlocking.
+	 */
+	mutex_lock(&inode->i_mutex);
+	bytes = ll_direct_rw_pages(env, io, rw, inode, pvec);
+	mutex_unlock(&inode->i_mutex);
+	cl_io_fini(env, io);
+	return (bytes == pvec->ldp_size) ? 0 : (int)bytes;
 }
 
 /*

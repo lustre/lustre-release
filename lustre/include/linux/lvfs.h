@@ -124,22 +124,22 @@ static inline struct dentry *ll_lookup_one_len(const char *fid_name,
                                                struct dentry *dparent,
                                                int fid_namelen)
 {
-        struct dentry *dchild;
+	struct dentry *dchild;
 
-        LOCK_INODE_MUTEX(dparent->d_inode);
-        dchild = lookup_one_len(fid_name, dparent, fid_namelen);
-        UNLOCK_INODE_MUTEX(dparent->d_inode);
+	mutex_lock(&dparent->d_inode->i_mutex);
+	dchild = lookup_one_len(fid_name, dparent, fid_namelen);
+	mutex_unlock(&dparent->d_inode->i_mutex);
 
-        if (IS_ERR(dchild) || dchild->d_inode == NULL)
-                return dchild;
+	if (IS_ERR(dchild) || dchild->d_inode == NULL)
+		return dchild;
 
-        if (is_bad_inode(dchild->d_inode)) {
-                CERROR("bad inode returned %lu/%u\n",
-                       dchild->d_inode->i_ino, dchild->d_inode->i_generation);
-                dput(dchild);
-                dchild = ERR_PTR(-ENOENT);
-        }
-        return dchild;
+	if (is_bad_inode(dchild->d_inode)) {
+		CERROR("bad inode returned %lu/%u\n",
+		       dchild->d_inode->i_ino, dchild->d_inode->i_generation);
+		dput(dchild);
+		dchild = ERR_PTR(-ENOENT);
+	}
+	return dchild;
 }
 
 static inline void ll_sleep(int t)

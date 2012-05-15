@@ -1516,16 +1516,16 @@ static int qslave_recovery_main(void *arg)
                 struct dquot_id *dqid, *tmp;
                 int ret;
 
-                LOCK_DQONOFF_MUTEX(dqopt);
-                if (!ll_sb_has_quota_active(qctxt->lqc_sb, type)) {
-                        UNLOCK_DQONOFF_MUTEX(dqopt);
-                        break;
-                }
+		mutex_lock(&dqopt->dqonoff_mutex);
+		if (!ll_sb_has_quota_active(qctxt->lqc_sb, type)) {
+			mutex_unlock(&dqopt->dqonoff_mutex);
+			break;
+		}
 
 		LASSERT(dqopt->files[type] != NULL);
 		CFS_INIT_LIST_HEAD(&id_list);
 		rc = fsfilt_qids(obd, NULL, dqopt->files[type], type, &id_list);
-		UNLOCK_DQONOFF_MUTEX(dqopt);
+		mutex_unlock(&dqopt->dqonoff_mutex);
 		if (rc)
 			CERROR("Get ids from quota file failed. (rc:%d)\n", rc);
 

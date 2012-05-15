@@ -508,7 +508,7 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                                             oti->oti_handle, attr, 0);
                 }
 
-                UNLOCK_INODE_MUTEX(inode);
+		mutex_unlock(&inode->i_mutex);
 
                 /* Force commit to make the just-deleted blocks
                  * reusable. LU-456 */
@@ -685,19 +685,19 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         fsfilt_check_slow(obd, now, "quota init");
 
 retry:
-        LOCK_INODE_MUTEX(inode);
-        fsfilt_check_slow(obd, now, "i_mutex");
-        oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
-                                           oti);
-        if (IS_ERR(oti->oti_handle)) {
-                UNLOCK_INODE_MUTEX(inode);
-                rc = PTR_ERR(oti->oti_handle);
-                CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
-                       "error starting transaction: rc = %d\n", rc);
-                oti->oti_handle = NULL;
-                GOTO(cleanup, rc);
-        }
-        /* have to call fsfilt_commit() from this point on */
+	mutex_lock(&inode->i_mutex);
+	fsfilt_check_slow(obd, now, "i_mutex");
+	oti->oti_handle = fsfilt_brw_start(obd, objcount, &fso, niocount, res,
+					   oti);
+	if (IS_ERR(oti->oti_handle)) {
+		mutex_unlock(&inode->i_mutex);
+		rc = PTR_ERR(oti->oti_handle);
+		CDEBUG(rc == -ENOSPC ? D_INODE : D_ERROR,
+		       "error starting transaction: rc = %d\n", rc);
+		oti->oti_handle = NULL;
+		GOTO(cleanup, rc);
+	}
+	/* have to call fsfilt_commit() from this point on */
 
         fsfilt_check_slow(obd, now, "brw_start");
 

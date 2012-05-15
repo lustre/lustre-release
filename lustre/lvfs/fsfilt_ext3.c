@@ -667,46 +667,45 @@ static int fsfilt_ext3_iocontrol(struct inode *inode, struct file *file,
 }
 
 static int fsfilt_ext3_set_md(struct inode *inode, void *handle,
-                              void *lmm, int lmm_size, const char *name)
+			      void *lmm, int lmm_size, const char *name)
 {
-        int rc;
+	int rc;
 
-        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
+	LASSERT(mutex_trylock(&inode->i_mutex) == 0);
 
-        rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
-                                   name, lmm, lmm_size, XATTR_NO_CTIME);
+	rc = ext3_xattr_set_handle(handle, inode, EXT3_XATTR_INDEX_TRUSTED,
+				   name, lmm, lmm_size, XATTR_NO_CTIME);
 
-
-        if (rc && rc != -EROFS)
-                CERROR("error adding MD data to inode %lu: rc = %d\n",
-                       inode->i_ino, rc);
-        return rc;
+	if (rc && rc != -EROFS)
+		CERROR("error adding MD data to inode %lu: rc = %d\n",
+		       inode->i_ino, rc);
+	return rc;
 }
 
 /* Must be called with i_mutex held */
 static int fsfilt_ext3_get_md(struct inode *inode, void *lmm, int lmm_size,
-                              const char *name)
+			      const char *name)
 {
-        int rc;
+	int rc;
 
-        LASSERT(TRYLOCK_INODE_MUTEX(inode) == 0);
+	LASSERT(mutex_trylock(&inode->i_mutex) == 0);
 
-        rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
-                            name, lmm, lmm_size);
+	rc = ext3_xattr_get(inode, EXT3_XATTR_INDEX_TRUSTED,
+			    name, lmm, lmm_size);
 
-        /* This gives us the MD size */
-        if (lmm == NULL)
-                return (rc == -ENODATA) ? 0 : rc;
+	/* This gives us the MD size */
+	if (lmm == NULL)
+		return (rc == -ENODATA) ? 0 : rc;
 
-        if (rc < 0) {
-                CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
-                       EXT3_XATTR_INDEX_TRUSTED, name,
-                       inode->i_ino, rc);
-                memset(lmm, 0, lmm_size);
-                return (rc == -ENODATA) ? 0 : rc;
-        }
+	if (rc < 0) {
+		CDEBUG(D_INFO, "error getting EA %d/%s from inode %lu: rc %d\n",
+		       EXT3_XATTR_INDEX_TRUSTED, name,
+		       inode->i_ino, rc);
+		memset(lmm, 0, lmm_size);
+		return (rc == -ENODATA) ? 0 : rc;
+	}
 
-        return rc;
+	return rc;
 }
 
 static int fsfilt_ext3_send_bio(int rw, struct inode *inode, struct bio *bio)

@@ -142,8 +142,8 @@ static struct ll_cl_context *ll_cl_init(struct file *file,
 		struct inode *inode = vmpage->mapping->host;
 		loff_t pos;
 
-		if (TRYLOCK_INODE_MUTEX(inode)) {
-			UNLOCK_INODE_MUTEX(inode);
+		if (mutex_trylock(&inode->i_mutex)) {
+			mutex_unlock(&(inode)->i_mutex);
 
 			/* this is too bad. Someone is trying to write the
 			 * page w/o holding inode mutex. This means we can

@@ -2610,23 +2610,23 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
 
 static int osd_object_sync(const struct lu_env *env, struct dt_object *dt)
 {
-        struct osd_object      *obj    = osd_dt_obj(dt);
-        struct inode           *inode  = obj->oo_inode;
-        struct osd_thread_info *info   = osd_oti_get(env);
-        struct dentry          *dentry = &info->oti_obj_dentry;
-        struct file            *file   = &info->oti_file;
-        int                     rc;
+	struct osd_object	*obj    = osd_dt_obj(dt);
+	struct inode		*inode  = obj->oo_inode;
+	struct osd_thread_info	*info   = osd_oti_get(env);
+	struct dentry		*dentry = &info->oti_obj_dentry;
+	struct file		*file   = &info->oti_file;
+	int			rc;
 
-        ENTRY;
+	ENTRY;
 
-        dentry->d_inode = inode;
-        file->f_dentry = dentry;
-        file->f_mapping = inode->i_mapping;
-        file->f_op = inode->i_fop;
-        LOCK_INODE_MUTEX(inode);
-        rc = file->f_op->fsync(file, dentry, 0);
-        UNLOCK_INODE_MUTEX(inode);
-        RETURN(rc);
+	dentry->d_inode = inode;
+	file->f_dentry = dentry;
+	file->f_mapping = inode->i_mapping;
+	file->f_op = inode->i_fop;
+	mutex_lock(&inode->i_mutex);
+	rc = file->f_op->fsync(file, dentry, 0);
+	mutex_unlock(&inode->i_mutex);
+	RETURN(rc);
 }
 
 static int osd_data_get(const struct lu_env *env, struct dt_object *dt,
