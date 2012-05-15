@@ -2401,7 +2401,7 @@ static int filter_llog_finish(struct obd_device *obd, int count)
                  * We actually do sync in disconnect time, but disconnect
                  * may not come being marked rq_no_resend = 1.
                  */
-                llog_sync(ctxt, NULL);
+		llog_sync(ctxt, NULL, OBD_LLOG_FL_EXIT);
 
                 /*
                  * Balance class_import_get() in llog_receptor_accept().
@@ -2413,16 +2413,16 @@ static int filter_llog_finish(struct obd_device *obd, int count)
                         class_import_put(ctxt->loc_imp);
                         ctxt->loc_imp = NULL;
                 }
+
+		if (filter->fo_lcm) {
+			llog_recov_thread_fini(filter->fo_lcm, obd->obd_force);
+			filter->fo_lcm = NULL;
+		}
+
                 cfs_mutex_up(&ctxt->loc_sem);
                 llog_ctxt_put(ctxt);
         }
 
-        if (filter->fo_lcm) {
-                cfs_mutex_down(&ctxt->loc_sem);
-                llog_recov_thread_fini(filter->fo_lcm, obd->obd_force);
-                filter->fo_lcm = NULL;
-                cfs_mutex_up(&ctxt->loc_sem);
-        }
         RETURN(filter_olg_fini(&obd->obd_olg));
 }
 
@@ -3055,7 +3055,7 @@ static void filter_sync_llogs(struct obd_device *obd, struct obd_export *dexp)
                         ctxt = llog_group_get_ctxt(olg_min,
                                                    LLOG_MDS_OST_REPL_CTXT);
                         if (ctxt) {
-                                err = llog_sync(ctxt, olg_min->olg_exp);
+				err = llog_sync(ctxt, olg_min->olg_exp, 0);
                                 llog_ctxt_put(ctxt);
                                 if (err) {
                                         CERROR("error flushing logs to MDS: "

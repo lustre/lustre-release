@@ -491,7 +491,7 @@ int llog_cat_process_thread(void *data)
         /*
          * Make sure that all cached data is sent.
          */
-        llog_sync(ctxt, NULL);
+	llog_sync(ctxt, NULL, 0);
         GOTO(release_llh, rc);
 release_llh:
         rc = llog_cat_put(llh);

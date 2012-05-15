@@ -1122,6 +1122,7 @@ struct obd_device {
 };
 
 #define OBD_LLOG_FL_SENDNOW     0x0001
+#define OBD_LLOG_FL_EXIT	0x0002
 
 enum obd_cleanup_stage {
 /* Special case hack for MDS LOVs */

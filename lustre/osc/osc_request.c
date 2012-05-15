@@ -4305,7 +4305,7 @@ static int osc_disconnect(struct obd_export *exp)
                 if (obd->u.cli.cl_conn_count == 1) {
                         /* Flush any remaining cancel messages out to the
                          * target */
-                        llog_sync(ctxt, exp);
+			llog_sync(ctxt, exp, 0);
                 }
                 llog_ctxt_put(ctxt);
         } else {

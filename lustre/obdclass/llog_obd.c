@@ -235,7 +235,7 @@ int llog_setup(struct obd_device *obd,  struct obd_llog_group *olg,
 }
 EXPORT_SYMBOL(llog_setup);
 
-int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
+int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags)
 {
         int rc = 0;
         ENTRY;
@@ -244,7 +244,7 @@ int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp)
                 RETURN(0);
 
         if (CTXTP(ctxt, sync))
-                rc = CTXTP(ctxt, sync)(ctxt, exp);
+		rc = CTXTP(ctxt, sync)(ctxt, exp, flags);
 
         RETURN(rc);
 }
