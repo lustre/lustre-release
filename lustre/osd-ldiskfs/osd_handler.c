@@ -554,9 +554,11 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 
         dt_txn_hook_commit(th);
 
-        /* call per-transaction callbacks if any */
-        cfs_list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage)
-                dcb->dcb_func(NULL, th, dcb, error);
+	/* call per-transaction callbacks if any */
+	cfs_list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage) {
+		cfs_list_del_init(&dcb->dcb_linkage);
+		dcb->dcb_func(NULL, th, dcb, error);
+	}
 
         lu_ref_del_at(&lud->ld_reference, oh->ot_dev_link, "osd-tx", th);
         lu_device_put(lud);

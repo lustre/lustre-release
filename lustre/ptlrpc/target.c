@@ -545,7 +545,6 @@ void lut_cb_last_committed(struct lu_env *env, struct thandle *th,
         if (ccb->llcc_transno)
                 CDEBUG(D_HA, "%s: transno "LPD64" is committed\n",
                        ccb->llcc_lut->lut_obd->obd_name, ccb->llcc_transno);
-        cfs_list_del(&ccb->llcc_cb.dcb_linkage);
         OBD_FREE_PTR(ccb);
 }
 
@@ -597,7 +596,6 @@ void lut_cb_new_client(struct lu_env *env, struct thandle *th,
         cfs_spin_unlock(&ccb->lncc_exp->exp_lock);
         class_export_cb_put(ccb->lncc_exp);
 
-        cfs_list_del(&ccb->lncc_cb.dcb_linkage);
         OBD_FREE_PTR(ccb);
 }
 

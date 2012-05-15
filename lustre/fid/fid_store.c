@@ -84,7 +84,6 @@ void seq_update_cb(struct lu_env *env, struct thandle *th,
         struct seq_update_callback *ccb;
         ccb = container_of0(cb, struct seq_update_callback, suc_cb);
         ccb->suc_seq->lss_need_sync = 0;
-        cfs_list_del(&ccb->suc_cb.dcb_linkage);
         OBD_FREE_PTR(ccb);
 }
 
