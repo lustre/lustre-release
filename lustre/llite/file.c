@@ -1972,11 +1972,7 @@ loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
         RETURN(retval);
 }
 
-#ifdef HAVE_FLUSH_OWNER_ID
 int ll_flush(struct file *file, fl_owner_t id)
-#else
-int ll_flush(struct file *file)
-#endif
 {
         struct inode *inode = file->f_dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);

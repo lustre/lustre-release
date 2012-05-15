@@ -514,47 +514,6 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
-# LC_FLUSH_OWNER_ID
-# starting from 2.6.18 the file_operations .flush
-# method has a new "fl_owner_t id" parameter
-#
-AC_DEFUN([LC_FLUSH_OWNER_ID],
-[AC_MSG_CHECKING([if file_operations .flush has an fl_owner_t id])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct file_operations *fops = NULL;
-        fl_owner_t id = NULL;
-        int i;
-
-        i = fops->flush(NULL, id);
-],[
-        AC_DEFINE(HAVE_FLUSH_OWNER_ID, 1,
-                [file_operations .flush method has an fl_owner_t id])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#
-# LC_EXPORT_INVALIDATE_MAPPING_PAGES
-#
-# SLES9, RHEL4, RHEL5, vanilla 2.6.24 export invalidate_mapping_pages() but
-# SLES10 2.6.16 does not, for some reason.  For filter cache invalidation.
-#
-AC_DEFUN([LC_EXPORT_INVALIDATE_MAPPING_PAGES],
-    [LB_CHECK_SYMBOL_EXPORT([invalidate_mapping_pages], [mm/truncate.c], [
-         AC_DEFINE(HAVE_INVALIDATE_MAPPING_PAGES, 1,
-                        [exported invalidate_mapping_pages])],
-    [LB_CHECK_SYMBOL_EXPORT([invalidate_inode_pages], [mm/truncate.c], [
-         AC_DEFINE(HAVE_INVALIDATE_INODE_PAGES, 1,
-                        [exported invalidate_inode_pages])], [
-       AC_MSG_ERROR([no way to invalidate pages])
-  ])
-    ],[])
-])
-
 #2.6.18 + RHEL5 (fc6)
 
 # RHEL5 in FS-cache patch rename PG_checked flag into PG_fs_misc
@@ -1881,10 +1840,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.18
          LC_UMOUNTBEGIN_HAS_VFSMOUNT
-         LC_FLUSH_OWNER_ID
-         if test x$enable_server = xyes ; then
-                LC_EXPORT_INVALIDATE_MAPPING_PAGES
-         fi
 
          #2.6.18 + RHEL5 (fc6)
          LC_PG_FS_MISC

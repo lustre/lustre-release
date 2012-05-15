@@ -624,10 +624,6 @@ static inline long labs(long x)
 }
 #endif /* HAVE_REGISTER_SHRINKER */
 
-#ifdef HAVE_INVALIDATE_INODE_PAGES
-#define invalidate_mapping_pages(mapping,s,e) invalidate_inode_pages(mapping)
-#endif
-
 #ifndef HAVE_SIMPLE_SETATTR
 #define simple_setattr(dentry, ops) inode_setattr((dentry)->d_inode, ops)
 #endif
