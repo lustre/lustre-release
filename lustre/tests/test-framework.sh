@@ -403,7 +403,11 @@ load_modules_local() {
         load_module cmm/cmm
         load_module osd-ldiskfs/osd_ldiskfs
         load_module ost/ost
-        load_module obdfilter/obdfilter
+		if [ "x$USE_OFD" = "xyes" ]; then
+			load_module ofd/ofd
+		else
+			load_module obdfilter/obdfilter
+		fi
     fi
 
 

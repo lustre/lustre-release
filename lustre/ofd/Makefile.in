@@ -1,0 +1,8 @@
+MODULES := ofd
+
+ofd-objs := ofd_dev.o ofd_obd.o
+ofd-objs += lproc_ofd.o
+
+EXTRA_DIST = $(ofd-objs:%.o=%.c) ofd_internal.h
+
+@INCLUDE_RULES@

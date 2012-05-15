@@ -2615,6 +2615,8 @@ lustre/obdecho/Makefile
 lustre/obdecho/autoMakefile
 lustre/obdfilter/Makefile
 lustre/obdfilter/autoMakefile
+lustre/ofd/Makefile
+lustre/ofd/autoMakefile
 lustre/osc/Makefile
 lustre/osc/autoMakefile
 lustre/ost/Makefile
