@@ -2075,7 +2075,7 @@ static int osd_object_ref_add(const struct lu_env *env,
                     inode->i_nlink == 2)
                         inode->i_nlink = 1;
         }
-        LASSERT(inode->i_nlink < LDISKFS_LINK_MAX);
+        LASSERT(inode->i_nlink <= LDISKFS_LINK_MAX);
         cfs_spin_unlock(&obj->oo_guard);
         inode->i_sb->s_op->dirty_inode(inode);
         LINVRNT(osd_invariant(obj));
