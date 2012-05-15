@@ -799,13 +799,13 @@ static int fsfilt_ext3_add_journal_cb(struct obd_device *obd, __u64 last_rcvd,
 
 static int fsfilt_ext3_statfs(struct super_block *sb, struct obd_statfs *osfs)
 {
-        struct kstatfs sfs;
-        int rc;
+	struct kstatfs sfs;
+	int rc;
 
-        memset(&sfs, 0, sizeof(sfs));
-        rc = ll_do_statfs(sb, &sfs);
-        statfs_pack(osfs, &sfs);
-        return rc;
+	memset(&sfs, 0, sizeof(sfs));
+	rc = sb->s_op->statfs(sb->s_root, &sfs);
+	statfs_pack(osfs, &sfs);
+	return rc;
 }
 
 static int fsfilt_ext3_sync(struct super_block *sb)

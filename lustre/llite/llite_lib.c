@@ -1539,16 +1539,11 @@ int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
 
         RETURN(rc);
 }
-#ifndef HAVE_STATFS_DENTRY_PARAM
-int ll_statfs(struct super_block *sb, struct kstatfs *sfs)
-{
-#else
 int ll_statfs(struct dentry *de, struct kstatfs *sfs)
 {
-        struct super_block *sb = de->d_sb;
-#endif
-        struct obd_statfs osfs;
-        int rc;
+	struct super_block *sb = de->d_sb;
+	struct obd_statfs osfs;
+	int rc;
 
         CDEBUG(D_VFSTRACE, "VFS Op: at "LPU64" jiffies\n", get_jiffies_64());
         ll_stats_ops_tally(ll_s2sbi(sb), LPROC_LL_STAFS, 1);

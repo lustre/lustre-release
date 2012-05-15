@@ -1800,39 +1800,30 @@ static void server_umount_begin(struct super_block *sb)
         EXIT;
 }
 
-#ifndef HAVE_STATFS_DENTRY_PARAM
-static int server_statfs (struct super_block *sb, cfs_kstatfs_t *buf)
-{
-#else
 static int server_statfs (struct dentry *dentry, cfs_kstatfs_t *buf)
 {
-        struct super_block *sb = dentry->d_sb;
-#endif
-        struct vfsmount *mnt = s2lsi(sb)->lsi_srv_mnt;
-        ENTRY;
+	struct super_block *sb = dentry->d_sb;
+	struct vfsmount *mnt = s2lsi(sb)->lsi_srv_mnt;
+	ENTRY;
 
-        if (mnt && mnt->mnt_sb && mnt->mnt_sb->s_op->statfs) {
-#ifdef HAVE_STATFS_DENTRY_PARAM
-                int rc = mnt->mnt_sb->s_op->statfs(mnt->mnt_root, buf);
-#else
-                int rc = mnt->mnt_sb->s_op->statfs(mnt->mnt_sb, buf);
-#endif
-                if (!rc) {
-                        buf->f_type = sb->s_magic;
-                        RETURN(0);
-                }
-        }
+	if (mnt && mnt->mnt_sb && mnt->mnt_sb->s_op->statfs) {
+		int rc = mnt->mnt_sb->s_op->statfs(mnt->mnt_root, buf);
+		if (!rc) {
+			buf->f_type = sb->s_magic;
+			RETURN(0);
+		}
+	}
 
-        /* just return 0 */
-        buf->f_type = sb->s_magic;
-        buf->f_bsize = sb->s_blocksize;
-        buf->f_blocks = 1;
-        buf->f_bfree = 0;
-        buf->f_bavail = 0;
-        buf->f_files = 1;
-        buf->f_ffree = 0;
-        buf->f_namelen = NAME_MAX;
-        RETURN(0);
+	/* just return 0 */
+	buf->f_type = sb->s_magic;
+	buf->f_bsize = sb->s_blocksize;
+	buf->f_blocks = 1;
+	buf->f_bfree = 0;
+	buf->f_bavail = 0;
+	buf->f_files = 1;
+	buf->f_ffree = 0;
+	buf->f_namelen = NAME_MAX;
+	RETURN(0);
 }
 
 /** The operations we support directly on the superblock:

@@ -307,12 +307,6 @@ static inline unsigned int mnt_get_count(struct vfsmount *mnt)
 # define mnt_get_count(mnt)      cfs_atomic_read(&(real_mount(mnt)->mnt_count))
 #endif
 
-#ifdef HAVE_STATFS_DENTRY_PARAM
-#define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb)->s_root, (sfs))
-#else
-#define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb), (sfs))
-#endif
-
 #ifdef HAVE_RW_TREE_LOCK
 #define TREE_READ_LOCK_IRQ(mapping)     read_lock_irq(&(mapping)->tree_lock)
 #define TREE_READ_UNLOCK_IRQ(mapping) read_unlock_irq(&(mapping)->tree_lock)

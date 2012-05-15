@@ -50,9 +50,6 @@
 
 #ifndef HAVE_DELETE_FROM_PAGE_CACHE /* 2.6.39 */
 #ifndef HAVE_REMOVE_FROM_PAGE_CACHE /* 2.6.35 - 2.6.38 */
-#ifdef HAVE_NR_PAGECACHE /* 2.6.18 */
-#define __dec_zone_page_state(page, flag) atomic_add(-1, &nr_pagecache);
-#endif /* HAVE_NR_PAGECACHE */
 
 /* XXX copy & paste from 2.6.15 kernel */
 static inline void ll_remove_from_page_cache(struct page *page)

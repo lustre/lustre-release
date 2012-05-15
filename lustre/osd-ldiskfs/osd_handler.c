@@ -1007,15 +1007,15 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
                 ksfs = &osd_oti_get(env)->oti_ksfs;
         }
 
-        cfs_spin_lock(&osd->od_osfs_lock);
-        /* cache 1 second */
-        if (cfs_time_before_64(osd->od_osfs_age, cfs_time_shift_64(-1))) {
-                result = ll_do_statfs(sb, ksfs);
-                if (likely(result == 0)) { /* N.B. statfs can't really fail */
-                        osd->od_osfs_age = cfs_time_current_64();
-                        statfs_pack(&osd->od_statfs, ksfs);
-                }
-        }
+	cfs_spin_lock(&osd->od_osfs_lock);
+	/* cache 1 second */
+	if (cfs_time_before_64(osd->od_osfs_age, cfs_time_shift_64(-1))) {
+		result = sb->s_op->statfs(sb->s_root, ksfs);
+		if (likely(result == 0)) { /* N.B. statfs can't really fail */
+			osd->od_osfs_age = cfs_time_current_64();
+			statfs_pack(&osd->od_statfs, ksfs);
+		}
+	}
 
         if (likely(result == 0))
                 *sfs = osd->od_statfs;

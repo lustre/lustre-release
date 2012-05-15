@@ -803,11 +803,7 @@ struct inode *ll_inode_from_lock(struct ldlm_lock *lock);
 void ll_clear_inode(struct inode *inode);
 int ll_setattr_raw(struct dentry *dentry, struct iattr *attr);
 int ll_setattr(struct dentry *de, struct iattr *attr);
-#ifndef HAVE_STATFS_DENTRY_PARAM
-int ll_statfs(struct super_block *sb, struct kstatfs *sfs);
-#else
 int ll_statfs(struct dentry *de, struct kstatfs *sfs);
-#endif
 int ll_statfs_internal(struct super_block *sb, struct obd_statfs *osfs,
                        __u64 max_age, __u32 flags);
 void ll_update_inode(struct inode *inode, struct lustre_md *md);
