@@ -451,70 +451,12 @@ AC_DEFUN([LC_CONFIG_GSS],
  fi
 ])
 
-AC_DEFUN([LC_PERCPU_COUNTER],
-[AC_MSG_CHECKING([if have struct percpu_counter defined])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/percpu_counter.h>
-],[],[
-        AC_DEFINE(HAVE_PERCPU_COUNTER, 1, [percpu_counter found])
-        AC_MSG_RESULT([yes])
-
-        AC_MSG_CHECKING([if percpu_counter_inc takes the 2nd argument])
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/percpu_counter.h>
-        ],[
-                struct percpu_counter c;
-                percpu_counter_init(&c, 0);
-        ],[
-                AC_DEFINE(HAVE_PERCPU_2ND_ARG, 1, [percpu_counter_init has two
-                                                   arguments])
-                AC_MSG_RESULT([yes])
-        ],[
-                AC_MSG_RESULT([no])
-        ])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 AC_DEFUN([LC_TASK_CLENV_STORE],
 [
         AC_MSG_CHECKING([if we can store cl_env in task_struct])
         if test x$have_task_clenv_store != xyes ; then
                 LC_TASK_CLENV_TUX_INFO
         fi
-])
-
-# ~2.6.11
-
-AC_DEFUN([LC_S_TIME_GRAN],
-[AC_MSG_CHECKING([if super block has s_time_gran member])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        struct super_block *sb = NULL;
-
-        return sb->s_time_gran;
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_S_TIME_GRAN, 1, [super block has s_time_gran member])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-AC_DEFUN([LC_SB_TIME_GRAN],
-[AC_MSG_CHECKING([if kernel has old get_sb_time_gran])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-	return get_sb_time_gran(NULL);
-],[
-        AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_SB_TIME_GRAN, 1, [kernel has old get_sb_time_gran])
-],[
-        AC_MSG_RESULT([no])
-])
 ])
 
 # 2.6.12
@@ -2010,12 +1952,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
-         LC_PERCPU_COUNTER
          LC_TASK_CLENV_STORE
-
-         # ~2.6.11
-         LC_S_TIME_GRAN
-         LC_SB_TIME_GRAN
 
          # 2.6.12
          LC_RW_TREE_LOCK

@@ -1389,15 +1389,15 @@ int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
 }
 
 static struct timespec *osd_inode_time(const struct lu_env *env,
-                                       struct inode *inode, __u64 seconds)
+				       struct inode *inode, __u64 seconds)
 {
-        struct osd_thread_info *oti = osd_oti_get(env);
-        struct timespec        *t   = &oti->oti_time;
+	struct osd_thread_info	*oti = osd_oti_get(env);
+	struct timespec		*t   = &oti->oti_time;
 
-        t->tv_sec  = seconds;
-        t->tv_nsec = 0;
-        *t = timespec_trunc(*t, get_sb_time_gran(inode->i_sb));
-        return t;
+	t->tv_sec = seconds;
+	t->tv_nsec = 0;
+	*t = timespec_trunc(*t, inode->i_sb->s_time_gran);
+	return t;
 }
 
 

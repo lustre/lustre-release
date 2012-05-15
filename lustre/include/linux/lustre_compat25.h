@@ -343,16 +343,6 @@ static inline unsigned int mnt_get_count(struct vfsmount *mnt)
 #define ll_do_statfs(sb, sfs) (sb)->s_op->statfs((sb), (sfs))
 #endif
 
-#ifndef HAVE_SB_TIME_GRAN
-#ifndef HAVE_S_TIME_GRAN
-#error Need s_time_gran patch!
-#endif
-static inline u32 get_sb_time_gran(struct super_block *sb)
-{
-        return sb->s_time_gran;
-}
-#endif
-
 #ifdef HAVE_RW_TREE_LOCK
 #define TREE_READ_LOCK_IRQ(mapping)     read_lock_irq(&(mapping)->tree_lock)
 #define TREE_READ_UNLOCK_IRQ(mapping) read_unlock_irq(&(mapping)->tree_lock)
