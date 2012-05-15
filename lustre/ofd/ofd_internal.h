@@ -41,7 +41,11 @@
 #include <dt_object.h>
 
 struct ofd_device {
-	struct dt_device	ofd_dt_dev;
+	struct dt_device	 ofd_dt_dev;
+	struct dt_device	*ofd_osd;
+	struct dt_device_param	 ofd_dt_conf;
+
+	struct lu_site		 ofd_site;
 };
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)
@@ -80,6 +84,10 @@ static inline struct ofd_object *ofd_obj(struct lu_object *o)
  */
 struct ofd_thread_info {
 	const struct lu_env *fti_env;
+
+	union {
+		char		name[64]; /* for ofd_init0() */
+	} fti_u;
 };
 
 /* ofd_dev.c */
@@ -90,5 +98,29 @@ extern struct obd_ops ofd_obd_ops;
 
 /* lproc_ofd.c */
 void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars);
+
+static inline struct ofd_thread_info * ofd_info(const struct lu_env *env)
+{
+	struct ofd_thread_info *info;
+
+	info = lu_context_key_get(&env->le_ctx, &ofd_thread_key);
+	LASSERT(info);
+	LASSERT(info->fti_env);
+	LASSERT(info->fti_env == env);
+	return info;
+}
+
+static inline struct ofd_thread_info * ofd_info_init(const struct lu_env *env,
+						     struct obd_export *exp)
+{
+	struct ofd_thread_info *info;
+
+	info = lu_context_key_get(&env->le_ctx, &ofd_thread_key);
+	LASSERT(info);
+	LASSERT(info->fti_env == NULL);
+
+	info->fti_env = env;
+	return info;
+}
 
 #endif /* _OFD_INTERNAL_H */

@@ -44,6 +44,24 @@
 
 #include "ofd_internal.h"
 
+static int ofd_obd_notify(struct obd_device *obd, struct obd_device *unused,
+			  enum obd_notify_event ev, void *data)
+{
+	switch (ev) {
+	case OBD_NOTIFY_CONFIG:
+		LASSERT(obd->obd_no_conn);
+		cfs_spin_lock(&obd->obd_dev_lock);
+		obd->obd_no_conn = 0;
+		cfs_spin_unlock(&obd->obd_dev_lock);
+		break;
+	default:
+		CDEBUG(D_INFO, "%s: Unhandled notification %#x\n",
+		       obd->obd_name, ev);
+	}
+	return 0;
+}
+
 struct obd_ops ofd_obd_ops = {
-	.o_owner          = THIS_MODULE,
+	.o_owner	  = THIS_MODULE,
+	.o_notify	  = ofd_obd_notify,
 };

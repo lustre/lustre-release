@@ -178,7 +178,7 @@ int osd_last_rcvd_subdir_count(struct osd_device *osd)
         struct dentry        *dlast;
         loff_t                off;
         int                   rc = 0;
-        int                   count = 0;
+	int                   count = FILTER_SUBDIR_COUNT;
 
         ENTRY;
 
@@ -195,20 +195,21 @@ int osd_last_rcvd_subdir_count(struct osd_device *osd)
                 CDEBUG(D_INFO, "read last_rcvd header, uuid = %s, "
                        "subdir count = %d\n", lsd.lsd_uuid,
                        lsd.lsd_subdir_count);
-                count = le16_to_cpu(lsd.lsd_subdir_count);
-        } else if (rc != 0) {
-                CERROR("Can't read last_rcvd file, rc = %d\n", rc);
-                if (rc > 0)
-                        rc = -EFAULT;
-                goto out;
-        } else {
-                count = FILTER_SUBDIR_COUNT;
-        }
-
-        rc = count;
+		if (le16_to_cpu(lsd.lsd_subdir_count) > 0)
+			count = le16_to_cpu(lsd.lsd_subdir_count);
+	} else if (rc != 0) {
+		CERROR("Can't read last_rcvd file, rc = %d\n", rc);
+		if (rc > 0)
+			rc = -EFAULT;
+		dput(dlast);
+		return rc;
+	} else {
+		count = FILTER_SUBDIR_COUNT;
+	}
 out:
-        dput(dlast);
-        return rc;
+	dput(dlast);
+	LASSERT(count > 0);
+	return rc;
 }
 
 void osd_compat_fini(struct osd_device *dev)
@@ -242,26 +243,28 @@ void osd_compat_fini(struct osd_device *dev)
  */
 int osd_compat_init(struct osd_device *dev)
 {
-        struct lvfs_run_ctxt  new;
-        struct lvfs_run_ctxt  save;
-        struct dentry        *rootd = osd_sb(dev)->s_root;
-        struct dentry        *d;
-        int                   rc;
-        int                   i;
+	struct lvfs_run_ctxt  new;
+	struct lvfs_run_ctxt  save;
+	struct dentry	     *rootd = osd_sb(dev)->s_root;
+	struct dentry	     *d;
+	int		      rc;
+	int		      i;
 
-        ENTRY;
+	ENTRY;
 
-        /* to get subdir count from last_rcvd */
-        rc = osd_last_rcvd_subdir_count(dev);
-        if (rc <= 0)
-                RETURN(rc);
+	OBD_ALLOC_PTR(dev->od_ost_map);
+	if (dev->od_ost_map == NULL)
+		RETURN(-ENOMEM);
+
+	/* to get subdir count from last_rcvd */
+	rc = osd_last_rcvd_subdir_count(dev);
+	if (rc < 0) {
+		OBD_FREE_PTR(dev->od_ost_map);
+		RETURN(rc);
+	}
 
         dev->od_ost_map->subdir_count = rc;
         rc = 0;
-
-        OBD_ALLOC_PTR(dev->od_ost_map);
-        if (dev->od_ost_map == NULL)
-                RETURN(-ENOMEM);
 
         LASSERT(dev->od_fsops);
         osd_push_ctxt(dev, &new, &save);

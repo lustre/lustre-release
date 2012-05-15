@@ -61,11 +61,122 @@ static struct lu_kmem_descr ofd_caches[] = {
 	}
 };
 
+static int ofd_stack_init(const struct lu_env *env,
+			  struct ofd_device *m, struct lustre_cfg *cfg)
+{
+	struct lu_device	*ofd_lu = &m->ofd_dt_dev.dd_lu_dev;
+	const char		*dev = lustre_cfg_string(cfg, 0);
+	struct obd_type		*type;
+	struct lu_device_type	*ldt;
+	struct lu_device	*d;
+	struct ofd_thread_info	*info = ofd_info(env);
+	int			 rc;
+
+	ENTRY;
+
+	/* XXX: we should be able to use different OSDs here */
+	type = class_get_type(LUSTRE_OSD_NAME);
+	if (!type) {
+		CERROR("Unknown type: '%s'\n", LUSTRE_OSD_NAME);
+		RETURN(-ENODEV);
+	}
+
+	rc = lu_env_refill((struct lu_env *)env);
+	if (rc != 0) {
+		CERROR("Failure to refill session: '%d'\n", rc);
+		GOTO(out_type, rc);
+	}
+
+	ldt = type->typ_lu;
+	if (ldt == NULL) {
+		CERROR("type: '%s'\n", LUSTRE_OSD_NAME);
+		GOTO(out_type, rc = -EINVAL);
+	}
+
+	ldt->ldt_obd_type = type;
+	d = ldt->ldt_ops->ldto_device_alloc(env, ldt, cfg);
+	if (IS_ERR(d)) {
+		CERROR("Cannot allocate device: '%s'\n", LUSTRE_OSD_NAME);
+		GOTO(out_type, rc = -ENODEV);
+	}
+
+	LASSERT(ofd_lu->ld_site);
+	d->ld_site = ofd_lu->ld_site;
+
+	snprintf(info->fti_u.name, sizeof(info->fti_u.name),
+		 "%s-osd", lustre_cfg_string(cfg, 0));
+
+	type->typ_refcnt++;
+	rc = ldt->ldt_ops->ldto_device_init(env, d, dev, NULL);
+	if (rc) {
+		CERROR("can't init device '%s', rc %d\n", LUSTRE_OSD_NAME, rc);
+		GOTO(out_free, rc);
+	}
+	lu_device_get(d);
+	lu_ref_add(&d->ld_reference, "lu-stack", &lu_site_init);
+
+	m->ofd_osd = lu2dt_dev(d);
+
+	/* process setup config */
+	rc = d->ld_ops->ldo_process_config(env, d, cfg);
+	if (rc)
+		GOTO(out_fini, rc);
+
+	RETURN(rc);
+
+out_fini:
+	ldt->ldt_ops->ldto_device_fini(env, d);
+out_free:
+	type->typ_refcnt--;
+	ldt->ldt_ops->ldto_device_free(env, d);
+out_type:
+	class_put_type(type);
+	RETURN(rc);
+}
+
+static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
+			   struct lu_device *top)
+{
+	struct obd_device	*obd = ofd_obd(m);
+	struct lustre_cfg_bufs	 bufs;
+	struct lustre_cfg	*lcfg;
+	char			 flags[3] = "";
+
+	ENTRY;
+
+	lu_site_purge(env, top->ld_site, ~0);
+
+	/* process cleanup, pass mdt obd name to get obd umount flags */
+	lustre_cfg_bufs_reset(&bufs, obd->obd_name);
+	if (obd->obd_force)
+		strcat(flags, "F");
+	if (obd->obd_fail)
+		strcat(flags, "A");
+	lustre_cfg_bufs_set_string(&bufs, 1, flags);
+	lcfg = lustre_cfg_new(LCFG_CLEANUP, &bufs);
+	if (!lcfg) {
+		CERROR("Cannot alloc lcfg!\n");
+		RETURN_EXIT;
+	}
+
+	LASSERT(top);
+	top->ld_ops->ldo_process_config(env, top, lcfg);
+	lustre_cfg_free(lcfg);
+
+	lu_stack_fini(env, &m->ofd_osd->dd_lu_dev);
+	m->ofd_osd = NULL;
+
+	EXIT;
+}
+
 /* used by MGS to process specific configurations */
 static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 			      struct lustre_cfg *cfg)
 {
-	int rc = 0;
+	struct ofd_device	*m = ofd_dev(d);
+	struct dt_device	*dt_next = m->ofd_osd;
+	struct lu_device	*next = &dt_next->dd_lu_dev;
+	int			 rc;
 
 	ENTRY;
 
@@ -76,6 +187,9 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 		lprocfs_ofd_init_vars(&lvars);
 		rc = class_process_proc_param(PARAM_OST, lvars.obd_vars, cfg,
 					      d->ld_obd);
+		if (rc > 0 || rc == -ENOSYS)
+			/* we don't understand; pass it on */
+			rc = next->ld_ops->ldo_process_config(env, next, cfg);
 		break;
 	}
 	case LCFG_SPTLRPC_CONF: {
@@ -83,6 +197,8 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 		break;
 	}
 	default:
+		/* others are passed further */
+		rc = next->ld_ops->ldo_process_config(env, next, cfg);
 		break;
 	}
 	RETURN(rc);
@@ -116,18 +232,16 @@ static struct lu_object *ofd_object_alloc(const struct lu_env *env,
 	}
 }
 
-static int ofd_start(const struct lu_env *env, struct lu_device *parent,
-		     struct lu_device *dev)
+static int ofd_start(const struct lu_env *env, struct lu_device *dev)
 {
-	struct obd_device *obd = dev->ld_obd;
-	int		   rc = 0;
+	struct ofd_device	*ofd = ofd_dev(dev);
+	struct lu_device	*next = &ofd->ofd_osd->dd_lu_dev;
+	int			 rc;
 
 	ENTRY;
 
-	LASSERT(obd->obd_no_conn);
-	cfs_spin_lock(&obd->obd_dev_lock);
-	obd->obd_no_conn = 0;
-	cfs_spin_unlock(&obd->obd_dev_lock);
+	/* initialize lower device */
+	rc = next->ld_ops->ldo_prepare(env, dev, next);
 
 	RETURN(rc);
 }
@@ -135,24 +249,29 @@ static int ofd_start(const struct lu_env *env, struct lu_device *parent,
 static int ofd_recovery_complete(const struct lu_env *env,
 				 struct lu_device *dev)
 {
-	int		   rc = 0;
+	struct ofd_device	*ofd = ofd_dev(dev);
+	struct lu_device	*next = &ofd->ofd_osd->dd_lu_dev;
+	int			 rc = 0;
 
 	ENTRY;
 
+	rc = next->ld_ops->ldo_recovery_complete(env, next);
 	RETURN(rc);
 }
 
 static struct lu_device_operations ofd_lu_ops = {
 	.ldo_object_alloc	= ofd_object_alloc,
 	.ldo_process_config	= ofd_process_config,
-	.ldo_prepare		= ofd_start,
 	.ldo_recovery_complete	= ofd_recovery_complete,
 };
+
+extern int ost_handle(struct ptlrpc_request *req);
 
 static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
 	const char		*dev = lustre_cfg_string(cfg, 0);
+	struct ofd_thread_info	*info = NULL;
 	struct obd_device	*obd;
 	int			 rc;
 
@@ -187,22 +306,52 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		}
 	}
 
+	info = ofd_info_init(env, NULL);
+	if (info == NULL)
+		RETURN(-EFAULT);
+
+	rc = lu_site_init(&m->ofd_site, &m->ofd_dt_dev.dd_lu_dev);
+	if (rc)
+		GOTO(err_out, rc);
+	m->ofd_site.ls_top_dev = &m->ofd_dt_dev.dd_lu_dev;
+
+	rc = ofd_stack_init(env, m, cfg);
+	if (rc) {
+		CERROR("Can't init device stack, rc %d\n", rc);
+		GOTO(err_lu_site, rc);
+	}
+
+	dt_conf_get(env, m->ofd_osd, &m->ofd_dt_conf);
+
+	rc = ofd_start(env, &m->ofd_dt_dev.dd_lu_dev);
+	if (rc)
+		GOTO(err_fini_stack, rc);
+
+	rc = lu_site_init_finish(&m->ofd_site);
+	if (rc)
+		GOTO(err_fini_stack, rc);
+
 	RETURN(0);
+
+err_fini_stack:
+	ofd_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);
+err_lu_site:
+	lu_site_fini(&m->ofd_site);
+err_out:
+	return rc;
 }
 
 static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 {
-	struct obd_device *obd = ofd_obd(m);
 	struct lu_device  *d = &m->ofd_dt_dev.dd_lu_dev;
 
-	obd_exports_barrier(obd);
-	obd_zombie_barrier();
-
+	ofd_stack_fini(env, m, m->ofd_site.ls_top_dev);
+	lu_site_fini(&m->ofd_site);
 	LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
 	EXIT;
 }
 
-static struct lu_device* ofd_device_fini(const struct lu_env *env,
+static struct lu_device *ofd_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	ENTRY;
