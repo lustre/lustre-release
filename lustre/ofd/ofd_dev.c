@@ -204,7 +204,56 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 	RETURN(rc);
 }
 
+static int ofd_object_init(const struct lu_env *env, struct lu_object *o,
+			   const struct lu_object_conf *conf)
+{
+	struct ofd_device	*d = ofd_dev(o->lo_dev);
+	struct lu_device	*under;
+	struct lu_object	*below;
+	int			 rc = 0;
+
+	ENTRY;
+
+	CDEBUG(D_INFO, "object init, fid = "DFID"\n",
+	       PFID(lu_object_fid(o)));
+
+	under = &d->ofd_osd->dd_lu_dev;
+	below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
+	if (below != NULL)
+		lu_object_add(o, below);
+	else
+		rc = -ENOMEM;
+
+	RETURN(rc);
+}
+
+static void ofd_object_free(const struct lu_env *env, struct lu_object *o)
+{
+	struct ofd_object	*of = ofd_obj(o);
+	struct lu_object_header	*h;
+
+	ENTRY;
+
+	h = o->lo_header;
+	CDEBUG(D_INFO, "object free, fid = "DFID"\n",
+	       PFID(lu_object_fid(o)));
+
+	lu_object_fini(o);
+	lu_object_header_fini(h);
+	OBD_SLAB_FREE_PTR(of, ofd_object_kmem);
+	EXIT;
+}
+
+static int ofd_object_print(const struct lu_env *env, void *cookie,
+			    lu_printer_t p, const struct lu_object *o)
+{
+	return (*p)(env, cookie, LUSTRE_OST_NAME"-object@%p", o);
+}
+
 struct lu_object_operations ofd_obj_ops = {
+	.loo_object_init	= ofd_object_init,
+	.loo_object_free	= ofd_object_free,
+	.loo_object_print	= ofd_object_print
 };
 
 static struct lu_object *ofd_object_alloc(const struct lu_env *env,
@@ -231,6 +280,8 @@ static struct lu_object *ofd_object_alloc(const struct lu_env *env,
 		RETURN(NULL);
 	}
 }
+
+extern int ost_handle(struct ptlrpc_request *req);
 
 static int ofd_start(const struct lu_env *env, struct lu_device *dev)
 {
@@ -327,12 +378,19 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc)
 		GOTO(err_fini_stack, rc);
 
-	rc = lu_site_init_finish(&m->ofd_site);
+	rc = lut_init(env, &m->ofd_lut, obd, m->ofd_osd);
 	if (rc)
 		GOTO(err_fini_stack, rc);
 
-	RETURN(0);
+	target_recovery_init(&m->ofd_lut, ost_handle);
 
+	rc = lu_site_init_finish(&m->ofd_site);
+	if (rc)
+		GOTO(err_fini_lut, rc);
+
+	RETURN(0);
+err_fini_lut:
+	lut_fini(env, &m->ofd_lut);
 err_fini_stack:
 	ofd_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);
 err_lu_site:
@@ -343,7 +401,14 @@ err_out:
 
 static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 {
+	struct obd_device *obd = ofd_obd(m);
 	struct lu_device  *d = &m->ofd_dt_dev.dd_lu_dev;
+
+	target_recovery_fini(obd);
+	obd_exports_barrier(obd);
+	obd_zombie_barrier();
+
+	lut_fini(env, &m->ofd_lut);
 
 	ofd_stack_fini(env, m, m->ofd_site.ls_top_dev);
 	lu_site_fini(&m->ofd_site);

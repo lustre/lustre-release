@@ -45,6 +45,9 @@ struct ofd_device {
 	struct dt_device	*ofd_osd;
 	struct dt_device_param	 ofd_dt_conf;
 
+	/* last_rcvd file */
+	struct lu_target	 ofd_lut;
+
 	struct lu_site		 ofd_site;
 };
 
@@ -89,6 +92,9 @@ struct ofd_thread_info {
 		char		name[64]; /* for ofd_init0() */
 	} fti_u;
 };
+
+extern void target_recovery_fini(struct obd_device *obd);
+extern void target_recovery_init(struct lu_target *lut, svc_handler_t handler);
 
 /* ofd_dev.c */
 extern struct lu_context_key ofd_thread_key;
