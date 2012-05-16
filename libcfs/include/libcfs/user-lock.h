@@ -246,6 +246,8 @@ typedef struct { volatile int counter; } cfs_atomic_t;
 #define cfs_atomic_add_unless(v, a, u) \
         ((v)->counter != u ? (v)->counter += a : 0)
 #define cfs_atomic_inc_not_zero(v) cfs_atomic_add_unless((v), 1, 0)
+#define cfs_atomic_cmpxchg(v, ov, nv) \
+	((v)->counter == ov ? ((v)->counter = nv, ov) : (v)->counter)
 
 #ifdef HAVE_LIBPTHREAD
 #include <pthread.h>

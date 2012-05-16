@@ -634,10 +634,9 @@ static void cl_page_state_set(const struct lu_env *env,
  */
 void cl_page_get(struct cl_page *page)
 {
-        ENTRY;
-        LASSERT(page->cp_state != CPS_FREEING);
-        cl_page_get_trust(page);
-        EXIT;
+	ENTRY;
+	cl_page_get_trust(page);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_get);
 

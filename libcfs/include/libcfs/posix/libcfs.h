@@ -64,6 +64,7 @@
 #include <sys/socket.h>
 #include <sys/utsname.h>
 #include <ctype.h>
+#include <stdbool.h>
 
 #ifdef HAVE_NETDB_H
 #include <netdb.h>

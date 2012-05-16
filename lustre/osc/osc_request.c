@@ -3199,6 +3199,33 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
                 RETURN(0);
         }
 
+	if (KEY_IS(KEY_LRU_SET)) {
+		struct client_obd *cli = &obd->u.cli;
+
+		LASSERT(cli->cl_lru == NULL); /* only once */
+		cli->cl_lru = (struct cl_client_lru *)val;
+		cfs_atomic_inc(&cli->cl_lru->ccl_users);
+		cli->cl_lru_left = &cli->cl_lru->ccl_page_left;
+
+		/* add this osc into entity list */
+		LASSERT(cfs_list_empty(&cli->cl_lru_osc));
+		cfs_spin_lock(&cli->cl_lru->ccl_lock);
+		cfs_list_add(&cli->cl_lru_osc, &cli->cl_lru->ccl_list);
+		cfs_spin_unlock(&cli->cl_lru->ccl_lock);
+
+		RETURN(0);
+	}
+
+	if (KEY_IS(KEY_LRU_SHRINK)) {
+		struct client_obd *cli = &obd->u.cli;
+		int nr = cfs_atomic_read(&cli->cl_lru_in_list) >> 1;
+		int target = *(int *)val;
+
+		nr = osc_lru_shrink(cli, min(nr, target));
+		*(int *)val -= nr;
+		RETURN(0);
+	}
+
         if (!set && !KEY_IS(KEY_GRANT_SHRINK))
                 RETURN(-EINVAL);
 
@@ -3594,9 +3621,21 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 
 int osc_cleanup(struct obd_device *obd)
 {
-        int rc;
+	struct client_obd *cli = &obd->u.cli;
+	int rc;
 
-        ENTRY;
+	ENTRY;
+
+	/* lru cleanup */
+	if (cli->cl_lru != NULL) {
+		LASSERT(cfs_atomic_read(&cli->cl_lru->ccl_users) > 0);
+		cfs_spin_lock(&cli->cl_lru->ccl_lock);
+		cfs_list_del_init(&cli->cl_lru_osc);
+		cfs_spin_unlock(&cli->cl_lru->ccl_lock);
+		cli->cl_lru_left = NULL;
+		cfs_atomic_dec(&cli->cl_lru->ccl_users);
+		cli->cl_lru = NULL;
+	}
 
         /* free memory of osc quota cache */
         osc_quota_cleanup(obd);

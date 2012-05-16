@@ -179,6 +179,8 @@ typedef wait_queue_t			cfs_waitlink_t;
 typedef wait_queue_head_t		cfs_waitq_t;
 typedef long                            cfs_task_state_t;
 
+#define CFS_DECL_WAITQ(wq)		DECLARE_WAIT_QUEUE_HEAD(wq)
+
 #define cfs_kthread_run(fn, data, fmt, arg...) kthread_run(fn, data, fmt, ##arg)
 
 /* Kernel thread */
@@ -276,6 +278,7 @@ typedef atomic_t cfs_atomic_t;
 #define cfs_atomic_inc_and_test(atom)        atomic_inc_and_test(atom)
 #define cfs_atomic_inc_return(atom)          atomic_inc_return(atom)
 #define cfs_atomic_inc_not_zero(atom)        atomic_inc_not_zero(atom)
+#define cfs_atomic_add_unless(atom, a, u)    atomic_add_unless(atom, a, u)
 #define cfs_atomic_dec(atom)                 atomic_dec(atom)
 #define cfs_atomic_dec_and_test(atom)        atomic_dec_and_test(atom)
 #define cfs_atomic_dec_and_lock(atom, lock)  atomic_dec_and_lock(atom, lock)
@@ -286,6 +289,7 @@ typedef atomic_t cfs_atomic_t;
 #define cfs_atomic_sub(value, atom)          atomic_sub(value, atom)
 #define cfs_atomic_sub_and_test(value, atom) atomic_sub_and_test(value, atom)
 #define cfs_atomic_sub_return(value, atom)   atomic_sub_return(value, atom)
+#define cfs_atomic_cmpxchg(atom, old, nv)    atomic_cmpxchg(atom, old, nv)
 #define CFS_ATOMIC_INIT(i)                   ATOMIC_INIT(i)
 
 /*

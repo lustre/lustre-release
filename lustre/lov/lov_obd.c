@@ -61,6 +61,7 @@
 #include <lprocfs_status.h>
 #include <lustre_param.h>
 #include <cl_object.h>
+#include <lclient.h> /* for cl_client_lru */
 #include <lustre/ll_fiemap.h>
 #include <lustre_log.h>
 
@@ -635,6 +636,15 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         /* connect to administrative disabled ost */
         if (!tgt->ltd_exp)
                 GOTO(out, rc = 0);
+
+	if (lov->lov_lru != NULL) {
+		rc = obd_set_info_async(NULL, tgt->ltd_exp,
+				sizeof(KEY_LRU_SET), KEY_LRU_SET,
+				sizeof(struct cl_client_lru), lov->lov_lru,
+				NULL);
+		if (rc < 0)
+			GOTO(out, rc);
+	}
 
         rc = lov_notify(obd, tgt->ltd_exp->exp_obd,
                         active ? OBD_NOTIFY_CONNECT : OBD_NOTIFY_INACTIVE,
@@ -2707,7 +2717,11 @@ static int lov_set_info_async(const struct lu_env *env, struct obd_export *exp,
                 mds_con = 1;
         } else if (KEY_IS(KEY_CAPA_KEY)) {
                 capa = 1;
-        }
+	} else if (KEY_IS(KEY_LRU_SET)) {
+		LASSERT(lov->lov_lru == NULL);
+		lov->lov_lru = val;
+		do_inactive = 1;
+	}
 
         for (i = 0; i < count; i++, val = (char *)val + incr) {
                 if (next_id) {

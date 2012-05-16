@@ -73,8 +73,9 @@ extern struct address_space_operations_ext ll_aops;
 
 static struct ll_sb_info *ll_init_sbi(void)
 {
-        struct ll_sb_info *sbi = NULL;
-        unsigned long pages;
+	struct ll_sb_info *sbi = NULL;
+	unsigned long pages;
+	unsigned long lru_page_max;
         struct sysinfo si;
         class_uuid_t uuid;
         int i;
@@ -94,13 +95,20 @@ static struct ll_sb_info *ll_init_sbi(void)
         pages = si.totalram - si.totalhigh;
         if (pages >> (20 - CFS_PAGE_SHIFT) < 512) {
 #ifdef HAVE_BGL_SUPPORT
-                sbi->ll_async_page_max = pages / 4;
+		lru_page_max = pages / 4;
 #else
-                sbi->ll_async_page_max = pages / 2;
+		lru_page_max = pages / 2;
 #endif
-        } else {
-                sbi->ll_async_page_max = (pages / 4) * 3;
-        }
+	} else {
+		lru_page_max = (pages / 4) * 3;
+	}
+
+	/* initialize lru data */
+	cfs_atomic_set(&sbi->ll_lru.ccl_users, 0);
+	sbi->ll_lru.ccl_page_max = lru_page_max;
+	cfs_atomic_set(&sbi->ll_lru.ccl_page_left, lru_page_max);
+	cfs_spin_lock_init(&sbi->ll_lru.ccl_lock);
+	CFS_INIT_LIST_HEAD(&sbi->ll_lru.ccl_list);
 
         sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
                                            SBI_DEFAULT_READAHEAD_MAX);
@@ -543,7 +551,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                  NULL);
         cl_sb_init(sb);
 
-        sb->s_root = d_alloc_root(root);
+	err = obd_set_info_async(NULL, sbi->ll_dt_exp, sizeof(KEY_LRU_SET),
+				 KEY_LRU_SET, sizeof(sbi->ll_lru),
+				 &sbi->ll_lru, NULL);
+
+	sb->s_root = d_alloc_root(root);
 #ifdef HAVE_DCACHE_LOCK
 	sb->s_root->d_op = &ll_d_root_ops;
 #else

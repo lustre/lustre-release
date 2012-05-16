@@ -89,6 +89,8 @@ typedef struct cfs_waitq {
         cfs_list_t sleepers;
 } cfs_waitq_t;
 
+#define CFS_DECL_WAITQ(wq) cfs_waitq_t wq
+
 /*
  * Task states
  */

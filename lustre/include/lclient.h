@@ -422,4 +422,16 @@ int lov_read_and_clear_async_rc(struct cl_object *clob);
 struct lov_stripe_md *ccc_inode_lsm_get(struct inode *inode);
 void ccc_inode_lsm_put(struct inode *inode, struct lov_stripe_md *lsm);
 
+/**
+ * Data structures for LRU management on lustre client mount
+ */
+struct cl_client_lru {
+	cfs_atomic_t	ccl_users; /* how many users(OSCs) of this data */
+	cfs_atomic_t	ccl_page_left;
+	unsigned long	ccl_page_max;
+	cfs_list_t	ccl_list; /* entities for lru - actually osc list */
+	cfs_spinlock_t	ccl_lock; /* lock for list */
+	unsigned int	ccl_reclaim_count; /* statistics */
+};
+
 #endif /*LCLIENT_H */

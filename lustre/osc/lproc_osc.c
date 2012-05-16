@@ -160,6 +160,48 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         return count;
 }
 
+static int osc_rd_cached_mb(char *page, char **start, off_t off, int count,
+			    int *eof, void *data)
+{
+	struct obd_device *dev = data;
+	struct client_obd *cli = &dev->u.cli;
+	int shift = 20 - CFS_PAGE_SHIFT;
+	int rc;
+
+	rc = snprintf(page, count,
+		      "used_mb: %d\n"
+		      "busy_cnt: %d\n",
+		      (cfs_atomic_read(&cli->cl_lru_in_list) +
+			cfs_atomic_read(&cli->cl_lru_busy)) >> shift,
+		      cfs_atomic_read(&cli->cl_lru_busy));
+
+	return rc;
+}
+
+/* shrink the number of caching pages to a specific number */
+static int osc_wr_cached_mb(struct file *file, const char *buffer,
+			    unsigned long count, void *data)
+{
+	struct obd_device *dev = data;
+	struct client_obd *cli = &dev->u.cli;
+	int pages_number, mult, rc;
+
+	mult = 1 << (20 - CFS_PAGE_SHIFT);
+	buffer = lprocfs_find_named_value(buffer, "used_mb:", &count);
+	rc = lprocfs_write_frac_helper(buffer, count, &pages_number, mult);
+	if (rc)
+		return rc;
+
+	if (pages_number < 0)
+		return -ERANGE;
+
+	rc = cfs_atomic_read(&cli->cl_lru_in_list) - pages_number;
+	if (rc > 0)
+		(void)osc_lru_shrink(cli, rc);
+
+	return count;
+}
+
 static int osc_rd_cur_dirty_bytes(char *page, char **start, off_t off,
                                   int count, int *eof, void *data)
 {
@@ -615,6 +657,7 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
                                 osc_wr_max_rpcs_in_flight, 0 },
         { "destroys_in_flight", osc_rd_destroys_in_flight, 0, 0 },
         { "max_dirty_mb",    osc_rd_max_dirty_mb, osc_wr_max_dirty_mb, 0 },
+	{ "osc_cached_mb",   osc_rd_cached_mb,     osc_wr_cached_mb, 0 },
         { "cur_dirty_bytes", osc_rd_cur_dirty_bytes, 0, 0 },
         { "cur_grant_bytes", osc_rd_cur_grant_bytes,
                              osc_wr_cur_grant_bytes, 0 },

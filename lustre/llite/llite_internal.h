@@ -450,8 +450,7 @@ struct ll_sb_info {
 
         struct lprocfs_stats     *ll_stats; /* lprocfs stats counter */
 
-        unsigned long             ll_async_page_max;
-        unsigned long             ll_async_page_count;
+	struct cl_client_lru      ll_lru;
 
         struct lprocfs_stats     *ll_ra_stats;
 
