@@ -66,7 +66,7 @@ setup_if_needed() {
     nfs_client_mode && return
 
     local MOUNTED=$(mounted_lustre_filesystems)
-    if $(echo $MOUNTED | grep -w -q $MOUNT); then
+    if $(echo $MOUNTED' ' | grep -w -q $MOUNT' '); then
         check_config_clients $MOUNT
         init_facets_vars
         init_param_vars
@@ -78,7 +78,7 @@ setup_if_needed() {
     $SETUP
 
     MOUNTED=$(mounted_lustre_filesystems)
-    if ! $(echo $MOUNTED | grep -w -q $MOUNT); then
+    if ! $(echo $MOUNTED' ' | grep -w -q $MOUNT' '); then
         echo "Lustre is not mounted after setup! SETUP=$SETUP"
         exit 1
     fi
