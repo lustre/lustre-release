@@ -1915,7 +1915,7 @@ void lstcon_init_acceptor_service(void)
         lstcon_acceptor_service.sv_name    = "join session";
         lstcon_acceptor_service.sv_handler = lstcon_acceptor_handle;
         lstcon_acceptor_service.sv_id      = SRPC_SERVICE_JOIN;
-        lstcon_acceptor_service.sv_concur  = SFW_SERVICE_CONCURRENCY;
+	lstcon_acceptor_service.sv_wi_total = SFW_FRWK_WI_MAX;
 }
 
 extern int lstcon_ioctl_entry(unsigned int cmd, struct libcfs_ioctl_data *data);
@@ -1927,7 +1927,6 @@ int
 lstcon_console_init(void)
 {
         int     i;
-        int     n;
         int     rc;
 
         memset(&console_session, 0, sizeof(lstcon_session_t));
@@ -1966,8 +1965,9 @@ lstcon_console_init(void)
                 return rc;
         }
 
-        n = srpc_service_add_buffers(&lstcon_acceptor_service, SFW_POST_BUFFERS);
-        if (n != SFW_POST_BUFFERS) {
+	rc = srpc_service_add_buffers(&lstcon_acceptor_service,
+				      lstcon_acceptor_service.sv_wi_total);
+	if (rc != 0) {
                 rc = -ENOMEM;
                 goto out;
         }

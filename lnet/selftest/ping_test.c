@@ -42,6 +42,9 @@
 
 #define LST_PING_TEST_MAGIC     0xbabeface
 
+int ping_srv_workitems = SFW_TEST_WI_MAX;
+CFS_MODULE_PARM(ping_srv_workitems, "i", int, 0644, "# PING server workitems");
+
 typedef struct {
         cfs_spinlock_t  pnd_lock;       /* serialize */
         int             pnd_counter;    /* sequence counter */
@@ -155,9 +158,9 @@ ping_client_done_rpc (sfw_test_unit_t *tsu, srpc_client_rpc_t *rpc)
 }
 
 static int
-ping_server_handle (srpc_server_rpc_t *rpc)
+ping_server_handle(struct srpc_server_rpc *rpc)
 {
-        srpc_service_t    *sv  = rpc->srpc_service;
+	struct srpc_service	*sv  = rpc->srpc_scd->scd_svc;
         srpc_msg_t        *reqstmsg = &rpc->srpc_reqstbuf->buf_msg;
         srpc_ping_reqst_t *req = &reqstmsg->msg_body.ping_reqst;
         srpc_ping_reply_t *rep = &rpc->srpc_replymsg.msg_body.ping_reply;
@@ -201,7 +204,8 @@ void ping_init_test_client(void)
 srpc_service_t ping_test_service;
 void ping_init_test_service(void)
 {
-        ping_test_service.sv_id       = SRPC_SERVICE_PING;
-        ping_test_service.sv_name     = "ping_test";
-        ping_test_service.sv_handler  = ping_server_handle;
+	ping_test_service.sv_id       = SRPC_SERVICE_PING;
+	ping_test_service.sv_name     = "ping_test";
+	ping_test_service.sv_handler  = ping_server_handle;
+	ping_test_service.sv_wi_total = ping_srv_workitems;
 }

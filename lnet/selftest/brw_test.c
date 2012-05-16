@@ -38,8 +38,12 @@
 
 #include "selftest.h"
 
+static int brw_srv_workitems = SFW_TEST_WI_MAX;
+CFS_MODULE_PARM(brw_srv_workitems, "i", int, 0644, "# BRW server workitems");
 
-extern int brw_inject_errors;
+static int brw_inject_errors;
+CFS_MODULE_PARM(brw_inject_errors, "i", int, 0644,
+		"# data errors to inject randomly, zero by default");
 
 static void
 brw_client_fini (sfw_test_instance_t *tsi)
@@ -80,9 +84,10 @@ brw_client_init (sfw_test_instance_t *tsi)
             flags != LST_BRW_CHECK_FULL && flags != LST_BRW_CHECK_SIMPLE)
                 return -EINVAL;
 
-        cfs_list_for_each_entry_typed (tsu, &tsi->tsi_units,
-                                       sfw_test_unit_t, tsu_list) {
-                bulk = srpc_alloc_bulk(npg, breq->blk_opc == LST_BRW_READ);
+	cfs_list_for_each_entry_typed(tsu, &tsi->tsi_units,
+				      sfw_test_unit_t, tsu_list) {
+		bulk = srpc_alloc_bulk(lnet_cpt_of_nid(tsu->tsu_dest.nid),
+				       npg, breq->blk_opc == LST_BRW_READ);
                 if (bulk == NULL) {
                         brw_client_fini(tsi);
                         return -ENOMEM;
@@ -367,9 +372,9 @@ brw_bulk_ready (srpc_server_rpc_t *rpc, int status)
 }
 
 int
-brw_server_handle (srpc_server_rpc_t *rpc)
+brw_server_handle(struct srpc_server_rpc *rpc)
 {
-        srpc_service_t   *sv = rpc->srpc_service;
+	struct srpc_service	*sv = rpc->srpc_scd->scd_svc;
         srpc_msg_t       *replymsg = &rpc->srpc_replymsg;
         srpc_msg_t       *reqstmsg = &rpc->srpc_reqstbuf->buf_msg;
         srpc_brw_reply_t *reply = &replymsg->msg_body.brw_reply;
@@ -403,9 +408,12 @@ brw_server_handle (srpc_server_rpc_t *rpc)
         }
 
         reply->brw_status = 0;
-        rc = sfw_alloc_pages(rpc, reqst->brw_len / CFS_PAGE_SIZE,
-                             reqst->brw_rw == LST_BRW_WRITE);
-        if (rc != 0) return rc;
+	/* allocate from "local" node */
+	rc = sfw_alloc_pages(rpc, rpc->srpc_scd->scd_cpt,
+			     reqst->brw_len / CFS_PAGE_SIZE,
+			     reqst->brw_rw == LST_BRW_WRITE);
+	if (rc != 0)
+		return rc;
 
         if (reqst->brw_rw == LST_BRW_READ)
                 brw_fill_bulk(rpc->srpc_bulk, reqst->brw_flags, BRW_MAGIC);
@@ -427,8 +435,16 @@ void brw_init_test_client(void)
 srpc_service_t brw_test_service;
 void brw_init_test_service(void)
 {
+#ifndef __KERNEL__
+	char *s;
+
+	s = getenv("BRW_INJECT_ERRORS");
+	brw_inject_errors = s != NULL ? atoi(s) : brw_inject_errors;
+#endif
+
         brw_test_service.sv_id         = SRPC_SERVICE_BRW;
         brw_test_service.sv_name       = "brw_test";
         brw_test_service.sv_handler    = brw_server_handle;
         brw_test_service.sv_bulk_ready = brw_bulk_ready;
+	brw_test_service.sv_wi_total   = brw_srv_workitems;
 }
