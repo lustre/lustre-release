@@ -1222,9 +1222,6 @@ void ll_put_super(struct super_block *sb)
                 class_manual_cleanup(obd);
         }
 
-        if (profilenm)
-                class_del_profile(profilenm);
-
 #ifdef HAVE_BDI_INIT
         if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
                 bdi_destroy(&lsi->lsi_bdi);
@@ -1238,6 +1235,9 @@ void ll_put_super(struct super_block *sb)
         lustre_common_put_super(sb);
 
         LCONSOLE_WARN("client %s(%p) umount complete\n", profilenm, sb);
+
+        if (profilenm)
+                class_del_profile(profilenm);
 
         cfs_module_put();
 
