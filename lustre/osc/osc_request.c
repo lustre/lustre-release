@@ -4722,11 +4722,9 @@ int __init osc_init(void)
 #ifdef __KERNEL__
 static void /*__exit*/ osc_exit(void)
 {
-        lu_device_type_fini(&osc_device_type);
-
-        osc_quota_exit();
-        class_unregister_type(LUSTRE_OSC_NAME);
-        lu_kmem_fini(osc_caches);
+	osc_quota_exit();
+	class_unregister_type(LUSTRE_OSC_NAME);
+	lu_kmem_fini(osc_caches);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");

@@ -3083,15 +3083,14 @@ static void /*__exit*/ lov_exit(void)
 {
         int rc;
 
-        lu_device_type_fini(&lov_device_type);
-        lu_kmem_fini(lov_caches);
-
         if (quota_interface)
                 PORTAL_SYMBOL_PUT(lov_quota_interface);
 
         class_unregister_type(LUSTRE_LOV_NAME);
         rc = cfs_mem_cache_destroy(lov_oinfo_slab);
         LASSERT(rc == 0);
+
+	lu_kmem_fini(lov_caches);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
