@@ -1746,8 +1746,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 				    at_get(&svcpt->scp_at_estimate));
         }
 
-        rc = lu_context_init(&request->rq_session,
-                             LCT_SESSION|LCT_REMEMBER|LCT_NOREF);
+	rc = lu_context_init(&request->rq_session, LCT_SESSION | LCT_NOREF);
         if (rc) {
                 CERROR("Failure to initialize session: %d\n", rc);
                 goto out_req;
