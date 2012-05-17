@@ -1018,9 +1018,6 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
         unsigned long count;
         handle_t *handle;
 
-        i = EXT_DEPTH(base);
-        EXT_ASSERT(path[i].p_hdr);
-
         if (cex->ec_type == EXT3_EXT_CACHE_EXTENT) {
                 err = EXT_CONTINUE;
                 goto map;
