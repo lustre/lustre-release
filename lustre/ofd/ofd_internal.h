@@ -38,7 +38,15 @@
 #define _OFD_INTERNAL_H
 
 #include <obd.h>
+#include <obd_class.h>
 #include <dt_object.h>
+#include <lustre_fid.h>
+
+#define OFD_INIT_OBJID	0
+#define OFD_ROCOMPAT_SUPP (0)
+#define OFD_INCOMPAT_SUPP (OBD_INCOMPAT_GROUPS | OBD_INCOMPAT_OST | \
+			   OBD_INCOMPAT_COMMON_LR)
+#define OFD_MAX_GROUPS	256
 
 struct ofd_device {
 	struct dt_device	 ofd_dt_dev;
@@ -47,6 +55,16 @@ struct ofd_device {
 
 	/* last_rcvd file */
 	struct lu_target	 ofd_lut;
+	struct dt_object	*ofd_last_group_file;
+	struct dt_object	*ofd_health_check_file;
+
+	int			 ofd_subdir_count;
+
+	int			 ofd_max_group;
+	obd_id			 ofd_last_objids[OFD_MAX_GROUPS];
+	cfs_mutex_t		 ofd_create_locks[OFD_MAX_GROUPS];
+	struct dt_object	*ofd_lastid_obj[OFD_MAX_GROUPS];
+	cfs_spinlock_t		 ofd_objid_lock;
 
 	struct lu_site		 ofd_site;
 };
@@ -86,12 +104,24 @@ static inline struct ofd_object *ofd_obj(struct lu_object *o)
  * to reduce stack consumption.
  */
 struct ofd_thread_info {
-	const struct lu_env *fti_env;
+	const struct lu_env	*fti_env;
 
+	struct lu_fid		 fti_fid;
+	struct lu_attr		 fti_attr;
 	union {
-		char		name[64]; /* for ofd_init0() */
+		char		 name[64]; /* for ofd_init0() */
 	} fti_u;
+
+	struct dt_object_format	 fti_dof;
+	struct lu_buf		 fti_buf;
+	loff_t			 fti_off;
 };
+
+static inline int ofd_export_stats_init(struct ofd_device *ofd,
+					struct obd_export *exp, void *data)
+{
+	return 0;
+}
 
 extern void target_recovery_fini(struct obd_device *obd);
 extern void target_recovery_init(struct lu_target *lut, svc_handler_t handler);
@@ -101,6 +131,11 @@ extern struct lu_context_key ofd_thread_key;
 
 /* ofd_obd.c */
 extern struct obd_ops ofd_obd_ops;
+
+/* ofd_fs.c */
+int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
+		 struct obd_device *obd);
+void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd);
 
 /* lproc_ofd.c */
 void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars);

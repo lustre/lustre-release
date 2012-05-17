@@ -382,13 +382,20 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (rc)
 		GOTO(err_fini_stack, rc);
 
+	rc = ofd_fs_setup(env, m, obd);
+	if (rc)
+		GOTO(err_fini_lut, rc);
+
 	target_recovery_init(&m->ofd_lut, ost_handle);
 
 	rc = lu_site_init_finish(&m->ofd_site);
 	if (rc)
-		GOTO(err_fini_lut, rc);
+		GOTO(err_fs_cleanup, rc);
 
 	RETURN(0);
+err_fs_cleanup:
+	target_recovery_fini(obd);
+	ofd_fs_cleanup(env, m);
 err_fini_lut:
 	lut_fini(env, &m->ofd_lut);
 err_fini_stack:
@@ -409,6 +416,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	obd_zombie_barrier();
 
 	lut_fini(env, &m->ofd_lut);
+	ofd_fs_cleanup(env, m);
 
 	ofd_stack_fini(env, m, m->ofd_site.ls_top_dev);
 	lu_site_fini(&m->ofd_site);

@@ -501,10 +501,10 @@ static const struct named_oid oids[] = {
         { MDD_CAPA_KEYS_OID,    "" /* CAPA_KEYS */ },
 	{ MDT_LAST_RECV_OID,    LAST_RCVD },
         { OFD_LAST_RECV_OID,    "" /* LAST_RCVD */ },
-        { OFD_LAST_GROUP_OID,   "" /* "LAST_GROUP" */ },
+	{ OFD_LAST_GROUP_OID,   "LAST_GROUP" },
         { LLOG_CATALOGS_OID,    "" /* "CATALOGS" */ },
         { MGS_CONFIGS_OID,      "" /* MOUNT_CONFIGS_DIR */ },
-        { OFD_HEALTH_CHECK_OID, "" /* HEALTH_CHECK */ },
+	{ OFD_HEALTH_CHECK_OID, HEALTH_CHECK },
         { 0,                    NULL }
 };
 
