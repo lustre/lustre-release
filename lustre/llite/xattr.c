@@ -512,6 +512,29 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
         if (rc < 0)
                 GOTO(out, rc);
 
+	if (buffer != NULL) {
+		struct ll_sb_info *sbi = ll_i2sbi(inode);
+		char *xattr_name = buffer;
+		int xlen, rem = rc;
+
+		while (rem > 0) {
+			xlen = strnlen(xattr_name, rem - 1) + 1;
+			rem -= xlen;
+			if (xattr_type_filter(sbi,
+					get_xattr_type(xattr_name)) == 0) {
+				/* skip OK xattr type
+				 * leave it in buffer
+				 */
+				xattr_name += xlen;
+				continue;
+			}
+			/* move up remaining xattrs in buffer
+			 * removing the xattr that is not OK
+			 */
+			memmove(xattr_name, xattr_name + xlen, rem);
+			rc -= xlen;
+		}
+	}
         if (S_ISREG(inode->i_mode)) {
                 if (ll_i2info(inode)->lli_smd == NULL)
                         rc2 = -1;
@@ -526,14 +549,14 @@ ssize_t ll_listxattr(struct dentry *dentry, char *buffer, size_t size)
                 const size_t name_len   = sizeof("lov") - 1;
                 const size_t total_len  = prefix_len + name_len + 1;
 
-                if (buffer && (rc + total_len) <= size) {
-                        buffer += rc;
-                        memcpy(buffer,XATTR_LUSTRE_PREFIX, prefix_len);
-                        memcpy(buffer+prefix_len, "lov", name_len);
-                        buffer[prefix_len + name_len] = '\0';
-                }
-                rc2 = total_len;
-        }
+		if (buffer && (rc + total_len) <= size) {
+			buffer += rc;
+			memcpy(buffer, XATTR_LUSTRE_PREFIX, prefix_len);
+			memcpy(buffer + prefix_len, "lov", name_len);
+			buffer[prefix_len + name_len] = '\0';
+		}
+		rc2 = total_len;
+	}
 out:
         ptlrpc_req_finished(request);
         rc = rc + rc2;
