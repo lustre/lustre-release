@@ -912,6 +912,28 @@ start() {
     return $RC
 }
 
+refresh_disk() {
+	local facet=$1
+	local fstype=$(facet_fstype $facet)
+	local _dev
+	local dev
+	local poolname
+
+	if [ "${fstype}" == "zfs" ]; then
+		_dev=$(facet_active $facet)_dev
+		dev=${!_dev} # expand _dev to its value, e.g. ${mds1_dev}
+		poolname="${dev%%/*}" # poolname is string before "/"
+
+		if [ "${poolname}" == "" ]; then
+			echo "invalid dataset name: $dev"
+			return
+		fi
+		do_facet $facet "cp /etc/zfs/zpool.cache /tmp/zpool.cache.back"
+		do_facet $facet "$ZPOOL export ${poolname}"
+		do_facet $facet "$ZPOOL import -f -c /tmp/zpool.cache.back ${poolname}"
+	fi
+}
+
 stop() {
     local running
     local facet=$1
@@ -1276,12 +1298,13 @@ remount_facet() {
 }
 
 reboot_facet() {
-    local facet=$1
-    if [ "$FAILURE_MODE" = HARD ]; then
-        reboot_node $(facet_active_host $facet)
-    else
-        sleep 10
-    fi
+	local facet=$1
+	if [ "$FAILURE_MODE" = HARD ]; then
+		reboot_node $(facet_active_host $facet)
+	else
+		refresh_disk ${facet}
+		sleep 10
+	fi
 }
 
 boot_node() {
@@ -1921,13 +1944,14 @@ fail_nodf() {
 }
 
 fail_abort() {
-    local facet=$1
-    stop $facet
-    change_active $facet
-    wait_for_facet $facet
-    mount_facet $facet -o abort_recovery
-    clients_up || echo "first df failed: $?"
-    clients_up || error "post-failover df: $?"
+	local facet=$1
+	stop $facet
+	refresh_disk ${facet}
+	change_active $facet
+	wait_for_facet $facet
+	mount_facet $facet -o abort_recovery
+	clients_up || echo "first df failed: $?"
+	clients_up || error "post-failover df: $?"
 }
 
 do_lmc() {

@@ -61,6 +61,19 @@ test_0b() {
 }
 run_test 0b "ensure object created after recover exists. (3284)"
 
+test_0c() {
+	replay_barrier $SINGLEMDS
+	mcreate $DIR/$tfile
+	umount $MOUNT
+	facet_failover $SINGLEMDS
+	zconf_mount `hostname` $MOUNT || error "mount fails"
+	client_up || error "post-failover df failed"
+	# file shouldn't exist if replay-barrier works as expected
+	rm $DIR/$tfile && return 1
+	return 0
+}
+run_test 0c "check replay-barrier"
+
 test_0d() {
     replay_barrier $SINGLEMDS
     umount $MOUNT
