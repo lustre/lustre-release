@@ -321,14 +321,34 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
         return rc;
 }
 
+static int obd_proc_rd_jobid_var(char *page, char **start, off_t off,
+				int count, int *eof, void *data)
+{
+	return snprintf(page, count, "%s\n", obd_jobid_var);
+}
+
+static int obd_proc_wr_jobid_var(struct file *file, const char *buffer,
+				unsigned long count, void *data)
+{
+	if (!count || count > JOBSTATS_JOBID_VAR_MAX_LEN)
+		return -EINVAL;
+
+	memset(obd_jobid_var, 0, JOBSTATS_JOBID_VAR_MAX_LEN + 1);
+	/* Trim the trailing '\n' if any */
+	memcpy(obd_jobid_var, buffer, count - (buffer[count - 1] == '\n'));
+	return count;
+}
+
 /* Root for /proc/fs/lustre */
 struct proc_dir_entry *proc_lustre_root = NULL;
 
 struct lprocfs_vars lprocfs_base[] = {
-        { "version", obd_proc_read_version, NULL, NULL },
-        { "pinger", obd_proc_read_pinger, NULL, NULL },
-        { "health_check", obd_proc_read_health, NULL, NULL },
-        { 0 }
+	{ "version", obd_proc_read_version, NULL, NULL },
+	{ "pinger", obd_proc_read_pinger, NULL, NULL },
+	{ "health_check", obd_proc_read_health, NULL, NULL },
+	{ "jobid_var", obd_proc_rd_jobid_var,
+		       obd_proc_wr_jobid_var, NULL },
+	{ 0 }
 };
 #else
 #define lprocfs_base NULL

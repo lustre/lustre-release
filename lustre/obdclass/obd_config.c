@@ -868,25 +868,28 @@ void class_del_profiles(void)
         EXIT;
 }
 
-static int class_set_global(char *ptr, int val) {
-        ENTRY;
+static int class_set_global(char *ptr, int val, struct lustre_cfg *lcfg)
+{
+	ENTRY;
+	if (class_match_param(ptr, PARAM_AT_MIN, NULL) == 0)
+		at_min = val;
+	else if (class_match_param(ptr, PARAM_AT_MAX, NULL) == 0)
+		at_max = val;
+	else if (class_match_param(ptr, PARAM_AT_EXTRA, NULL) == 0)
+		at_extra = val;
+	else if (class_match_param(ptr, PARAM_AT_EARLY_MARGIN, NULL) == 0)
+		at_early_margin = val;
+	else if (class_match_param(ptr, PARAM_AT_HISTORY, NULL) == 0)
+		at_history = val;
+	else if (class_match_param(ptr, PARAM_JOBID_VAR, NULL) == 0) {
+		memset(obd_jobid_var, 0, JOBSTATS_JOBID_VAR_MAX_LEN + 1);
+		memcpy(obd_jobid_var, lustre_cfg_string(lcfg, 2),
+		       JOBSTATS_JOBID_VAR_MAX_LEN + 1);
+	} else
+		RETURN(-EINVAL);
 
-        if (class_match_param(ptr, PARAM_AT_MIN, NULL) == 0)
-            at_min = val;
-        else if (class_match_param(ptr, PARAM_AT_MAX, NULL) == 0)
-                at_max = val;
-        else if (class_match_param(ptr, PARAM_AT_EXTRA, NULL) == 0)
-                at_extra = val;
-        else if (class_match_param(ptr, PARAM_AT_EARLY_MARGIN, NULL) == 0)
-                at_early_margin = val;
-        else if (class_match_param(ptr, PARAM_AT_HISTORY, NULL) == 0)
-                at_history = val;
-        else
-                RETURN(-EINVAL);
-
-        CDEBUG(D_IOCTL, "global %s = %d\n", ptr, val);
-
-        RETURN(0);
+	CDEBUG(D_IOCTL, "global %s = %d\n", ptr, val);
+	RETURN(0);
 }
 
 
@@ -993,7 +996,7 @@ int class_process_config(struct lustre_cfg *lcfg)
                 } else if ((class_match_param(lustre_cfg_string(lcfg, 1),
                                               PARAM_SYS, &tmp) == 0)) {
                         /* Global param settings */
-                        err = class_set_global(tmp, lcfg->lcfg_num);
+			err = class_set_global(tmp, lcfg->lcfg_num, lcfg);
                         /* Note that since LCFG_PARAM is LCFG_REQUIRED, new
                            unknown globals would cause config to fail */
                         if (err)

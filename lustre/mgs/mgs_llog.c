@@ -2004,51 +2004,53 @@ static int mgs_wlp_lcfg(struct obd_device *obd, struct fs_db *fsdb,
 
 /* write global variable settings into log */
 static int mgs_write_log_sys(struct obd_device *obd, struct fs_db *fsdb,
-                             struct mgs_target_info *mti, char *sys, char *ptr)
+			struct mgs_target_info *mti, char *sys, char *ptr)
 {
-        struct lustre_cfg_bufs bufs;
-        struct lustre_cfg *lcfg;
-        char *tmp;
-        char sep;
-        int cmd, val;
-        int rc;
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+	char *tmp, sep;
+	int rc, cmd, convert = 1;
 
-        if (class_match_param(ptr, PARAM_TIMEOUT, &tmp) == 0)
-                cmd = LCFG_SET_TIMEOUT;
-        else if (class_match_param(ptr, PARAM_LDLM_TIMEOUT, &tmp) == 0)
-                cmd = LCFG_SET_LDLM_TIMEOUT;
-        /* Check for known params here so we can return error to lctl */
-        else if ((class_match_param(ptr, PARAM_AT_MIN, &tmp) == 0)
-                 || (class_match_param(ptr, PARAM_AT_MAX, &tmp) == 0)
-                 || (class_match_param(ptr, PARAM_AT_EXTRA, &tmp) == 0)
-                 || (class_match_param(ptr, PARAM_AT_EARLY_MARGIN, &tmp) == 0)
-                 || (class_match_param(ptr, PARAM_AT_HISTORY, &tmp) == 0))
-                cmd = LCFG_PARAM;
-        else
-                return -EINVAL;
+	if (class_match_param(ptr, PARAM_TIMEOUT, &tmp) == 0) {
+		cmd = LCFG_SET_TIMEOUT;
+	} else if (class_match_param(ptr, PARAM_LDLM_TIMEOUT, &tmp) == 0) {
+		cmd = LCFG_SET_LDLM_TIMEOUT;
+	/* Check for known params here so we can return error to lctl */
+	} else if ((class_match_param(ptr, PARAM_AT_MIN, &tmp) == 0) ||
+		(class_match_param(ptr, PARAM_AT_MAX, &tmp) == 0) ||
+		(class_match_param(ptr, PARAM_AT_EXTRA, &tmp) == 0) ||
+		(class_match_param(ptr, PARAM_AT_EARLY_MARGIN, &tmp) == 0) ||
+		(class_match_param(ptr, PARAM_AT_HISTORY, &tmp) == 0)) {
+		cmd = LCFG_PARAM;
+	} else if (class_match_param(ptr, PARAM_JOBID_VAR, &tmp) == 0) {
+		convert = 0; /* Don't convert string value to integer */
+		cmd = LCFG_PARAM;
+	} else {
+		return -EINVAL;
+	}
 
-        /* separate the value */
-        val = simple_strtoul(tmp, NULL, 0);
-        if (*tmp == '\0')
-                CDEBUG(D_MGS, "global '%s' removed\n", sys);
-        else
-                CDEBUG(D_MGS, "global '%s' val=%d\n", sys, val);
+	if (mgs_param_empty(ptr))
+		CDEBUG(D_MGS, "global '%s' removed\n", sys);
+	else
+		CDEBUG(D_MGS, "global '%s' val=%s\n", sys, tmp);
 
-        lustre_cfg_bufs_reset(&bufs, NULL);
-        lustre_cfg_bufs_set_string(&bufs, 1, sys);
-        lcfg = lustre_cfg_new(cmd, &bufs);
-        lcfg->lcfg_num = val;
-        /* truncate the comment to the parameter name */
-        ptr = tmp - 1;
-        sep = *ptr;
-        *ptr = '\0';
-        /* modify all servers and clients */
-        rc = mgs_write_log_direct_all(obd, fsdb, mti,
-                                      *tmp == '\0' ? NULL : lcfg,
-                                      mti->mti_fsname, sys);
-        *ptr = sep;
-        lustre_cfg_free(lcfg);
-        return rc;
+	lustre_cfg_bufs_reset(&bufs, NULL);
+	lustre_cfg_bufs_set_string(&bufs, 1, sys);
+	if (!convert && *tmp != '\0')
+		lustre_cfg_bufs_set_string(&bufs, 2, tmp);
+	lcfg = lustre_cfg_new(cmd, &bufs);
+	lcfg->lcfg_num = convert ? simple_strtoul(tmp, NULL, 0) : 0;
+	/* truncate the comment to the parameter name */
+	ptr = tmp - 1;
+	sep = *ptr;
+	*ptr = '\0';
+	/* modify all servers and clients */
+	rc = mgs_write_log_direct_all(obd, fsdb, mti,
+				*tmp == '\0' ? NULL : lcfg,
+				mti->mti_fsname, sys);
+	*ptr = sep;
+	lustre_cfg_free(lcfg);
+	return rc;
 }
 
 static int mgs_srpc_set_param_disk(struct obd_device *obd,
