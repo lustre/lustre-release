@@ -46,35 +46,6 @@
 
 #include "../lutil.h"
 
-
-#ifdef CRAY_XT3
-int _sysio_lustre_init(void)
-{
-        /*
-         * This is an aweful HACK.  Basically the problem is on
-         * Catamount, the build system links in liblustre.a to
-         * all the test executables, and at this point its not
-         * clear how to modify the build system to prevent this
-         * from happening.  So providing our own call to 
-         * _sysio_lustre_init() that does nothing, prevents
-         * liblustre.a from initializing.
-         *
-         * Why is liblustre.a initializing a problem anyway.  Well
-         * this main() in this module calls init_obdclass(), as 
-         * well as the llite_lib.c's _sysio_lustre_init().  Two
-         * calls to init_obdclass() cause an assertion.  Secondly
-         * it doesn't even logically make sense, this is module
-         * does not need lustre file system functionality, it's 
-         * just the echo_tester.
-         * 
-         */
-        /*lprintf("--> THIS OVERRIDES liblustre.a INITIALIZATION <--\n");*/
-        return 0;
-}
-#endif
-
-
-
 extern int class_handle_ioctl(unsigned int cmd, unsigned long arg);
 
 static int liblustre_ioctl(int dev_id, unsigned int opc, void *ptr)

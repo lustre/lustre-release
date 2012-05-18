@@ -4123,10 +4123,7 @@ wait_import_state() {
 # the value depends on configure options, and it is not stored in /proc.
 # obd_support.h:
 # #define CONNECTION_SWITCH_MIN 5U
-# #ifndef CRAY_XT3
 # #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/20)
-# #else
-# #define INITIAL_CONNECT_TIMEOUT max(CONNECTION_SWITCH_MIN,obd_timeout/2)
 
 request_timeout () {
     local facet=$1
