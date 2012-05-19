@@ -511,17 +511,16 @@ static int import_select_connection(struct obd_import *imp)
            state associated with the last connection attempt to drain before
            trying to reconnect on it.) */
         if (tried_all && (imp->imp_conn_list.next == &imp_conn->oic_item)) {
-                if (at_get(&imp->imp_at.iat_net_latency) <
-                    CONNECTION_SWITCH_MAX) {
-                        at_measured(&imp->imp_at.iat_net_latency,
-                                    at_get(&imp->imp_at.iat_net_latency) +
-                                    CONNECTION_SWITCH_INC);
-                }
-                LASSERT(imp_conn->oic_last_attempt);
-                CDEBUG(D_HA, "%s: tried all connections, increasing latency "
-                       "to %ds\n", imp->imp_obd->obd_name,
-                       at_get(&imp->imp_at.iat_net_latency));
-        }
+		struct adaptive_timeout *at = &imp->imp_at.iat_net_latency;
+		if (at_get(at) < CONNECTION_SWITCH_MAX) {
+			at_measured(at, at_get(at) + CONNECTION_SWITCH_INC);
+			if (at_get(at) > CONNECTION_SWITCH_MAX)
+				at_reset(at, CONNECTION_SWITCH_MAX);
+		}
+		LASSERT(imp_conn->oic_last_attempt);
+		CDEBUG(D_HA, "%s: tried all connections, increasing latency "
+			"to %ds\n", imp->imp_obd->obd_name, at_get(at));
+	}
 
         imp_conn->oic_last_attempt = cfs_time_current_64();
 
@@ -772,6 +771,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                  * for connecting*/
                 imp->imp_force_reconnect = ptlrpc_busy_reconnect(rc);
                 cfs_spin_unlock(&imp->imp_lock);
+                ptlrpc_maybe_ping_import_soon(imp);
                 GOTO(out, rc);
         }
 
