@@ -52,6 +52,8 @@ struct ofd_device {
 	struct dt_device	 ofd_dt_dev;
 	struct dt_device	*ofd_osd;
 	struct dt_device_param	 ofd_dt_conf;
+	/* DLM name-space for meta-data locks maintained by this server */
+	struct ldlm_namespace	*ofd_namespace;
 
 	/* last_rcvd file */
 	struct lu_target	 ofd_lut;
@@ -106,6 +108,7 @@ static inline struct ofd_object *ofd_obj(struct lu_object *o)
 struct ofd_thread_info {
 	const struct lu_env	*fti_env;
 
+	struct obd_export	*fti_exp;
 	struct lu_fid		 fti_fid;
 	struct lu_attr		 fti_attr;
 	union {
@@ -133,6 +136,8 @@ extern struct lu_context_key ofd_thread_key;
 extern struct obd_ops ofd_obd_ops;
 
 /* ofd_fs.c */
+obd_id ofd_last_id(struct ofd_device *ofd, obd_seq seq);
+int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int);
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 		 struct obd_device *obd);
 void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd);
@@ -158,9 +163,11 @@ static inline struct ofd_thread_info * ofd_info_init(const struct lu_env *env,
 
 	info = lu_context_key_get(&env->le_ctx, &ofd_thread_key);
 	LASSERT(info);
+	LASSERT(info->fti_exp == NULL);
 	LASSERT(info->fti_env == NULL);
 
 	info->fti_env = env;
+	info->fti_exp = exp;
 	return info;
 }
 

@@ -340,6 +340,9 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	obd->u.obt.obt_magic = OBT_MAGIC;
 
+	cfs_rwlock_init(&obd->u.filter.fo_sptlrpc_lock);
+	sptlrpc_rule_set_init(&obd->u.filter.fo_sptlrpc_rset);
+
 	m->ofd_dt_dev.dd_lu_dev.ld_ops = &ofd_lu_ops;
 	m->ofd_dt_dev.dd_lu_dev.ld_obd = obd;
 	/* set this lu_device to obd, because error handling need it */
@@ -372,6 +375,15 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		GOTO(err_lu_site, rc);
 	}
 
+	m->ofd_namespace = ldlm_namespace_new(obd, info->fti_u.name,
+					      LDLM_NAMESPACE_SERVER,
+					      LDLM_NAMESPACE_GREEDY,
+					      LDLM_NS_TYPE_OST);
+	if (m->ofd_namespace == NULL)
+		GOTO(err_fini_stack, rc = -ENOMEM);
+	/* set obd_namespace for compatibility with old code */
+	obd->obd_namespace = m->ofd_namespace;
+
 	dt_conf_get(env, m->ofd_osd, &m->ofd_dt_conf);
 
 	rc = ofd_start(env, &m->ofd_dt_dev.dd_lu_dev);
@@ -380,7 +392,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	rc = lut_init(env, &m->ofd_lut, obd, m->ofd_osd);
 	if (rc)
-		GOTO(err_fini_stack, rc);
+		GOTO(err_free_ns, rc);
 
 	rc = ofd_fs_setup(env, m, obd);
 	if (rc)
@@ -398,6 +410,9 @@ err_fs_cleanup:
 	ofd_fs_cleanup(env, m);
 err_fini_lut:
 	lut_fini(env, &m->ofd_lut);
+err_free_ns:
+	ldlm_namespace_free(m->ofd_namespace, 0, obd->obd_force);
+	obd->obd_namespace = m->ofd_namespace = NULL;
 err_fini_stack:
 	ofd_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);
 err_lu_site:
@@ -417,6 +432,12 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 
 	lut_fini(env, &m->ofd_lut);
 	ofd_fs_cleanup(env, m);
+
+	if (m->ofd_namespace != NULL) {
+		ldlm_namespace_free(m->ofd_namespace, NULL,
+				    d->ld_obd->obd_force);
+		d->ld_obd->obd_namespace = m->ofd_namespace = NULL;
+	}
 
 	ofd_stack_fini(env, m, m->ofd_site.ls_top_dev);
 	lu_site_fini(&m->ofd_site);
@@ -474,6 +495,7 @@ static void ofd_key_exit(const struct lu_context *ctx,
 	struct ofd_thread_info *info = data;
 
 	info->fti_env = NULL;
+	info->fti_exp = NULL;
 }
 
 struct lu_context_key ofd_thread_key = {
