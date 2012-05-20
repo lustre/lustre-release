@@ -41,6 +41,7 @@
 #include <obd_class.h>
 #include <dt_object.h>
 #include <lustre_fid.h>
+#include <lustre_capa.h>
 
 #define OFD_INIT_OBJID	0
 #define OFD_ROCOMPAT_SUPP (0)
@@ -106,18 +107,19 @@ static inline struct ofd_object *ofd_obj(struct lu_object *o)
  * to reduce stack consumption.
  */
 struct ofd_thread_info {
-	const struct lu_env	*fti_env;
+	const struct lu_env		*fti_env;
 
-	struct obd_export	*fti_exp;
-	struct lu_fid		 fti_fid;
-	struct lu_attr		 fti_attr;
+	struct obd_export		*fti_exp;
+	struct lu_fid			 fti_fid;
+	struct lu_attr			 fti_attr;
 	union {
-		char		 name[64]; /* for ofd_init0() */
+		char			 name[64]; /* for ofd_init0() */
+		struct obd_statfs	 osfs;    /* for obdofd_statfs() */
 	} fti_u;
 
-	struct dt_object_format	 fti_dof;
-	struct lu_buf		 fti_buf;
-	loff_t			 fti_off;
+	struct dt_object_format		 fti_dof;
+	struct lu_buf			 fti_buf;
+	loff_t				 fti_off;
 };
 
 static inline int ofd_export_stats_init(struct ofd_device *ofd,
@@ -128,6 +130,12 @@ static inline int ofd_export_stats_init(struct ofd_device *ofd,
 
 extern void target_recovery_fini(struct obd_device *obd);
 extern void target_recovery_init(struct lu_target *lut, svc_handler_t handler);
+
+/* ofd_capa.c */
+int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *key);
+int ofd_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
+		  struct lustre_capa *capa, __u64 opc);
+void ofd_free_capa_keys(struct ofd_device *ofd);
 
 /* ofd_dev.c */
 extern struct lu_context_key ofd_thread_key;
