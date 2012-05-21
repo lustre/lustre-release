@@ -1,3 +1,5 @@
+LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a
+
 # Lustre test Makefile
 AM_CPPFLAGS = $(LLCPPFLAGS) -I/opt/lam/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS
 AM_CFLAGS = $(LLCFLAGS)
@@ -73,11 +75,13 @@ endif # TESTS
 mmap_sanity_SOURCES= mmap_sanity.c
 
 LIBLUSTREAPI := $(top_builddir)/lustre/utils/liblustreapi.a
-multiop_LDADD=$(LIBLUSTREAPI) -lrt $(PTHREAD_LIBS)
-copytool_LDADD=$(LIBLUSTREAPI)
+multiop_LDADD=$(LIBLUSTREAPI) -lrt $(PTHREAD_LIBS) $(LIBCFS)
+copytool_LDADD=$(LIBLUSTREAPI) $(LIBCFS)
+it_test_LDADD=$(LIBCFS)
+rwv_LDADD=$(LIBCFS)
 
 ll_dirstripe_verify_SOURCES= ll_dirstripe_verify.c
-ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi
+ll_dirstripe_verify_LDADD= -L$(top_builddir)/lustre/utils -llustreapi $(LIBCFS)
 
 flocks_test_SOURCES=flocks_test.c
 flocks_test_LDADD=-lpthread

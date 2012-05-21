@@ -49,8 +49,6 @@
 static int lstjn_stopping = 0;
 static int lstjn_intialized = 0;
 
-unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
-unsigned int libcfs_debug = 0;
 
 static struct option lstjn_options[] =
 {

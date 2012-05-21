@@ -8,7 +8,9 @@ AM_CFLAGS=$(LLCFLAGS)
 AM_CPPFLAGS=$(LLCPPFLAGS) -DLUSTRE_UTILS=1
 AM_LDFLAGS := -L$(top_builddir)/lnet/utils
 
-LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a $(top_builddir)/libcfs/libcfs/libcfsutil.a
+LIBPTLCTL := $(top_builddir)/lnet/utils/libptlctl.a \
+	     $(top_builddir)/libcfs/libcfs/libcfsutil.a \
+	     $(top_builddir)/libcfs/libcfs/libcfs.a
 
 sbin_scripts = lrun
 bin_scripts = llstat llobdstat plot-llstat llbackup

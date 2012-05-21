@@ -78,8 +78,6 @@
 #include <libcfs/libcfsutil.h>
 #include "obdctl.h"
 
-unsigned int libcfs_subsystem_debug = 0;
-
 /* all functions */
 static int lfs_setstripe(int argc, char **argv);
 static int lfs_find(int argc, char **argv);

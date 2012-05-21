@@ -61,8 +61,6 @@
 #include "lutil.h"
 
 
-unsigned int libcfs_subsystem_debug = ~0 - (S_LNET | S_LND);
-unsigned int libcfs_debug = 0;
 
 struct task_struct     *current;
 
