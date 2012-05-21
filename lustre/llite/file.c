@@ -1982,6 +1982,48 @@ int ll_flush(struct file *file)
         return rc ? -EIO : 0;
 }
 
+/**
+ * Called to make sure a portion of file has been written out.
+ * if @local_only is not true, it will send OST_SYNC RPCs to ost.
+ */
+int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end)
+{
+	struct cl_env_nest nest;
+	struct lu_env *env;
+	struct cl_io *io;
+	struct obd_capa *capa = NULL;
+	struct cl_fsync_io *fio;
+	int result;
+	ENTRY;
+
+	env = cl_env_nested_get(&nest);
+	if (IS_ERR(env))
+		RETURN(PTR_ERR(env));
+
+	capa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
+
+	io = ccc_env_thread_io(env);
+	io->ci_obj = cl_i2info(inode)->lli_clob;
+
+	/* initialize parameters for sync */
+	fio = &io->u.ci_fsync;
+	fio->fi_capa = capa;
+	fio->fi_start = start;
+	fio->fi_end = end;
+	fio->fi_fid = ll_inode2fid(inode);
+
+	if (cl_io_init(env, io, CIT_FSYNC, io->ci_obj) == 0)
+		result = cl_io_loop(env, io);
+	else
+		result = io->ci_result;
+	cl_io_fini(env, io);
+	cl_env_nested_put(&nest, env);
+
+	capa_put(capa);
+
+	RETURN(result);
+}
+
 #ifdef HAVE_FILE_FSYNC_4ARGS
 int ll_fsync(struct file *file, loff_t start, loff_t end, int data)
 #elif defined(HAVE_FILE_FSYNC_2ARGS)
@@ -2029,33 +2071,9 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                 ptlrpc_req_finished(req);
 
         if (data && lsm) {
-                struct obd_info *oinfo;
-
-                OBD_ALLOC_PTR(oinfo);
-                if (!oinfo)
-                        RETURN(rc ? rc : -ENOMEM);
-                OBDO_ALLOC(oinfo->oi_oa);
-                if (!oinfo->oi_oa) {
-                        OBD_FREE_PTR(oinfo);
-                        RETURN(rc ? rc : -ENOMEM);
-                }
-                oinfo->oi_oa->o_id = lsm->lsm_object_id;
-                oinfo->oi_oa->o_seq = lsm->lsm_object_seq;
-                oinfo->oi_oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
-                obdo_from_inode(oinfo->oi_oa, inode,
-                                OBD_MD_FLTYPE | OBD_MD_FLATIME |
-                                OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                OBD_MD_FLGROUP);
-                obdo_set_parent_fid(oinfo->oi_oa, &ll_i2info(inode)->lli_fid);
-                oinfo->oi_md = lsm;
-                oinfo->oi_capa = ll_osscapa_get(inode, CAPA_OPC_OSS_WRITE);
-                err = obd_sync_rqset(ll_i2sbi(inode)->ll_dt_exp, oinfo, 0,
-                                     OBD_OBJECT_EOF);
-                capa_put(oinfo->oi_capa);
+		err = cl_sync_file_range(inode, 0, OBD_OBJECT_EOF);
                 if (!rc)
                         rc = err;
-                OBDO_FREE(oinfo->oi_oa);
-                OBD_FREE_PTR(oinfo);
                 lli->lli_write_rc = rc < 0 ? rc : 0;
         }
 

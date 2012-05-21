@@ -568,7 +568,7 @@ static int osc_sync_interpret(const struct lu_env *env,
                               struct ptlrpc_request *req,
                               void *arg, int rc)
 {
-        struct osc_async_args *aa = arg;
+	struct osc_fsync_args *fa = arg;
         struct ost_body *body;
         ENTRY;
 
@@ -581,26 +581,21 @@ static int osc_sync_interpret(const struct lu_env *env,
                 GOTO(out, rc = -EPROTO);
         }
 
-        *aa->aa_oi->oi_oa = body->oa;
+	*fa->fa_oi->oi_oa = body->oa;
 out:
-        rc = aa->aa_oi->oi_cb_up(aa->aa_oi, rc);
-        RETURN(rc);
+	rc = fa->fa_upcall(fa->fa_cookie, rc);
+	RETURN(rc);
 }
 
-static int osc_sync(const struct lu_env *env, struct obd_export *exp,
-                    struct obd_info *oinfo, obd_size start, obd_size end,
-                    struct ptlrpc_request_set *set)
+int osc_sync_base(struct obd_export *exp, struct obd_info *oinfo,
+		  obd_enqueue_update_f upcall, void *cookie,
+                  struct ptlrpc_request_set *rqset)
 {
-        struct ptlrpc_request *req;
-        struct ost_body       *body;
-        struct osc_async_args *aa;
+	struct ptlrpc_request *req;
+	struct ost_body       *body;
+	struct osc_fsync_args *fa;
         int                    rc;
         ENTRY;
-
-        if (!oinfo->oi_oa) {
-                CDEBUG(D_INFO, "oa NULL\n");
-                RETURN(-EINVAL);
-        }
 
         req = ptlrpc_request_alloc(class_exp2cliimp(exp), &RQF_OST_SYNC);
         if (req == NULL)
@@ -617,20 +612,41 @@ static int osc_sync(const struct lu_env *env, struct obd_export *exp,
         body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
         LASSERT(body);
         lustre_set_wire_obdo(&body->oa, oinfo->oi_oa);
-        body->oa.o_size = start;
-        body->oa.o_blocks = end;
-        body->oa.o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
         osc_pack_capa(req, body, oinfo->oi_capa);
 
         ptlrpc_request_set_replen(req);
         req->rq_interpret_reply = osc_sync_interpret;
 
-        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = ptlrpc_req_async_args(req);
-        aa->aa_oi = oinfo;
+	CLASSERT(sizeof(*fa) <= sizeof(req->rq_async_args));
+	fa = ptlrpc_req_async_args(req);
+	fa->fa_oi = oinfo;
+	fa->fa_upcall = upcall;
+	fa->fa_cookie = cookie;
 
-        ptlrpc_set_add_req(set, req);
-        RETURN (0);
+	if (rqset == PTLRPCD_SET)
+		ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+	else
+		ptlrpc_set_add_req(rqset, req);
+
+	RETURN (0);
+}
+
+static int osc_sync(const struct lu_env *env, struct obd_export *exp,
+		    struct obd_info *oinfo, obd_size start, obd_size end,
+		    struct ptlrpc_request_set *set)
+{
+	ENTRY;
+
+	if (!oinfo->oi_oa) {
+		CDEBUG(D_INFO, "oa NULL\n");
+		RETURN(-EINVAL);
+	}
+
+	oinfo->oi_oa->o_size = start;
+	oinfo->oi_oa->o_blocks = end;
+	oinfo->oi_oa->o_valid |= (OBD_MD_FLSIZE | OBD_MD_FLBLOCKS);
+
+	RETURN(osc_sync_base(exp, oinfo, oinfo->oi_cb_up, oinfo, set));
 }
 
 /* Find and cancel locally locks matched by @mode in the resource found by

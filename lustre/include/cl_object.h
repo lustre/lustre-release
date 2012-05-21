@@ -1901,6 +1901,11 @@ enum cl_io_type {
          */
         CIT_FAULT,
         /**
+	 * fsync system call handling
+	 * To write out a range of file
+	 */
+	CIT_FSYNC,
+	/**
          * Miscellaneous io. This is used for occasional io activity that
          * doesn't fit into other types. Currently this is used for:
          *
@@ -2299,6 +2304,13 @@ struct cl_io {
                         /** resulting page */
                         struct cl_page *ft_page;
                 } ci_fault;
+		struct cl_fsync_io {
+			loff_t             fi_start;
+			loff_t             fi_end;
+			struct obd_capa   *fi_capa;
+			/** file system level fid */
+			struct lu_fid     *fi_fid;
+		} ci_fsync;
         } u;
         struct cl_2queue     ci_queue;
         size_t               ci_nob;

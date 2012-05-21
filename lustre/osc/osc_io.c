@@ -363,9 +363,9 @@ static int osc_io_fault_start(const struct lu_env *env,
         RETURN(0);
 }
 
-static int osc_setattr_upcall(void *a, int rc)
+static int osc_async_upcall(void *a, int rc)
 {
-        struct osc_setattr_cbargs *args = a;
+	struct osc_async_cbargs *args = a;
 
         args->opc_rc = rc;
         cfs_complete(&args->opc_sync);
@@ -441,7 +441,7 @@ static int osc_io_setattr_start(const struct lu_env *env,
         struct lov_oinfo        *loi    = cl2osc(obj)->oo_oinfo;
         struct cl_attr          *attr   = &osc_env_info(env)->oti_attr;
         struct obdo             *oa     = &oio->oi_oa;
-        struct osc_setattr_cbargs *cbargs = &oio->oi_setattr_cbarg;
+	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
         loff_t                   size   = io->u.ci_setattr.sa_attr.lvb_size;
         unsigned int             ia_valid = io->u.ci_setattr.sa_valid;
         int                      result = 0;
@@ -504,12 +504,12 @@ static int osc_io_setattr_start(const struct lu_env *env,
 
                 if (ia_valid & ATTR_SIZE)
                         result = osc_punch_base(osc_export(cl2osc(obj)),
-                                                &oinfo, osc_setattr_upcall,
+						&oinfo, osc_async_upcall,
                                                 cbargs, PTLRPCD_SET);
                 else
                         result = osc_setattr_async_base(osc_export(cl2osc(obj)),
                                                         &oinfo, NULL,
-                                                        osc_setattr_upcall,
+							osc_async_upcall,
                                                         cbargs, PTLRPCD_SET);
         }
         return result;
@@ -520,7 +520,7 @@ static void osc_io_setattr_end(const struct lu_env *env,
 {
         struct cl_io            *io     = slice->cis_io;
         struct osc_io           *oio    = cl2osc_io(env, slice);
-        struct osc_setattr_cbargs *cbargs = &oio->oi_setattr_cbarg;
+	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
         int result;
 
         cfs_wait_for_completion(&cbargs->opc_sync);
@@ -584,6 +584,52 @@ static int osc_io_write_start(const struct lu_env *env,
         RETURN(result);
 }
 
+static int osc_io_fsync_start(const struct lu_env *env,
+			      const struct cl_io_slice *slice)
+{
+	struct cl_io     *io    = slice->cis_io;
+	struct osc_io    *oio   = cl2osc_io(env, slice);
+	struct obdo      *oa    = &oio->oi_oa;
+	struct obd_info  *oinfo = &oio->oi_info;
+	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
+	struct cl_object *obj   = slice->cis_obj;
+	struct lov_oinfo *loi   = cl2osc(obj)->oo_oinfo;
+	int result = 0;
+	ENTRY;
+
+	memset(oa, 0, sizeof(*oa));
+	oa->o_id = loi->loi_id;
+	oa->o_seq = loi->loi_seq;
+	oa->o_valid = OBD_MD_FLID | OBD_MD_FLGROUP;
+
+	/* reload size and blocks for start and end of sync range */
+	oa->o_size = io->u.ci_fsync.fi_start;
+	oa->o_blocks = io->u.ci_fsync.fi_end;
+	oa->o_valid |= OBD_MD_FLSIZE | OBD_MD_FLBLOCKS;
+
+	obdo_set_parent_fid(oa, io->u.ci_fsync.fi_fid);
+
+	memset(oinfo, 0, sizeof(*oinfo));
+	oinfo->oi_oa = oa;
+	oinfo->oi_capa = io->u.ci_fsync.fi_capa;
+	cfs_init_completion(&cbargs->opc_sync);
+
+	result = osc_sync_base(osc_export(cl2osc(obj)), oinfo,
+			       osc_async_upcall, cbargs, PTLRPCD_SET);
+	RETURN(result);
+}
+
+static void osc_io_fsync_end(const struct lu_env *env,
+			     const struct cl_io_slice *slice)
+{
+	struct cl_io  *io  = slice->cis_io;
+	struct osc_io *oio = cl2osc_io(env, slice);
+	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
+
+	cfs_wait_for_completion(&cbargs->opc_sync);
+	io->ci_result = cbargs->opc_rc;
+}
+
 static const struct cl_io_operations osc_io_ops = {
         .op = {
                 [CIT_READ] = {
@@ -602,6 +648,11 @@ static const struct cl_io_operations osc_io_ops = {
                         .cio_fini   = osc_io_fini,
                         .cio_start  = osc_io_fault_start
                 },
+		[CIT_FSYNC] = {
+			.cio_start  = osc_io_fsync_start,
+			.cio_end    = osc_io_fsync_end,
+			.cio_fini   = osc_io_fini
+		},
                 [CIT_MISC] = {
                         .cio_fini   = osc_io_fini
                 }

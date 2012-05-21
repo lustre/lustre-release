@@ -109,6 +109,13 @@ static void lov_io_sub_inherit(struct cl_io *io, struct lov_io *lio,
                 io->u.ci_fault.ft_index = cl_index(obj, off);
                 break;
         }
+	case CIT_FSYNC: {
+		io->u.ci_fsync.fi_start = start;
+		io->u.ci_fsync.fi_end = end;
+		io->u.ci_fsync.fi_capa = parent->u.ci_fsync.fi_capa;
+		io->u.ci_fsync.fi_fid = parent->u.ci_fsync.fi_fid;
+		break;
+	}
         case CIT_READ:
         case CIT_WRITE: {
                 if (cl_io_is_append(parent)) {
@@ -331,6 +338,12 @@ static void lov_io_slice_init(struct lov_io *lio,
                 break;
         }
 
+	case CIT_FSYNC: {
+		lio->lis_pos = io->u.ci_fsync.fi_start;
+		lio->lis_endpos = io->u.ci_fsync.fi_end;
+		break;
+	}
+
         case CIT_MISC:
                 lio->lis_pos = 0;
                 lio->lis_endpos = OBD_OBJECT_EOF;
@@ -445,6 +458,7 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 static int lov_io_call(const struct lu_env *env, struct lov_io *lio,
                        int (*iofunc)(const struct lu_env *, struct cl_io *))
 {
+	struct cl_io *parent = lio->lis_cl.cis_io;
         struct lov_io_sub *sub;
         int rc = 0;
 
@@ -455,6 +469,9 @@ static int lov_io_call(const struct lu_env *env, struct lov_io *lio,
                 lov_sub_exit(sub);
                 if (rc)
                         break;
+
+		if (parent->ci_result == 0)
+			parent->ci_result = sub->sub_io->ci_result;
         }
         RETURN(rc);
 }
@@ -764,6 +781,15 @@ static const struct cl_io_operations lov_io_ops = {
                         .cio_start     = lov_io_fault_start,
                         .cio_end       = lov_io_end
                 },
+		[CIT_FSYNC] = {
+			.cio_fini      = lov_io_fini,
+			.cio_iter_init = lov_io_iter_init,
+			.cio_iter_fini = lov_io_iter_fini,
+			.cio_lock      = lov_io_lock,
+			.cio_unlock    = lov_io_unlock,
+			.cio_start     = lov_io_start,
+			.cio_end       = lov_io_end
+		},
                 [CIT_MISC] = {
                         .cio_fini   = lov_io_fini
                 }
@@ -836,6 +862,9 @@ static const struct cl_io_operations lov_empty_io_ops = {
                         .cio_start     = LOV_EMPTY_IMPOSSIBLE,
                         .cio_end       = LOV_EMPTY_IMPOSSIBLE
                 },
+		[CIT_FSYNC] = {
+			.cio_fini   = lov_empty_io_fini
+		},
                 [CIT_MISC] = {
                         .cio_fini   = lov_empty_io_fini
                 }
@@ -879,6 +908,7 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
         switch (io->ci_type) {
         default:
                 LBUG();
+	case CIT_FSYNC:
         case CIT_MISC:
         case CIT_READ:
                 result = 0;

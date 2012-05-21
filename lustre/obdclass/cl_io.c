@@ -1033,7 +1033,9 @@ int cl_io_loop(const struct lu_env *env, struct cl_io *io)
                 }
                 cl_io_iter_fini(env, io);
         } while (result == 0 && io->ci_continue);
-        RETURN(result < 0 ? result : 0);
+	if (result == 0)
+		result = io->ci_result;
+	RETURN(result < 0 ? result : 0);
 }
 EXPORT_SYMBOL(cl_io_loop);
 

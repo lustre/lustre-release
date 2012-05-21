@@ -1402,6 +1402,8 @@ static inline int cl_merge_lvb(struct inode *inode)
 
 struct obd_capa *cl_capa_lookup(struct inode *inode, enum cl_req_type crt);
 
+int cl_sync_file_range(struct inode *inode, loff_t start, loff_t end);
+
 /** direct write pages */
 struct ll_dio_pages {
         /** page array to be written. we don't support

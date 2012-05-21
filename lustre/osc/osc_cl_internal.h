@@ -70,11 +70,12 @@ struct osc_io {
         /** true if this io is lockless. */
         int                oi_lockless;
 
-        struct obdo        oi_oa;
-        struct osc_setattr_cbargs {
-                int               opc_rc;
-                cfs_completion_t  opc_sync;
-        } oi_setattr_cbarg;
+	struct obd_info    oi_info;
+	struct obdo        oi_oa;
+	struct osc_async_cbargs {
+		int               opc_rc;
+		cfs_completion_t  opc_sync;
+	} oi_cbarg;
 };
 
 /**

@@ -69,6 +69,12 @@ struct osc_setattr_args {
         void                *sa_cookie;
 };
 
+struct osc_fsync_args {
+	struct obd_info     *fa_oi;
+	obd_enqueue_update_f fa_upcall;
+	void                *fa_cookie;
+};
+
 struct osc_enqueue_args {
         struct obd_export        *oa_exp;
         int                      *oa_flags;
