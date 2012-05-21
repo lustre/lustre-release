@@ -45,6 +45,77 @@
 #include "ofd_internal.h"
 #include <obd_cksum.h>
 
+static int ofd_export_stats_init(struct ofd_device *ofd,
+				 struct obd_export *exp, void *client_nid)
+{
+	struct obd_device	*obd = ofd_obd(ofd);
+	struct nid_stat		*stats;
+	int			 num_stats, i;
+	int			 rc, newnid = 0;
+
+	ENTRY;
+
+	if (obd_uuid_equals(&exp->exp_client_uuid, &obd->obd_uuid))
+		/* Self-export gets no proc entry */
+		RETURN(0);
+
+	rc = lprocfs_exp_setup(exp, client_nid, &newnid);
+	if (rc) {
+		/* Mask error for already created
+		 * /proc entries */
+		if (rc == -EALREADY)
+			rc = 0;
+		RETURN(rc);
+	}
+
+	if (newnid == 0)
+		RETURN(0);
+
+	stats = exp->exp_nid_stats;
+	LASSERT(stats != NULL);
+
+	OBD_ALLOC(stats->nid_brw_stats, sizeof(struct brw_stats));
+	if (stats->nid_brw_stats == NULL)
+		GOTO(clean, rc = -ENOMEM);
+
+	for (i = 0; i < BRW_LAST; i++)
+		cfs_spin_lock_init(&stats->nid_brw_stats->hist[i].oh_lock);
+
+	rc = lprocfs_seq_create(stats->nid_proc, "brw_stats", 0644,
+				&ofd_per_nid_stats_fops, stats);
+	if (rc)
+		CWARN("Error adding the brw_stats file\n");
+
+	num_stats = (sizeof(*obd->obd_type->typ_dt_ops) / sizeof(void *)) +
+		     LPROC_OFD_LAST - 1;
+
+	stats->nid_stats = lprocfs_alloc_stats(num_stats,
+					       LPROCFS_STATS_FLAG_NOPERCPU);
+	if (stats->nid_stats == NULL)
+		return -ENOMEM;
+
+	lprocfs_init_ops_stats(LPROC_OFD_LAST, stats->nid_stats);
+	lprocfs_counter_init(stats->nid_stats, LPROC_OFD_READ_BYTES,
+			     LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
+	lprocfs_counter_init(stats->nid_stats, LPROC_OFD_WRITE_BYTES,
+			     LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
+
+	rc = lprocfs_register_stats(stats->nid_proc, "stats",
+				    stats->nid_stats);
+	if (rc)
+		GOTO(clean, rc);
+
+	rc = lprocfs_nid_ldlm_stats_init(stats);
+	if (rc) {
+		lprocfs_free_stats(&stats->nid_stats);
+		GOTO(clean, rc);
+	}
+
+	RETURN(0);
+clean:
+	return rc;
+}
+
 static int ofd_parse_connect_data(const struct lu_env *env,
 				  struct obd_export *exp,
 				  struct obd_connect_data *data)
@@ -160,7 +231,8 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 			     struct obd_device *obd, struct obd_uuid *cluuid,
 			     struct obd_connect_data *data, void *localdata)
 {
-	int rc;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	int			 rc;
 
 	ENTRY;
 
@@ -175,6 +247,8 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 
 	ofd_info_init(env, exp);
 	rc = ofd_parse_connect_data(env, exp, data);
+	if (rc == 0)
+		ofd_export_stats_init(ofd, exp, localdata);
 
 	RETURN(rc);
 }
@@ -214,7 +288,6 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 	if (rc)
 		GOTO(out, rc);
 
-	ofd_export_stats_init(ofd, exp, localdata);
 	group = data->ocd_group;
 	if (obd->obd_replayable) {
 		struct tg_export_data *ted = &exp->exp_target_data;
@@ -224,6 +297,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 		rc = lut_client_new(env, exp);
 		if (rc != 0)
 			GOTO(out, rc);
+		ofd_export_stats_init(ofd, exp, localdata);
 	}
 	if (group == 0)
 		GOTO(out, rc = 0);
@@ -450,6 +524,10 @@ static int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOINO,
 				 ofd->ofd_lut.lut_lsd.lsd_ost_index))
 		osfs->os_ffree = 0;
+
+	/* OS_STATE_READONLY can be set by OSD already */
+	if (ofd->ofd_raid_degraded)
+		osfs->os_state |= OS_STATE_DEGRADED;
 	EXIT;
 out:
 	return rc;

@@ -316,6 +316,82 @@ static struct lu_device_operations ofd_lu_ops = {
 	.ldo_recovery_complete	= ofd_recovery_complete,
 };
 
+static int ofd_procfs_init(struct ofd_device *ofd)
+{
+	struct lprocfs_static_vars	 lvars;
+	struct obd_device		*obd = ofd_obd(ofd);
+	cfs_proc_dir_entry_t		*entry;
+	int				 rc = 0;
+
+	ENTRY;
+
+	/* lprocfs must be setup before the ofd so state can be safely added
+	 * to /proc incrementally as the ofd is setup */
+	lprocfs_ofd_init_vars(&lvars);
+	rc = lprocfs_obd_setup(obd, lvars.obd_vars);
+	if (rc) {
+		CERROR("%s: lprocfs_obd_setup failed: %d.\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	rc = lprocfs_alloc_obd_stats(obd, LPROC_OFD_LAST);
+	if (rc) {
+		CERROR("%s: lprocfs_alloc_obd_stats failed: %d.\n",
+		       obd->obd_name, rc);
+		GOTO(obd_cleanup, rc);
+	}
+
+	/* Init OFD private stats here */
+	lprocfs_counter_init(obd->obd_stats, LPROC_OFD_READ_BYTES,
+			     LPROCFS_CNTR_AVGMINMAX, "read_bytes", "bytes");
+	lprocfs_counter_init(obd->obd_stats, LPROC_OFD_WRITE_BYTES,
+			     LPROCFS_CNTR_AVGMINMAX, "write_bytes", "bytes");
+
+	rc = lproc_ofd_attach_seqstat(obd);
+	if (rc) {
+		CERROR("%s: create seqstat failed: %d.\n", obd->obd_name, rc);
+		GOTO(free_obd_stats, rc);
+	}
+
+	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
+	if (IS_ERR(entry)) {
+		rc = PTR_ERR(entry);
+		CERROR("%s: error %d setting up lprocfs for %s\n",
+		       obd->obd_name, rc, "exports");
+		GOTO(free_obd_stats, rc);
+	}
+	obd->obd_proc_exports_entry = entry;
+
+	entry = lprocfs_add_simple(obd->obd_proc_exports_entry, "clear",
+				   lprocfs_nid_stats_clear_read,
+				   lprocfs_nid_stats_clear_write, obd, NULL);
+	if (IS_ERR(entry)) {
+		rc = PTR_ERR(entry);
+		CERROR("%s: add proc entry 'clear' failed: %d.\n",
+		       obd->obd_name, rc);
+		GOTO(free_obd_stats, rc);
+	}
+	RETURN(0);
+
+free_obd_stats:
+	lprocfs_free_obd_stats(obd);
+obd_cleanup:
+	lprocfs_obd_cleanup(obd);
+	return rc;
+}
+
+static int ofd_procfs_fini(struct ofd_device *ofd)
+{
+	struct obd_device *obd = ofd_obd(ofd);
+
+	lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
+	lprocfs_free_per_client_stats(obd);
+	lprocfs_free_obd_stats(obd);
+	lprocfs_obd_cleanup(obd);
+	return 0;
+}
+
 extern int ost_handle(struct ptlrpc_request *req);
 
 static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
@@ -340,6 +416,13 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	obd->u.obt.obt_magic = OBT_MAGIC;
 
+	cfs_spin_lock_init(&m->ofd_flags_lock);
+	m->ofd_raid_degraded = 0;
+	m->ofd_syncjournal = 0;
+	ofd_slc_set(m);
+
+	m->ofd_max_group = 0;
+
 	cfs_rwlock_init(&obd->u.filter.fo_sptlrpc_lock);
 	sptlrpc_rule_set_init(&obd->u.filter.fo_sptlrpc_rset);
 
@@ -353,6 +436,12 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_dt_dev.dd_lu_dev.ld_obd = obd;
 	/* set this lu_device to obd, because error handling need it */
 	obd->obd_lu_dev = &m->ofd_dt_dev.dd_lu_dev;
+
+	rc = ofd_procfs_init(m);
+	if (rc) {
+		CERROR("Can't init ofd lprocfs, rc %d\n", rc);
+		RETURN(rc);
+	}
 
 	/* No connection accepted until configurations will finish */
 	obd->obd_no_conn = 1;
@@ -372,7 +461,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	rc = lu_site_init(&m->ofd_site, &m->ofd_dt_dev.dd_lu_dev);
 	if (rc)
-		GOTO(err_out, rc);
+		GOTO(err_fini_proc, rc);
 	m->ofd_site.ls_top_dev = &m->ofd_dt_dev.dd_lu_dev;
 
 	rc = ofd_stack_init(env, m, cfg);
@@ -423,7 +512,8 @@ err_fini_stack:
 	ofd_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);
 err_lu_site:
 	lu_site_fini(&m->ofd_site);
-err_out:
+err_fini_proc:
+	ofd_procfs_fini(m);
 	return rc;
 }
 
@@ -450,6 +540,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 
 	ofd_stack_fini(env, m, m->ofd_site.ls_top_dev);
 	lu_site_fini(&m->ofd_site);
+	ofd_procfs_fini(m);
 	LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
 	EXIT;
 }

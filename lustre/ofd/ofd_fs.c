@@ -324,7 +324,6 @@ int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
 		fed = &exp->exp_filter_data;
 		*fed->fed_ted.ted_lcd = *lcd;
 
-		ofd_export_stats_init(ofd, exp, NULL);
 		rc = lut_client_add(env, exp, cl_idx);
 		LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 		/* VBR: set export last committed version */
