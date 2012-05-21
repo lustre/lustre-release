@@ -383,6 +383,8 @@ static int ofd_destroy_export(struct obd_export *exp)
 	ldlm_destroy_export(exp);
 	lut_client_free(exp);
 
+	ofd_fmd_cleanup(exp);
+
 	LASSERT(cfs_list_empty(&exp->exp_filter_data.fed_mod_list));
 	return 0;
 }

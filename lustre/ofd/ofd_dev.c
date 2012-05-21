@@ -416,6 +416,9 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	obd->u.obt.obt_magic = OBT_MAGIC;
 
+	m->ofd_fmd_max_num = OFD_FMD_MAX_NUM_DEFAULT;
+	m->ofd_fmd_max_age = OFD_FMD_MAX_AGE_DEFAULT;
+
 	cfs_spin_lock_init(&m->ofd_flags_lock);
 	m->ofd_raid_degraded = 0;
 	m->ofd_syncjournal = 0;
@@ -636,6 +639,12 @@ int __init ofd_init(void)
 	if (rc)
 		return rc;
 
+	rc = ofd_fmd_init();
+	if (rc) {
+		lu_kmem_fini(ofd_caches);
+		return(rc);
+	}
+
 	lprocfs_ofd_init_vars(&lvars);
 
 	rc = class_register_type(&ofd_obd_ops, NULL, lvars.module_vars,
@@ -645,8 +654,9 @@ int __init ofd_init(void)
 
 void __exit ofd_exit(void)
 {
-	class_unregister_type(LUSTRE_OST_NAME);
+	ofd_fmd_exit();
 	lu_kmem_fini(ofd_caches);
+	class_unregister_type(LUSTRE_OST_NAME);
 }
 
 MODULE_AUTHOR("Whamcloud, Inc. <http://www.whamcloud.com/>");

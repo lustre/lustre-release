@@ -79,6 +79,66 @@ static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
 	return retval;
 }
 
+int lprocfs_ofd_rd_fmd_max_num(char *page, char **start, off_t off,
+			       int count, int *eof, void *data)
+{
+	struct obd_device	*obd = data;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	int			 rc;
+
+	rc = snprintf(page, count, "%u\n", ofd->ofd_fmd_max_num);
+	return rc;
+}
+
+int lprocfs_ofd_wr_fmd_max_num(struct file *file, const char *buffer,
+			       unsigned long count, void *data)
+{
+	struct obd_device	*obd = data;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	int			 val;
+	int			 rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val > 65536 || val < 1)
+		return -EINVAL;
+
+	ofd->ofd_fmd_max_num = val;
+	return count;
+}
+
+int lprocfs_ofd_rd_fmd_max_age(char *page, char **start, off_t off,
+			       int count, int *eof, void *data)
+{
+	struct obd_device	*obd = data;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	int			 rc;
+
+	rc = snprintf(page, count, "%ld\n", ofd->ofd_fmd_max_age / CFS_HZ);
+	return rc;
+}
+
+int lprocfs_ofd_wr_fmd_max_age(struct file *file, const char *buffer,
+			       unsigned long count, void *data)
+{
+	struct obd_device	*obd = data;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	int			 val;
+	int			 rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val > 65536 || val < 1)
+		return -EINVAL;
+
+	ofd->ofd_fmd_max_age = val * CFS_HZ;
+	return count;
+}
+
 static int lprocfs_ofd_rd_capa(char *page, char **start, off_t off,
 			       int count, int *eof, void *data)
 {
@@ -271,6 +331,10 @@ static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "instance",		 lprocfs_target_rd_instance, 0 },
 	{ "ir_factor",		 lprocfs_obd_rd_ir_factor,
 				 lprocfs_obd_wr_ir_factor, 0},
+	{ "client_cache_count",	 lprocfs_ofd_rd_fmd_max_num,
+				 lprocfs_ofd_wr_fmd_max_num, 0 },
+	{ "client_cache_seconds", lprocfs_ofd_rd_fmd_max_age,
+				  lprocfs_ofd_wr_fmd_max_age, 0 },
 	{ "capa",		 lprocfs_ofd_rd_capa,
 				 lprocfs_ofd_wr_capa, 0 },
 	{ "capa_count",		 lprocfs_ofd_rd_capa_count, 0, 0 },

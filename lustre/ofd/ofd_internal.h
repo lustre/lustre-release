@@ -49,6 +49,18 @@
 			   OBD_INCOMPAT_COMMON_LR)
 #define OFD_MAX_GROUPS	256
 
+/* per-client-per-object persistent state (LRU) */
+struct ofd_mod_data {
+	cfs_list_t	fmd_list;        /* linked to fed_mod_list */
+	struct lu_fid	fmd_fid;         /* FID being written to */
+	__u64		fmd_mactime_xid; /* xid highest {m,a,c}time setattr */
+	cfs_time_t	fmd_expire;      /* time when the fmd should expire */
+	int		fmd_refcount;    /* reference counter - list holds 1 */
+};
+
+#define OFD_FMD_MAX_NUM_DEFAULT 128
+#define OFD_FMD_MAX_AGE_DEFAULT ((obd_timeout + 10) * CFS_HZ)
+
 enum {
 	LPROC_OFD_READ_BYTES = 0,
 	LPROC_OFD_WRITE_BYTES = 1,
@@ -74,6 +86,10 @@ struct ofd_device {
 	cfs_mutex_t		 ofd_create_locks[OFD_MAX_GROUPS];
 	struct dt_object	*ofd_lastid_obj[OFD_MAX_GROUPS];
 	cfs_spinlock_t		 ofd_objid_lock;
+
+	/* ofd mod data: ofd_device wide values */
+	int			 ofd_fmd_max_num; /* per ofd ofd_mod_data */
+	cfs_duration_t		 ofd_fmd_max_age; /* time to fmd expiry */
 
 	cfs_spinlock_t		 ofd_flags_lock;
 	unsigned long		 ofd_raid_degraded:1,
@@ -161,6 +177,22 @@ void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd);
 void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars);
 int lproc_ofd_attach_seqstat(struct obd_device *dev);
 extern struct file_operations ofd_per_nid_stats_fops;
+
+/* ofd_fmd.c */
+int ofd_fmd_init(void);
+void ofd_fmd_exit(void);
+struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
+				  struct lu_fid *fid);
+struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp,
+				 struct lu_fid *fid);
+void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd);
+void ofd_fmd_expire(struct obd_export *exp);
+void ofd_fmd_cleanup(struct obd_export *exp);
+#ifdef DO_FMD_DROP
+void ofd_fmd_drop(struct obd_export *exp, struct lu_fid *fid);
+#else
+#define ofd_fmd_drop(exp, fid) do {} while (0)
+#endif
 
 static inline struct ofd_thread_info * ofd_info(const struct lu_env *env)
 {
