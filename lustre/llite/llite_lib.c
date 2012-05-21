@@ -1187,6 +1187,8 @@ void ll_put_super(struct super_block *sb)
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         char *profilenm = get_profile_name(sb);
+        char *tmp_name = NULL;
+        int tmp_name_len = 0;
         int force = 1, next;
         ENTRY;
 
@@ -1222,6 +1224,15 @@ void ll_put_super(struct super_block *sb)
                 class_manual_cleanup(obd);
         }
 
+        /* Temp storage for client profile name */
+        tmp_name_len = strlen(profilenm) + 1;
+        OBD_ALLOC(tmp_name, tmp_name_len);
+        if (tmp_name != NULL)
+                memcpy(tmp_name, profilenm, tmp_name_len);
+
+        if (profilenm)
+                class_del_profile(profilenm);
+
 #ifdef HAVE_BDI_INIT
         if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
                 bdi_destroy(&lsi->lsi_bdi);
@@ -1234,10 +1245,13 @@ void ll_put_super(struct super_block *sb)
 
         lustre_common_put_super(sb);
 
+        if (tmp_name != NULL)
+                profilenm = tmp_name;
+
         LCONSOLE_WARN("client %s(%p) umount complete\n", profilenm, sb);
 
-        if (profilenm)
-                class_del_profile(profilenm);
+        if (tmp_name != NULL)
+                OBD_FREE(tmp_name, tmp_name_len);
 
         cfs_module_put();
 
