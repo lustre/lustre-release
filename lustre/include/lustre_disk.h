@@ -219,6 +219,8 @@ struct lustre_mount_data {
         char      *lmd_opts;          /* lustre mount options (as opposed to
                                          _device_ mount options) */
         __u32     *lmd_exclude;       /* array of OSTs to ignore */
+	char	*lmd_mgs;           /* MGS nid */
+	char	*lmd_osd_type;      /* OSD type */
 };
 
 #define LMD_FLG_SERVER       0x0001  /* Mounting a server */
@@ -479,6 +481,8 @@ struct lustre_sb_info {
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
         struct vfsmount          *lsi_srv_mnt; /* the one server mount */
         cfs_atomic_t              lsi_mounts;  /* references to the srv_mnt */
+	char			  lsi_svname[MTI_NAME_MAXLEN];
+	char			  lsi_osd_type[16];
         struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs
                                                   own backing_dev_info */
 };

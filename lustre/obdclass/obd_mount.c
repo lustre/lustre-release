@@ -90,7 +90,6 @@ static int server_register_mount(const char *name, struct super_block *sb,
         char *name_cp;
         ENTRY;
 
-        LASSERT(mnt);
         LASSERT(sb);
 
         OBD_ALLOC(lmi, sizeof(*lmi));
@@ -120,7 +119,8 @@ static int server_register_mount(const char *name, struct super_block *sb,
         cfs_mutex_unlock(&lustre_mount_info_lock);
 
         CDEBUG(D_MOUNT, "reg_mnt %p from %s, vfscount=%d\n",
-               lmi->lmi_mnt, name, mnt_get_count(lmi->lmi_mnt));
+	       lmi->lmi_mnt, name,
+	       lmi->lmi_mnt ? mnt_get_count(lmi->lmi_mnt) : -1);
 
         RETURN(0);
 }
@@ -140,7 +140,8 @@ static int server_deregister_mount(const char *name)
         }
 
         CDEBUG(D_MOUNT, "dereg_mnt %p from %s, vfscount=%d\n",
-               lmi->lmi_mnt, name, mnt_get_count(lmi->lmi_mnt));
+	       lmi->lmi_mnt, name,
+	       lmi->lmi_mnt ? mnt_get_count(lmi->lmi_mnt) : -1);
 
         OBD_FREE(lmi->lmi_name, strlen(lmi->lmi_name) + 1);
         cfs_list_del(&lmi->lmi_list_chain);
@@ -167,12 +168,14 @@ struct lustre_mount_info *server_get_mount(const char *name)
                 RETURN(NULL);
         }
         lsi = s2lsi(lmi->lmi_sb);
-        mntget(lmi->lmi_mnt);
+
+	if (lmi->lmi_mnt)
+		mntget(lmi->lmi_mnt);
         cfs_atomic_inc(&lsi->lsi_mounts);
 
         CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d, vfscount=%d\n",
                lmi->lmi_mnt, name, cfs_atomic_read(&lsi->lsi_mounts),
-               mnt_get_count(lmi->lmi_mnt));
+	       lmi->lmi_mnt ? mnt_get_count(lmi->lmi_mnt) - 1 : -1);
 
         RETURN(lmi);
 }
@@ -219,11 +222,14 @@ int server_put_mount(const char *name, struct vfsmount *mnt)
 {
         struct lustre_mount_info *lmi;
         struct lustre_sb_info *lsi;
-        int count = mnt_get_count(mnt) - 1;
+	int count = 0;
         ENTRY;
 
         /* This might be the last one, can't deref after this */
-        unlock_mntput(mnt);
+	if (mnt) {
+		count = mnt_get_count(mnt) - 1;
+		unlock_mntput(mnt);
+	}
 
         cfs_mutex_lock(&lustre_mount_info_lock);
         lmi = server_find_mount(name);
@@ -350,6 +356,9 @@ static int ldd_write(struct lvfs_run_ctxt *mount_ctxt,
         unsigned long len = sizeof(struct lustre_disk_data);
         int rc = 0;
         ENTRY;
+
+	if (ldd->ldd_magic == 0)
+		RETURN(0);
 
         LASSERT(ldd->ldd_magic == LDD_MAGIC);
 
@@ -611,8 +620,12 @@ static int lustre_start_mgc(struct super_block *sb)
         /* Find the first non-lo MGS nid for our MGC name */
         if (lsi->lsi_flags & LSI_SERVER) {
                 ptr = lsi->lsi_ldd->ldd_params;
+		/* mount -o mgsnode=nid */
+		if (lsi->lsi_lmd->lmd_mgs &&
+		    (class_parse_nid(lsi->lsi_lmd->lmd_mgs, &nid, &ptr) == 0)) {
+			i++;
                 /* Use mgsnode= nids */
-                if ((class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0) &&
+		} else if ((class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0) &&
                     (class_parse_nid(ptr, &nid, &ptr) == 0)) {
                         i++;
                 } else if (IS_MGS(lsi->lsi_ldd)) {
@@ -725,7 +738,11 @@ static int lustre_start_mgc(struct super_block *sb)
                         }
                 } else {
                         /* Use mgsnode= nids */
-                        if (class_find_param(ptr, PARAM_MGSNODE, &ptr) != 0) {
+			/* mount -o mgsnode=nid */
+			if (lsi->lsi_lmd->lmd_mgs) {
+				ptr = lsi->lsi_lmd->lmd_mgs;
+			} else if (class_find_param(ptr, PARAM_MGSNODE,
+						    &ptr) != 0) {
                                 CERROR("No MGS nids given.\n");
                                 GOTO(out_free, rc = -EINVAL);
                         }
@@ -1132,6 +1149,8 @@ int server_register_target(struct super_block *sb)
                         sizeof(ldd->ldd_svname));
                 /* or ldd_make_sv_name(ldd); */
                 ldd_write(&mgc->obd_lvfs_ctxt, ldd);
+		if (lsi->lsi_lmd->lmd_osd_type)
+			goto out;
                 err = fsfilt_set_label(mgc, lsi->lsi_srv_mnt->mnt_sb,
                                        mti->mti_svname);
                 if (err)
@@ -1250,9 +1269,11 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         /* Set the mgc fs to our server disk.  This allows the MGC to
          * read and write configs locally, in case it can't talk to the MGS. */
-        rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
-        if (rc)
-                RETURN(rc);
+	if (lsi->lsi_lmd->lmd_osd_type == NULL) {
+		rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
+		if (rc)
+			RETURN(rc);
+	}
 
         /* Register with MGS */
         rc = server_register_target(sb);
@@ -1279,7 +1300,8 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
 out_mgc:
         /* Release the mgc fs for others to use */
-        server_mgc_clear_fs(lsi->lsi_mgc);
+	if (lsi->lsi_lmd->lmd_osd_type == NULL)
+		server_mgc_clear_fs(lsi->lsi_mgc);
 
         if (!rc) {
                 obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
@@ -1367,6 +1389,13 @@ static int lustre_free_lsi(struct super_block *sb)
                         OBD_FREE(lsi->lsi_lmd->lmd_exclude,
                                  sizeof(lsi->lsi_lmd->lmd_exclude[0]) *
                                  lsi->lsi_lmd->lmd_exclude_count);
+		if (lsi->lsi_lmd->lmd_mgs != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_mgs,
+				 strlen(lsi->lsi_lmd->lmd_mgs) + 1);
+		if (lsi->lsi_lmd->lmd_osd_type != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_osd_type,
+				 strlen(lsi->lsi_lmd->lmd_osd_type) + 1);
+
                 OBD_FREE(lsi->lsi_lmd, sizeof(*lsi->lsi_lmd));
         }
 
@@ -1394,6 +1423,78 @@ static int lustre_put_lsi(struct super_block *sb)
         RETURN(0);
 }
 
+static int lsi_prepare(struct lustre_sb_info *lsi)
+{
+	struct lustre_disk_data  *ldd;
+	__u32                     index;
+	int                       rc;
+	ENTRY;
+
+	LASSERT(lsi);
+	LASSERT(lsi->lsi_lmd);
+
+	OBD_ALLOC(ldd, sizeof(*ldd));
+	if (ldd == NULL)
+		RETURN(-ENOMEM);
+	strcpy(lsi->lsi_osd_type, LUSTRE_OSD_NAME);
+
+	/* The server name is given as a mount line option */
+	if (lsi->lsi_lmd->lmd_profile == NULL) {
+		LCONSOLE_ERROR("Can't determine server name\n");
+		RETURN(-EINVAL);
+	}
+
+	if (strlen(lsi->lsi_lmd->lmd_profile) >= sizeof(ldd->ldd_svname))
+		RETURN(-ENAMETOOLONG);
+
+	strcpy(ldd->ldd_svname, lsi->lsi_lmd->lmd_profile);
+	strcpy(ldd->ldd_fsname, "lustre");
+
+	/* Determine osd type */
+	if (lsi->lsi_lmd->lmd_osd_type != NULL) {
+		if (strlen(lsi->lsi_lmd->lmd_osd_type) >=
+				sizeof(lsi->lsi_osd_type))
+			RETURN (-ENAMETOOLONG);
+
+		strcpy(lsi->lsi_osd_type, lsi->lsi_lmd->lmd_osd_type);
+	}
+
+	/* Determine server type */
+	rc = server_name2index(ldd->ldd_svname, &index, NULL);
+	if (rc < 0) {
+		if (0 /*lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS*/) {
+			/* Assume we're a bare MGS */
+			rc = 0;
+			lsi->lsi_lmd->lmd_flags |= LMD_FLG_NOSVC;
+		} else {
+			LCONSOLE_ERROR("Can't determine server type of '%s'\n",
+				       lsi->lsi_svname);
+			RETURN(rc);
+		}
+	}
+	ldd->ldd_svindex = index;
+	//lsi->lsi_flags |= rc;
+	ldd->ldd_flags = rc | LDD_F_WRITECONF;
+
+	lsi->lsi_ldd = ldd;
+
+	/* Add mount line flags that used to be in ldd:
+	 * writeconf, mgs, iam, anything else?
+	 */
+#if 0
+	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF) ?
+		LDD_F_WRITECONF : 0;
+	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) ?
+		LDD_F_SV_TYPE_MGS : 0;
+	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_IAM) ?
+		LDD_F_IAM_DIR : 0;
+	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) ?
+		LDD_F_NO_PRIMNODE : 0;
+#endif
+
+	RETURN(0);
+}
+
 /*************** server mount ******************/
 
 /** Kernel mount using mount options in MOUNT_DATA_FILE.
@@ -1416,9 +1517,15 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         int rc;
         ENTRY;
 
+	if (lsi->lsi_lmd->lmd_osd_type) {
+		rc = lsi_prepare(lsi);
+		RETURN(ERR_PTR(rc));
+	}
+
         OBD_ALLOC(ldd, sizeof(*ldd));
         if (!ldd)
                 RETURN(ERR_PTR(-ENOMEM));
+	strcpy(lsi->lsi_osd_type, LUSTRE_OSD_NAME);
 
         /* In the past, we have always used flags = 0.
            Note ext3/ldiskfs can't be mounted ro. */
@@ -1532,6 +1639,14 @@ static void server_wait_finished(struct vfsmount *mnt)
        int                     rc, waited = 0;
        cfs_sigset_t            blocked;
 
+	if (mnt == NULL) {
+		cfs_waitq_init(&waitq);
+		cfs_waitq_wait_event_interruptible_timeout(waitq, 0,
+						cfs_time_seconds(3), rc);
+		return;
+	}
+
+	LASSERT(mnt);
        cfs_waitq_init(&waitq);
 
        while (mnt_get_count(mnt) > 1) {
@@ -1629,16 +1744,17 @@ static void server_put_super(struct super_block *sb)
         server_wait_finished(mnt);
 
         /* drop the One True Mount */
-        unlock_mntput(mnt);
+	if (mnt)
+		unlock_mntput(mnt);
 
-        /* Stop the servers (MDS, OSS) if no longer needed.  We must wait
-           until the target is really gone so that our type refcount check
-           is right. */
-        server_stop_servers(lddflags, lsiflags);
+	/* Stop the servers (MDS, OSS) if no longer needed.  We must wait
+	   until the target is really gone so that our type refcount check
+	   is right. */
+	server_stop_servers(lddflags, lsiflags);
 
-        /* In case of startup or cleanup err, stop related obds */
-        if (extraname) {
-                obd = class_name2obd(extraname);
+	/* In case of startup or cleanup err, stop related obds */
+	if (extraname) {
+		obd = class_name2obd(extraname);
                 if (obd) {
                         CWARN("Cleaning orphaned obd %s\n", extraname);
                         obd->obd_force = 1;
@@ -2101,6 +2217,73 @@ static int lmd_parse_mgssec(struct lustre_mount_data *lmd, char *ptr)
         return 0;
 }
 
+static int lmd_parse_string(char **handle, char *ptr)
+{
+	char   *tail;
+	int     length;
+
+	if ((handle == NULL) || (ptr == NULL))
+		return -EINVAL;
+
+	if (*handle != NULL) {
+		OBD_FREE(*handle, strlen(*handle) + 1);
+		*handle = NULL;
+	}
+
+	tail = strchr(ptr, ',');
+	if (tail == NULL)
+		length = strlen(ptr);
+	else
+		length = tail - ptr;
+
+	OBD_ALLOC(*handle, length + 1);
+	if (*handle == NULL)
+		return -ENOMEM;
+
+	memcpy(*handle, ptr, length);
+	(*handle)[length] = '\0';
+
+	return 0;
+}
+
+/* Collect multiple values for mgsnid specifiers */
+static int lmd_parse_mgs(struct lustre_mount_data *lmd, char **ptr)
+{
+	lnet_nid_t nid;
+	char *tail = *ptr;
+	char *mgsnid;
+	int   length;
+	int   oldlen = 0;
+
+	/* Find end of nidlist */
+	while (class_parse_nid(tail, &nid, &tail) == 0) {}
+	length = tail - *ptr;
+	if (length == 0) {
+		LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", *ptr);
+		return -EINVAL;
+	}
+
+	if (lmd->lmd_mgs != NULL)
+		oldlen = strlen(lmd->lmd_mgs) + 1;
+
+	OBD_ALLOC(mgsnid, oldlen + length + 1);
+	if (mgsnid == NULL)
+		return -ENOMEM;
+
+	if (lmd->lmd_mgs != NULL) {
+		/* Multiple mgsnid= are taken to mean failover locations */
+		memcpy(mgsnid, lmd->lmd_mgs, oldlen);
+		mgsnid[oldlen - 1] = ':';
+		OBD_FREE(lmd->lmd_mgs, oldlen);
+	}
+	memcpy(mgsnid + oldlen, *ptr, length);
+	mgsnid[oldlen + length] = '\0';
+	lmd->lmd_mgs = mgsnid;
+	*ptr = tail;
+
+	return 0;
+}
+
 /** Parse mount line options
  * e.g. mount -v -t lustre -o abort_recov uml1:uml2:/lustre-client /mnt/lustre
  * dev is passed as device=uml1:/lustre by mount.lustre
@@ -2167,6 +2350,15 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
 		} else if (strncmp(s1, "noscrub", 7) == 0) {
 			lmd->lmd_flags |= LMD_FLG_NOSCRUB;
 			clear++;
+		} else if (strncmp(s1, PARAM_MGSNODE,
+				   sizeof(PARAM_MGSNODE) - 1) == 0) {
+			s2 = s1 + sizeof(PARAM_MGSNODE) - 1;
+			/* Assume the next mount opt is the first
+			   invalid nid we get to. */
+			rc = lmd_parse_mgs(lmd, &s2);
+			if (rc)
+				goto invalid;
+			clear++;
                 } else if (strncmp(s1, "writeconf", 9) == 0) {
                         lmd->lmd_flags |= LMD_FLG_WRITECONF;
                         clear++;
@@ -2181,6 +2373,23 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         if (rc)
                                 goto invalid;
                         clear++;
+		} else if (strncmp(s1, "svname=", 7) == 0) {
+			rc = lmd_parse_string(&lmd->lmd_profile, s1 + 7);
+			if (rc)
+				goto invalid;
+			clear++;
+		} else if (strncmp(s1, "osd=", 4) == 0) {
+			rc = lmd_parse_string(&lmd->lmd_osd_type, s1 + 4);
+			if (rc)
+				goto invalid;
+			/* with ldiskfs we're still doing ldd parsing
+			 * in the kernel space */
+			if (!strcmp(lmd->lmd_osd_type, "osd-ldiskfs")) {
+				OBD_FREE(lmd->lmd_osd_type,
+					 strlen(lmd->lmd_osd_type) + 1);
+				lmd->lmd_osd_type = NULL;
+			}
+			clear++;
                 }
                 /* Linux 2.4 doesn't pass the device, so we stuck it at the
                    end of the options. */
