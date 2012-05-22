@@ -306,6 +306,13 @@ static int ofd_recovery_complete(const struct lu_env *env,
 
 	ENTRY;
 
+	/* Grant space for object precreation on the self export.
+	 * This initial reserved space (i.e. 20MB for zfs and 560KB for ldiskfs)
+	 * is enough to create 20k objects. It is then adapted based on the
+	 * precreate request size (see ofd_grant_create()
+	 */
+	ofd_grant_connect(env, dev->ld_obd->obd_self_export,
+			  OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace);
 	rc = next->ld_ops->ldo_recovery_complete(env, next);
 	RETURN(rc);
 }
@@ -400,6 +407,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	const char		*dev = lustre_cfg_string(cfg, 0);
 	struct ofd_thread_info	*info = NULL;
 	struct obd_device	*obd;
+	struct obd_statfs	*osfs;
 	int			 rc;
 
 	ENTRY;
@@ -423,7 +431,20 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_raid_degraded = 0;
 	m->ofd_syncjournal = 0;
 	ofd_slc_set(m);
+	m->ofd_grant_compat_disable = 0;
 
+	/* statfs data */
+	cfs_spin_lock_init(&m->ofd_osfs_lock);
+	m->ofd_osfs_age = cfs_time_shift_64(-1000);
+	m->ofd_osfs_unstable = 0;
+	m->ofd_statfs_inflight = 0;
+	m->ofd_osfs_inflight = 0;
+
+	/* grant data */
+	cfs_spin_lock_init(&m->ofd_grant_lock);
+	m->ofd_tot_dirty = 0;
+	m->ofd_tot_granted = 0;
+	m->ofd_tot_pending = 0;
 	m->ofd_max_group = 0;
 
 	cfs_rwlock_init(&obd->u.filter.fo_sptlrpc_lock);
@@ -473,6 +494,21 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		GOTO(err_lu_site, rc);
 	}
 
+	/* populate cached statfs data */
+	osfs = &ofd_info(env)->fti_u.osfs;
+	rc = ofd_statfs_internal(env, m, osfs, 0, NULL);
+	if (rc != 0) {
+		CERROR("%s: can't get statfs data, rc %d\n", obd->obd_name, rc);
+		GOTO(err_fini_stack, rc);
+	}
+	if (!IS_PO2(osfs->os_bsize)) {
+		CERROR("%s: blocksize (%d) is not a power of 2\n",
+				obd->obd_name, osfs->os_bsize);
+		GOTO(err_fini_stack, rc = -EPROTO);
+	}
+	m->ofd_blockbits = cfs_fls(osfs->os_bsize) - 1;
+
+	snprintf(info->fti_u.name, sizeof(info->fti_u.name), "filter-%p", m);
 	m->ofd_namespace = ldlm_namespace_new(obd, info->fti_u.name,
 					      LDLM_NAMESPACE_SERVER,
 					      LDLM_NAMESPACE_GREEDY,
@@ -483,6 +519,14 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	obd->obd_namespace = m->ofd_namespace;
 
 	dt_conf_get(env, m->ofd_osd, &m->ofd_dt_conf);
+
+	/* Allow at most ddp_grant_reserved% of the available filesystem space
+	 * to be granted to clients, so that any errors in the grant overhead
+	 * calculations do not allow granting more space to clients than can be
+	 * written. Assumes that in aggregate the grant overhead calculations do
+	 * not have more than ddp_grant_reserved% estimation error in them. */
+	m->ofd_grant_ratio =
+		ofd_grant_ratio_conv(m->ofd_dt_conf.ddp_grant_reserved);
 
 	rc = ofd_start(env, &m->ofd_dt_dev.dd_lu_dev);
 	if (rc)

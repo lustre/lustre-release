@@ -114,6 +114,7 @@ struct filter_export_data {
         int                        fed_mod_count;/* items in fed_writing list */
         long                       fed_pending;  /* bytes just being written */
         __u32                      fed_group;
+	__u8                       fed_pagesize; /* log2 of client page size */
 };
 
 struct mgs_export_data {

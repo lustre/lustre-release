@@ -87,6 +87,39 @@ struct ofd_device {
 	struct dt_object	*ofd_lastid_obj[OFD_MAX_GROUPS];
 	cfs_spinlock_t		 ofd_objid_lock;
 
+	/* protect all statfs-related counters */
+	cfs_spinlock_t		 ofd_osfs_lock;
+	/* statfs optimization: we cache a bit  */
+	struct obd_statfs	 ofd_osfs;
+	__u64			 ofd_osfs_age;
+	int			 ofd_blockbits;
+	/* writes which might be be accounted twice in ofd_osfs.os_bavail */
+	obd_size		 ofd_osfs_unstable;
+
+	/* counters used during statfs update, protected by ofd_osfs_lock.
+	 * record when some statfs refresh are in progress */
+	int			 ofd_statfs_inflight;
+	/* track writes completed while statfs refresh is underway.
+	 * tracking is only effective when ofd_statfs_inflight > 1 */
+	obd_size		 ofd_osfs_inflight;
+
+	/* grants: all values in bytes */
+	/* grant lock to protect all grant counters */
+	cfs_spinlock_t		 ofd_grant_lock;
+	/* total amount of dirty data reported by clients in incoming obdo */
+	obd_size		 ofd_tot_dirty;
+	/* sum of filesystem space granted to clients for async writes */
+	obd_size		 ofd_tot_granted;
+	/* grant used by I/Os in progress (between prepare and commit) */
+	obd_size		 ofd_tot_pending;
+	/* free space threshold over which we stop granting space to clients
+	 * ofd_grant_ratio is stored as a fixed-point fraction using
+	 * OFD_GRANT_RATIO_SHIFT of the remaining free space, not in percentage
+	 * values */
+	int			 ofd_grant_ratio;
+	/* number of clients using grants */
+	int			 ofd_tot_granted_clients;
+
 	/* ofd mod data: ofd_device wide values */
 	int			 ofd_fmd_max_num; /* per ofd ofd_mod_data */
 	cfs_duration_t		 ofd_fmd_max_age; /* time to fmd expiry */
@@ -96,7 +129,10 @@ struct ofd_device {
 				 /* sync journal on writes */
 				 ofd_syncjournal:1,
 				 /* sync on lock cancel */
-				 ofd_sync_lock_cancel:2;
+				 ofd_sync_lock_cancel:2,
+				 /* shall we grant space to clients not
+				  * supporting OBD_CONNECT_GRANT_PARAM? */
+				 ofd_grant_compat_disable:1;
 
 	struct lu_site		 ofd_site;
 };
@@ -149,6 +185,9 @@ struct ofd_thread_info {
 	struct dt_object_format		 fti_dof;
 	struct lu_buf			 fti_buf;
 	loff_t				 fti_off;
+
+	/* Space used by the I/O, used by grant code */
+	unsigned long			 fti_used;
 };
 
 extern void target_recovery_fini(struct obd_device *obd);
@@ -165,6 +204,9 @@ extern struct lu_context_key ofd_thread_key;
 
 /* ofd_obd.c */
 extern struct obd_ops ofd_obd_ops;
+int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
+			struct obd_statfs *osfs, __u64 max_age,
+			int *from_cache);
 
 /* ofd_fs.c */
 obd_id ofd_last_id(struct ofd_device *ofd, obd_seq seq);
@@ -177,6 +219,60 @@ void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd);
 void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars);
 int lproc_ofd_attach_seqstat(struct obd_device *dev);
 extern struct file_operations ofd_per_nid_stats_fops;
+
+/* ofd_grants.c */
+#define OFD_GRANT_RATIO_SHIFT 8
+static inline __u64 ofd_grant_reserved(struct ofd_device *ofd, obd_size bavail)
+{
+	return (bavail * ofd->ofd_grant_ratio) >> OFD_GRANT_RATIO_SHIFT;
+}
+
+static inline int ofd_grant_ratio_conv(int percentage)
+{
+	return (percentage << OFD_GRANT_RATIO_SHIFT) / 100;
+}
+
+static inline int ofd_grant_param_supp(struct obd_export *exp)
+{
+	return !!(exp->exp_connect_flags & OBD_CONNECT_GRANT_PARAM);
+}
+
+/* Blocksize used for client not supporting OBD_CONNECT_GRANT_PARAM.
+ * That's 4KB=2^12 which is the biggest block size known to work whatever
+ * the client's page size is. */
+#define COMPAT_BSIZE_SHIFT 12
+static inline int ofd_grant_compat(struct obd_export *exp,
+				   struct ofd_device *ofd)
+{
+	/* Clients which don't support OBD_CONNECT_GRANT_PARAM cannot handle
+	 * a block size > page size and consume CFS_PAGE_SIZE of grant when
+	 * dirtying a page regardless of the block size */
+	return !!(ofd_obd(ofd)->obd_self_export != exp &&
+		  ofd->ofd_blockbits > COMPAT_BSIZE_SHIFT &&
+		  !ofd_grant_param_supp(exp));
+}
+
+static inline int ofd_grant_prohibit(struct obd_export *exp,
+				     struct ofd_device *ofd)
+{
+	/* When ofd_grant_compat_disable is set, we don't grant any space to
+	 * clients not supporting OBD_CONNECT_GRANT_PARAM.
+	 * Otherwise, space granted to such a client is inflated since it
+	 * consumes CFS_PAGE_SIZE of grant space per block */
+	return !!(ofd_grant_compat(exp, ofd) && ofd->ofd_grant_compat_disable);
+}
+
+void ofd_grant_sanity_check(struct obd_device *obd, const char *func);
+long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
+		       obd_size want);
+void ofd_grant_discard(struct obd_export *exp);
+void ofd_grant_prepare_read(const struct lu_env *env, struct obd_export *exp,
+			    struct obdo *oa);
+void ofd_grant_prepare_write(const struct lu_env *env, struct obd_export *exp,
+			     struct obdo *oa, struct niobuf_remote *rnb,
+			     int niocount);
+void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp, int rc);
+int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr);
 
 /* ofd_fmd.c */
 int ofd_fmd_init(void);
@@ -230,5 +326,10 @@ static inline void ofd_slc_set(struct ofd_device *ofd)
 	else if (ofd->ofd_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
 		ofd->ofd_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
 }
+
+/* niobuf_local has no rnb_ prefix in master */
+#define rnb_offset offset
+#define rnb_flags  flags
+#define rnb_len    len
 
 #endif /* _OFD_INTERNAL_H */
