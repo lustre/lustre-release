@@ -183,6 +183,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
         struct vvp_io           *vio;
         struct cl_env_nest       nest;
         int                      result;
+	cfs_sigset_t             set;
         ENTRY;
 
         LASSERT(vmpage != NULL);
@@ -207,7 +208,9 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
         vio->u.fault.ft_vma    = vma;
         vio->u.fault.ft_vmpage = vmpage;
 
-        result = cl_io_loop(env, io);
+	set = cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM));
+	result = cl_io_loop(env, io);
+	cfs_restore_sigs(set);
 
         if (result == -ENODATA) /* peek failed, no lock caching. */
                 CDEBUG(D_MMAP, "race on page_mkwrite: %lx (%lu %p)\n",
@@ -292,6 +295,7 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         pgoff_t                 pg_offset;
         int                     result;
         const unsigned long     writable = VM_SHARED|VM_WRITE;
+	cfs_sigset_t            set;
         ENTRY;
 
         pg_offset = ((address - vma->vm_start) >> PAGE_SHIFT) + vma->vm_pgoff;
@@ -311,10 +315,15 @@ struct page *ll_nopage(struct vm_area_struct *vma, unsigned long address,
         vio->u.fault.nopage.ft_type    = type;
         vio->u.fault.ft_vmpage         = NULL;
 
-        result = cl_io_loop(env, io);
-        page = vio->u.fault.ft_vmpage;
-        if (result != 0 && page != NULL)
-                page_cache_release(page);
+	set = cfs_block_sigsinv(sigmask(SIGKILL)|sigmask(SIGTERM));
+	result = cl_io_loop(env, io);
+	cfs_restore_sigs(set);
+
+	page = vio->u.fault.ft_vmpage;
+	if (result != 0 && page != NULL) {
+		page_cache_release(page);
+		page = NOPAGE_SIGBUS;
+	}
 
 out_err:
         if (result == -ENOMEM)
@@ -330,6 +339,26 @@ out_err:
 }
 
 #else
+
+static inline int to_fault_error(int result)
+{
+	switch(result) {
+	case 0:
+		result = VM_FAULT_LOCKED;
+		break;
+	case -EFAULT:
+		result = VM_FAULT_NOPAGE;
+		break;
+	case -ENOMEM:
+		result = VM_FAULT_OOM;
+		break;
+	default:
+		result = VM_FAULT_SIGBUS;
+		break;
+	}
+	return result;
+}
+
 /**
  * Lustre implementation of a vm_operations_struct::fault() method, called by
  * VM to server page fault (both in kernel and user space).
@@ -355,35 +384,30 @@ static int ll_fault0(struct vm_area_struct *vma, struct vm_fault *vmf)
 
         io = ll_fault_io_init(vma, &env,  &nest, vmf->pgoff, &ra_flags);
         if (IS_ERR(io))
-                RETURN(VM_FAULT_ERROR);
+		RETURN(to_fault_error(PTR_ERR(io)));
 
         result = io->ci_result;
-        if (result < 0)
-                goto out_err;
+	if (result == 0) {
+		vio = vvp_env_io(env);
+		vio->u.fault.ft_vma       = vma;
+		vio->u.fault.ft_vmpage    = NULL;
+		vio->u.fault.fault.ft_vmf = vmf;
 
-        vio = vvp_env_io(env);
-        vio->u.fault.ft_vma       = vma;
-        vio->u.fault.ft_vmpage    = NULL;
-        vio->u.fault.fault.ft_vmf = vmf;
+		result = cl_io_loop(env, io);
 
-        result = cl_io_loop(env, io);
-
-        vmpage = vio->u.fault.ft_vmpage;
-        if (result != 0 && vmpage != NULL) {
-                page_cache_release(vmpage);
-                vmf->page = NULL;
+		fault_ret = vio->u.fault.fault.ft_flags;
+		vmpage = vio->u.fault.ft_vmpage;
+		if (result != 0 && vmpage != NULL) {
+			page_cache_release(vmpage);
+			vmf->page = NULL;
+		}
         }
-
-        fault_ret = vio->u.fault.fault.ft_flags;
-
-out_err:
-        if (result != 0 && fault_ret == 0)
-                fault_ret = VM_FAULT_ERROR;
-
-        vma->vm_flags |= ra_flags;
-
         cl_io_fini(env, io);
         cl_env_nested_put(&nest, env);
+
+	vma->vm_flags |= ra_flags;
+	if (result != 0 && !(fault_ret & VM_FAULT_RETRY))
+		fault_ret |= to_fault_error(result);
 
         CDEBUG(D_MMAP, "%s fault %d/%d\n",
                cfs_current()->comm, fault_ret, result);
@@ -392,9 +416,15 @@ out_err:
 
 static int ll_fault(struct vm_area_struct *vma, struct vm_fault *vmf)
 {
-        int count = 0;
-        bool printed = false;
-        int result;
+	int count = 0;
+	bool printed = false;
+	int result;
+	cfs_sigset_t set;
+
+	/* Only SIGKILL and SIGTERM is allowed for fault/nopage/mkwrite
+	 * so that it can be killed by admin but not cause segfault by
+	 * other signals. */
+	set = cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM));
 
 restart:
         result = ll_fault0(vma, vmf);
@@ -421,6 +451,7 @@ restart:
 
                 result |= VM_FAULT_LOCKED;
         }
+	cfs_restore_sigs(set);
         return result;
 }
 #endif

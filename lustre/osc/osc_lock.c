@@ -200,6 +200,7 @@ static int osc_lock_unuse(const struct lu_env *env,
                 LASSERT(!ols->ols_hold);
                 LASSERT(ols->ols_agl);
                 return 0;
+	case OLS_ENQUEUED:
         case OLS_UPCALL_RECEIVED:
                 LASSERT(!ols->ols_hold);
                 ols->ols_state = OLS_NEW;
@@ -1545,6 +1546,9 @@ static int osc_lock_fits_into(const struct lu_env *env,
 
         if (need->cld_enq_flags & CEF_NEVER)
                 return 0;
+
+	if (ols->ols_state >= OLS_CANCELLED)
+		return 0;
 
         if (need->cld_mode == CLM_PHANTOM) {
                 if (ols->ols_agl)

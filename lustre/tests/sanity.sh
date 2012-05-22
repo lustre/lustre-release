@@ -9285,6 +9285,18 @@ test_226 () {
 }
 run_test 226 "call path2fid and fid2path on files of all type"
 
+# LU-1299 Executing or running ldd on a truncated executable does not
+# cause an out-of-memory condition.
+test_227() {
+	dd if=`which date` of=$MOUNT/date bs=1k count=1
+	chmod +x $MOUNT/date
+
+	$MOUNT/date > /dev/null
+	ldd $MOUNT/date > /dev/null
+	rm -f $MOUNT/date
+}
+run_test 227 "running truncated executable does not cause OOM"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

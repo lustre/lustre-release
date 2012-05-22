@@ -282,26 +282,27 @@ int cfs_daemonize_ctxt(char *str)
 
 cfs_sigset_t cfs_block_allsigs(void)
 {
-        cfs_sigset_t   all;
-        cfs_sigset_t   old;
-        int            rc;
+	cfs_sigset_t   all;
+	cfs_sigset_t   old;
+	int            rc;
 
-        sigfillset(&all);
-        rc = sigprocmask(SIG_SETMASK, &all, &old);
-        LASSERT(rc == 0);
+	sigfillset(&all);
+	rc = sigprocmask(SIG_BLOCK, &all, &old);
+	LASSERT(rc == 0);
 
-        return old;
+	return old;
 }
 
-cfs_sigset_t cfs_block_sigs(cfs_sigset_t blocks)
+cfs_sigset_t cfs_block_sigs(unsigned long sigs)
 {
-        cfs_sigset_t   old;
-        int   rc;
+	cfs_sigset_t   old;
+	cfs_sigset_t   blocks = { { sigs } }; /* kludge */
+	int   rc;
 
-        rc = sigprocmask(SIG_SETMASK, &blocks, &old);
-        LASSERT (rc == 0);
+	rc = sigprocmask(SIG_BLOCK, &blocks, &old);
+	LASSERT (rc == 0);
 
-        return old;
+	return old;
 }
 
 /* Block all signals except for the @sigs. It's only used in

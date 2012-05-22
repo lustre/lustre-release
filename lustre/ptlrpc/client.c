@@ -2040,7 +2040,7 @@ int ptlrpc_set_wait(struct ptlrpc_request_set *set)
                          * reentrant from userspace again */
                         if (cfs_signal_pending())
                                 ptlrpc_interrupted_set(set);
-                        cfs_block_sigs(blocked_sigs);
+			cfs_restore_sigs(blocked_sigs);
                 }
 
                 LASSERT(rc == 0 || rc == -EINTR || rc == -ETIMEDOUT);
