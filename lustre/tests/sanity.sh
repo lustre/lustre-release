@@ -4267,7 +4267,8 @@ run_test 65l "lfs find on -1 stripe dir ========================"
 test_66() {
 	COUNT=${COUNT:-8}
 	dd if=/dev/zero of=$DIR/f66 bs=1k count=$COUNT
-	sync; sleep 1; sync
+	sync; sync_all_data; sync; sync_all_data
+	cancel_lru_locks osc
 	BLOCKS=`ls -s $DIR/f66 | awk '{ print $1 }'`
 	[ $BLOCKS -ge $COUNT ] || error "$DIR/f66 blocks $BLOCKS < $COUNT"
 }

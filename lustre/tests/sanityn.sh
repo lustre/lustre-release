@@ -898,38 +898,44 @@ test_35() { # bug 17645
 run_test 35 "-EINTR cp_ast vs. bl_ast race does not evict client"
 
 test_36() { #bug 16417
-    local SIZE
-    local SIZE_B
-    local i
+	local SIZE
+	local SIZE_B
+	local i
 
-    mkdir -p $DIR1/$tdir
-    $LFS setstripe -c -1 $DIR1/$tdir
-    i=0
-    SIZE=50
-    let SIZE_B=SIZE*1024*1024
+	mkdir -p $DIR1/$tdir
+	$LFS setstripe -c -1 $DIR1/$tdir
+	i=0
+	SIZE=50
+	let SIZE_B=SIZE*1024*1024
 
-    while [ $i -le 10 ]; do
-        lctl mark "start test"
-        local before=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
-        dd if=/dev/zero of=$DIR1/$tdir/file000 bs=1M count=$SIZE
-        sync
-        sleep 1
-        local after_dd=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
-        multiop_bg_pause $DIR2/$tdir/file000 O_r${SIZE_B}c || return 3
-        read_pid=$!
-        rm -f $DIR1/$tdir/file000
-        kill -USR1 $read_pid
-        wait $read_pid
-        sleep 1
-        local after=$($LFS df | awk '{if ($1 ~/^filesystem/) {print $5; exit} }')
-        echo "*** cycle($i) *** before($before):after_dd($after_dd):after($after)"
-        # this free space! not used
-        if [ $after_dd -ge $after ]; then
-            error "space leaked"
-            return 1;
-        fi
-        let i=i+1
-            done
+	while [ $i -le 10 ]; do
+		lctl mark "start test"
+		local before=$($LFS df | awk '{if ($1 ~/^filesystem/) \
+		                               {print $5; exit} }')
+		dd if=/dev/zero of=$DIR1/$tdir/file000 bs=1M count=$SIZE
+		sync          # sync data from client's cache
+		sync_all_data # sync data from server's cache (delayed
+		              # allocation)
+		sleep 1
+		local after_dd=$($LFS df | awk '{if ($1 ~/^filesystem/) \
+		                                 {print $5; exit} }')
+		multiop_bg_pause $DIR2/$tdir/file000 O_r${SIZE_B}c || return 3
+		read_pid=$!
+		rm -f $DIR1/$tdir/file000
+		kill -USR1 $read_pid
+		wait $read_pid
+		sleep 1
+		local after=$($LFS df | awk '{if ($1 ~/^filesystem/) \
+		                              {print $5; exit} }')
+		echo "*** cycle($i) *** before($before) after_dd($after_dd)" \
+			"after($after)"
+		# this free space! not used
+		if [ $after_dd -ge $after ]; then
+			error "space leaked"
+			return 1;
+		fi
+		let i=i+1
+	done
 }
 run_test 36 "handle ESTALE/open-unlink corectly"
 
