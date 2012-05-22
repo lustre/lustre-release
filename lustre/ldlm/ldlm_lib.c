@@ -1069,7 +1069,8 @@ dont_check_exports:
           class_disconnect->class_export_recovery_cleanup() race
          */
         cfs_spin_lock(&target->obd_recovery_task_lock);
-        if (target->obd_recovering && !export->exp_in_recovery) {
+        if (target->obd_recovering && !export->exp_in_recovery &&
+            !export->exp_disconnected) {
                 cfs_spin_lock(&export->exp_lock);
                 export->exp_in_recovery = 1;
                 export->exp_req_replay_needed = 1;
@@ -1419,9 +1420,9 @@ static void reset_recovery_timer(struct obd_device *obd, int duration,
 
         obd->obd_recovery_end = obd->obd_recovery_start +
                                 obd->obd_recovery_timeout;
-        if (!cfs_timer_is_armed(&obd->obd_recovery_timer) ||
-            cfs_time_before(now, obd->obd_recovery_end)) {
+        if (cfs_time_before(now, obd->obd_recovery_end)) {
                 left = cfs_time_sub(obd->obd_recovery_end, now);
+                LASSERT(left != 0);
                 cfs_timer_arm(&obd->obd_recovery_timer, cfs_time_shift(left));
         }
         cfs_spin_unlock(&obd->obd_recovery_task_lock);
