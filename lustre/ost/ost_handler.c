@@ -2401,14 +2401,12 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
 static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
 	static struct ptlrpc_service_conf	svc_conf;
-        struct ost_obd *ost = &obd->u.ost;
-        struct lprocfs_static_vars lvars;
-        int oss_min_threads;
-        int oss_max_threads;
-        int oss_min_create_threads;
-        int oss_max_create_threads;
-        int rc;
-        ENTRY;
+	struct ost_obd *ost = &obd->u.ost;
+	struct lprocfs_static_vars lvars;
+	int oss_min_threads = OSS_THREADS_MIN;
+	int oss_max_threads = OSS_THREADS_MAX;
+	int rc;
+	ENTRY;
 
         rc = cfs_cleanup_group_info();
         if (rc)
@@ -2419,14 +2417,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 
         cfs_mutex_init(&ost->ost_health_mutex);
 
-        if (oss_num_threads) {
-                /* If oss_num_threads is set, it is the min and the max. */
-                if (oss_num_threads > OSS_THREADS_MAX)
-                        oss_num_threads = OSS_THREADS_MAX;
-                if (oss_num_threads < OSS_THREADS_MIN)
-                        oss_num_threads = OSS_THREADS_MIN;
-                oss_max_threads = oss_min_threads = oss_num_threads;
-	} else {
+	if (oss_num_threads == 0) {
 		/* Base min threads on memory and cpus */
 		oss_min_threads =
 			cfs_num_online_cpus() * CFS_NUM_CACHEPAGES >>
@@ -2437,7 +2428,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		if (oss_min_threads > OSS_THREADS_MAX / 4)
 			oss_min_threads = OSS_THREADS_MAX / 4;
 		oss_max_threads = min(OSS_THREADS_MAX, oss_min_threads * 4 + 1);
-	}
+        }
 
 	svc_conf = (typeof(svc_conf)) {
 		.psc_name		= LUSTRE_OSS_NAME,
@@ -2454,6 +2445,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_thr_name		= "ll_ost",
 			.tc_nthrs_min		= oss_min_threads,
 			.tc_nthrs_max		= oss_max_threads,
+			.tc_nthrs_user		= oss_num_threads,
 			.tc_ctx_tags		= LCT_DT_THREAD,
 		},
 		.psc_ops		= {
@@ -2467,18 +2459,6 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		rc = PTR_ERR(ost->ost_service);
 		CERROR("failed to start service: %d\n", rc);
 		GOTO(out_lprocfs, rc);
-        }
-
-        if (oss_num_create_threads) {
-                if (oss_num_create_threads > OSS_MAX_CREATE_THREADS)
-                        oss_num_create_threads = OSS_MAX_CREATE_THREADS;
-                if (oss_num_create_threads < OSS_MIN_CREATE_THREADS)
-                        oss_num_create_threads = OSS_MIN_CREATE_THREADS;
-                oss_min_create_threads = oss_max_create_threads =
-                        oss_num_create_threads;
-        } else {
-                oss_min_create_threads = OSS_MIN_CREATE_THREADS;
-                oss_max_create_threads = OSS_MAX_CREATE_THREADS;
         }
 
 	memset(&svc_conf, 0, sizeof(svc_conf));
@@ -2495,8 +2475,9 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "ll_ost_create",
-			.tc_nthrs_min		= oss_min_create_threads,
-			.tc_nthrs_max		= oss_max_create_threads,
+			.tc_nthrs_min		= OSS_CR_THREADS_MIN,
+			.tc_nthrs_max		= OSS_CR_THREADS_MAX,
+			.tc_nthrs_user		= oss_num_create_threads,
 			.tc_ctx_tags		= LCT_DT_THREAD,
 		},
 		.psc_ops		= {
@@ -2528,6 +2509,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 			.tc_thr_name		= "ll_ost_io",
 			.tc_nthrs_min		= oss_min_threads,
 			.tc_nthrs_max		= oss_max_threads,
+			.tc_nthrs_user		= oss_num_threads,
 			.tc_cpu_affinity	= 1,
 			.tc_ctx_tags		= LCT_DT_THREAD,
 		},

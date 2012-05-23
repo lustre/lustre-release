@@ -62,8 +62,9 @@ struct ost_thread_local_cache {
 
 struct ost_thread_local_cache *ost_tls(struct ptlrpc_request *r);
 
-#define OSS_MIN_CREATE_THREADS  2UL
-#define OSS_MAX_CREATE_THREADS 16UL
+/* threads for handling "create" request */
+#define OSS_CR_THREADS_MIN	2UL
+#define OSS_CR_THREADS_MAX	16UL
 
 /* Quota stuff */
 extern quota_interface_t *quota_interface;

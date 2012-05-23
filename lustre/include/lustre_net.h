@@ -106,6 +106,8 @@
 # endif
 #endif /* __KERNEL__ */
 
+#define PTLRPC_NTHRS_MIN	2
+
 /**
  * The following constants determine how memory is used to buffer incoming
  * service requests.
@@ -130,8 +132,8 @@
 #define LDLM_MAXREPSIZE (1024)
 
 /** Absolute limits */
-#define MDT_MIN_THREADS 2UL
 #ifndef MDT_MAX_THREADS
+#define MDT_MIN_THREADS PTLRPC_NTHRS_MIN
 #define MDT_MAX_THREADS 512UL
 #endif
 #define MDS_NBUFS       (64 * cfs_num_online_cpus())
@@ -1583,6 +1585,9 @@ struct ptlrpc_service_thr_conf {
 	unsigned int			tc_nthrs_min;
 	/* max number of service threads to start */
 	unsigned int			tc_nthrs_max;
+	/* user specified threads number, it will be validated due to
+	 * other members of this structure. */
+	unsigned int			tc_nthrs_user;
 	/* set NUMA node affinity for service threads */
 	unsigned int			tc_cpu_affinity;
 	/* Tags for lu_context associated with service thread */

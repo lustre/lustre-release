@@ -97,8 +97,6 @@ ldlm_mode_t mdt_dlm_lock_modes[] = {
  * Initialized in mdt_mod_init().
  */
 static unsigned long mdt_num_threads;
-static unsigned long mdt_min_threads;
-static unsigned long mdt_max_threads;
 
 /* ptlrpc request handler for MDT. All handlers are
  * grouped into several slices - struct mdt_opc_slice,
@@ -3931,8 +3929,9 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		 */
 		.psc_thr		= {
 			.tc_thr_name		= LUSTRE_MDT_NAME,
-			.tc_nthrs_min		= mdt_min_threads,
-			.tc_nthrs_max		= mdt_max_threads,
+			.tc_nthrs_min		= MDT_MIN_THREADS,
+			.tc_nthrs_max		= MDT_MAX_THREADS,
+			.tc_nthrs_user		= mdt_num_threads,
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_ops		= {
@@ -3967,8 +3966,9 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "mdt_rdpg",
-			.tc_nthrs_min		= mdt_min_threads,
-			.tc_nthrs_max		= mdt_max_threads,
+			.tc_nthrs_min		= MDT_MIN_THREADS,
+			.tc_nthrs_max		= MDT_MAX_THREADS,
+			.tc_nthrs_user		= mdt_num_threads,
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_ops		= {
@@ -4006,8 +4006,9 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "mdt_attr",
-			.tc_nthrs_min		= mdt_min_threads,
-			.tc_nthrs_max		= mdt_max_threads,
+			.tc_nthrs_min		= MDT_MIN_THREADS,
+			.tc_nthrs_max		= MDT_MAX_THREADS,
+			.tc_nthrs_user		= mdt_num_threads,
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_ops		= {
@@ -4041,8 +4042,9 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "mdt_mdsc",
-			.tc_nthrs_min		= mdt_min_threads,
-			.tc_nthrs_max		= mdt_max_threads,
+			.tc_nthrs_min		= MDT_MIN_THREADS,
+			.tc_nthrs_max		= MDT_MAX_THREADS,
+			.tc_nthrs_user		= mdt_num_threads,
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_ops		= {
@@ -4076,10 +4078,10 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "mdt_mdss",
-			.tc_nthrs_min		= mdt_min_threads,
-			.tc_nthrs_max		= mdt_max_threads,
-			.tc_ctx_tags		= LCT_MD_THREAD | \
-						  LCT_DT_THREAD,
+			.tc_nthrs_min		= MDT_MIN_THREADS,
+			.tc_nthrs_max		= MDT_MAX_THREADS,
+			.tc_nthrs_user		= mdt_num_threads,
+			.tc_ctx_tags		= LCT_MD_THREAD | LCT_DT_THREAD
 		},
 		.psc_ops		= {
 			.so_req_handler		= mdt_mdss_handle,
@@ -4114,10 +4116,10 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "mdt_dtss",
-			.tc_nthrs_min		= mdt_min_threads,
-			.tc_nthrs_max		= mdt_max_threads,
-			.tc_ctx_tags		= LCT_MD_THREAD | \
-						  LCT_DT_THREAD,
+			.tc_nthrs_min		= MDT_MIN_THREADS,
+			.tc_nthrs_max		= MDT_MAX_THREADS,
+			.tc_nthrs_user		= mdt_num_threads,
+			.tc_ctx_tags		= LCT_MD_THREAD | LCT_DT_THREAD
 		},
 		.psc_ops		= {
 			.so_req_handler		= mdt_dtss_handle,
@@ -4148,10 +4150,10 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "mdt_fld",
-			.tc_nthrs_min		= mdt_min_threads,
-			.tc_nthrs_max		= mdt_max_threads,
-			.tc_ctx_tags		= LCT_DT_THREAD | \
-						  LCT_MD_THREAD,
+			.tc_nthrs_min		= MDT_MIN_THREADS,
+			.tc_nthrs_max		= MDT_MAX_THREADS,
+			.tc_nthrs_user		= mdt_num_threads,
+			.tc_ctx_tags		= LCT_DT_THREAD | LCT_MD_THREAD
 		},
 		.psc_ops		= {
 			.so_req_handler		= mdt_fld_handle,
@@ -4185,8 +4187,9 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "mdt_mds",
-			.tc_nthrs_min		= mdt_min_threads,
-			.tc_nthrs_max		= mdt_max_threads,
+			.tc_nthrs_min		= MDT_MIN_THREADS,
+			.tc_nthrs_max		= MDT_MAX_THREADS,
+			.tc_nthrs_user		= mdt_num_threads,
 			.tc_ctx_tags		= LCT_MD_THREAD,
 		},
 		.psc_ops		= {
@@ -5856,17 +5859,6 @@ static int __init mdt_mod_init(void)
 {
         struct lprocfs_static_vars lvars;
         int rc;
-
-        if (mdt_num_threads > 0) {
-                if (mdt_num_threads > MDT_MAX_THREADS)
-                        mdt_num_threads = MDT_MAX_THREADS;
-                if (mdt_num_threads < MDT_MIN_THREADS)
-                        mdt_num_threads = MDT_MIN_THREADS;
-                mdt_max_threads = mdt_min_threads = mdt_num_threads;
-        } else {
-                mdt_max_threads = MDT_MAX_THREADS;
-                mdt_min_threads = MDT_MIN_THREADS;
-        }
 
         lprocfs_mdt_init_vars(&lvars);
         rc = class_register_type(&mdt_obd_device_ops, NULL,

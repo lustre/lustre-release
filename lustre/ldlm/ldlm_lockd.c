@@ -52,11 +52,9 @@
 #include <libcfs/list.h>
 #include "ldlm_internal.h"
 
-#ifdef __KERNEL__
 static int ldlm_num_threads;
 CFS_MODULE_PARM(ldlm_num_threads, "i", int, 0444,
                 "number of DLM service threads to start");
-#endif
 
 extern cfs_mem_cache_t *ldlm_resource_slab;
 extern cfs_mem_cache_t *ldlm_lock_slab;
@@ -2524,8 +2522,6 @@ static int ldlm_setup(void)
 	static struct ptlrpc_service_conf	conf;
 	struct ldlm_bl_pool			*blp = NULL;
         int rc = 0;
-        int ldlm_min_threads = LDLM_THREADS_AUTO_MIN;
-        int ldlm_max_threads = LDLM_THREADS_AUTO_MAX;
 #ifdef __KERNEL__
         int i;
 #endif
@@ -2544,16 +2540,6 @@ static int ldlm_setup(void)
 		GOTO(out, rc);
 #endif
 
-#ifdef __KERNEL__
-        if (ldlm_num_threads) {
-                /* If ldlm_num_threads is set, it is the min and the max. */
-                if (ldlm_num_threads > LDLM_THREADS_AUTO_MAX)
-                        ldlm_num_threads = LDLM_THREADS_AUTO_MAX;
-                if (ldlm_num_threads < LDLM_THREADS_AUTO_MIN)
-                        ldlm_num_threads = LDLM_THREADS_AUTO_MIN;
-                ldlm_min_threads = ldlm_max_threads = ldlm_num_threads;
-        }
-#endif
 	memset(&conf, 0, sizeof(conf));
 	conf = (typeof(conf)) {
 		.psc_name		= "ldlm_cbd",
@@ -2568,8 +2554,9 @@ static int ldlm_setup(void)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "ldlm_cb",
-			.tc_nthrs_min		= ldlm_min_threads,
-			.tc_nthrs_max		= ldlm_max_threads,
+			.tc_nthrs_min		= LDLM_THREADS_AUTO_MIN,
+			.tc_nthrs_max		= LDLM_THREADS_AUTO_MAX,
+			.tc_nthrs_user		= ldlm_num_threads,
 			.tc_ctx_tags		= LCT_MD_THREAD | \
 						  LCT_DT_THREAD,
 		},
@@ -2602,8 +2589,9 @@ static int ldlm_setup(void)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "ldlm_cn",
-			.tc_nthrs_min		= ldlm_min_threads,
-			.tc_nthrs_max		= ldlm_max_threads,
+			.tc_nthrs_min		= LDLM_THREADS_AUTO_MIN,
+			.tc_nthrs_max		= LDLM_THREADS_AUTO_MAX,
+			.tc_nthrs_user		= ldlm_num_threads,
 			.tc_ctx_tags		= LCT_MD_THREAD | \
 						  LCT_DT_THREAD | \
 						  LCT_CL_THREAD,
@@ -2634,10 +2622,18 @@ static int ldlm_setup(void)
         cfs_waitq_init(&blp->blp_waitq);
         cfs_atomic_set(&blp->blp_num_threads, 0);
         cfs_atomic_set(&blp->blp_busy_threads, 0);
-        blp->blp_min_threads = ldlm_min_threads;
-        blp->blp_max_threads = ldlm_max_threads;
 
 #ifdef __KERNEL__
+	if (ldlm_num_threads == 0) {
+		blp->blp_min_threads = LDLM_THREADS_AUTO_MIN;
+		blp->blp_max_threads = LDLM_THREADS_AUTO_MAX;
+	} else {
+		blp->blp_min_threads = blp->blp_max_threads = \
+			min_t(int, LDLM_THREADS_AUTO_MAX,
+				   max_t(int, LDLM_THREADS_AUTO_MIN,
+					      ldlm_num_threads));
+	}
+
         for (i = 0; i < blp->blp_min_threads; i++) {
                 rc = ldlm_bl_thread_start(blp);
                 if (rc < 0)
