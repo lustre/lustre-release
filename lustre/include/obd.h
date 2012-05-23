@@ -806,6 +806,7 @@ struct lmv_obd {
 };
 
 struct niobuf_local {
+	__u64 lnb_file_offset;
         __u64 offset;
         __u32 len;
         __u32 flags;
