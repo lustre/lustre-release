@@ -50,6 +50,10 @@
 			   OBD_INCOMPAT_COMMON_LR)
 #define OFD_MAX_GROUPS	256
 
+/* Limit the returned fields marked valid to those that we actually might set */
+#define OFD_VALID_FLAGS (LA_TYPE | LA_MODE | LA_SIZE | LA_BLOCKS | \
+			 LA_BLKSIZE | LA_ATIME | LA_MTIME | LA_CTIME)
+
 /* per-client-per-object persistent state (LRU) */
 struct ofd_mod_data {
 	cfs_list_t	fmd_list;        /* linked to fed_mod_list */
@@ -90,6 +94,7 @@ struct ofd_device {
 	cfs_mutex_t		 ofd_create_locks[OFD_MAX_GROUPS];
 	struct dt_object	*ofd_lastid_obj[OFD_MAX_GROUPS];
 	cfs_spinlock_t		 ofd_objid_lock;
+	unsigned long		 ofd_destroys_in_progress;
 
 	/* protect all statfs-related counters */
 	cfs_spinlock_t		 ofd_osfs_lock;
@@ -253,6 +258,8 @@ struct ofd_thread_info {
 	struct lu_fid			 fti_fid;
 	struct lu_attr			 fti_attr;
 	struct lu_attr			 fti_attr2;
+	struct ldlm_res_id		 fti_resid;
+	struct filter_fid		 fti_mds_fid;
 	struct filter_fid		 fti_mds_fid2;
 	struct ost_id			 fti_ostid;
 	struct ofd_object		*fti_obj;
@@ -296,6 +303,18 @@ int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int);
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 		 struct obd_device *obd);
 void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd);
+
+/* ofd_io.c */
+int ofd_preprw(const struct lu_env *env,int cmd, struct obd_export *exp,
+	       struct obdo *oa, int objcount, struct obd_ioobj *obj,
+	       struct niobuf_remote *rnb, int *nr_local,
+	       struct niobuf_local *lnb, struct obd_trans_info *oti,
+	       struct lustre_capa *capa);
+int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
+		 struct obdo *oa, int objcount, struct obd_ioobj *obj,
+		 struct niobuf_remote *rnb, int npages,
+		 struct niobuf_local *lnb, struct obd_trans_info *oti,
+		 int old_rc);
 
 /* ofd_trans.c */
 struct thandle *ofd_trans_create(const struct lu_env *env,
@@ -478,6 +497,26 @@ static inline void ofd_fid_from_resid(struct lu_fid *fid,
 	}
 }
 
+static inline void ofd_oti2info(struct ofd_thread_info *info,
+				struct obd_trans_info *oti)
+{
+	info->fti_xid = oti->oti_xid;
+	info->fti_transno = oti->oti_transno;
+	info->fti_pre_version = oti->oti_pre_version;
+}
+
+static inline void ofd_info2oti(struct ofd_thread_info *info,
+                                struct obd_trans_info *oti)
+{
+	oti->oti_xid = info->fti_xid;
+	LASSERTF(ergo(oti->oti_transno > 0,
+		      oti->oti_transno == info->fti_transno),
+		 "Overwrite replay transno "LPX64" by "LPX64"\n",
+		 oti->oti_transno, info->fti_transno);
+	oti->oti_transno = info->fti_transno;
+	oti->oti_pre_version = info->fti_pre_version;
+}
+
 /* sync on lock cancel is useless when we force a journal flush,
  * and if we enable async journal commit, we should also turn on
  * sync on lock cancel if it is not enabled already. */
@@ -505,9 +544,12 @@ static inline void ofd_prepare_fidea(struct filter_fid *ff, struct obdo *oa)
 	ff->ff_seq = cpu_to_le64(oa->o_seq);
 }
 
-/* niobuf_local has no rnb_ prefix in master */
+/* niobuf_remote has no rnb_ prefix in master */
 #define rnb_offset offset
 #define rnb_flags  flags
 #define rnb_len    len
+/* the same for niobuf_local */
+#define lnb_flags flags
+#define lnb_rc    rc
 
 #endif /* _OFD_INTERNAL_H */
