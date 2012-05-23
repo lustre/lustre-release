@@ -74,6 +74,9 @@ struct ofd_device {
 	/* DLM name-space for meta-data locks maintained by this server */
 	struct ldlm_namespace	*ofd_namespace;
 
+	/* transaction callbacks */
+	struct dt_txn_callback	 ofd_txn_cb;
+
 	/* last_rcvd file */
 	struct lu_target	 ofd_lut;
 	struct dt_object	*ofd_last_group_file;
@@ -167,6 +170,26 @@ static inline struct ofd_object *ofd_obj(struct lu_object *o)
 	return container_of0(o, struct ofd_object, ofo_obj.do_lu);
 }
 
+static inline int ofd_object_exists(struct ofd_object *obj)
+{
+	LASSERT(obj != NULL);
+	if (lu_object_is_dying(obj->ofo_obj.do_lu.lo_header))
+		return 0;
+	return lu_object_exists(&obj->ofo_obj.do_lu);
+}
+
+static inline struct dt_object *fo2dt(struct ofd_object *obj)
+{
+	return &obj->ofo_obj;
+}
+
+static inline struct dt_object *ofd_object_child(struct ofd_object *_obj)
+{
+	struct lu_object *lu = &(_obj)->ofo_obj.do_lu;
+
+	return container_of0(lu_object_next(lu), struct dt_object, do_lu);
+}
+
 /*
  * Common data shared by obdofd-level handlers. This is allocated per-thread
  * to reduce stack consumption.
@@ -175,8 +198,15 @@ struct ofd_thread_info {
 	const struct lu_env		*fti_env;
 
 	struct obd_export		*fti_exp;
+	__u64				 fti_xid;
+	__u64				 fti_transno;
+	__u64				 fti_pre_version;
+	__u32				 fti_has_trans:1, /* has txn already */
+					 fti_mult_trans:1;
+
 	struct lu_fid			 fti_fid;
 	struct lu_attr			 fti_attr;
+	struct ofd_object		*fti_obj;
 	union {
 		char			 name[64]; /* for ofd_init0() */
 		struct obd_statfs	 osfs;    /* for obdofd_statfs() */
@@ -214,6 +244,17 @@ int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int);
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 		 struct obd_device *obd);
 void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd);
+
+/* ofd_trans.c */
+struct thandle *ofd_trans_create(const struct lu_env *env,
+				 struct ofd_device *ofd);
+int ofd_trans_start(const struct lu_env *env,
+		    struct ofd_device *ofd, struct ofd_object *fo,
+		    struct thandle *th);
+void ofd_trans_stop(const struct lu_env *env, struct ofd_device *ofd,
+		    struct thandle *th, int rc);
+int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
+		    void *cookie);
 
 /* lproc_ofd.c */
 void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars);

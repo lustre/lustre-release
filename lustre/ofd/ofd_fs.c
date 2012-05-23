@@ -467,6 +467,16 @@ int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FS_SETUP))
 		RETURN (-ENOENT);
 
+	/* prepare transactions callbacks */
+	ofd->ofd_txn_cb.dtc_txn_start = NULL;
+	ofd->ofd_txn_cb.dtc_txn_stop = ofd_txn_stop_cb;
+	ofd->ofd_txn_cb.dtc_txn_commit = NULL;
+	ofd->ofd_txn_cb.dtc_cookie = ofd;
+	ofd->ofd_txn_cb.dtc_tag = LCT_DT_THREAD;
+	CFS_INIT_LIST_HEAD(&ofd->ofd_txn_cb.dtc_linkage);
+
+	dt_txn_callback_add(ofd->ofd_osd, &ofd->ofd_txn_cb);
+
 	rc = ofd_server_data_init(env, ofd);
 	if (rc)
 		GOTO(out, rc);
@@ -507,6 +517,7 @@ out_lg:
 out_hc:
 	lu_object_put(env, &ofd->ofd_health_check_file->do_lu);
 out:
+	dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
 	return rc;
 }
 
@@ -528,6 +539,9 @@ void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd)
 	i = dt_sync(env, ofd->ofd_osd);
 	if (i)
 		CERROR("can't sync: %d\n", i);
+
+	/* Remove transaction callback */
+	dt_txn_callback_del(ofd->ofd_osd, &ofd->ofd_txn_cb);
 
 	if (ofd->ofd_last_group_file) {
 		lu_object_put(env, &ofd->ofd_last_group_file->do_lu);
