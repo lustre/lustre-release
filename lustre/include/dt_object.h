@@ -200,7 +200,12 @@ enum dt_index_flags {
         /** index can be modified */
         DT_IND_UPDATE = 1 << 2,
         /** index supports records with non-unique (duplicate) keys */
-        DT_IND_NONUNQ = 1 << 3
+        DT_IND_NONUNQ = 1 << 3,
+        /**
+         * index support fixed-size keys sorted with natural numerical way
+         * and is able to return left-side value if no exact value found
+         */
+        DT_IND_RANGE = 1 << 4,
 };
 
 /**
