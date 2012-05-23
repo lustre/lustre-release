@@ -1264,4 +1264,7 @@ static inline int dt_lookup(const struct lu_env *env,
                 ret = -ENOENT;
         return ret;
 }
+
+#define LU221_BAD_TIME (0x80000000U + 24 * 3600)
+
 #endif /* __LUSTRE_DT_OBJECT_H */

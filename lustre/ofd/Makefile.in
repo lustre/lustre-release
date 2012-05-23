@@ -1,6 +1,6 @@
 MODULES := ofd
 
-ofd-objs := ofd_dev.o ofd_obd.o ofd_fs.o ofd_trans.o
+ofd-objs := ofd_dev.o ofd_obd.o ofd_fs.o ofd_trans.o ofd_objects.o
 ofd-objs += lproc_ofd.o ofd_capa.o ofd_fmd.o ofd_grant.o
 
 EXTRA_DIST = $(ofd-objs:%.o=%.c) ofd_internal.h

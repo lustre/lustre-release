@@ -41,6 +41,7 @@
 #include <obd_class.h>
 #include <dt_object.h>
 #include <lustre_fid.h>
+#include <obd_ost.h>
 #include <lustre_capa.h>
 
 #define OFD_INIT_OBJID	0
@@ -161,8 +162,9 @@ static inline char *ofd_name(struct ofd_device *ofd)
 }
 
 struct ofd_object {
-	struct lu_object_header ofo_header;
+	struct lu_object_header	ofo_header;
 	struct dt_object	ofo_obj;
+	int			ofo_ff_exists;
 };
 
 static inline struct ofd_object *ofd_obj(struct lu_object *o)
@@ -190,6 +192,50 @@ static inline struct dt_object *ofd_object_child(struct ofd_object *_obj)
 	return container_of0(lu_object_next(lu), struct dt_object, do_lu);
 }
 
+static inline struct ofd_device *ofd_obj2dev(const struct ofd_object *fo)
+{
+	return ofd_dev(fo->ofo_obj.do_lu.lo_dev);
+}
+
+static inline struct lustre_capa *ofd_object_capa(const struct lu_env *env,
+						  const struct ofd_object *obj)
+{
+	/* TODO: see mdd_object_capa() */
+	return BYPASS_CAPA;
+}
+
+static inline void ofd_read_lock(const struct lu_env *env,
+				 struct ofd_object *fo)
+{
+	struct dt_object  *next = ofd_object_child(fo);
+
+	next->do_ops->do_read_lock(env, next, 0);
+}
+
+static inline void ofd_read_unlock(const struct lu_env *env,
+				   struct ofd_object *fo)
+{
+	struct dt_object  *next = ofd_object_child(fo);
+
+	next->do_ops->do_read_unlock(env, next);
+}
+
+static inline void ofd_write_lock(const struct lu_env *env,
+				  struct ofd_object *fo)
+{
+	struct dt_object *next = ofd_object_child(fo);
+
+	next->do_ops->do_write_lock(env, next, 0);
+}
+
+static inline void ofd_write_unlock(const struct lu_env *env,
+				    struct ofd_object *fo)
+{
+	struct dt_object  *next = ofd_object_child(fo);
+
+	next->do_ops->do_write_unlock(env, next);
+}
+
 /*
  * Common data shared by obdofd-level handlers. This is allocated per-thread
  * to reduce stack consumption.
@@ -206,12 +252,17 @@ struct ofd_thread_info {
 
 	struct lu_fid			 fti_fid;
 	struct lu_attr			 fti_attr;
+	struct lu_attr			 fti_attr2;
+	struct filter_fid		 fti_mds_fid2;
+	struct ost_id			 fti_ostid;
 	struct ofd_object		*fti_obj;
 	union {
 		char			 name[64]; /* for ofd_init0() */
 		struct obd_statfs	 osfs;    /* for obdofd_statfs() */
 	} fti_u;
 
+	/* Ops object filename */
+	struct lu_name			 fti_name;
 	struct dt_object_format		 fti_dof;
 	struct lu_buf			 fti_buf;
 	loff_t				 fti_off;
@@ -240,6 +291,7 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 
 /* ofd_fs.c */
 obd_id ofd_last_id(struct ofd_device *ofd, obd_seq seq);
+void ofd_last_id_set(struct ofd_device *ofd, obd_id id, obd_seq seq);
 int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int);
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 		 struct obd_device *obd);
@@ -260,6 +312,30 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars);
 int lproc_ofd_attach_seqstat(struct obd_device *dev);
 extern struct file_operations ofd_per_nid_stats_fops;
+
+/* ofd_objects.c */
+struct ofd_object *ofd_object_find(const struct lu_env *env,
+				   struct ofd_device *ofd,
+				   const struct lu_fid *fid);
+struct ofd_object *ofd_object_find_or_create(const struct lu_env *env,
+					     struct ofd_device *ofd,
+					     const struct lu_fid *fid,
+					     struct lu_attr *attr);
+int ofd_object_ff_check(const struct lu_env *env, struct ofd_object *fo);
+int ofd_precreate_object(const struct lu_env *env, struct ofd_device *ofd,
+			 obd_id id, obd_seq seq);
+
+void ofd_object_put(const struct lu_env *env, struct ofd_object *fo);
+int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
+		 struct lu_attr *la, struct filter_fid *ff);
+int ofd_object_punch(const struct lu_env *env, struct ofd_object *fo,
+		     __u64 start, __u64 end, struct lu_attr *la,
+		     struct filter_fid *ff);
+int ofd_object_destroy(const struct lu_env *, struct ofd_object *, int);
+int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
+		 struct lu_attr *la);
+int ofd_attr_handle_ugid(const struct lu_env *env, struct ofd_object *fo,
+			 struct lu_attr *la, int is_setattr);
 
 /* ofd_grants.c */
 #define OFD_GRANT_RATIO_SHIFT 8
@@ -351,9 +427,13 @@ static inline struct ofd_thread_info * ofd_info_init(const struct lu_env *env,
 	LASSERT(info);
 	LASSERT(info->fti_exp == NULL);
 	LASSERT(info->fti_env == NULL);
+	LASSERT(info->fti_attr.la_valid == 0);
 
 	info->fti_env = env;
 	info->fti_exp = exp;
+	info->fti_pre_version = 0;
+	info->fti_transno = 0;
+	info->fti_has_trans = 0;
 	return info;
 }
 
@@ -366,6 +446,22 @@ static inline void ofd_slc_set(struct ofd_device *ofd)
 		ofd->ofd_sync_lock_cancel = NEVER_SYNC_ON_CANCEL;
 	else if (ofd->ofd_sync_lock_cancel == NEVER_SYNC_ON_CANCEL)
 		ofd->ofd_sync_lock_cancel = ALWAYS_SYNC_ON_CANCEL;
+}
+
+static inline void ofd_prepare_fidea(struct filter_fid *ff, struct obdo *oa)
+{
+	if (!(oa->o_valid & OBD_MD_FLGROUP))
+		oa->o_seq = 0;
+	/* packing fid and converting it to LE for storing into EA.
+	 * Here ->o_stripe_idx should be filled by LOV and rest of
+	 * fields - by client. */
+	ff->ff_parent.f_seq = cpu_to_le64(oa->o_parent_seq);
+	ff->ff_parent.f_oid = cpu_to_le32(oa->o_parent_oid);
+	/* XXX: we are ignoring o_parent_ver here, since this should
+	 *      be the same for all objects in this fileset. */
+	ff->ff_parent.f_ver = cpu_to_le32(oa->o_stripe_idx);
+	ff->ff_objid = cpu_to_le64(oa->o_id);
+	ff->ff_seq = cpu_to_le64(oa->o_seq);
 }
 
 /* niobuf_local has no rnb_ prefix in master */
