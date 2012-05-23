@@ -829,6 +829,17 @@ build_lustre() {
         echo NORPM mode. Only compiling.
     fi
 
+    # If server we now build the spl and zfs modules against the lustre kernel.
+    # These are required prior to the building of lustre server. Client does
+    # not require spl/zfs. Use !PATCHLESS to indicate server which follows the
+    # line above so is at least consistant.
+    if [ $PATCHLESS == false ] && [ "x$ZFSNOTSUPPORTED" == "x" ]; then
+        if ! build_spl_zfs; then
+            popd >/dev/null # pushd lustre
+            return 255
+        fi
+    fi
+
     ( $(skeep_ldiskfs_rpm $TAG) ) || {
 
         pushd ldiskfs > /dev/null || return 255
@@ -931,6 +942,118 @@ build_lustre() {
     fi
     popd >/dev/null
 
+}
+
+###
+# build_spl_zfs
+#
+# Fetch spl/zfs from the git repo and prepare for lustre build
+#
+# return 0 if successful, else 255
+build_spl_zfs() {
+    # make sure the RPM build environment is set up
+    create_rpmbuild_dirs
+
+    # The spl/zfs spec files expect RPM_BUILD_ROOT to point to the root of the
+    # destination for the rpms
+    export RPM_BUILD_ROOT=$TOPDIR
+
+    # The files expect a kver to be set to the kernel version .
+    kver=$(cat ${LINUX}/include/config/kernel.release)
+
+    # build and install the spl and zfs (and -devel) RPMs for lustre to use
+    local pkg
+    for pkg in spl zfs; do
+
+        local rpmmod spldir
+
+        [ "$pkg" == "zfs" ] && spldir="$(ls -d $TOPDIR/usr/src/spl-*/*)"
+        rpmmod=$pkg-modules
+
+        # need to fetch the repo in order to build it.
+        # default to github but allow override
+        git clone ${SPLZFSGITREPO:-"git@github.com:zfsonlinux"}/$pkg.git $pkg 2>&1
+
+        pushd $pkg || return 255
+
+        # XXX - _having_ to give a package a kernel just to have it configure
+        #       enough to do a "make dist" is truely bogus!
+        if  ! ./configure --with-linux=${LINUX} \
+                          ${spldir:+--with-spl="${spldir}"} 2>&1 ||
+            ! make dist 2>&1; then
+            popd
+            return 255
+        fi
+        popd
+
+        # XXX - dirty hack time.  ~sigh~
+        #       because the spl tarball contains two .spec files, we cannot
+        #       simply rebuild the tarball
+        ln $pkg/$pkg-*.tar.gz $TOPDIR/SOURCES ||
+            error "failed to link $pkg/$pkg-*.tar.gz into $TOPDIR/SOURCES"
+
+        # First build the userspace tools RPMs
+        if ! $RPMBUILD $targets -bb $pkg/$pkg.spec \
+            --nodeps -v \
+            --define "configure_args ${CONFIGURE_FLAGS}" \
+            --define "_tmppath /var/tmp" \
+            --define "_topdir $TOPDIR" 2>&1; then
+            return 255
+        fi
+
+        if $DO_SRC; then
+            if ! $RPMBUILD -bs $pkg/$pkg.spec \
+                --nodeps -v \
+                --define "configure_args ${CONFIGURE_FLAGS}" \
+                --define "_tmppath /var/tmp" \
+                --define "_topdir $TOPDIR" 2>&1; then
+                return 255
+            fi
+        fi
+
+        # Now the kernel module RPMs
+        # Need to provide pointers to the lustre kernel source, objects, usr/src
+        if ! $RPMBUILD $targets -bb $pkg/$rpmmod.spec \
+            --nodeps -v \
+            --define "require_kdir ${linux}" \
+            ${linuxobj:+--define "require_kobj ${linuxobj}"} \
+            ${spldir:+--define "require_spldir ${spldir}"} \
+            --define "configure_args ${CONFIGURE_FLAGS}" \
+            --define "_usrsrc $TOPDIR/usr/src" \
+            --define "kver $kver" \
+            --define "_tmppath /var/tmp" \
+            --define "_topdir $TOPDIR" 2>&1; then
+            return 255
+        fi
+
+        if $DO_SRC; then
+            if ! $RPMBUILD -bs $pkg/$rpmmod.spec \
+                --nodeps -v \
+                --define "require_kdir ${linux}" \
+                ${linuxobj:+--define "require_kobj ${linuxobj}"} \
+                ${spldir:+--define "require_spldir ${spldir}"} \
+                --define "configure_args ${CONFIGURE_FLAGS}" \
+                --define "_usrsrc $TOPDIR/usr/src" \
+                --define "kver $kver" \
+                --define "_tmppath /var/tmp" \
+                --define "_topdir $TOPDIR" 2>&1; then
+                return 255
+            fi
+        fi
+
+        # We have built the rpms for the package. No we need to extract the
+        # contained files so we can build further things against them
+        local rpm=$(ls $TOPDIR/RPMS/*/$rpmmod-devel-*.rpm)
+
+        # cpio only extract to pwd so we need to go there.
+        pushd $TOPDIR
+        rpm2cpio < $rpm | cpio -id
+        popd
+
+        CONFIGURE_FLAGS="--with-$pkg=$(ls -d $TOPDIR/usr/src/$pkg-*/*) ${CONFIGURE_FLAGS}"
+    done
+
+    return 0
 }
 
 stage() {
