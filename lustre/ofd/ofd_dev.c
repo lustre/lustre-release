@@ -517,6 +517,12 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 		GOTO(err_fini_stack, rc = -ENOMEM);
 	/* set obd_namespace for compatibility with old code */
 	obd->obd_namespace = m->ofd_namespace;
+	ldlm_register_intent(m->ofd_namespace, ofd_intent_policy);
+	m->ofd_namespace->ns_lvbo = &ofd_lvbo;
+	m->ofd_namespace->ns_lvbp = m;
+
+	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
+			   "filter_ldlm_cb_client", &obd->obd_ldlm_client);
 
 	dt_conf_get(env, m->ofd_osd, &m->ofd_dt_conf);
 
