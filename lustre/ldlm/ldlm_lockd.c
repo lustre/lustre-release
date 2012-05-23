@@ -1058,9 +1058,8 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 
         LASSERT(req->rq_export);
 
-        if (req->rq_rqbd->rqbd_service->srv_stats)
-                ldlm_svc_get_eopc(dlm_req,
-                                  req->rq_rqbd->rqbd_service->srv_stats);
+	if (ptlrpc_req2svc(req)->srv_stats != NULL)
+		ldlm_svc_get_eopc(dlm_req, ptlrpc_req2svc(req)->srv_stats);
 
         if (req->rq_export && req->rq_export->exp_nid_stats &&
             req->rq_export->exp_nid_stats->nid_ldlm_stats)

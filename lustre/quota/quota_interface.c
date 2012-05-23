@@ -452,23 +452,27 @@ static int quota_chk_acq_common(struct obd_device *obd, struct obd_export *exp,
         while ((rc = quota_check_common(obd, id, pending, count, cycle, isblk,
                                         inode, frags)) &
                QUOTA_RET_ACQUOTA) {
+		struct ptlrpc_thread *thr = oti != NULL ?
+					    oti->oti_thread : NULL;
 
-                cfs_spin_lock(&qctxt->lqc_lock);
-                if (!qctxt->lqc_import && oti) {
-                        cfs_spin_unlock(&qctxt->lqc_lock);
-                        LASSERT(oti->oti_thread);
-                        /* The recovery thread doesn't have watchdog
-                         * attached. LU-369 */
-                        if (oti->oti_thread->t_watchdog)
-                                lc_watchdog_disable(oti->oti_thread->\
-                                                t_watchdog);
-                        CDEBUG(D_QUOTA, "sleep for quota master\n");
-                        l_wait_event(qctxt->lqc_wait_for_qmaster, check_qm(qctxt),
-                                     &lwi);
-                        CDEBUG(D_QUOTA, "wake up when quota master is back\n");
-                        if (oti->oti_thread->t_watchdog)
-                                lc_watchdog_touch(oti->oti_thread->t_watchdog,
-                                       CFS_GET_TIMEOUT(oti->oti_thread->t_svc));
+		cfs_spin_lock(&qctxt->lqc_lock);
+		if (!qctxt->lqc_import && oti != NULL) {
+			cfs_spin_unlock(&qctxt->lqc_lock);
+
+			LASSERT(thr != NULL);
+			/* The recovery thread doesn't have watchdog
+			 * attached. LU-369 */
+			if (thr->t_watchdog != NULL)
+				lc_watchdog_disable(thr->t_watchdog);
+			CDEBUG(D_QUOTA, "sleep for quota master\n");
+			l_wait_event(qctxt->lqc_wait_for_qmaster,
+				     check_qm(qctxt), &lwi);
+
+			CDEBUG(D_QUOTA, "wake up when quota master is back\n");
+			if (thr->t_watchdog != NULL) {
+				lc_watchdog_touch(thr->t_watchdog,
+				   ptlrpc_server_get_timeout(thr->t_svcpt));
+			}
                 } else {
                         cfs_spin_unlock(&qctxt->lqc_lock);
                 }
@@ -510,9 +514,9 @@ static int quota_chk_acq_common(struct obd_device *obd, struct obd_export *exp,
                         cfs_waitq_t        waitq;
                         struct l_wait_info lwi;
 
-                        if (oti && oti->oti_thread && oti->oti_thread->t_watchdog)
-                                lc_watchdog_touch(oti->oti_thread->t_watchdog,
-                                       CFS_GET_TIMEOUT(oti->oti_thread->t_svc));
+			if (thr != NULL && thr->t_watchdog != NULL)
+				lc_watchdog_touch(thr->t_watchdog,
+				   ptlrpc_server_get_timeout(thr->t_svcpt));
                         CDEBUG(D_QUOTA, "rc: %d, count_err: %d\n", rc,
                                count_err++);
 

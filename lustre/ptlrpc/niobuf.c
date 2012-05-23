@@ -395,7 +395,8 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
 
 static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
 {
-        struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
+	struct ptlrpc_service_part	*svcpt = req->rq_rqbd->rqbd_svcpt;
+	struct ptlrpc_service		*svc = svcpt->scp_service;
         int service_time = max_t(int, cfs_time_current_sec() -
                                  req->rq_arrival_time.tv_sec, 1);
 
@@ -407,12 +408,14 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
                MSG_REQ_REPLAY_DONE | MSG_LOCK_REPLAY_DONE))) {
                 /* early replies, errors and recovery requests don't count
                  * toward our service time estimate */
-                int oldse = at_measured(&svc->srv_at_estimate, service_time);
-                if (oldse != 0)
-                        DEBUG_REQ(D_ADAPTTO, req,
-                                  "svc %s changed estimate from %d to %d",
-                                  svc->srv_name, oldse,
-                                  at_get(&svc->srv_at_estimate));
+		int oldse = at_measured(&svcpt->scp_at_estimate, service_time);
+
+		if (oldse != 0) {
+			DEBUG_REQ(D_ADAPTTO, req,
+				  "svc %s changed estimate from %d to %d",
+				  svc->srv_name, oldse,
+				  at_get(&svcpt->scp_at_estimate));
+		}
         }
         /* Report actual service time for client latency calc */
         lustre_msg_set_service_time(req->rq_repmsg, service_time);
@@ -424,7 +427,7 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
                 lustre_msg_set_timeout(req->rq_repmsg, 0);
         else
                 lustre_msg_set_timeout(req->rq_repmsg,
-                                       at_get(&svc->srv_at_estimate));
+				       at_get(&svcpt->scp_at_estimate));
 
         if (req->rq_reqmsg &&
             !(lustre_msghdr_get_flags(req->rq_reqmsg) & MSGHDR_AT_SUPPORT)) {
@@ -444,7 +447,6 @@ static void ptlrpc_at_set_reply(struct ptlrpc_request *req, int flags)
  */
 int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
 {
-        struct ptlrpc_service     *svc = req->rq_rqbd->rqbd_service;
         struct ptlrpc_reply_state *rs = req->rq_reply_state;
         struct ptlrpc_connection  *conn;
         int                        rc;
@@ -518,7 +520,8 @@ int ptlrpc_send_reply(struct ptlrpc_request *req, int flags)
         rc = ptl_send_buf (&rs->rs_md_h, rs->rs_repbuf, rs->rs_repdata_len,
                            (rs->rs_difficult && !rs->rs_no_ack) ?
                            LNET_ACK_REQ : LNET_NOACK_REQ,
-                           &rs->rs_cb_id, conn, svc->srv_rep_portal,
+			   &rs->rs_cb_id, conn,
+			   ptlrpc_req2svc(req)->srv_rep_portal,
                            req->rq_xid, req->rq_reply_off);
 out:
         if (unlikely(rc != 0))
@@ -760,9 +763,9 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
  */
 int ptlrpc_register_rqbd(struct ptlrpc_request_buffer_desc *rqbd)
 {
-        struct ptlrpc_service   *service = rqbd->rqbd_service;
-        static lnet_process_id_t  match_id = {LNET_NID_ANY, LNET_PID_ANY};
-        int                      rc;
+	struct ptlrpc_service	  *service = rqbd->rqbd_svcpt->scp_service;
+	static lnet_process_id_t  match_id = {LNET_NID_ANY, LNET_PID_ANY};
+	int			  rc;
         lnet_md_t                 md;
         lnet_handle_me_t          me_h;
 

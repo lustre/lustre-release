@@ -1689,12 +1689,13 @@ struct ost_prolong_data {
  */
 static inline int prolong_timeout(struct ptlrpc_request *req)
 {
-        struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
+	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
 
-        if (AT_OFF)
-                return obd_timeout / 2;
+	if (AT_OFF)
+		return obd_timeout / 2;
 
-        return max(at_est2timeout(at_get(&svc->srv_at_estimate)), ldlm_timeout);
+	return max(at_est2timeout(at_get(&svcpt->scp_at_estimate)),
+		   ldlm_timeout);
 }
 
 static void ost_prolong_lock_one(struct ost_prolong_data *opd,
@@ -2189,11 +2190,11 @@ int ost_handle(struct ptlrpc_request *req)
                 req_capsule_set(&req->rq_pill, &RQF_OST_BRW_WRITE);
                 CDEBUG(D_INODE, "write\n");
                 /* req->rq_request_portal would be nice, if it was set */
-                if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
-                        CERROR("%s: deny write request from %s to portal %u\n",
-                               req->rq_export->exp_obd->obd_name,
-                               obd_export_nid2str(req->rq_export),
-                               req->rq_rqbd->rqbd_service->srv_req_portal);
+		if (ptlrpc_req2svc(req)->srv_req_portal != OST_IO_PORTAL) {
+			CERROR("%s: deny write request from %s to portal %u\n",
+			       req->rq_export->exp_obd->obd_name,
+			       obd_export_nid2str(req->rq_export),
+			       ptlrpc_req2svc(req)->srv_req_portal);
                         GOTO(out, rc = -EPROTO);
                 }
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_NET))
@@ -2210,11 +2211,11 @@ int ost_handle(struct ptlrpc_request *req)
                 req_capsule_set(&req->rq_pill, &RQF_OST_BRW_READ);
                 CDEBUG(D_INODE, "read\n");
                 /* req->rq_request_portal would be nice, if it was set */
-                if (req->rq_rqbd->rqbd_service->srv_req_portal !=OST_IO_PORTAL){
-                        CERROR("%s: deny read request from %s to portal %u\n",
-                               req->rq_export->exp_obd->obd_name,
-                               obd_export_nid2str(req->rq_export),
-                               req->rq_rqbd->rqbd_service->srv_req_portal);
+		if (ptlrpc_req2svc(req)->srv_req_portal != OST_IO_PORTAL) {
+			CERROR("%s: deny read request from %s to portal %u\n",
+			       req->rq_export->exp_obd->obd_name,
+			       obd_export_nid2str(req->rq_export),
+			       ptlrpc_req2svc(req)->srv_req_portal);
                         GOTO(out, rc = -EPROTO);
                 }
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_BRW_NET))

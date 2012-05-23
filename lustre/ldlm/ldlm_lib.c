@@ -595,18 +595,20 @@ int server_disconnect_export(struct obd_export *exp)
                 struct ptlrpc_reply_state *rs =
                         cfs_list_entry(exp->exp_outstanding_replies.next,
                                        struct ptlrpc_reply_state, rs_exp_list);
-                struct ptlrpc_service *svc = rs->rs_service;
+		struct ptlrpc_service_part *svcpt = rs->rs_svcpt;
 
-                cfs_spin_lock(&svc->srv_rs_lock);
-                cfs_list_del_init(&rs->rs_exp_list);
-                cfs_spin_lock(&rs->rs_lock);
-                ptlrpc_schedule_difficult_reply(rs);
-                cfs_spin_unlock(&rs->rs_lock);
-                cfs_spin_unlock(&svc->srv_rs_lock);
-        }
-        cfs_spin_unlock(&exp->exp_lock);
+		cfs_spin_lock(&svcpt->scp_rep_lock);
 
-        RETURN(rc);
+		cfs_list_del_init(&rs->rs_exp_list);
+		cfs_spin_lock(&rs->rs_lock);
+		ptlrpc_schedule_difficult_reply(rs);
+		cfs_spin_unlock(&rs->rs_lock);
+
+		cfs_spin_unlock(&svcpt->scp_rep_lock);
+	}
+	cfs_spin_unlock(&exp->exp_lock);
+
+	RETURN(rc);
 }
 
 /* --------------------------------------------------------------------------
@@ -1517,7 +1519,7 @@ check_and_start_recovery_timer(struct obd_device *obd,
         if (!new_client && service_time)
                 /* Teach server about old server's estimates, as first guess
                  * at how long new requests will take. */
-                at_measured(&req->rq_rqbd->rqbd_service->srv_at_estimate,
+		at_measured(&req->rq_rqbd->rqbd_svcpt->scp_at_estimate,
                             service_time);
 
         target_start_recovery_timer(obd);
@@ -1828,15 +1830,17 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
                  * this client may come in recovery time
                  */
                 if (!AT_OFF) {
-                        struct ptlrpc_service *svc = req->rq_rqbd->rqbd_service;
-                        /* If the server sent early reply for this request,
-                         * the client will recalculate the timeout according to
-                         * current server estimate service time, so we will
-                         * use the maxium timeout here for waiting the client
-                         * sending the next req */
-                        to = max((int)at_est2timeout(
-                                 at_get(&svc->srv_at_estimate)),
-                                 (int)lustre_msg_get_timeout(req->rq_reqmsg));
+			struct ptlrpc_service_part *svcpt;
+
+			svcpt = req->rq_rqbd->rqbd_svcpt;
+			/* If the server sent early reply for this request,
+			 * the client will recalculate the timeout according to
+			 * current server estimate service time, so we will
+			 * use the maxium timeout here for waiting the client
+			 * sending the next req */
+			to = max((int)at_est2timeout(
+				 at_get(&svcpt->scp_at_estimate)),
+				 (int)lustre_msg_get_timeout(req->rq_reqmsg));
                         /* Add net_latency (see ptlrpc_replay_req) */
                         to += lustre_msg_get_service_time(req->rq_reqmsg);
                 }
@@ -2314,10 +2318,10 @@ int target_send_reply_msg(struct ptlrpc_request *req, int rc, int fail_id)
 
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 {
+	struct ptlrpc_service_part *svcpt;
         int                        netrc;
         struct ptlrpc_reply_state *rs;
         struct obd_export         *exp;
-        struct ptlrpc_service     *svc;
         ENTRY;
 
         if (req->rq_no_reply) {
@@ -2325,7 +2329,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                 return;
         }
 
-        svc = req->rq_rqbd->rqbd_service;
+	svcpt = req->rq_rqbd->rqbd_svcpt;
         rs = req->rq_reply_state;
         if (rs == NULL || !rs->rs_difficult) {
                 /* no notifiers */
@@ -2337,7 +2341,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         /* must be an export if locks saved */
         LASSERT (req->rq_export != NULL);
         /* req/reply consistent */
-        LASSERT (rs->rs_service == svc);
+	LASSERT(rs->rs_svcpt == svcpt);
 
         /* "fresh" reply */
         LASSERT (!rs->rs_scheduled);
@@ -2374,9 +2378,9 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
 
         netrc = target_send_reply_msg (req, rc, fail_id);
 
-        cfs_spin_lock(&svc->srv_rs_lock);
+	cfs_spin_lock(&svcpt->scp_rep_lock);
 
-        cfs_atomic_inc(&svc->srv_n_difficult_replies);
+	cfs_atomic_inc(&svcpt->scp_nreps_difficult);
 
         if (netrc != 0) {
                 /* error sending: reply is off the net.  Also we need +1
@@ -2396,12 +2400,12 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
                 CDEBUG(D_HA, "Schedule reply immediately\n");
                 ptlrpc_dispatch_difficult_reply(rs);
         } else {
-                cfs_list_add (&rs->rs_list, &svc->srv_active_replies);
-                rs->rs_scheduled = 0;           /* allow notifier to schedule */
-        }
-        cfs_spin_unlock(&rs->rs_lock);
-        cfs_spin_unlock(&svc->srv_rs_lock);
-        EXIT;
+		cfs_list_add(&rs->rs_list, &svcpt->scp_rep_active);
+		rs->rs_scheduled = 0;	/* allow notifier to schedule */
+	}
+	cfs_spin_unlock(&rs->rs_lock);
+	cfs_spin_unlock(&svcpt->scp_rep_lock);
+	EXIT;
 }
 
 int target_handle_qc_callback(struct ptlrpc_request *req)

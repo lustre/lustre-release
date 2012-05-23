@@ -589,10 +589,10 @@ void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)
 /* reconstruction code */
 static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 {
+	struct ptlrpc_service_part *svcpt;
         struct obd_export         *exp = req->rq_export;
         cfs_list_t                *tmp;
         struct ptlrpc_reply_state *oldrep;
-        struct ptlrpc_service     *svc;
         int                        i;
 
         /* CAVEAT EMPTOR: spinlock order */
@@ -610,8 +610,8 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                                 lustre_msg_get_opc(req->rq_reqmsg),
                                 oldrep->rs_opc);
 
-                svc = oldrep->rs_service;
-                cfs_spin_lock (&svc->srv_rs_lock);
+		svcpt = oldrep->rs_svcpt;
+		cfs_spin_lock(&svcpt->scp_rep_lock);
 
                 cfs_list_del_init (&oldrep->rs_exp_list);
 
@@ -631,7 +631,7 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                 ptlrpc_schedule_difficult_reply (oldrep);
                 cfs_spin_unlock(&oldrep->rs_lock);
 
-                cfs_spin_unlock (&svc->srv_rs_lock);
+		cfs_spin_unlock(&svcpt->scp_rep_lock);
                 break;
         }
         cfs_spin_unlock(&exp->exp_lock);

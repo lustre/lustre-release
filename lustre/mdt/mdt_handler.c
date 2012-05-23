@@ -336,20 +336,20 @@ static int mdt_getstatus(struct mdt_thread_info *info)
 
 static int mdt_statfs(struct mdt_thread_info *info)
 {
-        struct ptlrpc_request *req = mdt_info_req(info);
-        struct md_device      *next  = info->mti_mdt->mdt_child;
-        struct ptlrpc_service *svc;
-        struct obd_statfs     *osfs;
-        int                    rc;
+	struct ptlrpc_request		*req = mdt_info_req(info);
+	struct md_device		*next = info->mti_mdt->mdt_child;
+	struct ptlrpc_service_part	*svcpt;
+	struct obd_statfs		*osfs;
+	int				rc;
 
-        ENTRY;
+	ENTRY;
 
-        svc = info->mti_pill->rc_req->rq_rqbd->rqbd_service;
+	svcpt = info->mti_pill->rc_req->rq_rqbd->rqbd_svcpt;
 
-        /* This will trigger a watchdog timeout */
-        OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
-                         (MDT_SERVICE_WATCHDOG_FACTOR *
-                          at_get(&svc->srv_at_estimate)) + 1);
+	/* This will trigger a watchdog timeout */
+	OBD_FAIL_TIMEOUT(OBD_FAIL_MDS_STATFS_LCW_SLEEP,
+			 (MDT_SERVICE_WATCHDOG_FACTOR *
+			  at_get(&svcpt->scp_at_estimate)) + 1);
 
         rc = mdt_check_ucred(info);
         if (rc)

@@ -283,8 +283,6 @@ struct ptlrpc_request_set {
 	set_interpreter_func  set_interpret;
 	/** opaq argument passed to completion \a set_interpret callback. */
 	void                 *set_arg;
-	/** rq_status of requests that have been freed already */
-	int                   set_rc;
 	/**
 	 * Lock for \a set_new_requests manipulations
 	 * locked so that any old caller can communicate requests to
@@ -294,6 +292,8 @@ struct ptlrpc_request_set {
 	/** List of new yet unsent requests. Only used with ptlrpcd now. */
 	cfs_list_t            set_new_requests;
 
+	/** rq_status of requests that have been freed already */
+	int                   set_rc;
 	/** Additional fields used by the flow control extension */
 	/** Maximum number of RPCs in flight */
 	int                   set_max_inflight;
@@ -316,6 +316,7 @@ struct ptlrpc_set_cbdata {
 };
 
 struct ptlrpc_bulk_desc;
+struct ptlrpc_service_part;
 
 /**
  * ptlrpc callback & work item stuff
@@ -371,7 +372,7 @@ struct ptlrpc_reply_state {
         /** xid */
         __u64                  rs_xid;
         struct obd_export     *rs_export;
-        struct ptlrpc_service *rs_service;
+	struct ptlrpc_service_part *rs_svcpt;
         /** Lnet metadata handle for the reply */
         lnet_handle_md_t       rs_md_h;
         cfs_atomic_t           rs_refcount;
@@ -994,9 +995,9 @@ struct ptlrpc_thread {
         /**
          * the svc this thread belonged to b=18582
          */
-        struct ptlrpc_service *t_svc;
-        cfs_waitq_t t_ctl_waitq;
-        struct lu_env *t_env;
+	struct ptlrpc_service_part	*t_svcpt;
+	cfs_waitq_t			t_ctl_waitq;
+	struct lu_env			*t_env;
 };
 
 static inline int thread_is_init(struct ptlrpc_thread *thread)
@@ -1072,7 +1073,7 @@ struct ptlrpc_request_buffer_desc {
         /** History of requests for this buffer */
         cfs_list_t             rqbd_reqs;
         /** Back pointer to service for which this buffer is registered */
-        struct ptlrpc_service *rqbd_service;
+	struct ptlrpc_service_part *rqbd_svcpt;
         /** LNet descriptor */
         lnet_handle_md_t       rqbd_md_h;
         int                    rqbd_refcount;
@@ -1130,21 +1131,10 @@ struct ptlrpc_service_ops {
  * The service is listening on a particular portal (like tcp port)
  * and perform actions for a specific server like IO service for OST
  * or general metadata service for MDS.
- *
- * ptlrpc service has four locks:
- * \a srv_lock
- *    serialize operations on rqbd and requests waiting for preprocess
- * \a srv_rq_lock
- *    serialize operations active requests sent to this portal
- * \a srv_at_lock
- *    serialize adaptive timeout stuff
- * \a srv_rs_lock
- *    serialize operations on RS list (reply states)
- *
- * We don't have any use-case to take two or more locks at the same time
- * for now, so there is no lock order issue.
  */
 struct ptlrpc_service {
+	/** serialize /proc operations */
+	cfs_spinlock_t			srv_lock;
         /** most often accessed fields */
         /** chain thru all services */
         cfs_list_t                      srv_list;
@@ -1160,13 +1150,6 @@ struct ptlrpc_service {
         int                             srv_threads_min;
         /** thread upper limit */
         int                             srv_threads_max;
-        /** always increasing number */
-        unsigned                        srv_threads_next_id;
-        /** # of starting threads */
-        int                             srv_threads_starting;
-        /** # running threads */
-        int                             srv_threads_running;
-
         /** Root of /proc dir tree for this service */
         cfs_proc_dir_entry_t           *srv_procroot;
         /** Pointer to statistic data for this service */
@@ -1197,97 +1180,142 @@ struct ptlrpc_service {
         /** under unregister_service */
         unsigned                        srv_is_stopping:1;
 
-        /**
-         * serialize the following fields, used for protecting
-         * rqbd list and incoming requests waiting for preprocess
-         */
-        cfs_spinlock_t                  srv_lock  __cfs_cacheline_aligned;
-        /** incoming reqs */
-        cfs_list_t                      srv_req_in_queue;
-        /** total # req buffer descs allocated */
-        int                             srv_nbufs;
-        /** # posted request buffers */
-        int                             srv_nrqbd_receiving;
-        /** timeout before re-posting reqs, in tick */
-        cfs_duration_t                  srv_rqbd_timeout;
-        /** request buffers to be reposted */
-        cfs_list_t                      srv_idle_rqbds;
-        /** req buffers receiving */
-        cfs_list_t                      srv_active_rqbds;
-        /** request buffer history */
-        cfs_list_t                      srv_history_rqbds;
-        /** # request buffers in history */
-        int                             srv_n_history_rqbds;
-        /** max # request buffers in history */
-        int                             srv_max_history_rqbds;
-        /** request history */
-        cfs_list_t                      srv_request_history;
-        /** next request sequence # */
-        __u64                           srv_request_seq;
-        /** highest seq culled from history */
-        __u64                           srv_request_max_cull_seq;
-        /**
-         * all threads sleep on this. This wait-queue is signalled when new
-         * incoming request arrives and when difficult reply has to be handled.
-         */
-        cfs_waitq_t                     srv_waitq;
+	/**
+	 * max # request buffers in history, it needs to be convert into
+	 * per-partition value when we have multiple partitions
+	 */
+	int				srv_max_history_rqbds;
+	/**
+	 * partition data for ptlrpc service, only one instance so far,
+	 * instance per CPT will come soon
+	 */
+	struct ptlrpc_service_part	*srv_part;
+};
 
-        /**
-         * serialize the following fields, used for processing requests
-         * sent to this portal
-         */
-        cfs_spinlock_t                  srv_rq_lock __cfs_cacheline_aligned;
-        /** # reqs in either of the queues below */
-        /** reqs waiting for service */
-        cfs_list_t                      srv_request_queue;
-        /** high priority queue */
-        cfs_list_t                      srv_request_hpq;
-        /** # incoming reqs */
-        int                             srv_n_queued_reqs;
-        /** # reqs being served */
-        int                             srv_n_active_reqs;
-        /** # HPreqs being served */
-        int                             srv_n_active_hpreq;
-        /** # hp requests handled */
-        int                             srv_hpreq_count;
+/**
+ * Definition of PortalRPC service partition data.
+ * Although a service only has one instance of it right now, but we
+ * will have multiple instances very soon (instance per CPT).
+ *
+ * it has four locks:
+ * \a scp_lock
+ *    serialize operations on rqbd and requests waiting for preprocess
+ * \a scp_req_lock
+ *    serialize operations active requests sent to this portal
+ * \a scp_at_lock
+ *    serialize adaptive timeout stuff
+ * \a scp_rep_lock
+ *    serialize operations on RS list (reply states)
+ *
+ * We don't have any use-case to take two or more locks at the same time
+ * for now, so there is no lock order issue.
+ */
+struct ptlrpc_service_part {
+	/** back reference to owner */
+	struct ptlrpc_service		*scp_service __cfs_cacheline_aligned;
+	/* CPT id, reserved */
+	int				scp_cpt;
+	/** always increasing number */
+	int				scp_thr_nextid;
+	/** # of starting threads */
+	int				scp_nthrs_starting;
+	/** # of stopping threads, reserved for shrinking threads */
+	int				scp_nthrs_stopping;
+	/** # running threads */
+	int				scp_nthrs_running;
+	/** service threads list */
+	cfs_list_t			scp_threads;
 
-        /** AT stuff */
-        /** @{ */
-        /**
-         * serialize the following fields, used for changes on
-         * adaptive timeout
-         */
-        cfs_spinlock_t                  srv_at_lock __cfs_cacheline_aligned;
-        /** estimated rpc service time */
-        struct adaptive_timeout         srv_at_estimate;
-        /** reqs waiting for replies */
-        struct ptlrpc_at_array          srv_at_array;
-        /** early reply timer */
-        cfs_timer_t                     srv_at_timer;
-        /** check early replies */
-        unsigned                        srv_at_check;
-        /** debug */
-        cfs_time_t                      srv_at_checktime;
-        /** @} */
+	/**
+	 * serialize the following fields, used for protecting
+	 * rqbd list and incoming requests waiting for preprocess,
+	 * threads starting & stopping are also protected by this lock.
+	 */
+	cfs_spinlock_t			scp_lock  __cfs_cacheline_aligned;
+	/** total # req buffer descs allocated */
+	int				scp_nrqbds_total;
+	/** # posted request buffers for receiving */
+	int				scp_nrqbds_posted;
+	/** # incoming reqs */
+	int				scp_nreqs_incoming;
+	/** request buffers to be reposted */
+	cfs_list_t			scp_rqbd_idle;
+	/** req buffers receiving */
+	cfs_list_t			scp_rqbd_posted;
+	/** incoming reqs */
+	cfs_list_t			scp_req_incoming;
+	/** timeout before re-posting reqs, in tick */
+	cfs_duration_t			scp_rqbd_timeout;
+	/**
+	 * all threads sleep on this. This wait-queue is signalled when new
+	 * incoming request arrives and when difficult reply has to be handled.
+	 */
+	cfs_waitq_t			scp_waitq;
 
-        /**
-         * serialize the following fields, used for processing
-         * replies for this portal
-         */
-        cfs_spinlock_t                  srv_rs_lock __cfs_cacheline_aligned;
-        /** all the active replies */
-        cfs_list_t                      srv_active_replies;
+	/** request history */
+	cfs_list_t			scp_hist_reqs;
+	/** request buffer history */
+	cfs_list_t			scp_hist_rqbds;
+	/** # request buffers in history */
+	int				scp_hist_nrqbds;
+	/** sequence number for request */
+	__u64				scp_hist_seq;
+	/** highest seq culled from history */
+	__u64				scp_hist_seq_culled;
+
+	/**
+	 * serialize the following fields, used for processing requests
+	 * sent to this portal
+	 */
+	cfs_spinlock_t			scp_req_lock __cfs_cacheline_aligned;
+	/** # reqs in either of the queues below */
+	/** reqs waiting for service */
+	cfs_list_t			scp_req_pending;
+	/** high priority queue */
+	cfs_list_t			scp_hreq_pending;
+	/** # reqs being served */
+	int				scp_nreqs_active;
+	/** # HPreqs being served */
+	int				scp_nhreqs_active;
+	/** # hp requests handled */
+	int				scp_hreq_count;
+
+	/** AT stuff */
+	/** @{ */
+	/**
+	 * serialize the following fields, used for changes on
+	 * adaptive timeout
+	 */
+	cfs_spinlock_t			scp_at_lock __cfs_cacheline_aligned;
+	/** estimated rpc service time */
+	struct adaptive_timeout		scp_at_estimate;
+	/** reqs waiting for replies */
+	struct ptlrpc_at_array		scp_at_array;
+	/** early reply timer */
+	cfs_timer_t			scp_at_timer;
+	/** debug */
+	cfs_time_t			scp_at_checktime;
+	/** check early replies */
+	unsigned			scp_at_check;
+	/** @} */
+
+	/**
+	 * serialize the following fields, used for processing
+	 * replies for this portal
+	 */
+	cfs_spinlock_t			scp_rep_lock __cfs_cacheline_aligned;
+	/** all the active replies */
+	cfs_list_t			scp_rep_active;
 #ifndef __KERNEL__
-        /** replies waiting for service */
-        cfs_list_t                      srv_reply_queue;
+	/** replies waiting for service */
+	cfs_list_t			scp_rep_queue;
 #endif
-        /** List of free reply_states */
-        cfs_list_t                      srv_free_rs_list;
-        /** waitq to run, when adding stuff to srv_free_rs_list */
-        cfs_waitq_t                     srv_free_rs_waitq;
-        /** # 'difficult' replies */
-        cfs_atomic_t                    srv_n_difficult_replies;
-        //struct ptlrpc_srv_ni srv_interfaces[0];
+	/** List of free reply_states */
+	cfs_list_t			scp_rep_idle;
+	/** waitq to run, when adding stuff to srv_free_rs_list */
+	cfs_waitq_t			scp_rep_waitq;
+	/** # 'difficult' replies */
+	cfs_atomic_t			scp_nreps_difficult;
 };
 
 /**
@@ -1625,7 +1653,6 @@ struct ptlrpc_service *ptlrpc_register_service(
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 
 int ptlrpc_start_threads(struct ptlrpc_service *svc);
-int ptlrpc_start_thread(struct ptlrpc_service *svc);
 int ptlrpc_unregister_service(struct ptlrpc_service *service);
 int liblustre_check_services(void *arg);
 void ptlrpc_daemonize(char *name);
@@ -1910,6 +1937,22 @@ static inline int ptlrpc_no_resend(struct ptlrpc_request *req)
                 cfs_spin_unlock(&req->rq_lock);
         }
         return req->rq_no_resend;
+}
+
+static inline int
+ptlrpc_server_get_timeout(struct ptlrpc_service_part *svcpt)
+{
+	int at = AT_OFF ? 0 : at_get(&svcpt->scp_at_estimate);
+
+	return svcpt->scp_service->srv_watchdog_factor *
+	       max_t(int, at, obd_timeout);
+}
+
+static inline struct ptlrpc_service *
+ptlrpc_req2svc(struct ptlrpc_request *req)
+{
+	LASSERT(req->rq_rqbd != NULL);
+	return req->rq_rqbd->rqbd_svcpt->scp_service;
 }
 
 /* ldlm/ldlm_lib.c */
