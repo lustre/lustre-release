@@ -1073,11 +1073,33 @@ struct ptlrpc_request_buffer_desc {
         struct ptlrpc_request  rqbd_req;
 };
 
-typedef int  (*svc_thr_init_t)(struct ptlrpc_thread *thread);
-typedef void (*svc_thr_done_t)(struct ptlrpc_thread *thread);
 typedef int  (*svc_handler_t)(struct ptlrpc_request *req);
-typedef int  (*svc_hpreq_handler_t)(struct ptlrpc_request *);
-typedef void (*svc_req_printfn_t)(void *, struct ptlrpc_request *);
+
+struct ptlrpc_service_ops {
+	/**
+	 * if non-NULL called during thread creation (ptlrpc_start_thread())
+	 * to initialize service specific per-thread state.
+	 */
+	int		(*so_thr_init)(struct ptlrpc_thread *thr);
+	/**
+	 * if non-NULL called during thread shutdown (ptlrpc_main()) to
+	 * destruct state created by ->srv_init().
+	 */
+	void		(*so_thr_done)(struct ptlrpc_thread *thr);
+	/**
+	 * Handler function for incoming requests for this service
+	 */
+	int		(*so_req_handler)(struct ptlrpc_request *req);
+	/**
+	 * function to determine priority of the request, it's called
+	 * on every new request
+	 */
+	int		(*so_hpreq_handler)(struct ptlrpc_request *);
+	/**
+	 * service-specific print fn
+	 */
+	void		(*so_req_printer)(void *, struct ptlrpc_request *);
+};
 
 #ifndef __cfs_cacheline_aligned
 /* NB: put it here for reducing patche dependence */
@@ -1113,6 +1135,8 @@ struct ptlrpc_service {
         /** most often accessed fields */
         /** chain thru all services */
         cfs_list_t                      srv_list;
+	/** service operations table */
+	struct ptlrpc_service_ops	srv_ops;
         /** only statically allocated strings here; we don't clean them */
         char                           *srv_name;
         /** only statically allocated strings here; we don't clean them */
@@ -1129,26 +1153,6 @@ struct ptlrpc_service {
         int                             srv_threads_starting;
         /** # running threads */
         int                             srv_threads_running;
-
-        /** service operations, move to ptlrpc_svc_ops_t in the future */
-        /** @{ */
-        /**
-         * if non-NULL called during thread creation (ptlrpc_start_thread())
-         * to initialize service specific per-thread state.
-         */
-        svc_thr_init_t                  srv_init;
-        /**
-         * if non-NULL called during thread shutdown (ptlrpc_main()) to
-         * destruct state created by ->srv_init().
-         */
-        svc_thr_done_t                  srv_done;
-        /** Handler function for incoming requests for this service */
-        svc_handler_t                   srv_handler;
-        /** hp request handler */
-        svc_hpreq_handler_t             srv_hpreq_handler;
-        /** service-specific print fn */
-        svc_req_printfn_t               srv_req_printfn;
-        /** @} */
 
         /** Root of /proc dir tree for this service */
         cfs_proc_dir_entry_t           *srv_procroot;
@@ -1544,18 +1548,45 @@ void ptlrpcd_destroy_work(void *handler);
 int ptlrpcd_queue_work(void *handler);
 
 /** @} */
+struct ptlrpc_service_buf_conf {
+	/* nbufs is how many buffers to post */
+	unsigned int			bc_nbufs;
+	/* buffer size to post */
+	unsigned int			bc_buf_size;
+	/* portal to listed for requests on */
+	unsigned int			bc_req_portal;
+	/* portal of where to send replies to */
+	unsigned int			bc_rep_portal;
+	/* maximum request size to be accepted for this service */
+	unsigned int			bc_req_max_size;
+	/* maximum reply size this service can ever send */
+	unsigned int			bc_rep_max_size;
+};
+
+struct ptlrpc_service_thr_conf {
+	/* threadname should be 8 characters or less - 6 will be added on */
+	char				*tc_thr_name;
+	/* min number of service threads to start */
+	unsigned int			tc_nthrs_min;
+	/* max number of service threads to start */
+	unsigned int			tc_nthrs_max;
+	/* set NUMA node affinity for service threads */
+	unsigned int			tc_cpu_affinity;
+	/* Tags for lu_context associated with service thread */
+	__u32				tc_ctx_tags;
+};
 
 struct ptlrpc_service_conf {
-        int psc_nbufs;
-        int psc_bufsize;
-        int psc_max_req_size;
-        int psc_max_reply_size;
-        int psc_req_portal;
-        int psc_rep_portal;
-        int psc_watchdog_factor;
-        int psc_min_threads;
-        int psc_max_threads;
-        __u32 psc_ctx_tags;
+	/* service name */
+	char				*psc_name;
+	/* soft watchdog timeout multiplifier to print stuck service traces */
+	unsigned int			psc_watchdog_factor;
+	/* buffer information */
+	struct ptlrpc_service_buf_conf	psc_buf;
+	/* thread information */
+	struct ptlrpc_service_thr_conf	psc_thr;
+	/* function table */
+	struct ptlrpc_service_ops	psc_ops;
 };
 
 /* ptlrpc/service.c */
@@ -1570,22 +1601,9 @@ void ptlrpc_save_lock(struct ptlrpc_request *req,
 void ptlrpc_commit_replies(struct obd_export *exp);
 void ptlrpc_dispatch_difficult_reply(struct ptlrpc_reply_state *rs);
 void ptlrpc_schedule_difficult_reply(struct ptlrpc_reply_state *rs);
-struct ptlrpc_service *ptlrpc_init_svc_conf(struct ptlrpc_service_conf *c,
-                                            svc_handler_t h, char *name,
-                                            struct proc_dir_entry *proc_entry,
-                                            svc_req_printfn_t prntfn,
-                                            char *threadname);
-
-struct ptlrpc_service *ptlrpc_init_svc(int nbufs, int bufsize, int max_req_size,
-                                       int max_reply_size,
-                                       int req_portal, int rep_portal,
-                                       int watchdog_factor,
-                                       svc_handler_t, char *name,
-                                       cfs_proc_dir_entry_t *proc_entry,
-                                       svc_req_printfn_t,
-                                       int min_threads, int max_threads,
-                                       char *threadname, __u32 ctx_tags,
-                                       svc_hpreq_handler_t);
+struct ptlrpc_service *ptlrpc_register_service(
+				struct ptlrpc_service_conf *conf,
+				struct proc_dir_entry *proc_entry);
 void ptlrpc_stop_all_threads(struct ptlrpc_service *svc);
 
 int ptlrpc_start_threads(struct ptlrpc_service *svc);

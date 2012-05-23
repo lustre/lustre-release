@@ -49,6 +49,8 @@
 
 #define MGSSELF_NAME    "_mgs"
 
+#define MGS_SERVICE_WATCHDOG_FACTOR 2
+
 /* -- imperative recovery control data structures -- */
 /**
  * restarting targets.

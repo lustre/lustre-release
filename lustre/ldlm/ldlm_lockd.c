@@ -2527,7 +2527,8 @@ EXPORT_SYMBOL(ldlm_destroy_export);
 
 static int ldlm_setup(void)
 {
-        struct ldlm_bl_pool *blp;
+	static struct ptlrpc_service_conf	conf;
+	struct ldlm_bl_pool			*blp = NULL;
         int rc = 0;
         int ldlm_min_threads = LDLM_THREADS_AUTO_MIN;
         int ldlm_max_threads = LDLM_THREADS_AUTO_MAX;
@@ -2546,7 +2547,7 @@ static int ldlm_setup(void)
 #ifdef LPROCFS
         rc = ldlm_proc_setup();
         if (rc != 0)
-                GOTO(out_free, rc);
+		GOTO(out, rc);
 #endif
 
 #ifdef __KERNEL__
@@ -2559,43 +2560,78 @@ static int ldlm_setup(void)
                 ldlm_min_threads = ldlm_max_threads = ldlm_num_threads;
         }
 #endif
-
-        ldlm_state->ldlm_cb_service =
-                ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
-                                LDLM_MAXREPSIZE, LDLM_CB_REQUEST_PORTAL,
-                                LDLM_CB_REPLY_PORTAL, 2,
-                                ldlm_callback_handler, "ldlm_cbd",
-                                ldlm_svc_proc_dir, NULL,
-                                ldlm_min_threads, ldlm_max_threads,
-                                "ldlm_cb",
-                                LCT_MD_THREAD|LCT_DT_THREAD, NULL);
-
-        if (!ldlm_state->ldlm_cb_service) {
-                CERROR("failed to start service\n");
-                GOTO(out_proc, rc = -ENOMEM);
-        }
+	memset(&conf, 0, sizeof(conf));
+	conf = (typeof(conf)) {
+		.psc_name		= "ldlm_cbd",
+		.psc_watchdog_factor	= 2,
+		.psc_buf		= {
+			.bc_nbufs		= LDLM_NBUFS,
+			.bc_buf_size		= LDLM_BUFSIZE,
+			.bc_req_max_size	= LDLM_MAXREQSIZE,
+			.bc_rep_max_size	= LDLM_MAXREPSIZE,
+			.bc_req_portal		= LDLM_CB_REQUEST_PORTAL,
+			.bc_rep_portal		= LDLM_CB_REPLY_PORTAL,
+		},
+		.psc_thr		= {
+			.tc_thr_name		= "ldlm_cb",
+			.tc_nthrs_min		= ldlm_min_threads,
+			.tc_nthrs_max		= ldlm_max_threads,
+			.tc_ctx_tags		= LCT_MD_THREAD | \
+						  LCT_DT_THREAD,
+		},
+		.psc_ops		= {
+			.so_req_handler		= ldlm_callback_handler,
+		},
+	};
+	ldlm_state->ldlm_cb_service = \
+			ptlrpc_register_service(&conf, ldlm_svc_proc_dir);
+	if (IS_ERR(ldlm_state->ldlm_cb_service)) {
+		CERROR("failed to start service\n");
+		rc = PTR_ERR(ldlm_state->ldlm_cb_service);
+		ldlm_state->ldlm_cb_service = NULL;
+		GOTO(out, rc);
+	}
 
 #ifdef HAVE_SERVER_SUPPORT
-        ldlm_state->ldlm_cancel_service =
-                ptlrpc_init_svc(LDLM_NBUFS, LDLM_BUFSIZE, LDLM_MAXREQSIZE,
-                                LDLM_MAXREPSIZE, LDLM_CANCEL_REQUEST_PORTAL,
-                                LDLM_CANCEL_REPLY_PORTAL, 6,
-                                ldlm_cancel_handler, "ldlm_canceld",
-                                ldlm_svc_proc_dir, NULL,
-                                ldlm_min_threads, ldlm_max_threads,
-                                "ldlm_cn",
-                                LCT_MD_THREAD|LCT_DT_THREAD|LCT_CL_THREAD,
-                                ldlm_hpreq_handler);
+	memset(&conf, 0, sizeof(conf));
+	conf = (typeof(conf)) {
+		.psc_name		= "ldlm_canceld",
+		.psc_watchdog_factor	= 6,
+		.psc_buf		= {
+			.bc_nbufs		= LDLM_NBUFS,
+			.bc_buf_size		= LDLM_BUFSIZE,
+			.bc_req_max_size	= LDLM_MAXREQSIZE,
+			.bc_rep_max_size	= LDLM_MAXREPSIZE,
+			.bc_req_portal		= LDLM_CANCEL_REQUEST_PORTAL,
+			.bc_rep_portal		= LDLM_CANCEL_REPLY_PORTAL,
 
-        if (!ldlm_state->ldlm_cancel_service) {
-                CERROR("failed to start service\n");
-                GOTO(out_proc, rc = -ENOMEM);
-        }
+		},
+		.psc_thr		= {
+			.tc_thr_name		= "ldlm_cn",
+			.tc_nthrs_min		= ldlm_min_threads,
+			.tc_nthrs_max		= ldlm_max_threads,
+			.tc_ctx_tags		= LCT_MD_THREAD | \
+						  LCT_DT_THREAD | \
+						  LCT_CL_THREAD,
+		},
+		.psc_ops		= {
+			.so_req_handler		= ldlm_cancel_handler,
+			.so_hpreq_handler	= ldlm_hpreq_handler,
+		},
+	};
+	ldlm_state->ldlm_cancel_service = \
+			ptlrpc_register_service(&conf, ldlm_svc_proc_dir);
+	if (IS_ERR(ldlm_state->ldlm_cancel_service)) {
+		CERROR("failed to start service\n");
+		rc = PTR_ERR(ldlm_state->ldlm_cancel_service);
+		ldlm_state->ldlm_cancel_service = NULL;
+		GOTO(out, rc);
+	}
 #endif
 
-        OBD_ALLOC(blp, sizeof(*blp));
-        if (blp == NULL)
-                GOTO(out_proc, rc = -ENOMEM);
+	OBD_ALLOC(blp, sizeof(*blp));
+	if (blp == NULL)
+		GOTO(out, rc = -ENOMEM);
         ldlm_state->ldlm_bl_pool = blp;
 
         cfs_spin_lock_init(&blp->blp_lock);
@@ -2611,18 +2647,8 @@ static int ldlm_setup(void)
         for (i = 0; i < blp->blp_min_threads; i++) {
                 rc = ldlm_bl_thread_start(blp);
                 if (rc < 0)
-                        GOTO(out_thread, rc);
+			GOTO(out, rc);
         }
-
-# ifdef HAVE_SERVER_SUPPORT
-        rc = ptlrpc_start_threads(ldlm_state->ldlm_cancel_service);
-        if (rc)
-                GOTO(out_thread, rc);
-# endif
-
-        rc = ptlrpc_start_threads(ldlm_state->ldlm_cb_service);
-        if (rc)
-                GOTO(out_thread, rc);
 
         CFS_INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
         expired_lock_thread.elt_state = ELT_STOPPED;
@@ -2635,43 +2661,25 @@ static int ldlm_setup(void)
         rc = cfs_create_thread(expired_lock_main, NULL, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("Cannot start ldlm expired-lock thread: %d\n", rc);
-                GOTO(out_thread, rc);
+		GOTO(out, rc);
         }
 
         cfs_wait_event(expired_lock_thread.elt_waitq,
                        expired_lock_thread.elt_state == ELT_READY);
-#endif
 
-#ifdef __KERNEL__
         rc = ldlm_pools_init();
         if (rc)
-                GOTO(out_thread, rc);
+		GOTO(out, rc);
 #endif
         RETURN(0);
 
-#ifdef __KERNEL__
- out_thread:
-# ifdef HAVE_SERVER_SUPPORT
-        ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
-# endif
-        ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
-#endif
-
- out_proc:
-#ifdef LPROCFS
-        ldlm_proc_cleanup();
- out_free:
-#endif
-        OBD_FREE(ldlm_state, sizeof(*ldlm_state));
-        ldlm_state = NULL;
+ out:
+	ldlm_cleanup();
         return rc;
 }
 
 static int ldlm_cleanup(void)
 {
-#ifdef __KERNEL__
-        struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
-#endif
         ENTRY;
 
         if (!cfs_list_empty(ldlm_namespace_list(LDLM_NAMESPACE_SERVER)) ||
@@ -2684,38 +2692,42 @@ static int ldlm_cleanup(void)
 
 #ifdef __KERNEL__
         ldlm_pools_fini();
-#endif
 
+	if (ldlm_state->ldlm_bl_pool != NULL) {
+		struct ldlm_bl_pool *blp = ldlm_state->ldlm_bl_pool;
+
+		while (cfs_atomic_read(&blp->blp_num_threads) > 0) {
+			struct ldlm_bl_work_item blwi = { .blwi_ns = NULL };
+
+			cfs_init_completion(&blp->blp_comp);
+
+			cfs_spin_lock(&blp->blp_lock);
+			cfs_list_add_tail(&blwi.blwi_entry, &blp->blp_list);
+			cfs_waitq_signal(&blp->blp_waitq);
+			cfs_spin_unlock(&blp->blp_lock);
+
+			cfs_wait_for_completion(&blp->blp_comp);
+		}
+
+		OBD_FREE(blp, sizeof(*blp));
+	}
+#endif /* __KERNEL__ */
+
+	if (ldlm_state->ldlm_cb_service != NULL)
+		ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
+# ifdef HAVE_SERVER_SUPPORT
+	if (ldlm_state->ldlm_cancel_service != NULL)
+		ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
+# endif
 #ifdef __KERNEL__
-        while (cfs_atomic_read(&blp->blp_num_threads) > 0) {
-                struct ldlm_bl_work_item blwi = { .blwi_ns = NULL };
+	ldlm_proc_cleanup();
 
-                cfs_init_completion(&blp->blp_comp);
-
-                cfs_spin_lock(&blp->blp_lock);
-                cfs_list_add_tail(&blwi.blwi_entry, &blp->blp_list);
-                cfs_waitq_signal(&blp->blp_waitq);
-                cfs_spin_unlock(&blp->blp_lock);
-
-                cfs_wait_for_completion(&blp->blp_comp);
-        }
-        OBD_FREE(blp, sizeof(*blp));
-
-        ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
-# ifdef HAVE_SERVER_SUPPORT
-        ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
-# endif
-        ldlm_proc_cleanup();
-
-        expired_lock_thread.elt_state = ELT_TERMINATE;
-        cfs_waitq_signal(&expired_lock_thread.elt_waitq);
-        cfs_wait_event(expired_lock_thread.elt_waitq,
-                       expired_lock_thread.elt_state == ELT_STOPPED);
-#else /* !__KERNEL__ */
-        ptlrpc_unregister_service(ldlm_state->ldlm_cb_service);
-# ifdef HAVE_SERVER_SUPPORT
-        ptlrpc_unregister_service(ldlm_state->ldlm_cancel_service);
-# endif
+	if (expired_lock_thread.elt_state != ELT_STOPPED) {
+		expired_lock_thread.elt_state = ELT_TERMINATE;
+		cfs_waitq_signal(&expired_lock_thread.elt_waitq);
+		cfs_wait_event(expired_lock_thread.elt_waitq,
+			       expired_lock_thread.elt_state == ELT_STOPPED);
+	}
 #endif /* __KERNEL__ */
 
         OBD_FREE(ldlm_state, sizeof(*ldlm_state));

@@ -228,7 +228,7 @@ EXPORT_SYMBOL(ptlrpc_mark_interrupted);
 EXPORT_SYMBOL(ptlrpc_save_lock);
 EXPORT_SYMBOL(ptlrpc_schedule_difficult_reply);
 EXPORT_SYMBOL(ptlrpc_commit_replies);
-EXPORT_SYMBOL(ptlrpc_init_svc);
+EXPORT_SYMBOL(ptlrpc_register_service);
 EXPORT_SYMBOL(ptlrpc_stop_all_threads);
 EXPORT_SYMBOL(ptlrpc_start_threads);
 EXPORT_SYMBOL(ptlrpc_start_thread);

@@ -2421,6 +2421,7 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
 /* Sigh - really, this is an OSS, the _server_, not the _target_ */
 static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
+	static struct ptlrpc_service_conf	svc_conf;
         struct ost_obd *ost = &obd->u.ost;
         struct lprocfs_static_vars lvars;
         int oss_min_threads;
@@ -2459,22 +2460,35 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		oss_max_threads = min(OSS_THREADS_MAX, oss_min_threads * 4 + 1);
 	}
 
-        ost->ost_service =
-                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_MAXREPSIZE, OST_REQUEST_PORTAL,
-                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
-                                ost_handle, LUSTRE_OSS_NAME,
-                                obd->obd_proc_entry, target_print_req,
-                                oss_min_threads, oss_max_threads,
-                                "ll_ost", LCT_DT_THREAD, NULL);
-        if (ost->ost_service == NULL) {
-                CERROR("failed to start service\n");
-                GOTO(out_lprocfs, rc = -ENOMEM);
+	svc_conf = (typeof(svc_conf)) {
+		.psc_name		= LUSTRE_OSS_NAME,
+		.psc_watchdog_factor	= OSS_SERVICE_WATCHDOG_FACTOR,
+		.psc_buf		= {
+			.bc_nbufs		= OST_NBUFS,
+			.bc_buf_size		= OST_BUFSIZE,
+			.bc_req_max_size	= OST_MAXREQSIZE,
+			.bc_rep_max_size	= OST_MAXREPSIZE,
+			.bc_req_portal		= OST_REQUEST_PORTAL,
+			.bc_rep_portal		= OSC_REPLY_PORTAL,
+		},
+		.psc_thr		= {
+			.tc_thr_name		= "ll_ost",
+			.tc_nthrs_min		= oss_min_threads,
+			.tc_nthrs_max		= oss_max_threads,
+			.tc_ctx_tags		= LCT_DT_THREAD,
+		},
+		.psc_ops		= {
+			.so_req_handler		= ost_handle,
+			.so_req_printer		= target_print_req,
+		},
+	};
+	ost->ost_service = ptlrpc_register_service(&svc_conf,
+						   obd->obd_proc_entry);
+	if (IS_ERR(ost->ost_service)) {
+		rc = PTR_ERR(ost->ost_service);
+		CERROR("failed to start service: %d\n", rc);
+		GOTO(out_lprocfs, rc);
         }
-
-        rc = ptlrpc_start_threads(ost->ost_service);
-        if (rc)
-                GOTO(out_service, rc = -EINVAL);
 
         if (oss_num_create_threads) {
                 if (oss_num_create_threads > OSS_MAX_CREATE_THREADS)
@@ -2488,50 +2502,77 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
                 oss_max_create_threads = OSS_MAX_CREATE_THREADS;
         }
 
-        ost->ost_create_service =
-                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_MAXREPSIZE, OST_CREATE_PORTAL,
-                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
-                                ost_handle, "ost_create",
-                                obd->obd_proc_entry, target_print_req,
-                                oss_min_create_threads, oss_max_create_threads,
-                                "ll_ost_creat", LCT_DT_THREAD, NULL);
-        if (ost->ost_create_service == NULL) {
-                CERROR("failed to start OST create service\n");
-                GOTO(out_service, rc = -ENOMEM);
+	memset(&svc_conf, 0, sizeof(svc_conf));
+	svc_conf = (typeof(svc_conf)) {
+		.psc_name		= "ost_create",
+		.psc_watchdog_factor	= OSS_SERVICE_WATCHDOG_FACTOR,
+		.psc_buf		= {
+			.bc_nbufs		= OST_NBUFS,
+			.bc_buf_size		= OST_BUFSIZE,
+			.bc_req_max_size	= OST_MAXREQSIZE,
+			.bc_rep_max_size	= OST_MAXREPSIZE,
+			.bc_req_portal		= OST_CREATE_PORTAL,
+			.bc_rep_portal		= OSC_REPLY_PORTAL,
+		},
+		.psc_thr		= {
+			.tc_thr_name		= "ll_ost_create",
+			.tc_nthrs_min		= oss_min_create_threads,
+			.tc_nthrs_max		= oss_max_create_threads,
+			.tc_ctx_tags		= LCT_DT_THREAD,
+		},
+		.psc_ops		= {
+			.so_req_handler		= ost_handle,
+			.so_req_printer		= target_print_req,
+		},
+	};
+	ost->ost_create_service = ptlrpc_register_service(&svc_conf,
+							  obd->obd_proc_entry);
+	if (IS_ERR(ost->ost_create_service)) {
+		rc = PTR_ERR(ost->ost_create_service);
+		CERROR("failed to start OST create service: %d\n", rc);
+		GOTO(out_service, rc);
         }
 
-        rc = ptlrpc_start_threads(ost->ost_create_service);
-        if (rc)
-                GOTO(out_create, rc = -EINVAL);
-
-        ost->ost_io_service =
-                ptlrpc_init_svc(OST_NBUFS, OST_BUFSIZE, OST_MAXREQSIZE,
-                                OST_MAXREPSIZE, OST_IO_PORTAL,
-                                OSC_REPLY_PORTAL, OSS_SERVICE_WATCHDOG_FACTOR,
-                                ost_handle, "ost_io",
-                                obd->obd_proc_entry, target_print_req,
-                                oss_min_threads, oss_max_threads,
-                                "ll_ost_io", LCT_DT_THREAD, ost_hpreq_handler);
-        if (ost->ost_io_service == NULL) {
-                CERROR("failed to start OST I/O service\n");
-                GOTO(out_create, rc = -ENOMEM);
+	memset(&svc_conf, 0, sizeof(svc_conf));
+	svc_conf = (typeof(svc_conf)) {
+		.psc_name		= "ost_io",
+		.psc_watchdog_factor	= OSS_SERVICE_WATCHDOG_FACTOR,
+		.psc_buf		= {
+			.bc_nbufs		= OST_NBUFS,
+			.bc_buf_size		= OST_BUFSIZE,
+			.bc_req_max_size	= OST_MAXREQSIZE,
+			.bc_rep_max_size	= OST_MAXREPSIZE,
+			.bc_req_portal		= OST_IO_PORTAL,
+			.bc_rep_portal		= OSC_REPLY_PORTAL,
+		},
+		.psc_thr		= {
+			.tc_thr_name		= "ll_ost_io",
+			.tc_nthrs_min		= oss_min_threads,
+			.tc_nthrs_max		= oss_max_threads,
+			.tc_cpu_affinity	= 1,
+			.tc_ctx_tags		= LCT_DT_THREAD,
+		},
+		.psc_ops		= {
+			.so_thr_init		= ost_thread_init,
+			.so_thr_done		= ost_thread_done,
+			.so_req_handler		= ost_handle,
+			.so_hpreq_handler	= ost_hpreq_handler,
+			.so_req_printer		= target_print_req,
+		},
+	};
+	ost->ost_io_service = ptlrpc_register_service(&svc_conf,
+						      obd->obd_proc_entry);
+	if (IS_ERR(ost->ost_io_service)) {
+		rc = PTR_ERR(ost->ost_io_service);
+		CERROR("failed to start OST I/O service: %d\n", rc);
+		ost->ost_io_service = NULL;
+		GOTO(out_create, rc);
         }
-
-        ost->ost_io_service->srv_init = ost_thread_init;
-        ost->ost_io_service->srv_done = ost_thread_done;
-        ost->ost_io_service->srv_cpu_affinity = 1;
-        rc = ptlrpc_start_threads(ost->ost_io_service);
-        if (rc)
-                GOTO(out_io, rc = -EINVAL);
 
         ping_evictor_start();
 
         RETURN(0);
 
-out_io:
-        ptlrpc_unregister_service(ost->ost_io_service);
-        ost->ost_io_service = NULL;
 out_create:
         ptlrpc_unregister_service(ost->ost_create_service);
         ost->ost_create_service = NULL;
@@ -2560,6 +2601,8 @@ static int ost_cleanup(struct obd_device *obd)
         ptlrpc_unregister_service(ost->ost_io_service);
         ost->ost_service = NULL;
         ost->ost_create_service = NULL;
+	ost->ost_io_service = NULL;
+
         cfs_mutex_unlock(&ost->ost_health_mutex);
 
         lprocfs_obd_cleanup(obd);
