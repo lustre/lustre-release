@@ -1918,7 +1918,6 @@ static int __osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->setxattr != NULL);
-        LASSERT(osd_write_locked(env, obj));
 
         if (fl & LU_XATTR_REPLACE)
                 fs_flags |= XATTR_REPLACE;

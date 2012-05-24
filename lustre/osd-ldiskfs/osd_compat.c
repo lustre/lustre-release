@@ -204,13 +204,11 @@ int osd_last_rcvd_subdir_count(struct osd_device *osd)
 			rc = -EFAULT;
 		dput(dlast);
 		return rc;
-	} else {
-		count = FILTER_SUBDIR_COUNT;
 	}
 out:
 	dput(dlast);
 	LASSERT(count > 0);
-	return rc;
+	return count;
 }
 
 void osd_compat_fini(struct osd_device *dev)

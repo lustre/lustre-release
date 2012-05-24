@@ -134,7 +134,7 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 	}
 	/* ofd connect may cause transaction before export has last_rcvd
 	 * slot */
-	if (fed->fed_ted.ted_lr_off < 0)
+	if (fed->fed_ted.ted_lr_idx < 0)
 		RETURN(0);
 	off = fed->fed_ted.ted_lr_off;
 

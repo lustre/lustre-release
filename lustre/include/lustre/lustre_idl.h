@@ -1475,6 +1475,7 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_FLCROSSREF    (0x0000100000000000ULL) /* Cross-ref case */
 #define OBD_MD_FLGETATTRLOCK (0x0000200000000000ULL) /* Get IOEpoch attributes
                                                       * under lock */
+#define OBD_MD_FLOBJCOUNT    (0x0000400000000000ULL) /* for multiple destroy */
 
 #define OBD_MD_FLRMTLSETFACL (0x0001000000000000ULL) /* lfs lsetfacl case */
 #define OBD_MD_FLRMTLGETFACL (0x0002000000000000ULL) /* lfs lgetfacl case */

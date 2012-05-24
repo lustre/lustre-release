@@ -299,6 +299,8 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 /* ofd_fs.c */
 obd_id ofd_last_id(struct ofd_device *ofd, obd_seq seq);
 void ofd_last_id_set(struct ofd_device *ofd, obd_id id, obd_seq seq);
+int ofd_last_id_write(const struct lu_env *env, struct ofd_device *ofd,
+		      obd_seq seq);
 int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int);
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 		 struct obd_device *obd);

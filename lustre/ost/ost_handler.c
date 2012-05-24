@@ -1522,52 +1522,58 @@ static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
 
 /* Ensure that data and metadata are synced to the disk when lock is cancelled
  * (if requested) */
-int ost_blocking_ast(struct ldlm_lock *lock,
-                             struct ldlm_lock_desc *desc,
-                             void *data, int flag)
+int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
+		     void *data, int flag)
 {
-        __u32 sync_lock_cancel = 0;
-        __u32 len = sizeof(sync_lock_cancel);
-        int rc = 0;
-        ENTRY;
+	struct lu_env	env;
+	__u32		sync_lock_cancel = 0;
+	__u32		len = sizeof(sync_lock_cancel);
+	int		rc = 0;
 
-        rc = obd_get_info(NULL, lock->l_export, sizeof(KEY_SYNC_LOCK_CANCEL),
-                          KEY_SYNC_LOCK_CANCEL, &len, &sync_lock_cancel, NULL);
+	ENTRY;
 
-        if (!rc && flag == LDLM_CB_CANCELING &&
-            (lock->l_granted_mode & (LCK_PW|LCK_GROUP)) &&
-            (sync_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
-             (sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
-              lock->l_flags & LDLM_FL_CBPENDING))) {
-                struct obd_info *oinfo;
-                struct obdo *oa;
-                int rc;
+	rc = lu_env_init(&env, LCT_DT_THREAD);
+	if (unlikely(rc != 0))
+		RETURN(rc);
 
-                OBD_ALLOC_PTR(oinfo);
-                if (!oinfo)
-                        RETURN(-ENOMEM);
-                OBDO_ALLOC(oa);
-                if (!oa) {
-                        OBD_FREE_PTR(oinfo);
-                        RETURN(-ENOMEM);
-                }
-                oa->o_id = lock->l_resource->lr_name.name[0];
-                oa->o_seq = lock->l_resource->lr_name.name[1];
-                oa->o_valid = OBD_MD_FLID|OBD_MD_FLGROUP;
-                oinfo->oi_oa = oa;
+	rc = obd_get_info(&env, lock->l_export, sizeof(KEY_SYNC_LOCK_CANCEL),
+			  KEY_SYNC_LOCK_CANCEL, &len, &sync_lock_cancel, NULL);
+	if (rc == 0 && flag == LDLM_CB_CANCELING &&
+	    (lock->l_granted_mode & (LCK_PW|LCK_GROUP)) &&
+	    (sync_lock_cancel == ALWAYS_SYNC_ON_CANCEL ||
+	     (sync_lock_cancel == BLOCKING_SYNC_ON_CANCEL &&
+	      lock->l_flags & LDLM_FL_CBPENDING))) {
+		struct obd_info	*oinfo;
+		struct obdo	*oa;
+		int		 rc;
 
-                rc = obd_sync(NULL, lock->l_export, oinfo,
-                              lock->l_policy_data.l_extent.start,
-                              lock->l_policy_data.l_extent.end, NULL);
-                if (rc)
-                        CERROR("Error %d syncing data on lock cancel\n", rc);
+		OBD_ALLOC_PTR(oinfo);
+		if (!oinfo)
+			GOTO(out_env, rc = -ENOMEM);
+		OBDO_ALLOC(oa);
+		if (!oa) {
+			OBD_FREE_PTR(oinfo);
+			GOTO(out_env, rc = -ENOMEM);
+		}
+		oa->o_id = lock->l_resource->lr_name.name[0];
+		oa->o_seq = lock->l_resource->lr_name.name[1];
+		oa->o_valid = OBD_MD_FLID|OBD_MD_FLGROUP;
+		oinfo->oi_oa = oa;
 
-                OBDO_FREE(oa);
-                OBD_FREE_PTR(oinfo);
-        }
+		rc = obd_sync(&env, lock->l_export, oinfo,
+			      lock->l_policy_data.l_extent.start,
+			      lock->l_policy_data.l_extent.end, NULL);
+		if (rc)
+			CERROR("Error %d syncing data on lock cancel\n", rc);
 
-        rc = ldlm_server_blocking_ast(lock, desc, data, flag);
-        RETURN(rc);
+		OBDO_FREE(oa);
+		OBD_FREE_PTR(oinfo);
+	}
+
+	rc = ldlm_server_blocking_ast(lock, desc, data, flag);
+out_env:
+	lu_env_fini(&env);
+	RETURN(rc);
 }
 
 static int ost_filter_recovery_request(struct ptlrpc_request *req,
