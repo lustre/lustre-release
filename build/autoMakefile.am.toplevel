@@ -50,7 +50,7 @@ doxygen-%: build/doxyfile.%
 if MODULES
 sources: all-sources
 
-all-sources: $(SYMVERFILE_DEPENDECY)
+all-sources: $(MODULE_SYMVERS_DEPS)
 	for dir in $(SOURCES_SUBDIRS) ; do \
 		$(MAKE) sources -C $$dir || exit $$? ; \
 	done
