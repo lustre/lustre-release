@@ -734,8 +734,8 @@ run_write_append_truncate() {
 
 run_write_disjoint() {
 
-    WRITE_DISJOINT=${WRITE_DISJOINT:-\
-        $(which write_disjoint 2> /dev/null || true)}
+    WRITE_DISJOINT=${WRITE_DISJOINT:-$(which write_disjoint \
+        2> /dev/null || true)}
     # threads per client
     wdisjoint_THREADS=${wdisjoint_THREADS:-4}
     wdisjoint_REP=${wdisjoint_REP:-10000}
@@ -773,8 +773,8 @@ run_write_disjoint() {
 
 run_parallel_grouplock() {
 
-    PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-\
-        $(which parallel_grouplock 2> /dev/null || true)}
+    PARALLEL_GROUPLOCK=${PARALLEL_GROUPLOCK:-$(which parallel_grouplock \
+        2> /dev/null || true)}
     parallel_grouplock_MINTASKS=${parallel_grouplock_MINTASKS:-5}
 
     if [ "$NFSCLIENT" ]; then
