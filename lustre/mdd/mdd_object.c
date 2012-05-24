@@ -621,14 +621,19 @@ static int is_rootdir(struct mdd_object *mdd_obj)
 int mdd_big_lmm_get(const struct lu_env *env, struct mdd_object *obj,
                     struct md_attr *ma)
 {
-        struct mdd_thread_info *info = mdd_env_info(env);
-        int size;
-        int rc;
-        ENTRY;
+	struct mdd_thread_info *info = mdd_env_info(env);
+	int			size;
+	int			rc   = -EINVAL;
+	ENTRY;
 
-        LASSERT(info != NULL);
-        LASSERT(ma->ma_lmm_size > 0);
-        LASSERT(ma->ma_big_lmm_used == 0);
+	LASSERT(info != NULL);
+	LASSERT(ma->ma_big_lmm_used == 0);
+
+	if (ma->ma_lmm_size == 0) {
+		CERROR("No buffer to hold %s xattr of object "DFID"\n",
+		       XATTR_NAME_LOV, PFID(mdd_object_fid(obj)));
+		RETURN(rc);
+	}
 
         rc = mdo_xattr_get(env, obj, &LU_BUF_NULL, XATTR_NAME_LOV,
                            mdd_object_capa(env, obj));
