@@ -967,6 +967,7 @@ enum {
         SVC_SIGNAL      = 1 << 5,
 };
 
+#define PTLRPC_THR_NAME_LEN		32
 /**
  * Definition of server service thread structure
  */
@@ -998,6 +999,7 @@ struct ptlrpc_thread {
 	struct ptlrpc_service_part	*t_svcpt;
 	cfs_waitq_t			t_ctl_waitq;
 	struct lu_env			*t_env;
+	char				t_name[PTLRPC_THR_NAME_LEN];
 };
 
 static inline int thread_is_init(struct ptlrpc_thread *thread)
@@ -1668,11 +1670,6 @@ void ptlrpc_hr_fini(void);
 # define ptlrpc_hr_fini() do {} while(0)
 #endif
 
-struct ptlrpc_svc_data {
-        char *name;
-        struct ptlrpc_service *svc;
-        struct ptlrpc_thread *thread;
-};
 /** @} */
 
 /* ptlrpc/import.c */

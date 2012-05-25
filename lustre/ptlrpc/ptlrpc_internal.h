@@ -47,7 +47,7 @@ struct ldlm_res_id;
 struct ptlrpc_request_set;
 extern int test_req_buffer_pressure;
 
-int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt);
+int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait);
 /* ptlrpcd.c */
 int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc);
 

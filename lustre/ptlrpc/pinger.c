@@ -262,11 +262,10 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
 
 static int ptlrpc_pinger_main(void *arg)
 {
-        struct ptlrpc_svc_data *data = (struct ptlrpc_svc_data *)arg;
-        struct ptlrpc_thread *thread = data->thread;
-        ENTRY;
+        struct ptlrpc_thread *thread = (struct ptlrpc_thread *)arg;
+	ENTRY;
 
-        cfs_daemonize(data->name);
+        cfs_daemonize(thread->t_name);
 
         /* Record that the thread is running */
         thread_set_flags(thread, SVC_RUNNING);
@@ -343,7 +342,6 @@ static struct ptlrpc_thread *pinger_thread = NULL;
 int ptlrpc_start_pinger(void)
 {
         struct l_wait_info lwi = { 0 };
-        struct ptlrpc_svc_data d;
         int rc;
 #ifndef ENABLE_PINGER
         return 0;
@@ -359,12 +357,12 @@ int ptlrpc_start_pinger(void)
         cfs_waitq_init(&pinger_thread->t_ctl_waitq);
         cfs_waitq_init(&suspend_timeouts_waitq);
 
-        d.name = "ll_ping";
-        d.thread = pinger_thread;
+	strcpy(pinger_thread->t_name, "ll_ping");
 
-        /* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
-         * just drop the VM and FILES in cfs_daemonize_ctxt() right away. */
-        rc = cfs_create_thread(ptlrpc_pinger_main, &d, CFS_DAEMON_FLAGS);
+	/* CLONE_VM and CLONE_FILES just avoid a needless copy, because we
+	 * just drop the VM and FILES in cfs_daemonize_ctxt() right away. */
+        rc = cfs_create_thread(ptlrpc_pinger_main,
+			       pinger_thread, CFS_DAEMON_FLAGS);
         if (rc < 0) {
                 CERROR("cannot start thread: %d\n", rc);
                 OBD_FREE(pinger_thread, sizeof(*pinger_thread));
