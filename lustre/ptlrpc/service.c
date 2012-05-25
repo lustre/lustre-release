@@ -715,10 +715,11 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
         if (!cfs_atomic_dec_and_test(&req->rq_refcount))
                 return;
 
-	cfs_spin_lock(&svcpt->scp_at_lock);
 	if (req->rq_at_linked) {
 		struct ptlrpc_at_array *array = &svcpt->scp_at_array;
                 __u32 index = req->rq_at_index;
+
+		cfs_spin_lock(&svcpt->scp_at_lock);
 
                 LASSERT(!cfs_list_empty(&req->rq_timed_list));
                 cfs_list_del_init(&req->rq_timed_list);
@@ -727,10 +728,11 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
                 cfs_spin_unlock(&req->rq_lock);
                 array->paa_reqs_count[index]--;
                 array->paa_count--;
-        } else
-                LASSERT(cfs_list_empty(&req->rq_timed_list));
 
-	cfs_spin_unlock(&svcpt->scp_at_lock);
+		cfs_spin_unlock(&svcpt->scp_at_lock);
+	} else {
+		LASSERT(cfs_list_empty(&req->rq_timed_list));
+	}
 
         /* finalize request */
         if (req->rq_export) {
@@ -962,10 +964,8 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service_part *svcpt)
 	struct ptlrpc_at_array *array = &svcpt->scp_at_array;
 	__s32 next;
 
-	cfs_spin_lock(&svcpt->scp_at_lock);
 	if (array->paa_count == 0) {
 		cfs_timer_disarm(&svcpt->scp_at_timer);
-		cfs_spin_unlock(&svcpt->scp_at_lock);
 		return;
 	}
 
@@ -979,7 +979,6 @@ static void ptlrpc_at_set_timer(struct ptlrpc_service_part *svcpt)
 		CDEBUG(D_INFO, "armed %s at %+ds\n",
 		       svcpt->scp_service->srv_name, next);
 	}
-	cfs_spin_unlock(&svcpt->scp_at_lock);
 }
 
 /* Add rpc to early reply check list */
@@ -989,7 +988,6 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
 	struct ptlrpc_at_array *array = &svcpt->scp_at_array;
         struct ptlrpc_request *rq = NULL;
         __u32 index;
-        int found = 0;
 
         if (AT_OFF)
                 return(0);
@@ -1031,12 +1029,9 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
         array->paa_count++;
         if (array->paa_count == 1 || array->paa_deadline > req->rq_deadline) {
                 array->paa_deadline = req->rq_deadline;
-                found = 1;
-        }
-	cfs_spin_unlock(&svcpt->scp_at_lock);
-
-	if (found)
 		ptlrpc_at_set_timer(svcpt);
+	}
+	cfs_spin_unlock(&svcpt->scp_at_lock);
 
 	return 0;
 }
@@ -1208,10 +1203,10 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
 	first = array->paa_deadline - now;
 	if (first > at_early_margin) {
 		/* We've still got plenty of time.  Reset the timer. */
-		cfs_spin_unlock(&svcpt->scp_at_lock);
 		ptlrpc_at_set_timer(svcpt);
-                RETURN(0);
-        }
+		cfs_spin_unlock(&svcpt->scp_at_lock);
+		RETURN(0);
+	}
 
         /* We're close to a timeout, and we don't know how much longer the
            server will take. Send early replies to everyone expiring soon. */
@@ -1253,10 +1248,10 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
                         index = 0;
         }
         array->paa_deadline = deadline;
-	cfs_spin_unlock(&svcpt->scp_at_lock);
-
 	/* we have a new earliest deadline, restart the timer */
 	ptlrpc_at_set_timer(svcpt);
+
+	cfs_spin_unlock(&svcpt->scp_at_lock);
 
         CDEBUG(D_ADAPTTO, "timeout in %+ds, asking for %d secs on %d early "
                "replies\n", first, at_extra, counter);
