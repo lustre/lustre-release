@@ -752,23 +752,40 @@ lu_object_ops(const struct lu_object *o)
 struct lu_object *lu_object_locate(struct lu_object_header *h,
                                    const struct lu_device_type *dtype);
 
+struct lu_cdebug_print_info {
+        int         lpi_subsys;
+        int         lpi_mask;
+        const char *lpi_file;
+        const char *lpi_fn;
+        int         lpi_line;
+};
+
 /**
  * Printer function emitting messages through libcfs_debug_msg().
  */
 int lu_cdebug_printer(const struct lu_env *env,
                       void *cookie, const char *format, ...);
 
+#define DECLARE_LU_CDEBUG_PRINT_INFO(var, mask) \
+        struct lu_cdebug_print_info var = {     \
+                .lpi_subsys = DEBUG_SUBSYSTEM,  \
+                .lpi_mask   = (mask),           \
+                .lpi_file   = __FILE__,         \
+                .lpi_fn     = __FUNCTION__,     \
+                .lpi_line   = __LINE__          \
+        }
+
 /**
  * Print object description followed by a user-supplied message.
  */
-#define LU_OBJECT_DEBUG(mask, env, object, format, ...)                   \
-do {                                                                      \
-        LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);                  \
-                                                                          \
-        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                     \
-                lu_object_print(env, &msgdata, lu_cdebug_printer, object);\
-                CDEBUG(mask, format , ## __VA_ARGS__);                    \
-        }                                                                 \
+#define LU_OBJECT_DEBUG(mask, env, object, format, ...)                 \
+do {                                                                    \
+        static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
+                                                                        \
+        if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
+                lu_object_print(env, &__info, lu_cdebug_printer, object); \
+                CDEBUG(mask, format , ## __VA_ARGS__);                  \
+        }                                                               \
 } while (0)
 
 /**
@@ -776,12 +793,12 @@ do {                                                                      \
  */
 #define LU_OBJECT_HEADER(mask, env, object, format, ...)                \
 do {                                                                    \
-        LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, NULL);                \
+        static DECLARE_LU_CDEBUG_PRINT_INFO(__info, mask);              \
                                                                         \
         if (cfs_cdebug_show(mask, DEBUG_SUBSYSTEM)) {                   \
-                lu_object_header_print(env, &msgdata, lu_cdebug_printer,\
+                lu_object_header_print(env, &__info, lu_cdebug_printer, \
                                        (object)->lo_header);            \
-                lu_cdebug_printer(env, &msgdata, "\n");                 \
+                lu_cdebug_printer(env, &__info, "\n");                  \
                 CDEBUG(mask, format , ## __VA_ARGS__);                  \
         }                                                               \
 } while (0)

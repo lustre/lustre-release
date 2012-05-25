@@ -100,9 +100,9 @@ static inline __u32 query_stack_size()
 
 #ifdef __KERNEL__
 #define CDEBUG_STACK() (CFS_THREAD_SIZE - (__u32)IoGetRemainingStackSize())
-#define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)
+#define CFS_CHECK_STACK() do {} while(0)
 #else /* !__KERNEL__ */
-#define CFS_CHECK_STACK(msgdata, mask, cdls) do {} while(0)
+#define CFS_CHECK_STACK() do { } while(0)
 #define CDEBUG_STACK() (0L)
 #endif /* __KERNEL__ */
 

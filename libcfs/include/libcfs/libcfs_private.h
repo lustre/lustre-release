@@ -71,35 +71,48 @@
  *
  * requires -Wall. Unfortunately this rules out use of likely/unlikely.
  */
-#define LASSERTF(cond, fmt, ...)                                        \
+#define LASSERT(cond)                                                   \
 do {                                                                    \
         if (cond)                                                       \
                 ;                                                       \
-        else {                                                          \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);     \
-                libcfs_debug_msg(&msgdata,                              \
-                                 "ASSERTION( %s ) failed: " fmt, #cond, \
-                                  ## __VA_ARGS__);                      \
-                LBUG();                                                 \
-        }                                                              \
+        else                                                            \
+                libcfs_assertion_failed( #cond , __FILE__,              \
+                        __FUNCTION__, __LINE__);                        \
 } while(0)
 
-#define LASSERT(cond) LASSERTF(cond, "\n")
+#define LASSERTF(cond, fmt, ...)                                        \
+do {                                                                    \
+         if (cond)                                                      \
+                 ;                                                      \
+         else {                                                         \
+                 libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,       \
+                                  __FILE__, __FUNCTION__,__LINE__,      \
+                                  "ASSERTION(" #cond ") failed: " fmt,  \
+                                  ## __VA_ARGS__);                      \
+                 LBUG();                                                \
+         }                                                              \
+} while(0)
 
 #else /* !LASSERT_CHECKED */
+
+#define LASSERT(cond)                                                   \
+do {                                                                    \
+        if (unlikely(!(cond)))                                          \
+                libcfs_assertion_failed(#cond , __FILE__,               \
+                        __FUNCTION__, __LINE__);                        \
+} while(0)
 
 #define LASSERTF(cond, fmt, ...)                                        \
 do {                                                                    \
         if (unlikely(!(cond))) {                                        \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);     \
-                libcfs_debug_msg(&msgdata,                              \
-                                 "ASSERTION( %s ) failed: " fmt, #cond, \
+                libcfs_debug_msg(NULL, DEBUG_SUBSYSTEM, D_EMERG,        \
+                                 __FILE__, __FUNCTION__,__LINE__,       \
+                                 "ASSERTION(" #cond ") failed: " fmt,   \
                                  ## __VA_ARGS__ );                      \
                 LBUG();                                                 \
         }                                                               \
 } while(0)
 
-#define LASSERT(cond) LASSERTF(cond, "\n")
 #endif /* !LASSERT_CHECKED */
 #else /* !LIBCFS_DEBUG */
 /* sizeof is to use expression without evaluating it. */
@@ -120,13 +133,10 @@ do {                                                                    \
 
 #define KLASSERT(e) LASSERT(e)
 
-void lbug_with_loc(struct libcfs_debug_msg_data *) __attribute__((noreturn));
+void lbug_with_loc(const char *file, const char *func, const int line)
+        __attribute__((noreturn));
 
-#define LBUG()                                                          \
-do {                                                                    \
-        LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);             \
-        lbug_with_loc(&msgdata);                                        \
-} while(0)
+#define LBUG() lbug_with_loc(__FILE__, __FUNCTION__, __LINE__)
 
 extern cfs_atomic_t libcfs_kmemory;
 /*
@@ -212,7 +222,7 @@ do {                                                                    \
 
 void libcfs_debug_dumpstack(cfs_task_t *tsk);
 void libcfs_run_upcall(char **argv);
-void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *);
+void libcfs_run_lbug_upcall(const char * file, const char *fn, const int line);
 void libcfs_debug_dumplog(void);
 int libcfs_debug_init(unsigned long bufsize);
 int libcfs_debug_cleanup(void);

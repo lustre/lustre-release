@@ -332,7 +332,7 @@ static int libcfs_ioctl(struct cfs_psdev_file *pfile, unsigned long cmd, void *a
 {
         char    *buf;
         struct libcfs_ioctl_data *data;
-        int err = 0;
+        int err;
         ENTRY;
 
         LIBCFS_ALLOC_GFP(buf, 1024, CFS_ALLOC_STD);

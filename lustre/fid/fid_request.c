@@ -262,7 +262,7 @@ int seq_client_alloc_fid(struct lu_client_seq *seq, struct lu_fid *fid)
         cfs_down(&seq->lcs_sem);
 
         while (1) {
-                seqno_t seqnr = 0;
+                seqno_t seqnr;
 
                 if (!fid_is_zero(&seq->lcs_fid) &&
                     fid_oid(&seq->lcs_fid) < seq->lcs_width) {

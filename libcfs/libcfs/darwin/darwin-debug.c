@@ -28,8 +28,6 @@
 /*
  * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
- *
- * Copyright (c) 2012, Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -46,17 +44,17 @@ void libcfs_debug_dumpstack(cfs_task_t *tsk)
 	return;
 }
 
-void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *msgdata)
+void libcfs_run_lbug_upcall(const char *file, const char *fn, const int line)
 {
 }
 
-void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
+void lbug_with_loc(const char *file, const char *func, const int line)
 {
         libcfs_catastrophe = 1;
         CEMERG("LBUG: pid: %u thread: %#x\n",
 	       (unsigned)cfs_curproc_pid(), (unsigned)current_thread());
         libcfs_debug_dumplog();
-        libcfs_run_lbug_upcall(msgdata);
+        libcfs_run_lbug_upcall(file, func, line);
         while (1)
                 cfs_schedule();
 
