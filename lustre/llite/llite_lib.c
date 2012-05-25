@@ -535,7 +535,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         cl_sb_init(sb);
 
         sb->s_root = d_alloc_root(root);
-        sb->s_root->d_op = &ll_d_root_ops;
+#ifdef DCACHE_OP_HASH
+	d_set_d_op(sb->s_root, &ll_d_root_ops);
+	sb->s_d_op = &ll_d_ops;
+#else
+	sb->s_root->d_op = &ll_d_root_ops;
+#endif
 
         sbi->ll_sdev_orig = sb->s_dev;
 
@@ -620,7 +625,7 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
                " flags=0x%x, fsdata=%p, %d subdirs\n", dentry,
                dentry->d_name.len, dentry->d_name.name,
                dentry->d_parent->d_name.len, dentry->d_parent->d_name.name,
-               dentry->d_parent, dentry->d_inode, atomic_read(&dentry->d_count),
+	       dentry->d_parent, dentry->d_inode, d_refcount(dentry),
                dentry->d_flags, dentry->d_fsdata, subdirs);
         if (dentry->d_inode != NULL)
                 ll_dump_inode(dentry->d_inode);

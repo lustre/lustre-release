@@ -1883,8 +1883,10 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         struct ldlm_resource *res;
         struct ldlm_namespace *ns;
         int granted = 0;
-        int old_mode;
-        struct sl_insert_point prev;
+#ifdef HAVE_SERVER_SUPPORT
+	int old_mode;
+	struct sl_insert_point prev;
+#endif
         struct ldlm_interval *node;
         ENTRY;
 
@@ -1907,15 +1909,19 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         res = lock->l_resource;
         ns  = ldlm_res_to_ns(res);
 
-        old_mode = lock->l_req_mode;
-        lock->l_req_mode = new_mode;
-        if (res->lr_type == LDLM_PLAIN || res->lr_type == LDLM_IBITS) {
-                /* remember the lock position where the lock might be
-                 * added back to the granted list later and also
-                 * remember the join mode for skiplist fixing. */
-                prev.res_link = lock->l_res_link.prev;
-                prev.mode_link = lock->l_sl_mode.prev;
-                prev.policy_link = lock->l_sl_policy.prev;
+#ifdef HAVE_SERVER_SUPPORT
+	old_mode = lock->l_req_mode;
+#endif
+	lock->l_req_mode = new_mode;
+	if (res->lr_type == LDLM_PLAIN || res->lr_type == LDLM_IBITS) {
+#ifdef HAVE_SERVER_SUPPORT
+		/* remember the lock position where the lock might be
+		 * added back to the granted list later and also
+		 * remember the join mode for skiplist fixing. */
+		prev.res_link = lock->l_res_link.prev;
+		prev.mode_link = lock->l_sl_mode.prev;
+		prev.policy_link = lock->l_sl_policy.prev;
+#endif
                 ldlm_resource_unlink_lock(lock);
         } else {
                 ldlm_resource_unlink_lock(lock);

@@ -157,9 +157,6 @@ do {cfs_mutex_lock_nested(&(inode)->i_mutex, I_MUTEX_PARENT); } while(0)
 #define set_page_private(page, v) ((page)->private = (v))
 #endif
 
-#define lock_dentry(___dentry)          cfs_spin_lock(&(___dentry)->d_lock)
-#define unlock_dentry(___dentry)        cfs_spin_unlock(&(___dentry)->d_lock)
-
 #define ll_kernel_locked()      kernel_locked()
 
 /*
@@ -258,11 +255,6 @@ static inline int cfs_cleanup_group_info(void)
 
 #include <linux/proc_fs.h>
 
-#if !defined(HAVE_D_REHASH_COND) && defined(HAVE___D_REHASH)
-#define d_rehash_cond(dentry, lock) __d_rehash(dentry, lock)
-extern void __d_rehash(struct dentry *dentry, int lock);
-#endif
-
 #define CheckWriteback(page, cmd) \
         ((!PageWriteback(page) && (cmd & OBD_BRW_READ)) || \
          (PageWriteback(page) && (cmd & OBD_BRW_WRITE)))
@@ -307,11 +299,6 @@ static inline int mapping_has_pages(struct address_space *mapping)
                        vfs_symlink(dir, dentry, path)
 #endif
 
-#define ll_set_dflags(dentry, flags) do { \
-                cfs_spin_lock(&dentry->d_lock); \
-                dentry->d_flags |= flags; \
-                cfs_spin_unlock(&dentry->d_lock); \
-        } while(0)
 #endif
 
 #ifndef container_of

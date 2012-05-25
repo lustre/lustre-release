@@ -1891,6 +1891,65 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 2.6.38 dentry_operations.d_compare() taken 7 arguments.
+#
+AC_DEFUN([LC_D_COMPARE_7ARGS],
+[AC_MSG_CHECKING([if d_compare taken 7 arguments])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/dcache.h>
+],[
+	((struct dentry_operations*)0)->d_compare(NULL,NULL,NULL,NULL,0,NULL,NULL);
+],[
+	AC_DEFINE(HAVE_D_COMPARE_7ARGS, 1,
+		[d_compare need 7 arguments])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
+# 2.6.38 dentry_operations.d_delete() defined 'const' for 1st parameter.
+#
+AC_DEFUN([LC_D_DELETE_CONST],
+[AC_MSG_CHECKING([if d_delete has const declare on first parameter])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/dcache.h>
+],[
+	const struct dentry *d = NULL;
+	((struct dentry_operations*)0)->d_delete(d);
+],[
+	AC_DEFINE(HAVE_D_DELETE_CONST, const,
+		[d_delete first parameter declared const])
+	AC_MSG_RESULT([yes])
+],[
+	AC_DEFINE(HAVE_D_DELETE_CONST, , [])
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+#
+# 2.6.38 dcache_lock removed. rcu-walk commited.
+#
+AC_DEFUN([LC_DCACHE_LOCK],
+[AC_MSG_CHECKING([if dcache_lock is exist])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/dcache.h>
+],[
+	spin_lock(&dcache_lock);
+],[
+	AC_DEFINE(HAVE_DCACHE_LOCK, 1,
+		[dcache_lock is exist])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # 2.6.38 export blkdev_get_by_dev
 #
 AC_DEFUN([LC_BLKDEV_GET_BY_DEV],
@@ -2152,6 +2211,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BLKDEV_GET_BY_DEV
          LC_GENERIC_PERMISSION
          LC_QUOTA_ON_USE_PATH
+         LC_DCACHE_LOCK
+         LC_D_COMPARE_7ARGS
+         LC_D_DELETE_CONST
 
          # 2.6.39
          LC_REQUEST_QUEUE_UNPLUG_FN

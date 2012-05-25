@@ -1645,18 +1645,14 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
                         struct lookup_intent it = { .it_op = IT_GETATTR,
                                                     .d.lustre.it_lock_handle =
                                                      entry->se_handle };
-                        struct ll_dentry_data *lld;
-                        __u64 bits;
+			__u64 bits;
 
-                        rc = md_revalidate_lock(ll_i2mdexp(dir), &it,
-                                                ll_inode2fid(inode), &bits);
-                        if (rc == 1) {
-                                if ((*dentryp)->d_inode == NULL) {
-                                        *dentryp = ll_find_alias(inode,
-                                                                 *dentryp);
-                                        lld = ll_d2d(*dentryp);
-                                        if (unlikely(lld == NULL))
-                                                ll_dops_init(*dentryp, 1, 1);
+			rc = md_revalidate_lock(ll_i2mdexp(dir), &it,
+						ll_inode2fid(inode), &bits);
+			if (rc == 1) {
+				if ((*dentryp)->d_inode == NULL) {
+					*dentryp = ll_splice_alias(inode,
+								   *dentryp);
                                 } else if ((*dentryp)->d_inode != inode) {
                                         /* revalidate, but inode is recreated */
                                         CDEBUG(D_READA,
@@ -1671,12 +1667,13 @@ int do_statahead_enter(struct inode *dir, struct dentry **dentryp,
                                         ll_sai_unplug(sai, entry);
                                         RETURN(-ESTALE);
                                 } else {
-                                        ll_dentry_rehash(*dentryp, 0);
-                                        iput(inode);
-                                }
-                                entry->se_inode = NULL;
+					iput(inode);
+				}
+				entry->se_inode = NULL;
 
-                                ll_dentry_reset_flags(*dentryp, bits);
+				if ((bits & MDS_INODELOCK_LOOKUP) &&
+				    d_lustre_invalid(*dentryp))
+					d_lustre_revalidate(*dentryp);
                                 ll_intent_release(&it);
                         }
                 }

@@ -465,7 +465,7 @@ static cfs_sysctl_table_t lnet_table[] = {
         },
 
 	{
-		.ctl_name = PSDEV_CPT_TABLE,
+		INIT_CTL_NAME(PSDEV_CPT_TABLE)
 		.procname = "cpu_partition_table",
 		.maxlen   = 128,
 		.mode     = 0444,
