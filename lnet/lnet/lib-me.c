@@ -215,7 +215,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
         current_me = lnet_handle2me(&current_meh);
         if (current_me == NULL) {
-                lnet_me_free (new_me);
+		lnet_me_free_locked(new_me);
 
                 LNET_UNLOCK();
                 return -ENOENT;
@@ -226,7 +226,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         ptl = &the_lnet.ln_portals[current_me->me_portal];
         if (lnet_portal_is_unique(ptl)) {
                 /* nosense to insertion on unique portal */
-                lnet_me_free (new_me);
+		lnet_me_free_locked(new_me);
                 LNET_UNLOCK();
                 return -EPERM;
         }
@@ -310,7 +310,7 @@ lnet_me_unlink(lnet_me_t *me)
         }
 
         lnet_invalidate_handle (&me->me_lh);
-        lnet_me_free(me);
+	lnet_me_free_locked(me);
 }
 
 #if 0

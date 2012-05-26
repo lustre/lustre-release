@@ -77,7 +77,7 @@ lnet_md_unlink(lnet_libmd_t *md)
 
         LASSERT (!cfs_list_empty(&md->md_list));
         cfs_list_del_init (&md->md_list);
-        lnet_md_free(md);
+	lnet_md_free_locked(md);
 }
 
 /* must be called with LNET_LOCK held */
@@ -302,7 +302,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
                 }
         }
 
-        lnet_md_free (md);
+	lnet_md_free_locked(md);
 
         LNET_UNLOCK();
         return (rc);
@@ -356,7 +356,7 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
                 return (0);
         }
 
-        lnet_md_free (md);
+	lnet_md_free_locked(md);
 
         LNET_UNLOCK();
         return (rc);

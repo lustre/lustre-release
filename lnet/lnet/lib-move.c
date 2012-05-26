@@ -1574,7 +1574,7 @@ lnet_drop_delayed_put(lnet_msg_t *msg, char *reason)
         lnet_peer_decref_locked(msg->msg_rxpeer);
         msg->msg_rxpeer = NULL;
 
-        lnet_msg_free(msg);
+	lnet_msg_free_locked(msg);
 
         LNET_UNLOCK();
 }
@@ -2400,7 +2400,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
                 lnet_peer_decref_locked(msg->msg_rxpeer);
                 msg->msg_rxpeer = NULL;
         }
-        lnet_msg_free(msg);                     /* expects LNET_LOCK held */
+	lnet_msg_free_locked(msg);	/* expects LNET_LOCK held */
         LNET_UNLOCK();
 
  drop:
@@ -2485,7 +2485,7 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
 
         md = lnet_handle2md(&mdh);
         if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
-                lnet_msg_free(msg);
+		lnet_msg_free_locked(msg);
 
                 CERROR("Dropping PUT ("LPU64":%d:%s): MD (%d) invalid\n",
                        match_bits, portal, libcfs_id2str(target),
@@ -2613,7 +2613,7 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
         return msg;
 
  drop_msg:
-        lnet_msg_free(msg);
+	lnet_msg_free_locked(msg);
  drop:
         the_lnet.ln_counters.drop_count++;
         the_lnet.ln_counters.drop_length += getmd->md_length;
@@ -2690,7 +2690,7 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
 
         md = lnet_handle2md(&mdh);
         if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
-                lnet_msg_free(msg);
+		lnet_msg_free_locked(msg);
 
                 CERROR("Dropping GET ("LPU64":%d:%s): MD (%d) invalid\n",
                        match_bits, portal, libcfs_id2str(target),

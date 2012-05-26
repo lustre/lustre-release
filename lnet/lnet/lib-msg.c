@@ -147,7 +147,7 @@ lnet_complete_msg_locked(lnet_msg_t *msg)
         msg->msg_onactivelist = 0;
         cfs_list_del (&msg->msg_activelist);
         the_lnet.ln_counters.msgs_alloc--;
-        lnet_msg_free(msg);
+	lnet_msg_free_locked(msg);
 }
 
 

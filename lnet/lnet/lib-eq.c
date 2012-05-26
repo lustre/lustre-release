@@ -94,9 +94,7 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
 
         LIBCFS_ALLOC(eq->eq_events, count * sizeof(lnet_event_t));
         if (eq->eq_events == NULL) {
-                LNET_LOCK();
-                lnet_eq_free (eq);
-                LNET_UNLOCK();
+		lnet_eq_free(eq);
 
                 return -ENOMEM;
         }
@@ -163,7 +161,7 @@ LNetEQFree(lnet_handle_eq_t eqh)
 
         lnet_invalidate_handle (&eq->eq_lh);
         cfs_list_del (&eq->eq_list);
-        lnet_eq_free (eq);
+	lnet_eq_free_locked(eq);
 
         LNET_UNLOCK();
 

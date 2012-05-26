@@ -171,10 +171,18 @@ lnet_eq_alloc (void)
 }
 
 static inline void
-lnet_eq_free (lnet_eq_t *eq)
+lnet_eq_free_locked(lnet_eq_t *eq)
 {
-        /* ALWAYS called with liblock held */
-        lnet_freelist_free(&the_lnet.ln_free_eqs, eq);
+	/* ALWAYS called with resource lock held */
+	lnet_freelist_free(&the_lnet.ln_free_eqs, eq);
+}
+
+static inline void
+lnet_eq_free(lnet_eq_t *eq)
+{
+	LNET_LOCK();
+	lnet_eq_free_locked(eq);
+	LNET_UNLOCK();
 }
 
 static inline lnet_libmd_t *
@@ -194,10 +202,18 @@ lnet_md_alloc (lnet_md_t *umd)
 }
 
 static inline void
-lnet_md_free (lnet_libmd_t *md)
+lnet_md_free_locked(lnet_libmd_t *md)
 {
-        /* ALWAYS called with liblock held */
-        lnet_freelist_free (&the_lnet.ln_free_mds, md);
+	/* ALWAYS called with resource lock held */
+	lnet_freelist_free(&the_lnet.ln_free_mds, md);
+}
+
+static inline void
+lnet_md_free(lnet_libmd_t *md)
+{
+	LNET_LOCK();
+	lnet_md_free_locked(md);
+	LNET_UNLOCK();
 }
 
 static inline lnet_me_t *
@@ -214,10 +230,18 @@ lnet_me_alloc (void)
 }
 
 static inline void
-lnet_me_free (lnet_me_t *me)
+lnet_me_free_locked(lnet_me_t *me)
 {
-        /* ALWAYS called with liblock held */
-        lnet_freelist_free (&the_lnet.ln_free_mes, me);
+	/* ALWAYS called with resource lock held */
+	lnet_freelist_free(&the_lnet.ln_free_mes, me);
+}
+
+static inline void
+lnet_me_free(lnet_me_t *me)
+{
+	LNET_LOCK();
+	lnet_me_free_locked(me);
+	LNET_UNLOCK();
 }
 
 static inline lnet_msg_t *
@@ -241,14 +265,22 @@ lnet_msg_alloc (void)
 }
 
 static inline void
-lnet_msg_free (lnet_msg_t *msg)
+lnet_msg_free_locked(lnet_msg_t *msg)
 {
-        /* ALWAYS called with liblock held */
-        LASSERT (!msg->msg_onactivelist);
-        lnet_freelist_free(&the_lnet.ln_free_msgs, msg);
+	/* ALWAYS called with network lock held */
+	LASSERT(!msg->msg_onactivelist);
+	lnet_freelist_free(&the_lnet.ln_free_msgs, msg);
 }
 
-#else
+static inline void
+lnet_msg_free (lnet_msg_t *msg)
+{
+	LNET_LOCK();
+	lnet_msg_free_locked(msg);
+	LNET_UNLOCK();
+}
+
+#else /* !LNET_USE_LIB_FREELIST */
 
 static inline lnet_eq_t *
 lnet_eq_alloc (void)
@@ -261,10 +293,10 @@ lnet_eq_alloc (void)
 }
 
 static inline void
-lnet_eq_free (lnet_eq_t *eq)
+lnet_eq_free(lnet_eq_t *eq)
 {
-        /* ALWAYS called with liblock held */
-        LIBCFS_FREE(eq, sizeof(*eq));
+	/* ALWAYS called with resource lock held */
+	LIBCFS_FREE(eq, sizeof(*eq));
 }
 
 static inline lnet_libmd_t *
@@ -297,17 +329,17 @@ lnet_md_alloc (lnet_md_t *umd)
 }
 
 static inline void
-lnet_md_free (lnet_libmd_t *md)
+lnet_md_free(lnet_libmd_t *md)
 {
-        /* ALWAYS called with liblock held */
-        unsigned int  size;
+	/* ALWAYS called with resource lock held */
+	unsigned int  size;
 
-        if ((md->md_options & LNET_MD_KIOV) != 0)
-                size = offsetof(lnet_libmd_t, md_iov.kiov[md->md_niov]);
-        else
-                size = offsetof(lnet_libmd_t, md_iov.iov[md->md_niov]);
+	if ((md->md_options & LNET_MD_KIOV) != 0)
+		size = offsetof(lnet_libmd_t, md_iov.kiov[md->md_niov]);
+	else
+		size = offsetof(lnet_libmd_t, md_iov.iov[md->md_niov]);
 
-        LIBCFS_FREE(md, size);
+	LIBCFS_FREE(md, size);
 }
 
 static inline lnet_me_t *
@@ -323,8 +355,8 @@ lnet_me_alloc (void)
 static inline void
 lnet_me_free(lnet_me_t *me)
 {
-        /* ALWAYS called with liblock held */
-        LIBCFS_FREE(me, sizeof(*me));
+	/* ALWAYS called with resource lock held */
+	LIBCFS_FREE(me, sizeof(*me));
 }
 
 static inline lnet_msg_t *
@@ -348,11 +380,17 @@ lnet_msg_alloc(void)
 static inline void
 lnet_msg_free(lnet_msg_t *msg)
 {
-        /* ALWAYS called with liblock held */
-        LASSERT (!msg->msg_onactivelist);
-        LIBCFS_FREE(msg, sizeof(*msg));
+	/* ALWAYS called with network lock held */
+	LASSERT(!msg->msg_onactivelist);
+	LIBCFS_FREE(msg, sizeof(*msg));
 }
-#endif
+
+#define lnet_eq_free_locked(eq)		lnet_eq_free(eq)
+#define lnet_md_free_locked(md)		lnet_md_free(md)
+#define lnet_me_free_locked(me)		lnet_me_free(me)
+#define lnet_msg_free_locked(msg)	lnet_msg_free(msg)
+
+#endif /* LNET_USE_LIB_FREELIST */
 
 extern lnet_libhandle_t *lnet_lookup_cookie (__u64 cookie, int type);
 extern void lnet_initialise_handle (lnet_libhandle_t *lh, int type);
