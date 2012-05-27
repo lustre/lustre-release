@@ -160,7 +160,7 @@ LNetMEAttach(unsigned int portal,
         me->me_unlink = unlink;
         me->me_md = NULL;
 
-        lnet_initialise_handle (&me->me_lh, LNET_COOKIE_TYPE_ME);
+	lnet_res_lh_initialize(&the_lnet.ln_me_container, &me->me_lh);
         head = lnet_portal_me_head(portal, match_id, match_bits);
         LASSERT (head != NULL);
 
@@ -238,7 +238,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         new_me->me_unlink = unlink;
         new_me->me_md = NULL;
 
-        lnet_initialise_handle (&new_me->me_lh, LNET_COOKIE_TYPE_ME);
+	lnet_res_lh_initialize(&the_lnet.ln_me_container, &new_me->me_lh);
 
         if (pos == LNET_INS_AFTER)
                 cfs_list_add(&new_me->me_list, &current_me->me_list);
@@ -309,7 +309,7 @@ lnet_me_unlink(lnet_me_t *me)
                 lnet_md_unlink(me->me_md);
         }
 
-        lnet_invalidate_handle (&me->me_lh);
+	lnet_res_lh_invalidate(&me->me_lh);
 	lnet_me_free_locked(me);
 }
 

@@ -60,7 +60,7 @@ lnet_md_unlink(lnet_libmd_t *md)
                 }
 
                 /* ensure all future handle lookups fail */
-                lnet_invalidate_handle(&md->md_lh);
+		lnet_res_lh_invalidate(&md->md_lh);
         }
 
         if (md->md_refcount != 0) {
@@ -184,11 +184,11 @@ lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
                 eq->eq_refcount++;
 
         /* It's good; let handle2md succeed and add to active mds */
-        lnet_initialise_handle (&lmd->md_lh, LNET_COOKIE_TYPE_MD);
-        LASSERT (cfs_list_empty(&lmd->md_list));
-        cfs_list_add (&lmd->md_list, &the_lnet.ln_active_mds);
+	lnet_res_lh_initialize(&the_lnet.ln_md_container, &lmd->md_lh);
+	LASSERT(cfs_list_empty(&lmd->md_list));
+	cfs_list_add(&lmd->md_list, &the_lnet.ln_md_container.rec_active);
 
-        return 0;
+	return 0;
 }
 
 /* must be called with LNET_LOCK held */

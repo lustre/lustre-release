@@ -126,12 +126,17 @@ do {                                            \
 
 #define MAX_PORTALS     64
 
+/* these are only used by code with LNET_USE_LIB_FREELIST, but we still
+ * exported them to !LNET_USE_LIB_FREELIST for easy implemetation */
+#define LNET_FL_MAX_MES		2048
+#define LNET_FL_MAX_MDS		2048
+#define LNET_FL_MAX_EQS		512
+#define LNET_FL_MAX_MSGS	2048    /* Outstanding messages */
+
 #ifdef LNET_USE_LIB_FREELIST
 
-#define MAX_MES         2048
-#define MAX_MDS         2048
-#define MAX_MSGS        2048    /* Outstanding messages */
-#define MAX_EQS         512
+int lnet_freelist_init(lnet_freelist_t *fl, int n, int size);
+void lnet_freelist_fini(lnet_freelist_t *fl);
 
 static inline void *
 lnet_freelist_alloc (lnet_freelist_t *fl)
@@ -160,21 +165,24 @@ lnet_freelist_free (lnet_freelist_t *fl, void *obj)
 static inline lnet_eq_t *
 lnet_eq_alloc (void)
 {
-        /* NEVER called with liblock held */
-        lnet_eq_t     *eq;
+	/* NEVER called with resource lock held */
+	struct lnet_res_container *rec = &the_lnet.ln_eq_container;
+	lnet_eq_t		  *eq;
 
-        LNET_LOCK();
-        eq = (lnet_eq_t *)lnet_freelist_alloc(&the_lnet.ln_free_eqs);
-        LNET_UNLOCK();
+	LNET_LOCK();
+	eq = (lnet_eq_t *)lnet_freelist_alloc(&rec->rec_freelist);
+	LNET_UNLOCK();
 
-        return (eq);
+	return eq;
 }
 
 static inline void
 lnet_eq_free_locked(lnet_eq_t *eq)
 {
 	/* ALWAYS called with resource lock held */
-	lnet_freelist_free(&the_lnet.ln_free_eqs, eq);
+	struct lnet_res_container *rec = &the_lnet.ln_eq_container;
+
+	lnet_freelist_free(&rec->rec_freelist, eq);
 }
 
 static inline void
@@ -188,24 +196,27 @@ lnet_eq_free(lnet_eq_t *eq)
 static inline lnet_libmd_t *
 lnet_md_alloc (lnet_md_t *umd)
 {
-        /* NEVER called with liblock held */
-        lnet_libmd_t  *md;
+	/* NEVER called with resource lock held */
+	struct lnet_res_container *rec = &the_lnet.ln_md_container;
+	lnet_libmd_t		  *md;
 
-        LNET_LOCK();
-        md = (lnet_libmd_t *)lnet_freelist_alloc(&the_lnet.ln_free_mds);
-        LNET_UNLOCK();
+	LNET_LOCK();
+	md = (lnet_libmd_t *)lnet_freelist_alloc(&rec->rec_freelist);
+	LNET_UNLOCK();
 
-        if (md != NULL)
-                CFS_INIT_LIST_HEAD(&md->md_list);
+	if (md != NULL)
+		CFS_INIT_LIST_HEAD(&md->md_list);
 
-        return (md);
+	return md;
 }
 
 static inline void
 lnet_md_free_locked(lnet_libmd_t *md)
 {
 	/* ALWAYS called with resource lock held */
-	lnet_freelist_free(&the_lnet.ln_free_mds, md);
+	struct lnet_res_container *rec = &the_lnet.ln_md_container;
+
+	lnet_freelist_free(&rec->rec_freelist, md);
 }
 
 static inline void
@@ -217,23 +228,26 @@ lnet_md_free(lnet_libmd_t *md)
 }
 
 static inline lnet_me_t *
-lnet_me_alloc (void)
+lnet_me_alloc(void)
 {
-        /* NEVER called with liblock held */
-        lnet_me_t     *me;
+	/* NEVER called with resource lock held */
+	struct lnet_res_container *rec = &the_lnet.ln_me_container;
+	lnet_me_t		  *me;
 
-        LNET_LOCK();
-        me = (lnet_me_t *)lnet_freelist_alloc(&the_lnet.ln_free_mes);
-        LNET_UNLOCK();
+	LNET_LOCK();
+	me = (lnet_me_t *)lnet_freelist_alloc(&rec->rec_freelist);
+	LNET_UNLOCK();
 
-        return (me);
+	return me;
 }
 
 static inline void
 lnet_me_free_locked(lnet_me_t *me)
 {
 	/* ALWAYS called with resource lock held */
-	lnet_freelist_free(&the_lnet.ln_free_mes, me);
+	struct lnet_res_container *rec = &the_lnet.ln_me_container;
+
+	lnet_freelist_free(&rec->rec_freelist, me);
 }
 
 static inline void
@@ -392,9 +406,16 @@ lnet_msg_free(lnet_msg_t *msg)
 
 #endif /* LNET_USE_LIB_FREELIST */
 
-extern lnet_libhandle_t *lnet_lookup_cookie (__u64 cookie, int type);
-extern void lnet_initialise_handle (lnet_libhandle_t *lh, int type);
-extern void lnet_invalidate_handle (lnet_libhandle_t *lh);
+lnet_libhandle_t *lnet_res_lh_lookup(struct lnet_res_container *rec,
+				     __u64 cookie);
+void lnet_res_lh_initialize(struct lnet_res_container *rec,
+			    lnet_libhandle_t *lh);
+static inline void
+lnet_res_lh_invalidate(lnet_libhandle_t *lh)
+{
+	/* ALWAYS called with resource lock held */
+	cfs_list_del(&lh->lh_hash_chain);
+}
 
 static inline void
 lnet_eq2handle (lnet_handle_eq_t *handle, lnet_eq_t *eq)
@@ -408,15 +429,16 @@ lnet_eq2handle (lnet_handle_eq_t *handle, lnet_eq_t *eq)
 }
 
 static inline lnet_eq_t *
-lnet_handle2eq (lnet_handle_eq_t *handle)
+lnet_handle2eq(lnet_handle_eq_t *handle)
 {
-        /* ALWAYS called with liblock held */
-        lnet_libhandle_t *lh = lnet_lookup_cookie(handle->cookie,
-                                                  LNET_COOKIE_TYPE_EQ);
-        if (lh == NULL)
-                return (NULL);
+	/* ALWAYS called with resource lock held */
+	lnet_libhandle_t *lh;
 
-        return (lh_entry (lh, lnet_eq_t, eq_lh));
+	lh = lnet_res_lh_lookup(&the_lnet.ln_eq_container, handle->cookie);
+	if (lh == NULL)
+		return NULL;
+
+	return lh_entry(lh, lnet_eq_t, eq_lh);
 }
 
 static inline void
@@ -426,32 +448,33 @@ lnet_md2handle (lnet_handle_md_t *handle, lnet_libmd_t *md)
 }
 
 static inline lnet_libmd_t *
-lnet_handle2md (lnet_handle_md_t *handle)
+lnet_handle2md(lnet_handle_md_t *handle)
 {
-        /* ALWAYS called with liblock held */
-        lnet_libhandle_t *lh = lnet_lookup_cookie(handle->cookie,
-                                                  LNET_COOKIE_TYPE_MD);
-        if (lh == NULL)
-                return (NULL);
+	/* ALWAYS called with resource lock held */
+	lnet_libhandle_t *lh;
 
-        return (lh_entry (lh, lnet_libmd_t, md_lh));
+	lh = lnet_res_lh_lookup(&the_lnet.ln_md_container, handle->cookie);
+	if (lh == NULL)
+		return NULL;
+
+	return lh_entry(lh, lnet_libmd_t, md_lh);
 }
 
 static inline lnet_libmd_t *
-lnet_wire_handle2md (lnet_handle_wire_t *wh)
+lnet_wire_handle2md(lnet_handle_wire_t *wh)
 {
-        /* ALWAYS called with liblock held */
-        lnet_libhandle_t *lh;
+	/* ALWAYS called with resource lock held */
+	lnet_libhandle_t *lh;
 
-        if (wh->wh_interface_cookie != the_lnet.ln_interface_cookie)
-                return (NULL);
+	if (wh->wh_interface_cookie != the_lnet.ln_interface_cookie)
+		return NULL;
 
-        lh = lnet_lookup_cookie(wh->wh_object_cookie,
-                                LNET_COOKIE_TYPE_MD);
-        if (lh == NULL)
-                return (NULL);
+	lh = lnet_res_lh_lookup(&the_lnet.ln_md_container,
+				wh->wh_object_cookie);
+	if (lh == NULL)
+		return NULL;
 
-        return (lh_entry (lh, lnet_libmd_t, md_lh));
+	return lh_entry(lh, lnet_libmd_t, md_lh);
 }
 
 static inline void
@@ -461,15 +484,16 @@ lnet_me2handle (lnet_handle_me_t *handle, lnet_me_t *me)
 }
 
 static inline lnet_me_t *
-lnet_handle2me (lnet_handle_me_t *handle)
+lnet_handle2me(lnet_handle_me_t *handle)
 {
-        /* ALWAYS called with liblock held */
-        lnet_libhandle_t *lh = lnet_lookup_cookie(handle->cookie,
-                                                  LNET_COOKIE_TYPE_ME);
-        if (lh == NULL)
-                return (NULL);
+	/* ALWAYS called with resource lock held */
+	lnet_libhandle_t *lh;
 
-        return (lh_entry (lh, lnet_me_t, me_lh));
+	lh = lnet_res_lh_lookup(&the_lnet.ln_me_container, handle->cookie);
+	if (lh == NULL)
+		return NULL;
+
+	return lh_entry(lh, lnet_me_t, me_lh);
 }
 
 static inline int

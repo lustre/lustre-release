@@ -521,6 +521,21 @@ typedef struct {
         unsigned int      ptl_options;
 } lnet_portal_t;
 
+#define LNET_LH_HASH_BITS	12
+#define LNET_LH_HASH_SIZE	(1ULL << LNET_LH_HASH_BITS)
+#define LNET_LH_HASH_MASK	(LNET_LH_HASH_SIZE - 1)
+
+/* resource container (ME, MD, EQ) */
+struct lnet_res_container {
+	unsigned int		rec_type;	/* container type */
+	__u64			rec_lh_cookie;	/* cookie generator */
+	cfs_list_t		rec_active;	/* active resource list */
+	cfs_list_t		*rec_lh_hash;	/* handle hash */
+#ifdef LNET_USE_LIB_FREELIST
+	lnet_freelist_t		rec_freelist;	/* freelist for resources */
+#endif
+};
+
 /* Router Checker states */
 #define LNET_RC_STATE_SHUTDOWN     0            /* not started */
 #define LNET_RC_STATE_RUNNING      1            /* started up OK */
@@ -554,6 +569,12 @@ typedef struct
         pthread_mutex_t        ln_lnd_mutex;
 # endif
 #endif
+	/* ME container  */
+	struct lnet_res_container	ln_me_container;
+	/* MD container  */
+	struct lnet_res_container	ln_md_container;
+	/* Event Queue container */
+	struct lnet_res_container	ln_eq_container;
 
         /* Stuff initialised at LNetNIInit() */
 
@@ -582,9 +603,6 @@ typedef struct
         int                    ln_routing;          /* am I a router? */
         lnet_rtrbufpool_t      ln_rtrpools[LNET_NRBPOOLS]; /* router buffer pools */
 
-        int                    ln_lh_hash_size;     /* size of lib handle hash table */
-        cfs_list_t            *ln_lh_hash_table;    /* all extant lib handles, this interface */
-        __u64                  ln_next_object_cookie; /* cookie generator */
         __u64                  ln_interface_cookie; /* uniquely identifies this ni in this epoch */
 
         char                  *ln_network_tokens;   /* space for network names */
@@ -612,16 +630,10 @@ typedef struct
         lnet_handle_eq_t       ln_rc_eqh;           /* router checker's event queue */
         lnet_handle_md_t       ln_rc_mdh;
         cfs_list_t             ln_zombie_rcd;
-
 #ifdef LNET_USE_LIB_FREELIST
-        lnet_freelist_t        ln_free_mes;
         lnet_freelist_t        ln_free_msgs;
-        lnet_freelist_t        ln_free_mds;
-        lnet_freelist_t        ln_free_eqs;
 #endif
         cfs_list_t             ln_active_msgs;
-        cfs_list_t             ln_active_mds;
-        cfs_list_t             ln_active_eqs;
 
         lnet_counters_t        ln_counters;
 

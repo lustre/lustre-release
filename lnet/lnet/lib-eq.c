@@ -111,8 +111,8 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
 
         LNET_LOCK();
 
-        lnet_initialise_handle (&eq->eq_lh, LNET_COOKIE_TYPE_EQ);
-        cfs_list_add (&eq->eq_list, &the_lnet.ln_active_eqs);
+	lnet_res_lh_initialize(&the_lnet.ln_eq_container, &eq->eq_lh);
+	cfs_list_add(&eq->eq_list, &the_lnet.ln_eq_container.rec_active);
 
         LNET_UNLOCK();
 
@@ -159,7 +159,7 @@ LNetEQFree(lnet_handle_eq_t eqh)
         events  = eq->eq_events;
         size    = eq->eq_size;
 
-        lnet_invalidate_handle (&eq->eq_lh);
+	lnet_res_lh_invalidate(&eq->eq_lh);
         cfs_list_del (&eq->eq_list);
 	lnet_eq_free_locked(eq);
 
