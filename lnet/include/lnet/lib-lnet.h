@@ -261,29 +261,32 @@ lnet_me_free(lnet_me_t *me)
 static inline lnet_msg_t *
 lnet_msg_alloc (void)
 {
-        /* NEVER called with liblock held */
-        lnet_msg_t    *msg;
+	/* NEVER called with network lock held */
+	struct lnet_msg_container *msc = &the_lnet.ln_msg_container;
+	lnet_msg_t		  *msg;
 
-        LNET_LOCK();
-        msg = (lnet_msg_t *)lnet_freelist_alloc(&the_lnet.ln_free_msgs);
-        LNET_UNLOCK();
+	LNET_LOCK();
+	msg = (lnet_msg_t *)lnet_freelist_alloc(&msc->msc_freelist);
+	LNET_UNLOCK();
 
-        if (msg != NULL) {
-                /* NULL pointers, clear flags etc */
-                memset (msg, 0, sizeof (*msg));
+	if (msg != NULL) {
+		/* NULL pointers, clear flags etc */
+		memset(msg, 0, sizeof(*msg));
 #ifdef CRAY_XT3
-                msg->msg_ev.uid = LNET_UID_ANY;
+		msg->msg_ev.uid = LNET_UID_ANY;
 #endif
-        }
-        return(msg);
+	}
+	return msg;
 }
 
 static inline void
 lnet_msg_free_locked(lnet_msg_t *msg)
 {
 	/* ALWAYS called with network lock held */
+	struct lnet_msg_container *msc = &the_lnet.ln_msg_container;
+
 	LASSERT(!msg->msg_onactivelist);
-	lnet_freelist_free(&the_lnet.ln_free_msgs, msg);
+	lnet_freelist_free(&msc->msc_freelist, msg);
 }
 
 static inline void
@@ -692,6 +695,9 @@ void lnet_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 lnet_msg_t *lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *get_msg);
 void lnet_set_reply_msg_len(lnet_ni_t *ni, lnet_msg_t *msg, unsigned int len);
 void lnet_finalize(lnet_ni_t *ni, lnet_msg_t *msg, int rc);
+
+int lnet_msg_container_setup(struct lnet_msg_container *container);
+void lnet_msg_container_cleanup(struct lnet_msg_container *container);
 
 char *lnet_msgtyp2str (int type);
 void lnet_print_hdr (lnet_hdr_t * hdr);

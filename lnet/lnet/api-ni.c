@@ -348,20 +348,7 @@ lnet_unregister_lnd (lnd_t *lnd)
         LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
 }
 
-#ifndef LNET_USE_LIB_FREELIST
-
-int
-lnet_descriptor_setup (void)
-{
-        return 0;
-}
-
-void
-lnet_descriptor_cleanup (void)
-{
-}
-
-#else
+#ifdef LNET_USE_LIB_FREELIST
 
 int
 lnet_freelist_init (lnet_freelist_t *fl, int n, int size)
@@ -408,27 +395,6 @@ lnet_freelist_fini (lnet_freelist_t *fl)
 
         LIBCFS_FREE(fl->fl_objs, fl->fl_nobjs * fl->fl_objsize);
         memset (fl, 0, sizeof (*fl));
-}
-
-int
-lnet_descriptor_setup (void)
-{
-        /* NB on failure caller must still call lnet_descriptor_cleanup */
-        /*               ******                                         */
-        int        rc;
-
-        memset (&the_lnet.ln_free_msgs, 0, sizeof (the_lnet.ln_free_msgs));
-        rc = lnet_freelist_init(&the_lnet.ln_free_msgs,
-				LNET_FL_MAX_MSGS, sizeof(lnet_msg_t));
-        if (rc != 0)
-                return (rc);
-        return (rc);
-}
-
-void
-lnet_descriptor_cleanup (void)
-{
-        lnet_freelist_fini (&the_lnet.ln_free_msgs);
 }
 
 #endif /* LNET_USE_LIB_FREELIST */
@@ -623,50 +589,6 @@ lnet_portal_mhash_free(cfs_list_t *mhash)
         LIBCFS_FREE(mhash, sizeof(cfs_list_t) * LNET_PORTAL_HASH_SIZE);
 }
 
-int
-lnet_init_finalizers(void)
-{
-#ifdef __KERNEL__
-        int    i;
-
-        the_lnet.ln_nfinalizers = (int) cfs_num_online_cpus();
-
-        LIBCFS_ALLOC(the_lnet.ln_finalizers,
-                     the_lnet.ln_nfinalizers *
-                     sizeof(*the_lnet.ln_finalizers));
-        if (the_lnet.ln_finalizers == NULL) {
-                CERROR("Can't allocate ln_finalizers\n");
-                return -ENOMEM;
-        }
-
-        for (i = 0; i < the_lnet.ln_nfinalizers; i++)
-                the_lnet.ln_finalizers[i] = NULL;
-#else
-        the_lnet.ln_finalizing = 0;
-#endif
-
-        CFS_INIT_LIST_HEAD(&the_lnet.ln_finalizeq);
-        return 0;
-}
-
-void
-lnet_fini_finalizers(void)
-{
-#ifdef __KERNEL__
-        int    i;
-
-        for (i = 0; i < the_lnet.ln_nfinalizers; i++)
-                LASSERT (the_lnet.ln_finalizers[i] == NULL);
-
-        LIBCFS_FREE(the_lnet.ln_finalizers,
-                    the_lnet.ln_nfinalizers *
-                    sizeof(*the_lnet.ln_finalizers));
-#else
-        LASSERT (!the_lnet.ln_finalizing);
-#endif
-        LASSERT (cfs_list_empty(&the_lnet.ln_finalizeq));
-}
-
 #ifndef __KERNEL__
 /**
  * Reserved API - do not use.
@@ -709,14 +631,9 @@ lnet_prepare(lnet_pid_t requested_pid)
         }
 #endif
 
-        rc = lnet_descriptor_setup();
-        if (rc != 0)
-		return -ENOMEM;
-
         memset(&the_lnet.ln_counters, 0,
                sizeof(the_lnet.ln_counters));
 
-        CFS_INIT_LIST_HEAD (&the_lnet.ln_active_msgs);
         CFS_INIT_LIST_HEAD (&the_lnet.ln_test_peers);
         CFS_INIT_LIST_HEAD (&the_lnet.ln_nis);
         CFS_INIT_LIST_HEAD (&the_lnet.ln_zombie_nis);
@@ -731,7 +648,8 @@ lnet_prepare(lnet_pid_t requested_pid)
         if (rc != 0)
 		goto failed0;
 
-	rc = lnet_init_finalizers();
+	/* NB: we will have instance of message container per CPT soon */
+	rc = lnet_msg_container_setup(&the_lnet.ln_msg_container);
 	if (rc != 0)
 		goto failed1;
 
@@ -785,11 +703,10 @@ lnet_prepare(lnet_pid_t requested_pid)
 	lnet_res_container_cleanup(&the_lnet.ln_me_container);
 	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
  failed2:
-	lnet_fini_finalizers();
+	lnet_msg_container_cleanup(&the_lnet.ln_msg_container);
  failed1:
 	lnet_destroy_peer_table();
  failed0:
-	lnet_descriptor_cleanup();
 	return rc;
 }
 
@@ -834,26 +751,14 @@ lnet_unprepare (void)
 	lnet_res_container_cleanup(&the_lnet.ln_me_container);
 	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
 
-        while (!cfs_list_empty (&the_lnet.ln_active_msgs)) {
-                lnet_msg_t *msg = cfs_list_entry (the_lnet.ln_active_msgs.next,
-                                                  lnet_msg_t, msg_activelist);
+	LIBCFS_FREE(the_lnet.ln_portals,
+		    the_lnet.ln_nportals * sizeof(*the_lnet.ln_portals));
 
-                CERROR ("Active msg %p on exit\n", msg);
-                LASSERT (msg->msg_onactivelist);
-                msg->msg_onactivelist = 0;
-                cfs_list_del (&msg->msg_activelist);
-                lnet_msg_free (msg);
-        }
+	lnet_free_rtrpools();
+	lnet_msg_container_cleanup(&the_lnet.ln_msg_container);
+	lnet_destroy_peer_table();
 
-        LIBCFS_FREE(the_lnet.ln_portals,  
-                    the_lnet.ln_nportals * sizeof(*the_lnet.ln_portals));
-
-        lnet_free_rtrpools();
-        lnet_fini_finalizers();
-        lnet_destroy_peer_table();
-        lnet_descriptor_cleanup();
-
-        return (0);
+	return 0;
 }
 
 lnet_ni_t  *

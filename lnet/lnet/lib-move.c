@@ -1105,7 +1105,8 @@ lnet_commit_routedmsg (lnet_msg_t *msg)
 
         LASSERT (!msg->msg_onactivelist);
         msg->msg_onactivelist = 1;
-        cfs_list_add (&msg->msg_activelist, &the_lnet.ln_active_msgs);
+	cfs_list_add(&msg->msg_activelist,
+		     &the_lnet.ln_msg_container.msc_active);
 }
 
 lnet_rtrbufpool_t *
@@ -1526,7 +1527,8 @@ lnet_commit_md (lnet_libmd_t *md, lnet_msg_t *msg)
 
         LASSERT (!msg->msg_onactivelist);
         msg->msg_onactivelist = 1;
-        cfs_list_add (&msg->msg_activelist, &the_lnet.ln_active_msgs);
+	cfs_list_add(&msg->msg_activelist,
+		     &the_lnet.ln_msg_container.msc_active);
 }
 
 static void

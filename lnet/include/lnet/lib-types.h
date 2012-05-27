@@ -536,6 +536,21 @@ struct lnet_res_container {
 #endif
 };
 
+/* message container */
+struct lnet_msg_container {
+	int			msc_init;	/* initialized or not */
+	/* max # threads finalizing */
+	int			msc_nfinalizers;
+	/* msgs waiting to complete finalizing */
+	cfs_list_t		msc_finalizing;
+	cfs_list_t		msc_active;	/* active message list */
+	/* threads doing finalization */
+	void			**msc_finalizers;
+#ifdef LNET_USE_LIB_FREELIST
+	lnet_freelist_t		msc_freelist;	/* freelist for messages */
+#endif
+};
+
 /* Router Checker states */
 #define LNET_RC_STATE_SHUTDOWN     0            /* not started */
 #define LNET_RC_STATE_RUNNING      1            /* started up OK */
@@ -610,14 +625,10 @@ typedef struct
 
         int                    ln_testprotocompat;  /* test protocol compatibility flags */
 
-        cfs_list_t             ln_finalizeq;        /* msgs waiting to complete finalizing */
-#ifdef __KERNEL__
-        void                 **ln_finalizers;       /* threads doing finalization */
-        int                    ln_nfinalizers;      /* max # threads finalizing */
-#else
-        int                    ln_finalizing;
-#endif
         cfs_list_t             ln_test_peers;       /* failure simulation */
+
+	/* message container */
+	struct lnet_msg_container	ln_msg_container;
 
         lnet_handle_md_t       ln_ping_target_md;
         lnet_handle_eq_t       ln_ping_target_eq;
@@ -630,10 +641,6 @@ typedef struct
         lnet_handle_eq_t       ln_rc_eqh;           /* router checker's event queue */
         lnet_handle_md_t       ln_rc_mdh;
         cfs_list_t             ln_zombie_rcd;
-#ifdef LNET_USE_LIB_FREELIST
-        lnet_freelist_t        ln_free_msgs;
-#endif
-        cfs_list_t             ln_active_msgs;
 
         lnet_counters_t        ln_counters;
 

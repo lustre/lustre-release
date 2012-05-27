@@ -154,11 +154,10 @@ lnet_complete_msg_locked(lnet_msg_t *msg)
 void
 lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 {
-#ifdef __KERNEL__
-        int                i;
-        int                my_slot;
-#endif
-        lnet_libmd_t      *md;
+	struct lnet_msg_container	*container;
+	lnet_libmd_t			*md;
+	int				my_slot;
+	int				i;
 
         LASSERT (!cfs_in_interrupt ());
 
@@ -208,32 +207,37 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 msg->msg_md = NULL;
         }
 
-        cfs_list_add_tail (&msg->msg_list, &the_lnet.ln_finalizeq);
+	container = &the_lnet.ln_msg_container;
+	cfs_list_add_tail(&msg->msg_list, &container->msc_finalizing);
 
-        /* Recursion breaker.  Don't complete the message here if I am (or
-         * enough other threads are) already completing messages */
+	/* Recursion breaker.  Don't complete the message here if I am (or
+	 * enough other threads are) already completing messages */
 
 #ifdef __KERNEL__
-        my_slot = -1;
-        for (i = 0; i < the_lnet.ln_nfinalizers; i++) {
-                if (the_lnet.ln_finalizers[i] == cfs_current())
-                        goto out;
-                if (my_slot < 0 && the_lnet.ln_finalizers[i] == NULL)
-                        my_slot = i;
-        }
-        if (my_slot < 0)
-                goto out;
+	my_slot = -1;
+	for (i = 0; i < container->msc_nfinalizers; i++) {
+		if (container->msc_finalizers[i] == cfs_current())
+			goto out;
 
-        the_lnet.ln_finalizers[my_slot] = cfs_current();
+		if (my_slot < 0 && container->msc_finalizers[i] == NULL)
+			my_slot = i;
+	}
+
+	if (my_slot < 0)
+		goto out;
+
+	container->msc_finalizers[my_slot] = cfs_current();
 #else
-        if (the_lnet.ln_finalizing)
-                goto out;
+	LASSERT(container->msc_nfinalizers == 1);
+	if (container->msc_finalizers[0] != NULL)
+		goto out;
 
-        the_lnet.ln_finalizing = 1;
+	my_slot = i = 0;
+	container->msc_finalizers[0] = (struct lnet_msg_container *)1;
 #endif
 
-        while (!cfs_list_empty(&the_lnet.ln_finalizeq)) {
-                msg = cfs_list_entry(the_lnet.ln_finalizeq.next,
+	while (!cfs_list_empty(&container->msc_finalizing)) {
+		msg = cfs_list_entry(container->msc_finalizing.next,
                                      lnet_msg_t, msg_list);
 
                 cfs_list_del(&msg->msg_list);
@@ -243,12 +247,80 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 lnet_complete_msg_locked(msg);
         }
 
-#ifdef __KERNEL__
-        the_lnet.ln_finalizers[my_slot] = NULL;
-#else
-        the_lnet.ln_finalizing = 0;
-#endif
-
+	container->msc_finalizers[my_slot] = NULL;
  out:
-        LNET_UNLOCK();
+	LNET_UNLOCK();
+}
+
+void
+lnet_msg_container_cleanup(struct lnet_msg_container *container)
+{
+	int     count = 0;
+
+	if (container->msc_init == 0)
+		return;
+
+	while (!cfs_list_empty(&container->msc_active)) {
+		lnet_msg_t *msg = cfs_list_entry(container->msc_active.next,
+						 lnet_msg_t, msg_activelist);
+
+		LASSERT(msg->msg_onactivelist);
+		msg->msg_onactivelist = 0;
+		cfs_list_del(&msg->msg_activelist);
+		lnet_msg_free(msg);
+		count++;
+	}
+
+	if (count > 0)
+		CERROR("%d active msg on exit\n", count);
+
+	if (container->msc_finalizers != NULL) {
+		LIBCFS_FREE(container->msc_finalizers,
+			    container->msc_nfinalizers *
+			    sizeof(*container->msc_finalizers));
+		container->msc_finalizers = NULL;
+	}
+#ifdef LNET_USE_LIB_FREELIST
+	lnet_freelist_fini(&container->msc_freelist);
+#endif
+	container->msc_init = 0;
+}
+
+int
+lnet_msg_container_setup(struct lnet_msg_container *container)
+{
+	int	rc;
+
+	container->msc_init = 1;
+
+	CFS_INIT_LIST_HEAD(&container->msc_active);
+	CFS_INIT_LIST_HEAD(&container->msc_finalizing);
+
+#ifdef LNET_USE_LIB_FREELIST
+	memset(&container->msc_freelist, 0, sizeof(lnet_freelist_t));
+
+	rc = lnet_freelist_init(&container->msc_freelist,
+				LNET_FL_MAX_MSGS, sizeof(lnet_msg_t));
+	if (rc != 0) {
+		CERROR("Failed to init freelist for message container\n");
+		lnet_msg_container_cleanup(container);
+		return rc;
+	}
+#else
+	rc = 0;
+#endif
+	/* number of CPUs */
+	container->msc_nfinalizers = cfs_cpt_weight(cfs_cpt_table,
+						    CFS_CPT_ANY);
+	LIBCFS_ALLOC(container->msc_finalizers,
+		     container->msc_nfinalizers *
+		     sizeof(*container->msc_finalizers));
+
+	if (container->msc_finalizers == NULL) {
+		CERROR("Failed to allocate message finalizers\n");
+		lnet_msg_container_cleanup(container);
+		return -ENOMEM;
+	}
+
+	return 0;
 }
