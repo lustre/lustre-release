@@ -793,6 +793,7 @@ int cfs_trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
         knl_buffer[nob + 1] = 0;                /* terminate */
         return 0;
 }
+EXPORT_SYMBOL(cfs_trace_copyin_string);
 
 int cfs_trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
                              const char *knl_buffer, char *append)
