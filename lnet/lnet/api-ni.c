@@ -644,7 +644,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 
         lnet_init_rtrpools();
 
-        rc = lnet_create_peer_table();
+	rc = lnet_peer_table_create();
         if (rc != 0)
 		goto failed0;
 
@@ -705,7 +705,7 @@ lnet_prepare(lnet_pid_t requested_pid)
  failed2:
 	lnet_msg_container_cleanup(&the_lnet.ln_msg_container);
  failed1:
-	lnet_destroy_peer_table();
+	lnet_peer_table_destroy();
  failed0:
 	return rc;
 }
@@ -756,7 +756,7 @@ lnet_unprepare (void)
 
 	lnet_free_rtrpools();
 	lnet_msg_container_cleanup(&the_lnet.ln_msg_container);
-	lnet_destroy_peer_table();
+	lnet_peer_table_destroy();
 
 	return 0;
 }
@@ -898,7 +898,7 @@ lnet_shutdown_lndnis (void)
 
         /* Clear the peer table and wait for all peers to go (they hold refs on
          * their NIs) */
-        lnet_clear_peer_table();
+	lnet_peer_table_cleanup();
 
         LNET_LOCK();
         /* Now wait for the NI's I just nuked to show up on ln_zombie_nis

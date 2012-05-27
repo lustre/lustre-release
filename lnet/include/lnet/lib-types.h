@@ -454,6 +454,19 @@ typedef struct lnet_peer {
         lnet_rc_data_t   *lp_rcd;               /* router checker state */
 } lnet_peer_t;
 
+
+/* peer hash size */
+#define LNET_PEER_HASH_BITS     9
+#define LNET_PEER_HASH_SIZE     (1 << LNET_PEER_HASH_BITS)
+
+/* peer hash table */
+struct lnet_peer_table {
+	int			pt_version;	/* /proc validity stamp */
+	int			pt_number;	/* # peers extant */
+	cfs_list_t		pt_deathrow;	/* zombie peers */
+	cfs_list_t		*pt_hash;	/* NID->peer hash */
+};
+
 #define lnet_peer_aliveness_enabled(lp) ((lp)->lp_ni->ni_peertimeout > 0)
 
 typedef struct {
@@ -611,10 +624,6 @@ typedef struct
         cfs_list_t             ln_routers;       /* list of all known routers */
         __u64                  ln_routers_version;  /* validity stamp */
 
-        cfs_list_t            *ln_peer_hash;        /* NID->peer hash */
-        int                    ln_npeers;           /* # peers extant */
-        int                    ln_peertable_version; /* /proc validity stamp */
-
         int                    ln_routing;          /* am I a router? */
         lnet_rtrbufpool_t      ln_rtrpools[LNET_NRBPOOLS]; /* router buffer pools */
 
@@ -628,6 +637,7 @@ typedef struct
         cfs_list_t             ln_test_peers;       /* failure simulation */
 
 	/* message container */
+	struct lnet_peer_table		*ln_peer_table;
 	struct lnet_msg_container	ln_msg_container;
 
         lnet_handle_md_t       ln_ping_target_md;

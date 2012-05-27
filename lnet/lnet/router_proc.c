@@ -378,6 +378,7 @@ int LL_PROC_PROTO(proc_lnet_routers)
 
 int LL_PROC_PROTO(proc_lnet_peers)
 {
+	struct lnet_peer_table	*ptable = the_lnet.ln_peer_table;
         int        rc = 0;
         char      *tmpstr;
         char      *s;
@@ -414,7 +415,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
                 LASSERT (tmpstr + tmpsiz - s > 0);
 
                 LNET_LOCK();
-                ver = (unsigned int)the_lnet.ln_peertable_version;
+		ver = (unsigned int)ptable->pt_version;
                 LNET_UNLOCK();
                 *ppos = LNET_PHASH_POS_MAKE(ver, idx, num);
 
@@ -426,7 +427,7 @@ int LL_PROC_PROTO(proc_lnet_peers)
 
                 LNET_LOCK();
 
-                if (ver != LNET_VERSION_VALID_MASK(the_lnet.ln_peertable_version)) {
+		if (ver != LNET_VERSION_VALID_MASK(ptable->pt_version)) {
                         LNET_UNLOCK();
                         LIBCFS_FREE(tmpstr, tmpsiz);
                         return -ESTALE;
@@ -434,9 +435,9 @@ int LL_PROC_PROTO(proc_lnet_peers)
 
                 while (idx < LNET_PEER_HASHSIZE) {
                         if (p == NULL)
-                                p = the_lnet.ln_peer_hash[idx].next;
+				p = ptable->pt_hash[idx].next;
 
-                        while (p != &the_lnet.ln_peer_hash[idx]) {
+			while (p != &ptable->pt_hash[idx]) {
                                 lnet_peer_t *lp = cfs_list_entry(p, lnet_peer_t,
                                                                  lp_hashlist);
                                 if (skip == 0) {
@@ -445,8 +446,8 @@ int LL_PROC_PROTO(proc_lnet_peers)
                                         /* minor optimization: start from idx+1
                                          * on next iteration if we've just
                                          * drained lp_hashlist */
-                                        if (lp->lp_hashlist.next ==
-                                            &the_lnet.ln_peer_hash[idx]) {
+					if (lp->lp_hashlist.next ==
+					    &ptable->pt_hash[idx]) {
                                                 num = 1;
                                                 idx++;
                                         } else {

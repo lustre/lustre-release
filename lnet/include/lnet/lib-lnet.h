@@ -611,12 +611,10 @@ lnet_ni_decref(lnet_ni_t *ni)
         LNET_UNLOCK();
 }
 
-static inline cfs_list_t *
-lnet_nid2peerhash (lnet_nid_t nid)
+static inline int
+lnet_nid2peerhash(lnet_nid_t nid)
 {
-        unsigned int idx = LNET_NIDADDR(nid) % LNET_PEER_HASHSIZE;
-
-        return &the_lnet.ln_peer_hash[idx];
+	return cfs_hash_long(nid, LNET_PEER_HASH_BITS);
 }
 
 extern lnd_t the_lolnd;
@@ -819,9 +817,9 @@ int lnet_parse_networks (cfs_list_t *nilist, char *networks);
 
 int lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid);
 lnet_peer_t *lnet_find_peer_locked (lnet_nid_t nid);
-void lnet_clear_peer_table(void);
-void lnet_destroy_peer_table(void);
-int lnet_create_peer_table(void);
+void lnet_peer_table_cleanup(void);
+void lnet_peer_table_destroy(void);
+int lnet_peer_table_create(void);
 void lnet_debug_peer(lnet_nid_t nid);
 
 #ifndef __KERNEL__
