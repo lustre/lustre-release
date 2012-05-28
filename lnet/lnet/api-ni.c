@@ -91,10 +91,10 @@ lnet_get_networks(void)
 void
 lnet_init_locks(void)
 {
-        cfs_spin_lock_init (&the_lnet.ln_lock);
-        cfs_waitq_init (&the_lnet.ln_waitq);
-        cfs_mutex_init(&the_lnet.ln_lnd_mutex);
-        cfs_mutex_init(&the_lnet.ln_api_mutex);
+	cfs_spin_lock_init (&the_lnet.ln_lock);
+	cfs_waitq_init(&the_lnet.ln_eq_waitq);
+	cfs_mutex_init(&the_lnet.ln_lnd_mutex);
+	cfs_mutex_init(&the_lnet.ln_api_mutex);
 }
 
 void
@@ -189,18 +189,18 @@ void lnet_fini_locks(void)
 
 void lnet_init_locks(void)
 {
-        pthread_cond_init(&the_lnet.ln_cond, NULL);
-        pthread_mutex_init(&the_lnet.ln_lock, NULL);
-        pthread_mutex_init(&the_lnet.ln_lnd_mutex, NULL);
-        pthread_mutex_init(&the_lnet.ln_api_mutex, NULL);
+	pthread_cond_init(&the_lnet.ln_eq_cond, NULL);
+	pthread_mutex_init(&the_lnet.ln_lock, NULL);
+	pthread_mutex_init(&the_lnet.ln_lnd_mutex, NULL);
+	pthread_mutex_init(&the_lnet.ln_api_mutex, NULL);
 }
 
 void lnet_fini_locks(void)
 {
-        pthread_mutex_destroy(&the_lnet.ln_api_mutex);
-        pthread_mutex_destroy(&the_lnet.ln_lnd_mutex);
-        pthread_mutex_destroy(&the_lnet.ln_lock);
-        pthread_cond_destroy(&the_lnet.ln_cond);
+	pthread_mutex_destroy(&the_lnet.ln_api_mutex);
+	pthread_mutex_destroy(&the_lnet.ln_lnd_mutex);
+	pthread_mutex_destroy(&the_lnet.ln_lock);
+	pthread_cond_destroy(&the_lnet.ln_eq_cond);
 }
 
 # endif
@@ -878,10 +878,10 @@ lnet_shutdown_lndnis (void)
         }
 
         /* Drop the cached eqwait NI. */
-        if (the_lnet.ln_eqwaitni != NULL) {
-                lnet_ni_decref_locked(the_lnet.ln_eqwaitni);
-                the_lnet.ln_eqwaitni = NULL;
-        }
+	if (the_lnet.ln_eq_waitni != NULL) {
+		lnet_ni_decref_locked(the_lnet.ln_eq_waitni);
+		the_lnet.ln_eq_waitni = NULL;
+	}
 
         /* Drop the cached loopback NI. */
         if (the_lnet.ln_loni != NULL) {
@@ -1058,10 +1058,10 @@ lnet_startup_lndnis (void)
 
 #ifndef __KERNEL__
                 if (lnd->lnd_wait != NULL) {
-                        if (the_lnet.ln_eqwaitni == NULL) {
-                                lnet_ni_addref(ni);
-                                the_lnet.ln_eqwaitni = ni;
-                        }
+			if (the_lnet.ln_eq_waitni == NULL) {
+				lnet_ni_addref(ni);
+				the_lnet.ln_eq_waitni = ni;
+			}
                 } else {
 # ifndef HAVE_LIBPTHREAD
                         LCONSOLE_ERROR_MSG(0x106, "LND %s not supported in a "
@@ -1090,8 +1090,8 @@ lnet_startup_lndnis (void)
                 nicount++;
         }
 
-        if (the_lnet.ln_eqwaitni != NULL && nicount > 1) {
-                lnd_type = the_lnet.ln_eqwaitni->ni_lnd->lnd_type;
+	if (the_lnet.ln_eq_waitni != NULL && nicount > 1) {
+		lnd_type = the_lnet.ln_eq_waitni->ni_lnd->lnd_type;
                 LCONSOLE_ERROR_MSG(0x109, "LND %s can only run single-network"
                                    "\n",
                                    libcfs_lnd2str(lnd_type));

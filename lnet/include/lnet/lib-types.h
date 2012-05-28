@@ -582,19 +582,19 @@ typedef struct
 
 #ifdef __KERNEL__
         cfs_spinlock_t         ln_lock;
-        cfs_waitq_t            ln_waitq;
         cfs_mutex_t            ln_api_mutex;
         cfs_mutex_t            ln_lnd_mutex;
+	cfs_waitq_t			ln_eq_waitq;
 #else
 # ifndef HAVE_LIBPTHREAD
         int                    ln_lock;
         int                    ln_api_mutex;
         int                    ln_lnd_mutex;
 # else
-        pthread_cond_t         ln_cond;
         pthread_mutex_t        ln_lock;
         pthread_mutex_t        ln_api_mutex;
         pthread_mutex_t        ln_lnd_mutex;
+	pthread_cond_t			ln_eq_cond;
 # endif
 #endif
 	/* ME container  */
@@ -614,7 +614,9 @@ typedef struct
 
         cfs_list_t             ln_nis;              /* LND instances */
         lnet_ni_t             *ln_loni;             /* the loopback NI */
-        lnet_ni_t             *ln_eqwaitni;         /* NI to wait for events in */
+	/* NI to wait for events in */
+	lnet_ni_t			*ln_eq_waitni;
+
         cfs_list_t             ln_zombie_nis;       /* dying LND instances */
         int                    ln_nzombie_nis;      /* # of NIs to wait for */
 

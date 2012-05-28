@@ -56,43 +56,6 @@ lnet_build_unlink_event (lnet_libmd_t *md, lnet_event_t *ev)
 }
 
 void
-lnet_enq_event_locked (lnet_eq_t *eq, lnet_event_t *ev)
-{
-        lnet_event_t  *eq_slot;
-
-        /* Allocate the next queue slot */
-        ev->sequence = eq->eq_enq_seq++;
-
-        /* size must be a power of 2 to handle sequence # overflow */
-        LASSERT (eq->eq_size != 0 &&
-                 eq->eq_size == LOWEST_BIT_SET (eq->eq_size));
-        eq_slot = eq->eq_events + (ev->sequence & (eq->eq_size - 1));
-
-        /* There is no race since both event consumers and event producers
-         * take the LNET_LOCK, so we don't screw around with memory
-         * barriers, setting the sequence number last or weird structure
-         * layout assertions. */
-        *eq_slot = *ev;
-
-        /* Call the callback handler (if any) */
-        if (eq->eq_callback != NULL)
-                eq->eq_callback (eq_slot);
-
-#ifdef __KERNEL__
-        /* Wake anyone waiting in LNetEQPoll() */
-        if (cfs_waitq_active(&the_lnet.ln_waitq))
-                cfs_waitq_broadcast(&the_lnet.ln_waitq);
-#else
-# ifndef HAVE_LIBPTHREAD
-        /* LNetEQPoll() calls into _the_ LND to wait for action */
-# else
-        /* Wake anyone waiting in LNetEQPoll() */
-        pthread_cond_broadcast(&the_lnet.ln_cond);
-# endif
-#endif
-}
-
-void
 lnet_complete_msg_locked(lnet_msg_t *msg)
 {
         lnet_handle_wire_t ack_wmd;
@@ -199,7 +162,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                 msg->msg_ev.unlinked = unlink;
 
                 if (md->md_eq != NULL)
-                        lnet_enq_event_locked(md->md_eq, &msg->msg_ev);
+			lnet_eq_enqueue_event(md->md_eq, &msg->msg_ev);
 
                 if (unlink)
                         lnet_md_unlink(md);

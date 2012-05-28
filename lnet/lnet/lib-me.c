@@ -289,7 +289,7 @@ LNetMEUnlink(lnet_handle_me_t meh)
             md->md_eq != NULL &&
             md->md_refcount == 0) {
                 lnet_build_unlink_event(md, &ev);
-                lnet_enq_event_locked(md->md_eq, &ev);
+		lnet_eq_enqueue_event(md->md_eq, &ev);
         }
 
         lnet_me_unlink(me);
