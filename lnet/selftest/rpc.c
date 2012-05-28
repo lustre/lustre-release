@@ -1468,7 +1468,7 @@ srpc_startup (void)
 
         LNetInvalidateHandle(&srpc_data.rpc_lnet_eq);
 #ifdef __KERNEL__
-        rc = LNetEQAlloc(16, srpc_lnet_ev_handler, &srpc_data.rpc_lnet_eq);
+	rc = LNetEQAlloc(0, srpc_lnet_ev_handler, &srpc_data.rpc_lnet_eq);
 #else
         rc = LNetEQAlloc(10240, LNET_EQ_HANDLER_NONE, &srpc_data.rpc_lnet_eq);
 #endif

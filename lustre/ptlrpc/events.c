@@ -549,10 +549,11 @@ int ptlrpc_ni_init(void)
         /* CAVEAT EMPTOR: how we process portals events is _radically_
          * different depending on... */
 #ifdef __KERNEL__
-        /* kernel portals calls our master callback when events are added to
-         * the event queue.  In fact lustre never pulls events off this queue,
-         * so it's only sized for some debug history. */
-        rc = LNetEQAlloc(1024, ptlrpc_master_callback, &ptlrpc_eq_h);
+	/* kernel LNet calls our master callback when there are new event,
+	 * because we are guaranteed to get every event via callback,
+	 * so we just set EQ size to 0 to avoid overhread of serializing
+	 * enqueue/dequeue operations in LNet. */
+	rc = LNetEQAlloc(0, ptlrpc_master_callback, &ptlrpc_eq_h);
 #else
         /* liblustre calls the master callback when it removes events from the
          * event queue.  The event queue has to be big enough not to drop

@@ -1001,7 +1001,7 @@ lnet_router_checker_start(void)
         cfs_sema_init(&the_lnet.ln_rc_signal, 0);
         /* EQ size doesn't matter; the callback is guaranteed to get every
          * event */
-        eqsz = 1;
+	eqsz = 0;
         rc = LNetEQAlloc(eqsz, lnet_router_checker_event,
                          &the_lnet.ln_rc_eqh);
 #else
