@@ -499,62 +499,6 @@ lnet_handle2me(lnet_handle_me_t *handle)
 	return lh_entry(lh, lnet_me_t, me_lh);
 }
 
-static inline int
-lnet_portal_is_lazy(lnet_portal_t *ptl)
-{
-        return !!(ptl->ptl_options & LNET_PTL_LAZY);
-}
-
-static inline int
-lnet_portal_is_unique(lnet_portal_t *ptl)
-{
-        return !!(ptl->ptl_options & LNET_PTL_MATCH_UNIQUE); 
-}
-
-static inline int
-lnet_portal_is_wildcard(lnet_portal_t *ptl)
-{
-        return !!(ptl->ptl_options & LNET_PTL_MATCH_WILDCARD);
-}
-
-static inline void
-lnet_portal_setopt(lnet_portal_t *ptl, int opt)
-{
-        ptl->ptl_options |= opt;
-}
-
-static inline void
-lnet_portal_unsetopt(lnet_portal_t *ptl, int opt)
-{
-        ptl->ptl_options &= ~opt;
-}
-
-static inline int
-lnet_match_is_unique(lnet_process_id_t match_id,
-                     __u64 match_bits, __u64 ignore_bits)
-{
-        return ignore_bits == 0 &&
-               match_id.nid != LNET_NID_ANY &&
-               match_id.pid != LNET_PID_ANY;
-}
-
-static inline cfs_list_t *
-lnet_portal_me_head(int index, lnet_process_id_t id, __u64 mbits)
-{
-        lnet_portal_t *ptl = &the_lnet.ln_portals[index];
-
-        if (lnet_portal_is_wildcard(ptl)) {
-                return &ptl->ptl_mlist;
-        } else if (lnet_portal_is_unique(ptl)) {
-                LASSERT (ptl->ptl_mhash != NULL);
-                return &ptl->ptl_mhash[lnet_match_to_hash(id, mbits)];
-        }
-        return NULL;
-}
-
-cfs_list_t *lnet_portal_mhash_alloc(void);
-void lnet_portal_mhash_free(cfs_list_t *mhash);
-
 static inline void
 lnet_peer_addref_locked(lnet_peer_t *lp)
 {
@@ -679,13 +623,72 @@ lnet_remotenet_t *lnet_find_net_locked (__u32 net);
 int lnet_islocalnid(lnet_nid_t nid);
 int lnet_islocalnet(__u32 net);
 
+void lnet_commit_md(lnet_libmd_t *md, lnet_msg_t *msg);
 void lnet_build_unlink_event(lnet_libmd_t *md, lnet_event_t *ev);
 void lnet_eq_enqueue_event(lnet_eq_t *eq, lnet_event_t *ev);
 void lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
                     unsigned int offset, unsigned int len);
 int lnet_send(lnet_nid_t nid, lnet_msg_t *msg);
 void lnet_return_credits_locked (lnet_msg_t *msg);
+
+/* portals functions */
+static inline int
+lnet_ptl_is_lazy(lnet_portal_t *ptl)
+{
+	return !!(ptl->ptl_options & LNET_PTL_LAZY);
+}
+
+static inline int
+lnet_ptl_is_unique(lnet_portal_t *ptl)
+{
+	return !!(ptl->ptl_options & LNET_PTL_MATCH_UNIQUE);
+}
+
+static inline int
+lnet_ptl_is_wildcard(lnet_portal_t *ptl)
+{
+	return !!(ptl->ptl_options & LNET_PTL_MATCH_WILDCARD);
+}
+
+static inline void
+lnet_ptl_setopt(lnet_portal_t *ptl, int opt)
+{
+	ptl->ptl_options |= opt;
+}
+
+static inline void
+lnet_ptl_unsetopt(lnet_portal_t *ptl, int opt)
+{
+	ptl->ptl_options &= ~opt;
+}
+
+static inline cfs_list_t *
+lnet_ptl_me_head(int index, lnet_process_id_t id, __u64 mbits)
+{
+	lnet_portal_t *ptl = the_lnet.ln_portals[index];
+
+	if (lnet_ptl_is_wildcard(ptl)) {
+		return &ptl->ptl_mlist;
+	} else if (lnet_ptl_is_unique(ptl)) {
+		LASSERT(ptl->ptl_mhash != NULL);
+		return &ptl->ptl_mhash[lnet_match_to_hash(id, mbits)];
+	}
+	return NULL;
+}
+
+int lnet_portals_create(void);
+void lnet_portals_destroy(void);
+
+int lnet_ptl_type_match(struct lnet_portal *ptl, lnet_process_id_t id,
+			__u64 mbits, __u64 ignore_bits);
 void lnet_match_blocked_msg(lnet_libmd_t *md);
+int lnet_match_md(int index, int op_mask, lnet_process_id_t src,
+		  unsigned int rlength, unsigned int roffset,
+		  __u64 match_bits, lnet_msg_t *msg,
+		  unsigned int *mlength_out, unsigned int *offset_out,
+		  lnet_libmd_t **md_out);
+
+/* message functions */
 int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr,
                 lnet_nid_t fromnid, void *private, int rdma_req);
 void lnet_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
@@ -693,6 +696,8 @@ void lnet_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 lnet_msg_t *lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *get_msg);
 void lnet_set_reply_msg_len(lnet_ni_t *ni, lnet_msg_t *msg, unsigned int len);
 void lnet_finalize(lnet_ni_t *ni, lnet_msg_t *msg, int rc);
+void lnet_drop_delayed_msg_list(cfs_list_t *head, char *reason);
+void lnet_recv_delayed_msg_list(cfs_list_t *head);
 
 int lnet_msg_container_setup(struct lnet_msg_container *container);
 void lnet_msg_container_cleanup(struct lnet_msg_container *container);

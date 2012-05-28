@@ -40,60 +40,6 @@
 
 #include <lnet/lib-lnet.h>
 
-static int
-lnet_me_match_portal(lnet_portal_t *ptl, lnet_process_id_t id,
-                     __u64 match_bits, __u64 ignore_bits)
-{
-        cfs_list_t       *mhash = NULL;
-        int               unique;
-
-        LASSERT (!(lnet_portal_is_unique(ptl) &&
-                   lnet_portal_is_wildcard(ptl)));
-
-        /* prefer to check w/o any lock */
-        unique = lnet_match_is_unique(id, match_bits, ignore_bits);
-        if (likely(lnet_portal_is_unique(ptl) ||
-                   lnet_portal_is_wildcard(ptl)))
-                goto match;
-
-        /* unset, new portal */
-        if (unique) {
-                mhash = lnet_portal_mhash_alloc();
-                if (mhash == NULL)
-                        return -ENOMEM;
-        }
-
-        LNET_LOCK();
-        if (lnet_portal_is_unique(ptl) ||
-            lnet_portal_is_wildcard(ptl)) {
-                /* someone set it before me */
-                if (mhash != NULL)
-                        lnet_portal_mhash_free(mhash);
-                LNET_UNLOCK();
-                goto match;
-        }
-
-        /* still not set */
-        LASSERT (ptl->ptl_mhash == NULL);
-        if (unique) {
-                ptl->ptl_mhash = mhash;
-                lnet_portal_setopt(ptl, LNET_PTL_MATCH_UNIQUE);
-        } else {
-                lnet_portal_setopt(ptl, LNET_PTL_MATCH_WILDCARD);
-        }
-        LNET_UNLOCK();
-        return 0;
-
- match:
-        if (lnet_portal_is_unique(ptl) && !unique)
-                return -EPERM;
-
-        if (lnet_portal_is_wildcard(ptl) && unique)
-                return -EPERM;
-
-        return 0;
-}
-
 /**
  * Create and attach a match entry to the match list of \a portal. The new
  * ME is empty, i.e. not associated with a memory descriptor. LNetMDAttach()
@@ -142,10 +88,10 @@ LNetMEAttach(unsigned int portal,
         if ((int)portal >= the_lnet.ln_nportals)
                 return -EINVAL;
 
-        ptl = &the_lnet.ln_portals[portal];
-        rc = lnet_me_match_portal(ptl, match_id, match_bits, ignore_bits);
-        if (rc != 0)
-                return rc;
+	ptl = the_lnet.ln_portals[portal];
+	rc = lnet_ptl_type_match(ptl, match_id, match_bits, ignore_bits);
+	if (!rc)
+		return -EPERM;
 
         me = lnet_me_alloc();
         if (me == NULL)
@@ -161,7 +107,7 @@ LNetMEAttach(unsigned int portal,
         me->me_md = NULL;
 
 	lnet_res_lh_initialize(&the_lnet.ln_me_container, &me->me_lh);
-        head = lnet_portal_me_head(portal, match_id, match_bits);
+	head = lnet_ptl_me_head(portal, match_id, match_bits);
         LASSERT (head != NULL);
 
         if (pos == LNET_INS_AFTER)
@@ -223,8 +169,8 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
         LASSERT (current_me->me_portal < the_lnet.ln_nportals);
 
-        ptl = &the_lnet.ln_portals[current_me->me_portal];
-        if (lnet_portal_is_unique(ptl)) {
+	ptl = the_lnet.ln_portals[current_me->me_portal];
+	if (lnet_ptl_is_unique(ptl)) {
                 /* nosense to insertion on unique portal */
 		lnet_me_free_locked(new_me);
                 LNET_UNLOCK();

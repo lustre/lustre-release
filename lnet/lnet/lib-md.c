@@ -287,7 +287,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
         } else {
                 rc = lib_md_build(md, &umd, unlink);
                 if (rc == 0) {
-                        the_lnet.ln_portals[me->me_portal].ptl_ml_version++;
+			the_lnet.ln_portals[me->me_portal]->ptl_ml_version++;
 
                         me->me_md = md;
                         md->md_me = me;

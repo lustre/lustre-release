@@ -516,6 +516,15 @@ typedef struct {
 
 #define LNET_NRBPOOLS         3                 /* # different router buffer pools */
 
+enum {
+	/* Didn't match anything */
+	LNET_MATCHMD_NONE	= (1 << 0),
+	/* Matched OK */
+	LNET_MATCHMD_OK		= (1 << 1),
+	/* Must be discarded */
+	LNET_MATCHMD_DROP	= (1 << 2),
+};
+
 /* Options for lnet_portal_t::ptl_options */
 #define LNET_PTL_LAZY               (1 << 0)
 #define LNET_PTL_MATCH_UNIQUE       (1 << 1)    /* unique match, for RDMA */
@@ -525,7 +534,8 @@ typedef struct {
 #define LNET_PORTAL_HASH_BITS        8
 #define LNET_PORTAL_HASH_SIZE       (1 << LNET_PORTAL_HASH_BITS)
 
-typedef struct {
+typedef struct lnet_portal {
+	unsigned int		ptl_index;	/* portal ID, reserved */
         cfs_list_t       *ptl_mhash;            /* match hash */
         cfs_list_t        ptl_mlist;            /* match list */
         cfs_list_t        ptl_msgq;             /* messages blocking for MD */
@@ -577,6 +587,8 @@ typedef struct
         int                    ln_init;             /* LNetInit() called? */
         int                    ln_refcount;         /* LNetNIInit/LNetNIFini counter */
         int                    ln_niinit_self;      /* Have I called LNetNIInit myself? */
+	/* shutdown in progress */
+	int				ln_shutdown;
 
         cfs_list_t             ln_lnds;             /* registered LNDs */
 
@@ -604,11 +616,10 @@ typedef struct
 	/* Event Queue container */
 	struct lnet_res_container	ln_eq_container;
 
-        /* Stuff initialised at LNetNIInit() */
-
-        int                    ln_shutdown;         /* shutdown in progress */
-        int                    ln_nportals;         /* # portals */
-        lnet_portal_t         *ln_portals;          /* the vector of portals */
+	/* # portals */
+	int				ln_nportals;
+	/* the vector of portals */
+	lnet_portal_t			**ln_portals;
 
         lnet_pid_t             ln_pid;              /* requested pid */
 

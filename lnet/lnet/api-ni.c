@@ -556,39 +556,6 @@ lnet_res_lh_initialize(struct lnet_res_container *rec, lnet_libhandle_t *lh)
 	cfs_list_add(&lh->lh_hash_chain, &rec->rec_lh_hash[hash]);
 }
 
-cfs_list_t *
-lnet_portal_mhash_alloc(void)
-{
-        cfs_list_t       *mhash;
-        int               i;
-
-        LIBCFS_ALLOC(mhash, sizeof(cfs_list_t) * LNET_PORTAL_HASH_SIZE);
-        if (mhash == NULL)
-                return NULL;
-
-        for (i = 0; i < LNET_PORTAL_HASH_SIZE; i++)
-                CFS_INIT_LIST_HEAD(&mhash[i]);
-
-        return mhash;
-}
-
-void
-lnet_portal_mhash_free(cfs_list_t *mhash)
-{
-        int     i;
-
-        for (i = 0; i < LNET_PORTAL_HASH_SIZE; i++) {
-                while (!cfs_list_empty(&mhash[i])) {
-                        lnet_me_t *me = cfs_list_entry(mhash[i].next,
-                                                       lnet_me_t, me_list);
-                        CERROR ("Active ME %p on exit portal mhash\n", me);
-                        cfs_list_del(&me->me_list);
-                        lnet_me_free(me);
-                }
-        }
-        LIBCFS_FREE(mhash, sizeof(cfs_list_t) * LNET_PORTAL_HASH_SIZE);
-}
-
 #ifndef __KERNEL__
 /**
  * Reserved API - do not use.
@@ -607,7 +574,6 @@ lnet_prepare(lnet_pid_t requested_pid)
 {
         /* Prepare to bring up the network */
         int               rc = 0;
-        int               i;
 
         LASSERT (the_lnet.ln_refcount == 0);
 
@@ -679,22 +645,13 @@ lnet_prepare(lnet_pid_t requested_pid)
 		goto failed3;
 	}
 
-        the_lnet.ln_nportals = MAX_PORTALS;
-        LIBCFS_ALLOC(the_lnet.ln_portals,
-                     the_lnet.ln_nportals *
-                     sizeof(*the_lnet.ln_portals));
-        if (the_lnet.ln_portals == NULL) {
-                rc = -ENOMEM;
-                goto failed3;
-        }
+	rc = lnet_portals_create();
+	if (rc != 0) {
+		CERROR("Failed to create portals for LNet: %d\n", rc);
+		goto failed3;
+	}
 
-        for (i = 0; i < the_lnet.ln_nportals; i++) {
-                CFS_INIT_LIST_HEAD(&(the_lnet.ln_portals[i].ptl_mlist));
-                CFS_INIT_LIST_HEAD(&(the_lnet.ln_portals[i].ptl_msgq));
-                the_lnet.ln_portals[i].ptl_options = 0;
-        }
-
-        return 0;
+	return 0;
 
  failed3:
 	/* NB: lnet_res_container_cleanup is safe to call for
@@ -713,8 +670,6 @@ lnet_prepare(lnet_pid_t requested_pid)
 int
 lnet_unprepare (void)
 {
-        int       idx;
-
         /* NB no LNET_LOCK since this is the last reference.  All LND instances
          * have shut down already, so it is safe to unlink and free all
          * descriptors, even those that appear committed to a network op (eg MD
@@ -728,33 +683,13 @@ lnet_unprepare (void)
         LASSERT (cfs_list_empty(&the_lnet.ln_zombie_nis));
         LASSERT (the_lnet.ln_nzombie_nis == 0);
 
-        for (idx = 0; idx < the_lnet.ln_nportals; idx++) {
-                lnet_portal_t *ptl = &the_lnet.ln_portals[idx];
-
-                LASSERT (cfs_list_empty(&ptl->ptl_msgq));
-
-                while (!cfs_list_empty(&ptl->ptl_mlist)) {
-                        lnet_me_t *me = cfs_list_entry(ptl->ptl_mlist.next,
-                                                       lnet_me_t, me_list);
-                        CERROR ("Active ME %p on exit\n", me);
-                        cfs_list_del (&me->me_list);
-                        lnet_me_free (me);
-                }
-
-                if (ptl->ptl_mhash != NULL) {
-                        LASSERT (lnet_portal_is_unique(ptl));
-                        lnet_portal_mhash_free(ptl->ptl_mhash);
-                }
-        }
+	lnet_portals_destroy();
 
 	lnet_res_container_cleanup(&the_lnet.ln_md_container);
 	lnet_res_container_cleanup(&the_lnet.ln_me_container);
 	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
 
-	LIBCFS_FREE(the_lnet.ln_portals,
-		    the_lnet.ln_nportals * sizeof(*the_lnet.ln_portals));
-
-	lnet_free_rtrpools();
+        lnet_free_rtrpools();
 	lnet_msg_container_cleanup(&the_lnet.ln_msg_container);
 	lnet_peer_table_destroy();
 
