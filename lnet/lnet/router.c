@@ -122,6 +122,8 @@ lnet_notify_locked(lnet_peer_t *lp, int notifylnd, int alive, cfs_time_t when)
         lp->lp_alive = !(!alive);               /* 1 bit! */
         lp->lp_notify = 1;
         lp->lp_notifylnd |= notifylnd;
+	if (lp->lp_alive)
+		lp->lp_ping_version = LNET_PROTO_PING_UNKNOWN; /* reset */
 
         CDEBUG(D_NET, "set %s %d\n", libcfs_nid2str(lp->lp_nid), alive);
 }
@@ -198,6 +200,8 @@ lnet_rtr_decref_locked(lnet_peer_t *lp)
 
         lp->lp_rtr_refcount--;
         if (lp->lp_rtr_refcount == 0) {
+		LASSERT(cfs_list_empty(&lp->lp_routes));
+
                 if (lp->lp_rcd != NULL) {
                         cfs_list_add(&lp->lp_rcd->rcd_list,
 				     &the_lnet.ln_rcd_deathrow);
@@ -279,6 +283,7 @@ lnet_add_route_to_rnet (lnet_remotenet_t *rnet, lnet_route_t *route)
                 offset--;
         }
         cfs_list_add(&route->lr_list, e);
+	cfs_list_add(&route->lr_gwlist, &route->lr_gateway->lp_routes);
 
         the_lnet.ln_remote_nets_version++;
         lnet_rtr_addref_locked(route->lr_gateway);
@@ -325,6 +330,7 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         CFS_INIT_LIST_HEAD(&rnet->lrn_routes);
         rnet->lrn_net = net;
         route->lr_hops = hops;
+	route->lr_net = net;
 
         LNET_LOCK();
 
@@ -335,11 +341,13 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
                 LIBCFS_FREE(route, sizeof(*route));
                 LIBCFS_FREE(rnet, sizeof(*rnet));
 
-                if (rc == -EHOSTUNREACH)        /* gateway is not on a local net */
+		if (rc == -EHOSTUNREACH) { /* gateway is not on a local net */
                         return 0;               /* ignore the route entry */
-
-                CERROR("Error %d creating route %s %d %s\n", rc,
-                       libcfs_net2str(net), hops, libcfs_nid2str(gateway));
+		} else {
+			CERROR("Error %d creating route %s %d %s\n", rc,
+			       libcfs_net2str(net), hops,
+			       libcfs_nid2str(gateway));
+		}
                 return rc;
         }
 
@@ -367,22 +375,25 @@ lnet_add_route (__u32 net, unsigned int hops, lnet_nid_t gateway)
         }
 
         if (add_route) {
-                ni = route->lr_gateway->lp_ni;
-                lnet_ni_addref_locked(ni);
+		lnet_peer_addref_locked(route->lr_gateway); /* +1 for notify */
+		lnet_add_route_to_rnet(rnet2, route);
 
-                lnet_add_route_to_rnet(rnet2, route);
-                LNET_UNLOCK();
+		ni = route->lr_gateway->lp_ni;
+		LNET_UNLOCK();
 
-                /* XXX Assume alive */
-                if (ni->ni_lnd->lnd_notify != NULL)
-                        (ni->ni_lnd->lnd_notify)(ni, gateway, 1);
+		/* XXX Assume alive */
+		if (ni->ni_lnd->lnd_notify != NULL)
+			(ni->ni_lnd->lnd_notify)(ni, gateway, 1);
 
-                lnet_ni_decref(ni);
-        } else {
-                lnet_peer_decref_locked(route->lr_gateway);
-                LNET_UNLOCK();
-                LIBCFS_FREE(route, sizeof(*route));
-        }
+		LNET_LOCK();
+	}
+
+	/* -1 for notify or !add_route */
+	lnet_peer_decref_locked(route->lr_gateway);
+	LNET_UNLOCK();
+
+	if (!add_route)
+		LIBCFS_FREE(route, sizeof(*route));
 
         if (rnet != rnet2)
                 LIBCFS_FREE(rnet, sizeof(*rnet));
@@ -406,20 +417,31 @@ lnet_check_routes (void)
 
                 route2 = NULL;
                 cfs_list_for_each (e2, &rnet->lrn_routes) {
+			lnet_nid_t	nid1;
+			lnet_nid_t	nid2;
+			int		net;
+
                         route = cfs_list_entry(e2, lnet_route_t, lr_list);
 
-                        if (route2 == NULL)
-                                route2 = route;
-                        else if (route->lr_gateway->lp_ni !=
-                                 route2->lr_gateway->lp_ni) {
-                                LNET_UNLOCK();
+			if (route2 == NULL) {
+				route2 = route;
+				continue;
+			}
 
-                                CERROR("Routes to %s via %s and %s not supported\n",
-                                       libcfs_net2str(rnet->lrn_net),
-                                       libcfs_nid2str(route->lr_gateway->lp_nid),
-                                       libcfs_nid2str(route2->lr_gateway->lp_nid));
-                                return -EINVAL;
-                        }
+			if (route->lr_gateway->lp_ni ==
+			    route2->lr_gateway->lp_ni)
+				continue;
+
+			nid1 = route->lr_gateway->lp_nid;
+			nid2 = route2->lr_gateway->lp_nid;
+			net = rnet->lrn_net;
+
+			LNET_UNLOCK();
+
+			CERROR("Routes to %s via %s and %s not supported\n",
+			       libcfs_net2str(net), libcfs_nid2str(nid1),
+			       libcfs_nid2str(nid2));
+			return -EINVAL;
                 }
         }
 
@@ -430,6 +452,7 @@ lnet_check_routes (void)
 int
 lnet_del_route (__u32 net, lnet_nid_t gw_nid)
 {
+	struct lnet_peer	*gateway;
         lnet_remotenet_t    *rnet;
         lnet_route_t        *route;
         cfs_list_t          *e1;
@@ -455,11 +478,13 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
                 cfs_list_for_each (e2, &rnet->lrn_routes) {
                         route = cfs_list_entry(e2, lnet_route_t, lr_list);
 
-                        if (!(gw_nid == LNET_NID_ANY ||
-                              gw_nid == route->lr_gateway->lp_nid))
-                                continue;
+			gateway = route->lr_gateway;
+			if (!(gw_nid == LNET_NID_ANY ||
+			      gw_nid == gateway->lp_nid))
+				continue;
 
-                        cfs_list_del(&route->lr_list);
+			cfs_list_del(&route->lr_list);
+			cfs_list_del(&route->lr_gwlist);
                         the_lnet.ln_remote_nets_version++;
 
                         if (cfs_list_empty(&rnet->lrn_routes))
@@ -467,8 +492,8 @@ lnet_del_route (__u32 net, lnet_nid_t gw_nid)
                         else
                                 rnet = NULL;
 
-                        lnet_rtr_decref_locked(route->lr_gateway);
-                        lnet_peer_decref_locked(route->lr_gateway);
+			lnet_rtr_decref_locked(gateway);
+			lnet_peer_decref_locked(gateway);
                         LNET_UNLOCK();
 
                         LIBCFS_FREE(route, sizeof (*route));
@@ -529,6 +554,7 @@ lnet_swap_pinginfo(lnet_ping_info_t *info)
         int               i;
         lnet_ni_status_t *stat;
 
+	__swab32s(&info->pi_magic);
         __swab32s(&info->pi_version);
         __swab32s(&info->pi_pid);
         __swab32s(&info->pi_nnis);
@@ -540,84 +566,139 @@ lnet_swap_pinginfo(lnet_ping_info_t *info)
         return;
 }
 
-/* Returns # of down NIs, or negative error codes; ignore downed NIs
- * if a NI in 'net' is up */
-int
-lnet_router_down_ni(lnet_peer_t *rtr, __u32 net)
+/**
+ * parse router-checker pinginfo, record number of down NIs for remote
+ * networks on that router.
+ */
+static void
+lnet_parse_rc_info(lnet_rc_data_t *rcd)
 {
-        int               i;
-        int               down = 0;
-        int               ptl_up = 0;
-        int               ptl_down = 0;
-        lnet_ping_info_t *info;
+	lnet_ping_info_t	*info = rcd->rcd_pinginfo;
+	struct lnet_peer	*gw   = rcd->rcd_gateway;
+	lnet_route_t		*rtr;
 
-        if (!avoid_asym_router_failure)
-                return -ENOENT;
+	if (!gw->lp_alive)
+		return;
 
-        if (rtr->lp_rcd == NULL)
-                return -EINVAL;
+	if (info->pi_magic == __swab32(LNET_PROTO_PING_MAGIC))
+		lnet_swap_pinginfo(info);
 
-        if (!rtr->lp_alive)
-                return -EINVAL;  /* stale lp_rcd */
+	/* NB always racing with network! */
+	if (info->pi_magic != LNET_PROTO_PING_MAGIC) {
+		CDEBUG(D_NET, "%s: Unexpected magic %08x\n",
+		       libcfs_nid2str(gw->lp_nid), info->pi_magic);
+		gw->lp_ping_version = LNET_PROTO_PING_UNKNOWN;
+		return;
+	}
 
-        info = rtr->lp_rcd->rcd_pinginfo;
-        LASSERT (info != NULL);
+	gw->lp_ping_version = info->pi_version;
+	if (gw->lp_ping_version == LNET_PROTO_PING_VERSION_1)
+		return; /* v1 doesn't carry NI status info */
 
-        /* NB always racing with network! */
-        if (info->pi_magic == __swab32(LNET_PROTO_PING_MAGIC)) {
-                lnet_swap_pinginfo(info);
-        } else if (info->pi_magic != LNET_PROTO_PING_MAGIC) {
-                CNETERR("%s: Unexpected magic %08x\n",
-                        libcfs_nid2str(rtr->lp_nid), info->pi_magic);
-                return -EPROTO;
+	if (gw->lp_ping_version != LNET_PROTO_PING_VERSION) {
+		CDEBUG(D_NET, "%s: Unexpected version 0x%x\n",
+		       libcfs_nid2str(gw->lp_nid), gw->lp_ping_version);
+		gw->lp_ping_version = LNET_PROTO_PING_UNKNOWN;
+		return;
+	}
+
+	cfs_list_for_each_entry(rtr, &gw->lp_routes, lr_gwlist) {
+		int	ptl_status = LNET_NI_STATUS_INVALID;
+		int	down = 0;
+		int	up = 0;
+		int	i;
+
+		for (i = 0; i < info->pi_nnis && i < LNET_MAX_RTR_NIS; i++) {
+			lnet_ni_status_t *stat = &info->pi_ni[i];
+			lnet_nid_t	 nid = stat->ns_nid;
+
+			if (nid == LNET_NID_ANY) {
+				CDEBUG(D_NET, "%s: unexpected LNET_NID_ANY\n",
+				       libcfs_nid2str(gw->lp_nid));
+				gw->lp_ping_version = LNET_PROTO_PING_UNKNOWN;
+				return;
+			}
+
+			if (LNET_NETTYP(LNET_NIDNET(nid)) == LOLND)
+				continue;
+
+			if (stat->ns_status == LNET_NI_STATUS_DOWN) {
+				if (LNET_NETTYP(LNET_NIDNET(nid)) != PTLLND)
+					down++;
+				else if (ptl_status != LNET_NI_STATUS_UP)
+					ptl_status = LNET_NI_STATUS_DOWN;
+				continue;
+			}
+
+			if (stat->ns_status == LNET_NI_STATUS_UP) {
+				if (LNET_NIDNET(nid) == rtr->lr_net) {
+					up = 1;
+					break;
+				}
+				/* ptl NIs are considered down only when
+				 * they're all down */
+				if (LNET_NETTYP(LNET_NIDNET(nid)) == PTLLND)
+					ptl_status = LNET_NI_STATUS_UP;
+				continue;
+			}
+
+			CDEBUG(D_NET, "%s: Unexpected status 0x%x\n",
+			       libcfs_nid2str(gw->lp_nid), stat->ns_status);
+			gw->lp_ping_version = LNET_PROTO_PING_UNKNOWN;
+			return;
+		}
+
+		if (up) { /* ignore downed NIs if NI for dest network is up */
+			rtr->lr_downis = 0;
+			continue;
+		}
+		rtr->lr_downis = down + (ptl_status == LNET_NI_STATUS_DOWN);
+	}
+}
+
+static void
+lnet_router_checker_event(lnet_event_t *event)
+{
+	/* CAVEAT EMPTOR: I'm called with lnet_res_locked */
+	lnet_rc_data_t		*rcd = event->md.user_ptr;
+	struct lnet_peer	*lp;
+
+	LASSERT(rcd != NULL);
+
+	if (event->unlinked) {
+		LNetInvalidateHandle(&rcd->rcd_mdh);
+		return;
         }
 
-        if (info->pi_version == LNET_PROTO_PING_VERSION1)
-                return -ENOENT;  /* v1 doesn't carry NI status info */
+	LASSERT(event->type == LNET_EVENT_SEND ||
+		event->type == LNET_EVENT_REPLY);
 
-        if (info->pi_version != LNET_PROTO_PING_VERSION) {
-                CNETERR("%s: Unexpected version 0x%x\n",
-                        libcfs_nid2str(rtr->lp_nid), info->pi_version);
-                return -EPROTO;
-        }
+	lp = rcd->rcd_gateway;
+	LASSERT(lp != NULL);
 
-        for (i = 0; i < info->pi_nnis && i < LNET_MAX_RTR_NIS; i++) {
-                lnet_ni_status_t *stat = &info->pi_ni[i];
-                lnet_nid_t        nid = stat->ns_nid;
+	if (!lnet_isrouter(lp)) /* ignore if no longer a router */
+		return;
 
-                if (nid == LNET_NID_ANY) {
-                        CNETERR("%s: unexpected LNET_NID_ANY\n",
-                                libcfs_nid2str(rtr->lp_nid));
-                        return -EPROTO;
-                }
+	if (event->type == LNET_EVENT_SEND) {
+		lp->lp_ping_notsent = 0; /* NB: re-enable another ping */
+		if (event->status == 0)
+			return;
+	}
 
-                if (LNET_NETTYP(LNET_NIDNET(nid)) == LOLND)
-                        continue;
+	/* LNET_EVENT_REPLY */
+	/* A successful REPLY means the router is up.  If _any_ comms
+	 * to the router fail I assume it's down (this will happen if
+	 * we ping alive routers to try to detect router death before
+	 * apps get burned). */
 
-                if (stat->ns_status == LNET_NI_STATUS_DOWN) {
-                        if (LNET_NETTYP(LNET_NIDNET(nid)) == PTLLND)
-                                ptl_down = 1;
-                        else
-                                down++;
-                        continue;
-                }
+	lnet_notify_locked(lp, 1, (event->status == 0), cfs_time_current());
+	/* The router checker will wake up very shortly and do the
+	 * actual notification.
+	 * XXX If 'lp' stops being a router before then, it will still
+	 * have the notification pending!!! */
 
-                if (stat->ns_status != LNET_NI_STATUS_UP) {
-                        CNETERR("%s: Unexpected status 0x%x\n",
-                                libcfs_nid2str(rtr->lp_nid), stat->ns_status);
-                        return -EPROTO;
-                }
-
-                /* ignore downed NIs if there's a NI up for dest network */
-                if (LNET_NIDNET(nid) == net)
-                        return 0;
-
-                if (LNET_NETTYP(LNET_NIDNET(nid)) == PTLLND)
-                        ptl_up = 1;
-        }
-
-        /* ptl NIs are considered down only when they're all down */
-        return down + (ptl_up ? 0 : ptl_down);
+	if (avoid_asym_router_failure && event->status == 0)
+		lnet_parse_rc_info(rcd);
 }
 
 void
@@ -652,65 +733,6 @@ lnet_wait_known_routerstate(void)
 #endif
                 cfs_pause(cfs_time_seconds(1));
         }
-}
-
-static void
-lnet_router_checker_event (lnet_event_t *event)
-{
-        /* CAVEAT EMPTOR: I'm called with LNET_LOCKed and I'm not allowed to
-         * drop it (that's how come I see _every_ event, even ones that would
-         * overflow my EQ) */
-        lnet_rc_data_t *rcd = event->md.user_ptr;
-        lnet_peer_t    *lp;
-        lnet_nid_t      nid;
-
-	LASSERT(rcd != NULL);
-
-	if (event->unlinked) {
-		LNetInvalidateHandle(&rcd->rcd_mdh);
-		return;
-	}
-
-        LASSERT (event->type == LNET_EVENT_SEND ||
-                 event->type == LNET_EVENT_REPLY);
-
-        nid = (event->type == LNET_EVENT_SEND) ?
-              event->target.nid : event->initiator.nid;
-
-        lp = lnet_find_peer_locked(nid);
-        if (lp == NULL) {
-                /* router may have been removed */
-                CDEBUG(D_NET, "Router %s not found\n", libcfs_nid2str(nid));
-                return;
-        }
-
-        if (event->type == LNET_EVENT_SEND)     /* re-enable another ping */
-                lp->lp_ping_notsent = 0;
-
-        if (lnet_isrouter(lp) &&                /* ignore if no longer a router */
-            (event->status != 0 ||
-             event->type == LNET_EVENT_REPLY)) {
-
-                /* A successful REPLY means the router is up.  If _any_ comms
-                 * to the router fail I assume it's down (this will happen if
-                 * we ping alive routers to try to detect router death before
-                 * apps get burned). */
-
-                lnet_notify_locked(lp, 1, (event->status == 0),
-                                   cfs_time_current());
-
-                /* The router checker will wake up very shortly and do the
-                 * actual notification.  
-                 * XXX If 'lp' stops being a router before then, it will still
-                 * have the notification pending!!! */
-        }
-
-        /* This decref will NOT drop LNET_LOCK (it had to have 1 ref when it
-         * was in the peer table and I've not dropped the lock, so no-one else
-         * can have reduced the refcount) */
-        LASSERT(lp->lp_refcount > 1);
-
-        lnet_peer_decref_locked(lp);
 }
 
 void
@@ -756,6 +778,12 @@ lnet_destroy_rc_data (lnet_rc_data_t *rcd)
 	LASSERT(cfs_list_empty(&rcd->rcd_list));
 	/* detached from network */
 	LASSERT(LNetHandleIsInvalid(rcd->rcd_mdh));
+
+	if (rcd->rcd_gateway != NULL) {
+		LNET_LOCK();
+		lnet_peer_decref_locked(rcd->rcd_gateway);
+		LNET_UNLOCK();
+	}
 
 	if (rcd->rcd_pinginfo != NULL)
 		LIBCFS_FREE(rcd->rcd_pinginfo, LNET_PINGINFO_SIZE);
@@ -813,6 +841,8 @@ lnet_create_rc_data_locked(lnet_peer_t *gateway)
 		goto out;
 	}
 
+	lnet_peer_addref_locked(gateway);
+	rcd->rcd_gateway = gateway;
 	gateway->lp_rcd = rcd;
 	return rcd;
 

@@ -1146,18 +1146,65 @@ lnet_return_credits_locked (lnet_msg_t *msg)
         }
 }
 
+static lnet_peer_t *
+lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target)
+{
+	lnet_remotenet_t	*rnet;
+	lnet_route_t		*rtr;
+	lnet_route_t		*rtr_best;
+	lnet_route_t		*rtr_last;
+	struct lnet_peer	*lp_best;
+	struct lnet_peer	*lp;
+	int			rc;
+
+	rnet = lnet_find_net_locked(LNET_NIDNET(target));
+	if (rnet == NULL)
+		return NULL;
+
+	lp_best = NULL;
+	rtr_best = rtr_last = NULL;
+	cfs_list_for_each_entry(rtr, &rnet->lrn_routes, lr_list) {
+		lp = rtr->lr_gateway;
+
+		if (!lp->lp_alive || /* gateway is down */
+		    (lp->lp_ping_version == LNET_PROTO_PING_VERSION &&
+		     rtr->lr_downis != 0)) /* NI to target is down */
+			continue;
+
+		if (ni != NULL && lp->lp_ni != ni)
+			continue;
+
+		if (lp_best == NULL) {
+			rtr_best = rtr_last = rtr;
+			lp_best = lp;
+			continue;
+		}
+
+		rc = lnet_compare_routes(rtr, rtr_best);
+		if (rc < 0)
+			continue;
+
+		rtr_best = rtr;
+		lp_best = lp;
+	}
+
+	if (rtr_best != NULL) {
+		/* Place selected route at the end of the route list to ensure
+		 * fairness; everything else being equal... */
+		cfs_list_del(&rtr_best->lr_list);
+		cfs_list_add_tail(&rtr_best->lr_list, &rnet->lrn_routes);
+	}
+
+	return lp_best;
+}
+
 int
 lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 {
         lnet_nid_t        dst_nid = msg->msg_target.nid;
         lnet_ni_t        *src_ni;
         lnet_ni_t        *local_ni;
-        lnet_remotenet_t *rnet;
-        lnet_route_t     *route;
-        lnet_route_t     *best_route;
-        cfs_list_t       *tmp;
         lnet_peer_t      *lp;
-        lnet_peer_t      *lp2;
         int               rc;
 
         LASSERT (msg->msg_txpeer == NULL);
@@ -1247,33 +1294,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                 LNET_LOCK();
 #endif
                 /* sending to a remote network */
-                rnet = lnet_find_net_locked(LNET_NIDNET(dst_nid));
-                if (rnet == NULL) {
-                        if (src_ni != NULL)
-                                lnet_ni_decref_locked(src_ni);
-                        LNET_UNLOCK();
-                        LCONSOLE_WARN("No route to %s\n",
-                                      libcfs_id2str(msg->msg_target));
-                        return -EHOSTUNREACH;
-                }
-
-                /* Find the best gateway I can use */
-                lp = NULL;
-                best_route = NULL;
-                cfs_list_for_each(tmp, &rnet->lrn_routes) {
-                        route = cfs_list_entry(tmp, lnet_route_t, lr_list);
-                        lp2 = route->lr_gateway;
-
-                        if (lp2->lp_alive &&
-                            lnet_router_down_ni(lp2, rnet->lrn_net) <= 0 &&
-                            (src_ni == NULL || lp2->lp_ni == src_ni) &&
-                            (lp == NULL ||
-                             lnet_compare_routes(route, best_route) > 0)) {
-                                best_route = route;
-                                lp = lp2;
-                        }
-                }
-
+		lp = lnet_find_route_locked(src_ni, dst_nid);
                 if (lp == NULL) {
                         if (src_ni != NULL)
                                 lnet_ni_decref_locked(src_ni);
@@ -1286,10 +1307,6 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                         return -EHOSTUNREACH;
                 }
 
-                /* Place selected route at the end of the route list to ensure
-                 * fairness; everything else being equal... */
-                cfs_list_del(&best_route->lr_list);
-                cfs_list_add_tail(&best_route->lr_list, &rnet->lrn_routes);
                 CDEBUG(D_NET, "Best route to %s via %s for %s %d\n",
                        libcfs_nid2str(dst_nid), libcfs_nid2str(lp->lp_nid),
                        lnet_msgtyp2str(msg->msg_type), msg->msg_len);

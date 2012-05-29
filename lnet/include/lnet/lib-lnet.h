@@ -809,7 +809,6 @@ int lnet_peer_buffer_credits(lnet_ni_t *ni);
 int lnet_router_checker_start(void);
 void lnet_router_checker_stop(void);
 void lnet_swap_pinginfo(lnet_ping_info_t *info);
-int lnet_router_down_ni(lnet_peer_t *rtr, __u32 net);
 
 int lnet_ping_target_init(void);
 void lnet_ping_target_fini(void);

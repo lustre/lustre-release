@@ -231,11 +231,10 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
                 return -ENOMEM;
         }
 
-        memset(lp, 0, sizeof(*lp));             /* zero counters etc */
-        
 	CFS_INIT_LIST_HEAD(&lp->lp_txq);
         CFS_INIT_LIST_HEAD(&lp->lp_rtrq);
-	
+	CFS_INIT_LIST_HEAD(&lp->lp_routes);
+
         lp->lp_notify = 0;
         lp->lp_notifylnd = 0;
         lp->lp_notifying = 0;
@@ -245,6 +244,7 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid)
         lp->lp_last_alive = cfs_time_current(); /* assumes alive */
         lp->lp_last_query = 0; /* haven't asked NI yet */
         lp->lp_ping_timestamp = 0;
+	lp->lp_ping_version = LNET_PROTO_PING_UNKNOWN;
         lp->lp_nid = nid;
         lp->lp_refcount = 2;                    /* 1 for caller; 1 for hash */
         lp->lp_rtr_refcount = 0;

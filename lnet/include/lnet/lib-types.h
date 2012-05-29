@@ -407,8 +407,12 @@ typedef struct lnet_ni {
 } lnet_ni_t;
 
 #define LNET_PROTO_PING_MATCHBITS     0x8000000000000000LL
-#define LNET_PROTO_PING_VERSION       2
-#define LNET_PROTO_PING_VERSION1      1
+enum {
+	LNET_PROTO_PING_UNKNOWN		= 0,	/* unknown */
+	LNET_PROTO_PING_VERSION_1	= 1,	/* old version */
+	LNET_PROTO_PING_VERSION		= 2,	/* current version */
+};
+
 typedef struct {
         __u32            pi_magic;
         __u32            pi_version;
@@ -421,9 +425,11 @@ typedef struct {
 #define LNET_MAX_RTR_NIS   16
 #define LNET_PINGINFO_SIZE offsetof(lnet_ping_info_t, pi_ni[LNET_MAX_RTR_NIS])
 typedef struct {
-        cfs_list_t        rcd_list;             /* chain on the_lnet.ln_zombie_rcd */
-        lnet_handle_md_t  rcd_mdh;              /* ping buffer MD */
-        lnet_ping_info_t *rcd_pinginfo;         /* ping buffer */
+	/* chain on the_lnet.ln_zombie_rcd or ln_deathrow_rcd */
+	cfs_list_t		rcd_list;
+	lnet_handle_md_t	rcd_mdh;	/* ping buffer MD */
+	struct lnet_peer	*rcd_gateway;	/* reference to gateway */
+	lnet_ping_info_t	*rcd_pinginfo;	/* ping buffer */
 } lnet_rc_data_t;
 
 typedef struct lnet_peer {
@@ -451,7 +457,10 @@ typedef struct lnet_peer {
         lnet_nid_t        lp_nid;               /* peer's NID */
         int               lp_refcount;          /* # refs */
         int               lp_rtr_refcount;      /* # refs from lnet_route_t::lr_gateway */
-        lnet_rc_data_t   *lp_rcd;               /* router checker state */
+	/* returned RC ping version */
+	unsigned int		lp_ping_version;
+	cfs_list_t		lp_routes;	/* routers on this peer */
+	lnet_rc_data_t		*lp_rcd;	/* router checker state */
 } lnet_peer_t;
 
 
@@ -470,9 +479,12 @@ struct lnet_peer_table {
 #define lnet_peer_aliveness_enabled(lp) ((lp)->lp_ni->ni_peertimeout > 0)
 
 typedef struct {
-        cfs_list_t        lr_list;              /* chain on net */
-        lnet_peer_t      *lr_gateway;           /* router node */
-        unsigned int      lr_hops;              /* how far I am */
+	cfs_list_t		lr_list;	/* chain on net */
+	cfs_list_t		lr_gwlist;	/* chain on gateway */
+	lnet_peer_t		*lr_gateway;	/* router node */
+	__u32			lr_net;		/* remote network number */
+	unsigned int		lr_downis;	/* number of down NIs */
+	unsigned int		lr_hops;	/* how far I am */
 } lnet_route_t;
 
 typedef struct {

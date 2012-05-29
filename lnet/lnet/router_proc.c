@@ -331,8 +331,20 @@ int LL_PROC_PROTO(proc_lnet_routers)
                         int pingsent  = !peer->lp_ping_notsent;
                         int last_ping = cfs_duration_sec(cfs_time_sub(now,
                                                      peer->lp_ping_timestamp));
-                        int down_ni   = lnet_router_down_ni(peer,
-                                                    LNET_NIDNET(LNET_NID_ANY));
+			int down_ni   = 0;
+			lnet_route_t *rtr;
+
+			if (peer->lp_ping_version == LNET_PROTO_PING_VERSION) {
+				cfs_list_for_each_entry(rtr, &peer->lp_routes,
+							lr_gwlist) {
+					/* downis on any route should be the
+					 * number of downis on the gateway */
+					if (rtr->lr_downis != 0) {
+						down_ni = rtr->lr_downis;
+						break;
+					}
+				}
+			}
 
                         if (deadline == 0)
                                 s += snprintf(s, tmpstr + tmpsiz - s,
