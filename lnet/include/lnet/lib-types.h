@@ -401,9 +401,11 @@ typedef struct lnet_ni {
         void             *ni_data;              /* instance-specific data */
         lnd_t            *ni_lnd;               /* procedural interface */
         int               ni_refcount;          /* reference count */
-        cfs_time_t        ni_last_alive;        /* when I was last alive */
-        lnet_ni_status_t *ni_status;            /* my health status */
-        char             *ni_interfaces[LNET_MAX_INTERFACES]; /* equivalent interfaces to use */
+	/* when I was last alive */
+	long			ni_last_alive;
+	lnet_ni_status_t	*ni_status;	/* my health status */
+	/* equivalent interfaces to use */
+	char			*ni_interfaces[LNET_MAX_INTERFACES];
 } lnet_ni_t;
 
 #define LNET_PROTO_PING_MATCHBITS     0x8000000000000000LL

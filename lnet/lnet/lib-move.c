@@ -1854,17 +1854,16 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
                 return -EPROTO;
         }
 
-        if (the_lnet.ln_routing) {
-                cfs_time_t now = cfs_time_current();
+	if (the_lnet.ln_routing &&
+	    ni->ni_last_alive != cfs_time_current_sec()) {
+		LNET_LOCK();
 
-                LNET_LOCK();
-
-                ni->ni_last_alive = now;
-                if (ni->ni_status != NULL &&
-                    ni->ni_status->ns_status == LNET_NI_STATUS_DOWN)
-                        ni->ni_status->ns_status = LNET_NI_STATUS_UP;
-
-                LNET_UNLOCK();
+		/* NB: so far here is the only place to set NI status to "up */
+		ni->ni_last_alive = cfs_time_current_sec();
+		if (ni->ni_status != NULL &&
+		    ni->ni_status->ns_status == LNET_NI_STATUS_DOWN)
+			ni->ni_status->ns_status = LNET_NI_STATUS_UP;
+		LNET_UNLOCK();
         }
 
         /* Regard a bad destination NID as a protocol error.  Senders should

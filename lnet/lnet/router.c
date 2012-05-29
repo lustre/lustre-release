@@ -736,40 +736,35 @@ lnet_wait_known_routerstate(void)
 }
 
 void
-lnet_update_ni_status(void)
+lnet_update_ni_status_locked(void)
 {
-        cfs_time_t now = cfs_time_current();
-        lnet_ni_t *ni;
-        int        status;
-        int        timeout;
+	lnet_ni_t	*ni;
+	long		now;
+	int		timeout;
 
-        LASSERT (the_lnet.ln_routing);
+	LASSERT(the_lnet.ln_routing);
 
-        timeout = router_ping_timeout +
-                  MAX(live_router_check_interval, dead_router_check_interval);
+	timeout = router_ping_timeout +
+		  MAX(live_router_check_interval, dead_router_check_interval);
 
-        LNET_LOCK();
+	now = cfs_time_current_sec();
+	cfs_list_for_each_entry(ni, &the_lnet.ln_nis, ni_list) {
+		if (ni->ni_lnd->lnd_type == LOLND)
+			continue;
 
-        cfs_list_for_each_entry (ni, &the_lnet.ln_nis, ni_list) {
-                lnet_ni_status_t *ns = ni->ni_status;
+		if (now < ni->ni_last_alive + timeout)
+			continue;
 
-                LASSERT (ns != NULL);
+		LASSERT(ni->ni_status != NULL);
 
-                status = LNET_NI_STATUS_UP;
-                if (ni->ni_lnd->lnd_type != LOLND &&  /* @lo forever alive */
-                    cfs_time_after(now, cfs_time_add(ni->ni_last_alive,
-                                                     cfs_time_seconds(timeout))))
-                        status = LNET_NI_STATUS_DOWN;
-
-                if (ns->ns_status != status) {
-                        ns->ns_status = status;
-                        CDEBUG(D_NET, "NI(%s:%d) status changed to %s\n",
-                               libcfs_nid2str(ni->ni_nid), timeout,
-                               status == LNET_NI_STATUS_UP ? "up" : "down");
-                }
-        }
-
-        LNET_UNLOCK();
+		if (ni->ni_status->ns_status != LNET_NI_STATUS_DOWN) {
+			CDEBUG(D_NET, "NI(%s:%d) status changed to down\n",
+			       libcfs_nid2str(ni->ni_nid), timeout);
+			/* NB: so far, this is the only place to set
+			 * NI status to "down" */
+			ni->ni_status->ns_status = LNET_NI_STATUS_DOWN;
+		}
+	}
 }
 
 void
@@ -1196,10 +1191,10 @@ rescan:
                         }
                 }
 
-                LNET_UNLOCK();
+		if (the_lnet.ln_routing)
+			lnet_update_ni_status_locked();
 
-                if (the_lnet.ln_routing)
-                        lnet_update_ni_status();
+		LNET_UNLOCK();
 
 		lnet_prune_rc_data(0); /* don't wait for UNLINK */
 

@@ -1182,7 +1182,7 @@ LNetNIInit(lnet_pid_t requested_pid)
         /* Now I may use my own API functions... */
 
         /* NB router checker needs the_lnet.ln_ping_info in
-         * lnet_router_checker -> lnet_update_ni_status */
+	 * lnet_router_checker -> lnet_update_ni_status_locked */
         rc = lnet_ping_target_init();
         if (rc != 0)
                 goto failed3;
