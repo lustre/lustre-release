@@ -1070,7 +1070,8 @@ LNetInit(void)
         the_lnet.ln_init = 1;
         LNetInvalidateHandle(&the_lnet.ln_rc_eqh);
         CFS_INIT_LIST_HEAD(&the_lnet.ln_lnds);
-        CFS_INIT_LIST_HEAD(&the_lnet.ln_zombie_rcd);
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_rcd_zombie);
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_rcd_deathrow);
 
 #ifdef __KERNEL__
         /* All LNDs apart from the LOLND are in separate modules.  They
