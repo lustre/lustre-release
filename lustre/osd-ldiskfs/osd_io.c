@@ -969,8 +969,8 @@ static int osd_ldiskfs_writelink(struct inode *inode, char *buffer, int buflen)
         return 0;
 }
 
-static int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
-                                    loff_t *offs, handle_t *handle)
+int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
+			     loff_t *offs, handle_t *handle)
 {
         struct buffer_head *bh        = NULL;
         loff_t              offset    = *offs;

@@ -64,15 +64,12 @@
 
 /* fid_cpu_to_be() */
 #include <lustre_fid.h>
+#include <dt_object.h>
 
 #include "osd_oi.h"
 /* osd_lookup(), struct osd_thread_info */
 #include "osd_internal.h"
 #include "osd_igif.h"
-#include "dt_object.h"
-
-#define OSD_OI_FID_NR         (1UL << OSD_OI_FID_OID_BITS)
-#define OSD_OI_FID_NR_MAX     (1UL << OSD_OI_FID_OID_BITS_MAX)
 
 static unsigned int osd_oi_count = OSD_OI_FID_NR;
 CFS_MODULE_PARM(osd_oi_count, "i", int, 0444,
@@ -111,62 +108,56 @@ static void osd_oi_table_put(struct osd_thread_info *info,
 }
 
 static int osd_oi_index_create_one(struct osd_thread_info *info,
-                                   struct osd_device *osd, const char *name,
-                                   struct dt_index_features *feat)
+				   struct osd_device *osd, const char *name,
+				   struct dt_index_features *feat)
 {
-        const struct lu_env             *env = info->oti_env;
-        struct osd_inode_id             *id  = &info->oti_id;
-        struct buffer_head              *bh;
-        struct inode                    *inode;
-        struct ldiskfs_dir_entry_2      *de;
-        struct dentry                   *dentry;
-        struct inode                    *dir;
-        handle_t                        *jh;
-        int                              rc;
+	const struct lu_env		*env = info->oti_env;
+	struct osd_inode_id		*id  = &info->oti_id;
+	struct buffer_head		*bh;
+	struct inode			*inode;
+	struct ldiskfs_dir_entry_2	*de;
+	struct dentry			*dentry;
+	struct super_block		*sb  = osd_sb(osd);
+	struct inode			*dir = sb->s_root->d_inode;
+	handle_t			*jh;
+	int				 rc;
 
-        dentry = osd_child_dentry_by_inode(env, osd_sb(osd)->s_root->d_inode,
-                                           name, strlen(name));
-        dir = osd_sb(osd)->s_root->d_inode;
-        bh = osd_ldiskfs_find_entry(dir, dentry, &de, NULL);
-        if (bh) {
-                brelse(bh);
+	dentry = osd_child_dentry_by_inode(env, dir, name, strlen(name));
+	bh = osd_ldiskfs_find_entry(dir, dentry, &de, NULL);
+	if (bh) {
+		osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
+		brelse(bh);
+		inode = osd_iget(info, osd, id);
+		if (!IS_ERR(inode)) {
+			iput(inode);
+			inode = ERR_PTR(-EEXIST);
+		}
+		return PTR_ERR(inode);
+	}
 
-                id->oii_ino = le32_to_cpu(de->inode);
-                id->oii_gen = OSD_OII_NOGEN;
+	jh = ldiskfs_journal_start_sb(sb, 100);
+	if (IS_ERR(jh))
+		return PTR_ERR(jh);
 
-                inode = osd_iget(info, osd, id);
-                if (!IS_ERR(inode)) {
-                        iput(inode);
-                        RETURN(-EEXIST);
-                }
-                RETURN(PTR_ERR(inode));
-        }
+	inode = ldiskfs_create_inode(jh, dir, (S_IFREG | S_IRUGO | S_IWUSR));
+	if (IS_ERR(inode)) {
+		ldiskfs_journal_stop(jh);
+		return PTR_ERR(inode);
+	}
 
-        jh = ldiskfs_journal_start_sb(osd_sb(osd), 100);
-        LASSERT(!IS_ERR(jh));
-
-        inode = ldiskfs_create_inode(jh, osd_sb(osd)->s_root->d_inode,
-                                     (S_IFREG | S_IRUGO | S_IWUSR));
-        LASSERT(!IS_ERR(inode));
-
-        if (feat->dif_flags & DT_IND_VARKEY)
-                rc = iam_lvar_create(inode, feat->dif_keysize_max,
-                                     feat->dif_ptrsize, feat->dif_recsize_max,
-                                     jh);
-        else
-                rc = iam_lfix_create(inode, feat->dif_keysize_max,
-                                     feat->dif_ptrsize, feat->dif_recsize_max,
-                                     jh);
-
-        dentry = osd_child_dentry_by_inode(env, osd_sb(osd)->s_root->d_inode,
-                                           name, strlen(name));
-        rc = osd_ldiskfs_add_entry(jh, dentry, inode, NULL);
-        LASSERT(rc == 0);
-
-        ldiskfs_journal_stop(jh);
-        iput(inode);
-
-        return rc;
+	if (feat->dif_flags & DT_IND_VARKEY)
+		rc = iam_lvar_create(inode, feat->dif_keysize_max,
+				     feat->dif_ptrsize, feat->dif_recsize_max,
+				     jh);
+	else
+		rc = iam_lfix_create(inode, feat->dif_keysize_max,
+				     feat->dif_ptrsize, feat->dif_recsize_max,
+				     jh);
+	dentry = osd_child_dentry_by_inode(env, dir, name, strlen(name));
+	rc = osd_ldiskfs_add_entry(jh, dentry, inode, NULL);
+	ldiskfs_journal_stop(jh);
+	iput(inode);
+	return rc;
 }
 
 static struct inode *osd_oi_index_open(struct osd_thread_info *info,
@@ -199,7 +190,7 @@ static struct inode *osd_oi_index_open(struct osd_thread_info *info,
 
         rc = osd_oi_index_create_one(info, osd, name, f);
         if (rc)
-                RETURN(ERR_PTR(rc));
+		return ERR_PTR(rc);
 
         dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
         if (IS_ERR(dentry))
@@ -434,11 +425,27 @@ static int osd_oi_iam_lookup(struct osd_thread_info *oti,
         RETURN(rc);
 }
 
+int __osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
+		    const struct lu_fid *fid, struct osd_inode_id *id)
+{
+	struct lu_fid *oi_fid = &info->oti_fid2;
+	int	       rc;
+
+	fid_cpu_to_be(oi_fid, fid);
+	rc = osd_oi_iam_lookup(info, osd_fid2oi(osd, fid), (struct dt_rec *)id,
+			       (const struct dt_key *)oi_fid);
+	if (rc > 0) {
+		osd_id_unpack(id, id);
+		rc = 0;
+	} else if (rc == 0) {
+		rc = -ENOENT;
+	}
+	return rc;
+}
+
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
-        struct lu_fid       *oi_fid = &info->oti_fid;
-        const struct dt_key *key;
         int                  rc = 0;
 
         if (fid_is_idif(fid) || fid_seq(fid) == FID_SEQ_LLOG) {
@@ -446,36 +453,21 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
                 rc = osd_compat_objid_lookup(info, osd, fid, id);
         } else if (fid_is_igif(fid)) {
                 lu_igif_to_id(fid, id);
-                rc = 0;
         } else if (fid_is_fs_root(fid)) {
-                struct inode *inode = osd_sb(osd)->s_root->d_inode;
-
-                id->oii_ino = inode->i_ino;
-                id->oii_gen = inode->i_generation;
-        } else {
+		osd_id_gen(id, osd_sb(osd)->s_root->d_inode->i_ino,
+			   osd_sb(osd)->s_root->d_inode->i_generation);
+	} else {
 		if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
 			return osd_compat_spec_lookup(info, osd, fid, id);
 
-                fid_cpu_to_be(oi_fid, fid);
-                key = (struct dt_key *)oi_fid;
-
-                rc = osd_oi_iam_lookup(info, osd_fid2oi(osd, fid),
-                                       (struct dt_rec *)id, key);
-
-                if (rc > 0) {
-                        id->oii_ino = be32_to_cpu(id->oii_ino);
-                        id->oii_gen = be32_to_cpu(id->oii_gen);
-                        rc = 0;
-                } else if (rc == 0) {
-                        rc = -ENOENT;
-                }
+		rc = __osd_oi_lookup(info, osd, fid, id);
         }
         return rc;
 }
 
 static int osd_oi_iam_insert(struct osd_thread_info *oti, struct osd_oi *oi,
-                             const struct dt_rec *rec, const struct dt_key *key,
-                             struct thandle *th, int ignore_quota)
+			     const struct dt_rec *rec, const struct dt_key *key,
+			     struct thandle *th)
 {
         struct iam_container  *bag;
         struct iam_rec        *iam_rec = (struct iam_rec *)oti->oti_ldp;
@@ -499,10 +491,7 @@ static int osd_oi_iam_insert(struct osd_thread_info *oti, struct osd_oi *oi,
         LASSERT(oh->ot_handle != NULL);
         LASSERT(oh->ot_handle->h_transaction != NULL);
 #ifdef HAVE_QUOTA_SUPPORT
-        if (ignore_quota)
-                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-        else
-                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
 #endif
         if (S_ISDIR(oi->oi_inode->i_mode))
                 osd_fid_pack((struct osd_fid_pack *)iam_rec, rec,
@@ -520,32 +509,27 @@ static int osd_oi_iam_insert(struct osd_thread_info *oti, struct osd_oi *oi,
 }
 
 int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
-		  const struct lu_fid *fid, const struct osd_inode_id *id0,
-		  struct thandle *th, int ignore_quota)
+		  const struct lu_fid *fid, const struct osd_inode_id *id,
+		  struct thandle *th)
 {
-	struct lu_fid	    *oi_fid = &info->oti_fid;
-	struct osd_inode_id *id;
-	const struct dt_key *key;
+	struct lu_fid	    *oi_fid = &info->oti_fid2;
+	struct osd_inode_id *oi_id = &info->oti_id2;
 
 	if (fid_is_igif(fid) || unlikely(fid_seq(fid) == FID_SEQ_DOT_LUSTRE))
 		return 0;
 
 	if (fid_is_idif(fid) || fid_seq(fid) == FID_SEQ_LLOG)
-		return osd_compat_objid_insert(info, osd, fid, id0, th);
+		return osd_compat_objid_insert(info, osd, fid, id, th);
 
 	/* Server mount should not depends on OI files */
 	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
-		return osd_compat_spec_insert(info, osd, fid, id0, th);
+		return osd_compat_spec_insert(info, osd, fid, id, th);
 
-        fid_cpu_to_be(oi_fid, fid);
-        key = (struct dt_key *)oi_fid;
-
-        id  = &info->oti_id;
-        id->oii_ino = cpu_to_be32(id0->oii_ino);
-        id->oii_gen = cpu_to_be32(id0->oii_gen);
-
-        return osd_oi_iam_insert(info, osd_fid2oi(osd, fid),
-                                 (struct dt_rec *)id, key, th, ignore_quota);
+	fid_cpu_to_be(oi_fid, fid);
+	osd_id_pack(oi_id, id);
+	return osd_oi_iam_insert(info, osd_fid2oi(osd, fid),
+				 (const struct dt_rec *)oi_id,
+				 (const struct dt_key *)oi_fid, th);
 }
 
 static int osd_oi_iam_delete(struct osd_thread_info *oti, struct osd_oi *oi,
@@ -575,24 +559,22 @@ static int osd_oi_iam_delete(struct osd_thread_info *oti, struct osd_oi *oi,
 }
 
 int osd_oi_delete(struct osd_thread_info *info,
-                  struct osd_device *osd, const struct lu_fid *fid,
-                  struct thandle *th)
+		  struct osd_device *osd, const struct lu_fid *fid,
+		  struct thandle *th)
 {
-        struct lu_fid       *oi_fid = &info->oti_fid;
-        const struct dt_key *key;
+	struct lu_fid *oi_fid = &info->oti_fid2;
 
-        LASSERT(fid_seq(fid) != FID_SEQ_LOCAL_FILE);
+	LASSERT(fid_seq(fid) != FID_SEQ_LOCAL_FILE);
 
-        if (fid_is_idif(fid) || fid_seq(fid) == FID_SEQ_LLOG)
-                return osd_compat_objid_delete(info, osd, fid, th);
+	if (fid_is_idif(fid) || fid_seq(fid) == FID_SEQ_LLOG)
+		return osd_compat_objid_delete(info, osd, fid, th);
 
-        fid_cpu_to_be(oi_fid, fid);
-        key = (struct dt_key *)oi_fid;
-
-        return osd_oi_iam_delete(info, osd_fid2oi(osd, fid), key, th);
+	fid_cpu_to_be(oi_fid, fid);
+	return osd_oi_iam_delete(info, osd_fid2oi(osd, fid),
+				 (const struct dt_key *)oi_fid, th);
 }
 
-int osd_oi_mod_init()
+int osd_oi_mod_init(void)
 {
         if (osd_oi_count == 0 || osd_oi_count > OSD_OI_FID_NR_MAX)
                 osd_oi_count = OSD_OI_FID_NR;

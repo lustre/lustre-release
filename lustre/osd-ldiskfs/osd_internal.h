@@ -78,7 +78,6 @@
 
 struct inode;
 
-#define OSD_OII_NOGEN (0)
 #define OSD_COUNTERS (0)
 
 /** Enable thandle usage statistics */
@@ -441,7 +440,9 @@ struct osd_thread_info {
         struct htree_lock     *oti_hlock;
 
         struct lu_fid          oti_fid;
-        struct osd_inode_id    oti_id;
+	struct lu_fid	       oti_fid2;
+	struct osd_inode_id    oti_id;
+	struct osd_inode_id    oti_id2;
         struct ost_id          oti_ostid;
 
         /*
@@ -535,9 +536,10 @@ int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
                     struct lustre_capa *capa, __u64 opc);
 void osd_declare_qid(struct dt_object *dt, struct osd_thandle *oh,
                      int type, uid_t id, struct inode *inode);
-struct inode *osd_iget(struct osd_thread_info *info,
-                       struct osd_device *dev,
-                       const struct osd_inode_id *id);
+struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
+		       struct osd_inode_id *id);
+struct inode *osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
+			   struct osd_inode_id *id, struct lu_fid *fid);
 
 int osd_compat_init(struct osd_device *dev);
 void osd_compat_fini(struct osd_device *dev);
@@ -585,6 +587,14 @@ static inline int osd_invariant(const struct osd_object *obj)
 #define osd_invariant(obj) (1)
 #endif
 
+extern const struct dt_index_operations osd_otable_ops;
+
+static inline int osd_oi_fid2idx(struct osd_device *dev,
+				 const struct lu_fid *fid)
+{
+	return fid->f_seq & (dev->od_oi_count - 1);
+}
+
 static inline struct osd_oi *osd_fid2oi(struct osd_device *osd,
                                         const struct lu_fid *fid)
 {
@@ -593,7 +603,7 @@ static inline struct osd_oi *osd_fid2oi(struct osd_device *osd,
         LASSERT(osd->od_oi_table != NULL && osd->od_oi_count >= 1);
         /* It can work even od_oi_count equals to 1 although it's unexpected,
          * the only reason we set it to 1 is for performance measurement */
-        return osd->od_oi_table[fid->f_seq & (osd->od_oi_count - 1)];
+	return osd->od_oi_table[osd_oi_fid2idx(osd, fid)];
 }
 
 extern const struct lu_device_operations  osd_lu_ops;
@@ -688,6 +698,8 @@ static inline void osd_ipd_put(const struct lu_env *env,
 }
 
 int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs);
+int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
+			     loff_t *offs, handle_t *handle);
 
 static inline
 struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,

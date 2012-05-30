@@ -55,6 +55,7 @@
 #include <lvfs.h>
 
 #include "osd_internal.h"
+#include "osd_oi.h"
 
 struct osd_compat_objid_seq {
         /* protects on-fly initialization */
@@ -344,8 +345,7 @@ int osd_compat_add_entry(struct osd_thread_info *info, struct osd_device *osd,
 
         inode = &info->oti_inode;
         inode->i_sb = osd_sb(osd);
-        inode->i_ino = id->oii_ino;
-        inode->i_generation = id->oii_gen;
+	osd_id_to_inode(inode, id);
 
         child = &info->oti_child_dentry;
         child->d_name.hash = 0;
@@ -369,12 +369,12 @@ int osd_compat_objid_lookup(struct osd_thread_info *info,
         struct dentry              *d;
         struct dentry              *d_seq;
         struct ost_id              *ostid = &info->oti_ostid;
-        int                         rc = 0;
         int                         dirn;
         char                        name[32];
         struct ldiskfs_dir_entry_2 *de;
         struct buffer_head         *bh;
         struct inode               *dir;
+	struct inode		   *inode;
         ENTRY;
 
         /* on the very first lookup we find and open directories */
@@ -405,25 +405,18 @@ int osd_compat_objid_lookup(struct osd_thread_info *info,
         bh = osd_ldiskfs_find_entry(dir, d_seq, &de, NULL);
         UNLOCK_INODE_MUTEX(dir);
 
-        rc = -ENOENT;
-        if (bh) {
-                struct inode *inode;
+	if (bh == NULL)
+		RETURN(-ENOENT);
 
-                id->oii_ino = le32_to_cpu(de->inode);
-                brelse(bh);
+	osd_id_gen(id, le32_to_cpu(de->inode), OSD_OII_NOGEN);
+	brelse(bh);
 
-                id->oii_gen = OSD_OII_NOGEN;
-                inode = osd_iget(info, dev, id);
+	inode = osd_iget(info, dev, id);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
 
-                if (IS_ERR(inode))
-                        GOTO(cleanup, rc = PTR_ERR(inode));
-                rc = 0;
-                id->oii_gen = inode->i_generation;
-                iput(inode);
-        }
-
-cleanup:
-        RETURN(rc);
+	iput(inode);
+	RETURN(0);
 }
 
 int osd_compat_objid_insert(struct osd_thread_info *info,
@@ -555,6 +548,7 @@ int osd_compat_spec_lookup(struct osd_thread_info *info,
 			   struct osd_inode_id *id)
 {
 	struct dentry *dentry;
+	struct inode  *inode;
 	char	      *name;
 	int	       rc = -ENOENT;
 	ENTRY;
@@ -563,20 +557,20 @@ int osd_compat_spec_lookup(struct osd_thread_info *info,
 	if (name == NULL || strlen(name) == 0)
 		RETURN(-ENOENT);
 
-        dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
-        if (!IS_ERR(dentry)) {
-                if (dentry->d_inode) {
-                        if (is_bad_inode(dentry->d_inode)) {
-                                rc = -EIO;
-                        } else {
-                                id->oii_ino = dentry->d_inode->i_ino;
-                                id->oii_gen = dentry->d_inode->i_generation;
-                                rc = 0;
-                        }
-                }
-                dput(dentry);
-        }
+	dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
+	if (!IS_ERR(dentry)) {
+		inode = dentry->d_inode;
+		if (inode) {
+			if (is_bad_inode(inode)) {
+				rc = -EIO;
+			} else {
+				osd_id_gen(id, inode->i_ino,
+					   inode->i_generation);
+				rc = 0;
+			}
+		}
+		dput(dentry);
+	}
 
-        RETURN(rc);
+	RETURN(rc);
 }
-

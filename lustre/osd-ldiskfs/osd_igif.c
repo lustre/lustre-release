@@ -55,8 +55,6 @@
 
 void lu_igif_to_id(const struct lu_fid *fid, struct osd_inode_id *id)
 {
-        LASSERT(fid_is_igif(fid));
-        id->oii_ino = lu_igif_ino(fid);
-        id->oii_gen = lu_igif_gen(fid);
+	LASSERT(fid_is_igif(fid));
+	osd_id_gen(id, lu_igif_ino(fid), lu_igif_gen(fid));
 }
-
