@@ -196,13 +196,8 @@ static int obd_class_release(struct inode * inode, struct file * file)
 }
 
 /* to control /dev/obd */
-#ifdef HAVE_UNLOCKED_IOCTL
 static long obd_class_ioctl(struct file *filp, unsigned int cmd,
-                            unsigned long arg)
-#else
-static int obd_class_ioctl(struct inode *inode, struct file *filp,
-                           unsigned int cmd, unsigned long arg)
-#endif
+			    unsigned long arg)
 {
         int err = 0;
         ENTRY;
@@ -220,14 +215,10 @@ static int obd_class_ioctl(struct inode *inode, struct file *filp,
 
 /* declare character device */
 static struct file_operations obd_psdev_fops = {
-        .owner   = THIS_MODULE,
-#if HAVE_UNLOCKED_IOCTL
-        .unlocked_ioctl = obd_class_ioctl, /* unlocked_ioctl */
-#else
-        .ioctl   = obd_class_ioctl,     /* ioctl */
-#endif
-        .open    = obd_class_open,      /* open */
-        .release = obd_class_release,   /* release */
+	.owner          = THIS_MODULE,
+	.unlocked_ioctl = obd_class_ioctl, /* unlocked_ioctl */
+	.open           = obd_class_open,      /* open */
+	.release        = obd_class_release,   /* release */
 };
 
 /* modules setup */

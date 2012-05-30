@@ -76,17 +76,10 @@ libcfs_sock_ioctl(int cmd, unsigned long arg)
                 goto out_fd;
         }
 
-        set_fs(KERNEL_DS);
-#ifdef HAVE_UNLOCKED_IOCTL
-        if (sock_filp->f_op->unlocked_ioctl)
-                rc = sock_filp->f_op->unlocked_ioctl(sock_filp, cmd, arg);
-#else
-        lock_kernel();
-        rc = sock_filp->f_op->ioctl(sock_filp->f_dentry->d_inode,
-                                    sock_filp, cmd, arg);
-        unlock_kernel();
-#endif
-        set_fs(oldmm);
+	set_fs(KERNEL_DS);
+	if (sock_filp->f_op->unlocked_ioctl)
+		rc = sock_filp->f_op->unlocked_ioctl(sock_filp, cmd, arg);
+	set_fs(oldmm);
 
         fput(sock_filp);
 

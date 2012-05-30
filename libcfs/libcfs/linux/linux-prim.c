@@ -267,13 +267,11 @@ void cfs_enter_debugger(void)
 void cfs_daemonize(char *str) {
         unsigned long flags;
 
-        lock_kernel();
         daemonize(str);
         SIGNAL_MASK_LOCK(current, flags);
         sigfillset(&current->blocked);
         RECALC_SIGPENDING;
         SIGNAL_MASK_UNLOCK(current, flags);
-        unlock_kernel();
 }
 
 int cfs_daemonize_ctxt(char *str) {

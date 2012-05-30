@@ -313,9 +313,10 @@ static int panic_notifier(struct notifier_block *self, unsigned long unused1,
         if (in_interrupt()) {
                 cfs_trace_debug_print();
         } else {
-                while (current->lock_depth >= 0)
-                        unlock_kernel();
-
+# ifdef HAVE_KERNEL_LOCKED
+		while (kernel_locked())
+			unlock_kernel();
+# endif
                 libcfs_debug_dumplog_internal((void *)(long)cfs_curproc_pid());
         }
 #endif
