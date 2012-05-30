@@ -551,18 +551,17 @@ int osd_compat_spec_insert(struct osd_thread_info *info,
 }
 
 int osd_compat_spec_lookup(struct osd_thread_info *info,
-                           struct osd_device *osd, const struct lu_fid *fid,
-                           struct osd_inode_id *id)
+			   struct osd_device *osd, const struct lu_fid *fid,
+			   struct osd_inode_id *id)
 {
-        struct dentry *dentry;
-        char          *name;
-        int            rc = -ERESTART;
+	struct dentry *dentry;
+	char	      *name;
+	int	       rc = -ENOENT;
+	ENTRY;
 
-        ENTRY;
-
-        name = oid2name(fid_oid(fid));
-        if (name == NULL || strlen(name) == 0)
-                return -ERESTART;
+	name = oid2name(fid_oid(fid));
+	if (name == NULL || strlen(name) == 0)
+		RETURN(-ENOENT);
 
         dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
         if (!IS_ERR(dentry)) {

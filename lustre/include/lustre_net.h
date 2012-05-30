@@ -986,6 +986,11 @@ struct ptlrpc_thread {
         struct lu_env *t_env;
 };
 
+static inline int thread_is_init(struct ptlrpc_thread *thread)
+{
+	return thread->t_flags == 0;
+}
+
 static inline int thread_is_stopped(struct ptlrpc_thread *thread)
 {
         return !!(thread->t_flags & SVC_STOPPED);
