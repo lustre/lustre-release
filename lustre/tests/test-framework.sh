@@ -4566,20 +4566,30 @@ wait_clients_import_state () {
 }
 
 oos_full() {
-        local -a AVAILA
-        local -a GRANTA
-        local OSCFULL=1
-        AVAILA=($(do_nodes $(comma_list $(osts_nodes)) \
-                  $LCTL get_param obdfilter.*.kbytesavail))
-        GRANTA=($(do_nodes $(comma_list $(osts_nodes)) \
-                  $LCTL get_param -n obdfilter.*.tot_granted))
-        for ((i=0; i<${#AVAILA[@]}; i++)); do
-                local -a AVAIL1=(${AVAILA[$i]//=/ })
-                GRANT=$((${GRANTA[$i]}/1024))
-                echo -n $(echo ${AVAIL1[0]} | cut -d"." -f2) avl=${AVAIL1[1]} grnt=$GRANT diff=$((AVAIL1[1] - GRANT))
-                [ $((AVAIL1[1] - GRANT)) -lt 400 ] && OSCFULL=0 && echo " FULL" || echo
-        done
-        return $OSCFULL
+	local -a AVAILA
+	local -a GRANTA
+	local -a TOTALA
+	local OSCFULL=1
+	AVAILA=($(do_nodes $(comma_list $(osts_nodes)) \
+	          $LCTL get_param obdfilter.*.kbytesavail))
+	GRANTA=($(do_nodes $(comma_list $(osts_nodes)) \
+	          $LCTL get_param -n obdfilter.*.tot_granted))
+	TOTALA=($(do_nodes $(comma_list $(osts_nodes)) \
+	          $LCTL get_param -n obdfilter.*.kbytestotal))
+	for ((i=0; i<${#AVAILA[@]}; i++)); do
+		local -a AVAIL1=(${AVAILA[$i]//=/ })
+		local -a TOTAL=(${TOTALA[$i]//=/ })
+		GRANT=$((${GRANTA[$i]}/1024))
+		# allow 1% of total space in bavail because of delayed
+		# allocation with ZFS which might release some free space after
+		# txg commit.  For small devices, we set a mininum of 8MB
+		local LIMIT=$((${TOTAL} / 100 + 8000))
+		echo -n $(echo ${AVAIL1[0]} | cut -d"." -f2) avl=${AVAIL1[1]} \
+			grnt=$GRANT diff=$((AVAIL1[1] - GRANT)) limit=${LIMIT}
+		[ $((AVAIL1[1] - GRANT)) -lt $LIMIT ] && OSCFULL=0 && \
+			echo " FULL" || echo
+	done
+	return $OSCFULL
 }
 
 pool_list () {
