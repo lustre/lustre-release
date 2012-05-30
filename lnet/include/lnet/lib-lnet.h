@@ -623,8 +623,10 @@ lnet_remotenet_t *lnet_find_net_locked (__u32 net);
 int lnet_islocalnid(lnet_nid_t nid);
 int lnet_islocalnet(__u32 net);
 
-void lnet_commit_md(lnet_libmd_t *md, lnet_msg_t *msg);
+void lnet_commit_md(lnet_libmd_t *md, lnet_msg_t *msg,
+		    unsigned int offset, unsigned int mlen);
 void lnet_build_unlink_event(lnet_libmd_t *md, lnet_event_t *ev);
+void lnet_build_msg_event(lnet_msg_t *msg, lnet_event_kind_t ev_type);
 void lnet_eq_enqueue_event(lnet_eq_t *eq, lnet_event_t *ev);
 void lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
                     unsigned int offset, unsigned int len);
@@ -684,9 +686,7 @@ int lnet_ptl_type_match(struct lnet_portal *ptl, lnet_process_id_t id,
 void lnet_match_blocked_msg(lnet_libmd_t *md);
 int lnet_match_md(int index, int op_mask, lnet_process_id_t src,
 		  unsigned int rlength, unsigned int roffset,
-		  __u64 match_bits, lnet_msg_t *msg,
-		  unsigned int *mlength_out, unsigned int *offset_out,
-		  lnet_libmd_t **md_out);
+		  __u64 match_bits, lnet_msg_t *msg);
 
 /* message functions */
 int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr,

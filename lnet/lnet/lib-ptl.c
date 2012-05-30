@@ -82,8 +82,7 @@ lnet_ptl_type_match(struct lnet_portal *ptl, lnet_process_id_t match_id,
 static int
 lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 		  unsigned int rlength, unsigned int roffset,
-		  __u64 match_bits, lnet_libmd_t *md, lnet_msg_t *msg,
-		  unsigned int *mlength_out, unsigned int *offset_out)
+		  __u64 match_bits, lnet_libmd_t *md, lnet_msg_t *msg)
 {
 	/* ALWAYS called holding the LNET_LOCK, and can't LNET_UNLOCK;
 	 * lnet_match_blocked_msg() relies on this to avoid races */
@@ -145,22 +144,8 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 	       index, libcfs_id2str(src), mlength, rlength,
 	       md->md_lh.lh_cookie, md->md_niov, offset);
 
-	lnet_commit_md(md, msg);
+	lnet_commit_md(md, msg, offset, mlength);
 	md->md_offset = offset + mlength;
-
-	/* NB Caller will set ev.type and ev.hdr_data */
-	msg->msg_ev.initiator = src;
-	msg->msg_ev.pt_index = index;
-	msg->msg_ev.match_bits = match_bits;
-	msg->msg_ev.rlength = rlength;
-	msg->msg_ev.mlength = mlength;
-	msg->msg_ev.offset = offset;
-
-	lnet_md_deconstruct(md, &msg->msg_ev.md);
-	lnet_md2handle(&msg->msg_ev.md_handle, md);
-
-	*offset_out = offset;
-	*mlength_out = mlength;
 
 	/* Auto-unlink NOW, so the ME gets unlinked if required.
 	 * We bumped md->md_refcount above so the MD just gets flagged
@@ -176,9 +161,7 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 int
 lnet_match_md(int index, int op_mask, lnet_process_id_t src,
 	      unsigned int rlength, unsigned int roffset,
-	      __u64 match_bits, lnet_msg_t *msg,
-	      unsigned int *mlength_out, unsigned int *offset_out,
-	      lnet_libmd_t **md_out)
+	      __u64 match_bits, lnet_msg_t *msg)
 {
 	struct lnet_portal	*ptl = the_lnet.ln_portals[index];
 	cfs_list_t		*head;
@@ -210,8 +193,7 @@ lnet_match_md(int index, int op_mask, lnet_process_id_t src,
 		LASSERT(me == md->md_me);
 
 		rc = lnet_try_match_md(index, op_mask, src, rlength,
-				       roffset, match_bits, md, msg,
-				       mlength_out, offset_out);
+				       roffset, match_bits, md, msg);
 		switch (rc) {
 		default:
 			LBUG();
@@ -220,7 +202,6 @@ lnet_match_md(int index, int op_mask, lnet_process_id_t src,
 			continue;
 
 		case LNET_MATCHMD_OK:
-			*md_out = md;
 			return LNET_MATCHMD_OK;
 
 		case LNET_MATCHMD_DROP:
@@ -262,8 +243,6 @@ lnet_match_blocked_msg(lnet_libmd_t *md)
 	cfs_list_for_each_safe(entry, tmp, &ptl->ptl_msgq) {
 		int               rc;
 		int               index;
-		unsigned int      mlength;
-		unsigned int      offset;
 		lnet_hdr_t       *hdr;
 		lnet_process_id_t src;
 
@@ -280,8 +259,7 @@ lnet_match_blocked_msg(lnet_libmd_t *md)
 		rc = lnet_try_match_md(index, LNET_MD_OP_PUT, src,
 				       hdr->payload_length,
 				       hdr->msg.put.offset,
-				       hdr->msg.put.match_bits,
-				       md, msg, &mlength, &offset);
+				       hdr->msg.put.match_bits, md, msg);
 
 		if (rc == LNET_MATCHMD_NONE)
 			continue;

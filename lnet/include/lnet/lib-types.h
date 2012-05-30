@@ -187,7 +187,9 @@ typedef struct lnet_msg {
         cfs_list_t            msg_list;           /* Q for credits/MD */
 
         lnet_process_id_t     msg_target;
-        __u32                 msg_type;
+	/* where is it from, it's only for building event */
+	lnet_nid_t		msg_from;
+	__u32			msg_type;
 
         unsigned int          msg_vmflush:1;      /* VM trying to free memory */
         unsigned int          msg_target_is_router:1; /* sending to a router */

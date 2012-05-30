@@ -55,6 +55,85 @@ lnet_build_unlink_event (lnet_libmd_t *md, lnet_event_t *ev)
         EXIT;
 }
 
+/*
+ * Don't need any lock, must be called after lnet_commit_md
+ */
+void
+lnet_build_msg_event(lnet_msg_t *msg, lnet_event_kind_t ev_type)
+{
+	lnet_hdr_t	*hdr = &msg->msg_hdr;
+	lnet_event_t	*ev  = &msg->msg_ev;
+
+	LASSERT(!msg->msg_routing);
+
+	ev->type = ev_type;
+
+	if (ev_type == LNET_EVENT_SEND) {
+		/* event for active message */
+		ev->target.nid    = le64_to_cpu(hdr->dest_nid);
+		ev->target.pid    = le32_to_cpu(hdr->dest_pid);
+		ev->initiator.nid = LNET_NID_ANY;
+		ev->initiator.pid = the_lnet.ln_pid;
+		ev->sender        = LNET_NID_ANY;
+
+	} else {
+		/* event for passive message */
+		ev->target.pid    = hdr->dest_pid;
+		ev->target.nid    = hdr->dest_nid;
+		ev->initiator.pid = hdr->src_pid;
+		ev->initiator.nid = hdr->src_nid;
+		ev->rlength       = hdr->payload_length;
+		ev->sender        = msg->msg_from;
+		ev->mlength	  = msg->msg_wanted;
+		ev->offset	  = msg->msg_offset;
+	}
+
+	switch (ev_type) {
+	default:
+		LBUG();
+
+	case LNET_EVENT_PUT: /* passive PUT */
+		ev->pt_index   = hdr->msg.put.ptl_index;
+		ev->match_bits = hdr->msg.put.match_bits;
+		ev->hdr_data   = hdr->msg.put.hdr_data;
+		return;
+
+	case LNET_EVENT_GET: /* passive GET */
+		ev->pt_index   = hdr->msg.get.ptl_index;
+		ev->match_bits = hdr->msg.get.match_bits;
+		ev->hdr_data   = 0;
+		return;
+
+	case LNET_EVENT_ACK: /* ACK */
+		ev->match_bits = hdr->msg.ack.match_bits;
+		ev->mlength    = hdr->msg.ack.mlength;
+		return;
+
+	case LNET_EVENT_REPLY: /* REPLY */
+		return;
+
+	case LNET_EVENT_SEND: /* active message */
+		if (msg->msg_type == LNET_MSG_PUT) {
+			ev->pt_index   = le32_to_cpu(hdr->msg.put.ptl_index);
+			ev->match_bits = le64_to_cpu(hdr->msg.put.match_bits);
+			ev->offset     = le32_to_cpu(hdr->msg.put.offset);
+			ev->mlength    =
+			ev->rlength    = le32_to_cpu(hdr->payload_length);
+			ev->hdr_data   = le64_to_cpu(hdr->msg.put.hdr_data);
+
+		} else {
+			LASSERT(msg->msg_type == LNET_MSG_GET);
+			ev->pt_index   = le32_to_cpu(hdr->msg.get.ptl_index);
+			ev->match_bits = le64_to_cpu(hdr->msg.get.match_bits);
+			ev->mlength    =
+			ev->rlength    = le32_to_cpu(hdr->msg.get.sink_length);
+			ev->offset     = le32_to_cpu(hdr->msg.get.src_offset);
+			ev->hdr_data   = 0;
+		}
+		return;
+	}
+}
+
 void
 lnet_complete_msg_locked(lnet_msg_t *msg)
 {
