@@ -836,7 +836,6 @@ static int ptlrpc_import_delay_req(struct obd_import *imp,
         if (imp->imp_state == LUSTRE_IMP_NEW) {
                 DEBUG_REQ(D_ERROR, req, "Uninitialized import.");
                 *status = -EIO;
-                LBUG();
         } else if (imp->imp_state == LUSTRE_IMP_CLOSED) {
                 DEBUG_REQ(D_ERROR, req, "IMP_CLOSED ");
                 *status = -EIO;
