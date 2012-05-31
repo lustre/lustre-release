@@ -987,17 +987,18 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                               libcfs_nid2str(conn->oic_conn->c_peer.nid));
                 j++;
         }
-        cfs_spin_unlock(&imp->imp_lock);
-        i += snprintf(page + i, count - i,
-                      "]\n"
-                      "       current_connection: %s\n"
-                      "       connection_attempts: %u\n"
-                      "       generation: %u\n"
-                      "       in-progress_invalidations: %u\n",
-                      libcfs_nid2str(imp->imp_connection->c_peer.nid),
-                      imp->imp_conn_cnt,
-                      imp->imp_generation,
-                      cfs_atomic_read(&imp->imp_inval_count));
+	i += snprintf(page + i, count - i,
+		      "]\n"
+		      "       current_connection: %s\n"
+		      "       connection_attempts: %u\n"
+		      "       generation: %u\n"
+		      "       in-progress_invalidations: %u\n",
+		      imp->imp_connection == NULL ? "<none>" :
+			      libcfs_nid2str(imp->imp_connection->c_peer.nid),
+		      imp->imp_conn_cnt,
+		      imp->imp_generation,
+		      cfs_atomic_read(&imp->imp_inval_count));
+	cfs_spin_unlock(&imp->imp_lock);
 
         lprocfs_stats_collect(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR, &ret);
         if (ret.lc_count != 0) {
