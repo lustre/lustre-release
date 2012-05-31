@@ -828,7 +828,8 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       "       connection_attempts: %u\n"
                       "       generation: %u\n"
                       "       in-progress_invalidations: %u\n",
-                      libcfs_nid2str(imp->imp_connection->c_peer.nid),
+                      imp->imp_connection == NULL ? "<none>" :
+                              libcfs_nid2str(imp->imp_connection->c_peer.nid),
                       imp->imp_conn_cnt,
                       imp->imp_generation,
                       atomic_read(&imp->imp_inval_count));
