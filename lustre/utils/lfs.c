@@ -2542,7 +2542,7 @@ static int lfs_ls(int argc, char **argv)
 static int lfs_changelog(int argc, char **argv)
 {
         void *changelog_priv;
-        struct changelog_rec *rec;
+	struct changelog_ext_rec *rec;
         long long startrec = 0, endrec = 0;
         char *mdd;
         struct option long_opts[] = {
@@ -2610,10 +2610,14 @@ static int lfs_changelog(int argc, char **argv)
                        rec->cr_flags & CLF_FLAGMASK, PFID(&rec->cr_tfid));
                 if (rec->cr_namelen)
                         /* namespace rec includes parent and filename */
-                        printf(" p="DFID" %.*s\n", PFID(&rec->cr_pfid),
-                               rec->cr_namelen, rec->cr_name);
-                else
-                        printf("\n");
+			printf(" p="DFID" %.*s", PFID(&rec->cr_pfid),
+				rec->cr_namelen, rec->cr_name);
+		if (fid_is_sane(&rec->cr_sfid))
+			printf(" s="DFID" sp="DFID" %.*s",
+				PFID(&rec->cr_sfid), PFID(&rec->cr_spfid),
+				changelog_rec_snamelen(rec),
+				changelog_rec_sname(rec));
+		printf("\n");
 
                 llapi_changelog_free(&rec);
         }

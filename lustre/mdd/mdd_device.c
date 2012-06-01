@@ -325,6 +325,42 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
         return rc;
 }
 
+/** Add a changelog_ext entry \a rec to the changelog llog
+ * \param mdd
+ * \param rec
+ * \param handle - currently ignored since llogs start their own transaction;
+ *		this will hopefully be fixed in llog rewrite
+ * \retval 0 ok
+ */
+int mdd_changelog_ext_llog_write(struct mdd_device *mdd,
+				 struct llog_changelog_ext_rec *rec,
+				 struct thandle *handle)
+{
+	struct obd_device *obd = mdd2obd_dev(mdd);
+	struct llog_ctxt *ctxt;
+	int rc;
+
+	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
+	/* llog_lvfs_write_rec sets the llog tail len */
+	rec->cr_hdr.lrh_type = CHANGELOG_REC;
+	rec->cr.cr_time = cl_time();
+	cfs_spin_lock(&mdd->mdd_cl.mc_lock);
+	/* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
+	 * but as long as the MDD transactions are ordered correctly for e.g.
+	 * rename conflicts, I don't think this should matter. */
+	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
+	cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
+	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+	if (ctxt == NULL)
+		return -ENXIO;
+
+	/* nested journal transaction */
+	rc = llog_add(ctxt, &rec->cr_hdr, NULL, NULL, 0);
+	llog_ctxt_put(ctxt);
+
+	return rc;
+}
+
 /** Remove entries with indicies up to and including \a endrec from the
  *  changelog
  * \param mdd

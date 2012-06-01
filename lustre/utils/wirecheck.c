@@ -226,9 +226,9 @@ check_ost_id(void)
         CHECK_VALUE_64X(FID_SEQ_NORMAL);
         CHECK_VALUE_64X(FID_SEQ_LOV_DEFAULT);
 
-        CHECK_VALUE(FID_OID_SPECIAL_BFL);
-        CHECK_VALUE(FID_OID_DOT_LUSTRE);
-        CHECK_VALUE(FID_OID_DOT_LUSTRE_OBF);
+        CHECK_VALUE_X(FID_OID_SPECIAL_BFL);
+        CHECK_VALUE_X(FID_OID_DOT_LUSTRE);
+        CHECK_VALUE_X(FID_OID_DOT_LUSTRE_OBF);
 }
 
 static void
@@ -590,6 +590,7 @@ check_lov_mds_md_v1(void)
         CHECK_MEMBER(lov_mds_md_v1, lmm_object_seq);
         CHECK_MEMBER(lov_mds_md_v1, lmm_stripe_size);
         CHECK_MEMBER(lov_mds_md_v1, lmm_stripe_count);
+	CHECK_MEMBER(lov_mds_md_v1, lmm_layout_gen);
         CHECK_MEMBER(lov_mds_md_v1, lmm_objects[0]);
 
         CHECK_CDEFINE(LOV_MAGIC_V1);
@@ -606,6 +607,7 @@ check_lov_mds_md_v3(void)
         CHECK_MEMBER(lov_mds_md_v3, lmm_object_seq);
         CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_size);
         CHECK_MEMBER(lov_mds_md_v3, lmm_stripe_count);
+	CHECK_MEMBER(lov_mds_md_v3, lmm_layout_gen);
         CHECK_CVALUE(LOV_MAXPOOLNAME);
         CHECK_MEMBER(lov_mds_md_v3, lmm_pool_name[LOV_MAXPOOLNAME]);
         CHECK_MEMBER(lov_mds_md_v3, lmm_objects[0]);
@@ -1397,6 +1399,23 @@ check_changelog_rec(void)
 }
 
 static void
+check_changelog_rec_ext(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(changelog_ext_rec);
+	CHECK_MEMBER(changelog_ext_rec, cr_namelen);
+	CHECK_MEMBER(changelog_ext_rec, cr_flags);
+	CHECK_MEMBER(changelog_ext_rec, cr_type);
+	CHECK_MEMBER(changelog_ext_rec, cr_index);
+	CHECK_MEMBER(changelog_ext_rec, cr_prev);
+	CHECK_MEMBER(changelog_ext_rec, cr_time);
+	CHECK_MEMBER(changelog_ext_rec, cr_tfid);
+	CHECK_MEMBER(changelog_ext_rec, cr_pfid);
+	CHECK_MEMBER(changelog_ext_rec, cr_sfid);
+	CHECK_MEMBER(changelog_ext_rec, cr_spfid);
+}
+
+static void
 check_changelog_setinfo(void)
 {
         BLANK_LINE();
@@ -2064,6 +2083,7 @@ main(int argc, char **argv)
         check_llog_setattr64_rec();
         check_llog_size_change_rec();
         check_changelog_rec();
+	check_changelog_rec_ext();
         check_changelog_setinfo();
         check_llog_changelog_rec();
         check_llog_changelog_user_rec();

@@ -240,11 +240,16 @@ extern int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags);
    slow user parsing of the records, but it also prevents us from cleaning
    up if the records are not consumed. */
 
+/* Records received are in extentded format now, though most of them are still
+ * written in disk in changelog_rec format (to save space and time), it's
+ * converted to extented format in liblustre to ease changelog analysis. */
+#define HAVE_CHANGELOG_EXTEND_REC 1
+
 extern int llapi_changelog_start(void **priv, int flags, const char *mdtname,
                                  long long startrec);
 extern int llapi_changelog_fini(void **priv);
-extern int llapi_changelog_recv(void *priv, struct changelog_rec **rech);
-extern int llapi_changelog_free(struct changelog_rec **rech);
+extern int llapi_changelog_recv(void *priv, struct changelog_ext_rec **rech);
+extern int llapi_changelog_free(struct changelog_ext_rec **rech);
 /* Allow records up to endrec to be destroyed; requires registered id. */
 extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
                                  long long endrec);

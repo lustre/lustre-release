@@ -3569,6 +3569,24 @@ int llapi_changelog_fini(void **priv)
         return 0;
 }
 
+/** Convert a changelog_rec to changelog_ext_rec, in this way client can treat
+ *  all records in the format of changelog_ext_rec, this can make record
+ *  analysis simpler.
+ */
+static inline int changelog_extend_rec(struct changelog_ext_rec *ext)
+{
+	if (!CHANGELOG_REC_EXTENDED(ext)) {
+		struct changelog_rec *rec = (struct changelog_rec *)ext;
+
+		memmove(ext->cr_name, rec->cr_name, rec->cr_namelen);
+		fid_zero(&ext->cr_sfid);
+		fid_zero(&ext->cr_spfid);
+		return 1;
+	}
+
+	return 0;
+}
+
 /** Read the next changelog entry
  * @param priv Opaque private control structure
  * @param rech Changelog record handle; record will be allocated here
@@ -3576,7 +3594,7 @@ int llapi_changelog_fini(void **priv)
  *         <0 error code
  *         1 EOF
  */
-int llapi_changelog_recv(void *priv, struct changelog_rec **rech)
+int llapi_changelog_recv(void *priv, struct changelog_ext_rec **rech)
 {
         struct changelog_private *cp = (struct changelog_private *)priv;
         struct kuc_hdr *kuch;
@@ -3617,10 +3635,11 @@ repeat:
                 }
         }
 
-        /* Our message is a changelog_rec.  Use pointer math to skip
-         * kuch_hdr and point directly to the message payload.
-         */
-        *rech = (struct changelog_rec *)(kuch + 1);
+	/* Our message is a changelog_ext_rec.  Use pointer math to skip
+	 * kuch_hdr and point directly to the message payload.
+	 */
+	*rech = (struct changelog_ext_rec *)(kuch + 1);
+	changelog_extend_rec(*rech);
 
         return 0;
 
@@ -3631,7 +3650,7 @@ out_free:
 }
 
 /** Release the changelog record when done with it. */
-int llapi_changelog_free(struct changelog_rec **rech)
+int llapi_changelog_free(struct changelog_ext_rec **rech)
 {
         if (*rech) {
                 /* We allocated memory starting at the kuc_hdr, but passed
@@ -3917,8 +3936,8 @@ out_free:
 /** Release the action list when done with it. */
 int llapi_copytool_free(struct hsm_action_list **hal)
 {
-        /* Reuse the llapi_changelog_free function */
-        return llapi_changelog_free((struct changelog_rec **)hal);
+	/* Reuse the llapi_changelog_free function */
+	return llapi_changelog_free((struct changelog_ext_rec **)hal);
 }
 
 int llapi_get_connect_flags(const char *mnt, __u64 *flags)
