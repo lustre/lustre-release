@@ -342,8 +342,8 @@ typedef struct {
  * Six types of events can be logged in an event queue.
  */
 typedef enum {
-        /** An incoming GET operation has completed on the MD. */
-        LNET_EVENT_GET,
+	/** An incoming GET operation has completed on the MD. */
+	LNET_EVENT_GET		= 1,
         /**
          * An incoming PUT operation has completed on the MD. The
          * underlying layers will not alter the memory (on behalf of this

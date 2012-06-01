@@ -144,7 +144,7 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 	       index, libcfs_id2str(src), mlength, rlength,
 	       md->md_lh.lh_cookie, md->md_niov, offset);
 
-	lnet_commit_md(md, msg, offset, mlength);
+	lnet_msg_attach_md(msg, md, offset, mlength);
 	md->md_offset = offset + mlength;
 
 	/* Auto-unlink NOW, so the ME gets unlinked if required.

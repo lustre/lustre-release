@@ -623,15 +623,20 @@ lnet_remotenet_t *lnet_find_net_locked (__u32 net);
 int lnet_islocalnid(lnet_nid_t nid);
 int lnet_islocalnet(__u32 net);
 
-void lnet_commit_md(lnet_libmd_t *md, lnet_msg_t *msg,
-		    unsigned int offset, unsigned int mlen);
+void lnet_msg_attach_md(lnet_msg_t *msg, lnet_libmd_t *md,
+			unsigned int offset, unsigned int mlen);
+void lnet_msg_detach_md(lnet_msg_t *msg, int status);
 void lnet_build_unlink_event(lnet_libmd_t *md, lnet_event_t *ev);
 void lnet_build_msg_event(lnet_msg_t *msg, lnet_event_kind_t ev_type);
+void lnet_msg_commit(lnet_msg_t *msg, int sending);
+void lnet_msg_decommit(lnet_msg_t *msg, int status);
+
 void lnet_eq_enqueue_event(lnet_eq_t *eq, lnet_event_t *ev);
 void lnet_prep_send(lnet_msg_t *msg, int type, lnet_process_id_t target,
                     unsigned int offset, unsigned int len);
 int lnet_send(lnet_nid_t nid, lnet_msg_t *msg);
-void lnet_return_credits_locked (lnet_msg_t *msg);
+void lnet_return_tx_credits_locked(lnet_msg_t *msg);
+void lnet_return_rx_credits_locked(lnet_msg_t *msg);
 
 /* portals functions */
 static inline int

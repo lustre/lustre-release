@@ -922,26 +922,6 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
 }
 
 #ifdef __KERNEL__
-static void
-lnet_commit_routedmsg (lnet_msg_t *msg)
-{
-        /* ALWAYS called holding the LNET_LOCK */
-        LASSERT (msg->msg_routing);
-
-        the_lnet.ln_counters.msgs_alloc++;
-        if (the_lnet.ln_counters.msgs_alloc >
-            the_lnet.ln_counters.msgs_max)
-                the_lnet.ln_counters.msgs_max =
-                        the_lnet.ln_counters.msgs_alloc;
-
-        the_lnet.ln_counters.route_count++;
-        the_lnet.ln_counters.route_length += msg->msg_len;
-
-        LASSERT (!msg->msg_onactivelist);
-        msg->msg_onactivelist = 1;
-	cfs_list_add(&msg->msg_activelist,
-		     &the_lnet.ln_msg_container.msc_active);
-}
 
 lnet_rtrbufpool_t *
 lnet_msg2bufpool(lnet_msg_t *msg)
@@ -1031,12 +1011,11 @@ lnet_post_routed_recv_locked (lnet_msg_t *msg, int do_recv)
 #endif
 
 void
-lnet_return_credits_locked (lnet_msg_t *msg)
+lnet_return_tx_credits_locked(lnet_msg_t *msg)
 {
-        lnet_peer_t       *txpeer = msg->msg_txpeer;
-        lnet_peer_t       *rxpeer = msg->msg_rxpeer;
-        lnet_msg_t        *msg2;
-        lnet_ni_t         *ni;
+	lnet_peer_t	*txpeer = msg->msg_txpeer;
+	lnet_msg_t	*msg2;
+	lnet_ni_t	*ni;
 
         if (msg->msg_txcredit) {
                 /* give back NI txcredits */
@@ -1085,8 +1064,15 @@ lnet_return_credits_locked (lnet_msg_t *msg)
                 msg->msg_txpeer = NULL;
                 lnet_peer_decref_locked(txpeer);
         }
+}
 
+void
+lnet_return_rx_credits_locked(lnet_msg_t *msg)
+{
+	lnet_peer_t	*rxpeer = msg->msg_rxpeer;
 #ifdef __KERNEL__
+	lnet_msg_t	*msg2;
+
         if (msg->msg_rtrcredit) {
                 /* give back global router credits */
                 lnet_rtrbuf_t     *rb;
@@ -1237,6 +1223,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
                 LASSERT (!msg->msg_routing);
         }
 
+	lnet_msg_commit(msg, 1);
         /* Is this for someone on a local network? */
         local_ni = lnet_net2ni_locked(LNET_NIDNET(dst_nid));
 
@@ -1353,43 +1340,6 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
         return 0;
 }
 
-void
-lnet_commit_md(lnet_libmd_t *md, lnet_msg_t *msg,
-	       unsigned int offset, unsigned int mlen)
-{
-        /* ALWAYS called holding the LNET_LOCK */
-        /* Here, we commit the MD to a network OP by marking it busy and
-         * decrementing its threshold.  Come what may, the network "owns"
-         * the MD until a call to lnet_finalize() signals completion. */
-        LASSERT (!msg->msg_routing);
-
-        msg->msg_md = md;
-	lnet_md_deconstruct(md, &msg->msg_ev.md);
-	lnet_md2handle(&msg->msg_ev.md_handle, md);
-
-	if (msg->msg_receiving) {
-		msg->msg_offset = offset;
-		msg->msg_wanted = mlen;
-	}
-
-        md->md_refcount++;
-        if (md->md_threshold != LNET_MD_THRESH_INF) {
-                LASSERT (md->md_threshold > 0);
-                md->md_threshold--;
-        }
-
-        the_lnet.ln_counters.msgs_alloc++;
-        if (the_lnet.ln_counters.msgs_alloc > 
-            the_lnet.ln_counters.msgs_max)
-                the_lnet.ln_counters.msgs_max = 
-                        the_lnet.ln_counters.msgs_alloc;
-
-        LASSERT (!msg->msg_onactivelist);
-        msg->msg_onactivelist = 1;
-	cfs_list_add(&msg->msg_activelist,
-		     &the_lnet.ln_msg_container.msc_active);
-}
-
 static void
 lnet_drop_message (lnet_ni_t *ni, void *private, unsigned int nob)
 {
@@ -1405,13 +1355,6 @@ static void
 lnet_recv_put(lnet_ni_t *ni, lnet_msg_t *msg)
 {
 	lnet_hdr_t	*hdr = &msg->msg_hdr;
-
-	LNET_LOCK();
-
-	the_lnet.ln_counters.recv_count++;
-	the_lnet.ln_counters.recv_length += msg->msg_wanted;
-
-	LNET_UNLOCK();
 
 	if (msg->msg_wanted != 0)
 		lnet_setpayloadbuffer(msg);
@@ -1538,9 +1481,6 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 
         LASSERT (rc == LNET_MATCHMD_OK);
 
-        the_lnet.ln_counters.send_count++;
-	the_lnet.ln_counters.send_length += msg->msg_wanted;
-
 	LNET_UNLOCK();
 
 	lnet_build_msg_event(msg, LNET_EVENT_GET);
@@ -1626,13 +1566,10 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
                libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), 
                mlength, rlength, hdr->msg.reply.dst_wmd.wh_object_cookie);
 
-	lnet_commit_md(md, msg, 0, mlength);
+	lnet_msg_attach_md(msg, md, 0, mlength);
 
         if (mlength != 0)
                 lnet_setpayloadbuffer(msg);
-
-        the_lnet.ln_counters.recv_count++;
-        the_lnet.ln_counters.recv_length += mlength;
 
         LNET_UNLOCK();
 
@@ -1680,9 +1617,7 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
                libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), 
                hdr->msg.ack.dst_wmd.wh_object_cookie);
 
-	lnet_commit_md(md, msg, 0, 0);
-
-	the_lnet.ln_counters.recv_count++;
+	lnet_msg_attach_md(msg, md, 0, 0);
 
 	LNET_UNLOCK();
 
@@ -1925,8 +1860,11 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
                        "(error %d looking up sender)\n",
                        libcfs_nid2str(from_nid), libcfs_nid2str(src_nid),
                        lnet_msgtyp2str(type), rc);
-                goto free_drop;
-        }
+		lnet_msg_free(msg);
+		goto drop;
+	}
+
+	lnet_msg_commit(msg, 0);
         LNET_UNLOCK();
 
 #ifndef __KERNEL__
@@ -1947,7 +1885,6 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
                                 goto free_drop;
                         }
                 }
-                lnet_commit_routedmsg(msg);
                 rc = lnet_post_routed_recv_locked(msg, 0);
                 LNET_UNLOCK();
 
@@ -1980,6 +1917,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
                 break;
         default:
                 LASSERT(0);
+		rc = -EPROTO;
                 goto free_drop;  /* prevent an unused label if !kernel */
         }
 
@@ -1989,18 +1927,12 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
         LASSERT (rc == ENOENT);
 
  free_drop:
-        LASSERT (msg->msg_md == NULL);
-        LNET_LOCK();
-        if (msg->msg_rxpeer != NULL) {
-                lnet_peer_decref_locked(msg->msg_rxpeer);
-                msg->msg_rxpeer = NULL;
-        }
-	lnet_msg_free_locked(msg);	/* expects LNET_LOCK held */
-        LNET_UNLOCK();
+	LASSERT(msg->msg_md == NULL);
+	lnet_finalize(ni, msg, rc);
 
  drop:
-        lnet_drop_message(ni, private, payload_length);
-        return 0;
+	lnet_drop_message(ni, private, payload_length);
+	return 0;
 }
 
 void
@@ -2168,7 +2100,7 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
 
         CDEBUG(D_NET, "LNetPut -> %s\n", libcfs_id2str(target));
 
-	lnet_commit_md(md, msg, 0, 0);
+	lnet_msg_attach_md(msg, md, 0, 0);
 
         lnet_prep_send(msg, LNET_MSG_PUT, target, 0, md->md_length);
 
@@ -2189,9 +2121,6 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
                 msg->msg_hdr.msg.put.ack_wmd.wh_object_cookie = 
                         LNET_WIRE_HANDLE_COOKIE_NONE;
         }
-
-        the_lnet.ln_counters.send_count++;
-        the_lnet.ln_counters.send_length += md->md_length;
 
         LNET_UNLOCK();
 
@@ -2252,11 +2181,10 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
         msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
 	msg->msg_hdr.src_nid = peer_id.nid;
 	msg->msg_hdr.payload_length = getmd->md_length;
+	msg->msg_receiving = 1; /* required by lnet_msg_attach_md */
 
-	lnet_commit_md(getmd, msg, getmd->md_offset, getmd->md_length);
-
-	the_lnet.ln_counters.recv_count++;
-	the_lnet.ln_counters.recv_length += getmd->md_length;
+	lnet_msg_attach_md(msg, getmd, getmd->md_offset, getmd->md_length);
+	lnet_msg_commit(msg, 0);
 
 	LNET_UNLOCK();
 
@@ -2357,7 +2285,7 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
 
         CDEBUG(D_NET, "LNetGet -> %s\n", libcfs_id2str(target));
 
-	lnet_commit_md(md, msg, 0, 0);
+	lnet_msg_attach_md(msg, md, 0, 0);
 
         lnet_prep_send(msg, LNET_MSG_GET, target, 0, 0);
 
@@ -2371,8 +2299,6 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
                 the_lnet.ln_interface_cookie;
         msg->msg_hdr.msg.get.return_wmd.wh_object_cookie = 
                 md->md_lh.lh_cookie;
-
-        the_lnet.ln_counters.send_count++;
 
         LNET_UNLOCK();
 

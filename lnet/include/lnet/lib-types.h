@@ -191,6 +191,9 @@ typedef struct lnet_msg {
 	lnet_nid_t		msg_from;
 	__u32			msg_type;
 
+	unsigned int		msg_rx_committed:1;
+	unsigned int		msg_tx_committed:1;
+
         unsigned int          msg_vmflush:1;      /* VM trying to free memory */
         unsigned int          msg_target_is_router:1; /* sending to a router */
         unsigned int          msg_routing:1;      /* being forwarded */
