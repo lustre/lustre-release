@@ -609,69 +609,146 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
-
 /** Store a namespace change changelog record
  * If this fails, we must fail the whole transaction; we don't
  * want the change to commit without the log entry.
  * \param target - mdd_object of change
  * \param parent - parent dir/object
- * \param tf - target lu_fid, overrides fid of \a target if this is non-null
  * \param tname - target name string
  * \param handle - transacion handle
  */
 static int mdd_changelog_ns_store(const struct lu_env  *env,
-                                  struct mdd_device    *mdd,
-                                  enum changelog_rec_type type,
-                                  int flags,
-                                  struct mdd_object    *target,
-                                  struct mdd_object    *parent,
-                                  const struct lu_fid  *tf,
-                                  const struct lu_name *tname,
-                                  struct thandle *handle)
+				  struct mdd_device    *mdd,
+				  enum changelog_rec_type type,
+				  unsigned flags,
+				  struct mdd_object    *target,
+				  struct mdd_object    *parent,
+				  const struct lu_name *tname,
+				  struct thandle *handle)
 {
-        const struct lu_fid *tfid;
-        const struct lu_fid *tpfid = mdo2fid(parent);
-        struct llog_changelog_rec *rec;
-        struct lu_buf *buf;
-        int reclen;
-        int rc;
-        ENTRY;
+	struct llog_changelog_rec *rec;
+	struct lu_buf *buf;
+	int reclen;
+	int rc;
+	ENTRY;
 
-        /* Not recording */
-        if (!(mdd->mdd_cl.mc_flags & CLM_ON))
-                RETURN(0);
-        if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
-                RETURN(0);
+	/* Not recording */
+	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+		RETURN(0);
+	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
+		RETURN(0);
 
-        LASSERT(parent != NULL);
-        LASSERT(tname != NULL);
-        LASSERT(handle != NULL);
+	LASSERT(target != NULL);
+	LASSERT(parent != NULL);
+	LASSERT(tname != NULL);
+	LASSERT(handle != NULL);
 
-        /* target */
-        reclen = llog_data_len(sizeof(*rec) + tname->ln_namelen);
-        buf = mdd_buf_alloc(env, reclen);
-        if (buf->lb_buf == NULL)
-                RETURN(-ENOMEM);
-        rec = (struct llog_changelog_rec *)buf->lb_buf;
+	reclen = llog_data_len(sizeof(*rec) + tname->ln_namelen);
+	buf = mdd_buf_alloc(env, reclen);
+	if (buf->lb_buf == NULL)
+		RETURN(-ENOMEM);
+	rec = (struct llog_changelog_rec *)buf->lb_buf;
 
-        rec->cr.cr_flags = CLF_VERSION | (CLF_FLAGMASK & flags);
-        rec->cr.cr_type = (__u32)type;
-        tfid = tf ? tf : mdo2fid(target);
-        rec->cr.cr_tfid = *tfid;
-        rec->cr.cr_pfid = *tpfid;
-        rec->cr.cr_namelen = tname->ln_namelen;
-        memcpy(rec->cr.cr_name, tname->ln_name, rec->cr.cr_namelen);
-        if (likely(target))
-                target->mod_cltime = cfs_time_current_64();
+	rec->cr.cr_flags = CLF_VERSION | (CLF_FLAGMASK & flags);
+	rec->cr.cr_type = (__u32)type;
+	rec->cr.cr_tfid = *mdo2fid(target);
+	rec->cr.cr_pfid = *mdo2fid(parent);
+	rec->cr.cr_namelen = tname->ln_namelen;
+	memcpy(rec->cr.cr_name, tname->ln_name, tname->ln_namelen);
 
-        rc = mdd_changelog_llog_write(mdd, rec, handle);
-        if (rc < 0) {
-                CERROR("changelog failed: rc=%d, op%d %s c"DFID" p"DFID"\n",
-                       rc, type, tname->ln_name, PFID(tfid), PFID(tpfid));
-                return -EFAULT;
-        }
+	target->mod_cltime = cfs_time_current_64();
 
-        return 0;
+	rc = mdd_changelog_llog_write(mdd, rec, handle);
+	if (rc < 0) {
+		CERROR("changelog failed: rc=%d, op%d %s c"DFID" p"DFID"\n",
+			rc, type, tname->ln_name, PFID(&rec->cr.cr_tfid),
+			PFID(&rec->cr.cr_pfid));
+		RETURN(-EFAULT);
+	}
+
+	RETURN(0);
+}
+
+
+/** Store a namespace change changelog record
+ * If this fails, we must fail the whole transaction; we don't
+ * want the change to commit without the log entry.
+ * \param target - mdd_object of change
+ * \param tpfid - target parent dir/object fid
+ * \param sfid - source object fid
+ * \param spfid - source parent fid
+ * \param tname - target name string
+ * \param sname - source name string
+ * \param handle - transacion handle
+ */
+static int mdd_changelog_ext_ns_store(const struct lu_env  *env,
+				      struct mdd_device    *mdd,
+				      enum changelog_rec_type type,
+				      unsigned flags,
+				      struct mdd_object    *target,
+				      const struct lu_fid  *tpfid,
+				      const struct lu_fid  *sfid,
+				      const struct lu_fid  *spfid,
+				      const struct lu_name *tname,
+				      const struct lu_name *sname,
+				      struct thandle *handle)
+{
+	struct llog_changelog_ext_rec *rec;
+	struct lu_buf *buf;
+	int reclen;
+	int rc;
+	ENTRY;
+
+	/* Not recording */
+	if (!(mdd->mdd_cl.mc_flags & CLM_ON))
+		RETURN(0);
+	if ((mdd->mdd_cl.mc_mask & (1 << type)) == 0)
+		RETURN(0);
+
+	LASSERT(sfid != NULL);
+	LASSERT(tpfid != NULL);
+	LASSERT(tname != NULL);
+	LASSERT(handle != NULL);
+
+	reclen = sizeof(*rec) + tname->ln_namelen;
+	if (sname != NULL)
+		reclen += 1 + sname->ln_namelen;
+	reclen = llog_data_len(reclen);
+	buf = mdd_buf_alloc(env, reclen);
+	if (buf->lb_buf == NULL)
+		RETURN(-ENOMEM);
+	rec = (struct llog_changelog_ext_rec *)buf->lb_buf;
+
+	rec->cr.cr_flags = CLF_EXT_VERSION | (CLF_FLAGMASK & flags);
+	rec->cr.cr_type = (__u32)type;
+	rec->cr.cr_pfid = *tpfid;
+	rec->cr.cr_sfid = *sfid;
+	rec->cr.cr_spfid = *spfid;
+	rec->cr.cr_namelen = tname->ln_namelen;
+	memcpy(rec->cr.cr_name, tname->ln_name, tname->ln_namelen);
+	if (sname) {
+		LASSERT(sfid != NULL);
+		rec->cr.cr_name[tname->ln_namelen] = '\0';
+		memcpy(rec->cr.cr_name + tname->ln_namelen + 1, sname->ln_name,
+			sname->ln_namelen);
+		rec->cr.cr_namelen += 1 + sname->ln_namelen;
+	}
+
+	if (likely(target != NULL)) {
+		rec->cr.cr_tfid = *mdo2fid(target);
+		target->mod_cltime = cfs_time_current_64();
+	} else {
+		fid_zero(&rec->cr.cr_tfid);
+	}
+
+	rc = mdd_changelog_ext_llog_write(mdd, rec, handle);
+	if (rc < 0) {
+		CERROR("changelog failed: rc=%d, op%d %s c"DFID" p"DFID"\n",
+			rc, type, tname->ln_name, PFID(sfid), PFID(tpfid));
+		return -EFAULT;
+	}
+
+	return 0;
 }
 
 static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
@@ -756,8 +833,8 @@ out_unlock:
         mdd_pdo_write_unlock(env, mdd_tobj, dlh);
 out_trans:
         if (rc == 0)
-                rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, 0, mdd_sobj,
-                                            mdd_tobj, NULL, lname, handle);
+		rc = mdd_changelog_ns_store(env, mdd, CL_HARDLINK, 0, mdd_sobj,
+					    mdd_tobj, lname, handle);
         mdd_trans_stop(env, mdd, rc, handle);
 out_pending:
 #ifdef HAVE_QUOTA_SUPPORT
@@ -937,9 +1014,9 @@ out_trans:
                     (ma->ma_hsm.mh_flags & HS_EXISTS))
                         cl_flags |= CLF_UNLINK_HSM_EXISTS;
 
-                rc = mdd_changelog_ns_store(env, mdd,
-                         is_dir ? CL_RMDIR : CL_UNLINK, cl_flags,
-                         mdd_cobj, mdd_pobj, NULL, lname, handle);
+		rc = mdd_changelog_ns_store(env, mdd,
+			is_dir ? CL_RMDIR : CL_UNLINK, cl_flags,
+			mdd_cobj, mdd_pobj, lname, handle);
         }
 
         mdd_trans_stop(env, mdd, rc, handle);
@@ -1220,6 +1297,7 @@ static int mdd_rename_tgt(const struct lu_env *env,
         int quota_copc = 0, quota_popc = 0;
         int rec_pending[MAXQUOTAS] = { 0, 0 };
 #endif
+	int cl_flags = 0;
         int rc;
         ENTRY;
 
@@ -1300,13 +1378,15 @@ static int mdd_rename_tgt(const struct lu_env *env,
                 if (rc)
                         GOTO(cleanup, rc);
 
+		if (ma->ma_valid & MA_INODE && ma->ma_attr.la_nlink == 0) {
+			cl_flags |= CLF_RENAME_LAST;
 #ifdef HAVE_QUOTA_SUPPORT
-                if (mds->mds_quota && ma->ma_valid & MA_INODE &&
-                    ma->ma_attr.la_nlink == 0 && mdd_tobj->mod_count == 0) {
-                        quota_copc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
-                        mdd_quota_wrapper(&ma->ma_attr, qcids);
-                }
+			if (mds->mds_quota && mdd_tobj->mod_count == 0) {
+				quota_copc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
+				mdd_quota_wrapper(&ma->ma_attr, qcids);
+			}
 #endif
+		}
         }
         EXIT;
 cleanup:
@@ -1315,10 +1395,10 @@ cleanup:
         mdd_pdo_write_unlock(env, mdd_tpobj, dlh);
 out_trans:
         if (rc == 0)
-                /* Bare EXT record with no RENAME in front of it signifies
-                   a partial slave op */
-                rc = mdd_changelog_ns_store(env, mdd, CL_EXT, 0, mdd_tobj,
-                                            mdd_tpobj, NULL, lname, handle);
+		/* Bare EXT record with no RENAME in front of it signifies
+		   a partial slave op */
+		rc = mdd_changelog_ns_store(env, mdd, CL_EXT, cl_flags,
+					    mdd_tobj, mdd_tpobj, lname, handle);
 
         mdd_trans_stop(env, mdd, rc, handle);
 out_pending:
@@ -1874,11 +1954,11 @@ cleanup:
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
         if (rc == 0)
-                rc = mdd_changelog_ns_store(env, mdd,
-                            S_ISDIR(attr->la_mode) ? CL_MKDIR :
-                            S_ISREG(attr->la_mode) ? CL_CREATE :
-                            S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
-                            0, son, mdd_pobj, NULL, lname, handle);
+		rc = mdd_changelog_ns_store(env, mdd,
+			S_ISDIR(attr->la_mode) ? CL_MKDIR :
+			S_ISREG(attr->la_mode) ? CL_CREATE :
+			S_ISLNK(attr->la_mode) ? CL_SOFTLINK : CL_MKNOD,
+			0, son, mdd_pobj, lname, handle);
         mdd_trans_stop(env, mdd, rc, handle);
 out_free:
         /* finish lov_create stuff, free all temporary data */
@@ -2009,6 +2089,7 @@ static int mdd_rename(const struct lu_env *env,
         const struct lu_fid *tpobj_fid = mdo2fid(mdd_tpobj);
         const struct lu_fid *spobj_fid = mdo2fid(mdd_spobj);
         int is_dir;
+	unsigned cl_flags = 0;
         int rc, rc2;
 
 #ifdef HAVE_QUOTA_SUPPORT
@@ -2176,13 +2257,15 @@ static int mdd_rename(const struct lu_env *env,
                 if (rc)
                         GOTO(fixup_tpobj, rc);
 
+		if (ma->ma_valid & MA_INODE && ma->ma_attr.la_nlink == 0) {
+			cl_flags |= CLF_RENAME_LAST;
 #ifdef HAVE_QUOTA_SUPPORT
-                if (mds->mds_quota && ma->ma_valid & MA_INODE &&
-                    ma->ma_attr.la_nlink == 0 && mdd_tobj->mod_count == 0) {
-                        quota_copc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
-                        mdd_quota_wrapper(&ma->ma_attr, qtcids);
-                }
+			if (mds->mds_quota && mdd_tobj->mod_count == 0) {
+				quota_copc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
+				mdd_quota_wrapper(&ma->ma_attr, qtcids);
+			}
 #endif
+		}
         }
 
         la->la_valid = LA_CTIME | LA_MTIME;
@@ -2260,18 +2343,10 @@ cleanup:
                 mdd_pdo_write_unlock(env, mdd_spobj, sdlh);
 cleanup_unlocked:
         if (rc == 0)
-                rc = mdd_changelog_ns_store(env, mdd, CL_RENAME, 0, mdd_tobj,
-                                            mdd_spobj, lf, lsname, handle);
-        if (rc == 0) {
-                struct lu_fid zero_fid;
-                fid_zero(&zero_fid);
-                /* If the rename target exist, The CL_EXT record should save
-                 * the target fid as tfid, otherwise, use zero fid. LU-543 */
-                rc = mdd_changelog_ns_store(env, mdd, CL_EXT, 0, mdd_tobj,
-                                            mdd_tpobj,
-                                            mdd_tobj ? NULL : &zero_fid,
-                                            ltname, handle);
-        }
+		rc = mdd_changelog_ext_ns_store(env, mdd, CL_RENAME, cl_flags,
+						mdd_tobj, tpobj_fid, lf,
+						spobj_fid, ltname, lsname,
+						handle);
 
         mdd_trans_stop(env, mdd, rc, handle);
         if (mdd_sobj)

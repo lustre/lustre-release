@@ -1250,14 +1250,14 @@ static int changelog_show_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
                 RETURN(0);
         }
 
-        CDEBUG(D_CHANGELOG, LPU64" %02d%-5s "LPU64" 0x%x t="DFID" p="DFID
-               " %.*s\n", rec->cr.cr_index, rec->cr.cr_type,
-               changelog_type2str(rec->cr.cr_type), rec->cr.cr_time,
-               rec->cr.cr_flags & CLF_FLAGMASK,
-               PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid),
-               rec->cr.cr_namelen, rec->cr.cr_name);
+	CDEBUG(D_CHANGELOG, LPU64" %02d%-5s "LPU64" 0x%x t="DFID" p="DFID
+		" %.*s\n", rec->cr.cr_index, rec->cr.cr_type,
+		changelog_type2str(rec->cr.cr_type), rec->cr.cr_time,
+		rec->cr.cr_flags & CLF_FLAGMASK,
+		PFID(&rec->cr.cr_tfid), PFID(&rec->cr.cr_pfid),
+		rec->cr.cr_namelen, changelog_rec_name(&rec->cr));
 
-        len = sizeof(*lh) + sizeof(rec->cr) + rec->cr.cr_namelen;
+	len = sizeof(*lh) + changelog_rec_size(&rec->cr) + rec->cr.cr_namelen;
 
         /* Set up the message */
         lh = changelog_kuc_hdr(cs->cs_buf, len, cs->cs_flags);

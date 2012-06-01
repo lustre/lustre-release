@@ -1023,6 +1023,32 @@ check_changelog_rec(void)
 }
 
 static void
+check_changelog_rec_ext(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(changelog_ext_rec);
+	CHECK_MEMBER(changelog_ext_rec, cr_namelen);
+	CHECK_MEMBER(changelog_ext_rec, cr_flags);
+	CHECK_MEMBER(changelog_ext_rec, cr_type);
+	CHECK_MEMBER(changelog_ext_rec, cr_index);
+	CHECK_MEMBER(changelog_ext_rec, cr_prev);
+	CHECK_MEMBER(changelog_ext_rec, cr_time);
+	CHECK_MEMBER(changelog_ext_rec, cr_tfid);
+	CHECK_MEMBER(changelog_ext_rec, cr_pfid);
+	CHECK_MEMBER(changelog_ext_rec, cr_sfid);
+	CHECK_MEMBER(changelog_ext_rec, cr_spfid);
+}
+
+static void
+check_changelog_setinfo(void)
+{
+        BLANK_LINE();
+        CHECK_STRUCT(changelog_setinfo);
+        CHECK_MEMBER(changelog_setinfo, cs_recno);
+        CHECK_MEMBER(changelog_setinfo, cs_id);
+}
+
+static void
 check_llog_changelog_rec(void)
 {
         BLANK_LINE();
@@ -1544,6 +1570,8 @@ main(int argc, char **argv)
         check_llog_setattr64_rec();
         check_llog_size_change_rec();
         check_changelog_rec();
+	check_changelog_rec_ext();
+        check_changelog_setinfo();
         check_llog_changelog_rec();
         check_llog_gen();
         check_llog_gen_rec();

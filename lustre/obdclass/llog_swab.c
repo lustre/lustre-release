@@ -165,6 +165,13 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec, struct llog_rec_tail *tail)
                 __swab64s(&cr->cr.cr_time);
                 lustre_swab_lu_fid(&cr->cr.cr_tfid);
                 lustre_swab_lu_fid(&cr->cr.cr_pfid);
+		if (CHANGELOG_REC_EXTENDED(&cr->cr)) {
+			struct llog_changelog_ext_rec *ext =
+				(struct llog_changelog_ext_rec *)rec;
+
+			lustre_swab_lu_fid(&ext->cr.cr_sfid);
+			lustre_swab_lu_fid(&ext->cr.cr_spfid);
+		}
                 break;
         }
 

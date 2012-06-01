@@ -62,7 +62,11 @@
  *  tfid - The FID of the target file
  *  pfid - The FID of the parent of the target file (at the time of
  *         the operation)
- *  name - The name of the target file (at the time of the operation)
+ *  sfid - The FID of the source file
+ *  spfid - The FID of the parent of the source file
+ *  name - The name of the target file (at the time of the operation), the name
+ *         of the source file is appended (delimited with '\0') if this
+ *         operation involves a source
  *
  * With just this information, it is not alwasy possible to determine
  * the file paths for each operation. For instance, if pfid does not
@@ -72,7 +76,7 @@
  * changelog are replayed, all the files in this special directory
  * will get moved to the location as in the source-fs.
  *
- * Shorthand used: f2p(tfid) = fid2path(tfid)
+ * Shorthand used: f2p(fid) = fid2path(fid)
  *
  * The following are the metadata operations of interest.
  * 1. creat
@@ -90,14 +94,14 @@
  *      rm .lustrerepl/[tfid]
  *    Else if pfid is present on the source-fs,
  *      if f2p(pfid)+name is present,
- *        rm f2p(pfid)+name(pfid,name)
+ *        rm f2p(pfid)+name
  *
- * 3. move (pfid1,name1) to (pfid2,name2)
- *    If pfid2 is present
- *      if pfid1 is also present, mv (pfid1,name1) to (pfid2,name2)
- *      else mv .lustrerepl/[tfid] to (pfid2,name2)
- *    If pfid2 is not present,
- *      if pfid1 is present, mv (pfid1,name1) .lustrerepl/[tfid]
+ * 3. move (spfid,sname) to (pfid,name)
+ *    If pfid is present
+ *      if spfid is also present, mv (spfid,sname) to (pfid,name)
+ *      else mv .lustrerepl/[sfid] to (pfid,name)
+ *    Else if pfid is not present,
+ *      if spfid is present, mv (spfid,sname) .lustrerepl/[sfid]
  *    If moving out of .lustrerepl
  *      move out all its children in .lustrerepl.
  *      [pfid,tfid,name] tracked from (1) is used for this.
@@ -148,10 +152,14 @@ extern int obd_initialize(int argc, char **argv);
 struct lr_info {
         long long recno;
         int target_no;
+	unsigned int is_extended:1;
         enum changelog_rec_type type;
-        char pfid[LR_FID_STR_LEN];
-        char tfid[LR_FID_STR_LEN];
-        char name[PATH_MAX + 1];
+	char tfid[LR_FID_STR_LEN];
+	char pfid[LR_FID_STR_LEN];
+	char sfid[LR_FID_STR_LEN];
+	char spfid[LR_FID_STR_LEN];
+	char sname[NAME_MAX + 1];
+	char name[NAME_MAX + 1];
         char src[PATH_MAX + 1];
         char dest[PATH_MAX + 1];
         char path[PATH_MAX + 1];
@@ -658,7 +666,7 @@ void lr_cascade_move(const char *fid, const char *dest, struct lr_info *info)
         free(d);
 }
 
-/* remove [info->pfid, ext->tfid] from parents */
+/* remove [info->spfid, info->sfid] from parents */
 int lr_remove_pc(const char *pfid, const char *tfid)
 {
         struct lr_parent_child_list *curr, *prev;
@@ -769,7 +777,9 @@ int lr_create(struct lr_info *info)
 
         /* Is f2p(pfid)+name != f2p(tfid)? If not the file has moved. */
         len = strlen(info->path);
-        if (len - 1 >= 0 && info->path[len - 1] == '/')
+	if (len == 1 && info->path[0] == '/')
+		snprintf(info->dest, PATH_MAX, "%s", info->name);
+	else if (len - 1 > 0 && info->path[len - 1] == '/')
                 snprintf(info->dest, PATH_MAX, "%s%s", info->path, info->name);
         else
                 snprintf(info->dest, PATH_MAX, "%s/%s", info->path, info->name);
@@ -785,10 +795,13 @@ int lr_create(struct lr_info *info)
         /* Is f2p(pfid) present on the target? If not, the parent has
            moved */
         if (!mkspecial) {
-                snprintf(info->dest, PATH_MAX, "%s/%s", status->ls_targets[0],
-                        info->path);
-                if (access(info->dest, F_OK) != 0)
-                        mkspecial = 1;
+		snprintf(info->dest, PATH_MAX, "%s/%s", status->ls_targets[0],
+			info->path);
+		if (access(info->dest, F_OK) != 0) {
+			lr_debug(DTRACE, "create: parent %s not found\n",
+				info->dest);
+			mkspecial = 1;
+		}
         }
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
@@ -849,23 +862,26 @@ int lr_remove(struct lr_info *info)
         return rc;
 }
 
-/* Replicate a rename/move operation. This operations are tracked by
-   two changelog records. */
-int lr_move(struct lr_info *info, struct lr_info *ext)
+/* Replicate a rename/move operation. */
+int lr_move(struct lr_info *info)
 {
         int rc = 0;
         int rc1;
         int rc_dest, rc_src;
         int special_src = 0;
         int special_dest = 0;
+	char srcpath[PATH_MAX + 1] = "";
 
-        rc_dest = lr_get_path(ext, ext->pfid);
-        if (rc_dest < 0 && rc_dest != -ENOENT)
-                return rc_dest;
+	LASSERT(info->is_extended);
 
-        rc_src = lr_get_path(info, info->pfid);
-        if (rc_src < 0 && rc_src != -ENOENT)
-                return rc_src;
+	rc_src = lr_get_path(info, info->spfid);
+	if (rc_src < 0 && rc_src != -ENOENT)
+		return rc_src;
+	memcpy(srcpath, info->path, strlen(info->path));
+
+	rc_dest = lr_get_path(info, info->pfid);
+	if (rc_dest < 0 && rc_dest != -ENOENT)
+		return rc_dest;
 
         for (info->target_no = 0; info->target_no < status->ls_num_targets;
              info->target_no++) {
@@ -873,31 +889,31 @@ int lr_move(struct lr_info *info, struct lr_info *ext)
                 if (!rc_dest) {
                         snprintf(info->dest, PATH_MAX, "%s/%s",
                                 status->ls_targets[info->target_no],
-                                ext->path);
+				info->path);
                         if (access(info->dest, F_OK) != 0) {
                                 rc_dest = -errno;
                         } else {
                                 snprintf(info->dest, PATH_MAX, "%s/%s/%s",
                                         status->ls_targets[info->target_no],
-                                        ext->path, ext->name);
+					info->path, info->name);
                         }
                 }
                 if (rc_dest == -ENOENT) {
                         snprintf(info->dest, PATH_MAX, "%s/%s/%s",
                                 status->ls_targets[info->target_no],
-                                SPECIAL_DIR, info->tfid);
+				SPECIAL_DIR, info->sfid);
                         special_dest = 1;
                 }
 
                 if (!rc_src)
                         snprintf(info->src, PATH_MAX, "%s/%s/%s",
                                 status->ls_targets[info->target_no],
-                                info->path, info->name);
+				srcpath, info->sname);
                 if (rc_src == -ENOENT || (access(info->src, F_OK) != 0 &&
                                           errno == ENOENT)) {
                         snprintf(info->src, PATH_MAX, "%s/%s/%s",
                                 status->ls_targets[info->target_no],
-                                SPECIAL_DIR, info->tfid);
+				SPECIAL_DIR, info->sfid);
                         special_src = 1;
                 }
 
@@ -908,13 +924,13 @@ int lr_move(struct lr_info *info, struct lr_info *ext)
                                 rc1 = -errno;
                 }
 
-                if (special_src) {
-                        lr_remove_pc(info->pfid, info->tfid);
-                        if (!special_dest)
-                                lr_cascade_move(info->tfid, info->dest, info);
+		if (special_src) {
+			lr_remove_pc(info->spfid, info->sfid);
+			if (!special_dest)
+				lr_cascade_move(info->sfid, info->dest, info);
                 }
-                if (special_dest)
-                        lr_add_pc(ext->pfid, info->tfid, ext->name);
+		if (special_dest)
+			lr_add_pc(info->pfid, info->sfid, info->name);
 
                 lr_debug(DINFO, "move: %s [to] %s rc1=%d, errno=%d\n",
                          info->src, info->dest, rc1, errno);
@@ -1061,20 +1077,35 @@ int lr_setxattr(struct lr_info *info)
 /* Parse a line of changelog entry */
 int lr_parse_line(void *priv, struct lr_info *info)
 {
-        struct changelog_rec *rec;
+	struct changelog_ext_rec *rec;
 
         if (llapi_changelog_recv(priv, &rec) != 0)
                 return -1;
 
+	info->is_extended = CHANGELOG_REC_EXTENDED(rec);
         info->recno = rec->cr_index;
         info->type = rec->cr_type;
         sprintf(info->tfid, DFID, PFID(&rec->cr_tfid));
         sprintf(info->pfid, DFID, PFID(&rec->cr_pfid));
         strncpy(info->name, rec->cr_name, rec->cr_namelen);
-        info->name[rec->cr_namelen] = '\0';
 
-        if (verbose > 1)
-                printf("Rec %lld: %d %s\n", info->recno, info->type,info->name);
+	if (fid_is_sane(&rec->cr_sfid)) {
+		sprintf(info->sfid, DFID, PFID(&rec->cr_sfid));
+		sprintf(info->spfid, DFID, PFID(&rec->cr_spfid));
+		strncpy(info->sname, changelog_rec_sname(rec),
+			changelog_rec_snamelen(rec));
+		info->sname[changelog_rec_snamelen(rec)] = '\0';
+
+		if (verbose > 1)
+			printf("Rec %lld: %d %s %s\n", info->recno, info->type,
+				info->name, info->sname);
+	} else {
+		info->name[rec->cr_namelen] = '\0';
+
+		if (verbose > 1)
+			printf("Rec %lld: %d %s\n", info->recno, info->type,
+				info->name);
+	}
 
         llapi_changelog_free(&rec);
 
@@ -1382,7 +1413,6 @@ int lr_replicate()
         ext = calloc(1, sizeof(struct lr_info));
         if (ext == NULL)
                 return -ENOMEM;
-        memcpy(ext, info, sizeof(struct lr_info));
 
         for (i = 0, xattr_not_supp = 0; i < status->ls_num_targets; i++) {
                 snprintf(info->dest, PATH_MAX, "%s/%s", status->ls_targets[i],
@@ -1417,10 +1447,21 @@ int lr_replicate()
 
         while (!quit && lr_parse_line(changelog_priv, info) == 0) {
                 rc = 0;
-                if (info->type == CL_RENAME)
-                        /* Rename operations have an additional changelog
-                           record of information. */
-                        lr_parse_line(changelog_priv, ext);
+		if (info->type == CL_RENAME && !info->is_extended) {
+			/* Newer rename operations extends changelog to store
+			 * source file information, but old changelog has
+			 * another record.
+			 */
+			if (lr_parse_line(changelog_priv, ext) != 0)
+				break;
+			memcpy(info->sfid, info->tfid, sizeof(info->sfid));
+			memcpy(info->spfid, info->pfid, sizeof(info->spfid));
+			memcpy(info->tfid, ext->tfid, sizeof(info->tfid));
+			memcpy(info->pfid, ext->pfid, sizeof(info->pfid));
+			strncpy(info->sname, info->name, sizeof(info->sname));
+			strncpy(info->name, ext->name, sizeof(info->name));
+			info->is_extended = 1;
+		}
 
                 if (dryrun)
                         continue;
@@ -1437,7 +1478,7 @@ int lr_replicate()
                         rc = lr_remove(info);
                         break;
                 case CL_RENAME:
-                        rc = lr_move(info, ext);
+			rc = lr_move(info);
                         break;
                 case CL_HARDLINK:
                         rc = lr_link(info);

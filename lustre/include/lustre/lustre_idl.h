@@ -2652,6 +2652,12 @@ struct llog_changelog_rec {
         struct llog_rec_tail cr_tail; /**< for_sizezof_only */
 } __attribute__((packed));
 
+struct llog_changelog_ext_rec {
+	struct llog_rec_hdr      cr_hdr;
+	struct changelog_ext_rec cr;
+	struct llog_rec_tail     cr_tail; /**< for_sizezof_only */
+} __attribute__((packed));
+
 #define CHANGELOG_USER_PREFIX "cl"
 
 struct llog_changelog_user_rec {
