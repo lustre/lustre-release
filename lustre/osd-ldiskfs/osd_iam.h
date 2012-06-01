@@ -374,6 +374,8 @@ struct iam_leaf_operations {
         int (*key_cmp)(const struct iam_leaf *l, const struct iam_key *k);
         int (*key_eq)(const struct iam_leaf *l, const struct iam_key *k);
 
+	int (*rec_eq)(const struct iam_leaf *l, const struct iam_rec *r);
+
         int (*key_size)(const struct iam_leaf *l);
         /*
          * Search leaf @l for a record with key @k or for a place

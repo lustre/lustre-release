@@ -1057,7 +1057,7 @@ const int osd_dto_credits_noquota[DTO_NR] = {
         [DTO_INDEX_INSERT]  = 16,
         [DTO_INDEX_DELETE]  = 16,
         /**
-         * Unused now
+	 * Used for OI scrub
          */
         [DTO_INDEX_UPDATE]  = 16,
         /**
@@ -1541,6 +1541,7 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                  * NB: don't need any lock because no contention at this
                  * early stage */
                 inode->i_flags |= S_NOCMTIME;
+		inode->i_state |= I_LUSTRE_NOSCRUB;
                 obj->oo_inode = inode;
                 result = 0;
         } else {
@@ -1874,6 +1875,9 @@ static int osd_object_destroy(const struct lu_env *env,
         LASSERT(inode);
         LASSERT(!lu_object_is_dying(dt->do_lu.lo_header));
 
+	/* Parallel control for OI scrub. For most of cases, there is no
+	 * lock contention. So it will not affect unlink performance. */
+	cfs_mutex_lock(&inode->i_mutex);
         if (S_ISDIR(inode->i_mode)) {
                 LASSERT(osd_inode_unlinked(inode) ||
                         inode->i_nlink == 1);
@@ -1888,6 +1892,7 @@ static int osd_object_destroy(const struct lu_env *env,
         OSD_EXEC_OP(th, destroy);
 
         result = osd_oi_delete(osd_oti_get(env), osd, fid, th);
+	cfs_mutex_unlock(&inode->i_mutex);
 
         /* XXX: add to ext3 orphan list */
         /* rc = ext3_orphan_add(handle_t *handle, struct inode *inode) */
@@ -4004,19 +4009,16 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
-        struct osd_thread_info *info = osd_oti_get(env);
+	ENTRY;
 
-        ENTRY;
+	osd_scrub_cleanup(env, o);
 
-        if (o->od_oi_table != NULL)
-                osd_oi_fini(info, o);
+	if (o->od_fsops) {
+		fsfilt_put_ops(o->od_fsops);
+	o->od_fsops = NULL;
+	}
 
-        if (o->od_fsops) {
-                fsfilt_put_ops(o->od_fsops);
-                o->od_fsops = NULL;
-        }
-
-        RETURN(0);
+	RETURN(0);
 }
 
 static int osd_mount(const struct lu_env *env,
@@ -4113,6 +4115,7 @@ static struct lu_device *osd_device_alloc(const struct lu_env *env,
                         l->ld_ops = &osd_lu_ops;
                         o->od_dt_dev.dd_ops = &osd_dt_ops;
                         cfs_spin_lock_init(&o->od_osfs_lock);
+			cfs_mutex_init(&o->od_otable_mutex);
                         o->od_osfs_age = cfs_time_shift_64(-1000);
                         o->od_capa_hash = init_capa_hash();
                         if (o->od_capa_hash == NULL) {
@@ -4171,14 +4174,12 @@ static int osd_recovery_complete(const struct lu_env *env,
 static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
                        struct lu_device *dev)
 {
-        struct osd_device      *osd = osd_dev(dev);
-        struct osd_thread_info *oti = osd_oti_get(env);
-        int                     result;
+	struct osd_device *osd = osd_dev(dev);
+	int		   result;
+	ENTRY;
 
-        ENTRY;
-
-        /* 1. initialize oi before any file create or file open */
-        result = osd_oi_init(oti, osd);
+	/* 1. setup scrub, including OI files initialization */
+	result = osd_scrub_setup(env, osd);
         if (result < 0)
                 RETURN(result);
 

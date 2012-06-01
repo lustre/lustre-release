@@ -75,10 +75,14 @@
 
 #include "osd_oi.h"
 #include "osd_iam.h"
+#include "osd_scrub.h"
 
 struct inode;
 
 #define OSD_COUNTERS (0)
+
+/* Lustre special inode::i_state to indicate OI scrub skip this inode. */
+#define I_LUSTRE_NOSCRUB	(1 << 31)
 
 /** Enable thandle usage statistics */
 #define OSD_THANDLE_STATS (0)
@@ -191,6 +195,55 @@ static inline void ldiskfs_htree_lock_free(struct htree_lock *lk)
 
 #endif /* HAVE_LDISKFS_PDO */
 
+#define OSD_OTABLE_IT_CACHE_SIZE	128
+#define OSD_OTABLE_IT_CACHE_MASK	(~(OSD_OTABLE_IT_CACHE_SIZE - 1))
+
+struct osd_inconsistent_item {
+	/* link into osd_scrub::os_inconsistent_items,
+	 * protected by osd_scrub::os_lock. */
+	cfs_list_t	       oii_list;
+
+	/* The right FID <=> ino#/gen mapping. */
+	struct osd_idmap_cache oii_cache;
+
+	unsigned int	       oii_insert:1; /* insert or update mapping. */
+};
+
+struct osd_otable_cache {
+	struct osd_idmap_cache ooc_cache[OSD_OTABLE_IT_CACHE_SIZE];
+
+	/* Index for next cache slot to be filled. */
+	int		       ooc_producer_idx;
+
+	/* Index for next cache slot to be returned by it::next(). */
+	int		       ooc_consumer_idx;
+
+	/* How many items in ooc_cache. */
+	int		       ooc_cached_items;
+
+	/* Position for up layer LFSCK iteration pre-loading. */
+	__u32		       ooc_pos_preload;
+};
+
+struct osd_otable_it {
+	struct osd_device       *ooi_dev;
+	struct osd_otable_cache  ooi_cache;
+
+	/* For osd_otable_it_key. */
+	__u8			 ooi_key[16];
+
+	/* The following bits can be updated/checked w/o lock protection.
+	 * If more bits will be introduced in the future and need lock to
+	 * protect, please add comment. */
+	unsigned long		 ooi_used_outside:1, /* Some user out of OSD
+						      * uses the iteration. */
+				 ooi_all_cached:1, /* No more entries can be
+						    * filled into cache. */
+				 ooi_user_ready:1, /* The user out of OSD is
+						    * ready to iterate. */
+				 ooi_waiting:1; /* it::next is waiting. */
+};
+
 extern const int osd_dto_credits_noquota[];
 
 /*
@@ -244,6 +297,10 @@ struct osd_device {
         struct brw_stats          od_brw_stats;
         cfs_atomic_t              od_r_in_flight;
         cfs_atomic_t              od_w_in_flight;
+
+	cfs_mutex_t		  od_otable_mutex;
+	struct osd_otable_it	 *od_otable_it;
+	struct osd_scrub	  od_scrub;
 };
 
 #define OSD_TRACK_DECLARES
@@ -560,6 +617,12 @@ int osd_compat_spec_insert(struct osd_thread_info *info,
                            struct osd_device *osd,
                            const struct lu_fid *fid,
                            const struct osd_inode_id *id, struct thandle *th);
+
+void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags);
+int osd_scrub_file_store(struct osd_scrub *scrub);
+int osd_scrub_start(struct osd_device *dev);
+int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
+void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
 
 /*
  * Invariants, assertions.

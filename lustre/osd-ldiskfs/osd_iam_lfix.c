@@ -26,6 +26,8 @@
 /*
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2012 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -356,6 +358,18 @@ static void iam_lfix_rec_set(struct iam_leaf *l, const struct iam_rec *r)
         memcpy(iam_lfix_rec(l), r, iam_leaf_descr(l)->id_rec_size);
 }
 
+static inline int lfix_reccmp(const struct iam_container *c,
+			      const struct iam_rec *r1,
+			      const struct iam_rec *r2)
+{
+	return memcmp(r1, r2, c->ic_descr->id_rec_size);
+}
+
+static int iam_lfix_rec_eq(const struct iam_leaf *l, const struct iam_rec *r)
+{
+	return !lfix_reccmp(iam_leaf_container(l), iam_lfix_rec(l), r);
+}
+
 static void iam_lfix_rec_get(const struct iam_leaf *l, struct iam_rec *r)
 {
         assert_corr(iam_leaf_at_rec(l));
@@ -511,6 +525,7 @@ static struct iam_leaf_operations iam_lfix_leaf_ops = {
         .key_eq         = iam_lfix_key_eq,
         .key_size       = iam_lfix_key_size,
         .rec_set        = iam_lfix_rec_set,
+	.rec_eq         = iam_lfix_rec_eq,
         .rec_get        = iam_lfix_rec_get,
         .lookup         = iam_lfix_lookup,
         .ilookup        = iam_lfix_ilookup,

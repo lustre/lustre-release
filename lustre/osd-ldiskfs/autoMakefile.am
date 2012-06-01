@@ -40,4 +40,4 @@ endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 EXTRA_DIST := $(osd_ldiskfs-objs:%.o=%.c) osd_internal.h osd_oi.h osd_igif.h \
-              osd_iam.h
+	      osd_iam.h osd_scrub.h

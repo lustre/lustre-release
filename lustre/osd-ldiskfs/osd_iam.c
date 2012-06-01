@@ -2249,20 +2249,27 @@ EXPORT_SYMBOL(iam_insert);
  * Update record with the key @k in container @c (within context of
  * transaction @h), new record is given by @r.
  *
- * Return values: 0: success, -ve: error, including -ENOENT if no record with
- * the given key found.
+ * Return values: +1: skip because of the same rec value, 0: success,
+ * -ve: error, including -ENOENT if no record with the given key found.
  */
 int iam_update(handle_t *h, struct iam_container *c, const struct iam_key *k,
                const struct iam_rec *r, struct iam_path_descr *pd)
 {
         struct iam_iterator it;
-        int result;
+	struct iam_leaf *folio;
+	int result;
 
-        iam_it_init(&it, c, IAM_IT_WRITE, pd);
+	iam_it_init(&it, c, IAM_IT_WRITE, pd);
 
-        result = iam_it_get_exact(&it, k);
-        if (result == 0)
-                iam_it_rec_set(h, &it, r);
+	result = iam_it_get_exact(&it, k);
+	if (result == 0) {
+		folio = &it.ii_path.ip_leaf;
+		result = iam_leaf_ops(folio)->rec_eq(folio, r);
+		if (result == 0)
+			iam_it_rec_set(h, &it, r);
+		else
+			result = 1;
+	}
         iam_it_put(&it);
         iam_it_fini(&it);
         return result;

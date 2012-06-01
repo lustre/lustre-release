@@ -26,6 +26,8 @@
 /*
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2012 Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -571,6 +573,15 @@ static void lvar_rec_set(struct iam_leaf *l, const struct iam_rec *r)
         assert_inv(n_invariant(l));
 }
 
+static int lvar_rec_eq(const struct iam_leaf *l, const struct iam_rec *r)
+{
+	struct iam_rec *rec = e_rec(n_cur(l));
+
+	if (rec_size(rec) != rec_size(r))
+		return 0;
+	return !memcmp(rec, r, rec_size(r));
+}
+
 static void lvar_rec_get(const struct iam_leaf *l, struct iam_rec *r)
 {
         struct iam_rec *rec;
@@ -768,6 +779,7 @@ static struct iam_leaf_operations lvar_leaf_ops = {
         .key_eq         = lvar_key_eq,
         .key_size       = lvar_key_size,
         .rec_set        = lvar_rec_set,
+	.rec_eq         = lvar_rec_eq,
         .rec_get        = lvar_rec_get,
         .lookup         = lvar_lookup,
         .ilookup        = lvar_ilookup,
