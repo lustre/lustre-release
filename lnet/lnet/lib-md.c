@@ -80,34 +80,12 @@ lnet_md_unlink(lnet_libmd_t *md)
 	lnet_md_free_locked(md);
 }
 
-/* must be called with LNET_LOCK held */
 static int
-lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
+lnet_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
 {
-        lnet_eq_t   *eq = NULL;
         int          i;
         unsigned int niov;
         int          total_length = 0;
-
-        /* NB we are passed an allocated, but uninitialised/active md.
-         * if we return success, caller may lnet_md_unlink() it.
-         * otherwise caller may only lnet_md_free() it.
-         */
-
-        if (!LNetHandleIsInvalid (umd->eq_handle)) {
-                eq = lnet_handle2eq(&umd->eq_handle);
-                if (eq == NULL)
-                        return -ENOENT;
-        }
-
-        /* This implementation doesn't know how to create START events or
-         * disable END events.  Best to LASSERT our caller is compliant so
-         * we find out quickly...  */
-        /*  TODO - reevaluate what should be here in light of 
-         * the removal of the start and end events
-         * maybe there we shouldn't even allow LNET_EQ_NONE!)
-        LASSERT (eq == NULL);
-         */
 
         lmd->md_me = NULL;
         lmd->md_start = umd->start;
@@ -115,7 +93,7 @@ lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
         lmd->md_max_size = umd->max_size;
         lmd->md_options = umd->options;
         lmd->md_user_ptr = umd->user_ptr;
-        lmd->md_eq = eq;
+	lmd->md_eq = NULL;
         lmd->md_threshold = umd->threshold;
         lmd->md_refcount = 0;
         lmd->md_flags = (unlink == LNET_UNLINK) ? LNET_MD_FLAG_AUTO_UNLINK : 0;
@@ -180,13 +158,40 @@ lib_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
                         return -EINVAL;
         }
 
-        if (eq != NULL)
-                eq->eq_refcount++;
+	return 0;
+}
 
-        /* It's good; let handle2md succeed and add to active mds */
-	lnet_res_lh_initialize(&the_lnet.ln_md_container, &lmd->md_lh);
-	LASSERT(cfs_list_empty(&lmd->md_list));
-	cfs_list_add(&lmd->md_list, &the_lnet.ln_md_container.rec_active);
+/* must be called with resource lock held */
+static int
+lnet_md_link(lnet_libmd_t *md, lnet_handle_eq_t eq_handle)
+{
+	struct lnet_res_container *container = &the_lnet.ln_md_container;
+
+	/* NB we are passed an allocated, but inactive md.
+	 * if we return success, caller may lnet_md_unlink() it.
+	 * otherwise caller may only lnet_md_free() it.
+	 */
+	/* This implementation doesn't know how to create START events or
+	 * disable END events.  Best to LASSERT our caller is compliant so
+	 * we find out quickly...  */
+	/*  TODO - reevaluate what should be here in light of
+	 * the removal of the start and end events
+	 * maybe there we shouldn't even allow LNET_EQ_NONE!)
+	 * LASSERT (eq == NULL);
+	 */
+	if (!LNetHandleIsInvalid(eq_handle)) {
+		md->md_eq = lnet_handle2eq(&eq_handle);
+
+		if (md->md_eq == NULL)
+			return -ENOENT;
+
+		md->md_eq->eq_refcount++;
+	}
+
+	lnet_res_lh_initialize(container, &md->md_lh);
+
+	LASSERT(cfs_list_empty(&md->md_list));
+	cfs_list_add(&md->md_list, &container->rec_active);
 
 	return 0;
 }
@@ -277,35 +282,41 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
         if (md == NULL)
                 return -ENOMEM;
 
-        LNET_LOCK();
+	rc = lnet_md_build(md, &umd, unlink);
+
+	LNET_LOCK();
+	if (rc != 0)
+		goto failed;
 
         me = lnet_handle2me(&meh);
-        if (me == NULL) {
-                rc = -ENOENT;
-        } else if (me->me_md != NULL) {
+	if (me == NULL)
+		rc = -ENOENT;
+	else if (me->me_md != NULL)
                 rc = -EBUSY;
-        } else {
-                rc = lib_md_build(md, &umd, unlink);
-                if (rc == 0) {
-			the_lnet.ln_portals[me->me_portal]->ptl_ml_version++;
+	else
+		rc = lnet_md_link(md, umd.eq_handle);
 
-                        me->me_md = md;
-                        md->md_me = me;
+	if (rc != 0)
+		goto failed;
 
-                        lnet_md2handle(handle, md);
+	the_lnet.ln_portals[me->me_portal]->ptl_ml_version++;
 
-                        /* check if this MD matches any blocked msgs */
-                        lnet_match_blocked_msg(md);   /* expects LNET_LOCK held */
+	me->me_md = md;
+	md->md_me = me;
 
-                        LNET_UNLOCK();
-                        return (0);
-                }
-        }
+	lnet_md2handle(handle, md);
 
+	/* check if this MD matches any blocked msgs */
+	lnet_match_blocked_msg(md);   /* expects LNET_LOCK held */
+
+	LNET_UNLOCK();
+	return 0;
+
+ failed:
 	lnet_md_free_locked(md);
 
-        LNET_UNLOCK();
-        return (rc);
+	LNET_UNLOCK();
+	return rc;
 }
 
 /**
@@ -345,21 +356,26 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
         if (md == NULL)
                 return -ENOMEM;
 
-        LNET_LOCK();
+	rc = lnet_md_build(md, &umd, unlink);
 
-        rc = lib_md_build(md, &umd, unlink);
+	LNET_LOCK();
+	if (rc != 0)
+		goto failed;
 
-        if (rc == 0) {
-                lnet_md2handle(handle, md);
+	rc = lnet_md_link(md, umd.eq_handle);
+	if (rc != 0)
+		goto failed;
 
-                LNET_UNLOCK();
-                return (0);
-        }
+	lnet_md2handle(handle, md);
 
+	LNET_UNLOCK();
+	return 0;
+
+ failed:
 	lnet_md_free_locked(md);
 
-        LNET_UNLOCK();
-        return (rc);
+	LNET_UNLOCK();
+	return rc;
 }
 
 /**
