@@ -1238,8 +1238,13 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         if (desc == NULL)
                 RETURN(-ENOMEM);
 
-        for (i = 0, tmpcount = nob;
-                i < rdpg->rp_npages && tmpcount > 0; i++, tmpcount -= tmpsize) {
+	if (!(exp->exp_connect_flags & OBD_CONNECT_BRW_SIZE))
+		/* old client requires reply size in it's PAGE_SIZE,
+ 		 * which is rdpg->rp_count */
+		nob = rdpg->rp_count;
+
+	for (i = 0, tmpcount = nob; i < rdpg->rp_npages && tmpcount > 0;
+	     i++, tmpcount -= tmpsize) {
                 tmpsize = min_t(int, tmpcount, CFS_PAGE_SIZE);
                 ptlrpc_prep_bulk_page(desc, rdpg->rp_pages[i], 0, tmpsize);
         }
