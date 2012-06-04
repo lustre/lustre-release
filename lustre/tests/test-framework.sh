@@ -672,20 +672,23 @@ mount_facets () {
 }
 
 mount_facet() {
-    local facet=$1
-    shift
-    local dev=$(facet_active $facet)_dev
-    local opt=${facet}_opt
-    local mntpt=$(facet_mntpt $facet)
+	local facet=$1
+	shift
+	local dev=$(facet_active $facet)_dev
+	local opt=${facet}_opt
+	local mntpt=$(facet_mntpt $facet)
 
-    echo "Starting ${facet}: ${!opt} $@ ${!dev} $mntpt"
-    do_facet ${facet} "mkdir -p $mntpt; mount -t lustre ${!opt} $@ ${!dev} $mntpt"
-    RC=${PIPESTATUS[0]}
-    # to allow testing LU-482 error handling in mount_facets() and test_0a()
-    [ -f $TMP/test-lu482-trigger ] && RC=2
-    if [ $RC -ne 0 ]; then
-        echo "mount -t lustre $@ ${!dev} $mntpt"
-        echo "Start of ${!dev} on ${facet} failed ${RC}"
+	echo "Starting ${facet}: ${!opt} $@ ${!dev} $mntpt"
+	# for testing LU-482 error handling in mount_facets() and test_0a()
+	if [ -f $TMP/test-lu482-trigger ]; then
+		RC=2
+	else
+		do_facet ${facet} "mkdir -p $mntpt; mount -t lustre ${!opt} \
+				   $@ ${!dev} $mntpt"
+		RC=${PIPESTATUS[0]}
+	fi
+	if [ $RC -ne 0 ]; then
+		echo "Start of ${!dev} on ${facet} failed ${RC}"
     else
         set_default_debug_facet $facet
 

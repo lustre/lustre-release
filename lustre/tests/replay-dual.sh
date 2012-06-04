@@ -68,8 +68,17 @@ if [ -f "$LU482_FAILED" ]; then
 	log "Found check file $LU482_FAILED, aborting test script"
 	rm -vf "$LU482_FAILED"
 	complete $(basename $0) $SECONDS
-	[ "$MOUNTED2" = yes ] && zconf_umount $HOSTNAME $MOUNT2 || true
-	check_and_cleanup_lustre
+	do_nodes $CLIENTS umount -f $MOUNT2 || true
+	do_nodes $CLIENTS umount -f $MOUNT || true
+	# copied from stopall, but avoid the MDS recovery
+    for num in `seq $OSTCOUNT`; do
+        stop ost$num -f
+        rm -f $TMP/ost${num}active
+    done
+    if ! combined_mgs_mds ; then
+        stop mgs
+    fi
+
 	exit_status
 fi
 
