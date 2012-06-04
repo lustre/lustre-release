@@ -1272,24 +1272,36 @@ void lprocfs_clear_stats(struct lprocfs_stats *stats)
 	int			i;
 	int			j;
 	unsigned int		num_entry;
+	unsigned int		percpusize;
 	unsigned long		flags = 0;
 
 	num_entry = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 
+	percpusize = offsetof(struct lprocfs_percpu, lp_cntr[stats->ls_num]);
+	if (num_entry > 1)
+		percpusize = CFS_L1_CACHE_ALIGN(percpusize);
+
 	for (i = 0; i < num_entry; i++) {
 		if (stats->ls_percpu[i] == NULL)
 			continue;
-                for (j = 0; j < stats->ls_num; j++) {
-                        percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[j];
-                        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
-                        percpu_cntr->lc_count = 0;
-                        percpu_cntr->lc_sum = 0;
-                        percpu_cntr->lc_min = LC_MIN_INIT;
-                        percpu_cntr->lc_max = 0;
-                        percpu_cntr->lc_sumsquare = 0;
-                        cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
-                }
-        }
+		/* the 1st percpu entry was statically allocated in
+		 * lprocfs_alloc_stats() */
+		if (i > 0) {
+			OBD_FREE(stats->ls_percpu[i], percpusize);
+			stats->ls_percpu[i] = NULL;
+			continue;
+		}
+		for (j = 0; j < stats->ls_num; j++) {
+			percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[j];
+			cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
+			percpu_cntr->lc_count = 0;
+			percpu_cntr->lc_sum = 0;
+			percpu_cntr->lc_min = LC_MIN_INIT;
+			percpu_cntr->lc_max = 0;
+			percpu_cntr->lc_sumsquare = 0;
+			cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
+		}
+	}
 
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
 }
