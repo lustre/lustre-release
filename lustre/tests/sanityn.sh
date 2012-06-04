@@ -29,7 +29,6 @@ export TMP=${TMP:-/tmp}
 MOUNT_2=${MOUNT_2:-"yes"}
 CHECK_GRANT=${CHECK_GRANT:-"yes"}
 GRANT_CHECK_LIST=${GRANT_CHECK_LIST:-""}
-TSTUSR=${TSTUSR:-"quota_usr"}
 
 SAVE_PWD=$PWD
 
@@ -1926,7 +1925,7 @@ test_60() {
 	    error "chmod should not change data version: $version5 != $version6"
 
 	# Chown do not change version
-	chown $TSTUSR $file2 || error "Could not chown $TSTUSR $file2"
+	chown $RUNAS_ID $file2 || error "Could not chown $RUNAS_ID $file2"
 	version7=$($LFS data_version $file1)
 	[ "$version5" == "$version7" ] ||
 	    error "chown should not change data version: $version5 != $version7"
