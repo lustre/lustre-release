@@ -99,6 +99,7 @@ mount_lustre_LDADD := $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
 mkfs_lustre_SOURCES = mkfs_lustre.c mount_utils.c mount_utils.h
+mkfs_lustre_SOURCES += mount_utils_ldiskfs.c
 mkfs_lustre_CPPFLAGS = -UTUNEFS $(AM_CPPFLAGS)
 mkfs_lustre_LDADD := libiam.a $(LIBPTLCTL)
 mkfs_lustre_DEPENDENCIES := $(LIBPTLCTL) libiam.a
