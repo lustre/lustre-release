@@ -56,11 +56,18 @@ static int ll_readlink_internal(struct inode *inode,
 
         *request = NULL;
 
-        if (lli->lli_symlink_name) {
-                *symname = lli->lli_symlink_name;
-                CDEBUG(D_INODE, "using cached symlink %s\n", *symname);
-                RETURN(0);
-        }
+	if (lli->lli_symlink_name) {
+		int print_limit = min_t(int, PAGE_SIZE - 128, symlen);
+
+		*symname = lli->lli_symlink_name;
+		/* If the total CDEBUG() size is larger than a page, it
+		 * will print a warning to the console, avoid this by
+		 * printing just the last part of the symlink. */
+		CDEBUG(D_INODE, "using cached symlink %s%.*s, len = %d\n",
+		       print_limit < symlen ? "..." : "", print_limit,
+		       (*symname) + symlen - print_limit, symlen);
+		RETURN(0);
+	}
 
         op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, symlen,
                                      LUSTRE_OPC_ANY, NULL);

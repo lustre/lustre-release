@@ -579,20 +579,27 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
                         CERROR("readlink failed: %d\n", rc);
                         rc = -EFAULT;
                 } else {
-                        if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
-                                 rc -= 2;
-                        repbody->valid |= OBD_MD_LINKNAME;
-                        /* we need to report back size with NULL-terminator
-                         * because client expects that */
-                        repbody->eadatasize = rc + 1;
-                        if (repbody->eadatasize != reqbody->eadatasize)
-                                CERROR("Read shorter link %d than expected "
-                                       "%d\n", rc, reqbody->eadatasize - 1);
-                        /* NULL terminate */
-                        ((char*)ma->ma_lmm)[rc] = 0;
-                        CDEBUG(D_INODE, "symlink dest %s, len = %d\n",
-                               (char*)ma->ma_lmm, rc);
-                        rc = 0;
+			int print_limit = min_t(int, CFS_PAGE_SIZE - 128, rc);
+
+			if (OBD_FAIL_CHECK(OBD_FAIL_MDS_READLINK_EPROTO))
+				rc -= 2;
+			repbody->valid |= OBD_MD_LINKNAME;
+			/* we need to report back size with NULL-terminator
+			 * because client expects that */
+			repbody->eadatasize = rc + 1;
+			if (repbody->eadatasize != reqbody->eadatasize)
+				CERROR("Read shorter symlink %d, expected %d\n",
+				       rc, reqbody->eadatasize - 1);
+			/* NULL terminate */
+			((char *)ma->ma_lmm)[rc] = 0;
+
+			/* If the total CDEBUG() size is larger than a page, it
+			 * will print a warning to the console, avoid this by
+			 * printing just the last part of the symlink. */
+			CDEBUG(D_INODE, "symlink dest %s%.*s, len = %d\n",
+			       print_limit < rc ? "..." : "", print_limit,
+			       (char *)ma->ma_lmm + rc - print_limit, rc);
+			rc = 0;
                 }
         }
 
