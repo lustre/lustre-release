@@ -1,4 +1,4 @@
-EXTRA_DIST := \
+EXTRA_DIST = \
 	darwin-mem.c \
 	darwin-proc.c \
 	darwin-utils.c \

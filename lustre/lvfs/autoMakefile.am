@@ -76,17 +76,17 @@ endif # LINUX
 
 if DARWIN
 
-macos_PROGRAMS := lvfs
+macos_PROGRAMS = lvfs
 
-lvfs_SOURCES := lvfs_darwin.c
+lvfs_SOURCES = lvfs_darwin.c
 
 lvfs_CFLAGS := $(EXTRA_KCFLAGS)
 lvfs_LDFLAGS := $(EXTRA_KLDFLAGS)
 lvfs_LDADD := $(EXTRA_KLIBS)
 
-plist_DATA := Info.plist
+plist_DATA = Info.plist
 
-install_data_hook := fix-kext-ownership
+install_data_hook = fix-kext-ownership
 
 endif # DARWIN
 

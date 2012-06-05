@@ -17,4 +17,4 @@ MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 distclean: distclean-recursive
 	@true
 
-SUBDIRS := autoconf
+SUBDIRS = autoconf

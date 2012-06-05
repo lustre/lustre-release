@@ -25,7 +25,7 @@ liblustre_test_LIBRARIES = $(noinst_LIBRARIES)
 endif # LIBLUSTRE_TESTS
 endif # LIBLUSTRE
 
-DIST_SUBDIRS := mpi
+DIST_SUBDIRS = mpi
 
 libtestcommon_a_SOURCES = test_common.c test_common.h
 

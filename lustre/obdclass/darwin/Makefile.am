@@ -1,3 +1,3 @@
-EXTRA_DIST := 		\
+EXTRA_DIST = 		\
 	darwin-module.c	\
 	darwin-sysctl.c

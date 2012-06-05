@@ -1,6 +1,6 @@
-SUBDIRS := . ldiskfs
-SOURCES_SUBDIRS := ldiskfs
-DIST_SUBDIRS := ldiskfs
+SUBDIRS = . ldiskfs
+SOURCES_SUBDIRS = ldiskfs
+DIST_SUBDIRS = ldiskfs
 
 # this is in fact irrelevant in this file but needed to keep
 # autoMakefile.am.toplevel happy

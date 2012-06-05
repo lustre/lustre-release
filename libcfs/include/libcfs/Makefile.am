@@ -1,10 +1,10 @@
-SUBDIRS := linux posix util
+SUBDIRS = linux posix util
 if DARWIN
 SUBDIRS += darwin
 endif
-DIST_SUBDIRS := linux posix util darwin
+DIST_SUBDIRS = linux posix util darwin
 
-EXTRA_DIST := curproc.h libcfs_private.h libcfs.h list.h lltrace.h \
+EXTRA_DIST = curproc.h libcfs_private.h libcfs.h list.h lltrace.h \
 		user-lock.h user-prim.h user-time.h user-mem.h \
 		user-tcpip.h user-bitops.h bitmap.h user-crypto.h \
 		libcfs_prim.h libcfs_time.h libcfs_hash.h libcfs_cpu.h \

@@ -1,1 +1,1 @@
-EXTRA_DIST := lustre-libcfs.m4
+EXTRA_DIST = lustre-libcfs.m4

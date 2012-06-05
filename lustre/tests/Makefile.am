@@ -2,9 +2,9 @@
 AM_CPPFLAGS = $(LLCPPFLAGS) -I/opt/lam/include -D_LARGEFILE64_SOURCE -D_FILE_OFFSET_BITS=64 -DLUSTRE_UTILS
 AM_CFLAGS = $(LLCFLAGS)
 # LDADD = -lldap
-# LDADD := -lreadline -ltermcap # -lefence
+# LDADD = -lreadline -ltermcap # -lefence
 
-DIST_SUBDIRS := mpi
+DIST_SUBDIRS = mpi
 
 noinst_DATA = disk1_8.tar.bz2
 noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh functions.sh

@@ -47,10 +47,10 @@ modulefs_DATA = obdecho$(KMODEXT)
 endif
 
 if DARWIN
-macos_PROGRAMS := obdecho
-obdecho_SOURCES := \
-        lproc_echo.c \
-        echo_client.c
+macos_PROGRAMS = obdecho
+obdecho_SOURCES =	\
+	lproc_echo.c	\
+	echo_client.c
 
 if SERVER
 obdecho_SOURCES += echo.c
@@ -60,9 +60,9 @@ obdecho_CFLAGS := $(EXTRA_KCFLAGS)
 obdecho_LDFLAGS := $(EXTRA_KLDFLAGS)
 obdecho_LDADD := $(EXTRA_KLIBS)
 
-plist_DATA := Info.plist
+plist_DATA = Info.plist
 
-install_data_hook := fix-kext-ownership
+install_data_hook = fix-kext-ownership
 
 endif # darwin
 

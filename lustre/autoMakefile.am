@@ -39,14 +39,14 @@
 AUTOMAKE_OPTIONS = foreign
 
 # also update lustre/autoconf/lustre-core.m4 AC_CONFIG_FILES
-ALWAYS_SUBDIRS := include lvfs obdclass ldlm ptlrpc osc lov obdecho \
+ALWAYS_SUBDIRS = include lvfs obdclass ldlm ptlrpc osc lov obdecho \
 	mgc fid fld doc utils tests scripts autoconf contrib conf
 
-SERVER_SUBDIRS := obdfilter ost mds mgs mdt cmm mdd ofd osd-zfs osd-ldiskfs quota
+SERVER_SUBDIRS = obdfilter ost mds mgs mdt cmm mdd ofd osd-zfs osd-ldiskfs quota
 
-CLIENT_SUBDIRS := mdc lmv llite lclient
+CLIENT_SUBDIRS = mdc lmv llite lclient
 
-LIBLUSTRE_SUBDIRS := liblustre
+LIBLUSTRE_SUBDIRS = liblustre
 
 SUBDIRS := $(ALWAYS_SUBDIRS)
 

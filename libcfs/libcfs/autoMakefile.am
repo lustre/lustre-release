@@ -28,24 +28,26 @@
 # Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
 # Use is subject to license terms.
 #
+# Copyright (c) 2012, Whamcloud, Inc.
+#
 
 #
 # This file is part of Lustre, http://www.lustre.org/
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-SUBDIRS := linux util posix
+SUBDIRS = linux util posix
 if DARWIN
 SUBDIRS += darwin
 endif
-DIST_SUBDIRS := linux util posix darwin
+DIST_SUBDIRS = linux util posix darwin
 
 if LIBLUSTRE
 noinst_LIBRARIES= libcfs.a
-libcfs_a_SOURCES= posix/posix-debug.c user-prim.c user-lock.c user-tcpip.c \
+libcfs_a_SOURCES= posix/posix-debug.c user-prim.c user-lock.c user-tcpip.c  \
 		  prng.c user-bitops.c user-mem.c hash.c kernel_user_comm.c \
 		  workitem.c fail.c libcfs_cpu.c libcfs_mem.c libcfs_lock.c \
-		  posix/rbtree.c user-crypto.c posix/posix-crc32.c \
+		  posix/rbtree.c user-crypto.c posix/posix-crc32.c          \
 		  posix/posix-adler.c
 
 if ARCH_x86
@@ -57,9 +59,9 @@ libcfs_a_CFLAGS = $(LLCFLAGS)
 endif
 
 lib_LIBRARIES = libcfsutil.a
-libcfsutil_a_SOURCES = nidstrings.c libcfs_string.c util/parser.c \
-                       util/l_ioctl.c util/util.c
-libcfsutil_a_CPPFLAGS = $(LLCPPFLAGS) 
+libcfsutil_a_SOURCES = nidstrings.c libcfs_string.c util/parser.c	\
+		util/l_ioctl.c util/util.c
+libcfsutil_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfsutil_a_CFLAGS = $(LLCFLAGS) -DLUSTRE_UTILS=1
 
 if MODULES
@@ -69,9 +71,9 @@ modulenet_DATA := libcfs$(KMODEXT)
 endif
 
 if DARWIN
-macos_PROGRAMS := libcfs
+macos_PROGRAMS = libcfs
 
-nodist_libcfs_SOURCES := darwin/darwin-sync.c darwin/darwin-mem.c	\
+nodist_libcfs_SOURCES = darwin/darwin-sync.c darwin/darwin-mem.c	\
 	darwin/darwin-prim.c darwin/darwin-fs.c darwin/darwin-curproc.c	\
 	darwin/darwin-tcpip.c darwin/darwin-utils.c 			\
 	darwin/darwin-debug.c darwin/darwin-proc.c 			\
@@ -83,9 +85,9 @@ libcfs_CFLAGS := $(EXTRA_KCFLAGS)
 libcfs_LDFLAGS := $(EXTRA_KLDFLAGS)
 libcfs_LDADD := $(EXTRA_KLIBS)
 
-plist_DATA := Info.plist
+plist_DATA = Info.plist
 
-install_data_hook := fix-kext-ownership
+install_data_hook = fix-kext-ownership
 
 endif
 

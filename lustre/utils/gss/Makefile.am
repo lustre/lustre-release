@@ -8,7 +8,7 @@ AM_LDFLAGS := -L$(top_builddir)/libcfs/libcfs
 
 LIBCFS := $(top_builddir)/libcfs/libcfs/libcfs.a $(top_builddir)/libcfs/libcfs/libcfsutil.a
 
-sbin_PROGRAMS := lsvcgssd l_idmap
+sbin_PROGRAMS = lsvcgssd l_idmap
 
 if GSS_KEYRING
 sbin_PROGRAMS += lgss_keyring

@@ -1,1 +1,1 @@
-EXTRA_DIST := lustre-snmp.m4
+EXTRA_DIST = lustre-snmp.m4

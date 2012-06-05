@@ -1,8 +1,8 @@
-SUBDIRS := linux
+SUBDIRS = linux
 if DARWIN
 SUBDIRS += darwin
 endif
-DIST_SUBDIRS := linux darwin
+DIST_SUBDIRS = linux darwin
 
 if LIBLUSTRE
 INCLUDES = -I$(SYSIO)/include
@@ -28,23 +28,23 @@ noinst_DATA = llog_test$(KMODEXT)
 endif # LINUX
 
 if DARWIN
-macos_PROGRAMS := obdclass
+macos_PROGRAMS = obdclass
 
-obdclass_SOURCES := \
-        darwin/darwin-module.c darwin/darwin-sysctl.c 		\
-        class_obd.c genops.c lprocfs_status.c           	\
-        lustre_handles.c lustre_peer.c obd_config.c     	\
-        obdo.c debug.c llog_ioctl.c uuid.c                      \
-        llog_swab.c llog_obd.c llog.c llog_cat.c llog_lvfs.c    \
-        mea.c lu_object.c dt_object.c lu_ref.c
+obdclass_SOURCES =						\
+	darwin/darwin-module.c darwin/darwin-sysctl.c		\
+	class_obd.c genops.c lprocfs_status.c			\
+	lustre_handles.c lustre_peer.c obd_config.c		\
+	obdo.c debug.c llog_ioctl.c uuid.c			\
+	llog_swab.c llog_obd.c llog.c llog_cat.c llog_lvfs.c	\
+	mea.c lu_object.c dt_object.c lu_ref.c
 
 obdclass_CFLAGS := $(EXTRA_KCFLAGS)
 obdclass_LDFLAGS := $(EXTRA_KLDFLAGS)
 obdclass_LDADD := $(EXTRA_KLIBS)
 
-plist_DATA := Info.plist
+plist_DATA = Info.plist
 
-install_data_hook := fix-kext-ownership
+install_data_hook = fix-kext-ownership
 
 endif # DARWIN
 

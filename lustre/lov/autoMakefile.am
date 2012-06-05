@@ -47,36 +47,36 @@ modulefs_DATA = lov$(KMODEXT)
 endif
 
 if DARWIN
-macos_PROGRAMS := lov
+macos_PROGRAMS = lov
 
-lov_SOURCES :=          \
-        lov_log.c       \
-        lov_pool.c	    \
-        lov_obd.c       \
-        lov_pack.c      \
-        lov_request.c   \
-        lov_merge.c     \
-        lov_qos.c       \
-        lov_dev.c       \
-        lov_object.c    \
-        lov_page.c      \
-        lov_lock.c      \
-        lov_io.c        \
-        lovsub_dev.c    \
-        lovsub_object.c \
-        lovsub_page.c   \
-        lovsub_lock.c   \
-        lovsub_io.c     \
-        lov_offset.c    \
-        lov_internal.h
+lov_SOURCES =		\
+	lov_log.c	\
+	lov_pool.c	\
+	lov_obd.c	\
+	lov_pack.c	\
+	lov_request.c	\
+	lov_merge.c	\
+	lov_qos.c	\
+	lov_dev.c	\
+	lov_object.c	\
+	lov_page.c	\
+	lov_lock.c	\
+	lov_io.c	\
+	lovsub_dev.c	\
+	lovsub_object.c	\
+	lovsub_page.c	\
+	lovsub_lock.c	\
+	lovsub_io.c	\
+	lov_offset.c	\
+	lov_internal.h
 
 lov_CFLAGS := $(EXTRA_KCFLAGS)
 lov_LDFLAGS := $(EXTRA_KLDFLAGS)
 lov_LDADD := $(EXTRA_KLIBS)
 
-plist_DATA := Info.plist
+plist_DATA = Info.plist
 
-install_data_hook := fix-kext-ownership
+install_data_hook = fix-kext-ownership
 
 endif # DARWIN
 
