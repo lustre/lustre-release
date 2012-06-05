@@ -376,6 +376,28 @@ int loop_format(struct mkfs_opts *mop)
 	return 0;
 }
 
+/* Write the server config files */
+int osd_write_ldd(struct mkfs_opts *mop)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	int ret;
+
+	switch (ldd->ldd_mount_type) {
+	case LDD_MT_LDISKFS:
+	case LDD_MT_LDISKFS2:
+		ret = ldiskfs_write_ldd(mop);
+		break;
+	default:
+		fatal();
+		fprintf(stderr, "unknown fs type %d '%s'\n",
+			ldd->ldd_mount_type, MT_STR(ldd));
+		ret = EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
 /* Read the server config files */
 int osd_read_ldd(char *dev, struct lustre_disk_data *ldd)
 {

@@ -87,7 +87,7 @@ extern char *progname;
 #define EXT3_DIRENT_SIZE                DUMMY_FILE_NAME_LEN
 
 /* Write the server config files */
-int write_local_files(struct mkfs_opts *mop)
+int ldiskfs_write_ldd(struct mkfs_opts *mop)
 {
 	char mntpt[] = "/tmp/mntXXXXXX";
 	char filepnm[128];

@@ -687,7 +687,7 @@ int main(int argc, char *const argv[])
 #endif
 
         /* Write our config files */
-        ret = write_local_files(&mop);
+	ret = osd_write_ldd(&mop);
         if (ret != 0) {
                 fatal();
                 fprintf(stderr, "failed to write local files\n");
