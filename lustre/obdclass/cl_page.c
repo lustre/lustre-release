@@ -1023,15 +1023,14 @@ EXPORT_SYMBOL(cl_page_own_try);
 void cl_page_assume(const struct lu_env *env,
                     struct cl_io *io, struct cl_page *pg)
 {
-        PASSERT(env, pg, pg->cp_owner == NULL);
         PINVRNT(env, pg, cl_object_same(pg->cp_obj, io->ci_obj));
-        PINVRNT(env, pg, cl_page_invariant(pg));
 
         ENTRY;
         pg = cl_page_top(pg);
         io = cl_io_top(io);
 
         cl_page_invoid(env, io, pg, CL_PAGE_OP(cpo_assume));
+        PASSERT(env, pg, pg->cp_owner == NULL);
         pg->cp_owner = io;
         pg->cp_task = current;
         cl_page_owner_set(pg);
