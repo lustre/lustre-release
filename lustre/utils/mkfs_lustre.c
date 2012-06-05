@@ -500,6 +500,7 @@ int main(int argc, char *const argv[])
         char *mountopts = NULL;
         char always_mountopts[512] = "";
         char default_mountopts[512] = "";
+	unsigned mount_type;
         int ret = 0;
 
         if ((progname = strrchr(argv[0], '/')) != NULL)
@@ -523,7 +524,7 @@ int main(int argc, char *const argv[])
            new ones. */
 
         /* Check whether the disk has already been formatted by mkfs.lustre */
-        ret = is_lustre_target(&mop);
+	ret = osd_is_lustre(mop.mo_device, &mount_type);
         if (ret == 0) {
                 fatal();
                 fprintf(stderr, "Device %s has not been formatted with "
@@ -665,7 +666,7 @@ int main(int argc, char *const argv[])
 #ifndef TUNEFS /* mkfs.lustre */
         /* Check whether the disk has already been formatted by mkfs.lustre */
         if (!(mop.mo_flags & MO_FORCEFORMAT)) {
-                ret = is_lustre_target(&mop);
+		ret = osd_is_lustre(mop.mo_device, &mount_type);
                 if (ret) {
                         fatal();
                         fprintf(stderr, "Device %s was previously formatted "

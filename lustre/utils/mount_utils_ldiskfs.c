@@ -277,30 +277,25 @@ static int file_in_dev(char *file_name, char *dev_name)
 }
 
 /* Check whether the device has already been used with lustre */
-int is_lustre_target(struct mkfs_opts *mop)
+int ldiskfs_is_lustre(char *dev, unsigned *mount_type)
 {
-	int rc;
+	int ret;
 
-	vprint("checking for existing Lustre data: ");
-
-	if ((rc = file_in_dev(MOUNT_DATA_FILE, mop->mo_device))) {
-		vprint("found %s\n",
-		       (rc == 1) ? MOUNT_DATA_FILE : "extents");
-		/* in the -1 case, 'extents' means this really IS a lustre
-		   target */
-		return rc;
+	ret = file_in_dev(MOUNT_DATA_FILE, dev);
+	if (ret) {
+		/* in the -1 case, 'extents' means IS a lustre target */
+		*mount_type = LDD_MT_LDISKFS;
+		return 1;
 	}
 
-	if ((rc = file_in_dev(LAST_RCVD, mop->mo_device))) {
-		vprint("found %s\n", LAST_RCVD);
-		return rc;
+	ret = file_in_dev(LAST_RCVD, dev);
+	if (ret) {
+		*mount_type = LDD_MT_LDISKFS;
+		return 1;
 	}
 
-	vprint("not found\n");
-	return 0; /* The device is not a lustre target. */
+	return 0;
 }
-
-
 
 /* Check if a certain feature is supported by e2fsprogs.
  * Firstly we try to use "debugfs supported_features" command to check if

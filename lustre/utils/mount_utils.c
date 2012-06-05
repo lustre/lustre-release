@@ -376,6 +376,20 @@ int loop_format(struct mkfs_opts *mop)
 	return 0;
 }
 
+/* Was this device formatted for Lustre */
+int osd_is_lustre(char *dev, unsigned *mount_type)
+{
+	vprint("checking for existing Lustre data: ");
+
+	if (ldiskfs_is_lustre(dev, mount_type)) {
+		vprint("found\n");
+		return 1;
+	}
+
+	vprint("not found\n");
+	return 0;
+}
+
 int osd_prepare_lustre(struct mkfs_opts *mop,
 		char *default_mountopts, int default_len,
 		char *always_mountopts, int always_len)
