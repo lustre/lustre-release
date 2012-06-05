@@ -518,15 +518,6 @@ int main(int argc, char *const argv[])
         /* device is last arg */
         strscpy(mop.mo_device, argv[argc - 1], sizeof(mop.mo_device));
 
-        /* Are we using a loop device? */
-        ret = is_block(mop.mo_device);
-        if (ret < 0) {
-                ret = errno;
-                goto out;
-        }
-        if (ret == 0)
-                mop.mo_flags |= MO_IS_LOOP;
-
 #ifdef TUNEFS
         /* For tunefs, we must read in the old values before parsing any
            new ones. */
@@ -605,32 +596,14 @@ int main(int argc, char *const argv[])
 #endif
 
         /* These are the permanent mount options (always included) */
-        switch (ldd->ldd_mount_type) {
-        case LDD_MT_EXT3:
-        case LDD_MT_LDISKFS:
-        case LDD_MT_LDISKFS2:
-                strscat(default_mountopts, ",errors=remount-ro",
-                        sizeof(default_mountopts));
-                if (IS_MDT(ldd) || IS_MGS(ldd))
-                        strscat(always_mountopts, ",user_xattr",
-                                sizeof(always_mountopts));
-                /* NB: Files created while extents are enabled can only be read
-                 * if mounted using the ext4 or ldiskfs filesystem type. */
-                if (IS_OST(ldd) &&
-                    (ldd->ldd_mount_type == LDD_MT_LDISKFS ||
-                     ldd->ldd_mount_type == LDD_MT_LDISKFS2)) {
-                        strscat(default_mountopts, ",extents,mballoc",
-                                sizeof(default_mountopts));
-                }
-                break;
-        default:
-                fatal();
-                fprintf(stderr, "unknown fs type %d '%s'\n",
-                        ldd->ldd_mount_type,
-                        MT_STR(ldd));
-                ret = EINVAL;
-                goto out;
-        }
+	ret = osd_prepare_lustre(&mop,
+				 default_mountopts, sizeof(default_mountopts),
+				 always_mountopts, sizeof(always_mountopts));
+	if (ret) {
+		fatal();
+		fprintf(stderr, "unable to prepare backend (%d)\n", ret);
+		goto out;
+	}
 
         if (mountopts) {
                 trim_mountfsoptions(mountopts);

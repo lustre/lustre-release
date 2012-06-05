@@ -376,6 +376,31 @@ int loop_format(struct mkfs_opts *mop)
 	return 0;
 }
 
+int osd_prepare_lustre(struct mkfs_opts *mop,
+		char *default_mountopts, int default_len,
+		char *always_mountopts, int always_len)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	int ret;
+
+	switch (ldd->ldd_mount_type) {
+	case LDD_MT_LDISKFS:
+	case LDD_MT_LDISKFS2:
+		ret = ldiskfs_prepare_lustre(mop,
+					     default_mountopts, default_len,
+					     always_mountopts, always_len);
+		break;
+	default:
+		fatal();
+		fprintf(stderr, "unknown fs type %d '%s'\n",
+			ldd->ldd_mount_type, MT_STR(ldd));
+		ret = EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
 __u64 get_device_size(char* device)
 {
 	int ret, fd;

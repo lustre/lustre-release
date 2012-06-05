@@ -95,6 +95,7 @@ llog_reader_DEPENDENCIES := $(LIBPTLCTL)
 lr_reader_SOURCES = lr_reader.c
 
 mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h
+mount_lustre_SOURCES += mount_utils_ldiskfs.c
 mount_lustre_LDADD := $(LIBPTLCTL)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 
