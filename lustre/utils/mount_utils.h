@@ -77,6 +77,8 @@ int add_param(char *buf, char *key, char *val);
 int get_param(char *buf, char *key, char **val);
 char *strscat(char *dst, char *src, int buflen);
 char *strscpy(char *dst, char *src, int buflen);
+int check_mountfsoptions(char *mountopts, char *wanted_mountopts, int justwarn);
+void trim_mountfsoptions(char *s);
 __u64 get_device_size(char* device);
 
 int is_block(char *devname);
@@ -85,5 +87,11 @@ int make_lustre_backfs(struct mkfs_opts *mop);
 int write_local_files(struct mkfs_opts *mop);
 int read_local_files(struct mkfs_opts *mop);
 int is_lustre_target(struct mkfs_opts *mop);
+
+/* loopback helper functions */
+int file_create(char *path, int size);
+int loop_format(struct mkfs_opts *mop);
+int loop_setup(struct mkfs_opts *mop);
+int loop_cleanup(struct mkfs_opts *mop);
 
 #endif
