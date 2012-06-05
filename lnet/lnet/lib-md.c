@@ -53,8 +53,8 @@ lnet_md_unlink(lnet_libmd_t *md)
                 /* Disassociate from ME (if any), and unlink it if it was created
                  * with LNET_UNLINK */
                 if (me != NULL) {
-                        md->md_me = NULL;
-                        me->me_md = NULL;
+			/* detach MD from portal */
+			lnet_ptl_detach_md(me, md);
                         if (me->me_unlink == LNET_UNLINK)
                                 lnet_me_unlink(me);
                 }
@@ -263,6 +263,8 @@ int
 LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
              lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
+	CFS_LIST_HEAD	(matches);
+	CFS_LIST_HEAD	(drops);
         lnet_me_t     *me;
         lnet_libmd_t  *md;
         int            rc;
@@ -299,17 +301,17 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 	if (rc != 0)
 		goto failed;
 
-	the_lnet.ln_portals[me->me_portal]->ptl_ml_version++;
-
-	me->me_md = md;
-	md->md_me = me;
+	/* attach this MD to portal of ME and check if it matches any
+	 * blocked msgs on this portal */
+	lnet_ptl_attach_md(me, md, &matches, &drops);
 
 	lnet_md2handle(handle, md);
 
-	/* check if this MD matches any blocked msgs */
-	lnet_match_blocked_msg(md);   /* expects LNET_LOCK held */
-
 	LNET_UNLOCK();
+
+	lnet_drop_delayed_msg_list(&drops, "Bad match");
+	lnet_recv_delayed_msg_list(&matches);
+
 	return 0;
 
  failed:

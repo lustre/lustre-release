@@ -191,8 +191,16 @@ typedef struct lnet_msg {
 	lnet_nid_t		msg_from;
 	__u32			msg_type;
 
-	unsigned int		msg_rx_committed:1;
+	/* commited for sending */
 	unsigned int		msg_tx_committed:1;
+	/* queued for tx credit */
+	unsigned int		msg_tx_delayed:1;
+	/* commited for receiving */
+	unsigned int		msg_rx_committed:1;
+	/* queued for RX buffer */
+	unsigned int		msg_rx_delayed:1;
+	/* ready for pending on RX delay list */
+	unsigned int		msg_rx_ready_delay:1;
 
         unsigned int          msg_vmflush:1;      /* VM trying to free memory */
         unsigned int          msg_target_is_router:1; /* sending to a router */
@@ -200,7 +208,6 @@ typedef struct lnet_msg {
         unsigned int          msg_ack:1;          /* ack on finalize (PUT) */
         unsigned int          msg_sending:1;      /* outgoing message */
         unsigned int          msg_receiving:1;    /* being received */
-        unsigned int          msg_delayed:1;      /* had to Q for buffer or tx credit */
         unsigned int          msg_txcredit:1;     /* taken an NI send credit */
         unsigned int          msg_peertxcredit:1; /* taken a peer send credit */
         unsigned int          msg_rtrcredit:1;    /* taken a globel router credit */
@@ -550,17 +557,27 @@ enum {
 #define LNET_PTL_MATCH_WILDCARD     (1 << 2)    /* wildcard match, request portal */
 
 /* ME hash of RDMA portal */
-#define LNET_PORTAL_HASH_BITS        8
-#define LNET_PORTAL_HASH_SIZE       (1 << LNET_PORTAL_HASH_BITS)
+#define LNET_MT_HASH_BITS		8
+#define LNET_MT_HASH_SIZE		(1 << LNET_MT_HASH_BITS)
+
+/* portal match table */
+struct lnet_match_table {
+	/* reserved for upcoming patches, CPU partition ID */
+	unsigned int		mt_cpt;
+	unsigned int		mt_portal;      /* portal index */
+	cfs_list_t		mt_mlist;       /* matching list */
+	cfs_list_t		*mt_mhash;      /* matching hash */
+};
 
 typedef struct lnet_portal {
 	unsigned int		ptl_index;	/* portal ID, reserved */
-        cfs_list_t       *ptl_mhash;            /* match hash */
-        cfs_list_t        ptl_mlist;            /* match list */
-        cfs_list_t        ptl_msgq;             /* messages blocking for MD */
-        __u64             ptl_ml_version;       /* validity stamp, only changed for new attached MD */
-        __u64             ptl_msgq_version;     /* validity stamp */
-        unsigned int      ptl_options;
+	/* flags on this portal: lazy, unique... */
+	unsigned int		ptl_options;
+	/* Now we only have single instance for each portal,
+	 * will have instance per CPT in upcoming patches */
+	struct lnet_match_table	*ptl_mtable;
+	/* messages blocking for MD */
+	cfs_list_t		ptl_msgq;
 } lnet_portal_t;
 
 #define LNET_LH_HASH_BITS	12

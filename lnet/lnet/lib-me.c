@@ -77,10 +77,9 @@ LNetMEAttach(unsigned int portal,
              lnet_unlink_t unlink, lnet_ins_pos_t pos,
              lnet_handle_me_t *handle)
 {
+	struct lnet_match_table *mtable;
         lnet_me_t        *me;
-        lnet_portal_t    *ptl;
         cfs_list_t       *head;
-        int               rc;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -88,9 +87,9 @@ LNetMEAttach(unsigned int portal,
         if ((int)portal >= the_lnet.ln_nportals)
                 return -EINVAL;
 
-	ptl = the_lnet.ln_portals[portal];
-	rc = lnet_ptl_type_match(ptl, match_id, match_bits, ignore_bits);
-	if (!rc)
+	mtable = lnet_mt_of_attach(portal, match_id,
+				   match_bits, ignore_bits, pos);
+	if (mtable == NULL) /* can't match portal type */
 		return -EPERM;
 
         me = lnet_me_alloc();
@@ -107,7 +106,7 @@ LNetMEAttach(unsigned int portal,
         me->me_md = NULL;
 
 	lnet_res_lh_initialize(&the_lnet.ln_me_container, &me->me_lh);
-	head = lnet_ptl_me_head(portal, match_id, match_bits);
+	head = lnet_mt_match_head(mtable, match_id, match_bits);
         LASSERT (head != NULL);
 
         if (pos == LNET_INS_AFTER)
@@ -248,12 +247,15 @@ LNetMEUnlink(lnet_handle_me_t meh)
 void
 lnet_me_unlink(lnet_me_t *me)
 {
-        cfs_list_del (&me->me_list);
+	cfs_list_del(&me->me_list);
 
-        if (me->me_md != NULL) {
-                me->me_md->md_me = NULL;
-                lnet_md_unlink(me->me_md);
-        }
+	if (me->me_md != NULL) {
+		lnet_libmd_t *md = me->me_md;
+
+		/* detach MD from portal of this ME */
+		lnet_ptl_detach_md(me, md);
+		lnet_md_unlink(md);
+	}
 
 	lnet_res_lh_invalidate(&me->me_lh);
 	lnet_me_free_locked(me);

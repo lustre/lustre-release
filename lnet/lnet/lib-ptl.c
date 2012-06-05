@@ -38,11 +38,12 @@
 
 #include <lnet/lib-lnet.h>
 
-int
-lnet_ptl_type_match(struct lnet_portal *ptl, lnet_process_id_t match_id,
+static int
+lnet_ptl_match_type(unsigned int index, lnet_process_id_t match_id,
 		    __u64 mbits, __u64 ignore_bits)
 {
-	int unique;
+	struct lnet_portal	*ptl = the_lnet.ln_portals[index];
+	int			unique;
 
 	unique = ignore_bits == 0 &&
 		 match_id.nid != LNET_NID_ANY &&
@@ -158,42 +159,88 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 	return LNET_MATCHMD_OK;
 }
 
-int
-lnet_match_md(int index, int op_mask, lnet_process_id_t src,
-	      unsigned int rlength, unsigned int roffset,
-	      __u64 match_bits, lnet_msg_t *msg)
+struct lnet_match_table *
+lnet_mt_of_attach(unsigned int index, lnet_process_id_t id,
+		  __u64 mbits, __u64 ignore_bits, lnet_ins_pos_t pos)
 {
-	struct lnet_portal	*ptl = the_lnet.ln_portals[index];
+	struct lnet_portal *ptl;
+
+	LASSERT(index < the_lnet.ln_nportals);
+
+	if (!lnet_ptl_match_type(index, id, mbits, ignore_bits))
+		return NULL;
+
+	ptl = the_lnet.ln_portals[index];
+	/* NB: Now we only have one match-table for each portal,
+	 * and will have match-table per CPT in upcoming changes,
+	 * ME will be scattered to different match-tables based
+	 * on attaching information */
+	return ptl->ptl_mtable;
+}
+
+struct lnet_match_table *
+lnet_mt_of_match(unsigned int index, lnet_process_id_t id, __u64 mbits)
+{
+	struct lnet_portal *ptl;
+
+	LASSERT(index < the_lnet.ln_nportals);
+
+	ptl = the_lnet.ln_portals[index];
+	if (!lnet_ptl_is_unique(ptl) &&
+	    !lnet_ptl_is_wildcard(ptl) && !lnet_ptl_is_lazy(ptl))
+		return NULL;
+
+	/* NB: Now we only have one match-table for each portal,
+	 * and will have match-table per CPT in upcoming changes,
+	 * request will be scattered to different match-tables based
+	 * on matching information */
+	return ptl->ptl_mtable;
+}
+
+cfs_list_t *
+lnet_mt_match_head(struct lnet_match_table *mtable,
+		   lnet_process_id_t id, __u64 mbits)
+{
+	struct lnet_portal *ptl = the_lnet.ln_portals[mtable->mt_portal];
+
+	if (lnet_ptl_is_wildcard(ptl)) {
+		return &mtable->mt_mlist;
+
+	} else if (lnet_ptl_is_unique(ptl)) {
+		unsigned long hash = mbits + id.nid + id.pid;
+
+		hash = cfs_hash_long(hash, LNET_MT_HASH_BITS);
+		return &mtable->mt_mhash[hash];
+	}
+
+	return NULL;
+}
+
+int
+lnet_mt_match_md(struct lnet_match_table *mtable,
+		 int op_mask, lnet_process_id_t src,
+		 unsigned int rlength, unsigned int roffset,
+		 __u64 match_bits, lnet_msg_t *msg)
+{
 	cfs_list_t		*head;
 	lnet_me_t		*me;
 	lnet_me_t		*tmp;
-	lnet_libmd_t		*md;
 	int			rc;
 
-	CDEBUG(D_NET, "Request from %s of length %d into portal %d "
-	       "MB="LPX64"\n", libcfs_id2str(src), rlength, index, match_bits);
-
-	if (index < 0 || index >= the_lnet.ln_nportals) {
-		CERROR("Invalid portal %d not in [0-%d]\n",
-		       index, the_lnet.ln_nportals);
-		return LNET_MATCHMD_DROP;
-	}
-
-	head = lnet_ptl_me_head(index, src, match_bits);
+	head = lnet_mt_match_head(mtable, src, match_bits);
 	if (head == NULL) /* nobody posted anything on this portal */
 		goto out;
 
 	cfs_list_for_each_entry_safe(me, tmp, head, me_list) {
-		md = me->me_md;
-
 		/* ME attached but MD not attached yet */
-		if (md == NULL)
+		if (me->me_md == NULL)
 			continue;
 
-		LASSERT(me == md->md_me);
+		LASSERT(me == me->me_md->md_me);
 
-		rc = lnet_try_match_md(index, op_mask, src, rlength,
-				       roffset, match_bits, md, msg);
+		rc = lnet_try_match_md(mtable->mt_portal,
+				       op_mask, src, rlength, roffset,
+				       match_bits, me->me_md, msg);
 		switch (rc) {
 		default:
 			LBUG();
@@ -212,43 +259,97 @@ lnet_match_md(int index, int op_mask, lnet_process_id_t src,
 
  out:
 	if (op_mask == LNET_MD_OP_GET ||
-	    !lnet_ptl_is_lazy(ptl))
+	    !lnet_ptl_is_lazy(the_lnet.ln_portals[mtable->mt_portal]))
 		return LNET_MATCHMD_DROP;
 
 	return LNET_MATCHMD_NONE;
 }
 
+int
+lnet_ptl_match_md(unsigned int index, int op_mask, lnet_process_id_t src,
+		  unsigned int rlength, unsigned int roffset,
+		  __u64 match_bits, lnet_msg_t *msg)
+{
+	struct lnet_match_table	*mtable;
+	struct lnet_portal	*ptl;
+	int			rc;
+
+	CDEBUG(D_NET, "Request from %s of length %d into portal %d "
+	       "MB="LPX64"\n", libcfs_id2str(src), rlength, index, match_bits);
+
+	if (index >= the_lnet.ln_nportals) {
+		CERROR("Invalid portal %d not in [0-%d]\n",
+		       index, the_lnet.ln_nportals);
+		return LNET_MATCHMD_DROP;
+	}
+
+	mtable = lnet_mt_of_match(index, src, match_bits);
+	if (mtable == NULL) {
+		CDEBUG(D_NET, "Drop early message from %s of length %d into "
+			      "portal %d MB="LPX64"\n",
+			      libcfs_id2str(src), rlength, index, match_bits);
+		return LNET_MATCHMD_DROP;
+	}
+
+	ptl = the_lnet.ln_portals[index];
+	LNET_LOCK();
+
+	if (the_lnet.ln_shutdown) {
+		rc =  LNET_MATCHMD_DROP;
+		goto out;
+	}
+
+	rc = lnet_mt_match_md(mtable, op_mask, src, rlength,
+			      roffset, match_bits, msg);
+	if (rc != LNET_MATCHMD_NONE) /* matched or dropping */
+		goto out;
+
+	if (!msg->msg_rx_ready_delay)
+		goto out;
+
+	LASSERT(!msg->msg_rx_delayed);
+	msg->msg_rx_delayed = 1;
+	cfs_list_add_tail(&msg->msg_list, &ptl->ptl_msgq);
+
+	CDEBUG(D_NET,
+	       "Delaying %s from %s portal %d MB "LPX64" offset %d len %d\n",
+	       op_mask == LNET_MD_OP_PUT ? "PUT" : "GET",
+	       libcfs_id2str(src), index, match_bits, roffset, rlength);
+ out:
+	LNET_UNLOCK();
+	return rc;
+}
+
+void
+lnet_ptl_detach_md(lnet_me_t *me, lnet_libmd_t *md)
+{
+	LASSERT(me->me_md == md && md->md_me == me);
+
+	me->me_md = NULL;
+	md->md_me = NULL;
+}
+
 /* called with LNET_LOCK held */
 void
-lnet_match_blocked_msg(lnet_libmd_t *md)
+lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
+		   cfs_list_t *matches, cfs_list_t *drops)
 {
-	CFS_LIST_HEAD		(drops);
-	CFS_LIST_HEAD		(matches);
-	cfs_list_t		*tmp;
-	cfs_list_t		*entry;
+	struct lnet_portal	*ptl = the_lnet.ln_portals[me->me_portal];
+	lnet_msg_t		*tmp;
 	lnet_msg_t		*msg;
-	struct lnet_portal	*ptl;
-	lnet_me_t		*me  = md->md_me;
-
-	LASSERT(me->me_portal < (unsigned int)the_lnet.ln_nportals);
-
-	ptl = the_lnet.ln_portals[me->me_portal];
-	if (!lnet_ptl_is_lazy(ptl)) {
-		LASSERT(cfs_list_empty(&ptl->ptl_msgq));
-		return;
-	}
 
 	LASSERT(md->md_refcount == 0); /* a brand new MD */
 
-	cfs_list_for_each_safe(entry, tmp, &ptl->ptl_msgq) {
+	me->me_md = md;
+	md->md_me = me;
+
+	cfs_list_for_each_entry_safe(msg, tmp, &ptl->ptl_msgq, msg_list) {
 		int               rc;
 		int               index;
 		lnet_hdr_t       *hdr;
 		lnet_process_id_t src;
 
-		msg = cfs_list_entry(entry, lnet_msg_t, msg_list);
-
-		LASSERT(msg->msg_delayed);
+		LASSERT(msg->msg_rx_delayed);
 
 		hdr   = &msg->msg_hdr;
 		index = hdr->msg.put.ptl_index;
@@ -266,10 +367,9 @@ lnet_match_blocked_msg(lnet_libmd_t *md)
 
 		/* Hurrah! This _is_ a match */
 		cfs_list_del(&msg->msg_list);
-		ptl->ptl_msgq_version++;
 
 		if (rc == LNET_MATCHMD_OK) {
-			cfs_list_add_tail(&msg->msg_list, &matches);
+			cfs_list_add_tail(&msg->msg_list, matches);
 
 			CDEBUG(D_NET, "Resuming delayed PUT from %s portal %d "
 			       "match "LPU64" offset %d length %d.\n",
@@ -281,79 +381,98 @@ lnet_match_blocked_msg(lnet_libmd_t *md)
 		} else {
 			LASSERT(rc == LNET_MATCHMD_DROP);
 
-			cfs_list_add_tail(&msg->msg_list, &drops);
+			cfs_list_add_tail(&msg->msg_list, drops);
 		}
 
 		if (lnet_md_exhausted(md))
 			break;
 	}
-
-	LNET_UNLOCK();
-
-	lnet_drop_delayed_msg_list(&drops, "Bad match");
-	lnet_recv_delayed_msg_list(&matches);
-
-	LNET_LOCK();
 }
 
 void
 lnet_ptl_cleanup(struct lnet_portal *ptl)
 {
-	lnet_me_t		*me;
-	int			j;
+	struct lnet_match_table	*mtable;
 
 	LASSERT(cfs_list_empty(&ptl->ptl_msgq));
-	LASSERT(cfs_list_empty(&ptl->ptl_mlist));
 
-	if (ptl->ptl_mhash == NULL) /* uninitialized portal */
+	if (ptl->ptl_mtable == NULL) /* uninitialized portal */
 		return;
 
-	/* cleanup ME */
-	while (!cfs_list_empty(&ptl->ptl_mlist)) {
-		me = cfs_list_entry(ptl->ptl_mlist.next,
-				    lnet_me_t, me_list);
-		CERROR("Active wildcard ME %p on exit\n", me);
-		cfs_list_del(&me->me_list);
-		lnet_me_free(me);
-	}
+	do { /* iterate over match-tables when we have percpt match-table */
+		cfs_list_t	*mhash;
+		lnet_me_t	*me;
+		int		j;
 
-	for (j = 0; j < LNET_PORTAL_HASH_SIZE; j++) {
-		while (!cfs_list_empty(&ptl->ptl_mhash[j])) {
-			me = cfs_list_entry(ptl->ptl_mhash[j].next,
-				       lnet_me_t, me_list);
-			CERROR("Active unique ME %p on exit\n", me);
+		mtable = ptl->ptl_mtable;
+
+		if (mtable->mt_mhash == NULL) /* uninitialized match-table */
+			continue;
+
+		mhash = mtable->mt_mhash;
+		/* cleanup ME */
+		while (!cfs_list_empty(&mtable->mt_mlist)) {
+			me = cfs_list_entry(mtable->mt_mlist.next,
+					    lnet_me_t, me_list);
+			CERROR("Active wildcard ME %p on exit\n", me);
 			cfs_list_del(&me->me_list);
 			lnet_me_free(me);
 		}
-	}
 
-	LIBCFS_FREE(ptl->ptl_mhash,
-		    LNET_PORTAL_HASH_SIZE * sizeof(ptl->ptl_mhash[0]));
-	ptl->ptl_mhash = NULL; /* mark it as finalized */
+		for (j = 0; j < LNET_MT_HASH_SIZE; j++) {
+			while (!cfs_list_empty(&mhash[j])) {
+				me = cfs_list_entry(mhash[j].next,
+						    lnet_me_t, me_list);
+				CERROR("Active unique ME %p on exit\n", me);
+				cfs_list_del(&me->me_list);
+				lnet_me_free(me);
+			}
+		}
+
+		LIBCFS_FREE(mhash, sizeof(*mhash) * LNET_MT_HASH_SIZE);
+	} while (0);
+
+	LIBCFS_FREE(ptl->ptl_mtable, sizeof(*mtable));
+	ptl->ptl_mtable = NULL;
 }
 
 int
 lnet_ptl_setup(struct lnet_portal *ptl, int index)
 {
+	struct lnet_match_table	*mtable;
 	cfs_list_t		*mhash;
-	int			i;
+	int			j;
 
 	ptl->ptl_index = index;
 	CFS_INIT_LIST_HEAD(&ptl->ptl_msgq);
-	CFS_INIT_LIST_HEAD(&ptl->ptl_mlist);
 
-	LIBCFS_ALLOC(mhash, sizeof(*mhash) * LNET_PORTAL_HASH_SIZE);
-	if (mhash == NULL) {
+	LIBCFS_ALLOC(mtable, sizeof(*mtable));
+	if (mtable == NULL) {
 		CERROR("Failed to create match table for portal %d\n", index);
 		return -ENOMEM;
 	}
 
-	for (i = 0; i < LNET_PORTAL_HASH_SIZE; i++)
-		CFS_INIT_LIST_HEAD(&mhash[i]);
+	ptl->ptl_mtable = mtable;
+	do { /* iterate over match-tables when we have percpt match-table */
+		LIBCFS_ALLOC(mhash, sizeof(*mhash) * LNET_MT_HASH_SIZE);
+		if (mhash == NULL) {
+			CERROR("Failed to create match hash for portal %d\n",
+			       index);
+			goto failed;
+		}
 
-	ptl->ptl_mhash = mhash; /* initialized */
+		mtable->mt_mhash = mhash;
+		for (j = 0; j < LNET_MT_HASH_SIZE; j++)
+			CFS_INIT_LIST_HEAD(&mhash[j]);
+
+		CFS_INIT_LIST_HEAD(&mtable->mt_mlist);
+		mtable->mt_portal = index;
+	} while (0);
 
 	return 0;
+ failed:
+	lnet_ptl_cleanup(ptl);
+	return -ENOMEM;
 }
 
 void
@@ -477,7 +596,6 @@ LNetClearLazyPortal(int portal)
 	/* grab all the blocked messages atomically */
 	cfs_list_splice_init(&ptl->ptl_msgq, &zombies);
 
-	ptl->ptl_msgq_version++;
 	lnet_ptl_unsetopt(ptl, LNET_PTL_LAZY);
 
 	LNET_UNLOCK();

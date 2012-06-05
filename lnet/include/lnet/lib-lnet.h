@@ -86,13 +86,6 @@ static inline int lnet_md_unlinkable (lnet_libmd_t *md)
                 lnet_md_exhausted(md));
 }
 
-static inline unsigned int
-lnet_match_to_hash(lnet_process_id_t id, __u64 mbits)
-{
-        mbits += id.nid + id.pid;
-        return cfs_hash_long((unsigned long)mbits, LNET_PORTAL_HASH_BITS);
-}
-
 #ifdef __KERNEL__
 #define LNET_LOCK()        cfs_spin_lock(&the_lnet.ln_lock)
 #define LNET_UNLOCK()      cfs_spin_unlock(&the_lnet.ln_lock)
@@ -639,6 +632,7 @@ void lnet_return_tx_credits_locked(lnet_msg_t *msg);
 void lnet_return_rx_credits_locked(lnet_msg_t *msg);
 
 /* portals functions */
+/* portals attributes */
 static inline int
 lnet_ptl_is_lazy(lnet_portal_t *ptl)
 {
@@ -669,29 +663,31 @@ lnet_ptl_unsetopt(lnet_portal_t *ptl, int opt)
 	ptl->ptl_options &= ~opt;
 }
 
-static inline cfs_list_t *
-lnet_ptl_me_head(int index, lnet_process_id_t id, __u64 mbits)
-{
-	lnet_portal_t *ptl = the_lnet.ln_portals[index];
+/* match-table functions */
+cfs_list_t *lnet_mt_match_head(struct lnet_match_table *mtable,
+			       lnet_process_id_t id, __u64 mbits);
+struct lnet_match_table *lnet_mt_of_attach(unsigned int index,
+					   lnet_process_id_t id, __u64 mbits,
+					   __u64 ignore_bits,
+					   lnet_ins_pos_t pos);
+struct lnet_match_table *lnet_mt_of_match(unsigned int index,
+					  lnet_process_id_t id, __u64 mbits);
+int lnet_mt_match_md(struct lnet_match_table *mtable,
+		     int op_mask, lnet_process_id_t src,
+		     unsigned int rlength, unsigned int roffset,
+		     __u64 match_bits, lnet_msg_t *msg);
 
-	if (lnet_ptl_is_wildcard(ptl)) {
-		return &ptl->ptl_mlist;
-	} else if (lnet_ptl_is_unique(ptl)) {
-		LASSERT(ptl->ptl_mhash != NULL);
-		return &ptl->ptl_mhash[lnet_match_to_hash(id, mbits)];
-	}
-	return NULL;
-}
+/* portals match/attach functions */
+void lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
+			cfs_list_t *matches, cfs_list_t *drops);
+void lnet_ptl_detach_md(lnet_me_t *me, lnet_libmd_t *md);
+int lnet_ptl_match_md(unsigned int index, int op_mask, lnet_process_id_t src,
+		      unsigned int rlength, unsigned int roffset,
+		      __u64 match_bits, lnet_msg_t *msg);
 
+/* initialized and finalize portals */
 int lnet_portals_create(void);
 void lnet_portals_destroy(void);
-
-int lnet_ptl_type_match(struct lnet_portal *ptl, lnet_process_id_t id,
-			__u64 mbits, __u64 ignore_bits);
-void lnet_match_blocked_msg(lnet_libmd_t *md);
-int lnet_match_md(int index, int op_mask, lnet_process_id_t src,
-		  unsigned int rlength, unsigned int roffset,
-		  __u64 match_bits, lnet_msg_t *msg);
 
 /* message functions */
 int lnet_parse (lnet_ni_t *ni, lnet_hdr_t *hdr,
