@@ -100,12 +100,14 @@ int loop_cleanup(struct mkfs_opts *mop);
 /* generic target support */
 int osd_read_ldd(char *dev, struct lustre_disk_data *ldd);
 int osd_is_lustre(char *dev, unsigned *mount_type);
+int osd_make_lustre(struct mkfs_opts *mop);
 int osd_prepare_lustre(struct mkfs_opts *mop,
 		       char *default_mountopts, int default_len,
 		       char *always_mountopts, int always_len);
 
 int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *ldd);
 int ldiskfs_is_lustre(char *dev, unsigned *mount_type);
+int ldiskfs_make_lustre(struct mkfs_opts *mop);
 int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
 			   char *default_mountopts, int default_len,
 			   char *always_mountopts, int always_len);

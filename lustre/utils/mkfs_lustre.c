@@ -678,7 +678,7 @@ int main(int argc, char *const argv[])
         }
 
         /* Format the backing filesystem */
-        ret = make_lustre_backfs(&mop);
+	ret = osd_make_lustre(&mop);
         if (ret != 0) {
                 fatal();
                 fprintf(stderr, "mkfs failed %d\n", ret);

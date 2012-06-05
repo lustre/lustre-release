@@ -476,7 +476,7 @@ static char *moveopts_to_end(char *start)
 }
 
 /* Build fs according to type */
-int make_lustre_backfs(struct mkfs_opts *mop)
+int ldiskfs_make_lustre(struct mkfs_opts *mop)
 {
 	__u64 device_sz = mop->mo_device_sz, block_count = 0;
 	char mkfs_cmd[PATH_MAX];

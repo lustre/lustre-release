@@ -411,6 +411,28 @@ int osd_is_lustre(char *dev, unsigned *mount_type)
 	return 0;
 }
 
+/* Build fs according to type */
+int osd_make_lustre(struct mkfs_opts *mop)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	int ret;
+
+	switch (ldd->ldd_mount_type) {
+	case LDD_MT_LDISKFS:
+	case LDD_MT_LDISKFS2:
+		ret = ldiskfs_make_lustre(mop);
+		break;
+	default:
+		fatal();
+		fprintf(stderr, "unknown fs type %d '%s'\n",
+			ldd->ldd_mount_type, MT_STR(ldd));
+		ret = EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
 int osd_prepare_lustre(struct mkfs_opts *mop,
 		char *default_mountopts, int default_len,
 		char *always_mountopts, int always_len)
