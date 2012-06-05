@@ -156,12 +156,11 @@ out_rmdir:
 	return ret;
 }
 
-int read_local_files(struct mkfs_opts *mop)
+int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *mo_ldd)
 {
 	char tmpdir[] = "/tmp/dirXXXXXX";
 	char cmd[PATH_MAX];
 	char filepnm[128];
-	char *dev;
 	FILE *filep;
 	int ret = 0;
 	int cmdsz = sizeof(cmd);
@@ -172,8 +171,6 @@ int read_local_files(struct mkfs_opts *mop)
 			progname, tmpdir, strerror(errno));
 		return errno;
 	}
-
-	dev = mop->mo_device;
 
 	/* TODO: it's worth observing the get_mountdata() function that is
 	   in mount_utils.c for getting the mountdata out of the
@@ -193,7 +190,7 @@ int read_local_files(struct mkfs_opts *mop)
 	if (filep) {
 		size_t num_read;
 		vprint("Reading %s\n", MOUNT_DATA_FILE);
-		num_read = fread(&mop->mo_ldd, sizeof(mop->mo_ldd), 1, filep);
+		num_read = fread(mo_ldd, sizeof(*mo_ldd), 1, filep);
 		if (num_read < 1 && ferror(filep)) {
 			fprintf(stderr, "%s: Unable to read from file %s: %s\n",
 				progname, filepnm, strerror(errno));

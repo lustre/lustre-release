@@ -533,7 +533,7 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 
-        ret = read_local_files(&mop);
+	ret = osd_read_ldd(mop.mo_device, &mop.mo_ldd);
         if (ret) {
                 fatal();
                 fprintf(stderr, "Failed to read previous Lustre data from %s "
