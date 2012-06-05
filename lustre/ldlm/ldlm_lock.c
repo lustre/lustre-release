@@ -343,10 +343,12 @@ int ldlm_lock_destroy_internal(struct ldlm_lock *lock)
         }
         lock->l_destroyed = 1;
 
-        if (lock->l_export && lock->l_export->exp_lock_hash &&
-            !cfs_hlist_unhashed(&lock->l_exp_hash))
-                cfs_hash_del(lock->l_export->exp_lock_hash,
-                             &lock->l_remote_handle, &lock->l_exp_hash);
+	if (lock->l_export && lock->l_export->exp_lock_hash) {
+		/* NB: it's safe to call cfs_hash_del() even lock isn't
+		 * in exp_lock_hash. */
+		cfs_hash_del(lock->l_export->exp_lock_hash,
+			     &lock->l_remote_handle, &lock->l_exp_hash);
+	}
 
         ldlm_lock_remove_from_lru(lock);
         class_handle_unhash(&lock->l_handle);
@@ -1731,11 +1733,17 @@ int ldlm_lock_set_data(struct lustre_handle *lockh, void *data)
         RETURN(0);
 }
 
+struct export_cl_data {
+	struct obd_export	*ecl_exp;
+	int			ecl_loop;
+};
+
 int ldlm_cancel_locks_for_export_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                                     cfs_hlist_node_t *hnode, void *data)
 
 {
-        struct obd_export    *exp  = data;
+	struct export_cl_data	*ecl = (struct export_cl_data *)data;
+	struct obd_export	*exp  = ecl->ecl_exp;
         struct ldlm_lock     *lock = cfs_hash_object(hs, hnode);
         struct ldlm_resource *res;
 
@@ -1748,13 +1756,28 @@ int ldlm_cancel_locks_for_export_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
         ldlm_reprocess_all(res);
         ldlm_resource_putref(res);
         LDLM_LOCK_RELEASE(lock);
-        return 0;
+
+	ecl->ecl_loop++;
+	if ((ecl->ecl_loop & -ecl->ecl_loop) == ecl->ecl_loop) {
+		CDEBUG(D_INFO,
+		       "Cancel lock %p for export %p (loop %d), still have "
+		       "%d locks left on hash table.\n",
+		       lock, exp, ecl->ecl_loop,
+		       cfs_atomic_read(&hs->hs_count));
+	}
+
+	return 0;
 }
 
 void ldlm_cancel_locks_for_export(struct obd_export *exp)
 {
-        cfs_hash_for_each_empty(exp->exp_lock_hash,
-                                ldlm_cancel_locks_for_export_cb, exp);
+	struct export_cl_data	ecl = {
+		.ecl_exp	= exp,
+		.ecl_loop	= 0,
+	};
+
+	cfs_hash_for_each_empty(exp->exp_lock_hash,
+				ldlm_cancel_locks_for_export_cb, &ecl);
 }
 
 /**

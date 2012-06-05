@@ -2228,10 +2228,13 @@ int ldlm_revoke_lock_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
         LASSERT(!lock->l_blocking_lock);
 
         lock->l_flags |= LDLM_FL_AST_SENT;
-        if (lock->l_export && lock->l_export->exp_lock_hash &&
-            !cfs_hlist_unhashed(&lock->l_exp_hash))
-                cfs_hash_del(lock->l_export->exp_lock_hash,
-                             &lock->l_remote_handle, &lock->l_exp_hash);
+        if (lock->l_export && lock->l_export->exp_lock_hash) {
+		/* NB: it's safe to call cfs_hash_del() even lock isn't
+		 * in exp_lock_hash. */
+		cfs_hash_del(lock->l_export->exp_lock_hash,
+			     &lock->l_remote_handle, &lock->l_exp_hash);
+	}
+
         cfs_list_add_tail(&lock->l_rk_ast, rpc_list);
         LDLM_LOCK_GET(lock);
 
