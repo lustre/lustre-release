@@ -1306,10 +1306,15 @@ cfs_hash_del(cfs_hash_t *hs, const void *key, cfs_hlist_node_t *hnode)
         cfs_hash_lock(hs, 0);
         cfs_hash_dual_bd_get_and_lock(hs, key, bds, 1);
 
-        if (bds[1].bd_bucket == NULL && hnode != NULL)
-                cfs_hash_bd_del_locked(hs, &bds[0], hnode);
-        else
-                hnode = cfs_hash_dual_bd_finddel_locked(hs, bds, key, hnode);
+	/* NB: do nothing if @hnode is not in hash table */
+	if (hnode == NULL || !cfs_hlist_unhashed(hnode)) {
+		if (bds[1].bd_bucket == NULL && hnode != NULL) {
+			cfs_hash_bd_del_locked(hs, &bds[0], hnode);
+		} else {
+			hnode = cfs_hash_dual_bd_finddel_locked(hs, bds,
+								key, hnode);
+		}
+	}
 
         if (hnode != NULL) {
                 obj  = cfs_hash_object(hs, hnode);
