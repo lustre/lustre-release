@@ -157,6 +157,62 @@ char *strscpy(char *dst, char *src, int buflen)
 	return strscat(dst, src, buflen);
 }
 
+int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
+{
+	FILE *fp;
+	struct mntent *mnt;
+
+	fp = setmntent(MOUNTED, "r");
+	if (fp == NULL)
+		return 0;
+
+	while ((mnt = getmntent(fp)) != NULL) {
+		if ((strcmp(mnt->mnt_fsname, spec1) == 0 ||
+		     strcmp(mnt->mnt_fsname, spec2) == 0) &&
+		    (mtpt == NULL || strcmp(mnt->mnt_dir, mtpt) == 0) &&
+		    (type == NULL || strcmp(mnt->mnt_type, type) == 0)) {
+			endmntent(fp);
+			return(EEXIST);
+		}
+	}
+	endmntent(fp);
+
+	return 0;
+}
+
+int update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
+		int flags, int freq, int pass)
+{
+	FILE *fp;
+	struct mntent mnt;
+	int rc = 0;
+
+	mnt.mnt_fsname = spec;
+	mnt.mnt_dir = mtpt;
+	mnt.mnt_type = type;
+	mnt.mnt_opts = opts ? opts : "";
+	mnt.mnt_freq = freq;
+	mnt.mnt_passno = pass;
+
+	fp = setmntent(MOUNTED, "a+");
+	if (fp == NULL) {
+		fprintf(stderr, "%s: setmntent(%s): %s:",
+			progname, MOUNTED, strerror (errno));
+		rc = 16;
+	} else {
+		if ((addmntent(fp, &mnt)) == 1) {
+			fprintf(stderr, "%s: addmntent: %s:",
+				progname, strerror (errno));
+			rc = 16;
+		}
+		endmntent(fp);
+	}
+
+	return rc;
+}
+
+/* Search for opt in mntlist, returning true if found.
+ */
 static int in_mntlist(char *opt, char *mntlist)
 {
 	char *ml, *mlp, *item, *ctx = NULL;

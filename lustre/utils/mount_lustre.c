@@ -48,10 +48,6 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/mount.h>
-#include <linux/fs.h>
-#include <mntent.h>
-#include <getopt.h>
 #include "obdctl.h"
 #include <lustre_ver.h>
 #include <glob.h>
@@ -101,61 +97,6 @@ void usage(FILE *out)
                 "size for the underlying raid if present\n"
                 );
         exit((out != stdout) ? EINVAL : 0);
-}
-
-static int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
-{
-        FILE *fp;
-        struct mntent *mnt;
-
-        fp = setmntent(MOUNTED, "r");
-        if (fp == NULL)
-                return(0);
-
-        while ((mnt = getmntent(fp)) != NULL) {
-                if ((strcmp(mnt->mnt_fsname, spec1) == 0 ||
-                     strcmp(mnt->mnt_fsname, spec2) == 0) &&
-                        strcmp(mnt->mnt_dir, mtpt) == 0 &&
-                        strcmp(mnt->mnt_type, type) == 0) {
-                        endmntent(fp);
-                        return(EEXIST);
-                }
-        }
-        endmntent(fp);
-
-        return(0);
-}
-
-static int
-update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
-                  int flags, int freq, int pass)
-{
-        FILE *fp;
-        struct mntent mnt;
-        int rc = 0;
-
-        mnt.mnt_fsname = spec;
-        mnt.mnt_dir = mtpt;
-        mnt.mnt_type = type;
-        mnt.mnt_opts = opts ? opts : "";
-        mnt.mnt_freq = freq;
-        mnt.mnt_passno = pass;
-
-        fp = setmntent(MOUNTED, "a+");
-        if (fp == NULL) {
-                fprintf(stderr, "%s: setmntent(%s): %s:",
-                        progname, MOUNTED, strerror (errno));
-                rc = 16;
-        } else {
-                if ((addmntent(fp, &mnt)) == 1) {
-                        fprintf(stderr, "%s: addmntent: %s:",
-                                progname, strerror (errno));
-                        rc = 16;
-                }
-                endmntent(fp);
-        }
-
-        return rc;
 }
 
 /* Get rid of symbolic hostnames for tcp, since kernel can't do lookups */
