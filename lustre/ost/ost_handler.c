@@ -1694,8 +1694,10 @@ static inline int prolong_timeout(struct ptlrpc_request *req)
 static void ost_prolong_lock_one(struct ost_prolong_data *opd,
                                  struct ldlm_lock *lock)
 {
-        LASSERT(lock->l_req_mode == lock->l_granted_mode);
-        LASSERT(lock->l_export == opd->opd_exp);
+	LASSERT(lock->l_export == opd->opd_exp);
+
+	if (lock->l_destroyed) /* lock already cancelled */
+		return;
 
         /* XXX: never try to grab resource lock here because we're inside
          * exp_bl_list_lock; in ldlm_lockd.c to handle waiting list we take
