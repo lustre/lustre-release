@@ -2791,7 +2791,7 @@ kiblnd_base_startup (void)
         kiblnd_data.kib_init = IBLND_INIT_DATA;
         /*****************************************************/
 
-        for (i = 0; i < IBLND_N_SCHED; i++) {
+        for (i = 0; i < *kiblnd_tunables.kib_schedulers; i++) {
                 rc = kiblnd_thread_start(kiblnd_scheduler, (void *)((long)i));
                 if (rc != 0) {
                         CERROR("Can't spawn o2iblnd scheduler[%d]: %d\n",
