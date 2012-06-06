@@ -628,34 +628,6 @@ lnet_ni_recv(lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
                 lnet_finalize(ni, msg, rc);
 }
 
-int
-lnet_compare_routes(lnet_route_t *r1, lnet_route_t *r2)
-{
-        lnet_peer_t *p1 = r1->lr_gateway;
-        lnet_peer_t *p2 = r2->lr_gateway;
-
-        if (r1->lr_hops < r2->lr_hops)
-                return 1;
-
-        if (r1->lr_hops > r2->lr_hops)
-                return -1;
-
-        if (p1->lp_txqnob < p2->lp_txqnob)
-                return 1;
-
-        if (p1->lp_txqnob > p2->lp_txqnob)
-                return -1;
-
-        if (p1->lp_txcredits > p2->lp_txcredits)
-                return 1;
-
-        if (p1->lp_txcredits < p2->lp_txcredits)
-                return -1;
-
-        return 0;
-}
-
-
 void
 lnet_setpayloadbuffer(lnet_msg_t *msg)
 {
@@ -734,29 +706,11 @@ lnet_ni_eager_recv(lnet_ni_t *ni, lnet_msg_t *msg)
 	return rc;
 }
 
-int
-lnet_ni_eager_recv_locked(lnet_ni_t *ni, lnet_msg_t *msg)
-{
-	int	rc;
-
-	if (ni->ni_lnd->lnd_eager_recv == NULL) {
-		msg->msg_rx_ready_delay = 1;
-		return 0;
-	}
-
-	LNET_UNLOCK();
-	rc = lnet_ni_eager_recv(ni, msg);
-	LNET_LOCK();
-
-	return rc;
-}
-
 /* NB: caller shall hold a ref on 'lp' as I'd drop LNET_LOCK */
 void
-lnet_ni_peer_alive(lnet_peer_t *lp)
+lnet_ni_query_locked(lnet_ni_t *ni, lnet_peer_t *lp)
 {
-        cfs_time_t  last_alive = 0;
-        lnet_ni_t  *ni = lp->lp_ni;
+	cfs_time_t	last_alive = 0;
 
         LASSERT (lnet_peer_aliveness_enabled(lp));
         LASSERT (ni->ni_lnd->lnd_query != NULL);
@@ -844,7 +798,7 @@ lnet_peer_alive_locked (lnet_peer_t *lp)
         }
 
         /* query NI for latest aliveness news */
-        lnet_ni_peer_alive(lp);
+	lnet_ni_query_locked(lp->lp_ni, lp);
 
         if (lnet_peer_is_alive(lp, now))
                 return 1;
@@ -1137,6 +1091,33 @@ lnet_return_rx_credits_locked(lnet_msg_t *msg)
                 msg->msg_rxpeer = NULL;
                 lnet_peer_decref_locked(rxpeer);
         }
+}
+
+static int
+lnet_compare_routes(lnet_route_t *r1, lnet_route_t *r2)
+{
+	lnet_peer_t *p1 = r1->lr_gateway;
+	lnet_peer_t *p2 = r2->lr_gateway;
+
+	if (r1->lr_hops < r2->lr_hops)
+		return 1;
+
+	if (r1->lr_hops > r2->lr_hops)
+		return -1;
+
+	if (p1->lp_txqnob < p2->lp_txqnob)
+		return 1;
+
+	if (p1->lp_txqnob > p2->lp_txqnob)
+		return -1;
+
+	if (p1->lp_txcredits > p2->lp_txcredits)
+		return 1;
+
+	if (p1->lp_txcredits < p2->lp_txcredits)
+		return -1;
+
+	return 0;
 }
 
 static lnet_peer_t *
@@ -1608,6 +1589,31 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
         return 0;
 }
 
+static int
+lnet_parse_forward_locked(lnet_ni_t *ni, lnet_msg_t *msg)
+{
+	int	rc = 0;
+
+#ifdef __KERNEL__
+	if (msg->msg_rxpeer->lp_rtrcredits <= 0 ||
+	    lnet_msg2bufpool(msg)->rbp_credits <= 0) {
+		if (ni->ni_lnd->lnd_eager_recv == NULL) {
+			msg->msg_rx_ready_delay = 1;
+		} else {
+			LNET_UNLOCK();
+			rc = lnet_ni_eager_recv(ni, msg);
+			LNET_LOCK();
+		}
+	}
+
+	if (rc == 0)
+		rc = lnet_post_routed_recv_locked(msg, 0);
+#else
+	LBUG();
+#endif
+	return rc;
+}
+
 char *
 lnet_msgtyp2str (int type)
 {
@@ -1832,6 +1838,20 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
         msg->msg_hdr = *hdr;
 	/* for building message event */
 	msg->msg_from = from_nid;
+	if (!for_me) {
+		msg->msg_target.pid	= dest_pid;
+		msg->msg_target.nid	= dest_nid;
+		msg->msg_routing	= 1;
+
+	} else {
+		/* convert common msg->hdr fields to host byteorder */
+		msg->msg_hdr.type	= type;
+		msg->msg_hdr.src_nid	= src_nid;
+		msg->msg_hdr.src_pid	= le32_to_cpu(msg->msg_hdr.src_pid);
+		msg->msg_hdr.dest_nid	= dest_nid;
+		msg->msg_hdr.dest_pid	= dest_pid;
+		msg->msg_hdr.payload_length = payload_length;
+	}
 
         LNET_LOCK();
         rc = lnet_nid2peer_locked(&msg->msg_rxpeer, from_nid);
@@ -1846,42 +1866,21 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
 	}
 
 	lnet_msg_commit(msg, 0);
-        LNET_UNLOCK();
 
-#ifndef __KERNEL__
-        LASSERT (for_me);
-#else
-        if (!for_me) {
-                msg->msg_target.pid = dest_pid;
-                msg->msg_target.nid = dest_nid;
-                msg->msg_routing = 1;
-                msg->msg_offset = 0;
+	if (!for_me) {
+		rc = lnet_parse_forward_locked(ni, msg);
+		LNET_UNLOCK();
 
-                LNET_LOCK();
-                if (msg->msg_rxpeer->lp_rtrcredits <= 0 ||
-                    lnet_msg2bufpool(msg)->rbp_credits <= 0) {
-			rc = lnet_ni_eager_recv_locked(ni, msg);
-                        if (rc != 0) {
-                                LNET_UNLOCK();
-                                goto free_drop;
-                        }
-                }
-                rc = lnet_post_routed_recv_locked(msg, 0);
-                LNET_UNLOCK();
+		if (rc < 0)
+			goto free_drop;
+		if (rc == 0) {
+			lnet_ni_recv(ni, msg->msg_private, msg, 0,
+				     0, payload_length, payload_length);
+		}
+		return 0;
+	}
 
-                if (rc == 0)
-                        lnet_ni_recv(ni, msg->msg_private, msg, 0,
-                                     0, payload_length, payload_length);
-                return 0;
-        }
-#endif
-        /* convert common msg->hdr fields to host byteorder */
-        msg->msg_hdr.type = type;
-        msg->msg_hdr.src_nid = src_nid;
-        msg->msg_hdr.src_pid = le32_to_cpu(msg->msg_hdr.src_pid);
-        msg->msg_hdr.dest_nid = dest_nid;
-        msg->msg_hdr.dest_pid = dest_pid;
-        msg->msg_hdr.payload_length = payload_length;
+	LNET_UNLOCK();
 
         switch (type) {
         case LNET_MSG_ACK:
