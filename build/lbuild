@@ -1018,8 +1018,9 @@ build_kernel_ib() {
             OFED_HARDWARE="$OFED_HARDWARE --with-ehca-mod"
             ;;
     esac
-    # we're no longer shipping the OFED iSCSI
+    # we're no longer shipping the OFED iSCSI target
     #OFED_ISCSI="--with-srp-mod --with-srp-target-mod"
+    OFED_ISCSI="--with-srp-mod"
     ## ISER module has no backport support as of OFED 1.5 (i.e. only builds on
     ##kernels >= 2.6.30)
     #if [[ $OFED_VERSION = 1.[0-4]* ]]; then
