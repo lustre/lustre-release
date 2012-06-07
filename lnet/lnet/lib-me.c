@@ -96,7 +96,7 @@ LNetMEAttach(unsigned int portal,
         if (me == NULL)
                 return -ENOMEM;
 
-        LNET_LOCK();
+	lnet_res_lock();
 
         me->me_portal = portal;
         me->me_match_id = match_id;
@@ -116,7 +116,7 @@ LNetMEAttach(unsigned int portal,
 
         lnet_me2handle(handle, me);
 
-        LNET_UNLOCK();
+	lnet_res_unlock();
 
         return 0;
 }
@@ -156,23 +156,23 @@ LNetMEInsert(lnet_handle_me_t current_meh,
         if (new_me == NULL)
                 return -ENOMEM;
 
-        LNET_LOCK();
+	lnet_res_lock();
 
-        current_me = lnet_handle2me(&current_meh);
-        if (current_me == NULL) {
+	current_me = lnet_handle2me(&current_meh);
+	if (current_me == NULL) {
 		lnet_me_free_locked(new_me);
 
-                LNET_UNLOCK();
-                return -ENOENT;
-        }
+		lnet_res_unlock();
+		return -ENOENT;
+	}
 
-        LASSERT (current_me->me_portal < the_lnet.ln_nportals);
+	LASSERT(current_me->me_portal < the_lnet.ln_nportals);
 
 	ptl = the_lnet.ln_portals[current_me->me_portal];
 	if (lnet_ptl_is_unique(ptl)) {
                 /* nosense to insertion on unique portal */
 		lnet_me_free_locked(new_me);
-                LNET_UNLOCK();
+		lnet_res_unlock();
                 return -EPERM;
         }
 
@@ -192,9 +192,9 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
         lnet_me2handle(handle, new_me);
 
-        LNET_UNLOCK();
+	lnet_res_unlock();
 
-        return 0;
+	return 0;
 }
 
 /**
@@ -221,11 +221,11 @@ LNetMEUnlink(lnet_handle_me_t meh)
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
-        LNET_LOCK();
+	lnet_res_lock();
 
         me = lnet_handle2me(&meh);
         if (me == NULL) {
-                LNET_UNLOCK();
+		lnet_res_unlock();
                 return -ENOENT;
         }
 
@@ -239,11 +239,11 @@ LNetMEUnlink(lnet_handle_me_t meh)
 
         lnet_me_unlink(me);
 
-        LNET_UNLOCK();
+	lnet_res_unlock();
         return 0;
 }
 
-/* call with LNET_LOCK please */
+/* call with lnet_res_lock please */
 void
 lnet_me_unlink(lnet_me_t *me)
 {

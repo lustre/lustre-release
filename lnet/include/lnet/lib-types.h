@@ -623,24 +623,27 @@ typedef struct
         int                    ln_niinit_self;      /* Have I called LNetNIInit myself? */
 	/* shutdown in progress */
 	int				ln_shutdown;
-
-        cfs_list_t             ln_lnds;             /* registered LNDs */
+	/* registered LNDs */
+	cfs_list_t			ln_lnds;
 
 #ifdef __KERNEL__
-        cfs_spinlock_t         ln_lock;
-        cfs_mutex_t            ln_api_mutex;
-        cfs_mutex_t            ln_lnd_mutex;
+	cfs_spinlock_t			ln_lock;
+	cfs_mutex_t			ln_api_mutex;
+	cfs_mutex_t			ln_lnd_mutex;
 	cfs_waitq_t			ln_eq_waitq;
+	cfs_spinlock_t			ln_res_lock;
 #else
 # ifndef HAVE_LIBPTHREAD
-        int                    ln_lock;
-        int                    ln_api_mutex;
-        int                    ln_lnd_mutex;
+	int				ln_lock;
+	int				ln_api_mutex;
+	int				ln_lnd_mutex;
+	int				ln_res_lock;
 # else
-        pthread_mutex_t        ln_lock;
-        pthread_mutex_t        ln_api_mutex;
-        pthread_mutex_t        ln_lnd_mutex;
+	pthread_mutex_t			ln_lock;
+	pthread_mutex_t			ln_api_mutex;
+	pthread_mutex_t			ln_lnd_mutex;
 	pthread_cond_t			ln_eq_cond;
+	pthread_mutex_t			ln_res_lock;
 # endif
 #endif
 	/* ME container  */

@@ -111,15 +111,15 @@ LNetEQAlloc(unsigned int count, lnet_eq_handler_t callback,
         eq->eq_refcount = 0;
         eq->eq_callback = callback;
 
-        LNET_LOCK();
+	lnet_res_lock();
 
 	lnet_res_lh_initialize(&the_lnet.ln_eq_container, &eq->eq_lh);
 	cfs_list_add(&eq->eq_list, &the_lnet.ln_eq_container.rec_active);
 
-        LNET_UNLOCK();
+	lnet_res_unlock();
 
-        lnet_eq2handle(handle, eq);
-        return (0);
+	lnet_eq2handle(handle, eq);
+	return 0;
 }
 
 /**
@@ -142,30 +142,30 @@ LNetEQFree(lnet_handle_eq_t eqh)
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
-        LNET_LOCK();
+	lnet_res_lock();
 
-        eq = lnet_handle2eq(&eqh);
-        if (eq == NULL) {
-                LNET_UNLOCK();
-                return (-ENOENT);
-        }
+	eq = lnet_handle2eq(&eqh);
+	if (eq == NULL) {
+		lnet_res_unlock();
+		return -ENOENT;
+	}
 
-        if (eq->eq_refcount != 0) {
-                CDEBUG(D_NET, "Event queue (%d) busy on destroy.\n",
-                       eq->eq_refcount);
-                LNET_UNLOCK();
-                return (-EBUSY);
-        }
+	if (eq->eq_refcount != 0) {
+		CDEBUG(D_NET, "Event queue (%d) busy on destroy.\n",
+		       eq->eq_refcount);
+		lnet_res_unlock();
+		return -EBUSY;
+	}
 
-        /* stash for free after lock dropped */
-        events  = eq->eq_events;
-        size    = eq->eq_size;
+	/* stash for free after lock dropped */
+	events	= eq->eq_events;
+	size	= eq->eq_size;
 
 	lnet_res_lh_invalidate(&eq->eq_lh);
-        cfs_list_del (&eq->eq_list);
+	cfs_list_del(&eq->eq_list);
 	lnet_eq_free_locked(eq);
 
-        LNET_UNLOCK();
+	lnet_res_unlock();
 
 	if (events != NULL)
 		LIBCFS_FREE(events, size * sizeof(lnet_event_t));
@@ -309,7 +309,7 @@ lnet_eq_wait_locked(int *timeout_ms)
 	cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
 	cfs_waitq_add(&the_lnet.ln_eq_waitq, &wl);
 
-	LNET_UNLOCK();
+	lnet_res_unlock();
 
 	if (tms < 0) {
 		cfs_waitq_wait(&wl, CFS_TASK_INTERRUPTIBLE);
@@ -329,7 +329,7 @@ lnet_eq_wait_locked(int *timeout_ms)
 	wait = tms != 0; /* might need to call here again */
 	*timeout_ms = tms;
 
-	LNET_LOCK();
+	lnet_res_lock();
 	cfs_waitq_del(&the_lnet.ln_eq_waitq, &wl);
 
 	return wait;
@@ -342,10 +342,10 @@ static void
 lnet_eq_cond_wait(struct timespec *ts)
 {
 	if (ts == NULL) {
-		pthread_cond_wait(&the_lnet.ln_eq_cond, &the_lnet.ln_lock);
+		pthread_cond_wait(&the_lnet.ln_eq_cond, &the_lnet.ln_res_lock);
 	} else {
 		pthread_cond_timedwait(&the_lnet.ln_eq_cond,
-				       &the_lnet.ln_lock, ts);
+				       &the_lnet.ln_res_lock, ts);
 	}
 }
 # endif
@@ -362,9 +362,18 @@ lnet_eq_wait_locked(int *timeout_ms)
 	if (the_lnet.ln_eq_waitni != NULL) {
 		/* I have a single NI that I have to call into, to get
 		 * events queued, or to block. */
-		eq_waitni = the_lnet.ln_eq_waitni;
-		lnet_ni_addref_locked(eq_waitni);
+		lnet_res_unlock();
 
+		LNET_LOCK();
+		eq_waitni = the_lnet.ln_eq_waitni;
+		if (unlikely(eq_waitni == NULL)) {
+			LNET_UNLOCK();
+
+			lnet_res_lock();
+			return -1;
+		}
+
+		lnet_ni_addref_locked(eq_waitni);
 		LNET_UNLOCK();
 
 		if (tms <= 0) { /* even for tms == 0 */
@@ -382,8 +391,8 @@ lnet_eq_wait_locked(int *timeout_ms)
 				tms = 0;
 		}
 
-		LNET_LOCK();
-		lnet_ni_decref_locked(eq_waitni);
+		lnet_ni_decref(eq_waitni);
+		lnet_res_lock();
 	} else { /* w/o eq_waitni */
 # ifndef HAVE_LIBPTHREAD
 		/* If I'm single-threaded, LNET fails at startup if it can't
@@ -471,34 +480,34 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
         if (neq < 1)
                 RETURN(-ENOENT);
 
-        LNET_LOCK();
+	lnet_res_lock();
 
         for (;;) {
 #ifndef __KERNEL__
-                LNET_UNLOCK();
+		lnet_res_unlock();
 
-                /* Recursion breaker */
-                if (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING &&
-                    !LNetHandleIsEqual(eventqs[0], the_lnet.ln_rc_eqh))
-                        lnet_router_checker();
+		/* Recursion breaker */
+		if (the_lnet.ln_rc_state == LNET_RC_STATE_RUNNING &&
+		    !LNetHandleIsEqual(eventqs[0], the_lnet.ln_rc_eqh))
+			lnet_router_checker();
 
-                LNET_LOCK();
+		lnet_res_lock();
 #endif
-                for (i = 0; i < neq; i++) {
-                        lnet_eq_t *eq = lnet_handle2eq(&eventqs[i]);
+		for (i = 0; i < neq; i++) {
+			lnet_eq_t *eq = lnet_handle2eq(&eventqs[i]);
 
-                        if (eq == NULL) {
-                                LNET_UNLOCK();
-                                RETURN(-ENOENT);
-                        }
+			if (eq == NULL) {
+				lnet_res_unlock();
+				RETURN(-ENOENT);
+			}
 
 			rc = lnet_eq_dequeue_event(eq, event);
-                        if (rc != 0) {
-                                LNET_UNLOCK();
-                                *which = i;
-                                RETURN(rc);
-                        }
-                }
+			if (rc != 0) {
+				lnet_res_unlock();
+				*which = i;
+				RETURN(rc);
+			}
+		}
 
 		if (wait == 0)
 			break;
@@ -515,6 +524,6 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 			break;
 	}
 
-	LNET_UNLOCK();
+	lnet_res_unlock();
 	RETURN(0);
 }

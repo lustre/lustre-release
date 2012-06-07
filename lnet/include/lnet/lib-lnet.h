@@ -87,6 +87,19 @@ static inline int lnet_md_unlinkable (lnet_libmd_t *md)
 }
 
 #ifdef __KERNEL__
+
+static inline void
+lnet_res_lock(void)
+{
+	cfs_spin_lock(&the_lnet.ln_res_lock);
+}
+
+static inline void
+lnet_res_unlock(void)
+{
+	cfs_spin_unlock(&the_lnet.ln_res_lock);
+}
+
 #define LNET_LOCK()        cfs_spin_lock(&the_lnet.ln_lock)
 #define LNET_UNLOCK()      cfs_spin_unlock(&the_lnet.ln_lock)
 #define LNET_MUTEX_LOCK(m)   cfs_mutex_lock(m)
@@ -105,15 +118,24 @@ do {                                            \
         (l) = 0;                                \
 } while (0)
 
-#define LNET_LOCK()        LNET_SINGLE_THREADED_LOCK(the_lnet.ln_lock)
-#define LNET_UNLOCK()      LNET_SINGLE_THREADED_UNLOCK(the_lnet.ln_lock)
-#define LNET_MUTEX_LOCK(m)     LNET_SINGLE_THREADED_LOCK(*(m))
-#define LNET_MUTEX_UNLOCK(m)   LNET_SINGLE_THREADED_UNLOCK(*(m))
+#define LNET_LOCK()		LNET_SINGLE_THREADED_LOCK(the_lnet.ln_lock)
+#define LNET_UNLOCK()		LNET_SINGLE_THREADED_UNLOCK(the_lnet.ln_lock)
+#define LNET_MUTEX_LOCK(m)	LNET_SINGLE_THREADED_LOCK(*(m))
+#define LNET_MUTEX_UNLOCK(m)	LNET_SINGLE_THREADED_UNLOCK(*(m))
+
+#define lnet_res_lock()				\
+	LNET_SINGLE_THREADED_LOCK(the_lnet.ln_res_lock)
+#define lnet_res_unlock()			\
+	LNET_SINGLE_THREADED_UNLOCK(the_lnet.ln_res_lock)
+
 # else
-#define LNET_LOCK()        pthread_mutex_lock(&the_lnet.ln_lock)
-#define LNET_UNLOCK()      pthread_mutex_unlock(&the_lnet.ln_lock)
-#define LNET_MUTEX_LOCK(m)     pthread_mutex_lock(m)
-#define LNET_MUTEX_UNLOCK(m)   pthread_mutex_unlock(m)
+#define LNET_LOCK()		pthread_mutex_lock(&the_lnet.ln_lock)
+#define LNET_UNLOCK()		pthread_mutex_unlock(&the_lnet.ln_lock)
+#define LNET_MUTEX_LOCK(m)	pthread_mutex_lock(m)
+#define LNET_MUTEX_UNLOCK(m)	pthread_mutex_unlock(m)
+#define lnet_res_lock()		pthread_mutex_lock(&the_lnet.ln_res_lock)
+#define lnet_res_unlock()	pthread_mutex_unlock(&the_lnet.ln_res_lock)
+
 # endif
 #endif
 
@@ -162,9 +184,9 @@ lnet_eq_alloc (void)
 	struct lnet_res_container *rec = &the_lnet.ln_eq_container;
 	lnet_eq_t		  *eq;
 
-	LNET_LOCK();
+	lnet_res_lock();
 	eq = (lnet_eq_t *)lnet_freelist_alloc(&rec->rec_freelist);
-	LNET_UNLOCK();
+	lnet_res_unlock();
 
 	return eq;
 }
@@ -181,9 +203,9 @@ lnet_eq_free_locked(lnet_eq_t *eq)
 static inline void
 lnet_eq_free(lnet_eq_t *eq)
 {
-	LNET_LOCK();
+	lnet_res_lock();
 	lnet_eq_free_locked(eq);
-	LNET_UNLOCK();
+	lnet_res_unlock();
 }
 
 static inline lnet_libmd_t *
@@ -193,9 +215,9 @@ lnet_md_alloc (lnet_md_t *umd)
 	struct lnet_res_container *rec = &the_lnet.ln_md_container;
 	lnet_libmd_t		  *md;
 
-	LNET_LOCK();
+	lnet_res_lock();
 	md = (lnet_libmd_t *)lnet_freelist_alloc(&rec->rec_freelist);
-	LNET_UNLOCK();
+	lnet_res_unlock();
 
 	if (md != NULL)
 		CFS_INIT_LIST_HEAD(&md->md_list);
@@ -215,9 +237,9 @@ lnet_md_free_locked(lnet_libmd_t *md)
 static inline void
 lnet_md_free(lnet_libmd_t *md)
 {
-	LNET_LOCK();
+	lnet_res_lock();
 	lnet_md_free_locked(md);
-	LNET_UNLOCK();
+	lnet_res_unlock();
 }
 
 static inline lnet_me_t *
@@ -227,9 +249,9 @@ lnet_me_alloc(void)
 	struct lnet_res_container *rec = &the_lnet.ln_me_container;
 	lnet_me_t		  *me;
 
-	LNET_LOCK();
+	lnet_res_lock();
 	me = (lnet_me_t *)lnet_freelist_alloc(&rec->rec_freelist);
-	LNET_UNLOCK();
+	lnet_res_unlock();
 
 	return me;
 }
@@ -246,9 +268,9 @@ lnet_me_free_locked(lnet_me_t *me)
 static inline void
 lnet_me_free(lnet_me_t *me)
 {
-	LNET_LOCK();
+	lnet_res_lock();
 	lnet_me_free_locked(me);
-	LNET_UNLOCK();
+	lnet_res_unlock();
 }
 
 static inline lnet_msg_t *

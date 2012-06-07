@@ -56,10 +56,10 @@ lnet_ptl_match_type(unsigned int index, lnet_process_id_t match_id,
 		goto match;
 
 	/* unset, new portal */
-	LNET_LOCK();
+	lnet_res_lock();
 	/* check again with lock */
 	if (unlikely(lnet_ptl_is_unique(ptl) || lnet_ptl_is_wildcard(ptl))) {
-		LNET_UNLOCK();
+		lnet_res_unlock();
 		goto match;
 	}
 
@@ -69,7 +69,7 @@ lnet_ptl_match_type(unsigned int index, lnet_process_id_t match_id,
 	else
 		lnet_ptl_setopt(ptl, LNET_PTL_MATCH_WILDCARD);
 
-	LNET_UNLOCK();
+	lnet_res_unlock();
 
 	return 1;
 
@@ -85,7 +85,7 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 		  unsigned int rlength, unsigned int roffset,
 		  __u64 match_bits, lnet_libmd_t *md, lnet_msg_t *msg)
 {
-	/* ALWAYS called holding the LNET_LOCK, and can't LNET_UNLOCK;
+	/* ALWAYS called holding the lnet_res_lock, and can't lnet_res_unlock;
 	 * lnet_match_blocked_msg() relies on this to avoid races */
 	unsigned int	offset;
 	unsigned int	mlength;
@@ -292,7 +292,7 @@ lnet_ptl_match_md(unsigned int index, int op_mask, lnet_process_id_t src,
 	}
 
 	ptl = the_lnet.ln_portals[index];
-	LNET_LOCK();
+	lnet_res_lock();
 
 	if (the_lnet.ln_shutdown) {
 		rc =  LNET_MATCHMD_DROP;
@@ -316,7 +316,7 @@ lnet_ptl_match_md(unsigned int index, int op_mask, lnet_process_id_t src,
 	       op_mask == LNET_MD_OP_PUT ? "PUT" : "GET",
 	       libcfs_id2str(src), index, match_bits, roffset, rlength);
  out:
-	LNET_UNLOCK();
+	lnet_res_unlock();
 	return rc;
 }
 
@@ -329,7 +329,7 @@ lnet_ptl_detach_md(lnet_me_t *me, lnet_libmd_t *md)
 	md->md_me = NULL;
 }
 
-/* called with LNET_LOCK held */
+/* called with lnet_res_lock held */
 void
 lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 		   cfs_list_t *matches, cfs_list_t *drops)
@@ -554,9 +554,9 @@ LNetSetLazyPortal(int portal)
 	CDEBUG(D_NET, "Setting portal %d lazy\n", portal);
 	ptl = the_lnet.ln_portals[portal];
 
-	LNET_LOCK();
+	lnet_res_lock();
 	lnet_ptl_setopt(ptl, LNET_PTL_LAZY);
-	LNET_UNLOCK();
+	lnet_res_unlock();
 
 	return 0;
 }
@@ -581,10 +581,10 @@ LNetClearLazyPortal(int portal)
 
 	ptl = the_lnet.ln_portals[portal];
 
-	LNET_LOCK();
+	lnet_res_lock();
 
 	if (!lnet_ptl_is_lazy(ptl)) {
-		LNET_UNLOCK();
+		lnet_res_unlock();
 		return 0;
 	}
 
@@ -598,7 +598,7 @@ LNetClearLazyPortal(int portal)
 
 	lnet_ptl_unsetopt(ptl, LNET_PTL_LAZY);
 
-	LNET_UNLOCK();
+	lnet_res_unlock();
 
 	lnet_drop_delayed_msg_list(&zombies, "Clearing lazy portal attr");
 

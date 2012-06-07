@@ -91,7 +91,8 @@ lnet_get_networks(void)
 void
 lnet_init_locks(void)
 {
-	cfs_spin_lock_init (&the_lnet.ln_lock);
+	cfs_spin_lock_init(&the_lnet.ln_lock);
+	cfs_spin_lock_init(&the_lnet.ln_res_lock);
 	cfs_waitq_init(&the_lnet.ln_eq_waitq);
 	cfs_mutex_init(&the_lnet.ln_lnd_mutex);
 	cfs_mutex_init(&the_lnet.ln_api_mutex);
@@ -173,16 +174,18 @@ lnet_get_networks (void)
 
 void lnet_init_locks(void)
 {
-        the_lnet.ln_lock = 0;
-        the_lnet.ln_lnd_mutex = 0;
-        the_lnet.ln_api_mutex = 0;
+	the_lnet.ln_lock = 0;
+	the_lnet.ln_res_lock = 0;
+	the_lnet.ln_lnd_mutex = 0;
+	the_lnet.ln_api_mutex = 0;
 }
 
 void lnet_fini_locks(void)
 {
-        LASSERT (the_lnet.ln_api_mutex == 0);
-        LASSERT (the_lnet.ln_lnd_mutex == 0);
-        LASSERT (the_lnet.ln_lock == 0);
+	LASSERT(the_lnet.ln_api_mutex == 0);
+	LASSERT(the_lnet.ln_lnd_mutex == 0);
+	LASSERT(the_lnet.ln_lock == 0);
+	LASSERT(the_lnet.ln_res_lock == 0);
 }
 
 # else
@@ -191,6 +194,7 @@ void lnet_init_locks(void)
 {
 	pthread_cond_init(&the_lnet.ln_eq_cond, NULL);
 	pthread_mutex_init(&the_lnet.ln_lock, NULL);
+	pthread_mutex_init(&the_lnet.ln_res_lock, NULL);
 	pthread_mutex_init(&the_lnet.ln_lnd_mutex, NULL);
 	pthread_mutex_init(&the_lnet.ln_api_mutex, NULL);
 }
@@ -200,6 +204,7 @@ void lnet_fini_locks(void)
 	pthread_mutex_destroy(&the_lnet.ln_api_mutex);
 	pthread_mutex_destroy(&the_lnet.ln_lnd_mutex);
 	pthread_mutex_destroy(&the_lnet.ln_lock);
+	pthread_mutex_destroy(&the_lnet.ln_res_lock);
 	pthread_cond_destroy(&the_lnet.ln_eq_cond);
 }
 

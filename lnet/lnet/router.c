@@ -659,7 +659,6 @@ lnet_parse_rc_info(lnet_rc_data_t *rcd)
 static void
 lnet_router_checker_event(lnet_event_t *event)
 {
-	/* CAVEAT EMPTOR: I'm called with lnet_res_locked */
 	lnet_rc_data_t		*rcd = event->md.user_ptr;
 	struct lnet_peer	*lp;
 
@@ -676,13 +675,16 @@ lnet_router_checker_event(lnet_event_t *event)
 	lp = rcd->rcd_gateway;
 	LASSERT(lp != NULL);
 
-	if (!lnet_isrouter(lp)) /* ignore if no longer a router */
-		return;
+	LNET_LOCK();
+	if (!lnet_isrouter(lp) || lp->lp_rcd != rcd) {
+		/* ignore if no longer a router or rcd is replaced */
+		goto out;
+	}
 
 	if (event->type == LNET_EVENT_SEND) {
-		lp->lp_ping_notsent = 0; /* NB: re-enable another ping */
+		lp->lp_ping_notsent = 0;
 		if (event->status == 0)
-			return;
+			goto out;
 	}
 
 	/* LNET_EVENT_REPLY */
@@ -699,6 +701,9 @@ lnet_router_checker_event(lnet_event_t *event)
 
 	if (avoid_asym_router_failure && event->status == 0)
 		lnet_parse_rc_info(rcd);
+
+ out:
+	LNET_UNLOCK();
 }
 
 void
@@ -839,6 +844,8 @@ lnet_create_rc_data_locked(lnet_peer_t *gateway)
 	lnet_peer_addref_locked(gateway);
 	rcd->rcd_gateway = gateway;
 	gateway->lp_rcd = rcd;
+	gateway->lp_ping_notsent = 0;
+
 	return rcd;
 
  out:
@@ -1549,9 +1556,7 @@ lnet_router_checker (void)
 
                 LASSERT (rc == 1);
 
-                LNET_LOCK();
                 lnet_router_checker_event(&ev);
-                LNET_UNLOCK();
         }
 
 	if (the_lnet.ln_rc_state == LNET_RC_STATE_STOPPING) {

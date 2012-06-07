@@ -311,9 +311,6 @@ lnet_msg_detach_md(lnet_msg_t *msg, int status)
 	lnet_libmd_t	*md = msg->msg_md;
 	int		unlink;
 
-	if (md == NULL)
-		return;
-
 	/* Now it's safe to drop my caller's ref */
 	md->md_refcount--;
 	LASSERT(md->md_refcount >= 0);
@@ -413,23 +410,25 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                msg->msg_txpeer == NULL ? "<none>" : libcfs_nid2str(msg->msg_txpeer->lp_nid),
                msg->msg_rxpeer == NULL ? "<none>" : libcfs_nid2str(msg->msg_rxpeer->lp_nid));
 #endif
-        LNET_LOCK();
 
         LASSERT (msg->msg_onactivelist);
 
         msg->msg_ev.status = status;
 
-	if (msg->msg_md != NULL)
+	if (msg->msg_md != NULL) {
+		lnet_res_lock();
 		lnet_msg_detach_md(msg, status);
+		lnet_res_unlock();
+	}
 
 	if (!msg->msg_tx_committed && !msg->msg_rx_committed) {
-		LNET_UNLOCK();
 		/* not commited to network yet */
 		LASSERT(!msg->msg_onactivelist);
 		lnet_msg_free(msg);
 		return;
 	}
 
+	LNET_LOCK();
 	container = &the_lnet.ln_msg_container;
 	cfs_list_add_tail(&msg->msg_list, &container->msc_finalizing);
 

@@ -40,7 +40,7 @@
 
 #include <lnet/lib-lnet.h>
 
-/* must be called with LNET_LOCK held */
+/* must be called with lnet_res_lock held */
 void
 lnet_md_unlink(lnet_libmd_t *md)
 {
@@ -196,7 +196,7 @@ lnet_md_link(lnet_libmd_t *md, lnet_handle_eq_t eq_handle)
 	return 0;
 }
 
-/* must be called with LNET_LOCK held */
+/* must be called with lnet_res_lock held */
 void
 lnet_md_deconstruct(lnet_libmd_t *lmd, lnet_md_t *umd)
 {
@@ -286,7 +286,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 
 	rc = lnet_md_build(md, &umd, unlink);
 
-	LNET_LOCK();
+	lnet_res_lock();
 	if (rc != 0)
 		goto failed;
 
@@ -307,7 +307,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 
 	lnet_md2handle(handle, md);
 
-	LNET_UNLOCK();
+	lnet_res_unlock();
 
 	lnet_drop_delayed_msg_list(&drops, "Bad match");
 	lnet_recv_delayed_msg_list(&matches);
@@ -317,7 +317,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
  failed:
 	lnet_md_free_locked(md);
 
-	LNET_UNLOCK();
+	lnet_res_unlock();
 	return rc;
 }
 
@@ -360,7 +360,7 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 
 	rc = lnet_md_build(md, &umd, unlink);
 
-	LNET_LOCK();
+	lnet_res_lock();
 	if (rc != 0)
 		goto failed;
 
@@ -370,13 +370,13 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 
 	lnet_md2handle(handle, md);
 
-	LNET_UNLOCK();
+	lnet_res_unlock();
 	return 0;
 
  failed:
 	lnet_md_free_locked(md);
 
-	LNET_UNLOCK();
+	lnet_res_unlock();
 	return rc;
 }
 
@@ -418,11 +418,11 @@ LNetMDUnlink (lnet_handle_md_t mdh)
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
 
-        LNET_LOCK();
+	lnet_res_lock();
 
-        md = lnet_handle2md(&mdh);
-        if (md == NULL) {
-                LNET_UNLOCK();
+	md = lnet_handle2md(&mdh);
+	if (md == NULL) {
+		lnet_res_unlock();
                 return -ENOENT;
         }
 
@@ -438,6 +438,6 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 
         lnet_md_unlink(md);
 
-        LNET_UNLOCK();
-        return 0;
+	lnet_res_unlock();
+	return 0;
 }
