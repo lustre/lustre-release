@@ -177,6 +177,7 @@ void set_defaults(struct mkfs_opts *mop)
 
         mop->mo_ldd.ldd_svindex = INDEX_UNASSIGNED;
         mop->mo_stripe_count = 1;
+	mop->mo_pool_vdevs = NULL;
 }
 
 static inline void badopt(const char *opt, char *type)
@@ -479,16 +480,20 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 }
         }//while
 
-        /* Last arg is device */
-        if (optind != argc - 1) {
-                fatal();
-                fprintf(stderr, "Bad argument: %s\n", argv[optind]);
-                return EINVAL;
-        }
+	if (optind == argc) {
+		/* The user didn't specify device name */
+		fatal();
+		fprintf(stderr, "Not enough arguments - device name or "
+			"pool/dataset name not specified.\n");
+		return EINVAL;
+	} else {
+		/*  The device or pool/filesystem name */
+		strscpy(mop->mo_device, argv[optind], sizeof(mop->mo_device));
 
-        /* single argument: <device> */
-        if (argc == 2)
-                ++print_only;
+		/* Followed by optional vdevs */
+		if (optind < argc - 1)
+			mop->mo_pool_vdevs = (char **) &argv[optind + 1];
+	}
 
         return 0;
 }
