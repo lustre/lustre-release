@@ -163,6 +163,21 @@ do {                                                            \
                 CHECK_VALUE((int)sizeof(s));                    \
 } while(0)
 
+#define CHECK_VALUE_SAME(v1, v2)                                \
+do {                                                            \
+	printf("\tLASSERTF("#v1" == "#v2", "                    \
+	       "\"%%d != %%d\\n\",\n"                           \
+	       "\t\t "#v1", "#v2");\n");                        \
+} while (0)
+
+#define CHECK_MEMBER_SAME(s1, s2, m)                            \
+do {                                                            \
+	CHECK_VALUE_SAME((int)offsetof(struct s1, m),           \
+			 (int)offsetof(struct s2, m));          \
+	CHECK_VALUE_SAME((int)sizeof(((struct s1 *)0)->m),      \
+			 (int)sizeof(((struct s2 *)0)->m));     \
+} while (0)
+
 static void
 check_lu_seq_range(void)
 {
@@ -323,10 +338,29 @@ check_ptlrpc_body(void)
         CHECK_MEMBER(ptlrpc_body, pb_limit);
 	CHECK_MEMBER(ptlrpc_body, pb_slv);
         CHECK_CVALUE(PTLRPC_NUM_VERSIONS);
-        CHECK_MEMBER(ptlrpc_body, pb_pre_versions[PTLRPC_NUM_VERSIONS]);
-        CHECK_MEMBER(ptlrpc_body, pb_padding[4]);
+	CHECK_MEMBER(ptlrpc_body, pb_pre_versions);
+	CHECK_MEMBER(ptlrpc_body, pb_padding);
 	CHECK_CVALUE(JOBSTATS_JOBID_SIZE);
 	CHECK_MEMBER(ptlrpc_body, pb_jobid);
+
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_handle);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_type);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_version);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_opc);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_status);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_last_xid);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_last_seen);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_last_committed);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_transno);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_flags);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_op_flags);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_conn_cnt);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_timeout);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_service_time);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_limit);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_slv);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_pre_versions);
+	CHECK_MEMBER_SAME(ptlrpc_body_v3, ptlrpc_body_v2, pb_padding);
 
         CHECK_VALUE(MSG_PTLRPC_BODY_OFF);
         CHECK_VALUE(REQ_REC_OFF);
