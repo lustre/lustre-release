@@ -35,6 +35,7 @@
 #define DEBUG_SUBSYSTEM S_LNET
 
 #include <libcfs/libcfs.h>
+#include <libcfs/libcfs_crypto.h>
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet.h>
 #include "tracefile.h"
@@ -373,99 +374,108 @@ extern void libcfs_arch_cleanup(void);
 
 static int init_libcfs_module(void)
 {
-        int rc;
+	int rc;
 
-        libcfs_arch_init();
-        libcfs_init_nidstrings();
-        cfs_init_rwsem(&cfs_tracefile_sem);
-        cfs_mutex_init(&cfs_trace_thread_mutex);
-        cfs_init_rwsem(&ioctl_list_sem);
-        CFS_INIT_LIST_HEAD(&ioctl_list);
-        cfs_waitq_init(&cfs_race_waitq);
+	libcfs_arch_init();
+	libcfs_init_nidstrings();
+	cfs_init_rwsem(&cfs_tracefile_sem);
+	cfs_mutex_init(&cfs_trace_thread_mutex);
+	cfs_init_rwsem(&ioctl_list_sem);
+	CFS_INIT_LIST_HEAD(&ioctl_list);
+	cfs_waitq_init(&cfs_race_waitq);
 
-        rc = libcfs_debug_init(5 * 1024 * 1024);
-        if (rc < 0) {
-                printk(CFS_KERN_ERR "LustreError: libcfs_debug_init: %d\n", rc);
-                return (rc);
-        }
+	rc = libcfs_debug_init(5 * 1024 * 1024);
+	if (rc < 0) {
+		printk(CFS_KERN_ERR "LustreError: libcfs_debug_init: %d\n", rc);
+		return rc;
+	}
 
 	rc = cfs_cpu_init();
 	if (rc != 0)
 		goto cleanup_debug;
 
 #if LWT_SUPPORT
-        rc = lwt_init();
-        if (rc != 0) {
-                CERROR("lwt_init: error %d\n", rc);
-                goto cleanup_debug;
-        }
+	rc = lwt_init();
+	if (rc != 0) {
+		CERROR("lwt_init: error %d\n", rc);
+		goto cleanup_debug;
+	}
 #endif
-        rc = cfs_psdev_register(&libcfs_dev);
-        if (rc) {
-                CERROR("misc_register: error %d\n", rc);
-                goto cleanup_lwt;
-        }
+	rc = cfs_psdev_register(&libcfs_dev);
+	if (rc) {
+		CERROR("misc_register: error %d\n", rc);
+		goto cleanup_lwt;
+	}
 
-        rc = cfs_wi_startup();
-        if (rc) {
-                CERROR("startup workitem: error %d\n", rc);
-                goto cleanup_deregister;
-        }
+	rc = cfs_wi_startup();
+	if (rc) {
+		CERROR("startup workitem: error %d\n", rc);
+		goto cleanup_deregister;
+	}
 
-        rc = insert_proc();
-        if (rc) {
-                CERROR("insert_proc: error %d\n", rc);
-                goto cleanup_wi;
-        }
+	rc = cfs_crypto_register();
+	if (rc) {
+		CERROR("cfs_crypto_regster: error %d\n", rc);
+		goto cleanup_wi;
+	}
 
-        CDEBUG (D_OTHER, "portals setup OK\n");
-        return (0);
+	rc = insert_proc();
+	if (rc) {
+		CERROR("insert_proc: error %d\n", rc);
+		goto cleanup_crypto;
+	}
 
+	CDEBUG(D_OTHER, "libcfs setup OK\n");
+
+	return 0;
+ cleanup_crypto:
+	cfs_crypto_unregister();
  cleanup_wi:
-        cfs_wi_shutdown();
+	cfs_wi_shutdown();
  cleanup_deregister:
-        cfs_psdev_deregister(&libcfs_dev);
+	cfs_psdev_deregister(&libcfs_dev);
  cleanup_lwt:
 #if LWT_SUPPORT
-        lwt_fini();
+	lwt_fini();
 #endif
  cleanup_debug:
-        libcfs_debug_cleanup();
-        return rc;
+	libcfs_debug_cleanup();
+	return rc;
 }
 
 static void exit_libcfs_module(void)
 {
-        int rc;
+	int rc;
 
-        remove_proc();
+	remove_proc();
 
-        CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
-               cfs_atomic_read(&libcfs_kmemory));
+	CDEBUG(D_MALLOC, "before Portals cleanup: kmem %d\n",
+	       cfs_atomic_read(&libcfs_kmemory));
 
-        cfs_wi_shutdown();
-        rc = cfs_psdev_deregister(&libcfs_dev);
-        if (rc)
-                CERROR("misc_deregister error %d\n", rc);
+	cfs_crypto_unregister();
+	cfs_wi_shutdown();
+	rc = cfs_psdev_deregister(&libcfs_dev);
+	if (rc)
+		CERROR("misc_deregister error %d\n", rc);
 
 #if LWT_SUPPORT
-        lwt_fini();
+	lwt_fini();
 #endif
 	cfs_cpu_fini();
 
-        if (cfs_atomic_read(&libcfs_kmemory) != 0)
-                CERROR("Portals memory leaked: %d bytes\n",
-                       cfs_atomic_read(&libcfs_kmemory));
+	if (cfs_atomic_read(&libcfs_kmemory) != 0)
+		CERROR("Portals memory leaked: %d bytes\n",
+		       cfs_atomic_read(&libcfs_kmemory));
 
-        rc = libcfs_debug_cleanup();
-        if (rc)
-                printk(CFS_KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n",
-                       rc);
+	rc = libcfs_debug_cleanup();
+	if (rc)
+		printk(CFS_KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n",
+		       rc);
 
-        cfs_fini_rwsem(&ioctl_list_sem);
-        cfs_fini_rwsem(&cfs_tracefile_sem);
+	cfs_fini_rwsem(&ioctl_list_sem);
+	cfs_fini_rwsem(&cfs_tracefile_sem);
 
-        libcfs_arch_cleanup();
+	libcfs_arch_cleanup();
 }
 
 cfs_module(libcfs, "1.0.0", init_libcfs_module, exit_libcfs_module);

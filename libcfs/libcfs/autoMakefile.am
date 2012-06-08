@@ -44,7 +44,8 @@ if LIBLUSTRE
 noinst_LIBRARIES= libcfs.a
 libcfs_a_SOURCES= posix/posix-debug.c user-prim.c user-lock.c user-tcpip.c \
 		  prng.c user-bitops.c user-mem.c hash.c kernel_user_comm.c \
-		  workitem.c fail.c libcfs_cpu.c libcfs_mem.c libcfs_lock.c
+		  workitem.c fail.c libcfs_cpu.c libcfs_mem.c libcfs_lock.c \
+		  user-crypto.c posix/posix-crc32.c posix/posix-adler.c
 libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfs_a_CFLAGS = $(LLCFLAGS)
 endif

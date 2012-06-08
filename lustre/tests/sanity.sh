@@ -4696,7 +4696,7 @@ test_77i() { # bug 13805
 	for VALUE in `lctl get_param osc.*osc-[^mM]*.checksum_type`; do
 		PARAM=`echo ${VALUE[0]} | cut -d "=" -f1`
 		algo=`lctl get_param -n $PARAM | sed 's/.*\[\(.*\)\].*/\1/g'`
-		[ "$algo" = "crc32" ] || error "algo set to $algo instead of crc32"
+		[ "$algo" = "adler" ] || error "algo set to $algo instead of adler"
 	done
 	remount_client $MOUNT
 }

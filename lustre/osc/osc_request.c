@@ -1136,39 +1136,60 @@ static inline int can_merge_pages(struct brw_page *p1, struct brw_page *p2)
 }
 
 static obd_count osc_checksum_bulk(int nob, obd_count pg_count,
-                                   struct brw_page **pga, int opc,
-                                   cksum_type_t cksum_type)
+				   struct brw_page **pga, int opc,
+				   cksum_type_t cksum_type)
 {
-        __u32 cksum;
-        int i = 0;
+	__u32				cksum;
+	int				i = 0;
+	struct cfs_crypto_hash_desc	*hdesc;
+	unsigned int			bufsize;
+	int				err;
+	unsigned char			cfs_alg = cksum_obd2cfs(cksum_type);
 
-        LASSERT (pg_count > 0);
-        cksum = init_checksum(cksum_type);
-        while (nob > 0 && pg_count > 0) {
-                unsigned char *ptr = cfs_kmap(pga[i]->pg);
-                int off = pga[i]->off & ~CFS_PAGE_MASK;
-                int count = pga[i]->count > nob ? nob : pga[i]->count;
+	LASSERT(pg_count > 0);
 
-                /* corrupt the data before we compute the checksum, to
-                 * simulate an OST->client data error */
-                if (i == 0 && opc == OST_READ &&
-                    OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE))
-                        memcpy(ptr + off, "bad1", min(4, nob));
-                cksum = compute_checksum(cksum, ptr + off, count, cksum_type);
-                cfs_kunmap(pga[i]->pg);
-                LL_CDEBUG_PAGE(D_PAGE, pga[i]->pg, "off %d checksum %x\n",
-                               off, cksum);
+	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(hdesc)) {
+		CERROR("Unable to initialize checksum hash %s\n",
+		       cfs_crypto_hash_name(cfs_alg));
+		return PTR_ERR(hdesc);
+	}
 
-                nob -= pga[i]->count;
-                pg_count--;
-                i++;
-        }
-        /* For sending we only compute the wrong checksum instead
-         * of corrupting the data so it is still correct on a redo */
-        if (opc == OST_WRITE && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND))
-                cksum++;
+	while (nob > 0 && pg_count > 0) {
+		int count = pga[i]->count > nob ? nob : pga[i]->count;
 
-        return fini_checksum(cksum, cksum_type);
+		/* corrupt the data before we compute the checksum, to
+		 * simulate an OST->client data error */
+		if (i == 0 && opc == OST_READ &&
+		    OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_RECEIVE)) {
+			unsigned char *ptr = cfs_kmap(pga[i]->pg);
+			int off = pga[i]->off & ~CFS_PAGE_MASK;
+			memcpy(ptr + off, "bad1", min(4, nob));
+			cfs_kunmap(pga[i]->pg);
+		}
+		cfs_crypto_hash_update_page(hdesc, pga[i]->pg,
+				  pga[i]->off & ~CFS_PAGE_MASK,
+				  count);
+		LL_CDEBUG_PAGE(D_PAGE, pga[i]->pg, "off %d checksum %x\n",
+			       (int)(pga[i]->off & ~CFS_PAGE_MASK), cksum);
+
+		nob -= pga[i]->count;
+		pg_count--;
+		i++;
+	}
+
+	bufsize = 4;
+	err = cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+
+	if (err)
+		cfs_crypto_hash_final(hdesc, NULL, NULL);
+
+	/* For sending we only compute the wrong checksum instead
+	 * of corrupting the data so it is still correct on a redo */
+	if (opc == OST_WRITE && OBD_FAIL_CHECK(OBD_FAIL_OSC_CHECKSUM_SEND))
+		cksum++;
+
+	return cksum;
 }
 
 static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,

@@ -1298,24 +1298,33 @@ __u32 lustre_msg_calc_cksum(struct lustre_msg *msg, int compat18)
 __u32 lustre_msg_calc_cksum(struct lustre_msg *msg)
 #endif
 {
-        switch (msg->lm_magic) {
-        case LUSTRE_MSG_MAGIC_V2: {
-                struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
+	switch (msg->lm_magic) {
+	case LUSTRE_MSG_MAGIC_V2: {
+		struct ptlrpc_body *pb = lustre_msg_ptlrpc_body(msg);
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 0, 0)
-                __u32 len = compat18 ? ptlrpc_body_cksum_size_compat18 :
-                            lustre_msg_buflen(msg, MSG_PTLRPC_BODY_OFF);
-                LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-                return crc32_le(~(__u32)0, (unsigned char *)pb, len);
+		__u32 crc;
+		unsigned int hsize = 4;
+		__u32 len = compat18 ? ptlrpc_body_cksum_size_compat18 :
+			    lustre_msg_buflen(msg, MSG_PTLRPC_BODY_OFF);
+		LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
+		cfs_crypto_hash_digest(CFS_HASH_ALG_CRC32, (unsigned char *)pb,
+				       len, NULL, 0, (unsigned char *)&crc,
+				       &hsize);
+		return crc;
 #else
 # warning "remove checksum compatibility support for b1_8"
-                return crc32_le(~(__u32)0, (unsigned char *)pb,
-                                lustre_msg_buflen(msg, MSG_PTLRPC_BODY_OFF));
+		__u32 crc;
+		unsigned int hsize = 4;
+		cfs_crypto_hash_digest(CFS_HASH_ALG_CRC32, (unsigned char *)pb,
+				   lustre_msg_buflen(msg, MSG_PTLRPC_BODY_OFF),
+				   NULL, 0, (unsigned char *)&crc, &hsize);
+		return crc;
 #endif
-        }
-        default:
-                CERROR("incorrect message magic: %08x\n", msg->lm_magic);
-                return 0;
-        }
+	}
+	default:
+		CERROR("incorrect message magic: %08x\n", msg->lm_magic);
+		return 0;
+	}
 }
 
 void lustre_msg_set_handle(struct lustre_msg *msg, struct lustre_handle *handle)

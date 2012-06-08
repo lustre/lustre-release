@@ -803,55 +803,25 @@ void sptlrpc_enc_pool_fini(void)
 }
 #endif
 
-/****************************************
- * Helpers to assist policy modules to  *
- * implement checksum funcationality    *
- ****************************************/
-
-static struct sptlrpc_hash_type hash_types[] = {
-        [BULK_HASH_ALG_NULL]    = { "null",     "null",         0 },
-        [BULK_HASH_ALG_ADLER32] = { "adler32",  "adler32",      4 },
-        [BULK_HASH_ALG_CRC32]   = { "crc32",    "crc32",        4 },
-        [BULK_HASH_ALG_MD5]     = { "md5",      "md5",          16 },
-        [BULK_HASH_ALG_SHA1]    = { "sha1",     "sha1",         20 },
-        [BULK_HASH_ALG_SHA256]  = { "sha256",   "sha256",       32 },
-        [BULK_HASH_ALG_SHA384]  = { "sha384",   "sha384",       48 },
-        [BULK_HASH_ALG_SHA512]  = { "sha512",   "sha512",       64 },
+static int cfs_hash_alg_id[] = {
+	[BULK_HASH_ALG_NULL]	= CFS_HASH_ALG_NULL,
+	[BULK_HASH_ALG_ADLER32]	= CFS_HASH_ALG_ADLER32,
+	[BULK_HASH_ALG_CRC32]	= CFS_HASH_ALG_CRC32,
+	[BULK_HASH_ALG_MD5]	= CFS_HASH_ALG_MD5,
+	[BULK_HASH_ALG_SHA1]	= CFS_HASH_ALG_SHA1,
+	[BULK_HASH_ALG_SHA256]	= CFS_HASH_ALG_SHA256,
+	[BULK_HASH_ALG_SHA384]	= CFS_HASH_ALG_SHA384,
+	[BULK_HASH_ALG_SHA512]	= CFS_HASH_ALG_SHA512,
 };
-
-const struct sptlrpc_hash_type *sptlrpc_get_hash_type(__u8 hash_alg)
-{
-        struct sptlrpc_hash_type *ht;
-
-        if (hash_alg < BULK_HASH_ALG_MAX) {
-                ht = &hash_types[hash_alg];
-                if (ht->sht_tfm_name)
-                        return ht;
-        }
-        return NULL;
-}
-EXPORT_SYMBOL(sptlrpc_get_hash_type);
-
 const char * sptlrpc_get_hash_name(__u8 hash_alg)
 {
-        const struct sptlrpc_hash_type *ht;
-
-        ht = sptlrpc_get_hash_type(hash_alg);
-        if (ht)
-                return ht->sht_name;
-        else
-                return "unknown";
+	return cfs_crypto_hash_name(cfs_hash_alg_id[hash_alg]);
 }
 EXPORT_SYMBOL(sptlrpc_get_hash_name);
 
 __u8 sptlrpc_get_hash_alg(const char *algname)
 {
-        int     i;
-
-        for (i = 0; i < BULK_HASH_ALG_MAX; i++)
-                if (!strcmp(hash_types[i].sht_name, algname))
-                        break;
-        return i;
+	return cfs_crypto_hash_alg(algname);
 }
 EXPORT_SYMBOL(sptlrpc_get_hash_alg);
 
@@ -893,149 +863,52 @@ int bulk_sec_desc_unpack(struct lustre_msg *msg, int offset, int swabbed)
 }
 EXPORT_SYMBOL(bulk_sec_desc_unpack);
 
-#ifdef __KERNEL__
-
-#ifdef HAVE_ADLER
-static int do_bulk_checksum_adler32(struct ptlrpc_bulk_desc *desc, void *buf)
-{
-        struct page    *page;
-        int             off;
-        char           *ptr;
-        __u32           adler32 = 1;
-        int             len, i;
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                page = desc->bd_iov[i].kiov_page;
-                off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
-                ptr = cfs_kmap(page) + off;
-                len = desc->bd_iov[i].kiov_len;
-
-                adler32 = adler32(adler32, ptr, len);
-
-                cfs_kunmap(page);
-        }
-
-        adler32 = cpu_to_le32(adler32);
-        memcpy(buf, &adler32, sizeof(adler32));
-        return 0;
-}
-#endif
-
-static int do_bulk_checksum_crc32(struct ptlrpc_bulk_desc *desc, void *buf)
-{
-        struct page    *page;
-        int             off;
-        char           *ptr;
-        __u32           crc32 = ~0;
-        int             len, i;
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                page = desc->bd_iov[i].kiov_page;
-                off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
-                ptr = cfs_kmap(page) + off;
-                len = desc->bd_iov[i].kiov_len;
-
-                crc32 = crc32_le(crc32, ptr, len);
-
-                cfs_kunmap(page);
-        }
-
-        crc32 = cpu_to_le32(crc32);
-        memcpy(buf, &crc32, sizeof(crc32));
-        return 0;
-}
-
 int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
-                              void *buf, int buflen)
+			      void *buf, int buflen)
 {
-        struct hash_desc    hdesc;
-        int                 hashsize;
-        char                hashbuf[64];
-        struct scatterlist  sl;
-        int                 i;
+	struct cfs_crypto_hash_desc	*hdesc;
+	int				hashsize;
+	char				hashbuf[64];
+	unsigned int			bufsize;
+	int				i, err;
 
-        LASSERT(alg > BULK_HASH_ALG_NULL && alg < BULK_HASH_ALG_MAX);
-        LASSERT(buflen >= 4);
+	LASSERT(alg > BULK_HASH_ALG_NULL && alg < BULK_HASH_ALG_MAX);
+	LASSERT(buflen >= 4);
 
-        switch (alg) {
-        case BULK_HASH_ALG_ADLER32:
-#ifdef HAVE_ADLER
-                return do_bulk_checksum_adler32(desc, buf);
+	hdesc = cfs_crypto_hash_init(cfs_hash_alg_id[alg], NULL, 0);
+	if (IS_ERR(hdesc)) {
+		CERROR("Unable to initialize checksum hash %s\n",
+		       cfs_crypto_hash_name(cfs_hash_alg_id[alg]));
+		return PTR_ERR(hdesc);
+	}
+
+	hashsize = cfs_crypto_hash_digestsize(cfs_hash_alg_id[alg]);
+
+	for (i = 0; i < desc->bd_iov_count; i++) {
+#ifdef __KERNEL__
+		cfs_crypto_hash_update_page(hdesc, desc->bd_iov[i].kiov_page,
+				  desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK,
+				  desc->bd_iov[i].kiov_len);
 #else
-                CERROR("Adler32 not supported\n");
-                return -EINVAL;
+		cfs_crypto_hash_update(hdesc, desc->bd_iov[i].iov_base,
+				  desc->bd_iov[i].iov_len);
 #endif
-        case BULK_HASH_ALG_CRC32:
-                return do_bulk_checksum_crc32(desc, buf);
-        }
+	}
+	if (hashsize > buflen) {
+		bufsize = sizeof(hashbuf);
+		err = cfs_crypto_hash_final(hdesc, (unsigned char *)hashbuf,
+					    &bufsize);
+		memcpy(buf, hashbuf, buflen);
+	} else {
+		bufsize = buflen;
+		err = cfs_crypto_hash_final(hdesc, (unsigned char *)buf,
+					    &bufsize);
+	}
 
-        hdesc.tfm = ll_crypto_alloc_hash(hash_types[alg].sht_tfm_name, 0, 0);
-        if (hdesc.tfm == NULL) {
-                CERROR("Unable to allocate TFM %s\n", hash_types[alg].sht_name);
-                return -ENOMEM;
-        }
-
-        hdesc.flags = 0;
-        ll_crypto_hash_init(&hdesc);
-
-        hashsize = ll_crypto_hash_digestsize(hdesc.tfm);
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                sg_set_page(&sl, desc->bd_iov[i].kiov_page,
-                             desc->bd_iov[i].kiov_len,
-                             desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK);
-                ll_crypto_hash_update(&hdesc, &sl, sl.length);
-        }
-
-        if (hashsize > buflen) {
-                ll_crypto_hash_final(&hdesc, hashbuf);
-                memcpy(buf, hashbuf, buflen);
-        } else {
-                ll_crypto_hash_final(&hdesc, buf);
-        }
-
-        ll_crypto_free_hash(hdesc.tfm);
-        return 0;
+	if (err)
+		cfs_crypto_hash_final(hdesc, NULL, NULL);
+	return err;
 }
 EXPORT_SYMBOL(sptlrpc_get_bulk_checksum);
 
-#else /* !__KERNEL__ */
 
-int sptlrpc_get_bulk_checksum(struct ptlrpc_bulk_desc *desc, __u8 alg,
-                              void *buf, int buflen)
-{
-        __u32   csum32;
-        int     i;
-
-        LASSERT(alg == BULK_HASH_ALG_ADLER32 || alg == BULK_HASH_ALG_CRC32);
-
-        if (alg == BULK_HASH_ALG_ADLER32)
-                csum32 = 1;
-        else
-                csum32 = ~0;
-
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                unsigned char *ptr = desc->bd_iov[i].iov_base;
-                int len = desc->bd_iov[i].iov_len;
-
-                switch (alg) {
-                case BULK_HASH_ALG_ADLER32:
-#ifdef HAVE_ADLER
-                        csum32 = adler32(csum32, ptr, len);
-#else
-                        CERROR("Adler32 not supported\n");
-                        return -EINVAL;
-#endif
-                        break;
-                case BULK_HASH_ALG_CRC32:
-                        csum32 = crc32_le(csum32, ptr, len);
-                        break;
-                }
-        }
-
-        csum32 = cpu_to_le32(csum32);
-        memcpy(buf, &csum32, sizeof(csum32));
-        return 0;
-}
-
-#endif /* __KERNEL__ */

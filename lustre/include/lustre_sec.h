@@ -883,13 +883,6 @@ enum sptlrpc_bulk_hash_alg {
         BULK_HASH_ALG_MAX
 };
 
-struct sptlrpc_hash_type {
-        char           *sht_name;
-        char           *sht_tfm_name;
-        unsigned int    sht_size;
-};
-
-const struct sptlrpc_hash_type *sptlrpc_get_hash_type(__u8 hash_alg);
 const char * sptlrpc_get_hash_name(__u8 hash_alg);
 __u8 sptlrpc_get_hash_alg(const char *algname);
 

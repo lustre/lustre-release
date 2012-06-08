@@ -93,6 +93,30 @@ AC_DEFINE(HAVE_TASKLIST_LOCK, 1,
 ])
 ])
 
+# LIBCFS_DIGEST_SETKEY_FLAGS
+# digest_alg.dia_setkey takes 4 args (2.6.18)
+#
+AC_DEFUN([LIBCFS_DIGEST_SETKEY_FLAGS],
+[AC_MSG_CHECKING([if kernel dia_setkey takes 4 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/err.h>
+	#include <linux/crypto.h>
+
+	static int foo(struct crypto_tfm *tfm, const u8 *key, unsigned int l, u32* f)
+	{
+		return 1;
+	}
+],[
+	struct digest_alg alg = {.dia_setkey=foo};
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_DIGEST_SETKEY_FLAGS, 1, [kernel dia_setkey takes 4 args])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+
 # 2.6.19 API changes
 # kmem_cache_destroy(cachep) return void instead of
 # int
@@ -221,6 +245,7 @@ LB_LINUX_TRY_COMPILE([
 	AC_MSG_RESULT(NO)
 ])
 ])
+
 
 # 2.6.20 API change INIT_WORK use 2 args and not
 # store data inside
@@ -490,6 +515,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# LIBCFS_STRUCT_SHASH_ALG
+# struct shash_alg was introduced in 2.6.29
+#
+AC_DEFUN([LIBCFS_STRUCT_SHASH_ALG],
+[AC_MSG_CHECKING([if kernel has struct shash_alg])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/err.h>
+	#include <crypto/internal/hash.h>
+],[
+	struct shash_alg foo;
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_STRUCT_SHASH_ALG, 1, [kernel has struct shash_alg])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+
 #
 # LIBCFS_FUNC_UNSHARE_FS_STRUCT
 #
@@ -712,6 +756,7 @@ LIBCFS_U64_LONG_LONG_LINUX
 # 2.6.18
 LIBCFS_TASKLIST_LOCK
 LIBCFS_HAVE_IS_COMPAT_TASK
+LIBCFS_DIGEST_SETKEY_FLAGS
 # 2.6.19
 LIBCFS_KMEM_CACHE_DESTROY_INT
 # 2.6.20
@@ -735,6 +780,7 @@ LIBCFS_CPUMASK_SIZE
 # 2.6.29
 LIBCFS_STRUCT_CRED_IN_TASK
 LIBCFS_CPU_TOPOLOGY
+LIBCFS_STRUCT_SHASH_ALG
 # 2.6.30
 LIBCFS_FUNC_UNSHARE_FS_STRUCT
 LIBCFS_SOCK_MAP_FD_2ARG
