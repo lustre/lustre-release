@@ -238,7 +238,7 @@ check_cur_qunit(struct obd_device *obd,
         int ret = 0;
         ENTRY;
 
-        if (!ll_sb_any_quota_active(sb))
+        if (!ll_sb_has_quota_active(sb, QDATA_IS_GRP(qdata)))
                 RETURN(0);
 
         spin_lock(&qctxt->lqc_lock);
@@ -365,9 +365,6 @@ int compute_remquota(struct obd_device *obd, struct lustre_quota_ctxt *qctxt,
         struct obd_quotactl *qctl;
         int ret = QUOTA_RET_OK;
         ENTRY;
-
-        if (!ll_sb_any_quota_active(sb))
-                RETURN(QUOTA_RET_NOQUOTA);
 
         /* ignore root user */
         if (qdata->qd_id == 0 && QDATA_IS_GRP(qdata) == USRQUOTA)
