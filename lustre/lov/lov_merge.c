@@ -67,6 +67,11 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
         LASSERT(lsm->lsm_lock_owner == cfs_curproc_pid());
 #endif
 
+	CDEBUG(D_INODE, "MDT FID "DFID" initial value: s="LPU64" m="LPU64
+	       " a="LPU64" c="LPU64" b="LPU64"\n",
+	       lsm->lsm_object_seq, (__u32)lsm->lsm_object_id,
+	       (__u32)(lsm->lsm_object_id >> 32), lvb->lvb_size,
+	       lvb->lvb_mtime, lvb->lvb_atime, lvb->lvb_ctime, lvb->lvb_blocks);
         for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_oinfo *loi = lsm->lsm_oinfo[i];
                 obd_size lov_size, tmpsize;
@@ -99,8 +104,9 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 		       " a="LPU64" c="LPU64" b="LPU64"\n",
 		       lsm->lsm_object_seq, (__u32)lsm->lsm_object_id,
 		       (__u32)(lsm->lsm_object_id >> 32), loi->loi_ost_idx,
-		       lvb->lvb_size, lvb->lvb_mtime, lvb->lvb_atime,
-		       lvb->lvb_ctime, lvb->lvb_blocks);
+		       loi->loi_lvb.lvb_size, loi->loi_lvb.lvb_mtime,
+		       loi->loi_lvb.lvb_atime, loi->loi_lvb.lvb_ctime,
+		       loi->loi_lvb.lvb_blocks);
         }
 
         *kms_place = kms;
