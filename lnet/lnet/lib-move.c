@@ -1361,28 +1361,27 @@ lnet_recv_put(lnet_ni_t *ni, lnet_msg_t *msg)
 static int
 lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 {
-        int               rc;
-        int               index;
-        lnet_hdr_t       *hdr = &msg->msg_hdr;
-        unsigned int      rlength = hdr->payload_length;
-        lnet_process_id_t src= {0};
+	lnet_hdr_t		*hdr = &msg->msg_hdr;
+	struct lnet_match_info	info;
+	int			rc;
 
-        src.nid = hdr->src_nid;
-        src.pid = hdr->src_pid;
+	/* Convert put fields to host byte order */
+	hdr->msg.put.match_bits	= le64_to_cpu(hdr->msg.put.match_bits);
+	hdr->msg.put.ptl_index	= le32_to_cpu(hdr->msg.put.ptl_index);
+	hdr->msg.put.offset	= le32_to_cpu(hdr->msg.put.offset);
 
-        /* Convert put fields to host byte order */
-        hdr->msg.put.match_bits = le64_to_cpu(hdr->msg.put.match_bits);
-        hdr->msg.put.ptl_index = le32_to_cpu(hdr->msg.put.ptl_index);
-        hdr->msg.put.offset = le32_to_cpu(hdr->msg.put.offset);
-
-        index = hdr->msg.put.ptl_index;
+	info.mi_id.nid	= hdr->src_nid;
+	info.mi_id.pid	= hdr->src_pid;
+	info.mi_opc	= LNET_MD_OP_PUT;
+	info.mi_portal	= hdr->msg.put.ptl_index;
+	info.mi_rlength	= hdr->payload_length;
+	info.mi_roffset	= hdr->msg.put.offset;
+	info.mi_mbits	= hdr->msg.put.match_bits;
 
 	msg->msg_rx_ready_delay = ni->ni_lnd->lnd_eager_recv == NULL;
 
  again:
-	rc = lnet_ptl_match_md(index, LNET_MD_OP_PUT, src,
-			       rlength, hdr->msg.put.offset,
-			       hdr->msg.put.match_bits, msg);
+	rc = lnet_ptl_match_md(&info, msg);
         switch (rc) {
         default:
                 LBUG();
@@ -1398,58 +1397,56 @@ lnet_parse_put(lnet_ni_t *ni, lnet_msg_t *msg)
 		rc = lnet_ni_eager_recv(ni, msg);
 		if (rc == 0)
 			goto again;
-                /* fall through */
+		/* fall through */
 
-        case LNET_MATCHMD_DROP:
-                CNETERR("Dropping PUT from %s portal %d match "LPU64
-                        " offset %d length %d: %d\n",
-                        libcfs_id2str(src), index,
-                        hdr->msg.put.match_bits,
-                        hdr->msg.put.offset, rlength, rc);
+	case LNET_MATCHMD_DROP:
+		CNETERR("Dropping PUT from %s portal %d match "LPU64
+			" offset %d length %d: %d\n",
+			libcfs_id2str(info.mi_id), info.mi_portal,
+			info.mi_mbits, info.mi_roffset, info.mi_rlength, rc);
 
-                return ENOENT;          /* +ve: OK but no match */
-        }
+		return ENOENT;	/* +ve: OK but no match */
+	}
 }
 
 static int
 lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 {
-        lnet_hdr_t        *hdr = &msg->msg_hdr;
-        lnet_process_id_t  src = {0};
-        lnet_handle_wire_t reply_wmd;
-        int                rc;
+	struct lnet_match_info	info;
+	lnet_hdr_t		*hdr = &msg->msg_hdr;
+	lnet_handle_wire_t	reply_wmd;
+	int			rc;
 
-        src.nid = hdr->src_nid;
-        src.pid = hdr->src_pid;
+	/* Convert get fields to host byte order */
+	hdr->msg.get.match_bits	  = le64_to_cpu(hdr->msg.get.match_bits);
+	hdr->msg.get.ptl_index	  = le32_to_cpu(hdr->msg.get.ptl_index);
+	hdr->msg.get.sink_length  = le32_to_cpu(hdr->msg.get.sink_length);
+	hdr->msg.get.src_offset	  = le32_to_cpu(hdr->msg.get.src_offset);
 
-        /* Convert get fields to host byte order */
-        hdr->msg.get.match_bits = le64_to_cpu(hdr->msg.get.match_bits);
-        hdr->msg.get.ptl_index = le32_to_cpu(hdr->msg.get.ptl_index);
-        hdr->msg.get.sink_length = le32_to_cpu(hdr->msg.get.sink_length);
-        hdr->msg.get.src_offset = le32_to_cpu(hdr->msg.get.src_offset);
+	info.mi_id.nid	= hdr->src_nid;
+	info.mi_id.pid	= hdr->src_pid;
+	info.mi_opc	= LNET_MD_OP_GET;
+	info.mi_portal	= hdr->msg.get.ptl_index;
+	info.mi_rlength	= hdr->msg.get.sink_length;
+	info.mi_roffset	= hdr->msg.get.src_offset;
+	info.mi_mbits	= hdr->msg.get.match_bits;
 
-	rc = lnet_ptl_match_md(hdr->msg.get.ptl_index, LNET_MD_OP_GET, src,
-			       hdr->msg.get.sink_length,
-			       hdr->msg.get.src_offset,
-			       hdr->msg.get.match_bits, msg);
-        if (rc == LNET_MATCHMD_DROP) {
-                CNETERR("Dropping GET from %s portal %d match "LPU64
-                        " offset %d length %d\n",
-                        libcfs_id2str(src),
-                        hdr->msg.get.ptl_index,
-                        hdr->msg.get.match_bits,
-                        hdr->msg.get.src_offset,
-                        hdr->msg.get.sink_length);
-                return ENOENT;                  /* +ve: OK but no match */
-        }
+	rc = lnet_ptl_match_md(&info, msg);
+	if (rc == LNET_MATCHMD_DROP) {
+		CNETERR("Dropping GET from %s portal %d match "LPU64
+			" offset %d length %d\n",
+			libcfs_id2str(info.mi_id), info.mi_portal,
+			info.mi_mbits, info.mi_roffset, info.mi_rlength);
+		return ENOENT;	/* +ve: OK but no match */
+	}
 
-        LASSERT (rc == LNET_MATCHMD_OK);
+	LASSERT(rc == LNET_MATCHMD_OK);
 
 	lnet_build_msg_event(msg, LNET_EVENT_GET);
 
 	reply_wmd = hdr->msg.get.return_wmd;
 
-	lnet_prep_send(msg, LNET_MSG_REPLY, src,
+	lnet_prep_send(msg, LNET_MSG_REPLY, info.mi_id,
 		       msg->msg_offset, msg->msg_wanted);
 
         msg->msg_hdr.msg.reply.dst_wmd = reply_wmd;
@@ -1468,12 +1465,13 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
         if (rc < 0) {
                 /* didn't get as far as lnet_ni_send() */
                 CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
-                       libcfs_nid2str(ni->ni_nid), libcfs_id2str(src), rc);
+		       libcfs_nid2str(ni->ni_nid),
+		       libcfs_id2str(info.mi_id), rc);
 
-                lnet_finalize(ni, msg, rc);
-        }
+		lnet_finalize(ni, msg, rc);
+	}
 
-        return 0;
+	return 0;
 }
 
 static int

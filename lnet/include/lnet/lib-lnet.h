@@ -695,17 +695,13 @@ struct lnet_match_table *lnet_mt_of_attach(unsigned int index,
 struct lnet_match_table *lnet_mt_of_match(unsigned int index,
 					  lnet_process_id_t id, __u64 mbits);
 int lnet_mt_match_md(struct lnet_match_table *mtable,
-		     int op_mask, lnet_process_id_t src,
-		     unsigned int rlength, unsigned int roffset,
-		     __u64 match_bits, lnet_msg_t *msg);
+		     struct lnet_match_info *info, struct lnet_msg *msg);
 
 /* portals match/attach functions */
 void lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 			cfs_list_t *matches, cfs_list_t *drops);
 void lnet_ptl_detach_md(lnet_me_t *me, lnet_libmd_t *md);
-int lnet_ptl_match_md(unsigned int index, int op_mask, lnet_process_id_t src,
-		      unsigned int rlength, unsigned int roffset,
-		      __u64 match_bits, lnet_msg_t *msg);
+int lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg);
 
 /* initialized and finalize portals */
 int lnet_portals_create(void);

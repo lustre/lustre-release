@@ -556,6 +556,16 @@ enum {
 #define LNET_PTL_MATCH_UNIQUE       (1 << 1)    /* unique match, for RDMA */
 #define LNET_PTL_MATCH_WILDCARD     (1 << 2)    /* wildcard match, request portal */
 
+/* parameter for matching operations (GET, PUT) */
+struct lnet_match_info {
+	__u64			mi_mbits;
+	lnet_process_id_t	mi_id;
+	unsigned int		mi_opc;
+	unsigned int		mi_portal;
+	unsigned int		mi_rlength;
+	unsigned int		mi_roffset;
+};
+
 /* ME hash of RDMA portal */
 #define LNET_MT_HASH_BITS		8
 #define LNET_MT_HASH_SIZE		(1 << LNET_MT_HASH_BITS)

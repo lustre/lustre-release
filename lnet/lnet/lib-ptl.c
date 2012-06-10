@@ -81,9 +81,8 @@ lnet_ptl_match_type(unsigned int index, lnet_process_id_t match_id,
 }
 
 static int
-lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
-		  unsigned int rlength, unsigned int roffset,
-		  __u64 match_bits, lnet_libmd_t *md, lnet_msg_t *msg)
+lnet_try_match_md(lnet_libmd_t *md,
+		  struct lnet_match_info *info, struct lnet_msg *msg)
 {
 	/* ALWAYS called holding the lnet_res_lock, and can't lnet_res_unlock;
 	 * lnet_match_blocked_msg() relies on this to avoid races */
@@ -92,7 +91,7 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 	lnet_me_t	*me = md->md_me;
 
 	/* mismatched MD op */
-	if ((md->md_options & op_mask) == 0)
+	if ((md->md_options & info->mi_opc) == 0)
 		return LNET_MATCHMD_NONE;
 
 	/* MD exhausted */
@@ -101,15 +100,15 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 
 	/* mismatched ME nid/pid? */
 	if (me->me_match_id.nid != LNET_NID_ANY &&
-	    me->me_match_id.nid != src.nid)
+	    me->me_match_id.nid != info->mi_id.nid)
 		return LNET_MATCHMD_NONE;
 
 	if (me->me_match_id.pid != LNET_PID_ANY &&
-	    me->me_match_id.pid != src.pid)
+	    me->me_match_id.pid != info->mi_id.pid)
 		return LNET_MATCHMD_NONE;
 
 	/* mismatched ME matchbits? */
-	if (((me->me_match_bits ^ match_bits) & ~me->me_ignore_bits) != 0)
+	if (((me->me_match_bits ^ info->mi_mbits) & ~me->me_ignore_bits) != 0)
 		return LNET_MATCHMD_NONE;
 
 	/* Hurrah! This _is_ a match; check it out... */
@@ -117,7 +116,7 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 	if ((md->md_options & LNET_MD_MANAGE_REMOTE) == 0)
 		offset = md->md_offset;
 	else
-		offset = roffset;
+		offset = info->mi_roffset;
 
 	if ((md->md_options & LNET_MD_MAX_SIZE) != 0) {
 		mlength = md->md_max_size;
@@ -126,14 +125,14 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 		mlength = md->md_length - offset;
 	}
 
-	if (rlength <= mlength) {        /* fits in allowed space */
-		mlength = rlength;
+	if (info->mi_rlength <= mlength) {        /* fits in allowed space */
+		mlength = info->mi_rlength;
 	} else if ((md->md_options & LNET_MD_TRUNCATE) == 0) {
 		/* this packet _really_ is too big */
 		CERROR("Matching packet from %s, match "LPU64
 		       " length %d too big: %d left, %d allowed\n",
-		       libcfs_id2str(src), match_bits, rlength,
-		       md->md_length - offset, mlength);
+		       libcfs_id2str(info->mi_id), info->mi_mbits,
+		       info->mi_rlength, md->md_length - offset, mlength);
 
 		return LNET_MATCHMD_DROP;
 	}
@@ -141,9 +140,9 @@ lnet_try_match_md(int index, int op_mask, lnet_process_id_t src,
 	/* Commit to this ME/MD */
 	CDEBUG(D_NET, "Incoming %s index %x from %s of "
 	       "length %d/%d into md "LPX64" [%d] + %d\n",
-	       (op_mask == LNET_MD_OP_PUT) ? "put" : "get",
-	       index, libcfs_id2str(src), mlength, rlength,
-	       md->md_lh.lh_cookie, md->md_niov, offset);
+	       (info->mi_opc == LNET_MD_OP_PUT) ? "put" : "get",
+	       info->mi_portal, libcfs_id2str(info->mi_id), mlength,
+	       info->mi_rlength, md->md_lh.lh_cookie, md->md_niov, offset);
 
 	lnet_msg_attach_md(msg, md, offset, mlength);
 	md->md_offset = offset + mlength;
@@ -218,16 +217,14 @@ lnet_mt_match_head(struct lnet_match_table *mtable,
 
 int
 lnet_mt_match_md(struct lnet_match_table *mtable,
-		 int op_mask, lnet_process_id_t src,
-		 unsigned int rlength, unsigned int roffset,
-		 __u64 match_bits, lnet_msg_t *msg)
+		 struct lnet_match_info *info, struct lnet_msg *msg)
 {
 	cfs_list_t		*head;
 	lnet_me_t		*me;
 	lnet_me_t		*tmp;
 	int			rc;
 
-	head = lnet_mt_match_head(mtable, src, match_bits);
+	head = lnet_mt_match_head(mtable, info->mi_id, info->mi_mbits);
 	if (head == NULL) /* nobody posted anything on this portal */
 		goto out;
 
@@ -238,9 +235,7 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 
 		LASSERT(me == me->me_md->md_me);
 
-		rc = lnet_try_match_md(mtable->mt_portal,
-				       op_mask, src, rlength, roffset,
-				       match_bits, me->me_md, msg);
+		rc = lnet_try_match_md(me->me_md, info, msg);
 		switch (rc) {
 		default:
 			LBUG();
@@ -258,40 +253,41 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 	}
 
  out:
-	if (op_mask == LNET_MD_OP_GET ||
-	    !lnet_ptl_is_lazy(the_lnet.ln_portals[mtable->mt_portal]))
+	if (info->mi_opc == LNET_MD_OP_GET ||
+	    !lnet_ptl_is_lazy(the_lnet.ln_portals[info->mi_portal]))
 		return LNET_MATCHMD_DROP;
 
 	return LNET_MATCHMD_NONE;
 }
 
 int
-lnet_ptl_match_md(unsigned int index, int op_mask, lnet_process_id_t src,
-		  unsigned int rlength, unsigned int roffset,
-		  __u64 match_bits, lnet_msg_t *msg)
+lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 {
 	struct lnet_match_table	*mtable;
 	struct lnet_portal	*ptl;
 	int			rc;
 
 	CDEBUG(D_NET, "Request from %s of length %d into portal %d "
-	       "MB="LPX64"\n", libcfs_id2str(src), rlength, index, match_bits);
+	       "MB="LPX64"\n", libcfs_id2str(info->mi_id),
+	       info->mi_rlength, info->mi_portal, info->mi_mbits);
 
-	if (index >= the_lnet.ln_nportals) {
+	if (info->mi_portal >= the_lnet.ln_nportals) {
 		CERROR("Invalid portal %d not in [0-%d]\n",
-		       index, the_lnet.ln_nportals);
+		       info->mi_portal, the_lnet.ln_nportals);
 		return LNET_MATCHMD_DROP;
 	}
 
-	mtable = lnet_mt_of_match(index, src, match_bits);
+	mtable = lnet_mt_of_match(info->mi_portal,
+				  info->mi_id, info->mi_mbits);
 	if (mtable == NULL) {
 		CDEBUG(D_NET, "Drop early message from %s of length %d into "
 			      "portal %d MB="LPX64"\n",
-			      libcfs_id2str(src), rlength, index, match_bits);
+			      libcfs_id2str(info->mi_id), info->mi_rlength,
+			      info->mi_portal, info->mi_mbits);
 		return LNET_MATCHMD_DROP;
 	}
 
-	ptl = the_lnet.ln_portals[index];
+	ptl = the_lnet.ln_portals[info->mi_portal];
 	lnet_res_lock();
 
 	if (the_lnet.ln_shutdown) {
@@ -299,8 +295,7 @@ lnet_ptl_match_md(unsigned int index, int op_mask, lnet_process_id_t src,
 		goto out;
 	}
 
-	rc = lnet_mt_match_md(mtable, op_mask, src, rlength,
-			      roffset, match_bits, msg);
+	rc = lnet_mt_match_md(mtable, info, msg);
 	if (rc != LNET_MATCHMD_NONE) /* matched or dropping */
 		goto out;
 
@@ -313,8 +308,9 @@ lnet_ptl_match_md(unsigned int index, int op_mask, lnet_process_id_t src,
 
 	CDEBUG(D_NET,
 	       "Delaying %s from %s portal %d MB "LPX64" offset %d len %d\n",
-	       op_mask == LNET_MD_OP_PUT ? "PUT" : "GET",
-	       libcfs_id2str(src), index, match_bits, roffset, rlength);
+	       info->mi_opc == LNET_MD_OP_PUT ? "PUT" : "GET",
+	       libcfs_id2str(info->mi_id), info->mi_portal,
+	       info->mi_mbits, info->mi_roffset, info->mi_rlength);
  out:
 	lnet_res_unlock();
 	return rc;
@@ -344,23 +340,22 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 	md->md_me = me;
 
 	cfs_list_for_each_entry_safe(msg, tmp, &ptl->ptl_msgq, msg_list) {
-		int               rc;
-		int               index;
-		lnet_hdr_t       *hdr;
-		lnet_process_id_t src;
+		struct lnet_match_info	info;
+		lnet_hdr_t		*hdr;
+		int			rc;
 
 		LASSERT(msg->msg_rx_delayed);
 
 		hdr   = &msg->msg_hdr;
-		index = hdr->msg.put.ptl_index;
+		info.mi_id.nid	= hdr->src_nid;
+		info.mi_id.pid	= hdr->src_pid;
+		info.mi_opc	= LNET_MD_OP_PUT;
+		info.mi_portal	= hdr->msg.put.ptl_index;
+		info.mi_rlength	= hdr->payload_length;
+		info.mi_roffset	= hdr->msg.put.offset;
+		info.mi_mbits	= hdr->msg.put.match_bits;
 
-		src.nid = hdr->src_nid;
-		src.pid = hdr->src_pid;
-
-		rc = lnet_try_match_md(index, LNET_MD_OP_PUT, src,
-				       hdr->payload_length,
-				       hdr->msg.put.offset,
-				       hdr->msg.put.match_bits, md, msg);
+		rc = lnet_try_match_md(md, &info, msg);
 
 		if (rc == LNET_MATCHMD_NONE)
 			continue;
@@ -373,11 +368,9 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 
 			CDEBUG(D_NET, "Resuming delayed PUT from %s portal %d "
 			       "match "LPU64" offset %d length %d.\n",
-			       libcfs_id2str(src),
-			       hdr->msg.put.ptl_index,
-			       hdr->msg.put.match_bits,
-			       hdr->msg.put.offset,
-			       hdr->payload_length);
+			       libcfs_id2str(info.mi_id),
+			       info.mi_portal, info.mi_mbits,
+			       info.mi_roffset, info.mi_rlength);
 		} else {
 			LASSERT(rc == LNET_MATCHMD_DROP);
 
