@@ -1191,10 +1191,13 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
                 struct obd_import *imp = req->rq_import;
                 __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
-                LCONSOLE_ERROR_MSG(0x011,"an error occurred while communicating"
-                                " with %s. The %s operation failed with %d\n",
-                                libcfs_nid2str(imp->imp_connection->c_peer.nid),
-                                ll_opcode2str(opc), err);
+                if (ptlrpc_console_allow(req))
+                        LCONSOLE_ERROR_MSG(0x011,"an error occurred while "
+                                           "communicating with %s. The %s "
+                                           "operation failed with %d\n",
+                                           libcfs_nid2str(
+                                           imp->imp_connection->c_peer.nid),
+                                           ll_opcode2str(opc), err);
                 RETURN(err < 0 ? err : -EINVAL);
         }
 
@@ -1203,21 +1206,6 @@ static int ptlrpc_check_status(struct ptlrpc_request *req)
         } else if (err > 0) {
                 /* XXX: translate this error from net to host */
                 DEBUG_REQ(D_INFO, req, "status is %d", err);
-        }
-
-        if (lustre_msg_get_type(req->rq_repmsg) == PTL_RPC_MSG_ERR) {
-                struct obd_import *imp = req->rq_import;
-                __u32 opc = lustre_msg_get_opc(req->rq_reqmsg);
-
-                if (ptlrpc_console_allow(req))
-                        LCONSOLE_ERROR_MSG(0x011,"an error occurred while "
-                                           "communicating with %s. The %s "
-                                           "operation failed with %d\n",
-                                           libcfs_nid2str(
-                                           imp->imp_connection->c_peer.nid),
-                                           ll_opcode2str(opc), err);
-
-                RETURN(err < 0 ? err : -EINVAL);
         }
 
         RETURN(err);
