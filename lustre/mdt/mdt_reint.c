@@ -683,7 +683,8 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         struct mdt_lock_handle  *child_lh;
         struct lu_name          *lname;
         int                      rc;
-        ENTRY;
+	int			 no_name = 0;
+	ENTRY;
 
         DEBUG_REQ(D_INODE, req, "unlink "DFID"/%s", PFID(rr->rr_fid1),
                   rr->rr_name);
@@ -732,8 +733,30 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 	/* lookup child object along with version checking */
 	fid_zero(child_fid);
 	rc = mdt_lookup_version_check(info, mp, lname, child_fid, 1);
-	if (rc != 0)
-		GOTO(unlock_parent, rc);
+	if (rc != 0) {
+		/* Name might not be able to find during resend of
+		 * remote unlink, considering following case.
+		 * dir_A is a remote directory, the name entry of
+		 * dir_A is on MDT0, the directory is on MDT1,
+		 *
+		 * 1. client sends unlink req to MDT1.
+		 * 2. MDT1 sends name delete update to MDT0.
+		 * 3. name entry is being deleted in MDT0 synchronously.
+		 * 4. MDT1 is restarted.
+		 * 5. client resends unlink req to MDT1. So it can not
+		 *    find the name entry on MDT0 anymore.
+		 * In this case, MDT1 only needs to destory the local
+		 * directory.
+		 * */
+		if (mdt_object_remote(mp) && rc == -ENOENT &&
+		    !fid_is_zero(rr->rr_fid2) &&
+		    lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
+			no_name = 1;
+			*child_fid = *rr->rr_fid2;
+		 } else {
+			GOTO(unlock_parent, rc);
+		 }
+	}
 
 	if (fid_is_obf(child_fid) || fid_is_dot_lustre(child_fid))
 		GOTO(unlock_parent, rc = -EPERM);
@@ -779,7 +802,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			ma->ma_valid = 0;
 			mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
 			rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
-					NULL, lname, ma);
+					NULL, lname, ma, no_name);
 			GOTO(put_child, rc);
 		}
 		/* Revoke the LOOKUP lock of the remote object granted by
@@ -801,7 +824,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		GOTO(put_child, rc = -EPERM);
 	}
 
-        rc = mdt_object_lock(info, mc, child_lh, MDS_INODELOCK_FULL,
+	rc = mdt_object_lock(info, mc, child_lh, MDS_INODELOCK_FULL,
                              MDT_CROSS_LOCK);
 	if (rc != 0) {
 		GOTO(put_child, rc);
@@ -818,12 +841,13 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
         ma->ma_need = MA_INODE;
         ma->ma_valid = 0;
         mdt_set_capainfo(info, 1, child_fid, BYPASS_CAPA);
-        rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
-                        mdt_object_child(mc), lname, ma);
+
+	rc = mdo_unlink(info->mti_env, mdt_object_child(mp),
+			mdt_object_child(mc), lname, ma, no_name);
 	if (rc == 0 && !lu_object_is_dying(&mc->mot_header))
 		rc = mdt_attr_get_complex(info, mc, ma);
-        if (rc == 0)
-                mdt_handle_last_unlink(info, mc, ma);
+	if (rc == 0)
+		mdt_handle_last_unlink(info, mc, ma);
 
         if (ma->ma_valid & MA_INODE) {
                 switch (ma->ma_attr.la_mode & S_IFMT) {

@@ -1956,12 +1956,12 @@ static int echo_md_destroy_internal(const struct lu_env *env,
         CDEBUG(D_RPCTRACE, "Start destroy object "DFID" %s %p\n",
                PFID(lu_object_fid(&parent->mo_lu)), lname->ln_name, parent);
 
-        rc = mdo_unlink(env, parent, lu2md(child), lname, ma);
-        if (rc) {
-                CERROR("Can not unlink child %s: rc = %d\n",
-                        lname->ln_name, rc);
-                GOTO(out_put, rc);
-        }
+	rc = mdo_unlink(env, parent, lu2md(child), lname, ma, 0);
+	if (rc) {
+		CERROR("Can not unlink child %s: rc = %d\n",
+			lname->ln_name, rc);
+		GOTO(out_put, rc);
+	}
         CDEBUG(D_RPCTRACE, "End destroy object "DFID" %s %p\n",
                PFID(lu_object_fid(&parent->mo_lu)), lname->ln_name, parent);
 out_put:

@@ -1687,27 +1687,27 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		}
 	}
 
-        /* Try to open it now. */
-        rc = mdt_finish_open(info, parent, child, create_flags,
-                             created, ldlm_rep);
-        if (rc) {
-                result = rc;
+	/* Try to open it now. */
+	rc = mdt_finish_open(info, parent, child, create_flags,
+			     created, ldlm_rep);
+	if (rc) {
+		result = rc;
 		/* openlock will be released if mdt_finish_open failed */
 		mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_LOCK);
-                if (created) {
-                        ma->ma_need = 0;
-                        ma->ma_valid = 0;
-                        ma->ma_cookie_size = 0;
-                        rc = mdo_unlink(info->mti_env,
-                                        mdt_object_child(parent),
-                                        mdt_object_child(child),
-                                        lname,
-                                        &info->mti_attr);
-                        if (rc != 0)
-                                CERROR("Error in cleanup of open\n");
+		if (created) {
+			ma->ma_need = 0;
+			ma->ma_valid = 0;
+			ma->ma_cookie_size = 0;
+			rc = mdo_unlink(info->mti_env,
+					mdt_object_child(parent),
+					mdt_object_child(child),
+					lname,
+					&info->mti_attr, 0);
+			if (rc != 0)
+				CERROR("Error in cleanup of open\n");
 			mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
-                }
-        }
+		}
+	}
         EXIT;
 out_child:
 	mdt_object_open_unlock(info, child, lhc, ibits, result);

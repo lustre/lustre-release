@@ -90,8 +90,8 @@ static int osp_remote_sync(const struct lu_env *env, struct dt_device *dt,
 	int			rc;
 	ENTRY;
 
-	rc = osp_prep_update_req(env, osp, update->ur_buf,
-				 UPDATE_BUFFER_SIZE, &req);
+	rc = osp_prep_update_req(env, osp, update->ur_buf, UPDATE_BUFFER_SIZE,
+				 &req);
 	if (rc)
 		RETURN(rc);
 
@@ -136,7 +136,7 @@ static struct update_request
 
 	CFS_INIT_LIST_HEAD(&update->ur_list);
 	update->ur_dt = dt;
-
+	update->ur_batchid = 0;
 	update->ur_buf->ub_magic = UPDATE_BUFFER_MAGIC;
 	update->ur_buf->ub_count = 0;
 
@@ -197,8 +197,8 @@ int osp_trans_start(const struct lu_env *env, struct dt_device *dt,
  */
 static int osp_insert_update(const struct lu_env *env,
 			     struct update_request *update, int op,
-			     struct lu_fid *fid, int count, int *lens,
-			     char **bufs)
+			     struct lu_fid *fid, int count,
+			     int *lens, char **bufs)
 {
 	struct update_buf    *ubuf = update->ur_buf;
 	struct update        *obj_update;
@@ -236,6 +236,7 @@ static int osp_insert_update(const struct lu_env *env,
 	/* fill the update into the update buffer */
 	fid_cpu_to_le(&obj_update->u_fid, fid);
 	obj_update->u_type = cpu_to_le32(op);
+	obj_update->u_batchid = update->ur_batchid;
 	for (i = 0; i < count; i++)
 		obj_update->u_lens[i] = cpu_to_le32(lens[i]);
 
@@ -268,6 +269,11 @@ static struct update_request
 			return update;
 	}
 	return NULL;
+}
+
+static inline void osp_md_add_update_batchid(struct update_request *update)
+{
+	update->ur_batchid++;
 }
 
 /**
@@ -337,6 +343,7 @@ static int osp_md_declare_object_create(const struct lu_env *env,
 	int			buf_count;
 	int			rc;
 
+
 	update = osp_find_create_update_loc(th, dt);
 	if (IS_ERR(update)) {
 		CERROR("%s: Get OSP update buf failed: rc = %d\n",
@@ -365,12 +372,53 @@ static int osp_md_declare_object_create(const struct lu_env *env,
 		buf_count++;
 	}
 
+	if (lu_object_exists(&dt->do_lu)) {
+		/* If the object already exists, we needs to destroy
+		 * this orphan object first.
+		 *
+		 * The scenario might happen in this case
+		 *
+		 * 1. client send remote create to MDT0.
+		 * 2. MDT0 send create update to MDT1.
+		 * 3. MDT1 finished create synchronously.
+		 * 4. MDT0 failed and reboot.
+		 * 5. client resend remote create to MDT0.
+		 * 6. MDT0 tries to resend create update to MDT1,
+		 *    but find the object already exists
+		 */
+		CDEBUG(D_HA, "%s: object "DFID" exists, destroy this orphan\n",
+		       dt->do_lu.lo_dev->ld_obd->obd_name, PFID(fid1));
+
+		rc = osp_insert_update(env, update, OBJ_REF_DEL, fid1, 0,
+				       NULL, NULL);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		if (S_ISDIR(lu_object_attr(&dt->do_lu))) {
+			/* decrease for ".." */
+			rc = osp_insert_update(env, update, OBJ_REF_DEL, fid1,
+					       0, NULL, NULL);
+			if (rc != 0)
+				GOTO(out, rc);
+		}
+
+		rc = osp_insert_update(env, update, OBJ_DESTROY, fid1, 0, NULL,
+				       NULL);
+		if (rc != 0)
+			GOTO(out, rc);
+
+		dt->do_lu.lo_header->loh_attr &= ~LOHA_EXISTS;
+		/* Increase batchid to add this orphan object deletion
+		 * to separate transaction */
+		osp_md_add_update_batchid(update);
+	}
+
 	rc = osp_insert_update(env, update, OBJ_CREATE, fid1, buf_count, sizes,
 			       bufs);
-	if (rc) {
+out:
+	if (rc)
 		CERROR("%s: Insert update error: rc = %d\n",
 		       dt->do_lu.lo_dev->ld_obd->obd_name, rc);
-	}
 
 	return rc;
 }

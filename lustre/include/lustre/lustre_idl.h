@@ -3485,7 +3485,7 @@ enum object_update_op {
 
 struct update {
 	__u32		u_type;
-	__u32		u_padding;
+	__u32		u_batchid;
 	struct lu_fid	u_fid;
 	__u32		u_lens[UPDATE_BUF_COUNT];
 	__u32		u_bufs[0];

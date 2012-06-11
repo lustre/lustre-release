@@ -283,7 +283,7 @@ enum mdt_reint_flag {
 
 struct mdt_thread_info;
 struct tx_arg;
-typedef int (*tx_exec_func_t)(struct mdt_thread_info *, struct thandle *,
+typedef int (*tx_exec_func_t)(const struct lu_env *, struct thandle *,
 			      struct tx_arg *);
 
 struct tx_arg {
@@ -291,8 +291,8 @@ struct tx_arg {
 	tx_exec_func_t		undo_fn;
 	struct dt_object	*object;
 	char			*file;
-	int			line;
 	struct update_reply	*reply;
+	int			line;
 	int			index;
 	union {
 		struct {
@@ -1123,6 +1123,8 @@ int out_handle(struct mdt_thread_info *info);
 	__out_tx_index_delete(info, obj, th, name, reply, idx, \
 			      __FILE__, __LINE__)
 
+#define out_tx_destroy(info, obj, th, reply, idx) \
+	__out_tx_destroy(info, obj, th, reply, idx, __FILE__, __LINE__)
 
 #endif /* __KERNEL__ */
 #endif /* _MDT_H */

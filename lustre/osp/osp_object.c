@@ -370,16 +370,13 @@ static int osp_object_init(const struct lu_env *env, struct lu_object *o,
 		po->opo_obj.do_ops = &osp_md_obj_ops;
 		o->lo_header->loh_attr |= LOHA_REMOTE;
 		po->opo_obj.do_lock_ops = &osp_md_lock_ops;
-		/* Do not need get attr for new object */
-		if (!(conf != NULL && (conf->loc_flags & LOC_F_NEW) != 0)) {
-			rc = po->opo_obj.do_ops->do_attr_get(env, lu2dt_obj(o),
-							     la, NULL);
-			if (rc == 0)
-				o->lo_header->loh_attr |=
-					LOHA_EXISTS | (la->la_mode & S_IFMT);
-			if (rc == -ENOENT)
-				rc = 0;
-		}
+		rc = po->opo_obj.do_ops->do_attr_get(env, lu2dt_obj(o),
+						     la, NULL);
+		if (rc == 0)
+			o->lo_header->loh_attr |=
+				LOHA_EXISTS | (la->la_mode & S_IFMT);
+		if (rc == -ENOENT)
+			rc = 0;
 	}
 	RETURN(rc);
 }

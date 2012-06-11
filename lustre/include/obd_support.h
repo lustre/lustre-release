@@ -465,8 +465,6 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LOV_INIT			    0x1403
 #define OBD_FAIL_GLIMPSE_DELAY			    0x1404
 
-#define OBD_FAIL_UPDATE_OBJ_NET				0x1500
-
 #define OBD_FAIL_FID_INDIR	0x1501
 #define OBD_FAIL_FID_INLMA	0x1502
 #define OBD_FAIL_FID_IGIF	0x1504
@@ -484,6 +482,11 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LFSCK_CRASH		0x160a
 #define OBD_FAIL_LFSCK_NO_AUTO		0x160b
 #define OBD_FAIL_LFSCK_NO_DOUBLESCAN	0x160c
+
+/* UPDATE */
+#define OBD_FAIL_UPDATE_OBJ_NET			0x1700
+#define OBD_FAIL_UPDATE_OBJ_NET_REP		0x1701
+
 
 /* Assign references to moved code to reduce code changes */
 #define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)

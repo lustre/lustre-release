@@ -2023,7 +2023,7 @@ static void check_update(void)
 	BLANK_LINE();
 	CHECK_STRUCT(update);
 	CHECK_MEMBER(update, u_type);
-	CHECK_MEMBER(update, u_padding);
+	CHECK_MEMBER(update, u_batchid);
 	CHECK_MEMBER(update, u_fid);
 	CHECK_MEMBER(update, u_lens);
 	CHECK_MEMBER(update, u_bufs);

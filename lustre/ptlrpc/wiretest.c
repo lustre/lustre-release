@@ -4496,10 +4496,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct update, u_type));
 	LASSERTF((int)sizeof(((struct update *)0)->u_type) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct update *)0)->u_type));
-	LASSERTF((int)offsetof(struct update, u_padding) == 4, "found %lld\n",
-		 (long long)(int)offsetof(struct update, u_padding));
-	LASSERTF((int)sizeof(((struct update *)0)->u_padding) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct update *)0)->u_padding));
+	LASSERTF((int)offsetof(struct update, u_batchid) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct update, u_batchid));
+	LASSERTF((int)sizeof(((struct update *)0)->u_batchid) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct update *)0)->u_batchid));
 	LASSERTF((int)offsetof(struct update, u_fid) == 8, "found %lld\n",
 		 (long long)(int)offsetof(struct update, u_fid));
 	LASSERTF((int)sizeof(((struct update *)0)->u_fid) == 16, "found %lld\n",

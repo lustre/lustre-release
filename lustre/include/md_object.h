@@ -325,9 +325,9 @@ struct md_dir_operations {
                         struct md_object *src_obj, const struct lu_name *lname,
                         struct md_attr *ma);
 
-        int (*mdo_unlink)(const struct lu_env *env, struct md_object *pobj,
-                          struct md_object *cobj, const struct lu_name *lname,
-                          struct md_attr *ma);
+	int (*mdo_unlink)(const struct lu_env *env, struct md_object *pobj,
+			  struct md_object *cobj, const struct lu_name *lname,
+			  struct md_attr *ma, int no_name);
 
         /** This method is used to compare a requested layout to an existing
          * layout (struct lov_mds_md_v1/3 vs struct lov_mds_md_v1/3) */
@@ -800,13 +800,13 @@ static inline int mdo_link(const struct lu_env *env,
 }
 
 static inline int mdo_unlink(const struct lu_env *env,
-                             struct md_object *p,
-                             struct md_object *c,
-                             const struct lu_name *lname,
-                             struct md_attr *ma)
+			     struct md_object *p,
+			     struct md_object *c,
+			     const struct lu_name *lname,
+			     struct md_attr *ma, int no_name)
 {
 	LASSERT(p->mo_dir_ops->mdo_unlink);
-	return p->mo_dir_ops->mdo_unlink(env, p, c, lname, ma);
+	return p->mo_dir_ops->mdo_unlink(env, p, c, lname, ma, no_name);
 }
 
 static inline int mdo_lum_lmm_cmp(const struct lu_env *env,

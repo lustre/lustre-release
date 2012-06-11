@@ -1094,16 +1094,18 @@ static inline int mdd_declare_links_del(const struct lu_env *env,
 }
 
 static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
-                              struct mdd_object *p, struct mdd_object *c,
-                              const struct lu_name *name, struct md_attr *ma,
-                              struct thandle *handle)
+			      struct mdd_object *p, struct mdd_object *c,
+			      const struct lu_name *name, struct md_attr *ma,
+			      struct thandle *handle, int no_name)
 {
 	struct lu_attr     *la = &mdd_env_info(env)->mti_la_for_fix;
         int rc;
 
-        rc = mdo_declare_index_delete(env, p, name->ln_name, handle);
-        if (rc)
-                return rc;
+	if (likely(no_name == 0)) {
+		rc = mdo_declare_index_delete(env, p, name->ln_name, handle);
+		if (rc)
+			return rc;
+	}
 
         rc = mdo_declare_ref_del(env, p, handle);
         if (rc)
@@ -1144,9 +1146,18 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
 	return rc;
 }
 
+/**
+ * Delete name entry and the object.
+ * Note: no_name == 1 means it only destory the object, i.e. name_entry
+ * does not exist for this object, and it could only happen during resending
+ * of remote unlink. see the comments in mdt_reint_unlink. Unfortunately, lname
+ * is also needed in this case(needed by changelog), so we have to add another
+ * parameter(no_name)here. XXX: this is only needed in DNE phase I, on Phase II,
+ * the ENOENT failure should be able to be fixed by redo mechanism.
+ */
 static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
-                      struct md_object *cobj, const struct lu_name *lname,
-                      struct md_attr *ma)
+		      struct md_object *cobj, const struct lu_name *lname,
+		      struct md_attr *ma, int no_name)
 {
         const char *name = lname->ln_name;
 	struct lu_attr     *cattr = &mdd_env_info(env)->mti_cattr;
@@ -1174,7 +1185,7 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
                 RETURN(PTR_ERR(handle));
 
 	rc = mdd_declare_unlink(env, mdd, mdd_pobj, mdd_cobj,
-				lname, ma, handle);
+				lname, ma, handle, no_name);
 	if (rc)
 		GOTO(stop, rc);
 
@@ -1203,10 +1214,12 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 	if (rc)
 		GOTO(cleanup, rc);
 
-	rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle,
-				mdd_object_capa(env, mdd_pobj));
-	if (rc)
-		GOTO(cleanup, rc);
+	if (likely(no_name == 0)) {
+		rc = __mdd_index_delete(env, mdd_pobj, name, is_dir, handle,
+					mdd_object_capa(env, mdd_pobj));
+		if (rc)
+			GOTO(cleanup, rc);
+	}
 
 	if (likely(mdd_cobj != NULL)) {
 		rc = mdo_ref_del(env, mdd_cobj, handle);

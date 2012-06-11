@@ -620,7 +620,6 @@ test_22a () {
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
-	do_facet mds${MDTIDX} lctl set_param fail_loc=0
 
 	fail mds${MDTIDX}
 	wait $CLIENT_PID || error "lfs mkdir failed"
@@ -647,7 +646,6 @@ test_22b () {
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
-	do_facet mds${MDTIDX} lctl set_param fail_loc=0
 
 	fail mds${MDTIDX},mds$((MDTIDX + 1))
 	wait $CLIENT_PID || error "lfs mkdir failed"
@@ -674,8 +672,8 @@ test_22c () {
 
 	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
 
-	# OBD_FAIL_UPDATE_OBJ_NET    0x1500
-	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x1500
+	# OBD_FAIL_UPDATE_OBJ_NET_REP    0x1701
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
@@ -701,8 +699,8 @@ test_22d () {
 
 	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
 
-	# OBD_FAIL_UPDATE_OBJ_NET    0x1500
-	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x1500
+	# OBD_FAIL_UPDATE_OBJ_NET_REP    0x1701
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
 	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
@@ -808,8 +806,8 @@ test_23c () {
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
 			error "lfs mkdir failed"
 
-	# OBD_FAIL_UPDATE_OBJ_NET    0x1500
-	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1500
+	# OBD_FAIL_UPDATE_OBJ_NET_REP    0x1701
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0
@@ -837,8 +835,8 @@ test_23d () {
 	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
 			error "lfs mkdir failed"
 
-	# OBD_FAIL_UPDATE_OBJ_NET    0x1500
-	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1500
+	# OBD_FAIL_UPDATE_OBJ_NET    0x1701
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x1701
 	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
 	CLIENT_PID=$!
 	do_facet mds${MDTIDX} lctl set_param fail_loc=0

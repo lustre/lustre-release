@@ -800,12 +800,12 @@ static int dot_lustre_mdd_link(const struct lu_env *env,
 }
 
 static int dot_lustre_mdd_unlink(const struct lu_env *env,
-                                 struct md_object *pobj,
-                                 struct md_object *cobj,
-                                 const struct lu_name *lname,
-                                 struct md_attr *ma)
+				 struct md_object *pobj,
+				 struct md_object *cobj,
+				 const struct lu_name *lname,
+				 struct md_attr *ma, int no_name)
 {
-        return -EPERM;
+	return -EPERM;
 }
 
 static int dot_lustre_mdd_name_insert(const struct lu_env *env,
@@ -1032,10 +1032,10 @@ static int obf_link(const struct lu_env *env, struct md_object *tgt_obj,
 }
 
 static int obf_unlink(const struct lu_env *env, struct md_object *pobj,
-                      struct md_object *cobj, const struct lu_name *lname,
-                      struct md_attr *ma)
+		      struct md_object *cobj, const struct lu_name *lname,
+		      struct md_attr *ma, int no_name)
 {
-        return -EPERM;
+	return -EPERM;
 }
 
 static struct md_dir_operations mdd_obf_dir_ops = {
