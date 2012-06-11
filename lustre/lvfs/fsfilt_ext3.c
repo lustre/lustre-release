@@ -821,20 +821,12 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 #define EXT_ASSERT(cond)  BUG_ON(!(cond))
 #endif
 
-#ifdef EXT3_EXT_HAS_NO_TREE
-/* for kernels 2.6.18 and later */
 #define EXT_GENERATION(inode)           (EXT4_I(inode)->i_ext_generation)
 #define ext3_ext_base                   inode
 #define ext3_ext_base2inode(inode)      (inode)
 #define EXT_DEPTH(inode)                ext_depth(inode)
 #define fsfilt_ext3_ext_walk_space(inode, block, num, cb, cbdata) \
                         ext3_ext_walk_space(inode, block, num, cb, cbdata);
-#else
-#define ext3_ext_base                   ext3_extents_tree
-#define ext3_ext_base2inode(tree)       (tree->inode)
-#define fsfilt_ext3_ext_walk_space(tree, block, num, cb, cbdata) \
-                        ext3_ext_walk_space(tree, block, num, cb);
-#endif
 
 struct bpointers {
         unsigned long *blocks;
@@ -925,7 +917,6 @@ static unsigned long new_blocks(handle_t *handle, struct ext3_ext_base *base,
 }
 #endif
 
-#ifdef EXT3_EXT_HAS_NO_TREE
 static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                                   struct ext3_ext_path *path,
                                   struct ext3_ext_cache *cex,
@@ -935,17 +926,6 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                                   void *cbdata)
 {
         struct bpointers *bp = cbdata;
-#else
-static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
-                                  struct ext3_ext_path *path,
-                                  struct ext3_ext_cache *cex
-#ifdef HAVE_EXT_PREPARE_CB_EXTENT
-                                  , struct ext3_extent *ex
-#endif
-                                 )
-{
-        struct bpointers *bp = base->private;
-#endif
         struct inode *inode = ext3_ext_base2inode(base);
         struct ext3_extent nex;
         unsigned long pblock;
@@ -1083,22 +1063,13 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
                        unsigned long num, unsigned long *blocks,
                        int *created, int create)
 {
-#ifdef EXT3_EXT_HAS_NO_TREE
         struct ext3_ext_base *base = inode;
-#else
-        struct ext3_extents_tree tree;
-        struct ext3_ext_base *base = &tree;
-#endif
         struct bpointers bp;
         int err;
 
         CDEBUG(D_OTHER, "blocks %lu-%lu requested for inode %u\n",
                block, block + num - 1, (unsigned) inode->i_ino);
 
-#ifndef EXT3_EXT_HAS_NO_TREE
-        ext3_init_tree_desc(base, inode);
-        tree.private = &bp;
-#endif
         bp.blocks = blocks;
         bp.created = created;
         bp.start = block;
@@ -2144,14 +2115,7 @@ static int fsfilt_ext3_dquot(struct lustre_dquot *dquot, int cmd)
 static int fsfilt_ext3_get_mblk(struct super_block *sb, int *count,
                                 struct inode *inode, int frags)
 {
-#ifdef EXT3_EXT_HAS_NO_TREE
         struct ext3_ext_base *base = inode;
-#else
-        struct ext3_extents_tree tree;
-        struct ext3_ext_base *base = &tree;
-
-        ext3_init_tree_desc(base, inode);
-#endif
         /* for an ost_write request, it needs <#fragments> * <tree depth + 1>
          * metablocks at maxium b=16542 */
         *count = frags * (EXT_DEPTH(base) + 1) * EXT3_BLOCK_SIZE(sb);

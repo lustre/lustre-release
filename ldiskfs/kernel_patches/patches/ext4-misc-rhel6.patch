@@ -39,15 +39,7 @@ Index: linux-stage/fs/ext4/ext4_extents.h
  
  /*
   * ext4_inode has i_block array (60 bytes total).
-@@ -160,6 +166,7 @@ typedef int (*ext_prepare_callback)(stru
- #define EXT_INIT_MAX_LEN	(1UL << 15)
- #define EXT_UNINIT_MAX_LEN	(EXT_INIT_MAX_LEN - 1)
- 
-+#define EXT4_EXT_HAS_NO_TREE	/* ext4_extents_tree struct is not used*/
- 
- #define EXT_FIRST_EXTENT(__hdr__) \
- 	((struct ext4_extent *) (((char *) (__hdr__)) +		\
-@@ -239,6 +246,8 @@ extern int ext4_extent_tree_init(handle_
+@@ -239,6 +245,8 @@ extern int ext4_extent_tree_init(handle_
  extern int ext4_ext_calc_credits_for_single_extent(struct inode *inode,
  						   int num,
  						   struct ext4_ext_path *path);
