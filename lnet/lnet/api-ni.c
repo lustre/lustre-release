@@ -92,7 +92,7 @@ void
 lnet_init_locks(void)
 {
 	cfs_spin_lock_init(&the_lnet.ln_lock);
-	cfs_spin_lock_init(&the_lnet.ln_res_lock);
+	cfs_spin_lock_init(&the_lnet.ln_eq_wait_lock);
 	cfs_waitq_init(&the_lnet.ln_eq_waitq);
 	cfs_mutex_init(&the_lnet.ln_lnd_mutex);
 	cfs_mutex_init(&the_lnet.ln_api_mutex);
@@ -175,7 +175,7 @@ lnet_get_networks (void)
 void lnet_init_locks(void)
 {
 	the_lnet.ln_lock = 0;
-	the_lnet.ln_res_lock = 0;
+	the_lnet.ln_eq_wait_lock = 0;
 	the_lnet.ln_lnd_mutex = 0;
 	the_lnet.ln_api_mutex = 0;
 }
@@ -185,7 +185,7 @@ void lnet_fini_locks(void)
 	LASSERT(the_lnet.ln_api_mutex == 0);
 	LASSERT(the_lnet.ln_lnd_mutex == 0);
 	LASSERT(the_lnet.ln_lock == 0);
-	LASSERT(the_lnet.ln_res_lock == 0);
+	LASSERT(the_lnet.ln_eq_wait_lock == 0);
 }
 
 # else
@@ -194,7 +194,7 @@ void lnet_init_locks(void)
 {
 	pthread_cond_init(&the_lnet.ln_eq_cond, NULL);
 	pthread_mutex_init(&the_lnet.ln_lock, NULL);
-	pthread_mutex_init(&the_lnet.ln_res_lock, NULL);
+	pthread_mutex_init(&the_lnet.ln_eq_wait_lock, NULL);
 	pthread_mutex_init(&the_lnet.ln_lnd_mutex, NULL);
 	pthread_mutex_init(&the_lnet.ln_api_mutex, NULL);
 }
@@ -204,12 +204,36 @@ void lnet_fini_locks(void)
 	pthread_mutex_destroy(&the_lnet.ln_api_mutex);
 	pthread_mutex_destroy(&the_lnet.ln_lnd_mutex);
 	pthread_mutex_destroy(&the_lnet.ln_lock);
-	pthread_mutex_destroy(&the_lnet.ln_res_lock);
+	pthread_mutex_destroy(&the_lnet.ln_eq_wait_lock);
 	pthread_cond_destroy(&the_lnet.ln_eq_cond);
 }
 
 # endif
 #endif
+
+static int
+lnet_create_locks(void)
+{
+	lnet_init_locks();
+
+	the_lnet.ln_res_lock = cfs_percpt_lock_alloc(lnet_cpt_table());
+	if (the_lnet.ln_res_lock != NULL)
+		return 0;
+
+	lnet_fini_locks();
+	return -ENOMEM;
+}
+
+static void
+lnet_destroy_locks(void)
+{
+	if (the_lnet.ln_res_lock != NULL) {
+		cfs_percpt_lock_free(the_lnet.ln_res_lock);
+		the_lnet.ln_res_lock = NULL;
+	}
+
+	lnet_fini_locks();
+}
 
 void lnet_assert_wire_constants (void)
 {
@@ -486,7 +510,7 @@ lnet_res_container_cleanup(struct lnet_res_container *rec)
 
 int
 lnet_res_container_setup(struct lnet_res_container *rec,
-			 int type, int objnum, int objsz)
+			 int cpt, int type, int objnum, int objsz)
 {
 	int	rc = 0;
 	int	i;
@@ -502,11 +526,11 @@ lnet_res_container_setup(struct lnet_res_container *rec,
 	if (rc != 0)
 		goto out;
 #endif
-	rec->rec_lh_cookie = type;
+	rec->rec_lh_cookie = (cpt << LNET_COOKIE_TYPE_BITS) | type;
 
 	/* Arbitrary choice of hash table size */
-	LIBCFS_ALLOC(rec->rec_lh_hash,
-		     LNET_LH_HASH_SIZE * sizeof(rec->rec_lh_hash[0]));
+	LIBCFS_CPT_ALLOC(rec->rec_lh_hash, lnet_cpt_table(), cpt,
+			 LNET_LH_HASH_SIZE * sizeof(rec->rec_lh_hash[0]));
 	if (rec->rec_lh_hash == NULL) {
 		rc = -ENOMEM;
 		goto out;
@@ -524,6 +548,44 @@ out:
 	return rc;
 }
 
+static void
+lnet_res_containers_destroy(struct lnet_res_container **recs)
+{
+	struct lnet_res_container	*rec;
+	int				i;
+
+	cfs_percpt_for_each(rec, i, recs)
+		lnet_res_container_cleanup(rec);
+
+	cfs_percpt_free(recs);
+}
+
+static struct lnet_res_container **
+lnet_res_containers_create(int type, int objnum, int objsz)
+{
+	struct lnet_res_container	**recs;
+	struct lnet_res_container	*rec;
+	int				rc;
+	int				i;
+
+	recs = cfs_percpt_alloc(lnet_cpt_table(), sizeof(*rec));
+	if (recs == NULL) {
+		CERROR("Failed to allocate %s resource containers\n",
+		       lnet_res_type2str(type));
+		return NULL;
+	}
+
+	cfs_percpt_for_each(rec, i, recs) {
+		rc = lnet_res_container_setup(rec, i, type, objnum, objsz);
+		if (rc != 0) {
+			lnet_res_containers_destroy(recs);
+			return NULL;
+		}
+	}
+
+	return recs;
+}
+
 lnet_libhandle_t *
 lnet_res_lh_lookup(struct lnet_res_container *rec, __u64 cookie)
 {
@@ -535,7 +597,7 @@ lnet_res_lh_lookup(struct lnet_res_container *rec, __u64 cookie)
 	if ((cookie & (LNET_COOKIE_TYPES - 1)) != rec->rec_type)
 		return NULL;
 
-	hash = cookie >> LNET_COOKIE_TYPE_BITS;
+	hash = cookie >> (LNET_COOKIE_TYPE_BITS + LNET_CPT_BITS);
 	head = &rec->rec_lh_hash[hash & LNET_LH_HASH_MASK];
 
 	cfs_list_for_each_entry(lh, head, lh_hash_chain) {
@@ -550,7 +612,7 @@ void
 lnet_res_lh_initialize(struct lnet_res_container *rec, lnet_libhandle_t *lh)
 {
 	/* ALWAYS called with lnet_res_lock held */
-	unsigned int	ibits = LNET_COOKIE_TYPE_BITS;
+	unsigned int	ibits = LNET_COOKIE_TYPE_BITS + LNET_CPT_BITS;
 	unsigned int	hash;
 
 	lh->lh_cookie = rec->rec_lh_cookie;
@@ -578,7 +640,8 @@ int
 lnet_prepare(lnet_pid_t requested_pid)
 {
         /* Prepare to bring up the network */
-        int               rc = 0;
+	struct lnet_res_container **recs;
+	int			  rc = 0;
 
         LASSERT (the_lnet.ln_refcount == 0);
 
@@ -624,31 +687,26 @@ lnet_prepare(lnet_pid_t requested_pid)
 	if (rc != 0)
 		goto failed1;
 
-	rc = lnet_res_container_setup(&the_lnet.ln_eq_container,
+	rc = lnet_res_container_setup(&the_lnet.ln_eq_container, 0,
 				      LNET_COOKIE_TYPE_EQ, LNET_FL_MAX_EQS,
 				      sizeof(lnet_eq_t));
-	if (rc != 0) {
-		CERROR("Failed to create EQ container for LNet: %d\n", rc);
+	if (rc != 0)
 		goto failed2;
-	}
 
-	/* NB: we will have instance of ME container per CPT soon */
-	rc = lnet_res_container_setup(&the_lnet.ln_me_container,
-				      LNET_COOKIE_TYPE_ME, LNET_FL_MAX_MES,
-				      sizeof(lnet_me_t));
-	if (rc != 0) {
-		CERROR("Failed to create ME container for LNet: %d\n", rc);
+	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_ME, LNET_FL_MAX_MES,
+					  sizeof(lnet_me_t));
+	if (recs == NULL)
 		goto failed3;
-	}
+
+	the_lnet.ln_me_containers = recs;
 
 	/* NB: we will have instance of MD container per CPT soon */
-	rc = lnet_res_container_setup(&the_lnet.ln_md_container,
-				      LNET_COOKIE_TYPE_MD, LNET_FL_MAX_MDS,
-				      sizeof(lnet_libmd_t));
-	if (rc != 0) {
-		CERROR("Failed to create MD container for LNet: %d\n", rc);
+	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_MD, LNET_FL_MAX_MDS,
+					  sizeof(lnet_libmd_t));
+	if (recs == NULL)
 		goto failed3;
-	}
+
+	the_lnet.ln_md_containers = recs;
 
 	rc = lnet_portals_create();
 	if (rc != 0) {
@@ -661,8 +719,14 @@ lnet_prepare(lnet_pid_t requested_pid)
  failed3:
 	/* NB: lnet_res_container_cleanup is safe to call for
 	 * uninitialized container */
-	lnet_res_container_cleanup(&the_lnet.ln_md_container);
-	lnet_res_container_cleanup(&the_lnet.ln_me_container);
+	if (the_lnet.ln_md_containers != NULL) {
+		lnet_res_containers_destroy(the_lnet.ln_md_containers);
+		the_lnet.ln_md_containers = NULL;
+	}
+	if (the_lnet.ln_me_containers != NULL) {
+		lnet_res_containers_destroy(the_lnet.ln_me_containers);
+		the_lnet.ln_me_containers = NULL;
+	}
 	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
  failed2:
 	lnet_msg_container_cleanup(&the_lnet.ln_msg_container);
@@ -690,8 +754,16 @@ lnet_unprepare (void)
 
 	lnet_portals_destroy();
 
-	lnet_res_container_cleanup(&the_lnet.ln_md_container);
-	lnet_res_container_cleanup(&the_lnet.ln_me_container);
+	if (the_lnet.ln_md_containers != NULL) {
+		lnet_res_containers_destroy(the_lnet.ln_md_containers);
+		the_lnet.ln_md_containers = NULL;
+	}
+
+	if (the_lnet.ln_me_containers != NULL) {
+		lnet_res_containers_destroy(the_lnet.ln_me_containers);
+		the_lnet.ln_me_containers = NULL;
+	}
+
 	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
 
         lnet_free_rtrpools();
@@ -718,6 +790,30 @@ lnet_net2ni_locked (__u32 net)
 
         return NULL;
 }
+
+unsigned int
+lnet_nid_cpt_hash(lnet_nid_t nid)
+{
+	__u64		key = nid;
+	unsigned int	val;
+
+	val = cfs_hash_long(key, LNET_CPT_BITS);
+	/* NB: LNET_CP_NUMBER doesn't have to be PO2 */
+	if (val < LNET_CPT_NUMBER)
+		return val;
+
+	return (unsigned int)((key + val + (val >> 1)) % LNET_CPT_NUMBER);
+}
+
+int
+lnet_cpt_of_nid(lnet_nid_t nid)
+{
+	if (LNET_CPT_NUMBER == 1)
+		return 0; /* the only one */
+
+	return lnet_nid_cpt_hash(nid);
+}
+EXPORT_SYMBOL(lnet_cpt_of_nid);
 
 int
 lnet_islocalnet (__u32 net)
@@ -1065,12 +1161,35 @@ lnet_startup_lndnis (void)
 int
 LNetInit(void)
 {
+	int	rc;
+
         lnet_assert_wire_constants ();
         LASSERT (!the_lnet.ln_init);
 
         memset(&the_lnet, 0, sizeof(the_lnet));
 
-        lnet_init_locks();
+	/* refer to global cfs_cpt_table for now */
+	the_lnet.ln_cpt_table	= cfs_cpt_table;
+	the_lnet.ln_cpt_number	= cfs_cpt_number(cfs_cpt_table);
+
+	LASSERT(the_lnet.ln_cpt_number > 0);
+	if (the_lnet.ln_cpt_number > LNET_CPT_MAX) {
+		/* we are under risk of consuming all lh_cookie */
+		CERROR("Can't have %d CPTs for LNet (max allowed is %d), "
+		       "please change setting of CPT-table and retry\n",
+		       the_lnet.ln_cpt_number, LNET_CPT_MAX);
+		return -1;
+	}
+
+	while ((1 << the_lnet.ln_cpt_bits) < the_lnet.ln_cpt_number)
+		the_lnet.ln_cpt_bits++;
+
+	rc = lnet_create_locks();
+	if (rc != 0) {
+		CERROR("Can't create LNet global locks: %d\n", rc);
+		return -1;
+	}
+
         the_lnet.ln_refcount = 0;
         the_lnet.ln_init = 1;
         LNetInvalidateHandle(&the_lnet.ln_rc_eqh);
@@ -1108,15 +1227,15 @@ LNetInit(void)
 void
 LNetFini(void)
 {
-        LASSERT (the_lnet.ln_init);
-        LASSERT (the_lnet.ln_refcount == 0);
+	LASSERT(the_lnet.ln_init);
+	LASSERT(the_lnet.ln_refcount == 0);
 
-        while (!cfs_list_empty(&the_lnet.ln_lnds))
-                lnet_unregister_lnd(cfs_list_entry(the_lnet.ln_lnds.next,
-                                                   lnd_t, lnd_list));
-        lnet_fini_locks();
+	while (!cfs_list_empty(&the_lnet.ln_lnds))
+		lnet_unregister_lnd(cfs_list_entry(the_lnet.ln_lnds.next,
+						   lnd_t, lnd_list));
+	lnet_destroy_locks();
 
-        the_lnet.ln_init = 0;
+	the_lnet.ln_init = 0;
 }
 
 /**

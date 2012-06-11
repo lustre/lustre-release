@@ -241,14 +241,14 @@ typedef struct lnet_libhandle {
         ((type *)((char *)(ptr)-(char *)(&((type *)0)->member)))
 
 typedef struct lnet_eq {
-        cfs_list_t            eq_list;
-        lnet_libhandle_t      eq_lh;
-        lnet_seq_t            eq_enq_seq;
-        lnet_seq_t            eq_deq_seq;
-        unsigned int          eq_size;
-        lnet_event_t         *eq_events;
-        int                   eq_refcount;
-        lnet_eq_handler_t     eq_callback;
+	cfs_list_t		eq_list;
+	lnet_libhandle_t	eq_lh;
+	lnet_seq_t		eq_enq_seq;
+	lnet_seq_t		eq_deq_seq;
+	unsigned int		eq_size;
+	lnet_eq_handler_t	eq_callback;
+	lnet_event_t		*eq_events;
+	int			**eq_refs;	/* percpt refcount for EQ */
 } lnet_eq_t;
 
 typedef struct lnet_me {
@@ -549,6 +549,10 @@ enum {
 	LNET_MATCHMD_OK		= (1 << 1),
 	/* Must be discarded */
 	LNET_MATCHMD_DROP	= (1 << 2),
+	/* match and buffer is exhausted */
+	LNET_MATCHMD_EXHAUSTED  = (1 << 3),
+	/* match or drop */
+	LNET_MATCHMD_FINISH     = (LNET_MATCHMD_OK | LNET_MATCHMD_DROP),
 };
 
 /* Options for lnet_portal_t::ptl_options */
@@ -575,19 +579,38 @@ struct lnet_match_table {
 	/* reserved for upcoming patches, CPU partition ID */
 	unsigned int		mt_cpt;
 	unsigned int		mt_portal;      /* portal index */
+	/* match table is set as "enabled" if there's non-exhausted MD
+	 * attached on mt_mlist, it's only valide for wildcard portal */
+	unsigned int		mt_enabled;
 	cfs_list_t		mt_mlist;       /* matching list */
 	cfs_list_t		*mt_mhash;      /* matching hash */
 };
 
 typedef struct lnet_portal {
+#ifdef __KERNEL__
+	cfs_spinlock_t		ptl_lock;
+#else
+# ifndef HAVE_LIBPTHREAD
+	int			ptl_lock;
+# else
+	pthread_mutex_t		ptl_lock;
+# endif
+#endif
 	unsigned int		ptl_index;	/* portal ID, reserved */
 	/* flags on this portal: lazy, unique... */
 	unsigned int		ptl_options;
-	/* Now we only have single instance for each portal,
-	 * will have instance per CPT in upcoming patches */
-	struct lnet_match_table	*ptl_mtable;
+	/* list of messags which are stealing buffer */
+	cfs_list_t		ptl_msg_stealing;
 	/* messages blocking for MD */
-	cfs_list_t		ptl_msgq;
+	cfs_list_t		ptl_msg_delayed;
+	/* Match table for each CPT */
+	struct lnet_match_table	**ptl_mtables;
+	/* spread rotor of incoming "PUT" */
+	int			ptl_rotor;
+	/* # active entries for this portal */
+	int                     ptl_mt_nmaps;
+	/* array of active entries' cpu-partition-id */
+	int                     ptl_mt_maps[0];
 } lnet_portal_t;
 
 #define LNET_LH_HASH_BITS	12
@@ -627,39 +650,37 @@ struct lnet_msg_container {
 
 typedef struct
 {
-        /* Stuff initialised at LNetInit() */
-        int                    ln_init;             /* LNetInit() called? */
-        int                    ln_refcount;         /* LNetNIInit/LNetNIFini counter */
-        int                    ln_niinit_self;      /* Have I called LNetNIInit myself? */
-	/* shutdown in progress */
-	int				ln_shutdown;
-	/* registered LNDs */
-	cfs_list_t			ln_lnds;
+	/* CPU partition table of LNet */
+	struct cfs_cpt_table		*ln_cpt_table;
+	/* number of CPTs in ln_cpt_table */
+	unsigned int			ln_cpt_number;
+	unsigned int			ln_cpt_bits;
 
 #ifdef __KERNEL__
 	cfs_spinlock_t			ln_lock;
 	cfs_mutex_t			ln_api_mutex;
 	cfs_mutex_t			ln_lnd_mutex;
 	cfs_waitq_t			ln_eq_waitq;
-	cfs_spinlock_t			ln_res_lock;
+	cfs_spinlock_t			ln_eq_wait_lock;
 #else
 # ifndef HAVE_LIBPTHREAD
 	int				ln_lock;
 	int				ln_api_mutex;
 	int				ln_lnd_mutex;
-	int				ln_res_lock;
+	int				ln_eq_wait_lock;
 # else
 	pthread_mutex_t			ln_lock;
 	pthread_mutex_t			ln_api_mutex;
 	pthread_mutex_t			ln_lnd_mutex;
 	pthread_cond_t			ln_eq_cond;
-	pthread_mutex_t			ln_res_lock;
+	pthread_mutex_t			ln_eq_wait_lock;
 # endif
 #endif
+	struct cfs_percpt_lock		*ln_res_lock;
 	/* ME container  */
-	struct lnet_res_container	ln_me_container;
+	struct lnet_res_container	**ln_me_containers;
 	/* MD container  */
-	struct lnet_res_container	ln_md_container;
+	struct lnet_res_container	**ln_md_containers;
 	/* Event Queue container */
 	struct lnet_res_container	ln_eq_container;
 
@@ -667,6 +688,16 @@ typedef struct
 	int				ln_nportals;
 	/* the vector of portals */
 	lnet_portal_t			**ln_portals;
+
+	int				ln_init;	/* LNetInit() called? */
+	/* LNetNIInit/LNetNIFini counter */
+	int				ln_refcount;
+	/* Have I called LNetNIInit myself? */
+	int				ln_niinit_self;
+	/* shutdown in progress */
+	int				ln_shutdown;
+	/* registered LNDs */
+	cfs_list_t			ln_lnds;
 
         lnet_pid_t             ln_pid;              /* requested pid */
 

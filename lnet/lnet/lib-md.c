@@ -71,12 +71,14 @@ lnet_md_unlink(lnet_libmd_t *md)
         CDEBUG(D_NET, "Unlinking md %p\n", md);
 
         if (md->md_eq != NULL) {
-                md->md_eq->eq_refcount--;
-                LASSERT (md->md_eq->eq_refcount >= 0);
-        }
+		int	cpt = lnet_cpt_of_cookie(md->md_lh.lh_cookie);
 
-        LASSERT (!cfs_list_empty(&md->md_list));
-        cfs_list_del_init (&md->md_list);
+		LASSERT(*md->md_eq->eq_refs[cpt] > 0);
+		(*md->md_eq->eq_refs[cpt])--;
+	}
+
+	LASSERT(!cfs_list_empty(&md->md_list));
+	cfs_list_del_init(&md->md_list);
 	lnet_md_free_locked(md);
 }
 
@@ -163,9 +165,9 @@ lnet_md_build(lnet_libmd_t *lmd, lnet_md_t *umd, int unlink)
 
 /* must be called with resource lock held */
 static int
-lnet_md_link(lnet_libmd_t *md, lnet_handle_eq_t eq_handle)
+lnet_md_link(lnet_libmd_t *md, lnet_handle_eq_t eq_handle, int cpt)
 {
-	struct lnet_res_container *container = &the_lnet.ln_md_container;
+	struct lnet_res_container *container = the_lnet.ln_md_containers[cpt];
 
 	/* NB we are passed an allocated, but inactive md.
 	 * if we return success, caller may lnet_md_unlink() it.
@@ -185,7 +187,7 @@ lnet_md_link(lnet_libmd_t *md, lnet_handle_eq_t eq_handle)
 		if (md->md_eq == NULL)
 			return -ENOENT;
 
-		md->md_eq->eq_refcount++;
+		(*md->md_eq->eq_refs[cpt])++;
 	}
 
 	lnet_res_lh_initialize(container, &md->md_lh);
@@ -263,11 +265,12 @@ int
 LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
              lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
-	CFS_LIST_HEAD	(matches);
-	CFS_LIST_HEAD	(drops);
-        lnet_me_t     *me;
-        lnet_libmd_t  *md;
-        int            rc;
+	CFS_LIST_HEAD		(matches);
+	CFS_LIST_HEAD		(drops);
+	struct lnet_me		*me;
+	struct lnet_libmd	*md;
+	int			cpt;
+	int			rc;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -285,8 +288,9 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
                 return -ENOMEM;
 
 	rc = lnet_md_build(md, &umd, unlink);
+	cpt = lnet_cpt_of_cookie(meh.cookie);
 
-	lnet_res_lock();
+	lnet_res_lock(cpt);
 	if (rc != 0)
 		goto failed;
 
@@ -296,7 +300,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 	else if (me->me_md != NULL)
                 rc = -EBUSY;
 	else
-		rc = lnet_md_link(md, umd.eq_handle);
+		rc = lnet_md_link(md, umd.eq_handle, cpt);
 
 	if (rc != 0)
 		goto failed;
@@ -307,7 +311,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 
 	lnet_md2handle(handle, md);
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 
 	lnet_drop_delayed_msg_list(&drops, "Bad match");
 	lnet_recv_delayed_msg_list(&matches);
@@ -317,7 +321,7 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
  failed:
 	lnet_md_free_locked(md);
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 	return rc;
 }
 
@@ -340,8 +344,9 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 int
 LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
-        lnet_libmd_t  *md;
-        int            rc;
+	lnet_libmd_t	*md;
+	int		cpt;
+	int		rc;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -360,23 +365,23 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 
 	rc = lnet_md_build(md, &umd, unlink);
 
-	lnet_res_lock();
+	cpt = lnet_res_lock_current();
 	if (rc != 0)
 		goto failed;
 
-	rc = lnet_md_link(md, umd.eq_handle);
+	rc = lnet_md_link(md, umd.eq_handle, cpt);
 	if (rc != 0)
 		goto failed;
 
 	lnet_md2handle(handle, md);
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 	return 0;
 
  failed:
 	lnet_md_free_locked(md);
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 	return rc;
 }
 
@@ -412,17 +417,19 @@ LNetMDBind(lnet_md_t umd, lnet_unlink_t unlink, lnet_handle_md_t *handle)
 int
 LNetMDUnlink (lnet_handle_md_t mdh)
 {
-        lnet_event_t     ev;
-        lnet_libmd_t    *md;
+	lnet_event_t	ev;
+	lnet_libmd_t	*md;
+	int		cpt;
 
-        LASSERT (the_lnet.ln_init);
-        LASSERT (the_lnet.ln_refcount > 0);
+	LASSERT(the_lnet.ln_init);
+	LASSERT(the_lnet.ln_refcount > 0);
 
-	lnet_res_lock();
+	cpt = lnet_cpt_of_cookie(mdh.cookie);
+	lnet_res_lock(cpt);
 
 	md = lnet_handle2md(&mdh);
 	if (md == NULL) {
-		lnet_res_unlock();
+		lnet_res_unlock(cpt);
                 return -ENOENT;
         }
 
@@ -438,6 +445,6 @@ LNetMDUnlink (lnet_handle_md_t mdh)
 
         lnet_md_unlink(md);
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 	return 0;
 }

@@ -1483,8 +1483,10 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
         lnet_libmd_t     *md;
         int               rlength;
         int               mlength;
+	int			cpt;
 
-	lnet_res_lock();
+	cpt = lnet_cpt_of_cookie(hdr->msg.reply.dst_wmd.wh_object_cookie);
+	lnet_res_lock(cpt);
 
         src.nid = hdr->src_nid;
         src.pid = hdr->src_pid;
@@ -1502,7 +1504,7 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
                         CERROR("REPLY MD also attached to portal %d\n",
                                md->md_me->me_portal);
 
-		lnet_res_unlock();
+		lnet_res_unlock(cpt);
                 return ENOENT;                  /* +ve: OK but no match */
         }
 
@@ -1518,7 +1520,7 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
                         libcfs_nid2str(ni->ni_nid), libcfs_id2str(src),
                         rlength, hdr->msg.reply.dst_wmd.wh_object_cookie,
                         mlength);
-		lnet_res_unlock();
+		lnet_res_unlock(cpt);
                 return ENOENT;          /* +ve: OK but no match */
         }
 
@@ -1531,7 +1533,7 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
         if (mlength != 0)
                 lnet_setpayloadbuffer(msg);
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 
 	lnet_build_msg_event(msg, LNET_EVENT_REPLY);
 
@@ -1545,6 +1547,7 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
         lnet_hdr_t       *hdr = &msg->msg_hdr;
         lnet_process_id_t src = {0};
         lnet_libmd_t     *md;
+	int			cpt;
 
         src.nid = hdr->src_nid;
         src.pid = hdr->src_pid;
@@ -1553,7 +1556,8 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
         hdr->msg.ack.match_bits = le64_to_cpu(hdr->msg.ack.match_bits);
         hdr->msg.ack.mlength = le32_to_cpu(hdr->msg.ack.mlength);
 
-	lnet_res_lock();
+	cpt = lnet_cpt_of_cookie(hdr->msg.ack.dst_wmd.wh_object_cookie);
+	lnet_res_lock(cpt);
 
         /* NB handles only looked up by creator (no flips) */
         md = lnet_wire_handle2md(&hdr->msg.ack.dst_wmd);
@@ -1569,7 +1573,7 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
                         CERROR("Source MD also attached to portal %d\n",
                                md->md_me->me_portal);
 
-		lnet_res_unlock();
+		lnet_res_unlock(cpt);
                 return ENOENT;                  /* +ve! */
         }
 
@@ -1579,7 +1583,7 @@ lnet_parse_ack(lnet_ni_t *ni, lnet_msg_t *msg)
 
 	lnet_msg_attach_md(msg, md, 0, 0);
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 
 	lnet_build_msg_event(msg, LNET_EVENT_ACK);
 
@@ -2036,9 +2040,10 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
         __u64 match_bits, unsigned int offset,
         __u64 hdr_data)
 {
-        lnet_msg_t       *msg;
-        lnet_libmd_t     *md;
-        int               rc;
+	struct lnet_msg		*msg;
+	struct lnet_libmd	*md;
+	int			cpt;
+	int			rc;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -2059,7 +2064,8 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
         }
         msg->msg_vmflush = !!cfs_memory_pressure_get();
 
-	lnet_res_lock();
+	cpt = lnet_cpt_of_cookie(mdh.cookie);
+	lnet_res_lock(cpt);
 
         md = lnet_handle2md(&mdh);
         if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
@@ -2069,11 +2075,9 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
                 if (md != NULL && md->md_me != NULL)
                         CERROR("Source MD also attached to portal %d\n",
                                md->md_me->me_portal);
-
-		lnet_res_unlock();
+		lnet_res_unlock(cpt);
 
 		lnet_msg_free(msg);
-
                 return -ENOENT;
         }
 
@@ -2101,7 +2105,7 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
                         LNET_WIRE_HANDLE_COOKIE_NONE;
         }
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 
 	lnet_build_msg_event(msg, LNET_EVENT_SEND);
 
@@ -2126,14 +2130,16 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
          * CAVEAT EMPTOR: 'getmsg' is the original GET, which is freed when
          * lnet_finalize() is called on it, so the LND must call this first */
 
-        lnet_msg_t        *msg = lnet_msg_alloc();
-        lnet_libmd_t      *getmd = getmsg->msg_md;
-        lnet_process_id_t  peer_id = getmsg->msg_target;
+	struct lnet_msg		*msg = lnet_msg_alloc();
+	struct lnet_libmd	*getmd = getmsg->msg_md;
+	lnet_process_id_t	peer_id = getmsg->msg_target;
+	int			cpt;
 
-        LASSERT (!getmsg->msg_target_is_router);
-        LASSERT (!getmsg->msg_routing);
+	LASSERT(!getmsg->msg_target_is_router);
+	LASSERT(!getmsg->msg_routing);
 
-	lnet_res_lock();
+	cpt = lnet_cpt_of_cookie(getmd->md_lh.lh_cookie);
+	lnet_res_lock(cpt);
 
         LASSERT (getmd->md_refcount > 0);
 
@@ -2147,7 +2153,7 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
                 CERROR ("%s: Dropping REPLY from %s for inactive MD %p\n",
                         libcfs_nid2str(ni->ni_nid), libcfs_id2str(peer_id), 
                         getmd);
-		lnet_res_unlock();
+		lnet_res_unlock(cpt);
 		goto drop;
         }
 
@@ -2164,7 +2170,7 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 	msg->msg_receiving = 1; /* required by lnet_msg_attach_md */
 
 	lnet_msg_attach_md(msg, getmd, getmd->md_offset, getmd->md_length);
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 
 	LNET_LOCK();
 	lnet_msg_commit(msg, 0);
@@ -2227,9 +2233,10 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
         lnet_process_id_t target, unsigned int portal, 
         __u64 match_bits, unsigned int offset)
 {
-        lnet_msg_t       *msg;
-        lnet_libmd_t     *md;
-        int               rc;
+	struct lnet_msg		*msg;
+	struct lnet_libmd	*md;
+	int			cpt;
+	int			rc;
 
         LASSERT (the_lnet.ln_init);
         LASSERT (the_lnet.ln_refcount > 0);
@@ -2249,7 +2256,8 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
                 return -ENOMEM;
         }
 
-	lnet_res_lock();
+	cpt = lnet_cpt_of_cookie(mdh.cookie);
+	lnet_res_lock(cpt);
 
         md = lnet_handle2md(&mdh);
         if (md == NULL || md->md_threshold == 0 || md->md_me != NULL) {
@@ -2260,7 +2268,7 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
                         CERROR("REPLY MD also attached to portal %d\n",
                                md->md_me->me_portal);
 
-		lnet_res_unlock();
+		lnet_res_unlock(cpt);
 
 		lnet_msg_free(msg);
 
@@ -2279,12 +2287,12 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
         msg->msg_hdr.msg.get.sink_length = cpu_to_le32(md->md_length);
 
         /* NB handles only looked up by creator (no flips) */
-        msg->msg_hdr.msg.get.return_wmd.wh_interface_cookie = 
-                the_lnet.ln_interface_cookie;
-        msg->msg_hdr.msg.get.return_wmd.wh_object_cookie = 
-                md->md_lh.lh_cookie;
+	msg->msg_hdr.msg.get.return_wmd.wh_interface_cookie =
+		the_lnet.ln_interface_cookie;
+	msg->msg_hdr.msg.get.return_wmd.wh_object_cookie =
+		md->md_lh.lh_cookie;
 
-	lnet_res_unlock();
+	lnet_res_unlock(cpt);
 
 	lnet_build_msg_event(msg, LNET_EVENT_SEND);
 

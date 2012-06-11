@@ -387,6 +387,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 {
 	struct lnet_msg_container	*container;
 	int				my_slot;
+	int				cpt;
 	int				i;
 
         LASSERT (!cfs_in_interrupt ());
@@ -416,9 +417,11 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
         msg->msg_ev.status = status;
 
 	if (msg->msg_md != NULL) {
-		lnet_res_lock();
+		cpt = lnet_cpt_of_cookie(msg->msg_md->md_lh.lh_cookie);
+
+		lnet_res_lock(cpt);
 		lnet_msg_detach_md(msg, status);
-		lnet_res_unlock();
+		lnet_res_unlock(cpt);
 	}
 
 	if (!msg->msg_tx_committed && !msg->msg_rx_committed) {
