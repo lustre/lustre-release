@@ -322,6 +322,7 @@ run_test 14d "chmod of executing file is still possible ========"
 test_15() {	# bug 974 - ENOSPC
 	echo "PATH=$PATH"
 	sh oos2.sh $MOUNT1 $MOUNT2
+	wait_delete_completed
 	grant_error=`dmesg | grep "> available"`
 	[ -z "$grant_error" ] || error "$grant_error"
 }
@@ -615,8 +616,13 @@ test_31a() {
 run_test 31a "voluntary cancel / blocking ast race=============="
 
 test_31b() {
-        remote_ost || { skip "local OST" && return 0; }
-        remote_ost_nodsh && skip "remote OST w/o dsh" && return 0
+	remote_ost || { skip "local OST" && return 0; }
+	remote_ost_nodsh && skip "remote OST w/o dsh" && return 0
+
+	# make sure there is no local locks due to destroy
+	wait_mds_ost_sync || error "wait_mds_ost_sync()"
+	wait_delete_completed || error "wait_delete_completed()"
+
         mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
         lfs setstripe $DIR/$tdir/$tfile -i 0 -c 1
         cp /etc/hosts $DIR/$tdir/$tfile
@@ -925,7 +931,7 @@ test_36() { #bug 16417
 		rm -f $DIR1/$tdir/file000
 		kill -USR1 $read_pid
 		wait $read_pid
-		sleep 1
+		wait_delete_completed
 		local after=$($LFS df | awk '{if ($1 ~/^filesystem/) \
 		                              {print $5; exit} }')
 		echo "*** cycle($i) *** before($before) after_dd($after_dd)" \
