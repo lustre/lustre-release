@@ -643,7 +643,6 @@ static void enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
         if (is_e2fsprogs_feature_supp("-O dir_nlink") == 0)
                 append_unique(anchor, ",", "dir_nlink", NULL, maxbuflen);
 
-#ifdef HAVE_EXT4_LDISKFS
         /* The following options are only valid for ext4-based ldiskfs.
          * If --backfstype=ext3 is specified, do not enable them. */
         if (mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3)
@@ -673,7 +672,6 @@ static void enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
                 }
         }
         /* Don't add any more "-O" options here, see last comment above */
-#endif
 }
 
 /**

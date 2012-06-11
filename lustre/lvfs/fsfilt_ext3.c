@@ -49,14 +49,8 @@
 #ifdef HAVE_LINUX_EXPORTFS_H
 #include <linux/exportfs.h>
 #endif
-#ifdef HAVE_EXT4_LDISKFS
 #include <ext4/ext4.h>
 #include <ext4/ext4_jbd2.h>
-#else
-#include <linux/jbd.h>
-#include <linux/ext3_fs.h>
-#include <linux/ext3_jbd.h>
-#endif
 #include <linux/version.h>
 #include <linux/bitops.h>
 #include <linux/quota.h>
@@ -96,11 +90,7 @@ extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, 
 #include <linux/lustre_compat25.h>
 #include <linux/lprocfs_status.h>
 
-#ifdef HAVE_EXT4_LDISKFS
 #include <ext4/ext4_extents.h>
-#else
-#include <linux/ext3_extents.h>
-#endif
 
 #include "lustre_quota_fmt.h"
 
@@ -121,16 +111,8 @@ extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, 
 #define ext3_mb_discard_inode_preallocations(inode) \
                  ext3_discard_preallocations(inode)
 
-#ifdef HAVE_EXT4_LDISKFS
 #define fsfilt_log_start_commit(journal, tid) jbd2_log_start_commit(journal, tid)
 #define fsfilt_log_wait_commit(journal, tid) jbd2_log_wait_commit(journal, tid)
-#else
-#define fsfilt_log_start_commit(journal, tid) log_start_commit(journal, tid)
-#define fsfilt_log_wait_commit(journal, tid) log_wait_commit(journal, tid)
-#define ext_pblock(ex) le32_to_cpu((ex)->ee_start)
-#define ext3_ext_store_pblock(ex, pblock)  ((ex)->ee_start = cpu_to_le32(pblock))
-#define ext3_inode_bitmap(sb,desc) le32_to_cpu((desc)->bg_inode_bitmap)
-#endif
 
 #ifdef HAVE_EXT4_JOURNAL_CALLBACK_ADD
 # define journal_callback ext4_journal_cb_entry
@@ -284,21 +266,6 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                 nblocks += 3;
                 /* no break */
         case FSFILT_OP_CREATE: {
-#if defined(EXT3_EXTENTS_FL) && defined(EXT3_INDEX_FL) && !defined(HAVE_EXT4_LDISKFS)
-                static int warned;
-                if (!warned) {
-                        if (!test_opt(inode->i_sb, EXTENTS)) {
-                                warned = 1;
-                        } else if (((EXT3_I(inode)->i_flags &
-                              cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL)) ==
-                              cpu_to_le32(EXT3_EXTENTS_FL | EXT3_INDEX_FL))) {
-                                CWARN("extent-mapped directory found with "
-                                      "ext3-based ldiskfs - contact "
-                                      "http://bugs.whamcloud.com/\n");
-                                warned = 1;
-                        }
-                }
-#endif
                 /* no break */
         }
         case FSFILT_OP_MKDIR:
@@ -690,14 +657,9 @@ static int fsfilt_ext3_iocontrol(struct inode *inode, struct file *file,
                 *(int *)arg |= EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL;
         }
 
-#ifdef HAVE_EXT4_LDISKFS
         /* ext4_ioctl does not have a inode argument */
         if (inode->i_fop->unlocked_ioctl)
                 rc = inode->i_fop->unlocked_ioctl(file, cmd, arg);
-#else
-        if (inode->i_fop->ioctl)
-                rc = inode->i_fop->ioctl(inode, file, cmd, arg);
-#endif
         else
                 RETURN(-ENOTTY);
 
@@ -868,13 +830,8 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 # define fsfilt_up_truncate_sem(inode)  up(&LDISKFS_I(inode)->truncate_sem);
 # define fsfilt_down_truncate_sem(inode)  down(&LDISKFS_I(inode)->truncate_sem);
 #else
-# ifdef HAVE_EXT4_LDISKFS
-#   define fsfilt_up_truncate_sem(inode) do{ }while(0)
-#   define fsfilt_down_truncate_sem(inode) do{ }while(0)
-# else
-#  define fsfilt_up_truncate_sem(inode)  mutex_unlock(&EXT3_I(inode)->truncate_mutex)
-#  define fsfilt_down_truncate_sem(inode)  mutex_lock(&EXT3_I(inode)->truncate_mutex)
-# endif
+# define fsfilt_up_truncate_sem(inode) do{ }while(0)
+# define fsfilt_down_truncate_sem(inode) do{ }while(0)
 #endif
 
 #ifndef EXT_ASSERT
@@ -883,11 +840,7 @@ static int fsfilt_ext3_sync(struct super_block *sb)
 
 #ifdef EXT3_EXT_HAS_NO_TREE
 /* for kernels 2.6.18 and later */
-#ifdef HAVE_EXT4_LDISKFS
 #define EXT_GENERATION(inode)           (EXT4_I(inode)->i_ext_generation)
-#else
-#define EXT_GENERATION(inode)           ext_generation(inode)
-#endif
 #define ext3_ext_base                   inode
 #define ext3_ext_base2inode(inode)      (inode)
 #define EXT_DEPTH(inode)                ext_depth(inode)
@@ -1059,7 +1012,6 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                 return EXT_REPEAT;
         }
 
-#if defined(HAVE_EXT4_LDISKFS)
         /* In 2.6.32 kernel, ext4_ext_walk_space()'s callback func is not
          * protected by i_data_sem as whole. so we patch it to store
 	 * generation to path and now verify the tree hasn't changed */
@@ -1072,7 +1024,6 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                 ext3_journal_stop(handle);
                 return EXT_REPEAT;
         }
-#endif
 
         count = cex->ec_len;
         pblock = new_blocks(handle, base, path, cex->ec_block, &count, &err);
@@ -1108,9 +1059,7 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
         BUG_ON(le32_to_cpu(nex.ee_block) != cex->ec_block);
 
 out:
-#if defined(HAVE_EXT4_LDISKFS)
         up_write((&EXT4_I(inode)->i_data_sem));
-#endif
         ext3_journal_stop(handle);
 map:
         if (err >= 0) {
@@ -1771,40 +1720,6 @@ static inline int read_old_dqinfo(struct super_block *sb, int type,
         RETURN(rc);
 }
 
-#ifndef HAVE_EXT4_LDISKFS
-static inline struct ext3_group_desc *
-get_group_desc(struct super_block *sb, int group, struct buffer_head **bh)
-{
-        unsigned long desc_block, desc;
-        struct ext3_group_desc *gdp;
-
-        desc_block = group / EXT3_DESC_PER_BLOCK(sb);
-        desc = group % EXT3_DESC_PER_BLOCK(sb);
-        gdp = (struct ext3_group_desc *)
-              EXT3_SB(sb)->s_group_desc[desc_block]->b_data;
-
-        return gdp + desc;
-}
-
-static inline struct buffer_head *
-ext3_read_inode_bitmap(struct super_block *sb, unsigned long group)
-{
-        struct ext3_group_desc *desc;
-        struct buffer_head *bh;
-
-        desc = get_group_desc(sb, group, NULL);
-        bh = sb_bread(sb, ext3_inode_bitmap(sb, desc));
-        return bh;
-}
-
-static __u32 ext3_itable_unused_count(struct super_block *sb,
-                               struct ext3_group_desc *bg) {
-       return le16_to_cpu(bg->bg_itable_unused);
-}
-#else
-#define get_group_desc ext3_get_group_desc
-#endif
-
 struct qchk_ctxt {
         cfs_hlist_head_t        qckt_hash[NR_DQHASH];      /* quotacheck hash */
         cfs_list_t              qckt_list;                 /* quotacheck list */
@@ -2066,34 +1981,22 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
                 if (uninit_feat) {
                         struct ext3_group_desc *desc;
-                        desc = get_group_desc(sb, group, NULL);
+                        desc = ext3_get_group_desc(sb, group, NULL);
                         if (!desc)
                                 GOTO(out, -EIO);
 
                         /* we don't really need to take the group lock here,
                          * but it may be useful if one day we support online
                          * quotacheck */
-#ifdef HAVE_EXT4_LDISKFS
                         ext4_lock_group(sb, group);
-#else
-                        spin_lock(sb_bgl_lock(sbi, group));
-#endif
                         if (desc->bg_flags & cpu_to_le16(EXT3_BG_INODE_UNINIT)) {
                                 /* no inode in use in this group, just skip it */
-#ifdef HAVE_EXT4_LDISKFS
                                 ext3_unlock_group(sb, group);
-#else
-                                spin_unlock(sb_bgl_lock(sbi, group));
-#endif
                                 continue;
                         }
 
                         used_count -= ext3_itable_unused_count(sb, desc);
-#ifdef HAVE_EXT4_LDISKFS
                         ext3_unlock_group(sb, group);
-#else
-                        spin_unlock(sb_bgl_lock(sbi, group));
-#endif
                 }
 
                 ino = group * sbi->s_inodes_per_group + 1;
@@ -2113,11 +2016,7 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         ino = i + group * sbi->s_inodes_per_group;
                         if (ino < sbi->s_first_ino)
                                 continue;
-#if defined(HAVE_EXT4_LDISKFS) || !defined(HAVE_READ_INODE_IN_SBOPS)
                         inode = ext3_iget(sb, ino);
-#else
-                        inode = iget(sb, ino);
-#endif
                         if (!inode || IS_ERR(inode))
                                 continue;
 

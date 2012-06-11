@@ -103,7 +103,6 @@ if test x$with_ldiskfs = xyes; then
 
 	LB_LDISKFS_SYMVERS
 	LB_LDISKFS_RELEASE
-	LB_LDISKFS_EXT_RELEASE
 	LB_LDISKFS_EXT_DIR
 	LB_LDISKFS_BUILD
 	LB_LDISKFS_DEFINE_OPTIONS
@@ -111,7 +110,7 @@ fi
 
 #
 # LDISKFS_DEVEL is required because when using the ldiskfs-devel package the
-# ext3/4 source will be fully patched to ldiskfs.  When building with the
+# ext4 source will be fully patched to ldiskfs.  When building with the
 # in-tree ldiskfs this patching this will occur after the configure step.
 # We needed a way to determine if we should check the patched or unpatched
 # source files.
@@ -137,41 +136,6 @@ fi
 ])
 
 #
-# LB_LDISKFS_EXT_RELEASE
-#
-# Determine if ext3 or ext4 sources should be used for ldiskfs.
-#
-AC_DEFUN([LB_LDISKFS_EXT_RELEASE],
-[
-AC_ARG_ENABLE([ext4],
-	 AC_HELP_STRING([--enable-ext4], [enable ldiskfs build using ext4]),
-	[],
-	[
-		if test x$RHEL_KERNEL = xyes; then
-			enable_ext4='yes'
-		else
-			# 2.6.22-2.6.26 ext4 available but unstable
-			case x$LINUXRELEASE in
-			x2.6.2[[0-6]]*)
-				enable_ext4='no' ;;
-			*)
-				enable_ext4='yes' ;;
-			esac
-		fi
-	])
-
-if test x$enable_ext4 = xyes; then
-	LDISKFS_BACKFS='ext4'
-else
-	LDISKFS_BACKFS='ext3'
-fi
-
-AC_MSG_CHECKING([whether to use ext3 or ext4 source])
-AC_MSG_RESULT([$LDISKFS_BACKFS])
-AC_SUBST(LDISKFS_BACKFS)
-])
-
-#
 # LB_LDISKFS_EXT_DIR
 #
 # Determine the location of the ext3/ext4 source code.  It it required
@@ -181,20 +145,20 @@ AC_DEFUN([LB_LDISKFS_EXT_DIR],
 [
 # Kernel ext source located with devel headers
 linux_src=$LINUX
-if test -e "$linux_src/fs/$LDISKFS_BACKFS/super.c"; then
-	EXT_DIR=$linux_src/fs/$LDISKFS_BACKFS
+if test -e "$linux_src/fs/ext4/super.c"; then
+	EXT_DIR=$linux_src/fs/ext4
 else
 	# Kernel ext source provided by kernel-debuginfo-common package
 	linux_src=$(ls -1d /usr/src/debug/*/linux-$LINUXRELEASE \
 		2>/dev/null | tail -1)
-	if test -e "$linux_src/fs/$LDISKFS_BACKFS/super.c"; then
-		EXT_DIR=$linux_src/fs/$LDISKFS_BACKFS
+	if test -e "$linux_src/fs/ext4/super.c"; then
+		EXT_DIR=$linux_src/fs/ext4
 	else
 		EXT_DIR=
 	fi
 fi
 
-AC_MSG_CHECKING([$LDISKFS_BACKFS source directory])
+AC_MSG_CHECKING([ext4 source directory])
 AC_MSG_RESULT([$EXT_DIR])
 AC_SUBST(EXT_DIR)
 ])
@@ -213,16 +177,16 @@ if test x$EXT_DIR = x; then
 else
 	LB_CHECK_FILE([$EXT_DIR/dir.c], [], [
 		enable_ldiskfs_build='no'
-		AC_MSG_WARN([$LDISKFS_BACKFS must exist for ldiskfs build])])
+		AC_MSG_WARN([ext4 must exist for ldiskfs build])])
 	LB_CHECK_FILE([$EXT_DIR/file.c], [], [
 		enable_ldiskfs_build='no'
-		AC_MSG_WARN([$LDISKFS_BACKFS must exist for ldiskfs build])])
+		AC_MSG_WARN([ext4 must exist for ldiskfs build])])
 	LB_CHECK_FILE([$EXT_DIR/inode.c], [], [
 		enable_ldiskfs_build='no'
-		AC_MSG_WARN([$LDISKFS_BACKFS must exist for ldiskfs build])])
+		AC_MSG_WARN([ext4 must exist for ldiskfs build])])
 	LB_CHECK_FILE([$EXT_DIR/super.c], [], [
 		enable_ldiskfs_build='no'
-		AC_MSG_WARN([$LDISKFS_BACKFS must exist for ldiskfs build])])
+		AC_MSG_WARN([ext4 must exist for ldiskfs build])])
 fi
 
 if test x$enable_ldiskfs_build = xno; then
@@ -233,7 +197,7 @@ if test x$enable_ldiskfs_build = xno; then
 
 	AC_MSG_WARN([
 
-Disabling server because complete $LDISKFS_BACKFS source does not exist.
+Disabling server because complete ext4 source does not exist.
 
 If you are building using kernel-devel packages and require ldiskfs
 server support then ensure that the matching kernel-debuginfo-common
@@ -255,22 +219,18 @@ AC_DEFUN([LB_LDISKFS_DEFINE_OPTIONS],
 AC_DEFINE(HAVE_LDISKFS_OSD, 1, Enable ldiskfs osd)
 
 with_ldiskfs_pdo=no
-if test $LDISKFS_BACKFS = 'ext4'; then
-	AC_DEFINE(HAVE_EXT4_LDISKFS, 1, [build ext4 based ldiskfs])
-	case $LINUXRELEASE in
-	2.6.32*)
-		if test x$RHEL_KERNEL = xyes; then
-			with_ldiskfs_pdo=yes
-			AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
-		fi
-		if test x$SUSE_KERNEL = xyes; then
-			with_ldiskfs_pdo=yes
-			AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
-		fi
-        ;;
-	esac
-fi
-
+case $LINUXRELEASE in
+2.6.32*)
+	if test x$RHEL_KERNEL = xyes; then
+		with_ldiskfs_pdo=yes
+		AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
+	fi
+	if test x$SUSE_KERNEL = xyes; then
+		with_ldiskfs_pdo=yes
+		AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
+	fi
+	;;
+esac
 LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET
 
 AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1,

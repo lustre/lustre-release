@@ -3,13 +3,13 @@ default: all
 MODULES := ldiskfs
 
 # copy makefile over to not break patches
-backfs_extra := $(wildcard @LINUX@/fs/@BACKFS@/Makefile)
+backfs_extra := $(wildcard @LINUX@/fs/ext4/Makefile)
 
 backfs_headers := $(wildcard @EXT_DIR@/*.h)
-linux_headers := $(wildcard @LINUX@/include/linux/@BACKFS@*.h)
+linux_headers := $(wildcard @LINUX@/include/linux/ext4*.h)
 linux_new_headers := dynlocks.h
 @LDISKFS_PDO_TRUE@linux_new_headers += htree_lock.h
-trace_headers := $(wildcard @LINUX@/include/trace/events/@BACKFS@*.h)
+trace_headers := $(wildcard @LINUX@/include/trace/events/ext4*.h)
 
 backfs_sources := $(filter-out %.mod.c,$(wildcard @EXT_DIR@/*.c))
 
@@ -20,8 +20,8 @@ ext4_new_sources := dynlocks.c fiemap.h mmp.c
 @LDISKFS_PDO_TRUE@ext4_new_sources += htree_lock.c
 ext4_new_headers :=
 
-new_sources := $(@BACKFS@_new_sources)
-new_headers := $(@BACKFS@_new_headers)
+new_sources := $(ext4_new_sources)
+new_headers := $(ext4_new_headers)
 
 ldiskfs_patched_sources := $(notdir $(backfs_sources) $(backfs_headers)) $(new_sources) $(new_headers)
 ldiskfs_sources := $(ldiskfs_patched_sources)

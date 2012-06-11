@@ -63,20 +63,12 @@ sources:
 endif #SERVER
 
 ldiskfs_sed_flags = \
-	-e "s/dx_hash_info/ext3_dx_hash_info/g" \
-	-e "s/dir_private_info/ext3_dir_private_info/g" \
-	-e "s/DX_HASH/EXT3_DX_HASH/g" \
-	-e "s/reserve_window/ext3_reserve_window/g" \
-	-e "s/rsv_window_add/ext3_rsv_window_add/g" \
 	-e "s/EXT3/LDISKFS/g" -e "s/ext3/ldiskfs/g" \
-	-e "s/EXT4/LDISKFS/g" -e "s/ext4/ldiskfs/g" \
-	-e "s/HAVE_LDISKFS_LDISKFS/HAVE_EXT4_LDISKFS/g"
+	-e "s/EXT4/LDISKFS/g" -e "s/ext4/ldiskfs/g"
 
 fsfilt_ldiskfs.c: fsfilt_ext3.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
-	if grep -q '^#define\(.*\)HAVE_EXT4_LDISKFS' @LDISKFS_DIR@/config.h ; then \
-		sed -i -e "/DEBUG_SUBSYSTEM\(.*\)S_FILTER/a\#define HAVE_EXT4_LDISKFS 1" $@ ;\
-	fi
+
 fsfilt_ldiskfs_quota.h: fsfilt_ext3_quota.h
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 

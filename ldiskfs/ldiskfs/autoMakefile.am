@@ -1,24 +1,21 @@
 modulefs_DATA = ldiskfs$(KMODEXT)
 
-ldiskfs_linux_headers := $(addprefix linux/,$(subst @BACKFS@,ldiskfs,$(notdir $(linux_headers))))
+ldiskfs_linux_headers := $(addprefix linux/,$(subst ext4,ldiskfs,$(notdir $(linux_headers))))
 
 $(filter %.c,$(ldiskfs_patched_sources)): sources $(ldiskfs_linux_headers) $(filter %.h,$(ldiskfs_patched_sources))
 
 ldiskfs_sed_flags = \
-	-e "s/dx_hash_info/@BACKFS@_dx_hash_info/g" \
-	-e "s/dir_private_info/@BACKFS@_dir_private_info/g" \
-	-e "s/DX_HASH/@BACKFSU@_DX_HASH/g" \
-	-e "s/\<reserve_window/@BACKFS@_reserve_window/g" \
-	-e "s/\<rsv_window_add/@BACKFS@_rsv_window_add/g" \
-	-e "s/@BACKFSU@/LDISKFS/g" -e "s/@BACKFS@/ldiskfs/g"
+	-e "s/dx_hash_info/ext4_dx_hash_info/g" \
+	-e "s/DX_HASH/EXT4_DX_HASH/g" \
+	-e "s/EXT4/LDISKFS/g" -e "s/ext4/ldiskfs/g"
 
-%.c: linux-stage/fs/@BACKFS@/%.c
+%.c: linux-stage/fs/ext4/%.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
-%.h: linux-stage/fs/@BACKFS@/%.h
+%.h: linux-stage/fs/ext4/%.h
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
-linux/ldiskfs%.h: linux-stage/include/linux/@BACKFS@%.h
+linux/ldiskfs%.h: linux-stage/include/linux/ext4%.h
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
 series := @top_srcdir@/kernel_patches/series/ldiskfs-$(LDISKFS_SERIES)
@@ -26,9 +23,9 @@ patches := @top_srcdir@/kernel_patches/patches
 
 sources: $(backfs_sources) $(backfs_headers) $(linux_headers) $(series) $(trace_headers)
 	rm -rf linux-stage linux sources trace $(ldiskfs_SOURCES)
-	mkdir -p linux-stage/fs/@BACKFS@ linux-stage/include/linux \
+	mkdir -p linux-stage/fs/ext4 linux-stage/include/linux \
 		 linux-stage/include/trace/events
-	cp $(backfs_sources) $(backfs_headers) $(backfs_extra) linux-stage/fs/@BACKFS@
+	cp $(backfs_sources) $(backfs_headers) $(backfs_extra) linux-stage/fs/ext4
 	if test -n "$(linux_headers)" ; then \
 		cp $(linux_headers) linux-stage/include/linux; \
 	fi
@@ -40,7 +37,7 @@ if USE_QUILT
 	ln -s ../$(series) linux-stage/series
 	cd linux-stage && quilt push -a -q
 else
-	@echo -n "Applying @BACKFS@ patches:"
+	@echo -n "Applying ext4 patches:"
 	@cd linux-stage && for i in $$(<../$(series)) ; do \
 		echo -n " $$i" ; \
 		patch -s -p1 < ../$(patches)/$$i || exit 1 ; \
@@ -48,28 +45,28 @@ else
 	@echo
 endif
 	mkdir -p linux trace/events
-	@echo -n "Replacing '@BACKFS@' with 'ldiskfs':"
+	@echo -n "Replacing 'ext4' with 'ldiskfs':"
 	for i in $(notdir $(backfs_headers) $(backfs_sources)) $(new_sources) ; do \
 		echo -n " $$i" ; \
 		sed $(strip $(ldiskfs_sed_flags)) \
-			linux-stage/fs/@BACKFS@/$$i > $$i ; \
+			linux-stage/fs/ext4/$$i > $$i ; \
 	done
-	for i in $(subst @BACKFS@,,$(notdir $(backfs_headers))) ; do \
-		if test -f "@BACKFS@$$i" ; then \
-			echo -n " @BACKFS@$$i" ; \
-			mv @BACKFS@$$i ldiskfs$$i ; \
+	for i in $(subst ext4,,$(notdir $(backfs_headers))) ; do \
+		if test -f "ext4$$i" ; then \
+			echo -n " ext4$$i" ; \
+			mv ext4$$i ldiskfs$$i ; \
 		fi ; \
 	done
-	for i in $(subst @BACKFS@,,$(notdir $(linux_headers) $(new_headers))) ; do \
-		echo -n " @BACKFS@$$i" ; \
+	for i in $(subst ext4,,$(notdir $(linux_headers) $(new_headers))) ; do \
+		echo -n " ext4$$i" ; \
 		sed $(strip $(ldiskfs_sed_flags)) \
-			linux-stage/include/linux/@BACKFS@$$i \
+			linux-stage/include/linux/ext4$$i \
 			> linux/ldiskfs$$i ; \
 	done
-	for i in $(subst @BACKFS@,,$(notdir $(trace_headers))) ; do \
-		echo -n " @BACKFS@$$i"; \
+	for i in $(subst ext4,,$(notdir $(trace_headers))) ; do \
+		echo -n " ext4$$i"; \
 		sed $(strip $(ldiskfs_sed_flags)) \
-			linux-stage/include/trace/events/@BACKFS@$$i \
+			linux-stage/include/trace/events/ext4$$i \
 			> trace/events/ldiskfs$$i ; \
 	done
 	for i in $(notdir $(linux_new_headers)) ; do \
