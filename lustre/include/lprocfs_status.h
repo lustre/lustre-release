@@ -608,6 +608,19 @@ extern int lprocfs_rd_filesfree(char *page, char **start, off_t off,
                                 int count, int *eof, void *data);
 extern int lprocfs_rd_filegroups(char *page, char **start, off_t off,
                                  int count, int *eof, void *data);
+extern int lprocfs_osd_rd_blksize(char *page, char **start, off_t off,
+				int count, int *eof, void *data);
+extern int lprocfs_osd_rd_kbytesfree(char *page, char **start, off_t off,
+				int count, int *eof, void *data);
+extern int lprocfs_osd_rd_kbytesavail(char *page, char **start, off_t off,
+				int count, int *eof, void *data);
+extern int lprocfs_osd_rd_filestotal(char *page, char **start, off_t off,
+				int count, int *eof, void *data);
+extern int lprocfs_osd_rd_filesfree(char *page, char **start, off_t off,
+				int count, int *eof, void *data);
+extern int lprocfs_osd_rd_kbytestotal(char *page, char **start, off_t off,
+				int count, int *eof, void *data);
+
 
 extern int lprocfs_write_helper(const char *buffer, unsigned long count,
                                 int *val);
