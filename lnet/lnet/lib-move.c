@@ -821,11 +821,11 @@ lnet_post_send_locked (lnet_msg_t *msg, int do_send)
 	LASSERT(!do_send || msg->msg_tx_delayed);
 	LASSERT(!msg->msg_receiving);
 
-        /* NB 'lp' is always the next hop */
-        if ((msg->msg_target.pid & LNET_PID_USERFLAG) == 0 &&
-            lnet_peer_alive_locked(lp) == 0) {
-                the_lnet.ln_counters.drop_count++;
-                the_lnet.ln_counters.drop_length += msg->msg_len;
+	/* NB 'lp' is always the next hop */
+	if ((msg->msg_target.pid & LNET_PID_USERFLAG) == 0 &&
+	    lnet_peer_alive_locked(lp) == 0) {
+		the_lnet.ln_counters->drop_count++;
+		the_lnet.ln_counters->drop_length += msg->msg_len;
                 LNET_UNLOCK();
 
                 CNETERR("Dropping message for %s: peer not alive\n",
@@ -1331,12 +1331,12 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg)
 static void
 lnet_drop_message (lnet_ni_t *ni, void *private, unsigned int nob)
 {
-        LNET_LOCK();
-        the_lnet.ln_counters.drop_count++;
-        the_lnet.ln_counters.drop_length += nob;
-        LNET_UNLOCK();
+	LNET_LOCK();
+	the_lnet.ln_counters->drop_count++;
+	the_lnet.ln_counters->drop_length += nob;
+	LNET_UNLOCK();
 
-        lnet_ni_recv(ni, private, NULL, 0, 0, 0, nob);
+	lnet_ni_recv(ni, private, NULL, 0, 0, 0, nob);
 }
 
 static void
@@ -2182,8 +2182,8 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 
  drop:
 	LNET_LOCK();
-	the_lnet.ln_counters.drop_count++;
-	the_lnet.ln_counters.drop_length += getmd->md_length;
+	the_lnet.ln_counters->drop_count++;
+	the_lnet.ln_counters->drop_length += getmd->md_length;
 	LNET_UNLOCK ();
 
 	if (msg != NULL)

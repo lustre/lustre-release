@@ -416,11 +416,8 @@ sfw_get_stats (srpc_stat_reqst_t *request, srpc_stat_reply_t *reply)
                 return 0;
         }
 
-        LNET_LOCK();
-        reply->str_lnet = the_lnet.ln_counters;
-        LNET_UNLOCK();
-
-        srpc_get_counters(&reply->str_rpc);
+	lnet_counters_get(&reply->str_lnet);
+	srpc_get_counters(&reply->str_rpc);
 
         /* send over the msecs since the session was started
          - with 32 bits to send, this is ~49 days */

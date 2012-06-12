@@ -716,7 +716,8 @@ typedef struct
         __u64                  ln_routers_version;  /* validity stamp */
 
         int                    ln_routing;          /* am I a router? */
-        lnet_rtrbufpool_t      ln_rtrpools[LNET_NRBPOOLS]; /* router buffer pools */
+	/* router buffer pools */
+	lnet_rtrbufpool_t		*ln_rtrpools;
 
         __u64                  ln_interface_cookie; /* uniquely identifies this ni in this epoch */
 
@@ -728,8 +729,9 @@ typedef struct
         cfs_list_t             ln_test_peers;       /* failure simulation */
 
 	/* message container */
-	struct lnet_peer_table		*ln_peer_table;
 	struct lnet_msg_container	ln_msg_container;
+	struct lnet_peer_table		*ln_peer_table;
+	lnet_counters_t			*ln_counters;
 
         lnet_handle_md_t       ln_ping_target_md;
         lnet_handle_eq_t       ln_ping_target_eq;
@@ -746,8 +748,6 @@ typedef struct
 	cfs_list_t			ln_rcd_deathrow;
 	/* rcd ready for free */
 	cfs_list_t			ln_rcd_zombie;
-
-        lnet_counters_t        ln_counters;
 
 #ifndef __KERNEL__
         /* Temporary workaround to allow uOSS and test programs force

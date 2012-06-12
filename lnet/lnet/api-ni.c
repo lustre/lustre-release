@@ -377,6 +377,47 @@ lnet_unregister_lnd (lnd_t *lnd)
         LNET_MUTEX_UNLOCK(&the_lnet.ln_lnd_mutex);
 }
 
+void
+lnet_counters_get(lnet_counters_t *counters)
+{
+	lnet_counters_t *ctr;
+
+	memset(counters, 0, sizeof(*counters));
+
+	LNET_LOCK();
+	ctr = the_lnet.ln_counters;
+	do {	/* iterate over counters of all CPTs in upcoming patches */
+		counters->msgs_max     += ctr->msgs_max;
+		counters->msgs_alloc   += ctr->msgs_alloc;
+		counters->errors       += ctr->errors;
+		counters->send_count   += ctr->send_count;
+		counters->recv_count   += ctr->recv_count;
+		counters->route_count  += ctr->route_count;
+		counters->drop_length  += ctr->drop_length;
+		counters->send_length  += ctr->send_length;
+		counters->recv_length  += ctr->recv_length;
+		counters->route_length += ctr->route_length;
+		counters->drop_length  += ctr->drop_length;
+	} while (0);
+
+	LNET_UNLOCK();
+}
+EXPORT_SYMBOL(lnet_counters_get);
+
+void
+lnet_counters_reset(void)
+{
+	lnet_counters_t *counters;
+
+	LNET_LOCK();
+	counters = the_lnet.ln_counters;
+	do {	/* iterate over counters of all CPTs in upcoming patches */
+		memset(counters, 0, sizeof(lnet_counters_t));
+	} while (0);
+	LNET_UNLOCK();
+}
+EXPORT_SYMBOL(lnet_counters_reset);
+
 #ifdef LNET_USE_LIB_FREELIST
 
 int
@@ -636,6 +677,8 @@ lnet_server_mode() {
 }
 #endif
 
+int lnet_unprepare(void);
+
 int
 lnet_prepare(lnet_pid_t requested_pid)
 {
@@ -665,38 +708,40 @@ lnet_prepare(lnet_pid_t requested_pid)
         }
 #endif
 
-        memset(&the_lnet.ln_counters, 0,
-               sizeof(the_lnet.ln_counters));
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_test_peers);
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_nis);
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_zombie_nis);
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_remote_nets);
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_routers);
 
-        CFS_INIT_LIST_HEAD (&the_lnet.ln_test_peers);
-        CFS_INIT_LIST_HEAD (&the_lnet.ln_nis);
-        CFS_INIT_LIST_HEAD (&the_lnet.ln_zombie_nis);
-        CFS_INIT_LIST_HEAD (&the_lnet.ln_remote_nets);
-        CFS_INIT_LIST_HEAD (&the_lnet.ln_routers);
+	the_lnet.ln_interface_cookie = lnet_create_interface_cookie();
 
-        the_lnet.ln_interface_cookie = lnet_create_interface_cookie();
-
-        lnet_init_rtrpools();
+	LIBCFS_ALLOC(the_lnet.ln_counters, sizeof(lnet_counters_t));
+	if (the_lnet.ln_counters == NULL) {
+		CERROR("Failed to allocate counters for LNet\n");
+		rc = -ENOMEM;
+		goto failed;
+	}
 
 	rc = lnet_peer_table_create();
-        if (rc != 0)
-		goto failed0;
+	if (rc != 0)
+		goto failed;
 
 	/* NB: we will have instance of message container per CPT soon */
 	rc = lnet_msg_container_setup(&the_lnet.ln_msg_container);
 	if (rc != 0)
-		goto failed1;
+		goto failed;
 
 	rc = lnet_res_container_setup(&the_lnet.ln_eq_container, 0,
 				      LNET_COOKIE_TYPE_EQ, LNET_FL_MAX_EQS,
 				      sizeof(lnet_eq_t));
 	if (rc != 0)
-		goto failed2;
+		goto failed;
 
 	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_ME, LNET_FL_MAX_MES,
 					  sizeof(lnet_me_t));
 	if (recs == NULL)
-		goto failed3;
+		goto failed;
 
 	the_lnet.ln_me_containers = recs;
 
@@ -704,35 +749,20 @@ lnet_prepare(lnet_pid_t requested_pid)
 	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_MD, LNET_FL_MAX_MDS,
 					  sizeof(lnet_libmd_t));
 	if (recs == NULL)
-		goto failed3;
+		goto failed;
 
 	the_lnet.ln_md_containers = recs;
 
 	rc = lnet_portals_create();
 	if (rc != 0) {
 		CERROR("Failed to create portals for LNet: %d\n", rc);
-		goto failed3;
+		goto failed;
 	}
 
 	return 0;
 
- failed3:
-	/* NB: lnet_res_container_cleanup is safe to call for
-	 * uninitialized container */
-	if (the_lnet.ln_md_containers != NULL) {
-		lnet_res_containers_destroy(the_lnet.ln_md_containers);
-		the_lnet.ln_md_containers = NULL;
-	}
-	if (the_lnet.ln_me_containers != NULL) {
-		lnet_res_containers_destroy(the_lnet.ln_me_containers);
-		the_lnet.ln_me_containers = NULL;
-	}
-	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
- failed2:
-	lnet_msg_container_cleanup(&the_lnet.ln_msg_container);
- failed1:
-	lnet_peer_table_destroy();
- failed0:
+ failed:
+	lnet_unprepare();
 	return rc;
 }
 
@@ -766,9 +796,14 @@ lnet_unprepare (void)
 
 	lnet_res_container_cleanup(&the_lnet.ln_eq_container);
 
-        lnet_free_rtrpools();
 	lnet_msg_container_cleanup(&the_lnet.ln_msg_container);
 	lnet_peer_table_destroy();
+	lnet_rtrpools_free();
+
+	if (the_lnet.ln_counters != NULL) {
+		LIBCFS_FREE(the_lnet.ln_counters, sizeof(lnet_counters_t));
+		the_lnet.ln_counters = NULL;
+	}
 
 	return 0;
 }
@@ -1294,7 +1329,7 @@ LNetNIInit(lnet_pid_t requested_pid)
         if (rc != 0)
                 goto failed2;
 
-        rc = lnet_alloc_rtrpools(im_a_router);
+	rc = lnet_rtrpools_alloc(im_a_router);
         if (rc != 0)
                 goto failed2;
 

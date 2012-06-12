@@ -716,9 +716,8 @@ int lnet_get_route(int idx, __u32 *net, __u32 *hops,
                    lnet_nid_t *gateway, __u32 *alive);
 void lnet_proc_init(void);
 void lnet_proc_fini(void);
-void lnet_init_rtrpools(void);
-int  lnet_alloc_rtrpools(int im_a_router);
-void lnet_free_rtrpools(void);
+int  lnet_rtrpools_alloc(int im_a_router);
+void lnet_rtrpools_free(void);
 lnet_remotenet_t *lnet_find_net_locked (__u32 net);
 
 int lnet_islocalnid(lnet_nid_t nid);
@@ -810,6 +809,9 @@ void lnet_msg_container_cleanup(struct lnet_msg_container *container);
 char *lnet_msgtyp2str (int type);
 void lnet_print_hdr (lnet_hdr_t * hdr);
 int lnet_fail_nid(lnet_nid_t nid, unsigned int threshold);
+
+void lnet_counters_get(lnet_counters_t *counters);
+void lnet_counters_reset(void);
 
 unsigned int lnet_iov_nob (unsigned int niov, struct iovec *iov);
 int lnet_extract_iov (int dst_niov, struct iovec *dst,

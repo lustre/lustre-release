@@ -138,7 +138,7 @@ void
 lnet_msg_commit(lnet_msg_t *msg, int sending)
 {
 	struct lnet_msg_container *container = &the_lnet.ln_msg_container;
-	lnet_counters_t		  *counters  = &the_lnet.ln_counters;
+	lnet_counters_t		  *counters  = the_lnet.ln_counters;
 
 	/* routed message can be committed for both receiving and sending */
 	LASSERT(!msg->msg_tx_committed);
@@ -167,7 +167,7 @@ lnet_msg_commit(lnet_msg_t *msg, int sending)
 static void
 lnet_msg_tx_decommit(lnet_msg_t *msg, int status)
 {
-	lnet_counters_t	*counters = &the_lnet.ln_counters;
+	lnet_counters_t	*counters = the_lnet.ln_counters;
 	lnet_event_t *ev = &msg->msg_ev;
 
 	LASSERT(msg->msg_tx_committed);
@@ -217,7 +217,7 @@ lnet_msg_tx_decommit(lnet_msg_t *msg, int status)
 static void
 lnet_msg_rx_decommit(lnet_msg_t *msg, int status)
 {
-	lnet_counters_t	*counters = &the_lnet.ln_counters;
+	lnet_counters_t	*counters = the_lnet.ln_counters;
 	lnet_event_t *ev = &msg->msg_ev;
 
 	LASSERT(!msg->msg_tx_committed); /* decommitted or uncommitted */
@@ -262,7 +262,7 @@ lnet_msg_rx_decommit(lnet_msg_t *msg, int status)
 void
 lnet_msg_decommit(lnet_msg_t *msg, int status)
 {
-	lnet_counters_t	*counters = &the_lnet.ln_counters;
+	lnet_counters_t	*counters = the_lnet.ln_counters;
 
 	LASSERT(msg->msg_tx_committed || msg->msg_rx_committed);
 	LASSERT(msg->msg_onactivelist);
