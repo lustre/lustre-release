@@ -164,6 +164,8 @@ libcfs_debug_subsys2str(int subsys)
                 return "lov";
         case S_LQUOTA:
                 return "lquota";
+	case S_OSD:
+		return "osd";
         case S_LMV:
                 return "lmv";
         case S_SEC:
