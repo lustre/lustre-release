@@ -715,6 +715,9 @@ static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
 
 	/* call per-transaction callbacks if any */
 	cfs_list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage) {
+		LASSERTF(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC,
+			 "commit callback entry: magic=%x name='%s'\n",
+			 dcb->dcb_magic, dcb->dcb_name);
 		cfs_list_del_init(&dcb->dcb_linkage);
 		dcb->dcb_func(NULL, th, dcb, error);
 	}
@@ -918,12 +921,14 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
 
 static int osd_trans_cb_add(struct thandle *th, struct dt_txn_commit_cb *dcb)
 {
-        struct osd_thandle *oh = container_of0(th, struct osd_thandle,
-                                               ot_super);
+	struct osd_thandle *oh = container_of0(th, struct osd_thandle,
+					       ot_super);
 
-        cfs_list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
+	LASSERT(dcb->dcb_magic == TRANS_COMMIT_CB_MAGIC);
+	LASSERT(&dcb->dcb_func != NULL);
+	cfs_list_add(&dcb->dcb_linkage, &oh->ot_dcb_list);
 
-        return 0;
+	return 0;
 }
 
 /*

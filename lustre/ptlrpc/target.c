@@ -527,7 +527,8 @@ void lut_cb_last_committed(struct lu_env *env, struct thandle *th,
 
         ccb = container_of0(cb, struct lut_last_committed_callback, llcc_cb);
 
-        LASSERT(ccb->llcc_exp->exp_obd == ccb->llcc_lut->lut_obd);
+	LASSERT(ccb->llcc_lut != NULL);
+	LASSERT(ccb->llcc_exp->exp_obd == ccb->llcc_lut->lut_obd);
 
         cfs_spin_lock(&ccb->llcc_lut->lut_translock);
         if (ccb->llcc_transno > ccb->llcc_lut->lut_obd->obd_last_committed)
@@ -551,25 +552,30 @@ void lut_cb_last_committed(struct lu_env *env, struct thandle *th,
 int lut_last_commit_cb_add(struct thandle *th, struct lu_target *lut,
                            struct obd_export *exp, __u64 transno)
 {
-        struct lut_last_committed_callback *ccb;
-        int rc;
+	struct lut_last_committed_callback *ccb;
+	struct dt_txn_commit_cb		   *dcb;
+	int				   rc;
 
-        OBD_ALLOC_PTR(ccb);
-        if (ccb == NULL)
-                return -ENOMEM;
+	OBD_ALLOC_PTR(ccb);
+	if (ccb == NULL)
+		return -ENOMEM;
 
-        ccb->llcc_cb.dcb_func = lut_cb_last_committed;
-        CFS_INIT_LIST_HEAD(&ccb->llcc_cb.dcb_linkage);
-        ccb->llcc_lut = lut;
-        ccb->llcc_exp = class_export_cb_get(exp);
-        ccb->llcc_transno = transno;
+	ccb->llcc_lut	  = lut;
+	ccb->llcc_exp	  = class_export_cb_get(exp);
+	ccb->llcc_transno = transno;
 
-        rc = dt_trans_cb_add(th, &ccb->llcc_cb);
-        if (rc) {
-                class_export_cb_put(exp);
-                OBD_FREE_PTR(ccb);
-        }
-        return rc;
+	dcb	       = &ccb->llcc_cb;
+	dcb->dcb_func  = lut_cb_last_committed;
+	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
+	strncpy(dcb->dcb_name, "lut_cb_last_committed", MAX_COMMIT_CB_STR_LEN);
+	dcb->dcb_name[MAX_COMMIT_CB_STR_LEN - 1] = '\0';
+
+	rc = dt_trans_cb_add(th, dcb);
+	if (rc) {
+		class_export_cb_put(exp);
+		OBD_FREE_PTR(ccb);
+	}
+	return rc;
 }
 EXPORT_SYMBOL(lut_last_commit_cb_add);
 
@@ -601,23 +607,28 @@ void lut_cb_new_client(struct lu_env *env, struct thandle *th,
 
 int lut_new_client_cb_add(struct thandle *th, struct obd_export *exp)
 {
-        struct lut_new_client_callback *ccb;
-        int rc;
+	struct lut_new_client_callback *ccb;
+	struct dt_txn_commit_cb	       *dcb;
+	int			       rc;
 
-        OBD_ALLOC_PTR(ccb);
-        if (ccb == NULL)
-                return -ENOMEM;
+	OBD_ALLOC_PTR(ccb);
+	if (ccb == NULL)
+		return -ENOMEM;
 
-        ccb->lncc_cb.dcb_func = lut_cb_new_client;
-        CFS_INIT_LIST_HEAD(&ccb->lncc_cb.dcb_linkage);
-        ccb->lncc_exp = class_export_cb_get(exp);
+	ccb->lncc_exp  = class_export_cb_get(exp);
 
-        rc = dt_trans_cb_add(th, &ccb->lncc_cb);
-        if (rc) {
-                class_export_cb_put(exp);
-                OBD_FREE_PTR(ccb);
-        }
-        return rc;
+	dcb	       = &ccb->lncc_cb;
+	dcb->dcb_func  = lut_cb_new_client;
+	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
+	strncpy(dcb->dcb_name, "lut_cb_new_client", MAX_COMMIT_CB_STR_LEN);
+	dcb->dcb_name[MAX_COMMIT_CB_STR_LEN - 1] = '\0';
+
+	rc = dt_trans_cb_add(th, dcb);
+	if (rc) {
+		class_export_cb_put(exp);
+		OBD_FREE_PTR(ccb);
+	}
+	return rc;
 }
 
 /**
