@@ -168,8 +168,8 @@ run_suites() {
 export NAME MOUNT START CLEAN
 . $LUSTRE/tests/cfg/$NAME.sh
 
-assert_env mds_HOST MDS_MKFS_OPTS 
-assert_env ost_HOST OST_MKFS_OPTS OSTCOUNT
+assert_env mds_HOST
+assert_env ost_HOST OSTCOUNT
 assert_env FSNAME MOUNT MOUNT2
 
 setup_if_needed

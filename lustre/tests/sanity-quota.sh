@@ -6,13 +6,6 @@
 # Run test by setting NOSETUP=true when ltest has setup env for us
 set -e
 
-#kernel 2.4.x doesn't support quota
-K_VER=`uname --kernel-release | cut -b 1-3`
-if [ $K_VER = "2.4" ]; then
-    echo "Kernel 2.4 doesn't support quota"
-    exit 0
-fi
-
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
@@ -23,11 +16,6 @@ ONLY=${ONLY:-"$*"}
 # b=20877
 ALWAYS_EXCEPT="10 12 $SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
-
-case `uname -r` in
-2.6*) FSTYPE=${FSTYPE:-ldiskfs};;
-*) error "unsupported kernel" ;;
-esac
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && \
 	echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT`"
