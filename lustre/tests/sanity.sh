@@ -3032,6 +3032,29 @@ test_48e() { # bug 4134
 }
 run_test 48e "Access to recreated parent subdir (should return errors)"
 
+test_49() { # LU-1030
+	# get ost1 size - lustre-OST0000
+	ost1_size=$(do_facet ost1 lfs df |grep ${ost1_svc} |awk '{print $4}')
+	# write 800M at maximum
+	[ $ost1_size -gt 819200 ] && ost1_size=819200
+
+	lfs setstripe -c 1 -i 0 $DIR/$tfile
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=$((ost1_size >> 2)) &
+	local dd_pid=$!
+
+	# change max_pages_per_rpc while writing the file
+	local osc1_mppc=osc.$(get_osc_import_name client ost1).max_pages_per_rpc
+	local orig_mppc=`$LCTL get_param -n $osc1_mppc`
+	# loop until dd process exits
+	while ps ax -opid | grep -q $dd_pid; do
+		$LCTL set_param $osc1_mppc=$((RANDOM % 256 + 1))
+		sleep $((RANDOM % 5 + 1))
+	done
+	# restore original max_pages_per_rpc
+	$LCTL set_param $osc1_mppc=$orig_mppc
+}
+run_test 49 "Change max_pages_per_rpc won't break osc extent"
+
 test_50() {
 	# bug 1485
 	mkdir $DIR/d50

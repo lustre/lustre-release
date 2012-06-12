@@ -62,6 +62,7 @@
 #include <linux/types.h>
 #include <asm/timex.h>
 #include <linux/sched.h> /* THREAD_SIZE */
+#include <linux/rbtree.h>
 
 #define CFS_THREAD_SIZE   THREAD_SIZE
 #define LUSTRE_TRACE_SIZE (THREAD_SIZE >> 5)

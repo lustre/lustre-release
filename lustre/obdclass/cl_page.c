@@ -1406,30 +1406,59 @@ EXPORT_SYMBOL(cl_page_make_ready);
  * its queues.
  *
  * \pre  cl_page_is_owned(pg, io)
- * \post ergo(result == 0,
- *            pg->cp_state == CPS_PAGEIN || pg->cp_state == CPS_PAGEOUT)
+ * \post cl_page_is_owned(pg, io)
  *
  * \see cl_page_operations::cpo_cache_add()
  */
 int cl_page_cache_add(const struct lu_env *env, struct cl_io *io,
                       struct cl_page *pg, enum cl_req_type crt)
 {
-        int result;
+	const struct cl_page_slice *scan;
+	int result = 0;
 
-        PINVRNT(env, pg, crt < CRT_NR);
-        PINVRNT(env, pg, cl_page_is_owned(pg, io));
-        PINVRNT(env, pg, cl_page_invariant(pg));
+	PINVRNT(env, pg, crt < CRT_NR);
+	PINVRNT(env, pg, cl_page_is_owned(pg, io));
+	PINVRNT(env, pg, cl_page_invariant(pg));
 
-        ENTRY;
-        result = cl_page_invoke(env, io, pg, CL_PAGE_OP(io[crt].cpo_cache_add));
-        if (result == 0) {
-                cl_page_owner_clear(pg);
-                cl_page_state_set(env, pg, CPS_CACHED);
-        }
-        CL_PAGE_HEADER(D_TRACE, env, pg, "%d %d\n", crt, result);
-        RETURN(result);
+	ENTRY;
+
+	cfs_list_for_each_entry(scan, &pg->cp_layers, cpl_linkage) {
+		if (scan->cpl_ops->io[crt].cpo_cache_add == NULL)
+			continue;
+
+		result = scan->cpl_ops->io[crt].cpo_cache_add(env, scan, io);
+		if (result != 0)
+			break;
+	}
+	CL_PAGE_HEADER(D_TRACE, env, pg, "%d %d\n", crt, result);
+	RETURN(result);
 }
 EXPORT_SYMBOL(cl_page_cache_add);
+
+/**
+ * Called if a pge is being written back by kernel's intention.
+ *
+ * \pre  cl_page_is_owned(pg, io)
+ * \post ergo(result == 0, pg->cp_state == CPS_PAGEOUT)
+ *
+ * \see cl_page_operations::cpo_flush()
+ */
+int cl_page_flush(const struct lu_env *env, struct cl_io *io,
+		  struct cl_page *pg)
+{
+	int result;
+
+	PINVRNT(env, pg, cl_page_is_owned(pg, io));
+	PINVRNT(env, pg, cl_page_invariant(pg));
+
+	ENTRY;
+
+	result = cl_page_invoke(env, io, pg, CL_PAGE_OP(cpo_flush));
+
+	CL_PAGE_HEADER(D_TRACE, env, pg, "%d\n", result);
+	RETURN(result);
+}
+EXPORT_SYMBOL(cl_page_flush);
 
 /**
  * Checks whether page is protected by any extent lock is at least required

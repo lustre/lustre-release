@@ -2776,7 +2776,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                 cfs_spin_lock (&req->rq_lock);
                 if (req->rq_import_generation < imp->imp_generation) {
                         req->rq_err = 1;
-                        req->rq_status = -EINTR;
+			req->rq_status = -EIO;
                         ptlrpc_client_wake_req(req);
                 }
                 cfs_spin_unlock (&req->rq_lock);
@@ -2791,7 +2791,7 @@ void ptlrpc_abort_inflight(struct obd_import *imp)
                 cfs_spin_lock (&req->rq_lock);
                 if (req->rq_import_generation < imp->imp_generation) {
                         req->rq_err = 1;
-                        req->rq_status = -EINTR;
+			req->rq_status = -EIO;
                         ptlrpc_client_wake_req(req);
                 }
                 cfs_spin_unlock (&req->rq_lock);

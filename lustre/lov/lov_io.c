@@ -114,10 +114,12 @@ static void lov_io_sub_inherit(struct cl_io *io, struct lov_io *lio,
 		io->u.ci_fsync.fi_end = end;
 		io->u.ci_fsync.fi_capa = parent->u.ci_fsync.fi_capa;
 		io->u.ci_fsync.fi_fid = parent->u.ci_fsync.fi_fid;
+		io->u.ci_fsync.fi_mode = parent->u.ci_fsync.fi_mode;
 		break;
 	}
-        case CIT_READ:
-        case CIT_WRITE: {
+	case CIT_READ:
+	case CIT_WRITE: {
+		io->u.ci_wr.wr_sync = cl_io_is_sync_write(parent);
                 if (cl_io_is_append(parent)) {
                         io->u.ci_wr.wr_append = 1;
                 } else {
@@ -573,8 +575,7 @@ static struct cl_page_list *lov_io_submit_qin(struct lov_device *ld,
  */
 static int lov_io_submit(const struct lu_env *env,
                          const struct cl_io_slice *ios,
-                         enum cl_req_type crt, struct cl_2queue *queue,
-                         enum cl_req_priority priority)
+			 enum cl_req_type crt, struct cl_2queue *queue)
 {
         struct lov_io          *lio = cl2lov_io(env, ios);
         struct lov_object      *obj = lio->lis_object;
@@ -605,7 +606,7 @@ static int lov_io_submit(const struct lu_env *env,
                 LASSERT(!IS_ERR(sub));
                 LASSERT(sub->sub_io == &lio->lis_single_subio);
                 rc = cl_io_submit_rw(sub->sub_env, sub->sub_io,
-                                     crt, queue, priority);
+				     crt, queue);
                 lov_sub_put(sub);
                 RETURN(rc);
         }
@@ -646,7 +647,7 @@ static int lov_io_submit(const struct lu_env *env,
                 sub = lov_sub_get(env, lio, stripe);
                 if (!IS_ERR(sub)) {
                         rc = cl_io_submit_rw(sub->sub_env, sub->sub_io,
-                                             crt, cl2q, priority);
+					     crt, cl2q);
                         lov_sub_put(sub);
                 } else
                         rc = PTR_ERR(sub);
@@ -743,6 +744,28 @@ static int lov_io_fault_start(const struct lu_env *env,
         RETURN(lov_io_start(env, ios));
 }
 
+static void lov_io_fsync_end(const struct lu_env *env,
+			     const struct cl_io_slice *ios)
+{
+	struct lov_io *lio = cl2lov_io(env, ios);
+	struct lov_io_sub *sub;
+	unsigned int *written = &ios->cis_io->u.ci_fsync.fi_nr_written;
+	ENTRY;
+
+	*written = 0;
+	cfs_list_for_each_entry(sub, &lio->lis_active, sub_linkage) {
+		struct cl_io *subio = sub->sub_io;
+
+		lov_sub_enter(sub);
+		lov_io_end_wrapper(sub->sub_env, subio);
+		lov_sub_exit(sub);
+
+		if (subio->ci_result == 0)
+			*written += subio->u.ci_fsync.fi_nr_written;
+	}
+	RETURN_EXIT;
+}
+
 static const struct cl_io_operations lov_io_ops = {
         .op = {
                 [CIT_READ] = {
@@ -788,7 +811,7 @@ static const struct cl_io_operations lov_io_ops = {
 			.cio_lock      = lov_io_lock,
 			.cio_unlock    = lov_io_unlock,
 			.cio_start     = lov_io_start,
-			.cio_end       = lov_io_end
+			.cio_end       = lov_io_fsync_end
 		},
                 [CIT_MISC] = {
                         .cio_fini   = lov_io_fini

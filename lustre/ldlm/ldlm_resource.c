@@ -460,7 +460,6 @@ static void ldlm_res_hop_get_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 
         res = cfs_hlist_entry(hnode, struct ldlm_resource, lr_hash);
         ldlm_resource_getref(res);
-        LDLM_RESOURCE_ADDREF(res);
 }
 
 static void ldlm_res_hop_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
@@ -469,7 +468,6 @@ static void ldlm_res_hop_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
 
         res = cfs_hlist_entry(hnode, struct ldlm_resource, lr_hash);
         /* cfs_hash_for_each_nolock is the only chance we call it */
-        LDLM_RESOURCE_DELREF(res);
         ldlm_resource_putref_locked(res);
 }
 
@@ -478,7 +476,6 @@ static void ldlm_res_hop_put(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
         struct ldlm_resource *res;
 
         res = cfs_hlist_entry(hnode, struct ldlm_resource, lr_hash);
-        LDLM_RESOURCE_DELREF(res);
         ldlm_resource_putref(res);
 }
 

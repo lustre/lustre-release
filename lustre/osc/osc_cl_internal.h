@@ -40,6 +40,7 @@
  * Internal interfaces of OSC layer.
  *
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
+ *   Author: Jinshan Xiong <jinshan.xiong@whamcloud.com>
  */
 
 #ifndef OSC_CL_INTERNAL_H
@@ -61,6 +62,8 @@
  *  @{
  */
 
+struct osc_extent;
+
 /**
  * State maintained by osc layer for each IO context.
  */
@@ -69,6 +72,12 @@ struct osc_io {
         struct cl_io_slice oi_cl;
         /** true if this io is lockless. */
         int                oi_lockless;
+	/** active extents, we know how many bytes is going to be written,
+	 * so having an active extent will prevent it from being fragmented */
+	struct osc_extent *oi_active;
+	/** partially truncated extent, we need to hold this extent to prevent
+	 * page writeback from happening. */
+	struct osc_extent *oi_trunc;
 
 	struct obd_info    oi_info;
 	struct obdo        oi_oa;
@@ -99,23 +108,8 @@ struct osc_thread_info {
         struct cl_attr          oti_attr;
         struct lustre_handle    oti_handle;
         struct cl_page_list     oti_plist;
+	struct cl_io	    oti_io;
 };
-
-/**
- * Manage osc_async_page
- */
-struct osc_oap_pages {
-	cfs_list_t      oop_pending;
-	cfs_list_t      oop_urgent;
-	int             oop_num_pending;
-};
-
-static inline void osc_oap_pages_init(struct osc_oap_pages *list)
-{
-	CFS_INIT_LIST_HEAD(&list->oop_pending);
-	CFS_INIT_LIST_HEAD(&list->oop_urgent);
-	list->oop_num_pending = 0;
-}
 
 struct osc_object {
         struct cl_object   oo_cl;
@@ -144,15 +138,54 @@ struct osc_object {
         cfs_spinlock_t     oo_seatbelt;
 
 	/**
-	 * used by the osc to keep track of what objects to build into rpcs
+	 * used by the osc to keep track of what objects to build into rpcs.
+	 * Protected by client_obd->cli_loi_list_lock.
 	 */
-	struct osc_oap_pages oo_read_pages;
-	struct osc_oap_pages oo_write_pages;
-	cfs_list_t           oo_ready_item;
-	cfs_list_t           oo_hp_ready_item;
-	cfs_list_t           oo_write_item;
-	cfs_list_t           oo_read_item;
+	cfs_list_t	   oo_ready_item;
+	cfs_list_t	   oo_hp_ready_item;
+	cfs_list_t	   oo_write_item;
+	cfs_list_t	   oo_read_item;
+
+	/**
+	 * extent is a red black tree to manage (async) dirty pages.
+	 */
+	struct rb_root       oo_root;
+	/**
+	 * Manage write(dirty) extents.
+	 */
+	cfs_list_t	   oo_hp_exts; /* list of hp extents */
+	cfs_list_t	   oo_urgent_exts; /* list of writeback extents */
+	cfs_list_t	   oo_rpc_exts;
+
+	cfs_list_t	   oo_reading_exts;
+
+	cfs_atomic_t	 oo_nr_reads;
+	cfs_atomic_t	 oo_nr_writes;
+
+	/** Protect extent tree. Will be used to protect
+	 * oo_{read|write}_pages soon. */
+	cfs_spinlock_t       oo_lock;
 };
+
+static inline void osc_object_lock(struct osc_object *obj)
+{
+	cfs_spin_lock(&obj->oo_lock);
+}
+
+static inline int osc_object_trylock(struct osc_object *obj)
+{
+	return cfs_spin_trylock(&obj->oo_lock);
+}
+
+static inline void osc_object_unlock(struct osc_object *obj)
+{
+	cfs_spin_unlock(&obj->oo_lock);
+}
+
+static inline int osc_object_is_locked(struct osc_object *obj)
+{
+	return cfs_spin_is_locked(&obj->oo_lock);
+}
 
 /*
  * Lock "micro-states" for osc layer.
@@ -361,6 +394,7 @@ extern cfs_mem_cache_t *osc_object_kmem;
 extern cfs_mem_cache_t *osc_thread_kmem;
 extern cfs_mem_cache_t *osc_session_kmem;
 extern cfs_mem_cache_t *osc_req_kmem;
+extern cfs_mem_cache_t *osc_extent_kmem;
 
 extern struct lu_device_type osc_device_type;
 extern struct lu_context_key osc_key;
@@ -389,22 +423,29 @@ void osc_index2policy  (ldlm_policy_data_t *policy, const struct cl_object *obj,
 int  osc_lvb_print     (const struct lu_env *env, void *cookie,
                         lu_printer_t p, const struct ost_lvb *lvb);
 
-void osc_io_submit_page(const struct lu_env *env,
-                        struct osc_io *oio, struct osc_page *opg,
-                        enum cl_req_type crt);
-void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
-		       struct obdo *oa, struct osc_async_page *oap,
-		       int sent, int rc);
+void osc_page_submit(const struct lu_env *env, struct osc_page *opg,
+		     enum cl_req_type crt, int brw_flags);
 int osc_cancel_async_page(const struct lu_env *env, struct osc_page *ops);
 int osc_set_async_flags(struct osc_object *obj, struct osc_page *opg,
 			obd_flag async_flags);
 int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 			cfs_page_t *page, loff_t offset);
-int osc_queue_async_io(const struct lu_env *env, struct osc_page *ops);
-int osc_teardown_async_page(struct osc_object *obj,
+int osc_queue_async_io(const struct lu_env *env, struct cl_io *io,
+		       struct osc_page *ops);
+int osc_teardown_async_page(const struct lu_env *env, struct osc_object *obj,
 			    struct osc_page *ops);
-int osc_queue_sync_page(const struct lu_env *env, struct osc_page *ops,
-			int cmd, int brw_flags);
+int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
+			 struct osc_page *ops);
+int osc_queue_sync_pages(const struct lu_env *env, struct osc_object *obj,
+			 cfs_list_t *list, int cmd, int brw_flags);
+int osc_cache_truncate_start(const struct lu_env *env, struct osc_io *oio,
+			     struct osc_object *obj, __u64 size);
+void osc_cache_truncate_end(const struct lu_env *env, struct osc_io *oio,
+			    struct osc_object *obj);
+int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
+			      pgoff_t start, pgoff_t end, int hp, int discard);
+int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
+			 pgoff_t start, pgoff_t end);
 void osc_io_unplug(const struct lu_env *env, struct client_obd *cli,
 		   struct osc_object *osc, pdl_policy_t pol);
 
@@ -459,10 +500,20 @@ static inline struct obd_export *osc_export(const struct osc_object *obj)
         return lu2osc_dev(obj->oo_cl.co_lu.lo_dev)->od_exp;
 }
 
+static inline struct client_obd *osc_cli(const struct osc_object *obj)
+{
+	return &osc_export(obj)->exp_obd->u.cli;
+}
+
 static inline struct osc_object *cl2osc(const struct cl_object *obj)
 {
         LINVRNT(osc_is_object(&obj->co_lu));
         return container_of0(obj, struct osc_object, oo_cl);
+}
+
+static inline struct cl_object *osc2cl(const struct osc_object *obj)
+{
+	return (struct cl_object *)&obj->oo_cl;
 }
 
 static inline ldlm_mode_t osc_cl_lock2ldlm(enum cl_lock_mode mode)
@@ -493,6 +544,21 @@ static inline struct osc_page *cl2osc_page(const struct cl_page_slice *slice)
         return container_of0(slice, struct osc_page, ops_cl);
 }
 
+static inline struct osc_page *oap2osc(struct osc_async_page *oap)
+{
+	return container_of0(oap, struct osc_page, ops_oap);
+}
+
+static inline struct cl_page *oap2cl_page(struct osc_async_page *oap)
+{
+	return oap2osc(oap)->ops_cl.cpl_page;
+}
+
+static inline struct osc_page *oap2osc_page(struct osc_async_page *oap)
+{
+	return (struct osc_page *)container_of(oap, struct osc_page, ops_oap);
+}
+
 static inline struct osc_lock *cl2osc_lock(const struct cl_lock_slice *slice)
 {
         LINVRNT(osc_is_object(&slice->cls_obj->co_lu));
@@ -508,6 +574,106 @@ static inline int osc_io_srvlock(struct osc_io *oio)
 {
         return (oio->oi_lockless && !oio->oi_cl.cis_io->ci_no_srvlock);
 }
+
+enum osc_extent_state {
+	OES_INV       = 0, /** extent is just initialized or destroyed */
+	OES_ACTIVE    = 1, /** process is using this extent */
+	OES_CACHE     = 2, /** extent is ready for IO */
+	OES_LOCKING   = 3, /** locking page to prepare IO */
+	OES_LOCK_DONE = 4, /** locking finished, ready to send */
+	OES_RPC       = 5, /** in RPC */
+	OES_TRUNC     = 6, /** being truncated */
+	OES_STATE_MAX
+};
+#define OES_STRINGS { "inv", "active", "cache", "locking", "lockdone", "rpc", \
+		      "trunc", NULL }
+
+/**
+ * osc_extent data to manage dirty pages.
+ * osc_extent has the following attributes:
+ * 1. all pages in the same must be in one RPC in write back;
+ * 2. # of pages must be less than max_pages_per_rpc - implied by 1;
+ * 3. must be covered by only 1 osc_lock;
+ * 4. exclusive. It's impossible to have overlapped osc_extent.
+ *
+ * The lifetime of an extent is from when the 1st page is dirtied to when
+ * all pages inside it are written out.
+ *
+ * LOCKING ORDER
+ * =============
+ * page lock -> client_obd_list_lock -> object lock(osc_object::oo_lock)
+ */
+struct osc_extent {
+	/** red-black tree node */
+	struct rb_node     oe_node;
+	/** osc_object of this extent */
+	struct osc_object *oe_obj;
+	/** refcount, removed from red-black tree if reaches zero. */
+	cfs_atomic_t       oe_refc;
+	/** busy if non-zero */
+	cfs_atomic_t       oe_users;
+	/** link list of osc_object's oo_{hp|urgent|locking}_exts. */
+	cfs_list_t	 oe_link;
+	/** state of this extent */
+	unsigned int       oe_state;
+	/** flags for this extent. */
+	unsigned int       oe_intree:1,
+	/** 0 is write, 1 is read */
+			   oe_rw:1,
+			   oe_srvlock:1,
+			   oe_memalloc:1,
+	/** an ACTIVE extent is going to be truncated, so when this extent
+	 * is released, it will turn into TRUNC state instead of CACHE. */
+			   oe_trunc_pending:1,
+	/** this extent should be written asap and someone may wait for the
+	 * write to finish. This bit is usually set along with urgent if
+	 * the extent was CACHE state.
+	 * fsync_wait extent can't be merged because new extent region may
+	 * exceed fsync range. */
+			   oe_fsync_wait:1,
+	/** covering lock is being canceled */
+			   oe_hp:1,
+	/** this extent should be written back asap. set if one of pages is
+	 * called by page WB daemon, or sync write or reading requests. */
+			   oe_urgent:1;
+	/** how many grants allocated for this extent.
+	 *  Grant allocated for this extent. There is no grant allocated
+	 *  for reading extents and sync write extents. */
+	unsigned int       oe_grants;
+	/** # of dirty pages in this extent */
+	unsigned int       oe_nr_pages;
+	/** list of pending oap pages. Pages in this list are NOT sorted. */
+	cfs_list_t         oe_pages;
+	/** Since an extent has to be written out in atomic, this is used to
+	 * remember the next page need to be locked to write this extent out.
+	 * Not used right now.
+	 */
+	struct osc_page   *oe_next_page;
+	/** start and end index of this extent, include start and end
+	 * themselves. Page offset here is the page index of osc_pages.
+	 * oe_start is used as keyword for red-black tree. */
+	pgoff_t            oe_start;
+	pgoff_t            oe_end;
+	/** maximum ending index of this extent, this is limited by
+	 * max_pages_per_rpc, lock extent and chunk size. */
+	pgoff_t            oe_max_end;
+	/** waitqueue - for those who want to be notified if this extent's
+	 * state has changed. */
+	cfs_waitq_t        oe_waitq;
+	/** lock covering this extent */
+	struct cl_lock    *oe_osclock;
+	/** terminator of this extent. Must be true if this extent is in IO. */
+	cfs_task_t        *oe_owner;
+	/** return value of writeback. If somebody is waiting for this extent,
+	 * this value can be known by outside world. */
+	int                oe_rc;
+	/** max pages per rpc when this extent was created */
+	unsigned int       oe_mppr;
+};
+
+int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
+		      int sent, int rc);
+int osc_extent_release(const struct lu_env *env, struct osc_extent *ext);
 
 /** @} osc */
 

@@ -141,7 +141,21 @@ static struct ll_cl_context *ll_cl_init(struct file *file,
         cio = ccc_env_io(env);
         io = cio->cui_cl.cis_io;
         if (io == NULL && create) {
-                loff_t pos;
+		struct inode *inode = vmpage->mapping->host;
+		loff_t pos;
+
+		if (TRYLOCK_INODE_MUTEX(inode)) {
+			UNLOCK_INODE_MUTEX(inode);
+
+			/* this is too bad. Someone is trying to write the
+			 * page w/o holding inode mutex. This means we can
+			 * add dirty pages into cache during truncate */
+			CERROR("Proc %s is dirting page w/o inode lock, this"
+			       "will break truncate.\n", cfs_current()->comm);
+			libcfs_debug_dumpstack(NULL);
+			LBUG();
+			return ERR_PTR(-EIO);
+		}
 
                 /*
                  * Loop-back driver calls ->prepare_write() and ->sendfile()
@@ -1152,8 +1166,8 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
         struct cl_io           *io;
         struct cl_page         *page;
         struct cl_object       *clob;
-        struct cl_2queue       *queue;
         struct cl_env_nest      nest;
+	int redirtied = 0;
         int result;
         ENTRY;
 
@@ -1167,7 +1181,6 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
         if (IS_ERR(env))
                 RETURN(PTR_ERR(env));
 
-        queue = &vvp_env_info(env)->vti_queue;
         clob  = ll_i2info(inode)->lli_clob;
         LASSERT(clob != NULL);
 
@@ -1181,39 +1194,88 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
                         lu_ref_add(&page->cp_reference, "writepage",
                                    cfs_current());
                         cl_page_assume(env, io, page);
-                        /*
-                         * Mark page dirty, because this is what
-                         * ->vio_submit()->cpo_prep_write() assumes.
-                         *
-                         * XXX better solution is to detect this from within
-                         * cl_io_submit_rw() somehow.
-                         */
-                        set_page_dirty(vmpage);
-                        cl_2queue_init_page(queue, page);
-                        result = cl_io_submit_rw(env, io, CRT_WRITE,
-                                                 queue, CRP_NORMAL);
-                        if (result != 0) {
-                                /*
-                                 * Re-dirty page on error so it retries write,
-                                 * but not in case when IO has actually
-                                 * occurred and completed with an error.
-                                 */
-                                if (!PageError(vmpage)) {
-                                        redirty_page_for_writepage(wbc, vmpage);
-                                        result = 0;
-                                }
-                        }
-                        cl_page_list_disown(env, io, &queue->c2_qin);
-                        LASSERT(!cl_page_is_owned(page, io));
+			result = cl_page_flush(env, io, page);
+			if (result != 0) {
+				/*
+				 * Re-dirty page on error so it retries write,
+				 * but not in case when IO has actually
+				 * occurred and completed with an error.
+				 */
+				if (!PageError(vmpage)) {
+					redirty_page_for_writepage(wbc, vmpage);
+					result = 0;
+					redirtied = 1;
+				}
+			}
+			cl_page_disown(env, io, page);
                         lu_ref_del(&page->cp_reference,
                                    "writepage", cfs_current());
                         cl_page_put(env, page);
-                        cl_2queue_fini(env, queue);
                 }
         }
         cl_io_fini(env, io);
+
+	if (redirtied && wbc->sync_mode == WB_SYNC_ALL) {
+		loff_t offset = cl_offset(clob, vmpage->index);
+
+		/* Flush page failed because the extent is being written out.
+		 * Wait for the write of extent to be finished to avoid
+		 * breaking kernel which assumes ->writepage should mark
+		 * PageWriteback or clean the page. */
+		result = cl_sync_file_range(inode, offset,
+					    offset + CFS_PAGE_SIZE - 1,
+					    CL_FSYNC_LOCAL);
+		if (result > 0) {
+			/* actually we may have written more than one page.
+			 * decreasing this page because the caller will count
+			 * it. */
+			wbc->nr_to_write -= result - 1;
+			result = 0;
+		}
+	}
+
         cl_env_nested_put(&nest, env);
         RETURN(result);
+}
+
+int ll_writepages(struct address_space *mapping, struct writeback_control *wbc)
+{
+	struct inode *inode = mapping->host;
+	loff_t start;
+	loff_t end;
+	enum cl_fsync_mode mode;
+	int range_whole = 0;
+	int result;
+	ENTRY;
+
+	if (wbc->range_cyclic) {
+		start = mapping->writeback_index << CFS_PAGE_SHIFT;
+		end = OBD_OBJECT_EOF;
+	} else {
+		start = wbc->range_start;
+		end = wbc->range_end;
+		if (end == LLONG_MAX) {
+			end = OBD_OBJECT_EOF;
+			range_whole = start == 0;
+		}
+	}
+
+	mode = CL_FSYNC_NONE;
+	if (wbc->sync_mode == WB_SYNC_ALL)
+		mode = CL_FSYNC_LOCAL;
+
+	result = cl_sync_file_range(inode, start, end, mode);
+	if (result > 0) {
+		wbc->nr_to_write -= result;
+		result = 0;
+	 }
+
+	if (wbc->range_cyclic || (range_whole && wbc->nr_to_write > 0)) {
+		if (end == OBD_OBJECT_EOF)
+			end = i_size_read(inode);
+		mapping->writeback_index = (end >> CFS_PAGE_SHIFT) + 1;
+	}
+	RETURN(result);
 }
 
 int ll_readpage(struct file *file, struct page *vmpage)

@@ -57,7 +57,6 @@ struct osc_async_page {
         unsigned short          oap_interrupted:1;
 
         cfs_list_t              oap_pending_item;
-        cfs_list_t              oap_urgent_item;
         cfs_list_t              oap_rpc_item;
 
         obd_off                 oap_obj_off;
@@ -82,6 +81,7 @@ struct osc_cache_waiter {
         cfs_list_t              ocw_entry;
         cfs_waitq_t             ocw_waitq;
         struct osc_async_page  *ocw_oap;
+	int                     ocw_grant;
         int                     ocw_rc;
 };
 
@@ -142,10 +142,8 @@ int osc_sync_base(struct obd_export *exp, struct obd_info *oinfo,
 
 int osc_process_config_base(struct obd_device *obd, struct lustre_cfg *cfg);
 int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
-		  cfs_list_t *rpc_list, int page_count, int cmd,
-		  pdl_policy_t p);
+		  cfs_list_t *ext_list, int cmd, pdl_policy_t p);
 
-struct cl_page *osc_oap2cl_page(struct osc_async_page *oap);
 extern cfs_spinlock_t osc_ast_guard;
 
 int osc_cleanup(struct obd_device *obd);

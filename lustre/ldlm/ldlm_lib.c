@@ -313,6 +313,8 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         CFS_INIT_LIST_HEAD(&cli->cl_loi_write_list);
         CFS_INIT_LIST_HEAD(&cli->cl_loi_read_list);
         client_obd_list_lock_init(&cli->cl_loi_list_lock);
+	cfs_atomic_set(&cli->cl_pending_w_pages, 0);
+	cfs_atomic_set(&cli->cl_pending_r_pages, 0);
         cli->cl_r_in_flight = 0;
         cli->cl_w_in_flight = 0;
 

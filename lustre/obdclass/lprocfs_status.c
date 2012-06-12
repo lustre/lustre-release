@@ -2457,32 +2457,6 @@ int lprocfs_obd_rd_max_pages_per_rpc(char *page, char **start, off_t off,
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_max_pages_per_rpc);
 
-int lprocfs_obd_wr_max_pages_per_rpc(struct file *file, const char *buffer,
-                                     unsigned long count, void *data)
-{
-        struct obd_device *dev = data;
-        struct client_obd *cli = &dev->u.cli;
-        struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
-        int val, rc;
-
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        LPROCFS_CLIMP_CHECK(dev);
-        if (val < 1 || val > ocd->ocd_brw_size >> CFS_PAGE_SHIFT) {
-                LPROCFS_CLIMP_EXIT(dev);
-                return -ERANGE;
-        }
-        client_obd_list_lock(&cli->cl_loi_list_lock);
-        cli->cl_max_pages_per_rpc = val;
-        client_obd_list_unlock(&cli->cl_loi_list_lock);
-
-        LPROCFS_CLIMP_EXIT(dev);
-        return count;
-}
-EXPORT_SYMBOL(lprocfs_obd_wr_max_pages_per_rpc);
-
 int lprocfs_target_rd_instance(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {

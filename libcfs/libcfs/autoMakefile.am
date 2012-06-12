@@ -44,7 +44,8 @@ if LIBLUSTRE
 noinst_LIBRARIES= libcfs.a
 libcfs_a_SOURCES= posix/posix-debug.c user-prim.c user-lock.c user-tcpip.c \
 		  prng.c user-bitops.c user-mem.c hash.c kernel_user_comm.c \
-		  workitem.c fail.c libcfs_cpu.c libcfs_mem.c libcfs_lock.c
+		  workitem.c fail.c libcfs_cpu.c libcfs_mem.c libcfs_lock.c \
+		  posix/rbtree.c
 libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfs_a_CFLAGS = $(LLCFLAGS)
 endif
@@ -70,7 +71,7 @@ nodist_libcfs_SOURCES := darwin/darwin-sync.c darwin/darwin-mem.c	\
 	darwin/darwin-debug.c darwin/darwin-proc.c 			\
 	darwin/darwin-tracefile.c darwin/darwin-module.c 		\
 	posix/posix-debug.c module.c tracefile.c nidstrings.c watchdog.c \
-	kernel_user_comm.c hash.c
+	kernel_user_comm.c hash.c posix/rbtree.c
 
 libcfs_CFLAGS := $(EXTRA_KCFLAGS)
 libcfs_LDFLAGS := $(EXTRA_KLDFLAGS)

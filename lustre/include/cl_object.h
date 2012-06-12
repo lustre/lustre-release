@@ -1054,6 +1054,15 @@ struct cl_page_operations {
          */
         int (*cpo_cancel)(const struct lu_env *env,
                           const struct cl_page_slice *slice);
+	/**
+	 * Write out a page by kernel. This is only called by ll_writepage
+	 * right now.
+	 *
+	 * \see cl_page_flush()
+	 */
+	int (*cpo_flush)(const struct lu_env *env,
+			 const struct cl_page_slice *slice,
+			 struct cl_io *io);
         /** @} transfer */
 };
 
@@ -1960,11 +1969,6 @@ enum cl_io_state {
         CIS_FINI
 };
 
-enum cl_req_priority {
-        CRP_NORMAL,
-        CRP_CANCEL
-};
-
 /**
  * IO state private for a layer.
  *
@@ -2082,8 +2086,7 @@ struct cl_io_operations {
                 int  (*cio_submit)(const struct lu_env *env,
                                    const struct cl_io_slice *slice,
                                    enum cl_req_type crt,
-                                   struct cl_2queue *queue,
-                                   enum cl_req_priority priority);
+				   struct cl_2queue *queue);
         } req_op[CRT_NR];
         /**
          * Read missing page.
@@ -2245,6 +2248,18 @@ enum cl_io_lock_dmd {
         CILR_PEEK
 };
 
+enum cl_fsync_mode {
+	/** start writeback, do not wait for them to finish */
+	CL_FSYNC_NONE  = 0,
+	/** start writeback and wait for them to finish */
+	CL_FSYNC_LOCAL = 1,
+	/** discard all of dirty pages in a specific file range */
+	CL_FSYNC_DISCARD = 2,
+	/** start writeback and make sure they have reached storage before
+	 * return. OST_SYNC RPC must be issued and finished */
+	CL_FSYNC_ALL   = 3
+};
+
 struct cl_io_rw_common {
         loff_t      crw_pos;
         size_t      crw_count;
@@ -2291,6 +2306,7 @@ struct cl_io {
                 struct cl_wr_io {
                         struct cl_io_rw_common wr;
                         int                    wr_append;
+			int                    wr_sync;
                 } ci_wr;
                 struct cl_io_rw_common ci_rw;
                 struct cl_setattr_io {
@@ -2318,6 +2334,9 @@ struct cl_io {
 			struct obd_capa   *fi_capa;
 			/** file system level fid */
 			struct lu_fid     *fi_fid;
+			enum cl_fsync_mode fi_mode;
+			/* how many pages were written/discarded */
+			unsigned int       fi_nr_written;
 		} ci_fsync;
         } u;
         struct cl_2queue     ci_queue;
@@ -2769,6 +2788,8 @@ int  cl_page_cache_add  (const struct lu_env *env, struct cl_io *io,
 void cl_page_clip       (const struct lu_env *env, struct cl_page *pg,
                          int from, int to);
 int  cl_page_cancel     (const struct lu_env *env, struct cl_page *page);
+int  cl_page_flush      (const struct lu_env *env, struct cl_io *io,
+			 struct cl_page *pg);
 
 /** @} transfer */
 
@@ -2815,9 +2836,19 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
 struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                 const struct cl_lock_descr *need,
                                 const char *scope, const void *source);
-struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
-                                struct cl_page *page, struct cl_lock *except,
-                                int pending, int canceld);
+struct cl_lock *cl_lock_at_pgoff(const struct lu_env *env,
+				 struct cl_object *obj, pgoff_t index,
+				 struct cl_lock *except, int pending,
+				 int canceld);
+static inline struct cl_lock *cl_lock_at_page(const struct lu_env *env,
+					      struct cl_object *obj,
+					      struct cl_page *page,
+					      struct cl_lock *except,
+					      int pending, int canceld)
+{
+	return cl_lock_at_pgoff(env, obj, page->cp_index, except,
+				pending, canceld);
+}
 
 const struct cl_lock_slice *cl_lock_at(const struct cl_lock *lock,
                                        const struct lu_device_type *dtype);
@@ -2899,8 +2930,7 @@ int  cl_lock_mutex_try  (const struct lu_env *env, struct cl_lock *lock);
 void cl_lock_mutex_put  (const struct lu_env *env, struct cl_lock *lock);
 int  cl_lock_is_mutexed (struct cl_lock *lock);
 int  cl_lock_nr_mutexed (const struct lu_env *env);
-int  cl_lock_page_out   (const struct lu_env *env, struct cl_lock *lock,
-                         int discard);
+int  cl_lock_discard_pages(const struct lu_env *env, struct cl_lock *lock);
 int  cl_lock_ext_match  (const struct cl_lock_descr *has,
                          const struct cl_lock_descr *need);
 int  cl_lock_descr_match(const struct cl_lock_descr *has,
@@ -2958,11 +2988,10 @@ int   cl_io_prepare_write(const struct lu_env *env, struct cl_io *io,
 int   cl_io_commit_write (const struct lu_env *env, struct cl_io *io,
                           struct cl_page *page, unsigned from, unsigned to);
 int   cl_io_submit_rw    (const struct lu_env *env, struct cl_io *io,
-                          enum cl_req_type iot, struct cl_2queue *queue,
-                          enum cl_req_priority priority);
+			  enum cl_req_type iot, struct cl_2queue *queue);
 int   cl_io_submit_sync  (const struct lu_env *env, struct cl_io *io,
-                          enum cl_req_type iot, struct cl_2queue *queue,
-                          enum cl_req_priority priority, long timeout);
+			  enum cl_req_type iot, struct cl_2queue *queue,
+			  long timeout);
 void  cl_io_rw_advance   (const struct lu_env *env, struct cl_io *io,
                           size_t nob);
 int   cl_io_cancel       (const struct lu_env *env, struct cl_io *io,
@@ -2975,6 +3004,16 @@ int   cl_io_is_going     (const struct lu_env *env);
 static inline int cl_io_is_append(const struct cl_io *io)
 {
         return io->ci_type == CIT_WRITE && io->u.ci_wr.wr_append;
+}
+
+static inline int cl_io_is_sync_write(const struct cl_io *io)
+{
+	return io->ci_type == CIT_WRITE && io->u.ci_wr.wr_sync;
+}
+
+static inline int cl_io_is_mkwrite(const struct cl_io *io)
+{
+	return io->ci_type == CIT_FAULT && io->u.ci_fault.ft_mkwrite;
 }
 
 /**

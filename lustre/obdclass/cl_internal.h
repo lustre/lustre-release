@@ -110,7 +110,7 @@ struct cl_thread_info {
          */
         struct cl_sync_io    clt_anchor;
         /**
-         * Fields used by cl_lock_page_out().
+	 * Fields used by cl_lock_discard_pages().
          */
         pgoff_t              clt_next_index;
         pgoff_t              clt_fn_index; /* first non-overlapped index */
