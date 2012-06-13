@@ -197,7 +197,7 @@ lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
 
                 if (the_lnet.ln_testprotocompat != 0) {
                         /* single-shot proto check */
-                        LNET_LOCK();
+			lnet_net_lock(LNET_LOCK_EX);
                         if ((the_lnet.ln_testprotocompat & 4) != 0) {
                                 cr.acr_version++;
                                 the_lnet.ln_testprotocompat &= ~4;
@@ -206,7 +206,7 @@ lnet_connect(cfs_socket_t **sockp, lnet_nid_t peer_nid,
                                 cr.acr_magic = LNET_PROTO_MAGIC;
                                 the_lnet.ln_testprotocompat &= ~8;
                         }
-                        LNET_UNLOCK();
+			lnet_net_unlock(LNET_LOCK_EX);
                 }
 
                 rc = libcfs_sock_write(sock, &cr, sizeof(cr),

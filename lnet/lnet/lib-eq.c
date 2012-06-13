@@ -399,17 +399,17 @@ lnet_eq_wait_locked(int *timeout_ms)
 		 * events queued, or to block. */
 		lnet_eq_wait_unlock();
 
-		LNET_LOCK();
+		lnet_net_lock(0);
 		eq_waitni = the_lnet.ln_eq_waitni;
 		if (unlikely(eq_waitni == NULL)) {
-			LNET_UNLOCK();
+			lnet_net_unlock(0);
 
 			lnet_eq_wait_lock();
 			return -1;
 		}
 
-		lnet_ni_addref_locked(eq_waitni);
-		LNET_UNLOCK();
+		lnet_ni_addref_locked(eq_waitni, 0);
+		lnet_net_unlock(0);
 
 		if (tms <= 0) { /* even for tms == 0 */
 			(eq_waitni->ni_lnd->lnd_wait)(eq_waitni, tms);
