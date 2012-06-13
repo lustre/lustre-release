@@ -7864,6 +7864,35 @@ test_154() {
 	touch $DIR/.lustre/fid/$tfile && \
 		error "touch $DIR/.lustre/fid/$tfile should fail."
 
+	echo "setxattr to $DIR/.lustre/fid"
+	setfattr -n trusted.name1 -v value1 $DIR/.lustre/fid &&
+		error "setxattr should fail."
+
+	echo "listxattr for $DIR/.lustre/fid"
+	getfattr -d -m "^trusted" $DIR/.lustre/fid &&
+		error "listxattr should fail."
+
+	echo "delxattr from $DIR/.lustre/fid"
+	setfattr -x trusted.name1 $DIR/.lustre/fid &&
+		error "delxattr should fail."
+
+	echo "touch invalid fid: $DIR/.lustre/fid/[0x200000400:0x2:0x3]"
+	touch $DIR/.lustre/fid/[0x200000400:0x2:0x3] &&
+		error "touch invalid fid should fail."
+
+	echo "touch non-normal fid: $DIR/.lustre/fid/[0x1:0x2:0x0]"
+	touch $DIR/.lustre/fid/[0x1:0x2:0x0] &&
+		error "touch non-normal fid should fail."
+
+	echo "rename $tdir to $DIR/.lustre/fid"
+	mrename $DIR/$tdir $DIR/.lustre/fid &&
+		error "rename to $DIR/.lustre/fid should fail."
+
+	echo "rename .lustre to itself"
+	fid=$($LFS path2fid $DIR)
+	mrename $DIR/.lustre $DIR/.lustre/fid/$fid/.lustre &&
+		error "rename .lustre to itself should fail."
+
 	echo "Open-by-FID succeeded"
 }
 run_test 154 "Open-by-FID"

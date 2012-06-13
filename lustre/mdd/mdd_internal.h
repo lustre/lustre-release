@@ -248,6 +248,10 @@ int mdd_get_md_locked(const struct lu_env *env, struct mdd_object *obj,
 int mdd_data_get(const struct lu_env *env, struct mdd_object *obj, void **data);
 int mdd_la_get(const struct lu_env *env, struct mdd_object *obj,
                struct lu_attr *la, struct lustre_capa *capa);
+int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
+		 struct md_attr *ma);
+int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
+		 const struct md_attr *ma);
 int mdd_attr_set_internal(const struct lu_env *env,
                           struct mdd_object *obj,
                           struct lu_attr *attr,
