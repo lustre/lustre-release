@@ -812,8 +812,8 @@ int mdd_attr_get_internal_locked(const struct lu_env *env,
 /*
  * No permission check is needed.
  */
-static int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
-                        struct md_attr *ma)
+int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
+                 struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         int                rc;
@@ -1464,8 +1464,8 @@ static int mdd_attr_set_changelog(const struct lu_env *env,
 }
 
 /* set attr and LOV EA at once, return updated attr */
-static int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
-                        const struct md_attr *ma)
+int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
+                 const struct md_attr *ma)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
         struct mdd_device *mdd = mdo2mdd(obj);

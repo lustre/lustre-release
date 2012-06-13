@@ -455,21 +455,6 @@ static int dot_lustre_mdd_permission(const struct lu_env *env,
                 return 0;
 }
 
-static int dot_lustre_mdd_attr_get(const struct lu_env *env,
-                                   struct md_object *obj, struct md_attr *ma)
-{
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-
-        return mdd_attr_get_internal_locked(env, mdd_obj, ma);
-}
-
-static int dot_lustre_mdd_attr_set(const struct lu_env *env,
-                                   struct md_object *obj,
-                                   const struct md_attr *ma)
-{
-        return -EPERM;
-}
-
 static int dot_lustre_mdd_xattr_get(const struct lu_env *env,
                                     struct md_object *obj, struct lu_buf *buf,
                                     const char *name)
@@ -590,8 +575,8 @@ static int dot_file_unlock(const struct lu_env *env, struct md_object *obj,
 
 static struct md_object_operations mdd_dot_lustre_obj_ops = {
         .moo_permission    = dot_lustre_mdd_permission,
-        .moo_attr_get      = dot_lustre_mdd_attr_get,
-        .moo_attr_set      = dot_lustre_mdd_attr_set,
+        .moo_attr_get      = mdd_attr_get,
+        .moo_attr_set      = mdd_attr_set,
         .moo_xattr_get     = dot_lustre_mdd_xattr_get,
         .moo_xattr_list    = dot_lustre_mdd_xattr_list,
         .moo_xattr_set     = dot_lustre_mdd_xattr_set,
@@ -734,8 +719,7 @@ static int obf_attr_get(const struct lu_env *env, struct md_object *obj,
                 /* "fid" is a virtual object and hence does not have any "real"
                  * attributes. So we reuse attributes of .lustre for "fid" dir */
                 ma->ma_need |= MA_INODE;
-                rc = dot_lustre_mdd_attr_get(env, &mdd->mdd_dot_lustre->mod_obj,
-                                             ma);
+                rc = mdd_attr_get(env, &mdd->mdd_dot_lustre->mod_obj, ma);
                 if (rc)
                         return rc;
                 ma->ma_valid |= MA_INODE;
@@ -771,11 +755,32 @@ static int obf_attr_set(const struct lu_env *env, struct md_object *obj,
         return -EPERM;
 }
 
+static int obf_xattr_list(const struct lu_env *env,
+                          struct md_object *obj, struct lu_buf *buf)
+{
+        return 0;
+}
+
 static int obf_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
                          const char *name)
 {
         return 0;
+}
+
+static int obf_xattr_set(const struct lu_env *env,
+                         struct md_object *obj,
+                         const struct lu_buf *buf, const char *name,
+                         int fl)
+{
+        return -EPERM;
+}
+
+static int obf_xattr_del(const struct lu_env *env,
+                         struct md_object *obj,
+                         const char *name)
+{
+        return -EPERM;
 }
 
 static int obf_mdd_open(const struct lu_env *env, struct md_object *obj,
@@ -815,14 +820,24 @@ static int obf_path(const struct lu_env *env, struct md_object *obj,
         return -ENOSYS;
 }
 
+static dt_obj_version_t obf_version_get(const struct lu_env *env,
+                                        struct md_object *obj)
+{
+        return 0;
+}
+
 static struct md_object_operations mdd_obf_obj_ops = {
-        .moo_attr_get   = obf_attr_get,
-        .moo_attr_set   = obf_attr_set,
-        .moo_xattr_get  = obf_xattr_get,
-        .moo_open       = obf_mdd_open,
-        .moo_close      = obf_mdd_close,
-        .moo_readpage   = obf_mdd_readpage,
-        .moo_path       = obf_path
+        .moo_attr_get    = obf_attr_get,
+        .moo_attr_set    = obf_attr_set,
+        .moo_xattr_list  = obf_xattr_list,
+        .moo_xattr_get   = obf_xattr_get,
+        .moo_xattr_set   = obf_xattr_set,
+        .moo_xattr_del   = obf_xattr_del,
+        .moo_open        = obf_mdd_open,
+        .moo_close       = obf_mdd_close,
+        .moo_readpage    = obf_mdd_readpage,
+        .moo_version_get = obf_version_get,
+        .moo_path        = obf_path
 };
 
 /**
