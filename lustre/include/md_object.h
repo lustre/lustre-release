@@ -805,8 +805,8 @@ static inline int mdo_create(const struct lu_env *env,
                              struct md_op_spec *spc,
                              struct md_attr *at)
 {
-        LASSERT(c->mo_dir_ops->mdo_create);
-        return c->mo_dir_ops->mdo_create(env, p, lchild_name, c, spc, at);
+	LASSERT(p->mo_dir_ops->mdo_create);
+	return p->mo_dir_ops->mdo_create(env, p, lchild_name, c, spc, at);
 }
 
 static inline int mdo_create_data(const struct lu_env *env,

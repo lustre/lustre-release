@@ -103,7 +103,7 @@ static void mdt_obj_version_get(struct mdt_thread_info *info,
 {
         LASSERT(o);
         LASSERT(mdt_object_exists(o) >= 0);
-        if (mdt_object_exists(o) > 0)
+	if (mdt_object_exists(o) > 0 && !mdt_object_obf(o))
                 *version = dt_version_get(info->mti_env, mdt_obj2dt(o));
         else
                 *version = ENOENT_VERSION;
@@ -491,6 +491,9 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
         mo = mdt_object_find(info->mti_env, info->mti_mdt, rr->rr_fid1);
         if (IS_ERR(mo))
                 GOTO(out, rc = PTR_ERR(mo));
+
+	if (mdt_object_obf(mo))
+		GOTO(out_put, rc = -EPERM);
 
         /* start a log jounal handle if needed */
         if (!(mdt_conn_flags(info) & OBD_CONNECT_SOM)) {
@@ -1222,6 +1225,11 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         if (IS_ERR(mold))
                 GOTO(out_unlock_target, rc = PTR_ERR(mold));
 
+	if (mdt_object_obf(mold)) {
+		mdt_object_put(info->mti_env, mold);
+		GOTO(out_unlock_target, rc = -EPERM);
+	}
+
         lh_oldp = &info->mti_lh[MDT_LH_OLD];
         mdt_lock_reg_init(lh_oldp, LCK_EX);
         rc = mdt_object_lock(info, mold, lh_oldp, MDS_INODELOCK_LOOKUP,
@@ -1255,6 +1263,11 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                 mnew = mdt_object_find(info->mti_env, info->mti_mdt, new_fid);
                 if (IS_ERR(mnew))
                         GOTO(out_unlock_old, rc = PTR_ERR(mnew));
+
+		if (mdt_object_obf(mnew)) {
+			mdt_object_put(info->mti_env, mnew);
+			GOTO(out_unlock_old, rc = -EPERM);
+		}
 
                 rc = mdt_object_lock(info, mnew, lh_newp,
                                      MDS_INODELOCK_FULL, MDT_CROSS_LOCK);
