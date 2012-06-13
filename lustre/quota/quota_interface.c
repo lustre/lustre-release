@@ -203,6 +203,10 @@ static int filter_quota_getflag(struct obd_device *obd, struct obdo *oa)
         for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
                 struct lustre_qunit_size *lqs = NULL;
 
+                /* check if quota is enabled */
+                if (!ll_sb_has_quota_active(obt->obt_sb, cnt))
+                        continue;
+
                 lqs = quota_search_lqs(LQS_KEY(cnt, GET_OA_ID(cnt, oa)),
                                        qctxt, 0);
                 if (IS_ERR(lqs)) {
@@ -296,6 +300,10 @@ static int quota_check_common(struct obd_device *obd, const unsigned int id[],
                 if (isblk)
                         QDATA_SET_BLK(&qdata[i]);
                 qdata[i].qd_count = 0;
+
+                /* check if quota is enabled */
+                if (!ll_sb_has_quota_active(qctxt->lqc_sb, i))
+                        continue;
 
                 /* ignore root user */
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
@@ -404,6 +412,9 @@ int quota_is_set(struct obd_device *obd, const unsigned int id[], int flag)
                 RETURN(0);
 
         for (i = 0; i < MAXQUOTAS; i++) {
+                /* check if quota is enabled */
+                if (!ll_sb_has_quota_active(obd->u.obt.obt_qctxt.lqc_sb, i))
+                        continue;
                 lqs = quota_search_lqs(LQS_KEY(i, id[i]),
                                        &obd->u.obt.obt_qctxt, 0);
                 if (lqs && !IS_ERR(lqs)) {
