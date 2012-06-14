@@ -1356,15 +1356,15 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 *child_fid = *info->mti_rr.rr_fid2;
                 LASSERTF(fid_is_sane(child_fid), "fid="DFID"\n",
                          PFID(child_fid));
-        } else {
-                /*
-                 * Check for O_EXCL is moved to the mdt_finish_open(), we need to
-                 * return FID back in that case.
-                 */
-                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
-        }
-
-        child = mdt_object_find(info->mti_env, mdt, child_fid);
+		child = mdt_object_new(info->mti_env, mdt, child_fid);
+	} else {
+		/*
+		 * Check for O_EXCL is moved to the mdt_finish_open(), we need to
+		 * return FID back in that case.
+		 */
+		mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
+		child = mdt_object_find(info->mti_env, mdt, child_fid);
+	}
         if (IS_ERR(child))
                 GOTO(out_parent, result = PTR_ERR(child));
 

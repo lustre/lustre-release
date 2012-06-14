@@ -202,6 +202,7 @@ struct echo_thread_info {
         struct cl_io            eti_io;
         struct cl_lock_descr    eti_descr;
         struct lu_fid           eti_fid;
+	struct lu_fid		eti_fid2;
         struct md_op_spec       eti_spec;
         struct lov_mds_md_v3    eti_lmm;
         struct lov_user_md_v3   eti_lum;
@@ -1416,20 +1417,27 @@ static inline void echo_md_build_name(struct lu_name *lname, char *name,
 	lname->ln_namelen = strlen(name);
 }
 
-static int echo_md_create_internal(const struct lu_env *env,
-                                   struct echo_device *ed,
-                                   struct md_object *parent,
-                                   struct lu_fid *fid,
-                                   struct lu_name *lname,
-                                   struct md_op_spec *spec,
-                                   struct md_attr *ma)
+static int
+echo_md_create_internal(const struct lu_env *env, struct echo_device *ed,
+			struct md_object *parent, struct lu_fid *fid,
+			struct lu_name *lname, struct md_op_spec *spec,
+			struct md_attr *ma)
 {
-        struct lu_object        *ec_child, *child;
-        struct lu_device        *ld = ed->ed_next;
-        int                      rc;
+	struct lu_object	*ec_child, *child;
+	struct lu_device	*ld = ed->ed_next;
+	struct echo_thread_info *info = echo_env_info(env);
+	struct lu_fid		*fid2 = &info->eti_fid2;
+	struct lu_object_conf    conf = { .loc_flags = LOC_F_NEW };
+	int			 rc;
 
-        ec_child = lu_object_find_at(env, &ed->ed_cl.cd_lu_dev,
-                                     fid, NULL);
+	rc = mdo_lookup(env, parent, lname, fid2, spec);
+	if (rc == 0)
+		return -EEXIST;
+	else if (rc != -ENOENT)
+		return rc;
+
+	ec_child = lu_object_find_at(env, &ed->ed_cl.cd_lu_dev,
+				     fid, &conf);
         if (IS_ERR(ec_child)) {
                 CERROR("Can not find the child "DFID": rc = %ld\n", PFID(fid),
                         PTR_ERR(ec_child));
@@ -1445,6 +1453,10 @@ static int echo_md_create_internal(const struct lu_env *env,
         CDEBUG(D_RPCTRACE, "Start creating object "DFID" %s %p\n",
                PFID(lu_object_fid(&parent->mo_lu)), lname->ln_name, parent);
 
+	/*
+	 * Do not perform lookup sanity check. We know that name does not exist.
+	 */
+	spec->sp_cr_lookup = 0;
         rc = mdo_create(env, parent, lname, lu2md(child), spec, ma);
         if (rc) {
                 CERROR("Can not create child "DFID": rc = %d\n", PFID(fid), rc);

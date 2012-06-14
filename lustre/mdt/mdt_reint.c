@@ -303,14 +303,17 @@ static int mdt_md_create(struct mdt_thread_info *info)
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
         rc = mdt_lookup_version_check(info, parent, lname,
                                       &info->mti_tmp_fid1, 1);
-        /* -ENOENT is expected here */
-        if (rc != 0 && rc != -ENOENT)
-                GOTO(out_put_parent, rc);
+	if (rc == 0)
+		GOTO(out_put_parent, rc = -EEXIST);
 
-        /* save version of file name for replay, it must be ENOENT here */
-        mdt_enoent_version_save(info, 1);
+	/* -ENOENT is expected here */
+	if (rc != -ENOENT)
+		GOTO(out_put_parent, rc);
 
-        child = mdt_object_find(info->mti_env, mdt, rr->rr_fid2);
+	/* save version of file name for replay, it must be ENOENT here */
+	mdt_enoent_version_save(info, 1);
+
+	child = mdt_object_new(info->mti_env, mdt, rr->rr_fid2);
         if (likely(!IS_ERR(child))) {
                 struct md_object *next = mdt_object_child(parent);
 
@@ -334,11 +337,11 @@ static int mdt_md_create(struct mdt_thread_info *info)
                 info->mti_spec.sp_cr_mode =
                         mdt_dlm_mode2mdl_mode(lh->mlh_pdo_mode);
 
-                /*
-                 * Do perform lookup sanity check. We do not know if name exists
-                 * or not.
-                 */
-                info->mti_spec.sp_cr_lookup = 1;
+		/*
+		 * Do not perform lookup sanity check. We know that name does
+		 * not exist.
+		 */
+		info->mti_spec.sp_cr_lookup = 0;
                 info->mti_spec.sp_feat = &dt_directory_features;
 
                 rc = mdo_create(info->mti_env, next, lname,

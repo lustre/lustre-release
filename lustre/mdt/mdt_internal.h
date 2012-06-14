@@ -498,6 +498,9 @@ void mdt_object_unlock(struct mdt_thread_info *,
                        struct mdt_lock_handle *,
                        int decref);
 
+struct mdt_object *mdt_object_new(const struct lu_env *,
+				  struct mdt_device *,
+				  const struct lu_fid *);
 struct mdt_object *mdt_object_find(const struct lu_env *,
                                    struct mdt_device *,
                                    const struct lu_fid *);

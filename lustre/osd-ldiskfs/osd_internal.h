@@ -553,6 +553,7 @@ struct osd_thread_info {
                 long long      oti_alignment_lieutenant_colonel;
         };
 
+	struct osd_idmap_cache oti_cache;
 
         int                    oti_r_locks;
         int                    oti_w_locks;
@@ -623,6 +624,10 @@ int osd_scrub_file_store(struct osd_scrub *scrub);
 int osd_scrub_start(struct osd_device *dev);
 int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
+int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
+		   int insert);
+int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
+		   struct osd_inode_id *id);
 
 /*
  * Invariants, assertions.
