@@ -379,7 +379,7 @@ static struct dentry *ll_find_alias(struct inode *inode, struct dentry *dentry)
 }
 
 /*
- * Similar to d_splice_alias(), but lustre treats DCACHE_LUSTRE_INVALID alias
+ * Similar to d_splice_alias(), but lustre treats invalid alias
  * similar to DCACHE_DISCONNECTED, and tries to use it anyway.
  */
 struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
@@ -398,8 +398,8 @@ struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de)
 			return new;
 		}
 	}
-	__d_lustre_invalidate(de);
 	ll_dops_init(de, 1, 1);
+	__d_lustre_invalidate(de);
 	d_add(de, inode);
 	CDEBUG(D_DENTRY, "Add dentry %p inode %p refc %d flags %#x\n",
 	       de, de->d_inode, d_refcount(de), de->d_flags);

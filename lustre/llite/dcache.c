@@ -47,6 +47,14 @@
 
 #include "llite_internal.h"
 
+static void free_dentry_data(struct rcu_head *head)
+{
+	struct ll_dentry_data *lld;
+
+	lld = container_of(head, struct ll_dentry_data, lld_rcu_head);
+	OBD_FREE_PTR(lld);
+}
+
 /* should NOT be called with the dcache lock, see fs/dcache.c */
 static void ll_release(struct dentry *de)
 {
@@ -61,15 +69,16 @@ static void ll_release(struct dentry *de)
                 ll_intent_release(lld->lld_it);
                 OBD_FREE(lld->lld_it, sizeof(*lld->lld_it));
         }
-        LASSERT(lld->lld_cwd_count == 0);
-        LASSERT(lld->lld_mnt_count == 0);
-        OBD_FREE(de->d_fsdata, sizeof(*lld));
+	LASSERT(lld->lld_cwd_count == 0);
+	LASSERT(lld->lld_mnt_count == 0);
+	de->d_fsdata = NULL;
+	call_rcu(&lld->lld_rcu_head, free_dentry_data);
 
-        EXIT;
+	EXIT;
 }
 
 /* Compare if two dentries are the same.  Don't match if the existing dentry
- * is marked DCACHE_LUSTRE_INVALID.  Returns 1 if different, 0 if the same.
+ * is marked invalid.  Returns 1 if different, 0 if the same.
  *
  * This avoids a race where ll_lookup_it() instantiates a dentry, but we get
  * an AST before calling d_revalidate_it().  The dentry still exists (marked
@@ -420,12 +429,12 @@ int ll_revalidate_it(struct dentry *de, int lookup_flags,
 	if (it->it_op == IT_LOOKUP && !d_lustre_invalid(de))
                 RETURN(1);
 
-        if ((it->it_op == IT_OPEN) && de->d_inode) {
-                struct inode *inode = de->d_inode;
-                struct ll_inode_info *lli = ll_i2info(inode);
-                struct obd_client_handle **och_p;
-                __u64 *och_usecount;
-                __u64 ibits;
+	if (it->it_op == IT_OPEN) {
+		struct inode *inode = de->d_inode;
+		struct ll_inode_info *lli = ll_i2info(inode);
+		struct obd_client_handle **och_p;
+		__u64 *och_usecount;
+		__u64 ibits;
 
                 /*
                  * We used to check for MDS_INODELOCK_OPEN here, but in fact
