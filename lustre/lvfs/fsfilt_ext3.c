@@ -2044,15 +2044,11 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         continue;
 
 
-                LASSERT(sb_dqopt(sb)->files[i] != NULL);
-                CFS_INIT_LIST_HEAD(&id_list);
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
-                rc = lustre_get_qids(sb_dqopt(sb)->files[i], NULL, i, &id_list);
-#else
-                rc = lustre_get_qids(NULL, sb_dqopt(sb)->files[i], i, &id_list);
-#endif
-                if (rc)
-                        CERROR("read old limits failed. (rc:%d)\n", rc);
+		LASSERT(sb_dqopt(sb)->files[i] != NULL);
+		CFS_INIT_LIST_HEAD(&id_list);
+		rc = lustre_get_qids(NULL, sb_dqopt(sb)->files[i], i, &id_list);
+		if (rc)
+			CERROR("read old limits failed. (rc:%d)\n", rc);
 
                 cfs_list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
                         cfs_list_del_init(&dqid->di_link);

@@ -47,7 +47,7 @@
 #include <lustre_handles.h>
 #include <lustre_lib.h>
 
-#if !defined(HAVE_RCU) || !defined(__KERNEL__)
+#ifndef __KERNEL__
 # define list_add_rcu            cfs_list_add
 # define list_del_rcu            cfs_list_del
 # define list_for_each_rcu       cfs_list_for_each
@@ -55,7 +55,7 @@
 # define list_for_each_entry_rcu cfs_list_for_each_entry
 # define rcu_read_lock()         cfs_spin_lock(&bucket->lock)
 # define rcu_read_unlock()       cfs_spin_unlock(&bucket->lock)
-#endif /* ifndef HAVE_RCU */
+#endif /* !__KERNEL__ */
 
 static __u64 handle_base;
 #define HANDLE_INCR 7

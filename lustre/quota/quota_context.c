@@ -1522,16 +1522,12 @@ static int qslave_recovery_main(void *arg)
                         break;
                 }
 
-                LASSERT(dqopt->files[type] != NULL);
-                CFS_INIT_LIST_HEAD(&id_list);
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
-                rc = fsfilt_qids(obd, dqopt->files[type], NULL, type, &id_list);
-#else
-                rc = fsfilt_qids(obd, NULL, dqopt->files[type], type, &id_list);
-#endif
-                UNLOCK_DQONOFF_MUTEX(dqopt);
-                if (rc)
-                        CERROR("Get ids from quota file failed. (rc:%d)\n", rc);
+		LASSERT(dqopt->files[type] != NULL);
+		CFS_INIT_LIST_HEAD(&id_list);
+		rc = fsfilt_qids(obd, NULL, dqopt->files[type], type, &id_list);
+		UNLOCK_DQONOFF_MUTEX(dqopt);
+		if (rc)
+			CERROR("Get ids from quota file failed. (rc:%d)\n", rc);
 
                 cfs_list_for_each_entry_safe(dqid, tmp, &id_list, di_link) {
                         cfs_list_del_init(&dqid->di_link);
@@ -1611,12 +1607,12 @@ inline int quota_is_off(struct lustre_quota_ctxt *qctxt,
         return !(qctxt->lqc_flags & UGQUOTA2LQC(oqctl->qc_type));
 }
 
-/**
+/*
  * When quotaon, build a lqs for every uid/gid who has been set limitation
  * for quota. After quota_search_lqs, it will hold one ref for the lqs.
  * It will be released when qctxt_cleanup() is executed b=18574
  *
- * Should be called with obt->obt_quotachecking held. b=20152 
+ * Should be called with obt->obt_quotachecking held. b=20152
  */
 void build_lqs(struct obd_device *obd)
 {
@@ -1633,13 +1629,8 @@ void build_lqs(struct obd_device *obd)
                 if (sb_dqopt(qctxt->lqc_sb)->files[i] == NULL)
                         continue;
 
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
-                rc = fsfilt_qids(obd, sb_dqopt(qctxt->lqc_sb)->files[i], NULL,
-                                 i, &id_list);
-#else
-                rc = fsfilt_qids(obd, NULL, sb_dqopt(qctxt->lqc_sb)->files[i],
-                                 i, &id_list);
-#endif
+		rc = fsfilt_qids(obd, NULL, sb_dqopt(qctxt->lqc_sb)->files[i],
+				 i, &id_list);
                 if (rc) {
                         CERROR("%s: failed to get %s qids!\n", obd->obd_name,
                                i ? "group" : "user");

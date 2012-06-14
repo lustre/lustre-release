@@ -704,16 +704,6 @@ do {                                                                          \
 } while(0)
 
 
-#ifdef HAVE_RCU
-# ifdef HAVE_CALL_RCU_PARAM
-#  define my_call_rcu(rcu, cb)            call_rcu(rcu, cb, rcu)
-# else
-#  define my_call_rcu(rcu, cb)            call_rcu(rcu, cb)
-# endif
-#else
-# define my_call_rcu(rcu, cb)             (cb)(rcu)
-#endif
-
 #define OBD_FREE_RCU(ptr, size, handle)					      \
 do {									      \
 	struct portals_handle *__h = (handle);				      \
@@ -721,7 +711,7 @@ do {									      \
 	LASSERT(handle != NULL);					      \
 	__h->h_cookie = (unsigned long)(ptr);				      \
 	__h->h_size = (size);						      \
-	my_call_rcu(&__h->h_rcu, class_handle_free_cb);			      \
+	call_rcu(&__h->h_rcu, class_handle_free_cb);			      \
 	POISON_PTR(ptr);						      \
 } while(0)
 

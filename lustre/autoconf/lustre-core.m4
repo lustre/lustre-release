@@ -451,76 +451,6 @@ AC_DEFUN([LC_CONFIG_GSS],
  fi
 ])
 
-AC_DEFUN([LC_QUOTA_READ],
-[AC_MSG_CHECKING([if kernel supports quota_read])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/fs.h>
-],[
-	struct super_operations sp;
-        void *i = (void *)sp.quota_read;
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(KERNEL_SUPPORTS_QUOTA_READ, 1, [quota_read found])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-#
-# LC_COOKIE_FOLLOW_LINK
-#
-# kernel 2.6.13+ ->follow_link returns a cookie
-#
-AC_DEFUN([LC_COOKIE_FOLLOW_LINK],
-[AC_MSG_CHECKING([if inode_operations->follow_link returns a cookie])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-        #include <linux/namei.h>
-],[
-        struct dentry *dentry = NULL;
-        struct nameidata nd;
-
-        dentry->d_inode->i_op->put_link(dentry, &nd, NULL);
-],[
-        AC_DEFINE(HAVE_COOKIE_FOLLOW_LINK, 1, [inode_operations->follow_link returns a cookie])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
-#
-# LC_FUNC_RCU
-#
-# kernels prior than 2.6.0(?) have no RCU supported; in kernel 2.6.5(SUSE),
-# call_rcu takes three parameters.
-#
-AC_DEFUN([LC_FUNC_RCU],
-[AC_MSG_CHECKING([if kernel have RCU supported])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/rcupdate.h>
-],[],[
-        AC_DEFINE(HAVE_RCU, 1, [have RCU defined])
-        AC_MSG_RESULT([yes])
-
-        AC_MSG_CHECKING([if call_rcu takes three parameters])
-        LB_LINUX_TRY_COMPILE([
-                #include <linux/rcupdate.h>
-        ],[
-                struct rcu_head rh;
-                call_rcu(&rh, (void (*)(struct rcu_head *))1, NULL);
-        ],[
-                AC_DEFINE(HAVE_CALL_RCU_PARAM, 1, [call_rcu takes three parameters])
-                AC_MSG_RESULT([yes])
-        ],[
-                AC_MSG_RESULT([no])
-        ])
-
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 AC_DEFUN([LC_PERCPU_COUNTER],
 [AC_MSG_CHECKING([if have struct percpu_counter defined])
 LB_LINUX_TRY_COMPILE([
@@ -2080,9 +2010,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
          LC_CONFIG_GSS
-         LC_QUOTA_READ
-         LC_COOKIE_FOLLOW_LINK
-         LC_FUNC_RCU
          LC_PERCPU_COUNTER
          LC_TASK_CLENV_STORE
 

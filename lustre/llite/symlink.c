@@ -139,20 +139,13 @@ static int ll_readlink(struct dentry *dentry, char *buffer, int buflen)
 	RETURN(rc);
 }
 
-#ifdef HAVE_COOKIE_FOLLOW_LINK
-# define LL_FOLLOW_LINK_RETURN_TYPE void *
-#else
-# define LL_FOLLOW_LINK_RETURN_TYPE int
-#endif
-
-static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
-                                                 struct nameidata *nd)
+static void *ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 {
-        struct inode *inode = dentry->d_inode;
-        struct ptlrpc_request *request = NULL;
-        int rc;
-        char *symname;
-        ENTRY;
+	struct inode *inode = dentry->d_inode;
+	struct ptlrpc_request *request = NULL;
+	int rc;
+	char *symname;
+	ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op\n");
         /* Limit the recursive symlink depth to 5 instead of default
@@ -173,48 +166,30 @@ static LL_FOLLOW_LINK_RETURN_TYPE ll_follow_link(struct dentry *dentry,
                 GOTO(out, rc);
         }
 
-#ifdef HAVE_COOKIE_FOLLOW_LINK
-        nd_set_link(nd, symname);
-        /* @symname may contain a pointer to the request message buffer,
-           we delay request releasing until ll_put_link then. */
-        RETURN(request);
-#else
-        if (lli->lli_symlink_name == NULL) {
-                /* falling back to recursive follow link if the request
-                 * needs to be cleaned up still. */
-                rc = vfs_follow_link(nd, symname);
-                GOTO(out, rc);
-        }
-        nd_set_link(nd, symname);
-        RETURN(0);
-#endif
+	nd_set_link(nd, symname);
+	/* symname may contain a pointer to the request message buffer,
+	 * we delay request releasing until ll_put_link then.
+	 */
+	RETURN(request);
 out:
-        ptlrpc_req_finished(request);
-#ifdef HAVE_COOKIE_FOLLOW_LINK
-        RETURN(ERR_PTR(rc));
-#else
-        RETURN(rc);
-#endif
+	ptlrpc_req_finished(request);
+	RETURN(ERR_PTR(rc));
 }
 
-#ifdef HAVE_COOKIE_FOLLOW_LINK
 static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cookie)
 {
-        ptlrpc_req_finished(cookie);
+	ptlrpc_req_finished(cookie);
 }
-#endif
 
 struct inode_operations ll_fast_symlink_inode_operations = {
-        .readlink       = ll_readlink,
-        .setattr        = ll_setattr,
-        .follow_link    = ll_follow_link,
-#ifdef HAVE_COOKIE_FOLLOW_LINK
-        .put_link       = ll_put_link,
-#endif
-        .getattr        = ll_getattr,
-        .permission     = ll_inode_permission,
-        .setxattr       = ll_setxattr,
-        .getxattr       = ll_getxattr,
-        .listxattr      = ll_listxattr,
-        .removexattr    = ll_removexattr,
+	.readlink	= ll_readlink,
+	.setattr	= ll_setattr,
+	.follow_link	= ll_follow_link,
+	.put_link	= ll_put_link,
+	.getattr	= ll_getattr,
+	.permission	= ll_inode_permission,
+	.setxattr	= ll_setxattr,
+	.getxattr	= ll_getxattr,
+	.listxattr	= ll_listxattr,
+	.removexattr	= ll_removexattr,
 };

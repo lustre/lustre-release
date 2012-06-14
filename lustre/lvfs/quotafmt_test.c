@@ -373,37 +373,6 @@ static int quotfmt_test_4(struct lustre_quota_info *lqi)
         RETURN(rc);
 }
 
-static int quotfmt_test_5(struct lustre_quota_info *lqi)
-{
-#ifndef KERNEL_SUPPORTS_QUOTA_READ
-        int i, rc = 0;
-
-        for (i = USRQUOTA; i < MAXQUOTAS && !rc; i++) {
-                cfs_list_t list;
-                struct dquot_id *dqid, *tmp;
-
-                CFS_INIT_LIST_HEAD(&list);
-                rc = lustre_get_qids(lqi->qi_files[i], NULL, i, &list);
-                if (rc) {
-                        CERROR("%s get all %ss (rc:%d):\n",
-                               rc ? "error" : "success",
-                               i == USRQUOTA ? "uid" : "gid", rc);
-                }
-                cfs_list_for_each_entry_safe(dqid, tmp, &list, di_link) {
-                        cfs_list_del_init(&dqid->di_link);
-                        if (rc == 0)
-                                CDEBUG(D_INFO, "%d ", dqid->di_id);
-                        kfree(dqid);
-                }
-                CDEBUG(D_INFO, "\n");
-        }
-        return rc;
-#else
-        CWARN("kernel supports quota_read OR kernel version >= 2.6.12, test skipped\n");
-        return 0;
-#endif
-}
-
 static int quotfmt_run_tests(struct obd_device *obd, struct obd_device *tgt)
 {
         struct lvfs_run_ctxt saved;
@@ -450,14 +419,7 @@ static int quotfmt_run_tests(struct obd_device *obd, struct obd_device *tgt)
                 GOTO(out, rc);
         }
 
-        CWARN("=== test 5: walk through quota file to get all ids\n");
-        rc = quotfmt_test_5(lqi);
-        if (rc) {
-                CERROR("walk through quota file failed\n");
-                GOTO(out, rc);
-        }
-
-      out:
+out:
         CWARN("=== Finalize quotafile test\n");
         rc = quotfmt_finalize(lqi, tgt, &saved);
         OBD_FREE(lqi, sizeof(*lqi));
