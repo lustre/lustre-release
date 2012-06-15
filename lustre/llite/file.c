@@ -1678,11 +1678,16 @@ out:
 	RETURN(rc);
 }
 
-int ll_fid2path(struct obd_export *exp, void *arg)
+int ll_fid2path(struct inode *inode, void *arg)
 {
+	struct obd_export *exp = ll_i2mdexp(inode);
         struct getinfo_fid2path *gfout, *gfin;
         int outsize, rc;
         ENTRY;
+
+	if (!cfs_capable(CFS_CAP_DAC_READ_SEARCH) &&
+	    !(ll_i2sbi(inode)->ll_flags & LL_SBI_USER_FID2PATH))
+		RETURN(-EPERM);
 
         /* Need to get the buflen */
         OBD_ALLOC_PTR(gfin);
@@ -1895,7 +1900,7 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
                 RETURN(0);
         }
         case OBD_IOC_FID2PATH:
-                RETURN(ll_fid2path(ll_i2mdexp(inode), (void *)arg));
+		RETURN(ll_fid2path(inode, (void *)arg));
         case LL_IOC_DATA_VERSION: {
                 struct ioc_data_version idv;
                 int rc;

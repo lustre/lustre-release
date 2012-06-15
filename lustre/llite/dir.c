@@ -1466,7 +1466,7 @@ out_free:
                                     sizeof(struct ioc_changelog));
                 RETURN(rc);
         case OBD_IOC_FID2PATH:
-                RETURN(ll_fid2path(ll_i2mdexp(inode), (void *)arg));
+		RETURN(ll_fid2path(inode, (void *)arg));
         case LL_IOC_HSM_CT_START:
                 rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void *)arg,
                                     sizeof(struct lustre_kernelcomm));

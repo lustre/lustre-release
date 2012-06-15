@@ -803,6 +803,16 @@ static int ll_options(char *options, int *flags)
                         *flags |= tmp;
                         goto next;
                 }
+		tmp = ll_set_opt("user_fid2path", s1, LL_SBI_USER_FID2PATH);
+		if (tmp) {
+			*flags |= tmp;
+			goto next;
+		}
+		tmp = ll_set_opt("nouser_fid2path", s1, LL_SBI_USER_FID2PATH);
+		if (tmp) {
+			*flags &= ~tmp;
+			goto next;
+		}
 
                 tmp = ll_set_opt("checksum", s1, LL_SBI_CHECKSUM);
                 if (tmp) {
@@ -2324,6 +2334,9 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 
         if (sbi->ll_flags & LL_SBI_LAZYSTATFS)
                 seq_puts(seq, ",lazystatfs");
+
+	if (sbi->ll_flags & LL_SBI_USER_FID2PATH)
+		seq_puts(seq, ",user_fid2path");
 
         RETURN(0);
 }
