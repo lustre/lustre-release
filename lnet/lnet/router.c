@@ -1217,7 +1217,7 @@ rescan:
 		cfs_list_for_each(entry, &the_lnet.ln_routers) {
 			rtr = cfs_list_entry(entry, lnet_peer_t, lp_rtr_list);
 
-			cpt2 = lnet_cpt_of_nid(rtr->lp_nid);
+			cpt2 = lnet_cpt_of_nid_locked(rtr->lp_nid);
 			if (cpt != cpt2) {
 				lnet_net_unlock(cpt);
 				cpt = cpt2;

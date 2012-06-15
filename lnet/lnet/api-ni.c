@@ -719,6 +719,7 @@ lnet_prepare(lnet_pid_t requested_pid)
 
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_test_peers);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_nis);
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_nis_cpt);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_nis_zombie);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_remote_nets);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_routers);
@@ -789,6 +790,7 @@ lnet_unprepare (void)
 	LASSERT(the_lnet.ln_refcount == 0);
 	LASSERT(cfs_list_empty(&the_lnet.ln_test_peers));
 	LASSERT(cfs_list_empty(&the_lnet.ln_nis));
+	LASSERT(cfs_list_empty(&the_lnet.ln_nis_cpt));
 	LASSERT(cfs_list_empty(&the_lnet.ln_nis_zombie));
 
 	lnet_portals_destroy();
@@ -837,27 +839,66 @@ lnet_net2ni_locked(__u32 net, int cpt)
 	return NULL;
 }
 
-unsigned int
-lnet_nid_cpt_hash(lnet_nid_t nid)
+static unsigned int
+lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
 {
 	__u64		key = nid;
 	unsigned int	val;
 
+	LASSERT(number >= 1 && number <= LNET_CPT_NUMBER);
+
+	if (number == 1)
+		return 0;
+
 	val = cfs_hash_long(key, LNET_CPT_BITS);
 	/* NB: LNET_CP_NUMBER doesn't have to be PO2 */
-	if (val < LNET_CPT_NUMBER)
+	if (val < number)
 		return val;
 
-	return (unsigned int)((key + val + (val >> 1)) % LNET_CPT_NUMBER);
+	return (unsigned int)((key + val + (val >> 1)) % number);
+}
+
+int
+lnet_cpt_of_nid_locked(lnet_nid_t nid)
+{
+	struct lnet_ni *ni;
+
+	/* must called with hold of lnet_net_lock */
+	if (LNET_CPT_NUMBER == 1)
+		return 0; /* the only one */
+
+	/* take lnet_net_lock(any) would be OK */
+	if (!cfs_list_empty(&the_lnet.ln_nis_cpt)) {
+		cfs_list_for_each_entry(ni, &the_lnet.ln_nis_cpt, ni_cptlist) {
+			if (LNET_NIDNET(ni->ni_nid) != LNET_NIDNET(nid))
+				continue;
+
+			LASSERT(ni->ni_cpts != NULL);
+			return ni->ni_cpts[lnet_nid_cpt_hash
+					   (nid, ni->ni_ncpts)];
+		}
+	}
+
+	return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
 }
 
 int
 lnet_cpt_of_nid(lnet_nid_t nid)
 {
+	int	cpt;
+	int	cpt2;
+
 	if (LNET_CPT_NUMBER == 1)
 		return 0; /* the only one */
 
-	return lnet_nid_cpt_hash(nid);
+	if (cfs_list_empty(&the_lnet.ln_nis_cpt))
+		return lnet_nid_cpt_hash(nid, LNET_CPT_NUMBER);
+
+	cpt = lnet_net_lock_current();
+	cpt2 = lnet_cpt_of_nid_locked(nid);
+	lnet_net_unlock(cpt);
+
+	return cpt2;
 }
 EXPORT_SYMBOL(lnet_cpt_of_nid);
 
@@ -942,7 +983,12 @@ lnet_ni_tq_credits(lnet_ni_t *ni)
 {
 	int	credits;
 
-	credits = ni->ni_maxtxcredits / LNET_CPT_NUMBER;
+	LASSERT(ni->ni_ncpts >= 1);
+
+	if (ni->ni_ncpts == 1)
+		return ni->ni_maxtxcredits;
+
+	credits = ni->ni_maxtxcredits / ni->ni_ncpts;
 	credits = max(credits, 8 * ni->ni_peertxcredits);
 	credits = min(credits, ni->ni_maxtxcredits);
 
@@ -974,6 +1020,11 @@ lnet_shutdown_lndnis (void)
 		/* move it to zombie list and nobody can find it anymore */
 		cfs_list_move(&ni->ni_list, &the_lnet.ln_nis_zombie);
 		lnet_ni_decref_locked(ni, 0);	/* drop ln_nis' ref */
+
+		if (!cfs_list_empty(&ni->ni_cptlist)) {
+			cfs_list_del_init(&ni->ni_cptlist);
+			lnet_ni_decref_locked(ni, 0);
+		}
 	}
 
 	/* Drop the cached eqwait NI. */
@@ -1158,6 +1209,11 @@ lnet_startup_lndnis (void)
 		/* refcount for ln_nis */
 		lnet_ni_addref_locked(ni, 0);
 		cfs_list_add_tail(&ni->ni_list, &the_lnet.ln_nis);
+		if (ni->ni_cpts != NULL) {
+			cfs_list_add_tail(&ni->ni_cptlist,
+					  &the_lnet.ln_nis_cpt);
+			lnet_ni_addref_locked(ni, 0);
+		}
 
 		lnet_net_unlock(LNET_LOCK_EX);
 

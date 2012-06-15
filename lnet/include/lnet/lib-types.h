@@ -422,6 +422,7 @@ typedef struct lnet_ni {
 # endif
 #endif
 	cfs_list_t		ni_list;	/* chain on ln_nis */
+	cfs_list_t		ni_cptlist;	/* chain on ln_nis_cpt */
 	int			ni_maxtxcredits; /* # tx credits  */
 	/* # per-peer send credits */
 	int			ni_peertxcredits;
@@ -429,6 +430,8 @@ typedef struct lnet_ni {
 	int			ni_peerrtrcredits;
 	/* seconds to consider peer dead */
 	int			ni_peertimeout;
+	int			ni_ncpts;	/* number of CPTs */
+	__u32			*ni_cpts;	/* bond NI on some CPTs */
 	lnet_nid_t		ni_nid;		/* interface's NID */
 	void			*ni_data;	/* instance-specific data */
 	lnd_t			*ni_lnd;	/* procedural interface */
@@ -713,6 +716,8 @@ typedef struct
 	cfs_list_t			ln_test_peers;
 
 	cfs_list_t			ln_nis;		/* LND instances */
+	/* NIs bond on specific CPT(s) */
+	cfs_list_t			ln_nis_cpt;
 	/* dying LND instances */
 	cfs_list_t			ln_nis_zombie;
 	lnet_ni_t			*ln_loni;	/* the loopback NI */

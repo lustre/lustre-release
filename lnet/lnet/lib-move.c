@@ -1327,7 +1327,7 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg, lnet_nid_t rtr_nid)
 		 * pre-determined router, this can happen if router table
 		 * was changed when we release the lock */
 		if (rtr_nid != lp->lp_nid) {
-			cpt2 = lnet_cpt_of_nid(lp->lp_nid);
+			cpt2 = lnet_cpt_of_nid_locked(lp->lp_nid);
 			if (cpt2 != cpt) {
 				if (src_ni != NULL)
 					lnet_ni_decref_locked(src_ni, cpt);

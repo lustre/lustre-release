@@ -672,11 +672,12 @@ int LL_PROC_PROTO(proc_lnet_nis)
                 }
 
                 if (ni != NULL) {
-			char	*stat;
 			struct lnet_tx_queue	*tq;
+			char	*stat;
 			long	now = cfs_time_current_sec();
 			int	last_alive = -1;
 			int	i;
+			int	j;
 
 			if (the_lnet.ln_routing)
 				last_alive = now - ni->ni_last_alive;
@@ -694,6 +695,15 @@ int LL_PROC_PROTO(proc_lnet_nis)
 			/* we actually output credits information for
 			 * TX queue of each partition */
 			cfs_percpt_for_each(tq, i, ni->ni_tx_queues) {
+				for (j = 0; ni->ni_cpts != NULL &&
+				     j < ni->ni_ncpts; j++) {
+					if (i == ni->ni_cpts[j])
+						break;
+				}
+
+				if (j == ni->ni_ncpts)
+					continue;
+
 				if (i != 0)
 					lnet_net_lock(i);
 

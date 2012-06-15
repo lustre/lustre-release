@@ -209,7 +209,7 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt)
 	int			cpt2;
 
 	/* cpt can be LNET_LOCK_EX if it's called from router functions */
-	cpt2 = cpt != LNET_LOCK_EX ? cpt : lnet_cpt_of_nid(nid);
+	cpt2 = cpt != LNET_LOCK_EX ? cpt : lnet_cpt_of_nid_locked(nid);
 
 	ptable = the_lnet.ln_peer_tables[cpt2];
 	lp = lnet_find_peer_locked(ptable, nid);

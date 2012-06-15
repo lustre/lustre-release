@@ -726,6 +726,7 @@ lnet_set_msg_uid(lnet_ni_t *ni, lnet_msg_t *msg, lnet_uid_t uid)
 }
 #endif
 
+extern int lnet_cpt_of_nid_locked(lnet_nid_t nid);
 extern int lnet_cpt_of_nid(lnet_nid_t nid);
 extern lnet_ni_t *lnet_nid2ni_locked(lnet_nid_t nid, int cpt);
 extern lnet_ni_t *lnet_net2ni_locked(__u32 net, int cpt);
