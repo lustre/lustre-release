@@ -61,7 +61,7 @@ int cfs_tracefile_init_arch()
 	for (i = 0; i < CFS_TCD_TYPE_MAX; i++) {
 		cfs_trace_data[i] =
                         cfs_alloc(sizeof(union cfs_trace_data_union) * \
-                                  CFS_NR_CPUS, GFP_KERNEL);
+				  CFS_NR_CPUS, CFS_ALLOC_KERNEL);
 		if (cfs_trace_data[i] == NULL)
 			goto out;
 	}
@@ -77,7 +77,7 @@ int cfs_tracefile_init_arch()
 		for (j = 0; j < CFS_TCD_TYPE_MAX; j++) {
 			cfs_trace_console_buffers[i][j] =
 				cfs_alloc(CFS_TRACE_CONSOLE_BUFFER_SIZE,
-                                          GFP_KERNEL);
+					  CFS_ALLOC_KERNEL);
 
 			if (cfs_trace_console_buffers[i][j] == NULL)
 				goto out;

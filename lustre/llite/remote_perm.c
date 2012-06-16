@@ -60,12 +60,12 @@ cfs_mem_cache_t *ll_rmtperm_hash_cachep = NULL;
 
 static inline struct ll_remote_perm *alloc_ll_remote_perm(void)
 {
-        struct ll_remote_perm *lrp;
+	struct ll_remote_perm *lrp;
 
-        OBD_SLAB_ALLOC_PTR_GFP(lrp, ll_remote_perm_cachep, GFP_KERNEL);
-        if (lrp)
-                CFS_INIT_HLIST_NODE(&lrp->lrp_list);
-        return lrp;
+	OBD_SLAB_ALLOC_PTR_GFP(lrp, ll_remote_perm_cachep, CFS_ALLOC_KERNEL);
+	if (lrp)
+		CFS_INIT_HLIST_NODE(&lrp->lrp_list);
+	return lrp;
 }
 
 static inline void free_ll_remote_perm(struct ll_remote_perm *lrp)

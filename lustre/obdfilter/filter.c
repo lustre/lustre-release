@@ -1921,7 +1921,7 @@ static int filter_iobuf_pool_init(struct filter_obd *filter)
 
 
         OBD_ALLOC_GFP(filter->fo_iobuf_pool, OSS_THREADS_MAX * sizeof(*pool),
-                      GFP_KERNEL);
+		      CFS_ALLOC_KERNEL);
         if (filter->fo_iobuf_pool == NULL)
                 RETURN(-ENOMEM);
 

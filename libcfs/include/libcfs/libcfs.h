@@ -200,6 +200,8 @@ enum cfs_alloc_flags {
         /* standard allocator flag combination */
         CFS_ALLOC_STD    = CFS_ALLOC_FS | CFS_ALLOC_IO,
         CFS_ALLOC_USER   = CFS_ALLOC_WAIT | CFS_ALLOC_FS | CFS_ALLOC_IO,
+	CFS_ALLOC_NOFS   = CFS_ALLOC_WAIT | CFS_ALLOC_IO,
+	CFS_ALLOC_KERNEL = CFS_ALLOC_WAIT | CFS_ALLOC_IO | CFS_ALLOC_FS,
 };
 
 /* flags for cfs_page_alloc() in addition to enum cfs_alloc_flags */

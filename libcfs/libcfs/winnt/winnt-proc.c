@@ -2023,7 +2023,7 @@ static int traverse(struct seq_file *m, loff_t offset)
 Eoverflow:
 	m->op->stop(m, p);
 	cfs_free(m->buf);
-	m->buf = cfs_alloc(m->size <<= 1, GFP_KERNEL | CFS_ALLOC_ZERO);
+	m->buf = cfs_alloc(m->size <<= 1, CFS_ALLOC_KERNEL | CFS_ALLOC_ZERO);
 	return !m->buf ? -ENOMEM : -EAGAIN;
 }
 
@@ -2242,7 +2242,7 @@ void *__seq_open_private(struct file *f, const struct seq_operations *ops,
 	void *private;
 	struct seq_file *seq;
 
-	private = cfs_alloc(psize, GFP_KERNEL | CFS_ALLOC_ZERO);
+	private = cfs_alloc(psize, CFS_ALLOC_KERNEL | CFS_ALLOC_ZERO);
 	if (private == NULL)
 		goto out;
 

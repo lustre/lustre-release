@@ -1098,7 +1098,7 @@ int lustre_get_qids(struct file *fp, struct inode *inode, int type,
                                     (char *)&ddquot[i], dqblk_sz))
                                 continue;
 
-                        OBD_ALLOC_GFP(dqid, sizeof(*dqid), GFP_NOFS);
+			OBD_ALLOC_GFP(dqid, sizeof(*dqid), CFS_ALLOC_NOFS);
                         if (!dqid)
                                 GOTO(out_free, rc = -ENOMEM);
 
