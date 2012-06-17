@@ -38,6 +38,7 @@
 #define _MOUNT_UTILS_H_
 
 #include <lustre_disk.h>
+#include <lustre_param.h>
 
 extern char *progname;
 extern int verbose;
