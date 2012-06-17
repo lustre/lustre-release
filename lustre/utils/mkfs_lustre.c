@@ -293,6 +293,11 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                                 }
                                 i++;
                         }
+			if (i == LDD_MT_LAST) {
+				fprintf(stderr, "%s: invalid backend filesystem"
+					" type %s\n", progname, optarg);
+				return 1;
+			}
                         break;
                 }
                 case 'c':
