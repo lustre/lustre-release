@@ -615,6 +615,9 @@ int osd_oi_delete(struct osd_thread_info *info,
 {
 	struct lu_fid *oi_fid = &info->oti_fid2;
 
+	if (fid_is_igif(fid))
+		return 0;
+
 	LASSERT(fid_seq(fid) != FID_SEQ_LOCAL_FILE);
 
 	if (fid_is_idif(fid) || fid_seq(fid) == FID_SEQ_LLOG)
