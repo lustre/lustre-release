@@ -1072,6 +1072,12 @@ dont_check_exports:
         if (target->obd_recovering && !export->exp_in_recovery &&
             !export->exp_disconnected) {
                 cfs_spin_lock(&export->exp_lock);
+		/* possible race with class_disconnect_stale_exports,
+		 * export may be already in the eviction process */
+		if (export->exp_failed) {
+			cfs_spin_unlock(&export->exp_lock);
+			GOTO(out, rc = -ENODEV);
+		}
                 export->exp_in_recovery = 1;
                 export->exp_req_replay_needed = 1;
                 export->exp_lock_replay_needed = 1;
