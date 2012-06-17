@@ -106,11 +106,12 @@
 # endif
 #endif /* __KERNEL__ */
 
-#define PTLRPC_NTHRS_MIN	2
+#define PTLRPC_NTHRS_INIT	2
 
 /**
- * The following constants determine how memory is used to buffer incoming
- * service requests.
+ * Buffer Constants
+ *
+ * Constants determine how memory is used to buffer incoming service requests.
  *
  * ?_NBUFS              # buffers to allocate when growing the pool
  * ?_BUFSIZE            # bytes in a single request buffer
@@ -122,21 +123,170 @@
  * Messages larger than ?_MAXREQSIZE are dropped.  Request buffers are
  * considered full when less than ?_MAXREQSIZE is left in them.
  */
-#define LDLM_THREADS_AUTO_MIN (2)
-#define LDLM_THREADS_AUTO_MAX min_t(unsigned, cfs_num_online_cpus() * \
-                                  cfs_num_online_cpus() * 32, 128)
-#define LDLM_BL_THREADS  LDLM_THREADS_AUTO_MIN
+/**
+ * Thread Constants
+ *
+ * Constants determine how threads are created for ptlrpc service.
+ *
+ * ?_NTHRS_INIT	        # threads to create for each service partition on
+ *			  initializing. If it's non-affinity service and
+ *			  there is only one partition, it's the overall #
+ *			  threads for the service while initializing.
+ * ?_NTHRS_BASE		# threads should be created at least for each
+ *			  ptlrpc partition to keep the service healthy.
+ *			  It's the low-water mark of threads upper-limit
+ *			  for each partition.
+ * ?_THR_FACTOR         # threads can be added on threads upper-limit for
+ *			  each CPU core. This factor is only for reference,
+ *			  we might decrease value of factor if number of cores
+ *			  per CPT is above a limit.
+ * ?_NTHRS_MAX		# overall threads can be created for a service,
+ *			  it's a soft limit because if service is running
+ *			  on machine with hundreds of cores and tens of
+ *			  CPU partitions, we need to guarantee each partition
+ *			  has ?_NTHRS_BASE threads, which means total threads
+ *			  will be ?_NTHRS_BASE * number_of_cpts which can
+ *			  exceed ?_NTHRS_MAX.
+ *
+ * Examples
+ *
+ * #define MDT_NTHRS_INIT	2
+ * #define MDT_NTHRS_BASE	64
+ * #define MDT_NTHRS_FACTOR	8
+ * #define MDT_NTHRS_MAX	1024
+ *
+ * Example 1):
+ * ---------------------------------------------------------------------
+ * Server(A) has 16 cores, user configured it to 4 partitions so each
+ * partition has 4 cores, then actual number of service threads on each
+ * partition is:
+ *     MDT_NTHRS_BASE(64) + cores(4) * MDT_NTHRS_FACTOR(8) = 96
+ *
+ * Total number of threads for the service is:
+ *     96 * partitions(4) = 384
+ *
+ * Example 2):
+ * ---------------------------------------------------------------------
+ * Server(B) has 32 cores, user configured it to 4 partitions so each
+ * partition has 8 cores, then actual number of service threads on each
+ * partition is:
+ *     MDT_NTHRS_BASE(64) + cores(8) * MDT_NTHRS_FACTOR(8) = 128
+ *
+ * Total number of threads for the service is:
+ *     128 * partitions(4) = 512
+ *
+ * Example 3):
+ * ---------------------------------------------------------------------
+ * Server(B) has 96 cores, user configured it to 8 partitions so each
+ * partition has 12 cores, then actual number of service threads on each
+ * partition is:
+ *     MDT_NTHRS_BASE(64) + cores(12) * MDT_NTHRS_FACTOR(8) = 160
+ *
+ * Total number of threads for the service is:
+ *     160 * partitions(8) = 1280
+ *
+ * However, it's above the soft limit MDT_NTHRS_MAX, so we choose this number
+ * as upper limit of threads number for each partition:
+ *     MDT_NTHRS_MAX(1024) / partitions(8) = 128
+ *
+ * Example 4):
+ * ---------------------------------------------------------------------
+ * Server(C) have a thousand of cores and user configured it to 32 partitions
+ *     MDT_NTHRS_BASE(64) * 32 = 2048
+ *
+ * which is already above soft limit MDT_NTHRS_MAX(1024), but we still need
+ * to guarantee that each partition has at least MDT_NTHRS_BASE(64) threads
+ * to keep service healthy, so total number of threads will just be 2048.
+ *
+ * NB: we don't suggest to choose server with that many cores because backend
+ *     filesystem itself, buffer cache, or underlying network stack might
+ *     have some SMP scalability issues at that large scale.
+ *
+ *     If user already has a fat machine with hundreds or thousands of cores,
+ *     there are two choices for configuration:
+ *     a) create CPU table from subset of all CPUs and run Lustre on
+ *        top of this subset
+ *     b) bind service threads on a few partitions, see modparameters of
+ *        MDS and OSS for details
+*
+ * NB: these calculations (and examples below) are simplified to help
+ *     understanding, the real implementation is a little more complex,
+ *     please see ptlrpc_server_nthreads_check() for details.
+ *
+ */
+
+ /*
+  * LDLM threads constants:
+  *
+  * Given 8 as factor and 24 as base threads number
+  *
+  * example 1)
+  * On 4-core machine we will have 24 + 8 * 4 = 56 threads.
+  *
+  * example 2)
+  * On 8-core machine with 2 partitions we will have 24 + 4 * 8 = 56
+  * threads for each partition and total threads number will be 112.
+  *
+  * example 3)
+  * On 64-core machine with 8 partitions we will need LDLM_NTHRS_BASE(24)
+  * threads for each partition to keep service healthy, so total threads
+  * number should be 24 * 8 = 192.
+  *
+  * So with these constants, threads number wil be at the similar level
+  * of old versions, unless target machine has over a hundred cores
+  */
+#define LDLM_THR_FACTOR		8
+#define LDLM_NTHRS_INIT		PTLRPC_NTHRS_INIT
+#define LDLM_NTHRS_BASE		24
+#define LDLM_NTHRS_MAX		(cfs_num_online_cpus() == 1 ? 64 : 128)
+
+#define LDLM_BL_THREADS  LDLM_NTHRS_AUTO_INIT
 #define LDLM_NBUFS      (64 * cfs_num_online_cpus())
 #define LDLM_BUFSIZE    (8 * 1024)
 #define LDLM_MAXREQSIZE (5 * 1024)
 #define LDLM_MAXREPSIZE (1024)
 
-/** Absolute limits */
+ /*
+  * MDS threads constants:
+  *
+  * Please see examples in "Thread Constants", MDS threads number will be at
+  * the comparable level of old versions, unless the server has many cores.
+  */
 #ifndef MDT_MAX_THREADS
-#define MDT_MIN_THREADS PTLRPC_NTHRS_MIN
-#define MDT_MAX_THREADS 512UL
+#define MDT_MAX_THREADS		1024
+#define MDT_MAX_OTHR_THREADS	256
+
+#else /* MDT_MAX_THREADS */
+#if MDT_MAX_THREADS < PTLRPC_NTHRS_INIT
+#undef MDT_MAX_THREADS
+#define MDT_MAX_THREADS	PTLRPC_NTHRS_INIT
 #endif
-#define MDS_NBUFS       (64 * cfs_num_online_cpus())
+#define MDT_MAX_OTHR_THREADS	max(PTLRPC_NTHRS_INIT, MDT_MAX_THREADS / 2)
+#endif
+
+/* default service */
+#define MDT_THR_FACTOR		8
+#define MDT_NTHRS_INIT		PTLRPC_NTHRS_INIT
+#define MDT_NTHRS_MAX		MDT_MAX_THREADS
+#define MDT_NTHRS_BASE		min(64, MDT_NTHRS_MAX)
+
+/* read-page service */
+#define MDT_RDPG_THR_FACTOR	4
+#define MDT_RDPG_NTHRS_INIT	PTLRPC_NTHRS_INIT
+#define MDT_RDPG_NTHRS_MAX	MDT_MAX_OTHR_THREADS
+#define MDT_RDPG_NTHRS_BASE	min(48, MDT_RDPG_NTHRS_MAX)
+
+/* these should be removed when we remove setattr service in the future */
+#define MDT_SETA_THR_FACTOR	4
+#define MDT_SETA_NTHRS_INIT	PTLRPC_NTHRS_INIT
+#define MDT_SETA_NTHRS_MAX	MDT_MAX_OTHR_THREADS
+#define MDT_SETA_NTHRS_BASE	min(48, MDT_SETA_NTHRS_MAX)
+
+/* non-affinity threads */
+#define MDT_OTHR_NTHRS_INIT	PTLRPC_NTHRS_INIT
+#define MDT_OTHR_NTHRS_MAX	MDT_MAX_OTHR_THREADS
+
+#define MDS_NBUFS		(64 * cfs_num_online_cpus())
 /**
  * Assume file name length = FNAME_MAX = 256 (true for ext3).
  *        path name length = PATH_MAX = 4096
@@ -176,16 +326,51 @@
 #define SEQ_MAXREPSIZE  (152)
 
 /** MGS threads must be >= 3, see bug 22458 comment #28 */
-#define MGS_THREADS_AUTO_MIN 3
-#define MGS_THREADS_AUTO_MAX 32
+#define MGS_NTHRS_INIT	(PTLRPC_NTHRS_INIT + 1)
+#define MGS_NTHRS_MAX	32
+
 #define MGS_NBUFS       (64 * cfs_num_online_cpus())
 #define MGS_BUFSIZE     (8 * 1024)
 #define MGS_MAXREQSIZE  (7 * 1024)
 #define MGS_MAXREPSIZE  (9 * 1024)
 
-/** Absolute OSS limits */
-#define OSS_THREADS_MIN 3       /* difficult replies, HPQ, others */
-#define OSS_THREADS_MAX 512
+ /*
+  * OSS threads constants:
+  *
+  * Given 8 as factor and 64 as base threads number
+  *
+  * example 1):
+  * On 8-core server configured to 2 partitions, we will have
+  * 64 + 8 * 4 = 96 threads for each partition, 192 total threads.
+  *
+  * example 2):
+  * On 32-core machine configured to 4 partitions, we will have
+  * 64 + 8 * 8 = 112 threads for each partition, so total threads number
+  * will be 112 * 4 = 448.
+  *
+  * example 3):
+  * On 64-core machine configured to 4 partitions, we will have
+  * 64 + 16 * 8 = 192 threads for each partition, so total threads number
+  * will be 192 * 4 = 768 which is above limit OSS_NTHRS_MAX(512), so we
+  * cut off the value to OSS_NTHRS_MAX(512) / 4 which is 128 threads
+  * for each partition.
+  *
+  * So we can see that with these constants, threads number wil be at the
+  * similar level of old versions, unless the server has many cores.
+  */
+ /* depress threads factor for VM with small memory size */
+#define OSS_THR_FACTOR		min_t(int, 8, \
+				CFS_NUM_CACHEPAGES >> (28 - CFS_PAGE_SHIFT))
+#define OSS_NTHRS_INIT		(PTLRPC_NTHRS_INIT + 1)
+#define OSS_NTHRS_BASE		64
+#define OSS_NTHRS_MAX		512
+
+/* threads for handling "create" request */
+#define OSS_CR_THR_FACTOR	1
+#define OSS_CR_NTHRS_INIT	PTLRPC_NTHRS_INIT
+#define OSS_CR_NTHRS_BASE	8
+#define OSS_CR_NTHRS_MAX	64
+
 #define OST_NBUFS       (64 * cfs_num_online_cpus())
 #define OST_BUFSIZE     (8 * 1024)
 
@@ -1148,10 +1333,10 @@ struct ptlrpc_service {
         char                           *srv_thread_name;
         /** service thread list */
         cfs_list_t                      srv_threads;
-        /** threads to start at beginning of service */
-        int                             srv_threads_min;
-        /** thread upper limit */
-        int                             srv_threads_max;
+	/** threads # should be created for each partition on initializing */
+	int				srv_nthrs_cpt_init;
+	/** limit of threads number for each partition */
+	int				srv_nthrs_cpt_limit;
         /** Root of /proc dir tree for this service */
         cfs_proc_dir_entry_t           *srv_procroot;
         /** Pointer to statistic data for this service */
@@ -1177,21 +1362,23 @@ struct ptlrpc_service {
         __u32                           srv_ctx_tags;
         /** soft watchdog timeout multiplier */
         int                             srv_watchdog_factor;
-        /** bind threads to CPUs */
-        unsigned                        srv_cpu_affinity:1;
         /** under unregister_service */
         unsigned                        srv_is_stopping:1;
 
+	/** max # request buffers in history per partition */
+	int				srv_hist_nrqbds_cpt_max;
+	/** number of CPTs this service bound on */
+	int				srv_ncpts;
+	/** CPTs array this service bound on */
+	__u32				*srv_cpts;
+	/** 2^srv_cptab_bits >= cfs_cpt_numbert(srv_cptable) */
+	int				srv_cpt_bits;
+	/** CPT table this service is running over */
+	struct cfs_cpt_table		*srv_cptable;
 	/**
-	 * max # request buffers in history, it needs to be convert into
-	 * per-partition value when we have multiple partitions
+	 * partition data for ptlrpc service
 	 */
-	int				srv_max_history_rqbds;
-	/**
-	 * partition data for ptlrpc service, only one instance so far,
-	 * instance per CPT will come soon
-	 */
-	struct ptlrpc_service_part	*srv_part;
+	struct ptlrpc_service_part	*srv_parts[0];
 };
 
 /**
@@ -1319,6 +1506,12 @@ struct ptlrpc_service_part {
 	/** # 'difficult' replies */
 	cfs_atomic_t			scp_nreps_difficult;
 };
+
+#define ptlrpc_service_for_each_part(part, i, svc)			\
+	for (i = 0;							\
+	     i < (svc)->srv_ncpts &&					\
+	     (svc)->srv_parts != NULL &&				\
+	     ((part) = (svc)->srv_parts[i]) != NULL; i++)
 
 /**
  * Declaration of ptlrpcd control structure
@@ -1611,9 +1804,18 @@ struct ptlrpc_service_buf_conf {
 struct ptlrpc_service_thr_conf {
 	/* threadname should be 8 characters or less - 6 will be added on */
 	char				*tc_thr_name;
-	/* min number of service threads to start */
-	unsigned int			tc_nthrs_min;
-	/* max number of service threads to start */
+	/* threads increasing factor for each CPU */
+	unsigned int			tc_thr_factor;
+	/* service threads # to start on each partition while initializing */
+	unsigned int			tc_nthrs_init;
+	/*
+	 * low water of threads # upper-limit on each partition while running,
+	 * service availability may be impacted if threads number is lower
+	 * than this value. It can be ZERO if the service doesn't require
+	 * CPU affinity or there is only one partition.
+	 */
+	unsigned int			tc_nthrs_base;
+	/* "soft" limit for total threads number */
 	unsigned int			tc_nthrs_max;
 	/* user specified threads number, it will be validated due to
 	 * other members of this structure. */
@@ -1622,6 +1824,12 @@ struct ptlrpc_service_thr_conf {
 	unsigned int			tc_cpu_affinity;
 	/* Tags for lu_context associated with service thread */
 	__u32				tc_ctx_tags;
+};
+
+struct ptlrpc_service_cpt_conf {
+	struct cfs_cpt_table		*cc_cptable;
+	/* string pattern to describe CPTs for a service */
+	char				*cc_pattern;
 };
 
 struct ptlrpc_service_conf {
@@ -1633,6 +1841,8 @@ struct ptlrpc_service_conf {
 	struct ptlrpc_service_buf_conf	psc_buf;
 	/* thread information */
 	struct ptlrpc_service_thr_conf	psc_thr;
+	/* CPU partition information */
+	struct ptlrpc_service_cpt_conf	psc_cpt;
 	/* function table */
 	struct ptlrpc_service_ops	psc_ops;
 };

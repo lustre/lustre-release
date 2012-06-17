@@ -56,6 +56,10 @@ static int ldlm_num_threads;
 CFS_MODULE_PARM(ldlm_num_threads, "i", int, 0444,
                 "number of DLM service threads to start");
 
+static char *ldlm_cpts;
+CFS_MODULE_PARM(ldlm_cpts, "s", charp, 0444,
+		"CPU partitions ldlm threads should run on");
+
 extern cfs_mem_cache_t *ldlm_resource_slab;
 extern cfs_mem_cache_t *ldlm_lock_slab;
 static cfs_mutex_t      ldlm_ref_mutex;
@@ -2588,11 +2592,16 @@ static int ldlm_setup(void)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "ldlm_cb",
-			.tc_nthrs_min		= LDLM_THREADS_AUTO_MIN,
-			.tc_nthrs_max		= LDLM_THREADS_AUTO_MAX,
+			.tc_thr_factor		= LDLM_THR_FACTOR,
+			.tc_nthrs_init		= LDLM_NTHRS_INIT,
+			.tc_nthrs_base		= LDLM_NTHRS_BASE,
+			.tc_nthrs_max		= LDLM_NTHRS_MAX,
 			.tc_nthrs_user		= ldlm_num_threads,
-			.tc_ctx_tags		= LCT_MD_THREAD | \
-						  LCT_DT_THREAD,
+			.tc_cpu_affinity	= 1,
+			.tc_ctx_tags		= LCT_MD_THREAD | LCT_DT_THREAD,
+		},
+		.psc_cpt		= {
+			.cc_pattern		= ldlm_cpts,
 		},
 		.psc_ops		= {
 			.so_req_handler		= ldlm_callback_handler,
@@ -2623,12 +2632,18 @@ static int ldlm_setup(void)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "ldlm_cn",
-			.tc_nthrs_min		= LDLM_THREADS_AUTO_MIN,
-			.tc_nthrs_max		= LDLM_THREADS_AUTO_MAX,
+			.tc_thr_factor		= LDLM_THR_FACTOR,
+			.tc_nthrs_init		= LDLM_NTHRS_INIT,
+			.tc_nthrs_base		= LDLM_NTHRS_BASE,
+			.tc_nthrs_max		= LDLM_NTHRS_MAX,
 			.tc_nthrs_user		= ldlm_num_threads,
+			.tc_cpu_affinity	= 1,
 			.tc_ctx_tags		= LCT_MD_THREAD | \
 						  LCT_DT_THREAD | \
 						  LCT_CL_THREAD,
+		},
+		.psc_cpt		= {
+			.cc_pattern		= ldlm_cpts,
 		},
 		.psc_ops		= {
 			.so_req_handler		= ldlm_cancel_handler,
@@ -2659,20 +2674,19 @@ static int ldlm_setup(void)
 
 #ifdef __KERNEL__
 	if (ldlm_num_threads == 0) {
-		blp->blp_min_threads = LDLM_THREADS_AUTO_MIN;
-		blp->blp_max_threads = LDLM_THREADS_AUTO_MAX;
+		blp->blp_min_threads = LDLM_NTHRS_INIT;
+		blp->blp_max_threads = LDLM_NTHRS_MAX;
 	} else {
 		blp->blp_min_threads = blp->blp_max_threads = \
-			min_t(int, LDLM_THREADS_AUTO_MAX,
-				   max_t(int, LDLM_THREADS_AUTO_MIN,
-					      ldlm_num_threads));
+			min_t(int, LDLM_NTHRS_MAX, max_t(int, LDLM_NTHRS_INIT,
+							 ldlm_num_threads));
 	}
 
-        for (i = 0; i < blp->blp_min_threads; i++) {
-                rc = ldlm_bl_thread_start(blp);
-                if (rc < 0)
+	for (i = 0; i < blp->blp_min_threads; i++) {
+		rc = ldlm_bl_thread_start(blp);
+		if (rc < 0)
 			GOTO(out, rc);
-        }
+	}
 
 # ifdef HAVE_SERVER_SUPPORT
         CFS_INIT_LIST_HEAD(&expired_lock_thread.elt_expired_locks);
@@ -2684,24 +2698,26 @@ static int ldlm_setup(void)
         cfs_timer_init(&waiting_locks_timer, waiting_locks_callback, 0);
 
         rc = cfs_create_thread(expired_lock_main, NULL, CFS_DAEMON_FLAGS);
-        if (rc < 0) {
-                CERROR("Cannot start ldlm expired-lock thread: %d\n", rc);
+	if (rc < 0) {
+		CERROR("Cannot start ldlm expired-lock thread: %d\n", rc);
 		GOTO(out, rc);
-        }
+	}
 
         cfs_wait_event(expired_lock_thread.elt_waitq,
                        expired_lock_thread.elt_state == ELT_READY);
 # endif /* HAVE_SERVER_SUPPORT */
 
-        rc = ldlm_pools_init();
-        if (rc)
+	rc = ldlm_pools_init();
+	if (rc) {
+		CERROR("Failed to initialize LDLM pools: %d\n", rc);
 		GOTO(out, rc);
+	}
 #endif
-        RETURN(0);
+	RETURN(0);
 
  out:
 	ldlm_cleanup();
-        return rc;
+	RETURN(rc);
 }
 
 static int ldlm_cleanup(void)

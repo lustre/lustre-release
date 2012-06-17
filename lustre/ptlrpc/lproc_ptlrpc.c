@@ -251,30 +251,44 @@ ptlrpc_lprocfs_read_req_history_len(char *page, char **start, off_t off,
 				    int count, int *eof, void *data)
 {
 	struct ptlrpc_service *svc = data;
+	struct ptlrpc_service_part *svcpt;
+	int	total = 0;
+	int	i;
 
 	*eof = 1;
-	return snprintf(page, count, "%d\n", svc->srv_part->scp_hist_nrqbds);
+
+	ptlrpc_service_for_each_part(svcpt, i, svc)
+		total += svcpt->scp_hist_nrqbds;
+
+	return snprintf(page, count, "%d\n", total);
 }
 
 static int
 ptlrpc_lprocfs_read_req_history_max(char *page, char **start, off_t off,
                                     int count, int *eof, void *data)
 {
-        struct ptlrpc_service *svc = data;
+	struct ptlrpc_service *svc = data;
+	struct ptlrpc_service_part *svcpt;
+	int	total = 0;
+	int	i;
 
-        *eof = 1;
-        return snprintf(page, count, "%d\n", svc->srv_max_history_rqbds);
+	*eof = 1;
+	ptlrpc_service_for_each_part(svcpt, i, svc)
+		total += svc->srv_hist_nrqbds_cpt_max;
+
+	return snprintf(page, count, "%d\n", total);
 }
 
 static int
 ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
                                      unsigned long count, void *data)
 {
-        struct ptlrpc_service *svc = data;
-        int                    bufpages;
-        int                    val;
-        int                    rc = lprocfs_write_helper(buffer, count, &val);
+	struct ptlrpc_service	   *svc = data;
+	int			    bufpages;
+	int			    val;
+	int			    rc;
 
+	rc = lprocfs_write_helper(buffer, count, &val);
         if (rc < 0)
                 return rc;
 
@@ -289,7 +303,12 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
                 return -ERANGE;
 
 	cfs_spin_lock(&svc->srv_lock);
-	svc->srv_max_history_rqbds = val;
+
+	if (val == 0)
+		svc->srv_hist_nrqbds_cpt_max = 0;
+	else
+		svc->srv_hist_nrqbds_cpt_max = max(1, (val / svc->srv_ncpts));
+
 	cfs_spin_unlock(&svc->srv_lock);
 
 	return count;
@@ -297,34 +316,36 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
 
 static int
 ptlrpc_lprocfs_rd_threads_min(char *page, char **start, off_t off,
-                              int count, int *eof, void *data)
+			      int count, int *eof, void *data)
 {
-        struct ptlrpc_service *svc = data;
+	struct ptlrpc_service *svc = data;
 
-        return snprintf(page, count, "%d\n", svc->srv_threads_min);
+	return snprintf(page, count, "%d\n",
+			svc->srv_nthrs_cpt_init * svc->srv_ncpts);
 }
 
 static int
 ptlrpc_lprocfs_wr_threads_min(struct file *file, const char *buffer,
                               unsigned long count, void *data)
 {
-        struct ptlrpc_service *svc = data;
-        int                    val;
-        int                    rc = lprocfs_write_helper(buffer, count, &val);
+	struct ptlrpc_service	   *svc = data;
+	int	val;
+	int	rc = lprocfs_write_helper(buffer, count, &val);
 
-        if (rc < 0)
-                return rc;
+	if (rc < 0)
+		return rc;
 
-        if (val < 2)
-                return -ERANGE;
+	if (val / svc->srv_ncpts < PTLRPC_NTHRS_INIT)
+		return -ERANGE;
 
 	cfs_spin_lock(&svc->srv_lock);
-	if (val > svc->srv_threads_max) {
+	if (val > svc->srv_nthrs_cpt_limit * svc->srv_ncpts) {
 		cfs_spin_unlock(&svc->srv_lock);
 		return -ERANGE;
 	}
 
-	svc->srv_threads_min = val;
+	svc->srv_nthrs_cpt_init = val / svc->srv_ncpts;
+
 	cfs_spin_unlock(&svc->srv_lock);
 
 	return count;
@@ -335,50 +356,58 @@ ptlrpc_lprocfs_rd_threads_started(char *page, char **start, off_t off,
 				  int count, int *eof, void *data)
 {
 	struct ptlrpc_service *svc = data;
+	struct ptlrpc_service_part *svcpt;
+	int	total = 0;
+	int	i;
 
-	LASSERT(svc->srv_part != NULL);
-	return snprintf(page, count, "%d\n",
-			svc->srv_part->scp_nthrs_running);
+	LASSERT(svc->srv_parts != NULL);
+	ptlrpc_service_for_each_part(svcpt, i, svc)
+		total += svcpt->scp_nthrs_running;
+
+	return snprintf(page, count, "%d\n", total);
 }
 
 static int
 ptlrpc_lprocfs_rd_threads_max(char *page, char **start, off_t off,
-                              int count, int *eof, void *data)
+			      int count, int *eof, void *data)
 {
-        struct ptlrpc_service *svc = data;
+	struct ptlrpc_service *svc = data;
 
-        return snprintf(page, count, "%d\n", svc->srv_threads_max);
+	return snprintf(page, count, "%d\n",
+			svc->srv_nthrs_cpt_limit * svc->srv_ncpts);
 }
 
 static int
 ptlrpc_lprocfs_wr_threads_max(struct file *file, const char *buffer,
-                              unsigned long count, void *data)
+			      unsigned long count, void *data)
 {
-        struct ptlrpc_service *svc = data;
-        int                    val;
-        int                    rc = lprocfs_write_helper(buffer, count, &val);
+	struct ptlrpc_service *svc = data;
+	int	val;
+	int	rc = lprocfs_write_helper(buffer, count, &val);
 
-        if (rc < 0)
-                return rc;
+	if (rc < 0)
+		return rc;
 
-        if (val < 2)
-                return -ERANGE;
+	if (val / svc->srv_ncpts < PTLRPC_NTHRS_INIT)
+		return -ERANGE;
 
 	cfs_spin_lock(&svc->srv_lock);
-	if (val < svc->srv_threads_min) {
+	if (val < svc->srv_nthrs_cpt_init * svc->srv_ncpts) {
 		cfs_spin_unlock(&svc->srv_lock);
 		return -ERANGE;
 	}
 
-	svc->srv_threads_max = val;
+	svc->srv_nthrs_cpt_limit = val / svc->srv_ncpts;
+
 	cfs_spin_unlock(&svc->srv_lock);
 
 	return count;
 }
 
 struct ptlrpc_srh_iterator {
-        __u64                  srhi_seq;
-        struct ptlrpc_request *srhi_req;
+	int			srhi_idx;
+	__u64			srhi_seq;
+	struct ptlrpc_request	*srhi_req;
 };
 
 int
@@ -423,28 +452,33 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
 static void *
 ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 {
-        struct ptlrpc_service       *svc = s->private;
-        struct ptlrpc_srh_iterator  *srhi;
-        int                          rc;
+	struct ptlrpc_service		*svc = s->private;
+	struct ptlrpc_service_part	*svcpt;
+	struct ptlrpc_srh_iterator	*srhi;
+	int				rc;
+	int				i;
 
-        OBD_ALLOC(srhi, sizeof(*srhi));
-        if (srhi == NULL)
-                return NULL;
+	OBD_ALLOC(srhi, sizeof(*srhi));
+	if (srhi == NULL)
+		return NULL;
 
-        srhi->srhi_seq = 0;
-        srhi->srhi_req = NULL;
+	srhi->srhi_seq = 0;
+	srhi->srhi_req = NULL;
 
-	cfs_spin_lock(&svc->srv_part->scp_lock);
-	rc = ptlrpc_lprocfs_svc_req_history_seek(svc->srv_part, srhi, *pos);
-	cfs_spin_unlock(&svc->srv_part->scp_lock);
+	ptlrpc_service_for_each_part(svcpt, i, svc) {
+		srhi->srhi_idx = i;
 
-        if (rc == 0) {
-                *pos = srhi->srhi_seq;
-                return srhi;
-        }
+		cfs_spin_lock(&svcpt->scp_lock);
+		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, *pos);
+		cfs_spin_unlock(&svcpt->scp_lock);
+		if (rc == 0) {
+			*pos = srhi->srhi_seq;
+			return srhi;
+		}
+	}
 
-        OBD_FREE(srhi, sizeof(*srhi));
-        return NULL;
+	OBD_FREE(srhi, sizeof(*srhi));
+	return NULL;
 }
 
 static void
@@ -461,13 +495,22 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
 				    void *iter, loff_t *pos)
 {
 	struct ptlrpc_service		*svc = s->private;
-	struct ptlrpc_service_part	*svcpt = svc->srv_part;
 	struct ptlrpc_srh_iterator	*srhi = iter;
-	int				rc;
+	struct ptlrpc_service_part	*svcpt;
+	int				rc = 0;
+	int				i;
 
-	cfs_spin_lock(&svcpt->scp_lock);
-	rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, *pos + 1);
-	cfs_spin_unlock(&svcpt->scp_lock);
+	for (i = srhi->srhi_idx; i < svc->srv_ncpts; i++) {
+		svcpt = svc->srv_parts[i];
+
+		srhi->srhi_idx = i;
+
+		cfs_spin_lock(&svcpt->scp_lock);
+		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, *pos + 1);
+		cfs_spin_unlock(&svcpt->scp_lock);
+		if (rc == 0)
+			break;
+	}
 
         if (rc != 0) {
                 OBD_FREE(srhi, sizeof(*srhi));
@@ -511,10 +554,14 @@ EXPORT_SYMBOL(target_print_req);
 static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 {
 	struct ptlrpc_service		*svc = s->private;
-	struct ptlrpc_service_part	*svcpt = svc->srv_part;
 	struct ptlrpc_srh_iterator	*srhi = iter;
+	struct ptlrpc_service_part	*svcpt;
 	struct ptlrpc_request		*req;
 	int				rc;
+
+	LASSERT(srhi->srhi_idx < svc->srv_ncpts);
+
+	svcpt = svc->srv_parts[srhi->srhi_idx];
 
 	cfs_spin_lock(&svcpt->scp_lock);
 
@@ -571,6 +618,8 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
         return 0;
 }
 
+#define PTLRPC_AT_LINE_SIZE	128
+
 /* See also lprocfs_rd_timeouts */
 static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
 				      int count, int *eof, void *data)
@@ -581,25 +630,53 @@ static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
 	time_t				worstt;
 	unsigned int			cur;
 	unsigned int			worst;
+	int				nob = 0;
 	int				rc = 0;
+	int				cpt;
+	int				i;
 
-	svcpt = svc->srv_part;
-	LASSERT(svcpt != NULL);
+	LASSERT(svc->srv_parts != NULL);
 
-	*eof = 1;
-	cur = at_get(&svcpt->scp_at_estimate);
-	worst = svcpt->scp_at_estimate.at_worst_ever;
-	worstt = svcpt->scp_at_estimate.at_worst_time;
-	s2dhms(&ts, cfs_time_current_sec() - worstt);
-        if (AT_OFF)
-                rc += snprintf(page + rc, count - rc,
-                              "adaptive timeouts off, using obd_timeout %u\n",
-                              obd_timeout);
-        rc += snprintf(page + rc, count - rc,
-                       "%10s : cur %3u  worst %3u (at %ld, "DHMS_FMT" ago) ",
-                       "service", cur, worst, worstt,
-                       DHMS_VARS(&ts));
-	rc = lprocfs_at_hist_helper(page, count, rc, &svcpt->scp_at_estimate);
+	if (AT_OFF) {
+		rc += snprintf(page + rc, count - rc,
+			       "adaptive timeouts off, using obd_timeout %u\n",
+			       obd_timeout);
+		*eof = 1;
+		return rc;
+	}
+
+	cpt = ((unsigned)off) / PTLRPC_AT_LINE_SIZE;
+
+	ptlrpc_service_for_each_part(svcpt, i, svc) {
+		if (i < cpt)
+			continue;
+
+		cur	= at_get(&svcpt->scp_at_estimate);
+		worst	= svcpt->scp_at_estimate.at_worst_ever;
+		worstt	= svcpt->scp_at_estimate.at_worst_time;
+		s2dhms(&ts, cfs_time_current_sec() - worstt);
+
+		nob = snprintf(page + rc, count - rc,
+			       "%10s : cur %3u  worst %3u (at %ld, "
+			       DHMS_FMT" ago) ", "service",
+			       cur, worst, worstt, DHMS_VARS(&ts));
+
+		nob += lprocfs_at_hist_helper(page, count, rc + nob,
+					      &svcpt->scp_at_estimate);
+		LASSERT(nob < PTLRPC_AT_LINE_SIZE);
+		/* fill the whole line with spaces, so we can locate
+		 * partition by offset on the next call... */
+		memset(page + rc + nob, ' ', PTLRPC_AT_LINE_SIZE - nob);
+		page[rc + PTLRPC_AT_LINE_SIZE - 1] = '\n';
+		rc += PTLRPC_AT_LINE_SIZE;
+
+		if (count - rc < PTLRPC_AT_LINE_SIZE)
+			break;
+	}
+
+	if (i == svc->srv_ncpts - 1)
+		*eof = 1;
+
 	return rc;
 }
 
@@ -614,14 +691,16 @@ static int ptlrpc_lprocfs_rd_hp_ratio(char *page, char **start, off_t off,
 static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
                                       unsigned long count, void *data)
 {
-        struct ptlrpc_service *svc = data;
-        int rc, val;
+	struct ptlrpc_service		*svc = data;
+	int	rc;
+	int	val;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc < 0)
-                return rc;
-        if (val < 0)
-                return -ERANGE;
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc < 0)
+		return rc;
+
+	if (val < 0)
+		return -ERANGE;
 
 	cfs_spin_lock(&svc->srv_lock);
 	svc->srv_hpreq_ratio = val;

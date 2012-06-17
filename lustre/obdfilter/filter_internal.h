@@ -194,7 +194,21 @@ void filter_release_cache(struct obd_device *, struct obd_ioobj *,
                           struct niobuf_remote *, struct inode *);
 
 /* filter_io_*.c */
-struct filter_iobuf;
+struct filter_iobuf {
+	cfs_hlist_node_t	dr_hlist;
+	__u64			dr_hkey;
+	/* number of reqs being processed */
+	cfs_atomic_t		dr_numreqs;
+	cfs_waitq_t		dr_wait;
+	int			dr_max_pages;
+	int			dr_npages;
+	int			dr_error;
+	unsigned int		dr_ignore_quota:1;
+	struct page		**dr_pages;
+	unsigned long		*dr_blocks;
+	struct filter_obd	*dr_filter;
+};
+
 int filter_commitrw_write(struct obd_export *exp, struct obdo *oa, int objcount,
                           struct obd_ioobj *obj, struct niobuf_remote *, int,
                           struct niobuf_local *res, struct obd_trans_info *oti,

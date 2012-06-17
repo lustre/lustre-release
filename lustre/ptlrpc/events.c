@@ -235,17 +235,12 @@ void client_bulk_callback (lnet_event_t *ev)
  *
  * it might not be precise but should be good enough.
  */
-#define REQS_ALL_BITS(svcpt)	((int)(sizeof((svcpt)->scp_hist_seq) * 8))
-#define REQS_SEC_BITS		32
-#define REQS_USEC_BITS		16
-/* will be replaced by bits for total service partition number soon */
-#define REQS_CPT_BITS(svcpt)	0
-#define REQS_SEQ_BITS(svcpt)	(REQS_ALL_BITS(svcpt) - REQS_CPT_BITS(svcpt) -\
-				 REQS_SEC_BITS - REQS_USEC_BITS)
 
-#define REQS_SEQ_SHIFT(svcpt)	(REQS_CPT_BITS(svcpt))
-#define REQS_USEC_SHIFT(svcpt)	(REQS_SEQ_SHIFT(svcpt) + REQS_SEQ_BITS(svcpt))
-#define REQS_SEC_SHIFT(svcpt)	(REQS_USEC_SHIFT(svcpt) + REQS_USEC_BITS)
+#define REQS_CPT_BITS(svcpt)	((svcpt)->scp_service->srv_cpt_bits)
+
+#define REQS_SEC_SHIFT		32
+#define REQS_USEC_SHIFT		16
+#define REQS_SEQ_SHIFT(svcpt)	REQS_CPT_BITS(svcpt)
 
 static void ptlrpc_req_add_history(struct ptlrpc_service_part *svcpt,
 				   struct ptlrpc_request *req)
@@ -257,21 +252,20 @@ static void ptlrpc_req_add_history(struct ptlrpc_service_part *svcpt,
 	/* set sequence ID for request and add it to history list,
 	 * it must be called with hold svcpt::scp_lock */
 
-	LASSERT(REQS_SEQ_BITS(svcpt) > 0);
-
-	new_seq = (sec << REQS_SEC_SHIFT(svcpt)) |
-		  (usec << REQS_USEC_SHIFT(svcpt)) | svcpt->scp_cpt;
+	new_seq = (sec << REQS_SEC_SHIFT) |
+		  (usec << REQS_USEC_SHIFT) | svcpt->scp_cpt;
 	if (new_seq > svcpt->scp_hist_seq) {
 		/* This handles the initial case of scp_hist_seq == 0 or
 		 * we just jumped into a new time window */
 		svcpt->scp_hist_seq = new_seq;
 	} else {
+		LASSERT(REQS_SEQ_SHIFT(svcpt) < REQS_USEC_SHIFT);
 		/* NB: increase sequence number in current usec bucket,
 		 * however, it's possible that we used up all bits for
 		 * sequence and jumped into the next usec bucket (future time),
 		 * then we hope there will be less RPCs per bucket at some
 		 * point, and sequence will catch up again */
-		svcpt->scp_hist_seq += (1U << REQS_CPT_BITS(svcpt));
+		svcpt->scp_hist_seq += (1U << REQS_SEQ_SHIFT(svcpt));
 		new_seq = svcpt->scp_hist_seq;
 	}
 

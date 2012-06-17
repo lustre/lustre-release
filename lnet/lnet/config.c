@@ -100,10 +100,8 @@ lnet_ni_free(struct lnet_ni *ni)
 	if (ni->ni_tx_queues != NULL)
 		cfs_percpt_free(ni->ni_tx_queues);
 
-	if (ni->ni_cpts != NULL) {
-		LIBCFS_FREE(ni->ni_cpts,
-			    sizeof(ni->ni_cpts[0] * ni->ni_ncpts));
-	}
+	if (ni->ni_cpts != NULL)
+		cfs_expr_list_values_free(ni->ni_cpts, ni->ni_ncpts);
 
 #ifndef __KERNEL__
 # ifdef HAVE_LIBPTHREAD

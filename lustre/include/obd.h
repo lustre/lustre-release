@@ -361,20 +361,18 @@ struct filter_obd {
         cfs_atomic_t         fo_r_in_flight;
         cfs_atomic_t         fo_w_in_flight;
 
-        /*
-         * per-filter pool of kiobuf's allocated by filter_common_setup() and
-         * torn down by filter_cleanup(). Contains OST_NUM_THREADS elements of
-         * which ->fo_iobuf_count were allocated.
-         *
-         * This pool contains kiobuf used by
-         * filter_{prep,commit}rw_{read,write}() and is shared by all OST
-         * threads.
-         *
-         * Locking: none, each OST thread uses only one element, determined by
-         * its "ordinal number", ->t_id.
-         */
-        struct filter_iobuf    **fo_iobuf_pool;
-        int                      fo_iobuf_count;
+	/*
+	 * per-filter pool of kiobuf's allocated by filter_common_setup() and
+	 * torn down by filter_cleanup().
+	 *
+	 * This pool contains kiobuf used by
+	 * filter_{prep,commit}rw_{read,write}() and is shared by all OST
+	 * threads.
+	 *
+	 * Locking: protected by internal lock of cfs_hash, pool can be
+	 * found from this hash table by t_id of ptlrpc_thread.
+	 */
+	struct cfs_hash		*fo_iobuf_hash;
 
         cfs_list_t               fo_llog_list;
         cfs_spinlock_t           fo_llog_list_lock;

@@ -66,6 +66,14 @@ static int oss_num_create_threads;
 CFS_MODULE_PARM(oss_num_create_threads, "i", int, 0444,
                 "number of OSS create threads to start");
 
+static char *oss_cpts;
+CFS_MODULE_PARM(oss_cpts, "s", charp, 0444,
+		"CPU partitions OSS threads should run on");
+
+static char *oss_io_cpts;
+CFS_MODULE_PARM(oss_io_cpts, "s", charp, 0444,
+		"CPU partitions OSS IO threads should run on");
+
 /**
  * Do not return server-side uid/gid to remote client
  */
@@ -2414,7 +2422,6 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
 
         LASSERT(thread != NULL);
         LASSERT(thread->t_data == NULL);
-        LASSERTF(thread->t_id <= OSS_THREADS_MAX, "%u\n", thread->t_id);
 
         OBD_ALLOC_PTR(tls);
         if (tls == NULL)
@@ -2425,14 +2432,15 @@ static int ost_thread_init(struct ptlrpc_thread *thread)
 
 #define OST_WATCHDOG_TIMEOUT (obd_timeout * 1000)
 
+static struct cfs_cpt_table	*ost_io_cptable;
+
 /* Sigh - really, this is an OSS, the _server_, not the _target_ */
 static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 {
 	static struct ptlrpc_service_conf	svc_conf;
 	struct ost_obd *ost = &obd->u.ost;
 	struct lprocfs_static_vars lvars;
-	int oss_min_threads = OSS_THREADS_MIN;
-	int oss_max_threads = OSS_THREADS_MAX;
+	nodemask_t		*mask;
 	int rc;
 	ENTRY;
 
@@ -2444,19 +2452,6 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
         cfs_mutex_init(&ost->ost_health_mutex);
-
-	if (oss_num_threads == 0) {
-		/* Base min threads on memory and cpus */
-		oss_min_threads =
-			cfs_num_online_cpus() * CFS_NUM_CACHEPAGES >>
-			(27 - CFS_PAGE_SHIFT);
-		if (oss_min_threads < OSS_THREADS_MIN)
-			oss_min_threads = OSS_THREADS_MIN;
-		/* Insure a 4x range for dynamic threads */
-		if (oss_min_threads > OSS_THREADS_MAX / 4)
-			oss_min_threads = OSS_THREADS_MAX / 4;
-		oss_max_threads = min(OSS_THREADS_MAX, oss_min_threads * 4 + 1);
-        }
 
 	svc_conf = (typeof(svc_conf)) {
 		.psc_name		= LUSTRE_OSS_NAME,
@@ -2471,10 +2466,16 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "ll_ost",
-			.tc_nthrs_min		= oss_min_threads,
-			.tc_nthrs_max		= oss_max_threads,
+			.tc_thr_factor		= OSS_THR_FACTOR,
+			.tc_nthrs_init		= OSS_NTHRS_INIT,
+			.tc_nthrs_base		= OSS_NTHRS_BASE,
+			.tc_nthrs_max		= OSS_NTHRS_MAX,
 			.tc_nthrs_user		= oss_num_threads,
+			.tc_cpu_affinity	= 1,
 			.tc_ctx_tags		= LCT_DT_THREAD,
+		},
+		.psc_cpt                = {
+			.cc_pattern             = oss_cpts,
 		},
 		.psc_ops		= {
 			.so_req_handler		= ost_handle,
@@ -2503,10 +2504,16 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "ll_ost_create",
-			.tc_nthrs_min		= OSS_CR_THREADS_MIN,
-			.tc_nthrs_max		= OSS_CR_THREADS_MAX,
+			.tc_thr_factor		= OSS_CR_THR_FACTOR,
+			.tc_nthrs_init		= OSS_CR_NTHRS_INIT,
+			.tc_nthrs_base		= OSS_CR_NTHRS_BASE,
+			.tc_nthrs_max		= OSS_CR_NTHRS_MAX,
 			.tc_nthrs_user		= oss_num_create_threads,
+			.tc_cpu_affinity	= 1,
 			.tc_ctx_tags		= LCT_DT_THREAD,
+		},
+		.psc_cpt                = {
+			.cc_pattern             = oss_cpts,
 		},
 		.psc_ops		= {
 			.so_req_handler		= ost_handle,
@@ -2520,6 +2527,31 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		CERROR("failed to start OST create service: %d\n", rc);
 		GOTO(out_service, rc);
         }
+
+	mask = cfs_cpt_table->ctb_nodemask;
+	/* event CPT feature is disabled in libcfs level by set partition
+	 * number to 1, we still want to set node affinity for io service */
+	if (cfs_cpt_number(cfs_cpt_table) == 1 && nodes_weight(*mask) > 1) {
+		int	cpt = 0;
+		int	i;
+
+		ost_io_cptable = cfs_cpt_table_alloc(nodes_weight(*mask));
+		for_each_node_mask(i, *mask) {
+			if (ost_io_cptable == NULL) {
+				CWARN("OSS failed to create CPT table\n");
+				break;
+			}
+
+			rc = cfs_cpt_set_node(ost_io_cptable, cpt++, i);
+			if (!rc) {
+				CWARN("OSS Failed to set node %d for"
+				      "IO CPT table\n", i);
+				cfs_cpt_table_free(ost_io_cptable);
+				ost_io_cptable = NULL;
+				break;
+			}
+		}
+	}
 
 	memset(&svc_conf, 0, sizeof(svc_conf));
 	svc_conf = (typeof(svc_conf)) {
@@ -2535,11 +2567,18 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
 		},
 		.psc_thr		= {
 			.tc_thr_name		= "ll_ost_io",
-			.tc_nthrs_min		= oss_min_threads,
-			.tc_nthrs_max		= oss_max_threads,
+			.tc_thr_factor		= OSS_THR_FACTOR,
+			.tc_nthrs_init		= OSS_NTHRS_INIT,
+			.tc_nthrs_base		= OSS_NTHRS_BASE,
+			.tc_nthrs_max		= OSS_NTHRS_MAX,
 			.tc_nthrs_user		= oss_num_threads,
 			.tc_cpu_affinity	= 1,
 			.tc_ctx_tags		= LCT_DT_THREAD,
+		},
+		.psc_cpt		= {
+			.cc_cptable		= ost_io_cptable,
+			.cc_pattern		= ost_io_cptable == NULL ?
+						  oss_io_cpts : NULL,
 		},
 		.psc_ops		= {
 			.so_thr_init		= ost_thread_init,
@@ -2592,11 +2631,16 @@ static int ost_cleanup(struct obd_device *obd)
         ost->ost_create_service = NULL;
 	ost->ost_io_service = NULL;
 
-        cfs_mutex_unlock(&ost->ost_health_mutex);
+	cfs_mutex_unlock(&ost->ost_health_mutex);
 
-        lprocfs_obd_cleanup(obd);
+	lprocfs_obd_cleanup(obd);
 
-        RETURN(err);
+	if (ost_io_cptable != NULL) {
+		cfs_cpt_table_free(ost_io_cptable);
+		ost_io_cptable = NULL;
+	}
+
+	RETURN(err);
 }
 
 static int ost_health_check(const struct lu_env *env, struct obd_device *obd)

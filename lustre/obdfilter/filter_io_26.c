@@ -57,17 +57,6 @@
 
 /* 512byte block min */
 #define MAX_BLOCKS_PER_PAGE (CFS_PAGE_SIZE / 512)
-struct filter_iobuf {
-        cfs_atomic_t       dr_numreqs;  /* number of reqs being processed */
-        cfs_waitq_t        dr_wait;
-        int                dr_max_pages;
-        int                dr_npages;
-        int                dr_error;
-        struct page      **dr_pages;
-        unsigned long     *dr_blocks;
-        unsigned int       dr_ignore_quota:1;
-        struct filter_obd *dr_filter;
-};
 
 static void record_start_io(struct filter_iobuf *iobuf, int rw, int size,
                             struct obd_export *exp)
@@ -233,6 +222,7 @@ struct filter_iobuf *filter_alloc_iobuf(struct filter_obd *filter,
         if (iobuf->dr_blocks == NULL)
                 goto failed_2;
 
+	CFS_INIT_HLIST_NODE(&iobuf->dr_hlist);
         iobuf->dr_filter = filter;
         cfs_waitq_init(&iobuf->dr_wait);
         cfs_atomic_set(&iobuf->dr_numreqs, 0);
@@ -260,10 +250,11 @@ static void filter_clear_iobuf(struct filter_iobuf *iobuf)
 
 void filter_free_iobuf(struct filter_iobuf *iobuf)
 {
-        int num_pages = iobuf->dr_max_pages;
+	int num_pages = iobuf->dr_max_pages;
 
-        filter_clear_iobuf(iobuf);
+	filter_clear_iobuf(iobuf);
 
+	LASSERT(cfs_hlist_unhashed(&iobuf->dr_hlist));
         OBD_FREE(iobuf->dr_blocks,
                  MAX_BLOCKS_PER_PAGE * num_pages * sizeof(*iobuf->dr_blocks));
         OBD_FREE(iobuf->dr_pages,
@@ -282,9 +273,6 @@ void filter_iobuf_put(struct filter_obd *filter, struct filter_iobuf *iobuf,
                 return;
         }
 
-        LASSERTF(filter->fo_iobuf_pool[thread_id] == iobuf,
-                 "iobuf mismatch for thread %d: pool %p iobuf %p\n",
-                 thread_id, filter->fo_iobuf_pool[thread_id], iobuf);
         filter_clear_iobuf(iobuf);
 }
 
