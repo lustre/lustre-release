@@ -480,6 +480,22 @@ int osd_prepare_lustre(struct mkfs_opts *mop,
 	return ret;
 }
 
+int osd_init(void)
+{
+	int ret = 0;
+
+	ret = ldiskfs_init();
+	if (ret)
+		return ret;
+
+	return ret;
+}
+
+void osd_fini(void)
+{
+	ldiskfs_fini();
+}
+
 __u64 get_device_size(char* device)
 {
 	int ret, fd;

@@ -557,6 +557,10 @@ int main(int argc, char *const argv[])
                 print_ldd("Read previous values", &(mop.mo_ldd));
 #endif
 
+	ret = osd_init();
+	if (ret)
+		return ret;
+
         ret = parse_opts(argc, argv, &mop, &mountopts);
         if (ret)
                 goto out;
@@ -706,6 +710,7 @@ int main(int argc, char *const argv[])
 
 out:
         loop_cleanup(&mop);
+	osd_fini();
 
         /* Fix any crazy return values from system() */
         if (ret && ((ret & 255) == 0))

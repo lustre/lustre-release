@@ -106,6 +106,8 @@ int osd_make_lustre(struct mkfs_opts *mop);
 int osd_prepare_lustre(struct mkfs_opts *mop,
 		       char *default_mountopts, int default_len,
 		       char *always_mountopts, int always_len);
+int osd_init(void);
+void osd_fini(void);
 
 int ldiskfs_write_ldd(struct mkfs_opts *mop);
 int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *ldd);
@@ -114,5 +116,7 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop);
 int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
 			   char *default_mountopts, int default_len,
 			   char *always_mountopts, int always_len);
+int ldiskfs_init(void);
+void ldiskfs_fini(void);
 
 #endif

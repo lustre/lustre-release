@@ -820,3 +820,16 @@ out:
 	return ret;
 }
 
+int ldiskfs_init(void)
+{
+	/* Required because full path to DEBUGFS is not specified */
+	setenv("PATH", "/bin:/sbin:/usr/bin:/usr/sbin:/usr/local/bin", 0);
+
+	return 0;
+}
+
+void ldiskfs_fini(void)
+{
+	return;
+}
+
