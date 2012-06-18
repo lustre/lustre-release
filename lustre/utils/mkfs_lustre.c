@@ -88,12 +88,47 @@ int verbose = 1;
 static int print_only = 0;
 static int upgrade_to_18 = 0;
 
+#define FSLIST_LDISKFS "ldiskfs"
+#define HAVE_FSLIST
+#ifdef HAVE_ZFS_OSD
+ #ifdef HAVE_FSLIST
+   #define FSLIST_ZFS "|zfs"
+ #else
+  #define FSLIST_ZFS "zfs"
+  #define HAVE_FSLIST
+ #endif
+#else
+ #define FSLIST_ZFS ""
+#endif /* HAVE_ZFS_OSD */
+
+#ifndef HAVE_FSLIST
+ #error "no backing OSD types (ldiskfs or ZFS) are configured"
+#endif
+
+#define FSLIST FSLIST_LDISKFS FSLIST_ZFS
+
 void usage(FILE *out)
 {
         fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
-        fprintf(out, "usage: %s <target types> [options] <device>\n", progname);
+#ifdef HAVE_ZFS_OSD
+	fprintf(out, "usage: %s <target types> [--backfstype=zfs] [options] "
+			"<pool name>/<dataset name> [[<vdev type>] <device> "
+			"[<device> ...] [[vdev type>] ...]]\n", progname);
+#endif
+
+	fprintf(out, "usage: %s <target types> --backfstype="FSLIST" "
+			"[options] <device>\n", progname);
         fprintf(out,
                 "\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
+#ifdef HAVE_ZFS_OSD
+		"\t<pool name>: name of the ZFS pool where to create the "
+		"target (e.g. tank)\n"
+		"\t<dataset name>: name of the new dataset (e.g. ost1). The "
+		"dataset name must be unique within the ZFS pool\n"
+		"\t<vdev type>: type of vdev (mirror, raidz, raidz2, spare, "
+		"cache, log)\n"
+#endif
+		"\n"
                 "\ttarget types:\n"
                 "\t\t--ost: object storage, mutually exclusive with mdt,mgs\n"
                 "\t\t--mdt: metadata storage, mutually exclusive with ost\n"
