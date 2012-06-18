@@ -135,4 +135,16 @@ int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
 int ldiskfs_init(void);
 void ldiskfs_fini(void);
 
+#ifdef HAVE_ZFS_OSD
+int zfs_write_ldd(struct mkfs_opts *mop);
+int zfs_read_ldd(char *ds,  struct lustre_disk_data *ldd);
+int zfs_is_lustre(char *dev, unsigned *mount_type);
+int zfs_make_lustre(struct mkfs_opts *mop);
+int zfs_prepare_lustre(struct mkfs_opts *mop,
+		       char *default_mountopts, int default_len,
+		       char *always_mountopts, int always_len);
+int zfs_init(void);
+void zfs_fini(void);
+#endif
+
 #endif
