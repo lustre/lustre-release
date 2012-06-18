@@ -74,11 +74,24 @@ typedef __signed__ int __s32;
 typedef unsigned int __u32;
 #endif
 
-#ifndef HAVE___S64
+/*
+ * The kernel defines user space 64bit values as l64 on powerpc. We must
+ * match that definition to avoid conflicting definition compile errors.
+ */
+#if defined(__powerpc64__) && !defined(__KERNEL__)
+# ifndef HAVE___S64
+typedef __signed__ long __s64;
+# endif
+# ifndef HAVE___U64
+typedef unsigned long __u64;
+# endif
+#else /* !defined(__powerpc64__) || defined(__KERNEL__) */
+# ifndef HAVE___S64
 typedef __signed__ long long __s64;
-#endif
-#ifndef HAVE___U64
+# endif
+# ifndef HAVE___U64
 typedef unsigned long long __u64;
+# endif
 #endif
 
 /* long integer with size equal to pointer */
