@@ -1031,6 +1031,7 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
         io->u.ci_setattr.sa_valid = attr->ia_valid;
         io->u.ci_setattr.sa_capa = capa;
 
+again:
         if (cl_io_init(env, io, CIT_SETATTR, io->ci_obj) == 0) {
                 struct ccc_io *cio = ccc_env_io(env);
 
@@ -1044,8 +1045,10 @@ int cl_setattr_ost(struct inode *inode, const struct iattr *attr,
                 result = io->ci_result;
         }
         cl_io_fini(env, io);
-        cl_env_put(env, &refcheck);
-        RETURN(result);
+	if (unlikely(io->ci_need_restart))
+		goto again;
+	cl_env_put(env, &refcheck);
+	RETURN(result);
 }
 
 /*****************************************************************************

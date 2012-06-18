@@ -104,8 +104,8 @@ static int cl_io_invariant(const struct cl_io *io)
  */
 void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 {
-        struct cl_io_slice    *slice;
-        struct cl_thread_info *info;
+	struct cl_io_slice    *slice;
+	struct cl_thread_info *info;
 
         LINVRNT(cl_io_type_is_valid(io->ci_type));
         LINVRNT(cl_io_invariant(io));
@@ -128,7 +128,24 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
         info = cl_env_info(env);
         if (info->clt_current_io == io)
                 info->clt_current_io = NULL;
-        EXIT;
+
+	/* sanity check for layout change */
+	switch(io->ci_type) {
+	case CIT_READ:
+	case CIT_WRITE:
+	case CIT_FAULT:
+	case CIT_FSYNC:
+		LASSERT(!io->ci_need_restart);
+		break;
+	case CIT_MISC:
+		/* Check ignore layout change conf */
+		LASSERT(ergo(io->ci_ignore_layout, !io->ci_need_restart));
+	case CIT_SETATTR:
+		break;
+	default:
+		LBUG();
+	}
+	EXIT;
 }
 EXPORT_SYMBOL(cl_io_fini);
 

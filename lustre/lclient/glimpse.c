@@ -224,6 +224,7 @@ int cl_glimpse_size0(struct inode *inode, int agl)
 
         result = cl_io_get(inode, &env, &io, &refcheck);
         if (result > 0) {
+	again:
                 result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
                 if (result > 0)
                         /*
@@ -235,9 +236,11 @@ int cl_glimpse_size0(struct inode *inode, int agl)
                         result = cl_glimpse_lock(env, io, inode, io->ci_obj,
                                                  agl);
                 cl_io_fini(env, io);
-                cl_env_put(env, &refcheck);
-        }
-        RETURN(result);
+		if (unlikely(io->ci_need_restart))
+			goto again;
+		cl_env_put(env, &refcheck);
+	}
+	RETURN(result);
 }
 
 int cl_local_size(struct inode *inode)

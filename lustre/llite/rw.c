@@ -1186,6 +1186,7 @@ int ll_writepage(struct page *vmpage, struct writeback_control *wbc)
 
         io = ccc_env_thread_io(env);
         io->ci_obj = clob;
+	io->ci_ignore_layout = 1;
         result = cl_io_init(env, io, CIT_MISC, clob);
         if (result == 0) {
                 page = cl_page_find(env, clob, vmpage->index,

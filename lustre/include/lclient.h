@@ -107,6 +107,10 @@ struct ccc_io {
          * True iff io is processing glimpse right now.
          */
         int                  cui_glimpse;
+	/**
+	 * Layout version when this IO is initialized
+	 */
+	__u32                cui_layout_gen;
         /**
          * File descriptor against which IO is done.
          */

@@ -2304,11 +2304,6 @@ struct cl_io {
         struct cl_lockset              ci_lockset;
         /** lock requirements, this is just a help info for sublayers. */
         enum cl_io_lock_dmd            ci_lockreq;
-        /**
-         * This io has held grouplock, to inform sublayers that
-         * don't do lockless i/o.
-         */
-        int                            ci_no_srvlock;
         union {
                 struct cl_rd_io {
                         struct cl_io_rw_common rd;
@@ -2352,7 +2347,29 @@ struct cl_io {
         struct cl_2queue     ci_queue;
         size_t               ci_nob;
         int                  ci_result;
-        int                  ci_continue;
+	unsigned int         ci_continue:1,
+	/**
+	 * This io has held grouplock, to inform sublayers that
+	 * don't do lockless i/o.
+	 */
+			     ci_no_srvlock:1,
+	/**
+	 * The whole IO need to be restarted because layout has been changed
+	 */
+			     ci_need_restart:1,
+	/**
+	 * Ignore layout change.
+	 * Most of the CIT_MISC operations can ignore layout change, because
+	 * the purpose to create this kind of cl_io is to give an environment
+	 * to run clio methods, for example:
+	 *   1. request group lock;
+	 *   2. flush caching pages by osc;
+	 *   3. writepage
+	 *   4. echo client
+	 * So far, only direct IO and glimpse clio need restart if layout
+	 * change during IO time.
+	 */
+			     ci_ignore_layout:1;
         /**
          * Number of pages owned by this IO. For invariant checking.
          */

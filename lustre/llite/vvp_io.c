@@ -85,18 +85,18 @@ static int vvp_io_fault_iter_init(const struct lu_env *env,
 
 static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 {
-        struct cl_io     *io  = ios->cis_io;
-        struct cl_object *obj = io->ci_obj;
+	struct cl_io     *io  = ios->cis_io;
+	struct cl_object *obj = io->ci_obj;
+	struct ccc_io    *cio = cl2ccc_io(env, ios);
+	__u32 gen;
+	int   result;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
-        if (io->ci_type == CIT_READ) {
-                struct vvp_io     *vio  = cl2vvp_io(env, ios);
-                struct ccc_io     *cio  = cl2ccc_io(env, ios);
 
-                if (vio->cui_ra_window_set)
-                        ll_ra_read_ex(cio->cui_fd->fd_file, &vio->cui_bead);
-        }
-
+	/* check layout version */
+	result = ll_layout_refresh(ccc_object_inode(obj), &gen);
+	if (cio->cui_layout_gen > 0)
+		io->ci_need_restart = cio->cui_layout_gen == gen;
 }
 
 static void vvp_io_fault_fini(const struct lu_env *env,
@@ -538,6 +538,17 @@ out:
                 result = 0;
         }
         return result;
+}
+
+static void vvp_io_read_fini(const struct lu_env *env, const struct cl_io_slice *ios)
+{
+	struct vvp_io *vio = cl2vvp_io(env, ios);
+	struct ccc_io *cio = cl2ccc_io(env, ios);
+
+	if (vio->cui_ra_window_set)
+		ll_ra_read_ex(cio->cui_fd->fd_file, &vio->cui_bead);
+
+	vvp_io_fini(env, ios);
 }
 
 static int vvp_io_write_start(const struct lu_env *env,
@@ -1057,7 +1068,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
 static const struct cl_io_operations vvp_io_ops = {
         .op = {
                 [CIT_READ] = {
-                        .cio_fini      = vvp_io_fini,
+                        .cio_fini      = vvp_io_read_fini,
                         .cio_lock      = vvp_io_read_lock,
                         .cio_start     = vvp_io_read_start,
                         .cio_advance   = ccc_io_advance
@@ -1098,8 +1109,9 @@ static const struct cl_io_operations vvp_io_ops = {
 int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
                 struct cl_io *io)
 {
-        struct vvp_io      *vio   = vvp_env_io(env);
-        struct ccc_io      *cio   = ccc_env_io(env);
+	struct vvp_io      *vio   = vvp_env_io(env);
+	struct ccc_io      *cio   = ccc_env_io(env);
+	struct inode       *inode = ccc_object_inode(obj);
         int                 result;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
@@ -1108,10 +1120,10 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
         CL_IO_SLICE_CLEAN(cio, cui_cl);
         cl_io_slice_add(io, &cio->cui_cl, obj, &vvp_io_ops);
         vio->cui_ra_window_set = 0;
-        result = 0;
-        if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
-                size_t count;
-		struct ll_inode_info *lli = ll_i2info(ccc_object_inode(obj));
+	result = 0;
+	if (io->ci_type == CIT_READ || io->ci_type == CIT_WRITE) {
+		size_t count;
+		struct ll_inode_info *lli = ll_i2info(inode);
 
                 count = io->u.ci_rw.crw_count;
                 /* "If nbyte is 0, read() will return 0 and have no other
@@ -1129,11 +1141,18 @@ int vvp_io_init(const struct lu_env *env, struct cl_object *obj,
 		 * jobs.
 		 */
 		lustre_get_jobid(lli->lli_jobid);
-        } else if (io->ci_type == CIT_SETATTR) {
-                if (!cl_io_is_trunc(io))
-                        io->ci_lockreq = CILR_MANDATORY;
-        }
-        RETURN(result);
+	} else if (io->ci_type == CIT_SETATTR) {
+		if (!cl_io_is_trunc(io))
+			io->ci_lockreq = CILR_MANDATORY;
+	}
+
+	/* Enqueue layout lock and get layout version. We need to do this
+	 * even for operations requiring to open file, such as read and write,
+	 * because it might not grant layout lock in IT_OPEN. */
+	if (result == 0 && !io->ci_ignore_layout)
+		result = ll_layout_refresh(inode, &cio->cui_layout_gen);
+
+	RETURN(result);
 }
 
 static struct vvp_io *cl2vvp_io(const struct lu_env *env,

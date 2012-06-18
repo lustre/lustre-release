@@ -1180,6 +1180,7 @@ static int cl_echo_enqueue(struct echo_object *eco, obd_off start, obd_off end,
         info = echo_env_info(env);
         io = &info->eti_io;
 
+	io->ci_ignore_layout = 1;
         result = cl_io_init(env, io, CIT_MISC, echo_obj2cl(eco));
         if (result < 0)
                 GOTO(out, result);
@@ -1289,6 +1290,8 @@ static int cl_echo_object_brw(struct echo_object *eco, int rw, obd_off offset,
         queue   = &info->eti_queue;
 
         cl_2queue_init(queue);
+
+	io->ci_ignore_layout = 1;
         rc = cl_io_init(env, io, CIT_MISC, obj);
         if (rc < 0)
                 GOTO(out, rc);
