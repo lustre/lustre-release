@@ -657,14 +657,13 @@ static int target_handle_reconnect(struct lustre_handle *conn,
                          * doing a valid reconnect from the same client. */
                         RETURN(EALREADY);
                 } else {
-                        LCONSOLE_WARN("%s: The server has already connected "
-                                      "client %s (at %s) with handle " LPX64
-                                      ", rejecting a client with the same "
-                                      "uuid trying to reconnect with "
-                                      "handle " LPX64, target->obd_name,
-                                      obd_uuid2str(&exp->exp_client_uuid),
-                                      obd_export_nid2str(exp),
-                                      hdl->cookie, conn->cookie);
+			LCONSOLE_WARN("%s: already connected client %s (at %s) "
+				      "with handle "LPX64". Rejecting client "
+				      "with the same UUID trying to reconnect "
+				      "with handle "LPX64"\n", target->obd_name,
+				      obd_uuid2str(&exp->exp_client_uuid),
+				      obd_export_nid2str(exp),
+				      hdl->cookie, conn->cookie);
                         memset(conn, 0, sizeof *conn);
                         /* target_handle_connect() treats EALREADY and
                          * -EALREADY differently.  -EALREADY is an error
