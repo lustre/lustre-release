@@ -1125,7 +1125,9 @@ static int ldlm_pools_shrink(ldlm_side_t client, int nr,
                 cached += ldlm_pool_granted(&ns->ns_pool);
                 ldlm_namespace_put(ns, 1);
         }
-        return cached;
+        /* we only decrease the SLV in server pools shrinker, return -1 to
+         * kernel to avoid needless loop. LU-1128 */
+        return (client == LDLM_NAMESPACE_SERVER) ? -1 : cached;
 }
 
 static int ldlm_pools_srv_shrink(SHRINKER_FIRST_ARG int nr_to_scan,
