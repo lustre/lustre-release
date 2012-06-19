@@ -3097,28 +3097,30 @@ test_51b() {
 run_test 51b "mkdir .../t-0 --- .../t-$NUMTEST ===================="
 
 test_51ba() { # LU-993
-        local BASE=$DIR/d51b
-        # unlink all but 100 subdirectories, then check it still works
-        local LEFT=100
-        local DELETE=$((NUMTEST - LEFT))
+	local BASE=$DIR/d51b
+	# unlink all but 100 subdirectories, then check it still works
+	local LEFT=100
+	local DELETE=$((NUMTEST - LEFT))
 
-        ! [ -d "${BASE}/t-$DELETE" ] && skip "test_51b() not run" && return 0
+	# continue on to run this test even if 51b didn't finish,
+	# just to delete the many subdirectories created.
+	! [ -d "${BASE}/t-1" ] && skip "test_51b() not run" && return 0
 
-        # for ldiskfs the nlink count should be 1, but this is OSD specific
-        # and so this is listed for informational purposes only
-        log "nlink before: $(stat -c %h $BASE)"
-        unlinkmany -d $BASE/t- $DELETE ||
-                error "unlink of first $DELETE subdirs failed"
+	# for ldiskfs the nlink count should be 1, but this is OSD specific
+	# and so this is listed for informational purposes only
+	log "nlink before: $(stat -c %h $BASE)"
+	unlinkmany -d $BASE/t- $DELETE ||
+		error "unlink of first $DELETE subdirs failed"
 
-        log "nlink between: $(stat -c %h $BASE)"
-        local FOUND=$(ls -l ${BASE} | wc -l)
-        FOUND=$((FOUND - 1))  # trim the first line of ls output
-        [ $FOUND -ne $LEFT ] &&
-                error "can't find subdirs: found only $FOUND/$LEFT"
+	log "nlink between: $(stat -c %h $BASE)"
+	local FOUND=$(ls -l ${BASE} | wc -l)
+	FOUND=$((FOUND - 1))  # trim the first line of ls output
+	[ $FOUND -ne $LEFT ] &&
+		error "can't find subdirs: found only $FOUND/$LEFT"
 
-        unlinkmany -d $BASE/t- $DELETE $LEFT ||
-                error "unlink of second $LEFT subdirs failed"
-        log "nlink after: $(stat -c %h $BASE)"
+	unlinkmany -d $BASE/t- $DELETE $LEFT ||
+		error "unlink of second $LEFT subdirs failed"
+	log "nlink after: $(stat -c %h $BASE)"
 }
 run_test 51ba "rmdir .../t-0 --- .../t-$NUMTEST"
 
@@ -4206,7 +4208,7 @@ test_65ib() { # bug12836
 run_test 65ib "getstripe -v on -1 default directory striping"
 
 test_65ic() { # bug12836
-	$LFS find -mtime -1 $MOUNT || error "find $MOUNT failed"
+	$LFS find -mtime -1 $MOUNT > /dev/null || error "find $MOUNT failed"
 }
 run_test 65ic "new find on -1 default directory striping"
 

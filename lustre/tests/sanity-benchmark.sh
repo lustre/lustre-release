@@ -194,7 +194,7 @@ test_fsx() {
     rm -f $testfile
     $LFS setstripe -c -1 $testfile
     CMD="fsx -c 50 -p 1000 -S $FSX_SEED -P $TMP -l $FSX_SIZE \
-        -N $((FSX_COUNT * 100)) $testfile"
+        -N $((FSX_COUNT * 100)) $FSXOPT $testfile"
     echo "Using: $CMD"
     $CMD || error "fsx failed"
     rm -f $testfile

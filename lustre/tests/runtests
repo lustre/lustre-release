@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # Script which does some basic tests to ensure we haven't regressed.
 # Probably a good idea to run this before doing any checkins.
@@ -16,8 +16,8 @@ init_test_env $@
 init_logging
 
 RUNTESTS_SRC=${RUNTESTS_SRC:-"/etc /bin"}
-[ "$COUNT" ] || COUNT=1000
-[ "$SLOW" = "no" ] && COUNT=100
+[ "$COUNT" ] || COUNT=10000
+[ "$SLOW" = "no" ] && COUNT=1000
 
 [ "$MCREATE" ] || MCREATE=mcreate
 
@@ -67,12 +67,15 @@ mkdir $DST || error "can't mkdir $DST" 10
 FILES=$TMP/runtests.files
 # use "NUL" instead of newline as filename terminator, bug 19702 
 find $RUNTESTS_SRC -type f -mtime +1 | head -n $COUNT | tr '\n' '\0' > $FILES
-[ -s "$FILES" ] || error "$RUNTESTS_SRC contains only files modifed less than 2 days ago"
+[ -s "$FILES" ] ||
+	error "$RUNTESTS_SRC contains only files modifed less than 2 days ago"
+COUNT=$(xargs -0 -n 1 echo < $FILES | wc -l)
 
-log "copying files from $RUNTESTS_SRC to $DST$RUNTESTS_SRC at `date`"
-tar cf - --null --files-from $FILES | tar xvf - -C $DST > /dev/null || error "copying $RUNTESTS_SRC" 11
+log "copying $COUNT files from $RUNTESTS_SRC to $DST$RUNTESTS_SRC at `date`"
+tar cf - --null --files-from $FILES | tar xvf - -C $DST > /dev/null ||
+	error "copying $RUNTESTS_SRC" 11
 
-log "comparing newly copied files at `date`"
+log "comparing $COUNT newly copied files at `date`"
 
 cat $FILES | tr "\0" "\n" | ( rc=0; while read f; do
 	[ $V ] && log "verifying $DST/$f"
@@ -85,10 +88,10 @@ log "finished at `date` ($(($(date +%s) - START)))"
 stopall || exit 19
 setupall || exit 20
 
-log "comparing previously copied files"
+log "comparing $COUNT previously copied files"
 cat $FILES | tr "\0" "\n" | ( rc=0; while read f; do
-        [ $V ] && log "verifying $DST/$f"
-        diff -q "$f" "$DST/$f" || rc=22
+	[ $V ] && log "verifying $DST/$f"
+	diff -q "$f" "$DST/$f" || rc=22
 done
 [ "$rc" = 0 ] || error_exit "old and new files are different: rc=$rc" )
 
@@ -114,7 +117,7 @@ fi
 # mkdirmany test (bug 589)
 log "running $MKDIRMANY $MOUNT/base$$ 100"
 $MKDIRMANY $MOUNT/base$$ 100 || error "mkdirmany failed"
-log "removing mkdirmany directories"
+log "removing $MKDIRMANY directories"
 rmdir $MOUNT/base$$* || error "mkdirmany cleanup failed"
 
 log "done"

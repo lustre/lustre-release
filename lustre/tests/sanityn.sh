@@ -330,7 +330,8 @@ run_test 15 "test out-of-space with multiple writers ==========="
 test_16() {
 	rm -f $MOUNT1/fsxfile
 	lfs setstripe $MOUNT1/fsxfile -c -1 # b=10919
-	fsx -c 50 -p 100 -N 2500 -l $((SIZE * 256)) -S 0 $MOUNT1/fsxfile $MOUNT2/fsxfile
+	fsx -c 50 -p 100 -N 2500 -l $((SIZE * 256)) -S 0 $FSXOPT \
+		$MOUNT1/fsxfile $MOUNT2/fsxfile
 }
 run_test 16 "2500 iterations of dual-mount fsx ================="
 

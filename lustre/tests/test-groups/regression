@@ -1,10 +1,10 @@
+runtests
 sanity
-metadata-updates
-sanity-benchmark
 sanityn
-lfsck
-liblustre
+sanity-benchmark
+metadata-updates
 racer
+lnet-selftest
 replay-single
 conf-sanity
 recovery-small
@@ -17,8 +17,8 @@ sanity-sec
 sanity-gss
 lustre_rsync-test
 ost-pools
-lnet-selftest
 mmp
 obdfilter-survey
 sgpdd-survey
 sanity-scrub
+lfsck
