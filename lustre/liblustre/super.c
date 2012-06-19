@@ -147,19 +147,15 @@ void llu_update_inode(struct inode *inode, struct lustre_md *md)
                 st->st_mode = (st->st_mode & ~S_IFMT)|(body->mode & S_IFMT);
 
         if (lsm != NULL) {
-                if (lli->lli_smd == NULL) {
-                        cl_file_inode_init(inode, md);
-                        lli->lli_smd = lsm;
-                        lli->lli_maxbytes = lsm->lsm_maxbytes;
-                        if (lli->lli_maxbytes > MAX_LFS_FILESIZE)
-                                lli->lli_maxbytes = MAX_LFS_FILESIZE;
-                } else {
-                        if (lov_stripe_md_cmp(lli->lli_smd, lsm)) {
-                                CERROR("lsm mismatch for inode %lld\n",
-                                       (long long)st->st_ino);
-                                LBUG();
-                        }
-                }
+		if (!lli->lli_has_smd) {
+			cl_file_inode_init(inode, md);
+			lli->lli_has_smd = true;
+			lli->lli_maxbytes = lsm->lsm_maxbytes;
+			if (lli->lli_maxbytes > MAX_LFS_FILESIZE)
+				lli->lli_maxbytes = MAX_LFS_FILESIZE;
+		}
+		if (md->lsm != NULL)
+			obd_free_memmd(llu_i2obdexp(inode), &md->lsm);
         }
 
         if (body->valid & OBD_MD_FLATIME) {
@@ -193,7 +189,7 @@ void llu_update_inode(struct inode *inode, struct lustre_md *md)
                 lli->lli_st_flags = body->flags;
         if (body->valid & OBD_MD_FLSIZE) {
                 if ((llu_i2sbi(inode)->ll_lco.lco_flags & OBD_CONNECT_SOM) &&
-                    S_ISREG(st->st_mode) && lli->lli_smd) {
+		    S_ISREG(st->st_mode) && lli->lli_has_smd) {
                         struct lustre_handle lockh;
                         ldlm_mode_t mode;
 
@@ -267,13 +263,13 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
                       __u64 ioepoch, int sync)
 {
-        struct llu_inode_info *lli = llu_i2info(inode);
-        struct ptlrpc_request_set *set;
-        struct lov_stripe_md *lsm = lli->lli_smd;
-        struct obd_info oinfo = { { { 0 } } };
-        int rc;
-        ENTRY;
+	struct ptlrpc_request_set *set;
+	struct lov_stripe_md *lsm = NULL;
+	struct obd_info oinfo = { { { 0 } } };
+	int rc;
+	ENTRY;
 
+	lsm = ccc_inode_lsm_get(inode);
         LASSERT(lsm);
 
         oinfo.oi_md = lsm;
@@ -303,6 +299,7 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
                         rc = ptlrpc_set_wait(set);
                 ptlrpc_set_destroy(set);
         }
+	ccc_inode_lsm_put(inode, lsm);
         if (rc)
                 RETURN(rc);
 
@@ -312,11 +309,11 @@ int llu_inode_getattr(struct inode *inode, struct obdo *obdo,
 
         obdo_refresh_inode(inode, oinfo.oi_oa, oinfo.oi_oa->o_valid);
         CDEBUG(D_INODE, "objid "LPX64" size %llu, blocks %llu, "
-               "blksize %llu\n", lli->lli_smd->lsm_object_id,
-               (long long unsigned)llu_i2stat(inode)->st_size,
-               (long long unsigned)llu_i2stat(inode)->st_blocks,
-               (long long unsigned)llu_i2stat(inode)->st_blksize);
-        RETURN(0);
+	       "blksize %llu\n", oinfo.oi_oa->o_id,
+	       (long long unsigned)llu_i2stat(inode)->st_size,
+	       (long long unsigned)llu_i2stat(inode)->st_blocks,
+	       (long long unsigned)llu_i2stat(inode)->st_blksize);
+	RETURN(0);
 }
 
 static struct inode* llu_new_inode(struct filesys *fs,
@@ -346,7 +343,7 @@ static struct inode* llu_new_inode(struct filesys *fs,
 
         /* initialize lli here */
         lli->lli_sbi = llu_fs2sbi(fs);
-        lli->lli_smd = NULL;
+	lli->lli_has_smd = false;
         lli->lli_symlink_name = NULL;
         lli->lli_flags = 0;
         lli->lli_maxbytes = (__u64)(~0UL);
@@ -442,12 +439,12 @@ static int llu_inode_revalidate(struct inode *inode)
 
 
                 llu_update_inode(inode, &md);
-                if (md.lsm != NULL && lli->lli_smd != md.lsm)
-                        obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
-                ptlrpc_req_finished(req);
-        }
+		if (md.lsm != NULL)
+			obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
+		ptlrpc_req_finished(req);
+	}
 
-        if (!lli->lli_smd) {
+	if (!lli->lli_has_smd) {
                 /* object not yet allocated, don't validate size */
                 st->st_atime = lli->lli_lvb.lvb_atime;
                 st->st_mtime = lli->lli_lvb.lvb_mtime;
@@ -509,8 +506,9 @@ static int null_if_equal(struct ldlm_lock *lock, void *data)
 
 void llu_clear_inode(struct inode *inode)
 {
-        struct llu_inode_info *lli = llu_i2info(inode);
-        struct llu_sb_info *sbi = llu_i2sbi(inode);
+	struct llu_inode_info *lli = llu_i2info(inode);
+	struct llu_sb_info *sbi = llu_i2sbi(inode);
+	struct lov_stripe_md *lsm;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu/%lu(%p)\n",
@@ -521,16 +519,13 @@ void llu_clear_inode(struct inode *inode)
         md_change_cbdata(sbi->ll_md_exp, ll_inode2fid(inode),
                          null_if_equal, inode);
 
-        if (lli->lli_smd)
-                obd_change_cbdata(sbi->ll_dt_exp, lli->lli_smd,
-                                  null_if_equal, inode);
+	lsm = ccc_inode_lsm_get(inode);
+	if (lsm != NULL)
+		obd_change_cbdata(sbi->ll_dt_exp, lsm, null_if_equal, inode);
+	ccc_inode_lsm_put(inode, lsm);
 
-        cl_inode_fini(inode);
-
-        if (lli->lli_smd) {
-                obd_free_memmd(sbi->ll_dt_exp, &lli->lli_smd);
-                lli->lli_smd = NULL;
-        }
+	cl_inode_fini(inode);
+	lli->lli_has_smd = false;
 
         if (lli->lli_symlink_name) {
                 OBD_FREE(lli->lli_symlink_name,
@@ -563,7 +558,7 @@ static int inode_setattr(struct inode * inode, struct iattr * attr)
          * inode_setattr() is only ever invoked with ATTR_SIZE (by
          * llu_setattr_raw()) when file has no bodies. Check this.
          */
-        LASSERT(ergo(ia_valid & ATTR_SIZE, llu_i2info(inode)->lli_smd == NULL));
+	LASSERT(ergo(ia_valid & ATTR_SIZE, !llu_i2info(inode)->lli_has_smd));
 
         if (ia_valid & ATTR_SIZE)
                 st->st_size = attr->ia_size;
@@ -675,7 +670,7 @@ static int llu_setattr_done_writing(struct inode *inode,
  */
 int llu_setattr_raw(struct inode *inode, struct iattr *attr)
 {
-        struct lov_stripe_md *lsm = llu_i2info(inode)->lli_smd;
+	int has_lsm = llu_i2info(inode)->lli_has_smd;
         struct intnl_stat *st = llu_i2stat(inode);
         int ia_valid = attr->ia_valid;
         struct md_op_data op_data = { { 0 } };
@@ -713,18 +708,18 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
         if (attr->ia_valid & (ATTR_MTIME | ATTR_CTIME))
                 CDEBUG(D_INODE, "setting mtime "CFS_TIME_T", ctime "CFS_TIME_T
 		       ", now = "CFS_TIME_T"\n",
-                       LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
-                       LTIME_S(CFS_CURRENT_TIME));
+		       LTIME_S(attr->ia_mtime), LTIME_S(attr->ia_ctime),
+		       LTIME_S(CFS_CURRENT_TIME));
 
-        /* NB: ATTR_SIZE will only be set after this point if the size
-         * resides on the MDS, ie, this file has no objects. */
-        if (lsm)
-                attr->ia_valid &= ~ATTR_SIZE;
+	/* NB: ATTR_SIZE will only be set after this point if the size
+	 * resides on the MDS, ie, this file has no objects. */
+	if (has_lsm)
+		attr->ia_valid &= ~ATTR_SIZE;
 
-        /* If only OST attributes being set on objects, don't do MDS RPC.
-         * In that case, we need to check permissions and update the local
-         * inode ourselves so we can call obdo_from_inode() always. */
-        if (ia_valid & (lsm ? ~(ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
+	/* If only OST attributes being set on objects, don't do MDS RPC.
+	 * In that case, we need to check permissions and update the local
+	 * inode ourselves so we can call obdo_from_inode() always. */
+	if (ia_valid & (has_lsm ? ~(ATTR_FROM_OPEN | ATTR_RAW) : ~0)) {
                 memcpy(&op_data.op_attr, attr, sizeof(*attr));
 
                 /* Open epoch for truncate. */
@@ -736,7 +731,7 @@ int llu_setattr_raw(struct inode *inode, struct iattr *attr)
                         RETURN(rc);
 
                 llu_ioepoch_open(llu_i2info(inode), op_data.op_ioepoch);
-                if (!lsm || !S_ISREG(st->st_mode)) {
+		if (!has_lsm || !S_ISREG(st->st_mode)) {
                         CDEBUG(D_INODE, "no lsm: not setting attrs on OST\n");
                         GOTO(out, rc);
                 }
@@ -1656,7 +1651,7 @@ static int llu_lov_setstripe_ea_info(struct inode *ino, int flags,
         int rc = 0;
         ENTRY;
 
-        if (lli->lli_smd) {
+	if (lli->lli_has_smd) {
                 CDEBUG(D_IOCTL, "stripe already exists for ino "DFID"\n",
                        PFID(&lli->lli_fid));
                 return -EEXIST;
@@ -1732,13 +1727,15 @@ static int llu_lov_setstripe(struct inode *ino, unsigned long arg)
 
 static int llu_lov_getstripe(struct inode *ino, unsigned long arg)
 {
-        struct lov_stripe_md *lsm = llu_i2info(ino)->lli_smd;
+	struct lov_stripe_md *lsm = NULL;
+	int rc = -ENODATA;
 
-        if (!lsm)
-                RETURN(-ENODATA);
-
-        return obd_iocontrol(LL_IOC_LOV_GETSTRIPE, llu_i2obdexp(ino), 0, lsm,
-                            (void *)arg);
+	lsm = ccc_inode_lsm_get(ino);
+	if (lsm != NULL)
+		rc = obd_iocontrol(LL_IOC_LOV_GETSTRIPE, llu_i2obdexp(ino), 0, lsm,
+				   (void *)arg);
+	ccc_inode_lsm_put(ino, lsm);
+	return rc;
 }
 
 static int llu_iop_ioctl(struct inode *ino, unsigned long int request,

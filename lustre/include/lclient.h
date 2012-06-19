@@ -404,4 +404,18 @@ int  cl_get_grouplock(struct cl_object *obj, unsigned long gid, int nonblock,
                       struct ccc_grouplock *cg);
 void cl_put_grouplock(struct ccc_grouplock *cg);
 
+/**
+ * New interfaces to get and put lov_stripe_md from lov layer. This violates
+ * layering because lov_stripe_md is supposed to be a private data in lov.
+ *
+ * NB: If you find you have to use these interfaces for your new code, please
+ * think about it again. These interfaces may be removed in the future for
+ * better layering. */
+struct lov_stripe_md *lov_lsm_get(struct cl_object *clobj);
+void lov_lsm_put(struct cl_object *clobj, struct lov_stripe_md *lsm);
+int lov_read_and_clear_async_rc(struct cl_object *clob);
+
+struct lov_stripe_md *ccc_inode_lsm_get(struct inode *inode);
+void ccc_inode_lsm_put(struct inode *inode, struct lov_stripe_md *lsm);
+
 #endif /*LCLIENT_H */

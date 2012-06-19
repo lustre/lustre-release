@@ -265,7 +265,7 @@ int lov_getstripe(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct lov_user_md *lump);
 int lov_alloc_memmd(struct lov_stripe_md **lsmp, __u16 stripe_count,
                     int pattern, int magic);
-void lov_free_memmd(struct lov_stripe_md **lsmp);
+int lov_free_memmd(struct lov_stripe_md **lsmp);
 
 void lov_dump_lmm_v1(int level, struct lov_mds_md_v1 *lmm);
 void lov_dump_lmm_v3(int level, struct lov_mds_md_v3 *lmm);
@@ -309,5 +309,12 @@ void lov_dump_pool(int level, struct pool_desc *pool);
 struct pool_desc *lov_find_pool(struct lov_obd *lov, char *poolname);
 int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool);
 void lov_pool_putref(struct pool_desc *pool);
+
+static inline struct lov_stripe_md *lsm_addref(struct lov_stripe_md *lsm)
+{
+	LASSERT(cfs_atomic_read(&lsm->lsm_refc) > 0);
+	cfs_atomic_inc(&lsm->lsm_refc);
+	return lsm;
+}
 
 #endif

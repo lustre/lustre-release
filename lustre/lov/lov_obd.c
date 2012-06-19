@@ -2768,22 +2768,6 @@ static int lov_set_info_async(const struct lu_env *env, struct obd_export *exp,
         RETURN(rc);
 }
 
-int lov_test_and_clear_async_rc(struct lov_stripe_md *lsm)
-{
-        int i, rc = 0;
-        ENTRY;
-
-        for (i = 0; i < lsm->lsm_stripe_count; i++) {
-                struct lov_oinfo *loi = lsm->lsm_oinfo[i];
-                if (loi->loi_ar.ar_rc && !rc)
-                        rc = loi->loi_ar.ar_rc;
-                loi->loi_ar.ar_rc = 0;
-        }
-        RETURN(rc);
-}
-EXPORT_SYMBOL(lov_test_and_clear_async_rc);
-
-
 static int lov_extent_calc(struct obd_export *exp, struct lov_stripe_md *lsm,
                            int cmd, __u64 *offset)
 {

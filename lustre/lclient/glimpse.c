@@ -115,7 +115,7 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
         result = 0;
         if (!(lli->lli_flags & LLIF_MDS_SIZE_LOCK)) {
                 CDEBUG(D_DLMTRACE, "Glimpsing inode "DFID"\n", PFID(fid));
-                if (lli->lli_smd) {
+		if (lli->lli_has_smd) {
                         /* NOTE: this looks like DLM lock request, but it may
                          *       not be one. Due to CEF_ASYNC flag (translated
                          *       to LDLM_FL_HAS_INTENT by osc), this is
@@ -253,7 +253,7 @@ int cl_local_size(struct inode *inode)
 
         ENTRY;
 
-        if (!cl_i2info(inode)->lli_smd)
+	if (!cl_i2info(inode)->lli_has_smd)
                 RETURN(0);
 
         result = cl_io_get(inode, &env, &io, &refcheck);

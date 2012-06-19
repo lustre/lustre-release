@@ -130,19 +130,21 @@ int lov_merge_lvb_kms(struct lov_stripe_md *lsm,
 int lov_merge_lvb(struct obd_export *exp,
                   struct lov_stripe_md *lsm, struct ost_lvb *lvb, int kms_only)
 {
-        int   rc;
-        __u64 kms;
+	int   rc;
+	__u64 kms;
 
-        ENTRY;
-        rc = lov_merge_lvb_kms(lsm, lvb, &kms);
-        if (kms_only)
-                lvb->lvb_size = kms;
+	ENTRY;
+	lov_stripe_lock(lsm);
+	rc = lov_merge_lvb_kms(lsm, lvb, &kms);
+	lov_stripe_unlock(lsm);
+	if (kms_only)
+		lvb->lvb_size = kms;
 	CDEBUG(D_INODE, "merged for FID "DFID" s="LPU64" m="LPU64" a="LPU64
 	       " c="LPU64" b="LPU64"\n",
 	       lsm->lsm_object_seq, (__u32)lsm->lsm_object_id,
 	       (__u32)(lsm->lsm_object_id >> 32), lvb->lvb_size, lvb->lvb_mtime,
 	       lvb->lvb_atime, lvb->lvb_ctime, lvb->lvb_blocks);
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /* Must be called under the lov_stripe_lock() */

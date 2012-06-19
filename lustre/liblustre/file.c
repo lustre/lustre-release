@@ -186,7 +186,6 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         struct intnl_stat *st = llu_i2stat(inode);
         struct ptlrpc_request *request;
         struct lookup_intent *it;
-        struct lov_stripe_md *lsm;
         int rc = 0;
         ENTRY;
 
@@ -214,8 +213,7 @@ int llu_iop_open(struct pnode *pnode, int flags, mode_t mode)
         if (!S_ISREG(st->st_mode))
                 GOTO(out_release, rc = 0);
 
-        lsm = lli->lli_smd;
-        if (lsm)
+	if (lli->lli_has_smd)
                 flags &= ~O_LOV_DELAY_CREATE;
         /*XXX: open_flags are overwritten and the previous ones are lost */
         lli->lli_open_flags = flags & ~(O_CREAT | O_EXCL | O_TRUNC);
@@ -335,10 +333,7 @@ int llu_som_update(struct inode *inode, struct md_op_data *op_data)
                                        old_flags & MF_GETATTR_LOCK);
                 if (rc) {
                         oa.o_valid = 0;
-                        if (rc == -ENOENT)
-                                CDEBUG(D_INODE, "objid "LPX64" is destroyed\n",
-                                       lli->lli_smd->lsm_object_id);
-                        else
+			if (rc != -ENOENT)
                                 CERROR("inode_getattr failed (%d): unable to "
                                        "send a Size-on-MDS attribute update "
                                        "for inode %llu/%lu\n", rc,

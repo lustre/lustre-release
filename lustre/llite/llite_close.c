@@ -248,10 +248,7 @@ int ll_som_update(struct inode *inode, struct md_op_data *op_data)
                                       old_flags & MF_GETATTR_LOCK);
                 if (rc) {
                         oa->o_valid = 0;
-                        if (rc == -ENOENT)
-                                CDEBUG(D_INODE, "objid "LPX64" is destroyed\n",
-                                       lli->lli_smd->lsm_object_id);
-                        else
+			if (rc != -ENOENT)
                                 CERROR("inode_getattr failed (%d): unable to "
                                        "send a Size-on-MDS attribute update "
                                        "for inode %lu/%u\n", rc, inode->i_ino,

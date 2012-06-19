@@ -144,7 +144,7 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
          * It is an anonymous dentry without OST objects created yet.
          * We have to find the parent to tell MDS how to init lov objects.
          */
-        if (S_ISREG(inode->i_mode) && ll_i2info(inode)->lli_smd == NULL &&
+	if (S_ISREG(inode->i_mode) && !ll_i2info(inode)->lli_has_smd &&
             parent != NULL) {
                 struct ll_inode_info *lli = ll_i2info(inode);
 

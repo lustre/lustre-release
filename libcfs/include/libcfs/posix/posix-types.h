@@ -41,6 +41,7 @@
 #define _LUSTRE_POSIX_TYPES_H
 
 #include <asm/types.h>
+#include <stdbool.h> /* for bool */
 #ifndef HAVE_UMODE_T
 typedef unsigned short cfs_umode_t;
 #else

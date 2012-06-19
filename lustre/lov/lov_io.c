@@ -36,6 +36,7 @@
  * Implementation of cl_io for LOV layer.
  *
  *   Author: Nikita Danilov <nikita.danilov@sun.com>
+ *   Author: Jinshan Xiong <jinshan.xiong@whamcloud.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LOV
@@ -84,7 +85,7 @@ static void lov_io_sub_fini(const struct lu_env *env, struct lov_io *lio,
 static void lov_io_sub_inherit(struct cl_io *io, struct lov_io *lio,
                                int stripe, loff_t start, loff_t end)
 {
-        struct lov_stripe_md *lsm    = lov_r0(lio->lis_object)->lo_lsm;
+	struct lov_stripe_md *lsm    = lio->lis_lsm;
         struct cl_io         *parent = lio->lis_cl.cis_io;
 
         switch(io->ci_type) {
@@ -259,7 +260,7 @@ static int lov_page_stripe(const struct cl_page *page)
 struct lov_io_sub *lov_page_subio(const struct lu_env *env, struct lov_io *lio,
                                   const struct cl_page_slice *slice)
 {
-        struct lov_stripe_md *lsm  = lov_r0(lio->lis_object)->lo_lsm;
+	struct lov_stripe_md *lsm  = lio->lis_lsm;
         struct cl_page       *page = slice->cpl_page;
         int stripe;
 
@@ -277,8 +278,7 @@ struct lov_io_sub *lov_page_subio(const struct lu_env *env, struct lov_io *lio,
 static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
                              struct cl_io *io)
 {
-        struct lov_object    *lov = lio->lis_object;
-        struct lov_stripe_md *lsm = lov_r0(lov)->lo_lsm;
+	struct lov_stripe_md *lsm = lio->lis_lsm;
         int result;
 
         LASSERT(lio->lis_object != NULL);
@@ -303,13 +303,14 @@ static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
 static void lov_io_slice_init(struct lov_io *lio,
                               struct lov_object *obj, struct cl_io *io)
 {
-        struct lov_stripe_md *lsm = lov_r0(obj)->lo_lsm;
+	struct lov_stripe_md *lsm = lov_lsm_addref(obj);
+	ENTRY;
 
-        LASSERT(lsm != NULL);
-        ENTRY;
+	io->ci_result = 0;
+	lio->lis_object = obj;
 
-        io->ci_result = 0;
-        lio->lis_object = obj;
+	LASSERT(lsm != NULL);
+	lio->lis_lsm = lsm; /* called inside lo_type_guard. */
         lio->lis_stripe_count = lsm->lsm_stripe_count;
 
         switch (io->ci_type) {
@@ -371,7 +372,9 @@ static void lov_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
                          lio->lis_nr_subios * sizeof lio->lis_subs[0]);
                 lio->lis_nr_subios = 0;
         }
-        EXIT;
+	lov_lsm_decref(lio->lis_object, lio->lis_lsm);
+	lio->lis_lsm = NULL;
+	EXIT;
 }
 
 static obd_off lov_offset_mod(obd_off val, int delta)
@@ -384,8 +387,8 @@ static obd_off lov_offset_mod(obd_off val, int delta)
 static int lov_io_iter_init(const struct lu_env *env,
                             const struct cl_io_slice *ios)
 {
-        struct lov_io        *lio = cl2lov_io(env, ios);
-        struct lov_stripe_md *lsm = lov_r0(lio->lis_object)->lo_lsm;
+	struct lov_io        *lio = cl2lov_io(env, ios);
+	struct lov_stripe_md *lsm = lio->lis_lsm;
         struct lov_io_sub    *sub;
         obd_off endpos;
         obd_off start;
@@ -423,9 +426,9 @@ static int lov_io_iter_init(const struct lu_env *env,
 static int lov_io_rw_iter_init(const struct lu_env *env,
                                const struct cl_io_slice *ios)
 {
-        struct lov_io        *lio = cl2lov_io(env, ios);
-        struct cl_io         *io  = ios->cis_io;
-        struct lov_stripe_md *lsm = lov_r0(cl2lov(ios->cis_obj))->lo_lsm;
+	struct lov_io        *lio = cl2lov_io(env, ios);
+	struct cl_io         *io  = ios->cis_io;
+	struct lov_stripe_md *lsm = lio->lis_lsm;
         loff_t start = io->u.ci_rw.crw_pos;
         loff_t next;
         unsigned long ssize = lsm->lsm_stripe_size;
@@ -449,12 +452,12 @@ static int lov_io_rw_iter_init(const struct lu_env *env,
 		CDEBUG(D_VFSTRACE, "stripe: "LPU64" chunk: ["LPU64", "LPU64") "
 		       LPU64"\n", (__u64)start, lio->lis_pos, lio->lis_endpos,
 		       (__u64)lio->lis_io_endpos);
-        }
-        /*
-         * XXX The following call should be optimized: we know, that
-         * [lio->lis_pos, lio->lis_endpos) intersects with exactly one stripe.
-         */
-        RETURN(lov_io_iter_init(env, ios));
+	}
+	/*
+	 * XXX The following call should be optimized: we know, that
+	 * [lio->lis_pos, lio->lis_endpos) intersects with exactly one stripe.
+	 */
+	RETURN(lov_io_iter_init(env, ios));
 }
 
 static int lov_io_call(const struct lu_env *env, struct lov_io *lio,
@@ -474,8 +477,8 @@ static int lov_io_call(const struct lu_env *env, struct lov_io *lio,
 
 		if (parent->ci_result == 0)
 			parent->ci_result = sub->sub_io->ci_result;
-        }
-        RETURN(rc);
+	}
+	RETURN(rc);
 }
 
 static int lov_io_lock(const struct lu_env *env, const struct cl_io_slice *ios)
@@ -913,7 +916,6 @@ int lov_io_init_raid0(const struct lu_env *env, struct cl_object *obj,
         CFS_INIT_LIST_HEAD(&lio->lis_active);
         lov_io_slice_init(lio, lov, io);
         if (io->ci_result == 0) {
-                LASSERT(lov_r0(lov)->lo_lsm != NULL);
                 io->ci_result = lov_io_subio_init(env, lio, io);
                 if (io->ci_result == 0)
                         cl_io_slice_add(io, &lio->lis_cl, obj, &lov_io_ops);
@@ -924,13 +926,14 @@ int lov_io_init_raid0(const struct lu_env *env, struct cl_object *obj,
 int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
                       struct cl_io *io)
 {
-        struct lov_io *lio = lov_env_io(env);
-        int result;
+	struct lov_io *lio = lov_env_io(env);
+	int result;
+	ENTRY;
 
-        ENTRY;
-        switch (io->ci_type) {
-        default:
-                LBUG();
+	lio->lis_lsm = NULL;
+	switch (io->ci_type) {
+	default:
+		LBUG();
 	case CIT_FSYNC:
         case CIT_MISC:
         case CIT_READ:

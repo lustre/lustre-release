@@ -385,13 +385,12 @@ static ssize_t ll_direct_IO_26(int rw, struct kiocb *iocb,
         long count = iov_length(iov, nr_segs);
         long tot_bytes = 0, result = 0;
         struct ll_inode_info *lli = ll_i2info(inode);
-        struct lov_stripe_md *lsm = lli->lli_smd;
         unsigned long seg = 0;
         long size = MAX_DIO_SIZE;
         int refcheck;
         ENTRY;
 
-        if (!lli->lli_smd || !lli->lli_smd->lsm_object_id)
+	if (!lli->lli_has_smd)
                 RETURN(-EBADF);
 
         /* FIXME: io smaller than PAGE_SIZE is broken on ia64 ??? */
@@ -488,14 +487,19 @@ out:
 
         if (tot_bytes > 0) {
                 if (rw == WRITE) {
-                        lov_stripe_lock(lsm);
-                        obd_adjust_kms(ll_i2dtexp(inode), lsm, file_offset, 0);
-                        lov_stripe_unlock(lsm);
-                }
-        }
+			struct lov_stripe_md *lsm;
 
-        cl_env_put(env, &refcheck);
-        RETURN(tot_bytes ? : result);
+			lsm = ccc_inode_lsm_get(inode);
+			LASSERT(lsm != NULL);
+			lov_stripe_lock(lsm);
+			obd_adjust_kms(ll_i2dtexp(inode), lsm, file_offset, 0);
+			lov_stripe_unlock(lsm);
+			ccc_inode_lsm_put(inode, lsm);
+		}
+	}
+
+	cl_env_put(env, &refcheck);
+	RETURN(tot_bytes ? : result);
 }
 
 #if defined(HAVE_KERNEL_WRITE_BEGIN_END) || defined(MS_HAS_NEW_AOPS)

@@ -1296,7 +1296,7 @@ int ll_readpage(struct file *file, struct page *vmpage)
                         result = cl_io_read_page(env, io, page);
                 } else {
                         /* Page from a non-object file. */
-                        LASSERT(!ll_i2info(vmpage->mapping->host)->lli_smd);
+			LASSERT(!ll_i2info(vmpage->mapping->host)->lli_has_smd);
                         unlock_page(vmpage);
                         result = 0;
                 }

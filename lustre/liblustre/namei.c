@@ -346,8 +346,7 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
                         if (md.lsm != NULL)
                                 obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
                         RETURN(inode ? PTR_ERR(inode) : -ENOMEM);
-                } else if (md.lsm != NULL &&
-                           llu_i2info(inode)->lli_smd != md.lsm) {
+		} else if (md.lsm != NULL) {
                         obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
                 }
 
@@ -356,11 +355,8 @@ static int lookup_it_finish(struct ptlrpc_request *request, int offset,
 
                 /* If this is a stat, get the authoritative file size */
                 if (it->it_op == IT_GETATTR && S_ISREG(st->st_mode) &&
-                    lli->lli_smd != NULL) {
-                        struct lov_stripe_md *lsm = lli->lli_smd;
+		    lli->lli_has_smd) {
                         ldlm_error_t rc;
-
-                        LASSERT(lsm->lsm_object_id != 0);
 
                         /* bug 2334: drop MDS lock before acquiring OST lock */
                         ll_intent_drop_lock(it);

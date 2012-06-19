@@ -99,7 +99,6 @@ struct llu_inode_info {
         struct llu_sb_info     *lli_sbi;
         struct lu_fid           lli_fid;
 
-        struct lov_stripe_md   *lli_smd;
         char                   *lli_symlink_name;
         __u64                   lli_maxbytes;
         unsigned long           lli_flags;
@@ -118,6 +117,7 @@ struct llu_inode_info {
          * was opened several times without close, we track an
          * open_count here */
         struct ll_file_data    *lli_file_data;
+	bool                    lli_has_smd;
         int                     lli_open_flags;
         int                     lli_open_count;
 
@@ -407,11 +407,11 @@ static inline struct ll_file_data *cl_iattr2fd(struct inode *inode,
         return llu_i2info(inode)->lli_file_data;
 }
 
-static inline void cl_isize_lock(struct inode *inode, int lsmlock)
+static inline void cl_isize_lock(struct inode *inode)
 {
 }
 
-static inline void cl_isize_unlock(struct inode *inode, int lsmlock)
+static inline void cl_isize_unlock(struct inode *inode)
 {
 }
 

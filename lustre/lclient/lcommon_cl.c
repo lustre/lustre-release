@@ -457,6 +457,22 @@ int ccc_conf_set(const struct lu_env *env, struct cl_object *obj,
         return 0;
 }
 
+static void ccc_object_size_lock(struct cl_object *obj)
+{
+	struct inode *inode = ccc_object_inode(obj);
+
+	cl_isize_lock(inode);
+	cl_object_attr_lock(obj);
+}
+
+static void ccc_object_size_unlock(struct cl_object *obj)
+{
+	struct inode *inode = ccc_object_inode(obj);
+
+	cl_object_attr_unlock(obj);
+	cl_isize_unlock(inode);
+}
+
 /*****************************************************************************
  *
  * Page operations.
@@ -684,8 +700,7 @@ void ccc_lock_state(const struct lu_env *env,
                  * cancel the result of the truncate.  Getting the
                  * ll_inode_size_lock() after the enqueue maintains the DLM
                  * -> ll_inode_size_lock() acquiring order. */
-                cl_isize_lock(inode, 0);
-                cl_object_attr_lock(obj);
+		ccc_object_size_lock(obj);
                 rc = cl_object_attr_get(env, obj, attr);
                 if (rc == 0) {
                         if (lock->cll_descr.cld_start == 0 &&
@@ -702,10 +717,9 @@ void ccc_lock_state(const struct lu_env *env,
                 } else {
                         CL_LOCK_DEBUG(D_INFO, env, lock, "attr_get: %d\n", rc);
                 }
-                cl_object_attr_unlock(obj);
-                cl_isize_unlock(inode, 0);
-        }
-        EXIT;
+		ccc_object_size_unlock(obj);
+	}
+	EXIT;
 }
 
 /*****************************************************************************
@@ -823,22 +837,6 @@ void ccc_io_advance(const struct lu_env *env,
                         iv->iov_len = cio->cui_iov_olen - iv->iov_len;
                 }
         }
-}
-
-static void ccc_object_size_lock(struct cl_object *obj)
-{
-        struct inode *inode = ccc_object_inode(obj);
-
-        cl_isize_lock(inode, 0);
-        cl_object_attr_lock(obj);
-}
-
-static void ccc_object_size_unlock(struct cl_object *obj)
-{
-        struct inode *inode = ccc_object_inode(obj);
-
-        cl_object_attr_unlock(obj);
-        cl_isize_unlock(inode, 0);
 }
 
 /**
@@ -1335,4 +1333,14 @@ __u32 cl_fid_build_gen(const struct lu_fid *fid)
 
         gen = (fid_flatten(fid) >> 32);
         RETURN(gen);
+}
+
+struct lov_stripe_md *ccc_inode_lsm_get(struct inode *inode)
+{
+	return lov_lsm_get(cl_i2info(inode)->lli_clob);
+}
+
+void inline ccc_inode_lsm_put(struct inode *inode, struct lov_stripe_md *lsm)
+{
+	lov_lsm_put(cl_i2info(inode)->lli_clob, lsm);
 }

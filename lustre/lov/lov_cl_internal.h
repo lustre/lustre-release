@@ -199,6 +199,10 @@ struct lov_object {
          * Type of an object. Protected by lov_object::lo_type_guard.
          */
         enum lov_layout_type   lo_type;
+	/**
+	 * Waitq - wait for no one else is using lo_lsm
+	 */
+	cfs_waitq_t            lo_waitq;
 
         union lov_layout_state {
                 struct lov_layout_raid0 {
@@ -469,6 +473,11 @@ struct lov_io {
          * lov_io::lis_cl::cis_object.
          */
         struct lov_object *lis_object;
+	/**
+	 * Lov stripe - this determines how this io fans out.
+	 * Hold a refcount to the lsm so it can't go away during IO.
+	 */
+	struct lov_stripe_md *lis_lsm;
         /**
          * Original end-of-io position for this IO, set by the upper layer as
          * cl_io::u::ci_rw::pos + cl_io::u::ci_rw::count. lov remembers this,
@@ -603,6 +612,8 @@ struct lov_io_sub    *lov_page_subio    (const struct lu_env *env,
                                          struct lov_io *lio,
                                          const struct cl_page_slice *slice);
 
+void lov_lsm_decref(struct lov_object *lov, struct lov_stripe_md *lsm);
+struct lov_stripe_md *lov_lsm_addref(struct lov_object *lov);
 
 #define lov_foreach_target(lov, var)                    \
         for (var = 0; var < lov_targets_nr(lov); ++var)

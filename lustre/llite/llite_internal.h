@@ -162,7 +162,7 @@ struct ll_inode_info {
         __u64                           lli_open_fd_write_count;
         __u64                           lli_open_fd_exec_count;
         /* Protects access to och pointers and their usage counters, also
-         * atomicity of check-update of lli_smd */
+	 * atomicity of check-update of lli_has_smd */
         cfs_mutex_t                     lli_och_mutex;
 
         struct inode                    lli_vfs_inode;
@@ -264,20 +264,19 @@ struct ll_inode_info {
          *      In the future, if more members are added only for directory,
          *      some of the following members can be moved into u.f.
          */
-        struct lov_stripe_md           *lli_smd;
+	bool                            lli_has_smd;
         struct cl_object               *lli_clob;
 };
 
 /*
  * Locking to guarantee consistency of non-atomic updates to long long i_size,
- * consistency between file size and KMS, and consistency within
- * ->lli_smd->lsm_oinfo[]'s.
+ * consistency between file size and KMS.
  *
- * Implemented by ->lli_size_sem and ->lsm_sem, nested in that order.
+ * Implemented by ->lli_size_sem and ->lsm_lock, nested in that order.
  */
 
-void ll_inode_size_lock(struct inode *inode, int lock_lsm);
-void ll_inode_size_unlock(struct inode *inode, int unlock_lsm);
+void ll_inode_size_lock(struct inode *inode);
+void ll_inode_size_unlock(struct inode *inode);
 
 // FIXME: replace the name of this with LL_I to conform to kernel stuff
 // static inline struct ll_inode_info *LL_I(struct inode *inode)
@@ -1372,14 +1371,14 @@ static inline struct ll_file_data *cl_iattr2fd(struct inode *inode,
         return LUSTRE_FPRIVATE(attr->ia_file);
 }
 
-static inline void cl_isize_lock(struct inode *inode, int lsmlock)
+static inline void cl_isize_lock(struct inode *inode)
 {
-        ll_inode_size_lock(inode, lsmlock);
+	ll_inode_size_lock(inode);
 }
 
-static inline void cl_isize_unlock(struct inode *inode, int lsmlock)
+static inline void cl_isize_unlock(struct inode *inode)
 {
-        ll_inode_size_unlock(inode, lsmlock);
+	ll_inode_size_unlock(inode);
 }
 
 static inline void cl_isize_write_nolock(struct inode *inode, loff_t kms)
@@ -1390,9 +1389,9 @@ static inline void cl_isize_write_nolock(struct inode *inode, loff_t kms)
 
 static inline void cl_isize_write(struct inode *inode, loff_t kms)
 {
-        ll_inode_size_lock(inode, 0);
-        i_size_write(inode, kms);
-        ll_inode_size_unlock(inode, 0);
+	ll_inode_size_lock(inode);
+	i_size_write(inode, kms);
+	ll_inode_size_unlock(inode);
 }
 
 #define cl_isize_read(inode)             i_size_read(inode)

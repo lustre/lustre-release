@@ -239,7 +239,7 @@ static int vvp_io_read_lock(const struct lu_env *env,
 
         ENTRY;
         /* XXX: Layer violation, we shouldn't see lsm at llite level. */
-        if (lli->lli_smd != NULL) /* lsm-less file, don't need to lock */
+	if (lli->lli_has_smd) /* lsm-less file doesn't need to lock */
                 result = vvp_io_rw_lock(env, io, CLM_READ,
                                         io->u.ci_rd.rd.crw_pos,
                                         io->u.ci_rd.rd.crw_pos +
@@ -332,16 +332,16 @@ static int vvp_io_setattr_lock(const struct lu_env *env,
 
 static int vvp_do_vmtruncate(struct inode *inode, size_t size)
 {
-        int     result;
-        /*
-         * Only ll_inode_size_lock is taken at this level. lov_stripe_lock()
-         * is grabbed by ll_truncate() only over call to obd_adjust_kms().
-         */
-        ll_inode_size_lock(inode, 0);
-        result = vmtruncate(inode, size);
-        ll_inode_size_unlock(inode, 0);
+	int     result;
+	/*
+	 * Only ll_inode_size_lock is taken at this level. lov_stripe_lock()
+	 * is grabbed by ll_truncate() only over call to obd_adjust_kms().
+	 */
+	ll_inode_size_lock(inode);
+	result = vmtruncate(inode, size);
+	ll_inode_size_unlock(inode);
 
-        return result;
+	return result;
 }
 
 static int vvp_io_setattr_trunc(const struct lu_env *env,
@@ -1037,7 +1037,7 @@ static int vvp_io_commit_write(const struct lu_env *env,
 
         size = cl_offset(obj, pg->cp_index) + to;
 
-        ll_inode_size_lock(inode, 0);
+	ll_inode_size_lock(inode);
         if (result == 0) {
                 if (size > i_size_read(inode)) {
                         cl_isize_write_nolock(inode, size);
@@ -1050,8 +1050,8 @@ static int vvp_io_commit_write(const struct lu_env *env,
                 if (size > i_size_read(inode))
                         cl_page_discard(env, io, pg);
         }
-        ll_inode_size_unlock(inode, 0);
-        RETURN(result);
+	ll_inode_size_unlock(inode);
+	RETURN(result);
 }
 
 static const struct cl_io_operations vvp_io_ops = {
