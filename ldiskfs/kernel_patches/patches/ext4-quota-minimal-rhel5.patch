@@ -1,0 +1,20 @@
+Index: linux-2.6.18-238.12.1/fs/ext4/ext4.h
+===================================================================
+--- linux-2.6.18-238.12.1.orig/fs/ext4/ext4.h	2011-09-21 17:55:44.627741549 +0200
++++ linux-2.6.18-238.12.1/fs/ext4/ext4.h	2011-09-21 18:05:20.974106450 +0200
+@@ -971,6 +971,7 @@
+ #ifdef CONFIG_QUOTA
+ 	char *s_qf_names[MAXQUOTAS];		/* Names of quota files with journalled quota */
+ 	int s_jquota_fmt;			/* Format of quota to use */
++	unsigned long s_qf_inums[MAXQUOTAS];    /* Quota file inodes */
+ #endif
+ 	unsigned int s_want_extra_isize; /* New inodes should reserve # bytes */
+ 	struct rb_root system_blks;
+@@ -1171,6 +1172,7 @@
+ #define EXT4_FEATURE_RO_COMPAT_GDT_CSUM		0x0010
+ #define EXT4_FEATURE_RO_COMPAT_DIR_NLINK	0x0020
+ #define EXT4_FEATURE_RO_COMPAT_EXTRA_ISIZE	0x0040
++#define EXT4_FEATURE_RO_COMPAT_QUOTA		0x0100
+ 
+ #define EXT4_FEATURE_INCOMPAT_COMPRESSION	0x0001
+ #define EXT4_FEATURE_INCOMPAT_FILETYPE		0x0002

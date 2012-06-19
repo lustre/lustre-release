@@ -508,6 +508,9 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		osd_id_gen(id, osd_sb(osd)->s_root->d_inode->i_ino,
 			   osd_sb(osd)->s_root->d_inode->i_generation);
 	} else {
+		if (unlikely(fid_is_acct(fid)))
+			return osd_acct_obj_lookup(info, osd, fid, id);
+
 		if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
 			return osd_compat_spec_lookup(info, osd, fid, id);
 

@@ -1,0 +1,92 @@
+commit 21f976975cbecbdaf23ceeacc1cab2b1c05a028e
+Author: Jan Kara <jack@suse.cz>
+Date:   Mon Apr 4 15:33:39 2011 -0400
+
+    ext4: remove unnecessary [cm]time update of quota file
+
+    It is not necessary to update [cm]time of quota file on each quota
+    file write and it wastes journal space and IO throughput with inode
+    writes. So just remove the updating from ext4_quota_write() and only
+    update times when quotas are being turned off. Userspace cannot get
+    anything reliable from quota files while they are used by the kernel
+    anyway.
+
+    Signed-off-by: Jan Kara <jack@suse.cz>
+    Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+
+Index: linux-stage/fs/ext4/ext4_jbd2.h
+===================================================================
+--- linux-stage.orig/fs/ext4/ext4_jbd2.h	2012-06-26 11:26:25.000000000 +0200
++++ linux-stage/fs/ext4/ext4_jbd2.h	2012-06-26 11:35:31.025105000 +0200
+@@ -88,8 +88,8 @@
+ 
+ #ifdef CONFIG_QUOTA
+ /* Amount of blocks needed for quota update - we know that the structure was
+- * allocated so we need to update only inode+data */
+-#define EXT4_QUOTA_TRANS_BLOCKS(sb) (test_opt(sb, QUOTA) ? 2 : 0)
++ * allocated so we need to update only data block */
++#define EXT4_QUOTA_TRANS_BLOCKS(sb) (test_opt(sb, QUOTA) ? 1 : 0)
+ /* Amount of blocks needed for quota insert/delete - we do some block writes
+  * but inode, sb and group updates are done only once */
+ #define EXT4_QUOTA_INIT_BLOCKS(sb) (test_opt(sb, QUOTA) ? (DQUOT_INIT_ALLOC*\
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c	2012-06-26 11:35:09.000000000 +0200
++++ linux-stage/fs/ext4/super.c	2012-06-26 11:37:30.905374000 +0200
+@@ -4582,6 +4582,7 @@ static int ext4_quota_on(struct super_bl
+ static int ext4_quota_off(struct super_block *sb, int type, int remount)
+ {
+ 	struct quota_info *dqopt = sb_dqopt(sb);
++	int                cnt;
+ 
+ 	mutex_lock(&dqopt->dqonoff_mutex);
+ 	if (!sb_any_quota_loaded(sb)) {
+@@ -4598,6 +4599,37 @@ static int ext4_quota_off(struct super_b
+ 		up_read(&sb->s_umount);
+ 	}
+ 
++	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
++		struct inode      *inode;
++		handle_t          *handle;
++
++		if (type != -1 && cnt != type)
++			continue;
++
++		mutex_lock(&dqopt->dqonoff_mutex);
++		inode = dqopt->files[cnt];
++		if (!sb_has_quota_loaded(sb, cnt) || !inode) {
++			mutex_unlock(&dqopt->dqonoff_mutex);
++			continue;
++		}
++
++		inode = igrab(inode);
++		mutex_unlock(&dqopt->dqonoff_mutex);
++
++		if (!inode)
++			continue;
++
++		/* Update modification times of quota files when userspace can
++		 * start looking at them */
++		handle = ext4_journal_start(inode, 1);
++		if (!IS_ERR(handle)) {
++			inode->i_mtime = inode->i_ctime = CURRENT_TIME;
++			ext4_mark_inode_dirty(handle, inode);
++			ext4_journal_stop(handle);
++		}
++		iput(inode);
++	}
++
+ 	return vfs_quota_off(sb, type, remount);
+ }
+ 
+@@ -4696,9 +4728,8 @@ out:
+ 	if (inode->i_size < off + len) {
+ 		i_size_write(inode, off + len);
+ 		EXT4_I(inode)->i_disksize = inode->i_size;
++		ext4_mark_inode_dirty(handle, inode);
+ 	}
+-	inode->i_mtime = inode->i_ctime = CURRENT_TIME;
+-	ext4_mark_inode_dirty(handle, inode);
+ 	mutex_unlock(&inode->i_mutex);
+ 	return len;
+ }

@@ -1,0 +1,62 @@
+commit ca0e05e4b15193aeba72b995e90de990db7f8304
+Author: Dmitry Monakhov <dmonakhov@openvz.org>
+Date:   Sun Aug 1 17:48:36 2010 -0400
+
+    ext4: force block allocation on quota_off
+    
+    Perform full sync procedure so that any delayed allocation blocks are
+    allocated so quota will be consistent.
+    
+    Signed-off-by: Dmitry Monakhov <dmonakhov@openvz.org>
+    Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+
+Index: linux-stage/fs/ext4/super.c
+===================================================================
+--- linux-stage.orig/fs/ext4/super.c	2012-06-26 09:37:06.039508000 +0200
++++ linux-stage/fs/ext4/super.c	2012-06-26 11:35:09.824099000 +0200
+@@ -1104,6 +1104,7 @@ static int ext4_mark_dquot_dirty(struct
+ static int ext4_write_info(struct super_block *sb, int type);
+ static int ext4_quota_on(struct super_block *sb, int type, int format_id,
+ 				char *path, int remount);
++static int ext4_quota_off(struct super_block *sb, int type, int remount);
+ static int ext4_quota_on_mount(struct super_block *sb, int type);
+ static ssize_t ext4_quota_read(struct super_block *sb, int type, char *data,
+ 			       size_t len, loff_t off);
+@@ -1173,7 +1174,7 @@ static const struct dquot_operations ext
+ 
+ static const struct quotactl_ops ext4_qctl_operations = {
+ 	.quota_on	= ext4_quota_on,
+-	.quota_off	= vfs_quota_off,
++	.quota_off	= ext4_quota_off,
+ 	.quota_sync	= vfs_quota_sync,
+ 	.get_info	= vfs_get_dqinfo,
+ 	.set_info	= vfs_set_dqinfo,
+@@ -4578,6 +4579,28 @@ static int ext4_quota_on(struct super_bl
+ 	return err;
+ }
+ 
++static int ext4_quota_off(struct super_block *sb, int type, int remount)
++{
++	struct quota_info *dqopt = sb_dqopt(sb);
++
++	mutex_lock(&dqopt->dqonoff_mutex);
++	if (!sb_any_quota_loaded(sb)) {
++		/* nothing to do */
++		mutex_unlock(&dqopt->dqonoff_mutex);
++		return 0;
++	}
++	mutex_unlock(&dqopt->dqonoff_mutex);
++
++	/* Force all delayed allocation blocks to be allocated. */
++	if (test_opt(sb, DELALLOC)) {
++		down_read(&sb->s_umount);
++		sync_filesystem(sb);
++		up_read(&sb->s_umount);
++	}
++
++	return vfs_quota_off(sb, type, remount);
++}
++
+ /* Read data from quotafile - avoid pagecache and such because we cannot afford
+  * acquiring the locks... As quota files are never truncated and quota code
+  * itself serializes the operations (and noone else should touch the files)
