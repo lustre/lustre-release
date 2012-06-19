@@ -239,6 +239,14 @@ LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[AUTOCONF_HDIR=linux],
 LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],[],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])
 
+# ----------- kconfig.h exists ---------------
+# kernel 3.1, $LINUX/include/linux/kconfig.h is added
+# see kernel commit 2a11c8ea20bf850b3a2c60db8c2e7497d28aba99
+LB_CHECK_FILE([$LINUX_OBJ/include/linux/kconfig.h],
+              [CONFIG_INCLUDE=include/linux/kconfig.h],
+              [CONFIG_INCLUDE=include/$AUTOCONF_HDIR/autoconf.h])
+	AC_SUBST(CONFIG_INCLUDE)
+
 # ------------ rhconfig.h includes runtime-generated bits --
 # red hat kernel-source checks
 
@@ -383,7 +391,7 @@ $2
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/`uname -m|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 -include include/$AUTOCONF_HDIR/autoconf.h" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/`uname -m|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 -include $CONFIG_INCLUDE" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])

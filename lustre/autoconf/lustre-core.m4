@@ -1355,7 +1355,7 @@ LB_LINUX_TRY_COMPILE([
 AC_DEFUN([LC_BDI_NAME],
 [AC_MSG_CHECKING([if backing_device_info has name field])
 LB_LINUX_TRY_COMPILE([
-        #include <linux/blkkdev.h>
+        #include <linux/blkdev.h>
 ],[
         struct backing_dev_info bdi;
         bdi.name = NULL;

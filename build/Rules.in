@@ -65,14 +65,4 @@ EXTRA_CFLAGS += $(EXTRA_POST_CFLAGS)
 
 obj-m := $(patsubst %,%.o,$(MODULES))
 
-ifeq ($(PATCHLEVEL),4)
-# 2.4 rules
-O_TARGET := $(firstword $(obj-m))
-obj-y := $($(firstword $(MODULES))-objs)
-export-objs := $(obj-y) $(filter-out $(O_TARGET),$(obj-m))
-include $(TOPDIR)/Rules.make
-$(MODINCL)/%.ver: %.c
-	@true
 endif # PATCHLEVEL
-
-endif # KERNELRELEASE
