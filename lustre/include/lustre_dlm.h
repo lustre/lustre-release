@@ -733,6 +733,22 @@ struct ldlm_lock {
          * Protected by lock and resource locks.
          */
                               l_destroyed:1,
+	/*
+	 * it's set in lock_res_and_lock() and unset in unlock_res_and_lock().
+	 *
+	 * NB: compare with check_res_locked(), check this bit is cheaper,
+	 * also, spin_is_locked() is deprecated for kernel code, one reason is
+	 * because it works only for SMP so user needs add extra macros like
+	 * LASSERT_SPIN_LOCKED for uniprocessor kernels.
+	 */
+			      l_res_locked:1,
+	/*
+	 * it's set once we call ldlm_add_waiting_lock_res_locked()
+	 * to start the lock-timeout timer and it will never be reset.
+	 *
+	 * Protected by lock_res_and_lock().
+	 */
+			      l_waited:1,
         /**
          * flag whether this is a server namespace lock.
          */
