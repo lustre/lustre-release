@@ -64,7 +64,8 @@
 #define CAPA_KEYS         "capa_keys"
 #define CHANGELOG_USERS   "changelog_users"
 #define MGS_NIDTBL_DIR    "NIDTBL_VERSIONS"
-
+#define QMT_DIR           "quota_master"
+#define QSD_DIR           "quota_slave"
 
 /****************** persistent mount data *********************/
 

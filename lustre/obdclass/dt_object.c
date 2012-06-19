@@ -49,6 +49,8 @@
 /* fid_be_to_cpu() */
 #include <lustre_fid.h>
 
+#include <lquota.h>
+
 struct dt_find_hint {
         struct lu_fid        *dfh_fid;
         struct dt_device     *dfh_dt;
@@ -559,8 +561,23 @@ dt_obj_version_t dt_version_get(const struct lu_env *env, struct dt_object *o)
 }
 EXPORT_SYMBOL(dt_version_get);
 
+/* list of all supported index types */
+
+/* directories */
 const struct dt_index_features dt_directory_features;
 EXPORT_SYMBOL(dt_directory_features);
 
+/* scrub iterator */
 const struct dt_index_features dt_otable_features;
 EXPORT_SYMBOL(dt_otable_features);
+
+/* accounting indexes */
+const struct dt_index_features dt_acct_features = {
+	.dif_flags		= DT_IND_UPDATE,
+	.dif_keysize_min	= sizeof(__u64), /* 64-bit uid/gid */
+	.dif_keysize_max	= sizeof(__u64), /* 64-bit uid/gid */
+	.dif_recsize_min	= sizeof(struct acct_rec), /* 32 bytes */
+	.dif_recsize_max	= sizeof(struct acct_rec), /* 32 bytes */
+	.dif_ptrsize		= 4
+};
+EXPORT_SYMBOL(dt_acct_features);

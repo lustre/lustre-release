@@ -1,9 +1,13 @@
 MODULES := lquota
 
-lquota-objs := quota_check.o quota_context.o quota_ctl.o quota_interface.o
-lquota-objs += quota_master.o quota_adjust_qunit.o lproc_quota.o
+quota-objs := quota_check.o quota_context.o quota_ctl.o quota_interface.o
+quota-objs += quota_master.o quota_adjust_qunit.o lproc_quota.o lquota_lib.o
 
-EXTRA_DIST := $(lquota-objs:%.o=%.c) $(quotactl-objs:%.o=%.c) $(quotacheck-objs:%.o=%.c) quota_internal.h
+qsd-objs := qsd_lib.o
+
+lquota-objs := $(quota-objs) $(qsd-objs)
+
+EXTRA_DIST := $(lquota-objs:%.o=%.c) lquota_internal.h qsd_internal.h
+EXTRA_DIST += quota_internal.h
 
 @INCLUDE_RULES@
-

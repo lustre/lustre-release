@@ -215,6 +215,9 @@ enum dt_index_flags {
 extern const struct dt_index_features dt_directory_features;
 extern const struct dt_index_features dt_otable_features;
 
+/* index features supported by the accounting objects */
+extern const struct dt_index_features dt_acct_features;
+
 /**
  * This is a general purpose dt allocation hint.
  * It now contains the parent object.
