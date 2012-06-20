@@ -215,7 +215,6 @@ extern struct req_format RQF_LDLM_BL_CALLBACK;
 extern struct req_format RQF_LDLM_GL_CALLBACK;
 /* LOG req_format */
 extern struct req_format RQF_LOG_CANCEL;
-extern struct req_format RQF_LLOG_CATINFO;
 extern struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE;
 extern struct req_format RQF_LLOG_ORIGIN_HANDLE_DESTROY;
 extern struct req_format RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK;

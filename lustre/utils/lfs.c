@@ -88,7 +88,6 @@ static int lfs_osts(int argc, char **argv);
 static int lfs_df(int argc, char **argv);
 static int lfs_getname(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
-static int lfs_catinfo(int argc, char **argv);
 #ifdef HAVE_SYS_QUOTA_H
 static int lfs_quotachown(int argc, char **argv);
 static int lfs_quotacheck(int argc, char **argv);
@@ -156,11 +155,6 @@ command_t cmdlist[] = {
          "Display the status of MDS or OSTs (as specified in the command)\n"
          "or all the servers (MDS and OSTs).\n"
          "usage: check <osts|mds|servers>"},
-        {"catinfo", lfs_catinfo, 0,
-         "Show information of specified type logs.\n"
-         "usage: catinfo {keyword} [node name]\n"
-         "\tkeywords are one of followings: config, deletions.\n"
-         "\tnode name must be provided when use keyword config."},
         {"join", lfs_join, 0,
          "join two lustre files into one.\n"
          "obsolete, HEAD does not support it anymore.\n"},
@@ -1251,31 +1245,6 @@ static int lfs_check(int argc, char **argv)
 
         return rc;
 
-}
-
-static int lfs_catinfo(int argc, char **argv)
-{
-        char mntdir[PATH_MAX] = {'\0'};
-        int rc;
-
-        if (argc < 2 || (!strcmp(argv[1],"config") && argc < 3))
-                return CMD_HELP;
-
-        if (strcmp(argv[1], "config") && strcmp(argv[1], "deletions"))
-                return CMD_HELP;
-
-        rc = llapi_search_mounts(NULL, 0, mntdir, NULL);
-        if (rc == 0 && mntdir[0] != '\0') {
-                if (argc == 3)
-                        rc = llapi_catinfo(mntdir, argv[1], argv[2]);
-                else
-                        rc = llapi_catinfo(mntdir, argv[1], NULL);
-        } else {
-                fprintf(stderr, "no lustre_lite mounted.\n");
-                rc = -1;
-        }
-
-        return rc;
 }
 
 static int lfs_join(int argc, char **argv)

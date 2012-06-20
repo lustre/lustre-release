@@ -447,17 +447,6 @@ static const struct req_msg_field *mds_setattr_server[] = {
         &RMF_CAPA2
 };
 
-static const struct req_msg_field *llog_catinfo_client[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_NAME,
-        &RMF_STRING
-};
-
-static const struct req_msg_field *llog_catinfo_server[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_STRING
-};
-
 static const struct req_msg_field *llog_origin_handle_create_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_LLOGD_BODY,
@@ -620,7 +609,6 @@ static struct req_format *req_formats[] = {
         &RQF_LDLM_INTENT_CREATE,
         &RQF_LDLM_INTENT_UNLINK,
         &RQF_LOG_CANCEL,
-        &RQF_LLOG_CATINFO,
         &RQF_LLOG_ORIGIN_HANDLE_CREATE,
         &RQF_LLOG_ORIGIN_HANDLE_DESTROY,
         &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK,
@@ -1212,11 +1200,6 @@ struct req_format RQF_MDS_IS_SUBDIR =
         DEFINE_REQ_FMT0("MDS_IS_SUBDIR",
                         mdt_body_only, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_IS_SUBDIR);
-
-struct req_format RQF_LLOG_CATINFO =
-        DEFINE_REQ_FMT0("LLOG_CATINFO",
-                        llog_catinfo_client, llog_catinfo_server);
-EXPORT_SYMBOL(RQF_LLOG_CATINFO);
 
 struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE =
         DEFINE_REQ_FMT0("LLOG_ORIGIN_HANDLE_CREATE",

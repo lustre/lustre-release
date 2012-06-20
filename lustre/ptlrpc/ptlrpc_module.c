@@ -347,7 +347,6 @@ EXPORT_SYMBOL(llog_origin_handle_prev_block);
 EXPORT_SYMBOL(llog_origin_handle_read_header);
 EXPORT_SYMBOL(llog_origin_handle_close);
 EXPORT_SYMBOL(llog_client_ops);
-EXPORT_SYMBOL(llog_catinfo);
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Request Processor and Lock Management");

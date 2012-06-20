@@ -2713,7 +2713,7 @@ enum llogd_rpc_ops {
         LLOG_ORIGIN_HANDLE_WRITE_REC    = 504,
         LLOG_ORIGIN_HANDLE_CLOSE        = 505,
         LLOG_ORIGIN_CONNECT             = 506,
-        LLOG_CATINFO                    = 507,  /* for lfs catinfo */
+	LLOG_CATINFO			= 507,  /* deprecated */
         LLOG_ORIGIN_HANDLE_PREV_BLOCK   = 508,
         LLOG_ORIGIN_HANDLE_DESTROY      = 509,  /* for destroy llog object*/
         LLOG_LAST_OPC,

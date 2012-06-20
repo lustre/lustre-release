@@ -2590,51 +2590,6 @@ int llapi_target_check(int type_num, char **obd_type, char *dir)
 
 #undef MAX_STRING_SIZE
 
-int llapi_catinfo(char *dir, char *keyword, char *node_name)
-{
-        char raw[OBD_MAX_IOCTL_BUFFER];
-        char out[LLOG_CHUNK_SIZE];
-        char *buf = raw;
-        struct obd_ioctl_data data = { 0 };
-        char key[30];
-        DIR *root;
-        int rc;
-
-        sprintf(key, "%s", keyword);
-        memset(raw, 0, sizeof(raw));
-        memset(out, 0, sizeof(out));
-        data.ioc_inlbuf1 = key;
-        data.ioc_inllen1 = strlen(key) + 1;
-        if (node_name) {
-                data.ioc_inlbuf2 = node_name;
-                data.ioc_inllen2 = strlen(node_name) + 1;
-        }
-        data.ioc_pbuf1 = out;
-        data.ioc_plen1 = sizeof(out);
-        rc = obd_ioctl_pack(&data, &buf, sizeof(raw));
-        if (rc)
-                return rc;
-
-        root = opendir(dir);
-        if (root == NULL) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc, "open %s failed", dir);
-                return rc;
-        }
-
-        rc = ioctl(dirfd(root), OBD_IOC_LLOG_CATINFO, buf);
-        if (rc) {
-                rc = -errno;
-                llapi_error(LLAPI_MSG_ERROR, rc,
-                            "ioctl OBD_IOC_CATINFO failed");
-        } else {
-                llapi_printf(LLAPI_MSG_NORMAL, "%s", data.ioc_pbuf1);
-        }
-
-        closedir(root);
-        return rc;
-}
-
 /* Is this a lustre fs? */
 int llapi_is_lustre_mnttype(const char *type)
 {

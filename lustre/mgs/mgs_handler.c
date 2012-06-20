@@ -766,10 +766,9 @@ int mgs_handle(struct ptlrpc_request *req)
                 rc = llog_origin_handle_close(req);
                 break;
         case LLOG_CATINFO:
-                DEBUG_REQ(D_MGS, req, "llog catinfo");
-                req_capsule_set(&req->rq_pill, &RQF_LLOG_CATINFO);
-                rc = llog_catinfo(req);
-                break;
+		DEBUG_REQ(D_MGS, req, "llog catinfo");
+		rc = -EOPNOTSUPP;
+		break;
         default:
                 req->rq_status = -ENOTSUPP;
                 rc = ptlrpc_error(req);

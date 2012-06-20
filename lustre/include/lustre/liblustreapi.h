@@ -181,7 +181,6 @@ extern int llapi_obd_statfs(char *path, __u32 type, __u32 index,
                      struct obd_uuid *uuid_buf);
 extern int llapi_ping(char *obd_type, char *obd_name);
 extern int llapi_target_check(int num_types, char **obd_types, char *dir);
-extern int llapi_catinfo(char *dir, char *keyword, char *node_name);
 extern int llapi_file_get_lov_uuid(const char *path, struct obd_uuid *lov_uuid);
 extern int llapi_file_fget_lov_uuid(int fd, struct obd_uuid *lov_uuid);
 extern int llapi_lov_get_uuids(int fd, struct obd_uuid *uuidp, int *ost_count);
