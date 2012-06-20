@@ -27,7 +27,7 @@ init() {
                         Reviewed-by \
                         CC \
                 | tr ' ' '|')
-        readonly WIDTH_SUM=64
+        readonly WIDTH_SUM=62
         readonly WIDTH_REG=70
         readonly JIRA_FMT_A="^[A-Z]\{2,5\}-[0-9]\{1,5\} [-a-z0-9]\{2,9\}: "
         readonly JIRA_FMT_B="^[A-Z]\{2,5\}-[0-9]\{1,5\} "
