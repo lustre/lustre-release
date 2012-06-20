@@ -797,25 +797,28 @@ static inline int ldlm_ast_fini(struct ptlrpc_request *req,
  */
 static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
 {
-        struct ptlrpc_request *req;
-        ENTRY;
+	struct ptlrpc_request *req;
+	ENTRY;
 
-        if (lock->l_export == NULL) {
-                LDLM_DEBUG(lock, "client lock: no-op");
-                RETURN_EXIT;
-        }
+	if (lock->l_export == NULL) {
+		LDLM_DEBUG(lock, "client lock: no-op");
+		RETURN_EXIT;
+	}
 
 	spin_lock_bh(&lock->l_export->exp_rpc_lock);
-        cfs_list_for_each_entry(req, &lock->l_export->exp_hp_rpcs,
-                                rq_exp_list) {
-                /* Do not process requests that were not yet added to there
-                 * incoming queue or were already removed from there for
-                 * processing */
-                if (!req->rq_hp && !cfs_list_empty(&req->rq_list) &&
-                    req->rq_ops->hpreq_lock_match &&
-                    req->rq_ops->hpreq_lock_match(req, lock))
-                        ptlrpc_hpreq_reorder(req);
-        }
+	cfs_list_for_each_entry(req, &lock->l_export->exp_hp_rpcs,
+				rq_exp_list) {
+		/* Do not process requests that were not yet added to there
+		 * incoming queue or were already removed from there for
+		 * processing. We evaluate ptlrpc_request_reorderable() without
+		 * holding svcpt->scp_req_lock, and then redo the checks with
+		 * the lock held once we need to obtain a reliable result.
+		 */
+		if (ptlrpc_nrs_req_can_move(req) &&
+		    req->rq_ops->hpreq_lock_match &&
+		    req->rq_ops->hpreq_lock_match(req, lock))
+			ptlrpc_nrs_req_hp_move(req);
+	}
 	spin_unlock_bh(&lock->l_export->exp_rpc_lock);
 	EXIT;
 }

@@ -405,6 +405,330 @@ ptlrpc_lprocfs_wr_threads_max(struct file *file, const char *buffer,
 	return count;
 }
 
+/**
+ * \addtogoup nrs
+ * @{
+ */
+extern struct nrs_core nrs_core;
+
+/**
+ * Translates \e ptlrpc_nrs_pol_state values to human-readable strings.
+ *
+ * \param[in] state The policy state
+ */
+static const char *
+nrs_state2str(enum ptlrpc_nrs_pol_state state)
+{
+	switch (state) {
+	default:
+		LBUG();
+	case NRS_POL_STATE_INVALID:
+		return "invalid";
+	case NRS_POL_STATE_UNAVAIL:
+		return "unavail";
+	case NRS_POL_STATE_STOPPED:
+		return "stopped";
+	case NRS_POL_STATE_STOPPING:
+		return "stopping";
+	case NRS_POL_STATE_STARTING:
+		return "starting";
+	case NRS_POL_STATE_STARTED:
+		return "started";
+	}
+}
+
+/**
+ * Obtains status information for \a policy.
+ *
+ * Information is copied in \a info.
+ *
+ * \param[in] policy The policy
+ * \param[out] info  Holds returned status information
+ */
+void
+nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
+			   struct ptlrpc_nrs_pol_info *info)
+{
+	LASSERT(policy != NULL);
+	LASSERT(info != NULL);
+	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
+
+	memcpy(info->pi_name, policy->pol_name, NRS_POL_NAME_MAX);
+
+	info->pi_fallback    = !!(policy->pol_flags & PTLRPC_NRS_FL_FALLBACK);
+	info->pi_state	     = policy->pol_state;
+	/**
+	 * XXX: These are accessed without holding
+	 * ptlrpc_service_part::scp_req_lock.
+	 */
+	info->pi_req_queued  = policy->pol_req_queued;
+	info->pi_req_started = policy->pol_req_started;
+}
+
+/**
+ * Reads and prints policy status information for all policies of a PTLRPC
+ * service.
+ */
+static int
+ptlrpc_lprocfs_rd_nrs(char *page, char **start, off_t off,
+		      int count, int *eof, void *data)
+{
+	struct ptlrpc_service	       *svc = data;
+	struct ptlrpc_service_part     *svcpt;
+	struct ptlrpc_nrs	       *nrs;
+	struct ptlrpc_nrs_policy       *policy;
+	struct ptlrpc_nrs_pol_info     *infos;
+	struct ptlrpc_nrs_pol_info	tmp;
+	unsigned			num_pols;
+	unsigned			pol_idx = 0;
+	bool				hp = false;
+	int				i;
+	int				rc = 0;
+	int				rc2 = 0;
+	ENTRY;
+
+	/**
+	 * Serialize NRS core lprocfs operations with policy registration/
+	 * unregistration.
+	 */
+	mutex_lock(&nrs_core.nrs_mutex);
+
+	/**
+	 * Use the first service partition's regular NRS head in order to obtain
+	 * the number of policies registered with NRS heads of this service. All
+	 * service partitions will have the same number of policies.
+	 */
+	nrs = nrs_svcpt2nrs(svc->srv_parts[0], false);
+
+	spin_lock(&nrs->nrs_lock);
+	num_pols = svc->srv_parts[0]->scp_nrs_reg.nrs_num_pols;
+	spin_unlock(&nrs->nrs_lock);
+
+	OBD_ALLOC(infos, num_pols * sizeof(*infos));
+	if (infos == NULL)
+		GOTO(out, rc = -ENOMEM);
+again:
+
+	ptlrpc_service_for_each_part(svcpt, i, svc) {
+		nrs = nrs_svcpt2nrs(svcpt, hp);
+		spin_lock(&nrs->nrs_lock);
+
+		pol_idx = 0;
+
+		cfs_list_for_each_entry(policy, &nrs->nrs_policy_list,
+					pol_list) {
+			LASSERT(pol_idx < num_pols);
+
+			nrs_policy_get_info_locked(policy, &tmp);
+			/**
+			 * Copy values when handling the first service
+			 * partition.
+			 */
+			if (i == 0) {
+				memcpy(infos[pol_idx].pi_name, tmp.pi_name,
+				       NRS_POL_NAME_MAX);
+				memcpy(&infos[pol_idx].pi_state, &tmp.pi_state,
+				       sizeof(tmp.pi_state));
+				infos[pol_idx].pi_fallback = tmp.pi_fallback;
+				/**
+				 * For the rest of the service partitions
+				 * sanity-check the values we get.
+				 */
+			} else {
+				LASSERT(strncmp(infos[pol_idx].pi_name,
+						tmp.pi_name,
+						NRS_POL_NAME_MAX) == 0);
+				/**
+				 * Not asserting ptlrpc_nrs_pol_info::pi_state,
+				 * because it may be different between
+				 * instances of the same policy in different
+				 * service partitions.
+				 */
+				LASSERT(infos[pol_idx].pi_fallback ==
+					tmp.pi_fallback);
+			}
+
+			infos[pol_idx].pi_req_queued += tmp.pi_req_queued;
+			infos[pol_idx].pi_req_started += tmp.pi_req_started;
+
+			pol_idx++;
+		}
+		spin_unlock(&nrs->nrs_lock);
+	}
+
+	/**
+	 * Policy status information output is in YAML format.
+	 * For example:
+	 *
+	 *	regular_requests:
+	 *	  - name: fifo
+	 *	    state: started
+	 *	    fallback: yes
+	 *	    queued: 0
+	 *	    active: 0
+	 *
+	 *	  - name: crrn
+	 *	    state: started
+	 *	    fallback: no
+	 *	    queued: 2015
+	 *	    active: 384
+	 *
+	 *	high_priority_requests:
+	 *	  - name: fifo
+	 *	    state: started
+	 *	    fallback: yes
+	 *	    queued: 0
+	 *	    active: 2
+	 *
+	 *	  - name: crrn
+	 *	    state: stopped
+	 *	    fallback: no
+	 *	    queued: 0
+	 *	    active: 0
+	 */
+	rc2 = snprintf(page + rc, count - rc,
+		       "%s\n", !hp ?
+		       "\nregular_requests:" :
+		       "high_priority_requests:");
+
+	if (rc2 >= count - rc) {
+		/** Output was truncated */
+		GOTO(out, rc = -EFBIG);
+	}
+
+	rc += rc2;
+
+	for (pol_idx = 0; pol_idx < num_pols; pol_idx++) {
+		rc2 = snprintf(page + rc, count - rc,
+			       "  - name: %s\n"
+			       "    state: %s\n"
+			       "    fallback: %s\n"
+			       "    queued: %-20d\n"
+			       "    active: %-20d\n\n",
+			       infos[pol_idx].pi_name,
+			       nrs_state2str(infos[pol_idx].pi_state),
+			       infos[pol_idx].pi_fallback ? "yes" : "no",
+			       (int)infos[pol_idx].pi_req_queued,
+			       (int)infos[pol_idx].pi_req_started);
+
+
+		if (rc2 >= count - rc) {
+			/** Output was truncated */
+			GOTO(out, rc = -EFBIG);
+		}
+
+		rc += rc2;
+	}
+
+	if (!hp && nrs_svc_has_hp(svc)) {
+		memset(infos, 0, num_pols * sizeof(*infos));
+
+		/**
+		 * Redo the processing for the service's HP NRS heads' policies.
+		 */
+		hp = true;
+		goto again;
+	}
+
+	*eof = 1;
+
+out:
+	if (infos)
+		OBD_FREE(infos, num_pols * sizeof(*infos));
+
+	mutex_unlock(&nrs_core.nrs_mutex);
+
+	RETURN(rc);
+}
+
+/**
+ * The longest valid command string is the maxium policy name size, plus the
+ * length of the " reg" substring
+ */
+#define LPROCFS_NRS_WR_MAX_CMD	(NRS_POL_NAME_MAX + sizeof(" reg") - 1)
+
+/**
+ * Starts and stops a given policy on a PTLRPC service.
+ *
+ * Commands consist of the policy name, followed by an optional [reg|hp] token;
+ * if the optional token is omitted, the operation is performed on both the
+ * regular and high-priority (if the service has one) NRS head.
+ */
+static int
+ptlrpc_lprocfs_wr_nrs(struct file *file, const char *buffer,
+		      unsigned long count, void *data)
+{
+	struct ptlrpc_service	       *svc = data;
+	enum ptlrpc_nrs_queue_type	queue = PTLRPC_NRS_QUEUE_BOTH;
+	char			       *cmd;
+	char			       *cmd_copy = NULL;
+	char			       *token;
+	int				rc = 0;
+	ENTRY;
+
+	if (count >= LPROCFS_NRS_WR_MAX_CMD)
+		GOTO(out, rc = -EINVAL);
+
+	OBD_ALLOC(cmd, LPROCFS_NRS_WR_MAX_CMD);
+	if (cmd == NULL)
+		GOTO(out, rc = -ENOMEM);
+	/**
+	 * strsep() modifies its argument, so keep a copy
+	 */
+	cmd_copy = cmd;
+
+	if (cfs_copy_from_user(cmd, buffer, count))
+		GOTO(out, rc = -EFAULT);
+
+	cmd[count] = '\0';
+
+	token = strsep(&cmd, " ");
+
+	if (strlen(token) > NRS_POL_NAME_MAX - 1)
+		GOTO(out, rc = -EINVAL);
+
+	/**
+	 * No [reg|hp] token has been specified
+	 */
+	if (cmd == NULL)
+		goto default_queue;
+
+	/**
+	 * The second token is either NULL, or an optional [reg|hp] string
+	 */
+	if (strcmp(cmd, "reg") == 0)
+		queue = PTLRPC_NRS_QUEUE_REG;
+	else if (strcmp(cmd, "hp") == 0)
+		queue = PTLRPC_NRS_QUEUE_HP;
+	else
+		GOTO(out, rc = -EINVAL);
+
+default_queue:
+
+	if (queue == PTLRPC_NRS_QUEUE_HP && !nrs_svc_has_hp(svc))
+		GOTO(out, rc = -ENODEV);
+	else if (queue == PTLRPC_NRS_QUEUE_BOTH && !nrs_svc_has_hp(svc))
+		queue = PTLRPC_NRS_QUEUE_REG;
+
+	/**
+	 * Serialize NRS core lprocfs operations with policy registration/
+	 * unregistration.
+	 */
+	mutex_lock(&nrs_core.nrs_mutex);
+
+	rc = ptlrpc_nrs_policy_control(svc, queue, token, PTLRPC_NRS_CTL_START,
+				       false, NULL);
+
+	mutex_unlock(&nrs_core.nrs_mutex);
+out:
+	if (cmd_copy)
+		OBD_FREE(cmd_copy, LPROCFS_NRS_WR_MAX_CMD);
+
+	RETURN(rc < 0 ? rc : count);
+}
+
+/** @} nrs */
+
 struct ptlrpc_srh_iterator {
 	int			srhi_idx;
 	__u64			srhi_seq;
@@ -792,7 +1116,11 @@ void ptlrpc_lprocfs_register_service(struct proc_dir_entry *entry,
                 {.name       = "timeouts",
                  .read_fptr  = ptlrpc_lprocfs_rd_timeouts,
                  .data       = svc},
-                {NULL}
+                {.name       = "nrs_policies",
+		 .read_fptr  = ptlrpc_lprocfs_rd_nrs,
+		 .write_fptr = ptlrpc_lprocfs_wr_nrs,
+		 .data	     = svc},
+		{NULL}
         };
         static struct file_operations req_history_fops = {
                 .owner       = THIS_MODULE,

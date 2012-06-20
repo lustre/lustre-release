@@ -51,7 +51,6 @@ extern spinlock_t ptlrpc_last_xid_lock;
 #if RS_DEBUG
 extern spinlock_t ptlrpc_rs_debug_lock;
 #endif
-extern spinlock_t ptlrpc_all_services_lock;
 extern struct mutex pinger_mutex;
 extern struct mutex ptlrpcd_mutex;
 
@@ -64,7 +63,7 @@ __init int ptlrpc_init(void)
 #if RS_DEBUG
 	spin_lock_init(&ptlrpc_rs_debug_lock);
 #endif
-	spin_lock_init(&ptlrpc_all_services_lock);
+	mutex_init(&ptlrpc_all_services_mutex);
 	mutex_init(&pinger_mutex);
 	mutex_init(&ptlrpcd_mutex);
         ptlrpc_init_xid();
@@ -110,8 +109,13 @@ __init int ptlrpc_init(void)
         if (rc)
                 GOTO(cleanup, rc);
 
-#ifdef __KERNEL__
 	cleanup_phase = 7;
+	rc = ptlrpc_nrs_init();
+	if (rc)
+		GOTO(cleanup, rc);
+
+#ifdef __KERNEL__
+	cleanup_phase = 8;
 	rc = tgt_mod_init();
 	if (rc)
 		GOTO(cleanup, rc);
@@ -121,9 +125,11 @@ __init int ptlrpc_init(void)
 cleanup:
         switch(cleanup_phase) {
 #ifdef __KERNEL__
+	case 8:
+		ptlrpc_nrs_fini();
+#endif
 	case 7:
 		llog_recov_fini();
-#endif
         case 6:
                 sptlrpc_fini();
         case 5:
@@ -147,6 +153,7 @@ cleanup:
 static void __exit ptlrpc_exit(void)
 {
 	tgt_mod_exit();
+	ptlrpc_nrs_fini();
         llog_recov_fini();
         sptlrpc_fini();
         ldlm_exit();
