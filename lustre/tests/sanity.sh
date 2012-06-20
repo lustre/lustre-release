@@ -7647,44 +7647,43 @@ test_150() {
 run_test 150 "truncate/append tests"
 
 function roc_hit() {
-    local list=$(comma_list $(osts_nodes))
+	local list=$(comma_list $(osts_nodes))
 
-    ACCNUM=$(do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
-        awk '/'cache_hit'/ {sum+=$2} END {print sum}')
-    echo $ACCNUM
+	echo $(get_obdfilter_param $list '' stats |
+	       awk '/'cache_hit'/ {sum+=$2} END {print sum}')
 }
 
 function set_cache() {
-    local on=1
+	local on=1
 
-    if [ "$2" == "off" ]; then
-        on=0;
-    fi
-    local list=$(comma_list $(osts_nodes))
-    do_nodes $list lctl set_param obdfilter.*.${1}_cache_enable $on
+	if [ "$2" == "off" ]; then
+		on=0;
+	fi
+	local list=$(comma_list $(osts_nodes))
+	set_obdfilter_param $list '' $1_cache_enable $on
 
-    cancel_lru_locks osc
+	cancel_lru_locks osc
 }
 
 test_151() {
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-        local CPAGES=3
-        local list=$(comma_list $(osts_nodes))
+	local CPAGES=3
+	local list=$(comma_list $(osts_nodes))
 
-        # check whether obdfilter is cache capable at all
-        if ! do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable > /dev/null; then
-                echo "not cache-capable obdfilter"
-                return 0
-        fi
+	# check whether obdfilter is cache capable at all
+	if ! get_obdfilter_param $list '' read_cache_enable >/dev/null; then
+		echo "not cache-capable obdfilter"
+		return 0
+	fi
 
-        # check cache is enabled on all obdfilters
-        if do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable | grep 0 >&/dev/null; then
-                echo "oss cache is disabled"
-                return 0
-        fi
+	# check cache is enabled on all obdfilters
+	if get_obdfilter_param $list '' read_cache_enable | grep 0; then
+		echo "oss cache is disabled"
+		return 0
+	fi
 
-        do_nodes $list $LCTL set_param -n obdfilter.*.writethrough_cache_enable 1
+	set_obdfilter_param $list '' writethrough_cache_enable 1
 
         # pages should be in the case right after write
         dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
@@ -7698,7 +7697,7 @@ test_151() {
 
         # the following read invalidates the cache
         cancel_lru_locks osc
-        do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 0
+	set_obdfilter_param $list '' read_cache_enable 0
         cat $DIR/$tfile >/dev/null
 
         # now data shouldn't be found in the cache
@@ -7710,7 +7709,7 @@ test_151() {
                 error "IN CACHE: before: $BEFORE, after: $AFTER"
         fi
 
-        do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 1
+	set_obdfilter_param $list '' read_cache_enable 1
         rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
