@@ -3051,6 +3051,7 @@ test_49() { # LU-1030
 	done
 	# restore original max_pages_per_rpc
 	$LCTL set_param $osc1_mppc=$orig_mppc
+	rm $DIR/$tfile || error "rm $DIR/$tfile failed"
 }
 run_test 49 "Change max_pages_per_rpc won't break osc extent"
 
