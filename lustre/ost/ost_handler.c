@@ -1606,6 +1606,11 @@ static int ost_rw_hpreq_check(struct ptlrpc_request *req)
         RETURN(ost_rw_prolong_locks(req, ioo, nb, &body->oa, mode));
 }
 
+static void ost_rw_hpreq_fini(struct ptlrpc_request *req)
+{
+        (void)ost_rw_hpreq_check(req);
+}
+
 static int ost_punch_prolong_locks(struct ptlrpc_request *req, struct obdo *oa)
 {
         struct ldlm_res_id res_id = { .name = { oa->o_id } };
@@ -1668,14 +1673,21 @@ static int ost_punch_hpreq_check(struct ptlrpc_request *req)
         RETURN(ost_punch_prolong_locks(req, &body->oa));
 }
 
+static void ost_punch_hpreq_fini(struct ptlrpc_request *req)
+{
+        (void)ost_punch_hpreq_check(req);
+}
+
 struct ptlrpc_hpreq_ops ost_hpreq_rw = {
         .hpreq_lock_match  = ost_rw_hpreq_lock_match,
         .hpreq_check       = ost_rw_hpreq_check,
+        .hpreq_fini        = ost_rw_hpreq_fini,
 };
 
 struct ptlrpc_hpreq_ops ost_hpreq_punch = {
         .hpreq_lock_match  = ost_punch_hpreq_lock_match,
         .hpreq_check       = ost_punch_hpreq_check,
+        .hpreq_fini        = ost_punch_hpreq_fini,
 };
 
 /** Assign high priority operations to the request if needed. */
