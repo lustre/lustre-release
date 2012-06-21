@@ -99,7 +99,6 @@ static int osc_io_submit(const struct lu_env *env,
                          const struct cl_io_slice *ios,
 			 enum cl_req_type crt, struct cl_2queue *queue)
 {
-	struct obd_export *exp;
         struct cl_page    *page;
         struct cl_page    *tmp;
         struct client_obd *cli  = NULL;
@@ -121,7 +120,6 @@ static int osc_io_submit(const struct lu_env *env,
 	CDEBUG(D_CACHE, "%d %d\n", qin->pl_nr, crt);
 
 	osc = cl2osc(ios->cis_obj);
-	exp = osc_export(osc);
 	cli = osc_cli(osc);
 	max_pages = cli->cl_max_pages_per_rpc;
 

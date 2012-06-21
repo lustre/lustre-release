@@ -2532,7 +2532,7 @@ lustre_check_acl(struct inode *inode, int mask)
         int rc;
         ENTRY;
 
-#ifdef IPERM_FLAG_RCU
+#ifdef HAVE_GENERIC_PERMISSION_4ARGS
         if (flags & IPERM_FLAG_RCU)
                 return -ECHILD;
 #endif
@@ -2565,7 +2565,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
         int rc = 0;
         ENTRY;
 
-#ifdef IPERM_FLAG_RCU
+#ifdef HAVE_GENERIC_PERMISSION_4ARGS
 	if (flags & IPERM_FLAG_RCU)
 		return -ECHILD;
 #endif

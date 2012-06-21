@@ -544,5 +544,5 @@ lnet_msg_container_setup(struct lnet_msg_container *container)
 		return -ENOMEM;
 	}
 
-	return 0;
+	return rc;
 }

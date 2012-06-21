@@ -171,11 +171,11 @@ static int ll_ddelete(HAVE_D_DELETE_CONST struct dentry *de)
 	       d_unhashed((struct dentry *)de) ? "" : "hashed,",
 	       list_empty(&de->d_subdirs) ? "" : "subdirs");
 
-	/* kernel >= 2.6.38 last refcount is decreased after this function. */
-#ifdef DCACHE_OP_DELETE
-	LASSERT(d_refcount(de) == 1);
-#else
+#ifdef HAVE_DCACHE_LOCK
 	LASSERT(d_refcount(de) == 0);
+#else
+	/* kernel >= 2.6.38 last refcount is decreased after this function. */
+	LASSERT(d_refcount(de) == 1);
 #endif
 
 	/* if not ldlm lock for this inode, set i_nlink to 0 so that
@@ -233,10 +233,11 @@ int ll_dops_init(struct dentry *de, int block, int init_sa)
         if (lld != NULL && init_sa != 0)
                 lld->lld_sa_generation = 0;
 
-#ifdef DCACHE_OP_HASH
-	LASSERT(de->d_op == &ll_d_ops);
-#else
+#ifdef HAVE_DCACHE_LOCK
 	de->d_op = &ll_d_ops;
+#else
+	/* kernel >= 2.6.38 d_op is set in d_alloc() */
+	LASSERT(de->d_op == &ll_d_ops);
 #endif
         return rc;
 }
@@ -613,7 +614,8 @@ int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd)
         int rc;
         ENTRY;
 
-#ifdef LOOKUP_RCU
+#ifndef HAVE_DCACHE_LOCK
+	/* kernel >= 2.6.38 supports rcu-walk, but lustre doesn't. */
 	if (nd->flags & LOOKUP_RCU)
 		return -ECHILD;
 #endif

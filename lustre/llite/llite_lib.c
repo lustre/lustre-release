@@ -535,11 +535,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         cl_sb_init(sb);
 
         sb->s_root = d_alloc_root(root);
-#ifdef DCACHE_OP_HASH
+#ifdef HAVE_DCACHE_LOCK
+	sb->s_root->d_op = &ll_d_root_ops;
+#else
+	/* kernel >= 2.6.38 store dentry operations in sb->s_d_op. */
 	d_set_d_op(sb->s_root, &ll_d_root_ops);
 	sb->s_d_op = &ll_d_ops;
-#else
-	sb->s_root->d_op = &ll_d_root_ops;
 #endif
 
         sbi->ll_sdev_orig = sb->s_dev;
