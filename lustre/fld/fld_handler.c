@@ -492,7 +492,14 @@ static int fld_server_proc_init(struct lu_server_fld *fld)
                 RETURN(rc);
         }
 
-        RETURN(rc);
+	rc = lprocfs_seq_create(fld->lsf_proc_dir, "fldb", 0444,
+				&fld_proc_seq_fops, fld);
+	if (rc) {
+		lprocfs_remove(&fld->lsf_proc_dir);
+		fld->lsf_proc_dir = NULL;
+	}
+
+	RETURN(rc);
 }
 
 static void fld_server_proc_fini(struct lu_server_fld *fld)

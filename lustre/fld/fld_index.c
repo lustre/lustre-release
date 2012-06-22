@@ -82,8 +82,7 @@ const struct dt_index_features fld_index_features = {
 
 extern struct lu_context_key fld_thread_key;
 
-static struct dt_key *fld_key(const struct lu_env *env,
-                              const seqno_t seq)
+static struct dt_key *fld_key(const struct lu_env *env, const seqno_t seq)
 {
         struct fld_thread_info *info;
         ENTRY;

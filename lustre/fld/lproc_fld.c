@@ -26,6 +26,8 @@
 /*
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
+ *
+ * Copyright (c) 2011, 2012, Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -36,6 +38,7 @@
  * FLD (FIDs Location Database)
  *
  * Author: Yury Umanets <umka@clusterfs.com>
+ *	Di Wang <di.wang@whamcloud.com>
  */
 
 #define DEBUG_SUBSYSTEM S_FLD
@@ -54,6 +57,7 @@
 #include <obd_support.h>
 #include <lustre_req_layout.h>
 #include <lustre_fld.h>
+#include <lustre_fid.h>
 #include "fld_internal.h"
 
 #ifdef LPROCFS
@@ -131,7 +135,7 @@ fld_proc_write_hash(struct file *file, const char *buffer,
                 CDEBUG(D_INFO, "%s: Changed hash to \"%s\"\n",
                        fld->lcf_name, hash->fh_name);
         }
-	
+
         RETURN(count);
 }
 
@@ -147,8 +151,154 @@ fld_proc_write_cache_flush(struct file *file, const char *buffer,
         fld_cache_flush(fld->lcf_cache);
 
         CDEBUG(D_INFO, "%s: Lookup cache is flushed\n", fld->lcf_name);
-	
+
         RETURN(count);
+}
+
+struct fld_seq_param {
+	struct lu_env  fsp_env;
+	struct dt_it  *fsp_it;
+};
+
+static void *fldb_seq_start(struct seq_file *p, loff_t *pos)
+{
+	struct lu_server_fld	*fld = p->private;
+	struct dt_object	*obj;
+	const struct dt_it_ops	*iops;
+	struct fld_seq_param	*param;
+	struct fld_thread_info	*info;
+
+	if (fld->lsf_obj == NULL)
+		return NULL;
+
+	obj = fld->lsf_obj;
+	iops = &obj->do_index_ops->dio_it;
+
+	OBD_ALLOC_PTR(param);
+	if (param == NULL)
+		return ERR_PTR(-ENOMEM);
+
+	lu_env_init(&param->fsp_env, LCT_MD_THREAD);
+	param->fsp_it = iops->init(&param->fsp_env, obj, 0, NULL);
+	info = lu_context_key_get(&param->fsp_env.le_ctx,
+				  &fld_thread_key);
+
+	iops->load(&param->fsp_env, param->fsp_it, *pos);
+
+	return param;
+}
+
+static void fldb_seq_stop(struct seq_file *p, void *v)
+{
+	struct lu_server_fld	*fld = p->private;
+	struct dt_object	*obj;
+	const struct dt_it_ops	*iops;
+	struct fld_seq_param	*param = (struct fld_seq_param *)v;
+
+	if (fld->lsf_obj == NULL)
+		return;
+
+	obj = fld->lsf_obj;
+	iops = &obj->do_index_ops->dio_it;
+	if (IS_ERR(param) || param == NULL)
+		return;
+
+	iops->put(&param->fsp_env, param->fsp_it);
+	iops->fini(&param->fsp_env, param->fsp_it);
+	lu_env_fini(&param->fsp_env);
+	OBD_FREE_PTR(param);
+
+	return;
+}
+
+static void *fldb_seq_next(struct seq_file *p, void *v, loff_t *pos)
+{
+	struct lu_server_fld	*fld = p->private;
+	struct dt_object	*obj;
+	const struct dt_it_ops	*iops;
+	struct fld_seq_param	*param = (struct fld_seq_param *)v;
+	int			rc;
+
+	if (fld->lsf_obj == NULL)
+		return NULL;
+
+	obj = fld->lsf_obj;
+	iops = &obj->do_index_ops->dio_it;
+
+	iops->get(&param->fsp_env, param->fsp_it,
+		  (const struct dt_key *)pos);
+
+	rc = iops->next(&param->fsp_env, param->fsp_it);
+	if (rc > 0) {
+		iops->put(&param->fsp_env, param->fsp_it);
+		iops->fini(&param->fsp_env, param->fsp_it);
+		lu_env_fini(&param->fsp_env);
+		OBD_FREE_PTR(param);
+		return NULL;
+	}
+
+	*pos = *(loff_t *)iops->key(&param->fsp_env, param->fsp_it);
+
+	return param;
+}
+
+static int fldb_seq_show(struct seq_file *p, void *v)
+{
+	struct lu_server_fld	*fld = p->private;
+	struct dt_object	*obj = fld->lsf_obj;
+	struct fld_seq_param	*param = (struct fld_seq_param *)v;
+	const struct dt_it_ops	*iops;
+	struct fld_thread_info	*info;
+	struct lu_seq_range	*fld_rec;
+	int			rc;
+
+	if (fld->lsf_obj == NULL)
+		return 0;
+
+	obj = fld->lsf_obj;
+	iops = &obj->do_index_ops->dio_it;
+
+	info = lu_context_key_get(&param->fsp_env.le_ctx,
+				  &fld_thread_key);
+	fld_rec = &info->fti_rec;
+	rc = iops->rec(&param->fsp_env, param->fsp_it,
+		       (struct dt_rec *)fld_rec, 0);
+	if (rc != 0) {
+		CERROR("%s:read record error: rc %d\n",
+		       fld->lsf_name, rc);
+	} else if (fld_rec->lsr_start != 0) {
+		range_be_to_cpu(fld_rec, fld_rec);
+		rc = seq_printf(p, DRANGE"\n", PRANGE(fld_rec));
+	}
+
+	iops->put(&param->fsp_env, param->fsp_it);
+
+	return rc;
+}
+
+struct seq_operations fldb_sops = {
+	.start = fldb_seq_start,
+	.stop = fldb_seq_stop,
+	.next = fldb_seq_next,
+	.show = fldb_seq_show,
+};
+
+static int fldb_seq_open(struct inode *inode, struct file *file)
+{
+	struct proc_dir_entry *dp = PDE(inode);
+	struct seq_file *seq;
+	int rc;
+
+	LPROCFS_ENTRY_AND_CHECK(dp);
+	rc = seq_open(file, &fldb_sops);
+	if (rc) {
+		LPROCFS_EXIT();
+		return rc;
+	}
+
+	seq = file->private_data;
+	seq->private = dp->data;
+	return 0;
 }
 
 struct lprocfs_vars fld_server_proc_list[] = {
@@ -159,4 +309,13 @@ struct lprocfs_vars fld_client_proc_list[] = {
 	{ "hash",        fld_proc_read_hash, fld_proc_write_hash, NULL },
 	{ "cache_flush", NULL, fld_proc_write_cache_flush, NULL },
 	{ NULL }};
+
+struct file_operations fld_proc_seq_fops = {
+	.owner   = THIS_MODULE,
+	.open    = fldb_seq_open,
+	.read    = seq_read,
+	.llseek  = seq_lseek,
+	.release = lprocfs_seq_release,
+};
+
 #endif

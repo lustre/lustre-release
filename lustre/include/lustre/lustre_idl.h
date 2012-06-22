@@ -251,13 +251,14 @@ static inline int range_compare_loc(const struct lu_seq_range *r1,
                r1->lsr_flags != r2->lsr_flags;
 }
 
-#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x):%x:%x"
+#define DRANGE "[%#16.16"LPF64"x-%#16.16"LPF64"x):%x:%s"
 
 #define PRANGE(range)      \
-        (range)->lsr_start, \
-        (range)->lsr_end,    \
-        (range)->lsr_index,  \
-        (range)->lsr_flags
+	(range)->lsr_start, \
+	(range)->lsr_end,    \
+	(range)->lsr_index,  \
+	(range)->lsr_flags == LU_SEQ_RANGE_MDT ? "mdt" : "ost"
+
 
 /** \defgroup lu_fid lu_fid
  * @{ */

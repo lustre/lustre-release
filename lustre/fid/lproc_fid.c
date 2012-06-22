@@ -33,6 +33,8 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
+ * Copyright (c) 2011, 2012, Whamcloud, Inc.
+ *
  * lustre/fid/lproc_fid.c
  *
  * Lustre Sequence Manager
@@ -92,8 +94,8 @@ seq_proc_read_common(char *page, char **start, off_t off,
 	ENTRY;
 
         *eof = 1;
-        rc = snprintf(page, count, "["LPX64" - "LPX64"]:%x:%x\n",
-                      PRANGE(range));
+	rc = snprintf(page, count, "["LPX64" - "LPX64"]:%x:%s\n",
+			PRANGE(range));
 	RETURN(rc);
 }
 
