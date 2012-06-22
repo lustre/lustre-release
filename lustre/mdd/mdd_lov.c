@@ -589,10 +589,8 @@ out_ids:
  * destroy objects on OSS.
  */
 int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
-                      struct mdd_object *obj, struct lu_attr *la,
-                      struct lov_mds_md *lmm, int lmm_size,
-                      struct llog_cookie *logcookies,
-                      int log_unlink)
+		      struct mdd_object *obj, struct lu_attr *la,
+		      struct md_attr *ma, int log_unlink)
 {
         struct obd_device     *obd = mdd2obd_dev(mdd);
         struct obd_export     *lov_exp = obd->u.mds.mds_lov_exp;
@@ -600,7 +598,10 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
         struct obd_trans_info *oti = &mdd_env_info(env)->mti_oti;
         struct obdo           *oa = &mdd_env_info(env)->mti_oa;
         struct lu_site        *site = mdd2lu_dev(mdd)->ld_site;
-        int rc;
+	struct lov_mds_md     *lmm = ma->ma_lmm;
+	int                    lmm_size = ma->ma_lmm_size;
+	struct llog_cookie    *logcookies = ma->ma_cookie;
+	int                    rc;
         ENTRY;
 
         if (lmm_size == 0)
@@ -625,6 +626,9 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
                 oa->o_valid |= OBD_MD_FLCOOKIE;
                 oti->oti_logcookies = logcookies;
         }
+
+	if (!(ma->ma_attr_flags & MDS_UNLINK_DESTROY))
+		oa->o_flags = OBD_FL_DELORPHAN;
 
         CDEBUG(D_INFO, "destroying OSS object "LPU64":"LPU64"\n", oa->o_seq,
                oa->o_id);
@@ -685,11 +689,10 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
                 RETURN(rc);
         }
 
-        if (ma->ma_valid & MA_COOKIE)
-                rc = mdd_lovobj_unlink(env, mdd, obj, la,
-                                       ma->ma_lmm, ma->ma_lmm_size,
-                                       ma->ma_cookie, 1);
-        RETURN(rc);
+	if (ma->ma_valid & MA_COOKIE)
+		rc = mdd_lovobj_unlink(env, mdd, obj, la, ma, 1);
+
+	RETURN(rc);
 }
 
 int mdd_declare_unlink_log(const struct lu_env *env, struct mdd_object *obj,

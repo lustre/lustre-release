@@ -223,6 +223,29 @@ void client_destroy_import(struct obd_import *imp)
 }
 EXPORT_SYMBOL(client_destroy_import);
 
+/**
+ * check whether the osc is on MDT or not
+ * In the config log,
+ * osc on MDT
+ *	setup 0:{fsname}-OSTxxxx-osc[-MDTxxxx] 1:lustre-OST0000_UUID 2:NID
+ * osc on client
+ *	setup 0:{fsname}-OSTxxxx-osc 1:lustre-OST0000_UUID 2:NID
+ *
+ **/
+static int osc_on_mdt(char *obdname)
+{
+	char *ptr;
+
+	ptr = strrchr(obdname, '-');
+	if (ptr == NULL)
+		return 0;
+
+	if (strncmp(ptr + 1, "MDT", 3) == 0)
+		return 1;
+
+	return 0;
+}
+
 /* configure an RPC client OBD device
  *
  * lcfg parameters:
@@ -352,9 +375,11 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
         } else if (cfs_num_physpages >> (20 - CFS_PAGE_SHIFT) <= 512 /* MB */) {
                 cli->cl_max_rpcs_in_flight = 4;
         } else {
-                cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
+		if (osc_on_mdt(obddev->obd_name))
+			cli->cl_max_rpcs_in_flight = MDS_OSC_MAX_RIF_DEFAULT;
+		else
+			cli->cl_max_rpcs_in_flight = OSC_MAX_RIF_DEFAULT;
         }
-
         rc = ldlm_get_ref();
         if (rc) {
                 CERROR("ldlm_get_ref failed: %d\n", rc);

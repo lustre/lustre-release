@@ -760,8 +760,11 @@ static int osc_destroy(const struct lu_env *env, struct obd_export *exp,
         osc_pack_capa(req, body, (struct obd_capa *)capa);
         ptlrpc_request_set_replen(req);
 
-        /* don't throttle destroy RPCs for the MDT */
-        if (!(cli->cl_import->imp_connect_flags_orig & OBD_CONNECT_MDS)) {
+	/* If osc_destory is for destroying the unlink orphan,
+	 * sent from MDT to OST, which should not be blocked here,
+	 * because the process might be triggered by ptlrpcd, and
+	 * it is not good to block ptlrpcd thread (b=16006)*/
+	if (!(oa->o_flags & OBD_FL_DELORPHAN)) {
                 req->rq_interpret_reply = osc_destroy_interpret;
                 if (!osc_can_send_destroy(cli)) {
                         struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP,
