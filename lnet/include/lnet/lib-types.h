@@ -317,9 +317,7 @@ typedef struct {
 #define LNET_COOKIE_TYPE_ME    2
 #define LNET_COOKIE_TYPE_EQ    3
 #define LNET_COOKIE_TYPE_BITS  2
-#define LNET_COOKIE_TYPES      (1 << LNET_COOKIE_TYPE_BITS)
-/* LNET_COOKIE_TYPES must be a power of 2, so the cookie type can be
- * extracted by masking with (LNET_COOKIE_TYPES - 1) */
+#define LNET_COOKIE_MASK	((1ULL << LNET_COOKIE_TYPE_BITS) - 1ULL)
 
 struct lnet_ni;                                  /* forward ref */
 
@@ -443,19 +441,23 @@ typedef struct lnet_ni {
 	char			*ni_interfaces[LNET_MAX_INTERFACES];
 } lnet_ni_t;
 
-#define LNET_PROTO_PING_MATCHBITS     0x8000000000000000LL
-enum {
-	LNET_PROTO_PING_UNKNOWN		= 0,	/* unknown */
-	LNET_PROTO_PING_VERSION_1	= 1,	/* old version */
-	LNET_PROTO_PING_VERSION		= 2,	/* current version */
-};
+#define LNET_PROTO_PING_MATCHBITS	0x8000000000000000LL
+
+/* NB: value of these features equal to LNET_PROTO_PING_VERSION_x
+ * of old LNet, so there shouldn't be any compatibility issue */
+#define LNET_PING_FEAT_INVAL		(0)		/* no feature */
+#define LNET_PING_FEAT_BASE		(1 << 0)	/* just a ping */
+#define LNET_PING_FEAT_NI_STATUS	(1 << 1)	/* return NI status */
+
+#define LNET_PING_FEAT_MASK		(LNET_PING_FEAT_BASE | \
+					 LNET_PING_FEAT_NI_STATUS)
 
 typedef struct {
-        __u32            pi_magic;
-        __u32            pi_version;
-        lnet_pid_t       pi_pid;
-        __u32            pi_nnis;
-        lnet_ni_status_t pi_ni[0];
+	__u32			pi_magic;
+	__u32			pi_features;
+	lnet_pid_t		pi_pid;
+	__u32			pi_nnis;
+	lnet_ni_status_t	pi_ni[0];
 } WIRE_ATTR lnet_ping_info_t;
 
 /* router checker data, per router */
@@ -496,8 +498,8 @@ typedef struct lnet_peer {
 	int			lp_cpt;		/* CPT this peer attached on */
 	/* # refs from lnet_route_t::lr_gateway */
 	int			lp_rtr_refcount;
-	/* returned RC ping version */
-	unsigned int		lp_ping_version;
+	/* returned RC ping features */
+	unsigned int		lp_ping_feats;
 	cfs_list_t		lp_routes;	/* routers on this peer */
 	lnet_rc_data_t		*lp_rcd;	/* router checker state */
 } lnet_peer_t;
@@ -688,9 +690,9 @@ typedef struct
 	int				ln_nportals;
 	/* the vector of portals */
 	lnet_portal_t			**ln_portals;
-	/* ME container  */
+	/* percpt ME containers */
 	struct lnet_res_container	**ln_me_containers;
-	/* MD container  */
+	/* percpt MD container */
 	struct lnet_res_container	**ln_md_containers;
 
 	/* Event Queue container */
@@ -708,7 +710,7 @@ typedef struct
 #endif
 	/* protect NI, peer table, credits, routers, rtrbuf... */
 	struct cfs_percpt_lock		*ln_net_lock;
-	/* message container for active/finalizing/freed message */
+	/* percpt message containers for active/finalizing/freed message */
 	struct lnet_msg_container	**ln_msg_containers;
 	lnet_counters_t			**ln_counters;
 	struct lnet_peer_table		**ln_peer_tables;
@@ -732,7 +734,7 @@ typedef struct
 	cfs_list_t			ln_routers;
 	/* validity stamp */
 	__u64				ln_routers_version;
-	/* router buffer pools */
+	/* percpt router buffer pools */
 	lnet_rtrbufpool_t		**ln_rtrpools;
 
 	lnet_handle_md_t		ln_ping_target_md;

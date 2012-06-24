@@ -692,6 +692,7 @@ lnet_ni_eager_recv(lnet_ni_t *ni, lnet_msg_t *msg)
 
 	LASSERT(!msg->msg_sending);
 	LASSERT(msg->msg_receiving);
+	LASSERT(!msg->msg_rx_ready_delay);
 	LASSERT(ni->ni_lnd->lnd_eager_recv != NULL);
 
 	msg->msg_rx_ready_delay = 1;
@@ -1165,7 +1166,7 @@ lnet_find_route_locked(lnet_ni_t *ni, lnet_nid_t target, lnet_nid_t rtr_nid)
 		lp = rtr->lr_gateway;
 
 		if (!lp->lp_alive || /* gateway is down */
-		    (lp->lp_ping_version == LNET_PROTO_PING_VERSION &&
+		    ((lp->lp_ping_feats & LNET_PING_FEAT_NI_STATUS) != 0 &&
 		     rtr->lr_downis != 0)) /* NI to target is down */
 			continue;
 
@@ -1588,15 +1589,15 @@ lnet_parse_reply(lnet_ni_t *ni, lnet_msg_t *msg)
 
 	lnet_msg_attach_md(msg, md, 0, mlength);
 
-        if (mlength != 0)
-                lnet_setpayloadbuffer(msg);
+	if (mlength != 0)
+		lnet_setpayloadbuffer(msg);
 
 	lnet_res_unlock(cpt);
 
 	lnet_build_msg_event(msg, LNET_EVENT_REPLY);
 
-        lnet_ni_recv(ni, private, msg, 0, 0, mlength, rlength);
-        return 0;
+	lnet_ni_recv(ni, private, msg, 0, 0, mlength, rlength);
+	return 0;
 }
 
 static int
@@ -2139,10 +2140,10 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
 		lnet_res_unlock(cpt);
 
 		lnet_msg_free(msg);
-                return -ENOENT;
-        }
+		return -ENOENT;
+	}
 
-        CDEBUG(D_NET, "LNetPut -> %s\n", libcfs_id2str(target));
+	CDEBUG(D_NET, "LNetPut -> %s\n", libcfs_id2str(target));
 
 	lnet_msg_attach_md(msg, md, 0, 0);
 
@@ -2216,16 +2217,16 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
                         getmd);
 		lnet_res_unlock(cpt);
 		goto drop;
-        }
+	}
 
-        LASSERT (getmd->md_offset == 0);
+	LASSERT(getmd->md_offset == 0);
 
 	CDEBUG(D_NET, "%s: Reply from %s md %p\n",
 	       libcfs_nid2str(ni->ni_nid), libcfs_id2str(peer_id), getmd);
 
 	/* setup information for lnet_build_msg_event */
 	msg->msg_from = peer_id.nid;
-        msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
+	msg->msg_type = LNET_MSG_GET; /* flag this msg as an "optimized" GET */
 	msg->msg_hdr.src_nid = peer_id.nid;
 	msg->msg_hdr.payload_length = getmd->md_length;
 	msg->msg_receiving = 1; /* required by lnet_msg_attach_md */

@@ -180,7 +180,7 @@ lnet_try_match_md(lnet_libmd_t *md,
 		mlength = md->md_length - offset;
 	}
 
-	if (info->mi_rlength <= mlength) {        /* fits in allowed space */
+	if (info->mi_rlength <= mlength) {	/* fits in allowed space */
 		mlength = info->mi_rlength;
 	} else if ((md->md_options & LNET_MD_TRUNCATE) == 0) {
 		/* this packet _really_ is too big */

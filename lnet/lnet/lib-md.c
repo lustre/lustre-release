@@ -263,7 +263,7 @@ lnet_md_validate(lnet_md_t *umd)
  */
 int
 LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
-             lnet_unlink_t unlink, lnet_handle_md_t *handle)
+	     lnet_unlink_t unlink, lnet_handle_md_t *handle)
 {
 	CFS_LIST_HEAD		(matches);
 	CFS_LIST_HEAD		(drops);
@@ -294,11 +294,11 @@ LNetMDAttach(lnet_handle_me_t meh, lnet_md_t umd,
 	if (rc != 0)
 		goto failed;
 
-        me = lnet_handle2me(&meh);
+	me = lnet_handle2me(&meh);
 	if (me == NULL)
 		rc = -ENOENT;
 	else if (me->me_md != NULL)
-                rc = -EBUSY;
+		rc = -EBUSY;
 	else
 		rc = lnet_md_link(md, umd.eq_handle, cpt);
 

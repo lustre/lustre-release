@@ -92,9 +92,9 @@ LNetMEAttach(unsigned int portal,
 	if (mtable == NULL) /* can't match portal type */
 		return -EPERM;
 
-        me = lnet_me_alloc();
-        if (me == NULL)
-                return -ENOMEM;
+	me = lnet_me_alloc();
+	if (me == NULL)
+		return -ENOMEM;
 
 	lnet_res_lock(mtable->mt_cpt);
 
@@ -155,9 +155,9 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 	if (pos == LNET_INS_LOCAL)
 		return -EPERM;
 
-        new_me = lnet_me_alloc();
-        if (new_me == NULL)
-                return -ENOMEM;
+	new_me = lnet_me_alloc();
+	if (new_me == NULL)
+		return -ENOMEM;
 
 	cpt = lnet_cpt_of_cookie(current_meh.cookie);
 
@@ -175,7 +175,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
 	ptl = the_lnet.ln_portals[current_me->me_portal];
 	if (lnet_ptl_is_unique(ptl)) {
-                /* nosense to insertion on unique portal */
+		/* nosense to insertion on unique portal */
 		lnet_me_free_locked(new_me);
 		lnet_res_unlock(cpt);
 		return -EPERM;

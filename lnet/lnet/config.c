@@ -114,7 +114,7 @@ lnet_ni_free(struct lnet_ni *ni)
 }
 
 lnet_ni_t *
-lnet_ni_alloc(__u32 net, struct cfs_expr_list **el, cfs_list_t *nilist)
+lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, cfs_list_t *nilist)
 {
 	struct lnet_tx_queue	*tq;
 	struct lnet_ni		*ni;
@@ -155,11 +155,11 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list **el, cfs_list_t *nilist)
 	cfs_percpt_for_each(tq, i, ni->ni_tx_queues)
 		CFS_INIT_LIST_HEAD(&tq->tq_delayed);
 
-	if (el == NULL || *el == NULL) {
+	if (el == NULL) {
 		ni->ni_cpts  = NULL;
 		ni->ni_ncpts = LNET_CPT_NUMBER;
 	} else {
-		rc = cfs_expr_list_values(*el, LNET_CPT_NUMBER, &ni->ni_cpts);
+		rc = cfs_expr_list_values(el, LNET_CPT_NUMBER, &ni->ni_cpts);
 		if (rc <= 0) {
 			CERROR("Failed to set CPTs for NI %s: %d\n",
 			       libcfs_net2str(net), rc);
@@ -173,8 +173,6 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list **el, cfs_list_t *nilist)
 		}
 
 		ni->ni_ncpts = rc;
-		cfs_expr_list_free(*el); /* consume it */
-		*el = NULL;
 	}
 
         /* LND will fill in the address part of the NID */
@@ -275,8 +273,13 @@ lnet_parse_networks(cfs_list_t *nilist, char *networks)
                         }
 
 			if (LNET_NETTYP(net) != LOLND && /* LO is implicit */
-			    lnet_ni_alloc(net, &el, nilist) == NULL)
-                                goto failed;
+			    lnet_ni_alloc(net, el, nilist) == NULL)
+				goto failed;
+
+			if (el != NULL) {
+				cfs_expr_list_free(el);
+				el = NULL;
+			}
 
 			str = comma;
 			continue;
@@ -290,11 +293,16 @@ lnet_parse_networks(cfs_list_t *nilist, char *networks)
 		}
 
 		nnets++;
-		ni = lnet_ni_alloc(net, &el, nilist);
-                if (ni == NULL)
-                        goto failed;
+		ni = lnet_ni_alloc(net, el, nilist);
+		if (ni == NULL)
+			goto failed;
 
-                niface = 0;
+		if (el != NULL) {
+			cfs_expr_list_free(el);
+			el = NULL;
+		}
+
+		niface = 0;
 		iface = bracket + 1;
 
 		bracket = strchr(iface, ')');

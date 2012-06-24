@@ -69,7 +69,7 @@ extern lnet_t  the_lnet;                        /* THE network */
 # else /* 64-bit system */
 /*
  * 256 CPTs for thousands of CPUs, allowing more CPTs might make us
- * under risk of consuming all lh_cooke.
+ * under risk of consuming all lh_cookie.
  */
 #  define LNET_CPT_MAX_BITS     8
 # endif /* BITS_PER_LONG == 32 */

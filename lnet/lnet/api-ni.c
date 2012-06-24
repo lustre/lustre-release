@@ -519,7 +519,7 @@ lnet_res_container_cleanup(struct lnet_res_container *rec)
 {
 	int	count = 0;
 
-	if (rec->rec_type == 0) /* not set yet, it's a uninitialized */
+	if (rec->rec_type == 0) /* not set yet, it's uninitialized */
 		return;
 
 	while (!cfs_list_empty(&rec->rec_active)) {
@@ -644,7 +644,7 @@ lnet_res_lh_lookup(struct lnet_res_container *rec, __u64 cookie)
 	lnet_libhandle_t	*lh;
 	unsigned int		hash;
 
-	if ((cookie & (LNET_COOKIE_TYPES - 1)) != rec->rec_type)
+	if ((cookie & LNET_COOKIE_MASK) != rec->rec_type)
 		return NULL;
 
 	hash = cookie >> (LNET_COOKIE_TYPE_BITS + LNET_CPT_BITS);
@@ -691,7 +691,7 @@ int lnet_unprepare(void);
 int
 lnet_prepare(lnet_pid_t requested_pid)
 {
-        /* Prepare to bring up the network */
+	/* Prepare to bring up the network */
 	struct lnet_res_container **recs;
 	int			  rc = 0;
 
@@ -738,7 +738,6 @@ lnet_prepare(lnet_pid_t requested_pid)
 	if (rc != 0)
 		goto failed;
 
-	/* NB: we will have instance of message container per CPT soon */
 	rc = lnet_msg_containers_create();
 	if (rc != 0)
 		goto failed;
@@ -756,7 +755,6 @@ lnet_prepare(lnet_pid_t requested_pid)
 
 	the_lnet.ln_me_containers = recs;
 
-	/* NB: we will have instance of MD container per CPT soon */
 	recs = lnet_res_containers_create(LNET_COOKIE_TYPE_MD, LNET_FL_MAX_MDS,
 					  sizeof(lnet_libmd_t));
 	if (recs == NULL)
@@ -855,7 +853,7 @@ lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
 	if (val < number)
 		return val;
 
-	return (unsigned int)((key + val + (val >> 1)) % number);
+	return (unsigned int)(key + val + (val >> 1)) % number;
 }
 
 int
@@ -1299,10 +1297,10 @@ LNetInit(void)
 {
 	int	rc;
 
-        lnet_assert_wire_constants ();
-        LASSERT (!the_lnet.ln_init);
+	lnet_assert_wire_constants();
+	LASSERT(!the_lnet.ln_init);
 
-        memset(&the_lnet, 0, sizeof(the_lnet));
+	memset(&the_lnet, 0, sizeof(the_lnet));
 
 	/* refer to global cfs_cpt_table for now */
 	the_lnet.ln_cpt_table	= cfs_cpt_table;
@@ -1326,10 +1324,10 @@ LNetInit(void)
 		return -1;
 	}
 
-        the_lnet.ln_refcount = 0;
-        the_lnet.ln_init = 1;
-        LNetInvalidateHandle(&the_lnet.ln_rc_eqh);
-        CFS_INIT_LIST_HEAD(&the_lnet.ln_lnds);
+	the_lnet.ln_refcount = 0;
+	the_lnet.ln_init = 1;
+	LNetInvalidateHandle(&the_lnet.ln_rc_eqh);
+	CFS_INIT_LIST_HEAD(&the_lnet.ln_lnds);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_rcd_zombie);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_rcd_deathrow);
 
@@ -1708,7 +1706,7 @@ lnet_create_ping_info(void)
         pinfo->pi_nnis    = n;
         pinfo->pi_pid     = the_lnet.ln_pid;
         pinfo->pi_magic   = LNET_PROTO_PING_MAGIC;
-        pinfo->pi_version = LNET_PROTO_PING_VERSION;
+	pinfo->pi_features = LNET_PING_FEAT_NI_STATUS;
 
         for (i = 0; i < n; i++) {
                 lnet_ni_status_t *ns = &pinfo->pi_ni[i];
@@ -1731,10 +1729,10 @@ lnet_create_ping_info(void)
 
 		lnet_ni_decref_locked(ni, 0);
 		lnet_net_unlock(0);
-        }
+	}
 
-        the_lnet.ln_ping_info = pinfo;
-        return 0;
+	the_lnet.ln_ping_info = pinfo;
+	return 0;
 }
 
 static void
@@ -2004,11 +2002,11 @@ lnet_ping (lnet_process_id_t id, int timeout_ms, lnet_process_id_t *ids, int n_i
                 goto out_1;
         }
 
-        if (info->pi_version != LNET_PROTO_PING_VERSION) {
-                CERROR("%s: Unexpected version 0x%x\n",
-                       libcfs_id2str(id), info->pi_version);
-                goto out_1;
-        }
+	if ((info->pi_features & LNET_PING_FEAT_NI_STATUS) == 0) {
+		CERROR("%s: ping w/o NI status: 0x%x\n",
+		       libcfs_id2str(id), info->pi_features);
+		goto out_1;
+	}
 
         if (nob < offsetof(lnet_ping_info_t, pi_ni[0])) {
                 CERROR("%s: Short reply %d(%d min)\n", libcfs_id2str(id),

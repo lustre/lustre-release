@@ -74,7 +74,7 @@ lnet_build_msg_event(lnet_msg_t *msg, lnet_event_kind_t ev_type)
 		ev->target.pid    = le32_to_cpu(hdr->dest_pid);
 		ev->initiator.nid = LNET_NID_ANY;
 		ev->initiator.pid = the_lnet.ln_pid;
-		ev->sender        = LNET_NID_ANY;
+		ev->sender	  = LNET_NID_ANY;
 
 	} else {
 		/* event for passive message */
@@ -83,7 +83,7 @@ lnet_build_msg_event(lnet_msg_t *msg, lnet_event_kind_t ev_type)
 		ev->initiator.pid = hdr->src_pid;
 		ev->initiator.nid = hdr->src_nid;
 		ev->rlength       = hdr->payload_length;
-		ev->sender        = msg->msg_from;
+		ev->sender	  = msg->msg_from;
 		ev->mlength	  = msg->msg_wanted;
 		ev->offset	  = msg->msg_offset;
 	}

@@ -255,8 +255,8 @@ lnet_eq_dequeue_event(lnet_eq_t *eq, lnet_event_t *ev)
 	if (LNET_SEQ_GT(eq->eq_deq_seq, new_event->sequence))
 		RETURN(0);
 
-        /* We've got a new event... */
-        *ev = *new_event;
+	/* We've got a new event... */
+	*ev = *new_event;
 
 	CDEBUG(D_INFO, "event: %p, sequence: %lu, eq->size: %u\n",
 	       new_event, eq->eq_deq_seq, eq->eq_size);
@@ -331,10 +331,10 @@ LNetEQWait (lnet_handle_eq_t eventq, lnet_event_t *event)
 static int
 lnet_eq_wait_locked(int *timeout_ms)
 {
-	int              tms = *timeout_ms;
-	int              wait;
-	cfs_waitlink_t   wl;
-	cfs_time_t       now;
+	int		tms = *timeout_ms;
+	int		wait;
+	cfs_waitlink_t  wl;
+	cfs_time_t      now;
 
 	if (tms == 0)
 		return -1; /* don't want to wait and no new event */
@@ -388,11 +388,11 @@ lnet_eq_cond_wait(struct timespec *ts)
 static int
 lnet_eq_wait_locked(int *timeout_ms)
 {
-	lnet_ni_t         *eq_waitni = NULL;
-	int                tms = *timeout_ms;
-	int                wait;
-	struct timeval     then;
-	struct timeval     now;
+	lnet_ni_t	*eq_waitni = NULL;
+	int		tms = *timeout_ms;
+	int		wait;
+	struct timeval	then;
+	struct timeval	now;
 
 	if (the_lnet.ln_eq_waitni != NULL) {
 		/* I have a single NI that I have to call into, to get
@@ -501,8 +501,8 @@ lnet_eq_wait_locked(int *timeout_ms)
  * \retval -ENOENT    If there's an invalid handle in \a eventqs.
  */
 int
-LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
-            lnet_event_t *event, int *which)
+LNetEQPoll(lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
+	   lnet_event_t *event, int *which)
 {
 	int	wait = 1;
 	int	rc;
@@ -517,7 +517,7 @@ LNetEQPoll (lnet_handle_eq_t *eventqs, int neq, int timeout_ms,
 
 	lnet_eq_wait_lock();
 
-        for (;;) {
+	for (;;) {
 #ifndef __KERNEL__
 		lnet_eq_wait_unlock();
 

@@ -348,7 +348,8 @@ int LL_PROC_PROTO(proc_lnet_routers)
 			int down_ni   = 0;
 			lnet_route_t *rtr;
 
-			if (peer->lp_ping_version == LNET_PROTO_PING_VERSION) {
+			if ((peer->lp_ping_feats &
+			     LNET_PING_FEAT_NI_STATUS) != 0) {
 				cfs_list_for_each_entry(rtr, &peer->lp_routes,
 							lr_gwlist) {
 					/* downis on any route should be the
