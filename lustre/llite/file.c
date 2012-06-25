@@ -2527,39 +2527,40 @@ int ll_fiemap(struct inode *inode, struct fiemap_extent_info *fieinfo,
 }
 #endif
 
-
+#ifndef HAVE_GENERIC_PERMISSION_2ARGS
 static int
-#ifdef HAVE_GENERIC_PERMISSION_4ARGS
+# ifdef HAVE_GENERIC_PERMISSION_4ARGS
 lustre_check_acl(struct inode *inode, int mask, unsigned int flags)
-#else
+# else
 lustre_check_acl(struct inode *inode, int mask)
-#endif
+# endif
 {
-#ifdef CONFIG_FS_POSIX_ACL
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct posix_acl *acl;
-        int rc;
-        ENTRY;
+# ifdef CONFIG_FS_POSIX_ACL
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct posix_acl *acl;
+	int rc;
+	ENTRY;
 
-#ifdef HAVE_GENERIC_PERMISSION_4ARGS
-        if (flags & IPERM_FLAG_RCU)
-                return -ECHILD;
-#endif
-        cfs_spin_lock(&lli->lli_lock);
-        acl = posix_acl_dup(lli->lli_posix_acl);
-        cfs_spin_unlock(&lli->lli_lock);
+#  ifdef HAVE_GENERIC_PERMISSION_4ARGS
+	if (flags & IPERM_FLAG_RCU)
+		return -ECHILD;
+#  endif
+	cfs_spin_lock(&lli->lli_lock);
+	acl = posix_acl_dup(lli->lli_posix_acl);
+	cfs_spin_unlock(&lli->lli_lock);
 
-        if (!acl)
-                RETURN(-EAGAIN);
+	if (!acl)
+		RETURN(-EAGAIN);
 
-        rc = posix_acl_permission(inode, acl, mask);
-        posix_acl_release(acl);
+	rc = posix_acl_permission(inode, acl, mask);
+	posix_acl_release(acl);
 
-        RETURN(rc);
-#else
-        return -EAGAIN;
-#endif
+	RETURN(rc);
+# else /* !CONFIG_FS_POSIX_ACL */
+	return -EAGAIN;
+# endif /* CONFIG_FS_POSIX_ACL */
 }
+#endif /* HAVE_GENERIC_PERMISSION_2ARGS */
 
 #ifdef HAVE_GENERIC_PERMISSION_4ARGS
 int ll_inode_permission(struct inode *inode, int mask, unsigned int flags)

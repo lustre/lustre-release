@@ -1747,21 +1747,34 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# 2.6.38 generic_permission taken 4 paremater.
+# 2.6.38 generic_permission taken 4 parameters.
 # in fact, it means rcu-walk aware permission bring.
 #
+# 3.1 generic_permission taken 2 parameters.
+# see kernel commit 2830ba7f34ebb27c4e5b8b6ef408cd6d74860890
+#
 AC_DEFUN([LC_GENERIC_PERMISSION],
-[AC_MSG_CHECKING([if generic_permission take 4 arguments])
+[AC_MSG_CHECKING([if generic_permission take 2 or 4 arguments])
 LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
+	#include <linux/fs.h>
 ],[
-        generic_permission(NULL, 0, 0, NULL);
+	generic_permission(NULL, 0);
 ],[
-        AC_DEFINE(HAVE_GENERIC_PERMISSION_4ARGS, 1,
-                  [generic_permission taken 4 arguments])
-        AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_GENERIC_PERMISSION_2ARGS, 1,
+		  [generic_permission taken 2 arguments])
+	AC_MSG_RESULT([yes, 2 args])
 ],[
-        AC_MSG_RESULT([no])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/fs.h>
+	],[
+		generic_permission(NULL, 0, 0, NULL);
+	],[
+		AC_DEFINE(HAVE_GENERIC_PERMISSION_4ARGS, 1,
+			  [generic_permission taken 4 arguments])
+		AC_MSG_RESULT([yes, 4 args])
+	],[
+		AC_MSG_RESULT([no])
+	])
 ])
 ])
 
