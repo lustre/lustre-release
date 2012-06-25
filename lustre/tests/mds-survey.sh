@@ -8,9 +8,6 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-build_test_filter
-check_and_setup_lustre
-
 file_count=${file_count:-150000}
 dir_count=${dir_count:-4}
 thrhi=${thrhi:-8}
@@ -25,6 +22,9 @@ MDSSURVEY=${MDSSURVEY:-$(which mds-survey 2>/dev/null || true)}
 if [ -z ${MDSSURVEY} ]; then
     skip_env "mds-survey not found" && exit
 fi
+
+build_test_filter
+check_and_setup_lustre
 
 adjust_inode() {
     local require_inode=0
