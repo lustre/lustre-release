@@ -348,7 +348,8 @@ static int ll_readdir_18(struct file *filp, void *dirent, filldir_t filldir)
         pgoff_t idx         = pos >> CFS_PAGE_SHIFT;
         pgoff_t npages      = dir_pages(inode);
         unsigned chunk_mask = ll_dir_page_mask(inode);
-        int need_revalidate = (filp->f_version != inode->i_version);
+        int need_revalidate = (filp->f_version == 0 ||
+                               filp->f_version != inode->i_version);
         int rc              = 0;
         int done; /* when this becomes negative --- stop iterating */
 
