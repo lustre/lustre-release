@@ -44,6 +44,7 @@
 
 #include "ofd_internal.h"
 #include <obd_cksum.h>
+#include <lquota.h>
 
 static int ofd_export_stats_init(struct ofd_device *ofd,
 				 struct obd_export *exp, void *client_nid)
@@ -1426,6 +1427,9 @@ static int ofd_obd_notify(struct obd_device *obd, struct obd_device *unused,
 
 /*
  * Handle quotacheck requests.
+ * Although in-kernel quotacheck isn't supported any more, we still emulate it
+ * in order to interoperate with current MDT stack which needs proper
+ * quotacheck support, even for space accounting.
  *
  * \param obd - is the obd device associated with the ofd
  * \param exp - is the client's export
@@ -1434,7 +1438,23 @@ static int ofd_obd_notify(struct obd_device *obd, struct obd_device *unused,
 static int ofd_quotacheck(struct obd_device *obd, struct obd_export *exp,
 			  struct obd_quotactl *oqctl)
 {
-	return 0;
+	struct ptlrpc_request	*req;
+	struct obd_quotactl	*body;
+	ENTRY;
+
+	req = ptlrpc_request_alloc_pack(exp->exp_imp_reverse, &RQF_QC_CALLBACK,
+					LUSTRE_OBD_VERSION, OBD_QC_CALLBACK);
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
+	oqctl->qc_stat = 0;
+	memcpy(body, oqctl, sizeof(*body));
+
+	ptlrpc_request_set_replen(req);
+	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
+
+	RETURN(0);
 }
 
 /*
@@ -1448,7 +1468,24 @@ static int ofd_quotacheck(struct obd_device *obd, struct obd_export *exp,
 static int ofd_quotactl(struct obd_device *obd, struct obd_export *exp,
 			struct obd_quotactl *oqctl)
 {
-	return 0;
+	struct ofd_device  *ofd = ofd_dev(obd->obd_lu_dev);
+	struct lu_env       env;
+	int                 rc;
+	ENTRY;
+
+	/* report success for quota on/off for interoperability with current MDT
+	 * stack */
+	if (oqctl->qc_cmd == Q_QUOTAON || oqctl->qc_cmd == Q_QUOTAOFF)
+		RETURN(0);
+
+	rc = lu_env_init(&env, LCT_DT_THREAD);
+	if (rc)
+		RETURN(rc);
+
+	rc = lquotactl_slv(&env, ofd->ofd_osd, oqctl);
+	lu_env_fini(&env);
+
+	RETURN(rc);
 }
 
 struct obd_ops ofd_obd_ops = {
