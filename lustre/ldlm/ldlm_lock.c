@@ -438,6 +438,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         CFS_INIT_LIST_HEAD(&lock->l_sl_mode);
         CFS_INIT_LIST_HEAD(&lock->l_sl_policy);
         CFS_INIT_HLIST_NODE(&lock->l_exp_hash);
+	CFS_INIT_HLIST_NODE(&lock->l_exp_flock_hash);
 
         lprocfs_counter_incr(ldlm_res_to_ns(resource)->ns_stats,
                              LDLM_NSS_LOCKS);

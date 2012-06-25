@@ -601,6 +601,8 @@ struct ldlm_flock {
         __u64 owner;
         __u64 blocking_owner;
         struct obd_export *blocking_export;
+	/* Protected by the hash lock */
+	__u32 blocking_refs;
         __u32 pid;
 };
 
@@ -655,6 +657,12 @@ struct ldlm_lock {
         /**
          * Protected by lr_lock. Requested mode.
          */
+	/**
+	 * Protected by per-bucket exp->exp_flock_hash locks. Per export hash
+	 * of locks.
+	 */
+	cfs_hlist_node_t         l_exp_flock_hash;
+
         ldlm_mode_t              l_req_mode;
         /**
          * Granted mode, also protected by lr_lock.

@@ -212,13 +212,11 @@ struct obd_export {
         __u32                     exp_conn_cnt;
         /** Hash list of all ldlm locks granted on this export */
         cfs_hash_t               *exp_lock_hash;
-        /** Lock protecting access to exp_flock_wait_list */
-        cfs_rwlock_t              exp_flock_wait_lock;
         /**
-         * Wait queue for Posix lock deadlock detection, added with
-         * ldlm_lock::l_flock_waitq.
+	 * Hash list for Posix lock deadlock detection, added with
+	 * ldlm_lock::l_exp_flock_hash.
          */
-        cfs_list_t                exp_flock_wait_list;
+	cfs_hash_t               *exp_flock_hash;
         cfs_list_t                exp_outstanding_replies;
         cfs_list_t                exp_uncommitted_replies;
         cfs_spinlock_t            exp_uncommitted_replies_lock;

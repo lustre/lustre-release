@@ -5312,12 +5312,21 @@ static int mdt_init_export(struct obd_export *exp)
                 RETURN(0);
 
         rc = lut_client_alloc(exp);
-        if (rc == 0)
-                rc = ldlm_init_export(exp);
         if (rc)
-                CERROR("%s: Error %d while initializing export\n",
-                       exp->exp_obd->obd_name, rc);
+		GOTO(err, rc);
+
+	rc = ldlm_init_export(exp);
+	if (rc)
+		GOTO(err_free, rc);
+
         RETURN(rc);
+
+err_free:
+	lut_client_free(exp);
+err:
+	CERROR("%s: Error %d while initializing export\n",
+	       exp->exp_obd->obd_name, rc);
+	return rc;
 }
 
 static int mdt_destroy_export(struct obd_export *exp)

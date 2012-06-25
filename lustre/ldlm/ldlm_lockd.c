@@ -2515,6 +2515,8 @@ void ldlm_destroy_export(struct obd_export *exp)
         ENTRY;
         cfs_hash_putref(exp->exp_lock_hash);
         exp->exp_lock_hash = NULL;
+
+	ldlm_destroy_flock_export(exp);
         EXIT;
 }
 EXPORT_SYMBOL(ldlm_destroy_export);
