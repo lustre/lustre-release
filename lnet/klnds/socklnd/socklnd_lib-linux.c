@@ -432,15 +432,14 @@ ksocknal_lib_get_conn_addrs (ksock_conn_t *conn)
 int
 ksocknal_lib_zc_capable(ksock_conn_t *conn)
 {
-        int  caps = conn->ksnc_sock->sk->sk_route_caps;
+	int  caps = conn->ksnc_sock->sk->sk_route_caps;
 
-        if (conn->ksnc_proto == &ksocknal_protocol_v1x)
-                return 0;
+	if (conn->ksnc_proto == &ksocknal_protocol_v1x)
+		return 0;
 
-        /* ZC if the socket supports scatter/gather and doesn't need software
-         * checksums */
-        return ((caps & NETIF_F_SG) != 0 &&
-                (caps & (NETIF_F_IP_CSUM | NETIF_F_NO_CSUM | NETIF_F_HW_CSUM)) != 0);
+	/* ZC if the socket supports scatter/gather and doesn't need software
+	 * checksums */
+	return ((caps & NETIF_F_SG) != 0 && (caps & NETIF_F_ALL_CSUM) != 0);
 }
 
 int

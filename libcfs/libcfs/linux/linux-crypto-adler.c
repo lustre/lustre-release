@@ -29,6 +29,7 @@
  * This is crypto api shash wrappers to zlib_adler32.
  */
 
+#include <linux/module.h>
 #include <linux/zutil.h>
 #ifdef HAVE_STRUCT_SHASH_ALG
 #include <crypto/internal/hash.h>

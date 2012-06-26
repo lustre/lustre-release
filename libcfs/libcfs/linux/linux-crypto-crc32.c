@@ -29,6 +29,7 @@
  * This is crypto api shash wrappers to crc32_le.
  */
 
+#include <linux/module.h>
 #include <linux/crc32.h>
 #ifdef HAVE_STRUCT_SHASH_ALG
 #include <crypto/internal/hash.h>
