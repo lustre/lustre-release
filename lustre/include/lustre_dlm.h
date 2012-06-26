@@ -572,6 +572,12 @@ static inline int ns_is_server(struct ldlm_namespace *ns)
         return ns->ns_client == LDLM_NAMESPACE_SERVER;
 }
 
+static inline int ns_connect_cancelset(struct ldlm_namespace *ns)
+{
+	LASSERT(ns != NULL);
+	return !!(ns->ns_connect_flags & OBD_CONNECT_CANCELSET);
+}
+
 static inline int ns_connect_lru_resize(struct ldlm_namespace *ns)
 {
         LASSERT(ns != NULL);

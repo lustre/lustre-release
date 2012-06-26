@@ -662,6 +662,15 @@ static int osc_resource_get_unused(struct obd_export *exp, struct obdo *oa,
         int count;
         ENTRY;
 
+	/* Return, i.e. cancel nothing, only if ELC is supported (flag in
+	 * export) but disabled through procfs (flag in NS).
+	 *
+	 * This distinguishes from a case when ELC is not supported originally,
+	 * when we still want to cancel locks in advance and just cancel them
+	 * locally, without sending any RPC. */
+	if (exp_connect_cancelset(exp) && !ns_connect_cancelset(ns))
+		RETURN(0);
+
         osc_build_res_name(oa->o_id, oa->o_seq, &res_id);
         res = ldlm_resource_get(ns, NULL, &res_id, 0, 0);
         if (res == NULL)

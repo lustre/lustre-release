@@ -270,6 +270,33 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
         return count;
 }
 
+static int lprocfs_rd_elc(char *page, char **start, off_t off,
+			  int count, int *eof, void *data)
+{
+	struct ldlm_namespace *ns = data;
+	unsigned int supp = ns_connect_cancelset(ns);
+
+	return lprocfs_rd_uint(page, start, off, count, eof, &supp);
+}
+
+static int lprocfs_wr_elc(struct file *file, const char *buffer,
+			       unsigned long count, void *data)
+{
+	struct ldlm_namespace *ns = data;
+	unsigned int supp = -1;
+	int rc;
+
+	rc = lprocfs_wr_uint(file, buffer, count, &supp);
+	if (rc < 0)
+		return rc;
+
+	if (supp == 0)
+		ns->ns_connect_flags &= ~OBD_CONNECT_CANCELSET;
+	else if (ns->ns_orig_connect_flags & OBD_CONNECT_CANCELSET)
+		ns->ns_connect_flags |= OBD_CONNECT_CANCELSET;
+	return count;
+}
+
 void ldlm_namespace_proc_unregister(struct ldlm_namespace *ns)
 {
         struct proc_dir_entry *dir;
@@ -338,6 +365,13 @@ int ldlm_namespace_proc_register(struct ldlm_namespace *ns)
                 lock_vars[0].read_fptr = lprocfs_rd_uint;
                 lock_vars[0].write_fptr = lprocfs_wr_uint;
                 lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
+
+		snprintf(lock_name, MAX_STRING_SIZE, "%s/early_lock_cancel",
+			 ldlm_ns_name(ns));
+		lock_vars[0].data = ns;
+		lock_vars[0].read_fptr = lprocfs_rd_elc;
+		lock_vars[0].write_fptr = lprocfs_wr_elc;
+		lprocfs_add_vars(ldlm_ns_proc_dir, lock_vars, 0);
         } else {
                 snprintf(lock_name, MAX_STRING_SIZE, "%s/ctime_age_limit",
                          ldlm_ns_name(ns));
