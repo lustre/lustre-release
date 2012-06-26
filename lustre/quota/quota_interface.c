@@ -301,6 +301,10 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
                         continue;
 
+                /* no inodes/blocks to be allocated */
+                if (count == 0)
+                        continue;
+
                 lqs = quota_search_lqs(LQS_KEY(i, id[i]), qctxt, 0);
                 if (lqs == NULL || IS_ERR(lqs))
                         continue;
@@ -321,12 +325,16 @@ static int quota_check_common(struct obd_device *obd, unsigned int uid,
                                                "blocks\n", obd->obd_name);
                                 else
                                         pending[i] += mb;
-                                LASSERTF(pending[i] >= 0, "pending is not valid,"
-                                         " count=%d, mb=%d\n", count, mb);
+
+                                LASSERTF(pending[i] > 0, "Invalid pending, "
+                                         "count=%d, mb=%d\n", count, mb);
                                 lqs->lqs_bwrite_pending += pending[i];
                         } else {
                                 pending[i] = count;
                                 lqs->lqs_iwrite_pending += pending[i];
+
+                                LASSERTF(pending[i] > 0, "Invalid pending, "
+                                         "count=%d\n", count);
                         }
                 }
 
@@ -559,7 +567,6 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
         do_gettimeofday(&work_start);
         for (i = 0; i < MAXQUOTAS; i++) {
                 struct lustre_qunit_size *lqs = NULL;
-                int flag = 0;
 
                 qdata[i].qd_id = id[i];
                 qdata[i].qd_flags = i;
@@ -570,16 +577,24 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
                 if (qdata[i].qd_id == 0 && !QDATA_IS_GRP(&qdata[i]))
                         continue;
 
-                lqs = quota_search_lqs(LQS_KEY(i, qdata[i].qd_id), qctxt, 0);
-                if (lqs == NULL || IS_ERR(lqs))
+                /* lquota_chkquota() didn't increase pending write, no
+                 * lqs is held neither. LU-1563 */
+                if (pending[i] == 0)
                         continue;
+
+                lqs = quota_search_lqs(LQS_KEY(i, qdata[i].qd_id), qctxt, 0);
+                if (lqs == NULL || IS_ERR(lqs)) {
+                        CWARN("%s: fail to find lqs for id:%u type:%d!! "
+                              "pending:%d\n", obd->obd_name, qdata[i].qd_id,
+                              i, pending[i]);
+                        continue;
+                }
 
                 spin_lock(&lqs->lqs_lock);
                 if (isblk) {
                         if (lqs->lqs_bwrite_pending >= pending[i]) {
                                 LASSERT(pending[i] >= 0);
                                 lqs->lqs_bwrite_pending -= pending[i];
-                                flag = 1;
                         } else {
                                 CERROR("%s: there are too many blocks!\n",
                                        obd->obd_name);
@@ -587,7 +602,6 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
                 } else {
                         if (lqs->lqs_iwrite_pending >= pending[i]) {
                                 lqs->lqs_iwrite_pending -= pending[i];
-                                flag = 1;
                         } else {
                                 CERROR("%s: there are too many files!\n",
                                        obd->obd_name);
@@ -602,8 +616,7 @@ static int quota_pending_commit(struct obd_device *obd, unsigned int uid,
                 lqs_putref(lqs);
                 /* When lqs_*_pening is changed back, we'll putref lqs
                  * here b=14784 */
-                if (flag)
-                        lqs_putref(lqs);
+                lqs_putref(lqs);
         }
         do_gettimeofday(&work_end);
         timediff = cfs_timeval_sub(&work_end, &work_start, NULL);
