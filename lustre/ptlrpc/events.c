@@ -334,6 +334,7 @@ void request_in_callback(lnet_event_t *ev)
         req->rq_phase = RQ_PHASE_NEW;
         cfs_spin_lock_init(&req->rq_lock);
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);
+	CFS_INIT_LIST_HEAD(&req->rq_exp_list);
         cfs_atomic_set(&req->rq_refcount, 1);
         if (ev->type == LNET_EVENT_PUT)
                 CDEBUG(D_INFO, "incoming req@%p x"LPU64" msgsize %u\n",

@@ -3991,6 +3991,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		.psc_ops		= {
 			.so_req_handler		= mdt_regular_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= ptlrpc_hpreq_handler,
 		},
 	};
 	m->mdt_regular_service = ptlrpc_register_service(&conf, procfs_entry);
@@ -4034,6 +4035,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		.psc_ops		= {
 			.so_req_handler		= mdt_readpage_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= NULL,
 		},
 	};
 	m->mdt_readpage_service = ptlrpc_register_service(&conf, procfs_entry);
@@ -4080,6 +4082,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		.psc_ops		= {
 			.so_req_handler		= mdt_regular_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= NULL,
 		},
 	};
 	m->mdt_setattr_service = ptlrpc_register_service(&conf, procfs_entry);
@@ -4115,6 +4118,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		.psc_ops		= {
 			.so_req_handler		= mdt_mdsc_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= NULL,
 		},
 	};
 	m->mdt_mdsc_service = ptlrpc_register_service(&conf, procfs_entry);
@@ -4150,6 +4154,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		.psc_ops		= {
 			.so_req_handler		= mdt_mdss_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= NULL,
 		},
         };
 	m->mdt_mdss_service = ptlrpc_register_service(&conf, procfs_entry);
@@ -4187,6 +4192,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		.psc_ops		= {
 			.so_req_handler		= mdt_dtss_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= NULL,
 		},
         };
 	m->mdt_dtss_service = ptlrpc_register_service(&conf, procfs_entry);
@@ -4220,6 +4226,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		.psc_ops		= {
 			.so_req_handler		= mdt_fld_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= NULL,
 		},
 	};
 	m->mdt_fld_service = ptlrpc_register_service(&conf, procfs_entry);
@@ -4256,6 +4263,7 @@ static int mdt_start_ptlrpc_service(struct mdt_device *m)
 		.psc_ops		= {
 			.so_req_handler		= mdt_xmds_handle,
 			.so_req_printer		= target_print_req,
+			.so_hpreq_handler	= ptlrpc_hpreq_handler,
 		},
 	};
 	m->mdt_xmds_service = ptlrpc_register_service(&conf, procfs_entry);

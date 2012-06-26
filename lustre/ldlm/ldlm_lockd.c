@@ -2202,7 +2202,8 @@ static int ldlm_cancel_hpreq_check(struct ptlrpc_request *req)
 
 static struct ptlrpc_hpreq_ops ldlm_cancel_hpreq_ops = {
         .hpreq_lock_match = ldlm_cancel_hpreq_lock_match,
-        .hpreq_check      = ldlm_cancel_hpreq_check
+	.hpreq_check      = ldlm_cancel_hpreq_check,
+	.hpreq_fini       = NULL,
 };
 
 static int ldlm_hpreq_handler(struct ptlrpc_request *req)
