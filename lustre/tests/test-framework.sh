@@ -902,6 +902,11 @@ restore_quota_type () {
 setup_quota(){
     local mntpt=$1
 
+	if [ "$USE_OFD" = "yes" ]; then
+		$LFS quotacheck $mntpt || error "quotacheck failed"
+		return
+	fi
+
     # We need save the original quota_type params, and restore them after testing
 
     # Suppose that quota type the same on mds and ost
@@ -2755,7 +2760,7 @@ init_param_vars () {
     osc_ensure_active $SINGLEMDS $TIMEOUT
     osc_ensure_active client $TIMEOUT
 
-	if [ $QUOTA_AUTO -ne 0 ] && [ "$USE_OFD" != yes ]; then
+	if [ $QUOTA_AUTO -ne 0 ]; then
         if [ "$ENABLE_QUOTA" ]; then
             echo "enable quota as required"
             setup_quota $MOUNT || return 2

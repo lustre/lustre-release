@@ -9,6 +9,11 @@ set -e
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
+if [ "$USE_OFD" = "yes" -a -z "$ONLY" ]; then
+	# only accounting tests are supported with OFD for the time being
+	ONLY="33 34 35"
+fi
+
 ONLY=${ONLY:-"$*"}
 # test_11 has been used to protect a kernel bug(bz10912), now it isn't
 # useful any more. Then add it to ALWAYS_EXCEPT. b=19835
@@ -83,6 +88,22 @@ cycle=30
 [ "$SLOW" = "no" ] && cycle=10
 
 build_test_filter
+
+if [ "$USE_OFD" = "yes" ]; then
+	for num in `seq $OSTCOUNT`; do
+		if [ $(facet_fstype ost$num) = ldiskfs ]; then
+			# not the most efficient way to enable the quota feature
+			# on ost, but it still allows us to test ofd accounting
+			# for now
+			device=$(ostdevname $num)
+			stop ost$num
+			do_facet ost$num "$TUNE2FS -O quota $device"
+			[ ${PIPESTATUS[0]} -ne 0] && \
+			      error "failed to enable quota feature for ost$num"
+			start ost$num $device $OST_MOUNT_OPTS
+		fi
+	done
+fi
 
 # set_blk_tunables(btune_sz)
 set_blk_tunesz() {
@@ -2215,11 +2236,13 @@ test_33() {
         [ $USED -ne 0 ] && \
                 error "Used space ($USED) for group $TSTID isn't 0."
 
-        echo "Write files..."
-        for i in `seq 0 $INODES`; do
-                $RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile-$i bs=$BLK_SZ \
-                   count=$BLK_CNT oflag=sync 2>/dev/null || error "write failed"
-        done
+	for i in `seq 0 $INODES`; do
+		$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile-$i conv=fsync \
+			bs=$((BLK_SZ * BLK_CNT)) count=1 2>/dev/null ||
+			error "write failed"
+		echo "Iteration $i/$INODES completed"
+	done
+	sync; sync_all_data;
 
         echo "Verify disk usage after write"
         USED=`getquota -u $TSTID global curspace`
@@ -2256,7 +2279,7 @@ test_34() {
         BLK_CNT=1024
         mkdir -p $DIR/$tdir
         chmod 0777 $DIR/$tdir
-        
+
         trap cleanup_quota_test EXIT
 
         # make sure the system is clean
@@ -2265,12 +2288,16 @@ test_34() {
         USED=`getquota -g $TSTID global curspace`
         [ $USED -ne 0 ] && error "Used space ($USED) for group $TSTID isn't 0."
 
-        echo "Write file..."
-        dd if=/dev/zero of=$DIR/$tdir/$tfile bs=$BLK_SZ count=$BLK_CNT \
-                oflag=sync 2>/dev/null || error "write failed"
+	echo "Write file..."
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=$((BLK_SZ * BLK_CNT)) count=1 \
+		conv=fsync 2>/dev/null || error "write failed"
+	sync; sync_all_data;
 
         echo "chown the file to user $TSTID"
         chown $TSTID $DIR/$tdir/$tfile || error "chown failed"
+
+	echo "Wait for setattr on objects finished..."
+	wait_delete_completed
 
         echo "Verify disk usage for user $TSTID"
         USED=`getquota -u $TSTID global curspace`
@@ -2282,6 +2309,9 @@ test_34() {
 
         echo "chgrp the file to group $TSTID"
         chgrp $TSTID $DIR/$tdir/$tfile || error "chgrp failed"
+
+	echo "Wait for setattr on objects finished..."
+	wait_delete_completed
 
         echo "Verify disk usage for group $TSTID"
         USED=`getquota -g $TSTID global curspace`
@@ -2303,9 +2333,10 @@ test_35() {
 
         trap cleanup_quota_test EXIT
 
-        echo "Write file..."
-        $RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=$BLK_SZ \
-                count=$BLK_CNT oflag=sync 2>/dev/null || error "write failed"
+	echo "Write file..."
+	$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=$((BLK_SZ * BLK_CNT)) \
+		count=1 conv=fsync 2>/dev/null || error "write failed"
+	sync; sync_all_data;
 
         echo "Save disk usage before restart"
         ORIG_USR_SPACE=`getquota -u $TSTID global curspace`
@@ -2349,7 +2380,6 @@ test_35() {
         cleanup_quota_test
 }
 run_test 35 "usage is still accessible across reboot ============================"
-
 
 # turn off quota
 quota_fini()
