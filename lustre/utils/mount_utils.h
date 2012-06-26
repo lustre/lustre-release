@@ -68,6 +68,21 @@ struct mkfs_opts {
 	int	mo_mgs_failnodes;
 };
 
+/* used to describe the options to mount the lustre disk */
+struct mount_opts {
+	struct lustre_disk_data	 mo_ldd;
+	char	*mo_orig_options;
+	char	*mo_usource;		/* user-specified mount device */
+	char	*mo_source;		/* our mount device name */
+	char	 mo_target[PATH_MAX];	/* mount directory */
+	int	 mo_nomtab;
+	int	 mo_fake;
+	int	 mo_force;
+	int	 mo_retry;
+	int	 mo_have_mgsnid;
+	int	 mo_md_stripe_cache_size;
+};
+
 int get_mountdata(char *, struct lustre_disk_data *);
 
 /* mkfs/mount helper functions */

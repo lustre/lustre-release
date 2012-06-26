@@ -61,10 +61,6 @@
 #define MAX_RETRIES 99
 
 int          verbose = 0;
-int          nomtab = 0;
-int          fake = 0;
-int          force = 0;
-int          retry = 0;
 int          md_stripe_cache_size = 16384;
 char         *progname = NULL;
 
@@ -220,7 +216,7 @@ static void append_option(char *options, const char *one)
 
 /* Replace options with subset of Lustre-specific options, and
    fill in mount flags */
-int parse_options(char *orig_options, int *flagp)
+int parse_options(struct mount_opts *mop, char *orig_options, int *flagp)
 {
         char *options, *opt, *nextopt, *arg, *val;
 
@@ -242,17 +238,17 @@ int parse_options(char *orig_options, int *flagp)
                 if (val && strncmp(arg, "md_stripe_cache_size", 20) == 0) {
                         md_stripe_cache_size = atoi(val + 1);
                 } else if (val && strncmp(arg, "retry", 5) == 0) {
-                        retry = atoi(val + 1);
-                        if (retry > MAX_RETRIES)
-                                retry = MAX_RETRIES;
-                        else if (retry < 0)
-                                retry = 0;
+			mop->mo_retry = atoi(val + 1);
+			if (mop->mo_retry > MAX_RETRIES)
+				mop->mo_retry = MAX_RETRIES;
+			else if (mop->mo_retry < 0)
+				mop->mo_retry = 0;
                 } else if (val && strncmp(arg, "mgssec", 6) == 0) {
                         append_option(options, opt);
                 } else if (strcmp(opt, "force") == 0) {
                         //XXX special check for 'force' option
-                        ++force;
-                        printf("force: %d\n", force);
+			++mop->mo_force;
+			printf("force: %d\n", mop->mo_force);
                 } else if (parse_one_option(opt, flagp) == 0) {
                         /* pass this on as an option */
                         append_option(options, opt);
@@ -488,160 +484,182 @@ set_params:
         return rc;
 }
 
+static void set_defaults(struct mount_opts *mop)
+{
+	memset(mop, 0, sizeof(*mop));
+	mop->mo_usource = NULL;
+	mop->mo_source = NULL;
+	mop->mo_nomtab = 0;
+	mop->mo_fake = 0;
+	mop->mo_force = 0;
+	mop->mo_retry = 0;
+	mop->mo_have_mgsnid = 0;
+	mop->mo_md_stripe_cache_size = 16384;
+	mop->mo_orig_options = "";
+}
+
+static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
+{
+	static struct option long_opt[] = {
+		{"fake", 0, 0, 'f'},
+		{"force", 0, 0, 1},
+		{"help", 0, 0, 'h'},
+		{"nomtab", 0, 0, 'n'},
+		{"options", 1, 0, 'o'},
+		{"verbose", 0, 0, 'v'},
+		{0, 0, 0, 0}
+	};
+	char real_path[PATH_MAX] = {'\0'};
+	FILE *f;
+	char path[256], name[256];
+	size_t sz;
+	char *ptr;
+	int opt, rc;
+
+	while ((opt = getopt_long(argc, argv, "fhno:v",
+				  long_opt, NULL)) != EOF){
+		switch (opt) {
+		case 1:
+			++mop->mo_force;
+			printf("force: %d\n", mop->mo_force);
+			break;
+		case 'f':
+			++mop->mo_fake;
+			printf("fake: %d\n", mop->mo_fake);
+			break;
+		case 'h':
+			usage(stdout);
+			break;
+		case 'n':
+			++mop->mo_nomtab;
+			printf("nomtab: %d\n", mop->mo_nomtab);
+			break;
+		case 'o':
+			mop->mo_orig_options = optarg;
+			break;
+		case 'v':
+			++verbose;
+			break;
+		default:
+			fprintf(stderr, "%s: unknown option '%c'\n",
+					progname, opt);
+			usage(stderr);
+			break;
+		}
+	}
+
+	if (optind + 2 > argc) {
+		fprintf(stderr, "%s: too few arguments\n", progname);
+		usage(stderr);
+	}
+
+	mop->mo_usource = argv[optind];
+	if (!mop->mo_usource) {
+		usage(stderr);
+	}
+
+	/**
+	 * Try to get the real path to the device, in case it is a
+	 * symbolic link for instance
+	 */
+	if (realpath(mop->mo_usource, real_path) != NULL) {
+		mop->mo_usource = strdup(real_path);
+
+		ptr = strrchr(real_path, '/');
+		if (ptr && strncmp(ptr, "/dm-", 4) == 0 && isdigit(*(ptr + 4))) {
+			snprintf(path, sizeof(path), "/sys/block/%s/dm/name", ptr+1);
+			if ((f = fopen(path, "r"))) {
+				/* read "<name>\n" from sysfs */
+				if (fgets(name, sizeof(name), f) && (sz = strlen(name)) > 1) {
+					name[sz - 1] = '\0';
+					snprintf(real_path, sizeof(real_path), "/dev/mapper/%s", name);
+				}
+				fclose(f);
+			}
+		}
+	}
+
+	mop->mo_source = convert_hostnames(mop->mo_usource);
+	if (!mop->mo_source) {
+		usage(stderr);
+	}
+
+	if (realpath(argv[optind + 1], mop->mo_target) == NULL) {
+		rc = errno;
+		fprintf(stderr, "warning: %s: cannot resolve: %s\n",
+				argv[optind + 1], strerror(errno));
+		return rc;
+	}
+
+	return 0;
+}
+
 int main(int argc, char *const argv[])
 {
-        char default_options[] = "";
-        char *usource, *source, *ptr;
-        char target[PATH_MAX] = {'\0'};
-        char real_path[PATH_MAX] = {'\0'};
-        char path[256], name[256];
-        FILE *f;
-        size_t sz;
-        char *options, *optcopy, *orig_options = default_options;
-        int i, nargs = 3, opt, rc, flags, optlen;
-        static struct option long_opt[] = {
-                {"fake", 0, 0, 'f'},
-                {"force", 0, 0, 1},
-                {"help", 0, 0, 'h'},
-                {"nomtab", 0, 0, 'n'},
-                {"options", 1, 0, 'o'},
-                {"verbose", 0, 0, 'v'},
-                {0, 0, 0, 0}
-        };
+	struct mount_opts mop;
+	char *options, *optcopy;
+	int i, rc, flags, optlen;
 
-        progname = strrchr(argv[0], '/');
-        progname = progname ? progname + 1 : argv[0];
+	progname = strrchr(argv[0], '/');
+	progname = progname ? progname + 1 : argv[0];
 
-        while ((opt = getopt_long(argc, argv, "fhno:v",
-                                  long_opt, NULL)) != EOF){
-                switch (opt) {
-                case 1:
-                        ++force;
-                        printf("force: %d\n", force);
-                        nargs++;
-                        break;
-                case 'f':
-                        ++fake;
-                        printf("fake: %d\n", fake);
-                        nargs++;
-                        break;
-                case 'h':
-                        usage(stdout);
-                        break;
-                case 'n':
-                        ++nomtab;
-                        printf("nomtab: %d\n", nomtab);
-                        nargs++;
-                        break;
-                case 'o':
-                        orig_options = optarg;
-                        nargs++;
-                        break;
-                case 'v':
-                        ++verbose;
-                        nargs++;
-                        break;
-                default:
-                        fprintf(stderr, "%s: unknown option '%c'\n",
-                                progname, opt);
-                        usage(stderr);
-                        break;
-                }
-        }
+	set_defaults(&mop);
 
-        if (optind + 2 > argc) {
-                fprintf(stderr, "%s: too few arguments\n", progname);
-                usage(stderr);
-        }
-
-        usource = argv[optind];
-        if (!usource) {
-                usage(stderr);
-        }
-
-        /**
-         * Try to get the real path to the device, in case it is a
-         * symbolic link for instance
-         */
-        if (realpath(usource, real_path) != NULL) {
-                usource = real_path;
-
-                ptr = strrchr(real_path, '/');
-                if (ptr && strncmp(ptr, "/dm-", 4) == 0 && isdigit(*(ptr + 4))) {
-                        snprintf(path, sizeof(path), "/sys/block/%s/dm/name", ptr+1);
-                        if ((f = fopen(path, "r"))) {
-                                /* read "<name>\n" from sysfs */
-                                if (fgets(name, sizeof(name), f) && (sz = strlen(name)) > 1) {
-                                        name[sz - 1] = '\0';
-                                        snprintf(real_path, sizeof(real_path), "/dev/mapper/%s", name);
-                                }
-                                fclose(f);
-                        }
-                }
-        }
-
-        source = convert_hostnames(usource);
-        if (!source) {
-                usage(stderr);
-        }
-
-        if (realpath(argv[optind + 1], target) == NULL) {
-                rc = errno;
-                fprintf(stderr, "warning: %s: cannot resolve: %s\n",
-                        argv[optind + 1], strerror(errno));
-                return rc;
-        }
+	rc = parse_opts(argc, argv, &mop);
+	if (rc)
+		return rc;
 
         if (verbose) {
                 for (i = 0; i < argc; i++)
                         printf("arg[%d] = %s\n", i, argv[i]);
-                printf("source = %s (%s), target = %s\n", usource, source,
-                       target);
-                printf("options = %s\n", orig_options);
+		printf("source = %s (%s), target = %s\n", mop.mo_usource,
+		       mop.mo_source, mop.mo_target);
+		printf("options = %s\n", mop.mo_orig_options);
         }
 
-        options = malloc(strlen(orig_options) + 1);
+	options = malloc(strlen(mop.mo_orig_options) + 1);
         if (options == NULL) {
                 fprintf(stderr, "can't allocate memory for options\n");
                 return -1;
         }
-        strcpy(options, orig_options);
-        rc = parse_options(options, &flags);
+	strcpy(options, mop.mo_orig_options);
+	rc = parse_options(&mop, options, &flags);
         if (rc) {
                 fprintf(stderr, "%s: can't parse options: %s\n",
                         progname, options);
                 return(EINVAL);
         }
 
-        if (!force) {
-                rc = check_mtab_entry(usource, source, target, "lustre");
+	if (!mop.mo_force) {
+		rc = check_mtab_entry(mop.mo_usource, mop.mo_source,
+				      mop.mo_target, "lustre");
                 if (rc && !(flags & MS_REMOUNT)) {
                         fprintf(stderr, "%s: according to %s %s is "
-                                "already mounted on %s\n",
-                                progname, MOUNTED, usource, target);
+				"already mounted on %s\n", progname, MOUNTED,
+				mop.mo_usource, mop.mo_target);
                         return(EEXIST);
                 }
                 if (!rc && (flags & MS_REMOUNT)) {
                         fprintf(stderr, "%s: according to %s %s is "
-                                "not already mounted on %s\n",
-                                progname, MOUNTED, usource, target);
+				"not already mounted on %s\n", progname, MOUNTED,
+				mop.mo_usource, mop.mo_target);
                         return(ENOENT);
                 }
         }
         if (flags & MS_REMOUNT)
-                nomtab++;
+		mop.mo_nomtab++;
 
-        rc = access(target, F_OK);
+	rc = access(mop.mo_target, F_OK);
         if (rc) {
                 rc = errno;
-                fprintf(stderr, "%s: %s inaccessible: %s\n", progname, target,
-                        strerror(errno));
+		fprintf(stderr, "%s: %s inaccessible: %s\n", progname,
+			mop.mo_target, strerror(errno));
                 return rc;
         }
 
         /* In Linux 2.4, the target device doesn't get passed to any of our
            functions.  So we'll stick it on the end of the options. */
-        optlen = strlen(options) + strlen(",device=") + strlen(source) + 1;
+	optlen = strlen(options) + strlen(",device=") + strlen(mop.mo_source) + 1;
         optcopy = malloc(optlen);
         if (optcopy == NULL) {
                 fprintf(stderr, "can't allocate memory to optcopy\n");
@@ -651,36 +669,37 @@ int main(int argc, char *const argv[])
         if (*optcopy)
                 strcat(optcopy, ",");
         strcat(optcopy, "device=");
-        strcat(optcopy, source);
+	strcat(optcopy, mop.mo_source);
 
         if (verbose)
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
-                       source, target, flags, optcopy);
+		       mop.mo_source, mop.mo_target, flags, optcopy);
 
-        if (!strstr(usource, ":/") && set_blockdev_tunables(source, 1)) {
+	if (!strstr(mop.mo_usource, ":/") && set_blockdev_tunables(mop.mo_source, 1)) {
                 if (verbose)
                         fprintf(stderr, "%s: unable to set tunables for %s"
                                 " (may cause reduced IO performance)\n",
-                                argv[0], source);
+				argv[0], mop.mo_source);
         }
 
-        if (!fake) {
+	if (!mop.mo_fake) {
                 /* flags and target get to lustre_get_sb, but not
                    lustre_fill_super.  Lustre ignores the flags, but mount
                    does not. */
-                for (i = 0, rc = -EAGAIN; i <= retry && rc != 0; i++) {
-                        rc = mount(source, target, "lustre", flags,
-                                   (void *)optcopy);
+                for (i = 0, rc = -EAGAIN; i <= mop.mo_retry && rc != 0; i++) {
+			rc = mount(mop.mo_source, mop.mo_target, "lustre",
+				   flags, (void *)optcopy);
                         if (rc) {
                                 if (verbose) {
                                         fprintf(stderr, "%s: mount %s at %s "
                                                 "failed: %s retries left: "
                                                 "%d\n", basename(progname),
-                                                usource, target,
-                                                strerror(errno), retry-i);
+						mop.mo_usource, mop.mo_target,
+                                                strerror(errno),
+						mop.mo_retry - i);
                                 }
 
-                                if (retry) {
+                                if (mop.mo_retry) {
                                         sleep(1 << max((i/2), 5));
                                 }
                                 else {
@@ -695,14 +714,14 @@ int main(int argc, char *const argv[])
 
                 rc = errno;
 
-                cli = strrchr(usource, ':');
+		cli = strrchr(mop.mo_usource, ':');
                 if (cli && (strlen(cli) > 2))
                         cli += 2;
                 else
                         cli = NULL;
 
                 fprintf(stderr, "%s: mount %s at %s failed: %s\n", progname,
-                        usource, target, strerror(errno));
+			mop.mo_usource, mop.mo_target, strerror(errno));
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                                 "Check /etc/modprobe.conf and "
@@ -720,16 +739,16 @@ int main(int argc, char *const argv[])
                 }
                 if (errno == EALREADY)
                         fprintf(stderr, "The target service is already running."
-                                " (%s)\n", usource);
+				" (%s)\n", mop.mo_usource);
                 if (errno == ENXIO)
                         fprintf(stderr, "The target service failed to start "
                                 "(bad config log?) (%s).  "
-                                "See /var/log/messages.\n", usource);
+				"See /var/log/messages.\n", mop.mo_usource);
                 if (errno == EIO)
                         fprintf(stderr, "Is the MGS running?\n");
                 if (errno == EADDRINUSE)
                         fprintf(stderr, "The target service's index is already "
-                                "in use. (%s)\n", usource);
+				"in use. (%s)\n", mop.mo_usource);
                 if (errno == EINVAL) {
                         fprintf(stderr, "This may have multiple causes.\n");
                         if (cli)
@@ -740,22 +759,23 @@ int main(int argc, char *const argv[])
                 }
 
                 /* May as well try to clean up loop devs */
-                if (strncmp(usource, "/dev/loop", 9) == 0) {
+		if (strncmp(mop.mo_usource, "/dev/loop", 9) == 0) {
                         char cmd[256];
                         int ret;
-                        sprintf(cmd, "/sbin/losetup -d %s", usource);
+			sprintf(cmd, "/sbin/losetup -d %s", mop.mo_usource);
                         if ((ret = system(cmd)) < 0)
                                 rc = errno;
                         else if (ret > 0)
                                 rc = WEXITSTATUS(ret);
                 }
 
-        } else if (!nomtab) {
-                rc = update_mtab_entry(usource, target, "lustre", orig_options,
-                                       0,0,0);
+	} else if (!mop.mo_nomtab) {
+		rc = update_mtab_entry(mop.mo_usource, mop.mo_target, "lustre",
+				       mop.mo_orig_options, 0,0,0);
         }
 
         free(optcopy);
-        free(source);
+	/* mo_usource should be freed, but we can rely on the kernel */
+	free(mop.mo_source);
         return rc;
 }
