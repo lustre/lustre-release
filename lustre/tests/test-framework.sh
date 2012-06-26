@@ -1,6 +1,4 @@
 #!/bin/bash
-# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
-# vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
 trap 'print_summary && touch $TF_FAIL && \
     echo "test-framework exiting on error"' ERR
@@ -3039,11 +3037,14 @@ pause_bulk() {
 
 drop_ldlm_cancel() {
 #define OBD_FAIL_LDLM_CANCEL             0x304
-    RC=0
-    do_facet client lctl set_param fail_loc=0x304
-    do_facet client "$@" || RC=$?
-    do_facet client lctl set_param fail_loc=0
-    return $RC
+	local RC=0
+	local list=$(comma_list $(mdts_nodes) $(osts_nodes))
+	do_nodes $list lctl set_param fail_loc=0x304
+
+	do_facet client "$@" || RC=$?
+
+	do_nodes $list lctl set_param fail_loc=0
+	return $RC
 }
 
 drop_bl_callback() {
