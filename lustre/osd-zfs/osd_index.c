@@ -916,11 +916,9 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 			dt->do_index_ops = &osd_dir_ops;
 		else
 			RETURN(-ENOTDIR);
-#if 0
 	} else if (unlikely(feat == &dt_acct_features)) {
 		LASSERT(fid_is_acct(lu_object_fid(&dt->do_lu)));
 		dt->do_index_ops = &osd_acct_index_ops;
-#endif
 	} else if (udmu_object_is_zap(obj->oo_db) &&
 		   dt->do_index_ops == NULL) {
 		/* For index file, we don't support variable key & record sizes

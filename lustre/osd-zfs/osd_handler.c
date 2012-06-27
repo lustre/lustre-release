@@ -486,6 +486,14 @@ struct lu_context_key osd_key = {
 
 static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 {
+	ENTRY;
+
+	/* shutdown quota slave instance associated with the device */
+	if (o->od_quota_slave != NULL) {
+		qsd_fini(env, o->od_quota_slave);
+		o->od_quota_slave = NULL;
+	}
+
 	RETURN(0);
 }
 
@@ -715,7 +723,19 @@ static int osd_recovery_complete(const struct lu_env *env, struct lu_device *d)
 static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		       struct lu_device *dev)
 {
-	return 0;
+	struct osd_device	*osd = osd_dev(dev);
+	int			 rc = 0;
+	ENTRY;
+
+	/* initialize quota slave instance */
+	osd->od_quota_slave = qsd_init(env, osd->od_svname, &osd->od_dt_dev,
+				       osd->od_proc_entry);
+	if (IS_ERR(osd->od_quota_slave)) {
+		rc = PTR_ERR(osd->od_quota_slave);
+		osd->od_quota_slave = NULL;
+	}
+
+	RETURN(rc);
 }
 
 struct lu_device_operations osd_lu_ops = {

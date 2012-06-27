@@ -1,5 +1,5 @@
 MODULES := osd_zfs
-osd_zfs-objs := osd_handler.o osd_lproc.o udmu.o
+osd_zfs-objs := osd_handler.o osd_lproc.o udmu.o osd_quota.o
 osd_zfs-objs += osd_object.o osd_io.o osd_oi.o osd_xattr.o osd_index.o
 
 EXTRA_PRE_CFLAGS += -I@SPL_DIR@ -I@SPL_DIR@/include

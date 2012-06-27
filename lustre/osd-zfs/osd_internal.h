@@ -47,6 +47,7 @@
 #define _OSD_INTERNAL_H
 
 #include <dt_object.h>
+#include <lquota.h>
 #include <sys/arc.h>
 
 #include <sys/nvpair.h>
@@ -221,6 +222,9 @@ struct osd_device {
 	/* object IDs of the inode accounting indexes */
 	uint64_t		 od_iusr_oid;
 	uint64_t		 od_igrp_oid;
+
+	/* quota slave instance */
+	struct qsd_instance	*od_quota_slave;
 
 	/* used to debug zerocopy logic: the fields track all
 	 * allocated, loaned and referenced buffers in use.
