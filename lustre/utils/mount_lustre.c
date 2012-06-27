@@ -261,6 +261,31 @@ int parse_options(struct mount_opts *mop, char *orig_options, int *flagp)
         return 0;
 }
 
+/* Add mgsnids from ldd params */
+static int add_mgsnids(struct mount_opts *mop, char *options,
+		       const char *params)
+{
+	char *ptr = (char *)params;
+	char tmp, *sep;
+
+	while ((ptr = strstr(ptr, PARAM_MGSNODE)) != NULL) {
+		sep = strchr(ptr, ' ');
+		if (sep != NULL) {
+			tmp = *sep;
+			*sep = '\0';
+		}
+		append_option(options, ptr);
+		mop->mo_have_mgsnid++;
+		if (sep) {
+			*sep = tmp;
+			ptr = sep;
+		} else {
+			break;
+		}
+	}
+
+	return 0;
+}
 
 static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 {
@@ -274,6 +299,79 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 			"this tool\n", progname, source);
 		return ENODEV;
 	}
+
+	/* for new backends (i.e. ZFS) we will be parsing mount data
+	 * in the userspace and pass it in the form of mount options.
+	 * to adopt this schema smoothly we're still doing old way
+	 * (parsing mount data within the kernel) for ldiskfs */
+	if (ldd->ldd_mount_type == LDD_MT_EXT3 ||
+	    ldd->ldd_mount_type == LDD_MT_LDISKFS ||
+	    ldd->ldd_mount_type == LDD_MT_LDISKFS2)
+		return 0;
+
+	rc = osd_read_ldd(source, ldd);
+	if (rc) {
+		fprintf(stderr, "%s: %s failed to read permanent mount"
+			" data: %s\n", progname, source, strerror(rc));
+		return rc;
+	}
+
+	if (ldd->ldd_flags & LDD_F_NEED_INDEX) {
+		fprintf(stderr, "%s: %s has no index assigned "
+			"(probably formatted with old mkfs)\n",
+			progname, source);
+		return EINVAL;
+	}
+
+	if (ldd->ldd_flags & LDD_F_UPGRADE14) {
+		fprintf(stderr, "%s: we cannot upgrade %s from this (very old) "
+			"Lustre version\n", progname, source);
+		return EINVAL;
+	}
+
+	/* Since we never rewrite ldd, ignore temp flags */
+	ldd->ldd_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE);
+
+	/* svname of the form lustre:OST1234 means never registered */
+	rc = strlen(ldd->ldd_svname);
+	if (ldd->ldd_svname[rc - 8] == ':') {
+		ldd->ldd_svname[rc - 8] = '-';
+		ldd->ldd_flags |= LDD_F_VIRGIN;
+	}
+
+	/* backend osd type */
+	append_option(options, "osd=");
+	strcat(options, mt_type(ldd->ldd_mount_type));
+
+	append_option(options, ldd->ldd_mount_opts);
+
+	if (!mop->mo_have_mgsnid) {
+		/* Only use disk data if mount -o mgsnode=nid wasn't
+		 * specified */
+		if (ldd->ldd_flags & LDD_F_SV_TYPE_MGS) {
+			append_option(options, "mgs");
+			mop->mo_have_mgsnid++;
+		} else {
+			add_mgsnids(mop, options, ldd->ldd_params);
+		}
+	}
+	/* Better have an mgsnid by now */
+	if (!mop->mo_have_mgsnid) {
+		fprintf(stderr, "%s: missing option mgsnode=<nid>\n",
+			progname);
+		return EINVAL;
+	}
+
+	if (ldd->ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF))
+		append_option(options, "writeconf");
+	if (ldd->ldd_flags & LDD_F_IAM_DIR)
+		append_option(options, "iam");
+	if (ldd->ldd_flags & LDD_F_NO_PRIMNODE)
+		append_option(options, "noprimnode");
+
+	/* svname must be last option */
+	append_option(options, "svname=");
+	strcat(options, ldd->ldd_svname);
 
 	return 0;
 }
@@ -373,9 +471,13 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 		}
 	}
 
-	mop->mo_source = convert_hostnames(mop->mo_usource);
-	if (!mop->mo_source) {
-		usage(stderr);
+	ptr = strstr(mop->mo_usource, ":/");
+	if (ptr != NULL) {
+		mop->mo_source = convert_hostnames(mop->mo_usource);
+		if (!mop->mo_source)
+			usage(stderr);
+	} else {
+		mop->mo_source = strdup(mop->mo_usource);
 	}
 
 	if (realpath(argv[optind + 1], mop->mo_target) == NULL) {
