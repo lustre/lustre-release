@@ -41,6 +41,7 @@ enum {
         PSDEV_LNET_PEERS,
         PSDEV_LNET_BUFFERS,
         PSDEV_LNET_NIS,
+	PSDEV_LNET_PTL_ROTOR,
 };
 #else
 #define CTL_LNET           CTL_UNNUMBERED
@@ -50,6 +51,7 @@ enum {
 #define PSDEV_LNET_PEERS   CTL_UNNUMBERED
 #define PSDEV_LNET_BUFFERS CTL_UNNUMBERED
 #define PSDEV_LNET_NIS     CTL_UNNUMBERED
+#define PSDEV_LNET_PTL_ROTOR	CTL_UNNUMBERED
 #endif
 
 #define LNET_LOFFT_BITS		(sizeof(loff_t) * 8)
@@ -744,6 +746,107 @@ int LL_PROC_PROTO(proc_lnet_nis)
         return rc;
 }
 
+struct lnet_portal_rotors {
+	int             pr_value;
+	const char      *pr_name;
+	const char	*pr_desc;
+};
+
+static struct lnet_portal_rotors	portal_rotors[] = {
+	{
+		.pr_value = LNET_PTL_ROTOR_OFF,
+		.pr_name  = "OFF",
+		.pr_desc  = "Turn off message rotor for wildcard portals"
+	},
+	{
+		.pr_value = LNET_PTL_ROTOR_ON,
+		.pr_name  = "ON",
+		.pr_desc  = "round-robin dispatch all PUT messages for "
+			    "wildcard portals"
+	},
+	{
+		.pr_value = LNET_PTL_ROTOR_RR_RT,
+		.pr_name  = "RR_RT",
+		.pr_desc  = "round-robin dispatch routed PUT message for "
+			    "wildcard portals"
+	},
+	{
+		.pr_value = LNET_PTL_ROTOR_HASH_RT,
+		.pr_name  = "HASH_RT",
+		.pr_desc  = "dispatch routed PUT message by hashing source "
+			    "NID for wildcard portals"
+	},
+	{
+		.pr_value = -1,
+		.pr_name  = NULL,
+		.pr_desc  = NULL
+	},
+};
+
+extern int portal_rotor;
+
+static int __proc_lnet_portal_rotor(void *data, int write,
+				    loff_t pos, void *buffer, int nob)
+{
+	const int	buf_len	= 128;
+	char		*buf;
+	char		*tmp;
+	int		rc;
+	int		i;
+
+	LIBCFS_ALLOC(buf, buf_len);
+	if (buf == NULL)
+		return -ENOMEM;
+
+	if (!write) {
+		lnet_res_lock(0);
+
+		for (i = 0; portal_rotors[i].pr_value >= 0; i++) {
+			if (portal_rotors[i].pr_value == portal_rotor)
+				break;
+		}
+
+		LASSERT(portal_rotors[i].pr_value == portal_rotor);
+		lnet_res_unlock(0);
+
+		rc = snprintf(buf, buf_len,
+			      "{\n\tportals: all\n"
+			      "\trotor: %s\n\tdescription: %s\n}",
+			      portal_rotors[i].pr_name,
+			      portal_rotors[i].pr_desc);
+
+		if (pos >= min_t(int, rc, buf_len)) {
+			rc = 0;
+		} else {
+			rc = cfs_trace_copyout_string(buffer, nob,
+					buf + pos, "\n");
+		}
+		goto out;
+	}
+
+	rc = cfs_trace_copyin_string(buf, buf_len, buffer, nob);
+	if (rc < 0)
+		goto out;
+
+	tmp = cfs_trimwhite(buf);
+
+	rc = -EINVAL;
+	lnet_res_lock(0);
+	for (i = 0; portal_rotors[i].pr_name != NULL; i++) {
+		if (cfs_strncasecmp(portal_rotors[i].pr_name, tmp,
+				    strlen(portal_rotors[i].pr_name)) == 0) {
+			portal_rotor = portal_rotors[i].pr_value;
+			rc = 0;
+			break;
+		}
+	}
+	lnet_res_unlock(0);
+out:
+	LIBCFS_FREE(buf, buf_len);
+	return rc;
+}
+DECLARE_PROC_HANDLER(proc_lnet_portal_rotor);
+
 static cfs_sysctl_table_t lnet_table[] = {
         /*
          * NB No .strategy entries have been provided since sysctl(8) prefers
@@ -786,8 +889,14 @@ static cfs_sysctl_table_t lnet_table[] = {
                 .proc_handler = &proc_lnet_nis,
         },
         {
-                INIT_CTL_NAME(0)
-        }
+		INIT_CTL_NAME(PSDEV_LNET_PTL_ROTOR)
+		.procname = "portal_rotor",
+		.mode     = 0644,
+		.proc_handler = &proc_lnet_portal_rotor,
+	},
+	{
+		INIT_CTL_NAME(0)
+	}
 };
 
 static cfs_sysctl_table_t top_table[] = {

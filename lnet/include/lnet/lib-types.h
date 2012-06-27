@@ -614,6 +614,16 @@ struct lnet_match_table {
 	cfs_list_t		*mt_mhash;      /* matching hash */
 };
 
+/* these are only useful for wildcard portal */
+/* Turn off message rotor for wildcard portals */
+#define	LNET_PTL_ROTOR_OFF	0
+/* round-robin dispatch all PUT messages for wildcard portals */
+#define	LNET_PTL_ROTOR_ON	1
+/* round-robin dispatch routed PUT message for wildcard portals */
+#define	LNET_PTL_ROTOR_RR_RT	2
+/* dispatch routed PUT message by hashing source NID for wildcard portals */
+#define	LNET_PTL_ROTOR_HASH_RT	3
+
 typedef struct lnet_portal {
 #ifdef __KERNEL__
 	cfs_spinlock_t		ptl_lock;

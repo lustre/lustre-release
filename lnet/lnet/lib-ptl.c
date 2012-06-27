@@ -39,7 +39,7 @@
 #include <lnet/lib-lnet.h>
 
 /* NB: add /proc interfaces in upcoming patches */
-int	portal_rotor;
+int	portal_rotor	= LNET_PTL_ROTOR_HASH_RT;
 CFS_MODULE_PARM(portal_rotor, "i", int, 0644,
 		"redirect PUTs to different cpu-partitions");
 
@@ -259,34 +259,42 @@ lnet_mt_of_attach(unsigned int index, lnet_process_id_t id,
 	}
 }
 
-struct lnet_match_table *
-lnet_mt_of_match(unsigned int index, lnet_process_id_t id, __u64 mbits)
+static struct lnet_match_table *
+lnet_mt_of_match(struct lnet_match_info *info, struct lnet_msg *msg)
 {
 	struct lnet_match_table	*mtable;
 	struct lnet_portal	*ptl;
 	int			nmaps;
 	int			rotor;
+	int			routed;
 	int			cpt;
 
 	/* NB: called w/o lock */
-	LASSERT(index < the_lnet.ln_nportals);
-	ptl = the_lnet.ln_portals[index];
+	LASSERT(info->mi_portal < the_lnet.ln_nportals);
+	ptl = the_lnet.ln_portals[info->mi_portal];
 
 	LASSERT(lnet_ptl_is_wildcard(ptl) || lnet_ptl_is_unique(ptl));
 
-	mtable = lnet_match2mt(ptl, id, mbits);
+	mtable = lnet_match2mt(ptl, info->mi_id, info->mi_mbits);
 	if (mtable != NULL)
 		return mtable;
 
 	/* it's a wildcard portal */
-	if (!portal_rotor) {
+	routed = LNET_NIDNET(msg->msg_hdr.src_nid) !=
+		 LNET_NIDNET(msg->msg_hdr.dest_nid);
+
+	if (portal_rotor == LNET_PTL_ROTOR_OFF ||
+	    (portal_rotor != LNET_PTL_ROTOR_ON && !routed)) {
 		cpt = lnet_cpt_current();
 		if (ptl->ptl_mtables[cpt]->mt_enabled)
 			return ptl->ptl_mtables[cpt];
 	}
 
-	rotor = ptl->ptl_rotor++;
-	cpt = rotor % LNET_CPT_NUMBER;
+	rotor = ptl->ptl_rotor++; /* get round-robin factor */
+	if (portal_rotor == LNET_PTL_ROTOR_HASH_RT && routed)
+		cpt = lnet_cpt_of_nid(msg->msg_hdr.src_nid);
+	else
+		cpt = rotor % LNET_CPT_NUMBER;
 
 	if (!ptl->ptl_mtables[cpt]->mt_enabled) {
 		/* is there any active entry for this portal? */
@@ -491,8 +499,7 @@ lnet_ptl_match_md(struct lnet_match_info *info, struct lnet_msg *msg)
 	if (rc != 0) /* matched or delayed early message */
 		return rc;
 
-	mtable = lnet_mt_of_match(info->mi_portal,
-				  info->mi_id, info->mi_mbits);
+	mtable = lnet_mt_of_match(info, msg);
 	lnet_res_lock(mtable->mt_cpt);
 
 	if (the_lnet.ln_shutdown) {
