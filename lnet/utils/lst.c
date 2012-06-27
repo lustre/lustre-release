@@ -1554,6 +1554,22 @@ lst_lnet_stat_value(int bw, int send, int off)
         return *p;
 }
 
+static void
+lst_timeval_diff(struct timeval *tv1,
+		 struct timeval *tv2, struct timeval *df)
+{
+	if (tv1->tv_usec >= tv2->tv_usec) {
+		df->tv_sec  = tv1->tv_sec - tv2->tv_sec;
+		df->tv_usec = tv1->tv_usec - tv2->tv_usec;
+		return;
+	}
+
+	df->tv_sec  = tv1->tv_sec - 1 - tv2->tv_sec;
+	df->tv_usec = tv1->tv_usec + 1000000 - tv2->tv_usec;
+
+	return;
+}
+
 void
 lst_cal_lnet_stat(float delta, lnet_counters_t *lnet_new,
                   lnet_counters_t *lnet_old)
@@ -1674,7 +1690,7 @@ lst_print_lnet_stat(char *name, int bwrt, int rdwr, int type)
 
 void
 lst_print_stat(char *name, cfs_list_t *resultp,
-               int idx, int lnet, int bwrt, int rdwr, int type)
+	       int idx, int lnet, int bwrt, int rdwr, int type)
 {
         cfs_list_t        tmp[2];
         lstcon_rpc_ent_t *new;
@@ -1735,11 +1751,26 @@ lst_print_stat(char *name, cfs_list_t *resultp,
                 lnet_new = (lnet_counters_t *)((char *)srpc_new + sizeof(*srpc_new));
                 lnet_old = (lnet_counters_t *)((char *)srpc_old + sizeof(*srpc_old));
 
-                /* use the timestamp from the remote node, not our rpe_stamp
-                 * from when we copied up the data out of the kernel */
+		/* Prior to version 2.3, the running_ms field was a counter for
+		 * the number of running tests.  We are looking at this value
+		 * to determine if it is a millisecond timestamep (>= 2.3) or a
+		 * test counter (< 2.3).  The number 500 is being used for this
+		 * barrier as the test counter should never get this high, and
+		 * the timestamp should never get this low. */
 
-                delta = (float) (sfwk_new->running_ms -
-                                 sfwk_old->running_ms) / 1000;
+		if (sfwk_new->running_ms > 500) {
+			/* use the timestamp from the remote node, not our
+			 * rpe_stamp from when we copied up the data out of
+			 * the kernel */
+
+			delta = (float) (sfwk_new->running_ms -
+					sfwk_old->running_ms) / 1000;
+		} else {
+			struct timeval	  tv;
+
+			lst_timeval_diff(&new->rpe_stamp, &old->rpe_stamp, &tv);
+			delta = tv.tv_sec + (float)tv.tv_usec / 1000000;
+		}
 
                 if (!lnet) /* TODO */
                         continue;
@@ -1779,19 +1810,19 @@ jt_lst_stat(int argc, char **argv)
 
         static struct option stat_opts[] =
         {
-                {"timeout", required_argument, 0, 't' },
-                {"delay"  , required_argument, 0, 'd' },
-                {"count"  , required_argument, 0, 'o' },
-                {"lnet"   , no_argument,       0, 'l' },
-                {"rpc"    , no_argument,       0, 'c' },
-                {"bw"     , no_argument,       0, 'b' },
-                {"rate"   , no_argument,       0, 'a' },
-                {"read"   , no_argument,       0, 'r' },
-                {"write"  , no_argument,       0, 'w' },
-                {"avg"    , no_argument,       0, 'g' },
-                {"min"    , no_argument,       0, 'n' },
-                {"max"    , no_argument,       0, 'x' },
-                {0,         0,                 0,  0  }
+		{"timeout"   , required_argument, 0, 't' },
+		{"delay"     , required_argument, 0, 'd' },
+		{"count"     , required_argument, 0, 'o' },
+		{"lnet"	     , no_argument,	 0, 'l' },
+		{"rpc"	     , no_argument,	 0, 'c' },
+		{"bw"	     , no_argument,	 0, 'b' },
+		{"rate"	     , no_argument,	 0, 'a' },
+		{"read"	     , no_argument,	 0, 'r' },
+		{"write"     , no_argument,	 0, 'w' },
+		{"avg"	     , no_argument,	 0, 'g' },
+		{"min"	     , no_argument,	 0, 'n' },
+		{"max"	     , no_argument,	 0, 'x' },
+		{0,	       0,		 0,  0  }
         };
 
         if (session_key == 0) {
@@ -1801,7 +1832,7 @@ jt_lst_stat(int argc, char **argv)
         }
 
         while (1) {
-                c = getopt_long(argc, argv, "t:d:lcbarwgnx", stat_opts, &optidx);
+		c = getopt_long(argc, argv, "t:d:lcbarwgnx", stat_opts, &optidx);
 
                 if (c == -1)
                         break;
@@ -1855,6 +1886,7 @@ jt_lst_stat(int argc, char **argv)
                         }
                         type |= 4;
                         break;
+
                 default:
                         lst_print_usage(argv[0]);
                         return -1;
@@ -1911,8 +1943,8 @@ jt_lst_stat(int argc, char **argv)
                                 goto out;
                         }
 
-                        lst_print_stat(srp->srp_name, srp->srp_result,
-                                       idx, lnet, bwrt, rdwr, type);
+			lst_print_stat(srp->srp_name, srp->srp_result,
+				       idx, lnet, bwrt, rdwr, type);
 
                         lst_reset_rpcent(&srp->srp_result[1 - idx]);
                 }
@@ -3137,9 +3169,9 @@ static command_t lst_cmdlist[] = {
          "Usage: lst update_group NAME [--clean] [--refresh] [--remove IDs]"            },
         {"list_group",          jt_lst_list_group,      NULL,
           "Usage: lst list_group [--active] [--busy] [--down] [--unknown] GROUP ..."    },
-        {"stat",                jt_lst_stat,            NULL,
-         "Usage: lst stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] "
-         " [--timeout #] [--delay #] [--count #] GROUP [GROUP]"                         },
+	{"stat",                jt_lst_stat,            NULL,
+	 "Usage: lst stat [--bw] [--rate] [--read] [--write] [--max] [--min] [--avg] "
+	 " [--timeout #] [--delay #] [--count #] GROUP [GROUP]"                         },
         {"show_error",          jt_lst_show_error,      NULL,
          "Usage: lst show_error NAME | IDS ..."                                         },
         {"add_batch",           jt_lst_add_batch,       NULL,
