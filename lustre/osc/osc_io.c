@@ -551,6 +551,7 @@ static int osc_io_write_start(const struct lu_env *env,
         ENTRY;
 
         if (oio->oi_lockless == 0) {
+		OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_DELAY_SETTIME, 1);
                 cl_object_attr_lock(obj);
                 result = cl_object_attr_get(env, obj, attr);
                 if (result == 0) {
@@ -738,20 +739,35 @@ static void osc_req_completion(const struct lu_env *env,
  * fields.
  */
 static void osc_req_attr_set(const struct lu_env *env,
-                             const struct cl_req_slice *slice,
-                             const struct cl_object *obj,
-                             struct cl_req_attr *attr, obd_valid flags)
+			     const struct cl_req_slice *slice,
+			     const struct cl_object *obj,
+			     struct cl_req_attr *attr, obd_valid flags)
 {
-        struct lov_oinfo *oinfo;
-        struct cl_req    *clerq;
-        struct cl_page   *apage; /* _some_ page in @clerq */
-        struct cl_lock   *lock;  /* _some_ lock protecting @apage */
-        struct osc_lock  *olck;
-        struct osc_page  *opg;
-        struct obdo      *oa;
+	struct lov_oinfo *oinfo;
+	struct cl_req    *clerq;
+	struct cl_page   *apage; /* _some_ page in @clerq */
+	struct cl_lock   *lock;  /* _some_ lock protecting @apage */
+	struct osc_lock  *olck;
+	struct osc_page  *opg;
+	struct obdo      *oa;
+	struct ost_lvb   *lvb;
 
-        oa = attr->cra_oa;
-        oinfo = cl2osc(obj)->oo_oinfo;
+	oinfo	= cl2osc(obj)->oo_oinfo;
+	lvb	= &oinfo->loi_lvb;
+	oa	= attr->cra_oa;
+
+	if ((flags & OBD_MD_FLMTIME) != 0) {
+		oa->o_mtime = lvb->lvb_mtime;
+		oa->o_valid |= OBD_MD_FLMTIME;
+	}
+	if ((flags & OBD_MD_FLATIME) != 0) {
+		oa->o_atime = lvb->lvb_atime;
+		oa->o_valid |= OBD_MD_FLATIME;
+	}
+	if ((flags & OBD_MD_FLCTIME) != 0) {
+		oa->o_ctime = lvb->lvb_ctime;
+		oa->o_valid |= OBD_MD_FLCTIME;
+	}
         if (flags & OBD_MD_FLID) {
                 oa->o_id = oinfo->loi_id;
                 oa->o_valid |= OBD_MD_FLID;

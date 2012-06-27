@@ -2426,7 +2426,10 @@ test_39j() {
 	touch $DIR1/$tfile
 	sleep 1
 
-	multiop_bg_pause $DIR1/$tfile oO_RDWR:w2097152_c || error "multiop failed"
+	#define OBD_FAIL_OSC_DELAY_SETTIME	 0x412
+	lctl set_param fail_loc=0x80000412
+	multiop_bg_pause $DIR1/$tfile oO_RDWR:w2097152_c ||
+		error "multiop failed"
 	local multipid=$!
 	local mtime1=`stat -c %Y $DIR1/$tfile`
 
@@ -2437,12 +2440,14 @@ test_39j() {
 
 	for (( i=0; i < 2; i++ )) ; do
 		local mtime2=`stat -c %Y $DIR1/$tfile-1`
-		[ "$mtime1" = "$mtime2" ] || \
-			error "mtime is lost on close: $mtime2, should be $mtime1"
+		[ "$mtime1" = "$mtime2" ] ||
+			error "mtime is lost on close: $mtime2, " \
+			      "should be $mtime1"
 
 		cancel_lru_locks osc
 		if [ $i = 0 ] ; then echo "repeat after cancel_lru_locks"; fi
 	done
+	lctl set_param fail_loc=0
 	stop_full_debug_logging
 }
 run_test 39j "write, rename, close, stat ======================="
