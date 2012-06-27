@@ -70,14 +70,21 @@ static int ofd_stack_init(const struct lu_env *env,
 	struct lu_device_type	*ldt;
 	struct lu_device	*d;
 	struct ofd_thread_info	*info = ofd_info(env);
+	struct lustre_mount_info *lmi;
 	int			 rc;
 
 	ENTRY;
 
-	/* XXX: we should be able to use different OSDs here */
-	type = class_get_type(LUSTRE_OSD_NAME);
+	lmi = server_get_mount_2(dev);
+	if (lmi == NULL) {
+		CERROR("Cannot get mount info for %s!\n", dev);
+		RETURN(-EFAULT);
+	}
+
+	type = class_get_type(s2lsi(lmi->lmi_sb)->lsi_osd_type);
 	if (!type) {
-		CERROR("Unknown type: '%s'\n", LUSTRE_OSD_NAME);
+		CERROR("Unknown type: '%s'\n",
+		       s2lsi(lmi->lmi_sb)->lsi_osd_type);
 		RETURN(-ENODEV);
 	}
 
@@ -89,14 +96,15 @@ static int ofd_stack_init(const struct lu_env *env,
 
 	ldt = type->typ_lu;
 	if (ldt == NULL) {
-		CERROR("type: '%s'\n", LUSTRE_OSD_NAME);
+		CERROR("type: '%s'\n", s2lsi(lmi->lmi_sb)->lsi_osd_type);
 		GOTO(out_type, rc = -EINVAL);
 	}
 
 	ldt->ldt_obd_type = type;
 	d = ldt->ldt_ops->ldto_device_alloc(env, ldt, cfg);
 	if (IS_ERR(d)) {
-		CERROR("Cannot allocate device: '%s'\n", LUSTRE_OSD_NAME);
+		CERROR("Cannot allocate device: '%s'\n",
+		       s2lsi(lmi->lmi_sb)->lsi_osd_type);
 		GOTO(out_type, rc = -ENODEV);
 	}
 
@@ -109,7 +117,8 @@ static int ofd_stack_init(const struct lu_env *env,
 	type->typ_refcnt++;
 	rc = ldt->ldt_ops->ldto_device_init(env, d, dev, NULL);
 	if (rc) {
-		CERROR("can't init device '%s', rc %d\n", LUSTRE_OSD_NAME, rc);
+		CERROR("can't init device '%s', rc = %d\n",
+		       s2lsi(lmi->lmi_sb)->lsi_osd_type, rc);
 		GOTO(out_free, rc);
 	}
 	lu_device_get(d);
