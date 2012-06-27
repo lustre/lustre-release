@@ -616,6 +616,14 @@ int zfs_prepare_lustre(struct mkfs_opts *mop,
 	return 0;
 }
 
+int zfs_tune_lustre(char *dev, struct mount_opts *mop)
+{
+	if (osd_check_zfs_setup() == 0)
+		return EINVAL;
+
+	return 0;
+}
+
 int zfs_init(void)
 {
 	int ret = 0;

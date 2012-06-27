@@ -50,19 +50,14 @@
 #include <string.h>
 #include "obdctl.h"
 #include <lustre_ver.h>
-#include <glob.h>
 #include <ctype.h>
 #include <limits.h>
 #include "mount_utils.h"
 
-#define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
-#define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
-#define STRIPE_CACHE_SIZE       "md/stripe_cache_size"
 #define MAXOPT 4096
 #define MAX_RETRIES 99
 
 int          verbose = 0;
-int          md_stripe_cache_size = 16384;
 char         *progname = NULL;
 
 void usage(FILE *out)
@@ -237,7 +232,7 @@ int parse_options(struct mount_opts *mop, char *orig_options, int *flagp)
                  * of param=value. We should pay attention not to remove those
                  * mount options, see bug 22097. */
                 if (val && strncmp(arg, "md_stripe_cache_size", 20) == 0) {
-                        md_stripe_cache_size = atoi(val + 1);
+			mop->mo_md_stripe_cache_size = atoi(val + 1);
                 } else if (val && strncmp(arg, "retry", 5) == 0) {
 			mop->mo_retry = atoi(val + 1);
 			if (mop->mo_retry > MAX_RETRIES)
@@ -266,224 +261,6 @@ int parse_options(struct mount_opts *mop, char *orig_options, int *flagp)
         return 0;
 }
 
-
-int read_file(char *path, char *buf, int size)
-{
-        FILE *fd;
-
-        fd = fopen(path, "r");
-        if (fd == NULL)
-                return errno;
-
-        /* should not ignore fgets(3)'s return value */
-        if (!fgets(buf, size, fd)) {
-                fprintf(stderr, "reading from %s: %s", path, strerror(errno));
-                fclose(fd);
-                return 1;
-        }
-        fclose(fd);
-        return 0;
-}
-
-int write_file(char *path, char *buf)
-{
-        FILE *fd;
-
-        fd = fopen(path, "w");
-        if (fd == NULL)
-                return errno;
-
-        fputs(buf, fd);
-        fclose(fd);
-        return 0;
-}
-
-/* This is to tune the kernel for good SCSI performance.
- * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
- * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
-int set_blockdev_tunables(char *source, int fan_out)
-{
-        glob_t glob_info = { 0 };
-        struct stat stat_buf;
-        char *chk_major, *chk_minor;
-        char *savept = NULL, *dev;
-        char *ret_path;
-        char buf[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
-        char real_path[PATH_MAX] = {'\0'};
-        int i, rc = 0;
-        int major, minor;
-
-        if (!source)
-                return -EINVAL;
-
-        ret_path = realpath(source, real_path);
-        if (ret_path == NULL) {
-                if (verbose)
-                        fprintf(stderr, "warning: %s: cannot resolve: %s\n",
-                                source, strerror(errno));
-                return -EINVAL;
-        }
-
-        if (strncmp(real_path, "/dev/loop", 9) == 0)
-                return 0;
-
-        if ((real_path[0] != '/') && (strpbrk(real_path, ",:") != NULL))
-                return 0;
-
-        snprintf(path, sizeof(path), "/sys/block%s", real_path + 4);
-        if (access(path, X_OK) == 0)
-                goto set_params;
-
-        /* The name of the device say 'X' specified in /dev/X may not
-         * match any entry under /sys/block/. In that case we need to
-         * match the major/minor number to find the entry under
-         * sys/block corresponding to /dev/X */
-
-        /* Don't chop tail digit on /dev/mapper/xxx, LU-478 */
-        if (strncmp(real_path, "/dev/mapper", 11) != 0) {
-                dev = real_path + strlen(real_path);
-                while (--dev > real_path && isdigit(*dev))
-                        *dev = 0;
-
-                if (strncmp(real_path, "/dev/md_", 8) == 0)
-                        *dev = 0;
-        }
-
-        rc = stat(real_path, &stat_buf);
-        if (rc) {
-                if (verbose)
-                        fprintf(stderr, "warning: %s, device %s stat failed\n",
-                                strerror(errno), real_path);
-                return rc;
-        }
-
-        major = major(stat_buf.st_rdev);
-        minor = minor(stat_buf.st_rdev);
-        rc = glob("/sys/block/*", GLOB_NOSORT, NULL, &glob_info);
-        if (rc) {
-                if (verbose)
-                        fprintf(stderr, "warning: failed to read entries under "
-                                "/sys/block\n");
-                globfree(&glob_info);
-                return rc;
-        }
-
-        for (i = 0; i < glob_info.gl_pathc; i++){
-                snprintf(path, sizeof(path), "%s/dev", glob_info.gl_pathv[i]);
-
-                rc = read_file(path, buf, sizeof(buf));
-                if (rc)
-                        continue;
-
-                if (buf[strlen(buf) - 1] == '\n')
-                        buf[strlen(buf) - 1] = '\0';
-
-                chk_major = strtok_r(buf, ":", &savept);
-                chk_minor = savept;
-                if (major == atoi(chk_major) &&minor == atoi(chk_minor))
-                        break;
-        }
-
-        if (i == glob_info.gl_pathc) {
-                if (verbose)
-                        fprintf(stderr,"warning: device %s does not match any "
-                                "entry under /sys/block\n", real_path);
-                globfree(&glob_info);
-                return -EINVAL;
-        }
-
-        /* Chop off "/dev" from path we found */
-        path[strlen(glob_info.gl_pathv[i])] = '\0';
-        globfree(&glob_info);
-
-set_params:
-        if (strncmp(real_path, "/dev/md", 7) == 0) {
-                snprintf(real_path, sizeof(real_path), "%s/%s", path,
-                         STRIPE_CACHE_SIZE);
-
-                rc = read_file(real_path, buf, sizeof(buf));
-                if (rc) {
-                        if (verbose)
-                                fprintf(stderr, "warning: opening %s: %s\n",
-                                        real_path, strerror(errno));
-                        return 0;
-                }
-
-                if (atoi(buf) >= md_stripe_cache_size)
-                        return 0;
-
-                if (strlen(buf) - 1 > 0) {
-                        snprintf(buf, sizeof(buf), "%d", md_stripe_cache_size);
-                        rc = write_file(real_path, buf);
-                        if (rc && verbose)
-                                fprintf(stderr, "warning: opening %s: %s\n",
-                                        real_path, strerror(errno));
-                }
-                /* Return since raid and disk tunables are different */
-                return rc;
-        }
-
-        snprintf(real_path, sizeof(real_path), "%s/%s", path,
-                 MAX_HW_SECTORS_KB_PATH);
-        rc = read_file(real_path, buf, sizeof(buf));
-        if (rc) {
-                if (verbose)
-                        fprintf(stderr, "warning: opening %s: %s\n",
-                                real_path, strerror(errno));
-                /* No MAX_HW_SECTORS_KB_PATH isn't necessary an
-                 * error for some device. */
-                rc = 0;
-        }
-
-        if (strlen(buf) - 1 > 0) {
-                snprintf(real_path, sizeof(real_path), "%s/%s", path,
-                         MAX_SECTORS_KB_PATH);
-                rc = write_file(real_path, buf);
-                if (rc) {
-                        if (verbose)
-                                fprintf(stderr, "warning: writing to %s: %s\n",
-                                        real_path, strerror(errno));
-                        /* No MAX_SECTORS_KB_PATH isn't necessary an
-                         * error for some device. */
-                        rc = 0;
-                }
-        }
-
-        if (fan_out) {
-                char *slave = NULL;
-                glob_info.gl_pathc = 0;
-                glob_info.gl_offs = 0;
-                /* if device is multipath device, tune its slave devices */
-                snprintf(real_path, sizeof(real_path), "%s/slaves/*", path);
-                rc = glob(real_path, GLOB_NOSORT, NULL, &glob_info);
-
-                for (i = 0; rc == 0 && i < glob_info.gl_pathc; i++){
-                        slave = basename(glob_info.gl_pathv[i]);
-                        snprintf(real_path, sizeof(real_path), "/dev/%s", slave);
-                        rc = set_blockdev_tunables(real_path, 0);
-                }
-
-                if (rc == GLOB_NOMATCH) {
-                        /* no slave device is not an error */
-                        rc = 0;
-                } else if (rc && verbose) {
-                        if (slave == NULL) {
-                                fprintf(stderr, "warning: %s, failed to read"
-                                        " entries under %s/slaves\n",
-                                        strerror(errno), path);
-                        } else {
-                                fprintf(stderr, "unable to set tunables for"
-                                        " slave device %s (slave would be"
-                                        " unable to handle IO request from"
-                                        " master %s)\n",
-                                        real_path, source);
-                        }
-                }
-                globfree(&glob_info);
-        }
-
-        return rc;
-}
 
 static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 {
@@ -693,12 +470,13 @@ int main(int argc, char *const argv[])
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
 		       mop.mo_source, mop.mo_target, flags, options);
 
-	if (!strstr(mop.mo_usource, ":/") && set_blockdev_tunables(mop.mo_source, 1)) {
-                if (verbose)
-                        fprintf(stderr, "%s: unable to set tunables for %s"
-                                " (may cause reduced IO performance)\n",
-				argv[0], mop.mo_source);
-        }
+	if (!strstr(mop.mo_usource, ":/") &&
+	    osd_tune_lustre(mop.mo_source, &mop)) {
+		if (verbose)
+			fprintf(stderr, "%s: unable to set tunables for %s"
+					" (may cause reduced IO performance)\n",
+					argv[0], mop.mo_source);
+	}
 
 	if (!mop.mo_fake) {
                 /* flags and target get to lustre_get_sb, but not

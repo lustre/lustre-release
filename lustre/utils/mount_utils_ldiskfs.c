@@ -53,6 +53,7 @@
 #include <fcntl.h>
 #include <stdarg.h>
 #include <mntent.h>
+#include <glob.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -78,6 +79,10 @@
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
 #include "mount_utils.h"
+
+#define MAX_HW_SECTORS_KB_PATH	"queue/max_hw_sectors_kb"
+#define MAX_SECTORS_KB_PATH	"queue/max_sectors_kb"
+#define STRIPE_CACHE_SIZE	"md/stripe_cache_size"
 
 extern char *progname;
 
@@ -743,6 +748,230 @@ int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
 		strscat(always_mountopts, ",user_xattr", always_len);
 
 	return 0;
+}
+
+int read_file(char *path, char *buf, int size)
+{
+	FILE *fd;
+
+	fd = fopen(path, "r");
+	if (fd == NULL)
+		return errno;
+
+	/* should not ignore fgets(3)'s return value */
+	if (!fgets(buf, size, fd)) {
+		fprintf(stderr, "reading from %s: %s", path, strerror(errno));
+		fclose(fd);
+		return 1;
+	}
+	fclose(fd);
+	return 0;
+}
+
+int write_file(char *path, char *buf)
+{
+	FILE *fd;
+
+	fd = fopen(path, "w");
+	if (fd == NULL)
+		return errno;
+
+	fputs(buf, fd);
+	fclose(fd);
+	return 0;
+}
+
+/* This is to tune the kernel for good SCSI performance.
+ * For that we set the value of /sys/block/{dev}/queue/max_sectors_kb
+ * to the value of /sys/block/{dev}/queue/max_hw_sectors_kb */
+int set_blockdev_tunables(char *source, struct mount_opts *mop, int fan_out)
+{
+	glob_t glob_info = { 0 };
+	struct stat stat_buf;
+	char *chk_major, *chk_minor;
+	char *savept = NULL, *dev;
+	char *ret_path;
+	char buf[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
+	char real_path[PATH_MAX] = {'\0'};
+	int i, rc = 0;
+	int major, minor;
+
+	if (!source)
+		return -EINVAL;
+
+	ret_path = realpath(source, real_path);
+	if (ret_path == NULL) {
+		if (verbose)
+			fprintf(stderr, "warning: %s: cannot resolve: %s\n",
+				source, strerror(errno));
+		return -EINVAL;
+	}
+
+	if (strncmp(real_path, "/dev/loop", 9) == 0)
+		return 0;
+
+	if ((real_path[0] != '/') && (strpbrk(real_path, ",:") != NULL))
+		return 0;
+
+	snprintf(path, sizeof(path), "/sys/block%s", real_path + 4);
+	if (access(path, X_OK) == 0)
+		goto set_params;
+
+	/* The name of the device say 'X' specified in /dev/X may not
+	 * match any entry under /sys/block/. In that case we need to
+	 * match the major/minor number to find the entry under
+	 * sys/block corresponding to /dev/X */
+
+	/* Don't chop tail digit on /dev/mapper/xxx, LU-478 */
+	if (strncmp(real_path, "/dev/mapper", 11) != 0) {
+		dev = real_path + strlen(real_path);
+		while (--dev > real_path && isdigit(*dev))
+			*dev = 0;
+
+		if (strncmp(real_path, "/dev/md_", 8) == 0)
+			*dev = 0;
+	}
+
+	rc = stat(real_path, &stat_buf);
+	if (rc) {
+		if (verbose)
+			fprintf(stderr, "warning: %s, device %s stat failed\n",
+				strerror(errno), real_path);
+		return rc;
+	}
+
+	major = major(stat_buf.st_rdev);
+	minor = minor(stat_buf.st_rdev);
+	rc = glob("/sys/block/*", GLOB_NOSORT, NULL, &glob_info);
+	if (rc) {
+		if (verbose)
+			fprintf(stderr, "warning: failed to read entries under "
+				"/sys/block\n");
+		globfree(&glob_info);
+		return rc;
+	}
+
+	for (i = 0; i < glob_info.gl_pathc; i++){
+		snprintf(path, sizeof(path), "%s/dev", glob_info.gl_pathv[i]);
+
+		rc = read_file(path, buf, sizeof(buf));
+		if (rc)
+			continue;
+
+		if (buf[strlen(buf) - 1] == '\n')
+			buf[strlen(buf) - 1] = '\0';
+
+		chk_major = strtok_r(buf, ":", &savept);
+		chk_minor = savept;
+		if (major == atoi(chk_major) &&minor == atoi(chk_minor))
+			break;
+	}
+
+	if (i == glob_info.gl_pathc) {
+		if (verbose)
+			fprintf(stderr,"warning: device %s does not match any "
+				"entry under /sys/block\n", real_path);
+		globfree(&glob_info);
+		return -EINVAL;
+	}
+
+	/* Chop off "/dev" from path we found */
+	path[strlen(glob_info.gl_pathv[i])] = '\0';
+	globfree(&glob_info);
+
+set_params:
+	if (strncmp(real_path, "/dev/md", 7) == 0) {
+		snprintf(real_path, sizeof(real_path), "%s/%s", path,
+			 STRIPE_CACHE_SIZE);
+
+		rc = read_file(real_path, buf, sizeof(buf));
+		if (rc) {
+			if (verbose)
+				fprintf(stderr, "warning: opening %s: %s\n",
+					real_path, strerror(errno));
+			return 0;
+		}
+
+		if (atoi(buf) >= mop->mo_md_stripe_cache_size)
+			return 0;
+
+		if (strlen(buf) - 1 > 0) {
+			snprintf(buf, sizeof(buf), "%d",
+				 mop->mo_md_stripe_cache_size);
+			rc = write_file(real_path, buf);
+			if (rc && verbose)
+				fprintf(stderr, "warning: opening %s: %s\n",
+					real_path, strerror(errno));
+		}
+		/* Return since raid and disk tunables are different */
+		return rc;
+	}
+
+	snprintf(real_path, sizeof(real_path), "%s/%s", path,
+		 MAX_HW_SECTORS_KB_PATH);
+	rc = read_file(real_path, buf, sizeof(buf));
+	if (rc) {
+		if (verbose)
+			fprintf(stderr, "warning: opening %s: %s\n",
+				real_path, strerror(errno));
+		/* No MAX_HW_SECTORS_KB_PATH isn't necessary an
+		 * error for some device. */
+		rc = 0;
+	}
+
+	if (strlen(buf) - 1 > 0) {
+		snprintf(real_path, sizeof(real_path), "%s/%s", path,
+			 MAX_SECTORS_KB_PATH);
+		rc = write_file(real_path, buf);
+		if (rc) {
+			if (verbose)
+				fprintf(stderr, "warning: writing to %s: %s\n",
+					real_path, strerror(errno));
+			/* No MAX_SECTORS_KB_PATH isn't necessary an
+			 * error for some device. */
+			rc = 0;
+		}
+	}
+
+	if (fan_out) {
+		char *slave = NULL;
+		glob_info.gl_pathc = 0;
+		glob_info.gl_offs = 0;
+		/* if device is multipath device, tune its slave devices */
+		snprintf(real_path, sizeof(real_path), "%s/slaves/*", path);
+		rc = glob(real_path, GLOB_NOSORT, NULL, &glob_info);
+
+		for (i = 0; rc == 0 && i < glob_info.gl_pathc; i++){
+			slave = basename(glob_info.gl_pathv[i]);
+			snprintf(real_path, sizeof(real_path), "/dev/%s", slave);
+			rc = set_blockdev_tunables(real_path, mop, 0);
+		}
+
+		if (rc == GLOB_NOMATCH) {
+			/* no slave device is not an error */
+			rc = 0;
+		} else if (rc && verbose) {
+			if (slave == NULL) {
+				fprintf(stderr, "warning: %s, failed to read"
+					" entries under %s/slaves\n",
+					strerror(errno), path);
+			} else {
+				fprintf(stderr, "unable to set tunables for"
+					" slave device %s (slave would be"
+					" unable to handle IO request from"
+					" master %s)\n",
+					real_path, source);
+			}
+		}
+		globfree(&glob_info);
+	}
+
+	return rc;
+}
+
+int ldiskfs_tune_lustre(char *dev, struct mount_opts *mop)
+{
+	return set_blockdev_tunables(dev, mop, 1);
 }
 
 /* return canonicalized absolute pathname, even if the target file does not
