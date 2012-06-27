@@ -58,6 +58,7 @@
 #define MAX_HW_SECTORS_KB_PATH  "queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH     "queue/max_sectors_kb"
 #define STRIPE_CACHE_SIZE       "md/stripe_cache_size"
+#define MAXOPT 4096
 #define MAX_RETRIES 99
 
 int          verbose = 0;
@@ -484,6 +485,26 @@ set_params:
         return rc;
 }
 
+static int parse_ldd(char *source, struct mount_opts *mop, char *options)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	int rc;
+
+	rc = osd_is_lustre(source, &ldd->ldd_mount_type);
+	if (rc == 0) {
+		fprintf(stderr, "%s: %s has not been formatted with mkfs.lustre"
+			" or the backend filesystem type is not supported by "
+			"this tool\n", progname, source);
+		return ENODEV;
+	}
+
+	/* backend osd type */
+	append_option(options, "osd=");
+	strcat(options, mt_type(ldd->ldd_mount_type));
+
+	return 0;
+}
+
 static void set_defaults(struct mount_opts *mop)
 {
 	memset(mop, 0, sizeof(*mop));
@@ -597,13 +618,17 @@ static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
 int main(int argc, char *const argv[])
 {
 	struct mount_opts mop;
-	char *options, *optcopy;
-	int i, rc, flags, optlen;
+	char *options;
+	int i, rc, flags;
 
 	progname = strrchr(argv[0], '/');
 	progname = progname ? progname + 1 : argv[0];
 
 	set_defaults(&mop);
+
+	rc = osd_init();
+	if (rc)
+		return rc;
 
 	rc = parse_opts(argc, argv, &mop);
 	if (rc)
@@ -617,7 +642,7 @@ int main(int argc, char *const argv[])
 		printf("options = %s\n", mop.mo_orig_options);
         }
 
-	options = malloc(strlen(mop.mo_orig_options) + 1);
+	options = malloc(MAXOPT);
         if (options == NULL) {
                 fprintf(stderr, "can't allocate memory for options\n");
                 return -1;
@@ -657,23 +682,20 @@ int main(int argc, char *const argv[])
                 return rc;
         }
 
+	if (!strstr(mop.mo_usource, ":/")) {
+		rc = parse_ldd(mop.mo_source, &mop, options);
+		if (rc)
+			return rc;
+	}
+
         /* In Linux 2.4, the target device doesn't get passed to any of our
            functions.  So we'll stick it on the end of the options. */
-	optlen = strlen(options) + strlen(",device=") + strlen(mop.mo_source) + 1;
-        optcopy = malloc(optlen);
-        if (optcopy == NULL) {
-                fprintf(stderr, "can't allocate memory to optcopy\n");
-                return -1;
-        }
-        strcpy(optcopy, options);
-        if (*optcopy)
-                strcat(optcopy, ",");
-        strcat(optcopy, "device=");
-	strcat(optcopy, mop.mo_source);
+	append_option(options, "device=");
+	strcat(options, mop.mo_source);
 
         if (verbose)
                 printf("mounting device %s at %s, flags=%#x options=%s\n",
-		       mop.mo_source, mop.mo_target, flags, optcopy);
+		       mop.mo_source, mop.mo_target, flags, options);
 
 	if (!strstr(mop.mo_usource, ":/") && set_blockdev_tunables(mop.mo_source, 1)) {
                 if (verbose)
@@ -688,7 +710,7 @@ int main(int argc, char *const argv[])
                    does not. */
                 for (i = 0, rc = -EAGAIN; i <= mop.mo_retry && rc != 0; i++) {
 			rc = mount(mop.mo_source, mop.mo_target, "lustre",
-				   flags, (void *)optcopy);
+				   flags, (void *)options);
                         if (rc) {
                                 if (verbose) {
                                         fprintf(stderr, "%s: mount %s at %s "
@@ -774,8 +796,11 @@ int main(int argc, char *const argv[])
 				       mop.mo_orig_options, 0,0,0);
         }
 
-        free(optcopy);
+	free(options);
 	/* mo_usource should be freed, but we can rely on the kernel */
 	free(mop.mo_source);
+
+	osd_fini();
+
         return rc;
 }
