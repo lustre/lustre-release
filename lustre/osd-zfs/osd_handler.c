@@ -517,7 +517,7 @@ static int osd_mount(const struct lu_env *env,
 
 	strcpy(o->od_mntdev, dev);
 
-	rc = -udmu_objset_open(o->od_mntdev + 1, &o->od_objset);
+	rc = -udmu_objset_open(o->od_mntdev, &o->od_objset);
 	if (rc) {
 		CERROR("can't open objset %s: %d\n", o->od_mntdev, rc);
 		RETURN(rc);
