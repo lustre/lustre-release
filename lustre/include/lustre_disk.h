@@ -130,6 +130,19 @@ static inline char *mt_str(enum ldd_mount_type mt)
         return mount_type_string[mt];
 }
 
+static inline char *mt_type(enum ldd_mount_type mt)
+{
+	static char *mount_type_string[] = {
+		"osd-ldiskfs",
+		"osd-ldiskfs",
+		"osd-smfs",
+		"osd-reiserfs",
+		"osd-ldiskfs",
+		"osd-zfs",
+	};
+	return mount_type_string[mt];
+}
+
 #define LDD_INCOMPAT_SUPP 0
 #define LDD_ROCOMPAT_SUPP 0
 
