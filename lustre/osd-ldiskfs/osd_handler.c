@@ -980,6 +980,9 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
         struct kstatfs     *ksfs;
         int result = 0;
 
+	if (unlikely(osd->od_mount == NULL))
+		return -EINPROGRESS;
+
         /* osd_lproc.c call this without env, allocate ksfs for that case */
         if (unlikely(env == NULL)) {
                 OBD_ALLOC_PTR(ksfs);

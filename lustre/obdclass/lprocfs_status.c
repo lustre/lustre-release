@@ -579,6 +579,7 @@ int lprocfs_osd_rd_blksize(char *page, char **start, off_t off,
 	}
 	return rc;
 }
+EXPORT_SYMBOL(lprocfs_osd_rd_blksize);
 
 int lprocfs_rd_kbytestotal(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
@@ -619,6 +620,7 @@ int lprocfs_osd_rd_kbytestotal(char *page, char **start, off_t off,
 	}
 	return rc;
 }
+EXPORT_SYMBOL(lprocfs_osd_rd_kbytestotal);
 
 int lprocfs_rd_kbytesfree(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
@@ -659,6 +661,7 @@ int lprocfs_osd_rd_kbytesfree(char *page, char **start, off_t off,
 	}
 	return rc;
 }
+EXPORT_SYMBOL(lprocfs_osd_rd_kbytesfree);
 
 int lprocfs_rd_kbytesavail(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
@@ -699,6 +702,7 @@ int lprocfs_osd_rd_kbytesavail(char *page, char **start, off_t off,
 	}
 	return rc;
 }
+EXPORT_SYMBOL(lprocfs_osd_rd_kbytesavail);
 
 int lprocfs_rd_filestotal(char *page, char **start, off_t off, int count,
                           int *eof, void *data)
@@ -729,6 +733,7 @@ int lprocfs_osd_rd_filestotal(char *page, char **start, off_t off,
 
 	return rc;
 }
+EXPORT_SYMBOL(lprocfs_osd_rd_filestotal);
 
 int lprocfs_rd_filesfree(char *page, char **start, off_t off, int count,
                          int *eof, void *data)
@@ -757,6 +762,7 @@ int lprocfs_osd_rd_filesfree(char *page, char **start, off_t off,
 	}
 	return rc;
 }
+EXPORT_SYMBOL(lprocfs_osd_rd_filesfree);
 
 int lprocfs_rd_server_uuid(char *page, char **start, off_t off, int count,
                            int *eof, void *data)
