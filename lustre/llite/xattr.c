@@ -96,8 +96,6 @@ int xattr_type_filter(struct ll_sb_info *sbi, int xattr_type)
            !(sbi->ll_flags & LL_SBI_ACL))
                 return -EOPNOTSUPP;
 
-        if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled())
-                return -EOPNOTSUPP;
         if (xattr_type == XATTR_USER_T && !(sbi->ll_flags & LL_SBI_USER_XATTR))
                 return -EOPNOTSUPP;
         if (xattr_type == XATTR_TRUSTED_T && !cfs_capable(CFS_CAP_SYS_ADMIN))
@@ -137,6 +135,11 @@ int ll_setxattr_common(struct inode *inode, const char *name,
         if ((xattr_type == XATTR_SECURITY_T &&
             strcmp(name, "security.capability") == 0))
                 RETURN(0);
+
+        /* LU-549:  Disable security.selinux when selinux is disabled */
+        if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled() &&
+            strcmp(name, "security.selinux") == 0)
+                RETURN(-EOPNOTSUPP);
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
@@ -306,6 +309,11 @@ int ll_getxattr_common(struct inode *inode, const char *name,
         if ((xattr_type == XATTR_SECURITY_T &&
             strcmp(name, "security.capability") == 0))
                 RETURN(-ENODATA);
+
+        /* LU-549:  Disable security.selinux when selinux is disabled */
+        if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled() &&
+            strcmp(name, "security.selinux") == 0)
+                RETURN(-EOPNOTSUPP);
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
