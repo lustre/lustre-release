@@ -837,6 +837,19 @@ lnet_net2ni_locked(__u32 net, int cpt)
 	return NULL;
 }
 
+lnet_ni_t *
+lnet_net2ni(__u32 net)
+{
+	lnet_ni_t *ni;
+
+	lnet_net_lock(0);
+	ni = lnet_net2ni_locked(net, 0);
+	lnet_net_unlock(0);
+
+	return ni;
+}
+EXPORT_SYMBOL(lnet_net2ni);
+
 static unsigned int
 lnet_nid_cpt_hash(lnet_nid_t nid, unsigned int number)
 {
