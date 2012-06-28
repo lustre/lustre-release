@@ -1024,28 +1024,29 @@ finish:
                                       newer : older, LUSTRE_VERSION_STRING);
                 }
 
-                if (ocd->ocd_connect_flags & OBD_CONNECT_CKSUM) {
-                        /* We sent to the server ocd_cksum_types with bits set
-                         * for algorithms we understand. The server masked off
-                         * the checksum types it doesn't support */
-                        if ((ocd->ocd_cksum_types & cksum_types_supported()) == 0) {
-                                LCONSOLE_WARN("The negotiation of the checksum "
-                                              "alogrithm to use with server %s "
-                                              "failed (%x/%x), disabling "
-                                              "checksums\n",
-                                              obd2cli_tgt(imp->imp_obd),
-                                              ocd->ocd_cksum_types,
-                                              cksum_types_supported());
-                                cli->cl_checksum = 0;
-                                cli->cl_supp_cksum_types = OBD_CKSUM_CRC32;
-                        } else {
-                                cli->cl_supp_cksum_types = ocd->ocd_cksum_types;
-                        }
-                } else {
-                        /* The server does not support OBD_CONNECT_CKSUM.
-                         * Enforce CRC32 for backward compatibility*/
-                        cli->cl_supp_cksum_types = OBD_CKSUM_CRC32;
-                }
+		if (ocd->ocd_connect_flags & OBD_CONNECT_CKSUM) {
+			/* We sent to the server ocd_cksum_types with bits set
+			 * for algorithms we understand. The server masked off
+			 * the checksum types it doesn't support */
+			if ((ocd->ocd_cksum_types &
+			     cksum_types_supported_client()) == 0) {
+				LCONSOLE_WARN("The negotiation of the checksum "
+					      "alogrithm to use with server %s "
+					      "failed (%x/%x), disabling "
+					      "checksums\n",
+					      obd2cli_tgt(imp->imp_obd),
+					      ocd->ocd_cksum_types,
+					      cksum_types_supported_client());
+				cli->cl_checksum = 0;
+				cli->cl_supp_cksum_types = OBD_CKSUM_ADLER;
+			} else {
+				cli->cl_supp_cksum_types = ocd->ocd_cksum_types;
+			}
+		} else {
+			/* The server does not support OBD_CONNECT_CKSUM.
+			 * Enforce ADLER for backward compatibility*/
+			cli->cl_supp_cksum_types = OBD_CKSUM_ADLER;
+		}
                 cli->cl_cksum_type =cksum_type_select(cli->cl_supp_cksum_types);
 
                 if (ocd->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)

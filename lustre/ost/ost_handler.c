@@ -521,36 +521,57 @@ static int ost_setattr(struct obd_export *exp, struct ptlrpc_request *req,
 }
 
 static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
-                               cksum_type_t cksum_type)
+			       cksum_type_t cksum_type)
 {
-        __u32 cksum;
-        int i;
+	struct cfs_crypto_hash_desc	*hdesc;
+	unsigned int			bufsize;
+	int				i, err;
+	unsigned char			cfs_alg = cksum_obd2cfs(cksum_type);
+	__u32				cksum;
 
-        cksum = init_checksum(cksum_type);
-        for (i = 0; i < desc->bd_iov_count; i++) {
-                struct page *page = desc->bd_iov[i].kiov_page;
-                int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
-                char *ptr = kmap(page) + off;
-                int len = desc->bd_iov[i].kiov_len;
+	hdesc = cfs_crypto_hash_init(cfs_alg, NULL, 0);
+	if (IS_ERR(hdesc)) {
+		CERROR("Unable to initialize checksum hash %s\n",
+		       cfs_crypto_hash_name(cfs_alg));
+		return PTR_ERR(hdesc);
+	}
+	CDEBUG(D_INFO, "Checksum for algo %s\n", cfs_crypto_hash_name(cfs_alg));
+	for (i = 0; i < desc->bd_iov_count; i++) {
 
-                /* corrupt the data before we compute the checksum, to
-                 * simulate a client->OST data error */
-                if (i == 0 && opc == OST_WRITE &&
-                    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE))
-                        memcpy(ptr, "bad3", min(4, len));
-                cksum = compute_checksum(cksum, ptr, len, cksum_type);
-                /* corrupt the data after we compute the checksum, to
-                 * simulate an OST->client data error */
-                if (i == 0 && opc == OST_READ &&
-                    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
-                        memcpy(ptr, "bad4", min(4, len));
-                        /* nobody should use corrupted page again */
-                        ClearPageUptodate(page);
-                }
-                kunmap(page);
-        }
+		/* corrupt the data before we compute the checksum, to
+		 * simulate a client->OST data error */
+		if (i == 0 && opc == OST_WRITE &&
+		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
+			int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
+			int len = desc->bd_iov[i].kiov_len;
+			char *ptr = kmap(desc->bd_iov[i].kiov_page) + off;
+			memcpy(ptr, "bad3", min(4, len));
+			kunmap(desc->bd_iov[i].kiov_page);
+		}
+		cfs_crypto_hash_update_page(hdesc, desc->bd_iov[i].kiov_page,
+				  desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK,
+				  desc->bd_iov[i].kiov_len);
 
-        return fini_checksum(cksum, cksum_type);
+		 /* corrupt the data after we compute the checksum, to
+		 * simulate an OST->client data error */
+		if (i == 0 && opc == OST_READ &&
+		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
+			int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
+			int len = desc->bd_iov[i].kiov_len;
+			char *ptr = kmap(desc->bd_iov[i].kiov_page) + off;
+			memcpy(ptr, "bad4", min(4, len));
+			kunmap(desc->bd_iov[i].kiov_page);
+			/* nobody should use corrupted page again */
+			ClearPageUptodate(desc->bd_iov[i].kiov_page);
+		}
+	}
+
+	bufsize = 4;
+	err = cfs_crypto_hash_final(hdesc, (unsigned char *)&cksum, &bufsize);
+	if (err)
+		cfs_crypto_hash_final(hdesc, NULL, NULL);
+
+	return cksum;
 }
 
 static int ost_brw_lock_get(int mode, struct obd_export *exp,

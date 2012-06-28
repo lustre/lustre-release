@@ -399,10 +399,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                  * agreement on the supported algorithms at connect time */
                 data->ocd_connect_flags |= OBD_CONNECT_CKSUM;
 
-                if (OBD_FAIL_CHECK(OBD_FAIL_OSC_CKSUM_ADLER_ONLY))
-                        data->ocd_cksum_types = OBD_CKSUM_ADLER;
-                else
-                        data->ocd_cksum_types = cksum_types_supported();
+		if (OBD_FAIL_CHECK(OBD_FAIL_OSC_CKSUM_ADLER_ONLY))
+			data->ocd_cksum_types = OBD_CKSUM_ADLER;
+		else
+			data->ocd_cksum_types = cksum_types_supported_client();
         }
 
 #ifdef HAVE_LRU_RESIZE_SUPPORT
