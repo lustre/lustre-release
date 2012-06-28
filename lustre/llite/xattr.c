@@ -311,6 +311,11 @@ int ll_getxattr_common(struct inode *inode, const char *name,
             strcmp(name, "security.capability") == 0))
                 RETURN(-ENODATA);
 
+        /* LU-549:  Disable security.selinux when selinux is disabled */
+        if (xattr_type == XATTR_SECURITY_T && !selinux_is_enabled() &&
+            strcmp(name, "security.selinux") == 0)
+                RETURN(-EOPNOTSUPP);
+
 #ifdef CONFIG_FS_POSIX_ACL
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT &&
             (xattr_type == XATTR_ACL_ACCESS_T ||
