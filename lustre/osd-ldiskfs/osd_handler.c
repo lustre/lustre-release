@@ -2397,22 +2397,20 @@ static int osd_declare_xattr_set(const struct lu_env *env,
                                  const struct lu_buf *buf, const char *name,
                                  int fl, struct thandle *handle)
 {
-        struct osd_thandle *oh;
+	struct osd_thandle *oh;
 
-        LASSERT(handle != NULL);
+	LASSERT(handle != NULL);
 
-        if (strcmp(name, XATTR_NAME_VERSION) == 0) {
-                /* no credits for version */
-                return 0;
-        }
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	OSD_DECLARE_OP(oh, xattr_set);
+	if (strcmp(name, XATTR_NAME_VERSION) == 0)
+		oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
+	else
+		oh->ot_credits += osd_dto_credits_noquota[DTO_XATTR_SET];
 
-        OSD_DECLARE_OP(oh, xattr_set);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_XATTR_SET];
-
-        return 0;
+	return 0;
 }
 
 /*
