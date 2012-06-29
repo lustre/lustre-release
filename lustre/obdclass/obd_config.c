@@ -903,6 +903,79 @@ void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg))
 }
 EXPORT_SYMBOL(lustre_register_client_process_config);
 
+/**
+ * Rename the proc parameter in \a cfg with a new name \a new_name.
+ *
+ * \param cfg	   config structure which contains the proc parameter
+ * \param new_name new name of the proc parameter
+ *
+ * \retval valid-pointer    pointer to the newly-allocated config structure
+ *			    which contains the renamed proc parameter
+ * \retval ERR_PTR(-EINVAL) if \a cfg or \a new_name is NULL, or \a cfg does
+ *			    not contain a proc parameter
+ * \retval ERR_PTR(-ENOMEM) if memory allocation failure occurs
+ */
+struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
+				     const char *new_name)
+{
+	struct lustre_cfg_bufs	*bufs = NULL;
+	struct lustre_cfg	*new_cfg = NULL;
+	char			*param = NULL;
+	char			*new_param = NULL;
+	char			*value = NULL;
+	int			 name_len = 0;
+	int			 new_len = 0;
+	ENTRY;
+
+	if (cfg == NULL || new_name == NULL)
+		RETURN(ERR_PTR(-EINVAL));
+
+	param = lustre_cfg_string(cfg, 1);
+	if (param == NULL)
+		RETURN(ERR_PTR(-EINVAL));
+
+	value = strchr(param, '=');
+	if (value == NULL)
+		name_len = strlen(param);
+	else
+		name_len = value - param;
+
+	new_len = LUSTRE_CFG_BUFLEN(cfg, 1) + strlen(new_name) - name_len;
+
+	OBD_ALLOC(new_param, new_len);
+	if (new_param == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	strcpy(new_param, new_name);
+	if (value != NULL)
+		strcat(new_param, value);
+
+	OBD_ALLOC_PTR(bufs);
+	if (bufs == NULL) {
+		OBD_FREE(new_param, new_len);
+		RETURN(ERR_PTR(-ENOMEM));
+	}
+
+	lustre_cfg_bufs_reset(bufs, NULL);
+	lustre_cfg_bufs_init(bufs, cfg);
+	lustre_cfg_bufs_set_string(bufs, 1, new_param);
+
+	new_cfg = lustre_cfg_new(cfg->lcfg_command, bufs);
+
+	OBD_FREE(new_param, new_len);
+	OBD_FREE_PTR(bufs);
+	if (new_cfg == NULL)
+		RETURN(ERR_PTR(-ENOMEM));
+
+	new_cfg->lcfg_num = cfg->lcfg_num;
+	new_cfg->lcfg_flags = cfg->lcfg_flags;
+	new_cfg->lcfg_nid = cfg->lcfg_nid;
+	new_cfg->lcfg_nal = cfg->lcfg_nal;
+
+	RETURN(new_cfg);
+}
+EXPORT_SYMBOL(lustre_cfg_rename);
+
 /** Process configuration commands given in lustre_cfg form.
  * These may come from direct calls (e.g. class_manual_cleanup)
  * or processing the config llog, or ioctl from lctl.

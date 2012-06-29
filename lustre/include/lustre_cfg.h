@@ -95,16 +95,16 @@ struct lustre_cfg_bufs {
 };
 
 struct lustre_cfg {
-        __u32 lcfg_version;
-        __u32 lcfg_command;
+	__u32 lcfg_version;
+	__u32 lcfg_command;
 
-        __u32 lcfg_num; 
-        __u32 lcfg_flags;
-        __u64 lcfg_nid;
-        __u32 lcfg_nal;                      /* not used any more */
+	__u32 lcfg_num;
+	__u32 lcfg_flags;
+	__u64 lcfg_nid;
+	__u32 lcfg_nal;		/* not used any more */
 
-        __u32 lcfg_bufcount;
-        __u32 lcfg_buflens[0];
+	__u32 lcfg_bufcount;
+	__u32 lcfg_buflens[0];
 };
 
 enum cfg_record_type {
@@ -179,29 +179,30 @@ static inline void lustre_cfg_bufs_init(struct lustre_cfg_bufs *bufs,
 
 static inline char *lustre_cfg_string(struct lustre_cfg *lcfg, int index)
 {
-        char *s;
+	char *s;
 
-        if (!lcfg->lcfg_buflens[index])
-                return NULL;
+	if (lcfg->lcfg_buflens[index] == 0)
+		return NULL;
 
-        s = lustre_cfg_buf(lcfg, index);
-        if (!s)
-                return NULL;
+	s = lustre_cfg_buf(lcfg, index);
+	if (s == NULL)
+		return NULL;
 
-        /* make sure it's NULL terminated, even if this kills a char
-         * of data.  Try to use the padding first though.
-         */
-        if (s[lcfg->lcfg_buflens[index] - 1] != '\0') {
-                int last = min((int)lcfg->lcfg_buflens[index], 
-                               cfs_size_round(lcfg->lcfg_buflens[index]) - 1);
-                char lost = s[last];
-                s[last] = '\0';
-                if (lost != '\0') {
-                        CWARN("Truncated buf %d to '%s' (lost '%c'...)\n",
-                              index, s, lost);
-                }
-        }
-        return s;
+	/*
+	 * make sure it's NULL terminated, even if this kills a char
+	 * of data.  Try to use the padding first though.
+	 */
+	if (s[lcfg->lcfg_buflens[index] - 1] != '\0') {
+		int last = min((int)lcfg->lcfg_buflens[index],
+			       cfs_size_round(lcfg->lcfg_buflens[index]) - 1);
+		char lost = s[last];
+		s[last] = '\0';
+		if (lost != '\0') {
+			CWARN("Truncated buf %d to '%s' (lost '%c'...)\n",
+			      index, s, lost);
+		}
+	}
+	return s;
 }
 
 static inline int lustre_cfg_len(__u32 bufcount, __u32 *buflens)
@@ -270,7 +271,7 @@ static inline int lustre_cfg_sanity_check(void *buf, int len)
 
         if (lcfg->lcfg_version != LUSTRE_CFG_VERSION)
                 RETURN(-EINVAL);
-        
+
         if (lcfg->lcfg_bufcount >= LUSTRE_CFG_MAX_BUFCOUNT)
                 RETURN(-EINVAL);
 
