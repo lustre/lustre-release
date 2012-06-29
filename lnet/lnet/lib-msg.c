@@ -204,11 +204,10 @@ lnet_msg_decommit_tx(lnet_msg_t *msg, int status)
 
 	case LNET_EVENT_GET:
 		LASSERT(msg->msg_rx_committed);
-		/* overwritten while sending reply */
+		/* overwritten while sending reply, we should never be
+		 * here for optimized GET */
 		LASSERT(msg->msg_type == LNET_MSG_REPLY);
-
 		msg->msg_type = LNET_MSG_GET; /* fix type */
-		counters->send_length += msg->msg_len;
 		break;
 	}
 
@@ -230,6 +229,7 @@ lnet_msg_decommit_rx(lnet_msg_t *msg, int status)
 	if (status != 0)
 		goto out;
 
+	counters = the_lnet.ln_counters[msg->msg_rx_cpt];
 	switch (ev->type) {
 	default:
 		LASSERT(ev->type == 0);
@@ -241,7 +241,13 @@ lnet_msg_decommit_rx(lnet_msg_t *msg, int status)
 		break;
 
 	case LNET_EVENT_GET:
-		LASSERT(msg->msg_type == LNET_MSG_GET);
+		/* type is "REPLY" if it's an optimized GET on passive side,
+		 * because optimized GET will never be committed for sending,
+		 * so message type wouldn't be changed back to "GET" by
+		 * lnet_msg_decommit_tx(), see details in lnet_parse_get() */
+		LASSERT(msg->msg_type == LNET_MSG_REPLY ||
+			msg->msg_type == LNET_MSG_GET);
+		counters->send_length += msg->msg_wanted;
 		break;
 
 	case LNET_EVENT_PUT:
@@ -249,12 +255,13 @@ lnet_msg_decommit_rx(lnet_msg_t *msg, int status)
 		break;
 
 	case LNET_EVENT_REPLY:
-		LASSERT(msg->msg_type == LNET_MSG_REPLY ||
-			msg->msg_type == LNET_MSG_GET); /* optimized GET */
+		/* type is "GET" if it's an optimized GET on active side,
+		 * see details in lnet_create_reply_msg() */
+		LASSERT(msg->msg_type == LNET_MSG_GET ||
+			msg->msg_type == LNET_MSG_REPLY);
 		break;
 	}
 
-	counters = the_lnet.ln_counters[msg->msg_rx_cpt];
 	counters->recv_count++;
 	if (ev->type == LNET_EVENT_PUT || ev->type == LNET_EVENT_REPLY)
 		counters->recv_length += msg->msg_wanted;
@@ -432,9 +439,6 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
                msg->msg_txpeer == NULL ? "<none>" : libcfs_nid2str(msg->msg_txpeer->lp_nid),
                msg->msg_rxpeer == NULL ? "<none>" : libcfs_nid2str(msg->msg_rxpeer->lp_nid));
 #endif
-
-        LASSERT (msg->msg_onactivelist);
-
         msg->msg_ev.status = status;
 
 	if (msg->msg_md != NULL) {
