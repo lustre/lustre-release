@@ -303,15 +303,13 @@ static int lov_io_subio_init(const struct lu_env *env, struct lov_io *lio,
 static void lov_io_slice_init(struct lov_io *lio,
                               struct lov_object *obj, struct cl_io *io)
 {
-	struct lov_stripe_md *lsm = lov_lsm_addref(obj);
 	ENTRY;
 
 	io->ci_result = 0;
 	lio->lis_object = obj;
 
-	LASSERT(lsm != NULL);
-	lio->lis_lsm = lsm; /* called inside lo_type_guard. */
-        lio->lis_stripe_count = lsm->lsm_stripe_count;
+	LASSERT(lio->lis_lsm != NULL);
+        lio->lis_stripe_count = lio->lis_lsm->lsm_stripe_count;
 
         switch (io->ci_type) {
         case CIT_READ:

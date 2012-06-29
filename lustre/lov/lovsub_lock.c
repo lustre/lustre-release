@@ -153,10 +153,9 @@ static unsigned long lovsub_lock_weigh(const struct lu_env *env,
  * Maps start/end offsets within a stripe, to offsets within a file.
  */
 static void lovsub_lock_descr_map(const struct cl_lock_descr *in,
-                                  struct lov_object *obj,
-                                  int stripe, struct cl_lock_descr *out)
+				  struct lov_object *lov,
+				  int stripe, struct cl_lock_descr *out)
 {
-        struct lov_stripe_md *lsm = lov_r0(obj)->lo_lsm;
         pgoff_t size; /* stripe size in pages */
         pgoff_t skip; /* how many pages in every stripe are occupied by
                        * "other" stripes */
@@ -167,9 +166,9 @@ static void lovsub_lock_descr_map(const struct cl_lock_descr *in,
         start = in->cld_start;
         end   = in->cld_end;
 
-        if (lsm->lsm_stripe_count > 1) {
-                size = cl_index(lov2cl(obj), lsm->lsm_stripe_size);
-                skip = (lsm->lsm_stripe_count - 1) * size;
+	if (lov->lo_lsm->lsm_stripe_count > 1) {
+		size = cl_index(lov2cl(lov), lov->lo_lsm->lsm_stripe_size);
+		skip = (lov->lo_lsm->lsm_stripe_count - 1) * size;
 
                 /* XXX overflow check here? */
                 start += start/size * skip + stripe * size;

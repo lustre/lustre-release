@@ -316,7 +316,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
                  * XXX for wide striping smarter algorithm is desirable,
                  * breaking out of the loop, early.
                  */
-                if (lov_stripe_intersects(r0->lo_lsm, i,
+		if (lov_stripe_intersects(loo->lo_lsm, i,
                                           file_start, file_end, &start, &end))
                         nr++;
         }
@@ -334,7 +334,7 @@ static int lov_lock_sub_init(const struct lu_env *env,
          * top-lock.
          */
         for (i = 0, nr = 0; i < r0->lo_nr; ++i) {
-                if (lov_stripe_intersects(r0->lo_lsm, i,
+		if (lov_stripe_intersects(loo->lo_lsm, i,
                                           file_start, file_end, &start, &end)) {
                         struct cl_lock_descr *descr;
 
@@ -919,7 +919,7 @@ static int lock_lock_multi_match()
                 if (sub->sub_lock == NULL)
                         continue;
                 subobj = sub->sub_descr.cld_obj;
-                if (!lov_stripe_intersects(r0->lo_lsm, sub->sub_stripe,
+		if (!lov_stripe_intersects(loo->lo_lsm, sub->sub_stripe,
                                            fstart, fend, &start, &end))
                         continue;
                 subneed->cld_start = cl_index(subobj, start);
@@ -943,7 +943,7 @@ static int lov_lock_stripe_is_matching(const struct lu_env *env,
                                        const struct cl_lock_descr *child,
                                        const struct cl_lock_descr *descr)
 {
-        struct lov_stripe_md *lsm = lov_r0(lov)->lo_lsm;
+	struct lov_stripe_md *lsm = lov->lo_lsm;
         obd_off start;
         obd_off end;
         int result;

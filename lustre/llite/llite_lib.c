@@ -372,6 +372,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         else
                 sbi->ll_md_brw_size = CFS_PAGE_SIZE;
 
+	if (data->ocd_connect_flags & OBD_CONNECT_LAYOUTLOCK) {
+		LCONSOLE_INFO("Layout lock feature supported.\n");
+		sbi->ll_flags |= LL_SBI_LAYOUT_LOCK;
+	}
+
         obd = class_name2obd(dt);
         if (!obd) {
                 CERROR("DT %s: not setup or attached\n", dt);
@@ -908,6 +913,7 @@ void ll_lli_init(struct ll_inode_info *lli)
                 CFS_INIT_LIST_HEAD(&lli->lli_agl_list);
                 lli->lli_agl_index = 0;
         }
+	cfs_mutex_init(&lli->lli_layout_mutex);
 }
 
 static inline int ll_bdi_register(struct backing_dev_info *bdi)
@@ -1602,16 +1608,15 @@ void ll_inode_size_unlock(struct inode *inode)
 
 void ll_update_inode(struct inode *inode, struct lustre_md *md)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct mdt_body *body = md->body;
-        struct lov_stripe_md *lsm = md->lsm;
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct mdt_body *body = md->body;
+	struct lov_stripe_md *lsm = md->lsm;
+	struct ll_sb_info *sbi = ll_i2sbi(inode);
 
-        LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
-        if (lsm != NULL) {
-                LASSERT(S_ISREG(inode->i_mode));
-
-                cfs_mutex_lock(&lli->lli_och_mutex);
+	LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
+	if (lsm != NULL) {
+		LASSERT(S_ISREG(inode->i_mode));
+		cfs_mutex_lock(&lli->lli_och_mutex);
 		CDEBUG(D_INODE, "adding lsm %p to inode %lu/%u(%p)\n",
 				lsm, inode->i_ino, inode->i_generation, inode);
 		/* cl_file_inode_init must go before lli_has_smd or a race
@@ -1621,12 +1626,13 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 		if (cl_file_inode_init(inode, md) == 0)
 			lli->lli_has_smd = true;
 		cfs_mutex_unlock(&lli->lli_och_mutex);
+
 		lli->lli_maxbytes = lsm->lsm_maxbytes;
 		if (lli->lli_maxbytes > MAX_LFS_FILESIZE)
 			lli->lli_maxbytes = MAX_LFS_FILESIZE;
 		if (md->lsm != NULL)
 			obd_free_memmd(ll_i2dtexp(inode), &md->lsm);
-        }
+	}
 
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
                 if (body->valid & OBD_MD_FLRMTPERM)
@@ -2064,8 +2070,9 @@ int ll_prep_inode(struct inode **inode,
                   struct ptlrpc_request *req,
                   struct super_block *sb)
 {
-        struct ll_sb_info *sbi = NULL;
-        struct lustre_md md;
+	struct ll_sb_info *sbi = NULL;
+	struct lustre_md md;
+	__u64 ibits;
         int rc;
         ENTRY;
 
@@ -2104,9 +2111,18 @@ int ll_prep_inode(struct inode **inode,
                 }
         }
 
+	/* sanity check for LAYOUT lock. */
+	ibits = MDS_INODELOCK_LAYOUT;
+	if (S_ISREG(md.body->mode) && sbi->ll_flags & LL_SBI_LAYOUT_LOCK &&
+	    md.lsm != NULL && !ll_have_md_lock(*inode, &ibits, LCK_MINMODE)) {
+		CERROR("%s: inode "DFID" (%p) layout lock not granted.\n",
+			ll_get_fsname(*inode), PFID(ll_inode2fid(*inode)),
+			*inode);
+	}
+
 out:
-        md_free_lustre_md(sbi->ll_md_exp, &md);
-        RETURN(rc);
+	md_free_lustre_md(sbi->ll_md_exp, &md);
+	RETURN(rc);
 }
 
 int ll_obd_statfs(struct inode *inode, void *arg)

@@ -200,14 +200,29 @@ struct lov_object {
          */
         enum lov_layout_type   lo_type;
 	/**
+	 * True if layout is valid. This bit is cleared when layout lock
+	 * is lost.
+	 */
+	unsigned	       lo_lsm_invalid:1;
+	/**
+	 * Layout metadata.
+	 */
+	struct lov_stripe_md  *lo_lsm;
+	/**
 	 * Waitq - wait for no one else is using lo_lsm
 	 */
-	cfs_waitq_t            lo_waitq;
+	cfs_waitq_t	       lo_waitq;
 
         union lov_layout_state {
                 struct lov_layout_raid0 {
                         unsigned               lo_nr;
-                        struct lov_stripe_md  *lo_lsm;
+			/**
+			 * When this is true, lov_object::lo_attr contains
+			 * valid up to date attributes for a top-level
+			 * object. This field is reset to 0 when attributes of
+			 * any sub-object change.
+			 */
+			int		       lo_attr_valid;
                         /**
                          * Array of sub-objects. Allocated when top-object is
                          * created (lov_init_raid0()).
@@ -228,13 +243,6 @@ struct lov_object {
                          * protect lo_sub
                          */
                         cfs_spinlock_t         lo_sub_lock;
-                        /**
-                         * When this is true, lov_object::lo_attr contains
-                         * valid up to date attributes for a top-level
-                         * object. This field is reset to 0 when attributes of
-                         * any sub-object change.
-                         */
-                        int                    lo_attr_valid;
                         /**
                          * Cached object attribute, built from sub-object
                          * attributes.
@@ -803,13 +811,10 @@ static inline struct lov_thread_info *lov_env_info(const struct lu_env *env)
 
 static inline struct lov_layout_raid0 *lov_r0(struct lov_object *lov)
 {
-        struct lov_layout_raid0 *raid0;
-
-        LASSERT(lov->lo_type == LLT_RAID0);
-        raid0 = &lov->u.raid0;
-        LASSERT(raid0->lo_lsm->lsm_wire.lw_magic == LOV_MAGIC ||
-                raid0->lo_lsm->lsm_wire.lw_magic == LOV_MAGIC_V3);
-        return raid0;
+	LASSERT(lov->lo_type == LLT_RAID0);
+	LASSERT(lov->lo_lsm->lsm_wire.lw_magic == LOV_MAGIC ||
+		lov->lo_lsm->lsm_wire.lw_magic == LOV_MAGIC_V3);
+	return &lov->u.raid0;
 }
 
 /** @} lov */

@@ -265,7 +265,10 @@ struct ll_inode_info {
          *      some of the following members can be moved into u.f.
          */
 	bool                            lli_has_smd;
-        struct cl_object               *lli_clob;
+	struct cl_object	       *lli_clob;
+
+	/* mutex to request for layout lock exclusively. */
+	cfs_mutex_t		        lli_layout_mutex;
 };
 
 /*
@@ -387,6 +390,7 @@ enum stats_track_type {
 #define LL_SBI_64BIT_HASH      0x4000 /* support 64-bits dir hash/offset */
 #define LL_SBI_AGL_ENABLED     0x8000 /* enable agl */
 #define LL_SBI_VERBOSE        0x10000 /* verbose mount/umount */
+#define LL_SBI_LAYOUT_LOCK    0x20000 /* layout lock support */
 
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
@@ -661,6 +665,7 @@ struct page *ll_get_dir_page(struct file *filp, struct inode *dir, __u64 hash,
 int ll_readdir(struct file *filp, void *cookie, filldir_t filldir);
 
 int ll_get_mdt_idx(struct inode *inode);
+char *ll_get_fsname(struct inode *inode);
 /* llite/namei.c */
 int ll_objects_destroy(struct ptlrpc_request *request,
                        struct inode *dir);
@@ -1535,5 +1540,8 @@ struct if_quotactl_18 {
 #else
 #warning "remove old LL_IOC_QUOTACTL_18 compatibility code"
 #endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0) */
+
+int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf);
+int ll_layout_refresh(struct inode *inode, __u32 *gen);
 
 #endif /* LLITE_INTERNAL_H */

@@ -464,9 +464,11 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                               struct lustre_handle *lockh,
                               int rc)
 {
-        struct req_capsule  *pill = &req->rq_pill;
-        struct ldlm_request *lockreq;
-        struct ldlm_reply   *lockrep;
+	struct req_capsule  *pill = &req->rq_pill;
+	struct ldlm_request *lockreq;
+	struct ldlm_reply   *lockrep;
+	__u64                bits = 0;
+	struct lustre_intent_data *intent = &it->d.lustre;
         ENTRY;
 
         LASSERT(rc >= 0);
@@ -492,20 +494,21 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                         ldlm_lock_decref(lockh, einfo->ei_mode);
                         einfo->ei_mode = lock->l_req_mode;
                 }
-                LDLM_LOCK_PUT(lock);
-        }
+		bits = lock->l_policy_data.l_inodebits.bits;
+		LDLM_LOCK_PUT(lock);
+	}
 
-        lockrep = req_capsule_server_get(pill, &RMF_DLM_REP);
-        LASSERT(lockrep != NULL);                 /* checked by ldlm_cli_enqueue() */
+	lockrep = req_capsule_server_get(pill, &RMF_DLM_REP);
+	LASSERT(lockrep != NULL); /* checked by ldlm_cli_enqueue() */
 
-        it->d.lustre.it_disposition = (int)lockrep->lock_policy_res1;
-        it->d.lustre.it_status = (int)lockrep->lock_policy_res2;
-        it->d.lustre.it_lock_mode = einfo->ei_mode;
-        it->d.lustre.it_lock_handle = lockh->cookie;
-        it->d.lustre.it_data = req;
+	intent->it_disposition = (int)lockrep->lock_policy_res1;
+	intent->it_status = (int)lockrep->lock_policy_res2;
+	intent->it_lock_mode = einfo->ei_mode;
+	intent->it_lock_handle = lockh->cookie;
+	intent->it_data = req;
 
-        if (it->d.lustre.it_status < 0 && req->rq_replay)
-                mdc_clear_replay_flag(req, it->d.lustre.it_status);
+	if (intent->it_status < 0 && req->rq_replay)
+		mdc_clear_replay_flag(req, intent->it_status);
 
         /* If we're doing an IT_OPEN which did not result in an actual
          * successful open, then we need to remove the bit which saves
@@ -515,11 +518,11 @@ static int mdc_finish_enqueue(struct obd_export *exp,
          * function without doing so, and try to replay a failed create
          * (bug 3440) */
         if (it->it_op & IT_OPEN && req->rq_replay &&
-            (!it_disposition(it, DISP_OPEN_OPEN) ||it->d.lustre.it_status != 0))
-                mdc_clear_replay_flag(req, it->d.lustre.it_status);
+	    (!it_disposition(it, DISP_OPEN_OPEN) ||intent->it_status != 0))
+		mdc_clear_replay_flag(req, intent->it_status);
 
-        DEBUG_REQ(D_RPCTRACE, req, "op: %d disposition: %x, status: %d",
-                  it->it_op,it->d.lustre.it_disposition,it->d.lustre.it_status);
+	DEBUG_REQ(D_RPCTRACE, req, "op: %d disposition: %x, status: %d",
+		  it->it_op, intent->it_disposition, intent->it_status);
 
         /* We know what to expect, so we do any byte flipping required here */
         if (it->it_op & (IT_OPEN | IT_UNLINK | IT_LOOKUP | IT_GETATTR)) {
@@ -540,7 +543,9 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                          * is swabbed by that handler correctly.
                          */
                         mdc_set_open_replay_data(NULL, NULL, req);
-                }
+		}
+
+		/* TODO: make sure LAYOUT lock must be granted along with EA */
 
                 if ((body->valid & (OBD_MD_FLDIREA | OBD_MD_FLEASIZE)) != 0) {
                         void *eadata;
@@ -616,9 +621,47 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                         if (capa == NULL)
                                 RETURN(-EPROTO);
                 }
-        }
+        } else if (it->it_op & IT_LAYOUT) {
+                struct ldlm_lock *lock = ldlm_handle2lock(lockh);
 
-        RETURN(rc);
+		if (lock != NULL && lock->l_lvb_data == NULL) {
+			int lvb_len;
+
+			/* maybe the lock was granted right away and layout
+			 * is packed into RMF_DLM_LVB of req */
+			lvb_len = req_capsule_get_size(pill, &RMF_DLM_LVB,
+						       RCL_SERVER);
+			if (lvb_len > 0) {
+				void *lvb;
+				void *lmm;
+
+				lvb = req_capsule_server_get(pill,
+							     &RMF_DLM_LVB);
+				if (lvb == NULL) {
+					LDLM_LOCK_PUT(lock);
+					RETURN(-EPROTO);
+				}
+
+				OBD_ALLOC_LARGE(lmm, lvb_len);
+				if (lmm == NULL) {
+					LDLM_LOCK_PUT(lock);
+					RETURN(-ENOMEM);
+				}
+				memcpy(lmm, lvb, lvb_len);
+
+				/* install lvb_data */
+				lock_res_and_lock(lock);
+				LASSERT(lock->l_lvb_data == NULL);
+				lock->l_lvb_data = lmm;
+				lock->l_lvb_len = lvb_len;
+				unlock_res_and_lock(lock);
+			}
+		}
+		if (lock != NULL)
+			LDLM_LOCK_PUT(lock);
+	}
+
+	RETURN(rc);
 }
 
 /* We always reserve enough space in the reply packet for a stripe MD, because
@@ -637,6 +680,8 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                             { .l_inodebits = { MDS_INODELOCK_LOOKUP } };
         static const ldlm_policy_data_t update_policy =
                             { .l_inodebits = { MDS_INODELOCK_UPDATE } };
+	static const ldlm_policy_data_t layout_policy =
+			    { .l_inodebits = { MDS_INODELOCK_LAYOUT } };
         ldlm_policy_data_t const *policy = &lookup_policy;
         int                    generation, resends = 0;
         struct ldlm_reply     *lockrep;
@@ -647,10 +692,13 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
 
         fid_build_reg_res_name(&op_data->op_fid1, &res_id);
 
-        if (it)
-                saved_flags |= LDLM_FL_HAS_INTENT;
-        if (it && it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
-                policy = &update_policy;
+	if (it) {
+		saved_flags |= LDLM_FL_HAS_INTENT;
+		if (it->it_op & (IT_UNLINK | IT_GETATTR | IT_READDIR))
+			policy = &update_policy;
+		else if (it->it_op & IT_LAYOUT)
+			policy = &layout_policy;
+	}
 
         LASSERT(reqp == NULL);
 
@@ -673,11 +721,11 @@ resend:
                 lmm = NULL;
         } else if (it->it_op & IT_UNLINK)
                 req = mdc_intent_unlink_pack(exp, it, op_data);
-        else if (it->it_op & (IT_GETATTR | IT_LOOKUP | IT_LAYOUT))
-                req = mdc_intent_getattr_pack(exp, it, op_data);
-        else if (it->it_op == IT_READDIR)
-                req = ldlm_enqueue_pack(exp);
-        else {
+	else if (it->it_op & (IT_GETATTR | IT_LOOKUP))
+		req = mdc_intent_getattr_pack(exp, it, op_data);
+	else if (it->it_op & (IT_READDIR | IT_LAYOUT))
+		req = ldlm_enqueue_pack(exp);
+	else {
                 LBUG();
                 RETURN(-EINVAL);
         }
