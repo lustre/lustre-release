@@ -1119,6 +1119,8 @@ struct obd_device {
          * debugging.
          */
         struct lu_ref          obd_reference;
+
+	int		       obd_conn_inprogress;
 };
 
 #define OBD_LLOG_FL_SENDNOW     0x0001
