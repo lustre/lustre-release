@@ -731,7 +731,7 @@ check_and_start_recovery_timer(struct obd_device *obd,
 
 int target_handle_connect(struct ptlrpc_request *req)
 {
-        struct obd_device *target, *targref = NULL;
+	struct obd_device *target = NULL, *targref = NULL;
         struct obd_export *export = NULL;
         struct obd_import *revimp;
         struct lustre_handle conn;
@@ -762,17 +762,29 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (!target)
                 target = class_name2obd(str);
 
-        if (!target || target->obd_stopping || !target->obd_set_up) {
-                deuuidify(str, NULL, &target_start, &target_len);
-                LCONSOLE_ERROR_MSG(0x137, "%.*s: Not available for connect "
-                                   "from %s (%s)\n", target_len, target_start,
-                                   libcfs_nid2str(req->rq_peer.nid), !target ?
-                                   "no target" : (target->obd_stopping ?
-                                   "stopping" : "not set up"));
-                GOTO(out, rc = -ENODEV);
-        }
+	if (!target) {
+		deuuidify(str, NULL, &target_start, &target_len);
+		LCONSOLE_ERROR_MSG(0x137, "UUID '%s' is not available for "
+				   "connect (no target)\n", str);
+		GOTO(out, rc = -ENODEV);
+	}
+
+	cfs_spin_lock(&target->obd_dev_lock);
+	if (target->obd_stopping || !target->obd_set_up) {
+		cfs_spin_unlock(&target->obd_dev_lock);
+
+		deuuidify(str, NULL, &target_start, &target_len);
+		LCONSOLE_ERROR_MSG(0x137, "%.*s: Not available for connect "
+				   "from %s (%s)\n", target_len, target_start,
+				   libcfs_nid2str(req->rq_peer.nid), 
+				   (target->obd_stopping ?
+				   "stopping" : "not set up"));
+		GOTO(out, rc = -ENODEV);
+	}
 
         if (target->obd_no_conn) {
+		cfs_spin_unlock(&target->obd_dev_lock);
+
                 LCONSOLE_WARN("%s: Temporarily refusing client connection "
                               "from %s\n", target->obd_name,
                               libcfs_nid2str(req->rq_peer.nid));
@@ -784,6 +796,8 @@ int target_handle_connect(struct ptlrpc_request *req)
            Really, class_uuid2obd should take the ref. */
         targref = class_incref(target, __FUNCTION__, cfs_current());
 
+	target->obd_conn_inprogress++;
+	cfs_spin_unlock(&target->obd_dev_lock);
 
         str = req_capsule_client_get(&req->rq_pill, &RMF_CLUUID);
         if (str == NULL) {
@@ -1003,19 +1017,12 @@ dont_check_exports:
                         rc = obd_connect(req->rq_svc_thread->t_env,
                                          &export, target, &cluuid, data,
                                          client_nid);
-                        if (rc == 0) {
+                        if (rc == 0)
                                 conn.cookie = export->exp_handle.h_cookie;
-                                /* LU-1092 reconnect put export refcount in the
-                                 * end, connect needs take one here too. */
-                                class_export_get(export);
-                        }
                 }
         } else {
                 rc = obd_reconnect(req->rq_svc_thread->t_env,
                                    export, target, &cluuid, data, client_nid);
-                if (rc == 0)
-                        /* prevous done via class_conn2export */
-                        class_export_get(export);
         }
         if (rc)
                 GOTO(out, rc);
@@ -1051,7 +1058,8 @@ dont_check_exports:
         if (req->rq_export != NULL)
                 class_export_put(req->rq_export);
 
-        req->rq_export = export;
+	/* request takes one export refcount */
+	req->rq_export = class_export_get(export);
 
         cfs_spin_lock(&export->exp_lock);
         if (export->exp_conn_cnt >= lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
@@ -1198,8 +1206,13 @@ out:
 
                 class_export_put(export);
         }
-        if (targref)
+        if (targref) {
+		cfs_spin_lock(&target->obd_dev_lock);
+		target->obd_conn_inprogress--;
+		cfs_spin_unlock(&target->obd_dev_lock);
+
                 class_decref(targref, __FUNCTION__, cfs_current());
+	}
         if (rc)
                 req->rq_status = rc;
         RETURN(rc);
