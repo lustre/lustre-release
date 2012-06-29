@@ -21,3 +21,4 @@ lnet-selftest
 mmp
 obdfilter-survey
 sgpdd-survey
+sanity-scrub

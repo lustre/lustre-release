@@ -5,6 +5,7 @@ trap 'print_summary && touch $TF_FAIL && \
 set -e
 #set -x
 
+export EJOURNAL=${EJOURNAL:-""}
 export REFORMAT=${REFORMAT:-""}
 export WRITECONF=${WRITECONF:-""}
 export VERBOSE=${VERBOSE:-false}
@@ -396,6 +397,7 @@ load_modules_local() {
     load_module osc/osc
     load_module lov/lov
     load_module mgc/mgc
+    load_module obdecho/obdecho
     if ! client_only; then
         SYMLIST=/proc/kallsyms
         grep -q crc16 $SYMLIST || { modprobe crc16 2>/dev/null || true; }
@@ -5226,4 +5228,92 @@ generate_string() {
     local size=${1:-1024} # in bytes
 
     echo "$(head -c $size < /dev/zero | tr '\0' y)"
+}
+
+reformat_external_journal() {
+	if [ ! -z ${EJOURNAL} ]; then
+		local rcmd="do_facet ${SINGLEMDS}"
+
+		echo "reformat external journal on ${SINGLEMDS}:${EJOURNAL}"
+		${rcmd} mke2fs -O journal_dev ${EJOURNAL} || return 1
+	fi
+}
+
+# MDT file-level backup/restore
+mds_backup_restore() {
+	local devname=$(mdsdevname ${SINGLEMDS//mds/})
+	local mntpt=$(facet_mntpt brpt)
+	local rcmd="do_facet ${SINGLEMDS}"
+	local metaea=${TMP}/backup_restore.ea
+	local metadata=${TMP}/backup_restore.tgz
+
+	echo "file-level backup/restore on ${SINGLEMDS}:${devname}"
+
+	# step 1: build mount point
+	${rcmd} mkdir -p $mntpt
+	# step 2: cleanup old backup
+	${rcmd} rm -f $metaea $metadata
+	# step 3: mount dev
+	${rcmd} mount -t ldiskfs $MDS_MOUNT_OPTS $devname $mntpt || return 1
+	# step 4: backup metaea
+	echo "backup EA"
+	${rcmd} "cd $mntpt && getfattr -R -d -m '.*' -P . > $metaea && cd -" ||
+		return 2
+	# step 5: backup metadata
+	echo "backup data"
+	${rcmd} tar zcf $metadata -C $mntpt/ . > /dev/null 2>&1 || return 3
+	# step 6: umount
+	${rcmd} umount -d $mntpt || return 4
+	# step 7: reformat external journal if needed
+	reformat_external_journal || return 5
+	# step 8: reformat dev
+	echo "reformat new device"
+	add ${SINGLEMDS} $(mkfs_opts mds) --backfstype ldiskfs --reformat \
+		$devname > /dev/null || return 6
+	# step 9: mount dev
+	${rcmd} mount -t ldiskfs $MDS_MOUNT_OPTS $devname $mntpt || return 7
+	# step 10: restore metadata
+	echo "restore data"
+	${rcmd} tar zxfp $metadata -C $mntpt > /dev/null 2>&1 || return 8
+	# step 11: restore metaea
+	echo "restore EA"
+	${rcmd} "cd $mntpt && setfattr --restore=$metaea && cd - " || return 9
+	# step 12: remove recovery logs
+	echo "remove recovery logs"
+	${rcmd} rm -fv $mntpt/OBJECTS/* $mntpt/CATALOGS
+	# step 13: umount dev
+	${rcmd} umount -d $mntpt || return 10
+	# step 14: cleanup tmp backup
+	${rcmd} rm -f $metaea $metadata
+}
+
+# remove OI files
+mds_remove_ois() {
+	local devname=$(mdsdevname ${SINGLEMDS//mds/})
+	local mntpt=$(facet_mntpt brpt)
+	local rcmd="do_facet ${SINGLEMDS}"
+	local idx=$1
+
+	echo "remove OI files: idx=${idx}"
+
+	# step 1: build mount point
+	${rcmd} mkdir -p $mntpt
+	# step 2: mount dev
+	${rcmd} mount -t ldiskfs $MDS_MOUNT_OPTS $devname $mntpt || return 1
+	if [ -z $idx ]; then
+		# step 3: remove all OI files
+		${rcmd} rm -fv $mntpt/oi.16*
+	elif [ $idx -lt 2 ]; then
+		${rcmd} rm -fv $mntpt/oi.16.${idx}
+	else
+		local i
+
+		# others, rm oi.16.[idx, idx * idx, idx ** ...]
+		for ((i=${idx}; i<64; i=$((i * idx)))); do
+			${rcmd} rm -fv $mntpt/oi.16.${i}
+		done
+	fi
+	# step 4: umount
+	${rcmd} umount -d $mntpt || return 2
+	# OI files will be recreated when mounted as lustre next time.
 }

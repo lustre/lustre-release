@@ -657,6 +657,7 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 		   int insert);
 int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 		   struct osd_inode_id *id);
+int osd_scrub_dump(struct osd_device *dev, char *buf, int len);
 
 /* osd_quota_fmt.c */
 int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,

@@ -241,6 +241,11 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_GET_INFO_NET        0x186
 #define OBD_FAIL_MDS_DQACQ_NET           0x187
 
+/* OI scrub */
+#define OBD_FAIL_OSD_SCRUB_DELAY	 0x190
+#define OBD_FAIL_OSD_SCRUB_CRASH	 0x191
+#define OBD_FAIL_OSD_SCRUB_FATAL	 0x192
+
 #define OBD_FAIL_OST                     0x200
 #define OBD_FAIL_OST_CONNECT_NET         0x201
 #define OBD_FAIL_OST_DISCONNECT_NET      0x202
@@ -631,10 +636,10 @@ do {									      \
 #ifdef __KERNEL__
 
 /* Allocations above this size are considered too big and could not be done
- * atomically. 
+ * atomically.
  *
  * Be very careful when changing this value, especially when decreasing it,
- * since vmalloc in Linux doesn't perform well on multi-cores system, calling 
+ * since vmalloc in Linux doesn't perform well on multi-cores system, calling
  * vmalloc in critical path would hurt peformance badly. See LU-66.
  */
 #define OBD_ALLOC_BIG (4 * CFS_PAGE_SIZE)

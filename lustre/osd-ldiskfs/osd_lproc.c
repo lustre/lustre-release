@@ -481,6 +481,50 @@ static int lprocfs_osd_wr_pdo(struct file *file, const char *buffer,
 }
 #endif
 
+static int lprocfs_osd_rd_auto_scrub(char *page, char **start, off_t off,
+				     int count, int *eof, void *data)
+{
+	struct osd_device *dev = data;
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mount == NULL))
+		return -EINPROGRESS;
+
+	*eof = 1;
+	return snprintf(page, count, "%d\n", !dev->od_scrub.os_no_scrub);
+}
+
+static int lprocfs_osd_wr_auto_scrub(struct file *file, const char *buffer,
+				     unsigned long count, void *data)
+{
+	struct osd_device *dev = data;
+	int val, rc;
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mount == NULL))
+		return -EINPROGRESS;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	dev->od_scrub.os_no_scrub = !val;
+	return count;
+}
+
+static int lprocfs_osd_rd_oi_scrub(char *page, char **start, off_t off,
+				   int count, int *eof, void *data)
+{
+	struct osd_device *dev = data;
+
+	LASSERT(dev != NULL);
+	if (unlikely(dev->od_mount == NULL))
+		return -EINPROGRESS;
+
+	*eof = 1;
+	return osd_scrub_dump(dev, page, count);
+}
+
 struct lprocfs_vars lprocfs_osd_obd_vars[] = {
         { "blocksize",       lprocfs_osd_rd_blksize,     0, 0 },
         { "kbytestotal",     lprocfs_osd_rd_kbytestotal, 0, 0 },
@@ -493,7 +537,10 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
 #ifdef HAVE_LDISKFS_PDO
         { "pdo",             lprocfs_osd_rd_pdo, lprocfs_osd_wr_pdo, 0 },
 #endif
-        { 0 }
+	{ "auto_scrub",      lprocfs_osd_rd_auto_scrub,
+			     lprocfs_osd_wr_auto_scrub,  0 },
+	{ "oi_scrub",	     lprocfs_osd_rd_oi_scrub,    0, 0 },
+	{ 0 }
 };
 
 struct lprocfs_vars lprocfs_osd_module_vars[] = {

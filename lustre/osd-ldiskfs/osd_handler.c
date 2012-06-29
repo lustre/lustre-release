@@ -300,8 +300,8 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		iput(inode);
 		inode = ERR_PTR(-ESTALE);
 	} else if (is_bad_inode(inode)) {
-		CWARN("%s: bad inode: ino = %u\n",
-		dev->od_dt_dev.dd_lu_dev.ld_obd->obd_name, id->oii_ino);
+		CWARN("%.16s: bad inode: ino = %u\n",
+		LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name, id->oii_ino);
 		iput(inode);
 		inode = ERR_PTR(-ENOENT);
 	} else {
@@ -462,9 +462,10 @@ trigger:
 				result = -EINPROGRESS;
 			} else if (!scrub->os_no_scrub) {
 				result = osd_scrub_start(dev);
-				LCONSOLE_ERROR("Trigger OI scrub by RPC for "
-					       DFID", rc = %d\n",
-					       PFID(fid), result);
+				LCONSOLE_ERROR("%.16s: trigger OI scrub by RPC "
+					       "for "DFID", rc = %d [1]\n",
+					       LDISKFS_SB(osd_sb(dev))->s_es->\
+					       s_volume_name,PFID(fid), result);
 				if (result == 0 || result == -EALREADY)
 					result = -EINPROGRESS;
 				else
@@ -763,9 +764,10 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                 GOTO(out, rc);
 
         if (!osd_param_is_sane(dev, th)) {
-                CWARN("%s: too many transaction credits (%d > %d)\n",
-                      d->dd_lu_dev.ld_obd->obd_name, oh->ot_credits,
-                      osd_journal(dev)->j_max_transaction_buffers);
+		CWARN("%.16s: too many transaction credits (%d > %d)\n",
+		      LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name,
+		      oh->ot_credits,
+		      osd_journal(dev)->j_max_transaction_buffers);
                 /* XXX Limit the credits to 'max_transaction_buffers', and
                  *     let the underlying filesystem to catch the error if
                  *     we really need so many credits.
@@ -3323,8 +3325,10 @@ again:
 		CDEBUG(D_LFSCK, "Trigger OI scrub by RPC for "DFID"\n",
 		       PFID(fid));
 		rc = osd_scrub_start(dev);
-		CDEBUG(D_LFSCK, "Trigger OI scrub by RPC for "DFID", rc = %d\n",
-		       PFID(fid), rc);
+		LCONSOLE_ERROR("%.16s: trigger OI scrub by RPC for "DFID
+			       ", rc = %d [2]\n",
+			       LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name,
+			       PFID(fid), rc);
 		if (rc == 0)
 			goto again;
 	}
