@@ -148,8 +148,9 @@ EXPORT_SYMBOL(lprocfs_counter_sub);
 
 int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int idx)
 {
-	unsigned int percpusize;
-	int          rc = -ENOMEM;
+	unsigned int	percpusize;
+	int		rc	= -ENOMEM;
+	unsigned long	flags	= 0;
 
 	/* the 1st percpu entry was statically allocated in
 	 * lprocfs_alloc_stats() */
@@ -162,8 +163,20 @@ int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int idx)
 	OBD_ALLOC_GFP(stats->ls_percpu[idx], percpusize, CFS_ALLOC_ATOMIC);
 	if (stats->ls_percpu[idx] != NULL) {
 		rc = 0;
-		if (unlikely(stats->ls_biggest_alloc_num <= idx))
-			stats->ls_biggest_alloc_num = idx + 1;
+		if (unlikely(stats->ls_biggest_alloc_num <= idx)) {
+			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE)
+				cfs_spin_lock_irqsave(&stats->ls_lock, flags);
+			else
+				cfs_spin_lock(&stats->ls_lock);
+			if (stats->ls_biggest_alloc_num <= idx)
+				stats->ls_biggest_alloc_num = idx + 1;
+			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
+				cfs_spin_unlock_irqrestore(&stats->ls_lock,
+							   flags);
+			} else {
+				cfs_spin_unlock(&stats->ls_lock);
+			}
+		}
 
 		/* initialize the ls_percpu[idx] by copying the 0th template
 		 * entry */

@@ -175,9 +175,10 @@ struct lprocfs_percpu {
 #define LPROCFS_GET_SMP_ID  0x0002
 
 enum lprocfs_stats_flags {
-        LPROCFS_STATS_FLAG_NONE     = 0x0000, /* per cpu counter */
-        LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* stats have no percpu
-                                               * area and need locking */
+	LPROCFS_STATS_FLAG_NONE     = 0x0000, /* per cpu counter */
+	LPROCFS_STATS_FLAG_NOPERCPU = 0x0001, /* stats have no percpu
+					       * area and need locking */
+	LPROCFS_STATS_FLAG_IRQ_SAFE = 0x0002, /* alloc need irq safe */
 };
 
 enum lprocfs_fields_flags {
@@ -197,8 +198,9 @@ struct lprocfs_stats {
 					  * been allocated, the 0th entry is
 					  * a statically intialized template */
 	int		       ls_flags; /* See LPROCFS_STATS_FLAG_* */
-	cfs_spinlock_t	       ls_lock;  /* Lock used only when there are
-					  * no percpu stats areas */
+	/* Lock used when there are no percpu stats areas; For percpu stats,
+	 * it is used to protect ls_biggest_alloc_num change */
+	cfs_spinlock_t	       ls_lock;
 	struct lprocfs_percpu *ls_percpu[0];
 };
 
@@ -381,31 +383,41 @@ extern int lprocfs_stats_alloc_one(struct lprocfs_stats *stats,
 static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int opc,
 				     unsigned long *flags)
 {
-	int rc = 0;
+	int		rc = 0;
+	unsigned int	cpuid;
 
 	switch (opc) {
 	default:
 		LBUG();
 
 	case LPROCFS_GET_SMP_ID:
-		if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
-			cfs_spin_lock_irqsave(&stats->ls_lock, *flags);
-			return 0;
-		} else {
-			unsigned int cpuid = cfs_get_cpu();
+		/* percpu counter stats */
+		if ((stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) == 0) {
+			cpuid = cfs_get_cpu();
 
 			if (unlikely(stats->ls_percpu[cpuid + 1] == NULL))
 				rc = lprocfs_stats_alloc_one(stats, cpuid + 1);
 			return rc < 0 ? rc : cpuid + 1;
 		}
 
-	case LPROCFS_GET_NUM_CPU:
-		if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
+		/* non-percpu counter stats */
+		if ((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
 			cfs_spin_lock_irqsave(&stats->ls_lock, *flags);
-			return 1;
-		} else {
+		else
+			cfs_spin_lock(&stats->ls_lock);
+		return 0;
+
+	case LPROCFS_GET_NUM_CPU:
+		/* percpu counter stats */
+		if ((stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) == 0)
 			return stats->ls_biggest_alloc_num;
-		}
+
+		/* non-percpu counter stats */
+		if ((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
+			cfs_spin_lock_irqsave(&stats->ls_lock, *flags);
+		else
+			cfs_spin_lock(&stats->ls_lock);
+		return 1;
 	}
 }
 
@@ -417,15 +429,27 @@ static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats, int opc,
 		LBUG();
 
 	case LPROCFS_GET_SMP_ID:
-		if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
-			cfs_spin_unlock_irqrestore(&stats->ls_lock, *flags);
-		else
+		if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
+			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
+				cfs_spin_unlock_irqrestore(&stats->ls_lock,
+							   *flags);
+			} else {
+				cfs_spin_unlock(&stats->ls_lock);
+			}
+		} else {
 			cfs_put_cpu();
+		}
 		return;
 
 	case LPROCFS_GET_NUM_CPU:
-		if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU)
-			cfs_spin_unlock_irqrestore(&stats->ls_lock, *flags);
+		if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
+			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
+				cfs_spin_unlock_irqrestore(&stats->ls_lock,
+							   *flags);
+			} else {
+				cfs_spin_unlock(&stats->ls_lock);
+			}
+		}
 		return;
 	}
 }

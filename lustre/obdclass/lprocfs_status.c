@@ -1324,13 +1324,8 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
 
 	stats->ls_num = num;
 	stats->ls_biggest_alloc_num = 1;
-        if (flags & LPROCFS_STATS_FLAG_NOPERCPU) {
-                stats->ls_flags = flags;
-                cfs_spin_lock_init(&stats->ls_lock);
-                /* Use this lock only if there are no percpu areas */
-        } else {
-                stats->ls_flags = 0;
-        }
+	stats->ls_flags = flags;
+	cfs_spin_lock_init(&stats->ls_lock);
 
 	percpusize = offsetof(struct lprocfs_percpu, lp_cntr[num]);
 	if (num_entry > 1)
@@ -1378,25 +1373,13 @@ void lprocfs_clear_stats(struct lprocfs_stats *stats)
 	int			i;
 	int			j;
 	unsigned int		num_entry;
-	unsigned int		percpusize;
 	unsigned long		flags = 0;
 
 	num_entry = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 
-	percpusize = offsetof(struct lprocfs_percpu, lp_cntr[stats->ls_num]);
-	if (num_entry > 1)
-		percpusize = CFS_L1_CACHE_ALIGN(percpusize);
-
 	for (i = 0; i < num_entry; i++) {
 		if (stats->ls_percpu[i] == NULL)
 			continue;
-		/* the 1st percpu entry was statically allocated in
-		 * lprocfs_alloc_stats() */
-		if (i > 0) {
-			OBD_FREE(stats->ls_percpu[i], percpusize);
-			stats->ls_percpu[i] = NULL;
-			continue;
-		}
 		for (j = 0; j < stats->ls_num; j++) {
 			percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[j];
 			cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
