@@ -694,6 +694,9 @@ AC_SUBST(LLCPPFLAGS)
 LLCFLAGS="-g -Wall -fPIC -D_GNU_SOURCE"
 AC_SUBST(LLCFLAGS)
 
+CCASFLAGS="-Wall -fPIC -D_GNU_SOURCE"
+AC_SUBST(CCASFLAGS)
+
 # everyone builds against lnet and lustre
 EXTRA_KCFLAGS="$EXTRA_KCFLAGS -g -I$PWD/$LIBCFS_INCLUDE_DIR -I$PWD/lnet/include -I$PWD/lustre/include"
 AC_SUBST(EXTRA_KCFLAGS)
@@ -715,6 +718,7 @@ AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 AM_CONDITIONAL(CRAY_XT3, test x$enable_cray_xt3 = "xyes")
 AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 AM_CONDITIONAL(USES_DPKG, test x$uses_dpkg = "xyes")
+AM_CONDITIONAL(ARCH_x86, test x$target_cpu != "xpowerpc")
 
 # this lets lustre cancel libsysio, per-branch or if liblustre is
 # disabled

@@ -31,6 +31,7 @@
 
 #include <libcfs/libcfs.h>
 #include <libcfs/posix/posix-crypto.h>
+#include <libcfs/user-crypto.h>
 
 static int cfs_crypto_hash_speeds[CFS_HASH_ALG_MAX];
 
@@ -89,8 +90,21 @@ static int adler_wrapper(void *ctx, const unsigned char *p,
 	return 0;
 }
 
+#if (defined i386) || (defined __amd64__)
+static int crc32_pclmul_wrapper(void *ctx, const unsigned char *p,
+				unsigned int len)
+{
+	unsigned int cksum = *(unsigned int *)ctx;
+
+	cksum = crc32_pclmul_le(cksum, p, len);
+
+	*(unsigned int *)ctx = cksum;
+	return 0;
+}
+#endif
+
 static int start_generic(void *ctx, unsigned char *key,
-					 unsigned int key_len)
+			 unsigned int key_len)
 {
 	const struct cfs_crypto_hash_type       *type;
 	struct hash_desc	*hd = container_of(ctx, struct hash_desc,
@@ -111,7 +125,7 @@ static int start_generic(void *ctx, unsigned char *key,
 }
 
 static int final_generic(void *ctx, unsigned char *hash,
-					 unsigned int hash_len)
+			 unsigned int hash_len)
 {
 	const struct cfs_crypto_hash_type       *type;
 	struct hash_desc	*hd = container_of(ctx, struct hash_desc,
@@ -142,7 +156,18 @@ static struct __hash_alg crypto_hash[] = {
 					   .update = adler_wrapper,
 					   .start = start_generic,
 					   .final = final_generic,
-					   .fini = NULL} };
+					   .fini = NULL},
+#if (defined i386) || (defined __amd64__)
+					  {.ha_id = CFS_HASH_ALG_CRC32,
+					   .ha_ctx_size = sizeof(unsigned int),
+					   .ha_priority = 100,
+					   .init = crc32_pclmul_init,
+					   .update = crc32_pclmul_wrapper,
+					   .start = start_generic,
+					   .final = final_generic,
+					   .fini = NULL},
+#endif
+					};
 
 /**
  * Go through hashes to find the hash with  max priority

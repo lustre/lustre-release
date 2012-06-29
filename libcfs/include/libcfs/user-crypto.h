@@ -1,5 +1,4 @@
- /*
- * GPL HEADER START
+/* GPL HEADER START
  *
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
@@ -24,26 +23,13 @@
 
 /*
  * Copyright 2012 Xyratex Technology Limited
+ *
  */
 
-/**
- * Linux crypto hash specific functions.
- */
+unsigned int crc32_pclmul_le_16(unsigned char const *buffer, size_t len,
+				unsigned int crc32) __attribute__((regparm(3)));
 
-/**
- * Functions for start/stop shash CRC32 algorithm.
- */
-int cfs_crypto_crc32_register(void);
-void cfs_crypto_crc32_unregister(void);
+unsigned int crc32_pclmul_le(unsigned int crc, unsigned char const *p,
+			     size_t len);
 
-/**
- * Functions for start/stop shash adler32 algorithm.
- */
-int cfs_crypto_adler32_register(void);
-void cfs_crypto_adler32_unregister(void);
-
-/**
- * Functions for start/stop shash crc32 pclmulqdq
- */
-int cfs_crypto_crc32_pclmul_register(void);
-void cfs_crypto_crc32_pclmul_unregister(void);
+int crc32_pclmul_init(void);
