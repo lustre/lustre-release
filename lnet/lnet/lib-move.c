@@ -2011,12 +2011,9 @@ lnet_drop_delayed_msg_list(cfs_list_t *head, char *reason)
 		lnet_drop_message(msg->msg_rxpeer->lp_ni,
 				  msg->msg_rxpeer->lp_cpt,
 				  msg->msg_private, msg->msg_len);
-
-		lnet_net_lock(msg->msg_rxpeer->lp_cpt);
-		lnet_peer_decref_locked(msg->msg_rxpeer);
-		lnet_net_unlock(msg->msg_rxpeer->lp_cpt);
-
-		lnet_msg_free(msg);
+		/* NB: message will not generate event because w/o attached MD,
+		 * so we just use 0 as the third parameter */
+		lnet_finalize(msg->msg_rxpeer->lp_ni, msg, 0);
 	}
 }
 
