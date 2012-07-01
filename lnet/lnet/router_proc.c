@@ -58,7 +58,7 @@ enum {
 /*
  * NB: max allowed LNET_CPT_BITS is 8 on 64-bit system and 2 on 32-bit system
  */
-#define LNET_PROC_CPT_BITS	LNET_CPT_BITS
+#define LNET_PROC_CPT_BITS	(LNET_CPT_BITS + 1)
 /* change version, 16 bits or 8 bits */
 #define LNET_PROC_VER_BITS	MAX(((MIN(LNET_LOFFT_BITS, 64)) / 4), 8)
 
@@ -413,8 +413,8 @@ int LL_PROC_PROTO(proc_lnet_peers)
 	char			*s;
 	int			cpt  = LNET_PROC_CPT_GET(*ppos);
 	int			ver  = LNET_PROC_VER_GET(*ppos);
-	int			hoff = LNET_PROC_HOFF_GET(*ppos);
 	int			hash = LNET_PROC_HASH_GET(*ppos);
+	int			hoff = LNET_PROC_HOFF_GET(*ppos);
 	int			rc = 0;
 	int			len;
 
@@ -424,8 +424,10 @@ int LL_PROC_PROTO(proc_lnet_peers)
 	if (*lenp == 0)
 		return 0;
 
-	if (cpt >= LNET_CPT_NUMBER)
+	if (cpt >= LNET_CPT_NUMBER) {
+		*lenp = 0;
 		return 0;
+	}
 
         LIBCFS_ALLOC(tmpstr, tmpsiz);
         if (tmpstr == NULL)
@@ -442,11 +444,14 @@ int LL_PROC_PROTO(proc_lnet_peers)
 
 		hoff++;
 	} else {
-		struct lnet_peer	*peer	= NULL;
-		cfs_list_t		*p	= NULL;
-		int			skip	= hoff - 1;
-
+		struct lnet_peer	*peer;
+		cfs_list_t		*p;
+		int			skip;
  again:
+		p = NULL;
+		peer = NULL;
+		skip = hoff - 1;
+
 		lnet_net_lock(cpt);
 		ptable = the_lnet.ln_peer_tables[cpt];
 		if (hoff == 1)
@@ -536,14 +541,14 @@ int LL_PROC_PROTO(proc_lnet_peers)
 
 		} else { /* peer is NULL */
 			lnet_net_unlock(cpt);
+		}
 
-			if (hash == LNET_PEER_HASH_SIZE &&
-			    cpt < LNET_CPT_NUMBER - 1) {
-				cpt++;
-				hash = 0;
-				hoff = 1;
+		if (hash == LNET_PEER_HASH_SIZE) {
+			cpt++;
+			hash = 0;
+			hoff = 1;
+			if (peer == NULL && cpt < LNET_CPT_NUMBER)
 				goto again;
-			}
 		}
         }
 
