@@ -112,6 +112,8 @@ enum local_oid {
         OSD_FS_ROOT_OID         = 13UL,
         ACCT_USER_OID           = 15UL,
         ACCT_GROUP_OID          = 16UL,
+	LFSCK_BOOKMARK_OID	= 17UL,
+	OTABLE_IT_OID		= 18UL,
         OFD_LAST_RECV_OID       = 19UL,
         OFD_GROUP0_LAST_OID     = 20UL,
         OFD_GROUP4K_LAST_OID    = 20UL+4096,
@@ -126,6 +128,12 @@ static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)
         fid->f_seq = FID_SEQ_LOCAL_FILE;
         fid->f_oid = oid;
         fid->f_ver = 0;
+}
+
+static inline int fid_is_otable_it(const struct lu_fid *fid)
+{
+	return unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
+			fid_oid(fid) == OTABLE_IT_OID);
 }
 
 static inline int fid_is_acct(const struct lu_fid *fid)

@@ -52,6 +52,7 @@
 # include <lustre_quota.h>
 #endif
 #include <lustre_fsfilt.h>
+#include <lustre/lustre_lfsck_user.h>
 
 #ifdef HAVE_QUOTA_SUPPORT
 /* quota stuff */
@@ -96,6 +97,29 @@ struct mdd_dot_lustre_objs {
         struct mdd_object *mdd_obf;
 };
 
+extern const char lfsck_bookmark_name[];
+
+struct md_lfsck {
+	cfs_mutex_t	      ml_mutex;
+	cfs_spinlock_t	      ml_lock;
+	struct ptlrpc_thread  ml_thread;
+	struct dt_object     *ml_bookmark_obj;
+	struct dt_object     *ml_it_obj;
+	__u32		      ml_new_scanned;
+	/* Arguments for low layer iteration. */
+	__u32		      ml_args;
+
+	/* Raw value for LFSCK speed limit. */
+	__u32		      ml_speed_limit;
+
+	/* Schedule for every N objects. */
+	__u32		      ml_sleep_rate;
+
+	/* Sleep N jiffies for each schedule. */
+	__u32		      ml_sleep_jif;
+	__u16		      ml_version;
+};
+
 struct mdd_device {
         struct md_device                 mdd_md_dev;
         struct dt_device                *mdd_child;
@@ -111,7 +135,8 @@ struct mdd_device {
         unsigned long                    mdd_atime_diff;
         struct mdd_object               *mdd_dot_lustre;
         struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
-        unsigned int                     mdd_sync_permission;
+	struct md_lfsck			 mdd_lfsck;
+	unsigned int			 mdd_sync_permission;
 };
 
 enum mod_flags {
@@ -435,6 +460,14 @@ int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
                     void *cookie);
 int mdd_txn_start_cb(const struct lu_env *env, struct thandle *,
                      void *cookie);
+
+/* mdd_lfsck.c */
+void mdd_lfsck_set_speed(struct md_lfsck *lfsck, __u32 limit);
+int mdd_lfsck_start(const struct lu_env *env, struct md_lfsck *lfsck,
+		    struct lfsck_start *start);
+int mdd_lfsck_stop(const struct lu_env *env, struct md_lfsck *lfsck);
+int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd);
+void mdd_lfsck_cleanup(const struct lu_env *env, struct mdd_device *mdd);
 
 /* mdd_device.c */
 struct lu_object *mdd_object_alloc(const struct lu_env *env,

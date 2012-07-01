@@ -483,20 +483,22 @@ struct named_oid {
 };
 
 static const struct named_oid oids[] = {
-        { FLD_INDEX_OID,        "" /* "fld" */ },
-        { FID_SEQ_CTL_OID,      "" /* "seq_ctl" */ },
-        { FID_SEQ_SRV_OID,      "" /* "seq_srv" */ },
-        { MDD_ROOT_INDEX_OID,   "" /* "ROOT" */ },
-        { MDD_ORPHAN_OID,       "" /* "PENDING" */ },
-        { MDD_LOV_OBJ_OID,      "" /* LOV_OBJID */ },
-        { MDD_CAPA_KEYS_OID,    "" /* CAPA_KEYS */ },
+	{ FLD_INDEX_OID,        "" /* "fld" */ },
+	{ FID_SEQ_CTL_OID,      "" /* "seq_ctl" */ },
+	{ FID_SEQ_SRV_OID,      "" /* "seq_srv" */ },
+	{ MDD_ROOT_INDEX_OID,   "" /* "ROOT" */ },
+	{ MDD_ORPHAN_OID,       "" /* "PENDING" */ },
+	{ MDD_LOV_OBJ_OID,      "" /* LOV_OBJID */ },
+	{ MDD_CAPA_KEYS_OID,    "" /* CAPA_KEYS */ },
 	{ MDT_LAST_RECV_OID,    LAST_RCVD },
-        { OFD_LAST_RECV_OID,    "" /* LAST_RCVD */ },
+	{ LFSCK_BOOKMARK_OID,   "" /* "lfsck_bookmark" */ },
+	{ OTABLE_IT_OID,	"" /* "otable iterator" */},
+	{ OFD_LAST_RECV_OID,    "" /* LAST_RCVD */ },
 	{ OFD_LAST_GROUP_OID,   "LAST_GROUP" },
-        { LLOG_CATALOGS_OID,    "" /* "CATALOGS" */ },
-        { MGS_CONFIGS_OID,      "" /* MOUNT_CONFIGS_DIR */ },
+	{ LLOG_CATALOGS_OID,    "" /* "CATALOGS" */ },
+	{ MGS_CONFIGS_OID,      "" /* MOUNT_CONFIGS_DIR */ },
 	{ OFD_HEALTH_CHECK_OID, HEALTH_CHECK },
-        { 0,                    NULL }
+	{ 0,                    NULL }
 };
 
 static char *oid2name(const unsigned long oid)
