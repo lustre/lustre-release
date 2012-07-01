@@ -1162,7 +1162,7 @@ lnet_prune_rc_data(int wait_unlink)
 	while (!cfs_list_empty(&the_lnet.ln_rcd_zombie)) {
 		cfs_list_for_each_entry_safe(rcd, tmp, &the_lnet.ln_rcd_zombie,
 					     rcd_list) {
-			if (!LNetHandleIsInvalid(rcd->rcd_mdh))
+			if (LNetHandleIsInvalid(rcd->rcd_mdh))
 				cfs_list_move(&rcd->rcd_list, &head);
 		}
 
@@ -1179,7 +1179,7 @@ lnet_prune_rc_data(int wait_unlink)
 		}
 
 		if (!wait_unlink)
-			break;
+			return;
 
 		i++;
 		CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET,
@@ -1188,6 +1188,8 @@ lnet_prune_rc_data(int wait_unlink)
 
 		lnet_net_lock(LNET_LOCK_EX);
 	}
+
+	lnet_net_unlock(LNET_LOCK_EX);
 }
 
 
