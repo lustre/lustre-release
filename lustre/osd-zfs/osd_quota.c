@@ -27,7 +27,7 @@
  * Author: Johann Lombardi <johann@whamcloud.com>
  */
 
-#include <lu_quota.h>
+#include <lquota.h>
 #include <obd.h>
 #include "udmu.h"
 #include "osd_internal.h"
