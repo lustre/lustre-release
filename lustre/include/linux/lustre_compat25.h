@@ -935,5 +935,12 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 # define TIMES_SET_FLAGS (ATTR_MTIME_SET | ATTR_ATIME_SET)
 #endif
 
+#ifndef HAVE_SELINUX_IS_ENABLED
+static inline bool selinux_is_enabled(void)
+{
+        return 0;
+}
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

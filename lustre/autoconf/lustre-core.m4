@@ -2036,6 +2036,22 @@ AC_DEFUN([LC_SET_CPUS_ALLOWED],
                            [set_cpus_allowed is exported by the kernel])],
                 [AC_MSG_RESULT([no])] )])
 
+# 2.6.32 introduces selinux_is_enabled()
+AC_DEFUN([LC_SELINUX_IS_ENABLED],
+[AC_MSG_CHECKING([if selinux_is_enabled is available])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/selinux.h>
+],[
+        selinux_is_enabled();
+],[
+        AC_MSG_RESULT([yes])
+        AC_DEFINE(HAVE_SELINUX_IS_ENABLED, 1,
+                [selinux_is_enabled is defined])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
 #
 # LC_D_OBTAIN_ALIAS
 # starting from 2.6.28 kernel replaces d_alloc_anon() with
@@ -2373,6 +2389,7 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_BLK_QUEUE_MAX_SEGMENTS
          LC_SET_CPUS_ALLOWED
          LC_CACHE_UPCALL
+         LC_SELINUX_IS_ENABLED
 
          # 2.6.35
          LC_FILE_FSYNC
