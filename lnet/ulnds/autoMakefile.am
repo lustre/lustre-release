@@ -34,4 +34,4 @@
 # Lustre is a trademark of Sun Microsystems, Inc.
 #
 
-SUBDIRS = socklnd ptllnd
+SUBDIRS = socklnd

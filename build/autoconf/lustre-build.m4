@@ -286,23 +286,6 @@ AC_SUBST(LIBCFS_INCLUDE_DIR)
 ])
 
 #
-# LB_CONFIG_CRAY_XT3
-#
-# Enable Cray XT3 features
-#
-AC_DEFUN([LB_CONFIG_CRAY_XT3],
-[AC_MSG_CHECKING([whether to build Cray XT3 features])
-AC_ARG_ENABLE([cray_xt3],
-	AC_HELP_STRING([--enable-cray-xt3],
-			[enable building of Cray XT3 features]),
-	[enable_cray_xt3='yes'],[enable_cray_xt3='no'])
-AC_MSG_RESULT([$enable_cray_xt3])
-if test x$enable_cray_xt3 != xno; then
-        AC_DEFINE(CRAY_XT3, 1, Enable Cray XT3 Features)
-fi
-])
-
-#
 # LB_CONFIG_BGL
 #
 # Enable BGL features
@@ -715,7 +698,6 @@ AM_CONDITIONAL(DOC, test x$ENABLE_DOC = x1)
 AM_CONDITIONAL(INIT_SCRIPTS, test x$ENABLE_INIT_SCRIPTS = "x1")
 AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
-AM_CONDITIONAL(CRAY_XT3, test x$enable_cray_xt3 = "xyes")
 AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 AM_CONDITIONAL(USES_DPKG, test x$uses_dpkg = "xyes")
 AM_CONDITIONAL(ARCH_x86, test x$target_cpu != "xpowerpc")
@@ -773,7 +755,6 @@ LB_LIBCFS_DIR
 
 LB_INCLUDE_RULES
 
-LB_CONFIG_CRAY_XT3
 LB_CONFIG_BGL
 LB_PATH_DEFAULTS
 

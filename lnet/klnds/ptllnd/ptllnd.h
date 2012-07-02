@@ -73,9 +73,6 @@
 #include <lnet/lib-lnet.h>
 #include <lnet/lnet-sysctl.h>
 #include <portals/p30.h>
-#ifdef CRAY_XT3
-#include <portals/ptltrace.h>
-#endif
 #include <lnet/ptllnd.h>        /* Depends on portals/p30.h */
 
 /*
@@ -111,11 +108,6 @@ typedef struct
         int             *kptl_peer_hash_table_size; /* # slots in peer hash table */
         int             *kptl_reschedule_loops; /* scheduler yield loops */
         int             *kptl_ack_puts;         /* make portals ack PUTs */
-#ifdef CRAY_XT3
-        int             *kptl_ptltrace_on_timeout; /* dump pltrace on timeout? */
-        int             *kptl_ptltrace_on_fail;    /* dump pltrace on PTL_NAL_FAILED? */
-        char           **kptl_ptltrace_basename;  /* ptltrace dump file basename */
-#endif
 #ifdef PJK_DEBUGGING
         int             *kptl_simulation_bitmap;/* simulation bitmap */
 #endif
@@ -150,9 +142,6 @@ typedef struct kptl_rx                          /* receive message */
         int                     rx_nob;         /* received message size */
         unsigned long           rx_treceived;   /* time received */
         ptl_process_id_t        rx_initiator;   /* sender's address */
-#ifdef CRAY_XT3
-        ptl_uid_t               rx_uid;         /* sender's uid */
-#endif
         kptl_peer_t            *rx_peer;        /* pointer to peer */
         char                    rx_space[0];    /* copy of incoming request */
 } kptl_rx_t;
@@ -282,7 +271,6 @@ struct kptl_data
         cfs_list_t              kptl_sched_rxbq;       /* rxb requiring reposting */
 
         cfs_waitq_t             kptl_watchdog_waitq;   /* watchdog sleeps here */
-        cfs_atomic_t            kptl_needs_ptltrace;   /* watchdog thread to dump ptltrace */
 
         kptl_rx_buffer_pool_t   kptl_rx_buffer_pool;   /* rx buffer pool */
         cfs_mem_cache_t*        kptl_rx_cache;         /* rx descripter cache */
@@ -340,17 +328,6 @@ kptllnd_lnet2ptlnid(lnet_nid_t lnet_nid)
                           LNET_NIDADDR(lnet_nid));
 #else
 	return LNET_NIDADDR(lnet_nid);
-#endif
-}
-
-static inline void
-kptllnd_schedule_ptltrace_dump (void)
-{
-#ifdef CRAY_XT3
-        if (*kptllnd_tunables.kptl_ptltrace_on_fail) {
-                cfs_atomic_inc(&kptllnd_data.kptl_needs_ptltrace);
-                cfs_waitq_signal(&kptllnd_data.kptl_watchdog_waitq);
-        }
 #endif
 }
 

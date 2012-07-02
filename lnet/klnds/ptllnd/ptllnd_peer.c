@@ -863,7 +863,6 @@ kptllnd_peer_check_sends (kptl_peer_t *peer)
         /* Nuke everything (including tx we were trying) */
         kptllnd_peer_close(peer, -EIO);
         kptllnd_tx_decref(tx);
-        kptllnd_schedule_ptltrace_dump();
 }
 
 kptl_tx_t *
@@ -998,11 +997,6 @@ kptllnd_peer_check_bucket (int idx, int stamp)
                        (tx->tx_tposted == 0) ? "not " : "",
                        (tx->tx_tposted == 0) ? 0UL : (jiffies - tx->tx_tposted),
                        *kptllnd_tunables.kptl_timeout);
-
-#ifdef CRAY_XT3
-                if (*kptllnd_tunables.kptl_ptltrace_on_timeout)
-                        kptllnd_dump_ptltrace();
-#endif
 
                 kptllnd_tx_decref(tx);
 

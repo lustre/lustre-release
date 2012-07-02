@@ -104,19 +104,6 @@ static int ack_puts = 0;
 CFS_MODULE_PARM(ack_puts, "i", int, 0644,
                 "get portals to ack all PUTs");
 
-#ifdef CRAY_XT3
-static int ptltrace_on_timeout = 0;
-CFS_MODULE_PARM(ptltrace_on_timeout, "i", int, 0644,
-                "dump ptltrace on timeout");
-
-static int ptltrace_on_fail = 1;
-CFS_MODULE_PARM(ptltrace_on_fail, "i", int, 0644,
-                "dump ptltrace on Portals failure");
-
-static char *ptltrace_basename = "/tmp/lnet-ptltrace";
-CFS_MODULE_PARM(ptltrace_basename, "s", charp, 0644,
-                "ptltrace dump file basename");
-#endif
 #ifdef PJK_DEBUGGING
 static int simulation_bitmap = 0;
 CFS_MODULE_PARM(simulation_bitmap, "i", int, 0444,
@@ -141,11 +128,6 @@ kptl_tunables_t kptllnd_tunables = {
         .kptl_peer_hash_table_size   = &peer_hash_table_size,
         .kptl_reschedule_loops       = &reschedule_loops,
         .kptl_ack_puts               = &ack_puts,
-#ifdef CRAY_XT3
-        .kptl_ptltrace_on_timeout    = &ptltrace_on_timeout,
-        .kptl_ptltrace_on_fail       = &ptltrace_on_fail,
-        .kptl_ptltrace_basename      = &ptltrace_basename,
-#endif
 #ifdef PJK_DEBUGGING
         .kptl_simulation_bitmap      = &simulation_bitmap,
 #endif
@@ -153,17 +135,6 @@ kptl_tunables_t kptllnd_tunables = {
 
 
 #if defined(CONFIG_SYSCTL) && !CFS_SYSFS_MODULE_PARM
-#ifdef CRAY_XT3
-static char ptltrace_basename_space[1024];
-
-static void
-kptllnd_init_strtunable(char **str_param, char *space, int size)
-{
-        strncpy(space, *str_param, size);
-        space[size - 1] = 0;
-        *str_param = space;
-}
-#endif
 
 #ifndef HAVE_SYSCTL_UNNUMBERED
 
@@ -332,33 +303,6 @@ static cfs_sysctl_table_t kptllnd_ctl_table[] = {
                 .mode     = 0644,
                 .proc_handler = &proc_dointvec
         },
-#ifdef CRAY_XT3
-        {
-                .ctl_name = KPTLLND_TRACETIMEOUT,
-                .procname = "ptltrace_on_timeout",
-                .data     = &ptltrace_on_timeout,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KPTLLND_TRACEFAIL,
-                .procname = "ptltrace_on_fail",
-                .data     = &ptltrace_on_fail,
-                .maxlen   = sizeof(int),
-                .mode     = 0644,
-                .proc_handler = &proc_dointvec
-        },
-        {
-                .ctl_name = KPTLLND_TRACEBASENAME,
-                .procname = "ptltrace_basename",
-                .data     = ptltrace_basename_space,
-                .maxlen   = sizeof(ptltrace_basename_space),
-                .mode     = 0644,
-                .proc_handler = &proc_dostring,
-                .strategy = &sysctl_string
-        },
-#endif
 #ifdef PJK_DEBUGGING
         {
                 .ctl_name = KPTLLND_SIMULATION_BITMAP,
@@ -388,11 +332,6 @@ static cfs_sysctl_table_t kptllnd_top_ctl_table[] = {
 int
 kptllnd_tunables_init ()
 {
-#ifdef CRAY_XT3
-        kptllnd_init_strtunable(&ptltrace_basename,
-                                ptltrace_basename_space,
-                                sizeof(ptltrace_basename_space));
-#endif
         kptllnd_tunables.kptl_sysctl =
                 cfs_register_sysctl_table(kptllnd_top_ctl_table, 0);
 

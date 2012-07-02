@@ -299,7 +299,6 @@ kptllnd_active_rdma(kptl_rx_t *rx, lnet_msg_t *lntmsg, int type,
                 kptllnd_peer_close(peer, -EIO);
                 /* Everything (including this RDMA) queued on the peer will
                  * be completed with failure */
-                kptllnd_schedule_ptltrace_dump();
         }
 
         return 0;
@@ -545,17 +544,6 @@ kptllnd_recv (lnet_ni_t *ni, void *private, lnet_msg_t *lntmsg, int delayed,
         LASSERT (!(kiov != NULL && iov != NULL)); /* never both */
         LASSERT (niov <= PTL_MD_MAX_IOV);       /* !!! */
 
-#ifdef CRAY_XT3
-        if (lntmsg != NULL &&
-            rx->rx_uid != 0) {
-                /* Set the UID if the sender's uid isn't 0; i.e. non-root
-                 * running in userspace (e.g. a catamount node; linux kernel
-                 * senders, including routers have uid 0).  If this is a lustre
-                 * RPC request, this tells lustre not to trust the creds in the
-                 * RPC message body. */
-                lnet_set_msg_uid(ni, lntmsg, rx->rx_uid);
-        }
-#endif
         switch(rxmsg->ptlm_type)
         {
         default:
@@ -697,24 +685,7 @@ kptllnd_watchdog(void *arg)
         /* threads shut down in phase 2 after all peers have been destroyed */
         while (kptllnd_data.kptl_shutdown < 2) {
 
-                /* add a check for needs ptltrace
-                 * yes, this is blatant hijacking of this thread
-                 * we can't dump directly from tx or rx _callbacks as it
-                 * deadlocks portals and takes out the node
-                */
-
-                if (cfs_atomic_read(&kptllnd_data.kptl_needs_ptltrace)) {
-#ifdef CRAY_XT3
-                        kptllnd_dump_ptltrace();
-                        /* we only dump once, no matter how many pending */
-                        cfs_atomic_set(&kptllnd_data.kptl_needs_ptltrace, 0);
-#else
-                        LBUG();
-#endif
-                }
-
                 timeout = (int)(deadline - jiffies);
-
                 if (timeout <= 0) {
                         const int n = 4;
                         const int p = 1;

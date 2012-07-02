@@ -1351,9 +1351,6 @@ LNetInit(void)
 #else
         /* Register LNDs
          * NB the order here determines default 'networks=' order */
-# ifdef CRAY_XT3
-        LNET_REGISTER_ULND(the_ptllnd);
-# endif
 # ifdef HAVE_LIBPTHREAD
         LNET_REGISTER_ULND(the_tcplnd);
 # endif

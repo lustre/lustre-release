@@ -393,9 +393,6 @@ lnet_msg_alloc (void)
 	if (msg != NULL) {
 		/* NULL pointers, clear flags etc */
 		memset(msg, 0, sizeof(*msg));
-#ifdef CRAY_XT3
-		msg->msg_ev.uid = LNET_UID_ANY;
-#endif
 	}
 	return msg;
 }
@@ -507,12 +504,6 @@ lnet_msg_alloc(void)
         LIBCFS_ALLOC(msg, sizeof(*msg));
 
         /* no need to zero, LIBCFS_ALLOC does for us */
-
-#ifdef CRAY_XT3
-        if (msg != NULL) {
-                msg->msg_ev.uid = LNET_UID_ANY;
-        }
-#endif
         return (msg);
 }
 
@@ -715,15 +706,6 @@ do {                                                                    \
         if (&(lnd) != &the_lolnd)                                       \
                 lnet_register_lnd(&(lnd));                              \
 } while (0)
-#endif
-
-#ifdef CRAY_XT3
-inline static void
-lnet_set_msg_uid(lnet_ni_t *ni, lnet_msg_t *msg, lnet_uid_t uid)
-{
-        LASSERT (msg->msg_ev.uid == LNET_UID_ANY);
-        msg->msg_ev.uid = uid;
-}
 #endif
 
 extern int lnet_cpt_of_nid_locked(lnet_nid_t nid);

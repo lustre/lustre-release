@@ -773,7 +773,6 @@ kptllnd_base_startup (void)
 
         cfs_rwlock_init(&kptllnd_data.kptl_peer_rw_lock);
         cfs_waitq_init(&kptllnd_data.kptl_watchdog_waitq);
-        cfs_atomic_set(&kptllnd_data.kptl_needs_ptltrace, 0);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_closing_peers);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_zombie_peers);
 

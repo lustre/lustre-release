@@ -741,7 +741,6 @@ AM_CONDITIONAL(BUILD_MXLND, test x$MXLND = "xmxlnd")
 AM_CONDITIONAL(BUILD_O2IBLND, test x$O2IBLND = "xo2iblnd")
 AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
 AM_CONDITIONAL(BUILD_PTLLND, test x$PTLLND = "xptllnd")
-AM_CONDITIONAL(BUILD_UPTLLND, test x$UPTLLND = "xptllnd")
 AM_CONDITIONAL(BUILD_USOCKLND, test x$USOCKLND = "xusocklnd")
 ])
 
@@ -781,7 +780,6 @@ lnet/selftest/autoMakefile
 lnet/ulnds/Makefile
 lnet/ulnds/autoMakefile
 lnet/ulnds/socklnd/Makefile
-lnet/ulnds/ptllnd/Makefile
 lnet/utils/Makefile
 lnet/include/lnet/darwin/Makefile
 ])

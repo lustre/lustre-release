@@ -16,9 +16,7 @@ endif # MPITESTS
 
 noinst_PROGRAMS = sanity
 
-if !CRAY_XT3
 noinst_PROGRAMS += recovery_small replay_single replay_ost_single
-endif # !CRAY_XT3
 
 liblustre_testdir=$(libdir)/lustre/liblustre/tests
 liblustre_test_PROGRAMS = $(noinst_PROGRAMS)

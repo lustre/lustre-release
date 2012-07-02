@@ -832,9 +832,6 @@ struct ptlrpc_request {
         struct ptlrpc_reply_state *rq_reply_state;
         /** incoming request buffer */
         struct ptlrpc_request_buffer_desc *rq_rqbd;
-#ifdef CRAY_XT3
-        __u32                rq_uid;            /* peer uid, used in MDS only */
-#endif
 
         /** client-only incoming reply */
         lnet_handle_md_t     rq_reply_md_h;

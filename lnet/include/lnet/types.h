@@ -70,11 +70,6 @@ typedef __u32 lnet_pid_t;
 /** wildcard PID that matches any lnet_pid_t */
 #define LNET_PID_ANY      ((lnet_pid_t) -1)
 
-#ifdef CRAY_XT3
-typedef __u32 lnet_uid_t;
-#define LNET_UID_ANY      ((lnet_uid_t) -1)
-#endif
-
 #define LNET_PID_RESERVED 0xf0000000 /* reserved bits in PID */
 #define LNET_PID_USERFLAG 0x80000000 /* set in userspace peers */
 
@@ -460,10 +455,6 @@ typedef struct {
          * \see lnet_md_t::options
          */
         unsigned int        offset;
-#ifdef CRAY_XT3
-        lnet_uid_t          uid;
-#endif
-
         /**
          * The sequence number for this event. Sequence numbers are unique
          * to each event.

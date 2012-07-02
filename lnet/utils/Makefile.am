@@ -86,9 +86,6 @@ LND_LIBS =
 if BUILD_USOCKLND
 LND_LIBS +=    $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
 endif
-if BUILD_UPTLLND
-LND_LIBS +=   $(top_builddir)/lnet/ulnds/ptllnd/libptllnd.a
-endif
 
 if LIBLUSTRE
 LIB_SELFTEST = $(top_builddir)/libcfs/libcfs/libcfs.a $(top_builddir)/lnet/lnet/liblnet.a $(top_builddir)/lnet/selftest/libselftest.a

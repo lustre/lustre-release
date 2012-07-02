@@ -7,7 +7,6 @@ kptllnd-objs := ptllnd.o                \
                 ptllnd_modparams.o      \
                 ptllnd_peer.o           \
                 ptllnd_rx_buf.o         \
-                ptllnd_tx.o		\
-                ptllnd_ptltrace.o
+                ptllnd_tx.o
 
 @INCLUDE_RULES@

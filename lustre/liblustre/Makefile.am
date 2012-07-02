@@ -26,9 +26,6 @@ LND_LIBS =
 if BUILD_USOCKLND
 LND_LIBS +=    $(top_builddir)/lnet/ulnds/socklnd/libsocklnd.a
 endif
-if BUILD_UPTLLND
-LND_LIBS +=   $(top_builddir)/lnet/ulnds/ptllnd/libptllnd.a
-endif
 
 LNET_LIBS =   $(top_builddir)/lnet/utils/libuptlctl.a \
               $(top_builddir)/lnet/lnet/liblnet.a \

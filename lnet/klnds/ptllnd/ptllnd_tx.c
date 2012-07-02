@@ -486,7 +486,6 @@ kptllnd_tx_callback(ptl_event_t *ev)
                        ev->ni_fail_type, unlinked);
                 tx->tx_status = -EIO; 
                 kptllnd_peer_close(peer, -EIO);
-                kptllnd_schedule_ptltrace_dump();
         }
 
         if (!unlinked)

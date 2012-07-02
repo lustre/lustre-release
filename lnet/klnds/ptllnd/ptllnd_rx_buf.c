@@ -428,7 +428,6 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
                        kptllnd_evtype2str(ev->type), ev->type, rxb,
                        kptllnd_errtype2str(ev->ni_fail_type),
                        ev->ni_fail_type, unlinked);
-                kptllnd_schedule_ptltrace_dump();
         } else if (ev->type == PTL_EVENT_PUT_END &&
                    !rxbp->rxbp_shutdown) {
 
@@ -475,9 +474,6 @@ kptllnd_rx_buffer_callback (ptl_event_t *ev)
 
                         rx->rx_initiator = ev->initiator;
                         rx->rx_treceived = jiffies;
-#ifdef CRAY_XT3
-                        rx->rx_uid = ev->uid;
-#endif
                         /* Queue for attention */
                         cfs_spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
                                               flags);
@@ -531,7 +527,6 @@ kptllnd_nak (ptl_process_id_t dest)
         if (rc != PTL_OK) {
                 CWARN("Can't NAK %s: put failed %s(%d)\n",
                       kptllnd_ptlid2str(dest), kptllnd_errtype2str(rc), rc);
-                kptllnd_schedule_ptltrace_dump();
         }
 }
 

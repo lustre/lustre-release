@@ -1432,17 +1432,10 @@ int ptlrpc_disconnect_import(struct obd_import *imp, int noclose)
                  * if the client doesn't know the server is gone yet. */
                 req->rq_no_resend = 1;
 
-#ifndef CRAY_XT3
                 /* We want client umounts to happen quickly, no matter the
                    server state... */
                 req->rq_timeout = min_t(int, req->rq_timeout,
                                         INITIAL_CONNECT_TIMEOUT);
-#else
-                /* ... but we always want liblustre clients to nicely
-                   disconnect, so only use the adaptive value. */
-                if (AT_OFF)
-                        req->rq_timeout = obd_timeout / 3;
-#endif
 
                 IMPORT_SET_STATE(imp, LUSTRE_IMP_CONNECTING);
                 req->rq_send_state =  LUSTRE_IMP_CONNECTING;

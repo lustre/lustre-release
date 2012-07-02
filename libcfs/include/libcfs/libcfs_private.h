@@ -287,18 +287,10 @@ do {                                                                           \
 # endif /* LIBCFS_DEBUG */
 # define KLASSERT(e) ((void)0)
 # define printk printf
-# ifdef CRAY_XT3                                /* buggy calloc! */
-#  define LIBCFS_ALLOC_GFP(ptr, size, mask)	\
-   do {						\
-	(ptr) = malloc(size);			\
-	memset(ptr, 0, size);			\
-   } while (0)
-# else
-#  define LIBCFS_ALLOC_GFP(ptr, size, mask)	\
-   do {						\
+#define LIBCFS_ALLOC_GFP(ptr, size, mask)	\
+do {						\
 	(ptr) = calloc(1, size);		\
-   } while (0)
-# endif
+} while (0)
 # define LIBCFS_FREE(ptr, size) do { free(ptr); } while((size) - (size))
 # define LIBCFS_ALLOC(ptr, size)				\
 	 LIBCFS_ALLOC_GFP(ptr, size, 0)

@@ -30,9 +30,6 @@ build_obj_list ../../libcfs/libcfs libcfsutil.a
 if $(echo "$LND_LIBS" | grep "socklnd" >/dev/null) ; then
 	build_obj_list ../../lnet/ulnds/socklnd libsocklnd.a
 fi
-if $(echo "$LND_LIBS" | grep "ptllnd" >/dev/null) ; then
-	build_obj_list ../../lnet/ulnds/ptllnd libptllnd.a
-fi
 build_obj_list ../../lnet/lnet liblnet.a
 build_obj_list ../../lnet/selftest libselftest.a
 
