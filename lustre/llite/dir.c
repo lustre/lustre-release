@@ -245,7 +245,6 @@ static int ll_dir_readpage(struct file *file, struct page *page0)
                                                GFP_KERNEL);
                 if (ret == 0) {
                         unlock_page(page);
-                        page_cache_get(page);
                         if (ll_pagevec_add(&lru_pvec, page) == 0)
                                 ll_pagevec_lru_add_file(&lru_pvec);
                 } else {
