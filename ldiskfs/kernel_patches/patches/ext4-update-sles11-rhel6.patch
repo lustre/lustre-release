@@ -1,6 +1,6 @@
 diff -urpN linux-stage.orig/fs/ext4/balloc.c linux-stage/fs/ext4/balloc.c
---- linux-stage.orig/fs/ext4/balloc.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/balloc.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/balloc.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/balloc.c	2012-07-02 11:15:32.000000000 -0400
 @@ -97,7 +97,7 @@ unsigned ext4_init_block_bitmap(struct s
  		/* If checksum is bad mark all blocks used to prevent allocation
  		 * essentially implementing a per-group read-only flag. */
@@ -79,8 +79,8 @@ diff -urpN linux-stage.orig/fs/ext4/balloc.c linux-stage/fs/ext4/balloc.c
  				   (ext4_fsblk_t)(block + i));
  			BUFFER_TRACE(bitmap_bh, "bit already cleared");
 diff -urpN linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
---- linux-stage.orig/fs/ext4/dir.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/dir.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/dir.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/dir.c	2012-07-02 11:15:32.000000000 -0400
 @@ -70,28 +70,29 @@ int ext4_check_dir_entry(const char *fun
  	const int rlen = ext4_rec_len_from_disk(de->rec_len,
  						dir->i_sb->s_blocksize);
@@ -137,8 +137,8 @@ diff -urpN linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
  					   inode->i_ino,
  					   (unsigned long long) filp->f_pos);
 diff -urpN linux-stage.orig/fs/ext4/ext4_extents.h linux-stage/fs/ext4/ext4_extents.h
---- linux-stage.orig/fs/ext4/ext4_extents.h	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/ext4_extents.h	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/ext4_extents.h	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/ext4_extents.h	2012-07-02 11:15:32.000000000 -0400
 @@ -138,7 +138,7 @@ typedef int (*ext_prepare_callback)(stru
  #define EXT_REPEAT     2
  
@@ -149,8 +149,8 @@ diff -urpN linux-stage.orig/fs/ext4/ext4_extents.h linux-stage/fs/ext4/ext4_exte
  /*
   * EXT_INIT_MAX_LEN is the maximum number of blocks we can have in an
 diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
---- linux-stage.orig/fs/ext4/ext4.h	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/ext4.h	2012-02-16 08:06:56.000000000 -0500
+--- linux-stage.orig/fs/ext4/ext4.h	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/ext4.h	2012-07-02 11:15:32.000000000 -0400
 @@ -23,6 +23,7 @@
  #include <linux/quota.h>
  #include <linux/rwsem.h>
@@ -172,7 +172,36 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  /* data type for block offset of block group */
  typedef int ext4_grpblk_t;
  
-@@ -1110,6 +1117,9 @@ struct ext4_sb_info {
+@@ -970,7 +977,27 @@ struct ext4_super_block {
+ 	__u8	s_reserved_char_pad2;
+ 	__le16  s_reserved_pad;
+ 	__le64	s_kbytes_written;	/* nr of lifetime kilobytes written */
+-	__u32   s_reserved[160];        /* Padding to the end of the block */
++	__le32	s_snapshot_inum;	/* Inode number of active snapshot */
++	__le32	s_snapshot_id;		/* sequential ID of active snapshot */
++	__le64	s_snapshot_r_blocks_count; /* reserved blocks for active
++					      snapshot's future use */
++	__le32	s_snapshot_list;	/* inode number of the head of the
++					   on-disk snapshot list */
++#define EXT4_S_ERR_START offsetof(struct ext4_super_block, s_error_count)
++	__le32	s_error_count;		/* number of fs errors */
++	__le32	s_first_error_time;	/* first time an error happened */
++	__le32	s_first_error_ino;	/* inode involved in first error */
++	__le64	s_first_error_block;	/* block involved of first error */
++	__u8	s_first_error_func[32];	/* function where the error happened */
++	__le32	s_first_error_line;	/* line number where error happened */
++	__le32	s_last_error_time;	/* most recent time of an error */
++	__le32	s_last_error_ino;	/* inode involved in last error */
++	__le32	s_last_error_line;	/* line number where error happened */
++	__le64	s_last_error_block;	/* block involved of last error */
++	__u8	s_last_error_func[32];	/* function where the error happened */
++#define EXT4_S_ERR_END offsetof(struct ext4_super_block, s_mount_opts)
++	__u8	s_mount_opts[64];
++	__le32	s_reserved[112];        /* Padding to the end of the block */
+ };
+ 
+ #ifdef __KERNEL__
+@@ -1110,6 +1137,9 @@ struct ext4_sb_info {
  
  	/* workqueue for dio unwritten */
  	struct workqueue_struct *dio_unwritten_wq;
@@ -182,7 +211,7 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  };
  
  static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
-@@ -1431,6 +1441,23 @@ void ext4_get_group_no_and_offset(struct
+@@ -1431,6 +1461,23 @@ void ext4_get_group_no_and_offset(struct
  extern struct proc_dir_entry *ext4_proc_root;
  
  /*
@@ -206,7 +235,7 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
   * Function prototypes
   */
  
-@@ -1509,6 +1536,7 @@ extern struct buffer_head *ext4_read_ino
+@@ -1509,6 +1556,7 @@ extern struct buffer_head *ext4_read_ino
  extern void mark_bitmap_end(int start_bit, int end_bit, char *bitmap);
  
  /* mballoc.c */
@@ -214,7 +243,7 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  extern long ext4_mb_stats;
  extern long ext4_mb_max_to_scan;
  extern int ext4_mb_init(struct super_block *, int);
-@@ -1526,6 +1554,8 @@ extern int ext4_mb_add_groupinfo(struct 
+@@ -1526,6 +1574,8 @@ extern int ext4_mb_add_groupinfo(struct 
  extern int ext4_mb_get_buddy_cache_lock(struct super_block *, ext4_group_t);
  extern void ext4_mb_put_buddy_cache_lock(struct super_block *,
  						ext4_group_t, int);
@@ -223,7 +252,7 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  /* inode.c */
  int ext4_forget(handle_t *handle, int is_metadata, struct inode *inode,
  		struct buffer_head *bh, ext4_fsblk_t blocknr);
-@@ -1586,13 +1616,17 @@ extern int ext4_group_extend(struct supe
+@@ -1586,13 +1636,17 @@ extern int ext4_group_extend(struct supe
  				ext4_fsblk_t n_blocks_count);
  
  /* super.c */
@@ -244,8 +273,8 @@ diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
  	__attribute__ ((format (printf, 3, 4)));
  extern void ext4_grp_locked_error(struct super_block *, ext4_group_t,
 diff -urpN linux-stage.orig/fs/ext4/ext4_jbd2.c linux-stage/fs/ext4/ext4_jbd2.c
---- linux-stage.orig/fs/ext4/ext4_jbd2.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/ext4_jbd2.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/ext4_jbd2.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/ext4_jbd2.c	2012-07-02 11:15:32.000000000 -0400
 @@ -96,7 +96,7 @@ int __ext4_handle_dirty_metadata(const c
  		if (inode && inode_needs_sync(inode)) {
  			sync_dirty_buffer(bh);
@@ -256,8 +285,8 @@ diff -urpN linux-stage.orig/fs/ext4/ext4_jbd2.c linux-stage/fs/ext4/ext4_jbd2.c
  					   "inode=%lu, block=%llu",
  					   inode->i_ino,
 diff -urpN linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
---- linux-stage.orig/fs/ext4/extents.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/extents.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/extents.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/extents.c	2012-07-02 11:15:32.000000000 -0400
 @@ -437,7 +437,7 @@ static int __ext4_ext_check(const char *
  	return 0;
  
@@ -458,8 +487,8 @@ diff -urpN linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
  
  		/*
 diff -urpN linux-stage.orig/fs/ext4/ialloc.c linux-stage/fs/ext4/ialloc.c
---- linux-stage.orig/fs/ext4/ialloc.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/ialloc.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/ialloc.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/ialloc.c	2012-07-02 11:15:32.000000000 -0400
 @@ -76,7 +76,7 @@ unsigned ext4_init_inode_bitmap(struct s
  	/* If checksum is bad mark all blocks and inodes use to prevent
  	 * allocation, essentially implementing a per-group read-only flag. */
@@ -548,8 +577,8 @@ diff -urpN linux-stage.orig/fs/ext4/ialloc.c linux-stage/fs/ext4/ialloc.c
  	printk(KERN_NOTICE "ext4_test_bit(bit=%d, block=%llu) = %d\n",
  	       bit, (unsigned long long)bitmap_bh->b_blocknr,
 diff -urpN linux-stage.orig/fs/ext4/inode.c linux-stage/fs/ext4/inode.c
---- linux-stage.orig/fs/ext4/inode.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/inode.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/inode.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/inode.c	2012-07-02 11:15:32.000000000 -0400
 @@ -246,7 +246,7 @@ void ext4_delete_inode(struct inode *ino
  	inode->i_size = 0;
  	err = ext4_mark_inode_dirty(handle, inode);
@@ -672,8 +701,8 @@ diff -urpN linux-stage.orig/fs/ext4/inode.c linux-stage/fs/ext4/inode.c
  					" some EAs or run e2fsck.",
  					inode->i_ino);
 diff -urpN linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
---- linux-stage.orig/fs/ext4/mballoc.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/mballoc.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/mballoc.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/mballoc.c	2012-07-02 11:15:32.000000000 -0400
 @@ -862,8 +862,6 @@ static int ext4_mb_init_cache(struct pag
  
  	err = 0;
@@ -843,8 +872,8 @@ diff -urpN linux-stage.orig/fs/ext4/mballoc.c linux-stage/fs/ext4/mballoc.c
  			   "Block = %llu, count = %lu", block, count);
  		/* err = 0. ext4_std_error should be a no op */
 diff -urpN linux-stage.orig/fs/ext4/move_extent.c linux-stage/fs/ext4/move_extent.c
---- linux-stage.orig/fs/ext4/move_extent.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/move_extent.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/move_extent.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/move_extent.c	2012-07-02 11:15:32.000000000 -0400
 @@ -152,12 +152,12 @@ mext_check_null_inode(struct inode *inod
  	int ret = 0;
  
@@ -912,8 +941,8 @@ diff -urpN linux-stage.orig/fs/ext4/move_extent.c linux-stage/fs/ext4/move_exten
  					"sum of replaced: %llu requested: %llu",
  					*moved_len, len);
 diff -urpN linux-stage.orig/fs/ext4/namei.c linux-stage/fs/ext4/namei.c
---- linux-stage.orig/fs/ext4/namei.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/namei.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/namei.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/namei.c	2012-07-02 11:15:32.000000000 -0400
 @@ -394,8 +394,7 @@ dx_probe(const struct qstr *d_name, stru
  	if (root->info.hash_version != DX_HASH_TEA &&
  	    root->info.hash_version != DX_HASH_HALF_MD4 &&
@@ -1140,8 +1169,8 @@ diff -urpN linux-stage.orig/fs/ext4/namei.c linux-stage/fs/ext4/namei.c
  				old_dir->i_ino, old_dir->i_nlink, retval);
  	}
 diff -urpN linux-stage.orig/fs/ext4/resize.c linux-stage/fs/ext4/resize.c
---- linux-stage.orig/fs/ext4/resize.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/resize.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/resize.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/resize.c	2012-07-02 11:15:32.000000000 -0400
 @@ -48,63 +48,63 @@ static int verify_group_input(struct sup
  
  	ext4_get_group_no_and_offset(sb, start, NULL, &offset);
@@ -1400,9 +1429,17 @@ diff -urpN linux-stage.orig/fs/ext4/resize.c linux-stage/fs/ext4/resize.c
  		mutex_unlock(&EXT4_SB(sb)->s_resize_lock);
  		ext4_journal_stop(handle);
 diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
---- linux-stage.orig/fs/ext4/super.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/super.c	2012-02-16 08:05:47.000000000 -0500
-@@ -53,6 +53,8 @@
+--- linux-stage.orig/fs/ext4/super.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/super.c	2012-07-02 11:19:32.000000000 -0400
+@@ -48,11 +48,16 @@
+ #include "acl.h"
+ #include "mballoc.h"
+ 
++#define QFMT_OCFS2 3
++#define QFMT_VFS_V1 4
++
+ #define CREATE_TRACE_POINTS
+ #include <trace/events/ext4.h>
  
  struct proc_dir_entry *ext4_proc_root;
  static struct kset *ext4_kset;
@@ -1411,7 +1448,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  
  static int ext4_load_journal(struct super_block *, struct ext4_super_block *,
  			     unsigned long journal_devnum);
-@@ -337,7 +339,7 @@ static void ext4_handle_error(struct sup
+@@ -337,7 +342,7 @@ static void ext4_handle_error(struct sup
  			sb->s_id);
  }
  
@@ -1420,7 +1457,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  		const char *fmt, ...)
  {
  	va_list args;
-@@ -351,6 +353,42 @@ void ext4_error(struct super_block *sb, 
+@@ -351,6 +356,42 @@ void ext4_error(struct super_block *sb, 
  	ext4_handle_error(sb);
  }
  
@@ -1463,7 +1500,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  static const char *ext4_decode_error(struct super_block *sb, int errno,
  				     char nbuf[16])
  {
-@@ -454,7 +492,7 @@ void ext4_msg (struct super_block * sb, 
+@@ -454,7 +495,7 @@ void ext4_msg (struct super_block * sb, 
  	va_end(args);
  }
  
@@ -1472,7 +1509,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  		  const char *fmt, ...)
  {
  	va_list args;
-@@ -511,7 +549,7 @@ void ext4_update_dynamic_rev(struct supe
+@@ -511,7 +552,7 @@ void ext4_update_dynamic_rev(struct supe
  	if (le32_to_cpu(es->s_rev_level) > EXT4_GOOD_OLD_REV)
  		return;
  
@@ -1481,7 +1518,33 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  		     "updating to rev %d because of new feature flag, "
  		     "running e2fsck is recommended",
  		     EXT4_DYNAMIC_REV);
-@@ -1096,13 +1134,14 @@ enum {
+@@ -777,9 +818,22 @@ static inline void ext4_show_quota_optio
+ #if defined(CONFIG_QUOTA)
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 
+-	if (sbi->s_jquota_fmt)
+-		seq_printf(seq, ",jqfmt=%s",
+-		(sbi->s_jquota_fmt == QFMT_VFS_OLD) ? "vfsold" : "vfsv0");
++	if (sbi->s_jquota_fmt) {
++		char *fmtname = "";
++
++		switch (sbi->s_jquota_fmt) {
++		case QFMT_VFS_OLD:
++			fmtname = "vfsold";
++			break;
++		case QFMT_VFS_V0:
++			fmtname = "vfsv0";
++			break;
++		case QFMT_VFS_V1:
++			fmtname = "vfsv1";
++			break;
++		}
++		seq_printf(seq, ",jqfmt=%s", fmtname);
++	}
+ 
+ 	if (sbi->s_qf_names[USRQUOTA])
+ 		seq_printf(seq, ",usrjquota=%s", sbi->s_qf_names[USRQUOTA]);
+@@ -1096,13 +1150,14 @@ enum {
  	Opt_abort, Opt_data_journal, Opt_data_ordered, Opt_data_writeback,
  	Opt_data_err_abort, Opt_data_err_ignore,
  	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
@@ -1499,7 +1562,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  };
  
  static const match_table_t tokens = {
-@@ -2709,6 +2748,21 @@ static int ext4_fill_super(struct super_
+@@ -2709,6 +2764,21 @@ static int ext4_fill_super(struct super_
  	get_random_bytes(&sbi->s_next_generation, sizeof(u32));
  	spin_lock_init(&sbi->s_next_gen_lock);
  
@@ -1521,7 +1584,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	sbi->s_stripe = ext4_get_stripe_size(sbi);
  	sbi->s_max_writeback_mb_bump = 128;
  
-@@ -2828,20 +2882,6 @@ static int ext4_fill_super(struct super_
+@@ -2828,20 +2898,6 @@ static int ext4_fill_super(struct super_
  	set_task_ioprio(sbi->s_journal->j_task, journal_ioprio);
  
  no_journal:
@@ -1542,7 +1605,18 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	if (test_opt(sb, NOBH)) {
  		if (!(test_opt(sb, DATA_FLAGS) == EXT4_MOUNT_WRITEBACK_DATA)) {
  			ext4_msg(sb, KERN_WARNING, "Ignoring nobh option - "
-@@ -2974,10 +3014,6 @@ failed_mount_wq:
+@@ -2955,7 +3011,9 @@ no_journal:
+ 	} else
+ 		descr = "out journal";
+ 
+-	ext4_msg(sb, KERN_INFO, "mounted filesystem with%s", descr);
++	ext4_msg(sb, KERN_INFO, "mounted filesystem with%s. "
++		 "Opts: %s%s", descr, sbi->s_es->s_mount_opts,
++		 *sbi->s_es->s_mount_opts ? "; " : "");
+ 
+ 	lock_kernel();
+ 	return 0;
+@@ -2974,10 +3032,6 @@ failed_mount_wq:
  		jbd2_journal_destroy(sbi->s_journal);
  		sbi->s_journal = NULL;
  	}
@@ -1553,7 +1627,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  failed_mount3:
  	if (sbi->s_flex_groups) {
  		if (is_vmalloc_addr(sbi->s_flex_groups))
-@@ -2985,6 +3021,10 @@ failed_mount3:
+@@ -2985,6 +3039,10 @@ failed_mount3:
  		else
  			kfree(sbi->s_flex_groups);
  	}
@@ -1564,7 +1638,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  failed_mount2:
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
-@@ -3377,9 +3417,9 @@ static void ext4_clear_journal_err(struc
+@@ -3377,9 +3435,9 @@ static void ext4_clear_journal_err(struc
  		char nbuf[16];
  
  		errstr = ext4_decode_error(sb, j_errno, nbuf);
@@ -1576,7 +1650,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  			     "filesystem check.");
  
  		EXT4_SB(sb)->s_mount_state |= EXT4_ERROR_FS;
-@@ -4007,11 +4047,21 @@ static struct file_system_type ext4_fs_t
+@@ -4007,11 +4065,21 @@ static struct file_system_type ext4_fs_t
  	.fs_flags	= FS_REQUIRES_DEV,
  };
  
@@ -1598,7 +1672,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	err = init_ext4_system_zone();
  	if (err)
  		return err;
-@@ -4019,6 +4069,9 @@ static int __init init_ext4_fs(void)
+@@ -4019,6 +4087,9 @@ static int __init init_ext4_fs(void)
  	if (!ext4_kset)
  		goto out4;
  	ext4_proc_root = proc_mkdir("fs/ext4", NULL);
@@ -1608,7 +1682,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	err = init_ext4_mballoc();
  	if (err)
  		goto out3;
-@@ -4032,6 +4085,9 @@ static int __init init_ext4_fs(void)
+@@ -4032,6 +4103,9 @@ static int __init init_ext4_fs(void)
  	err = register_filesystem(&ext4_fs_type);
  	if (err)
  		goto out;
@@ -1618,7 +1692,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	return 0;
  out:
  	destroy_inodecache();
-@@ -4040,6 +4096,7 @@ out1:
+@@ -4040,6 +4114,7 @@ out1:
  out2:
  	exit_ext4_mballoc();
  out3:
@@ -1626,7 +1700,7 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	remove_proc_entry("fs/ext4", NULL);
  	kset_unregister(ext4_kset);
  out4:
-@@ -4053,6 +4110,7 @@ static void __exit exit_ext4_fs(void)
+@@ -4053,6 +4128,7 @@ static void __exit exit_ext4_fs(void)
  	destroy_inodecache();
  	exit_ext4_xattr();
  	exit_ext4_mballoc();
@@ -1635,8 +1709,8 @@ diff -urpN linux-stage.orig/fs/ext4/super.c linux-stage/fs/ext4/super.c
  	kset_unregister(ext4_kset);
  	exit_ext4_system_zone();
 diff -urpN linux-stage.orig/fs/ext4/xattr.c linux-stage/fs/ext4/xattr.c
---- linux-stage.orig/fs/ext4/xattr.c	2012-02-16 07:54:55.000000000 -0500
-+++ linux-stage/fs/ext4/xattr.c	2012-02-16 08:05:47.000000000 -0500
+--- linux-stage.orig/fs/ext4/xattr.c	2012-07-02 10:32:05.000000000 -0400
++++ linux-stage/fs/ext4/xattr.c	2012-07-02 11:15:32.000000000 -0400
 @@ -227,7 +227,7 @@ ext4_xattr_block_get(struct inode *inode
  	ea_bdebug(bh, "b_count=%d, refcount=%d",
  		atomic_read(&(bh->b_count)), le32_to_cpu(BHDR(bh)->h_refcount));
