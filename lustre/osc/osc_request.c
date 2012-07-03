@@ -1251,6 +1251,9 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
         }
         req->rq_request_portal = OST_IO_PORTAL; /* bug 7198 */
         ptlrpc_at_set_req_timeout(req);
+	/* ask ptlrpc not to resend on EINPROGRESS since BRWs have their own
+	 * retry logic */
+	req->rq_no_retry_einprogress = 1;
 
         if (opc == OST_WRITE)
                 desc = ptlrpc_prep_bulk_imp(req, page_count,
