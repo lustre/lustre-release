@@ -585,7 +585,7 @@ struct ldlm_interval_tree {
         struct interval_node *lit_root; /* actually ldlm_interval */
 };
 
-#define LUSTRE_TRACKS_LOCK_EXP_REFS (1)
+#define LUSTRE_TRACKS_LOCK_EXP_REFS (0)
 
 /* Cancel flag. */
 typedef enum {
