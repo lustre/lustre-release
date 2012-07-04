@@ -166,8 +166,29 @@ static int mdd_lfsck_main(void *args)
 	GOTO(out, rc);
 
 out:
-	CDEBUG(D_LFSCK, "LFSCK: iteration stop: pos = %s, rc = %d\n",
-	       (char *)iops->key(&env, di), rc);
+	if (lfsck->ml_paused) {
+		/* XXX: It is hack here: if the lfsck is still running when MDS
+		 *	umounts, it should be restarted automatically after MDS
+		 *	remounts up.
+		 *
+		 *	To support that, we need to record the lfsck status in
+		 *	the lfsck on-disk bookmark file. But now, there is not
+		 *	lfsck component under the lfsck framework. To avoid to
+		 *	introduce nunecessary bookmark incompatibility issues,
+		 *	we write nothing to the lfsck bookmark file now.
+		 *
+		 *	Instead, we will reuse dt_it_ops::put() method to notify
+		 *	low layer iterator to process such case.
+		 *
+		 * 	It is just temporary solution, and will be replaced when
+		 * 	some lfsck component is introduced in the future. */
+		iops->put(&env, di);
+		CDEBUG(D_LFSCK, "LFSCK: iteration pasued: pos = %s, rc = %d\n",
+		       (char *)iops->key(&env, di), rc);
+	} else {
+		CDEBUG(D_LFSCK, "LFSCK: iteration stop: pos = %s, rc = %d\n",
+		       (char *)iops->key(&env, di), rc);
+	}
 	iops->fini(&env, di);
 
 fini_env:
@@ -202,11 +223,6 @@ int mdd_lfsck_start(const struct lu_env *env, struct md_lfsck *lfsck,
 	cfs_spin_unlock(&lfsck->ml_lock);
 	if (start->ls_valid & LSV_SPEED_LIMIT)
 		mdd_lfsck_set_speed(lfsck, start->ls_speed_limit);
-
-	if (start->ls_valid & LSV_METHOD && start->ls_method != LM_OTABLE) {
-		cfs_mutex_unlock(&lfsck->ml_mutex);
-		RETURN(-EOPNOTSUPP);
-	}
 
 	if (start->ls_valid & LSV_ERROR_HANDLE) {
 		valid |= DOIV_ERROR_HANDLE;
@@ -279,6 +295,7 @@ int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd)
 	struct dt_object *obj;
 	int		  rc;
 
+	memset(lfsck, 0, sizeof(*lfsck));
 	lfsck->ml_version = LFSCK_VERSION_V1;
 	cfs_waitq_init(&lfsck->ml_thread.t_ctl_waitq);
 	cfs_mutex_init(&lfsck->ml_mutex);
@@ -311,6 +328,7 @@ void mdd_lfsck_cleanup(const struct lu_env *env, struct mdd_device *mdd)
 	struct md_lfsck *lfsck = &mdd->mdd_lfsck;
 
 	if (lfsck->ml_it_obj != NULL) {
+		lfsck->ml_paused = 1;
 		mdd_lfsck_stop(env, lfsck);
 		lu_object_put(env, &lfsck->ml_it_obj->do_lu);
 		lfsck->ml_it_obj = NULL;

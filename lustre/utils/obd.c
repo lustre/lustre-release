@@ -108,8 +108,6 @@ const int thread = 0;
 const int nthreads = 1;
 #endif
 
-#define MAX_IOC_BUFLEN 8192
-
 static int cur_device = -1;
 
 struct lov_oinfo lov_oinfos[LOV_MAX_STRIPE_COUNT];

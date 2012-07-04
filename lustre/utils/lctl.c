@@ -344,6 +344,17 @@ command_t cmdlist[] = {
          "get the version of an object on servers\n"
          "usage: getobjversion <fid>"},
 
+	/* LFSCK commands */
+	{"==== LFSCK ====", jt_noop, 0, "LFSCK"},
+	{"lfsck_start", jt_lfsck_start, 0, "start LFSCK\n"
+	 "usage: lfsck_start <-M | --device MDT_device>\n"
+	 "		     [-e | --error error_handle] [-h | --help]\n"
+	 "		     [-n | --dryrun switch] [-r | --reset]\n"
+	 "		     [-s | --speed speed_limit]\n"
+	 "		     [-t | --type lfsck_type[,lfsck_type...]]"},
+	{"lfsck_stop", jt_lfsck_stop, 0, "stop lfsck(s)\n"
+	 "usage: lfsck_stop <-M | --device MDT_device> [-h | --help]"},
+
         {"==== obsolete (DANGEROUS) ====", jt_noop, 0, "obsolete (DANGEROUS)"},
         /* some test scripts still use these */
         {"cfg_device", jt_obd_device, 0,

@@ -5246,6 +5246,11 @@ mds_backup_restore() {
 	local rcmd="do_facet ${SINGLEMDS}"
 	local metaea=${TMP}/backup_restore.ea
 	local metadata=${TMP}/backup_restore.tgz
+	local opts=${MDS_MOUNT_OPTS}
+
+	if ! ${rcmd} test -b ${devname}; then
+		opts=$(csa_add "$opts" -o loop)
+	fi
 
 	echo "file-level backup/restore on ${SINGLEMDS}:${devname}"
 
@@ -5254,7 +5259,7 @@ mds_backup_restore() {
 	# step 2: cleanup old backup
 	${rcmd} rm -f $metaea $metadata
 	# step 3: mount dev
-	${rcmd} mount -t ldiskfs $MDS_MOUNT_OPTS $devname $mntpt || return 1
+	${rcmd} mount -t ldiskfs $opts $devname $mntpt || return 1
 	# step 4: backup metaea
 	echo "backup EA"
 	${rcmd} "cd $mntpt && getfattr -R -d -m '.*' -P . > $metaea && cd -" ||
@@ -5268,10 +5273,10 @@ mds_backup_restore() {
 	reformat_external_journal || return 5
 	# step 8: reformat dev
 	echo "reformat new device"
-	add ${SINGLEMDS} $(mkfs_opts mds) --backfstype ldiskfs --reformat \
-		$devname > /dev/null || return 6
+	add ${SINGLEMDS} $(mkfs_opts ${SINGLEMDS}) --backfstype ldiskfs \
+		--reformat $devname > /dev/null || return 6
 	# step 9: mount dev
-	${rcmd} mount -t ldiskfs $MDS_MOUNT_OPTS $devname $mntpt || return 7
+	${rcmd} mount -t ldiskfs $opts $devname $mntpt || return 7
 	# step 10: restore metadata
 	echo "restore data"
 	${rcmd} tar zxfp $metadata -C $mntpt > /dev/null 2>&1 || return 8
@@ -5293,13 +5298,18 @@ mds_remove_ois() {
 	local mntpt=$(facet_mntpt brpt)
 	local rcmd="do_facet ${SINGLEMDS}"
 	local idx=$1
+	local opts=${MDS_MOUNT_OPTS}
+
+	if ! ${rcmd} test -b ${devname}; then
+		opts=$(csa_add "$opts" -o loop)
+	fi
 
 	echo "remove OI files: idx=${idx}"
 
 	# step 1: build mount point
 	${rcmd} mkdir -p $mntpt
 	# step 2: mount dev
-	${rcmd} mount -t ldiskfs $MDS_MOUNT_OPTS $devname $mntpt || return 1
+	${rcmd} mount -t ldiskfs $opts $devname $mntpt || return 1
 	if [ -z $idx ]; then
 		# step 3: remove all OI files
 		${rcmd} rm -fv $mntpt/oi.16*

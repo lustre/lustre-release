@@ -33,7 +33,7 @@ endif # UTILS
 
 lib_LIBRARIES = liblustreapi.a libiam.a
 
-lctl_SOURCES = obd.c lustre_cfg.c lctl.c obdctl.h
+lctl_SOURCES = lustre_lfsck.c obd.c lustre_cfg.c lctl.c obdctl.h
 lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
 lctl_DEPENDENCIES := $(LIBPTLCTL) liblustreapi.a
 

@@ -44,15 +44,6 @@ enum lfsck_param_flags {
 	LPF_DRYRUN      = 0x0004,
 };
 
-enum lfsck_method {
-	/* Object table based iteration, depends on backend filesystem.
-	 * For ldiskfs, it is inode table based iteration. */
-	LM_OTABLE       = 1,
-
-	/* Namespace based scanning. NOT support yet. */
-	LM_NAMESPACE    = 2,
-};
-
 enum lfsck_type {
 	/* For MDT-OST consistency check/repair. */
 	LT_LAYOUT	= 0x0001,
@@ -61,7 +52,7 @@ enum lfsck_type {
 	LT_DNE  	= 0x0002,
 };
 
-#define LFSCK_VERSION_V1	10
+#define LFSCK_VERSION_V1	1
 
 #define LFSCK_TYPES_ALL 	((__u16)(~0))
 #define LFSCK_TYPES_DEF 	((__u16)0)
@@ -71,15 +62,17 @@ enum lfsck_type {
 
 enum lfsck_start_valid {
 	LSV_SPEED_LIMIT 	= 0x00000001,
-	LSV_METHOD		= 0x00000002,
-	LSV_ERROR_HANDLE	= 0x00000004,
-	LSV_DRYRUN		= 0x00000008,
+	LSV_ERROR_HANDLE	= 0x00000002,
+	LSV_DRYRUN		= 0x00000004,
 };
 
 /* Arguments for starting lfsck. */
 struct lfsck_start {
 	/* Which arguments are valid, see 'enum lfsck_start_valid'. */
 	__u32   ls_valid;
+
+	/* How many items can be scanned at most per second. */
+	__u32   ls_speed_limit;
 
 	/* For compatibility between user space tools and kernel service. */
 	__u16   ls_version;
@@ -90,11 +83,8 @@ struct lfsck_start {
 	/* Flags for the LFSCK, see 'enum lfsck_param_flags'. */
 	__u16   ls_flags;
 
-	/* Object iteration method, see 'enum lfsck_method'. */
-	__u16   ls_method;
-
-	/* How many items can be scanned at most per second. */
-	__u32   ls_speed_limit;
+	/* For 64-bits aligned. */
+	__u16   ls_padding;
 };
 
 #endif /* _LUSTRE_LFSCK_USER_H */

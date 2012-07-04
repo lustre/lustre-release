@@ -118,6 +118,7 @@ struct md_lfsck {
 	/* Sleep N jiffies for each schedule. */
 	__u32		      ml_sleep_jif;
 	__u16		      ml_version;
+	unsigned int	      ml_paused:1; /* The lfsck is paused. */
 };
 
 struct mdd_device {

@@ -39,7 +39,7 @@ fi
 stopall
 do_rpc_nodes $(facet_active_host $SINGLEMDS) load_modules_local
 reformat_external_journal
-add ${SINGLEMDS} $(mkfs_opts mds) --backfstype ldiskfs --reformat \
+add $SINGLEMDS $(mkfs_opts $SINGLEMDS) --backfstype ldiskfs --reformat \
 	$MDT_DEVNAME > /dev/null || exit 2
 
 scrub_attach() {
@@ -155,15 +155,16 @@ test_0() {
 			error "Fail to start MDS!"
 
 		while true; do
-			local STATUS=$($SHOW_SCRUB|sed -n '4'p|awk '{print $2}')
+			local STATUS=$($SHOW_SCRUB | \
+					awk '/^status/ { print $2 }')
 			[ "$STATUS" == "completed" ] && break
 			sleep 3 # check status every 3 seconds
 		done
 
 		echo "--- end to rebuild OI for ${i} files set at: $(date) ---"
-		local RTIME=$($SHOW_SCRUB | sed -n '18'p | awk '{print $2}')
+		local RTIME=$($SHOW_SCRUB | awk '/^run_time/ { print $2 }')
 		echo "rebuild OI for ${i} files used ${RTIME} seconds"
-		local SPEED=$($SHOW_SCRUB | sed -n '19'p | awk '{print $2}')
+		local SPEED=$($SHOW_SCRUB | awk '/^average_speed/ { print $2 }')
 		echo "rebuild speed is ${SPEED}/sec"
 		stop ${SINGLEMDS} > /dev/null || error "Fail to stop MDS!"
 	done

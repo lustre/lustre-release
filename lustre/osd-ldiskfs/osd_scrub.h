@@ -55,10 +55,13 @@ enum scrub_status {
 	SS_FAILED	= 3,
 
 	/* The scrub is stopped manually, the OI files may be inconsistent. */
-	SS_PAUSED	= 4,
+	SS_STOPPED	= 4,
+
+	/* The scrub is paused automatically when umount. */
+	SS_PAUSED	= 5,
 
 	/* The scrub crashed during the scanning, should be restarted. */
-	SS_CRASHED	= 5,
+	SS_CRASHED	= 6,
 };
 
 enum scrub_flags {
@@ -189,7 +192,8 @@ struct osd_scrub {
 						* found by RPC prior */
 				os_waiting:1, /* Waiting for scan window. */
 				os_full_speed:1, /* run w/o speed limit */
-				os_no_scrub:1; /* NOT auto trigger OI scrub*/
+				os_no_scrub:1, /* NOT auto trigger OI scrub*/
+				os_paused:1; /* The scrub is paused. */
 };
 
 #endif /* _OSD_SCRUB_H */

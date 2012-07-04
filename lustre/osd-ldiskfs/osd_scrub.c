@@ -475,7 +475,10 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 		sf->sf_time_last_complete = sf->sf_time_last_checkpoint;
 		sf->sf_success_count++;
 	} else if (result == 0) {
-		sf->sf_status = SS_PAUSED;
+		if (scrub->os_paused)
+			sf->sf_status = SS_PAUSED;
+		else
+			sf->sf_status = SS_STOPPED;
 	} else {
 		sf->sf_status = SS_FAILED;
 	}
@@ -979,6 +982,7 @@ static void osd_scrub_stop(struct osd_device *dev)
 {
 	/* od_otable_mutex: prevent curcurrent start/stop */
 	cfs_mutex_lock(&dev->od_otable_mutex);
+	dev->od_scrub.os_paused = 1;
 	do_osd_scrub_stop(&dev->od_scrub);
 	cfs_mutex_unlock(&dev->od_otable_mutex);
 }
@@ -1002,6 +1006,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	int			    rc     = 0;
 	ENTRY;
 
+	memset(scrub, 0, sizeof(*scrub));
 	OBD_SET_CTXT_MAGIC(ctxt);
 	ctxt->pwdmnt = dev->od_mnt;
 	ctxt->pwd = dev->od_mnt->mnt_root;
@@ -1077,7 +1082,8 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	}
 
 	if (rc == 0 && !scrub->os_no_scrub &&
-	    ((sf->sf_status == SS_CRASHED &&
+	    ((sf->sf_status == SS_PAUSED) ||
+	     (sf->sf_status == SS_CRASHED &&
 	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_AUTO)) ||
 	     (sf->sf_status == SS_INIT &&
 	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT))))
@@ -1170,6 +1176,19 @@ static void osd_otable_it_fini(const struct lu_env *env, struct dt_it *di)
 	dev->od_otable_it = NULL;
 	cfs_mutex_unlock(&dev->od_otable_mutex);
 	OBD_FREE_PTR(it);
+}
+
+/**
+ * XXX: Temporary used to notify otable iteration to be paused.
+ */
+static void osd_otable_it_put(const struct lu_env *env, struct dt_it *di)
+{
+	struct osd_device *dev = ((struct osd_otable_it *)di)->ooi_dev;
+
+	/* od_otable_mutex: prevent curcurrent init/fini */
+	cfs_mutex_lock(&dev->od_otable_mutex);
+	dev->od_scrub.os_paused = 1;
+	cfs_mutex_unlock(&dev->od_otable_mutex);
 }
 
 /**
@@ -1331,6 +1350,7 @@ const struct dt_index_operations osd_otable_ops = {
 	.dio_it = {
 		.init     = osd_otable_it_init,
 		.fini     = osd_otable_it_fini,
+		.put	  = osd_otable_it_put,
 		.get      = osd_otable_it_get,
 		.next     = osd_otable_it_next,
 		.key      = osd_otable_it_key,
@@ -1400,6 +1420,7 @@ static const char *scrub_status_names[] = {
 	"scanning",
 	"completed",
 	"failed",
+	"stopped",
 	"paused",
 	"crashed",
 	NULL
