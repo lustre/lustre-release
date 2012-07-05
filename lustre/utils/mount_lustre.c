@@ -498,10 +498,6 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 		return ENODEV;
 	}
 
-	/* backend osd type */
-	append_option(options, "osd=");
-	strcat(options, mt_type(ldd->ldd_mount_type));
-
 	return 0;
 }
 
