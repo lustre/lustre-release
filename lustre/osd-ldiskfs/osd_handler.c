@@ -106,10 +106,16 @@ static int osd_object_invariant(const struct lu_object *l)
 
 #ifdef HAVE_QUOTA_SUPPORT
 static inline void
-osd_push_ctxt(const struct lu_env *env, struct osd_ctxt *save)
+osd_push_ctxt(const struct lu_env *env, struct osd_ctxt *save, bool is_md)
 {
-        struct md_ucred *uc = md_ucred(env);
+	struct md_ucred *uc;
         struct cred     *tc;
+
+	if (!is_md)
+		/* OFD support */
+		return;
+
+	uc = md_ucred(env);
 
         LASSERT(uc != NULL);
 
@@ -126,9 +132,13 @@ osd_push_ctxt(const struct lu_env *env, struct osd_ctxt *save)
 }
 
 static inline void
-osd_pop_ctxt(struct osd_ctxt *save)
+osd_pop_ctxt(struct osd_ctxt *save, bool is_md)
 {
         struct cred *tc;
+
+	if (!is_md)
+		/* OFD support */
+		return;
 
         if ((tc = prepare_creds())) {
                 tc->fsuid         = save->oc_uid;
@@ -820,7 +830,7 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                  *      data (ofd) and reverse ordering for metadata
                  *      (mdd). then at some point we'll fix the latter
                  */
-                if (lu_device_is_md(&d->dd_lu_dev)) {
+		if (dev->od_is_md) {
                         LASSERT(oti->oti_r_locks == 0);
                         LASSERT(oti->oti_w_locks == 0);
                 }
@@ -873,7 +883,7 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
                  *      data (ofd) and reverse ordering for metadata
                  *      (mdd). then at some point we'll fix the latter
                  */
-                if (lu_device_is_md(&th->th_dev->dd_lu_dev)) {
+		if (osd_dt_dev(th->th_dev)->od_is_md) {
                         LASSERT(oti->oti_r_locks == 0);
                         LASSERT(oti->oti_w_locks == 0);
                 }
@@ -1560,8 +1570,8 @@ static int osd_attr_set(const struct lu_env *env,
         OSD_EXEC_OP(handle, attr_set);
 
         inode = obj->oo_inode;
-	if (LDISKFS_HAS_RO_COMPAT_FEATURE(inode->i_sb,
-					  LDISKFS_FEATURE_RO_COMPAT_QUOTA)) {
+	if (!osd_dt_dev(handle->th_dev)->od_is_md) {
+		/* OFD support */
 		rc = osd_quota_transfer(inode, attr);
 		if (rc)
 			return rc;
@@ -1580,9 +1590,9 @@ static int osd_attr_set(const struct lu_env *env,
 				iattr.ia_valid |= ATTR_GID;
 			iattr.ia_uid = attr->la_uid;
 			iattr.ia_gid = attr->la_gid;
-			osd_push_ctxt(env, save);
+			osd_push_ctxt(env, save, 1);
 			rc = ll_vfs_dq_transfer(inode, &iattr) ? -EDQUOT : 0;
-			osd_pop_ctxt(save);
+			osd_pop_ctxt(save, 1);
 			if (rc != 0)
 				return rc;
 		}
@@ -1635,14 +1645,14 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                 parent = hint->dah_parent;
 
 #ifdef HAVE_QUOTA_SUPPORT
-        osd_push_ctxt(info->oti_env, save);
+	osd_push_ctxt(info->oti_env, save, osd_dt_dev(th->th_dev)->od_is_md);
 #endif
         inode = ldiskfs_create_inode(oth->ot_handle,
                                      parent ? osd_dt_obj(parent)->oo_inode :
                                               osd_sb(osd)->s_root->d_inode,
                                      mode);
 #ifdef HAVE_QUOTA_SUPPORT
-        osd_pop_ctxt(save);
+	osd_pop_ctxt(save, osd_dt_dev(th->th_dev)->od_is_md);
 #endif
         if (!IS_ERR(inode)) {
                 /* Do not update file c/mtime in ldiskfs.
@@ -1845,8 +1855,8 @@ static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
         if ((valid & LA_MTIME) && (attr->la_mtime == LTIME_S(inode->i_mtime)))
                 attr->la_valid &= ~LA_MTIME;
 
-	if (LDISKFS_HAS_RO_COMPAT_FEATURE(inode->i_sb,
-					  LDISKFS_FEATURE_RO_COMPAT_QUOTA)) {
+	if (!osd_obj2dev(obj)->od_is_md) {
+		/* OFD support */
 		result = osd_quota_transfer(inode, attr);
 		if (result)
 			return;
@@ -1917,10 +1927,13 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
         struct osd_thread_info *info = osd_oti_get(env);
         struct osd_inode_id    *id   = &info->oti_id;
         struct osd_device      *osd  = osd_obj2dev(obj);
-        struct md_ucred        *uc   = md_ucred(env);
 
         LASSERT(obj->oo_inode != NULL);
-        LASSERT(uc != NULL);
+
+	if (osd->od_is_md) {
+		struct md_ucred	*uc = md_ucred(env);
+		LASSERT(uc != NULL);
+	}
 
 	osd_id_gen(id, obj->oo_inode->i_ino, obj->oo_inode->i_generation);
 	return osd_oi_insert(info, osd, fid, id, th);
@@ -4494,7 +4507,24 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		RETURN(result);
 	}
 
-        if (!lu_device_is_md(pdev))
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,3,50,0)
+	/* Unfortunately, the current MDD implementation relies on some specific
+	 * code to be executed in the OSD layer. Since OFD now also uses the OSD
+	 * module, we need a way to skip the metadata-specific code when running
+	 * with OFD.
+	 * The hack here is to check the type of the parent device which is
+	 * either MD (i.e. MDD device) with the current MDT stack or DT (i.e.
+	 * OFD device) on an OST. As a reminder, obdfilter does not use the OSD
+	 * layer and still relies on lvfs. This hack won't work any more when
+	 * LOD is landed since LOD is of DT type.
+	 * This code should be removed once the orion MDT changes (LOD/OSP, ...)
+	 * have been landed */
+	osd->od_is_md = lu_device_is_md(pdev);
+#else
+#warning "all is_md checks must be removed from osd-ldiskfs"
+#endif
+
+        if (!osd->od_is_md)
                 RETURN(0);
 
         /* 3. setup local objects */

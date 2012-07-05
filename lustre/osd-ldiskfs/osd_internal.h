@@ -264,7 +264,8 @@ struct osd_device {
         /*
          * Fid Capability
          */
-        unsigned int              od_fl_capa:1;
+	unsigned int              od_fl_capa:1,
+				  od_is_md:1; /* set in ->ldo_prepare */
         unsigned long             od_capa_timeout;
         __u32                     od_capa_alg;
         struct lustre_capa_key   *od_capa_keys;
