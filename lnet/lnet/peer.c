@@ -207,16 +207,17 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt)
 	lnet_peer_t		*lp = NULL;
 	lnet_peer_t		*lp2;
 	int			cpt2;
+	int			rc = 0;
 
 	/* cpt can be LNET_LOCK_EX if it's called from router functions */
 	cpt2 = cpt != LNET_LOCK_EX ? cpt : lnet_cpt_of_nid_locked(nid);
 
 	ptable = the_lnet.ln_peer_tables[cpt2];
 	lp = lnet_find_peer_locked(ptable, nid);
-        if (lp != NULL) {
-                *lpp = lp;
-                return 0;
-        }
+	if (lp != NULL) {
+		*lpp = lp;
+		return 0;
+	}
 
 	if (!cfs_list_empty(&ptable->pt_deathrow)) {
 		lp = cfs_list_entry(ptable->pt_deathrow.next,
@@ -224,6 +225,12 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt)
 		cfs_list_del(&lp->lp_hashlist);
 	}
 
+	*lpp = NULL;
+	/*
+	 * take extra refcount in case another thread has shutdown LNet
+	 * and destroyed locks and peer-table before I finish the allocation
+	 */
+	ptable->pt_number++;
 	lnet_net_unlock(cpt);
 
 	if (lp != NULL)
@@ -232,10 +239,10 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt)
 		LIBCFS_CPT_ALLOC(lp, lnet_cpt_table(), cpt2, sizeof(*lp));
 
 	if (lp == NULL) {
-                *lpp = NULL;
-                LNET_LOCK();
-                return -ENOMEM;
-        }
+		rc = -ENOMEM;
+		lnet_net_lock(cpt);
+		goto out;
+	}
 
 	CFS_INIT_LIST_HEAD(&lp->lp_txq);
 	CFS_INIT_LIST_HEAD(&lp->lp_rtrq);
@@ -253,48 +260,44 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt)
 	lp->lp_ping_feats = LNET_PING_FEAT_INVAL;
 	lp->lp_nid = nid;
 	lp->lp_cpt = cpt2;
-	lp->lp_refcount = 2;                    /* 1 for caller; 1 for hash */
+	lp->lp_refcount = 2;	/* 1 for caller; 1 for hash */
 	lp->lp_rtr_refcount = 0;
 
 	lnet_net_lock(cpt);
 
+	if (the_lnet.ln_shutdown) {
+		rc = -ESHUTDOWN;
+		goto out;
+	}
+
 	lp2 = lnet_find_peer_locked(ptable, nid);
 	if (lp2 != NULL) {
-		cfs_list_add(&lp->lp_hashlist, &ptable->pt_deathrow);
-
-                if (the_lnet.ln_shutdown) {
-                        lnet_peer_decref_locked(lp2);
-                        *lpp = NULL;
-                        return -ESHUTDOWN;
-                }
-
-                *lpp = lp2;
-                return 0;
-        }
+		*lpp = lp2;
+		goto out;
+	}
 
 	lp->lp_ni = lnet_net2ni_locked(LNET_NIDNET(nid), cpt2);
 	if (lp->lp_ni == NULL) {
-		cfs_list_add(&lp->lp_hashlist, &ptable->pt_deathrow);
+		rc = -EHOSTUNREACH;
+		goto out;
+	}
 
-                *lpp = NULL;
-                return the_lnet.ln_shutdown ? -ESHUTDOWN : -EHOSTUNREACH;
-        }
-
-        lp->lp_txcredits    =
-        lp->lp_mintxcredits = lp->lp_ni->ni_peertxcredits;
-        lp->lp_rtrcredits    =
-        lp->lp_minrtrcredits = lnet_peer_buffer_credits(lp->lp_ni);
-
-        /* can't add peers after shutdown starts */
-        LASSERT (!the_lnet.ln_shutdown);
+	lp->lp_txcredits    =
+	lp->lp_mintxcredits = lp->lp_ni->ni_peertxcredits;
+	lp->lp_rtrcredits    =
+	lp->lp_minrtrcredits = lnet_peer_buffer_credits(lp->lp_ni);
 
 	cfs_list_add_tail(&lp->lp_hashlist,
 			  &ptable->pt_hash[lnet_nid2peerhash(nid)]);
 	ptable->pt_version++;
-	ptable->pt_number++;
-
 	*lpp = lp;
+
 	return 0;
+out:
+	if (lp != NULL)
+		cfs_list_add(&lp->lp_hashlist, &ptable->pt_deathrow);
+	ptable->pt_number--;
+	return rc;
 }
 
 void
