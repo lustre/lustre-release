@@ -2554,6 +2554,7 @@ thread_sanity() {
         local tstarted
         local paramp
         local msg="Insane $modname thread counts"
+	local ncpts=$(check_cpt_number)
         shift 4
 
         setup
@@ -2577,11 +2578,11 @@ thread_sanity() {
         lassert 24 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax ))' || return $?
 
         # Check that we can change min/max
-        do_facet $facet "lctl set_param ${paramp}.threads_min=$((tmin + 1))"
-        do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmax - 1))"
-        tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
-        tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
-        lassert 25 "$msg" '(($tmin2 == ($tmin + 1) && $tmax2 == ($tmax -1)))' || return $?
+	do_facet $facet "lctl set_param ${paramp}.threads_min=$((tmin + ncpts))"
+	do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmax - ncpts))"
+	tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
+	tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
+	lassert 25 "$msg" '(($tmin2 == ($tmin + $ncpts) && $tmax2 == ($tmax - $ncpts)))' || return $?
 
         # Check that we can set min/max to the same value
         tmin=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
@@ -2626,12 +2627,20 @@ thread_sanity() {
 }
 
 test_53a() {
-        thread_sanity OST ost1 'ost.*.ost' 'oss_num_threads=64'
+	local ncpts=$(check_cpt_number)
+	local nthrs
+
+	nthrs=`expr 16 \* $ncpts`
+	thread_sanity OST ost1 'ost.*.ost' 'oss_num_threads='$nthrs
 }
 run_test 53a "check OSS thread count params"
 
 test_53b() {
-        thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads=64'
+	local ncpts=$(check_cpt_number)
+	local nthrs
+
+	nthrs=`expr 16 \* $ncpts`
+	thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads='$nthrs
 }
 run_test 53b "check MDT thread count params"
 

@@ -9036,10 +9036,10 @@ test_215() { # for bugs 18102, 21079, 21517
 	# /proc/sys/lnet/nis should look like this:
 	# nid status alive refs peer rtr max tx min
 	# where nid is a string like 192.168.1.1@tcp2, status is up/down,
-	# alive is numeric (0 or >0 or <0), refs > 0, peer >= 0,
+	# alive is numeric (0 or >0 or <0), refs >= 0, peer >= 0,
 	# rtr >= 0, max >=0, tx and min are numeric (0 or >0 or <0).
 	L1="^nid +status +alive +refs +peer +rtr +max +tx +min$"
-	BR="^$NID +(up|down) +$I +$P +$N +$N +$N +$I +$I$"
+	BR="^$NID +(up|down) +$I +$N +$N +$N +$N +$I +$I$"
 	create_lnet_proc_files "nis"
 	check_lnet_proc_entry "nis.out" "/proc/sys/lnet/nis" "$BR" "$L1"
 	check_lnet_proc_entry "nis.sys" "lnet.nis" "$BR" "$L1"

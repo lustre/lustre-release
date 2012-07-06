@@ -173,11 +173,11 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, cfs_list_t *nilist)
 		ni->ni_ncpts = rc;
 	}
 
-        /* LND will fill in the address part of the NID */
-        ni->ni_nid = LNET_MKNID(net, 0);
-        ni->ni_last_alive = cfs_time_current();
-        cfs_list_add_tail(&ni->ni_list, nilist);
-        return ni;
+	/* LND will fill in the address part of the NID */
+	ni->ni_nid = LNET_MKNID(net, 0);
+	ni->ni_last_alive = cfs_time_current_sec();
+	cfs_list_add_tail(&ni->ni_list, nilist);
+	return ni;
  failed:
 	lnet_ni_free(ni);
 	return NULL;
