@@ -1686,7 +1686,7 @@ static struct lu_local_obj_desc llod_mdd_root = {
         .llod_feat      = &dt_directory_features,
 };
 
-static struct lu_local_obj_desc llod_lfsck_bookmark_key = {
+static struct lu_local_obj_desc llod_lfsck_bookmark = {
 	.llod_name      = lfsck_bookmark_name,
 	.llod_oid       = LFSCK_BOOKMARK_OID,
 	.llod_is_index  = 0,
@@ -1700,7 +1700,7 @@ static int __init mdd_mod_init(void)
 	llo_local_obj_register(&llod_capa_key);
 	llo_local_obj_register(&llod_mdd_orphan);
 	llo_local_obj_register(&llod_mdd_root);
-	llo_local_obj_register(&llod_lfsck_bookmark_key);
+	llo_local_obj_register(&llod_lfsck_bookmark);
 
 	return class_register_type(&mdd_obd_device_ops, NULL, lvars.module_vars,
 				   LUSTRE_MDD_NAME, &mdd_device_type);
@@ -1711,7 +1711,7 @@ static void __exit mdd_mod_exit(void)
 	llo_local_obj_unregister(&llod_capa_key);
 	llo_local_obj_unregister(&llod_mdd_orphan);
 	llo_local_obj_unregister(&llod_mdd_root);
-	llo_local_obj_unregister(&llod_lfsck_bookmark_key);
+	llo_local_obj_unregister(&llod_lfsck_bookmark);
 
 	class_unregister_type(LUSTRE_MDD_NAME);
 }

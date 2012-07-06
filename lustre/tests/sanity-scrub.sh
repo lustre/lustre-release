@@ -322,7 +322,8 @@ test_6() {
 	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
 		error "(6) File diff failed unexpected!"
 
-	sleep 8
+	# Sleep 5 sec to guarantee at least one object processed by OI scrub
+	sleep 5
 	# Fail the OI scrub to guarantee there is at least one checkpoint
 	#define OBD_FAIL_OSD_SCRUB_FATAL	 0x192
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80000192
@@ -347,7 +348,7 @@ test_6() {
 	#define OBD_FAIL_OSD_SCRUB_CRASH	 0x191
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80000191
 	sleep 4
-	local POSITION0=$($SHOW_SCRUB | \
+	local POSITION0=$($SHOW_SCRUB |
 			awk '/^last_checkpoint_position/ {print $2}')
 	POSITION0=$((POSITION0 + 1))
 
@@ -365,7 +366,7 @@ test_6() {
 	[ "$STATUS" == "scanning" ] ||
 		error "(13) Expect 'scanning', but got '$STATUS'"
 
-	local POSITION1=$($SHOW_SCRUB | \
+	local POSITION1=$($SHOW_SCRUB |
 			awk '/^latest_start_position/ {print $2}')
 	[ $POSITION0 -eq $POSITION1 ] ||
 		error "(14) Expect position: $POSITION0, but got $POSITION1"

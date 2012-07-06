@@ -155,7 +155,7 @@ test_0() {
 			error "Fail to start MDS!"
 
 		while true; do
-			local STATUS=$($SHOW_SCRUB | \
+			local STATUS=$($SHOW_SCRUB |
 					awk '/^status/ { print $2 }')
 			[ "$STATUS" == "completed" ] && break
 			sleep 3 # check status every 3 seconds

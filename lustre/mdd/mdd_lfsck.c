@@ -174,7 +174,7 @@ out:
 		 *	To support that, we need to record the lfsck status in
 		 *	the lfsck on-disk bookmark file. But now, there is not
 		 *	lfsck component under the lfsck framework. To avoid to
-		 *	introduce nunecessary bookmark incompatibility issues,
+		 *	introduce unnecessary bookmark incompatibility issues,
 		 *	we write nothing to the lfsck bookmark file now.
 		 *
 		 *	Instead, we will reuse dt_it_ops::put() method to notify

@@ -20,7 +20,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2011 Whamcloud, Inc.
+ * Copyright (c) 2012 Whamcloud, Inc.
  */
 /*
  * lustre/utils/lustre_lfsck.c
@@ -104,6 +104,20 @@ static void usage_stop(void)
 		"-h: Help information.\n");
 }
 
+static int lfsck_pack_dev(struct obd_ioctl_data *data, char *arg)
+{
+	data->ioc_inllen4 = strlen(arg) + 1;
+	if (data->ioc_inllen4 > MAX_OBD_NAME) {
+		fprintf(stderr, "MDT device name is too long. "
+			"Valid length should be less than %d\n", MAX_OBD_NAME);
+		return -EINVAL;
+	}
+
+	data->ioc_inlbuf4 = arg;
+	data->ioc_dev = OBD_DEV_BY_DEVNAME;
+	return 0;
+}
+
 int jt_lfsck_start(int argc, char **argv)
 {
 	struct obd_ioctl_data data;
@@ -121,16 +135,9 @@ int jt_lfsck_start(int argc, char **argv)
 				  &index)) != EOF) {
 		switch (opt) {
 		case 'M':
-			data.ioc_inllen4 = strlen(optarg) + 1;
-			if (data.ioc_inllen4 > MAX_OBD_NAME) {
-				fprintf(stderr, "MDT device name is too long. "
-					"Valid length should be less than %d\n",
-					MAX_OBD_NAME);
-				return -EINVAL;
-			}
-
-			data.ioc_inlbuf4 = optarg;
-			data.ioc_dev = OBD_DEV_BY_DEVNAME;
+			rc = lfsck_pack_dev(&data, optarg);
+			if (rc != 0)
+				return rc;
 			break;
 		case 'e':
 			if (strcmp(optarg, "abort") == 0) {
@@ -270,16 +277,9 @@ int jt_lfsck_stop(int argc, char **argv)
 				  &index)) != EOF) {
 		switch (opt) {
 		case 'M':
-			data.ioc_inllen4 = strlen(optarg) + 1;
-			if (data.ioc_inllen4 > MAX_OBD_NAME) {
-				fprintf(stderr, "MDT device name is too long. "
-					"Valid length should be less than %d\n",
-					MAX_OBD_NAME);
-				return -EINVAL;
-			}
-
-			data.ioc_inlbuf4 = optarg;
-			data.ioc_dev = OBD_DEV_BY_DEVNAME;
+			rc = lfsck_pack_dev(&data, optarg);
+			if (rc != 0)
+				return rc;
 			break;
 		case 'h':
 			usage_stop();
