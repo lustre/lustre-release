@@ -109,63 +109,66 @@ static int upgrade_to_18 = 0;
 
 void usage(FILE *out)
 {
-        fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
+	fprintf(out, "%s v"LUSTRE_VERSION_STRING"\n", progname);
+	fprintf(out, "usage: %s <target type> [--backfstype="FSLIST"] "
+		"--fsname=<filesystem name>\n"
+		"\t--index=<target index> [options] <device>\n", progname);
 #ifdef HAVE_ZFS_OSD
-	fprintf(out, "usage: %s <target types> [--backfstype=zfs] [options] "
-			"<pool name>/<dataset name> [[<vdev type>] <device> "
-			"[<device> ...] [[vdev type>] ...]]\n", progname);
+	fprintf(out, "usage: %s <target type> --backfstype=zfs "
+		"--fsname=<filesystem name> [options]\n"
+		"\t<pool name>/<dataset name>\n"
+		"\t[[<vdev type>] <device> [<device> ...] [vdev type>] ...]\n",
+		progname);
 #endif
-
-	fprintf(out, "usage: %s <target types> --backfstype="FSLIST" "
-			"[options] <device>\n", progname);
-        fprintf(out,
-                "\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
+	fprintf(out,
+		"\t<device>:block device or file (e.g /dev/sda or /tmp/ost1)\n"
 #ifdef HAVE_ZFS_OSD
-		"\t<pool name>: name of the ZFS pool where to create the "
-		"target (e.g. tank)\n"
-		"\t<dataset name>: name of the new dataset (e.g. ost1). The "
-		"dataset name must be unique within the ZFS pool\n"
+		"\t<pool name>: name of ZFS pool where target is created "
+			"(e.g. tank)\n"
+		"\t<dataset name>: name of new dataset, must be unique within "
+			"pool (e.g. ost1)\n"
 		"\t<vdev type>: type of vdev (mirror, raidz, raidz2, spare, "
-		"cache, log)\n"
+			"cache, log)\n"
 #endif
 		"\n"
-                "\ttarget types:\n"
-                "\t\t--ost: object storage, mutually exclusive with mdt,mgs\n"
-                "\t\t--mdt: metadata storage, mutually exclusive with ost\n"
-                "\t\t--mgs: configuration management service - one per site\n"
-                "\toptions (in order of popularity):\n"
-                "\t\t--mgsnode=<nid>[,<...>] : NID(s) of a remote mgs node\n"
-                "\t\t\trequired for all targets other than the mgs node\n"
-                "\t\t--fsname=<filesystem_name> : default is 'lustre'\n"
-                "\t\t--failnode=<nid>[,<...>] : NID(s) of a failover partner\n"
-                "\t\t\tcannot be used with --servicenode\n"
-                "\t\t--servicenode=<nid>[,<...>] : NID(s) of all service partners\n"
-                "\t\t\ttreat all nodes as equal service node, cannot be used with --failnode\n"
-                "\t\t--param <key>=<value> : set a permanent parameter\n"
-                "\t\t\te.g. --param sys.timeout=40\n"
-                "\t\t\t     --param lov.stripesize=2M\n"
-                "\t\t--index=#N : target index (i.e. ost index within lov)\n"
-                "\t\t--comment=<user comment>: arbitrary string (%d bytes)\n"
-                "\t\t--mountfsoptions=<opts> : permanent mount options\n"
-                "\t\t--network=<net>[,<...>] : restrict OST/MDT to network(s)\n"
+		"\ttarget types:\n"
+		"\t\t--mgs: configuration management service\n"
+		"\t\t--mdt: metadata storage, mutually exclusive with ost\n"
+		"\t\t--ost: object storage, mutually exclusive with mdt, mgs\n"
+		"\toptions (in order of popularity):\n"
+		"\t\t--index=#N: numerical target index (0..N)\n"
+		"\t\t\trequired for all targets other than the MGS\n"
+		"\t\t--fsname=<8_char_filesystem_name>: fs targets belong to\n"
+		"\t\t\trequired for all targets other than MGS\n"
+		"\t\t--mgsnode=<nid>[,<...>]: NID(s) of remote MGS\n"
+		"\t\t\trequired for all targets other than MGS\n"
+		"\t\t--mountfsoptions=<opts>: permanent mount options\n"
+		"\t\t--failnode=<nid>[,<...>]: NID(s) of backup failover node\n"
+		"\t\t\tmutually exclusive with --servicenode\n"
+		"\t\t--servicenode=<nid>[,<...>]: NID(s) of service partners\n"
+		"\t\t\ttreat nodes as equal service node, mutually exclusive "
+			"with --failnode\n"
+		"\t\t--param <key>=<value>: set a permanent parameter\n"
+		"\t\t\te.g. --param sys.timeout=40\n"
+		"\t\t\t     --param lov.stripesize=2M\n"
+		"\t\t--network=<net>[,<...>]: restrict OST/MDT to network(s)\n"
 #ifndef TUNEFS
-                "\t\t--backfstype=<fstype> : backing fs type (ext3, ldiskfs)\n"
-                "\t\t--device-size=#N(KB) : device size for loop devices\n"
-                "\t\t--mkfsoptions=<opts> : format options\n"
-                "\t\t--reformat: overwrite an existing disk\n"
-                "\t\t--stripe-count-hint=#N : for optimizing MDT inode size\n"
-                "\t\t--iam-dir: use IAM directory format, not ext3 compatible\n"
+		"\t\t--backfstype=<fstype>: backing fs type (ext3, ldiskfs)\n"
+		"\t\t--device-size=#N(KB): device size for loop devices\n"
+		"\t\t--mkfsoptions=<opts>: format options\n"
+		"\t\t--reformat: overwrite an existing disk\n"
+		"\t\t--stripe-count-hint=#N: for optimizing MDT inode size\n"
 #else
-                "\t\t--erase-params : erase all old parameter settings\n"
-                "\t\t--nomgs: turn off MGS service on this MDT\n"
-                "\t\t--writeconf: erase all config logs for this fs.\n"
+		"\t\t--erase-params: erase all old parameter settings\n"
+		"\t\t--nomgs: turn off MGS service on this MDT\n"
+		"\t\t--writeconf: erase all config logs for this fs.\n"
 #endif
-                "\t\t--dryrun: just report what we would do; "
-                "don't write to disk\n"
-                "\t\t--verbose : e.g. show mkfs progress\n"
-                "\t\t--quiet\n",
-                (int)sizeof(((struct lustre_disk_data *)0)->ldd_userdata));
-        return;
+		"\t\t--comment=<user comment>: arbitrary string (%d bytes)\n"
+		"\t\t--dryrun: report what we would do; don't write to disk\n"
+		"\t\t--verbose: e.g. show mkfs progress\n"
+		"\t\t--quiet\n",
+		(int)sizeof(((struct lustre_disk_data *)0)->ldd_userdata));
+	return;
 }
 
 /* ==================== Lustre config functions =============*/
@@ -203,15 +206,13 @@ void print_ldd(char *str, struct lustre_disk_data *ldd)
 
 void set_defaults(struct mkfs_opts *mop)
 {
-        mop->mo_ldd.ldd_magic = LDD_MAGIC;
-        mop->mo_ldd.ldd_config_ver = 1;
-        mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_VIRGIN;
-        mop->mo_mgs_failnodes = 0;
-        strcpy(mop->mo_ldd.ldd_fsname, "lustre");
-        mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
-
-        mop->mo_ldd.ldd_svindex = INDEX_UNASSIGNED;
-        mop->mo_stripe_count = 1;
+	mop->mo_ldd.ldd_magic = LDD_MAGIC;
+	mop->mo_ldd.ldd_config_ver = 1;
+	mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_VIRGIN;
+	mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
+	mop->mo_ldd.ldd_svindex = INDEX_UNASSIGNED;
+	mop->mo_mgs_failnodes = 0;
+	mop->mo_stripe_count = 1;
 	mop->mo_pool_vdevs = NULL;
 }
 
@@ -645,6 +646,12 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 #endif
+	if ((IS_MDT(ldd) || IS_OST(ldd)) && mop.mo_ldd.ldd_fsname[0] == '\0') {
+		fatal();
+		fprintf(stderr, "Must specify --fsname for MDT/OST device\n");
+		ret = EINVAL;
+		goto out;
+	}
 
         /* These are the permanent mount options (always included) */
 	ret = osd_prepare_lustre(&mop,
