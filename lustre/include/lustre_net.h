@@ -657,8 +657,10 @@ struct ptlrpc_hpreq_ops {
  * in Lustre.
  */
 struct ptlrpc_request {
-        /* Request type: one of PTL_RPC_MSG_* */
-        int rq_type;
+	/* Request type: one of PTL_RPC_MSG_* */
+	int rq_type;
+	/** Result of request processing */
+	int rq_status;
         /**
          * Linkage item through which this request is included into
          * sending/delayed lists on client and into rqbd list on server
@@ -678,18 +680,20 @@ struct ptlrpc_request {
         cfs_list_t rq_exp_list;
         /** server-side hp handlers */
         struct ptlrpc_hpreq_ops *rq_ops;
+
+	/** initial thread servicing this request */
+	struct ptlrpc_thread *rq_svc_thread;
+
         /** history sequence # */
         __u64 rq_history_seq;
         /** the index of service's srv_at_array into which request is linked */
         time_t rq_at_index;
-        /** Result of request processing */
-        int rq_status;
         /** Lock to protect request flags and some other important bits, like
          * rq_list
          */
         cfs_spinlock_t rq_lock;
         /** client-side flags are serialized by rq_lock */
-        unsigned long rq_intr:1, rq_replied:1, rq_err:1,
+	unsigned int rq_intr:1, rq_replied:1, rq_err:1,
                 rq_timedout:1, rq_resend:1, rq_restart:1,
                 /**
                  * when ->rq_replay is set, request is kept by the client even
@@ -721,13 +725,10 @@ struct ptlrpc_request {
         cfs_atomic_t rq_refcount;/* client-side refcount for SENT race,
                                     server-side refcounf for multiple replies */
 
-        /** initial thread servicing this request */
-        struct ptlrpc_thread *rq_svc_thread;
-
-        /** Portal to which this request would be sent */
-        int rq_request_portal;  /* XXX FIXME bug 249 */
-        /** Portal where to wait for reply and where reply would be sent */
-        int rq_reply_portal;    /* XXX FIXME bug 249 */
+	/** Portal to which this request would be sent */
+	short rq_request_portal;  /* XXX FIXME bug 249 */
+	/** Portal where to wait for reply and where reply would be sent */
+	short rq_reply_portal;    /* XXX FIXME bug 249 */
 
         /**
          * client-side:
@@ -737,11 +738,10 @@ struct ptlrpc_request {
         int rq_nob_received;
         /** Request length */
         int rq_reqlen;
-         /** Request message - what client sent */
-        struct lustre_msg *rq_reqmsg;
-
         /** Reply length */
         int rq_replen;
+	/** Request message - what client sent */
+	struct lustre_msg *rq_reqmsg;
         /** Reply message - server response */
         struct lustre_msg *rq_repmsg;
         /** Transaction number */
@@ -765,7 +765,8 @@ struct ptlrpc_request {
         struct sptlrpc_flavor    rq_flvr;        /**< for client & server */
         enum lustre_sec_part     rq_sp_from;
 
-        unsigned long            /* client/server security flags */
+	/* client/server security flags */
+	unsigned int
                                  rq_ctx_init:1,      /* context initiation */
                                  rq_ctx_fini:1,      /* context destroy */
                                  rq_bulk_read:1,     /* request bulk read */
@@ -789,20 +790,20 @@ struct ptlrpc_request {
         /* (server side), pointed directly into req buffer */
         struct ptlrpc_user_desc *rq_user_desc;
 
-        /** early replies go to offset 0, regular replies go after that */
-        unsigned int             rq_reply_off;
-
         /* various buffer pointers */
         struct lustre_msg       *rq_reqbuf;      /* req wrapper */
+	char                    *rq_repbuf;      /* rep buffer */
+	struct lustre_msg       *rq_repdata;     /* rep wrapper msg */
+	struct lustre_msg       *rq_clrbuf;      /* only in priv mode */
         int                      rq_reqbuf_len;  /* req wrapper buf len */
         int                      rq_reqdata_len; /* req wrapper msg len */
-        char                    *rq_repbuf;      /* rep buffer */
         int                      rq_repbuf_len;  /* rep buffer len */
-        struct lustre_msg       *rq_repdata;     /* rep wrapper msg */
         int                      rq_repdata_len; /* rep wrapper msg len */
-        struct lustre_msg       *rq_clrbuf;      /* only in priv mode */
         int                      rq_clrbuf_len;  /* only in priv mode */
         int                      rq_clrdata_len; /* only in priv mode */
+
+	/** early replies go to offset 0, regular replies go after that */
+	unsigned int             rq_reply_off;
 
         /** @} */
 
@@ -883,10 +884,10 @@ struct ptlrpc_request {
         int    rq_timeout;
 
         /** Multi-rpc bits */
-        /** Link item for request set lists */
-        cfs_list_t  rq_set_chain;
         /** Per-request waitq introduced by bug 21938 for recovery waiting */
         cfs_waitq_t rq_set_waitq;
+	/** Link item for request set lists */
+	cfs_list_t  rq_set_chain;
         /** Link back to the request set */
         struct ptlrpc_request_set *rq_set;
         /** Async completion handler, called when reply is received */
