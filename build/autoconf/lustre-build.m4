@@ -700,7 +700,7 @@ AM_CONDITIONAL(LINUX, test x$lb_target_os = "xlinux")
 AM_CONDITIONAL(DARWIN, test x$lb_target_os = "xdarwin")
 AM_CONDITIONAL(SUNOS, test x$lb_target_os = "xSunOS")
 AM_CONDITIONAL(USES_DPKG, test x$uses_dpkg = "xyes")
-AM_CONDITIONAL(ARCH_x86, test x$target_cpu != "xpowerpc")
+AM_CONDITIONAL(ARCH_x86, test x$target_cpu = "xx86_64" -o x$target_cpu = "xi686")
 
 # this lets lustre cancel libsysio, per-branch or if liblustre is
 # disabled

@@ -26,6 +26,7 @@
  *
  */
 
+#if (defined i386) || (defined __amd64__)
 unsigned int crc32_pclmul_le_16(unsigned char const *buffer, size_t len,
 				unsigned int crc32) __attribute__((regparm(3)));
 
@@ -33,3 +34,4 @@ unsigned int crc32_pclmul_le(unsigned int crc, unsigned char const *p,
 			     size_t len);
 
 int crc32_pclmul_init(void);
+#endif
