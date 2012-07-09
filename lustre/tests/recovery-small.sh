@@ -32,61 +32,87 @@ assert_DIR
 rm -rf $DIR/[df][0-9]*
 
 test_1() {
-    drop_request "mcreate $DIR/f1"  || return 1
-    drop_reint_reply "mcreate $DIR/f2"    || return 2
-}
-run_test 1 "mcreate: drop req, drop rep"
+	local f1="$DIR/$tfile"
+	local f2="$DIR/$tfile.2"
 
-test_2() {
-    drop_request "tchmod 111 $DIR/f2"  || return 1
-    drop_reint_reply "tchmod 666 $DIR/f2"    || return 2
-}
-run_test 2 "chmod: drop req, drop rep"
+	drop_request "mcreate $f1" ||
+		error_noexit "create '$f1': drop req"
 
-test_3() {
-    drop_request "statone $DIR/f2" || return 1
-    drop_reply "statone $DIR/f2"   || return 2
-}
-run_test 3 "stat: drop req, drop rep"
+	drop_reint_reply "mcreate $f2" ||
+		error_noexit "create '$f2': drop rep"
 
-SAMPLE_NAME=f0.recovery-small.junk
-SAMPLE_FILE=$TMP/$SAMPLE_NAME
-# make this big, else test 9 doesn't wait for bulk -- bz 5595
-dd if=/dev/urandom of=$SAMPLE_FILE bs=1M count=4
+	drop_request "tchmod 111 $f2" ||
+		error_noexit "chmod '$f2': drop req"
+
+	drop_reint_reply "tchmod 666 $f2" ||
+		error_noexit "chmod '$f2': drop rep"
+
+	drop_request "statone $f2" ||
+		error_noexit "stat '$f2': drop req"
+
+	drop_reply  "statone $f2" ||
+		error_noexit "stat '$f2': drop rep"
+}
+run_test 1 "create, chmod, stat: drop req, drop rep"
 
 test_4() {
-    do_facet client "cp $SAMPLE_FILE $DIR/$SAMPLE_NAME" || return 1
-    drop_request "cat $DIR/$SAMPLE_NAME > /dev/null"   || return 2
-    drop_reply "cat $DIR/$SAMPLE_NAME > /dev/null"     || return 3
+	local t=$DIR/$tfile
+	do_facet_create_file client $t 10K ||
+		error_noexit "Create file $t"
+
+	drop_request "cat $t > /dev/null" ||
+		error_noexit "Open request for $t file"
+
+	drop_reply "cat $t > /dev/null" ||
+		error_noexit "Open replay for $t file"
 }
 run_test 4 "open: drop req, drop rep"
 
-RENAMED_AGAIN=$DIR/f0.renamed-again
-
 test_5() {
-    drop_request "mv $DIR/$SAMPLE_NAME $DIR/$tfile-renamed" || return 1
-    drop_reint_reply "mv $DIR/$tfile-renamed $RENAMED_AGAIN" || return 2
-    do_facet client "checkstat -v $RENAMED_AGAIN"  || return 3
+	local T=$DIR/$tfile
+	local R="$T-renamed"
+	local RR="$T-renamed-again"
+	do_facet_create_file client $T 10K ||
+		error_noexit "Create file $T"
+
+	drop_request "mv $T $R" ||
+		error_noexit "Rename $T"
+
+	drop_reint_reply "mv $R $RR" ||
+		error_noexit "Failed rename replay on $R"
+
+	do_facet client "checkstat -v $RR" ||
+		error_noexit "checkstat error on $RR"
+
+	do_facet client "rm $RR" ||
+		error_noexit "Can't remove file $RR"
 }
 run_test 5 "rename: drop req, drop rep"
 
-[ ! -e $RENAMED_AGAIN ] && cp $SAMPLE_FILE $RENAMED_AGAIN
-LINK1=$DIR/f0.link1
-LINK2=$DIR/f0.link2
-
 test_6() {
-    drop_request "mlink $RENAMED_AGAIN $LINK1" || return 1
-    drop_reint_reply "mlink $RENAMED_AGAIN $LINK2"   || return 2
-}
-run_test 6 "link: drop req, drop rep"
+	local T=$DIR/$tfile
+	local LINK1=$DIR/$tfile.link1
+	local LINK2=$DIR/$tfile.link2
 
-[ ! -e $LINK1 ] && mlink $RENAMED_AGAIN $LINK1
-[ ! -e $LINK2 ] && mlink $RENAMED_AGAIN $LINK2
-test_7() {
-    drop_request "munlink $LINK1"   || return 1
-    drop_reint_reply "munlink $LINK2"     || return 2
+	do_facet_create_file client $T 10K ||
+		error_noexit "Create file $T"
+
+	drop_request "mlink $T $LINK1" ||
+		error_noexit "mlink request for $T"
+
+	drop_reint_reply "mlink $T $LINK2" ||
+		error_noexit "mlink reply for $T"
+
+	drop_request "munlink $LINK1" ||
+		error_noexit "munlink request for $T"
+
+	drop_reint_reply "munlink $LINK2" ||
+		error_noexit "munlink reply for $T"
+
+	do_facet client "rm $T" ||
+		error_noexit "Can't remove file $T"
 }
-run_test 7 "unlink: drop req, drop rep"
+run_test 6 "link, unlink: drop req, drop rep"
 
 #bug 1423
 test_8() {
@@ -96,12 +122,25 @@ run_test 8 "touch: drop rep (bug 1423)"
 
 #bug 1420
 test_9() {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    pause_bulk "cp /etc/profile $DIR/$tfile"       || return 1
-    do_facet client "cp $SAMPLE_FILE $DIR/${tfile}.2"  || return 2
-    do_facet client "sync"
-    do_facet client "rm $DIR/$tfile $DIR/${tfile}.2" || return 3
+	local t1=${tfile}.1
+	local t2=${tfile}.2
+	do_facet_random_file client $TMP/$tfile 1K ||
+		error_noexit "Create random file $TMP/$tfile"
+	# make this big, else test 9 doesn't wait for bulk -- bz 5595
+	do_facet_create_file client $TMP/$t1 4M ||
+		error_noexit "Create file $TMP/$t1"
+	do_facet client "cp $TMP/$t1 $DIR/$t1" ||
+		error_noexit "Can't copy to $DIR/$t1 file"
+	pause_bulk "cp $TMP/$tfile $DIR/$tfile" ||
+		error_noexit "Can't pause_bulk copy"
+	do_facet client "cp $TMP/$t1 $DIR/$t2" ||
+		error_noexit "Can't copy file"
+	do_facet client "sync"
+	do_facet client "rm $DIR/$tfile $DIR/$t2 $DIR/$t1" ||
+		error_noexit "Can't remove files"
+	do_facet client "rm $TMP/$t1 $TMP/$tfile"
 }
 run_test 9 "pause bulk on OST (bug 1420)"
 
@@ -188,22 +227,25 @@ start_read_ahead() {
 }
 
 test_16() {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    do_facet client cp $SAMPLE_FILE $DIR
-    sync
-    stop_read_ahead
+	do_facet_random_file client $TMP/$tfile 100K ||
+		{ error_noexit "Create random file $TMP/$T" ; return 0; }
+	do_facet client "cp $TMP/$tfile $DIR/$tfile" ||
+		{ error_noexit "Copy to $DIR/$tfile file" ; return 0; }
+	sync
+	stop_read_ahead
 
 #define OBD_FAIL_PTLRPC_BULK_PUT_NET 0x504 | OBD_FAIL_ONCE
-    do_facet ost1 "lctl set_param fail_loc=0x80000504"
-    cancel_lru_locks osc
-    # OST bulk will time out here, client resends
-    do_facet client "cmp $SAMPLE_FILE $DIR/${SAMPLE_FILE##*/}" || return 1
-    do_facet ost1 lctl set_param fail_loc=0
-    # give recovery a chance to finish (shouldn't take long)
-    sleep $TIMEOUT
-    do_facet client "cmp $SAMPLE_FILE $DIR/${SAMPLE_FILE##*/}" || return 2
-    start_read_ahead
+	do_facet ost1 "lctl set_param fail_loc=0x80000504"
+	cancel_lru_locks osc
+	# OST bulk will time out here, client resends
+	do_facet client "cmp $TMP/$tfile $DIR/$tfile" || return 1
+	do_facet ost1 lctl set_param fail_loc=0
+	# give recovery a chance to finish (shouldn't take long)
+	sleep $TIMEOUT
+	do_facet client "cmp $TMP/$tfile $DIR/$tfile" || return 2
+	start_read_ahead
 }
 run_test 16 "timeout bulk put, don't evict client (2732)"
 
@@ -211,6 +253,10 @@ test_17() {
     local at_max_saved=0
 
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
+	local SAMPLE_FILE=$TMP/$tfile
+	do_facet_random_file client $SAMPLE_FILE 20K ||
+		{ error_noexit "Create random file $SAMPLE_FILE" ; return 0; }
 
     # With adaptive timeouts, bulk_get won't expire until adaptive_timeout_max
     if at_is_enabled; then
@@ -242,6 +288,9 @@ run_test 17 "timeout bulk get, don't evict client (2732)"
 test_18a() {
     [ -z ${ost2_svc} ] && skip_env "needs 2 osts" && return 0
 
+	do_facet_create_file client $TMP/$tfile 20K ||
+		{ error_noexit "Create file $TMP/$tfile" ; return 0; }
+
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile
 
@@ -256,7 +305,7 @@ test_18a() {
         error "$f: stripe_index $stripe_index != 1" && return
     fi
 
-    do_facet client cp $SAMPLE_FILE $f
+    do_facet client cp $TMP/$tfile $f
     sync
     local osc2dev=`lctl get_param -n devices | grep ${ost2_svc}-osc- | egrep -v 'MDT' | awk '{print $1}'`
     $LCTL --device $osc2dev deactivate || return 3
@@ -273,6 +322,9 @@ run_test 18a "manual ost invalidate clears page cache immediately"
 test_18b() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
+	do_facet_create_file client $TMP/$tfile 20K ||
+		{ error_noexit "Create file $TMP/$tfile" ; return 0; }
+
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile
 
@@ -286,7 +338,7 @@ test_18b() {
         error "$f: stripe_index $stripe_index != 0" && return
     fi
 
-    do_facet client cp $SAMPLE_FILE $f
+    do_facet client cp $TMP/$tfile $f
     sync
     ost_evict_client
     # allow recovery to complete
@@ -303,6 +355,9 @@ run_test 18b "eviction and reconnect clears page cache (2766)"
 test_18c() {
     remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
+	do_facet_create_file client $TMP/$tfile 20K ||
+		{ error_noexit "Create file $TMP/$tfile" ; return 0; }
+
     do_facet client mkdir -p $DIR/$tdir
     f=$DIR/$tdir/$tfile
 
@@ -316,7 +371,7 @@ test_18c() {
         error "$f: stripe_index $stripe_index != 0" && return
     fi
 
-    do_facet client cp $SAMPLE_FILE $f
+    do_facet client cp $TMP/$tfile $f
     sync
     ost_evict_client
 
