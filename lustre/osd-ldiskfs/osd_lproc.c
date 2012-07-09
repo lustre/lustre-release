@@ -328,11 +328,11 @@ static int lprocfs_osd_rd_mntdev(char *page, char **start, off_t off, int count,
         if (unlikely(osd->od_mount == NULL))
                 return -EINPROGRESS;
 
-        LASSERT(osd->od_mount->lmi_mnt->mnt_devname);
-        *eof = 1;
+	LASSERT(mnt_get_devname(osd->od_mount->lmi_mnt));
+	*eof = 1;
 
-        return snprintf(page, count, "%s\n",
-                        osd->od_mount->lmi_mnt->mnt_devname);
+	return snprintf(page, count, "%s\n",
+			mnt_get_devname(osd->od_mount->lmi_mnt));
 }
 
 #ifdef HAVE_LDISKFS_PDO

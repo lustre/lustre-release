@@ -1773,20 +1773,34 @@ AC_DEFINE(HAVE_BLKDEV_GET_BY_DEV, 1,
 #
 # 2.6.38 vfsmount.mnt_count doesn't use atomic_t
 #
+# 3.3 starts hiding vfsmount guts series (move from include/linux/mount.h to
+# fs/mount.h, see kernel commit 7d6fec45a5131918b51dcd76da52f2ec86a85be6)
+#
 AC_DEFUN([LC_ATOMIC_MNT_COUNT],
-[AC_MSG_CHECKING([if vfsmount.mnt_count is atomic_t])
+[AC_MSG_CHECKING([if vfsmount guts is hidden, or vfsmount.mnt_count is atomic_t.])
 LB_LINUX_TRY_COMPILE([
-        #include <asm/atomic.h>
-        #include <linux/fs.h>
-        #include <linux/mount.h>
+	#include <linux/fs.h>
+	#include <../fs/mount.h>
 ],[
-        ((struct vfsmount *)0)->mnt_count = ((atomic_t) { 0 });
+	struct mount *mnt =  real_mount((struct vfsmount *)0);
 ],[
-        AC_DEFINE(HAVE_ATOMIC_MNT_COUNT, 1,
-                [vfsmount.mnt_count is atomic_t])
-        AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_HIDE_VFSMOUNT_GUTS, 1,
+		  [hide vfsmount guts in fs/mount.h])
+	AC_MSG_RESULT([yes, hide vfsmount guts in fs/mount.h])
 ],[
-        AC_MSG_RESULT([no])
+	LB_LINUX_TRY_COMPILE([
+		#include <asm/atomic.h>
+		#include <linux/fs.h>
+		#include <linux/mount.h>
+	],[
+		((struct vfsmount *)0)->mnt_count = ((atomic_t) { 0 });
+	],[
+		AC_DEFINE(HAVE_ATOMIC_MNT_COUNT, 1,
+			[vfsmount.mnt_count is atomic_t])
+		AC_MSG_RESULT([yes, vfsmount.mnt_count is atomic_t])
+	],[
+		AC_MSG_RESULT([no])
+	])
 ])
 ])
 
