@@ -1,11 +1,4 @@
-/.Xrefs
-/config.log
-/config.status
-/configure
-/Makefile
 /Makefile.in
-/.deps
-/TAGS
 /extN_fs.h
 /extN_fs_i.h
 /extN_fs_sb.h

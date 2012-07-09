@@ -1,11 +1,3 @@
 /Kernelenv
-/Makefile
-/autoMakefile
-/autoMakefile.in
 /aclocal.m4
 /autom4te.cache
-/config.log
-/config.status
-/configure
-/.*.cmd
-/.depend

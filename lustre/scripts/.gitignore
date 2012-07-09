@@ -1,12 +1,5 @@
-/.Xrefs
 /lustre.spec
-/config.log
-/config.status
-/configure
-/Makefile
 /Makefile.in
-/.deps
-/TAGS
 /version_tag.pl
 /lustre_createcsv.sh
 /lustre_config.sh

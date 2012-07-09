@@ -1,11 +1,8 @@
-/Makefile
 /Makefile.in
 /acceptor
 /debugctl
 /ptlctl
-/.deps
 /routerstat
 /wirecheck
 /lst
 /lstclient
-/.*.cmd

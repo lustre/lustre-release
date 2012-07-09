@@ -1,17 +1,10 @@
-/.tmp_versions
-/Makefile
 /Rules
 /aclocal.m4
-/autoMakefile
-/autoMakefile.in
 /autom4te.cache
 /config.guess
 /config.h
 /config.h.in
-/config.log
-/config.status
 /config.sub
-/configure
 /install-sh
 /lustre-ldiskfs-*.tar.gz
 /lustre-ldiskfs.spec

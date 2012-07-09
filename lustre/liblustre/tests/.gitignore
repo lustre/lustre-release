@@ -1,6 +1,4 @@
-/Makefile
 /Makefile.in
-/.deps
 /echo_test
 /recovery_small
 /replay_ost_single

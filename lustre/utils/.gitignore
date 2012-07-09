@@ -1,12 +1,4 @@
-/.Xrefs
-/config.log
-/config.status
-/configure
-/Makefile
 /Makefile.in
-/.deps
-/tags
-/TAGS
 /mkfs.lustre
 /mount.lustre
 /tunefs.lustre
@@ -25,8 +17,6 @@
 /l_facl
 /req_layout
 /l_getgroups
-/.*.cmd
-/.*.d
 /mkfs_lustre
 /mount_lustre
 /tunefs_lustre

@@ -1,11 +1,4 @@
-/.Xrefs
-/config.log
-/config.status
-/configure
-/Makefile
 /Makefile.in
-/.deps
-/TAGS
 /createmany-mpi
 /mdsrate
 /parallel_grouplock
@@ -13,5 +6,4 @@
 /write_disjoint
 /cascading_rw
 /createmany_mpi
-/*.cmd
 /*.log

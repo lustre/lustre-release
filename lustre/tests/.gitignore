@@ -1,12 +1,4 @@
-/.tmp_versions
-/.Xrefs
-/config.log
-/config.status
-/configure
-/Makefile
 /Makefile.in
-/.deps
-/TAGS
 /openunlink
 /testreq
 /truncate
@@ -42,7 +34,6 @@
 /openfile
 /unlinkmany
 /fchdir_test
-/*.cmd
 /getdents
 /o_directory
 /mkdirdeep
