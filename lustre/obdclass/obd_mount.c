@@ -1437,9 +1437,9 @@ static int lustre_put_lsi(struct super_block *sb)
 
 static int lsi_prepare(struct lustre_sb_info *lsi)
 {
-	struct lustre_disk_data  *ldd;
-	__u32                     index;
-	int                       rc;
+	struct lustre_disk_data	*ldd;
+	char			*p;
+	int			 rc, len;
 	ENTRY;
 
 	LASSERT(lsi);
@@ -1448,45 +1448,47 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 	OBD_ALLOC(ldd, sizeof(*ldd));
 	if (ldd == NULL)
 		RETURN(-ENOMEM);
+
 	strcpy(lsi->lsi_osd_type, LUSTRE_OSD_NAME);
 
 	/* The server name is given as a mount line option */
 	if (lsi->lsi_lmd->lmd_profile == NULL) {
 		LCONSOLE_ERROR("Can't determine server name\n");
-		RETURN(-EINVAL);
+		GOTO(err, rc = -EINVAL);
 	}
 
 	if (strlen(lsi->lsi_lmd->lmd_profile) >= sizeof(ldd->ldd_svname))
-		RETURN(-ENAMETOOLONG);
+		GOTO(err, rc = -ENAMETOOLONG);
 
 	strcpy(ldd->ldd_svname, lsi->lsi_lmd->lmd_profile);
-	strcpy(ldd->ldd_fsname, "lustre");
 
 	/* Determine osd type */
 	if (lsi->lsi_lmd->lmd_osd_type != NULL) {
 		if (strlen(lsi->lsi_lmd->lmd_osd_type) >=
-				sizeof(lsi->lsi_osd_type))
-			RETURN (-ENAMETOOLONG);
+			   sizeof(lsi->lsi_osd_type))
+			GOTO(err, rc = -ENAMETOOLONG);
 
 		strcpy(lsi->lsi_osd_type, lsi->lsi_lmd->lmd_osd_type);
 	}
 
-	/* Determine server type */
-	rc = server_name2index(ldd->ldd_svname, &index, NULL);
-	if (rc < 0) {
-		if (0 /*lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS*/) {
-			/* Assume we're a bare MGS */
-			rc = 0;
-			lsi->lsi_lmd->lmd_flags |= LMD_FLG_NOSVC;
-		} else {
-			LCONSOLE_ERROR("Can't determine server type of '%s'\n",
-				       lsi->lsi_svname);
-			RETURN(rc);
-		}
+	if ((p = strstr(ldd->ldd_svname, "-OST"))) {
+		ldd->ldd_flags = LDD_F_SV_TYPE_OST;
+	} else if ((p = strstr(ldd->ldd_svname, "-MDT"))) {
+		ldd->ldd_flags = LDD_F_SV_TYPE_MDT;
+	} else {
+		LCONSOLE_ERROR("Can't determine server type of '%s'\n",
+			       ldd->ldd_svname);
+		GOTO(err, rc = -EINVAL);
 	}
-	ldd->ldd_svindex = index;
-	//lsi->lsi_flags |= rc;
-	ldd->ldd_flags = rc | LDD_F_WRITECONF;
+
+	len = p - ldd->ldd_svname;
+	if (len >= MTI_NAME_MAXLEN)
+		GOTO(err, rc = -ENAMETOOLONG);
+	memcpy(ldd->ldd_fsname, ldd->ldd_svname, len);
+	ldd->ldd_fsname[len] = '\0';
+
+	ldd->ldd_svindex = simple_strtoul(p + 4, NULL, 16);
+	ldd->ldd_flags |= LDD_F_WRITECONF;
 
 	lsi->lsi_ldd = ldd;
 
@@ -1505,6 +1507,10 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 #endif
 
 	RETURN(0);
+
+err:
+	OBD_FREE(ldd, sizeof(*ldd));
+	RETURN(rc);
 }
 
 /*************** server mount ******************/
