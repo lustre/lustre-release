@@ -1278,11 +1278,11 @@ lnet_send(lnet_nid_t src_nid, lnet_msg_t *msg, lnet_nid_t rtr_nid)
 		LASSERT(src_nid != LNET_NID_ANY);
 		lnet_msg_commit(msg, cpt);
 
-                if (!msg->msg_routing)
-                        msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
+		if (!msg->msg_routing)
+			msg->msg_hdr.src_nid = cpu_to_le64(src_nid);
 
-                if (src_ni == the_lnet.ln_loni) {
-                        /* No send credit hassles with LOLND */
+		if (src_ni == the_lnet.ln_loni) {
+			/* No send credit hassles with LOLND */
 			lnet_net_unlock(cpt);
 			lnet_ni_send(src_ni, msg);
 
@@ -1416,8 +1416,8 @@ lnet_recv_put(lnet_ni_t *ni, lnet_msg_t *msg)
 
 	lnet_build_msg_event(msg, LNET_EVENT_PUT);
 
-        /* Must I ACK?  If so I'll grab the ack_wmd out of the header and put
-         * it back into the ACK during lnet_finalize() */
+	/* Must I ACK?  If so I'll grab the ack_wmd out of the header and put
+	 * it back into the ACK during lnet_finalize() */
 	msg->msg_ack = (!lnet_is_wire_handle_none(&hdr->msg.put.ack_wmd) &&
 			(msg->msg_md->md_options & LNET_MD_ACK_DISABLE) == 0);
 
@@ -1531,7 +1531,7 @@ lnet_parse_get(lnet_ni_t *ni, lnet_msg_t *msg, int rdma_get)
 	rc = lnet_send(ni->ni_nid, msg, LNET_NID_ANY);
 	if (rc < 0) {
 		/* didn't get as far as lnet_ni_send() */
-                CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
+		CERROR("%s: Unable to send REPLY for GET from %s: %d\n",
 		       libcfs_nid2str(ni->ni_nid),
 		       libcfs_id2str(info.mi_id), rc);
 
@@ -2021,9 +2021,12 @@ lnet_drop_delayed_msg_list(cfs_list_t *head, char *reason)
 		lnet_drop_message(msg->msg_rxpeer->lp_ni,
 				  msg->msg_rxpeer->lp_cpt,
 				  msg->msg_private, msg->msg_len);
-		/* NB: message will not generate event because w/o attached MD,
-		 * so we just use 0 as the third parameter */
-		lnet_finalize(msg->msg_rxpeer->lp_ni, msg, 0);
+		/*
+		 * NB: message will not generate event because w/o attached MD,
+		 * but we still should give error code so lnet_msg_decommit()
+		 * can skip counters operations and other checks.
+		 */
+		lnet_finalize(msg->msg_rxpeer->lp_ni, msg, -ENOENT);
 	}
 }
 

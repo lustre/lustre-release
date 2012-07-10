@@ -186,8 +186,7 @@ lnet_find_peer_locked(struct lnet_peer_table *ptable, lnet_nid_t nid)
 	cfs_list_t	*peers;
 	lnet_peer_t	*lp;
 
-	if (the_lnet.ln_shutdown)
-		return NULL;
+	LASSERT(!the_lnet.ln_shutdown);
 
 	peers = &ptable->pt_hash[lnet_nid2peerhash(nid)];
 	cfs_list_for_each_entry(lp, peers, lp_hashlist) {
@@ -209,6 +208,10 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt)
 	int			cpt2;
 	int			rc = 0;
 
+	*lpp = NULL;
+	if (the_lnet.ln_shutdown) /* it's shutting down */
+		return -ESHUTDOWN;
+
 	/* cpt can be LNET_LOCK_EX if it's called from router functions */
 	cpt2 = cpt != LNET_LOCK_EX ? cpt : lnet_cpt_of_nid_locked(nid);
 
@@ -225,7 +228,6 @@ lnet_nid2peer_locked(lnet_peer_t **lpp, lnet_nid_t nid, int cpt)
 		cfs_list_del(&lp->lp_hashlist);
 	}
 
-	*lpp = NULL;
 	/*
 	 * take extra refcount in case another thread has shutdown LNet
 	 * and destroyed locks and peer-table before I finish the allocation
