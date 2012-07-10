@@ -1905,14 +1905,14 @@
  	struct ext4_dir_entry_2 *de, *de2, *dot_de, *dotdot_de;
  	char		*data1, *top;
 @@ -1517,7 +1867,7 @@ static int make_indexed_dir(handle_t *ha
- 	frame->at = entries;
- 	frame->bh = bh;
- 	bh = bh2;
+	ext4_handle_dirty_metadata(handle, dir, frame->bh);
+	ext4_handle_dirty_metadata(handle, dir, bh);
+
 -	de = do_split(handle,dir, &bh, frame, &hinfo, &retval);
 +	de = do_split(handle,dir, &bh, frames, frame, &hinfo, NULL, &retval);
- 	dx_release (frames);
- 	if (!(de))
- 		return retval;
+	if (!de) {
+		/*
+		 * Even if the block split failed, we have to properly write
 @@ -1616,7 +1966,7 @@ out:
   * the entry, as someone else might have used it while you slept.
   */

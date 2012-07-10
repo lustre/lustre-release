@@ -13,9 +13,9 @@ Index: linux-2.6.32-131.0.15.el6.x86_64/drivers/md/raid5.c
  	bi->bi_phys_segments++;
 + 	if (bio_rw_flagged(bi, BIO_RW_SYNCIO) && !forwrite)
 + 		clear_bit(R5_UPTODATE, &sh->dev[dd_idx].flags); /* force to read from disk. */
- 	spin_unlock_irq(&conf->device_lock);
- 	spin_unlock(&sh->lock);
  
+	if (forwrite) {
+		/* check if page is covered */
 @@ -4132,6 +4134,9 @@ static int make_request(mddev_t *mddev, 
  		bio_endio(bi, 0);
  	}

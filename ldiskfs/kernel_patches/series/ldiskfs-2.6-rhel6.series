@@ -12,7 +12,7 @@ ext4-print-inum-in-htree-warning-rhel6.patch
 ext4-xattr-no-update-ctime-rhel5.patch
 ext4-prealloc-rhel6.patch
 ext4-mballoc-extra-checks-rhel6.patch
-ext4-misc-rhel6.patch 
+ext4-misc-rhel6.patch
 ext4-big-endian-check-2.6-rhel6.patch
 ext4-alloc-policy-2.6-rhel5.patch
 ext4-force_over_128tb-rhel6.patch
@@ -30,7 +30,6 @@ ext4-large-eas.patch
 ext4-disable-mb-cache-rhel6.patch
 ext4-back-dquot-to-rhel6.patch
 ext4-nocmtime-2.6-rhel5.patch
-ext4-export-64bit-name-hash.patch
 ext4-vmalloc-rhel6.patch
 ext4-journal-callback.patch
 ext4-store-tree-generation-at-find.patch

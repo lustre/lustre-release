@@ -157,7 +157,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	return 0;
  }
  
-@@ -2693,56 +2692,52 @@ static inline int ext4_issue_discard(str
+@@ -2693,58 +2692,54 @@ static inline int ext4_issue_discard(str
   * This function is called by the jbd2 layer once the commit has finished,
   * so we know we can free the blocks that were released with that commit.
   */
@@ -182,25 +182,12 @@ Index: linux-stage/fs/ext4/mballoc.c
 +	mb_debug(1, "gonna free %u blocks in group %u (0x%p):",
 +		 entry->efd_count, entry->efd_group, entry);
  
--		if (test_opt(sb, DISCARD)) {
--			int ret;
--			ret = ext4_issue_discard(sb, entry->group,
--					entry->start_blk, entry->count);
--			if (unlikely(ret == -EOPNOTSUPP)) {
--				ext4_warning(sb, "discard not supported, "
--						 "disabling");
--				clear_opt(EXT4_SB(sb)->s_mount_opt, DISCARD);
--			}
-+	if (test_opt(sb, DISCARD)) {
-+		int ret;
-+		ret = ext4_issue_discard(sb, entry->efd_group,
+-		if (test_opt(sb, DISCARD))
+-			ext4_issue_discard(sb, entry->group,
+-					   entry->start_blk, entry->count);
++	if (test_opt(sb, DISCARD))
++		ext4_issue_discard(sb, entry->efd_group,
 +				entry->efd_start_blk, entry->efd_count);
-+		if (unlikely(ret == -EOPNOTSUPP)) {
-+			ext4_warning(sb, "discard not supported, "
-+					 "disabling");
-+			clear_opt(EXT4_SB(sb)->s_mount_opt, DISCARD);
- 		}
-+	}
  
 -		err = ext4_mb_load_buddy(sb, entry->group, &e4b);
 -		/* we expect to find existing buddy because it's pinned */
@@ -214,6 +201,15 @@ Index: linux-stage/fs/ext4/mballoc.c
 -		/* Take it out of per group rb tree */
 -		rb_erase(&entry->node, &(db->bb_free_root));
 -		mb_free_blocks(NULL, &e4b, entry->start_blk, entry->count);
+-
+-		/*
+-		 * Clear the trimmed flag for the group so that the next
+-		 * ext4_trim_fs can trim it.
+-		 * If the volume is mounted with -o discard, online discard
+-		 * is supported and the free blocks will be trimmed online.
+-		 */
+-		if (!test_opt(sb, DISCARD))
+-			EXT4_MB_GRP_CLEAR_TRIMMED(db);
 -
 -		if (!db->bb_free_root.rb_node) {
 -			/* No more items in the per group rb tree
@@ -237,6 +233,15 @@ Index: linux-stage/fs/ext4/mballoc.c
 +	/* Take it out of per group rb tree */
 +	rb_erase(&entry->efd_node, &(db->bb_free_root));
 +	mb_free_blocks(NULL, &e4b, entry->efd_start_blk, entry->efd_count);
++
++	/*
++	 * Clear the trimmed flag for the group so that the next
++	 * ext4_trim_fs can trim it.
++	 * If the volume is mounted with -o discard, online discard
++	 * is supported and the free blocks will be trimmed online.
++	 */
++	if (!test_opt(sb, DISCARD))
++		EXT4_MB_GRP_CLEAR_TRIMMED(db);
 +
 +	if (!db->bb_free_root.rb_node) {
 +		/* No more items in the per group rb tree
