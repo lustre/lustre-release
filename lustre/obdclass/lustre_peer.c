@@ -93,6 +93,7 @@ int lustre_uuid_to_peer(const char *uuid, lnet_nid_t *peer_nid, int index)
         cfs_spin_unlock(&g_uuid_lock);
         return rc;
 }
+EXPORT_SYMBOL(lustre_uuid_to_peer);
 
 /* Add a nid to a niduuid.  Multiple nids can be added to a single uuid;
    LNET will choose the best one. */

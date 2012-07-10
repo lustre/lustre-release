@@ -83,3 +83,4 @@ void class_uuid_unparse(class_uuid_t uu, struct obd_uuid *out)
 		uuid[0], uuid[1], uuid[2], uuid[3],
 		uuid[4], uuid[5], uuid[6], uuid[7]);
 }
+EXPORT_SYMBOL(class_uuid_unparse);

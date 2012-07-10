@@ -65,6 +65,7 @@ static void print_export_data(struct obd_export *exp,
                               const char *status, int locks);
 
 int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
+EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
 
 /*
  * support functions: we could use inter-module communication, but this

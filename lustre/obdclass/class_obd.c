@@ -56,6 +56,7 @@ cfs_atomic_t libcfs_kmemory = {0};
 #endif
 
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
+EXPORT_SYMBOL(obd_devs);
 cfs_list_t obd_types;
 cfs_rwlock_t obd_dev_lock = CFS_RW_LOCK_UNLOCKED;
 
@@ -68,20 +69,33 @@ __u64 obd_pages;
 
 /* The following are visible and mutable through /proc/sys/lustre/. */
 unsigned int obd_debug_peer_on_timeout;
+EXPORT_SYMBOL(obd_debug_peer_on_timeout);
 unsigned int obd_dump_on_timeout;
+EXPORT_SYMBOL(obd_dump_on_timeout);
 unsigned int obd_dump_on_eviction;
+EXPORT_SYMBOL(obd_dump_on_eviction);
 unsigned int obd_max_dirty_pages = 256;
+EXPORT_SYMBOL(obd_max_dirty_pages);
+cfs_atomic_t obd_dirty_pages;
+EXPORT_SYMBOL(obd_dirty_pages);
 unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
+EXPORT_SYMBOL(obd_timeout);
 unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
+EXPORT_SYMBOL(ldlm_timeout);
 /* Adaptive timeout defs here instead of ptlrpc module for /proc/sys/ access */
 unsigned int at_min = 0;
+EXPORT_SYMBOL(at_min);
 unsigned int at_max = 600;
+EXPORT_SYMBOL(at_max);
 unsigned int at_history = 600;
+EXPORT_SYMBOL(at_history);
 int at_early_margin = 5;
+EXPORT_SYMBOL(at_early_margin);
 int at_extra = 30;
+EXPORT_SYMBOL(at_extra);
 
-cfs_atomic_t obd_dirty_pages;
 cfs_atomic_t obd_dirty_transit_pages;
+EXPORT_SYMBOL(obd_dirty_transit_pages);
 
 char obd_jobid_var[JOBSTATS_JOBID_VAR_MAX_LEN + 1] = JOBSTATS_DISABLE;
 EXPORT_SYMBOL(obd_jobid_var);
@@ -388,60 +402,11 @@ int class_handle_ioctl(unsigned int cmd, unsigned long arg)
         RETURN(err);
 } /* class_handle_ioctl */
 
-
-
 #ifdef __KERNEL__
 extern cfs_psdev_t obd_psdev;
 #else
 void *obd_psdev = NULL;
 #endif
-
-EXPORT_SYMBOL(obd_devs);
-EXPORT_SYMBOL(obd_debug_peer_on_timeout);
-EXPORT_SYMBOL(obd_dump_on_timeout);
-EXPORT_SYMBOL(obd_dump_on_eviction);
-EXPORT_SYMBOL(obd_timeout);
-EXPORT_SYMBOL(ldlm_timeout);
-EXPORT_SYMBOL(obd_max_dirty_pages);
-EXPORT_SYMBOL(obd_dirty_pages);
-EXPORT_SYMBOL(obd_dirty_transit_pages);
-EXPORT_SYMBOL(at_min);
-EXPORT_SYMBOL(at_max);
-EXPORT_SYMBOL(at_extra);
-EXPORT_SYMBOL(at_early_margin);
-EXPORT_SYMBOL(at_history);
-EXPORT_SYMBOL(ptlrpc_put_connection_superhack);
-EXPORT_SYMBOL(proc_lustre_root);
-
-/* uuid.c */
-EXPORT_SYMBOL(class_uuid_unparse);
-EXPORT_SYMBOL(lustre_uuid_to_peer);
-
-EXPORT_SYMBOL(class_handle_hash);
-EXPORT_SYMBOL(class_handle_unhash);
-EXPORT_SYMBOL(class_handle_hash_back);
-EXPORT_SYMBOL(class_handle2object);
-EXPORT_SYMBOL(class_handle_free_cb);
-
-/* obd_config.c */
-EXPORT_SYMBOL(class_incref);
-EXPORT_SYMBOL(class_decref);
-EXPORT_SYMBOL(class_get_profile);
-EXPORT_SYMBOL(class_del_profile);
-EXPORT_SYMBOL(class_del_profiles);
-EXPORT_SYMBOL(class_process_config);
-EXPORT_SYMBOL(class_process_proc_param);
-EXPORT_SYMBOL(class_config_parse_llog);
-EXPORT_SYMBOL(class_config_dump_llog);
-EXPORT_SYMBOL(class_attach);
-EXPORT_SYMBOL(class_setup);
-EXPORT_SYMBOL(class_cleanup);
-EXPORT_SYMBOL(class_detach);
-EXPORT_SYMBOL(class_manual_cleanup);
-
-/* mea.c */
-EXPORT_SYMBOL(mea_name2idx);
-EXPORT_SYMBOL(raw_name2idx);
 
 #define OBD_INIT_CHECK
 #ifdef OBD_INIT_CHECK

@@ -74,6 +74,7 @@ int class_find_param(char *buf, char *key, char **valp)
 
         return 0;
 }
+EXPORT_SYMBOL(class_find_param);
 
 /**
  * Finds a parameter in \a params and copies it to \a copy.
@@ -140,6 +141,7 @@ int class_get_next_param(char **params, char *copy)
         }
         return 1;
 }
+EXPORT_SYMBOL(class_get_next_param);
 
 /* returns 0 if this is the first key in the buffer, else 1.
    valp points to first char after key. */
@@ -156,6 +158,7 @@ int class_match_param(char *buf, char *key, char **valp)
 
         return 0;
 }
+EXPORT_SYMBOL(class_match_param);
 
 static int parse_nid(char *buf, void *value)
 {
@@ -229,11 +232,13 @@ int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
 {
         return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh);
 }
+EXPORT_SYMBOL(class_parse_nid);
 
 int class_parse_net(char *buf, __u32 *net, char **endh)
 {
         return class_parse_value(buf, CLASS_PARSE_NET, (void *)net, endh);
 }
+EXPORT_SYMBOL(class_parse_net);
 
 /* 1 param contains key and match
  * 0 param contains key and not match
@@ -255,6 +260,7 @@ int class_match_nid(char *buf, char *key, lnet_nid_t nid)
         }
         return rc;
 }
+EXPORT_SYMBOL(class_match_nid);
 
 int class_match_net(char *buf, char *key, __u32 net)
 {
@@ -272,13 +278,6 @@ int class_match_net(char *buf, char *key, __u32 net)
         }
         return rc;
 }
-
-EXPORT_SYMBOL(class_find_param);
-EXPORT_SYMBOL(class_get_next_param);
-EXPORT_SYMBOL(class_match_param);
-EXPORT_SYMBOL(class_parse_nid);
-EXPORT_SYMBOL(class_parse_net);
-EXPORT_SYMBOL(class_match_nid);
 EXPORT_SYMBOL(class_match_net);
 
 /********************** class fns **********************/
@@ -397,6 +396,7 @@ int class_attach(struct lustre_cfg *lcfg)
         }
         return rc;
 }
+EXPORT_SYMBOL(class_attach);
 
 /** Create hashes, self-export, and call type-specific setup.
  * Setup is effectively the "start this obd" call.
@@ -521,6 +521,7 @@ err_hash:
         CERROR("setup %s failed (%d)\n", obd->obd_name, err);
         return err;
 }
+EXPORT_SYMBOL(class_setup);
 
 /** We have finished using this obd and are ready to destroy it.
  * There can be no more references to this obd.
@@ -549,6 +550,7 @@ int class_detach(struct obd_device *obd, struct lustre_cfg *lcfg)
         class_decref(obd, "attach", obd);
         RETURN(0);
 }
+EXPORT_SYMBOL(class_detach);
 
 /** Start shutting down the obd.  There may be in-progess ops when
  * this is called.  We tell them to start shutting down with a call
@@ -652,6 +654,7 @@ int class_cleanup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         RETURN(0);
 }
+EXPORT_SYMBOL(class_cleanup);
 
 struct obd_device *class_incref(struct obd_device *obd,
                                 const char *scope, const void *source)
@@ -663,6 +666,7 @@ struct obd_device *class_incref(struct obd_device *obd,
 
         return obd;
 }
+EXPORT_SYMBOL(class_incref);
 
 void class_decref(struct obd_device *obd, const char *scope, const void *source)
 {
@@ -709,6 +713,7 @@ void class_decref(struct obd_device *obd, const char *scope, const void *source)
                 class_release_dev(obd);
         }
 }
+EXPORT_SYMBOL(class_decref);
 
 /** Add a failover nid location.
  * Client obd types contact server obd types using this nid list.
@@ -790,6 +795,7 @@ struct lustre_profile *class_get_profile(const char * prof)
         }
         RETURN(NULL);
 }
+EXPORT_SYMBOL(class_get_profile);
 
 /** Create a named "profile".
  * This defines the mdc and osc names to use for a client.
@@ -861,6 +867,7 @@ void class_del_profile(const char *prof)
         }
         EXIT;
 }
+EXPORT_SYMBOL(class_del_profile);
 
 /* COMPAT_146 */
 void class_del_profiles(void)
@@ -878,6 +885,7 @@ void class_del_profiles(void)
         }
         EXIT;
 }
+EXPORT_SYMBOL(class_del_profiles);
 
 static int class_set_global(char *ptr, int val, struct lustre_cfg *lcfg)
 {
@@ -1162,6 +1170,7 @@ out:
         }
         return err;
 }
+EXPORT_SYMBOL(class_process_config);
 
 int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
                              struct lustre_cfg *lcfg, void *data)
@@ -1249,6 +1258,7 @@ int class_process_proc_param(char *prefix, struct lprocfs_vars *lvars,
         RETURN(0);
 #endif
 }
+EXPORT_SYMBOL(class_process_proc_param);
 
 int class_config_dump_handler(struct llog_handle * handle,
                               struct llog_rec_hdr *rec, void *data);
@@ -1487,6 +1497,7 @@ parse_out:
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(class_config_parse_llog);
 
 int class_config_dump_handler(struct llog_handle * handle,
                               struct llog_rec_hdr *rec, void *data)
@@ -1575,6 +1586,7 @@ parse_out:
         RETURN(rc);
 
 }
+EXPORT_SYMBOL(class_config_dump_llog);
 
 /** Call class_cleanup and class_detach.
  * "Manual" only in the sense that we're faking lcfg commands.
@@ -1621,6 +1633,7 @@ out:
         lustre_cfg_free(lcfg);
         RETURN(rc);
 }
+EXPORT_SYMBOL(class_manual_cleanup);
 
 /*
  * uuid<->export lustre hash operations
