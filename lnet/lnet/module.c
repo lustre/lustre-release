@@ -145,47 +145,6 @@ fini_lnet(void)
         LNetFini();
 }
 
-EXPORT_SYMBOL(lnet_register_lnd);
-EXPORT_SYMBOL(lnet_unregister_lnd);
-
-EXPORT_SYMBOL(LNetMEAttach);
-EXPORT_SYMBOL(LNetMEInsert);
-EXPORT_SYMBOL(LNetMEUnlink);
-EXPORT_SYMBOL(LNetEQAlloc);
-EXPORT_SYMBOL(LNetMDAttach);
-EXPORT_SYMBOL(LNetMDUnlink);
-EXPORT_SYMBOL(LNetNIInit);
-EXPORT_SYMBOL(LNetNIFini);
-EXPORT_SYMBOL(LNetInit);
-EXPORT_SYMBOL(LNetFini);
-EXPORT_SYMBOL(LNetSnprintHandle);
-EXPORT_SYMBOL(LNetPut);
-EXPORT_SYMBOL(LNetGet);
-EXPORT_SYMBOL(LNetEQWait);
-EXPORT_SYMBOL(LNetEQFree);
-EXPORT_SYMBOL(LNetEQGet);
-EXPORT_SYMBOL(LNetGetId);
-EXPORT_SYMBOL(LNetMDBind);
-EXPORT_SYMBOL(LNetDist);
-EXPORT_SYMBOL(LNetSetAsync);
-EXPORT_SYMBOL(LNetCtl);
-EXPORT_SYMBOL(LNetSetLazyPortal);
-EXPORT_SYMBOL(LNetClearLazyPortal);
-EXPORT_SYMBOL(the_lnet);
-EXPORT_SYMBOL(lnet_iov_nob);
-EXPORT_SYMBOL(lnet_extract_iov);
-EXPORT_SYMBOL(lnet_kiov_nob);
-EXPORT_SYMBOL(lnet_extract_kiov);
-EXPORT_SYMBOL(lnet_copy_iov2iov);
-EXPORT_SYMBOL(lnet_copy_iov2kiov);
-EXPORT_SYMBOL(lnet_copy_kiov2iov);
-EXPORT_SYMBOL(lnet_copy_kiov2kiov);
-EXPORT_SYMBOL(lnet_finalize);
-EXPORT_SYMBOL(lnet_parse);
-EXPORT_SYMBOL(lnet_create_reply_msg);
-EXPORT_SYMBOL(lnet_set_reply_msg_len);
-EXPORT_SYMBOL(lnet_msgtyp2str);
-
 MODULE_AUTHOR("Peter J. Braam <braam@clusterfs.com>");
 MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");

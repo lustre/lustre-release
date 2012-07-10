@@ -541,6 +541,7 @@ lnet_finalize (lnet_ni_t *ni, lnet_msg_t *msg, int status)
 	if (rc != 0)
 		goto again;
 }
+EXPORT_SYMBOL(lnet_finalize);
 
 void
 lnet_msg_container_cleanup(struct lnet_msg_container *container)

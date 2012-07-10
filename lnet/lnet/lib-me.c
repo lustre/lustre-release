@@ -119,6 +119,7 @@ LNetMEAttach(unsigned int portal,
 	lnet_res_unlock(mtable->mt_cpt);
 	return 0;
 }
+EXPORT_SYMBOL(LNetMEAttach);
 
 /**
  * Create and a match entry and insert it before or after the ME pointed to by
@@ -201,6 +202,7 @@ LNetMEInsert(lnet_handle_me_t current_meh,
 
 	return 0;
 }
+EXPORT_SYMBOL(LNetMEInsert);
 
 /**
  * Unlink a match entry from its match list.
@@ -249,6 +251,7 @@ LNetMEUnlink(lnet_handle_me_t meh)
 	lnet_res_unlock(cpt);
 	return 0;
 }
+EXPORT_SYMBOL(LNetMEUnlink);
 
 /* call with lnet_res_lock please */
 void

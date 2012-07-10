@@ -166,6 +166,7 @@ lnet_iov_nob (unsigned int niov, struct iovec *iov)
 
         return (nob);
 }
+EXPORT_SYMBOL(lnet_iov_nob);
 
 void
 lnet_copy_iov2iov (unsigned int ndiov, struct iovec *diov, unsigned int doffset,
@@ -224,6 +225,7 @@ lnet_copy_iov2iov (unsigned int ndiov, struct iovec *diov, unsigned int doffset,
                 }
         } while (nob > 0);
 }
+EXPORT_SYMBOL(lnet_copy_iov2iov);
 
 int
 lnet_extract_iov (int dst_niov, struct iovec *dst,
@@ -270,6 +272,7 @@ lnet_extract_iov (int dst_niov, struct iovec *dst,
                 offset = 0;
         }
 }
+EXPORT_SYMBOL(lnet_extract_iov);
 
 #ifndef __KERNEL__
 unsigned int
@@ -323,6 +326,7 @@ lnet_kiov_nob (unsigned int niov, lnet_kiov_t *kiov)
 
         return (nob);
 }
+EXPORT_SYMBOL(lnet_kiov_nob);
 
 void
 lnet_copy_kiov2kiov (unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset,
@@ -404,6 +408,7 @@ lnet_copy_kiov2kiov (unsigned int ndiov, lnet_kiov_t *diov, unsigned int doffset
         if (saddr != NULL)
                 cfs_kunmap(siov->kiov_page);
 }
+EXPORT_SYMBOL(lnet_copy_kiov2kiov);
 
 void
 lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, unsigned int iovoffset,
@@ -473,6 +478,7 @@ lnet_copy_kiov2iov (unsigned int niov, struct iovec *iov, unsigned int iovoffset
         if (addr != NULL)
                 cfs_kunmap(kiov->kiov_page);
 }
+EXPORT_SYMBOL(lnet_copy_kiov2iov);
 
 void
 lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffset,
@@ -541,6 +547,7 @@ lnet_copy_iov2kiov (unsigned int nkiov, lnet_kiov_t *kiov, unsigned int kiovoffs
         if (addr != NULL)
                 cfs_kunmap(kiov->kiov_page);
 }
+EXPORT_SYMBOL(lnet_copy_iov2kiov);
 
 int
 lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst,
@@ -590,6 +597,7 @@ lnet_extract_kiov (int dst_niov, lnet_kiov_t *dst,
                 offset = 0;
         }
 }
+EXPORT_SYMBOL(lnet_extract_kiov);
 #endif
 
 void
@@ -1693,6 +1701,7 @@ lnet_msgtyp2str (int type)
                 return ("<UNKNOWN>");
         }
 }
+EXPORT_SYMBOL(lnet_msgtyp2str);
 
 void
 lnet_print_hdr(lnet_hdr_t * hdr)
@@ -1977,6 +1986,7 @@ lnet_parse(lnet_ni_t *ni, lnet_hdr_t *hdr, lnet_nid_t from_nid,
 	lnet_drop_message(ni, cpt, private, payload_length);
 	return 0;
 }
+EXPORT_SYMBOL(lnet_parse);
 
 void
 lnet_drop_delayed_msg_list(cfs_list_t *head, char *reason)
@@ -2178,6 +2188,7 @@ LNetPut(lnet_nid_t self, lnet_handle_md_t mdh, lnet_ack_req_t ack,
         /* completion will be signalled by an event */
         return 0;
 }
+EXPORT_SYMBOL(LNetPut);
 
 lnet_msg_t *
 lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
@@ -2254,6 +2265,7 @@ lnet_create_reply_msg (lnet_ni_t *ni, lnet_msg_t *getmsg)
 
 	return NULL;
 }
+EXPORT_SYMBOL(lnet_create_reply_msg);
 
 void
 lnet_set_reply_msg_len(lnet_ni_t *ni, lnet_msg_t *reply, unsigned int len)
@@ -2270,6 +2282,7 @@ lnet_set_reply_msg_len(lnet_ni_t *ni, lnet_msg_t *reply, unsigned int len)
 
         reply->msg_ev.mlength = len;
 }
+EXPORT_SYMBOL(lnet_set_reply_msg_len);
 
 /**
  * Initiate an asynchronous GET operation.
@@ -2292,9 +2305,9 @@ lnet_set_reply_msg_len(lnet_ni_t *ni, lnet_msg_t *reply, unsigned int len)
  * \retval -ENOENT Invalid MD object.
  */
 int
-LNetGet(lnet_nid_t self, lnet_handle_md_t mdh, 
-        lnet_process_id_t target, unsigned int portal, 
-        __u64 match_bits, unsigned int offset)
+LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
+	lnet_process_id_t target, unsigned int portal,
+	__u64 match_bits, unsigned int offset)
 {
 	struct lnet_msg		*msg;
 	struct lnet_libmd	*md;
@@ -2369,6 +2382,7 @@ LNetGet(lnet_nid_t self, lnet_handle_md_t mdh,
         /* completion will be signalled by an event */
         return 0;
 }
+EXPORT_SYMBOL(LNetGet);
 
 /**
  * Calculate distance to node at \a dstnid.
@@ -2465,6 +2479,7 @@ LNetDist(lnet_nid_t dstnid, lnet_nid_t *srcnidp, __u32 *orderp)
 	lnet_net_unlock(cpt);
 	return -EHOSTUNREACH;
 }
+EXPORT_SYMBOL(LNetDist);
 
 /**
  * Set the number of asynchronous messages expected from a target process.
@@ -2555,3 +2570,4 @@ LNetSetAsync(lnet_process_id_t id, int nasync)
         return rc;
 #endif
 }
+EXPORT_SYMBOL(LNetSetAsync);
