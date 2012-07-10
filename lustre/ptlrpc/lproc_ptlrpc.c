@@ -618,8 +618,6 @@ ptlrpc_lprocfs_svc_req_history_open(struct inode *inode, struct file *file)
         return 0;
 }
 
-#define PTLRPC_AT_LINE_SIZE	128
-
 /* See also lprocfs_rd_timeouts */
 static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
 				      int count, int *eof, void *data)
@@ -632,7 +630,6 @@ static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
 	unsigned int			worst;
 	int				nob = 0;
 	int				rc = 0;
-	int				cpt;
 	int				i;
 
 	LASSERT(svc->srv_parts != NULL);
@@ -641,41 +638,39 @@ static int ptlrpc_lprocfs_rd_timeouts(char *page, char **start, off_t off,
 		rc += snprintf(page + rc, count - rc,
 			       "adaptive timeouts off, using obd_timeout %u\n",
 			       obd_timeout);
-		*eof = 1;
 		return rc;
 	}
 
-	cpt = ((unsigned)off) / PTLRPC_AT_LINE_SIZE;
-
 	ptlrpc_service_for_each_part(svcpt, i, svc) {
-		if (i < cpt)
-			continue;
-
 		cur	= at_get(&svcpt->scp_at_estimate);
 		worst	= svcpt->scp_at_estimate.at_worst_ever;
 		worstt	= svcpt->scp_at_estimate.at_worst_time;
 		s2dhms(&ts, cfs_time_current_sec() - worstt);
 
-		nob = snprintf(page + rc, count - rc,
+		nob = snprintf(page, count,
 			       "%10s : cur %3u  worst %3u (at %ld, "
 			       DHMS_FMT" ago) ", "service",
 			       cur, worst, worstt, DHMS_VARS(&ts));
 
-		nob += lprocfs_at_hist_helper(page, count, rc + nob,
-					      &svcpt->scp_at_estimate);
-		LASSERT(nob < PTLRPC_AT_LINE_SIZE);
-		/* fill the whole line with spaces, so we can locate
-		 * partition by offset on the next call... */
-		memset(page + rc + nob, ' ', PTLRPC_AT_LINE_SIZE - nob);
-		page[rc + PTLRPC_AT_LINE_SIZE - 1] = '\n';
-		rc += PTLRPC_AT_LINE_SIZE;
+		nob = lprocfs_at_hist_helper(page, count, nob,
+					     &svcpt->scp_at_estimate);
+		rc += nob;
+		page += nob;
+		count -= nob;
 
-		if (count - rc < PTLRPC_AT_LINE_SIZE)
+		/*
+		 * NB: for lustre proc read, the read count must be less
+		 * than PAGE_SIZE, please see details in lprocfs_fops_read.
+		 * It's unlikely that we exceed PAGE_SIZE at here because
+		 * it means the service has more than 50 partitions.
+		 */
+		if (count <= 0) {
+			CWARN("Can't fit AT information of %s in one page, "
+			      "please contact with developer to fix this.\n",
+			      svc->srv_name);
 			break;
+		}
 	}
-
-	if (i == svc->srv_ncpts - 1)
-		*eof = 1;
 
 	return rc;
 }
@@ -689,7 +684,7 @@ static int ptlrpc_lprocfs_rd_hp_ratio(char *page, char **start, off_t off,
 }
 
 static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
-                                      unsigned long count, void *data)
+				      unsigned long count, void *data)
 {
 	struct ptlrpc_service		*svc = data;
 	int	rc;
