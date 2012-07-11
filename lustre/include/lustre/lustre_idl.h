@@ -1109,6 +1109,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                                   * write RPC error properly */
 #define OBD_CONNECT_GRANT_PARAM 0x100000000000ULL/* extra grant params used for
                                                   * finer space reservation */
+#define OBD_CONNECT_NANOSECOND_TIMES 0x200000000000ULL /* nanosec resolution
+                                                        * timestamps supported
+                                                        */
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
