@@ -38,9 +38,6 @@
  * Author: Phil Schwan <phil@clusterfs.com>
  */
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/module.h>
 #include <linux/kmod.h>
 #include <linux/notifier.h>

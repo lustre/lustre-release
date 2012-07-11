@@ -47,9 +47,6 @@
 #endif
 
 #ifdef __KERNEL__
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
 #include <linux/version.h>

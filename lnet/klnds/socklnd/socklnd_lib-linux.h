@@ -37,9 +37,6 @@
 #ifndef __LINUX_SOCKNAL_LIB_H__
 #define __LINUX_SOCKNAL_LIB_H__
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/version.h>

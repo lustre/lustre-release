@@ -38,9 +38,6 @@
  * Lustre Lite I/O page cache routines for the 2.5/2.6 kernel version
  */
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/string.h>

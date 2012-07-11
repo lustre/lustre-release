@@ -40,9 +40,6 @@
  * Author: Phil Schwan <phil@clusterfs.com>
  */
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/mm.h>

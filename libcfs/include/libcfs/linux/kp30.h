@@ -38,9 +38,6 @@
 #define __LIBCFS_LINUX_KP30_H__
 
 
-#ifndef AUTOCONF_INCLUDED
-# include <linux/config.h>
-#endif
 #include <linux/kernel.h>
 #include <linux/mm.h>
 #include <linux/string.h>

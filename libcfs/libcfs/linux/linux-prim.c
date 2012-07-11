@@ -35,9 +35,6 @@
  */
 
 #define DEBUG_SUBSYSTEM S_LNET
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/module.h>
 #include <linux/kernel.h>
 #include <linux/fs_struct.h>

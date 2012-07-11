@@ -47,9 +47,6 @@
 #error This include is only for kernel use.
 #endif
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/module.h>
 #include <linux/init.h>
 #include <linux/kernel.h>

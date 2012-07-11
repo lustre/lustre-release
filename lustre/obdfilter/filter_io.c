@@ -40,9 +40,6 @@
 
 #define DEBUG_SUBSYSTEM S_FILTER
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/module.h>
 #include <linux/pagemap.h> // XXX kill me soon
 #include <linux/version.h>

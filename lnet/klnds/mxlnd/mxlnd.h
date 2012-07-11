@@ -39,9 +39,6 @@
  * Author: Scott Atchley <atchley at myri.com>
  */
 
-#ifndef AUTOCONF_INCLUDED
-#include <linux/config.h>
-#endif
 #include <linux/module.h>       /* module */
 #include <linux/kernel.h>       /* module */
 #include <linux/mm.h>

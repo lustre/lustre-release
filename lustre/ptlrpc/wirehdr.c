@@ -40,9 +40,6 @@
 #endif
 
 #ifdef __KERNEL__
-# ifndef AUTOCONF_INCLUDED
-#  include <linux/config.h>
-# endif
 # ifdef CONFIG_FS_POSIX_ACL
 #  include <linux/fs.h>
 #  include <linux/posix_acl_xattr.h>

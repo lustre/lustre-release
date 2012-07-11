@@ -233,8 +233,7 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 # and at more old has only one line
 # include <autoconf.h>
 LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[AUTOCONF_HDIR=linux],
-        [LB_CHECK_FILE([$LINUX_OBJ/include/generated/autoconf.h],[AUTOCONF_HDIR=generated
-                       AC_DEFINE(AUTOCONF_INCLUDED, 1, [autoconf.h not define it while move to generated])],
+        [LB_CHECK_FILE([$LINUX_OBJ/include/generated/autoconf.h],[AUTOCONF_HDIR=generated],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])])
         AC_SUBST(AUTOCONF_HDIR)
 LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],[],
