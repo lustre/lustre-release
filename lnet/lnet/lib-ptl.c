@@ -311,6 +311,49 @@ lnet_mt_of_match(struct lnet_match_info *info, struct lnet_msg *msg)
 	return ptl->ptl_mtables[cpt];
 }
 
+static int
+lnet_mt_test_exhausted(struct lnet_match_table *mtable, int pos)
+{
+	__u64	*bmap;
+	int	i;
+
+	if (!lnet_ptl_is_wildcard(the_lnet.ln_portals[mtable->mt_portal]))
+		return 0;
+
+	if (pos < 0) { /* check all bits */
+		for (i = 0; i < LNET_MT_EXHAUSTED_BMAP; i++) {
+			if (mtable->mt_exhausted[i] != (__u64)(-1))
+				return 0;
+		}
+		return 1;
+	}
+
+	LASSERT(pos <= LNET_MT_HASH_IGNORE);
+	/* mtable::mt_mhash[pos] is marked as exhausted or not */
+	bmap = &mtable->mt_exhausted[pos >> LNET_MT_BITS_U64];
+	pos &= (1 << LNET_MT_BITS_U64) - 1;
+
+	return ((*bmap) & (1ULL << pos)) != 0;
+}
+
+static void
+lnet_mt_set_exhausted(struct lnet_match_table *mtable, int pos, int exhausted)
+{
+	__u64	*bmap;
+
+	LASSERT(lnet_ptl_is_wildcard(the_lnet.ln_portals[mtable->mt_portal]));
+	LASSERT(pos <= LNET_MT_HASH_IGNORE);
+
+	/* set mtable::mt_mhash[pos] as exhausted/non-exhausted */
+	bmap = &mtable->mt_exhausted[pos >> LNET_MT_BITS_U64];
+	pos &= (1 << LNET_MT_BITS_U64) - 1;
+
+	if (!exhausted)
+		*bmap &= ~(1ULL << pos);
+	else
+		*bmap |= 1ULL << pos;
+}
+
 cfs_list_t *
 lnet_mt_match_head(struct lnet_match_table *mtable,
 		   lnet_process_id_t id, __u64 mbits)
@@ -318,8 +361,7 @@ lnet_mt_match_head(struct lnet_match_table *mtable,
 	struct lnet_portal *ptl = the_lnet.ln_portals[mtable->mt_portal];
 
 	if (lnet_ptl_is_wildcard(ptl)) {
-		return &mtable->mt_mlist;
-
+		return &mtable->mt_mhash[mbits & LNET_MT_HASH_MASK];
 	} else {
 		unsigned long hash = mbits + id.nid + id.pid;
 
@@ -339,11 +381,15 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 	int			exhausted = 0;
 	int			rc;
 
-	/* NB: only wildcard portal can return LNET_MATCHMD_EXHAUSTED */
+	/* any ME with ignore bits? */
+	if (!cfs_list_empty(&mtable->mt_mhash[LNET_MT_HASH_IGNORE]))
+		head = &mtable->mt_mhash[LNET_MT_HASH_IGNORE];
+	else
+		head = lnet_mt_match_head(mtable, info->mi_id, info->mi_mbits);
+ again:
+	/* NB: only wildcard portal needs to return LNET_MATCHMD_EXHAUSTED */
 	if (lnet_ptl_is_wildcard(the_lnet.ln_portals[mtable->mt_portal]))
 		exhausted = LNET_MATCHMD_EXHAUSTED;
-
-	head = lnet_mt_match_head(mtable, info->mi_id, info->mi_mbits);
 
 	cfs_list_for_each_entry_safe(me, tmp, head, me_list) {
 		/* ME attached but MD not attached yet */
@@ -361,6 +407,17 @@ lnet_mt_match_md(struct lnet_match_table *mtable,
 			 * whether the mlist is empty or not */
 			return rc & ~LNET_MATCHMD_EXHAUSTED;
 		}
+	}
+
+	if (exhausted == LNET_MATCHMD_EXHAUSTED) { /* @head is exhausted */
+		lnet_mt_set_exhausted(mtable, head - mtable->mt_mhash, 1);
+		if (!lnet_mt_test_exhausted(mtable, -1))
+			exhausted = 0;
+	}
+
+	if (exhausted == 0 && head == &mtable->mt_mhash[LNET_MT_HASH_IGNORE]) {
+		head = lnet_mt_match_head(mtable, info->mi_id, info->mi_mbits);
+		goto again; /* re-check MEs w/o ignore-bits */
 	}
 
 	if (info->mi_opc == LNET_MD_OP_GET ||
@@ -585,7 +642,7 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 
 	if (cfs_list_empty(&ptl->ptl_msg_stealing) &&
 	    cfs_list_empty(&ptl->ptl_msg_delayed) &&
-	    mtable->mt_enabled)
+	    !lnet_mt_test_exhausted(mtable, me->me_pos))
 		return;
 
 	lnet_ptl_lock(ptl);
@@ -648,8 +705,11 @@ lnet_ptl_attach_md(lnet_me_t *me, lnet_libmd_t *md,
 		goto again;
 	}
 
-	if (lnet_ptl_is_wildcard(ptl) && !exhausted && !mtable->mt_enabled)
-		lnet_ptl_enable_mt(ptl, cpt);
+	if (lnet_ptl_is_wildcard(ptl) && !exhausted) {
+		lnet_mt_set_exhausted(mtable, me->me_pos, 0);
+		if (!mtable->mt_enabled)
+			lnet_ptl_enable_mt(ptl, cpt);
+	}
 
 	lnet_ptl_unlock(ptl);
 }
@@ -680,25 +740,17 @@ lnet_ptl_cleanup(struct lnet_portal *ptl)
 
 		mhash = mtable->mt_mhash;
 		/* cleanup ME */
-		while (!cfs_list_empty(&mtable->mt_mlist)) {
-			me = cfs_list_entry(mtable->mt_mlist.next,
-					    lnet_me_t, me_list);
-			CERROR("Active wildcard ME %p on exit\n", me);
-			cfs_list_del(&me->me_list);
-			lnet_me_free(me);
-		}
-
-		for (j = 0; j < LNET_MT_HASH_SIZE; j++) {
+		for (j = 0; j < LNET_MT_HASH_SIZE + 1; j++) {
 			while (!cfs_list_empty(&mhash[j])) {
 				me = cfs_list_entry(mhash[j].next,
 						    lnet_me_t, me_list);
-				CERROR("Active unique ME %p on exit\n", me);
+				CERROR("Active ME %p on exit\n", me);
 				cfs_list_del(&me->me_list);
 				lnet_me_free(me);
 			}
 		}
-
-		LIBCFS_FREE(mhash, sizeof(*mhash) * LNET_MT_HASH_SIZE);
+		/* the extra entry is for MEs with ignore bits */
+		LIBCFS_FREE(mhash, sizeof(*mhash) * (LNET_MT_HASH_SIZE + 1));
 	}
 
 	cfs_percpt_free(ptl->ptl_mtables);
@@ -731,19 +783,22 @@ lnet_ptl_setup(struct lnet_portal *ptl, int index)
 # endif
 #endif
 	cfs_percpt_for_each(mtable, i, ptl->ptl_mtables) {
+		/* the extra entry is for MEs with ignore bits */
 		LIBCFS_CPT_ALLOC(mhash, lnet_cpt_table(), i,
-				 sizeof(*mhash) * LNET_MT_HASH_SIZE);
+				 sizeof(*mhash) * (LNET_MT_HASH_SIZE + 1));
 		if (mhash == NULL) {
 			CERROR("Failed to create match hash for portal %d\n",
 			       index);
 			goto failed;
 		}
 
+		memset(&mtable->mt_exhausted[0], -1,
+		       sizeof(mtable->mt_exhausted[0]) *
+		       LNET_MT_EXHAUSTED_BMAP);
 		mtable->mt_mhash = mhash;
-		for (j = 0; j < LNET_MT_HASH_SIZE; j++)
+		for (j = 0; j < LNET_MT_HASH_SIZE + 1; j++)
 			CFS_INIT_LIST_HEAD(&mhash[j]);
 
-		CFS_INIT_LIST_HEAD(&mtable->mt_mlist);
 		mtable->mt_portal = index;
 		mtable->mt_cpt = i;
 	}

@@ -260,6 +260,7 @@ typedef struct lnet_me {
         lnet_libhandle_t       me_lh;
         lnet_process_id_t      me_match_id;
         unsigned int           me_portal;
+	unsigned int           me_pos;		/* hash offset in mt_hash */
         __u64                  me_match_bits;
         __u64                  me_ignore_bits;
         lnet_unlink_t          me_unlink;
@@ -601,6 +602,16 @@ struct lnet_match_info {
 /* ME hash of RDMA portal */
 #define LNET_MT_HASH_BITS		8
 #define LNET_MT_HASH_SIZE		(1 << LNET_MT_HASH_BITS)
+#define LNET_MT_HASH_MASK		(LNET_MT_HASH_SIZE - 1)
+/* we allocate (LNET_MT_HASH_SIZE + 1) entries for lnet_match_table::mt_hash,
+ * the last entry is reserved for MEs with ignore-bits */
+#define LNET_MT_HASH_IGNORE		LNET_MT_HASH_SIZE
+/* __u64 has 2^6 bits, so need 2^(LNET_MT_HASH_BITS - LNET_MT_BITS_U64) which
+ * is 4 __u64s as bit-map, and add an extra __u64 (only use one bit) for the
+ * ME-list with ignore-bits, which is mtable::mt_hash[LNET_MT_HASH_IGNORE] */
+#define LNET_MT_BITS_U64		6	/* 2^6 bits */
+#define LNET_MT_EXHAUSTED_BITS		(LNET_MT_HASH_BITS - LNET_MT_BITS_U64)
+#define LNET_MT_EXHAUSTED_BMAP		((1 << LNET_MT_EXHAUSTED_BITS) + 1)
 
 /* portal match table */
 struct lnet_match_table {
@@ -608,9 +619,10 @@ struct lnet_match_table {
 	unsigned int		mt_cpt;
 	unsigned int		mt_portal;      /* portal index */
 	/* match table is set as "enabled" if there's non-exhausted MD
-	 * attached on mt_mlist, it's only valide for wildcard portal */
+	 * attached on mt_mhash, it's only valide for wildcard portal */
 	unsigned int		mt_enabled;
-	cfs_list_t		mt_mlist;       /* matching list */
+	/* bitmap to flag whether MEs on mt_hash are exhausted or not */
+	__u64			mt_exhausted[LNET_MT_EXHAUSTED_BMAP];
 	cfs_list_t		*mt_mhash;      /* matching hash */
 };
 
