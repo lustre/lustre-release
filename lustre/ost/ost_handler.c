@@ -1591,6 +1591,7 @@ int ost_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 		oa->o_seq = lock->l_resource->lr_name.name[1];
 		oa->o_valid = OBD_MD_FLID|OBD_MD_FLGROUP;
 		oinfo->oi_oa = oa;
+		oinfo->oi_capa = BYPASS_CAPA;
 
 		rc = obd_sync(&env, lock->l_export, oinfo,
 			      lock->l_policy_data.l_extent.start,
