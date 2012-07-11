@@ -300,17 +300,38 @@ do {                                                                    \
 #if defined(__GNUC__)
 
 long libcfs_log_return(struct libcfs_debug_msg_data *, long rc);
-#define RETURN(rc)                                                      \
-do {                                                                    \
-        EXIT_NESTING;                                                   \
-        if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {                \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_TRACE, NULL);     \
-                return (typeof(rc))libcfs_log_return(&msgdata,          \
-                                                     (long)(rc));       \
-        }                                                               \
-                                                                        \
-        return (rc);                                                    \
+#if BITS_PER_LONG > 32
+#define RETURN(rc)							\
+do {									\
+	EXIT_NESTING;							\
+	if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {		\
+                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_TRACE, NULL);	\
+                return (typeof(rc))libcfs_log_return(&msgdata,		\
+                                                     (long)(rc));	\
+	}								\
+									\
+	return (rc);							\
 } while (0)
+#else /* BITS_PER_LONG == 32 */
+/* We need an on-stack variable, because we cannot case a 32-bit pointer
+ * directly to (long long) without generating a complier warning/error, yet
+ * casting directly to (long) will truncate 64-bit return values. The log
+ * values will print as 32-bit values, but they always have been. LU-1436
+ */
+#define RETURN(rc)							\
+do {									\
+	EXIT_NESTING;							\
+	if (cfs_cdebug_show(D_TRACE, DEBUG_SUBSYSTEM)) {		\
+		typeof(rc) __rc = (rc);					\
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_TRACE, NULL);	\
+		libcfs_log_return(&msgdata, (long_ptr_t)__rc);		\
+		return __rc;						\
+	}								\
+									\
+	return (rc);							\
+} while (0)
+#endif /* BITS_PER_LONG > 32 */
+
 #elif defined(_MSC_VER)
 #define RETURN(rc)                                                      \
 do {                                                                    \
