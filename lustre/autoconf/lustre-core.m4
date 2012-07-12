@@ -1791,6 +1791,44 @@ AC_DEFINE(HAVE_SIMPLE_SETATTR, 1,
 ])
 
 #
+# 3.3 introduces migrate_mode.h and migratepage has 4 args
+#
+AC_DEFUN([LC_HAVE_MIGRATE_HEADER],
+[LB_CHECK_FILE([$LINUX/include/linux/migrate.h],[
+		AC_DEFINE(HAVE_MIGRATE_H, 1,
+		[kernel has include/linux/migrate.h])
+],[LB_CHECK_FILE([$LINUX/include/linux/migrate_mode.h],[
+		AC_DEFINE(HAVE_MIGRATE_MODE_H, 1,
+			[kernel has include/linux/migrate_mode.h])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+])
+
+AC_DEFUN([LC_MIGRATEPAGE_4ARGS],
+[AC_MSG_CHECKING([if address_space_operations.migratepage has 4 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+#ifdef HAVE_MIGRATE_H
+	#include <linux/migrate.h>
+#elif defined(HAVE_MIGRATE_MODE_H)
+	#include <linux/migrate_mode.h>
+#endif
+],[
+	struct address_space_operations aops;
+
+	aops.migratepage(NULL, NULL, NULL, MIGRATE_ASYNC);
+],[
+	AC_DEFINE(HAVE_MIGRATEPAGE_4ARGS, 1,
+		[address_space_operations.migratepage has 4 args])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -1931,6 +1969,10 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.39
          LC_REQUEST_QUEUE_UNPLUG_FN
+
+	# 3.3
+	LC_HAVE_MIGRATE_HEADER
+	LC_MIGRATEPAGE_4ARGS
 
          #
          if test x$enable_server = xyes ; then
