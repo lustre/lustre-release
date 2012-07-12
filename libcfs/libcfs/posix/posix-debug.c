@@ -43,24 +43,11 @@
 
 static char debug_file_name[1024];
 
-#ifdef HAVE_CATAMOUNT_DATA_H
-#include <catamount/data.h>
-#include <catamount/lputs.h>
-
-static char source_nid[16];
-/* 0 indicates no messages to console, 1 is errors, > 1 is all debug messages */
-static int toconsole = 1;
-unsigned int libcfs_console_ratelimit = 1;
-unsigned int libcfs_console_max_delay;
-unsigned int libcfs_console_min_delay;
-unsigned int libcfs_console_backoff = CDEBUG_DEFAULT_BACKOFF;
-#else /* !HAVE_CATAMOUNT_DATA_H */
 #ifdef HAVE_NETDB_H
 #include <sys/utsname.h>
 #endif /* HAVE_NETDB_H */
 struct utsname *tmp_utsname;
 static char source_nid[sizeof(tmp_utsname->nodename)];
-#endif /* HAVE_CATAMOUNT_DATA_H */
 
 static int source_pid;
 int cfs_smp_processor_id = 1;
@@ -92,76 +79,12 @@ int libcfs_debug_init(unsigned long bufsize)
         char *debug_subsys = NULL;
         char *debug_filename;
 
-#ifdef HAVE_CATAMOUNT_DATA_H
-        char *debug_console = NULL;
-        char *debug_ratelimit = NULL;
-        char *debug_max_delay = NULL;
-        char *debug_min_delay = NULL;
-        char *debug_backoff = NULL;
-
-        libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
-        libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
-
-        snprintf(source_nid, sizeof(source_nid) - 1, "%u", _my_pnid);
-        source_pid = _my_pid;
-
-        debug_console = getenv("LIBLUSTRE_DEBUG_CONSOLE");
-        if (debug_console != NULL) {
-                toconsole = strtoul(debug_console, NULL, 0);
-                CDEBUG(D_INFO, "set liblustre toconsole to %u\n", toconsole);
-        }
-        debug_ratelimit = getenv("LIBLUSTRE_DEBUG_CONSOLE_RATELIMIT");
-        if (debug_ratelimit != NULL) {
-                libcfs_console_ratelimit = strtoul(debug_ratelimit, NULL, 0);
-                CDEBUG(D_INFO, "set liblustre console ratelimit to %u\n",
-                                libcfs_console_ratelimit);
-        }
-        debug_max_delay = getenv("LIBLUSTRE_DEBUG_CONSOLE_MAX_DELAY");
-        if (debug_max_delay != NULL)
-                libcfs_console_max_delay =
-                            cfs_time_seconds(strtoul(debug_max_delay, NULL, 0));
-        debug_min_delay = getenv("LIBLUSTRE_DEBUG_CONSOLE_MIN_DELAY");
-        if (debug_min_delay != NULL)
-                libcfs_console_min_delay =
-                            cfs_time_seconds(strtoul(debug_min_delay, NULL, 0));
-        if (debug_min_delay || debug_max_delay) {
-                if (!libcfs_console_max_delay || !libcfs_console_min_delay ||
-                    libcfs_console_max_delay < libcfs_console_min_delay) {
-                        libcfs_console_max_delay = CDEBUG_DEFAULT_MAX_DELAY;
-                        libcfs_console_min_delay = CDEBUG_DEFAULT_MIN_DELAY;
-                        CDEBUG(D_INFO, "LIBLUSTRE_DEBUG_CONSOLE_MAX_DELAY "
-                                       "should be greater than "
-                                       "LIBLUSTRE_DEBUG_CONSOLE_MIN_DELAY "
-                                       "and both parameters should be non-null"
-                                       ": restore default values\n");
-                } else {
-                        CDEBUG(D_INFO, "set liblustre console max delay to %lus"
-                                       " and min delay to %lus\n",
-                               (cfs_duration_t)
-                                     cfs_duration_sec(libcfs_console_max_delay),
-                               (cfs_duration_t)
-                                    cfs_duration_sec(libcfs_console_min_delay));
-                }
-        }
-        debug_backoff = getenv("LIBLUSTRE_DEBUG_CONSOLE_BACKOFF");
-        if (debug_backoff != NULL) {
-                libcfs_console_backoff = strtoul(debug_backoff, NULL, 0);
-                if (libcfs_console_backoff <= 0) {
-                        libcfs_console_backoff = CDEBUG_DEFAULT_BACKOFF;
-                        CDEBUG(D_INFO, "LIBLUSTRE_DEBUG_CONSOLE_BACKOFF <= 0: "
-                                       "restore default value\n");
-                } else {
-                        CDEBUG(D_INFO, "set liblustre console backoff to %u\n",
-                               libcfs_console_backoff);
-                }
-        }
-#else
         struct utsname myname;
 
         if (uname(&myname) == 0)
                 strcpy(source_nid, myname.nodename);
         source_pid = getpid();
-#endif
+
         /* debug masks */
         debug_mask = getenv("LIBLUSTRE_DEBUG_MASK");
         if (debug_mask)
@@ -226,21 +149,6 @@ int libcfs_debug_mark_buffer(const char *text)
         return 0;
 }
 
-#ifdef HAVE_CATAMOUNT_DATA_H
-#define CATAMOUNT_MAXLINE (256-4)
-void catamount_printline(char *buf, size_t size)
-{
-    char *pos = buf;
-    int prsize = size;
-
-    while (prsize > 0){
-        lputs(pos);
-        pos += CATAMOUNT_MAXLINE;
-        prsize -= CATAMOUNT_MAXLINE;
-    }
-}
-#endif
-
 int libcfs_debug_msg(struct libcfs_debug_msg_data *msgdata,
                      const char *format, ...)
 {
@@ -269,14 +177,6 @@ libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
         int            console = 0;
         char *prefix = "Lustre";
 
-#ifdef HAVE_CATAMOUNT_DATA_H
-        /* toconsole == 0 - all messages to debug_file_fd
-         * toconsole == 1 - warnings to console, all to debug_file_fd
-         * toconsole >  1 - all debug to console */
-        if (((msgdata->msg_mask & libcfs_printk) && toconsole == 1) || toconsole > 1)
-                console = 1;
-#endif
-
         if ((!console) && (!debug_file_fd)) {
                 return 0;
         }
@@ -300,62 +200,6 @@ libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
                 va_end(ap);
         }
 
-#ifdef HAVE_CATAMOUNT_DATA_H
-        if (console) {
-                cfs_debug_limit_state_t *cdls = msgdata->msg_cdls;
-
-                /* check rate limit for console */
-                if (cdls != NULL) {
-                        if (libcfs_console_ratelimit &&
-                                cdls->cdls_next != 0 &&     /* not first time ever */
-                                !cfs_time_after(cfs_time_current(), cdls->cdls_next)) {
-
-                                /* skipping a console message */
-                                cdls->cdls_count++;
-                                goto out_file;
-                        }
-
-                        if (cfs_time_after(cfs_time_current(), cdls->cdls_next +
-                                           libcfs_console_max_delay +
-                                           cfs_time_seconds(10))) {
-                                /* last timeout was a long time ago */
-                                cdls->cdls_delay /= libcfs_console_backoff * 4;
-                        } else {
-                                cdls->cdls_delay *= libcfs_console_backoff;
-
-                                if (cdls->cdls_delay <
-                                                libcfs_console_min_delay)
-                                        cdls->cdls_delay =
-                                                libcfs_console_min_delay;
-                                else if (cdls->cdls_delay >
-                                                libcfs_console_max_delay)
-                                        cdls->cdls_delay =
-                                                libcfs_console_max_delay;
-                        }
-
-                        /* ensure cdls_next is never zero after it's been seen */
-                        cdls->cdls_next = (cfs_time_current() + cdls->cdls_delay) | 1;
-                }
-
-                if (cdls != NULL && cdls->cdls_count != 0) {
-                        char buf2[100];
-
-                        nob = snprintf(buf2, sizeof(buf2),
-                                       "Skipped %d previous similar message%s\n",
-                                       cdls->cdls_count, (cdls->cdls_count > 1) ? "s" : "");
-
-                        catamount_printline(buf2, nob);
-                        cdls->cdls_count = 0;
-                        goto out_file;
-                }
-                catamount_printline(buf, nob);
-       }
-out_file:
-        /* return on toconsole > 1, as we don't want the user getting
-        * spammed by the debug data */
-        if (toconsole > 1)
-                return 0;
-#endif
         if (debug_file_fd == NULL)
                 return 0;
 
