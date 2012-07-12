@@ -128,6 +128,9 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
         if (!fid_seq_is_mdt(seq))
                 RETURN(0);
 
+        if (capa == BYPASS_CAPA)
+                RETURN(0);
+
         /* capability is disabled */
         if (!filter->fo_fl_oss_capa)
                 RETURN(0);
@@ -228,6 +231,8 @@ int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
 int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_seq seq,
                       struct lustre_capa *capa)
 {
+        struct obd_device *obd = exp->exp_obd;
+        struct filter_obd *filter = &obd->u.filter;
         int rc = 0;
         ENTRY;
 
@@ -238,12 +243,14 @@ int filter_capa_fixoa(struct obd_export *exp, struct obdo *oa, obd_seq seq,
         if (!(exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA))
                 RETURN(0);
 
+        /* capability is disabled */
+        if (!filter->fo_fl_oss_capa)
+                RETURN(0);
+
         if (unlikely(!capa))
                 RETURN(-EACCES);
 
         if (capa_flags(capa) == LC_ID_CONVERT) {
-                struct obd_device *obd = exp->exp_obd;
-                struct filter_obd *filter = &obd->u.filter;
                 struct filter_capa_key *k;
                 int found = 0;
 
