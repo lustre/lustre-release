@@ -3554,56 +3554,59 @@ static int brw_queue_work(const struct lu_env *env, void *data)
 
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        struct client_obd *cli = &obd->u.cli;
-        int rc;
-        ENTRY;
+	struct lprocfs_static_vars lvars = { 0 };
+	struct client_obd          *cli = &obd->u.cli;
+	void                       *handler;
+	int                        rc;
+	ENTRY;
 
-        ENTRY;
-        rc = ptlrpcd_addref();
-        if (rc)
-                RETURN(rc);
+	rc = ptlrpcd_addref();
+	if (rc)
+		RETURN(rc);
 
-        rc = client_obd_setup(obd, lcfg);
-        if (rc == 0) {
-                void *handler;
-                handler = ptlrpcd_alloc_work(cli->cl_import,
-                                             brw_queue_work, cli);
-                if (!IS_ERR(handler))
-                        cli->cl_writeback_work = handler;
-                else
-                        rc = PTR_ERR(handler);
-        }
+	rc = client_obd_setup(obd, lcfg);
+	if (rc)
+		GOTO(out_ptlrpcd, rc);
 
-        if (rc == 0) {
-                struct lprocfs_static_vars lvars = { 0 };
+	handler = ptlrpcd_alloc_work(cli->cl_import, brw_queue_work, cli);
+	if (IS_ERR(handler))
+		GOTO(out_client_setup, PTR_ERR(handler));
+	cli->cl_writeback_work = handler;
 
-                cli->cl_grant_shrink_interval = GRANT_SHRINK_INTERVAL;
-                lprocfs_osc_init_vars(&lvars);
-                if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
-                        lproc_osc_attach_seqstat(obd);
-                        sptlrpc_lprocfs_cliobd_attach(obd);
-                        ptlrpc_lprocfs_register_obd(obd);
-                }
+	rc = osc_quota_setup(obd);
+	if (rc)
+		GOTO(out_ptlrpcd_work, rc);
 
-                oscc_init(obd);
-                /* We need to allocate a few requests more, because
-                   brw_interpret tries to create new requests before freeing
-                   previous ones. Ideally we want to have 2x max_rpcs_in_flight
-                   reserved, but I afraid that might be too much wasted RAM
-                   in fact, so 2 is just my guess and still should work. */
-                cli->cl_import->imp_rq_pool =
-                        ptlrpc_init_rq_pool(cli->cl_max_rpcs_in_flight + 2,
-                                            OST_MAXREQSIZE,
-                                            ptlrpc_add_rqs_to_pool);
+	cli->cl_grant_shrink_interval = GRANT_SHRINK_INTERVAL;
+	lprocfs_osc_init_vars(&lvars);
+	if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
+		lproc_osc_attach_seqstat(obd);
+		sptlrpc_lprocfs_cliobd_attach(obd);
+		ptlrpc_lprocfs_register_obd(obd);
+	}
 
-                CFS_INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
+	oscc_init(obd);
+	/* We need to allocate a few requests more, because
+	 * brw_interpret tries to create new requests before freeing
+	 * previous ones, Ideally we want to have 2x max_rpcs_in_flight
+	 * reserved, but I'm afraid that might be too much wasted RAM
+	 * in fact, so 2 is just my guess and still should work. */
+	cli->cl_import->imp_rq_pool =
+		ptlrpc_init_rq_pool(cli->cl_max_rpcs_in_flight + 2,
+				    OST_MAXREQSIZE,
+				    ptlrpc_add_rqs_to_pool);
 
-                ns_register_cancel(obd->obd_namespace, osc_cancel_for_recovery);
-        }
+	CFS_INIT_LIST_HEAD(&cli->cl_grant_shrink_list);
+	ns_register_cancel(obd->obd_namespace, osc_cancel_for_recovery);
+	RETURN(rc);
 
-        if (rc)
-                ptlrpcd_decref();
-        RETURN(rc);
+out_ptlrpcd_work:
+	ptlrpcd_destroy_work(handler);
+out_client_setup:
+	client_obd_cleanup(obd);
+out_ptlrpcd:
+	ptlrpcd_decref();
+	RETURN(rc);
 }
 
 static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
@@ -3751,7 +3754,6 @@ int __init osc_init(void)
 
         lprocfs_osc_init_vars(&lvars);
 
-        osc_quota_init();
         rc = class_register_type(&osc_obd_ops, NULL, lvars.module_vars,
                                  LUSTRE_OSC_NAME, &osc_device_type);
         if (rc) {
@@ -3774,7 +3776,6 @@ int __init osc_init(void)
 #ifdef __KERNEL__
 static void /*__exit*/ osc_exit(void)
 {
-	osc_quota_exit();
 	class_unregister_type(LUSTRE_OSC_NAME);
 	lu_kmem_fini(osc_caches);
 }

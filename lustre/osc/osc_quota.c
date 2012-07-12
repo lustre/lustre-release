@@ -34,226 +34,221 @@
 #include <obd_ost.h>
 #include "osc_internal.h"
 
-struct osc_quota_info {
-        cfs_list_t         oqi_hash; /* hash list */
-        struct client_obd *oqi_cli;  /* osc obd */
-        unsigned int       oqi_id;   /* uid/gid of a file */
-        short              oqi_type; /* quota type */
-};
-
-cfs_spinlock_t qinfo_list_lock = CFS_SPIN_LOCK_UNLOCKED;
-
-static cfs_list_t qinfo_hash[NR_DQHASH];
-/* SLAB cache for client quota context */
-cfs_mem_cache_t *qinfo_cachep = NULL;
-
-static inline int hashfn(struct client_obd *cli, unsigned long id, int type)
-                         __attribute__((__const__));
-
-static inline int hashfn(struct client_obd *cli, unsigned long id, int type)
+static inline struct osc_quota_info *osc_oqi_alloc(obd_uid id)
 {
-        unsigned long tmp = ((unsigned long)cli>>6) ^ id;
-        tmp = (tmp * (MAXQUOTAS - type)) % NR_DQHASH;
-        return tmp;
-}
+	struct osc_quota_info *oqi;
 
-/* caller must hold qinfo_list_lock */
-static inline void insert_qinfo_hash(struct osc_quota_info *oqi)
-{
-        cfs_list_t *head = qinfo_hash +
-                hashfn(oqi->oqi_cli, oqi->oqi_id, oqi->oqi_type);
+	OBD_SLAB_ALLOC_PTR(oqi, osc_quota_kmem);
+	if (oqi != NULL)
+		oqi->oqi_id = id;
 
-        LASSERT_SPIN_LOCKED(&qinfo_list_lock);
-        cfs_list_add(&oqi->oqi_hash, head);
-}
-
-/* caller must hold qinfo_list_lock */
-static inline void remove_qinfo_hash(struct osc_quota_info *oqi)
-{
-        LASSERT_SPIN_LOCKED(&qinfo_list_lock);
-        cfs_list_del_init(&oqi->oqi_hash);
-}
-
-/* caller must hold qinfo_list_lock */
-static inline struct osc_quota_info *find_qinfo(struct client_obd *cli,
-                                                unsigned int id, int type)
-{
-        struct osc_quota_info *oqi;
-        unsigned int           hashent = hashfn(cli, id, type);
-        ENTRY;
-
-        LASSERT_SPIN_LOCKED(&qinfo_list_lock);
-        cfs_list_for_each_entry(oqi, &qinfo_hash[hashent], oqi_hash) {
-                if (oqi->oqi_cli == cli &&
-                    oqi->oqi_id == id && oqi->oqi_type == type)
-                        RETURN(oqi);
-        }
-        RETURN(NULL);
-}
-
-static struct osc_quota_info *alloc_qinfo(struct client_obd *cli,
-                                          unsigned int id, int type)
-{
-        struct osc_quota_info *oqi;
-        ENTRY;
-
-	OBD_SLAB_ALLOC_PTR(oqi, qinfo_cachep);
-        if(!oqi)
-                RETURN(NULL);
-
-        CFS_INIT_LIST_HEAD(&oqi->oqi_hash);
-        oqi->oqi_cli = cli;
-        oqi->oqi_id = id;
-        oqi->oqi_type = type;
-
-        RETURN(oqi);
-}
-
-static void free_qinfo(struct osc_quota_info *oqi)
-{
-        OBD_SLAB_FREE(oqi, qinfo_cachep, sizeof(*oqi));
+	return oqi;
 }
 
 int osc_quota_chkdq(struct client_obd *cli, const unsigned int qid[])
 {
-        unsigned int id;
-        int          cnt, rc = QUOTA_OK;
-        ENTRY;
+	int type;
+	ENTRY;
 
-        cfs_spin_lock(&qinfo_list_lock);
-        for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-                struct osc_quota_info *oqi = NULL;
+	for (type = 0; type < MAXQUOTAS; type++) {
+		struct osc_quota_info *oqi;
 
-                id = (cnt == USRQUOTA) ? qid[USRQUOTA] : qid[GRPQUOTA];
-                oqi = find_qinfo(cli, id, cnt);
-                if (oqi) {
-                        rc = NO_QUOTA;
-                        break;
-                }
-        }
-        cfs_spin_unlock(&qinfo_list_lock);
+		oqi = cfs_hash_lookup(cli->cl_quota_hash[type], &qid[type]);
+		if (oqi) {
+			obd_uid id = oqi->oqi_id;
 
-        if (rc == NO_QUOTA)
-                CDEBUG(D_QUOTA, "chkdq found noquota for %s %d\n",
-                       cnt == USRQUOTA ? "user" : "group", id);
-        RETURN(rc);
+			LASSERTF(id == qid[type],
+				 "The ids don't match %u != %u\n",
+				 id, qid[type]);
+
+			/* the slot is busy, the user is about to run out of
+			 * quota space on this OST */
+			CDEBUG(D_QUOTA, "chkdq found noquota for %s %d\n",
+			       type == USRQUOTA ? "user" : "grout", qid[type]);
+			RETURN(NO_QUOTA);
+		}
+	}
+
+	RETURN(QUOTA_OK);
 }
+
+#define MD_QUOTA_FLAG(type) ((type == USRQUOTA) ? OBD_MD_FLUSRQUOTA \
+						: OBD_MD_FLGRPQUOTA)
+#define FL_QUOTA_FLAG(type) ((type == USRQUOTA) ? OBD_FL_NO_USRQUOTA \
+						: OBD_FL_NO_GRPQUOTA)
 
 int osc_quota_setdq(struct client_obd *cli, const unsigned int qid[],
                     obd_flag valid, obd_flag flags)
 {
-        unsigned int id;
-        obd_flag     noquota;
-        int          cnt, rc = 0;
+	int type;
+	int rc = 0;
         ENTRY;
 
-        for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
-                struct osc_quota_info *oqi = NULL, *old;
+	if ((valid & (OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA)) == 0)
+		RETURN(0);
 
-                if (!(valid & ((cnt == USRQUOTA) ?
-                    OBD_MD_FLUSRQUOTA : OBD_MD_FLGRPQUOTA)))
-                        continue;
+	for (type = 0; type < MAXQUOTAS; type++) {
+		struct osc_quota_info *oqi;
 
-                id = (cnt == USRQUOTA) ? qid[USRQUOTA] : qid[GRPQUOTA];
-                noquota = (cnt == USRQUOTA) ?
-                    (flags & OBD_FL_NO_USRQUOTA) : (flags & OBD_FL_NO_GRPQUOTA);
+		if ((valid & MD_QUOTA_FLAG(type)) == 0)
+			continue;
 
-                if (noquota) {
-                        oqi = alloc_qinfo(cli, id, cnt);
-                        if (!oqi) {
-                                rc = -ENOMEM;
-                                CDEBUG(D_QUOTA, "setdq for %s %d failed, "
-                                       "(rc = %d)\n",
-                                       cnt == USRQUOTA ? "user" : "group",
-                                       id, rc);
-                                break;
-                        }
-                }
+		/* lookup the ID in the per-type hash table */
+		oqi = cfs_hash_lookup(cli->cl_quota_hash[type], &qid[type]);
+		if ((flags & FL_QUOTA_FLAG(type)) != 0) {
+			/* This ID is getting close to its quota limit, let's
+			 * switch to sync I/O */
+			if (oqi != NULL)
+				continue;
 
-                cfs_spin_lock(&qinfo_list_lock);
-                old = find_qinfo(cli, id, cnt);
-                if (old && !noquota)
-                        remove_qinfo_hash(old);
-                else if (!old && noquota)
-                        insert_qinfo_hash(oqi);
-                cfs_spin_unlock(&qinfo_list_lock);
+			oqi = osc_oqi_alloc(qid[type]);
+			if (oqi == NULL) {
+				rc = -ENOMEM;
+				break;
+			}
 
-                if (old && !noquota)
-                        CDEBUG(D_QUOTA, "setdq to remove for %s %d\n",
-                               cnt == USRQUOTA ? "user" : "group", id);
-                else if (!old && noquota)
-                        CDEBUG(D_QUOTA, "setdq to insert for %s %d\n",
-                               cnt == USRQUOTA ? "user" : "group", id);
+			rc = cfs_hash_add_unique(cli->cl_quota_hash[type],
+						 &qid[type], &oqi->oqi_hash);
+			/* race with others? */
+			if (rc == -EALREADY) {
+				rc = 0;
+				OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
+			}
 
-                if (old) {
-                        if (noquota)
-                                free_qinfo(oqi);
-                        else
-                                free_qinfo(old);
-                }
-        }
-        RETURN(rc);
+			CDEBUG(D_QUOTA, "%s: setdq to insert for %s %d (%d)\n",
+			       cli->cl_import->imp_obd->obd_name,
+			       type == USRQUOTA ? "user" : "group",
+			       qid[type], rc);
+		} else {
+			/* This ID is now off the hook, let's remove it from
+			 * the hash table */
+			if (oqi == NULL)
+				continue;
+
+			oqi = cfs_hash_del_key(cli->cl_quota_hash[type],
+					       &qid[type]);
+			if (oqi)
+				OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
+
+			CDEBUG(D_QUOTA, "%s: setdq to remove for %s %d (%p)\n",
+			       cli->cl_import->imp_obd->obd_name,
+			       type == USRQUOTA ? "user" : "group",
+			       qid[type], oqi);
+		}
+	}
+
+	RETURN(rc);
+}
+
+/*
+ * Hash operations for uid/gid <-> osc_quota_info
+ */
+static unsigned
+oqi_hashfn(cfs_hash_t *hs, const void *key, unsigned mask)
+{
+	return cfs_hash_u32_hash(*((__u32*)key), mask);
+}
+
+static int
+oqi_keycmp(const void *key, cfs_hlist_node_t *hnode)
+{
+	struct osc_quota_info *oqi;
+	obd_uid uid;
+
+	LASSERT(key != NULL);
+	uid = *((obd_uid*)key);
+	oqi = cfs_hlist_entry(hnode, struct osc_quota_info, oqi_hash);
+
+	return uid == oqi->oqi_id;
+}
+
+static void *
+oqi_key(cfs_hlist_node_t *hnode)
+{
+	struct osc_quota_info *oqi;
+	oqi = cfs_hlist_entry(hnode, struct osc_quota_info, oqi_hash);
+	return &oqi->oqi_id;
+}
+
+static void *
+oqi_object(cfs_hlist_node_t *hnode)
+{
+	return cfs_hlist_entry(hnode, struct osc_quota_info, oqi_hash);
+}
+
+static void
+oqi_get(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+{
+}
+
+static void
+oqi_put_locked(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+{
+}
+
+static void
+oqi_exit(cfs_hash_t *hs, cfs_hlist_node_t *hnode)
+{
+	struct osc_quota_info *oqi;
+
+	oqi = cfs_hlist_entry(hnode, struct osc_quota_info, oqi_hash);
+
+        OBD_SLAB_FREE_PTR(oqi, osc_quota_kmem);
+}
+
+#define HASH_QUOTA_BKT_BITS 5
+#define HASH_QUOTA_CUR_BITS 5
+#define HASH_QUOTA_MAX_BITS 15
+
+static cfs_hash_ops_t quota_hash_ops = {
+	.hs_hash	= oqi_hashfn,
+	.hs_keycmp	= oqi_keycmp,
+	.hs_key		= oqi_key,
+	.hs_object	= oqi_object,
+	.hs_get		= oqi_get,
+	.hs_put_locked	= oqi_put_locked,
+	.hs_exit	= oqi_exit,
+};
+
+int osc_quota_setup(struct obd_device *obd)
+{
+	struct client_obd *cli = &obd->u.cli;
+	int i, type;
+	ENTRY;
+
+	for (type = 0; type < MAXQUOTAS; type++) {
+		cli->cl_quota_hash[type] = cfs_hash_create("QUOTA_HASH",
+							   HASH_QUOTA_CUR_BITS,
+							   HASH_QUOTA_MAX_BITS,
+							   HASH_QUOTA_BKT_BITS,
+							   0,
+							   CFS_HASH_MIN_THETA,
+							   CFS_HASH_MAX_THETA,
+							   &quota_hash_ops,
+							   CFS_HASH_DEFAULT);
+		if (cli->cl_quota_hash[type] == NULL)
+			break;
+	}
+
+	if (type == MAXQUOTAS)
+		RETURN(0);
+
+	for (i = 0; i < type; i++)
+		cfs_hash_putref(cli->cl_quota_hash[i]);
+
+	RETURN(-ENOMEM);
 }
 
 int osc_quota_cleanup(struct obd_device *obd)
 {
-        struct client_obd     *cli = &obd->u.cli;
-        struct osc_quota_info *oqi, *n;
-        int i;
-        ENTRY;
+	struct client_obd     *cli = &obd->u.cli;
+	int type;
+	ENTRY;
 
-        cfs_spin_lock(&qinfo_list_lock);
-        for (i = 0; i < NR_DQHASH; i++) {
-                cfs_list_for_each_entry_safe(oqi, n, &qinfo_hash[i], oqi_hash) {
-                        if (oqi->oqi_cli != cli)
-                                continue;
-                        remove_qinfo_hash(oqi);
-                        free_qinfo(oqi);
-                }
-        }
-        cfs_spin_unlock(&qinfo_list_lock);
+	for (type = 0; type < MAXQUOTAS; type++)
+		cfs_hash_putref(cli->cl_quota_hash[type]);
 
-        RETURN(0);
-}
-
-int osc_quota_init()
-{
-        int i;
-        ENTRY;
-
-        LASSERT(qinfo_cachep == NULL);
-        qinfo_cachep = cfs_mem_cache_create("osc_quota_info",
-                                            sizeof(struct osc_quota_info),
-                                            0, 0);
-        if (!qinfo_cachep)
-                RETURN(-ENOMEM);
-
-        for (i = 0; i < NR_DQHASH; i++)
-                CFS_INIT_LIST_HEAD(qinfo_hash + i);
-
-        RETURN(0);
-}
-
-int osc_quota_exit()
-{
-        struct osc_quota_info *oqi, *n;
-        int                    i, rc;
-        ENTRY;
-
-        cfs_spin_lock(&qinfo_list_lock);
-        for (i = 0; i < NR_DQHASH; i++) {
-                cfs_list_for_each_entry_safe(oqi, n, &qinfo_hash[i], oqi_hash) {
-                        remove_qinfo_hash(oqi);
-                        free_qinfo(oqi);
-                }
-        }
-        cfs_spin_unlock(&qinfo_list_lock);
-
-        rc = cfs_mem_cache_destroy(qinfo_cachep);
-        LASSERTF(rc == 0, "couldn't destory qinfo_cachep slab\n");
-        qinfo_cachep = NULL;
-
-        RETURN(0);
+	RETURN(0);
 }
 
 int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
