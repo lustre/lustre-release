@@ -599,15 +599,18 @@ int ll_teardown_mmaps(struct address_space *mapping, __u64 first, __u64 last)
 
 static struct vm_operations_struct ll_file_vm_ops = {
 #ifndef HAVE_VM_OP_FAULT
-        .nopage         = ll_nopage,
-        .populate       = ll_populate,
-
+	.nopage			= ll_nopage,
+	.populate		= ll_populate,
 #else
-        .fault          = ll_fault,
+	.fault			= ll_fault,
 #endif
-        .page_mkwrite   = ll_page_mkwrite,
-        .open           = ll_vm_open,
-        .close          = ll_vm_close,
+#ifndef HAVE_PGMKWRITE_COMPACT
+	.page_mkwrite		= ll_page_mkwrite,
+#else
+	._pmkw.page_mkwrite	= ll_page_mkwrite,
+#endif
+	.open			= ll_vm_open,
+	.close			= ll_vm_close,
 };
 
 int ll_file_mmap(struct file *file, struct vm_area_struct * vma)

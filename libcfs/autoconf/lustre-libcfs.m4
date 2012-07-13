@@ -101,13 +101,10 @@ AC_DEFUN([LIBCFS_DIGEST_SETKEY_FLAGS],
 LB_LINUX_TRY_COMPILE([
 	#include <linux/err.h>
 	#include <linux/crypto.h>
-
-	static int foo(struct crypto_tfm *tfm, const u8 *key, unsigned int l, u32* f)
-	{
-		return 1;
-	}
 ],[
-	struct digest_alg alg = {.dia_setkey=foo};
+	struct digest_alg alg;
+
+	alg.dia_setkey(NULL, NULL, 0, NULL);
 ],[
 	AC_MSG_RESULT([yes])
 	AC_DEFINE(HAVE_DIGEST_SETKEY_FLAGS, 1, [kernel dia_setkey takes 4 args])
@@ -115,7 +112,6 @@ LB_LINUX_TRY_COMPILE([
 	AC_MSG_RESULT([no])
 ])
 ])
-
 
 # 2.6.19 API changes
 # kmem_cache_destroy(cachep) return void instead of
