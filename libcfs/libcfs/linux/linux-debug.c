@@ -49,7 +49,9 @@
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/errno.h>
+#ifdef HAVE_KERNEL_LOCKED
 #include <linux/smp_lock.h>
+#endif
 #include <linux/unistd.h>
 #include <linux/interrupt.h>
 #include <asm/system.h>

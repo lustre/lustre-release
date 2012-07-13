@@ -69,7 +69,6 @@
 #include <asm/poll.h>
 #include <asm/uaccess.h>
 #include <linux/miscdevice.h>
-#include <linux/smp_lock.h>
 #include <linux/seq_file.h>
 #else
 # include <liblustre.h>

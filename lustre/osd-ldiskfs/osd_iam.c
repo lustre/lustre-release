@@ -112,7 +112,6 @@
 #include <linux/string.h>
 #include <linux/quotaops.h>
 #include <linux/buffer_head.h>
-#include <linux/smp_lock.h>
 #include "osd_internal.h"
 
 #include "xattr.h"

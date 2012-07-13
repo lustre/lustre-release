@@ -36,7 +36,6 @@
 
 #include <linux/fs.h>
 #include <linux/sched.h>
-#include <linux/smp_lock.h>
 #include <linux/quotaops.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE

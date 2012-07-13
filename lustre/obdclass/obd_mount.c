@@ -55,6 +55,9 @@
 #include <lustre_log.h>
 #include <lustre_disk.h>
 #include <lustre_param.h>
+#ifdef HAVE_KERNEL_LOCKED
+#include <linux/smp_lock.h>
+#endif
 
 static int (*client_fill_super)(struct super_block *sb,
                                 struct vfsmount *mnt) = NULL;

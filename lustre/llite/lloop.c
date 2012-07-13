@@ -94,7 +94,6 @@
 #include <linux/blkdev.h>
 #include <linux/blkpg.h>
 #include <linux/init.h>
-#include <linux/smp_lock.h>
 #include <linux/swap.h>
 #include <linux/slab.h>
 #include <linux/suspend.h>

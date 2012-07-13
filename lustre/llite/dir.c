@@ -42,7 +42,6 @@
 #include <linux/pagemap.h>
 #include <linux/mm.h>
 #include <linux/version.h>
-#include <linux/smp_lock.h>
 #include <asm/uaccess.h>
 #include <linux/buffer_head.h>   // for wait_on_buffer
 #include <linux/pagevec.h>

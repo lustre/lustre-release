@@ -37,7 +37,6 @@
 #include <linux/fs.h>
 #include <linux/sched.h>
 #include <linux/mm.h>
-#include <linux/smp_lock.h>
 #ifdef HAVE_SELINUX_IS_ENABLED
 #include <linux/selinux.h>
 #endif

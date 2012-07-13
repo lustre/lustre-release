@@ -42,7 +42,6 @@
 # include <linux/init.h>
 # include <linux/fs.h>
 # include <linux/jbd.h>
-# include <linux/smp_lock.h>
 # include <linux/buffer_head.h>
 # include <linux/workqueue.h>
 # include <linux/mount.h>

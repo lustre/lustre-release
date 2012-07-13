@@ -47,8 +47,6 @@
 # include <linux/fs.h>
 # include <linux/list.h>
 # include <linux/sched.h>  /* for struct task_struct, for current.h */
-# include <asm/current.h>  /* for smp_lock.h */
-# include <linux/smp_lock.h>
 # include <linux/proc_fs.h>
 # include <linux/mount.h>
 # include <linux/lustre_intent.h>

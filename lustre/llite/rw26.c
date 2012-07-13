@@ -46,7 +46,6 @@
 #include <linux/string.h>
 #include <linux/stat.h>
 #include <linux/errno.h>
-#include <linux/smp_lock.h>
 #include <linux/unistd.h>
 #include <linux/version.h>
 #include <asm/system.h>
@@ -59,7 +58,6 @@
 #include <asm/uaccess.h>
 #include <linux/mm.h>
 #include <linux/pagemap.h>
-#include <linux/smp_lock.h>
 
 #define DEBUG_SUBSYSTEM S_LLITE
 
