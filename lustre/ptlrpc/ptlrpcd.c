@@ -103,6 +103,7 @@ void ptlrpcd_wake(struct ptlrpc_request *req)
 
         cfs_waitq_signal(&rq_set->set_waitq);
 }
+EXPORT_SYMBOL(ptlrpcd_wake);
 
 static struct ptlrpcd_ctl *
 ptlrpcd_select_pc(struct ptlrpc_request *req, pdl_policy_t policy, int index)
@@ -274,6 +275,7 @@ void ptlrpcd_add_req(struct ptlrpc_request *req, pdl_policy_t policy, int idx)
 
         ptlrpc_set_add_new_req(pc, req);
 }
+EXPORT_SYMBOL(ptlrpcd_add_req);
 
 static inline void ptlrpc_reqset_get(struct ptlrpc_request_set *set)
 {
@@ -881,6 +883,7 @@ int ptlrpcd_addref(void)
         cfs_mutex_unlock(&ptlrpcd_mutex);
         RETURN(rc);
 }
+EXPORT_SYMBOL(ptlrpcd_addref);
 
 void ptlrpcd_decref(void)
 {
@@ -889,4 +892,5 @@ void ptlrpcd_decref(void)
                 ptlrpcd_fini();
         cfs_mutex_unlock(&ptlrpcd_mutex);
 }
+EXPORT_SYMBOL(ptlrpcd_decref);
 /** @} ptlrpcd */

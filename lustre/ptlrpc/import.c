@@ -221,6 +221,7 @@ void ptlrpc_deactivate_import(struct obd_import *imp)
         cfs_spin_lock(&imp->imp_lock);
         ptlrpc_deactivate_and_unlock_import(imp);
 }
+EXPORT_SYMBOL(ptlrpc_deactivate_import);
 
 static unsigned int
 ptlrpc_inflight_deadline(struct ptlrpc_request *req, time_t now)
@@ -379,6 +380,7 @@ void ptlrpc_invalidate_import(struct obd_import *imp)
         cfs_atomic_dec(&imp->imp_inval_count);
         cfs_waitq_broadcast(&imp->imp_recovery_waitq);
 }
+EXPORT_SYMBOL(ptlrpc_invalidate_import);
 
 /* unset imp_invalid */
 void ptlrpc_activate_import(struct obd_import *imp)
@@ -391,6 +393,7 @@ void ptlrpc_activate_import(struct obd_import *imp)
         cfs_spin_unlock(&imp->imp_lock);
         obd_import_event(obd, imp, IMP_EVENT_ACTIVE);
 }
+EXPORT_SYMBOL(ptlrpc_activate_import);
 
 void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
 {
@@ -419,6 +422,7 @@ void ptlrpc_fail_import(struct obd_import *imp, __u32 conn_cnt)
         }
         EXIT;
 }
+EXPORT_SYMBOL(ptlrpc_fail_import);
 
 int ptlrpc_reconnect_import(struct obd_import *imp)
 {
@@ -1456,6 +1460,7 @@ out:
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(ptlrpc_disconnect_import);
 
 void ptlrpc_cleanup_imp(struct obd_import *imp)
 {
@@ -1469,6 +1474,7 @@ void ptlrpc_cleanup_imp(struct obd_import *imp)
 
         EXIT;
 }
+EXPORT_SYMBOL(ptlrpc_cleanup_imp);
 
 /* Adaptive Timeout utils */
 extern unsigned int at_min, at_max, at_history;

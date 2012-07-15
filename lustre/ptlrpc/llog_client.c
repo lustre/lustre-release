@@ -351,3 +351,4 @@ struct llog_operations llog_client_ops = {
         lop_destroy:     llog_client_destroy,
         lop_close:       llog_client_close,
 };
+EXPORT_SYMBOL(llog_client_ops);

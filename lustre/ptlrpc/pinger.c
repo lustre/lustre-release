@@ -407,6 +407,7 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
         ptlrpc_update_next_ping(imp, 0);
 }
+EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
 
 void ptlrpc_pinger_commit_expected(struct obd_import *imp)
 {
@@ -434,6 +435,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
 
         RETURN(0);
 }
+EXPORT_SYMBOL(ptlrpc_pinger_add_import);
 
 int ptlrpc_pinger_del_import(struct obd_import *imp)
 {
@@ -451,6 +453,7 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         cfs_mutex_unlock(&pinger_mutex);
         RETURN(0);
 }
+EXPORT_SYMBOL(ptlrpc_pinger_del_import);
 
 /**
  * Register a timeout callback to the pinger list, and the callback will
@@ -524,6 +527,7 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
         cfs_mutex_unlock(&pinger_mutex);
         return 0;
 }
+EXPORT_SYMBOL(ptlrpc_add_timeout_client);
 
 int ptlrpc_del_timeout_client(cfs_list_t *obd_list,
                               enum timeout_event event)
@@ -552,6 +556,7 @@ int ptlrpc_del_timeout_client(cfs_list_t *obd_list,
         cfs_mutex_unlock(&pinger_mutex);
         return 0;
 }
+EXPORT_SYMBOL(ptlrpc_del_timeout_client);
 
 int ptlrpc_pinger_remove_timeouts(void)
 {

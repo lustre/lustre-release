@@ -182,6 +182,7 @@ int ptlrpc_resend(struct obd_import *imp)
 
         RETURN(0);
 }
+EXPORT_SYMBOL(ptlrpc_resend);
 
 /**
  * Go through all requests in delayed list and wake their threads
@@ -201,6 +202,7 @@ void ptlrpc_wake_delayed(struct obd_import *imp)
         }
         cfs_spin_unlock(&imp->imp_lock);
 }
+EXPORT_SYMBOL(ptlrpc_wake_delayed);
 
 void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 {
@@ -283,6 +285,7 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(ptlrpc_set_import_active);
 
 /* Attempt to reconnect an import */
 int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
@@ -343,6 +346,7 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 out:
         return rc;
 }
+EXPORT_SYMBOL(ptlrpc_recover_import);
 
 int ptlrpc_import_in_recovery(struct obd_import *imp)
 {
