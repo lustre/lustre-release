@@ -534,7 +534,7 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
 {
         struct lov_stripe_md *lsm = set->set_oi->oi_md;
         struct lov_obd *lov = &set->set_exp->exp_obd->u.lov;
-        unsigned ost_idx = 0, ost_count;
+        unsigned ost_idx, ost_count;
         struct pool_desc *pool;
         struct ost_pool *osts = NULL;
         int i, rc = -EIO;
@@ -546,7 +546,8 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
                 cfs_down_read(&pool_tgt_rw_sem(pool));
                 osts = &(pool->pool_obds);
                 ost_count = osts->op_count;
-                for (i = 0; i < ost_count; i++, ost_idx = osts->op_array[i]) {
+                for (i = 0, ost_idx = osts->op_array[0]; i < ost_count;
+                     i++, ost_idx = osts->op_array[i]) {
                         rc = lov_check_and_create_object(lov, ost_idx, lsm, req,
                                                          set->set_oti);
                         if (rc == 0)

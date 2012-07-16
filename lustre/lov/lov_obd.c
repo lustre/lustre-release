@@ -1173,7 +1173,7 @@ static int lov_create(struct obd_export *exp, struct obdo *src_oa,
 
         /* osc_create have timeout equ obd_timeout/2 so waiting don't be
          * longer then this */
-        l_wait_event(set->set_waitq, lov_finished_set(set), &lwi);
+        l_wait_event(set->set_waitq, lov_set_finished(set, 1), &lwi);
 
         /* we not have ptlrpc set for assign set->interpret and should
          * be call interpret function himself. calling from cb_create_update

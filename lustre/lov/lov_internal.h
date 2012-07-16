@@ -77,6 +77,7 @@ struct lov_request_set {
         int                      set_count;
         int                      set_completes;
         int                      set_success;
+        cfs_atomic_t             set_finish_checked;
         struct llog_cookie      *set_cookies;
         int                      set_cookie_sent;
         struct obd_trans_info   *set_oti;
@@ -193,7 +194,7 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req);
 
 /* lov_request.c */
 void lov_set_add_req(struct lov_request *req, struct lov_request_set *set);
-int lov_finished_set(struct lov_request_set *set);
+int lov_set_finished(struct lov_request_set *set, int idempotent);
 void lov_update_set(struct lov_request_set *set,
                     struct lov_request *req, int rc);
 int lov_update_common_set(struct lov_request_set *set,

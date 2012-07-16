@@ -59,6 +59,7 @@ static void lov_init_set(struct lov_request_set *set)
         set->set_count = 0;
         set->set_completes = 0;
         set->set_success = 0;
+        cfs_atomic_set(&set->set_finish_checked, 0);
         set->set_cookies = 0;
         CFS_INIT_LIST_HEAD(&set->set_list);
         cfs_atomic_set(&set->set_refcount, 1);
@@ -99,11 +100,17 @@ void lov_finish_set(struct lov_request_set *set)
         EXIT;
 }
 
-int lov_finished_set(struct lov_request_set *set)
+int lov_set_finished(struct lov_request_set *set, int idempotent)
 {
         CDEBUG(D_INFO, "check set %d/%d\n", set->set_completes,
                set->set_count);
-        return set->set_completes == set->set_count;
+        if (set->set_completes == set->set_count) {
+                if (idempotent)
+                        return 1;
+                if (cfs_atomic_inc_return(&set->set_finish_checked) == 1)
+                        return 1;
+        }
+        return 0;
 }
 
 void lov_update_set(struct lov_request_set *set,
@@ -727,7 +734,7 @@ int cb_create_update(void *cookie, int rc)
                         rc = -ENOTCONN;
 
         rc= lov_update_create_set(lovreq->rq_rqset, lovreq, rc);
-        if (lov_finished_set(lovreq->rq_rqset))
+        if (lov_set_finished(lovreq->rq_rqset, 0))
                 lov_put_reqset(lovreq->rq_rqset);
         return rc;
 }
@@ -1653,7 +1660,7 @@ out_update:
 
 out:
         if (lovreq->rq_rqset->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
-            lov_finished_set(lovreq->rq_rqset)) {
+            lov_set_finished(lovreq->rq_rqset, 0)) {
                lov_statfs_interpret(NULL, lovreq->rq_rqset,
                                     lovreq->rq_rqset->set_success !=
                                                   lovreq->rq_rqset->set_count);
