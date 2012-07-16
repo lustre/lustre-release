@@ -65,25 +65,26 @@ struct lov_request {
 };
 
 struct lov_request_set {
-        struct ldlm_enqueue_info*set_ei;
-        struct obd_info         *set_oi;
-        cfs_atomic_t             set_refcount;
-        struct obd_export       *set_exp;
-        /* XXX: There is @set_exp already, however obd_statfs gets obd_device
-           only. */
-        struct obd_device       *set_obd;
-        int                      set_count;
-        cfs_atomic_t             set_completes;
-        cfs_atomic_t             set_success;
-        struct llog_cookie      *set_cookies;
-        int                      set_cookie_sent;
-        struct obd_trans_info   *set_oti;
-        obd_count                set_oabufs;
-        struct brw_page         *set_pga;
-        struct lov_lock_handles *set_lockh;
-        cfs_list_t               set_list;
-        cfs_waitq_t              set_waitq;
-        cfs_spinlock_t           set_lock;
+	struct ldlm_enqueue_info	*set_ei;
+	struct obd_info			*set_oi;
+	cfs_atomic_t			set_refcount;
+	struct obd_export		*set_exp;
+	/* XXX: There is @set_exp already, however obd_statfs gets obd_device
+	   only. */
+	struct obd_device		*set_obd;
+	int				set_count;
+	cfs_atomic_t			set_completes;
+	cfs_atomic_t			set_success;
+	cfs_atomic_t			set_finish_checked;
+	struct llog_cookie		*set_cookies;
+	int				set_cookie_sent;
+	struct obd_trans_info		*set_oti;
+	obd_count			set_oabufs;
+	struct brw_page			*set_pga;
+	struct lov_lock_handles		*set_lockh;
+	cfs_list_t			set_list;
+	cfs_waitq_t			set_waitq;
+	cfs_spinlock_t			set_lock;
 };
 
 extern cfs_mem_cache_t *lov_oinfo_slab;
@@ -168,7 +169,7 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req);
 
 /* lov_request.c */
 void lov_set_add_req(struct lov_request *req, struct lov_request_set *set);
-int lov_finished_set(struct lov_request_set *set);
+int lov_set_finished(struct lov_request_set *set, int idempotent);
 void lov_update_set(struct lov_request_set *set,
                     struct lov_request *req, int rc);
 int lov_update_common_set(struct lov_request_set *set,

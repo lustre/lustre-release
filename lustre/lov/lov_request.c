@@ -50,14 +50,15 @@
 
 static void lov_init_set(struct lov_request_set *set)
 {
-        set->set_count = 0;
-        cfs_atomic_set(&set->set_completes, 0);
-        cfs_atomic_set(&set->set_success, 0);
-        set->set_cookies = 0;
-        CFS_INIT_LIST_HEAD(&set->set_list);
-        cfs_atomic_set(&set->set_refcount, 1);
-        cfs_waitq_init(&set->set_waitq);
-        cfs_spin_lock_init(&set->set_lock);
+	set->set_count = 0;
+	cfs_atomic_set(&set->set_completes, 0);
+	cfs_atomic_set(&set->set_success, 0);
+	cfs_atomic_set(&set->set_finish_checked, 0);
+	set->set_cookies = 0;
+	CFS_INIT_LIST_HEAD(&set->set_list);
+	cfs_atomic_set(&set->set_refcount, 1);
+	cfs_waitq_init(&set->set_waitq);
+	cfs_spin_lock_init(&set->set_lock);
 }
 
 void lov_finish_set(struct lov_request_set *set)
@@ -93,13 +94,19 @@ void lov_finish_set(struct lov_request_set *set)
         EXIT;
 }
 
-int lov_finished_set(struct lov_request_set *set)
+int lov_set_finished(struct lov_request_set *set, int idempotent)
 {
-        int completes = cfs_atomic_read(&set->set_completes);
+	int completes = cfs_atomic_read(&set->set_completes);
 
-        CDEBUG(D_INFO, "check set %d/%d\n", completes,
-               set->set_count);
-        return completes == set->set_count;
+	CDEBUG(D_INFO, "check set %d/%d\n", completes, set->set_count);
+
+	if (completes == set->set_count) {
+		if (idempotent)
+			return 1;
+		if (cfs_atomic_inc_return(&set->set_finish_checked) == 1)
+			return 1;
+	}
+	return 0;
 }
 
 void lov_update_set(struct lov_request_set *set,
@@ -741,10 +748,10 @@ int cb_create_update(void *cookie, int rc)
                 if (lovreq->rq_idx == cfs_fail_val)
                         rc = -ENOTCONN;
 
-        rc= lov_update_create_set(lovreq->rq_rqset, lovreq, rc);
-        if (lov_finished_set(lovreq->rq_rqset))
-                lov_put_reqset(lovreq->rq_rqset);
-        return rc;
+	rc = lov_update_create_set(lovreq->rq_rqset, lovreq, rc);
+	if (lov_set_finished(lovreq->rq_rqset, 0))
+		lov_put_reqset(lovreq->rq_rqset);
+	return rc;
 }
 
 int lov_prep_create_set(struct obd_export *exp, struct obd_info *oinfo,
@@ -1669,15 +1676,15 @@ out_update:
         obd_putref(lovobd);
 
 out:
-        if (set->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
-            lov_finished_set(set)) {
-                lov_statfs_interpret(NULL, set, set->set_count !=
-                                     cfs_atomic_read(&set->set_success));
-                if (lov->lov_qos.lq_statfs_in_progress)
-                        qos_statfs_done(lov);
-        }
+	if (set->set_oi->oi_flags & OBD_STATFS_PTLRPCD &&
+	    lov_set_finished(set, 0)) {
+		lov_statfs_interpret(NULL, set, set->set_count !=
+				     cfs_atomic_read(&set->set_success));
+		if (lov->lov_qos.lq_statfs_in_progress)
+			qos_statfs_done(lov);
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 int lov_prep_statfs_set(struct obd_device *obd, struct obd_info *oinfo,
