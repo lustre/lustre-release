@@ -1786,13 +1786,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 
 void ll_delete_inode(struct inode *inode)
 {
-        struct ll_sb_info *sbi = ll_i2sbi(inode);
-        int rc;
         ENTRY;
-
-        rc = obd_fid_delete(sbi->ll_md_exp, ll_inode2fid(inode));
-        if (rc)
-                CERROR("fid_delete() failed, rc %d\n", rc);
 
         truncate_inode_pages(&inode->i_data, 0);
 

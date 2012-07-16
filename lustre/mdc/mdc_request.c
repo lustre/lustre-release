@@ -1959,16 +1959,6 @@ int mdc_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
         RETURN(seq_client_alloc_fid(seq, fid));
 }
 
-/* XXX This method is used only to clear current fid seq
- * once fld/mds insert failed */
-static int mdc_fid_delete(struct obd_export *exp, const struct lu_fid *fid)
-{
-        struct client_obd *cli = &exp->exp_obd->u.cli;
-
-        seq_client_flush(cli->cl_seq);
-        return 0;
-}
-
 struct obd_uuid *mdc_get_uuid(struct obd_export *exp) {
         struct client_obd *cli = &exp->exp_obd->u.cli;
         return &cli->cl_target_uuid;
@@ -2296,7 +2286,6 @@ struct obd_ops mdc_obd_ops = {
         .o_fid_init         = mdc_fid_init,
         .o_fid_fini         = mdc_fid_fini,
         .o_fid_alloc        = mdc_fid_alloc,
-        .o_fid_delete       = mdc_fid_delete,
         .o_import_event     = mdc_import_event,
         .o_llog_init        = mdc_llog_init,
         .o_llog_finish      = mdc_llog_finish,

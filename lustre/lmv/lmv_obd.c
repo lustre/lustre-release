@@ -1040,17 +1040,6 @@ int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
         RETURN(rc);
 }
 
-static int lmv_fid_delete(struct obd_export *exp, const struct lu_fid *fid)
-{
-        ENTRY;
-        LASSERT(exp != NULL && fid != NULL);
-        if (lmv_object_delete(exp, fid)) {
-                CDEBUG(D_INODE, "Object "DFID" is destroyed.\n",
-                       PFID(fid));
-        }
-        RETURN(0);
-}
-
 static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lmv_obd             *lmv = &obd->u.lmv;
@@ -3129,7 +3118,6 @@ struct obd_ops lmv_obd_ops = {
         .o_notify               = lmv_notify,
         .o_get_uuid             = lmv_get_uuid,
         .o_iocontrol            = lmv_iocontrol,
-        .o_fid_delete           = lmv_fid_delete
 };
 
 struct md_ops lmv_md_ops = {

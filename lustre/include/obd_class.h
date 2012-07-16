@@ -1041,19 +1041,6 @@ static inline int obd_fid_alloc(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline int obd_fid_delete(struct obd_export *exp,
-                                 const struct lu_fid *fid)
-{
-        int rc;
-        ENTRY;
-
-        EXP_CHECK_DT_OP(exp, fid_delete);
-        EXP_COUNTER_INCREMENT(exp, fid_delete);
-
-        rc = OBP(exp->exp_obd, fid_delete)(exp, fid);
-        RETURN(rc);
-}
-
 static inline int obd_ping(struct obd_export *exp)
 {
         int rc;
