@@ -1873,13 +1873,7 @@ void ll_read_inode2(struct inode *inode, void *opaque)
 void ll_delete_inode(struct inode *inode)
 {
 	struct cl_inode_info *lli = cl_i2info(inode);
-	struct ll_sb_info    *sbi = ll_i2sbi(inode);
-	int rc;
 	ENTRY;
-
-	rc = obd_fid_delete(sbi->ll_md_exp, ll_inode2fid(inode));
-	if (rc)
-		CERROR("fid_delete() failed, rc %d\n", rc);
 
 	if (S_ISREG(inode->i_mode) && lli->lli_clob != NULL)
 		/* discard all dirty pages before truncating them, required by
