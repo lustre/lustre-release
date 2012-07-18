@@ -912,6 +912,16 @@ start() {
     return $RC
 }
 
+#
+# When a ZFS OSD is made read-only by replay_barrier(), its pool is "freezed".
+# Because stopping corresponding target may not clear this in-memory state, we
+# need to zap the pool from memory by exporting and reimporting the pool.
+#
+# Although the uberblocks are not updated when a pool is freezed, transactions
+# are still written to the disks.  Modified blocks may be cached in memory when
+# tests try reading them back.  The export-and-reimport process also evicts any
+# cached pool data from memory to provide the correct "data loss" semantics.
+#
 refresh_disk() {
 	local facet=$1
 	local fstype=$(facet_fstype $facet)
@@ -930,7 +940,8 @@ refresh_disk() {
 		fi
 		do_facet $facet "cp /etc/zfs/zpool.cache /tmp/zpool.cache.back"
 		do_facet $facet "$ZPOOL export ${poolname}"
-		do_facet $facet "$ZPOOL import -f -c /tmp/zpool.cache.back ${poolname}"
+		do_facet $facet "$ZPOOL import -f -c /tmp/zpool.cache.back \
+		                 ${poolname}"
 	fi
 }
 
