@@ -48,6 +48,7 @@
 #if !defined(HAVE_LINUX_FIEMAP_H) || !defined(__KERNEL__)
 
 #ifndef __KERNEL__
+#include <stddef.h>
 #include <libcfs/posix/posix-types.h>
 #endif
 
