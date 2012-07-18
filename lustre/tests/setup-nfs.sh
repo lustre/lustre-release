@@ -24,7 +24,9 @@ setup_nfs() {
 
     do_nodes $LUSTRE_CLIENT "service nfs restart" || return 1
 
-    do_nodes $NFS_CLIENTS "service rpcidmapd restart" || return 1
+    do_nodes $NFS_CLIENTS "chkconfig --list rpcidmapd 2>/dev/null |
+                           grep -q rpcidmapd && service rpcidmapd restart ||
+                           true"
 
     do_nodes $LUSTRE_CLIENT "exportfs -o $export_opts_v *:$MNTPNT \
         && exportfs -v" || return 1
@@ -52,7 +54,9 @@ cleanup_nfs() {
     do_nodes $NFS_CLIENTS "umount -f $MNTPNT" || return 1
 
     echo -e "\nUnexporting Lustre filesystem..."
-    do_nodes $NFS_CLIENTS "service rpcidmapd stop" || return 1
+    do_nodes $NFS_CLIENTS "chkconfig --list rpcidmapd 2>/dev/null |
+                           grep -q rpcidmapd && service rpcidmapd stop ||
+                           true"
 
     do_nodes $LUSTRE_CLIENT "service nfs stop" || return 1
 
