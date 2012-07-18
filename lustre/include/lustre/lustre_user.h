@@ -192,6 +192,22 @@ struct obd_statfs {
 #define LOV_MAXPOOLNAME 16
 #define LOV_POOLNAMEF "%.16s"
 
+#define LOV_MIN_STRIPE_BITS 16   /* maximum PAGE_SIZE (ia64), power of 2 */
+#define LOV_MIN_STRIPE_SIZE (1<<LOV_MIN_STRIPE_BITS)
+#define LOV_MAX_STRIPE_COUNT_OLD 160
+/* This calculation is crafted so that input of 4096 will result in 160
+ * which in turn is equal to old maximal stripe count.
+ * XXX: In fact this is too simpified for now, what it also need is to get
+ * ea_type argument to clearly know how much space each stripe consumes.
+ *
+ * The limit of 12 pages is somewhat arbitrary, but is a reasonably large
+ * allocation that is sufficient for the current generation of systems.
+ *
+ * (max buffer size - lov+rpc header) / sizeof(struct lov_ost_data_v1) */
+#define LOV_MAX_STRIPE_COUNT 2000  /* ((12 * 4096 - 256) / 24) */
+#define LOV_ALL_STRIPES       0xffff /* only valid for directories */
+#define LOV_V1_INSANE_STRIPE_COUNT 65532 /* maximum stripe count bz13933 */
+
 #define lov_user_ost_data lov_user_ost_data_v1
 struct lov_user_ost_data_v1 {     /* per-stripe data structure */
         __u64 l_object_id;        /* OST object ID */
