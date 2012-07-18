@@ -44,11 +44,8 @@
 #include <unistd.h>
 
 #include <liblustre.h>
-#include <lnet/lnetctl.h>
-#include <obd.h>
-#include <lustre_lib.h>
-#include <obd_lov.h>
-#include <lustre/liblustreapi.h>
+#include <obd.h> /* needed for lov_stripe_md_size */
+#include <lustre/lustreapi.h>
 
 #define ACT_NONE        0
 #define ACT_READ        1

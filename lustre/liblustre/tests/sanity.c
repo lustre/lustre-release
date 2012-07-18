@@ -56,7 +56,7 @@
 
 #include <liblustre.h>
 #include "test_common.h"
-#include <lustre/liblustreapi.h>
+#include <lustre/lustreapi.h>
 
 #define _npages (2048)
 

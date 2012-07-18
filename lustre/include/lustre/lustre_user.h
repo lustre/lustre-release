@@ -686,13 +686,11 @@ static inline char *changelog_rec_name(struct changelog_rec *rec)
 
 static inline int changelog_rec_snamelen(struct changelog_ext_rec *rec)
 {
-	LASSERT(CHANGELOG_REC_EXTENDED(rec));
 	return rec->cr_namelen - strlen(rec->cr_name) - 1;
 }
 
 static inline char *changelog_rec_sname(struct changelog_ext_rec *rec)
 {
-	LASSERT(CHANGELOG_REC_EXTENDED(rec));
 	return rec->cr_name + strlen(rec->cr_name) + 1;
 }
 

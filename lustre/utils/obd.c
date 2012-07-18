@@ -67,10 +67,9 @@
 #include <obd.h>          /* for struct lov_stripe_md */
 #include <lustre/lustre_build_version.h>
 
-#include <obd_class.h>
 #include <lnet/lnetctl.h>
 #include <libcfs/libcfsutil.h>
-#include <lustre/liblustreapi.h>
+#include <lustre/lustreapi.h>
 
 #define MAX_STRING_SIZE 128
 #define DEVICES_LIST "/proc/fs/lustre/devices"

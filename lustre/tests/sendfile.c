@@ -42,12 +42,7 @@
 #include <sys/stat.h>
 #include <sys/socket.h>
 
-#include <liblustre.h>
-#include <lnet/lnetctl.h>
-#include <obd.h>
-#include <lustre_lib.h>
-#include <obd_lov.h>
-#include <lustre/liblustreapi.h>
+#include <lustre/lustreapi.h>
 
 #define syserr(str) { perror(str); exit(-1); }
 

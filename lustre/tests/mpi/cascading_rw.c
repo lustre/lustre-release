@@ -50,13 +50,12 @@
 #include <getopt.h>
 #include <errno.h>
 
-#include <libcfs/libcfs.h>
+#include <lustre/lustreapi.h>
 #include "lp_utils.h"
 #ifndef _IOWR
 # include <ioctl.h>
 #endif
 
-#include <lustre/liblustreapi.h>
 
 int rank = 0;
 int size = 0;

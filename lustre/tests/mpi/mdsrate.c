@@ -30,8 +30,7 @@
 #include "mpi.h"
 
 /* lustre */
-#include <liblustre.h>
-#include <lustre/liblustreapi.h>        /* for O_LOV_DELAY_CREATE */
+#include <lustre/lustreapi.h>        /* for O_LOV_DELAY_CREATE */
 
 #define CHECK_COUNT 10000
 #define DISPLAY_COUNT (CHECK_COUNT * 10)

@@ -66,13 +66,10 @@
 /* For dirname() */
 #include <libgen.h>
 
-#include <lnet/api-support.h>
 #include <lnet/lnetctl.h>
 
 #include <liblustre.h>
-#include <lustre/lustre_idl.h>
-#include <lustre/liblustreapi.h>
-#include <lustre/lustre_user.h>
+#include <lustre/lustreapi.h>
 #include <lustre_quota.h>
 
 #include <libcfs/libcfsutil.h>

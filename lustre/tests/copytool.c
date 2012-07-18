@@ -47,9 +47,8 @@
 #include <stdio.h>
 #include <getopt.h>
 #include <signal.h>
-#include <libcfs/libcfs.h>
-#include <lustre/lustre_user.h>
-#include <lustre/liblustreapi.h>
+
+#include <lustre/lustreapi.h>
 
 void *ctdata;
 

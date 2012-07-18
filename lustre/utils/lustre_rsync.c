@@ -119,10 +119,8 @@
 #include <utime.h>
 #include <sys/xattr.h>
 
-#include <libcfs/libcfs.h>
 #include <libcfs/libcfsutil.h>
-#include <lustre/liblustreapi.h>
-#include <lustre/lustre_idl.h>
+#include <lustre/lustreapi.h>
 #include "lustre_rsync.h"
 
 #define REPLICATE_STATUS_VER 1

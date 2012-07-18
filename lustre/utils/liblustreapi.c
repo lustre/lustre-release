@@ -71,9 +71,8 @@
 #include <liblustre.h>
 #include <lnet/lnetctl.h>
 #include <obd.h>
-#include <lustre_lib.h>
 #include <obd_lov.h>
-#include <lustre/liblustreapi.h>
+#include <lustre/lustreapi.h>
 
 static unsigned llapi_dir_filetype_table[] = {
         [DT_UNKNOWN]= 0,

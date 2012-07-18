@@ -1,4 +1,4 @@
-.TH LLAPI_FILE_OPEN 3 "2009 Jul 10" Lustre API
+.TH lustreapi 3 "2009 Jul 10" The Lustre user application interface library
 .SH NAME
 llapi_file_open, llapi_file_create \- open and possibly create a file or a device on a Lustre filesystem
 .SH SYNOPSIS
@@ -6,10 +6,7 @@ llapi_file_open, llapi_file_create \- open and possibly create a file or a devic
 .B #include <sys/types.h>
 .B #include <sys/stat.h>
 .B #include <fcntl.h>
-.B #include <liblustre.h>
-.B #include <lustre/lustre_idl.h>
-.B #include <lustre/liblustreapi.h>
-.B #include <lustre/lustre_user.h>
+.B #include <lustre/lustreapi.h>
 .sp
 .BI "int llapi_file_open(const char *"name ", int " flags ", int " mode "," 
 .BI "                    unsigned long long " stripe_size ", int " stripe_offset "," 
@@ -128,10 +125,7 @@ may not point to a Lustre filesystem.
 #include <fcntl.h>
 #include <errno.h>
 #include <stdio.h>
-#include <liblustre.h>
-#include <lustre/lustre_idl.h>
-#include <lustre/liblustreapi.h>
-#include <lustre/lustre_user.h>
+#include <lustre/lustreapi.h>
 int main(int argc, char *argv[])
 {
         int rc;
@@ -152,4 +146,4 @@ int main(int argc, char *argv[])
 .SH "SEE ALSO"
 .BR open (2),
 .BR lustre (7),
-.BR liblustreapi (7)
+.BR lustreapi (7)

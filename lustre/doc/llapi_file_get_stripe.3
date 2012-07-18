@@ -1,4 +1,4 @@
-.TH llapi_file_get_stripe 3 "2009 Jul 22" Lustre liblustreapi
+.TH lustreapi 3 "2009 Jul 22" The Lustre user application interface library
 .SH NAME
 llapi_file_get_stripe \- get striping information for a file or a directory on a Lustre filesystem
 .SH SYNOPSIS
@@ -6,10 +6,7 @@ llapi_file_get_stripe \- get striping information for a file or a directory on a
 .B #include <sys/types.h>
 .B #include <sys/stat.h>
 .B #include <fcntl.h>
-.B #include <liblustre.h>
-.B #include <lustre/lustre_idl.h>
-.B #include <lustre/liblustreapi.h>
-.B #include <lustre/lustre_user.h>
+.B #include <lustre/lustreapi.h>
 .sp
 .BI "int llapi_file_get_stripe(const char *"path ", void *"lum );
 .sp
@@ -140,12 +137,7 @@ is not properly mapped.
 .SH "EXAMPLE"
 .nf
 #include <sys/vfs.h>
-#include <liblustre.h>
-#include <lnet/lnetctl.h>
-#include <obd.h>
-#include <lustre_lib.h>
-#include <lustre/liblustreapi.h>
-#include <obd_lov.h>
+#include <lustre/lustreapi.h>
 
 static inline int maxint(int a, int b)
 {
@@ -201,4 +193,4 @@ cleanup:
 .fi
 .SH "SEE ALSO"
 .BR lustre (7),
-.BR liblustreapi (7)
+.BR lustreapi (7)
