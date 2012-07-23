@@ -639,10 +639,10 @@ void lustre_dump_dentry(struct dentry *dentry, int recur)
         if (recur == 0)
                 return;
 
-       list_for_each(tmp, &dentry->d_subdirs) {
-                struct dentry *d = list_entry(tmp, struct dentry, d_child);
-                lustre_dump_dentry(d, recur - 1);
-        }
+	list_for_each(tmp, &dentry->d_subdirs) {
+		struct dentry *d = list_entry(tmp, struct dentry, d_u.d_child);
+		lustre_dump_dentry(d, recur - 1);
+	}
 }
 
 void client_common_put_super(struct super_block *sb)

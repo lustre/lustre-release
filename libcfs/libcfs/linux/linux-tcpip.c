@@ -572,22 +572,6 @@ libcfs_sock_listen (struct socket **sockp,
 
 EXPORT_SYMBOL(libcfs_sock_listen);
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,12)
-int sock_create_lite(int family, int type, int protocol, struct socket **res)
-{
-        struct socket *sock;
-
-        sock = sock_alloc();
-        if (sock == NULL)
-                return -ENOMEM;
-
-        sock->type = type;
-        *res = sock;
-
-        return 0;
-}
-#endif
-
 int
 libcfs_sock_accept (struct socket **newsockp, struct socket *sock)
 {

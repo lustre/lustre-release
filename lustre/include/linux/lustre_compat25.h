@@ -39,10 +39,6 @@
 
 #ifdef __KERNEL__
 
-#if LINUX_VERSION_CODE < KERNEL_VERSION(2,6,9)
-#error sorry, lustre requires at least linux kernel 2.6.9 or later
-#endif
-
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
 #include <libcfs/linux/portals_compat25.h>
@@ -56,15 +52,6 @@
  #define SEEK_CUR 1
  #define SEEK_END 2
 #endif
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
-struct ll_iattr {
-        struct iattr    iattr;
-        unsigned int    ia_attr_flags;
-};
-#else
-#define ll_iattr iattr
-#endif /* LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14) */
 
 #ifdef HAVE_FS_STRUCT_RWLOCK
 # define LOCK_FS_STRUCT(fs)   cfs_write_lock(&(fs)->lock)
@@ -120,11 +107,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
  * ATTR_* attributes (see bug 13828)
  */
 #define ATTR_BLOCKS    (1 << 27)
-
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,15)
-#define d_child d_u.d_child
-#define d_rcu d_u.d_rcu
-#endif
 
 #define current_ngroups current_cred()->group_info->ngroups
 #define current_groups current_cred()->group_info->small_block

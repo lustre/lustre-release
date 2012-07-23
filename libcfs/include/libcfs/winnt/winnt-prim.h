@@ -1174,12 +1174,6 @@ sigpending(cfs_sigset_t *what) {
 
 
 /*
- *  Linux kernel version definition
- */
-
-#define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-
-/*
  *  linux ioctl coding definitions
  */
  

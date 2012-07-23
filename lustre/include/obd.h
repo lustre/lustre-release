@@ -1281,9 +1281,7 @@ struct md_op_data {
         /* iattr fields and blocks. */
         struct iattr            op_attr;
 #ifdef __KERNEL__
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,14)
-        unsigned int            op_attr_flags;
-#endif
+	unsigned int            op_attr_flags;
 #endif
         __u64                   op_valid;
         loff_t                  op_attr_blocks;

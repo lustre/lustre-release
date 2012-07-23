@@ -1014,25 +1014,11 @@ ksocknal_lib_setup_sock (struct socket *sock)
         return (0);
 }
 
-#if (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,10))
-#define sock2tcp_opt(sk) tcp_sk(sk)
-#else
-struct tcp_opt *sock2tcp_opt(struct sock *sk)
-{
-        struct tcp_sock *s = (struct tcp_sock *)sk;
-        return &s->tcp;
-}
-#endif
-
 void
 ksocknal_lib_push_conn (ksock_conn_t *conn)
 {
         struct sock    *sk;
-#if (LINUX_VERSION_CODE < KERNEL_VERSION(2,6,11))
-        struct tcp_opt *tp;
-#else
         struct tcp_sock *tp;
-#endif
         int             nonagle;
         int             val = 1;
         int             rc;
@@ -1042,8 +1028,8 @@ ksocknal_lib_push_conn (ksock_conn_t *conn)
         if (rc != 0)                            /* being shut down */
                 return;
 
-        sk = conn->ksnc_sock->sk;
-        tp = sock2tcp_opt(sk);
+	sk = conn->ksnc_sock->sk;
+	tp = tcp_sk(sk);
 
         lock_sock (sk);
         nonagle = tp->nonagle;

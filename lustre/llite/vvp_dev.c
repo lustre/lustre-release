@@ -430,9 +430,6 @@ static void vvp_pgcache_page_show(const struct lu_env *env,
         seq_page_flag(seq, vmpage, referenced, has_flags);
         seq_page_flag(seq, vmpage, uptodate, has_flags);
         seq_page_flag(seq, vmpage, dirty, has_flags);
-#if (LINUX_VERSION_CODE <= KERNEL_VERSION(2,6,12))
-        seq_page_flag(seq, vmpage, highmem, has_flags);
-#endif
         seq_page_flag(seq, vmpage, writeback, has_flags);
         seq_printf(seq, "%s]\n", has_flags ? "" : "-");
 }

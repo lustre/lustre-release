@@ -491,9 +491,6 @@ static inline int request_module(const char *name, ...)
 #define MODULE_PARM(a, b)
 #define MODULE_PARM_DESC(a, b)
 
-#define KERNEL_VERSION(a,b,c) ((a)*100+(b)*10+c)
-#define LINUX_VERSION_CODE KERNEL_VERSION(2,5,0)
-
 #define NR_IRQS				512
 #define in_interrupt()			ml_at_interrupt_context()
 
