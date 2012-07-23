@@ -1847,13 +1847,13 @@ int ptlrpc_check_set(const struct lu_env *env, struct ptlrpc_request_set *set)
 
                 ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
 
-                CDEBUG(D_RPCTRACE, "Completed RPC pname:cluuid:pid:xid:nid:"
-                       "opc %s:%s:%d:"LPU64":%s:%d\n", cfs_curproc_comm(),
-                       imp->imp_obd->obd_uuid.uuid,
-                       req->rq_reqmsg ? lustre_msg_get_status(req->rq_reqmsg):-1,
-                       req->rq_xid,
-                       libcfs_nid2str(imp->imp_connection->c_peer.nid),
-                       req->rq_reqmsg ? lustre_msg_get_opc(req->rq_reqmsg) : -1);
+		CDEBUG(req->rq_reqmsg != NULL ? D_RPCTRACE : 0,
+			"Completed RPC pname:cluuid:pid:xid:nid:"
+			"opc %s:%s:%d:"LPU64":%s:%d\n",
+			cfs_curproc_comm(), imp->imp_obd->obd_uuid.uuid,
+			lustre_msg_get_status(req->rq_reqmsg), req->rq_xid,
+			libcfs_nid2str(imp->imp_connection->c_peer.nid),
+			lustre_msg_get_opc(req->rq_reqmsg));
 
                 cfs_spin_lock(&imp->imp_lock);
                 /* Request already may be not on sending or delaying list. This
