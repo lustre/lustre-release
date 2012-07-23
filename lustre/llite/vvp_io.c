@@ -977,13 +977,12 @@ static int vvp_io_commit_write(const struct lu_env *env,
          */
         if (!PageDirty(vmpage)) {
                 tallyop = LPROC_LL_DIRTY_MISSES;
-                vvp_write_pending(cl2ccc(obj), cp);
-                set_page_dirty(vmpage);
-                /* ll_set_page_dirty() does the same for now, but
-                 * it will not soon. */
-                vvp_write_pending(cl2ccc(obj), cp);
                 result = cl_page_cache_add(env, io, pg, CRT_WRITE);
-                if (result == -EDQUOT) {
+                if (result == 0) {
+                        /* page was added into cache successfully. */
+                        set_page_dirty(vmpage);
+                        vvp_write_pending(cl2ccc(obj), cp);
+                } else if (result == -EDQUOT) {
                         pgoff_t last_index = i_size_read(inode) >> CFS_PAGE_SHIFT;
                         bool need_clip = true;
 
