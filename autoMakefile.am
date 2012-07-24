@@ -33,7 +33,31 @@ if LDISKFS_ENABLED
 	fi
 endif # LDISKFS_ENABLED
 
-module-symvers: module-symvers-ldiskfs
+module-symvers-zfs:
+if ZFS_ENABLED
+	@if [ -f @SPL_OBJ@/@SPL_SYMBOLS@ ]; then \
+		cat @SPL_OBJ@/@SPL_SYMBOLS@ >>@SYMVERFILE@; \
+	elif [ -f @SPL_OBJ@/module/@SPL_SYMBOLS@ ]; then \
+		cat @SPL_OBJ@/module/@SPL_SYMBOLS@ >>@SYMVERFILE@; \
+	else \
+		echo -e "\n" \
+		"*** Missing spl symbols. Ensure you have built spl:\n" \
+		"*** - @SPL_OBJ@/@SYMVERFILE@\n"; \
+		exit 1; \
+	fi
+	@if [ -f @ZFS_OBJ@/@ZFS_SYMBOLS@ ]; then \
+		cat @ZFS_OBJ@/@ZFS_SYMBOLS@ >>@SYMVERFILE@; \
+	elif [ -f @ZFS_OBJ@/module/@ZFS_SYMBOLS@ ]; then \
+		cat @ZFS_OBJ@/module/@ZFS_SYMBOLS@ >>@SYMVERFILE@; \
+	else \
+		echo -e "\n" \
+		"*** Missing zfs symbols. Ensure you have built zfs:\n" \
+		"*** - @ZFS_OBJ@/@SYMVERFILE@\n"; \
+		exit 1; \
+	fi
+endif # ZFS_ENABLED
+
+module-symvers: module-symvers-ldiskfs module-symvers-zfs
 
 CSTK=/tmp/checkstack
 CSTKO=/tmp/checkstack.orig
