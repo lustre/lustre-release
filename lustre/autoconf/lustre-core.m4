@@ -2246,6 +2246,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+#
+# 2.6.39 replace get_sb with mount in struct file_system_type
+#
+AC_DEFUN([LC_HAVE_FSTYPE_MOUNT],
+[AC_MSG_CHECKING([if file_system_type has mount field])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct file_system_type fst;
+	void *i = (void *) fst.mount;
+],[
+	AC_DEFINE(HAVE_FSTYPE_MOUNT, 1,
+		[struct file_system_type has mount field])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
 
 #
 # LC_PROG_LINUX
@@ -2407,6 +2426,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_EXT4_SINGLEDATA_TRANS_BLOCKS_SB
          LC_WALK_SPACE_HAS_DATA_SEM
          LC_SELINUX_IS_ENABLED
+
+	 # 2.6.39
+	 LC_HAVE_FSTYPE_MOUNT
 
          #
          if test x$enable_server = xyes ; then

@@ -470,7 +470,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
         sb->s_op = &lustre_super_operations;
-#if THREAD_SIZE >= 8192
+#if THREAD_SIZE >= 8192 /*b=17630*/ && \
+    !defined(HAVE_FSTYPE_MOUNT) /*LU-812*/ && \
+    (LINUX_VERSION_CODE >= KERNEL_VERSION(2,6,18)) /*LU-1646*/
         sb->s_export_op = &lustre_export_operations;
 #endif
 
