@@ -372,6 +372,7 @@ static int ll_intent_file_open(struct file *file, void *lmm,
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
+	itp->it_flags |= MDS_OPEN_BY_FID;
         rc = md_intent_lock(sbi->ll_md_exp, op_data, lmm, lmmsize, itp,
                             0 /*unused */, &req, ll_md_blocking_ast, 0);
         ll_finish_md_op_data(op_data);

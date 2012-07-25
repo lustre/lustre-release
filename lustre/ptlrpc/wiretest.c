@@ -1847,6 +1847,8 @@ void lustre_assert_wire_constants(void)
                  MDS_OPEN_SYNC);
         LASSERTF(MDS_OPEN_DIRECTORY == 000000200000UL, "found 0%.11oUL\n",
                  MDS_OPEN_DIRECTORY);
+	LASSERTF(MDS_OPEN_BY_FID == 000040000000UL, "found 0%.11oUL\n",
+		 MDS_OPEN_BY_FID);
         LASSERTF(MDS_OPEN_DELAY_CREATE == 000100000000UL, "found 0%.11oUL\n",
                  MDS_OPEN_DELAY_CREATE);
         LASSERTF(MDS_OPEN_OWNEROVERRIDE == 000200000000UL, "found 0%.11oUL\n",
