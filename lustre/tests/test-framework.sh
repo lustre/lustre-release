@@ -445,19 +445,26 @@ load_modules_local() {
         grep -q crc16 $SYMLIST || { modprobe crc16 2>/dev/null || true; }
         grep -q -w jbd $SYMLIST || { modprobe jbd 2>/dev/null || true; }
         grep -q -w jbd2 $SYMLIST || { modprobe jbd2 2>/dev/null || true; }
-		if [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
-			grep -q exportfs_decode_fh $SYMLIST ||
-			{ modprobe exportfs 2> /dev/null || true; }
-			load_module ../ldiskfs/ldiskfs/ldiskfs
-		fi
 		[ "$LQUOTA" != "no" ] && load_module quota/lquota $LQUOTAOPTS
+		if [[ $(node_fstypes $HOSTNAME) == *zfs* ]]; then
+			load_module osd-zfs/osd_zfs
+		fi
 		load_module mgs/mgs
 		load_module mds/mds
 		load_module mdd/mdd
+		if [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
+			#
+			# This block shall be moved up beside osd-zfs as soon
+			# as osd-ldiskfs stops using mdd symbols.
+			#
+			grep -q exportfs_decode_fh $SYMLIST ||
+				{ modprobe exportfs 2> /dev/null || true; }
+			load_module ../ldiskfs/ldiskfs/ldiskfs
+			load_module lvfs/fsfilt_ldiskfs
+			load_module osd-ldiskfs/osd_ldiskfs
+		fi
 		load_module mdt/mdt
-		load_module lvfs/fsfilt_ldiskfs
 		load_module cmm/cmm
-		load_module osd-ldiskfs/osd_ldiskfs
 		load_module ost/ost
 		if [ "$USE_OFD" == yes ]; then
 			load_module ofd/ofd
@@ -2246,6 +2253,8 @@ single_local_node () {
 get_env_vars() {
 	local var
 	local value
+	local facets=$(get_facets)
+	local facet
 
 	for var in ${!MODOPTS_*}; do
 		value=${!var}
@@ -2253,6 +2262,23 @@ get_env_vars() {
 	done
 
 	echo -n " USE_OFD=$USE_OFD"
+
+	for facet in ${facets//,/ }; do
+		var=${facet}_FSTYPE
+		if [ -n "${!var}" ]; then
+			echo -n " $var=${!var}"
+		fi
+	done
+
+	for var in MGSFSTYPE MDSFSTYPE OSTFSTYPE; do
+		if [ -n "${!var}" ]; then
+			echo -n " $var=${!var}"
+		fi
+	done
+
+	if [ -n "$FSTYPE" ]; then
+		echo -n " FSTYPE=$FSTYPE"
+	fi
 }
 
 do_nodes() {
