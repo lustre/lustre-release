@@ -226,47 +226,47 @@ int parse_size(char *optarg, unsigned long long *size,
 /* XXX: llapi_xxx() functions return negative values upon failure */
 
 int llapi_stripe_limit_check(unsigned long long stripe_size, int stripe_offset,
-                             int stripe_count, int stripe_pattern)
+				int stripe_count, int stripe_pattern)
 {
-        int page_size, rc;
+	int page_size, rc;
 
-        /* 64 KB is the largest common page size I'm aware of (on ia64), but
-         * check the local page size just in case. */
-        page_size = LOV_MIN_STRIPE_SIZE;
-        if (getpagesize() > page_size) {
-                page_size = getpagesize();
-                llapi_err_noerrno(LLAPI_MSG_WARN,
-                                  "warning: your page size (%u) is "
-                                  "larger than expected (%u)", page_size,
-                                  LOV_MIN_STRIPE_SIZE);
-        }
-        if (stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
-                rc = -EINVAL;
-                llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe_size %lu, "
-                            "must be an even multiple of %d bytes",
-                            stripe_size, page_size);
-                return rc;
-        }
-        if (stripe_offset < -1 || stripe_offset > MAX_OBD_DEVICES) {
-                rc = -EINVAL;
-                llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe offset %d",
-                            stripe_offset);
-                return rc;
-        }
-        if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
-                rc = -EINVAL;
-                llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe count %d",
-                            stripe_count);
-                return rc;
-        }
-        if (stripe_size >= (1ULL << 32)){
-                rc = -EINVAL;
-                llapi_error(LLAPI_MSG_ERROR, rc,
-                            "warning: stripe size larger than 4G "
-                            "is not currently supported and would wrap");
-                return rc;
-        }
-        return 0;
+	/* 64 KB is the largest common page size I'm aware of (on ia64), but
+	 * check the local page size just in case. */
+	page_size = LOV_MIN_STRIPE_SIZE;
+	if (getpagesize() > page_size) {
+		page_size = getpagesize();
+		llapi_err_noerrno(LLAPI_MSG_WARN,
+				"warning: your page size (%u) is "
+				"larger than expected (%u)", page_size,
+				LOV_MIN_STRIPE_SIZE);
+	}
+	if (stripe_size < 0 || (stripe_size & (LOV_MIN_STRIPE_SIZE - 1))) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe_size %lu, "
+				"must be an even multiple of %d bytes",
+				stripe_size, page_size);
+		return rc;
+	}
+	if (stripe_offset < -1 || stripe_offset > MAX_OBD_DEVICES) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe offset %d",
+				stripe_offset);
+		return rc;
+	}
+	if (stripe_count < -1 || stripe_count > LOV_MAX_STRIPE_COUNT) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc, "error: bad stripe count %d",
+				stripe_count);
+		return rc;
+	}
+	if (stripe_size >= (1ULL << 32)) {
+		rc = -EINVAL;
+		llapi_error(LLAPI_MSG_ERROR, rc,
+				"warning: stripe size 4G or larger "
+				"is not currently supported and would wrap");
+		return rc;
+	}
+	return 0;
 }
 
 /* return the first file matching this pattern */
