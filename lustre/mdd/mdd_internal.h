@@ -53,6 +53,7 @@
 #endif
 #include <lustre_fsfilt.h>
 #include <lustre/lustre_lfsck_user.h>
+#include <lustre_fid.h>
 
 #ifdef HAVE_QUOTA_SUPPORT
 /* quota stuff */
@@ -582,6 +583,11 @@ static inline struct mdd_device *mdd_obj2mdd_dev(struct mdd_object *obj)
 static inline const struct lu_fid *mdo2fid(const struct mdd_object *obj)
 {
         return lu_object_fid(&obj->mod_obj.mo_lu);
+}
+
+static inline int mdd_object_obf(const struct mdd_object *obj)
+{
+	return lu_fid_eq(mdo2fid(obj), &LU_OBF_FID);
 }
 
 static inline cfs_umode_t mdd_object_type(const struct mdd_object *obj)

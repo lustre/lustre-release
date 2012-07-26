@@ -463,6 +463,13 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
 
                         LASSERT(parent != NULL);
 
+			/*
+			 * can not create child's lov_mds_md by access it
+			 * thru .lustre path
+			 */
+			if (mdd_object_obf(parent))
+				GOTO(out_oti, rc = -EBADFD);
+
                         _lmm = mdd_max_lmm_get(env, mdd);
                         if (_lmm == NULL)
                                 GOTO(out_oti, rc = -ENOMEM);
