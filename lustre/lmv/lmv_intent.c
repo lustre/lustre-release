@@ -120,29 +120,30 @@ int lmv_intent_remote(struct obd_export *exp, void *lmm,
         if (rc)
                 GOTO(out_free_op_data, rc);
 
-        /*
-         * LLite needs LOOKUP lock to track dentry revocation in order to
-         * maintain dcache consistency. Thus drop UPDATE lock here and put
-         * LOOKUP in request.
-         */
-        if (it->d.lustre.it_lock_mode != 0) {
-                ldlm_lock_decref((void *)&it->d.lustre.it_lock_handle,
-                                 it->d.lustre.it_lock_mode);
-                it->d.lustre.it_lock_mode = 0;
-        }
-        it->d.lustre.it_lock_handle = plock.cookie;
-        it->d.lustre.it_lock_mode = pmode;
+	/*
+	 * LLite needs LOOKUP lock to track dentry revocation in order to
+	 * maintain dcache consistency. Thus drop UPDATE|PERM lock here
+	 * and put LOOKUP in request.
+	 */
+	if (it->d.lustre.it_lock_mode != 0) {
+		it->d.lustre.it_remote_lock_handle =
+					it->d.lustre.it_lock_handle;
+		it->d.lustre.it_remote_lock_mode = it->d.lustre.it_lock_mode;
+	}
 
-        EXIT;
+	it->d.lustre.it_lock_handle = plock.cookie;
+	it->d.lustre.it_lock_mode = pmode;
+
+	EXIT;
 out_free_op_data:
-        OBD_FREE_PTR(op_data);
+	OBD_FREE_PTR(op_data);
 out:
-        if (rc && pmode)
-                ldlm_lock_decref(&plock, pmode);
+	if (rc && pmode)
+		ldlm_lock_decref(&plock, pmode);
 
-        ptlrpc_req_finished(*reqp);
-        *reqp = req;
-        return rc;
+	ptlrpc_req_finished(*reqp);
+	*reqp = req;
+	return rc;
 }
 
 /*

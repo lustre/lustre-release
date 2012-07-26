@@ -39,13 +39,15 @@
 
 /* intent IT_XXX are defined in lustre/include/obd.h */
 struct lustre_intent_data {
-        int             it_disposition;
-        int             it_status;
-        __u64           it_lock_handle;
-        __u64           it_lock_bits;
-        void           *it_data;
-        int             it_lock_mode;
-        unsigned int    it_lock_set:1;
+	int		it_disposition;
+	int		it_status;
+	__u64		it_lock_handle;
+	__u64		it_lock_bits;
+	int		it_lock_mode;
+	int		it_remote_lock_mode;
+	__u64           it_remote_lock_handle;
+	void           *it_data;
+	unsigned int    it_lock_set:1;
 };
 
 struct lookup_intent {

@@ -1160,9 +1160,9 @@ static int mdt_getattr_name_lock(struct mdt_thread_info *info,
                          * needed here but update is.
                          */
                         child_bits &= ~MDS_INODELOCK_LOOKUP;
-                        child_bits |= MDS_INODELOCK_UPDATE;
+			child_bits |= MDS_INODELOCK_PERM | MDS_INODELOCK_UPDATE;
 
-                        rc = mdt_object_lock(info, child, lhc, child_bits,
+			rc = mdt_object_lock(info, child, lhc, child_bits,
                                              MDT_LOCAL_LOCK);
                 }
                 if (rc == 0) {
@@ -2450,10 +2450,14 @@ static int mdt_object_lock0(struct mdt_thread_info *info, struct mdt_object *o,
 
 	if (mdt_object_remote(o)) {
                 if (locality == MDT_CROSS_LOCK) {
-                        ibits &= ~MDS_INODELOCK_UPDATE;
+			ibits &= ~(MDS_INODELOCK_UPDATE | MDS_INODELOCK_PERM);
                         ibits |= MDS_INODELOCK_LOOKUP;
                 } else {
-                        LASSERT(!(ibits & MDS_INODELOCK_UPDATE));
+			LASSERTF(!(ibits &
+				  (MDS_INODELOCK_UPDATE | MDS_INODELOCK_PERM)),
+				"%s: wrong bit "LPX64" for remote obj "DFID"\n",
+				mdt_obd_name(info->mti_mdt), ibits,
+				PFID(mdt_object_fid(o)));
                         LASSERT(ibits & MDS_INODELOCK_LOOKUP);
                 }
                 /* No PDO lock on remote object */
@@ -3565,10 +3569,11 @@ static int mdt_intent_getattr(enum mdt_it_code opcode,
 
         switch (opcode) {
         case MDT_IT_LOOKUP:
-                child_bits = MDS_INODELOCK_LOOKUP;
+		child_bits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM;
                 break;
         case MDT_IT_GETATTR:
-                child_bits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE;
+		child_bits = MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
+			     MDS_INODELOCK_PERM;
                 break;
         default:
                 CERROR("Unsupported intent (%d)\n", opcode);

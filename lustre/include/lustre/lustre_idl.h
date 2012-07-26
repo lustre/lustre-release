@@ -1912,8 +1912,9 @@ extern void lustre_swab_generic_32s (__u32 *val);
 #define MDS_INODELOCK_UPDATE 0x000002       /* size, links, timestamps */
 #define MDS_INODELOCK_OPEN   0x000004       /* For opened files */
 #define MDS_INODELOCK_LAYOUT 0x000008       /* for layout */
+#define MDS_INODELOCK_PERM   0x000010       /* for permission */
 
-#define MDS_INODELOCK_MAXSHIFT 3
+#define MDS_INODELOCK_MAXSHIFT 4
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 

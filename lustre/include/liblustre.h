@@ -206,9 +206,14 @@ struct lustre_intent_data {
         int       it_disposition;
         int       it_status;
         __u64     it_lock_handle;
-        void     *it_data;
         int       it_lock_mode;
+	int       it_remote_lock_mode;
+	__u64	  it_remote_lock_handle;
+        void     *it_data;
+
+	unsigned int    it_lock_set:1;
 };
+
 struct lookup_intent {
         int     it_magic;
         void    (*it_op_release)(struct lookup_intent *);

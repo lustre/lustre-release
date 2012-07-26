@@ -271,7 +271,16 @@ void ll_intent_drop_lock(struct lookup_intent *it)
                 /* bug 494: intent_release may be called multiple times, from
                  * this thread and we don't want to double-decref this lock */
                 it->d.lustre.it_lock_mode = 0;
-        }
+		if (it->d.lustre.it_remote_lock_mode != 0) {
+			handle.cookie = it->d.lustre.it_remote_lock_handle;
+
+			CDEBUG(D_DLMTRACE, "releasing remote lock with cookie"
+			       LPX64" from it %p\n", handle.cookie, it);
+			ldlm_lock_decref(&handle,
+					 it->d.lustre.it_remote_lock_mode);
+			it->d.lustre.it_remote_lock_mode = 0;
+		}
+	}
 }
 
 void ll_intent_release(struct lookup_intent *it)
@@ -551,16 +560,33 @@ out:
 		ll_invalidate_aliases(de->d_inode);
 	} else {
 		__u64 bits = 0;
+		__u64 matched_bits = 0;
 
 		CDEBUG(D_DENTRY, "revalidated dentry %.*s (%p) parent %p "
 		       "inode %p refc %d\n", de->d_name.len,
 		       de->d_name.name, de, de->d_parent, de->d_inode,
 		       d_refcount(de));
+
 		ll_set_lock_data(exp, de->d_inode, it, &bits);
-		if ((bits & MDS_INODELOCK_LOOKUP) && d_lustre_invalid(de))
+
+		/* Note: We have to match both LOOKUP and PERM lock
+		 * here to make sure the dentry is valid and no one
+		 * changing the permission.
+		 * But if the client connects < 2.4 server, which will
+		 * only grant LOOKUP lock, so we can only Match LOOKUP
+		 * lock for old server */
+		if (exp_connect_flags(ll_i2mdexp(de->d_inode)) &&
+							OBD_CONNECT_LVB_TYPE)
+			matched_bits =
+				MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM;
+		else
+			matched_bits = MDS_INODELOCK_LOOKUP;		
+
+		if (((bits & matched_bits) == matched_bits) &&
+		    d_lustre_invalid(de))
 			d_lustre_revalidate(de);
-                ll_lookup_finish_locks(it, de);
-        }
+		ll_lookup_finish_locks(it, de);
+	}
 
 mark:
         if (it != NULL && it->it_op == IT_GETATTR && rc > 0)

@@ -226,7 +226,7 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 /* For OPEN locks we differentiate between lock modes
 		 * LCK_CR, LCK_CW, LCK_PR - bug 22891 */
 		if (bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_UPDATE |
-			    MDS_INODELOCK_LAYOUT))
+			    MDS_INODELOCK_LAYOUT | MDS_INODELOCK_PERM))
                         ll_have_md_lock(inode, &bits, LCK_MINMODE);
 
                 if (bits & MDS_INODELOCK_OPEN)
@@ -284,7 +284,7 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 		if (inode->i_sb->s_root &&
 		    inode != inode->i_sb->s_root->d_inode &&
-		    (bits & MDS_INODELOCK_LOOKUP))
+		    (bits & (MDS_INODELOCK_LOOKUP | MDS_INODELOCK_PERM)))
 			ll_invalidate_aliases(inode);
                 iput(inode);
                 break;

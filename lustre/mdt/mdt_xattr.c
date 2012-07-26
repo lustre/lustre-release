@@ -337,8 +337,9 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
          * not change the access permissions of this inode, nor any
          * other existing inodes. It is setting the ACLs inherited
          * by new directories/files at create time. */
+	/* We need revoke both LOOKUP|PERM lock here, see mdt_attr_set. */
         if (!strcmp(xattr_name, XATTR_NAME_ACL_ACCESS))
-                lockpart |= MDS_INODELOCK_LOOKUP;
+		lockpart |= MDS_INODELOCK_PERM | MDS_INODELOCK_LOOKUP;
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         /* ACLs were sent to clients under LCK_CR locks, so taking LCK_EX
