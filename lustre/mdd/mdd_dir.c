@@ -1488,7 +1488,7 @@ static int mdd_create_sanity_check(const struct lu_env *env,
         if (mdd_is_dead_obj(obj))
                 RETURN(-ENOENT);
 
-        /*
+	/*
          * In some cases this lookup is not needed - we know before if name
          * exists or not because MDT performs lookup for it.
          * name length check is done in lookup.

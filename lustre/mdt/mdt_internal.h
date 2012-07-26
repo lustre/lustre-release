@@ -159,8 +159,9 @@ struct mdt_device {
         cfs_timer_t                mdt_ck_timer;
         struct ptlrpc_thread       mdt_ck_thread;
         struct lustre_capa_key     mdt_capa_keys[2];
-        unsigned int               mdt_capa_conf:1,
-                                   mdt_som_conf:1;
+	unsigned int               mdt_capa_conf:1,
+				   mdt_som_conf:1,
+				   mdt_enable_remote_dir:1;
 
 	/* statfs optimization: we cache a bit  */
 	struct obd_statfs	   mdt_osfs;

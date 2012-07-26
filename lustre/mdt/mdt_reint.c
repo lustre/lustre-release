@@ -306,6 +306,19 @@ static int mdt_md_create(struct mdt_thread_info *info)
         if (likely(!IS_ERR(child))) {
                 struct md_object *next = mdt_object_child(parent);
 
+		if (mdt_object_exists(child) < 0) {
+			struct seq_server_site *ss;
+
+			ss = mdt_seq_site(mdt);
+			if (ss->ss_node_id != 0 &&
+			    mdt->mdt_enable_remote_dir == 0) {
+				CERROR("%s: remote dir is only permitted on"
+				       " MDT0 or set_param"
+				       " mdt.*.enable_remote_dir=1\n",
+				       mdt2obd_dev(mdt)->obd_name);
+				GOTO(out_put_child, rc = -EPERM);
+			}
+		}
                 ma->ma_need = MA_INODE;
                 ma->ma_valid = 0;
                 /* capa for cross-ref will be stored here */

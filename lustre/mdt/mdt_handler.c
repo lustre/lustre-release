@@ -4526,6 +4526,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	init_rwsem(&m->mdt_squash_sem);
 	spin_lock_init(&m->mdt_osfs_lock);
 	m->mdt_osfs_age = cfs_time_shift_64(-1000);
+	m->mdt_enable_remote_dir = 0;
 
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
         m->mdt_md_dev.md_lu_dev.ld_obd = obd;

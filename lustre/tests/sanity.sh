@@ -10519,6 +10519,7 @@ test_230b() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
 	local MDTIDX=1
 	local remote_dir=$DIR/$tdir/remote_dir
+	local rc=0
 
 	mkdir -p $DIR/$tdir
 	$LFS mkdir -i $MDTIDX $remote_dir ||
@@ -10526,6 +10527,13 @@ test_230b() {
 
 	$LFS mkdir -i 0 $remote_dir/new_dir &&
 		error "nested remote directory create succeed!"
+
+	do_facet mds$((MDTIDX + 1)) lctl set_param mdt.*.enable_remote_dir=1
+	$LFS mkdir -i 0 $remote_dir/new_dir || rc=$?
+	do_facet mds$((MDTIDX + 1)) lctl set_param mdt.*.enable_remote_dir=0
+
+	[ $rc -ne 0 ] &&
+	   error "create remote directory failed after set enable_remote_dir"
 
 	rm -r $DIR/$tdir || error "unlink remote directory failed"
 }
