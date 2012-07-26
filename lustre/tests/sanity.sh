@@ -7893,6 +7893,17 @@ test_154() {
 	mrename $DIR/.lustre $DIR/.lustre/fid/$fid/.lustre &&
 		error "rename .lustre to itself should fail."
 
+	$OPENFILE -f O_LOV_DELAY_CREATE:O_CREAT $DIR/$tfile-2
+	fid=$($LFS path2fid $DIR/$tfile-2)
+	echo "cp /etc/passwd $DIR/.lustre/fid/$fid"
+	cp /etc/passwd $DIR/.lustre/fid/$fid &&
+		error "create lov data thru .lustre should fail."
+	echo "cp /etc/passwd $DIR/$tfile-2"
+	cp /etc/passwd $DIR/$tfile-2 || error "copy to $DIR/$tfile-2 failed."
+	echo "diff /etc/passwd $DIR/.lustre/fid/$fid"
+	diff /etc/passwd $DIR/.lustre/fid/$fid ||
+		error "diff /etc/passwd $DIR/.lustre/fid/$fid failed."
+
 	echo "Open-by-FID succeeded"
 }
 run_test 154 "Open-by-FID"
