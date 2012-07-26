@@ -2395,6 +2395,22 @@ test_35() {
                 error "Used inodes for group $TSTID changed from " \
                         "$ORIG_GRP_INODES to $USED"
 
+	# check if the vfs_dq_init() is called before writing
+	echo "Append to the same file..."
+	$RUNAS dd if=/dev/zero of=$DIR/$tdir/$tfile bs=$((BLK_SZ * BLK_CNT)) \
+		count=1 seek=1 conv=fsync 2>/dev/null || error "write failed"
+	sync; sync_all_data;
+
+	echo "Verify space usage is increased"
+	USED=`getquota -u $TSTID global curspace`
+	[ $USED -gt $ORIG_USR_SPACE ] ||
+		error "Used space for user $TSTID isn't increased" \
+			"orig:$ORIG_USR_SPACE, now:$USED"
+	USED=`getquota -g $TSTID global curspace`
+	[ $USED -gt $ORIG_GRP_SPACE ] ||
+		error "Used space for group $TSTID isn't increased" \
+			"orig:$ORIG_GRP_SPACE, now:$USED"
+
         cleanup_quota_test
 }
 run_test 35 "usage is still accessible across reboot ============================"
