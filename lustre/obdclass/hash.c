@@ -226,8 +226,8 @@ int ldiskfsfs_dirhash(const char *name, int len, struct ldiskfs_dx_hash_info *hi
 		return -1;
 	}
 	hash = hash & ~1;
-	if (hash == (LDISKFS_HTREE_EOF << 1))
-		hash = (LDISKFS_HTREE_EOF-1) << 1;
+	if (hash == (LDISKFS_HTREE_EOF_32BIT << 1))
+		hash = (LDISKFS_HTREE_EOF_32BIT-1) << 1;
 	hinfo->hash = hash;
 	hinfo->minor_hash = minor_hash;
 	return 0;

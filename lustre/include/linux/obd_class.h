@@ -72,7 +72,7 @@ struct ldiskfs_dx_hash_info
         u32     *seed;
 };
 
-#  define LDISKFS_HTREE_EOF     0x7fffffff
+#  define LDISKFS_HTREE_EOF_32BIT     0x7fffffff
 
 int ldiskfsfs_dirhash(const char *name, int len, struct ldiskfs_dx_hash_info *hinfo);
 

@@ -45,15 +45,15 @@ Index: linux-stage/fs/ext4/ext4.h
  	__le32  s_raid_stripe_width;    /* blocks on all data disks (N*stride)*/
  	__u8	s_log_groups_per_flex;  /* FLEX_BG group size */
 @@ -1145,6 +1145,9 @@ struct ext4_sb_info {
- 	struct ext4_li_request *s_li_request;
- 	/* Wait multiplier for lazy initialization thread */
- 	unsigned int s_li_wait_mult;
+	struct ext4_li_request *s_li_request;
+	/* Wait multiplier for lazy initialization thread */
+	unsigned int s_li_wait_mult;
 +
 +	/* Kernel thread for multiple mount protection */
 +	struct task_struct *s_mmp_tsk;
- };
  
- static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
+	/* record the last minlen when FITRIM is called. */
+	atomic_t s_last_trim_minblks;
 @@ -1283,7 +1286,8 @@ EXT4_INODE_BIT_FNS(state, state_flags)
  					 EXT4_FEATURE_INCOMPAT_META_BG| \
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \

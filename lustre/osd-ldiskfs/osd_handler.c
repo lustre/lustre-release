@@ -3462,9 +3462,9 @@ static struct dt_it *osd_it_ea_init(const struct lu_env *env,
         it->oie_file.f_pos      = 0;
         it->oie_file.f_dentry   = obj_dentry;
         if (attr & LUDA_64BITHASH)
-                it->oie_file.f_flags = O_64BITHASH;
+		it->oie_file.f_mode |= FMODE_64BITHASH;
         else
-                it->oie_file.f_flags = O_32BITHASH;
+		it->oie_file.f_mode |= FMODE_32BITHASH;
         it->oie_file.f_mapping    = obj->oo_inode->i_mapping;
         it->oie_file.f_op         = obj->oo_inode->i_fop;
         it->oie_file.private_data = NULL;
@@ -3637,7 +3637,7 @@ static int osd_it_ea_next(const struct lu_env *env, struct dt_it *di)
                 it->oie_it_dirent++;
                 RETURN(0);
         } else {
-                if (it->oie_file.f_pos == LDISKFS_HTREE_EOF)
+		if (it->oie_file.f_pos == ldiskfs_get_htree_eof(&it->oie_file))
                         rc = +1;
                 else
                         rc = osd_ldiskfs_it_fill(di);

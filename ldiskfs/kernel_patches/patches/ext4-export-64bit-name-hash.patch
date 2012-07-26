@@ -1,8 +1,7 @@
-Index: linux-stage/fs/ext4/dir.c
-===================================================================
---- linux-stage.orig/fs/ext4/dir.c	2011-04-19 01:02:34.000000000 +0800
-+++ linux-stage/fs/ext4/dir.c	2011-04-19 01:24:36.000000000 +0800
-@@ -242,22 +242,50 @@
+diff -urp linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
+--- linux-stage.orig/fs/ext4/dir.c	2012-06-21 10:26:23.000000000 -0400
++++ linux-stage/fs/ext4/dir.c	2012-06-21 10:37:39.000000000 -0400
+@@ -247,22 +247,63 @@ out:
 	return ret;
  }
 
@@ -17,7 +16,8 @@ Index: linux-stage/fs/ext4/dir.c
 +
  /*
   * These functions convert from the major/minor hash to an f_pos
-  * value.
+- * value.
++ * value for dx directories.
   *
 - * Currently we only use major hash numer.  This is unfortunate, but
 - * on 32-bit machines, the same VFS interface is used for lseek and
@@ -27,44 +27,57 @@ Index: linux-stage/fs/ext4/dir.c
 - * a 64-bit version of the system call or the 32-bit version of the
 - * system call.  Worse yet, NFSv2 only allows for a 32-bit readdir
 - * cookie.  Sigh.
-+ * Up layer (OSD) should specify O_32BITHASH or O_64BITHASH explicitly.
-+ * On the other hand, we allow ldiskfs to be mounted directly on both 32-bit
-+ * and 64-bit nodes, under such case, neither O_32BITHASH nor O_64BITHASH is
-+ * specified.
-  */
--#define hash2pos(major, minor)	(major >> 1)
--#define pos2maj_hash(pos)	((pos << 1) & 0xffffffff)
--#define pos2min_hash(pos)	(0)
++ * Upper layer (for example NFS) should specify FMODE_32BITHASH or
++ * FMODE_64BITHASH explicitly. On the other hand, we allow ext4 to be mounted
++ * directly on both 32-bit and 64-bit nodes, under such case, neither
++ * FMODE_32BITHASH nor FMODE_64BITHASH is specified.
++ */
 +static inline loff_t hash2pos(struct file *filp, __u32 major, __u32 minor)
 +{
-+	if ((filp->f_flags & O_32BITHASH) ||
-+	    (!(filp->f_flags & O_64BITHASH) && is_32bit_api()))
-+		return (major >> 1);
++	if ((filp->f_mode & FMODE_32BITHASH) ||
++	    (!(filp->f_mode & FMODE_64BITHASH) && is_32bit_api()))
++		return major >> 1;
 +	else
-+		return (((__u64)(major >> 1) << 32) | (__u64)minor);
++		return ((__u64)(major >> 1) << 32) | (__u64)minor;
 +}
 +
 +static inline __u32 pos2maj_hash(struct file *filp, loff_t pos)
 +{
-+	if ((filp->f_flags & O_32BITHASH) ||
-+	    (!(filp->f_flags & O_64BITHASH) && is_32bit_api()))
-+		return ((pos << 1) & 0xffffffff);
++	if ((filp->f_mode & FMODE_32BITHASH) ||
++	    (!(filp->f_mode & FMODE_64BITHASH) && is_32bit_api()))
++		return (pos << 1) & 0xffffffff;
 +	else
-+		return (((pos >> 32) << 1) & 0xffffffff);
++		return ((pos >> 32) << 1) & 0xffffffff;
 +}
 +
 +static inline __u32 pos2min_hash(struct file *filp, loff_t pos)
 +{
-+	if ((filp->f_flags & O_32BITHASH) ||
-+	    (!(filp->f_flags & O_64BITHASH) && is_32bit_api()))
-+		return (0);
++	if ((filp->f_mode & FMODE_32BITHASH) ||
++	    (!(filp->f_mode & FMODE_64BITHASH) && is_32bit_api()))
++		return 0;
 +	else
-+		return (pos & 0xffffffff);
++		return pos & 0xffffffff;
 +}
++
++/*
++ * Return 32- or 64-bit end-of-file for dx directories
+  */
+-#define hash2pos(major, minor)	(major >> 1)
+-#define pos2maj_hash(pos)	((pos << 1) & 0xffffffff)
+-#define pos2min_hash(pos)	(0)
++static inline loff_t ext4_get_htree_eof(struct file *filp)
++{
++	if ((filp->f_mode & FMODE_32BITHASH) ||
++	    (!(filp->f_mode & FMODE_64BITHASH) && is_32bit_api()))
++		return EXT4_HTREE_EOF_32BIT;
++	else
++		return EXT4_HTREE_EOF_64BIT;
++}
++
  
  /*
   * This structure holds the nodes of the red-black tree used to store
-@@ -318,15 +346,16 @@
+@@ -323,15 +364,16 @@ static void free_rb_tree_fname(struct rb
  }
  
  
@@ -84,7 +97,7 @@ Index: linux-stage/fs/ext4/dir.c
  	return p;
  }
  
-@@ -422,7 +451,7 @@
+@@ -427,7 +469,7 @@ static int call_filldir(struct file *fil
  		       "null fname?!?\n");
  		return 0;
  	}
@@ -93,7 +106,7 @@ Index: linux-stage/fs/ext4/dir.c
  	while (fname) {
  		error = filldir(dirent, fname->name,
  				fname->name_len, curr_pos,
-@@ -447,7 +476,7 @@
+@@ -452,13 +494,13 @@ static int ext4_dx_readdir(struct file *
  	int	ret;
  
  	if (!info) {
@@ -102,7 +115,14 @@ Index: linux-stage/fs/ext4/dir.c
  		if (!info)
  			return -ENOMEM;
  		filp->private_data = info;
-@@ -461,8 +490,8 @@
+	}
+
+-	if (filp->f_pos == EXT4_HTREE_EOF)
++	if (filp->f_pos == ext4_get_htree_eof(filp))
+		return 0;	/* EOF */
+
+	/* Some one has messed with f_pos; reset the world */
+@@ -466,8 +508,8 @@ static int ext4_dx_readdir(struct file *
  		free_rb_tree_fname(&info->root);
  		info->curr_node = NULL;
  		info->extra_fname = NULL;
@@ -113,22 +133,68 @@ Index: linux-stage/fs/ext4/dir.c
  	}
  
  	/*
-Index: linux-stage/fs/ext4/ext4.h
-===================================================================
---- linux-stage.orig/fs/ext4/ext4.h	2011-04-19 01:02:34.000000000 +0800
-+++ linux-stage/fs/ext4/ext4.h	2011-04-19 01:02:34.000000000 +0800
-@@ -55,6 +55,14 @@
- #define ext4_debug(f, a...)	do {} while (0)
- #endif
+@@ -499,7 +541,7 @@ static int ext4_dx_readdir(struct file *
+			if (ret < 0)
+				return ret;
+			if (ret == 0) {
+-				filp->f_pos = EXT4_HTREE_EOF;
++				filp->f_pos = ext4_get_htree_eof(filp);
+				break;
+			}
+			info->curr_node = rb_first(&info->root);
+@@ -519,7 +561,7 @@ static int ext4_dx_readdir(struct file *
+			info->curr_minor_hash = fname->minor_hash;
+		} else {
+			if (info->next_hash == ~0) {
+-				filp->f_pos = EXT4_HTREE_EOF;
++				filp->f_pos = ext4_get_htree_eof(filp);
+				break;
+			}
+			info->curr_hash = info->next_hash;
+diff -urp linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
+--- linux-stage.orig/fs/ext4/ext4.h	2012-06-21 10:26:23.000000000 -0400
++++ linux-stage/fs/ext4/ext4.h	2012-06-21 10:39:43.000000000 -0400
+@@ -816,6 +816,16 @@ struct ext4_inode_info {
+	__u64 i_fs_version;
+ };
  
-+#ifndef O_32BITHASH
-+# define O_32BITHASH	0x10000000
++#ifndef FMODE_32BITHASH
++/* 32bit hashes as llseek() offset (for directories) */
++#define FMODE_32BITHASH         ((__force fmode_t)0x200)
 +#endif
 +
-+#ifndef O_64BITHASH
-+# define O_64BITHASH	0x20000000
++#ifndef FMODE_64BITHASH
++/* 64bit hashes as llseek() offset (for directories) */
++#define FMODE_64BITHASH         ((__force fmode_t)0x400)
 +#endif
 +
  #define HAVE_DISK_INODE_VERSION
  
- /* data type for block offset of block group */
+ /*
+@@ -1450,7 +1460,11 @@ struct dx_hash_info
+	u32		*seed;
+ };
+
+-#define EXT4_HTREE_EOF	0x7fffffff
++
++/* 32 and 64 bit signed EOF for dx directories */
++#define EXT4_HTREE_EOF_32BIT   ((1UL  << (32 - 1)) - 1)
++#define EXT4_HTREE_EOF_64BIT   ((1ULL << (64 - 1)) - 1)
++
+
+ /*
+  * Control parameters used by ext4_htree_next_block
+diff -urp linux-stage.orig/fs/ext4/hash.c linux-stage/fs/ext4/hash.c
+--- linux-stage.orig/fs/ext4/hash.c	2012-06-21 10:26:23.000000000 -0400
++++ linux-stage/fs/ext4/hash.c	2012-06-21 10:29:02.000000000 -0400
+@@ -201,8 +201,8 @@ int ext4fs_dirhash(const char *name, int
+		return -1;
+	}
+	hash = hash & ~1;
+-	if (hash == (EXT4_HTREE_EOF << 1))
+-		hash = (EXT4_HTREE_EOF-1) << 1;
++	if (hash == (EXT4_HTREE_EOF_32BIT << 1))
++		hash = (EXT4_HTREE_EOF_32BIT - 1) << 1;
+	hinfo->hash = hash;
+	hinfo->minor_hash = minor_hash;
+	return 0;
