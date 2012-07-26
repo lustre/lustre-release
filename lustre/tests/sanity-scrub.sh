@@ -532,9 +532,8 @@ test_9() {
 	[ $SPEED -lt 220 ] &&
 		error "(11) Unexpected speed $SPEED, should not less than 220"
 
-	# (1024 + 100 * 10 + 300 * 10) / 20
-	[ $SPEED -gt 270 ] &&
-		error "(12) Unexpected speed $SPEED, should not more than 270"
+	[ $SPEED -gt 300 ] &&
+		error "(12) Unexpected speed $SPEED, should not more than 300"
 
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
