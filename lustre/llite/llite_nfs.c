@@ -266,9 +266,7 @@ struct dentry *ll_get_parent(struct dentry *dchild)
 
         sbi = ll_s2sbi(dir->i_sb);
 
-        fid.id = (__u64)dir->i_ino;
-        fid.generation = dir->i_generation;
-        fid.f_type = S_IFDIR;
+        ll_inode2fid(&fid, dir);
 
         rc = mdc_getattr_name(sbi->ll_mdc_exp, &fid, dotdot, strlen(dotdot) + 1,
                               0, 0, &req);
@@ -278,9 +276,9 @@ struct dentry *ll_get_parent(struct dentry *dchild)
         }
         body = lustre_msg_buf(req->rq_repmsg, REPLY_REC_OFF, sizeof (*body));
 
-        LASSERT((body->valid & OBD_MD_FLGENER) && (body->valid & OBD_MD_FLID));
-        fid.id = body->ino;
-        fid.generation = body->generation;
+        LASSERT(body->valid & OBD_MD_FLID);
+
+        fid = body->fid1;
         result = ll_iget_for_nfs(dir->i_sb, &fid);
 
         if (IS_ERR(result))
