@@ -692,6 +692,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
         osd_init_iobuf(osd, iobuf, 1);
         isize = i_size_read(inode);
+	ll_vfs_dq_init(inode);
 
         for (i = 0; i < npages; i++) {
                 if (lnb[i].rc == -ENOSPC &&
