@@ -1501,7 +1501,10 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 #define OBD_MD_MDS         (0x0000000100000000ULL) /* where an inode lives on */
 #define OBD_MD_REINT       (0x0000000200000000ULL) /* reintegrate oa */
 #define OBD_MD_MEA         (0x0000000400000000ULL) /* CMD split EA  */
-#define OBD_MD_MDTIDX      (0x0000000800000000ULL) /* Get MDT index  */
+
+/* OBD_MD_MDTIDX is used to get MDT index, but it is never been used overwire,
+ * and it is already obsolete since 2.3 */
+/* #define OBD_MD_MDTIDX      (0x0000000800000000ULL) */
 
 #define OBD_MD_FLXATTR       (0x0000001000000000ULL) /* xattr */
 #define OBD_MD_FLXATTRLS     (0x0000002000000000ULL) /* xattr list */
@@ -1869,19 +1872,20 @@ enum {
 
 /* mdt_thread_info.mti_flags. */
 enum md_op_flags {
-        /* The flag indicates Size-on-MDS attributes are changed. */
-        MF_SOM_CHANGE           = (1 << 0),
-        /* Flags indicates an epoch opens or closes. */
-        MF_EPOCH_OPEN           = (1 << 1),
-        MF_EPOCH_CLOSE          = (1 << 2),
-        MF_MDC_CANCEL_FID1      = (1 << 3),
-        MF_MDC_CANCEL_FID2      = (1 << 4),
-        MF_MDC_CANCEL_FID3      = (1 << 5),
-        MF_MDC_CANCEL_FID4      = (1 << 6),
-        /* There is a pending attribute update. */
-        MF_SOM_AU               = (1 << 7),
-        /* Cancel OST locks while getattr OST attributes. */
-        MF_GETATTR_LOCK         = (1 << 8),
+	/* The flag indicates Size-on-MDS attributes are changed. */
+	MF_SOM_CHANGE           = (1 << 0),
+	/* Flags indicates an epoch opens or closes. */
+	MF_EPOCH_OPEN           = (1 << 1),
+	MF_EPOCH_CLOSE          = (1 << 2),
+	MF_MDC_CANCEL_FID1      = (1 << 3),
+	MF_MDC_CANCEL_FID2      = (1 << 4),
+	MF_MDC_CANCEL_FID3      = (1 << 5),
+	MF_MDC_CANCEL_FID4      = (1 << 6),
+	/* There is a pending attribute update. */
+	MF_SOM_AU               = (1 << 7),
+	/* Cancel OST locks while getattr OST attributes. */
+	MF_GETATTR_LOCK         = (1 << 8),
+	MF_GET_MDT_IDX          = (1 << 9),
 };
 
 #define MF_SOM_LOCAL_FLAGS (MF_SOM_CHANGE | MF_EPOCH_OPEN | MF_EPOCH_CLOSE)

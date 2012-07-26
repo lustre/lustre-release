@@ -840,7 +840,7 @@ int ll_get_mdt_idx(struct inode *inode)
         if (IS_ERR(op_data))
                 RETURN(PTR_ERR(op_data));
 
-        op_data->op_valid |= OBD_MD_MDTIDX;
+	op_data->op_flags |= MF_GET_MDT_IDX;
         rc = md_getattr(sbi->ll_md_exp, op_data, NULL);
         mdtidx = op_data->op_mds;
         ll_finish_md_op_data(op_data);

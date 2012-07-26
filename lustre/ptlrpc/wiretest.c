@@ -1270,8 +1270,6 @@ void lustre_assert_wire_constants(void)
                  OBD_MD_REINT);
         LASSERTF(OBD_MD_MEA == (0x0000000400000000ULL), "found 0x%.16llxULL\n",
                  OBD_MD_MEA);
-        LASSERTF(OBD_MD_MDTIDX == (0x0000000800000000ULL), "found 0x%.16llxULL\n",
-                 OBD_MD_MDTIDX);
         LASSERTF(OBD_MD_FLXATTR == (0x0000001000000000ULL), "found 0x%.16llxULL\n",
                  OBD_MD_FLXATTR);
         LASSERTF(OBD_MD_FLXATTRLS == (0x0000002000000000ULL), "found 0x%.16llxULL\n",
