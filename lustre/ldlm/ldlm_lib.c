@@ -998,19 +998,24 @@ no_export:
         if (export == NULL) {
                 if (target->obd_recovering) {
                         cfs_time_t t;
+			int	   c; /* connected */
+			int	   i; /* in progress */
+			int	   k; /* known */
 
-                        t = cfs_timer_deadline(&target->obd_recovery_timer);
-                        t = cfs_time_sub(t, cfs_time_current());
-                        t = cfs_duration_sec(t);
-                        LCONSOLE_WARN("%s: Denying connection for new client "
-                                      "%s (at %s), waiting for %d clients in "
-                                      "recovery for %d:%.02d\n",
-                                      target->obd_name,
-                                      libcfs_nid2str(req->rq_peer.nid),
-                                      cluuid.uuid,
-                                      cfs_atomic_read(&target-> \
-                                                      obd_lock_replay_clients),
-                                      (int)t / 60, (int)t % 60);
+			c = cfs_atomic_read(&target->obd_connected_clients);
+			i = cfs_atomic_read(&target->obd_lock_replay_clients);
+			k = target->obd_max_recoverable_clients;
+			t = cfs_timer_deadline(&target->obd_recovery_timer);
+			t = cfs_time_sub(t, cfs_time_current());
+			t = cfs_duration_sec(t);
+			LCONSOLE_WARN("%s: Denying connection for new client "
+				      "%s (at %s), waiting for all %d known "
+				      "clients (%d recovered, %d in progress, "
+				      "and %d unseen) to recover in %d:%.02d\n",
+				      target->obd_name, cluuid.uuid,
+				      libcfs_nid2str(req->rq_peer.nid), k,
+				      c - i, i, k - c, (int)t / 60,
+				      (int)t % 60);
                         rc = -EBUSY;
                 } else {
 dont_check_exports:
