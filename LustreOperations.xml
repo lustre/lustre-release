@@ -145,7 +145,8 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
   </section>
   <section xml:id="dbdoclet.50438194_88063">
     <title><indexterm><primary>operations</primary><secondary>multiple file systems</secondary></indexterm>Running Multiple Lustre File Systems</title>
-    <para>There may be situations in which you want to run multiple file systems. This is doable, as long as you follow specific naming conventions.</para>
+    <para>Lustre supports multiple file systems provided the combination of <literal>NID:fsname</literal> is unique. Each file system must be allocated a unique name during creation with the <literal>--fsname</literal> parameter. Unique names for file systems are enforced if a single MGS is present. If multiple MGSs are present (for example if you have an MGS on every MDS) the administrator is responsible for ensuring file system names are unique. A single MGS and unique file system names provides a single point of administration and allows commands to be issued against the file system even if it is not mounted.</para>
+    <para>Lustre supports multiple file systems on a single MGS. With a single MGS fsnames are guaranteed to be unique. Lustre also allows multiple MGSs to co-exist. For example, multiple MGSs will be necessary if multiple file systems on different Lustre software versions are to be concurrently available. With multiple MGSs additional care must be taken to ensure file system names are unique. Each file system should have a unique fsname among all systems that may interoperate in the future.</para>
     <para>By default, the <literal>mkfs.lustre</literal> command creates a file system named <literal>lustre</literal>. To specify a different file system name (limited to 8 characters) at format time, use the <literal>--fsname</literal> option:</para>
     <para><screen>mkfs.lustre --fsname=&lt;file system name&gt;</screen></para>
     <note>
@@ -159,10 +160,7 @@ LABEL=testfs-OST0000 /mnt/test/ost0 lustre defaults,_netdev,noauto 0 0</screen>
       <para>If a client(s) will be mounted on several file systems, add the following line to <literal>/etc/xattr.conf</literal> file to avoid problems when files are moved between the file systems: <literal>lustre.* skip</literal></para>
     </note>
     <note>
-      <para>The MGS is universal; there is only one MGS per Lustre installation, not per file system.</para>
-    </note>
-    <note>
-      <para>There is only one file system per MDT. Therefore, specify <literal>--mdt --mgs</literal> on one file system and <literal>--mdt --mgsnode=&lt;MGS node NID&gt;</literal> on the other file systems.</para>
+      <para>To ensure that a new MDT is added to an existing MGS create the MDT by specifying: <literal>--mdt --mgsnode=&lt;MGS node NID&gt;</literal>.</para>
     </note>
     <para>A Lustre installation with two file systems (<literal>foo</literal> and <literal>bar</literal>) could look like this, where the MGS node is <literal>mgsnode@tcp0</literal> and the mount points are <literal>/mnt/foo</literal> and <literal>/mnt/bar</literal>.</para>
     <screen>mgsnode# mkfs.lustre --mgs /dev/sda

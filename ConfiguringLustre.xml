@@ -56,8 +56,9 @@
         <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgs --mdt --index=0 &lt;<emphasis>block device name</emphasis>&gt;</screen>
         <para>The default file system name (<literal>fsname</literal>) is <literal>lustre</literal>.</para>
         <note>
-          <para>If you plan to generate multiple file systems, the MGS should be created separately on its own dedicated block device, by running:</para>
+          <para>If you plan to create multiple file systems, the MGS should be created separately on its own dedicated block device, by running:</para>
           <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgs &lt;<emphasis>block device name</emphasis>&gt;</screen>
+          <para>See <xref linkend="dbdoclet.50438194_88063"/> for more details.</para> 
         </note>
       </listitem>
       <listitem>
