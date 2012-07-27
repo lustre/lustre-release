@@ -828,6 +828,11 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 LDLM_DEBUG(lock, "client-side enqueue START");
         }
 
+	lock->l_conn_export = exp;
+	lock->l_export = NULL;
+	lock->l_blocking_ast = einfo->ei_cb_bl;
+	lock->l_flags |= (*flags & LDLM_FL_NO_LRU);
+
         /* lock not sent to server yet */
 
         if (reqp == NULL || *reqp == NULL) {
@@ -852,11 +857,6 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 LASSERTF(len >= sizeof(*body), "buflen[%d] = %d, not %d\n",
                          DLM_LOCKREQ_OFF, len, (int)sizeof(*body));
         }
-
-        lock->l_conn_export = exp;
-        lock->l_export = NULL;
-        lock->l_blocking_ast = einfo->ei_cb_bl;
-        lock->l_flags |= (*flags & LDLM_FL_NO_LRU);
 
         /* Dump lock data into the request buffer */
         body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
