@@ -534,6 +534,32 @@ int osd_tune_lustre(char *dev, struct mount_opts *mop)
 	return ret;
 }
 
+int osd_label_lustre(struct mount_opts *mop)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	int ret;
+
+	switch (ldd->ldd_mount_type) {
+	case LDD_MT_LDISKFS:
+	case LDD_MT_LDISKFS2:
+		ret = ldiskfs_label_lustre(mop);
+		break;
+#ifdef HAVE_ZFS_OSD
+	case LDD_MT_ZFS:
+		ret = zfs_label_lustre(mop);
+		break;
+#endif /* HAVE_ZFS_OSD */
+	default:
+		fatal();
+		fprintf(stderr, "unknown fs type %d '%s'\n",
+			ldd->ldd_mount_type, MT_STR(ldd));
+		ret = EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
 int osd_init(void)
 {
 	int ret = 0;

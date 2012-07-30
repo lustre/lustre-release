@@ -670,6 +670,11 @@ int main(int argc, char *const argv[])
 	} else if (!mop.mo_nomtab) {
 		rc = update_mtab_entry(mop.mo_usource, mop.mo_target, "lustre",
 				       mop.mo_orig_options, 0,0,0);
+
+		/* change label from <fsname>:<index> to <fsname>-<index>
+		 * to indicate the device has been registered. */
+		if (mop.mo_ldd.ldd_flags & LDD_F_VIRGIN)
+			(void) osd_label_lustre(&mop);
         }
 
 	free(options);

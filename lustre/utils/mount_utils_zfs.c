@@ -624,6 +624,24 @@ int zfs_tune_lustre(char *dev, struct mount_opts *mop)
 	return 0;
 }
 
+int zfs_label_lustre(struct mount_opts *mop)
+{
+	zfs_handle_t *zhp;
+	int ret;
+
+	if (osd_check_zfs_setup() == 0)
+		return EINVAL;
+
+	zhp = zfs_open(g_zfs, mop->mo_source, ZFS_TYPE_FILESYSTEM);
+	if (zhp == NULL)
+		return EINVAL;
+
+	ret = zfs_set_prop_str(zhp, LDD_SVNAME_PROP, mop->mo_ldd.ldd_svname);
+	zfs_close(zhp);
+
+	return ret;
+}
+
 int zfs_init(void)
 {
 	int ret = 0;

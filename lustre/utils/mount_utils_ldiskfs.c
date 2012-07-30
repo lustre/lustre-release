@@ -974,6 +974,18 @@ int ldiskfs_tune_lustre(char *dev, struct mount_opts *mop)
 	return set_blockdev_tunables(dev, mop, 1);
 }
 
+int ldiskfs_label_lustre(struct mount_opts *mop)
+{
+	char label_cmd[PATH_MAX];
+	int rc;
+
+	snprintf(label_cmd, sizeof(label_cmd), E2LABEL" %s %s",
+		 mop->mo_source, mop->mo_ldd.ldd_svname);
+	rc = run_command(label_cmd, sizeof(label_cmd));
+
+	return rc;
+}
+
 /* return canonicalized absolute pathname, even if the target file does not
  * exist, unlike realpath */
 static char *absolute_path(char *devname)
