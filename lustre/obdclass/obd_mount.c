@@ -347,6 +347,14 @@ static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
                 GOTO(out_close, rc = -EINVAL);
         }
 
+	/* svname of the form lustre:OST1234 means never registered */
+	rc = strlen(ldd->ldd_svname);
+	if (ldd->ldd_svname[rc - 8] == ':') {
+		ldd->ldd_svname[rc - 8] = '-';
+		ldd->ldd_flags |= LDD_F_VIRGIN;
+	}
+	rc = 0;
+
 out_close:
         filp_close(file, 0);
 out:
@@ -1488,7 +1496,8 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 	ldd->ldd_fsname[len] = '\0';
 
 	ldd->ldd_svindex = simple_strtoul(p + 4, NULL, 16);
-	ldd->ldd_flags |= LDD_F_WRITECONF;
+	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF) ?
+				LDD_F_WRITECONF : 0;
 
 	lsi->lsi_ldd = ldd;
 

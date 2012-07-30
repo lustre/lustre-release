@@ -599,7 +599,7 @@ static int mgs_set_index(struct obd_device *obd, struct mgs_target_info *mti)
 
         cfs_set_bit(mti->mti_stripe_index, imap);
         cfs_clear_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
-        server_make_name(mti->mti_flags, mti->mti_stripe_index,
+	server_make_name(mti->mti_flags & ~LDD_F_VIRGIN, mti->mti_stripe_index,
                          mti->mti_fsname, mti->mti_svname);
 
         CDEBUG(D_MGS, "Set index for %s to %d\n", mti->mti_svname,
