@@ -35,7 +35,7 @@ Index: linux-stage/fs/ext4/ext4.h
 ===================================================================
 --- linux-stage.orig/fs/ext4/ext4.h
 +++ linux-stage/fs/ext4/ext4.h
-@@ -878,7 +878,7 @@ struct ext4_super_block {
+@@ -880,7 +880,7 @@ struct ext4_super_block {
  	__le16	s_want_extra_isize; 	/* New inodes should reserve # bytes */
  	__le32	s_flags;		/* Miscellaneous flags */
  	__le16  s_raid_stride;		/* RAID stride */
@@ -44,7 +44,7 @@ Index: linux-stage/fs/ext4/ext4.h
  	__le64  s_mmp_block;            /* Block for multi-mount protection */
  	__le32  s_raid_stripe_width;    /* blocks on all data disks (N*stride)*/
  	__u8	s_log_groups_per_flex;  /* FLEX_BG group size */
-@@ -1032,6 +1032,9 @@ struct ext4_sb_info {
+@@ -1034,6 +1034,9 @@ struct ext4_sb_info {
  
  	/* workqueue for dio unwritten */
  	struct workqueue_struct *dio_unwritten_wq;
@@ -54,7 +54,7 @@ Index: linux-stage/fs/ext4/ext4.h
  };
  
  static inline struct ext4_sb_info *EXT4_SB(struct super_block *sb)
-@@ -1169,7 +1172,8 @@ static inline void ext4_clear_inode_stat
+@@ -1171,7 +1174,8 @@ static inline void ext4_clear_inode_stat
  					 EXT4_FEATURE_INCOMPAT_META_BG| \
  					 EXT4_FEATURE_INCOMPAT_EXTENTS| \
  					 EXT4_FEATURE_INCOMPAT_64BIT| \
@@ -64,7 +64,7 @@ Index: linux-stage/fs/ext4/ext4.h
  #define EXT4_FEATURE_RO_COMPAT_SUPP	(EXT4_FEATURE_RO_COMPAT_SPARSE_SUPER| \
  					 EXT4_FEATURE_RO_COMPAT_LARGE_FILE| \
  					 EXT4_FEATURE_RO_COMPAT_GDT_CSUM| \
-@@ -1376,6 +1380,67 @@ void ext4_get_group_no_and_offset(struct
+@@ -1378,6 +1382,67 @@ void ext4_get_group_no_and_offset(struct
  extern struct proc_dir_entry *ext4_proc_root;
  
  /*
@@ -132,7 +132,7 @@ Index: linux-stage/fs/ext4/ext4.h
   * Function prototypes
   */
  
-@@ -1547,6 +1612,10 @@ extern void __ext4_warning(struct super_
+@@ -1549,6 +1614,10 @@ extern void __ext4_warning(struct super_
  #define ext4_warning(sb, message...)   __ext4_warning(sb, __func__, ## message)
  extern void ext4_msg(struct super_block *, const char *, const char *, ...)
  	__attribute__ ((format (printf, 3, 4)));
@@ -143,7 +143,7 @@ Index: linux-stage/fs/ext4/ext4.h
  extern void ext4_grp_locked_error(struct super_block *, ext4_group_t,
  				const char *, const char *, ...)
  	__attribute__ ((format (printf, 4, 5)));
-@@ -1784,6 +1853,9 @@ static inline void ext4_unlock_group(str
+@@ -1786,6 +1855,9 @@ static inline void ext4_unlock_group(str
  	spin_unlock(ext4_group_lock_ptr(sb, group));
  }
  
@@ -522,16 +522,34 @@ Index: linux-stage/fs/ext4/super.c
  
  #include "ext4.h"
  #include "ext4_jbd2.h"
-@@ -698,6 +700,8 @@ static void ext4_put_super(struct super_
+@@ -674,7 +676,6 @@ static void ext4_put_super(struct super_
+ 	percpu_counter_destroy(&sbi->s_freeinodes_counter);
+ 	percpu_counter_destroy(&sbi->s_dirs_counter);
+ 	percpu_counter_destroy(&sbi->s_dirtyblocks_counter);
+-	brelse(sbi->s_sbh);
+ #ifdef CONFIG_QUOTA
+ 	for (i = 0; i < MAXQUOTAS; i++)
+ 		kfree(sbi->s_qf_names[i]);
+@@ -688,7 +689,6 @@ static void ext4_put_super(struct super_
+ 		dump_orphan_list(sb, sbi);
+ 	J_ASSERT(list_empty(&sbi->s_orphan));
+ 
+-	invalidate_bdev(sb->s_bdev, 0);
+ 	if (sbi->journal_bdev && sbi->journal_bdev != sb->s_bdev) {
+ 		/*
+ 		 * Invalidate the journal device's buffers.  We don't want them
+@@ -699,6 +699,10 @@ static void ext4_put_super(struct super_
  		invalidate_bdev(sbi->journal_bdev, 0);
  		ext4_blkdev_remove(sbi);
  	}
 +	if (sbi->s_mmp_tsk)
 +		kthread_stop(sbi->s_mmp_tsk);
++	brelse(sbi->s_sbh);
++	invalidate_bdev(sb->s_bdev, 0);
  	sb->s_fs_info = NULL;
  	/*
  	 * Now that we are completely done shutting down the
-@@ -2810,6 +2814,11 @@ static int ext4_fill_super(struct super_
+@@ -2824,6 +2828,11 @@ static int ext4_fill_super(struct super_
  			  EXT4_HAS_INCOMPAT_FEATURE(sb,
  				    EXT4_FEATURE_INCOMPAT_RECOVER));
  
@@ -543,7 +561,7 @@ Index: linux-stage/fs/ext4/super.c
  	/*
  	 * The first inode we look at is the journal inode.  Don't try
  	 * root first: it may be modified in the journal!
-@@ -3048,6 +3057,8 @@ failed_mount3:
+@@ -3062,6 +3071,8 @@ failed_mount3:
  	percpu_counter_destroy(&sbi->s_freeinodes_counter);
  	percpu_counter_destroy(&sbi->s_dirs_counter);
  	percpu_counter_destroy(&sbi->s_dirtyblocks_counter);
@@ -552,7 +570,7 @@ Index: linux-stage/fs/ext4/super.c
  failed_mount2:
  	for (i = 0; i < db_count; i++)
  		brelse(sbi->s_group_desc[i]);
-@@ -3557,7 +3568,7 @@ static int ext4_remount(struct super_blo
+@@ -3571,7 +3582,7 @@ static int ext4_remount(struct super_blo
  	struct ext4_mount_options old_opts;
  	ext4_group_t g;
  	unsigned int journal_ioprio = DEFAULT_JOURNAL_IOPRIO;
@@ -561,7 +579,7 @@ Index: linux-stage/fs/ext4/super.c
  #ifdef CONFIG_QUOTA
  	int i;
  #endif
-@@ -3676,6 +3687,13 @@ static int ext4_remount(struct super_blo
+@@ -3690,6 +3701,13 @@ static int ext4_remount(struct super_blo
  				goto restore_opts;
  			if (!ext4_setup_super(sb, es, 0))
  				sb->s_flags &= ~MS_RDONLY;
