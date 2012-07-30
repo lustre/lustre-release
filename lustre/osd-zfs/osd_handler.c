@@ -403,23 +403,6 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
 	RETURN(0);
 }
 
-static char *osd_label_get(const struct lu_env *env, const struct dt_device *d)
-{
-	struct osd_device *dev = osd_dt_dev(d);
-	int rc;
-	ENTRY;
-
-	rc = -udmu_userprop_get_str(&dev->od_objset, DMU_OSD_SVNAME,
-				    dev->od_svname, sizeof(dev->od_svname));
-	if (rc != 0) {
-		if (rc == -EOVERFLOW)
-			CWARN("%s: buffer too small\n", dev->od_svname);
-		RETURN(NULL);
-	}
-
-	RETURN(&dev->od_svname[0]);
-}
-
 static struct dt_device_operations osd_dt_ops = {
 	.dt_root_get		= osd_root_get,
 	.dt_statfs		= osd_statfs,
@@ -504,7 +487,6 @@ static int osd_mount(const struct lu_env *env,
 	struct lustre_mount_info	*lmi;
 	struct lustre_sb_info		*lsi;
 	dmu_buf_t			*rootdb;
-	char				*label;
 	int				 rc;
 	ENTRY;
 
@@ -524,6 +506,7 @@ static int osd_mount(const struct lu_env *env,
 		RETURN(-E2BIG);
 
 	strcpy(o->od_mntdev, dev);
+	strcpy(o->od_svname, lsi->lsi_ldd->ldd_svname);
 
 	rc = -udmu_objset_open(o->od_mntdev, &o->od_objset);
 	if (rc) {
@@ -547,15 +530,11 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
-	label = osd_label_get(env, &o->od_dt_dev);
-	if (label == NULL)
-		GOTO(err, rc = -ENODEV);
-
 	/* Use our own ZAP for inode accounting by default, this can be changed
 	 * via procfs to estimate the inode usage from the block usage */
 	o->od_quota_iused_est = 0;
 
-	rc = osd_procfs_init(o, label);
+	rc = osd_procfs_init(o, o->od_svname);
 	if (rc)
 		GOTO(err, rc);
 
