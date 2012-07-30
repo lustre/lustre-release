@@ -66,6 +66,8 @@ extern unsigned int obd_dump_on_eviction;
    networking / disk / timings affected by load (use Adaptive Timeouts) */
 extern unsigned int obd_timeout;          /* seconds */
 extern unsigned int ldlm_timeout;         /* seconds */
+extern unsigned int obd_timeout_set;
+extern unsigned int ldlm_timeout_set;
 extern unsigned int at_min;
 extern unsigned int at_max;
 extern unsigned int at_history;
