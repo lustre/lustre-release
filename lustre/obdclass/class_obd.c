@@ -82,6 +82,10 @@ unsigned int obd_timeout = OBD_TIMEOUT_DEFAULT;   /* seconds */
 EXPORT_SYMBOL(obd_timeout);
 unsigned int ldlm_timeout = LDLM_TIMEOUT_DEFAULT; /* seconds */
 EXPORT_SYMBOL(ldlm_timeout);
+unsigned int obd_timeout_set;
+EXPORT_SYMBOL(obd_timeout_set);
+unsigned int ldlm_timeout_set;
+EXPORT_SYMBOL(ldlm_timeout_set);
 /* Adaptive timeout defs here instead of ptlrpc module for /proc/sys/ access */
 unsigned int at_min = 0;
 EXPORT_SYMBOL(at_min);
