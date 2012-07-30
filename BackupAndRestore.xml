@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
-<!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="backupandrestore">
+<chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="backupandrestore">
   <title xml:id="backupandrestore.title">Backing Up and Restoring a File System</title>
-  <para>Lustre provides backups at the filesystem-level, device-level and file-level. This chapter describes how to backup and restore on Lustre, and includes the following sections:</para>
+  <para>This chapter describes how to backup and restore on Lustre, at the filesystem-level, device-level and file-level. Each backup approach is described in the the following sections:</para>
   <itemizedlist>
     <listitem>
       <para><xref linkend="dbdoclet.50438207_56395"/></para>
@@ -20,14 +20,11 @@
     </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438207_56395">
-
-
       <title>
           <indexterm><primary>backup</primary></indexterm>
           <indexterm><primary>restoring</primary><see>backup</see></indexterm>
           <indexterm><primary>LVM</primary><see>backup</see></indexterm>
           <indexterm><primary>rsync</primary><see>backup</see></indexterm>
-          
           Backing up a File System</title>
     <para>Backing up a complete file system gives you full control over the files to back up, and allows restoration of individual files as needed. Filesystem-level backups are also the easiest to integrate into existing backup solutions.</para>
     <para>File system backups are performed from a Lustre client (or many clients working parallel in different directories) rather than on individual server nodes; this is no different than backing up any other file system.</para>
@@ -196,9 +193,9 @@ Changelog records consumed: 42</screen>
     <note>
       <para>Keeping an updated full backup of the MDT is especially important because a permanent failure of the MDT file system renders the much larger amount of data in all the OSTs largely inaccessible and unusable.</para>
     </note>
-    <note>
-      <para>In Lustre 2.0 and 2.1 the only correct way to perform an MDT backup and restore is to do a device-level backup as is described in this section. The ability to do MDT file-level backups is not functional in these releases because of the inability to restore the Object Index (OI) file correctly (see bug 22741 for details).</para>
-    </note>
+    <warning>
+        <para>In Lustre 2.0 and 2.1 the only successful way to backup and restore an MDT is to do a device-level backup as is described in this section. File-level backup of an MDT is not available before Lustre 2.3 as the Object Index (OI) file cannot be rebuilt after restore (see bug 22741 for details). <emphasis role='bold'>Since Lustre 2.3 </emphasis> OI files are automatically rebuilt and file-level backup is supported (see <xref linkend='dbdoclet.50438207_21638'/>.)</para>
+    </warning>
     <para>If hardware replacement is the reason for the backup or if a spare storage device is available, it is possible to do a raw copy of the MDT or OST from one block device to the other, as long as the new device is at least as large as the original device. To do this, run:</para>
     <screen>dd if=/dev/{original} of=/dev/{new} bs=1M</screen>
     <para>If hardware errors cause read problems on the original device, use the command below to allow as much data as possible to be read from the original device while skipping sections of the disk with errors:</para>
@@ -207,11 +204,12 @@ Changelog records consumed: 42</screen>
     <para>Even in the face of hardware errors, the <literal>ldiskfs</literal> file system is very robust and it may be possible to recover the file system data after running <literal>e2fsck -f</literal> on the new device.</para>
   </section>
   <section xml:id="dbdoclet.50438207_21638">
-    <title><indexterm><primary>backup</primary><secondary>OST file system</secondary></indexterm>Making a File-Level Backup of an OST File System</title>
-    <para>This procedure provides another way to backup or migrate the data of an OST at the file level, so that the unused space of the OST does not need to be backed up. Backing up a single OST device is not necessarily the best way to perform backups of the Lustre file system, since the files stored in the backup are not usable without metadata stored on the MDT. However, it is the preferred method for migration of OST devices, especially when it is desirable to reformat the underlying file system with different configuration options or to reduce fragmentation.</para>
+      <title><indexterm><primary>backup</primary><secondary>OST file system</secondary></indexterm><indexterm><primary>backup</primary><secondary>MDT file system</secondary></indexterm>Making a File-Level Backup of an OST or MDT File System</title>
+    <para>This procedure provides an alternative to backup or migrate the data of an OST or MDT at the file level. At the file-level, unused space is omitted from the backed up and the process may be completed quicker with smaller total backup size. Backing up a single OST device is not necessarily the best way to perform backups of the Lustre file system, since the files stored in the backup are not usable without metadata stored on the MDT and additional file stripes that may be on other OSTs. However, it is the preferred method for migration of OST devices, especially when it is desirable to reformat the underlying file system with different configuration options or to reduce fragmentation.</para>
     <note>
-      <para>In Lustre 2.0 and 2.1 the only correct way to perform an MDT backup and restore is to do a device-level backup as is described in this section. The ability to do MDT file-level backups is not functional in these releases because of the inability to restore the Object Index (OI) file correctly (see bug 22741 for details).</para>
+        <para>Prior to Lustre 2.3, the only successful way to perform an MDT backup and restore is to do a device-level backup as is described in <xref linkend='dbdoclet.50438207_71633'/>. The ability to do MDT file-level backups is not available for Lustre 2.0 thru 2.2 because restoration of the Object Index (OI) file is not supported. <emphasis role='bold'>Since Lustre 2.3</emphasis> OI files are automatically rebuilt and file-level backup is supported (see <link xl:href='http://jira.whamcloud.com/browse/LU-957'>LU-957</link>.)</para>
     </note>
+    <para>For Lustre 2.3 and newer with MDT file-level backup support, substitute <literal>mdt</literal> for <literal>ost</literal> in the instructions below.</para>
     <orderedlist>
       <listitem>
         <para><emphasis role="bold">Make a mountpoint for the file system.</emphasis></para>
@@ -244,10 +242,13 @@ trusted.fid= \
       </listitem>
       <listitem>
         <para><emphasis role="bold">Back up all file system data.</emphasis></para>
-        <screen>[oss]# tar czvf {backup file}.tgz --sparse .</screen>
+        <screen>[oss]# tar czvf {backup file}.tgz [--xattrs] --sparse .</screen>
         <note>
-          <para>The tar <literal>--sparse</literal> option reduces the size of the MDT backup file. Be sure to use it so the tar command does not mistakenly create an archive full of zeros.</para>
+            <para>The tar <literal>--sparse</literal> option is vital for backing up an MDT. In order to have <literal>--sparse</literal> behave correctly, and complete the backup of and MDT in finite time, the version of tar must be specified. Correctly functioning versions of tar include: Whamcloud <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>, Red Hat tar from RHEL 6.3 onwards and gnu tar version 1.25 or more recent.</para>
         </note>
+        <warning>
+            <para>The tar <literal>--xattrs</literal> option is only available in gnu tar distributions from Red Hat or Whamcloud. Whamcloud tar is available at <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>.</para>
+        </warning>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Change directory out of the file system.</emphasis></para>
@@ -280,11 +281,14 @@ trusted.fid= \
       </listitem>
       <listitem>
         <para>Restore the file system backup.</para>
-        <screen>[oss]# tar xzvpf {<emphasis>backup file</emphasis>} --sparse</screen>
+        <screen>[oss]# tar xzvpf {<emphasis>backup file</emphasis>} [--xattrs] --sparse</screen>
       </listitem>
       <listitem>
         <para>Restore the file system extended attributes.</para>
         <screen>[oss]# setfattr --restore=ea-${date}.bak</screen>
+        <note>
+            <para>If <literal>--xattrs</literal> option is supported by tar and specified in the step above, this step is redundant.</para>
+        </note>
       </listitem>
       <listitem>
         <para>Verify that the extended attributes were restored.</para>
