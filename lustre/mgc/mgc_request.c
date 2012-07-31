@@ -418,7 +418,7 @@ int lprocfs_mgc_rd_ir_state(char *page, char **start, off_t off,
         ENTRY;
 
         rc = snprintf(page, count, "imperative_recovery: %s\n",
-                      OCD_HAS_FLAG(ocd, IMP_RECOV) ? "ON" : "OFF");
+		      OCD_HAS_FLAG(ocd, IMP_RECOV) ? "ENABLED" : "DISABLED");
         rc += snprintf(page + rc, count - rc, "client_state:\n");
 
         cfs_spin_lock(&config_list_lock);
