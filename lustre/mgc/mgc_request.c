@@ -1723,7 +1723,7 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
            running an MGS though (logs are already local). */
         if (lctxt && lsi && (lsi->lsi_flags & LSI_SERVER) &&
             (lsi->lsi_srv_mnt == cli->cl_mgc_vfsmnt) &&
-	    !IS_MGS(lsi->lsi_ldd) && lsi->lsi_lmd->lmd_osd_type == NULL) {
+	    !IS_MGS(lsi->lsi_ldd) && lsi->lsi_srv_mnt) {
                 push_ctxt(saved_ctxt, &mgc->obd_lvfs_ctxt, NULL);
                 must_pop++;
                 if (!local_only)

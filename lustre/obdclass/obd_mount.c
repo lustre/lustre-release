@@ -272,139 +272,6 @@ int server_put_mount_2(const char *name, struct vfsmount *mnt)
 }
 EXPORT_SYMBOL(server_put_mount_2);
 
-/******* mount helper utilities *********/
-
-#if 0
-static void ldd_print(struct lustre_disk_data *ldd)
-{
-        PRINT_CMD(PRINT_MASK, "  disk data:\n");
-        PRINT_CMD(PRINT_MASK, "server:  %s\n", ldd->ldd_svname);
-        PRINT_CMD(PRINT_MASK, "uuid:    %s\n", (char *)ldd->ldd_uuid);
-        PRINT_CMD(PRINT_MASK, "fs:      %s\n", ldd->ldd_fsname);
-        PRINT_CMD(PRINT_MASK, "index:   %04x\n", ldd->ldd_svindex);
-        PRINT_CMD(PRINT_MASK, "config:  %d\n", ldd->ldd_config_ver);
-        PRINT_CMD(PRINT_MASK, "flags:   %#x\n", ldd->ldd_flags);
-        PRINT_CMD(PRINT_MASK, "diskfs:  %s\n", MT_STR(ldd));
-        PRINT_CMD(PRINT_MASK, "options: %s\n", ldd->ldd_mount_opts);
-        PRINT_CMD(PRINT_MASK, "params:  %s\n", ldd->ldd_params);
-        PRINT_CMD(PRINT_MASK, "comment: %s\n", ldd->ldd_userdata);
-}
-#endif
-
-static int ldd_parse(struct lvfs_run_ctxt *mount_ctxt,
-                     struct lustre_disk_data *ldd)
-{
-        struct lvfs_run_ctxt saved;
-        struct file *file;
-        loff_t off = 0;
-        unsigned long len;
-        int rc;
-        ENTRY;
-
-        push_ctxt(&saved, mount_ctxt, NULL);
-
-        file = filp_open(MOUNT_DATA_FILE, O_RDONLY, 0644);
-        if (IS_ERR(file)) {
-                rc = PTR_ERR(file);
-                CERROR("cannot open %s: rc = %d\n", MOUNT_DATA_FILE, rc);
-                GOTO(out, rc);
-        }
-
-        len = i_size_read(file->f_dentry->d_inode);
-        CDEBUG(D_MOUNT, "Have %s, size %lu\n", MOUNT_DATA_FILE, len);
-        if (len != sizeof(*ldd)) {
-                CERROR("disk data size does not match: see %lu expect %u\n",
-                       len, (int)sizeof(*ldd));
-                GOTO(out_close, rc = -EINVAL);
-        }
-
-        rc = lustre_fread(file, ldd, len, &off);
-        if (rc != len) {
-                CERROR("error reading %s: read %d of %lu\n",
-                       MOUNT_DATA_FILE, rc, len);
-                GOTO(out_close, rc = -EINVAL);
-        }
-        rc = 0;
-
-        if (ldd->ldd_magic != LDD_MAGIC) {
-                /* FIXME add swabbing support */
-                CERROR("Bad magic in %s: %x!=%x\n", MOUNT_DATA_FILE,
-                       ldd->ldd_magic, LDD_MAGIC);
-                GOTO(out_close, rc = -EINVAL);
-        }
-
-        if (ldd->ldd_feature_incompat & ~LDD_INCOMPAT_SUPP) {
-                CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
-                       ldd->ldd_svname,
-                       ldd->ldd_feature_incompat & ~LDD_INCOMPAT_SUPP);
-                GOTO(out_close, rc = -EINVAL);
-        }
-        if (ldd->ldd_feature_rocompat & ~LDD_ROCOMPAT_SUPP) {
-                CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
-                       ldd->ldd_svname,
-                       ldd->ldd_feature_rocompat & ~LDD_ROCOMPAT_SUPP);
-                /* Do something like remount filesystem read-only */
-                GOTO(out_close, rc = -EINVAL);
-        }
-
-	/* svname of the form lustre:OST1234 means never registered */
-	rc = strlen(ldd->ldd_svname);
-	if (ldd->ldd_svname[rc - 8] == ':') {
-		ldd->ldd_svname[rc - 8] = '-';
-		ldd->ldd_flags |= LDD_F_VIRGIN;
-	}
-	rc = 0;
-
-out_close:
-        filp_close(file, 0);
-out:
-        pop_ctxt(&saved, mount_ctxt, NULL);
-        RETURN(rc);
-}
-
-static int ldd_write(struct lvfs_run_ctxt *mount_ctxt,
-                     struct lustre_disk_data *ldd)
-{
-        struct lvfs_run_ctxt saved;
-        struct file *file;
-        loff_t off = 0;
-        unsigned long len = sizeof(struct lustre_disk_data);
-        int rc = 0;
-        ENTRY;
-
-	if (ldd->ldd_magic == 0)
-		RETURN(0);
-
-        LASSERT(ldd->ldd_magic == LDD_MAGIC);
-
-        ldd->ldd_config_ver++;
-
-        push_ctxt(&saved, mount_ctxt, NULL);
-
-        file = filp_open(MOUNT_DATA_FILE, O_RDWR|O_SYNC, 0644);
-        if (IS_ERR(file)) {
-                rc = PTR_ERR(file);
-                CERROR("cannot open %s: rc = %d\n", MOUNT_DATA_FILE, rc);
-                GOTO(out, rc);
-        }
-
-        rc = lustre_fwrite(file, ldd, len, &off);
-        if (rc != len) {
-                CERROR("error writing %s: read %d of %lu\n",
-                       MOUNT_DATA_FILE, rc, len);
-                GOTO(out_close, rc = -EINVAL);
-        }
-
-        rc = 0;
-
-out_close:
-        filp_close(file, 0);
-out:
-        pop_ctxt(&saved, mount_ctxt, NULL);
-        RETURN(rc);
-}
-
-
 /**************** config llog ********************/
 
 /** Get a config log from the MGS and process it.
@@ -1063,13 +930,13 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
 
                 /* server use --servicenode param, only allow specified
                  * nids be registered */
-                if ((ldd->ldd_flags & LDD_F_NO_PRIMNODE) != 0 &&
-                    class_match_nid(ldd->ldd_params,
+		if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) != 0 &&
+		    class_match_nid(lsi->lsi_lmd->lmd_params,
                                     PARAM_FAILNODE, id.nid) < 1)
                         continue;
 
                 /* match specified network */
-                if (!class_match_net(ldd->ldd_params,
+		if (!class_match_net(lsi->lsi_lmd->lmd_params,
                                      PARAM_NETWORK, LNET_NIDNET(id.nid)))
                         continue;
 
@@ -1093,7 +960,8 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
                 CERROR("params too big for mti\n");
                 RETURN(-ENOMEM);
         }
-        memcpy(mti->mti_params, ldd->ldd_params, sizeof(mti->mti_params));
+	strncpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
+			sizeof(mti->mti_params));
         RETURN(0);
 }
 
@@ -1151,36 +1019,6 @@ int server_register_target(struct super_block *sb)
                         rc = 0;
                 }
                 GOTO(out, rc);
-        }
-
-        /* Always update our flags */
-        ldd->ldd_flags = mti->mti_flags & LDD_F_ONDISK_MASK;
-
-        /* If this flag is set, it means the MGS wants us to change our
-           on-disk data. (So far this means just the index.) */
-        if (mti->mti_flags & LDD_F_REWRITE_LDD) {
-                char *label;
-                int err;
-                CDEBUG(D_MOUNT, "Changing on-disk index from %#x to %#x "
-                       "for %s\n", ldd->ldd_svindex, mti->mti_stripe_index,
-                       mti->mti_svname);
-                ldd->ldd_svindex = mti->mti_stripe_index;
-                strncpy(ldd->ldd_svname, mti->mti_svname,
-                        sizeof(ldd->ldd_svname));
-                /* or ldd_make_sv_name(ldd); */
-                ldd_write(&mgc->obd_lvfs_ctxt, ldd);
-		if (lsi->lsi_lmd->lmd_osd_type)
-			goto out;
-                err = fsfilt_set_label(mgc, lsi->lsi_srv_mnt->mnt_sb,
-                                       mti->mti_svname);
-                if (err)
-                        CERROR("Label set error %d\n", err);
-                label = fsfilt_get_label(mgc, lsi->lsi_srv_mnt->mnt_sb);
-                if (label)
-                        CDEBUG(D_MOUNT, "Disk label changed to %s\n", label);
-
-                /* Flush the new ldd to disk */
-                fsfilt_sync(mgc, lsi->lsi_srv_mnt->mnt_sb);
         }
 
 out:
@@ -1290,7 +1128,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
         /* Set the mgc fs to our server disk.  This allows the MGC to
          * read and write configs locally, in case it can't talk to the MGS. */
-	if (lsi->lsi_lmd->lmd_osd_type == NULL) {
+	if (lsi->lsi_srv_mnt) {
 		rc = server_mgc_set_fs(lsi->lsi_mgc, sb);
 		if (rc)
 			RETURN(rc);
@@ -1321,7 +1159,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
 out_mgc:
         /* Release the mgc fs for others to use */
-	if (lsi->lsi_lmd->lmd_osd_type == NULL)
+	if (lsi->lsi_srv_mnt)
 		server_mgc_clear_fs(lsi->lsi_mgc);
 
         if (!rc) {
@@ -1416,6 +1254,8 @@ static int lustre_free_lsi(struct super_block *sb)
 		if (lsi->lsi_lmd->lmd_osd_type != NULL)
 			OBD_FREE(lsi->lsi_lmd->lmd_osd_type,
 				 strlen(lsi->lsi_lmd->lmd_osd_type) + 1);
+		if (lsi->lsi_lmd->lmd_params != NULL)
+			OBD_FREE(lsi->lsi_lmd->lmd_params, 4096);
 
                 OBD_FREE(lsi->lsi_lmd, sizeof(*lsi->lsi_lmd));
         }
@@ -1459,6 +1299,7 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 		RETURN(-ENOMEM);
 
 	strcpy(lsi->lsi_osd_type, LUSTRE_OSD_NAME);
+	ldd->ldd_mount_type = LDD_MT_LDISKFS;
 
 	/* The server name is given as a mount line option */
 	if (lsi->lsi_lmd->lmd_profile == NULL) {
@@ -1499,6 +1340,12 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 	ldd->ldd_svindex = simple_strtoul(p + 4, NULL, 16);
 	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF) ?
 				LDD_F_WRITECONF : 0;
+	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_VIRGIN) ?
+				LDD_F_VIRGIN | LDD_F_UPDATE : 0;
+	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) ?
+				LDD_F_SV_TYPE_MGS : 0;
+	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) ?
+				LDD_F_NO_PRIMNODE : 0;
 
 	lsi->lsi_ldd = ldd;
 
@@ -1532,7 +1379,6 @@ err:
  */
 static struct vfsmount *server_kernel_mount(struct super_block *sb)
 {
-        struct lvfs_run_ctxt mount_ctxt;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct lustre_disk_data *ldd;
         struct lustre_mount_data *lmd = lsi->lsi_lmd;
@@ -1545,15 +1391,21 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         int rc;
         ENTRY;
 
-	if (lsi->lsi_lmd->lmd_osd_type) {
-		rc = lsi_prepare(lsi);
+	rc = lsi_prepare(lsi);
+	if (rc)
 		RETURN(ERR_PTR(rc));
+
+	if (strcmp(lmd->lmd_osd_type, "osd-ldiskfs") == 0) {
+		/* with ldiskfs we're still mounting in the kernel space */
+		OBD_FREE(lmd->lmd_osd_type,
+			 strlen(lmd->lmd_osd_type) + 1);
+		lmd->lmd_osd_type = NULL;
+	} else {
+		/* non-ldiskfs backends (zfs) do mounting internally */
+		RETURN(NULL);
 	}
 
-        OBD_ALLOC(ldd, sizeof(*ldd));
-        if (!ldd)
-                RETURN(ERR_PTR(-ENOMEM));
-	strcpy(lsi->lsi_osd_type, LUSTRE_OSD_NAME);
+	ldd = lsi->lsi_ldd;
 
         /* In the past, we have always used flags = 0.
            Note ext3/ldiskfs can't be mounted ro. */
@@ -1566,44 +1418,6 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         page = (unsigned long)cfs_page_address(__page);
         options = (char *)page;
         memset(options, 0, CFS_PAGE_SIZE);
-
-        /* mount-line options must be added for pre-mount because it may
-         * contain mount options such as journal_dev which are required
-         * to mount successfuly the underlying filesystem */
-        if (lmd->lmd_opts && (*(lmd->lmd_opts) != 0))
-                strncat(options, lmd->lmd_opts, CFS_PAGE_SIZE - 1);
-
-        /* Pre-mount ldiskfs to read the MOUNT_DATA_FILE */
-        CDEBUG(D_MOUNT, "Pre-mount ldiskfs %s\n", lmd->lmd_dev);
-        type = get_fs_type("ldiskfs");
-        if (!type) {
-                CERROR("premount failed: cannot find ldiskfs module\n");
-                GOTO(out_free, rc = -ENODEV);
-        }
-        mnt = vfs_kern_mount(type, s_flags, lmd->lmd_dev, (void *)options);
-        cfs_module_put(type->owner);
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                CERROR("premount %s:%#lx ldiskfs failed: %d "
-                        "Is the ldiskfs module available?\n",
-                        lmd->lmd_dev, s_flags, rc );
-                GOTO(out_free, rc);
-        }
-
-        OBD_SET_CTXT_MAGIC(&mount_ctxt);
-        mount_ctxt.pwdmnt = mnt;
-        mount_ctxt.pwd = mnt->mnt_root;
-        mount_ctxt.fs = get_ds();
-
-        rc = ldd_parse(&mount_ctxt, ldd);
-        unlock_mntput(mnt);
-
-        if (rc) {
-                CERROR("premount parse options failed: rc = %d\n", rc);
-                GOTO(out_free, rc);
-        }
-
-        /* Done with our pre-mount, now do the real mount. */
 
         /* Glom up mount options */
         memset(options, 0, CFS_PAGE_SIZE);
@@ -2332,6 +2146,11 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
         }
         lmd->lmd_magic = LMD_MAGIC;
 
+	OBD_ALLOC(lmd->lmd_params, 4096);
+	if (lmd->lmd_params == NULL)
+		RETURN(-ENOMEM);
+	lmd->lmd_params[0] = '\0';
+
         /* Set default flags here */
 
         s1 = options;
@@ -2383,6 +2202,12 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                 } else if (strncmp(s1, "writeconf", 9) == 0) {
                         lmd->lmd_flags |= LMD_FLG_WRITECONF;
                         clear++;
+		} else if (strncmp(s1, "virgin", 6) == 0) {
+			lmd->lmd_flags |= LMD_FLG_VIRGIN;
+			clear++;
+		} else if (strncmp(s1, "noprimnode", 10) == 0) {
+			lmd->lmd_flags |= LMD_FLG_NO_PRIMNODE;
+			clear++;
                 } else if (strncmp(s1, "mgssec=", 7) == 0) {
                         rc = lmd_parse_mgssec(lmd, s1 + 7);
                         if (rc)
@@ -2394,22 +2219,30 @@ static int lmd_parse(char *options, struct lustre_mount_data *lmd)
                         if (rc)
                                 goto invalid;
                         clear++;
+		} else if (strncmp(s1, "mgs", 3) == 0) {
+			/* We are an MGS */
+			lmd->lmd_flags |= LMD_FLG_MGS;
+			clear++;
 		} else if (strncmp(s1, "svname=", 7) == 0) {
 			rc = lmd_parse_string(&lmd->lmd_profile, s1 + 7);
 			if (rc)
 				goto invalid;
 			clear++;
+		} else if (strncmp(s1, "param=", 6) == 0) {
+			int length;
+			char *tail = strchr(s1 + 6, ',');
+			if (tail == NULL)
+				length = strlen(s1);
+			else
+				length = tail - s1;
+			length -= 6;
+			strncat(lmd->lmd_params, s1 + 6, length);
+			strcat(lmd->lmd_params, " ");
+			clear++;
 		} else if (strncmp(s1, "osd=", 4) == 0) {
 			rc = lmd_parse_string(&lmd->lmd_osd_type, s1 + 4);
 			if (rc)
 				goto invalid;
-			/* with ldiskfs we're still doing ldd parsing
-			 * in the kernel space */
-			if (!strcmp(lmd->lmd_osd_type, "osd-ldiskfs")) {
-				OBD_FREE(lmd->lmd_osd_type,
-					 strlen(lmd->lmd_osd_type) + 1);
-				lmd->lmd_osd_type = NULL;
-			}
 			clear++;
                 }
                 /* Linux 2.4 doesn't pass the device, so we stuck it at the

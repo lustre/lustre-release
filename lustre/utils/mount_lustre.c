@@ -241,6 +241,9 @@ int parse_options(struct mount_opts *mop, char *orig_options, int *flagp)
 				mop->mo_retry = 0;
                 } else if (val && strncmp(arg, "mgssec", 6) == 0) {
                         append_option(options, opt);
+		} else if (strncmp(arg, "nosvc", 5) == 0) {
+			mop->mo_nosvc = 1;
+			append_option(options, opt);
                 } else if (strcmp(opt, "force") == 0) {
                         //XXX special check for 'force' option
 			++mop->mo_force;
@@ -290,6 +293,7 @@ static int add_mgsnids(struct mount_opts *mop, char *options,
 static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 {
 	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	char *cur, *start;
 	int rc;
 
 	rc = osd_is_lustre(source, &ldd->ldd_mount_type);
@@ -299,15 +303,6 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 			"this tool\n", progname, source);
 		return ENODEV;
 	}
-
-	/* for new backends (i.e. ZFS) we will be parsing mount data
-	 * in the userspace and pass it in the form of mount options.
-	 * to adopt this schema smoothly we're still doing old way
-	 * (parsing mount data within the kernel) for ldiskfs */
-	if (ldd->ldd_mount_type == LDD_MT_EXT3 ||
-	    ldd->ldd_mount_type == LDD_MT_LDISKFS ||
-	    ldd->ldd_mount_type == LDD_MT_LDISKFS2)
-		return 0;
 
 	rc = osd_read_ldd(source, ldd);
 	if (rc) {
@@ -330,13 +325,16 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 	}
 
 	/* Since we never rewrite ldd, ignore temp flags */
-	ldd->ldd_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE);
+	ldd->ldd_flags &= ~(LDD_F_VIRGIN | LDD_F_UPDATE | LDD_F_WRITECONF);
 
 	/* svname of the form lustre:OST1234 means never registered */
 	rc = strlen(ldd->ldd_svname);
 	if (ldd->ldd_svname[rc - 8] == ':') {
 		ldd->ldd_svname[rc - 8] = '-';
 		ldd->ldd_flags |= LDD_F_VIRGIN;
+	} else if (ldd->ldd_svname[rc - 8] == '=') {
+		ldd->ldd_svname[rc - 8] = '-';
+		ldd->ldd_flags |= LDD_F_WRITECONF;
 	}
 
 	/* backend osd type */
@@ -362,12 +360,31 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 		return EINVAL;
 	}
 
-	if (ldd->ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF))
+	if (ldd->ldd_flags & LDD_F_VIRGIN)
+		append_option(options, "virgin");
+	if (ldd->ldd_flags & LDD_F_WRITECONF)
 		append_option(options, "writeconf");
 	if (ldd->ldd_flags & LDD_F_IAM_DIR)
 		append_option(options, "iam");
 	if (ldd->ldd_flags & LDD_F_NO_PRIMNODE)
 		append_option(options, "noprimnode");
+
+	/* prefix every lustre parameter with param= so that in-kernel
+	 * mount can recognize them properly and send to MGS at registration */
+	start = ldd->ldd_params;
+	while (start && *start != '\0') {
+		while (*start == ' ') start++;
+		if (*start == '\0')
+			break;
+		cur = start;
+		start = strchr(cur, ' ');
+		if (start) {
+			*start = '\0';
+			start++;
+		}
+		append_option(options, "param=");
+		strcat(options, cur);
+	}
 
 	/* svname must be last option */
 	append_option(options, "svname=");
@@ -388,6 +405,7 @@ static void set_defaults(struct mount_opts *mop)
 	mop->mo_have_mgsnid = 0;
 	mop->mo_md_stripe_cache_size = 16384;
 	mop->mo_orig_options = "";
+	mop->mo_nosvc = 0;
 }
 
 static int parse_opts(int argc, char *const argv[], struct mount_opts *mop)
@@ -672,9 +690,13 @@ int main(int argc, char *const argv[])
 				       mop.mo_orig_options, 0,0,0);
 
 		/* change label from <fsname>:<index> to <fsname>-<index>
-		 * to indicate the device has been registered. */
-		if (mop.mo_ldd.ldd_flags & LDD_F_VIRGIN)
-			(void) osd_label_lustre(&mop);
+		 * to indicate the device has been registered.
+		 * only if the label is supposed to be changed and
+		 * target service is supposed to start */
+		if (mop.mo_ldd.ldd_flags & (LDD_F_VIRGIN | LDD_F_WRITECONF)) {
+			if (mop.mo_nosvc == 0 )
+				(void) osd_label_lustre(&mop);
+		}
         }
 
 	free(options);

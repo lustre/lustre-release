@@ -82,6 +82,7 @@ struct mount_opts {
 	int	 mo_retry;
 	int	 mo_have_mgsnid;
 	int	 mo_md_stripe_cache_size;
+	int	 mo_nosvc;
 };
 
 int get_mountdata(char *, struct lustre_disk_data *);

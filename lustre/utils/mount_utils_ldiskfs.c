@@ -161,6 +161,25 @@ out_rmdir:
 	return ret;
 }
 
+static int readcmd(char *cmd, char *buf, int len)
+{
+	FILE *fp;
+	int red;
+
+	fp = popen(cmd, "r");
+	if (!fp)
+		return errno;
+
+	red = fread(buf, 1, len, fp);
+	pclose(fp);
+
+	/* strip trailing newline */
+	if (buf[red - 1] == '\n')
+		buf[red - 1] = '\0';
+
+	return (red == 0) ? -ENOENT : 0;
+}
+
 int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *mo_ldd)
 {
 	char tmpdir[] = "/tmp/dirXXXXXX";
@@ -209,6 +228,11 @@ out_close:
 	run_command(cmd, cmdsz);
 	if (ret)
 		verrprint("Failed to read old data (%d)\n", ret);
+
+	/* As long as we at least have the label, we're good to go */
+	snprintf(cmd, sizeof(cmd), E2LABEL" %s", dev);
+	ret = readcmd(cmd, mo_ldd->ldd_svname, sizeof(mo_ldd->ldd_svname) - 1);
+
 	return ret;
 }
 

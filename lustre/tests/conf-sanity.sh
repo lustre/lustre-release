@@ -11,7 +11,6 @@ ONLY=${ONLY:-"$*"}
 
 # bug number for skipped test:
 #               15977
-ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 if [ "$FAILURE_MODE" = "HARD" ]; then
@@ -942,6 +941,9 @@ test_26() {
     lctl get_param -n devices
     DEVS=$(lctl get_param -n devices | egrep -v MG | wc -l)
     [ $DEVS -gt 0 ] && return 2
+    # start mds to drop writeconf setting
+    start_mds || return 3
+    stop_mds || return 4
     unload_modules_conf || return $?
 }
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
