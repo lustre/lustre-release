@@ -351,6 +351,7 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
 
                         bio->bi_bdev = inode->i_sb->s_bdev;
                         bio->bi_sector = sector;
+			bio->bi_rw = (iobuf->dr_rw == 0) ? READ : WRITE;
                         bio->bi_end_io = dio_complete_routine;
                         bio->bi_private = iobuf;
 
