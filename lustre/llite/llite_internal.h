@@ -585,6 +585,10 @@ struct ll_file_data {
         unsigned long fd_gid;
         struct ll_file_dir fd_dir;
         __u32 fd_flags;
+	/* Indicate whether need to report failure when close.
+	 * true: failure is known, not report again.
+	 * false: unknown failure, should report. */
+	bool fd_write_failed;
 };
 
 struct lov_stripe_md;
