@@ -315,7 +315,7 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         mntput(mnt);
         cfs_init_rwsem(&mds->mds_notify_lock);
 
-        obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+	obd->obd_fsops = fsfilt_get_ops(lsi->lsi_fstype);
         rc = mds_init_ctxt(obd, mnt);
         if (rc)
                 GOTO(err_putfs, rc);

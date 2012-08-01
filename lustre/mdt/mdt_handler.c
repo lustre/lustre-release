@@ -4494,7 +4494,7 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
 
         LASSERT(obd->obd_fsops == NULL);
 
-        obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+	obd->obd_fsops = fsfilt_get_ops(lsi->lsi_fstype);
         if (IS_ERR(obd->obd_fsops))
                 return PTR_ERR(obd->obd_fsops);
 
@@ -4636,7 +4636,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         const char                *num = lustre_cfg_string(cfg, 2);
         struct lustre_mount_info  *lmi = NULL;
         struct lustre_sb_info     *lsi;
-        struct lustre_disk_data   *ldd;
         struct lu_site            *s;
         struct md_site            *mite;
         const char                *identity_upcall = "NONE";
@@ -4678,10 +4677,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         } else {
                 lsi = s2lsi(lmi->lmi_sb);
                 /* CMD is supported only in IAM mode */
-                ldd = lsi->lsi_ldd;
                 LASSERT(num);
                 node_id = simple_strtol(num, NULL, 10);
-                if (!(ldd->ldd_flags & LDD_F_IAM_DIR) && node_id) {
+		if (!(lsi->lsi_flags & LDD_F_IAM_DIR) && node_id) {
                         CERROR("CMD Operation not allowed in IOP mode\n");
                         GOTO(err_lmi, rc = -EINVAL);
                 }

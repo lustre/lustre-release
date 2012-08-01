@@ -2054,7 +2054,7 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
                    lcfg bufs 1, 2, 4 (device, fstype, mount opts) are ignored.*/
                 struct lustre_sb_info *lsi = s2lsi(lmi->lmi_sb);
                 mnt = lmi->lmi_mnt;
-                obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+		obd->obd_fsops = fsfilt_get_ops(lsi->lsi_fstype);
         } else {
                 /* old path - used by lctl */
                 CERROR("Using old MDS mount method\n");

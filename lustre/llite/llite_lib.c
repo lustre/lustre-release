@@ -2001,7 +2001,6 @@ void ll_umount_begin(struct vfsmount *vfsmnt, int flags)
 void ll_umount_begin(struct super_block *sb)
 {
 #endif
-        struct lustre_sb_info *lsi = s2lsi(sb);
         struct ll_sb_info *sbi = ll_s2sbi(sb);
         struct obd_device *obd;
         struct obd_ioctl_data *ioc_data;
@@ -2013,9 +2012,6 @@ void ll_umount_begin(struct super_block *sb)
                 return;
         }
 #endif
-
-        /* Tell the MGC we got umount -f */
-        lsi->lsi_flags |= LSI_UMOUNT_FORCE;
 
         CDEBUG(D_VFSTRACE, "VFS Op: superblock %p count %d active %d\n", sb,
                sb->s_count, atomic_read(&sb->s_active));

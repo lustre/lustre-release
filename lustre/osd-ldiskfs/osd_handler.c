@@ -4333,7 +4333,6 @@ static int osd_mount(const struct lu_env *env,
 {
         struct lustre_mount_info *lmi;
         const char               *dev  = lustre_cfg_string(cfg, 0);
-        struct lustre_disk_data  *ldd;
         struct lustre_sb_info    *lsi;
         int                       rc = 0;
 
@@ -4363,15 +4362,14 @@ static int osd_mount(const struct lu_env *env,
         o->od_mnt = lmi->lmi_mnt;
 
         lsi = s2lsi(lmi->lmi_sb);
-        ldd = lsi->lsi_ldd;
 
-        if (ldd->ldd_flags & LDD_F_IAM_DIR) {
+	if (lsi->lsi_flags & LDD_F_IAM_DIR) {
                 o->od_iop_mode = 0;
                 LCONSOLE_WARN("%s: OSD: IAM mode enabled\n", dev);
         } else
                 o->od_iop_mode = 1;
 
-        if (ldd->ldd_flags & LDD_F_SV_TYPE_OST) {
+	if (lsi->lsi_flags & LDD_F_SV_TYPE_OST) {
                 rc = osd_compat_init(o);
                 if (rc)
                         CERROR("%s: can't initialize compats: %d\n", dev, rc);

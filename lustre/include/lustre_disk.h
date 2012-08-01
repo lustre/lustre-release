@@ -107,6 +107,8 @@
 
 #define LDD_F_ONDISK_MASK  (LDD_F_SV_TYPE_MASK | LDD_F_IAM_DIR)
 
+#define LDD_F_MASK          0xFFFF
+
 enum ldd_mount_type {
 	LDD_MT_EXT3 = 0,
 	LDD_MT_LDISKFS,
@@ -171,9 +173,11 @@ struct lustre_disk_data {
 /*8192*/char       ldd_params[4096];     /* key=value pairs */
 };
 
-#define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
-#define IS_OST(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_OST)
-#define IS_MGS(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGS)
+#define IS_MDT(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
+#define IS_OST(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_OST)
+#define IS_MGS(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_MGS)
+#define IS_SERVER(data) ((data)->lsi_flags & (LDD_F_SV_TYPE_MGS | \
+       LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST))
 #define MT_STR(data)   mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
@@ -198,6 +202,7 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
 
 /* Get the index from the obd name */
 int server_name2index(char *svname, __u32 *idx, char **endptr);
+int server_name2svname(char *label, char *svname, char **endptr);
 
 
 /****************** mount command *********************/
@@ -484,21 +489,18 @@ struct lustre_sb_info {
         int                       lsi_flags;
         struct obd_device        *lsi_mgc;     /* mgc obd */
         struct lustre_mount_data *lsi_lmd;     /* mount command info */
-        struct lustre_disk_data  *lsi_ldd;     /* mount info on-disk */
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
         struct vfsmount          *lsi_srv_mnt; /* the one server mount */
         cfs_atomic_t              lsi_mounts;  /* references to the srv_mnt */
 	char			  lsi_svname[MTI_NAME_MAXLEN];
 	char			  lsi_osd_type[16];
+	char			  lsi_fstype[16];
         struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs
                                                   own backing_dev_info */
 };
 
-#define LSI_SERVER                       0x00000001
-#define LSI_UMOUNT_FORCE                 0x00000010
-#define LSI_UMOUNT_FAILOVER              0x00000020
-#define LSI_BDI_INITIALIZED              0x00000040
-#define LSI_IR_CAPABLE                   0x00000080
+#define LSI_UMOUNT_FAILOVER              0x00200000
+#define LSI_BDI_INITIALIZED              0x00400000
 
 #define     s2lsi(sb)        ((struct lustre_sb_info *)((sb)->s_fs_info))
 #define     s2lsi_nocast(sb) ((sb)->s_fs_info)
@@ -533,7 +535,6 @@ struct lustre_mount_info *server_get_mount(const char *name);
 struct lustre_mount_info *server_get_mount_2(const char *name);
 int server_put_mount(const char *name, struct vfsmount *mnt);
 int server_put_mount_2(const char *name, struct vfsmount *mnt);
-int server_register_target(struct super_block *sb);
 struct mgs_target_info;
 int server_mti_print(char *title, struct mgs_target_info *mti);
 void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd);

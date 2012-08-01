@@ -506,7 +506,7 @@ static int osd_mount(const struct lu_env *env,
 		RETURN(-E2BIG);
 
 	strcpy(o->od_mntdev, dev);
-	strcpy(o->od_svname, lsi->lsi_ldd->ldd_svname);
+	strcpy(o->od_svname, lsi->lsi_svname);
 
 	rc = -udmu_objset_open(o->od_mntdev, &o->od_objset);
 	if (rc) {

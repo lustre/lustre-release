@@ -432,8 +432,7 @@ static int server_start_mgs(struct super_block *sb)
         if (lmi) {
                 lsi = s2lsi(lmi->lmi_sb);
                 LCONSOLE_ERROR_MSG(0x15d, "The MGS service was already started"
-                                   " from server %s\n",
-                                   lsi->lsi_ldd->ldd_svname);
+				   " from server\n");
                 RETURN(-EALREADY);
         }
 
@@ -503,17 +502,13 @@ static int lustre_start_mgc(struct super_block *sb)
         LASSERT(lsi->lsi_lmd);
 
         /* Find the first non-lo MGS nid for our MGC name */
-        if (lsi->lsi_flags & LSI_SERVER) {
-                ptr = lsi->lsi_ldd->ldd_params;
+	if (IS_SERVER(lsi)) {
 		/* mount -o mgsnode=nid */
+		ptr = lsi->lsi_lmd->lmd_mgs;
 		if (lsi->lsi_lmd->lmd_mgs &&
 		    (class_parse_nid(lsi->lsi_lmd->lmd_mgs, &nid, &ptr) == 0)) {
 			i++;
-                /* Use mgsnode= nids */
-		} else if ((class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0) &&
-                    (class_parse_nid(ptr, &nid, &ptr) == 0)) {
-                        i++;
-                } else if (IS_MGS(lsi->lsi_ldd)) {
+		} else if (IS_MGS(lsi)) {
                         lnet_process_id_t id;
                         while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
                                 if (LNET_NETTYP(LNET_NIDNET(id.nid)) == LOLND)
@@ -589,7 +584,7 @@ static int lustre_start_mgc(struct super_block *sb)
                 recov_bk = 0;
                 /* If we are restarting the MGS, don't try to keep the MGC's
                    old connection, or registration will fail. */
-                if ((lsi->lsi_flags & LSI_SERVER) && IS_MGS(lsi->lsi_ldd)) {
+		if (IS_MGS(lsi)) {
                         CDEBUG(D_MOUNT, "New MGS with live MGC\n");
                         recov_bk = 1;
                 }
@@ -612,9 +607,9 @@ static int lustre_start_mgc(struct super_block *sb)
         /* Add the primary nids for the MGS */
         i = 0;
         sprintf(niduuid, "%s_%x", mgcname, i);
-        if (lsi->lsi_flags & LSI_SERVER) {
-                ptr = lsi->lsi_ldd->ldd_params;
-                if (IS_MGS(lsi->lsi_ldd)) {
+	if (IS_SERVER(lsi)) {
+		ptr = lsi->lsi_lmd->lmd_mgs;
+		if (IS_MGS(lsi)) {
                         /* Use local nids (including LO) */
                         lnet_process_id_t id;
                         while ((rc = LNetGetId(i++, &id)) != -ENOENT) {
@@ -670,8 +665,8 @@ static int lustre_start_mgc(struct super_block *sb)
 
         /* Add any failover MGS nids */
         i = 1;
-        while ((*ptr == ':' ||
-                class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0)) {
+	while (ptr && ((*ptr == ':' ||
+	       class_find_param(ptr, PARAM_MGSNODE, &ptr) == 0))) {
                 /* New failover node */
                 sprintf(niduuid, "%s_%x", mgcname, i);
                 j = 0;
@@ -859,7 +854,7 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
 CFS_DEFINE_MUTEX(server_start_lock);
 
 /* Stop MDS/OSS if nobody is using them */
-static int server_stop_servers(int lddflags, int lsiflags)
+static int server_stop_servers(int lsiflags)
 {
         struct obd_device *obd = NULL;
         struct obd_type *type = NULL;
@@ -870,13 +865,13 @@ static int server_stop_servers(int lddflags, int lsiflags)
 
         /* Either an MDT or an OST or neither  */
         /* if this was an MDT, and there are no more MDT's, clean up the MDS */
-        if ((lddflags & LDD_F_SV_TYPE_MDT) &&
+	if ((lsiflags & LDD_F_SV_TYPE_MDT) &&
             (obd = class_name2obd(LUSTRE_MDS_OBDNAME))) {
                 /*FIXME pre-rename, should eventually be LUSTRE_MDT_NAME*/
                 type = class_search_type(LUSTRE_MDS_NAME);
         }
         /* if this was an OST, and there are no more OST's, clean up the OSS */
-        if ((lddflags & LDD_F_SV_TYPE_OST) &&
+	if ((lsiflags & LDD_F_SV_TYPE_OST) &&
             (obd = class_name2obd(LUSTRE_OSS_OBDNAME))) {
                 type = class_search_type(LUSTRE_OST_NAME);
         }
@@ -905,23 +900,111 @@ int server_mti_print(char *title, struct mgs_target_info *mti)
                   mti->mti_config_ver, mti->mti_flags);
         return(0);
 }
-EXPORT_SYMBOL(server_mti_print);
 
-static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
+/** Get the fsname ("lustre") from the server name ("lustre-OST003F").
+ * @param [in] svname server name including type and index
+ * @param [out] fsname Buffer to copy filesystem name prefix into.
+ *  Must have at least 'strlen(fsname) + 1' chars.
+ * @param [out] endptr if endptr isn't NULL it is set to end of fsname
+ * rc < 0  on error
+ */
+static int server_name2fsname(char *svname, char *fsname, char **endptr)
 {
-        struct lustre_sb_info    *lsi = s2lsi(sb);
-        struct lustre_disk_data  *ldd = lsi->lsi_ldd;
-        lnet_process_id_t         id;
-        int                       i = 0;
+	char *p;
+
+	p = strstr(svname, "-OST");
+	if (p == NULL)
+		p = strstr(svname, "-MDT");
+	if (p == NULL)
+		return -1;
+
+	if (fsname) {
+		strncpy(fsname, svname, p - svname);
+		fsname[p - svname] = '\0';
+	}
+
+	if (endptr != NULL)
+		*endptr = p;
+
+	return 0;
+}
+
+/**
+ * Get service name (svname) from string
+ * rc < 0 on error
+ * if endptr isn't NULL it is set to end of fsname *
+ */
+int server_name2svname(char *label, char *svname, char **endptr)
+{
+	int rc;
+	char *dash;
+
+	/* We use server_name2fsname() just for parsing */
+	rc = server_name2fsname(label, NULL, &dash);
+	if (rc != 0)
+		return rc;
+
+	if (*dash != '-')
+		return -1;
+
+	strncpy(svname, dash + 1, MTI_NAME_MAXLEN);
+
+	return 0;
+}
+EXPORT_SYMBOL(server_name2svname);
+
+
+/* Get the index from the obd name.
+   rc = server type, or
+   rc < 0  on error
+   if endptr isn't NULL it is set to end of name */
+int server_name2index(char *svname, __u32 *idx, char **endptr)
+{
+	unsigned long index;
+	int rc;
+	char *dash;
+
+	/* We use server_name2fsname() just for parsing */
+	rc = server_name2fsname(svname, NULL, &dash);
+	if (rc != 0)
+		return rc;
+
+	if (*dash != '-')
+		return -EINVAL;
+
+	dash++;
+
+	if (strncmp(dash, "MDT", 3) == 0)
+		rc = LDD_F_SV_TYPE_MDT;
+	else if (strncmp(dash, "OST", 3) == 0)
+		rc = LDD_F_SV_TYPE_OST;
+	else
+		return -EINVAL;
+
+	dash += 3;
+
+	if (strcmp(dash, "all") == 0)
+		return rc | LDD_F_SV_ALL;
+
+	index = simple_strtoul(dash, endptr, 16);
+	*idx = index;
+
+	return rc;
+}
+EXPORT_SYMBOL(server_name2index);
+
+/* Generate data for registration */
+static int server_lsi2mti(struct lustre_sb_info *lsi,
+			  struct mgs_target_info *mti)
+{
+	lnet_process_id_t id;
+	int rc, i = 0;
         ENTRY;
 
-        if (!(lsi->lsi_flags & LSI_SERVER))
+	if (!IS_SERVER(lsi))
                 RETURN(-EINVAL);
 
-        strncpy(mti->mti_fsname, ldd->ldd_fsname,
-                sizeof(mti->mti_fsname));
-        strncpy(mti->mti_svname, ldd->ldd_svname,
-                sizeof(mti->mti_svname));
+	strncpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname));
 
         mti->mti_nid_count = 0;
         while (LNetGetId(i++, &id) != -ENOENT) {
@@ -951,27 +1034,29 @@ static int server_sb2mti(struct super_block *sb, struct mgs_target_info *mti)
 
         mti->mti_lustre_ver = LUSTRE_VERSION_CODE;
         mti->mti_config_ver = 0;
-        if (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF)
-                ldd->ldd_flags |= LDD_F_WRITECONF;
-        mti->mti_flags = ldd->ldd_flags;
-        mti->mti_stripe_index = ldd->ldd_svindex;
-        memcpy(mti->mti_uuid, ldd->ldd_uuid, sizeof(mti->mti_uuid));
-        if (strlen(ldd->ldd_params) > sizeof(mti->mti_params)) {
-                CERROR("params too big for mti\n");
-                RETURN(-ENOMEM);
-        }
+
+	rc = server_name2fsname(lsi->lsi_svname, mti->mti_fsname, NULL);
+	if (rc != 0)
+		return rc;
+
+	rc = server_name2index(lsi->lsi_svname, &mti->mti_stripe_index, NULL);
+	if (rc < 0)
+		return rc;
+	/* Orion requires index to be set */
+	LASSERT(!(rc & LDD_F_NEED_INDEX));
+	/* keep only LDD flags */
+	mti->mti_flags = lsi->lsi_flags & LDD_F_MASK;
+	mti->mti_flags |= LDD_F_UPDATE;
 	strncpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
-			sizeof(mti->mti_params));
-        RETURN(0);
+		sizeof(mti->mti_params));
+	return 0;
 }
 
 /* Register an old or new target with the MGS. If needed MGS will construct
    startup logs and assign index */
-int server_register_target(struct super_block *sb)
+static int server_register_target(struct lustre_sb_info *lsi)
 {
-        struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device *mgc = lsi->lsi_mgc;
-        struct lustre_disk_data *ldd = lsi->lsi_ldd;
         struct mgs_target_info *mti = NULL;
         bool writeconf;
         int rc;
@@ -979,13 +1064,14 @@ int server_register_target(struct super_block *sb)
 
         LASSERT(mgc);
 
-        if (!(lsi->lsi_flags & LSI_SERVER))
+	if (!IS_SERVER(lsi))
                 RETURN(-EINVAL);
 
         OBD_ALLOC_PTR(mti);
         if (!mti)
                 RETURN(-ENOMEM);
-        rc = server_sb2mti(sb, mti);
+
+	rc = server_lsi2mti(lsi, mti);
         if (rc)
                 GOTO(out, rc);
 
@@ -995,7 +1081,7 @@ int server_register_target(struct super_block *sb)
                mti->mti_flags);
 
         /* if write_conf is true, the registration must succeed */
-        writeconf = !!(ldd->ldd_flags & (LDD_F_NEED_INDEX | LDD_F_UPDATE));
+	writeconf = !!(lsi->lsi_flags & (LDD_F_NEED_INDEX | LDD_F_UPDATE));
         mti->mti_flags |= LDD_F_OPC_REG;
 
         /* Register the target */
@@ -1008,7 +1094,7 @@ int server_register_target(struct super_block *sb)
                         LCONSOLE_ERROR_MSG(0x160,
                                 "The MGS is refusing to allow this "
                                 "server (%s) to start. Please see messages"
-                                " on the MGS node.\n", ldd->ldd_svname);
+				" on the MGS node.\n", lsi->lsi_svname);
                 } else if (writeconf) {
                         LCONSOLE_ERROR_MSG(0x15f,
                                 "Communication to the MGS return error %d. "
@@ -1026,7 +1112,6 @@ out:
                 OBD_FREE_PTR(mti);
         RETURN(rc);
 }
-EXPORT_SYMBOL(server_register_target);
 
 /**
  * Notify the MGS that this target is ready.
@@ -1042,13 +1127,13 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
 
         LASSERT(mgc);
 
-        if (!(lsi->lsi_flags & LSI_SERVER))
+	if (!(IS_SERVER(lsi)))
                 RETURN(-EINVAL);
 
         OBD_ALLOC_PTR(mti);
         if (!mti)
                 RETURN(-ENOMEM);
-        rc = server_sb2mti(sb, mti);
+	rc = server_lsi2mti(lsi, mti);
         if (rc)
                 GOTO(out, rc);
 
@@ -1064,7 +1149,7 @@ static int server_notify_target(struct super_block *sb, struct obd_device *obd)
         /* Imperative recovery: if the mgs informs us to use IR? */
         if (!rc && !(mti->mti_flags & LDD_F_ERROR) &&
             (mti->mti_flags & LDD_F_IR_CAPABLE))
-                lsi->lsi_flags |= LSI_IR_CAPABLE;
+		lsi->lsi_flags |= LDD_F_IR_CAPABLE;
 
 out:
         if (mti)
@@ -1083,7 +1168,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         int rc;
         ENTRY;
 
-        CDEBUG(D_MOUNT, "starting target %s\n", lsi->lsi_ldd->ldd_svname);
+	CDEBUG(D_MOUNT, "starting target %s\n", lsi->lsi_svname);
 
 #if 0
         /* If we're an MDT, make sure the global MDS is running */
@@ -1108,7 +1193,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 #endif
 
         /* If we're an OST, make sure the global OSS is running */
-        if (IS_OST(lsi->lsi_ldd)) {
+	if (IS_OST(lsi)) {
                 /* make sure OSS is started */
                 cfs_mutex_lock(&server_start_lock);
                 obd = class_name2obd(LUSTRE_OSS_OBDNAME);
@@ -1135,27 +1220,27 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 	}
 
         /* Register with MGS */
-        rc = server_register_target(sb);
+	rc = server_register_target(lsi);
         if (rc)
                 GOTO(out_mgc, rc);
 
         /* Let the target look up the mount using the target's name
            (we can't pass the sb or mnt through class_process_config.) */
-        rc = server_register_mount(lsi->lsi_ldd->ldd_svname, sb, mnt);
+	rc = server_register_mount(lsi->lsi_svname, sb, mnt);
         if (rc)
                 GOTO(out_mgc, rc);
 
-        /* Start targets using the llog named for the target */
-        memset(&cfg, 0, sizeof(cfg));
-        rc = lustre_process_log(sb, lsi->lsi_ldd->ldd_svname, &cfg);
-        if (rc) {
-                CERROR("failed to start server %s: %d\n",
-                       lsi->lsi_ldd->ldd_svname, rc);
-                /* Do NOT call server_deregister_mount() here. This makes it
-                 * impossible to find mount later in cleanup time and leaves
-                 * @lsi and othder stuff leaked. -umka */
-                GOTO(out_mgc, rc);
-        }
+	/* Start targets using the llog named for the target */
+	memset(&cfg, 0, sizeof(cfg));
+	rc = lustre_process_log(sb, lsi->lsi_svname, &cfg);
+	if (rc) {
+		CERROR("failed to start server %s: %d\n",
+		       lsi->lsi_svname, rc);
+		/* Do NOT call server_deregister_mount() here. This makes it
+		 * impossible to find mount later in cleanup time and leaves
+		 * @lsi and othder stuff leaked. -umka */
+		GOTO(out_mgc, rc);
+	}
 
 out_mgc:
         /* Release the mgc fs for others to use */
@@ -1163,10 +1248,10 @@ out_mgc:
 		server_mgc_clear_fs(lsi->lsi_mgc);
 
         if (!rc) {
-                obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
+		obd = class_name2obd(lsi->lsi_svname);
                 if (!obd) {
                         CERROR("no server named %s was started\n",
-                               lsi->lsi_ldd->ldd_svname);
+			       lsi->lsi_svname);
                         RETURN(-ENXIO);
                 }
 
@@ -1228,9 +1313,6 @@ static int lustre_free_lsi(struct super_block *sb)
         /* someone didn't call server_put_mount. */
         LASSERT(cfs_atomic_read(&lsi->lsi_mounts) == 0);
 
-        if (lsi->lsi_ldd != NULL)
-                OBD_FREE(lsi->lsi_ldd, sizeof(*lsi->lsi_ldd));
-
         if (lsi->lsi_lmd != NULL) {
                 if (lsi->lsi_lmd->lmd_dev != NULL)
                         OBD_FREE(lsi->lsi_lmd->lmd_dev,
@@ -1286,88 +1368,73 @@ static int lustre_put_lsi(struct super_block *sb)
 
 static int lsi_prepare(struct lustre_sb_info *lsi)
 {
-	struct lustre_disk_data	*ldd;
-	char			*p;
-	int			 rc, len;
+	__u32 index;
+	int rc;
 	ENTRY;
 
 	LASSERT(lsi);
 	LASSERT(lsi->lsi_lmd);
 
-	OBD_ALLOC(ldd, sizeof(*ldd));
-	if (ldd == NULL)
-		RETURN(-ENOMEM);
-
-	strcpy(lsi->lsi_osd_type, LUSTRE_OSD_NAME);
-	ldd->ldd_mount_type = LDD_MT_LDISKFS;
-
 	/* The server name is given as a mount line option */
 	if (lsi->lsi_lmd->lmd_profile == NULL) {
 		LCONSOLE_ERROR("Can't determine server name\n");
-		GOTO(err, rc = -EINVAL);
+		RETURN(-EINVAL);
 	}
 
-	if (strlen(lsi->lsi_lmd->lmd_profile) >= sizeof(ldd->ldd_svname))
-		GOTO(err, rc = -ENAMETOOLONG);
+	if (strlen(lsi->lsi_lmd->lmd_profile) >= sizeof(lsi->lsi_svname))
+		RETURN(-ENAMETOOLONG);
 
-	strcpy(ldd->ldd_svname, lsi->lsi_lmd->lmd_profile);
+	strcpy(lsi->lsi_svname, lsi->lsi_lmd->lmd_profile);
 
 	/* Determine osd type */
 	if (lsi->lsi_lmd->lmd_osd_type != NULL) {
 		if (strlen(lsi->lsi_lmd->lmd_osd_type) >=
 			   sizeof(lsi->lsi_osd_type))
-			GOTO(err, rc = -ENAMETOOLONG);
+			RETURN(-ENAMETOOLONG);
 
 		strcpy(lsi->lsi_osd_type, lsi->lsi_lmd->lmd_osd_type);
-	}
-
-	if ((p = strstr(ldd->ldd_svname, "-OST"))) {
-		ldd->ldd_flags = LDD_F_SV_TYPE_OST;
-	} else if ((p = strstr(ldd->ldd_svname, "-MDT"))) {
-		ldd->ldd_flags = LDD_F_SV_TYPE_MDT;
 	} else {
-		LCONSOLE_ERROR("Can't determine server type of '%s'\n",
-			       ldd->ldd_svname);
-		GOTO(err, rc = -EINVAL);
+		strcpy(lsi->lsi_osd_type, LUSTRE_OSD_NAME);
 	}
 
-	len = p - ldd->ldd_svname;
-	if (len >= MTI_NAME_MAXLEN)
-		GOTO(err, rc = -ENAMETOOLONG);
-	memcpy(ldd->ldd_fsname, ldd->ldd_svname, len);
-	ldd->ldd_fsname[len] = '\0';
+	/* XXX: a temp. solution for components using fsfilt
+	 *      to be removed in one of the subsequent patches */
+	if (!strcmp(lsi->lsi_lmd->lmd_osd_type, "osd-ldiskfs")) {
+		strcpy(lsi->lsi_fstype, "ldiskfs");
+	} else {
+		strcpy(lsi->lsi_fstype, lsi->lsi_lmd->lmd_osd_type);
+	}
 
-	ldd->ldd_svindex = simple_strtoul(p + 4, NULL, 16);
-	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF) ?
-				LDD_F_WRITECONF : 0;
-	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_VIRGIN) ?
-				LDD_F_VIRGIN | LDD_F_UPDATE : 0;
-	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) ?
-				LDD_F_SV_TYPE_MGS : 0;
-	ldd->ldd_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) ?
-				LDD_F_NO_PRIMNODE : 0;
-
-	lsi->lsi_ldd = ldd;
+	/* Determine server type */
+	rc = server_name2index(lsi->lsi_svname, &index, NULL);
+	if (rc < 0) {
+		if (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) {
+			/* Assume we're a bare MGS */
+			rc = 0;
+			lsi->lsi_lmd->lmd_flags |= LMD_FLG_NOSVC;
+		} else {
+			LCONSOLE_ERROR("Can't determine server type of '%s'\n",
+				       lsi->lsi_svname);
+			RETURN(rc);
+		}
+	}
+	lsi->lsi_flags |= rc;
 
 	/* Add mount line flags that used to be in ldd:
 	 * writeconf, mgs, iam, anything else?
 	 */
-#if 0
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF) ?
 		LDD_F_WRITECONF : 0;
+	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_VIRGIN) ?
+		LDD_F_VIRGIN : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) ?
 		LDD_F_SV_TYPE_MGS : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_IAM) ?
 		LDD_F_IAM_DIR : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) ?
 		LDD_F_NO_PRIMNODE : 0;
-#endif
 
 	RETURN(0);
-
-err:
-	OBD_FREE(ldd, sizeof(*ldd));
-	RETURN(rc);
 }
 
 /*************** server mount ******************/
@@ -1380,7 +1447,6 @@ err:
 static struct vfsmount *server_kernel_mount(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
-        struct lustre_disk_data *ldd;
         struct lustre_mount_data *lmd = lsi->lsi_lmd;
         struct vfsmount *mnt;
         struct file_system_type *type;
@@ -1405,8 +1471,6 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
 		RETURN(NULL);
 	}
 
-	ldd = lsi->lsi_ldd;
-
         /* In the past, we have always used flags = 0.
            Note ext3/ldiskfs can't be mounted ro. */
         s_flags = sb->s_flags;
@@ -1421,7 +1485,7 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
 
         /* Glom up mount options */
         memset(options, 0, CFS_PAGE_SIZE);
-        strncpy(options, ldd->ldd_mount_opts, CFS_PAGE_SIZE - 2);
+	strncpy(options, lsi->lsi_lmd->lmd_opts, CFS_PAGE_SIZE - 2);
 
         len = CFS_PAGE_SIZE - strlen(options) - 2;
         if (*options != 0)
@@ -1436,12 +1500,12 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
         }
 
         /* Special permanent mount flags */
-        if (IS_OST(ldd))
+	if (IS_OST(lsi))
             s_flags |= MS_NOATIME | MS_NODIRATIME;
 
         CDEBUG(D_MOUNT, "kern_mount: %s %s %s\n",
-               MT_STR(ldd), lmd->lmd_dev, options);
-        type = get_fs_type(MT_STR(ldd));
+	       lsi->lsi_osd_type, lmd->lmd_dev, options);
+	type = get_fs_type(lsi->lsi_fstype);
         if (!type) {
                 CERROR("get_fs_type failed\n");
                 GOTO(out_free, rc = -ENODEV);
@@ -1459,15 +1523,12 @@ static struct vfsmount *server_kernel_mount(struct super_block *sb)
                                 LR_CLIENT_START);
 
         OBD_PAGE_FREE(__page);
-        lsi->lsi_ldd = ldd;   /* freed at lsi cleanup */
         CDEBUG(D_SUPER, "%s: mnt = %p\n", lmd->lmd_dev, mnt);
         RETURN(mnt);
 
 out_free:
         if (__page)
                 OBD_PAGE_FREE(__page);
-        OBD_FREE(ldd, sizeof(*ldd));
-        lsi->lsi_ldd = NULL;
         RETURN(ERR_PTR(rc));
 }
 
@@ -1525,37 +1586,36 @@ static void server_put_super(struct super_block *sb)
         struct vfsmount       *mnt = lsi->lsi_srv_mnt;
         char *tmpname, *extraname = NULL;
         int tmpname_sz;
-        int lddflags = lsi->lsi_ldd->ldd_flags;
         int lsiflags = lsi->lsi_flags;
         ENTRY;
 
-        LASSERT(lsiflags & LSI_SERVER);
+	LASSERT(IS_SERVER(lsi));
 
-        tmpname_sz = strlen(lsi->lsi_ldd->ldd_svname) + 1;
+	tmpname_sz = strlen(lsi->lsi_svname) + 1;
         OBD_ALLOC(tmpname, tmpname_sz);
-        memcpy(tmpname, lsi->lsi_ldd->ldd_svname, tmpname_sz);
+	memcpy(tmpname, lsi->lsi_svname, tmpname_sz);
         CDEBUG(D_MOUNT, "server put_super %s\n", tmpname);
-        if (IS_MDT(lsi->lsi_ldd) && (lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC))
+	if (IS_MDT(lsi) && (lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC))
                 snprintf(tmpname, tmpname_sz, "MGS");
 
         /* Stop the target */
         if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
-            (IS_MDT(lsi->lsi_ldd) || IS_OST(lsi->lsi_ldd))) {
+	    (IS_MDT(lsi) || IS_OST(lsi))) {
                 struct lustre_profile *lprof = NULL;
 
                 /* tell the mgc to drop the config log */
-                lustre_end_log(sb, lsi->lsi_ldd->ldd_svname, NULL);
+		lustre_end_log(sb, lsi->lsi_svname, NULL);
 
                 /* COMPAT_146 - profile may get deleted in mgc_cleanup.
                    If there are any setup/cleanup errors, save the lov
                    name for safety cleanup later. */
-                lprof = class_get_profile(lsi->lsi_ldd->ldd_svname);
+		lprof = class_get_profile(lsi->lsi_svname);
                 if (lprof && lprof->lp_dt) {
                         OBD_ALLOC(extraname, strlen(lprof->lp_dt) + 1);
                         strcpy(extraname, lprof->lp_dt);
                 }
 
-                obd = class_name2obd(lsi->lsi_ldd->ldd_svname);
+		obd = class_name2obd(lsi->lsi_svname);
                 if (obd) {
                         CDEBUG(D_MOUNT, "stopping %s\n", obd->obd_name);
                         if (lsi->lsi_flags & LSI_UMOUNT_FAILOVER)
@@ -1565,14 +1625,14 @@ static void server_put_super(struct super_block *sb)
                         obd->obd_force = 1;
                         class_manual_cleanup(obd);
                 } else {
-                        CERROR("no obd %s\n", lsi->lsi_ldd->ldd_svname);
-                        server_deregister_mount(lsi->lsi_ldd->ldd_svname);
+			CERROR("no obd %s\n", lsi->lsi_svname);
+			server_deregister_mount(lsi->lsi_svname);
                 }
         }
 
         /* If they wanted the mgs to stop separately from the mdt, they
            should have put it on a different device. */
-        if (IS_MGS(lsi->lsi_ldd)) {
+	if (IS_MGS(lsi)) {
                 /* if MDS start with --nomgs, don't stop MGS then */
                 if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS))
                         server_stop_mgs(sb);
@@ -1592,7 +1652,7 @@ static void server_put_super(struct super_block *sb)
 	/* Stop the servers (MDS, OSS) if no longer needed.  We must wait
 	   until the target is really gone so that our type refcount check
 	   is right. */
-	server_stop_servers(lddflags, lsiflags);
+	server_stop_servers(lsiflags);
 
 	/* In case of startup or cleanup err, stop related obds */
 	if (extraname) {
@@ -1635,7 +1695,6 @@ static void server_umount_begin(struct super_block *sb)
            umount -f = force
            no third way to do non-force, non-failover */
         lsi->lsi_flags &= ~LSI_UMOUNT_FAILOVER;
-        lsi->lsi_flags |= LSI_UMOUNT_FORCE;
         EXIT;
 }
 
@@ -1736,23 +1795,21 @@ static int server_fill_super(struct super_block *sb)
         }
         lsi->lsi_srv_mnt = mnt;
 
-        LASSERT(lsi->lsi_ldd);
-        CDEBUG(D_MOUNT, "Found service %s for fs '%s' on device %s\n",
-               lsi->lsi_ldd->ldd_svname, lsi->lsi_ldd->ldd_fsname,
-               lsi->lsi_lmd->lmd_dev);
+	CDEBUG(D_MOUNT, "Found service %s on device %s\n",
+	       lsi->lsi_svname, lsi->lsi_lmd->lmd_dev);
 
-        if (class_name2obd(lsi->lsi_ldd->ldd_svname)) {
+	if (class_name2obd(lsi->lsi_svname)) {
                 LCONSOLE_ERROR_MSG(0x161, "The target named %s is already "
                                    "running. Double-mount may have compromised"
                                    " the disk journal.\n",
-                                   lsi->lsi_ldd->ldd_svname);
+				   lsi->lsi_svname);
                 lustre_put_lsi(sb);
                 unlock_mntput(mnt);
                 RETURN(-EALREADY);
         }
 
         /* Start MGS before MGC */
-        if (IS_MGS(lsi->lsi_ldd) && !(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS)){
+	if (IS_MGS(lsi) && !(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS)){
                 rc = server_start_mgs(sb);
                 if (rc)
                         GOTO(out_mnt, rc);
@@ -1765,7 +1822,7 @@ static int server_fill_super(struct super_block *sb)
 
         /* Set up all obd devices for service */
         if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
-                (IS_OST(lsi->lsi_ldd) || IS_MDT(lsi->lsi_ldd))) {
+			(IS_OST(lsi) || IS_MDT(lsi))) {
                 rc = server_start_targets(sb, mnt);
                 if (rc < 0) {
                         CERROR("Unable to start targets: %d\n", rc);
@@ -1795,42 +1852,6 @@ out_mnt:
         return rc;
 }
 
-/* Get the index from the obd name.
-   rc = server type, or
-   rc < 0  on error
-   if endptr isn't NULL it is set to end of name */
-int server_name2index(char *svname, __u32 *idx, char **endptr)
-{
-        unsigned long index;
-        int rc;
-        char *dash = strrchr(svname, '-');
-        if (!dash)
-                return(-EINVAL);
-
-        /* intepret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
-         * in the fsname, then determine the server index */
-        if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
-                dash--;
-                for (; dash > svname && *dash != '-'; dash--);
-                if (dash == svname)
-                        return(-EINVAL);
-        }
-
-        if (strncmp(dash + 1, "MDT", 3) == 0)
-                rc = LDD_F_SV_TYPE_MDT;
-        else if (strncmp(dash + 1, "OST", 3) == 0)
-                rc = LDD_F_SV_TYPE_OST;
-        else
-                return(-EINVAL);
-        if (strcmp(dash + 4, "all") == 0)
-                return rc | LDD_F_SV_ALL;
-
-        index = simple_strtoul(dash + 4, endptr, 16);
-        *idx = index;
-        return rc;
-}
-EXPORT_SYMBOL(server_name2index);
-
 /*
  * Calculate timeout value for a target.
  */
@@ -1840,10 +1861,10 @@ void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd)
         int soft = 0;
         int hard = 0;
         int factor = 0;
-        bool has_ir = !!(lsi->lsi_flags & LSI_IR_CAPABLE);
+	bool has_ir = !!(lsi->lsi_flags & LDD_F_IR_CAPABLE);
         int min = OBD_RECOVERY_TIME_MIN;
 
-        LASSERT(lsi->lsi_flags & LSI_SERVER);
+	LASSERT(IS_SERVER(lsi));
 
         lmd = lsi->lsi_lmd;
         if (lmd) {
@@ -2379,7 +2400,6 @@ int lustre_fill_super(struct super_block *sb, void *data, int silent)
                 }
         } else {
                 CDEBUG(D_MOUNT, "Mounting server from %s\n", lmd->lmd_dev);
-                lsi->lsi_flags |= LSI_SERVER;
                 rc = server_fill_super(sb);
                 /* s_f_s calls lustre_start_mgc after the mount because we need
                    the MGS nids which are stored on disk.  Plus, we may
@@ -2441,7 +2461,7 @@ void lustre_kill_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
 
-        if (kill_super_cb && lsi && !(lsi->lsi_flags & LSI_SERVER))
+	if (kill_super_cb && lsi && !IS_SERVER(lsi))
                 (*kill_super_cb)(sb);
 
         kill_anon_super(sb);
@@ -2474,3 +2494,5 @@ int lustre_unregister_fs(void)
 {
         return unregister_filesystem(&lustre_fs_type);
 }
+
+EXPORT_SYMBOL(server_mti_print);

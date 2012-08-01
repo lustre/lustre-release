@@ -1622,7 +1622,7 @@ check_and_start_recovery_timer(struct obd_device *obd,
 
         LASSERT(obt->obt_magic == OBT_MAGIC);
         lsi = s2lsi(obt->obt_sb);
-        if (!(lsi->lsi_flags | LSI_IR_CAPABLE))
+	if (!(lsi->lsi_flags | LDD_F_IR_CAPABLE))
                 service_time += 2 * (CONNECTION_SWITCH_MAX +
                                      CONNECTION_SWITCH_INC);
         if (service_time > obd->obd_recovery_timeout && !new_client)

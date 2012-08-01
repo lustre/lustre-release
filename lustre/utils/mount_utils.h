@@ -87,6 +87,15 @@ struct mount_opts {
 
 int get_mountdata(char *, struct lustre_disk_data *);
 
+#define MT_STR(data)   mt_str((data)->ldd_mount_type)
+
+#undef IS_MDT
+#define IS_MDT(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_MDT)
+#undef IS_OST
+#define IS_OST(data)   ((data)->ldd_flags & LDD_F_SV_TYPE_OST)
+#undef IS_MGS
+#define IS_MGS(data)  ((data)->ldd_flags & LDD_F_SV_TYPE_MGS)
+
 /* mkfs/mount helper functions */
 void fatal(void);
 int run_command_err(char *cmd, int cmdsz, char *error_msg);

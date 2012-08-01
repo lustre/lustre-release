@@ -185,7 +185,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         mnt = lmi->lmi_mnt;
         lsi = s2lsi(lmi->lmi_sb);
-        obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+	obd->obd_fsops = fsfilt_get_ops(lsi->lsi_fstype);
         if (IS_ERR(obd->obd_fsops))
                 GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
 

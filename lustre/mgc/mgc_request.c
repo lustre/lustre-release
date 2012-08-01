@@ -259,14 +259,14 @@ static struct config_llog_data *config_recover_log_add(struct obd_device *obd,
         struct config_llog_data *cld;
         char logname[32];
 
-        if ((lsi->lsi_flags & LSI_SERVER) && IS_OST(lsi->lsi_ldd))
+	if (IS_OST(lsi))
                 return NULL;
 
         /* we have to use different llog for clients and mdts for cmd
          * where only clients are notified if one of cmd server restarts */
         LASSERT(strlen(fsname) < sizeof(logname) / 2);
         strcpy(logname, fsname);
-        if (lsi->lsi_flags & LSI_SERVER) { /* mdt */
+	if (IS_SERVER(lsi)) { /* mdt */
                 LASSERT(lcfg.cfg_instance == NULL);
                 lcfg.cfg_instance = sb;
                 strcat(logname, "-mdtir");
@@ -619,10 +619,10 @@ static int mgc_fs_setup(struct obd_device *obd, struct super_block *sb,
 
         cfs_cleanup_group_info();
 
-        obd->obd_fsops = fsfilt_get_ops(MT_STR(lsi->lsi_ldd));
+	obd->obd_fsops = fsfilt_get_ops(lsi->lsi_fstype);
         if (IS_ERR(obd->obd_fsops)) {
                 cfs_up(&cli->cl_mgc_sem);
-                CERROR("No fstype %s rc=%ld\n", MT_STR(lsi->lsi_ldd),
+		CERROR("No fstype %s rc=%ld\n", lsi->lsi_fstype,
                        PTR_ERR(obd->obd_fsops));
                 RETURN(PTR_ERR(obd->obd_fsops));
         }
@@ -926,7 +926,7 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* check if this is server or client */
         if (cld->cld_cfg.cfg_sb) {
                 struct lustre_sb_info *lsi = s2lsi(cld->cld_cfg.cfg_sb);
-                if (lsi && (lsi->lsi_flags & LSI_SERVER))
+		if (lsi && IS_SERVER(lsi))
                         short_limit = 1;
         }
         /* Limit how long we will wait for the enqueue to complete */
@@ -1254,11 +1254,14 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
         if (inst == NULL)
                 RETURN(-ENOMEM);
 
-        if (!(lsi->lsi_flags & LSI_SERVER)) {
+	if (!IS_SERVER(lsi)) {
                 pos = sprintf(inst, "%p", cfg->cfg_instance);
         } else {
-                LASSERT(IS_MDT(lsi->lsi_ldd));
-                pos = sprintf(inst, "MDT%04x", lsi->lsi_ldd->ldd_svindex);
+		LASSERT(IS_MDT(lsi));
+		rc = server_name2svname(lsi->lsi_svname, inst, NULL);
+		if (rc)
+			RETURN(-EINVAL);
+		pos = strlen(inst);
         }
 
         ++pos;
@@ -1721,9 +1724,9 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 
         /* Copy the setup log locally if we can. Don't mess around if we're
            running an MGS though (logs are already local). */
-        if (lctxt && lsi && (lsi->lsi_flags & LSI_SERVER) &&
+	if (lctxt && lsi && IS_SERVER(lsi) &&
             (lsi->lsi_srv_mnt == cli->cl_mgc_vfsmnt) &&
-	    !IS_MGS(lsi->lsi_ldd) && lsi->lsi_srv_mnt) {
+	    !IS_MGS(lsi) && lsi->lsi_srv_mnt) {
                 push_ctxt(saved_ctxt, &mgc->obd_lvfs_ctxt, NULL);
                 must_pop++;
                 if (!local_only)
