@@ -3625,11 +3625,11 @@ error_noexit() {
 }
 
 exit_status () {
-    local status=0
-    local log=$TESTSUITELOG
+	local status=0
+	local log=$TESTSUITELOG
 
-    [ -f "$log" ] && grep -q FAIL: $log && status=1
-    exit $status
+	[ -f "$log" ] && grep -q FAIL $log && status=1
+	exit $status
 }
 
 error() {
@@ -3885,34 +3885,34 @@ run_one() {
 #  - test result is saved to data file
 #
 run_one_logged() {
-    local BEFORE=`date +%s`
-    local TEST_ERROR
-    local name=${TESTSUITE}.test_${1}.test_log.$(hostname -s).log
-    local test_log=$LOGDIR/$name
-    rm -rf $LOGDIR/err
-    local SAVE_UMASK=`umask`
-    umask 0022
+	local BEFORE=`date +%s`
+	local TEST_ERROR
+	local name=${TESTSUITE}.test_${1}.test_log.$(hostname -s).log
+	local test_log=$LOGDIR/$name
+	rm -rf $LOGDIR/err
+	local SAVE_UMASK=`umask`
+	umask 0022
 
-    echo
-    log_sub_test_begin test_${1}
-    (run_one $1 "$2") 2>&1 | tee -i $test_log
-    local RC=${PIPESTATUS[0]}
+	echo
+	log_sub_test_begin test_${1}
+	(run_one $1 "$2") 2>&1 | tee -i $test_log
+	local RC=${PIPESTATUS[0]}
 
-    [ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] && \
-        echo "test_$1 returned $RC" | tee $LOGDIR/err
+	[ $RC -ne 0 ] && [ ! -f $LOGDIR/err ] && \
+		echo "test_$1 returned $RC" | tee $LOGDIR/err
 
-    duration=$((`date +%s` - $BEFORE))
-    pass "$1" "(${duration}s)"
-    [ -f $LOGDIR/err ] && TEST_ERROR=$(cat $LOGDIR/err)
-    log_sub_test_end $TEST_STATUS $duration "$RC" "$TEST_ERROR"
+	duration=$((`date +%s` - $BEFORE))
+	pass "$1" "(${duration}s)"
+	[ -f $LOGDIR/err ] && TEST_ERROR=$(cat $LOGDIR/err)
+	log_sub_test_end $TEST_STATUS $duration "$RC" "$TEST_ERROR"
 
-    if [ -f $LOGDIR/err ]; then
-        $FAIL_ON_ERROR && exit $RC
-    fi
+	if [ -f $LOGDIR/err ]; then
+		$FAIL_ON_ERROR && exit $RC
+	fi
 
-    umask $SAVE_UMASK
+	umask $SAVE_UMASK
 
-    return $RC
+	return 0
 }
 
 #
