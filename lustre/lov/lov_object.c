@@ -313,20 +313,16 @@ static void lov_fini_empty(const struct lu_env *env, struct lov_object *lov,
 static void lov_fini_raid0(const struct lu_env *env, struct lov_object *lov,
                            union lov_layout_state *state)
 {
-        struct lov_layout_raid0 *r0 = &state->raid0;
+	struct lov_layout_raid0 *r0 = &state->raid0;
+	ENTRY;
 
-        ENTRY;
+	if (r0->lo_sub != NULL) {
+		OBD_FREE_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
+		r0->lo_sub = NULL;
+	}
 
-        if (r0->lo_sub != NULL) {
-                OBD_FREE_LARGE(r0->lo_sub, r0->lo_nr * sizeof r0->lo_sub[0]);
-                r0->lo_sub = NULL;
-        }
-
-	LASSERTF(cfs_atomic_read(&lov->lo_lsm->lsm_refc) == 1,
-		"actual %d proc %p.\n",
-		cfs_atomic_read(&lov->lo_lsm->lsm_refc), cfs_current());
+	dump_lsm(D_INODE, lov->lo_lsm);
 	lov_free_memmd(&lov->lo_lsm);
-	lov->lo_lsm = NULL;
 
 	EXIT;
 }
