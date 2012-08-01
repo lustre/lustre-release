@@ -42,7 +42,9 @@
 #endif
 
 #ifdef __KERNEL__
+#ifdef CONFIG_X86
 #include <asm/cpufeature.h>
+#endif
 #include <asm/processor.h>
 #include <linux/seq_file.h>
 #include <linux/module.h>
