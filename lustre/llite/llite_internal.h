@@ -225,14 +225,14 @@ struct ll_inode_info {
                         cfs_rw_semaphore_t              f_trunc_sem;
                         cfs_mutex_t                     f_write_mutex;
 
-                        /* for writepage() only to communicate to fsync */
-                        int                             f_async_rc;
-                        int                             f_write_rc;
+			cfs_rw_semaphore_t		f_glimpse_sem;
+			cfs_time_t			f_glimpse_time;
+			cfs_list_t			f_agl_list;
+			__u64				f_agl_index;
 
-                        cfs_rw_semaphore_t              f_glimpse_sem;
-                        cfs_time_t                      f_glimpse_time;
-                        cfs_list_t                      f_agl_list;
-                        __u64                           f_agl_index;
+                        /* for writepage() only to communicate to fsync */
+                        int				f_async_rc;
+
 			/*
 			 * whenever a process try to read/write the file, the
 			 * jobid of the process will be saved here, and it'll
@@ -250,15 +250,14 @@ struct ll_inode_info {
 #define lli_maxbytes            u.f.f_maxbytes
 #define lli_trunc_sem           u.f.f_trunc_sem
 #define lli_write_mutex         u.f.f_write_mutex
-#define lli_async_rc            u.f.f_async_rc
-#define lli_write_rc            u.f.f_write_rc
-#define lli_glimpse_sem         u.f.f_glimpse_sem
-#define lli_glimpse_time        u.f.f_glimpse_time
-#define lli_agl_list            u.f.f_agl_list
-#define lli_agl_index           u.f.f_agl_index
-#define lli_jobid               u.f.f_jobid
+#define lli_glimpse_sem 	u.f.f_glimpse_sem
+#define lli_glimpse_time	u.f.f_glimpse_time
+#define lli_agl_list		u.f.f_agl_list
+#define lli_agl_index		u.f.f_agl_index
+#define lli_async_rc		u.f.f_async_rc
+#define lli_jobid		u.f.f_jobid
 
-        } u;
+	} u;
 
         /* XXX: For following frequent used members, although they maybe special
          *      used for non-directory object, it is some time-wasting to check
@@ -603,6 +602,10 @@ struct ll_file_data {
         struct ll_file_dir fd_dir;
         __u32 fd_flags;
         struct file *fd_file;
+	/* Indicate whether need to report failure when close.
+	 * true: failure is known, not report again.
+	 * false: unknown failure, should report. */
+	bool fd_write_failed;
 };
 
 struct lov_stripe_md;

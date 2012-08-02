@@ -906,13 +906,12 @@ void ll_lli_init(struct ll_inode_info *lli)
                 lli->lli_symlink_name = NULL;
                 cfs_init_rwsem(&lli->lli_trunc_sem);
                 cfs_mutex_init(&lli->lli_write_mutex);
-                lli->lli_async_rc = 0;
-                lli->lli_write_rc = 0;
-                cfs_init_rwsem(&lli->lli_glimpse_sem);
-                lli->lli_glimpse_time = 0;
-                CFS_INIT_LIST_HEAD(&lli->lli_agl_list);
-                lli->lli_agl_index = 0;
-        }
+		cfs_init_rwsem(&lli->lli_glimpse_sem);
+		lli->lli_glimpse_time = 0;
+		CFS_INIT_LIST_HEAD(&lli->lli_agl_list);
+		lli->lli_agl_index = 0;
+		lli->lli_async_rc = 0;
+	}
 	cfs_mutex_init(&lli->lli_layout_mutex);
 }
 
