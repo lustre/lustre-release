@@ -2885,6 +2885,8 @@ void  cl_lock_get_trust (struct cl_lock *lock);
 void  cl_lock_put       (const struct lu_env *env, struct cl_lock *lock);
 void  cl_lock_hold_add  (const struct lu_env *env, struct cl_lock *lock,
                          const char *scope, const void *source);
+void cl_lock_hold_release(const struct lu_env *env, struct cl_lock *lock,
+			  const char *scope, const void *source);
 void  cl_lock_unhold    (const struct lu_env *env, struct cl_lock *lock,
                          const char *scope, const void *source);
 void  cl_lock_release   (const struct lu_env *env, struct cl_lock *lock,

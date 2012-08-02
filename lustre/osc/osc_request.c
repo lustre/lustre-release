@@ -2495,7 +2495,10 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
                                  * are explained in lov_enqueue() */
                         }
 
-                        /* We already have a lock, and it's referenced */
+			/* We already have a lock, and it's referenced.
+			 *
+			 * At this point, the cl_lock::cll_state is CLS_QUEUING,
+			 * AGL upcall may change it to CLS_HELD directly. */
                         (*upcall)(cookie, ELDLM_OK);
 
                         if (einfo->ei_mode != mode)

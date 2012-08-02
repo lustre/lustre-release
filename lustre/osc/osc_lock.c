@@ -583,17 +583,21 @@ static int osc_lock_upcall(void *cookie, int errcode)
                         cl_lock_error(env, lock, rc);
                 }
 
-                cl_lock_mutex_put(env, lock);
+		/* release cookie reference, acquired by osc_lock_enqueue() */
+		cl_lock_hold_release(env, lock, "upcall", lock);
+		cl_lock_mutex_put(env, lock);
 
-                /* release cookie reference, acquired by osc_lock_enqueue() */
-                lu_ref_del(&lock->cll_reference, "upcall", lock);
-                cl_lock_put(env, lock);
+		lu_ref_del(&lock->cll_reference, "upcall", lock);
+		/* This maybe the last reference, so must be called after
+		 * cl_lock_mutex_put(). */
+		cl_lock_put(env, lock);
 
-                cl_env_nested_put(&nest, env);
-        } else
-                /* should never happen, similar to osc_ldlm_blocking_ast(). */
-                LBUG();
-        RETURN(errcode);
+		cl_env_nested_put(&nest, env);
+	} else {
+		/* should never happen, similar to osc_ldlm_blocking_ast(). */
+		LBUG();
+	}
+	RETURN(errcode);
 }
 
 /**
@@ -1179,7 +1183,9 @@ static int osc_lock_enqueue(const struct lu_env *env,
         if (enqflags & CEF_AGL) {
                 ols->ols_flags |= LDLM_FL_BLOCK_NOWAIT;
                 ols->ols_agl = 1;
-        }
+	} else {
+		ols->ols_agl = 0;
+	}
         if (ols->ols_flags & LDLM_FL_HAS_INTENT)
                 ols->ols_glimpse = 1;
         if (!osc_lock_is_lockless(ols) && !(enqflags & CEF_MUST))
@@ -1198,9 +1204,9 @@ static int osc_lock_enqueue(const struct lu_env *env,
                         if (ols->ols_locklessable)
                                 ols->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
 
-                        /* a reference for lock, passed as an upcall cookie */
-                        cl_lock_get(lock);
-                        lu_ref_add(&lock->cll_reference, "upcall", lock);
+			/* lock will be passed as upcall cookie,
+			 * hold ref to prevent to be released. */
+                        cl_lock_hold_add(env, lock, "upcall", lock);
                         /* a user for lock also */
                         cl_lock_user_add(env, lock);
                         ols->ols_state = OLS_ENQUEUED;
@@ -1221,9 +1227,7 @@ static int osc_lock_enqueue(const struct lu_env *env,
                                           PTLRPCD_SET, 1, ols->ols_agl);
                         if (result != 0) {
                                 cl_lock_user_del(env, lock);
-                                lu_ref_del(&lock->cll_reference,
-                                           "upcall", lock);
-                                cl_lock_put(env, lock);
+				cl_lock_unhold(env, lock, "upcall", lock);
                                 if (unlikely(result == -ECANCELED)) {
                                         ols->ols_state = OLS_NEW;
                                         result = 0;

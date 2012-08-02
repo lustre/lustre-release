@@ -884,8 +884,8 @@ static void cl_lock_used_mod(const struct lu_env *env, struct cl_lock *lock,
         }
 }
 
-static void cl_lock_hold_release(const struct lu_env *env, struct cl_lock *lock,
-                                 const char *scope, const void *source)
+void cl_lock_hold_release(const struct lu_env *env, struct cl_lock *lock,
+			  const char *scope, const void *source)
 {
         LINVRNT(cl_lock_is_mutexed(lock));
         LINVRNT(cl_lock_invariant(env, lock));
@@ -917,6 +917,7 @@ static void cl_lock_hold_release(const struct lu_env *env, struct cl_lock *lock,
         }
         EXIT;
 }
+EXPORT_SYMBOL(cl_lock_hold_release);
 
 /**
  * Waits until lock state is changed.
@@ -1196,7 +1197,9 @@ int cl_enqueue_try(const struct lu_env *env, struct cl_lock *lock,
                 case CLS_QUEUING:
                         /* kick layers. */
                         result = cl_enqueue_kick(env, lock, io, flags);
-                        if (result == 0)
+			/* For AGL case, the cl_lock::cll_state may
+			 * become CLS_HELD already. */
+			if (result == 0 && lock->cll_state == CLS_QUEUING)
                                 cl_lock_state_set(env, lock, CLS_ENQUEUED);
                         break;
                 case CLS_INTRANSIT:
@@ -1456,9 +1459,11 @@ int cl_wait_try(const struct lu_env *env, struct cl_lock *lock)
         do {
                 LINVRNT(cl_lock_is_mutexed(lock));
                 LINVRNT(cl_lock_invariant(env, lock));
-                LASSERT(lock->cll_state == CLS_ENQUEUED ||
-                        lock->cll_state == CLS_HELD ||
-                        lock->cll_state == CLS_INTRANSIT);
+		LASSERTF(lock->cll_state == CLS_QUEUING ||
+			 lock->cll_state == CLS_ENQUEUED ||
+			 lock->cll_state == CLS_HELD ||
+			 lock->cll_state == CLS_INTRANSIT,
+			 "lock state: %d\n", lock->cll_state);
                 LASSERT(lock->cll_users > 0);
                 LASSERT(lock->cll_holds > 0);
 
@@ -2038,7 +2043,6 @@ void cl_locks_prune(const struct lu_env *env, struct cl_object *obj, int cancel)
 again:
                 cl_lock_mutex_get(env, lock);
                 if (lock->cll_state < CLS_FREEING) {
-                        LASSERT(lock->cll_holds == 0);
                         LASSERT(lock->cll_users <= 1);
                         if (unlikely(lock->cll_users == 1)) {
                                 struct l_wait_info lwi = { 0 };

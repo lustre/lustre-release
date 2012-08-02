@@ -269,8 +269,10 @@ static int lov_subresult(int result, int rc)
 
         ENTRY;
 
-        LASSERT(result <= 0 || result == CLO_REPEAT || result == CLO_WAIT);
-        LASSERT(rc <= 0 || rc == CLO_REPEAT || rc == CLO_WAIT);
+	LASSERTF(result <= 0 || result == CLO_REPEAT || result == CLO_WAIT,
+		 "result = %d", result);
+	LASSERTF(rc <= 0 || rc == CLO_REPEAT || rc == CLO_WAIT,
+		 "rc = %d\n", rc);
         CLASSERT(CLO_WAIT < CLO_REPEAT);
 
         /* calculate ranks in the ordering above */
@@ -524,10 +526,13 @@ static int lov_lock_enqueue_one(const struct lu_env *env, struct lov_lock *lck,
 
         /* first, try to enqueue a sub-lock ... */
         result = cl_enqueue_try(env, sublock, io, enqflags);
-        if ((sublock->cll_state == CLS_ENQUEUED) && !(enqflags & CEF_AGL))
-                /* if it is enqueued, try to `wait' on it---maybe it's already
-                 * granted */
-                result = cl_wait_try(env, sublock);
+	if ((sublock->cll_state == CLS_ENQUEUED) && !(enqflags & CEF_AGL)) {
+		/* if it is enqueued, try to `wait' on it---maybe it's already
+		 * granted */
+		result = cl_wait_try(env, sublock);
+		if (result == CLO_REENQUEUED)
+			result = CLO_WAIT;
+	}
         /*
          * If CEF_ASYNC flag is set, then all sub-locks can be enqueued in
          * parallel, otherwise---enqueue has to wait until sub-lock is granted
