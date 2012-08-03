@@ -2213,6 +2213,7 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         ldlm_policy_data_t flock = {{0}};
         int flags = 0;
         int rc;
+	int rc2 = 0;
         ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu file_lock=%p\n",
@@ -2308,15 +2309,22 @@ int ll_file_flock(struct file *file, int cmd, struct file_lock *file_lock)
         rc = md_enqueue(sbi->ll_md_exp, &einfo, NULL,
                         op_data, &lockh, &flock, 0, NULL /* req */, flags);
 
-        ll_finish_md_op_data(op_data);
-
         if ((file_lock->fl_flags & FL_FLOCK) &&
             (rc == 0 || file_lock->fl_type == F_UNLCK))
-                flock_lock_file_wait(file, file_lock);
+		rc2  = flock_lock_file_wait(file, file_lock);
         if ((file_lock->fl_flags & FL_POSIX) &&
             (rc == 0 || file_lock->fl_type == F_UNLCK) &&
             !(flags & LDLM_FL_TEST_LOCK))
-                posix_lock_file_wait(file, file_lock);
+		rc2  = posix_lock_file_wait(file, file_lock);
+
+	if (rc2 && file_lock->fl_type != F_UNLCK) {
+		einfo.ei_mode = LCK_NL;
+		md_enqueue(sbi->ll_md_exp, &einfo, NULL,
+			op_data, &lockh, &flock, 0, NULL /* req */, flags);
+		rc = rc2;
+	}
+
+	ll_finish_md_op_data(op_data);
 
         RETURN(rc);
 }
