@@ -760,7 +760,7 @@ get_obdfilter_param() {
 	local name=$3
 
 	do_nodes $nodes "$LCTL get_param -n obdfilter.$device.$name \
-		osd-*.$device.$name" 2>&1 | grep -v 'Found no match'
+		osd-*.$device.$name 2>&1" | grep -v 'Found no match'
 }
 
 set_obdfilter_param() {
@@ -770,7 +770,7 @@ set_obdfilter_param() {
 	local value=$4
 
 	do_nodes $nodes "$LCTL set_param -n obdfilter.$device.$name=$value \
-		osd-*.$device.$name=$value" 2>&1 | grep -v 'Found no match'
+		osd-*.$device.$name=$value 2>&1" | grep -v 'Found no match'
 }
 
 set_debug_size () {
