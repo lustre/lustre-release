@@ -1010,6 +1010,8 @@ static int vvp_io_commit_write(const struct lu_env *env,
                         }
                         if (need_clip)
                                 cl_page_clip(env, pg, 0, to);
+
+                        set_page_dirty(vmpage);
                         result = vvp_page_sync_io(env, io, pg, cp, CRT_WRITE);
                         if (result)
                                 CERROR("Write page %lu of inode %p failed %d\n",
