@@ -884,7 +884,11 @@ int target_handle_connect(struct ptlrpc_request *req)
                 goto no_export;
 
         /* we've found an export in the hash */
+
+	cfs_spin_lock(&export->exp_lock);
+
         if (export->exp_connecting) { /* bug 9635, et. al. */
+		cfs_spin_unlock(&export->exp_lock);
                 LCONSOLE_WARN("%s: Export %p already connecting from %s\n",
                               export->exp_obd->obd_name, export,
                               libcfs_nid2str(req->rq_peer.nid));
@@ -892,6 +896,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                 export = NULL;
                 rc = -EALREADY;
         } else if (mds_conn && export->exp_connection) {
+		cfs_spin_unlock(&export->exp_lock);
                 if (req->rq_peer.nid != export->exp_connection->c_peer.nid)
                         /* mds reconnected after failover */
                         LCONSOLE_WARN("%s: Received MDS connection from "
@@ -911,6 +916,7 @@ int target_handle_connect(struct ptlrpc_request *req)
                    req->rq_peer.nid != export->exp_connection->c_peer.nid &&
                    (lustre_msg_get_op_flags(req->rq_reqmsg) &
                     MSG_CONNECT_INITIAL)) {
+		cfs_spin_unlock(&export->exp_lock);
                 /* in mds failover we have static uuid but nid can be
                  * changed*/
                 LCONSOLE_WARN("%s: Client %s seen on new nid %s when "
@@ -923,13 +929,12 @@ int target_handle_connect(struct ptlrpc_request *req)
                 class_export_put(export);
                 export = NULL;
         } else {
-                cfs_spin_lock(&export->exp_lock);
-                export->exp_connecting = 1;
-                cfs_spin_unlock(&export->exp_lock);
-                LASSERT(export->exp_obd == target);
+		export->exp_connecting = 1;
+		cfs_spin_unlock(&export->exp_lock);
+		LASSERT(export->exp_obd == target);
 
-                rc = target_handle_reconnect(&conn, export, &cluuid);
-        }
+		rc = target_handle_reconnect(&conn, export, &cluuid);
+	}
 
         /* If we found an export, we already unlocked. */
         if (!export) {
