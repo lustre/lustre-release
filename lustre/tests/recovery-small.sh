@@ -990,7 +990,10 @@ test_58() { # bug 11546
         lctl set_param fail_loc=0
         drop_bl_callback rm -f $DIR/$tfile
         wait $pid
-        do_facet client "df $DIR"
+        # the first 'df' could tigger the eviction caused by
+        # 'drop_bl_callback', and it's normal case.
+        # but the next 'df' should return successfully.
+        do_facet client "df $DIR" || do_facet client "df $DIR"
 }
 run_test 58 "Eviction in the middle of open RPC reply processing"
 
