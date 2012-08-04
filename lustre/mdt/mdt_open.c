@@ -1074,9 +1074,8 @@ int mdt_open_by_fid(struct mdt_thread_info* info,
         RETURN(rc);
 }
 
-int mdt_open_anon_by_fid(struct mdt_thread_info *info,
-                         struct ldlm_reply *rep,
-                         struct mdt_lock_handle *lhc)
+int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
+			 struct mdt_lock_handle *lhc)
 {
         const struct lu_env     *env   = info->mti_env;
         struct mdt_device       *mdt   = info->mti_mdt;
@@ -1089,7 +1088,7 @@ int mdt_open_anon_by_fid(struct mdt_thread_info *info,
         ldlm_mode_t              lm;
         ENTRY;
 
-        if (md_should_create(flags)) {
+	if (md_should_create(flags) && !(flags & MDS_OPEN_HAS_EA)) {
                 if (!lu_fid_eq(rr->rr_fid1, rr->rr_fid2)) {
                         parent = mdt_object_find(env, mdt, rr->rr_fid1);
                         if (IS_ERR(parent)) {
@@ -1273,7 +1272,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                PFID(rr->rr_fid2), create_flags,
                ma->ma_attr.la_mode, msg_flags);
 
-	if ((create_flags & MDS_OPEN_BY_FID) || req_is_replay(req) ||
+	if (req_is_replay(req) ||
 	    (req->rq_export->exp_libclient && create_flags & MDS_OPEN_HAS_EA)) {
 		/* This is a replay request or from liblustre with ea. */
 		result = mdt_open_by_fid(info, ldlm_rep);
@@ -1286,16 +1285,21 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 		}
 		/* We didn't find the correct object, so we need to re-create it
 		 * via a regular replay. */
-		if (!(create_flags & (MDS_OPEN_CREAT | MDS_OPEN_BY_FID))) {
+		if (!(create_flags & MDS_OPEN_CREAT)) {
 			DEBUG_REQ(D_ERROR, req,
 				  "OPEN & CREAT not in open replay/by_fid.");
 			GOTO(out, result = -EFAULT);
 		}
-		CDEBUG(D_INFO, "No object, continue as regular open.\n");
-	} else if (rr->rr_namelen == 0 && !info->mti_cross_ref &&
-		   create_flags & MDS_OPEN_LOCK) {
-		result = mdt_open_anon_by_fid(info, ldlm_rep, lhc);
-		GOTO(out, result);
+		CDEBUG(D_INFO, "No object(1), continue as regular open.\n");
+	} else if ((rr->rr_namelen == 0 && !info->mti_cross_ref &&
+		    create_flags & MDS_OPEN_LOCK) ||
+		   (create_flags & MDS_OPEN_BY_FID)) {
+		result = mdt_open_by_fid_lock(info, ldlm_rep, lhc);
+		if (result != -ENOENT && !(create_flags & MDS_OPEN_CREAT))
+			GOTO(out, result);
+		if (unlikely(rr->rr_namelen == 0))
+			GOTO(out, result = -EINVAL);
+		CDEBUG(D_INFO, "No object(2), continue as regular open.\n");
 	}
 
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OPEN_PACK))
