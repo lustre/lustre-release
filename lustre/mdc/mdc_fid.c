@@ -412,12 +412,8 @@ EXPORT_SYMBOL(fid_build_reg_res_name);
  */
 int fid_res_name_eq(const struct lu_fid *f, const struct ldlm_res_id *name)
 {
-        int ret;
-
-        ret = name->name[LUSTRE_RES_ID_SEQ_OFF] == fid_seq(f) &&
-              name->name[LUSTRE_RES_ID_VER_OID_OFF] == fid_oid(f);
-        if (!fid_is_igif(f))
-                ret &= name->name[LUSTRE_RES_ID_VER_OID_OFF] == fid_ver(f);
-        return ret;
+	return name->name[LUSTRE_RES_ID_SEQ_OFF] == fid_seq(f) &&
+	       name->name[LUSTRE_RES_ID_VER_OID_OFF] ==
+	       (fid_oid(f) | (fid_is_igif(f) ? 0 : (__u64)fid_ver(f)<<32));
 }
 EXPORT_SYMBOL(fid_res_name_eq);
