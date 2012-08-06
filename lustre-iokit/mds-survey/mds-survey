@@ -267,6 +267,7 @@ for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
     if (( thr_per_dir <= 0 )); then
         continue
     fi
+    file_count_per_thread=$((${file_count}/${thr}))
     str=`printf 'mdt %1d file %7d dir %4d thr %4d ' \
     $ndevs $file_count $dir_count $thr`
     echo "=======================> $str" >> $workf
@@ -291,7 +292,7 @@ for ((thr = $thrlo; thr <= $thrhi; thr*=2)); do
             echo >> ${cmdsf}_${host}                                                     \
                 "$lctl > $tmpfi 2>&1                                                     \
                  --threads $thr -$snap $devno test_$test -d /$basedir -D $dir_count      \
-                 -b $start_number -n $file_count"
+                 -b $start_number -n $file_count_per_thread"
         done
         pidcount=0
         for host in ${unique_hosts[@]}; do
