@@ -1229,9 +1229,9 @@ enum {
 };
 
 static int mgc_apply_recover_logs(struct obd_device *mgc,
-                                  struct config_llog_data *cld,
-                                  __u64 max_version,
-                                  void *data, int datalen, int need_swab)
+				  struct config_llog_data *cld,
+				  __u64 max_version,
+				  void *data, int datalen, bool mne_swab)
 {
         struct config_llog_instance *cfg = &cld->cld_cfg;
         struct lustre_sb_info       *lsi = s2lsi(cfg->cfg_sb);
@@ -1292,11 +1292,16 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
                 if (datalen < entry_len) /* must have entry_len at least */
                         break;
 
-                if (need_swab)
-                        lustre_swab_mgs_nidtbl_entry(entry);
-                LASSERT(entry->mne_length <= CFS_PAGE_SIZE);
-                if (entry->mne_length < entry_len)
-                        break;
+		/* Keep this swab for normal mixed endian handling. LU-1644 */
+		if (mne_swab)
+			lustre_swab_mgs_nidtbl_entry(entry);
+		if (entry->mne_length > CFS_PAGE_SIZE) {
+			CERROR("MNE too large (%u)\n", entry->mne_length);
+			break;
+		}
+
+		if (entry->mne_length < entry_len)
+			break;
 
                 off     += entry->mne_length;
                 datalen -= entry->mne_length;
@@ -1418,6 +1423,7 @@ static int mgc_process_recover_log(struct obd_device *obd,
         cfs_page_t **pages;
         int nrpages;
         bool eof = true;
+	bool mne_swab = false;
         int i;
         int ealen;
         int rc;
@@ -1504,14 +1510,24 @@ again:
                 GOTO(out, rc);
         }
 
+	mne_swab = !!ptlrpc_rep_need_swab(req);
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+	/* This import flag means the server did an extra swab of IR MNE
+	 * records (fixed in LU-1252), reverse it here if needed. LU-1644 */
+	if (unlikely(req->rq_import->imp_need_mne_swab))
+		mne_swab = !mne_swab;
+#else
+#warning "LU-1644: Remove old OBD_CONNECT_MNE_SWAB fixup and exp_need_mne_swab"
+#endif
+
         for (i = 0; i < nrpages && ealen > 0; i++) {
                 int rc2;
                 void *ptr;
 
                 ptr = cfs_kmap(pages[i]);
                 rc2 = mgc_apply_recover_logs(obd, cld, res->mcr_offset, ptr,
-                                             min_t(int, ealen, CFS_PAGE_SIZE),
-                                             ptlrpc_rep_need_swab(req));
+					     min_t(int, ealen, CFS_PAGE_SIZE),
+					     mne_swab);
                 cfs_kunmap(pages[i]);
                 if (rc2 < 0) {
                         CWARN("Process recover log %s error %d\n",

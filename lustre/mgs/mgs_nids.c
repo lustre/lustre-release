@@ -86,7 +86,7 @@ static int nidtbl_is_sane(struct mgs_nidtbl *tbl)
  * nidtbl entries will be packed in @pages by @unit_size units - entries
  * shouldn't cross unit boundaries.
  */
-static int mgs_nidtbl_read(struct obd_device *unused, struct mgs_nidtbl *tbl,
+static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
                            struct mgs_config_res *res, cfs_page_t **pages,
                            int nrpages, int units_total, int unit_size)
 {
@@ -146,7 +146,17 @@ static int mgs_nidtbl_read(struct obd_device *unused, struct mgs_nidtbl *tbl,
 
                         /* check if we need to consume remaining bytes. */
                         if (last_in_unit != NULL && bytes_in_unit) {
-                                last_in_unit->mne_length += bytes_in_unit;
+#
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+				/* May need to swab back to update the length.*/
+				if (exp->exp_need_mne_swab)
+					lustre_swab_mgs_nidtbl_entry(last_in_unit);
+#endif
+				last_in_unit->mne_length += bytes_in_unit;
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+				if (exp->exp_need_mne_swab)
+					lustre_swab_mgs_nidtbl_entry(last_in_unit);
+#endif
                                 rc  += bytes_in_unit;
                                 buf += bytes_in_unit;
                                 last_in_unit = NULL;
@@ -192,6 +202,12 @@ static int mgs_nidtbl_read(struct obd_device *unused, struct mgs_nidtbl *tbl,
                 entry->mne_nid_count = mti->mti_nid_count;
                 memcpy(entry->u.nids, mti->mti_nids,
                        mti->mti_nid_count * sizeof(lnet_nid_t));
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+		/* For LU-1644, swab entry for 2.2 clients. */
+		if (exp->exp_need_mne_swab)
+			lustre_swab_mgs_nidtbl_entry(entry);
+#endif
 
                 version = tgt->mnt_version;
                 rc     += entry_len;
@@ -634,8 +650,8 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
 
         res->mcr_offset = body->mcb_offset;
         unit_size = min_t(int, 1 << body->mcb_bits, CFS_PAGE_SIZE);
-        bytes = mgs_nidtbl_read(obd, &fsdb->fsdb_nidtbl, res, pages, nrpages,
-                                bufsize / unit_size, unit_size);
+	bytes = mgs_nidtbl_read(req->rq_export, &fsdb->fsdb_nidtbl, res,
+				pages, nrpages, bufsize / unit_size, unit_size);
         if (bytes < 0)
                 GOTO(out, rc = bytes);
 

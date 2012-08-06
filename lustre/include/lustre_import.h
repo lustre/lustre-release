@@ -264,6 +264,7 @@ struct obd_import {
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
                                   imp_no_pinger_recover:1,/* disable normal recovery, for test only. */
+				  imp_need_mne_swab:1,	  /* need IR MNE swab */
                                   imp_force_reconnect:1;  /* import must be reconnected instead of chouse new connection */
         __u32                     imp_connect_op;
         struct obd_connect_data   imp_connect_data;

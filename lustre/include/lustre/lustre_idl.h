@@ -1155,11 +1155,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                                   * write RPC error properly */
 #define OBD_CONNECT_GRANT_PARAM 0x100000000000ULL/* extra grant params used for
                                                   * finer space reservation */
-#define OBD_CONNECT_NANOSECOND_TIMES 0x200000000000ULL /* nanosec resolution
-							* timestamps supported
-							*/
+#define OBD_CONNECT_NANOSEC_TIME 0x200000000000ULL /* nanosecond timestamps */
 #define OBD_CONNECT_LVB_TYPE	0x400000000000ULL /* variable type of LVB */
-
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
@@ -1167,6 +1164,12 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
  * submit a small patch against EVERY branch that ONLY adds the new flag
  * and updates obd_connect_names[] for lprocfs_rd_connect_flags(), so it
  * can be approved and landed easily to reserve the flag for future use. */
+
+/* The MNE_SWAB flag is overloading the MDS_MDS bit only for the MGS
+ * connection.  It is a temporary bug fix for Imperative Recovery interop
+ * between 2.2 and 2.3 x86/ppc nodes, and can be removed when interop for
+ * 2.2 clients/servers is no longer needed.  LU-1252/LU-1644. */
+#define OBD_CONNECT_MNE_SWAB		 OBD_CONNECT_MDS_MDS
 
 #define OCD_HAS_FLAG(ocd, flg)  \
         (!!((ocd)->ocd_connect_flags & OBD_CONNECT_##flg))
@@ -1209,7 +1212,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 				OBD_CONNECT_EINPROGRESS | OBD_CONNECT_JOBSTATS)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
-                                OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV)
+				OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV | \
+				OBD_CONNECT_MNE_SWAB)
 
 /* Features required for this version of the client to work with server */
 #define CLIENT_CONNECT_MDT_REQD (OBD_CONNECT_IBITS | OBD_CONNECT_FID | \

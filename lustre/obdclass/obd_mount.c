@@ -851,10 +851,11 @@ static int lustre_start_mgc(struct super_block *sb)
         if (rc)
                 /* nonfatal */
                 CWARN("can't set %s %d\n", KEY_INIT_RECOV_BACKUP, rc);
-        /* We connect to the MGS at setup, and don't disconnect until cleanup */
-        data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_FID |
-                                  OBD_CONNECT_AT | OBD_CONNECT_FULL20   |
-                                  OBD_CONNECT_IMP_RECOV;
+
+	/* We connect to the MGS at setup, and don't disconnect until cleanup */
+	data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT |
+				  OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV |
+				  OBD_CONNECT_MNE_SWAB;
         if (lmd_is_client(lsi->lsi_lmd) &&
             lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR)
                 data->ocd_connect_flags &= ~OBD_CONNECT_IMP_RECOV;
