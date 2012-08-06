@@ -235,14 +235,14 @@ int lut_client_data_read(const struct lu_env *env, struct lu_target *tg,
 		lcd_le_to_cpu(&tti->tti_lcd, lcd);
 	}
 
-	CDEBUG(D_INFO, "read lcd @%lld rc = %d, uuid = %s, last_transno = "LPU64
+	CDEBUG(D_INFO, "%s: read lcd @%lld uuid = %s, last_transno = "LPU64
 	       ", last_xid = "LPU64", last_result = %u, last_data = %u, "
 	       "last_close_transno = "LPU64", last_close_xid = "LPU64", "
-	       "last_close_result = %u\n", *off,
-	       rc, lcd->lcd_uuid, lcd->lcd_last_transno, lcd->lcd_last_xid,
+	       "last_close_result = %u, rc = %d\n", tg->lut_obd->obd_name,
+	       *off, lcd->lcd_uuid, lcd->lcd_last_transno, lcd->lcd_last_xid,
 	       lcd->lcd_last_result, lcd->lcd_last_data,
 	       lcd->lcd_last_close_transno, lcd->lcd_last_close_xid,
-	       lcd->lcd_last_close_result);
+	       lcd->lcd_last_close_result, rc);
 	return rc;
 }
 EXPORT_SYMBOL(lut_client_data_read);
@@ -307,9 +307,9 @@ int lut_client_data_update(const struct lu_env *env, struct obd_export *exp)
 	EXIT;
 out:
 	dt_trans_stop(env, tg->lut_bottom, th);
-	CDEBUG(D_INFO, "write last_rcvd, rc = %d:\n"
-	       "uuid = %s\nlast_transno = "LPU64"\n",
-	       rc, tg->lut_lsd.lsd_uuid, tg->lut_lsd.lsd_last_transno);
+	CDEBUG(D_INFO, "%s: update last_rcvd client data for UUID = %s, "
+	       "last_transno = "LPU64": rc = %d\n", tg->lut_obd->obd_name,
+	       tg->lut_lsd.lsd_uuid, tg->lut_lsd.lsd_last_transno, rc);
 
 	return rc;
 }
@@ -325,9 +325,9 @@ int lut_server_data_read(const struct lu_env *env, struct lu_target *tg)
 	if (rc == 0)
 		lsd_le_to_cpu(&tti->tti_lsd, &tg->lut_lsd);
 
-	CDEBUG(D_INFO, "%s: read last_rcvd header, rc = %d, uuid = %s, "
-	       "last_transno = "LPU64"\n", tg->lut_obd->obd_name, rc,
-	       tg->lut_lsd.lsd_uuid, tg->lut_lsd.lsd_last_transno);
+	CDEBUG(D_INFO, "%s: read last_rcvd server data for UUID = %s, "
+	       "last_transno = "LPU64": rc = %d\n", tg->lut_obd->obd_name,
+	       tg->lut_lsd.lsd_uuid, tg->lut_lsd.lsd_last_transno, rc);
         return rc;
 }
 EXPORT_SYMBOL(lut_server_data_read);
@@ -346,9 +346,9 @@ int lut_server_data_write(const struct lu_env *env, struct lu_target *tg,
 	rc = dt_record_write(env, tg->lut_last_rcvd, &tti->tti_buf,
 			     &tti->tti_off, th);
 
-	CDEBUG(D_INFO, "write last_rcvd header rc = %d:\n"
-	       "uuid = %s\nlast_transno = "LPU64"\n",
-	       rc, tg->lut_lsd.lsd_uuid, tg->lut_lsd.lsd_last_transno);
+	CDEBUG(D_INFO, "%s: write last_rcvd server data for UUID = %s, "
+	       "last_transno = "LPU64": rc = %d\n", tg->lut_obd->obd_name,
+	       tg->lut_lsd.lsd_uuid, tg->lut_lsd.lsd_last_transno, rc);
 
 	RETURN(rc);
 }
@@ -396,9 +396,9 @@ int lut_server_data_update(const struct lu_env *env, struct lu_target *tg,
 out:
 	dt_trans_stop(env, tg->lut_bottom, th);
 
-	CDEBUG(D_INFO, "write last_rcvd header, rc = %d:\n"
-	       "uuid = %s\nlast_transno = "LPU64"\n",
-	       rc, tg->lut_lsd.lsd_uuid, tg->lut_lsd.lsd_last_transno);
+	CDEBUG(D_INFO, "%s: update last_rcvd server data for UUID = %s, "
+	       "last_transno = "LPU64": rc = %d\n", tg->lut_obd->obd_name,
+	       tg->lut_lsd.lsd_uuid, tg->lut_lsd.lsd_last_transno, rc);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lut_server_data_update);
