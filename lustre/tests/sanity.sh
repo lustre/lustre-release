@@ -3046,7 +3046,7 @@ test_49() { # LU-1030
 	local osc1_mppc=osc.$(get_osc_import_name client ost1).max_pages_per_rpc
 	local orig_mppc=`$LCTL get_param -n $osc1_mppc`
 	# loop until dd process exits
-	while ps ax -opid | grep -q $dd_pid; do
+	while ps ax -opid | grep -wq $dd_pid; do
 		$LCTL set_param $osc1_mppc=$((RANDOM % 256 + 1))
 		sleep $((RANDOM % 5 + 1))
 	done
