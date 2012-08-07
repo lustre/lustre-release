@@ -976,7 +976,8 @@ static int osd_object_print(const struct lu_env *env, void *cookie,
                 d = o->oo_dir->od_container.ic_descr;
         else
                 d = NULL;
-        return (*p)(env, cookie, LUSTRE_OSD_NAME"-object@%p(i:%p:%lu/%u)[%s]",
+	return (*p)(env, cookie,
+		    LUSTRE_OSD_LDISKFS_NAME"-object@%p(i:%p:%lu/%u)[%s]",
                     o, o->oo_inode,
                     o->oo_inode ? o->oo_inode->i_ino : 0UL,
                     o->oo_inode ? o->oo_inode->i_generation : 0,
@@ -994,7 +995,7 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
         struct kstatfs     *ksfs;
         int result = 0;
 
-	if (unlikely(osd->od_mount == NULL))
+	if (unlikely(osd->od_mnt == NULL))
 		return -EINPROGRESS;
 
         /* osd_lproc.c call this without env, allocate ksfs for that case */
@@ -1038,6 +1039,7 @@ static void osd_conf_get(const struct lu_env *env,
         /*
          * XXX should be taken from not-yet-existing fs abstraction layer.
          */
+	param->ddp_mnt = osd_dt_dev(dev)->od_mnt;
         param->ddp_max_name_len = LDISKFS_NAME_LEN;
         param->ddp_max_nlink    = LDISKFS_LINK_MAX;
 	param->ddp_block_shift  = sb->s_blocksize_bits;
@@ -1074,7 +1076,7 @@ static struct lu_buf *osd_buf_get(const struct lu_env *env, void *area, ssize_t 
  */
 static int osd_sync(const struct lu_env *env, struct dt_device *d)
 {
-        CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_NAME);
+	CDEBUG(D_HA, "syncing OSD %s\n", LUSTRE_OSD_LDISKFS_NAME);
         return ldiskfs_force_commit(osd_sb(osd_dt_dev(d)));
 }
 
@@ -1096,7 +1098,7 @@ static int osd_commit_async(const struct lu_env *env,
         struct super_block *s = osd_sb(osd_dt_dev(d));
         ENTRY;
 
-        CDEBUG(D_HA, "async commit OSD %s\n", LUSTRE_OSD_NAME);
+	CDEBUG(D_HA, "async commit OSD %s\n", LUSTRE_OSD_LDISKFS_NAME);
         RETURN(s->s_op->sync_fs(s, 0));
 }
 
@@ -1110,7 +1112,7 @@ static int osd_ro(const struct lu_env *env, struct dt_device *d)
         int rc;
         ENTRY;
 
-        CERROR("*** setting device %s read-only ***\n", LUSTRE_OSD_NAME);
+	CERROR("*** setting %s read-only ***\n", osd_dt_dev(d)->od_svname);
 
         rc = __lvfs_set_rdonly(sb->s_bdev, LDISKFS_SB(sb)->journal_bdev);
         RETURN(rc);
@@ -4331,12 +4333,19 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 static int osd_mount(const struct lu_env *env,
                      struct osd_device *o, struct lustre_cfg *cfg)
 {
-        struct lustre_mount_info *lmi;
-        const char               *dev  = lustre_cfg_string(cfg, 0);
-        struct lustre_sb_info    *lsi;
-        int                       rc = 0;
-
+	const char		*name  = lustre_cfg_string(cfg, 0);
+	const char		*dev  = lustre_cfg_string(cfg, 1);
+	const char              *opts;
+	unsigned long            page, s_flags, lmd_flags = 0;
+	struct page             *__page;
+	struct file_system_type *type;
+	char                    *options = NULL;
+	char			*str;
+	int                       rc = 0;
         ENTRY;
+
+	if (o->od_mnt != NULL)
+		RETURN(0);
 
         o->od_fsops = fsfilt_get_ops(mt_str(LDD_MT_LDISKFS));
         if (o->od_fsops == NULL) {
@@ -4344,36 +4353,72 @@ static int osd_mount(const struct lu_env *env,
                 RETURN(-ENOTSUPP);
         }
 
-        if (o->od_mount != NULL) {
-                CERROR("Already mounted (%s)\n", dev);
-                RETURN(-EEXIST);
-        }
+	OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
+	if (__page == NULL)
+		RETURN(-ENOMEM);
 
-        /* get mount */
-        lmi = server_get_mount(dev);
-        if (lmi == NULL) {
-                CERROR("Cannot get mount info for %s!\n", dev);
-                RETURN(-EFAULT);
-        }
+	str = lustre_cfg_string(cfg, 2);
+	s_flags = simple_strtoul(str, NULL, 0);
+	str = strstr(str, ":");
+	if (str)
+		lmd_flags = simple_strtoul(str + 1, NULL, 0);
+	opts = lustre_cfg_string(cfg, 3);
+	page = (unsigned long)cfs_page_address(__page);
+	options = (char *)page;
+	*options = '\0';
+	if (opts == NULL)
+		strcat(options, "user_xattr,acl");
+	else
+		strcat(options, opts);
 
-        LASSERT(lmi != NULL);
-        /* save lustre_mount_info in dt_device */
-        o->od_mount = lmi;
-        o->od_mnt = lmi->lmi_mnt;
+	/* Glom up mount options */
+	if (*options != '\0')
+		strcat(options, ",");
+	strlcat(options, "no_mbcache", CFS_PAGE_SIZE);
 
-        lsi = s2lsi(lmi->lmi_sb);
+	type = get_fs_type("ldiskfs");
+	if (!type) {
+		CERROR("%s: cannot find ldiskfs module\n", name);
+		GOTO(out, rc = -ENODEV);
+	}
 
-	if (lsi->lsi_flags & LDD_F_IAM_DIR) {
+	o->od_mnt = vfs_kern_mount(type, s_flags, dev, options);
+	cfs_module_put(type->owner);
+
+	if (IS_ERR(o->od_mnt)) {
+		rc = PTR_ERR(o->od_mnt);
+		CERROR("%s: can't mount %s: %d\n", name, dev, rc);
+		o->od_mnt = NULL;
+		GOTO(out, rc);
+	}
+
+	if (lvfs_check_rdonly(o->od_mnt->mnt_sb->s_bdev)) {
+		CERROR("%s: underlying device %s is marked as read-only. "
+		       "Setup failed\n", name, dev);
+		mntput(o->od_mnt);
+		o->od_mnt = NULL;
+		GOTO(out, rc = -EROFS);
+	}
+
+	if (!LDISKFS_HAS_COMPAT_FEATURE(o->od_mnt->mnt_sb,
+	    LDISKFS_FEATURE_COMPAT_HAS_JOURNAL)) {
+		CERROR("%s: device %s is mounted w/o journal\n", name, dev);
+		mntput(o->od_mnt);
+		o->od_mnt = NULL;
+		GOTO(out, rc = -EINVAL);
+	}
+
+	if (lmd_flags & LMD_FLG_IAM) {
                 o->od_iop_mode = 0;
-                LCONSOLE_WARN("%s: OSD: IAM mode enabled\n", dev);
+		LCONSOLE_WARN("%s: OSD: IAM mode enabled\n", name);
         } else
                 o->od_iop_mode = 1;
+	if (lmd_flags & LMD_FLG_NOSCRUB)
+		o->od_scrub.os_no_scrub = 1;
 
-	if (lsi->lsi_flags & LDD_F_SV_TYPE_OST) {
-                rc = osd_compat_init(o);
-                if (rc)
-                        CERROR("%s: can't initialize compats: %d\n", dev, rc);
-        }
+out:
+	if (__page)
+		OBD_PAGE_FREE(__page);
 
         RETURN(rc);
 }
@@ -4383,6 +4428,8 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 {
         int rc;
         ENTRY;
+
+	rc = osd_shutdown(env, osd_dev(d));
 
         osd_compat_fini(osd_dev(d));
 
@@ -4395,46 +4442,104 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
                 RETURN (ERR_PTR(rc));
         }
 
-        if (osd_dev(d)->od_mount)
-                server_put_mount(osd_dev(d)->od_mount->lmi_name,
-                                 osd_dev(d)->od_mount->lmi_mnt);
-        osd_dev(d)->od_mount = NULL;
+	if (osd_dev(d)->od_mnt) {
+		mntput(osd_dev(d)->od_mnt);
+		osd_dev(d)->od_mnt = NULL;
+	}
 
         RETURN(NULL);
+}
+
+static int osd_device_init0(const struct lu_env *env,
+			    struct osd_device *o,
+			    struct lustre_cfg *cfg)
+{
+	struct lu_device	*l = osd2lu_dev(o);
+	struct osd_thread_info *info;
+	int			rc;
+
+	/* if the module was re-loaded, env can loose its keys */
+	rc = lu_env_refill((struct lu_env *) env);
+	if (rc)
+		GOTO(out, rc);
+	info = osd_oti_get(env);
+	LASSERT(info);
+
+	l->ld_ops = &osd_lu_ops;
+	o->od_dt_dev.dd_ops = &osd_dt_ops;
+
+	cfs_spin_lock_init(&o->od_osfs_lock);
+	cfs_mutex_init(&o->od_otable_mutex);
+	o->od_osfs_age = cfs_time_shift_64(-1000);
+
+	o->od_capa_hash = init_capa_hash();
+	if (o->od_capa_hash == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	o->od_read_cache = 1;
+	o->od_writethrough_cache = 1;
+
+	rc = osd_mount(env, o, cfg);
+	if (rc)
+		GOTO(out_capa, rc);
+
+	/* setup scrub, including OI files initialization */
+	rc = osd_scrub_setup(env, o);
+	if (rc < 0)
+		GOTO(out_mnt, rc);
+
+	strncpy(o->od_svname, lustre_cfg_string(cfg, 4),
+			sizeof(o->od_svname) - 1);
+
+	if (strstr(o->od_svname, "-OST")) {
+		rc = osd_compat_init(o);
+		if (rc != 0)
+			GOTO(out_mnt, rc);
+	}
+
+	rc = osd_procfs_init(o, o->od_svname);
+	if (rc != 0) {
+		CERROR("%s: can't initialize procfs: rc = %d\n",
+		       o->od_svname, rc);
+		GOTO(out_compat, rc);
+	}
+
+	RETURN(0);
+out_compat:
+	osd_compat_fini(o);
+out_mnt:
+	osd_oi_fini(info, o);
+	osd_shutdown(env, o);
+	mntput(o->od_mnt);
+	o->od_mnt = NULL;
+out_capa:
+	cleanup_capa_hash(o->od_capa_hash);
+out:
+	RETURN(rc);
 }
 
 static struct lu_device *osd_device_alloc(const struct lu_env *env,
                                           struct lu_device_type *t,
                                           struct lustre_cfg *cfg)
 {
-        struct lu_device  *l;
-        struct osd_device *o;
+	struct osd_device *o;
+	int                rc;
 
-        OBD_ALLOC_PTR(o);
-        if (o != NULL) {
-                int result;
+	OBD_ALLOC_PTR(o);
+	if (o == NULL)
+		return ERR_PTR(-ENOMEM);
 
-                result = dt_device_init(&o->od_dt_dev, t);
-                if (result == 0) {
-                        l = osd2lu_dev(o);
-                        l->ld_ops = &osd_lu_ops;
-                        o->od_dt_dev.dd_ops = &osd_dt_ops;
-                        cfs_spin_lock_init(&o->od_osfs_lock);
-			cfs_mutex_init(&o->od_otable_mutex);
-                        o->od_osfs_age = cfs_time_shift_64(-1000);
-                        o->od_capa_hash = init_capa_hash();
-                        if (o->od_capa_hash == NULL) {
-                                dt_device_fini(&o->od_dt_dev);
-                                l = ERR_PTR(-ENOMEM);
-                        }
-                } else
-                        l = ERR_PTR(result);
+	rc = dt_device_init(&o->od_dt_dev, t);
+	if (rc == 0) {
+		rc = osd_device_init0(env, o, cfg);
+		if (rc)
+			dt_device_fini(&o->od_dt_dev);
+	}
 
-                if (IS_ERR(l))
-                        OBD_FREE_PTR(o);
-        } else
-                l = ERR_PTR(-ENOMEM);
-        return l;
+	if (unlikely(rc != 0))
+		OBD_FREE_PTR(o);
+
+	return rc == 0 ? osd2lu_dev(o) : ERR_PTR(rc);
 }
 
 static struct lu_device *osd_device_free(const struct lu_env *env,
@@ -4462,7 +4567,7 @@ static int osd_process_config(const struct lu_env *env,
                 break;
         case LCFG_CLEANUP:
 		lu_dev_del_linkage(d->ld_site, d);
-                err = osd_shutdown(env, o);
+		err = 0;
                 break;
         default:
                 err = -ENOSYS;
@@ -4477,17 +4582,64 @@ static int osd_recovery_complete(const struct lu_env *env,
         RETURN(0);
 }
 
+/*
+ * we use exports to track all osd users
+ */
+static int osd_obd_connect(const struct lu_env *env, struct obd_export **exp,
+			   struct obd_device *obd, struct obd_uuid *cluuid,
+			   struct obd_connect_data *data, void *localdata)
+{
+	struct osd_device    *osd = osd_dev(obd->obd_lu_dev);
+	struct lustre_handle  conn;
+	int                   rc;
+	ENTRY;
+
+	CDEBUG(D_CONFIG, "connect #%d\n", osd->od_connects);
+
+	rc = class_connect(&conn, obd, cluuid);
+	if (rc)
+		RETURN(rc);
+
+	*exp = class_conn2export(&conn);
+
+	cfs_spin_lock(&osd->od_osfs_lock);
+	osd->od_connects++;
+	cfs_spin_unlock(&osd->od_osfs_lock);
+
+	RETURN(0);
+}
+
+/*
+ * once last export (we don't count self-export) disappeared
+ * osd can be released
+ */
+static int osd_obd_disconnect(struct obd_export *exp)
+{
+	struct obd_device *obd = exp->exp_obd;
+	struct osd_device *osd = osd_dev(obd->obd_lu_dev);
+	int                rc, release = 0;
+	ENTRY;
+
+	/* Only disconnect the underlying layers on the final disconnect. */
+	cfs_spin_lock(&osd->od_osfs_lock);
+	osd->od_connects--;
+	if (osd->od_connects == 0)
+		release = 1;
+	cfs_spin_unlock(&osd->od_osfs_lock);
+
+	rc = class_disconnect(exp); /* bz 9811 */
+
+	if (rc == 0 && release)
+		class_manual_cleanup(obd);
+	RETURN(rc);
+}
+
 static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
                        struct lu_device *dev)
 {
 	struct osd_device *osd = osd_dev(dev);
 	int		   result;
 	ENTRY;
-
-	/* 1. setup scrub, including OI files initialization */
-	result = osd_scrub_setup(env, osd);
-        if (result < 0)
-                RETURN(result);
 
 	/* 2. setup quota slave instance */
 	osd->od_quota_slave = qsd_init(env, osd->od_svname, &osd->od_dt_dev,
@@ -4553,9 +4705,9 @@ static const struct lu_device_type_operations osd_device_type_ops = {
         .ldto_device_fini    = osd_device_fini
 };
 
-static struct lu_device_type osd_device_type = {
+struct lu_device_type osd_device_type = {
         .ldt_tags     = LU_DEVICE_DT,
-        .ldt_name     = LUSTRE_OSD_NAME,
+	.ldt_name     = LUSTRE_OSD_LDISKFS_NAME,
         .ldt_ops      = &osd_device_type_ops,
         .ldt_ctx_tags = LCT_LOCAL,
 };
@@ -4564,7 +4716,9 @@ static struct lu_device_type osd_device_type = {
  * lprocfs legacy support.
  */
 static struct obd_ops osd_obd_device_ops = {
-        .o_owner = THIS_MODULE
+	.o_owner = THIS_MODULE,
+	.o_connect	= osd_obd_connect,
+	.o_disconnect	= osd_obd_disconnect
 };
 
 static int __init osd_mod_init(void)
@@ -4574,16 +4728,16 @@ static int __init osd_mod_init(void)
         osd_oi_mod_init();
         lprocfs_osd_init_vars(&lvars);
         return class_register_type(&osd_obd_device_ops, NULL, lvars.module_vars,
-                                   LUSTRE_OSD_NAME, &osd_device_type);
+				   LUSTRE_OSD_LDISKFS_NAME, &osd_device_type);
 }
 
 static void __exit osd_mod_exit(void)
 {
-        class_unregister_type(LUSTRE_OSD_NAME);
+	class_unregister_type(LUSTRE_OSD_LDISKFS_NAME);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD_NAME")");
+MODULE_DESCRIPTION("Lustre Object Storage Device ("LUSTRE_OSD_LDISKFS_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(osd, "0.1.0", osd_mod_init, osd_mod_exit);

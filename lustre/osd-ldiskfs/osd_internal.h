@@ -255,7 +255,6 @@ struct osd_device {
         /* super-class */
         struct dt_device          od_dt_dev;
         /* information about underlying file system */
-        struct lustre_mount_info *od_mount;
         struct vfsmount          *od_mnt;
         /* object index */
         struct osd_oi           **od_oi_table;
@@ -287,6 +286,7 @@ struct osd_device {
         __u32                     od_iop_mode;
 
         struct fsfilt_operations *od_fsops;
+	int			  od_connects;
 
         /*
          * mapping for legacy OST objids
@@ -751,7 +751,7 @@ static inline struct osd_device *osd_obj2dev(const struct osd_object *o)
 
 static inline struct super_block *osd_sb(const struct osd_device *dev)
 {
-        return dev->od_mount->lmi_mnt->mnt_sb;
+	return dev->od_mnt->mnt_sb;
 }
 
 static inline int osd_object_is_root(const struct osd_object *obj)

@@ -1042,8 +1042,6 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	cfs_init_rwsem(&scrub->os_rwsem);
 	cfs_spin_lock_init(&scrub->os_lock);
 	CFS_INIT_LIST_HEAD(&scrub->os_inconsistent_items);
-	if (get_mount_flags(dev->od_mount->lmi_sb) & LMD_FLG_NOSCRUB)
-		scrub->os_no_scrub = 1;
 
 	push_ctxt(&saved, ctxt, NULL);
 	filp = filp_open(osd_scrub_name, O_RDWR | O_CREAT, 0644);

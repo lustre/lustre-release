@@ -75,6 +75,7 @@ enum {
 struct ofd_device {
 	struct dt_device	 ofd_dt_dev;
 	struct dt_device	*ofd_osd;
+	struct obd_export	*ofd_osd_exp;
 	struct dt_device_param	 ofd_dt_conf;
 	/* DLM name-space for meta-data locks maintained by this server */
 	struct ldlm_namespace	*ofd_namespace;

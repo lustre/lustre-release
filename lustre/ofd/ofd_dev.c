@@ -61,46 +61,74 @@ static struct lu_kmem_descr ofd_caches[] = {
 	}
 };
 
+static int ofd_connect_to_next(const struct lu_env *env, struct ofd_device *m,
+			       const char *next, struct obd_export **exp)
+{
+	struct obd_connect_data *data = NULL;
+	struct obd_device	*obd;
+	int			 rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(data);
+	if (data == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	obd = class_name2obd(next);
+	if (obd == NULL) {
+		CERROR("%s: can't locate next device: %s\n",
+		       m->ofd_dt_dev.dd_lu_dev.ld_obd->obd_name, next);
+		GOTO(out, rc = -ENOTCONN);
+	}
+
+	data->ocd_connect_flags = OBD_CONNECT_VERSION;
+	data->ocd_version = LUSTRE_VERSION_CODE;
+
+	rc = obd_connect(NULL, exp, obd, &obd->obd_uuid, data, NULL);
+	if (rc) {
+		CERROR("%s: cannot connect to next dev %s: rc = %d\n",
+		       m->ofd_dt_dev.dd_lu_dev.ld_obd->obd_name, next, rc);
+		GOTO(out, rc);
+	}
+
+out:
+	if (data)
+		OBD_FREE_PTR(data);
+	RETURN(rc);
+}
+
 static int ofd_stack_init(const struct lu_env *env,
 			  struct ofd_device *m, struct lustre_cfg *cfg)
 {
 	struct lu_device	*ofd_lu = &m->ofd_dt_dev.dd_lu_dev;
 	const char		*dev = lustre_cfg_string(cfg, 0);
-	struct obd_type		*type;
-	struct lu_device_type	*ldt;
 	struct lu_device	*d;
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct lustre_mount_info *lmi;
 	int			 rc;
+	char			*osdname;
 
 	ENTRY;
 
-	lmi = server_get_mount_2(dev);
+	lmi = server_get_mount(dev);
 	if (lmi == NULL) {
 		CERROR("Cannot get mount info for %s!\n", dev);
 		RETURN(-ENODEV);
 	}
 
-	type = class_get_type(s2lsi(lmi->lmi_sb)->lsi_osd_type);
-	if (!type) {
-		CERROR("Unknown type: '%s'\n",
-		       s2lsi(lmi->lmi_sb)->lsi_osd_type);
-		RETURN(-ENODEV);
-	}
+	/* find bottom osd */
+	OBD_ALLOC(osdname, MTI_NAME_MAXLEN);
+	if (osdname == NULL)
+		RETURN(-ENOMEM);
 
-	ldt = type->typ_lu;
-	if (ldt == NULL) {
-		CERROR("type: '%s'\n", s2lsi(lmi->lmi_sb)->lsi_osd_type);
-		GOTO(out_type, rc = -EINVAL);
-	}
+	snprintf(osdname, MTI_NAME_MAXLEN, "%s-osd", dev);
+	rc = ofd_connect_to_next(env, m, osdname, &m->ofd_osd_exp);
+	OBD_FREE(osdname, MTI_NAME_MAXLEN);
+	if (rc)
+		RETURN(rc);
 
-	ldt->ldt_obd_type = type;
-	d = ldt->ldt_ops->ldto_device_alloc(env, ldt, cfg);
-	if (IS_ERR(d)) {
-		CERROR("Cannot allocate device: '%s'\n",
-		       s2lsi(lmi->lmi_sb)->lsi_osd_type);
-		GOTO(out_type, rc = -ENODEV);
-	}
+	d = m->ofd_osd_exp->exp_obd->obd_lu_dev;
+	LASSERT(d);
+	m->ofd_osd = lu2dt_dev(d);
 
 	LASSERT(ofd_lu->ld_site);
 	d->ld_site = ofd_lu->ld_site;
@@ -108,39 +136,6 @@ static int ofd_stack_init(const struct lu_env *env,
 	snprintf(info->fti_u.name, sizeof(info->fti_u.name),
 		 "%s-osd", lustre_cfg_string(cfg, 0));
 
-	type->typ_refcnt++;
-
-	rc = lu_env_refill((struct lu_env *)env);
-	if (rc != 0) {
-		CERROR("Failure to refill session: '%d'\n", rc);
-		GOTO(out_free, rc);
-	}
-
-	rc = ldt->ldt_ops->ldto_device_init(env, d, dev, NULL);
-	if (rc) {
-		CERROR("can't init device '%s', rc = %d\n",
-		       s2lsi(lmi->lmi_sb)->lsi_osd_type, rc);
-		GOTO(out_free, rc);
-	}
-	lu_device_get(d);
-	lu_ref_add(&d->ld_reference, "lu-stack", &lu_site_init);
-
-	m->ofd_osd = lu2dt_dev(d);
-
-	/* process setup config */
-	rc = d->ld_ops->ldo_process_config(env, d, cfg);
-	if (rc)
-		GOTO(out_fini, rc);
-
-	RETURN(rc);
-
-out_fini:
-	ldt->ldt_ops->ldto_device_fini(env, d);
-out_free:
-	type->typ_refcnt--;
-	ldt->ldt_ops->ldto_device_free(env, d);
-out_type:
-	class_put_type(type);
 	RETURN(rc);
 }
 
@@ -173,7 +168,10 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 	top->ld_ops->ldo_process_config(env, top, lcfg);
 	lustre_cfg_free(lcfg);
 
-	lu_stack_fini(env, &m->ofd_osd->dd_lu_dev);
+	lu_site_purge(env, top->ld_site, ~0);
+
+	LASSERT(m->ofd_osd_exp);
+	obd_disconnect(m->ofd_osd_exp);
 	m->ofd_osd = NULL;
 
 	EXIT;
@@ -601,10 +599,11 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 		d->ld_obd->obd_namespace = m->ofd_namespace = NULL;
 	}
 
-	ofd_stack_fini(env, m, m->ofd_site.ls_top_dev);
+	ofd_stack_fini(env, m, &m->ofd_dt_dev.dd_lu_dev);
 	lu_site_fini(&m->ofd_site);
 	ofd_procfs_fini(m);
 	LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
+	server_put_mount(obd->obd_name, NULL);
 	EXIT;
 }
 

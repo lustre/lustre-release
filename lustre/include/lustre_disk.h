@@ -490,9 +490,13 @@ struct lustre_sb_info {
         struct obd_device        *lsi_mgc;     /* mgc obd */
         struct lustre_mount_data *lsi_lmd;     /* mount command info */
         struct ll_sb_info        *lsi_llsbi;   /* add'l client sbi info */
+	struct dt_device	 *lsi_dt_dev;  /* dt device to access disk fs*/
         struct vfsmount          *lsi_srv_mnt; /* the one server mount */
         cfs_atomic_t              lsi_mounts;  /* references to the srv_mnt */
 	char			  lsi_svname[MTI_NAME_MAXLEN];
+	char			  lsi_osd_obdname[64];
+	char			  lsi_osd_uuid[64];
+	struct obd_export	 *lsi_osd_exp;
 	char			  lsi_osd_type[16];
 	char			  lsi_fstype[16];
         struct backing_dev_info   lsi_bdi;     /* each client mountpoint needs

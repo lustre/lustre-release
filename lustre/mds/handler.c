@@ -312,7 +312,6 @@ static int mds_cmd_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
          * OSD did mount already, so put mount back
          */
         cfs_atomic_dec(&lsi->lsi_mounts);
-        mntput(mnt);
         cfs_init_rwsem(&mds->mds_notify_lock);
 
 	obd->obd_fsops = fsfilt_get_ops(lsi->lsi_fstype);

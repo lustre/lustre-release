@@ -250,12 +250,13 @@ static const char *osd_counter_names[] = {
 int osd_procfs_init(struct osd_device *osd, const char *name)
 {
         struct lprocfs_static_vars lvars;
-        struct lu_device    *ld = &osd->od_dt_dev.dd_lu_dev;
         struct obd_type     *type;
         int                  rc;
         ENTRY;
 
-        type = ld->ld_type->ldt_obd_type;
+	/* at the moment there is no linkage between lu_type
+	 * and obd_type, so we lookup obd_type this way */
+	type = class_search_type(LUSTRE_OSD_LDISKFS_NAME);
 
         LASSERT(name != NULL);
         LASSERT(type != NULL);
@@ -325,14 +326,14 @@ static int lprocfs_osd_rd_mntdev(char *page, char **start, off_t off, int count,
         struct osd_device *osd = osd_dt_dev(data);
 
         LASSERT(osd != NULL);
-        if (unlikely(osd->od_mount == NULL))
+	if (unlikely(osd->od_mnt == NULL))
                 return -EINPROGRESS;
 
-	LASSERT(mnt_get_devname(osd->od_mount->lmi_mnt));
+	LASSERT(mnt_get_devname(osd->od_mnt));
 	*eof = 1;
 
 	return snprintf(page, count, "%s\n",
-			mnt_get_devname(osd->od_mount->lmi_mnt));
+			mnt_get_devname(osd->od_mnt));
 }
 
 #ifdef HAVE_LDISKFS_PDO
@@ -366,7 +367,7 @@ static int lprocfs_osd_rd_auto_scrub(char *page, char **start, off_t off,
 	struct osd_device *dev = data;
 
 	LASSERT(dev != NULL);
-	if (unlikely(dev->od_mount == NULL))
+	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
 	*eof = 1;
@@ -380,7 +381,7 @@ static int lprocfs_osd_wr_auto_scrub(struct file *file, const char *buffer,
 	int val, rc;
 
 	LASSERT(dev != NULL);
-	if (unlikely(dev->od_mount == NULL))
+	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
 	rc = lprocfs_write_helper(buffer, count, &val);
@@ -397,7 +398,7 @@ static int lprocfs_osd_rd_oi_scrub(char *page, char **start, off_t off,
 	struct osd_device *dev = data;
 
 	LASSERT(dev != NULL);
-	if (unlikely(dev->od_mount == NULL))
+	if (unlikely(dev->od_mnt == NULL))
 		return -EINPROGRESS;
 
 	*eof = 1;

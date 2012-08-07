@@ -340,6 +340,8 @@ static void osd_conf_get(const struct lu_env *env,
 	param->ddp_inodespace = OSD_DNODE_EST_COUNT;
 	/* per-fragment overhead to be used by the client code */
 	param->ddp_grant_frag = udmu_blk_insert_cost();
+
+	param->ddp_mnt = NULL;
 }
 
 /*
@@ -483,30 +485,20 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 static int osd_mount(const struct lu_env *env,
 		     struct osd_device *o, struct lustre_cfg *cfg)
 {
-	char				*dev  = lustre_cfg_string(cfg, 0);
-	struct lustre_mount_info	*lmi;
-	struct lustre_sb_info		*lsi;
-	dmu_buf_t			*rootdb;
-	int				 rc;
+	char	  *dev  = lustre_cfg_string(cfg, 1);
+	dmu_buf_t *rootdb;
+	int	   rc;
 	ENTRY;
 
 	if (o->od_objset.os != NULL)
 		RETURN(0);
 
-	lmi = server_get_mount(dev);
-	if (lmi == NULL) {
-		CERROR("Unknown mount point: '%s'\n", dev);
-		RETURN(-ENODEV);
-	}
-
-	lsi = s2lsi(lmi->lmi_sb);
-	dev = lsi->lsi_lmd->lmd_dev;
-
 	if (strlen(dev) >= sizeof(o->od_mntdev))
 		RETURN(-E2BIG);
 
 	strcpy(o->od_mntdev, dev);
-	strcpy(o->od_svname, lsi->lsi_svname);
+	strncpy(o->od_svname, lustre_cfg_string(cfg, 4),
+		sizeof(o->od_svname) - 1);
 
 	rc = -udmu_objset_open(o->od_mntdev, &o->od_objset);
 	if (rc) {
@@ -587,28 +579,36 @@ out:
 	RETURN(rc);
 }
 
+static struct lu_device *osd_device_fini(const struct lu_env *env,
+					 struct lu_device *dev);
+
 static struct lu_device *osd_device_alloc(const struct lu_env *env,
-					  struct lu_device_type *t,
+					  struct lu_device_type *type,
 					  struct lustre_cfg *cfg)
 {
-	struct osd_device	*o;
-	int			 rc;
+	struct osd_device *dev;
+	int		   rc;
 
-	OBD_ALLOC_PTR(o);
-	if (o == NULL)
+	OBD_ALLOC_PTR(dev);
+	if (dev == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	rc = dt_device_init(&o->od_dt_dev, t);
+	rc = dt_device_init(&dev->od_dt_dev, type);
 	if (rc == 0) {
-		rc = osd_device_init0(env, o, cfg);
+		rc = osd_device_init0(env, dev, cfg);
+		if (rc == 0) {
+			rc = osd_mount(env, dev, cfg);
+			if (rc)
+				osd_device_fini(env, osd2lu_dev(dev));
+		}
 		if (rc)
-			dt_device_fini(&o->od_dt_dev);
+			dt_device_fini(&dev->od_dt_dev);
 	}
 
 	if (unlikely(rc != 0))
-		OBD_FREE_PTR(o);
+		OBD_FREE_PTR(dev);
 
-	return rc == 0 ? osd2lu_dev(o) : ERR_PTR(rc);
+	return rc == 0 ? osd2lu_dev(dev) : ERR_PTR(rc);
 }
 
 static struct lu_device *osd_device_free(const struct lu_env *env,
@@ -631,9 +631,8 @@ static struct lu_device *osd_device_free(const struct lu_env *env,
 static struct lu_device *osd_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
-	struct osd_device	 *o = osd_dev(d);
-	struct lustre_mount_info *lmi;
-	int rc;
+	struct osd_device *o = osd_dev(d);
+	int		   rc;
 	ENTRY;
 
 
@@ -654,10 +653,6 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 
 	if (o->od_objset.os)
 		osd_umount(env, o);
-
-	lmi = server_get_mount_2(o->od_svname);
-	LASSERT(lmi);
-	server_put_mount(lmi->lmi_name, lmi->lmi_mnt);
 
 	RETURN(NULL);
 }
@@ -697,6 +692,58 @@ static int osd_recovery_complete(const struct lu_env *env, struct lu_device *d)
 {
 	ENTRY;
 	RETURN(0);
+}
+
+/*
+ * we use exports to track all osd users
+ */
+static int osd_obd_connect(const struct lu_env *env, struct obd_export **exp,
+			   struct obd_device *obd, struct obd_uuid *cluuid,
+			   struct obd_connect_data *data, void *localdata)
+{
+	struct osd_device    *osd = osd_dev(obd->obd_lu_dev);
+	struct lustre_handle  conn;
+	int                   rc;
+	ENTRY;
+
+	CDEBUG(D_CONFIG, "connect #%d\n", osd->od_connects);
+
+	rc = class_connect(&conn, obd, cluuid);
+	if (rc)
+		RETURN(rc);
+
+	*exp = class_conn2export(&conn);
+
+	cfs_spin_lock(&osd->od_objset.lock);
+	osd->od_connects++;
+	cfs_spin_unlock(&osd->od_objset.lock);
+
+	RETURN(0);
+}
+
+/*
+ * once last export (we don't count self-export) disappeared
+ * osd can be released
+ */
+static int osd_obd_disconnect(struct obd_export *exp)
+{
+	struct obd_device *obd = exp->exp_obd;
+	struct osd_device *osd = osd_dev(obd->obd_lu_dev);
+	int                rc, release = 0;
+	ENTRY;
+
+	/* Only disconnect the underlying layers on the final disconnect. */
+	cfs_spin_lock(&osd->od_objset.lock);
+	osd->od_connects--;
+	if (osd->od_connects == 0)
+		release = 1;
+	cfs_spin_unlock(&osd->od_objset.lock);
+
+	rc = class_disconnect(exp); /* bz 9811 */
+
+	if (rc == 0 && release)
+		class_manual_cleanup(obd);
+	RETURN(rc);
 }
 
 static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
@@ -756,6 +803,8 @@ static struct lu_device_type osd_device_type = {
 
 static struct obd_ops osd_obd_device_ops = {
 	.o_owner       = THIS_MODULE,
+	.o_connect	= osd_obd_connect,
+	.o_disconnect	= osd_obd_disconnect
 };
 
 int __init osd_init(void)

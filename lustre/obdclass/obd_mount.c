@@ -172,8 +172,6 @@ struct lustre_mount_info *server_get_mount(const char *name)
         }
         lsi = s2lsi(lmi->lmi_sb);
 
-	if (lmi->lmi_mnt)
-		mntget(lmi->lmi_mnt);
         cfs_atomic_inc(&lsi->lsi_mounts);
 
         CDEBUG(D_MOUNT, "get_mnt %p from %s, refs=%d, vfscount=%d\n",
@@ -204,22 +202,6 @@ struct lustre_mount_info *server_get_mount_2(const char *name)
 }
 EXPORT_SYMBOL(server_get_mount_2);
 
-static void unlock_mntput(struct vfsmount *mnt)
-{
-#ifdef HAVE_KERNEL_LOCKED
-	/* for kernel < 2.6.37 */
-	if (kernel_locked()) {
-		unlock_kernel();
-		mntput(mnt);
-		lock_kernel();
-	} else {
-		mntput(mnt);
-	}
-#else
-	mntput(mnt);
-#endif
-}
-
 static int lustre_put_lsi(struct super_block *sb);
 
 /* to be called from obd_cleanup methods */
@@ -230,12 +212,6 @@ int server_put_mount(const char *name, struct vfsmount *mnt)
 	int count = 0;
         ENTRY;
 
-        /* This might be the last one, can't deref after this */
-	if (mnt) {
-		count = mnt_get_count(mnt) - 1;
-		unlock_mntput(mnt);
-	}
-
         cfs_mutex_lock(&lustre_mount_info_lock);
         lmi = server_find_mount(name);
         cfs_mutex_unlock(&lustre_mount_info_lock);
@@ -244,7 +220,6 @@ int server_put_mount(const char *name, struct vfsmount *mnt)
                 RETURN(-ENOENT);
         }
         lsi = s2lsi(lmi->lmi_sb);
-        LASSERT(lmi->lmi_mnt == mnt);
 
         CDEBUG(D_MOUNT, "put_mnt %p from %s, refs=%d, vfscount=%d\n",
                lmi->lmi_mnt, name, cfs_atomic_read(&lsi->lsi_mounts), count);
@@ -398,22 +373,22 @@ EXPORT_SYMBOL(do_lcfg);
  * obd type-specific methods.
  */
 static int lustre_start_simple(char *obdname, char *type, char *uuid,
-                               char *s1, char *s2)
+			       char *s1, char *s2, char *s3, char *s4)
 {
-        int rc;
-        CDEBUG(D_MOUNT, "Starting obd %s (typ=%s)\n", obdname, type);
+	int rc;
+	CDEBUG(D_MOUNT, "Starting obd %s (typ=%s)\n", obdname, type);
 
-        rc = do_lcfg(obdname, 0, LCFG_ATTACH, type, uuid, 0, 0);
-        if (rc) {
-                CERROR("%s attach error %d\n", obdname, rc);
-                return(rc);
-        }
-        rc = do_lcfg(obdname, 0, LCFG_SETUP, s1, s2, 0, 0);
-        if (rc) {
-                CERROR("%s setup error %d\n", obdname, rc);
-                do_lcfg(obdname, 0, LCFG_DETACH, 0, 0, 0, 0);
-        }
-        return rc;
+	rc = do_lcfg(obdname, 0, LCFG_ATTACH, type, uuid, 0, 0);
+	if (rc) {
+		CERROR("%s attach error %d\n", obdname, rc);
+		return(rc);
+	}
+	rc = do_lcfg(obdname, 0, LCFG_SETUP, s1, s2, s3, s4);
+	if (rc) {
+		CERROR("%s setup error %d\n", obdname, rc);
+		do_lcfg(obdname, 0, LCFG_DETACH, 0, 0, 0, 0);
+	}
+	return rc;
 }
 
 /* Set up a MGS to serve startup logs */
@@ -442,7 +417,7 @@ static int server_start_mgs(struct super_block *sb)
 
         if (!rc) {
                 rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
-                                         LUSTRE_MGS_OBDNAME, 0, 0);
+					 LUSTRE_MGS_OBDNAME, 0, 0, 0, 0);
                 /* Do NOT call server_deregister_mount() here. This leads to
                  * inability cleanup cleanly and free lsi and other stuff when
                  * mgs calls server_put_mount() in error handling case. -umka */
@@ -658,7 +633,7 @@ static int lustre_start_mgc(struct super_block *sb)
         /* Start the MGC */
         rc = lustre_start_simple(mgcname, LUSTRE_MGC_NAME,
                                  (char *)uuid->uuid, LUSTRE_MGS_OBDNAME,
-                                 niduuid);
+				 niduuid, 0, 0);
         OBD_FREE_PTR(uuid);
         if (rc)
                 GOTO(out_free, rc);
@@ -1201,7 +1176,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
                         rc = lustre_start_simple(LUSTRE_OSS_OBDNAME,
                                                  LUSTRE_OSS_NAME,
                                                  LUSTRE_OSS_OBDNAME"_uuid",
-                                                 0, 0);
+						 0, 0, 0, 0);
                         if (rc) {
                                 cfs_mutex_unlock(&server_start_lock);
                                 CERROR("failed to start OSS: %d\n", rc);
@@ -1360,6 +1335,11 @@ static int lustre_put_lsi(struct super_block *sb)
 
         CDEBUG(D_MOUNT, "put %p %d\n", sb, cfs_atomic_read(&lsi->lsi_mounts));
         if (cfs_atomic_dec_and_test(&lsi->lsi_mounts)) {
+		if (IS_SERVER(lsi) && lsi->lsi_osd_exp) {
+			obd_disconnect(lsi->lsi_osd_exp);
+			/* wait till OSD is gone */
+			obd_zombie_barrier();
+		}
                 lustre_free_lsi(sb);
                 RETURN(1);
         }
@@ -1394,7 +1374,7 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 
 		strcpy(lsi->lsi_osd_type, lsi->lsi_lmd->lmd_osd_type);
 	} else {
-		strcpy(lsi->lsi_osd_type, LUSTRE_OSD_NAME);
+		strcpy(lsi->lsi_osd_type, LUSTRE_OSD_LDISKFS_NAME);
 	}
 
 	/* XXX: a temp. solution for components using fsfilt
@@ -1439,151 +1419,12 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 
 /*************** server mount ******************/
 
-/** Kernel mount using mount options in MOUNT_DATA_FILE.
- * Since this file lives on the disk, we pre-mount using a common
- * type, read the file, then re-mount using the type specified in the
- * file.
- */
-static struct vfsmount *server_kernel_mount(struct super_block *sb)
-{
-        struct lustre_sb_info *lsi = s2lsi(sb);
-        struct lustre_mount_data *lmd = lsi->lsi_lmd;
-        struct vfsmount *mnt;
-        struct file_system_type *type;
-        char *options = NULL;
-        unsigned long page, s_flags;
-        struct page *__page;
-        int len;
-        int rc;
-        ENTRY;
-
-	rc = lsi_prepare(lsi);
-	if (rc)
-		RETURN(ERR_PTR(rc));
-
-	if (strcmp(lmd->lmd_osd_type, "osd-ldiskfs") == 0) {
-		/* with ldiskfs we're still mounting in the kernel space */
-		OBD_FREE(lmd->lmd_osd_type,
-			 strlen(lmd->lmd_osd_type) + 1);
-		lmd->lmd_osd_type = NULL;
-	} else {
-		/* non-ldiskfs backends (zfs) do mounting internally */
-		RETURN(NULL);
-	}
-
-        /* In the past, we have always used flags = 0.
-           Note ext3/ldiskfs can't be mounted ro. */
-        s_flags = sb->s_flags;
-
-        /* allocate memory for options */
-        OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
-        if (!__page)
-                GOTO(out_free, rc = -ENOMEM);
-        page = (unsigned long)cfs_page_address(__page);
-        options = (char *)page;
-        memset(options, 0, CFS_PAGE_SIZE);
-
-        /* Glom up mount options */
-        memset(options, 0, CFS_PAGE_SIZE);
-	strncpy(options, lsi->lsi_lmd->lmd_opts, CFS_PAGE_SIZE - 2);
-
-        len = CFS_PAGE_SIZE - strlen(options) - 2;
-        if (*options != 0)
-                strcat(options, ",");
-        strncat(options, "no_mbcache", len);
-
-        /* Add in any mount-line options */
-        if (lmd->lmd_opts && (*(lmd->lmd_opts) != 0)) {
-                len = CFS_PAGE_SIZE - strlen(options) - 2;
-                strcat(options, ",");
-                strncat(options, lmd->lmd_opts, len);
-        }
-
-        /* Special permanent mount flags */
-	if (IS_OST(lsi))
-            s_flags |= MS_NOATIME | MS_NODIRATIME;
-
-        CDEBUG(D_MOUNT, "kern_mount: %s %s %s\n",
-	       lsi->lsi_osd_type, lmd->lmd_dev, options);
-	type = get_fs_type(lsi->lsi_fstype);
-        if (!type) {
-                CERROR("get_fs_type failed\n");
-                GOTO(out_free, rc = -ENODEV);
-        }
-        mnt = vfs_kern_mount(type, s_flags, lmd->lmd_dev, (void *)options);
-        cfs_module_put(type->owner);
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                CERROR("vfs_kern_mount failed: rc = %d\n", rc);
-                GOTO(out_free, rc);
-        }
-
-        if (lmd->lmd_flags & LMD_FLG_ABORT_RECOV)
-                simple_truncate(mnt->mnt_sb->s_root, mnt, LAST_RCVD,
-                                LR_CLIENT_START);
-
-        OBD_PAGE_FREE(__page);
-        CDEBUG(D_SUPER, "%s: mnt = %p\n", lmd->lmd_dev, mnt);
-        RETURN(mnt);
-
-out_free:
-        if (__page)
-                OBD_PAGE_FREE(__page);
-        RETURN(ERR_PTR(rc));
-}
-
-/** Wait here forever until the mount refcount is 0 before completing umount,
- * else we risk dereferencing a null pointer.
- * LNET may take e.g. 165s before killing zombies.
- */
-static void server_wait_finished(struct vfsmount *mnt)
-{
-       cfs_waitq_t             waitq;
-       int                     rc, waited = 0;
-       cfs_sigset_t            blocked;
-
-	if (mnt == NULL) {
-		cfs_waitq_init(&waitq);
-		cfs_waitq_wait_event_interruptible_timeout(waitq, 0,
-						cfs_time_seconds(3), rc);
-		return;
-	}
-
-	LASSERT(mnt);
-       cfs_waitq_init(&waitq);
-
-       while (mnt_get_count(mnt) > 1) {
-               if (waited && (waited % 30 == 0))
-                       LCONSOLE_WARN("Mount still busy with %d refs after "
-                                      "%d secs.\n",
-                                      mnt_get_count(mnt),
-                                      waited);
-               /* Cannot use l_event_wait() for an interruptible sleep. */
-               waited += 3;
-               blocked = cfs_block_sigsinv(sigmask(SIGKILL));
-               cfs_waitq_wait_event_interruptible_timeout(
-                       waitq,
-                       (mnt_get_count(mnt) == 1),
-                       cfs_time_seconds(3),
-                       rc);
-		cfs_restore_sigs(blocked);
-		if (rc < 0) {
-			LCONSOLE_EMERG("Danger: interrupted umount %s with "
-				"%d refs!\n", mnt_get_devname(mnt),
-				mnt_get_count(mnt));
-			break;
-		}
-
-	}
-}
-
 /** Start the shutdown of servers at umount.
  */
 static void server_put_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct obd_device     *obd;
-        struct vfsmount       *mnt = lsi->lsi_srv_mnt;
         char *tmpname, *extraname = NULL;
         int tmpname_sz;
         int lsiflags = lsi->lsi_flags;
@@ -1641,13 +1482,10 @@ static void server_put_super(struct super_block *sb)
         /* Clean the mgc and sb */
         lustre_common_put_super(sb);
 
-        /* Wait for the targets to really clean up - can't exit (and let the
-           sb get destroyed) while the mount is still in use */
-        server_wait_finished(mnt);
-
-        /* drop the One True Mount */
-	if (mnt)
-		unlock_mntput(mnt);
+	/* wait till all in-progress cleanups are done
+	 * specifically we're interested in ofd cleanup
+	 * as it pins OSS */
+	obd_zombie_barrier();
 
 	/* Stop the servers (MDS, OSS) if no longer needed.  We must wait
 	   until the target is really gone so that our type refcount check
@@ -1772,6 +1610,58 @@ static int server_fill_super_common(struct super_block *sb)
         RETURN(0);
 }
 
+static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
+{
+	struct lustre_mount_data *lmd = lsi->lsi_lmd;
+	struct obd_device	 *obd;
+	struct dt_device_param    p;
+	char			  flagstr[16];
+	int			  rc;
+	ENTRY;
+
+	CDEBUG(D_MOUNT,
+	       "Attempting to start %s, type=%s, lsifl=%x, mountfl=%lx\n",
+	       lsi->lsi_svname, lsi->lsi_osd_type, lsi->lsi_flags, mflags);
+
+	sprintf(lsi->lsi_osd_obdname, "%s-osd", lsi->lsi_svname);
+	strcpy(lsi->lsi_osd_uuid, lsi->lsi_osd_obdname);
+	strcat(lsi->lsi_osd_uuid, "_UUID");
+	sprintf(flagstr, "%lu:%lu", mflags, (unsigned long) lmd->lmd_flags);
+
+	obd = class_name2obd(lsi->lsi_osd_obdname);
+	if (obd == NULL) {
+		rc = lustre_start_simple(lsi->lsi_osd_obdname,
+				lsi->lsi_osd_type,
+				lsi->lsi_osd_uuid, lmd->lmd_dev,
+				flagstr, lsi->lsi_lmd->lmd_opts,
+				lsi->lsi_svname);
+		if (rc)
+			GOTO(out, rc);
+		obd = class_name2obd(lsi->lsi_osd_obdname);
+		LASSERT(obd);
+	}
+
+	rc = obd_connect(NULL, &lsi->lsi_osd_exp, obd, &obd->obd_uuid, NULL, NULL);
+	if (rc) {
+		obd->obd_force = 1;
+		class_manual_cleanup(obd);
+		lsi->lsi_dt_dev = NULL;
+	}
+
+	/* XXX: to keep support old components relying on lsi_srv_mnt
+	 *	we get this info from OSD just started */
+	LASSERT(obd->obd_lu_dev);
+	lsi->lsi_dt_dev = lu2dt_dev(obd->obd_lu_dev);
+	LASSERT(lsi->lsi_dt_dev);
+
+	dt_conf_get(NULL, lsi->lsi_dt_dev, &p);
+
+	lsi->lsi_srv_mnt = p.ddp_mnt;
+
+out:
+	RETURN(rc);
+}
+
 /** Fill in the superblock info for a Lustre server.
  * Mount the device with the correct options.
  * Read the on-disk config file.
@@ -1780,20 +1670,21 @@ static int server_fill_super_common(struct super_block *sb)
 static int server_fill_super(struct super_block *sb)
 {
         struct lustre_sb_info *lsi = s2lsi(sb);
-        struct vfsmount *mnt;
         int rc;
         ENTRY;
 
-        /* the One True Mount */
-        mnt = server_kernel_mount(sb);
-        if (IS_ERR(mnt)) {
-                rc = PTR_ERR(mnt);
-                CERROR("Unable to mount device %s: %d\n",
-                       lsi->lsi_lmd->lmd_dev, rc);
+	rc = lsi_prepare(lsi);
+	if (rc)
+		RETURN(rc);
+
+	/* Start low level OSD */
+	rc = osd_start(lsi, sb->s_flags);
+	if (rc) {
+		CERROR("Unable to start osd on %s: %d\n",
+		       lsi->lsi_lmd->lmd_dev, rc);
                 lustre_put_lsi(sb);
                 RETURN(rc);
-        }
-        lsi->lsi_srv_mnt = mnt;
+	}
 
 	CDEBUG(D_MOUNT, "Found service %s on device %s\n",
 	       lsi->lsi_svname, lsi->lsi_lmd->lmd_dev);
@@ -1804,7 +1695,6 @@ static int server_fill_super(struct super_block *sb)
                                    " the disk journal.\n",
 				   lsi->lsi_svname);
                 lustre_put_lsi(sb);
-                unlock_mntput(mnt);
                 RETURN(-EALREADY);
         }
 
@@ -1823,7 +1713,7 @@ static int server_fill_super(struct super_block *sb)
         /* Set up all obd devices for service */
         if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
 			(IS_OST(lsi) || IS_MDT(lsi))) {
-                rc = server_start_targets(sb, mnt);
+		rc = server_start_targets(sb, lsi->lsi_srv_mnt);
                 if (rc < 0) {
                         CERROR("Unable to start targets: %d\n", rc);
                         GOTO(out_mnt, rc);

@@ -111,8 +111,10 @@ struct mdt_device {
         /* ptlrpc handle for MDS->client connections (for lock ASTs). */
         struct ptlrpc_client      *mdt_ldlm_client;
         /* underlying device */
+	struct obd_export         *mdt_child_exp;
         struct md_device          *mdt_child;
         struct dt_device          *mdt_bottom;
+	struct obd_export	  *mdt_bottom_exp;
         /** target device */
         struct lu_target           mdt_lut;
         /*

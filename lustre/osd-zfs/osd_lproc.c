@@ -44,6 +44,7 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <obd.h>
+#include <obd_class.h>
 #include <lprocfs_status.h>
 #include <lu_time.h>
 
@@ -190,13 +191,16 @@ struct lprocfs_vars lprocfs_osd_module_vars[] = {
 
 int osd_procfs_init(struct osd_device *osd, const char *name)
 {
-	struct lu_device    *ld = &osd->od_dt_dev.dd_lu_dev;
-	struct obd_type     *type = ld->ld_type->ldt_obd_type;
-	int                  rc;
+	struct obd_type *type;
+	int		 rc;
 	ENTRY;
 
 	if (osd->od_proc_entry)
 		RETURN(0);
+
+	/* at the moment there is no linkage between lu_type
+	 * and obd_type, so we lookup obd_type this way */
+	type = class_search_type(LUSTRE_OSD_ZFS_NAME);
 
 	LASSERT(name != NULL);
 	LASSERT(type != NULL);

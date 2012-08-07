@@ -4360,6 +4360,8 @@ static void mdt_stack_fini(const struct lu_env *env,
         lu_stack_fini(env, top);
         m->mdt_child = NULL;
         m->mdt_bottom = NULL;
+
+	obd_disconnect(m->mdt_bottom_exp);
 }
 
 static struct lu_device *mdt_layer_setup(struct lu_env *env,
@@ -4423,6 +4425,41 @@ out:
         return ERR_PTR(rc);
 }
 
+static int mdt_connect_to_next(const struct lu_env *env, struct mdt_device *m,
+			       const char *next, struct obd_export **exp)
+{
+	struct obd_connect_data *data = NULL;
+	struct obd_device	*obd;
+	int			 rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(data);
+	if (data == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	obd = class_name2obd(next);
+	if (obd == NULL) {
+		CERROR("%s: can't locate next device: %s\n",
+		       m->mdt_md_dev.md_lu_dev.ld_obd->obd_name, next);
+		GOTO(out, rc = -ENOTCONN);
+	}
+
+	data->ocd_connect_flags = OBD_CONNECT_VERSION;
+	data->ocd_version = LUSTRE_VERSION_CODE;
+
+	rc = obd_connect(NULL, exp, obd, &obd->obd_uuid, data, NULL);
+	if (rc) {
+		CERROR("%s: cannot connect to next dev %s (%d)\n",
+		       m->mdt_md_dev.md_lu_dev.ld_obd->obd_name, next, rc);
+		GOTO(out, rc);
+	}
+
+out:
+	if (data)
+		OBD_FREE_PTR(data);
+	RETURN(rc);
+}
+
 static int mdt_stack_init(struct lu_env *env,
                           struct mdt_device *m,
                           struct lustre_cfg *cfg,
@@ -4432,16 +4469,27 @@ static int mdt_stack_init(struct lu_env *env,
         struct lu_device  *tmp;
         struct md_device  *md;
         struct lu_device  *child_lu_dev;
+	char		  *osdname;
         int rc;
         ENTRY;
 
-        /* init the stack */
-        tmp = mdt_layer_setup(env, LUSTRE_OSD_NAME, d, cfg);
-        if (IS_ERR(tmp)) {
-                RETURN(PTR_ERR(tmp));
-        }
-        m->mdt_bottom = lu2dt_dev(tmp);
-        d = tmp;
+	/* find bottom osd */
+	OBD_ALLOC(osdname, MTI_NAME_MAXLEN);
+	if (osdname == NULL)
+		RETURN(-ENOMEM);
+
+	snprintf(osdname, MTI_NAME_MAXLEN, "%s-osd", lustre_cfg_string(cfg, 0));
+	rc = mdt_connect_to_next(env, m, osdname, &m->mdt_bottom_exp);
+	OBD_FREE(osdname, MTI_NAME_MAXLEN);
+	if (rc)
+		RETURN(rc);
+
+	tmp = m->mdt_bottom_exp->exp_obd->obd_lu_dev;
+	LASSERT(tmp);
+	m->mdt_bottom = lu2dt_dev(tmp);
+	tmp->ld_site = d->ld_site;
+	d = tmp;
+
         tmp = mdt_layer_setup(env, LUSTRE_MDD_NAME, d, cfg);
         if (IS_ERR(tmp)) {
                 GOTO(out, rc = PTR_ERR(tmp));
@@ -4598,6 +4646,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         }
         LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
 
+	server_put_mount(mdt2obd_dev(m)->obd_name, NULL);
+
         EXIT;
 }
 
@@ -4670,7 +4720,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_som_conf = 0;
 
         m->mdt_opts.mo_cos = MDT_COS_DEFAULT;
-        lmi = server_get_mount_2(dev);
+	lmi = server_get_mount(dev);
         if (lmi == NULL) {
                 CERROR("Cannot get mount info for %s!\n", dev);
                 RETURN(-EFAULT);
@@ -4799,9 +4849,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_llog_cleanup, rc);
 #endif
 
-        server_put_mount_2(dev, lmi->lmi_mnt);
-        lmi = NULL;
-
         rc = next->md_ops->mdo_iocontrol(env, next, OBD_IOC_GET_MNTOPT, 0,
                                          &mntopts);
         if (rc)
@@ -4898,8 +4945,8 @@ err_lu_site:
 err_free_site:
         OBD_FREE_PTR(mite);
 err_lmi:
-        if (lmi)
-                server_put_mount_2(dev, lmi->lmi_mnt);
+	if (lmi)
+		server_put_mount(dev, lmi->lmi_mnt);
         return (rc);
 }
 

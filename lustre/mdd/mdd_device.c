@@ -94,7 +94,6 @@ static struct lu_device *mdd_device_fini(const struct lu_env *env,
                                          struct lu_device *d)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
-        struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
         int rc;
 
         rc = mdd_procfs_fini(mdd);
@@ -102,7 +101,7 @@ static struct lu_device *mdd_device_fini(const struct lu_env *env,
                 CERROR("proc fini error %d \n", rc);
                 return ERR_PTR(rc);
         }
-        return next;
+	return NULL;
 }
 
 static void mdd_changelog_fini(const struct lu_env *env,
@@ -1281,13 +1280,12 @@ static struct lu_device *mdd_device_free(const struct lu_env *env,
                                          struct lu_device *lu)
 {
         struct mdd_device *m = lu2mdd_dev(lu);
-        struct lu_device  *next = &m->mdd_child->dd_lu_dev;
         ENTRY;
 
         LASSERT(cfs_atomic_read(&lu->ld_ref) == 0);
         md_device_fini(&m->mdd_md_dev);
         OBD_FREE_PTR(m);
-        RETURN(next);
+	RETURN(NULL);
 }
 
 static struct obd_ops mdd_obd_device_ops = {

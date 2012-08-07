@@ -112,6 +112,7 @@ struct obd_type *class_search_type(const char *name)
         cfs_spin_unlock(&obd_types_lock);
         return NULL;
 }
+EXPORT_SYMBOL(class_search_type);
 
 struct obd_type *class_get_type(const char *name)
 {
