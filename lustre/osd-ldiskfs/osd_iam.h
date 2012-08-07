@@ -460,6 +460,7 @@ struct iam_container {
          * read-write lock protecting index consistency.
          */
         cfs_rw_semaphore_t   ic_sem;
+	struct dynlock       ic_tree_lock;
 };
 
 /*
@@ -908,18 +909,12 @@ static inline struct iam_ikey *iam_path_ikey(const struct iam_path *path,
         return path->ip_data->ipd_key_scratch[nr];
 }
 
-
-static inline struct dynlock *path_dynlock(struct iam_path *path)
-{
-        return &LDISKFS_I(iam_path_obj(path))->i_htree_lock;
-}
-
 static inline int iam_leaf_is_locked(const struct iam_leaf *leaf)
 {
         int result;
 
-        result = dynlock_is_locked(path_dynlock(leaf->il_path),
-                                   leaf->il_curidx);
+	result = dynlock_is_locked(&iam_leaf_container(leaf)->ic_tree_lock,
+				   leaf->il_curidx);
         if (!result)
                 dump_stack();
         return result;
@@ -930,7 +925,8 @@ static inline int iam_frame_is_locked(struct iam_path *path,
 {
         int result;
 
-        result = dynlock_is_locked(path_dynlock(path), frame->curidx);
+	result = dynlock_is_locked(&path->ip_container->ic_tree_lock,
+				   frame->curidx);
         if (!result)
                 dump_stack();
         return result;

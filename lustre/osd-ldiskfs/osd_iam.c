@@ -172,6 +172,7 @@ int iam_container_init(struct iam_container *c,
         c->ic_descr  = descr;
         c->ic_object = inode;
         cfs_init_rwsem(&c->ic_sem);
+	dynlock_init(&c->ic_tree_lock);
         return 0;
 }
 EXPORT_SYMBOL(iam_container_init);
@@ -393,20 +394,21 @@ static int iam_leaf_load(struct iam_path *path)
         return err;
 }
 
-static void iam_unlock_htree(struct inode *dir, struct dynlock_handle *lh)
+static void iam_unlock_htree(struct iam_container *ic,
+			     struct dynlock_handle *lh)
 {
-        if (lh != NULL)
-                dynlock_unlock(&LDISKFS_I(dir)->i_htree_lock, lh);
+	if (lh != NULL)
+		dynlock_unlock(&ic->ic_tree_lock, lh);
 }
 
 
 static void iam_leaf_unlock(struct iam_leaf *leaf)
 {
         if (leaf->il_lock != NULL) {
-                iam_unlock_htree(iam_leaf_container(leaf)->ic_object,
-                                leaf->il_lock);
-                do_corr(schedule());
-                leaf->il_lock = NULL;
+		iam_unlock_htree(iam_leaf_container(leaf),
+				 leaf->il_lock);
+		do_corr(schedule());
+		leaf->il_lock = NULL;
         }
 }
 
@@ -644,25 +646,24 @@ EXPORT_SYMBOL(iam_it_fini);
  * this locking primitives are used to protect parts
  * of dir's htree. protection unit is block: leaf or index
  */
-struct dynlock_handle *iam_lock_htree(struct inode *dir, unsigned long value,
-                                     enum dynlock_type lt)
+static struct dynlock_handle *iam_lock_htree(struct iam_container *ic,
+					     unsigned long value,
+					     enum dynlock_type lt)
 {
-        return dynlock_lock(&LDISKFS_I(dir)->i_htree_lock, value, lt, GFP_NOFS);
+	return dynlock_lock(&ic->ic_tree_lock, value, lt, GFP_NOFS);
 }
-
-
 
 int iam_index_lock(struct iam_path *path, struct dynlock_handle **lh)
 {
         struct iam_frame *f;
 
-        for (f = path->ip_frame; f >= path->ip_frames; --f, ++lh) {
-                do_corr(schedule());
-                *lh = iam_lock_htree(iam_path_obj(path), f->curidx, DLT_READ);
-                if (*lh == NULL)
-                        return -ENOMEM;
-        }
-        return 0;
+	for (f = path->ip_frame; f >= path->ip_frames; --f, ++lh) {
+		do_corr(schedule());
+		*lh = iam_lock_htree(path->ip_container, f->curidx, DLT_READ);
+		if (*lh == NULL)
+			return -ENOMEM;
+	}
+	return 0;
 }
 
 /*
@@ -948,12 +949,13 @@ int iam_lookup_lock(struct iam_path *path,
         dir = iam_path_obj(path);
         while ((result = __iam_path_lookup(path)) == 0) {
                 do_corr(schedule());
-                *dl = iam_lock_htree(dir, path->ip_frame->leaf, lt);
-                if (*dl == NULL) {
-                        iam_path_fini(path);
-                        result = -ENOMEM;
-                        break;
-                }
+		*dl = iam_lock_htree(path->ip_container, path->ip_frame->leaf,
+				     lt);
+		if (*dl == NULL) {
+			iam_path_fini(path);
+			result = -ENOMEM;
+			break;
+		}
                 do_corr(schedule());
                 /*
                  * while locking leaf we just found may get split so we need
@@ -961,7 +963,7 @@ int iam_lookup_lock(struct iam_path *path,
                  */
                 if (iam_check_full_path(path, 1) == 0)
                         break;
-                iam_unlock_htree(dir, *dl);
+		iam_unlock_htree(path->ip_container, *dl);
                 *dl = NULL;
                 iam_path_fini(path);
         }
@@ -1295,15 +1297,16 @@ static inline int iam_index_advance(struct iam_path *path)
         return iam_htree_advance(iam_path_obj(path), 0, path, NULL, 0);
 }
 
-static void iam_unlock_array(struct inode *dir, struct dynlock_handle **lh)
+static void iam_unlock_array(struct iam_container *ic,
+			     struct dynlock_handle **lh)
 {
         int i;
 
         for (i = 0; i < DX_MAX_TREE_HEIGHT; ++i, ++lh) {
-                if (*lh != NULL) {
-                        iam_unlock_htree(dir, *lh);
-                        *lh = NULL;
-                }
+		if (*lh != NULL) {
+			iam_unlock_htree(ic, *lh);
+			*lh = NULL;
+		}
         }
 }
 /*
@@ -1339,7 +1342,7 @@ int iam_index_next(struct iam_container *c, struct iam_path *path)
                         break;
                 }
                 do {
-                        iam_unlock_array(object, lh);
+			iam_unlock_array(c, lh);
 
                         iam_path_release(path);
                         do_corr(schedule());
@@ -1371,13 +1374,13 @@ int iam_index_next(struct iam_container *c, struct iam_path *path)
                                 result = iam_check_full_path(path, 0);
                                 if (result != 0)
                                         break;
-                                iam_unlock_array(object, lh);
+				iam_unlock_array(c, lh);
                         }
                 } while (result == -EAGAIN);
                 if (result < 0)
                         break;
         }
-        iam_unlock_array(object, lh);
+	iam_unlock_array(c, lh);
         return result;
 }
 
@@ -1430,9 +1433,10 @@ int iam_it_next(struct iam_iterator *it)
                         result = iam_index_next(iam_it_container(it), path);
                         assert_corr(iam_leaf_is_locked(leaf));
                         if (result == 1) {
-                                struct dynlock_handle *lh;
-                                lh = iam_lock_htree(obj, path->ip_frame->leaf,
-                                                   DLT_WRITE);
+				struct dynlock_handle *lh;
+				lh = iam_lock_htree(iam_it_container(it),
+						    path->ip_frame->leaf,
+						    DLT_WRITE);
                                 if (lh != NULL) {
                                         iam_leaf_fini(leaf);
                                         leaf->il_lock = lh;
@@ -1602,7 +1606,7 @@ static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
         if (new_leaf != NULL) {
                 struct dynlock_handle *lh;
 
-                lh = iam_lock_htree(obj, blknr, DLT_WRITE);
+		lh = iam_lock_htree(c, blknr, DLT_WRITE);
                 do_corr(schedule());
                 if (lh != NULL) {
                         iam_leaf_ops(leaf)->init_new(c, new_leaf);
@@ -1617,7 +1621,7 @@ static int iam_new_leaf(handle_t *handle, struct iam_leaf *leaf)
                                 leaf->il_lock = lh;
                                 path->ip_frame->leaf = blknr;
                         } else
-                                iam_unlock_htree(obj, lh);
+				iam_unlock_htree(path->ip_container, lh);
                         do_corr(schedule());
                         err = iam_txn_dirty(handle, path, new_leaf);
                         brelse(new_leaf);
@@ -1757,12 +1761,13 @@ int split_index_node(handle_t *handle, struct iam_path *path,
          * Lock all nodes, bottom to top.
          */
         for (frame = path->ip_frame, i = nr_splet; i >= 0; --i, --frame) {
-                do_corr(schedule());
-                lock[i] = iam_lock_htree(dir, frame->curidx, DLT_WRITE);
-                if (lock[i] == NULL) {
-                        err = -ENOMEM;
-                        goto cleanup;
-                }
+		do_corr(schedule());
+		lock[i] = iam_lock_htree(path->ip_container, frame->curidx,
+					 DLT_WRITE);
+		if (lock[i] == NULL) {
+			err = -ENOMEM;
+			goto cleanup;
+		}
         }
 
         /*
@@ -1793,11 +1798,12 @@ int split_index_node(handle_t *handle, struct iam_path *path,
                     descr->id_ops->id_node_init(path->ip_container,
                                                 bh_new[i], 0) != 0)
                         goto cleanup;
-                new_lock[i] = iam_lock_htree(dir, newblock[i], DLT_WRITE);
-                if (new_lock[i] == NULL) {
-                        err = -ENOMEM;
-                        goto cleanup;
-                }
+		new_lock[i] = iam_lock_htree(path->ip_container, newblock[i],
+					     DLT_WRITE);
+		if (new_lock[i] == NULL) {
+			err = -ENOMEM;
+			goto cleanup;
+		}
                 do_corr(schedule());
                 BUFFER_TRACE(frame->bh, "get_write_access");
                 err = ldiskfs_journal_get_write_access(handle, frame->bh);
@@ -1937,8 +1943,8 @@ journal_error:
         ldiskfs_std_error(dir->i_sb, err);
 
 cleanup:
-        iam_unlock_array(dir, lock);
-        iam_unlock_array(dir, new_lock);
+	iam_unlock_array(path->ip_container, lock);
+	iam_unlock_array(path->ip_container, new_lock);
 
         assert_corr(err || iam_frame_is_locked(path, path->ip_frame));
 
@@ -1993,7 +1999,7 @@ static int iam_add_rec(handle_t *handle, struct iam_iterator *it,
                                         err = iam_txn_dirty(handle, path,
                                                             path->ip_frame->bh);
                         }
-                        iam_unlock_htree(iam_path_obj(path), lh);
+			iam_unlock_htree(path->ip_container, lh);
                         do_corr(schedule());
                 }
                 if (err == 0) {
