@@ -65,7 +65,7 @@ cfs_mem_cache_t *capa_cachep = NULL;
 
 #ifdef __KERNEL__
 /* lock for capa hash/capa_list/fo_capa_keys */
-cfs_spinlock_t capa_lock = CFS_SPIN_LOCK_UNLOCKED;
+DEFINE_SPINLOCK(capa_lock);
 
 cfs_list_t capa_list[CAPA_SITE_MAX];
 

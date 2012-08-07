@@ -58,7 +58,7 @@ cfs_atomic_t libcfs_kmemory = {0};
 struct obd_device *obd_devs[MAX_OBD_DEVICES];
 EXPORT_SYMBOL(obd_devs);
 cfs_list_t obd_types;
-cfs_rwlock_t obd_dev_lock = CFS_RW_LOCK_UNLOCKED;
+DEFINE_RWLOCK(obd_dev_lock);
 
 #ifndef __KERNEL__
 __u64 obd_max_pages = 0;

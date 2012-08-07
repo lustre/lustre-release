@@ -60,7 +60,7 @@
 
 /* lock ordering: mds->mds_qonoff_sem > dquot->dq_mutex > lqs->lqs_lock */
 static cfs_list_t lustre_dquot_hash[NR_DQHASH];
-static cfs_rwlock_t dquot_hash_lock = CFS_RW_LOCK_UNLOCKED;
+static DEFINE_RWLOCK(dquot_hash_lock);
 
 cfs_mem_cache_t *lustre_dquot_cachep;
 

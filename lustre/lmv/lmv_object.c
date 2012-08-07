@@ -60,7 +60,7 @@ extern cfs_mem_cache_t *lmv_object_cache;
 extern cfs_atomic_t lmv_object_count;
 
 static CFS_LIST_HEAD(obj_list);
-static cfs_spinlock_t obj_list_lock = CFS_SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(obj_list_lock);
 
 struct lmv_object *lmv_object_alloc(struct obd_device *obd,
                                     const struct lu_fid *fid,

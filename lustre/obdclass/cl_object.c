@@ -540,7 +540,7 @@ static CFS_LIST_HEAD(cl_envs);
 static unsigned cl_envs_cached_nr  = 0;
 static unsigned cl_envs_cached_max = 128; /* XXX: prototype: arbitrary limit
                                            * for now. */
-static cfs_spinlock_t cl_envs_guard = CFS_SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(cl_envs_guard);
 
 struct cl_env {
         void             *ce_magic;

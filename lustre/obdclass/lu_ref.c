@@ -97,7 +97,7 @@ static struct lu_kmem_descr lu_ref_caches[] = {
 static CFS_LIST_HEAD(lu_ref_refs);
 static cfs_spinlock_t lu_ref_refs_guard;
 static struct lu_ref lu_ref_marker = {
-        .lf_guard   = CFS_SPIN_LOCK_UNLOCKED,
+	.lf_guard   = DEFINE_SPINLOCK(lu_ref_marker.lf_guard),
         .lf_list    = CFS_LIST_HEAD_INIT(lu_ref_marker.lf_list),
         .lf_linkage = CFS_LIST_HEAD_INIT(lu_ref_marker.lf_linkage)
 };

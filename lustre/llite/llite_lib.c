@@ -59,7 +59,7 @@
 cfs_mem_cache_t *ll_file_data_slab;
 
 CFS_LIST_HEAD(ll_super_blocks);
-cfs_spinlock_t ll_sb_lock = CFS_SPIN_LOCK_UNLOCKED;
+DEFINE_SPINLOCK(ll_sb_lock);
 
 #ifndef MS_HAS_NEW_AOPS
 extern struct address_space_operations ll_aops;

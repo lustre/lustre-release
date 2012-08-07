@@ -64,7 +64,7 @@
 #include "gss_api.h"
 
 static CFS_LIST_HEAD(registered_mechs);
-static cfs_spinlock_t registered_mechs_lock = CFS_SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(registered_mechs_lock);
 
 int lgss_mech_register(struct gss_api_mech *gm)
 {

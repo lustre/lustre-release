@@ -91,9 +91,8 @@ static CFS_DEFINE_MUTEX(lcw_refcount_mutex);
  * dispatcher.
  */
 /* BH lock! */
-static cfs_spinlock_t lcw_pending_timers_lock = CFS_SPIN_LOCK_UNLOCKED;
-static cfs_list_t lcw_pending_timers = \
-        CFS_LIST_HEAD_INIT(lcw_pending_timers);
+static DEFINE_SPINLOCK(lcw_pending_timers_lock);
+static cfs_list_t lcw_pending_timers = CFS_LIST_HEAD_INIT(lcw_pending_timers);
 
 /* Last time a watchdog expired */
 static cfs_time_t lcw_last_watchdog_time;

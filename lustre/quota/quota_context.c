@@ -69,7 +69,7 @@ unsigned long default_itune_ratio = 50;             /* 50 percentage */
 
 cfs_mem_cache_t *qunit_cachep = NULL;
 cfs_list_t qunit_hash[NR_DQHASH];
-cfs_spinlock_t qunit_hash_lock = CFS_SPIN_LOCK_UNLOCKED;
+DEFINE_SPINLOCK(qunit_hash_lock);
 
 /* please sync qunit_state with qunit_state_names */
 enum qunit_state {
@@ -431,7 +431,7 @@ static struct lustre_qunit *alloc_qunit(struct lustre_quota_ctxt *qctxt,
         qunit->lq_ctxt = qctxt;
         memcpy(&qunit->lq_data, qdata, sizeof(*qdata));
         qunit->lq_opc = opc;
-        qunit->lq_lock = CFS_SPIN_LOCK_UNLOCKED;
+	cfs_spin_lock_init(&qunit->lq_lock);
         QUNIT_SET_STATE_AND_RC(qunit, QUNIT_CREATED, 0);
         qunit->lq_owner = cfs_curproc_pid();
         RETURN(qunit);
@@ -529,7 +529,7 @@ void* quota_barrier(struct lustre_quota_ctxt *qctxt,
         }
 
         CFS_INIT_LIST_HEAD(&qunit->lq_hash);
-        qunit->lq_lock = CFS_SPIN_LOCK_UNLOCKED;
+	cfs_spin_lock_init(&qunit->lq_lock);
         cfs_waitq_init(&qunit->lq_waitq);
         cfs_atomic_set(&qunit->lq_refcnt, 1);
         qunit->lq_ctxt = qctxt;

@@ -588,7 +588,7 @@ static int               pet_refcount = 0;
 static int               pet_state;
 static cfs_waitq_t       pet_waitq;
 CFS_LIST_HEAD(pet_list);
-static cfs_spinlock_t    pet_lock = CFS_SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(pet_lock);
 
 int ping_evictor_wake(struct obd_export *exp)
 {

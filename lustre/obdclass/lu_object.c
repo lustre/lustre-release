@@ -1245,7 +1245,7 @@ enum {
 
 static struct lu_context_key *lu_keys[LU_CONTEXT_KEY_NR] = { NULL, };
 
-static cfs_spinlock_t lu_keys_guard = CFS_SPIN_LOCK_UNLOCKED;
+static DEFINE_SPINLOCK(lu_keys_guard);
 
 /**
  * Global counter incremented whenever key is registered, unregistered,
