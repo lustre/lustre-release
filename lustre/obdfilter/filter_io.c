@@ -657,6 +657,7 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
         obd_size left;
         unsigned long now = jiffies, timediff;
         int rc = 0, i, tot_bytes = 0, cleanup_phase = 0, localreq = 0;
+	int retries = 0;
         ENTRY;
         LASSERT(objcount == 1);
         LASSERT(obj->ioo_bufcnt > 0);
@@ -744,38 +745,55 @@ static int filter_preprw_write(int cmd, struct obd_export *exp, struct obdo *oa,
          * already exist so we can store the reservation handle there. */
         fmd = filter_fmd_find(exp, obj->ioo_id, obj->ioo_seq);
 
-        LASSERT(oa != NULL);
-        cfs_spin_lock(&obd->obd_osfs_lock);
-        filter_grant_incoming(exp, oa);
-        if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
-                oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
-                                 OBD_MD_FLATIME);
-        else
-                obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
-                              OBD_MD_FLMTIME | OBD_MD_FLCTIME);
-        cleanup_phase = 3;
+	LASSERT(oa != NULL);
+retry:
+	cfs_spin_lock(&obd->obd_osfs_lock);
+	if (retries == 0)
+		filter_grant_incoming(exp, oa);
+	if (fmd && fmd->fmd_mactime_xid > oti->oti_xid)
+		oa->o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLCTIME |
+				 OBD_MD_FLATIME);
+	else
+		obdo_to_inode(dentry->d_inode, oa, OBD_MD_FLATIME |
+			      OBD_MD_FLMTIME | OBD_MD_FLCTIME);
+	cleanup_phase = 3;
 
-        left = filter_grant_space_left(exp);
+	left = filter_grant_space_left(exp);
 
-        fso.fso_dentry = dentry;
-        fso.fso_bufcnt = *npages;
+	fso.fso_dentry = dentry;
+	fso.fso_bufcnt = *npages;
 
-        rc = filter_grant_check(exp, oa, objcount, &fso, *npages, res,
-                                &left, dentry->d_inode);
+	rc = filter_grant_check(exp, oa, objcount, &fso, *npages, res,
+				&left, dentry->d_inode);
 
-        /* do not zero out oa->o_valid as it is used in filter_commitrw_write()
-         * for setting UID/GID and fid EA in first write time. */
-        /* If OBD_FL_SHRINK_GRANT is set, the client just returned us some grant
-         * so no sense in allocating it some more. We either return the grant
-         * back to the client if we have plenty of space or we don't return
-         * anything if we are short. This was decided in filter_grant_incoming*/
-        if ((oa->o_valid & OBD_MD_FLGRANT) &&
-            (!(oa->o_valid & OBD_MD_FLFLAGS) ||
-             !(oa->o_flags & OBD_FL_SHRINK_GRANT)))
-                oa->o_grant = filter_grant(exp, oa->o_grant, oa->o_undirty,
-                                           left, 1);
+	/* do not zero out oa->o_valid as it is used in filter_commitrw_write()
+	 * for setting UID/GID and fid EA in first write time. */
+	/* If OBD_FL_SHRINK_GRANT is set, the client just returned us some grant
+	 * so no sense in allocating it some more. We either return the grant
+	 * back to the client if we have plenty of space or we don't return
+	 * anything if we are short. This was decided in filter_grant_incoming*/
+	if ((retries == 0) && (oa->o_valid & OBD_MD_FLGRANT) &&
+	    (!(oa->o_valid & OBD_MD_FLFLAGS) ||
+	     !(oa->o_flags & OBD_FL_SHRINK_GRANT)))
+		oa->o_grant = filter_grant(exp, oa->o_grant, oa->o_undirty,
+					   left, 1);
 
-        cfs_spin_unlock(&obd->obd_osfs_lock);
+	cfs_spin_unlock(&obd->obd_osfs_lock);
+
+	if (rc == -ENOSPC && retries == 0) {
+		void *handle = NULL;
+
+		CDEBUG(D_INODE, "retry after commit pending journals");
+
+		retries = 1;
+		handle = fsfilt_start_log(obd, dentry->d_inode,
+					  FSFILT_OP_SETATTR, NULL, 1);
+		if (handle != NULL) {
+			fsfilt_commit_wait(obd, dentry->d_inode, handle);
+			goto retry;
+		}
+	}
+
         filter_fmd_put(exp, fmd);
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_BRW_PAUSE_BULK2, (obd_timeout + 1) / 4);
