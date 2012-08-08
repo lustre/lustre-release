@@ -809,7 +809,7 @@ static inline void osd_ipd_put(const struct lu_env *env,
 
 int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs);
 int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
-			     loff_t *offs, handle_t *handle);
+			     int write_NUL, loff_t *offs, handle_t *handle);
 
 static inline
 struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,

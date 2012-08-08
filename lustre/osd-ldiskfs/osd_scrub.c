@@ -214,7 +214,7 @@ int osd_scrub_file_store(struct osd_scrub *scrub)
 
 	osd_scrub_file_to_le(&scrub->os_file_disk, &scrub->os_file);
 	rc = osd_ldiskfs_write_record(scrub->os_inode, &scrub->os_file_disk,
-				      len, &pos, jh);
+				      len, 0, &pos, jh);
 	ldiskfs_journal_stop(jh);
 	if (rc != 0)
 		CERROR("%.16s: fail to store scrub file, expected = %d, "
