@@ -65,6 +65,7 @@ CFS_MODULE_PARM(at_extra, "i", int, 0644,
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds(struct ptlrpc_service_part *svcpt);
 static void ptlrpc_hpreq_fini(struct ptlrpc_request *req);
+static void ptlrpc_at_remove_timed(struct ptlrpc_request *req);
 
 static CFS_LIST_HEAD(ptlrpc_all_services);
 cfs_spinlock_t ptlrpc_all_services_lock;
@@ -863,23 +864,15 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
                 return;
 
 	if (req->rq_at_linked) {
-		struct ptlrpc_at_array *array = &svcpt->scp_at_array;
-                __u32 index = req->rq_at_index;
-
 		cfs_spin_lock(&svcpt->scp_at_lock);
-
-                LASSERT(!cfs_list_empty(&req->rq_timed_list));
-                cfs_list_del_init(&req->rq_timed_list);
-                cfs_spin_lock(&req->rq_lock);
-                req->rq_at_linked = 0;
-                cfs_spin_unlock(&req->rq_lock);
-                array->paa_reqs_count[index]--;
-                array->paa_count--;
-
+		/* recheck with lock, in case it's unlinked by
+		 * ptlrpc_at_check_timed() */
+		if (likely(req->rq_at_linked))
+			ptlrpc_at_remove_timed(req);
 		cfs_spin_unlock(&svcpt->scp_at_lock);
-	} else {
-		LASSERT(cfs_list_empty(&req->rq_timed_list));
 	}
+
+	LASSERT(cfs_list_empty(&req->rq_timed_list));
 
         /* finalize request */
         if (req->rq_export) {
@@ -1183,6 +1176,25 @@ static int ptlrpc_at_add_timed(struct ptlrpc_request *req)
 	return 0;
 }
 
+static void
+ptlrpc_at_remove_timed(struct ptlrpc_request *req)
+{
+	struct ptlrpc_at_array *array;
+
+	array = &req->rq_rqbd->rqbd_svcpt->scp_at_array;
+
+	/* NB: must call with hold svcpt::scp_at_lock */
+	LASSERT(!cfs_list_empty(&req->rq_timed_list));
+	cfs_list_del_init(&req->rq_timed_list);
+
+	cfs_spin_lock(&req->rq_lock);
+	req->rq_at_linked = 0;
+	cfs_spin_unlock(&req->rq_lock);
+
+	array->paa_reqs_count[req->rq_at_index]--;
+	array->paa_count--;
+}
+
 static int ptlrpc_at_send_early_reply(struct ptlrpc_request *req)
 {
 	struct ptlrpc_service_part *svcpt = req->rq_rqbd->rqbd_svcpt;
@@ -1366,29 +1378,23 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
                 cfs_list_for_each_entry_safe(rq, n,
                                              &array->paa_reqs_array[index],
                                              rq_timed_list) {
-                        if (rq->rq_deadline <= now + at_early_margin) {
-                                cfs_list_del_init(&rq->rq_timed_list);
-                                /**
-                                 * ptlrpc_server_drop_request() may drop
-                                 * refcount to 0 already. Let's check this and
-                                 * don't add entry to work_list
-                                 */
-                                if (likely(cfs_atomic_inc_not_zero(&rq->rq_refcount)))
-                                        cfs_list_add(&rq->rq_timed_list, &work_list);
-                                counter++;
-                                array->paa_reqs_count[index]--;
-                                array->paa_count--;
-                                cfs_spin_lock(&rq->rq_lock);
-                                rq->rq_at_linked = 0;
-                                cfs_spin_unlock(&rq->rq_lock);
-                                continue;
-                        }
+			if (rq->rq_deadline > now + at_early_margin) {
+				/* update the earliest deadline */
+				if (deadline == -1 ||
+				    rq->rq_deadline < deadline)
+					deadline = rq->rq_deadline;
+				break;
+			}
 
-                        /* update the earliest deadline */
-                        if (deadline == -1 || rq->rq_deadline < deadline)
-                                deadline = rq->rq_deadline;
-
-                        break;
+			ptlrpc_at_remove_timed(rq);
+			/**
+			 * ptlrpc_server_drop_request() may drop
+			 * refcount to 0 already. Let's check this and
+			 * don't add entry to work_list
+			 */
+			if (likely(cfs_atomic_inc_not_zero(&rq->rq_refcount)))
+				cfs_list_add(&rq->rq_timed_list, &work_list);
+			counter++;
                 }
 
                 if (++index >= array->paa_size)
