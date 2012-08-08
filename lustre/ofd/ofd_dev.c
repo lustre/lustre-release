@@ -90,6 +90,12 @@ static int ofd_connect_to_next(const struct lu_env *env, struct ofd_device *m,
 		GOTO(out, rc);
 	}
 
+	m->ofd_dt_dev.dd_lu_dev.ld_site =
+		m->ofd_osd_exp->exp_obd->obd_lu_dev->ld_site;
+	LASSERT(m->ofd_dt_dev.dd_lu_dev.ld_site);
+	m->ofd_osd = lu2dt_dev(m->ofd_osd_exp->exp_obd->obd_lu_dev);
+	m->ofd_dt_dev.dd_lu_dev.ld_site->ls_top_dev = &m->ofd_dt_dev.dd_lu_dev;
+
 out:
 	if (data)
 		OBD_FREE_PTR(data);
@@ -99,7 +105,6 @@ out:
 static int ofd_stack_init(const struct lu_env *env,
 			  struct ofd_device *m, struct lustre_cfg *cfg)
 {
-	struct lu_device	*ofd_lu = &m->ofd_dt_dev.dd_lu_dev;
 	const char		*dev = lustre_cfg_string(cfg, 0);
 	struct lu_device	*d;
 	struct ofd_thread_info	*info = ofd_info(env);
@@ -129,9 +134,6 @@ static int ofd_stack_init(const struct lu_env *env,
 	d = m->ofd_osd_exp->exp_obd->obd_lu_dev;
 	LASSERT(d);
 	m->ofd_osd = lu2dt_dev(d);
-
-	LASSERT(ofd_lu->ld_site);
-	d->ld_site = ofd_lu->ld_site;
 
 	snprintf(info->fti_u.name, sizeof(info->fti_u.name),
 		 "%s-osd", lustre_cfg_string(cfg, 0));
@@ -491,15 +493,10 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	if (info == NULL)
 		RETURN(-EFAULT);
 
-	rc = lu_site_init(&m->ofd_site, &m->ofd_dt_dev.dd_lu_dev);
-	if (rc)
-		GOTO(err_fini_proc, rc);
-	m->ofd_site.ls_top_dev = &m->ofd_dt_dev.dd_lu_dev;
-
 	rc = ofd_stack_init(env, m, cfg);
 	if (rc) {
 		CERROR("Can't init device stack, rc %d\n", rc);
-		GOTO(err_lu_site, rc);
+		GOTO(err_fini_proc, rc);
 	}
 
 	/* populate cached statfs data */
@@ -556,14 +553,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	target_recovery_init(&m->ofd_lut, ost_handle);
 
-	rc = lu_site_init_finish(&m->ofd_site);
-	if (rc)
-		GOTO(err_fs_cleanup, rc);
-
 	RETURN(0);
-err_fs_cleanup:
-	target_recovery_fini(obd);
-	ofd_fs_cleanup(env, m);
 err_fini_lut:
 	lut_fini(env, &m->ofd_lut);
 err_free_ns:
@@ -571,8 +561,6 @@ err_free_ns:
 	obd->obd_namespace = m->ofd_namespace = NULL;
 err_fini_stack:
 	ofd_stack_fini(env, m, &m->ofd_osd->dd_lu_dev);
-err_lu_site:
-	lu_site_fini(&m->ofd_site);
 err_fini_proc:
 	ofd_procfs_fini(m);
 	return rc;
@@ -600,7 +588,6 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	}
 
 	ofd_stack_fini(env, m, &m->ofd_dt_dev.dd_lu_dev);
-	lu_site_fini(&m->ofd_site);
 	ofd_procfs_fini(m);
 	LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
 	server_put_mount(obd->obd_name, NULL);

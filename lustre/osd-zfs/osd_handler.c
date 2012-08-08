@@ -522,6 +522,14 @@ static int osd_mount(const struct lu_env *env,
 	if (rc)
 		GOTO(err, rc);
 
+	rc = lu_site_init(&o->od_site, osd2lu_dev(o));
+	if (rc)
+		GOTO(err, rc);
+
+	rc = lu_site_init_finish(&o->od_site);
+	if (rc)
+		GOTO(err, rc);
+
 	/* Use our own ZAP for inode accounting by default, this can be changed
 	 * via procfs to estimate the inode usage from the block usage */
 	o->od_quota_iused_est = 0;
@@ -619,9 +627,13 @@ static struct lu_device *osd_device_free(const struct lu_env *env,
 
 	cleanup_capa_hash(o->od_capa_hash);
 	/* XXX: make osd top device in order to release reference */
-	/*d->ld_site->ls_top_dev = d;
+	d->ld_site->ls_top_dev = d;
 	lu_site_purge(env, d->ld_site, -1);
-	lu_site_fini(&o->od_site);*/
+	if (!cfs_hash_is_empty(d->ld_site->ls_obj_hash)) {
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		lu_site_print(env, d->ld_site, &msgdata, lu_cdebug_printer);
+	}
+	lu_site_fini(&o->od_site);
 	dt_device_fini(&o->od_dt_dev);
 	OBD_FREE_PTR(o);
 

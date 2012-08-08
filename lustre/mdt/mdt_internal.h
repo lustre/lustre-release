@@ -98,6 +98,7 @@ struct mdt_file_data {
 struct mdt_device {
         /* super-class */
         struct md_device           mdt_md_dev;
+	struct md_site		   mdt_mite;
         struct ptlrpc_service     *mdt_regular_service;
         struct ptlrpc_service     *mdt_readpage_service;
         struct ptlrpc_service     *mdt_xmds_service;
@@ -467,9 +468,9 @@ static inline struct lu_site *mdt_lu_site(const struct mdt_device *mdt)
         return mdt->mdt_md_dev.md_lu_dev.ld_site;
 }
 
-static inline struct md_site *mdt_md_site(const struct mdt_device *mdt)
+static inline struct md_site *mdt_md_site(struct mdt_device *mdt)
 {
-        return lu_site2md(mdt_lu_site(mdt));
+	return &mdt->mdt_mite;
 }
 
 static inline void mdt_export_evict(struct obd_export *exp)

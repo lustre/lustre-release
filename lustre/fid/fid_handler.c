@@ -203,7 +203,7 @@ static int range_alloc_set(const struct lu_env *env,
 
         if (range_is_exhausted(loset)) {
                 /* reached high water mark. */
-                struct lu_device *dev = seq->lss_site->ms_lu.ls_top_dev;
+		struct lu_device *dev = seq->lss_site->ms_lu->ls_top_dev;
                 int obd_num_clients = dev->ld_obd->obd_num_exports;
                 __u64 set_sz;
 

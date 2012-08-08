@@ -143,8 +143,6 @@ struct ofd_device {
 				 /* shall we grant space to clients not
 				  * supporting OBD_CONNECT_GRANT_PARAM? */
 				 ofd_grant_compat_disable:1;
-
-	struct lu_site		 ofd_site;
 };
 
 static inline struct ofd_device *ofd_dev(struct lu_device *d)

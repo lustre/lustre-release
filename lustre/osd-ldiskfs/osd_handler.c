@@ -4497,12 +4497,22 @@ static int osd_device_init0(const struct lu_env *env,
 			GOTO(out_mnt, rc);
 	}
 
+	rc = lu_site_init(&o->od_site, l);
+	if (rc)
+		GOTO(out_compat, rc);
+
+	rc = lu_site_init_finish(&o->od_site);
+	if (rc)
+		GOTO(out_compat, rc);
+
 	rc = osd_procfs_init(o, o->od_svname);
 	if (rc != 0) {
 		CERROR("%s: can't initialize procfs: rc = %d\n",
 		       o->od_svname, rc);
 		GOTO(out_compat, rc);
 	}
+
+	LASSERT(l->ld_site->ls_linkage.next && l->ld_site->ls_linkage.prev);
 
 	RETURN(0);
 out_compat:
@@ -4549,6 +4559,14 @@ static struct lu_device *osd_device_free(const struct lu_env *env,
         ENTRY;
 
         cleanup_capa_hash(o->od_capa_hash);
+	/* XXX: make osd top device in order to release reference */
+	d->ld_site->ls_top_dev = d;
+	lu_site_purge(env, d->ld_site, -1);
+	if (!cfs_hash_is_empty(d->ld_site->ls_obj_hash)) {
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		lu_site_print(env, d->ld_site, &msgdata, lu_cdebug_printer);
+	}
+	lu_site_fini(&o->od_site);
         dt_device_fini(&o->od_dt_dev);
         OBD_FREE_PTR(o);
         RETURN(NULL);

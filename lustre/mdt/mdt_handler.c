@@ -4487,7 +4487,13 @@ static int mdt_stack_init(struct lu_env *env,
 	tmp = m->mdt_bottom_exp->exp_obd->obd_lu_dev;
 	LASSERT(tmp);
 	m->mdt_bottom = lu2dt_dev(tmp);
-	tmp->ld_site = d->ld_site;
+
+	/* initialize site's pointers: md_site, top device */
+	d->ld_site = tmp->ld_site;
+	d->ld_site->ls_top_dev = d;
+	m->mdt_mite.ms_lu = tmp->ld_site;
+	tmp->ld_site->ld_md_site = &m->mdt_mite;
+	LASSERT(d->ld_site);
 	d = tmp;
 
         tmp = mdt_layer_setup(env, LUSTRE_MDD_NAME, d, cfg);
@@ -4585,7 +4591,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 {
         struct md_device  *next = m->mdt_child;
         struct lu_device  *d    = &m->mdt_md_dev.md_lu_dev;
-        struct lu_site    *ls   = d->ld_site;
         struct obd_device *obd = mdt2obd_dev(m);
         ENTRY;
 
@@ -4636,14 +4641,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
          */
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
-        if (ls) {
-                struct md_site *mite;
-
-                lu_site_fini(ls);
-                mite = lu_site2md(ls);
-                OBD_FREE_PTR(mite);
-                d->ld_site = NULL;
-        }
         LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
 
 	server_put_mount(mdt2obd_dev(m)->obd_name, NULL);
@@ -4754,25 +4751,23 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         m->mdt_nosquash_strlen = 0;
         cfs_init_rwsem(&m->mdt_squash_sem);
 
-        OBD_ALLOC_PTR(mite);
-        if (mite == NULL)
-                GOTO(err_lmi, rc = -ENOMEM);
-
-        s = &mite->ms_lu;
-
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
         m->mdt_md_dev.md_lu_dev.ld_obd = obd;
         /* set this lu_device to obd, because error handling need it */
         obd->obd_lu_dev = &m->mdt_md_dev.md_lu_dev;
 
-        rc = lu_site_init(s, &m->mdt_md_dev.md_lu_dev);
-        if (rc) {
-                CERROR("Can't init lu_site, rc %d\n", rc);
-                GOTO(err_free_site, rc);
-        }
+	/* init the stack */
+	rc = mdt_stack_init((struct lu_env *)env, m, cfg, lmi);
+	if (rc) {
+		CERROR("Can't init device stack, rc %d\n", rc);
+		RETURN(rc);
+	}
+
+	s = m->mdt_md_dev.md_lu_dev.ld_site;
+	mite = &m->mdt_mite;
 
         /* set server index */
-        lu_site2md(s)->ms_node_id = node_id;
+	mite->ms_node_id = node_id;
 
         /* failover is the default
          * FIXME: we do not failout mds0/mgs, which may cause some problems.
@@ -4788,13 +4783,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                         CWARN("%s: recovery disabled\n", obd->obd_name);
                         obd->obd_replayable = 0;
                 }
-        }
-
-        /* init the stack */
-        rc = mdt_stack_init((struct lu_env *)env, m, cfg, lmi);
-        if (rc) {
-                CERROR("Can't init device stack, rc %d\n", rc);
-                GOTO(err_lu_site, rc);
         }
 
         rc = lut_init(env, &m->mdt_lut, obd, m->mdt_bottom);
@@ -4891,10 +4879,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         ping_evictor_start();
 
-        rc = lu_site_init_finish(s);
-        if (rc)
-                GOTO(err_stop_service, rc);
-
         if (obd->obd_recovering == 0)
                 mdt_postrecov(env, m);
 
@@ -4908,7 +4892,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         RETURN(0);
 
-err_stop_service:
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
 err_procfs:
@@ -4940,10 +4923,6 @@ err_lut:
         lut_fini(env, &m->mdt_lut);
 err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
-err_lu_site:
-        lu_site_fini(s);
-err_free_site:
-        OBD_FREE_PTR(mite);
 err_lmi:
 	if (lmi)
 		server_put_mount(dev, lmi->lmi_mnt);

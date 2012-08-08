@@ -287,6 +287,7 @@ struct osd_device {
 
         struct fsfilt_operations *od_fsops;
 	int			  od_connects;
+	struct lu_site		  od_site;
 
         /*
          * mapping for legacy OST objids

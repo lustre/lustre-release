@@ -1213,15 +1213,6 @@ void lu_stack_fini(const struct lu_env *env, struct lu_device *top)
         /* purge again. */
         lu_site_purge(env, site, ~0);
 
-        if (!cfs_hash_is_empty(site->ls_obj_hash)) {
-                /*
-                 * Uh-oh, objects still exist.
-                 */
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
-
-                lu_site_print(env, site, &msgdata, lu_cdebug_printer);
-        }
-
         for (scan = top; scan != NULL; scan = next) {
                 const struct lu_device_type *ldt = scan->ld_type;
                 struct obd_type             *type;

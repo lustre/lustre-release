@@ -644,6 +644,10 @@ struct lu_site {
          */
         struct lprocfs_stats     *ls_stats;
         struct lprocfs_stats     *ls_time_stats;
+	/**
+	 * XXX: a hack! fld has to find md_site via site, remove when possible
+	 */
+	struct md_site           *ld_md_site;
 };
 
 static inline struct lu_site_bkt_data *

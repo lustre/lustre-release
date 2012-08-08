@@ -527,7 +527,7 @@ struct md_object {
  * md-server site.
  */
 struct md_site {
-        struct lu_site ms_lu;
+	struct lu_site	     *ms_lu;
         /**
          * mds number of this site.
          */
@@ -590,7 +590,7 @@ static inline struct md_device *md_obj2dev(const struct md_object *o)
 
 static inline struct md_site *lu_site2md(const struct lu_site *s)
 {
-        return container_of0(s, struct md_site, ms_lu);
+	return s->ld_md_site;
 }
 
 static inline int md_device_init(struct md_device *md, struct lu_device_type *t)
