@@ -119,11 +119,10 @@ struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
 
 void mdd_buf_put(struct lu_buf *buf)
 {
-        if (buf == NULL || buf->lb_buf == NULL)
-                return;
-        OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
-        buf->lb_buf = NULL;
-        buf->lb_len = 0;
+	if (buf == NULL || buf->lb_buf == NULL)
+		return;
+	OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
+	*buf = LU_BUF_NULL;
 }
 
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
@@ -139,19 +138,19 @@ const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
 
 struct lu_buf *mdd_buf_alloc(const struct lu_env *env, ssize_t len)
 {
-        struct lu_buf *buf = &mdd_env_info(env)->mti_big_buf;
+	struct lu_buf *buf = &mdd_env_info(env)->mti_big_buf;
 
-        if ((len > buf->lb_len) && (buf->lb_buf != NULL)) {
-                OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
-                buf->lb_buf = NULL;
-        }
-        if (buf->lb_buf == NULL) {
-                buf->lb_len = len;
-                OBD_ALLOC_LARGE(buf->lb_buf, buf->lb_len);
-                if (buf->lb_buf == NULL)
-                        buf->lb_len = 0;
-        }
-        return buf;
+	if ((len > buf->lb_len) && (buf->lb_buf != NULL)) {
+		OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
+		*buf = LU_BUF_NULL;
+	}
+	if (memcmp(buf, &LU_BUF_NULL, sizeof(*buf)) == 0) {
+		buf->lb_len = len;
+		OBD_ALLOC_LARGE(buf->lb_buf, buf->lb_len);
+		if (buf->lb_buf == NULL)
+			*buf = LU_BUF_NULL;
+	}
+	return buf;
 }
 
 /** Increase the size of the \a mti_big_buf.

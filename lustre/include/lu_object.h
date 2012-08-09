@@ -1306,7 +1306,7 @@ struct lu_buf {
 /** null buffer */
 extern struct lu_buf LU_BUF_NULL;
 
-#define DLUBUF "(%p %z)"
+#define DLUBUF "(%p %zu)"
 #define PLUBUF(buf) (buf)->lb_buf, (buf)->lb_len
 /**
  * One-time initializers, called at obdclass module initialization, not
