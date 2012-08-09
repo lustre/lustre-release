@@ -1713,6 +1713,18 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
+# 2.6.38 export simple_setattr
+#
+AC_DEFUN([LC_EXPORT_SIMPLE_SETATTR],
+[LB_CHECK_SYMBOL_EXPORT([simple_setattr],
+[fs/libfs.c],[
+AC_DEFINE(HAVE_SIMPLE_SETATTR, 1,
+            [simple_setattr is exported by the kernel])
+],[
+])
+])
+
+#
 # 2.6.39 remove unplug_fn from request_queue.
 #
 AC_DEFUN([LC_REQUEST_QUEUE_UNPLUG_FN],
@@ -1782,14 +1794,42 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# 2.6.38 export simple_setattr
+# 3.1.1 has ext4_blocks_for_truncate
 #
-AC_DEFUN([LC_EXPORT_SIMPLE_SETATTR],
-[LB_CHECK_SYMBOL_EXPORT([simple_setattr],
-[fs/libfs.c],[
-AC_DEFINE(HAVE_SIMPLE_SETATTR, 1,
-            [simple_setattr is exported by the kernel])
+AC_DEFUN([LC_BLOCKS_FOR_TRUNCATE],
+[AC_MSG_CHECKING([if kernel has ext4_blocks_for_truncate])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	#include "$LINUX/fs/ext4/ext4_jbd2.h"
+	#include "$LINUX/fs/ext4/truncate.h"
 ],[
+	ext4_blocks_for_truncate(NULL);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_BLOCKS_FOR_TRUNCATE, 1,
+		  [kernel has ext4_blocks_for_truncate])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
+# 3.1 renames lock-manager ops(lock_manager_operations) from fl_xxx to lm_xxx
+# see kernel commit 8fb47a4fbf858a164e973b8ea8ef5e83e61f2e50
+#
+AC_DEFUN([LC_LM_XXX_LOCK_MANAGER_OPS],
+[AC_MSG_CHECKING([if lock-manager ops renamed to lm_xxx])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct lock_manager_operations lm_ops;
+	lm_ops.lm_compare_owner = NULL;
+],[
+	AC_DEFINE(HAVE_LM_XXX_LOCK_MANAGER_OPS, 1,
+		  [lock-manager ops renamed to lm_xxx])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
 ])
 ])
 
@@ -1826,26 +1866,6 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_MIGRATEPAGE_4ARGS, 1,
 		[address_space_operations.migratepage has 4 args])
 	AC_MSG_RESULT([yes])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-#
-# 3.1.1 has ext4_blocks_for_truncate
-#
-AC_DEFUN([LC_BLOCKS_FOR_TRUNCATE],
-[AC_MSG_CHECKING([if kernel has ext4_blocks_for_truncate])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/fs.h>
-	#include "$LINUX/fs/ext4/ext4_jbd2.h"
-	#include "$LINUX/fs/ext4/truncate.h"
-],[
-	ext4_blocks_for_truncate(NULL);
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_BLOCKS_FOR_TRUNCATE, 1,
-		  [kernel has ext4_blocks_for_truncate])
 ],[
 	AC_MSG_RESULT([no])
 ])
@@ -1991,14 +2011,17 @@ AC_DEFUN([LC_PROG_LINUX],
 
          # 2.6.39
          LC_REQUEST_QUEUE_UNPLUG_FN
-	LC_HAVE_FSTYPE_MOUNT
-
-	# 3.3
-	LC_HAVE_MIGRATE_HEADER
-	LC_MIGRATEPAGE_4ARGS
+	 LC_HAVE_FSTYPE_MOUNT
 
 	 # 3.1.1
 	 LC_BLOCKS_FOR_TRUNCATE
+
+	 # 3.1
+	 LC_LM_XXX_LOCK_MANAGER_OPS
+
+	 # 3.3
+	 LC_HAVE_MIGRATE_HEADER
+	 LC_MIGRATEPAGE_4ARGS
 
          #
          if test x$enable_server = xyes ; then

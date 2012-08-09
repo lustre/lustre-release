@@ -758,5 +758,9 @@ static inline bool selinux_is_enabled(void)
 }
 #endif
 
+#ifndef HAVE_LM_XXX_LOCK_MANAGER_OPS
+# define lm_compare_owner	fl_compare_owner
+#endif
+
 #endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */
