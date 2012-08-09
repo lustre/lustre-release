@@ -166,6 +166,7 @@ struct mgs_device {
 	cfs_list_t			 mgs_fs_db_list;
 	cfs_spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
 	cfs_proc_dir_entry_t		*mgs_proc_live;
+	cfs_proc_dir_entry_t		*mgs_proc_mntdev;
 	cfs_time_t			 mgs_start_time;
 	struct obd_device		*mgs_obd;
 	struct local_oid_storage	*mgs_los;
@@ -237,7 +238,7 @@ int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *m);
 
 #define strsuf(buf, suffix) (strcmp((buf)+strlen(buf)-strlen(suffix), (suffix)))
 #ifdef LPROCFS
-int lproc_mgs_setup(struct mgs_device *mgs);
+int lproc_mgs_setup(struct mgs_device *mgs, char *osd_name);
 int lproc_mgs_cleanup(struct mgs_device *mgs);
 int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb);
 int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb);

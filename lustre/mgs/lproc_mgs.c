@@ -45,24 +45,6 @@
 
 #ifdef LPROCFS
 
-static int lprocfs_mgs_rd_mntdev(char *page, char **start, off_t off, int count,
-                                 int *eof, void *data)
-{
-	struct obd_device *obd = (struct obd_device *)data;
-
-	LASSERT(obd != NULL);
-#if 0
-	/* will be fixed in the subsequent patch */
-	LASSERT(mnt_get_devname(obd->u.mgs.mgs_vfsmnt));
-	*eof = 1;
-
-	return snprintf(page, count, "%s\n",
-			mnt_get_devname(obd->u.mgs.mgs_vfsmnt));
-#else
-	return 0;
-#endif
-}
-
 static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 {
         struct obd_device *obd = seq->private;
@@ -163,10 +145,13 @@ out:
 
 LPROC_SEQ_FOPS_RO(mgsself_srpc);
 
-int lproc_mgs_setup(struct mgs_device *mgs)
+int lproc_mgs_setup(struct mgs_device *mgs, char *osd_name)
 {
 	struct obd_device *obd = mgs->mgs_obd;
-        int rc;
+	struct obd_device *osd_obd = mgs->mgs_bottom->dd_lu_dev.ld_obd;
+	int		   osd_suffix = strlen(osd_name) - strlen("-osd");
+	char		   c = osd_name[osd_suffix];
+	int		   rc;
 
         rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
                                     &mgs_fs_fops, obd);
@@ -190,7 +175,17 @@ int lproc_mgs_setup(struct mgs_device *mgs)
                 obd->obd_proc_exports_entry = NULL;
         }
 
-        return rc;
+	osd_name[osd_suffix] = '\0'; /* Remove the "-osd" suffix. */
+	mgs->mgs_proc_mntdev = lprocfs_add_symlink("mntdev",
+						   obd->obd_proc_entry,
+						   "../../%s/%s/mntdev",
+						   osd_obd->obd_type->typ_name,
+						   osd_name);
+	osd_name[osd_suffix] = c;
+	if (mgs->mgs_proc_mntdev == NULL)
+		rc = -ENOMEM;
+
+	return rc;
 }
 
 int lproc_mgs_cleanup(struct mgs_device *mgs)
@@ -200,6 +195,8 @@ int lproc_mgs_cleanup(struct mgs_device *mgs)
         if (!obd)
                 return -EINVAL;
 
+	if (mgs->mgs_proc_mntdev)
+		lprocfs_remove(&mgs->mgs_proc_mntdev);
         if (mgs->mgs_proc_live) {
                 /* Should be no live entries */
                 LASSERT(mgs->mgs_proc_live->subdir == NULL);
@@ -287,7 +284,6 @@ int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "fstype",          lprocfs_rd_fstype,      0, 0 },
-        { "mntdev",          lprocfs_mgs_rd_mntdev,  0, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
         { "hash_stats",      lprocfs_obd_rd_hash,    0, 0 },
         { "evict_client",    0, lprocfs_wr_evict_client, 0 },
