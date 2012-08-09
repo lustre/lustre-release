@@ -130,10 +130,7 @@ struct mgs_fsdb_handler_data
 /* from the (client) config log, figure out:
         1. which ost's/mdt's are configured (by index)
         2. what the last config step is
-        3. COMPAT_146 lov name
-        4. COMPAT_146 mdt lov name
-        5. COMPAT_146 mdc name
-        6. COMPAT_18 osc name
+	3. COMPAT_18 osc name
 */
 /* It might be better to have a separate db file, instead of parsing the info
    out of the client log.  This is slow and potentially error-prone. */
@@ -194,45 +191,14 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
                 fsdb->fsdb_mdt_count ++;
         }
 
-        /* COMPAT_146 */
-        /* figure out the old LOV name. fsdb_gen = 0 means old log */
-        /* #01 L attach 0:lov_mdsA 1:lov 2:cdbe9_lov_mdsA_dc8cf7f3bb */
-        if ((fsdb->fsdb_gen == 0) && (lcfg->lcfg_command == LCFG_ATTACH) &&
-            (strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_LOV_NAME) == 0)) {
-                cfs_set_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags);
-                name_destroy(&fsdb->fsdb_clilov);
-                rc = name_create(&fsdb->fsdb_clilov,
-                                 lustre_cfg_string(lcfg, 0), "");
-                if (rc)
-                        RETURN(rc);
-                CDEBUG(D_MGS, "client lov name is %s\n", fsdb->fsdb_clilov);
-        }
-
-        /* figure out the old MDT lov name from the MDT uuid */
-        if ((fsdb->fsdb_gen == 0) && (lcfg->lcfg_command == LCFG_SETUP) &&
-            (strncmp(lustre_cfg_string(lcfg, 0), "MDC_", 4) == 0)) {
-                char *ptr;
-                cfs_set_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags);
-                ptr = strstr(lustre_cfg_string(lcfg, 1), "_UUID");
-                if (!ptr) {
-                        CERROR("Can't parse MDT uuid %s\n",
-                               lustre_cfg_string(lcfg, 1));
-                        RETURN(-EINVAL);
-                }
-                *ptr = '\0';
-                name_destroy(&fsdb->fsdb_mdtlov);
-                rc = name_create(&fsdb->fsdb_mdtlov,
-                                 "lov_", lustre_cfg_string(lcfg, 1));
-                if (rc)
-                        RETURN(rc);
-                name_destroy(&fsdb->fsdb_mdc);
-                rc = name_create(&fsdb->fsdb_mdc,
-                                 lustre_cfg_string(lcfg, 0), "");
-                if (rc)
-                        RETURN(rc);
-                CDEBUG(D_MGS, "MDT lov name is %s\n", fsdb->fsdb_mdtlov);
-        }
-        /* end COMPAT_146 */
+	/**
+	 * figure out the old config. fsdb_gen = 0 means old log
+	 * It is obsoleted and not supported anymore
+	 */
+	if (fsdb->fsdb_gen == 0) {
+		CERROR("Old config format is not supported\n");
+		RETURN(-EINVAL);
+	}
 
         /*
          * compat to 1.8, check osc name used by MDT0 to OSTs, bz18548.
@@ -361,6 +327,7 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
         strcpy(fsdb->fsdb_name, fsname);
         cfs_mutex_init(&fsdb->fsdb_mutex);
         cfs_set_bit(FSDB_UDESC, &fsdb->fsdb_flags);
+	fsdb->fsdb_gen = 1;
 
         if (strcmp(fsname, MGSSELF_NAME) == 0) {
                 cfs_set_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags);
@@ -372,12 +339,6 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
 			GOTO(err, rc = -ENOMEM);
                 }
 
-                rc = name_create(&fsdb->fsdb_mdtlov, fsname, "-mdtlov");
-                if (rc)
-                        GOTO(err, rc);
-                rc = name_create(&fsdb->fsdb_mdtlmv, fsname, "-mdtlmv");
-                if (rc)
-                        GOTO(err, rc);
                 rc = name_create(&fsdb->fsdb_clilov, fsname, "-clilov");
                 if (rc)
                         GOTO(err, rc);
@@ -401,8 +362,6 @@ err:
                 OBD_FREE(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
         name_destroy(&fsdb->fsdb_clilov);
         name_destroy(&fsdb->fsdb_clilmv);
-        name_destroy(&fsdb->fsdb_mdtlov);
-        name_destroy(&fsdb->fsdb_mdtlmv);
         OBD_FREE_PTR(fsdb);
         RETURN(NULL);
 }
@@ -423,9 +382,6 @@ static void mgs_free_fsdb(struct mgs_device *mgs, struct fs_db *fsdb)
                 OBD_FREE(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
         name_destroy(&fsdb->fsdb_clilov);
         name_destroy(&fsdb->fsdb_clilmv);
-        name_destroy(&fsdb->fsdb_mdtlov);
-        name_destroy(&fsdb->fsdb_mdtlmv);
-        name_destroy(&fsdb->fsdb_mdc);
         mgs_free_fsdb_srpc(fsdb);
         cfs_mutex_unlock(&fsdb->fsdb_mutex);
         OBD_FREE_PTR(fsdb);
@@ -1766,22 +1722,6 @@ static int mgs_write_log_mdt(const struct lu_env *env,
 
         CDEBUG(D_MGS, "writing new mdt %s\n", mti->mti_svname);
 
-#if 0
-        /* COMPAT_146 */
-        if (mti->mti_flags & LDD_F_UPGRADE14) {
-                /* We're starting with an old uuid.  Assume old name for lov
-                   as well since the lov entry already exists in the log. */
-                CDEBUG(D_MGS, "old mds uuid %s\n", mti->mti_uuid);
-                if (strncmp(mti->mti_uuid, fsdb->fsdb_mdtlov + 4,
-                            strlen(fsdb->fsdb_mdtlov) - 4) != 0) {
-                        CERROR("old mds uuid %s doesn't match log %s (%s)\n",
-                               mti->mti_uuid, fsdb->fsdb_mdtlov,
-                               fsdb->fsdb_mdtlov + 4);
-                        RETURN(-EINVAL);
-                }
-        }
-        /* end COMPAT_146 */
-#endif
         if (mti->mti_uuid[0] == '\0') {
                 /* Make up our own uuid */
                 snprintf(mti->mti_uuid, sizeof(mti->mti_uuid),
@@ -1818,30 +1758,6 @@ static int mgs_write_log_mdt(const struct lu_env *env,
         #14 L mount_option 0:  1:client  2:lov1  3:MDC_uml1_mdsA_MNT_client
         */
 
-#if 0
-        /* COMPAT_146 */
-        if (mti->mti_flags & LDD_F_UPGRADE14) {
-                rc = record_start_log(obd, &llh, cliname);
-                if (rc)
-                        GOTO(out, rc);
-
-                rc = record_marker(obd, llh, fsdb, CM_START,
-                                   mti->mti_svname,"add mdc");
-
-                /* Old client log already has MDC entry, but needs mount opt
-                   for new client name (lustre-client) */
-                /* FIXME Old MDT log already has an old mount opt
-                   which we should remove (currently handled by
-                   class_del_profiles()) */
-                rc = record_mount_opt(obd, llh, cliname, fsdb->fsdb_clilov,
-                                      fsdb->fsdb_mdc);
-                /* end COMPAT_146 */
-
-                rc = record_marker(obd, llh, fsdb, CM_END,
-                                   mti->mti_svname, "add mdc");
-        } else
-#endif
-        {
                 /* copy client info about lov/lmv */
 		mgi->mgi_comp.comp_mti = mti;
 		mgi->mgi_comp.comp_fsdb = fsdb;
@@ -1870,7 +1786,6 @@ static int mgs_write_log_mdt(const struct lu_env *env,
 			GOTO(out_end, rc);
 		rc = record_marker(env, llh, fsdb, CM_END, cliname,
                                    "mount opts");
-	}
 
 	if (rc)
 		GOTO(out_end, rc);
@@ -2909,36 +2824,26 @@ static int mgs_write_log_param(const struct lu_env *env,
             (class_match_param(ptr, PARAM_MDC, NULL) == 0) ||
             (class_match_param(ptr, PARAM_LLITE, NULL) == 0)) {
                 char *cname;
-                if (memcmp(ptr, PARAM_LLITE, strlen(PARAM_LLITE)) == 0) {
-                        name_create(&cname, mti->mti_fsname, "-client");
-                        /* Add the client type to match the obdname in
-                           class_config_llog_handler */
-                } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
-                        /* COMPAT_146 */
-                        if (fsdb->fsdb_mdc)
-                                name_create(&cname, fsdb->fsdb_mdc, "");
-                        else
-                                name_create(&cname, mti->mti_svname,
-                                            "-mdc");
-                } else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
-                        /* COMPAT_146 */
-                        if (cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
-                                LCONSOLE_ERROR_MSG(0x148, "Upgraded "
-                                                   "client logs for %s"
-                                                   " cannot be "
-                                                   "modified. Consider"
-                                                   " updating the "
-                                                   "configuration with"
-                                                   " --writeconf\n",
-                                                   mti->mti_svname);
-                                /* We don't know the names of all the
-                                   old oscs*/
-                                GOTO(end, rc = -EINVAL);
-                        }
-                        name_create(&cname, mti->mti_svname, "-osc");
-                } else {
-                        GOTO(end, rc = -EINVAL);
-                }
+
+		if (cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
+			LCONSOLE_ERROR_MSG(0x148, "Upgraded client logs for %s"
+					   " cannot be modified. Consider"
+					   " updating the configuration with"
+					   " --writeconf\n",
+					   mti->mti_svname);
+			GOTO(end, rc = -EINVAL);
+		}
+		if (memcmp(ptr, PARAM_LLITE, strlen(PARAM_LLITE)) == 0) {
+			rc = name_create(&cname, mti->mti_fsname, "-client");
+			/* Add the client type to match the obdname in
+			   class_config_llog_handler */
+		} else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
+			rc = name_create(&cname, mti->mti_svname, "-mdc");
+		} else if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
+			rc = name_create(&cname, mti->mti_svname, "-osc");
+		} else {
+			GOTO(end, rc = -EINVAL);
+		}
 		if (rc)
 			GOTO(end, rc);
 
@@ -3097,38 +3002,16 @@ int mgs_write_log_target(const struct lu_env *env,
                 RETURN(rc);
         }
 
-        /* COMPAT_146 */
-        if (mti->mti_flags & LDD_F_UPGRADE14) {
-                if (rc == EALREADY) {
-                        LCONSOLE_INFO("Found index %d for %s 1.4 log, "
-                                      "upgrading\n", mti->mti_stripe_index,
-                                      mti->mti_svname);
-                } else {
-                        LCONSOLE_ERROR_MSG(0x149, "Failed to find %s in the old"
-                                           " client log. Apparently it is not "
-                                           "part of this filesystem, or the old"
-                                           " log is wrong.\nUse 'writeconf' on "
-                                           "the MDT to force log regeneration."
-                                           "\n", mti->mti_svname);
-                        /* Not in client log?  Upgrade anyhow...*/
-                        /* Argument against upgrading: reformat MDT,
-                           upgrade OST, then OST will start but will be SKIPped
-                           in client logs.  Maybe error now is better. */
-                        /* RETURN(-EINVAL); */
-                }
-                /* end COMPAT_146 */
-        } else {
-                if (rc == EALREADY) {
-                        LCONSOLE_WARN("Found index %d for %s, updating log\n",
-                                      mti->mti_stripe_index, mti->mti_svname);
-                        /* We would like to mark old log sections as invalid
-                           and add new log sections in the client and mdt logs.
-                           But if we add new sections, then live clients will
-                           get repeat setup instructions for already running
-                           osc's. So don't update the client/mdt logs. */
-                        mti->mti_flags &= ~LDD_F_UPDATE;
-                }
-        }
+	if (rc == EALREADY) {
+		LCONSOLE_WARN("Found index %d for %s, updating log\n",
+			      mti->mti_stripe_index, mti->mti_svname);
+		/* We would like to mark old log sections as invalid
+		   and add new log sections in the client and mdt logs.
+		   But if we add new sections, then live clients will
+		   get repeat setup instructions for already running
+		   osc's. So don't update the client/mdt logs. */
+		mti->mti_flags &= ~LDD_F_UPDATE;
+	}
 
         cfs_mutex_lock(&fsdb->fsdb_mutex);
 
@@ -3182,73 +3065,6 @@ out_up:
         cfs_mutex_unlock(&fsdb->fsdb_mutex);
         RETURN(rc);
 }
-
-/* COMPAT_146 */
-/* verify that we can handle the old config logs */
-int mgs_upgrade_sv_14(const struct lu_env *env, struct mgs_device *mgs,
-		      struct mgs_target_info *mti, struct fs_db *fsdb)
-{
-        int rc = 0;
-        ENTRY;
-
-        /* Create ost log normally, as servers register.  Servers
-           register with their old uuids (from last_rcvd), so old
-           (MDT and client) logs should work.
-         - new MDT won't know about old OSTs, only the ones that have
-           registered, so we need the old MDT log to get the LOV right
-           in order for old clients to work.
-         - Old clients connect to the MDT, not the MGS, for their logs, and
-           will therefore receive the old client log from the MDT /LOGS dir.
-         - Old clients can continue to use and connect to old or new OSTs
-         - New clients will contact the MGS for their log
-        */
-
-        LCONSOLE_INFO("upgrading server %s from pre-1.6\n", mti->mti_svname);
-        server_mti_print("upgrade", mti);
-
-        if (cfs_test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
-                LCONSOLE_ERROR_MSG(0x14a, "The old client log %s-client is "
-                                   "missing.  Was tunefs.lustre successful?\n",
-                                   mti->mti_fsname);
-                RETURN(-ENOENT);
-        }
-
-        if (fsdb->fsdb_gen == 0) {
-                /* There were no markers in the client log, meaning we have
-                   not updated the logs for this fs */
-                CDEBUG(D_MGS, "found old, unupdated client log\n");
-        }
-
-        if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
-		if (mgs_log_is_empty(env, mgs, mti->mti_svname)) {
-                        LCONSOLE_ERROR_MSG(0x14b, "The old MDT log %s is "
-                                           "missing. Was tunefs.lustre "
-                                           "successful?\n",
-                                           mti->mti_svname);
-                        RETURN(-ENOENT);
-                }
-                /* We're starting with an old uuid.  Assume old name for lov
-                   as well since the lov entry already exists in the log. */
-                CDEBUG(D_MGS, "old mds uuid %s\n", mti->mti_uuid);
-                if (strncmp(mti->mti_uuid, fsdb->fsdb_mdtlov + 4,
-                            strlen(fsdb->fsdb_mdtlov) - 4) != 0) {
-                        CERROR("old mds uuid %s doesn't match log %s (%s)\n",
-                               mti->mti_uuid, fsdb->fsdb_mdtlov,
-                               fsdb->fsdb_mdtlov + 4);
-                        RETURN(-EINVAL);
-                }
-        }
-
-        if (!cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
-                LCONSOLE_ERROR_MSG(0x14c, "%s-client is supposedly an old "
-                                   "log, but no old LOV or MDT was found. "
-                                   "Consider updating the configuration with"
-                                   " --writeconf.\n", mti->mti_fsname);
-        }
-
-        RETURN(rc);
-}
-/* end COMPAT_146 */
 
 int mgs_erase_log(const struct lu_env *env, struct mgs_device *mgs, char *name)
 {

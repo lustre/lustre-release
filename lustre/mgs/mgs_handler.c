@@ -584,18 +584,10 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
          * from where they left off.
          */
 
-        /* COMPAT_146 */
         if (mti->mti_flags & LDD_F_UPGRADE14) {
-		rc = mgs_upgrade_sv_14(env, mgs, mti, fsdb);
-                if (rc) {
-                        CERROR("Can't upgrade from 1.4 (%d)\n", rc);
-                        GOTO(out, rc);
-                }
-
-                /* We're good to go */
-                mti->mti_flags |= LDD_F_UPDATE;
-        }
-        /* end COMPAT_146 */
+		CERROR("Can't upgrade from 1.4 (%d)\n", rc);
+		GOTO(out, rc);
+	}
 
         if (mti->mti_flags & LDD_F_UPDATE) {
                 CDEBUG(D_MGS, "updating %s, index=%d\n", mti->mti_svname,
