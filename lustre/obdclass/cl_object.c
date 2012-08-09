@@ -88,8 +88,8 @@ int cl_object_header_init(struct cl_object_header *h)
                 cfs_spin_lock_init(&h->coh_page_guard);
                 cfs_spin_lock_init(&h->coh_lock_guard);
                 cfs_spin_lock_init(&h->coh_attr_guard);
-                cfs_lockdep_set_class(&h->coh_attr_guard, &cl_page_guard_class);
-                cfs_lockdep_set_class(&h->coh_attr_guard, &cl_lock_guard_class);
+                cfs_lockdep_set_class(&h->coh_page_guard, &cl_page_guard_class);
+                cfs_lockdep_set_class(&h->coh_lock_guard, &cl_lock_guard_class);
                 cfs_lockdep_set_class(&h->coh_attr_guard, &cl_attr_guard_class);
                 h->coh_pages = 0;
                 /* XXX hard coded GFP_* mask. */
