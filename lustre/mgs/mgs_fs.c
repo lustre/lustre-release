@@ -143,7 +143,7 @@ struct lvfs_callback_ops mgs_lvfs_ops = {
 
 int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 {
-        struct mgs_obd *mgs = &obd->u.mgs;
+	struct mgs_device *mgs = &obd->u.mgs;
         struct lvfs_run_ctxt saved;
         struct dentry *dentry;
         int rc;
@@ -198,7 +198,7 @@ err_pop:
 
 int mgs_fs_cleanup(struct obd_device *obd)
 {
-        struct mgs_obd *mgs = &obd->u.mgs;
+	struct mgs_device *mgs = &obd->u.mgs;
         struct lvfs_run_ctxt saved;
         int rc = 0;
 

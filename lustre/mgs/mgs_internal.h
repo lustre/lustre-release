@@ -154,6 +154,7 @@ struct fs_db {
 
         /* async thread to notify clients */
         struct obd_device   *fsdb_obd;
+	struct mgs_device   *fsdb_mgs;
         cfs_waitq_t          fsdb_notify_waitq;
         cfs_completion_t     fsdb_notify_comp;
         cfs_time_t           fsdb_notify_start;
@@ -167,39 +168,45 @@ struct fs_db {
 };
 
 /* mgs_llog.c */
-int class_dentry_readdir(struct obd_device *obd, struct dentry *dir,
-                         struct vfsmount *inmnt,
-                         cfs_list_t *dentry_list);
+int class_dentry_readdir(const struct lu_env *env,
+			 struct mgs_device *mgs, cfs_list_t *list);
 
-int mgs_init_fsdb_list(struct obd_device *obd);
-int mgs_cleanup_fsdb_list(struct obd_device *obd);
-int mgs_find_or_make_fsdb(struct obd_device *obd, char *name,
+int mgs_init_fsdb_list(struct mgs_device *mgs);
+int mgs_cleanup_fsdb_list(struct mgs_device *mgs);
+int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs, char *name,
                           struct fs_db **dbh);
-struct fs_db *mgs_find_fsdb(struct obd_device *obd, char *fsname);
-int mgs_get_fsdb_srpc_from_llog(struct obd_device *obd, struct fs_db *fsdb);
-int mgs_check_index(struct obd_device *obd, struct mgs_target_info *mti);
-int mgs_check_failnid(struct obd_device *obd, struct mgs_target_info *mti);
-int mgs_write_log_target(struct obd_device *obd, struct mgs_target_info *mti,
+struct fs_db *mgs_find_fsdb(struct mgs_device *mgs, char *fsname);
+int mgs_get_fsdb_srpc_from_llog(const struct lu_env *env, struct mgs_device *mgs, struct fs_db *fsdb);
+int mgs_check_index(const struct lu_env *env, struct mgs_device *mgs, struct mgs_target_info *mti);
+int mgs_check_failnid(const struct lu_env *env, struct mgs_device *mgs, struct mgs_target_info *mti);
+int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs, struct mgs_target_info *mti,
                          struct fs_db *fsdb);
-int mgs_upgrade_sv_14(struct obd_device *obd, struct mgs_target_info *mti,
-                      struct fs_db *fsdb);
-int mgs_erase_log(struct obd_device *obd, char *name);
-int mgs_erase_logs(struct obd_device *obd, char *fsname);
-int mgs_setparam(struct obd_device *obd, struct lustre_cfg *lcfg, char *fsname);
-
-int mgs_pool_cmd(struct obd_device *obd, enum lcfg_command_type cmd,
-                 char *poolname, char *fsname, char *ostname);
+int mgs_upgrade_sv_14(const struct lu_env *env, struct mgs_device *mgs,
+		      struct mgs_target_info *mti, struct fs_db *fsdb);
+int mgs_erase_log(const struct lu_env *env, struct mgs_device *mgs,
+		  char *name);
+int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs,
+		   char *fsname);
+int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
+		 struct lustre_cfg *lcfg, char *fsname);
+int mgs_list_logs(const struct lu_env *env, struct mgs_device *mgs,
+		  struct obd_ioctl_data *data);
+int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
+		 enum lcfg_command_type cmd, char *poolname, char *fsname,
+		 char *ostname);
 
 /* mgs_handler.c */
 int  mgs_get_lock(struct obd_device *obd, struct ldlm_res_id *res,
                   struct lustre_handle *lockh);
 int  mgs_put_lock(struct lustre_handle *lockh);
-void mgs_revoke_lock(struct obd_device *obd, struct fs_db *fsdb, int type);
+void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb, int type);
 
 /* mgs_nids.c */
-int  mgs_ir_update(struct obd_device *obd, struct mgs_target_info *mti);
-int  mgs_ir_init_fs(struct obd_device *obd, struct fs_db *fsdb);
-void mgs_ir_fini_fs(struct obd_device *obd, struct fs_db *fsdb);
+int  mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,
+		   struct mgs_target_info *mti);
+int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
+		   struct fs_db *fsdb);
+void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb);
 void mgs_ir_notify_complete(struct fs_db *fsdb);
 int  mgs_get_ir_logs(struct ptlrpc_request *req);
 int  lprocfs_wr_ir_state(struct file *file, const char *buffer,
@@ -211,7 +218,8 @@ int  lprocfs_rd_ir_timeout(char *page, char **start, off_t off, int count,
                            int *eof, void *data);
 void mgs_fsc_cleanup(struct obd_export *exp);
 void mgs_fsc_cleanup_by_fsdb(struct fs_db *fsdb);
-int  mgs_fsc_attach(struct obd_export *exp, char *fsname);
+int  mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
+		    char *fsname);
 
 /* mgs_fs.c */
 int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
@@ -222,19 +230,19 @@ int mgs_fs_cleanup(struct obd_device *obddev);
 
 #define strsuf(buf, suffix) (strcmp((buf)+strlen(buf)-strlen(suffix), (suffix)))
 #ifdef LPROCFS
-int lproc_mgs_setup(struct obd_device *dev);
-int lproc_mgs_cleanup(struct obd_device *obd);
-int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb);
-int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb);
+int lproc_mgs_setup(struct mgs_device *mgs);
+int lproc_mgs_cleanup(struct mgs_device *mgs);
+int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb);
+int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb);
 void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars);
 #else
 static inline int lproc_mgs_setup(struct obd_device *dev)
 {return 0;}
 static inline int lproc_mgs_cleanup(struct obd_device *obd)
 {return 0;}
-static inline int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb)
+static inline int lproc_mgs_add_live(struct mgs_device *obd, struct fs_db *fsdb)
 {return 0;}
-static inline int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb)
+static inline int lproc_mgs_del_live(struct mgs_device *obd, struct fs_db *fsdb)
 {return 0;}
 static void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
 {
@@ -253,5 +261,10 @@ enum {
 };
 void mgs_counter_incr(struct obd_export *exp, int opcode);
 void mgs_stats_counter_init(struct lprocfs_stats *stats);
+
+static inline struct mgs_device *exp2mgs_dev(struct obd_export *exp)
+{
+	return &exp->exp_obd->u.mgs;
+}
 
 #endif /* _MGS_INTERNAL_H */

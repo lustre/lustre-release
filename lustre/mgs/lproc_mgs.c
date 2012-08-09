@@ -61,18 +61,23 @@ static int lprocfs_mgs_rd_mntdev(char *page, char **start, off_t off, int count,
 static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 {
         struct obd_device *obd = seq->private;
-        struct mgs_obd *mgs = &obd->u.mgs;
+	struct mgs_device *mgs = &obd->u.mgs;
         cfs_list_t dentry_list;
         struct l_linux_dirent *dirent, *n;
+	struct lu_env env;
         int rc, len;
         ENTRY;
 
         LASSERT(obd != NULL);
-        rc = class_dentry_readdir(obd, mgs->mgs_configs_dir,
-                                  mgs->mgs_vfsmnt, &dentry_list);
+
+	rc = lu_env_init(&env, LCT_MG_THREAD);
+	if (rc)
+		RETURN(rc);
+
+	rc = class_dentry_readdir(&env, mgs, &dentry_list);
         if (rc) {
                 CERROR("Can't read config dir\n");
-                RETURN(rc);
+		GOTO(out, rc);
         }
         cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 cfs_list_del(&dirent->lld_list);
@@ -84,6 +89,8 @@ static int mgs_fs_seq_show(struct seq_file *seq, void *v)
                 OBD_FREE(dirent, sizeof(*dirent));
         }
 
+out:
+	lu_env_fini(&env);
         RETURN(0);
 }
 
@@ -122,24 +129,33 @@ static void seq_show_srpc_rules(struct seq_file *seq, const char *tgtname,
 static int mgsself_srpc_seq_show(struct seq_file *seq, void *v)
 {
         struct obd_device *obd = seq->private;
+	struct mgs_device *mgs = &obd->u.mgs;
         struct fs_db      *fsdb;
+	struct lu_env	   env;
         int                rc;
 
-        rc = mgs_find_or_make_fsdb(obd, MGSSELF_NAME, &fsdb);
+	rc = lu_env_init(&env, LCT_MG_THREAD);
+	if (rc)
+		return rc;
+
+	rc = mgs_find_or_make_fsdb(&env, mgs, MGSSELF_NAME, &fsdb);
         if (rc)
-                return rc;
+		goto out;
 
         cfs_mutex_lock(&fsdb->fsdb_mutex);
         seq_show_srpc_rules(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
         cfs_mutex_unlock(&fsdb->fsdb_mutex);
+
+out:
+	lu_env_fini(&env);
         return 0;
 }
 
 LPROC_SEQ_FOPS_RO(mgsself_srpc);
 
-int lproc_mgs_setup(struct obd_device *obd)
+int lproc_mgs_setup(struct mgs_device *mgs)
 {
-        struct mgs_obd *mgs = &obd->u.mgs;
+	struct obd_device *obd = mgs->mgs_obd;
         int rc;
 
         rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
@@ -167,14 +183,13 @@ int lproc_mgs_setup(struct obd_device *obd)
         return rc;
 }
 
-int lproc_mgs_cleanup(struct obd_device *obd)
+int lproc_mgs_cleanup(struct mgs_device *mgs)
 {
-        struct mgs_obd *mgs;
+	struct obd_device *obd = mgs->mgs_obd;
 
         if (!obd)
                 return -EINVAL;
 
-        mgs = &obd->u.mgs;
         if (mgs->mgs_proc_live) {
                 /* Should be no live entries */
                 LASSERT(mgs->mgs_proc_live->subdir == NULL);
@@ -238,9 +253,8 @@ static ssize_t mgs_live_seq_write(struct file *file, const char *buf,
 }
 LPROC_SEQ_FOPS(mgs_live);
 
-int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb)
+int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
 {
-        struct mgs_obd *mgs = &obd->u.mgs;
         int rc;
 
         if (!mgs->mgs_proc_live)
@@ -251,10 +265,8 @@ int lproc_mgs_add_live(struct obd_device *obd, struct fs_db *fsdb)
         return 0;
 }
 
-int lproc_mgs_del_live(struct obd_device *obd, struct fs_db *fsdb)
+int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 {
-        struct mgs_obd *mgs = &obd->u.mgs;
-
         if (!mgs->mgs_proc_live)
                 return 0;
 
