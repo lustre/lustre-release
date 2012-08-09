@@ -77,7 +77,8 @@ static int mgs_connect(const struct lu_env *env,
                 RETURN(rc);
 
         lexp = class_conn2export(&conn);
-        LASSERT(lexp);
+	if (lexp == NULL)
+		GOTO(out, rc = -EFAULT);
 
         mgs_counter_incr(lexp, LPROC_MGS_CONNECT);
 
@@ -89,6 +90,7 @@ static int mgs_connect(const struct lu_env *env,
 
         rc = mgs_export_stats_init(obd, lexp, localdata);
 
+out:
         if (rc) {
                 class_disconnect(lexp);
         } else {
@@ -564,6 +566,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 mti->mti_flags |= LDD_F_UPDATE;
                 /* Erased logs means start from scratch. */
                 mti->mti_flags &= ~LDD_F_UPGRADE14;
+		if (rc)
+			GOTO(out_nolock, rc);
         }
 
 	rc = mgs_find_or_make_fsdb(env, mgs, mti->mti_fsname, &fsdb);
@@ -654,20 +658,23 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
 	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, msp->mgs_param);
 	lcfg = lustre_cfg_new(LCFG_PARAM, &mgi->mgi_bufs);
+	if (IS_ERR(lcfg))
+		GOTO(out, rc = PTR_ERR(lcfg));
 	rc = mgs_setparam(env, mgs, lcfg, mgi->mgi_fsname);
         if (rc) {
                 CERROR("Error %d in setting the parameter %s for fs %s\n",
 		       rc, msp->mgs_param, mgi->mgi_fsname);
-                RETURN(rc);
+		GOTO(out_cfg, rc);
         }
-
-        lustre_cfg_free(lcfg);
 
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc == 0) {
                 rep_msp = req_capsule_server_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
                 rep_msp = msp;
         }
+out_cfg:
+	lustre_cfg_free(lcfg);
+out:
         RETURN(rc);
 }
 
@@ -1025,52 +1032,50 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
                 rec.lrh_type = OBD_CFG_REC;
         } else {
                 CERROR("unknown cfg record type:%d \n", data->ioc_type);
-                rc = -EINVAL;
-                GOTO(out_pool, rc);
+		GOTO(out_pool, rc = -EINVAL);
         }
 
-        if (data->ioc_plen1 > CFS_PAGE_SIZE) {
-                rc = -E2BIG;
-                GOTO(out_pool, rc);
-        }
+	if (data->ioc_plen1 > CFS_PAGE_SIZE)
+		GOTO(out_pool, rc = -E2BIG);
 
         OBD_ALLOC(lcfg, data->ioc_plen1);
         if (lcfg == NULL)
                 GOTO(out_pool, rc = -ENOMEM);
 
         if (cfs_copy_from_user(lcfg, data->ioc_pbuf1, data->ioc_plen1))
-                GOTO(out_pool, rc = -EFAULT);
+		GOTO(out_lcfg, rc = -EFAULT);
 
-        if (lcfg->lcfg_bufcount < 2) {
-                GOTO(out_pool, rc = -EFAULT);
-        }
+	if (lcfg->lcfg_bufcount < 2)
+		GOTO(out_lcfg, rc = -EFAULT);
 
         /* first arg is always <fsname>.<poolname> */
-	mgs_extract_fs_pool(lustre_cfg_string(lcfg, 1), mgi->mgi_fsname,
-                            poolname);
+	rc = mgs_extract_fs_pool(lustre_cfg_string(lcfg, 1), mgi->mgi_fsname,
+				 poolname);
+	if (rc)
+		GOTO(out_lcfg, rc);
 
         switch (lcfg->lcfg_command) {
 	case LCFG_POOL_NEW:
                 if (lcfg->lcfg_bufcount != 2)
-                        RETURN(-EINVAL);
+			GOTO(out_lcfg, rc = -EINVAL);
 		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_NEW, mgi->mgi_fsname,
                                   poolname, NULL);
                 break;
 	case LCFG_POOL_ADD:
                 if (lcfg->lcfg_bufcount != 3)
-                        RETURN(-EINVAL);
+			GOTO(out_lcfg, rc = -EINVAL);
 		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_ADD, mgi->mgi_fsname,
 				  poolname, lustre_cfg_string(lcfg, 2));
                 break;
 	case LCFG_POOL_REM:
                 if (lcfg->lcfg_bufcount != 3)
-                        RETURN(-EINVAL);
+			GOTO(out_lcfg, rc = -EINVAL);
 		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_REM, mgi->mgi_fsname,
 				  poolname, lustre_cfg_string(lcfg, 2));
                 break;
 	case LCFG_POOL_DEL:
                 if (lcfg->lcfg_bufcount != 2)
-                        RETURN(-EINVAL);
+			GOTO(out_lcfg, rc = -EINVAL);
 		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_DEL, mgi->mgi_fsname,
                                   poolname, NULL);
                 break;
@@ -1081,16 +1086,13 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
         if (rc) {
                 CERROR("OBD_IOC_POOL err %d, cmd %X for pool %s.%s\n",
 		       rc, lcfg->lcfg_command, mgi->mgi_fsname, poolname);
-                GOTO(out_pool, rc);
+		GOTO(out_lcfg, rc);
         }
 
+out_lcfg:
+	OBD_FREE(lcfg, data->ioc_plen1);
 out_pool:
-        if (lcfg != NULL)
-                OBD_FREE(lcfg, data->ioc_plen1);
-
-        if (poolname != NULL)
-                OBD_FREE(poolname, LOV_MAXPOOLNAME + 1);
-
+	OBD_FREE(poolname, LOV_MAXPOOLNAME + 1);
         RETURN(rc);
 }
 
@@ -1137,10 +1139,9 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                         GOTO(out_free, rc = -EINVAL);
 
 		rc = mgs_setparam(&env, mgs, lcfg, mgi->mgi_fsname);
-                if (rc) {
-                        CERROR("setparam err %d\n", rc);
-                        GOTO(out_free, rc);
-                }
+		if (rc)
+			CERROR("%s: setparam err: rc = %d\n",
+			       exp->exp_obd->obd_name, rc);
 out_free:
                 OBD_FREE(lcfg, data->ioc_plen1);
 		break;
