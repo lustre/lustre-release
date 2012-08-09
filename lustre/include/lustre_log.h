@@ -122,6 +122,9 @@ int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		     int flags, struct obd_uuid *uuid);
 int llog_process(const struct lu_env *env, struct llog_handle *loghandle,
 		 llog_cb_t cb, void *data, void *catdata);
+int llog_process_or_fork(const struct lu_env *env,
+			 struct llog_handle *loghandle,
+			 llog_cb_t cb, void *data, void *catdata, bool fork);
 int llog_reverse_process(const struct lu_env *env,
 			 struct llog_handle *loghandle, llog_cb_t cb,
 			 void *data, void *catdata);

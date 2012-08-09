@@ -254,7 +254,7 @@ static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 			.tc_thr_name		= "ll_mgs",
 			.tc_nthrs_init		= MGS_NTHRS_INIT,
 			.tc_nthrs_max		= MGS_NTHRS_MAX,
-			.tc_ctx_tags		= LCT_MD_THREAD,
+			.tc_ctx_tags		= LCT_MG_THREAD,
 		},
 		.psc_ops		= {
 			.so_req_handler		= mgs_handle,
@@ -642,23 +642,22 @@ static int mgs_set_info_rpc(struct ptlrpc_request *req)
 	struct mgs_device *mgs = exp2mgs_dev(req->rq_export);
 	struct lu_env     *env = req->rq_svc_thread->t_env;
         struct mgs_send_param *msp, *rep_msp;
+	struct mgs_thread_info *mgi = mgs_env_info(env);
         int rc;
-        struct lustre_cfg_bufs bufs;
         struct lustre_cfg *lcfg;
-        char fsname[MTI_NAME_MAXLEN];
         ENTRY;
 
         msp = req_capsule_client_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
         LASSERT(msp);
 
         /* Construct lustre_cfg structure to pass to function mgs_setparam */
-        lustre_cfg_bufs_reset(&bufs, NULL);
-        lustre_cfg_bufs_set_string(&bufs, 1, msp->mgs_param);
-        lcfg = lustre_cfg_new(LCFG_PARAM, &bufs);
-	rc = mgs_setparam(env, mgs, lcfg, fsname);
+	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
+	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, msp->mgs_param);
+	lcfg = lustre_cfg_new(LCFG_PARAM, &mgi->mgi_bufs);
+	rc = mgs_setparam(env, mgs, lcfg, mgi->mgi_fsname);
         if (rc) {
                 CERROR("Error %d in setting the parameter %s for fs %s\n",
-                       rc, msp->mgs_param, fsname);
+		       rc, msp->mgs_param, mgi->mgi_fsname);
                 RETURN(rc);
         }
 
@@ -1010,22 +1009,16 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
 			      struct mgs_device *mgs,
                               struct obd_ioctl_data *data)
 {
+	struct mgs_thread_info *mgi = mgs_env_info(env);
         int rc;
         struct lustre_cfg *lcfg = NULL;
         struct llog_rec_hdr rec;
-        char *fsname = NULL;
         char *poolname = NULL;
         ENTRY;
 
-        OBD_ALLOC(fsname, MTI_NAME_MAXLEN);
-        if (fsname == NULL)
-                RETURN(-ENOMEM);
-
         OBD_ALLOC(poolname, LOV_MAXPOOLNAME + 1);
-        if (poolname == NULL) {
-                rc = -ENOMEM;
-                GOTO(out_pool, rc);
-        }
+	if (poolname == NULL)
+		RETURN(-ENOMEM);
         rec.lrh_len = llog_data_len(data->ioc_plen1);
 
         if (data->ioc_type == LUSTRE_CFG_TYPE) {
@@ -1053,56 +1046,47 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
         }
 
         /* first arg is always <fsname>.<poolname> */
-        mgs_extract_fs_pool(lustre_cfg_string(lcfg, 1), fsname,
+	mgs_extract_fs_pool(lustre_cfg_string(lcfg, 1), mgi->mgi_fsname,
                             poolname);
 
         switch (lcfg->lcfg_command) {
-        case LCFG_POOL_NEW: {
+	case LCFG_POOL_NEW:
                 if (lcfg->lcfg_bufcount != 2)
                         RETURN(-EINVAL);
-		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_NEW, fsname,
+		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_NEW, mgi->mgi_fsname,
                                   poolname, NULL);
                 break;
-        }
-        case LCFG_POOL_ADD: {
+	case LCFG_POOL_ADD:
                 if (lcfg->lcfg_bufcount != 3)
                         RETURN(-EINVAL);
-		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_ADD, fsname, poolname,
-                                  lustre_cfg_string(lcfg, 2));
+		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_ADD, mgi->mgi_fsname,
+				  poolname, lustre_cfg_string(lcfg, 2));
                 break;
-        }
-        case LCFG_POOL_REM: {
+	case LCFG_POOL_REM:
                 if (lcfg->lcfg_bufcount != 3)
                         RETURN(-EINVAL);
-		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_REM, fsname, poolname,
-                                  lustre_cfg_string(lcfg, 2));
+		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_REM, mgi->mgi_fsname,
+				  poolname, lustre_cfg_string(lcfg, 2));
                 break;
-        }
-        case LCFG_POOL_DEL: {
+	case LCFG_POOL_DEL:
                 if (lcfg->lcfg_bufcount != 2)
                         RETURN(-EINVAL);
-		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_DEL, fsname,
+		rc = mgs_pool_cmd(env, mgs, LCFG_POOL_DEL, mgi->mgi_fsname,
                                   poolname, NULL);
                 break;
-        }
-        default: {
+	default:
                  rc = -EINVAL;
-                 GOTO(out_pool, rc);
-        }
         }
 
         if (rc) {
                 CERROR("OBD_IOC_POOL err %d, cmd %X for pool %s.%s\n",
-                       rc, lcfg->lcfg_command, fsname, poolname);
+		       rc, lcfg->lcfg_command, mgi->mgi_fsname, poolname);
                 GOTO(out_pool, rc);
         }
 
 out_pool:
         if (lcfg != NULL)
                 OBD_FREE(lcfg, data->ioc_plen1);
-
-        if (fsname != NULL)
-                OBD_FREE(fsname, MTI_NAME_MAXLEN);
 
         if (poolname != NULL)
                 OBD_FREE(poolname, LOV_MAXPOOLNAME + 1);
@@ -1130,9 +1114,9 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         switch (cmd) {
 
         case OBD_IOC_PARAM: {
+		struct mgs_thread_info *mgi = mgs_env_info(&env);
                 struct lustre_cfg *lcfg;
                 struct llog_rec_hdr rec;
-                char fsname[MTI_NAME_MAXLEN];
 
                 rec.lrh_len = llog_data_len(data->ioc_plen1);
 
@@ -1152,7 +1136,7 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 if (lcfg->lcfg_bufcount < 1)
                         GOTO(out_free, rc = -EINVAL);
 
-		rc = mgs_setparam(&env, mgs, lcfg, fsname);
+		rc = mgs_setparam(&env, mgs, lcfg, mgi->mgi_fsname);
                 if (rc) {
                         CERROR("setparam err %d\n", rc);
                         GOTO(out_free, rc);
@@ -1201,6 +1185,11 @@ out:
 	RETURN(rc);
 }
 
+/* context key constructor/destructor: mgs_key_init, mgs_key_fini */
+LU_KEY_INIT_FINI(mgs, struct mgs_thread_info);
+
+LU_CONTEXT_KEY_DEFINE(mgs, LCT_MG_THREAD);
+
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mgs_obd_ops = {
         .o_owner           = THIS_MODULE,
@@ -1220,17 +1209,24 @@ static struct obd_ops mgs_obd_ops = {
 static int __init mgs_init(void)
 {
         struct lprocfs_static_vars lvars;
+	int rc;
 
         lprocfs_mgs_init_vars(&lvars);
         class_register_type(&mgs_obd_ops, NULL,
                             lvars.module_vars, LUSTRE_MGS_NAME, NULL);
 
-        return 0;
+	LU_CONTEXT_KEY_INIT(&mgs_thread_key);
+	rc = lu_context_key_register(&mgs_thread_key);
+	if (rc)
+		class_unregister_type(LUSTRE_MGS_NAME);
+
+	return rc;
 }
 
 static void /*__exit*/ mgs_exit(void)
 {
         class_unregister_type(LUSTRE_MGS_NAME);
+	lu_context_key_degister(&mgs_thread_key);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");

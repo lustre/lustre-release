@@ -84,7 +84,4 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 int class_config_dump_handler(const struct lu_env *env,
 			      struct llog_handle *handle,
 			      struct llog_rec_hdr *rec, void *data);
-int llog_process_or_fork(const struct lu_env *env,
-			 struct llog_handle *loghandle,
-			 llog_cb_t cb, void *data, void *catdata, bool fork);
 #endif
