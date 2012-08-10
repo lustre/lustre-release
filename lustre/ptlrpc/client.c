@@ -1027,7 +1027,6 @@ EXPORT_SYMBOL(ptlrpc_set_add_cb);
 void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
                         struct ptlrpc_request *req)
 {
-	char jobid[JOBSTATS_JOBID_SIZE];
 	LASSERT(cfs_list_empty(&req->rq_set_chain));
 
 	/* The set takes over the caller's request reference */
@@ -1036,10 +1035,8 @@ void ptlrpc_set_add_req(struct ptlrpc_request_set *set,
 	cfs_atomic_inc(&set->set_remaining);
 	req->rq_queued_time = cfs_time_current();
 
-	if (req->rq_reqmsg) {
-		lustre_get_jobid(jobid);
-		lustre_msg_set_jobid(req->rq_reqmsg, jobid);
-	}
+	if (req->rq_reqmsg != NULL)
+		lustre_msg_set_jobid(req->rq_reqmsg, NULL);
 
 	if (set->set_producer != NULL)
 		/* If the request set has a producer callback, the RPC must be

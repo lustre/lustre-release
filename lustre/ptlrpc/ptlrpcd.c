@@ -238,12 +238,9 @@ static int ptlrpcd_steal_rqset(struct ptlrpc_request_set *des,
 void ptlrpcd_add_req(struct ptlrpc_request *req, pdl_policy_t policy, int idx)
 {
         struct ptlrpcd_ctl *pc;
-	char jobid[JOBSTATS_JOBID_SIZE];
 
-	if (req->rq_reqmsg) {
-		lustre_get_jobid(jobid);
-		lustre_msg_set_jobid(req->rq_reqmsg, jobid);
-	}
+	if (req->rq_reqmsg)
+		lustre_msg_set_jobid(req->rq_reqmsg, NULL);
 
         cfs_spin_lock(&req->rq_lock);
         if (req->rq_invalid_rqset) {
