@@ -2547,6 +2547,7 @@ thread_sanity() {
         local facet=$2
         local parampat=$3
         local opts=$4
+	local basethr=$5
         local tmin
         local tmin2
         local tmax
@@ -2554,7 +2555,8 @@ thread_sanity() {
         local tstarted
         local paramp
         local msg="Insane $modname thread counts"
-	local ncpts=$(check_cpt_number)
+	local ncpts=$(check_cpt_number $facet)
+	local nthrs
         shift 4
 
         setup
@@ -2576,17 +2578,23 @@ thread_sanity() {
         tstarted=$(do_facet $facet "lctl get_param -n ${paramp}.threads_started" || echo 0)
         lassert 23 "$msg (PDSH problems?)" '(($tstarted && $tmin && $tmax))' || return $?
         lassert 24 "$msg" '(($tstarted >= $tmin && $tstarted <= $tmax ))' || return $?
+	nthrs=$(expr $tmax - $tmin)
+	if [ $nthrs -lt $ncpts ]; then
+		nthrs=0
+	else
+		nthrs=$ncpts
+	fi
 
 	[ $tmin -eq $tmax -a $tmin -eq $tstarted ] &&
 		skip_env "module parameter forced $facet thread count" &&
 		tmin=3 && tmax=$((3 * tmax))
 
         # Check that we can change min/max
-	do_facet $facet "lctl set_param ${paramp}.threads_min=$((tmin + ncpts))"
-	do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmax - ncpts))"
+	do_facet $facet "lctl set_param ${paramp}.threads_min=$((tmin + nthrs))"
+	do_facet $facet "lctl set_param ${paramp}.threads_max=$((tmax - nthrs))"
 	tmin2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
 	tmax2=$(do_facet $facet "lctl get_param -n ${paramp}.threads_max" || echo 0)
-	lassert 25 "$msg" '(($tmin2 == ($tmin + $ncpts) && $tmax2 == ($tmax - $ncpts)))' || return $?
+	lassert 25 "$msg" '(($tmin2 == ($tmin + $nthrs) && $tmax2 == ($tmax - $nthrs)))' || return $?
 
         # Check that we can set min/max to the same value
         tmin=$(do_facet $facet "lctl get_param -n ${paramp}.threads_min" || echo 0)
@@ -2606,7 +2614,8 @@ thread_sanity() {
         LOAD_MODULES_REMOTE=true
         cleanup
         local oldvalue
-        setmodopts -a $modname "$opts" oldvalue
+	local newvalue="${opts}=$(expr $basethr \* $ncpts)"
+	setmodopts -a $modname "$newvalue" oldvalue
 
         load_modules
         setup
@@ -2631,20 +2640,12 @@ thread_sanity() {
 }
 
 test_53a() {
-	local ncpts=$(check_cpt_number)
-	local nthrs
-
-	nthrs=`expr 16 \* $ncpts`
-	thread_sanity OST ost1 'ost.*.ost' 'oss_num_threads='$nthrs
+	thread_sanity OST ost1 'ost.*.ost' 'oss_num_threads' '16'
 }
 run_test 53a "check OSS thread count params"
 
 test_53b() {
-	local ncpts=$(check_cpt_number)
-	local nthrs
-
-	nthrs=`expr 16 \* $ncpts`
-	thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads='$nthrs
+	thread_sanity MDT $SINGLEMDS 'mdt.*.*.' 'mdt_num_threads' '16'
 }
 run_test 53b "check MDT thread count params"
 

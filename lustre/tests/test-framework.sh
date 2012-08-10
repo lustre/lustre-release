@@ -267,9 +267,12 @@ init_test_env() {
 }
 
 check_cpt_number() {
+	local facet=$1
 	local ncpts
 
-	ncpts=$(lctl get_param -n cpu_partition_table 2>/dev/null| wc -l)
+	ncpts=$(do_facet $facet "lctl get_param -n " \
+		"cpu_partition_table 2>/dev/null| wc -l" || echo 1)
+
 	if [ $ncpts -eq 0 ]; then
 		echo "1"
 	else
