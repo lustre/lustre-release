@@ -91,10 +91,16 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
         percpu_cntr->lc_count++;
 
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
-                /* see comment in lprocfs_counter_sub */
-                LASSERT(!cfs_in_interrupt());
-
-                percpu_cntr->lc_sum += amount;
+		/*
+		 * lprocfs_counter_add() can be called in interrupt context,
+		 * as memory allocation could trigger memory shrinker call
+		 * ldlm_pool_shrink(), which calls lprocfs_counter_add().
+		 * LU-1727.
+		 */
+		if (cfs_in_interrupt())
+			percpu_cntr->lc_sum_irq += amount;
+		else
+			percpu_cntr->lc_sum += amount;
                 if (percpu_cntr->lc_config & LPROCFS_CNTR_STDDEV)
                         percpu_cntr->lc_sumsquare += (__s64)amount * amount;
                 if (amount < percpu_cntr->lc_min)
@@ -127,14 +133,13 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
         if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
                 cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
-                /*
-                 * currently lprocfs_count_add() can only be called in thread
-                 * context; sometimes we use RCU callbacks to free memory
-                 * which calls lprocfs_counter_sub(), and RCU callbacks may
-                 * execute in softirq context - right now that's the only case
-                 * we're in softirq context here, use separate counter for that.
-                 * bz20650.
-                 */
+		/*
+		 * Sometimes we use RCU callbacks to free memory which calls
+		 * lprocfs_counter_sub(), and RCU callbacks may execute in
+		 * softirq context - right now that's the only case we're in
+		 * softirq context here, use separate counter for that.
+		 * bz20650.
+		 */
                 if (cfs_in_interrupt())
                         percpu_cntr->lc_sum_irq -= amount;
                 else
