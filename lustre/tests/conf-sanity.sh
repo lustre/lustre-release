@@ -2909,6 +2909,26 @@ test_62() {
 }
 run_test 62 "start with disabled journal"
 
+test_63() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
+	local inode_slab=$(do_facet $SINGLEMDS \
+		"awk '/ldiskfs_inode_cache/ { print \\\$5 }' /proc/slabinfo")
+	if [ -z "$inode_slab" ]; then
+		skip "ldiskfs module has not been loaded"
+		return
+	fi
+
+	echo "$inode_slab ldisk inodes per page"
+	[ "$inode_slab" -ge "3" ] ||
+		error "ldisk inode size is too big, $inode_slab objs per page"
+	return
+}
+run_test 63 "Verify each page can at least hold 3 ldisk inodes"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
