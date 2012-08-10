@@ -835,6 +835,9 @@ AC_CHECK_TYPE([spinlock_t],
 # lnet/utils/wirecheck.c
 AC_CHECK_FUNCS([strnlen])
 
+# lnet/libcfs/user-prim.c, missing for RHEL5 and earlier userspace
+AC_CHECK_FUNCS([strlcpy])
+
 AC_CHECK_TYPE([umode_t],
 	[AC_DEFINE(HAVE_UMODE_T, 1, [umode_t is defined])],
 	[],

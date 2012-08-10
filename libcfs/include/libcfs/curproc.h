@@ -47,12 +47,8 @@
  *
  * Implemented in portals/include/libcfs/<os>/
  */
-uid_t  cfs_curproc_uid(void);
-gid_t  cfs_curproc_gid(void);
 uid_t  cfs_curproc_euid(void);
 gid_t  cfs_curproc_egid(void);
-uid_t  cfs_curproc_fsuid(void);
-gid_t  cfs_curproc_fsgid(void);
 pid_t  cfs_curproc_pid(void);
 int    cfs_curproc_groups_nr(void);
 int    cfs_curproc_is_in_groups(gid_t group);
@@ -73,8 +69,12 @@ char  *cfs_curproc_comm(void);
 
 /* check if task is running in compat mode.*/
 int cfs_curproc_is_32bit(void);
-int cfs_get_environ(const char *key, char *value, int *val_len);
 #endif
+uid_t  cfs_curproc_uid(void);
+gid_t  cfs_curproc_gid(void);
+uid_t  cfs_curproc_fsuid(void);
+gid_t  cfs_curproc_fsgid(void);
+int cfs_get_environ(const char *key, char *value, int *val_len);
 
 typedef __u32 cfs_cap_t;
 

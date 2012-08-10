@@ -118,36 +118,47 @@ EXPORT_SYMBOL(obd_jobid_var);
  */
 int lustre_get_jobid(char *jobid)
 {
-#ifdef __KERNEL__
 	int jobid_len = JOBSTATS_JOBID_SIZE;
-#endif
-	int ret = 0;
+	int rc = 0;
 	ENTRY;
 
 	memset(jobid, 0, JOBSTATS_JOBID_SIZE);
 	/* Jobstats isn't enabled */
-	if (!memcmp(obd_jobid_var, JOBSTATS_DISABLE,
-		    strlen(JOBSTATS_DISABLE))) {
+	if (strcmp(obd_jobid_var, JOBSTATS_DISABLE) == 0)
 		RETURN(0);
-	}
 
 	/* Use process name + fsuid as jobid */
-	if (!memcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID,
-		    strlen(JOBSTATS_PROCNAME_UID))) {
+	if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
 		snprintf(jobid, JOBSTATS_JOBID_SIZE, "%s_%u",
 			 cfs_curproc_comm(), cfs_curproc_fsuid());
 		RETURN(0);
 	}
 
-#ifdef __KERNEL__
-	ret = cfs_get_environ(obd_jobid_var, jobid, &jobid_len);
-	if (ret) {
-		CDEBUG((ret != -ENOENT && ret != -EINVAL && ret != -EDEADLK) ?
-		       D_ERROR : D_INFO, "Get jobid for (%s) failed: rc = %d\n",
-		       obd_jobid_var, ret);
+	rc = cfs_get_environ(obd_jobid_var, jobid, &jobid_len);
+	if (rc) {
+		if (rc == -EOVERFLOW) {
+			/* For the PBS_JOBID and LOADL_STEP_ID keys (which are
+			 * variable length strings instead of just numbers), it
+			 * might make sense to keep the unique parts for JobID,
+			 * instead of just returning an error.  That means a
+			 * larger temp buffer for cfs_get_environ(), then
+			 * truncating the string at some separator to fit into
+			 * the specified jobid_len.  Fix later if needed. */
+			static bool printed;
+			if (unlikely(!printed)) {
+				LCONSOLE_ERROR_MSG(0x16b, "%s value too large "
+						   "for JobID buffer (%d)\n",
+						   obd_jobid_var, jobid_len);
+				printed = true;
+			}
+		} else {
+			CDEBUG((rc == -ENOENT && rc == -EINVAL &&
+				rc == -EDEADLK) ? D_INFO : D_ERROR,
+			       "Get jobid for (%s) failed: rc = %d\n",
+			       obd_jobid_var, rc);
+		}
 	}
-#endif
-	RETURN(ret);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_get_jobid);
 
