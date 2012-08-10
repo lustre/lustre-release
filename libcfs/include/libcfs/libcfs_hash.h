@@ -149,12 +149,12 @@ typedef union {
  * - some extra bytes (caller can require it while creating hash)
  */
 typedef struct cfs_hash_bucket {
-        cfs_hash_lock_t             hsb_lock;       /**< bucket lock */
-        __u32                       hsb_count;      /**< current entries */
-        __u32                       hsb_version;    /**< change version */
-        unsigned int                hsb_index;      /**< index of bucket */
-        int                         hsb_depmax;     /**< max depth on bucket */
-        char                        hsb_head[0];    /**< hash-head array */
+	cfs_hash_lock_t		hsb_lock;	/**< bucket lock */
+	__u32			hsb_count;	/**< current entries */
+	__u32			hsb_version;	/**< change version */
+	unsigned int		hsb_index;	/**< index of bucket */
+	int			hsb_depmax;	/**< max depth on bucket */
+	long			hsb_head[0];	/**< hash-head array */
 } cfs_hash_bucket_t;
 
 /**
