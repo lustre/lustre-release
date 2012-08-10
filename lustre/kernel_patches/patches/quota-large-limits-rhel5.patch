@@ -1,3 +1,23 @@
+Index: linux-2.6.18-128.1.14/fs/dquot.c
+===================================================================
+--- linux-2.6.18-128.1.14.orig/fs/dquot.c	2009-06-19 12:33:10.000000000 -0600
++++ linux-2.6.18-128.1.14/fs/dquot.c	2009-06-19 12:35:20.000000000 -0600
+@@ -139,11 +139,11 @@
+	struct mem_dqinfo *dqi = &sb_dqopt(dquot->dq_sb)->info[dquot->dq_type];
+
+	if ((di->dqb_valid & QIF_BLIMITS &&
+-	     (di->dqb_bhardlimit > DQI_MAXBLIMIT ||
+-	      di->dqb_bsoftlimit > DQI_MAXBLIMIT)) ||
++	     (di->dqb_bhardlimit > dqi->dqi_maxblimit ||
++	      di->dqb_bsoftlimit > dqi->dqi_maxblimit)) ||
+	    (di->dqb_valid & QIF_ILIMITS &&
+-	     (di->dqb_ihardlimit > DQI_MAXILIMIT ||
+-	      di->dqb_isoftlimit > DQI_MAXILIMIT)))
++	     (di->dqb_ihardlimit > dqi->dqi_maxilimit ||
++	      di->dqb_isoftlimit > dqi->dqi_maxilimit)))
+		return -ERANGE;
+
+	spin_lock(&dq_data_lock);
 Index: linux-2.6.18-128.1.14/fs/quota_v1.c
 ===================================================================
 --- linux-2.6.18-128.1.14.orig/fs/quota_v1.c	2009-06-19 12:33:10.000000000 -0600
