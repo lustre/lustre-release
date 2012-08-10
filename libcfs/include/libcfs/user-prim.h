@@ -163,6 +163,10 @@ gid_t cfs_curproc_gid(void);
 uid_t cfs_curproc_fsuid(void);
 gid_t cfs_curproc_fsgid(void);
 
+#ifndef HAVE_STRLCPY /* not in glibc for RHEL 5.x, remove when obsolete */
+size_t strlcpy(char *tgt, const char *src, size_t tgt_len);
+#endif
+
 #define LIBCFS_REALLOC(ptr, size) realloc(ptr, size)
 
 #define cfs_online_cpus() sysconf(_SC_NPROCESSORS_ONLN)

@@ -233,12 +233,12 @@ static int cfs_access_process_vm(struct task_struct *tsk, unsigned long addr,
 	down_read(&mm->mmap_sem);
 	/* ignore errors, just check how much was sucessfully transfered */
 	while (len) {
-		int bytes, ret, offset;
+		int bytes, rc, offset;
 		void *maddr;
 
-		ret = get_user_pages(tsk, mm, addr, 1,
+		rc = get_user_pages(tsk, mm, addr, 1,
 				     write, 1, &page, &vma);
-		if (ret <= 0)
+		if (rc <= 0)
 			break;
 
 		bytes = len;
@@ -274,17 +274,18 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 	struct mm_struct *mm;
 	char *buffer, *tmp_buf = NULL;
 	int buf_len = CFS_PAGE_SIZE;
+	int key_len = strlen(key);
 	unsigned long addr;
-	int ret;
+	int rc;
 	ENTRY;
 
-	buffer = (char *)cfs_alloc(buf_len, CFS_ALLOC_USER);
+	buffer = cfs_alloc(buf_len, CFS_ALLOC_USER);
 	if (!buffer)
 		RETURN(-ENOMEM);
 
 	mm = get_task_mm(current);
 	if (!mm) {
-		cfs_free((void *)buffer);
+		cfs_free(buffer);
 		RETURN(-EINVAL);
 	}
 
@@ -297,15 +298,13 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 	up_read(&mm->mmap_sem);
 
 	addr = mm->env_start;
-	ret = -ENOENT;
-
 	while (addr < mm->env_end) {
 		int this_len, retval, scan_len;
 		char *env_start, *env_end;
 
 		memset(buffer, 0, buf_len);
 
-		this_len = min((int)(mm->env_end - addr), buf_len);
+		this_len = min_t(int, mm->env_end - addr, buf_len);
 		retval = cfs_access_process_vm(current, addr, buffer,
 					       this_len, 0);
 		if (retval != this_len)
@@ -321,7 +320,7 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 			char *entry;
 			int entry_len;
 
-			env_end = (char *)memscan(env_start, '\0', scan_len);
+			env_end = memscan(env_start, '\0', scan_len);
 			LASSERT(env_end >= env_start &&
 				env_end <= env_start + scan_len);
 
@@ -331,8 +330,7 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 				/* This entry is too large to fit in buffer */
 				if (unlikely(scan_len == this_len)) {
 					CERROR("Too long env variable.\n");
-					ret = -EINVAL;
-					goto out;
+					GOTO(out, rc = -EINVAL);
 				}
 				addr -= scan_len;
 				break;
@@ -342,34 +340,31 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 			entry_len = env_end - env_start;
 
 			/* Key length + length of '=' */
-			if (entry_len > strlen(key) + 1 &&
-			    !memcmp(entry, key, strlen(key))) {
-				entry += (strlen(key) + 1);
-				entry_len -= (strlen(key) + 1);
+			if (entry_len > key_len + 1 &&
+			    !memcmp(entry, key, key_len)) {
+				entry += key_len + 1;
+				entry_len -= key_len + 1;
 				/* The 'value' buffer passed in is too small.*/
-				if (entry_len >= *val_len) {
-					CERROR("Buffer is too small. "
-					       "entry_len=%d buffer_len=%d\n",
-					       entry_len, *val_len);
-					ret = -EOVERFLOW;
-				} else {
-					memcpy(value, entry, entry_len);
-					*val_len = entry_len;
-					ret = 0;
-				}
-				goto out;
+				if (entry_len >= *val_len)
+					GOTO(out, rc = -EOVERFLOW);
+
+				memcpy(value, entry, entry_len);
+				*val_len = entry_len;
+				GOTO(out, rc = 0);
 			}
 
 			scan_len -= (env_end - env_start + 1);
 			env_start = env_end + 1;
 		}
 	}
+	GOTO(out, rc = -ENOENT);
+
 out:
 	mmput(mm);
 	cfs_free((void *)buffer);
 	if (tmp_buf)
 		cfs_free((void *)tmp_buf);
-	RETURN(ret);
+	return rc;
 }
 EXPORT_SYMBOL(cfs_get_environ);
 
