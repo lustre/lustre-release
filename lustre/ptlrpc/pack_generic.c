@@ -1557,7 +1557,11 @@ void lustre_msg_set_jobid(struct lustre_msg *msg, char *jobid)
 		pb = lustre_msg_buf_v2(msg, MSG_PTLRPC_BODY_OFF,
 				       sizeof(struct ptlrpc_body));
 		LASSERTF(pb, "invalid msg %p: no ptlrpc body!\n", msg);
-		memcpy(pb->pb_jobid, jobid, JOBSTATS_JOBID_SIZE);
+
+		if (jobid != NULL)
+			memcpy(pb->pb_jobid, jobid, JOBSTATS_JOBID_SIZE);
+		else if (pb->pb_jobid[0] == '\0')
+			lustre_get_jobid(pb->pb_jobid);
 		return;
 	}
 	default:

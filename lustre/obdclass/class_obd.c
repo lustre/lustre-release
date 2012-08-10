@@ -138,8 +138,9 @@ int lustre_get_jobid(char *jobid)
 #ifdef __KERNEL__
 	ret = cfs_get_environ(obd_jobid_var, jobid, &jobid_len);
 	if (ret) {
-		CDEBUG((ret != -ENOENT && ret != -EINVAL) ? D_ERROR : D_INFO,
-		       "Get jobid for (%s) failed(%d).\n", obd_jobid_var, ret);
+		CDEBUG((ret != -ENOENT && ret != -EINVAL && ret != -EDEADLK) ?
+		       D_ERROR : D_INFO, "Get jobid for (%s) failed: rc = %d\n",
+		       obd_jobid_var, ret);
 	}
 #endif
 	RETURN(ret);

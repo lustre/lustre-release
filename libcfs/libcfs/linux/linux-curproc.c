@@ -288,6 +288,14 @@ int cfs_get_environ(const char *key, char *value, int *val_len)
 		RETURN(-EINVAL);
 	}
 
+	/* Avoid deadlocks on mmap_sem if called from sys_mmap_pgoff(),
+	 * which is already holding mmap_sem for writes.  If some other
+	 * thread gets the write lock in the meantime, this thread will
+	 * block, but at least it won't deadlock on itself.  LU-1735 */
+	if (down_read_trylock(&mm->mmap_sem) == 0)
+		return -EDEADLK;
+	up_read(&mm->mmap_sem);
+
 	addr = mm->env_start;
 	ret = -ENOENT;
 
