@@ -212,6 +212,9 @@ int mdd_lfsck_start(const struct lu_env *env, struct md_lfsck *lfsck,
 	__u16		      flags   = 0;
 	ENTRY;
 
+	if (lfsck->ml_it_obj == NULL)
+		RETURN(-ENOTSUPP);
+
 	cfs_mutex_lock(&lfsck->ml_mutex);
 	cfs_spin_lock(&lfsck->ml_lock);
 	if (thread_is_running(thread)) {
@@ -315,6 +318,11 @@ int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd)
 	rc = obj->do_ops->do_index_try(env, obj, &dt_otable_features);
 	if (rc != 0) {
 		lu_object_put(env, &obj->do_lu);
+		if (rc == -ENOTSUPP) {
+			CERROR("%s: Lustre LFSCK unsupported on this device.\n",
+				mdd->mdd_obd_dev->obd_name);
+			rc = 0;
+		}
 		return rc;
 	}
 

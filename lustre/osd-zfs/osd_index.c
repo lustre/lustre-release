@@ -902,7 +902,7 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 	struct osd_object *obj = osd_dt_obj(dt);
 	ENTRY;
 
-	LASSERT(obj->oo_db != NULL);
+	LASSERT(dt_object_exists(dt));
 
 	/*
 	 * XXX: implement support for fixed-size keys sorted with natural
@@ -911,6 +911,11 @@ int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 	if (feat->dif_flags & DT_IND_RANGE)
 		RETURN(-ERANGE);
 
+	if (unlikely(feat == &dt_otable_features))
+		/* do not support oi scrub yet. */
+		RETURN(-ENOTSUPP);
+
+	LASSERT(obj->oo_db != NULL);
 	if (likely(feat == &dt_directory_features)) {
 		if (udmu_object_is_zap(obj->oo_db))
 			dt->do_index_ops = &osd_dir_ops;

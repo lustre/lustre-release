@@ -77,6 +77,7 @@ static char *osd_obj_tag = "osd_object";
 static struct dt_object_operations osd_obj_ops;
 static struct lu_object_operations osd_lu_obj_ops;
 extern struct dt_body_operations osd_body_ops;
+static struct dt_object_operations osd_obj_otable_it_ops;
 
 extern cfs_mem_cache_t *osd_object_kmem;
 
@@ -372,6 +373,11 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 			       osd->od_svname, PFID(lu_object_fid(l)), oid, rc);
 		}
 	} else if (rc == -ENOENT) {
+		if (fid_is_otable_it(&l->lo_header->loh_fid)) {
+			obj->oo_dt.do_ops = &osd_obj_otable_it_ops;
+			/* LFSCK iterator object is special without inode */
+			l->lo_header->loh_attr |= LOHA_EXISTS;
+                }
 		rc = 0;
 	}
 	LASSERT(osd_invariant(obj));
@@ -1599,5 +1605,19 @@ static struct lu_object_operations osd_lu_obj_ops = {
 	.loo_object_free	= osd_object_free,
 	.loo_object_print	= osd_object_print,
 	.loo_object_invariant	= osd_object_invariant,
+};
+
+static int osd_otable_it_attr_get(const struct lu_env *env,
+				struct dt_object *dt,
+				struct lu_attr *attr,
+				struct lustre_capa *capa)
+{
+	attr->la_valid = 0;
+	return 0;
+}
+
+static struct dt_object_operations osd_obj_otable_it_ops = {
+        .do_attr_get    = osd_otable_it_attr_get,
+        .do_index_try   = osd_index_try,
 };
 
