@@ -3281,6 +3281,7 @@ kiblnd_check_txs_locked(struct kib_conn *conn, struct list_head *txs)
 		if (ktime_compare(ktime_get(), tx->tx_deadline) >= 0) {
 			CERROR("Timed out tx: %s, %lld seconds\n",
 			       kiblnd_queue2str(conn, txs),
+			       kiblnd_timeout() +
 			       ktime_ms_delta(ktime_get(),
 					      tx->tx_deadline) / MSEC_PER_SEC);
 			return 1;
