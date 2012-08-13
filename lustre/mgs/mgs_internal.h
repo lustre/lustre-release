@@ -159,6 +159,32 @@ struct fs_db {
 int class_dentry_readdir(const struct lu_env *env,
 			 struct mgs_device *mgs, cfs_list_t *list);
 
+struct mgs_device {
+	struct dt_device		 mgs_dt_dev;
+	struct ptlrpc_service		*mgs_service;
+	struct dt_device		*mgs_bottom;
+	struct obd_export		*mgs_bottom_exp;
+	struct dentry			*mgs_configs_dir;
+	struct dt_object		*mgs_nidtbl_dir;
+	cfs_list_t			 mgs_fs_db_list;
+	cfs_spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
+	cfs_proc_dir_entry_t		*mgs_proc_live;
+	cfs_time_t			 mgs_start_time;
+	struct obd_device		*mgs_obd;
+	struct local_oid_storage	*mgs_los;
+	struct vfsmount			*mgs_vfsmnt;
+	struct super_block		*mgs_sb;
+	cfs_mutex_t			 mgs_mutex;
+};
+
+/* this is a top object */
+struct mgs_object {
+	struct lu_object_header mgo_header;
+	struct dt_object        mgo_obj;
+	int			mgo_no_attrs;
+	int			mgo_reserved;
+};
+
 int mgs_init_fsdb_list(struct mgs_device *mgs);
 int mgs_cleanup_fsdb_list(struct mgs_device *mgs);
 int mgs_find_or_make_fsdb(const struct lu_env *env, struct mgs_device *mgs, char *name,
@@ -213,8 +239,8 @@ int  mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
 int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
                           void *localdata);
 int mgs_client_free(struct obd_export *exp);
-int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt);
-int mgs_fs_cleanup(struct obd_device *obddev);
+int mgs_fs_setup(const struct lu_env *env, struct mgs_device *m);
+int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *m);
 
 #define strsuf(buf, suffix) (strcmp((buf)+strlen(buf)-strlen(suffix), (suffix)))
 #ifdef LPROCFS
@@ -277,9 +303,67 @@ static inline struct mgs_thread_info *mgs_env_info(const struct lu_env *env)
 	return info;
 }
 
+extern const struct lu_device_operations mgs_lu_ops;
+
+static inline int lu_device_is_mgs(struct lu_device *d)
+{
+	return ergo(d != NULL && d->ld_ops != NULL, d->ld_ops == &mgs_lu_ops);
+}
+
+static inline struct mgs_device* lu2mgs_dev(struct lu_device *d)
+{
+	LASSERT(lu_device_is_mgs(d));
+	return container_of0(d, struct mgs_device, mgs_dt_dev.dd_lu_dev);
+}
+
 static inline struct mgs_device *exp2mgs_dev(struct obd_export *exp)
 {
-	return &exp->exp_obd->u.mgs;
+	return lu2mgs_dev(exp->exp_obd->obd_lu_dev);
+}
+
+static inline struct lu_device *mgs2lu_dev(struct mgs_device *d)
+{
+	return (&d->mgs_dt_dev.dd_lu_dev);
+}
+
+static inline struct mgs_device *dt2mgs_dev(struct dt_device *d)
+{
+	LASSERT(lu_device_is_mgs(&d->dd_lu_dev));
+	return container_of0(d, struct mgs_device, mgs_dt_dev);
+}
+
+static inline struct mgs_object *lu2mgs_obj(struct lu_object *o)
+{
+	LASSERT(ergo(o != NULL, lu_device_is_mgs(o->lo_dev)));
+	return container_of0(o, struct mgs_object, mgo_obj.do_lu);
+}
+
+static inline struct lu_object *mgs2lu_obj(struct mgs_object *obj)
+{
+	return &obj->mgo_obj.do_lu;
+}
+
+static inline struct mgs_object *mgs_obj(const struct lu_object *o)
+{
+	LASSERT(lu_device_is_mgs(o->lo_dev));
+	return container_of0(o, struct mgs_object, mgo_obj.do_lu);
+}
+
+static inline struct mgs_object *dt2mgs_obj(const struct dt_object *d)
+{
+	return mgs_obj(&d->do_lu);
+}
+
+static inline struct dt_object* mgs_object_child(struct mgs_object *o)
+{
+	return container_of0(lu_object_next(mgs2lu_obj(o)),
+			     struct dt_object, do_lu);
+}
+
+static inline struct dt_object *dt_object_child(struct dt_object *o)
+{
+	return container_of0(lu_object_next(&(o)->do_lu),
+			     struct dt_object, do_lu);
 }
 
 #endif /* _MGS_INTERNAL_H */

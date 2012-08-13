@@ -1008,6 +1008,7 @@ static void osd_conf_get(const struct lu_env *env,
         param->ddp_max_name_len = LDISKFS_NAME_LEN;
         param->ddp_max_nlink    = LDISKFS_LINK_MAX;
 	param->ddp_block_shift  = sb->s_blocksize_bits;
+	param->ddp_mount_type     = LDD_MT_LDISKFS;
         param->ddp_mntopts      = 0;
         if (test_opt(sb, XATTR_USER))
                 param->ddp_mntopts |= MNTOPT_USERXATTR;
@@ -4508,7 +4509,7 @@ static int osd_mount(const struct lu_env *env,
 
 	OBD_PAGE_ALLOC(__page, CFS_ALLOC_STD);
 	if (__page == NULL)
-		RETURN(-ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	str = lustre_cfg_string(cfg, 2);
 	s_flags = simple_strtoul(str, NULL, 0);
@@ -4572,6 +4573,8 @@ static int osd_mount(const struct lu_env *env,
 out:
 	if (__page)
 		OBD_PAGE_FREE(__page);
+	if (rc)
+		fsfilt_put_ops(o->od_fsops);
 
         RETURN(rc);
 }

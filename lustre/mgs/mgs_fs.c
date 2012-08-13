@@ -27,7 +27,7 @@
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
- * Copyright (c) 2011, Whamcloud, Inc.
+ * Copyright (c) 2011, 2012, Whamcloud, Inc.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/
@@ -38,6 +38,7 @@
  * Lustre Management Server (MGS) filesystem interface code
  *
  * Author: Nathan Rutman <nathan@clusterfs.com>
+ * Author: Alex Zhuravlev <bzzz@whamcloud.com>
  */
 
 #define DEBUG_SUBSYSTEM S_MGS
@@ -123,10 +124,11 @@ static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen,
 {
         struct fsfilt_fid  fid;
         struct obd_device *obd = (struct obd_device *)data;
+	struct mgs_device *mgs = lu2mgs_dev(obd->obd_lu_dev);
         ENTRY;
 
         CDEBUG(D_DENTRY, "--> mgs_fid2dentry: ino/gen %lu/%u, sb %p\n",
-               (unsigned long)id, gen, obd->u.mgs.mgs_sb);
+	       (unsigned long)id, gen, mgs->mgs_sb);
 
         if (id == 0)
                 RETURN(ERR_PTR(-ESTALE));
@@ -134,20 +136,29 @@ static struct dentry *mgs_lvfs_fid2dentry(__u64 id, __u32 gen,
         fid.ino = id;
         fid.gen = gen;
 
-        RETURN(fsfilt_fid2dentry(obd, obd->u.mgs.mgs_vfsmnt, &fid, 0));
+	RETURN(fsfilt_fid2dentry(obd, mgs->mgs_vfsmnt, &fid, 0));
 }
 
 struct lvfs_callback_ops mgs_lvfs_ops = {
         l_fid2dentry:     mgs_lvfs_fid2dentry,
 };
 
-int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
+int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
 {
-	struct mgs_device *mgs = &obd->u.mgs;
+	struct obd_device *obd = mgs->mgs_obd;
+	struct dt_device_param p;
+	struct vfsmount *mnt;
         struct lvfs_run_ctxt saved;
         struct dentry *dentry;
         int rc;
         ENTRY;
+
+	dt_conf_get(env, mgs->mgs_bottom, &p);
+	mnt = p.ddp_mnt;
+	if (mnt == NULL) {
+		CERROR("%s: no proper support for OSD yet\n", obd->obd_name);
+		RETURN(-ENODEV);
+	}
 
         /* FIXME what's this?  Do I need it? */
         rc = cfs_cleanup_group_info();
@@ -156,6 +167,10 @@ int mgs_fs_setup(struct obd_device *obd, struct vfsmount *mnt)
 
         mgs->mgs_vfsmnt = mnt;
         mgs->mgs_sb = mnt->mnt_root->d_inode->i_sb;
+
+	obd->obd_fsops = fsfilt_get_ops(mt_str(p.ddp_mount_type));
+	if (IS_ERR(obd->obd_fsops))
+		RETURN(PTR_ERR(obd->obd_fsops));
 
         rc = fsfilt_setup(obd, mgs->mgs_sb);
         if (rc)
@@ -196,9 +211,9 @@ err_pop:
         return rc;
 }
 
-int mgs_fs_cleanup(struct obd_device *obd)
+int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 {
-	struct mgs_device *mgs = &obd->u.mgs;
+	struct obd_device *obd = mgs->mgs_obd;
         struct lvfs_run_ctxt saved;
         int rc = 0;
 
@@ -214,6 +229,9 @@ int mgs_fs_cleanup(struct obd_device *obd)
         shrink_dcache_sb(mgs->mgs_sb);
 
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+
+	if (obd->obd_fsops)
+		fsfilt_put_ops(obd->obd_fsops);
 
         return rc;
 }

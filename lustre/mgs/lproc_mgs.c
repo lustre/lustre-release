@@ -51,17 +51,22 @@ static int lprocfs_mgs_rd_mntdev(char *page, char **start, off_t off, int count,
 	struct obd_device *obd = (struct obd_device *)data;
 
 	LASSERT(obd != NULL);
+#if 0
+	/* will be fixed in the subsequent patch */
 	LASSERT(mnt_get_devname(obd->u.mgs.mgs_vfsmnt));
 	*eof = 1;
 
 	return snprintf(page, count, "%s\n",
 			mnt_get_devname(obd->u.mgs.mgs_vfsmnt));
+#else
+	return 0;
+#endif
 }
 
 static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 {
         struct obd_device *obd = seq->private;
-	struct mgs_device *mgs = &obd->u.mgs;
+	struct mgs_device *mgs;
         cfs_list_t dentry_list;
         struct l_linux_dirent *dirent, *n;
 	struct lu_env env;
@@ -69,6 +74,8 @@ static int mgs_fs_seq_show(struct seq_file *seq, void *v)
         ENTRY;
 
         LASSERT(obd != NULL);
+	LASSERT(obd->obd_lu_dev != NULL);
+	mgs = lu2mgs_dev(obd->obd_lu_dev);
 
 	rc = lu_env_init(&env, LCT_MG_THREAD);
 	if (rc)
@@ -129,10 +136,14 @@ static void seq_show_srpc_rules(struct seq_file *seq, const char *tgtname,
 static int mgsself_srpc_seq_show(struct seq_file *seq, void *v)
 {
         struct obd_device *obd = seq->private;
-	struct mgs_device *mgs = &obd->u.mgs;
+	struct mgs_device *mgs;
         struct fs_db      *fsdb;
 	struct lu_env	   env;
         int                rc;
+
+	LASSERT(obd != NULL);
+	LASSERT(obd->obd_lu_dev != NULL);
+	mgs = lu2mgs_dev(obd->obd_lu_dev);
 
 	rc = lu_env_init(&env, LCT_MG_THREAD);
 	if (rc)

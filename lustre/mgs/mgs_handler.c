@@ -36,6 +36,8 @@
  * lustre/mgs/mgs_handler.c
  *
  * Author: Nathan Rutman <nathan@clusterfs.com>
+ * Author: Alex Zhuravlev <bzzz@whamcloud.com>
+ * Author: Mikhail Pershin <tappro@whamcloud.com>
  */
 
 #define DEBUG_SUBSYSTEM S_MGS
@@ -140,7 +142,6 @@ static int mgs_disconnect(struct obd_export *exp)
         RETURN(rc);
 }
 
-static int mgs_cleanup(struct obd_device *obd);
 static int mgs_handle(struct ptlrpc_request *req);
 
 static int mgs_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
@@ -166,179 +167,6 @@ static int mgs_llog_finish(struct obd_device *obd, int count)
                 rc = llog_cleanup(ctxt);
 
         RETURN(rc);
-}
-
-/* Start the MGS obd */
-static int mgs_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
-{
-	static struct ptlrpc_service_conf	conf;
-        struct lprocfs_static_vars lvars;
-	struct mgs_device *mgs = &obd->u.mgs;
-        struct lustre_mount_info *lmi;
-        struct lustre_sb_info *lsi;
-        struct vfsmount *mnt;
-        int rc = 0;
-        ENTRY;
-
-        CDEBUG(D_CONFIG, "Starting MGS\n");
-
-        /* Find our disk */
-        lmi = server_get_mount(obd->obd_name);
-        if (!lmi)
-                RETURN(rc = -EINVAL);
-
-        mnt = lmi->lmi_mnt;
-        lsi = s2lsi(lmi->lmi_sb);
-	obd->obd_fsops = fsfilt_get_ops(lsi->lsi_fstype);
-        if (IS_ERR(obd->obd_fsops))
-                GOTO(err_put, rc = PTR_ERR(obd->obd_fsops));
-
-        if (lvfs_check_rdonly(lvfs_sbdev(mnt->mnt_sb))) {
-                CERROR("%s: Underlying device is marked as read-only. "
-                       "Setup failed\n", obd->obd_name);
-                GOTO(err_ops, rc = -EROFS);
-        }
-
-        obd->u.obt.obt_magic = OBT_MAGIC;
-        obd->u.obt.obt_instance = 0;
-	mgs->mgs_obd = obd;
-
-        /* namespace for mgs llog */
-        obd->obd_namespace = ldlm_namespace_new(obd ,"MGS",
-                                                LDLM_NAMESPACE_SERVER,
-                                                LDLM_NAMESPACE_MODEST,
-                                                LDLM_NS_TYPE_MGT);
-        if (obd->obd_namespace == NULL)
-                GOTO(err_ops, rc = -ENOMEM);
-
-        /* ldlm setup */
-        ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-                           "mgs_ldlm_client", &obd->obd_ldlm_client);
-
-        rc = mgs_fs_setup(obd, mnt);
-        if (rc) {
-                CERROR("%s: MGS filesystem method init failed: rc = %d\n",
-                       obd->obd_name, rc);
-                GOTO(err_ns, rc);
-        }
-
-        rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
-        if (rc)
-                GOTO(err_fs, rc);
-
-        /* No recovery for MGC's */
-        obd->obd_replayable = 0;
-
-        /* Internal mgs setup */
-	mgs_init_fsdb_list(mgs);
-        cfs_mutex_init(&mgs->mgs_mutex);
-        mgs->mgs_start_time = cfs_time_current_sec();
-
-        /* Setup proc */
-        lprocfs_mgs_init_vars(&lvars);
-        if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
-		lproc_mgs_setup(mgs);
-                rc = lprocfs_alloc_md_stats(obd, LPROC_MGS_LAST);
-                if (rc)
-                        GOTO(err_llog, rc);
-        }
-
-	conf = (typeof(conf)) {
-		.psc_name		= LUSTRE_MGS_NAME,
-		.psc_watchdog_factor	= MGS_SERVICE_WATCHDOG_FACTOR,
-		.psc_buf		= {
-			.bc_nbufs		= MGS_NBUFS,
-			.bc_buf_size		= MGS_BUFSIZE,
-			.bc_req_max_size	= MGS_MAXREQSIZE,
-			.bc_rep_max_size	= MGS_MAXREPSIZE,
-			.bc_req_portal		= MGS_REQUEST_PORTAL,
-			.bc_rep_portal		= MGC_REPLY_PORTAL,
-		},
-		.psc_thr		= {
-			.tc_thr_name		= "ll_mgs",
-			.tc_nthrs_init		= MGS_NTHRS_INIT,
-			.tc_nthrs_max		= MGS_NTHRS_MAX,
-			.tc_ctx_tags		= LCT_MG_THREAD,
-		},
-		.psc_ops		= {
-			.so_req_handler		= mgs_handle,
-			.so_req_printer		= target_print_req,
-		},
-	};
-        /* Start the service threads */
-	mgs->mgs_service = ptlrpc_register_service(&conf, obd->obd_proc_entry);
-	if (IS_ERR(mgs->mgs_service)) {
-		rc = PTR_ERR(mgs->mgs_service);
-		CERROR("failed to start service: %d\n", rc);
-		GOTO(err_llog, rc);
-        }
-
-        ping_evictor_start();
-
-        CDEBUG(D_INFO, "MGS %s started\n", obd->obd_name);
-
-        RETURN(0);
-
-err_llog:
-	lproc_mgs_cleanup(mgs);
-        obd_llog_finish(obd, 0);
-err_fs:
-        /* No extra cleanup needed for llog_init_commit_thread() */
-        mgs_fs_cleanup(obd);
-err_ns:
-        ldlm_namespace_free(obd->obd_namespace, NULL, 0);
-        obd->obd_namespace = NULL;
-err_ops:
-        fsfilt_put_ops(obd->obd_fsops);
-err_put:
-        server_put_mount(obd->obd_name, mnt);
-        mgs->mgs_sb = 0;
-        return rc;
-}
-
-static int mgs_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
-{
-	struct mgs_device *mgs = &obd->u.mgs;
-        int rc = 0;
-        ENTRY;
-
-        switch (stage) {
-        case OBD_CLEANUP_EARLY:
-                break;
-        case OBD_CLEANUP_EXPORTS:
-                ping_evictor_stop();
-                ptlrpc_unregister_service(mgs->mgs_service);
-		mgs_cleanup_fsdb_list(mgs);
-                rc = obd_llog_finish(obd, 0);
-		lproc_mgs_cleanup(mgs);
-                break;
-        }
-        RETURN(rc);
-}
-
-/**
- * Performs cleanup procedures for passed \a obd given it is mgs obd.
- */
-static int mgs_cleanup(struct obd_device *obd)
-{
-	struct mgs_device *mgs = &obd->u.mgs;
-        ENTRY;
-
-        if (mgs->mgs_sb == NULL)
-                RETURN(0);
-
-        mgs_fs_cleanup(obd);
-
-        server_put_mount(obd->obd_name, mgs->mgs_vfsmnt);
-        mgs->mgs_sb = NULL;
-
-        ldlm_namespace_free(obd->obd_namespace, NULL, 1);
-        obd->obd_namespace = NULL;
-
-        fsfilt_put_ops(obd->obd_fsops);
-
-        LCONSOLE_INFO("%s has stopped.\n", obd->obd_name);
-        RETURN(0);
 }
 
 static int mgs_completion_ast_config(struct ldlm_lock *lock, int flags,
@@ -631,7 +459,7 @@ out_nolock:
         *rep_mti = *mti;
 
         /* Flush logs to disk */
-        fsfilt_sync(obd, obd->u.mgs.mgs_sb);
+	dt_sync(req->rq_svc_thread->t_env, mgs->mgs_bottom);
         RETURN(rc);
 }
 
@@ -1186,10 +1014,358 @@ out:
 	RETURN(rc);
 }
 
+static int mgs_connect_to_osd(struct mgs_device *m, const char *nextdev)
+{
+	struct obd_connect_data *data = NULL;
+	struct obd_device       *obd;
+	int                      rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(data);
+	if (data == NULL)
+		RETURN(-ENOMEM);
+
+	obd = class_name2obd(nextdev);
+	if (obd == NULL) {
+		CERROR("can't locate next device: %s\n", nextdev);
+		GOTO(out, rc = -ENOTCONN);
+	}
+
+	data->ocd_version = LUSTRE_VERSION_CODE;
+
+	rc = obd_connect(NULL, &m->mgs_bottom_exp, obd,
+			 &obd->obd_uuid, data, NULL);
+	if (rc) {
+		CERROR("cannot connect to next dev %s (%d)\n", nextdev, rc);
+		GOTO(out, rc);
+	}
+
+	m->mgs_bottom = lu2dt_dev(m->mgs_bottom_exp->exp_obd->obd_lu_dev);
+	m->mgs_dt_dev.dd_lu_dev.ld_site = m->mgs_bottom->dd_lu_dev.ld_site;
+	LASSERT(m->mgs_dt_dev.dd_lu_dev.ld_site);
+out:
+	OBD_FREE_PTR(data);
+	RETURN(rc);
+}
+
+
+static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
+		     struct lu_device_type *ldt, struct lustre_cfg *lcfg)
+{
+	static struct ptlrpc_service_conf	conf;
+	struct lprocfs_static_vars  lvars = { 0 };
+	struct obd_device	   *obd;
+	struct lustre_mount_info   *lmi;
+	int			    rc;
+	ENTRY;
+
+	lmi = server_get_mount(lustre_cfg_string(lcfg, 0));
+	if (lmi == NULL)
+		RETURN(-ENODEV);
+
+	mgs->mgs_dt_dev.dd_lu_dev.ld_ops = &mgs_lu_ops;
+
+	rc = mgs_connect_to_osd(mgs, lustre_cfg_string(lcfg, 3));
+	if (rc)
+		RETURN(rc);
+
+	obd = class_name2obd(lustre_cfg_string(lcfg, 0));
+	LASSERT(obd);
+	mgs->mgs_obd = obd;
+	mgs->mgs_obd->obd_lu_dev = &mgs->mgs_dt_dev.dd_lu_dev;
+
+	obd->u.obt.obt_magic = OBT_MAGIC;
+	obd->u.obt.obt_instance = 0;
+
+	/* namespace for mgs llog */
+	obd->obd_namespace = ldlm_namespace_new(obd ,"MGS",
+						LDLM_NAMESPACE_SERVER,
+						LDLM_NAMESPACE_MODEST,
+						LDLM_NS_TYPE_MGT);
+	if (obd->obd_namespace == NULL)
+		GOTO(err_ops, rc = -ENOMEM);
+
+	/* ldlm setup */
+	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
+			   "mgs_ldlm_client", &obd->obd_ldlm_client);
+
+	rc = mgs_fs_setup(env, mgs);
+	if (rc) {
+		CERROR("%s: MGS filesystem method init failed: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(err_ns, rc);
+	}
+
+	rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
+	if (rc)
+		GOTO(err_fs, rc);
+
+	/* No recovery for MGC's */
+	obd->obd_replayable = 0;
+
+	/* Internal mgs setup */
+	mgs_init_fsdb_list(mgs);
+	cfs_mutex_init(&mgs->mgs_mutex);
+	mgs->mgs_start_time = cfs_time_current_sec();
+	cfs_spin_lock_init(&mgs->mgs_lock);
+
+	/* Setup proc */
+	lprocfs_mgs_init_vars(&lvars);
+	if (lprocfs_obd_setup(obd, lvars.obd_vars) == 0) {
+		lproc_mgs_setup(mgs);
+		rc = lprocfs_alloc_md_stats(obd, LPROC_MGS_LAST);
+		if (rc)
+			GOTO(err_llog, rc);
+	}
+
+	conf = (typeof(conf)) {
+		.psc_name		= LUSTRE_MGS_NAME,
+		.psc_watchdog_factor	= MGS_SERVICE_WATCHDOG_FACTOR,
+		.psc_buf		= {
+			.bc_nbufs		= MGS_NBUFS,
+			.bc_buf_size		= MGS_BUFSIZE,
+			.bc_req_max_size	= MGS_MAXREQSIZE,
+			.bc_rep_max_size	= MGS_MAXREPSIZE,
+			.bc_req_portal		= MGS_REQUEST_PORTAL,
+			.bc_rep_portal		= MGC_REPLY_PORTAL,
+		},
+		.psc_thr		= {
+			.tc_thr_name		= "ll_mgs",
+			.tc_nthrs_init		= MGS_NTHRS_INIT,
+			.tc_nthrs_max		= MGS_NTHRS_MAX,
+			.tc_ctx_tags		= LCT_MG_THREAD,
+		},
+		.psc_ops		= {
+			.so_req_handler		= mgs_handle,
+			.so_req_printer		= target_print_req,
+		},
+	};
+	/* Start the service threads */
+	mgs->mgs_service = ptlrpc_register_service(&conf, obd->obd_proc_entry);
+	if (IS_ERR(mgs->mgs_service)) {
+		rc = PTR_ERR(mgs->mgs_service);
+		CERROR("failed to start service: %d\n", rc);
+		GOTO(err_lproc, rc);
+	}
+
+	ping_evictor_start();
+
+	CDEBUG(D_INFO, "MGS %s started\n", obd->obd_name);
+
+	/* device stack is not yet fully setup to keep no objects behind */
+	lu_site_purge(env, mgs2lu_dev(mgs)->ld_site, ~0);
+	RETURN(0);
+
+err_lproc:
+	lproc_mgs_cleanup(mgs);
+err_llog:
+err_fs:
+	/* No extra cleanup needed for llog_init_commit_thread() */
+	mgs_fs_cleanup(env, mgs);
+err_ns:
+	ldlm_namespace_free(obd->obd_namespace, NULL, 0);
+	obd->obd_namespace = NULL;
+err_ops:
+	lu_site_purge(env, mgs2lu_dev(mgs)->ld_site, ~0);
+	if (!cfs_hash_is_empty(mgs2lu_dev(mgs)->ld_site->ls_obj_hash)) {
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		lu_site_print(env, mgs2lu_dev(mgs)->ld_site, &msgdata,
+				lu_cdebug_printer);
+	}
+	obd_disconnect(mgs->mgs_bottom_exp);
+	RETURN(rc);
+}
+
+static struct lu_device *mgs_device_free(const struct lu_env *env,
+					 struct lu_device *lu)
+{
+	struct mgs_device *mgs = lu2mgs_dev(lu);
+	ENTRY;
+
+	dt_device_fini(&mgs->mgs_dt_dev);
+	OBD_FREE_PTR(mgs);
+	RETURN(NULL);
+}
+
+static int mgs_process_config(const struct lu_env *env,
+			      struct lu_device *dev,
+			      struct lustre_cfg *lcfg)
+{
+	LBUG();
+	return 0;
+}
+
+static int mgs_object_init(const struct lu_env *env, struct lu_object *o,
+			   const struct lu_object_conf *unused)
+{
+	struct mgs_device *d = lu2mgs_dev(o->lo_dev);
+	struct lu_device  *under;
+	struct lu_object  *below;
+	int                rc = 0;
+	ENTRY;
+
+	/* do no set .do_ops as mgs calls to bottom osd directly */
+
+	CDEBUG(D_INFO, "object init, fid = "DFID"\n",
+			PFID(lu_object_fid(o)));
+
+	under = &d->mgs_bottom->dd_lu_dev;
+	below = under->ld_ops->ldo_object_alloc(env, o->lo_header, under);
+	if (below != NULL)
+		lu_object_add(o, below);
+	else
+		rc = -ENOMEM;
+
+	return 0;
+}
+
+static void mgs_object_free(const struct lu_env *env, struct lu_object *o)
+{
+	struct mgs_object *obj = lu2mgs_obj(o);
+	struct lu_object_header *h = o->lo_header;
+
+	dt_object_fini(&obj->mgo_obj);
+	lu_object_header_fini(h);
+	OBD_FREE_PTR(obj);
+}
+
+static int mgs_object_print(const struct lu_env *env, void *cookie,
+			    lu_printer_t p, const struct lu_object *l)
+{
+	const struct mgs_object *o = lu2mgs_obj((struct lu_object *) l);
+
+	return (*p)(env, cookie, LUSTRE_MGS_NAME"-object@%p", o);
+}
+
+struct lu_object_operations mgs_lu_obj_ops = {
+	.loo_object_init	= mgs_object_init,
+	.loo_object_free	= mgs_object_free,
+	.loo_object_print	= mgs_object_print,
+};
+
+struct lu_object *mgs_object_alloc(const struct lu_env *env,
+				   const struct lu_object_header *hdr,
+				   struct lu_device *d)
+{
+	struct lu_object_header *h;
+	struct mgs_object       *o;
+	struct lu_object        *l;
+
+	LASSERT(hdr == NULL);
+
+	OBD_ALLOC_PTR(o);
+	if (o != NULL) {
+		l = &o->mgo_obj.do_lu;
+		h = &o->mgo_header;
+
+		lu_object_header_init(h);
+		dt_object_init(&o->mgo_obj, h, d);
+		lu_object_add_top(h, l);
+
+		l->lo_ops = &mgs_lu_obj_ops;
+
+		return l;
+	} else {
+		return NULL;
+	}
+}
+
+const struct lu_device_operations mgs_lu_ops = {
+	.ldo_object_alloc	= mgs_object_alloc,
+	.ldo_process_config	= mgs_process_config,
+};
+
+static struct lu_device *mgs_device_alloc(const struct lu_env *env,
+					  struct lu_device_type *type,
+					  struct lustre_cfg *lcfg)
+{
+	struct mgs_device *mgs;
+	struct lu_device  *ludev;
+
+	OBD_ALLOC_PTR(mgs);
+	if (mgs == NULL) {
+		ludev = ERR_PTR(-ENOMEM);
+	} else {
+		int rc;
+
+		ludev = mgs2lu_dev(mgs);
+		dt_device_init(&mgs->mgs_dt_dev, type);
+		rc = mgs_init0(env, mgs, type, lcfg);
+		if (rc != 0) {
+			mgs_device_free(env, ludev);
+			ludev = ERR_PTR(rc);
+		}
+	}
+	return ludev;
+}
+
+static struct lu_device *mgs_device_fini(const struct lu_env *env,
+					 struct lu_device *d)
+{
+	struct mgs_device *mgs = lu2mgs_dev(d);
+	struct obd_device *obd = mgs->mgs_obd;
+	ENTRY;
+
+	LASSERT(mgs->mgs_bottom);
+
+	ping_evictor_stop();
+
+	ptlrpc_unregister_service(mgs->mgs_service);
+
+	obd_exports_barrier(obd);
+	obd_zombie_barrier();
+
+	mgs_cleanup_fsdb_list(mgs);
+	lproc_mgs_cleanup(mgs);
+
+	obd_llog_finish(obd, 0);
+
+	mgs_fs_cleanup(env, mgs);
+
+	ldlm_namespace_free(obd->obd_namespace, NULL, 1);
+	obd->obd_namespace = NULL;
+
+	lu_site_purge(env, d->ld_site, ~0);
+	if (!cfs_hash_is_empty(d->ld_site->ls_obj_hash)) {
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_ERROR, NULL);
+		lu_site_print(env, d->ld_site, &msgdata, lu_cdebug_printer);
+	}
+
+	LASSERT(mgs->mgs_bottom_exp);
+	obd_disconnect(mgs->mgs_bottom_exp);
+
+	server_put_mount(obd->obd_name, NULL);
+
+	RETURN(NULL);
+}
+
 /* context key constructor/destructor: mgs_key_init, mgs_key_fini */
 LU_KEY_INIT_FINI(mgs, struct mgs_thread_info);
 
+LU_TYPE_INIT_FINI(mgs, &mgs_thread_key);
+
 LU_CONTEXT_KEY_DEFINE(mgs, LCT_MG_THREAD);
+
+static struct lu_device_type_operations mgs_device_type_ops = {
+	.ldto_init		= mgs_type_init,
+	.ldto_fini		= mgs_type_fini,
+
+	.ldto_start		= mgs_type_start,
+	.ldto_stop		= mgs_type_stop,
+
+	.ldto_device_alloc	= mgs_device_alloc,
+	.ldto_device_free	= mgs_device_free,
+
+	.ldto_device_fini	= mgs_device_fini
+};
+
+static struct lu_device_type mgs_device_type = {
+	.ldt_tags	= LU_DEVICE_DT,
+	.ldt_name	= LUSTRE_MGS_NAME,
+	.ldt_ops	= &mgs_device_type_ops,
+	.ldt_ctx_tags	= LCT_MG_THREAD
+};
+
 
 /* use obd ops to offer management infrastructure */
 static struct obd_ops mgs_obd_ops = {
@@ -1197,9 +1373,6 @@ static struct obd_ops mgs_obd_ops = {
         .o_connect         = mgs_connect,
         .o_reconnect       = mgs_reconnect,
         .o_disconnect      = mgs_disconnect,
-        .o_setup           = mgs_setup,
-        .o_precleanup      = mgs_precleanup,
-        .o_cleanup         = mgs_cleanup,
         .o_init_export     = mgs_init_export,
         .o_destroy_export  = mgs_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
@@ -1210,24 +1383,17 @@ static struct obd_ops mgs_obd_ops = {
 static int __init mgs_init(void)
 {
         struct lprocfs_static_vars lvars;
-	int rc;
 
         lprocfs_mgs_init_vars(&lvars);
-        class_register_type(&mgs_obd_ops, NULL,
-                            lvars.module_vars, LUSTRE_MGS_NAME, NULL);
+	class_register_type(&mgs_obd_ops, NULL, lvars.module_vars,
+			    LUSTRE_MGS_NAME, &mgs_device_type);
 
-	LU_CONTEXT_KEY_INIT(&mgs_thread_key);
-	rc = lu_context_key_register(&mgs_thread_key);
-	if (rc)
-		class_unregister_type(LUSTRE_MGS_NAME);
-
-	return rc;
+	return 0;
 }
 
 static void /*__exit*/ mgs_exit(void)
 {
         class_unregister_type(LUSTRE_MGS_NAME);
-	lu_context_key_degister(&mgs_thread_key);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");

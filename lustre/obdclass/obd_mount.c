@@ -407,7 +407,8 @@ static int server_start_mgs(struct super_block *sb)
 
         if (!rc) {
                 rc = lustre_start_simple(LUSTRE_MGS_OBDNAME, LUSTRE_MGS_NAME,
-					 LUSTRE_MGS_OBDNAME, 0, 0, 0, 0);
+					 LUSTRE_MGS_OBDNAME, 0, 0,
+					 lsi->lsi_osd_obdname, 0);
                 /* Do NOT call server_deregister_mount() here. This leads to
                  * inability cleanup cleanly and free lsi and other stuff when
                  * mgs calls server_put_mount() in error handling case. -umka */

@@ -254,7 +254,7 @@ static int nidtbl_update_version(const struct lu_env *env,
                 if (rc == sizeof(version))
                         rc = 0;
                 filp_close(file, 0);
-                fsfilt_sync(obd, obd->u.mgs.mgs_sb);
+		dt_sync(env, mgs->mgs_bottom);
         } else {
                 rc = PTR_ERR(file);
         }
