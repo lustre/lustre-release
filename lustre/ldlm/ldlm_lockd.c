@@ -180,13 +180,15 @@ static int expired_lock_main(void *arg)
 
                 cfs_spin_lock_bh(&waiting_locks_spinlock);
                 if (expired_lock_thread.elt_dump) {
+                        struct libcfs_debug_msg_data msgdata = {
+                                .msg_file = __FILE__,
+                                .msg_fn = "waiting_locks_callback",
+                                .msg_line = expired_lock_thread.elt_dump };
                         cfs_spin_unlock_bh(&waiting_locks_spinlock);
 
                         /* from waiting_locks_callback, but not in timer */
                         libcfs_debug_dumplog();
-                        libcfs_run_lbug_upcall(__FILE__,
-                                                "waiting_locks_callback",
-                                                expired_lock_thread.elt_dump);
+                        libcfs_run_lbug_upcall(&msgdata);
 
                         cfs_spin_lock_bh(&waiting_locks_spinlock);
                         expired_lock_thread.elt_dump = 0;

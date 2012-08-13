@@ -1017,7 +1017,7 @@ int lmv_fid_alloc(struct obd_export *exp, struct lu_fid *fid,
 {
         struct obd_device     *obd = class_exp2obd(exp);
         struct lmv_obd        *lmv = &obd->u.lmv;
-        mdsno_t                mds;
+        mdsno_t                mds = 0;
         int                    rc;
         ENTRY;
 

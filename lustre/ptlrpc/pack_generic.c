@@ -2270,8 +2270,9 @@ static inline int rep_ptlrpc_body_swabbed(struct ptlrpc_request *req)
         }
 }
 
-void _debug_req(struct ptlrpc_request *req, __u32 mask,
-                struct libcfs_debug_msg_data *data, const char *fmt, ... )
+void _debug_req(struct ptlrpc_request *req,
+                struct libcfs_debug_msg_data *msgdata,
+                const char *fmt, ... )
 {
         int req_ok = req->rq_reqmsg != NULL;
         int rep_ok = req->rq_repmsg != NULL;
@@ -2283,8 +2284,7 @@ void _debug_req(struct ptlrpc_request *req, __u32 mask,
         }
 
         va_start(args, fmt);
-        libcfs_debug_vmsg2(data->msg_cdls, data->msg_subsys, mask, data->msg_file,
-                           data->msg_fn, data->msg_line, fmt, args,
+        libcfs_debug_vmsg2(msgdata, fmt, args,
                            " req@%p x"LPU64"/t"LPD64"("LPD64") o%d->%s@%s:%d/%d"
                            " lens %d/%d e %d to %d dl "CFS_TIME_T" ref %d "
                            "fl "REQ_FLAGS_FMT"/%x/%x rc %d/%d\n",

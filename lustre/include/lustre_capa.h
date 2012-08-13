@@ -155,13 +155,16 @@ static inline __u32 capa_expiry(struct lustre_capa *capa)
         return capa->lc_expiry;
 }
 
-#define DEBUG_CAPA(level, c, fmt, args...)                                     \
+void _debug_capa(struct lustre_capa *, struct libcfs_debug_msg_data *,
+                 const char *fmt, ... );
+#define DEBUG_CAPA(level, capa, fmt, args...)                                  \
 do {                                                                           \
-CDEBUG(level, fmt " capability@%p fid "DFID" opc "LPX64" uid "LPU64" gid "     \
-       LPU64" flags %u alg %d keyid %u timeout %u expiry %u\n",                \
-       ##args, c, PFID(capa_fid(c)), capa_opc(c), capa_uid(c), capa_gid(c),    \
-       capa_flags(c), capa_alg(c), capa_keyid(c), capa_timeout(c),             \
-       capa_expiry(c));                                                        \
+        if (((level) & D_CANTMASK) != 0 ||                                     \
+            ((libcfs_debug & (level)) != 0 &&                                  \
+             (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0)) {               \
+                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, level, NULL);              \
+                _debug_capa((capa), &msgdata, fmt, ##args);                    \
+        }                                                                      \
 } while (0)
 
 #define DEBUG_CAPA_KEY(level, k, fmt, args...)                                 \
