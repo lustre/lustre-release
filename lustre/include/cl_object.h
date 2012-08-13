@@ -723,6 +723,8 @@ struct cl_page {
          * modified only internally within cl_page.c. Protected by a VM lock.
          */
         const enum cl_page_state cp_state;
+	/** Protect to get and put page, see cl_page_put and cl_vmpage_page */
+	cfs_spinlock_t           cp_lock;
         /**
          * Linkage of pages within some group. Protected by
          * cl_page::cp_mutex. */
