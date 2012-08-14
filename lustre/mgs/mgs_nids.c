@@ -49,7 +49,6 @@
 
 #include <obd.h>
 #include <obd_class.h>
-#include <lustre_fsfilt.h>
 #include <lustre_disk.h>
 
 #include "mgs_internal.h"
@@ -230,37 +229,46 @@ static int nidtbl_update_version(const struct lu_env *env,
 				 struct mgs_device *mgs,
 				 struct mgs_nidtbl *tbl)
 {
-        struct lvfs_run_ctxt saved;
-        struct file         *file = NULL;
-        char                 filename[sizeof(MGS_NIDTBL_DIR) + 9];
-        u64                  version;
-        loff_t               off = 0;
-        int                  rc;
-	struct obd_device   *obd = tbl->mn_fsdb->fsdb_obd;
+	struct dt_object *fsdb;
+	struct thandle   *th;
+	u64		  version;
+	struct lu_buf	  buf = {
+				.lb_buf = &version,
+				.lb_len = sizeof(version)
+			  };
+	loff_t		  off = 0;
+	int		  rc;
         ENTRY;
 
-        LASSERT(cfs_mutex_is_locked(&tbl->mn_lock));
-        LASSERT(sizeof(filename) < 32);
+	LASSERT(cfs_mutex_is_locked(&tbl->mn_lock));
 
-        sprintf(filename, "%s/%s",
-                MGS_NIDTBL_DIR, tbl->mn_fsdb->fsdb_name);
+	fsdb = local_file_find_or_create(env, mgs->mgs_los, mgs->mgs_nidtbl_dir,
+					 tbl->mn_fsdb->fsdb_name,
+					 S_IFREG | S_IRUGO | S_IWUSR);
+	if (IS_ERR(fsdb))
+		RETURN(PTR_ERR(fsdb));
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+	th = dt_trans_create(env, mgs->mgs_bottom);
+	if (IS_ERR(th))
+		GOTO(out_put, rc = PTR_ERR(th));
 
-        file = l_filp_open(filename, O_RDWR|O_CREAT, 0660);
-        if (!IS_ERR(file)) {
-                version = cpu_to_le64(tbl->mn_version);
-                rc = lustre_fwrite(file, &version, sizeof(version), &off);
-                if (rc == sizeof(version))
-                        rc = 0;
-                filp_close(file, 0);
-		dt_sync(env, mgs->mgs_bottom);
-        } else {
-                rc = PTR_ERR(file);
-        }
+	th->th_sync = 1; /* update table synchronously */
+	rc = dt_declare_record_write(env, fsdb, buf.lb_len, off, th);
+	if (rc)
+		GOTO(out, rc);
 
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        RETURN(rc);
+	rc = dt_trans_start_local(env, mgs->mgs_bottom, th);
+	if (rc)
+		GOTO(out, rc);
+
+	version = cpu_to_le64(tbl->mn_version);
+	rc = dt_record_write(env, fsdb, &buf, &off, th);
+
+out:
+	dt_trans_stop(env, mgs->mgs_bottom, th);
+out_put:
+	lu_object_put(env, &fsdb->do_lu);
+	RETURN(rc);
 }
 
 #define MGS_NIDTBL_VERSION_INIT 2
@@ -268,41 +276,42 @@ static int nidtbl_update_version(const struct lu_env *env,
 static int nidtbl_read_version(const struct lu_env *env,
 			       struct mgs_device *mgs, struct mgs_nidtbl *tbl)
 {
-        struct lvfs_run_ctxt saved;
-        struct file         *file = NULL;
-        char                 filename[sizeof(MGS_NIDTBL_DIR) + 9];
-        u64                  version;
+	struct dt_object *fsdb;
+	struct lu_fid     fid;
+	u64               tmpver;
+	struct lu_buf     buf = {
+				.lb_buf = &tmpver,
+				.lb_len = sizeof(tmpver)
+			  };
         loff_t               off = 0;
         int                  rc;
-	struct obd_device   *obd = tbl->mn_fsdb->fsdb_obd;
         ENTRY;
 
         LASSERT(cfs_mutex_is_locked(&tbl->mn_lock));
-        LASSERT(sizeof(filename) < 32);
 
-        sprintf(filename, "%s/%s",
-                MGS_NIDTBL_DIR, tbl->mn_fsdb->fsdb_name);
+	LASSERT(mgs->mgs_nidtbl_dir);
+	rc = dt_lookup_dir(env, mgs->mgs_nidtbl_dir, tbl->mn_fsdb->fsdb_name,
+			   &fid);
+	if (rc == -ENOENT)
+		RETURN(MGS_NIDTBL_VERSION_INIT);
+	else if (rc < 0)
+		RETURN(rc);
 
-        push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
+	fsdb = dt_locate_at(env, mgs->mgs_bottom, &fid,
+			    &mgs->mgs_dt_dev.dd_lu_dev);
+	if (IS_ERR(fsdb))
+		RETURN(PTR_ERR(fsdb));
 
-        file = l_filp_open(filename, O_RDONLY, 0);
-        if (!IS_ERR(file)) {
-                rc = lustre_fread(file, &version, sizeof(version), &off);
-                if (rc == sizeof(version))
-                        rc = cpu_to_le64(version);
-                else if (rc == 0)
-                        rc = MGS_NIDTBL_VERSION_INIT;
-                else
-                        CERROR("read version file %s error %d\n", filename, rc);
-                filp_close(file, 0);
-        } else {
-                rc = PTR_ERR(file);
-                if (rc == -ENOENT)
-                        rc = MGS_NIDTBL_VERSION_INIT;
-        }
-
-        pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-        RETURN(rc);
+	rc = dt_read(env, fsdb, &buf, &off);
+	if (rc == buf.lb_len)
+		rc = le64_to_cpu(tmpver);
+	else if (rc == 0)
+		rc = MGS_NIDTBL_VERSION_INIT;
+	else
+		CERROR("%s: read version file %s error %d\n",
+		       mgs->mgs_obd->obd_name, tbl->mn_fsdb->fsdb_name, rc);
+	lu_object_put(env, &fsdb->do_lu);
+	RETURN(rc);
 }
 
 static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
