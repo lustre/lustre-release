@@ -54,6 +54,7 @@
 #include <lustre_lib.h>
 #include <lustre_fsfilt.h>
 #include <libcfs/list.h>
+#include <lustre_fid.h>
 #include "mgs_internal.h"
 
 int mgs_export_stats_init(struct obd_device *obd, struct obd_export *exp,
@@ -143,7 +144,7 @@ struct lvfs_callback_ops mgs_lvfs_ops = {
         l_fid2dentry:     mgs_lvfs_fid2dentry,
 };
 
-int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
+int mgs_fs_setup_old(const struct lu_env *env, struct mgs_device *mgs)
 {
 	struct obd_device *obd = mgs->mgs_obd;
 	struct dt_device_param p;
@@ -192,7 +193,7 @@ int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
                        MOUNT_CONFIGS_DIR, rc);
                 GOTO(err_pop, rc);
         }
-        mgs->mgs_configs_dir = dentry;
+	mgs->mgs_configs_dir_old = dentry;
 
         /* create directory to store nid table versions */
         dentry = simple_mkdir(cfs_fs_pwd(current->fs), mnt, MGS_NIDTBL_DIR,
@@ -211,7 +212,7 @@ err_pop:
         return rc;
 }
 
-int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
+int mgs_fs_cleanup_old(const struct lu_env *env, struct mgs_device *mgs)
 {
 	struct obd_device *obd = mgs->mgs_obd;
         struct lvfs_run_ctxt saved;
@@ -221,10 +222,10 @@ int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        if (mgs->mgs_configs_dir) {
-                l_dput(mgs->mgs_configs_dir);
-                mgs->mgs_configs_dir = NULL;
-        }
+	if (mgs->mgs_configs_dir_old) {
+		l_dput(mgs->mgs_configs_dir_old);
+		mgs->mgs_configs_dir_old = NULL;
+	}
 
         shrink_dcache_sb(mgs->mgs_sb);
 
@@ -234,4 +235,100 @@ int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
 		fsfilt_put_ops(obd->obd_fsops);
 
         return rc;
+}
+
+int mgs_fs_setup(const struct lu_env *env, struct mgs_device *mgs)
+{
+	struct lu_fid	  fid;
+	struct dt_object *o;
+	struct lu_fid	  rfid;
+	struct dt_object *root;
+	int rc;
+	ENTRY;
+
+	/* FIXME what's this?  Do I need it? */
+	rc = cfs_cleanup_group_info();
+	if (rc)
+		RETURN(rc);
+
+	/* XXX: fix when support for N:1 layering is implemented */
+	LASSERT(mgs->mgs_dt_dev.dd_lu_dev.ld_site);
+	mgs->mgs_dt_dev.dd_lu_dev.ld_site->ls_top_dev =
+		&mgs->mgs_dt_dev.dd_lu_dev;
+
+	/* Setup the configs dir */
+	fid.f_seq = FID_SEQ_LOCAL_NAME;
+	fid.f_oid = 1;
+	fid.f_ver = 0;
+	rc = local_oid_storage_init(env, mgs->mgs_bottom, &fid, &mgs->mgs_los);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = dt_root_get(env, mgs->mgs_bottom, &rfid);
+	if (rc)
+		GOTO(out_los, rc);
+
+	root = dt_locate_at(env, mgs->mgs_bottom, &rfid,
+			    &mgs->mgs_dt_dev.dd_lu_dev);
+	if (unlikely(IS_ERR(root)))
+		GOTO(out_los, PTR_ERR(root));
+
+	o = local_file_find_or_create(env, mgs->mgs_los, root,
+				      MOUNT_CONFIGS_DIR,
+				      S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
+	if (IS_ERR(o))
+		GOTO(out_root, rc = PTR_ERR(o));
+
+	mgs->mgs_configs_dir = o;
+
+	/* create directory to store nid table versions */
+	o = local_file_find_or_create(env, mgs->mgs_los, root, MGS_NIDTBL_DIR,
+				      S_IFDIR | S_IRUGO | S_IWUSR | S_IXUGO);
+	if (IS_ERR(o)) {
+		lu_object_put(env, &mgs->mgs_configs_dir->do_lu);
+		mgs->mgs_configs_dir = NULL;
+		GOTO(out_root, rc = PTR_ERR(o));
+	}
+
+	mgs->mgs_nidtbl_dir = o;
+
+out_root:
+	lu_object_put(env, &root->do_lu);
+out_los:
+	if (rc) {
+		local_oid_storage_fini(env, mgs->mgs_los);
+		mgs->mgs_los = NULL;
+	}
+out:
+	mgs->mgs_dt_dev.dd_lu_dev.ld_site->ls_top_dev = NULL;
+
+	if (rc == 0) {
+		rc = mgs_fs_setup_old(env, mgs);
+		if (rc)
+			mgs_fs_cleanup(env, mgs);
+	}
+
+	return rc;
+}
+
+int mgs_fs_cleanup(const struct lu_env *env, struct mgs_device *mgs)
+{
+	mgs_fs_cleanup_old(env, mgs);
+
+	class_disconnect_exports(mgs->mgs_obd); /* cleans up client info too */
+
+	if (mgs->mgs_configs_dir) {
+		lu_object_put(env, &mgs->mgs_configs_dir->do_lu);
+		mgs->mgs_configs_dir = NULL;
+	}
+	if (mgs->mgs_nidtbl_dir) {
+		lu_object_put(env, &mgs->mgs_nidtbl_dir->do_lu);
+		mgs->mgs_nidtbl_dir = NULL;
+	}
+	if (mgs->mgs_los) {
+		local_oid_storage_fini(env, mgs->mgs_los);
+		mgs->mgs_los = NULL;
+	}
+
+	return 0;
 }

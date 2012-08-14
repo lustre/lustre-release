@@ -67,7 +67,7 @@ int class_dentry_readdir(const struct lu_env *env,
         ENTRY;
 
 	push_ctxt(&saved, &mgs->mgs_obd->obd_lvfs_ctxt, NULL);
-	dentry = dget(mgs->mgs_configs_dir);
+	dentry = dget(mgs->mgs_configs_dir_old);
         if (IS_ERR(dentry))
                 GOTO(out_pop, rc = PTR_ERR(dentry));
 	mnt = mntget(mgs->mgs_vfsmnt);

@@ -164,7 +164,8 @@ struct mgs_device {
 	struct ptlrpc_service		*mgs_service;
 	struct dt_device		*mgs_bottom;
 	struct obd_export		*mgs_bottom_exp;
-	struct dentry			*mgs_configs_dir;
+	struct dt_object		*mgs_configs_dir;
+	struct dentry			*mgs_configs_dir_old;
 	struct dt_object		*mgs_nidtbl_dir;
 	cfs_list_t			 mgs_fs_db_list;
 	cfs_spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
@@ -195,8 +196,6 @@ int mgs_check_index(const struct lu_env *env, struct mgs_device *mgs, struct mgs
 int mgs_check_failnid(const struct lu_env *env, struct mgs_device *mgs, struct mgs_target_info *mti);
 int mgs_write_log_target(const struct lu_env *env, struct mgs_device *mgs, struct mgs_target_info *mti,
                          struct fs_db *fsdb);
-int mgs_upgrade_sv_14(const struct lu_env *env, struct mgs_device *mgs,
-		      struct mgs_target_info *mti, struct fs_db *fsdb);
 int mgs_erase_log(const struct lu_env *env, struct mgs_device *mgs,
 		  char *name);
 int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs,
