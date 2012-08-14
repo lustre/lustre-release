@@ -245,6 +245,7 @@ static char *convert_hostnames(char *s1)
                 sep = *s2;
                 *s2 = '\0';
                 nid = libcfs_str2nid(s1);
+		*s2 = sep;
 
                 if (nid == LNET_NID_ANY) {
                         fprintf(stderr, "%s: Can't parse NID '%s'\n",
