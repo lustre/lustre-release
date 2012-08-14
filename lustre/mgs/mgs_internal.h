@@ -364,5 +364,38 @@ static inline struct dt_object *dt_object_child(struct dt_object *o)
 	return container_of0(lu_object_next(&(o)->do_lu),
 			     struct dt_object, do_lu);
 }
+struct mgs_direntry {
+	cfs_list_t  list;
+	char	   *name;
+	int	    len;
+};
+
+static inline void mgs_direntry_free(struct mgs_direntry *de)
+{
+	if (de) {
+		LASSERT(de->len);
+		OBD_FREE(de->name, de->len);
+		OBD_FREE_PTR(de);
+	}
+}
+
+static inline struct mgs_direntry *mgs_direntry_alloc(int len)
+{
+	struct mgs_direntry *de;
+
+	OBD_ALLOC_PTR(de);
+	if (de == NULL)
+		return NULL;
+
+	OBD_ALLOC(de->name, len);
+	if (de->name == NULL) {
+		OBD_FREE_PTR(de);
+		return NULL;
+	}
+
+	de->len = len;
+
+	return de;
+}
 
 #endif /* _MGS_INTERNAL_H */

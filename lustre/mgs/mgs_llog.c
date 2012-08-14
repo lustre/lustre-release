@@ -38,6 +38,8 @@
  * Lustre Management Server (mgs) config llog creation
  *
  * Author: Nathan Rutman <nathan@clusterfs.com>
+ * Author: Alex Zhuravlev <bzzz@whamcloud.com>
+ * Author: Mikhail Pershin <tappro@whamcloud.com>
  */
 
 #define DEBUG_SUBSYSTEM S_MGS
@@ -54,41 +56,79 @@
 
 /********************** Class functions ********************/
 
-/* Caller must list_del and OBD_FREE each dentry from the list */
+/* Caller must list_del and mgs_dirent_free() each dentry from the list */
 int class_dentry_readdir(const struct lu_env *env,
-			 struct mgs_device *mgs, cfs_list_t *dentry_list)
+			 struct mgs_device *mgs, cfs_list_t *list)
 {
-        /* see mds_cleanup_pending */
-        struct lvfs_run_ctxt saved;
-        struct file *file;
-        struct dentry *dentry;
-        struct vfsmount *mnt;
-        int rc = 0;
-        ENTRY;
+	struct dt_object    *dir = mgs->mgs_configs_dir;
+	const struct dt_it_ops *iops;
+	struct dt_it        *it;
+	struct mgs_direntry *de;
+	char		    *key;
+	int		     rc, key_sz;
 
-	push_ctxt(&saved, &mgs->mgs_obd->obd_lvfs_ctxt, NULL);
-	dentry = dget(mgs->mgs_configs_dir_old);
-        if (IS_ERR(dentry))
-                GOTO(out_pop, rc = PTR_ERR(dentry));
-	mnt = mntget(mgs->mgs_vfsmnt);
-        if (IS_ERR(mnt)) {
-                l_dput(dentry);
-                GOTO(out_pop, rc = PTR_ERR(mnt));
-        }
+	CFS_INIT_LIST_HEAD(list);
 
-        file = ll_dentry_open(dentry, mnt, O_RDONLY, current_cred());
-        if (IS_ERR(file))
-                /* dentry_open_it() drops the dentry, mnt refs */
-                GOTO(out_pop, rc = PTR_ERR(file));
+	if (!dt_try_as_dir(env, dir))
+		GOTO(out, rc = -ENOTDIR);
 
-        CFS_INIT_LIST_HEAD(dentry_list);
-        rc = l_readdir(file, dentry_list);
-        filp_close(file, 0);
-        /*  filp_close->fput() drops the dentry, mnt refs */
+	LASSERT(dir);
+	LASSERT(dir->do_index_ops);
 
-out_pop:
-	pop_ctxt(&saved, &mgs->mgs_obd->obd_lvfs_ctxt, NULL);
-        RETURN(rc);
+	iops = &dir->do_index_ops->dio_it;
+	it = iops->init(env, dir, LUDA_64BITHASH, BYPASS_CAPA);
+	if (IS_ERR(it))
+		RETURN(PTR_ERR(it));
+
+	rc = iops->load(env, it, 0);
+	if (rc <= 0)
+		GOTO(fini, rc = 0);
+
+	/* main cycle */
+	do {
+		key = (void *)iops->key(env, it);
+		if (IS_ERR(key)) {
+			CERROR("%s: key failed when listing %s: rc = %d\n",
+			       mgs->mgs_obd->obd_name, MOUNT_CONFIGS_DIR,
+			       (int) PTR_ERR(key));
+			goto next;
+		}
+		key_sz = iops->key_size(env, it);
+		LASSERT(key_sz > 0);
+
+		/* filter out "." and ".." entries */
+		if (key[0] == '.') {
+			if (key_sz == 1)
+				goto next;
+			if (key_sz == 2 && key[1] == '.')
+				goto next;
+		}
+
+		de = mgs_direntry_alloc(key_sz + 1);
+		if (de == NULL) {
+			rc = -ENOMEM;
+			break;
+		}
+
+		memcpy(de->name, key, key_sz);
+		de->name[key_sz] = 0;
+
+		cfs_list_add(&de->list, list);
+
+next:
+		rc = iops->next(env, it);
+	} while (rc == 0);
+	rc = 0;
+
+	iops->put(env, it);
+
+fini:
+	iops->fini(env, it);
+out:
+	if (rc)
+		CERROR("%s: key failed when listing %s: rc = %d\n",
+		       mgs->mgs_obd->obd_name, MOUNT_CONFIGS_DIR, rc);
+	RETURN(rc);
 }
 
 /******************** DB functions *********************/
@@ -995,8 +1035,8 @@ int mgs_write_log_direct_all(const struct lu_env *env,
 			     char *devname, char *comment,
 			     int server_only)
 {
-        cfs_list_t dentry_list;
-        struct l_linux_dirent *dirent, *n;
+	cfs_list_t list;
+	struct mgs_direntry *dirent, *n;
         char *fsname = mti->mti_fsname;
         char *logname;
         int rc = 0, len = strlen(fsname);
@@ -1019,41 +1059,43 @@ int mgs_write_log_direct_all(const struct lu_env *env,
                 RETURN(rc);
 
         /* Find all the logs in the CONFIGS directory */
-	rc = class_dentry_readdir(env, mgs, &dentry_list);
-        if (rc) {
-                CERROR("Can't read %s dir\n", MOUNT_CONFIGS_DIR);
+	rc = class_dentry_readdir(env, mgs, &list);
+	if (rc)
                 RETURN(rc);
-        }
 
         /* Could use fsdb index maps instead of directory listing */
-        cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                cfs_list_del(&dirent->lld_list);
+	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
+		cfs_list_del(&dirent->list);
                 /* don't write to sptlrpc rule log */
-		if (strstr(dirent->lld_name, "-sptlrpc") != NULL)
+		if (strstr(dirent->name, "-sptlrpc") != NULL)
 			goto next;
 
 		/* caller wants write server logs only */
-		if (server_only && strstr(dirent->lld_name, "-client") != NULL)
+		if (server_only && strstr(dirent->name, "-client") != NULL)
 			goto next;
 
-		if (strncmp(fsname, dirent->lld_name, len) == 0) {
-                        CDEBUG(D_MGS, "Changing log %s\n", dirent->lld_name);
+		if (strncmp(fsname, dirent->name, len) == 0) {
+			CDEBUG(D_MGS, "Changing log %s\n", dirent->name);
                         /* Erase any old settings of this same parameter */
-			mgs_modify(env, mgs, fsdb, mti, dirent->lld_name,
-				   devname, comment, CM_SKIP);
+			rc = mgs_modify(env, mgs, fsdb, mti, dirent->name,
+					devname, comment, CM_SKIP);
+			if (rc < 0)
+				CERROR("%s: Can't modify llog %s: rc = %d\n",
+				       mgs->mgs_obd->obd_name, dirent->name,rc);
                         /* Write the new one */
                         if (lcfg) {
 				rc = mgs_write_log_direct(env, mgs, fsdb,
-                                                          dirent->lld_name,
-                                                          lcfg, devname,
-                                                          comment);
+							  dirent->name,
+							  lcfg, devname,
+							  comment);
                                 if (rc)
-                                        CERROR("err %d writing log %s\n", rc,
-                                               dirent->lld_name);
+					CERROR("%s: writing log %s: rc = %d\n",
+					       mgs->mgs_obd->obd_name,
+					       dirent->name, rc);
                         }
                 }
 next:
-                OBD_FREE(dirent, sizeof(*dirent));
+		mgs_direntry_free(dirent);
         }
 
         RETURN(rc);
@@ -3087,19 +3129,17 @@ int mgs_erase_log(const struct lu_env *env, struct mgs_device *mgs, char *name)
 /* erase all logs for the given fs */
 int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs, char *fsname)
 {
-        struct fs_db *fsdb;
-        cfs_list_t dentry_list;
-        struct l_linux_dirent *dirent, *n;
-        int rc, len = strlen(fsname);
-        char *suffix;
-        ENTRY;
+	struct fs_db *fsdb;
+	cfs_list_t list;
+	struct mgs_direntry *dirent, *n;
+	int rc, len = strlen(fsname);
+	char *suffix;
+	ENTRY;
 
-        /* Find all the logs in the CONFIGS directory */
-	rc = class_dentry_readdir(env, mgs, &dentry_list);
-        if (rc) {
-                CERROR("Can't read %s dir\n", MOUNT_CONFIGS_DIR);
-                RETURN(rc);
-        }
+	/* Find all the logs in the CONFIGS directory */
+	rc = class_dentry_readdir(env, mgs, &list);
+	if (rc)
+		RETURN(rc);
 
         cfs_mutex_lock(&mgs->mgs_mutex);
 
@@ -3108,21 +3148,21 @@ int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs, char *fsnam
         if (fsdb)
 		mgs_free_fsdb(mgs, fsdb);
 
-        cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                cfs_list_del(&dirent->lld_list);
-                suffix = strrchr(dirent->lld_name, '-');
-                if (suffix != NULL) {
-                        if ((len == suffix - dirent->lld_name) &&
-                            (strncmp(fsname, dirent->lld_name, len) == 0)) {
-                                CDEBUG(D_MGS, "Removing log %s\n",
-                                       dirent->lld_name);
-				mgs_erase_log(env, mgs, dirent->lld_name);
-                        }
-                }
-                OBD_FREE(dirent, sizeof(*dirent));
-        }
-
         cfs_mutex_unlock(&mgs->mgs_mutex);
+
+	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
+		cfs_list_del(&dirent->list);
+		suffix = strrchr(dirent->name, '-');
+		if (suffix != NULL) {
+			if ((len == suffix - dirent->name) &&
+			    (strncmp(fsname, dirent->name, len) == 0)) {
+				CDEBUG(D_MGS, "Removing log %s\n",
+				       dirent->name);
+				mgs_erase_log(env, mgs, dirent->name);
+			}
+		}
+		mgs_direntry_free(dirent);
+	}
 
         RETURN(rc);
 }

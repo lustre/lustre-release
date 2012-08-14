@@ -67,8 +67,8 @@ static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 {
         struct obd_device *obd = seq->private;
 	struct mgs_device *mgs;
-        cfs_list_t dentry_list;
-        struct l_linux_dirent *dirent, *n;
+	cfs_list_t list;
+	struct mgs_direntry *dirent, *n;
 	struct lu_env env;
         int rc, len;
         ENTRY;
@@ -81,19 +81,18 @@ static int mgs_fs_seq_show(struct seq_file *seq, void *v)
 	if (rc)
 		RETURN(rc);
 
-	rc = class_dentry_readdir(&env, mgs, &dentry_list);
+	rc = class_dentry_readdir(&env, mgs, &list);
         if (rc) {
                 CERROR("Can't read config dir\n");
 		GOTO(out, rc);
         }
-        cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
-                cfs_list_del(&dirent->lld_list);
-                len = strlen(dirent->lld_name);
-                if ((len > 7) && (strncmp(dirent->lld_name + len - 7, "-client",
-                                          len) == 0)) {
-                        seq_printf(seq, "%.*s\n", len - 7, dirent->lld_name);
-                }
-                OBD_FREE(dirent, sizeof(*dirent));
+	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
+		cfs_list_del(&dirent->list);
+		len = strlen(dirent->name);
+		if (len > 7 &&
+		    strncmp(dirent->name + len - 7, "-client", len) == 0)
+			seq_printf(seq, "%.*s\n", len - 7, dirent->name);
+		mgs_direntry_free(dirent);
         }
 
 out:
