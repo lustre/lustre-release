@@ -39,6 +39,8 @@
  *   if an OST or MDS fails it need only look at log(s) relevant to itself
  *
  * Author: Andreas Dilger <adilger@clusterfs.com>
+ * Author: Alex Zhuravlev <bzzz@whamcloud.com>
+ * Author: Mikhail Pershin <tappro@whamcloud.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LOG
@@ -49,7 +51,6 @@
 
 #include <obd_class.h>
 #include <lustre_log.h>
-#include <libcfs/list.h>
 #include "llog_internal.h"
 
 /* Allocate a new log or catalog handle */
@@ -58,11 +59,13 @@ struct llog_handle *llog_alloc_handle(void)
         struct llog_handle *loghandle;
         ENTRY;
 
-        OBD_ALLOC(loghandle, sizeof(*loghandle));
+	OBD_ALLOC_PTR(loghandle);
         if (loghandle == NULL)
                 RETURN(ERR_PTR(-ENOMEM));
 
         cfs_init_rwsem(&loghandle->lgh_lock);
+	cfs_spin_lock_init(&loghandle->lgh_hdr_lock);
+	CFS_INIT_LIST_HEAD(&loghandle->u.phd.phd_entry);
 
         RETURN(loghandle);
 }
@@ -80,10 +83,11 @@ void llog_free_handle(struct llog_handle *loghandle)
                 cfs_list_del_init(&loghandle->u.phd.phd_entry);
         if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
                 LASSERT(cfs_list_empty(&loghandle->u.chd.chd_head));
-        OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
+	LASSERT(sizeof(*(loghandle->lgh_hdr)) == LLOG_CHUNK_SIZE);
+	OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
 
- out:
-        OBD_FREE(loghandle, sizeof(*loghandle));
+out:
+	OBD_FREE_PTR(loghandle);
 }
 EXPORT_SYMBOL(llog_free_handle);
 
@@ -102,7 +106,9 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
                 RETURN(-EINVAL);
         }
 
-        if (!ext2_clear_bit(index, llh->llh_bitmap)) {
+	cfs_spin_lock(&loghandle->lgh_hdr_lock);
+	if (!ext2_clear_bit(index, llh->llh_bitmap)) {
+		cfs_spin_unlock(&loghandle->lgh_hdr_lock);
                 CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n", index);
                 RETURN(-ENOENT);
         }
@@ -112,25 +118,38 @@ int llog_cancel_rec(struct llog_handle *loghandle, int index)
         if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
             (llh->llh_count == 1) &&
             (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
-                rc = llog_destroy(loghandle);
-                if (rc) {
-                        CERROR("Failure destroying log after last cancel: %d\n",
-                               rc);
-                        ext2_set_bit(index, llh->llh_bitmap);
-                        llh->llh_count++;
-                } else {
-                        rc = 1;
-                }
-                RETURN(rc);
-        }
+		cfs_spin_unlock(&loghandle->lgh_hdr_lock);
+		rc = llog_destroy(loghandle);
+		if (rc < 0) {
+			CERROR("%s: can't destroy empty llog #"LPX64"#"LPX64
+			       "#%08x: rc = %d\n",
+			       loghandle->lgh_ctxt->loc_obd->obd_name,
+			       loghandle->lgh_id.lgl_oid,
+			       loghandle->lgh_id.lgl_oseq,
+			       loghandle->lgh_id.lgl_ogen, rc);
+			GOTO(out_err, rc);
+		}
+		RETURN(1);
+	}
+	cfs_spin_unlock(&loghandle->lgh_hdr_lock);
 
-        rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
-        if (rc) {
-                CERROR("Failure re-writing header %d\n", rc);
-                ext2_set_bit(index, llh->llh_bitmap);
-                llh->llh_count++;
-        }
-        RETURN(rc);
+	rc = llog_write_rec(loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
+	if (rc < 0) {
+		CERROR("%s: fail to write header for llog #"LPX64"#"LPX64
+		       "#%08x: rc = %d\n",
+		       loghandle->lgh_ctxt->loc_obd->obd_name,
+		       loghandle->lgh_id.lgl_oid,
+		       loghandle->lgh_id.lgl_oseq,
+		       loghandle->lgh_id.lgl_ogen, rc);
+		GOTO(out_err, rc);
+	}
+	RETURN(0);
+out_err:
+	cfs_spin_lock(&loghandle->lgh_hdr_lock);
+	ext2_set_bit(index, llh->llh_bitmap);
+	llh->llh_count++;
+	cfs_spin_unlock(&loghandle->lgh_hdr_lock);
+	return rc;
 }
 EXPORT_SYMBOL(llog_cancel_rec);
 
@@ -142,7 +161,7 @@ int llog_init_handle(struct llog_handle *handle, int flags,
         ENTRY;
         LASSERT(handle->lgh_hdr == NULL);
 
-        OBD_ALLOC(llh, sizeof(*llh));
+	OBD_ALLOC_PTR(llh);
         if (llh == NULL)
                 RETURN(-ENOMEM);
         handle->lgh_hdr = llh;
@@ -177,21 +196,20 @@ int llog_init_handle(struct llog_handle *handle, int flags,
 
 out:
         if (flags & LLOG_F_IS_CAT) {
-                CFS_INIT_LIST_HEAD(&handle->u.chd.chd_head);
-                llh->llh_size = sizeof(struct llog_logid_rec);
-        } else if (flags & LLOG_F_IS_PLAIN) {
-                CFS_INIT_LIST_HEAD(&handle->u.phd.phd_entry);
-        } else {
-                CERROR("Unknown flags: %#x (Expected %#x or %#x\n",
-                       flags, LLOG_F_IS_CAT, LLOG_F_IS_PLAIN);
-                LBUG();
-        }
+		LASSERT(cfs_list_empty(&handle->u.chd.chd_head));
+		CFS_INIT_LIST_HEAD(&handle->u.chd.chd_head);
+		llh->llh_size = sizeof(struct llog_logid_rec);
+	} else if (!(flags & LLOG_F_IS_PLAIN)) {
+		CERROR("Unknown flags: %#x (Expected %#x or %#x\n",
+		       flags, LLOG_F_IS_CAT, LLOG_F_IS_PLAIN);
+		rc = -EINVAL;
+	}
 
-        if (rc) {
-                OBD_FREE(llh, sizeof(*llh));
-                handle->lgh_hdr = NULL;
-        }
-        RETURN(rc);
+	if (rc) {
+		OBD_FREE_PTR(llh);
+		handle->lgh_hdr = NULL;
+	}
+	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_init_handle);
 

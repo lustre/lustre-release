@@ -91,13 +91,18 @@ static struct llog_handle *llog_cat_new_log(struct llog_handle *cathandle)
 
         if (index == 0)
                 index = 1;
+
+	cfs_spin_lock(&loghandle->lgh_hdr_lock);
+	llh->llh_count++;
         if (ext2_set_bit(index, llh->llh_bitmap)) {
                 CERROR("argh, index %u already set in log bitmap?\n",
                        index);
+		cfs_spin_unlock(&loghandle->lgh_hdr_lock);
                 LBUG(); /* should never happen */
         }
+	cfs_spin_unlock(&loghandle->lgh_hdr_lock);
+
         cathandle->lgh_last_idx = index;
-        llh->llh_count++;
         llh->llh_tail.lrt_index = index;
 
         CDEBUG(D_RPCTRACE,"new recovery log "LPX64":%x for index %u of catalog "

@@ -69,6 +69,7 @@
 #include <obd_class.h>
 #include <obd_ost.h>
 #include <lustre/lustre_idl.h>
+#include <dt_object.h>
 
 #define LOG_NAME_LIMIT(logname, name)                   \
         snprintf(logname, sizeof(logname), "LOGS/%s", name)
@@ -78,29 +79,36 @@ struct plain_handle_data {
         cfs_list_t          phd_entry;
         struct llog_handle *phd_cat_handle;
         struct llog_cookie  phd_cookie; /* cookie of this log in its cat */
-        int                 phd_last_idx;
 };
 
 struct cat_handle_data {
         cfs_list_t              chd_head;
         struct llog_handle     *chd_current_log; /* currently open log */
+	struct llog_handle	*chd_next_log; /* llog to be used next */
 };
 
-/* In-memory descriptor for a log object or log catalog */
-struct llog_handle {
-        cfs_rw_semaphore_t      lgh_lock;
-        struct llog_logid       lgh_id;              /* id of this log */
-        struct llog_log_hdr    *lgh_hdr;
-        struct file            *lgh_file;
-        int                     lgh_last_idx;
-        int                     lgh_cur_idx;    /* used during llog_process */
-        __u64                   lgh_cur_offset; /* used during llog_process */
-        struct llog_ctxt       *lgh_ctxt;
-        union {
-                struct plain_handle_data phd;
-                struct cat_handle_data   chd;
-        } u;
-};
+static inline void logid_to_fid(struct llog_logid *id, struct lu_fid *fid)
+{
+	/* For compatibility purposes we identify pre-OSD (~< 2.3.51 MDS)
+	 * logid's by non-zero ogen (inode generation) and convert them
+	 * into IGIF */
+	if (id->lgl_ogen == 0) {
+		fid->f_seq = id->lgl_oseq;
+		fid->f_oid = id->lgl_oid;
+		fid->f_ver = 0;
+	} else {
+		lu_igif_build(fid, id->lgl_oid, id->lgl_ogen);
+	}
+}
+
+static inline void fid_to_logid(struct lu_fid *fid, struct llog_logid *id)
+{
+	id->lgl_oseq = fid->f_seq;
+	id->lgl_oid = fid->f_oid;
+	id->lgl_ogen = 0;
+}
+
+struct llog_handle;
 
 /* llog.c  -  general API */
 typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
@@ -266,6 +274,29 @@ struct llog_operations {
         /* XXX add 2 more: commit callbacks and llog recovery functions */
 };
 
+/* In-memory descriptor for a log object or log catalog */
+struct llog_handle {
+	cfs_rw_semaphore_t	 lgh_lock;
+	struct llog_logid	 lgh_id; /* id of this log */
+	struct llog_log_hdr	*lgh_hdr;
+	cfs_spinlock_t		 lgh_hdr_lock; /* protect lgh_hdr data */
+	union {
+		struct file		*lgh_file;
+		struct dt_object	*lgh_obj;
+	};
+	int			 lgh_last_idx;
+	int			 lgh_cur_idx; /* used during llog_process */
+	__u64			 lgh_cur_offset; /* used during llog_process */
+	struct llog_ctxt	*lgh_ctxt;
+	union {
+		struct plain_handle_data	 phd;
+		struct cat_handle_data		 chd;
+	} u;
+	char			*lgh_name;
+	void			*private_data;
+	struct llog_operations	*lgh_logops;
+};
+
 /* llog_lvfs.c */
 extern struct llog_operations llog_lvfs_ops;
 int llog_get_cat_list(struct obd_device *disk_obd,
@@ -294,6 +325,7 @@ struct llog_ctxt {
         cfs_atomic_t             loc_refcount;
         void                    *llog_proc_cb;
         long                     loc_flags; /* flags, see above defines */
+	struct dt_object	*loc_dir;
 };
 
 #define LCM_NAME_SIZE 64

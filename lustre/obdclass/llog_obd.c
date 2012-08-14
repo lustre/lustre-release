@@ -476,3 +476,22 @@ int obd_llog_finish(struct obd_device *obd, int count)
         RETURN(rc);
 }
 EXPORT_SYMBOL(obd_llog_finish);
+
+/* context key constructor/destructor: llog_key_init, llog_key_fini */
+LU_KEY_INIT_FINI(llog, struct llog_thread_info);
+/* context key: llog_thread_key */
+LU_CONTEXT_KEY_DEFINE(llog, LCT_MD_THREAD | LCT_MG_THREAD | LCT_LOCAL);
+LU_KEY_INIT_GENERIC(llog);
+EXPORT_SYMBOL(llog_thread_key);
+
+int llog_info_init(void)
+{
+	llog_key_init_generic(&llog_thread_key, NULL);
+	lu_context_key_register(&llog_thread_key);
+	return 0;
+}
+
+void llog_info_fini(void)
+{
+	lu_context_key_degister(&llog_thread_key);
+}
