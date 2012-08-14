@@ -641,8 +641,14 @@ test_18() {
                 log "use STORED_MDSSIZE=$STORED_MDSSIZE"
 
         # check if the block device is large enough
-        [ -z "$OK" ] && $(is_blkdev $SINGLEMDS $MDSDEV $MIN) && OK=1 &&
-                myMDSSIZE=$MIN && log "use device $MDSDEV with MIN=$MIN"
+	is_blkdev $SINGLEMDS $MDSDEV $MIN
+	local large_enough=$?
+	if [ -n "$OK" ]; then
+		[ $large_enough -ne 0 ] && OK=""
+	else
+		[ $large_enough -eq 0 ] && OK=1 && myMDSSIZE=$MIN &&
+			log "use device $MDSDEV with MIN=$MIN"
+	fi
 
         # check if a loopback device has enough space for fs metadata (5%)
 

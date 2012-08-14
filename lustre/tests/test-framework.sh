@@ -2882,21 +2882,22 @@ formatall() {
 	if ! combined_mgs_mds ; then
 		echo "Format mgs: $(mgsdevname)"
 		add mgs $(mkfs_opts mgs $(mgsdevname)) --reformat \
-		$(mgsdevname) $(mgsvdevname) ${quiet:+>/dev/null} || exit 10
+			$(mgsdevname) $(mgsvdevname) ${quiet:+>/dev/null} ||
+			exit 10
 	fi
 
 	for num in $(seq $MDSCOUNT); do
 		echo "Format mds$num: $(mdsdevname $num)"
 		add mds$num $(mkfs_opts mds$num $(mdsdevname ${num})) \
-		--reformat $(mdsdevname $num) $(mdsvdevname $num) \
-		${quiet:+>/dev/null} || exit 10
+			--reformat $(mdsdevname $num) $(mdsvdevname $num) \
+			${quiet:+>/dev/null} || exit 10
 	done
 
 	for num in $(seq $OSTCOUNT); do
 		echo "Format ost$num: $(ostdevname $num)"
 		add ost$num $(mkfs_opts ost$num $(ostdevname ${num})) \
-		--reformat $(ostdevname $num) $(ostvdevname ${num}) \
-		${quiet:+>/dev/null} || exit 10
+			--reformat $(ostdevname $num) $(ostvdevname ${num}) \
+			${quiet:+>/dev/null} || exit 10
 	done
 }
 
