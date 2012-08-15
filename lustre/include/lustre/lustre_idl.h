@@ -2553,40 +2553,38 @@ struct llog_catid {
 #define LLOG_OP_MASK  0xfff00000
 
 typedef enum {
-        LLOG_PAD_MAGIC     = LLOG_OP_MAGIC | 0x00000,
-        OST_SZ_REC         = LLOG_OP_MAGIC | 0x00f00,
-        OST_RAID1_REC      = LLOG_OP_MAGIC | 0x01000,
-        MDS_UNLINK_REC     = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_UNLINK,
-        MDS_SETATTR_REC    = LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) | REINT_SETATTR,
-        MDS_SETATTR64_REC  = LLOG_OP_MAGIC | 0x90000 | (MDS_REINT << 8) | REINT_SETATTR,
-        OBD_CFG_REC        = LLOG_OP_MAGIC | 0x20000,
-        PTL_CFG_REC        = LLOG_OP_MAGIC | 0x30000, /* obsolete */
-        LLOG_GEN_REC       = LLOG_OP_MAGIC | 0x40000,
-        LLOG_JOIN_REC      = LLOG_OP_MAGIC | 0x50000, /* obsolete */
-        CHANGELOG_REC      = LLOG_OP_MAGIC | 0x60000,
-        CHANGELOG_USER_REC = LLOG_OP_MAGIC | 0x70000,
-        LLOG_HDR_MAGIC     = LLOG_OP_MAGIC | 0x45539,
-        LLOG_LOGID_MAGIC   = LLOG_OP_MAGIC | 0x4553b,
+	LLOG_PAD_MAGIC		= LLOG_OP_MAGIC | 0x00000,
+	OST_SZ_REC		= LLOG_OP_MAGIC | 0x00f00,
+	/* OST_RAID1_REC	= LLOG_OP_MAGIC | 0x01000, never used */
+	MDS_UNLINK_REC		= LLOG_OP_MAGIC | 0x10000 | (MDS_REINT << 8) |
+				  REINT_UNLINK, /* obsolete after 2.5.0 */
+	MDS_UNLINK64_REC	= LLOG_OP_MAGIC | 0x90000 | (MDS_REINT << 8) |
+				  REINT_UNLINK,
+	/* MDS_SETATTR_REC	= LLOG_OP_MAGIC | 0x12401, obsolete 1.8.0 */
+	MDS_SETATTR64_REC	= LLOG_OP_MAGIC | 0x90000 | (MDS_REINT << 8) |
+				  REINT_SETATTR,
+	OBD_CFG_REC		= LLOG_OP_MAGIC | 0x20000,
+	/* PTL_CFG_REC		= LLOG_OP_MAGIC | 0x30000, obsolete 1.4.0 */
+	LLOG_GEN_REC		= LLOG_OP_MAGIC | 0x40000,
+	/* LLOG_JOIN_REC	= LLOG_OP_MAGIC | 0x50000, obsolete  1.8.0 */
+	CHANGELOG_REC		= LLOG_OP_MAGIC | 0x60000,
+	CHANGELOG_USER_REC	= LLOG_OP_MAGIC | 0x70000,
+	LLOG_HDR_MAGIC		= LLOG_OP_MAGIC | 0x45539,
+	LLOG_LOGID_MAGIC	= LLOG_OP_MAGIC | 0x4553b,
 } llog_op_type;
 
-/*
- * for now, continue to support old pad records which have 0 for their
- * type but still need to be swabbed for their length
- */
-#define LLOG_REC_HDR_NEEDS_SWABBING(r)                                  \
-        (((r)->lrh_type & __swab32(LLOG_OP_MASK)) ==                    \
-         __swab32(LLOG_OP_MAGIC) ||                                     \
-         (((r)->lrh_type == 0) && ((r)->lrh_len > LLOG_CHUNK_SIZE)))
+#define LLOG_REC_HDR_NEEDS_SWABBING(r) \
+	(((r)->lrh_type & __swab32(LLOG_OP_MASK)) == __swab32(LLOG_OP_MAGIC))
 
 /** Log record header - stored in little endian order.
  * Each record must start with this struct, end with a llog_rec_tail,
  * and be a multiple of 256 bits in size.
  */
 struct llog_rec_hdr {
-        __u32                   lrh_len;
-        __u32                   lrh_index;
-        __u32                   lrh_type;
-        __u32                   lrh_padding;
+	__u32	lrh_len;
+	__u32	lrh_index;
+	__u32	lrh_type;
+	__u32	lrh_id;
 };
 
 struct llog_rec_tail {
@@ -2879,8 +2877,7 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
 extern void lustre_swab_llogd_body (struct llogd_body *d);
 extern void lustre_swab_llog_hdr (struct llog_log_hdr *h);
 extern void lustre_swab_llogd_conn_body (struct llogd_conn_body *d);
-extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec,
-                                 struct llog_rec_tail *tail);
+extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec);
 
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);

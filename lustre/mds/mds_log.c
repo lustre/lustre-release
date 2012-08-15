@@ -175,8 +175,8 @@ static int llog_changelog_cancel(struct llog_ctxt *ctxt,
         /* This should only be called with the catalog handle */
         LASSERT(cathandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
-        rc = llog_cat_process(cathandle, llog_changelog_cancel_cb,
-                              (void *)cookies, 0, 0);
+	rc = llog_cat_process(NULL, cathandle, llog_changelog_cancel_cb,
+			      (void *)cookies, 0, 0);
         if (rc >= 0)
                 /* 0 or 1 means we're done */
                 rc = 0;

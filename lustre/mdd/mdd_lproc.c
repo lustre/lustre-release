@@ -246,8 +246,8 @@ static int lprocfs_rd_changelog_users(char *page, char **start, off_t off,
         cucb.idx += snprintf(cucb.page + cucb.idx, cucb.count - cucb.idx,
                               "%-5s %s\n", "ID", "index");
 
-        llog_cat_process(ctxt->loc_handle, lprocfs_changelog_users_cb,
-                         &cucb, 0, 0);
+	llog_cat_process(NULL, ctxt->loc_handle, lprocfs_changelog_users_cb,
+			 &cucb, 0, 0);
 
         llog_ctxt_put(ctxt);
         return cucb.idx;

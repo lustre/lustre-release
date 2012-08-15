@@ -361,13 +361,10 @@ static int llog_lvfs_write_rec(struct llog_handle *loghandle,
                 reccookie->lgc_lgl = loghandle->lgh_id;
                 reccookie->lgc_index = index;
                 if ((rec->lrh_type == MDS_UNLINK_REC) ||
-                    (rec->lrh_type == MDS_SETATTR_REC) ||
                     (rec->lrh_type == MDS_SETATTR64_REC))
                         reccookie->lgc_subsys = LLOG_MDS_OST_ORIG_CTXT;
                 else if (rec->lrh_type == OST_SZ_REC)
                         reccookie->lgc_subsys = LLOG_SIZE_ORIG_CTXT;
-                else if (rec->lrh_type == OST_RAID1_REC)
-                        reccookie->lgc_subsys = LLOG_RD1_ORIG_CTXT;
                 else
                         reccookie->lgc_subsys = -1;
                 rc = 1;
@@ -454,9 +451,8 @@ static int llog_lvfs_next_block(struct llog_handle *loghandle, int *cur_idx,
                 tail = (struct llog_rec_tail *)((char *)buf + rc -
                                                 sizeof(struct llog_rec_tail));
 
-                if (LLOG_REC_HDR_NEEDS_SWABBING(rec)) {
-                        lustre_swab_llog_rec(rec, tail);
-                }
+		if (LLOG_REC_HDR_NEEDS_SWABBING(rec))
+			lustre_swab_llog_rec(rec);
 
                 *cur_idx = tail->lrt_index;
 

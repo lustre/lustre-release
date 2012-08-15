@@ -1146,7 +1146,7 @@ int sptlrpc_target_local_read_conf(struct obd_device *obd,
                 GOTO(out_close, rc = 0);
         }
 
-        rc = llog_process(llh, local_read_handler, (void *) conf, NULL);
+	rc = llog_process(NULL, llh, local_read_handler, (void *)conf, NULL);
 
         if (rc == 0) {
                 conf->sc_local = 1;

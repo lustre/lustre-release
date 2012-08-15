@@ -191,7 +191,8 @@ static int mdd_changelog_llog_init(struct mdd_device *mdd)
                 return -EINVAL;
         }
 
-        rc = llog_cat_reverse_process(ctxt->loc_handle, changelog_init_cb, mdd);
+	rc = llog_cat_reverse_process(NULL, ctxt->loc_handle,
+				      changelog_init_cb, mdd);
         llog_ctxt_put(ctxt);
 
         if (rc < 0) {
@@ -212,8 +213,8 @@ static int mdd_changelog_llog_init(struct mdd_device *mdd)
                 return -EINVAL;
         }
 
-        rc = llog_cat_reverse_process(ctxt->loc_handle, changelog_user_init_cb,
-                                      mdd);
+	rc = llog_cat_reverse_process(NULL, ctxt->loc_handle,
+				      changelog_user_init_cb, mdd);
         llog_ctxt_put(ctxt);
 
         if (rc < 0) {
@@ -1545,8 +1546,9 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
                 return -ENXIO;
         LASSERT(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
-        rc = llog_cat_process(ctxt->loc_handle, mdd_changelog_user_purge_cb,
-                              (void *)&data, 0, 0);
+	rc = llog_cat_process(env, ctxt->loc_handle,
+			      mdd_changelog_user_purge_cb, (void *)&data,
+			      0, 0);
         if ((rc >= 0) && (data.mcud_minrec > 0)) {
                 CDEBUG(D_IOCTL, "Purging changelog entries up to "LPD64
                        ", referenced by "CHANGELOG_USER_PREFIX"%d\n",

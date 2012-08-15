@@ -1300,7 +1300,7 @@ static int mdc_changelog_send_thread(void *csdata)
                 GOTO(out, rc);
         }
 
-        rc = llog_cat_process_flags(llh, changelog_show_cb, cs, 0, 0, 0);
+	rc = llog_cat_process(NULL, llh, changelog_show_cb, cs, 0, 0);
 
         /* Send EOF no matter what our result */
         if ((kuch = changelog_kuc_hdr(cs->cs_buf, sizeof(*kuch),

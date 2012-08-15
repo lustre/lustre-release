@@ -117,12 +117,11 @@ extern struct llog_handle *llog_alloc_handle(void);
 int llog_init_handle(struct llog_handle *handle, int flags,
                      struct obd_uuid *uuid);
 extern void llog_free_handle(struct llog_handle *handle);
-int llog_process(struct llog_handle *loghandle, llog_cb_t cb,
-                 void *data, void *catdata);
-int llog_process_flags(struct llog_handle *loghandle, llog_cb_t cb,
-                 void *data, void *catdata, int flags);
-int llog_reverse_process(struct llog_handle *loghandle, llog_cb_t cb,
-                         void *data, void *catdata);
+int llog_process(const struct lu_env *env, struct llog_handle *loghandle,
+		 llog_cb_t cb, void *data, void *catdata);
+int llog_reverse_process(const struct lu_env *env,
+			 struct llog_handle *loghandle, llog_cb_t cb,
+			 void *data, void *catdata);
 extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
 extern int llog_close(struct llog_handle *cathandle);
 extern int llog_get_size(struct llog_handle *loghandle);
@@ -147,7 +146,6 @@ struct llog_process_data {
          */
         int                  lpd_startcat;
         int                  lpd_startidx;
-        int                  lpd_flags;  /** llog_process flags */
 };
 
 struct llog_process_cat_data {
@@ -181,12 +179,15 @@ int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                      struct llog_cookie *reccookie, void *buf);
 int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
                             struct llog_cookie *cookies);
-int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
-                     int startcat, int startidx);
-int llog_cat_process_flags(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
-                     int flags, int startcat, int startidx);
+int __llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
+		       llog_cb_t cb, void *data, int startcat, int startidx,
+		       int fork);
+int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
+		     llog_cb_t cb, void *data, int startcat, int startidx);
 int llog_cat_process_thread(void *data);
-int llog_cat_reverse_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data);
+int llog_cat_reverse_process(const struct lu_env *env,
+			     struct llog_handle *cat_llh, llog_cb_t cb,
+			     void *data);
 int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
 
 /* llog_obd.c */

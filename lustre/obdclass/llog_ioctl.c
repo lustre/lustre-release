@@ -135,14 +135,12 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                                lir->lid_id.lgl_ogen);
                         RETURN(rc);
                 }
-                rc = llog_process(log_handle, llog_check_cb, NULL, NULL);
+		rc = llog_process(NULL, log_handle, llog_check_cb, NULL, NULL);
                 llog_close(log_handle);
         } else {
                 switch (rec->lrh_type) {
                 case OST_SZ_REC:
-                case OST_RAID1_REC:
                 case MDS_UNLINK_REC:
-                case MDS_SETATTR_REC:
                 case MDS_SETATTR64_REC:
                 case OBD_CFG_REC:
                 case LLOG_HDR_MAGIC: {
@@ -334,7 +332,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         }
         case OBD_IOC_LLOG_CHECK: {
                 LASSERT(data->ioc_inllen1);
-                err = llog_process(handle, llog_check_cb, data, NULL);
+		err = llog_process(NULL, handle, llog_check_cb, data, NULL);
                 if (err == -LLOG_EEMPTY)
                         err = 0;
                 GOTO(out_close, err);
@@ -342,11 +340,13 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
 
         case OBD_IOC_LLOG_PRINT: {
                 LASSERT(data->ioc_inllen1);
-                err = llog_process(handle, class_config_dump_handler,data,NULL);
+		err = llog_process(NULL, handle, class_config_dump_handler,
+				   data, NULL);
                 if (err == -LLOG_EEMPTY)
                         err = 0;
                 else
-                        err = llog_process(handle, llog_print_cb, data, NULL);
+			err = llog_process(NULL, handle, llog_print_cb, data,
+					   NULL);
 
                 GOTO(out_close, err);
         }
@@ -398,8 +398,8 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                                 GOTO(out_close, err);
                         err = llog_remove_log(handle, &plain);
                 } else {
-                        /*remove all the log of the catalog*/
-                        llog_process(handle, llog_delete_cb, NULL, NULL);
+			/* remove all the log of the catalog */
+			llog_process(NULL, handle, llog_delete_cb, NULL, NULL);
                 }
                 GOTO(out_close, err);
         }

@@ -382,7 +382,7 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
         if (rc)
                 GOTO(out, rc);
 
-        rc = llog_process(handle, (llog_cb_t)cat_cancel_cb, NULL, NULL);
+	rc = llog_process(NULL, handle, (llog_cb_t)cat_cancel_cb, NULL, NULL);
         if (rc)
                 CERROR("llog_process() with cat_cancel_cb failed: %d\n", rc);
         GOTO(out, rc);

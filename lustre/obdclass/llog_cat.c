@@ -50,7 +50,8 @@
 
 #include <obd_class.h>
 #include <lustre_log.h>
-#include <libcfs/list.h>
+
+#include "llog_internal.h"
 
 /* Create a new log handle and add it to the open list.
  * This log handle will be closed when all of the records in it are removed.
@@ -393,20 +394,20 @@ int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec,
 
                 cd.lpcd_first_idx = d->lpd_startidx;
                 cd.lpcd_last_idx = 0;
-                rc = llog_process_flags(llh, d->lpd_cb, d->lpd_data, &cd,
-                                        d->lpd_flags);
+		rc = llog_process(NULL, llh, d->lpd_cb, d->lpd_data, &cd);
                 /* Continue processing the next log from idx 0 */
                 d->lpd_startidx = 0;
         } else {
-                rc = llog_process_flags(llh, d->lpd_cb, d->lpd_data, NULL,
-                                        d->lpd_flags);
+		rc = llog_process(NULL, llh, d->lpd_cb, d->lpd_data, NULL);
         }
 
         RETURN(rc);
 }
 
-int llog_cat_process_flags(struct llog_handle *cat_llh, llog_cb_t cb,
-                           void *data, int flags, int startcat, int startidx)
+int llog_cat_process_or_fork(const struct lu_env *env,
+			     struct llog_handle *cat_llh,
+			     llog_cb_t cb, void *data, int startcat,
+			     int startidx, bool fork)
 {
         struct llog_process_data d;
         struct llog_log_hdr *llh = cat_llh->lgh_hdr;
@@ -418,7 +419,6 @@ int llog_cat_process_flags(struct llog_handle *cat_llh, llog_cb_t cb,
         d.lpd_cb = cb;
         d.lpd_startcat = startcat;
         d.lpd_startidx = startidx;
-        d.lpd_flags = flags;
 
         if (llh->llh_cat_idx > cat_llh->lgh_last_idx) {
                 struct llog_process_cat_data cd;
@@ -428,28 +428,29 @@ int llog_cat_process_flags(struct llog_handle *cat_llh, llog_cb_t cb,
 
                 cd.lpcd_first_idx = llh->llh_cat_idx;
                 cd.lpcd_last_idx = 0;
-                rc = llog_process_flags(cat_llh, llog_cat_process_cb, &d, &cd,
-                                        flags);
+		rc = llog_process_or_fork(env, cat_llh, llog_cat_process_cb,
+					  &d, &cd, fork);
                 if (rc != 0)
                         RETURN(rc);
 
                 cd.lpcd_first_idx = 0;
                 cd.lpcd_last_idx = cat_llh->lgh_last_idx;
-                rc = llog_process_flags(cat_llh, llog_cat_process_cb, &d, &cd,
-                                        flags);
+		rc = llog_process_or_fork(env, cat_llh, llog_cat_process_cb,
+					  &d, &cd, fork);
         } else {
-                rc = llog_process_flags(cat_llh, llog_cat_process_cb, &d, NULL,
-                                        flags);
+		rc = llog_process_or_fork(env, cat_llh, llog_cat_process_cb,
+					  &d, NULL, fork);
         }
 
         RETURN(rc);
 }
-EXPORT_SYMBOL(llog_cat_process_flags);
+EXPORT_SYMBOL(llog_cat_process_or_fork);
 
-int llog_cat_process(struct llog_handle *cat_llh, llog_cb_t cb, void *data,
-                     int startcat, int startidx)
+int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
+		     llog_cb_t cb, void *data, int startcat, int startidx)
 {
-        return llog_cat_process_flags(cat_llh, cb, data, 0, startcat, startidx);
+	return llog_cat_process_or_fork(env, cat_llh, cb, data, startcat,
+					startidx, 0);
 }
 EXPORT_SYMBOL(llog_cat_process);
 
@@ -460,17 +461,24 @@ int llog_cat_process_thread(void *data)
         struct llog_ctxt *ctxt = args->lpca_ctxt;
         struct llog_handle *llh = NULL;
         llog_cb_t cb = args->lpca_cb;
-        struct llog_logid logid;
+	struct llog_thread_info *lgi;
+	struct lu_env		 env;
         int rc;
         ENTRY;
 
         cfs_daemonize_ctxt("ll_log_process");
 
-        logid = *(struct llog_logid *)(args->lpca_arg);
-        rc = llog_create(ctxt, &llh, &logid, NULL);
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		GOTO(out, rc);
+	lgi = llog_info(&env);
+	LASSERT(lgi);
+
+	lgi->lgi_logid = *(struct llog_logid *)(args->lpca_arg);
+	rc = llog_create(ctxt, &llh, &lgi->lgi_logid, NULL);
         if (rc) {
                 CERROR("llog_create() failed %d\n", rc);
-                GOTO(out, rc);
+		GOTO(out_env, rc);
         }
         rc = llog_init_handle(llh, LLOG_F_IS_CAT, NULL);
         if (rc) {
@@ -479,7 +487,7 @@ int llog_cat_process_thread(void *data)
         }
 
         if (cb) {
-                rc = llog_cat_process(llh, cb, NULL, 0, 0);
+		rc = llog_cat_process(&env, llh, cb, NULL, 0, 0);
                 if (rc != LLOG_PROC_BREAK && rc != 0)
                         CERROR("llog_cat_process() failed %d\n", rc);
                 cb(llh, NULL, NULL);
@@ -496,6 +504,8 @@ release_llh:
         rc = llog_cat_put(llh);
         if (rc)
                 CERROR("llog_cat_put() failed %d\n", rc);
+out_env:
+	lu_env_fini(&env);
 out:
         llog_ctxt_put(ctxt);
         OBD_FREE_PTR(args);
@@ -527,12 +537,13 @@ static int llog_cat_reverse_process_cb(struct llog_handle *cat_llh,
                 RETURN(rc);
         }
 
-        rc = llog_reverse_process(llh, d->lpd_cb, d->lpd_data, NULL);
+	rc = llog_reverse_process(NULL, llh, d->lpd_cb, d->lpd_data, NULL);
         RETURN(rc);
 }
 
-int llog_cat_reverse_process(struct llog_handle *cat_llh,
-                             llog_cb_t cb, void *data)
+int llog_cat_reverse_process(const struct lu_env *env,
+			     struct llog_handle *cat_llh,
+			     llog_cb_t cb, void *data)
 {
         struct llog_process_data d;
         struct llog_process_cat_data cd;
@@ -550,18 +561,21 @@ int llog_cat_reverse_process(struct llog_handle *cat_llh,
 
                 cd.lpcd_first_idx = 0;
                 cd.lpcd_last_idx = cat_llh->lgh_last_idx;
-                rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
-                                          &d, &cd);
+		rc = llog_reverse_process(env, cat_llh,
+					  llog_cat_reverse_process_cb,
+					  &d, &cd);
                 if (rc != 0)
                         RETURN(rc);
 
                 cd.lpcd_first_idx = le32_to_cpu(llh->llh_cat_idx);
                 cd.lpcd_last_idx = 0;
-                rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
-                                          &d, &cd);
+		rc = llog_reverse_process(env, cat_llh,
+					  llog_cat_reverse_process_cb,
+					  &d, &cd);
         } else {
-                rc = llog_reverse_process(cat_llh, llog_cat_reverse_process_cb,
-                                          &d, NULL);
+		rc = llog_reverse_process(env, cat_llh,
+					  llog_cat_reverse_process_cb,
+					  &d, NULL);
         }
 
         RETURN(rc);

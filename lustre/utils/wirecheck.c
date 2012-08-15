@@ -1281,16 +1281,16 @@ check_llog_logid(void)
         CHECK_MEMBER(llog_logid, lgl_oseq);
         CHECK_MEMBER(llog_logid, lgl_ogen);
 
-        CHECK_CVALUE(OST_SZ_REC);
-        CHECK_CVALUE(OST_RAID1_REC);
-        CHECK_CVALUE(MDS_UNLINK_REC);
-        CHECK_CVALUE(MDS_SETATTR_REC);
-        CHECK_CVALUE(OBD_CFG_REC);
-        CHECK_CVALUE(PTL_CFG_REC);
-        CHECK_CVALUE(LLOG_GEN_REC);
-        CHECK_CVALUE(LLOG_JOIN_REC);
-        CHECK_CVALUE(LLOG_HDR_MAGIC);
-        CHECK_CVALUE(LLOG_LOGID_MAGIC);
+	CHECK_CVALUE(OST_SZ_REC);
+	CHECK_CVALUE(MDS_UNLINK_REC);
+	CHECK_CVALUE(MDS_UNLINK64_REC);
+	CHECK_CVALUE(MDS_SETATTR64_REC);
+	CHECK_CVALUE(OBD_CFG_REC);
+	CHECK_CVALUE(LLOG_GEN_REC);
+	CHECK_CVALUE(CHANGELOG_REC);
+	CHECK_CVALUE(CHANGELOG_USER_REC);
+	CHECK_CVALUE(LLOG_HDR_MAGIC);
+	CHECK_CVALUE(LLOG_LOGID_MAGIC);
 }
 
 static void
@@ -1312,7 +1312,7 @@ check_llog_rec_hdr(void)
         CHECK_MEMBER(llog_rec_hdr, lrh_len);
         CHECK_MEMBER(llog_rec_hdr, lrh_index);
         CHECK_MEMBER(llog_rec_hdr, lrh_type);
-        CHECK_MEMBER(llog_rec_hdr, lrh_padding);
+	CHECK_MEMBER(llog_rec_hdr, lrh_id);
 }
 
 static void

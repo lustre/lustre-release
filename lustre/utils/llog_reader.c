@@ -172,7 +172,7 @@ int llog_pack_buffer(int fd, struct llog_log_hdr **llog,
                                        cur_rec->lrh_type, cur_rec->lrh_len);
                 } else {
                         printf("Bit %d of %d not set\n", idx, recs_num);
-                        cur_rec->lrh_padding = CANCELLED;
+                        cur_rec->lrh_id = CANCELLED;
                         /* The header counts only set records */
                         i--;
                 }
@@ -466,7 +466,7 @@ void print_records(struct llog_rec_hdr **recs, int rec_number)
 
                 lopt = le32_to_cpu(recs[i]->lrh_type);
 
-                if (recs[i]->lrh_padding == CANCELLED)
+                if (recs[i]->lrh_id == CANCELLED)
                         printf("NOT SET ");
 
                 if (lopt == OBD_CFG_REC) {

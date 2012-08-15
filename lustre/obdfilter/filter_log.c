@@ -215,21 +215,18 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
         if (oinfo.oi_oa == NULL)
                 RETURN(-ENOMEM);
 
-        if (rec->lrh_type == MDS_SETATTR_REC) {
-                struct llog_setattr_rec *lsr = (struct llog_setattr_rec *)rec;
-
-                oinfo.oi_oa->o_id = lsr->lsr_oid;
-                oinfo.oi_oa->o_seq = lsr->lsr_oseq;
-                oinfo.oi_oa->o_uid = lsr->lsr_uid;
-                oinfo.oi_oa->o_gid = lsr->lsr_gid;
-        } else {
+	if (rec->lrh_type == MDS_SETATTR64_REC) {
                 struct llog_setattr64_rec *lsr = (struct llog_setattr64_rec *)rec;
 
                 oinfo.oi_oa->o_id = lsr->lsr_oid;
                 oinfo.oi_oa->o_seq = lsr->lsr_oseq;
                 oinfo.oi_oa->o_uid = lsr->lsr_uid;
                 oinfo.oi_oa->o_gid = lsr->lsr_gid;
-        }
+	} else {
+		CERROR("%s: wrong llog type %#x\n", obd->obd_name,
+		       rec->lrh_type);
+		RETURN(-EINVAL);
+	}
 
         oinfo.oi_oa->o_valid |= (OBD_MD_FLID | OBD_MD_FLUID | OBD_MD_FLGID |
                                  OBD_MD_FLCOOKIE);
@@ -284,12 +281,12 @@ int filter_recov_log_mds_ost_cb(struct llog_handle *llh,
         case MDS_UNLINK_REC:
                 rc = filter_recov_log_unlink_cb(ctxt, rec, &cookie);
                 break;
-        case MDS_SETATTR_REC:
         case MDS_SETATTR64_REC:
                 rc = filter_recov_log_setattr_cb(ctxt, rec, &cookie);
                 break;
         case LLOG_GEN_REC: {
                 struct llog_gen_rec *lgr = (struct llog_gen_rec *)rec;
+
                 if (llog_gen_lt(lgr->lgr_gen, ctxt->loc_gen))
                         rc = 0;
                 else

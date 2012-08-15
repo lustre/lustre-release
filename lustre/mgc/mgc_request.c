@@ -1651,7 +1651,8 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
                 GOTO(out_closer, rc);
 
         /* Copy remote log */
-        rc = llog_process(remote_llh, mgc_copy_handler,(void *)local_llh, NULL);
+	rc = llog_process(NULL, remote_llh, mgc_copy_handler,
+			  (void *)local_llh, NULL);
 
 out_closer:
         rc2 = llog_close(remote_llh);
