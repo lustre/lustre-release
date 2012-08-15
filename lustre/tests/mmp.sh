@@ -215,7 +215,7 @@ mmp_fini() {
     return 0
 }
 
-# Mount the shared target on the failover server after some interval it's 
+# Mount the shared target on the failover server after some interval it's
 # mounted on the primary server.
 mount_after_interval_sub() {
     local interval=$1
@@ -254,7 +254,7 @@ mount_after_interval_sub() {
             return ${PIPESTATUS[0]}
         return 1
     elif [ $second_mount_rc -ne 0 -a $first_mount_rc -ne 0 ]; then
-        error_noexit "failed to mount on the failover pair $facet,$failover_facet"
+        error_noexit "mount failure on failover pair $facet,$failover_facet"
         return $first_mount_rc
     fi
 
@@ -280,7 +280,7 @@ mount_after_interval() {
     return 0
 }
 
-# Mount the shared target on the failover server 
+# Mount the shared target on the failover server
 # during unmounting it on the primary server.
 mount_during_unmount() {
     local device=$1
@@ -322,7 +322,7 @@ mount_during_unmount() {
     return 0
 }
 
-# Mount the shared target on the failover server 
+# Mount the shared target on the failover server
 # after clean unmounting it on the primary server.
 mount_after_unmount() {
     local device=$1
@@ -336,7 +336,7 @@ mount_after_unmount() {
     start $facet $device $mnt_opts || return ${PIPESTATUS[0]}
 
     log "Unmounting $device on $facet..."
-    stop $facet || return ${PIPESTATUS[0]} 
+    stop $facet || return ${PIPESTATUS[0]}
 
     log "Mounting $device on $failover_facet..."
     start $failover_facet $device $mnt_opts || return ${PIPESTATUS[0]}
@@ -388,6 +388,16 @@ run_e2fsck() {
 
     log "Running e2fsck on the device $device on $facet..."
     do_facet $facet "$E2FSCK $opts $device"
+    return ${PIPESTATUS[0]}
+}
+
+# Run delayed e2fsck on the Lustre server target.
+run_delay_e2fsck() {
+    local facet=$1
+    shift
+    local device=$1
+
+    do_facet $facet "$LUSTRE/tests/e2fsck.exp $device"
     return ${PIPESTATUS[0]}
 }
 
@@ -518,13 +528,15 @@ run_test 7 "mount after reboot"
 test_8() {
     local e2fsck_pid
 
-    run_e2fsck $MMP_MDS $MMP_MDSDEV "-fy" &
+    log "Force e2fsck checking on device $MMP_MDSDEV on $MMP_MDS"
+    do_facet $MMP_MDS "$DEBUGFS -w -R 'ssv free_blocks_count 0' $MMP_MDSDEV"
+    run_delay_e2fsck $MMP_MDS $MMP_MDSDEV &
     e2fsck_pid=$!
-    sleep 1
+    sleep 5
 
-    log "Mounting $MMP_MDSDEV on $MMP_MDS_FAILOVER..."
     if start $MMP_MDS_FAILOVER $MMP_MDSDEV $MDS_MOUNT_OPTS; then
-        error_noexit "mount $MMP_MDSDEV on $MMP_MDS_FAILOVER should fail"
+        error_noexit \
+            "mount $MMP_MDSDEV on $MMP_MDS_FAILOVER should fail"
         stop $MMP_MDS_FAILOVER || return ${PIPESTATUS[0]}
         return 1
     fi
@@ -532,13 +544,15 @@ test_8() {
     wait $e2fsck_pid
 
     echo
-    run_e2fsck $MMP_OSS $MMP_OSTDEV "-fy" &
+    log "Force e2fsck checking on device $MMP_OSTDEV on $MMP_OSS"
+    do_facet $MMP_OSS "$DEBUGFS -w -R 'ssv free_blocks_count 0' $MMP_OSTDEV"
+    run_delay_e2fsck $MMP_OSS $MMP_OSTDEV &
     e2fsck_pid=$!
-    sleep 1
+    sleep 5
 
-    log "Mounting $MMP_OSTDEV on $MMP_OSS_FAILOVER..."
     if start $MMP_OSS_FAILOVER $MMP_OSTDEV $OST_MOUNT_OPTS; then
-        error_noexit "mount $MMP_OSTDEV on $MMP_OSS_FAILOVER should fail"
+        error_noexit \
+            "mount $MMP_OSTDEV on $MMP_OSS_FAILOVER should fail"
         stop $MMP_OSS_FAILOVER || return ${PIPESTATUS[0]}
         return 2
     fi
@@ -559,7 +573,7 @@ test_9() {
     stop_services primary || return ${PIPESTATUS[0]}
 
     mark_mmp_block $MMP_MDS $MMP_MDSDEV || return ${PIPESTATUS[0]}
-    
+
     log "Mounting $MMP_MDSDEV on $MMP_MDS..."
     if start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS; then
         error_noexit "mount $MMP_MDSDEV on $MMP_MDS should fail"
