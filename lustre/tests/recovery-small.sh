@@ -1189,8 +1189,8 @@ check_target_ir_state()
 
         st=$(do_facet $target "lctl get_param -n $recovery_proc |
                                awk '/IR:/{ print \\\$2}'")
-        [ $st != ON -o $st != OFF ] ||
-                error "Error state $st, must be ON or OFF"
+	[ $st != ON -o $st != OFF -o $st != ENABLED -o $st != DISABLED ] ||
+		error "Error state $st, must be ENABLED or DISABLED"
         echo -n $st
 }
 
@@ -1455,7 +1455,8 @@ test_105()
 
         # make sure lustre mount at $rcli disabling IR
         local ir_state=$(check_cli_ir_state $rcli)
-	[ $ir_state = DISABLED -o $ir_state = "OFF" ] || error "IR state must be DISABLED at $rcli"
+	[ $ir_state = "DISABLED" -o $ir_state = "OFF" ] ||
+		error "IR state must be DISABLED at $rcli"
 
 	# Since the client just mounted, its last_rcvd entry is not on disk.
 	# Send an RPC so exp_need_sync forces last_rcvd to commit this export
