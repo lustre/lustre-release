@@ -61,6 +61,7 @@ struct cfg_interop_param *class_find_old_param(const char *param,
 int class_get_next_param(char **params, char *copy);
 int class_match_param(char *buf, char *key, char **valp);
 int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh);
+int class_parse_nid_quiet(char *buf, lnet_nid_t *nid, char **endh);
 int class_parse_net(char *buf, __u32 *net, char **endh);
 int class_match_nid(char *buf, char *key, lnet_nid_t nid);
 int class_match_net(char *buf, char *key, __u32 net);

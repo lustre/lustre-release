@@ -203,7 +203,7 @@ int class_match_param(char *buf, char *key, char **valp)
 }
 EXPORT_SYMBOL(class_match_param);
 
-static int parse_nid(char *buf, void *value)
+static int parse_nid(char *buf, void *value, int quiet)
 {
         lnet_nid_t *nid = (lnet_nid_t *)value;
 
@@ -211,7 +211,8 @@ static int parse_nid(char *buf, void *value)
         if (*nid != LNET_NID_ANY)
                 return 0;
 
-        LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", buf);
+	if (!quiet)
+		LCONSOLE_ERROR_MSG(0x159, "Can't parse NID '%s'\n", buf);
         return -EINVAL;
 }
 
@@ -233,7 +234,8 @@ enum {
    1 not found
    < 0 error
    endh is set to next separator */
-static int class_parse_value(char *buf, int opc, void *value, char **endh)
+static int class_parse_value(char *buf, int opc, void *value, char **endh,
+			     int quiet)
 {
         char *endp;
         char  tmp;
@@ -257,7 +259,7 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh)
         default:
                 LBUG();
         case CLASS_PARSE_NID:
-                rc = parse_nid(buf, value);
+		rc = parse_nid(buf, value, quiet);
                 break;
         case CLASS_PARSE_NET:
                 rc = parse_net(buf, value);
@@ -273,13 +275,19 @@ static int class_parse_value(char *buf, int opc, void *value, char **endh)
 
 int class_parse_nid(char *buf, lnet_nid_t *nid, char **endh)
 {
-        return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh);
+	return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh, 0);
 }
 EXPORT_SYMBOL(class_parse_nid);
 
+int class_parse_nid_quiet(char *buf, lnet_nid_t *nid, char **endh)
+{
+	return class_parse_value(buf, CLASS_PARSE_NID, (void *)nid, endh, 1);
+}
+EXPORT_SYMBOL(class_parse_nid_quiet);
+
 int class_parse_net(char *buf, __u32 *net, char **endh)
 {
-        return class_parse_value(buf, CLASS_PARSE_NET, (void *)net, endh);
+	return class_parse_value(buf, CLASS_PARSE_NET, (void *)net, endh, 0);
 }
 EXPORT_SYMBOL(class_parse_net);
 
