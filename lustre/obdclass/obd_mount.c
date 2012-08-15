@@ -1539,12 +1539,15 @@ static void server_umount_begin(struct super_block *sb)
 static int server_statfs (struct dentry *dentry, cfs_kstatfs_t *buf)
 {
 	struct super_block *sb = dentry->d_sb;
-	struct vfsmount *mnt = s2lsi(sb)->lsi_srv_mnt;
+	struct lustre_sb_info *lsi = s2lsi(sb);
+	struct obd_statfs statfs;
+	int rc;
 	ENTRY;
 
-	if (mnt && mnt->mnt_sb && mnt->mnt_sb->s_op->statfs) {
-		int rc = mnt->mnt_sb->s_op->statfs(mnt->mnt_root, buf);
-		if (!rc) {
+	if (lsi->lsi_dt_dev) {
+		rc = dt_statfs(NULL, lsi->lsi_dt_dev, &statfs);
+		if (rc == 0) {
+			statfs_unpack(buf, &statfs);
 			buf->f_type = sb->s_magic;
 			RETURN(0);
 		}
