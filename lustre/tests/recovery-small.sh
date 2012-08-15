@@ -1103,6 +1103,15 @@ test_61()
 }
 run_test 61 "Verify to not reuse orphan objects - bug 17025"
 
+test_62()
+{
+        zconf_umount `hostname` $DIR
+#define OBD_FAIL_PTLRPC_DELAY_IMP_FULL   0x515
+	lctl set_param fail_loc=0x515
+        mount_client $DIR
+}
+run_test 62 "Verify connection flags race - bug LU-1716"
+
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -817,6 +817,7 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 } else {
                         IMPORT_SET_STATE(imp, LUSTRE_IMP_FULL);
                         ptlrpc_activate_import(imp);
+			OBD_FAIL_TIMEOUT(OBD_FAIL_PTLRPC_DELAY_IMP_FULL, 2);
                 }
 
                 GOTO(finish, rc = 0);
