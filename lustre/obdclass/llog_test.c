@@ -364,8 +364,8 @@ ctxt_release:
         RETURN(rc);
 }
 
-static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
-                        void *data)
+static int cat_print_cb(const struct lu_env *env, struct llog_handle *llh,
+			struct llog_rec_hdr *rec, void *data)
 {
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
 
@@ -380,8 +380,8 @@ static int cat_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         RETURN(0);
 }
 
-static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
-                          void *data)
+static int plain_print_cb(const struct lu_env *env, struct llog_handle *llh,
+			  struct llog_rec_hdr *rec, void *data)
 {
         if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
                 CERROR("log is not plain\n");
@@ -393,8 +393,9 @@ static int plain_print_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
         RETURN(0);
 }
 
-static int llog_cancel_rec_cb(struct llog_handle *llh, struct llog_rec_hdr *rec,
-                              void *data)
+static int llog_cancel_rec_cb(const struct lu_env *env,
+			      struct llog_handle *llh,
+			      struct llog_rec_hdr *rec, void *data)
 {
         struct llog_cookie cookie;
         static int i = 0;

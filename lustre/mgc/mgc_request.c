@@ -1576,8 +1576,8 @@ static int mgc_llog_is_empty(struct obd_device *obd, struct llog_ctxt *ctxt,
         return(rc <= 1);
 }
 
-static int mgc_copy_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
-                            void *data)
+static int mgc_copy_handler(const struct lu_env *env, struct llog_handle *llh,
+			    struct llog_rec_hdr *rec, void *data)
 {
         struct llog_rec_hdr local_rec = *rec;
         struct llog_handle *local_llh = (struct llog_handle *)data;

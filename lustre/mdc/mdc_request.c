@@ -1221,8 +1221,8 @@ struct changelog_show {
         struct obd_device *cs_obd;
 };
 
-static int changelog_show_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
-                             void *data)
+static int changelog_show_cb(const struct lu_env *env, struct llog_handle *llh,
+			     struct llog_rec_hdr *hdr, void *data)
 {
         struct changelog_show *cs = data;
         struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;

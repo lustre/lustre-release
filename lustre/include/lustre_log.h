@@ -111,7 +111,8 @@ static inline void fid_to_logid(struct lu_fid *fid, struct llog_logid *id)
 struct llog_handle;
 
 /* llog.c  -  general API */
-typedef int (*llog_cb_t)(struct llog_handle *, struct llog_rec_hdr *, void *);
+typedef int (*llog_cb_t)(const struct lu_env *env, struct llog_handle *lgh,
+			 struct llog_rec_hdr *rec, void *data);
 typedef int (*llog_fill_rec_cb_t)(struct llog_rec_hdr *rec, void *data);
 extern struct llog_handle *llog_alloc_handle(void);
 int llog_init_handle(struct llog_handle *handle, int flags,
@@ -174,6 +175,8 @@ struct llog_process_cat_args {
         void                *lpca_arg;
 };
 
+int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
+		  struct llog_rec_hdr *rec, void *data);
 int llog_cat_put(struct llog_handle *cathandle);
 int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
                      struct llog_cookie *reccookie, void *buf);

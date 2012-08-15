@@ -198,8 +198,9 @@ struct cucb_data {
         int idx;
 };
 
-static int lprocfs_changelog_users_cb(struct llog_handle *llh,
-                                      struct llog_rec_hdr *hdr, void *data)
+static int lprocfs_changelog_users_cb(const struct lu_env *env,
+				      struct llog_handle *llh,
+				      struct llog_rec_hdr *hdr, void *data)
 {
         struct llog_changelog_user_rec *rec;
         struct cucb_data *cucb = (struct cucb_data *)data;

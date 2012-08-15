@@ -333,8 +333,8 @@ repeat:
 
                         /* if set, process the callback on this record */
                         if (ext2_test_bit(index, llh->llh_bitmap)) {
-                                rc = lpi->lpi_cb(loghandle, rec,
-                                                 lpi->lpi_cbdata);
+				rc = lpi->lpi_cb(lpi->lpi_env, loghandle, rec,
+						 lpi->lpi_cbdata);
                                 last_called_index = index;
                                 if (rc == LLOG_PROC_BREAK) {
                                         GOTO(out, rc);
@@ -513,9 +513,9 @@ int llog_reverse_process(const struct lu_env *env,
 				rec = (void *)tail - tail->lrt_len +
 				      sizeof(*tail);
 
-                                rc = cb(loghandle, rec, data);
-                                if (rc == LLOG_PROC_BREAK) {
-                                        GOTO(out, rc);
+				rc = cb(env, loghandle, rec, data);
+				if (rc == LLOG_PROC_BREAK) {
+					GOTO(out, rc);
 				} else if (rc == LLOG_DEL_RECORD) {
 					llog_cancel_rec(loghandle,
 							tail->lrt_index);

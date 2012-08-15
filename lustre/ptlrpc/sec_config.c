@@ -1082,9 +1082,9 @@ out_ctx:
         RETURN(rc);
 }
 
-static int local_read_handler(struct llog_handle *llh,
-                              struct llog_rec_hdr *rec,
-                              void *data)
+static int local_read_handler(const struct lu_env *env,
+			      struct llog_handle *llh,
+			      struct llog_rec_hdr *rec, void *data)
 {
         struct sptlrpc_conf  *conf = (struct sptlrpc_conf *) data;
         struct lustre_cfg    *lcfg = (struct lustre_cfg *)(rec + 1);

@@ -131,8 +131,8 @@ static void mdd_device_shutdown(const struct lu_env *env,
         EXIT;
 }
 
-static int changelog_init_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
-                             void *data)
+static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
+			     struct llog_rec_hdr *hdr, void *data)
 {
         struct mdd_device *mdd = (struct mdd_device *)data;
         struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
@@ -151,8 +151,9 @@ static int changelog_init_cb(struct llog_handle *llh, struct llog_rec_hdr *hdr,
         RETURN(LLOG_PROC_BREAK);
 }
 
-static int changelog_user_init_cb(struct llog_handle *llh,
-                                  struct llog_rec_hdr *hdr, void *data)
+static int changelog_user_init_cb(const struct lu_env *env,
+				  struct llog_handle *llh,
+				  struct llog_rec_hdr *hdr, void *data)
 {
         struct mdd_device *mdd = (struct mdd_device *)data;
         struct llog_changelog_user_rec *rec =
@@ -1428,7 +1429,6 @@ struct mdd_changelog_user_data {
         __u32 mcud_usercount;
         int   mcud_found:1;
         struct mdd_device   *mcud_mdd;
-        const struct lu_env *mcud_env;
 };
 #define MCUD_UNREGISTER -1LL
 
@@ -1436,13 +1436,14 @@ struct mdd_changelog_user_data {
  * 1. Find the smallest record everyone is willing to purge
  * 2. Update the last purgeable record for this user
  */
-static int mdd_changelog_user_purge_cb(struct llog_handle *llh,
-                                       struct llog_rec_hdr *hdr, void *data)
+static int mdd_changelog_user_purge_cb(const struct lu_env *env,
+				       struct llog_handle *llh,
+				       struct llog_rec_hdr *hdr, void *data)
 {
-        struct llog_changelog_user_rec *rec;
-        struct mdd_changelog_user_data *mcud =
-                (struct mdd_changelog_user_data *)data;
-        int rc;
+	struct llog_changelog_user_rec	*rec;
+	struct mdd_changelog_user_data	*mcud = data;
+	int				 rc;
+
         ENTRY;
 
         LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
@@ -1479,17 +1480,17 @@ static int mdd_changelog_user_purge_cb(struct llog_handle *llh,
 
                 /* XXX This is a workaround for the deadlock of changelog
                  * adding vs. changelog cancelling. LU-81. */
-                th = mdd_trans_create(mcud->mcud_env, mdd);
+		th = mdd_trans_create(env, mdd);
                 if (IS_ERR(th)) {
                         CERROR("Cannot get thandle\n");
                         RETURN(-ENOMEM);
                 }
 
-		rc = mdd_declare_llog_cancel(mcud->mcud_env, mdd, th);
+		rc = mdd_declare_llog_cancel(env, mdd, th);
                 if (rc)
                         GOTO(stop, rc);
 
-                rc = mdd_trans_start(mcud->mcud_env, mdd, th);
+		rc = mdd_trans_start(env, mdd, th);
                 if (rc)
                         GOTO(stop, rc);
 
@@ -1499,7 +1500,7 @@ static int mdd_changelog_user_purge_cb(struct llog_handle *llh,
                         mcud->mcud_usercount--;
 
 stop:
-                mdd_trans_stop(mcud->mcud_env, mdd, 0, th);
+		mdd_trans_stop(env, mdd, 0, th);
                 RETURN(rc);
         }
 
@@ -1532,7 +1533,6 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
         data.mcud_usercount = 0;
         data.mcud_endrec = endrec;
         data.mcud_mdd = mdd;
-        data.mcud_env = env;
         cfs_spin_lock(&mdd->mdd_cl.mc_lock);
         endrec = mdd->mdd_cl.mc_index;
         cfs_spin_unlock(&mdd->mdd_cl.mc_lock);

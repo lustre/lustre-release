@@ -361,8 +361,8 @@ int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
 }
 EXPORT_SYMBOL(llog_cat_cancel_records);
 
-int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec,
-                        void *data)
+int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
+			struct llog_rec_hdr *rec, void *data)
 {
         struct llog_process_data *d = data;
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
@@ -394,11 +394,11 @@ int llog_cat_process_cb(struct llog_handle *cat_llh, struct llog_rec_hdr *rec,
 
                 cd.lpcd_first_idx = d->lpd_startidx;
                 cd.lpcd_last_idx = 0;
-		rc = llog_process(NULL, llh, d->lpd_cb, d->lpd_data, &cd);
+		rc = llog_process(env, llh, d->lpd_cb, d->lpd_data, &cd);
                 /* Continue processing the next log from idx 0 */
                 d->lpd_startidx = 0;
         } else {
-		rc = llog_process(NULL, llh, d->lpd_cb, d->lpd_data, NULL);
+		rc = llog_process(env, llh, d->lpd_cb, d->lpd_data, NULL);
         }
 
         RETURN(rc);
@@ -488,9 +488,9 @@ int llog_cat_process_thread(void *data)
 
         if (cb) {
 		rc = llog_cat_process(&env, llh, cb, NULL, 0, 0);
-                if (rc != LLOG_PROC_BREAK && rc != 0)
-                        CERROR("llog_cat_process() failed %d\n", rc);
-                cb(llh, NULL, NULL);
+		if (rc != LLOG_PROC_BREAK && rc != 0)
+			CERROR("llog_cat_process() failed %d\n", rc);
+		cb(&env, llh, NULL, NULL);
         } else {
                 CWARN("No callback function for recovery\n");
         }
@@ -514,8 +514,9 @@ out:
 EXPORT_SYMBOL(llog_cat_process_thread);
 #endif
 
-static int llog_cat_reverse_process_cb(struct llog_handle *cat_llh,
-                                       struct llog_rec_hdr *rec, void *data)
+static int llog_cat_reverse_process_cb(const struct lu_env *env,
+				       struct llog_handle *cat_llh,
+				       struct llog_rec_hdr *rec, void *data)
 {
         struct llog_process_data *d = data;
         struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
@@ -537,7 +538,7 @@ static int llog_cat_reverse_process_cb(struct llog_handle *cat_llh,
                 RETURN(rc);
         }
 
-	rc = llog_reverse_process(NULL, llh, d->lpd_cb, d->lpd_data, NULL);
+	rc = llog_reverse_process(env, llh, d->lpd_cb, d->lpd_data, NULL);
         RETURN(rc);
 }
 
@@ -612,4 +613,62 @@ out:
         }
 
         RETURN(0);
+}
+
+/* callback func for llog_process in llog_obd_origin_setup */
+int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
+		  struct llog_rec_hdr *rec, void *data)
+{
+	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
+	struct llog_handle	*loghandle;
+	struct llog_log_hdr	*llh;
+	int			 rc, index;
+
+	ENTRY;
+
+	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
+		CERROR("%s: invalid record in catalog\n",
+		       loghandle->lgh_ctxt->loc_obd->obd_name);
+		RETURN(-EINVAL);
+	}
+	CDEBUG(D_HA, "processing log "LPX64":%x at index %u of catalog "
+	       LPX64"\n", lir->lid_id.lgl_oid, lir->lid_id.lgl_ogen,
+	       rec->lrh_index, cathandle->lgh_id.lgl_oid);
+
+	rc = llog_cat_id2handle(cathandle, &loghandle, &lir->lid_id);
+	if (rc) {
+		CERROR("%s: cannot find handle for llog "LPX64"\n",
+		       loghandle->lgh_ctxt->loc_obd->obd_name,
+		       lir->lid_id.lgl_oid);
+		if (rc == -ENOENT) {
+			index = rec->lrh_index;
+			goto cat_cleanup;
+		}
+		RETURN(rc);
+	}
+
+	llh = loghandle->lgh_hdr;
+	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
+	    (llh->llh_count == 1)) {
+		rc = llog_destroy(loghandle);
+		if (rc)
+			CERROR("%s: fail to destroy empty log: rc = %d\n",
+			       loghandle->lgh_ctxt->loc_obd->obd_name, rc);
+
+		index = loghandle->u.phd.phd_cookie.lgc_index;
+		llog_free_handle(loghandle);
+
+cat_cleanup:
+		LASSERT(index);
+		llog_cat_set_first_idx(cathandle, index);
+		rc = llog_cancel_rec(cathandle, index);
+		if (rc == 0)
+			CDEBUG(D_HA,
+			       "cancel log "LPX64":%x at index %u of catalog "
+			       LPX64"\n", lir->lid_id.lgl_oid,
+			       lir->lid_id.lgl_ogen, rec->lrh_index,
+			       cathandle->lgh_id.lgl_oid);
+	}
+
+	RETURN(rc);
 }

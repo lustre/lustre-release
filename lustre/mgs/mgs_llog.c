@@ -136,10 +136,10 @@ struct mgs_fsdb_handler_data
 */
 /* It might be better to have a separate db file, instead of parsing the info
    out of the client log.  This is slow and potentially error-prone. */
-static int mgs_fsdb_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
-                            void *data)
+static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
+			    struct llog_rec_hdr *rec, void *data)
 {
-        struct mgs_fsdb_handler_data *d = (struct mgs_fsdb_handler_data *) data;
+	struct mgs_fsdb_handler_data *d = data;
         struct fs_db *fsdb = d->fsdb;
         int cfg_len = rec->lrh_len;
         char *cfg_buf = (char*) (rec + 1);
@@ -614,10 +614,11 @@ struct mgs_modify_lookup {
         int               mml_modified;
 };
 
-static int mgs_modify_handler(struct llog_handle *llh, struct llog_rec_hdr *rec,
-                              void *data)
+static int mgs_modify_handler(const struct lu_env *env,
+			      struct llog_handle *llh,
+			      struct llog_rec_hdr *rec, void *data)
 {
-        struct mgs_modify_lookup *mml = (struct mgs_modify_lookup *)data;
+	struct mgs_modify_lookup *mml = data;
         struct cfg_marker *marker;
         struct lustre_cfg *lcfg = (struct lustre_cfg *)(rec + 1);
         int cfg_len = rec->lrh_len - sizeof(struct llog_rec_hdr) -
@@ -1087,9 +1088,9 @@ static int mgs_write_log_osc_to_lov(struct obd_device *obd, struct fs_db *fsdb,
 static void name_create_mdt_and_lov(char **logname, char **lovname,
                                     struct fs_db *fsdb, int i);
 
-static int mgs_steal_llog_handler(struct llog_handle *llh,
-                                  struct llog_rec_hdr *rec,
-                                  void *data)
+static int mgs_steal_llog_handler(const struct lu_env *env,
+				  struct llog_handle *llh,
+				  struct llog_rec_hdr *rec, void *data)
 {
         struct obd_device * obd;
         struct mgs_target_info *mti, *tmti;
@@ -2295,11 +2296,11 @@ struct mgs_srpc_read_data {
         int             msrd_skip;
 };
 
-static int mgs_srpc_read_handler(struct llog_handle *llh,
-                                 struct llog_rec_hdr *rec,
-                                 void *data)
+static int mgs_srpc_read_handler(const struct lu_env *env,
+				 struct llog_handle *llh,
+				 struct llog_rec_hdr *rec, void *data)
 {
-        struct mgs_srpc_read_data *msrd = (struct mgs_srpc_read_data *) data;
+	struct mgs_srpc_read_data *msrd = data;
         struct cfg_marker         *marker;
         struct lustre_cfg         *lcfg = (struct lustre_cfg *)(rec + 1);
         char                      *svname, *param;

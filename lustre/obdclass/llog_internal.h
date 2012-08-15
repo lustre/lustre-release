@@ -81,8 +81,9 @@ void llog_info_fini(void);
 
 int llog_cat_id2handle(struct llog_handle *cathandle, struct llog_handle **res,
                        struct llog_logid *logid);
-int class_config_dump_handler(struct llog_handle * handle,
-                              struct llog_rec_hdr *rec, void *data);
+int class_config_dump_handler(const struct lu_env *env,
+			      struct llog_handle *handle,
+			      struct llog_rec_hdr *rec, void *data);
 int llog_process_or_fork(const struct lu_env *env,
 			 struct llog_handle *loghandle,
 			 llog_cb_t cb, void *data, void *catdata, bool fork);

@@ -84,8 +84,8 @@ static int str2logid(struct llog_logid *logid, char *str, int len)
         RETURN(0);
 }
 
-static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
-                         void *data)
+static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
+			 struct llog_rec_hdr *rec, void *data)
 {
         struct obd_ioctl_data *ioc_data = (struct obd_ioctl_data *)data;
         static int l, remains, from, to;
@@ -135,7 +135,7 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
                                lir->lid_id.lgl_ogen);
                         RETURN(rc);
                 }
-		rc = llog_process(NULL, log_handle, llog_check_cb, NULL, NULL);
+		rc = llog_process(env, log_handle, llog_check_cb, NULL, NULL);
                 llog_close(log_handle);
         } else {
                 switch (rec->lrh_type) {
@@ -174,8 +174,8 @@ static int llog_check_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
         RETURN(rc);
 }
 
-static int llog_print_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
-                         void *data)
+static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
+			 struct llog_rec_hdr *rec, void *data)
 {
         struct obd_ioctl_data *ioc_data = (struct obd_ioctl_data *)data;
         static int l, remains, from, to;
@@ -208,6 +208,7 @@ static int llog_print_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
 
         if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
                 struct llog_logid_rec *lir = (struct llog_logid_rec *)rec;
+
                 if (rec->lrh_type != LLOG_LOGID_MAGIC) {
                         CERROR("invalid record in catalog\n");
                         RETURN(-EINVAL);
@@ -262,8 +263,8 @@ out:
 
 }
 
-static int llog_delete_cb(struct llog_handle *handle, struct llog_rec_hdr *rec,
-                          void *data)
+static int llog_delete_cb(const struct lu_env *env, struct llog_handle *handle,
+			  struct llog_rec_hdr *rec, void *data)
 {
         struct  llog_logid_rec *lir = (struct llog_logid_rec*)rec;
         int     rc;

@@ -112,8 +112,9 @@ static struct llog_operations mds_size_repl_logops = {
 
 static struct llog_operations changelog_orig_logops;
 
-static int llog_changelog_cancel_cb(struct llog_handle *llh,
-                                    struct llog_rec_hdr *hdr, void *data)
+static int llog_changelog_cancel_cb(const struct lu_env *env,
+				    struct llog_handle *llh,
+				    struct llog_rec_hdr *hdr, void *data)
 {
         struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
         struct llog_cookie cookie;
