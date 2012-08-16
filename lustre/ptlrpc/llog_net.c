@@ -93,9 +93,9 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
                rc = PTR_ERR(handle);
                RETURN(rc);
         }
-        
+
         lgr->lgr_gen = ctxt->loc_gen;
-        rc = llog_add(ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
+	rc = llog_add(NULL, ctxt, &lgr->lgr_hdr, NULL, NULL, 1);
         OBD_FREE_PTR(lgr);
         rc1 = fsfilt_commit(ctxt->loc_exp->exp_obd, inode, handle, 0);
         if (rc != 1 || rc1 != 0) {

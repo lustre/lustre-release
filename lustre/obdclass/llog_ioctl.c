@@ -127,7 +127,8 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
                 }
                 if (handle->lgh_ctxt == NULL)
                         RETURN(-EOPNOTSUPP);
-                rc = llog_cat_id2handle(handle, &log_handle, &lir->lid_id);
+		rc = llog_cat_id2handle(env, handle, &log_handle,
+					&lir->lid_id);
                 if (rc) {
                         CDEBUG(D_IOCTL,
                                "cannot find log #"LPX64"#"LPX64"#%08x\n",
@@ -136,7 +137,7 @@ static int llog_check_cb(const struct lu_env *env, struct llog_handle *handle,
                         RETURN(rc);
                 }
 		rc = llog_process(env, log_handle, llog_check_cb, NULL, NULL);
-                llog_close(log_handle);
+		llog_close(env, log_handle);
         } else {
                 switch (rec->lrh_type) {
                 case OST_SZ_REC:
@@ -233,14 +234,15 @@ static int llog_print_cb(const struct lu_env *env, struct llog_handle *handle,
 
         RETURN(0);
 }
-static int llog_remove_log(struct llog_handle *cat, struct llog_logid *logid)
+static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
+			   struct llog_logid *logid)
 {
         struct llog_handle *log;
         int rc, index = 0;
 
         ENTRY;
         cfs_down_write(&cat->lgh_lock);
-        rc = llog_cat_id2handle(cat, &log, logid);
+	rc = llog_cat_id2handle(env, cat, &log, logid);
         if (rc) {
                 CDEBUG(D_IOCTL, "cannot find log #"LPX64"#"LPX64"#%08x\n",
                        logid->lgl_oid, logid->lgl_oseq, logid->lgl_ogen);
@@ -249,13 +251,13 @@ static int llog_remove_log(struct llog_handle *cat, struct llog_logid *logid)
 
         index = log->u.phd.phd_cookie.lgc_index;
         LASSERT(index);
-        rc = llog_destroy(log);
+	rc = llog_destroy(env, log);
         if (rc) {
                 CDEBUG(D_IOCTL, "cannot destroy log\n");
                 GOTO(out, rc);
         }
         llog_cat_set_first_idx(cat, index);
-        rc = llog_cancel_rec(cat, index);
+	rc = llog_cancel_rec(env, cat, index);
 out:
         llog_free_handle(log);
         cfs_up_write(&cat->lgh_lock);
@@ -272,7 +274,7 @@ static int llog_delete_cb(const struct lu_env *env, struct llog_handle *handle,
         ENTRY;
         if (rec->lrh_type != LLOG_LOGID_MAGIC)
               RETURN (-EINVAL);
-        rc = llog_remove_log(handle, &lir->lid_id);
+	rc = llog_remove_log(env, handle, &lir->lid_id);
 
         RETURN(rc);
 }
@@ -289,19 +291,19 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                 err = str2logid(&logid, data->ioc_inlbuf1, data->ioc_inllen1);
                 if (err)
                         GOTO(out, err);
-                err = llog_create(ctxt, &handle, &logid, NULL);
+		err = llog_create(NULL, ctxt, &handle, &logid, NULL);
                 if (err)
                         GOTO(out, err);
         } else if (*data->ioc_inlbuf1 == '$') {
                 char *name = data->ioc_inlbuf1 + 1;
-                err = llog_create(ctxt, &handle, NULL, name);
+		err = llog_create(NULL, ctxt, &handle, NULL, name);
                 if (err)
                         GOTO(out, err);
         } else {
                 GOTO(out, err = -EINVAL);
         }
 
-        err = llog_init_handle(handle, 0, NULL);
+	err = llog_init_handle(NULL, handle, 0, NULL);
         if (err)
                 GOTO(out_close, err = -ENOENT);
 
@@ -309,7 +311,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         case OBD_IOC_LLOG_INFO: {
                 int l;
                 int remains = data->ioc_inllen2 +
-                        cfs_size_round(data->ioc_inllen1);
+			      cfs_size_round(data->ioc_inllen1);
                 char *out = data->ioc_bulk;
 
                 l = snprintf(out, remains,
@@ -362,7 +364,7 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
 
                 if (handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT) {
                         cfs_down_write(&handle->lgh_lock);
-                        err = llog_cancel_rec(handle, cookie.lgc_index);
+			err = llog_cancel_rec(NULL, handle, cookie.lgc_index);
                         cfs_up_write(&handle->lgh_lock);
                         GOTO(out_close, err);
                 }
@@ -375,14 +377,14 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                 if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
                         GOTO(out_close, err = -EINVAL);
 
-                err = llog_cat_cancel_records(handle, 1, &cookie);
+		err = llog_cat_cancel_records(NULL, handle, 1, &cookie);
                 GOTO(out_close, err);
         }
         case OBD_IOC_LLOG_REMOVE: {
                 struct llog_logid plain;
 
                 if (handle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) {
-                        err = llog_destroy(handle);
+                        err = llog_destroy(NULL, handle);
                         if (!err)
                                 llog_free_handle(handle);
                         GOTO(out, err);
@@ -397,8 +399,8 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                                         data->ioc_inllen2);
                         if (err)
                                 GOTO(out_close, err);
-                        err = llog_remove_log(handle, &plain);
-                } else {
+			err = llog_remove_log(NULL, handle, &plain);
+		} else {
 			/* remove all the log of the catalog */
 			llog_process(NULL, handle, llog_delete_cb, NULL, NULL);
                 }
@@ -407,13 +409,13 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
         }
 
 out_close:
-        if (handle->lgh_hdr &&
-            handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
-                llog_cat_put(handle);
-        else
-                llog_close(handle);
+	if (handle->lgh_hdr &&
+	    handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
+		llog_cat_put(NULL, handle);
+	else
+		llog_close(NULL, handle);
 out:
-        RETURN(err);
+	RETURN(err);
 }
 EXPORT_SYMBOL(llog_ioctl);
 

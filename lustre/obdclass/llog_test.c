@@ -99,20 +99,20 @@ static int llog_test_1(struct obd_device *obd, char *name)
         CWARN("1a: create a log with name: %s\n", name);
         LASSERT(ctxt);
 
-        rc = llog_create(ctxt, &llh, NULL, name);
+	rc = llog_create(NULL, ctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
                 llog_ctxt_put(ctxt);
                 RETURN(rc);
         }
-        llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
+	llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, &uuid);
 
         if ((rc = verify_handle("1", llh, 1)))
                 GOTO(out, rc);
 
  out:
         CWARN("1b: close newly-created log\n");
-        rc2 = llog_close(llh);
+	rc2 = llog_close(NULL, llh);
         llog_ctxt_put(ctxt);
         if (rc2) {
                 CERROR("1b: close log %s failed: %d\n", name, rc2);
@@ -131,12 +131,12 @@ static int llog_test_2(struct obd_device *obd, char *name,
         ENTRY;
 
         CWARN("2a: re-open a log with name: %s\n", name);
-        rc = llog_create(ctxt, llh, NULL, name);
+	rc = llog_create(NULL, ctxt, llh, NULL, name);
         if (rc) {
                 CERROR("2a: re-open log with name %s failed: %d\n", name, rc);
                 GOTO(out, rc);
         }
-        llog_init_handle(*llh, LLOG_F_IS_PLAIN, &uuid);
+	llog_init_handle(NULL, *llh, LLOG_F_IS_PLAIN, &uuid);
 
         if ((rc = verify_handle("2", *llh, 1)))
                 GOTO(out, rc);
@@ -185,7 +185,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
         lcr.lcr_hdr.lrh_type = OST_SZ_REC;
 
         CWARN("3a: write one create_rec\n");
-        rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
+	rc = llog_write_rec(NULL, llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
         num_recs++;
         if (rc) {
                 CERROR("3a: write one log record failed: %d\n", rc);
@@ -202,7 +202,7 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                 hdr.lrh_len = 8;
                 hdr.lrh_type = OBD_CFG_REC;
                 memset(buf, 0, sizeof buf);
-                rc = llog_write_rec(llh, &hdr, NULL, 0, buf, -1);
+		rc = llog_write_rec(NULL, llh, &hdr, NULL, 0, buf, -1);
                 if (rc) {
                         CERROR("3b: write 10 records failed at #%d: %d\n",
                                i + 1, rc);
@@ -218,7 +218,8 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
 
         CWARN("3c: write 1000 more log records\n");
         for (i = 0; i < 1000; i++) {
-                rc = llog_write_rec(llh, &lcr.lcr_hdr, NULL, 0, NULL, -1);
+		rc = llog_write_rec(NULL, llh, &lcr.lcr_hdr, NULL, 0, NULL,
+				    -1);
                 if (rc) {
                         CERROR("3c: write 1000 records failed at #%d: %d\n",
                                i + 1, rc);
@@ -243,11 +244,13 @@ static int llog_test_3(struct obd_device *obd, struct llog_handle *llh)
                 if ((i % 2) == 0) {
                         hdr.lrh_len = 24;
                         hdr.lrh_type = OBD_CFG_REC;
-                        rc = llog_write_rec(llh, &hdr, NULL, 0, buf_even, -1);
+			rc = llog_write_rec(NULL, llh, &hdr, NULL, 0, buf_even,
+					    -1);
                 } else {
                         hdr.lrh_len = 32;
                         hdr.lrh_type = OBD_CFG_REC;
-                        rc = llog_write_rec(llh, &hdr, NULL, 0, buf_odd, -1);
+			rc = llog_write_rec(NULL, llh, &hdr, NULL, 0, buf_odd,
+					    -1);
                 }
                 if (rc) {
                         if (rc == -ENOSPC) {
@@ -290,17 +293,17 @@ static int llog_test_4(struct obd_device *obd)
 
         sprintf(name, "%x", llog_test_rand+1);
         CWARN("4a: create a catalog log with name: %s\n", name);
-        rc = llog_create(ctxt, &cath, NULL, name);
+	rc = llog_create(NULL, ctxt, &cath, NULL, name);
         if (rc) {
                 CERROR("1a: llog_create with name %s failed: %d\n", name, rc);
                 GOTO(out, rc);
         }
-        llog_init_handle(cath, LLOG_F_IS_CAT, &uuid);
+	llog_init_handle(NULL, cath, LLOG_F_IS_CAT, &uuid);
         num_recs++;
         cat_logid = cath->lgh_id;
 
         CWARN("4b: write 1 record into the catalog\n");
-        rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, &cookie, NULL);
+	rc = llog_cat_add_rec(NULL, cath, &lmr.lmr_hdr, &cookie, NULL);
         if (rc != 1) {
                 CERROR("4b: write 1 catalog record failed at: %d\n", rc);
                 GOTO(out, rc);
@@ -313,7 +316,7 @@ static int llog_test_4(struct obd_device *obd)
                 GOTO(ctxt_release, rc);
 
         CWARN("4c: cancel 1 log record\n");
-        rc = llog_cat_cancel_records(cath, 1, &cookie);
+	rc = llog_cat_cancel_records(NULL, cath, 1, &cookie);
         if (rc) {
                 CERROR("4c: cancel 1 catalog based record failed: %d\n", rc);
                 GOTO(out, rc);
@@ -325,7 +328,7 @@ static int llog_test_4(struct obd_device *obd)
 
         CWARN("4d: write 40,000 more log records\n");
         for (i = 0; i < 40000; i++) {
-                rc = llog_cat_add_rec(cath, &lmr.lmr_hdr, NULL, NULL);
+		rc = llog_cat_add_rec(NULL, cath, &lmr.lmr_hdr, NULL, NULL);
                 if (rc) {
                         CERROR("4d: write 40000 records failed at #%d: %d\n",
                                i + 1, rc);
@@ -343,7 +346,7 @@ static int llog_test_4(struct obd_device *obd)
         for (i = 0; i < 5; i++) {
                 rec.lrh_len = buflen;
                 rec.lrh_type = OBD_CFG_REC;
-                rc = llog_cat_add_rec(cath, &rec, NULL, buf);
+		rc = llog_cat_add_rec(NULL, cath, &rec, NULL, buf);
                 if (rc) {
                         CERROR("4e: write 5 records failed at #%d: %d\n",
                                i + 1, rc);
@@ -356,7 +359,7 @@ static int llog_test_4(struct obd_device *obd)
 
  out:
         CWARN("4f: put newly-created catalog\n");
-        rc = llog_cat_put(cath);
+	rc = llog_cat_put(NULL, cath);
 ctxt_release:
         llog_ctxt_put(ctxt);
         if (rc)
@@ -408,7 +411,7 @@ static int llog_cancel_rec_cb(const struct lu_env *env,
         cookie.lgc_lgl = llh->lgh_id;
         cookie.lgc_index = rec->lrh_index;
 
-        llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
+	llog_cat_cancel_records(NULL, llh->u.phd.phd_cat_handle, 1, &cookie);
         i++;
         if (i == 40000)
                 RETURN(-4711);
@@ -430,12 +433,12 @@ static int llog_test_5(struct obd_device *obd)
         lmr.lmr_hdr.lrh_type = 0xf00f00;
 
         CWARN("5a: re-open catalog by id\n");
-        rc = llog_create(ctxt, &llh, &cat_logid, NULL);
+	rc = llog_create(NULL, ctxt, &llh, &cat_logid, NULL);
         if (rc) {
                 CERROR("5a: llog_create with logid failed: %d\n", rc);
                 GOTO(out, rc);
         }
-        llog_init_handle(llh, LLOG_F_IS_CAT, &uuid);
+	llog_init_handle(NULL, llh, LLOG_F_IS_CAT, &uuid);
 
         CWARN("5b: print the catalog entries.. we expect 2\n");
 	rc = llog_process(NULL, llh, cat_print_cb, "test 5", NULL);
@@ -452,7 +455,7 @@ static int llog_test_5(struct obd_device *obd)
         }
 
         CWARN("5d: add 1 record to the log with many canceled empty pages\n");
-        rc = llog_cat_add_rec(llh, &lmr.lmr_hdr, NULL, NULL);
+	rc = llog_cat_add_rec(NULL, llh, &lmr.lmr_hdr, NULL, NULL);
         if (rc) {
                 CERROR("5d: add record to the log with many canceled empty\
                        pages failed\n");
@@ -483,7 +486,7 @@ static int llog_test_5(struct obd_device *obd)
  out:
         CWARN("5: close re-opened catalog\n");
         if (llh)
-                rc = llog_cat_put(llh);
+		rc = llog_cat_put(NULL, llh);
         if (rc)
                 CERROR("1b: close log %s failed: %d\n", name, rc);
         llog_ctxt_put(ctxt);
@@ -522,14 +525,14 @@ static int llog_test_6(struct obd_device *obd, char *name)
         }
 
         nctxt = llog_get_context(mgc_obd, LLOG_CONFIG_REPL_CTXT);
-        rc = llog_create(nctxt, &llh, NULL, name);
+	rc = llog_create(NULL, nctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("6: llog_create failed %d\n", rc);
                 llog_ctxt_put(nctxt);
                 GOTO(ctxt_release, rc);
         }
 
-        rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
         if (rc) {
                 CERROR("6: llog_init_handle failed %d\n", rc);
                 GOTO(parse_out, rc);
@@ -544,7 +547,7 @@ static int llog_test_6(struct obd_device *obd, char *name)
                 CERROR("6: llog_reverse_process failed %d\n", rc);
 
 parse_out:
-        rc = llog_close(llh);
+	rc = llog_close(NULL, llh);
         llog_ctxt_put(nctxt);
         if (rc) {
                 CERROR("6: llog_close failed: rc = %d\n", rc);
@@ -567,22 +570,22 @@ static int llog_test_7(struct obd_device *obd)
         CWARN("7: create a log with name: %s\n", name);
         LASSERT(ctxt);
 
-        rc = llog_create(ctxt, &llh, NULL, name);
+	rc = llog_create(NULL, ctxt, &llh, NULL, name);
         if (rc) {
                 CERROR("7: llog_create with name %s failed: %d\n", name, rc);
                 GOTO(ctxt_release, rc);
         }
-        llog_init_handle(llh, LLOG_F_IS_PLAIN, &uuid);
+	llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, &uuid);
 
         lcr.lcr_hdr.lrh_len = lcr.lcr_tail.lrt_len = sizeof(lcr);
         lcr.lcr_hdr.lrh_type = OST_SZ_REC;
-        rc = llog_write_rec(llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
+	rc = llog_write_rec(NULL, llh,  &lcr.lcr_hdr, NULL, 0, NULL, -1);
         if (rc) {
                 CERROR("7: write one log record failed: %d\n", rc);
                 GOTO(ctxt_release, rc);
         }
 
-        rc = llog_destroy(llh);
+	rc = llog_destroy(NULL, llh);
         if (rc)
                 CERROR("7: llog_destroy failed: %d\n", rc);
         else
@@ -639,7 +642,7 @@ static int llog_run_tests(struct obd_device *obd)
  cleanup:
         switch (cleanup_phase) {
         case 1:
-                err = llog_close(llh);
+		err = llog_close(NULL, llh);
                 if (err)
                         CERROR("cleanup: llog_close failed: %d\n", err);
                 if (!rc)
@@ -650,7 +653,6 @@ static int llog_run_tests(struct obd_device *obd)
         llog_ctxt_put(ctxt);
         return rc;
 }
-
 
 static int llog_test_llog_init(struct obd_device *obd,
                                struct obd_llog_group *olg,

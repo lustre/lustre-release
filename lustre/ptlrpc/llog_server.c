@@ -49,7 +49,6 @@
 #include <obd_class.h>
 #include <lustre_log.h>
 #include <lustre_net.h>
-#include <libcfs/list.h>
 #include <lustre_fsfilt.h>
 
 #if defined(__KERNEL__) && defined(LUSTRE_LOG_SERVER)
@@ -91,7 +90,8 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, logid, name);
+	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle, logid,
+			 name);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -102,9 +102,9 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         body = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
         body->lgd_logid = loghandle->lgh_id;
 
-        GOTO(out_close, rc);
+	EXIT;
 out_close:
-        rc2 = llog_close(loghandle);
+	rc2 = llog_close(req->rq_svc_thread->t_env, loghandle);
         if (!rc)
                 rc = rc2;
 out_pop:
@@ -141,7 +141,8 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, logid, NULL);
+	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle, logid,
+			 NULL);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -151,17 +152,18 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
 
         body = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
         body->lgd_logid = loghandle->lgh_id;
-        rc = llog_init_handle(loghandle, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(req->rq_svc_thread->t_env, loghandle,
+			      LLOG_F_IS_PLAIN, NULL);
         if (rc)
                 GOTO(out_close, rc);
-        rc = llog_destroy(loghandle);
+	rc = llog_destroy(req->rq_svc_thread->t_env, loghandle);
         if (rc)
                 GOTO(out_close, rc);
         llog_free_handle(loghandle);
-        GOTO(out_close, rc);
+	EXIT;
 out_close:
         if (rc)
-                llog_close(loghandle);
+		llog_close(req->rq_svc_thread->t_env, loghandle);
 out_pop:
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         llog_ctxt_put(ctxt);
@@ -199,19 +201,21 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle,
+			 &body->lgd_logid, NULL);
         if (rc)
                 GOTO(out_pop, rc);
 
         flags = body->lgd_llh_flags;
-        rc = llog_init_handle(loghandle, flags, NULL);
+	rc = llog_init_handle(req->rq_svc_thread->t_env, loghandle, flags,
+			      NULL);
         if (rc)
                 GOTO(out_close, rc);
 
         memset(buf, 0, LLOG_CHUNK_SIZE);
-        rc = llog_next_block(loghandle, &body->lgd_saved_index,
-                             body->lgd_index,
-                             &body->lgd_cur_offset, buf, LLOG_CHUNK_SIZE);
+	rc = llog_next_block(req->rq_svc_thread->t_env, loghandle,
+			     &body->lgd_saved_index, body->lgd_index,
+			     &body->lgd_cur_offset, buf, LLOG_CHUNK_SIZE);
         if (rc)
                 GOTO(out_close, rc);
 
@@ -226,9 +230,9 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 
         ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
         memcpy(ptr, buf, LLOG_CHUNK_SIZE);
-        GOTO(out_close, rc);
+	EXIT;
 out_close:
-        rc2 = llog_close(loghandle);
+	rc2 = llog_close(req->rq_svc_thread->t_env, loghandle);
         if (!rc)
                 rc = rc2;
 out_pop:
@@ -271,18 +275,20 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle,
+			 &body->lgd_logid, NULL);
         if (rc)
                 GOTO(out_pop, rc);
 
         flags = body->lgd_llh_flags;
-        rc = llog_init_handle(loghandle, flags, NULL);
+	rc = llog_init_handle(req->rq_svc_thread->t_env, loghandle, flags,
+			      NULL);
         if (rc)
                 GOTO(out_close, rc);
 
         memset(buf, 0, LLOG_CHUNK_SIZE);
-        rc = llog_prev_block(loghandle, body->lgd_index,
-                             buf, LLOG_CHUNK_SIZE);
+	rc = llog_prev_block(req->rq_svc_thread->t_env, loghandle,
+			     body->lgd_index, buf, LLOG_CHUNK_SIZE);
         if (rc)
                 GOTO(out_close, rc);
 
@@ -297,9 +303,9 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
 
         ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
         memcpy(ptr, buf, LLOG_CHUNK_SIZE);
-        GOTO(out_close, rc);
+	EXIT;
 out_close:
-        rc2 = llog_close(loghandle);
+	rc2 = llog_close(req->rq_svc_thread->t_env, loghandle);
         if (!rc)
                 rc = rc2;
 
@@ -337,7 +343,8 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &loghandle, &body->lgd_logid, NULL);
+	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle,
+			 &body->lgd_logid, NULL);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -345,7 +352,8 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
          * llog_init_handle() reads the llog header
          */
         flags = body->lgd_llh_flags;
-        rc = llog_init_handle(loghandle, flags, NULL);
+	rc = llog_init_handle(req->rq_svc_thread->t_env, loghandle, flags,
+			      NULL);
         if (rc)
                 GOTO(out_close, rc);
 
@@ -355,9 +363,9 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
 
         hdr = req_capsule_server_get(&req->rq_pill, &RMF_LLOG_LOG_HDR);
         *hdr = *loghandle->lgh_hdr;
-        GOTO(out_close, rc);
+        EXIT;
 out_close:
-        rc2 = llog_close(loghandle);
+	rc2 = llog_close(req->rq_svc_thread->t_env, loghandle);
         if (!rc)
                 rc = rc2;
 out_pop:
@@ -415,7 +423,8 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                         GOTO(pop_ctxt, rc = PTR_ERR(handle));
                 }
 
-                rc = llog_cat_cancel_records(cathandle, 1, logcookies);
+		rc = llog_cat_cancel_records(req->rq_svc_thread->t_env,
+					     cathandle, 1, logcookies);
 
                 /*
                  * Do not raise -ENOENT errors for resent rpcs. This rec already

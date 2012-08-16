@@ -80,8 +80,9 @@
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-static int llog_client_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                              struct llog_logid *logid, char *name)
+static int llog_client_create(const struct lu_env *env, struct llog_ctxt *ctxt,
+			      struct llog_handle **res,
+			      struct llog_logid *logid, char *name)
 {
         struct obd_import     *imp;
         struct llogd_body     *body;
@@ -148,7 +149,8 @@ err_free:
         goto out;
 }
 
-static int llog_client_destroy(struct llog_handle *loghandle)
+static int llog_client_destroy(const struct lu_env *env,
+			       struct llog_handle *loghandle)
 {
         struct obd_import     *imp;
         struct ptlrpc_request *req = NULL;
@@ -169,7 +171,7 @@ static int llog_client_destroy(struct llog_handle *loghandle)
 
         ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);
-        
+
         ptlrpc_req_finished(req);
 err_exit:
         LLOG_CLIENT_EXIT(loghandle->lgh_ctxt, imp);
@@ -177,9 +179,10 @@ err_exit:
 }
 
 
-static int llog_client_next_block(struct llog_handle *loghandle,
-                                  int *cur_idx, int next_idx,
-                                  __u64 *cur_offset, void *buf, int len)
+static int llog_client_next_block(const struct lu_env *env,
+				  struct llog_handle *loghandle,
+				  int *cur_idx, int next_idx,
+				  __u64 *cur_offset, void *buf, int len)
 {
         struct obd_import     *imp;
         struct ptlrpc_request *req = NULL;
@@ -194,7 +197,7 @@ static int llog_client_next_block(struct llog_handle *loghandle,
                                         LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
         if (req == NULL)
                 GOTO(err_exit, rc =-ENOMEM);
-                
+
         body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
         body->lgd_logid = loghandle->lgh_id;
         body->lgd_ctxt_idx = loghandle->lgh_ctxt->loc_idx - 1;
@@ -231,8 +234,9 @@ err_exit:
         return rc;
 }
 
-static int llog_client_prev_block(struct llog_handle *loghandle,
-                                  int prev_idx, void *buf, int len)
+static int llog_client_prev_block(const struct lu_env *env,
+				  struct llog_handle *loghandle,
+				  int prev_idx, void *buf, int len)
 {
         struct obd_import     *imp;
         struct ptlrpc_request *req = NULL;
@@ -279,7 +283,8 @@ err_exit:
         return rc;
 }
 
-static int llog_client_read_header(struct llog_handle *handle)
+static int llog_client_read_header(const struct lu_env *env,
+				   struct llog_handle *handle)
 {
         struct obd_import     *imp;
         struct ptlrpc_request *req = NULL;
@@ -334,7 +339,8 @@ err_exit:
         return rc;
 }
 
-static int llog_client_close(struct llog_handle *handle)
+static int llog_client_close(const struct lu_env *env,
+			     struct llog_handle *handle)
 {
         /* this doesn't call LLOG_ORIGIN_HANDLE_CLOSE because
            the servers all close the file at the end of every

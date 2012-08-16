@@ -321,7 +321,7 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
                 return -ENXIO;
 
         /* nested journal transaction */
-        rc = llog_add(ctxt, &rec->cr_hdr, NULL, NULL, 0);
+	rc = llog_add(NULL, ctxt, &rec->cr_hdr, NULL, NULL, 0);
         llog_ctxt_put(ctxt);
 
         return rc;
@@ -357,7 +357,7 @@ int mdd_changelog_ext_llog_write(struct mdd_device *mdd,
 		return -ENXIO;
 
 	/* nested journal transaction */
-	rc = llog_add(ctxt, &rec->cr_hdr, NULL, NULL, 0);
+	rc = llog_add(NULL, ctxt, &rec->cr_hdr, NULL, NULL, 0);
 	llog_ctxt_put(ctxt);
 
 	return rc;
@@ -369,7 +369,8 @@ int mdd_changelog_ext_llog_write(struct mdd_device *mdd,
  * \param endrec
  * \retval 0 ok
  */
-int mdd_changelog_llog_cancel(struct mdd_device *mdd, long long endrec)
+int mdd_changelog_llog_cancel(const struct lu_env *env,
+			      struct mdd_device *mdd, long long endrec)
 {
         struct obd_device *obd = mdd2obd_dev(mdd);
         struct llog_ctxt *ctxt;
@@ -407,7 +408,7 @@ int mdd_changelog_llog_cancel(struct mdd_device *mdd, long long endrec)
         mdd->mdd_cl.mc_starttime = cfs_time_current_64();
 
         /* XXX: transaction is started by llog itself */
-        rc = llog_cancel(ctxt, NULL, 1, (struct llog_cookie *)&endrec, 0);
+	rc = llog_cancel(env, ctxt, NULL, 1, (struct llog_cookie *)&endrec, 0);
 out:
         llog_ctxt_put(ctxt);
         return rc;
@@ -1383,7 +1384,7 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
         rec->cur_endrec = mdd->mdd_cl.mc_index;
         cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
-        rc = llog_add(ctxt, &rec->cur_hdr, NULL, NULL, 0);
+	rc = llog_add(NULL, ctxt, &rec->cur_hdr, NULL, NULL, 0);
 
         CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
 out:
@@ -1494,8 +1495,8 @@ static int mdd_changelog_user_purge_cb(const struct lu_env *env,
                 if (rc)
                         GOTO(stop, rc);
 
-                rc = llog_cat_cancel_records(llh->u.phd.phd_cat_handle,
-                                             1, &cookie);
+		rc = llog_cat_cancel_records(env, llh->u.phd.phd_cat_handle,
+					     1, &cookie);
                 if (rc == 0)
                         mcud->mcud_usercount--;
 
@@ -1510,8 +1511,8 @@ stop:
 
         /* hdr+1 is loc of data */
         hdr->lrh_len -= sizeof(*hdr) + sizeof(struct llog_rec_tail);
-        rc = llog_write_rec(llh, hdr, NULL, 0, (void *)(hdr + 1),
-                            hdr->lrh_index);
+	rc = llog_write_rec(env, llh, hdr, NULL, 0, (void *)(hdr + 1),
+			    hdr->lrh_index);
 
         RETURN(rc);
 }
@@ -1553,7 +1554,7 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
                 CDEBUG(D_IOCTL, "Purging changelog entries up to "LPD64
                        ", referenced by "CHANGELOG_USER_PREFIX"%d\n",
                        data.mcud_minrec, data.mcud_minid);
-                rc = mdd_changelog_llog_cancel(mdd, data.mcud_minrec);
+		rc = mdd_changelog_llog_cancel(env, mdd, data.mcud_minrec);
         } else {
                 CWARN("Could not determine changelog records to purge; rc=%d\n",
                       rc);

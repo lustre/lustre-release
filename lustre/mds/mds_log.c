@@ -52,9 +52,11 @@
 #include <lustre_log.h>
 #include "mds_internal.h"
 
-static int mds_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
-                               struct lov_stripe_md *lsm,
-                               struct llog_cookie *logcookies, int numcookies)
+static int mds_llog_origin_add(const struct lu_env *env,
+			       struct llog_ctxt *ctxt,
+			       struct llog_rec_hdr *rec,
+			       struct lov_stripe_md *lsm,
+			       struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_lov_obd;
@@ -63,7 +65,7 @@ static int mds_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_add(lctxt, rec, lsm, logcookies, numcookies);
+	rc = llog_add(env, lctxt, rec, lsm, logcookies, numcookies);
         llog_ctxt_put(lctxt);
 
         RETURN(rc);
@@ -91,8 +93,11 @@ static struct llog_operations mds_ost_orig_logops = {
         lop_connect:    mds_llog_origin_connect,
 };
 
-static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
-                          int count, struct llog_cookie *cookies, int flags)
+static int mds_llog_repl_cancel(const struct lu_env *env,
+				struct llog_ctxt *ctxt,
+				struct lov_stripe_md *lsm,
+				int count, struct llog_cookie *cookies,
+				int flags)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct obd_device *lov_obd = obd->u.mds.mds_lov_obd;
@@ -101,7 +106,7 @@ static int mds_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-        rc = llog_cancel(lctxt, lsm, count, cookies, flags);
+	rc = llog_cancel(env, lctxt, lsm, count, cookies, flags);
         llog_ctxt_put(lctxt);
         RETURN(rc);
 }
@@ -154,7 +159,8 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
         /* cancel them one at a time.  I suppose we could store up the cookies
            and cancel them all at once; probably more efficient, but this is
            done as a user call, so who cares... */
-        rc = llog_cat_cancel_records(llh->u.phd.phd_cat_handle, 1, &cookie);
+	rc = llog_cat_cancel_records(env, llh->u.phd.phd_cat_handle, 1,
+				     &cookie);
 
         err = fsfilt_commit(obd, inode, trans_h, 0);
         if (err) {
@@ -165,9 +171,10 @@ static int llog_changelog_cancel_cb(const struct lu_env *env,
         RETURN(rc < 0 ? rc : 0);
 }
 
-static int llog_changelog_cancel(struct llog_ctxt *ctxt,
-                                 struct lov_stripe_md *lsm, int count,
-                                 struct llog_cookie *cookies, int flags)
+static int llog_changelog_cancel(const struct lu_env *env,
+				 struct llog_ctxt *ctxt,
+				 struct lov_stripe_md *lsm, int count,
+				 struct llog_cookie *cookies, int flags)
 {
         struct llog_handle *cathandle = ctxt->loc_handle;
         int rc;
@@ -176,7 +183,7 @@ static int llog_changelog_cancel(struct llog_ctxt *ctxt,
         /* This should only be called with the catalog handle */
         LASSERT(cathandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
-	rc = llog_cat_process(NULL, cathandle, llog_changelog_cancel_cb,
+	rc = llog_cat_process(env, cathandle, llog_changelog_cancel_cb,
 			      (void *)cookies, 0, 0);
         if (rc >= 0)
                 /* 0 or 1 means we're done */
@@ -307,7 +314,7 @@ static int mds_llog_add_unlink(struct obd_device *obd,
         lur->lur_count = count;
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        rc = llog_add(ctxt, &lur->lur_hdr, lsm, logcookie, cookies);
+	rc = llog_add(NULL, ctxt, &lur->lur_hdr, lsm, logcookie, cookies);
         llog_ctxt_put(ctxt);
 
         OBD_FREE_PTR(lur);

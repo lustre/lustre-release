@@ -94,7 +94,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         lsc->lsc_fid = *mds_fid;
         lsc->lsc_ioepoch = ioepoch;
 
-        rc = llog_cat_add_rec(cathandle, &lsc->lsc_hdr, logcookie, NULL);
+	rc = llog_cat_add_rec(NULL, cathandle, &lsc->lsc_hdr, logcookie, NULL);
         OBD_FREE(lsc, sizeof(*lsc));
 
         if (rc > 0) {
@@ -137,7 +137,7 @@ void filter_cancel_cookies_cb(struct obd_device *obd, __u64 transno,
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OST_CANCEL_COOKIE_TIMEOUT, 30);
 
-        rc = llog_cancel(ctxt, NULL, 1, cookie, 0);
+	rc = llog_cancel(NULL, ctxt, NULL, 1, cookie, 0);
         if (rc)
                 CERROR("error cancelling log cookies: rc = %d\n", rc);
         llog_ctxt_put(ctxt);
@@ -239,7 +239,7 @@ static int filter_recov_log_setattr_cb(struct llog_ctxt *ctxt,
 
         if (rc == -ENOENT) {
                 CDEBUG(D_RPCTRACE, "object already removed, send cookie\n");
-                llog_cancel(ctxt, NULL, 1, cookie, 0);
+		llog_cancel(NULL, ctxt, NULL, 1, cookie, 0);
                 RETURN(0);
         }
 
@@ -293,7 +293,7 @@ int filter_recov_log_mds_ost_cb(const struct lu_env *env,
                 else
                         rc = LLOG_PROC_BREAK;
                 CDEBUG(D_HA, "fetch generation log, send cookie\n");
-                llog_cancel(ctxt, NULL, 1, &cookie, 0);
+		llog_cancel(NULL, ctxt, NULL, 1, &cookie, 0);
                 RETURN(rc);
                 }
                 break;

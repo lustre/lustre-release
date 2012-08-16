@@ -113,19 +113,19 @@ struct llog_handle;
 /* llog.c  -  general API */
 typedef int (*llog_cb_t)(const struct lu_env *env, struct llog_handle *lgh,
 			 struct llog_rec_hdr *rec, void *data);
-typedef int (*llog_fill_rec_cb_t)(struct llog_rec_hdr *rec, void *data);
 extern struct llog_handle *llog_alloc_handle(void);
-int llog_init_handle(struct llog_handle *handle, int flags,
-                     struct obd_uuid *uuid);
+int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
+		     int flags, struct obd_uuid *uuid);
 extern void llog_free_handle(struct llog_handle *handle);
 int llog_process(const struct lu_env *env, struct llog_handle *loghandle,
 		 llog_cb_t cb, void *data, void *catdata);
 int llog_reverse_process(const struct lu_env *env,
 			 struct llog_handle *loghandle, llog_cb_t cb,
 			 void *data, void *catdata);
-extern int llog_cancel_rec(struct llog_handle *loghandle, int index);
-extern int llog_close(struct llog_handle *cathandle);
-extern int llog_get_size(struct llog_handle *loghandle);
+int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
+		    int index);
+int llog_close(const struct lu_env *env, struct llog_handle *cathandle);
+int llog_get_size(struct llog_handle *loghandle);
 
 /* llog_process flags */
 #define LLOG_FLAG_NODEAMON 0x0001
@@ -177,11 +177,13 @@ struct llog_process_cat_args {
 
 int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
 		  struct llog_rec_hdr *rec, void *data);
-int llog_cat_put(struct llog_handle *cathandle);
-int llog_cat_add_rec(struct llog_handle *cathandle, struct llog_rec_hdr *rec,
-                     struct llog_cookie *reccookie, void *buf);
-int llog_cat_cancel_records(struct llog_handle *cathandle, int count,
-                            struct llog_cookie *cookies);
+int llog_cat_put(const struct lu_env *env, struct llog_handle *cathandle);
+int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
+		     struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
+		     void *buf);
+int llog_cat_cancel_records(const struct lu_env *env,
+			    struct llog_handle *cathandle, int count,
+			    struct llog_cookie *cookies);
 int __llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
 		       llog_cb_t cb, void *data, int startcat, int startidx,
 		       int fork);
@@ -204,19 +206,20 @@ int llog_setup(struct obd_device *obd, struct obd_llog_group *olg, int index,
 int __llog_ctxt_put(struct llog_ctxt *ctxt);
 int llog_cleanup(struct llog_ctxt *);
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags);
-int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
-             struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
-             int numcookies);
-int llog_cancel(struct llog_ctxt *, struct lov_stripe_md *lsm,
-                int count, struct llog_cookie *cookies, int flags);
-
-int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
-                          int index, struct obd_device *disk_obd, int count,
-                          struct llog_logid *logid, const char *name);
-int llog_obd_origin_cleanup(struct llog_ctxt *ctxt);
-int llog_obd_origin_add(struct llog_ctxt *ctxt,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies);
+int llog_add(const struct lu_env *env, struct llog_ctxt *ctxt,
+	     struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+	     struct llog_cookie *logcookies, int numcookies);
+int llog_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
+		struct lov_stripe_md *lsm, int count,
+		struct llog_cookie *cookies, int flags);
+int llog_obd_origin_setup(const struct lu_env *env, struct obd_device *obd,
+			  struct obd_llog_group *olg, int index,
+			  struct obd_device *disk_obd, int count,
+			  struct llog_logid *logid, const char *name);
+int llog_obd_origin_cleanup(const struct lu_env *env, struct llog_ctxt *ctxt);
+int llog_obd_origin_add(const struct lu_env *env, struct llog_ctxt *ctxt,
+			struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+			struct llog_cookie *logcookies, int numcookies);
 
 int obd_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                   struct obd_device *disk_obd, int *idx);
@@ -237,9 +240,9 @@ int llog_origin_connect(struct llog_ctxt *ctxt,
 int llog_handle_connect(struct ptlrpc_request *req);
 
 /* recov_thread.c */
-int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
-                         struct lov_stripe_md *lsm, int count,
-                         struct llog_cookie *cookies, int flags);
+int llog_obd_repl_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
+			 struct lov_stripe_md *lsm, int count,
+			 struct llog_cookie *cookies, int flags);
 int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp,
 		       int flags);
 int llog_obd_repl_connect(struct llog_ctxt *ctxt,
@@ -247,35 +250,39 @@ int llog_obd_repl_connect(struct llog_ctxt *ctxt,
                           struct obd_uuid *uuid);
 
 struct llog_operations {
-        int (*lop_write_rec)(struct llog_handle *loghandle,
-                             struct llog_rec_hdr *rec,
-                             struct llog_cookie *logcookies, int numcookies,
-                             void *, int idx);
-        int (*lop_destroy)(struct llog_handle *handle);
-        int (*lop_next_block)(struct llog_handle *h, int *curr_idx,
-                              int next_idx, __u64 *offset, void *buf, int len);
-        int (*lop_prev_block)(struct llog_handle *h,
-                              int prev_idx, void *buf, int len);
-        int (*lop_create)(struct llog_ctxt *ctxt, struct llog_handle **,
-                          struct llog_logid *logid, char *name);
-        int (*lop_close)(struct llog_handle *handle);
-        int (*lop_read_header)(struct llog_handle *handle);
-
-        int (*lop_setup)(struct obd_device *obd, struct obd_llog_group *olg,
-                         int ctxt_idx, struct obd_device *disk_obd, int count,
-                         struct llog_logid *logid, const char *name);
+	int (*lop_destroy)(const struct lu_env *env,
+			   struct llog_handle *handle);
+	int (*lop_next_block)(const struct lu_env *env, struct llog_handle *h,
+			      int *curr_idx, int next_idx, __u64 *offset,
+			      void *buf, int len);
+	int (*lop_prev_block)(const struct lu_env *env, struct llog_handle *h,
+			      int prev_idx, void *buf, int len);
+	int (*lop_read_header)(const struct lu_env *env,
+			       struct llog_handle *handle);
+	int (*lop_setup)(const struct lu_env *env, struct obd_device *obd,
+			 struct obd_llog_group *olg, int ctxt_idx,
+			 struct obd_device *disk_obd, int count,
+			 struct llog_logid *logid, const char *name);
 	int (*lop_sync)(struct llog_ctxt *ctxt, struct obd_export *exp,
 			int flags);
-        int (*lop_cleanup)(struct llog_ctxt *ctxt);
-        int (*lop_add)(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
-                       struct lov_stripe_md *lsm,
-                       struct llog_cookie *logcookies, int numcookies);
-        int (*lop_cancel)(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
-                          int count, struct llog_cookie *cookies, int flags);
-        int (*lop_connect)(struct llog_ctxt *ctxt,
-                           struct llog_logid *logid, struct llog_gen *gen,
-                           struct obd_uuid *uuid);
-        /* XXX add 2 more: commit callbacks and llog recovery functions */
+	int (*lop_cleanup)(const struct lu_env *env, struct llog_ctxt *ctxt);
+	int (*lop_cancel)(const struct lu_env *env, struct llog_ctxt *ctxt,
+			  struct lov_stripe_md *lsm, int count,
+			  struct llog_cookie *cookies, int flags);
+	int (*lop_connect)(struct llog_ctxt *ctxt, struct llog_logid *logid,
+			   struct llog_gen *gen, struct obd_uuid *uuid);
+	int (*lop_create)(const struct lu_env *env, struct llog_ctxt *ctxt,
+			  struct llog_handle **h, struct llog_logid *logid,
+			  char *name);
+	int (*lop_write_rec)(const struct lu_env *env,
+			     struct llog_handle *loghandle,
+			     struct llog_rec_hdr *rec,
+			     struct llog_cookie *logcookies, int numcookies,
+			     void *, int idx);
+	int (*lop_add)(const struct lu_env *env, struct llog_ctxt *ctxt,
+		       struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+		       struct llog_cookie *logcookies, int numcookies);
+	int (*lop_close)(const struct lu_env *env, struct llog_handle *handle);
 };
 
 /* In-memory descriptor for a log object or log catalog */
@@ -560,147 +567,140 @@ static inline int llog_ctxt_null(struct obd_device *obd, int index)
         return (llog_group_ctxt_null(&obd->obd_olg, index));
 }
 
-static inline int llog_write_rec(struct llog_handle *handle,
-                                 struct llog_rec_hdr *rec,
-                                 struct llog_cookie *logcookies,
-                                 int numcookies, void *buf, int idx)
+static inline int llog_write_rec(const struct lu_env *env,
+				 struct llog_handle *handle,
+				 struct llog_rec_hdr *rec,
+				 struct llog_cookie *logcookies,
+				 int numcookies, void *buf, int idx)
 {
-        struct llog_operations *lop;
-        int raised, rc, buflen;
-        ENTRY;
+	struct llog_operations *lop;
+	int raised, rc, buflen;
 
-        rc = llog_handle2ops(handle, &lop);
-        if (rc)
-                RETURN(rc);
-        LASSERT(lop);
-        if (lop->lop_write_rec == NULL)
-                RETURN(-EOPNOTSUPP);
+	ENTRY;
 
-        /* FIXME:  Why doesn't caller just set the right lrh_len itself? */
-        if (buf)
-                buflen = rec->lrh_len + sizeof(struct llog_rec_hdr)
-                                + sizeof(struct llog_rec_tail);
-        else
-                buflen = rec->lrh_len;
-        LASSERT(cfs_size_round(buflen) == buflen);
+	rc = llog_handle2ops(handle, &lop);
+	if (rc)
+		RETURN(rc);
+	LASSERT(lop);
+	if (lop->lop_write_rec == NULL)
+		RETURN(-EOPNOTSUPP);
 
-        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
-        if (!raised)
-                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-        rc = lop->lop_write_rec(handle, rec, logcookies, numcookies, buf, idx);
-        if (!raised)
-                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
-        RETURN(rc);
+	/* FIXME:  Why doesn't caller just set the right lrh_len itself? */
+	if (buf)
+		buflen = rec->lrh_len + sizeof(struct llog_rec_hdr) +
+			 sizeof(struct llog_rec_tail);
+	else
+		buflen = rec->lrh_len;
+	LASSERT(cfs_size_round(buflen) == buflen);
+
+	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	if (!raised)
+		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+	rc = lop->lop_write_rec(env, handle, rec, logcookies, numcookies,
+				buf, idx);
+	if (!raised)
+		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	RETURN(rc);
 }
 
-static inline int llog_read_header(struct llog_handle *handle)
+static inline int llog_read_header(const struct lu_env *env,
+				   struct llog_handle *handle)
 {
-        struct llog_operations *lop;
-        int rc;
-        ENTRY;
+	struct llog_operations *lop;
+	int rc;
 
-        rc = llog_handle2ops(handle, &lop);
-        if (rc)
-                RETURN(rc);
-        if (lop->lop_read_header == NULL)
-                RETURN(-EOPNOTSUPP);
+	ENTRY;
 
-        rc = lop->lop_read_header(handle);
-        RETURN(rc);
+	rc = llog_handle2ops(handle, &lop);
+	if (rc)
+		RETURN(rc);
+	if (lop->lop_read_header == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	rc = lop->lop_read_header(env, handle);
+	RETURN(rc);
 }
 
-static inline int llog_destroy(struct llog_handle *handle)
+static inline int llog_destroy(const struct lu_env *env,
+			       struct llog_handle *handle)
 {
-        struct llog_operations *lop;
-        int rc;
-        ENTRY;
+	struct llog_operations *lop;
+	int rc;
 
-        rc = llog_handle2ops(handle, &lop);
-        if (rc)
-                RETURN(rc);
-        if (lop->lop_destroy == NULL)
-                RETURN(-EOPNOTSUPP);
+	ENTRY;
 
-        rc = lop->lop_destroy(handle);
-        RETURN(rc);
+	rc = llog_handle2ops(handle, &lop);
+	if (rc)
+		RETURN(rc);
+	if (lop->lop_destroy == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	rc = lop->lop_destroy(env, handle);
+	RETURN(rc);
 }
 
-#if 0
-static inline int llog_cancel(struct obd_export *exp,
-                              struct lov_stripe_md *lsm, int count,
-                              struct llog_cookie *cookies, int flags)
+static inline int llog_next_block(const struct lu_env *env,
+				  struct llog_handle *loghandle, int *cur_idx,
+				  int next_idx, __u64 *cur_offset, void *buf,
+				  int len)
 {
-        struct llog_operations *lop;
-        int rc;
-        ENTRY;
+	struct llog_operations *lop;
+	int rc;
 
-        rc = llog_handle2ops(loghandle, &lop);
-        if (rc)
-                RETURN(rc);
-        if (lop->lop_cancel == NULL)
-                RETURN(-EOPNOTSUPP);
+	ENTRY;
 
-        rc = lop->lop_cancel(exp, lsm, count, cookies, flags);
-        RETURN(rc);
-}
-#endif
+	rc = llog_handle2ops(loghandle, &lop);
+	if (rc)
+		RETURN(rc);
+	if (lop->lop_next_block == NULL)
+		RETURN(-EOPNOTSUPP);
 
-static inline int llog_next_block(struct llog_handle *loghandle, int *cur_idx,
-                                  int next_idx, __u64 *cur_offset, void *buf,
-                                  int len)
-{
-        struct llog_operations *lop;
-        int rc;
-        ENTRY;
-
-        rc = llog_handle2ops(loghandle, &lop);
-        if (rc)
-                RETURN(rc);
-        if (lop->lop_next_block == NULL)
-                RETURN(-EOPNOTSUPP);
-
-        rc = lop->lop_next_block(loghandle, cur_idx, next_idx, cur_offset, buf,
-                                 len);
-        RETURN(rc);
+	rc = lop->lop_next_block(env, loghandle, cur_idx, next_idx,
+				 cur_offset, buf, len);
+	RETURN(rc);
 }
 
-static inline int llog_prev_block(struct llog_handle *loghandle,
-                                  int prev_idx, void *buf, int len)
+static inline int llog_prev_block(const struct lu_env *env,
+				  struct llog_handle *loghandle,
+				  int prev_idx, void *buf, int len)
 {
-        struct llog_operations *lop;
-        int rc;
-        ENTRY;
+	struct llog_operations *lop;
+	int rc;
 
-        rc = llog_handle2ops(loghandle, &lop);
-        if (rc)
-                RETURN(rc);
-        if (lop->lop_prev_block == NULL)
-                RETURN(-EOPNOTSUPP);
+	ENTRY;
 
-        rc = lop->lop_prev_block(loghandle, prev_idx, buf, len);
-        RETURN(rc);
+	rc = llog_handle2ops(loghandle, &lop);
+	if (rc)
+		RETURN(rc);
+	if (lop->lop_prev_block == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	rc = lop->lop_prev_block(env, loghandle, prev_idx, buf, len);
+	RETURN(rc);
 }
 
-static inline int llog_create(struct llog_ctxt *ctxt, struct llog_handle **res,
-                              struct llog_logid *logid, char *name)
+static inline int llog_create(const struct lu_env *env, struct llog_ctxt *ctxt,
+			      struct llog_handle **res,
+			      struct llog_logid *logid, char *name)
 {
-        struct llog_operations *lop;
-        int raised, rc;
-        ENTRY;
+	struct llog_operations *lop;
+	int raised, rc;
 
-        rc = llog_obd2ops(ctxt, &lop);
-        if (rc)
-                RETURN(rc);
-        if (lop->lop_create == NULL)
-                RETURN(-EOPNOTSUPP);
+	ENTRY;
 
-        raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
-        if (!raised)
-                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-        rc = lop->lop_create(ctxt, res, logid, name);
-        if (!raised)
-                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
-        RETURN(rc);
+	rc = llog_obd2ops(ctxt, &lop);
+	if (rc)
+		RETURN(rc);
+	if (lop->lop_create == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	if (!raised)
+		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+	rc = lop->lop_create(env, ctxt, res, logid, name);
+	if (!raised)
+		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	RETURN(rc);
 }
 
 static inline int llog_connect(struct llog_ctxt *ctxt,

@@ -983,7 +983,7 @@ static int sptlrpc_record_rule_set(struct llog_handle *llh,
                                         lcfg->lcfg_buflens);
                 rec.lrh_len = llog_data_len(buflen);
                 rec.lrh_type = OBD_CFG_REC;
-                rc = llog_write_rec(llh, &rec, NULL, 0, (void *)lcfg, -1);
+		rc = llog_write_rec(NULL, llh, &rec, NULL, 0, (void *)lcfg, -1);
                 if (rc)
                         CERROR("failed to write a rec: rc = %d\n", rc);
                 lustre_cfg_free(lcfg);
@@ -1037,15 +1037,15 @@ int sptlrpc_target_local_copy_conf(struct obd_device *obd,
         }
 
         /* erase the old tmp log */
-        rc = llog_create(ctxt, &llh, NULL, LOG_SPTLRPC_TMP);
-        if (rc == 0) {
-                rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
-                if (rc == 0) {
-                        rc = llog_destroy(llh);
-                        llog_free_handle(llh);
-                } else {
-                        llog_close(llh);
-                }
+	rc = llog_create(NULL, ctxt, &llh, NULL, LOG_SPTLRPC_TMP);
+	if (rc == 0) {
+		rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
+		if (rc == 0) {
+			rc = llog_destroy(NULL, llh);
+			llog_free_handle(llh);
+		} else {
+			llog_close(NULL, llh);
+		}
         }
 
         if (rc) {
@@ -1055,17 +1055,17 @@ int sptlrpc_target_local_copy_conf(struct obd_device *obd,
         }
 
         /* write temporary log */
-        rc = llog_create(ctxt, &llh, NULL, LOG_SPTLRPC_TMP);
-        if (rc)
-                GOTO(out_dput, rc);
-        rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_create(NULL, ctxt, &llh, NULL, LOG_SPTLRPC_TMP);
+	if (rc)
+		GOTO(out_dput, rc);
+	rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
         if (rc)
                 GOTO(out_close, rc);
 
         rc = sptlrpc_record_rules(llh, conf);
 
 out_close:
-        llog_close(llh);
+	llog_close(NULL, llh);
 
         if (rc == 0) {
                 rc = lustre_rename(dentry, obd->obd_lvfs_ctxt.pwdmnt,
@@ -1133,11 +1133,11 @@ int sptlrpc_target_local_read_conf(struct obd_device *obd,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-        rc = llog_create(ctxt, &llh, NULL, LOG_SPTLRPC);
-        if (rc)
-                GOTO(out_pop, rc);
+	rc = llog_create(NULL, ctxt, &llh, NULL, LOG_SPTLRPC);
+	if (rc)
+		GOTO(out_pop, rc);
 
-        rc = llog_init_handle(llh, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
         if (rc)
                 GOTO(out_close, rc);
 
@@ -1155,7 +1155,7 @@ int sptlrpc_target_local_read_conf(struct obd_device *obd,
         }
 
 out_close:
-        llog_close(llh);
+	llog_close(NULL, llh);
 out_pop:
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         llog_ctxt_put(ctxt);

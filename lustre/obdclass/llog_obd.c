@@ -105,11 +105,11 @@ int __llog_ctxt_put(struct llog_ctxt *ctxt)
 
         /* cleanup the llog ctxt here */
         if (CTXTP(ctxt, cleanup))
-                rc = CTXTP(ctxt, cleanup)(ctxt);
+		rc = CTXTP(ctxt, cleanup)(NULL, ctxt);
 
-        llog_ctxt_destroy(ctxt);
-        cfs_waitq_signal(&olg->olg_waitq);
-        return rc;
+	llog_ctxt_destroy(ctxt);
+	cfs_waitq_signal(&olg->olg_waitq);
+	return rc;
 }
 EXPORT_SYMBOL(__llog_ctxt_put);
 
@@ -205,8 +205,8 @@ int llog_setup_named(struct obd_device *obd,  struct obd_llog_group *olg,
                 rc = -ENOTSUPP;
         } else {
                 if (op->lop_setup)
-                        rc = op->lop_setup(obd, olg, index, disk_obd, count,
-                                           logid, logname);
+			rc = op->lop_setup(NULL, obd, olg, index, disk_obd,
+					   count, logid, logname);
         }
 
         if (rc) {
@@ -246,9 +246,9 @@ int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags)
 }
 EXPORT_SYMBOL(llog_sync);
 
-int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
-             struct lov_stripe_md *lsm, struct llog_cookie *logcookies,
-             int numcookies)
+int llog_add(const struct lu_env *env, struct llog_ctxt *ctxt,
+	     struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+	     struct llog_cookie *logcookies, int numcookies)
 {
         int raised, rc;
         ENTRY;
@@ -266,15 +266,17 @@ int llog_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
         raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
         if (!raised)
                 cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-        rc = CTXTP(ctxt, add)(ctxt, rec, lsm, logcookies, numcookies);
+	rc = CTXTP(ctxt, add)(env, ctxt, rec, lsm, logcookies,
+			      numcookies);
         if (!raised)
                 cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_add);
 
-int llog_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
-                int count, struct llog_cookie *cookies, int flags)
+int llog_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
+		struct lov_stripe_md *lsm, int count,
+		struct llog_cookie *cookies, int flags)
 {
         int rc;
         ENTRY;
@@ -285,16 +287,17 @@ int llog_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
         }
 
         CTXT_CHECK_OP(ctxt, cancel, -EOPNOTSUPP);
-        rc = CTXTP(ctxt, cancel)(ctxt, lsm, count, cookies, flags);
+	rc = CTXTP(ctxt, cancel)(env, ctxt, lsm, count, cookies, flags);
         RETURN(rc);
 }
 EXPORT_SYMBOL(llog_cancel);
 
 /* lop_setup method for filter/osc */
 // XXX how to set exports
-int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
-                          int index, struct obd_device *disk_obd, int count,
-                          struct llog_logid *logid, const char *name)
+int llog_obd_origin_setup(const struct lu_env *env, struct obd_device *obd,
+			  struct obd_llog_group *olg, int index,
+			  struct obd_device *disk_obd, int count,
+			  struct llog_logid *logid, const char *name)
 {
         struct llog_ctxt *ctxt;
         struct llog_handle *handle;
@@ -313,9 +316,9 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
                 RETURN(-ENODEV);
 
         if (logid && logid->lgl_oid) {
-                rc = llog_create(ctxt, &handle, logid, NULL);
+		rc = llog_create(env, ctxt, &handle, logid, NULL);
         } else {
-                rc = llog_create(ctxt, &handle, NULL, (char *)name);
+		rc = llog_create(env, ctxt, &handle, NULL, (char *)name);
                 if (!rc && logid)
                         *logid = handle->lgh_id;
         }
@@ -324,12 +327,12 @@ int llog_obd_origin_setup(struct obd_device *obd, struct obd_llog_group *olg,
 
         ctxt->loc_handle = handle;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-        rc = llog_init_handle(handle, LLOG_F_IS_CAT, NULL);
+	rc = llog_init_handle(env, handle, LLOG_F_IS_CAT, NULL);
         pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 GOTO(out, rc);
 
-	rc = llog_process(NULL, handle, (llog_cb_t)cat_cancel_cb, NULL, NULL);
+	rc = llog_process(env, handle, (llog_cb_t)cat_cancel_cb, NULL, NULL);
         if (rc)
                 CERROR("llog_process() with cat_cancel_cb failed: %d\n", rc);
         GOTO(out, rc);
@@ -339,7 +342,7 @@ out:
 }
 EXPORT_SYMBOL(llog_obd_origin_setup);
 
-int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
+int llog_obd_origin_cleanup(const struct lu_env *env, struct llog_ctxt *ctxt)
 {
         struct llog_handle *cathandle, *n, *loghandle;
         struct llog_log_hdr *llh;
@@ -358,7 +361,7 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
                         if ((llh->llh_flags &
                                 LLOG_F_ZAP_WHEN_EMPTY) &&
                             (llh->llh_count == 1)) {
-                                rc = llog_destroy(loghandle);
+				rc = llog_destroy(env, loghandle);
                                 if (rc)
                                         CERROR("failure destroying log during "
                                                "cleanup: %d\n", rc);
@@ -368,23 +371,23 @@ int llog_obd_origin_cleanup(struct llog_ctxt *ctxt)
 
                                 LASSERT(index);
                                 llog_cat_set_first_idx(cathandle, index);
-                                rc = llog_cancel_rec(cathandle, index);
+				rc = llog_cancel_rec(env, cathandle, index);
                                 if (rc == 0)
                                         CDEBUG(D_RPCTRACE, "cancel plain log at"
                                                "index %u of catalog "LPX64"\n",
                                                index,cathandle->lgh_id.lgl_oid);
                         }
                 }
-                llog_cat_put(ctxt->loc_handle);
+		llog_cat_put(env, ctxt->loc_handle);
         }
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_obd_origin_cleanup);
 
 /* add for obdfilter/sz and mds/unlink */
-int llog_obd_origin_add(struct llog_ctxt *ctxt,
-                        struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
-                        struct llog_cookie *logcookies, int numcookies)
+int llog_obd_origin_add(const struct lu_env *env, struct llog_ctxt *ctxt,
+			struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
+			struct llog_cookie *logcookies, int numcookies)
 {
         struct llog_handle *cathandle;
         int rc;
@@ -392,7 +395,7 @@ int llog_obd_origin_add(struct llog_ctxt *ctxt,
 
         cathandle = ctxt->loc_handle;
         LASSERT(cathandle != NULL);
-        rc = llog_cat_add_rec(cathandle, rec, logcookies, NULL);
+	rc = llog_cat_add_rec(env, cathandle, rec, logcookies, NULL);
         if (rc != 0 && rc != 1)
                 CERROR("write one catalog record failed: %d\n", rc);
         RETURN(rc);

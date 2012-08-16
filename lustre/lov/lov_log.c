@@ -63,9 +63,11 @@
  * we need to keep cookies in stripe order, even if some are NULL, so that
  * the right cookies are passed back to the right OSTs at the client side.
  * Unset cookies should be all-zero (which will never occur naturally). */
-static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
-                               struct lov_stripe_md *lsm,
-                               struct llog_cookie *logcookies, int numcookies)
+static int lov_llog_origin_add(const struct lu_env *env,
+			       struct llog_ctxt *ctxt,
+			       struct llog_rec_hdr *rec,
+			       struct lov_stripe_md *lsm,
+			       struct llog_cookie *logcookies, int numcookies)
 {
         struct obd_device *obd = ctxt->loc_obd;
         struct lov_obd *lov = &obd->u.lov;
@@ -104,8 +106,8 @@ static int lov_llog_origin_add(struct llog_ctxt *ctxt, struct llog_rec_hdr *rec,
                         llog_ctxt_put(cctxt);
                         cctxt = NULL;
                 }
-                rc = llog_add(cctxt, rec, NULL, logcookies + cookies,
-                               numcookies - cookies);
+		rc = llog_add(env, cctxt, rec, NULL, logcookies + cookies,
+			      numcookies - cookies);
                 llog_ctxt_put(cctxt);
                 if (rc < 0) {
                         CERROR("Can't add llog (rc = %d) for stripe %d\n",
@@ -157,8 +159,11 @@ static int lov_llog_origin_connect(struct llog_ctxt *ctxt,
 }
 
 /* the replicators commit callback */
-static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *lsm,
-                          int count, struct llog_cookie *cookies, int flags)
+static int lov_llog_repl_cancel(const struct lu_env *env,
+				struct llog_ctxt *ctxt,
+				struct lov_stripe_md *lsm,
+				int count, struct llog_cookie *cookies,
+				int flags)
 {
         struct lov_obd *lov;
         struct obd_device *obd = ctxt->loc_obd;
@@ -178,7 +183,7 @@ static int lov_llog_repl_cancel(struct llog_ctxt *ctxt, struct lov_stripe_md *ls
                         llog_get_context(child, ctxt->loc_idx);
                 int err;
 
-                err = llog_cancel(cctxt, NULL, 1, cookies, flags);
+		err = llog_cancel(env, cctxt, NULL, 1, cookies, flags);
                 llog_ctxt_put(cctxt);
                 if (err && lov->lov_tgts[loi->loi_ost_idx]->ltd_active) {
                         CERROR("error: objid "LPX64" subobj "LPX64

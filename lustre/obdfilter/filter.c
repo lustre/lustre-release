@@ -4274,7 +4274,7 @@ int filter_destroy(const struct lu_env *env, struct obd_export *exp,
                         }
                         fcc = &oa->o_lcookie;
                         ctxt = llog_group_get_ctxt(olg, fcc->lgc_subsys + 1);
-                        llog_cancel(ctxt, NULL, 1, fcc, 0);
+			llog_cancel(NULL, ctxt, NULL, 1, fcc, 0);
                         llog_ctxt_put(ctxt);
                         fcc = NULL; /* we didn't allocate fcc, don't free it */
                 }

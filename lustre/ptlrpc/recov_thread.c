@@ -581,9 +581,9 @@ EXPORT_SYMBOL(llog_obd_repl_connect);
  * log record for the deletion. The commit callback calls this
  * function.
  */
-int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
-                         struct lov_stripe_md *lsm, int count,
-                         struct llog_cookie *cookies, int flags)
+int llog_obd_repl_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
+			 struct lov_stripe_md *lsm, int count,
+			 struct llog_cookie *cookies, int flags)
 {
         struct llog_commit_master *lcm;
         struct llog_canceld_ctxt *llcd;
@@ -717,8 +717,8 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp,
                  */
                 CDEBUG(D_RPCTRACE, "Sync cached llcd\n");
                 cfs_mutex_unlock(&ctxt->loc_mutex);
-		rc = llog_cancel(ctxt, NULL, 0, NULL, OBD_LLOG_FL_SENDNOW |
-				 flags);
+		rc = llog_cancel(NULL, ctxt, NULL, 0, NULL,
+				 OBD_LLOG_FL_SENDNOW | flags);
         }
         RETURN(rc);
 }
@@ -726,7 +726,7 @@ EXPORT_SYMBOL(llog_obd_repl_sync);
 
 #else /* !__KERNEL__ */
 
-int llog_obd_repl_cancel(struct llog_ctxt *ctxt,
+int llog_obd_repl_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
                          struct lov_stripe_md *lsm, int count,
                          struct llog_cookie *cookies, int flags)
 {
