@@ -195,6 +195,20 @@ static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
 
 static const struct lu_object_operations mdt_obj_ops;
 
+/* Slab for MDT object allocation */
+static cfs_mem_cache_t *mdt_object_kmem;
+
+static struct lu_kmem_descr mdt_caches[] = {
+	{
+		.ckd_cache = &mdt_object_kmem,
+		.ckd_name  = "mdt_obj",
+		.ckd_size  = sizeof(struct mdt_object)
+	},
+	{
+		.ckd_cache = NULL
+	}
+};
+
 int mdt_get_disposition(struct ldlm_reply *rep, int flag)
 {
         if (!rep)
@@ -5009,7 +5023,7 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
 
         ENTRY;
 
-        OBD_ALLOC_PTR(mo);
+	OBD_SLAB_ALLOC_PTR_GFP(mo, mdt_object_kmem, CFS_ALLOC_IO);
         if (mo != NULL) {
                 struct lu_object *o;
                 struct lu_object_header *h;
@@ -5061,7 +5075,8 @@ static void mdt_object_free(const struct lu_env *env, struct lu_object *o)
 
         lu_object_fini(o);
         lu_object_header_fini(h);
-        OBD_FREE_PTR(mo);
+	OBD_SLAB_FREE_PTR(mo, mdt_object_kmem);
+
         EXIT;
 }
 
@@ -6028,6 +6043,10 @@ static int __init mdt_mod_init(void)
         struct lprocfs_static_vars lvars;
         int rc;
 
+	rc = lu_kmem_init(mdt_caches);
+	if (rc)
+		return rc;
+
 	if (mdt_num_threads != 0 && mds_num_threads == 0) {
 		LCONSOLE_INFO("mdt_num_threads module parameter is deprecated,"
 			      "use mds_num_threads instead or unset both for"
@@ -6040,12 +6059,15 @@ static int __init mdt_mod_init(void)
                                  lvars.module_vars, LUSTRE_MDT_NAME,
                                  &mdt_device_type);
 
+	if (rc)
+		lu_kmem_fini(mdt_caches);
         return rc;
 }
 
 static void __exit mdt_mod_exit(void)
 {
         class_unregister_type(LUSTRE_MDT_NAME);
+	lu_kmem_fini(mdt_caches);
 }
 
 
