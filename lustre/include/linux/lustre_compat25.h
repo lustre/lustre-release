@@ -146,12 +146,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define ll_dentry_open(a, b, c, d) dentry_open(a, b, c)
 #endif
 
-#ifdef HAVE_KIOBUF_KIO_BLOCKS
-#define KIOBUF_GET_BLOCKS(k) ((k)->kio_blocks)
-#else
-#define KIOBUF_GET_BLOCKS(k) ((k)->blocks)
-#endif
-
 #ifdef HAVE_SECURITY_PLUG
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \
                 vfs_symlink(dir, dentry, mnt, path, mode)
@@ -166,12 +160,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 
 #endif
 
-#ifndef container_of
-#define container_of(ptr, type, member) ({                      \
-                const typeof( ((type *)0)->member ) *__mptr = (ptr); \
-                (type *)( (char *)__mptr - offsetof(type,member) );})
-#endif
-
 #ifdef HAVE_INODE_DIO_WAIT
 /* inode_dio_wait(i) use as-is for write lock */
 # define inode_dio_write_done(i)	do {} while (0) /* for write unlock */
@@ -183,8 +171,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 # define inode_dio_read(i)		down_read(&(i)->i_alloc_sem)
 # define inode_dio_done(i)		up_read(&(i)->i_alloc_sem)
 #endif
-
-#include <linux/mpage.h>        /* for generic_writepages */
 
 #ifdef HAVE_HIDE_VFSMOUNT_GUTS
 # include <../fs/mount.h>
