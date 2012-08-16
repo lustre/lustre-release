@@ -2678,6 +2678,10 @@ void osc_cache_truncate_end(const struct lu_env *env, struct osc_io *oio,
 		OSC_EXTENT_DUMP(D_CACHE, ext, "trunc -> cache.\n");
 		osc_object_lock(obj);
 		osc_extent_state_set(ext, OES_CACHE);
+		if (ext->oe_fsync_wait && !ext->oe_urgent) {
+			ext->oe_urgent = 1;
+			cfs_list_move_tail(&ext->oe_link, &obj->oo_urgent_exts);
+		}
 		osc_update_pending(obj, OBD_BRW_WRITE, ext->oe_nr_pages);
 		osc_object_unlock(obj);
 		osc_extent_put(env, ext);
@@ -2808,6 +2812,11 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 			 * grants. We do this for the correctness of fsync. */
 			LASSERT(hp == 0 && discard == 0);
 			ext->oe_urgent = 1;
+			break;
+		case OES_TRUNC:
+			/* this extent is being truncated, can't do anything
+			 * for it now. it will be set to urgent after truncate
+			 * is finished in osc_cache_truncate_end(). */
 		default:
 			break;
 		}
