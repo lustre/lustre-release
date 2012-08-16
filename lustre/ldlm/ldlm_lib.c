@@ -703,6 +703,7 @@ int target_handle_connect(struct ptlrpc_request *req)
 	struct obd_device *target = NULL, *targref = NULL;
         struct obd_export *export = NULL;
         struct obd_import *revimp;
+	struct obd_import *tmp_imp = NULL;
         struct lustre_handle conn;
         struct lustre_handle *tmp;
         struct obd_uuid tgtuuid;
@@ -1118,22 +1119,24 @@ dont_check_exports:
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_CONN);
         conn = *tmp;
 
-        if (export->exp_imp_reverse != NULL) {
-                /* destroyed import can be still referenced in ctxt */
-                obd_set_info_async(export, sizeof(KEY_REVIMP_UPD),
-                                   KEY_REVIMP_UPD, 0, NULL, NULL);
+	/* for the rest part, we return -ENOTCONN in case of errors
+	 * in order to let client initialize connection again.
+	 */
+	revimp = class_new_import(target);
+	if (revimp == NULL) {
+		CERROR("fail to alloc new reverse import.\n");
+		GOTO(out, rc = -ENOTCONN);
+	}
 
-                client_destroy_import(export->exp_imp_reverse);
-        }
-
-        /* for the rest part, we return -ENOTCONN in case of errors
-         * in order to let client initialize connection again.
-         */
-        revimp = export->exp_imp_reverse = class_new_import(target);
-        if (!revimp) {
-                CERROR("fail to alloc new reverse import.\n");
-                GOTO(out, rc = -ENOTCONN);
-        }
+	cfs_spin_lock(&export->exp_lock);
+	if (export->exp_imp_reverse != NULL) {
+		/* destroyed import can be still referenced in ctxt */
+		obd_set_info_async(export, sizeof(KEY_REVIMP_UPD),
+				   KEY_REVIMP_UPD, 0, NULL, NULL);
+		tmp_imp = export->exp_imp_reverse;
+	}
+	export->exp_imp_reverse = revimp;
+	cfs_spin_unlock(&export->exp_lock);
 
         revimp->imp_connection = ptlrpc_connection_addref(export->exp_connection);
         revimp->imp_client = &export->exp_obd->obd_ldlm_client;
@@ -1157,15 +1160,20 @@ dont_check_exports:
         else
                 revimp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
 
-        rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx, &req->rq_flvr);
-        if (rc) {
-                CERROR("Failed to get sec for reverse import: %d\n", rc);
-                export->exp_imp_reverse = NULL;
-                class_destroy_import(revimp);
-        }
+	rc = sptlrpc_import_sec_adapt(revimp, req->rq_svc_ctx, &req->rq_flvr);
+	if (rc) {
+		CERROR("Failed to get sec for reverse import: %d\n", rc);
+		cfs_spin_lock(&export->exp_lock);
+		export->exp_imp_reverse = NULL;
+		cfs_spin_unlock(&export->exp_lock);
+		class_destroy_import(revimp);
+	}
 
-        class_import_put(revimp);
+	class_import_put(revimp);
+
 out:
+	if (tmp_imp != NULL)
+		client_destroy_import(tmp_imp);
         if (export) {
                 cfs_spin_lock(&export->exp_lock);
                 export->exp_connecting = 0;
@@ -1202,15 +1210,22 @@ int target_handle_disconnect(struct ptlrpc_request *req)
 
 void target_destroy_export(struct obd_export *exp)
 {
-        /* exports created from last_rcvd data, and "fake"
-           exports created by lctl don't have an import */
-        if (exp->exp_imp_reverse != NULL)
-                client_destroy_import(exp->exp_imp_reverse);
+	struct obd_import	*imp = NULL;
+	/* exports created from last_rcvd data, and "fake"
+	   exports created by lctl don't have an import */
+	cfs_spin_lock(&exp->exp_lock);
+	if (exp->exp_imp_reverse != NULL) {
+		imp = exp->exp_imp_reverse;
+		exp->exp_imp_reverse = NULL;
+	}
+	cfs_spin_unlock(&exp->exp_lock);
+	if (imp != NULL)
+		client_destroy_import(imp);
 
-        LASSERT_ATOMIC_ZERO(&exp->exp_locks_count);
-        LASSERT_ATOMIC_ZERO(&exp->exp_rpc_count);
-        LASSERT_ATOMIC_ZERO(&exp->exp_cb_count);
-        LASSERT_ATOMIC_ZERO(&exp->exp_replay_count);
+	LASSERT_ATOMIC_ZERO(&exp->exp_locks_count);
+	LASSERT_ATOMIC_ZERO(&exp->exp_rpc_count);
+	LASSERT_ATOMIC_ZERO(&exp->exp_cb_count);
+	LASSERT_ATOMIC_ZERO(&exp->exp_replay_count);
 }
 
 /*

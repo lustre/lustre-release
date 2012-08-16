@@ -196,7 +196,10 @@ struct obd_export {
         cfs_list_t                exp_obd_chain_timed;
         /** Obd device of this export */
         struct obd_device        *exp_obd;
-        /** "reverse" import to send requests (e.g. from ldlm) back to client */
+	/**
+	 * "reverse" import to send requests (e.g. from ldlm) back to client
+	 * exp_lock protect its change
+	 */
         struct obd_import        *exp_imp_reverse;
         struct nid_stat          *exp_nid_stats;
         struct lprocfs_stats     *exp_md_stats;
@@ -217,7 +220,10 @@ struct obd_export {
         cfs_time_t                exp_last_request_time;
         /** On replay all requests waiting for replay are linked here */
         cfs_list_t                exp_req_replay_queue;
-        /** protects exp_flags and exp_outstanding_replies */
+	/**
+	 * protects exp_flags, exp_outstanding_replies and the change
+	 * of exp_imp_reverse
+	 */
         cfs_spinlock_t            exp_lock;
         /** Compatibility flags for this export */
         __u64                     exp_connect_flags;
