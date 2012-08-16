@@ -626,6 +626,12 @@ int main(int argc, char *const argv[])
                 ret = EINVAL;
                 goto out;
         }
+
+	if (IS_OST(ldd) && (mop.mo_ldd.ldd_flags & LDD_F_NEED_INDEX))
+		fprintf(stderr, "warning: %s: for Lustre 2.4 and later, the "
+			"target index must be specified with --index\n",
+			mop.mo_device);
+
 #if 0
         /*
          * Comment out these 2 checks temporarily, since for multi-MDSes
