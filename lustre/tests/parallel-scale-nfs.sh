@@ -61,7 +61,7 @@ mbench_NFILES=${mbench_NFILES:-10000}
 [ "$SLOW" = "no" ] && cnt_NRUN=2
 
 # IOR
-[ "$SLOW" = "no" ] && ior_DURATION=30
+ior_DURATION=${ior_DURATION:-30}
 
 # source the common file after all parameters are set to take affect
 . $LUSTRE/tests/functions.sh
