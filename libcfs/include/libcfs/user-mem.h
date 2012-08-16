@@ -76,7 +76,7 @@ typedef struct {
 } cfs_mem_cache_t;
 
 #define CFS_SLAB_HWCACHE_ALIGN 0
-#define CFS_SLAB_DESTROY_BY_RCU 0
+#define SLAB_DESTROY_BY_RCU 0
 #define CFS_SLAB_KERNEL 0
 #define CFS_SLAB_NOFS 0
 

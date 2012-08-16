@@ -406,11 +406,11 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
 	needed += EXT3_DATA_TRANS_BLOCKS(sb);
 
 #if defined(CONFIG_QUOTA)
-        /* We assume that there will be 1 bit set in s_dquot.flags for each
-         * quota file that is active.  This is at least true for now.
-         */
-        needed += hweight32(ll_sb_any_quota_active(sb)) *
-                FSFILT_SINGLEDATA_TRANS_BLOCKS(sb);
+	/* We assume that there will be 1 bit set in s_dquot.flags for each
+	 * quota file that is active.  This is at least true for now.
+	 */
+	needed += hweight32(sb_any_quota_loaded(sb)) *
+		FSFILT_SINGLEDATA_TRANS_BLOCKS(sb);
 #endif
 
         return needed;

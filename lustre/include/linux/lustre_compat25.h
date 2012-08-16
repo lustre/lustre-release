@@ -553,16 +553,6 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define ll_crypto_tfm_alg_max_keysize	crypto_tfm_alg_max_keysize
 #endif /* HAVE_ASYNC_BLOCK_CIPHER */
 
-#ifdef HAVE_FILE_REMOVE_SUID
-# define ll_remove_suid(file, mnt)       file_remove_suid(file)
-#else
-# ifdef HAVE_SECURITY_PLUG
-#  define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry,mnt)
-# else
-#  define ll_remove_suid(file,mnt)      remove_suid(file->f_dentry)
-# endif
-#endif
-
 #ifdef HAVE_SECURITY_PLUG
 #define ll_vfs_rmdir(dir,entry,mnt)             vfs_rmdir(dir,entry,mnt)
 #define ll_vfs_mkdir(inode,dir,mnt,mode)        vfs_mkdir(inode,dir,mnt,mode)
@@ -609,42 +599,24 @@ static inline int ll_crypto_hmac(struct crypto_tfm *tfm,
 #define cfs_path_put(nd)     path_release(nd)
 #endif
 
-#ifndef abs
-static inline int abs(int x)
-{
-        return (x < 0) ? -x : x;
-}
-#endif
-
-#ifndef labs
-static inline long labs(long x)
-{
-        return (x < 0) ? -x : x;
-}
-#endif /* HAVE_REGISTER_SHRINKER */
-
 #ifndef HAVE_SIMPLE_SETATTR
 #define simple_setattr(dentry, ops) inode_setattr((dentry)->d_inode, ops)
 #endif
 
 #ifndef SLAB_DESTROY_BY_RCU
-#define CFS_SLAB_DESTROY_BY_RCU 0
-#else
-#define CFS_SLAB_DESTROY_BY_RCU SLAB_DESTROY_BY_RCU
+#define SLAB_DESTROY_BY_RCU 0
 #endif
 
-#ifdef HAVE_SB_HAS_QUOTA_ACTIVE
-#define ll_sb_has_quota_active(sb, type) sb_has_quota_active(sb, type)
-#else
-#define ll_sb_has_quota_active(sb, type) sb_has_quota_enabled(sb, type)
+#ifndef HAVE_SB_HAS_QUOTA_ACTIVE
+#define sb_has_quota_active(sb, type) sb_has_quota_enabled(sb, type)
 #endif
 
-#ifdef HAVE_SB_ANY_QUOTA_LOADED
-#define ll_sb_any_quota_active(sb) sb_any_quota_loaded(sb)
-#elif defined(HAVE_SB_ANY_QUOTA_ACTIVE)
-#define ll_sb_any_quota_active(sb) sb_any_quota_active(sb)
-#else
-#define ll_sb_any_quota_active(sb) sb_any_quota_enabled(sb)
+#ifndef HAVE_SB_ANY_QUOTA_LOADED
+# ifdef HAVE_SB_ANY_QUOTA_ACTIVE
+# define sb_any_quota_loaded(sb) sb_any_quota_active(sb)
+# else
+# define sb_any_quota_loaded(sb) sb_any_quota_enabled(sb)
+# endif
 #endif
 
 static inline int

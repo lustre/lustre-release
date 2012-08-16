@@ -2854,13 +2854,13 @@ int ldlm_init(void)
         if (ldlm_resource_slab == NULL)
                 return -ENOMEM;
 
-        ldlm_lock_slab = cfs_mem_cache_create("ldlm_locks",
-                              sizeof(struct ldlm_lock), 0,
-                              CFS_SLAB_HWCACHE_ALIGN | CFS_SLAB_DESTROY_BY_RCU);
-        if (ldlm_lock_slab == NULL) {
-                cfs_mem_cache_destroy(ldlm_resource_slab);
-                return -ENOMEM;
-        }
+	ldlm_lock_slab = cfs_mem_cache_create("ldlm_locks",
+			      sizeof(struct ldlm_lock), 0,
+			      CFS_SLAB_HWCACHE_ALIGN | SLAB_DESTROY_BY_RCU);
+	if (ldlm_lock_slab == NULL) {
+		cfs_mem_cache_destroy(ldlm_resource_slab);
+		return -ENOMEM;
+	}
 
         ldlm_interval_slab = cfs_mem_cache_create("interval_node",
                                         sizeof(struct ldlm_interval),

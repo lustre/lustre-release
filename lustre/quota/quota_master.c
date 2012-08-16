@@ -368,8 +368,8 @@ int dqacq_handler(struct obd_device *obd, struct qunit_data *qdata, int opc)
         if (OBD_FAIL_CHECK(OBD_FAIL_OBD_DQACQ))
                 RETURN(-EIO);
 
-        if (!ll_sb_has_quota_active(qctxt->lqc_sb,
-                                    QDATA_IS_GRP(qdata) ? GRPQUOTA : USRQUOTA))
+	if (!sb_has_quota_active(qctxt->lqc_sb,
+				    QDATA_IS_GRP(qdata) ? GRPQUOTA : USRQUOTA))
                 RETURN(-EIO);
 
         lqs = quota_search_lqs(LQS_KEY(QDATA_IS_GRP(qdata), qdata->qd_id),
@@ -1736,8 +1736,8 @@ int mds_quota_recovery(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        if (!ll_sb_any_quota_active(obd->u.obt.obt_qctxt.lqc_sb))
-                RETURN(0);
+	if (!sb_any_quota_loaded(obd->u.obt.obt_qctxt.lqc_sb))
+		RETURN(0);
 
         if (unlikely(!mds->mds_quota || obd->obd_stopping))
                 RETURN(rc);

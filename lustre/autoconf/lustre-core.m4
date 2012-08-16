@@ -1020,22 +1020,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.27 has file_remove_suid instead of remove_suid
-AC_DEFUN([LC_FILE_REMOVE_SUID],
-[AC_MSG_CHECKING([kernel has file_remove_suid])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/fs.h>
-],[
-        file_remove_suid(NULL);
-],[
-        AC_DEFINE(HAVE_FILE_REMOVE_SUID, 1,
-                  [kernel have file_remove_suid])
-        AC_MSG_RESULT([yes])
-],[
-        AC_MSG_RESULT([no])
-])
-])
-
 # 2.6.27 have new page locking API
 AC_DEFUN([LC_TRYLOCKPAGE],
 [AC_MSG_CHECKING([kernel uses trylock_page for page lock])
@@ -1947,7 +1931,6 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_PGMKWRITE_USE_VMFAULT
 	 LC_PGMKWRITE_COMPACT
          LC_INODE_PERMISION_2ARGS
-         LC_FILE_REMOVE_SUID
          LC_TRYLOCKPAGE
          LC_READ_INODE_IN_SBOPS
          LC_EXPORT_INODE_PERMISSION

@@ -244,7 +244,7 @@ check_cur_qunit(struct obd_device *obd,
         int ret = 0;
         ENTRY;
 
-        if (!ll_sb_has_quota_active(sb, QDATA_IS_GRP(qdata)))
+        if (!sb_has_quota_active(sb, QDATA_IS_GRP(qdata)))
                 RETURN(0);
 
         cfs_spin_lock(&qctxt->lqc_lock);
@@ -1517,7 +1517,7 @@ static int qslave_recovery_main(void *arg)
                 int ret;
 
 		mutex_lock(&dqopt->dqonoff_mutex);
-		if (!ll_sb_has_quota_active(qctxt->lqc_sb, type)) {
+		if (!sb_has_quota_active(qctxt->lqc_sb, type)) {
 			mutex_unlock(&dqopt->dqonoff_mutex);
 			break;
 		}
@@ -1576,8 +1576,8 @@ qslave_start_recovery(struct obd_device *obd, struct lustre_quota_ctxt *qctxt)
         int rc;
         ENTRY;
 
-        if (!ll_sb_any_quota_active(qctxt->lqc_sb))
-                goto exit;
+	if (!sb_any_quota_loaded(qctxt->lqc_sb))
+		goto exit;
 
         data.obd = obd;
         data.qctxt = qctxt;
