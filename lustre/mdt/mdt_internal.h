@@ -158,6 +158,11 @@ struct mdt_device {
         unsigned int               mdt_capa_conf:1,
                                    mdt_som_conf:1;
 
+	/* statfs optimization: we cache a bit  */
+	struct obd_statfs          mdt_osfs;
+	__u64                      mdt_osfs_age;
+	cfs_spinlock_t             mdt_osfs_lock;
+
         /* root squash */
         uid_t                      mdt_squash_uid;
         gid_t                      mdt_squash_gid;
@@ -369,7 +374,7 @@ struct mdt_thread_info {
                 struct obd_uuid    uuid[2];       /* for mdt_seq_init_cli()  */
                 char               ns_name[48];   /* for mdt_init0()         */
                 struct lustre_cfg_bufs bufs;      /* for mdt_stack_fini()    */
-                cfs_kstatfs_t      ksfs;          /* for mdt_statfs()        */
+		struct obd_statfs  osfs;          /* for mdt_statfs()        */
                 struct {
                         /* for mdt_readpage()      */
                         struct lu_rdpg     mti_rdpg;
