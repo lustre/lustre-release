@@ -500,10 +500,10 @@ static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
 
         rc = 0;
         cl_page_assume(env, io, page);
-        lu_ref_add(&page->cp_reference, "ra", cfs_current());
-        cp = cl2ccc_page(cl_page_at(page, &vvp_device_type));
-        if (!cp->cpg_defer_uptodate && !Page_Uptodate(vmpage)) {
-                rc = cl_page_is_under_lock(env, io, page);
+	lu_ref_add(&page->cp_reference, "ra", cfs_current());
+	cp = cl2ccc_page(cl_page_at(page, &vvp_device_type));
+	if (!cp->cpg_defer_uptodate && !PageUptodate(vmpage)) {
+		rc = cl_page_is_under_lock(env, io, page);
                 if (rc == -EBUSY) {
                         cp->cpg_defer_uptodate = 1;
                         cp->cpg_ra_used = 0;
@@ -513,9 +513,10 @@ static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
                         cl_page_delete(env, page);
                         rc = -ENOLCK;
                 }
-        } else
-                /* skip completed pages */
-                cl_page_unassume(env, io, page);
+	} else {
+		/* skip completed pages */
+		cl_page_unassume(env, io, page);
+	}
         lu_ref_del(&page->cp_reference, "ra", cfs_current());
         cl_page_put(env, page);
         RETURN(rc);

@@ -86,10 +86,10 @@ static int vvp_page_own(const struct lu_env *env,
         struct ccc_page *vpg    = cl2ccc_page(slice);
         cfs_page_t      *vmpage = vpg->cpg_page;
 
-        LASSERT(vmpage != NULL);
-        if (nonblock) {
-                if (TestSetPageLocked(vmpage))
-                        return -EAGAIN;
+	LASSERT(vmpage != NULL);
+	if (nonblock) {
+		if (!trylock_page(vmpage))
+			return -EAGAIN;
 
                 if (unlikely(PageWriteback(vmpage))) {
                         unlock_page(vmpage);

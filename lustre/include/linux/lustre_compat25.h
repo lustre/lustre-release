@@ -45,14 +45,6 @@
 
 #include <linux/lustre_patchless_compat.h>
 
-/* Some old kernels (like 2.6.9) may not define such SEEK_XXX. So the
- * definition allows to compile lustre client on more OS platforms. */
-#ifndef SEEK_SET
- #define SEEK_SET 0
- #define SEEK_CUR 1
- #define SEEK_END 2
-#endif
-
 #ifdef HAVE_FS_STRUCT_RWLOCK
 # define LOCK_FS_STRUCT(fs)   cfs_write_lock(&(fs)->lock)
 # define UNLOCK_FS_STRUCT(fs) cfs_write_unlock(&(fs)->lock)
@@ -111,13 +103,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define current_ngroups current_cred()->group_info->ngroups
 #define current_groups current_cred()->group_info->small_block
 
-#ifndef page_private
-#define page_private(page) ((page)->private)
-#define set_page_private(page, v) ((page)->private = (v))
-#endif
-
-#define ll_kernel_locked()      kernel_locked()
-
 /*
  * OBD need working random driver, thus all our
  * initialization routines must be called after device
@@ -128,18 +113,11 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define module_init(a)     late_initcall(a)
 #endif
 
-/* XXX our code should be using the 2.6 calls, not the other way around */
-#ifdef HAVE_TRYLOCK_PAGE
-#define TestSetPageLocked(page)         (!trylock_page(page))
+#ifndef HAVE_TRYLOCK_PAGE
+#define trylock_page(page)		(!TestSetPageLocked(page))
 #endif
 
-#define Page_Uptodate(page)             PageUptodate(page)
-#define ll_redirty_page(page)           set_page_dirty(page)
-
-#define KDEVT_INIT(val)                 (val)
-
 #define LTIME_S(time)                   (time.tv_sec)
-#define ll_path_lookup                  path_lookup
 
 #ifdef HAVE_EXPORT_INODE_PERMISSION
 #define ll_permission(inode,mask,nd)    inode_permission(inode,mask)
