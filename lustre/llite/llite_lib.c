@@ -987,14 +987,14 @@ int ll_fill_super(struct super_block *sb, struct vfsmount *mnt)
         if (err)
                 GOTO(out_free, err);
 
-        err = ll_bdi_init(&lsi->lsi_bdi);
-        if (err)
-                GOTO(out_free, err);
-        lsi->lsi_flags |= LSI_BDI_INITIALIZED;
-        lsi->lsi_bdi.capabilities = BDI_CAP_MAP_COPY;
-        err = ll_bdi_register(&lsi->lsi_bdi);
-        if (err)
-                GOTO(out_free, err);
+	err = bdi_init(&lsi->lsi_bdi);
+	if (err)
+		GOTO(out_free, err);
+	lsi->lsi_flags |= LSI_BDI_INITIALIZED;
+	lsi->lsi_bdi.capabilities = BDI_CAP_MAP_COPY;
+	err = ll_bdi_register(&lsi->lsi_bdi);
+	if (err)
+		GOTO(out_free, err);
 
 #ifdef HAVE_SB_BDI
         sb->s_bdi = &lsi->lsi_bdi;
@@ -1103,10 +1103,10 @@ void ll_put_super(struct super_block *sb)
         if (profilenm)
                 class_del_profile(profilenm);
 
-        if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
-                ll_bdi_destroy(&lsi->lsi_bdi);
-                lsi->lsi_flags &= ~LSI_BDI_INITIALIZED;
-        }
+	if (lsi->lsi_flags & LSI_BDI_INITIALIZED) {
+		bdi_destroy(&lsi->lsi_bdi);
+		lsi->lsi_flags &= ~LSI_BDI_INITIALIZED;
+	}
 
         ll_free_sbi(sb);
         lsi->lsi_llsbi = NULL;
