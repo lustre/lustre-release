@@ -1129,10 +1129,10 @@ static int ll_rename_generic(struct inode *src, struct dentry *src_dparent,
 }
 
 static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
-                    ll_dev_t rdev)
+		    dev_t rdev)
 {
-        return ll_mknod_generic(dir, &dchild->d_name, mode,
-                                old_encode_dev(rdev), dchild);
+	return ll_mknod_generic(dir, &dchild->d_name, mode,
+				old_encode_dev(rdev), dchild);
 }
 
 static int ll_unlink(struct inode * dir, struct dentry *dentry)

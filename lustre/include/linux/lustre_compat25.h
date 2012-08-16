@@ -37,8 +37,6 @@
 #ifndef _LINUX_COMPAT25_H
 #define _LINUX_COMPAT25_H
 
-#ifdef __KERNEL__
-
 #include <linux/fs_struct.h>
 #include <linux/namei.h>
 #include <libcfs/linux/portals_compat25.h>
@@ -136,20 +134,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 	 generic_permission(inode, mask, check_acl)
 #endif
 
-#define ll_pgcache_lock(mapping)          cfs_spin_lock(&mapping->page_lock)
-#define ll_pgcache_unlock(mapping)        cfs_spin_unlock(&mapping->page_lock)
-#define ll_call_writepage(inode, page)  \
-                                (inode)->i_mapping->a_ops->writepage(page, NULL)
-#define ll_invalidate_inode_pages(inode) \
-                                invalidate_inode_pages((inode)->i_mapping)
-
-#define ll_vfs_create(a,b,c,d)          vfs_create(a,b,c,d)
-#define ll_dev_t                        dev_t
-#define kdev_t                          dev_t
-#define to_kdev_t(dev)                  (dev)
-#define kdev_t_to_nr(dev)               (dev)
-#define val_to_kdev(dev)                (dev)
-
 #ifdef HAVE_BLKDEV_PUT_2ARGS
 #define ll_blkdev_put(a, b) blkdev_put(a, b)
 #else
@@ -160,65 +144,6 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define ll_dentry_open(a, b, c, d) dentry_open(a, b, c, d)
 #else
 #define ll_dentry_open(a, b, c, d) dentry_open(a, b, c)
-#endif
-
-#include <linux/writeback.h>
-
-static inline int cfs_cleanup_group_info(void)
-{
-        struct group_info *ginfo;
-
-        ginfo = groups_alloc(0);
-        if (!ginfo)
-                return -ENOMEM;
-
-        set_current_groups(ginfo);
-        put_group_info(ginfo);
-
-        return 0;
-}
-
-#define __set_page_ll_data(page, llap) \
-        do {       \
-                page_cache_get(page); \
-                SetPagePrivate(page); \
-                set_page_private(page, (unsigned long)llap); \
-        } while (0)
-#define __clear_page_ll_data(page) \
-        do {       \
-                ClearPagePrivate(page); \
-                set_page_private(page, 0); \
-                page_cache_release(page); \
-        } while(0)
-
-#define kiobuf bio
-
-#include <linux/proc_fs.h>
-
-#define CheckWriteback(page, cmd) \
-        ((!PageWriteback(page) && (cmd & OBD_BRW_READ)) || \
-         (PageWriteback(page) && (cmd & OBD_BRW_WRITE)))
-
-#ifdef HAVE_PAGE_LIST
-static inline int mapping_has_pages(struct address_space *mapping)
-{
-        int rc = 1;
-
-        ll_pgcache_lock(mapping);
-        if (cfs_list_empty(&mapping->dirty_pages) &&
-            cfs_list_empty(&mapping->clean_pages) &&
-            cfs_list_empty(&mapping->locked_pages)) {
-                rc = 0;
-        }
-        ll_pgcache_unlock(mapping);
-
-        return rc;
-}
-#else
-static inline int mapping_has_pages(struct address_space *mapping)
-{
-        return mapping->nrpages > 0;
-}
 #endif
 
 #ifdef HAVE_KIOBUF_KIO_BLOCKS
@@ -313,12 +238,12 @@ int ll_unregister_blkdev(unsigned int dev, const char *name)
 #define ll_invalidate_bdev(a,b)         invalidate_bdev((a))
 #endif
 
-#define ll_inode_blksize(a)     (1<<(a)->i_blkbits)
+#ifndef FS_HAS_FIEMAP
+#define FS_HAS_FIEMAP			(0)
+#endif
 
-#ifdef HAVE_FS_RENAME_DOES_D_MOVE
-#define LL_RENAME_DOES_D_MOVE   FS_RENAME_DOES_D_MOVE
-#else
-#define LL_RENAME_DOES_D_MOVE   FS_ODD_RENAME
+#ifndef HAVE_FS_RENAME_DOES_D_MOVE
+#define FS_RENAME_DOES_D_MOVE		FS_ODD_RENAME
 #endif
 
 #ifndef HAVE_D_OBTAIN_ALIAS
@@ -762,5 +687,4 @@ static inline bool selinux_is_enabled(void)
 # define lm_compare_owner	fl_compare_owner
 #endif
 
-#endif /* __KERNEL__ */
 #endif /* _COMPAT25_H */

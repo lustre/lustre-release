@@ -154,8 +154,6 @@ typedef unsigned long ulong_ptr_t;
 
 typedef __u32           off_t;
 
-typedef unsigned short  kdev_t;
-
 typedef __u32           pid_t;
 typedef __u32           tid_t;
 

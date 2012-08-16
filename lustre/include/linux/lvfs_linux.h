@@ -74,7 +74,6 @@ struct lvfs_dentry_params
 #define LVFS_DENTRY_PARAMS_INIT         { .ldp_magic = LVFS_DENTRY_PARAM_MAGIC }
 
 #define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
-#define ll_bdevname(SB, STORAGE) __bdevname(kdev_t_to_nr(SB->s_dev), STORAGE)
 #define lvfs_sbdev(SB)       ((SB)->s_bdev)
 #define lvfs_sbdev_type      struct block_device *
 #define lvfs_sbdev_sync      fsync_bdev

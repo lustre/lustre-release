@@ -45,6 +45,7 @@
 
 #if defined __KERNEL__
 #include <linux/lustre_compat25.h>
+#include <linux/lustre_common.h>
 #include <linux/lvfs_linux.h>
 #else
 #include <liblustre.h>

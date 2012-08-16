@@ -69,7 +69,6 @@ typedef long long_ptr_t;
 
 
 typedef struct { int e; }		event_chan_t;
-typedef dev_t				kdev_t;
 
 /*
  * Atmoic define

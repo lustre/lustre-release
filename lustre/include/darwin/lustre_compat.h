@@ -97,10 +97,6 @@ static inline int ll_path_lookup(const char *path, unsigned int flags, struct na
 }
 #endif
 
-#define to_kdev_t(dev)                  (dev)
-#define kdev_t_to_nr(dev)               (dev)
-#define val_to_kdev(dev)                (dev)
-
 #define ext2_test_bit	test_bit
 
 #endif	/* __KERNEL__ */

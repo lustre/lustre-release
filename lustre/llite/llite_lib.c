@@ -1860,8 +1860,8 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         } else {
                 inode->i_op = &ll_special_inode_operations;
 
-                init_special_inode(inode, inode->i_mode,
-                                   kdev_t_to_nr(inode->i_rdev));
+		init_special_inode(inode, inode->i_mode,
+				   inode->i_rdev);
 
                 EXIT;
         }

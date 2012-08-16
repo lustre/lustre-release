@@ -97,7 +97,7 @@ struct fsfilt_operations {
          * IO was submitted successfully.
          *
          */
-        int     (* fs_send_bio)(int rw, struct inode *inode,struct kiobuf *bio);
+	int     (* fs_send_bio)(int rw, struct inode *inode, struct bio *bio);
         ssize_t (* fs_readpage)(struct file *file, char *buf, size_t count,
                                 loff_t *offset);
         int     (* fs_add_journal_cb)(struct obd_device *obd, __u64 last_rcvd,

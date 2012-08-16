@@ -51,9 +51,10 @@
 #include <linux/slab.h>
 #include <linux/highmem.h>
 #include <linux/swap.h>
+#include <linux/lustre_compat25.h>
+#include <linux/lustre_common.h>
 #endif
 #include <libcfs/libcfs.h>
-#include <linux/lustre_compat25.h>
 #include <lustre/lustre_idl.h>
 
 

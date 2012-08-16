@@ -131,8 +131,6 @@ extern int echo_client_init(void);
 
 /* general stuff */
 
-typedef __u64 kdev_t;
-
 #ifndef min
 #define min(x,y) ((x)<(y) ? (x) : (y))
 #endif

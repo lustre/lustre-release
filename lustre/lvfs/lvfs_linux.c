@@ -235,10 +235,10 @@ struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix)
                 GOTO(out_up, dchild);
         }
 
-        err = ll_vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG,
-                            NULL);
-        if (err)
-                GOTO(out_err, err);
+	err = vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG,
+			    NULL);
+	if (err)
+		GOTO(out_err, err);
 
         RETURN(dchild);
 

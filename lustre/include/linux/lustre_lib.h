@@ -53,8 +53,9 @@
 # include <linux/sched.h>
 # include <linux/signal.h>
 # include <linux/types.h>
+# include <linux/lustre_compat25.h>
+# include <linux/lustre_common.h>
 #endif
-#include <linux/lustre_compat25.h>
 
 #ifndef LP_POISON
 #if BITS_PER_LONG > 32
