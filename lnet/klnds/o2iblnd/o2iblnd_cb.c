@@ -770,7 +770,6 @@ kiblnd_setup_rd_kiov (lnet_ni_t *ni, kib_tx_t *tx, kib_rdma_desc_t *rd,
 
                 fragnob = min((int)(kiov->kiov_len - offset), nob);
 
-                memset(sg, 0, sizeof(*sg));
                 sg_set_page(sg, kiov->kiov_page, fragnob,
                             kiov->kiov_offset + offset);
                 sg++;

@@ -2147,6 +2147,8 @@ kiblnd_create_tx_pool(kib_poolset_t *ps, int size, kib_pool_t **pp_po)
 		if (tx->tx_frags == NULL)
 			break;
 
+		sg_init_table(tx->tx_frags, IBLND_MAX_RDMA_FRAGS);
+
 		LIBCFS_CPT_ALLOC(tx->tx_wrq, lnet_cpt_table(), ps->ps_cpt,
 				 (1 + IBLND_MAX_RDMA_FRAGS) *
 				 sizeof(*tx->tx_wrq));

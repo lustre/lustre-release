@@ -346,7 +346,24 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
-# 2.6.24 
+# 2.6.24-rc1 sg_init_table
+AC_DEFUN([LIBCFS_SCATTERLIST_INITTABLE],
+[AC_MSG_CHECKING([for sg_init_table])
+LB_LINUX_TRY_COMPILE([
+	#include <asm/types.h>
+	#include <linux/scatterlist.h>
+],[
+	sg_init_table(NULL,0);
+],[
+	AC_MSG_RESULT(yes)
+	AC_DEFINE(HAVE_SCATTERLIST_INITTABLE, 1,
+		  [scatterlist has sg_init_table])
+],[
+	AC_MSG_RESULT(NO)
+])
+])
+
+# 2.6.24
 AC_DEFUN([LIBCFS_NETWORK_NAMESPACE],
 [AC_MSG_CHECKING([for network stack has namespaces])
 LB_LINUX_TRY_COMPILE([
@@ -765,6 +782,7 @@ LC_REGISTER_SHRINKER
 # 2.6.24
 LIBCFS_SYSCTL_UNNUMBERED
 LIBCFS_SCATTERLIST_SETPAGE
+LIBCFS_SCATTERLIST_INITTABLE
 LIBCFS_NETWORK_NAMESPACE
 LIBCFS_FUNC_DUMP_TRACE
 # 2.6.26
