@@ -652,23 +652,6 @@ int ll_send_mgc_param(struct obd_export *mgc, char *string)
         return rc;
 }
 
-char *ll_get_fsname(struct inode *inode)
-{
-        struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
-        char *ptr, *fsname;
-        int len;
-
-        OBD_ALLOC(fsname, MGS_PARAM_MAXLEN);
-        len = strlen(lsi->lsi_lmd->lmd_profile);
-        ptr = strrchr(lsi->lsi_lmd->lmd_profile, '-');
-        if (ptr && (strcmp(ptr, "-client") == 0))
-                len -= 7;
-        strncpy(fsname, lsi->lsi_lmd->lmd_profile, len);
-        fsname[len] = '\0';
-
-        return fsname;
-}
-
 int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
                      int set_default)
 {
@@ -678,8 +661,8 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
         int rc = 0;
         struct lustre_sb_info *lsi = s2lsi(inode->i_sb);
         struct obd_device *mgc = lsi->lsi_mgc;
-        char *fsname = NULL, *param = NULL;
         int lum_size;
+	ENTRY;
 
         if (lump != NULL) {
                 /*
@@ -732,38 +715,44 @@ int ll_dir_setstripe(struct inode *inode, struct lov_user_md *lump,
          LOV_USER_MAGIC_V3 have the same initial fields so we do not
          need the make the distiction between the 2 versions */
         if (set_default && mgc->u.cli.cl_mgc_mgsexp) {
-                OBD_ALLOC(param, MGS_PARAM_MAXLEN);
+		char *param = NULL;
+		char *buf;
 
-                /* Get fsname and assume devname to be -MDT0000. */
-                fsname = ll_get_fsname(inode);
-                /* Set root stripesize */
-                sprintf(param, "%s-MDT0000.lov.stripesize=%u", fsname,
-                        lump ? le32_to_cpu(lump->lmm_stripe_size) : 0);
-                rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
-                if (rc)
-                        goto end;
+		OBD_ALLOC(param, MGS_PARAM_MAXLEN);
+		if (param == NULL)
+			GOTO(end, rc = -ENOMEM);
 
-                /* Set root stripecount */
-                sprintf(param, "%s-MDT0000.lov.stripecount=%hd", fsname,
-                        lump ? le16_to_cpu(lump->lmm_stripe_count) : 0);
-                rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
-                if (rc)
-                        goto end;
+		buf = param;
+		/* Get fsname and assume devname to be -MDT0000. */
+		ll_get_fsname(inode->i_sb, buf, MTI_NAME_MAXLEN);
+		strcat(buf, "-MDT0000.lov");
+		buf += strlen(buf);
 
-                /* Set root stripeoffset */
-                sprintf(param, "%s-MDT0000.lov.stripeoffset=%hd", fsname,
-                        lump ? le16_to_cpu(lump->lmm_stripe_offset) :
-                        (typeof(lump->lmm_stripe_offset))(-1));
-                rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
-                if (rc)
-                        goto end;
+		/* Set root stripesize */
+		sprintf(buf, ".stripesize=%u",
+			lump ? le32_to_cpu(lump->lmm_stripe_size) : 0);
+		rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
+		if (rc)
+			GOTO(end, rc);
+
+		/* Set root stripecount */
+		sprintf(buf, ".stripecount=%hd",
+			lump ? le16_to_cpu(lump->lmm_stripe_count) : 0);
+		rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
+		if (rc)
+			GOTO(end, rc);
+
+		/* Set root stripeoffset */
+		sprintf(buf, ".stripeoffset=%hd",
+			lump ? le16_to_cpu(lump->lmm_stripe_offset) :
+			(typeof(lump->lmm_stripe_offset))(-1));
+		rc = ll_send_mgc_param(mgc->u.cli.cl_mgc_mgsexp, param);
+
 end:
-                if (fsname)
-                        OBD_FREE(fsname, MGS_PARAM_MAXLEN);
-                if (param)
-                        OBD_FREE(param, MGS_PARAM_MAXLEN);
-        }
-        return rc;
+		if (param != NULL)
+			OBD_FREE(param, MGS_PARAM_MAXLEN);
+	}
+	RETURN(rc);
 }
 
 int ll_dir_getstripe(struct inode *inode, struct lov_mds_md **lmmp,
