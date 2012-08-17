@@ -328,13 +328,35 @@ test_15() {	# bug 974 - ENOSPC
 }
 run_test 15 "test out-of-space with multiple writers ==========="
 
+COUNT=${COUNT:-2500}
+# The FSXNUM reduction for ZFS is needed until ORI-487 is fixed.
+# We don't want to skip it entirely, but ZFS is VERY slow and cannot
+# pass a 2500 operation dual-mount run within the time limit.
+if [ "$OSTFSTYPE" = "zfs" ]; then
+	FSXNUM=$((COUNT / 5))
+	FSXP=1
+elif [ "$SLOW" = "yes" ]; then
+	FSXNUM=$((COUNT * 5))
+	FSXP=500
+else
+	FSXNUM=$COUNT
+	FSXP=100
+fi
+
 test_16() {
-	rm -f $MOUNT1/fsxfile
-	lfs setstripe $MOUNT1/fsxfile -c -1 # b=10919
-	fsx -c 50 -p 100 -N 2500 -l $((SIZE * 256)) -S 0 $FSXOPT \
-		$MOUNT1/fsxfile $MOUNT2/fsxfile
+	local file1=$DIR1/$tfile
+	local file2=$DIR2/$tfile
+
+	# to allocate grant because it may run out due to test_15.
+	lfs setstripe -c -1 $file1
+	dd if=/dev/zero of=$file1 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
+	dd if=/dev/zero of=$file2 bs=$STRIPE_BYTES count=$OSTCOUNT oflag=sync
+	rm -f $file1
+
+	lfs setstripe -c -1 $file1 # b=10919
+	fsx -c 50 -p $FSXP -N $FSXNUM -l $((SIZE * 256)) -S 0 $file1 $file2
 }
-run_test 16 "2500 iterations of dual-mount fsx ================="
+run_test 16 "$FSXNUM iterations of dual-mount fsx"
 
 test_17() { # bug 3513, 3667
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
