@@ -1319,9 +1319,6 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
                 rc = mdd_lov_set_md(env, mdd_pobj, son, lmm,
                                     lmm_size, handle, 0);
 
-        if (rc == 0)
-               rc = mdd_attr_get_internal_locked(env, son, ma);
-
         /* update lov_objid data, must be before transaction stop! */
         if (rc == 0)
                 mdd_lov_objid_update(mdd, lmm);
@@ -1823,20 +1820,6 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
                 CERROR("error on stripe info copy %d \n", rc);
                 GOTO(cleanup, rc);
         }
-        if (lmm && lmm_size > 0) {
-                /* Set Lov here, do not get lmm again later */
-                if (lmm_size > ma->ma_lmm_size) {
-                        /* Reply buffer is smaller, need bigger one */
-                        mdd_max_lmm_buffer(env, lmm_size);
-                        if (unlikely(info->mti_max_lmm == NULL))
-                                GOTO(cleanup, rc = -ENOMEM);
-                        ma->ma_lmm = info->mti_max_lmm;
-                        ma->ma_big_lmm_used = 1;
-                }
-                memcpy(ma->ma_lmm, lmm, lmm_size);
-                ma->ma_lmm_size = lmm_size;
-                ma->ma_valid |= MA_LOV;
-        }
 
         if (S_ISLNK(attr->la_mode)) {
                 struct md_ucred  *uc = md_ucred(env);
@@ -1864,8 +1847,6 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        /* Return attr back. */
-        rc = mdd_attr_get_internal_locked(env, son, ma);
         EXIT;
 cleanup:
 	if (rc != 0 && created != 0) {

@@ -586,7 +586,7 @@ int mdt_fix_reply(struct mdt_thread_info *info)
 
         /* MDT_MD buffer may be bigger than packed value, let's shrink all
          * buffers before growing it */
-        if (info->mti_attr.ma_big_lmm_used) {
+	if (info->mti_big_lmm_used) {
                 LASSERT(req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER));
                 md_packed = req_capsule_get_size(pill, &RMF_MDT_MD,
                                                  RCL_SERVER);
@@ -597,7 +597,7 @@ int mdt_fix_reply(struct mdt_thread_info *info)
                 req_capsule_shrink(pill, &RMF_MDT_MD, 0, RCL_SERVER);
                 /* free big lmm if md_size is not needed */
                 if (md_size == 0)
-                        info->mti_attr.ma_big_lmm_used = 0;
+			info->mti_big_lmm_used = 0;
         } else if (req_capsule_has_field(pill, &RMF_MDT_MD, RCL_SERVER)) {
                 req_capsule_shrink(pill, &RMF_MDT_MD, md_size, RCL_SERVER);
         }
@@ -622,7 +622,7 @@ int mdt_fix_reply(struct mdt_thread_info *info)
          */
 
         /* Grow MD buffer if needed finally */
-        if (info->mti_attr.ma_big_lmm_used) {
+	if (info->mti_big_lmm_used) {
                 void *lmm;
 
                 LASSERT(md_size > md_packed);
@@ -649,7 +649,7 @@ int mdt_fix_reply(struct mdt_thread_info *info)
                 if (info->mti_mdt->mdt_max_mdsize < info->mti_attr.ma_lmm_size)
                         info->mti_mdt->mdt_max_mdsize =
                                                     info->mti_attr.ma_lmm_size;
-                info->mti_attr.ma_big_lmm_used = 0;
+		info->mti_big_lmm_used = 0;
         }
         RETURN(rc);
 }
@@ -1288,7 +1288,8 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
                  */
                 if (rr->rr_eadatalen == 0 &&
                     !(info->mti_spec.sp_cr_flags & MDS_OPEN_DELAY_CREATE))
-                        rr->rr_eadatalen = MIN_MD_SIZE;        }
+			rr->rr_eadatalen = MIN_MD_SIZE;
+	}
 
         RETURN(0);
 }

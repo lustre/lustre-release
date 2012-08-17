@@ -736,42 +736,11 @@ static struct md_dir_operations mdd_dot_lustre_dir_ops = {
 static int obf_attr_get(const struct lu_env *env, struct md_object *obj,
                         struct md_attr *ma)
 {
-        int rc = 0;
+	struct mdd_device *mdd = mdo2mdd(obj);
 
-        if (ma->ma_need & MA_INODE) {
-                struct mdd_device *mdd = mdo2mdd(obj);
-
-                /* "fid" is a virtual object and hence does not have any "real"
-                 * attributes. So we reuse attributes of .lustre for "fid" dir */
-                ma->ma_need |= MA_INODE;
-		rc = mdd_attr_get(env, &mdd->mdd_dot_lustre->mod_obj, ma);
-                if (rc)
-                        return rc;
-                ma->ma_valid |= MA_INODE;
-        }
-
-        /* "fid" directory does not have any striping information. */
-        if (ma->ma_need & MA_LOV) {
-                struct mdd_object *mdd_obj = md2mdd_obj(obj);
-
-                if (ma->ma_valid & MA_LOV)
-                        return 0;
-
-                if (!(S_ISREG(mdd_object_type(mdd_obj)) ||
-                      S_ISDIR(mdd_object_type(mdd_obj))))
-                        return 0;
-
-                if (ma->ma_need & MA_LOV_DEF) {
-                        rc = mdd_get_default_md(mdd_obj, ma->ma_lmm);
-                        if (rc > 0) {
-                                ma->ma_lmm_size = rc;
-                                ma->ma_valid |= MA_LOV;
-                                rc = 0;
-                        }
-                }
-        }
-
-        return rc;
+	/* "fid" is a virtual object and hence does not have any "real"
+	 * attributes. So we reuse attributes of .lustre for "fid" dir */
+	return mdd_attr_get(env, &mdd->mdd_dot_lustre->mod_obj, ma);
 }
 
 static int obf_attr_set(const struct lu_env *env, struct md_object *obj,
@@ -790,7 +759,20 @@ static int obf_xattr_get(const struct lu_env *env,
                          struct md_object *obj, struct lu_buf *buf,
                          const char *name)
 {
-        return 0;
+	int rc = 0;
+
+	/* XXX: a temp. solution till LOD/OSP is landed */
+	if (strcmp(name, XATTR_NAME_LOV) == 0) {
+		if (buf->lb_buf == NULL) {
+			rc = sizeof(struct lov_user_md);
+		} else if (buf->lb_len >= sizeof(struct lov_user_md)) {
+			rc = mdd_get_default_md(md2mdd_obj(obj), buf->lb_buf);
+		} else {
+			rc = -ERANGE;
+		}
+	}
+
+	return rc;
 }
 
 static int obf_xattr_set(const struct lu_env *env,

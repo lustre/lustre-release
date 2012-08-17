@@ -687,34 +687,6 @@ static int __mdd_lmm_get(const struct lu_env *env,
         RETURN(rc);
 }
 
-/* get the first parent fid from link EA */
-static int mdd_pfid_get(const struct lu_env *env,
-                        struct mdd_object *mdd_obj, struct md_attr *ma)
-{
-        struct lu_buf *buf;
-        struct link_ea_header *leh;
-        struct link_ea_entry *lee;
-        struct lu_fid *pfid = &ma->ma_pfid;
-        ENTRY;
-
-        if (ma->ma_valid & MA_PFID)
-                RETURN(0);
-
-        buf = mdd_links_get(env, mdd_obj);
-        if (IS_ERR(buf))
-                RETURN(PTR_ERR(buf));
-
-        leh = buf->lb_buf;
-        lee = (struct link_ea_entry *)(leh + 1);
-        memcpy(pfid, &lee->lee_parent_fid, sizeof(*pfid));
-        fid_be_to_cpu(pfid, pfid);
-        ma->ma_valid |= MA_PFID;
-        if (buf->lb_len > OBD_ALLOC_BIG)
-                /* if we vmalloced a large buffer drop it */
-                mdd_buf_put(buf);
-        RETURN(0);
-}
-
 int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
                        struct md_attr *ma)
 {
@@ -727,128 +699,6 @@ int mdd_lmm_get_locked(const struct lu_env *env, struct mdd_object *mdd_obj,
         RETURN(rc);
 }
 
-/* get lmv EA only*/
-static int __mdd_lmv_get(const struct lu_env *env,
-                         struct mdd_object *mdd_obj, struct md_attr *ma)
-{
-        int rc;
-        ENTRY;
-
-        if (ma->ma_valid & MA_LMV)
-                RETURN(0);
-
-        rc = mdd_get_md(env, mdd_obj, ma->ma_lmv, &ma->ma_lmv_size,
-                        XATTR_NAME_LMV);
-        if (rc > 0) {
-                ma->ma_valid |= MA_LMV;
-                rc = 0;
-        }
-        RETURN(rc);
-}
-
-static int __mdd_lma_get(const struct lu_env *env, struct mdd_object *mdd_obj,
-                         struct md_attr *ma)
-{
-        struct mdd_thread_info *info = mdd_env_info(env);
-        struct lustre_mdt_attrs *lma =
-                                 (struct lustre_mdt_attrs *)info->mti_xattr_buf;
-        int lma_size;
-        int rc;
-        ENTRY;
-
-        /* If all needed data are already valid, nothing to do */
-        if ((ma->ma_valid & (MA_HSM | MA_SOM)) ==
-            (ma->ma_need & (MA_HSM | MA_SOM)))
-                RETURN(0);
-
-        /* Read LMA from disk EA */
-        lma_size = sizeof(info->mti_xattr_buf);
-        rc = mdd_get_md(env, mdd_obj, lma, &lma_size, XATTR_NAME_LMA);
-        if (rc <= 0)
-                RETURN(rc);
-
-        /* Useless to check LMA incompatibility because this is already done in
-         * osd_ea_fid_get(), and this will fail long before this code is
-         * called.
-         * So, if we are here, LMA is compatible.
-         */
-
-        lustre_lma_swab(lma);
-
-        /* Swab and copy LMA */
-        if (ma->ma_need & MA_HSM) {
-                if (lma->lma_compat & LMAC_HSM)
-                        ma->ma_hsm.mh_flags = lma->lma_flags & HSM_FLAGS_MASK;
-                else
-                        ma->ma_hsm.mh_flags = 0;
-                ma->ma_valid |= MA_HSM;
-        }
-
-        /* Copy SOM */
-        if (ma->ma_need & MA_SOM && lma->lma_compat & LMAC_SOM) {
-                LASSERT(ma->ma_som != NULL);
-                ma->ma_som->msd_ioepoch = lma->lma_ioepoch;
-                ma->ma_som->msd_size    = lma->lma_som_size;
-                ma->ma_som->msd_blocks  = lma->lma_som_blocks;
-                ma->ma_som->msd_mountid = lma->lma_som_mountid;
-                ma->ma_valid |= MA_SOM;
-        }
-
-        RETURN(0);
-}
-
-int mdd_attr_get_internal(const struct lu_env *env, struct mdd_object *mdd_obj,
-                                 struct md_attr *ma)
-{
-        int rc = 0;
-        ENTRY;
-
-        if (ma->ma_need & MA_INODE)
-                rc = mdd_iattr_get(env, mdd_obj, ma);
-
-        if (rc == 0 && ma->ma_need & MA_LOV) {
-                if (S_ISREG(mdd_object_type(mdd_obj)) ||
-                    S_ISDIR(mdd_object_type(mdd_obj)))
-                        rc = __mdd_lmm_get(env, mdd_obj, ma);
-        }
-        if (rc == 0 && ma->ma_need & MA_PFID && !(ma->ma_valid & MA_LOV)) {
-                if (S_ISREG(mdd_object_type(mdd_obj)))
-                        rc = mdd_pfid_get(env, mdd_obj, ma);
-        }
-        if (rc == 0 && ma->ma_need & MA_LMV) {
-                if (S_ISDIR(mdd_object_type(mdd_obj)))
-                        rc = __mdd_lmv_get(env, mdd_obj, ma);
-        }
-        if (rc == 0 && ma->ma_need & (MA_HSM | MA_SOM)) {
-                if (S_ISREG(mdd_object_type(mdd_obj)))
-                        rc = __mdd_lma_get(env, mdd_obj, ma);
-        }
-#ifdef CONFIG_FS_POSIX_ACL
-        if (rc == 0 && ma->ma_need & MA_ACL_DEF) {
-                if (S_ISDIR(mdd_object_type(mdd_obj)))
-                        rc = mdd_def_acl_get(env, mdd_obj, ma);
-        }
-#endif
-        CDEBUG(D_INODE, "after getattr rc = %d, ma_valid = "LPX64" ma_lmm=%p\n",
-               rc, ma->ma_valid, ma->ma_lmm);
-        RETURN(rc);
-}
-
-int mdd_attr_get_internal_locked(const struct lu_env *env,
-                                 struct mdd_object *mdd_obj, struct md_attr *ma)
-{
-        int rc;
-        int needlock = ma->ma_need &
-                       (MA_LOV | MA_LMV | MA_ACL_DEF | MA_HSM | MA_SOM | MA_PFID);
-
-        if (needlock)
-                mdd_read_lock(env, mdd_obj, MOR_TGT_CHILD);
-        rc = mdd_attr_get_internal(env, mdd_obj, ma);
-        if (needlock)
-                mdd_read_unlock(env, mdd_obj);
-        return rc;
-}
-
 /*
  * No permission check is needed.
  */
@@ -859,7 +709,7 @@ int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
         int                rc;
 
         ENTRY;
-        rc = mdd_attr_get_internal_locked(env, mdd_obj, ma);
+	rc = mdd_iattr_get(env, mdd_obj, ma);
         RETURN(rc);
 }
 
@@ -871,6 +721,9 @@ static int mdd_xattr_get(const struct lu_env *env,
                          const char *name)
 {
         struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	struct mdd_device *mdd = mdo2mdd(obj);
+	struct lu_fid	   rootfid;
+	int is_root;
         int rc;
 
         ENTRY;
@@ -885,6 +738,20 @@ static int mdd_xattr_get(const struct lu_env *env,
         rc = mdo_xattr_get(env, mdd_obj, buf, name,
                            mdd_object_capa(env, mdd_obj));
         mdd_read_unlock(env, mdd_obj);
+
+	dt_root_get(env, mdd->mdd_child, &rootfid);
+	is_root = lu_fid_eq(mdd_object_fid(mdd_obj), &rootfid);
+
+	/* XXX: a temp. solution till LOD/OSP is landed */
+	if (rc == -ENODATA && strcmp(name, XATTR_NAME_LOV) == 0 && is_root) {
+		if (buf->lb_buf == NULL) {
+			rc = sizeof(struct lov_user_md);
+		} else if (buf->lb_len >= sizeof(struct lov_user_md)) {
+			rc = mdd_get_default_md(mdd_obj, buf->lb_buf);
+		} else {
+			rc = -ERANGE;
+		}
+	}
 
         RETURN(rc);
 }

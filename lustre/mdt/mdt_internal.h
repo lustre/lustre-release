@@ -178,6 +178,7 @@ struct mdt_device {
         struct lprocfs_stats      *mdt_stats;
         int                        mdt_sec_level;
         struct rename_stats        mdt_rename_stats;
+	struct lu_fid		   mdt_md_root_fid;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR     (2)
@@ -400,6 +401,13 @@ struct mdt_thread_info {
 
         /* Ops object filename */
         struct lu_name             mti_name;
+	/* per-thread values, can be re-used */
+	void			  *mti_big_lmm;
+	int			   mti_big_lmmsize;
+	/* big_lmm buffer was used and must be used in reply */
+	int			   mti_big_lmm_used;
+	/* should be enough to fit lustre_mdt_attrs */
+	char			   mti_xattr_buf[128];
 };
 
 static inline const struct md_device_operations *
@@ -577,6 +585,8 @@ enum {
         MDT_SOM_ENABLE  = 1,
 };
 
+int mdt_attr_get_complex(struct mdt_thread_info *info,
+			 struct mdt_object *o, struct md_attr *ma);
 int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
                      int created);
 int mdt_object_is_som_enabled(struct mdt_object *mo);

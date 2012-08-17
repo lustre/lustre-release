@@ -51,33 +51,6 @@
 #ifdef CONFIG_FS_POSIX_ACL
 
 /*
- * Get default acl EA only.
- * Hold read_lock for mdd_obj.
- */
-int mdd_def_acl_get(const struct lu_env *env, struct mdd_object *mdd_obj,
-                    struct md_attr *ma)
-{
-        struct lu_buf *buf;
-        int rc;
-        ENTRY;
-
-        if (ma->ma_valid & MA_ACL_DEF)
-                RETURN(0);
-
-        buf = mdd_buf_get(env, ma->ma_acl, ma->ma_acl_size);
-        rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_ACL_DEFAULT,
-                           BYPASS_CAPA);
-        if (rc > 0) {
-                ma->ma_acl_size = rc;
-                ma->ma_valid |= MA_ACL_DEF;
-                rc = 0;
-        } else if ((rc == -EOPNOTSUPP) || (rc == -ENODATA)) {
-                rc = 0;
-        }
-        RETURN(rc);
-}
-
-/*
  * Hold write_lock for o.
  */
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,

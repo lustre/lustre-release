@@ -271,11 +271,6 @@ int mdd_object_kill(const struct lu_env *env, struct mdd_object *obj,
                     struct md_attr *ma, struct thandle *handle);
 int mdd_iattr_get(const struct lu_env *env, struct mdd_object *mdd_obj,
                   struct md_attr *ma);
-int mdd_attr_get_internal(const struct lu_env *env, struct mdd_object *mdd_obj,
-                          struct md_attr *ma);
-int mdd_attr_get_internal_locked(const struct lu_env *env,
-                                 struct mdd_object *mdd_obj,
-                                 struct md_attr *ma);
 int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
 			       struct mdd_object *c, struct lu_attr *attr,
 			       struct thandle *handle,
@@ -511,8 +506,6 @@ static inline int mdd_capable(struct md_ucred *uc, cfs_cap_t cap)
         return 0;
 }
 
-int mdd_def_acl_get(const struct lu_env *env, struct mdd_object *mdd_obj,
-                    struct md_attr *ma);
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
                   struct thandle *handle);
 int __mdd_declare_acl_init(const struct lu_env *env, struct mdd_object *obj,
