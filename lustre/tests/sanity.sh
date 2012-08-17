@@ -7889,7 +7889,7 @@ get_ost_param() {
                 [ x$gl = x"" ] && gl=0
                 gl_sum=$((gl_sum + gl))
         done
-        echo $gl
+        echo $gl_sum
 }
 
 som_mode_switch() {
