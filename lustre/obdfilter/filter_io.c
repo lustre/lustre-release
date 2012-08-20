@@ -786,12 +786,11 @@ retry:
 		CDEBUG(D_INODE, "retry after commit pending journals");
 
 		retries = 1;
-		handle = fsfilt_start_log(obd, dentry->d_inode,
-					  FSFILT_OP_SETATTR, NULL, 1);
-		if (handle != NULL) {
-			fsfilt_commit_wait(obd, dentry->d_inode, handle);
+		handle = fsfilt_start(obd, dentry->d_inode,
+				      FSFILT_OP_SETATTR, NULL);
+		if (handle != NULL &&
+		    fsfilt_commit(obd, dentry->d_inode, handle, 1) == 0)
 			goto retry;
-		}
 	}
 
         filter_fmd_put(exp, fmd);
