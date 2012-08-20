@@ -15,6 +15,8 @@ export GSS_KRB5=false
 export GSS_PIPEFS=false
 export IDENTITY_UPCALL=default
 export QUOTA_AUTO=1
+export JOBSTATS_AUTO=${JOBSTATS_AUTO:-1}
+export JOBID_VAR=${JOBID_VAR:-"procname_uid"}
 
 # LOAD_LLOOP: LU-409: only load llite_lloop module if kernel < 2.6.32 or
 #             LOAD_LLOOP is true. LOAD_LLOOP is false by default.
@@ -2904,25 +2906,44 @@ osc_ensure_active () {
 }
 
 init_param_vars () {
-    remote_mds_nodsh ||
-        TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
+	remote_mds_nodsh ||
+		TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
 
-    log "Using TIMEOUT=$TIMEOUT"
+	log "Using TIMEOUT=$TIMEOUT"
 
-    osc_ensure_active $SINGLEMDS $TIMEOUT
-    osc_ensure_active client $TIMEOUT
+	osc_ensure_active $SINGLEMDS $TIMEOUT
+	osc_ensure_active client $TIMEOUT
+
+	local jobid_var
+	if [ $JOBSTATS_AUTO -ne 0 ]; then
+		echo "enable jobstats, set job scheduler as $JOBID_VAR"
+		jobid_var=$JOBID_VAR
+	else
+		jobid_var=`$LCTL get_param -n jobid_var`
+		if [ $jobid_var != "disable" ]; then
+			echo "disable jobstats as required"
+			jobid_var="disable"
+		else
+			jobid_var="none"
+		fi
+	fi
+
+	if [ $jobid_var == $JOBID_VAR -o $jobid_var == "disable" ]; then
+		do_facet mgs $LCTL conf_param $FSNAME.sys.jobid_var=$jobid_var
+		wait_update $HOSTNAME "$LCTL get_param -n jobid_var" \
+			$jobid_var || return 1
+	fi
 
 	if [ $QUOTA_AUTO -ne 0 ]; then
-        if [ "$ENABLE_QUOTA" ]; then
-            echo "enable quota as required"
-            setup_quota $MOUNT || return 2
-        else
-            echo "disable quota as required"
-            $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
-        fi
-    fi
-
-    return 0
+		if [ "$ENABLE_QUOTA" ]; then
+			echo "enable quota as required"
+			setup_quota $MOUNT || return 2
+		else
+			echo "disable quota as required"
+			$LFS quotaoff -ug $MOUNT > /dev/null 2>&1
+		fi
+	fi
+	return 0
 }
 
 nfs_client_mode () {
