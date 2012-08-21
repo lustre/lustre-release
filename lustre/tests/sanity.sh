@@ -9071,6 +9071,17 @@ test_205() { # Job stats
 }
 run_test 205 "Verify job stats"
 
+# LU-1480, LU-1773 and LU-1657
+test_206() {
+	mkdir -p $DIR/$tdir
+	lfs setstripe -c -1 $DIR/$tdir
+#define OBD_FAIL_LOV_INIT 0x1403
+	$LCTL set_param fail_loc=0xa0001403
+	$LCTL set_param fail_val=1
+	touch $DIR/$tdir/$tfile || true
+}
+run_test 206 "fail lov_init_raid0() doesn't lbug"
+
 test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))

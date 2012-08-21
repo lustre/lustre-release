@@ -424,7 +424,6 @@ struct lov_thread_info {
         struct cl_lock_descr    lti_ldescr;
         struct ost_lvb          lti_lvb;
         struct cl_2queue        lti_cl2q;
-        union  lov_layout_state lti_state;
         struct cl_lock_closure  lti_closure;
         cfs_waitlink_t          lti_waiter;
 };
