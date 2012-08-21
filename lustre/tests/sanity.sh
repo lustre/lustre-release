@@ -8815,7 +8815,7 @@ test_200() {
 	local POOL_ROOT=${POOL_ROOT:-$DIR/d200.pools}
 	local POOL_DIR_NAME=${POOL_DIR_NAME:-dir_tst}
 	# Pool OST targets
-	local first_ost=1
+	local first_ost=0
 	local last_ost=$(($OSTCOUNT - 1))
 	local ost_step=2
 	local ost_list=$(seq $first_ost $ost_step $last_ost)
