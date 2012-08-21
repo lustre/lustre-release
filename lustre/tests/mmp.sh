@@ -139,9 +139,9 @@ get_mmp_update_interval() {
     local device=$2
     local interval
 
-    interval=$(do_facet $facet "$DEBUGFS -c -R dump_mmp $device 2>/dev/null \
-                | grep 'MMP Update Interval' | cut -d' ' -f4")
-    [ -z "$interval" ] && interval=1
+    interval=$(do_facet $facet "$DEBUGFS -c -R dump_mmp $device 2>/dev/null" |
+               awk 'tolower($0) ~ /update.interval/ { print $NF }')
+    [ -z "$interval" ] && interval=5
 
     echo $interval
 }
@@ -152,11 +152,22 @@ get_mmp_check_interval() {
     local device=$2
     local interval
 
-    interval=$(do_facet $facet "$DEBUGFS -c -R dump_mmp $device 2>/dev/null \
-                | grep 'MMP Check Interval' | cut -d' ' -f4")
+    interval=$(do_facet $facet "$DEBUGFS -c -R dump_mmp $device 2>/dev/null" |
+               awk 'tolower($0) ~ /check.interval/ { print $NF }')
     [ -z "$interval" ] && interval=5
 
     echo $interval
+}
+
+# Adjust the MMP update interval (in seconds) on the Lustre server target.
+# Specifying an interval of 0 means to use the default interval.
+set_mmp_update_interval() {
+    local facet=$1
+    local device=$2
+    local interval=${3:-0}
+
+    do_facet $facet "$TUNE2FS -E mmp_update_interval=$interval $device"
+    return ${PIPESTATUS[0]}
 }
 
 # Enable the MMP feature on the Lustre server targets.
@@ -386,18 +397,8 @@ run_e2fsck() {
     shift
     local opts="$@"
 
-    log "Running e2fsck on the device $device on $facet..."
+    echo "Running e2fsck on the device $device on $facet..."
     do_facet $facet "$E2FSCK $opts $device"
-    return ${PIPESTATUS[0]}
-}
-
-# Run delayed e2fsck on the Lustre server target.
-run_delay_e2fsck() {
-    local facet=$1
-    shift
-    local device=$1
-
-    do_facet $facet "$LUSTRE/tests/e2fsck.exp $device"
     return ${PIPESTATUS[0]}
 }
 
@@ -527,10 +528,18 @@ run_test 7 "mount after reboot"
 # Test 8 - mount during e2fsck (should never succeed).
 test_8() {
     local e2fsck_pid
+    local saved_interval
+    local new_interval
 
-    log "Force e2fsck checking on device $MMP_MDSDEV on $MMP_MDS"
-    do_facet $MMP_MDS "$DEBUGFS -w -R 'ssv free_blocks_count 0' $MMP_MDSDEV"
-    run_delay_e2fsck $MMP_MDS $MMP_MDSDEV &
+    # After writing a new sequence number into the MMP block, e2fsck will sleep
+    # at least (2 * new_interval + 1) seconds before it goes into e2fsck passes.
+    new_interval=30
+
+    # MDT
+    saved_interval=$(get_mmp_update_interval $MMP_MDS $MMP_MDSDEV)
+    set_mmp_update_interval $MMP_MDS $MMP_MDSDEV $new_interval
+
+    run_e2fsck $MMP_MDS $MMP_MDSDEV "-fy" &
     e2fsck_pid=$!
     sleep 5
 
@@ -538,15 +547,19 @@ test_8() {
         error_noexit \
             "mount $MMP_MDSDEV on $MMP_MDS_FAILOVER should fail"
         stop $MMP_MDS_FAILOVER || return ${PIPESTATUS[0]}
+        set_mmp_update_interval $MMP_MDS $MMP_MDSDEV $saved_interval
         return 1
     fi
 
     wait $e2fsck_pid
+    set_mmp_update_interval $MMP_MDS $MMP_MDSDEV $saved_interval
 
+    # OST
     echo
-    log "Force e2fsck checking on device $MMP_OSTDEV on $MMP_OSS"
-    do_facet $MMP_OSS "$DEBUGFS -w -R 'ssv free_blocks_count 0' $MMP_OSTDEV"
-    run_delay_e2fsck $MMP_OSS $MMP_OSTDEV &
+    saved_interval=$(get_mmp_update_interval $MMP_OSS $MMP_OSTDEV)
+    set_mmp_update_interval $MMP_OSS $MMP_OSTDEV $new_interval
+
+    run_e2fsck $MMP_OSS $MMP_OSTDEV "-fy" &
     e2fsck_pid=$!
     sleep 5
 
@@ -554,10 +567,12 @@ test_8() {
         error_noexit \
             "mount $MMP_OSTDEV on $MMP_OSS_FAILOVER should fail"
         stop $MMP_OSS_FAILOVER || return ${PIPESTATUS[0]}
+        set_mmp_update_interval $MMP_OSS $MMP_OSTDEV $saved_interval
         return 2
     fi
 
     wait $e2fsck_pid
+    set_mmp_update_interval $MMP_OSS $MMP_OSTDEV $saved_interval
     return 0
 }
 run_test 8 "mount during e2fsck"
