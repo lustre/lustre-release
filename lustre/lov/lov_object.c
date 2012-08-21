@@ -107,7 +107,6 @@ static void lov_install_raid0(const struct lu_env *env,
                               struct lov_object *lov,
                               union  lov_layout_state *state)
 {
-        lov->u = *state;
 }
 
 static struct cl_object *lov_sub_find(const struct lu_env *env,
@@ -132,6 +131,11 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
         struct cl_object_header *parent;
         struct lov_oinfo        *oinfo;
         int result;
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LOV_INIT)) {
+		cl_object_put(env, stripe);
+		return -EIO;
+	}
 
         hdr    = cl_object_header(lov2cl(lov));
         subhdr = cl_object_header(stripe);
@@ -286,7 +290,7 @@ static int lov_delete_raid0(const struct lu_env *env, struct lov_object *lov,
 	ENTRY;
 
 	dump_lsm(D_INODE, lsm);
-	if (cfs_atomic_read(&lsm->lsm_refc) > 1)
+	if (lov->lo_lsm_invalid && cfs_atomic_read(&lsm->lsm_refc) > 1)
 		RETURN(-EBUSY);
 
         if (r0->lo_sub != NULL) {
@@ -519,7 +523,7 @@ static int lov_layout_change(const struct lu_env *env,
                              const struct cl_object_conf *conf)
 {
 	int result;
-	union lov_layout_state *state = &lov_env_info(env)->lti_state;
+	union lov_layout_state *state = &lov->u;
 	const struct lov_layout_operations *old_ops;
 	const struct lov_layout_operations *new_ops;
 
@@ -551,12 +555,17 @@ static int lov_layout_change(const struct lu_env *env,
 		LASSERT(hdr->coh_tree.rnode == NULL);
 		LASSERT(hdr->coh_pages == 0);
 
+		lov->lo_type = LLT_EMPTY;
 		result = new_ops->llo_init(env,
 					lu2lov_dev(lov->lo_cl.co_lu.lo_dev),
 					lov, conf, state);
 		if (result == 0) {
 			new_ops->llo_install(env, lov, state);
 			lov->lo_type = llt;
+		} else {
+			new_ops->llo_delete(env, lov, state);
+			new_ops->llo_fini(env, lov, state);
+			/* this file becomes an EMPTY file. */
 		}
 	}
 	RETURN(result);
@@ -574,7 +583,7 @@ int lov_object_init(const struct lu_env *env, struct lu_object *obj,
         struct lov_device            *dev   = lu2lov_dev(obj->lo_dev);
         struct lov_object            *lov   = lu2lov(obj);
         const struct cl_object_conf  *cconf = lu2cl_conf(conf);
-        union  lov_layout_state      *set   = &lov_env_info(env)->lti_state;
+        union  lov_layout_state      *set   = &lov->u;
         const struct lov_layout_operations *ops;
         int result;
 
@@ -588,8 +597,6 @@ int lov_object_init(const struct lu_env *env, struct lu_object *obj,
         result = ops->llo_init(env, dev, lov, cconf, set);
         if (result == 0)
                 ops->llo_install(env, lov, set);
-        else
-                ops->llo_fini(env, lov, set);
         RETURN(result);
 }
 
