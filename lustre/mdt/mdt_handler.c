@@ -2021,11 +2021,11 @@ static int mdt_llog_ctxt_unclone(const struct lu_env *env,
 
 static int mdt_llog_create(struct mdt_thread_info *info)
 {
-        int rc;
+	int rc;
 
-        req_capsule_set(info->mti_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
-        rc = llog_origin_handle_create(mdt_info_req(info));
-        return (rc < 0 ? err_serious(rc) : rc);
+	req_capsule_set(info->mti_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
+	rc = llog_origin_handle_open(mdt_info_req(info));
+	return (rc < 0 ? err_serious(rc) : rc);
 }
 
 static int mdt_llog_destroy(struct mdt_thread_info *info)

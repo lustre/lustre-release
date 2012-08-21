@@ -316,9 +316,10 @@ int llog_obd_origin_setup(const struct lu_env *env, struct obd_device *obd,
                 RETURN(-ENODEV);
 
         if (logid && logid->lgl_oid) {
-		rc = llog_create(env, ctxt, &handle, logid, NULL);
-        } else {
-		rc = llog_create(env, ctxt, &handle, NULL, (char *)name);
+		rc = llog_open(env, ctxt, &handle, logid, NULL,
+			       LLOG_OPEN_EXISTS);
+	} else {
+		rc = llog_open_create(env, ctxt, &handle, NULL, (char *)name);
                 if (!rc && logid)
                         *logid = handle->lgh_id;
         }
@@ -344,42 +345,13 @@ EXPORT_SYMBOL(llog_obd_origin_setup);
 
 int llog_obd_origin_cleanup(const struct lu_env *env, struct llog_ctxt *ctxt)
 {
-        struct llog_handle *cathandle, *n, *loghandle;
-        struct llog_log_hdr *llh;
-        int rc, index;
-        ENTRY;
+	ENTRY;
 
-        if (!ctxt)
-                RETURN(0);
+	if (!ctxt)
+		RETURN(0);
 
-        cathandle = ctxt->loc_handle;
-        if (cathandle) {
-                cfs_list_for_each_entry_safe(loghandle, n,
-                                             &cathandle->u.chd.chd_head,
-                                             u.phd.phd_entry) {
-                        llh = loghandle->lgh_hdr;
-                        if ((llh->llh_flags &
-                                LLOG_F_ZAP_WHEN_EMPTY) &&
-                            (llh->llh_count == 1)) {
-				rc = llog_destroy(env, loghandle);
-                                if (rc)
-                                        CERROR("failure destroying log during "
-                                               "cleanup: %d\n", rc);
-
-                                index = loghandle->u.phd.phd_cookie.lgc_index;
-                                llog_free_handle(loghandle);
-
-                                LASSERT(index);
-                                llog_cat_set_first_idx(cathandle, index);
-				rc = llog_cancel_rec(env, cathandle, index);
-                                if (rc == 0)
-                                        CDEBUG(D_RPCTRACE, "cancel plain log at"
-                                               "index %u of catalog "LPX64"\n",
-                                               index,cathandle->lgh_id.lgl_oid);
-                        }
-                }
-		llog_cat_put(env, ctxt->loc_handle);
-        }
+	if (ctxt->loc_handle)
+		llog_cat_close(env, ctxt->loc_handle);
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_obd_origin_cleanup);

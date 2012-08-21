@@ -52,20 +52,29 @@
 #include <lustre_fsfilt.h>
 
 #if defined(__KERNEL__) && defined(LUSTRE_LOG_SERVER)
-
-int llog_origin_handle_create(struct ptlrpc_request *req)
+static int llog_origin_close(const struct lu_env *env, struct llog_handle *lgh)
 {
-        struct obd_export    *exp = req->rq_export;
-        struct obd_device    *obd = exp->exp_obd;
-        struct obd_device    *disk_obd;
-        struct llog_handle   *loghandle;
-        struct llogd_body    *body;
-        struct lvfs_run_ctxt  saved;
-        struct llog_logid    *logid = NULL;
-        struct llog_ctxt     *ctxt;
-        char                 *name = NULL;
-        int                   rc, rc2;
-        ENTRY;
+	if (lgh->lgh_hdr != NULL && lgh->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
+		return llog_cat_close(env, lgh);
+	else
+		return llog_close(env, lgh);
+}
+
+/* Only open is supported, no new llog can be created remotely */
+int llog_origin_handle_open(struct ptlrpc_request *req)
+{
+	struct obd_export	*exp = req->rq_export;
+	struct obd_device	*obd = exp->exp_obd;
+	struct obd_device	*disk_obd;
+	struct lvfs_run_ctxt	 saved;
+	struct llog_handle	*loghandle;
+	struct llogd_body	*body;
+	struct llog_logid	*logid = NULL;
+	struct llog_ctxt	*ctxt;
+	char			*name = NULL;
+	int			 rc;
+
+	ENTRY;
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
         if (body == NULL)
@@ -90,8 +99,8 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle, logid,
-			 name);
+	rc = llog_open(req->rq_svc_thread->t_env, ctxt, &loghandle, logid,
+		       name, LLOG_OPEN_EXISTS);
         if (rc)
                 GOTO(out_pop, rc);
 
@@ -104,28 +113,24 @@ int llog_origin_handle_create(struct ptlrpc_request *req)
 
 	EXIT;
 out_close:
-	rc2 = llog_close(req->rq_svc_thread->t_env, loghandle);
-        if (!rc)
-                rc = rc2;
+	llog_origin_close(req->rq_svc_thread->t_env, loghandle);
 out_pop:
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-        llog_ctxt_put(ctxt);
-        return rc;
+	pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+	llog_ctxt_put(ctxt);
+	return rc;
 }
-EXPORT_SYMBOL(llog_origin_handle_create);
+EXPORT_SYMBOL(llog_origin_handle_open);
 
 int llog_origin_handle_destroy(struct ptlrpc_request *req)
 {
-        struct obd_export    *exp = req->rq_export;
-        struct obd_device    *obd = exp->exp_obd;
-        struct obd_device    *disk_obd;
-        struct llog_handle   *loghandle;
-        struct llogd_body    *body;
-        struct lvfs_run_ctxt  saved;
-        struct llog_logid    *logid = NULL;
-        struct llog_ctxt     *ctxt;
-        int                   rc;
-        ENTRY;
+	struct obd_device	*disk_obd;
+	struct lvfs_run_ctxt	 saved;
+	struct llogd_body	*body;
+	struct llog_logid	*logid = NULL;
+	struct llog_ctxt	*ctxt;
+	int			 rc;
+
+	ENTRY;
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
         if (body == NULL)
@@ -134,47 +139,29 @@ int llog_origin_handle_destroy(struct ptlrpc_request *req)
         if (body->lgd_logid.lgl_oid > 0)
                 logid = &body->lgd_logid;
 
-        ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
-        if (ctxt == NULL)
-                RETURN(-ENODEV);
+	if (!(body->lgd_llh_flags & LLOG_F_IS_PLAIN))
+		CERROR("%s: wrong llog flags %x\n",
+		       req->rq_export->exp_obd->obd_name, body->lgd_llh_flags);
 
-        disk_obd = ctxt->loc_exp->exp_obd;
-        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
+	if (ctxt == NULL)
+		RETURN(-ENODEV);
 
-	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle, logid,
-			 NULL);
-        if (rc)
-                GOTO(out_pop, rc);
+	disk_obd = ctxt->loc_exp->exp_obd;
+	push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-        rc = req_capsule_server_pack(&req->rq_pill);
-        if (rc)
-                GOTO(out_close, rc = -ENOMEM);
-
-        body = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        body->lgd_logid = loghandle->lgh_id;
-	rc = llog_init_handle(req->rq_svc_thread->t_env, loghandle,
-			      LLOG_F_IS_PLAIN, NULL);
-        if (rc)
-                GOTO(out_close, rc);
-	rc = llog_destroy(req->rq_svc_thread->t_env, loghandle);
-        if (rc)
-                GOTO(out_close, rc);
-        llog_free_handle(loghandle);
-	EXIT;
-out_close:
-        if (rc)
-		llog_close(req->rq_svc_thread->t_env, loghandle);
-out_pop:
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-        llog_ctxt_put(ctxt);
-        return rc;
+	rc = req_capsule_server_pack(&req->rq_pill);
+	/* erase only if no error and logid is valid */
+	if (rc == 0)
+		rc = llog_erase(req->rq_svc_thread->t_env, ctxt, logid, NULL);
+	pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+	llog_ctxt_put(ctxt);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_origin_handle_destroy);
 
 int llog_origin_handle_next_block(struct ptlrpc_request *req)
 {
-        struct obd_export   *exp = req->rq_export;
-        struct obd_device   *obd = exp->exp_obd;
         struct obd_device   *disk_obd;
         struct llog_handle  *loghandle;
         struct llogd_body   *body;
@@ -182,40 +169,30 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
         struct lvfs_run_ctxt saved;
         struct llog_ctxt    *ctxt;
         __u32                flags;
-        __u8                *buf;
         void                *ptr;
-        int                  rc, rc2;
+	int                  rc;
+
         ENTRY;
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
-        if (!buf)
-                RETURN(-ENOMEM);
+	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
+	if (ctxt == NULL)
+		RETURN(-ENODEV);
 
-        ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
-        if (ctxt == NULL)
-                GOTO(out_free, rc = -ENODEV);
-        disk_obd = ctxt->loc_exp->exp_obd;
-        push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+	disk_obd = ctxt->loc_exp->exp_obd;
+	push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle,
-			 &body->lgd_logid, NULL);
-        if (rc)
-                GOTO(out_pop, rc);
+	rc = llog_open(req->rq_svc_thread->t_env, ctxt, &loghandle,
+		       &body->lgd_logid, NULL, LLOG_OPEN_EXISTS);
+	if (rc)
+		GOTO(out_pop, rc);
 
-        flags = body->lgd_llh_flags;
+	flags = body->lgd_llh_flags;
 	rc = llog_init_handle(req->rq_svc_thread->t_env, loghandle, flags,
 			      NULL);
-        if (rc)
-                GOTO(out_close, rc);
-
-        memset(buf, 0, LLOG_CHUNK_SIZE);
-	rc = llog_next_block(req->rq_svc_thread->t_env, loghandle,
-			     &body->lgd_saved_index, body->lgd_index,
-			     &body->lgd_cur_offset, buf, LLOG_CHUNK_SIZE);
         if (rc)
                 GOTO(out_close, rc);
 
@@ -229,25 +206,23 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
         *repbody = *body;
 
         ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
-        memcpy(ptr, buf, LLOG_CHUNK_SIZE);
+	rc = llog_next_block(req->rq_svc_thread->t_env, loghandle,
+			     &body->lgd_saved_index, body->lgd_index,
+			     &body->lgd_cur_offset, ptr, LLOG_CHUNK_SIZE);
+	if (rc)
+		GOTO(out_close, rc);
 	EXIT;
 out_close:
-	rc2 = llog_close(req->rq_svc_thread->t_env, loghandle);
-        if (!rc)
-                rc = rc2;
+	llog_origin_close(req->rq_svc_thread->t_env, loghandle);
 out_pop:
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-        llog_ctxt_put(ctxt);
-out_free:
-        OBD_FREE(buf, LLOG_CHUNK_SIZE);
-        return rc;
+	pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+	llog_ctxt_put(ctxt);
+	return rc;
 }
 EXPORT_SYMBOL(llog_origin_handle_next_block);
 
 int llog_origin_handle_prev_block(struct ptlrpc_request *req)
 {
-        struct obd_export    *exp = req->rq_export;
-        struct obd_device    *obd = exp->exp_obd;
         struct llog_handle   *loghandle;
         struct llogd_body    *body;
         struct llogd_body    *repbody;
@@ -255,40 +230,30 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
         struct lvfs_run_ctxt  saved;
         struct llog_ctxt     *ctxt;
         __u32                 flags;
-        __u8                 *buf;
         void                 *ptr;
-        int                   rc, rc2;
+	int                   rc;
+
         ENTRY;
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        OBD_ALLOC(buf, LLOG_CHUNK_SIZE);
-        if (!buf)
-                RETURN(-ENOMEM);
-
-        ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
-        if (ctxt == NULL)
-                GOTO(out_free, rc = -ENODEV);
+	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
+	if (ctxt == NULL)
+		RETURN(-ENODEV);
 
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle,
-			 &body->lgd_logid, NULL);
-        if (rc)
-                GOTO(out_pop, rc);
+	rc = llog_open(req->rq_svc_thread->t_env, ctxt, &loghandle,
+			 &body->lgd_logid, NULL, LLOG_OPEN_EXISTS);
+	if (rc)
+		GOTO(out_pop, rc);
 
-        flags = body->lgd_llh_flags;
+	flags = body->lgd_llh_flags;
 	rc = llog_init_handle(req->rq_svc_thread->t_env, loghandle, flags,
 			      NULL);
-        if (rc)
-                GOTO(out_close, rc);
-
-        memset(buf, 0, LLOG_CHUNK_SIZE);
-	rc = llog_prev_block(req->rq_svc_thread->t_env, loghandle,
-			     body->lgd_index, buf, LLOG_CHUNK_SIZE);
         if (rc)
                 GOTO(out_close, rc);
 
@@ -302,26 +267,23 @@ int llog_origin_handle_prev_block(struct ptlrpc_request *req)
         *repbody = *body;
 
         ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
-        memcpy(ptr, buf, LLOG_CHUNK_SIZE);
+	rc = llog_prev_block(req->rq_svc_thread->t_env, loghandle,
+			     body->lgd_index, ptr, LLOG_CHUNK_SIZE);
+	if (rc)
+		GOTO(out_close, rc);
+
 	EXIT;
 out_close:
-	rc2 = llog_close(req->rq_svc_thread->t_env, loghandle);
-        if (!rc)
-                rc = rc2;
-
+	llog_origin_close(req->rq_svc_thread->t_env, loghandle);
 out_pop:
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-        llog_ctxt_put(ctxt);
-out_free:
-        OBD_FREE(buf, LLOG_CHUNK_SIZE);
-        return rc;
+	pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+	llog_ctxt_put(ctxt);
+	return rc;
 }
 EXPORT_SYMBOL(llog_origin_handle_prev_block);
 
 int llog_origin_handle_read_header(struct ptlrpc_request *req)
 {
-        struct obd_export    *exp = req->rq_export;
-        struct obd_device    *obd = exp->exp_obd;
         struct obd_device    *disk_obd;
         struct llog_handle   *loghandle;
         struct llogd_body    *body;
@@ -329,33 +291,35 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         struct lvfs_run_ctxt  saved;
         struct llog_ctxt     *ctxt;
         __u32                 flags;
-        int                   rc, rc2;
+	int                   rc;
+
         ENTRY;
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
         if (body == NULL)
                 RETURN(-EFAULT);
 
-        ctxt = llog_get_context(obd, body->lgd_ctxt_idx);
-        if (ctxt == NULL)
-                RETURN(-ENODEV);
+	ctxt = llog_get_context(req->rq_export->exp_obd, body->lgd_ctxt_idx);
+	if (ctxt == NULL)
+		RETURN(-ENODEV);
 
         disk_obd = ctxt->loc_exp->exp_obd;
         push_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
 
-	rc = llog_create(req->rq_svc_thread->t_env, ctxt, &loghandle,
-			 &body->lgd_logid, NULL);
-        if (rc)
-                GOTO(out_pop, rc);
+	rc = llog_open(req->rq_svc_thread->t_env, ctxt, &loghandle,
+		       &body->lgd_logid, NULL, LLOG_OPEN_EXISTS);
+	if (rc)
+		GOTO(out_pop, rc);
 
-        /*
-         * llog_init_handle() reads the llog header
-         */
-        flags = body->lgd_llh_flags;
+	/*
+	 * llog_init_handle() reads the llog header
+	 */
+	flags = body->lgd_llh_flags;
 	rc = llog_init_handle(req->rq_svc_thread->t_env, loghandle, flags,
 			      NULL);
-        if (rc)
-                GOTO(out_close, rc);
+	if (rc)
+		GOTO(out_close, rc);
+	flags = loghandle->lgh_hdr->llh_flags;
 
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
@@ -365,13 +329,11 @@ int llog_origin_handle_read_header(struct ptlrpc_request *req)
         *hdr = *loghandle->lgh_hdr;
         EXIT;
 out_close:
-	rc2 = llog_close(req->rq_svc_thread->t_env, loghandle);
-        if (!rc)
-                rc = rc2;
+	llog_origin_close(req->rq_svc_thread->t_env, loghandle);
 out_pop:
-        pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
-        llog_ctxt_put(ctxt);
-        return rc;
+	pop_ctxt(&saved, &disk_obd->obd_lvfs_ctxt, NULL);
+	llog_ctxt_put(ctxt);
+	return rc;
 }
 EXPORT_SYMBOL(llog_origin_handle_read_header);
 
@@ -385,7 +347,6 @@ EXPORT_SYMBOL(llog_origin_handle_close);
 
 int llog_origin_handle_cancel(struct ptlrpc_request *req)
 {
-        struct obd_device *obd = req->rq_export->exp_obd;
         int num_cookies, rc = 0, err, i, failed = 0;
         struct obd_device *disk_obd;
         struct llog_cookie *logcookies;
@@ -404,7 +365,8 @@ int llog_origin_handle_cancel(struct ptlrpc_request *req)
                 RETURN(-EFAULT);
         }
 
-        ctxt = llog_get_context(obd, logcookies->lgc_subsys);
+	ctxt = llog_get_context(req->rq_export->exp_obd,
+				logcookies->lgc_subsys);
         if (ctxt == NULL)
                 RETURN(-ENODEV);
 
@@ -467,7 +429,7 @@ pop_ctxt:
 EXPORT_SYMBOL(llog_origin_handle_cancel);
 
 #else /* !__KERNEL__ */
-int llog_origin_handle_create(struct ptlrpc_request *req)
+int llog_origin_handle_open(struct ptlrpc_request *req)
 {
         LBUG();
         return 0;

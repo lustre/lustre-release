@@ -1037,25 +1037,15 @@ int sptlrpc_target_local_copy_conf(struct obd_device *obd,
         }
 
         /* erase the old tmp log */
-	rc = llog_create(NULL, ctxt, &llh, NULL, LOG_SPTLRPC_TMP);
-	if (rc == 0) {
-		rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
-		if (rc == 0) {
-			rc = llog_destroy(NULL, llh);
-			llog_free_handle(llh);
-		} else {
-			llog_close(NULL, llh);
-		}
-        }
+	rc = llog_erase(NULL, ctxt, NULL, LOG_SPTLRPC_TMP);
+	if (rc < 0 && rc != -ENOENT) {
+		CERROR("%s: cannot erase temporary sptlrpc log: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(out_dput, rc);
+	}
 
-        if (rc) {
-                CERROR("target %s: cannot erase temporary sptlrpc log: "
-                       "rc = %d\n", obd->obd_name, rc);
-                GOTO(out_dput, rc);
-        }
-
-        /* write temporary log */
-	rc = llog_create(NULL, ctxt, &llh, NULL, LOG_SPTLRPC_TMP);
+	/* write temporary log */
+	rc = llog_open_create(NULL, ctxt, &llh, NULL, LOG_SPTLRPC_TMP);
 	if (rc)
 		GOTO(out_dput, rc);
 	rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
@@ -1066,12 +1056,9 @@ int sptlrpc_target_local_copy_conf(struct obd_device *obd,
 
 out_close:
 	llog_close(NULL, llh);
-
-        if (rc == 0) {
-                rc = lustre_rename(dentry, obd->obd_lvfs_ctxt.pwdmnt,
-                                   LOG_SPTLRPC_TMP, LOG_SPTLRPC);
-        }
-
+	if (rc == 0)
+		rc = lustre_rename(dentry, obd->obd_lvfs_ctxt.pwdmnt,
+				   LOG_SPTLRPC_TMP, LOG_SPTLRPC);
 out_dput:
         l_dput(dentry);
 out_ctx:
@@ -1133,9 +1120,12 @@ int sptlrpc_target_local_read_conf(struct obd_device *obd,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 
-	rc = llog_create(NULL, ctxt, &llh, NULL, LOG_SPTLRPC);
-	if (rc)
+	rc = llog_open(NULL, ctxt, &llh, NULL, LOG_SPTLRPC, LLOG_OPEN_EXISTS);
+	if (rc < 0) {
+		if (rc == -ENOENT)
+			rc = 0;
 		GOTO(out_pop, rc);
+	}
 
 	rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
         if (rc)

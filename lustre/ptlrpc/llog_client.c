@@ -80,27 +80,26 @@
 
 /* This is a callback from the llog_* functions.
  * Assumes caller has already pushed us into the kernel context. */
-static int llog_client_create(const struct lu_env *env, struct llog_ctxt *ctxt,
-			      struct llog_handle **res,
-			      struct llog_logid *logid, char *name)
+static int llog_client_open(const struct lu_env *env,
+			    struct llog_handle *lgh, struct llog_logid *logid,
+			    char *name, enum llog_open_param open_param)
 {
         struct obd_import     *imp;
         struct llogd_body     *body;
-        struct llog_handle    *handle;
+	struct llog_ctxt      *ctxt = lgh->lgh_ctxt;
         struct ptlrpc_request *req = NULL;
         int                    rc;
         ENTRY;
 
         LLOG_CLIENT_ENTRY(ctxt, imp);
 
-        handle = llog_alloc_handle();
-        if (handle == NULL)
-                RETURN(-ENOMEM);
-        *res = handle;
+	/* client cannot create llog */
+	LASSERTF(open_param != LLOG_OPEN_NEW, "%#x\n", open_param);
+	LASSERT(lgh);
 
-        req = ptlrpc_request_alloc(imp, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
-        if (req == NULL)
-                GOTO(err_free, rc = -ENOMEM);
+	req = ptlrpc_request_alloc(imp, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
+	if (req == NULL)
+		GOTO(out, rc = -ENOMEM);
 
         if (name)
                 req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
@@ -111,7 +110,7 @@ static int llog_client_create(const struct lu_env *env, struct llog_ctxt *ctxt,
         if (rc) {
                 ptlrpc_request_free(req);
                 req = NULL;
-                GOTO(err_free, rc);
+		GOTO(out, rc);
         }
         ptlrpc_request_set_replen(req);
 
@@ -130,23 +129,19 @@ static int llog_client_create(const struct lu_env *env, struct llog_ctxt *ctxt,
 
         rc = ptlrpc_queue_wait(req);
         if (rc)
-                GOTO(err_free, rc);
+		GOTO(out, rc);
 
-        body = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
-        if (body == NULL)
-                GOTO(err_free, rc =-EFAULT);
+	body = req_capsule_server_get(&req->rq_pill, &RMF_LLOGD_BODY);
+	if (body == NULL)
+		GOTO(out, rc = -EFAULT);
 
-        handle->lgh_id = body->lgd_logid;
-        handle->lgh_ctxt = ctxt;
-        EXIT;
+	lgh->lgh_id = body->lgd_logid;
+	lgh->lgh_ctxt = ctxt;
+	EXIT;
 out:
-        LLOG_CLIENT_EXIT(ctxt, imp);
-        ptlrpc_req_finished(req);
-        return rc;
-err_free:
-        *res = NULL;
-        llog_free_handle(handle);
-        goto out;
+	LLOG_CLIENT_EXIT(ctxt, imp);
+	ptlrpc_req_finished(req);
+	return rc;
 }
 
 static int llog_client_destroy(const struct lu_env *env,
@@ -168,6 +163,10 @@ static int llog_client_destroy(const struct lu_env *env,
         body = req_capsule_client_get(&req->rq_pill, &RMF_LLOGD_BODY);
         body->lgd_logid = loghandle->lgh_id;
         body->lgd_llh_flags = loghandle->lgh_hdr->llh_flags;
+
+	if (!(body->lgd_llh_flags & LLOG_F_IS_PLAIN))
+		CERROR("%s: wrong llog flags %x\n", imp->imp_obd->obd_name,
+		       body->lgd_llh_flags);
 
         ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);
@@ -348,13 +347,12 @@ static int llog_client_close(const struct lu_env *env,
         return(0);
 }
 
-
 struct llog_operations llog_client_ops = {
-        lop_next_block:  llog_client_next_block,
-        lop_prev_block:  llog_client_prev_block,
-        lop_read_header: llog_client_read_header,
-        lop_create:      llog_client_create,
-        lop_destroy:     llog_client_destroy,
-        lop_close:       llog_client_close,
+	.lop_next_block		= llog_client_next_block,
+	.lop_prev_block		= llog_client_prev_block,
+	.lop_read_header	= llog_client_read_header,
+	.lop_open		= llog_client_open,
+	.lop_destroy		= llog_client_destroy,
+	.lop_close		= llog_client_close,
 };
 EXPORT_SYMBOL(llog_client_ops);

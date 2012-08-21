@@ -1963,7 +1963,7 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                 req_capsule_set(&req->rq_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OBD_LOGD_NET))
                         RETURN(0);
-                rc = llog_origin_handle_create(req);
+		rc = llog_origin_handle_open(req);
                 ldlm_callback_reply(req, rc);
                 RETURN(0);
         case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:

@@ -907,9 +907,9 @@ int mgs_handle(struct ptlrpc_request *req)
                 break;
 
         case LLOG_ORIGIN_HANDLE_CREATE:
-                DEBUG_REQ(D_MGS, req, "llog_init");
-                req_capsule_set(&req->rq_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
-                rc = llog_origin_handle_create(req);
+		DEBUG_REQ(D_MGS, req, "llog_open");
+		req_capsule_set(&req->rq_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
+		rc = llog_origin_handle_open(req);
                 if (rc == 0)
                         (void)mgs_handle_fslog_hack(req);
                 break;
@@ -929,21 +929,18 @@ int mgs_handle(struct ptlrpc_request *req)
                 DEBUG_REQ(D_MGS, req, "llog close");
                 rc = llog_origin_handle_close(req);
                 break;
-        case LLOG_CATINFO:
-		DEBUG_REQ(D_MGS, req, "llog catinfo");
+	default:
 		rc = -EOPNOTSUPP;
-		break;
-        default:
-                req->rq_status = -ENOTSUPP;
-                rc = ptlrpc_error(req);
-                RETURN(rc);
         }
 
         LASSERT(current->journal_info == NULL);
-
-        if (rc)
-                CERROR("MGS handle cmd=%d rc=%d\n", opc, rc);
-
+	if (rc) {
+		DEBUG_REQ(D_MGS, req, "MGS fail to handle opc = %d: rc = %d\n",
+			  opc, rc);
+		req->rq_status = rc;
+		rc = ptlrpc_error(req);
+		RETURN(rc);
+	}
 out:
         target_send_reply(req, rc, fail);
         RETURN(0);

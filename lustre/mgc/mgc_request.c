@@ -1357,7 +1357,7 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
                 if (obd == NULL) {
                         CDEBUG(D_INFO, "mgc %s: cannot find obdname %s\n",
                                mgc->obd_name, obdname);
-
+			rc = 0;
                         /* this is a safe race, when the ost is starting up...*/
                         continue;
                 }
@@ -1568,11 +1568,13 @@ static int mgc_llog_is_empty(struct obd_device *obd, struct llog_ctxt *ctxt,
 	int			 rc = 0;
 
 	push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
-	rc = llog_create(NULL, ctxt, &llh, NULL, name);
+	rc = llog_open(NULL, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
 	if (rc == 0) {
 		llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
 		rc = llog_get_size(llh);
 		llog_close(NULL, llh);
+	} else if (rc == -ENOENT) {
+		rc = 0;
 	}
 	pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 	/* header is record 1 */
@@ -1621,39 +1623,37 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
         sprintf(temp_log, "%sT", logname);
 
         /* Make sure there's no old temp log */
-	rc = llog_create(NULL, lctxt, &local_llh, NULL, temp_log);
+	rc = llog_erase(NULL, lctxt, NULL, temp_log);
+	if (rc < 0 && rc != -ENOENT)
+		GOTO(out, rc);
+
+	/* open local log */
+	rc = llog_open_create(NULL, lctxt, &local_llh, NULL, temp_log);
 	if (rc)
 		GOTO(out, rc);
-	rc = llog_init_handle(NULL, local_llh, LLOG_F_IS_PLAIN, NULL);
-	if (rc)
-		GOTO(out, rc);
-	rc = llog_destroy(NULL, local_llh);
-        llog_free_handle(local_llh);
-        if (rc)
-                GOTO(out, rc);
 
-        /* open local log */
-	rc = llog_create(NULL, lctxt, &local_llh, NULL, temp_log);
-        if (rc)
-                GOTO(out, rc);
-
-        /* set the log header uuid for fun */
-        OBD_ALLOC_PTR(uuid);
-        obd_str2uuid(uuid, logname);
+	/* set the log header uuid for fun */
+	OBD_ALLOC_PTR(uuid);
+	obd_str2uuid(uuid, logname);
 	rc = llog_init_handle(NULL, local_llh, LLOG_F_IS_PLAIN, uuid);
-        OBD_FREE_PTR(uuid);
-        if (rc)
-                GOTO(out_closel, rc);
-
-        /* open remote log */
-	rc = llog_create(NULL, rctxt, &remote_llh, NULL, logname);
+	OBD_FREE_PTR(uuid);
 	if (rc)
 		GOTO(out_closel, rc);
-	rc = llog_init_handle(NULL, remote_llh, LLOG_F_IS_PLAIN, NULL);
-        if (rc)
-                GOTO(out_closer, rc);
 
-        /* Copy remote log */
+	/* open remote log */
+	rc = llog_open(NULL, rctxt, &remote_llh, NULL, logname,
+		       LLOG_OPEN_EXISTS);
+	if (rc < 0) {
+		if (rc == -ENOENT)
+			rc = 0;
+		GOTO(out_closel, rc);
+	}
+
+	rc = llog_init_handle(NULL, remote_llh, LLOG_F_IS_PLAIN, NULL);
+	if (rc)
+		GOTO(out_closer, rc);
+
+	/* Copy remote log */
 	rc = llog_process(NULL, remote_llh, mgc_copy_handler,
 			  (void *)local_llh, NULL);
 
@@ -1668,8 +1668,9 @@ out_closel:
 
         /* We've copied the remote log to the local temp log, now
            replace the old local log with the temp log. */
-        if (!rc) {
+	if (rc == 0) {
                 struct client_obd *cli = &obd->u.cli;
+
                 LASSERT(cli);
                 LASSERT(cli->cl_mgc_configs_dir);
                 rc = lustre_rename(cli->cl_mgc_configs_dir, cli->cl_mgc_vfsmnt,

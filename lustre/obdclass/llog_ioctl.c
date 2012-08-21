@@ -252,31 +252,31 @@ static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
         index = log->u.phd.phd_cookie.lgc_index;
         LASSERT(index);
 	rc = llog_destroy(env, log);
-        if (rc) {
-                CDEBUG(D_IOCTL, "cannot destroy log\n");
-                GOTO(out, rc);
-        }
-        llog_cat_set_first_idx(cat, index);
+	if (rc) {
+		CDEBUG(D_IOCTL, "cannot destroy log\n");
+		GOTO(out, rc);
+	}
+	llog_cat_set_first_idx(cat, index);
 	rc = llog_cancel_rec(env, cat, index);
 out:
-        llog_free_handle(log);
-        cfs_up_write(&cat->lgh_lock);
-        RETURN(rc);
+	cfs_up_write(&cat->lgh_lock);
+	llog_close(env, log);
+	RETURN(rc);
 
 }
 
 static int llog_delete_cb(const struct lu_env *env, struct llog_handle *handle,
 			  struct llog_rec_hdr *rec, void *data)
 {
-        struct  llog_logid_rec *lir = (struct llog_logid_rec*)rec;
-        int     rc;
+	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
+	int			 rc;
 
-        ENTRY;
-        if (rec->lrh_type != LLOG_LOGID_MAGIC)
-              RETURN (-EINVAL);
+	ENTRY;
+	if (rec->lrh_type != LLOG_LOGID_MAGIC)
+		RETURN(-EINVAL);
 	rc = llog_remove_log(env, handle, &lir->lid_id);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 
@@ -291,12 +291,15 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                 err = str2logid(&logid, data->ioc_inlbuf1, data->ioc_inllen1);
                 if (err)
                         GOTO(out, err);
-		err = llog_create(NULL, ctxt, &handle, &logid, NULL);
+		err = llog_open(NULL, ctxt, &handle, &logid, NULL,
+				LLOG_OPEN_EXISTS);
                 if (err)
                         GOTO(out, err);
         } else if (*data->ioc_inlbuf1 == '$') {
                 char *name = data->ioc_inlbuf1 + 1;
-		err = llog_create(NULL, ctxt, &handle, NULL, name);
+
+		err = llog_open(NULL, ctxt, &handle, NULL, name,
+				LLOG_OPEN_EXISTS);
                 if (err)
                         GOTO(out, err);
         } else {
@@ -345,9 +348,9 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
                 LASSERT(data->ioc_inllen1);
 		err = llog_process(NULL, handle, class_config_dump_handler,
 				   data, NULL);
-                if (err == -LLOG_EEMPTY)
-                        err = 0;
-                else
+		if (err == -LLOG_EEMPTY)
+			err = 0;
+		else
 			err = llog_process(NULL, handle, llog_print_cb, data,
 					   NULL);
 
@@ -385,13 +388,10 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
 
                 if (handle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN) {
                         err = llog_destroy(NULL, handle);
-                        if (!err)
-                                llog_free_handle(handle);
-                        GOTO(out, err);
-                }
-
-                if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT))
-                        GOTO(out_close, err = -EINVAL);
+			GOTO(out_close, err);
+		} else if (!(handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)) {
+			GOTO(out_close, err = -EINVAL);
+		}
 
                 if (data->ioc_inlbuf2) {
                         /*remove indicate log from the catalog*/
@@ -402,16 +402,21 @@ int llog_ioctl(struct llog_ctxt *ctxt, int cmd, struct obd_ioctl_data *data)
 			err = llog_remove_log(NULL, handle, &plain);
 		} else {
 			/* remove all the log of the catalog */
-			llog_process(NULL, handle, llog_delete_cb, NULL, NULL);
-                }
-                GOTO(out_close, err);
-        }
+			err = llog_process(NULL, handle, llog_delete_cb, NULL,
+					   NULL);
+			if (err)
+				GOTO(out_close, err);
+		}
+		break;
+	}
+	default:
+		GOTO(out_close, err = -ENOTTY);
         }
 
 out_close:
 	if (handle->lgh_hdr &&
 	    handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
-		llog_cat_put(NULL, handle);
+		llog_cat_close(NULL, handle);
 	else
 		llog_close(NULL, handle);
 out:

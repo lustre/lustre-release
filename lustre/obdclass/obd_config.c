@@ -1519,7 +1519,7 @@ int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
         ENTRY;
 
         CDEBUG(D_INFO, "looking up llog %s\n", name);
-	rc = llog_create(NULL, ctxt, &llh, NULL, name);
+	rc = llog_open(NULL, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
         if (rc)
                 RETURN(rc);
 
@@ -1619,13 +1619,13 @@ int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
 
         LCONSOLE_INFO("Dumping config log %s\n", name);
 
-	rc = llog_create(NULL, ctxt, &llh, NULL, name);
-        if (rc)
-                RETURN(rc);
+	rc = llog_open(NULL, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
+	if (rc)
+		RETURN(rc);
 
 	rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
-        if (rc)
-                GOTO(parse_out, rc);
+	if (rc)
+		GOTO(parse_out, rc);
 
 	rc = llog_process(NULL, llh, class_config_dump_handler, cfg, NULL);
 parse_out:
