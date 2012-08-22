@@ -319,7 +319,7 @@ AC_DEFUN([LC_BIT_SPINLOCK_H],
 AC_DEFUN([LC_CONST_ACL_SIZE],
 [AC_MSG_CHECKING([calc acl size])
 tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -I$LINUX/arch/`uname -m|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -include $AUTOCONF_HDIR/autoconf.h $EXTRA_KCFLAGS"
+CFLAGS="$CFLAGS -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -I$LINUX/arch/`echo $target_cpu|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -include $AUTOCONF_HDIR/autoconf.h $EXTRA_KCFLAGS"
 AC_TRY_RUN([
         #define __KERNEL__
         #include <linux/types.h>
