@@ -555,7 +555,7 @@ static int fsfilt_ext3_setattr(struct dentry *dentry, void *handle,
         struct inode *inode = dentry->d_inode;
         int rc = 0;
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0)
         /* Try to correct for a bug in 2.1.0 (LU-221) that caused negative
          * timestamps to appear to be in the far future, due old timestamp
          * being stored on disk as an unsigned value.  This fixes up any

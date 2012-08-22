@@ -536,7 +536,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	 * zfs_readdir() generates ./.. on fly, but
 	 * we want own entries (.. at least) with a fid
 	 */
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 3, 53, 0)
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 3, 55, 0)
 #warning "fix '.' and '..' handling"
 #endif
 

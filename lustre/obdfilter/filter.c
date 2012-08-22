@@ -3213,7 +3213,7 @@ struct dentry *__filter_oa2dentry(struct obd_device *obd, struct ost_id *ostid,
                 RETURN(ERR_PTR(-ENOENT));
         }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0)
         /* Try to correct for a bug in 2.1.0 (LU-221) that caused negative
          * timestamps to appear to be in the far future, due old timestamp
          * being stored on disk as an unsigned value.  This fixes up any

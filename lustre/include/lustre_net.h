@@ -1970,7 +1970,7 @@ __u32 lustre_msg_get_timeout(struct lustre_msg *msg);
 __u32 lustre_msg_get_service_time(struct lustre_msg *msg);
 char *lustre_msg_get_jobid(struct lustre_msg *msg);
 __u32 lustre_msg_get_cksum(struct lustre_msg *msg);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 0, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0)
 __u32 lustre_msg_calc_cksum(struct lustre_msg *msg, int compat18);
 #else
 # warning "remove checksum compatibility support for b1_8"

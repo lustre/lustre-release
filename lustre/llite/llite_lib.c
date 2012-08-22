@@ -773,7 +773,7 @@ static int ll_options(char *options, int *flags)
                         *flags &= ~tmp;
                         goto next;
                 }
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,5,50,0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 5, 50, 0)
                 tmp = ll_set_opt("acl", s1, LL_SBI_ACL);
                 if (tmp) {
                         /* Ignore deprecated mount option.  The client will

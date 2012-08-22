@@ -104,7 +104,7 @@ int null_ctx_verify(struct ptlrpc_cli_ctx *ctx, struct ptlrpc_request *req)
 
         if (req->rq_early) {
                 cksums = lustre_msg_get_cksum(req->rq_repdata);
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 0, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0)
                 if (lustre_msghdr_get_flags(req->rq_reqmsg) &
                     MSGHDR_CKSUM_INCOMPAT18)
                         cksumc = lustre_msg_calc_cksum(req->rq_repmsg, 0);
@@ -363,7 +363,7 @@ int null_authorize(struct ptlrpc_request *req)
         } else {
                 __u32 cksum;
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 9, 0, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0)
                 if (lustre_msghdr_get_flags(req->rq_reqmsg) &
                     MSGHDR_CKSUM_INCOMPAT18)
                         cksum = lustre_msg_calc_cksum(rs->rs_repbuf, 0);

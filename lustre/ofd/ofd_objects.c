@@ -510,7 +510,7 @@ int ofd_attr_get(const struct lu_env *env, struct ofd_object *fo,
 		rc = dt_attr_get(env, ofd_object_child(fo), la,
 				 ofd_object_capa(env, fo));
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0)
 		/* Try to correct for a bug in 2.1.0 (LU-221) that caused
 		 * negative timestamps to appear to be in the far future,
 		 * due old timestamp being stored on disk as an unsigned value.

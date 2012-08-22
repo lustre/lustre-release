@@ -4512,7 +4512,7 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 		RETURN(result);
 	}
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,3,50,0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 55, 0)
 	/* Unfortunately, the current MDD implementation relies on some specific
 	 * code to be executed in the OSD layer. Since OFD now also uses the OSD
 	 * module, we need a way to skip the metadata-specific code when running

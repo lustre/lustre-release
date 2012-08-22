@@ -1816,7 +1816,7 @@ static int echo_md_destroy_internal(const struct lu_env *env,
         CDEBUG(D_RPCTRACE, "Start destroy object "DFID" %s %p\n",
                PFID(lu_object_fid(&parent->mo_lu)), lname->ln_name, parent);
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,3,50,0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 55, 0)
         /* After 2.4, MDT will send destroy RPC to OST directly, so no need
          * this flag */
         ma->ma_valid |= MA_FLAGS;

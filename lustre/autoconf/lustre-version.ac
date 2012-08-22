@@ -5,11 +5,11 @@ m4_define([LUSTRE_FIX],[0])
 
 dnl # liblustre delta is 0.0.1.32 , next version with fixes is ok, but
 dnl # after following release candidate/beta would spill this warning already.
-m4_define([LUSTRE_VER_ALLOWED_OFFSET],["OBD_OCD_VERSION(0,0,1,32)"])
-m4_define([LUSTRE_LIB_VER_OFFSET_WARN],["OBD_OCD_VERSION(0,0,1,32)"])
+m4_define([LUSTRE_VER_ALLOWED_OFFSET],["OBD_OCD_VERSION(0, 0, 1, 32)"])
+m4_define([LUSTRE_LIB_VER_OFFSET_WARN],["OBD_OCD_VERSION(0, 0, 1, 32)"])
 
-dnl # linux lustre delta is 0.2.0.0 , next major release version is ok
-m4_define([LUSTRE_CLI_VER_OFFSET_WARN],["OBD_OCD_VERSION(0,2,0,0)"])
+dnl # linux lustre delta is 0.4.0.0 , next stable release version is ok
+m4_define([LUSTRE_CLI_VER_OFFSET_WARN],["OBD_OCD_VERSION(0, 4, 0, 0)"])
 
 dnl # User editable part ends here. -----------------------------------------
 
