@@ -900,12 +900,7 @@ static struct mod_paths {
         {NULL, NULL}
 };
 
-static int jt_dbg_modules_2_4(int argc, char **argv)
-{
-        return -EINVAL;
-}
-
-static int jt_dbg_modules_2_5(int argc, char **argv)
+int jt_dbg_modules(int argc, char **argv)
 {
         struct mod_paths *mp;
         char *path = "";
@@ -933,35 +928,15 @@ static int jt_dbg_modules_2_5(int argc, char **argv)
                                 if (!strcmp(mp->name, modname))
                                         break;
                         }
-                        if (mp->name) {
-                                printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n", 
-                                       path, path[0] ? "/" : "", 
-                                       mp->path, mp->name, modaddr);
-                        }
+			if (mp->name) {
+				printf("add-symbol-file %s%s%s/%s.o 0x%0lx\n",
+					path, path[0] ? "/" : "",
+					mp->path, mp->name, modaddr);
+			}
                 }
         }
 
         fclose(file);
-        return 0;
-}
-
-int jt_dbg_modules(int argc, char **argv)
-{
-        int rc = 0;
-        struct utsname sysinfo;
-
-        rc = uname(&sysinfo);
-        if (rc) {
-                printf("uname() failed: %s\n", strerror(errno));
-                return 0;
-        }
-
-        if (sysinfo.release[2] > '4') {
-                return jt_dbg_modules_2_5(argc, argv);
-        } else {
-                return jt_dbg_modules_2_4(argc, argv);
-        }
-
         return 0;
 }
 
