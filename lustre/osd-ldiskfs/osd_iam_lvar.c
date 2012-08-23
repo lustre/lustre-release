@@ -765,6 +765,11 @@ static void lvar_split(struct iam_leaf *leaf, struct buffer_head **bh,
         assert_inv(n_invariant(leaf));
 }
 
+static int lvar_leaf_empty(struct iam_leaf *leaf)
+{
+	return h_used(n_head(leaf)) == sizeof(struct lvar_leaf_header);
+}
+
 static struct iam_leaf_operations lvar_leaf_ops = {
         .init           = lvar_init,
         .init_new       = lvar_init_new,
@@ -787,7 +792,8 @@ static struct iam_leaf_operations lvar_leaf_ops = {
         .rec_add        = lvar_rec_add,
         .rec_del        = lvar_rec_del,
         .can_add        = lvar_can_add,
-        .split          = lvar_split
+	.split          = lvar_split,
+	.leaf_empty	= lvar_leaf_empty,
 };
 
 /*
@@ -938,6 +944,18 @@ static void lvar_root(void *buf,
                                         sizeof (lvar_hash_t) + ptrsize)
         };
 
+	/* To guarantee that the padding "keysize + ptrsize"
+	 * covers the "dx_countlimit" and the "idle_blocks". */
+	LASSERT((keysize + ptrsize) >=
+		(sizeof(struct dx_countlimit) + sizeof(__u32)));
+
+	entry = limit + 1;
+	/* Put "idle_blocks" just after the limit. There was padding after
+	 * the limit, the "idle_blocks" re-uses part of the padding, so no
+	 * compatibility issues with old layout.
+	 */
+	*(__u32 *)entry = 0;
+
         entry = root + 1;
         /*
          * Skip over @limit.
@@ -1054,11 +1072,14 @@ static int lvar_guess(struct iam_container *c)
                         descr->id_node_gap  = 0;
                         descr->id_ops       = &lvar_ops;
                         descr->id_leaf_ops  = &lvar_leaf_ops;
-                } else
-                        result = -EBADF;
-                brelse(bh);
-        }
-        return result;
+
+			c->ic_root_bh = bh;
+		} else {
+			result = -EBADF;
+			brelse(bh);
+		}
+	}
+	return result;
 }
 
 static struct iam_format lvar_format = {
