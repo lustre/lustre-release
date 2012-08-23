@@ -405,6 +405,9 @@ retry:
 
 	th->th_sync |= oti->oti_sync_write;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OST_DQACQ_NET))
+		GOTO(out_stop, rc = -EINPROGRESS);
+
 	rc = dt_declare_write_commit(env, o, lnb, niocount, th);
 	if (rc)
 		GOTO(out_stop, rc);
