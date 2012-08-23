@@ -496,6 +496,58 @@ test_17k() { #bug 22301
 }
 run_test 17k "symlinks: rsync with xattrs enabled ========================="
 
+# LU-1540
+test_17m() {
+        local short_sym="0123456789"
+        local WDIR=$DIR/${tdir}m
+        local mds_index
+        local devname
+        local cmd
+        local i
+        local rc=0
+
+        mkdir -p $WDIR
+        long_sym=$short_sym
+        # create a long symlink file
+        for ((i = 0; i < 4; ++i)); do
+                long_sym=${long_sym}${long_sym}
+        done
+
+        echo "create 512 short and long symlink files under $WDIR"
+        for ((i = 0; i < 256; ++i)); do
+                ln -sf ${long_sym}"a5a5" $WDIR/long-$i
+                ln -sf ${short_sym}"a5a5" $WDIR/short-$i
+        done
+
+        echo "erase them"
+        rm -f $WDIR/*
+        sync
+        sleep 2
+
+        echo "recreate the 512 symlink files with a shorter string"
+        for ((i = 0; i < 512; ++i)); do
+                # rewrite the symlink file with a shorter string
+                ln -sf ${long_sym} $WDIR/long-$i
+                ln -sf ${short_sym} $WDIR/short-$i
+        done
+
+        mds_index=1
+        devname=$(mdsdevname $mds_index)
+        cmd="$E2FSCK -fnvd $devname"
+
+        echo "stop and checking mds${mds_index}: $cmd"
+        # e2fsck should not return error
+        stop mds${mds_index} -f
+        do_facet mds${mds_index} $cmd || rc=$?
+
+        start mds${mds_index} $devname $MDS_MOUNT_OPTS
+        df $MOUNT > /dev/null 2>&1
+        [ $rc -ne 0 ] && error "e2fsck should not report error upon "\
+                "short/long symlink MDT: rc=$rc"
+        return $rc
+}
+run_test 17m "run e2fsck against MDT which contains short/long symlink"
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
