@@ -173,26 +173,32 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
  * 2 -- contains child file handle and parent file handle;
  * 255 -- error.
  */
+#ifndef HAVE_ENCODE_FH_PARENT
 static int ll_encode_fh(struct dentry *de, __u32 *fh, int *plen,
-                        int connectable)
+			int connectable)
 {
-        struct inode *inode = de->d_inode;
-        struct inode *parent = de->d_parent->d_inode;
-        struct lustre_nfs_fid *nfs_fid = (void *)fh;
-        ENTRY;
+	struct inode *inode = de->d_inode;
+	struct inode *parent = de->d_parent->d_inode;
+#else
+static int ll_encode_fh(struct inode *inode, __u32 *fh, int *plen,
+			struct inode *parent)
+{
+#endif
+	struct lustre_nfs_fid *nfs_fid = (void *)fh;
+	ENTRY;
 
-        CDEBUG(D_INFO, "encoding for (%lu,"DFID") maxlen=%d minlen=%d\n",
-              inode->i_ino, PFID(ll_inode2fid(inode)), *plen,
-              (int)sizeof(struct lustre_nfs_fid));
+	CDEBUG(D_INFO, "encoding for (%lu,"DFID") maxlen=%d minlen=%d\n",
+	      inode->i_ino, PFID(ll_inode2fid(inode)), *plen,
+	      (int)sizeof(struct lustre_nfs_fid));
 
-        if (*plen < sizeof(struct lustre_nfs_fid)/4)
-                RETURN(255);
+	if (*plen < sizeof(struct lustre_nfs_fid) / 4)
+		RETURN(255);
 
-        nfs_fid->lnf_child = *ll_inode2fid(inode);
-        nfs_fid->lnf_parent = *ll_inode2fid(parent);
-        *plen = sizeof(struct lustre_nfs_fid)/4;
+	nfs_fid->lnf_child = *ll_inode2fid(inode);
+	nfs_fid->lnf_parent = *ll_inode2fid(parent);
+	*plen = sizeof(struct lustre_nfs_fid) / 4;
 
-        RETURN(LUSTRE_NFS_FID);
+	RETURN(LUSTRE_NFS_FID);
 }
 
 static int ll_nfs_get_name_filldir(void *cookie, const char *name, int namelen,

@@ -2085,6 +2085,35 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.5 encode_fh has parent inode passed in directly
+# see kernel commit b0b0382b
+#
+AC_DEFUN([LC_HAVE_ENCODE_FH_PARENT],
+[AC_MSG_CHECKING([if encode_fh have parent inode as parameter])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/exportfs.h>
+	#include <linux/fs.h>
+	#include <linux/types.h>
+	int ll_encode_fh(struct inode *i, __u32 *a, int *b, struct inode *p)
+	{
+		return 0;
+	}
+],[
+	struct export_operations exp_op;
+	exp_op.encode_fh = ll_encode_fh;
+],[
+	AC_DEFINE(HAVE_ENCODE_FH_PARENT, 1,
+		  [have parent inode as parameter])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2251,6 +2280,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
 	 # 3.5
 	 LC_HAVE_CLEAR_INODE
+	 LC_HAVE_ENCODE_FH_PARENT
 
 	 #
 	 if test x$enable_server = xyes ; then
