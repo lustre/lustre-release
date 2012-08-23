@@ -219,6 +219,9 @@ struct iam_frame {
         iam_ptr_t         curidx;  /* (logical) offset of this node. Used to
                                     * per-node locking to detect concurrent
                                     * splits. */
+	unsigned int      at_shifted:1; /* The "at" entry has moved to next
+					 * because of shrinking index node
+					 * for recycling empty leaf node. */
 };
 
 /*
@@ -403,6 +406,10 @@ struct iam_leaf_operations {
          */
         void (*split)(struct iam_leaf *l, struct buffer_head **bh,
                       iam_ptr_t newblknr);
+	/*
+	 * the leaf is empty?
+	 */
+	int (*leaf_empty)(struct iam_leaf *l);
 };
 
 /*
@@ -441,6 +448,20 @@ struct iam_descr {
         struct iam_leaf_operations      *id_leaf_ops;
 };
 
+enum {
+	IAM_IDLE_HEADER_MAGIC = 0x7903,
+};
+
+/*
+ * Header structure to record idle blocks.
+ */
+struct iam_idle_head {
+	__le16 iih_magic;
+	__le16 iih_count; /* how many idle blocks in this head */
+	__le32 iih_next; /* next head for idle blocks */
+	__le32 iih_blks[0];
+};
+
 /*
  * An instance of iam container.
  */
@@ -463,6 +484,15 @@ struct iam_container {
          */
         cfs_rw_semaphore_t   ic_sem;
 	struct dynlock       ic_tree_lock;
+	/*
+	 * Protect ic_idle_bh
+	 */
+	cfs_semaphore_t      ic_idle_sem;
+	/*
+	 * BH for idle blocks
+	 */
+	struct buffer_head  *ic_idle_bh;
+	unsigned int	     ic_idle_failed:1; /* Idle block mechanism failed */
 };
 
 /*
@@ -820,8 +850,8 @@ struct fake_dirent {
 };
 
 struct dx_countlimit {
-        __le16 limit;
-        __le16 count;
+	__le16 limit;
+	__le16 count;
 };
 
 /*

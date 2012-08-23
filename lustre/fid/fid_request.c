@@ -309,6 +309,9 @@ int seq_client_alloc_fid(const struct lu_env *env,
         cfs_waitlink_init(&link);
         cfs_mutex_lock(&seq->lcs_mutex);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_SEQ_EXHAUST))
+		seq->lcs_fid.f_oid = seq->lcs_width;
+
         while (1) {
                 seqno_t seqnr;
 
