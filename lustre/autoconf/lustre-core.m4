@@ -1570,33 +1570,43 @@ LB_LINUX_TRY_COMPILE([
 # 2.6.27 sles11 has sb_any_quota_active
 AC_DEFUN([LC_SB_ANY_QUOTA_ACTIVE],
 [AC_MSG_CHECKING([Kernel has sb_any_quota_active])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/quotaops.h>
+	# Ignore backported quotaops.h in OFED
+	if test -f $OFED_BACKPORT_PATH/linux/quotaops.h ; then
+		AC_MSG_RESULT(no)
+	else
+		LB_LINUX_TRY_COMPILE([
+			#include <linux/quotaops.h>
 ],[
-        sb_any_quota_active(NULL);
+			sb_any_quota_active(NULL);
 ],[
-        AC_DEFINE(HAVE_SB_ANY_QUOTA_ACTIVE, 1,
-                [Kernel has a sb_any_quota_active])
-        AC_MSG_RESULT([yes])
+			AC_DEFINE(HAVE_SB_ANY_QUOTA_ACTIVE, 1,
+				[Kernel has a sb_any_quota_active])
+			AC_MSG_RESULT([yes])
 ],[
-        AC_MSG_RESULT([no])
+			AC_MSG_RESULT([no])
 ])
+	fi
 ])
 
 # 2.6.27 sles11 has sb_has_quota_active
 AC_DEFUN([LC_SB_HAS_QUOTA_ACTIVE],
 [AC_MSG_CHECKING([Kernel has sb_has_quota_active])
-LB_LINUX_TRY_COMPILE([
-        #include <linux/quotaops.h>
+	# Ignore backported quotaops.h in OFED
+	if test -f $OFED_BACKPORT_PATH/linux/quotaops.h ; then
+		AC_MSG_RESULT(no)
+	else
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/quotaops.h>
 ],[
-        sb_has_quota_active(NULL, 0);
+		sb_has_quota_active(NULL, 0);
 ],[
-        AC_DEFINE(HAVE_SB_HAS_QUOTA_ACTIVE, 1,
-                [Kernel has a sb_has_quota_active])
-        AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_SB_HAS_QUOTA_ACTIVE, 1,
+			[Kernel has a sb_has_quota_active])
+		AC_MSG_RESULT([yes])
 ],[
-        AC_MSG_RESULT([no])
+		AC_MSG_RESULT([no])
 ])
+	fi
 ])
 
 # 2.6.27 has inode_permission instead of permisson
