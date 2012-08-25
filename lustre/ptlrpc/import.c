@@ -762,6 +762,9 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
         struct lustre_handle old_hdl;
         __u64 old_connect_flags;
         int msg_flags;
+	struct obd_connect_data *ocd;
+	struct obd_export *exp;
+	int ret;
         ENTRY;
 
         cfs_spin_lock(&imp->imp_lock);
@@ -778,17 +781,67 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 ptlrpc_maybe_ping_import_soon(imp);
                 GOTO(out, rc);
         }
+	cfs_spin_unlock(&imp->imp_lock);
 
         LASSERT(imp->imp_conn_current);
 
         msg_flags = lustre_msg_get_op_flags(request->rq_repmsg);
+
+	ret = req_capsule_get_size(&request->rq_pill, &RMF_CONNECT_DATA,
+				   RCL_SERVER);
+	/* server replied obd_connect_data is always bigger */
+	ocd = req_capsule_server_sized_get(&request->rq_pill,
+					   &RMF_CONNECT_DATA, ret);
+
+	if (ocd == NULL) {
+		CERROR("%s: no connect data from server\n",
+		       imp->imp_obd->obd_name);
+		rc = -EPROTO;
+		GOTO(out, rc);
+	}
+
+	cfs_spin_lock(&imp->imp_lock);
 
         /* All imports are pingable */
         imp->imp_pingable = 1;
         imp->imp_force_reconnect = 0;
         imp->imp_force_verify = 0;
 
+	imp->imp_connect_data = *ocd;
+
+	CDEBUG(D_HA, "%s: connect to target with instance %u\n",
+	       imp->imp_obd->obd_name, ocd->ocd_instance);
+	exp = class_conn2export(&imp->imp_dlm_handle);
+
+	cfs_spin_unlock(&imp->imp_lock);
+
+	/* check that server granted subset of flags we asked for. */
+	if ((ocd->ocd_connect_flags & imp->imp_connect_flags_orig) !=
+	    ocd->ocd_connect_flags) {
+		CERROR("%s: Server didn't granted asked subset of flags: "
+		       "asked="LPX64" grranted="LPX64"\n",
+		       imp->imp_obd->obd_name,imp->imp_connect_flags_orig,
+		       ocd->ocd_connect_flags);
+		GOTO(out, rc = -EPROTO);
+	}
+
+	if (!exp) {
+		/* This could happen if export is cleaned during the
+		   connect attempt */
+		CERROR("%s: missing export after connect\n",
+		       imp->imp_obd->obd_name);
+		GOTO(out, rc = -ENODEV);
+	}
+	old_connect_flags = exp->exp_connect_flags;
+	exp->exp_connect_flags = ocd->ocd_connect_flags;
+	imp->imp_obd->obd_self_export->exp_connect_flags =
+						ocd->ocd_connect_flags;
+	class_export_put(exp);
+
+	obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
+
         if (aa->pcaa_initial_connect) {
+		cfs_spin_lock(&imp->imp_lock);
                 if (msg_flags & MSG_CONNECT_REPLAYABLE) {
                         imp->imp_replayable = 1;
                         cfs_spin_unlock(&imp->imp_lock);
@@ -818,8 +871,6 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
                 }
 
                 GOTO(finish, rc = 0);
-        } else {
-                cfs_spin_unlock(&imp->imp_lock);
         }
 
         /* Determine what recovery state to move the import to. */
@@ -944,14 +995,6 @@ finish:
                         RETURN(0);
                 }
         } else {
-                struct obd_connect_data *ocd;
-                struct obd_export *exp;
-                int ret;
-                ret = req_capsule_get_size(&request->rq_pill, &RMF_CONNECT_DATA,
-                                           RCL_SERVER);
-                /* server replied obd_connect_data is always bigger */
-                ocd = req_capsule_server_sized_get(&request->rq_pill,
-                                                   &RMF_CONNECT_DATA, ret);
 
                 cfs_spin_lock(&imp->imp_lock);
                 cfs_list_del(&imp->imp_conn_current->oic_item);
@@ -960,40 +1003,7 @@ finish:
                 imp->imp_last_success_conn =
                         imp->imp_conn_current->oic_last_attempt;
 
-                if (ocd == NULL) {
-                        cfs_spin_unlock(&imp->imp_lock);
-                        CERROR("Wrong connect data from server\n");
-                        rc = -EPROTO;
-                        GOTO(out, rc);
-                }
-
-                imp->imp_connect_data = *ocd;
-                CDEBUG(D_HA, "obd %s to target with inst %u\n",
-                       imp->imp_obd->obd_name, ocd->ocd_instance);
-
-                exp = class_conn2export(&imp->imp_dlm_handle);
                 cfs_spin_unlock(&imp->imp_lock);
-
-                /* check that server granted subset of flags we asked for. */
-                LASSERTF((ocd->ocd_connect_flags &
-                          imp->imp_connect_flags_orig) ==
-                         ocd->ocd_connect_flags, LPX64" != "LPX64,
-                         imp->imp_connect_flags_orig, ocd->ocd_connect_flags);
-
-                if (!exp) {
-                        /* This could happen if export is cleaned during the
-                           connect attempt */
-                        CERROR("Missing export for %s\n",
-                               imp->imp_obd->obd_name);
-                        GOTO(out, rc = -ENODEV);
-                }
-                old_connect_flags = exp->exp_connect_flags;
-                exp->exp_connect_flags = ocd->ocd_connect_flags;
-                imp->imp_obd->obd_self_export->exp_connect_flags =
-                                                        ocd->ocd_connect_flags;
-                class_export_put(exp);
-
-                obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
 
                 if (!ocd->ocd_ibits_known &&
                     ocd->ocd_connect_flags & OBD_CONNECT_IBITS)
