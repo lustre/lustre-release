@@ -32,6 +32,7 @@ sbin_SCRIPTS = $(sbin_scripts)
 endif # UTILS
 
 lib_LIBRARIES = liblustreapi.a libiam.a
+noinst_LIBRARIES = liblustreapitmp.a
 
 lctl_SOURCES = lustre_lfsck.c obd.c lustre_cfg.c lctl.c obdctl.h
 lctl_LDADD := $(LIBREADLINE) liblustreapi.a $(LIBPTLCTL) $(PTHREAD_LIBS)
@@ -75,7 +76,24 @@ llverdev_LDADD := $(EXT2FSLIB) $(BLKIDLIB)
 
 L_IOCTL := $(top_builddir)/libcfs/libcfs/util/l_ioctl.c
 L_KERNELCOMM := $(top_builddir)/libcfs/libcfs/kernel_user_comm.c
-liblustreapi_a_SOURCES = liblustreapi.c $(L_IOCTL) $(L_KERNELCOMM)
+liblustreapitmp_a_SOURCES = liblustreapi.c $(L_IOCTL) $(L_KERNELCOMM)
+
+# build static and shared lib lustreapi
+liblustreapi.a : liblustreapitmp.a
+	rm -f liblustreapi.a liblustreapi.so
+	gcc -shared -o liblustreapi.so `ar -t liblustreapitmp.a`
+	mv liblustreapitmp.a liblustreapi.a
+
+install-exec-hook: liblustreapi.so
+	@$(NORMAL_INSTALL)
+	$(mkinstalldirs) $(DESTDIR)$(libdir)
+	@list=$< ; for p in $$list; do \
+	  if test -f $$p; then \
+	    f="`echo $$p | sed -e 's|^.*/||'`"; \
+	    echo " $(INSTALL_DATA) $$p $(DESTDIR)$(libdir)/$$f"; \
+	    $(INSTALL_DATA) $$p $(DESTDIR)$(libdir)/$$f; \
+	  else :; fi; \
+	done
 
 libiam_a_SOURCES = libiam.c
 
