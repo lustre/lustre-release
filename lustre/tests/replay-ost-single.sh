@@ -261,10 +261,12 @@ test_8a() {
             return 1
     fi
     do_facet ost1 "lctl set_param fail_loc=0"
-    wait $ddpid || return 1
+    wait $ddpid || true
     cancel_lru_locks osc
     cmp $verify $TDIR/$tfile || return 2
     rm -f $verify $TDIR/$tfile
+	message=`dmesg | grep "redo for recoverable error -115"`
+	[ -z "$message" ] || error "redo error messages found in dmesg"
 }
 run_test 8a "Verify redo io: redo io when get -EINPROGRESS error"
 

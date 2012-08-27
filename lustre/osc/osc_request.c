@@ -1677,16 +1677,16 @@ out:
         RETURN (rc);
 }
 
-int osc_brw_redo_request(struct ptlrpc_request *request,
-                         struct osc_brw_async_args *aa)
+static int osc_brw_redo_request(struct ptlrpc_request *request,
+				struct osc_brw_async_args *aa, int rc)
 {
         struct ptlrpc_request *new_req;
         struct osc_brw_async_args *new_aa;
         struct osc_async_page *oap;
-        int rc = 0;
         ENTRY;
 
-        DEBUG_REQ(D_ERROR, request, "redo for recoverable error");
+	DEBUG_REQ(rc == -EINPROGRESS ? D_RPCTRACE : D_ERROR, request,
+		  "redo for recoverable error %d", rc);
 
         rc = osc_brw_prep_request(lustre_msg_get_opc(request->rq_reqmsg) ==
                                         OST_WRITE ? OBD_BRW_WRITE :OBD_BRW_READ,
@@ -1713,7 +1713,12 @@ int osc_brw_redo_request(struct ptlrpc_request *request,
         aa->aa_resends++;
         new_req->rq_interpret_reply = request->rq_interpret_reply;
         new_req->rq_async_args = request->rq_async_args;
-        new_req->rq_sent = cfs_time_current_sec() + aa->aa_resends;
+	/* cap resend delay to the current request timeout, this is similar to
+	 * what ptlrpc does (see after_reply()) */
+	if (aa->aa_resends > new_req->rq_timeout)
+		new_req->rq_sent = cfs_time_current_sec() + new_req->rq_timeout;
+	else
+		new_req->rq_sent = cfs_time_current_sec() + aa->aa_resends;
         new_req->rq_generation_set = 1;
         new_req->rq_import_generation = request->rq_import_generation;
 
@@ -1918,7 +1923,7 @@ static int brw_interpret(const struct lu_env *env,
                                aa->aa_oa->o_id, aa->aa_oa->o_seq, rc);
                 } else if (rc == -EINPROGRESS ||
                     client_should_resend(aa->aa_resends, aa->aa_cli)) {
-                        rc = osc_brw_redo_request(req, aa);
+                        rc = osc_brw_redo_request(req, aa, rc);
                 } else {
                         CERROR("%s: too many resent retries for object: "
                                ""LPU64":"LPU64", rc = %d.\n",
