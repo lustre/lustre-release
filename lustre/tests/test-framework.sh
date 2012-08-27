@@ -5801,3 +5801,11 @@ mds_remove_ois() {
 	${rcmd} umount -d $mntpt || return 2
 	# OI files will be recreated when mounted as lustre next time.
 }
+
+# generate maloo upload-able log file name
+# \param logname specify unique part of file name
+generate_logname() {
+	local logname=${1:-"default_logname"}
+
+	echo "$TESTLOG_PREFIX.$TESTNAME.$logname.$(hostname -s).log"
+}
