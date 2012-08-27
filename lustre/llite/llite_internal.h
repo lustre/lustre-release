@@ -192,7 +192,6 @@ struct ll_inode_info {
                          * cleanup the dir readahead. */
                         void                           *d_opendir_key;
                         struct ll_statahead_info       *d_sai;
-                        __u64                           d_sa_pos;
                         struct posix_acl               *d_def_acl;
                         /* protect statahead stuff. */
                         cfs_spinlock_t                  d_sa_lock;
@@ -204,7 +203,6 @@ struct ll_inode_info {
 #define lli_readdir_mutex       u.d.d_readdir_mutex
 #define lli_opendir_key         u.d.d_opendir_key
 #define lli_sai                 u.d.d_sai
-#define lli_sa_pos              u.d.d_sa_pos
 #define lli_def_acl             u.d.d_def_acl
 #define lli_sa_lock             u.d.d_sa_lock
 #define lli_opendir_pid         u.d.d_opendir_pid
@@ -491,7 +489,6 @@ struct ll_sb_info {
                                                  * clustred nfs */
         struct rmtacl_ctl_table   ll_rct;
         struct eacl_table         ll_et;
-        struct vfsmount          *ll_mnt;
 };
 
 #define LL_DEFAULT_MAX_RW_CHUNK      (32 * 1024 * 1024)
@@ -589,18 +586,13 @@ struct ll_readahead_state {
         unsigned long   ras_consecutive_stride_requests;
 };
 
-struct ll_file_dir {
-        __u64 lfd_pos;
-        __u64 lfd_next;
-};
-
 extern cfs_mem_cache_t *ll_file_data_slab;
 struct lustre_handle;
 struct ll_file_data {
         struct ll_readahead_state fd_ras;
         int fd_omode;
         struct ccc_grouplock fd_grouplock;
-        struct ll_file_dir fd_dir;
+	__u64 lfd_pos;
         __u32 fd_flags;
         struct file *fd_file;
 	/* Indicate whether need to report failure when close.
@@ -670,9 +662,10 @@ static void lprocfs_llite_init_vars(struct lprocfs_static_vars *lvars)
 void ll_release_page(struct page *page, int remove);
 extern struct file_operations ll_dir_operations;
 extern struct inode_operations ll_dir_inode_operations;
-struct page *ll_get_dir_page(struct file *filp, struct inode *dir, __u64 hash,
+struct page *ll_get_dir_page(struct inode *dir, __u64 hash,
                              struct ll_dir_chain *chain);
-int ll_readdir(struct file *filp, void *cookie, filldir_t filldir);
+int ll_dir_read(struct inode *inode, __u64 *_pos, void *cookie,
+		filldir_t filldir);
 
 int ll_get_mdt_idx(struct inode *inode);
 char *ll_get_fsname(struct inode *inode);

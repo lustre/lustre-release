@@ -217,8 +217,8 @@ static int ll_get_name(struct dentry *dentry, char *name,
                        struct dentry *child)
 {
         struct inode *dir = dentry->d_inode;
-        struct file *filp;
         struct ll_getname_data lgd;
+	__u64 offset = 0;
         int rc;
         ENTRY;
 
@@ -228,27 +228,17 @@ static int ll_get_name(struct dentry *dentry, char *name,
         if (!dir->i_fop)
                 GOTO(out, rc = -EINVAL);
 
-        filp = ll_dentry_open(dget(dentry), mntget(ll_i2sbi(dir)->ll_mnt),
-                              O_RDONLY, current_cred());
-        if (IS_ERR(filp))
-                GOTO(out, rc = PTR_ERR(filp));
-
-        if (!filp->f_op->readdir)
-                GOTO(out_close, rc = -EINVAL);
-
         lgd.lgd_name = name;
         lgd.lgd_fid = ll_i2info(child->d_inode)->lli_fid;
         lgd.lgd_found = 0;
 
         cfs_mutex_lock(&dir->i_mutex);
-        rc = ll_readdir(filp, &lgd, ll_nfs_get_name_filldir);
+	rc = ll_dir_read(dir, &offset, &lgd, ll_nfs_get_name_filldir);
         cfs_mutex_unlock(&dir->i_mutex);
         if (!rc && !lgd.lgd_found)
                 rc = -ENOENT;
         EXIT;
 
-out_close:
-        fput(filp);
 out:
         return rc;
 }

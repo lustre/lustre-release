@@ -63,10 +63,8 @@ DEFINE_SPINLOCK(ll_sb_lock);
 
 #ifndef MS_HAS_NEW_AOPS
 extern struct address_space_operations ll_aops;
-extern struct address_space_operations ll_dir_aops;
 #else
 extern struct address_space_operations_ext ll_aops;
-extern struct address_space_operations_ext ll_dir_aops;
 #endif
 
 #ifndef log2
@@ -469,7 +467,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         CDEBUG(D_SUPER, "rootfid "DFID"\n", PFID(&sbi->ll_root_fid));
 
         sb->s_op = &lustre_super_operations;
-#if THREAD_SIZE >= 8192 /*b=17630*/ && !defined(HAVE_FSTYPE_MOUNT) /*LU-812*/
+#if THREAD_SIZE >= 8192 /*b=17630*/
         sb->s_export_op = &lustre_export_operations;
 #endif
 
@@ -564,7 +562,6 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         uuid = obd_get_uuid(sbi->ll_md_exp);
         if (uuid != NULL)
                 sb->s_dev = get_uuid2int(uuid->uuid, strlen(uuid->uuid));
-        sbi->ll_mnt = mnt;
 
         if (data != NULL)
                 OBD_FREE_PTR(data);
@@ -912,7 +909,6 @@ void ll_lli_init(struct ll_inode_info *lli)
                 cfs_mutex_init(&lli->lli_readdir_mutex);
                 lli->lli_opendir_key = NULL;
                 lli->lli_sai = NULL;
-                lli->lli_sa_pos = 0;
                 lli->lli_def_acl = NULL;
                 cfs_spin_lock_init(&lli->lli_sa_lock);
                 lli->lli_opendir_pid = 0;
@@ -1845,7 +1841,6 @@ void ll_read_inode2(struct inode *inode, void *opaque)
         } else if (S_ISDIR(inode->i_mode)) {
                 inode->i_op = &ll_dir_inode_operations;
                 inode->i_fop = &ll_dir_operations;
-                inode->i_mapping->a_ops = (struct address_space_operations *)&ll_dir_aops;
                 EXIT;
         } else if (S_ISLNK(inode->i_mode)) {
                 inode->i_op = &ll_fast_symlink_inode_operations;

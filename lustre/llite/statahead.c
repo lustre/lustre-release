@@ -1117,9 +1117,8 @@ static int ll_statahead_thread(void *arg)
         cfs_spin_unlock(&plli->lli_sa_lock);
         cfs_waitq_signal(&thread->t_ctl_waitq);
 
-        plli->lli_sa_pos = 0;
         ll_dir_chain_init(&chain);
-        page = ll_get_dir_page(NULL, dir, pos, &chain);
+	page = ll_get_dir_page(dir, pos, &chain);
 
         while (1) {
                 struct lu_dirpage *dp;
@@ -1276,9 +1275,8 @@ do_it:
                          */
                         ll_release_page(page, le32_to_cpu(dp->ldp_flags) &
                                               LDF_COLLIDE);
-                        plli->lli_sa_pos = pos;
                         sai->sai_in_readpage = 1;
-                        page = ll_get_dir_page(NULL, dir, pos, &chain);
+			page = ll_get_dir_page(dir, pos, &chain);
                         sai->sai_in_readpage = 0;
                 } else {
                         LASSERT(le32_to_cpu(dp->ldp_flags) & LDF_COLLIDE);
@@ -1394,7 +1392,6 @@ enum {
 
 static int is_first_dirent(struct inode *dir, struct dentry *dentry)
 {
-        struct ll_inode_info *lli    = ll_i2info(dir);
         struct ll_dir_chain   chain;
         struct qstr          *target = &dentry->d_name;
         struct page          *page;
@@ -1403,9 +1400,8 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
         int                   rc     = LS_NONE_FIRST_DE;
         ENTRY;
 
-        lli->lli_sa_pos = 0;
         ll_dir_chain_init(&chain);
-        page = ll_get_dir_page(NULL, dir, pos, &chain);
+	page = ll_get_dir_page(dir, pos, &chain);
 
         while (1) {
                 struct lu_dirpage *dp;
@@ -1492,8 +1488,7 @@ static int is_first_dirent(struct inode *dir, struct dentry *dentry)
                          */
                         ll_release_page(page, le32_to_cpu(dp->ldp_flags) &
                                               LDF_COLLIDE);
-                        lli->lli_sa_pos = pos;
-                        page = ll_get_dir_page(NULL, dir, pos, &chain);
+			page = ll_get_dir_page(dir, pos, &chain);
                 } else {
                         /*
                          * go into overflow page.
