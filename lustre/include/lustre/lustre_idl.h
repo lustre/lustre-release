@@ -1157,6 +1157,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                                   * finer space reservation */
 #define OBD_CONNECT_NANOSEC_TIME 0x200000000000ULL /* nanosecond timestamps */
 #define OBD_CONNECT_LVB_TYPE	0x400000000000ULL /* variable type of LVB */
+#define OBD_CONNECT_LIGHTWEIGHT 0x1000000000000ULL/* lightweight connection */
 /* XXX README XXX:
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
