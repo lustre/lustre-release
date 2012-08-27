@@ -102,7 +102,14 @@ ldlm_mode_t mdt_dlm_lock_modes[] = {
 /*
  * Initialized in mdt_mod_init().
  */
+static unsigned long mds_num_threads;
+CFS_MODULE_PARM(mds_num_threads, "ul", ulong, 0444,
+                "number of MDS service threads to start (preferred)");
+
 static unsigned long mdt_num_threads;
+CFS_MODULE_PARM(mdt_num_threads, "ul", ulong, 0444,
+                "number of MDS service threads to start (deprecated)");
+
 static unsigned long mdt_min_threads;
 static unsigned long mdt_max_threads;
 
@@ -5844,6 +5851,14 @@ static int __init mdt_mod_init(void)
 
         llo_local_obj_register(&mdt_last_recv);
 
+        /* Compatibility with 1.8- and 2.3+.  It was a mistake to use
+         * mdt_num_threads, since the service threads relate to the MDS
+         * service, and not to the MDT(s).  Don't print a warning for
+         * now, to allow either one to work without annoyance.  There
+         * is a deprecation warning printed for mdt_num_threads in 2.3. */
+        if (mds_num_threads > 0 && mdt_num_threads == 0)
+                mdt_num_threads = mds_num_threads;
+
         if (mdt_num_threads > 0) {
                 if (mdt_num_threads > MDT_MAX_THREADS)
                         mdt_num_threads = MDT_MAX_THREADS;
@@ -6092,8 +6107,5 @@ static struct mdt_opc_slice mdt_fld_handlers[] = {
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Meta-data Target ("LUSTRE_MDT_NAME")");
 MODULE_LICENSE("GPL");
-
-CFS_MODULE_PARM(mdt_num_threads, "ul", ulong, 0444,
-                "number of mdt service threads to start");
 
 cfs_module(mdt, "0.2.0", mdt_mod_init, mdt_mod_exit);
