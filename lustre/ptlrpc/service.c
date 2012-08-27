@@ -1610,6 +1610,9 @@ static int ptlrpc_server_allow_high(struct ptlrpc_service_part *svcpt,
 	if (svcpt->scp_nreqs_active >= svcpt->scp_nthrs_running - 1)
 		return 0;
 
+	if (svcpt->scp_nhreqs_active == 0)
+		return 1;
+
 	return cfs_list_empty(&svcpt->scp_req_pending) ||
 	       svcpt->scp_hreq_count < svcpt->scp_service->srv_hpreq_ratio;
 }
