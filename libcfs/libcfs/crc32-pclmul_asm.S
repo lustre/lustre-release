@@ -41,6 +41,34 @@
  * Use macro defenition from linux kernel 2.6.38  */
 
 #define REG_NUM_INVALID	100
+	.macro R32_NUM opd r32
+	\opd = REG_NUM_INVALID
+	.ifc \r32,%eax
+	\opd = 0
+	.endif
+	.ifc \r32,%ecx
+	\opd = 1
+	.endif
+	.ifc \r32,%edx
+	\opd = 2
+	.endif
+	.ifc \r32,%ebx
+	\opd = 3
+	.endif
+	.ifc \r32,%esp
+	\opd = 4
+	.endif
+	.ifc \r32,%ebp
+	\opd = 5
+	.endif
+	.ifc \r32,%esi
+	\opd = 6
+	.endif
+	.ifc \r32,%edi
+	\opd = 7
+	.endif
+	.endm
+
 	.macro XMM_NUM opd xmm
 	\opd = REG_NUM_INVALID
 	.ifc \xmm,%xmm0
@@ -117,6 +145,15 @@
 	.byte \imm8
 	.endm
 
+	.macro PEXTRD imm8 xmm1 reg1
+	XMM_NUM extrd_opd2 \xmm1
+	R32_NUM extrd_opd1 \reg1
+	PFX_OPD_SIZE
+	PFX_REX extrd_opd1 extrd_opd2
+	.byte 0x0f, 0x3a, 0x16
+	MODRM 0xc0 extrd_opd1 extrd_opd2
+	.byte \imm8
+	.endm
 
 .align 16
 /*
@@ -318,6 +355,6 @@ fold_64:
 	pand    %xmm3, %xmm1
 	PCLMULQDQ 0x00, CONSTANT, %xmm1
 	pxor    %xmm2, %xmm1
-	pextrd  $0x01, %xmm1, %eax
+	PEXTRD  0x01, %xmm1, %eax
 
 	ret
