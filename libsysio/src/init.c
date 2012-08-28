@@ -219,6 +219,7 @@ _sysio_shutdown()
 	_sysio_i_shutdown();
 	_sysio_fssw_shutdown();
 	_sysio_access_shutdown();
+	free(incore_dir_template);
 #ifdef SYSIO_TRACING
 	{
 		struct trace_callback *tcb;

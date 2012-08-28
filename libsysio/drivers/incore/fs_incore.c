@@ -336,8 +336,9 @@ struct lookup_data {
  * Given mode bits, return directory entry type code.
  */
 #define INCORE_D_TYPEOF(m)	(((m) & S_IFMT) >> 12)
+#define INCORE_D_TEMPLATE_LEN   (INCORE_D_RECLEN(1) + INCORE_D_RECLEN(2))
 
-static char incore_dir_template[INCORE_D_RECLEN(1) + INCORE_D_RECLEN(2)];
+char *incore_dir_template;
 #if 0
 static struct intnl_dirent incore_dir_template[] = {
 	{
@@ -369,6 +370,9 @@ _sysio_incore_init()
 	/*
 	 * Fill in the directory template.
 	 */
+	incore_dir_template = calloc(1, INCORE_D_TEMPLATE_LEN);
+	if (incore_dir_template == NULL)
+		return -ENOMEM;
 	de = (struct intnl_dirent *)incore_dir_template;
 #ifdef _DIRENT_HAVE_D_OFF
 	de->d_off =
@@ -489,14 +493,14 @@ incore_directory_new(struct incore_filesys *icfs,
 	/*
 	 * Allocate and init directory data.
 	 */
-	err = incore_trunc(icino, sizeof(incore_dir_template), 1);
+	err = incore_trunc(icino, INCORE_D_TEMPLATE_LEN, 1);
 	if (err) {
 		incore_i_destroy(icino);
 		return NULL;
 	}
 	(void )memcpy(icino->ici_data,
 		      &incore_dir_template,
-		      sizeof(incore_dir_template));
+		      INCORE_D_TEMPLATE_LEN);
 	de = icino->ici_data;
 	de->d_ino = st->st_ino;
 	de =
@@ -1249,7 +1253,7 @@ incore_unlink_entry(struct incore_inode *icino,
 	if (!de)
 		return -ENOENT;
 	assert((size_t )((char *)de - (char *)icino->ici_data) >=
-	       sizeof(incore_dir_template));
+	       INCORE_D_TEMPLATE_LEN);
 #ifndef _DIRENT_HAVE_D_OFF
 	reclen = de->d_reclen;
 #else
