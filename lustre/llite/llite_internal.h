@@ -673,10 +673,10 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
                       struct lustre_md *lic);
 int ll_md_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                        void *data, int flag);
+#ifndef HAVE_IOP_ATOMIC_OPEN
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags);
-int ll_lookup_it_finish(struct ptlrpc_request *request,
-                        struct lookup_intent *it, void *data);
+#endif
 struct dentry *ll_splice_alias(struct inode *inode, struct dentry *de);
 
 /* llite/rw.c */
@@ -708,7 +708,11 @@ extern ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
                                    struct lustre_handle *lockh, __u64 flags);
 int __ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,
                              __u64 bits);
+#ifdef HAVE_IOP_ATOMIC_OPEN
+int ll_revalidate_nd(struct dentry *dentry, unsigned int flags);
+#else
 int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd);
+#endif
 int ll_file_open(struct inode *inode, struct file *file);
 int ll_file_release(struct inode *inode, struct file *file);
 int ll_glimpse_ioctl(struct ll_sb_info *sbi,
@@ -1285,44 +1289,56 @@ ll_statahead_mark(struct inode *dir, struct dentry *dentry)
 }
 
 static inline int
-ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int only_unplug)
+ll_need_statahead(struct inode *dir, struct dentry *dentryp)
 {
-        struct ll_inode_info  *lli;
-        struct ll_dentry_data *ldd;
+	struct ll_inode_info  *lli;
+	struct ll_dentry_data *ldd;
 
-        if (ll_i2sbi(dir)->ll_sa_max == 0)
-                return -EAGAIN;
+	if (ll_i2sbi(dir)->ll_sa_max == 0)
+		return -EAGAIN;
 
-        lli = ll_i2info(dir);
-        /* not the same process, don't statahead */
-        if (lli->lli_opendir_pid != cfs_curproc_pid())
-                return -EAGAIN;
+	lli = ll_i2info(dir);
+	/* not the same process, don't statahead */
+	if (lli->lli_opendir_pid != cfs_curproc_pid())
+		return -EAGAIN;
 
 	/* statahead has been stopped */
 	if (lli->lli_opendir_key == NULL)
 		return -EAGAIN;
 
-        ldd = ll_d2d(*dentryp);
-        /*
-         * When stats a dentry, the system trigger more than once "revalidate"
-         * or "lookup", for "getattr", for "getxattr", and maybe for others.
-         * Under patchless client mode, the operation intent is not accurate,
-         * which maybe misguide the statahead thread. For example:
-         * The "revalidate" call for "getattr" and "getxattr" of a dentry maybe
-         * have the same operation intent -- "IT_GETATTR".
-         * In fact, one dentry should has only one chance to interact with the
-         * statahead thread, otherwise the statahead windows will be confused.
-         * The solution is as following:
-         * Assign "lld_sa_generation" with "sai_generation" when a dentry
-         * "IT_GETATTR" for the first time, and the subsequent "IT_GETATTR"
-         * will bypass interacting with statahead thread for checking:
-         * "lld_sa_generation == lli_sai->sai_generation"
-         */
-        if (ldd && lli->lli_sai &&
-            ldd->lld_sa_generation == lli->lli_sai->sai_generation)
-                return -EAGAIN;
+	ldd = ll_d2d(dentryp);
+	/*
+	 * When stats a dentry, the system trigger more than once "revalidate"
+	 * or "lookup", for "getattr", for "getxattr", and maybe for others.
+	 * Under patchless client mode, the operation intent is not accurate,
+	 * which maybe misguide the statahead thread. For example:
+	 * The "revalidate" call for "getattr" and "getxattr" of a dentry maybe
+	 * have the same operation intent -- "IT_GETATTR".
+	 * In fact, one dentry should has only one chance to interact with the
+	 * statahead thread, otherwise the statahead windows will be confused.
+	 * The solution is as following:
+	 * Assign "lld_sa_generation" with "sai_generation" when a dentry
+	 * "IT_GETATTR" for the first time, and the subsequent "IT_GETATTR"
+	 * will bypass interacting with statahead thread for checking:
+	 * "lld_sa_generation == lli_sai->sai_generation"
+	 */
+	if (ldd && lli->lli_sai &&
+	    ldd->lld_sa_generation == lli->lli_sai->sai_generation)
+		return -EAGAIN;
 
-        return do_statahead_enter(dir, dentryp, only_unplug);
+	return 1;
+}
+
+static inline int
+ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int only_unplug)
+{
+	int ret;
+
+	ret = ll_need_statahead(dir, *dentryp);
+	if (ret <= 0)
+		return ret;
+
+	return do_statahead_enter(dir, dentryp, only_unplug);
 }
 
 /* llite ioctl register support rountine */

@@ -2176,6 +2176,25 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
+# 3.6 vfs adds iop->atomic_open
+#
+AC_DEFUN([LC_HAVE_IOP_ATOMIC_OPEN],
+[AC_MSG_CHECKING([if iop has atomic_open])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct inode_operations iop;
+	iop.atomic_open = NULL;
+],[
+	AC_DEFINE(HAVE_IOP_ATOMIC_OPEN, 1,
+		  [have iop atomic_open])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2348,6 +2367,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 3.6
 	 LC_HAVE_DENTRY_D_ALIAS_HLIST
 	 LC_DENTRY_OPEN_USE_PATH
+	 LC_HAVE_IOP_ATOMIC_OPEN
 
 	 #
 	 if test x$enable_server = xyes ; then

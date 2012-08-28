@@ -51,6 +51,9 @@
 #include <lustre_ver.h>
 #include "llite_internal.h"
 
+static int ll_create_it(struct inode *, struct dentry *,
+			int, struct lookup_intent *);
+
 /*
  * Check if we have something mounted at the named dchild.
  * In such a case there would always be dentry present.
@@ -421,6 +424,8 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
 
 	/* NB 1 request reference will be taken away by ll_intent_lock()
 	 * when I return */
+	CDEBUG(D_DENTRY, "it %p it_disposition %x\n", it,
+	       it->d.lustre.it_disposition);
 	if (!it_disposition(it, DISP_LOOKUP_NEG)) {
                 rc = ll_prep_inode(&inode, request, (*de)->d_sb);
                 if (rc)
@@ -438,13 +443,21 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
                    Also see bug 7198. */
 	}
 
-	*de = ll_splice_alias(inode, *de);
+	/* Only hash *de if it is unhashed (new dentry).
+	 * Atoimc_open may passin hashed dentries for open.
+	 */
+	if (d_unhashed(*de))
+		*de = ll_splice_alias(inode, *de);
 
 	if (!it_disposition(it, DISP_LOOKUP_NEG)) {
 		/* we have lookup look - unhide dentry */
 		if (bits & MDS_INODELOCK_LOOKUP)
 			d_lustre_revalidate(*de);
-	} else {
+	} else if (!it_disposition(it, DISP_OPEN_CREATE)) {
+		/* If file created on server, don't depend on parent UPDATE
+		 * lock to unhide it. It is left hidden and next lookup can
+		 * find it in ll_splice_alias.
+		 */
 		/* Check that parent has UPDATE lock. */
 		struct lookup_intent parent_it = {
 					.it_op = IT_GETATTR,
@@ -553,6 +566,121 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
         return retval;
 }
 
+#ifdef HAVE_IOP_ATOMIC_OPEN
+static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
+				   unsigned int flags)
+{
+	struct lookup_intent *itp, it = { .it_op = IT_GETATTR };
+	struct dentry *de;
+
+	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),flags=%u\n",
+	       dentry->d_name.len, dentry->d_name.name, parent->i_ino,
+	       parent->i_generation, parent, flags);
+
+	/* Optimize away (CREATE && !OPEN). Let .create handle the race. */
+	if ((flags & LOOKUP_CREATE ) && !(flags & LOOKUP_OPEN)) {
+		ll_dops_init(dentry, 1, 1);
+		__d_lustre_invalidate(dentry);
+		d_add(dentry, NULL);
+		return NULL;
+	}
+
+	if (flags & (LOOKUP_PARENT|LOOKUP_OPEN|LOOKUP_CREATE))
+		itp = NULL;
+	else
+		itp = &it;
+	de = ll_lookup_it(parent, dentry, itp, 0);
+
+	if (itp != NULL)
+		ll_intent_release(itp);
+
+	return de;
+}
+
+/*
+ * For cached negative dentry and new dentry, handle lookup/create/open
+ * together.
+ */
+static int ll_atomic_open(struct inode *dir, struct dentry *dentry,
+			  struct file *file, unsigned open_flags,
+			  umode_t mode, int *opened)
+{
+	struct lookup_intent *it;
+	struct dentry *de;
+	long long lookup_flags = LOOKUP_OPEN;
+	int rc = 0;
+	ENTRY;
+
+	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),file %p,"
+			   "open_flags %x,mode %x opened %d\n",
+	       dentry->d_name.len, dentry->d_name.name, dir->i_ino,
+	       dir->i_generation, dir, file, open_flags, mode, *opened);
+
+	OBD_ALLOC(it, sizeof(*it));
+	if (!it)
+		RETURN(-ENOMEM);
+
+	it->it_op = IT_OPEN;
+	if (mode) {
+		it->it_op |= IT_CREAT;
+		lookup_flags |= LOOKUP_CREATE;
+	}
+	it->it_create_mode = (mode & S_IALLUGO) | S_IFREG;
+	it->it_flags = (open_flags & ~O_ACCMODE) | OPEN_FMODE(open_flags);
+
+	/* Dentry added to dcache tree in ll_lookup_it */
+	de = ll_lookup_it(dir, dentry, it, lookup_flags);
+	if (IS_ERR(de))
+		rc = PTR_ERR(de);
+	else if (de != NULL)
+		dentry = de;
+
+	if (!rc) {
+		if (it_disposition(it, DISP_OPEN_CREATE)) {
+			/* Dentry instantiated in ll_create_it. */
+			rc = ll_create_it(dir, dentry, mode, it);
+			if (rc) {
+				/* We dget in ll_splice_alias. */
+				if (de != NULL)
+					dput(de);
+				goto out_release;
+			}
+
+			*opened |= FILE_CREATED;
+		}
+		if (dentry->d_inode && it_disposition(it, DISP_OPEN_OPEN)) {
+			/* Open dentry. */
+			if (S_ISFIFO(dentry->d_inode->i_mode)) {
+				/* We cannot call open here as it would
+				 * deadlock.
+				 */
+				if (it_disposition(it, DISP_ENQ_OPEN_REF))
+					ptlrpc_req_finished(
+						       (struct ptlrpc_request *)
+							  it->d.lustre.it_data);
+				rc = finish_no_open(file, de);
+			} else {
+				file->private_data = it;
+				rc = finish_open(file, dentry, NULL, opened);
+				/* We dget in ll_splice_alias. finish_open takes
+				 * care of dget for fd open.
+				 */
+				if (de != NULL)
+					dput(de);
+			}
+		} else {
+			rc = finish_no_open(file, de);
+		}
+	}
+
+out_release:
+	ll_intent_release(it);
+	OBD_FREE(it, sizeof(*it));
+
+	RETURN(rc);
+}
+
+#else /* !HAVE_IOP_ATOMIC_OPEN */
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags)
 {
@@ -647,6 +775,7 @@ static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,
 
         RETURN(de);
 }
+#endif /* HAVE_IOP_ATOMIC_OPEN */
 
 /* We depend on "mode" being set with the proper file type/umask by now */
 static struct inode *ll_create_node(struct inode *dir, const char *name,
@@ -819,6 +948,30 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
         RETURN(err);
 }
 
+#ifdef HAVE_IOP_ATOMIC_OPEN
+/*
+ * Plain create. Intent create is handled in atomic_open.
+ */
+static int ll_create_nd(struct inode *dir, struct dentry *dentry,
+			umode_t mode, bool want_excl)
+{
+	int rc;
+
+	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),"
+			   "flags=%u, excl=%d\n",
+	       dentry->d_name.len, dentry->d_name.name, dir->i_ino,
+	       dir->i_generation, dir, mode, want_excl);
+
+	rc = ll_mknod_generic(dir, &dentry->d_name, mode, 0, dentry);
+
+	ll_stats_ops_tally(ll_i2sbi(dir), LPROC_LL_CREATE, 1);
+
+	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s, unhashed %d\n",
+	       dentry->d_name.len, dentry->d_name.name, d_unhashed(dentry));
+
+	return rc;
+}
+#else /* !HAVE_IOP_ATOMIC_OPEN */
 static int ll_create_nd(struct inode *dir, struct dentry *dentry,
 			ll_umode_t mode, struct nameidata *nd)
 {
@@ -855,6 +1008,7 @@ out:
 
         return rc;
 }
+#endif /* HAVE_IOP_ATOMIC_OPEN */
 
 static int ll_symlink_generic(struct inode *dir, struct qstr *name,
                               const char *tgt, struct dentry *dchild)
@@ -1189,6 +1343,9 @@ static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
 
 struct inode_operations ll_dir_inode_operations = {
 	.mknod              = ll_mknod,
+#ifdef HAVE_IOP_ATOMIC_OPEN
+	.atomic_open	    = ll_atomic_open,
+#endif
 	.lookup             = ll_lookup_nd,
 	.create             = ll_create_nd,
 	/* We need all these non-raw things for NFSD, to not patch it. */
