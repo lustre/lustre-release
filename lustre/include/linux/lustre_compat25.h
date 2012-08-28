@@ -140,11 +140,19 @@ static inline void ll_set_fs_pwd(struct fs_struct *fs, struct vfsmount *mnt,
 #define ll_blkdev_put(a, b) blkdev_put(a)
 #endif
 
-#ifdef HAVE_DENTRY_OPEN_4ARGS
-#define ll_dentry_open(a, b, c, d) dentry_open(a, b, c, d)
+static inline struct file *ll_dentry_open(struct dentry *dentry,
+					  struct vfsmount *mnt, int flags,
+					  const struct cred *cred)
+{
+#ifdef HAVE_DENTRY_OPEN_USE_PATH
+	struct path path = { .mnt = mnt, .dentry = dentry };
+	return dentry_open(&path, flags, cred);
+#elif defined HAVE_DENTRY_OPEN_4ARGS
+	return dentry_open(dentry, mnt, flags, cred);
 #else
-#define ll_dentry_open(a, b, c, d) dentry_open(a, b, c)
+	return dentry_open(dentry, mnt, flags);
 #endif
+}
 
 #ifdef HAVE_SECURITY_PLUG
 #define ll_vfs_symlink(dir, dentry, mnt, path, mode) \

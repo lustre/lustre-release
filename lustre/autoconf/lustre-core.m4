@@ -2141,6 +2141,30 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
+# 3.6 dentry_open uses struct path as first argument
+# see kernel commit 765927b2
+#
+AC_DEFUN([LC_DENTRY_OPEN_USE_PATH],
+[AC_MSG_CHECKING([if dentry_open uses struct path as first argument])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	#include <linux/path.h>
+],[
+	struct path path;
+	dentry_open(&path, 0, NULL);
+],[
+	AC_DEFINE(HAVE_DENTRY_OPEN_USE_PATH, 1,
+		  [dentry_open uses struct path as first argument])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2311,6 +2335,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
 	 # 3.6
 	 LC_HAVE_DENTRY_D_ALIAS_HLIST
+	 LC_DENTRY_OPEN_USE_PATH
 
 	 #
 	 if test x$enable_server = xyes ; then
