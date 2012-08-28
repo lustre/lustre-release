@@ -163,6 +163,7 @@ struct filesys {
 
 extern struct fsswent *_sysio_fssw_lookup(const char *name);
 extern int _sysio_fssw_register(const char *name, struct fssw_ops *ops);
+extern char *incore_dir_template;
 extern struct filesys * _sysio_fs_new(struct filesys_ops *ops,
 				      unsigned mask,
 				      void *private);
