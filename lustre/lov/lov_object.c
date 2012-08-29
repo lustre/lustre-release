@@ -690,29 +690,17 @@ struct cl_page *lov_page_init(const struct lu_env *env, struct cl_object *obj,
  * layer. Dispatches to the appropriate layout io initialization method.
  */
 int lov_io_init(const struct lu_env *env, struct cl_object *obj,
-                struct cl_io *io)
+		struct cl_io *io)
 {
 	struct lov_io *lio = lov_env_io(env);
 
-        CL_IO_SLICE_CLEAN(lov_env_io(env), lis_cl);
+	CL_IO_SLICE_CLEAN(lov_env_io(env), lis_cl);
 
 	/* hold lsm before initializing because io relies on it */
 	lio->lis_lsm = lov_lsm_addref(cl2lov(obj));
 
-        /*
-         * Do not take lock in case of CIT_MISC io, because
-         *
-         *     - if this is an io for a glimpse, then we don't care;
-         *
-         *     - if this not a glimpse (writepage or lock cancellation), then
-         *       layout change cannot happen because a page or a lock
-         *       already exist; and
-         *
-         *     - lock ordering (lock mutex nests within layout rw-semaphore)
-         *       is obeyed in case of lock cancellation.
-         */
-        return LOV_2DISPATCH_MAYLOCK(cl2lov(obj), llo_io_init,
-                                     io->ci_type != CIT_MISC, env, obj, io);
+	/* No need to lock because we've taken one refcount of layout.  */
+	return LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_io_init, env, obj, io);
 }
 
 /**
@@ -738,9 +726,11 @@ static int lov_attr_set(const struct lu_env *env, struct cl_object *obj,
 }
 
 int lov_lock_init(const struct lu_env *env, struct cl_object *obj,
-                  struct cl_lock *lock, const struct cl_io *io)
+		  struct cl_lock *lock, const struct cl_io *io)
 {
-        return LOV_2DISPATCH(cl2lov(obj), llo_lock_init, env, obj, lock, io);
+	/* No need to lock because we've taken one refcount of layout.  */
+	return LOV_2DISPATCH_NOLOCK(cl2lov(obj), llo_lock_init, env, obj, lock,
+				    io);
 }
 
 static const struct cl_object_operations lov_ops = {
