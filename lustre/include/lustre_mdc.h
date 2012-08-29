@@ -58,10 +58,10 @@
 #endif /* __KERNEL__ */
 #include <lustre_handles.h>
 #include <libcfs/libcfs.h>
+#include <obd_class.h>
 #include <lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
-#include <lustre_log.h>
 #include <lustre_export.h>
 
 struct ptlrpc_client;

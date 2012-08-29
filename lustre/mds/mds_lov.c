@@ -50,6 +50,7 @@
 #include <lustre_lib.h>
 #include <lustre_fsfilt.h>
 #include <obd_cksum.h>
+#include <lustre_log.h>
 
 #include "mds_internal.h"
 

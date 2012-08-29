@@ -46,6 +46,7 @@
 
 #include <liblustre.h>
 #include <lnet/lnetctl.h>     /* needed for parse_dump */
+#include <lustre_log.h>
 
 #include "lutil.h"
 #include "llite_lib.h"

@@ -55,6 +55,7 @@
 #include <obd_lov.h>
 #include <obd_ost.h>
 #include <lprocfs_status.h>
+#include <lustre_log.h>
 
 #include "lov_internal.h"
 
@@ -101,6 +102,7 @@ static int lov_llog_origin_add(const struct lu_env *env,
                 default:
                         break;
                 }
+
                 /* inject error in llog_add() below */
                 if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FAIL_LOV_LOG_ADD)) {
                         llog_ctxt_put(cctxt);

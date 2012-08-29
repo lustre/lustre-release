@@ -43,24 +43,13 @@
 #define DEBUG_SUBSYSTEM S_MGS
 #define D_MGS D_CONFIG
 
-#ifdef __KERNEL__
-#include <linux/module.h>
-#include <linux/pagemap.h>
-#include <linux/fs.h>
-#endif
-
 #include <obd.h>
 #include <obd_lov.h>
-#include <obd_class.h>
-#include <lustre_log.h>
-#include <obd_ost.h>
-#include <libcfs/list.h>
-#include <linux/lvfs.h>
-#include <lustre_fsfilt.h>
-#include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lustre_sec.h>
 #include <lquota.h>
+#include <lustre_log.h>
+
 #include "mgs_internal.h"
 
 /********************** Class functions ********************/

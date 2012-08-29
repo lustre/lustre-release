@@ -52,7 +52,6 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_lib.h>
 #include <lustre_dlm.h>
-#include <lustre_log.h>
 #include <lustre_export.h>
 
 #if defined(__linux__)

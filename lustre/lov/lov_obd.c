@@ -62,6 +62,7 @@
 #include <lustre_param.h>
 #include <cl_object.h>
 #include <lustre/ll_fiemap.h>
+#include <lustre_log.h>
 
 #include "lov_internal.h"
 

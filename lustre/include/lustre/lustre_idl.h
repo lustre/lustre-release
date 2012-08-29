@@ -2633,74 +2633,57 @@ struct llog_rec_hdr {
 };
 
 struct llog_rec_tail {
-        __u32 lrt_len;
-        __u32 lrt_index;
+	__u32	lrt_len;
+	__u32	lrt_index;
 };
 
 struct llog_logid_rec {
-        struct llog_rec_hdr     lid_hdr;
-        struct llog_logid       lid_id;
-        __u32                   lid_padding1;
-        __u32                   lid_padding2;
-        __u32                   lid_padding3;
-        __u32                   lid_padding4;
-        __u32                   lid_padding5;
-        struct llog_rec_tail    lid_tail;
-} __attribute__((packed));
-
-struct llog_create_rec {
-        struct llog_rec_hdr     lcr_hdr;
-        struct ll_fid           lcr_fid;
-        obd_id                  lcr_oid;
-        obd_count               lcr_oseq;
-        __u32                   lcr_padding;
-        struct llog_rec_tail    lcr_tail;
-} __attribute__((packed));
-
-struct llog_orphan_rec {
-        struct llog_rec_hdr     lor_hdr;
-        obd_id                  lor_oid;
-        obd_count               lor_ogen;
-        __u32                   lor_padding;
-        struct llog_rec_tail    lor_tail;
+	struct llog_rec_hdr	lid_hdr;
+	struct llog_logid	lid_id;
+	__u32			lid_padding1;
+	__u64			lid_padding2;
+	__u64			lid_padding3;
+	struct llog_rec_tail	lid_tail;
 } __attribute__((packed));
 
 struct llog_unlink_rec {
-        struct llog_rec_hdr     lur_hdr;
-        obd_id                  lur_oid;
-        obd_count               lur_oseq;
-        obd_count               lur_count;
-        struct llog_rec_tail    lur_tail;
+	struct llog_rec_hdr	lur_hdr;
+	obd_id			lur_oid;
+	obd_count		lur_oseq;
+	obd_count		lur_count;
+	struct llog_rec_tail	lur_tail;
 } __attribute__((packed));
 
-struct llog_setattr_rec {
-        struct llog_rec_hdr     lsr_hdr;
-        obd_id                  lsr_oid;
-        obd_count               lsr_oseq;
-        __u32                   lsr_uid;
-        __u32                   lsr_gid;
-        __u32                   lsr_padding;
-        struct llog_rec_tail    lsr_tail;
+struct llog_unlink64_rec {
+	struct llog_rec_hdr	lur_hdr;
+	struct lu_fid		lur_fid;
+	obd_count		lur_count; /* to destroy the lost precreated */
+	__u32			lur_padding1;
+	__u64			lur_padding2;
+	__u64			lur_padding3;
+	struct llog_rec_tail    lur_tail;
 } __attribute__((packed));
 
 struct llog_setattr64_rec {
-        struct llog_rec_hdr     lsr_hdr;
-        obd_id                  lsr_oid;
-        obd_count               lsr_oseq;
-        __u32                   lsr_padding;
-        __u32                   lsr_uid;
-        __u32                   lsr_uid_h;
-        __u32                   lsr_gid;
-        __u32                   lsr_gid_h;
-        struct llog_rec_tail    lsr_tail;
+	struct llog_rec_hdr	lsr_hdr;
+	obd_id			lsr_oid;
+	obd_seq			lsr_oseq;
+	__u32			lsr_uid;
+	__u32			lsr_uid_h;
+	__u32			lsr_gid;
+	__u32			lsr_gid_h;
+	__u64			lsr_padding;
+	struct llog_rec_tail    lsr_tail;
 } __attribute__((packed));
 
 struct llog_size_change_rec {
-        struct llog_rec_hdr     lsc_hdr;
-        struct ll_fid           lsc_fid;
-        __u32                   lsc_ioepoch;
-        __u32                   lsc_padding;
-        struct llog_rec_tail    lsc_tail;
+	struct llog_rec_hdr	lsc_hdr;
+	struct ll_fid		lsc_fid;
+	__u32			lsc_ioepoch;
+	__u32			lsc_padding1;
+	__u64			lsc_padding2;
+	__u64			lsc_padding3;
+	struct llog_rec_tail	lsc_tail;
 } __attribute__((packed));
 
 #define CHANGELOG_MAGIC 0xca103000
@@ -2743,16 +2726,21 @@ struct llog_changelog_user_rec {
         struct llog_rec_tail  cur_tail;
 } __attribute__((packed));
 
+/* Old llog gen for compatibility */
 struct llog_gen {
-        __u64 mnt_cnt;
-        __u64 conn_cnt;
+	__u64 mnt_cnt;
+	__u64 conn_cnt;
 } __attribute__((packed));
 
 struct llog_gen_rec {
-        struct llog_rec_hdr     lgr_hdr;
-        struct llog_gen         lgr_gen;
-        struct llog_rec_tail    lgr_tail;
+	struct llog_rec_hdr	lgr_hdr;
+	struct llog_gen		lgr_gen;
+	__u64			padding1;
+	__u64			padding2;
+	__u64			padding3;
+	struct llog_rec_tail	lgr_tail;
 };
+
 /* On-disk header structure of each log object, stored in little endian order */
 #define LLOG_CHUNK_SIZE         8192
 #define LLOG_HEADER_SIZE        (96)
@@ -2761,9 +2749,11 @@ struct llog_gen_rec {
 #define LLOG_MIN_REC_SIZE       (24) /* round(llog_rec_hdr + llog_rec_tail) */
 
 /* flags for the logs */
-#define LLOG_F_ZAP_WHEN_EMPTY   0x1
-#define LLOG_F_IS_CAT           0x2
-#define LLOG_F_IS_PLAIN         0x4
+enum llog_flag {
+	LLOG_F_ZAP_WHEN_EMPTY	= 0x1,
+	LLOG_F_IS_CAT		= 0x2,
+	LLOG_F_IS_PLAIN		= 0x4,
+};
 
 struct llog_log_hdr {
         struct llog_rec_hdr     llh_hdr;
@@ -2780,9 +2770,9 @@ struct llog_log_hdr {
         struct llog_rec_tail    llh_tail;
 } __attribute__((packed));
 
-#define LLOG_BITMAP_SIZE(llh)  ((llh->llh_hdr.lrh_len -         \
-                                 llh->llh_bitmap_offset -       \
-                                 sizeof(llh->llh_tail)) * 8)
+#define LLOG_BITMAP_SIZE(llh)  (__u32)((llh->llh_hdr.lrh_len -		\
+					llh->llh_bitmap_offset -	\
+					sizeof(llh->llh_tail)) * 8)
 
 /** log cookies are used to reference a specific log file and a record therein */
 struct llog_cookie {
@@ -2922,7 +2912,7 @@ extern void lustre_swab_lov_mds_md(struct lov_mds_md *lmm);
 extern void lustre_swab_llogd_body (struct llogd_body *d);
 extern void lustre_swab_llog_hdr (struct llog_log_hdr *h);
 extern void lustre_swab_llogd_conn_body (struct llogd_conn_body *d);
-extern void lustre_swab_llog_rec(struct llog_rec_hdr  *rec);
+extern void lustre_swab_llog_rec(struct llog_rec_hdr *rec);
 
 struct lustre_cfg;
 extern void lustre_swab_lustre_cfg(struct lustre_cfg *lcfg);

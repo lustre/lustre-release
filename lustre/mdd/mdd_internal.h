@@ -43,17 +43,17 @@
 
 #include <lustre_acl.h>
 #include <lustre_eacl.h>
-#include <obd.h>
 #include <md_object.h>
 #include <dt_object.h>
-#include <linux/sched.h>
-#include <linux/capability.h>
 #ifdef HAVE_QUOTA_SUPPORT
 # include <lustre_quota.h>
 #endif
 #include <lustre_fsfilt.h>
 #include <lustre/lustre_lfsck_user.h>
 #include <lustre_fid.h>
+#include <lustre_capa.h>
+#include <lprocfs_status.h>
+#include <lustre_log.h>
 
 #ifdef HAVE_QUOTA_SUPPORT
 /* quota stuff */

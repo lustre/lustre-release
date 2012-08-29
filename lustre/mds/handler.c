@@ -58,6 +58,7 @@
 #include <lprocfs_status.h>
 #include <lustre_disk.h>
 #include <lustre_param.h>
+#include <lustre_log.h>
 
 #include "mds_internal.h"
 

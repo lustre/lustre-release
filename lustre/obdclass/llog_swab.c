@@ -144,6 +144,16 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		tail = &lur->lur_tail;
                 break;
         }
+	case MDS_UNLINK64_REC:
+	{
+		struct llog_unlink64_rec *lur =
+			(struct llog_unlink64_rec *)rec;
+
+		lustre_swab_lu_fid(&lur->lur_fid);
+		__swab32s(&lur->lur_count);
+		tail = &lur->lur_tail;
+		break;
+	}
 	case CHANGELOG_REC:
 	{
                 struct llog_changelog_rec *cr = (struct llog_changelog_rec*)rec;
@@ -184,14 +194,14 @@ void lustre_swab_llog_rec(struct llog_rec_hdr *rec)
 		struct llog_setattr64_rec *lsr =
 			(struct llog_setattr64_rec *)rec;
 
-                __swab64s(&lsr->lsr_oid);
-                __swab32s(&lsr->lsr_oseq);
-                __swab32s(&lsr->lsr_uid);
+		__swab64s(&lsr->lsr_oid);
+		__swab64s(&lsr->lsr_oseq);
+		__swab32s(&lsr->lsr_uid);
 		__swab32s(&lsr->lsr_uid_h);
-                __swab32s(&lsr->lsr_gid);
+		__swab32s(&lsr->lsr_gid);
 		__swab32s(&lsr->lsr_gid_h);
 		tail = &lsr->lsr_tail;
-                break;
+		break;
         }
         case OBD_CFG_REC:
                 /* these are swabbed as they are consumed */

@@ -37,14 +37,7 @@
 #ifndef _MGS_INTERNAL_H
 #define _MGS_INTERNAL_H
 
-#ifdef __KERNEL__
-# include <linux/fs.h>
-#endif
 #include <libcfs/libcfs.h>
-#include <lustre/lustre_idl.h>
-#include <lustre_lib.h>
-#include <lustre_dlm.h>
-#include <lustre_log.h>
 #include <lustre_export.h>
 
 #define MGSSELF_NAME    "_mgs"
