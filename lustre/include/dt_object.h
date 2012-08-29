@@ -1114,7 +1114,8 @@ static inline int dt_fiemap_get(const struct lu_env *env, struct dt_object *d,
         LASSERT(d);
         if (d->do_body_ops == NULL)
                 return -EPROTO;
-        LASSERT(d->do_body_ops->dbo_fiemap_get);
+	if (d->do_body_ops->dbo_fiemap_get == NULL)
+		return -EOPNOTSUPP;
         return d->do_body_ops->dbo_fiemap_get(env, d, fm);
 }
 
