@@ -2915,7 +2915,9 @@ init_param_vars () {
 	osc_ensure_active client $TIMEOUT
 
 	local jobid_var
-	if [ $JOBSTATS_AUTO -ne 0 ]; then
+	if [ -z "$(lctl get_param -n mdc.*.connect_flags | grep jobstats)" ]; then
+		jobid_var="none"
+	elif [ $JOBSTATS_AUTO -ne 0 ]; then
 		echo "enable jobstats, set job scheduler as $JOBID_VAR"
 		jobid_var=$JOBID_VAR
 	else

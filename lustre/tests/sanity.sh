@@ -9050,6 +9050,9 @@ verify_jobstats() {
 }
 
 test_205() { # Job stats
+	[ -z "$(lctl get_param -n mdc.*.connect_flags | grep jobstats)" ] &&
+		skip "Server doesn't support jobstats" && return 0
+
 	local cmd
 	OLD_JOBENV=`$LCTL get_param -n jobid_var`
 	if [ $OLD_JOBENV != $JOBENV ]; then
