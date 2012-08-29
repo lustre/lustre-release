@@ -2544,14 +2544,14 @@ kiblnd_dev_need_failover(kib_dev_t *dev)
         dstaddr.sin_family = AF_INET;
         rc = rdma_resolve_addr(cmid, (struct sockaddr *)&srcaddr,
                                (struct sockaddr *)&dstaddr, 1);
-        if (rc != 0) {
-                CERROR("Failed to bind %s to device: %d\n",
-                       dev->ibd_ifname, rc);
+	if (rc != 0 || cmid->device == NULL) {
+		CERROR("Failed to bind %s:%u.%u.%u.%u to device(%p): %d\n",
+		       dev->ibd_ifname, HIPQUAD(dev->ibd_ifip),
+		       cmid->device, rc);
                 rdma_destroy_id(cmid);
                 return rc;
         }
 
-        LASSERT (cmid->device != NULL);
         if (dev->ibd_hdev->ibh_ibdev == cmid->device) {
                 /* don't need device failover */
                 rdma_destroy_id(cmid);
@@ -2617,9 +2617,10 @@ kiblnd_dev_failover(kib_dev_t *dev)
 
         /* Bind to failover device or port */
         rc = rdma_bind_addr(cmid, (struct sockaddr *)&addr);
-        if (rc != 0) {
-                CERROR("Failed to bind %s to device: %d\n",
-                       dev->ibd_ifname, rc);
+	if (rc != 0 || cmid->device == NULL) {
+		CERROR("Failed to bind %s:%u.%u.%u.%u to device(%p): %d\n",
+		       dev->ibd_ifname, HIPQUAD(dev->ibd_ifip),
+		       cmid->device, rc);
                 rdma_destroy_id(cmid);
                 goto out;
         }
