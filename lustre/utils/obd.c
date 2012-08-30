@@ -2417,6 +2417,56 @@ static int do_activate(int argc, char **argv, int flag)
         return rc;
 }
 
+/**
+ * Replace nids for given device.
+ * lctl replace_nids <devicename> <nid1>[,nid2,nid3]
+ * Command should be started on MGS server.
+ * Only MGS server should be started (command execution
+ * returns error in another cases). Command mount
+ * -t lustre <MDT partition> -o nosvc <mount point>
+ * can be used for that.
+ *
+ * llogs for MDTs and clients are processed. All
+ * records copied as is except add_uuid and setup. This records
+ * are skipped and recorded with new nids and uuid.
+ *
+ * \see mgs_replace_nids
+ * \see mgs_replace_nids_log
+ * \see mgs_replace_handler
+ */
+int jt_replace_nids(int argc, char **argv)
+{
+	int rc;
+	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
+	struct obd_ioctl_data data;
+
+	memset(&data, 0, sizeof(data));
+	data.ioc_dev = get_mgs_device();
+	if (argc != 3)
+		return CMD_HELP;
+
+	data.ioc_inllen1 = strlen(argv[1]) + 1;
+	data.ioc_inlbuf1 = argv[1];
+
+	data.ioc_inllen2 = strlen(argv[2]) + 1;
+	data.ioc_inlbuf2 = argv[2];
+	memset(buf, 0, sizeof(rawbuf));
+	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
+	if (rc) {
+		fprintf(stderr, "error: %s: invalid ioctl\n",
+			jt_cmdname(argv[0]));
+		return rc;
+	}
+
+	rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_REPLACE_NIDS, buf);
+	if (rc < 0) {
+		fprintf(stderr, "error: %s: %s\n", jt_cmdname(argv[0]),
+			strerror(rc = errno));
+	}
+
+	return rc;
+}
+
 int jt_obd_deactivate(int argc, char **argv)
 {
         return do_activate(argc, argv, 0);

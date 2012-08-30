@@ -624,7 +624,9 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	}
 
 	/* No connection accepted until configurations will finish */
+	spin_lock(&obd->obd_dev_lock);
 	obd->obd_no_conn = 1;
+	spin_unlock(&obd->obd_dev_lock);
 	obd->obd_replayable = 1;
 	if (cfg->lcfg_bufcount > 4 && LUSTRE_CFG_BUFLEN(cfg, 4) > 0) {
 		char *str = lustre_cfg_string(cfg, 4);

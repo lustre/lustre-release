@@ -2773,6 +2773,14 @@ struct llog_rec_tail {
 	__u32	lrt_index;
 };
 
+/* Where data follow just after header */
+#define REC_DATA(ptr)						\
+	((void *)((char *)ptr + sizeof(struct llog_rec_hdr)))
+
+#define REC_DATA_LEN(rec)					\
+	(rec->lrh_len - sizeof(struct llog_rec_hdr) -		\
+	 sizeof(struct llog_rec_tail))
+
 struct llog_logid_rec {
 	struct llog_rec_hdr	lid_hdr;
 	struct llog_logid	lid_id;

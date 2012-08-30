@@ -3386,6 +3386,8 @@ test_64() {
 	echo "$LFS df"
 	$LFS df --lazy || error "lfs df failed"
 	cleanup || return $?
+	#writeconf to remove all ost2 traces for subsequent tests
+	writeconf_or_reformat
 }
 run_test 64 "check lfs df --lazy "
 
@@ -3428,6 +3430,73 @@ test_65() { # LU-2237
 	[ -n "$obj" ] || error "fail to re-create the last_rcvd"
 }
 run_test 65 "re-create the lost last_rcvd file when server mount"
+
+test_66() {
+	setup
+	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -1)
+	local MDS_NID=$(do_facet $SINGLEMDS $LCTL list_nids | head -1)
+
+	echo "replace_nids should fail if MDS, OSTs and clients are UP"
+	do_facet mgs $LCTL replace_nids $FSNAME-OST0000 $OST1_NID &&
+		error "replace_nids fail"
+
+	umount_client $MOUNT || error "unmounting client failed"
+	echo "replace_nids should fail if MDS and OSTs are UP"
+	do_facet mgs $LCTL replace_nids $FSNAME-OST0000 $OST1_NID &&
+		error "replace_nids fail"
+
+	stop_ost
+	echo "replace_nids should fail if MDS is UP"
+	do_facet mgs $LCTL replace_nids $FSNAME-OST0000 $OST1_NID &&
+		error "replace_nids fail"
+
+	stop_mds || error "stopping mds failed"
+
+	if combined_mgs_mds; then
+		start_mds "-o nosvc" ||
+			error "starting mds with nosvc option failed"
+	fi
+
+	echo "command should accept two parameters"
+	do_facet mgs $LCTL replace_nids $FSNAME-OST0000 &&
+		error "command should accept two params"
+
+	echo "correct device name should be passed"
+	do_facet mgs $LCTL replace_nids $FSNAME-WRONG0000 $OST1_NID &&
+		error "wrong devname"
+
+	echo "wrong nids list should not destroy the system"
+	do_facet mgs $LCTL replace_nids $FSNAME-OST0000 "wrong nids list" &&
+		error "wrong parse"
+
+	echo "replace OST nid"
+	do_facet mgs $LCTL replace_nids $FSNAME-OST0000 $OST1_NID ||
+		error "replace nids failed"
+
+	echo "command should accept two parameters"
+	do_facet mgs $LCTL replace_nids $FSNAME-MDT0000 &&
+		error "command should accept two params"
+
+	echo "wrong nids list should not destroy the system"
+	do_facet mgs $LCTL replace_nids $FSNAME-MDT0000 "wrong nids list" &&
+		error "wrong parse"
+
+	echo "replace MDS nid"
+	do_facet mgs $LCTL replace_nids $FSNAME-MDT0000 $MDS_NID ||
+		error "replace nids failed"
+
+	if ! combined_mgs_mds ; then
+		stop_mgs
+	else
+		stop_mds
+	fi
+
+	setup_noconfig
+	check_mount || error "error after nid replace"
+	cleanup
+	reformat
+}
+run_test 66 "replace nids"
 
 test_70a() {
 	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return

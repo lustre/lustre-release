@@ -104,6 +104,7 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid,
                                            int *next);
 struct obd_device * class_num2obd(int num);
+int get_devices_count(void);
 
 int class_notify_sptlrpc_conf(const char *fsname, int namelen);
 

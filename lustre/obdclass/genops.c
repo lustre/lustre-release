@@ -479,6 +479,27 @@ struct obd_device *class_num2obd(int num)
 }
 EXPORT_SYMBOL(class_num2obd);
 
+/**
+ * Get obd devices count. Device in any
+ *    state are counted
+ * \retval obd device count
+ */
+int get_devices_count(void)
+{
+	int index, max_index = class_devno_max(), dev_count = 0;
+
+	read_lock(&obd_dev_lock);
+	for (index = 0; index <= max_index; index++) {
+		struct obd_device *obd = class_num2obd(index);
+		if (obd != NULL)
+			dev_count++;
+	}
+	read_unlock(&obd_dev_lock);
+
+	return dev_count;
+}
+EXPORT_SYMBOL(get_devices_count);
+
 void class_obd_list(void)
 {
         char *status;

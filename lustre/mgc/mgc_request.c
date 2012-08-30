@@ -1601,29 +1601,6 @@ static int mgc_llog_is_empty(struct obd_device *obd, struct llog_ctxt *ctxt,
 	return (rc <= 1);
 }
 
-static int mgc_copy_handler(const struct lu_env *env, struct llog_handle *llh,
-			    struct llog_rec_hdr *rec, void *data)
-{
-        struct llog_rec_hdr local_rec = *rec;
-        struct llog_handle *local_llh = (struct llog_handle *)data;
-        char *cfg_buf = (char*) (rec + 1);
-        struct lustre_cfg *lcfg;
-        int rc = 0;
-        ENTRY;
-
-        /* Append all records */
-        local_rec.lrh_len -= sizeof(*rec) + sizeof(struct llog_rec_tail);
-	rc = llog_write(env, local_llh, &local_rec, NULL, 0,
-			(void *)cfg_buf, -1);
-
-        lcfg = (struct lustre_cfg *)cfg_buf;
-        CDEBUG(D_INFO, "idx=%d, rc=%d, len=%d, cmd %x %s %s\n",
-               rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command,
-               lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
-
-        RETURN(rc);
-}
-
 /* Copy a remote log locally */
 static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
                          struct llog_ctxt *lctxt, char *logname)
@@ -1674,7 +1651,7 @@ static int mgc_copy_llog(struct obd_device *obd, struct llog_ctxt *rctxt,
 		GOTO(out_closer, rc);
 
 	/* Copy remote log */
-	rc = llog_process(NULL, remote_llh, mgc_copy_handler,
+	rc = llog_process(NULL, remote_llh, llog_copy_handler,
 			  (void *)local_llh, NULL);
 
 out_closer:

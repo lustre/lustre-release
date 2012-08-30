@@ -56,6 +56,16 @@ Print all Network Identifiers on the local node. LNET must be running.
 From a list of nids for a remote node, show which interface communication
 will take place on.
 .TP
+.BI replace_nids " <devicename> <nid1>[,nid2,nid3 ...]"
+Replace the LNET Network Identifiers for a given device,
+as when the server's IP address has changed.
+This command must be run on the MGS node.
+Only MGS server should be started (command execution returns error
+in another cases). To start the MGS service only:
+mount -t lustre <MDT partition> -o nosvc <mount point>
+Note the replace_nids command skips any invalidated records in the configuration log.
+The previous log is backed up with the suffix '.bak'.
+.TP
 .BI ping " <nid> "
 Check LNET connectivity via an LNET ping. This will use the fabric
 appropriate to the specified NID.

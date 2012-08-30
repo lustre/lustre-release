@@ -535,6 +535,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 #define OBD_IOC_CLEAR_LOG              _IOWR('f', 186, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_PARAM                  _IOW ('f', 187, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_POOL                   _IOWR('f', 188, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_REPLACE_NIDS           _IOWR('f', 189, OBD_IOC_DATA_TYPE)
 
 #define OBD_IOC_CATLOGLIST             _IOWR('f', 190, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_LLOG_INFO              _IOWR('f', 191, OBD_IOC_DATA_TYPE)

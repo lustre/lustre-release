@@ -118,6 +118,8 @@ struct llog_handle;
 /* llog.c  -  general API */
 int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		     int flags, struct obd_uuid *uuid);
+int llog_copy_handler(const struct lu_env *env, struct llog_handle *llh,
+		      struct llog_rec_hdr *rec, void *data);
 int llog_process(const struct lu_env *env, struct llog_handle *loghandle,
 		 llog_cb_t cb, void *data, void *catdata);
 int llog_process_or_fork(const struct lu_env *env,

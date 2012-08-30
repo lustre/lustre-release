@@ -272,6 +272,32 @@ out:
 }
 EXPORT_SYMBOL(llog_init_handle);
 
+int llog_copy_handler(const struct lu_env *env,
+		      struct llog_handle *llh,
+		      struct llog_rec_hdr *rec,
+		      void *data)
+{
+	struct llog_rec_hdr local_rec = *rec;
+	struct llog_handle *local_llh = (struct llog_handle *)data;
+	char *cfg_buf = (char*) (rec + 1);
+	struct lustre_cfg *lcfg;
+	int rc = 0;
+	ENTRY;
+
+	/* Append all records */
+	local_rec.lrh_len -= sizeof(*rec) + sizeof(struct llog_rec_tail);
+	rc = llog_write(env, local_llh, &local_rec, NULL, 0,
+			(void *)cfg_buf, -1);
+
+	lcfg = (struct lustre_cfg *)cfg_buf;
+	CDEBUG(D_INFO, "idx=%d, rc=%d, len=%d, cmd %x %s %s\n",
+	       rec->lrh_index, rc, rec->lrh_len, lcfg->lcfg_command,
+	       lustre_cfg_string(lcfg, 0), lustre_cfg_string(lcfg, 1));
+
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_copy_handler);
+
 static int llog_process_thread(void *arg)
 {
 	struct llog_process_info	*lpi = arg;
@@ -417,7 +443,7 @@ static int llog_process_thread_daemonize(void *arg)
 	cfs_daemonize_ctxt("llog_process_thread");
 
 	/* client env has no keys, tags is just 0 */
-	rc = lu_env_init(&env, LCT_LOCAL);
+	rc = lu_env_init(&env, LCT_LOCAL | LCT_MG_THREAD);
 	if (rc)
 		goto out;
 	lpi->lpi_env = &env;
