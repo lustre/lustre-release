@@ -1970,7 +1970,7 @@ test_45g() {
 	mv $DIR1/$tfile $DIR1/$tfile-2 &
 	PID1=$!
 	sleep 1
-	stat $DIR2/$tfile > /dev/null && "stat must fail"
+	stat $DIR2/$tfile > /dev/null && error "stat must fail"
 	check_pdo_conflict $PID1 && { wait $PID1; error "getattr isn't blocked"; }
 	rm -r $DIR1/*
 	return 0
