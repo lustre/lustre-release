@@ -197,11 +197,15 @@ Changelog records consumed: 42</screen>
         <para>In Lustre 2.0 and 2.1 the only successful way to backup and restore an MDT is to do a device-level backup as is described in this section. File-level backup of an MDT is not available before Lustre 2.3 as the Object Index (OI) file cannot be rebuilt after restore (see bug 22741 for details). <emphasis role='bold'>Since Lustre 2.3 </emphasis> OI files are automatically rebuilt and file-level backup is supported (see <xref linkend='dbdoclet.50438207_21638'/>.)</para>
     </warning>
     <para>If hardware replacement is the reason for the backup or if a spare storage device is available, it is possible to do a raw copy of the MDT or OST from one block device to the other, as long as the new device is at least as large as the original device. To do this, run:</para>
-    <screen>dd if=/dev/{original} of=/dev/{new} bs=1M</screen>
+    <screen>dd if=/dev/{original} of=/dev/{newdev} bs=1M</screen>
     <para>If hardware errors cause read problems on the original device, use the command below to allow as much data as possible to be read from the original device while skipping sections of the disk with errors:</para>
-    <screen>dd if=/dev/{original} of=/dev/{new} bs=4k conv=sync,noerror /
+    <screen>dd if=/dev/{original} of=/dev/{newdev} bs=4k conv=sync,noerror /
       count={original size in 4kB blocks}</screen>
-    <para>Even in the face of hardware errors, the <literal>ldiskfs</literal> file system is very robust and it may be possible to recover the file system data after running <literal>e2fsck -f</literal> on the new device.</para>
+    <para>Even in the face of hardware errors, the <literal>ldiskfs</literal>
+    file system is very robust and it may be possible to recover the file
+    system data after running <literal>e2fsck -fy /dev/{newdev}</literal> on
+    the new device, along with <literal>ll_recover_lost_found_objs</literal>
+    for OST devices.</para>
   </section>
   <section xml:id="dbdoclet.50438207_21638">
       <title><indexterm><primary>backup</primary><secondary>OST file system</secondary></indexterm><indexterm><primary>backup</primary><secondary>MDT file system</secondary></indexterm>Making a File-Level Backup of an OST or MDT File System</title>
@@ -217,7 +221,7 @@ Changelog records consumed: 42</screen>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Mount the file system.</emphasis></para>
-        <screen>[oss]# mount -t ldiskfs /<emphasis>dev</emphasis>/{ostdev} /mnt/ost</screen>
+        <screen>[oss]# mount -t ldiskfs /dev/<emphasis>{ostdev}</emphasis> /mnt/ost</screen>
       </listitem>
       <listitem>
         <para><emphasis role="bold">Change to the mountpoint being backed up.</emphasis></para>
@@ -244,10 +248,19 @@ trusted.fid= \
         <para><emphasis role="bold">Back up all file system data.</emphasis></para>
         <screen>[oss]# tar czvf {backup file}.tgz [--xattrs] --sparse .</screen>
         <note>
-            <para>The tar <literal>--sparse</literal> option is vital for backing up an MDT. In order to have <literal>--sparse</literal> behave correctly, and complete the backup of and MDT in finite time, the version of tar must be specified. Correctly functioning versions of tar include: Whamcloud <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>, Red Hat tar from RHEL 6.3 onwards and gnu tar version 1.25 or more recent.</para>
+            <para>The tar <literal>--sparse</literal> option is vital for
+	    backing up an MDT. In order to have <literal>--sparse</literal>
+	    behave correctly, and complete the backup of and MDT in finite
+	    time, the version of tar must be specified. Correctly functioning
+	    versions of tar include: Whamcloud
+	    <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>,
+	    Red Hat tar from RHEL 6.3 onwards and GNU tar version 1.25 or
+	    more recent.</para>
         </note>
         <warning>
-            <para>The tar <literal>--xattrs</literal> option is only available in gnu tar distributions from Red Hat or Whamcloud. Whamcloud tar is available at <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>.</para>
+            <para>The tar <literal>--xattrs</literal> option is only available
+	    in GNU tar distributions from Red Hat or Whamcloud. Whamcloud tar
+	    is available at <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>.</para>
         </warning>
       </listitem>
       <listitem>
@@ -269,11 +282,11 @@ trusted.fid= \
     <orderedlist>
       <listitem>
         <para>Format the new device.</para>
-        <screen>[oss]# mkfs.lustre --ost --index {<emphasis>OST index</emphasis>} {<emphasis>other options</emphasis>} newdev}</screen>
+        <screen>[oss]# mkfs.lustre --ost --index {<emphasis>OST index</emphasis>} {<emphasis>other options</emphasis>} /dev/<emphasis>{newdev}</emphasis></screen>
       </listitem>
       <listitem>
         <para>Mount the file system.</para>
-        <screen>[oss]# mount -t ldiskfs {<emphasis>newdev</emphasis>} /mnt/ost</screen>
+        <screen>[oss]# mount -t ldiskfs /dev/<emphasis>{newdev}</emphasis> /mnt/ost</screen>
       </listitem>
       <listitem>
         <para>Change to the new file system mount point.</para>
@@ -281,7 +294,7 @@ trusted.fid= \
       </listitem>
       <listitem>
         <para>Restore the file system backup.</para>
-        <screen>[oss]# tar xzvpf {<emphasis>backup file</emphasis>} [--xattrs] --sparse</screen>
+        <screen>[oss]# tar xzvpf <emphasis>{backup file}</emphasis> [--xattrs] --sparse</screen>
       </listitem>
       <listitem>
         <para>Restore the file system extended attributes.</para>

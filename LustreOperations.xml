@@ -301,7 +301,8 @@ mds1&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
   </section>
   <section xml:id="dbdoclet.50438194_70905">
     <title><indexterm><primary>operations</primary><secondary>erasing a file system</secondary></indexterm>Erasing a File System</title>
-    <para>If you want to erase a file system, run this command on your targets:</para>
+    <para>If you want to erase a file system and permanently delete all the
+    data in the filesystem, run this command on your targets:</para>
     <screen>$ &quot;mkfs.lustre --reformat&quot;</screen>
     <para>If you are using a separate MGS and want to keep other file systems defined on that MGS, then set the <literal>writeconf</literal> flag on the MDT for that file system. The <literal>writeconf</literal> flag causes the configuration logs to be erased; they are regenerated the next time the servers start.</para>
     <para>To set the <literal>writeconf</literal> flag on the MDT:</para>
@@ -311,12 +312,13 @@ mds1&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
         <screen>$ umount /mnt/lustre</screen>
       </listitem>
       <listitem>
-        <para>Erase the file system and, presumably, replace it with another file system, run:</para>
-        <screen>$ mkfs.lustre --reformat --fsname spfs --mgs --mdt --index=0 /dev/sda</screen>
+        <para>Permanently erase the file system and, presumably, replace it
+	with another file system, run:</para>
+        <screen>$ mkfs.lustre --reformat --fsname spfs --mgs --mdt --index=0 /dev/<emphasis>{mdsdev}</emphasis></screen>
       </listitem>
       <listitem>
         <para>If you have a separate MGS (that you do not want to reformat), then add the &quot;--writeconf&quot; flag to <literal>mkfs.lustre</literal> on the MDT, run:</para>
-        <screen>$ mkfs.lustre --reformat --writeconf --fsname spfs --mgs --mdt /dev/sda</screen>
+        <screen>$ mkfs.lustre --reformat --writeconf --fsname spfs --mgsnode=&lt;MGS node NID&gt; --mdt --index=0 /dev/<emphasis>{mdsdev}</emphasis></screen>
       </listitem>
     </orderedlist>
     <note>
@@ -325,36 +327,27 @@ mds1&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
   </section>
   <section xml:id="dbdoclet.50438194_16954">
     <title><indexterm><primary>operations</primary><secondary>reclaiming space</secondary></indexterm>Reclaiming Reserved Disk Space</title>
-    <para>All current Lustre installations run the ldiskfs file system internally on service nodes. By default, ldiskfs reserves 5% of the disk space for the root user. In order to reclaim this space, run the following command on your OSSs:</para>
-    <screen>tune2fs [-m reserved_blocks_percent] [device]</screen>
+    <para>All current Lustre installations run the ldiskfs file system
+    internally on service nodes. By default, ldiskfs reserves 5% of the disk
+    space to avoid filesystem fragmentation. In order to reclaim this space,
+    run the following command on your OSS for each OST in the filesystem:</para>
+    <screen>tune2fs [-m reserved_blocks_percent] /dev/<emphasis>{ostdev}</emphasis></screen>
     <para>You do not need to shut down Lustre before running this command or restart it afterwards.</para>
+    <warning>
+      <para>Reducing the space reservation can cause severe performance
+      degradation as the OST filesystem becomes more than 95% full, due to
+      difficulty in locating large areas of contiguous free space.  This
+      performance degradation may persist even if the space usage drops
+      below 95% again.  It is recommended NOT to reduce the reserved disk
+      space below 5%.</para>
+    </warning>
   </section>
   <section xml:id="dbdoclet.50438194_69998">
-    <title><indexterm><primary>operations</primary><secondary>replacing a OST or MDS</secondary></indexterm>Replacing an Existing OST or MDS</title>
-    <para>To copy the contents of an existing OST to a new OST (or an old MDS to a new MDS), use one of these methods:</para>
-    <itemizedlist>
-      <listitem>
-        <para>Connect the old OST disk and new OST disk to a single machine, mount both, and use rsync to copy all data between the OST file systems.</para>
-        <para>For example:</para>
-        <screen>mount -t ldiskfs /dev/old /mnt/ost_old
-mount -t ldiskfs /dev/new /mnt/ost_new
-rsync -aSv /mnt/ost_old/ /mnt/ost_new
-# note trailing slash on ost_old/</screen>
-      </listitem>
-    </itemizedlist>
-    <itemizedlist>
-      <listitem>
-        <para>If you are unable to connect both sets of disk to the same computer, use <literal>rsync</literal> to copy over the network using <literal>rsh</literal> (or <literal>ssh</literal> with <literal>-e ssh</literal>):</para>
-        <screen>rsync -aSvz /mnt/ost_old/ new_ost_node:/mnt/ost_new</screen>
-      </listitem>
-    </itemizedlist>
-    <itemizedlist>
-      <listitem>
-        <para>Use the same procedure for the MDS, with one additional step:</para>
-        <screen>cd /mnt/mds_old; getfattr -R -e base64 -d . &gt; /tmp/mdsea; \&lt;copy all MDS file\
-s as above&gt;; cd /mnt/mds_new; setfattr \--restore=/tmp/mdsea</screen>
-      </listitem>
-    </itemizedlist>
+    <title><indexterm><primary>operations</primary><secondary>replacing an OST or MDS</secondary></indexterm>Replacing an Existing OST or MDT</title>
+    <para>To copy the contents of an existing OST to a new OST (or an old
+    MDT to a new MDT), follow the process for either OST/MDT backups in
+    <xref linkend='dbdoclet.50438207_71633'/> or
+    <xref linkend='dbdoclet.50438207_21638'/>.</para>
   </section>
   <section xml:id="dbdoclet.50438194_30872">
     <title><indexterm><primary>operations</primary><secondary>identifying OSTs</secondary></indexterm>Identifying To Which Lustre File an OST Object Belongs</title>
@@ -362,15 +355,15 @@ s as above&gt;; cd /mnt/mds_new; setfattr \--restore=/tmp/mdsea</screen>
     <orderedlist>
       <listitem>
         <para>On the OST (as root), run <literal>debugfs</literal> to display the file identifier (<literal>FID</literal>) of the file associated with the object.</para>
-        <para>For example, if the object is <literal>34976</literal> on <literal>/dev/lustre/ost_test2</literal>, the debug command is:</para>
-        <screen># debugfs -c -R &quot;stat /O/0/d$((34976 %32))/34976&quot; /dev/lustre/ost_test2 </screen>
-        <para>The command output is:</para>
-        <screen>debugfs 1.41.5.sun2 (23-Apr-2009)
+        <para>For example, if the object is <literal>34976</literal> on <literal>/dev/lustre/ost_test2</literal>, the debug command is:
+        <screen># debugfs -c -R &quot;stat /O/0/d$((34976 % 32))/34976&quot; /dev/lustre/ost_test2 </screen></para>
+        <para>The command output is:
+        <screen>debugfs 1.42.3.wc3 (15-Aug-2012)
 /dev/lustre/ost_test2: catastrophic mode - not reading inode or group bitma\
 ps
 Inode: 352365   Type: regular    Mode:  0666   Flags: 0x80000
-Generation: 1574463214    Version: 0xea020000:00000000
-User:   500   Group:   500   Size: 260096
+Generation: 2393149953    Version: 0x0000002a:00005f81
+User:  1000   Group:  1000   Size: 260096
 File ACL: 0    Directory ACL: 0
 Links: 1   Blockcount: 512
 Fragment:  Address: 0    Number: 0    Size: 0
@@ -380,32 +373,33 @@ mtime: 0x4a216b48:00000000 -- Sat May 30 13:22:16 2009
 crtime: 0x4a216b3c:975870dc -- Sat May 30 13:22:04 2009
 Size of extra inode fields: 24
 Extended attributes stored in inode body:
-fid = &quot;e2 00 11 00 00 00 00 00 25 43 c1 87 00 00 00 00 a0 88 00 00 00 00 00 \
-00 00 00 00 00 00 00 00 00 &quot; (32)
-BLOCKS:
-(0-63):47968-48031
-TOTAL: 64</screen>
+  fid = &quot;b9 da 24 00 00 00 00 00 6a fa 0d 3f 01 00 00 00 eb 5b 0b 00 00 00 0000 00 00 00 00 00 00 00 00 &quot; (32)
+  fid: objid=34976 seq=0 parent=[0x24dab9:0x3f0dfa6a:0x0] stripe=1
+EXTENTS:
+(0-64):4620544-4620607
+</screen></para>
       </listitem>
       <listitem>
-        <para>Note the FID&apos;s EA and apply it to the <literal>osd_inode_id</literal> mapping.</para>
-        <para>In this example, the FID&apos;s EA is:</para>
-        <screen>e2001100000000002543c18700000000a0880000000000000000000000000000
-struct osd_inode_id {
-__u64 oii_ino; /* inode number */
-__u32 oii_gen; /* inode generation */
-__u32 oii_pad; /* alignment padding */
-};</screen>
-        <para>After swapping, you get an inode number of <literal>0x001100e2</literal> and generation of <literal>0</literal>.</para>
+        <para>For Lustre 2.x filesystems, the parent FID will be of the form
+	[0x200000400:0x122:0x0] and can be resolved directly using the
+	<literal>lfs path2fid [0x200000404:0x122:0x0] /mnt/lustre</literal>
+	command on any Lustre client, and the process is complete.</para>
       </listitem>
       <listitem>
-        <para>On the MDT (as root), use <literal>debugfs</literal> to find the file associated with the inode.</para>
-        <screen># debugfs -c -R &quot;ncheck 0x001100e2&quot; /dev/lustre/mdt_test </screen>
+        <para>In this example the parent inode FID is an upgraded 1.x inode
+	(due to the first part of the FID being below 0x200000400), the
+	MDT inode number is <literal>0x24dab9</literal> and generation <literal>0x3f0dfa6a</literal> and the pathname needs to be resolved using
+	<literal>debugfs</literal>.</para>
+      </listitem>
+      <listitem>
+        <para>On the MDS (as root), use <literal>debugfs</literal> to find the file associated with the inode:</para>
+        <screen># debugfs -c -R &quot;ncheck 0x24dab9&quot; /dev/lustre/mdt_test </screen>
         <para>Here is the command output:</para>
-        <screen>debugfs 1.41.5.sun2 (23-Apr-2009)
+        <screen>debugfs 1.42.3.wc2 (15-Aug-2012)
 /dev/lustre/mdt_test: catastrophic mode - not reading inode or group bitmap\
 s
 Inode      Pathname
-1114338    /ROOT/brian-laptop-guest/clients/client11/~dmtmp/PWRPNT/ZD16.BMP</screen>
+2415289    /ROOT/brian-laptop-guest/clients/client11/~dmtmp/PWRPNT/ZD16.BMP</screen>
       </listitem>
     </orderedlist>
     <para>The command lists the inode and pathname associated with the object.</para>
