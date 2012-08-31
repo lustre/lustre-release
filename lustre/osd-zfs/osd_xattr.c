@@ -728,14 +728,16 @@ osd_sa_xattr_list(const struct lu_env *env, struct osd_object *obj,
 
 	while ((nvp = nvlist_next_nvpair(obj->oo_sa_xattr, nvp)) != NULL) {
 		len = strlen(nvpair_name(nvp));
-		if (len >= remain)
-			return -ERANGE;
+		if (lb->lb_buf != NULL) {
+			if (len + 1 > remain)
+				return -ERANGE;
 
-		memcpy(lb->lb_buf, nvpair_name(nvp), len);
-		lb->lb_buf += len;
-		*((char *)lb->lb_buf) = '\0';
-		lb->lb_buf++;
-		remain -= len + 1;
+			memcpy(lb->lb_buf, nvpair_name(nvp), len);
+			lb->lb_buf += len;
+			*((char *)lb->lb_buf) = '\0';
+			lb->lb_buf++;
+			remain -= len + 1;
+		}
 		counted += len + 1;
 	}
 	return counted;
@@ -775,14 +777,16 @@ int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 	while ((rc = -udmu_zap_cursor_retrieve_key(env, zc, oti->oti_key,
 						MAXNAMELEN)) == 0) {
 		rc = strlen(oti->oti_key);
-		if (rc >= remain)
-			GOTO(out_fini, rc = -ERANGE);
+		if (lb->lb_buf != NULL) {
+			if (rc + 1 > remain)
+				RETURN(-ERANGE);
 
-		memcpy(lb->lb_buf, oti->oti_key, rc);
-		lb->lb_buf += rc;
-		*((char *)lb->lb_buf) = '\0';
-		lb->lb_buf++;
-		remain -= rc + 1;
+			memcpy(lb->lb_buf, oti->oti_key, rc);
+			lb->lb_buf += rc;
+			*((char *)lb->lb_buf) = '\0';
+			lb->lb_buf++;
+			remain -= rc + 1;
+		}
 		counted += rc + 1;
 
 		zap_cursor_advance(zc);
