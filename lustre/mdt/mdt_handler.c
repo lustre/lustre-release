@@ -4863,8 +4863,8 @@ static int mdt_obd_llog_setup(struct obd_device *obd,
         obd->obd_lvfs_ctxt.pwd = lsi->lsi_srv_mnt->mnt_root;
         obd->obd_lvfs_ctxt.fs = get_ds();
 
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
-                        0, NULL, &llog_lvfs_ops);
+	rc = llog_setup(NULL, obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
+			&llog_lvfs_ops);
         if (rc) {
                 CERROR("llog_setup() failed: %d\n", rc);
                 fsfilt_put_ops(obd->obd_fsops);
@@ -4879,7 +4879,7 @@ static void mdt_obd_llog_cleanup(struct obd_device *obd)
 
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
         if (ctxt)
-                llog_cleanup(ctxt);
+		llog_cleanup(NULL, ctxt);
 
         if (obd->obd_fsops) {
                 fsfilt_put_ops(obd->obd_fsops);

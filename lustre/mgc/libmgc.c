@@ -121,25 +121,29 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
         ENTRY;
 
         LASSERT(olg == &obd->obd_olg);
-        rc = llog_setup(obd, olg, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
-                        &llog_client_ops);
-        if (rc == 0) {
-                ctxt = llog_group_get_ctxt(olg, LLOG_CONFIG_REPL_CTXT);
-                llog_initiator_connect(ctxt);
-                llog_ctxt_put(ctxt);
-        }
+	rc = llog_setup(NULL, obd, olg, LLOG_CONFIG_REPL_CTXT, tgt,
+			&llog_client_ops);
+	if (rc < 0)
+		RETURN(rc);
 
-        RETURN(rc);
+	ctxt = llog_group_get_ctxt(olg, LLOG_CONFIG_REPL_CTXT);
+	llog_initiator_connect(ctxt);
+	llog_ctxt_put(ctxt);
+
+	RETURN(rc);
 }
 
 static int mgc_llog_finish(struct obd_device *obd, int count)
 {
-        int rc;
-        ENTRY;
+	struct llog_ctxt *ctxt;
 
-        rc = llog_cleanup(llog_get_context(obd, LLOG_CONFIG_REPL_CTXT));
+	ENTRY;
 
-        RETURN(rc);
+	ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
+
+	RETURN(0);
 }
 
 struct obd_ops mgc_obd_ops = {

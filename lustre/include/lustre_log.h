@@ -184,8 +184,6 @@ struct llog_process_cat_args {
         void                *lpca_arg;
 };
 
-int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
-		  struct llog_rec_hdr *rec, void *data);
 int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle);
 int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
 		 struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
@@ -193,27 +191,24 @@ int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
 int llog_cat_cancel_records(const struct lu_env *env,
 			    struct llog_handle *cathandle, int count,
 			    struct llog_cookie *cookies);
-int __llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
-		       llog_cb_t cb, void *data, int startcat, int startidx,
-		       int fork);
+int llog_cat_process_or_fork(const struct lu_env *env,
+			     struct llog_handle *cat_llh, llog_cb_t cb,
+			     void *data, int startcat, int startidx, bool fork);
 int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
 		     llog_cb_t cb, void *data, int startcat, int startidx);
 int llog_cat_process_thread(void *data);
 int llog_cat_reverse_process(const struct lu_env *env,
 			     struct llog_handle *cat_llh, llog_cb_t cb,
 			     void *data);
-int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
+int llog_cat_init_and_process(const struct lu_env *env,
+			      struct llog_handle *llh);
 
 /* llog_obd.c */
-int llog_setup_named(struct obd_device *obd, struct obd_llog_group *olg,
-                     int index, struct obd_device *disk_obd, int count,
-                     struct llog_logid *logid, const char *logname,
-                     struct llog_operations *op);
-int llog_setup(struct obd_device *obd, struct obd_llog_group *olg, int index,
-               struct obd_device *disk_obd, int count, struct llog_logid *logid,
-               struct llog_operations *op);
-int __llog_ctxt_put(struct llog_ctxt *ctxt);
-int llog_cleanup(struct llog_ctxt *);
+int llog_setup(const struct lu_env *env, struct obd_device *obd,
+	       struct obd_llog_group *olg, int index,
+	       struct obd_device *disk_obd, struct llog_operations *op);
+int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt);
+int llog_cleanup(const struct lu_env *env, struct llog_ctxt *);
 int llog_sync(struct llog_ctxt *ctxt, struct obd_export *exp, int flags);
 int llog_obd_add(const struct lu_env *env, struct llog_ctxt *ctxt,
 		 struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
@@ -221,11 +216,6 @@ int llog_obd_add(const struct lu_env *env, struct llog_ctxt *ctxt,
 int llog_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
 		struct lov_stripe_md *lsm, int count,
 		struct llog_cookie *cookies, int flags);
-int llog_obd_origin_setup(const struct lu_env *env, struct obd_device *obd,
-			  struct obd_llog_group *olg, int index,
-			  struct obd_device *disk_obd, int count,
-			  struct llog_logid *logid, const char *name);
-int llog_obd_origin_cleanup(const struct lu_env *env, struct llog_ctxt *ctxt);
 int llog_obd_origin_add(const struct lu_env *env, struct llog_ctxt *ctxt,
 			struct llog_rec_hdr *rec, struct lov_stripe_md *lsm,
 			struct llog_cookie *logcookies, int numcookies);
@@ -270,8 +260,7 @@ struct llog_operations {
 			       struct llog_handle *handle);
 	int (*lop_setup)(const struct lu_env *env, struct obd_device *obd,
 			 struct obd_llog_group *olg, int ctxt_idx,
-			 struct obd_device *disk_obd, int count,
-			 struct llog_logid *logid, const char *name);
+			 struct obd_device *disk_obd);
 	int (*lop_sync)(struct llog_ctxt *ctxt, struct obd_export *exp,
 			int flags);
 	int (*lop_cleanup)(const struct lu_env *env, struct llog_ctxt *ctxt);
@@ -545,7 +534,7 @@ static inline void llog_ctxt_put(struct llog_ctxt *ctxt)
         LASSERT_ATOMIC_GT_LT(&ctxt->loc_refcount, 0, LI_POISON);
         CDEBUG(D_INFO, "PUTting ctxt %p : new refcount %d\n", ctxt,
                cfs_atomic_read(&ctxt->loc_refcount) - 1);
-        __llog_ctxt_put(ctxt);
+	__llog_ctxt_put(NULL, ctxt);
 }
 
 static inline void llog_group_init(struct obd_llog_group *olg, int group)
@@ -600,6 +589,14 @@ static inline struct llog_ctxt *llog_group_get_ctxt(struct obd_llog_group *olg,
         }
         cfs_spin_unlock(&olg->olg_lock);
         return ctxt;
+}
+
+static inline void llog_group_clear_ctxt(struct obd_llog_group *olg, int index)
+{
+	LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
+	cfs_spin_lock(&olg->olg_lock);
+	olg->olg_ctxts[index] = NULL;
+	cfs_spin_unlock(&olg->olg_lock);
 }
 
 static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,

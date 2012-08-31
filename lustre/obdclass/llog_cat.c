@@ -809,7 +809,6 @@ out:
         RETURN(0);
 }
 
-/* callback func for llog_process in llog_obd_origin_setup */
 int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
 		  struct llog_rec_hdr *rec, void *data)
 {
@@ -866,3 +865,19 @@ cat_cleanup:
 
 	RETURN(rc);
 }
+
+/* helper to initialize catalog llog and process it to cancel */
+int llog_cat_init_and_process(const struct lu_env *env,
+			      struct llog_handle *llh)
+{
+	int rc;
+
+	rc = llog_init_handle(env, llh, LLOG_F_IS_CAT, NULL);
+	if (rc)
+		RETURN(rc);
+
+	rc = llog_process(env, llh, cat_cancel_cb, NULL, NULL);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_cat_init_and_process);
+

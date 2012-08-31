@@ -145,28 +145,29 @@ static int mgs_disconnect(struct obd_export *exp)
 static int mgs_handle(struct ptlrpc_request *req);
 
 static int mgs_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                         struct obd_device *tgt, int *index)
+			 struct obd_device *tgt, int *index)
 {
-        int rc;
-        ENTRY;
+	int rc;
 
-        LASSERT(olg == &obd->obd_olg);
-        rc = llog_setup(obd, olg, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
-                        &llog_lvfs_ops);
-        RETURN(rc);
+	ENTRY;
+
+	LASSERT(olg == &obd->obd_olg);
+	rc = llog_setup(NULL, obd, olg, LLOG_CONFIG_ORIG_CTXT, obd,
+			&llog_lvfs_ops);
+	RETURN(rc);
 }
 
 static int mgs_llog_finish(struct obd_device *obd, int count)
 {
-        struct llog_ctxt *ctxt;
-        int rc = 0;
-        ENTRY;
+	struct llog_ctxt *ctxt;
 
-        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-        if (ctxt)
-                rc = llog_cleanup(ctxt);
+	ENTRY;
 
-        RETURN(rc);
+	ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
+
+	RETURN(0);
 }
 
 static int mgs_completion_ast_config(struct ldlm_lock *lock, int flags,

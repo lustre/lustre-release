@@ -972,7 +972,7 @@ static int llog_test_cleanup(struct obd_device *obd)
 {
 	int rc;
 
-	rc = llog_cleanup(llog_get_context(obd, LLOG_TEST_ORIG_CTXT));
+	rc = llog_cleanup(NULL, llog_get_context(obd, LLOG_TEST_ORIG_CTXT));
 	if (rc)
 		CERROR("failed to llog_test_llog_finish: %d\n", rc);
 	return rc;
@@ -1011,7 +1011,7 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	CWARN("Setup llog-test device over %s device\n",
 	      lustre_cfg_string(lcfg, 1));
 
-	rc = llog_setup(obd, &obd->obd_olg, LLOG_TEST_ORIG_CTXT, tgt, 0, NULL,
+	rc = llog_setup(&env, obd, &obd->obd_olg, LLOG_TEST_ORIG_CTXT, tgt,
 			&llog_lvfs_ops);
 	if (rc)
 		GOTO(cleanup_env, rc);

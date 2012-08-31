@@ -2183,47 +2183,36 @@ static int mdc_cleanup(struct obd_device *obd)
 static int mdc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                          struct obd_device *tgt, int *index)
 {
-        struct llog_ctxt *ctxt;
-        int rc;
-        ENTRY;
+	struct llog_ctxt	*ctxt;
+	int			 rc;
 
-        LASSERT(olg == &obd->obd_olg);
+	ENTRY;
 
-        rc = llog_setup(obd, olg, LLOG_LOVEA_REPL_CTXT, tgt, 0, NULL,
-                        &llog_client_ops);
-        if (rc)
-                RETURN(rc);
+	LASSERT(olg == &obd->obd_olg);
 
-        ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
-        llog_initiator_connect(ctxt);
-        llog_ctxt_put(ctxt);
+	rc = llog_setup(NULL, obd, olg, LLOG_CHANGELOG_REPL_CTXT, tgt,
+			&llog_client_ops);
+	if (rc)
+		RETURN(rc);
 
-        rc = llog_setup(obd, olg, LLOG_CHANGELOG_REPL_CTXT, tgt, 0, NULL,
-                        &llog_client_ops);
-        if (rc == 0) {
-                ctxt = llog_group_get_ctxt(olg, LLOG_CHANGELOG_REPL_CTXT);
-                llog_initiator_connect(ctxt);
-                llog_ctxt_put(ctxt);
-        }
+	ctxt = llog_group_get_ctxt(olg, LLOG_CHANGELOG_REPL_CTXT);
+	llog_initiator_connect(ctxt);
+	llog_ctxt_put(ctxt);
 
-        RETURN(rc);
+	RETURN(0);
 }
 
 static int mdc_llog_finish(struct obd_device *obd, int count)
 {
-        struct llog_ctxt *ctxt;
-        int rc = 0;
-        ENTRY;
+	struct llog_ctxt *ctxt;
 
-        ctxt = llog_get_context(obd, LLOG_LOVEA_REPL_CTXT);
-        if (ctxt)
-                rc = llog_cleanup(ctxt);
+	ENTRY;
 
-        ctxt = llog_get_context(obd, LLOG_CHANGELOG_REPL_CTXT);
-        if (ctxt)
-                rc = llog_cleanup(ctxt);
+	ctxt = llog_get_context(obd, LLOG_CHANGELOG_REPL_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
 
-        RETURN(rc);
+	RETURN(0);
 }
 
 static int mdc_process_config(struct obd_device *obd, obd_count len, void *buf)

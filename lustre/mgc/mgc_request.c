@@ -1177,50 +1177,45 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         LASSERT(olg == &obd->obd_olg);
 
-        rc = llog_setup(obd, olg, LLOG_CONFIG_ORIG_CTXT, tgt, 0, NULL,
-                        &llog_lvfs_ops);
-        if (rc)
-                RETURN(rc);
+	rc = llog_setup(NULL, obd, olg, LLOG_CONFIG_ORIG_CTXT, tgt,
+			&llog_lvfs_ops);
+	if (rc)
+		RETURN(rc);
 
-        rc = llog_setup(obd, olg, LLOG_CONFIG_REPL_CTXT, tgt, 0, NULL,
-                        &llog_client_ops);
-        if (rc == 0) {
-                ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                if (!ctxt) {
-                        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-                        if (ctxt)
-                                llog_cleanup(ctxt);
-                        RETURN(-ENODEV);
-                }
-                llog_initiator_connect(ctxt);
-                llog_ctxt_put(ctxt);
-        } else {
-                ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-                if (ctxt)
-                        llog_cleanup(ctxt);
-        }
+	rc = llog_setup(NULL, obd, olg, LLOG_CONFIG_REPL_CTXT, tgt,
+			&llog_client_ops);
+	if (rc)
+		GOTO(out, rc);
 
+	ctxt = llog_group_get_ctxt(olg, LLOG_CONFIG_REPL_CTXT);
+	if (!ctxt)
+		GOTO(out, rc = -ENODEV);
+
+	llog_initiator_connect(ctxt);
+	llog_ctxt_put(ctxt);
+
+	RETURN(0);
+out:
+	ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
         RETURN(rc);
 }
 
 static int mgc_llog_finish(struct obd_device *obd, int count)
 {
-        struct llog_ctxt *ctxt;
-        int rc = 0, rc2 = 0;
-        ENTRY;
+	struct llog_ctxt *ctxt;
 
-        ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-        if (ctxt)
-                rc = llog_cleanup(ctxt);
+	ENTRY;
 
-        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-        if (ctxt)
-                rc2 = llog_cleanup(ctxt);
+	ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
 
-        if (!rc)
-                rc = rc2;
-
-        RETURN(rc);
+	ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
+	RETURN(0);
 }
 
 enum {

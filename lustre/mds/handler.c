@@ -125,15 +125,10 @@ static int mds_postsetup(struct obd_device *obd)
         int rc = 0;
         ENTRY;
 
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd, 0, NULL,
-                        &llog_lvfs_ops);
+	rc = llog_setup(NULL, obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
+			&llog_lvfs_ops);
         if (rc)
                 RETURN(rc);
-
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_LOVEA_ORIG_CTXT, obd, 0, NULL,
-                        &llog_lvfs_ops);
-        if (rc)
-                GOTO(err_llog, rc);
 
         mds_changelog_llog_init(obd, obd);
 
@@ -158,13 +153,9 @@ static int mds_postsetup(struct obd_device *obd)
 
 err_cleanup:
         mds_lov_clean(obd);
-        ctxt = llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT);
-        if (ctxt)
-                llog_cleanup(ctxt);
-err_llog:
         ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
         if (ctxt)
-                llog_cleanup(ctxt);
+		llog_cleanup(NULL, ctxt);
         return rc;
 }
 
@@ -225,10 +216,7 @@ static int mds_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 mds_lov_clean(obd);
                 ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
                 if (ctxt)
-                        llog_cleanup(ctxt);
-                ctxt = llog_get_context(obd, LLOG_LOVEA_ORIG_CTXT);
-                if (ctxt)
-                        llog_cleanup(ctxt);
+			llog_cleanup(NULL, ctxt);
                 rc = obd_llog_finish(obd, 0);
                 mds->mds_lov_exp = NULL;
                 cfs_up_write(&mds->mds_notify_lock);

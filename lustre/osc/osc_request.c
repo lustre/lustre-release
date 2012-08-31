@@ -3275,36 +3275,72 @@ static struct llog_operations osc_size_repl_logops = {
 static struct llog_operations osc_mds_ost_orig_logops;
 
 static int __osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-                           struct obd_device *tgt, struct llog_catid *catid)
+			   struct obd_device *tgt, struct llog_catid *catid)
 {
-        int rc;
-        ENTRY;
+	struct llog_ctxt	*ctxt = NULL;
+	struct llog_handle	*lgh;
+	int			 rc;
 
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, tgt, 1,
-                        &catid->lci_logid, &osc_mds_ost_orig_logops);
-        if (rc) {
-                CERROR("failed LLOG_MDS_OST_ORIG_CTXT\n");
-                GOTO(out, rc);
-        }
+	ENTRY;
 
-        rc = llog_setup(obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt, 1,
-                        NULL, &osc_size_repl_logops);
-        if (rc) {
-                struct llog_ctxt *ctxt =
-                        llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-                if (ctxt)
-                        llog_cleanup(ctxt);
-                CERROR("failed LLOG_SIZE_REPL_CTXT\n");
-        }
-        GOTO(out, rc);
+	osc_mds_ost_orig_logops = llog_lvfs_ops;
+	osc_mds_ost_orig_logops.lop_obd_add = llog_obd_origin_add;
+	osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
+	rc = llog_setup(NULL, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, tgt,
+			&osc_mds_ost_orig_logops);
+	if (rc)
+		RETURN(rc);
+
+	ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	/* context might be initialized already */
+	if (ctxt->loc_handle != NULL) {
+		/* sanity check for valid loc_handle */
+		LASSERT(ctxt->loc_handle->lgh_ctxt == ctxt);
+		GOTO(out, rc = 0);
+	}
+
+	/* first try to open existent llog by ID */
+	if (likely(catid->lci_logid.lgl_oid != 0)) {
+		rc = llog_open(NULL, ctxt, &lgh, &catid->lci_logid, NULL,
+			       LLOG_OPEN_EXISTS);
+		/* re-create llog if it is missing */
+		if (rc == -ENOENT)
+			catid->lci_logid.lgl_oid = 0;
+		else if (rc < 0)
+			GOTO(out_cleanup, rc);
+	}
+	/* create new llog if llog ID is not specified or llog is missed */
+	if (unlikely(catid->lci_logid.lgl_oid == 0)) {
+		rc = llog_open_create(NULL, ctxt, &lgh, NULL, NULL);
+		if (rc < 0)
+			GOTO(out_cleanup, rc);
+		catid->lci_logid = lgh->lgh_id;
+	}
+
+	ctxt->loc_handle = lgh;
+
+	rc = llog_cat_init_and_process(NULL, lgh);
+	if (rc)
+		GOTO(out_close, rc);
+
+	rc = llog_setup(NULL, obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt,
+			&osc_size_repl_logops);
+	if (rc)
+		GOTO(out_close, rc);
 out:
-        if (rc) {
-                CERROR("osc '%s' tgt '%s' catid %p rc=%d\n",
-                       obd->obd_name, tgt->obd_name, catid, rc);
-                CERROR("logid "LPX64":0x%x\n",
-                       catid->lci_logid.lgl_oid, catid->lci_logid.lgl_ogen);
-        }
-        return rc;
+	llog_ctxt_put(ctxt);
+	RETURN(0);
+out_close:
+	llog_cat_close(NULL, lgh);
+out_cleanup:
+	llog_cleanup(NULL, ctxt);
+	CERROR("%s: fail to init llog #"LPX64"#"LPX64"#%08x tgt '%s': "
+	       "rc = %d\n", obd->obd_name, catid->lci_logid.lgl_oid,
+	       catid->lci_logid.lgl_oseq, catid->lci_logid.lgl_ogen,
+	       tgt->obd_name, rc);
+	return rc;
 }
 
 static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
@@ -3348,21 +3384,20 @@ static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
 static int osc_llog_finish(struct obd_device *obd, int count)
 {
-        struct llog_ctxt *ctxt;
-        int rc = 0, rc2 = 0;
-        ENTRY;
+	struct llog_ctxt *ctxt;
 
-        ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-        if (ctxt)
-                rc = llog_cleanup(ctxt);
+	ENTRY;
 
-        ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
-        if (ctxt)
-                rc2 = llog_cleanup(ctxt);
-        if (!rc)
-                rc = rc2;
+	ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
+	if (ctxt) {
+		llog_cat_close(NULL, ctxt->loc_handle);
+		llog_cleanup(NULL, ctxt);
+	}
 
-        RETURN(rc);
+	ctxt = llog_get_context(obd, LLOG_SIZE_REPL_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
+	RETURN(0);
 }
 
 static int osc_reconnect(const struct lu_env *env,
@@ -3771,12 +3806,6 @@ int __init osc_init(void)
 
         cfs_spin_lock_init(&osc_ast_guard);
         cfs_lockdep_set_class(&osc_ast_guard, &osc_ast_guard_class);
-
-        osc_mds_ost_orig_logops = llog_lvfs_ops;
-        osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
-        osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
-	osc_mds_ost_orig_logops.lop_obd_add = llog_obd_origin_add;
-        osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
 
         RETURN(rc);
 }

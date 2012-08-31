@@ -634,7 +634,6 @@ static int llog_lvfs_open(const struct lu_env *env,  struct llog_handle *handle,
 			       logid->lgl_ogen, rc);
 			GOTO(out, rc);
 		}
-
 		handle->lgh_id = *logid;
 	} else if (name) {
 		handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR, name,
@@ -690,6 +689,7 @@ static int llog_lvfs_create(const struct lu_env *env,
 	struct llog_ctxt	*ctxt = handle->lgh_ctxt;
 	struct obd_device	*obd;
 	struct l_dentry		*dchild = NULL;
+	struct file		*file;
 	struct obdo		*oa = NULL;
 	int			 rc = 0;
 	int			 open_flags = O_RDWR | O_CREAT | O_LARGEFILE;
@@ -702,17 +702,16 @@ static int llog_lvfs_create(const struct lu_env *env,
 	LASSERT(handle->lgh_file == NULL);
 
 	if (handle->lgh_name) {
-		handle->lgh_file = llog_filp_open(MOUNT_CONFIGS_DIR,
-						  handle->lgh_name,
-						  open_flags, 0644);
-		if (IS_ERR(handle->lgh_file))
-			RETURN(PTR_ERR(handle->lgh_file));
+		file = llog_filp_open(MOUNT_CONFIGS_DIR, handle->lgh_name,
+				      open_flags, 0644);
+		if (IS_ERR(file))
+			RETURN(PTR_ERR(file));
 
 		handle->lgh_id.lgl_oseq = FID_SEQ_LLOG;
-		handle->lgh_id.lgl_oid =
-			handle->lgh_file->f_dentry->d_inode->i_ino;
+		handle->lgh_id.lgl_oid = file->f_dentry->d_inode->i_ino;
 		handle->lgh_id.lgl_ogen =
-			handle->lgh_file->f_dentry->d_inode->i_generation;
+				file->f_dentry->d_inode->i_generation;
+		handle->lgh_file = file;
 	} else {
 		OBDO_ALLOC(oa);
 		if (oa == NULL)
@@ -734,14 +733,13 @@ static int llog_lvfs_create(const struct lu_env *env,
 		if (IS_ERR(dchild))
 			GOTO(out, rc = PTR_ERR(dchild));
 
-		handle->lgh_file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild,
-						 open_flags);
-		if (IS_ERR(handle->lgh_file))
-			GOTO(out, rc = PTR_ERR(handle->lgh_file));
-
+		file = l_dentry_open(&obd->obd_lvfs_ctxt, dchild, open_flags);
+		if (IS_ERR(file))
+			GOTO(out, rc = PTR_ERR(file));
 		handle->lgh_id.lgl_oseq = oa->o_seq;
 		handle->lgh_id.lgl_oid = oa->o_id;
 		handle->lgh_id.lgl_ogen = oa->o_generation;
+		handle->lgh_file = file;
 out:
 		OBDO_FREE(oa);
 	}

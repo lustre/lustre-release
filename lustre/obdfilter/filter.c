@@ -2342,59 +2342,58 @@ obd_cleanup:
 
 static struct llog_operations filter_mds_ost_repl_logops;
 
-static struct llog_operations filter_size_orig_logops = {
-	.lop_setup	= llog_obd_origin_setup,
-	.lop_cleanup	= llog_obd_origin_cleanup,
-};
+static struct llog_operations filter_size_orig_logops = {};
 
 static int filter_olg_fini(struct obd_llog_group *olg)
 {
-        struct llog_ctxt *ctxt;
-        int rc = 0, rc2 = 0;
-        ENTRY;
+	struct llog_ctxt *ctxt;
 
-        ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
-        if (ctxt)
-                rc = llog_cleanup(ctxt);
+	ENTRY;
 
-        ctxt = llog_group_get_ctxt(olg, LLOG_SIZE_ORIG_CTXT);
-        if (ctxt) {
-                rc2 = llog_cleanup(ctxt);
-                if (!rc)
-                        rc = rc2;
-        }
+	ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
 
-        ctxt = llog_group_get_ctxt(olg, LLOG_CONFIG_ORIG_CTXT);
-        if (ctxt) {
-                rc2 = llog_cleanup(ctxt);
-                if (!rc)
-                        rc = rc2;
-        }
+	ctxt = llog_group_get_ctxt(olg, LLOG_SIZE_ORIG_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
 
-        RETURN(rc);
+	ctxt = llog_group_get_ctxt(olg, LLOG_CONFIG_ORIG_CTXT);
+	if (ctxt)
+		llog_cleanup(NULL, ctxt);
+
+	RETURN(0);
 }
 
 static int
 filter_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
                 struct obd_device *tgt)
 {
-        int rc;
-        ENTRY;
+	struct llog_ctxt	*ctxt = NULL;
+	int			 rc;
 
-        rc = llog_setup(obd, olg, LLOG_MDS_OST_REPL_CTXT, tgt, 0, NULL,
-                        &filter_mds_ost_repl_logops);
-        if (rc)
-                GOTO(cleanup, rc);
+	ENTRY;
 
-        rc = llog_setup(obd, olg, LLOG_SIZE_ORIG_CTXT, tgt, 0, NULL,
-                        &filter_size_orig_logops);
-        if (rc)
-                GOTO(cleanup, rc);
-        EXIT;
-cleanup:
-        if (rc)
-                filter_olg_fini(olg);
-        return rc;
+	filter_mds_ost_repl_logops = llog_client_ops;
+	filter_mds_ost_repl_logops.lop_cancel = llog_obd_repl_cancel;
+	filter_mds_ost_repl_logops.lop_connect = llog_obd_repl_connect;
+	filter_mds_ost_repl_logops.lop_sync = llog_obd_repl_sync;
+
+	rc = llog_setup(NULL, obd, olg, LLOG_MDS_OST_REPL_CTXT, tgt,
+			&filter_mds_ost_repl_logops);
+	if (rc)
+		RETURN(rc);
+
+	rc = llog_setup(NULL, obd, olg, LLOG_SIZE_ORIG_CTXT, tgt,
+			&filter_size_orig_logops);
+	if (rc)
+		GOTO(out, rc);
+
+	RETURN(0);
+out:
+	ctxt = llog_group_get_ctxt(olg, LLOG_MDS_OST_REPL_CTXT);
+	llog_cleanup(NULL, ctxt);
+	return rc;
 }
 
 /**
@@ -2413,17 +2412,12 @@ filter_default_olg_init(struct obd_device *obd, struct obd_llog_group *olg,
         if (!filter->fo_lcm)
                 RETURN(-ENOMEM);
 
-        filter_mds_ost_repl_logops = llog_client_ops;
-        filter_mds_ost_repl_logops.lop_cancel = llog_obd_repl_cancel;
-        filter_mds_ost_repl_logops.lop_connect = llog_obd_repl_connect;
-        filter_mds_ost_repl_logops.lop_sync = llog_obd_repl_sync;
-
         rc = filter_olg_init(obd, olg, tgt);
         if (rc)
                 GOTO(cleanup_lcm, rc);
 
-        rc = llog_setup(obd, olg, LLOG_CONFIG_ORIG_CTXT, tgt, 0, NULL,
-                        &llog_lvfs_ops);
+	rc = llog_setup(NULL, obd, olg, LLOG_CONFIG_ORIG_CTXT, tgt,
+			&llog_lvfs_ops);
         if (rc)
                 GOTO(cleanup_olg, rc);
 
