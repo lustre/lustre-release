@@ -666,7 +666,7 @@ int __osd_xattr_del(const struct lu_env *env, struct osd_object *obj,
 		return rc;
 
 	if (obj->oo_xattr == ZFS_NO_OBJECT)
-		return rc;
+		return 0;
 
 	rc = -zap_lookup(uos->os, obj->oo_xattr, name, sizeof(uint64_t), 1,
 			&xa_data_obj);
