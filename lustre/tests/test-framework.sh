@@ -15,8 +15,8 @@ export GSS_KRB5=false
 export GSS_PIPEFS=false
 export IDENTITY_UPCALL=default
 export QUOTA_AUTO=1
-export JOBSTATS_AUTO=${JOBSTATS_AUTO:-1}
-export JOBID_VAR=${JOBID_VAR:-"procname_uid"}
+# specify environment variable containing batch job name for server statistics
+export JOBID_VAR=${JOBID_VAR:-"procname_uid"}  # or "existing" or "disable"
 
 # LOAD_LLOOP: LU-409: only load llite_lloop module if kernel < 2.6.32 or
 #             LOAD_LLOOP is true. LOAD_LLOOP is false by default.
@@ -3246,26 +3246,20 @@ init_param_vars () {
 	osc_ensure_active $SINGLEMDS $TIMEOUT
 	osc_ensure_active client $TIMEOUT
 
-	local jobid_var
-	if [ -z "$(lctl get_param -n mdc.*.connect_flags | grep jobstats)" ]; then
-		jobid_var="none"
-	elif [ $JOBSTATS_AUTO -ne 0 ]; then
-		echo "enable jobstats, set job scheduler as $JOBID_VAR"
-		jobid_var=$JOBID_VAR
-	else
-		jobid_var=`$LCTL get_param -n jobid_var`
-		if [ $jobid_var != "disable" ]; then
-			echo "disable jobstats as required"
-			jobid_var="disable"
-		else
-			jobid_var="none"
-		fi
-	fi
+	if [ -n "$(lctl get_param -n mdc.*.connect_flags|grep jobstats)" ]; then
+		local current_jobid_var=$($LCTL get_param -n jobid_var)
 
-	if [ $jobid_var == $JOBID_VAR -o $jobid_var == "disable" ]; then
-		do_facet mgs $LCTL conf_param $FSNAME.sys.jobid_var=$jobid_var
-		wait_update $HOSTNAME "$LCTL get_param -n jobid_var" \
-			$jobid_var || return 1
+		if [ $JOBID_VAR = "existing" ]; then
+			echo "keeping jobstats as $current_jobid_var"
+		elif [ $current_jobid_var != $JOBID_VAR ]; then
+			echo "seting jobstats to $JOBID_VAR"
+
+			set_conf_param_and_check $HOSTNAME		\
+				"$LCTL get_param -n jobid_var"		\
+				"$FSNAME.sys.jobid_var" $JOBID_VAR
+		fi
+	else
+		echo "jobstats not supported by server"
 	fi
 
 	if [ $QUOTA_AUTO -ne 0 ]; then
