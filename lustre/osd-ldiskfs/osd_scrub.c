@@ -157,6 +157,8 @@ void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags)
 	sf->sf_items_updated = 0;
 	sf->sf_items_failed = 0;
 	sf->sf_items_updated_prior = 0;
+	sf->sf_items_noscrub = 0;
+	sf->sf_items_igif = 0;
 }
 
 static int osd_scrub_file_load(struct osd_scrub *scrub)
@@ -500,6 +502,8 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 #define SCRUB_NEXT_WAIT 	4 /* wait for free cache slot */
 #define SCRUB_NEXT_CRASH	5 /* simulate system crash during OI scrub */
 #define SCRUB_NEXT_FATAL	6 /* simulate failure during OI scrub */
+#define SCRUB_NEXT_NOSCRUB	7 /* new created object, no scrub on it */
+#define SCRUB_NEXT_IGIF 	8 /* IGIF object */
 
 struct osd_iit_param {
 	struct super_block *sb;
@@ -624,8 +628,14 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 	if (rc != 0)
 		return rc;
 
-	if (!fid_is_norm(fid) || inode->i_state & I_LUSTRE_NOSCRUB)
-		rc = SCRUB_NEXT_CONTINUE;
+	if (inode->i_state & I_LUSTRE_NOSCRUB) {
+		/* Only skip it for the first OI scrub accessing. */
+		inode->i_state &= ~I_LUSTRE_NOSCRUB;
+		rc = SCRUB_NEXT_NOSCRUB;
+	} else if (!fid_is_norm(fid)) {
+		rc = SCRUB_NEXT_IGIF;
+	}
+
 	iput(inode);
 	return rc;
 }
@@ -668,6 +678,8 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 {
 	struct l_wait_info	 lwi    = { 0 };
 	struct osd_scrub	*scrub  = &dev->od_scrub;
+	struct scrub_file	*sf     = &scrub->os_file;
+	__u64			*items  = NULL;
 	struct ptlrpc_thread	*thread = &scrub->os_thread;
 	struct osd_otable_it	*it     = dev->od_otable_it;
 	struct osd_otable_cache *ooc    = it ? &it->ooi_cache : NULL;
@@ -677,6 +689,20 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 		goto next;
 	case SCRUB_NEXT_WAIT:
 		goto wait;
+	case SCRUB_NEXT_NOSCRUB:
+		items = &sf->sf_items_noscrub;
+		break;
+	case SCRUB_NEXT_IGIF:
+		items = &sf->sf_items_igif;
+		break;
+	}
+
+	if (items != NULL) {
+		cfs_down_write(&scrub->os_rwsem);
+		scrub->os_new_checked++;
+		(*items)++;
+		cfs_up_write(&scrub->os_rwsem);
+		goto next;
 	}
 
 	LASSERTF(rc <= 0, "unexpected rc = %d\n", rc);
@@ -1569,9 +1595,12 @@ int osd_scrub_dump(struct osd_device *dev, char *buf, int len)
 		      "updated: "LPU64"\n"
 		      "failed: "LPU64"\n"
 		      "prior_updated: "LPU64"\n"
+		      "noscrub: "LPU64"\n"
+		      "igif: "LPU64"\n"
 		      "success_count: %u\n",
 		      checked, sf->sf_items_updated, sf->sf_items_failed,
-		      sf->sf_items_updated_prior, sf->sf_success_count);
+		      sf->sf_items_updated_prior, sf->sf_items_noscrub,
+		      sf->sf_items_igif, sf->sf_success_count);
 	if (rc <= 0)
 		goto out;
 

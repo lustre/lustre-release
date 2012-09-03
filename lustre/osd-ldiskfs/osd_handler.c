@@ -431,8 +431,6 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 			verify = 1;
 	}
 
-	fid_zero(&oic->oic_fid);
-
 	/*
 	 * Objects are created as locking anchors or place holders for objects
 	 * yet to be created. No need to osd_oi_lookup() at here because FID
@@ -465,6 +463,7 @@ iget:
 	if (IS_ERR(inode)) {
 		result = PTR_ERR(inode);
 		if (result == -ENOENT || result == -ESTALE) {
+			fid_zero(&oic->oic_fid);
 			result = 0;
 		} else if (result == -EREMCHG) {
 
@@ -3414,9 +3413,10 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 			rc = osd_ea_fid_get(env, obj, ino, fid, &oic->oic_lid);
 		else
 			osd_id_gen(&oic->oic_lid, ino, OSD_OII_NOGEN);
-
-		if (rc != 0 || !fid_is_norm(fid))
+		if (rc != 0 || !fid_is_norm(fid)) {
+			fid_zero(&oic->oic_fid);
 			GOTO(out, rc);
+		}
 
 		oic->oic_fid = *fid;
 		if ((scrub->os_pos_current <= ino) &&
@@ -4130,9 +4130,10 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 			   it->oie_dirent->oied_name,
 			   it->oie_dirent->oied_namelen,
 			   it->oie_dirent->oied_type, attr);
-
-	if (!fid_is_norm(fid))
+	if (!fid_is_norm(fid)) {
+		fid_zero(&oic->oic_fid);
 		RETURN(0);
+	}
 
 	oic->oic_fid = *fid;
 	if ((scrub->os_pos_current <= ino) &&
