@@ -232,8 +232,8 @@ LB_CHECK_FILE([$LINUX_CONFIG],[],
 # at 2.6.19 # $LINUX/include/linux/config.h is removed
 # and at more old has only one line
 # include <autoconf.h>
-LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[AUTOCONF_HDIR=linux],
-        [LB_CHECK_FILE([$LINUX_OBJ/include/generated/autoconf.h],[AUTOCONF_HDIR=generated],
+LB_CHECK_FILE([$LINUX_OBJ/include/generated/autoconf.h],[AUTOCONF_HDIR=generated],
+        [LB_CHECK_FILE([$LINUX_OBJ/include/linux/autoconf.h],[AUTOCONF_HDIR=linux],
 	[AC_MSG_ERROR([Run make config in $LINUX.])])])
         AC_SUBST(AUTOCONF_HDIR)
 LB_CHECK_FILE([$LINUX_OBJ/include/linux/version.h],[],

@@ -2008,7 +2008,6 @@ jt_lst_show_error(int argc, char **argv)
         lstcon_rpc_ent_t     *ent;
         sfw_counters_t       *sfwk;
         srpc_counters_t      *srpc;
-        lnet_counters_t      *lnet;
         int                   show_rpc = 1;
         int                   optidx   = 0;
         int                   rc       = 0;
@@ -2092,7 +2091,6 @@ jt_lst_show_error(int argc, char **argv)
 
                         sfwk = (sfw_counters_t *)&ent->rpe_payload[0];
                         srpc = (srpc_counters_t *)((char *)sfwk + sizeof(*sfwk));
-                        lnet = (lnet_counters_t *)((char *)srpc + sizeof(*srpc));
 
                         if (srpc->errors == 0 &&
                             sfwk->brw_errors == 0 && sfwk->ping_errors == 0)
