@@ -140,6 +140,12 @@ struct scrub_file {
 	/* How many prior objects have been updated during scanning. */
 	__u64   sf_items_updated_prior;
 
+	/* How many objects marked as I_LUSTRE_NOSCRUB. */
+	__u64   sf_items_noscrub;
+
+	/* How many IGIF objects. */
+	__u64   sf_items_igif;
+
 	/* How long the OI scrub has run. */
 	__u32   sf_run_time;
 
