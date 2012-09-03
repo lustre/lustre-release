@@ -482,6 +482,11 @@ test_8() {
 run_test 8 "Control OI scrub manually"
 
 test_9() {
+	if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
+		skip "Testing on UP system, the speed may be inaccurate."
+		return 0
+	fi
+
 	scrub_prep 8000
 	mds_backup_restore || error "(1) Fail to backup/restore!"
 
