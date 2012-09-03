@@ -166,7 +166,6 @@ static void *fldb_seq_start(struct seq_file *p, loff_t *pos)
 	struct dt_object	*obj;
 	const struct dt_it_ops	*iops;
 	struct fld_seq_param	*param;
-	struct fld_thread_info	*info;
 
 	if (fld->lsf_obj == NULL)
 		return NULL;
@@ -180,8 +179,6 @@ static void *fldb_seq_start(struct seq_file *p, loff_t *pos)
 
 	lu_env_init(&param->fsp_env, LCT_MD_THREAD);
 	param->fsp_it = iops->init(&param->fsp_env, obj, 0, NULL);
-	info = lu_context_key_get(&param->fsp_env.le_ctx,
-				  &fld_thread_key);
 
 	iops->load(&param->fsp_env, param->fsp_it, *pos);
 

@@ -89,12 +89,11 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct cl_object *obj = io->ci_obj;
 	struct ccc_io    *cio = cl2ccc_io(env, ios);
 	__u32 gen;
-	int   result;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
 	/* check layout version */
-	result = ll_layout_refresh(ccc_object_inode(obj), &gen);
+	ll_layout_refresh(ccc_object_inode(obj), &gen);
 	if (cio->cui_layout_gen > 0)
 		io->ci_need_restart = cio->cui_layout_gen == gen;
 }

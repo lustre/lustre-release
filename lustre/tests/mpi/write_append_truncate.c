@@ -525,7 +525,6 @@ int main(int argc, char *argv[])
 
                         if (error == 1) {
                                 char command[4096];
-                                int rc;
 
                                 rprintf(rank, n, 0, STATUS_FMT"\n",
                                         write_char, write_size, write_size,
@@ -533,7 +532,7 @@ int main(int argc, char *argv[])
                                         trunc_offset, trunc_offset);
 
                                 sprintf(command, "od -Ax -a %s", fnames[0]);
-                                rc = system(command);
+                                ret = system(command);
                                 MPI_Abort(MPI_COMM_WORLD, 1);
                         }
                 }

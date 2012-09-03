@@ -423,6 +423,8 @@ cfs_wi_sched_destroy(struct cfs_wi_sched *sched)
 	cfs_list_del(&sched->ws_list);
 
 	cfs_spin_unlock(&cfs_wi_data.wi_glock);
+#else
+	SET_BUT_UNUSED(i);
 #endif
 	LASSERT(sched->ws_nscheduled == 0);
 
@@ -491,6 +493,8 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 		cfs_wi_sched_destroy(sched);
 		return rc;
 	}
+#else
+	SET_BUT_UNUSED(rc);
 #endif
 	cfs_spin_lock(&cfs_wi_data.wi_glock);
 	cfs_list_add(&sched->ws_list, &cfs_wi_data.wi_scheds);

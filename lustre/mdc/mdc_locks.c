@@ -467,7 +467,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 	struct req_capsule  *pill = &req->rq_pill;
 	struct ldlm_request *lockreq;
 	struct ldlm_reply   *lockrep;
-	__u64                bits = 0;
 	struct lustre_intent_data *intent = &it->d.lustre;
         ENTRY;
 
@@ -494,7 +493,6 @@ static int mdc_finish_enqueue(struct obd_export *exp,
                         ldlm_lock_decref(lockh, einfo->ei_mode);
                         einfo->ei_mode = lock->l_req_mode;
                 }
-		bits = lock->l_policy_data.l_inodebits.bits;
 		LDLM_LOCK_PUT(lock);
 	}
 

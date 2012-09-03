@@ -1,0 +1,14 @@
+lnxmaj="2.6.38.6"
+lnxrel="26.rc1.fc15"
+
+KERNEL_SRPM=kernel-${lnxmaj}-${lnxrel}.src.rpm
+SERIES=""
+EXTRA_VERSION=${lnxrel}_lustre.@VERSION@
+LUSTRE_VERSION=@VERSION@
+BASE_ARCHS="i686 x86_64"
+BIGMEM_ARCHS=""
+BOOT_ARCHS=""
+JENSEN_ARCHS=""
+SMP_ARCHS=""
+UP_ARCHS=""
+

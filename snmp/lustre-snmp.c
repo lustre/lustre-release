@@ -571,7 +571,6 @@ write_sysStatus(int      action,
             size_t   name_len)
 {
   static long *long_ret;
-  int size;
   int new_value;
 
 
@@ -597,7 +596,6 @@ write_sysStatus(int      action,
 
 
         case RESERVE2:
-          size = var_val_len;
           long_ret = (long *) var_val;
 
 

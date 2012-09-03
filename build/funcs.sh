@@ -144,6 +144,9 @@ autodetect_distro() {
             "SUSE LINUX")
                 name="sles"
                 ;;
+            "Fedora")
+                name="fc"
+                ;;
             *)
                 fatal 1 "I don't know what distro name $name and version $version is.\nEither update autodetect_distro() or use the --distro argument."
                 ;;
@@ -182,6 +185,7 @@ autodetect_target() {
          rhel6) target="2.6-rhel6";;
         sles10) target="2.6-sles10";;
         sles11) target="2.6-sles11";;
+          fc15) target="2.6-fc15";;
             *) fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
     esac
 
