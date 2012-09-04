@@ -1864,6 +1864,11 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
         int  rc;
         ENTRY;
 
+	if (!strcmp(name, XATTR_NAME_ACL_ACCESS)) {
+		rc = mdd_acl_set(env, mdd_obj, buf, fl);
+		RETURN(rc);
+	}
+
         rc = mdd_xattr_sanity_check(env, mdd_obj);
         if (rc)
                 RETURN(rc);

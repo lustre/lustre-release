@@ -1516,9 +1516,11 @@ static int mdd_declare_create(const struct lu_env *env,
                               const struct lu_name *name,
                               struct md_attr *ma,
                               int lmm_size,
+			      int got_def_acl,
                               struct thandle *handle,
                               const struct md_op_spec *spec)
 {
+	struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_buf *buf = &mdd_env_info(env)->mti_buf;
         int            rc = 0;
 
@@ -1526,22 +1528,39 @@ static int mdd_declare_create(const struct lu_env *env,
         if (rc)
                 GOTO(out, rc);
 
+#ifdef CONFIG_FS_POSIX_ACL
+	if (got_def_acl > 0) {
+		struct lu_buf *acl_buf;
+
+		acl_buf = mdd_buf_get(env, NULL, got_def_acl);
+		/* if dir, then can inherit default ACl */
+		if (S_ISDIR(ma->ma_attr.la_mode)) {
+			rc = mdo_declare_xattr_set(env, c, acl_buf,
+						   XATTR_NAME_ACL_DEFAULT,
+						   0, handle);
+			if (rc)
+				GOTO(out, rc);
+		}
+
+		rc = mdo_declare_attr_set(env, c, &info->mti_pattr, handle);
+		if (rc)
+			GOTO(out, rc);
+
+		rc = mdo_declare_xattr_set(env, c, acl_buf,
+					   XATTR_NAME_ACL_ACCESS, 0, handle);
+		if (rc)
+			GOTO(out, rc);
+	}
+#endif
+
         /* if dir, then can inherit default ACl */
         buf->lb_buf = NULL;
         buf->lb_len = lmm_size;
-        if (S_ISDIR(ma->ma_attr.la_mode)) {
-                rc = mdo_declare_xattr_set(env, c, buf, XATTR_NAME_ACL_DEFAULT,
-                                           0, handle);
-                if (rc == 0)
-                        rc = mdo_declare_ref_add(env, p, handle);
+	if (S_ISDIR(ma->ma_attr.la_mode)) {
+		rc = mdo_declare_ref_add(env, p, handle);
+		if (rc)
+			GOTO(out, rc);
         }
-        if (rc)
-                GOTO(out, rc);
-
-        rc = mdo_declare_xattr_set(env, c, buf, XATTR_NAME_ACL_ACCESS,
-                                   0, handle);
-        if (rc)
-                GOTO(out, rc);
 
         rc = mdd_declare_object_initialize(env, c, ma, handle);
         if (rc)
@@ -1591,7 +1610,6 @@ static int mdd_create(const struct lu_env *env,
 {
         struct mdd_thread_info *info = mdd_env_info(env);
         struct lu_attr         *la = &info->mti_la_for_fix;
-        struct md_attr         *ma_acl = &info->mti_ma;
         struct mdd_object      *mdd_pobj = md2mdd_obj(pobj);
         struct mdd_object      *son = md2mdd_obj(child);
         struct mdd_device      *mdd = mdo2mdd(pobj);
@@ -1716,18 +1734,18 @@ static int mdd_create(const struct lu_env *env,
         }
 
         if (!S_ISLNK(attr->la_mode)) {
-                ma_acl->ma_acl_size = sizeof info->mti_xattr_buf;
-                ma_acl->ma_acl = info->mti_xattr_buf;
-                ma_acl->ma_need = MA_ACL_DEF;
-                ma_acl->ma_valid = 0;
+		struct lu_buf *acl_buf;
 
+		acl_buf = mdd_buf_get(env, info->mti_xattr_buf,
+				sizeof(info->mti_xattr_buf));
                 mdd_read_lock(env, mdd_pobj, MOR_TGT_PARENT);
-                rc = mdd_def_acl_get(env, mdd_pobj, ma_acl);
+		rc = mdo_xattr_get(env, mdd_pobj, acl_buf,
+				XATTR_NAME_ACL_DEFAULT, BYPASS_CAPA);
                 mdd_read_unlock(env, mdd_pobj);
-                if (rc)
-                        GOTO(out_free, rc);
-                else if (ma_acl->ma_valid & MA_ACL_DEF)
-                        got_def_acl = 1;
+		if (rc > 0)
+			got_def_acl = rc;
+		else if (rc < 0 && rc != -EOPNOTSUPP && rc != -ENODATA)
+			GOTO(out_free, rc);
         }
 
 	mdd_object_make_hint(env, mdd_pobj, son, attr);
@@ -1737,7 +1755,7 @@ static int mdd_create(const struct lu_env *env,
                 GOTO(out_free, rc = PTR_ERR(handle));
 
         rc = mdd_declare_create(env, mdd, mdd_pobj, son, lname, ma,
-                                lmm_size, handle, spec);
+				got_def_acl, lmm_size, handle, spec);
         if (rc)
                 GOTO(out_stop, rc);
 
@@ -1760,17 +1778,14 @@ static int mdd_create(const struct lu_env *env,
 
 #ifdef CONFIG_FS_POSIX_ACL
         if (got_def_acl) {
-                struct lu_buf *acl_buf = &info->mti_buf;
-                acl_buf->lb_buf = ma_acl->ma_acl;
-                acl_buf->lb_len = ma_acl->ma_acl_size;
+		struct lu_buf *acl_buf;
 
-                rc = __mdd_acl_init(env, son, acl_buf, &attr->la_mode, handle);
-                if (rc) {
-                        mdd_write_unlock(env, son);
-                        GOTO(cleanup, rc);
-                } else {
-                        ma->ma_attr.la_valid |= LA_MODE;
-                }
+		acl_buf = mdd_buf_get(env, info->mti_xattr_buf, got_def_acl);
+		rc = __mdd_acl_init(env, son, acl_buf, &attr->la_mode, handle);
+		if (rc) {
+			mdd_write_unlock(env, son);
+			GOTO(cleanup, rc);
+		}
         }
 #endif
 

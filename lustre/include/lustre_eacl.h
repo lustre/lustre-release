@@ -81,6 +81,8 @@ extern int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
                                        __u32 mode, int count);
 extern int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry,
                                         __u32 *pmode, int count);
+extern int lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry, mode_t *mode_p,
+				       int count);
 
 extern ext_acl_xattr_header *
 lustre_posix_acl_xattr_2ext(posix_acl_xattr_header *header, int size);

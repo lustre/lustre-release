@@ -205,6 +205,49 @@ int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry, __u32 mode,
 EXPORT_SYMBOL(lustre_posix_acl_chmod_masq);
 
 /*
+ * Returns 0 if the acl can be exactly represented in the traditional
+ * file mode permission bits, or else 1. Returns -E... on error.
+ */
+	int
+lustre_posix_acl_equiv_mode(posix_acl_xattr_entry *entry, mode_t *mode_p,
+		int count)
+{
+	posix_acl_xattr_entry *pa, *pe;
+	mode_t                 mode = 0;
+	int                    not_equiv = 0;
+
+	for (pa = &entry[0], pe = &entry[count - 1]; pa <= pe; pa++) {
+		__u16 perm = le16_to_cpu(pa->e_perm);
+		switch (le16_to_cpu(pa->e_tag)) {
+			case ACL_USER_OBJ:
+				mode |= (perm & S_IRWXO) << 6;
+				break;
+			case ACL_GROUP_OBJ:
+				mode |= (perm & S_IRWXO) << 3;
+				break;
+			case ACL_OTHER:
+				mode |= perm & S_IRWXO;
+				break;
+			case ACL_MASK:
+				mode = (mode & ~S_IRWXG) |
+					((perm & S_IRWXO) << 3);
+				not_equiv = 1;
+				break;
+			case ACL_USER:
+			case ACL_GROUP:
+				not_equiv = 1;
+				break;
+			default:
+				return -EINVAL;
+		}
+	}
+	if (mode_p)
+		*mode_p = (*mode_p & ~S_IRWXUGO) | mode;
+	return not_equiv;
+}
+EXPORT_SYMBOL(lustre_posix_acl_equiv_mode);
+
+/*
  * Modify acl when creating a new object.
  */
 int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry, __u32 *pmode,
