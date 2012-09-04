@@ -188,6 +188,7 @@ int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock)
                         lock->l_flags &= ~LDLM_FL_SKIPPED;
                 LASSERT(ns->ns_nr_unused > 0);
                 ns->ns_nr_unused--;
+                atomic_dec(&ldlm_cli_all_ns_unused);
                 rc = 1;
         }
         return rc;
@@ -214,6 +215,7 @@ void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
         list_add_tail(&lock->l_lru, &ns->ns_unused_list);
         LASSERT(ns->ns_nr_unused >= 0);
         ns->ns_nr_unused++;
+        atomic_inc(&ldlm_cli_all_ns_unused);
 }
 
 void ldlm_lock_add_to_lru(struct ldlm_lock *lock)

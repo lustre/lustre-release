@@ -396,6 +396,7 @@ struct ldlm_namespace {
         __u32                  ns_refcount; /* count of resources in the hash */
         struct list_head       ns_root_list; /* all root resources in ns */
         struct list_head       ns_list_chain; /* position in global NS list */
+        struct list_head       ns_shrink_chain; /* list of shrinking ns-s */
 
         struct list_head       ns_unused_list; /* all root resources in ns */
         int                    ns_nr_unused;

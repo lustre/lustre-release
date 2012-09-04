@@ -42,6 +42,11 @@ extern struct semaphore ldlm_srv_namespace_lock;
 extern struct list_head ldlm_srv_namespace_list;
 extern struct semaphore ldlm_cli_namespace_lock;
 extern struct list_head ldlm_cli_namespace_list;
+extern atomic_t ldlm_cli_all_ns_unused;
+extern atomic_t ldlm_srv_all_pl_granted;
+#define LDLM_POOL_SHRINK_BATCH_SIZE 64
+#define LDLM_POOL_SHRINK_THREAD_LIMIT 32
+extern struct semaphore ldlm_pool_shrink_lock;
 
 static inline atomic_t *ldlm_namespace_nr(ldlm_side_t client)
 {
