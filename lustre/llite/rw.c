@@ -63,23 +63,6 @@
 #include "llite_internal.h"
 #include <linux/lustre_compat25.h>
 
-/* this isn't where truncate starts.   roughly:
- * sys_truncate->ll_setattr_raw->vmtruncate->ll_truncate. setattr_raw grabs
- * DLM lock on [size, EOF], i_mutex, ->lli_size_sem, and WRITE_I_ALLOC_SEM to
- * avoid races.
- *
- * must be called under ->lli_size_sem */
-void ll_truncate(struct inode *inode)
-{
-        ENTRY;
-
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) to %llu\n", inode->i_ino,
-               inode->i_generation, inode, i_size_read(inode));
-
-        EXIT;
-        return;
-} /* ll_truncate */
-
 /**
  * Finalizes cl-data before exiting typical address_space operation. Dual to
  * ll_cl_init().

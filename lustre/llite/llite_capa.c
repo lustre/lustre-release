@@ -163,7 +163,7 @@ static void ll_delete_capa(struct obd_capa *ocapa)
 /* three places where client capa is deleted:
  * 1. capa_thread_main(), main place to delete expired capa.
  * 2. ll_clear_inode_capas() in ll_clear_inode().
- * 3. ll_truncate_free_capa() delete truncate capa explicitly in ll_truncate().
+ * 3. ll_truncate_free_capa() delete truncate capa explicitly in ll_setattr_ost().
  */
 static int capa_thread_main(void *unused)
 {

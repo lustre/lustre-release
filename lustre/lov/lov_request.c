@@ -1333,8 +1333,6 @@ int lov_update_punch_set(struct lov_request_set *set,
                                 req->rq_oi.oi_oa->o_blocks;
                 }
 
-                /* Do we need to update lvb_size here? It needn't because
-                 * it have been done in ll_truncate(). -jay */
                 lov_stripe_unlock(lsm);
         }
 
