@@ -290,7 +290,9 @@ srpc_unpack_msg_hdr(srpc_msg_t *msg)
 	if (msg->msg_magic == SRPC_MSG_MAGIC)
 		return; /* no flipping needed */
 
-	__swab32s(&msg->msg_magic);
+	/* We do not swap the magic number here as it is needed to
+	   determine whether the body needs to be swapped. */
+	/* __swab32s(&msg->msg_magic); */
 	__swab32s(&msg->msg_type);
 	__swab32s(&msg->msg_version);
 	__swab32s(&msg->msg_ses_feats);

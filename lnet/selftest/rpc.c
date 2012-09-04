@@ -1267,7 +1267,8 @@ srpc_send_rpc (swi_workitem_t *wi)
 
 		srpc_unpack_msg_hdr(reply);
 		if (reply->msg_type != type ||
-		    reply->msg_magic != SRPC_MSG_MAGIC) {
+		    (reply->msg_magic != SRPC_MSG_MAGIC &&
+		     reply->msg_magic != __swab32(SRPC_MSG_MAGIC))) {
                         CWARN ("Bad message from %s: type %u (%d expected),"
                                " magic %u (%d expected).\n",
                                libcfs_id2str(rpc->crpc_dest),
