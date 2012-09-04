@@ -136,18 +136,6 @@ diff -urpN linux-stage.orig/fs/ext4/dir.c linux-stage/fs/ext4/dir.c
  					   "contains a hole at offset %Lu",
  					   inode->i_ino,
  					   (unsigned long long) filp->f_pos);
-diff -urpN linux-stage.orig/fs/ext4/ext4_extents.h linux-stage/fs/ext4/ext4_extents.h
---- linux-stage.orig/fs/ext4/ext4_extents.h	2012-07-02 12:07:23.000000000 -0400
-+++ linux-stage/fs/ext4/ext4_extents.h	2012-07-02 12:07:57.000000000 -0400
-@@ -138,7 +138,7 @@ typedef int (*ext_prepare_callback)(stru
- #define EXT_REPEAT     2
- 
- /* Maximum logical block in a file; ext4_extent's ee_block is __le32 */
--#define EXT_MAX_BLOCK	0xffffffff
-+#define EXT_MAX_BLOCKS	0xffffffff
- 
- /*
-  * EXT_INIT_MAX_LEN is the maximum number of blocks we can have in an
 diff -urpN linux-stage.orig/fs/ext4/ext4.h linux-stage/fs/ext4/ext4.h
 --- linux-stage.orig/fs/ext4/ext4.h	2012-07-02 12:07:23.000000000 -0400
 +++ linux-stage/fs/ext4/ext4.h	2012-07-02 12:10:15.000000000 -0400
@@ -317,57 +305,6 @@ diff -urpN linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
  			"bad header/extent in inode #%lu: %s - magic %x, "
  			"entries %u, max %u(%u), depth %u(%u)",
  			inode->i_ino, error_msg, le16_to_cpu(eh->eh_magic),
-@@ -1329,7 +1329,7 @@ got_index:
- 
- /*
-  * ext4_ext_next_allocated_block:
-- * returns allocated block in subsequent extent or EXT_MAX_BLOCK.
-+ * returns allocated block in subsequent extent or EXT_MAX_BLOCKS.
-  * NOTE: it considers block number from index entry as
-  * allocated block. Thus, index entries have to be consistent
-  * with leaves.
-@@ -1343,7 +1343,7 @@ ext4_ext_next_allocated_block(struct ext
- 	depth = path->p_depth;
- 
- 	if (depth == 0 && path->p_ext == NULL)
--		return EXT_MAX_BLOCK;
-+		return EXT_MAX_BLOCKS;
- 
- 	while (depth >= 0) {
- 		if (depth == path->p_depth) {
-@@ -1360,12 +1360,12 @@ ext4_ext_next_allocated_block(struct ext
- 		depth--;
- 	}
- 
--	return EXT_MAX_BLOCK;
-+	return EXT_MAX_BLOCKS;
- }
- 
- /*
-  * ext4_ext_next_leaf_block:
-- * returns first allocated block from next leaf or EXT_MAX_BLOCK
-+ * returns first allocated block from next leaf or EXT_MAX_BLOCKS
-  */
- static ext4_lblk_t ext4_ext_next_leaf_block(struct inode *inode,
- 					struct ext4_ext_path *path)
-@@ -1377,7 +1377,7 @@ static ext4_lblk_t ext4_ext_next_leaf_bl
- 
- 	/* zero-tree has no leaf blocks at all */
- 	if (depth == 0)
--		return EXT_MAX_BLOCK;
-+		return EXT_MAX_BLOCKS;
- 
- 	/* go to index block */
- 	depth--;
-@@ -1390,7 +1390,7 @@ static ext4_lblk_t ext4_ext_next_leaf_bl
- 		depth--;
- 	}
- 
--	return EXT_MAX_BLOCK;
-+	return EXT_MAX_BLOCKS;
- }
- 
- /*
 @@ -1534,7 +1534,7 @@ int ext4_ext_try_to_merge(struct inode *
  		merge_done = 1;
  		WARN_ON(eh->eh_entries == 0);
@@ -377,40 +314,6 @@ diff -urpN linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
  			   "inode#%lu, eh->eh_entries = 0!", inode->i_ino);
  	}
  
-@@ -1570,13 +1570,13 @@ unsigned int ext4_ext_check_overlap(stru
- 	 */
- 	if (b2 < b1) {
- 		b2 = ext4_ext_next_allocated_block(path);
--		if (b2 == EXT_MAX_BLOCK)
-+		if (b2 == EXT_MAX_BLOCKS)
- 			goto out;
- 	}
- 
- 	/* check for wrap through zero on extent logical start block*/
- 	if (b1 + len1 < b1) {
--		len1 = EXT_MAX_BLOCK - b1;
-+		len1 = EXT_MAX_BLOCKS - b1;
- 		newext->ee_len = cpu_to_le16(len1);
- 		ret = 1;
- 	}
-@@ -1652,7 +1652,7 @@ repeat:
- 	fex = EXT_LAST_EXTENT(eh);
- 	next = ext4_ext_next_leaf_block(inode, path);
- 	if (le32_to_cpu(newext->ee_block) > le32_to_cpu(fex->ee_block)
--	    && next != EXT_MAX_BLOCK) {
-+	    && next != EXT_MAX_BLOCKS) {
- 		ext_debug("next leaf block - %d\n", next);
- 		BUG_ON(npath != NULL);
- 		npath = ext4_ext_find_extent(inode, next, NULL);
-@@ -1771,7 +1771,7 @@ int ext4_ext_walk_space(struct inode *in
- 	BUG_ON(func == NULL);
- 	BUG_ON(inode == NULL);
- 
--	while (block < last && block != EXT_MAX_BLOCK) {
-+	while (block < last && block != EXT_MAX_BLOCKS) {
- 		num = last - block;
- 		/* find extent for this block */
- 		down_read(&EXT4_I(inode)->i_data_sem);
 @@ -1784,7 +1784,11 @@ int ext4_ext_walk_space(struct inode *in
  		}
  
@@ -437,26 +340,6 @@ diff -urpN linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
  		err = func(inode, path, &cbex, ex, cbdata);
  		ext4_ext_drop_refs(path);
  
-@@ -1899,7 +1907,7 @@ ext4_ext_put_gap_in_cache(struct inode *
- 	if (ex == NULL) {
- 		/* there is no extent yet, so gap is [0;-] */
- 		lblock = 0;
--		len = EXT_MAX_BLOCK;
-+		len = EXT_MAX_BLOCKS;
- 		ext_debug("cache gap(whole file):");
- 	} else if (block < le32_to_cpu(ex->ee_block)) {
- 		lblock = block;
-@@ -2144,8 +2152,8 @@ ext4_ext_rm_leaf(handle_t *handle, struc
- 		path[depth].p_ext = ex;
- 
- 		a = ex_ee_block > start ? ex_ee_block : start;
--		b = ex_ee_block + ex_ee_len - 1 < EXT_MAX_BLOCK ?
--			ex_ee_block + ex_ee_len - 1 : EXT_MAX_BLOCK;
-+		b = ex_ee_block + ex_ee_len - 1 < EXT_MAX_BLOCKS ?
-+			ex_ee_block + ex_ee_len - 1 : EXT_MAX_BLOCKS;
- 
- 		ext_debug("  border %u:%u\n", a, b);
- 
 @@ -3284,7 +3292,7 @@ int ext4_ext_get_blocks(handle_t *handle
  	 * this is why assert can't be put in ext4_ext_find_extent()
  	 */
@@ -475,38 +358,6 @@ diff -urpN linux-stage.orig/fs/ext4/extents.c linux-stage/fs/ext4/extents.c
  				   "inode#%lu, eh->eh_entries = 0 and "
  				   "EOFBLOCKS_FL set", inode->i_ino);
  			err = -EIO;
-@@ -3782,15 +3790,15 @@ static int ext4_ext_fiemap_cb(struct ino
- 		flags |= FIEMAP_EXTENT_UNWRITTEN;
- 
- 	/*
--	 * If this extent reaches EXT_MAX_BLOCK, it must be last.
-+	 * If this extent reaches EXT_MAX_BLOCKS, it must be last.
- 	 *
--	 * Or if ext4_ext_next_allocated_block is EXT_MAX_BLOCK,
-+	 * Or if ext4_ext_next_allocated_block is EXT_MAX_BLOCKS,
- 	 * this also indicates no more allocated blocks.
- 	 *
--	 * XXX this might miss a single-block extent at EXT_MAX_BLOCK
-+	 * XXX this might miss a single-block extent at EXT_MAX_BLOCKS
- 	 */
--	if (ext4_ext_next_allocated_block(path) == EXT_MAX_BLOCK ||
--	    newex->ec_block + newex->ec_len - 1 == EXT_MAX_BLOCK) {
-+	if (ext4_ext_next_allocated_block(path) == EXT_MAX_BLOCKS ||
-+	    newex->ec_block + newex->ec_len - 1 == EXT_MAX_BLOCKS) {
- 		loff_t size = i_size_read(inode);
- 		loff_t bs = EXT4_BLOCK_SIZE(inode->i_sb);
- 
-@@ -3870,8 +3878,8 @@ int ext4_fiemap(struct inode *inode, str
- 
- 		start_blk = start >> inode->i_sb->s_blocksize_bits;
- 		last_blk = (start + len - 1) >> inode->i_sb->s_blocksize_bits;
--		if (last_blk >= EXT_MAX_BLOCK)
--			last_blk = EXT_MAX_BLOCK-1;
-+		if (last_blk >= EXT_MAX_BLOCKS)
-+			last_blk = EXT_MAX_BLOCKS-1;
- 		len_blks = ((ext4_lblk_t) last_blk) - start_blk + 1;
- 
- 		/*
 diff -urpN linux-stage.orig/fs/ext4/ialloc.c linux-stage/fs/ext4/ialloc.c
 --- linux-stage.orig/fs/ext4/ialloc.c	2012-07-02 12:07:23.000000000 -0400
 +++ linux-stage/fs/ext4/ialloc.c	2012-07-02 12:07:57.000000000 -0400
@@ -962,24 +813,6 @@ diff -urpN linux-stage.orig/fs/ext4/move_extent.c linux-stage/fs/ext4/move_exten
  				"Donor offset(%u) and the first block of donor "
  				"extent(%u) should be equal",
  				donor_off,
-@@ -1001,12 +1001,12 @@ mext_check_arguments(struct inode *orig_
- 		return -EINVAL;
- 	}
- 
--	if ((orig_start > EXT_MAX_BLOCK) ||
--	    (donor_start > EXT_MAX_BLOCK) ||
--	    (*len > EXT_MAX_BLOCK) ||
--	    (orig_start + *len > EXT_MAX_BLOCK))  {
-+	if ((orig_start > EXT_MAX_BLOCKS) ||
-+	    (donor_start > EXT_MAX_BLOCKS) ||
-+	    (*len > EXT_MAX_BLOCKS) ||
-+	    (orig_start + *len > EXT_MAX_BLOCKS))  {
- 		ext4_debug("ext4 move extent: Can't handle over [%u] blocks "
--			"[ino:orig %lu, donor %lu]\n", EXT_MAX_BLOCK,
-+			"[ino:orig %lu, donor %lu]\n", EXT_MAX_BLOCKS,
- 			orig_inode->i_ino, donor_inode->i_ino);
- 		return -EINVAL;
- 	}
 @@ -1356,7 +1356,7 @@ ext4_move_extents(struct file *o_filp, s
  			if (ret1 < 0)
  				break;
