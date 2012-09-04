@@ -952,9 +952,10 @@ static int class_set_global(char *ptr, int val, struct lustre_cfg *lcfg)
 }
 
 
-/* We can't call ll_process_config directly because it lives in a module that
-   must be loaded after this one. */
+/* We can't call ll_process_config or lquota_process_config directly because
+ * it lives in a module that must be loaded after this one. */
 static int (*client_process_config)(struct lustre_cfg *lcfg) = NULL;
+static int (*quota_process_config)(struct lustre_cfg *lcfg) = NULL;
 
 void lustre_register_client_process_config(int (*cpc)(struct lustre_cfg *lcfg))
 {
@@ -1034,6 +1035,12 @@ struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 	RETURN(new_cfg);
 }
 EXPORT_SYMBOL(lustre_cfg_rename);
+
+void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg))
+{
+	quota_process_config = qpc;
+}
+EXPORT_SYMBOL(lustre_register_quota_process_config);
 
 /** Process configuration commands given in lustre_cfg form.
  * These may come from direct calls (e.g. class_manual_cleanup)
@@ -1135,8 +1142,12 @@ int class_process_config(struct lustre_cfg *lcfg)
                         if (err)
                                 CWARN("Ignoring unknown param %s\n", tmp);
                         GOTO(out, 0);
-                }
-
+		} else if ((class_match_param(lustre_cfg_string(lcfg, 1),
+					      PARAM_QUOTA, &tmp) == 0) &&
+			   quota_process_config) {
+			err = (*quota_process_config)(lcfg);
+			GOTO(out, err);
+		}
                 /* Fall through */
                 break;
         }

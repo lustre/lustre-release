@@ -111,6 +111,7 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_SRPC_FLVR            "srpc.flavor."
 #define PARAM_SRPC_UDESC           "srpc.udesc.cli2mdt"
 #define PARAM_SEC                  "security."
+#define PARAM_QUOTA                "quota."            /* global */
 
 /** @} param */
 

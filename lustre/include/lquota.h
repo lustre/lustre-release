@@ -42,6 +42,12 @@ struct acct_rec { /* 16 bytes */
 	__u64 ispace;  /* current # inodes in use */
 };
 
+/* Name used in the configuration logs to identify the default metadata pool
+ * (composed of all the MDTs, with pool ID 0) and the default data pool (all
+ * the OSTs, with pool ID 0 too). */
+#define QUOTA_METAPOOL_NAME   "mdt="
+#define QUOTA_DATAPOOL_NAME   "ost="
+
 /*
  * Quota enforcement support on slaves
  */

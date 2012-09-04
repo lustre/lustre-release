@@ -60,6 +60,7 @@
 #include <lustre_disk.h>
 #include <lustre_param.h>
 #include <lustre_sec.h>
+#include <lquota.h>
 #include "mgs_internal.h"
 
 /********************** Class functions ********************/
@@ -1010,9 +1011,10 @@ static int mgs_write_log_direct(struct obd_device *obd, struct fs_db *fsdb,
 
 /* write the lcfg in all logs for the given fs */
 int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
-                             struct mgs_target_info *mti,
-                             struct lustre_cfg *lcfg,
-                             char *devname, char *comment)
+			     struct mgs_target_info *mti,
+			     struct lustre_cfg *lcfg,
+			     char *devname, char *comment,
+			     int server_only)
 {
         struct mgs_obd *mgs = &obd->u.mgs;
         cfs_list_t dentry_list;
@@ -1048,8 +1050,14 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
         cfs_list_for_each_entry_safe(dirent, n, &dentry_list, lld_list) {
                 cfs_list_del(&dirent->lld_list);
                 /* don't write to sptlrpc rule log */
-                if (strncmp(fsname, dirent->lld_name, len) == 0 &&
-                    strstr(dirent->lld_name, "-sptlrpc") == NULL) {
+		if (strstr(dirent->lld_name, "-sptlrpc") != NULL)
+			goto next;
+
+		/* caller wants write server logs only */
+		if (server_only && strstr(dirent->lld_name, "-client") != NULL)
+			goto next;
+
+		if (strncmp(fsname, dirent->lld_name, len) == 0) {
                         CDEBUG(D_MGS, "Changing log %s\n", dirent->lld_name);
                         /* Erase any old settings of this same parameter */
                         mgs_modify(obd, fsdb, mti, dirent->lld_name, devname,
@@ -1065,6 +1073,7 @@ int mgs_write_log_direct_all(struct obd_device *obd, struct fs_db *fsdb,
                                                dirent->lld_name);
                         }
                 }
+next:
                 OBD_FREE(dirent, sizeof(*dirent));
         }
 
@@ -2047,8 +2056,8 @@ static int mgs_write_log_sys(struct obd_device *obd, struct fs_db *fsdb,
 	*ptr = '\0';
 	/* modify all servers and clients */
 	rc = mgs_write_log_direct_all(obd, fsdb, mti,
-				*tmp == '\0' ? NULL : lcfg,
-				mti->mti_fsname, sys);
+				      *tmp == '\0' ? NULL : lcfg,
+				      mti->mti_fsname, sys, 0);
 	if (rc == 0 && *tmp != '\0') {
 		switch (cmd) {
 		case LCFG_SET_TIMEOUT:
@@ -2063,6 +2072,58 @@ static int mgs_write_log_sys(struct obd_device *obd, struct fs_db *fsdb,
 			break;
 		}
 	}
+	*ptr = sep;
+	lustre_cfg_free(lcfg);
+	return rc;
+}
+
+/* write quota settings into log */
+static int mgs_write_log_quota(struct obd_device *obd, struct fs_db *fsdb,
+			       struct mgs_target_info *mti, char *quota,
+			       char *ptr)
+{
+	struct lustre_cfg_bufs bufs;
+	struct lustre_cfg *lcfg;
+	char *tmp;
+	char sep;
+	int cmd = LCFG_PARAM;
+	int rc;
+
+	/* support only 'meta' and 'data' pools so far */
+	if (class_match_param(ptr, QUOTA_METAPOOL_NAME, &tmp) != 0 &&
+	    class_match_param(ptr, QUOTA_DATAPOOL_NAME, &tmp) != 0) {
+		CERROR("parameter quota.%s isn't supported (only quota.mdt "
+		       "& quota.ost are)\n", ptr);
+		return -EINVAL;
+	}
+
+	if (*tmp == '\0') {
+		CDEBUG(D_MGS, "global '%s' removed\n", quota);
+	} else {
+		CDEBUG(D_MGS, "global '%s'\n", quota);
+
+		if (strchr(tmp, 'u') == NULL && strchr(tmp, 'g') == NULL &&
+		    strcmp(tmp, "none") != 0) {
+			CERROR("enable option(%s) isn't supported\n", tmp);
+			return -EINVAL;
+		}
+	}
+
+	lustre_cfg_bufs_reset(&bufs, NULL);
+	lustre_cfg_bufs_set_string(&bufs, 1, quota);
+	lcfg = lustre_cfg_new(cmd, &bufs);
+	/* truncate the comment to the parameter name */
+	ptr = tmp - 1;
+	sep = *ptr;
+	*ptr = '\0';
+
+	/* XXX we duplicated quota enable information in all server
+	 *     config logs, it should be moved to a separate config
+	 *     log once we cleanup the config log for global param. */
+	/* modify all servers */
+	rc = mgs_write_log_direct_all(obd, fsdb, mti,
+				      *tmp == '\0' ? NULL : lcfg,
+				      mti->mti_fsname, quota, 1);
 	*ptr = sep;
 	lustre_cfg_free(lcfg);
 	return rc;
@@ -2475,6 +2536,11 @@ static int mgs_write_log_param(struct obd_device *obd, struct fs_db *fsdb,
                 rc = mgs_write_log_sys(obd, fsdb, mti, ptr, tmp);
                 GOTO(end, rc);
         }
+
+	if (class_match_param(ptr, PARAM_QUOTA, &tmp) == 0) {
+		rc = mgs_write_log_quota(obd, fsdb, mti, ptr, tmp);
+		GOTO(end, rc);
+	}
 
         if (class_match_param(ptr, PARAM_OSC""PARAM_ACTIVE, &tmp) == 0) {
                 /* active=0 means off, anything else means on */
