@@ -1794,6 +1794,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt)
         req->rq_export = class_conn2export(
                 lustre_msg_get_handle(req->rq_reqmsg));
         if (req->rq_export) {
+		class_export_rpc_get(req->rq_export);
                 rc = ptlrpc_check_req(req);
                 if (rc == 0) {
                         rc = sptlrpc_target_export_check(req->rq_export, req);
@@ -1836,6 +1837,8 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt)
 	RETURN(1);
 
 err_req:
+	if (req->rq_export)
+		class_export_rpc_put(req->rq_export);
 	cfs_spin_lock(&svcpt->scp_req_lock);
 	svcpt->scp_nreqs_active++;
 	cfs_spin_unlock(&svcpt->scp_req_lock);
@@ -1921,6 +1924,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 				    at_get(&svcpt->scp_at_estimate));
         }
 
+	export = request->rq_export;
 	rc = lu_context_init(&request->rq_session, LCT_SESSION | LCT_NOREF);
         if (rc) {
                 CERROR("Failure to initialize session: %d\n", rc);
@@ -1937,10 +1941,9 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
                 request->rq_svc_thread->t_env->le_ses = &request->rq_session;
 
         if (likely(request->rq_export)) {
-                if (unlikely(ptlrpc_check_req(request)))
-                        goto put_conn;
+		if (unlikely(ptlrpc_check_req(request)))
+			goto put_conn;
                 ptlrpc_update_export_timer(request->rq_export, timediff >> 19);
-                export = class_export_rpc_get(request->rq_export);
         }
 
         /* Discard requests queued for longer than the deadline.
@@ -1953,7 +1956,7 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
                           request->rq_arrival_time.tv_sec),
                           cfs_time_sub(cfs_time_current_sec(),
                           request->rq_deadline));
-                goto put_rpc_export;
+                goto put_conn;
         }
 
         CDEBUG(D_RPCTRACE, "Handling RPC pname:cluuid+ref:pid:xid:nid:opc "
@@ -1973,9 +1976,6 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 
         ptlrpc_rqphase_move(request, RQ_PHASE_COMPLETE);
 
-put_rpc_export:
-        if (export != NULL)
-                class_export_rpc_put(export);
 put_conn:
         lu_context_exit(&request->rq_session);
         lu_context_fini(&request->rq_session);
@@ -2032,6 +2032,8 @@ put_conn:
         }
 
 out_req:
+	if (export != NULL)
+		class_export_rpc_put(export);
 	ptlrpc_server_finish_request(svcpt, request);
 
 	RETURN(1);
@@ -3043,6 +3045,9 @@ ptlrpc_service_purge_all(struct ptlrpc_service *svc)
 			cfs_list_del(&req->rq_list);
 			svcpt->scp_nreqs_active++;
 			ptlrpc_hpreq_fini(req);
+
+			if (req->rq_export != NULL)
+				class_export_rpc_put(req->rq_export);
 			ptlrpc_server_finish_request(svcpt, req);
 		}
 
