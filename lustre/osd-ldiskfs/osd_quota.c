@@ -149,6 +149,7 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 	memset(it, 0, sizeof(*it));
 	lu_object_get(lo);
 	it->oiq_obj = obj;
+	CFS_INIT_LIST_HEAD(&it->oiq_list);
 
 	/* LUSTRE_DQTREEOFF is the initial offset where the tree can be found */
 	it->oiq_blk[0] = LUSTRE_DQTREEOFF;
@@ -167,9 +168,15 @@ static struct dt_it *osd_it_acct_init(const struct lu_env *env,
 static void osd_it_acct_fini(const struct lu_env *env, struct dt_it *di)
 {
 	struct osd_it_quota *it = (struct osd_it_quota *)di;
-
+	struct osd_quota_leaf *leaf, *tmp;
 	ENTRY;
+
 	lu_object_put(env, &it->oiq_obj->oo_dt.do_lu);
+
+	cfs_list_for_each_entry_safe(leaf, tmp, &it->oiq_list, oql_link) {
+		cfs_list_del_init(&leaf->oql_link);
+		OBD_FREE_PTR(leaf);
+	}
 	EXIT;
 }
 
@@ -227,6 +234,19 @@ static void osd_it_acct_put(const struct lu_env *env, struct dt_it *di)
 	return;
 }
 
+static int osd_it_add_processed(struct osd_it_quota *it, int depth)
+{
+	struct osd_quota_leaf *leaf;
+
+	OBD_ALLOC_PTR(leaf);
+	if (leaf == NULL)
+		RETURN(-ENOMEM);
+	CFS_INIT_LIST_HEAD(&leaf->oql_link);
+	leaf->oql_blk = it->oiq_blk[depth];
+	cfs_list_add_tail(&leaf->oql_link, &it->oiq_list);
+	RETURN(0);
+}
+
 /**
  * Move on to the next valid entry.
  *
@@ -250,8 +270,8 @@ static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 	/* Let's first check if there are any remaining valid entry in the
 	 * current leaf block. Start with the next entry after the current one.
 	 */
-	depth = LUSTRE_DQTREEDEPTH - 1;
-	index = GETIDINDEX(it->oiq_id, depth);
+	depth = LUSTRE_DQTREEDEPTH;
+	index = it->oiq_index[depth];
 	if (++index < LUSTRE_DQSTRINBLK) {
 		/* Search for the next valid entry from current index */
 		rc = walk_block_dqentry(env, it->oiq_obj, type,
@@ -263,7 +283,15 @@ static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 			/* Found on entry, @it is already updated to the
 			 * new position in walk_block_dqentry(). */
 			RETURN(0);
+		} else {
+			rc = osd_it_add_processed(it, depth);
+			if (rc)
+				RETURN(rc);
 		}
+	} else {
+		rc = osd_it_add_processed(it, depth);
+		if (rc)
+			RETURN(rc);
 	}
 	rc = 1;
 
@@ -274,7 +302,7 @@ static int osd_it_acct_next(const struct lu_env *env, struct dt_it *di)
 	/* We keep searching as long as walk_tree_dqentry() returns +1
 	 * (= no valid entry found). */
 	for (; depth >= 0 && rc > 0; depth--) {
-		index = GETIDINDEX(it->oiq_id, depth);
+		index = it->oiq_index[depth];
 		if (++index > 0xff)
 			continue;
 		rc = walk_tree_dqentry(env, it->oiq_obj, type,

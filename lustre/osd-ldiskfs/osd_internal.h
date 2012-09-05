@@ -474,17 +474,26 @@ struct osd_it_iam {
         struct iam_iterator    oi_it;
 };
 
+struct osd_quota_leaf {
+	cfs_list_t	oql_link;
+	uint		oql_blk;
+};
+
 /**
  * Iterator's in-memory data structure for quota file.
  */
 struct osd_it_quota {
 	struct osd_object	*oiq_obj;
 	/** tree blocks path to where the entry is stored */
-	uint			 oiq_blk[LUSTRE_DQTREEDEPTH];
+	uint			 oiq_blk[LUSTRE_DQTREEDEPTH + 1];
 	/** on-disk offset for current key where quota record can be found */
 	loff_t			 oiq_offset;
 	/** identifier for current quota record */
 	__u64			 oiq_id;
+	/** the record index in the leaf/index block */
+	uint			 oiq_index[LUSTRE_DQTREEDEPTH + 1];
+	/** list of already processed leaf blocks */
+	cfs_list_t		 oiq_list;
 };
 
 #define MAX_BLOCKS_PER_PAGE (CFS_PAGE_SIZE / 512)

@@ -864,15 +864,17 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
         /* prevent reading after eof */
         cfs_spin_lock(&inode->i_lock);
         if (i_size_read(inode) < *offs + size) {
-                size = i_size_read(inode) - *offs;
-                cfs_spin_unlock(&inode->i_lock);
-                if (size < 0) {
-                        CDEBUG(D_EXT2, "size %llu is too short to read @%llu\n",
-                               i_size_read(inode), *offs);
-                        return -EBADR;
-                } else if (size == 0) {
-                        return 0;
-                }
+		loff_t diff = i_size_read(inode) - *offs;
+		cfs_spin_unlock(&inode->i_lock);
+		if (diff < 0) {
+			CDEBUG(D_EXT2, "size %llu is too short to read @%llu\n",
+			       i_size_read(inode), *offs);
+			return -EBADR;
+		} else if (diff == 0) {
+			return 0;
+		} else {
+			size = diff;
+		}
         } else {
                 cfs_spin_unlock(&inode->i_lock);
         }

@@ -53,8 +53,6 @@ static inline void freedqbuf(dqbuf_t buf)
 
 /**
  * Read the \a blk into \a buf.
- *
- * TODO Will support enforcement quota later.
  */
 static ssize_t quota_read_blk(const struct lu_env *env,
 			      struct osd_object *obj,
@@ -126,9 +124,10 @@ static loff_t find_block_dqentry(const struct lu_env *env,
 		      sizeof(struct lustre_disk_dqdbheader) + i * dqblk_sz;
 
 		if (it) {
-			it->oiq_blk[LUSTRE_DQTREEDEPTH - 1] = blk;
+			it->oiq_blk[LUSTRE_DQTREEDEPTH] = blk;
 			it->oiq_offset = ret;
 			it->oiq_id = dqid;
+			it->oiq_index[LUSTRE_DQTREEDEPTH] = i;
 		} else {
 			ret = 0;
 		}
@@ -174,8 +173,11 @@ loff_t find_tree_dqentry(const struct lu_env *env,
 	else
 		ret = find_block_dqentry(env, obj, type, dqid, blk, it);
 
-	if (it && ret > 0) /* Entry found */
-		it->oiq_blk[depth] = blk;
+	if (it && ret > 0) {
+		it->oiq_blk[depth + 1] = blk;
+		it->oiq_index[depth] = GETIDINDEX(dqid, depth);
+	}
+
 out_buf:
 	freedqbuf(buf);
 	RETURN(ret);
@@ -198,8 +200,14 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 	struct lustre_disk_dqdbheader	*dqhead;
 	int				 i, dqblk_sz;
 	struct lustre_disk_dqblk_v2	*ddquot;
-
+	struct osd_quota_leaf		*leaf;
 	ENTRY;
+
+	/* check if the leaf block has been processed before */
+	cfs_list_for_each_entry(leaf, &it->oiq_list, oql_link) {
+		if (leaf->oql_blk == blk)
+			RETURN(1);
+	}
 
 	dqhead = (struct lustre_disk_dqdbheader *)buf;
 	dqblk_sz = sizeof(struct lustre_disk_dqblk_v2);
@@ -223,11 +231,12 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 			    (char *)&ddquot[i], dqblk_sz))
 			continue;
 
-		it->oiq_blk[LUSTRE_DQTREEDEPTH - 1] = blk;
+		it->oiq_blk[LUSTRE_DQTREEDEPTH] = blk;
 		it->oiq_id = le32_to_cpu(ddquot[i].dqb_id);
 		it->oiq_offset = (blk << LUSTRE_DQBLKSIZE_BITS) +
 				  sizeof(struct lustre_disk_dqdbheader) +
 				  i * dqblk_sz;
+		it->oiq_index[LUSTRE_DQTREEDEPTH] = i;
 		ret = 0;
 		break;
 	}
@@ -276,8 +285,11 @@ int walk_tree_dqentry(const struct lu_env *env, struct osd_object *obj,
 			ret = walk_block_dqentry(env, obj, type, blk, 0, it);
 	}
 
-	if (ret == 0) /* Entry found */
-		it->oiq_blk[depth] = blk;
+	if (ret == 0) { /* Entry found */
+		it->oiq_blk[depth + 1] = blk;
+		it->oiq_index[depth] = index;
+	}
+
 out_buf:
 	freedqbuf(buf);
 	RETURN(ret);
