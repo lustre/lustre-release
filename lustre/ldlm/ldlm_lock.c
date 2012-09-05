@@ -982,9 +982,16 @@ static void ldlm_granted_list_add_lock(struct ldlm_lock *lock,
         LASSERT(cfs_list_empty(&lock->l_sl_mode));
         LASSERT(cfs_list_empty(&lock->l_sl_policy));
 
-        cfs_list_add(&lock->l_res_link, prev->res_link);
-        cfs_list_add(&lock->l_sl_mode, prev->mode_link);
-        cfs_list_add(&lock->l_sl_policy, prev->policy_link);
+	/*
+	 * lock->link == prev->link means lock is first starting the group.
+	 * Don't re-add to itself to suppress kernel warnings.
+	 */
+	if (&lock->l_res_link != prev->res_link)
+		cfs_list_add(&lock->l_res_link, prev->res_link);
+	if (&lock->l_sl_mode != prev->mode_link)
+		cfs_list_add(&lock->l_sl_mode, prev->mode_link);
+	if (&lock->l_sl_policy != prev->policy_link)
+		cfs_list_add(&lock->l_sl_policy, prev->policy_link);
 
         EXIT;
 }
