@@ -158,7 +158,7 @@ Lustre Debugging Tools</title>
       <title><indexterm><primary>debugging</primary><secondary>message format</secondary></indexterm>Understanding the Lustre Debug Messaging Format</title>
       <para>Lustre debug messages are categorized by originating sybsystem, message type, and locaton in the source code. For a list of subsystems and message types, see <xref linkend="dbdoclet.50438274_57603"/>.</para>
       <note>
-        <para>For a current list of subsystems and debug message types, see <literal>lnet/include/libcfs/libcfs.h</literal> in the Lustre tree</para>
+        <para>For a current list of subsystems and debug message types, see <literal>libcfs/include/libcfs/libcfs_debug.h</literal> in the Lustre tree</para>
       </note>
       <para>The elements of a Lustre debug message are described in <xref linkend="dbdoclet.50438274_57177"/> Format of Lustre Debug Messages.</para>
       <section xml:id="dbdoclet.50438274_57603">
