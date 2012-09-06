@@ -95,16 +95,17 @@ void ldlm_namespace_free_post(struct ldlm_namespace *ns);
 /* ldlm_lock.c */
 
 struct ldlm_cb_set_arg {
-	struct ptlrpc_request_set *set;
-	int                        type; /* LDLM_{CP,BL}_CALLBACK */
-	cfs_atomic_t               restart;
-	cfs_list_t                *list;
+	struct ptlrpc_request_set	*set;
+	int				 type; /* LDLM_{CP,BL,GL}_CALLBACK */
+	cfs_atomic_t			 restart;
+	cfs_list_t			*list;
 };
 
 typedef enum {
-        LDLM_WORK_BL_AST,
-        LDLM_WORK_CP_AST,
-        LDLM_WORK_REVOKE_AST
+	LDLM_WORK_BL_AST,
+	LDLM_WORK_CP_AST,
+	LDLM_WORK_REVOKE_AST,
+	LDLM_WORK_GL_AST
 } ldlm_desc_ast_t;
 
 void ldlm_grant_lock(struct ldlm_lock *lock, cfs_list_t *work_list);
@@ -127,6 +128,7 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, cfs_list_t *queue,
 #endif
 int ldlm_run_ast_work(struct ldlm_namespace *ns, cfs_list_t *rpc_list,
                       ldlm_desc_ast_t ast_type);
+int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq);
 int ldlm_lock_remove_from_lru(struct ldlm_lock *lock);
 int ldlm_lock_remove_from_lru_nolock(struct ldlm_lock *lock);
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock);

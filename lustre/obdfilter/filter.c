@@ -1698,6 +1698,8 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         __u32 repsize[3] = { [MSG_PTLRPC_BODY_OFF] = sizeof(struct ptlrpc_body),
                            [DLM_LOCKREPLY_OFF]   = sizeof(*rep),
                            [DLM_REPLY_REC_OFF]   = sizeof(*reply_lvb) };
+	struct ldlm_glimpse_work	gl_work;
+	CFS_LIST_HEAD(gl_list);
         ENTRY;
 
         policy = ldlm_get_processing_policy(res);
@@ -1820,7 +1822,21 @@ static int filter_intent_policy(struct ldlm_namespace *ns,
         }
 
         LASSERTF(l->l_glimpse_ast != NULL, "l == %p", l);
-        rc = l->l_glimpse_ast(l, NULL); /* this will update the LVB */
+
+	/* Populate the gl_work structure.
+	 * Grab additional reference on the lock which will be released in
+	 * ldlm_work_gl_ast_lock() */
+	gl_work.gl_lock = LDLM_LOCK_GET(l);
+	/* The glimpse callback is sent to one single extent lock. As a result,
+	 * the gl_work list is just composed of one element */
+	cfs_list_add_tail(&gl_work.gl_list, &gl_list);
+	/* the ldlm_glimpse_work structure is allocated on the stack */
+	gl_work.gl_flags = LDLM_GL_WORK_NOFREE;
+
+	rc = ldlm_glimpse_locks(res, &gl_list); /* this will update the LVB */
+
+	if (!cfs_list_empty(&gl_list))
+		LDLM_LOCK_RELEASE(l);
 
         lock_res(res);
         *reply_lvb = *res_lvb;

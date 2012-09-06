@@ -568,6 +568,15 @@ typedef int (*ldlm_completion_callback)(struct ldlm_lock *lock, int flags,
 typedef int (*ldlm_glimpse_callback)(struct ldlm_lock *lock, void *data);
 typedef unsigned long (*ldlm_weigh_callback)(struct ldlm_lock *lock);
 
+struct ldlm_glimpse_work {
+	struct ldlm_lock	*gl_lock; /* lock to glimpse */
+	cfs_list_t		 gl_list; /* linkage to other gl work structs */
+	__u32			 gl_flags;/* see LDLM_GL_WORK_* below */
+};
+
+/* the ldlm_glimpse_work is allocated on the stack and should not be freed */
+#define LDLM_GL_WORK_NOFREE 0x1
+
 /* Interval node data for each LDLM_EXTENT lock */
 struct ldlm_interval {
         struct interval_node li_node;   /* node for tree mgmt */
@@ -994,6 +1003,7 @@ int ldlm_server_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,
                              void *data, int flag);
 int ldlm_server_completion_ast(struct ldlm_lock *lock, int flags, void *data);
 int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data);
+int ldlm_glimpse_locks(struct ldlm_resource *res, cfs_list_t *gl_work_list);
 int ldlm_handle_enqueue(struct ptlrpc_request *req, ldlm_completion_callback,
                         ldlm_blocking_callback, ldlm_glimpse_callback);
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns, struct ptlrpc_request *req,

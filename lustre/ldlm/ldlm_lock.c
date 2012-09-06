@@ -1618,6 +1618,33 @@ ldlm_work_revoke_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	RETURN(rc);
 }
 
+int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
+{
+	struct ldlm_cb_set_arg		*arg = opaq;
+	struct ldlm_glimpse_work	*gl_work;
+	struct ldlm_lock		*lock;
+	int				 rc = 0;
+	ENTRY;
+
+	if (cfs_list_empty(arg->list))
+		RETURN(-ENOENT);
+
+	gl_work = cfs_list_entry(arg->list->next, struct ldlm_glimpse_work,
+				 gl_list);
+	cfs_list_del_init(&gl_work->gl_list);
+
+	lock = gl_work->gl_lock;
+	if (lock->l_glimpse_ast(lock, (void*)arg) == 0)
+		rc = 1;
+
+	LDLM_LOCK_RELEASE(lock);
+
+	if ((gl_work->gl_flags & LDLM_GL_WORK_NOFREE) == 0)
+		OBD_FREE_PTR(gl_work);
+
+	RETURN(rc);
+}
+
 int ldlm_run_ast_work(struct ldlm_namespace *ns, cfs_list_t *rpc_list,
                       ldlm_desc_ast_t ast_type)
 {
@@ -1647,6 +1674,10 @@ int ldlm_run_ast_work(struct ldlm_namespace *ns, cfs_list_t *rpc_list,
 		case LDLM_WORK_REVOKE_AST:
 			arg->type = LDLM_BL_CALLBACK;
 			work_ast_lock = ldlm_work_revoke_ast_lock;
+			break;
+		case LDLM_WORK_GL_AST:
+			arg->type = LDLM_GL_CALLBACK;
+			work_ast_lock = ldlm_work_gl_ast_lock;
 			break;
 		default:
 			LBUG();
