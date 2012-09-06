@@ -4558,6 +4558,22 @@ test_102k() {
 }
 run_test 102k "setfattr without parameter of value shouldn't cause a crash"
 
+test_102l() {
+	# LU-1838 trusted. xattr is invisible to non-root
+	local testfile=$DIR/$tfile
+
+	touch $testfile
+
+	echo "listxattr as user..."
+	chown $RUNAS_ID $testfile
+	$RUNAS getfattr -d -m '.*' $testfile 2>&1 |
+	    grep -q "trusted" &&
+		error "$testfile trusted xattrs are user visible"
+
+	return 0;
+}
+run_test 102l "listxattr filter test =================================="
+
 cleanup_test102
 
 run_acl_subtest()
