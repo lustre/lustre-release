@@ -10,6 +10,7 @@ sources:
 obdclass-all-objs := llog.o llog_cat.o llog_lvfs.o llog_obd.o llog_swab.o
 obdclass-all-objs += class_obd.o debug.o genops.o uuid.o llog_ioctl.o
 obdclass-all-objs += lprocfs_status.o lprocfs_jobstats.o lustre_handles.o lustre_peer.o
+obdclass-all-objs += local_storage.o
 obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o mea.o
 obdclass-all-objs += lu_object.o dt_object.o capa.o lu_time.o
 obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o
@@ -26,6 +27,6 @@ $(obj)/llog-test.c: $(obj)/llog_test.c
 	ln -sf $< $@
 
 EXTRA_DIST  = $(filter-out llog-test.c,$(obdclass-all-objs:.o=.c)) $(llog-test-objs:.o=.c) llog_test.c llog_internal.h
-EXTRA_DIST += cl_internal.h
+EXTRA_DIST += cl_internal.h local_storage.h
 
 @INCLUDE_RULES@

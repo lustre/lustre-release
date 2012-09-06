@@ -674,6 +674,24 @@ struct dt_object {
         const struct dt_index_operations  *do_index_ops;
 };
 
+/*
+ * In-core representation of per-device local object OID storage
+ */
+struct local_oid_storage {
+	/* all initialized llog systems on this node linked by this */
+	cfs_list_t	  los_list;
+
+	/* how many handle's reference this los has */
+	cfs_atomic_t	  los_refcount;
+	struct dt_device *los_dev;
+	struct dt_object *los_obj;
+
+	/* data used to generate new fids */
+	cfs_mutex_t	  los_id_lock;
+	__u64		  los_seq;
+	__u32		  los_last_oid;
+};
+
 static inline struct dt_object *lu2dt(struct lu_object *l)
 {
         LASSERT(l == NULL || IS_ERR(l) || lu_device_is_dt(l->lo_dev));
@@ -783,9 +801,50 @@ struct dt_object *dt_find_or_create(const struct lu_env *env,
                                     struct dt_object_format *dof,
                                     struct lu_attr *attr);
 
-struct dt_object *dt_locate(const struct lu_env *env,
-                            struct dt_device *dev,
-                            const struct lu_fid *fid);
+struct dt_object *dt_locate_at(const struct lu_env *env,
+			       struct dt_device *dev,
+			       const struct lu_fid *fid,
+			       struct lu_device *top_dev);
+static inline struct dt_object *
+dt_locate(const struct lu_env *env, struct dt_device *dev,
+	  const struct lu_fid *fid)
+{
+	return dt_locate_at(env, dev, fid, dev->dd_lu_dev.ld_site->ls_top_dev);
+}
+
+
+int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
+			   const struct lu_fid *first_fid,
+			   struct local_oid_storage **los);
+void local_oid_storage_fini(const struct lu_env *env,
+			    struct local_oid_storage *los);
+int local_object_fid_generate(const struct lu_env *env,
+			      struct local_oid_storage *los,
+			      struct lu_fid *fid);
+int local_object_declare_create(const struct lu_env *env,
+				struct local_oid_storage *los,
+				struct dt_object *o,
+				struct lu_attr *attr,
+				struct dt_object_format *dof,
+				struct thandle *th);
+int local_object_create(const struct lu_env *env,
+			struct local_oid_storage *los,
+			struct dt_object *o,
+			struct lu_attr *attr, struct dt_object_format *dof,
+			struct thandle *th);
+struct dt_object *local_file_find_or_create(const struct lu_env *env,
+					    struct local_oid_storage *los,
+					    struct dt_object *parent,
+					    const char *name, __u32 mode);
+struct dt_object *local_file_find_or_create_with_fid(const struct lu_env *env,
+						     struct dt_device *dt,
+						     const struct lu_fid *fid,
+						     struct dt_object *parent,
+						     const char *name,
+						     __u32 mode);
+
+int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
+		  const char *name, struct lu_fid *fid);
 
 static inline int dt_object_sync(const struct lu_env *env,
                                  struct dt_object *o)
@@ -1314,5 +1373,33 @@ static inline int dt_lookup(const struct lu_env *env,
 }
 
 #define LU221_BAD_TIME (0x80000000U + 24 * 3600)
+
+struct dt_find_hint {
+	struct lu_fid        *dfh_fid;
+	struct dt_device     *dfh_dt;
+	struct dt_object     *dfh_o;
+};
+
+struct dt_thread_info {
+	char                     dti_buf[DT_MAX_PATH];
+	struct dt_find_hint      dti_dfh;
+	struct lu_attr           dti_attr;
+	struct lu_fid            dti_fid;
+	struct dt_object_format  dti_dof;
+	struct lustre_mdt_attrs  dti_lma;
+	struct lu_buf            dti_lb;
+	loff_t                   dti_off;
+};
+
+extern struct lu_context_key dt_key;
+
+static inline struct dt_thread_info *dt_info(const struct lu_env *env)
+{
+	struct dt_thread_info *dti;
+
+	dti = lu_context_key_get(&env->le_ctx, &dt_key);
+	LASSERT(dti);
+	return dti;
+}
 
 #endif /* __LUSTRE_DT_OBJECT_H */

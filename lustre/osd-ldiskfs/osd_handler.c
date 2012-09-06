@@ -3467,7 +3467,17 @@ struct osd_object *osd_object_find(const struct lu_env *env,
         struct lu_object  *luch;
         struct lu_object  *lo;
 
-        luch = lu_object_find(env, ludev, fid, NULL);
+	/*
+	 * at this point topdev might not exist yet
+	 * (i.e. MGS is preparing profiles). so we can
+	 * not rely on topdev and instead lookup with
+	 * our device passed as topdev. this can't work
+	 * if the object isn't cached yet (as osd doesn't
+	 * allocate lu_header). IOW, the object must be
+	 * in the cache, otherwise lu_object_alloc() crashes
+	 * -bzzz
+	 */
+	luch = lu_object_find_at(env, ludev, fid, NULL);
         if (!IS_ERR(luch)) {
                 if (lu_object_exists(luch)) {
                         lo = lu_object_locate(luch->lo_header, ludev->ld_type);

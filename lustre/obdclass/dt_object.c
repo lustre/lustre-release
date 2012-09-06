@@ -51,26 +51,16 @@
 
 #include <lquota.h>
 
-struct dt_find_hint {
-        struct lu_fid        *dfh_fid;
-        struct dt_device     *dfh_dt;
-        struct dt_object     *dfh_o;
-};
-
-struct dt_thread_info {
-        char                    dti_buf[DT_MAX_PATH];
-        struct dt_find_hint     dti_dfh;
-};
-
 /* context key constructor/destructor: dt_global_key_init, dt_global_key_fini */
 LU_KEY_INIT(dt_global, struct dt_thread_info);
 LU_KEY_FINI(dt_global, struct dt_thread_info);
 
-static struct lu_context_key dt_key = {
+struct lu_context_key dt_key = {
         .lct_tags = LCT_MD_THREAD | LCT_DT_THREAD | LCT_MG_THREAD | LCT_LOCAL,
         .lct_init = dt_global_key_init,
         .lct_fini = dt_global_key_fini
 };
+EXPORT_SYMBOL(dt_key);
 
 /* no lock is necessary to protect the list, because call-backs
  * are added during system startup. Please refer to "struct dt_device".
@@ -221,26 +211,29 @@ int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
         return -ENOTDIR;
 }
 EXPORT_SYMBOL(dt_lookup_dir);
-/**
- * get object for given \a fid.
- */
-struct dt_object *dt_locate(const struct lu_env *env,
-                            struct dt_device *dev,
-                            const struct lu_fid *fid)
-{
-        struct lu_object *obj;
-        struct dt_object *dt;
 
-        obj = lu_object_find(env, &dev->dd_lu_dev, fid, NULL);
-        if (!IS_ERR(obj)) {
-                obj = lu_object_locate(obj->lo_header, dev->dd_lu_dev.ld_type);
-                LASSERT(obj != NULL);
-                dt = container_of(obj, struct dt_object, do_lu);
-        } else
-                dt = (struct dt_object *)obj;
-        return dt;
+/* this differs from dt_locate by top_dev as parameter
+ * but not one from lu_site */
+struct dt_object *dt_locate_at(const struct lu_env *env,
+			       struct dt_device *dev, const struct lu_fid *fid,
+			       struct lu_device *top_dev)
+{
+	struct lu_object *lo, *n;
+	ENTRY;
+
+	lo = lu_object_find_at(env, top_dev, fid, NULL);
+	if (IS_ERR(lo))
+		return (void *)lo;
+
+	LASSERT(lo != NULL);
+
+	cfs_list_for_each_entry(n, &lo->lo_header->loh_layers, lo_linkage) {
+		if (n->lo_dev == &dev->dd_lu_dev)
+			return container_of0(n, struct dt_object, do_lu);
+	}
+	return ERR_PTR(-ENOENT);
 }
-EXPORT_SYMBOL(dt_locate);
+EXPORT_SYMBOL(dt_locate_at);
 
 /**
  * find a object named \a entry in given \a dfh->dfh_o directory.
@@ -298,12 +291,12 @@ static struct dt_object *dt_store_resolve(const struct lu_env *env,
                                           const char *path,
                                           struct lu_fid *fid)
 {
-        struct dt_thread_info *info = lu_context_key_get(&env->le_ctx,
-                                                         &dt_key);
-        struct dt_find_hint *dfh = &info->dti_dfh;
-        struct dt_object     *obj;
-        char *local = info->dti_buf;
-        int result;
+	struct dt_thread_info *info = dt_info(env);
+	struct dt_find_hint   *dfh = &info->dti_dfh;
+	struct dt_object      *obj;
+	char		      *local = info->dti_buf;
+	int		       result;
+
 
         dfh->dfh_dt = dt;
         dfh->dfh_fid = fid;

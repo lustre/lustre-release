@@ -135,6 +135,18 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
 EXPORT_SYMBOL(lu_object_put);
 
 /**
+ * Put object and don't keep in cache. This is temporary solution for
+ * multi-site objects when its layering is not constant.
+ */
+void lu_object_put_nocache(const struct lu_env *env, struct lu_object *o)
+{
+	cfs_set_bit(LU_OBJECT_HEARD_BANSHEE,
+		    &o->lo_header->loh_flags);
+	return lu_object_put(env, o);
+}
+EXPORT_SYMBOL(lu_object_put_nocache);
+
+/**
  * Allocate new object.
  *
  * This follows object creation protocol, described in the comment within
