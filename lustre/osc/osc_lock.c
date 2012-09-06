@@ -200,11 +200,13 @@ static int osc_lock_unuse(const struct lu_env *env,
                 LASSERT(!ols->ols_hold);
                 LASSERT(ols->ols_agl);
                 return 0;
+	case OLS_UPCALL_RECEIVED:
+		osc_lock_unhold(ols);
 	case OLS_ENQUEUED:
-        case OLS_UPCALL_RECEIVED:
-                LASSERT(!ols->ols_hold);
-                ols->ols_state = OLS_NEW;
-                return 0;
+		LASSERT(!ols->ols_hold);
+		osc_lock_detach(env, ols);
+		ols->ols_state = OLS_NEW;
+		return 0;
         case OLS_GRANTED:
                 LASSERT(!ols->ols_glimpse);
                 LASSERT(ols->ols_hold);
