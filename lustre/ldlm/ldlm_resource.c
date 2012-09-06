@@ -1079,8 +1079,10 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 /* someone won the race and added the resource before */
                 cfs_hash_bd_unlock(ns->ns_rs_hash, &bd, 1);
                 /* clean lu_ref for failed resource */
-                lu_ref_fini(&res->lr_reference);
-                OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
+		lu_ref_fini(&res->lr_reference);
+		/* We have taken lr_lvb_mutex. Drop it. */
+		cfs_mutex_unlock(&res->lr_lvb_mutex);
+		OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
 
                 res = cfs_hlist_entry(hnode, struct ldlm_resource, lr_hash);
                 /* synchronize WRT resource creation */
@@ -1104,11 +1106,12 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 if (rc)
                         CERROR("lvbo_init failed for resource "
                                LPU64": rc %d\n", name->name[0], rc);
-                /* we create resource with locked lr_lvb_mutex */
-                cfs_mutex_unlock(&res->lr_lvb_mutex);
-        }
+	}
 
-        return res;
+	/* we create resource with locked lr_lvb_mutex */
+	cfs_mutex_unlock(&res->lr_lvb_mutex);
+
+	return res;
 }
 EXPORT_SYMBOL(ldlm_resource_get);
 
