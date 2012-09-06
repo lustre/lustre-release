@@ -1765,6 +1765,17 @@ struct mdt_ioepoch {
 
 extern void lustre_swab_mdt_ioepoch (struct mdt_ioepoch *b);
 
+/* The lquota_id structure is an union of all the possible identifier types that
+ * can be used with quota, this includes:
+ * - 64-bit user ID
+ * - 64-bit group ID
+ * - a FID which can be used for per-directory quota in the future */
+union lquota_id {
+	struct lu_fid	qid_fid; /* FID for per-directory quota */
+	__u64		qid_uid; /* user identifier */
+	__u64		qid_gid; /* group identifier */
+};
+
 #define Q_QUOTACHECK    0x800100
 #define Q_INITQUOTA     0x800101        /* init slave limits */
 #define Q_GETOINFO      0x800102        /* get obd quota info */
