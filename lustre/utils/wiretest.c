@@ -1638,6 +1638,46 @@ void lustre_assert_wire_constants(void)
         LASSERTF(Q_FINVALIDATE == 0x800104, "found 0x%.8x\n",
                  Q_FINVALIDATE);
 
+        /* Checks for struct lquota_acct_rec */
+        LASSERTF((int)sizeof(struct lquota_acct_rec) == 16, "found %lld\n",
+                 (long long)(int)sizeof(struct lquota_acct_rec));
+        LASSERTF((int)offsetof(struct lquota_acct_rec, bspace) == 0, "found %lld\n",
+                 (long long)(int)offsetof(struct lquota_acct_rec, bspace));
+        LASSERTF((int)sizeof(((struct lquota_acct_rec *)0)->bspace) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct lquota_acct_rec *)0)->bspace));
+        LASSERTF((int)offsetof(struct lquota_acct_rec, ispace) == 8, "found %lld\n",
+                 (long long)(int)offsetof(struct lquota_acct_rec, ispace));
+        LASSERTF((int)sizeof(((struct lquota_acct_rec *)0)->ispace) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct lquota_acct_rec *)0)->ispace));
+
+        /* Checks for struct lquota_glb_rec */
+        LASSERTF((int)sizeof(struct lquota_glb_rec) == 32, "found %lld\n",
+                 (long long)(int)sizeof(struct lquota_glb_rec));
+        LASSERTF((int)offsetof(struct lquota_glb_rec, qbr_hardlimit) == 0, "found %lld\n",
+                 (long long)(int)offsetof(struct lquota_glb_rec, qbr_hardlimit));
+        LASSERTF((int)sizeof(((struct lquota_glb_rec *)0)->qbr_hardlimit) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct lquota_glb_rec *)0)->qbr_hardlimit));
+        LASSERTF((int)offsetof(struct lquota_glb_rec, qbr_softlimit) == 8, "found %lld\n",
+                 (long long)(int)offsetof(struct lquota_glb_rec, qbr_softlimit));
+        LASSERTF((int)sizeof(((struct lquota_glb_rec *)0)->qbr_softlimit) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct lquota_glb_rec *)0)->qbr_softlimit));
+        LASSERTF((int)offsetof(struct lquota_glb_rec, qbr_time) == 16, "found %lld\n",
+                 (long long)(int)offsetof(struct lquota_glb_rec, qbr_time));
+        LASSERTF((int)sizeof(((struct lquota_glb_rec *)0)->qbr_time) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct lquota_glb_rec *)0)->qbr_time));
+        LASSERTF((int)offsetof(struct lquota_glb_rec, qbr_granted) == 24, "found %lld\n",
+                 (long long)(int)offsetof(struct lquota_glb_rec, qbr_granted));
+        LASSERTF((int)sizeof(((struct lquota_glb_rec *)0)->qbr_granted) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct lquota_glb_rec *)0)->qbr_granted));
+
+        /* Checks for struct lquota_slv_rec */
+        LASSERTF((int)sizeof(struct lquota_slv_rec) == 8, "found %lld\n",
+                 (long long)(int)sizeof(struct lquota_slv_rec));
+        LASSERTF((int)offsetof(struct lquota_slv_rec, qsr_granted) == 0, "found %lld\n",
+                 (long long)(int)offsetof(struct lquota_slv_rec, qsr_granted));
+        LASSERTF((int)sizeof(((struct lquota_slv_rec *)0)->qsr_granted) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct lquota_slv_rec *)0)->qsr_granted));
+
         /* Checks for struct niobuf_remote */
         LASSERTF((int)sizeof(struct niobuf_remote) == 16, "found %lld\n",
                  (long long)(int)sizeof(struct niobuf_remote));

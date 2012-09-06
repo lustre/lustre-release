@@ -21,11 +21,11 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2011, 2012, Whamcloud, Inc.
+ * Copyright (c) 2011, 2012, Intel, Inc.
  * Use is subject to license terms.
  *
- * Author: Johann Lombardi <johann@whamcloud.com>
- * Author: Niu    Yawei    <niu@whamcloud.com>
+ * Author: Johann Lombardi <johann.lombardi@intel.com>
+ * Author: Niu    Yawei    <yawei.niu@intel.com>
  */
 
 #ifndef EXPORT_SYMTAB
@@ -34,45 +34,101 @@
 
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
+#include <linux/version.h>
+#include <linux/module.h>
+#include <linux/init.h>
+
 #include "lquota_internal.h"
 
-static struct dt_object_format dt_acct_format = {
-	.dof_type		= DFT_INDEX,
-	.u.dof_idx.di_feat	= &dt_acct_features
-};
+/* register lquota key */
+LU_KEY_INIT_FINI(lquota, struct lquota_thread_info);
+LU_CONTEXT_KEY_DEFINE(lquota, LCT_MD_THREAD | LCT_DT_THREAD | LCT_LOCAL);
+LU_KEY_INIT_GENERIC(lquota);
 
 /**
  * Look-up accounting object to collect space usage information for user
  * or group.
  *
- * \param env - is the environment passed by the caller
- * \param dev - is the dt_device storing the accounting object
- * \param oid - is the object id of the accounting object to initialize, must be
- *              either ACCT_USER_OID or ACCT_GROUP_OID.
+ * \param env  - is the environment passed by the caller
+ * \param dev  - is the dt_device storing the accounting object
+ * \param type - is the quota type, either USRQUOTA or GRPQUOTA
  */
 struct dt_object *acct_obj_lookup(const struct lu_env *env,
-				  struct dt_device *dev, __u32 oid)
+				  struct dt_device *dev, int type)
 {
-	struct dt_object	*obj = NULL;
-	struct lu_fid		 fid;
-	struct lu_attr		 attr;
-	int			 rc;
+	struct lquota_thread_info	*qti = lquota_info(env);
+	struct dt_object		*obj = NULL;
 	ENTRY;
 
-	memset(&attr, 0, sizeof(attr));
-	attr.la_valid = LA_MODE;
-	attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-	lu_local_obj_fid(&fid, oid);
+	lu_local_obj_fid(&qti->qti_fid,
+			 type == USRQUOTA ? ACCT_USER_OID : ACCT_GROUP_OID);
 
-	/* lookup/create the accounting object */
-	obj = dt_find_or_create(env, dev, &fid, &dt_acct_format, &attr);
+	/* lookup the accounting object */
+	obj = dt_locate(env, dev, &qti->qti_fid);
 	if (IS_ERR(obj))
 		RETURN(obj);
 
+	if (!dt_object_exists(obj)) {
+		lu_object_put(env, &obj->do_lu);
+		RETURN(ERR_PTR(-ENOENT));
+	}
+
 	if (obj->do_index_ops == NULL) {
+		int rc;
+
 		/* set up indexing operations */
 		rc = obj->do_ops->do_index_try(env, obj, &dt_acct_features);
 		if (rc) {
+			CERROR("%s: failed to set up indexing operations for %s"
+			       " acct object rc:%d\n",
+			       dev->dd_lu_dev.ld_obd->obd_name,
+			       QTYPE_NAME(type), rc);
+			lu_object_put(env, &obj->do_lu);
+			RETURN(ERR_PTR(rc));
+		}
+	}
+	RETURN(obj);
+}
+
+/**
+ * Initialize slave index object to collect local quota limit for user or group.
+ *
+ * \param env - is the environment passed by the caller
+ * \param dev - is the dt_device storing the slave index object
+ * \param type - is the quota type, either USRQUOTA or GRPQUOTA
+ */
+static struct dt_object *quota_obj_lookup(const struct lu_env *env,
+					  struct dt_device *dev, int type)
+{
+	struct lquota_thread_info	*qti = lquota_info(env);
+	struct dt_object		*obj = NULL;
+	ENTRY;
+
+	qti->qti_fid.f_seq = FID_SEQ_QUOTA;
+	qti->qti_fid.f_oid = type == USRQUOTA ? LQUOTA_USR_OID : LQUOTA_GRP_OID;
+	qti->qti_fid.f_ver = 0;
+
+	/* lookup the quota object */
+	obj = dt_locate(env, dev, &qti->qti_fid);
+	if (IS_ERR(obj))
+		RETURN(obj);
+
+	if (!dt_object_exists(obj)) {
+		lu_object_put(env, &obj->do_lu);
+		RETURN(ERR_PTR(-ENOENT));
+	}
+
+	if (obj->do_index_ops == NULL) {
+		int rc;
+
+		/* set up indexing operations */
+		rc = obj->do_ops->do_index_try(env, obj,
+					       &dt_quota_slv_features);
+		if (rc) {
+			CERROR("%s: failed to set up indexing operations for %s"
+			       " slave index object rc:%d\n",
+			       dev->dd_lu_dev.ld_obd->obd_name,
+			       QTYPE_NAME(type), rc);
 			lu_object_put(env, &obj->do_lu);
 			RETURN(ERR_PTR(rc));
 		}
@@ -93,51 +149,106 @@ struct dt_object *acct_obj_lookup(const struct lu_env *env,
 int lquotactl_slv(const struct lu_env *env, struct dt_device *dev,
 		  struct obd_quotactl *oqctl)
 {
-	struct acct_rec		 rec;
-	__u64			 key;
-	struct dt_object	*obj;
-	int			 rc = 0;
+	struct lquota_thread_info	*qti = lquota_info(env);
+	__u64				 key;
+	struct dt_object		*obj;
+	struct obd_dqblk		*dqblk = &oqctl->qc_dqblk;
+	int				 rc;
 	ENTRY;
 
 	if (oqctl->qc_cmd != Q_GETOQUOTA) {
 		/* as in many other places, dev->dd_lu_dev.ld_obd->obd_name
-		 * point to a valid obd_name, to be fixed in LU-1574 */
+		 * point to an invalid obd_name, to be fixed in LU-1574 */
 		CERROR("%s: Unsupported quotactl command: %x\n",
 		       dev->dd_lu_dev.ld_obd->obd_name, oqctl->qc_cmd);
 		RETURN(-EOPNOTSUPP);
 	}
 
-	if (oqctl->qc_type == USRQUOTA)
-		obj = acct_obj_lookup(env, dev, ACCT_USER_OID);
-	else if (oqctl->qc_type == GRPQUOTA)
-		obj = acct_obj_lookup(env, dev, ACCT_GROUP_OID);
-	else
+	if (oqctl->qc_type != USRQUOTA && oqctl->qc_type != GRPQUOTA)
 		/* no support for directory quota yet */
 		RETURN(-EOPNOTSUPP);
 
+	/* qc_id is a 32-bit field while a key has 64 bits */
+	key = oqctl->qc_id;
+
+	/* Step 1: collect accounting information */
+
+	obj = acct_obj_lookup(env, dev, oqctl->qc_type);
 	if (IS_ERR(obj))
 		RETURN(-EOPNOTSUPP);
 	if (obj->do_index_ops == NULL)
 		GOTO(out, rc = -EINVAL);
 
-	/* qc_id is a 32-bit field while a key has 64 bits */
-	key = oqctl->qc_id;
-
 	/* lookup record storing space accounting information for this ID */
-	rc = dt_lookup(env, obj, (struct dt_rec *)&rec, (struct dt_key *)&key,
-		       BYPASS_CAPA);
+	rc = dt_lookup(env, obj, (struct dt_rec *)&qti->qti_acct_rec,
+		       (struct dt_key *)&key, BYPASS_CAPA);
 	if (rc < 0)
 		GOTO(out, rc);
 
 	memset(&oqctl->qc_dqblk, 0, sizeof(struct obd_dqblk));
-	oqctl->qc_dqblk.dqb_curspace  = rec.bspace;
-	oqctl->qc_dqblk.dqb_curinodes = rec.ispace;
-	oqctl->qc_dqblk.dqb_valid     = QIF_USAGE;
-	/* TODO: must set {hard,soft}limit and grace time */
+	dqblk->dqb_curspace	= qti->qti_acct_rec.bspace;
+	dqblk->dqb_curinodes	= qti->qti_acct_rec.ispace;
+	dqblk->dqb_valid	= QIF_USAGE;
 
-	EXIT;
+	lu_object_put(env, &obj->do_lu);
+
+	/* Step 2: collect enforcement information */
+
+	obj = quota_obj_lookup(env, dev, oqctl->qc_type);
+	if (IS_ERR(obj))
+		RETURN(0);
+	if (obj->do_index_ops == NULL)
+		GOTO(out, rc = 0);
+
+	memset(&qti->qti_slv_rec, 0, sizeof(qti->qti_slv_rec));
+	/* lookup record storing enforcement information for this ID */
+	rc = dt_lookup(env, obj, (struct dt_rec *)&qti->qti_slv_rec,
+		       (struct dt_key *)&key, BYPASS_CAPA);
+	if (rc < 0 && rc != -ENOENT)
+		GOTO(out, rc = 0);
+
+	if (lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev)) {
+		dqblk->dqb_ihardlimit = qti->qti_slv_rec.qsr_granted;
+		dqblk->dqb_bhardlimit = 0;
+	} else {
+		dqblk->dqb_ihardlimit = 0;
+		dqblk->dqb_bhardlimit = qti->qti_slv_rec.qsr_granted;
+	}
+	dqblk->dqb_valid |= QIF_LIMITS;
+
+	GOTO(out, rc = 0);
 out:
 	lu_object_put(env, &obj->do_lu);
         return rc;
 }
 EXPORT_SYMBOL(lquotactl_slv);
+
+static int __init init_lquota(void)
+{
+	int	rc;
+
+	/* call old quota module init function */
+	rc = init_lustre_quota();
+	if (rc)
+		return rc;
+
+	/* new quota initialization */
+	lquota_key_init_generic(&lquota_thread_key, NULL);
+	lu_context_key_register(&lquota_thread_key);
+
+	return 0;
+}
+
+static void exit_lquota(void)
+{
+	/* call old quota module exit function */
+	exit_lustre_quota();
+
+	lu_context_key_degister(&lquota_thread_key);
+}
+
+MODULE_AUTHOR("Intel, Inc. <http://www.intel.com/>");
+MODULE_DESCRIPTION("Lustre Quota");
+MODULE_LICENSE("GPL");
+
+cfs_module(lquota, "2.4.0", init_lquota, exit_lquota);

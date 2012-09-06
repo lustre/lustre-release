@@ -32,14 +32,13 @@
 #ifndef _LUSTRE_LQUOTA_H
 #define _LUSTRE_LQUOTA_H
 
-/*
- * Space accounting support
- * Format of an accounting record, providing disk usage information for a given
- * user or group
- */
-struct acct_rec { /* 16 bytes */
-	__u64 bspace;  /* current space in use */
-	__u64 ispace;  /* current # inodes in use */
+/* Gather all quota record type in an union that can be used to read any records
+ * from disk. All fields of these records must be 64-bit aligned, otherwise the
+ * OSD layer may swab them incorrectly. */
+union lquota_rec {
+	struct lquota_glb_rec	lqr_glb_rec;
+	struct lquota_slv_rec	lqr_slv_rec;
+	struct lquota_acct_rec	lqr_acct_rec;
 };
 
 /* Name used in the configuration logs to identify the default metadata pool

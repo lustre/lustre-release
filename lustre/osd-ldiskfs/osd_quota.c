@@ -102,7 +102,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	struct osd_thread_info	*info = osd_oti_get(env);
 	struct if_dqblk		*dqblk = &info->oti_dqblk;
 	struct super_block	*sb = osd_sb(osd_obj2dev(osd_dt_obj(dtobj)));
-	struct acct_rec		*rec = (struct acct_rec *)dtrec;
+	struct lquota_acct_rec	*rec = (struct lquota_acct_rec *)dtrec;
 	__u64			 id = *((__u64 *)dtkey);
 	int			 rc;
 

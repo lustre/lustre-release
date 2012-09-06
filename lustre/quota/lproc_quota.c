@@ -176,12 +176,12 @@ static void *lprocfs_quota_seq_next(struct seq_file *p, void *v, loff_t *pos)
  */
 static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 {
-	struct lquota_procfs *lqp = p->private;
-	const struct dt_it_ops *iops;
-	struct dt_it           *it;
-	struct dt_key          *key;
-	struct acct_rec         rec;
-	int                     rc;
+	struct lquota_procfs	*lqp = p->private;
+	const struct dt_it_ops	*iops;
+	struct dt_it		*it;
+	struct dt_key		*key;
+	struct lquota_acct_rec	 rec;
+	int			 rc;
 
 	LASSERT(lqp);
 	if (lqp->lqp_obj == NULL) {

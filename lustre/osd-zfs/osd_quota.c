@@ -71,7 +71,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
 	char			*buf  = info->oti_buf;
-	struct acct_rec		*rec  = (struct acct_rec *)dtrec;
+	struct lquota_acct_rec	*rec  = (struct lquota_acct_rec *)dtrec;
 	struct osd_object	*obj = osd_dt_obj(dtobj);
 	struct osd_device	*osd = osd_obj2dev(obj);
 	int			 rc;
@@ -249,7 +249,7 @@ static int osd_it_acct_rec(const struct lu_env *env,
 	struct osd_thread_info	*info = osd_oti_get(env);
 	char			*buf  = info->oti_buf;
 	struct osd_it_quota	*it = (struct osd_it_quota *)di;
-	struct acct_rec		*rec  = (struct acct_rec *)dtrec;
+	struct lquota_acct_rec	*rec  = (struct lquota_acct_rec *)dtrec;
 	struct osd_object	*obj = it->oiq_obj;
 	struct osd_device	*osd = osd_obj2dev(obj);
 	int			 bytes_read;

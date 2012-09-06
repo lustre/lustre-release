@@ -737,6 +737,23 @@ check_obd_quotactl(void)
         CHECK_DEFINE_X(Q_GETOINFO);
         CHECK_DEFINE_X(Q_GETOQUOTA);
         CHECK_DEFINE_X(Q_FINVALIDATE);
+
+	BLANK_LINE();
+	CHECK_STRUCT(lquota_acct_rec);
+	CHECK_MEMBER(lquota_acct_rec, bspace);
+	CHECK_MEMBER(lquota_acct_rec, ispace);
+
+	BLANK_LINE();
+	CHECK_STRUCT(lquota_glb_rec);
+	CHECK_MEMBER(lquota_glb_rec, qbr_hardlimit);
+	CHECK_MEMBER(lquota_glb_rec, qbr_softlimit);
+	CHECK_MEMBER(lquota_glb_rec, qbr_time);
+	CHECK_MEMBER(lquota_glb_rec, qbr_granted);
+
+	BLANK_LINE();
+	CHECK_STRUCT(lquota_slv_rec);
+	CHECK_MEMBER(lquota_slv_rec, qsr_granted);
+
 }
 
 static void

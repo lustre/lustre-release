@@ -770,7 +770,7 @@ quota_interface_t filter_quota_interface = {
 
 cfs_proc_dir_entry_t *lquota_type_proc_dir = NULL;
 
-static int __init init_lustre_quota(void)
+int init_lustre_quota(void)
 {
         int rc = 0;
 
@@ -793,7 +793,7 @@ static int __init init_lustre_quota(void)
         return 0;
 }
 
-static void /*__exit*/ exit_lustre_quota(void)
+void exit_lustre_quota(void)
 {
         PORTAL_SYMBOL_UNREGISTER(filter_quota_interface);
         PORTAL_SYMBOL_UNREGISTER(mds_quota_interface);
@@ -803,12 +803,6 @@ static void /*__exit*/ exit_lustre_quota(void)
         if (lquota_type_proc_dir)
                 lprocfs_remove(&lquota_type_proc_dir);
 }
-
-MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Quota");
-MODULE_LICENSE("GPL");
-
-cfs_module(lquota, "1.0.0", init_lustre_quota, exit_lustre_quota);
 
 EXPORT_SYMBOL(mds_quota_interface);
 EXPORT_SYMBOL(filter_quota_interface);

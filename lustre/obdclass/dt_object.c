@@ -576,8 +576,32 @@ const struct dt_index_features dt_acct_features = {
 	.dif_flags		= DT_IND_UPDATE,
 	.dif_keysize_min	= sizeof(__u64), /* 64-bit uid/gid */
 	.dif_keysize_max	= sizeof(__u64), /* 64-bit uid/gid */
-	.dif_recsize_min	= sizeof(struct acct_rec), /* 32 bytes */
-	.dif_recsize_max	= sizeof(struct acct_rec), /* 32 bytes */
+	.dif_recsize_min	= sizeof(struct lquota_acct_rec), /* 16 bytes */
+	.dif_recsize_max	= sizeof(struct lquota_acct_rec), /* 16 bytes */
 	.dif_ptrsize		= 4
 };
 EXPORT_SYMBOL(dt_acct_features);
+
+/* global quota files */
+const struct dt_index_features dt_quota_glb_features = {
+	.dif_flags		= DT_IND_UPDATE,
+	/* a different key would have to be used for per-directory quota */
+	.dif_keysize_min	= sizeof(__u64), /* 64-bit uid/gid */
+	.dif_keysize_max	= sizeof(__u64), /* 64-bit uid/gid */
+	.dif_recsize_min	= sizeof(struct lquota_glb_rec), /* 32 bytes */
+	.dif_recsize_max	= sizeof(struct lquota_glb_rec), /* 32 bytes */
+	.dif_ptrsize		= 4
+};
+EXPORT_SYMBOL(dt_quota_glb_features);
+
+/* slave quota files */
+const struct dt_index_features dt_quota_slv_features = {
+	.dif_flags		= DT_IND_UPDATE,
+	/* a different key would have to be used for per-directory quota */
+	.dif_keysize_min	= sizeof(__u64), /* 64-bit uid/gid */
+	.dif_keysize_max	= sizeof(__u64), /* 64-bit uid/gid */
+	.dif_recsize_min	= sizeof(struct lquota_slv_rec), /* 8 bytes */
+	.dif_recsize_max	= sizeof(struct lquota_slv_rec), /* 8 bytes */
+	.dif_ptrsize		= 4
+};
+EXPORT_SYMBOL(dt_quota_slv_features);

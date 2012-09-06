@@ -1820,6 +1820,39 @@ struct quota_adjust_qunit {
 };
 extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 
+/*
+ * Space accounting support
+ * Format of an accounting record, providing disk usage information for a given
+ * user or group
+ */
+struct lquota_acct_rec { /* 16 bytes */
+	__u64 bspace;  /* current space in use */
+	__u64 ispace;  /* current # inodes in use */
+};
+
+/*
+ * Global quota index support
+ * Format of a global record, providing global quota settings for a given quota
+ * identifier
+ */
+struct lquota_glb_rec { /* 32 bytes */
+	__u64 qbr_hardlimit; /* quota hard limit, in #inodes or kbytes */
+	__u64 qbr_softlimit; /* quota soft limit, in #inodes or kbytes */
+	__u64 qbr_time;      /* grace time, in seconds */
+	__u64 qbr_granted;   /* how much is granted to slaves, in #inodes or
+			      * kbytes */
+};
+
+/*
+ * Slave index support
+ * Format of a slave record, recording how much space is granted to a given
+ * slave
+ */
+struct lquota_slv_rec { /* 8 bytes */
+	__u64 qsr_granted; /* space granted to the slave for the key=ID,
+			    * in #inodes or kbytes */
+};
+
 /* flags is shared among quota structures */
 #define LQUOTA_FLAGS_GRP       1UL   /* 0 is user, 1 is group */
 #define LQUOTA_FLAGS_BLK       2UL   /* 0 is inode, 1 is block */
