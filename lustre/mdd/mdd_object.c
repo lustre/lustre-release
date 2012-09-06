@@ -2790,12 +2790,12 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 struct page *pg;
                 struct lu_dirpage *dp;
 
-                /*
-                 * According to POSIX, please do not return any entry to client:
-                 * even dot and dotdot should not be returned.
-                 */
-                CWARN("readdir from dead object: "DFID"\n",
-                        PFID(mdd_object_fid(mdd_obj)));
+		/*
+		 * According to POSIX, please do not return any entry to client:
+		 * even dot and dotdot should not be returned.
+		 */
+		CDEBUG(D_INODE, "readdir from dead object: "DFID"\n",
+		       PFID(mdd_object_fid(mdd_obj)));
 
                 if (rdpg->rp_count <= 0)
                         GOTO(out_unlock, rc = -EFAULT);

@@ -804,9 +804,9 @@ cfs_cpt_table_create(int ncpt)
 	if (ncpt <= 0)
 		ncpt = rc;
 
-	if (ncpt > rc) {
+	if (ncpt > num_online_cpus() || ncpt > 4 * rc) {
 		CWARN("CPU partition number %d is larger than suggested "
-		      "value(%d), your system may have performance"
+		      "value (%d), your system may have performance"
 		      "issue or run out of memory while under pressure\n",
 		      ncpt, rc);
 	}
