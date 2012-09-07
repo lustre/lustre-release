@@ -813,7 +813,7 @@ static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
 {
         struct md_capainfo *ci;
 
-        LASSERT(offset >= 0 && offset <= MD_CAPAINFO_MAX);
+	LASSERT(offset >= 0 && offset < MD_CAPAINFO_MAX);
         if (!info->mti_mdt->mdt_opts.mo_mds_capa ||
             !(info->mti_exp->exp_connect_flags & OBD_CONNECT_MDS_CAPA))
                 return;
