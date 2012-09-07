@@ -188,7 +188,8 @@ int run_one_child(char *file, int thread, int seconds)
                                 break;
                 }
                 
-                sprintf(filename, "%s-%d-%ld", file, thread, nfiles);
+		snprintf(filename, sizeof(filename), "%s-%d-%ld",
+			 file, thread, nfiles);
 
                 fd = open(filename, O_RDWR | O_CREAT, 0666);
                 if (fd < 0) {
@@ -247,7 +248,7 @@ int main(int argc, char *argv[])
         char *directory;
         int i = 1, rc = 0;
 
-        sprintf(cmdname, "%s", argv[0]);
+	snprintf(cmdname, sizeof(cmdname), "%s", argv[0]);
 
         while((i < argc) && (argv[i][0] == '-')) {
                 switch (argv[i][1]) {
@@ -291,7 +292,7 @@ int main(int argc, char *argv[])
                 }
                 if (rc == 0) {
                         /* children */
-                        sprintf(cmdname, "%s-%d", argv[0], i);
+			snprintf(cmdname, sizeof(cmdname), "%s-%d", argv[0], i);
                         return (run_one_child(directory, i, duration));
                 } else {
                         /* parent */

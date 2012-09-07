@@ -65,7 +65,7 @@ int main(int argc, char *argv[])
 		int mode = i | 0644;
 		int rc;
 
-		sprintf(name, "%s-mknod%07o", argv[1], mode);
+		snprintf(name, sizeof(name), "%s-mknod%07o", argv[1], mode);
 		rc = mknod(name, mode, 0x1234);
 		switch (i) {
 		case 0:
@@ -123,7 +123,7 @@ int main(int argc, char *argv[])
 		int rc;
 
 		mode = i | 0644;
-		sprintf(name, "%s-creat%07o", argv[1], mode);
+		snprintf(name, sizeof(name), "%s-creat%07o", argv[1], mode);
 		fd = open(name, O_CREAT|O_RDONLY, mode);
 		if (fd < 0) {
 			fprintf(stderr, "%s: ERROR creat %s: %s\n",
@@ -154,7 +154,7 @@ int main(int argc, char *argv[])
 		struct stat st;
 		int rc;
 
-		sprintf(name, "%s-mkdir%06o", argv[1], i | 0644);
+		snprintf(name, sizeof(name), "%s-mkdir%06o", argv[1], i | 0644);
 		rc = mkdir(name, i | 0664);
 		if (rc < 0) {
 			fprintf(stderr, "%s: ERROR mkdir %s: %s\n",

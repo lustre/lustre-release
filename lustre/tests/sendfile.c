@@ -141,6 +141,6 @@ int main(int argc, char *argv[])
         }
         close(sd[1]), close(infd), close(outfd);
 
-        sprintf(cmd, "cmp %s %s\n", sfile, tfile);
+	snprintf(cmd, sizeof(cmd), "cmp %s %s\n", sfile, tfile);
         return system(cmd);
 }

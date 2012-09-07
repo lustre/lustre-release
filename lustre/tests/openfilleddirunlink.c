@@ -72,7 +72,7 @@ int main(int argc, char **argv)
                 exit(1);
         }
 
-        sprintf(fname, "%s/0", dname1);
+	snprintf(fname, sizeof(fname), "%s/0", dname1);
         fprintf(stderr, "creating file %s\n", fname);
         fd = creat(fname, 0666);
         if (fd < 0) {

@@ -185,7 +185,8 @@ int main(int argc, char *argv[])
 		return 1;
 	} else if (argv[optind] != NULL) {
 		if (chdir(argv[optind]) < 0) {
-			sprintf(msg, "chdir '%s'\n", argv[optind]);
+			snprintf(msg, sizeof(msg),
+				 "chdir '%s'\n", argv[optind]);
 			perror(msg);
 			return 2;
 		}

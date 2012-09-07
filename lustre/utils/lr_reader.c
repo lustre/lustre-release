@@ -123,7 +123,7 @@ int main(int argc, char *const argv[])
         }
 
         memset(cmd, 0, sizeof(cmd));
-        sprintf(cmd,
+	snprintf(cmd, sizeof(cmd),
                 "%s -c -R 'dump /%s %s/%s' %s",
                 DEBUGFS, LAST_RCVD, tmpdir, LAST_RCVD, dev);
 

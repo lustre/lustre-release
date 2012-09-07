@@ -869,7 +869,8 @@ guess:
 		fprintf(stderr, "Memory allocation failed for chunk_buf\n");
 		return 4;
 	}
-	sprintf(filecount, "%s/%s.filecount", testdir, progname);
+	snprintf(filecount, sizeof(filecount), "%s/%s.filecount",
+		 testdir, progname);
 	if (writeoption) {
 		(void)mkdir(testdir, dirmode);
 

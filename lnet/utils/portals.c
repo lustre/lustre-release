@@ -142,7 +142,7 @@ lnet_parse_ipaddr (__u32 *ipaddrp, char *str)
 }
 
 char *
-ptl_ipaddr_2_str (__u32 ipaddr, char *str, int lookup)
+ptl_ipaddr_2_str(__u32 ipaddr, char *str, size_t strsize, int lookup)
 {
 #ifdef HAVE_GETHOSTBYNAME
         __u32           net_ip;
@@ -152,7 +152,8 @@ ptl_ipaddr_2_str (__u32 ipaddr, char *str, int lookup)
                 net_ip = htonl (ipaddr);
                 he = gethostbyaddr (&net_ip, sizeof (net_ip), AF_INET);
                 if (he != NULL) {
-                        strcpy(str, he->h_name);
+			strncpy(str, he->h_name, strsize - 1);
+			str[strsize - 1] = '\0';
                         return (str);
                 }
         }
@@ -431,7 +432,7 @@ int
 jt_ptl_print_interfaces (int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
-        char                     buffer[3][64];
+	char                     buffer[3][HOST_NAME_MAX + 1];
         int                      index;
         int                      rc;
 
@@ -448,9 +449,12 @@ jt_ptl_print_interfaces (int argc, char **argv)
                         break;
 
                 printf ("%s: (%s/%s) npeer %d nroute %d\n",
-                        ptl_ipaddr_2_str(data.ioc_u32[0], buffer[2], 1),
-                        ptl_ipaddr_2_str(data.ioc_u32[0], buffer[0], 0),
-                        ptl_ipaddr_2_str(data.ioc_u32[1], buffer[1], 0),
+			ptl_ipaddr_2_str(data.ioc_u32[0], buffer[2],
+					 sizeof(buffer[2]), 1),
+			ptl_ipaddr_2_str(data.ioc_u32[0], buffer[0],
+					 sizeof(buffer[0]), 0),
+			ptl_ipaddr_2_str(data.ioc_u32[1], buffer[1],
+					 sizeof(buffer[1]), 0),
                         data.ioc_u32[2], data.ioc_u32[3]);
         }
 
@@ -558,7 +562,7 @@ jt_ptl_print_peers (int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
         lnet_process_id_t        id;
-        char                     buffer[2][64];
+	char                     buffer[2][HOST_NAME_MAX + 1];
         int                      index;
         int                      rc;
 
@@ -581,8 +585,12 @@ jt_ptl_print_peers (int argc, char **argv)
                         printf ("%-20s [%d]%s->%s:%d #%d\n",
                                 libcfs_id2str(id), 
                                 data.ioc_count, /* persistence */
-                                ptl_ipaddr_2_str (data.ioc_u32[2], buffer[0], 1), /* my ip */
-                                ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* peer ip */
+				/* my ip */
+				ptl_ipaddr_2_str(data.ioc_u32[2], buffer[0],
+						 sizeof(buffer[0]), 1),
+				/* peer ip */
+				ptl_ipaddr_2_str(data.ioc_u32[0], buffer[1],
+						 sizeof(buffer[1]), 1),
                                 data.ioc_u32[1], /* peer port */
                                 data.ioc_u32[3]); /* conn_count */
                 } else if (g_net_is_compatible(NULL, PTLLND, 0)) {
@@ -608,7 +616,9 @@ jt_ptl_print_peers (int argc, char **argv)
                         printf ("%-20s [%d]@%s:%d\n",
                                 libcfs_nid2str(data.ioc_nid), /* peer nid */
                                 data.ioc_count,   /* peer persistence */
-                                ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* peer ip */
+				/* peer ip */
+				ptl_ipaddr_2_str(data.ioc_u32[0], buffer[1],
+						 sizeof(buffer[1]), 1),
                                 data.ioc_u32[1]); /* peer port */
                 } else {
                         printf ("%-20s [%d]\n",
@@ -754,7 +764,7 @@ jt_ptl_print_connections (int argc, char **argv)
 {
         struct libcfs_ioctl_data data;
         lnet_process_id_t        id;
-        char                     buffer[2][64];
+	char                     buffer[2][HOST_NAME_MAX + 1];
         int                      index;
         int                      rc;
 
@@ -780,8 +790,12 @@ jt_ptl_print_connections (int argc, char **argv)
                                 (data.ioc_u32[3] == SOCKLND_CONN_BULK_IN) ? "I" :
                                 (data.ioc_u32[3] == SOCKLND_CONN_BULK_OUT) ? "O" : "?",
                                 data.ioc_u32[4], /* scheduler */
-                                ptl_ipaddr_2_str (data.ioc_u32[2], buffer[0], 1), /* local IP addr */
-                                ptl_ipaddr_2_str (data.ioc_u32[0], buffer[1], 1), /* remote IP addr */
+				/* local IP addr */
+				ptl_ipaddr_2_str(data.ioc_u32[2], buffer[0],
+						 sizeof(buffer[0]), 1),
+				/* remote IP addr */
+				ptl_ipaddr_2_str(data.ioc_u32[0], buffer[1],
+						 sizeof(buffer[1]), 1),
                                 data.ioc_u32[1],         /* remote port */
                                 data.ioc_count, /* tx buffer size */
                                 data.ioc_u32[5], /* rx buffer size */
