@@ -235,21 +235,20 @@ EXPORT_SYMBOL(sptlrpc_flavor2name);
 
 char *sptlrpc_secflags2str(__u32 flags, char *buf, int bufsize)
 {
-        buf[0] = '\0';
+	buf[0] = '\0';
 
-        if (flags & PTLRPC_SEC_FL_REVERSE)
-                strncat(buf, "reverse,", bufsize);
-        if (flags & PTLRPC_SEC_FL_ROOTONLY)
-                strncat(buf, "rootonly,", bufsize);
-        if (flags & PTLRPC_SEC_FL_UDESC)
-                strncat(buf, "udesc,", bufsize);
-        if (flags & PTLRPC_SEC_FL_BULK)
-                strncat(buf, "bulk,", bufsize);
-        if (buf[0] == '\0')
-                strncat(buf, "-,", bufsize);
+	if (flags & PTLRPC_SEC_FL_REVERSE)
+		strlcat(buf, "reverse,", bufsize);
+	if (flags & PTLRPC_SEC_FL_ROOTONLY)
+		strlcat(buf, "rootonly,", bufsize);
+	if (flags & PTLRPC_SEC_FL_UDESC)
+		strlcat(buf, "udesc,", bufsize);
+	if (flags & PTLRPC_SEC_FL_BULK)
+		strlcat(buf, "bulk,", bufsize);
+	if (buf[0] == '\0')
+		strlcat(buf, "-,", bufsize);
 
-        buf[bufsize - 1] = '\0';
-        return buf;
+	return buf;
 }
 EXPORT_SYMBOL(sptlrpc_secflags2str);
 

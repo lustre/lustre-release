@@ -63,21 +63,20 @@ EXPORT_SYMBOL(sptlrpc_proc_root);
 
 char *sec_flags2str(unsigned long flags, char *buf, int bufsize)
 {
-        buf[0] = '\0';
+	buf[0] = '\0';
 
-        if (flags & PTLRPC_SEC_FL_REVERSE)
-                strncat(buf, "reverse,", bufsize);
-        if (flags & PTLRPC_SEC_FL_ROOTONLY)
-                strncat(buf, "rootonly,", bufsize);
-        if (flags & PTLRPC_SEC_FL_UDESC)
-                strncat(buf, "udesc,", bufsize);
-        if (flags & PTLRPC_SEC_FL_BULK)
-                strncat(buf, "bulk,", bufsize);
-        if (buf[0] == '\0')
-                strncat(buf, "-,", bufsize);
+	if (flags & PTLRPC_SEC_FL_REVERSE)
+		strlcat(buf, "reverse,", bufsize);
+	if (flags & PTLRPC_SEC_FL_ROOTONLY)
+		strlcat(buf, "rootonly,", bufsize);
+	if (flags & PTLRPC_SEC_FL_UDESC)
+		strlcat(buf, "udesc,", bufsize);
+	if (flags & PTLRPC_SEC_FL_BULK)
+		strlcat(buf, "bulk,", bufsize);
+	if (buf[0] == '\0')
+		strlcat(buf, "-,", bufsize);
 
-        buf[strlen(buf) - 1] = '\0';
-        return buf;
+	return buf;
 }
 
 static int sptlrpc_info_lprocfs_seq_show(struct seq_file *seq, void *v)
