@@ -748,7 +748,6 @@ int target_handle_connect(struct ptlrpc_request *req)
         struct obd_connect_data *data, *tmpdata;
         int size, tmpsize;
         lnet_nid_t *client_nid = NULL;
-	bool mne_swab_client_ver;
 	ENTRY;
 
         OBD_RACE(OBD_FAIL_TGT_CONN_RACE);
@@ -839,15 +838,6 @@ int target_handle_connect(struct ptlrpc_request *req)
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc)
                 GOTO(out, rc);
-
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
-	/* Check if the client might be missing the LU-1252 fix to swab
-	 * the IR mne_length entries. Do this as early as possible in case
-	 * the version code is modified. See LU-1644 for details. */
-	mne_swab_client_ver = OBD_OCD_VERSION_MAJOR(data->ocd_version) == 2 &&
-			      OBD_OCD_VERSION_MINOR(data->ocd_version) == 2 &&
-			      OBD_OCD_VERSION_PATCH(data->ocd_version) < 55;
-#endif
 
         if (lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_LIBCLIENT) {
                 if (!data) {
@@ -1051,9 +1041,8 @@ dont_check_exports:
 	 * OBD_CONNECT_MNE_SWAB flag around forever, just so long as we need
 	 * interop with unpatched 2.2 clients.  For newer clients, servers
 	 * will never do MNE swabbing, let the client handle that.  LU-1644 */
-	export->exp_need_mne_swab =
-		!(data->ocd_connect_flags & OBD_CONNECT_MNE_SWAB) &&
-		mne_swab_client_ver && !ptlrpc_req_need_swab(req);
+	export->exp_need_mne_swab = !ptlrpc_req_need_swab(req) &&
+			!(data->ocd_connect_flags & OBD_CONNECT_MNE_SWAB);
 #else
 #warning "LU-1644: Remove old OBD_CONNECT_MNE_SWAB fixup and exp_need_mne_swab"
 #endif

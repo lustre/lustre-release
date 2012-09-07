@@ -146,7 +146,6 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
 
                         /* check if we need to consume remaining bytes. */
                         if (last_in_unit != NULL && bytes_in_unit) {
-#
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
 				/* May need to swab back to update the length.*/
 				if (exp->exp_need_mne_swab)

@@ -691,8 +691,14 @@ static int lustre_start_mgc(struct super_block *sb)
 
 	/* We connect to the MGS at setup, and don't disconnect until cleanup */
 	data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT |
-				  OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV |
-				  OBD_CONNECT_MNE_SWAB;
+				  OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV;
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 50, 0)
+	data->ocd_connect_flags |= OBD_CONNECT_MNE_SWAB;
+#else
+#warning "LU-1644: Remove old OBD_CONNECT_MNE_SWAB fixup and imp_need_mne_swab"
+#endif
+
         if (lmd_is_client(lsi->lsi_lmd) &&
             lsi->lsi_lmd->lmd_flags & LMD_FLG_NOIR)
                 data->ocd_connect_flags &= ~OBD_CONNECT_IMP_RECOV;
