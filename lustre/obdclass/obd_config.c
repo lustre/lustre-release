@@ -79,6 +79,47 @@ int class_find_param(char *buf, char *key, char **valp)
 }
 
 /**
+ * Check whether the proc parameter \a param is an old parameter or not from
+ * the array \a ptr which contains the mapping from old parameters to new ones.
+ * If it's an old one, then return the pointer to the cfg_interop_param struc-
+ * ture which contains both the old and new parameters.
+ *
+ * \param param			proc parameter
+ * \param ptr			an array which contains the mapping from
+ *				old parameters to new ones
+ *
+ * \retval valid-pointer	pointer to the cfg_interop_param structure
+ *				which contains the old and new parameters
+ * \retval NULL			\a param or \a ptr is NULL,
+ *				or \a param is not an old parameter
+ */
+struct cfg_interop_param *class_find_old_param(const char *param,
+					       struct cfg_interop_param *ptr)
+{
+	char *value = NULL;
+	int   name_len = 0;
+
+	if (param == NULL || ptr == NULL)
+		RETURN(NULL);
+
+	value = strchr(param, '=');
+	if (value == NULL)
+		name_len = strlen(param);
+	else
+		name_len = value - param;
+
+	while (ptr->old_param != NULL) {
+		if (strncmp(param, ptr->old_param, name_len) == 0 &&
+		    name_len == strlen(ptr->old_param))
+			RETURN(ptr);
+		ptr++;
+	}
+
+	RETURN(NULL);
+}
+EXPORT_SYMBOL(class_find_old_param);
+
+/**
  * Finds a parameter in \a params and copies it to \a copy.
  *
  * Leading spaces are skipped. Next space or end of string is the
