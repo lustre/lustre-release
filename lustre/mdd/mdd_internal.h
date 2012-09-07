@@ -658,7 +658,7 @@ static inline void mdd_set_capainfo(const struct lu_env *env, int offset,
         struct md_capainfo *ci = md_capainfo(env);
         const struct lu_fid *fid = mdo2fid(obj);
 
-        LASSERT(offset >= 0 && offset <= MD_CAPAINFO_MAX);
+	LASSERT(offset >= 0 && offset < MD_CAPAINFO_MAX);
         /* NB: in mdt_init0 */
         if (!ci)
                 return;
