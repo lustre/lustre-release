@@ -359,8 +359,7 @@ mds1&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
         <screen># debugfs -c -R &quot;stat /O/0/d$((34976 % 32))/34976&quot; /dev/lustre/ost_test2 </screen></para>
         <para>The command output is:
         <screen>debugfs 1.42.3.wc3 (15-Aug-2012)
-/dev/lustre/ost_test2: catastrophic mode - not reading inode or group bitma\
-ps
+/dev/lustre/ost_test2: catastrophic mode - not reading inode or group bitmaps
 Inode: 352365   Type: regular    Mode:  0666   Flags: 0x80000
 Generation: 2393149953    Version: 0x0000002a:00005f81
 User:  1000   Group:  1000   Size: 260096

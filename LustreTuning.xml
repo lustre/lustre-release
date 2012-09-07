@@ -126,7 +126,7 @@
   </section>
   <section xml:id="dbdoclet.50438272_80545">
     <title><indexterm><primary>tuning</primary><secondary>for small files</secondary></indexterm>Improving Lustre Performance When Working with Small Files</title>
-    <para>A Lustre environment where an application writes small file chunks from many clients to a single file will result in bad I/O performance. To improve Lustre&apos;™s performance with small files:</para>
+    <para>A Lustre environment where an application writes small file chunks from many clients to a single file will result in bad I/O performance. To improve Lustre&apos;s performance with small files:</para>
     <itemizedlist>
       <listitem>
         <para>Have the application aggregate writes some amount before submitting them to Lustre. By default, Lustre enforces POSIX coherency semantics, so it results in lock ping-pong between client nodes if they are all writing to the same file at one time.</para>

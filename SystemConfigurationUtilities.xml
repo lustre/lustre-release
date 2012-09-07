@@ -141,7 +141,7 @@ l_getidentity</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable file that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the releated  <literal>identity_downcall_data</literal> structure (see <xref linkend='dbdoclet.50438291_33759'/>.) The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
+      <para>The group upcall file contains the path to an executable file that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the related <literal>identity_downcall_data</literal> structure (see <xref linkend='dbdoclet.50438291_33759'/>.) The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
       <para>The l_getidentity utility is the reference implementation of the user or group cache upcall.</para>
     </section>
     <section remap="h5">
@@ -212,17 +212,17 @@ quit</screen>
     <section remap="h5">
       <title>Setting Parameters with lctl</title>
       <para>Lustre parameters are not always accessible using the procfs interface, as it is platform-specific. As a solution, lctl {get,set}_param has been introduced as a platform-independent interface to the Lustre tunables. Avoid direct references to /proc/{fs,sys}/{lustre,lnet}. For future portability, use lctl {get,set}_param .</para>
-      <para>When the file system is running, use the lctl set_param command to set temporary parameters (mapping to items in /proc/{fs,sys}/{lnet,lustre}). The lctl set_param command uses this syntax:</para>
+      <para>When the file system is running, use the lctl set_param command to set temporary parameters (mapping to items in /proc/{fs,sys}/{lnet,lustre}). The <literal>lctl set_param</literal> command uses this syntax:</para>
       <screen>lctl set_param [-n] &lt;obdtype&gt;.&lt;obdname&gt;.&lt;proc_file_name&gt;=&lt;value&gt;</screen>
       <para>For example:</para>
       <screen>$ lctl set_param ldlm.namespaces.*osc*.lru_size=$((NR_CPU*100))</screen>
-      <para>Many permanent parameters can be set with lctl conf_param. In general, lctl conf_param can be used to specify any parameter settable in a /proc/fs/lustre file, with its own OBD device. The lctl conf_param command uses this syntax:</para>
+      <para>Many permanent parameters can be set with lctl conf_param. In general, lctl conf_param can be used to specify any parameter settable in a /proc/fs/lustre file, with its own OBD device. The <literal>lctl conf_param</literal> command uses this syntax:</para>
       <screen>&lt;obd|fsname&gt;.&lt;obdtype&gt;.&lt;proc_file_name&gt;=&lt;value&gt;) </screen>
       <para>For example:</para>
       <screen>$ lctl conf_param testfs-MDT0000.mdt.identity_upcall=NONE
 $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
       <caution>
-        <para>The lctlconf_param command permanently sets parameters in the file system configuration.</para>
+        <para>The <literal>lctl conf_param</literal> command permanently sets parameters in the file system configuration.</para>
       </caution>
       <para>To get current Lustre parameter settings, use the lctl get_param command with this syntax:</para>
       <screen>lctl get_param [-n] &lt;obdtype&gt;.&lt;obdname&gt;.&lt;proc_file_name&gt;</screen>
@@ -789,7 +789,7 @@ root@oss1# ll_decode_filter_fid #12345[4,5,8]
 #123455: objid=614725 seq=0 parent=[0x18d11:0xebba84eb:0x1]
 #123458: objid=533088 seq=0 parent=[0x21417:0x19734d61:0x0]</screen>
       <para>This shows that the three files in lost+found have decimal object IDs - 690670, 614725, and 533088, respectively. The object sequence number (formerly object group) is 0 for all current OST objects.</para>
-      <para>The MDT parent inode FIDs are hexdecimal numbers of the form sequence:oid:idx. Since the sequence number is below 0x100000000 in all these cases, the FIDs are in the legacy Inode and Generation In FID (IGIF) namespace and are mapped directly to the MDT inode = seq and generation = oid values; the MDT inodes are 0x751c5, 0x18d11, and 0x21417 respectively. For objects with MDT parent sequence numbers above 0x200000000, this indicates that the FID needs to be mapped via the MDT Object Index (OI) file on the MDT to determine the internal inode number.</para>
+      <para>The MDT parent inode FIDs are hexadecimal numbers of the form sequence:oid:idx. Since the sequence number is below 0x100000000 in all these cases, the FIDs are in the legacy Inode and Generation In FID (IGIF) namespace and are mapped directly to the MDT inode = seq and generation = oid values; the MDT inodes are 0x751c5, 0x18d11, and 0x21417 respectively. For objects with MDT parent sequence numbers above 0x200000000, this indicates that the FID needs to be mapped via the MDT Object Index (OI) file on the MDT to determine the internal inode number.</para>
       <para>The idx field shows the stripe number of this OST object in the Lustre RAID-0 striped file.</para>
     </section>
     <section remap="h5">
@@ -1166,7 +1166,7 @@ lshowmount</title>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The lshowmount utility shows the hosts that have Lustre mounted to a server. Ths utility looks for exports from the MGS, MDS, and obdfilter.</para>
+      <para>The lshowmount utility shows the hosts that have Lustre mounted to a server. This utility looks for exports from the MGS, MDS, and obdfilter.</para>
     </section>
     <section remap="h5">
       <title>Options</title>
@@ -1371,7 +1371,7 @@ lustre_rsync --statuslog|-l &lt;log&gt; --source|-s &lt;source&gt;
                 <para> <emphasis role="bold">--statuslog=</emphasis><emphasis>&lt;log&gt;</emphasis></para>
               </entry>
               <entry>
-                <para> A log file to which synchronization status is saved. When lustre_rsync starts, the state of a previous replication is read from here. If the status log from a previous synchronization operation is specified, otherwise mandatory options like --source, --target and --mdt options may be skipped. By specifying options like --source, --target and/or --mdt in addition to the --statuslog option, parameters in the status log can be overriden. Command line options take precedence over options in the status log.</para>
+                <para> A log file to which synchronization status is saved. When lustre_rsync starts, the state of a previous replication is read from here. If the status log from a previous synchronization operation is specified, otherwise mandatory options like --source, --target and --mdt options may be skipped. By specifying options like --source, --target and/or --mdt in addition to the --statuslog option, parameters in the status log can be overridden. Command line options take precedence over options in the status log.</para>
               </entry>
             </row>
             <row>
@@ -2616,7 +2616,7 @@ llog_reader /tmp/tfs-client
         <title><indexterm><primary>lr_reader</primary></indexterm>
 lr_reader</title>
         <para>The lr_reader utility translates a last received (last_rcvd) file into human-readable form.</para>
-        <para>The following utilites are part of the Lustre I/O kit. For more information, see <xref linkend="benchmarkingtests"/>.</para>
+        <para>The following utilities are part of the Lustre I/O kit. For more information, see <xref linkend="benchmarkingtests"/>.</para>
       </section>
       <section remap="h5">
         <title><indexterm><primary>sgpdd_survey</primary></indexterm>

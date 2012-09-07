@@ -93,7 +93,7 @@
         <para>2 KB/inode * 40 million inodes = 80 GB</para>
       </informalexample>
       <note>
-          <para>Inode size depends on stripe count. Without any stripes an inode allocation of 512 bytes might be suffecient. As striping grows to ~80 stripes per file, the inode allocation is around 2KB. At 160 stripes, a rough estimate for inode allocation is 4.5KB.</para>
+          <para>Inode size depends on stripe count. Without any stripes an inode allocation of 512 bytes might be sufficient. As striping grows to ~80 stripes per file, the inode allocation is around 2KB. At 160 stripes, a rough estimate for inode allocation is 4.5KB.</para>
       </note>
       <para>If the average file size is small, 4 KB for example, Lustre is not very efficient as the MDT uses as much space as the OSTs. However, this is not a common configuration for Lustre.</para>
       <note>
@@ -301,7 +301,7 @@
                 <para> 512 PB</para>
               </entry>
               <entry>
-                <para>Each OST or MDT on 64-bit kernel servers can have a file system up to 128 TB. On 32-bit systems, due to page cache limits, 16TB is the maximum block device size, which in turn applies to the size of OSTon 32-bit kernel servers.</para>
+                <para>Each OST or MDT on 64-bit kernel servers can have a file system up to 128 TB. On 32-bit systems, due to page cache limits, 16TB is the maximum block device size, which in turn applies to the size of OST on 32-bit kernel servers.</para>
                 <para>You can have multiple OST file systems on a single OSS node.</para>
               </entry>
             </row>

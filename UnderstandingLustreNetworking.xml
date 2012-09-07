@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="understandinglustrenetworking">
   <title xml:id="understandinglustrenetworking.title">Understanding Lustre Networking (LNET)</title>
-  <para>This chapter introduces Lustre Networking (LNET) and includes the following for intereste sections:</para>
+  <para>This chapter introduces Lustre Networking (LNET) and includes the following sections:</para>
   <itemizedlist>
     <listitem>
       <para>

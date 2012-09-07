@@ -25,7 +25,7 @@
     </section>
     <section remap="h3">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the releated <literal>identity_downcall_data</literal> data structure (see <xref linkend="dbdoclet.50438291_33759"/>). The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
+      <para>The group upcall file contains the path to an executable that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the related <literal>identity_downcall_data</literal> data structure (see <xref linkend="dbdoclet.50438291_33759"/>). The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
       <para>For a sample upcall program, see <literal>lustre/utils/l_getidentity.c</literal> in the Lustre source distribution.</para>
       <section remap="h4">
         <title>Primary and Secondary Groups</title>
@@ -57,7 +57,7 @@
 * the valid values for perms are:
 * setuid/setgid/setgrp/rmtacl -- enable corresponding perm
 * nosetuid/nosetgid/nosetgrp/normtacl -- disable corresponding perm
-* they can be listed together, seperated by &apos;,&apos;,
+* they can be listed together, separated by &apos;,&apos;,
 * when perm and noperm are in the same line (item), noperm is preferential,
 * when they are in different lines (items), the latter is preferential,
 * &apos;*&apos; nid is as default perm, and is not preferential.*/</screen>
@@ -104,7 +104,7 @@ l_getidentity [-v] -s</screen>
     </section>
     <section remap="h5">
       <title>Description</title>
-      <para>The group upcall file contains the path to an executable that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the releated <literal>identity_downcall_data</literal> data structure (see <xref linkend='dbdoclet.50438291_33759'/>). The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
+      <para>The group upcall file contains the path to an executable that is invoked to resolve a numeric UID to a group membership list. This utility opens <literal>/proc/fs/lustre/mdt/{mdtname}/identity_info</literal> and writes the related <literal>identity_downcall_data</literal> data structure (see <xref linkend='dbdoclet.50438291_33759'/>). The data is persisted with <literal>lctl set_param mdt.{mdtname}.identity_info</literal>.</para>
       <para>l_getidentity is the reference implementation of the user/group cache upcall.</para>
     </section>
     <section remap="h5">

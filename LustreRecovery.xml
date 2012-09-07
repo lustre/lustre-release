@@ -26,7 +26,7 @@
       <title>
           <indexterm><primary>recovery</primary></indexterm>
           <indexterm><primary>recovery</primary><secondary>VBR</secondary><see>version-based recovery</see></indexterm>
-          <indexterm><primary>recovery</primary><secondary>commit on share</secondary><see>ommit on share</see></indexterm>
+          <indexterm><primary>recovery</primary><secondary>commit on share</secondary><see>commit on share</see></indexterm>
           <indexterm><primary>lustre</primary><secondary>recovery</secondary><see>recovery</see></indexterm>
           Recovery Overview</title>
     <para>Lustre&apos;s recovery feature is responsible for dealing with node or network failure and returning the cluster to a consistent, performant state. Because Lustre allows servers to perform asynchronous update operations to the on-disk file system (i.e., the server can reply without waiting for the update to synchronously commit to disk), the clients may have state in memory that is newer than what the server can recover from disk after a crash.</para>
@@ -135,7 +135,7 @@
     </section>
     <section remap="h3">
       <title>Transaction Numbers</title>
-      <para>Each client request processed by the server that involves any state change (metadata update, file open, write, etc., depending on server type) is assigned a transaction number by the server that is a target-unique, monontonically increasing, server-wide 64-bit integer. The transaction number for each file system-modifying request is sent back to the client along with the reply to that client request. The transaction numbers allow the client and server to unambiguously order every modification to the file system in case recovery is needed.</para>
+      <para>Each client request processed by the server that involves any state change (metadata update, file open, write, etc., depending on server type) is assigned a transaction number by the server that is a target-unique, monotonically increasing, server-wide 64-bit integer. The transaction number for each file system-modifying request is sent back to the client along with the reply to that client request. The transaction numbers allow the client and server to unambiguously order every modification to the file system in case recovery is needed.</para>
       <para>Each reply sent to a client (regardless of request type) also contains the last committed transaction number that indicates the highest transaction number committed to the file system. The <literal>ldiskfs</literal> backing file system that Lustre uses enforces the requirement that any earlier disk operation will always be committed to disk before a later disk operation, so the last committed transaction number also reports that any requests with a lower transaction number have been committed to disk.</para>
     </section>
     <section remap="h3">
@@ -231,7 +231,7 @@
           <footnote>
         <para>There are two scenarios under which client RPCs are not replayed:   (1) Non-functioning or isolated clients do not reconnect, and they cannot replay their RPCs, causing a gap in the replay sequence. These clients get errors and are evicted.   (2) Functioning clients connect, but they cannot replay some or all of their RPCs that occurred after the gap caused by the non-functioning/isolated clients. These clients get errors (caused by the failed clients). With VBR, these requests have a better chance to replay because the &quot;gaps&quot; are only related to specific files that the missing client(s) changed.</para>
       </footnote>.</para>
-    <para>In pre-VBR versions of Lustre, if the MGS or an OST went down and then recovered, a recovery process was triggered in which clients attempted to replay their requests. Clients were only allowed to replay RPCs in serial order. If a particular client could not replay its requests, then those requests were lost as well as the requests of clients later in the sequence. The &apos;&apos;downstream&apos;&apos; clients never got to replay their requests because of the wait on the earlier client&apos;™s RPCs. Eventually, the recovery period would time out (so the component could accept new requests), leaving some number of clients evicted and their requests and data lost.</para>
+    <para>In pre-VBR versions of Lustre, if the MGS or an OST went down and then recovered, a recovery process was triggered in which clients attempted to replay their requests. Clients were only allowed to replay RPCs in serial order. If a particular client could not replay its requests, then those requests were lost as well as the requests of clients later in the sequence. The &apos;&apos;downstream&apos;&apos; clients never got to replay their requests because of the wait on the earlier client&apos;s RPCs. Eventually, the recovery period would time out (so the component could accept new requests), leaving some number of clients evicted and their requests and data lost.</para>
     <para>With VBR, the recovery mechanism does not result in the loss of clients or their data, because changes in inode versions are tracked, and more clients are able to reintegrate into the cluster. With VBR, inode tracking looks like this:</para>
     <itemizedlist>
       <listitem>
@@ -344,7 +344,7 @@
 	<para>Imperative recovery can also be disabled on the client side with the same mount option:</para>
 	<screen># mount -t lustre -onoir mymgsnid@tcp:/testfs /mnt/testfs</screen>
 	<note><para>When a single client is deactivated in this manner, the MGS will deactivate imperative recovery for the whole cluster. IR-enabled clients will still get notification of target restart, but targets will not be allowed to shorten the recovery window. </para></note>
-	<para>You can also disable imperative recovery globally on the MGS by writing `state=disabled’ to the controling procfs entry</para>
+	<para>You can also disable imperative recovery globally on the MGS by writing `state=disabled’ to the controlling procfs entry</para>
 	<screen># lctl set_param mgs.MGS.live.testfs="state=disabled"</screen>
 	<para>The above command will disable imperative recovery for file system named <emphasis>testfs</emphasis></para>
 	</section>

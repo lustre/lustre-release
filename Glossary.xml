@@ -76,7 +76,7 @@
       <glossterm>EA
         </glossterm>
       <glossdef>
-        <para>Extended Attribute. A small amount of data which can be retrieved through a name associated with a particular inode. Lustre uses EAa to store striping information (location of file data on OSTs). Examples of extended attributes are ACLs, striping information, and crypto keys.</para>
+        <para>Extended Attribute. A small amount of data which can be retrieved through a name associated with a particular inode. Lustre uses EAs to store striping information (location of file data on OSTs). Examples of extended attributes are ACLs, striping information, and crypto keys.</para>
       </glossdef>
     </glossentry>
     <glossentry xml:id="eviction">

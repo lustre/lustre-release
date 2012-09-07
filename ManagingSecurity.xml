@@ -46,7 +46,7 @@
       <screen>$ lctl get_param -n mdc.home-MDT0000-mdc-*.connect_flags | grep acl acl</screen>
       <para>To mount the client with no ACLs:</para>
       <screen>$ mount -t lustre -o noacl ibmds2@o2ib:/home /home</screen>
-      <para>ACLs are enabled in Lustre on a system-wide basis; either all clients enable ACLs or none do. Activating ACLs is controlled by MDS mount options <literal>acl</literal> / <literal>noacl</literal> (enable/disableACLs). Client-side mount options acl/noacl are ignored. You do not need to change the client configuration, and the &apos;acl&apos; string will not appear in the client /etc/mtab. The client acl mount option is no longer needed. If a client is mounted with that option, then this message appears in the MDS syslog:</para>
+      <para>ACLs are enabled in Lustre on a system-wide basis; either all clients enable ACLs or none do. Activating ACLs is controlled by MDS mount options <literal>acl</literal> / <literal>noacl</literal> (enable/disable ACLs). Client-side mount options acl/noacl are ignored. You do not need to change the client configuration, and the &apos;acl&apos; string will not appear in the client /etc/mtab. The client acl mount option is no longer needed. If a client is mounted with that option, then this message appears in the MDS syslog:</para>
       <screen>...MDS requires ACL support but client does not</screen>
       <para>The message is harmless but indicates a configuration issue, which should be corrected.</para>
       <para>If ACLs are not enabled on the MDS, then any attempts to reference an ACL on a client return an Operation not supported error.</para>
@@ -69,7 +69,7 @@ other::---
 [root@client lustre]# setfacl -m user:chirag:rwx rain
 [root@client lustre]# ls -ld rain
 drwxrwx---+ 2 root root 4096 Feb 20 06:50 rain
-[root@client lustre]# getfacl --omit-heade rain
+[root@client lustre]# getfacl --omit-header rain
 user::rwx
 user:chirag:rwx
 group::r-x

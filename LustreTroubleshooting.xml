@@ -201,7 +201,7 @@
     </section>
   </section>
   <section xml:id="dbdoclet.50438198_30989">
-      <title><indexterm><primary>troubleshooting</primary><secondary>reporting bugs</secondary></indexterm><indexterm><primary>reporting bugs</primary><see>troubleshooing</see></indexterm>
+      <title><indexterm><primary>troubleshooting</primary><secondary>reporting bugs</secondary></indexterm><indexterm><primary>reporting bugs</primary><see>troubleshooting</see></indexterm>
           Reporting a Lustre Bug</title>
     <para>If, after troubleshooting your Lustre system, you cannot resolve the problem, consider reporting a Lustre bug. The process for reporting a bug is described in the Lustre wiki topic <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>.</para>
     <para>You can also post a question to the <link xl:href="http://wiki.whamcloud.com/display/PUB/Community+Resources">lustre-discuss mailing list</link> or search the <link xl:href="http://groups.google.com/group/lustre-discuss-list">lustre-discuss Archives</link> for information about your issue.</para>
@@ -473,7 +473,7 @@ ptlrpc_main+0x42e/0x7c0 [ptlrpc]
     </section>
     <section remap="h3">
       <title><indexterm><primary>troubleshooting</primary><secondary>timeouts on setup</secondary></indexterm>Handling Timeouts on Initial Lustre Setup</title>
-      <para>If you come across timeouts or hangs on the initial setup of your Lustre system, verify that name resolution for servers and clients is working correctly. Some distributions configure <literal>/etc/hosts sts</literal> so the name of the local machine (as reported by the &apos;hostname&apos; command) is mapped to local host (127.0.0.1) instead of a proper IP address.</para>
+      <para>If you come across timeouts or hangs on the initial setup of your Lustre system, verify that name resolution for servers and clients is working correctly. Some distributions configure <literal>/etc/hosts</literal> so the name of the local machine (as reported by the &apos;hostname&apos; command) is mapped to local host (127.0.0.1) instead of a proper IP address.</para>
       <para>This might produce this error:</para>
       <screen>LustreError:(ldlm_handle_cancel()) received cancel for unknown lock cookie
 0xe74021a4b41b954e from nid 0x7f000001 (0:127.0.0.1)

@@ -386,7 +386,7 @@ $ lst add_group clients 192.168.1.[10-100]@tcp 192.168.[2,4].\
                 <para> unknown</para>
               </entry>
               <entry>
-                <para> The node&apos;™s status has yet to be determined.</para>
+                <para> The node&apos;s status has yet to be determined.</para>
               </entry>
             </row>
             <row>
@@ -750,7 +750,7 @@ $ lst add_test --batch bulkperf --loop 100 --concurrency 4 \
                 <literal> --test<replaceable>&lt;index&gt;</replaceable></literal>
               </entry>
               <entry nameend="c3" namest="c2">
-                <para>Lists tests in a batch. If no option is used, all tests in the batch are listed. IIf one of these options are used, only specified tests in the batch are listed:</para>
+                <para>Lists tests in a batch. If no option is used, all tests in the batch are listed. If one of these options are used, only specified tests in the batch are listed:</para>
               </entry>
             </row>
             <row>

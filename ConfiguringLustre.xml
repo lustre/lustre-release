@@ -682,7 +682,7 @@ filesystem summary: 2.5M        32         2.5M      0%       /lustre</screen>
         </listitem>
       </itemizedlist>
       <para>For examples using these utilities, see the topic <xref linkend="systemconfigurationutilities"/></para>
-      <para>The <literal>lfs</literal> utility is usful for configuring and querying a variety of options related to files. For more information, see <xref linkend="userutilities"/>.</para>
+      <para>The <literal>lfs</literal> utility is useful for configuring and querying a variety of options related to files. For more information, see <xref linkend="userutilities"/>.</para>
       <note>
         <para>Some sample scripts are included in the directory where Lustre is installed. If you have installed the Lustre source code, the scripts are located in the <literal>lustre/tests</literal> sub-directory. These scripts enable quick setup of some simple standard Lustre configurations.</para>
       </note>

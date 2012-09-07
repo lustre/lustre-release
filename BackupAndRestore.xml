@@ -99,7 +99,7 @@
                   <para> <literal>--user=&lt;user id&gt;</literal></para>
                 </entry>
                 <entry>
-                  <para>The changelog user ID for the specified MDT. To use <literal>lustre_rsync</literal>, the changelog user must be registered. For details, see the <literal>changelog_register</literal> parameter in <xref linkend="systemconfigurationutilities"/> (<literal>lctl</literal>). This is a mandatory option if a valid status log created during a previous synchronization operation (<literal>--statusl</literal>)  is not specified.</para>
+                  <para>The changelog user ID for the specified MDT. To use <literal>lustre_rsync</literal>, the changelog user must be registered. For details, see the <literal>changelog_register</literal> parameter in <xref linkend="systemconfigurationutilities"/> (<literal>lctl</literal>). This is a mandatory option if a valid status log created during a previous synchronization operation (<literal>--statuslog</literal>) is not specified.</para>
                 </entry>
               </row>
               <row>
@@ -107,7 +107,7 @@
                   <para> <literal>--statuslog=&lt;log&gt;</literal></para>
                 </entry>
                 <entry>
-                  <para>A log file to which synchronization status is saved. When the <literal>lustre_rsync</literal> utility starts, if the status log from a previous synchronization operation is specified, then the state is read from the log and otherwise mandatory <literal>--source</literal>, <literal>--target</literal> and <literal>--mdt</literal> options can be skipped. Specifying the <literal>--source</literal>, <literal>--target</literal> and/or <literal>--mdt</literal> options, in addition to the <literal>--statuslog</literal> option, causes the specified parameters in the status log to be overriden. Command line options take precedence over options in the status log.</para>
+                  <para>A log file to which synchronization status is saved. When the <literal>lustre_rsync</literal> utility starts, if the status log from a previous synchronization operation is specified, then the state is read from the log and otherwise mandatory <literal>--source</literal>, <literal>--target</literal> and <literal>--mdt</literal> options can be skipped. Specifying the <literal>--source</literal>, <literal>--target</literal> and/or <literal>--mdt</literal> options, in addition to the <literal>--statuslog</literal> option, causes the specified parameters in the status log to be overridden. Command line options take precedence over options in the status log.</para>
                 </entry>
               </row>
               <row>
@@ -405,7 +405,7 @@ cfs21:~# ls /mnt/main
 fstab  passwd</screen>
     </section>
     <section remap="h3">
-        <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>createing snapshots</tertiary></indexterm>Creating Snapshot Volumes</title>
+        <title><indexterm><primary>backup</primary><secondary>using LVM</secondary><tertiary>creating snapshots</tertiary></indexterm>Creating Snapshot Volumes</title>
       <para>Whenever you want to make a &quot;checkpoint&quot; of the main Lustre file system, create LVM snapshots of all target MDT and OSTs in the LVM-based backup file system. You must decide the maximum size of a snapshot ahead of time, although you can dynamically change this later. The size of a daily snapshot is dependent on the amount of data changed daily in the main Lustre file system. It is likely that a two-day old snapshot will be twice as big as a one-day old snapshot.</para>
       <para>You can create as many snapshots as you have room for in the volume group. If necessary, you can dynamically add disks to the volume group.</para>
       <para>The snapshots of the target MDT and OSTs should be taken at the same point in time. Make sure that the cronjob updating the backup file system is not running, since that is the only thing writing to the disks. Here is an example:</para>

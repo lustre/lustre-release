@@ -49,7 +49,7 @@ Lustre Debugging Tools</title>
                   <literal>
               <replaceable>lfs</replaceable>
             </literal>
-                  - This utility provides access to the extended attributes (EAs) of a Lustre file (along with other information). For more inforamtion about lfs, see <xref linkend="dbdoclet.50438206_94597"/>.</para>
+                  - This utility provides access to the extended attributes (EAs) of a Lustre file (along with other information). For more information about lfs, see <xref linkend="dbdoclet.50438206_94597"/>.</para>
         </listitem>
       </itemizedlist>
     </section>
@@ -156,7 +156,7 @@ Lustre Debugging Tools</title>
     <para>The procedures below may be useful to administrators or developers debugging a Lustre files system.</para>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>message format</secondary></indexterm>Understanding the Lustre Debug Messaging Format</title>
-      <para>Lustre debug messages are categorized by originating sybsystem, message type, and locaton in the source code. For a list of subsystems and message types, see <xref linkend="dbdoclet.50438274_57603"/>.</para>
+      <para>Lustre debug messages are categorized by originating subsystem, message type, and location in the source code. For a list of subsystems and message types, see <xref linkend="dbdoclet.50438274_57603"/>.</para>
       <note>
         <para>For a current list of subsystems and debug message types, see <literal>libcfs/include/libcfs/libcfs_debug.h</literal> in the Lustre tree</para>
       </note>

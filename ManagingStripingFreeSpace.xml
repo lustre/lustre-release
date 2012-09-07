@@ -27,7 +27,7 @@
           <indexterm><primary>space</primary><secondary>striping</secondary></indexterm>
   How Lustre Striping Works</title>
     <para>Lustre uses a round-robin algorithm for selecting the next OST to which a stripe is to be written. Normally the usage of OSTs is well balanced. However, if users create a small number of exceptionally large files or incorrectly specify striping parameters, imbalanced OST usage may result.</para>
-    <para>The MDS allocates objects on seqential OSTs. Periodically, it will adjust the striping layout to eliminate some degenerated cases where applications that create very regular file layouts (striping patterns) would preferentially use a particular OST in the sequence.</para>
+    <para>The MDS allocates objects on sequential OSTs. Periodically, it will adjust the striping layout to eliminate some degenerated cases where applications that create very regular file layouts (striping patterns) would preferentially use a particular OST in the sequence.</para>
     <para>Stripes are written to sequential OSTs until free space across the OSTs differs by more than 20%. The MDS will then use weighted random allocations with a preference for allocating objects on OSTs with more free space. This can reduce I/O performance until space usage is rebalanced to within 20% again.</para>
     <para>For a more detailed description of stripe assignments, see <xref linkend="dbdoclet.50438209_10424"/>.</para>
   </section>
@@ -357,7 +357,7 @@ filesystem summary:        2211572                 41924                   \
       </itemizedlist>
     </section>
     <section remap="h3">
-        <title><indexterm><primary>space</primary><secondary>locationg weighting</secondary></indexterm>>Adjusting the Weighting Between Free Space and Location</title>
+        <title><indexterm><primary>space</primary><secondary>location weighting</secondary></indexterm>>Adjusting the Weighting Between Free Space and Location</title>
       <para>The weighting priority can be adjusted in the <literal>/proc</literal> file <literal>/proc/fs/lustre/lov/lustre-mdtlov/qos_prio_free proc</literal>. The default value is 90%. Use this command on the MGS to permanently change this weighting:</para>
       <screen>lctl conf_param &lt;fsname&gt;-MDT0000.lov.qos_prio_free=90</screen>
       <para>Increasing this value puts more weighting on free space. When the free space priority is set to 100%, then location is no longer used in stripe-ordering calculations and weighting is based entirely on free space.</para>

@@ -94,7 +94,7 @@
     <note>
       <para>Array performance with all LUNs loaded does not always match the performance of a single LUN when tested in isolation.</para>
     </note>
-    <para><emphasis role="bold">Prequisites:</emphasis></para>
+    <para><emphasis role="bold">Prerequisites:</emphasis></para>
     <itemizedlist>
       <listitem>
         <para><literal>sgp_dd</literal>  tool in the <literal>sg3_utils</literal> package</para>
@@ -128,7 +128,7 @@
     <section remap="h3">
       <title>Running sgpdd_survey</title>
       <para>The <literal>sgpdd_survey</literal> script must be customized for the particular device being tested and for the location where the script saves its working and result files (by specifying the <literal>${rslt}</literal> variable). Customization variables are described at the beginning of the script.</para>
-      <para>When the <literal>sgpdd_survey</literal> script runs, it creates a number of working files and a pair of result files. The names of all the files created start with the prefixdefined in the variable <literal>${rslt}</literal>. (The default value is <literal>/tmp</literal>.) The files include:</para>
+      <para>When the <literal>sgpdd_survey</literal> script runs, it creates a number of working files and a pair of result files. The names of all the files created start with the prefix defined in the variable <literal>${rslt}</literal>. (The default value is <literal>/tmp</literal>.) The files include:</para>
       <itemizedlist>
         <listitem>
           <para>File containing standard output data (same as <literal>stdout</literal>)</para>
@@ -161,7 +161,7 @@
           <para><literal>thr</literal>  - Number of threads generating I/O (1 thread in above example).</para>
         </listitem>
         <listitem>
-          <para><literal>crg</literal> - Current regions, the number of disjount areas on the disk to which I/O is being sent (1 region in above example, indicating that no seeking is done).</para>
+          <para><literal>crg</literal> - Current regions, the number of disjoint areas on the disk to which I/O is being sent (1 region in above example, indicating that no seeking is done).</para>
         </listitem>
         <listitem>
           <para><literal>MB/s</literal>  - Aggregate bandwidth measured by dividing the total amount of data by the elapsed time (180.45 MB/s in the above example).</para>
@@ -244,7 +244,7 @@
         </listitem>
         <listitem>
           <para>Determine the OST names.</para>
-          <para>On the OSS nodes to be tested, run the lctldl command. The OST device names are listed in the fourth column of the output. For example:</para>
+          <para>On the OSS nodes to be tested, run the <literal>lctl dl</literal> command. The OST device names are listed in the fourth column of the output. For example:</para>
           <screen>$ lctl dl |grep obdfilter
 0 UP obdfilter lustre-OST0001 lustre-OST0001_UUID 1159
 2 UP obdfilter lustre-OST0002 lustre-OST0002_UUID 1159
@@ -338,7 +338,7 @@
         </listitem>
         <listitem>
           <para>List all OSCs you want to test.</para>
-          <para>Use the <literal>target=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name seperated by spaces using the format <literal><replaceable>&lt;fsname&gt;-&lt;OST_name&gt;</replaceable>-osc-<replaceable>&lt;OSC_number&gt;</replaceable></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <replaceable role="bold">do not have to specify an MDS or LOV.</replaceable></para>
+          <para>Use the <literal>target=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name separated by spaces using the format <literal><replaceable>&lt;fsname&gt;-&lt;OST_name&gt;</replaceable>-osc-<replaceable>&lt;OSC_number&gt;</replaceable></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <replaceable role="bold">do not have to specify an MDS or LOV.</replaceable></para>
         </listitem>
         <listitem>
           <para>Run the <literal><replaceable role="bold">o</replaceable>bdfilter_survey</literal> script with the <literal>target=parameter</literal> and <literal>case=netdisk</literal>.</para>
@@ -802,7 +802,7 @@ mdd, mdt, osd (current lustre version only supports mdd stack). It can be used w
           <para><literal>IO</literal>  - Lustre target operations statistics</para>
         </listitem>
         <listitem>
-          <para><literal>JBD</literal>  - ldisfs journal statistics</para>
+          <para><literal>JBD</literal>  - ldiskfs journal statistics</para>
         </listitem>
         <listitem>
           <para><literal>CLIENT</literal>  - Lustre OSC request statistics</para>

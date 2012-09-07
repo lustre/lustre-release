@@ -186,7 +186,7 @@ struct lov_user_ost_data_v1 lmm_objects[0];
                 <para> <literal>lmm_magic</literal></para>
               </entry>
               <entry>
-                <para>Specifies the format of the returned striping information. <literal>LOV_MAGIC_V1</literal> isused for lov_user_md_v1. LOV_MAGIC_V3 is used for <literal>lov_user_md_v3</literal>.</para>
+                <para>Specifies the format of the returned striping information. <literal>LOV_MAGIC_V1</literal> is used for lov_user_md_v1. LOV_MAGIC_V3 is used for <literal>lov_user_md_v3</literal>.</para>
               </entry>
             </row>
             <row>
@@ -544,7 +544,7 @@ int llapi_file_create(const char *<emphasis>name</emphasis>, unsigned long long 
                 <para> <literal>EEXIST</literal></para>
               </entry>
               <entry>
-                <para> triping information has already been set and cannot be altered; <literal>name</literal> already exists.</para>
+                <para>Striping information has already been set and cannot be altered; <literal>name</literal> already exists.</para>
               </entry>
             </row>
             <row>
@@ -976,7 +976,7 @@ int get_file_info(char *path)
    return rc;
    
 }
-/* Ping all OSTs that belong to this filesysem */
+/* Ping all OSTs that belong to this filesystem */
  
 int ping_osts()
 {
@@ -1029,7 +1029,7 @@ int main()
    }
    printf(&quot;Getting uuid list\n&quot;);
    rc = get_my_uuids(file);
-   rintf(&quot;Write to the file\n&quot;);
+   printf(&quot;Write to the file\n&quot;);
    rc = write_file(file);
    rc = close_file(file);
    printf(&quot;Listing LOV data\n&quot;);
@@ -1038,7 +1038,7 @@ int main()
    rc = ping_osts();
  
    /* the results should match lfs getstripe */
-   printf(&quot;Confirming our results with lfs getsrtipe\n&quot;);
+   printf(&quot;Confirming our results with lfs getstripe\n&quot;);
    sprintf(sys_cmd, &quot;/usr/bin/lfs getstripe %s/%s&quot;, MY_LUSTRE_DIR, TESTFILE);
    system(sys_cmd);
  

@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='UTF-8'?>
 <!-- This document was created with Syntext Serna Free. --><chapter xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US" xml:id="configuringstorage">
   <title xml:id="configuringstorage.title">Configuring Storage on a Lustre File System</title>
-  <para>This chapter describes best practices for storage selection and file system options to optimize perforance on RAID, and includes the following sections:</para>
+  <para>This chapter describes best practices for storage selection and file system options to optimize performance on RAID, and includes the following sections:</para>
   <itemizedlist>
     <listitem>
       <para>
@@ -30,7 +30,7 @@
     </listitem>
   </itemizedlist>
   <note>
-    <para><emphasis role="bold">It is strongly recommended that hardware RAID be used with Lustre.</emphasis> Lustre currently does not support any redundancy at the file system level and RAID is required to protect agains disk failure.</para>
+    <para><emphasis role="bold">It is strongly recommended that hardware RAID be used with Lustre.</emphasis> Lustre currently does not support any redundancy at the file system level and RAID is required to protect against disk failure.</para>
   </note>
   <section xml:id="dbdoclet.50438208_60972">
       <title>

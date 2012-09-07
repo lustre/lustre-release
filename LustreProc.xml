@@ -1024,7 +1024,7 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
           <para>There is no file size/block attributes pre-fetching and the traversing thread has to send synchronous glimpse size RPCs to OST(s).</para>
         </listitem>
       </orderedlist>
-      <para>The first issue is resolved by using statahead local dcache, and the second one is resolved by using asynchronous glimpse lock (AGL) RPCs for per-fetching file size/block attributes from OST(s).</para>
+      <para>The first issue is resolved by using statahead local dcache, and the second one is resolved by using asynchronous glimpse lock (AGL) RPCs for pre-fetching file size/block attributes from OST(s).</para>
       <section remap="h4">
         <title>Tuning File Readahead</title>
         <para>File readahead is triggered when two or more sequential reads by an application fail to be satisfied by the Linux buffer cache. The size of the initial readahead is 1 MB. Additional readaheads grow linearly, and increment until the readahead cache on the client is full at 40 MB.</para>
@@ -1061,7 +1061,7 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
     </section>
     <section remap="h3">
       <title><indexterm><primary>proc</primary><secondary>read cache</secondary></indexterm>OSS Read Cache</title>
-      <para>The OSS read cache feature provides read-only caching of data on an OSS. This functionality uses the regular Linux page cache to store the data. Just like caching from a regular filesytem in Linux, OSS read cache uses as much physical memory as is allocated.</para>
+      <para>The OSS read cache feature provides read-only caching of data on an OSS. This functionality uses the regular Linux page cache to store the data. Just like caching from a regular filesystem in Linux, OSS read cache uses as much physical memory as is allocated.</para>
       <para>OSS read cache improves Lustre performance in these situations:</para>
       <itemizedlist>
         <listitem>

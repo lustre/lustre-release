@@ -107,7 +107,7 @@ Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6</screen>
     <section remap="h3">
         <title>
             <indexterm><primary>I/O</primary><secondary>migrating data</secondary></indexterm>
-            <indexterm><primary>maintance</primary><secondary>full OSTs</secondary></indexterm>
+            <indexterm><primary>maintenance</primary><secondary>full OSTs</secondary></indexterm>
             Migrating Data within a File System</title>
       <para>As stripes cannot be moved within the file system, data must be migrated manually by copying and renaming the file, removing the original file, and renaming the new file with the original file name. The simplest way to do this is to use the <literal>lfs_migrate</literal> command (see <xref linkend="dbdoclet.50438206_42260"/>). However, the steps for migrating a file by hand are also shown here for reference.</para>
       <orderedlist>
@@ -157,7 +157,7 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
     <section remap="h3">
         <title>
             <indexterm><primary>I/O</primary><secondary>bringing OST online</secondary></indexterm>
-            <indexterm><primary>maintance</primary><secondary>bringing OST online</secondary></indexterm>
+            <indexterm><primary>maintenance</primary><secondary>bringing OST online</secondary></indexterm>
             
             Returning an Inactive OST Back Online</title>
       <para>Once the deactivated OST(s) no longer are severely imbalanced, due to either active or passive data redistribution, they should be reactivated so they will again have new files allocated on them.</para>
@@ -180,7 +180,7 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
   <section xml:id="dbdoclet.50438211_75549">
       <title>
             <indexterm><primary>I/O</primary><secondary>pools</secondary></indexterm>
-            <indexterm><primary>maintance</primary><secondary>pools</secondary></indexterm>
+            <indexterm><primary>maintenance</primary><secondary>pools</secondary></indexterm>
             <indexterm><primary>pools</primary></indexterm>
           Creating and Managing OST Pools</title>
     <para>The OST pools feature enables users to group OSTs together to make object placement more flexible. A &apos;pool&apos; is the name associated with an arbitrary subset of OSTs in a Lustre cluster.</para>

@@ -72,7 +72,7 @@
       <para>Examples are:</para>
       <screen>10.67.73.200@tcp0
 10.67.75.100@o2ib</screen>
-      <para>The first entry above identifes a TCP/IP node, while the second entry identifies an InfiniBand node.</para>
+      <para>The first entry above identifies a TCP/IP node, while the second entry identifies an InfiniBand node.</para>
       <para>When a mount command is run on a client, the client uses the NID of the MDS to retrieve configuration information. If an MDS has more than one NID, the client should use the appropriate NID for its local network.</para>
       <para>To determine the appropriate NID to specify in the mount command, use the <literal>lctl</literal> command. To display MDS NIDs, run on the MDS :</para>
       <screen>lctl list_nids</screen>
@@ -95,7 +95,7 @@
       <para>LNET lines in <literal>lustre.conf</literal> are only used by the local node to determine what to call its interfaces. They are not used for routing decisions.</para>
     </note>
     <section remap="h3">
-      <title><indexterm><primary>configuing</primary><secondary>multihome</secondary></indexterm>Multihome Server Example</title>
+      <title><indexterm><primary>configuring</primary><secondary>multihome</secondary></indexterm>Multihome Server Example</title>
       <para>If a server with multiple IP addresses (multihome server) is connected to a Lustre network, certain configuration setting are required. An example illustrating these setting consists of a network with the following nodes:</para>
       <itemizedlist>
         <listitem>
@@ -164,7 +164,7 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
   </section>
   <section xml:id="dbdoclet.50438216_71227">
     <title><indexterm><primary>LNET</primary><secondary>routes</secondary></indexterm>Setting the LNET Module routes Parameter</title>
-    <para>The LNET module routes parameter is used to identify routers in a Lustre configuration. These parameters are set in <literal>modprob.conf</literal> on each Lustre node.</para>
+    <para>The LNET module routes parameter is used to identify routers in a Lustre configuration. These parameters are set in <literal>modprobe.conf</literal> on each Lustre node.</para>
     <para>The LNET routes parameter specifies a colon-separated list of router definitions. Each route is defined as a network number, followed by a list of routers:</para>
     <screen>routes=&lt;<emphasis>net type</emphasis>&gt; &lt;<emphasis>router NID(s)</emphasis>&gt;</screen>
     <para>This example specifies bi-directional routing in which TCP clients can reach Lustre resources on the IB networks and IB servers can access the TCP networks:</para>
@@ -180,7 +180,7 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
       <para>On the router nodes, use:</para>
       <screen>lnet networks=&quot;tcp o2ib&quot; forwarding=enabled </screen>
       <para>On the MDS, use the reverse as shown below:</para>
-      <screen>lnet networks=&quot;o2ib0&quot; rountes=&quot;tcp0 132.6.1.[1-8]@o2ib0&quot; </screen>
+      <screen>lnet networks=&quot;o2ib0&quot; routes=&quot;tcp0 132.6.1.[1-8]@o2ib0&quot; </screen>
       <para>To start the routers, run:</para>
       <screen>modprobe lnet
 lctl network configure</screen>
