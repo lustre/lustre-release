@@ -647,6 +647,8 @@ int ptlrpc_connect_import(struct obd_import *imp)
         /* Reset connect flags to the originally requested flags, in case
          * the server is updated on-the-fly we will get the new features. */
         imp->imp_connect_data.ocd_connect_flags = imp->imp_connect_flags_orig;
+	/* Reset ocd_version each time so the server knows the exact versions */
+	imp->imp_connect_data.ocd_version = LUSTRE_VERSION_CODE;
         imp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
         imp->imp_msghdr_flags &= ~MSGHDR_CKSUM_INCOMPAT18;
 
@@ -1038,7 +1040,7 @@ finish:
                                       newer : older, LUSTRE_VERSION_STRING);
                 }
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 6, 50, 0)
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 50, 0)
 		/* Check if server has LU-1252 fix applied to not always swab
 		 * the IR MNE entries. Do this only once per connection.  This
 		 * fixup is version-limited, because we don't want to carry the
@@ -1056,7 +1058,7 @@ finish:
 		else /* clear if server was upgraded since last connect */
 			imp->imp_need_mne_swab = 0;
 #else
-#warning "LU-1644: Remove old OBD_CONNECT_MNE_SWAB fixup and exp_need_mne_swab"
+#warning "LU-1644: Remove old OBD_CONNECT_MNE_SWAB fixup and imp_need_mne_swab"
 #endif
 
 		if (ocd->ocd_connect_flags & OBD_CONNECT_CKSUM) {
