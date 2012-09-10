@@ -540,6 +540,7 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
                         if (tmp)
                                 bytes += blocksize - tmp;
 
+			lnb[n].rc = 0;
                         if ((lnb[n].flags & OBD_BRW_FROM_GRANT) &&
                             (oa->o_valid & OBD_MD_FLGRANT)) {
                                 if (resend) {
