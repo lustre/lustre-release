@@ -428,7 +428,11 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
                  * be near the head), we shouldn't have to do long
                  * re-scans */
                 LASSERT (srhi->srhi_seq == srhi->srhi_req->rq_history_seq);
-		LASSERT(!cfs_list_empty(&svcpt->scp_hist_reqs));
+		LASSERTF(!cfs_list_empty(&svcpt->scp_hist_reqs),
+			 "%s:%d: seek offset "LPU64", request seq "LPU64", "
+			 "last culled "LPU64"\n",
+			 svcpt->scp_service->srv_name, svcpt->scp_cpt,
+			 seq, srhi->srhi_seq, svcpt->scp_hist_seq_culled);
 		e = &srhi->srhi_req->rq_history_list;
 	} else {
 		/* search from start */

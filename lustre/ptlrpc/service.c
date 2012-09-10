@@ -943,6 +943,10 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 		cfs_list_del(&req->rq_list);
 		cfs_list_del_init(&req->rq_history_list);
 
+		/* Track the highest culled req seq */
+		if (req->rq_history_seq > svcpt->scp_hist_seq_culled)
+			svcpt->scp_hist_seq_culled = req->rq_history_seq;
+
 		cfs_spin_unlock(&svcpt->scp_lock);
 
 		ptlrpc_server_free_request(req);
