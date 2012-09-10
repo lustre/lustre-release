@@ -83,7 +83,7 @@ liblustreapitmp_a_SOURCES = liblustreapi.c $(L_IOCTL) $(L_KERNELCOMM)
 # build static and shared lib lustreapi
 liblustreapi.a : liblustreapitmp.a
 	rm -f liblustreapi.a liblustreapi.so
-	gcc -shared -o liblustreapi.so `ar -t liblustreapitmp.a`
+	$(CC) $(LDFLAGS) -shared -o liblustreapi.so `$(AR) -t liblustreapitmp.a`
 	mv liblustreapitmp.a liblustreapi.a
 
 install-exec-hook: liblustreapi.so
