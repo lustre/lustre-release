@@ -594,6 +594,31 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
         RETURN(rc);
 }
 
+/* Check if a block is allocated or not */
+static int osd_is_mapped(struct inode *inode, obd_size offset)
+{
+	sector_t (*fs_bmap)(struct address_space *, sector_t);
+
+	fs_bmap = inode->i_mapping->a_ops->bmap;
+
+	/* We can't know if we are overwriting or not */
+	if (unlikely(fs_bmap == NULL))
+		return 0;
+
+	if (i_size_read(inode) == 0)
+		return 0;
+
+	/* Beyond EOF, must not be mapped */
+	if (((i_size_read(inode) - 1) >> inode->i_blkbits) <
+	    (offset >> inode->i_blkbits))
+		return 0;
+
+	if (fs_bmap(inode->i_mapping, offset >> inode->i_blkbits) == 0)
+		return 0;
+
+	return 1;
+}
+
 static int osd_declare_write_commit(const struct lu_env *env,
                                     struct dt_object *dt,
                                     struct niobuf_local *lnb, int npages,
@@ -606,20 +631,36 @@ static int osd_declare_write_commit(const struct lu_env *env,
         int                      depth;
         int                      i;
         int                      newblocks;
-        int                      old;
+	int			 rc = 0;
+	int			 flags = 0;
+	bool			 ignore_quota = false;
+	long long		 quota_space = 0;
+	ENTRY;
 
         LASSERT(handle != NULL);
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-        old = oh->ot_credits;
         newblocks = npages;
 
         /* calculate number of extents (probably better to pass nb) */
-        for (i = 1; i < npages; i++)
-                if (lnb[i].offset !=
-                    lnb[i - 1].offset + lnb[i - 1].len)
-                        extents++;
+	for (i = 0; i < npages; i++) {
+		if (i && lnb[i].offset !=
+		    lnb[i - 1].offset + lnb[i - 1].len)
+			extents++;
+
+		if (!osd_is_mapped(inode, lnb[i].offset))
+			quota_space += CFS_PAGE_SIZE;
+
+		/* ignore quota for the whole request if any page is from
+		 * client cache or written by root.
+		 *
+		 * XXX we could handle this on per-lnb basis as done by
+		 * grant. */
+		if ((lnb[i].flags & OBD_BRW_NOQUOTA) ||
+		    !(lnb[i].flags & OBD_BRW_SYNC))
+			ignore_quota = true;
+	}
 
         /*
          * each extent can go into new leaf causing a split
@@ -643,6 +684,12 @@ static int osd_declare_write_commit(const struct lu_env *env,
                 oh->ot_credits += depth * extents;
         }
 
+	/* quota space for metadata blocks */
+	quota_space += depth * extents * LDISKFS_BLOCK_SIZE(osd_sb(osd));
+
+	/* quota space should be reported in 1K blocks */
+	quota_space = toqb(quota_space);
+
         /* each new block can go in different group (bitmap + gd) */
 
         /* we can't dirty more bitmap blocks than exist */
@@ -657,26 +704,25 @@ static int osd_declare_write_commit(const struct lu_env *env,
         else
                 oh->ot_credits += newblocks;
 
-        RETURN(0);
+	/* make sure the over quota flags were not set */
+	lnb[0].flags &= ~(OBD_BRW_OVER_USRQUOTA | OBD_BRW_OVER_GRPQUOTA);
+
+	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid,
+				   quota_space, oh, true, true, &flags,
+				   ignore_quota);
+
+	/* we need only to store the overquota flags in the first lnb for
+	 * now, once we support multiple objects BRW, this code needs be
+	 * revised. */
+	if (flags & QUOTA_FL_OVER_USRQUOTA)
+		lnb[0].flags |= OBD_BRW_OVER_USRQUOTA;
+	if (flags & QUOTA_FL_OVER_GRPQUOTA)
+		lnb[0].flags |= OBD_BRW_OVER_GRPQUOTA;
+
+	RETURN(rc);
 }
 
 /* Check if a block is allocated or not */
-static int osd_is_mapped(struct inode *inode, obd_size offset)
-{
-        sector_t (*fs_bmap)(struct address_space *, sector_t);
-
-        fs_bmap = inode->i_mapping->a_ops->bmap;
-
-        /* We can't know if we are overwriting or not */
-        if (fs_bmap == NULL)
-                return 0;
-
-        if (fs_bmap(inode->i_mapping, offset >> inode->i_blkbits) == 0)
-                return 0;
-
-        return 1;
-}
-
 static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                             struct niobuf_local *lnb, int npages,
                             struct thandle *thandle)
@@ -931,6 +977,9 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
 {
         struct osd_thandle *oh;
         int                 credits;
+	struct inode	   *inode;
+	int		    rc;
+	ENTRY;
 
         LASSERT(handle != NULL);
 
@@ -952,14 +1001,18 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
         OSD_DECLARE_OP(oh, write);
         oh->ot_credits += credits;
 
-        if (osd_dt_obj(dt)->oo_inode == NULL)
-                return 0;
+	inode = osd_dt_obj(dt)->oo_inode;
 
-        osd_declare_qid(dt, oh, USRQUOTA, osd_dt_obj(dt)->oo_inode->i_uid,
-                        osd_dt_obj(dt)->oo_inode);
-        osd_declare_qid(dt, oh, GRPQUOTA, osd_dt_obj(dt)->oo_inode->i_gid,
-                        osd_dt_obj(dt)->oo_inode);
-        return 0;
+	/* we may declare write to non-exist llog */
+	if (inode == NULL)
+		RETURN(0);
+
+	/* dt_declare_write() is usually called for system objects, such
+	 * as llog or last_rcvd files. We needn't enforce quota on those
+	 * objects, so always set the lqi_space as 0. */
+	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh,
+				   true, true, NULL, false);
+	RETURN(rc);
 }
 
 static int osd_ldiskfs_writelink(struct inode *inode, char *buffer, int buflen)
@@ -1109,6 +1162,8 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
                              __u64 start, __u64 end, struct thandle *th)
 {
         struct osd_thandle *oh;
+	struct inode	   *inode;
+	int		    rc;
         ENTRY;
 
         LASSERT(th);
@@ -1127,7 +1182,12 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
         oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
         oh->ot_credits += 3;
 
-        RETURN(0);
+	inode = osd_dt_obj(dt)->oo_inode;
+	LASSERT(inode);
+
+	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh,
+				   true, true, NULL, false);
+	RETURN(rc);
 }
 
 static int osd_punch(const struct lu_env *env, struct dt_object *dt,

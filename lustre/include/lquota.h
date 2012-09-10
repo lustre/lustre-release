@@ -48,6 +48,50 @@ union lquota_rec {
 #define QUOTA_DATAPOOL_NAME   "ost="
 
 /*
+ * Quota information attached to a transaction
+ */
+
+struct lquota_entry;
+
+struct lquota_id_info {
+	/* quota identifier */
+	union lquota_id		 lqi_id;
+
+	/* USRQUOTA or GRPQUOTA for now, could be expanded for
+	 * directory quota or other types later.  */
+	int			 lqi_type;
+
+	/* inodes or kbytes to be consumed or released, it could
+	 * be negative when releasing space.  */
+	long long		 lqi_space;
+
+	/* quota slave entry structure associated with this ID */
+	struct lquota_entry	*lqi_qentry;
+
+	/* whether we are reporting blocks or inodes */
+	bool			 lqi_is_blk;
+};
+
+/* Since we enforce only inode quota in meta pool (MDTs), and block quota in
+ * data pool (OSTs), there are at most 4 quota ids being enforced in a single
+ * transaction, which is chown transaction:
+ * original uid and gid, new uid and gid.
+ *
+ * This value might need to be revised when directory quota is added.  */
+#define QUOTA_MAX_TRANSIDS    4
+
+/* all qids involved in a single transaction */
+struct lquota_trans {
+        unsigned short         lqt_id_cnt;
+        struct lquota_id_info  lqt_ids[QUOTA_MAX_TRANSIDS];
+};
+
+/* flags for quota local enforcement */
+#define QUOTA_FL_OVER_USRQUOTA  0x01
+#define QUOTA_FL_OVER_GRPQUOTA  0x02
+#define QUOTA_FL_SYNC           0x04
+
+/*
  * Quota enforcement support on slaves
  */
 
@@ -78,6 +122,23 @@ void qsd_fini(const struct lu_env *, struct qsd_instance *);
  * on slave */
 int lquotactl_slv(const struct lu_env *, struct dt_device *,
 		  struct obd_quotactl *);
+
+/* XXX: dummy qsd_op_begin() & qsd_op_end(), will be replaced with the real
+ *      one once all the enforcement code landed. */
+static inline int qsd_op_begin(const struct lu_env *env,
+			       struct qsd_instance *qsd,
+			       struct lquota_trans *trans,
+			       struct lquota_id_info *qi,
+			       int *flags)
+{
+	return 0;
+}
+
+static inline void qsd_op_end(const struct lu_env *env,
+			      struct qsd_instance *qsd,
+			      struct lquota_trans *trans)
+{
+}
 
 #ifdef LPROCFS
 /* dumb procfs handler which always report success, for backward compatibility

@@ -176,51 +176,6 @@ static int osd_root_get(const struct lu_env *env,
         return 0;
 }
 
-static inline int osd_qid_type(struct osd_thandle *oh, int i)
-{
-        return (oh->ot_id_type & (1 << i)) ? GRPQUOTA : USRQUOTA;
-}
-
-static inline void osd_qid_set_type(struct osd_thandle *oh, int i, int type)
-{
-        oh->ot_id_type |= ((type == GRPQUOTA) ? (1 << i) : 0);
-}
-
-void osd_declare_qid(struct dt_object *dt, struct osd_thandle *oh,
-                     int type, uid_t id, struct inode *inode)
-{
-#ifdef CONFIG_QUOTA
-        int i, allocated = 0;
-        struct osd_object *obj;
-
-        LASSERT(dt != NULL);
-        LASSERT(oh != NULL);
-        LASSERTF(oh->ot_id_cnt <= OSD_MAX_UGID_CNT, "count=%u",
-                 oh->ot_id_cnt);
-
-        /* id entry is allocated in the quota file */
-        if (inode && inode->i_dquot[type] && inode->i_dquot[type]->dq_off)
-                allocated = 1;
-
-        for (i = 0; i < oh->ot_id_cnt; i++) {
-                if (oh->ot_id_array[i] == id && osd_qid_type(oh, i) == type)
-                        return;
-        }
-
-        if (unlikely(i >= OSD_MAX_UGID_CNT)) {
-                CERROR("more than %d uid/gids for a transaction?\n", i);
-                return;
-        }
-
-        oh->ot_id_array[i] = id;
-        osd_qid_set_type(oh, i, type);
-        oh->ot_id_cnt++;
-        obj = osd_dt_obj(dt);
-        oh->ot_credits += (allocated || id == 0) ?
-                1 : LDISKFS_QUOTA_INIT_BLOCKS(osd_sb(osd_obj2dev(obj)));
-#endif
-}
-
 /*
  * OSD object methods.
  */
@@ -745,6 +700,8 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
         th = ERR_PTR(-ENOMEM);
         OBD_ALLOC_GFP(oh, sizeof *oh, CFS_ALLOC_IO);
         if (oh != NULL) {
+		oh->ot_quota_trans = &oti->oti_quota_trans;
+		memset(oh->ot_quota_trans, 0, sizeof(*oh->ot_quota_trans));
                 th = &oh->ot_super;
                 th->th_dev = d;
                 th->th_result = 0;
@@ -855,10 +812,16 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
         struct osd_thandle     *oh;
         struct osd_thread_info *oti = osd_oti_get(env);
         struct osd_iobuf       *iobuf = &oti->oti_iobuf;
-
+	struct qsd_instance    *qsd = oti->oti_dev->od_quota_slave;
         ENTRY;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
+
+	if (qsd != NULL)
+		/* inform the quota slave device that the transaction is
+		 * stopping */
+		qsd_op_end(env, qsd, oh->ot_quota_trans);
+	oh->ot_quota_trans = NULL;
 
         if (oh->ot_handle != NULL) {
                 handle_t *hdl = oh->ot_handle;
@@ -1453,35 +1416,139 @@ static int osd_declare_attr_set(const struct lu_env *env,
                                 const struct lu_attr *attr,
                                 struct thandle *handle)
 {
-        struct osd_thandle *oh;
-        struct osd_object *obj;
+	struct osd_thandle     *oh;
+	struct osd_object      *obj;
+	struct osd_thread_info *info = osd_oti_get(env);
+	struct lquota_id_info  *qi = &info->oti_qi;
+	long long               bspace;
+	int			rc = 0;
+	bool			allocated;
+	ENTRY;
 
-        LASSERT(dt != NULL);
-        LASSERT(handle != NULL);
+	LASSERT(dt != NULL);
+	LASSERT(handle != NULL);
 
-        obj = osd_dt_obj(dt);
-        LASSERT(osd_invariant(obj));
+	obj = osd_dt_obj(dt);
+	LASSERT(osd_invariant(obj));
 
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, attr_set);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
+	OSD_DECLARE_OP(oh, attr_set);
+	oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
 
-        if (attr && attr->la_valid & LA_UID) {
-                if (obj->oo_inode)
-                        osd_declare_qid(dt, oh, USRQUOTA, obj->oo_inode->i_uid,
-                                        obj->oo_inode);
-                osd_declare_qid(dt, oh, USRQUOTA, attr->la_uid, NULL);
-        }
-        if (attr && attr->la_valid & LA_GID) {
-                if (obj->oo_inode)
-                        osd_declare_qid(dt, oh, GRPQUOTA, obj->oo_inode->i_gid,
-                                        obj->oo_inode);
-                osd_declare_qid(dt, oh, GRPQUOTA, attr->la_gid, NULL);
-        }
+	if (attr == NULL || obj->oo_inode == NULL)
+		RETURN(rc);
 
-        return 0;
+	bspace   = obj->oo_inode->i_blocks;
+	bspace <<= obj->oo_inode->i_sb->s_blocksize_bits;
+	bspace   = toqb(bspace);
+
+	/* Changing ownership is always preformed by super user, it should not
+	 * fail with EDQUOT.
+	 *
+	 * We still need to call the osd_declare_qid() to calculate the journal
+	 * credits for updating quota accounting files and to trigger quota
+	 * space adjustment once the operation is completed.*/
+	if ((attr->la_valid & LA_UID) != 0 &&
+	     attr->la_uid != obj->oo_inode->i_uid) {
+		qi->lqi_type = USRQUOTA;
+
+		/* inode accounting */
+		qi->lqi_is_blk = false;
+
+		/* one more inode for the new owner ... */
+		qi->lqi_id.qid_uid = attr->la_uid;
+		qi->lqi_space      = 1;
+		allocated = (attr->la_uid == 0) ? true : false;
+		rc = osd_declare_qid(env, oh, qi, allocated, NULL);
+		if (rc == -EDQUOT || rc == -EINPROGRESS)
+			rc = 0;
+		if (rc)
+			RETURN(rc);
+
+		/* and one less inode for the current uid */
+		qi->lqi_id.qid_uid = obj->oo_inode->i_uid;
+		qi->lqi_space      = -1;
+		rc = osd_declare_qid(env, oh, qi, true, NULL);
+		if (rc == -EDQUOT || rc == -EINPROGRESS)
+			rc = 0;
+		if (rc)
+			RETURN(rc);
+
+		/* block accounting */
+		qi->lqi_is_blk = true;
+
+		/* more blocks for the new owner ... */
+		qi->lqi_id.qid_uid = attr->la_uid;
+		qi->lqi_space      = bspace;
+		allocated = (attr->la_uid == 0) ? true : false;
+		rc = osd_declare_qid(env, oh, qi, allocated, NULL);
+		if (rc == -EDQUOT || rc == -EINPROGRESS)
+			rc = 0;
+		if (rc)
+			RETURN(rc);
+
+		/* and finally less blocks for the current owner */
+		qi->lqi_id.qid_uid = obj->oo_inode->i_uid;
+		qi->lqi_space      = -bspace;
+		rc = osd_declare_qid(env, oh, qi, true, NULL);
+		if (rc == -EDQUOT || rc == -EINPROGRESS)
+			rc = 0;
+		if (rc)
+			RETURN(rc);
+	}
+
+	if (attr->la_valid & LA_GID &&
+	    attr->la_gid != obj->oo_inode->i_gid) {
+		qi->lqi_type = GRPQUOTA;
+
+		/* inode accounting */
+		qi->lqi_is_blk = false;
+
+		/* one more inode for the new group owner ... */
+		qi->lqi_id.qid_gid = attr->la_gid;
+		qi->lqi_space      = 1;
+		allocated = (attr->la_gid == 0) ? true : false;
+		rc = osd_declare_qid(env, oh, qi, allocated, NULL);
+		if (rc == -EDQUOT || rc == -EINPROGRESS)
+			rc = 0;
+		if (rc)
+			RETURN(rc);
+
+		/* and one less inode for the current gid */
+		qi->lqi_id.qid_gid = obj->oo_inode->i_gid;
+		qi->lqi_space      = -1;
+		rc = osd_declare_qid(env, oh, qi, true, NULL);
+		if (rc == -EDQUOT || rc == -EINPROGRESS)
+			rc = 0;
+		if (rc)
+			RETURN(rc);
+
+		/* block accounting */
+		qi->lqi_is_blk = true;
+
+		/* more blocks for the new owner ... */
+		qi->lqi_id.qid_gid = attr->la_gid;
+		qi->lqi_space      = bspace;
+		allocated = (attr->la_gid == 0) ? true : false;
+		rc = osd_declare_qid(env, oh, qi, allocated, NULL);
+		if (rc == -EDQUOT || rc == -EINPROGRESS)
+			rc = 0;
+		if (rc)
+			RETURN(rc);
+
+		/* and finally less blocks for the current owner */
+		qi->lqi_id.qid_gid = obj->oo_inode->i_gid;
+		qi->lqi_space      = -bspace;
+		rc = osd_declare_qid(env, oh, qi, true, NULL);
+		if (rc == -EDQUOT || rc == -EINPROGRESS)
+			rc = 0;
+		if (rc)
+			RETURN(rc);
+	}
+
+	RETURN(rc);
 }
 
 static int osd_inode_setattr(const struct lu_env *env,
@@ -1952,7 +2019,9 @@ static int osd_declare_object_create(const struct lu_env *env,
                                      struct dt_object_format *dof,
                                      struct thandle *handle)
 {
-        struct osd_thandle *oh;
+	struct osd_thandle	*oh;
+	int			 rc;
+	ENTRY;
 
         LASSERT(handle != NULL);
 
@@ -1981,11 +2050,12 @@ static int osd_declare_object_create(const struct lu_env *env,
                 oh->ot_credits += osd_dto_credits_noquota[DTO_WRITE_BASE];
         }
 
-        if (attr) {
-                osd_declare_qid(dt, oh, USRQUOTA, attr->la_uid, NULL);
-                osd_declare_qid(dt, oh, GRPQUOTA, attr->la_gid, NULL);
-        }
-        return 0;
+	if (!attr)
+		RETURN(0);
+
+	rc = osd_declare_inode_qid(env, attr->la_uid, attr->la_gid, 1, oh,
+				   false, false, NULL, false);
+	RETURN(rc);
 }
 
 static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
@@ -2034,7 +2104,7 @@ static int osd_declare_object_destroy(const struct lu_env *env,
         struct osd_object  *obj = osd_dt_obj(dt);
         struct inode       *inode = obj->oo_inode;
         struct osd_thandle *oh;
-
+	int                 rc;
         ENTRY;
 
         oh = container_of0(th, struct osd_thandle, ot_super);
@@ -2053,10 +2123,15 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 		oh->ot_credits += 3;
         }
 
-        osd_declare_qid(dt, oh, USRQUOTA, inode->i_uid, inode);
-        osd_declare_qid(dt, oh, GRPQUOTA, inode->i_gid, inode);
-
-        RETURN(0);
+	/* one less inode */
+        rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, -1, oh,
+				   false, true, NULL, false);
+	if (rc)
+		RETURN(rc);
+	/* data to be truncated */
+	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh, true,
+				   true, NULL, false);
+        RETURN(rc);
 }
 
 static int osd_object_destroy(const struct lu_env *env,
@@ -2932,6 +3007,9 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
                                        struct thandle *handle)
 {
         struct osd_thandle *oh;
+	struct inode	   *inode;
+	int		    rc;
+	ENTRY;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
@@ -2942,13 +3020,12 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
         OSD_DECLARE_OP(oh, delete);
         oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
 
-        LASSERT(osd_dt_obj(dt)->oo_inode);
-        osd_declare_qid(dt, oh, USRQUOTA, osd_dt_obj(dt)->oo_inode->i_uid,
-                        osd_dt_obj(dt)->oo_inode);
-        osd_declare_qid(dt, oh, GRPQUOTA, osd_dt_obj(dt)->oo_inode->i_gid,
-                        osd_dt_obj(dt)->oo_inode);
+	inode = osd_dt_obj(dt)->oo_inode;
+	LASSERT(inode);
 
-        return 0;
+	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh,
+				   true, true, NULL, false);
+	RETURN(rc);
 }
 
 static inline int osd_get_fid_from_dentry(struct ldiskfs_dir_entry_2 *de,
@@ -3524,6 +3601,9 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
                                        struct thandle *handle)
 {
         struct osd_thandle *oh;
+	struct inode	   *inode;
+	int		    rc;
+	ENTRY;
 
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
@@ -3534,13 +3614,15 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
         OSD_DECLARE_OP(oh, insert);
         oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
 
-        LASSERT(osd_dt_obj(dt)->oo_inode);
-        osd_declare_qid(dt, oh, USRQUOTA, osd_dt_obj(dt)->oo_inode->i_uid,
-                        osd_dt_obj(dt)->oo_inode);
-        osd_declare_qid(dt, oh, GRPQUOTA, osd_dt_obj(dt)->oo_inode->i_gid,
-                        osd_dt_obj(dt)->oo_inode);
+	inode = osd_dt_obj(dt)->oo_inode;
+	LASSERT(inode);
 
-        return 0;
+	/* We ignore block quota on meta pool (MDTs), so needn't
+	 * calculate how many blocks will be consumed by this index
+	 * insert */
+	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh,
+				   true, true, NULL, false);
+	RETURN(rc);
 }
 
 /**

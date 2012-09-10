@@ -1527,6 +1527,8 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
 #define OBD_BRW_ASYNC          0x400 /* Server may delay commit to disk */
 #define OBD_BRW_MEMALLOC       0x800 /* Client runs in the "kswapd" context */
+#define OBD_BRW_OVER_USRQUOTA 0x1000 /* Running out of user quota */
+#define OBD_BRW_OVER_GRPQUOTA 0x2000 /* Running out of group quota */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 

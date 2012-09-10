@@ -167,6 +167,9 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 				lnb[j+k].lnb_rc = -ENOSPC;
 			if (!(rnb[i].rnb_flags & OBD_BRW_ASYNC))
 				oti->oti_sync_write = 1;
+			/* remote client can't break through quota */
+			if (exp_connect_rmtclient(exp))
+				lnb[j+k].lnb_flags &= ~OBD_BRW_NOQUOTA;
 		}
 		j += rc;
 		LASSERT(j <= PTLRPC_MAX_BRW_PAGES);
@@ -508,12 +511,27 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 		else
 			obdo_from_la(oa, &info->fti_attr, LA_GID | LA_UID);
 
-		if (ofd_grant_prohibit(exp, ofd))
-			/* Trick to prevent clients from waiting for bulk write
-			 * in flight since they won't get any grant in the reply
-			 * anyway so they had better firing the sync write RPC
-			 * straight away */
+		/* don't report overquota flag if we failed before reaching
+		 * commit */
+		if (old_rc == 0 && (rc == 0 || rc == -EDQUOT)) {
+			/* return the overquota flags to client */
+			if (lnb[0].lnb_flags & OBD_BRW_OVER_USRQUOTA) {
+				if (oa->o_valid & OBD_MD_FLFLAGS)
+					oa->o_flags |= OBD_FL_NO_USRQUOTA;
+				else
+					oa->o_flags = OBD_FL_NO_USRQUOTA;
+			}
+
+			if (lnb[0].lnb_flags & OBD_BRW_OVER_GRPQUOTA) {
+				if (oa->o_valid & OBD_MD_FLFLAGS)
+					oa->o_flags |= OBD_FL_NO_GRPQUOTA;
+				else
+					oa->o_flags = OBD_FL_NO_GRPQUOTA;
+			}
+
+			oa->o_valid |= OBD_MD_FLFLAGS;
 			oa->o_valid |= OBD_MD_FLUSRQUOTA | OBD_MD_FLGRPQUOTA;
+		}
 	} else if (cmd == OBD_BRW_READ) {
 		struct ldlm_namespace *ns = ofd->ofd_namespace;
 

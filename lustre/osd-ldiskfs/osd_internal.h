@@ -355,6 +355,7 @@ struct osd_thandle {
         unsigned short          ot_id_cnt;
         unsigned short          ot_id_type;
         uid_t                   ot_id_array[OSD_MAX_UGID_CNT];
+	struct lquota_trans    *ot_quota_trans;
 
 #ifdef OSD_TRACK_DECLARES
         unsigned char           ot_declare_attr_set;
@@ -613,6 +614,8 @@ struct osd_thread_info {
 		struct if_dqblk		oti_dqblk;
 		struct if_dqinfo	oti_dqinfo;
 	};
+	struct lquota_id_info  oti_qi;
+	struct lquota_trans    oti_quota_trans;
 };
 
 extern int ldiskfs_pdo;
@@ -632,8 +635,6 @@ int osd_statfs(const struct lu_env *env, struct dt_device *dev,
                struct obd_statfs *sfs);
 int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
                     struct lustre_capa *capa, __u64 opc);
-void osd_declare_qid(struct dt_object *dt, struct osd_thandle *oh,
-                     int type, uid_t id, struct inode *inode);
 struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       struct osd_inode_id *id);
 struct inode *osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
@@ -681,6 +682,13 @@ loff_t find_tree_dqentry(const struct lu_env *env,
                          struct osd_object *obj, int type,
                          qid_t dqid, uint blk, int depth,
                          struct osd_it_quota *it);
+/* osd_quota.c */
+int osd_declare_qid(const struct lu_env *env, struct osd_thandle *oh,
+		    struct lquota_id_info *qi, bool allocated, int *flags);
+int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
+			  long long space, struct osd_thandle *oh,
+			  bool is_blk, bool allocated, int *flags, bool force);
+
 /*
  * Invariants, assertions.
  */
