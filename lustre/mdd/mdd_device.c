@@ -326,7 +326,7 @@ int mdd_changelog_llog_write(struct mdd_device         *mdd,
                 return -ENXIO;
 
         /* nested journal transaction */
-	rc = llog_add(NULL, ctxt, &rec->cr_hdr, NULL, NULL, 0);
+	rc = llog_obd_add(NULL, ctxt, &rec->cr_hdr, NULL, NULL, 0);
         llog_ctxt_put(ctxt);
 
         return rc;
@@ -362,7 +362,7 @@ int mdd_changelog_ext_llog_write(struct mdd_device *mdd,
 		return -ENXIO;
 
 	/* nested journal transaction */
-	rc = llog_add(NULL, ctxt, &rec->cr_hdr, NULL, NULL, 0);
+	rc = llog_obd_add(NULL, ctxt, &rec->cr_hdr, NULL, NULL, 0);
 	llog_ctxt_put(ctxt);
 
 	return rc;
@@ -1388,7 +1388,7 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
         rec->cur_endrec = mdd->mdd_cl.mc_index;
         cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
-	rc = llog_add(NULL, ctxt, &rec->cur_hdr, NULL, NULL, 0);
+	rc = llog_obd_add(NULL, ctxt, &rec->cur_hdr, NULL, NULL, 0);
 
         CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
 out:
@@ -1516,7 +1516,7 @@ stop:
         /* hdr+1 is loc of data */
         hdr->lrh_len -= sizeof(*hdr) + sizeof(struct llog_rec_tail);
 	rc = llog_write_rec(env, llh, hdr, NULL, 0, (void *)(hdr + 1),
-			    hdr->lrh_index);
+			    hdr->lrh_index, NULL);
 
         RETURN(rc);
 }

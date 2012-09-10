@@ -216,7 +216,7 @@ static int llog_lvfs_write_rec(const struct lu_env *env,
 			       struct llog_handle *loghandle,
 			       struct llog_rec_hdr *rec,
 			       struct llog_cookie *reccookie, int cookiecount,
-			       void *buf, int idx)
+			       void *buf, int idx, struct thandle *th)
 {
         struct llog_log_hdr *llh;
         int reclen = rec->lrh_len, index, rc;
@@ -939,6 +939,21 @@ out1:
 }
 EXPORT_SYMBOL(llog_put_cat_list);
 
+static int llog_lvfs_declare_create(const struct lu_env *env,
+				    struct llog_handle *res,
+				    struct thandle *th)
+{
+	return 0;
+}
+
+static int llog_lvfs_declare_write_rec(const struct lu_env *env,
+				       struct llog_handle *loghandle,
+				       struct llog_rec_hdr *rec,
+				       int idx, struct thandle *th)
+{
+	return 0;
+}
+
 struct llog_operations llog_lvfs_ops = {
 	.lop_write_rec		= llog_lvfs_write_rec,
 	.lop_next_block		= llog_lvfs_next_block,
@@ -949,6 +964,8 @@ struct llog_operations llog_lvfs_ops = {
 	.lop_close		= llog_lvfs_close,
 	.lop_open		= llog_lvfs_open,
 	.lop_exist		= llog_lvfs_exist,
+	.lop_declare_create	= llog_lvfs_declare_create,
+	.lop_declare_write_rec	= llog_lvfs_declare_write_rec,
 };
 EXPORT_SYMBOL(llog_lvfs_ops);
 #else /* !__KERNEL__ */

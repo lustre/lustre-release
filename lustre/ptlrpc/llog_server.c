@@ -207,8 +207,8 @@ int llog_origin_handle_next_block(struct ptlrpc_request *req)
 
         ptr = req_capsule_server_get(&req->rq_pill, &RMF_EADATA);
 	rc = llog_next_block(req->rq_svc_thread->t_env, loghandle,
-			     &body->lgd_saved_index, body->lgd_index,
-			     &body->lgd_cur_offset, ptr, LLOG_CHUNK_SIZE);
+			     &repbody->lgd_saved_index, repbody->lgd_index,
+			     &repbody->lgd_cur_offset, ptr, LLOG_CHUNK_SIZE);
 	if (rc)
 		GOTO(out_close, rc);
 	EXIT;

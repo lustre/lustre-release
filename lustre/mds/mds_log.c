@@ -66,7 +66,7 @@ static int mds_llog_origin_add(const struct lu_env *env,
         ENTRY;
 
         lctxt = llog_get_context(lov_obd, ctxt->loc_idx);
-	rc = llog_add(env, lctxt, rec, lsm, logcookies, numcookies);
+	rc = llog_obd_add(env, lctxt, rec, lsm, logcookies, numcookies);
         llog_ctxt_put(lctxt);
 
         RETURN(rc);
@@ -90,8 +90,8 @@ static int mds_llog_origin_connect(struct llog_ctxt *ctxt,
 }
 
 static struct llog_operations mds_ost_orig_logops = {
-        lop_add:        mds_llog_origin_add,
-        lop_connect:    mds_llog_origin_connect,
+	.lop_obd_add	= mds_llog_origin_add,
+	.lop_connect	= mds_llog_origin_connect,
 };
 
 static int mds_llog_repl_cancel(const struct lu_env *env,
@@ -204,7 +204,7 @@ int mds_changelog_llog_init(struct obd_device *obd, struct obd_device *tgt)
         changelog_orig_logops = llog_lvfs_ops;
         changelog_orig_logops.lop_setup = llog_obd_origin_setup;
         changelog_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
-        changelog_orig_logops.lop_add = llog_obd_origin_add;
+	changelog_orig_logops.lop_obd_add = llog_obd_origin_add;
         changelog_orig_logops.lop_cancel = llog_changelog_cancel;
 
         rc = llog_setup_named(obd, &obd->obd_olg, LLOG_CHANGELOG_ORIG_CTXT,
@@ -315,7 +315,7 @@ static int mds_llog_add_unlink(struct obd_device *obd,
         lur->lur_count = count;
 
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-	rc = llog_add(NULL, ctxt, &lur->lur_hdr, lsm, logcookie, cookies);
+	rc = llog_obd_add(NULL, ctxt, &lur->lur_hdr, lsm, logcookie, cookies);
         llog_ctxt_put(ctxt);
 
         OBD_FREE_PTR(lur);

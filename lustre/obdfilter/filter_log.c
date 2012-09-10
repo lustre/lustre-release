@@ -94,7 +94,7 @@ int filter_log_sz_change(struct llog_handle *cathandle,
         lsc->lsc_fid = *mds_fid;
         lsc->lsc_ioepoch = ioepoch;
 
-	rc = llog_cat_add_rec(NULL, cathandle, &lsc->lsc_hdr, logcookie, NULL);
+	rc = llog_cat_add(NULL, cathandle, &lsc->lsc_hdr, logcookie, NULL);
         OBD_FREE(lsc, sizeof(*lsc));
 
         if (rc > 0) {

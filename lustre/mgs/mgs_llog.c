@@ -649,8 +649,8 @@ static int mgs_modify_handler(const struct lu_env *env,
                 /* Header and tail are added back to lrh_len in
                    llog_lvfs_write_rec */
                 rec->lrh_len = cfg_len;
-		rc = llog_write_rec(NULL, llh, rec, NULL, 0, (void *)lcfg,
-				    rec->lrh_index);
+		rc = llog_write(NULL, llh, rec, NULL, 0, (void *)lcfg,
+				rec->lrh_index);
                 if (!rc)
                          mml->mml_modified++;
         }
@@ -741,7 +741,7 @@ static int record_lcfg(const struct lu_env *env, struct llog_handle *llh,
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         /* idx = -1 means append */
-	rc = llog_write_rec(NULL, llh, &rec, NULL, 0, (void *)lcfg, -1);
+	rc = llog_write(NULL, llh, &rec, NULL, 0, (void *)lcfg, -1);
         pop_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         if (rc)
                 CERROR("failed %d\n", rc);

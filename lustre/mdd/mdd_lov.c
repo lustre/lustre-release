@@ -789,8 +789,8 @@ int mdd_log_op_setattr(struct obd_device *obd, __u32 uid, __u32 gid,
 
         /* write setattr log */
         ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-	rc = llog_add(NULL, ctxt, &lsr->lsr_hdr, lsm, logcookies,
-		      cookies_size / sizeof(struct llog_cookie));
+	rc = llog_obd_add(NULL, ctxt, &lsr->lsr_hdr, lsm, logcookies,
+			  cookies_size / sizeof(struct llog_cookie));
 
         llog_ctxt_put(ctxt);
 

@@ -2343,9 +2343,8 @@ obd_cleanup:
 static struct llog_operations filter_mds_ost_repl_logops;
 
 static struct llog_operations filter_size_orig_logops = {
-        .lop_setup   = llog_obd_origin_setup,
-        .lop_cleanup = llog_obd_origin_cleanup,
-        .lop_add     = llog_obd_origin_add
+	.lop_setup	= llog_obd_origin_setup,
+	.lop_cleanup	= llog_obd_origin_cleanup,
 };
 
 static int filter_olg_fini(struct obd_llog_group *olg)

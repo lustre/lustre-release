@@ -136,7 +136,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	}
 	cfs_spin_unlock(&loghandle->lgh_hdr_lock);
 
-	rc = llog_write_rec(env, loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
+	rc = llog_write(env, loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
 	if (rc < 0) {
 		CERROR("%s: fail to write header for llog #"LPX64"#"LPX64
 		       "#%08x: rc = %d\n",
@@ -570,6 +570,189 @@ out:
 EXPORT_SYMBOL(llog_reverse_process);
 
 /**
+ * new llog API
+ *
+ * API functions:
+ *      llog_open - open llog, may not exist
+ *      llog_exist - check if llog exists
+ *      llog_close - close opened llog, pair for open, frees llog_handle
+ *      llog_declare_create - declare llog creation
+ *      llog_create - create new llog on disk, need transaction handle
+ *      llog_declare_write_rec - declaration of llog write
+ *      llog_write_rec - write llog record on disk, need transaction handle
+ *      llog_declare_add - declare llog catalog record addition
+ *      llog_add - add llog record in catalog, need transaction handle
+ */
+int llog_exist(struct llog_handle *loghandle)
+{
+	struct llog_operations	*lop;
+	int			 rc;
+
+	ENTRY;
+
+	rc = llog_handle2ops(loghandle, &lop);
+	if (rc)
+		RETURN(rc);
+	if (lop->lop_exist == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	rc = lop->lop_exist(loghandle);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_exist);
+
+int llog_declare_create(const struct lu_env *env,
+			struct llog_handle *loghandle, struct thandle *th)
+{
+	struct llog_operations	*lop;
+	int			 raised, rc;
+
+	ENTRY;
+
+	rc = llog_handle2ops(loghandle, &lop);
+	if (rc)
+		RETURN(rc);
+	if (lop->lop_declare_create == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	if (!raised)
+		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+	rc = lop->lop_declare_create(env, loghandle, th);
+	if (!raised)
+		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_declare_create);
+
+int llog_create(const struct lu_env *env, struct llog_handle *handle,
+		struct thandle *th)
+{
+	struct llog_operations	*lop;
+	int			 raised, rc;
+
+	ENTRY;
+
+	rc = llog_handle2ops(handle, &lop);
+	if (rc)
+		RETURN(rc);
+	if (lop->lop_create == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	if (!raised)
+		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+	rc = lop->lop_create(env, handle, th);
+	if (!raised)
+		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_create);
+
+int llog_declare_write_rec(const struct lu_env *env,
+			   struct llog_handle *handle,
+			   struct llog_rec_hdr *rec, int idx,
+			   struct thandle *th)
+{
+	struct llog_operations	*lop;
+	int			 raised, rc;
+
+	ENTRY;
+
+	rc = llog_handle2ops(handle, &lop);
+	if (rc)
+		RETURN(rc);
+	LASSERT(lop);
+	if (lop->lop_declare_write_rec == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	if (!raised)
+		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+	rc = lop->lop_declare_write_rec(env, handle, rec, idx, th);
+	if (!raised)
+		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_declare_write_rec);
+
+int llog_write_rec(const struct lu_env *env, struct llog_handle *handle,
+		   struct llog_rec_hdr *rec, struct llog_cookie *logcookies,
+		   int numcookies, void *buf, int idx, struct thandle *th)
+{
+	struct llog_operations	*lop;
+	int			 raised, rc, buflen;
+
+	ENTRY;
+
+	rc = llog_handle2ops(handle, &lop);
+	if (rc)
+		RETURN(rc);
+
+	LASSERT(lop);
+	if (lop->lop_write_rec == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	if (buf)
+		buflen = rec->lrh_len + sizeof(struct llog_rec_hdr) +
+			 sizeof(struct llog_rec_tail);
+	else
+		buflen = rec->lrh_len;
+	LASSERT(cfs_size_round(buflen) == buflen);
+
+	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	if (!raised)
+		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+	rc = lop->lop_write_rec(env, handle, rec, logcookies, numcookies,
+				buf, idx, th);
+	if (!raised)
+		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_write_rec);
+
+int llog_add(const struct lu_env *env, struct llog_handle *lgh,
+	     struct llog_rec_hdr *rec, struct llog_cookie *logcookies,
+	     void *buf, struct thandle *th)
+{
+	int raised, rc;
+
+	ENTRY;
+
+	if (lgh->lgh_logops->lop_add == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	if (!raised)
+		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+	rc = lgh->lgh_logops->lop_add(env, lgh, rec, logcookies, buf, th);
+	if (!raised)
+		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_add);
+
+int llog_declare_add(const struct lu_env *env, struct llog_handle *lgh,
+		     struct llog_rec_hdr *rec, struct thandle *th)
+{
+	int raised, rc;
+
+	ENTRY;
+
+	if (lgh->lgh_logops->lop_declare_add == NULL)
+		RETURN(-EOPNOTSUPP);
+
+	raised = cfs_cap_raised(CFS_CAP_SYS_RESOURCE);
+	if (!raised)
+		cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
+	rc = lgh->lgh_logops->lop_declare_add(env, lgh, rec, th);
+	if (!raised)
+		cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_declare_add);
+
+/**
  * Helper function to open llog or create it if doesn't exist.
  * It hides all transaction handling from caller.
  */
@@ -646,6 +829,56 @@ int llog_erase(const struct lu_env *env, struct llog_ctxt *ctxt,
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_erase);
+
+/*
+ * Helper function for write record in llog.
+ * It hides all transaction handling from caller.
+ * Valid only with local llog.
+ */
+int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
+	       struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
+	       int cookiecount, void *buf, int idx)
+{
+	int rc;
+
+	ENTRY;
+
+	LASSERT(loghandle);
+	LASSERT(loghandle->lgh_ctxt);
+
+	if (loghandle->lgh_obj != NULL) {
+		struct dt_device	*dt;
+		struct thandle		*th;
+
+		dt = lu2dt_dev(loghandle->lgh_obj->do_lu.lo_dev);
+
+		th = dt_trans_create(env, dt);
+		if (IS_ERR(th))
+			RETURN(PTR_ERR(th));
+
+		rc = llog_declare_write_rec(env, loghandle, rec, idx, th);
+		if (rc)
+			GOTO(out_trans, rc);
+
+		rc = dt_trans_start_local(env, dt, th);
+		if (rc)
+			GOTO(out_trans, rc);
+
+		cfs_down_write(&loghandle->lgh_lock);
+		rc = llog_write_rec(env, loghandle, rec, reccookie,
+				    cookiecount, buf, idx, th);
+		cfs_up_write(&loghandle->lgh_lock);
+out_trans:
+		dt_trans_stop(env, dt, th);
+	} else { /* lvfs compatibility */
+		cfs_down_write(&loghandle->lgh_lock);
+		rc = llog_write_rec(env, loghandle, rec, reccookie,
+				    cookiecount, buf, idx, NULL);
+		cfs_up_write(&loghandle->lgh_lock);
+	}
+	RETURN(rc);
+}
+EXPORT_SYMBOL(llog_write);
 
 int llog_open(const struct lu_env *env, struct llog_ctxt *ctxt,
 	      struct llog_handle **lgh, struct llog_logid *logid,

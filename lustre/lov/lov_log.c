@@ -103,13 +103,13 @@ static int lov_llog_origin_add(const struct lu_env *env,
                         break;
                 }
 
-                /* inject error in llog_add() below */
-                if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FAIL_LOV_LOG_ADD)) {
-                        llog_ctxt_put(cctxt);
-                        cctxt = NULL;
-                }
-		rc = llog_add(env, cctxt, rec, NULL, logcookies + cookies,
-			      numcookies - cookies);
+		/* inject error in llog_obd_add() below */
+		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_FAIL_LOV_LOG_ADD)) {
+			llog_ctxt_put(cctxt);
+			cctxt = NULL;
+		}
+		rc = llog_obd_add(env, cctxt, rec, NULL, logcookies + cookies,
+				  numcookies - cookies);
                 llog_ctxt_put(cctxt);
                 if (rc < 0) {
                         CERROR("Can't add llog (rc = %d) for stripe %d\n",
@@ -118,7 +118,7 @@ static int lov_llog_origin_add(const struct lu_env *env,
                                sizeof(struct llog_cookie));
                         rc = 1; /* skip this cookie */
                 }
-                /* Note that rc is always 1 if llog_add was successful */
+		/* Note that rc is always 1 if llog_obd_add was successful */
                 cookies += rc;
         }
         RETURN(cookies);
@@ -200,12 +200,12 @@ static int lov_llog_repl_cancel(const struct lu_env *env,
 }
 
 static struct llog_operations lov_mds_ost_orig_logops = {
-        lop_add: lov_llog_origin_add,
-        lop_connect: lov_llog_origin_connect
+	.lop_obd_add	= lov_llog_origin_add,
+	.lop_connect	= lov_llog_origin_connect,
 };
 
 static struct llog_operations lov_size_repl_logops = {
-        lop_cancel: lov_llog_repl_cancel
+	.lop_cancel	= lov_llog_repl_cancel,
 };
 
 int lov_llog_init(struct obd_device *obd, struct obd_llog_group *olg,

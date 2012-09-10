@@ -3775,7 +3775,7 @@ int __init osc_init(void)
         osc_mds_ost_orig_logops = llog_lvfs_ops;
         osc_mds_ost_orig_logops.lop_setup = llog_obd_origin_setup;
         osc_mds_ost_orig_logops.lop_cleanup = llog_obd_origin_cleanup;
-        osc_mds_ost_orig_logops.lop_add = llog_obd_origin_add;
+	osc_mds_ost_orig_logops.lop_obd_add = llog_obd_origin_add;
         osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
 
         RETURN(rc);

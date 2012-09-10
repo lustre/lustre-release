@@ -79,6 +79,7 @@ struct lvfs_run_ctxt {
         int                      ngroups;
         struct lvfs_callback_ops cb_ops;
         struct group_info       *group_info;
+	struct dt_device	*dt;
 #ifdef OBD_CTXT_DEBUG
         __u32                    magic;
 #endif
