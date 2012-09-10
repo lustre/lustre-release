@@ -227,6 +227,12 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 #ifdef CONFIG_FS_POSIX_ACL
         data->ocd_connect_flags |= OBD_CONNECT_ACL;
 #endif
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDC_LIGHTWEIGHT))
+		/* flag mdc connection as lightweight, only used for test
+		 * purpose, use with care */
+                data->ocd_connect_flags |= OBD_CONNECT_LIGHTWEIGHT;
+
         data->ocd_ibits_known = MDS_INODELOCK_FULL;
         data->ocd_version = LUSTRE_VERSION_CODE;
 

@@ -419,14 +419,38 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
                 lcd->lcd_last_data = mti->mti_opdata;
         }
 
-        if (off <= 0) {
-                CERROR("client idx %d has offset %lld\n", ted->ted_lr_idx, off);
-                err = -EINVAL;
-        } else {
+	if ((mti->mti_exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0) {
+		/* Although lightweight (LW) connections have no slot in
+		 * last_rcvd, we still want to maintain the in-memory
+		 * lsd_client_data structure in order to properly handle reply
+		 * reconstruction. */
+		struct lu_target	*tg = &mdt->mdt_lut;
+		bool			 update = false;
+
+		cfs_mutex_unlock(&ted->ted_lcd_lock);
+		err = 0;
+
+		/* All operations performed by LW clients are synchronous and
+		 * we store the committed transno in the last_rcvd header */
+		cfs_spin_lock(&tg->lut_translock);
+		if (mti->mti_transno > tg->lut_lsd.lsd_last_transno) {
+			tg->lut_lsd.lsd_last_transno = mti->mti_transno;
+			update = true;
+		}
+		cfs_spin_unlock(&tg->lut_translock);
+
+		if (update)
+			err = lut_server_data_write(mti->mti_env, tg, th);
+	} else if (off <= 0) {
+		CERROR("%s: client idx %d has offset %lld\n",
+		       mdt2obd_dev(mdt)->obd_name, ted->ted_lr_idx, off);
+		cfs_mutex_unlock(&ted->ted_lcd_lock);
+		err = -EINVAL;
+	} else {
 		err = lut_client_data_write(mti->mti_env, &mdt->mdt_lut, lcd,
 					    &off, th);
+		cfs_mutex_unlock(&ted->ted_lcd_lock);
         }
-        cfs_mutex_unlock(&ted->ted_lcd_lock);
         RETURN(err);
 }
 

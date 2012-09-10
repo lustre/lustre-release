@@ -744,7 +744,7 @@ int target_handle_connect(struct ptlrpc_request *req)
         int rc = 0;
         char *target_start;
         int target_len;
-        int mds_conn = 0;
+	bool	 mds_conn = false, lw_client = false;
         struct obd_connect_data *data, *tmpdata;
         int size, tmpsize;
         lnet_nid_t *client_nid = NULL;
@@ -870,7 +870,10 @@ int target_handle_connect(struct ptlrpc_request *req)
 
         if ((lustre_msg_get_op_flags(req->rq_reqmsg) & MSG_CONNECT_INITIAL) &&
             (data->ocd_connect_flags & OBD_CONNECT_MDS))
-                mds_conn = 1;
+		mds_conn = true;
+
+	if ((data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
+		lw_client = true;
 
         /* lctl gets a backstage, all-access pass. */
         if (obd_uuid_equals(&cluuid, &target->obd_uuid))
@@ -978,8 +981,8 @@ no_export:
               export ? (long)export->exp_last_request_time : 0);
 
         /* If this is the first time a client connects, reset the recovery
-         * timer */
-        if (rc == 0 && target->obd_recovering)
+	 * timer. Discard lightweight connections which might be local */
+	if (!lw_client && rc == 0 && target->obd_recovering)
                 check_and_start_recovery_timer(target, req, export == NULL);
 
         /* We want to handle EALREADY but *not* -EALREADY from
@@ -997,7 +1000,8 @@ no_export:
         client_nid = &req->rq_peer.nid;
 
         if (export == NULL) {
-                if (target->obd_recovering) {
+		/* allow lightweight connections during recovery */
+		if (target->obd_recovering && !lw_client) {
                         cfs_time_t t;
 			int	   c; /* connected */
 			int	   i; /* in progress */
@@ -1128,7 +1132,7 @@ dont_check_exports:
                              &export->exp_nid_hash);
         }
 
-        if (target->obd_recovering && !export->exp_in_recovery) {
+	if (target->obd_recovering && !export->exp_in_recovery && !lw_client) {
                 int has_transno;
                 __u64 transno = data->ocd_transno;
 
@@ -1168,7 +1172,7 @@ dont_check_exports:
         }
 
         /* Tell the client we're in recovery, when client is involved in it. */
-        if (target->obd_recovering)
+	if (target->obd_recovering && !lw_client)
                 lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECOVERING);
 
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_CONN);

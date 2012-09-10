@@ -115,11 +115,15 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 	__u64				*transno_p;
 	loff_t				 off;
 	int				 err;
+	bool				 lw_client = false;
 
 	ENTRY;
 
 	LASSERT(ofd);
 	LASSERT(info->fti_exp);
+
+	if ((info->fti_exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
+		lw_client = true;
 
 	fed = &info->fti_exp->exp_filter_data;
 	LASSERT(fed);
@@ -134,7 +138,7 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 	}
 	/* ofd connect may cause transaction before export has last_rcvd
 	 * slot */
-	if (fed->fed_ted.ted_lr_idx < 0)
+	if (fed->fed_ted.ted_lr_idx < 0 && !lw_client)
 		RETURN(0);
 	off = fed->fed_ted.ted_lr_off;
 
@@ -157,9 +161,30 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 	}
 
 	*transno_p = info->fti_transno;
-	LASSERT(fed->fed_ted.ted_lr_off > 0);
-	err = lut_client_data_write(info->fti_env, &ofd->ofd_lut, lcd,
+	if (lw_client) {
+		/* Although lightweight (LW) connections have no slot in
+		 * last_rcvd, we still want to maintain the in-memory
+		 * lsd_client_data structure in order to properly handle reply
+		 * reconstruction. */
+		struct lu_target        *tg =&ofd->ofd_lut;
+		bool                     update = false;
+
+		err = 0;
+		/* All operations performed by LW clients are synchronous and
+		 * we store the committed transno in the last_rcvd header */
+		cfs_spin_lock(&tg->lut_translock);
+		if (info->fti_transno > tg->lut_lsd.lsd_last_transno) {
+			tg->lut_lsd.lsd_last_transno = info->fti_transno;
+			update = true;
+		}
+		cfs_spin_unlock(&tg->lut_translock);
+		if (update)
+			err = lut_server_data_write(info->fti_env, tg, th);
+	} else {
+		LASSERT(fed->fed_ted.ted_lr_off > 0);
+		err = lut_client_data_write(info->fti_env, &ofd->ofd_lut, lcd,
 				    &off, th);
+	}
 
 	RETURN(err);
 }

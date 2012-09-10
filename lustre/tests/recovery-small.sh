@@ -1491,6 +1491,42 @@ test_105()
 }
 run_test 105 "IR: NON IR clients support"
 
+cleanup_106() {
+	trap 0
+	umount_client $DIR2
+}
+
+test_106() { # LU-1789
+#define OBD_FAIL_MDC_LIGHTWEIGHT         0x805
+	$LCTL set_param fail_loc=0x805
+
+	trap cleanup_106 EXIT
+
+	# enable lightweight flag on mdc connection
+	mount_client $DIR2
+
+	local MDS_NEXP=$(do_facet $SINGLEMDS \
+			 lctl get_param -n mdt.${mds1_svc}.num_exports |
+			 cut -d' ' -f2)
+	$LCTL set_param fail_loc=0
+
+	touch $DIR2/$tfile || error "failed to create empty file"
+	replay_barrier $SINGLEMDS
+	facet_failover $SINGLEMDS
+
+	# lightweight connection must be evicted
+	wait_client_evicted $SINGLEMDS $MDS_NEXP $((TIMEOUT * 3)) || \
+		error "lightweight client not evicted by mds"
+
+	# and all operations performed by lightweight client should be
+	# synchronous, so the file created before mds restart should be there
+	$CHECKSTAT -t file $DIR/$tfile || error "file not present"
+	rm -f $DIR/$tfile
+
+	cleanup_106
+}
+run_test 106 "lightweight connection support"
+
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
 exit_status

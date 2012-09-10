@@ -826,8 +826,6 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
         if (oh->ot_handle != NULL) {
                 handle_t *hdl = oh->ot_handle;
 
-                hdl->h_sync = th->th_sync;
-
                 /*
                  * add commit callback
                  * notice we don't do this in osd_trans_start()
@@ -855,6 +853,10 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
                 rc = dt_txn_hook_stop(env, th);
                 if (rc != 0)
                         CERROR("Failure in transaction hook: %d\n", rc);
+
+		/* hook functions might modify th_sync */
+		hdl->h_sync = th->th_sync;
+
                 oh->ot_handle = NULL;
                 OSD_CHECK_SLOW_TH(oh, oti->oti_dev,
                                   rc = ldiskfs_journal_stop(hdl));

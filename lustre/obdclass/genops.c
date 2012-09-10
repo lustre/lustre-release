@@ -1295,6 +1295,11 @@ void class_disconnect_stale_exports(struct obd_device *obd,
                                     &exp->exp_obd->obd_uuid))
                         continue;
 
+		/* don't evict clients which have no slot in last_rcvd
+		 * (e.g. lightweight connection) */
+		if (exp->exp_target_data.ted_lr_idx == -1)
+			continue;
+
 		cfs_spin_lock(&exp->exp_lock);
 		if (test_export(exp)) {
 			cfs_spin_unlock(&exp->exp_lock);
