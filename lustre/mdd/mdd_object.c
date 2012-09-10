@@ -1578,7 +1578,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
 #ifdef CONFIG_FS_POSIX_ACL
         if (ma->ma_attr.la_valid & LA_MODE) {
                 mdd_read_lock(env, obj, MOR_TGT_CHILD);
-                rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_ACL_ACCESS,
+                rc = mdo_xattr_get(env, obj, &LU_BUF_NULL,XATTR_NAME_ACL_ACCESS,
                                    BYPASS_CAPA);
                 mdd_read_unlock(env, obj);
                 if (rc == -EOPNOTSUPP || rc == -ENODATA)
