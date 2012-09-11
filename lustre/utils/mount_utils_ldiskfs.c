@@ -150,6 +150,7 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 	if (num < 1 && ferror(filep)) {
 		fprintf(stderr, "%s: Unable to write to file (%s): %s\n",
 			progname, filepnm, strerror(errno));
+		fclose(filep);
 		goto out_umnt;
 	}
 	fclose(filep);
@@ -1023,8 +1024,10 @@ static char *absolute_path(char *devname)
 		return NULL;
 
 	if (devname[0] != '/') {
-		if (getcwd(buf, sizeof(buf) - 1) == NULL)
+		if (getcwd(buf, sizeof(buf) - 1) == NULL) {
+			free(path);
 			return NULL;
+		}
 		strcat(buf, "/");
 		strcat(buf, devname);
 	} else {

@@ -177,6 +177,7 @@ static int filter_recov_log_unlink_cb(struct llog_ctxt *ctxt,
         if (oa->o_seq > FID_SEQ_OST_MAX) {
                 CERROR("%s: invalid group number "LPU64" > MAX_CMD_GROUP %u\n",
                         exp->exp_obd->obd_name, oa->o_seq, FID_SEQ_OST_MAX);
+		OBDO_FREE(oa);
                 RETURN(-EINVAL);
         }
 

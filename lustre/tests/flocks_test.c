@@ -132,6 +132,7 @@ int t1(int argc, char *argv[])
         int fd;
         int mount_with_flock = 0;
         int error = 0;
+	int rc = 0;
 
         if (argc != 5) {
                 t1_usage();
@@ -167,13 +168,19 @@ int t1(int argc, char *argv[])
                 error = flock(fd, LOCK_EX);
         } else {
                 t1_usage();
-                return EXIT_FAILURE;
+		rc = EXIT_FAILURE;
+		goto out;
         }
 
         if (mount_with_flock)
-                return((error == 0) ? EXIT_SUCCESS : EXIT_FAILURE);
+		rc = ((error == 0) ? EXIT_SUCCESS : EXIT_FAILURE);
         else
-                return((error == 0) ? EXIT_FAILURE : EXIT_SUCCESS);
+		rc = ((error == 0) ? EXIT_FAILURE : EXIT_SUCCESS);
+
+out:
+	if (fd >= 0)
+		close(fd);
+	return rc;
 }
 
 /** ===============================================================
@@ -244,7 +251,8 @@ int t2(int argc, char* argv[])
         rc = t_fcntl(fd, F_GETFL);
         if ((rc & O_APPEND) == 0) {
                 fprintf(stderr, "error get flag: ret %x\n", rc);
-                return EXIT_FAILURE;
+		rc = EXIT_FAILURE;
+		goto out;
         }
 
         ta.lock = &lock;

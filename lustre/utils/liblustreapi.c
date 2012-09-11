@@ -410,6 +410,8 @@ static int get_param_obdvar(const char *fsname, const char *file_path,
                         llapi_error(LLAPI_MSG_ERROR, rc,
                                     "'%s' is not on a Lustre filesystem",
                                     file_path);
+			if (fp != NULL)
+				fclose(fp);
                         return rc;
                 }
         } else if (fsname) {
@@ -1016,7 +1018,7 @@ int llapi_get_poollist(const char *name, char **poollist, int list_size,
                         rc = -errno;
                         llapi_error(LLAPI_MSG_ERROR, rc,
                                     "Error reading pool list for '%s'", name);
-                        return rc;
+			goto out;
                 } else if ((rc == 0) && (cookie == NULL)) {
                         /* end of directory */
                         break;
@@ -1027,13 +1029,17 @@ int llapi_get_poollist(const char *name, char **poollist, int list_size,
                         continue;
 
                 /* check output bounds */
-                if (nb_entries >= list_size)
-                        return -EOVERFLOW;
+		if (nb_entries >= list_size) {
+			rc = -EOVERFLOW;
+			goto out;
+		}
 
                 /* +2 for '.' and final '\0' */
-                if (used + strlen(pool.d_name) + strlen(fsname) + 2
-                    > buffer_size)
-                        return -EOVERFLOW;
+		if (used + strlen(pool.d_name) + strlen(fsname) + 2
+		    > buffer_size) {
+			rc = -EOVERFLOW;
+			goto out;
+		}
 
                 sprintf(buffer + used, "%s.%s", fsname, pool.d_name);
                 poollist[nb_entries] = buffer + used;
@@ -1041,8 +1047,9 @@ int llapi_get_poollist(const char *name, char **poollist, int list_size,
                 nb_entries++;
         }
 
+out:
         closedir(dir);
-        return nb_entries;
+	return ((rc != 0) ? rc : nb_entries);
 }
 
 /* wrapper for lfs.c and obd.c */
@@ -1606,8 +1613,10 @@ retry_get_uuids:
                 if (ret == -EOVERFLOW) {
                         uuids_temp = realloc(uuids, obdcount *
                                              sizeof(struct obd_uuid));
-                        if (uuids_temp != NULL)
+			if (uuids_temp != NULL) {
+				uuids = uuids_temp;
                                 goto retry_get_uuids;
+			}
                         else
                                 ret = -ENOMEM;
                 }
@@ -3068,7 +3077,7 @@ static int rmtacl_notify(int ops)
 {
         FILE *fp;
         struct mntent *mnt;
-        int found = 0, fd, rc;
+	int found = 0, fd = 0, rc = 0;
 
         fp = setmntent(MOUNTED, "r");
         if (fp == NULL) {
@@ -3083,7 +3092,7 @@ static int rmtacl_notify(int ops)
                 if (!mnt)
                         break;
 
-                if (!llapi_is_lustre_mnt(mnt))
+		if (!llapi_is_lustre_mnt(mnt))
                         continue;
 
                 fd = open(mnt->mnt_dir, O_RDONLY | O_DIRECTORY);
@@ -3091,20 +3100,24 @@ static int rmtacl_notify(int ops)
                         rc = -errno;
                         llapi_error(LLAPI_MSG_ERROR, rc,
                                     "Can't open '%s'\n", mnt->mnt_dir);
-                        return rc;
+			goto out;
                 }
 
                 rc = ioctl(fd, LL_IOC_RMTACL, ops);
                 if (rc < 0) {
                         rc = -errno;
                         llapi_error(LLAPI_MSG_ERROR, rc, "ioctl %d\n", fd);
-                        return rc;
+			goto out;
                 }
 
                 found++;
         }
+
+out:
         endmntent(fp);
-        return found;
+	if (fd >= 0)
+		close(fd);
+	return ((rc != 0) ? rc : found);
 }
 
 static char *next_token(char *p, int div)

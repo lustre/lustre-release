@@ -2146,9 +2146,12 @@ int ll_prep_inode(struct inode **inode,
 	ibits = MDS_INODELOCK_LAYOUT;
 	if (S_ISREG(md.body->mode) && sbi->ll_flags & LL_SBI_LAYOUT_LOCK &&
 	    md.lsm != NULL && !ll_have_md_lock(*inode, &ibits, LCK_MINMODE)) {
+		char *fsname = ll_get_fsname(*inode);
 		CERROR("%s: inode "DFID" (%p) layout lock not granted.\n",
-			ll_get_fsname(*inode), PFID(ll_inode2fid(*inode)),
+			fsname, PFID(ll_inode2fid(*inode)),
 			*inode);
+		if (fsname)
+			OBD_FREE(fsname, MGS_PARAM_MAXLEN);
 	}
 
 out:

@@ -2404,7 +2404,7 @@ static int flushctx_ioctl(char *mp)
 static int lfs_flushctx(int argc, char **argv)
 {
         int     kdestroy = 0, c;
-        FILE   *proc;
+	FILE   *proc = NULL;
         char    procline[PATH_MAX], *line;
         int     rc = 0;
 
@@ -2447,7 +2447,8 @@ static int lfs_flushctx(int argc, char **argv)
                                 fprintf(stderr, "%s: unexpected format in "
                                                 "/proc/mounts\n",
                                         argv[0]);
-                                return -1;
+				rc = -1;
+				goto out;
                         }
 
                         if (strcmp(fs, "lustre") != 0)
@@ -2469,6 +2470,9 @@ static int lfs_flushctx(int argc, char **argv)
                 }
         }
 
+out:
+	if (proc != NULL)
+		fclose(proc);
         return rc;
 }
 
@@ -2753,14 +2757,12 @@ static int lfs_data_version(int argc, char **argv)
         if (rc) {
                 fprintf(stderr, "can't get version for %s: %s\n", path,
                         strerror(errno = -rc));
-                return rc;
-        }
-
-	printf(LPU64 "\n", data_version);
+	} else
+		printf(LPU64 "\n", data_version);
 
 	close(fd);
 
-	return 0;
+	return rc;
 }
 
 int main(int argc, char **argv)
