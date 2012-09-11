@@ -81,6 +81,8 @@ struct lquota_thread_info *lquota_info(const struct lu_env *env)
 /* lquota_lib.c */
 struct dt_object *acct_obj_lookup(const struct lu_env *, struct dt_device *,
 				  int);
+void lquota_generate_fid(struct lu_fid *, int, int, int);
+int lquota_extract_fid(struct lu_fid *, int *, int *, int *);
 
 /* lproc_quota.c */
 extern struct file_operations lprocfs_quota_seq_fops;

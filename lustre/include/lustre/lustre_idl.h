@@ -1855,6 +1855,24 @@ struct quota_adjust_qunit {
 };
 extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
 
+/* Quota types currently supported */
+enum {
+	LQUOTA_TYPE_USR	= 0x00, /* maps to USRQUOTA */
+	LQUOTA_TYPE_GRP	= 0x01, /* maps to GRPQUOTA */
+	LQUOTA_TYPE_MAX
+};
+
+/* There are 2 different resource types on which a quota limit can be enforced:
+ * - inodes on the MDTs
+ * - blocks on the OSTs */
+enum {
+	LQUOTA_RES_MD		= 0x01, /* skip 0 to avoid null oid in FID */
+	LQUOTA_RES_DT		= 0x02,
+	LQUOTA_LAST_RES,
+	LQUOTA_FIRST_RES	= LQUOTA_RES_MD
+};
+#define LQUOTA_NR_RES (LQUOTA_LAST_RES - LQUOTA_FIRST_RES + 1)
+
 /*
  * Space accounting support
  * Format of an accounting record, providing disk usage information for a given

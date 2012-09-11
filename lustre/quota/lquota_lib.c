@@ -223,6 +223,63 @@ out:
 }
 EXPORT_SYMBOL(lquotactl_slv);
 
+/**
+ * Helper routine returning the FID associated with the global index storing
+ * quota settings for the storage pool \pool_id, resource type \pool_type and
+ * the quota type \quota_type.
+ */
+void lquota_generate_fid(struct lu_fid *fid, int pool_id, int pool_type,
+                         int quota_type)
+{
+	__u8	 qtype;
+
+	qtype = (quota_type == USRQUOTA) ? LQUOTA_TYPE_USR : LQUOTA_TYPE_GRP;
+
+	fid->f_seq = FID_SEQ_QUOTA_GLB;
+	fid->f_oid = (qtype << 24) | (pool_type << 16) | (__u16)pool_id;
+	fid->f_ver = 0;
+}
+
+/**
+ * Helper routine used to extract pool ID, pool type and quota type from a
+ * given FID.
+ */
+int lquota_extract_fid(struct lu_fid *fid, int *pool_id, int *pool_type,
+		       int *quota_type)
+{
+	unsigned int	 tmp;
+	ENTRY;
+
+	if (fid->f_seq != FID_SEQ_QUOTA_GLB)
+		RETURN(-EINVAL);
+
+	if (pool_id != NULL) {
+		tmp = fid->f_oid & 0xffffU;
+		if (tmp != 0)
+			/* we only support pool ID 0 for the time being */
+			RETURN(-ENOTSUPP);
+		*pool_id = tmp;
+	}
+
+	if (pool_type != NULL) {
+		tmp = (fid->f_oid >> 16) & 0xffU;
+		if (tmp >= LQUOTA_LAST_RES)
+			RETURN(-ENOTSUPP);
+
+		*pool_type = tmp;
+	}
+
+	if (quota_type != NULL) {
+		tmp = fid->f_oid >> 24;
+		if (tmp >= LQUOTA_TYPE_MAX)
+			RETURN(-ENOTSUPP);
+
+		*quota_type = (tmp == LQUOTA_TYPE_USR) ? USRQUOTA : GRPQUOTA;
+	}
+
+	RETURN(0);
+}
+
 static int __init init_lquota(void)
 {
 	int	rc;
