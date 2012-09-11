@@ -1966,6 +1966,9 @@ static int osd_declare_object_create(const struct lu_env *env,
         if (fid_is_norm(lu_object_fid(&dt->do_lu))) {
                 OSD_DECLARE_OP(oh, insert);
                 oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+		/* Reuse idle OI block may cause additional one OI block
+		 * to be changed. */
+		oh->ot_credits += 1;
         }
         /* If this is directory, then we expect . and .. to be inserted as
          * well. The one directory block always needs to be created for the
@@ -2041,7 +2044,14 @@ static int osd_declare_object_destroy(const struct lu_env *env,
         OSD_DECLARE_OP(oh, destroy);
         OSD_DECLARE_OP(oh, delete);
         oh->ot_credits += osd_dto_credits_noquota[DTO_OBJECT_DELETE];
-        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+        /* XXX: So far, only normal fid needs to be inserted into the OI,
+         *      so only normal fid needs to be removed from the OI also. */
+        if (fid_is_norm(lu_object_fid(&dt->do_lu))) {
+		oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+		/* Recycle idle OI leaf may cause additional three OI blocks
+		 * to be changed. */
+		oh->ot_credits += 3;
+        }
 
         osd_declare_qid(dt, oh, USRQUOTA, inode->i_uid, inode);
         osd_declare_qid(dt, oh, GRPQUOTA, inode->i_gid, inode);

@@ -799,26 +799,25 @@ static void lfix_root(void *buf,
 	LASSERT((keysize + ptrsize) >=
 		(sizeof(struct dx_countlimit) + sizeof(__u32)));
 
-	entry = limit + 1;
+	entry = (void *)(limit + 1);
 	/* Put "idle_blocks" just after the limit. There was padding after
 	 * the limit, the "idle_blocks" re-uses part of the padding, so no
 	 * compatibility issues with old layout.
 	 */
 	*(__u32 *)entry = 0;
 
-        entry = root + 1;
-        /*
-         * Skip over @limit.
-         */
-        entry += keysize + ptrsize;
+	/*
+	 * Skip over @limit.
+	 */
+	entry = (void *)(root + 1) + keysize + ptrsize;
 
-        /*
-         * Entry format is <key> followed by <ptr>. In the minimal tree
-         * consisting of a root and single node, <key> is a minimal possible
-         * key.
-         *
-         * XXX: this key is hard-coded to be a sequence of 0's.
-         */
+	/*
+	 * Entry format is <key> followed by <ptr>. In the minimal tree
+	 * consisting of a root and single node, <key> is a minimal possible
+	 * key.
+	 *
+	 * XXX: this key is hard-coded to be a sequence of 0's.
+	 */
 
 	memset(entry, 0, keysize);
 	entry += keysize;
