@@ -297,7 +297,7 @@ static int osd_bufs_get_read(const struct lu_env *env, struct osd_object *obj,
 
 				lnb->rc = 0;
 				lnb->lnb_file_offset = off;
-				lnb->offset = bufoff & ~CFS_PAGE_MASK;
+				lnb->lnb_page_offset = bufoff & ~CFS_PAGE_MASK;
 				lnb->len = thispage;
 				lnb->page = kmem_to_page(dbp[i]->db_data +
 								bufoff);
@@ -363,7 +363,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 				plen = min_t(int, sz_in_block, CFS_PAGE_SIZE);
 
 				lnb[i].lnb_file_offset = off;
-				lnb[i].offset = 0;
+				lnb[i].lnb_page_offset = 0;
 				lnb[i].len = plen;
 				lnb[i].rc = 0;
 				if (sz_in_block == bs)
@@ -397,7 +397,7 @@ static int osd_bufs_get_write(const struct lu_env *env, struct osd_object *obj,
 				plen = min_t(int, sz_in_block, CFS_PAGE_SIZE);
 
 				lnb[i].lnb_file_offset = off;
-				lnb[i].offset = 0;
+				lnb[i].lnb_page_offset = 0;
 				lnb[i].len = plen;
 				lnb[i].rc = 0;
 				lnb[i].dentry = NULL;

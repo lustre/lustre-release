@@ -790,7 +790,7 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 if (page_rc != 0) {             /* some data! */
                         LASSERT (local_nb[i].page != NULL);
                         ptlrpc_prep_bulk_page(desc, local_nb[i].page,
-                                              local_nb[i].offset & ~CFS_PAGE_MASK,
+					      local_nb[i].lnb_page_offset,
                                               page_rc);
                 }
 
@@ -1024,7 +1024,7 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 
         for (i = 0; i < npages; i++)
                 ptlrpc_prep_bulk_page(desc, local_nb[i].page,
-                                      local_nb[i].offset & ~CFS_PAGE_MASK,
+				      local_nb[i].lnb_page_offset,
                                       local_nb[i].len);
 
         rc = sptlrpc_svc_prep_bulk(req, desc);
@@ -1112,8 +1112,8 @@ skip_transfer:
                                    body->oa.o_id,
                                    body->oa.o_valid & OBD_MD_FLGROUP ?
                                                 body->oa.o_seq : (__u64)0,
-                                   local_nb[0].offset,
-                                   local_nb[npages-1].offset +
+				   local_nb[0].lnb_file_offset,
+				   local_nb[npages-1].lnb_file_offset +
                                    local_nb[npages-1].len - 1 );
                 CERROR("client csum %x, original server csum %x, "
                        "server csum now %x\n",

@@ -317,7 +317,8 @@ static int filter_map_remote_to_local(int objcount, struct obd_ioobj *obj,
 
                         if (plen > len)
                                 plen = len;
-                        lnb->offset = offset;
+			lnb->lnb_file_offset = offset;
+			lnb->lnb_page_offset = poff;
                         lnb->len = plen;
                         lnb->flags = rnb->flags;
                         lnb->page = NULL;
@@ -423,19 +424,20 @@ static int filter_preprw_read(int cmd, struct obd_export *exp, struct obdo *oa,
 
                 lnb->dentry = dentry;
 
-                if (isize <= lnb->offset)
-                        /* If there's no more data, abort early.  lnb->rc == 0,
-                         * so it's easy to detect later. */
-                        break;
+		if (isize <= lnb->lnb_file_offset)
+			/* If there's no more data, abort early.  lnb->rc == 0,
+			 * so it's easy to detect later. */
+			break;
 
-                lnb->page = filter_get_page(obd, inode, lnb->offset, 0);
-                if (lnb->page == NULL)
-                        GOTO(cleanup, rc = -ENOMEM);
+		lnb->page = filter_get_page(obd, inode, lnb->lnb_file_offset,
+					    0);
+		if (lnb->page == NULL)
+			GOTO(cleanup, rc = -ENOMEM);
 
-                lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_CACHE_ACCESS, 1);
+		lprocfs_counter_add(obd->obd_stats, LPROC_FILTER_CACHE_ACCESS, 1);
 
-                if (isize < lnb->offset + lnb->len - 1)
-                        lnb->rc = isize - lnb->offset;
+		if (isize < lnb->lnb_file_offset + lnb->len - 1)
+			lnb->rc = isize - lnb->lnb_file_offset;
                 else
                         lnb->rc = lnb->len;
 
@@ -535,8 +537,9 @@ static int filter_grant_check(struct obd_export *exp, struct obdo *oa,
 
                         /* should match the code in osc_exit_cache */
                         bytes = lnb[n].len;
-                        bytes += lnb[n].offset & (blocksize - 1);
-                        tmp = (lnb[n].offset + lnb[n].len) & (blocksize - 1);
+			bytes += lnb[n].lnb_file_offset & (blocksize - 1);
+			tmp = (lnb[n].lnb_file_offset + lnb[n].len) &
+			      (blocksize - 1);
                         if (tmp)
                                 bytes += blocksize - tmp;
 
@@ -810,8 +813,8 @@ retry:
                  * needs to keep the pages all aligned properly. */
                 lnb->dentry = dentry;
 
-                lnb->page = filter_get_page(obd, dentry->d_inode, lnb->offset,
-                                            localreq);
+		lnb->page = filter_get_page(obd, dentry->d_inode,
+					    lnb->lnb_file_offset, localreq);
                 if (lnb->page == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
@@ -840,7 +843,8 @@ retry:
                         if (maxidx >= lnb->page->index) {
                                 LL_CDEBUG_PAGE(D_PAGE, lnb->page, "write %u @ "
                                                LPU64" flg %x before EOF %llu\n",
-                                               lnb->len, lnb->offset,lnb->flags,
+					       lnb->len, lnb->lnb_file_offset,
+					       lnb->flags,
                                                i_size_read(dentry->d_inode));
                                 filter_iobuf_add_page(obd, iobuf,
                                                       dentry->d_inode,
@@ -849,10 +853,11 @@ retry:
                                 long off;
                                 char *p = kmap(lnb->page);
 
-                                off = lnb->offset & ~CFS_PAGE_MASK;
+                                off = lnb->lnb_file_offset & ~CFS_PAGE_MASK;
                                 if (off)
                                         memset(p, 0, off);
-                                off = (lnb->offset + lnb->len) & ~CFS_PAGE_MASK;
+				off = (lnb->lnb_file_offset + lnb->len) &
+				      ~CFS_PAGE_MASK;
                                 if (off)
                                         memset(p + off, 0, CFS_PAGE_SIZE - off);
                                 kunmap(lnb->page);

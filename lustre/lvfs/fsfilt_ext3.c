@@ -369,10 +369,11 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
 
         for (i = 0, j = 0; i < objcount; i++, fso++) {
                 /* two or more dindirect blocks in case we cross boundary */
-                int ndind = (long)((nb[j + fso->fso_bufcnt - 1].offset -
-                                    nb[j].offset) >>
-                                   sb->s_blocksize_bits) /
-                        (EXT3_ADDR_PER_BLOCK(sb) * EXT3_ADDR_PER_BLOCK(sb));
+		int ndind =
+			(long)((nb[j + fso->fso_bufcnt - 1].lnb_file_offset -
+				nb[j].lnb_file_offset) >>
+			       sb->s_blocksize_bits) /
+			(EXT3_ADDR_PER_BLOCK(sb) * EXT3_ADDR_PER_BLOCK(sb));
                 nbitmaps += min(fso->fso_bufcnt, ndind > 0 ? ndind : 2);
 
                 /* leaf, indirect, tindirect blocks for first block */
@@ -381,14 +382,16 @@ static int fsfilt_ext3_credits_needed(int objcount, struct fsfilt_objinfo *fso,
                 j += fso->fso_bufcnt;
         }
 
-        next_indir = nb[0].offset +
-                (EXT3_ADDR_PER_BLOCK(sb) << sb->s_blocksize_bits);
-        for (i = 1; i < niocount; i++) {
-                if (nb[i].offset >= next_indir) {
-                        nbitmaps++;     /* additional indirect */
-                        next_indir = nb[i].offset +
-                                (EXT3_ADDR_PER_BLOCK(sb)<<sb->s_blocksize_bits);
-                } else if (nb[i].offset != nb[i - 1].offset + sb->s_blocksize) {
+	next_indir = nb[0].lnb_file_offset +
+		     (EXT3_ADDR_PER_BLOCK(sb) << sb->s_blocksize_bits);
+	for (i = 1; i < niocount; i++) {
+		if (nb[i].lnb_file_offset >= next_indir) {
+			nbitmaps++;     /* additional indirect */
+			next_indir = nb[i].lnb_file_offset +
+				     (EXT3_ADDR_PER_BLOCK(sb) <<
+				      sb->s_blocksize_bits);
+		} else if (nb[i].lnb_file_offset !=
+			   nb[i - 1].lnb_file_offset + sb->s_blocksize) {
                         nbitmaps++;     /* additional indirect */
                 }
                 nbitmaps += blockpp;    /* each leaf in different group? */

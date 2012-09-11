@@ -395,8 +395,8 @@ static int osd_map_remote_to_local(loff_t offset, ssize_t len, int *nrpages,
 
                 if (plen > len)
                         plen = len;
-                lnb->offset = offset;
-                /* lnb->lnb_page_offset = poff; */
+		lnb->lnb_file_offset = offset;
+		lnb->lnb_page_offset = poff;
                 lnb->len = plen;
                 /* lb->flags = rnb->flags; */
                 lnb->flags = 0;
@@ -467,7 +467,7 @@ int osd_bufs_get(const struct lu_env *env, struct dt_object *d, loff_t pos,
                  * needs to keep the pages all aligned properly. */
                 lnb->dentry = (void *) obj;
 
-                lnb->page = osd_get_page(d, lnb->offset, rw);
+		lnb->page = osd_get_page(d, lnb->lnb_file_offset, rw);
                 if (lnb->page == NULL)
                         GOTO(cleanup, rc = -ENOMEM);
 
@@ -565,11 +565,11 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
                         long off;
                         char *p = kmap(lnb[i].page);
 
-                        off = lnb[i].offset;
-                        if (off)
-                                memset(p, 0, off);
-                        off = lnb[i].offset + lnb[i].len;
-                        off &= ~CFS_PAGE_MASK;
+			off = lnb[i].lnb_page_offset;
+			if (off)
+				memset(p, 0, off);
+			off = (lnb[i].lnb_page_offset + lnb[i].len) &
+			      ~CFS_PAGE_MASK;
                         if (off)
                                 memset(p + off, 0, CFS_PAGE_SIZE - off);
                         kunmap(lnb[i].page);
@@ -645,11 +645,11 @@ static int osd_declare_write_commit(const struct lu_env *env,
 
         /* calculate number of extents (probably better to pass nb) */
 	for (i = 0; i < npages; i++) {
-		if (i && lnb[i].offset !=
-		    lnb[i - 1].offset + lnb[i - 1].len)
+		if (i && lnb[i].lnb_file_offset !=
+		    lnb[i - 1].lnb_file_offset + lnb[i - 1].len)
 			extents++;
 
-		if (!osd_is_mapped(inode, lnb[i].offset))
+		if (!osd_is_mapped(inode, lnb[i].lnb_file_offset))
 			quota_space += CFS_PAGE_SIZE;
 
 		/* ignore quota for the whole request if any page is from
@@ -742,7 +742,7 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
         for (i = 0; i < npages; i++) {
                 if (lnb[i].rc == -ENOSPC &&
-                    osd_is_mapped(inode, lnb[i].offset)) {
+		    osd_is_mapped(inode, lnb[i].lnb_file_offset)) {
                         /* Allow the write to proceed if overwriting an
                          * existing block */
                         lnb[i].rc = 0;
@@ -759,8 +759,8 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                 LASSERT(PageLocked(lnb[i].page));
                 LASSERT(!PageWriteback(lnb[i].page));
 
-                if (lnb[i].offset + lnb[i].len > isize)
-                        isize = lnb[i].offset + lnb[i].len;
+		if (lnb[i].lnb_file_offset + lnb[i].len > isize)
+			isize = lnb[i].lnb_file_offset + lnb[i].len;
 
                 /*
                  * Since write and truncate are serialized by oo_sem, even
@@ -835,14 +835,14 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
         cfs_gettimeofday(&start);
         for (i = 0; i < npages; i++) {
 
-                if (i_size_read(inode) <= lnb[i].offset)
+		if (i_size_read(inode) <= lnb[i].lnb_file_offset)
                         /* If there's no more data, abort early.
                          * lnb->rc == 0, so it's easy to detect later. */
                         break;
 
                 if (i_size_read(inode) <
-                    lnb[i].offset + lnb[i].len - 1)
-                        lnb[i].rc = i_size_read(inode) - lnb[i].offset;
+		    lnb[i].lnb_file_offset + lnb[i].len - 1)
+			lnb[i].rc = i_size_read(inode) - lnb[i].lnb_file_offset;
                 else
                         lnb[i].rc = lnb[i].len;
                 m += lnb[i].len;
