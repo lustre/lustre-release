@@ -2690,9 +2690,15 @@ static int cb_get_mdt_index(char *path, DIR *parent, DIR *d, void *data,
                 return ret;
         }
 
+	/* The 'LASSERT(parent != NULL || d != NULL);' guarantees
+	 * that either 'd' or 'parent' is not null.
+	 * So in all cases llapi_file_fget_mdtidx() is called,
+	 * thus initializing 'mdtidx'. */
         if (param->quiet || !(param->verbose & VERBOSE_DETAIL))
+		/* coverity[uninit_use_in_call] */
                 llapi_printf(LLAPI_MSG_NORMAL, "%d\n", mdtidx);
         else
+		/* coverity[uninit_use_in_call] */
                 llapi_printf(LLAPI_MSG_NORMAL, "%s\nmdt_index:\t%d\n",
                              path, mdtidx);
 
@@ -2858,6 +2864,8 @@ int llapi_ping(char *obd_type, char *obd_name)
                 return rc;
         }
 
+	/* The purpose is to send a byte as a ping, whatever this byte is. */
+	/* coverity[uninit_use_in_call] */
         rc = write(fd, buf, 1);
         if (rc < 0)
                 rc = -errno;
