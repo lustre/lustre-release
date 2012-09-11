@@ -2599,17 +2599,17 @@ static int mdd_readpage_sanity_check(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdd_dir_page_build(const struct lu_env *env, struct mdd_device *mdd,
-                              struct lu_dirpage *dp, int nob,
-                              const struct dt_it_ops *iops, struct dt_it *it,
-                              __u32 attr)
+static int mdd_dir_page_build(const struct lu_env *env, union lu_page *lp,
+			      int nob, const struct dt_it_ops *iops,
+			      struct dt_it *it, __u32 attr, void *arg)
 {
-        void                   *area = dp;
-        int                     result;
-        __u64                   hash = 0;
-        struct lu_dirent       *ent;
-        struct lu_dirent       *last = NULL;
-        int                     first = 1;
+	struct lu_dirpage	*dp = &lp->lp_dir;
+	void			*area = dp;
+	int			 result;
+	__u64			 hash = 0;
+	struct lu_dirent	*ent;
+	struct lu_dirent	*last = NULL;
+	int			 first = 1;
 
         memset(area, 0, sizeof (*dp));
         area += sizeof (*dp);
@@ -2666,113 +2666,12 @@ out:
                         dp->ldp_flags |= cpu_to_le32(LDF_COLLIDE);
                 last->lde_reclen = 0; /* end mark */
         }
+	if (result > 0)
+		/* end of directory */
+		dp->ldp_hash_end = cpu_to_le64(MDS_DIR_END_OFF);
+	if (result < 0)
+		CWARN("build page failed: %d!\n", result);
         return result;
-}
-
-static int __mdd_readpage(const struct lu_env *env, struct mdd_object *obj,
-                          const struct lu_rdpg *rdpg)
-{
-        struct dt_it      *it;
-        struct dt_object  *next = mdd_object_child(obj);
-        const struct dt_it_ops  *iops;
-        struct page       *pg;
-        struct mdd_device *mdd = mdo2mdd(&obj->mod_obj);
-        int i;
-        int nlupgs = 0;
-        int rc;
-        int nob;
-
-        LASSERT(rdpg->rp_pages != NULL);
-        LASSERT(next->do_index_ops != NULL);
-
-        if (rdpg->rp_count <= 0)
-                return -EFAULT;
-
-        /*
-         * iterate through directory and fill pages from @rdpg
-         */
-        iops = &next->do_index_ops->dio_it;
-        it = iops->init(env, next, rdpg->rp_attrs, mdd_object_capa(env, obj));
-        if (IS_ERR(it))
-                return PTR_ERR(it);
-
-        rc = iops->load(env, it, rdpg->rp_hash);
-
-        if (rc == 0) {
-                /*
-                 * Iterator didn't find record with exactly the key requested.
-                 *
-                 * It is currently either
-                 *
-                 *     - positioned above record with key less than
-                 *     requested---skip it.
-                 *
-                 *     - or not positioned at all (is in IAM_IT_SKEWED
-                 *     state)---position it on the next item.
-                 */
-                rc = iops->next(env, it);
-        } else if (rc > 0)
-                rc = 0;
-
-        /*
-         * At this point and across for-loop:
-         *
-         *  rc == 0 -> ok, proceed.
-         *  rc >  0 -> end of directory.
-         *  rc <  0 -> error.
-         */
-        for (i = 0, nob = rdpg->rp_count; rc == 0 && nob > 0;
-             i++, nob -= CFS_PAGE_SIZE) {
-                struct lu_dirpage *dp;
-
-                LASSERT(i < rdpg->rp_npages);
-                pg = rdpg->rp_pages[i];
-                dp = cfs_kmap(pg);
-#if CFS_PAGE_SIZE > LU_PAGE_SIZE
-repeat:
-#endif
-                rc = mdd_dir_page_build(env, mdd, dp,
-                                        min_t(int, nob, LU_PAGE_SIZE),
-                                        iops, it, rdpg->rp_attrs);
-                if (rc > 0) {
-                        /*
-                         * end of directory.
-                         */
-                        dp->ldp_hash_end = cpu_to_le64(MDS_DIR_END_OFF);
-                        nlupgs++;
-                } else if (rc < 0) {
-                        CWARN("build page failed: %d!\n", rc);
-                } else {
-                        nlupgs++;
-#if CFS_PAGE_SIZE > LU_PAGE_SIZE
-                        dp = (struct lu_dirpage *)((char *)dp + LU_PAGE_SIZE);
-                        if ((unsigned long)dp & ~CFS_PAGE_MASK)
-                                goto repeat;
-#endif
-                }
-                cfs_kunmap(pg);
-        }
-        if (rc >= 0) {
-                struct lu_dirpage *dp;
-
-                dp = cfs_kmap(rdpg->rp_pages[0]);
-                dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
-                if (nlupgs == 0) {
-                        /*
-                         * No pages were processed, mark this for first page
-                         * and send back.
-                         */
-                        dp->ldp_flags  = cpu_to_le32(LDF_EMPTY);
-                        nlupgs = 1;
-                }
-                cfs_kunmap(rdpg->rp_pages[0]);
-
-                rc = min_t(unsigned int, nlupgs * LU_PAGE_SIZE, rdpg->rp_count);
-        }
-        iops->put(env, it);
-        iops->fini(env, it);
-
-        return rc;
 }
 
 int mdd_readpage(const struct lu_env *env, struct md_object *obj,
@@ -2818,9 +2717,25 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                 GOTO(out_unlock, rc = LU_PAGE_SIZE);
         }
 
-        rc = __mdd_readpage(env, mdd_obj, rdpg);
+	rc = dt_index_walk(env, mdd_object_child(mdd_obj), rdpg,
+			   mdd_dir_page_build, NULL);
+	if (rc >= 0) {
+		struct lu_dirpage	*dp;
 
-        EXIT;
+		dp = cfs_kmap(rdpg->rp_pages[0]);
+		dp->ldp_hash_start = cpu_to_le64(rdpg->rp_hash);
+		if (rc == 0) {
+			/*
+			 * No pages were processed, mark this for first page
+			 * and send back.
+			 */
+			dp->ldp_flags = cpu_to_le32(LDF_EMPTY);
+			rc = min_t(unsigned int, LU_PAGE_SIZE, rdpg->rp_count);
+		}
+		cfs_kunmap(rdpg->rp_pages[0]);
+	}
+
+	GOTO(out_unlock, rc);
 out_unlock:
         mdd_read_unlock(env, mdd_obj);
         return rc;

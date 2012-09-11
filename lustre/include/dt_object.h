@@ -869,6 +869,15 @@ int dt_record_read(const struct lu_env *env, struct dt_object *dt,
                    struct lu_buf *buf, loff_t *pos);
 int dt_record_write(const struct lu_env *env, struct dt_object *dt,
                     const struct lu_buf *buf, loff_t *pos, struct thandle *th);
+typedef int (*dt_index_page_build_t)(const struct lu_env *env,
+				     union lu_page *lp, int nob,
+				     const struct dt_it_ops *iops,
+				     struct dt_it *it, __u32 attr, void *arg);
+int dt_index_walk(const struct lu_env *env, struct dt_object *obj,
+		  const struct lu_rdpg *rdpg, dt_index_page_build_t filler,
+		  void *arg);
+int dt_index_read(const struct lu_env *env, struct dt_device *dev,
+		  struct idx_info *ii, const struct lu_rdpg *rdpg);
 
 static inline struct thandle *dt_trans_create(const struct lu_env *env,
                                               struct dt_device *d)

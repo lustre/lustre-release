@@ -291,6 +291,7 @@ check_lu_dirpage(void)
         CHECK_VALUE(LDF_EMPTY);
         CHECK_VALUE(LDF_COLLIDE);
         CHECK_VALUE(LU_PAGE_SIZE);
+	CHECK_UNION(lu_page);
 }
 
 static void
@@ -754,6 +755,43 @@ check_obd_quotactl(void)
 	CHECK_STRUCT(lquota_slv_rec);
 	CHECK_MEMBER(lquota_slv_rec, qsr_granted);
 
+}
+
+static void
+check_obd_idx_read(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(idx_info);
+	CHECK_MEMBER(idx_info, ii_magic);
+	CHECK_MEMBER(idx_info, ii_flags);
+	CHECK_MEMBER(idx_info, ii_count);
+	CHECK_MEMBER(idx_info, ii_pad0);
+	CHECK_MEMBER(idx_info, ii_attrs);
+	CHECK_MEMBER(idx_info, ii_fid);
+	CHECK_MEMBER(idx_info, ii_version);
+	CHECK_MEMBER(idx_info, ii_hash_start);
+	CHECK_MEMBER(idx_info, ii_hash_end);
+	CHECK_MEMBER(idx_info, ii_keysize);
+	CHECK_MEMBER(idx_info, ii_recsize);
+	CHECK_MEMBER(idx_info, ii_pad1);
+	CHECK_MEMBER(idx_info, ii_pad2);
+	CHECK_MEMBER(idx_info, ii_pad3);
+	CHECK_CDEFINE(IDX_INFO_MAGIC);
+
+	BLANK_LINE();
+	CHECK_STRUCT(lu_idxpage);
+	CHECK_MEMBER(lu_idxpage, lip_magic);
+	CHECK_MEMBER(lu_idxpage, lip_flags);
+	CHECK_MEMBER(lu_idxpage, lip_nr);
+	CHECK_MEMBER(lu_idxpage, lip_pad0);
+
+	CHECK_CDEFINE(LIP_MAGIC);
+	CHECK_VALUE(LIP_HDR_SIZE);
+
+	CHECK_VALUE(II_FL_NOHASH);
+	CHECK_VALUE(II_FL_VARKEY);
+	CHECK_VALUE(II_FL_VARREC);
+	CHECK_VALUE(II_FL_NONUNQ);
 }
 
 static void
@@ -2042,6 +2080,7 @@ main(int argc, char **argv)
         CHECK_VALUE(OBD_PING);
         CHECK_VALUE(OBD_LOG_CANCEL);
         CHECK_VALUE(OBD_QC_CALLBACK);
+	CHECK_VALUE(OBD_IDX_READ);
         CHECK_VALUE(OBD_LAST_OPC);
 
         CHECK_VALUE(QUOTA_DQACQ);
@@ -2081,6 +2120,7 @@ main(int argc, char **argv)
         check_obd_statfs();
         check_obd_ioobj();
         check_obd_quotactl();
+	check_obd_idx_read();
         check_niobuf_remote();
         check_ost_body();
         check_ll_fid();

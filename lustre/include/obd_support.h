@@ -374,6 +374,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_OBD_DQACQ               0x604
 #define OBD_FAIL_OBD_LLOG_SETUP          0x605
 #define OBD_FAIL_OBD_LOG_CANCEL_REP      0x606
+#define OBD_FAIL_OBD_IDX_READ_NET        0x607
 
 #define OBD_FAIL_TGT_REPLY_NET           0x700
 #define OBD_FAIL_TGT_CONN_RACE           0x701

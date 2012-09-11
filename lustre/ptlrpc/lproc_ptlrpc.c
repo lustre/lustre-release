@@ -111,6 +111,7 @@ struct ll_rpc_opcode {
         { OBD_PING,         "obd_ping" },
         { OBD_LOG_CANCEL,   "llog_origin_handle_cancel" },
         { OBD_QC_CALLBACK,  "obd_quota_callback" },
+	{ OBD_IDX_READ,	    "dt_index_read" },
         { LLOG_ORIGIN_HANDLE_CREATE,     "llog_origin_handle_create" },
         { LLOG_ORIGIN_HANDLE_NEXT_BLOCK, "llog_origin_handle_next_block" },
         { LLOG_ORIGIN_HANDLE_READ_HEADER,"llog_origin_handle_read_header" },

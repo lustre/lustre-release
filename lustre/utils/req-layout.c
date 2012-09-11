@@ -74,6 +74,7 @@
 #define lustre_swab_ost_body NULL
 #define lustre_swab_ost_last_id NULL
 #define lustre_swab_fiemap NULL
+#define lustre_swab_idx_info NULL
 #define lustre_swab_qdata NULL
 #define lustre_swab_quota_body NULL
 #define lustre_swab_lvb NULL

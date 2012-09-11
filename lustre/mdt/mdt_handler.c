@@ -1959,6 +1959,89 @@ static int mdt_obd_ping(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
+/*
+ * OBD_IDX_READ handler
+ */
+static int mdt_obd_idx_read(struct mdt_thread_info *info)
+{
+	struct mdt_device	*mdt = info->mti_mdt;
+	struct lu_rdpg		*rdpg = &info->mti_u.rdpg.mti_rdpg;
+	struct idx_info		*req_ii, *rep_ii;
+	int			 rc, i;
+	ENTRY;
+
+	memset(rdpg, 0, sizeof(*rdpg));
+	req_capsule_set(info->mti_pill, &RQF_OBD_IDX_READ);
+
+	/* extract idx_info buffer from request & reply */
+	req_ii = req_capsule_client_get(info->mti_pill, &RMF_IDX_INFO);
+	if (req_ii == NULL || req_ii->ii_magic != IDX_INFO_MAGIC)
+		RETURN(err_serious(-EPROTO));
+
+	rc = req_capsule_server_pack(info->mti_pill);
+	if (rc)
+		RETURN(err_serious(rc));
+
+	rep_ii = req_capsule_server_get(info->mti_pill, &RMF_IDX_INFO);
+	if (rep_ii == NULL)
+		RETURN(err_serious(-EFAULT));
+	rep_ii->ii_magic = IDX_INFO_MAGIC;
+
+	/* extract hash to start with */
+	rdpg->rp_hash = req_ii->ii_hash_start;
+
+	/* extract requested attributes */
+	rdpg->rp_attrs = req_ii->ii_attrs;
+
+	/* check that fid packed in request is valid and supported */
+	if (!fid_is_sane(&req_ii->ii_fid))
+		RETURN(-EINVAL);
+	rep_ii->ii_fid = req_ii->ii_fid;
+
+	/* copy flags */
+	rep_ii->ii_flags = req_ii->ii_flags;
+
+	/* compute number of pages to allocate, ii_count is the number of 4KB
+	 * containers */
+	if (req_ii->ii_count <= 0)
+		GOTO(out, rc = -EFAULT);
+	rdpg->rp_count = min_t(unsigned int, req_ii->ii_count << LU_PAGE_SHIFT,
+			       PTLRPC_MAX_BRW_SIZE);
+	rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE -1) >> CFS_PAGE_SHIFT;
+
+	/* allocate pages to store the containers */
+	OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof(rdpg->rp_pages[0]));
+	if (rdpg->rp_pages == NULL)
+		GOTO(out, rc = -ENOMEM);
+	for (i = 0; i < rdpg->rp_npages; i++) {
+		rdpg->rp_pages[i] = cfs_alloc_page(CFS_ALLOC_STD);
+		if (rdpg->rp_pages[i] == NULL)
+			GOTO(out, rc = -ENOMEM);
+	}
+
+	/* populate pages with key/record pairs */
+	rc = dt_index_read(info->mti_env, mdt->mdt_bottom, rep_ii, rdpg);
+	if (rc < 0)
+		GOTO(out, rc);
+
+	LASSERTF(rc <= rdpg->rp_count, "dt_index_read() returned more than "
+		 "asked %d > %d\n", rc, rdpg->rp_count);
+
+	/* send pages to client */
+	rc = mdt_sendpage(info, rdpg, rc);
+
+	GOTO(out, rc);
+out:
+	if (rdpg->rp_pages) {
+		for (i = 0; i < rdpg->rp_npages; i++)
+			if (rdpg->rp_pages[i])
+				cfs_free_page(rdpg->rp_pages[i]);
+		OBD_FREE(rdpg->rp_pages,
+			 rdpg->rp_npages * sizeof(rdpg->rp_pages[0]));
+	}
+	return rc;
+}
+
 static int mdt_obd_log_cancel(struct mdt_thread_info *info)
 {
         return err_serious(-EOPNOTSUPP);
@@ -2970,6 +3053,7 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         case SEC_CTX_INIT:
         case SEC_CTX_INIT_CONT:
         case SEC_CTX_FINI:
+	case OBD_IDX_READ:
                 rc = lustre_msg_check_version(msg, LUSTRE_OBD_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -6138,7 +6222,8 @@ DEF_MDT_HNDL_F(0,                         QUOTACTL,     mdt_quotactl_handle)
 static struct mdt_handler mdt_obd_ops[] = {
         DEF_OBD_HNDL(0, PING,           mdt_obd_ping),
         DEF_OBD_HNDL(0, LOG_CANCEL,     mdt_obd_log_cancel),
-        DEF_OBD_HNDL(0, QC_CALLBACK,    mdt_obd_qc_callback)
+	DEF_OBD_HNDL(0, QC_CALLBACK,    mdt_obd_qc_callback),
+	DEF_OBD_HNDL(0, IDX_READ,       mdt_obd_idx_read)
 };
 
 #define DEF_DLM_HNDL_0(flags, name, fn)                   \
@@ -6229,6 +6314,11 @@ static struct mdt_opc_slice mdt_readpage_handlers[] = {
                 .mos_opc_end   = MDS_LAST_OPC,
                 .mos_hs        = mdt_readpage_ops
         },
+	{
+		.mos_opc_start = OBD_FIRST_OPC,
+		.mos_opc_end   = OBD_LAST_OPC,
+		.mos_hs        = mdt_obd_ops
+	},
         {
                 .mos_hs        = NULL
         }
