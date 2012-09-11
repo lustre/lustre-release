@@ -82,6 +82,7 @@ ZFS_MKFS_OPTS=${ZFS_MKFS_OPTS:-}
 # blacklist the undesired (and aliased the other, if necessary).
 #
 USE_OFD=${USE_OFD:-no}
+LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
 
 STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
