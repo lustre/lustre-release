@@ -304,6 +304,7 @@ void iam_path_release(struct iam_path *path)
 
         for (i = 0; i < ARRAY_SIZE(path->ip_frames); i++) {
                 if (path->ip_frames[i].bh != NULL) {
+			path->ip_frames[i].at_shifted = 0;
                         brelse(path->ip_frames[i].bh);
                         path->ip_frames[i].bh = NULL;
                 }
@@ -1671,7 +1672,7 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 		goto newblock;
 
 	cfs_down(&c->ic_idle_sem);
-	if (unlikely(c->ic_idle_failed || c->ic_idle_bh == NULL)) {
+	if (unlikely(c->ic_idle_bh == NULL)) {
 		cfs_up(&c->ic_idle_sem);
 		goto newblock;
 	}
@@ -2280,6 +2281,15 @@ static iam_ptr_t iam_index_shrink(handle_t *h, struct iam_path *p,
 		return 0;
 	}
 
+	entries = frame->entries;
+	count = dx_get_count(entries);
+	/* NOT shrink the last entry in the index node, which can be reused
+	 * directly by next new node. */
+	if (count == 2) {
+		iam_unlock_htree(c, lh);
+		return 0;
+	}
+
 	rc = iam_txn_add(h, p, frame->bh);
 	if (rc != 0) {
 		iam_unlock_htree(c, lh);
@@ -2287,8 +2297,6 @@ static iam_ptr_t iam_index_shrink(handle_t *h, struct iam_path *p,
 	}
 
 	iam_lock_bh(frame->bh);
-	entries = frame->entries;
-	count = dx_get_count(entries);
 	if (frame->at < iam_entry_shift(p, entries, count - 1)) {
 		struct iam_entry *n = iam_entry_shift(p, frame->at, 1);
 
@@ -2297,8 +2305,8 @@ static iam_ptr_t iam_index_shrink(handle_t *h, struct iam_path *p,
 		frame->at_shifted = 1;
 	}
 	dx_set_count(entries, count - 1);
-	rc = iam_txn_dirty(h, p, frame->bh);
 	iam_unlock_bh(frame->bh);
+	rc = iam_txn_dirty(h, p, frame->bh);
 	iam_unlock_htree(c, lh);
 	if (rc != 0)
 		return 0;

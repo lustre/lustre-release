@@ -949,18 +949,17 @@ static void lvar_root(void *buf,
 	LASSERT((keysize + ptrsize) >=
 		(sizeof(struct dx_countlimit) + sizeof(__u32)));
 
-	entry = limit + 1;
+	entry = (void *)(limit + 1);
 	/* Put "idle_blocks" just after the limit. There was padding after
 	 * the limit, the "idle_blocks" re-uses part of the padding, so no
 	 * compatibility issues with old layout.
 	 */
 	*(__u32 *)entry = 0;
 
-        entry = root + 1;
-        /*
-         * Skip over @limit.
-         */
-        entry += isize;
+	/*
+	 * Skip over @limit.
+	 */
+	entry = (void *)(root + 1) + isize;
 
         /*
          * Entry format is <key> followed by <ptr>. In the minimal tree

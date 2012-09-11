@@ -5855,9 +5855,9 @@ test_115() {
 	    cut -c11-20)
 
 	# don't return an error
-        [ $OSTIO_post -eq $OSTIO_pre ] && echo \
-	    "WARNING: No new ll_ost_io threads were created ($OSTIO_pre)" &&\
-	    echo "This may be fine, depending on what ran before this test" &&\
+        [ $OSTIO_post == $OSTIO_pre ] && echo \
+	    "WARNING: No new ll_ost_io threads were created ($OSTIO_pre)" &&
+	    echo "This may be fine, depending on what ran before this test" &&
 	    echo "and how fast this system is." && return
 
         echo "Started with $OSTIO_pre threads, ended with $OSTIO_post"
@@ -9609,7 +9609,7 @@ test_227() {
 run_test 227 "running truncated executable does not cause OOM"
 
 # LU-1512 try to reuse idle OI blocks
-test_228() {
+test_228a() {
 	[ "$FSTYPE" != "ldiskfs" ] && skip "non-ldiskfs backend" && return
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
@@ -9646,7 +9646,97 @@ test_228() {
 
 	[ $blk1 == $blk2 ] || error "old blk1=$blk1, new blk2=$blk2, unmatched!"
 }
-run_test 228 "try to reuse idle OI blocks"
+run_test 228a "try to reuse idle OI blocks"
+
+test_228b() {
+	[ "$FSTYPE" != "ldiskfs" ] && skip "non-ldiskfs backend" && return
+
+	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
+	local myDIR=$DIR/$tdir
+
+	mkdir -p $myDIR
+	#define OBD_FAIL_SEQ_EXHAUST             0x1002
+	$LCTL set_param fail_loc=0x80001002
+	createmany -o $myDIR/t- 10000
+	$LCTL set_param fail_loc=0
+	# The guard is current the largest FID holder
+	touch $myDIR/guard
+	local SEQ=$($LFS path2fid $myDIR/guard | awk -F ':' '{print $1}' |
+		    tr -d '[')
+	local IDX=$(($SEQ % 64))
+
+	do_facet $SINGLEMDS sync
+	# Make sure journal flushed.
+	sleep 6
+	local blk1=$(do_facet $SINGLEMDS \
+		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
+		     grep Blockcount | awk '{print $4}')
+
+	# Remove old files, some OI blocks will become idle.
+	unlinkmany $myDIR/t- 10000
+
+	# stop the MDT
+	stop $SINGLEMDS || error "Fail to stop MDT."
+	# remount the MDT
+	start $SINGLEMDS $MDT_DEV $MDS_MOUNT_OPTS || error "Fail to start MDT."
+
+	df $MOUNT || error "Fail to df."
+	# Create new files, idle OI blocks should be reused.
+	createmany -o $myDIR/t- 2000
+	do_facet $SINGLEMDS sync
+	# Make sure journal flushed.
+	sleep 6
+	local blk2=$(do_facet $SINGLEMDS \
+		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
+		     grep Blockcount | awk '{print $4}')
+
+	[ $blk1 == $blk2 ] || error "old blk1=$blk1, new blk2=$blk2, unmatched!"
+}
+run_test 228b "idle OI blocks can be reused after MDT restart"
+
+#LU-1881
+test_228c() {
+	[ "$FSTYPE" != "ldiskfs" ] && skip "non-ldiskfs backend" && return
+
+	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
+	local myDIR=$DIR/$tdir
+
+	mkdir -p $myDIR
+	#define OBD_FAIL_SEQ_EXHAUST             0x1002
+	$LCTL set_param fail_loc=0x80001002
+	# 20000 files can guarantee there are index nodes in the OI file
+	createmany -o $myDIR/t- 20000
+	$LCTL set_param fail_loc=0
+	# The guard is current the largest FID holder
+	touch $myDIR/guard
+	local SEQ=$($LFS path2fid $myDIR/guard | awk -F ':' '{print $1}' |
+		    tr -d '[')
+	local IDX=$(($SEQ % 64))
+
+	do_facet $SINGLEMDS sync
+	# Make sure journal flushed.
+	sleep 6
+	local blk1=$(do_facet $SINGLEMDS \
+		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
+		     grep Blockcount | awk '{print $4}')
+
+	# Remove old files, some OI blocks will become idle.
+	unlinkmany $myDIR/t- 20000
+	rm -f $myDIR/guard
+	# The OI file should become empty now
+
+	# Create new files, idle OI blocks should be reused.
+	createmany -o $myDIR/t- 2000
+	do_facet $SINGLEMDS sync
+	# Make sure journal flushed.
+	sleep 6
+	local blk2=$(do_facet $SINGLEMDS \
+		     "$DEBUGFS -c -R \\\"stat oi.16.${IDX}\\\" $MDT_DEV" |
+		     grep Blockcount | awk '{print $4}')
+
+	[ $blk1 == $blk2 ] || error "old blk1=$blk1, new blk2=$blk2, unmatched!"
+}
+run_test 228c "NOT shrink the last entry in OI index node to recycle idle leaf"
 
 #
 # tests that do cleanup/setup should be run at the end
