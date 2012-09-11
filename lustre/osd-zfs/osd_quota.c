@@ -395,5 +395,67 @@ const struct dt_index_operations osd_acct_index_ops = {
 
 /**
  * Quota Enforcement Management
- * TODO
  */
+
+/*
+ * Wrapper for qsd_op_begin().
+ *
+ * \param env    - the environment passed by the caller
+ * \param osd    - is the osd_device
+ * \param uid    - user id of the inode
+ * \param gid    - group id of the inode
+ * \param space  - how many blocks/inodes will be consumed/released
+ * \param oh     - osd transaction handle
+ * \param is_blk - block quota or inode quota?
+ * \param flags  - if the operation is write, return no user quota, no
+ *                  group quota, or sync commit flags to the caller
+ * \param force  - set to 1 when changes are performed by root user and thus
+ *                  can't failed with EDQUOT
+ *
+ * \retval 0      - success
+ * \retval -ve    - failure
+ */
+int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
+		      qid_t uid, qid_t gid, long long space,
+		      struct osd_thandle *oh, bool is_blk, int *flags,
+		      bool force)
+{
+	struct osd_thread_info	*info = osd_oti_get(env);
+	struct lquota_id_info	*qi = &info->oti_qi;
+	struct qsd_instance     *qsd = osd->od_quota_slave;
+	int			 rcu, rcg; /* user & group rc */
+	ENTRY;
+
+	if (unlikely(qsd == NULL))
+		/* quota slave instance hasn't been allocated yet */
+		RETURN(0);
+
+	/* let's start with user quota */
+	qi->lqi_id.qid_uid = uid;
+	qi->lqi_type       = USRQUOTA;
+	qi->lqi_space      = space;
+	qi->lqi_is_blk     = is_blk;
+	rcu = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, flags);
+
+	if (force && (rcu == -EDQUOT || rcu == -EINPROGRESS))
+		/* ignore EDQUOT & EINPROGRESS when changes are done by root */
+		rcu = 0;
+
+	/* For non-fatal error, we want to continue to get the noquota flags
+	 * for group id. This is only for commit write, which has @flags passed
+	 * in. See osd_declare_write_commit().
+	 * When force is set to true, we also want to proceed with the gid */
+	if (rcu && (rcu != -EDQUOT || flags == NULL))
+		RETURN(rcu);
+
+	/* and now group quota */
+	qi->lqi_id.qid_gid = gid;
+	qi->lqi_type       = GRPQUOTA;
+	rcg = qsd_op_begin(env, qsd, &oh->ot_quota_trans, qi, flags);
+
+	if (force && (rcg == -EDQUOT || rcg == -EINPROGRESS))
+		/* as before, ignore EDQUOT & EINPROGRESS for root */
+		rcg = 0;
+
+	RETURN(rcu ? rcu : rcg);
+}

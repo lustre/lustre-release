@@ -131,6 +131,7 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 {
 	struct osd_thandle	*oh = cb_data;
 	struct thandle		*th = &oh->ot_super;
+	struct osd_device	*osd = osd_dt_dev(th->th_dev);
 	struct lu_device	*lud = &th->th_dev->dd_lu_dev;
 	struct dt_txn_commit_cb	*dcb, *tmp;
 
@@ -150,6 +151,14 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 	/* call per-transaction callbacks if any */
 	cfs_list_for_each_entry_safe(dcb, tmp, &oh->ot_dcb_list, dcb_linkage)
 		dcb->dcb_func(NULL, th, dcb, error);
+
+	/* Unlike ldiskfs, zfs updates space accounting at commit time.
+	 * As a consequence, op_end is called only now to inform the quota slave
+	 * component that reserved quota space is now accounted in usage and
+	 * should be released. Quota space won't be adjusted at this point since
+	 * we can't provide a suitable environment. It will be performed
+	 * asynchronously by a lquota thread. */
+	qsd_op_end(NULL, osd->od_quota_slave, &oh->ot_quota_trans);
 
 	lu_device_put(lud);
 	th->th_dev = NULL;
@@ -234,9 +243,22 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
 		LASSERT(oh->ot_tx);
 		dmu_tx_abort(oh->ot_tx);
 		osd_object_sa_dirty_rele(oh);
+		/* there won't be any commit, release reserved quota space now,
+		 * if any */
+		qsd_op_end(env, osd->od_quota_slave, &oh->ot_quota_trans);
 		OBD_FREE_PTR(oh);
 		RETURN(0);
 	}
+
+	/* When doing our own inode accounting, the ZAPs storing per-uid/gid
+	 * usage are updated at operation execution time, so we should call
+	 * qsd_op_end() straight away. Otherwise (for blk accounting maintained
+	 * by ZFS and when #inode is estimated from #blks) accounting is updated
+	 * at commit time and the call to qsd_op_end() must be delayed */
+	if (oh->ot_quota_trans.lqt_id_cnt > 0 &&
+			!oh->ot_quota_trans.lqt_ids[0].lqi_is_blk &&
+			!osd->od_quota_iused_est)
+		qsd_op_end(env, osd->od_quota_slave, &oh->ot_quota_trans);
 
 	rc = dt_txn_hook_stop(env, th);
 	if (rc != 0)
@@ -279,6 +301,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
 	CFS_INIT_LIST_HEAD(&oh->ot_sa_list);
 	cfs_sema_init(&oh->ot_sa_lock, 1);
+	memset(&oh->ot_quota_trans, 0, sizeof(oh->ot_quota_trans));
 	th = &oh->ot_super;
 	th->th_dev = dt;
 	th->th_result = 0;

@@ -153,6 +153,8 @@ struct osd_thread_info {
 	zap_attribute_t		 oti_za;
 	dmu_object_info_t	 oti_doi;
 	struct luz_direntry	 oti_zde;
+
+	struct lquota_id_info	 oti_qi;
 };
 
 extern struct lu_context_key osd_key;
@@ -168,6 +170,7 @@ struct osd_thandle {
 	cfs_list_t		 ot_sa_list;
 	cfs_semaphore_t		 ot_sa_lock;
 	dmu_tx_t		*ot_tx;
+	struct lquota_trans	 ot_quota_trans;
 	__u32			 ot_write_commit:1,
 				 ot_assigned:1;
 };
@@ -268,6 +271,10 @@ int osd_statfs(const struct lu_env *, struct dt_device *, struct obd_statfs *);
 extern const struct dt_index_operations osd_acct_index_ops;
 uint64_t osd_quota_fid2dmu(const struct lu_fid *fid);
 extern struct lu_device_operations  osd_lu_ops;
+int osd_declare_quota(const struct lu_env *env, struct osd_device *osd,
+		      qid_t uid, qid_t gid, long long space,
+		      struct osd_thandle *oh, bool is_blk, int *flags,
+		      bool force);
 
 /*
  * Helpers.

@@ -458,6 +458,7 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	struct osd_device	*osd = osd_obj2dev(obj);
 	struct osd_thandle	*oh;
 	uint64_t		 zapid;
+	int			 rc;
 	ENTRY;
 
 	LASSERT(th != NULL);
@@ -480,7 +481,16 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	dmu_tx_hold_bonus(oh->ot_tx, osd->od_igrp_oid);
 	dmu_tx_hold_zap(oh->ot_tx, osd->od_igrp_oid, 0, buf);
 
-	RETURN(0);
+	/* one less inode */
+	rc = osd_declare_quota(env, osd, obj->oo_attr.la_uid,
+			       obj->oo_attr.la_gid, -1, oh, false, NULL, false);
+	if (rc)
+		RETURN(rc);
+
+	/* data to be truncated */
+	rc = osd_declare_quota(env, osd, obj->oo_attr.la_uid,
+			       obj->oo_attr.la_gid, 0, oh, true, NULL, false);
+	RETURN(rc);
 }
 
 int __osd_object_free(udmu_objset_t *uos, uint64_t oid, dmu_tx_t *tx)
@@ -732,15 +742,78 @@ static int osd_attr_get(const struct lu_env *env,
 	return 0;
 }
 
+/* Simple wrapper on top of qsd API which implement quota transfer for osd
+ * setattr needs. As a reminder, only the root user can change ownership of
+ * a file, that's why EDQUOT & EINPROGRESS errors are discarded */
+static inline int qsd_transfer(const struct lu_env *env,
+			       struct qsd_instance *qsd,
+			       struct lquota_trans *trans, int qtype,
+			       __u64 orig_id, __u64 new_id, __u64 bspace,
+			       struct lquota_id_info *qi)
+{
+	int	rc;
+
+	if (unlikely(qsd == NULL))
+		return 0;
+
+	LASSERT(qtype >= 0 && qtype < MAXQUOTAS);
+	qi->lqi_type = qtype;
+
+	/* inode accounting */
+	qi->lqi_is_blk = false;
+
+	/* one more inode for the new owner ... */
+	qi->lqi_id.qid_uid = new_id;
+	qi->lqi_space      = 1;
+	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		return rc;
+
+	/* and one less inode for the current id */
+	qi->lqi_id.qid_uid = orig_id;;
+	qi->lqi_space      = -1;
+	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		return rc;
+
+	/* block accounting */
+	qi->lqi_is_blk = true;
+
+	/* more blocks for the new owner ... */
+	qi->lqi_id.qid_uid = new_id;
+	qi->lqi_space      = bspace;
+	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	if (rc)
+		return rc;
+
+	/* and finally less blocks for the current owner */
+	qi->lqi_id.qid_uid = orig_id;
+	qi->lqi_space      = -bspace;
+	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
+	if (rc == -EDQUOT || rc == -EINPROGRESS)
+		rc = 0;
+	return rc;
+}
+
 static int osd_declare_attr_set(const struct lu_env *env,
 				struct dt_object *dt,
 				const struct lu_attr *attr,
 				struct thandle *handle)
 {
+	struct osd_thread_info	*info = osd_oti_get(env);
 	char			*buf = osd_oti_get(env)->oti_str;
 	struct osd_object	*obj = osd_dt_obj(dt);
 	struct osd_device	*osd = osd_obj2dev(obj);
 	struct osd_thandle	*oh;
+	uint64_t		 bspace;
+	uint32_t		 blksize;
+	int			 rc;
 	ENTRY;
 
 	if (!dt_object_exists(dt)) {
@@ -756,15 +829,38 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	LASSERT(obj->oo_sa_hdl != NULL);
 	dmu_tx_hold_sa(oh->ot_tx, obj->oo_sa_hdl, 0);
 
+	sa_object_size(obj->oo_sa_hdl, &blksize, &bspace);
+	bspace = toqb(bspace * blksize);
+
 	if (attr && attr->la_valid & LA_UID) {
 		/* account for user inode tracking ZAP update */
 		dmu_tx_hold_bonus(oh->ot_tx, osd->od_iusr_oid);
 		dmu_tx_hold_zap(oh->ot_tx, osd->od_iusr_oid, TRUE, buf);
+
+		/* quota enforcement for user */
+		if (attr->la_uid != obj->oo_attr.la_uid) {
+			rc = qsd_transfer(env, osd->od_quota_slave,
+					  &oh->ot_quota_trans, USRQUOTA,
+					  obj->oo_attr.la_uid, attr->la_uid,
+					  bspace, &info->oti_qi);
+			if (rc)
+				RETURN(rc);
+		}
 	}
 	if (attr && attr->la_valid & LA_GID) {
 		/* account for user inode tracking ZAP update */
 		dmu_tx_hold_bonus(oh->ot_tx, osd->od_igrp_oid);
 		dmu_tx_hold_zap(oh->ot_tx, osd->od_igrp_oid, TRUE, buf);
+
+		/* quota enforcement for group */
+		if (attr->la_gid != obj->oo_attr.la_gid) {
+			rc = qsd_transfer(env, osd->od_quota_slave,
+					  &oh->ot_quota_trans, GRPQUOTA,
+					  obj->oo_attr.la_gid, attr->la_gid,
+					  bspace, &info->oti_qi);
+			if (rc)
+				RETURN(rc);
+		}
 	}
 
 	RETURN(0);
@@ -982,7 +1078,8 @@ static int osd_declare_object_create(const struct lu_env *env,
 
 	dmu_tx_hold_sa_create(oh->ot_tx, ZFS_SA_BASE_ATTR_SIZE);
 
-	RETURN(0);
+	RETURN(osd_declare_quota(env, osd, attr->la_uid, attr->la_gid, 1, oh,
+				 false, NULL, false));
 }
 
 int __osd_attr_init(const struct lu_env *env, udmu_objset_t *uos,
