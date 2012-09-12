@@ -106,6 +106,8 @@ int do_lcfg(char *cfgname, lnet_nid_t nid, int cmd,
 #define PARAM_MDC                  "mdc."
 #define PARAM_LLITE                "llite."
 #define PARAM_LOV                  "lov."
+#define PARAM_LOD		"lod."
+#define PARAM_OSP		"osp."
 #define PARAM_SYS                  "sys."              /* global */
 #define PARAM_SRPC                 "srpc."
 #define PARAM_SRPC_FLVR            "srpc.flavor."

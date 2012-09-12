@@ -7,7 +7,8 @@ subdir-m += osc
 subdir-m += obdecho
 subdir-m += mgc
 
-@SERVER_TRUE@subdir-m += mds obdfilter ost mgs mdt cmm mdd ofd osd-ldiskfs quota
+@SERVER_TRUE@subdir-m += mds obdfilter ost mgs mdt cmm mdd ofd osd-ldiskfs
+@SERVER_TRUE@subdir-m += quota osp
 @CLIENT_TRUE@subdir-m += mdc lmv llite fld
 @ZFS_ENABLED_TRUE@subdir-m += osd-zfs
 

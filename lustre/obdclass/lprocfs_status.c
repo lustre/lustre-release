@@ -379,7 +379,7 @@ out:
 }
 EXPORT_SYMBOL(lprocfs_add_vars);
 
-void lprocfs_remove(struct proc_dir_entry **rooth)
+void lprocfs_remove_nolock(struct proc_dir_entry **rooth)
 {
         struct proc_dir_entry *root = *rooth;
         struct proc_dir_entry *temp = root;
@@ -392,7 +392,6 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
 
         parent = root->parent;
         LASSERT(parent != NULL);
-        LPROCFS_WRITE_ENTRY(); /* search vs remove race */
 
         while (1) {
                 while (temp->subdir != NULL)
@@ -428,7 +427,13 @@ void lprocfs_remove(struct proc_dir_entry **rooth)
                 if (temp == parent)
                         break;
         }
-        LPROCFS_WRITE_EXIT();
+}
+
+void lprocfs_remove(struct proc_dir_entry **rooth)
+{
+	LPROCFS_WRITE_ENTRY(); /* search vs remove race */
+	lprocfs_remove_nolock(rooth);
+	LPROCFS_WRITE_EXIT();
 }
 EXPORT_SYMBOL(lprocfs_remove);
 
@@ -438,6 +443,52 @@ void lprocfs_remove_proc_entry(const char *name, struct proc_dir_entry *parent)
         remove_proc_entry(name, parent);
 }
 EXPORT_SYMBOL(lprocfs_remove_proc_entry);
+
+void lprocfs_try_remove_proc_entry(const char *name,
+				   struct proc_dir_entry *parent)
+{
+	struct proc_dir_entry	 *t = NULL;
+	struct proc_dir_entry	**p;
+	int			  len, busy = 0;
+
+	LASSERT(parent != NULL);
+	len = strlen(name);
+
+	LPROCFS_WRITE_ENTRY();
+
+	/* lookup target name */
+	for (p = &parent->subdir; *p; p = &(*p)->next) {
+		if ((*p)->namelen != len)
+			continue;
+		if (memcmp(name, (*p)->name, len))
+			continue;
+		t = *p;
+		break;
+	}
+
+	if (t) {
+		/* verify it's empty: do not count "num_refs" */
+		for (p = &t->subdir; *p; p = &(*p)->next) {
+			if ((*p)->namelen != strlen("num_refs")) {
+				busy = 1;
+				break;
+			}
+			if (memcmp("num_refs", (*p)->name,
+				   strlen("num_refs"))) {
+				busy = 1;
+				break;
+			}
+		}
+	}
+
+	if (busy == 0)
+		lprocfs_remove_nolock(&t);
+
+	LPROCFS_WRITE_EXIT();
+
+	return;
+}
+EXPORT_SYMBOL(lprocfs_try_remove_proc_entry);
 
 struct proc_dir_entry *lprocfs_register(const char *name,
                                         struct proc_dir_entry *parent,
