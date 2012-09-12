@@ -366,10 +366,10 @@ struct obd_job_stats {
 	cfs_hash_t        *ojs_hash;
 	cfs_list_t         ojs_list;
 	cfs_rwlock_t       ojs_lock; /* protect the obj_list */
-	int                ojs_cntr_num;
 	cntr_init_callback ojs_cntr_init_fn;
-	cfs_timer_t        ojs_cleanup_timer;
+	int                ojs_cntr_num;
 	int                ojs_cleanup_interval;
+	time_t		   ojs_last_cleanup;
 };
 
 #ifdef LPROCFS
