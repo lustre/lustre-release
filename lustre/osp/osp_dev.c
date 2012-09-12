@@ -92,12 +92,109 @@ struct lu_object *osp_object_alloc(const struct lu_env *env,
 	}
 }
 
+/* Update opd_last_used_id along with checking for gap in objid sequence */
+void osp_update_last_id(struct osp_device *d, obd_id objid)
+{
+	/*
+	 * we might have lost precreated objects due to VBR and precreate
+	 * orphans, the gap in objid can be calculated properly only here
+	 */
+	if (objid > le64_to_cpu(d->opd_last_used_id)) {
+		if (objid - le64_to_cpu(d->opd_last_used_id) > 1) {
+			d->opd_gap_start = le64_to_cpu(d->opd_last_used_id) + 1;
+			d->opd_gap_count = objid - d->opd_gap_start;
+			CDEBUG(D_HA, "Gap in objids: %d, start = %llu\n",
+			       d->opd_gap_count, d->opd_gap_start);
+		}
+		d->opd_last_used_id = cpu_to_le64(objid);
+	}
+}
+
+static int osp_last_used_init(const struct lu_env *env, struct osp_device *m)
+{
+	struct osp_thread_info	*osi = osp_env_info(env);
+	struct dt_object_format	 dof = { 0 };
+	struct dt_object	*o;
+	int			 rc;
+
+	ENTRY;
+
+	osi->osi_attr.la_valid = LA_MODE;
+	osi->osi_attr.la_mode = S_IFREG | 0644;
+	lu_local_obj_fid(&osi->osi_fid, MDD_LOV_OBJ_OID);
+	dof.dof_type = DFT_REGULAR;
+	o = dt_find_or_create(env, m->opd_storage, &osi->osi_fid, &dof,
+			      &osi->osi_attr);
+	if (IS_ERR(o))
+		RETURN(PTR_ERR(o));
+
+	rc = dt_attr_get(env, o, &osi->osi_attr, NULL);
+	if (rc)
+		GOTO(out, rc);
+
+	m->opd_last_used_file = o;
+
+	if (osi->osi_attr.la_size >= sizeof(osi->osi_id) *
+				     (m->opd_index + 1)) {
+		osp_objid_buf_prep(osi, m, m->opd_index);
+		rc = dt_record_read(env, o, &osi->osi_lb, &osi->osi_off);
+		if (rc != 0)
+			GOTO(out, rc);
+	} else {
+		/* reset value to 0, just to make sure and change file's size */
+		struct thandle *th;
+
+		m->opd_last_used_id = 0;
+		osp_objid_buf_prep(osi, m, m->opd_index);
+
+		th = dt_trans_create(env, m->opd_storage);
+		if (IS_ERR(th))
+			GOTO(out, rc = PTR_ERR(th));
+
+		rc = dt_declare_record_write(env, m->opd_last_used_file,
+					     osi->osi_lb.lb_len, osi->osi_off,
+					     th);
+		if (rc) {
+			dt_trans_stop(env, m->opd_storage, th);
+			GOTO(out, rc);
+		}
+
+		rc = dt_trans_start_local(env, m->opd_storage, th);
+		if (rc) {
+			dt_trans_stop(env, m->opd_storage, th);
+			GOTO(out, rc);
+		}
+
+		rc = dt_record_write(env, m->opd_last_used_file, &osi->osi_lb,
+				     &osi->osi_off, th);
+		dt_trans_stop(env, m->opd_storage, th);
+		if (rc)
+			GOTO(out, rc);
+	}
+	RETURN(0);
+out:
+	/* object will be released in device cleanup path */
+	CERROR("%s: can't initialize lov_objid: %d\n",
+	       m->opd_obd->obd_name, rc);
+	lu_object_put(env, &o->do_lu);
+	m->opd_last_used_file = NULL;
+	RETURN(rc);
+}
+
+static void osp_last_used_fini(const struct lu_env *env, struct osp_device *d)
+{
+	lu_object_put(env, &d->opd_last_used_file->do_lu);
+	d->opd_last_used_file = NULL;
+}
+
 static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 {
 	struct obd_import	*imp;
 	int			 rc = 0;
-
 	ENTRY;
+
+	/* release last_used file */
+	osp_last_used_fini(env, d);
 
 	imp = d->opd_obd->u.cli.cl_import;
 
@@ -351,6 +448,13 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	}
 
 	/*
+	 * Initialize last id from the storage - will be used in orphan cleanup
+	 */
+	rc = osp_last_used_init(env, m);
+	if (rc)
+		GOTO(out_proc, rc);
+
+	/*
 	 * Initiate connect to OST
 	 */
 	ll_generate_random_uuid(uuid);
@@ -366,6 +470,8 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	RETURN(0);
 
 out:
+	osp_last_used_fini(env, m);
+out_proc:
 	ptlrpc_lprocfs_unregister_obd(m->opd_obd);
 	lprocfs_obd_cleanup(m->opd_obd);
 	class_destroy_import(m->opd_obd->u.cli.cl_import);

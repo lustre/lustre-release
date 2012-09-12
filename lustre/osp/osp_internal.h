@@ -52,6 +52,11 @@ struct osp_device {
 	/* device used to store persistent state (llogs, last ids) */
 	struct obd_export		*opd_storage_exp;
 	struct dt_device		*opd_storage;
+	struct dt_object		*opd_last_used_file;
+	/* protected by opd_pre_lock */
+	volatile obd_id			 opd_last_used_id;
+	obd_id				 opd_gap_start;
+	int				 opd_gap_count;
 	/* connection to OST */
 	struct obd_device		*opd_obd;
 	struct obd_export		*opd_exp;
@@ -86,8 +91,20 @@ struct osp_object {
 extern struct lu_object_operations osp_lu_obj_ops;
 
 struct osp_thread_info {
+	struct lu_buf		 osi_lb;
+	struct lu_fid		 osi_fid;
 	struct lu_attr		 osi_attr;
+	obd_id			 osi_id;
+	loff_t			 osi_off;
 };
+
+static inline void osp_objid_buf_prep(struct osp_thread_info *osi,
+				      struct osp_device *d, int index)
+{
+	osi->osi_lb.lb_buf = (void *)&d->opd_last_used_id;
+	osi->osi_lb.lb_len = sizeof(d->opd_last_used_id);
+	osi->osi_off = sizeof(d->opd_last_used_id) * index;
+}
 
 extern struct lu_context_key osp_thread_key;
 
@@ -169,6 +186,9 @@ static inline struct dt_object *osp_object_child(struct osp_object *o)
 	return container_of0(lu_object_next(osp2lu_obj(o)),
                              struct dt_object, do_lu);
 }
+
+/* osp_dev.c */
+void osp_update_last_id(struct osp_device *d, obd_id objid);
 
 /* lproc_osp.c */
 void lprocfs_osp_init_vars(struct lprocfs_static_vars *lvars);
