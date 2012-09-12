@@ -935,11 +935,11 @@ static int mdd_xattr_list(const struct lu_env *env, struct md_object *obj,
 }
 
 int mdd_declare_object_create_internal(const struct lu_env *env,
-                                       struct mdd_object *p,
-                                       struct mdd_object *c,
-                                       struct md_attr *ma,
-                                       struct thandle *handle,
-                                       const struct md_op_spec *spec)
+				       struct mdd_object *p,
+				       struct mdd_object *c,
+				       struct lu_attr *attr,
+				       struct thandle *handle,
+				       const struct md_op_spec *spec)
 {
         struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
         const struct dt_index_features *feat = spec->sp_feat;
@@ -949,21 +949,20 @@ int mdd_declare_object_create_internal(const struct lu_env *env,
         if (feat != &dt_directory_features && feat != NULL)
                 dof->dof_type = DFT_INDEX;
         else
-                dof->dof_type = dt_mode_to_dft(ma->ma_attr.la_mode);
+		dof->dof_type = dt_mode_to_dft(attr->la_mode);
 
         dof->u.dof_idx.di_feat = feat;
 
-        rc = mdo_declare_create_obj(env, c, &ma->ma_attr, NULL, dof, handle);
+	rc = mdo_declare_create_obj(env, c, attr, NULL, dof, handle);
 
         RETURN(rc);
 }
 
 int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
-                               struct mdd_object *c, struct md_attr *ma,
+			       struct mdd_object *c, struct lu_attr *attr,
                                struct thandle *handle,
                                const struct md_op_spec *spec)
 {
-        struct lu_attr *attr = &ma->ma_attr;
         struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
         struct dt_object_format *dof = &mdd_env_info(env)->mti_dof;
         const struct dt_index_features *feat = spec->sp_feat;
@@ -1014,11 +1013,9 @@ static inline int mdd_attr_check(const struct lu_env *env,
         RETURN(0);
 }
 
-int mdd_attr_set_internal(const struct lu_env *env,
-                          struct mdd_object *obj,
-                          struct lu_attr *attr,
-                          struct thandle *handle,
-                          int needacl)
+int mdd_attr_set_internal(const struct lu_env *env, struct mdd_object *obj,
+			  struct lu_attr *attr, struct thandle *handle,
+			  int needacl)
 {
         int rc;
         ENTRY;
@@ -1032,10 +1029,8 @@ int mdd_attr_set_internal(const struct lu_env *env,
 }
 
 int mdd_attr_check_set_internal(const struct lu_env *env,
-                                struct mdd_object *obj,
-                                struct lu_attr *attr,
-                                struct thandle *handle,
-                                int needacl)
+				struct mdd_object *obj, struct lu_attr *attr,
+				struct thandle *handle, int needacl)
 {
         int rc;
         ENTRY;
@@ -1046,24 +1041,6 @@ int mdd_attr_check_set_internal(const struct lu_env *env,
 
         if (attr->la_valid)
                 rc = mdd_attr_set_internal(env, obj, attr, handle, needacl);
-        RETURN(rc);
-}
-
-static int mdd_attr_set_internal_locked(const struct lu_env *env,
-                                        struct mdd_object *obj,
-                                        struct lu_attr *attr,
-                                        struct thandle *handle,
-                                        int needacl)
-{
-        int rc;
-        ENTRY;
-
-        needacl = needacl && (attr->la_valid & LA_MODE);
-        if (needacl)
-                mdd_write_lock(env, obj, MOR_TGT_CHILD);
-        rc = mdd_attr_set_internal(env, obj, attr, handle, needacl);
-        if (needacl)
-                mdd_write_unlock(env, obj);
         RETURN(rc);
 }
 
@@ -1109,7 +1086,7 @@ int __mdd_xattr_set(const struct lu_env *env, struct mdd_object *obj,
  * This API is ported from mds_fix_attr but remove some unnecesssary stuff.
  */
 static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
-                        struct lu_attr *la, const struct md_attr *ma)
+			struct lu_attr *la, const unsigned long flags)
 {
         struct lu_attr   *tmp_la     = &mdd_env_info(env)->mti_la;
         struct md_ucred  *uc;
@@ -1139,11 +1116,10 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                 RETURN(rc);
 
         if (la->la_valid == LA_CTIME) {
-                if (!(ma->ma_attr_flags & MDS_PERM_BYPASS))
+		if (!(flags & MDS_PERM_BYPASS))
                         /* This is only for set ctime when rename's source is
                          * on remote MDS. */
-                        rc = mdd_may_delete(env, NULL, obj,
-                                            (struct md_attr *)ma, 1, 0);
+			rc = mdd_may_delete(env, NULL, obj, tmp_la, NULL, 1, 0);
                 if (rc == 0 && la->la_ctime <= tmp_la->la_ctime)
                         la->la_valid &= ~LA_CTIME;
                 RETURN(rc);
@@ -1184,7 +1160,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
         if ((mdd_is_immutable(obj) || mdd_is_append(obj)) &&
             (la->la_valid & ~LA_FLAGS) &&
-            !(ma->ma_attr_flags & MDS_PERM_BYPASS))
+	    !(flags & MDS_PERM_BYPASS))
                 RETURN(-EPERM);
 
         /* Check for setting the obj time. */
@@ -1192,9 +1168,8 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
             !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
                 if ((uc->mu_fsuid != tmp_la->la_uid) &&
                     !mdd_capable(uc, CFS_CAP_FOWNER)) {
-                        rc = mdd_permission_internal_locked(env, obj, tmp_la,
-                                                            MAY_WRITE,
-                                                            MOR_TGT_CHILD);
+			rc = mdd_permission_internal(env, obj, tmp_la,
+						     MAY_WRITE);
                         if (rc)
                                 RETURN(rc);
                 }
@@ -1223,7 +1198,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
         /* Make sure a caller can chmod. */
         if (la->la_valid & LA_MODE) {
-                if (!(ma->ma_attr_flags & MDS_PERM_BYPASS) &&
+		if (!(flags & MDS_PERM_BYPASS) &&
                     (uc->mu_fsuid != tmp_la->la_uid) &&
                     !mdd_capable(uc, CFS_CAP_FOWNER))
                         RETURN(-EPERM);
@@ -1295,11 +1270,11 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 
         /* For both Size-on-MDS case and truncate case,
          * "la->la_valid & (LA_SIZE | LA_BLOCKS)" are ture.
-         * We distinguish them by "ma->ma_attr_flags & MDS_SOM".
+	 * We distinguish them by "flags & MDS_SOM".
          * For SOM case, it is true, the MAY_WRITE perm has been checked
          * when open, no need check again. For truncate case, it is false,
          * the MAY_WRITE perm should be checked here. */
-        if (ma->ma_attr_flags & MDS_SOM) {
+	if (flags & MDS_SOM) {
                 /* For the "Size-on-MDS" setattr update, merge coming
                  * attributes with the set in the inode. BUG 10641 */
                 if ((la->la_valid & LA_ATIME) &&
@@ -1313,12 +1288,11 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                         la->la_valid &= ~(LA_MTIME | LA_CTIME);
         } else {
                 if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
-                        if (!((ma->ma_attr_flags & MDS_OPEN_OWNEROVERRIDE) &&
+			if (!((flags & MDS_OPEN_OWNEROVERRIDE) &&
                               (uc->mu_fsuid == tmp_la->la_uid)) &&
-                            !(ma->ma_attr_flags & MDS_PERM_BYPASS)) {
-                                rc = mdd_permission_internal_locked(env, obj,
-                                                            tmp_la, MAY_WRITE,
-                                                            MOR_TGT_CHILD);
+			    !(flags & MDS_PERM_BYPASS)) {
+				rc = mdd_permission_internal(env, obj,
+							     tmp_la, MAY_WRITE);
                                 if (rc)
                                         RETURN(rc);
                         }
@@ -1543,9 +1517,10 @@ static int mdd_declare_attr_set(const struct lu_env *env,
                                 struct thandle *handle)
 {
         struct lu_buf  *buf = &mdd_env_info(env)->mti_buf;
+	struct lu_attr *attr = (struct lu_attr *) &ma->ma_attr;
         int             rc, i;
 
-        rc = mdo_declare_attr_set(env, obj, &ma->ma_attr, handle);
+	rc = mdo_declare_attr_set(env, obj, attr, handle);
         if (rc)
                 return rc;
 
@@ -1572,10 +1547,10 @@ static int mdd_declare_attr_set(const struct lu_env *env,
         }
 
 #ifdef CONFIG_FS_POSIX_ACL
-        if (ma->ma_attr.la_valid & LA_MODE) {
+	if (attr->la_valid & LA_MODE) {
                 mdd_read_lock(env, obj, MOR_TGT_CHILD);
-                rc = mdo_xattr_get(env, obj, &LU_BUF_NULL,XATTR_NAME_ACL_ACCESS,
-                                   BYPASS_CAPA);
+		rc = mdo_xattr_get(env, obj, &LU_BUF_NULL,
+				   XATTR_NAME_ACL_ACCESS, BYPASS_CAPA);
                 mdd_read_unlock(env, obj);
                 if (rc == -EOPNOTSUPP || rc == -ENODATA)
                         rc = 0;
@@ -1583,8 +1558,7 @@ static int mdd_declare_attr_set(const struct lu_env *env,
                         return rc;
 
                 if (rc != 0) {
-                        buf->lb_buf = NULL;
-                        buf->lb_len = rc;
+			struct lu_buf *buf = mdd_buf_get(env, NULL, rc);
                         rc = mdo_declare_xattr_set(env, obj, buf,
                                                    XATTR_NAME_ACL_ACCESS, 0,
                                                    handle);
@@ -1639,6 +1613,7 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         struct llog_cookie *logcookies = NULL;
         int  rc, lmm_size = 0, cookie_size = 0;
         struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
+	const struct lu_attr *la = &ma->ma_attr;
 #ifdef HAVE_QUOTA_SUPPORT
         struct obd_device *obd = mdd->mdd_obd_dev;
         struct mds_obd *mds = &obd->u.mds;
@@ -1651,13 +1626,12 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         ENTRY;
 
         *la_copy = ma->ma_attr;
-        rc = mdd_fix_attr(env, mdd_obj, la_copy, ma);
-        if (rc != 0)
+	rc = mdd_fix_attr(env, mdd_obj, la_copy, ma->ma_attr_flags);
+	if (rc)
                 RETURN(rc);
 
         /* setattr on "close" only change atime, or do nothing */
-        if (ma->ma_valid == MA_INODE &&
-            ma->ma_attr.la_valid == LA_ATIME && la_copy->la_valid == 0)
+	if (la->la_valid == LA_ATIME && la_copy->la_valid == 0)
                 RETURN(0);
 
         if (S_ISREG(mdd_object_type(mdd_obj)) &&
@@ -1688,12 +1662,12 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
                 GOTO(stop, rc);
 
         /* permission changes may require sync operation */
-        if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
+	if (ma->ma_attr.la_valid & (LA_MODE|LA_UID|LA_GID))
                 handle->th_sync |= !!mdd->mdd_sync_permission;
 
-        if (ma->ma_attr.la_valid & (LA_MTIME | LA_CTIME))
+	if (la->la_valid & (LA_MTIME | LA_CTIME))
                 CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
-                       ma->ma_attr.la_mtime, ma->ma_attr.la_ctime);
+		       la->la_mtime, la->la_ctime);
 
 #ifdef HAVE_QUOTA_SUPPORT
         if (mds->mds_quota && la_copy->la_valid & (LA_UID | LA_GID)) {
@@ -1724,13 +1698,11 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 #endif
 
         if (la_copy->la_valid & LA_FLAGS) {
-                rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy,
-                                                  handle, 1);
+		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
                 if (rc == 0)
                         mdd_flags_xlate(mdd_obj, la_copy->la_flags);
         } else if (la_copy->la_valid) {            /* setattr */
-                rc = mdd_attr_set_internal_locked(env, mdd_obj, la_copy,
-                                                  handle, 1);
+		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
                 /* journal chown/chgrp in llog, just like unlink */
                 if (rc == 0 && lmm_size){
                         cookie_size = mdd_lov_cookiesize(env, mdd);
@@ -1835,7 +1807,6 @@ static int mdd_declare_xattr_set(const struct lu_env *env,
                                  const struct lu_buf *buf,
                                  const char *name,
                                  struct thandle *handle)
-
 {
         int rc;
 
@@ -1889,15 +1860,20 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
         if (!strcmp(name, XATTR_NAME_ACL_ACCESS))
                 handle->th_sync |= !!mdd->mdd_sync_permission;
 
-        rc = mdd_xattr_set_txn(env, mdd_obj, buf, name, fl, handle);
+	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+	rc = mdo_xattr_set(env, mdd_obj, buf, name, fl, handle,
+			   mdd_object_capa(env, mdd_obj));
+	mdd_write_unlock(env, mdd_obj);
+	if (rc)
+		GOTO(stop, rc);
 
         /* Only record system & user xattr changes */
-        if ((rc == 0) && (strncmp(XATTR_USER_PREFIX, name,
+	if (strncmp(XATTR_USER_PREFIX, name,
                                   sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
                           strncmp(POSIX_ACL_XATTR_ACCESS, name,
                                   sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
                           strncmp(POSIX_ACL_XATTR_DEFAULT, name,
-                                  sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0))
+				  sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0)
                 rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj,
                                               handle);
 
@@ -1959,14 +1935,16 @@ int mdd_xattr_del(const struct lu_env *env, struct md_object *obj,
         rc = mdo_xattr_del(env, mdd_obj, name, handle,
                            mdd_object_capa(env, mdd_obj));
         mdd_write_unlock(env, mdd_obj);
+	if (rc)
+		GOTO(stop, rc);
 
         /* Only record system & user xattr changes */
-        if ((rc == 0) && (strncmp(XATTR_USER_PREFIX, name,
+	if (strncmp(XATTR_USER_PREFIX, name,
                                   sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
                           strncmp(POSIX_ACL_XATTR_ACCESS, name,
                                   sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
                           strncmp(POSIX_ACL_XATTR_DEFAULT, name,
-                                  sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0))
+				  sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0)
                 rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj,
                                               handle);
 
@@ -2221,7 +2199,8 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                 }
         }
 
-        rc = mdd_iattr_get(env, mdd_obj, ma);
+	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr,
+			mdd_object_capa(env, mdd_obj));
         /* Object maybe not in orphan list originally, it is rare case for
          * mdd_finish_unlink() failure. */
         if (rc == 0 && (ma->ma_attr.la_nlink == 0 || is_orphan)) {

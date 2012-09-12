@@ -362,7 +362,7 @@ int mdd_permission(const struct lu_env *env,
 {
         struct mdd_object *mdd_pobj, *mdd_cobj;
         struct md_ucred *uc = NULL;
-        struct lu_attr *la = NULL;
+	struct lu_attr *la = &mdd_env_info(env)->mti_cattr;
         int check_create, check_link;
         int check_unlink;
         int check_rename_src, check_rename_tar;
@@ -374,17 +374,15 @@ int mdd_permission(const struct lu_env *env,
         LASSERT(cobj);
         mdd_cobj = md2mdd_obj(cobj);
 
+	rc = mdd_la_get(env, mdd_cobj, la, BYPASS_CAPA);
+	if (rc)
+		RETURN(rc);
+
         /* For cross_open case, the "mask" is open flags,
          * so convert it to permission mask first.
          * XXX: MDS_OPEN_CROSS must be NOT equal to permission mask MAY_*. */
-        if (unlikely(mask & MDS_OPEN_CROSS)) {
-                la = &mdd_env_info(env)->mti_la;
-                rc = mdd_la_get(env, mdd_cobj, la, BYPASS_CAPA);
-                if (rc)
-                        RETURN(rc);
-
-                mask = accmode(env, la, mask & ~MDS_OPEN_CROSS);
-        }
+	if (unlikely(mask & MDS_OPEN_CROSS))
+		mask = accmode(env, la, mask & ~MDS_OPEN_CROSS);
 
         check_create = mask & MAY_CREATE;
         check_link = mask & MAY_LINK;
@@ -407,22 +405,18 @@ int mdd_permission(const struct lu_env *env,
         if (!rc && (check_create || check_link))
                 rc = mdd_may_create(env, mdd_cobj, NULL, 1, check_link);
 
-        if (!rc && check_unlink) {
-                LASSERT(ma);
-                rc = mdd_may_unlink(env, mdd_cobj, ma);
-        }
+	if (!rc && check_unlink)
+		rc = mdd_may_unlink(env, mdd_cobj, la);
 
         if (!rc && (check_rename_src || check_rename_tar)) {
                 LASSERT(pobj);
-                LASSERT(ma);
                 mdd_pobj = md2mdd_obj(pobj);
-                rc = mdd_may_delete(env, mdd_pobj, mdd_cobj, ma, 1,
+		rc = mdd_may_delete(env, mdd_pobj, mdd_cobj, la, NULL, 1,
                                     check_rename_tar);
         }
 
         if (!rc && (check_vtx_part || check_vtx_full)) {
                 uc = md_ucred(env);
-                LASSERT(ma);
                 if (likely(!la)) {
                         la = &mdd_env_info(env)->mti_la;
                         rc = mdd_la_get(env, mdd_cobj, la, BYPASS_CAPA);
@@ -444,13 +438,6 @@ int mdd_permission(const struct lu_env *env,
         if (unlikely(!rc && check_rgetfacl)) {
                 if (likely(!uc))
                         uc = md_ucred(env);
-
-                if (likely(!la)) {
-                        la = &mdd_env_info(env)->mti_la;
-                        rc = mdd_la_get(env, mdd_cobj, la, BYPASS_CAPA);
-                        if (rc)
-                                RETURN(rc);
-                }
 
                 if (la->la_uid != uc->mu_fsuid &&
                     !mdd_capable(uc, CFS_CAP_FOWNER))

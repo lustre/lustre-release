@@ -2471,7 +2471,6 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->getxattr != NULL);
-        LASSERT(osd_read_locked(env, obj) || osd_write_locked(env, obj));
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
                 return -EACCES;
