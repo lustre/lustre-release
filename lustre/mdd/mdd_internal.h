@@ -450,6 +450,9 @@ int mdd_quota_finvalidate(const struct lu_env *env, struct md_device *m,
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
                     struct mdd_object *obj, struct lu_attr *la);
 
+void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
+			  struct mdd_object *child, struct lu_attr *attr);
+
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)
 {

@@ -1655,6 +1655,7 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         struct lov_mds_md *lmm = NULL;
         int                lmm_size = 0;
         struct thandle    *handle;
+	struct lu_attr    *attr = &mdd_env_info(env)->mti_la_for_fix;
         int                rc;
         ENTRY;
 
@@ -1669,6 +1670,13 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
         rc = mdd_lov_create(env, mdd, mdd_pobj, son, &lmm, &lmm_size, spec, ma);
         if (rc)
                 RETURN(rc);
+
+	rc = mdd_la_get(env, son, attr, mdd_object_capa(env, son));
+	if (rc)
+		RETURN(rc);
+
+	/* calling ->ah_make_hint() is used to transfer information from parent */
+	mdd_object_make_hint(env, mdd_pobj, son, attr);
 
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
@@ -2129,6 +2137,8 @@ static int mdd_create(const struct lu_env *env,
                 else if (ma_acl->ma_valid & MA_ACL_DEF)
                         got_def_acl = 1;
         }
+
+	mdd_object_make_hint(env, mdd_pobj, son, attr);
 
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))

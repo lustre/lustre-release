@@ -1007,7 +1007,8 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
  */
 
 static void osd_ah_init(const struct lu_env *env, struct dt_allocation_hint *ah,
-			struct dt_object *parent, cfs_umode_t child_mode)
+			struct dt_object *parent, struct dt_object *child,
+			cfs_umode_t child_mode)
 {
 	LASSERT(ah);
 

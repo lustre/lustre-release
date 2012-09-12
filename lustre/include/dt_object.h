@@ -382,6 +382,7 @@ struct dt_object_operations {
         void  (*do_ah_init)(const struct lu_env *env,
                             struct dt_allocation_hint *ah,
                             struct dt_object *parent,
+			    struct dt_object *child,
                             cfs_umode_t child_mode);
         /**
          * Create new object on this device.

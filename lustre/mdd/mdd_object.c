@@ -981,11 +981,6 @@ int mdd_object_create_internal(const struct lu_env *env, struct mdd_object *p,
 
                 dof->u.dof_idx.di_feat = feat;
 
-                /* @hint will be initialized by underlying device. */
-                next->do_ops->do_ah_init(env, hint,
-                                         p ? mdd_object_child(p) : NULL,
-                                         attr->la_mode & S_IFMT);
-
                 rc = mdo_create_obj(env, c, attr, hint, dof, handle);
                 LASSERT(ergo(rc == 0, mdd_object_exists(c)));
         } else
@@ -2250,6 +2245,17 @@ static int mdd_ref_add(const struct lu_env *env, struct md_object *obj,
         mdd_trans_stop(env, mdd, 0, handle);
 
         RETURN(rc);
+}
+
+void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
+		struct mdd_object *child, struct lu_attr *attr)
+{
+	struct dt_allocation_hint *hint = &mdd_env_info(env)->mti_hint;
+	struct dt_object *np = parent ? mdd_object_child(parent) : NULL;
+	struct dt_object *nc = mdd_object_child(child);
+
+	/* @hint will be initialized by underlying device. */
+	nc->do_ops->do_ah_init(env, hint, np, nc, attr->la_mode & S_IFMT);
 }
 
 /*
