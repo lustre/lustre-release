@@ -153,6 +153,37 @@ static cfs_hash_ops_t job_stats_hash_ops = {
 	.hs_exit       = job_stat_exit,
 };
 
+static int job_iter_callback(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+			     cfs_hlist_node_t *hnode, void *data)
+{
+	time_t oldest = *((time_t *)data);
+	struct job_stat *job;
+
+	job = cfs_hlist_entry(hnode, struct job_stat, js_hash);
+	if (!oldest || job->js_timestamp < oldest)
+		cfs_hash_bd_del_locked(hs, bd, hnode);
+
+	return 0;
+}
+
+static void lprocfs_job_cleanup(struct obd_job_stats *stats, bool force)
+{
+	time_t oldest, now;
+
+	if (stats->ojs_cleanup_interval == 0)
+		return;
+
+	now = cfs_time_current_sec();
+	if (!force && now < stats->ojs_last_cleanup +
+			    stats->ojs_cleanup_interval)
+		return;
+
+	oldest = now - stats->ojs_cleanup_interval;
+	cfs_hash_for_each_safe(stats->ojs_hash, job_iter_callback,
+			       &oldest);
+	stats->ojs_last_cleanup = cfs_time_current_sec();
+}
+
 static struct job_stat *job_alloc(char *jobid, struct obd_job_stats *jobs)
 {
 	struct job_stat *job;
@@ -189,6 +220,8 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 	ENTRY;
 
 	LASSERT(stats && stats->ojs_hash);
+
+	lprocfs_job_cleanup(stats, false);
 
 	if (!jobid || !strlen(jobid))
 		RETURN(-EINVAL);
@@ -231,19 +264,6 @@ found:
 }
 EXPORT_SYMBOL(lprocfs_job_stats_log);
 
-static int job_iter_callback(cfs_hash_t *hs, cfs_hash_bd_t *bd,
-			     cfs_hlist_node_t *hnode, void *data)
-{
-	time_t oldest = *((time_t *)data);
-	struct job_stat *job;
-
-	job = cfs_hlist_entry(hnode, struct job_stat, js_hash);
-	if (!oldest || job->js_timestamp < oldest)
-		cfs_hash_bd_del_locked(hs, bd, hnode);
-
-	return 0;
-}
-
 void lprocfs_job_stats_fini(struct obd_device *obd)
 {
 	struct obd_job_stats *stats = &obd->u.obt.obt_jobstats;
@@ -251,7 +271,6 @@ void lprocfs_job_stats_fini(struct obd_device *obd)
 
 	if (stats->ojs_hash == NULL)
 		return;
-	cfs_timer_disarm(&stats->ojs_cleanup_timer);
 	cfs_hash_for_each_safe(stats->ojs_hash, job_iter_callback, &oldest);
 	cfs_hash_putref(stats->ojs_hash);
 	stats->ojs_hash = NULL;
@@ -463,20 +482,6 @@ struct file_operations lprocfs_jobstats_seq_fops = {
 	.release = lprocfs_seq_release,
 };
 
-static void job_cleanup_callback(unsigned long data)
-{
-	struct obd_job_stats *stats = (struct obd_job_stats *)data;
-	time_t oldest;
-
-	if (stats->ojs_cleanup_interval) {
-		oldest = cfs_time_current_sec() - stats->ojs_cleanup_interval;
-		cfs_hash_for_each_safe(stats->ojs_hash, job_iter_callback,
-				       &oldest);
-		cfs_timer_arm(&stats->ojs_cleanup_timer,
-			      cfs_time_shift(stats->ojs_cleanup_interval));
-	}
-}
-
 int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 			   cntr_init_callback init_fn)
 {
@@ -510,10 +515,8 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 	cfs_rwlock_init(&stats->ojs_lock);
 	stats->ojs_cntr_num = cntr_num;
 	stats->ojs_cntr_init_fn = init_fn;
-	cfs_timer_init(&stats->ojs_cleanup_timer, job_cleanup_callback, stats);
 	stats->ojs_cleanup_interval = 600; /* 10 mins by default */
-	cfs_timer_arm(&stats->ojs_cleanup_timer,
-		      cfs_time_shift(stats->ojs_cleanup_interval));
+	stats->ojs_last_cleanup = cfs_time_current_sec();
 
 	LPROCFS_WRITE_ENTRY();
 	entry = create_proc_entry("job_stats", 0644, obd->obd_proc_entry);
@@ -557,11 +560,7 @@ int lprocfs_wr_job_interval(struct file *file, const char *buffer,
 		return rc;
 
 	stats->ojs_cleanup_interval = val;
-	if (!stats->ojs_cleanup_interval)
-		cfs_timer_disarm(&stats->ojs_cleanup_timer);
-	else
-		cfs_timer_arm(&stats->ojs_cleanup_timer,
-			      cfs_time_shift(stats->ojs_cleanup_interval));
+	lprocfs_job_cleanup(stats, true);
 
 	return count;
 
