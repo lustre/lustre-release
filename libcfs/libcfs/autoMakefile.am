@@ -42,7 +42,6 @@ SUBDIRS += darwin
 endif
 DIST_SUBDIRS = linux util posix darwin
 
-if LIBLUSTRE
 noinst_LIBRARIES= libcfs.a
 libcfs_a_SOURCES= posix/posix-debug.c user-prim.c user-lock.c user-tcpip.c  \
 		  prng.c user-bitops.c user-mem.c hash.c kernel_user_comm.c \
@@ -56,7 +55,6 @@ endif
 
 libcfs_a_CPPFLAGS = $(LLCPPFLAGS)
 libcfs_a_CFLAGS = $(LLCFLAGS)
-endif
 
 lib_LIBRARIES = libcfsutil.a
 libcfsutil_a_SOURCES = nidstrings.c libcfs_string.c util/parser.c	\
