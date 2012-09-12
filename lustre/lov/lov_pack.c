@@ -465,6 +465,9 @@ static int __lov_setstripe(struct obd_export *exp, int max_lmm_size,
         if (lmm_magic == LOV_USER_MAGIC_V3) {
                 struct pool_desc *pool;
 
+		/* In the function below, .hs_keycmp resolves to
+		 * pool_hashkey_keycmp() */
+		/* coverity[overrun-buffer-val] */
                 pool = lov_find_pool(lov, lumv3->lmm_pool_name);
                 if (pool != NULL) {
                         if (lumv3->lmm_stripe_offset !=

@@ -898,6 +898,9 @@ static int lov_cleanup(struct obd_device *obd)
                 pool = cfs_list_entry(pos, struct pool_desc, pool_list);
                 /* free pool structs */
                 CDEBUG(D_INFO, "delete pool %p\n", pool);
+		/* In the function below, .hs_keycmp resolves to
+		 * pool_hashkey_keycmp() */
+		/* coverity[overrun-buffer-val] */
                 lov_pool_del(obd, pool->pool_name);
         }
         cfs_hash_putref(lov->lov_pools_hash_body);

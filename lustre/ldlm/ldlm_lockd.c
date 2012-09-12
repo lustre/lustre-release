@@ -1182,6 +1182,9 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 
         if (unlikely(flags & LDLM_FL_REPLAY)) {
                 /* Find an existing lock in the per-export lock hash */
+		/* In the function below, .hs_keycmp resolves to
+		 * ldlm_export_lock_keycmp() */
+		/* coverity[overrun-buffer-val] */
                 lock = cfs_hash_lookup(req->rq_export->exp_lock_hash,
                                        (void *)&dlm_req->lock_handle[0]);
                 if (lock != NULL) {
@@ -2316,6 +2319,9 @@ int ldlm_revoke_lock_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
         if (lock->l_export && lock->l_export->exp_lock_hash) {
 		/* NB: it's safe to call cfs_hash_del() even lock isn't
 		 * in exp_lock_hash. */
+		/* In the function below, .hs_keycmp resolves to
+		 * ldlm_export_lock_keycmp() */
+		/* coverity[overrun-buffer-val] */
 		cfs_hash_del(lock->l_export->exp_lock_hash,
 			     &lock->l_remote_handle, &lock->l_exp_hash);
 	}

@@ -215,6 +215,9 @@ static int lov_init_raid0(const struct lu_env *env,
                         subdev = lovsub2cl_dev(dev->ld_target[ost_idx]);
                         subconf->u.coc_oinfo = oinfo;
                         LASSERTF(subdev != NULL, "not init ost %d\n", ost_idx);
+			/* In the function below, .hs_keycmp resolves to
+			 * lu_obj_hop_keycmp() */
+			/* coverity[overrun-buffer-val] */
                         stripe = lov_sub_find(env, subdev, ofid, subconf);
                         if (!IS_ERR(stripe))
                                 result = lov_init_sub(env, lov, stripe, r0, i);

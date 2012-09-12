@@ -3439,6 +3439,9 @@ static void mdt_intent_fixup_resent(struct mdt_thread_info *info,
         dlmreq = req_capsule_client_get(info->mti_pill, &RMF_DLM_REQ);
         remote_hdl = dlmreq->lock_handle[0];
 
+	/* In the function below, .hs_keycmp resolves to
+	 * ldlm_export_lock_keycmp() */
+	/* coverity[overrun-buffer-val] */
         lock = cfs_hash_lookup(exp->exp_lock_hash, &remote_hdl);
         if (lock) {
                 if (lock != new_lock) {

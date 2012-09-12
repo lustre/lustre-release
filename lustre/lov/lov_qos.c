@@ -540,6 +540,9 @@ int qos_remedy_create(struct lov_request_set *set, struct lov_request *req)
 	ENTRY;
 
 	/* First check whether we can create the objects on the pool */
+	/* In the function below, .hs_keycmp resolves to
+	 * pool_hashkey_keycmp() */
+	/* coverity[overrun-buffer-val] */
 	pool = lov_find_pool(lov, lsm->lsm_pool_name);
 	if (pool != NULL) {
 		cfs_down_read(&pool_tgt_rw_sem(pool));
@@ -696,6 +699,9 @@ static int alloc_specific(struct lov_obd *lov, struct lov_stripe_md *lsm,
         struct ost_pool *osts;
         ENTRY;
 
+	/* In the function below, .hs_keycmp resolves to
+	 * pool_hashkey_keycmp() */
+	/* coverity[overrun-buffer-val] */
         pool = lov_find_pool(lov, lsm->lsm_pool_name);
         if (pool == NULL) {
                 osts = &(lov->lov_packed);
@@ -968,6 +974,9 @@ static int alloc_idx_array(struct obd_export *exp, struct lov_stripe_md *lsm,
 
         if (newea ||
             lsm->lsm_oinfo[0]->loi_ost_idx >= lov->desc.ld_tgt_count)
+		/* In the function below, .hs_keycmp resolves to
+		 * pool_hashkey_keycmp() */
+		/* coverity[overrun-buffer-val] */
                 rc = alloc_qos(exp, tmp_arr, &stripe_cnt,
                                lsm->lsm_pool_name, flags);
         else

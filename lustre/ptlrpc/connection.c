@@ -76,6 +76,9 @@ ptlrpc_connection_get(lnet_process_id_t peer, lnet_nid_t self,
          * connection.  The object which exists in the has will be
          * returned and may be compared against out object.
          */
+	/* In the function below, .hs_keycmp resolves to
+	 * conn_keycmp() */
+	/* coverity[overrun-buffer-val] */
         conn2 = cfs_hash_findadd_unique(conn_hash, &peer, &conn->c_hash);
         if (conn != conn2) {
                 OBD_FREE_PTR(conn);

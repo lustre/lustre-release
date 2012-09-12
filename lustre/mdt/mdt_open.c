@@ -1357,6 +1357,9 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                 *child_fid = *info->mti_rr.rr_fid2;
                 LASSERTF(fid_is_sane(child_fid), "fid="DFID"\n",
                          PFID(child_fid));
+		/* In the function below, .hs_keycmp resolves to
+		 * lu_obj_hop_keycmp() */
+		/* coverity[overrun-buffer-val] */
 		child = mdt_object_new(info->mti_env, mdt, child_fid);
 	} else {
 		/*

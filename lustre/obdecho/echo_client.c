@@ -1079,6 +1079,9 @@ static struct echo_object *cl_echo_object_find(struct echo_device *d,
         fid  = &info->eti_fid;
         lsm2fid(lsm, fid);
 
+	/* In the function below, .hs_keycmp resolves to
+	 * lu_obj_hop_keycmp() */
+	/* coverity[overrun-buffer-val] */
         obj = cl_object_find(env, echo_dev2cl(d), fid, &conf->eoc_cl);
         if (IS_ERR(obj))
                 GOTO(out, eco = (void*)obj);
@@ -2036,6 +2039,9 @@ static int echo_md_handler(struct echo_device *ed, int command,
                 fid->f_seq = data->ioc_obdo1.o_seq;
                 fid->f_oid = (__u32)data->ioc_obdo1.o_id;
                 fid->f_ver = 0;
+		/* In the function below, .hs_keycmp resolves to
+		 * lu_obj_hop_keycmp() */
+		/* coverity[overrun-buffer-val] */
                 rc = echo_create_md_object(env, ed, parent, fid, name, namelen,
                                            id, mode, count, stripe_count,
                                            stripe_index);
