@@ -638,6 +638,9 @@ int main(int argc, char *const argv[])
 
                 fprintf(stderr, "%s: mount %s at %s failed: %s\n", progname,
 			mop.mo_usource, mop.mo_target, strerror(errno));
+		if (errno == EBUSY)
+			fprintf(stderr, "Is the backend filesystem mounted?\n"
+					"Check /etc/mtab and /proc/mounts\n");
                 if (errno == ENODEV)
                         fprintf(stderr, "Are the lustre modules loaded?\n"
                                 "Check /etc/modprobe.conf and "
