@@ -132,6 +132,7 @@ static int osp_last_used_init(const struct lu_env *env, struct osp_device *m)
 	if (rc)
 		GOTO(out, rc);
 
+	/* object will be released in device cleanup path */
 	m->opd_last_used_file = o;
 
 	if (osi->osi_attr.la_size >= sizeof(osi->osi_id) *
@@ -173,12 +174,11 @@ static int osp_last_used_init(const struct lu_env *env, struct osp_device *m)
 	}
 	RETURN(0);
 out:
-	/* object will be released in device cleanup path */
 	CERROR("%s: can't initialize lov_objid: %d\n",
 	       m->opd_obd->obd_name, rc);
 	lu_object_put(env, &o->do_lu);
 	m->opd_last_used_file = NULL;
-	RETURN(rc);
+	return rc;
 }
 
 static void osp_last_used_fini(const struct lu_env *env, struct osp_device *d)
@@ -218,6 +218,9 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 		       d->opd_obd->obd_name, rc);
 
 	ptlrpc_invalidate_import(imp);
+
+	/* stop precreate thread */
+	osp_precreate_fini(d);
 
 	RETURN(rc);
 }
@@ -273,6 +276,7 @@ static int osp_recovery_complete(const struct lu_env *env,
 
 	ENTRY;
 	osp->opd_recovery_completed = 1;
+	cfs_waitq_signal(&osp->opd_pre_waitq);
 	RETURN(rc);
 }
 
@@ -455,6 +459,13 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 		GOTO(out_proc, rc);
 
 	/*
+	 * Initialize precreation thread, it handles new connections as well
+	 */
+	rc = osp_init_precreate(m);
+	if (rc)
+		GOTO(out_last_used, rc);
+
+	/*
 	 * Initiate connect to OST
 	 */
 	ll_generate_random_uuid(uuid);
@@ -470,6 +481,9 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	RETURN(0);
 
 out:
+	/* stop precreate thread */
+	osp_precreate_fini(m);
+out_last_used:
 	osp_last_used_fini(env, m);
 out_proc:
 	ptlrpc_lprocfs_unregister_obd(m->opd_obd);
