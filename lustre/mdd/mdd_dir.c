@@ -896,7 +896,12 @@ static int mdd_link(const struct lu_env *env, struct md_object *tgt_obj,
         if (rc)
                 GOTO(out_unlock, rc);
 
-        mdo_ref_add(env, mdd_sobj, handle);
+	rc = mdo_ref_add(env, mdd_sobj, handle);
+	if (rc != 0) {
+		__mdd_index_delete_only(env, mdd_tobj, name, handle,
+					mdd_object_capa(env, mdd_tobj));
+                GOTO(out_unlock, rc);
+	}
 
         LASSERT(ma->ma_attr.la_valid & LA_CTIME);
         la->la_ctime = la->la_mtime = ma->ma_attr.la_ctime;
@@ -1110,7 +1115,14 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
         if (rc)
                 GOTO(cleanup, rc);
 
-        mdo_ref_del(env, mdd_cobj, handle);
+	rc = mdo_ref_del(env, mdd_cobj, handle);
+	if (rc != 0) {
+		__mdd_index_insert_only(env, mdd_pobj, mdo2fid(mdd_cobj),
+					name, handle,
+					mdd_object_capa(env, mdd_pobj));
+		GOTO(cleanup, rc);
+	}
+
         if (is_dir)
                 /* unlink dot */
                 mdo_ref_del(env, mdd_cobj, handle);
@@ -2232,25 +2244,36 @@ static int mdd_create(const struct lu_env *env,
         rc = mdd_attr_get_internal_locked(env, son, ma);
         EXIT;
 cleanup:
-        if (rc && created) {
-                int rc2 = 0;
+	if (rc != 0 && created != 0) {
+		int rc2;
 
-                if (inserted) {
-                        rc2 = __mdd_index_delete(env, mdd_pobj, name,
-                                                 S_ISDIR(attr->la_mode),
-                                                 handle, BYPASS_CAPA);
-                        if (rc2)
-                                CERROR("error can not cleanup destroy %d\n",
-                                       rc2);
-                }
+		if (inserted != 0) {
+			rc2 = __mdd_index_delete(env, mdd_pobj, name,
+						 S_ISDIR(attr->la_mode),
+						 handle, BYPASS_CAPA);
+			if (rc2 != 0)
+				goto out_stop;
+		}
 
-                if (rc2 == 0) {
-                        mdd_write_lock(env, son, MOR_TGT_CHILD);
-                        mdo_ref_del(env, son, handle);
-                        if (initialized && S_ISDIR(attr->la_mode))
-                                mdo_ref_del(env, son, handle);
-                        mdd_write_unlock(env, son);
-                }
+		mdd_write_lock(env, son, MOR_TGT_CHILD);
+		if (initialized != 0 && S_ISDIR(attr->la_mode)) {
+			/* Drop the reference, no need to delete "."/"..",
+			 * because the object to be destroied directly. */
+			rc2 = mdo_ref_del(env, son, handle);
+			if (rc2 != 0) {
+				mdd_write_unlock(env, son);
+				goto out_stop;
+			}
+		}
+
+		rc2 = mdo_ref_del(env, son, handle);
+		if (rc2 != 0) {
+			mdd_write_unlock(env, son);
+			goto out_stop;
+		}
+
+		mdo_destroy(env, son, handle);
+		mdd_write_unlock(env, son);
         }
 
         /* update lov_objid data, must be before transaction stop! */
