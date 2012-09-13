@@ -39,6 +39,16 @@
  * Author: Phil Schwan <phil@clusterfs.com>
  */
 
+/**
+ * This file contains implementation of EXTENT lock type
+ *
+ * EXTENT lock type is for locking a contiguous range of values, represented
+ * by 64-bit starting and ending offsets (inclusive). There are several extent
+ * lock modes, some of which may be mutually incompatible. Extent locks are
+ * considered incompatible if their modes are incompatible and their extents
+ * intersect.  See the lock mode compatibility matrix in lustre_dlm.h.
+ */
+
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifndef __KERNEL__
 # include <liblustre.h>
@@ -57,7 +67,13 @@
 #ifdef HAVE_SERVER_SUPPORT
 # define LDLM_MAX_GROWN_EXTENT (32 * 1024 * 1024 - 1)
 
-/* fixup the ldlm_extent after expanding */
+/**
+ * Fix up the ldlm_extent after expanding it.
+ *
+ * After expansion has been done, we might still want to do certain adjusting
+ * based on overall contention of the resource and the like to avoid granting
+ * overly wide locks.
+ */
 static void ldlm_extent_internal_policy_fixup(struct ldlm_lock *req,
                                               struct ldlm_extent *new_ex,
                                               int conflicting)
@@ -102,10 +118,15 @@ static void ldlm_extent_internal_policy_fixup(struct ldlm_lock *req,
                  mask, new_ex->end, req_end);
 }
 
-/* The purpose of this function is to return:
- * - the maximum extent
- * - containing the requested extent
- * - and not overlapping existing conflicting extents outside the requested one
+/**
+ * Return the maximum extent that:
+ * - contains the requested extent
+ * - does not overlap existing conflicting extents outside the requested one
+ *
+ * This allows clients to request a small required extent range, but if there
+ * is no contention on the lock the full lock can be granted to the client.
+ * This avoids the need for many smaller lock requests to be granted in the
+ * common (uncontended) case.
  *
  * Use interval tree to expand the lock extent for granted lock.
  */
@@ -124,7 +145,7 @@ static void ldlm_extent_internal_policy_granted(struct ldlm_lock *req,
 
         lockmode_verify(req_mode);
 
-        /* using interval tree to handle the ldlm extent granted locks */
+	/* Using interval tree to handle the LDLM extent granted locks. */
         for (idx = 0; idx < LCK_MODE_NUM; idx++) {
                 struct interval_node_extent ext = { req_start, req_end };
 
@@ -342,14 +363,17 @@ static enum interval_iter ldlm_extent_compat_cb(struct interval_node *n,
         RETURN(INTERVAL_ITER_CONT);
 }
 
-/* Determine if the lock is compatible with all locks on the queue.
- * We stop walking the queue if we hit ourselves so we don't take
- * conflicting locks enqueued after us into accound, or we'd wait forever.
+/**
+ * Determine if the lock is compatible with all locks on the queue.
  *
- * 0 if the lock is not compatible
- * 1 if the lock is compatible
- * 2 if this group lock is compatible and requires no further checking
- * negative error, such as EWOULDBLOCK for group locks
+ * If \a work_list is provided, conflicting locks are linked there.
+ * If \a work_list is not provided, we exit this function on first conflict.
+ *
+ * \retval 0 if the lock is not compatible
+ * \retval 1 if the lock is compatible
+ * \retval 2 if \a req is a group lock and it is compatible and requires
+ *           no further checking
+ * \retval negative error, such as EWOULDBLOCK for group locks
  */
 static int
 ldlm_extent_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
@@ -438,6 +462,9 @@ ldlm_extent_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                         lock = cfs_list_entry(tmp, struct ldlm_lock,
                                               l_res_link);
 
+			/* We stop walking the queue if we hit ourselves so
+			 * we don't take conflicting locks enqueued after us
+			 * into account, or we'd wait forever. */
                         if (req == lock)
                                 break;
 
@@ -613,6 +640,12 @@ destroylock:
         RETURN(compat);
 }
 
+/**
+ * Discard all AST work items from list.
+ *
+ * If for whatever reason we do not want to send ASTs to conflicting locks
+ * anymore, disassemble the list with this function.
+ */
 static void discard_bl_list(cfs_list_t *bl_list)
 {
         cfs_list_t *tmp, *pos;
@@ -634,13 +667,21 @@ static void discard_bl_list(cfs_list_t *bl_list)
         EXIT;
 }
 
-/* If first_enq is 0 (ie, called from ldlm_reprocess_queue):
-  *   - blocking ASTs have already been sent
-  *   - must call this function with the ns lock held
-  *
-  * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
-  *   - blocking ASTs have not been sent
-  *   - must call this function with the ns lock held once */
+/**
+ * Process a granting attempt for extent lock.
+ * Must be called with ns lock held.
+ *
+ * This function looks for any conflicts for \a lock in the granted or
+ * waiting queues. The lock is granted if no conflicts are found in
+ * either queue.
+ *
+ * If \a first_enq is 0 (ie, called from ldlm_reprocess_queue):
+ *   - blocking ASTs have already been sent
+ *
+ * If \a first_enq is 1 (ie, called from ldlm_lock_enqueue):
+ *   - blocking ASTs have not been sent yet, so list of conflicting locks
+ *     would be collected and ASTs sent.
+ */
 int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 			     int first_enq, ldlm_error_t *err,
 			     cfs_list_t *work_list)
@@ -720,7 +761,6 @@ int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
 
                 lock_res(res);
                 if (rc == -ERESTART) {
-
                         /* 15715: The lock was granted and destroyed after
                          * resource lock was dropped. Interval node was freed
                          * in ldlm_lock_destroy. Anyway, this always happens
@@ -862,6 +902,7 @@ static inline int lock_mode_to_index(ldlm_mode_t mode)
         return index;
 }
 
+/** Add newly granted lock into interval tree for the resource. */
 void ldlm_extent_add_lock(struct ldlm_resource *res,
                           struct ldlm_lock *lock)
 {
@@ -899,6 +940,7 @@ void ldlm_extent_add_lock(struct ldlm_resource *res,
         ldlm_resource_add_lock(res, &res->lr_granted, lock);
 }
 
+/** Remove cancelled lock from resource interval tree. */
 void ldlm_extent_unlink_lock(struct ldlm_lock *lock)
 {
         struct ldlm_resource *res = lock->l_resource;

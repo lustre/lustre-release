@@ -130,8 +130,22 @@ struct ldlm_bl_work_item {
 
 #if defined(HAVE_SERVER_SUPPORT) && defined(__KERNEL__)
 
-/* w_l_spinlock protects both waiting_locks_list and expired_lock_thread */
+/**
+ * Protects both waiting_locks_list and expired_lock_thread.
+ */
 static spinlock_t waiting_locks_spinlock;   /* BH lock (timer) */
+
+/**
+ * List for contended locks.
+ *
+ * As soon as a lock is contended, it gets placed on this list and
+ * expected time to get a response is filled in the lock. A special
+ * thread walks the list looking for locks that should be released and
+ * schedules client evictions for those that have not been released in
+ * time.
+ *
+ * All access to it should be under waiting_locks_spinlock.
+ */
 static cfs_list_t waiting_locks_list;
 static cfs_timer_t waiting_locks_timer;
 
@@ -154,6 +168,9 @@ static inline int have_expired_locks(void)
 	RETURN(need_to_run);
 }
 
+/**
+ * Check expired lock list for expired locks and time them out.
+ */
 static int expired_lock_main(void *arg)
 {
         cfs_list_t *expired = &expired_lock_thread.elt_expired_locks;
@@ -403,7 +420,9 @@ static void waiting_locks_callback(unsigned long unused)
 	spin_unlock_bh(&waiting_locks_spinlock);
 }
 
-/*
+/**
+ * Add lock to the list of contended locks.
+ *
  * Indicate that we're waiting for a client to call us back cancelling a given
  * lock.  We add it to the pending-callback chain, and schedule the lock-timeout
  * timer to fire appropriately.  (We round up to the next second, to avoid
@@ -488,7 +507,7 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 	return ret;
 }
 
-/*
+/**
  * Remove a lock from the pending list, likely because it had its cancellation
  * callback arrive without incident.  This adjusts the lock-timeout timer if
  * needed.  Returns 0 if the lock wasn't pending after all, 1 if it was.
@@ -553,8 +572,8 @@ int ldlm_del_waiting_lock(struct ldlm_lock *lock)
 }
 EXPORT_SYMBOL(ldlm_del_waiting_lock);
 
-/*
- * Prolong the lock
+/**
+ * Prolong the contended lock waiting time.
  *
  * Called with namespace lock held.
  */
@@ -610,6 +629,9 @@ static int ldlm_add_waiting_lock(struct ldlm_lock *lock)
 
 #ifdef HAVE_SERVER_SUPPORT
 
+/**
+ * Perform lock cleanup if AST sending failed.
+ */
 static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
                             const char *ast_type)
 {
@@ -635,6 +657,9 @@ static void ldlm_failed_ast(struct ldlm_lock *lock, int rc,
 #endif
 }
 
+/**
+ * Perform lock cleanup if AST reply came with error.
+ */
 static int ldlm_handle_ast_error(struct ldlm_lock *lock,
                                  struct ptlrpc_request *req, int rc,
                                  const char *ast_type)
@@ -795,11 +820,11 @@ static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
 	EXIT;
 }
 
-/*
+/**
  * ->l_blocking_ast() method for server-side locks. This is invoked when newly
  * enqueued server lock conflicts with given one.
  *
- * Sends blocking ast rpc to the client owning that lock; arms timeout timer
+ * Sends blocking AST RPC to the client owning that lock; arms timeout timer
  * to wait for client response.
  */
 int ldlm_server_blocking_ast(struct ldlm_lock *lock,
@@ -893,6 +918,13 @@ int ldlm_server_blocking_ast(struct ldlm_lock *lock,
 }
 EXPORT_SYMBOL(ldlm_server_blocking_ast);
 
+/**
+ * ->l_completion_ast callback for a remote lock in server namespace.
+ *
+ *  Sends AST to the client notifying it of lock granting.  If initial
+ *  lock response was not sent yet, instead of sending another RPC, just
+ *  mark the lock as granted and client will understand
+ */
 int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 {
         struct ldlm_cb_set_arg *arg = data;
@@ -974,7 +1006,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
         lock_res_and_lock(lock);
         if (lock->l_flags & LDLM_FL_AST_SENT) {
 		body->lock_flags |= ldlm_flags_to_wire(LDLM_FL_AST_SENT);
-                /* copy ast flags like LDLM_FL_DISCARD_DATA */
+		/* Copy AST flags like LDLM_FL_DISCARD_DATA. */
 		body->lock_flags |= ldlm_flags_to_wire(lock->l_flags &
 						       LDLM_AST_FLAGS);
 
@@ -1007,6 +1039,12 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 }
 EXPORT_SYMBOL(ldlm_server_completion_ast);
 
+/**
+ * Server side ->l_glimpse_ast handler for client locks.
+ *
+ * Sends glimpse AST to the client and waits for reply. Then updates
+ * lvbo with the result.
+ */
 int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 {
 	struct ldlm_cb_set_arg		*arg = data;
@@ -1085,7 +1123,7 @@ int ldlm_glimpse_locks(struct ldlm_resource *res, cfs_list_t *gl_work_list)
 }
 EXPORT_SYMBOL(ldlm_glimpse_locks);
 
-/* return ldlm lock associated with a lock callback request */
+/* return LDLM lock associated with a lock callback request */
 struct ldlm_lock *ldlm_request_lock(struct ptlrpc_request *req)
 {
 	struct ldlm_cb_async_args	*ca;
@@ -1135,9 +1173,9 @@ static void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
         return;
 }
 
-/*
- * Main server-side entry point into LDLM. This is called by ptlrpc service
- * threads to carry out client lock enqueueing requests.
+/**
+ * Main server-side entry point into LDLM for enqueue. This is called by ptlrpc
+ * service threads to carry out client lock enqueueing requests.
  */
 int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                          struct ptlrpc_request *req,
@@ -1409,6 +1447,9 @@ existing_lock:
 }
 EXPORT_SYMBOL(ldlm_handle_enqueue0);
 
+/**
+ * Old-style LDLM main entry point for server code enqueue.
+ */
 int ldlm_handle_enqueue(struct ptlrpc_request *req,
                         ldlm_completion_callback completion_callback,
                         ldlm_blocking_callback blocking_callback,
@@ -1433,6 +1474,9 @@ int ldlm_handle_enqueue(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(ldlm_handle_enqueue);
 
+/**
+ * Main LDLM entry point for server code to process lock conversion requests.
+ */
 int ldlm_handle_convert0(struct ptlrpc_request *req,
                          const struct ldlm_request *dlm_req)
 {
@@ -1485,6 +1529,10 @@ int ldlm_handle_convert0(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(ldlm_handle_convert0);
 
+/**
+ * Old-style main LDLM entry point for server code to process lock conversion
+ * requests.
+ */
 int ldlm_handle_convert(struct ptlrpc_request *req)
 {
         int rc;
@@ -1501,7 +1549,12 @@ int ldlm_handle_convert(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(ldlm_handle_convert);
 
-/* Cancel all the locks whos handles are packed into ldlm_request */
+/**
+ * Cancel all the locks whose handles are packed into ldlm_request
+ *
+ * Called by server code expecting such combined cancel activity
+ * requests.
+ */
 int ldlm_request_cancel(struct ptlrpc_request *req,
                         const struct ldlm_request *dlm_req, int first)
 {
@@ -1537,6 +1590,9 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
                 res = lock->l_resource;
                 done++;
 
+		/* This code is an optimization to only attempt lock
+		 * granting on the resource (that could be CPU-expensive)
+		 * after we are done cancelling lock in that resource. */
                 if (res != pres) {
                         if (pres != NULL) {
                                 ldlm_reprocess_all(pres);
@@ -1563,6 +1619,11 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
 }
 EXPORT_SYMBOL(ldlm_request_cancel);
 
+/**
+ * Main LDLM entry point for server code to cancel locks.
+ *
+ * Typically gets called from service handler on LDLM_CANCEL opc.
+ */
 int ldlm_handle_cancel(struct ptlrpc_request *req)
 {
         struct ldlm_request *dlm_req;
@@ -1592,6 +1653,11 @@ int ldlm_handle_cancel(struct ptlrpc_request *req)
 EXPORT_SYMBOL(ldlm_handle_cancel);
 #endif /* HAVE_SERVER_SUPPORT */
 
+/**
+ * Callback handler for receiving incoming blocking ASTs.
+ *
+ * This can only happen on client side.
+ */
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
                              struct ldlm_lock_desc *ld, struct ldlm_lock *lock)
 {
@@ -1625,6 +1691,11 @@ void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
         EXIT;
 }
 
+/**
+ * Callback handler for receiving incoming completion ASTs.
+ *
+ * This only can happen on client side.
+ */
 static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
                                     struct ldlm_namespace *ns,
                                     struct ldlm_request *dlm_req,
@@ -1722,8 +1793,8 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
         }
 
         if (dlm_req->lock_flags & LDLM_FL_AST_SENT) {
-                /* BL_AST locks are not needed in lru.
-                 * let ldlm_cancel_lru() be fast. */
+		/* BL_AST locks are not needed in LRU.
+		 * Let ldlm_cancel_lru() be fast. */
                 ldlm_lock_remove_from_lru(lock);
                 lock->l_flags |= LDLM_FL_CBPENDING | LDLM_FL_BL_AST;
                 LDLM_DEBUG(lock, "completion AST includes blocking AST");
@@ -1762,6 +1833,13 @@ out:
 	LDLM_LOCK_RELEASE(lock);
 }
 
+/**
+ * Callback handler for receiving incoming glimpse ASTs.
+ *
+ * This only can happen on client side.  After handling the glimpse AST
+ * we also consider dropping the lock here if it is unused locally for a
+ * long time.
+ */
 static void ldlm_handle_gl_callback(struct ptlrpc_request *req,
                                     struct ldlm_namespace *ns,
                                     struct ldlm_request *dlm_req,
@@ -1867,6 +1945,15 @@ static inline void init_blwi(struct ldlm_bl_work_item *blwi,
         }
 }
 
+/**
+ * Queues a list of locks \a cancels containing \a count locks
+ * for later processing by a blocking thread.  If \a count is zero,
+ * then the lock referenced as \a lock is queued instead.
+ *
+ * The blocking thread would then call ->l_blocking_ast callback in the lock.
+ * If list addition fails an error is returned and caller is supposed to
+ * call ->l_blocking_ast itself.
+ */
 static int ldlm_bl_to_thread(struct ldlm_namespace *ns,
                              struct ldlm_lock_desc *ld, struct ldlm_lock *lock,
                              cfs_list_t *cancels, int count, int mode)
@@ -2126,8 +2213,8 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
                                              &dlm_req->lock_handle[0]);
                         RETURN(0);
                 }
-                /* BL_AST locks are not needed in lru.
-                 * let ldlm_cancel_lru() be fast. */
+		/* BL_AST locks are not needed in LRU.
+		 * Let ldlm_cancel_lru() be fast. */
                 ldlm_lock_remove_from_lru(lock);
                 lock->l_flags |= LDLM_FL_BL_AST;
         }
@@ -2174,6 +2261,11 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
 }
 
 #ifdef HAVE_SERVER_SUPPORT
+/**
+ * Main handler for canceld thread.
+ *
+ * Separated into its own thread to avoid deadlocks.
+ */
 static int ldlm_cancel_handler(struct ptlrpc_request *req)
 {
         int rc;
@@ -2443,6 +2535,13 @@ static int ldlm_bl_thread_start(struct ldlm_bl_pool *blp)
 	return 0;
 }
 
+/**
+ * Main blocking requests processing thread.
+ *
+ * Callers put locks into its queue by calling ldlm_bl_to_thread.
+ * This thread in the end ends up doing actual call to ->l_blocking_ast
+ * for queued locks.
+ */
 static int ldlm_bl_thread_main(void *arg)
 {
         struct ldlm_bl_pool *blp;
@@ -2498,7 +2597,7 @@ static int ldlm_bl_thread_main(void *arg)
 
                 if (blwi->blwi_count) {
                         int count;
-                        /* The special case when we cancel locks in lru
+			/* The special case when we cancel locks in LRU
                          * asynchronously, we pass the list of locks here.
                          * Thus locks are marked LDLM_FL_CANCELING, but NOT
                          * canceled locally yet. */

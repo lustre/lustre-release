@@ -39,6 +39,18 @@
  * Author: Phil Schwan <phil@clusterfs.com>
  */
 
+/**
+ * This file contains implementation of IBITS lock type
+ *
+ * IBITS lock type contains a bit mask determining various properties of an
+ * object. The meanings of specific bits are specific to the caller and are
+ * opaque to LDLM code.
+ *
+ * Locks with intersecting bitmasks and conflicting lock modes (e.g.  LCK_PW)
+ * are considered conflicting.  See the lock mode compatibility matrix
+ * in lustre_dlm.h.
+ */
+
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifndef __KERNEL__
 # include <liblustre.h>
@@ -51,7 +63,21 @@
 #include "ldlm_internal.h"
 
 #ifdef HAVE_SERVER_SUPPORT
-/* Determine if the lock is compatible with all locks on the queue. */
+/**
+ * Determine if the lock is compatible with all locks on the queue.
+ *
+ * If \a work_list is provided, conflicting locks are linked there.
+ * If \a work_list is not provided, we exit this function on first conflict.
+ *
+ * \retval 0 if there are conflicting locks in the \a queue
+ * \retval 1 if the lock is compatible to all locks in \a queue
+ *
+ * IBITS locks in granted queue are organized in bunches of
+ * same-mode/same-bits locks called "skip lists". The First lock in the
+ * bunch contains a pointer to the end of the bunch.  This allows us to
+ * skip an entire bunch when iterating the list in search for conflicting
+ * locks if first lock of the bunch is not conflicting with us.
+ */
 static int
 ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                             cfs_list_t *work_list)
@@ -72,6 +98,9 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
 
                 lock = cfs_list_entry(tmp, struct ldlm_lock, l_res_link);
 
+		/* We stop walking the queue if we hit ourselves so we don't
+		 * take conflicting locks enqueued after us into account,
+		 * or we'd wait forever. */
                 if (req == lock)
                         RETURN(compat);
 
@@ -91,27 +120,27 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                 for (;;) {
                         cfs_list_t *head;
 
-                        /* last lock in policy group */
-                        tmp = &cfs_list_entry(lock->l_sl_policy.prev,
-                                              struct ldlm_lock,
-                                              l_sl_policy)->l_res_link;
+			/* Advance loop cursor to last lock in policy group. */
+			tmp = &cfs_list_entry(lock->l_sl_policy.prev,
+					      struct ldlm_lock,
+					      l_sl_policy)->l_res_link;
 
-                        /* locks with bits overlapped are conflicting locks */
-                        if (lock->l_policy_data.l_inodebits.bits & req_bits) {
-                                /* COS lock from the same client is
-                                   not conflicting */
-                                if (lock->l_req_mode == LCK_COS &&
-                                    lock->l_client_cookie == req->l_client_cookie)
-                                        goto not_conflicting;
-                                /* conflicting policy */
-                                if (!work_list)
-                                        RETURN(0);
+			/* Locks with overlapping bits conflict. */
+			if (lock->l_policy_data.l_inodebits.bits & req_bits) {
+				/* COS lock mode has a special compatibility
+				 * requirement: it is only compatible with
+				 * locks from the same client. */
+				if (lock->l_req_mode == LCK_COS &&
+				    lock->l_client_cookie == req->l_client_cookie)
+					goto not_conflicting;
+				/* Found a conflicting policy group. */
+				if (!work_list)
+					RETURN(0);
 
-                                compat = 0;
+				compat = 0;
 
-                                /* add locks of the policy group to
-                                 * @work_list as blocking locks for
-                                 * @req */
+				/* Add locks of the policy group to @work_list
+				 * as blocking locks for @req */
                                 if (lock->l_blocking_ast)
                                         ldlm_add_ast_work_item(lock, req,
                                                                work_list);
@@ -128,19 +157,27 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
                         tmp = tmp->next;
                         lock = cfs_list_entry(tmp, struct ldlm_lock,
                                               l_res_link);
-                } /* loop over policy groups within one mode group */
-        } /* loop over mode groups within @queue */
+		} /* Loop over policy groups within one mode group. */
+	} /* Loop over mode groups within @queue. */
 
-        RETURN(compat);
+	RETURN(compat);
 }
 
-/* If first_enq is 0 (ie, called from ldlm_reprocess_queue):
-  *   - blocking ASTs have already been sent
-  *   - must call this function with the ns lock held
-  *
-  * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
-  *   - blocking ASTs have not been sent
-  *   - must call this function with the ns lock held once */
+/**
+ * Process a granting attempt for IBITS lock.
+ * Must be called with ns lock held
+ *
+ * This function looks for any conflicts for \a lock in the granted or
+ * waiting queues. The lock is granted if no conflicts are found in
+ * either queue.
+ *
+ * If \a first_enq is 0 (ie, called from ldlm_reprocess_queue):
+ *   - blocking ASTs have already been sent
+ *
+ * If \a first_enq is 1 (ie, called from ldlm_lock_enqueue):
+ *   - blocking ASTs have not been sent yet, so list of conflicting locks
+ *     would be collected and ASTs sent.
+ */
 int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
                                 int first_enq, ldlm_error_t *err,
                                 cfs_list_t *work_list)

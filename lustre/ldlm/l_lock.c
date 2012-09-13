@@ -42,13 +42,15 @@
 #include <lustre_dlm.h>
 #include <lustre_lib.h>
 
-/*
- * ldlm locking uses resource to serialize access to locks
+/**
+ * Lock a lock and its resource.
+ *
+ * LDLM locking uses resource to serialize access to locks
  * but there is a case when we change resource of lock upon
- * enqueue reply. we rely on that lock->l_resource = new_res
- * is atomic
+ * enqueue reply. We rely on lock->l_resource = new_res
+ * being an atomic operation.
  */
-struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
+struct ldlm_resource *lock_res_and_lock(struct ldlm_lock *lock)
 {
 	/* on server-side resource of lock doesn't change */
 	if (!lock->l_ns_srv)
@@ -61,6 +63,9 @@ struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
 }
 EXPORT_SYMBOL(lock_res_and_lock);
 
+/**
+ * Unlock a lock and its resource previously locked with lock_res_and_lock
+ */
 void unlock_res_and_lock(struct ldlm_lock *lock)
 {
 	/* on server-side resource of lock doesn't change */
