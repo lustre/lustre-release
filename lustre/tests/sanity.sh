@@ -506,6 +506,10 @@ test_17m() {
 	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
 	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.2.93) ] &&
 		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks" && return
+
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "only for ldiskfs MDT" && return 0
+
 	mkdir -p $WDIR
 	long_sym=$short_sym
 	# create a long symlink file
