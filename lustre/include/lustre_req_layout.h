@@ -182,6 +182,7 @@ extern struct req_format RQF_MDS_QUOTACHECK;
 extern struct req_format RQF_MDS_QUOTACTL;
 extern struct req_format RQF_MDS_QUOTA_DQACQ;
 extern struct req_format RQF_QC_CALLBACK;
+extern struct req_format RQF_QUOTA_DQACQ;
 /* OST req_format */
 extern struct req_format RQF_OST_CONNECT;
 extern struct req_format RQF_OST_DISCONNECT;
@@ -211,6 +212,7 @@ extern struct req_format RQF_LDLM_INTENT_GETATTR;
 extern struct req_format RQF_LDLM_INTENT_OPEN;
 extern struct req_format RQF_LDLM_INTENT_CREATE;
 extern struct req_format RQF_LDLM_INTENT_UNLINK;
+extern struct req_format RQF_LDLM_INTENT_QUOTA;
 extern struct req_format RQF_LDLM_CANCEL;
 extern struct req_format RQF_LDLM_CALLBACK;
 extern struct req_format RQF_LDLM_CP_CALLBACK;
@@ -260,6 +262,7 @@ extern struct req_msg_field RMF_OBD_QUOTACHECK;
 extern struct req_msg_field RMF_OBD_QUOTACTL;
 extern struct req_msg_field RMF_QUOTA_ADJUST_QUNIT;
 extern struct req_msg_field RMF_QUNIT_DATA;
+extern struct req_msg_field RMF_QUOTA_BODY;
 extern struct req_msg_field RMF_STRING;
 
 /* seq-mgr fields */

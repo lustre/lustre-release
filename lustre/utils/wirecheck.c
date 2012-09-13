@@ -1589,6 +1589,23 @@ check_qunit_data(void)
 }
 
 static void
+check_quota_body(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(quota_body);
+	CHECK_MEMBER(quota_body, qb_fid);
+	CHECK_MEMBER(quota_body, qb_id);
+	CHECK_MEMBER(quota_body, qb_flags);
+	CHECK_MEMBER(quota_body, qb_padding);
+	CHECK_MEMBER(quota_body, qb_count);
+	CHECK_MEMBER(quota_body, qb_usage);
+	CHECK_MEMBER(quota_body, qb_slv_ver);
+	CHECK_MEMBER(quota_body, qb_lockh);
+	CHECK_MEMBER(quota_body, qb_glb_lockh);
+	CHECK_MEMBER(quota_body, qb_padding1[4]);
+}
+
+static void
 check_mgs_target_info(void)
 {
         BLANK_LINE();
@@ -2108,6 +2125,7 @@ main(int argc, char **argv)
         check_llogd_conn_body();
         check_ll_fiemap_info_key();
         check_qunit_data();
+	check_quota_body();
         check_quota_adjust_qunit();
         check_mgs_target_info();
         check_lustre_capa();

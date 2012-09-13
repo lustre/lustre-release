@@ -1250,6 +1250,8 @@ struct lu_context;
 #define IT_EXEC     (1 << 8)
 #define IT_PIN      (1 << 9)
 #define IT_LAYOUT   (1 << 10)
+#define IT_QUOTA_DQACQ (1 << 11)
+#define IT_QUOTA_CONN  (1 << 12)
 
 static inline int it_to_lock_mode(struct lookup_intent *it)
 {

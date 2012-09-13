@@ -131,6 +131,25 @@ static const struct req_msg_field *qunit_data_only[] = {
         &RMF_QUNIT_DATA
 };
 
+static const struct req_msg_field *quota_body_only[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_QUOTA_BODY
+};
+
+static const struct req_msg_field *ldlm_intent_quota_client[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REQ,
+	&RMF_LDLM_INTENT,
+	&RMF_QUOTA_BODY
+};
+
+static const struct req_msg_field *ldlm_intent_quota_server[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REP,
+	&RMF_DLM_LVB,
+	&RMF_QUOTA_BODY
+};
+
 static const struct req_msg_field *mdt_close_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_MDT_EPOCH,
@@ -613,6 +632,8 @@ static struct req_format *req_formats[] = {
         &RQF_LDLM_INTENT_OPEN,
         &RQF_LDLM_INTENT_CREATE,
         &RQF_LDLM_INTENT_UNLINK,
+	&RQF_LDLM_INTENT_QUOTA,
+	&RQF_QUOTA_DQACQ,
         &RQF_LOG_CANCEL,
         &RQF_LLOG_ORIGIN_HANDLE_CREATE,
         &RQF_LLOG_ORIGIN_HANDLE_DESTROY,
@@ -760,6 +781,11 @@ struct req_msg_field RMF_QUNIT_DATA =
         DEFINE_MSGF("qunit_data", 0,
                     sizeof(struct qunit_data), lustre_swab_qdata, NULL);
 EXPORT_SYMBOL(RMF_QUNIT_DATA);
+
+struct req_msg_field RMF_QUOTA_BODY =
+	DEFINE_MSGF("quota_body", 0,
+		    sizeof(struct quota_body), lustre_swab_quota_body, NULL);
+EXPORT_SYMBOL(RMF_QUOTA_BODY);
 
 struct req_msg_field RMF_MDT_EPOCH =
         DEFINE_MSGF("mdt_ioepoch", 0,
@@ -1037,6 +1063,16 @@ EXPORT_SYMBOL(RQF_QC_CALLBACK);
 struct req_format RQF_MDS_QUOTA_DQACQ =
         DEFINE_REQ_FMT0("MDS_QUOTA_DQACQ", qunit_data_only, qunit_data_only);
 EXPORT_SYMBOL(RQF_MDS_QUOTA_DQACQ);
+
+struct req_format RQF_QUOTA_DQACQ =
+	DEFINE_REQ_FMT0("QUOTA_DQACQ", quota_body_only, quota_body_only);
+EXPORT_SYMBOL(RQF_QUOTA_DQACQ);
+
+struct req_format RQF_LDLM_INTENT_QUOTA =
+	DEFINE_REQ_FMT0("LDLM_INTENT_QUOTA",
+			ldlm_intent_quota_client,
+			ldlm_intent_quota_server);
+EXPORT_SYMBOL(RQF_LDLM_INTENT_QUOTA);
 
 struct req_format RQF_MDS_GETSTATUS =
         DEFINE_REQ_FMT0("MDS_GETSTATUS", mdt_body_only, mdt_body_capa);

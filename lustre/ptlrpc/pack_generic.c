@@ -2246,6 +2246,16 @@ void lustre_swab_qdata(struct qunit_data *d)
 }
 EXPORT_SYMBOL(lustre_swab_qdata);
 
+void lustre_swab_quota_body(struct quota_body *b)
+{
+	lustre_swab_lu_fid(&b->qb_fid);
+	lustre_swab_lu_fid((struct lu_fid *)&b->qb_id);
+	__swab32s(&b->qb_flags);
+	__swab64s(&b->qb_count);
+	__swab64s(&b->qb_usage);
+	__swab64s(&b->qb_slv_ver);
+}
+
 /* Dump functions */
 void dump_ioo(struct obd_ioobj *ioo)
 {

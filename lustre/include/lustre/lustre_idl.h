@@ -1817,6 +1817,35 @@ struct obd_quotactl {
 
 extern void lustre_swab_obd_quotactl(struct obd_quotactl *q);
 
+#define QUOTA_DQACQ_FL_ACQ      0x1  /* acquire quota */
+#define QUOTA_DQACQ_FL_PREACQ   0x2  /* pre-acquire */
+#define QUOTA_DQACQ_FL_REL      0x4  /* release quota */
+#define QUOTA_DQACQ_FL_REPORT   0x8  /* report usage */
+
+struct quota_body {
+	struct lu_fid    qb_fid;     /* FID of global index packing the pool ID
+				      * and type (data or metadata) as well as
+				      * the quota type (user or group). */
+	union lquota_id  qb_id;      /* uid or gid or directory FID */
+	__u32            qb_flags;   /* see above */
+	__u32            qb_padding;
+	__u64            qb_count;   /* acquire/release count (kbytes/inodes) */
+	__u64            qb_usage;   /* current slave usage (kbytes/inodes) */
+	__u64            qb_slv_ver; /* slave index file version */
+	struct lustre_handle qb_lockh;     /* per-ID lock handle */
+	struct lustre_handle qb_glb_lockh; /* global lock handle */
+	__u64            qb_padding1[4];
+};
+
+/* When the quota_body is used in the reply of quota global intent
+ * lock (IT_QUOTA_CONN) reply, qb_fid contains slave index file FID. */
+#define qb_slv_fid       qb_fid
+/* qb_usage is the current qunit (in kbytes/inodes) when quota_body is used in
+ * acquire reply */
+#define qb_qunit         qb_usage
+
+extern void lustre_swab_quota_body(struct quota_body *b);
+
 struct quota_adjust_qunit {
         __u32 qaq_flags;
         __u32 qaq_id;
