@@ -20,6 +20,10 @@ OBJGRP=${OBJGRP:-0} # the OST object group
 [ -d "$SHARED_DIRECTORY" ] || \
     { skip "SHARED_DIRECTORY should be specified with a shared directory \
 which can be accessable on all of the nodes" && exit 0; }
+[[ $(facet_fstype $SINGLEMDS) != ldiskfs ]] &&
+	skip "Only applicable to ldiskfs-based MDTs" && exit 0
+[[ $(facet_fstype OST) != ldiskfs ]] &&
+	skip "Only applicable to ldiskfs-based OST" && exit 0
 
 which getfattr &>/dev/null || { skip_env "could not find getfattr" && exit 0; }
 which setfattr &>/dev/null || { skip_env "could not find setfattr" && exit 0; }
