@@ -2254,6 +2254,8 @@ obd_size fiemap_calc_fm_end_offset(struct ll_user_fiemap *fiemap,
                         break;
                 }
         }
+	if (stripe_no == -1)
+		return -EINVAL;
 
         /* If we have finished mapping on previous device, shift logical
          * offset to start of next device */
@@ -2357,7 +2359,7 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
         int count_local;
         unsigned int get_num_extents = 0;
         int ost_index = 0, actual_start_stripe, start_stripe;
-        obd_size fm_start, fm_end, fm_length, fm_end_offset = 0;
+	obd_size fm_start, fm_end, fm_length, fm_end_offset;
         obd_size curr_loc;
         int current_extent = 0, rc = 0, i;
         int ost_eof = 0; /* EOF for object */
@@ -2393,8 +2395,10 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
         last_stripe = fiemap_calc_last_stripe(lsm, fm_start, fm_end,
                                             actual_start_stripe, &stripe_count);
 
-        fm_end_offset = fiemap_calc_fm_end_offset(fiemap, lsm, fm_start, fm_end,
-                                                  &start_stripe);
+	fm_end_offset = fiemap_calc_fm_end_offset(fiemap, lsm, fm_start,
+						  fm_end, &start_stripe);
+	if (fm_end_offset == -EINVAL)
+		return -EINVAL;
 
         if (fiemap->fm_extent_count == 0) {
                 get_num_extents = 1;
