@@ -56,15 +56,29 @@
 #include <sys/stat.h>
 
 #include <liblustre.h>
+#include <libcfs/list.h>
 
 #define MAX_GROUPS 64
 
 int verbose = 0;
 
 struct obd_group_info {
-        int dir_exists;
+	__u64		grp_last_id;
+	__u64		grp_seq;
+	cfs_list_t	grp_list;
 };
-struct obd_group_info grp_info[MAX_GROUPS];
+
+cfs_list_t grp_info_list;
+
+static void grp_info_list_destroy(cfs_list_t *list)
+{
+	struct obd_group_info *grp, *tmp;
+
+	cfs_list_for_each_entry_safe(grp, tmp, list, grp_list) {
+		cfs_list_del_init(&grp->grp_list);
+		free(grp);
+	}
+}
 
 static void usage(char *progname)
 {
@@ -99,31 +113,14 @@ static int _ll_sprintf(char *buf, size_t size, const char *func, int line,
 #define ll_sprintf(buf, size, format, ...) \
         _ll_sprintf(buf, size, __FUNCTION__, __LINE__, format, ## __VA_ARGS__)
 
-static int mkdir_p(const char *dest_path, const char *mount, __u64 ff_group)
+static int mkdir_p(const char *dest_path, const char *mount)
 {
         struct stat stat_buf;
         int retval;
         mode_t mode = 0700;
-        char tmp_path[PATH_MAX];
 
         if (stat(dest_path, &stat_buf) == 0)
                 return 0;
-
-        if (grp_info[ff_group].dir_exists == 0) {
-                if (ll_sprintf(tmp_path, PATH_MAX, "%s/O/"LPU64,
-                               mount, ff_group))
-                        return 1;
-
-                if (stat(tmp_path, &stat_buf) != 0) {
-                        retval = mkdir(tmp_path, mode);
-                        if (retval < 0) {
-                                fprintf(stderr, "error: creating directory %s: "
-                                        "%s\n", tmp_path, strerror(errno));
-                                return 1;
-                        }
-                        grp_info[ff_group].dir_exists = 1;
-                }
-        }
 
         retval = mkdir(dest_path, mode);
         if (retval < 0) {
@@ -168,6 +165,71 @@ static __u64 read_last_id(char *file_path)
         return le64_to_cpu(last_id);
 }
 
+struct obd_group_info *find_or_create_grp(cfs_list_t *list, __u64 seq,
+					  const char *mount)
+{
+	struct obd_group_info	*grp;
+	cfs_list_t		*entry;
+	char			tmp_path[PATH_MAX];
+	char			seq_name[32];
+	struct stat		stat_buf;
+	int			retval;
+	__u64			tmp_last_id;
+
+	cfs_list_for_each(entry, list) {
+		grp = (struct obd_group_info *)cfs_list_entry(entry,
+						struct obd_group_info,
+						grp_list);
+		if (grp->grp_seq == seq)
+			return grp;
+	}
+
+	grp = malloc(sizeof(struct obd_group_info));
+	if (grp == NULL)
+		return NULL;
+
+	sprintf(seq_name, (fid_seq_is_rsvd(seq) ||
+			   fid_seq_is_mdt0(seq)) ? LPU64 : LPX64i,
+			   fid_seq_is_idif(seq) ? 0 : seq);
+
+	/* Check whether the obj dir has been created */
+	if (ll_sprintf(tmp_path, PATH_MAX, "%s/O/%s", mount, seq_name)) {
+		free(grp);
+		return NULL;
+	}
+
+	if (stat(tmp_path, &stat_buf) != 0) {
+		retval = mkdir(tmp_path, 0700);
+		if (retval < 0) {
+			free(grp);
+			fprintf(stderr, "error: creating directory %s: "
+				"%s\n", tmp_path, strerror(errno));
+			return NULL;
+		}
+	}
+
+	if (ll_sprintf(tmp_path, PATH_MAX, "%s/O/%s/LAST_ID",
+		       mount, seq_name)) {
+		free(grp);
+		return NULL;
+	}
+
+	/*
+	 * Object ID needs to be verified against last_id.
+	 * LAST_ID file may not be present in the group directory
+	 * due to corruption. In case of any error tyr to recover
+	 * as many objects as possible by setting last_id to ~0ULL.
+	 */
+	tmp_last_id = read_last_id(tmp_path);
+	if (tmp_last_id == 0)
+		tmp_last_id = ~0ULL;
+	grp->grp_last_id = tmp_last_id;
+	grp->grp_seq = seq;
+
+	cfs_list_add(&grp->grp_list, list);
+	return grp;
+}
+
 static unsigned filetype_dir_table[] = {
         [0]= DT_UNKNOWN,
         [S_IFIFO]= DT_FIFO,
@@ -187,15 +249,15 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
         DIR *dir_ptr;
         struct filter_fid parent_fid;
         struct dirent64 *dirent;
-        __u64 ff_group, ff_objid;
+	__u64 ff_seq, ff_objid;
         char *file_path;
         char dest_path[PATH_MAX];
-        char last_id_file[PATH_MAX];
-        __u64 last_id[MAX_GROUPS] = {0};
-        __u64 tmp_last_id;
         struct stat st;
         int obj_exists, xattr_len;
         int len, ret = 0, error = 0;
+	char seq_name[32];
+	char obj_name[32];
+	struct obd_group_info *grp_info;
 
         len = strlen(src_dir);
 
@@ -260,63 +322,53 @@ static int traverse_lost_found(char *src_dir, const char *mount_path)
                          */
                         continue;
 
-                ff_group = le64_to_cpu(parent_fid.ff_seq);
-                if (ff_group >= FID_SEQ_OST_MAX) {
-                        fprintf(stderr, "error: invalid group "LPU64" likely"
-                                "indicates a corrupt xattr for file %s.\n",
-                                ff_group, file_path);
-                        continue;
-                }
+		ff_seq = le64_to_cpu(parent_fid.ff_seq);
+		sprintf(seq_name, (fid_seq_is_rsvd(ff_seq) ||
+			fid_seq_is_mdt0(ff_seq)) ?  LPU64 : LPX64i,
+			fid_seq_is_idif(ff_seq) ? 0 : ff_seq);
+
+
                 ff_objid = le64_to_cpu(parent_fid.ff_objid);
+		sprintf(obj_name, (fid_seq_is_rsvd(parent_fid.ff_seq) ||
+				   fid_seq_is_mdt0(parent_fid.ff_seq) ||
+				   fid_seq_is_idif(parent_fid.ff_seq)) ?
+				   LPU64 : LPX64i, ff_objid);
+
+		grp_info = find_or_create_grp(&grp_info_list, ff_seq,
+					      mount_path);
+		if (grp_info == NULL) {
+			closedir(dir_ptr);
+			return 1;
+		}
 
                 /* might need to create the parent directories for
                    this object */
-                if (ll_sprintf(dest_path, PATH_MAX, "%s/O/"LPU64"/d"LPU64,
-                               mount_path, ff_group, ff_objid % 32)) {
-                        closedir(dir_ptr);
-                        return 1;
-                }
+		if (ll_sprintf(dest_path, PATH_MAX, "%s/O/%s/d"LPU64,
+				mount_path, seq_name, ff_objid % 32)) {
+			closedir(dir_ptr);
+			return 1;
+		}
 
-                ret = mkdir_p(dest_path, mount_path, ff_group);
-                if (ret) {
-                        closedir(dir_ptr);
-                        return ret;
-                }
+		ret = mkdir_p(dest_path, mount_path);
+		if (ret) {
+			closedir(dir_ptr);
+			return ret;
+		}
 
-                /*
-                 * Object ID needs to be verified against last_id.
-                 * LAST_ID file may not be present in the group directory
-                 * due to corruption. In case of any error tyr to recover
-                 * as many objects as possible by setting last_id to ~0ULL.
-                 */
-                if (last_id[ff_group] == 0) {
-                        if (ll_sprintf(last_id_file, PATH_MAX,
-                                       "%s/O/"LPU64"/LAST_ID",
-                                       mount_path, ff_group)) {
-                                closedir(dir_ptr);
-                                return 1;
-                        }
-
-                        tmp_last_id = read_last_id(last_id_file);
-                        if (tmp_last_id == 0)
-                                tmp_last_id = ~0ULL;
-                        last_id[ff_group] = tmp_last_id;
-                }
-
-                if (ff_objid > last_id[ff_group]) {
-                        fprintf(stderr, "error: file skipped because object ID "
-                                "greater than LAST_ID\nFilename: %s\n"
-                                "Group: "LPU64"\nObjectid: "LPU64"\n"
-                                "LAST_ID: "LPU64, file_path, ff_group, ff_objid,
-                                last_id[ff_group]);
-                        continue;
-                }
+		if (ff_objid > grp_info->grp_last_id) {
+			fprintf(stderr, "error: file skipped because object ID "
+				"greater than LAST_ID\nFilename: %s\n"
+				"Group: "LPU64"\nObjectid: "LPU64"\n"
+				"LAST_ID: "LPU64, file_path, ff_seq, ff_objid,
+				grp_info->grp_last_id);
+			continue;
+		}
 
                 /* move file from lost+found to proper object
                    directory */
                 if (ll_sprintf(dest_path, PATH_MAX,
-                               "%s/O/"LPU64"/d"LPU64"/"LPU64, mount_path,
-                               ff_group, ff_objid % 32, ff_objid)) {
+				"%s/O/%s/d"LPU64"/%s", mount_path,
+				seq_name, ff_objid % 32, obj_name)) {
                         closedir(dir_ptr);
                         return 1;
                 }
@@ -465,7 +517,7 @@ int main(int argc, char **argv)
         int c;
         int retval;
 
-        progname = argv[0];
+	progname = argv[0];
 
         while ((c = getopt(argc, argv, "d:hv")) != EOF) {
                 switch (c) {
@@ -528,16 +580,19 @@ int main(int argc, char **argv)
                 }
         }
 
+	CFS_INIT_LIST_HEAD(&grp_info_list);
         retval = traverse_lost_found(src_dir, mount_path);
         if (retval) {
                 fprintf(stderr, "error: traversing lost+found looking for "
                         "orphan objects.\n");
-                return retval;
-        }
+		goto grp_destory;
+	}
 
         retval = check_last_id(mount_path);
         if (retval)
                 fprintf(stderr, "error: while checking/restoring LAST_ID.\n");
 
+grp_destory:
+	grp_info_list_destroy(&grp_info_list);
         return retval;
 }
