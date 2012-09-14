@@ -1958,8 +1958,11 @@ static int handle_recovery_req(struct ptlrpc_thread *thread,
 			to = max((int)at_est2timeout(
 				 at_get(&svcpt->scp_at_estimate)),
 				 (int)lustre_msg_get_timeout(req->rq_reqmsg));
-                        /* Add net_latency (see ptlrpc_replay_req) */
-                        to += lustre_msg_get_service_time(req->rq_reqmsg);
+			/* Add 2 net_latency, one for balance rq_deadline
+			 * (see ptl_send_rpc), one for resend the req to server,
+			 * Note: client will pack net_latency in replay req
+			 * (see ptlrpc_replay_req) */
+			to += 2 * lustre_msg_get_service_time(req->rq_reqmsg);
                 }
                 extend_recovery_timer(class_exp2obd(req->rq_export), to, true);
         }
