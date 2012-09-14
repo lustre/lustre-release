@@ -143,6 +143,12 @@ static inline int fid_is_acct(const struct lu_fid *fid)
                 fid_oid(fid) == ACCT_GROUP_OID);
 }
 
+static inline int fid_is_quota(const struct lu_fid *fid)
+{
+	return fid_seq(fid) == FID_SEQ_QUOTA ||
+	       fid_seq(fid) == FID_SEQ_QUOTA_GLB;
+}
+
 enum lu_mgr_type {
         LUSTRE_SEQ_SERVER,
         LUSTRE_SEQ_CONTROLLER

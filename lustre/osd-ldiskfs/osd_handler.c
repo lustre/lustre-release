@@ -2970,11 +2970,12 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
                                 struct thandle *handle,
                                 struct lustre_capa *capa)
 {
-        struct osd_object     *obj = osd_dt_obj(dt);
-        struct osd_thandle    *oh;
-        struct iam_path_descr *ipd;
-        struct iam_container  *bag = &obj->oo_dir->od_container;
-        int                    rc;
+        struct osd_thread_info *oti = osd_oti_get(env);
+        struct osd_object      *obj = osd_dt_obj(dt);
+        struct osd_thandle     *oh;
+        struct iam_path_descr  *ipd;
+        struct iam_container   *bag = &obj->oo_dir->od_container;
+        int                     rc;
 
         ENTRY;
 
@@ -2995,6 +2996,12 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
         LASSERT(oh->ot_handle->h_transaction != NULL);
+
+	if (fid_is_quota(lu_object_fid(&dt->do_lu))) {
+		/* swab quota uid/gid provided by caller */
+		oti->oti_quota_id = cpu_to_le64(*((__u64 *)key));
+		key = (const struct dt_key *)&oti->oti_quota_id;
+	}
 
         rc = iam_delete(oh->ot_handle, bag, (const struct iam_key *)key, ipd);
         osd_ipd_put(env, bag, ipd);
@@ -3148,6 +3155,12 @@ static int osd_index_iam_lookup(const struct lu_env *env, struct dt_object *dt,
         /* got ipd now we can start iterator. */
         iam_it_init(it, bag, 0, ipd);
 
+	if (fid_is_quota(lu_object_fid(&dt->do_lu))) {
+		/* swab quota uid/gid provided by caller */
+		oti->oti_quota_id = cpu_to_le64(*((__u64 *)key));
+		key = (const struct dt_key *)&oti->oti_quota_id;
+	}
+
         rc = iam_it_get(it, (struct iam_key *)key);
         if (rc >= 0) {
                 if (S_ISDIR(obj->oo_inode->i_mode))
@@ -3156,10 +3169,14 @@ static int osd_index_iam_lookup(const struct lu_env *env, struct dt_object *dt,
                         iam_rec = (struct iam_rec *) rec;
 
                 iam_reccpy(&it->ii_path.ip_leaf, (struct iam_rec *)iam_rec);
+
                 if (S_ISDIR(obj->oo_inode->i_mode))
                         osd_fid_unpack((struct lu_fid *) rec,
                                        (struct osd_fid_pack *)iam_rec);
+		else if (fid_is_quota(lu_object_fid(&dt->do_lu)))
+			osd_quota_unpack(obj, rec);
         }
+
         iam_it_put(it);
         iam_it_fini(it);
         osd_ipd_put(env, bag, ipd);
@@ -3213,7 +3230,7 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         cfs_cap_t              save = cfs_curproc_cap_pack();
 #endif
         struct osd_thread_info *oti = osd_oti_get(env);
-        struct iam_rec         *iam_rec = (struct iam_rec *)oti->oti_ldp;
+        struct iam_rec         *iam_rec;
         int                     rc;
 
         ENTRY;
@@ -3241,10 +3258,20 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         else
                 cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
 #endif
-        if (S_ISDIR(obj->oo_inode->i_mode))
-                osd_fid_pack((struct osd_fid_pack *)iam_rec, rec, &oti->oti_fid);
-        else
-                iam_rec = (struct iam_rec *) rec;
+	if (S_ISDIR(obj->oo_inode->i_mode)) {
+		iam_rec = (struct iam_rec *)oti->oti_ldp;
+		osd_fid_pack((struct osd_fid_pack *)iam_rec, rec, &oti->oti_fid);
+	} else if (fid_is_quota(lu_object_fid(&dt->do_lu))) {
+		/* pack quota uid/gid */
+		oti->oti_quota_id = cpu_to_le64(*((__u64 *)key));
+		key = (const struct dt_key *)&oti->oti_quota_id;
+		/* pack quota record */
+		rec = osd_quota_pack(obj, rec, &oti->oti_quota_rec);
+		iam_rec = (struct iam_rec *)rec;
+	} else {
+		iam_rec = (struct iam_rec *)rec;
+	}
+
         rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
                         iam_rec, ipd);
 #ifdef HAVE_QUOTA_SUPPORT
@@ -3744,7 +3771,14 @@ static void osd_it_iam_fini(const struct lu_env *env, struct dt_it *di)
 static int osd_it_iam_get(const struct lu_env *env,
                           struct dt_it *di, const struct dt_key *key)
 {
-        struct osd_it_iam *it = (struct osd_it_iam *)di;
+	struct osd_thread_info	*oti = osd_oti_get(env);
+	struct osd_it_iam	*it = (struct osd_it_iam *)di;
+
+	if (fid_is_quota(lu_object_fid(&it->oi_obj->oo_dt.do_lu))) {
+		/* swab quota uid/gid */
+		oti->oti_quota_id = cpu_to_le64(*((__u64 *)key));
+		key = (struct dt_key *)&oti->oti_quota_id;
+	}
 
         return iam_it_get(&it->oi_it, (const struct iam_key *)key);
 }
@@ -3786,9 +3820,20 @@ static int osd_it_iam_next(const struct lu_env *env, struct dt_it *di)
 static struct dt_key *osd_it_iam_key(const struct lu_env *env,
                                  const struct dt_it *di)
 {
-        struct osd_it_iam *it = (struct osd_it_iam *)di;
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_it_iam      *it = (struct osd_it_iam *)di;
+	struct osd_object      *obj = it->oi_obj;
+	struct dt_key          *key;
 
-        return (struct dt_key *)iam_it_key_get(&it->oi_it);
+	key = (struct dt_key *)iam_it_key_get(&it->oi_it);
+
+	if (!IS_ERR(key) && fid_is_quota(lu_object_fid(&obj->oo_dt.do_lu))) {
+		/* swab quota uid/gid */
+		oti->oti_quota_id = le64_to_cpu(*((__u64 *)key));
+		key = (struct dt_key *)&oti->oti_quota_id;
+	}
+
+	return key;
 }
 
 /**
@@ -3881,6 +3926,10 @@ static int osd_it_iam_rec(const struct lu_env *env,
 		/* IAM does not store object type in IAM index (dir) */
 		osd_it_pack_dirent(lde, fid, hash, name, namelen,
 				   0, LUDA_FID);
+	} else if (fid_is_quota(lu_object_fid(&it->oi_obj->oo_dt.do_lu))) {
+		iam_reccpy(&it->oi_it.ii_path.ip_leaf,
+			   (struct iam_rec *)dtrec);
+		osd_quota_unpack(it->oi_obj, dtrec);
 	} else {
 		iam_reccpy(&it->oi_it.ii_path.ip_leaf,
 			   (struct iam_rec *)dtrec);

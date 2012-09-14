@@ -415,6 +415,49 @@ const struct dt_index_operations osd_acct_index_ops = {
 	}
 };
 
+static inline void osd_quota_swab(char *ptr, size_t size)
+{
+	int offset;
+
+	LASSERT((size & (sizeof(__u64) - 1)) == 0);
+
+	for (offset = 0; offset < size; offset += sizeof(__u64))
+	     __swab64s((__u64 *)(ptr + offset));
+}
+
+const struct dt_rec *osd_quota_pack(struct osd_object *obj,
+				    const struct dt_rec *rec,
+				    union lquota_rec *quota_rec)
+{
+#ifdef __BIG_ENDIAN
+	struct iam_descr        *descr;
+
+	LASSERT(obj->oo_dir != NULL);
+	descr = obj->oo_dir->od_container.ic_descr;
+
+	memcpy(quota_rec, rec, descr->id_rec_size);
+
+	osd_quota_swab((char *)quota_rec, descr->id_rec_size);
+	return (const struct dt_rec *)quota_rec;
+#else
+	return rec;
+#endif
+}
+
+void osd_quota_unpack(struct osd_object *obj, const struct dt_rec *rec)
+{
+#ifdef __BIG_ENDIAN
+	struct iam_descr *descr;
+
+	LASSERT(obj->oo_dir != NULL);
+	descr = obj->oo_dir->od_container.ic_descr;
+
+	osd_quota_swab((char *)rec, descr->id_rec_size);
+#else
+	return;
+#endif
+}
+
 static inline int osd_qid_type(struct osd_thandle *oh, int i)
 {
 	return (oh->ot_id_type & (1 << i)) ? GRPQUOTA : USRQUOTA;
@@ -541,4 +584,3 @@ int osd_declare_inode_qid(const struct lu_env *env, qid_t uid, qid_t gid,
 
 	RETURN(rcu ? rcu : rcg);
 }
-
