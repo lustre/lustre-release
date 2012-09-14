@@ -1356,6 +1356,7 @@ static int ofd_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
 
 static int ofd_ping(const struct lu_env *env, struct obd_export *exp)
 {
+	ofd_fmd_expire(exp);
 	return 0;
 }
 

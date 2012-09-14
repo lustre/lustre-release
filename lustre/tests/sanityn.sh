@@ -368,26 +368,33 @@ test_18() {
 run_test 18 "mmap sanity check ================================="
 
 test_19() { # bug3811
-	[ -d /proc/fs/lustre/obdfilter ] || return 0
+	local node=$(facet_active_host ost1)
 
-	MAX=`lctl get_param -n obdfilter.*.readcache_max_filesize | head -n 1`
-	lctl set_param -n obdfilter.*OST*.readcache_max_filesize=4096
-	dd if=/dev/urandom of=$TMP/f19b bs=512k count=32
-	SUM=`cksum $TMP/f19b | cut -d" " -f 1,2`
-	cp $TMP/f19b $DIR1/f19b
+	# check whether obdfilter is cache capable at all
+	if ! get_obdfilter_param $node '' read_cache_enable >/dev/null; then
+		echo "not cache-capable obdfilter"
+		return 0
+	fi
+
+	local MAX=$(get_obdfilter_param $node '' readcache_max_filesize | \
+		    head -n 1)
+	set_obdfilter_param $node '' readcache_max_filesize 4096
+	dd if=/dev/urandom of=$TMP/$tfile bs=512k count=32
+	local SUM=$(cksum $TMP/$tfile | cut -d" " -f 1,2)
+	cp $TMP/$tfile $DIR1/$tfile
 	for i in `seq 1 20`; do
-		[ $((i % 5)) -eq 0 ] && log "test_18 loop $i"
+		[ $((i % 5)) -eq 0 ] && log "$testname loop $i"
 		cancel_lru_locks osc > /dev/null
-		cksum $DIR1/f19b | cut -d" " -f 1,2 > $TMP/sum1 & \
-		cksum $DIR2/f19b | cut -d" " -f 1,2 > $TMP/sum2
+		cksum $DIR1/$tfile | cut -d" " -f 1,2 > $TMP/sum1 & \
+		cksum $DIR2/$tfile | cut -d" " -f 1,2 > $TMP/sum2
 		wait
-		[ "`cat $TMP/sum1`" = "$SUM" ] || \
-			error "$DIR1/f19b `cat $TMP/sum1` != $SUM"
-		[ "`cat $TMP/sum2`" = "$SUM" ] || \
-			error "$DIR2/f19b `cat $TMP/sum2` != $SUM"
+		[ "$(cat $TMP/sum1)" = "$SUM" ] || \
+			error "$DIR1/$tfile $(cat $TMP/sum1) != $SUM"
+		[ "$(cat $TMP/sum2)" = "$SUM" ] || \
+			error "$DIR2/$tfile $(cat $TMP/sum2) != $SUM"
 	done
-	lctl set_param -n obdfilter.*OST*.readcache_max_filesize=$MAX
-	rm $DIR1/f19b
+	set_obdfilter_param $node '' readcache_max_filesize $MAX
+	rm $DIR1/$tfile
 }
 run_test 19 "test concurrent uncached read races ==============="
 

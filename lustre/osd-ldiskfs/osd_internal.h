@@ -720,6 +720,8 @@ static inline int osd_invariant(const struct osd_object *obj)
 #define osd_invariant(obj) (1)
 #endif
 
+#define OSD_MAX_CACHE_SIZE OBD_OBJECT_EOF
+
 extern const struct dt_index_operations osd_otable_ops;
 
 static inline int osd_oi_fid2idx(struct osd_device *dev,

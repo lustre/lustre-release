@@ -904,6 +904,8 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
 		if (likely(result == 0)) { /* N.B. statfs can't really fail */
 			osd->od_osfs_age = cfs_time_current_64();
 			statfs_pack(&osd->od_statfs, ksfs);
+			if (sb->s_flags & MS_RDONLY)
+				sfs->os_state = OS_STATE_READONLY;
 		}
 	}
 
@@ -4474,6 +4476,7 @@ static int osd_device_init0(const struct lu_env *env,
 
 	o->od_read_cache = 1;
 	o->od_writethrough_cache = 1;
+	o->od_readcache_max_filesize = OSD_MAX_CACHE_SIZE;
 
 	rc = osd_mount(env, o, cfg);
 	if (rc)
