@@ -94,7 +94,7 @@ static struct lu_kmem_descr osd_caches[] = {
 static void arc_prune_func(int64_t bytes, void *private)
 {
 	struct osd_device *od = private;
-	struct lu_site    *site = &od->od_site;
+	struct lu_site    *site = od->od_dt_dev.dd_lu_dev.ld_site;
 	struct lu_env      env;
 	int rc;
 
