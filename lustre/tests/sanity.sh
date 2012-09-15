@@ -7040,18 +7040,26 @@ cleanup_130() {
 }
 
 test_130a() {
-	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	local filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
+	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP" &&
+		return
 
 	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	$SETSTRIPE -S 65536 -c 1 $fm_file || error "setstripe on $fm_file"
-	dd if=/dev/zero of=$fm_file bs=65536 count=1 || error "dd failed for $fm_file"
+	dd if=/dev/zero of=$fm_file bs=65536 count=1 ||
+		error "dd failed for $fm_file"
 
-	filefrag -ves $fm_file || error "filefrag $fm_file failed"
-	filefrag_op=`filefrag -ve $fm_file | grep -A 100 "ext:" | grep -v "ext:" | grep -v "found"`
+	# LU-1795: test filefrag/FIEMAP once, even if unsupported
+	filefrag -ves $fm_file
+	RC=$?
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+	[ $RC != 0 ] && error "filefrag $fm_file failed"
 
+	filefrag_op=$(filefrag -ve $fm_file | grep -A 100 "ext:" |
+		      grep -v "ext:" | grep -v "found")
 	lun=$($GETSTRIPE -i $fm_file)
 
 	start_blk=`echo $filefrag_op | cut -d: -f2 | cut -d. -f1`
@@ -7082,21 +7090,28 @@ test_130a() {
 run_test 130a "FIEMAP (1-stripe file)"
 
 test_130b() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping FIEMAP on 2-stripe file test" && return
+	[ "$OSTCOUNT" -lt "2" ] &&
+		skip_env "skipping FIEMAP on 2-stripe file test" && return
 
-	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	local filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
+	[ -n "$filefrag_op" ] && skip_env "filefrag does not support FIEMAP" &&
+		return
 
 	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	$SETSTRIPE -S 65536 -c 2 $fm_file || error "setstripe on $fm_file"
-	dd if=/dev/zero of=$fm_file bs=1M count=2 || error "dd failed on $fm_file"
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+
+	dd if=/dev/zero of=$fm_file bs=1M count=2 ||
+		error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
-	filefrag_op=`filefrag -ve $fm_file | grep -A 100 "ext:" | grep -v "ext:" | grep -v "found"`
+	filefrag_op=$(filefrag -ve $fm_file | grep -A 100 "ext:" |
+		      grep -v "ext:" | grep -v "found")
 
-	last_lun=`echo $filefrag_op | cut -d: -f5`
+	last_lun=$(echo $filefrag_op | cut -d: -f5)
 
 	IFS=$'\n'
 	tot_len=0
@@ -7131,15 +7146,20 @@ test_130b() {
 run_test 130b "FIEMAP (2-stripe file)"
 
 test_130c() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "skipping FIEMAP on 2-stripe file with hole test" && return
+	[ "$OSTCOUNT" -lt "2" ] &&
+		skip_env "skipping FIEMAP on 2-stripe file" && return
 
 	filefrag_op=$(filefrag -e 2>&1 | grep "invalid option")
-	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" && return
+	[ -n "$filefrag_op" ] && skip "filefrag does not support FIEMAP" &&
+		return
 
 	trap cleanup_130 EXIT RETURN
 
 	local fm_file=$DIR/$tfile
 	$SETSTRIPE -S 65536 -c 2 $fm_file || error "setstripe on $fm_file"
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+
 	dd if=/dev/zero of=$fm_file seek=1 bs=1M count=1 || error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
@@ -7195,6 +7215,8 @@ test_130d() {
 
 	local fm_file=$DIR/$tfile
 	$SETSTRIPE -S 65536 -c $OSTCOUNT $fm_file||error "setstripe on $fm_file"
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
 	dd if=/dev/zero of=$fm_file bs=1M count=$OSTCOUNT || error "dd failed on $fm_file"
 
 	filefrag -ves $fm_file || error "filefrag $fm_file failed"
@@ -7244,6 +7266,9 @@ test_130e() {
 
 	local fm_file=$DIR/$tfile
 	$SETSTRIPE -S 131072 -c 2 $fm_file || error "setstripe on $fm_file"
+	[ "$(facet_fstype ost$(($($GETSTRIPE -i $fm_file) + 1)))" = "zfs" ] &&
+		skip "ORI-366/LU-1941: FIEMAP unimplemented on ZFS" && return
+
 	NUM_BLKS=512
 	EXPECTED_LEN=$(( (NUM_BLKS / 2) * 64 ))
 	for ((i = 0; i < $NUM_BLKS; i++))
