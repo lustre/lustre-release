@@ -36,6 +36,20 @@
 #
 #FSCK_ARGS="-p"
 
+# By default the init script will check ldiskfs filesystems using
+# /sbin/fsck.ldiskfs if it exists, otherwise it will use /sbin/fsck.
+# Set the PFSCK variable here to override that behavior.  The value must
+# be an absolute path.
+#
+#PFSCK=/sbin/fsck
+
+# By default the init script will test ldiskfs feature flags using
+# /sbin/tunefs.ldiskfs if it exists, otherwise it will use
+# /sbin/tune2fs.  Set the TUNE2FS variable here to override that
+# behavior.  The value must be an absolute path.
+#
+#TUNE2FS=/sbin/tune2fs
+
 # Uncomment to insert server mount options - see mount.lustre(8)
 #MOUNT_OPTIONS="-o abort_recov"
 
