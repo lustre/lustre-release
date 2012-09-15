@@ -463,7 +463,6 @@ load_modules_local() {
 		fi
 	fi
 
-	local ncpts=0
 	# if there is only one CPU core, libcfs can only create one partition
 	# if there is more than 4 CPU cores, libcfs should create multiple CPU
 	# partitions. So we just force libcfs to create 2 partitions for
@@ -471,12 +470,12 @@ load_modules_local() {
 	if [ $ncpus -le 4 ] && [ $ncpus -gt 1 ]; then
 		# force to enable multiple CPU partitions
 		echo "Force libcfs to create 2 CPU partitions"
-		ncpts=2
+		MODOPTS_LIBCFS="cpu_npartitions=2 $MODOPTS_LIBCFS"
 	else
 		echo "libcfs will create CPU partition based on online CPUs"
 	fi
 
-	load_module ../libcfs/libcfs/libcfs cpu_npartitions=$ncpts
+	load_module ../libcfs/libcfs/libcfs
 
     [ "$PTLDEBUG" ] && lctl set_param debug="$PTLDEBUG"
     [ "$SUBSYSTEM" ] && lctl set_param subsystem_debug="${SUBSYSTEM# }"
