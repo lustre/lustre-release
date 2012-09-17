@@ -181,6 +181,7 @@ void client_bulk_callback (lnet_event_t *ev)
 {
         struct ptlrpc_cb_id     *cbid = ev->md.user_ptr;
         struct ptlrpc_bulk_desc *desc = cbid->cbid_arg;
+        struct ptlrpc_request   *req;
         ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB))
@@ -198,7 +199,7 @@ void client_bulk_callback (lnet_event_t *ev)
                ev->type, ev->status, desc);
 
         spin_lock(&desc->bd_lock);
-
+        req = desc->bd_req;
         LASSERT(desc->bd_network_rw);
         desc->bd_network_rw = 0;
 
@@ -206,11 +207,16 @@ void client_bulk_callback (lnet_event_t *ev)
                 desc->bd_success = 1;
                 desc->bd_nob_transferred = ev->mlength;
                 desc->bd_sender = ev->sender;
+        } else {
+                /* start reconnect and resend if network error hit */
+                spin_lock(&req->rq_lock);
+                req->rq_net_err = 1;
+                spin_unlock(&req->rq_lock);
         }
 
         /* NB don't unlock till after wakeup; desc can disappear under us
          * otherwise */
-        ptlrpc_client_wake_req(desc->bd_req);
+        ptlrpc_client_wake_req(req);
 
         spin_unlock(&desc->bd_lock);
         EXIT;
