@@ -1077,6 +1077,8 @@ void lustre_assert_wire_constants(void)
                  OBD_CONNECT_GRANT_PARAM);
         LASSERTF(OBD_CONNECT_LIGHTWEIGHT == 0x1000000000000ULL, "found 0x%.16llxULL\n",
                  OBD_CONNECT_LIGHTWEIGHT);
+	LASSERTF(OBD_CONNECT_SHORTIO == 0x2000000000000ULL, "found 0x%.16llxULL\n",
+		 OBD_CONNECT_SHORTIO);
         LASSERTF(OBD_CKSUM_CRC32 == 0x00000001UL, "found 0x%.8xUL\n",
                  (unsigned)OBD_CKSUM_CRC32);
         LASSERTF(OBD_CKSUM_ADLER == 0x00000002UL, "found 0x%.8xUL\n",
