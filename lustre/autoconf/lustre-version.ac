@@ -1,7 +1,7 @@
 m4_define([LUSTRE_MAJOR],[1])
 m4_define([LUSTRE_MINOR],[8])
 m4_define([LUSTRE_PATCH],[8])
-m4_define([LUSTRE_FIX],[0])
+m4_define([LUSTRE_FIX],[60])
 # Note: we're starting prerelease versions at 80 this time.
 
 dnl # don't forget to update the service tags info

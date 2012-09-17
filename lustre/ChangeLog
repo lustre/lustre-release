@@ -1,3 +1,14 @@
+2012-xx-xx Whamcloud, Inc.
+	* version 1.8.9-wc1
+	* Support for kernels:
+	  2.6.18-308.11.1.el5 (RHEL 5)
+	  2.6.32-279.5.1.el6  (RHEL 6) - patchless client only
+	* Recommended e2fsprogs version: 1.41.90.wc4
+
+See http://wiki.whamcloud.com/display/PUB/Changelog+1.8 for more information.
+
+-------------------------------------------------------------------------------
+
 2012-05-31 Whamcloud, Inc.
 	* version 1.8.8-wc1
 	* Support for kernels:
@@ -6,14 +17,6 @@
 	* Recommended e2fsprogs version: 1.41.90.wc4
 
 See http://wiki.whamcloud.com/display/PUB/Changelog+1.8 for more information.
-
-Severity   : enhancement
-Jira       : LU-1754
-Description: Kernel update [RHEL6.3 2.6.32-279.5.1.el5]
-
-Severity   : enhancement
-Jira       : LU-1511
-Description: Kernel update [RHEL5.8 2.6.18-308.11.1.el5]
 
 -------------------------------------------------------------------------------
 

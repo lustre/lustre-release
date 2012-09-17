@@ -1,6 +1,6 @@
 # Process this file with autoconf to produce a configure script.
 
-AC_INIT([Lustre ldiskfs], 3.1.52, [http://bugs.whamcloud.com/])
+AC_INIT([Lustre ldiskfs], 3.1.53, [http://bugs.whamcloud.com/])
 AC_CONFIG_SRCDIR([lustre-ldiskfs.spec.in])
 ldiskfs_is_ext4=yes
 
