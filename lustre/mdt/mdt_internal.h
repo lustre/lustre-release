@@ -754,6 +754,9 @@ static inline ldlm_mode_t mdt_mdl_mode2dlm_mode(mdl_mode_t mode)
         return mdt_dlm_lock_modes[mode];
 }
 
+/* mdt_lvb.c */
+extern struct ldlm_valblock_ops mdt_lvbo;
+
 static inline struct lu_name *mdt_name(const struct lu_env *env,
                                        char *name, int namelen)
 {

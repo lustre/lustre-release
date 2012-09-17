@@ -5108,6 +5108,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (m->mdt_namespace == NULL)
                 GOTO(err_fini_seq, rc = -ENOMEM);
 
+	m->mdt_namespace->ns_lvbp = m;
+	m->mdt_namespace->ns_lvbo = &mdt_lvbo;
+
         ldlm_register_intent(m->mdt_namespace, mdt_intent_policy);
         /* set obd_namespace for compatibility with old code */
         obd->obd_namespace = m->mdt_namespace;

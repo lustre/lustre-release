@@ -265,8 +265,29 @@ out:
         return rc;
 }
 
+static int filter_lvbo_size(struct ldlm_lock *unused)
+{
+	return sizeof(struct ost_lvb);
+}
+
+static int filter_lvbo_fill(struct ldlm_lock *lock,
+			    void *buf, int buflen)
+{
+	struct ldlm_resource *res = lock->l_resource;
+
+	lock_res(res);
+	LASSERTF(buflen >= res->lr_lvb_len,
+		 "actual %d, want %d\n", buflen, res->lr_lvb_len);
+	memcpy(buf, res->lr_lvb_data, res->lr_lvb_len);
+	unlock_res(res);
+
+	return res->lr_lvb_len;
+}
+
 struct ldlm_valblock_ops filter_lvbo = {
         lvbo_init: filter_lvbo_init,
         lvbo_update: filter_lvbo_update,
-        lvbo_free: filter_lvbo_free
+        lvbo_free: filter_lvbo_free,
+	lvbo_size: filter_lvbo_size,
+	lvbo_fill: filter_lvbo_fill
 };

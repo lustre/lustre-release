@@ -380,6 +380,10 @@ struct ldlm_valblock_ops {
                            struct ptlrpc_request *r,
                            int increase);
         int (*lvbo_free)(struct ldlm_resource *res);
+	/* Return size of lvb data appropriate RPC size can be reserved */
+	int (*lvbo_size)(struct ldlm_lock *lock);
+	/* Called to fill in lvb data to RPC buffer @buf */
+	int (*lvbo_fill)(struct ldlm_lock *lock, void *buf, int buflen);
 };
 
 typedef enum {
@@ -896,6 +900,37 @@ static inline struct adaptive_timeout *
 ldlm_lock_to_ns_at(struct ldlm_lock *lock)
 {
         return &lock->l_resource->lr_ns_bucket->nsb_at_estimate;
+}
+
+static inline int ldlm_lvbo_init(struct ldlm_resource *res)
+{
+	struct ldlm_namespace *ns = ldlm_res_to_ns(res);
+
+	if (ns->ns_lvbo != NULL && ns->ns_lvbo->lvbo_init != NULL)
+		return ns->ns_lvbo->lvbo_init(res);
+
+	return 0;
+}
+
+static inline int ldlm_lvbo_size(struct ldlm_lock *lock)
+{
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+
+	if (ns->ns_lvbo != NULL && ns->ns_lvbo->lvbo_size != NULL)
+		return ns->ns_lvbo->lvbo_size(lock);
+
+	return 0;
+}
+
+static inline int ldlm_lvbo_fill(struct ldlm_lock *lock, void *buf, int len)
+{
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+
+	if (ns->ns_lvbo != NULL) {
+		LASSERT(ns->ns_lvbo->lvbo_fill != NULL);
+		return ns->ns_lvbo->lvbo_fill(lock, buf, len);
+	}
+	return 0;
 }
 
 struct ldlm_ast_work {
