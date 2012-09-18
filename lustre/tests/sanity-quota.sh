@@ -1254,9 +1254,6 @@ test_15(){
                         error "fail to set version for ost$j"
         done
 
-        echo "invalidating quota files"
-        $LFS quotainv -ug $DIR
-        $LFS quotainv -ugf $DIR
         $LFS quotacheck -ug $DIR
 }
 run_test_with_stat 15 "set block quota more than 4T ==="

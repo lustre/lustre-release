@@ -64,7 +64,7 @@ or
 .IR qc_id .
 .TP 15
 .SB LUSTRE_Q_QUOTAON
-Turn on quotas for a Lustre filesystem.
+Turn on quotas for a Lustre filesystem. Deprecated as of 2.4.0.
 .I qc_type
 is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quotas).
 The quota files must exist; they are normally created with the
@@ -74,7 +74,7 @@ call.
 This call is restricted to the super-user.
 .TP
 .SB LUSTRE_Q_QUOTAOFF
-Turn off quotas for a Lustre filesystem.
+Turn off quotas for a Lustre filesystem. Deprecated as of 2.4.0.
 .I qc_type
 is USRQUOTA, GRPQUOTA or UGQUOTA (both user and group quotas).
 

@@ -48,13 +48,9 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
 .br
 .B lfs quotacheck [-ug] <filesystem>
 .br
-.B lfs quotachown [-i] <filesystem>
-.br
 .B lfs quotaon [-ugf] <filesystem>
 .br
 .B lfs quotaoff [-ug] <filesystem>
-.br
-.B lfs quotainv [-ug] [-f] <filesystem>
 .br
 .B lfs setquota <-u|--user|-g|--group> <uname|uid|gname|gid>
              \fB[--block-softlimit <block-softlimit>]
@@ -211,20 +207,14 @@ To display disk usage and limits, either for the full filesystem, or for objects
 .B quota -t <-u|-g> <filesystem>
 To display block and inode grace times for user (-u) or group (-g) quotas
 .TP
-.B quotachown
-To change files' owner and group on OSTs of the specified filesystem
+.B quotacheck [-ugf] <filesystem> (deprecated as of 2.4.0)
+To scan the specified filesystem for disk usage, and create or update quota files. Options specify quota for users (-u) groups (-g) and force (-f). Not useful anymore with servers >= 2.4.0 since space accounting is always turned on.
 .TP
-.B quotacheck [-ugf] <filesystem>
-To scan the specified filesystem for disk usage, and create or update quota files. Options specify quota for users (-u) groups (-g) and force (-f)
+.B quotaon [-ugf] <filesystem> (deprecated as of 2.4.0)
+To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) and force (-f). Not used anymore in lustre 2.4.0 where quota enforcement must be enabled via conf_param (e.g. lctl conf_param ${FSNAME}.quota.<ost|mdt>=<u|g|ug>)
 .TP
-.B quotaon [-ugf] <filesystem>
-To turn filesystem quotas on. Options specify quota for users (-u) groups (-g) and force (-f)
-.TP
-.B quotaoff [-ugf] <filesystem>
-To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f)
-.TP
-.B quotainv [-ug] [-f] <filesystem>
-Clear quota files (administrative quota files if used without -f, operational quota files otherwise), all of their quota entries, for (-u) users or (-g) groups; after quotainv one must use quotacheck before using quotas. DO NOT USE THIS COMMAND UNLESS YOU REALLY KNOW WHAT IT DOES. IT IS MAINLY FOR INTERNAL PURPOSES.
+.B quotaoff [-ugf] <filesystem> (deprecated as of 2.4.0)
+To turn filesystem quotas off.  Options specify quota for users (-u) groups (-g) and force (-f). Not used anymore in lustre 2.4.0 where quota enforcement can be turned off (for inode or block) by running the following command on the MGS: lctl conf_param ${FSNAME}.quota.<ost|mdt>=""
 .TP
 .B setquota  <-u|-g> <uname>|<uid>|<gname>|<gid> [--block-softlimit <block-softlimit>] [--block-hardlimit <block-hardlimit>] [--inode-softlimit <inode-softlimit>] [--inode-hardlimit <inode-hardlimit>] <filesystem>
 To set filesystem quotas for users or groups. Limits can be specified with -b, -k, -m, -g, -t, -p suffixes which specify units of 1, 2^10, 2^20, 2^30, 2^40 and 2^50 accordingly. Block limits unit is kilobyte (1024) by default and block limits are always kilobyte-grained (even if specified in bytes), see EXAMPLES

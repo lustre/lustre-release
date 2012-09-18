@@ -88,13 +88,11 @@ static int lfs_df(int argc, char **argv);
 static int lfs_getname(int argc, char **argv);
 static int lfs_check(int argc, char **argv);
 #ifdef HAVE_SYS_QUOTA_H
-static int lfs_quotachown(int argc, char **argv);
 static int lfs_quotacheck(int argc, char **argv);
 static int lfs_quotaon(int argc, char **argv);
 static int lfs_quotaoff(int argc, char **argv);
 static int lfs_setquota(int argc, char **argv);
 static int lfs_quota(int argc, char **argv);
-static int lfs_quotainv(int argc, char **argv);
 #endif
 static int lfs_flushctx(int argc, char **argv);
 static int lfs_join(int argc, char **argv);
@@ -175,23 +173,20 @@ command_t cmdlist[] = {
          "[for specified path only]\n"
          "Usage: getname [-h]|[path ...] "},
 #ifdef HAVE_SYS_QUOTA_H
-        {"quotachown",lfs_quotachown, 0,
-         "Change files' owner or group on the specified filesystem.\n"
-         "usage: quotachown [-i] <filesystem>\n"
-         "\t-i: ignore error if file is not exist\n"},
         {"quotacheck", lfs_quotacheck, 0,
          "Scan the specified filesystem for disk usage, and create,\n"
-         "or update quota files.\n"
+         "or update quota files. Deprecated as of 2.4.0.\n"
          "usage: quotacheck [ -ug ] <filesystem>"},
-        {"quotaon", lfs_quotaon, 0, "Turn filesystem quotas on.\n"
+        {"quotaon", lfs_quotaon, 0, "Turn filesystem"
+         " quotas on. Deprecated as of 2.4.0.\n"
          "usage: quotaon [ -ugf ] <filesystem>"},
-        {"quotaoff", lfs_quotaoff, 0, "Turn filesystem quotas off.\n"
+        {"quotaoff", lfs_quotaoff, 0, "Turn filesystem"
+         " quotas off. Deprecated as of 2.4.0.\n"
          "usage: quotaoff [ -ug ] <filesystem>"},
         {"setquota", lfs_setquota, 0, "Set filesystem quotas.\n"
          "usage: setquota <-u|-g> <uname>|<uid>|<gname>|<gid>\n"
          "                -b <block-softlimit> -B <block-hardlimit>\n"
          "                -i <inode-softlimit> -I <inode-hardlimit> <filesystem>\n"
-         "       setquota -t <-u|-g> <block-grace> <inode-grace> <filesystem>\n"
          "       setquota <-u|--user|-g|--group> <uname>|<uid>|<gname>|<gid>\n"
          "                [--block-softlimit <block-softlimit>]\n"
          "                [--block-hardlimit <block-hardlimit>]\n"
@@ -208,8 +203,6 @@ command_t cmdlist[] = {
          "usage: quota [-q] [-v] [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>]\n"
          "             [<-u|-g> <uname>|<uid>|<gname>|<gid>] <filesystem>\n"
          "       quota [-o <obd_uuid>|-i <mdt_idx>|-I <ost_idx>] -t <-u|-g> <filesystem>"},
-        {"quotainv", lfs_quotainv, 0, "Invalidate quota data.\n"
-         "usage: quotainv [-u|-g] <filesystem>"},
 #endif
         {"flushctx", lfs_flushctx, 0, "Flush security context for current user.\n"
          "usage: flushctx [-k] [mountpoint...]"},
@@ -1446,32 +1439,6 @@ static int lfs_join(int argc, char **argv)
 }
 
 #ifdef HAVE_SYS_QUOTA_H
-static int lfs_quotachown(int argc, char **argv)
-{
-
-        int c,rc;
-        int flag = 0;
-
-        optind = 0;
-        while ((c = getopt(argc, argv, "i")) != -1) {
-                switch (c) {
-                case 'i':
-                        flag++;
-                        break;
-                default:
-                        fprintf(stderr, "error: %s: option '-%c' "
-                                        "unrecognized\n", argv[0], c);
-                        return CMD_HELP;
-                }
-        }
-        if (optind == argc)
-                return CMD_HELP;
-        rc = llapi_quotachown(argv[optind], flag);
-        if(rc)
-                fprintf(stderr,"error: change file owner/group failed.\n");
-        return rc;
-}
-
 static int lfs_quotacheck(int argc, char **argv)
 {
         int c, check_type = 0;
@@ -1510,7 +1477,14 @@ static int lfs_quotacheck(int argc, char **argv)
         mnt = argv[optind];
 
         rc = llapi_quotacheck(mnt, check_type);
-        if (rc) {
+	if (rc == -EOPNOTSUPP) {
+		fprintf(stderr, "error: quotacheck not supported by the quota "
+			"master.\nPlease note that quotacheck is deprecated as "
+			"of lustre 2.4.0 since space accounting is always "
+			"enabled.\nFilesystems not formatted with 2.4 utils or "
+			"beyond can be upgraded with tunefs.lustre --quota.\n");
+		return rc;
+	} else if (rc) {
                 fprintf(stderr, "quotacheck failed: %s\n", strerror(-rc));
                 return rc;
         }
@@ -1582,7 +1556,16 @@ static int lfs_quotaon(int argc, char **argv)
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (rc == -EALREADY) {
+                if (rc == -EOPNOTSUPP) {
+                        fprintf(stderr, "error: quotaon not supported by the "
+                                "quota master.\nPlease note that quotaon/off is"
+                                " deprecated as of lustre 2.4.0.\nQuota "
+                                "enforcement should now be enabled on the MGS "
+                                "via:\nmgs# lctl conf_param ${FSNAME}.quota."
+                                "<ost|mdt>=<u|g|ug>\n(ost for block quota, mdt "
+                                "for inode quota, u for user and g for group"
+                                "\n");
+                } else if (rc == -EALREADY) {
                         rc = 0;
                 } else if (rc == -ENOENT) {
                         fprintf(stderr, "error: cannot find quota database, "
@@ -1638,7 +1621,14 @@ static int lfs_quotaoff(int argc, char **argv)
 
         rc = llapi_quotactl(mnt, &qctl);
         if (rc) {
-                if (rc == -EALREADY) {
+                if (rc == -EOPNOTSUPP) {
+                        fprintf(stderr, "error: quotaoff not supported by the "
+                                "quota master.\nPlease note that quotaon/off is"
+                                " deprecated as of lustre 2.4.0.\nQuota "
+                                "enforcement can be disabled on the MGS via:\n"
+                                "mgs# lctl conf_param ${FSNAME}.quota.<ost|mdt>"
+                                "=\"\"\n");
+                } else if (rc == -EALREADY) {
                         rc = 0;
                 } else {
                         if (*obd_type)
@@ -1650,54 +1640,6 @@ static int lfs_quotaoff(int argc, char **argv)
         }
 
         return rc;
-}
-
-static int lfs_quotainv(int argc, char **argv)
-{
-        int c;
-        char *mnt;
-        struct if_quotactl qctl;
-        int rc;
-
-        memset(&qctl, 0, sizeof(qctl));
-        qctl.qc_cmd = LUSTRE_Q_INVALIDATE;
-
-        optind = 0;
-        while ((c = getopt(argc, argv, "fgu")) != -1) {
-                switch (c) {
-                case 'u':
-                        qctl.qc_type |= 0x01;
-                        break;
-                case 'g':
-                        qctl.qc_type |= 0x02;
-                        break;
-                case 'f':
-                        qctl.qc_cmd = LUSTRE_Q_FINVALIDATE;
-                        break;
-                default:
-                        fprintf(stderr, "error: %s: option '-%c' "
-                                        "unrecognized\n", argv[0], c);
-                        return CMD_HELP;
-                }
-        }
-
-        if (qctl.qc_type)
-                qctl.qc_type--;
-        else /* by default, invalidate quota for both user & group */
-                qctl.qc_type = 0x02;
-
-        if (argc == optind)
-                return CMD_HELP;
-
-        mnt = argv[optind];
-
-        rc = llapi_quotactl(mnt, &qctl);
-        if (rc) {
-                fprintf(stderr, "quotainv failed: %s\n", strerror(-rc));
-                return rc;
-        }
-
-        return 0;
 }
 
 #define ARG2INT(nr, str, msg)                                           \
