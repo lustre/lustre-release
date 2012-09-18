@@ -551,7 +551,7 @@ kiblnd_kvaddr_to_page (unsigned long vaddr)
 static int
 kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 {
-	kib_hca_dev_t		*hdev  = tx->tx_pool->tpo_hdev;
+	kib_hca_dev_t		*hdev;
 	__u64			*pages = tx->tx_pages;
 	kib_fmr_poolset_t	*fps;
 	int			npages;
@@ -560,6 +560,11 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 	int			rc;
 	int			i;
 
+	LASSERT(tx->tx_pool != NULL);
+	LASSERT(tx->tx_pool->tpo_pool.po_owner != NULL);
+
+	hdev  = tx->tx_pool->tpo_hdev;
+
         for (i = 0, npages = 0; i < rd->rd_nfrags; i++) {
                 for (size = 0; size <  rd->rd_frags[i].rf_nob;
                                size += hdev->ibh_page_size) {
@@ -567,9 +572,6 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
                                             hdev->ibh_page_mask) + size;
                 }
         }
-
-	LASSERT(tx->tx_pool != NULL);
-	LASSERT(tx->tx_pool->tpo_pool.po_owner != NULL);
 
 	cpt = tx->tx_pool->tpo_pool.po_owner->ps_cpt;
 
@@ -594,16 +596,18 @@ kiblnd_fmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 static int
 kiblnd_pmr_map_tx(kib_net_t *net, kib_tx_t *tx, kib_rdma_desc_t *rd, int nob)
 {
-	kib_hca_dev_t		*hdev = tx->tx_pool->tpo_hdev;
+	kib_hca_dev_t		*hdev;
 	kib_pmr_poolset_t	*pps;
 	__u64			iova;
 	int			cpt;
 	int			rc;
 
-	iova = rd->rd_frags[0].rf_addr & ~hdev->ibh_page_mask;
-
 	LASSERT(tx->tx_pool != NULL);
 	LASSERT(tx->tx_pool->tpo_pool.po_owner != NULL);
+
+	hdev = tx->tx_pool->tpo_hdev;
+
+	iova = rd->rd_frags[0].rf_addr & ~hdev->ibh_page_mask;
 
 	cpt = tx->tx_pool->tpo_pool.po_owner->ps_cpt;
 

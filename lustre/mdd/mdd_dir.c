@@ -878,7 +878,6 @@ static int mdd_changelog_ext_ns_store(const struct lu_env  *env,
 	rec->cr.cr_namelen = tname->ln_namelen;
 	memcpy(rec->cr.cr_name, tname->ln_name, tname->ln_namelen);
 	if (sname) {
-		LASSERT(sfid != NULL);
 		rec->cr.cr_name[tname->ln_namelen] = '\0';
 		memcpy(rec->cr.cr_name + tname->ln_namelen + 1, sname->ln_name,
 			sname->ln_namelen);

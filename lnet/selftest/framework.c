@@ -573,12 +573,16 @@ sfw_test_buffers(sfw_test_instance_t *tsi)
 int
 sfw_load_test(struct sfw_test_instance *tsi)
 {
-	struct sfw_test_case	*tsc = sfw_find_test_case(tsi->tsi_service);
-	struct srpc_service	*svc = tsc->tsc_srv_service;
-	int			nbuf = sfw_test_buffers(tsi);
+	struct sfw_test_case	*tsc;
+	struct srpc_service	*svc;
+	int			nbuf;
 	int			rc;
 
+	LASSERT(tsi != NULL);
+	tsc = sfw_find_test_case(tsi->tsi_service);
+	nbuf = sfw_test_buffers(tsi);
 	LASSERT(tsc != NULL);
+	svc = tsc->tsc_srv_service;
 
 	if (tsi->tsi_is_client) {
 		tsi->tsi_ops = tsc->tsc_cli_ops;

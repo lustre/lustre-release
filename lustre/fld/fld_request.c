@@ -200,11 +200,12 @@ fld_client_get_target(struct lu_client_fld *fld, seqno_t seq)
 int fld_client_add_target(struct lu_client_fld *fld,
                           struct lu_fld_target *tar)
 {
-        const char *name = fld_target_name(tar);
+	const char *name;
         struct lu_fld_target *target, *tmp;
         ENTRY;
 
         LASSERT(tar != NULL);
+	name = fld_target_name(tar);
         LASSERT(name != NULL);
         LASSERT(tar->ft_srv != NULL || tar->ft_exp != NULL);
 

@@ -1155,11 +1155,12 @@ static int mdd_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)
 {
         struct mdd_device *mdd = lu2mdd_dev(d);
-        struct lu_device *next = &mdd->mdd_child->dd_lu_dev;
+	struct lu_device *next;
         int rc;
         ENTRY;
 
         LASSERT(mdd != NULL);
+	next = &mdd->mdd_child->dd_lu_dev;
 
         /* XXX: orphans handling. */
         __mdd_orphan_cleanup(env, mdd);

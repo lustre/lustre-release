@@ -840,7 +840,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 		     void *lvb, __u32 lvb_len, enum lvb_type lvb_type,
 		     struct lustre_handle *lockh, int async)
 {
-        struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
+	struct ldlm_namespace *ns;
         struct ldlm_lock      *lock;
         struct ldlm_request   *body;
         int                    is_replay = *flags & LDLM_FL_REPLAY;
@@ -850,6 +850,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         ENTRY;
 
         LASSERT(exp != NULL);
+
+	ns = exp->exp_obd->obd_namespace;
 
         /* If we're replaying this lock, just check some invariants.
          * If we're creating a new lock, get everything all setup nice. */

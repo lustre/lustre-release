@@ -1213,12 +1213,19 @@ int
 srpc_send_rpc (swi_workitem_t *wi)
 {
         int                rc = 0;
-        srpc_client_rpc_t *rpc = wi->swi_workitem.wi_data;
-        srpc_msg_t        *reply = &rpc->crpc_replymsg;
-        int                do_bulk = rpc->crpc_bulk.bk_niov > 0;
+	srpc_client_rpc_t *rpc;
+	srpc_msg_t        *reply;
+	int                do_bulk;
+
+	LASSERT(wi != NULL);
+
+	rpc = wi->swi_workitem.wi_data;
 
         LASSERT (rpc != NULL);
         LASSERT (wi == &rpc->crpc_wi);
+
+	reply = &rpc->crpc_replymsg;
+	do_bulk = rpc->crpc_bulk.bk_niov > 0;
 
 	spin_lock(&rpc->crpc_lock);
 

@@ -2785,11 +2785,13 @@ int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait)
 {
 	struct l_wait_info	lwi = { 0 };
 	struct ptlrpc_thread	*thread;
-	struct ptlrpc_service	*svc = svcpt->scp_service;
+	struct ptlrpc_service	*svc;
 	int			rc;
 	ENTRY;
 
 	LASSERT(svcpt != NULL);
+
+	svc = svcpt->scp_service;
 
 	CDEBUG(D_RPCTRACE, "%s[%d] started %d min %d max %d\n",
 	       svc->srv_name, svcpt->scp_cpt, svcpt->scp_nthrs_running,

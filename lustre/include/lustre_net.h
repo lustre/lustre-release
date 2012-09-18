@@ -1669,10 +1669,11 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async);
 
 static inline int ptlrpc_client_bulk_active(struct ptlrpc_request *req)
 {
-        struct ptlrpc_bulk_desc *desc = req->rq_bulk;
+	struct ptlrpc_bulk_desc *desc;
         int                      rc;
 
         LASSERT(req != NULL);
+	desc = req->rq_bulk;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_BULK_UNLINK) &&
             req->rq_bulk_deadline > cfs_time_current_sec())

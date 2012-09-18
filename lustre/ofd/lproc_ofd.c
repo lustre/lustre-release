@@ -60,9 +60,10 @@ static int lprocfs_ofd_rd_tot_dirty(char *page, char **start, off_t off,
 				    int count, int *eof, void *data)
 {
 	struct obd_device *obd = (struct obd_device *)data;
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
+	ofd = ofd_dev(obd->obd_lu_dev);
 	*eof = 1;
 	return snprintf(page, count, LPU64"\n", ofd->ofd_tot_dirty);
 }
@@ -71,9 +72,10 @@ static int lprocfs_ofd_rd_tot_granted(char *page, char **start, off_t off,
 				      int count, int *eof, void *data)
 {
 	struct obd_device *obd = (struct obd_device *)data;
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
+	ofd = ofd_dev(obd->obd_lu_dev);
 	*eof = 1;
 	return snprintf(page, count, LPU64"\n", ofd->ofd_tot_granted);
 }
@@ -82,9 +84,10 @@ static int lprocfs_ofd_rd_tot_pending(char *page, char **start, off_t off,
 				      int count, int *eof, void *data)
 {
 	struct obd_device *obd = (struct obd_device *)data;
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
+	ofd = ofd_dev(obd->obd_lu_dev);
 	*eof = 1;
 	return snprintf(page, count, LPU64"\n", ofd->ofd_tot_pending);
 }
@@ -104,9 +107,10 @@ static int lprocfs_ofd_rd_grant_ratio(char *page, char **start, off_t off,
 				      int count, int *eof, void *data)
 {
 	struct obd_device *obd = (struct obd_device *)data;
-	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	struct ofd_device *ofd;
 
 	LASSERT(obd != NULL);
+	ofd = ofd_dev(obd->obd_lu_dev);
 	*eof = 1;
 	return snprintf(page, count, "%d%%\n",
 			(int) ofd_grant_reserved(ofd, 100));
@@ -176,12 +180,14 @@ static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
 				  int count, int *eof, void *data)
 {
 	struct obd_device	*obd = data;
-	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+	struct ofd_device	*ofd;
 	struct ofd_seq		*oseq = NULL;
 	int			retval = 0, rc;
 
 	if (obd == NULL)
 		return 0;
+
+	ofd = ofd_dev(obd->obd_lu_dev);
 
 	read_lock(&ofd->ofd_seq_list_lock);
 	cfs_list_for_each_entry(oseq, &ofd->ofd_seq_list, os_list) {

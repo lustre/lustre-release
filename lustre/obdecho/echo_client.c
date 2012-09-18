@@ -1682,6 +1682,8 @@ static int echo_create_md_object(const struct lu_env *env,
 
 	ENTRY;
 
+	if (ec_parent == NULL)
+		return -1;
         parent = lu_object_locate(ec_parent->lo_header, ld->ld_type);
 	if (parent == NULL)
 		RETURN(-ENXIO);
@@ -1777,6 +1779,8 @@ static int echo_setattr_object(const struct lu_env *env,
 
 	ENTRY;
 
+	if (ec_parent == NULL)
+		return -1;
         parent = lu_object_locate(ec_parent->lo_header, ld->ld_type);
 	if (parent == NULL)
 		RETURN(-ENXIO);
@@ -1840,6 +1844,8 @@ static int echo_getattr_object(const struct lu_env *env,
 
 	ENTRY;
 
+	if (ec_parent == NULL)
+		return -1;
         parent = lu_object_locate(ec_parent->lo_header, ld->ld_type);
 	if (parent == NULL)
 		RETURN(-ENXIO);
@@ -1902,6 +1908,8 @@ static int echo_lookup_object(const struct lu_env *env,
         int                      rc = 0;
         int                      i;
 
+	if (ec_parent == NULL)
+		return -1;
         parent = lu_object_locate(ec_parent->lo_header, ld->ld_type);
 	if (parent == NULL)
 		return -ENXIO;

@@ -141,11 +141,13 @@ static void vvp_page_discard(const struct lu_env *env,
                              struct cl_io *unused)
 {
         cfs_page_t           *vmpage  = cl2vm_page(slice);
-        struct address_space *mapping = vmpage->mapping;
+	struct address_space *mapping;
         struct ccc_page      *cpg     = cl2ccc_page(slice);
 
         LASSERT(vmpage != NULL);
         LASSERT(PageLocked(vmpage));
+
+	mapping = vmpage->mapping;
 
         if (cpg->cpg_defer_uptodate && !cpg->cpg_ra_used)
                 ll_ra_stats_inc(mapping, RA_STAT_DISCARDED);
@@ -162,10 +164,13 @@ static int vvp_page_unmap(const struct lu_env *env,
                           struct cl_io *unused)
 {
         cfs_page_t *vmpage = cl2vm_page(slice);
-        __u64       offset = vmpage->index << CFS_PAGE_SHIFT;
+	__u64       offset;
 
         LASSERT(vmpage != NULL);
         LASSERT(PageLocked(vmpage));
+
+	offset = vmpage->index << CFS_PAGE_SHIFT;
+
         /*
          * XXX is it safe to call this with the page lock held?
          */

@@ -1586,11 +1586,13 @@ EXPORT_SYMBOL(lprocfs_register_stats);
 void lprocfs_counter_init(struct lprocfs_stats *stats, int index,
 			  unsigned conf, const char *name, const char *units)
 {
-	struct lprocfs_counter *c     = &(stats->ls_percpu[0]->lp_cntr[index]);
+	struct lprocfs_counter *c;
 	unsigned long           flags = 0;
 
 	LASSERT(stats != NULL);
 	LASSERT(stats->ls_percpu[0] != NULL);
+
+	c = &(stats->ls_percpu[0]->lp_cntr[index]);
 
 	lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 	c->lc_config = conf;

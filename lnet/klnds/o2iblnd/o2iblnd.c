@@ -727,7 +727,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
          * its ref on 'cmid'). */
 	rwlock_t		*glock = &kiblnd_data.kib_global_lock;
         kib_net_t              *net = peer->ibp_ni->ni_data;
-        kib_dev_t              *dev = net->ibn_dev;
+	kib_dev_t              *dev;
         struct ib_qp_init_attr *init_qp_attr;
 	struct kib_sched_info	*sched;
 	kib_conn_t		*conn;
@@ -739,6 +739,8 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 
 	LASSERT(net != NULL);
 	LASSERT(!cfs_in_interrupt());
+
+	dev = net->ibn_dev;
 
 	cpt = lnet_cpt_of_nid(peer->ibp_nid);
 	sched = kiblnd_data.kib_scheds[cpt];
@@ -1342,7 +1344,7 @@ kiblnd_map_tx_pool(kib_tx_pool_t *tpo)
         kib_pages_t    *txpgs = tpo->tpo_tx_pages;
         kib_pool_t     *pool  = &tpo->tpo_pool;
         kib_net_t      *net   = pool->po_owner->ps_net;
-        kib_dev_t      *dev   = net->ibn_dev;
+	kib_dev_t      *dev;
         struct page    *page;
         kib_tx_t       *tx;
         int             page_offset;
@@ -1350,6 +1352,8 @@ kiblnd_map_tx_pool(kib_tx_pool_t *tpo)
         int             i;
 
         LASSERT (net != NULL);
+
+	dev = net->ibn_dev;
 
         /* pre-mapped messages are not bigger than 1 page */
         CLASSERT (IBLND_MSG_SIZE <= PAGE_SIZE);
