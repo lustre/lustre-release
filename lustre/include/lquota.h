@@ -41,6 +41,14 @@ union lquota_rec {
 	struct lquota_acct_rec	lqr_acct_rec;
 };
 
+/* Index features supported by the global index objects
+ * Only used for migration purpose and should be removed once on-disk migration
+ * is no longer needed */
+extern struct dt_index_features dt_quota_iusr_features;
+extern struct dt_index_features dt_quota_busr_features;
+extern struct dt_index_features dt_quota_igrp_features;
+extern struct dt_index_features dt_quota_bgrp_features;
+
 /* Name used in the configuration logs to identify the default metadata pool
  * (composed of all the MDTs, with pool ID 0) and the default data pool (all
  * the OSTs, with pool ID 0 too). */

@@ -280,6 +280,49 @@ int lquota_extract_fid(struct lu_fid *fid, int *pool_id, int *pool_type,
 	RETURN(0);
 }
 
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+/* Index features supported by the global index objects.
+ * We actually use one dt_index_features structure for each quota combination
+ * of quota type x [inode, block] to allow the ldiskfs OSD to recognize those
+ * objects and to handle the conversion from the old administrative quota file
+ * format */
+struct dt_index_features dt_quota_iusr_features;
+EXPORT_SYMBOL(dt_quota_iusr_features);
+struct dt_index_features dt_quota_busr_features;
+EXPORT_SYMBOL(dt_quota_busr_features);
+struct dt_index_features dt_quota_igrp_features;
+EXPORT_SYMBOL(dt_quota_igrp_features);
+struct dt_index_features dt_quota_bgrp_features;
+EXPORT_SYMBOL(dt_quota_bgrp_features);
+
+/**
+ * Helper routine returning the right index feature structure to be used
+ * depending on the FID of the global index.
+ */
+const struct dt_index_features *glb_idx_feature(struct lu_fid *fid)
+{
+	int	res_type, quota_type, rc;
+
+	rc = lquota_extract_fid(fid, NULL, &res_type, &quota_type);
+	if (rc)
+		return ERR_PTR(rc);
+
+	if (quota_type == USRQUOTA) {
+		if (res_type == LQUOTA_RES_MD)
+			return &dt_quota_iusr_features;
+		else
+			return &dt_quota_busr_features;
+	} else {
+		if (res_type == LQUOTA_RES_MD)
+			return &dt_quota_igrp_features;
+		else
+			return &dt_quota_bgrp_features;
+	}
+}
+#else
+#warning "remove old quota compatibility code"
+#endif
+
 static int __init init_lquota(void)
 {
 	int	rc;
@@ -292,6 +335,13 @@ static int __init init_lquota(void)
 	/* new quota initialization */
 	lquota_key_init_generic(&lquota_thread_key, NULL);
 	lu_context_key_register(&lquota_thread_key);
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
+	dt_quota_iusr_features = dt_quota_busr_features = dt_quota_glb_features;
+	dt_quota_igrp_features = dt_quota_bgrp_features = dt_quota_glb_features;
+#else
+#warning "remove old quota compatibility code"
+#endif
 
 	return 0;
 }

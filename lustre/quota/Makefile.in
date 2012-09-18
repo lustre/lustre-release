@@ -1,7 +1,8 @@
 MODULES := lquota
 
-quota-objs := quota_check.o quota_context.o quota_ctl.o quota_interface.o
-quota-objs += quota_master.o quota_adjust_qunit.o lproc_quota.o lquota_lib.o
+quota-objs := lquota_lib.o lquota_disk.o lproc_quota.o
+quota-objs += quota_check.o quota_context.o quota_ctl.o quota_interface.o
+quota-objs += quota_master.o quota_adjust_qunit.o
 
 qsd-objs := qsd_lib.o
 

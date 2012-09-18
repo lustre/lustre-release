@@ -50,8 +50,11 @@ static int lprocfs_qsd_rd_state(char *page, char **start, off_t off,
 
 	return snprintf(page, count,
 			"target name:    %s\n"
+			"pool ID:        %d\n"
+			"type:           %s\n"
 			"quota enabled:  none\n",
-			qsd->qsd_svname);
+			qsd->qsd_svname, qsd->qsd_pool_id,
+			qsd->qsd_is_md ? "md" : "dt");
 }
 
 static struct lprocfs_vars lprocfs_quota_qsd_vars[] = {
@@ -86,6 +89,20 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 		qqi->qqi_acct_obj = NULL;
 	}
 
+	/* release slv index */
+	if (qqi->qqi_slv_obj != NULL && !IS_ERR(qqi->qqi_slv_obj)) {
+		lu_object_put(env, &qqi->qqi_slv_obj->do_lu);
+		qqi->qqi_slv_obj = NULL;
+		qqi->qqi_slv_ver = 0;
+	}
+
+	/* release global index */
+	if (qqi->qqi_glb_obj != NULL && !IS_ERR(qqi->qqi_glb_obj)) {
+		lu_object_put(env, &qqi->qqi_glb_obj->do_lu);
+		qqi->qqi_glb_obj = NULL;
+		qqi->qqi_glb_ver = 0;
+	}
+
 	OBD_FREE_PTR(qqi);
 	EXIT;
 }
@@ -108,6 +125,7 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 {
 	struct qsd_qtype_info	*qqi;
 	int			 rc;
+	struct obd_uuid		 uuid;
 	ENTRY;
 
 	LASSERT(qsd->qsd_type_array[qtype] == NULL);
@@ -121,6 +139,8 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	/* set backpointer and other parameters */
 	qqi->qqi_qsd   = qsd;
 	qqi->qqi_qtype = qtype;
+	lquota_generate_fid(&qqi->qqi_fid, qsd->qsd_pool_id, QSD_RES_TYPE(qsd),
+			    qtype);
 
         /* open accounting object */
         LASSERT(qqi->qqi_acct_obj == NULL);
@@ -131,6 +151,34 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	 * non-OFD user (e.g. 2.3 MDT stack) */
 	if (IS_ERR(qqi->qqi_acct_obj))
 		qqi->qqi_acct_obj = NULL;
+
+	/* open global index copy */
+	LASSERT(qqi->qqi_glb_obj == NULL);
+	qqi->qqi_glb_obj = lquota_disk_glb_find_create(env, qsd->qsd_dev,
+						       qsd->qsd_root,
+						       &qqi->qqi_fid, true);
+	if (IS_ERR(qqi->qqi_glb_obj)) {
+		CERROR("%s: can't open global index copy "DFID" %ld\n",
+		       qsd->qsd_svname, PFID(&qqi->qqi_fid),
+		       PTR_ERR(qqi->qqi_glb_obj));
+		GOTO(out, rc = PTR_ERR(qqi->qqi_glb_obj));
+	}
+	qqi->qqi_glb_ver = dt_version_get(env, qqi->qqi_glb_obj);
+
+	/* open slave index copy */
+	LASSERT(qqi->qqi_slv_obj == NULL);
+	obd_str2uuid(&uuid, qsd->qsd_svname);
+	qqi->qqi_slv_obj = lquota_disk_slv_find_create(env, qsd->qsd_dev,
+						       qsd->qsd_root,
+						       &qqi->qqi_fid, &uuid,
+						       true);
+	if (IS_ERR(qqi->qqi_slv_obj)) {
+		CERROR("%s: can't open slave index copy "DFID" %ld\n",
+		       qsd->qsd_svname, PFID(&qqi->qqi_fid),
+		       PTR_ERR(qqi->qqi_slv_obj));
+		GOTO(out, rc = PTR_ERR(qqi->qqi_slv_obj));
+	}
+	qqi->qqi_slv_ver = dt_version_get(env, qqi->qqi_slv_obj);
 
 	/* register proc entry for accounting object */
 	rc = lprocfs_seq_create(qsd->qsd_proc,
@@ -163,6 +211,9 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	int	qtype;
 	ENTRY;
 
+	CDEBUG(D_QUOTA, "%s: initiating QSD shutdown\n", qsd->qsd_svname);
+	qsd->qsd_stopping = true;
+
 	/* remove qsd proc entry */
 	if (qsd->qsd_proc != NULL && !IS_ERR(qsd->qsd_proc)) {
 		lprocfs_remove(&qsd->qsd_proc);
@@ -172,6 +223,12 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	/* free per-quota type data */
 	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++)
 		qsd_qtype_fini(env, qsd, qtype);
+
+	/* release quota root directory */
+	if (qsd->qsd_root != NULL && !IS_ERR(qsd->qsd_root)) {
+		lu_object_put(env, &qsd->qsd_root->do_lu);
+		qsd->qsd_root = NULL;
+	}
 
 	/* release reference on dt_device */
 	if (qsd->qsd_dev != NULL) {
@@ -219,6 +276,24 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	lu_device_get(&dev->dd_lu_dev);
 	lu_ref_add(&dev->dd_lu_dev.ld_reference, "qsd", qsd);
 	qsd->qsd_dev = dev;
+
+	/* we only support pool ID 0 (default data or metadata pool) for the
+	 * time being. A different pool ID could be assigned to this target via
+	 * the configuration log in the future */
+	qsd->qsd_pool_id  = 0;
+
+	/* Record whether this qsd instance is managing quota enforcement for a
+	 * MDT (i.e. inode quota) or OST (block quota) */
+	qsd->qsd_is_md = lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev);
+
+	/* look-up on-disk directory for the quota slave */
+	qsd->qsd_root = lquota_disk_dir_find_create(env, dev, NULL, QSD_DIR);
+	if (IS_ERR(qsd->qsd_root)) {
+		rc = PTR_ERR(qsd->qsd_root);
+		CERROR("%s: failed to create quota slave root dir (%d)\n",
+		       svname, rc);
+		GOTO(out, rc);
+	}
 
 	/* register procfs directory */
 	qsd->qsd_proc = lprocfs_register(QSD_DIR, osd_proc,

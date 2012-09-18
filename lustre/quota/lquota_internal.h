@@ -65,6 +65,9 @@ struct lquota_thread_info {
 #define qti_acct_rec	qti_rec.lqr_acct_rec
 #define qti_slv_rec	qti_rec.lqr_slv_rec
 
+#define LQUOTA_BUMP_VER	0x1
+#define LQUOTA_SET_VER	0x2
+
 extern struct lu_context_key lquota_thread_key;
 
 /* extract lquota_threa_info context from environment */
@@ -74,6 +77,10 @@ struct lquota_thread_info *lquota_info(const struct lu_env *env)
 	struct lquota_thread_info	*info;
 
 	info = lu_context_key_get(&env->le_ctx, &lquota_thread_key);
+	if (info == NULL) {
+		lu_env_refill((struct lu_env *)env);
+		info = lu_context_key_get(&env->le_ctx, &lquota_thread_key);
+	}
 	LASSERT(info);
 	return info;
 }
@@ -83,6 +90,37 @@ struct dt_object *acct_obj_lookup(const struct lu_env *, struct dt_device *,
 				  int);
 void lquota_generate_fid(struct lu_fid *, int, int, int);
 int lquota_extract_fid(struct lu_fid *, int *, int *, int *);
+const struct dt_index_features *glb_idx_feature(struct lu_fid *);
+
+/* lquota_disk.c */
+struct dt_object *lquota_disk_dir_find_create(const struct lu_env *,
+					      struct dt_device *,
+					      struct dt_object *, const char *);
+struct dt_object *lquota_disk_glb_find_create(const struct lu_env *,
+					      struct dt_device *,
+					      struct dt_object *,
+					      struct lu_fid *, bool);
+struct dt_object *lquota_disk_slv_find_create(const struct lu_env *,
+					      struct dt_device *,
+					      struct dt_object *,
+					      struct lu_fid *,
+					      struct obd_uuid *, bool);
+typedef int (*lquota_disk_slv_cb_t) (const struct lu_env *, struct lu_fid *,
+				     char *, struct lu_fid *, void *);
+int lquota_disk_for_each_slv(const struct lu_env *, struct dt_object *,
+			     struct lu_fid *, lquota_disk_slv_cb_t, void *);
+struct dt_object *lquota_disk_slv_find(const struct lu_env *,
+				       struct dt_device *, struct dt_object *,
+				       struct lu_fid *, struct obd_uuid *);
+int lquota_disk_read(const struct lu_env *, struct dt_object *,
+		     union lquota_id *, struct dt_rec *);
+int lquota_disk_declare_write(const struct lu_env *, struct thandle *,
+			      struct dt_object *, union lquota_id *);
+int lquota_disk_write(const struct lu_env *, struct thandle *,
+		      struct dt_object *, union lquota_id *, struct dt_rec *,
+		      __u32, __u64 *);
+int lquota_disk_update_ver(const struct lu_env *, struct dt_device *,
+			   struct dt_object *, __u64);
 
 /* lproc_quota.c */
 extern struct file_operations lprocfs_quota_seq_fops;

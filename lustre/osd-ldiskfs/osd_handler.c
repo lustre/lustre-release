@@ -778,22 +778,6 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
                 lu_device_get(&d->dd_lu_dev);
                 oh->ot_dev_link = lu_ref_add(&d->dd_lu_dev.ld_reference,
                                              "osd-tx", th);
-
-                /*
-                 * XXX: current rule is that we first start tx,
-                 *      then lock object(s), but we can't use
-                 *      this rule for data (due to locking specifics
-                 *      in ldiskfs). also in long-term we'd like to
-                 *      use usually-used (locks;tx) ordering. so,
-                 *      UGLY thing is that we'll use one ordering for
-                 *      data (ofd) and reverse ordering for metadata
-                 *      (mdd). then at some point we'll fix the latter
-                 */
-		if (dev->od_is_md) {
-                        LASSERT(oti->oti_r_locks == 0);
-                        LASSERT(oti->oti_w_locks == 0);
-                }
-
                 oti->oti_txns++;
                 rc = 0;
         } else {
@@ -836,20 +820,6 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
 
                 LASSERT(oti->oti_txns == 1);
                 oti->oti_txns--;
-                /*
-                 * XXX: current rule is that we first start tx,
-                 *      then lock object(s), but we can't use
-                 *      this rule for data (due to locking specifics
-                 *      in ldiskfs). also in long-term we'd like to
-                 *      use usually-used (locks;tx) ordering. so,
-                 *      UGLY thing is that we'll use one ordering for
-                 *      data (ofd) and reverse ordering for metadata
-                 *      (mdd). then at some point we'll fix the latter
-                 */
-		if (osd_dt_dev(th->th_dev)->od_is_md) {
-                        LASSERT(oti->oti_r_locks == 0);
-                        LASSERT(oti->oti_w_locks == 0);
-                }
                 rc = dt_txn_hook_stop(env, th);
                 if (rc != 0)
                         CERROR("Failure in transaction hook: %d\n", rc);
@@ -4741,8 +4711,8 @@ static int osd_process_config(const struct lu_env *env,
                 break;
         case LCFG_CLEANUP:
 		lu_dev_del_linkage(d->ld_site, d);
-		err = 0;
-                break;
+		err = osd_shutdown(env, o);
+		break;
         default:
                 err = -ENOSYS;
         }
@@ -4812,17 +4782,8 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
                        struct lu_device *dev)
 {
 	struct osd_device *osd = osd_dev(dev);
-	int		   result;
+	int		   result = 0;
 	ENTRY;
-
-	/* 2. setup quota slave instance */
-	osd->od_quota_slave = qsd_init(env, osd->od_svname, &osd->od_dt_dev,
-				       osd->od_proc_entry);
-	if (IS_ERR(osd->od_quota_slave)) {
-		result = PTR_ERR(osd->od_quota_slave);
-		osd->od_quota_slave = NULL;
-		RETURN(result);
-	}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 55, 0)
 	/* Unfortunately, the current MDD implementation relies on some specific
@@ -4841,12 +4802,23 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 #warning "all is_md checks must be removed from osd-ldiskfs"
 #endif
 
-        if (!osd->od_is_md)
-                RETURN(0);
+        if (osd->od_is_md) {
+		/* 1. setup local objects */
+		result = llo_local_objects_setup(env, lu2md_dev(pdev),
+						 lu2dt_dev(dev));
+		if (result)
+			RETURN(result);
+	}
 
-        /* 3. setup local objects */
-        result = llo_local_objects_setup(env, lu2md_dev(pdev), lu2dt_dev(dev));
-        RETURN(result);
+	/* 2. setup quota slave instance */
+	osd->od_quota_slave = qsd_init(env, osd->od_svname, &osd->od_dt_dev,
+				       osd->od_proc_entry);
+	if (IS_ERR(osd->od_quota_slave)) {
+		result = PTR_ERR(osd->od_quota_slave);
+		osd->od_quota_slave = NULL;
+	}
+
+	RETURN(result);
 }
 
 static const struct lu_object_operations osd_lu_obj_ops = {

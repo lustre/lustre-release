@@ -843,6 +843,19 @@ struct dt_object *local_file_find_or_create_with_fid(const struct lu_env *env,
 						     struct dt_object *parent,
 						     const char *name,
 						     __u32 mode);
+struct dt_object *
+local_index_find_or_create(const struct lu_env *env,
+			   struct local_oid_storage *los,
+			   struct dt_object *parent,
+			   const char *name, __u32 mode,
+			   const struct dt_index_features *ft);
+struct dt_object *
+local_index_find_or_create_with_fid(const struct lu_env *env,
+				    struct dt_device *dt,
+				    const struct lu_fid *fid,
+				    struct dt_object *parent,
+				    const char *name, __u32 mode,
+				    const struct dt_index_features *ft);
 
 int dt_lookup_dir(const struct lu_env *env, struct dt_object *dir,
 		  const char *name, struct lu_fid *fid);

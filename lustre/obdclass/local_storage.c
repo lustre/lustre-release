@@ -303,7 +303,8 @@ struct dt_object *__local_file_create(const struct lu_env *env,
 				      struct local_oid_storage *los,
 				      struct ls_device *ls,
 				      struct dt_object *parent,
-				      const char *name, __u32 mode)
+				      const char *name, struct lu_attr *attr,
+				      struct dt_object_format *dof)
 {
 	struct dt_thread_info	*dti = dt_info(env);
 	struct dt_object	*dto;
@@ -318,17 +319,11 @@ struct dt_object *__local_file_create(const struct lu_env *env,
 	if (dt_object_exists(dto))
 		GOTO(out, rc = -EEXIST);
 
-	/* create the object */
-	dti->dti_attr.la_valid = LA_MODE | LA_TYPE;
-	dti->dti_attr.la_mode = mode;
-	dti->dti_dof.dof_type = dt_mode_to_dft(mode & S_IFMT);
-
 	th = dt_trans_create(env, ls->ls_osd);
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
-	rc = local_object_declare_create(env, los, dto, &dti->dti_attr,
-					 &dti->dti_dof, th);
+	rc = local_object_declare_create(env, los, dto, attr, dof, th);
 	if (rc)
 		GOTO(trans_stop, rc);
 
@@ -351,8 +346,7 @@ struct dt_object *__local_file_create(const struct lu_env *env,
 
 	CDEBUG(D_OTHER, "create new object "DFID"\n",
 	       PFID(lu_object_fid(&dto->do_lu)));
-	rc = local_object_create(env, los, dto, &dti->dti_attr,
-				 &dti->dti_dof, th);
+	rc = local_object_create(env, los, dto, attr, dof, th);
 	if (rc)
 		GOTO(unlock, rc);
 	LASSERT(dt_object_exists(dto));
@@ -425,12 +419,18 @@ struct dt_object *local_file_find_or_create(const struct lu_env *env,
 		dto = ERR_PTR(rc);
 	else {
 		rc = local_object_fid_generate(env, los, &dti->dti_fid);
-		if (rc < 0)
+		if (rc < 0) {
 			dto = ERR_PTR(rc);
-		else
+		} else {
+			/* create the object */
+			dti->dti_attr.la_valid	= LA_MODE;
+			dti->dti_attr.la_mode	= mode;
+			dti->dti_dof.dof_type	= dt_mode_to_dft(mode & S_IFMT);
 			dto = __local_file_create(env, &dti->dti_fid, los,
 						  dt2ls_dev(los->los_dev),
-						  parent, name, mode);
+						  parent, name, &dti->dti_attr,
+						  &dti->dti_dof);
+		}
 	}
 	return dto;
 }
@@ -462,16 +462,124 @@ struct dt_object *local_file_find_or_create_with_fid(const struct lu_env *env,
 		struct ls_device *ls;
 
 		ls = ls_device_get(env, dt);
-		if (IS_ERR(ls))
+		if (IS_ERR(ls)) {
 			dto = ERR_PTR(PTR_ERR(ls));
-		else
+		} else {
+			/* create the object */
+			dti->dti_attr.la_valid	= LA_MODE;
+			dti->dti_attr.la_mode	= mode;
+			dti->dti_dof.dof_type	= dt_mode_to_dft(mode & S_IFMT);
 			dto = __local_file_create(env, fid, NULL, ls, parent,
-						  name, mode);
-		ls_device_put(env, ls);
+						  name, &dti->dti_attr,
+						  &dti->dti_dof);
+			/* ls_device_put() will finalize the ls device, we
+			 * have to open the object in other device stack */
+			if (!IS_ERR(dto)) {
+				dti->dti_fid = dto->do_lu.lo_header->loh_fid;
+				lu_object_put_nocache(env, &dto->do_lu);
+				dto = dt_locate(env, dt, &dti->dti_fid);
+			}
+			ls_device_put(env, ls);
+		}
 	}
 	return dto;
 }
 EXPORT_SYMBOL(local_file_find_or_create_with_fid);
+
+/*
+ * Look up and create (if it does not exist) a local named index file in parent
+ * directory.
+ */
+struct dt_object *local_index_find_or_create(const struct lu_env *env,
+					     struct local_oid_storage *los,
+					     struct dt_object *parent,
+					     const char *name, __u32 mode,
+					     const struct dt_index_features *ft)
+{
+	struct dt_thread_info	*dti = dt_info(env);
+	struct dt_object	*dto;
+	int			 rc;
+
+	LASSERT(parent);
+
+	rc = dt_lookup_dir(env, parent, name, &dti->dti_fid);
+	if (rc == 0) {
+		/* name is found, get the object */
+		dto = ls_locate(env, dt2ls_dev(los->los_dev), &dti->dti_fid);
+	} else if (rc != -ENOENT) {
+		dto = ERR_PTR(rc);
+	} else {
+		rc = local_object_fid_generate(env, los, &dti->dti_fid);
+		if (rc < 0) {
+			dto = ERR_PTR(rc);
+		} else {
+			/* create the object */
+			dti->dti_attr.la_valid		= LA_MODE;
+			dti->dti_attr.la_mode		= mode;
+			dti->dti_dof.dof_type		= DFT_INDEX;
+			dti->dti_dof.u.dof_idx.di_feat	= ft;
+			dto = __local_file_create(env, &dti->dti_fid, los,
+						  dt2ls_dev(los->los_dev),
+						  parent, name, &dti->dti_attr,
+						  &dti->dti_dof);
+		}
+	}
+	return dto;
+
+}
+EXPORT_SYMBOL(local_index_find_or_create);
+
+struct dt_object *
+local_index_find_or_create_with_fid(const struct lu_env *env,
+				    struct dt_device *dt,
+				    const struct lu_fid *fid,
+				    struct dt_object *parent,
+				    const char *name, __u32 mode,
+				    const struct dt_index_features *ft)
+{
+	struct dt_thread_info	*dti = dt_info(env);
+	struct dt_object	*dto;
+	int			 rc;
+
+	LASSERT(parent);
+
+	rc = dt_lookup_dir(env, parent, name, &dti->dti_fid);
+	if (rc == 0) {
+		/* name is found, get the object */
+		if (!lu_fid_eq(fid, &dti->dti_fid))
+			dto = ERR_PTR(-EINVAL);
+		else
+			dto = dt_locate(env, dt, fid);
+	} else if (rc != -ENOENT) {
+		dto = ERR_PTR(rc);
+	} else {
+		struct ls_device *ls;
+
+		ls = ls_device_get(env, dt);
+		if (IS_ERR(ls)) {
+			dto = ERR_PTR(PTR_ERR(ls));
+		} else {
+			/* create the object */
+			dti->dti_attr.la_valid		= LA_MODE;
+			dti->dti_attr.la_mode		= mode;
+			dti->dti_dof.dof_type		= DFT_INDEX;
+			dti->dti_dof.u.dof_idx.di_feat  = ft;
+			dto = __local_file_create(env, fid, NULL, ls, parent,
+						  name, &dti->dti_attr,
+						  &dti->dti_dof);
+			/* ls_device_put() will finalize the ls device, we
+			 * have to open the object in other device stack */
+			if (!IS_ERR(dto)) {
+				dti->dti_fid = dto->do_lu.lo_header->loh_fid;
+				lu_object_put_nocache(env, &dto->do_lu);
+				dto = dt_locate(env, dt, &dti->dti_fid);
+			}
+			ls_device_put(env, ls);
+		}
+	}
+	return dto;
+}
+EXPORT_SYMBOL(local_index_find_or_create_with_fid);
 
 static struct local_oid_storage *dt_los_find(struct ls_device *ls, __u64 seq)
 {
@@ -682,4 +790,3 @@ void local_oid_storage_fini(const struct lu_env *env,
 	ls_device_put(env, ls);
 }
 EXPORT_SYMBOL(local_oid_storage_fini);
-

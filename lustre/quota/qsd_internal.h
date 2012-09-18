@@ -44,12 +44,18 @@ struct qsd_instance {
 	/* name of service which created this qsd instance */
 	char			 qsd_svname[MAX_OBD_NAME];
 
+	/* pool ID is always 0 for now */
+	int			 qsd_pool_id;
+
 	/* dt_device associated with this qsd instance */
 	struct dt_device	*qsd_dev;
 
 	/* procfs directory where information related to the underlying slaves
 	 * are exported */
 	cfs_proc_dir_entry_t	*qsd_proc;
+
+	/* on-disk directory where to store index files for this qsd instance */
+	struct dt_object	*qsd_root;
 
 	/* We create 2 quota slave instances:
 	 * - one for user quota
@@ -58,6 +64,9 @@ struct qsd_instance {
 	 * This will have to be revisited if new quota types are added in the
 	 * future. For the time being, we can just use an array. */
 	struct qsd_qtype_info	*qsd_type_array[MAXQUOTAS];
+
+	unsigned long		 qsd_is_md:1,    /* managing quota for mdt */
+				 qsd_stopping:1; /* qsd_instance is stopping */
 };
 
 /*
@@ -70,11 +79,22 @@ struct qsd_qtype_info {
 	 * immutable after creation. */
 	int			 qqi_qtype;
 
+	/* Global index FID to use for this quota type */
+	struct lu_fid		 qqi_fid;
+
 	/* back pointer to qsd device
 	 * immutable after creation. */
 	struct qsd_instance	*qqi_qsd;
 
 	/* Local index files storing quota settings for this quota type */
 	struct dt_object	*qqi_acct_obj; /* accounting object */
+	struct dt_object	*qqi_slv_obj;  /* slave index copy */
+	struct dt_object	*qqi_glb_obj;  /* global index copy */
+
+	/* Current object versions */
+	__u64			 qqi_slv_ver; /* slave index version */
+	__u64			 qqi_glb_ver; /* global index version */
 };
+
+#define QSD_RES_TYPE(qsd) ((qsd)->qsd_is_md ? LQUOTA_RES_MD : LQUOTA_RES_DT)
 #endif /* _QSD_INTERNAL_H */

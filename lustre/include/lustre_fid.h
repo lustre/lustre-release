@@ -130,6 +130,13 @@ static inline void lu_local_obj_fid(struct lu_fid *fid, __u32 oid)
         fid->f_ver = 0;
 }
 
+static inline void lu_local_name_obj_fid(struct lu_fid *fid, __u32 oid)
+{
+        fid->f_seq = FID_SEQ_LOCAL_NAME;
+        fid->f_oid = oid;
+        fid->f_ver = 0;
+}
+
 static inline int fid_is_otable_it(const struct lu_fid *fid)
 {
 	return unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
