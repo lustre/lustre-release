@@ -3213,6 +3213,9 @@ generate_db() {
     local ostidx
     local dev
 
+	[[ $(lustre_version_code $SINGLEMDS) -ne $(version_code 2.2.0) ]] ||
+		{ skip "Lustre 2.2.0 lacks the patch for LU-1255"; exit 0; }
+
     check_shared_dir $SHARED_DIRECTORY ||
         error "$SHARED_DIRECTORY isn't a shared directory"
 
