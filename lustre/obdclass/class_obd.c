@@ -152,7 +152,7 @@ int lustre_get_jobid(char *jobid)
 				printed = true;
 			}
 		} else {
-			CDEBUG((rc == -ENOENT && rc == -EINVAL &&
+			CDEBUG((rc == -ENOENT || rc == -EINVAL ||
 				rc == -EDEADLK) ? D_INFO : D_ERROR,
 			       "Get jobid for (%s) failed: rc = %d\n",
 			       obd_jobid_var, rc);
