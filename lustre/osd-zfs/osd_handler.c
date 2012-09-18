@@ -28,7 +28,7 @@
  * Use is subject to license terms.
  */
 /*
- * Copyright (c) 2011, 2012 Whamcloud, Inc.
+ * Copyright (c) 2012, Intel Corporation.
  * Use is subject to license terms.
  *
  */
