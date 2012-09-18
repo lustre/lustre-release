@@ -2597,7 +2597,10 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd)
         int rc = 0;
         ENTRY;
 
-#ifdef HAVE_GENERIC_PERMISSION_4ARGS
+#ifdef MAY_NOT_BLOCK
+	if (mask & MAY_NOT_BLOCK)
+		return -ECHILD;
+#elif defined(HAVE_GENERIC_PERMISSION_4ARGS)
 	if (flags & IPERM_FLAG_RCU)
 		return -ECHILD;
 #endif
