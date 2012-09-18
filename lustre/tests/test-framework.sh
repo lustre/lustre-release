@@ -29,6 +29,8 @@ LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/functions.sh
 . $LUSTRE/tests/yaml.sh
 
+export LD_LIBRARY_PATH=${LUSTRE}/utils:${LD_LIBRARY_PATH}
+
 LUSTRE_TESTS_CFG_DIR=${LUSTRE_TESTS_CFG_DIR:-${LUSTRE}/tests/cfg}
 
 EXCEPT_LIST_FILE=${EXCEPT_LIST_FILE:-${LUSTRE_TESTS_CFG_DIR}/tests-to-skip.sh}
