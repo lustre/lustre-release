@@ -27,6 +27,8 @@
  * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
  * Use is subject to license terms.
  *
+ * Copyright (c) 2012, Intel Corporation.
+ *
  * Copyright (c) 2012, Whamcloud Inc.
  */
 /*

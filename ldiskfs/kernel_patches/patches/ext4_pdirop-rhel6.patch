@@ -4,7 +4,7 @@
 +/*
 + * include/linux/htree_lock.h
 + *
-+ * Copyright (c) 2011, Whamcloud, Inc.
++ * Copyright (c) 2011, 2012, Intel Corporation.
 + *
 + * Author: Liang Zhen <liang@whamcloud.com>
 + */
@@ -194,7 +194,7 @@
 +/*
 + * fs/ext4/htree_lock.c
 + *
-+ * Copyright (c) 2011, Whamcloud, Inc.
++ * Copyright (c) 2011, 2012, Intel Corporation.
 + *
 + * Author: Liang Zhen <liang@whamcloud.com>
 + */
