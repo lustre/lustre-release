@@ -1337,5 +1337,8 @@ struct lu_kmem_descr {
 int  lu_kmem_init(struct lu_kmem_descr *caches);
 void lu_kmem_fini(struct lu_kmem_descr *caches);
 
+void lu_object_assign_fid(const struct lu_env *env, struct lu_object *o,
+			  const struct lu_fid *fid);
+
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */

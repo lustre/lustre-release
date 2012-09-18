@@ -242,4 +242,21 @@ void osp_statfs_need_now(struct osp_device *d);
 /* lproc_osp.c */
 void lprocfs_osp_init_vars(struct lprocfs_static_vars *lvars);
 
+/* osp_sync.c */
+/* functions below will be replaced by full versions with osp_sync.c code */
+static inline
+int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
+			 llog_op_type type, struct thandle *th)
+{
+	return 0;
+}
+
+static inline
+int osp_sync_add(const struct lu_env *env, struct osp_object *o,
+		 llog_op_type type, struct thandle *th,
+		 const struct lu_attr *attr)
+{
+	return 0;
+}
+
 #endif

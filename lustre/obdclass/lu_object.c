@@ -2060,3 +2060,34 @@ void lu_kmem_fini(struct lu_kmem_descr *caches)
         }
 }
 EXPORT_SYMBOL(lu_kmem_fini);
+
+/**
+ * Temporary solution to be able to assign fid in ->do_create()
+ * till we have fully-functional OST fids
+ */
+void lu_object_assign_fid(const struct lu_env *env, struct lu_object *o,
+			  const struct lu_fid *fid)
+{
+	struct lu_site		*s = o->lo_dev->ld_site;
+	struct lu_fid		*old = &o->lo_header->loh_fid;
+	struct lu_site_bkt_data	*bkt;
+	struct lu_object	*shadow;
+	cfs_waitlink_t		 waiter;
+	cfs_hash_t		*hs;
+	cfs_hash_bd_t		 bd;
+	__u64			 version = 0;
+
+	LASSERT(fid_is_zero(old));
+
+	hs = s->ls_obj_hash;
+	cfs_hash_bd_get_and_lock(hs, (void *)fid, &bd, 1);
+	shadow = htable_lookup(s, &bd, fid, &waiter, &version);
+	/* supposed to be unique */
+	LASSERT(shadow == NULL);
+	*old = *fid;
+	bkt = cfs_hash_bd_extra_get(hs, &bd);
+	cfs_hash_bd_add_locked(hs, &bd, &o->lo_header->loh_hash);
+	bkt->lsb_busy++;
+	cfs_hash_bd_unlock(hs, &bd, 1);
+}
+EXPORT_SYMBOL(lu_object_assign_fid);
