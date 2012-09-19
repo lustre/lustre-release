@@ -473,6 +473,7 @@ load_modules_local() {
 		load_module mdt/mdt
 		load_module cmm/cmm
 		load_module ost/ost
+		load_module lod/lod
 		if [ "$USE_OFD" == yes ]; then
 			load_module ofd/ofd
 		else

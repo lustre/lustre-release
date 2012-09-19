@@ -291,6 +291,14 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
                 cli->cl_flvr_mgc.sf_rpc = SPTLRPC_FLVR_INVALID;
                 ns_type = LDLM_NS_TYPE_MGC;
 
+	} else if (!strcmp(name, LUSTRE_OSP_NAME)) {
+		rq_portal = OST_REQUEST_PORTAL;
+		rp_portal = OSC_REPLY_PORTAL;
+		connect_op = OST_CONNECT;
+		cli->cl_sp_me = LUSTRE_SP_CLI;
+		cli->cl_sp_to = LUSTRE_SP_OST;
+		ns_type = LDLM_NS_TYPE_OSC;
+
         } else {
                 CERROR("unknown client OBD type \"%s\", can't setup\n",
                        name);

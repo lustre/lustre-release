@@ -62,6 +62,9 @@ static struct lu_kmem_descr lod_caches[] = {
 	}
 };
 
+static struct lu_device *lod_device_fini(const struct lu_env *env,
+					 struct lu_device *d);
+
 static int lod_process_config(const struct lu_env *env,
 			      struct lu_device *dev,
 			      struct lustre_cfg *lcfg)
@@ -95,6 +98,8 @@ static int lod_process_config(const struct lu_env *env,
 		struct lprocfs_static_vars  v = { 0 };
 		struct obd_device	  *obd = lod2obd(lod);
 
+		lprocfs_lod_init_vars(&v);
+
 		rc = class_process_proc_param(PARAM_LOV, v.obd_vars, lcfg, obd);
 		if (rc > 0)
 			rc = 0;
@@ -126,6 +131,10 @@ static int lod_process_config(const struct lu_env *env,
 		if (rc)
 			CERROR("%s: can't process %u: %d\n",
 			       lod2obd(lod)->obd_name, lcfg->lcfg_command, rc);
+
+		rc = obd_disconnect(lod->lod_child_exp);
+		if (rc)
+			CERROR("error in disconnect from storage: %d\n", rc);
 		break;
 
 	default:
@@ -168,9 +177,23 @@ static int lod_recovery_complete(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
+		       struct lu_device *cdev)
+{
+	struct lod_device   *lod = lu2lod_dev(cdev);
+	struct lu_device    *next = &lod->lod_child->dd_lu_dev;
+	int		     rc;
+	ENTRY;
+
+	rc = next->ld_ops->ldo_prepare(env, pdev, next);
+
+	RETURN(rc);
+}
+
 const struct lu_device_operations lod_lu_ops = {
 	.ldo_process_config	= lod_process_config,
 	.ldo_recovery_complete	= lod_recovery_complete,
+	.ldo_prepare		= lod_prepare,
 };
 
 static int lod_root_get(const struct lu_env *env,
@@ -366,6 +389,8 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 		RETURN(-ENODEV);
 	}
 
+	obd->obd_lu_dev = &lod->lod_dt_dev.dd_lu_dev;
+	lod->lod_dt_dev.dd_lu_dev.ld_obd = obd;
 	lod->lod_dt_dev.dd_lu_dev.ld_ops = &lod_lu_ops;
 	lod->lod_dt_dev.dd_ops = &lod_dt_ops;
 
@@ -446,15 +471,10 @@ static struct lu_device *lod_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct lod_device *lod = lu2lod_dev(d);
-	int		   rc;
 	ENTRY;
 
 	if (lod->lod_symlink)
 		lprocfs_remove(&lod->lod_symlink);
-
-	rc = obd_disconnect(lod->lod_child_exp);
-	if (rc)
-		CERROR("error in disconnect from storage: %d\n", rc);
 
 	RETURN(NULL);
 }
@@ -575,7 +595,7 @@ static int lod_obd_health_check(const struct lu_env *env,
 
 	LASSERT(d);
 	lod_getref(d);
-	cfs_foreach_bit(d->lod_ost_bitmap, i) {
+	lod_foreach_ost(d, i) {
 		ost = OST_TGT(d, i);
 		LASSERT(ost && ost->ltd_ost);
 		rc = obd_health_check(env, ost->ltd_exp->exp_obd);
@@ -603,6 +623,8 @@ static int __init lod_mod_init(void)
 	rc = lu_kmem_init(lod_caches);
 	if (rc)
 		return rc;
+
+	lprocfs_lod_init_vars(&lvars);
 
 	rc = class_register_type(&lod_obd_device_ops, NULL, lvars.module_vars,
 				 LUSTRE_LOD_NAME, &lod_device_type);

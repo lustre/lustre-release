@@ -1,5 +1,5 @@
 MODULES := lod
-lod-objs := lod_dev.o lod_lov.o
+lod-objs := lod_dev.o lod_lov.o lproc_lod.o
 
 EXTRA_DIST = $(lod-objs:.o=.c) lod_internal.h
 

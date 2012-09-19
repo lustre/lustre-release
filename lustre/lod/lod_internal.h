@@ -243,6 +243,14 @@ static inline struct lod_thread_info *lod_env_info(const struct lu_env *env)
 void lod_getref(struct lod_device *lod);
 void lod_putref(struct lod_device *lod);
 
+/* lproc_lod.c */
+extern struct file_operations lod_proc_target_fops;
+void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars);
+
+/* XXX: will be replaced as the landing goes */
+#define lod_fix_desc_stripe_size(a)
+#define lod_fix_desc_stripe_count(a)
+#define lod_fix_desc_pattern(a)
 
 #endif
 
