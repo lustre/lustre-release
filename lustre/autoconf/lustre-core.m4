@@ -2497,6 +2497,8 @@ lustre/utils/Makefile
 lustre/utils/gss/Makefile
 lustre/osp/Makefile
 lustre/osp/autoMakefile
+lustre/lod/Makefile
+lustre/lod/autoMakefile
 lustre/obdclass/darwin/Makefile
 ])
 ])

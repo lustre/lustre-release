@@ -1375,6 +1375,18 @@ static inline int dt_commit_async(const struct lu_env *env,
         return dev->dd_ops->dt_commit_async(env, dev);
 }
 
+static inline int dt_init_capa_ctxt(const struct lu_env *env,
+				    struct dt_device *dev,
+				    int mode, unsigned long timeout,
+				    __u32 alg, struct lustre_capa_key *keys)
+{
+	LASSERT(dev);
+	LASSERT(dev->dd_ops);
+	LASSERT(dev->dd_ops->dt_init_capa_ctxt);
+	return dev->dd_ops->dt_init_capa_ctxt(env, dev, mode,
+					      timeout, alg, keys);
+}
+
 static inline int dt_lookup(const struct lu_env *env,
                             struct dt_object *dt,
                             struct dt_rec *rec,
