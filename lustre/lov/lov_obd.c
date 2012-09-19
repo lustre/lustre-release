@@ -2035,6 +2035,7 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 struct obd_device *osc_obd;
                 struct obd_statfs stat_buf = {0};
                 __u32 index;
+		__u32 flags;
 
                 memcpy(&index, data->ioc_inlbuf2, sizeof(__u32));
                 if ((index >= count))
@@ -2056,10 +2057,11 @@ static int lov_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                          (int) sizeof(struct obd_uuid))))
                         RETURN(-EFAULT);
 
+		flags = uarg ? *(__u32*)uarg : 0;
                 /* got statfs data */
                 rc = obd_statfs(NULL, lov->lov_tgts[index]->ltd_exp, &stat_buf,
                                 cfs_time_shift_64(-OBD_STATFS_CACHE_SECONDS),
-                                0);
+                                flags);
                 if (rc)
                         RETURN(rc);
                 if (cfs_copy_to_user(data->ioc_pbuf1, &stat_buf,

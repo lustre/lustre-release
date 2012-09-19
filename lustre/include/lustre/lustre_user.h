@@ -157,6 +157,7 @@ struct obd_statfs {
 
 #define LL_STATFS_LMV           1
 #define LL_STATFS_LOV           2
+#define LL_STATFS_NODELAY	4
 
 #define IOC_MDC_TYPE            'i'
 #define IOC_MDC_LOOKUP          _IOWR(IOC_MDC_TYPE, 20, struct obd_device *)

@@ -2971,6 +2971,18 @@ test_63() {
 }
 run_test 63 "Verify each page can at least hold 3 ldisk inodes"
 
+test_64() {
+	start_mds
+	start_ost
+	start_ost2 || error "Unable to start second ost"
+	mount_client $MOUNT || error "Unable to mount client"
+	stop_ost2 || error "Unable to stop second ost"
+	echo "$LFS df"
+	$LFS df --lazy || error "lfs df failed"
+	cleanup || return $?
+}
+run_test 64 "check lfs df --lazy "
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi

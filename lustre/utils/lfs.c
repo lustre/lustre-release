@@ -168,7 +168,7 @@ command_t cmdlist[] = {
         {"df", lfs_df, 0,
          "report filesystem disk space usage or inodes usage"
          "of each MDS and all OSDs or a batch belonging to a specific pool .\n"
-         "Usage: df [-i] [-h] [--pool|-p <fsname>[.<pool>] [path]"},
+         "Usage: df [-i] [-h] [--lazy|-l] [--pool|-p <fsname>[.<pool>] [path]"},
         {"getname", lfs_getname, 0, "list instances and specified mount points "
          "[for specified path only]\n"
          "Usage: getname [-h]|[path ...] "},
@@ -1214,7 +1214,8 @@ struct ll_stat_type {
         char *st_name;
 };
 
-static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
+static int mntdf(char *mntdir, char *fsname, char *pool, int ishow,
+		int cooked, int lazy)
 {
         struct obd_statfs stat_buf, sum = { .os_bsize = 1 };
         struct obd_uuid uuid_buf;
@@ -1224,6 +1225,7 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
                                         { 0, NULL } };
         struct ll_stat_type *tp;
         __u32 index;
+        __u32 type;
         int rc;
 
         if (pool) {
@@ -1251,7 +1253,8 @@ static int mntdf(char *mntdir, char *fsname, char *pool, int ishow, int cooked)
                 for (index = 0; ; index++) {
                         memset(&stat_buf, 0, sizeof(struct obd_statfs));
                         memset(&uuid_buf, 0, sizeof(struct obd_uuid));
-                        rc = llapi_obd_statfs(mntdir, tp->st_op, index,
+			type = lazy ? tp->st_op | LL_STATFS_NODELAY : tp->st_op;
+			rc = llapi_obd_statfs(mntdir, type, index,
                                               &stat_buf, &uuid_buf);
                         if (rc == -ENODEV)
                                 break;
@@ -1300,15 +1303,17 @@ static int lfs_df(int argc, char **argv)
 {
         char mntdir[PATH_MAX] = {'\0'}, path[PATH_MAX] = {'\0'};
         int ishow = 0, cooked = 0;
+	int lazy = 0;
         int c, rc = 0, index = 0;
         char fsname[PATH_MAX] = "", *pool_name = NULL;
         struct option long_opts[] = {
                 {"pool", required_argument, 0, 'p'},
+                {"lazy", 0, 0, 'l'},
                 {0, 0, 0, 0}
         };
 
         optind = 0;
-        while ((c = getopt_long(argc, argv, "hip:", long_opts, NULL)) != -1) {
+	while ((c = getopt_long(argc, argv, "hilp:", long_opts, NULL)) != -1) {
                 switch (c) {
                 case 'i':
                         ishow = 1;
@@ -1316,6 +1321,8 @@ static int lfs_df(int argc, char **argv)
                 case 'h':
                         cooked = 1;
                         break;
+                case 'l':
+                        lazy = 1;
                 case 'p':
                         pool_name = optarg;
                         break;
@@ -1335,7 +1342,7 @@ static int lfs_df(int argc, char **argv)
                 if (mntdir[0] == '\0')
                         continue;
 
-                rc = mntdf(mntdir, fsname, pool_name, ishow, cooked);
+		rc = mntdf(mntdir, fsname, pool_name, ishow, cooked, lazy);
                 if (rc || path[0] != '\0')
                         break;
                 fsname[0] = '\0'; /* avoid matching in next loop */

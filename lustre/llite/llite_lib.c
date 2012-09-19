@@ -2182,6 +2182,7 @@ int ll_obd_statfs(struct inode *inode, void *arg)
         char *buf = NULL;
         struct obd_ioctl_data *data = NULL;
         __u32 type;
+	__u32 flags;
         int len = 0, rc;
 
         if (!inode || !(sbi = ll_i2sbi(inode)))
@@ -2203,14 +2204,15 @@ int ll_obd_statfs(struct inode *inode, void *arg)
                 GOTO(out_statfs, rc = -EINVAL);
 
         memcpy(&type, data->ioc_inlbuf1, sizeof(__u32));
-        if (type == LL_STATFS_LMV)
+	if (type & LL_STATFS_LMV)
                 exp = sbi->ll_md_exp;
-        else if (type == LL_STATFS_LOV)
+	else if (type & LL_STATFS_LOV)
                 exp = sbi->ll_dt_exp;
         else
                 GOTO(out_statfs, rc = -ENODEV);
 
-        rc = obd_iocontrol(IOC_OBD_STATFS, exp, len, buf, NULL);
+	flags = (type & LL_STATFS_NODELAY) ? OBD_STATFS_NODELAY : 0;
+	rc = obd_iocontrol(IOC_OBD_STATFS, exp, len, buf, &flags);
         if (rc)
                 GOTO(out_statfs, rc);
 out_statfs:
