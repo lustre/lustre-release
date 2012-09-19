@@ -713,6 +713,36 @@ static int vvp_io_fault_start(const struct lu_env *env,
                 GOTO(out, result = +1);
         }
 
+
+	if (fio->ft_mkwrite ) {
+		pgoff_t last_index;
+		/*
+		 * Capture the size while holding the lli_trunc_sem from above
+		 * we want to make sure that we complete the mkwrite action
+		 * while holding this lock. We need to make sure that we are
+		 * not past the end of the file.
+		 */
+		last_index = cl_index(obj, size - 1);
+		if (last_index < fio->ft_index) {
+			CDEBUG(D_PAGE,
+				"llite: mkwrite and truncate race happened: "
+				"%p: 0x%lx 0x%lx\n",
+				vmpage->mapping,fio->ft_index,last_index);
+			/*
+			 * We need to return if we are
+			 * passed the end of the file. This will propagate
+			 * up the call stack to ll_page_mkwrite where
+			 * we will return VM_FAULT_NOPAGE. Any non-negative
+			 * value returned here will be silently
+			 * converted to 0. If the vmpage->mapping is null
+			 * the error code would be converted back to ENODATA
+			 * in ll_page_mkwrite0. Thus we return -ENODATA
+			 * to handle both cases
+			 */
+			GOTO(out, result = -ENODATA);
+		}
+	}
+
         page = cl_page_find(env, obj, fio->ft_index, vmpage, CPT_CACHEABLE);
         if (IS_ERR(page))
                 GOTO(out, result = PTR_ERR(page));
@@ -750,11 +780,17 @@ static int vvp_io_fault_start(const struct lu_env *env,
 				GOTO(out, result);
 			} else
 				cl_page_disown(env, io, page);
-                }
-        }
+		}
+	}
 
-        last = cl_index(obj, size - 1);
-        LASSERT(fio->ft_index <= last);
+	last = cl_index(obj, size - 1);
+	/*
+	 * The ft_index is only used in the case of
+	 * a mkwrite action. We need to check
+	 * our assertions are correct, since
+	 * we should have caught this above
+	 */
+	LASSERT(!fio->ft_mkwrite || fio->ft_index <= last);
         if (fio->ft_index == last)
                 /*
                  * Last page is mapped partially.
