@@ -90,7 +90,13 @@ static int lod_process_config(const struct lu_env *env,
 		if (sscanf(lustre_cfg_buf(lcfg, 3), "%d", &gen) != 1)
 			GOTO(out, rc = -EINVAL);
 
-		rc = -EINVAL;
+		if (lcfg->lcfg_command == LCFG_LOV_ADD_OBD)
+			rc = lod_add_device(env, lod, arg1, index, gen, 1);
+		else if (lcfg->lcfg_command == LCFG_LOV_ADD_INA)
+			rc = lod_add_device(env, lod, arg1, index, gen, 0);
+		else
+			rc = lod_del_device(env, lod, arg1, index, gen);
+
 		break;
 	}
 
@@ -401,6 +407,11 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 	dt_conf_get(env, &lod->lod_dt_dev, &ddp);
 	lod->lod_osd_max_easize = ddp.ddp_max_ea_size;
 
+	/* setup obd to be used with old lov code */
+	rc = lod_pools_init(lod, cfg);
+	if (rc)
+		GOTO(out_disconnect, rc);
+
 	/* for compatibility we link old procfs's OSC entries to osp ones */
 	lov_proc_dir = lprocfs_srch(proc_lustre_root, "lov");
 	if (lov_proc_dir) {
@@ -425,6 +436,7 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 
 	RETURN(0);
 
+out_disconnect:
 	obd_disconnect(lod->lod_child_exp);
 	RETURN(rc);
 }
@@ -475,6 +487,8 @@ static struct lu_device *lod_device_fini(const struct lu_env *env,
 
 	if (lod->lod_symlink)
 		lprocfs_remove(&lod->lod_symlink);
+
+	lod_pools_fini(lod);
 
 	RETURN(NULL);
 }

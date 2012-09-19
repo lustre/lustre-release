@@ -242,6 +242,17 @@ static inline struct lod_thread_info *lod_env_info(const struct lu_env *env)
 /* lod_lov.c */
 void lod_getref(struct lod_device *lod);
 void lod_putref(struct lod_device *lod);
+int lod_add_device(const struct lu_env *env, struct lod_device *m,
+		   char *osp, unsigned index, unsigned gen, int active);
+int lod_del_device(const struct lu_env *env, struct lod_device *m,
+		   char *osp, unsigned index, unsigned gen);
+void lod_fix_desc(struct lov_desc *desc);
+void lod_fix_desc_qos_maxage(__u32 *val);
+void lod_fix_desc_pattern(__u32 *val);
+void lod_fix_desc_stripe_count(__u32 *val);
+void lod_fix_desc_stripe_size(__u64 *val);
+int lod_pools_init(struct lod_device *m, struct lustre_cfg *cfg);
+int lod_pools_fini(struct lod_device *m);
 
 /* lod_pool.c */
 int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
@@ -261,11 +272,6 @@ int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 /* lproc_lod.c */
 extern struct file_operations lod_proc_target_fops;
 void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars);
-
-/* XXX: will be replaced as the landing goes */
-#define lod_fix_desc_stripe_size(a)
-#define lod_fix_desc_stripe_count(a)
-#define lod_fix_desc_pattern(a)
 
 #endif
 

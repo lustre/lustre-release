@@ -90,9 +90,20 @@ int cfs_bitmap_check_empty(cfs_bitmap_t *bitmap)
         return cfs_find_first_bit(bitmap->data, bitmap->size) == bitmap->size;
 }
 
+static inline
+void cfs_bitmap_copy(cfs_bitmap_t *new, cfs_bitmap_t *old)
+{
+	int newsize;
+
+	LASSERT(new->size >= old->size);
+	newsize = new->size;
+	memcpy(new, old, CFS_BITMAP_SIZE(old->size));
+	new->size = newsize;
+}
+
 #define cfs_foreach_bit(bitmap, pos) \
 	for((pos)=cfs_find_first_bit((bitmap)->data, bitmap->size);   \
-            (pos) < (bitmap)->size;                               \
-            (pos) = cfs_find_next_bit((bitmap)->data, (bitmap)->size, (pos)))
+	    (pos) < (bitmap)->size;                               \
+	    (pos) = cfs_find_next_bit((bitmap)->data, (bitmap)->size, (pos)+1))
 
 #endif
