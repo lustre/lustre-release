@@ -48,6 +48,9 @@
 
 #include "lod_internal.h"
 
+extern struct lu_object_operations lod_lu_obj_ops;
+extern struct dt_object_operations lod_obj_ops;
+
 /* Slab for OSD object allocation */
 cfs_mem_cache_t *lod_object_kmem;
 
@@ -64,6 +67,25 @@ static struct lu_kmem_descr lod_caches[] = {
 
 static struct lu_device *lod_device_fini(const struct lu_env *env,
 					 struct lu_device *d);
+
+struct lu_object *lod_object_alloc(const struct lu_env *env,
+				   const struct lu_object_header *hdr,
+				   struct lu_device *dev)
+{
+	struct lu_object  *lu_obj;
+	struct lod_object *lo;
+
+	OBD_SLAB_ALLOC_PTR_GFP(lo, lod_object_kmem, CFS_ALLOC_IO);
+	if (lo == NULL)
+		return NULL;
+
+	lu_obj = lod2lu_obj(lo);
+	dt_object_init(&lo->ldo_obj, NULL, dev);
+	lo->ldo_obj.do_ops = &lod_obj_ops;
+	lu_obj->lo_ops = &lod_lu_obj_ops;
+
+	return lu_obj;
+}
 
 static int lod_process_config(const struct lu_env *env,
 			      struct lu_device *dev,
@@ -197,6 +219,7 @@ static int lod_prepare(const struct lu_env *env, struct lu_device *pdev,
 }
 
 const struct lu_device_operations lod_lu_ops = {
+	.ldo_object_alloc	= lod_object_alloc,
 	.ldo_process_config	= lod_process_config,
 	.ldo_recovery_complete	= lod_recovery_complete,
 	.ldo_prepare		= lod_prepare,
