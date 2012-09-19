@@ -81,7 +81,8 @@ void lod_putref(struct lod_device *lod)
 				continue;
 
 			cfs_list_add(&ost_desc->ltd_kill, &kill);
-			/* XXX: remove from the pool */
+
+			lod_ost_pool_remove(&lod->lod_pool_info, idx);
 			OST_TGT(lod, idx) = NULL;
 			lod->lod_ostnr--;
 			cfs_bitmap_clear(lod->lod_ost_bitmap, idx);

@@ -243,6 +243,21 @@ static inline struct lod_thread_info *lod_env_info(const struct lu_env *env)
 void lod_getref(struct lod_device *lod);
 void lod_putref(struct lod_device *lod);
 
+/* lod_pool.c */
+int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
+int lod_ost_pool_remove(struct ost_pool *op, __u32 idx);
+int lod_ost_pool_extend(struct ost_pool *op, unsigned int min_count);
+struct pool_desc *lod_find_pool(struct lod_device *lod, char *poolname);
+void lod_pool_putref(struct pool_desc *pool);
+int lod_ost_pool_free(struct ost_pool *op);
+int lod_pool_del(struct obd_device *obd, char *poolname);
+int lod_ost_pool_init(struct ost_pool *op, unsigned int count);
+extern cfs_hash_ops_t pool_hash_operations;
+int lod_check_index_in_pool(__u32 idx, struct pool_desc *pool);
+int lod_pool_new(struct obd_device *obd, char *poolname);
+int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname);
+int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
+
 /* lproc_lod.c */
 extern struct file_operations lod_proc_target_fops;
 void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars);

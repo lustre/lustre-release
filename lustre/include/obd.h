@@ -730,7 +730,6 @@ struct lov_tgt_desc {
 #define pool_tgt_count(_p)  _p->pool_obds.op_count
 #define pool_tgt_array(_p)  _p->pool_obds.op_array
 #define pool_tgt_rw_sem(_p) _p->pool_obds.op_rw_sem
-#define pool_tgt(_p, _i)    _p->pool_lov->lov_tgts[_p->pool_obds.op_array[_i]]
 
 struct pool_desc {
         char                  pool_name[LOV_MAXPOOLNAME + 1]; /* name of pool */
@@ -740,8 +739,8 @@ struct pool_desc {
         cfs_hlist_node_t      pool_hash;              /* access by poolname */
         cfs_list_t            pool_list;              /* serial access */
         cfs_proc_dir_entry_t *pool_proc_entry;        /* file in /proc */
-        struct lov_obd       *pool_lov;               /* lov obd to which this
-                                                         pool belong */
+	struct obd_device    *pool_lobd;	      /* obd of the lov/lod to which
+						       * this pool belongs */
 };
 
 struct lov_obd {
