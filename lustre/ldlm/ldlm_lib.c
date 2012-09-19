@@ -1376,17 +1376,20 @@ static void target_exp_dequeue_req_replay(struct ptlrpc_request *req)
 #ifdef __KERNEL__
 static void target_finish_recovery(struct obd_device *obd)
 {
-        time_t elapsed_time = max_t(time_t, 1, cfs_time_current_sec() -
-                                    obd->obd_recovery_start);
         ENTRY;
 
-        LCONSOLE_INFO("%s: Recovery over after %d:%.02d, of %d clients "
-                      "%d recovered and %d %s evicted.\n", obd->obd_name,
-                      (int)elapsed_time / 60, (int)elapsed_time % 60,
-                      obd->obd_max_recoverable_clients,
-                      cfs_atomic_read(&obd->obd_connected_clients),
-                      obd->obd_stale_clients,
-                      obd->obd_stale_clients == 1 ? "was" : "were");
+	/* only log a recovery message when recovery has occurred */
+	if (obd->obd_recovery_start) {
+		time_t elapsed_time = max_t(time_t, 1, cfs_time_current_sec() -
+					obd->obd_recovery_start);
+		LCONSOLE_INFO("%s: Recovery over after %d:%.02d, of %d clients "
+			"%d recovered and %d %s evicted.\n", obd->obd_name,
+			(int)elapsed_time / 60, (int)elapsed_time % 60,
+			obd->obd_max_recoverable_clients,
+			cfs_atomic_read(&obd->obd_connected_clients),
+			obd->obd_stale_clients,
+			obd->obd_stale_clients == 1 ? "was" : "were");
+	}
 
         ldlm_reprocess_all_ns(obd->obd_namespace);
         cfs_spin_lock(&obd->obd_recovery_task_lock);
