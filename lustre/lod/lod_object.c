@@ -161,13 +161,38 @@ static int lod_declare_attr_set(const struct lu_env *env,
 				struct thandle *handle)
 {
 	struct dt_object  *next = dt_object_child(dt);
-	int		   rc;
+	struct lod_object *lo = lod_dt_obj(dt);
+	int                rc, i;
 	ENTRY;
 
 	/*
 	 * declare setattr on the local object
 	 */
 	rc = dt_declare_attr_set(env, next, attr, handle);
+	if (rc)
+		RETURN(rc);
+
+	/*
+	 * load striping information, notice we don't do this when object
+	 * is being initialized as we don't need this information till
+	 * few specific cases like destroy, chown
+	 */
+	rc = lod_load_striping(env, lo);
+	if (rc)
+		RETURN(rc);
+
+	/*
+	 * if object is striped declare changes on the stripes
+	 */
+	LASSERT(lo->ldo_stripe || lo->ldo_stripenr == 0);
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		LASSERT(lo->ldo_stripe[i]);
+		rc = dt_declare_attr_set(env, lo->ldo_stripe[i], attr, handle);
+		if (rc) {
+			CERROR("failed declaration: %d\n", rc);
+			break;
+		}
+	}
 
 	RETURN(rc);
 }
@@ -179,7 +204,8 @@ static int lod_attr_set(const struct lu_env *env,
 			struct lustre_capa *capa)
 {
 	struct dt_object  *next = dt_object_child(dt);
-	int		   rc;
+	struct lod_object *lo = lod_dt_obj(dt);
+	int                rc, i;
 	ENTRY;
 
 	/*
@@ -188,6 +214,19 @@ static int lod_attr_set(const struct lu_env *env,
 	rc = dt_attr_set(env, next, attr, handle, capa);
 	if (rc)
 		RETURN(rc);
+
+	/*
+	 * if object is striped, apply changes to all the stripes
+	 */
+	LASSERT(lo->ldo_stripe || lo->ldo_stripenr == 0);
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		LASSERT(lo->ldo_stripe[i]);
+		rc = dt_attr_set(env, lo->ldo_stripe[i], attr, handle, capa);
+		if (rc) {
+			CERROR("failed declaration: %d\n", rc);
+			break;
+		}
+	}
 
 	RETURN(rc);
 }
@@ -367,7 +406,8 @@ static int lod_declare_object_destroy(const struct lu_env *env,
 				      struct thandle *th)
 {
 	struct dt_object   *next = dt_object_child(dt);
-	int		    rc;
+	struct lod_object  *lo = lod_dt_obj(dt);
+	int		    rc, i;
 	ENTRY;
 
 	/*
@@ -377,6 +417,24 @@ static int lod_declare_object_destroy(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
+	/*
+	 * load striping information, notice we don't do this when object
+	 * is being initialized as we don't need this information till
+	 * few specific cases like destroy, chown
+	 */
+	rc = lod_load_striping(env, lo);
+	if (rc)
+		RETURN(rc);
+
+	/* declare destroy for all underlying objects */
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		LASSERT(lo->ldo_stripe[i]);
+		rc = dt_declare_destroy(env, lo->ldo_stripe[i], th);
+
+		if (rc)
+			break;
+	}
+
 	RETURN(rc);
 }
 
@@ -384,13 +442,22 @@ static int lod_object_destroy(const struct lu_env *env,
 		struct dt_object *dt, struct thandle *th)
 {
 	struct dt_object  *next = dt_object_child(dt);
-	int                rc;
+	struct lod_object *lo = lod_dt_obj(dt);
+	int                rc, i;
 	ENTRY;
 
 	/* destroy local object */
 	rc = dt_destroy(env, next, th);
 	if (rc)
 		RETURN(rc);
+
+	/* destroy all underlying objects */
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		LASSERT(lo->ldo_stripe[i]);
+		rc = dt_destroy(env, lo->ldo_stripe[i], th);
+		if (rc)
+			break;
+	}
 
 	RETURN(rc);
 }
@@ -537,8 +604,24 @@ static int lod_object_init(const struct lu_env *env, struct lu_object *o,
 	RETURN(0);
 }
 
-void lod_object_free_striping(const struct lu_env *env, struct lod_object *o)
+void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo)
 {
+	int i;
+
+	if (lo->ldo_stripe) {
+		LASSERT(lo->ldo_stripes_allocated > 0);
+
+		for (i = 0; i < lo->ldo_stripenr; i++) {
+			if (lo->ldo_stripe[i])
+				lu_object_put(env, &lo->ldo_stripe[i]->do_lu);
+		}
+
+		i = sizeof(struct dt_object *) * lo->ldo_stripes_allocated;
+		OBD_FREE(lo->ldo_stripe, i);
+		lo->ldo_stripe = NULL;
+		lo->ldo_stripes_allocated = 0;
+	}
+	lo->ldo_stripenr = 0;
 }
 
 /*

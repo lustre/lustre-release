@@ -369,6 +369,224 @@ out:
 	return(rc);
 }
 
+int lod_ea_store_resize(struct lod_thread_info *info, int size)
+{
+	int round = size_roundup_power2(size);
+
+	LASSERT(round <= lov_mds_md_size(LOV_MAX_STRIPE_COUNT, LOV_MAGIC_V3));
+	if (info->lti_ea_store) {
+		LASSERT(info->lti_ea_store_size);
+		LASSERT(info->lti_ea_store_size < round);
+		CDEBUG(D_INFO, "EA store size %d is not enough, need %d\n",
+		       info->lti_ea_store_size, round);
+		OBD_FREE_LARGE(info->lti_ea_store, info->lti_ea_store_size);
+		info->lti_ea_store = NULL;
+		info->lti_ea_store_size = 0;
+	}
+
+	OBD_ALLOC_LARGE(info->lti_ea_store, round);
+	if (info->lti_ea_store == NULL)
+		RETURN(-ENOMEM);
+	info->lti_ea_store_size = round;
+	RETURN(0);
+}
+
+int lod_get_lov_ea(const struct lu_env *env, struct lod_object *lo)
+{
+	struct lod_thread_info *info = lod_env_info(env);
+	struct dt_object       *next = dt_object_child(&lo->ldo_obj);
+	int			rc;
+	ENTRY;
+
+	LASSERT(info);
+
+	if (unlikely(info->lti_ea_store_size == 0)) {
+		/* just to enter in allocation block below */
+		rc = -ERANGE;
+	} else {
+repeat:
+		info->lti_buf.lb_buf = info->lti_ea_store;
+		info->lti_buf.lb_len = info->lti_ea_store_size;
+		rc = dt_xattr_get(env, next, &info->lti_buf, XATTR_NAME_LOV,
+				  BYPASS_CAPA);
+	}
+	/* if object is not striped or inaccessible */
+	if (rc == -ENODATA)
+		RETURN(0);
+
+	if (rc == -ERANGE) {
+		/* EA doesn't fit, reallocate new buffer */
+		rc = dt_xattr_get(env, next, &LU_BUF_NULL, XATTR_NAME_LOV,
+				  BYPASS_CAPA);
+		if (rc == -ENODATA)
+			RETURN(0);
+		else if (rc < 0)
+			RETURN(rc);
+
+		LASSERT(rc > 0);
+		rc = lod_ea_store_resize(info, rc);
+		if (rc)
+			RETURN(rc);
+		goto repeat;
+	}
+
+	RETURN(rc);
+}
+
+/*
+ * allocate array of objects pointers, find/create objects
+ * stripenr and other fields should be initialized by this moment
+ */
+int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
+			   struct lov_ost_data_v1 *objs)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct lod_device	*md = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
+	struct lu_object	*o, *n;
+	struct lu_device	*nd;
+	int			i, idx, rc = 0;
+	ENTRY;
+
+	LASSERT(lo);
+	LASSERT(lo->ldo_stripe == NULL);
+	LASSERT(lo->ldo_stripenr > 0);
+	LASSERT(lo->ldo_stripe_size > 0);
+
+	i = sizeof(struct dt_object *) * lo->ldo_stripenr;
+	OBD_ALLOC(lo->ldo_stripe, i);
+	if (lo->ldo_stripe == NULL)
+		GOTO(out, rc = -ENOMEM);
+	lo->ldo_stripes_allocated = lo->ldo_stripenr;
+
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+
+		info->lti_ostid.oi_id = le64_to_cpu(objs[i].l_object_id);
+		/* XXX: support for DNE? */
+		info->lti_ostid.oi_seq = le64_to_cpu(objs[i].l_object_seq);
+		idx = le64_to_cpu(objs[i].l_ost_idx);
+		fid_ostid_unpack(&info->lti_fid, &info->lti_ostid, idx);
+
+		/*
+		 * XXX: assertion is left for testing, to make
+		 * sure we never process requests till configuration
+		 * is completed. to be changed to -EINVAL
+		 */
+
+		lod_getref(md);
+		LASSERT(cfs_bitmap_check(md->lod_ost_bitmap, idx));
+		LASSERT(OST_TGT(md,idx));
+		LASSERTF(OST_TGT(md,idx)->ltd_ost, "idx %d\n", idx);
+		nd = &OST_TGT(md,idx)->ltd_ost->dd_lu_dev;
+		lod_putref(md);
+
+		o = lu_object_find_at(env, nd, &info->lti_fid, NULL);
+		if (IS_ERR(o))
+			GOTO(out, rc = PTR_ERR(o));
+
+		n = lu_object_locate(o->lo_header, nd->ld_type);
+		LASSERT(n);
+
+		lo->ldo_stripe[i] = container_of(n, struct dt_object, do_lu);
+	}
+
+out:
+	RETURN(rc);
+}
+
+/*
+ * Parse striping information stored in lti_ea_store
+ */
+int lod_parse_striping(const struct lu_env *env, struct lod_object *lo,
+		       const struct lu_buf *buf)
+{
+	struct lov_mds_md_v1	*lmm;
+	struct lov_ost_data_v1	*objs;
+	__u32			 magic;
+	int			 rc = 0;
+	ENTRY;
+
+	LASSERT(buf);
+	LASSERT(buf->lb_buf);
+	LASSERT(buf->lb_len);
+
+	lmm = (struct lov_mds_md_v1 *) buf->lb_buf;
+	magic = le32_to_cpu(lmm->lmm_magic);
+
+	if (magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3)
+		GOTO(out, rc = -EINVAL);
+	if (le32_to_cpu(lmm->lmm_pattern) != LOV_PATTERN_RAID0)
+		GOTO(out, rc = -EINVAL);
+
+	lo->ldo_stripe_size = le32_to_cpu(lmm->lmm_stripe_size);
+	lo->ldo_stripenr = le16_to_cpu(lmm->lmm_stripe_count);
+	lo->ldo_layout_gen = le16_to_cpu(lmm->lmm_layout_gen);
+
+	LASSERT(buf->lb_len >= lov_mds_md_size(lo->ldo_stripenr, magic));
+
+	if (magic == LOV_MAGIC_V3) {
+		struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *) lmm;
+		objs = &v3->lmm_objects[0];
+		lod_object_set_pool(lo, v3->lmm_pool_name);
+	} else {
+		objs = &lmm->lmm_objects[0];
+	}
+
+	rc = lod_initialize_objects(env, lo, objs);
+
+out:
+	RETURN(rc);
+}
+
+/*
+ * Load and parse striping information, create in-core representation for the
+ * stripes
+ */
+int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
+	int			 rc;
+	ENTRY;
+
+	/*
+	 * currently this code is supposed to be called from declaration
+	 * phase only, thus the object is not expected to be locked by caller
+	 */
+	dt_write_lock(env, next, 0);
+	/* already initialized? */
+	if (lo->ldo_stripe) {
+		int i;
+		/* check validity */
+		for (i = 0; i < lo->ldo_stripenr; i++)
+			LASSERTF(lo->ldo_stripe[i], "stripe %d is NULL\n", i);
+		GOTO(out, rc = 0);
+	}
+
+	if (!dt_object_exists(next))
+		GOTO(out, rc = 0);
+
+	/* only regular files can be striped */
+	if (!(lu_object_attr(lod2lu_obj(lo)) & S_IFREG))
+		GOTO(out, rc = 0);
+
+	LASSERT(lo->ldo_stripenr == 0);
+
+	rc = lod_get_lov_ea(env, lo);
+	if (rc <= 0)
+		GOTO(out, rc);
+
+	/*
+	 * there is LOV EA (striping information) in this object
+	 * let's parse it and create in-core objects for the stripes
+	 */
+	info->lti_buf.lb_buf = info->lti_ea_store;
+	info->lti_buf.lb_len = info->lti_ea_store_size;
+	rc = lod_parse_striping(env, lo, &info->lti_buf);
+out:
+	dt_write_unlock(env, next);
+	RETURN(rc);
+}
+
 void lod_fix_desc_stripe_size(__u64 *val)
 {
 	if (*val < PTLRPC_MAX_BRW_SIZE) {

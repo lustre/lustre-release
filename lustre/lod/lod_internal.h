@@ -246,6 +246,8 @@ int lod_add_device(const struct lu_env *env, struct lod_device *m,
 		   char *osp, unsigned index, unsigned gen, int active);
 int lod_del_device(const struct lu_env *env, struct lod_device *m,
 		   char *osp, unsigned index, unsigned gen);
+int lod_load_striping(const struct lu_env *env, struct lod_object *mo);
+int lod_get_lov_ea(const struct lu_env *env, struct lod_object *mo);
 void lod_fix_desc(struct lov_desc *desc);
 void lod_fix_desc_qos_maxage(__u32 *val);
 void lod_fix_desc_pattern(__u32 *val);
@@ -253,6 +255,10 @@ void lod_fix_desc_stripe_count(__u32 *val);
 void lod_fix_desc_stripe_size(__u64 *val);
 int lod_pools_init(struct lod_device *m, struct lustre_cfg *cfg);
 int lod_pools_fini(struct lod_device *m);
+int lod_parse_striping(const struct lu_env *env, struct lod_object *mo,
+		       const struct lu_buf *buf);
+int lod_initialize_objects(const struct lu_env *env, struct lod_object *mo,
+			   struct lov_ost_data_v1 *objs);
 
 /* lod_pool.c */
 int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
