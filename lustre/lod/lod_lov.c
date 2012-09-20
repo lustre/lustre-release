@@ -96,11 +96,15 @@ void lod_putref(struct lod_device *lod)
 		cfs_list_for_each_entry_safe(ost_desc, tmp, &kill, ltd_kill) {
 			int rc;
 			cfs_list_del(&ost_desc->ltd_kill);
-			/* XXX: remove from QoS structures */
-			/* disconnect from OSP */
+			/* remove from QoS structures */
+			rc = qos_del_tgt(lod, ost_desc);
+			if (rc)
+				CERROR("%s: qos_del_tgt(%s) failed: rc = %d\n",
+				       lod2obd(lod)->obd_name,
+				       obd_uuid2str(&ost_desc->ltd_uuid), rc);
 			rc = obd_disconnect(ost_desc->ltd_exp);
 			if (rc)
-				CERROR("%s: failed to disconnect %s (%d)\n",
+				CERROR("%s: failed to disconnect %s: rc = %d\n",
 				       lod2obd(lod)->obd_name,
 				       obd_uuid2str(&ost_desc->ltd_uuid), rc);
 			OBD_FREE_PTR(ost_desc);
@@ -268,6 +272,13 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		GOTO(out_mutex, rc);
 	}
 
+	rc = qos_add_tgt(lod, ost_desc);
+	if (rc) {
+		CERROR("%s: qos_add_tgt(%s) failed: rc = %d\n", obd->obd_name,
+		       obd_uuid2str(&ost_desc->ltd_uuid), rc);
+		GOTO(out_pool, rc);
+	}
+
 	/* The new OST is now a full citizen */
 	if (index >= lod->lod_desc.ld_tgt_count)
 		lod->lod_desc.ld_tgt_count = index + 1;
@@ -284,6 +295,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 
 	RETURN(0);
 
+out_pool:
 	lod_ost_pool_remove(&lod->lod_pool_info, index);
 out_mutex:
 	cfs_mutex_unlock(&lod->lod_mutex);

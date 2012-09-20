@@ -275,6 +275,10 @@ int lod_pool_new(struct obd_device *obd, char *poolname);
 int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 
+/* lod_qos.c */
+int qos_add_tgt(struct lod_device*, struct lod_ost_desc *);
+int qos_del_tgt(struct lod_device *, struct lod_ost_desc *);
+
 /* lproc_lod.c */
 extern struct file_operations lod_proc_target_fops;
 void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars);
