@@ -1964,17 +1964,17 @@ int ll_iocontrol(struct inode *inode, struct file *file,
 		if (rc)
 			RETURN(rc);
 
-		OBDO_ALLOC(oinfo.oi_oa);
-		if (!oinfo.oi_oa)
-			RETURN(-ENOMEM);
+		inode->i_flags = ll_ext_to_inode_flags(flags);
 
 		lsm = ccc_inode_lsm_get(inode);
-		if (lsm == NULL) {
-			inode->i_flags = ll_ext_to_inode_flags(flags);
-			OBDO_FREE(oinfo.oi_oa);
+		if (lsm == NULL)
 			RETURN(0);
-		}
 
+		OBDO_ALLOC(oinfo.oi_oa);
+		if (!oinfo.oi_oa) {
+			ccc_inode_lsm_put(inode, lsm);
+			RETURN(-ENOMEM);
+		}
 		oinfo.oi_md = lsm;
                 oinfo.oi_oa->o_id = lsm->lsm_object_id;
                 oinfo.oi_oa->o_seq = lsm->lsm_object_seq;
