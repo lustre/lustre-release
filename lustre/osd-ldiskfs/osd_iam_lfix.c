@@ -484,7 +484,7 @@ static void iam_lfix_split(struct iam_leaf *l, struct buffer_head **bh,
         pivot = (const struct iam_ikey *)iam_leaf_key_at(start);
 
         memmove(iam_entries(new_leaf), start, finis - start);
-        hdr->ill_count = count - split;
+	hdr->ill_count = cpu_to_le16(count - split);
         lentry_count_set(l, split);
         if ((void *)l->il_at >= start) {
                 /*
