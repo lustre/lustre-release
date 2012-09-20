@@ -320,6 +320,75 @@ int lod_object_set_pool(struct lod_object *o, char *pool)
 	return 0;
 }
 
+static inline int lod_object_will_be_striped(int is_reg, const struct lu_fid *fid)
+{
+	return (is_reg && fid_seq(fid) != FID_SEQ_LOCAL_FILE);
+}
+
+static int lod_cache_parent_striping(const struct lu_env *env,
+				     struct lod_object *lp)
+{
+	struct lov_user_md_v1	*v1 = NULL;
+	struct lov_user_md_v3	*v3 = NULL;
+	int			 rc;
+	ENTRY;
+
+	/* dt_ah_init() is called from MDD without parent being write locked
+	 * lock it here */
+	dt_write_lock(env, dt_object_child(&lp->ldo_obj), 0);
+	if (lp->ldo_striping_cached)
+		GOTO(unlock, rc = 0);
+
+	rc = lod_get_lov_ea(env, lp);
+	if (rc < 0)
+		GOTO(unlock, rc);
+
+	if (rc < sizeof(struct lov_user_md)) {
+		/* don't lookup for non-existing or invalid striping */
+		lp->ldo_def_striping_set = 0;
+		lp->ldo_striping_cached = 1;
+		lp->ldo_def_stripe_size = 0;
+		lp->ldo_def_stripenr = 0;
+		lp->ldo_def_stripe_offset = (typeof(v1->lmm_stripe_offset))(-1);
+		GOTO(unlock, rc = 0);
+	}
+
+	v1 = (struct lov_user_md_v1 *)lod_env_info(env)->lti_ea_store;
+	if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V1))
+		lustre_swab_lov_user_md_v1(v1);
+	else if (v1->lmm_magic == __swab32(LOV_USER_MAGIC_V3))
+		lustre_swab_lov_user_md_v3(v3);
+
+	if (v1->lmm_magic != LOV_MAGIC_V3 && v1->lmm_magic != LOV_MAGIC_V1)
+		GOTO(unlock, rc = 0);
+
+	if (v1->lmm_pattern != LOV_PATTERN_RAID0 && v1->lmm_pattern != 0)
+		GOTO(unlock, rc = 0);
+
+	lp->ldo_def_stripenr = v1->lmm_stripe_count;
+	lp->ldo_def_stripe_size = v1->lmm_stripe_size;
+	lp->ldo_def_stripe_offset = v1->lmm_stripe_offset;
+	lp->ldo_striping_cached = 1;
+	lp->ldo_def_striping_set = 1;
+
+	if (v1->lmm_magic == LOV_USER_MAGIC_V3) {
+		/* XXX: sanity check here */
+		v3 = (struct lov_user_md_v3 *) v1;
+		if (v3->lmm_pool_name[0])
+			lod_object_set_pool(lp, v3->lmm_pool_name);
+	}
+
+	CDEBUG(D_OTHER, "def. striping: # %d, sz %d, off %d %s%s on "DFID"\n",
+	       lp->ldo_def_stripenr, lp->ldo_def_stripe_size,
+	       lp->ldo_def_stripe_offset, v3 ? "from " : "",
+	       v3 ? lp->ldo_pool : "", PFID(lu_object_fid(&lp->ldo_obj.do_lu)));
+
+	EXIT;
+unlock:
+	dt_write_unlock(env, dt_object_child(&lp->ldo_obj));
+	return rc;
+}
+
 /**
  * used to transfer default striping data to the object being created
  */
@@ -329,15 +398,20 @@ static void lod_ah_init(const struct lu_env *env,
 			struct dt_object *child,
 			cfs_umode_t child_mode)
 {
-	struct dt_object  *nextc;
+	struct lod_device *d = lu2lod_dev(child->do_lu.lo_dev);
 	struct dt_object  *nextp = NULL;
+	struct dt_object  *nextc;
+	struct lod_object *lp = NULL;
 	struct lod_object *lc;
+	struct lov_desc   *desc;
 	ENTRY;
 
 	LASSERT(child);
 
-	if (likely(parent))
+	if (likely(parent)) {
 		nextp = dt_object_child(parent);
+		lp = lod_dt_obj(parent);
+	}
 
 	nextc = dt_object_child(child);
 	lc = lod_dt_obj(child);
@@ -352,6 +426,71 @@ static void lod_ah_init(const struct lu_env *env,
 	 */
 	if (!dt_object_exists(nextc))
 		nextc->do_ops->do_ah_init(env, ah, nextp, nextc, child_mode);
+
+	if (S_ISDIR(child_mode)) {
+		if (lp->ldo_striping_cached == 0) {
+			/* we haven't tried to get default striping for
+			 * the directory yet, let's cache it in the object */
+			lod_cache_parent_striping(env, lp);
+		}
+		/* transfer defaults to new directory */
+		if (lp->ldo_striping_cached) {
+			if (lp->ldo_pool)
+				lod_object_set_pool(lc, lp->ldo_pool);
+			lc->ldo_def_stripenr = lp->ldo_def_stripenr;
+			lc->ldo_def_stripe_size = lp->ldo_def_stripe_size;
+			lc->ldo_def_stripe_offset = lp->ldo_def_stripe_offset;
+			lc->ldo_striping_cached = 1;
+			lc->ldo_def_striping_set = 1;
+			CDEBUG(D_OTHER, "inherite striping defaults\n");
+		}
+		return;
+	}
+
+	/*
+	 * if object is going to be striped over OSTs, transfer default
+	 * striping information to the child, so that we can use it
+	 * during declaration and creation
+	 */
+	if (!lod_object_will_be_striped(S_ISREG(child_mode),
+					lu_object_fid(&child->do_lu)))
+		return;
+
+	/*
+	 * try from the parent
+	 */
+	if (likely(parent)) {
+		if (lp->ldo_striping_cached == 0) {
+			/* we haven't tried to get default striping for
+			 * the directory yet, let's cache it in the object */
+			lod_cache_parent_striping(env, lp);
+		}
+
+		lc->ldo_def_stripe_offset = (__u16) -1;
+
+		if (lp->ldo_def_striping_set) {
+			if (lp->ldo_pool)
+				lod_object_set_pool(lc, lp->ldo_pool);
+			lc->ldo_stripenr = lp->ldo_def_stripenr;
+			lc->ldo_stripe_size = lp->ldo_def_stripe_size;
+			lc->ldo_def_stripe_offset = lp->ldo_def_stripe_offset;
+			CDEBUG(D_OTHER, "striping from parent: #%d, sz %d %s\n",
+			       lc->ldo_stripenr, lc->ldo_stripe_size,
+			       lp->ldo_pool ? lp->ldo_pool : "");
+		}
+	}
+
+	/*
+	 * if the parent doesn't provide with specific pattern, grab fs-wide one
+	 */
+	desc = &d->lod_desc;
+	if (lc->ldo_stripenr == 0)
+		lc->ldo_stripenr = desc->ld_default_stripe_count;
+	if (lc->ldo_stripe_size == 0)
+		lc->ldo_stripe_size = desc->ld_default_stripe_size;
+	CDEBUG(D_OTHER, "final striping: # %d stripes, sz %d from %s\n",
+	       lc->ldo_stripenr, lc->ldo_stripe_size,
+	       lc->ldo_pool ? lc->ldo_pool : "");
 
 	EXIT;
 }
