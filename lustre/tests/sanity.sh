@@ -2536,7 +2536,23 @@ run_test 39k "write, utime, close, stat ========================"
 # this should be set to future
 TEST_39_ATIME=`date -d "1 year" +%s`
 
+is_sles11()						# LU-1783
+{
+	if [ -r /etc/SuSE-release ]
+	then
+		local vers=`grep VERSION /etc/SuSE-release | awk '{print $3}'`
+		local patchlev=`grep PATCHLEVEL /etc/SuSE-release \
+			| awk '{print $3}'`
+		if [ $vers -eq 11 ] && [ $patchlev -eq 1 ]
+		then
+			return 0
+		fi
+	fi
+	return 1
+}
+
 test_39l() {
+	is_sles11 && skip "SLES 11 SP1" && return	# LU-1783
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local atime_diff=$(do_facet $SINGLEMDS lctl get_param -n mdd.*.atime_diff)
 
