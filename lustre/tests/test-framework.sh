@@ -3681,6 +3681,12 @@ error_ignore() {
     error_noexit "$@"
 }
 
+error_and_remount() {
+	error_noexit "$@"
+	remount_client $MOUNT
+	exit 1
+}
+
 skip_env () {
     $FAIL_ON_SKIP_ENV && error false $@ || skip $@
 }
