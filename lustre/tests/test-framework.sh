@@ -981,7 +981,7 @@ stop() {
 # save quota version (both administrative and operational quotas)
 # add an additional parameter if mountpoint is ever different from $MOUNT
 #
-# XXX This function is kept for interoperability with old server (< 2.3.51),
+# XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
 quota_save_version() {
@@ -1005,7 +1005,7 @@ quota_save_version() {
 
 # client could mount several lustre
 #
-# XXX This function is kept for interoperability with old server (< 2.3.51),
+# XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
 quota_type () {
@@ -1017,7 +1017,7 @@ quota_type () {
     return $rc 
 }
 
-# XXX This function is kept for interoperability with old server (< 2.3.51),
+# XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
 restore_quota_old() {
@@ -1030,7 +1030,7 @@ restore_quota_old() {
 	quota_save_version $old_QUOTA_TYPE
 }
 
-# XXX This function is kept for interoperability with old server (< 2.3.51),
+# XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
 setup_quota_old(){
@@ -1098,7 +1098,7 @@ ost_quota_type() {
 
 # restore old quota type settings
 restore_quota() {
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.51) ]; then
+	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
 		restore_quota_old
 		return
 	fi
@@ -1114,10 +1114,14 @@ restore_quota() {
 }
 
 setup_quota(){
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.51) ]; then
+	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
 		setup_quota_old $1
 		return
 	fi
+
+	# XXX remove it once all quota code landed
+	echo "skip quota setup"
+	return
 
 	local mntpt=$1
 
