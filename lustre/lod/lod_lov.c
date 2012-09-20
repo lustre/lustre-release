@@ -403,6 +403,73 @@ int lod_ea_store_resize(struct lod_thread_info *info, int size)
 	RETURN(0);
 }
 
+/*
+ * generate and write LOV EA for given striped object
+ */
+int lod_generate_and_set_lovea(const struct lu_env *env,
+			       struct lod_object *lo, struct thandle *th)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct dt_object	*next = dt_object_child(&lo->ldo_obj);
+	const struct lu_fid	*fid  = lu_object_fid(&lo->ldo_obj.do_lu);
+	struct lov_mds_md_v1	*lmm;
+	struct lov_ost_data_v1	*objs;
+	__u32			 magic;
+	int			 i, rc, lmm_size;
+	ENTRY;
+
+	LASSERT(lo);
+	LASSERT(lo->ldo_stripenr > 0);
+
+	magic = lo->ldo_pool ? LOV_MAGIC_V3 : LOV_MAGIC_V1;
+	lmm_size = lov_mds_md_size(lo->ldo_stripenr, magic);
+	if (info->lti_ea_store_size < lmm_size) {
+		rc = lod_ea_store_resize(info, lmm_size);
+		if (rc)
+			RETURN(rc);
+	}
+
+	lmm = info->lti_ea_store;
+
+	lmm->lmm_magic = cpu_to_le32(magic);
+	lmm->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
+	lmm->lmm_object_id = cpu_to_le64(fid_ver_oid(fid));
+	lmm->lmm_object_seq = cpu_to_le64(fid_seq(fid));
+	lmm->lmm_stripe_size = cpu_to_le32(lo->ldo_stripe_size);
+	lmm->lmm_stripe_count = cpu_to_le16(lo->ldo_stripenr);
+	lmm->lmm_layout_gen = 0;
+	if (magic == LOV_MAGIC_V1) {
+		objs = &lmm->lmm_objects[0];
+	} else {
+		struct lov_mds_md_v3 *v3 = (struct lov_mds_md_v3 *) lmm;
+		strncpy(v3->lmm_pool_name, lo->ldo_pool, LOV_MAXPOOLNAME);
+		objs = &v3->lmm_objects[0];
+	}
+
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		const struct lu_fid *fid;
+
+		LASSERT(lo->ldo_stripe[i]);
+		fid = lu_object_fid(&lo->ldo_stripe[i]->do_lu);
+
+		rc = fid_ostid_pack(fid, &info->lti_ostid);
+		LASSERT(rc == 0);
+		LASSERT(info->lti_ostid.oi_seq == FID_SEQ_OST_MDT0);
+
+		objs[i].l_object_id  = cpu_to_le64(info->lti_ostid.oi_id);
+		objs[i].l_object_seq = cpu_to_le64(info->lti_ostid.oi_seq);
+		objs[i].l_ost_gen    = cpu_to_le32(1);
+		objs[i].l_ost_idx    = cpu_to_le32(fid_idif_ost_idx(fid));
+	}
+
+	info->lti_buf.lb_buf = lmm;
+	info->lti_buf.lb_len = lmm_size;
+	rc = dt_xattr_set(env, next, &info->lti_buf, XATTR_NAME_LOV, 0,
+			  th, BYPASS_CAPA);
+
+	RETURN(rc);
+}
+
 int lod_get_lov_ea(const struct lu_env *env, struct lod_object *lo)
 {
 	struct lod_thread_info *info = lod_env_info(env);

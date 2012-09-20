@@ -534,6 +534,13 @@ static inline obd_id fid_idif_id(obd_seq seq, __u32 oid, __u32 ver)
         return ((__u64)ver << 48) | ((seq & 0xffff) << 32) | oid;
 }
 
+/* extract ost index from IDIF FID */
+static inline __u32 fid_idif_ost_idx(const struct lu_fid *fid)
+{
+	LASSERT(fid_is_idif(fid));
+	return (fid_seq(fid) >> 16) & 0xffff;
+}
+
 /* unpack an ostid (id/seq) from a wire/disk structure into an IDIF FID */
 static inline void ostid_idif_unpack(struct ost_id *ostid,
                                      struct lu_fid *fid, __u32 ost_idx)

@@ -292,8 +292,34 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 				 struct thandle *th)
 {
 	struct dt_object *next = dt_object_child(dt);
+	struct lu_attr	 *attr = &lod_env_info(env)->lti_attr;
+	__u32		  mode;
 	int		  rc;
 	ENTRY;
+
+	/*
+	 * allow to declare predefined striping on a new (!mode) object
+	 * which is supposed to be replay of regular file creation
+	 * (when LOV setting is declared)
+	 */
+	mode = dt->do_lu.lo_header->loh_attr & S_IFMT;
+	if ((S_ISREG(mode) || !mode) && !strcmp(name, XATTR_NAME_LOV)) {
+		/*
+		 * this is a request to manipulate object's striping
+		 */
+		if (dt_object_exists(dt)) {
+			rc = dt_attr_get(env, next, attr, BYPASS_CAPA);
+			if (rc)
+				RETURN(rc);
+		} else {
+			memset(attr, 0, sizeof(attr));
+			attr->la_valid = LA_TYPE | LA_MODE;
+			attr->la_mode = S_IFREG;
+		}
+		rc = lod_declare_striped_object(env, dt, attr, buf, th);
+		if (rc)
+			RETURN(rc);
+	}
 
 	rc = dt_declare_xattr_set(env, next, buf, name, fl, th);
 
@@ -375,6 +401,14 @@ static int lod_xattr_set(const struct lu_env *env,
 		else
 			rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
 
+	} else if (S_ISREG(attr) && !strcmp(name, XATTR_NAME_LOV)) {
+		/*
+		 * XXX: check striping match what we already have
+		 * during req replay, declare_xattr_set() defines striping,
+		 * then create() does the work
+		 */
+		rc = lod_striping_create(env, dt, NULL, NULL, th);
+		RETURN(rc);
 	} else {
 		/*
 		 * behave transparantly for all other EAs
@@ -600,6 +634,43 @@ static void lod_ah_init(const struct lu_env *env,
 	EXIT;
 }
 
+/**
+ * Create declaration of striped object
+ */
+int lod_declare_striped_object(const struct lu_env *env, struct dt_object *dt,
+			       struct lu_attr *attr,
+			       const struct lu_buf *lovea, struct thandle *th)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct dt_object	*next = dt_object_child(dt);
+	struct lod_object	*lo = lod_dt_obj(dt);
+	int			 rc;
+	ENTRY;
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_ALLOC_OBDO)) {
+		/* failed to create striping, let's reset
+		 * config so that others don't get confused */
+		lod_object_free_striping(env, lo);
+		GOTO(out, rc = -ENOMEM);
+	}
+
+	/* XXX: there will be a call to QoS here */
+	RETURN(0);
+
+	/*
+	 * declare storage for striping data
+	 */
+	info->lti_buf.lb_len = lov_mds_md_size(lo->ldo_stripenr,
+				lo->ldo_pool ?  LOV_MAGIC_V3 : LOV_MAGIC_V1);
+	rc = dt_declare_xattr_set(env, next, &info->lti_buf, XATTR_NAME_LOV,
+				  0, th);
+	if (rc)
+		GOTO(out, rc);
+
+out:
+	RETURN(rc);
+}
+
 static int lod_declare_object_create(const struct lu_env *env,
 				     struct dt_object *dt,
 				     struct lu_attr *attr,
@@ -627,7 +698,20 @@ static int lod_declare_object_create(const struct lu_env *env,
 	if (dof->dof_type == DFT_SYM)
 		dt->do_body_ops = &lod_body_lnk_ops;
 
-	if (dof->dof_type == DFT_DIR && lo->ldo_striping_cached) {
+	/*
+	 * it's lod_ah_init() who has decided the object will striped
+	 */
+	if (dof->dof_type == DFT_REGULAR) {
+		/* callers don't want stripes */
+		/* XXX: all tricky interactions with ->ah_make_hint() decided
+		 * to use striping, then ->declare_create() behaving differently
+		 * should be cleaned */
+		if (dof->u.dof_reg.striped == 0)
+			lo->ldo_stripenr = 0;
+		if (lo->ldo_stripenr > 0)
+			rc = lod_declare_striped_object(env, dt, attr,
+							NULL, th);
+	} else if (dof->dof_type == DFT_DIR && lo->ldo_striping_cached) {
 		struct lod_thread_info *info = lod_env_info(env);
 
 		info->lti_buf.lb_buf = NULL;
@@ -641,12 +725,39 @@ out:
 	RETURN(rc);
 }
 
+int lod_striping_create(const struct lu_env *env, struct dt_object *dt,
+			struct lu_attr *attr, struct dt_object_format *dof,
+			struct thandle *th)
+{
+	struct lod_object *lo = lod_dt_obj(dt);
+	int		   rc = 0, i;
+	ENTRY;
+
+	LASSERT(lo->ldo_stripe);
+	LASSERT(lo->ldo_stripe > 0);
+	LASSERT(lo->ldo_striping_cached == 0);
+
+	/* create all underlying objects */
+	for (i = 0; i < lo->ldo_stripenr; i++) {
+		LASSERT(lo->ldo_stripe[i]);
+		rc = dt_create(env, lo->ldo_stripe[i], attr, NULL, dof, th);
+
+		if (rc)
+			break;
+	}
+	if (rc == 0)
+		rc = lod_generate_and_set_lovea(env, lo, th);
+
+	RETURN(rc);
+}
+
 static int lod_object_create(const struct lu_env *env, struct dt_object *dt,
 			     struct lu_attr *attr,
 			     struct dt_allocation_hint *hint,
 			     struct dt_object_format *dof, struct thandle *th)
 {
 	struct dt_object   *next = dt_object_child(dt);
+	struct lod_object  *lo = lod_dt_obj(dt);
 	int		    rc;
 	ENTRY;
 
@@ -656,6 +767,8 @@ static int lod_object_create(const struct lu_env *env, struct dt_object *dt,
 	if (rc == 0) {
 		if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
 			rc = lod_store_def_striping(env, dt, th);
+		else if (lo->ldo_stripe)
+			rc = lod_striping_create(env, dt, attr, dof, th);
 	}
 
 	RETURN(rc);

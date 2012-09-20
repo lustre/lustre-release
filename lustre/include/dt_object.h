@@ -262,6 +262,7 @@ struct dt_object_format {
         enum dt_format_type dof_type;
         union {
                 struct dof_regular {
+			int striped;
                 } dof_reg;
                 struct dof_dir {
                 } dof_dir;

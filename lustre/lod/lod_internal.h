@@ -262,6 +262,8 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *mo,
 int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
 			   struct thandle *th);
 int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf, int specific);
+int lod_generate_and_set_lovea(const struct lu_env *env,
+			       struct lod_object *mo, struct thandle *th);
 
 /* lod_pool.c */
 int lod_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count);
@@ -288,6 +290,13 @@ void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars);
 
 /* lod_object.c */
 int lod_object_set_pool(struct lod_object *o, char *pool);
+int lod_declare_striped_object(const struct lu_env *env, struct dt_object *dt,
+			       struct lu_attr *attr,
+			       const struct lu_buf *lovea, struct thandle *th);
+int lod_striping_create(const struct lu_env *env, struct dt_object *dt,
+			struct lu_attr *attr, struct dt_object_format *dof,
+			struct thandle *th);
+void lod_object_free_striping(const struct lu_env *env, struct lod_object *lo);
 
 #endif
 
