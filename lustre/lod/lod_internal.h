@@ -281,6 +281,9 @@ int lod_pool_add(struct obd_device *obd, char *poolname, char *ostname);
 int lod_pool_remove(struct obd_device *obd, char *poolname, char *ostname);
 
 /* lod_qos.c */
+int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
+			struct lu_attr *attr, const struct lu_buf *buf,
+			struct thandle *th);
 int qos_add_tgt(struct lod_device*, struct lod_ost_desc *);
 int qos_del_tgt(struct lod_device *, struct lod_ost_desc *);
 

@@ -75,10 +75,31 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
         struct lu_site          *site;
         struct lu_object        *orig;
         cfs_hash_bd_t            bd;
+	const struct lu_fid     *fid;
 
         top  = o->lo_header;
         site = o->lo_dev->ld_site;
         orig = o;
+
+	/*
+	 * till we have full fids-on-OST implemented anonymous objects
+	 * are possible in OSP. such an object isn't listed in the site
+	 * so we should not remove it from the site.
+	 */
+	fid = lu_object_fid(o);
+	if (fid_is_zero(fid)) {
+		LASSERT(top->loh_hash.next == NULL
+			&& top->loh_hash.pprev == NULL);
+		LASSERT(cfs_list_empty(&top->loh_lru));
+		if (!cfs_atomic_dec_and_test(&top->loh_ref))
+			return;
+		cfs_list_for_each_entry_reverse(o, &top->loh_layers, lo_linkage) {
+			if (o->lo_ops->loo_object_release != NULL)
+				o->lo_ops->loo_object_release(env, o);
+		}
+		lu_object_free(env, orig);
+		return;
+	}
 
         cfs_hash_bd_get(site->ls_obj_hash, &top->loh_fid, &bd);
         bkt = cfs_hash_bd_extra_get(site->ls_obj_hash, &bd);
@@ -2091,3 +2112,22 @@ void lu_object_assign_fid(const struct lu_env *env, struct lu_object *o,
 	cfs_hash_bd_unlock(hs, &bd, 1);
 }
 EXPORT_SYMBOL(lu_object_assign_fid);
+
+/**
+ * allocates object with 0 (non-assiged) fid
+ * XXX: temporary solution to be able to assign fid in ->do_create()
+ *      till we have fully-functional OST fids
+ */
+struct lu_object *lu_object_anon(const struct lu_env *env,
+				 struct lu_device *dev,
+				 const struct lu_object_conf *conf)
+{
+	struct lu_fid     fid;
+	struct lu_object *o;
+
+	fid_zero(&fid);
+	o = lu_object_alloc(env, dev, &fid, conf);
+
+	return o;
+}
+EXPORT_SYMBOL(lu_object_anon);

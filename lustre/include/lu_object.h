@@ -1339,6 +1339,9 @@ void lu_kmem_fini(struct lu_kmem_descr *caches);
 
 void lu_object_assign_fid(const struct lu_env *env, struct lu_object *o,
 			  const struct lu_fid *fid);
+struct lu_object *lu_object_anon(const struct lu_env *env,
+				 struct lu_device *dev,
+				 const struct lu_object_conf *conf);
 
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */

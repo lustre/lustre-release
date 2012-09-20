@@ -654,8 +654,14 @@ int lod_declare_striped_object(const struct lu_env *env, struct dt_object *dt,
 		GOTO(out, rc = -ENOMEM);
 	}
 
-	/* XXX: there will be a call to QoS here */
-	RETURN(0);
+	/* choose OST and generate appropriate objects */
+	rc = lod_qos_prep_create(env, lo, attr, lovea, th);
+	if (rc) {
+		/* failed to create striping, let's reset
+		 * config so that others don't get confused */
+		lod_object_free_striping(env, lo);
+		GOTO(out, rc);
+	}
 
 	/*
 	 * declare storage for striping data
