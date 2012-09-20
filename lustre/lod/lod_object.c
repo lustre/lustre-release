@@ -634,6 +634,53 @@ static void lod_ah_init(const struct lu_env *env,
 	EXIT;
 }
 
+#define ll_do_div64(aaa,bbb)    do_div((aaa), (bbb))
+/*
+ * this function handles a special case when truncate was done
+ * on a stripeless object and now striping is being created
+ * we can't lose that size, so we have to propagate it to newly
+ * created object
+ */
+static int lod_declare_init_size(const struct lu_env *env,
+				 struct dt_object *dt, struct thandle *th)
+{
+	struct dt_object   *next = dt_object_child(dt);
+	struct lod_object  *lo = lod_dt_obj(dt);
+	struct lu_attr	   *attr = &lod_env_info(env)->lti_attr;
+	uint64_t	    size, offs;
+	int		    rc, stripe;
+	ENTRY;
+
+	/* XXX: we support the simplest (RAID0) striping so far */
+	LASSERT(lo->ldo_stripe || lo->ldo_stripenr == 0);
+	LASSERT(lo->ldo_stripe_size > 0);
+
+	rc = dt_attr_get(env, next, attr, BYPASS_CAPA);
+	LASSERT(attr->la_valid & LA_SIZE);
+	if (rc)
+		RETURN(rc);
+
+	size = attr->la_size;
+	if (size == 0)
+		RETURN(0);
+
+	/* ll_do_div64(a, b) returns a % b, and a = a / b */
+	ll_do_div64(size, (__u64) lo->ldo_stripe_size);
+	stripe = ll_do_div64(size, (__u64) lo->ldo_stripenr);
+
+	size = size * lo->ldo_stripe_size;
+	offs = attr->la_size;
+	size += ll_do_div64(offs, lo->ldo_stripe_size);
+
+	attr->la_valid = LA_SIZE;
+	attr->la_size = size;
+
+	rc = dt_declare_attr_set(env, lo->ldo_stripe[stripe], attr, th);
+
+	RETURN(rc);
+}
+
+
 /**
  * Create declaration of striped object
  */
@@ -672,6 +719,14 @@ int lod_declare_striped_object(const struct lu_env *env, struct dt_object *dt,
 				  0, th);
 	if (rc)
 		GOTO(out, rc);
+
+	/*
+	 * if striping is created with local object's size > 0,
+	 * we have to propagate this size to specific object
+	 * the case is possible only when local object was created previously
+	 */
+	if (dt_object_exists(next))
+		rc = lod_declare_init_size(env, dt, th);
 
 out:
 	RETURN(rc);
