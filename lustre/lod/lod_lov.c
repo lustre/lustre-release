@@ -445,6 +445,56 @@ repeat:
 	RETURN(rc);
 }
 
+int lod_store_def_striping(const struct lu_env *env, struct dt_object *dt,
+			   struct thandle *th)
+{
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct lod_object	*lo = lod_dt_obj(dt);
+	struct dt_object	*next = dt_object_child(dt);
+	struct lov_user_md_v3	*v3;
+	int			 rc;
+	ENTRY;
+
+	LASSERT(S_ISDIR(dt->do_lu.lo_header->loh_attr));
+
+	/*
+	 * store striping defaults into new directory
+	 * used to implement defaults inheritance
+	 */
+
+	/* probably nothing to inherite */
+	if (lo->ldo_striping_cached == 0)
+		RETURN(0);
+
+	if (LOVEA_DELETE_VALUES(lo->ldo_def_stripe_size, lo->ldo_def_stripenr,
+				lo->ldo_def_stripe_offset))
+		RETURN(0);
+
+	/* XXX: use thread info */
+	OBD_ALLOC_PTR(v3);
+	if (v3 == NULL)
+		RETURN(-ENOMEM);
+
+	v3->lmm_magic = cpu_to_le32(LOV_MAGIC_V3);
+	v3->lmm_pattern = cpu_to_le32(LOV_PATTERN_RAID0);
+	v3->lmm_object_id = 0;
+	v3->lmm_object_seq = 0;
+	v3->lmm_stripe_size = cpu_to_le32(lo->ldo_def_stripe_size);
+	v3->lmm_stripe_count = cpu_to_le16(lo->ldo_def_stripenr);
+	v3->lmm_stripe_offset = cpu_to_le16(lo->ldo_def_stripe_offset);
+	if (lo->ldo_pool)
+		strncpy(v3->lmm_pool_name, lo->ldo_pool, LOV_MAXPOOLNAME);
+
+	info->lti_buf.lb_buf = v3;
+	info->lti_buf.lb_len = sizeof(*v3);
+	rc = dt_xattr_set(env, next, &info->lti_buf, XATTR_NAME_LOV, 0, th,
+			BYPASS_CAPA);
+
+	OBD_FREE_PTR(v3);
+
+	RETURN(rc);
+}
+
 /*
  * allocate array of objects pointers, find/create objects
  * stripenr and other fields should be initialized by this moment
@@ -597,6 +647,90 @@ int lod_load_striping(const struct lu_env *env, struct lod_object *lo)
 out:
 	dt_write_unlock(env, next);
 	RETURN(rc);
+}
+
+int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
+			int specific)
+{
+	struct lov_user_md_v1	*lum;
+	struct lov_user_md_v3	*v3 = NULL;
+	struct pool_desc	*pool = NULL;
+	int			 rc;
+	ENTRY;
+
+	lum = buf->lb_buf;
+
+	if (lum->lmm_magic != LOV_USER_MAGIC_V1 &&
+	    lum->lmm_magic != LOV_USER_MAGIC_V3 &&
+	    lum->lmm_magic != LOV_MAGIC_V1_DEF &&
+	    lum->lmm_magic != LOV_MAGIC_V3_DEF) {
+		CDEBUG(D_IOCTL, "bad userland LOV MAGIC: %#x\n",
+		       lum->lmm_magic);
+		RETURN(-EINVAL);
+	}
+
+	if ((specific && lum->lmm_pattern != LOV_PATTERN_RAID0) ||
+	    (specific == 0 && lum->lmm_pattern != 0)) {
+		CDEBUG(D_IOCTL, "bad userland stripe pattern: %#x\n",
+		       lum->lmm_pattern);
+		RETURN(-EINVAL);
+	}
+
+	/* 64kB is the largest common page size we see (ia64), and matches the
+	 * check in lfs */
+	if (lum->lmm_stripe_size & (LOV_MIN_STRIPE_SIZE - 1)) {
+		CDEBUG(D_IOCTL, "stripe size %u not multiple of %u, fixing\n",
+		       lum->lmm_stripe_size, LOV_MIN_STRIPE_SIZE);
+		RETURN(-EINVAL);
+	}
+
+	/* an offset of -1 is treated as a "special" valid offset */
+	if (lum->lmm_stripe_offset != (typeof(lum->lmm_stripe_offset))(-1)) {
+		/* if offset is not within valid range [0, osts_size) */
+		if (lum->lmm_stripe_offset >= d->lod_osts_size) {
+			CDEBUG(D_IOCTL, "stripe offset %u >= bitmap size %u\n",
+			       lum->lmm_stripe_offset, d->lod_osts_size);
+			RETURN(-EINVAL);
+		}
+
+		/* if lmm_stripe_offset is *not* in bitmap */
+		if (!cfs_bitmap_check(d->lod_ost_bitmap,
+				      lum->lmm_stripe_offset)) {
+			CDEBUG(D_IOCTL, "stripe offset %u not in bitmap\n",
+			       lum->lmm_stripe_offset);
+			RETURN(-EINVAL);
+		}
+	}
+
+	if (lum->lmm_magic == LOV_USER_MAGIC_V3)
+		v3 = buf->lb_buf;
+
+	if (v3)
+		pool = lod_find_pool(d, v3->lmm_pool_name);
+
+	if (pool != NULL) {
+		__u16 offs = v3->lmm_stripe_offset;
+
+		if (offs != (typeof(v3->lmm_stripe_offset))(-1)) {
+			rc = lod_check_index_in_pool(offs, pool);
+			if (rc < 0) {
+				lod_pool_putref(pool);
+				RETURN(-EINVAL);
+			}
+		}
+
+		if (specific && lum->lmm_stripe_count > pool_tgt_count(pool)) {
+			CDEBUG(D_IOCTL,
+			       "stripe count %u > # OSTs %u in the pool\n",
+			       lum->lmm_stripe_count, pool_tgt_count(pool));
+			lod_pool_putref(pool);
+			RETURN(-EINVAL);
+		}
+
+		lod_pool_putref(pool);
+	}
+
+	RETURN(0);
 }
 
 void lod_fix_desc_stripe_size(__u64 *val)

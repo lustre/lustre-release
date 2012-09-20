@@ -235,7 +235,44 @@ static int lod_xattr_get(const struct lu_env *env, struct dt_object *dt,
 			 struct lu_buf *buf, const char *name,
 			 struct lustre_capa *capa)
 {
-	return dt_xattr_get(env, dt_object_child(dt), buf, name, capa);
+	struct lod_thread_info	*info = lod_env_info(env);
+	struct lod_device	*dev = lu2lod_dev(dt->do_lu.lo_dev);
+	int			 rc, is_root;
+	ENTRY;
+
+	rc = dt_xattr_get(env, dt_object_child(dt), buf, name, capa);
+	if (rc != -ENODATA || !S_ISDIR(dt->do_lu.lo_header->loh_attr & S_IFMT))
+		RETURN(rc);
+
+	/*
+	 * lod returns default striping on the real root of the device
+	 * this is like the root stores default striping for the whole
+	 * filesystem. historically we've been using a different approach
+	 * and store it in the config.
+	 */
+	dt_root_get(env, dev->lod_child, &info->lti_fid);
+	is_root = lu_fid_eq(&info->lti_fid, lu_object_fid(&dt->do_lu));
+
+	if (is_root && strcmp(XATTR_NAME_LOV, name) == 0) {
+		struct lov_user_md *lum = buf->lb_buf;
+		struct lov_desc    *desc = &dev->lod_desc;
+
+		if (buf->lb_buf == NULL) {
+			rc = sizeof(struct lov_user_md_v1);
+		} else if (buf->lb_len >= sizeof(struct lov_user_md_v1)) {
+			lum->lmm_magic = LOV_USER_MAGIC_V1;
+			lum->lmm_object_seq = FID_SEQ_LOV_DEFAULT;
+			lum->lmm_pattern = desc->ld_pattern;
+			lum->lmm_stripe_size = desc->ld_default_stripe_size;
+			lum->lmm_stripe_count = desc->ld_default_stripe_count;
+			lum->lmm_stripe_offset = desc->ld_default_stripe_offset;
+			rc = sizeof(struct lov_user_md_v1);
+		} else {
+			rc = -ERANGE;
+		}
+	}
+
+	RETURN(rc);
 }
 
 /*
@@ -263,19 +300,87 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 	RETURN(rc);
 }
 
+static int lod_xattr_set_lov_on_dir(const struct lu_env *env,
+				    struct dt_object *dt,
+				    const struct lu_buf *buf,
+				    const char *name, int fl,
+				    struct thandle *th,
+				    struct lustre_capa *capa)
+{
+	struct lod_device	*d = lu2lod_dev(dt->do_lu.lo_dev);
+	struct dt_object	*next = dt_object_child(dt);
+	struct lod_object	*l = lod_dt_obj(dt);
+	struct lov_user_md_v1	*lum;
+	struct lov_user_md_v3	*v3 = NULL;
+	int			 rc;
+	ENTRY;
+
+	LASSERT(l->ldo_stripe == NULL);
+	l->ldo_striping_cached = 0;
+	l->ldo_def_striping_set = 0;
+	lod_object_set_pool(l, NULL);
+	l->ldo_def_stripe_size = 0;
+	l->ldo_def_stripenr = 0;
+
+	LASSERT(buf);
+	LASSERT(buf->lb_buf);
+	lum = buf->lb_buf;
+
+	rc = lod_verify_striping(d, buf, 0);
+	if (rc)
+		RETURN(rc);
+
+	if (lum->lmm_magic == LOV_USER_MAGIC_V3)
+		v3 = buf->lb_buf;
+
+	/* if { size, offset, count } = { 0, -1, 0 } and no pool
+	 * (i.e. all default values specified) then delete default
+	 * striping from dir. */
+	CDEBUG(D_OTHER,
+		"set default striping: sz %u # %u offset %d %s %s\n",
+		(unsigned)lum->lmm_stripe_size,
+		(unsigned)lum->lmm_stripe_count,
+		(int)lum->lmm_stripe_offset,
+		v3 ? "from" : "", v3 ? v3->lmm_pool_name : "");
+
+	if (LOVEA_DELETE_VALUES((lum->lmm_stripe_size),
+				(lum->lmm_stripe_count),
+				(lum->lmm_stripe_offset)) &&
+			lum->lmm_magic == LOV_USER_MAGIC_V1) {
+		rc = dt_xattr_del(env, next, name, th, capa);
+		if (rc == -ENODATA)
+			rc = 0;
+	} else {
+		rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
+	}
+
+	RETURN(rc);
+}
+
 static int lod_xattr_set(const struct lu_env *env,
 			 struct dt_object *dt, const struct lu_buf *buf,
 			 const char *name, int fl, struct thandle *th,
 			 struct lustre_capa *capa)
 {
 	struct dt_object *next = dt_object_child(dt);
+	__u32		  attr;
 	int		  rc;
 	ENTRY;
 
-	/*
-	 * behave transparantly for all other EAs
-	 */
-	rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
+	attr = dt->do_lu.lo_header->loh_attr & S_IFMT;
+	if (S_ISDIR(attr)) {
+		if (strncmp(name, XATTR_NAME_LOV, strlen(XATTR_NAME_LOV)) == 0)
+			rc = lod_xattr_set_lov_on_dir(env, dt, buf, name,
+						      fl, th, capa);
+		else
+			rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
+
+	} else {
+		/*
+		 * behave transparantly for all other EAs
+		 */
+		rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
+	}
 
 	RETURN(rc);
 }
@@ -503,6 +608,7 @@ static int lod_declare_object_create(const struct lu_env *env,
 				     struct thandle *th)
 {
 	struct dt_object   *next = dt_object_child(dt);
+	struct lod_object  *lo = lod_dt_obj(dt);
 	int		    rc;
 	ENTRY;
 
@@ -521,6 +627,16 @@ static int lod_declare_object_create(const struct lu_env *env,
 	if (dof->dof_type == DFT_SYM)
 		dt->do_body_ops = &lod_body_lnk_ops;
 
+	if (dof->dof_type == DFT_DIR && lo->ldo_striping_cached) {
+		struct lod_thread_info *info = lod_env_info(env);
+
+		info->lti_buf.lb_buf = NULL;
+		info->lti_buf.lb_len = sizeof(struct lov_user_md_v3);
+		/* to transfer default striping from the parent */
+		rc = dt_declare_xattr_set(env, next, &info->lti_buf,
+					  XATTR_NAME_LOV, 0, th);
+	}
+
 out:
 	RETURN(rc);
 }
@@ -536,6 +652,11 @@ static int lod_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	/* create local object */
 	rc = dt_create(env, next, attr, hint, dof, th);
+
+	if (rc == 0) {
+		if (S_ISDIR(dt->do_lu.lo_header->loh_attr))
+			rc = lod_store_def_striping(env, dt, th);
+	}
 
 	RETURN(rc);
 }
