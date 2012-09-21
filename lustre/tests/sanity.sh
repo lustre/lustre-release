@@ -6244,6 +6244,8 @@ test_118h() {
 }
 run_test 118h "Verify timeout in handling recoverables errors  =========="
 
+[ "$SLOW" = "no" ] && [ -n "$OLD_RESENDCOUNT" ] && set_resend_count $OLD_RESENDCOUNT
+
 test_118i() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
@@ -6281,6 +6283,8 @@ test_118i() {
 	return 0
 }
 run_test 118i "Fix error before timeout in recoverable error  =========="
+
+[ "$SLOW" = "no" ] && set_resend_count 4
 
 test_118j() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return
