@@ -116,8 +116,6 @@ static inline void fid_to_logid(struct lu_fid *fid, struct llog_logid *id)
 struct llog_handle;
 
 /* llog.c  -  general API */
-typedef int (*llog_cb_t)(const struct lu_env *env, struct llog_handle *lgh,
-			 struct llog_rec_hdr *rec, void *data);
 int llog_init_handle(const struct lu_env *env, struct llog_handle *handle,
 		     int flags, struct obd_uuid *uuid);
 int llog_process(const struct lu_env *env, struct llog_handle *loghandle,

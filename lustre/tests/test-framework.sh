@@ -480,6 +480,7 @@ load_modules_local() {
 		else
 			load_module obdfilter/obdfilter
 		fi
+		load_module osp/osp
     fi
 
 

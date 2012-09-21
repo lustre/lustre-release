@@ -124,6 +124,10 @@ int kuc_ispayload(void *p);
 void *kuc_alloc(int payload_len, int transport, int type);
 void kuc_free(void *p, int payload_len);
 
+struct llog_handle;
+struct llog_rec_hdr;
+typedef int (*llog_cb_t)(const struct lu_env *, struct llog_handle *,
+			 struct llog_rec_hdr *, void *);
 /* obd_config.c */
 struct lustre_cfg *lustre_cfg_rename(struct lustre_cfg *cfg,
 				     const char *new_name);
@@ -139,6 +143,11 @@ struct obd_device *class_incref(struct obd_device *obd,
 void class_decref(struct obd_device *obd,
                   const char *scope, const void *source);
 void dump_exports(struct obd_device *obd, int locks);
+int class_config_llog_handler(const struct lu_env *env,
+			      struct llog_handle *handle,
+			      struct llog_rec_hdr *rec, void *data);
+int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg);
+int class_add_uuid(const char *uuid, __u64 nid);
 
 /*obdecho*/
 #ifdef LPROCFS
@@ -162,6 +171,7 @@ struct config_llog_instance {
         void               *cfg_instance;
         struct super_block *cfg_sb;
         struct obd_uuid     cfg_uuid;
+	llog_cb_t	    cfg_callback;
         int                 cfg_last_idx; /* for partial llog processing */
         int                 cfg_flags;
 };
@@ -2262,11 +2272,28 @@ static inline void fid2obdo(struct lu_fid *fid, struct obdo *oa)
         /* something here */
 }
 
+typedef int (*register_osp_cb)(void *data);
+
+struct osp_register_item {
+	struct obd_export **ori_exp;
+	register_osp_cb	    ori_cb_func;
+	void		   *ori_cb_data;
+	cfs_list_t	    ori_list;
+	char		    ori_name[MTI_NAME_MAXLEN];
+};
+
 /* I'm as embarrassed about this as you are.
  *
  * <shaver> // XXX do not look into _superhack with remaining eye
  * <shaver> // XXX if this were any uglier, I'd get my own show on MTV */
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
+
+/* obd_mount.c */
+int server_name2fsname(char *svname, char *fsname, char **endptr);
+int lustre_register_osp_item(char *ospname, struct obd_export **exp,
+			     register_osp_cb cb_func, void *cb_data);
+void lustre_deregister_osp_item(struct obd_export **exp);
+int tgt_name2ospname(char *ost_name, char *osp_name);
 
 /* sysctl.c */
 extern void obd_sysctl_init (void);

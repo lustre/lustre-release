@@ -800,6 +800,7 @@ int class_add_conn(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(class_add_conn);
 
 /** Remove a failover nid location.
  */
@@ -1334,9 +1335,9 @@ extern int lustre_check_exclusion(struct super_block *sb, char *svname);
  * records, change uuids, etc), then class_process_config() resulting
  * net records.
  */
-static int class_config_llog_handler(const struct lu_env *env,
-				     struct llog_handle *handle,
-				     struct llog_rec_hdr *rec, void *data)
+int class_config_llog_handler(const struct lu_env *env,
+			      struct llog_handle *handle,
+			      struct llog_rec_hdr *rec, void *data)
 {
         struct config_llog_instance *clli = data;
         int cfg_len = rec->lrh_len;
@@ -1547,14 +1548,15 @@ out:
         }
         RETURN(rc);
 }
+EXPORT_SYMBOL(class_config_llog_handler);
 
 int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 			    char *name, struct config_llog_instance *cfg)
 {
 	struct llog_process_cat_data	 cd = {0, 0};
 	struct llog_handle		*llh;
+	llog_cb_t			 callback;
 	int				 rc;
-
 	ENTRY;
 
 	CDEBUG(D_INFO, "looking up llog %s\n", name);
@@ -1567,11 +1569,17 @@ int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
 		GOTO(parse_out, rc);
 
 	/* continue processing from where we last stopped to end-of-log */
-	if (cfg)
+	if (cfg) {
 		cd.lpcd_first_idx = cfg->cfg_last_idx;
+		callback = cfg->cfg_callback;
+		LASSERT(callback != NULL);
+	} else {
+		callback = class_config_llog_handler;
+	}
+
 	cd.lpcd_last_idx = 0;
 
-	rc = llog_process(env, llh, class_config_llog_handler, cfg, &cd);
+	rc = llog_process(env, llh, callback, cfg, &cd);
 
 	CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name,
 	       cd.lpcd_first_idx + 1, cd.lpcd_last_idx, rc);

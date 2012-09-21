@@ -42,6 +42,7 @@
 #define _OSP_INTERNAL_H
 
 #include <obd.h>
+#include <obd_class.h>
 #include <dt_object.h>
 #include <lustre_fid.h>
 
@@ -182,6 +183,7 @@ struct osp_object {
 };
 
 extern struct lu_object_operations osp_lu_obj_ops;
+extern const struct dt_device_operations osp_dt_ops;
 
 struct osp_thread_info {
 	struct lu_buf		 osi_lb;
@@ -313,5 +315,11 @@ int osp_sync_add(const struct lu_env *env, struct osp_object *o,
 int osp_sync_init(const struct lu_env *env, struct osp_device *d);
 int osp_sync_fini(struct osp_device *d);
 void __osp_sync_check_for_work(struct osp_device *d);
+
+/* osp_ost.c */
+int osp_init_for_ost(const struct lu_env *env, struct osp_device *m,
+		     struct lu_device_type *ldt, struct lustre_cfg *cfg);
+int osp_disconnect(struct osp_device *d);
+int osp_fini_for_ost(struct osp_device *osp);
 
 #endif

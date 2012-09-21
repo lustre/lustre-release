@@ -856,6 +856,33 @@ struct niobuf_local {
 /* Don't conflict with on-wire flags OBD_BRW_WRITE, etc */
 #define N_LOCAL_TEMP_PAGE 0x10000000
 
+static inline int is_osp_on_ost(char *name)
+{
+	char   *ptr;
+
+	ptr = strrchr(name, '-');
+	if (ptr == NULL) {
+		CERROR("%s is not a obdname\n", name);
+		return 0;
+	}
+
+	if (strncmp(ptr + 1, "OST", 3) != 0 && strncmp(ptr + 1, "MDT", 3) != 0)
+		return 0;
+
+	/* match the "-osp" */
+	if (ptr - name < strlen(LUSTRE_OSP_NAME) + 1)
+		return 0;
+
+	ptr -= (strlen(LUSTRE_OSP_NAME) + 1);
+	if (*ptr != '-')
+		return 0;
+
+	if (strncmp(ptr + 1, LUSTRE_OSP_NAME, strlen(LUSTRE_OSP_NAME)) != 0)
+		return 0;
+
+	return 1;
+}
+
 struct obd_trans_info {
         __u64                    oti_transno;
         __u64                    oti_xid;

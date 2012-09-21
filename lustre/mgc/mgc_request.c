@@ -214,6 +214,8 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
         strcpy(cld->cld_logname, logname);
         if (cfg)
                 cld->cld_cfg = *cfg;
+	else
+		cld->cld_cfg.cfg_callback = class_config_llog_handler;
         cfs_mutex_init(&cld->cld_lock);
         cld->cld_cfg.cfg_last_idx = 0;
         cld->cld_cfg.cfg_flags = 0;
@@ -261,6 +263,10 @@ static struct config_llog_data *config_recover_log_add(struct obd_device *obd,
 
 	if (IS_OST(lsi))
                 return NULL;
+
+	/* for osp-on-ost, see lustre_start_osp() */
+	if (IS_MDT(lsi) && lcfg.cfg_instance)
+		return NULL;
 
         /* we have to use different llog for clients and mdts for cmd
          * where only clients are notified if one of cmd server restarts */

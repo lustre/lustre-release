@@ -822,6 +822,609 @@ static int server_mgc_clear_fs(struct obd_device *mgc)
         RETURN(rc);
 }
 
+/** Get the fsname ("lustre") from the server name ("lustre-OST003F").
+ * @param [in] svname server name including type and index
+ * @param [out] fsname Buffer to copy filesystem name prefix into.
+ *  Must have at least 'strlen(fsname) + 1' chars.
+ * @param [out] endptr if endptr isn't NULL it is set to end of fsname
+ * rc < 0  on error
+ */
+int server_name2fsname(char *svname, char *fsname, char **endptr)
+{
+	char *dash = strrchr(svname, '-');
+	if (!dash) {
+		dash = strrchr(svname, ':');
+		if (!dash)
+			return -EINVAL;
+	}
+
+	/* interpret <fsname>-MDTXXXXX-mdc as mdt, the better way is to pass
+	 * in the fsname, then determine the server index */
+	if (!strcmp(LUSTRE_MDC_NAME, dash + 1)) {
+		dash--;
+		for (; dash > svname && *dash != '-' && *dash != ':'; dash--)
+			;
+		if (dash == svname)
+			return -EINVAL;
+	}
+
+	if (fsname != NULL) {
+		strncpy(fsname, svname, dash - svname);
+		fsname[dash - svname] = '\0';
+	}
+
+	if (endptr != NULL)
+		*endptr = dash;
+
+	return 0;
+}
+EXPORT_SYMBOL(server_name2fsname);
+
+static int is_mdc_device(char *devname)
+{
+	char *ptr;
+	ptr = strrchr(devname, '-');
+	if (ptr != NULL && strcmp(ptr, "-mdc") == 0)
+		return 1;
+	return 0;
+}
+
+static int inline tgt_is_mdt0(char *tgtname)
+{
+	__u32 idx;
+	int   type;
+
+	type = server_name2index(tgtname, &idx, NULL);
+	if (type != LDD_F_SV_TYPE_MDT)
+		return 0;
+
+	return (idx == 0) ? 1 :0;
+}
+
+static int inline is_mdc_for_mdt0(char *devname)
+{
+	char   *ptr;
+
+	if (!is_mdc_device(devname))
+		return 0;
+
+	ptr = strrchr(devname, '-');
+	if (ptr == NULL)
+		return 0;
+
+	*ptr = 0;
+	if (tgt_is_mdt0(devname)) {
+		*ptr = '-';
+		return 1;
+	}
+	*ptr = '-';
+	return 0;
+}
+
+/**
+ * Convert OST/MDT name(fsname-OSTxxxx) to an osp name
+ * (fsname-MDT0000-osp-OSTxxxx), which will be used to
+ * communicate with MDT0 for this target.
+ **/
+int tgt_name2ospname(char *svname, char *ospname)
+{
+	char *fsname;
+	char *tgt;
+	int   rc;
+	ENTRY;
+
+	OBD_ALLOC(fsname, MTI_NAME_MAXLEN);
+	if (fsname == NULL)
+		RETURN(-ENOMEM);
+
+	rc = server_name2fsname(svname, fsname, &tgt);
+	if (rc != 0) {
+		CERROR("%s change fsname error: rc %d\n", svname, rc);
+		GOTO(cleanup, rc);
+	}
+
+	if (*tgt != '-' && *tgt != ':') {
+		CERROR("%s wrong svname name!\n", svname);
+		GOTO(cleanup, rc = -EINVAL);
+	}
+
+	tgt++;
+	if (strncmp(tgt, "OST", 3) != 0 && strncmp(tgt, "MDT", 3) != 0) {
+		CERROR("%s is not an OST or MDT target!\n", svname);
+		GOTO(cleanup, rc = -EINVAL);
+	}
+	sprintf(ospname, "%s-MDT0000-%s-%s", fsname, LUSTRE_OSP_NAME, tgt);
+cleanup:
+	if (fsname != NULL)
+		OBD_FREE(fsname, MTI_NAME_MAXLEN);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(tgt_name2ospname);
+
+static CFS_LIST_HEAD(osp_register_list);
+CFS_DEFINE_MUTEX(osp_register_list_lock);
+
+int lustre_register_osp_item(char *ospname, struct obd_export **exp,
+			     register_osp_cb cb_func, void *cb_data)
+{
+	struct obd_device	 *osp;
+	struct osp_register_item *ori;
+	ENTRY;
+
+	LASSERTF(strlen(ospname) < MTI_NAME_MAXLEN, "ospname is too long %s\n",
+		 ospname);
+	LASSERT(exp != NULL && *exp == NULL);
+
+	OBD_ALLOC_PTR(ori);
+	if (ori == NULL)
+		RETURN(-ENOMEM);
+
+	cfs_mutex_lock(&osp_register_list_lock);
+
+	osp = class_name2obd(ospname);
+	if (osp != NULL && osp->obd_set_up == 1) {
+		struct obd_uuid *uuid;
+
+		OBD_ALLOC_PTR(uuid);
+		if (uuid == NULL) {
+			cfs_mutex_unlock(&osp_register_list_lock);
+			RETURN(-ENOMEM);
+		}
+		memcpy(uuid->uuid, ospname, strlen(ospname));
+		*exp = cfs_hash_lookup(osp->obd_uuid_hash, uuid);
+		OBD_FREE_PTR(uuid);
+	}
+
+	memcpy(ori->ori_name, ospname, strlen(ospname));
+	ori->ori_exp = exp;
+	ori->ori_cb_func = cb_func;
+	ori->ori_cb_data = cb_data;
+	CFS_INIT_LIST_HEAD(&ori->ori_list);
+	cfs_list_add(&ori->ori_list, &osp_register_list);
+
+	if (*exp != NULL && cb_func != NULL)
+		cb_func(cb_data);
+
+	cfs_mutex_unlock(&osp_register_list_lock);
+	RETURN(0);
+}
+EXPORT_SYMBOL(lustre_register_osp_item);
+
+void lustre_deregister_osp_item(struct obd_export **exp)
+{
+	struct osp_register_item *ori, *tmp;
+
+	cfs_mutex_lock(&osp_register_list_lock);
+	cfs_list_for_each_entry_safe(ori, tmp, &osp_register_list, ori_list) {
+		if (exp == ori->ori_exp) {
+			if (*exp)
+				class_export_put(*exp);
+			cfs_list_del(&ori->ori_list);
+			OBD_FREE_PTR(ori);
+			break;
+		}
+	}
+	cfs_mutex_unlock(&osp_register_list_lock);
+}
+EXPORT_SYMBOL(lustre_deregister_osp_item);
+
+static void lustre_notify_osp_list(struct obd_export *exp)
+{
+	struct osp_register_item *ori, *tmp;
+	LASSERT(exp != NULL);
+
+	cfs_mutex_lock(&osp_register_list_lock);
+	cfs_list_for_each_entry_safe(ori, tmp, &osp_register_list, ori_list) {
+		if (strcmp(exp->exp_obd->obd_name, ori->ori_name))
+			continue;
+		if (*ori->ori_exp != NULL)
+			continue;
+		*ori->ori_exp = class_export_get(exp);
+		if (ori->ori_cb_func != NULL)
+			ori->ori_cb_func(ori->ori_cb_data);
+	}
+	cfs_mutex_unlock(&osp_register_list_lock);
+}
+
+static int lustre_osp_connect(struct obd_device *osp)
+{
+	struct lu_env		 env;
+	struct lu_context	 session_ctx;
+	struct obd_export	*exp;
+	struct obd_uuid		*uuid = NULL;
+	struct obd_connect_data	*data = NULL;
+	int			 rc;
+	ENTRY;
+
+	/* log has been fully processed, let clients connect */
+	rc = lu_env_init(&env, osp->obd_lu_dev->ld_type->ldt_ctx_tags);
+	if (rc != 0)
+		RETURN(rc);
+
+	lu_context_init(&session_ctx, LCT_SESSION);
+	session_ctx.lc_thread = NULL;
+	lu_context_enter(&session_ctx);
+	env.le_ses = &session_ctx;
+
+	OBD_ALLOC_PTR(data);
+	if (data == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX;
+	data->ocd_version = LUSTRE_VERSION_CODE;
+	data->ocd_ibits_known = MDS_INODELOCK_UPDATE;
+	data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_IBITS |
+				   OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID |
+				   OBD_CONNECT_AT | OBD_CONNECT_FULL20 |
+				   OBD_CONNECT_LIGHTWEIGHT;
+	OBD_ALLOC_PTR(uuid);
+	if (uuid == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	if (strlen(osp->obd_name) > sizeof(uuid->uuid)) {
+		CERROR("%s: Too long osp name %s, max_size is %d\n",
+		       osp->obd_name, osp->obd_name, (int)sizeof(uuid->uuid));
+		GOTO(out, rc = -EINVAL);
+	}
+	/* Use osp name as the uuid, so we find the export by
+	 * osp name later */
+	memcpy(uuid->uuid, osp->obd_name, strlen(osp->obd_name));
+	rc = obd_connect(&env, &exp, osp, uuid, data, NULL);
+	if (rc != 0)
+		CERROR("%s: connect failed: rc = %d\n", osp->obd_name, rc);
+	else
+		lustre_notify_osp_list(exp);
+
+out:
+	if (data != NULL)
+		OBD_FREE_PTR(data);
+	if (uuid != NULL)
+		OBD_FREE_PTR(uuid);
+
+	lu_env_fini(&env);
+	lu_context_exit(&session_ctx);
+	lu_context_fini(&session_ctx);
+
+	RETURN(rc);
+}
+
+/**
+ * osp-on-ost is used by slaves (Non-MDT0 targets) to manage the connection
+ * to MDT0.
+ *
+ * The OSTs will communicate with MDT0 by the connection established by the
+ * osp-on-ost to get quota and fid sequence.
+ *
+ **/
+static int lustre_osp_setup(struct lustre_cfg *lcfg, struct lustre_sb_info *lsi)
+{
+	struct obd_connect_data *data = NULL;
+	struct obd_device	*obd;
+	char			*ospname = NULL;
+	char			*ospuuid = NULL;
+	int			 rc;
+	ENTRY;
+
+	rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
+			    lcfg->lcfg_nid);
+	if (rc) {
+		CERROR("%s: Can't add uuid: rc =%d\n", lsi->lsi_svname, rc);
+		GOTO(out, rc);
+	}
+
+	OBD_ALLOC(ospname, MTI_NAME_MAXLEN);
+	if (ospname == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = tgt_name2ospname(lsi->lsi_svname, ospname);
+	if (rc != 0) {
+		CERROR("%s change ospname error: rc %d\n",
+		       lsi->lsi_svname, rc);
+		GOTO(out, rc);
+	}
+
+	OBD_ALLOC(ospuuid, MTI_NAME_MAXLEN);
+	if (ospuuid == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	sprintf(ospuuid, "%s_UUID", ospname);
+	rc = lustre_start_simple(ospname, LUSTRE_OSP_NAME,
+				 ospuuid, lustre_cfg_string(lcfg, 1),
+				 0, 0, 0);
+	if (rc) {
+		CERROR("%s: setup up failed: rc %d\n", ospname, rc);
+		GOTO(out, rc);
+	}
+
+	obd = class_name2obd(ospname);
+	LASSERT(obd != NULL);
+
+	rc = lustre_osp_connect(obd);
+	if (rc != 0)
+		CERROR("%s: connect failed: rc = %d\n", ospname, rc);
+out:
+	if (data != NULL)
+		OBD_FREE_PTR(data);
+	if (ospname != NULL)
+		OBD_FREE(ospname, MTI_NAME_MAXLEN);
+	if (ospuuid != NULL)
+		OBD_FREE(ospuuid, MTI_NAME_MAXLEN);
+
+	RETURN(rc);
+}
+
+static int lustre_osp_add_conn(struct lustre_cfg *cfg,
+                               struct lustre_sb_info *lsi)
+{
+	struct lustre_cfg_bufs *bufs = NULL;
+	struct lustre_cfg      *lcfg = NULL;
+	char		       *ospname = NULL;
+	struct obd_device      *osp;
+	int			rc;
+	ENTRY;
+
+	OBD_ALLOC(ospname, MTI_NAME_MAXLEN);
+	if (ospname == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = tgt_name2ospname(lsi->lsi_svname, ospname);
+	if (rc != 0) {
+		CERROR("%s change ospname error: rc %d\n",
+		       lsi->lsi_svname, rc);
+		GOTO(out, rc);
+	}
+
+	OBD_ALLOC_PTR(bufs);
+	if (bufs == NULL)
+		RETURN(-ENOMEM);
+
+	lustre_cfg_bufs_reset(bufs, ospname);
+	lustre_cfg_bufs_set_string(bufs, 1,
+				   lustre_cfg_string(cfg, 1));
+
+	lcfg = lustre_cfg_new(LCFG_ADD_CONN, bufs);
+
+	osp = class_name2obd(ospname);
+	if (osp == NULL) {
+		CERROR("Can not find %s\n", ospname);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	rc = class_add_conn(osp, lcfg);
+	if (rc)
+		CERROR("%s: can't add conn: rc = %d\n", ospname, rc);
+
+out:
+	if (bufs != NULL)
+		OBD_FREE_PTR(bufs);
+	if (lcfg != NULL)
+		lustre_cfg_free(lcfg);
+	if (ospname != NULL)
+		OBD_FREE(ospname, MTI_NAME_MAXLEN);
+
+	RETURN(rc);
+}
+
+/**
+ * Retrieve MDT nids from the client log, then start the osp-on-ost device.
+ * there are only two scenarios which would include mdt nid.
+ * 1.
+ * marker   5 (flags=0x01, v2.1.54.0) lustre-MDT0000  'add mdc' xxx-
+ * add_uuid  nid=192.168.122.162@tcp(0x20000c0a87aa2)  0:  1:192.168.122.162@tcp
+ * attach    0:lustre-MDT0000-mdc  1:mdc  2:lustre-clilmv_UUID
+ * setup     0:lustre-MDT0000-mdc  1:lustre-MDT0000_UUID  2:192.168.122.162@tcp
+ * add_uuid  nid=192.168.172.1@tcp(0x20000c0a8ac01)  0:  1:192.168.172.1@tcp
+ * add_conn  0:lustre-MDT0000-mdc  1:192.168.172.1@tcp
+ * modify_mdc_tgts add 0:lustre-clilmv  1:lustre-MDT0000_UUID xxxx
+ * marker   5 (flags=0x02, v2.1.54.0) lustre-MDT0000  'add mdc' xxxx-
+ * 2.
+ * marker   7 (flags=0x01, v2.1.54.0) lustre-MDT0000  'add failnid' xxxx-
+ * add_uuid  nid=192.168.122.2@tcp(0x20000c0a87a02)  0:  1:192.168.122.2@tcp
+ * add_conn  0:lustre-MDT0000-mdc  1:192.168.122.2@tcp
+ * marker   7 (flags=0x02, v2.1.54.0) lustre-MDT0000  'add failnid' xxxx-
+**/
+static int client_osp_config_process(const struct lu_env *env,
+				     struct llog_handle *handle,
+				     struct llog_rec_hdr *rec, void *data)
+{
+	struct config_llog_instance *clli = data;
+	int			     cfg_len = rec->lrh_len;
+	char			    *cfg_buf = (char *) (rec + 1);
+	struct lustre_cfg	    *lcfg = NULL;
+	struct lustre_sb_info	    *lsi;
+	int			     rc = 0, swab = 0;
+	ENTRY;
+
+	if (rec->lrh_type != OBD_CFG_REC) {
+		CERROR("Unknown llog record type %#x encountered\n",
+		       rec->lrh_type);
+		RETURN(-EINVAL);
+	}
+
+	LASSERT(clli->cfg_sb != NULL);
+	lsi = s2lsi(clli->cfg_sb);
+
+	lcfg = (struct lustre_cfg *)cfg_buf;
+	if (lcfg->lcfg_version == __swab32(LUSTRE_CFG_VERSION)) {
+		lustre_swab_lustre_cfg(lcfg);
+		swab = 1;
+	}
+
+	rc = lustre_cfg_sanity_check(cfg_buf, cfg_len);
+	if (rc)
+		GOTO(out, rc);
+
+	switch (lcfg->lcfg_command) {
+	case LCFG_MARKER: {
+		struct cfg_marker *marker = lustre_cfg_buf(lcfg, 1);
+
+		lustre_swab_cfg_marker(marker, swab,
+				       LUSTRE_CFG_BUFLEN(lcfg, 1));
+		if (marker->cm_flags & CM_SKIP ||
+		    marker->cm_flags & CM_EXCLUDE)
+			GOTO(out, rc = 0);
+
+		if (!tgt_is_mdt0(marker->cm_tgtname))
+			GOTO(out, rc = 0);
+
+		if(!strncmp(marker->cm_comment, "add mdc", 7) ||
+		   !strncmp(marker->cm_comment, "add failnid", 11)) {
+			if (marker->cm_flags & CM_START) {
+				clli->cfg_flags = CFG_F_MARKER;
+				/* This hack is to differentiate the
+				 * ADD_UUID is come from "add mdc" record
+				 * or from "add failnid" record. */
+				if (!strncmp(marker->cm_comment,
+					     "add failnid", 11))
+					clli->cfg_flags |= CFG_F_SKIP;
+			} else if (marker->cm_flags & CM_END) {
+				clli->cfg_flags = 0;
+			}
+		}
+		break;
+	}
+	case LCFG_ADD_UUID: {
+		if (clli->cfg_flags == CFG_F_MARKER) {
+			rc = lustre_osp_setup(lcfg, lsi);
+		} else if (clli->cfg_flags == (CFG_F_MARKER | CFG_F_SKIP)) {
+			rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
+					lcfg->lcfg_nid);
+			if (rc)
+				CERROR("%s: Fail to add uuid, rc:%d\n",
+				       lsi->lsi_svname, rc);
+		}
+		break;
+	}
+	case LCFG_ADD_CONN: {
+		if (is_mdc_for_mdt0(lustre_cfg_string(lcfg, 0)))
+			rc = lustre_osp_add_conn(lcfg, lsi);
+		break;
+	}
+	default:
+		break;
+	}
+out:
+	RETURN(rc);
+}
+
+static int lustre_disconnect_osp(struct super_block *sb)
+{
+	struct lustre_sb_info		*lsi = s2lsi(sb);
+	struct obd_device		*osp;
+	char				*ospname = NULL;
+	char				*logname = NULL;
+	struct lustre_cfg		*lcfg = NULL;
+	struct lustre_cfg_bufs		*bufs = NULL;
+	struct config_llog_instance	*cfg = NULL;
+	int				 rc;
+	ENTRY;
+
+	LASSERT(IS_OST(lsi) || IS_MDT(lsi));
+	OBD_ALLOC(logname, MTI_NAME_MAXLEN);
+	if (logname == NULL)
+		RETURN(-ENOMEM);
+
+	OBD_ALLOC(ospname, MTI_NAME_MAXLEN);
+	if (ospname == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	rc = server_name2fsname(lsi->lsi_svname, ospname, NULL);
+	if (rc != 0) {
+		CERROR("%s: get fsname error: %d\n",
+		       lsi->lsi_svname, rc);
+		GOTO(out, rc);
+	}
+	sprintf(logname, "%s-client", ospname);
+
+	OBD_ALLOC_PTR(cfg);
+	if (cfg == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	/* end log first */
+	cfg->cfg_instance = sb;
+	rc = lustre_end_log(sb, logname, cfg);
+	if (rc != 0) {
+		CERROR("Can't end config log %s\n", ospname);
+		GOTO(out, rc);
+	}
+
+	rc = tgt_name2ospname(lsi->lsi_svname, ospname);
+	if (rc != 0) {
+		CERROR("%s: get osp name error: %d\n",
+		       lsi->lsi_svname, rc);
+		GOTO(out, rc);
+	}
+
+	osp = class_name2obd(ospname);
+        if (osp == NULL) {
+                CERROR("Can't find osp-on-ost %s\n", ospname);
+                GOTO(out, rc = -ENOENT);
+        }
+
+	OBD_ALLOC_PTR(bufs);
+	if (bufs == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	lustre_cfg_bufs_reset(bufs, osp->obd_name);
+	lustre_cfg_bufs_set_string(bufs, 1, NULL);
+	lcfg = lustre_cfg_new(LCFG_CLEANUP, bufs);
+	if (!lcfg)
+		GOTO(out, rc = -ENOMEM);
+
+	/* Disconnect import first. NULL is passed for the '@env', since
+	 * it will not be used for the 'osp-on-ost'. (see osp_shutdown()) */
+	rc = osp->obd_lu_dev->ld_ops->ldo_process_config(NULL, osp->obd_lu_dev,
+							 lcfg);
+out:
+	if (lcfg)
+		lustre_cfg_free(lcfg);
+	if (bufs)
+		OBD_FREE_PTR(bufs);
+	if (cfg)
+		OBD_FREE_PTR(cfg);
+	if (ospname)
+		OBD_FREE(ospname, MTI_NAME_MAXLEN);
+	if (logname)
+		OBD_FREE(logname, MTI_NAME_MAXLEN);
+	RETURN(rc);
+}
+
+/**
+ * Stop the osp(fsname-MDT0000-osp-OSTxxxx) for an OST target.
+ **/
+static int lustre_stop_osp(struct super_block *sb)
+{
+	struct lustre_sb_info	*lsi = s2lsi(sb);
+	struct obd_device	*osp = NULL;
+	char			*ospname = NULL;
+	int			 rc = 0;
+	ENTRY;
+
+	LASSERT(IS_OST(lsi) || IS_MDT(lsi));
+	OBD_ALLOC(ospname, MTI_NAME_MAXLEN);
+
+	rc = tgt_name2ospname(lsi->lsi_svname, ospname);
+	if (rc != 0) {
+		CERROR("%s get fsname error: rc %d\n",
+		       lsi->lsi_svname, rc);
+		GOTO(cleanup, rc);
+	}
+
+	osp = class_name2obd(ospname);
+	if (osp == NULL) {
+		CERROR("Can not find osp-on-ost %s\n", ospname);
+		GOTO(cleanup, rc = -ENOENT);
+	}
+
+	osp->obd_force = 1;
+	rc = class_manual_cleanup(osp);
+
+cleanup:
+	if (ospname != NULL)
+		OBD_FREE(ospname, MTI_NAME_MAXLEN);
+	RETURN(rc);
+}
+
 CFS_DEFINE_MUTEX(server_start_lock);
 
 /* Stop MDS/OSS if nobody is using them */
@@ -870,34 +1473,6 @@ int server_mti_print(char *title, struct mgs_target_info *mti)
         PRINT_CMD(PRINT_MASK, "ver: %d  flags: %#x\n",
                   mti->mti_config_ver, mti->mti_flags);
         return(0);
-}
-
-/** Get the fsname ("lustre") from the server name ("lustre-OST003F").
- * @param [in] svname server name including type and index
- * @param [out] fsname Buffer to copy filesystem name prefix into.
- *  Must have at least 'strlen(fsname) + 1' chars.
- * @param [out] endptr if endptr isn't NULL it is set to end of fsname
- * rc < 0  on error
- */
-static int server_name2fsname(char *svname, char *fsname, char **endptr)
-{
-	char *p;
-
-	p = strstr(svname, "-OST");
-	if (p == NULL)
-		p = strstr(svname, "-MDT");
-	if (p == NULL)
-		return -1;
-
-	if (fsname) {
-		strncpy(fsname, svname, p - svname);
-		fsname[p - svname] = '\0';
-	}
-
-	if (endptr != NULL)
-		*endptr = p;
-
-	return 0;
 }
 
 /**
@@ -1129,6 +1704,66 @@ out:
 
 }
 
+/**
+ * Start the osp(fsname-MDT0000-osp-OSTxxxx) for an OST target,
+ * which would be used to communicate with MDT0 for quota and FID.
+ **/
+static int lustre_start_osp(struct super_block *sb)
+{
+	struct lustre_sb_info	    *lsi = s2lsi(sb);
+	struct config_llog_instance *cfg = NULL;
+	struct obd_device	    *osp;
+	char			    *ospname = NULL;
+	char			    *logname = NULL;
+	char			    *tgt;
+	int			     rc;
+	ENTRY;
+
+	LASSERT(IS_OST(lsi) || IS_MDT(lsi));
+	OBD_ALLOC(ospname, MTI_NAME_MAXLEN);
+	OBD_ALLOC(logname, MTI_NAME_MAXLEN);
+	if (ospname == NULL || logname == NULL)
+		GOTO(cleanup, rc = -ENOMEM);
+
+	rc = server_name2fsname(lsi->lsi_svname, ospname, &tgt);
+	if (rc != 0) {
+		CERROR("%s change fsname error: rc %d\n",
+		       lsi->lsi_svname, rc);
+		GOTO(cleanup, rc);
+	}
+	sprintf(logname, "%s-client", ospname);
+
+	rc = tgt_name2ospname(lsi->lsi_svname, ospname);
+	if (rc != 0) {
+		CERROR("%s change ospname error: rc %d\n",
+		       lsi->lsi_svname, rc);
+		GOTO(cleanup, rc);
+	}
+
+	osp = class_name2obd(ospname);
+	if (osp != NULL)
+		GOTO(cleanup, rc = 0);
+
+	OBD_ALLOC_PTR(cfg);
+	if (cfg == NULL)
+		GOTO(cleanup, rc = -ENOMEM);
+
+	cfg->cfg_callback = client_osp_config_process;
+	cfg->cfg_instance = sb;
+
+	rc = lustre_process_log(sb, logname, cfg);
+
+cleanup:
+	if (ospname != NULL)
+		OBD_FREE(ospname, MTI_NAME_MAXLEN);
+	if (logname != NULL)
+		OBD_FREE(logname, MTI_NAME_MAXLEN);
+	if (cfg != NULL)
+		OBD_FREE_PTR(cfg);
+
+	RETURN(rc);
+}
+
 /** Start server targets: MDTs and OSTs
  */
 static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
@@ -1205,6 +1840,7 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 
 	/* Start targets using the llog named for the target */
 	memset(&cfg, 0, sizeof(cfg));
+	cfg.cfg_callback = class_config_llog_handler;
 	rc = lustre_process_log(sb, lsi->lsi_svname, &cfg);
 	if (rc) {
 		CERROR("failed to start server %s: %d\n",
@@ -1215,55 +1851,61 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
 		GOTO(out_mgc, rc);
 	}
 
+	obd = class_name2obd(lsi->lsi_svname);
+	if (!obd) {
+		CERROR("no server named %s was started\n", lsi->lsi_svname);
+		GOTO(out_mgc, rc = -ENXIO);
+	}
+
+	if (IS_OST(lsi) || IS_MDT(lsi)) {
+		rc = lustre_start_osp(sb);
+		if (rc) {
+			CERROR("%s: failed to start OSP: %d\n",
+			       lsi->lsi_svname, rc);
+			GOTO(out_mgc, rc);
+		}
+	}
+
+	server_notify_target(sb, obd);
+
+	/* calculate recovery timeout, do it after lustre_process_log */
+	server_calc_timeout(lsi, obd);
+
+	/* log has been fully processed */
+	obd_notify(obd, NULL, OBD_NOTIFY_CONFIG, (void *)CONFIG_LOG);
+
+	/* log has been fully processed, let clients connect */
+	dev = obd->obd_lu_dev;
+	if (dev && dev->ld_ops->ldo_prepare) {
+		rc = lu_env_init(&env, dev->ld_type->ldt_ctx_tags);
+		if (rc == 0) {
+			struct lu_context  session_ctx;
+
+			lu_context_init(&session_ctx, LCT_SESSION);
+			session_ctx.lc_thread = NULL;
+			lu_context_enter(&session_ctx);
+			env.le_ses = &session_ctx;
+
+			dev->ld_ops->ldo_prepare(&env, NULL, dev);
+
+			lu_env_fini(&env);
+			lu_context_exit(&session_ctx);
+			lu_context_fini(&session_ctx);
+		}
+	}
+
+	/* abort recovery only on the complete stack:
+	 * many devices can be involved */
+	if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV) &&
+	    (OBP(obd, iocontrol))) {
+		obd_iocontrol(OBD_IOC_ABORT_RECOVERY, obd->obd_self_export, 0,
+			      NULL, NULL);
+	}
+
 out_mgc:
         /* Release the mgc fs for others to use */
 	if (lsi->lsi_srv_mnt)
 		server_mgc_clear_fs(lsi->lsi_mgc);
-
-        if (!rc) {
-		obd = class_name2obd(lsi->lsi_svname);
-                if (!obd) {
-                        CERROR("no server named %s was started\n",
-			       lsi->lsi_svname);
-                        RETURN(-ENXIO);
-                }
-
-                server_notify_target(sb, obd);
-
-                /* calculate recovery timeout, do it after lustre_process_log */
-                server_calc_timeout(lsi, obd);
-
-                /* log has been fully processed */
-                obd_notify(obd, NULL, OBD_NOTIFY_CONFIG, (void *)CONFIG_LOG);
-
-		/* log has been fully processed, let clients connect */
-		dev = obd->obd_lu_dev;
-		if (dev && dev->ld_ops->ldo_prepare) {
-			rc = lu_env_init(&env, dev->ld_type->ldt_ctx_tags);
-			if (rc == 0) {
-				struct lu_context  session_ctx;
-
-				lu_context_init(&session_ctx, LCT_SESSION);
-				session_ctx.lc_thread = NULL;
-				lu_context_enter(&session_ctx);
-				env.le_ses = &session_ctx;
-
-				dev->ld_ops->ldo_prepare(&env, NULL, dev);
-
-				lu_env_fini(&env);
-				lu_context_exit(&session_ctx);
-				lu_context_fini(&session_ctx);
-			}
-		}
-
-		/* abort recovery only on the complete stack:
-		 * many devices can be involved */
-		if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV) &&
-		    (OBP(obd, iocontrol))) {
-			obd_iocontrol(OBD_IOC_ABORT_RECOVERY,
-				      obd->obd_self_export, 0, NULL, NULL);
-		}
-        }
 
         RETURN(rc);
 }
@@ -1459,6 +2101,12 @@ static void server_put_super(struct super_block *sb)
 	if (IS_MDT(lsi) && (lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC))
                 snprintf(tmpname, tmpname_sz, "MGS");
 
+	/* disconnect the osp-on-ost first to drain off the inflight request */
+	if (IS_OST(lsi) || IS_MDT(lsi)) {
+		if (lustre_disconnect_osp(sb) < 0)
+			CERROR("%s: Fail to disconnect osp-on-ost!\n", tmpname);
+	}
+
         /* Stop the target */
         if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOSVC) &&
 	    (IS_MDT(lsi) || IS_OST(lsi))) {
@@ -1498,6 +2146,11 @@ static void server_put_super(struct super_block *sb)
                 if (!(lsi->lsi_lmd->lmd_flags & LMD_FLG_NOMGS))
                         server_stop_mgs(sb);
         }
+
+	if (IS_OST(lsi) || IS_MDT(lsi)) {
+		if (lustre_stop_osp(sb) < 0)
+			CERROR("%s: Fail to stop osp-on-ost!\n", tmpname);
+	}
 
         /* Clean the mgc and sb */
         lustre_common_put_super(sb);
