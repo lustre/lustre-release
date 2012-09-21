@@ -110,13 +110,12 @@ struct md_lfsck {
 
 struct mdd_device {
         struct md_device                 mdd_md_dev;
+	struct obd_export               *mdd_child_exp;
         struct dt_device                *mdd_child;
-        struct obd_device               *mdd_obd_dev;
         struct lu_fid                    mdd_root_fid;
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans; /* PENDING directory */
         struct dt_object                *mdd_capa;
-        struct dt_txn_callback           mdd_txn_cb;
         cfs_proc_dir_entry_t            *mdd_proc_entry;
         struct lprocfs_stats            *mdd_stats;
         struct mdd_changelog             mdd_cl;
@@ -125,6 +124,7 @@ struct mdd_device {
         struct mdd_dot_lustre_objs       mdd_dot_lustre_objs;
 	struct md_lfsck			 mdd_lfsck;
 	unsigned int			 mdd_sync_permission;
+	int				 mdd_connects;
 };
 
 enum mod_flags {
@@ -529,7 +529,7 @@ static inline struct dt_object* mdd_object_child(struct mdd_object *o)
 
 static inline struct obd_device *mdd2obd_dev(struct mdd_device *mdd)
 {
-        return mdd->mdd_obd_dev;
+	return (mdd->mdd_md_dev.md_lu_dev.ld_obd);
 }
 
 static inline struct mdd_device *mdd_obj2mdd_dev(struct mdd_object *obj)

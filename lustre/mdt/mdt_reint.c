@@ -52,17 +52,7 @@
 static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
                                      struct md_attr *ma)
 {
-        ma->ma_lmm = req_capsule_server_get(info->mti_pill, &RMF_MDT_MD);
-        ma->ma_lmm_size = req_capsule_get_size(info->mti_pill,
-                                               &RMF_MDT_MD, RCL_SERVER);
-
-        ma->ma_cookie = req_capsule_server_get(info->mti_pill,
-                                               &RMF_LOGCOOKIES);
-        ma->ma_cookie_size = req_capsule_get_size(info->mti_pill,
-                                                  &RMF_LOGCOOKIES,
-                                                  RCL_SERVER);
-
-        ma->ma_need = MA_INODE | MA_LOV | MA_COOKIE;
+	ma->ma_need = MA_INODE;
         ma->ma_valid = 0;
 }
 
@@ -556,20 +546,23 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 cfs_list_del_init(&mfd->mfd_list);
                 cfs_spin_unlock(&med->med_open_lock);
 
-                /* Close the found mfd, update attributes. */
-                ma->ma_lmm_size = info->mti_mdt->mdt_max_mdsize;
-                OBD_ALLOC_LARGE(ma->ma_lmm, info->mti_mdt->mdt_max_mdsize);
-                if (ma->ma_lmm == NULL)
-                        GOTO(out_put, rc = -ENOMEM);
-
                 mdt_mfd_close(info, mfd);
-
-                OBD_FREE_LARGE(ma->ma_lmm, info->mti_mdt->mdt_max_mdsize);
-        } else {
+	} else if ((ma->ma_valid & MA_INODE) && ma->ma_attr.la_valid) {
+		LASSERT((ma->ma_valid & MA_LOV) == 0);
                 rc = mdt_attr_set(info, mo, ma, rr->rr_flags);
                 if (rc)
                         GOTO(out_put, rc);
-        }
+	} else if ((ma->ma_valid & MA_LOV) && (ma->ma_valid & MA_INODE)) {
+		struct lu_buf *buf  = &info->mti_buf;
+		LASSERT(ma->ma_attr.la_valid == 0);
+		buf->lb_buf = ma->ma_lmm;
+		buf->lb_len = ma->ma_lmm_size;
+		rc = mo_xattr_set(info->mti_env, mdt_object_child(mo),
+				  buf, XATTR_NAME_LOV, 0);
+		if (rc)
+			GOTO(out_put, rc);
+	} else
+		LBUG();
 
         ma->ma_need = MA_INODE;
         ma->ma_valid = 0;
@@ -713,8 +706,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 GOTO(out_unlock_parent, rc);
 
         mdt_reint_init_ma(info, ma);
-        if (!ma->ma_lmm || !ma->ma_cookie)
-                GOTO(out_unlock_parent, rc = -EINVAL);
 
         if (info->mti_cross_ref) {
                 /*
@@ -995,8 +986,6 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                         GOTO(out_unlock_tgtdir, rc = PTR_ERR(mtgt));
 
                 mdt_reint_init_ma(info, ma);
-                if (!ma->ma_lmm || !ma->ma_cookie)
-                        GOTO(out_unlock_tgt, rc = -EINVAL);
 
                 rc = mdo_rename_tgt(info->mti_env, mdt_object_child(mtgtdir),
                                     mdt_object_child(mtgt), rr->rr_fid2,
@@ -1011,7 +1000,7 @@ static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
                 mdt_handle_last_unlink(info, mtgt, ma);
 
         EXIT;
-out_unlock_tgt:
+
         if (mtgt)
                 mdt_object_unlock_put(info, mtgt, lh_tgt, rc);
 out_unlock_tgtdir:
@@ -1289,8 +1278,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         /* step 5: rename it */
         mdt_reint_init_ma(info, ma);
-        if (!ma->ma_lmm || !ma->ma_cookie)
-                GOTO(out_unlock_new, rc = -EINVAL);
 
         mdt_fail_write(info->mti_env, info->mti_mdt->mdt_bottom,
                        OBD_FAIL_MDS_REINT_RENAME_WRITE);

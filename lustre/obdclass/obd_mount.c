@@ -1137,6 +1137,8 @@ static int server_start_targets(struct super_block *sb, struct vfsmount *mnt)
         struct obd_device *obd;
         struct lustre_sb_info *lsi = s2lsi(sb);
         struct config_llog_instance cfg;
+	struct lu_env env;
+	struct lu_device *dev;
         int rc;
         ENTRY;
 
@@ -1227,12 +1229,6 @@ out_mgc:
                         RETURN(-ENXIO);
                 }
 
-                if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV) &&
-                    (OBP(obd, iocontrol))) {
-                        obd_iocontrol(OBD_IOC_ABORT_RECOVERY,
-                                      obd->obd_self_export, 0, NULL, NULL);
-                }
-
                 server_notify_target(sb, obd);
 
                 /* calculate recovery timeout, do it after lustre_process_log */
@@ -1240,6 +1236,34 @@ out_mgc:
 
                 /* log has been fully processed */
                 obd_notify(obd, NULL, OBD_NOTIFY_CONFIG, (void *)CONFIG_LOG);
+
+		/* log has been fully processed, let clients connect */
+		dev = obd->obd_lu_dev;
+		if (dev && dev->ld_ops->ldo_prepare) {
+			rc = lu_env_init(&env, dev->ld_type->ldt_ctx_tags);
+			if (rc == 0) {
+				struct lu_context  session_ctx;
+
+				lu_context_init(&session_ctx, LCT_SESSION);
+				session_ctx.lc_thread = NULL;
+				lu_context_enter(&session_ctx);
+				env.le_ses = &session_ctx;
+
+				dev->ld_ops->ldo_prepare(&env, NULL, dev);
+
+				lu_env_fini(&env);
+				lu_context_exit(&session_ctx);
+				lu_context_fini(&session_ctx);
+			}
+		}
+
+		/* abort recovery only on the complete stack:
+		 * many devices can be involved */
+		if ((lsi->lsi_lmd->lmd_flags & LMD_FLG_ABORT_RECOV) &&
+		    (OBP(obd, iocontrol))) {
+			obd_iocontrol(OBD_IOC_ABORT_RECOVERY,
+				      obd->obd_self_export, 0, NULL, NULL);
+		}
         }
 
         RETURN(rc);

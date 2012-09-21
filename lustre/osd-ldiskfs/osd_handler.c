@@ -4677,25 +4677,9 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	int		   result = 0;
 	ENTRY;
 
-#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 55, 0)
-	/* Unfortunately, the current MDD implementation relies on some specific
-	 * code to be executed in the OSD layer. Since OFD now also uses the OSD
-	 * module, we need a way to skip the metadata-specific code when running
-	 * with OFD.
-	 * The hack here is to check the type of the parent device which is
-	 * either MD (i.e. MDD device) with the current MDT stack or DT (i.e.
-	 * OFD device) on an OST. As a reminder, obdfilter does not use the OSD
-	 * layer and still relies on lvfs. This hack won't work any more when
-	 * LOD is landed since LOD is of DT type.
-	 * This code should be removed once the orion MDT changes (LOD/OSP, ...)
-	 * have been landed */
-	osd->od_is_md = lu_device_is_md(pdev);
-#else
-#warning "all is_md checks must be removed from osd-ldiskfs"
-#endif
-
-        if (osd->od_is_md) {
-		/* 1. setup local objects */
+	if (dev->ld_site && lu_device_is_md(dev->ld_site->ls_top_dev)) {
+		/* MDT/MDD still use old infrastructure to create
+		 * special files */
 		result = llo_local_objects_setup(env, lu2md_dev(pdev),
 						 lu2dt_dev(dev));
 		if (result)

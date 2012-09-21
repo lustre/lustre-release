@@ -471,9 +471,9 @@ load_modules_local() {
 			load_module osd-ldiskfs/osd_ldiskfs
 		fi
 		load_module mdt/mdt
-		load_module cmm/cmm
 		load_module ost/ost
 		load_module lod/lod
+		load_module osp/osp
 		if [ "$USE_OFD" == yes ]; then
 			load_module ofd/ofd
 		else

@@ -865,6 +865,7 @@ cat_cleanup:
 
 	RETURN(rc);
 }
+EXPORT_SYMBOL(cat_cancel_cb);
 
 /* helper to initialize catalog llog and process it to cancel */
 int llog_cat_init_and_process(const struct lu_env *env,

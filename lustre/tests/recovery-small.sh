@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug  5494 5493
-ALWAYS_EXCEPT="24   52    $RECOVERY_SMALL_EXCEPT"
+#         bug  5494 5493  LU2034
+ALWAYS_EXCEPT="24   52    60      $RECOVERY_SMALL_EXCEPT"
 
 export MULTIOP=${MULTIOP:-multiop}
 PTLDEBUG=${PTLDEBUG:--1}

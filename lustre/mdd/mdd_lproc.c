@@ -55,12 +55,13 @@ static const char *mdd_counter_names[LPROC_MDD_NR] = {
 int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 {
         struct lprocfs_static_vars lvars;
-        struct lu_device    *ld = &mdd->mdd_md_dev.md_lu_dev;
         struct obd_type     *type;
         int                  rc;
         ENTRY;
 
-        type = ld->ld_type->ldt_obd_type;
+	/* at the moment there is no linkage between lu_type
+	 * and obd_type, so we lookup obd_type this way */
+	type = class_search_type(LUSTRE_MDD_NAME);
 
         LASSERT(name != NULL);
         LASSERT(type != NULL);

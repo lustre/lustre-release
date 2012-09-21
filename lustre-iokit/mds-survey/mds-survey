@@ -187,7 +187,7 @@ if (( $stripe_count > 0 )); then
     for ((i=0; i < $ndevs; i++)); do
         host=${host_names[$i]}
         obd=$(remote_shell $host $lctl device_list | awk "{if (\$2 == \"UP\" &&
-            \$3 == \"osc\") { print \$4 } }")
+            (\$3 == \"osc\" || \$3 == \"osp\")) { print \$4 } }")
         if [ -z "$obd" ]; then
             echo "Need obdfilter to test stripe_count"
             exit 1

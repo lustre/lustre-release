@@ -1549,6 +1549,7 @@ static int echo_create_md_object(const struct lu_env *env,
                         lum->lmm_stripe_offset = stripe_offset;
                         lum->lmm_pattern = 0;
                         spec->u.sp_ea.eadata = lum;
+			spec->u.sp_ea.eadatalen = sizeof(*lum);
                         spec->sp_cr_flags |= MDS_OPEN_HAS_EA;
                 }
         }

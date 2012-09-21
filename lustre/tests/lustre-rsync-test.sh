@@ -20,6 +20,9 @@ ALWAYS_EXCEPT="$LRSYNC_EXCEPT"
 [ "$ALWAYS_EXCEPT$EXCEPT" ] && \
         echo "Skipping tests: `echo $ALWAYS_EXCEPT $EXCEPT`"
 
+# disable till changelogs from orion landed (LU-2034)
+ALWAYS_EXCEPT="1 2 3 4 5 6 7 8 9"
+
 KILL=/bin/kill
 
 TMP=${TMP:-/tmp}

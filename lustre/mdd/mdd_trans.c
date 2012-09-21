@@ -48,16 +48,6 @@
 
 #include "mdd_internal.h"
 
-int mdd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
-                    void *cookie)
-{
-        struct mdd_device *mdd = cookie;
-        struct obd_device *obd = mdd2obd_dev(mdd);
-
-        LASSERT(obd);
-        return mds_lov_write_objids(obd);
-}
-
 struct thandle *mdd_trans_create(const struct lu_env *env,
                                  struct mdd_device *mdd)
 {

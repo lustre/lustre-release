@@ -93,7 +93,12 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 	 *
 	 * 2) send synchronous truncate RPC with just assigned id
 	 */
-	LASSERT(attr);
+
+	/* there are few places in MDD code still passing NULL
+	 * XXX: to be fixed soon */
+	if (attr == NULL)
+		RETURN(0);
+
 	if (attr->la_valid & LA_SIZE && attr->la_size > 0) {
 		LASSERT(!dt_object_exists(dt));
 		osp_object_assign_id(env, d, o);
@@ -171,8 +176,11 @@ static int osp_declare_object_create(const struct lu_env *env,
 
 	/*
 	 * There can be gaps in precreated ids and record to unlink llog
+	 * XXX: we do not handle gaps yet, implemented before solution
+	 *	was found to be racy, so we disabled that. there is no
+	 *	point in making useless but expensive llog declaration.
 	 */
-	rc = osp_sync_declare_add(env, o, MDS_UNLINK64_REC, th);
+	/* rc = osp_sync_declare_add(env, o, MDS_UNLINK64_REC, th); */
 
 	if (unlikely(!fid_is_zero(fid))) {
 		/* replay case: caller knows fid */

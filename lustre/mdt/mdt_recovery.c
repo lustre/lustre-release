@@ -555,8 +555,6 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
                  struct obd_device *obd,
                  struct lustre_sb_info *lsi)
 {
-        struct lu_fid fid;
-        struct dt_object *o;
         int rc = 0;
         ENTRY;
 
@@ -574,28 +572,8 @@ int mdt_fs_setup(const struct lu_env *env, struct mdt_device *mdt,
         dt_txn_callback_add(mdt->mdt_bottom, &mdt->mdt_txn_cb);
 
         rc = mdt_server_data_init(env, mdt, lsi);
-        if (rc)
-                RETURN(rc);
 
-        o = dt_store_open(env, mdt->mdt_bottom, "", CAPA_KEYS, &fid);
-        if (!IS_ERR(o)) {
-                mdt->mdt_ck_obj = o;
-                rc = mdt_capa_keys_init(env, mdt);
-                if (rc)
-                        GOTO(put_ck_object, rc);
-        } else {
-                rc = PTR_ERR(o);
-                CERROR("cannot open %s: rc = %d\n", CAPA_KEYS, rc);
-                GOTO(disconnect_exports, rc);
-        }
-        RETURN(0);
-
-put_ck_object:
-        lu_object_put(env, &o->do_lu);
-        mdt->mdt_ck_obj = NULL;
-disconnect_exports:
-        class_disconnect_exports(obd);
-        return rc;
+	RETURN(rc);
 }
 
 void mdt_fs_cleanup(const struct lu_env *env, struct mdt_device *mdt)

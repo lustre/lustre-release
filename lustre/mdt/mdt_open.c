@@ -223,39 +223,48 @@ int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
 static int mdt_som_attr_set(struct mdt_thread_info *info,
                             struct mdt_object *obj, __u64 ioepoch, int enable)
 {
-        struct md_attr *ma = &info->mti_attr;
-        int rc;
+	struct lustre_mdt_attrs	*lma;
+	struct md_attr		*ma = &info->mti_attr;
+	struct lu_buf		*buf = &info->mti_buf;
+	struct md_object	*next = mdt_object_child(obj);
+	struct mdt_device	*mdt = info->mti_mdt;
+	struct lu_attr		*la = &ma->ma_attr;
+	int			 rc;
         ENTRY;
 
         CDEBUG(D_INODE, "Size-on-MDS attribute %s for epoch "LPU64
                " on "DFID".\n", enable ? "update" : "disabling",
                ioepoch, PFID(mdt_object_fid(obj)));
 
-        ma->ma_valid |= MA_SOM;
-        ma->ma_som = &info->mti_u.som.data;
-        if (enable) {
-                struct mdt_device *mdt = info->mti_mdt;
-                struct lu_attr *la = &ma->ma_attr;
+	lma = (struct lustre_mdt_attrs *) info->mti_xattr_buf;
+	CLASSERT(sizeof(info->mti_xattr_buf) >= sizeof(*lma));
 
-                ma->ma_som->msd_ioepoch = ioepoch;
-                ma->ma_som->msd_size = la->la_valid & LA_SIZE ? la->la_size : 0;
-                ma->ma_som->msd_blocks = la->la_valid & LA_BLOCKS ?
-                                         la->la_blocks : 0;
-                ma->ma_som->msd_mountid = mdt->mdt_lut.lut_obd->u.obt.obt_mount_count;
-                ma->ma_attr.la_valid &= LA_ATIME | LA_MTIME | LA_CTIME;
-        } else {
-                ma->ma_som->msd_ioepoch = IOEPOCH_INVAL;
-                ma->ma_attr.la_valid &= LA_ATIME;
-        }
+	buf->lb_buf = lma;
+	buf->lb_len = sizeof(info->mti_xattr_buf);
+	rc = mo_xattr_get(info->mti_env, next, buf, XATTR_NAME_LMA);
+	if (rc > 0) {
+		lustre_lma_swab(lma);
+	} else if (rc == -ENODATA) {
+		memset(lma, 0, sizeof(*lma));
+	} else {
+		RETURN(rc);
+	}
 
-        /* Since we have opened the file, it is unnecessary
-         * to check permission when close it. Between the "open"
-         * and "close", maybe someone has changed the file mode
-         * or flags, or the file created mode do not permit wirte,
-         * and so on. Just set MDS_PERM_BYPASS for all the cases. */
-        ma->ma_attr_flags |= MDS_PERM_BYPASS | MDS_SOM;
+	/* Copy FID */
+	memcpy(&lma->lma_self_fid, mdt_object_fid(obj), sizeof(lma->lma_self_fid));
 
-        rc = mdt_attr_set(info, obj, ma, 0);
+	/* Copy SOM data */
+	lma->lma_ioepoch     = ioepoch;
+	lma->lma_som_size    = la->la_valid & LA_SIZE ? la->la_size : 0;
+	lma->lma_som_blocks  = la->la_valid & LA_BLOCKS ?  la->la_blocks : 0;
+	lma->lma_som_mountid = mdt->mdt_lut.lut_obd->u.obt.obt_mount_count;
+	if (enable)
+		lma->lma_compat |= LMAC_SOM;
+	else
+		lma->lma_compat &= ~LMAC_SOM;
+
+	rc = mo_xattr_set(info->mti_env, next, buf, XATTR_NAME_LMA, 0);
+
         RETURN(rc);
 }
 

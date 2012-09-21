@@ -246,7 +246,7 @@ static int osp_process_config(const struct lu_env *env,
 		lprocfs_osp_init_vars(&lvars);
 
 		LASSERT(d->opd_obd);
-		rc = class_process_proc_param(PARAM_OSP, lvars.obd_vars,
+		rc = class_process_proc_param(PARAM_OSC, lvars.obd_vars,
 					      lcfg, d->opd_obd);
 		if (rc > 0)
 			rc = 0;
