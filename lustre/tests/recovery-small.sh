@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug  5494 5493  LU1999
-ALWAYS_EXCEPT="24   52    106    $RECOVERY_SMALL_EXCEPT"
+#         bug  5494 5493
+ALWAYS_EXCEPT="24   52    $RECOVERY_SMALL_EXCEPT"
 
 export MULTIOP=${MULTIOP:-multiop}
 PTLDEBUG=${PTLDEBUG:--1}
@@ -1518,8 +1518,14 @@ test_106() { # LU-1789
 	facet_failover $SINGLEMDS
 
 	# lightweight connection must be evicted
-	wait_client_evicted $SINGLEMDS $MDS_NEXP $((TIMEOUT * 3)) || \
-		error "lightweight client not evicted by mds"
+	touch -c $DIR2/$tfile || true
+	evicted=`dmesg | awk '/test 106/ {start = 1;}
+			      /This client was evicted by .*MDT0000/ {
+				      if (start) {
+					      print;
+				      }
+			      }'`
+	[ -z "$evicted" ] && error "lightweight client not evicted by mds"
 
 	# and all operations performed by lightweight client should be
 	# synchronous, so the file created before mds restart should be there
