@@ -30,8 +30,6 @@
  * Author: Mikhail Pershin <mike.pershin@intel.com>
  */
 
-#define DEBUG_SUBSYSTEM S_CLASS
-
 #include <dt_object.h>
 #include <obd.h>
 #include <lustre_fid.h>
@@ -72,4 +70,7 @@ static inline struct dt_object *ls_locate(const struct lu_env *env,
 	return dt_locate_at(env, ls->ls_osd, fid, &ls->ls_top_dev.dd_lu_dev);
 }
 
-
+struct ls_device *ls_device_get(struct dt_device *dev);
+void ls_device_put(const struct lu_env *env, struct ls_device *ls);
+struct local_oid_storage *dt_los_find(struct ls_device *ls, __u64 seq);
+void dt_los_put(struct local_oid_storage *los);
