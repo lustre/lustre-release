@@ -638,7 +638,7 @@ int llog_cat_process(const struct lu_env *env, struct llog_handle *cat_llh,
 		     llog_cb_t cb, void *data, int startcat, int startidx)
 {
 	return llog_cat_process_or_fork(env, cat_llh, cb, data, startcat,
-					startidx, 0);
+					startidx, false);
 }
 EXPORT_SYMBOL(llog_cat_process);
 
@@ -877,7 +877,10 @@ int llog_cat_init_and_process(const struct lu_env *env,
 		RETURN(rc);
 
 	rc = llog_process(env, llh, cat_cancel_cb, NULL, NULL);
-	RETURN(rc);
+	if (rc)
+		CERROR("%s: llog_process() with cat_cancel_cb failed: rc = "
+		       "%d\n", llh->lgh_ctxt->loc_obd->obd_name, rc);
+	RETURN(0);
 }
 EXPORT_SYMBOL(llog_cat_init_and_process);
 

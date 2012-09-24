@@ -185,6 +185,12 @@ struct llog_process_cat_args {
 };
 
 int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle);
+int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
+		     struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
+		     void *buf, struct thandle *th);
+int llog_cat_declare_add_rec(const struct lu_env *env,
+			     struct llog_handle *cathandle,
+			     struct llog_rec_hdr *rec, struct thandle *th);
 int llog_cat_add(const struct lu_env *env, struct llog_handle *cathandle,
 		 struct llog_rec_hdr *rec, struct llog_cookie *reccookie,
 		 void *buf);

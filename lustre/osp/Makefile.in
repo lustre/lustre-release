@@ -1,5 +1,5 @@
 MODULES := osp
-osp-objs := osp_dev.o osp_object.o osp_precreate.o lproc_osp.o
+osp-objs := osp_dev.o osp_object.o osp_precreate.o osp_sync.o lproc_osp.o
 
 EXTRA_DIST = $(osp-objs:.o=.c) osp_internal.h
 

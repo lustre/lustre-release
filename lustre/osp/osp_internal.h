@@ -45,6 +45,24 @@
 #include <dt_object.h>
 #include <lustre_fid.h>
 
+/*
+ * Infrastructure to support tracking of last committed llog record
+ */
+struct osp_id_tracker {
+	cfs_spinlock_t		 otr_lock;
+	__u32			 otr_next_id;
+	__u32			 otr_committed_id;
+	/* callback is register once per diskfs -- that's the whole point */
+	struct dt_txn_callback	 otr_tx_cb;
+	/* single node can run many clusters */
+	cfs_list_t		 otr_wakeup_list;
+	cfs_list_t		 otr_list;
+	/* underlying shared device */
+	struct dt_device	*otr_dev;
+	/* how many users of this tracker */
+	cfs_atomic_t		 otr_refcount;
+};
+
 struct osp_device {
 	struct dt_device		 opd_dt_dev;
 	/* corresponded OST index */
@@ -106,6 +124,41 @@ struct osp_device {
 	int				 opd_pre_grow_slow;
 
 	/*
+	 * OST synchronization
+	 */
+	cfs_spinlock_t			 opd_syn_lock;
+	/* unique generation, to recognize start of new records in the llog */
+	struct llog_gen			 opd_syn_generation;
+	/* number of changes to sync, used to wake up sync thread */
+	unsigned long			 opd_syn_changes;
+	/* processing of changes from previous mount is done? */
+	int				 opd_syn_prev_done;
+	/* found records */
+	struct ptlrpc_thread		 opd_syn_thread;
+	cfs_waitq_t			 opd_syn_waitq;
+	/* list of remotely committed rpc */
+	cfs_list_t			 opd_syn_committed_there;
+	/* number of changes being under sync */
+	int				 opd_syn_sync_in_progress;
+	/* number of RPCs in flight - flow control */
+	int				 opd_syn_rpc_in_flight;
+	int				 opd_syn_max_rpc_in_flight;
+	/* number of RPC in processing (including non-committed by OST) */
+	int				 opd_syn_rpc_in_progress;
+	int				 opd_syn_max_rpc_in_progress;
+	/* osd api's commit cb control structure */
+	struct dt_txn_callback		 opd_syn_txn_cb;
+	/* last used change number -- semantically similar to transno */
+	unsigned long			 opd_syn_last_used_id;
+	/* last committed change number -- semantically similar to
+	 * last_committed */
+	unsigned long			 opd_syn_last_committed_id;
+	/* last processed (taken from llog) id */
+	unsigned long			 opd_syn_last_processed_id;
+	struct osp_id_tracker		*opd_syn_tracker;
+	cfs_list_t			 opd_syn_ontrack;
+
+	/*
 	 * statfs related fields: OSP maintains it on its own
 	 */
 	struct obd_statfs		 opd_statfs;
@@ -124,7 +177,8 @@ extern cfs_mem_cache_t *osp_object_kmem;
 struct osp_object {
 	struct lu_object_header	 opo_header;
 	struct dt_object	 opo_obj;
-	int			 opo_reserved;
+	int			 opo_reserved:1,
+				 opo_new:1;
 };
 
 extern struct lu_object_operations osp_lu_obj_ops;
@@ -136,6 +190,14 @@ struct osp_thread_info {
 	struct ost_id		 osi_oi;
 	obd_id			 osi_id;
 	loff_t			 osi_off;
+	union {
+		struct llog_rec_hdr		osi_hdr;
+		struct llog_unlink64_rec	osi_unlink;
+		struct llog_setattr64_rec	osi_setattr;
+		struct llog_gen_rec		osi_gen;
+	};
+	struct llog_cookie	 osi_cookie;
+	struct llog_catid	 osi_cid;
 };
 
 static inline void osp_objid_buf_prep(struct osp_thread_info *osi,
@@ -243,20 +305,13 @@ void osp_statfs_need_now(struct osp_device *d);
 void lprocfs_osp_init_vars(struct lprocfs_static_vars *lvars);
 
 /* osp_sync.c */
-/* functions below will be replaced by full versions with osp_sync.c code */
-static inline
 int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
-			 llog_op_type type, struct thandle *th)
-{
-	return 0;
-}
-
-static inline
+			 llog_op_type type, struct thandle *th);
 int osp_sync_add(const struct lu_env *env, struct osp_object *o,
 		 llog_op_type type, struct thandle *th,
-		 const struct lu_attr *attr)
-{
-	return 0;
-}
+		 const struct lu_attr *attr);
+int osp_sync_init(const struct lu_env *env, struct osp_device *d);
+int osp_sync_fini(struct osp_device *d);
+void __osp_sync_check_for_work(struct osp_device *d);
 
 #endif

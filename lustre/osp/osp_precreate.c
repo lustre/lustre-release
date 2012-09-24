@@ -358,8 +358,10 @@ static int osp_precreate_cleanup_orphans(struct osp_device *d)
 	req->rq_no_resend = req->rq_no_delay = 1;
 
 	rc = ptlrpc_queue_wait(req);
-	if (rc)
+	if (rc) {
+		ptlrpc_set_import_active(imp, 0);
 		GOTO(out_req, rc);
+	}
 
 	body = req_capsule_server_get(&req->rq_pill, &RMF_OST_BODY);
 	if (body == NULL)
@@ -425,6 +427,9 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 				       d->opd_obd->obd_name, msfs->os_blocks,
 				       msfs->os_bfree, used, msfs->os_bavail,
 				       d->opd_pre_status, rc);
+			CDEBUG(D_INFO,
+			       "non-commited changes: %lu, in progress: %u\n",
+			       d->opd_syn_changes, d->opd_syn_rpc_in_progress);
 		} else if (old == -ENOSPC) {
 			d->opd_pre_status = 0;
 			d->opd_pre_grow_slow = 0;
@@ -551,8 +556,9 @@ static int osp_precreate_ready_condition(struct osp_device *d)
 	if (d->opd_pre_next + d->opd_pre_reserved < d->opd_pre_last_created)
 		return 1;
 
-	/* ready if OST reported no space */
-	if (d->opd_pre_status != 0)
+	/* ready if OST reported no space and no destoys in progress */
+	if (d->opd_syn_changes + d->opd_syn_rpc_in_progress == 0 &&
+	    d->opd_pre_status != 0)
 		return 1;
 
 	return 0;
@@ -563,9 +569,11 @@ static int osp_precreate_timeout_condition(void *data)
 	struct osp_device *d = data;
 
 	LCONSOLE_WARN("%s: slow creates, last="LPU64", next="LPU64", "
-		      "reserved="LPU64", status=%d\n",
+		      "reserved="LPU64", syn_changes=%lu, "
+		      "syn_rpc_in_progress=%d, status=%d\n",
 		      d->opd_obd->obd_name, d->opd_pre_last_created,
 		      d->opd_pre_next, d->opd_pre_reserved,
+		      d->opd_syn_changes, d->opd_syn_rpc_in_progress,
 		      d->opd_pre_status);
 
 	return 0;
@@ -634,6 +642,28 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 			break;
 		}
 		cfs_spin_unlock(&d->opd_pre_lock);
+
+		/*
+		 * all precreated objects have been used and no-space
+		 * status leave us no chance to succeed very soon
+		 * but if there is destroy in progress, then we should
+		 * wait till that is done - some space might be released
+		 */
+		if (unlikely(rc == -ENOSPC)) {
+			if (d->opd_syn_changes) {
+				/* force local commit to release space */
+				dt_commit_async(env, d->opd_storage);
+			}
+			if (d->opd_syn_rpc_in_progress) {
+				/* just wait till destroys are done */
+				/* see l_wait_even() few lines below */
+			}
+			if (d->opd_syn_changes +
+			    d->opd_syn_rpc_in_progress == 0) {
+				/* no hope for free space */
+				break;
+			}
+		}
 
 		/* XXX: don't wake up if precreation is in progress */
 		cfs_waitq_signal(&d->opd_pre_waitq);

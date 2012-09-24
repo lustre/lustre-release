@@ -222,6 +222,9 @@ static int osp_shutdown(const struct lu_env *env, struct osp_device *d)
 	/* stop precreate thread */
 	osp_precreate_fini(d);
 
+	/* stop sync thread */
+	osp_sync_fini(d);
+
 	RETURN(rc);
 }
 
@@ -286,6 +289,49 @@ const struct lu_device_operations osp_lu_ops = {
 	.ldo_recovery_complete	= osp_recovery_complete,
 };
 
+/**
+ * provides with statfs from corresponded OST
+ *
+ */
+static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
+		      struct obd_statfs *sfs)
+{
+	struct osp_device *d = dt2osp_dev(dev);
+
+	ENTRY;
+
+	if (unlikely(d->opd_imp_active == 0)) {
+		/*
+		 * in case of inactive OST we return nulls
+		 * so that caller can understand this device
+		 * is unusable for new objects
+		 *
+		 * XXX: shouldn't we take normal statfs and fill
+		 * just few specific fields with zeroes?
+		 */
+		memset(sfs, 0, sizeof(*sfs));
+		sfs->os_bsize = 4096;
+		RETURN(0);
+	}
+
+	/* return recently updated data */
+	*sfs = d->opd_statfs;
+
+	/*
+	 * layer above osp (usually lod) can use ffree to estimate
+	 * how many objects are available for immediate creation
+	 */
+	cfs_spin_lock(&d->opd_pre_lock);
+	sfs->os_ffree = d->opd_pre_last_created - d->opd_pre_next;
+	cfs_spin_unlock(&d->opd_pre_lock);
+
+	CDEBUG(D_OTHER, "%s: "LPU64" blocks, "LPU64" free, "LPU64" avail, "
+	       LPU64" files, "LPU64" free files\n", d->opd_obd->obd_name,
+	       sfs->os_blocks, sfs->os_bfree, sfs->os_bavail,
+	       sfs->os_files, sfs->os_ffree);
+	RETURN(0);
+}
+
 static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 {
 	ENTRY;
@@ -298,6 +344,7 @@ static int osp_sync(const struct lu_env *env, struct dt_device *dev)
 }
 
 static const struct dt_device_operations osp_dt_ops = {
+	.dt_statfs	= osp_statfs,
 	.dt_sync	= osp_sync,
 };
 
@@ -466,6 +513,14 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 		GOTO(out_last_used, rc);
 
 	/*
+	 * Initialize synhronization mechanism taking care of propogating
+	 * changes to OST in near transactional manner
+	 */
+	rc = osp_sync_init(env, m);
+	if (rc)
+		GOTO(out_precreat, rc);
+
+	/*
 	 * Initiate connect to OST
 	 */
 	ll_generate_random_uuid(uuid);
@@ -481,6 +536,9 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	RETURN(0);
 
 out:
+	/* stop sync thread */
+	osp_sync_fini(m);
+out_precreat:
 	/* stop precreate thread */
 	osp_precreate_fini(m);
 out_last_used:
@@ -665,6 +723,166 @@ static int osp_obd_disconnect(struct obd_export *exp)
 	RETURN(rc);
 }
 
+/*
+ * lprocfs helpers still use OBD API, let's keep obd_statfs() support
+ */
+static int osp_obd_statfs(const struct lu_env *env, struct obd_export *exp,
+			  struct obd_statfs *osfs, __u64 max_age, __u32 flags)
+{
+	struct obd_statfs	*msfs;
+	struct ptlrpc_request	*req;
+	struct obd_import	*imp = NULL;
+	int			 rc;
+
+	ENTRY;
+
+	/* Since the request might also come from lprocfs, so we need
+	 * sync this with client_disconnect_export Bug15684 */
+	cfs_down_read(&exp->exp_obd->u.cli.cl_sem);
+	if (exp->exp_obd->u.cli.cl_import)
+		imp = class_import_get(exp->exp_obd->u.cli.cl_import);
+	cfs_up_read(&exp->exp_obd->u.cli.cl_sem);
+	if (!imp)
+		RETURN(-ENODEV);
+
+	/* We could possibly pass max_age in the request (as an absolute
+	 * timestamp or a "seconds.usec ago") so the target can avoid doing
+	 * extra calls into the filesystem if that isn't necessary (e.g.
+	 * during mount that would help a bit).  Having relative timestamps
+	 * is not so great if request processing is slow, while absolute
+	 * timestamps are not ideal because they need time synchronization. */
+	req = ptlrpc_request_alloc(imp, &RQF_OST_STATFS);
+
+	class_import_put(imp);
+
+	if (req == NULL)
+		RETURN(-ENOMEM);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_STATFS);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+	ptlrpc_request_set_replen(req);
+	req->rq_request_portal = OST_CREATE_PORTAL;
+	ptlrpc_at_set_req_timeout(req);
+
+	if (flags & OBD_STATFS_NODELAY) {
+		/* procfs requests not want stat in wait for avoid deadlock */
+		req->rq_no_resend = 1;
+		req->rq_no_delay = 1;
+	}
+
+	rc = ptlrpc_queue_wait(req);
+	if (rc)
+		GOTO(out, rc);
+
+	msfs = req_capsule_server_get(&req->rq_pill, &RMF_OBD_STATFS);
+	if (msfs == NULL)
+		GOTO(out, rc = -EPROTO);
+
+	*osfs = *msfs;
+
+	EXIT;
+out:
+	ptlrpc_req_finished(req);
+	return rc;
+}
+
+static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
+			    enum obd_import_event event)
+{
+	struct osp_device *d = lu2osp_dev(obd->obd_lu_dev);
+
+	switch (event) {
+	case IMP_EVENT_DISCON:
+		d->opd_got_disconnected = 1;
+		d->opd_imp_connected = 0;
+		osp_pre_update_status(d, -ENODEV);
+		cfs_waitq_signal(&d->opd_pre_waitq);
+		CDEBUG(D_HA, "got disconnected\n");
+		break;
+	case IMP_EVENT_INACTIVE:
+		d->opd_imp_active = 0;
+		osp_pre_update_status(d, -ENODEV);
+		cfs_waitq_signal(&d->opd_pre_waitq);
+		CDEBUG(D_HA, "got inactive\n");
+		break;
+	case IMP_EVENT_ACTIVE:
+		d->opd_imp_active = 1;
+		if (d->opd_got_disconnected)
+			d->opd_new_connection = 1;
+		d->opd_imp_connected = 1;
+		d->opd_imp_seen_connected = 1;
+		cfs_waitq_signal(&d->opd_pre_waitq);
+		__osp_sync_check_for_work(d);
+		CDEBUG(D_HA, "got connected\n");
+		break;
+	default:
+		CERROR("%s: unsupported import event: %#x\n",
+		       obd->obd_name, event);
+	}
+	return 0;
+}
+
+static int osp_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
+			 void *karg, void *uarg)
+{
+	struct obd_device	*obd = exp->exp_obd;
+	struct osp_device	*d;
+	struct obd_ioctl_data	*data = karg;
+	int			 rc = 0;
+
+	ENTRY;
+
+	LASSERT(obd->obd_lu_dev);
+	d = lu2osp_dev(obd->obd_lu_dev);
+	LASSERT(d->opd_dt_dev.dd_ops == &osp_dt_ops);
+
+	if (!cfs_try_module_get(THIS_MODULE)) {
+		CERROR("%s: can't get module. Is it alive?", obd->obd_name);
+		return -EINVAL;
+	}
+
+	switch (cmd) {
+	case OBD_IOC_CLIENT_RECOVER:
+		rc = ptlrpc_recover_import(obd->u.cli.cl_import,
+					   data->ioc_inlbuf1, 0);
+		if (rc > 0)
+			rc = 0;
+		break;
+	case IOC_OSC_SET_ACTIVE:
+		rc = ptlrpc_set_import_active(obd->u.cli.cl_import,
+					      data->ioc_offset);
+		break;
+	case OBD_IOC_PING_TARGET:
+		rc = ptlrpc_obd_ping(obd);
+		break;
+	default:
+		CERROR("%s: unrecognized ioctl %#x by %s\n", obd->obd_name,
+		       cmd, cfs_curproc_comm());
+		rc = -ENOTTY;
+	}
+	cfs_module_put(THIS_MODULE);
+	return rc;
+}
+
+static int osp_obd_health_check(const struct lu_env *env,
+				struct obd_device *obd)
+{
+	struct osp_device *d = lu2osp_dev(obd->obd_lu_dev);
+
+	ENTRY;
+
+	/*
+	 * 1.8/2.0 behaviour is that OST being connected once at least
+	 * is considired "healthy". and one "healty" OST is enough to
+	 * allow lustre clients to connect to MDS
+	 */
+	LASSERT(d);
+	RETURN(!d->opd_imp_seen_connected);
+}
+
 /* context key constructor/destructor: mdt_key_init, mdt_key_fini */
 LU_KEY_INIT_FINI(osp, struct osp_thread_info);
 static void osp_key_exit(const struct lu_context *ctx,
@@ -719,6 +937,10 @@ static struct obd_ops osp_obd_device_ops = {
 	.o_reconnect	= osp_reconnect,
 	.o_connect	= osp_obd_connect,
 	.o_disconnect	= osp_obd_disconnect,
+	.o_health_check	= osp_obd_health_check,
+	.o_import_event	= osp_import_event,
+	.o_iocontrol	= osp_iocontrol,
+	.o_statfs	= osp_obd_statfs,
 };
 
 static int __init osp_mod_init(void)
