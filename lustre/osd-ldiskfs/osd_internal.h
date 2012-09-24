@@ -694,6 +694,16 @@ const struct dt_rec *osd_quota_pack(struct osd_object *obj,
 				    const struct dt_rec *rec,
 				    union lquota_rec *quota_rec);
 void osd_quota_unpack(struct osd_object *obj, const struct dt_rec *rec);
+int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
+			const struct dt_index_features *feat);
+
+static inline bool is_quota_glb_feat(const struct dt_index_features *feat)
+{
+	return (feat == &dt_quota_iusr_features ||
+		feat == &dt_quota_busr_features ||
+		feat == &dt_quota_igrp_features ||
+		feat == &dt_quota_bgrp_features) ? true : false;
+}
 
 /*
  * Invariants, assertions.

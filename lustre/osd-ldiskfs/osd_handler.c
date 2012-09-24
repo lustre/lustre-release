@@ -2828,6 +2828,9 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
         }
         LINVRNT(osd_invariant(obj));
 
+	if (is_quota_glb_feat(feat))
+		result = osd_quota_migration(env, dt, feat);
+
         return result;
 }
 
