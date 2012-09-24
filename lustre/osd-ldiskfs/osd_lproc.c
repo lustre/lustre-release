@@ -336,6 +336,27 @@ static int lprocfs_osd_rd_mntdev(char *page, char **start, off_t off, int count,
 			mnt_get_devname(osd->od_mnt));
 }
 
+static int lprocfs_osd_wr_force_sync(struct file *file, const char *buffer,
+				     unsigned long count, void *data)
+{
+	struct osd_device *osd = osd_dt_dev(data);
+	struct dt_device  *dt = data;
+	struct lu_env      env;
+	int rc;
+
+	LASSERT(osd != NULL);
+	if (unlikely(osd->od_mnt == NULL))
+		return -EINPROGRESS;
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		return rc;
+	rc = dt_sync(&env, dt);
+	lu_env_fini(&env);
+
+	return rc == 0 ? count : rc;
+}
+
 #ifdef HAVE_LDISKFS_PDO
 static int lprocfs_osd_rd_pdo(char *page, char **start, off_t off, int count,
                               int *eof, void *data)
@@ -414,6 +435,7 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
         { "filesfree",       lprocfs_osd_rd_filesfree,   0, 0 },
         { "fstype",          lprocfs_osd_rd_fstype,      0, 0 },
         { "mntdev",          lprocfs_osd_rd_mntdev,      0, 0 },
+	{ "force_sync",      0, lprocfs_osd_wr_force_sync     },
 #ifdef HAVE_LDISKFS_PDO
         { "pdo",             lprocfs_osd_rd_pdo, lprocfs_osd_wr_pdo, 0 },
 #endif
