@@ -1036,10 +1036,8 @@ restore_quota_old() {
 setup_quota_old(){
 	local mntpt=$1
 
-	if [ "$USE_OFD" = "yes" ]; then
-		$LFS quotacheck $mntpt || error "quotacheck failed"
-		return
-	fi
+	# no quota enforcement for now and accounting works out of the box
+	return
 
     # We need save the original quota_type params, and restore them after testing
 
@@ -3047,7 +3045,7 @@ init_param_vars () {
 			setup_quota $MOUNT || return 2
 		else
 			echo "disable quota as required"
-			$LFS quotaoff -ug $MOUNT > /dev/null 2>&1
+			# $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
 		fi
 	fi
 	return 0

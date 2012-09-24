@@ -76,8 +76,6 @@ struct client_obd;
 #define toqb(x) (((x) + QUOTABLOCK_SIZE - 1) >> QUOTABLOCK_BITS)
 #endif
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 #ifndef MAX_IQ_TIME
 #define MAX_IQ_TIME  604800     /* (7*24*60*60) 1 week */
 #endif
@@ -419,18 +417,6 @@ struct lustre_quota_ctxt {
 #define QUOTA_MASTER_UNREADY(qctxt)
 
 #endif  /* !__KERNEL__ */
-
-#else
-
-#define LL_DQUOT_OFF(sb) do {} while(0)
-
-struct lustre_quota_info {
-};
-
-struct lustre_quota_ctxt {
-};
-
-#endif /* !HAVE_QUOTA_SUPPORT */
 
 /* If the (quota limit < qunit * slave count), the slave which can't
  * acquire qunit should set it's local limit as MIN_QLIMIT */

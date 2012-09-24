@@ -2923,58 +2923,6 @@ out:
         RETURN(rc);
 }
 
-int lov_quota_adjust_qunit(struct obd_export *exp,
-                           struct quota_adjust_qunit *oqaq,
-                           struct lustre_quota_ctxt *qctxt,
-                           struct ptlrpc_request_set *rqset)
-{
-        struct obd_device *obd = class_exp2obd(exp);
-        struct lov_obd    *lov = &obd->u.lov;
-        int                i, err, rc = 0;
-        unsigned           no_set = 0;
-        ENTRY;
-
-        if (!QAQ_IS_ADJBLK(oqaq)) {
-                CERROR("bad qaq_flags %x for lov obd.\n", oqaq->qaq_flags);
-                RETURN(-EFAULT);
-        }
-
-        if (rqset == NULL) {
-                rqset = ptlrpc_prep_set();
-                if (!rqset)
-                        RETURN(-ENOMEM);
-                no_set = 1;
-        }
-
-        obd_getref(obd);
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-
-                if (!lov->lov_tgts[i] || !lov->lov_tgts[i]->ltd_active) {
-                        CDEBUG(D_HA, "ost %d is inactive\n", i);
-                        continue;
-                }
-
-                err = obd_quota_adjust_qunit(lov->lov_tgts[i]->ltd_exp, oqaq,
-                                             NULL, rqset);
-                if (err) {
-                        if (lov->lov_tgts[i]->ltd_active && !rc)
-                                rc = err;
-                        continue;
-                }
-        }
-
-        err = ptlrpc_set_wait(rqset);
-        if (!rc)
-                rc = err;
-
-        /* Destroy the set if none was provided by the caller */
-        if (no_set)
-                ptlrpc_set_destroy(rqset);
-
-        obd_putref(obd);
-        RETURN(rc);
-}
-
 struct obd_ops lov_obd_ops = {
         .o_owner               = THIS_MODULE,
         .o_setup               = lov_setup,
@@ -3018,11 +2966,7 @@ struct obd_ops lov_obd_ops = {
         .o_putref              = lov_putref,
         .o_quotactl            = lov_quotactl,
         .o_quotacheck          = lov_quotacheck,
-        .o_quota_adjust_qunit  = lov_quota_adjust_qunit,
 };
-
-static quota_interface_t *quota_interface;
-extern quota_interface_t lov_quota_interface;
 
 cfs_mem_cache_t *lov_oinfo_slab;
 
@@ -3052,16 +2996,10 @@ int __init lov_init(void)
         }
         lprocfs_lov_init_vars(&lvars);
 
-        cfs_request_module("lquota");
-        quota_interface = PORTAL_SYMBOL_GET(lov_quota_interface);
-        init_obd_quota_ops(quota_interface, &lov_obd_ops);
-
         rc = class_register_type(&lov_obd_ops, NULL, lvars.module_vars,
                                  LUSTRE_LOV_NAME, &lov_device_type);
 
         if (rc) {
-                if (quota_interface)
-                        PORTAL_SYMBOL_PUT(lov_quota_interface);
                 rc2 = cfs_mem_cache_destroy(lov_oinfo_slab);
                 LASSERT(rc2 == 0);
                 lu_kmem_fini(lov_caches);
@@ -3074,9 +3012,6 @@ int __init lov_init(void)
 static void /*__exit*/ lov_exit(void)
 {
         int rc;
-
-        if (quota_interface)
-                PORTAL_SYMBOL_PUT(lov_quota_interface);
 
         class_unregister_type(LUSTRE_LOV_NAME);
         rc = cfs_mem_cache_destroy(lov_oinfo_slab);

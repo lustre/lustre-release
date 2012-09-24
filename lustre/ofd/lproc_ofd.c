@@ -464,9 +464,6 @@ static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "capa",		 lprocfs_ofd_rd_capa,
 				 lprocfs_ofd_wr_capa, 0 },
 	{ "capa_count",		 lprocfs_ofd_rd_capa_count, 0, 0 },
-	/* we still register a fake quota type file for backward compatibility*/
-	{ "quota_type",          lprocfs_quota_rd_type_dumb,
-				 lprocfs_quota_wr_type_dumb, 0},
 	{ 0 }
 };
 

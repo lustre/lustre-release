@@ -1317,25 +1317,6 @@ struct md_capainfo *md_capainfo(const struct lu_env *env)
 }
 EXPORT_SYMBOL(md_capainfo);
 
-/*
- * context key constructor/destructor:
- * mdd_quota_key_init, mdd_quota_key_fini
- */
-LU_KEY_INIT_FINI(mdd_quota, struct md_quota);
-
-struct lu_context_key mdd_quota_key = {
-        .lct_tags = LCT_SESSION,
-        .lct_init = mdd_quota_key_init,
-        .lct_fini = mdd_quota_key_fini
-};
-
-struct md_quota *md_quota(const struct lu_env *env)
-{
-        LASSERT(env->le_ses != NULL);
-        return lu_context_key_get(env->le_ses, &mdd_quota_key);
-}
-EXPORT_SYMBOL(md_quota);
-
 static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
 {
         struct llog_ctxt *ctxt;
@@ -1636,8 +1617,7 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 }
 
 /* type constructor/destructor: mdd_type_init, mdd_type_fini */
-LU_TYPE_INIT_FINI(mdd, &mdd_thread_key, &mdd_ucred_key, &mdd_capainfo_key,
-                  &mdd_quota_key);
+LU_TYPE_INIT_FINI(mdd, &mdd_thread_key, &mdd_ucred_key, &mdd_capainfo_key);
 
 const struct md_device_operations mdd_ops = {
         .mdo_statfs         = mdd_statfs,
@@ -1647,25 +1627,6 @@ const struct md_device_operations mdd_ops = {
         .mdo_update_capa_key= mdd_update_capa_key,
         .mdo_llog_ctxt_get  = mdd_llog_ctxt_get,
         .mdo_iocontrol      = mdd_iocontrol,
-#ifdef HAVE_QUOTA_SUPPORT
-        .mdo_quota          = {
-                .mqo_notify      = mdd_quota_notify,
-                .mqo_setup       = mdd_quota_setup,
-                .mqo_cleanup     = mdd_quota_cleanup,
-                .mqo_recovery    = mdd_quota_recovery,
-                .mqo_check       = mdd_quota_check,
-                .mqo_on          = mdd_quota_on,
-                .mqo_off         = mdd_quota_off,
-                .mqo_setinfo     = mdd_quota_setinfo,
-                .mqo_getinfo     = mdd_quota_getinfo,
-                .mqo_setquota    = mdd_quota_setquota,
-                .mqo_getquota    = mdd_quota_getquota,
-                .mqo_getoinfo    = mdd_quota_getoinfo,
-                .mqo_getoquota   = mdd_quota_getoquota,
-                .mqo_invalidate  = mdd_quota_invalidate,
-                .mqo_finvalidate = mdd_quota_finvalidate
-        }
-#endif
 };
 
 static struct lu_device_type_operations mdd_device_type_ops = {

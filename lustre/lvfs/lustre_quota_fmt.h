@@ -39,8 +39,6 @@
 #ifndef _LUSTRE_QUOTA_FMT_H
 #define _LUSTRE_QUOTA_FMT_H
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 #include <linux/types.h>
 #include <linux/quota.h>
 
@@ -193,4 +191,3 @@ ssize_t lustre_read_quota(struct file *f, struct inode *inode, int type,
 
 #define LUSTRE_OPQFILES_NAMES_V2 { "lquota_v2.user", "lquota_v2.group" }
 #endif                          /* lustre_quota_fmt.h */
-#endif

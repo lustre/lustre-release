@@ -147,12 +147,4 @@ static inline void qsd_op_end(const struct lu_env *env,
 			      struct lquota_trans *trans)
 {
 }
-
-#ifdef LPROCFS
-/* dumb procfs handler which always report success, for backward compatibility
- * purpose */
-int lprocfs_quota_rd_type_dumb(char *, char **, off_t, int, int *, void *);
-int lprocfs_quota_wr_type_dumb(struct file *, const char *, unsigned long,
-			       void *);
-#endif /* LPROCFS */
 #endif /* _LUSTRE_LQUOTA_H */

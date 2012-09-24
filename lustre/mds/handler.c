@@ -403,23 +403,9 @@ static struct obd_ops mds_cmd_obd_ops = {
         //   .o_health_check    = mds_cmd_health_check,
 };
 
-quota_interface_t *mds_quota_interface_ref;
-extern quota_interface_t mds_quota_interface;
-
 static int __init mds_cmd_init(void)
 {
         struct lprocfs_static_vars lvars;
-        int rc;
-
-        cfs_request_module("%s", "lquota");
-        mds_quota_interface_ref = PORTAL_SYMBOL_GET(mds_quota_interface);
-        rc = lquota_init(mds_quota_interface_ref);
-        if (rc) {
-                if (mds_quota_interface_ref)
-                        PORTAL_SYMBOL_PUT(mds_quota_interface);
-                return rc;
-        }
-        init_obd_quota_ops(mds_quota_interface_ref, &mds_cmd_obd_ops);
 
         lprocfs_mds_init_vars(&lvars);
         class_register_type(&mds_cmd_obd_ops, NULL, lvars.module_vars,
@@ -430,14 +416,9 @@ static int __init mds_cmd_init(void)
 
 static void /*__exit*/ mds_cmd_exit(void)
 {
-        lquota_exit(mds_quota_interface_ref);
-        if (mds_quota_interface_ref)
-                PORTAL_SYMBOL_PUT(mds_quota_interface);
-
         class_unregister_type(LUSTRE_MDS_NAME);
 }
 
-EXPORT_SYMBOL(mds_quota_interface_ref);
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
 MODULE_DESCRIPTION("Lustre Metadata Server (MDS)");
 MODULE_LICENSE("GPL");

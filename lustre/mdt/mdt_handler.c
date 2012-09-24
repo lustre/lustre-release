@@ -65,11 +65,9 @@
 #include <lustre_mdt.h>
 #include <lustre_log.h>
 #include "mdt_internal.h"
-#ifdef HAVE_QUOTA_SUPPORT
-# include <lustre_quota.h>
-#endif
 #include <lustre_acl.h>
 #include <lustre_param.h>
+#include <lquota.h>
 
 mdl_mode_t mdt_mdl_lock_modes[] = {
         [LCK_MINMODE] = MDL_MINMODE,
@@ -1819,7 +1817,6 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                               __u32 op)
 {
         struct req_capsule      *pill = info->mti_pill;
-        struct md_quota         *mq = md_quota(info->mti_env);
         struct mdt_body         *repbody;
         int                      rc = 0, rc2;
         ENTRY;
@@ -1872,7 +1869,6 @@ static int mdt_reint_internal(struct mdt_thread_info *info,
                 rc = lustre_msg_get_status(mdt_info_req(info)->rq_repmsg);
                 GOTO(out_ucred, rc);
         }
-        mq->mq_exp = info->mti_exp;
         rc = mdt_reint_rec(info, lhc);
         EXIT;
 out_ucred:
@@ -2021,133 +2017,140 @@ static int mdt_sync(struct mdt_thread_info *info)
         RETURN(rc);
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
-static int mdt_quotacheck_handle(struct mdt_thread_info *info)
+/*
+ * Quotacheck handler.
+ * in-kernel quotacheck isn't supported any more.
+ */
+static int mdt_quotacheck(struct mdt_thread_info *info)
 {
-        struct obd_quotactl *oqctl;
-        struct req_capsule *pill = info->mti_pill;
-        struct obd_export *exp = info->mti_exp;
-        struct md_quota *mq = md_quota(info->mti_env);
-        struct md_device *next = info->mti_mdt->mdt_child;
-        int rc;
-        ENTRY;
+	struct obd_quotactl	*oqctl;
+	int			 rc;
+	ENTRY;
 
-        oqctl = req_capsule_client_get(pill, &RMF_OBD_QUOTACTL);
-        if (oqctl == NULL)
-                RETURN(-EPROTO);
+	oqctl = req_capsule_client_get(info->mti_pill, &RMF_OBD_QUOTACTL);
+	if (oqctl == NULL)
+		RETURN(err_serious(-EPROTO));
 
-        /* remote client has no permission for quotacheck */
-        if (unlikely(exp_connect_rmtclient(exp)))
-                RETURN(-EPERM);
+	rc = req_capsule_server_pack(info->mti_pill);
+	if (rc)
+		RETURN(err_serious(rc));
 
-        rc = req_capsule_server_pack(pill);
-        if (rc)
-                RETURN(rc);
-
-        mq->mq_exp = exp;
-        rc = next->md_ops->mdo_quota.mqo_check(info->mti_env, next,
-                                               oqctl->qc_type);
-        RETURN(rc);
+	/* deprecated, not used any more */
+	RETURN(-EOPNOTSUPP);
 }
 
-static int mdt_quotactl_handle(struct mdt_thread_info *info)
+/*
+ * Handle quota control requests to consult current usage/limit, but also
+ * to configure quota enforcement
+ */
+static int mdt_quotactl(struct mdt_thread_info *info)
 {
-        struct obd_quotactl *oqctl, *repoqc;
-        struct req_capsule *pill = info->mti_pill;
-        struct obd_export *exp = info->mti_exp;
-        struct md_quota *mq = md_quota(info->mti_env);
-        struct md_device *next = info->mti_mdt->mdt_child;
-        const struct md_quota_operations *mqo = &next->md_ops->mdo_quota;
-        int id, rc;
-        ENTRY;
+	struct obd_export	*exp  = info->mti_exp;
+	struct req_capsule	*pill = info->mti_pill;
+	struct obd_quotactl	*oqctl, *repoqc;
+	int			 id, rc;
+	ENTRY;
 
-        oqctl = req_capsule_client_get(pill, &RMF_OBD_QUOTACTL);
-        if (oqctl == NULL)
-                RETURN(-EPROTO);
+	oqctl = req_capsule_client_get(pill, &RMF_OBD_QUOTACTL);
+	if (oqctl == NULL)
+		RETURN(err_serious(-EPROTO));
 
-        id = oqctl->qc_id;
-        if (exp_connect_rmtclient(exp)) {
-                struct ptlrpc_request *req = mdt_info_req(info);
-                struct mdt_export_data *med = mdt_req2med(req);
-                struct lustre_idmap_table *idmap = med->med_idmap;
+	rc = req_capsule_server_pack(pill);
+	if (rc)
+		RETURN(err_serious(rc));
 
-                if (unlikely(oqctl->qc_cmd != Q_GETQUOTA &&
-                             oqctl->qc_cmd != Q_GETINFO))
-                        RETURN(-EPERM);
+	switch (oqctl->qc_cmd) {
+	case Q_QUOTACHECK:
+	case LUSTRE_Q_INVALIDATE:
+	case LUSTRE_Q_FINVALIDATE:
+	case Q_QUOTAON:
+	case Q_QUOTAOFF:
+	case Q_INITQUOTA:
+		/* deprecated, not used any more */
+		RETURN(-EOPNOTSUPP);
+		/* master quotactl */
+	case Q_GETINFO:
+	case Q_SETINFO:
+	case Q_SETQUOTA:
+	case Q_GETQUOTA:
+		/* slave quotactl */
+	case Q_GETOINFO:
+	case Q_GETOQUOTA:
+		break;
+	default:
+		CERROR("Unsupported quotactl command: %d\n", oqctl->qc_cmd);
+		RETURN(-EFAULT);
+	}
 
+	/* map uid/gid for remote client */
+	id = oqctl->qc_id;
+	if (exp_connect_rmtclient(exp)) {
+		struct lustre_idmap_table *idmap;
 
-                if (oqctl->qc_type == USRQUOTA)
-                        id = lustre_idmap_lookup_uid(NULL, idmap, 0,
-                                                     oqctl->qc_id);
-                else if (oqctl->qc_type == GRPQUOTA)
-                        id = lustre_idmap_lookup_gid(NULL, idmap, 0,
-                                                     oqctl->qc_id);
-                else
-                        RETURN(-EINVAL);
+		idmap = mdt_req2med(mdt_info_req(info))->med_idmap;
 
-                if (id == CFS_IDMAP_NOTFOUND) {
-                        CDEBUG(D_QUOTA, "no mapping for id %u\n",
-                               oqctl->qc_id);
-                        RETURN(-EACCES);
-                }
-        }
+		if (unlikely(oqctl->qc_cmd != Q_GETQUOTA &&
+			     oqctl->qc_cmd != Q_GETINFO))
+			RETURN(-EPERM);
 
-        rc = req_capsule_server_pack(pill);
-        if (rc)
-                RETURN(rc);
+		if (oqctl->qc_type == USRQUOTA)
+			id = lustre_idmap_lookup_uid(NULL, idmap, 0,
+						     oqctl->qc_id);
+		else if (oqctl->qc_type == GRPQUOTA)
+			id = lustre_idmap_lookup_gid(NULL, idmap, 0,
+						     oqctl->qc_id);
+		else
+			RETURN(-EINVAL);
 
-        repoqc = req_capsule_server_get(pill, &RMF_OBD_QUOTACTL);
-        LASSERT(repoqc != NULL);
+		if (id == CFS_IDMAP_NOTFOUND) {
+			CDEBUG(D_QUOTA, "no mapping for id %u\n", oqctl->qc_id);
+			RETURN(-EACCES);
+		}
+	}
 
-        mq->mq_exp = exp;
-        switch (oqctl->qc_cmd) {
-        case Q_QUOTAON:
-                rc = mqo->mqo_on(info->mti_env, next, oqctl->qc_type);
-                break;
-        case Q_QUOTAOFF:
-                rc = mqo->mqo_off(info->mti_env, next, oqctl->qc_type);
-                break;
-        case Q_SETINFO:
-                rc = mqo->mqo_setinfo(info->mti_env, next, oqctl->qc_type, id,
-                                      &oqctl->qc_dqinfo);
-                break;
-        case Q_GETINFO:
-                rc = mqo->mqo_getinfo(info->mti_env, next, oqctl->qc_type, id,
-                                      &oqctl->qc_dqinfo);
-                break;
-        case Q_SETQUOTA:
-                rc = mqo->mqo_setquota(info->mti_env, next, oqctl->qc_type, id,
-                                       &oqctl->qc_dqblk);
-                break;
-        case Q_GETQUOTA:
-                rc = mqo->mqo_getquota(info->mti_env, next, oqctl->qc_type, id,
-                                       &oqctl->qc_dqblk);
-                break;
-        case Q_GETOINFO:
-                rc = mqo->mqo_getoinfo(info->mti_env, next, oqctl->qc_type, id,
-                                       &oqctl->qc_dqinfo);
-                break;
-        case Q_GETOQUOTA:
-                rc = mqo->mqo_getoquota(info->mti_env, next, oqctl->qc_type, id,
-                                        &oqctl->qc_dqblk);
-                break;
-        case LUSTRE_Q_INVALIDATE:
-                rc = mqo->mqo_invalidate(info->mti_env, next, oqctl->qc_type);
-                break;
-        case LUSTRE_Q_FINVALIDATE:
-                rc = mqo->mqo_finvalidate(info->mti_env, next, oqctl->qc_type);
-                break;
-        default:
-                CERROR("unsupported mdt_quotactl command: %d\n",
-                       oqctl->qc_cmd);
-                RETURN(-EFAULT);
-        }
+	repoqc = req_capsule_server_get(pill, &RMF_OBD_QUOTACTL);
+	if (repoqc == NULL)
+		RETURN(err_serious(-EFAULT));
 
-        *repoqc = *oqctl;
-        RETURN(rc);
+	if (oqctl->qc_id != id)
+		swap(oqctl->qc_id, id);
+
+	switch (oqctl->qc_cmd) {
+
+		/* master quotactl */
+	case Q_GETINFO:
+	case Q_SETINFO:
+	case Q_SETQUOTA:
+		/* XXX: not implemented yet. Will be when qmt support is
+		 * added */
+		CERROR("quotactl operation %d not implemented yet\n",
+					oqctl->qc_cmd);
+		RETURN(-EOPNOTSUPP);
+	case Q_GETQUOTA:
+		/* XXX: return no limit for now, just for testing purpose */
+		memset(&oqctl->qc_dqblk, 0, sizeof(struct obd_dqblk));
+		oqctl->qc_dqblk.dqb_valid = QIF_LIMITS;
+		rc = 0;
+		break;
+
+		/* slave quotactl */
+	case Q_GETOINFO:
+	case Q_GETOQUOTA:
+		rc = lquotactl_slv(info->mti_env, info->mti_mdt->mdt_bottom,
+				   oqctl);
+		break;
+
+	default:
+		CERROR("Unsupported quotactl command: %d\n", oqctl->qc_cmd);
+		RETURN(-EFAULT);
+	}
+
+	if (oqctl->qc_id != id)
+		swap(oqctl->qc_id, id);
+
+	*repoqc = *oqctl;
+	RETURN(rc);
 }
-#endif
-
 
 /*
  * OBD PING and other handlers.
@@ -4906,9 +4909,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         mdt_procfs_fini(m);
 
-#ifdef HAVE_QUOTA_SUPPORT
-        next->md_ops->mdo_quota.mqo_cleanup(env, next);
-#endif
         lut_fini(env, &m->mdt_lut);
         mdt_fs_cleanup(env, m);
         upcall_cache_cleanup(m->mdt_identity_cache);
@@ -5136,16 +5136,11 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         mdt_adapt_sptlrpc_conf(obd, 1);
 
         next = m->mdt_child;
-#ifdef HAVE_QUOTA_SUPPORT
-        rc = next->md_ops->mdo_quota.mqo_setup(env, next, lmi->lmi_mnt);
-        if (rc)
-                GOTO(err_llog_cleanup, rc);
-#endif
 
         rc = next->md_ops->mdo_iocontrol(env, next, OBD_IOC_GET_MNTOPT, 0,
                                          &mntopts);
         if (rc)
-                GOTO(err_quota, rc);
+		GOTO(err_llog_cleanup, rc);
 
         if (mntopts & MNTOPT_USERXATTR)
                 m->mdt_opts.mo_user_xattr = 1;
@@ -5167,7 +5162,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (IS_ERR(m->mdt_identity_cache)) {
                 rc = PTR_ERR(m->mdt_identity_cache);
                 m->mdt_identity_cache = NULL;
-                GOTO(err_quota, rc);
+		GOTO(err_llog_cleanup, rc);
         }
 
         target_recovery_init(&m->mdt_lut, mdt_recovery_handle);
@@ -5205,10 +5200,6 @@ err_recovery:
         target_recovery_fini(obd);
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
-err_quota:
-#ifdef HAVE_QUOTA_SUPPORT
-        next->md_ops->mdo_quota.mqo_cleanup(env, next);
-#endif
 err_llog_cleanup:
         mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
         mdt_obd_llog_cleanup(obd);
@@ -5850,13 +5841,6 @@ static int mdt_upcall(const struct lu_env *env, struct md_device *md,
                         /* Check that MDT is not yet configured */
                         LASSERT(!cfs_test_bit(MDT_FL_CFGLOG, &m->mdt_state));
                         break;
-#ifdef HAVE_QUOTA_SUPPORT
-                case MD_LOV_QUOTA:
-                        if (md->md_lu_dev.ld_obd->obd_recovering == 0 &&
-                            likely(md->md_lu_dev.ld_obd->obd_stopping == 0))
-                                next->md_ops->mdo_quota.mqo_recovery(env, next);
-                        break;
-#endif
                 default:
                         CERROR("invalid event\n");
                         rc = -EINVAL;
@@ -5870,20 +5854,11 @@ static int mdt_obd_notify(struct obd_device *obd,
                           enum obd_notify_event ev, void *data)
 {
         struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-#ifdef HAVE_QUOTA_SUPPORT
-        struct md_device *next = mdt->mdt_child;
-#endif
         ENTRY;
 
         switch (ev) {
         case OBD_NOTIFY_CONFIG:
                 mdt_allow_cli(mdt, (unsigned long)data);
-
-#ifdef HAVE_QUOTA_SUPPORT
-               /* quota_type has been processed, we can now handle
-                * incoming quota requests */
-                next->md_ops->mdo_quota.mqo_notify(NULL, next);
-#endif
                 break;
         default:
                 CDEBUG(D_INFO, "Unhandled notification %#x\n", ev);
@@ -6131,18 +6106,10 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 int mdt_postrecov(const struct lu_env *env, struct mdt_device *mdt)
 {
         struct lu_device *ld = md2lu_dev(mdt->mdt_child);
-#ifdef HAVE_QUOTA_SUPPORT
-        struct obd_device *obd = mdt2obd_dev(mdt);
-        struct md_device *next = mdt->mdt_child;
-#endif
         int rc;
         ENTRY;
 
         rc = ld->ld_ops->ldo_recovery_complete(env, ld);
-#ifdef HAVE_QUOTA_SUPPORT
-        if (likely(obd->obd_stopping == 0))
-                next->md_ops->mdo_quota.mqo_recovery(env, next);
-#endif
         RETURN(rc);
 }
 
@@ -6441,10 +6408,8 @@ DEF_MDT_HNDL_F(HABEO_CORPUS,              DONE_WRITING, mdt_done_writing),
 DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
 DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
 DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, IS_SUBDIR,    mdt_is_subdir),
-#ifdef HAVE_QUOTA_SUPPORT
-DEF_MDT_HNDL_F(0,                         QUOTACHECK,   mdt_quotacheck_handle),
-DEF_MDT_HNDL_F(0,                         QUOTACTL,     mdt_quotactl_handle)
-#endif
+DEF_MDT_HNDL_F(0,                         QUOTACHECK,   mdt_quotacheck),
+DEF_MDT_HNDL_F(0,                         QUOTACTL,     mdt_quotactl)
 };
 
 #define DEF_OBD_HNDL(flags, name, fn)                   \

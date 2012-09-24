@@ -69,7 +69,6 @@
 #include <lustre_log.h>
 #include <libcfs/list.h>
 #include <lustre_disk.h>
-#include <lustre_quota.h>
 #include <linux/slab.h>
 #include <lustre_param.h>
 #include <lustre/ll_fiemap.h>
@@ -2192,10 +2191,6 @@ int filter_common_setup(struct obd_device *obd, struct lustre_cfg* lcfg,
         /* do this after llog being initialized */
         filter_adapt_sptlrpc_conf(obd, 1);
 
-        rc = lquota_setup(filter_quota_interface_ref, obd);
-        if (rc)
-                GOTO(err_post, rc);
-
         q = bdev_get_queue(mnt->mnt_sb->s_bdev);
         if (queue_max_sectors(q) < queue_max_hw_sectors(q) &&
             queue_max_sectors(q) < PTLRPC_MAX_BRW_SIZE >> 9)
@@ -2705,7 +2700,6 @@ static int filter_precleanup(struct obd_device *obd,
                 lprocfs_free_per_client_stats(obd);
                 lprocfs_obd_cleanup(obd);
                 lprocfs_free_obd_stats(obd);
-                lquota_cleanup(filter_quota_interface_ref, obd);
                 break;
         }
         RETURN(rc);
@@ -3067,8 +3061,6 @@ static int filter_destroy_export(struct obd_export *exp)
                        exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
                        exp, fed->fed_pending);
 
-        lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
-
         target_destroy_export(exp);
 
         if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
@@ -3166,8 +3158,6 @@ static int filter_disconnect(struct obd_export *exp)
 
         /* Flush any remaining cancel messages out to the target */
         filter_sync_llogs(obd, exp);
-
-        lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
 
         rc = server_disconnect_export(exp);
 
@@ -3323,7 +3313,6 @@ int filter_update_fidea(struct obd_export *exp, struct inode *inode,
 int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                             struct obdo *oa, struct obd_trans_info *oti)
 {
-        unsigned int orig_ids[MAXQUOTAS] = {0, 0};
         struct llog_cookie *fcc = NULL;
         struct filter_obd *filter;
         int rc, err, sync = 0;
@@ -3403,8 +3392,6 @@ int filter_setattr_internal(struct obd_export *exp, struct dentry *dentry,
                         iattr.ia_mode &= ~S_ISGID;
                 }
 
-                orig_ids[USRQUOTA] = inode->i_uid;
-                orig_ids[GRPQUOTA] = inode->i_gid;
                 handle = fsfilt_start_log(exp->exp_obd, inode,
                                           FSFILT_OP_SETATTR, oti, 1);
                 if (IS_ERR(handle))
@@ -3485,16 +3472,6 @@ out_unlock:
 		up_write(&inode->i_alloc_sem);
 	if (fcc)
 		OBD_FREE(fcc, sizeof(*fcc));
-
-        /* trigger quota release */
-        if (ia_valid & (ATTR_SIZE | ATTR_UID | ATTR_GID)) {
-                unsigned int cur_ids[MAXQUOTAS] = {oa->o_uid, oa->o_gid};
-                int rc2 = lquota_adjust(filter_quota_interface_ref,
-                                        exp->exp_obd, cur_ids,
-                                        orig_ids, rc, FSFILT_OP_SETATTR);
-                CDEBUG(rc2 ? D_ERROR : D_QUOTA,
-                       "filter adjust qunit. (rc:%d)\n", rc2);
-        }
         return rc;
 }
 
@@ -4235,7 +4212,6 @@ int filter_destroy(const struct lu_env *env, struct obd_export *exp,
                    struct obd_trans_info *oti, struct obd_export *md_exp,
                    void *capa)
 {
-        unsigned int qcids[MAXQUOTAS] = {0, 0};
         struct obd_device *obd;
         struct filter_obd *filter;
         struct dentry *dchild = NULL, *dparent = NULL;
@@ -4417,13 +4393,6 @@ cleanup:
                 LBUG();
         }
 
-        /* trigger quota release */
-        qcids[USRQUOTA] = oa->o_uid;
-        qcids[GRPQUOTA] = oa->o_gid;
-        rc2 = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
-                            FSFILT_OP_UNLINK);
-        if (rc2)
-                CERROR("filter adjust qunit! (rc:%d)\n", rc2);
         return rc;
 }
 
@@ -4659,8 +4628,6 @@ static int filter_set_mds_conn(struct obd_export *exp, void *val)
                 /* setup llog group 1 for interop */
                 filter_setup_llog_group(exp, obd, FID_SEQ_LLOG);
         }
-
-        lquota_setinfo(filter_quota_interface_ref, obd, exp);
 out:
         RETURN(rc);
 }
@@ -4689,7 +4656,6 @@ static int filter_set_info_async(const struct lu_env *env,
 
         if (KEY_IS(KEY_REVIMP_UPD)) {
                 filter_revimp_update(exp);
-                lquota_clearinfo(filter_quota_interface_ref, exp, exp->exp_obd);
                 RETURN(0);
         }
 
@@ -4877,9 +4843,6 @@ static struct obd_ops filter_obd_ops = {
         .o_notify         = filter_notify,
 };
 
-quota_interface_t *filter_quota_interface_ref;
-extern quota_interface_t filter_quota_interface;
-
 static int __init obdfilter_init(void)
 {
         struct lprocfs_static_vars lvars;
@@ -4891,7 +4854,6 @@ static int __init obdfilter_init(void)
 
         lprocfs_filter_init_vars(&lvars);
 
-        cfs_request_module("%s", "lquota");
         OBD_ALLOC(obdfilter_created_scratchpad,
                   OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                   sizeof(*obdfilter_created_scratchpad));
@@ -4904,9 +4866,6 @@ static int __init obdfilter_init(void)
         if (!ll_fmd_cachep)
                 GOTO(out, rc = -ENOMEM);
 
-        filter_quota_interface_ref = PORTAL_SYMBOL_GET(filter_quota_interface);
-        init_obd_quota_ops(filter_quota_interface_ref, &filter_obd_ops);
-
         rc = class_register_type(&filter_obd_ops, NULL, lvars.module_vars,
                                  LUSTRE_OST_NAME, NULL);
         if (rc) {
@@ -4916,9 +4875,6 @@ static int __init obdfilter_init(void)
                 LASSERTF(err == 0, "Cannot destroy ll_fmd_cachep: rc %d\n",err);
                 ll_fmd_cachep = NULL;
 out:
-                if (filter_quota_interface_ref)
-                        PORTAL_SYMBOL_PUT(filter_quota_interface);
-
                 OBD_FREE(obdfilter_created_scratchpad,
                          OBDFILTER_CREATED_SCRATCHPAD_ENTRIES *
                          sizeof(*obdfilter_created_scratchpad));
@@ -4929,9 +4885,6 @@ out:
 
 static void __exit obdfilter_exit(void)
 {
-        if (filter_quota_interface_ref)
-                PORTAL_SYMBOL_PUT(filter_quota_interface);
-
         if (ll_fmd_cachep) {
                 int rc = cfs_mem_cache_destroy(ll_fmd_cachep);
                 LASSERTF(rc == 0, "Cannot destroy ll_fmd_cachep: rc %d\n", rc);

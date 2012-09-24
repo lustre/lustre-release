@@ -406,8 +406,8 @@ static void append_unique(char *buf, char *prefix, char *key, char *val,
 	}
 }
 
-static void enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
-					 size_t maxbuflen, int user_spec)
+static int enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
+					size_t maxbuflen, int user_spec)
 {
 	if (IS_OST(&mop->mo_ldd)) {
 		append_unique(anchor, user_spec ? "," : " -O ",
@@ -438,7 +438,17 @@ static void enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 	/* The following options are only valid for ext4-based ldiskfs.
 	 * If --backfstype=ext3 is specified, do not enable them. */
 	if (mop->mo_ldd.ldd_mount_type == LDD_MT_EXT3)
-		return;
+		return 0;
+
+	/* Enable quota by default */
+	if (is_e2fsprogs_feature_supp("-O quota") == 0) {
+		append_unique(anchor, ",", "quota", NULL, maxbuflen);
+	} else {
+		fatal();
+		fprintf(stderr, "\"-O quota\" must be supported by "
+			"e2fsprogs, please upgrade your e2fsprogs.\n");
+		return EINVAL;
+	}
 
 	/* Allow files larger than 2TB.  Also needs LU-16, but not harmful. */
 	if (is_e2fsprogs_feature_supp("-O huge_file") == 0)
@@ -464,6 +474,7 @@ static void enable_default_ext4_features(struct mkfs_opts *mop, char *anchor,
 		}
 	}
 	/* Don't add any more "-O" options here, see last comment above */
+	return 0;
 }
 
 /**
@@ -659,13 +670,15 @@ int ldiskfs_make_lustre(struct mkfs_opts *mop)
 			start = moveopts_to_end(start);
 			maxbuflen = sizeof(mop->mo_mkfsopts) -
 				(start - mop->mo_mkfsopts) - strlen(start);
-			enable_default_ext4_features(mop, start, maxbuflen, 1);
+			ret = enable_default_ext4_features(mop, start, maxbuflen, 1);
 		} else {
 			start = mop->mo_mkfsopts + strlen(mop->mo_mkfsopts),
 			      maxbuflen = sizeof(mop->mo_mkfsopts) -
 				      strlen(mop->mo_mkfsopts);
-			enable_default_ext4_features(mop, start, maxbuflen, 0);
+			ret = enable_default_ext4_features(mop, start, maxbuflen, 0);
 		}
+		if (ret)
+			return ret;
 		/* end handle -O mkfs options */
 
 		/* start handle -E mkfs options */

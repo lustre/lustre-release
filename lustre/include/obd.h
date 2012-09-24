@@ -959,8 +959,6 @@ enum obd_notify_event {
         OBD_NOTIFY_SYNC,
         /* Configuration event */
         OBD_NOTIFY_CONFIG,
-        /* Trigger quota recovery */
-        OBD_NOTIFY_QUOTA,
         /* Administratively deactivate/activate event */
         OBD_NOTIFY_DEACTIVATE,
         OBD_NOTIFY_ACTIVATE
@@ -1471,11 +1469,6 @@ struct obd_ops {
                             struct obd_quotactl *);
         int (*o_quotactl)(struct obd_device *, struct obd_export *,
                           struct obd_quotactl *);
-        int (*o_quota_adjust_qunit)(struct obd_export *exp,
-                                    struct quota_adjust_qunit *oqaq,
-                                    struct lustre_quota_ctxt *qctxt,
-                                    struct ptlrpc_request_set *rqset);
-
 
         int (*o_ping)(const struct lu_env *, struct obd_export *exp);
 
@@ -1687,18 +1680,6 @@ static inline void obd_transno_commit_cb(struct obd_device *obd, __u64 transno,
         }
         if (transno > obd->obd_last_committed)
                 obd->obd_last_committed = transno;
-}
-
-static inline void init_obd_quota_ops(quota_interface_t *interface,
-                                      struct obd_ops *obd_ops)
-{
-        if (!interface)
-                return;
-
-        LASSERT(obd_ops);
-        obd_ops->o_quotacheck = QUOTA_OP(interface, check);
-        obd_ops->o_quotactl = QUOTA_OP(interface, ctl);
-        obd_ops->o_quota_adjust_qunit = QUOTA_OP(interface, adjust_qunit);
 }
 
 static inline struct lustre_capa *oinfo_capa(struct obd_info *oinfo)

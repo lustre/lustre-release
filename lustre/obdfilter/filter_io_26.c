@@ -49,7 +49,6 @@
 
 #include <obd_class.h>
 #include <lustre_fsfilt.h>
-#include <lustre_quota.h>
 #include "filter_internal.h"
 
 /* 512byte block min */
@@ -484,9 +483,6 @@ int filter_direct_io(int rw, struct dentry *dchild, struct filter_iobuf *iobuf,
                 LASSERT(iobuf->dr_npages > 0);
                 create = 1;
                 mutex = &obd->u.filter.fo_alloc_lock;
-
-                lquota_enforce(filter_quota_interface_ref, obd,
-                               iobuf->dr_ignore_quota);
         }
 
         if (rw == OBD_BRW_WRITE &&
@@ -592,8 +588,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
         struct filter_obd *fo = &obd->u.filter;
         void *wait_handle = NULL;
         int total_size = 0;
-        unsigned int qcids[MAXQUOTAS] = { oa->o_uid, oa->o_gid };
-        int rec_pending[MAXQUOTAS] = { 0, 0 }, quota_pages = 0;
         int sync_journal_commit = obd->u.filter.fo_syncjournal;
         int retries = 0;
         ENTRY;
@@ -624,8 +618,6 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                          * we don't need a grant */
                         if (!(flags & OBD_BRW_GRANTED) && lnb->rc == -ENOSPC)
                                 lnb->rc = 0;
-                } else {
-                        quota_pages++;
                 }
 
                 if (lnb->rc) { /* ENOSPC, network RPC error, etc. */
@@ -670,21 +662,11 @@ int filter_commitrw_write(struct obd_export *exp, struct obdo *oa,
                 }
         }
 
-        /* we try to get enough quota to write here, and let ldiskfs
-         * decide if it is out of quota or not b=14783 */
-        rc = lquota_chkquota(filter_quota_interface_ref, obd, exp, qcids,
-                             rec_pending, quota_pages, oti, LQUOTA_FLAGS_BLK,
-                             (void *)inode, obj->ioo_bufcnt);
-        if (rc == -ENOTCONN)
-                GOTO(cleanup, rc);
-
         if (OBD_FAIL_CHECK(OBD_FAIL_OST_DQACQ_NET))
                 GOTO(cleanup, rc = -EINPROGRESS);
 
         push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
         cleanup_phase = 2;
-
-        fsfilt_check_slow(obd, now, "quota init");
 
 retry:
 	mutex_lock(&inode->i_mutex);
@@ -769,7 +751,6 @@ retry:
 			oa->o_id, (__u32)oa->o_seq, (__u32)oa->o_seq,
 			oa->o_size, oa->o_mtime, oa->o_atime, oa->o_ctime,
 			oa->o_blocks);
-        lquota_getflag(filter_quota_interface_ref, obd, oa);
 
         fsfilt_check_slow(obd, now, "direct_io");
 
@@ -810,9 +791,6 @@ retry:
         fsfilt_check_slow(obd, now, "commitrw commit");
 
 cleanup:
-        lquota_pending_commit(filter_quota_interface_ref, obd, qcids,
-                              rec_pending, 1);
-
         filter_grant_commit(exp, niocount, res);
 
         switch (cleanup_phase) {
@@ -827,22 +805,6 @@ cleanup:
                  * pool (bug 5137)
                  */
                  break;
-        }
-
-        /* trigger quota pre-acquire */
-        err = lquota_adjust(filter_quota_interface_ref, obd, qcids, NULL, rc,
-                            FSFILT_OP_CREATE);
-        CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
-               "(rc:%d, uid:%u, gid:%u)\n",
-               err, qcids[USRQUOTA], qcids[GRPQUOTA]);
-        if (qcids[USRQUOTA] != oa->o_uid || qcids[GRPQUOTA] != oa->o_gid) {
-                qcids[USRQUOTA] = oa->o_uid;
-                qcids[GRPQUOTA] = oa->o_gid;
-                err = lquota_adjust(filter_quota_interface_ref, obd, qcids,
-                                    NULL, rc, FSFILT_OP_CREATE);
-                CDEBUG(err ? D_ERROR : D_QUOTA, "filter adjust qunit! "
-                       "(rc:%d, uid:%u, gid:%u)\n",
-                       err, qcids[USRQUOTA], qcids[GRPQUOTA]);
         }
 
         for (i = 0, lnb = res; i < niocount; i++, lnb++) {

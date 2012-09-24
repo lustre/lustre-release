@@ -1299,7 +1299,6 @@ static int ost_get_info(struct obd_export *exp, struct ptlrpc_request *req)
         RETURN(rc);
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
 static int ost_handle_quotactl(struct ptlrpc_request *req)
 {
         struct obd_quotactl *oqctl, *repoqc;
@@ -1336,34 +1335,10 @@ static int ost_handle_quotacheck(struct ptlrpc_request *req)
         if (rc)
                 RETURN(-ENOMEM);
 
-        req->rq_status = obd_quotacheck(req->rq_export, oqctl);
-        RETURN(0);
+	/* deprecated, not used any more */
+	req->rq_status = -EOPNOTSUPP;
+	RETURN(-EOPNOTSUPP);
 }
-
-static int ost_handle_quota_adjust_qunit(struct ptlrpc_request *req)
-{
-        struct quota_adjust_qunit *oqaq, *repoqa;
-        struct lustre_quota_ctxt *qctxt;
-        int rc;
-        ENTRY;
-
-        qctxt = &req->rq_export->exp_obd->u.obt.obt_qctxt;
-        oqaq = req_capsule_client_get(&req->rq_pill, &RMF_QUOTA_ADJUST_QUNIT);
-        if (oqaq == NULL)
-                GOTO(out, rc = -EPROTO);
-
-        rc = req_capsule_server_pack(&req->rq_pill);
-        if (rc)
-                GOTO(out, rc);
-
-        repoqa = req_capsule_server_get(&req->rq_pill, &RMF_QUOTA_ADJUST_QUNIT);
-        req->rq_status = obd_quota_adjust_qunit(req->rq_export, oqaq, qctxt, NULL);
-        *repoqa = *oqaq;
-
- out:
-        RETURN(rc);
-}
-#endif
 
 static int ost_llog_handle_connect(struct obd_export *exp,
                                    struct ptlrpc_request *req)
@@ -1666,11 +1641,9 @@ int ost_msg_check_version(struct lustre_msg *msg)
         case OST_SYNC:
         case OST_SET_INFO:
         case OST_GET_INFO:
-#ifdef HAVE_QUOTA_SUPPORT
         case OST_QUOTACHECK:
         case OST_QUOTACTL:
         case OST_QUOTA_ADJUST_QUNIT:
-#endif
                 rc = lustre_msg_check_version(msg, LUSTRE_OST_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -2290,7 +2263,6 @@ int ost_handle(struct ptlrpc_request *req)
                 req_capsule_set(&req->rq_pill, &RQF_OST_GET_INFO_GENERIC);
                 rc = ost_get_info(req->rq_export, req);
                 break;
-#ifdef HAVE_QUOTA_SUPPORT
         case OST_QUOTACHECK:
                 CDEBUG(D_INODE, "quotacheck\n");
                 req_capsule_set(&req->rq_pill, &RQF_OST_QUOTACHECK);
@@ -2305,12 +2277,6 @@ int ost_handle(struct ptlrpc_request *req)
                         RETURN(0);
                 rc = ost_handle_quotactl(req);
                 break;
-        case OST_QUOTA_ADJUST_QUNIT:
-                CDEBUG(D_INODE, "quota_adjust_qunit\n");
-                req_capsule_set(&req->rq_pill, &RQF_OST_QUOTA_ADJUST_QUNIT);
-                rc = ost_handle_quota_adjust_qunit(req);
-                break;
-#endif
         case OBD_PING:
                 DEBUG_REQ(D_INODE, req, "ping");
                 req_capsule_set(&req->rq_pill, &RQF_OBD_PING);

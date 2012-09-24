@@ -211,9 +211,9 @@ fi
 # Quota support. The kernel must support CONFIG_QUOTA.
 #
 AC_DEFUN([LC_QUOTA_CONFIG],
-[LB_LINUX_CONFIG_IM([QUOTA],[AC_DEFINE(HAVE_QUOTA_SUPPORT, 1, [support quota])],[
-	AC_MSG_ERROR([Lustre quota requires that CONFIG_QUOTA is enabled in your kernel.])
-])
+[LB_LINUX_CONFIG_IM([QUOTA],[],[
+        AC_MSG_ERROR([Lustre quota requires that CONFIG_QUOTA is enabled in your kernel.])
+	])
 ])
 
 # truncate_complete_page() was exported from RHEL5/SLES10, but not in SLES11 SP0 (2.6.27)

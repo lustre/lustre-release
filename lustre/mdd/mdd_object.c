@@ -1481,15 +1481,6 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
         int  rc, lmm_size = 0, cookie_size = 0;
         struct lu_attr *la_copy = &mdd_env_info(env)->mti_la_for_fix;
 	const struct lu_attr *la = &ma->ma_attr;
-#ifdef HAVE_QUOTA_SUPPORT
-        struct obd_device *obd = mdd->mdd_obd_dev;
-        struct mds_obd *mds = &obd->u.mds;
-        unsigned int qnids[MAXQUOTAS] = { 0, 0 };
-        unsigned int qoids[MAXQUOTAS] = { 0, 0 };
-        int quota_opc = 0, block_count = 0;
-        int inode_pending[MAXQUOTAS] = { 0, 0 };
-        int block_pending[MAXQUOTAS] = { 0, 0 };
-#endif
         ENTRY;
 
         *la_copy = ma->ma_attr;
@@ -1535,34 +1526,6 @@ int mdd_attr_set(const struct lu_env *env, struct md_object *obj,
 	if (la->la_valid & (LA_MTIME | LA_CTIME))
                 CDEBUG(D_INODE, "setting mtime "LPU64", ctime "LPU64"\n",
 		       la->la_mtime, la->la_ctime);
-
-#ifdef HAVE_QUOTA_SUPPORT
-        if (mds->mds_quota && la_copy->la_valid & (LA_UID | LA_GID)) {
-                struct obd_export *exp = md_quota(env)->mq_exp;
-                struct lu_attr *la_tmp = &mdd_env_info(env)->mti_la;
-
-                rc = mdd_la_get(env, mdd_obj, la_tmp, BYPASS_CAPA);
-                if (!rc) {
-                        quota_opc = FSFILT_OP_SETATTR;
-                        mdd_quota_wrapper(la_copy, qnids);
-                        mdd_quota_wrapper(la_tmp, qoids);
-                        /* get file quota for new owner */
-                        lquota_chkquota(mds_quota_interface_ref, obd, exp,
-                                        qnids, inode_pending, 1, NULL, 0,
-                                        NULL, 0);
-                        block_count = (la_tmp->la_blocks + 7) >> 3;
-                        if (block_count) {
-                                void *data = NULL;
-                                mdd_data_get(env, mdd_obj, &data);
-                                /* get block quota for new owner */
-                                lquota_chkquota(mds_quota_interface_ref, obd,
-                                                exp, qnids, block_pending,
-                                                block_count, NULL,
-                                                LQUOTA_FLAGS_BLK, data, 1);
-                        }
-                }
-        }
-#endif
 
         if (la_copy->la_valid & LA_FLAGS) {
 		rc = mdd_attr_set_internal(env, mdd_obj, la_copy, handle, 1);
@@ -1616,19 +1579,6 @@ stop:
                 rc = mdd_lov_setattr_async(env, mdd_obj, lmm, lmm_size,
                                            logcookies);
         }
-#ifdef HAVE_QUOTA_SUPPORT
-        if (quota_opc) {
-                lquota_pending_commit(mds_quota_interface_ref, obd, qnids,
-                                      inode_pending, 0);
-                lquota_pending_commit(mds_quota_interface_ref, obd, qnids,
-                                      block_pending, 1);
-                /* Trigger dqrel/dqacq for original owner and new owner.
-                 * If failed, the next call for lquota_chkquota will
-                 * process it. */
-                lquota_adjust(mds_quota_interface_ref, obd, qnids, qoids, rc,
-                              quota_opc);
-        }
-#endif
         RETURN(rc);
 }
 
@@ -1996,13 +1946,6 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         struct thandle    *handle = NULL;
         int rc;
         int is_orphan = 0, reset = 1;
-
-#ifdef HAVE_QUOTA_SUPPORT
-        struct obd_device *obd = mdo2mdd(obj)->mdd_obd_dev;
-        struct mds_obd *mds = &obd->u.mds;
-        unsigned int qids[MAXQUOTAS] = { 0, 0 };
-        int quota_opc = 0;
-#endif
         ENTRY;
 
         if (ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_KEEP_ORPHAN) {
@@ -2071,12 +2014,6 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         /* Object maybe not in orphan list originally, it is rare case for
          * mdd_finish_unlink() failure. */
         if (rc == 0 && (ma->ma_attr.la_nlink == 0 || is_orphan)) {
-#ifdef HAVE_QUOTA_SUPPORT
-                if (mds->mds_quota) {
-                        quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
-                        mdd_quota_wrapper(&ma->ma_attr, qids);
-                }
-#endif
                 /* MDS_CLOSE_CLEANUP means destroy OSS objects by MDS. */
                 if (ma->ma_valid & MA_FLAGS &&
                     ma->ma_attr_flags & MDS_CLOSE_CLEANUP) {
@@ -2145,13 +2082,6 @@ out:
 stop:
         if (handle != NULL)
                 mdd_trans_stop(env, mdd, rc, handle);
-#ifdef HAVE_QUOTA_SUPPORT
-        if (quota_opc)
-                /* Trigger dqrel on the owner of child. If failed,
-                 * the next call for lquota_chkquota will process it */
-                lquota_adjust(mds_quota_interface_ref, obd, qids, 0, rc,
-                              quota_opc);
-#endif
         return rc;
 }
 

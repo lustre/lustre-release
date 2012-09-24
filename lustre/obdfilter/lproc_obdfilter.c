@@ -454,10 +454,6 @@ static struct lprocfs_vars lprocfs_filter_obd_vars[] = {
         { "readcache_max_filesize",
                           lprocfs_filter_rd_readcache,
                           lprocfs_filter_wr_readcache, 0 },
-#ifdef HAVE_QUOTA_SUPPORT
-        { "quota_type",     lprocfs_quota_rd_type,
-                            lprocfs_quota_wr_type, 0},
-#endif
         { "client_cache_count", lprocfs_filter_rd_fmd_max_num,
                           lprocfs_filter_wr_fmd_max_num, 0 },
         { "client_cache_seconds", lprocfs_filter_rd_fmd_max_age,

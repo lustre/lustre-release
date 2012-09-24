@@ -104,51 +104,6 @@ static int osd_object_invariant(const struct lu_object *l)
         return osd_invariant(osd_obj(l));
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
-static inline void
-osd_push_ctxt(const struct lu_env *env, struct osd_ctxt *save, bool is_md)
-{
-	struct md_ucred *uc;
-        struct cred     *tc;
-
-	if (!is_md)
-		/* OFD support */
-		return;
-
-	uc = md_ucred(env);
-
-        LASSERT(uc != NULL);
-
-        save->oc_uid = current_fsuid();
-        save->oc_gid = current_fsgid();
-        save->oc_cap = current_cap();
-        if ((tc = prepare_creds())) {
-                tc->fsuid         = uc->mu_fsuid;
-                tc->fsgid         = uc->mu_fsgid;
-                commit_creds(tc);
-        }
-        /* XXX not suboptimal */
-        cfs_curproc_cap_unpack(uc->mu_cap);
-}
-
-static inline void
-osd_pop_ctxt(struct osd_ctxt *save, bool is_md)
-{
-        struct cred *tc;
-
-	if (!is_md)
-		/* OFD support */
-		return;
-
-        if ((tc = prepare_creds())) {
-                tc->fsuid         = save->oc_uid;
-                tc->fsgid         = save->oc_gid;
-                tc->cap_effective = save->oc_cap;
-                commit_creds(tc);
-        }
-}
-#endif
-
 /*
  * Concurrency: doesn't matter
  */
@@ -1616,34 +1571,11 @@ static int osd_attr_set(const struct lu_env *env,
         OSD_EXEC_OP(handle, attr_set);
 
         inode = obj->oo_inode;
-	if (!osd_dt_dev(handle->th_dev)->od_is_md) {
-		/* OFD support */
-		rc = osd_quota_transfer(inode, attr);
-		if (rc)
-			return rc;
-	} else {
-#ifdef HAVE_QUOTA_SUPPORT
-		if ((attr->la_valid & LA_UID && attr->la_uid != inode->i_uid) ||
-		    (attr->la_valid & LA_GID && attr->la_gid != inode->i_gid)) {
-			struct osd_ctxt	*save = &osd_oti_get(env)->oti_ctxt;
-			struct		 iattr iattr;
-			int		 rc;
 
-			iattr.ia_valid = 0;
-			if (attr->la_valid & LA_UID)
-				iattr.ia_valid |= ATTR_UID;
-			if (attr->la_valid & LA_GID)
-				iattr.ia_valid |= ATTR_GID;
-			iattr.ia_uid = attr->la_uid;
-			iattr.ia_gid = attr->la_gid;
-			osd_push_ctxt(env, save, 1);
-			rc = ll_vfs_dq_transfer(inode, &iattr) ? -EDQUOT : 0;
-			osd_pop_ctxt(save, 1);
-			if (rc != 0)
-				return rc;
-		}
-#endif
-	}
+	rc = osd_quota_transfer(inode, attr);
+	if (rc)
+		return rc;
+
         cfs_spin_lock(&obj->oo_guard);
         rc = osd_inode_setattr(env, inode, attr);
         cfs_spin_unlock(&obj->oo_guard);
@@ -1670,9 +1602,6 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
         struct osd_thandle *oth;
         struct dt_object   *parent = NULL;
         struct inode       *inode;
-#ifdef HAVE_QUOTA_SUPPORT
-        struct osd_ctxt    *save = &info->oti_ctxt;
-#endif
 
         LINVRNT(osd_invariant(obj));
         LASSERT(obj->oo_inode == NULL);
@@ -1690,16 +1619,10 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
         if (hint && hint->dah_parent)
                 parent = hint->dah_parent;
 
-#ifdef HAVE_QUOTA_SUPPORT
-	osd_push_ctxt(info->oti_env, save, osd_dt_dev(th->th_dev)->od_is_md);
-#endif
         inode = ldiskfs_create_inode(oth->ot_handle,
                                      parent ? osd_dt_obj(parent)->oo_inode :
                                               osd_sb(osd)->s_root->d_inode,
                                      mode);
-#ifdef HAVE_QUOTA_SUPPORT
-	osd_pop_ctxt(save, osd_dt_dev(th->th_dev)->od_is_md);
-#endif
         if (!IS_ERR(inode)) {
                 /* Do not update file c/mtime in ldiskfs.
                  * NB: don't need any lock because no contention at this
@@ -1902,16 +1825,9 @@ static void osd_attr_init(struct osd_thread_info *info, struct osd_object *obj,
         if ((valid & LA_MTIME) && (attr->la_mtime == LTIME_S(inode->i_mtime)))
                 attr->la_valid &= ~LA_MTIME;
 
-	if (!osd_obj2dev(obj)->od_is_md) {
-		/* OFD support */
-		result = osd_quota_transfer(inode, attr);
-		if (result)
-			return;
-	} else {
-#ifdef HAVE_QUOTA_SUPPORT
-		attr->la_valid &= ~(LA_UID | LA_GID);
-#endif
-	}
+	result = osd_quota_transfer(inode, attr);
+	if (result)
+		return;
 
         if (attr->la_valid != 0) {
                 result = osd_inode_setattr(info->oti_env, inode, attr);
@@ -1976,11 +1892,6 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
         struct osd_device      *osd  = osd_obj2dev(obj);
 
         LASSERT(obj->oo_inode != NULL);
-
-	if (osd->od_is_md) {
-		struct md_ucred	*uc = md_ucred(env);
-		LASSERT(uc != NULL);
-	}
 
 	osd_id_gen(id, obj->oo_inode->i_ino, obj->oo_inode->i_generation);
 	return osd_oi_insert(info, osd, fid, id, th);
@@ -3201,9 +3112,6 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         struct iam_path_descr *ipd;
         struct osd_thandle    *oh;
         struct iam_container  *bag = &obj->oo_dir->od_container;
-#ifdef HAVE_QUOTA_SUPPORT
-        cfs_cap_t              save = cfs_curproc_cap_pack();
-#endif
         struct osd_thread_info *oti = osd_oti_get(env);
         struct iam_rec         *iam_rec;
         int                     rc;
@@ -3227,12 +3135,6 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
         LASSERT(oh->ot_handle->h_transaction != NULL);
-#ifdef HAVE_QUOTA_SUPPORT
-        if (ignore_quota)
-                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-        else
-                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
-#endif
 	if (S_ISDIR(obj->oo_inode->i_mode)) {
 		iam_rec = (struct iam_rec *)oti->oti_ldp;
 		osd_fid_pack((struct osd_fid_pack *)iam_rec, rec, &oti->oti_fid);
@@ -3249,9 +3151,6 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
 
         rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
                         iam_rec, ipd);
-#ifdef HAVE_QUOTA_SUPPORT
-        cfs_curproc_cap_unpack(save);
-#endif
         osd_ipd_put(env, bag, ipd);
         LINVRNT(osd_invariant(obj));
         RETURN(rc);
@@ -3648,9 +3547,6 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
         struct lu_fid     *fid   = (struct lu_fid *) rec;
         const char        *name  = (const char *)key;
         struct osd_object *child;
-#ifdef HAVE_QUOTA_SUPPORT
-        cfs_cap_t          save  = cfs_curproc_cap_pack();
-#endif
         int                rc;
 
         ENTRY;
@@ -3664,16 +3560,7 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
 
         child = osd_object_find(env, dt, fid);
         if (!IS_ERR(child)) {
-#ifdef HAVE_QUOTA_SUPPORT
-                if (ignore_quota)
-                        cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-                else
-                        cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
-#endif
                 rc = osd_ea_add_rec(env, obj, child->oo_inode, name, rec, th);
-#ifdef HAVE_QUOTA_SUPPORT
-                cfs_curproc_cap_unpack(save);
-#endif
                 osd_object_put(env, child);
         } else {
                 rc = PTR_ERR(child);

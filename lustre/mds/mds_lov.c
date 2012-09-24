@@ -885,17 +885,6 @@ static int __mds_lov_synchronize(void *data)
                 GOTO(out, rc);
         }
 
-#ifdef HAVE_QUOTA_SUPPORT
-        if (obd->obd_upcall.onu_owner) {
-                /*
-                 * This is a hack for mds_notify->mdd_notify. When the mds obd
-                 * in mdd is removed, This hack should be removed.
-                 */
-                LASSERT(obd->obd_upcall.onu_upcall != NULL);
-                rc = obd->obd_upcall.onu_upcall(obd, NULL, OBD_NOTIFY_QUOTA,
-                                                obd->obd_upcall.onu_owner,NULL);
-        }
-#endif
         EXIT;
 out:
         if (rc) {

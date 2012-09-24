@@ -9,10 +9,8 @@ set -e
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
-if [ "$USE_OFD" = "yes" -a -z "$ONLY" ]; then
-	# only accounting tests are supported with OFD for the time being
-	ONLY="33 34 35"
-fi
+# only accounting tests are supported for the time being
+ONLY="33 34 35"
 
 ONLY=${ONLY:-"$*"}
 # test_11 has been used to protect a kernel bug(bz10912), now it isn't
@@ -89,21 +87,12 @@ cycle=30
 
 build_test_filter
 
-if [ "$USE_OFD" = "yes" ]; then
-	for num in `seq $OSTCOUNT`; do
-		if [ $(facet_fstype ost$num) = ldiskfs ]; then
-			# not the most efficient way to enable the quota feature
-			# on ost, but it still allows us to test ofd accounting
-			# for now
-			device=$(ostdevname $num)
-			stop ost$num
-			do_facet ost$num "$TUNE2FS -O quota $device"
-			[ ${PIPESTATUS[0]} -ne 0] && \
-			      error "failed to enable quota feature for ost$num"
-			start ost$num $device $OST_MOUNT_OPTS
-		fi
-	done
-fi
+# Use OFD for all quota testing
+USE_OFD_OLD="$USE_OFD"
+LOAD_MODULES_REMOTE_OLD="$LOAD_MODULES_REMOTE"
+export USE_OFD="yes"
+export LOAD_MODULES_REMOTE="true"
+cleanup_and_setup_lustre
 
 # set_blk_tunables(btune_sz)
 set_blk_tunesz() {
@@ -169,6 +158,11 @@ FAIL_ON_ERROR=false
 
 run_test_with_stat() {
 	(($# != 2)) && error "the number of arguments is wrong"
+
+	if [ "$USE_OFD" == "yes" ]; then
+		run_test "$@"
+		return
+	fi
 
 	do_facet $SINGLEMDS "lctl set_param lquota.mdd_obd-${FSNAME}-MDT*.stats=0" > /dev/null
 	for j in `seq $OSTCOUNT`; do
@@ -307,11 +301,11 @@ quota_show_check() {
 quota_init() {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
 
-	log "do the quotacheck ..."
-	$LFS quotacheck -ug $DIR
+	# log "do the quotacheck ..."
+	# $LFS quotacheck -ug $DIR
 
-	resetquota -u $TSTUSR
-	resetquota -g $TSTUSR
+	# resetquota -u $TSTUSR
+	# resetquota -g $TSTUSR
 }
 quota_init
 
@@ -2415,13 +2409,15 @@ run_test 35 "usage is still accessible across reboot ===========================
 # turn off quota
 quota_fini()
 {
-	$LFS quotaoff $DIR
+	#$LFS quotaoff $DIR
         do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-quota"
 }
 quota_fini
 
 cd $ORIG_PWD
 complete $(basename $0) $SECONDS
-check_and_cleanup_lustre
+export USE_OFD="$USE_OFD_OLD"
+export LOAD_MODULES_REMOTE="$LOAD_MODULES_REMOTE_OLD"
 export QUOTA_AUTO=$QUOTA_AUTO_OLD
+cleanup_and_setup_lustre
 exit_status

@@ -45,26 +45,12 @@
 #include <lustre_eacl.h>
 #include <md_object.h>
 #include <dt_object.h>
-#ifdef HAVE_QUOTA_SUPPORT
-# include <lustre_quota.h>
-#endif
 #include <lustre_fsfilt.h>
 #include <lustre/lustre_lfsck_user.h>
 #include <lustre_fid.h>
 #include <lustre_capa.h>
 #include <lprocfs_status.h>
 #include <lustre_log.h>
-
-#ifdef HAVE_QUOTA_SUPPORT
-/* quota stuff */
-extern quota_interface_t *mds_quota_interface_ref;
-
-static inline void mdd_quota_wrapper(struct lu_attr *la, unsigned int *qids)
-{
-        qids[USRQUOTA] = la->la_uid;
-        qids[GRPQUOTA] = la->la_gid;
-}
-#endif
 
 /* PDO lock is unnecessary for current MDT stack because operations
  * are already protected by ldlm lock */
@@ -412,36 +398,6 @@ int mdd_declare_object_create_internal(const struct lu_env *env,
 				       struct lu_attr *attr,
 				       struct thandle *handle,
 				       const struct md_op_spec *spec);
-/* mdd_quota.c*/
-#ifdef HAVE_QUOTA_SUPPORT
-int mdd_quota_notify(const struct lu_env *env, struct md_device *m);
-int mdd_quota_setup(const struct lu_env *env, struct md_device *m,
-                    void *data);
-int mdd_quota_cleanup(const struct lu_env *env, struct md_device *m);
-int mdd_quota_recovery(const struct lu_env *env, struct md_device *m);
-int mdd_quota_check(const struct lu_env *env, struct md_device *m,
-                    __u32 type);
-int mdd_quota_on(const struct lu_env *env, struct md_device *m,
-                 __u32 type);
-int mdd_quota_off(const struct lu_env *env, struct md_device *m,
-                  __u32 type);
-int mdd_quota_setinfo(const struct lu_env *env, struct md_device *m,
-                      __u32 type, __u32 id, struct obd_dqinfo *dqinfo);
-int mdd_quota_getinfo(const struct lu_env *env, const struct md_device *m,
-                      __u32 type, __u32 id, struct obd_dqinfo *dqinfo);
-int mdd_quota_setquota(const struct lu_env *env, struct md_device *m,
-                       __u32 type, __u32 id, struct obd_dqblk *dqblk);
-int mdd_quota_getquota(const struct lu_env *env, const struct md_device *m,
-                       __u32 type, __u32 id, struct obd_dqblk *dqblk);
-int mdd_quota_getoinfo(const struct lu_env *env, const struct md_device *m,
-                       __u32 type, __u32 id, struct obd_dqinfo *dqinfo);
-int mdd_quota_getoquota(const struct lu_env *env, const struct md_device *m,
-                        __u32 type, __u32 id, struct obd_dqblk *dqblk);
-int mdd_quota_invalidate(const struct lu_env *env, struct md_device *m,
-                         __u32 type);
-int mdd_quota_finvalidate(const struct lu_env *env, struct md_device *m,
-                          __u32 type);
-#endif
 
 /* mdd_trans.c */
 int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,

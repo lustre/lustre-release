@@ -1115,9 +1115,6 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 	struct inode		*inode = osd_dt_obj(dt)->oo_inode;
 	struct osd_thandle	*oh;
 	ssize_t			result;
-#ifdef HAVE_QUOTA_SUPPORT
-	cfs_cap_t		save = cfs_curproc_cap_pack();
-#endif
 	int			is_link;
 
         LASSERT(dt_object_exists(dt));
@@ -1132,12 +1129,6 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
         oh = container_of(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle->h_transaction != NULL);
-#ifdef HAVE_QUOTA_SUPPORT
-        if (ignore_quota)
-                cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-        else
-                cfs_cap_lower(CFS_CAP_SYS_RESOURCE);
-#endif
 	/* Write small symlink to inode body as we need to maintain correct
 	 * on-disk symlinks for ldiskfs.
 	 * Note: the buf->lb_buf contains a NUL terminator while buf->lb_len
@@ -1150,9 +1141,6 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 		result = osd_ldiskfs_write_record(inode, buf->lb_buf,
 						  buf->lb_len, is_link, pos,
 						  oh->ot_handle);
-#ifdef HAVE_QUOTA_SUPPORT
-        cfs_curproc_cap_unpack(save);
-#endif
         if (result == 0)
                 result = buf->lb_len;
         return result;

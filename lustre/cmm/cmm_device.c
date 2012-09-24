@@ -54,9 +54,6 @@
 #include <lustre_ver.h>
 #include "cmm_internal.h"
 #include "mdc_internal.h"
-#ifdef HAVE_QUOTA_SUPPORT
-# include <lustre_quota.h>
-#endif
 
 struct obd_ops cmm_obd_device_ops = {
         .o_owner           = THIS_MODULE
@@ -143,246 +140,6 @@ static int cmm_llog_ctxt_get(const struct lu_env *env, struct md_device *m,
         RETURN(rc);
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
-/**
- * \name Quota functions
- * @{
- */
-static int cmm_quota_notify(const struct lu_env *env, struct md_device *m)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_notify(env,
-                                                          cmm_dev->cmm_child);
-        RETURN(rc);
-}
-
-static int cmm_quota_setup(const struct lu_env *env, struct md_device *m,
-                           void *data)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_setup(env,
-                                                         cmm_dev->cmm_child,
-                                                         data);
-        RETURN(rc);
-}
-
-static int cmm_quota_cleanup(const struct lu_env *env, struct md_device *m)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_cleanup(env,
-                                                           cmm_dev->cmm_child);
-        RETURN(rc);
-}
-
-static int cmm_quota_recovery(const struct lu_env *env, struct md_device *m)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_recovery(env,
-                                                            cmm_dev->cmm_child);
-        RETURN(rc);
-}
-
-static int cmm_quota_check(const struct lu_env *env, struct md_device *m,
-                           __u32 type)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_check(env,
-                                                         cmm_dev->cmm_child,
-                                                         type);
-        RETURN(rc);
-}
-
-static int cmm_quota_on(const struct lu_env *env, struct md_device *m,
-                        __u32 type)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_on(env,
-                                                      cmm_dev->cmm_child,
-                                                      type);
-        RETURN(rc);
-}
-
-static int cmm_quota_off(const struct lu_env *env, struct md_device *m,
-                         __u32 type)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_off(env,
-                                                       cmm_dev->cmm_child,
-                                                       type);
-        RETURN(rc);
-}
-
-static int cmm_quota_setinfo(const struct lu_env *env, struct md_device *m,
-                             __u32 type, __u32 id, struct obd_dqinfo *dqinfo)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_setinfo(env,
-                                                           cmm_dev->cmm_child,
-                                                           type, id, dqinfo);
-        RETURN(rc);
-}
-
-static int cmm_quota_getinfo(const struct lu_env *env,
-                             const struct md_device *m,
-                             __u32 type, __u32 id, struct obd_dqinfo *dqinfo)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev((struct md_device *)m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_getinfo(env,
-                                                           cmm_dev->cmm_child,
-                                                           type, id, dqinfo);
-        RETURN(rc);
-}
-
-static int cmm_quota_setquota(const struct lu_env *env, struct md_device *m,
-                              __u32 type, __u32 id, struct obd_dqblk *dqblk)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_setquota(env,
-                                                            cmm_dev->cmm_child,
-                                                            type, id, dqblk);
-        RETURN(rc);
-}
-
-static int cmm_quota_getquota(const struct lu_env *env,
-                              const struct md_device *m,
-                              __u32 type, __u32 id, struct obd_dqblk *dqblk)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev((struct md_device *)m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_getquota(env,
-                                                            cmm_dev->cmm_child,
-                                                            type, id, dqblk);
-        RETURN(rc);
-}
-
-static int cmm_quota_getoinfo(const struct lu_env *env,
-                              const struct md_device *m,
-                              __u32 type, __u32 id, struct obd_dqinfo *dqinfo)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev((struct md_device *)m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_getoinfo(env,
-                                                            cmm_dev->cmm_child,
-                                                            type, id, dqinfo);
-        RETURN(rc);
-}
-
-static int cmm_quota_getoquota(const struct lu_env *env,
-                               const struct md_device *m,
-                               __u32 type, __u32 id, struct obd_dqblk *dqblk)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev((struct md_device *)m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_getoquota(env,
-                                                             cmm_dev->cmm_child,
-                                                             type, id, dqblk);
-        RETURN(rc);
-}
-
-static int cmm_quota_invalidate(const struct lu_env *env, struct md_device *m,
-                                __u32 type)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_invalidate(env,
-                                                              cmm_dev->cmm_child,
-                                                              type);
-        RETURN(rc);
-}
-
-static int cmm_quota_finvalidate(const struct lu_env *env, struct md_device *m,
-                                 __u32 type)
-{
-        struct cmm_device *cmm_dev = md2cmm_dev(m);
-        int rc;
-        ENTRY;
-
-        /* disable quota for CMD case temporary. */
-        if (cmm_dev->cmm_tgt_count)
-                RETURN(-EOPNOTSUPP);
-
-        rc = cmm_child_ops(cmm_dev)->mdo_quota.mqo_finvalidate(env,
-                                                               cmm_dev->cmm_child,
-                                                               type);
-        RETURN(rc);
-}
-/** @} */
-#endif
-
 int cmm_iocontrol(const struct lu_env *env, struct md_device *m,
                   unsigned int cmd, int len, void *data)
 {
@@ -403,25 +160,6 @@ static const struct md_device_operations cmm_md_ops = {
         .mdo_update_capa_key = cmm_update_capa_key,
         .mdo_llog_ctxt_get   = cmm_llog_ctxt_get,
         .mdo_iocontrol       = cmm_iocontrol,
-#ifdef HAVE_QUOTA_SUPPORT
-        .mdo_quota           = {
-                .mqo_notify      = cmm_quota_notify,
-                .mqo_setup       = cmm_quota_setup,
-                .mqo_cleanup     = cmm_quota_cleanup,
-                .mqo_recovery    = cmm_quota_recovery,
-                .mqo_check       = cmm_quota_check,
-                .mqo_on          = cmm_quota_on,
-                .mqo_off         = cmm_quota_off,
-                .mqo_setinfo     = cmm_quota_setinfo,
-                .mqo_getinfo     = cmm_quota_getinfo,
-                .mqo_setquota    = cmm_quota_setquota,
-                .mqo_getquota    = cmm_quota_getquota,
-                .mqo_getoinfo    = cmm_quota_getoinfo,
-                .mqo_getoquota   = cmm_quota_getoquota,
-                .mqo_invalidate  = cmm_quota_invalidate,
-                .mqo_finvalidate = cmm_quota_finvalidate
-        }
-#endif
 };
 
 extern struct lu_device_type mdc_device_type;
@@ -463,9 +201,6 @@ static int cmm_add_mdc(const struct lu_env *env,
         mdsno_t mdc_num;
         struct lu_site *site = cmm2lu_dev(cm)->ld_site;
         int rc;
-#ifdef HAVE_QUOTA_SUPPORT
-        int first;
-#endif
         ENTRY;
 
         /* find out that there is no such mdc */
@@ -517,9 +252,6 @@ static int cmm_add_mdc(const struct lu_env *env,
         mc = lu2mdc_dev(ld);
         cfs_list_add_tail(&mc->mc_linkage, &cm->cmm_targets);
         cm->cmm_tgt_count++;
-#ifdef HAVE_QUOTA_SUPPORT
-        first = cm->cmm_tgt_count;
-#endif
         cfs_spin_unlock(&cm->cmm_tgt_guard);
 
         lu_device_get(cmm_lu);
@@ -537,13 +269,6 @@ static int cmm_add_mdc(const struct lu_env *env,
                 lu_site2md(site)->ms_server_fld->lsf_control_exp =
                                           mc->mc_desc.cl_exp;
         }
-#ifdef HAVE_QUOTA_SUPPORT
-        /* XXX: Disable quota for CMD case temporary. */
-        if (first == 1) {
-                CWARN("Disable quota for CMD case temporary!\n");
-                cmm_child_ops(cm)->mdo_quota.mqo_off(env, cm->cmm_child, UGQUOTA);
-        }
-#endif
         /* Set max md size for the mdc. */
         rc = cmm_post_init_mdc(env, cm);
         RETURN(rc);

@@ -63,6 +63,10 @@
 #define ARRAY_SIZE(a) ((sizeof (a)) / (sizeof ((a)[0])))
 #endif
 
+#if !defined(swap)
+#define swap(x,y) do { typeof(x) z = x; x = y; y = z; } while (0)
+#endif
+
 #if !defined(container_of)
 /* given a pointer @ptr to the field @member embedded into type (usually
  * struct) @type, return pointer to the embedding instance of @type. */

@@ -1426,40 +1426,7 @@ static int ofd_obd_notify(struct obd_device *obd, struct obd_device *unused,
 }
 
 /*
- * Handle quotacheck requests.
- * Although in-kernel quotacheck isn't supported any more, we still emulate it
- * in order to interoperate with current MDT stack which needs proper
- * quotacheck support, even for space accounting.
- *
- * \param obd - is the obd device associated with the ofd
- * \param exp - is the client's export
- * \param oqctl - is the obd_quotactl request to be processed
- */
-static int ofd_quotacheck(struct obd_device *obd, struct obd_export *exp,
-			  struct obd_quotactl *oqctl)
-{
-	struct ptlrpc_request	*req;
-	struct obd_quotactl	*body;
-	ENTRY;
-
-	req = ptlrpc_request_alloc_pack(exp->exp_imp_reverse, &RQF_QC_CALLBACK,
-					LUSTRE_OBD_VERSION, OBD_QC_CALLBACK);
-	if (req == NULL)
-		RETURN(-ENOMEM);
-
-	body = req_capsule_client_get(&req->rq_pill, &RMF_OBD_QUOTACTL);
-	oqctl->qc_stat = 0;
-	memcpy(body, oqctl, sizeof(*body));
-
-	ptlrpc_request_set_replen(req);
-	ptlrpcd_add_req(req, PDL_POLICY_ROUND, -1);
-
-	RETURN(0);
-}
-
-/*
- * Handle quota control requests to consult current usage/limit, but also
- * to configure quota enforcement
+ * Handle quota control requests to consult current usage/limit.
  *
  * \param obd - is the obd device associated with the ofd
  * \param exp - is the client's export
@@ -1513,5 +1480,4 @@ struct obd_ops ofd_obd_ops = {
 	.o_health_check		= ofd_health_check,
 	.o_notify		= ofd_obd_notify,
 	.o_quotactl		= ofd_quotactl,
-	.o_quotacheck		= ofd_quotacheck,
 };

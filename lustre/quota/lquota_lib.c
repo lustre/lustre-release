@@ -40,6 +40,10 @@
 
 #include "lquota_internal.h"
 
+static int hash_lqs_cur_bits = HASH_LQS_CUR_BITS;
+CFS_MODULE_PARM(hash_lqs_cur_bits, "i", int, 0444,
+		"the current bits of lqs hash");
+
 /* register lquota key */
 LU_KEY_INIT_FINI(lquota, struct lquota_thread_info);
 LU_CONTEXT_KEY_DEFINE(lquota, LCT_MD_THREAD | LCT_DT_THREAD | LCT_LOCAL);
@@ -325,13 +329,6 @@ const struct dt_index_features *glb_idx_feature(struct lu_fid *fid)
 
 static int __init init_lquota(void)
 {
-	int	rc;
-
-	/* call old quota module init function */
-	rc = init_lustre_quota();
-	if (rc)
-		return rc;
-
 	/* new quota initialization */
 	lquota_key_init_generic(&lquota_thread_key, NULL);
 	lu_context_key_register(&lquota_thread_key);
@@ -348,9 +345,6 @@ static int __init init_lquota(void)
 
 static void exit_lquota(void)
 {
-	/* call old quota module exit function */
-	exit_lustre_quota();
-
 	lu_context_key_degister(&lquota_thread_key);
 }
 

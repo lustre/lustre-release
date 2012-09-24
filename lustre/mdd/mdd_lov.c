@@ -76,12 +76,6 @@ static int mdd_notify(struct obd_device *host, struct obd_device *watched,
                         rc = md_do_upcall(NULL, &mdd->mdd_md_dev,
                                           MD_LOV_CONFIG, data);
                         break;
-#ifdef HAVE_QUOTA_SUPPORT
-                case OBD_NOTIFY_QUOTA:
-                        rc = md_do_upcall(NULL, &mdd->mdd_md_dev,
-                                          MD_LOV_QUOTA, data);
-                        break;
-#endif
                 default:
                         CDEBUG(D_INFO, "Unhandled notification %#x\n", ev);
         }
@@ -155,7 +149,7 @@ int mdd_init_obd(const struct lu_env *env, struct mdd_device *mdd,
 
         /*
          * Add here for obd notify mechanism, when adding a new ost, the mds
-         * will notify this mdd. The mds will be used for quota also.
+         * will notify this mdd.
          */
         obd->obd_upcall.onu_upcall = mdd_notify;
         obd->obd_upcall.onu_owner = mdd;

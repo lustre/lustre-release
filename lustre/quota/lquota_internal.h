@@ -124,10 +124,4 @@ int lquota_disk_update_ver(const struct lu_env *, struct dt_device *,
 
 /* lproc_quota.c */
 extern struct file_operations lprocfs_quota_seq_fops;
-
-/* quota_interface.c
- * old quota module initialization routines, to be removed */
-int init_lustre_quota(void);
-void exit_lustre_quota(void);
-
 #endif /* _LQUOTA_INTERNAL_H */

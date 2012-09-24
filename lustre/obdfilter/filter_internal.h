@@ -266,9 +266,6 @@ static void lprocfs_filter_init_vars(struct lprocfs_static_vars *lvars)
 static inline void filter_stats_counter_init(struct lprocfs_stats *stats) {}
 #endif
 
-/* Quota stuff */
-extern quota_interface_t *filter_quota_interface_ref;
-
 int filter_update_capa_key(struct obd_device *obd, struct lustre_capa_key *key);
 int filter_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
                      struct lustre_capa *capa, __u64 opc);

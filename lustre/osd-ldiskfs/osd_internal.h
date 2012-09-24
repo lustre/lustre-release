@@ -89,14 +89,6 @@ struct inode;
 /** Enable thandle usage statistics */
 #define OSD_THANDLE_STATS (0)
 
-#ifdef HAVE_QUOTA_SUPPORT
-struct osd_ctxt {
-        __u32 oc_uid;
-        __u32 oc_gid;
-        cfs_kernel_cap_t oc_cap;
-};
-#endif
-
 struct osd_directory {
         struct iam_container od_container;
         struct iam_descr     od_descr;
@@ -601,9 +593,6 @@ struct osd_thread_info {
         struct osd_iobuf       oti_iobuf;
         struct inode           oti_inode;
         int                    oti_created[PTLRPC_MAX_BRW_PAGES];
-#ifdef HAVE_QUOTA_SUPPORT
-        struct osd_ctxt        oti_ctxt;
-#endif
         struct lu_env          oti_obj_delete_tx_env;
 #define OSD_FID_REC_SZ 32
         char                   oti_ldp[OSD_FID_REC_SZ];

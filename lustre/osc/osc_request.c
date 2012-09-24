@@ -3775,7 +3775,6 @@ struct obd_ops osc_obd_ops = {
         .o_process_config       = osc_process_config,
         .o_quotactl             = osc_quotactl,
         .o_quotacheck           = osc_quotacheck,
-        .o_quota_adjust_qunit   = osc_quota_adjust_qunit,
 };
 
 extern struct lu_kmem_descr osc_caches[];

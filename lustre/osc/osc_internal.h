@@ -217,8 +217,4 @@ int osc_quotactl(struct obd_device *unused, struct obd_export *exp,
 int osc_quotacheck(struct obd_device *unused, struct obd_export *exp,
                    struct obd_quotactl *oqctl);
 int osc_quota_poll_check(struct obd_export *exp, struct if_quotacheck *qchk);
-int osc_quota_adjust_qunit(struct obd_export *exp,
-                           struct quota_adjust_qunit *oqaq,
-                           struct lustre_quota_ctxt *qctxt,
-                           struct ptlrpc_request_set *rqset);
 #endif /* OSC_INTERNAL_H */

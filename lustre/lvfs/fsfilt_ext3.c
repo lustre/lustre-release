@@ -1357,13 +1357,6 @@ static int fsfilt_ext3_write_record(struct file *file, void *buf, int bufsize,
 
 static int fsfilt_ext3_setup(struct super_block *sb)
 {
-#if defined(HAVE_QUOTA_SUPPORT) || defined(S_PDIROPS)
-        struct ext3_sb_info *sbi = EXT3_SB(sb);
-#if 0
-        sbi->dx_lock = fsfilt_ext3_dx_lock;
-        sbi->dx_unlock = fsfilt_ext3_dx_unlock;
-#endif
-#endif
         if (!EXT3_HAS_COMPAT_FEATURE(sb,
                                 EXT3_FEATURE_COMPAT_HAS_JOURNAL)) {
                 CERROR("ext3 mounted without journal\n");
@@ -1372,26 +1365,11 @@ static int fsfilt_ext3_setup(struct super_block *sb)
 
 #ifdef S_PDIROPS
         CWARN("Enabling PDIROPS\n");
-        set_opt(sbi->s_mount_opt, PDIROPS);
+        set_opt(EXT3_SB(sb)->s_mount_opt, PDIROPS);
         sb->s_flags |= S_PDIROPS;
 #endif
         if (!EXT3_HAS_COMPAT_FEATURE(sb, EXT3_FEATURE_COMPAT_DIR_INDEX))
                 CWARN("filesystem doesn't have dir_index feature enabled\n");
-#ifdef HAVE_QUOTA_SUPPORT
-        /* enable journaled quota support */
-        /* kfreed in ext3_put_super() */
-        sbi->s_qf_names[USRQUOTA] = kstrdup("lquota.user.reserved", GFP_KERNEL);
-        if (!sbi->s_qf_names[USRQUOTA])
-                return -ENOMEM;
-        sbi->s_qf_names[GRPQUOTA] = kstrdup("lquota.group.reserved", GFP_KERNEL);
-        if (!sbi->s_qf_names[GRPQUOTA]) {
-                kfree(sbi->s_qf_names[USRQUOTA]);
-                sbi->s_qf_names[USRQUOTA] = NULL;
-                return -ENOMEM;
-        }
-        sbi->s_jquota_fmt = QFMT_LUSTRE;
-        set_opt(sbi->s_mount_opt, QUOTA);
-#endif
         return 0;
 }
 
@@ -1426,7 +1404,6 @@ static int fsfilt_ext3_get_op_len(int op, struct fsfilt_objinfo *fso, int logs)
         return 0;
 }
 
-#ifdef HAVE_QUOTA_SUPPORT
 #define DQINFO_COPY(out, in)                    \
 do {                                            \
         Q_COPY(out, in, dqi_bgrace);            \
@@ -2003,7 +1980,6 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
 
         /* read old quota limits from old quota file. (only for the user
          * has limits but hasn't file) */
-#ifdef HAVE_QUOTA_SUPPORT
         for (i = 0; i < MAXQUOTAS; i++) {
                 cfs_list_t id_list;
                 struct dquot_id *dqid, *tmp;
@@ -2031,7 +2007,6 @@ static int fsfilt_ext3_quotacheck(struct super_block *sb,
                         OBD_FREE_PTR(dqid);
                 }
         }
-#endif
         /* turn off quota cause we are to dump chk_dqblk to files */
         quota_onoff(sb, Q_QUOTAOFF, oqc->qc_type, oqc->qc_id);
 
@@ -2145,8 +2120,6 @@ static int fsfilt_ext3_get_mblk(struct super_block *sb, int *count,
         *count = frags * (EXT_DEPTH(base) + 1) * EXT3_BLOCK_SIZE(sb);
         return 0;
 }
-
-#endif
 
 lvfs_sbdev_type fsfilt_ext3_journal_sbdev(struct super_block *sb)
 {
@@ -2313,14 +2286,12 @@ static struct fsfilt_operations fsfilt_ext3_ops = {
         .fs_get_version         = fsfilt_ext3_get_version,
         .fs_set_version         = fsfilt_ext3_set_version,
 #endif
-#ifdef HAVE_QUOTA_SUPPORT
         .fs_quotactl            = fsfilt_ext3_quotactl,
         .fs_quotacheck          = fsfilt_ext3_quotacheck,
         .fs_quotainfo           = fsfilt_ext3_quotainfo,
         .fs_qids                = fsfilt_ext3_qids,
         .fs_dquot               = fsfilt_ext3_dquot,
         .fs_get_mblk            = fsfilt_ext3_get_mblk,
-#endif
         .fs_journal_sbdev       = fsfilt_ext3_journal_sbdev,
         .fs_fid2dentry          = fsfilt_ext3_fid2dentry,
 };

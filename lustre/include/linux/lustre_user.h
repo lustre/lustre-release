@@ -41,14 +41,10 @@
 
 #ifndef __KERNEL__
 # define NEED_QUOTA_DEFS
-# ifdef HAVE_QUOTA_SUPPORT
-#  include <sys/quota.h>
-# endif
+# include <sys/quota.h>
 #else
 # include <linux/version.h>
-# ifdef HAVE_QUOTA_SUPPORT
-#  include <linux/quota.h>
-# endif
+# include <linux/quota.h>
 #endif
 
 /*

@@ -55,8 +55,6 @@
 #include <obd_support.h>
 #include "lustre_quota_fmt.h"
 
-#ifdef HAVE_QUOTA_SUPPORT
-
 static const uint lustre_initqversions[][MAXQUOTAS] = {
         [LUSTRE_QUOTA_V2] = LUSTRE_INITQVERSIONS_V2
 };
@@ -1124,4 +1122,3 @@ out_free:
         RETURN(rc);
 }
 EXPORT_SYMBOL(lustre_get_qids);
-#endif

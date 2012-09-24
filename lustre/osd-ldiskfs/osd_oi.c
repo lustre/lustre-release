@@ -528,9 +528,6 @@ static int osd_oi_iam_insert(struct osd_thread_info *oti, struct osd_oi *oi,
         struct iam_path_descr *ipd;
         struct osd_thandle    *oh;
         int                    rc;
-#ifdef HAVE_QUOTA_SUPPORT
-        cfs_cap_t              save    = cfs_curproc_cap_pack();
-#endif
         ENTRY;
 
         LASSERT(oi);
@@ -544,9 +541,6 @@ static int osd_oi_iam_insert(struct osd_thread_info *oti, struct osd_oi *oi,
         oh = container_of0(th, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
         LASSERT(oh->ot_handle->h_transaction != NULL);
-#ifdef HAVE_QUOTA_SUPPORT
-	cfs_cap_raise(CFS_CAP_SYS_RESOURCE);
-#endif
         if (S_ISDIR(oi->oi_inode->i_mode))
                 osd_fid_pack((struct osd_fid_pack *)iam_rec, rec,
                              &oti->oti_fid);
@@ -554,9 +548,6 @@ static int osd_oi_iam_insert(struct osd_thread_info *oti, struct osd_oi *oi,
                 iam_rec = (struct iam_rec *) rec;
         rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
                         iam_rec, ipd);
-#ifdef HAVE_QUOTA_SUPPORT
-        cfs_curproc_cap_unpack(save);
-#endif
         osd_ipd_put(oti->oti_env, bag, ipd);
         LINVRNT(osd_invariant(obj));
         RETURN(rc);
