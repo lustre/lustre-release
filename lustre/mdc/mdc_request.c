@@ -1494,7 +1494,7 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_LLOG_INFO:
         case OBD_IOC_LLOG_PRINT: {
                 ctxt = llog_get_context(obd, LLOG_CONFIG_REPL_CTXT);
-                rc = llog_ioctl(ctxt, cmd, data);
+		rc = llog_ioctl(NULL, ctxt, cmd, data);
                 llog_ctxt_put(ctxt);
                 GOTO(out, rc);
         }
