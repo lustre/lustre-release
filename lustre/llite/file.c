@@ -2078,9 +2078,14 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
                inode->i_generation, inode);
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FSYNC, 1);
 
+#ifdef HAVE_FILE_FSYNC_4ARGS
+	rc = filemap_write_and_wait_range(inode->i_mapping, start, end);
+	mutex_lock(&inode->i_mutex);
+#else
         /* fsync's caller has already called _fdata{sync,write}, we want
          * that IO to finish before calling the osc and mdc sync methods */
         rc = filemap_fdatawait(inode->i_mapping);
+#endif
 
         /* catch async errors that were recorded back when async writeback
          * failed for pages in this mapping. */
@@ -2118,6 +2123,9 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 	}
 	ccc_inode_lsm_put(inode, lsm);
 
+#ifdef HAVE_FILE_FSYNC_4ARGS
+	mutex_unlock(&inode->i_mutex);
+#endif
 	RETURN(rc);
 }
 
