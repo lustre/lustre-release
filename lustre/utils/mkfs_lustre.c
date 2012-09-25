@@ -620,6 +620,10 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 
+	/* Stand alone MGS doesn't need a index */
+	if (!IS_MDT(ldd) && IS_MGS(ldd))
+		mop.mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
+
         if ((mop.mo_ldd.ldd_flags & (LDD_F_NEED_INDEX | LDD_F_UPGRADE14)) ==
             (LDD_F_NEED_INDEX | LDD_F_UPGRADE14)) {
                 fatal();
