@@ -17,10 +17,10 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-[ "${MDSFSTYPE:-$FSTYPE}" != "ldiskfs" ] &&
+[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
 	skip "test OI scrub only for ldiskfs" && exit 0
-[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
-	skip "Need MDS version at least 2.3.0" && exit 0
+[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
+	skip "Need MDS version at least 2.2.90" && exit 0
 require_dsh_mds || exit 0
 
 SAVED_MDSSIZE=${MDSSIZE}
