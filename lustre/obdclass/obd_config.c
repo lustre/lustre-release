@@ -1521,41 +1521,38 @@ out:
         RETURN(rc);
 }
 
-int class_config_parse_llog(struct llog_ctxt *ctxt, char *name,
-                            struct config_llog_instance *cfg)
+int class_config_parse_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
+			    char *name, struct config_llog_instance *cfg)
 {
-        struct llog_process_cat_data cd = {0, 0};
-        struct llog_handle *llh;
-        int rc, rc2;
-        ENTRY;
+	struct llog_process_cat_data	 cd = {0, 0};
+	struct llog_handle		*llh;
+	int				 rc;
 
-        CDEBUG(D_INFO, "looking up llog %s\n", name);
-	rc = llog_open(NULL, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
-        if (rc)
-                RETURN(rc);
+	ENTRY;
 
-	rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
-        if (rc)
-                GOTO(parse_out, rc);
+	CDEBUG(D_INFO, "looking up llog %s\n", name);
+	rc = llog_open(env, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
+	if (rc)
+		RETURN(rc);
 
-        /* continue processing from where we last stopped to end-of-log */
-        if (cfg)
-                cd.lpcd_first_idx = cfg->cfg_last_idx;
-        cd.lpcd_last_idx = 0;
+	rc = llog_init_handle(env, llh, LLOG_F_IS_PLAIN, NULL);
+	if (rc)
+		GOTO(parse_out, rc);
 
-	rc = llog_process(NULL, llh, class_config_llog_handler, cfg, &cd);
+	/* continue processing from where we last stopped to end-of-log */
+	if (cfg)
+		cd.lpcd_first_idx = cfg->cfg_last_idx;
+	cd.lpcd_last_idx = 0;
 
-        CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name,
-               cd.lpcd_first_idx + 1, cd.lpcd_last_idx, rc);
+	rc = llog_process(env, llh, class_config_llog_handler, cfg, &cd);
 
-        if (cfg)
-                cfg->cfg_last_idx = cd.lpcd_last_idx;
+	CDEBUG(D_CONFIG, "Processed log %s gen %d-%d (rc=%d)\n", name,
+	       cd.lpcd_first_idx + 1, cd.lpcd_last_idx, rc);
+	if (cfg)
+		cfg->cfg_last_idx = cd.lpcd_last_idx;
 
 parse_out:
-	rc2 = llog_close(NULL, llh);
-        if (rc == 0)
-                rc = rc2;
-
+	llog_close(env, llh);
         RETURN(rc);
 }
 EXPORT_SYMBOL(class_config_parse_llog);
@@ -1636,32 +1633,30 @@ int class_config_dump_handler(const struct lu_env *env,
 	RETURN(rc);
 }
 
-int class_config_dump_llog(struct llog_ctxt *ctxt, char *name,
-                           struct config_llog_instance *cfg)
+int class_config_dump_llog(const struct lu_env *env, struct llog_ctxt *ctxt,
+			   char *name, struct config_llog_instance *cfg)
 {
-        struct llog_handle *llh;
-        int rc, rc2;
-        ENTRY;
+	struct llog_handle	*llh;
+	int			 rc;
 
-        LCONSOLE_INFO("Dumping config log %s\n", name);
+	ENTRY;
 
-	rc = llog_open(NULL, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
+	LCONSOLE_INFO("Dumping config log %s\n", name);
+
+	rc = llog_open(env, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
 	if (rc)
 		RETURN(rc);
 
-	rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(env, llh, LLOG_F_IS_PLAIN, NULL);
 	if (rc)
 		GOTO(parse_out, rc);
 
-	rc = llog_process(NULL, llh, class_config_dump_handler, cfg, NULL);
+	rc = llog_process(env, llh, class_config_dump_handler, cfg, NULL);
 parse_out:
-	rc2 = llog_close(NULL, llh);
-        if (rc == 0)
-                rc = rc2;
+	llog_close(env, llh);
 
-        LCONSOLE_INFO("End config log %s\n", name);
-        RETURN(rc);
-
+	LCONSOLE_INFO("End config log %s\n", name);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(class_config_dump_llog);
 

@@ -117,6 +117,10 @@ static void pop_group_info(struct lvfs_run_ctxt *save,
 void push_ctxt(struct lvfs_run_ctxt *save, struct lvfs_run_ctxt *new_ctx,
                struct lvfs_ucred *uc)
 {
+	/* if there is underlaying dt_device then push_ctxt is not needed */
+	if (new_ctx->dt != NULL)
+		return;
+
         //ASSERT_NOT_KERNEL_CTXT("already in kernel context!\n");
         ASSERT_CTXT_MAGIC(new_ctx->magic);
         OBD_SET_CTXT_MAGIC(save);
@@ -165,6 +169,10 @@ EXPORT_SYMBOL(push_ctxt);
 void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
               struct lvfs_ucred *uc)
 {
+	/* if there is underlaying dt_device then pop_ctxt is not needed */
+	if (new_ctx->dt != NULL)
+		return;
+
         ASSERT_CTXT_MAGIC(saved->magic);
         ASSERT_KERNEL_CTXT("popping non-kernel context!\n");
 

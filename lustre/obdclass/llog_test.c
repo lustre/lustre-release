@@ -158,7 +158,7 @@ static int llog_test_2(const struct lu_env *env, struct obd_device *obd,
 		GOTO(out_put, rc);
 	}
 
-	llog_init_handle(env, *llh, LLOG_F_IS_PLAIN, &uuid);
+	rc = llog_init_handle(env, *llh, LLOG_F_IS_PLAIN, &uuid);
 	if (rc) {
 		CERROR("2a: can't init llog handle: %d\n", rc);
 		GOTO(out_close_llh, rc);
@@ -343,7 +343,7 @@ static int llog_test_4(const struct lu_env *env, struct obd_device *obd)
 		CERROR("4a: llog_create with name %s failed: %d\n", name, rc);
 		GOTO(ctxt_release, rc);
         }
-	llog_init_handle(env, cath, LLOG_F_IS_CAT, &uuid);
+	rc = llog_init_handle(env, cath, LLOG_F_IS_CAT, &uuid);
 	if (rc) {
 		CERROR("4a: can't init llog handle: %d\n", rc);
 		GOTO(out, rc);
@@ -351,11 +351,6 @@ static int llog_test_4(const struct lu_env *env, struct obd_device *obd)
 
 	num_recs++;
 	cat_logid = cath->lgh_id;
-
-	/* XXX: there is known issue with tests 4b, MGS is not able to add
-	 * anonymous plain llog, si we exit now to allow following tests run.
-	 * It is fixed in upcoming llog over OSD code */
-	GOTO(out, rc);
 
 	CWARN("4b: write 1 record into the catalog\n");
 	rc = llog_cat_add(env, cath, &lmr.lmr_hdr, &cookie, NULL);
@@ -438,15 +433,18 @@ static int cat_print_cb(const struct lu_env *env, struct llog_handle *llh,
 			struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
+	struct lu_fid		 fid;
 
 	if (rec->lrh_type != LLOG_LOGID_MAGIC) {
 		CERROR("invalid record in catalog\n");
 		RETURN(-EINVAL);
 	}
 
-	CWARN("seeing record at index %d - "LPX64":%x in log "LPX64"\n",
-	      rec->lrh_index, lir->lid_id.lgl_oid,
-	      lir->lid_id.lgl_ogen, llh->lgh_id.lgl_oid);
+	logid_to_fid(&lir->lid_id, &fid);
+
+	CWARN("seeing record at index %d - "DFID" in log "DFID"\n",
+	      rec->lrh_index, PFID(&fid),
+	      PFID(lu_object_fid(&llh->lgh_obj->do_lu)));
 
 	cat_counter++;
 
@@ -458,13 +456,17 @@ static int plain_counter;
 static int plain_print_cb(const struct lu_env *env, struct llog_handle *llh,
 			  struct llog_rec_hdr *rec, void *data)
 {
+	struct lu_fid fid;
+
 	if (!(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)) {
 		CERROR("log is not plain\n");
 		RETURN(-EINVAL);
 	}
 
-	CDEBUG(D_INFO, "seeing record at index %d in log "LPX64"\n",
-	      rec->lrh_index, llh->lgh_id.lgl_oid);
+	logid_to_fid(&llh->lgh_id, &fid);
+
+	CDEBUG(D_INFO, "seeing record at index %d in log "DFID"\n",
+	       rec->lrh_index, PFID(&fid));
 
 	plain_counter++;
 
@@ -518,14 +520,11 @@ static int llog_test_5(const struct lu_env *env, struct obd_device *obd)
 		GOTO(out_put, rc);
 	}
 
-	llog_init_handle(env, llh, LLOG_F_IS_CAT, &uuid);
+	rc = llog_init_handle(env, llh, LLOG_F_IS_CAT, &uuid);
 	if (rc) {
 		CERROR("5a: can't init llog handle: %d\n", rc);
 		GOTO(out, rc);
 	}
-
-	/* XXX: depends on tests 4 which is not working yet */
-	GOTO(out, rc);
 
 	CWARN("5b: print the catalog entries.. we expect 2\n");
 	cat_counter = 0;
@@ -634,7 +633,7 @@ static int llog_test_6(const struct lu_env *env, struct obd_device *obd,
 	rc = obd_connect(NULL, &exp, mgc_obd, &uuid,
 			 NULL /* obd_connect_data */, NULL);
 	if (rc != -EALREADY) {
-		CERROR("6a: connect on connected MDC (%s) failed to return"
+		CERROR("6a: connect on connected MGC (%s) failed to return"
 		       " -EALREADY", mgc_obd->obd_name);
 		if (rc == 0)
 			obd_disconnect(exp);
@@ -731,7 +730,7 @@ static int llog_test_7_sub(const struct lu_env *env, struct llog_ctxt *ctxt)
 
 	ENTRY;
 
-	rc = llog_open_create(env, ctxt, &llh, NULL, "llt_test7");
+	rc = llog_open_create(env, ctxt, &llh, NULL, NULL);
 	if (rc) {
 		CERROR("7_sub: create log failed\n");
 		RETURN(rc);
@@ -905,7 +904,6 @@ out:
 static int llog_run_tests(const struct lu_env *env, struct obd_device *obd)
 {
 	struct llog_handle	*llh = NULL;
-	struct lvfs_run_ctxt	 saved;
 	struct llog_ctxt	*ctxt;
 	int			 rc, err;
 	char			 name[10];
@@ -915,7 +913,6 @@ static int llog_run_tests(const struct lu_env *env, struct obd_device *obd)
 	LASSERT(ctxt);
 
 	sprintf(name, "%x", llog_test_rand);
-	push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 
 	rc = llog_test_1(env, obd, name);
 	if (rc)
@@ -953,7 +950,6 @@ cleanup:
 	if (rc == 0)
 		rc = err;
 cleanup_ctxt:
-	pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
 	llog_ctxt_put(ctxt);
 	return rc;
 }
@@ -970,19 +966,32 @@ static void lprocfs_llog_test_init_vars(struct lprocfs_static_vars *lvars)
 
 static int llog_test_cleanup(struct obd_device *obd)
 {
-	int rc;
+	struct obd_device	*tgt;
+	struct lu_env		 env;
+	int			 rc;
 
-	rc = llog_cleanup(NULL, llog_get_context(obd, LLOG_TEST_ORIG_CTXT));
+	ENTRY;
+
+	rc = lu_env_init(&env, LCT_LOCAL | LCT_MG_THREAD);
+	if (rc)
+		RETURN(rc);
+
+	tgt = obd->obd_lvfs_ctxt.dt->dd_lu_dev.ld_obd;
+	rc = llog_cleanup(&env, llog_get_context(tgt, LLOG_TEST_ORIG_CTXT));
 	if (rc)
 		CERROR("failed to llog_test_llog_finish: %d\n", rc);
-	return rc;
+	lu_env_fini(&env);
+	RETURN(rc);
 }
 
 static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
-        struct obd_device *tgt;
-	struct lu_env env;
-        int rc;
+	struct obd_device	*tgt;
+	struct llog_ctxt	*ctxt;
+	struct dt_object	*o;
+	struct lu_env		 env;
+	struct lu_context	 test_session;
+	int			 rc;
 
         ENTRY;
 
@@ -1008,19 +1017,43 @@ static int llog_test_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	if (rc)
 		RETURN(rc);
 
+	rc = lu_context_init(&test_session, LCT_SESSION);
+	if (rc)
+		GOTO(cleanup_env, rc);
+	test_session.lc_thread = (struct ptlrpc_thread *)cfs_current();
+	lu_context_enter(&test_session);
+	env.le_ses = &test_session;
+
 	CWARN("Setup llog-test device over %s device\n",
 	      lustre_cfg_string(lcfg, 1));
 
-	rc = llog_setup(&env, obd, &obd->obd_olg, LLOG_TEST_ORIG_CTXT, tgt,
-			&llog_lvfs_ops);
+	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+	obd->obd_lvfs_ctxt.dt = lu2dt_dev(tgt->obd_lu_dev);
+
+	rc = llog_setup(&env, tgt, &tgt->obd_olg, LLOG_TEST_ORIG_CTXT, tgt,
+			&llog_osd_ops);
 	if (rc)
-		GOTO(cleanup_env, rc);
+		GOTO(cleanup_session, rc);
+
+	/* use MGS llog dir for tests */
+	ctxt = llog_get_context(tgt, LLOG_CONFIG_ORIG_CTXT);
+	LASSERT(ctxt);
+	o = ctxt->loc_dir;
+	llog_ctxt_put(ctxt);
+
+	ctxt = llog_get_context(tgt, LLOG_TEST_ORIG_CTXT);
+	LASSERT(ctxt);
+	ctxt->loc_dir = o;
+	llog_ctxt_put(ctxt);
 
 	llog_test_rand = cfs_rand();
 
-	rc = llog_run_tests(&env, obd);
+	rc = llog_run_tests(&env, tgt);
 	if (rc)
 		llog_test_cleanup(obd);
+cleanup_session:
+	lu_context_exit(&test_session);
+	lu_context_fini(&test_session);
 cleanup_env:
 	lu_env_fini(&env);
 	RETURN(rc);

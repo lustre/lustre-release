@@ -4507,11 +4507,9 @@ static int osd_device_init0(const struct lu_env *env,
 	strncpy(o->od_svname, lustre_cfg_string(cfg, 4),
 			sizeof(o->od_svname) - 1);
 
-	if (strstr(o->od_svname, "-OST")) {
-		rc = osd_compat_init(o);
-		if (rc != 0)
-			GOTO(out_mnt, rc);
-	}
+	rc = osd_compat_init(o);
+	if (rc != 0)
+		GOTO(out_scrub, rc);
 
 	rc = lu_site_init(&o->od_site, l);
 	if (rc)
@@ -4519,20 +4517,24 @@ static int osd_device_init0(const struct lu_env *env,
 
 	rc = lu_site_init_finish(&o->od_site);
 	if (rc)
-		GOTO(out_compat, rc);
+		GOTO(out_site, rc);
 
 	rc = osd_procfs_init(o, o->od_svname);
 	if (rc != 0) {
 		CERROR("%s: can't initialize procfs: rc = %d\n",
 		       o->od_svname, rc);
-		GOTO(out_compat, rc);
+		GOTO(out_site, rc);
 	}
 
 	LASSERT(l->ld_site->ls_linkage.next && l->ld_site->ls_linkage.prev);
 
 	RETURN(0);
+out_site:
+	lu_site_fini(&o->od_site);
 out_compat:
 	osd_compat_fini(o);
+out_scrub:
+	osd_scrub_cleanup(env, o);
 out_mnt:
 	osd_oi_fini(info, o);
 	osd_shutdown(env, o);

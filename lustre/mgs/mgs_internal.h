@@ -38,7 +38,9 @@
 #define _MGS_INTERNAL_H
 
 #include <libcfs/libcfs.h>
+#include <lustre_log.h>
 #include <lustre_export.h>
+#include <dt_object.h>
 
 #define MGSSELF_NAME    "_mgs"
 
@@ -141,7 +143,6 @@ struct fs_db {
         struct mgs_nidtbl    fsdb_nidtbl;
 
         /* async thread to notify clients */
-        struct obd_device   *fsdb_obd;
 	struct mgs_device   *fsdb_mgs;
         cfs_waitq_t          fsdb_notify_waitq;
         cfs_completion_t     fsdb_notify_comp;
@@ -155,17 +156,12 @@ struct fs_db {
         unsigned int         fsdb_notify_count;
 };
 
-/* mgs_llog.c */
-int class_dentry_readdir(const struct lu_env *env,
-			 struct mgs_device *mgs, cfs_list_t *list);
-
 struct mgs_device {
 	struct dt_device		 mgs_dt_dev;
 	struct ptlrpc_service		*mgs_service;
 	struct dt_device		*mgs_bottom;
 	struct obd_export		*mgs_bottom_exp;
 	struct dt_object		*mgs_configs_dir;
-	struct dentry			*mgs_configs_dir_old;
 	struct dt_object		*mgs_nidtbl_dir;
 	cfs_list_t			 mgs_fs_db_list;
 	cfs_spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
@@ -173,8 +169,6 @@ struct mgs_device {
 	cfs_time_t			 mgs_start_time;
 	struct obd_device		*mgs_obd;
 	struct local_oid_storage	*mgs_los;
-	struct vfsmount			*mgs_vfsmnt;
-	struct super_block		*mgs_sb;
 	cfs_mutex_t			 mgs_mutex;
 };
 
@@ -249,13 +243,13 @@ int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb);
 int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb);
 void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars);
 #else
-static inline int lproc_mgs_setup(struct obd_device *dev)
+static inline int lproc_mgs_setup(struct mgs_device *mgs)
 {return 0;}
-static inline int lproc_mgs_cleanup(struct obd_device *obd)
+static inline int lproc_mgs_cleanup(struct mgs_device *mgs)
 {return 0;}
-static inline int lproc_mgs_add_live(struct mgs_device *obd, struct fs_db *fsdb)
+static inline int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
 {return 0;}
-static inline int lproc_mgs_del_live(struct mgs_device *obd, struct fs_db *fsdb)
+static inline int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 {return 0;}
 static void lprocfs_mgs_init_vars(struct lprocfs_static_vars *lvars)
 {
@@ -275,13 +269,11 @@ enum {
 void mgs_counter_incr(struct obd_export *exp, int opcode);
 void mgs_stats_counter_init(struct lprocfs_stats *stats);
 
-struct temp_comp
-{
+struct temp_comp {
 	struct mgs_target_info	*comp_tmti;
 	struct mgs_target_info	*comp_mti;
 	struct fs_db		*comp_fsdb;
-	struct mgs_device	*comp_mgs;
-	const struct lu_env	*comp_env;
+	struct obd_device	*comp_obd;
 };
 
 struct mgs_thread_info {
@@ -397,5 +389,9 @@ static inline struct mgs_direntry *mgs_direntry_alloc(int len)
 
 	return de;
 }
+
+/* mgs_llog.c */
+int class_dentry_readdir(const struct lu_env *env, struct mgs_device *mgs,
+			 cfs_list_t *list);
 
 #endif /* _MGS_INTERNAL_H */

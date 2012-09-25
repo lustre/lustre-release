@@ -43,22 +43,9 @@
 #define DEBUG_SUBSYSTEM S_MGS
 #define D_MGS D_CONFIG
 
-#ifdef __KERNEL__
-# include <linux/module.h>
-# include <linux/pagemap.h>
-# include <linux/miscdevice.h>
-# include <linux/init.h>
-#else
-# include <liblustre.h>
-#endif
-
 #include <obd_class.h>
-#include <lustre_dlm.h>
 #include <lprocfs_status.h>
-#include <lustre_fsfilt.h>
-#include <lustre_disk.h>
 #include <lustre_param.h>
-#include <lustre_log.h>
 
 #include "mgs_internal.h"
 
@@ -143,32 +130,6 @@ static int mgs_disconnect(struct obd_export *exp)
 }
 
 static int mgs_handle(struct ptlrpc_request *req);
-
-static int mgs_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-			 struct obd_device *tgt, int *index)
-{
-	int rc;
-
-	ENTRY;
-
-	LASSERT(olg == &obd->obd_olg);
-	rc = llog_setup(NULL, obd, olg, LLOG_CONFIG_ORIG_CTXT, obd,
-			&llog_lvfs_ops);
-	RETURN(rc);
-}
-
-static int mgs_llog_finish(struct obd_device *obd, int count)
-{
-	struct llog_ctxt *ctxt;
-
-	ENTRY;
-
-	ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-	if (ctxt)
-		llog_cleanup(NULL, ctxt);
-
-	RETURN(0);
-}
 
 static int mgs_completion_ast_config(struct ldlm_lock *lock, int flags,
                                      void *cbdata)
@@ -371,10 +332,10 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                 if (rc <= 0)
                         /* Nothing wrong, or fatal error */
                         GOTO(out_nolock, rc);
-        } else {
-                if (!(mti->mti_flags & LDD_F_NO_PRIMNODE)
-                    && (rc = mgs_check_failover_reg(mti)))
-                        GOTO(out_nolock, rc);
+	} else if (!(mti->mti_flags & LDD_F_NO_PRIMNODE)) {
+		rc = mgs_check_failover_reg(mti);
+		if (rc)
+			GOTO(out_nolock, rc);
         }
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_MGS_PAUSE_TARGET_REG, 10);
@@ -848,19 +809,16 @@ static int mgs_iocontrol_pool(const struct lu_env *env,
 	struct mgs_thread_info *mgi = mgs_env_info(env);
         int rc;
         struct lustre_cfg *lcfg = NULL;
-        struct llog_rec_hdr rec;
         char *poolname = NULL;
         ENTRY;
 
         OBD_ALLOC(poolname, LOV_MAXPOOLNAME + 1);
 	if (poolname == NULL)
 		RETURN(-ENOMEM);
-        rec.lrh_len = llog_data_len(data->ioc_plen1);
 
-        if (data->ioc_type == LUSTRE_CFG_TYPE) {
-                rec.lrh_type = OBD_CFG_REC;
-        } else {
-                CERROR("unknown cfg record type:%d \n", data->ioc_type);
+	if (data->ioc_type != LUSTRE_CFG_TYPE) {
+		CERROR("%s: unknown cfg record type: %d\n",
+		       mgs->mgs_obd->obd_name, data->ioc_type);
 		GOTO(out_pool, rc = -EINVAL);
         }
 
@@ -931,7 +889,6 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 {
 	struct mgs_device *mgs = exp2mgs_dev(exp);
         struct obd_ioctl_data *data = karg;
-        struct lvfs_run_ctxt saved;
 	struct lu_env env;
         int rc = 0;
 
@@ -947,14 +904,10 @@ int mgs_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_PARAM: {
 		struct mgs_thread_info *mgi = mgs_env_info(&env);
                 struct lustre_cfg *lcfg;
-                struct llog_rec_hdr rec;
 
-                rec.lrh_len = llog_data_len(data->ioc_plen1);
-
-                if (data->ioc_type == LUSTRE_CFG_TYPE) {
-                        rec.lrh_type = OBD_CFG_REC;
-                } else {
-                        CERROR("unknown cfg record type:%d \n", data->ioc_type);
+		if (data->ioc_type != LUSTRE_CFG_TYPE) {
+			CERROR("%s: unknown cfg record type: %d\n",
+			       mgs->mgs_obd->obd_name, data->ioc_type);
 			GOTO(out, rc = -EINVAL);
                 }
 
@@ -982,31 +935,32 @@ out_free:
 
         case OBD_IOC_DUMP_LOG: {
                 struct llog_ctxt *ctxt;
+
 		ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
-		push_ctxt(&saved, &mgs->mgs_obd->obd_lvfs_ctxt, NULL);
-                rc = class_config_dump_llog(ctxt, data->ioc_inlbuf1, NULL);
-		pop_ctxt(&saved, &mgs->mgs_obd->obd_lvfs_ctxt, NULL);
+		rc = class_config_dump_llog(&env, ctxt, data->ioc_inlbuf1,
+					    NULL);
                 llog_ctxt_put(ctxt);
 
 		break;
         }
 
+	case OBD_IOC_LLOG_CANCEL:
+	case OBD_IOC_LLOG_REMOVE:
         case OBD_IOC_LLOG_CHECK:
         case OBD_IOC_LLOG_INFO:
         case OBD_IOC_LLOG_PRINT: {
                 struct llog_ctxt *ctxt;
 
 		ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
-		push_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
-		rc = llog_ioctl(NULL, ctxt, cmd, data);
-		pop_ctxt(&saved, &ctxt->loc_exp->exp_obd->obd_lvfs_ctxt, NULL);
+		rc = llog_ioctl(&env, ctxt, cmd, data);
 		llog_ctxt_put(ctxt);
 		break;
         }
 
         default:
-                CDEBUG(D_INFO, "unknown command %x\n", cmd);
-		rc = -EINVAL;
+		CERROR("%s: unknown command %#x\n",
+		       mgs->mgs_obd->obd_name,  cmd);
+		rc = -ENOTTY;
 		break;
         }
 out:
@@ -1052,11 +1006,13 @@ out:
 static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 		     struct lu_device_type *ldt, struct lustre_cfg *lcfg)
 {
-	static struct ptlrpc_service_conf	conf;
-	struct lprocfs_static_vars  lvars = { 0 };
-	struct obd_device	   *obd;
-	struct lustre_mount_info   *lmi;
-	int			    rc;
+	static struct ptlrpc_service_conf	 conf;
+	struct lprocfs_static_vars		 lvars = { 0 };
+	struct obd_device			*obd;
+	struct lustre_mount_info		*lmi;
+	struct llog_ctxt			*ctxt;
+	int					 rc;
+
 	ENTRY;
 
 	lmi = server_get_mount(lustre_cfg_string(lcfg, 0));
@@ -1096,9 +1052,17 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 		GOTO(err_ns, rc);
 	}
 
-	rc = obd_llog_init(obd, &obd->obd_olg, obd, NULL);
+	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT,
+			obd, &llog_osd_ops);
 	if (rc)
 		GOTO(err_fs, rc);
+
+	/* XXX: we need this trick till N:1 stack is supported
+	 * set "current" directory for named llogs */
+	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
+	LASSERT(ctxt);
+	ctxt->loc_dir = mgs->mgs_configs_dir;
+	llog_ctxt_put(ctxt);
 
 	/* No recovery for MGC's */
 	obd->obd_replayable = 0;
@@ -1159,6 +1123,11 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 err_lproc:
 	lproc_mgs_cleanup(mgs);
 err_llog:
+	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
+	if (ctxt) {
+		ctxt->loc_dir = NULL;
+		llog_cleanup(env, ctxt);
+	}
 err_fs:
 	/* No extra cleanup needed for llog_init_commit_thread() */
 	mgs_fs_cleanup(env, mgs);
@@ -1302,8 +1271,10 @@ static struct lu_device *mgs_device_alloc(const struct lu_env *env,
 static struct lu_device *mgs_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
-	struct mgs_device *mgs = lu2mgs_dev(d);
-	struct obd_device *obd = mgs->mgs_obd;
+	struct mgs_device	*mgs = lu2mgs_dev(d);
+	struct obd_device	*obd = mgs->mgs_obd;
+	struct llog_ctxt	*ctxt;
+
 	ENTRY;
 
 	LASSERT(mgs->mgs_bottom);
@@ -1318,7 +1289,11 @@ static struct lu_device *mgs_device_fini(const struct lu_env *env,
 	mgs_cleanup_fsdb_list(mgs);
 	lproc_mgs_cleanup(mgs);
 
-	obd_llog_finish(obd, 0);
+	ctxt = llog_get_context(mgs->mgs_obd, LLOG_CONFIG_ORIG_CTXT);
+	if (ctxt) {
+		ctxt->loc_dir = NULL;
+		llog_cleanup(env, ctxt);
+	}
 
 	mgs_fs_cleanup(env, mgs);
 
@@ -1376,8 +1351,6 @@ static struct obd_ops mgs_obd_ops = {
         .o_init_export     = mgs_init_export,
         .o_destroy_export  = mgs_destroy_export,
         .o_iocontrol       = mgs_iocontrol,
-        .o_llog_init       = mgs_llog_init,
-        .o_llog_finish     = mgs_llog_finish
 };
 
 static int __init mgs_init(void)
