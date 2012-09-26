@@ -45,6 +45,359 @@
 #include "osp_internal.h"
 
 #ifdef LPROCFS
+static int osp_rd_active(char *page, char **start, off_t off,
+			 int count, int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	int			 rc;
+
+	LPROCFS_CLIMP_CHECK(dev);
+	rc = snprintf(page, count, "%d\n",
+		      !dev->u.cli.cl_import->imp_deactive);
+	LPROCFS_CLIMP_EXIT(dev);
+	return rc;
+}
+
+static int osp_wr_active(struct file *file, const char *buffer,
+			 unsigned long count, void *data)
+{
+	struct obd_device	*dev = data;
+	int			 val, rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+	if (val < 0 || val > 1)
+		return -ERANGE;
+
+	LPROCFS_CLIMP_CHECK(dev);
+	/* opposite senses */
+	if (dev->u.cli.cl_import->imp_deactive == val)
+		rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
+	else
+		CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n",
+		       val);
+
+	LPROCFS_CLIMP_EXIT(dev);
+	return count;
+}
+
+static int osp_rd_syn_in_flight(char *page, char **start, off_t off,
+				int count, int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = snprintf(page, count, "%u\n", osp->opd_syn_rpc_in_flight);
+	return rc;
+}
+
+static int osp_rd_syn_in_prog(char *page, char **start, off_t off, int count,
+			      int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = snprintf(page, count, "%u\n", osp->opd_syn_rpc_in_progress);
+	return rc;
+}
+
+static int osp_rd_syn_changes(char *page, char **start, off_t off,
+			      int count, int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = snprintf(page, count, "%lu\n", osp->opd_syn_changes);
+	return rc;
+}
+
+static int osp_rd_max_rpcs_in_flight(char *page, char **start, off_t off,
+				     int count, int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = snprintf(page, count, "%u\n", osp->opd_syn_max_rpc_in_flight);
+	return rc;
+}
+
+static int osp_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
+				     unsigned long count, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 val, rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1)
+		return -ERANGE;
+
+	osp->opd_syn_max_rpc_in_flight = val;
+	return count;
+}
+
+static int osp_rd_max_rpcs_in_prog(char *page, char **start, off_t off,
+				   int count, int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = snprintf(page, count, "%u\n", osp->opd_syn_max_rpc_in_progress);
+	return rc;
+}
+
+static int osp_wr_max_rpcs_in_prog(struct file *file, const char *buffer,
+				   unsigned long count, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 val, rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1)
+		return -ERANGE;
+
+	osp->opd_syn_max_rpc_in_progress = val;
+
+	return count;
+}
+
+static int osp_rd_create_count(char *page, char **start, off_t off, int count,
+			       int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+
+	if (osp == NULL)
+		return 0;
+
+	return snprintf(page, count, "%d\n", osp->opd_pre_grow_count);
+}
+
+static int osp_wr_create_count(struct file *file, const char *buffer,
+			       unsigned long count, void *data)
+{
+	struct obd_device	*obd = data;
+	struct osp_device	*osp = lu2osp_dev(obd->obd_lu_dev);
+	int			 val, rc, i;
+
+	if (osp == NULL)
+		return 0;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	/* The MDT ALWAYS needs to limit the precreate count to
+	 * OST_MAX_PRECREATE, and the constant cannot be changed
+	 * because it is a value shared between the OSP and OST
+	 * that is the maximum possible number of objects that will
+	 * ever be handled by MDT->OST recovery processing.
+	 *
+	 * If the OST ever gets a request to delete more orphans,
+	 * this implies that something has gone badly on the MDT
+	 * and the OST will refuse to delete so much data from the
+	 * filesystem as a safety measure. */
+	if (val < OST_MIN_PRECREATE || val > OST_MAX_PRECREATE)
+		return -ERANGE;
+	if (val > osp->opd_pre_max_grow_count)
+		return -ERANGE;
+
+	for (i = 1; (i << 1) <= val; i <<= 1)
+		;
+	osp->opd_pre_grow_count = i;
+
+	return count;
+}
+
+static int osp_rd_max_create_count(char *page, char **start, off_t off,
+				   int count, int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+
+	if (osp == NULL)
+		return 0;
+
+	return snprintf(page, count, "%d\n", osp->opd_pre_max_grow_count);
+}
+
+static int osp_wr_max_create_count(struct file *file, const char *buffer,
+				   unsigned long count, void *data)
+{
+	struct obd_device	*obd = data;
+	struct osp_device	*osp = lu2osp_dev(obd->obd_lu_dev);
+	int			 val, rc;
+
+	if (osp == NULL)
+		return 0;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val < 0)
+		return -ERANGE;
+	if (val > OST_MAX_PRECREATE)
+		return -ERANGE;
+
+	if (osp->opd_pre_grow_count > val)
+		osp->opd_pre_grow_count = val;
+
+	osp->opd_pre_max_grow_count = val;
+
+	return count;
+}
+
+static int osp_rd_prealloc_next_id(char *page, char **start, off_t off,
+				   int count, int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+
+	if (osp == NULL)
+		return 0;
+
+	return snprintf(page, count, LPU64"\n", osp->opd_pre_next);
+}
+
+static int osp_rd_prealloc_last_id(char *page, char **start, off_t off,
+				   int count, int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+
+	if (osp == NULL)
+		return 0;
+
+	return snprintf(page, count, LPU64"\n", osp->opd_pre_last_created);
+}
+
+static int osp_rd_prealloc_reserved(char *page, char **start, off_t off,
+				    int count, int *eof, void *data)
+{
+	struct obd_device *obd = data;
+	struct osp_device *osp = lu2osp_dev(obd->obd_lu_dev);
+
+	if (osp == NULL)
+		return 0;
+
+	return snprintf(page, count, LPU64"\n", osp->opd_pre_reserved);
+}
+
+static int osp_rd_maxage(char *page, char **start, off_t off,
+			 int count, int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = snprintf(page, count, "%u\n", osp->opd_statfs_maxage);
+	return rc;
+}
+
+static int osp_wr_maxage(struct file *file, const char *buffer,
+			 unsigned long count, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 val, rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1)
+		return -ERANGE;
+
+	osp->opd_statfs_maxage = val;
+
+	return count;
+}
+
+static int osp_rd_pre_status(char *page, char **start, off_t off,
+			     int count, int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = snprintf(page, count, "%d\n", osp->opd_pre_status);
+	return rc;
+}
+
+static int osp_rd_destroys_in_flight(char *page, char **start, off_t off,
+				     int count, int *eof, void *data)
+{
+	struct obd_device *dev = data;
+	struct osp_device *osp = lu2osp_dev(dev->obd_lu_dev);
+
+	/*
+	 * This counter used to determine if OST has space returned.
+	 * Now we need to wait for the following:
+	 * - sync changes are zero - no llog records
+	 * - sync in progress are zero - no RPCs in flight
+	 */
+	return snprintf(page, count, "%lu\n",
+			osp->opd_syn_rpc_in_progress + osp->opd_syn_changes);
+}
+
+static int osp_rd_old_sync_processed(char *page, char **start, off_t off,
+				     int count, int *eof, void *data)
+{
+	struct obd_device	*dev = data;
+	struct osp_device	*osp = lu2osp_dev(dev->obd_lu_dev);
+	int			 rc;
+
+	if (osp == NULL)
+		return -EINVAL;
+
+	rc = snprintf(page, count, "%d\n", osp->opd_syn_prev_done);
+	return rc;
+}
+
 static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ "uuid",		lprocfs_rd_uuid, 0, 0 },
 	{ "ping",		0, lprocfs_wr_ping, 0, 0, 0222 },
@@ -57,9 +410,30 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ "filesfree",		lprocfs_rd_filesfree, 0, 0 },
 	{ "ost_server_uuid",	lprocfs_rd_server_uuid, 0, 0 },
 	{ "ost_conn_uuid",	lprocfs_rd_conn_uuid, 0, 0 },
+	{ "active",		osp_rd_active, osp_wr_active, 0 },
+	{ "max_rpcs_in_flight",	osp_rd_max_rpcs_in_flight,
+				osp_wr_max_rpcs_in_flight, 0 },
+	{ "max_rpcs_in_progress", osp_rd_max_rpcs_in_prog,
+				  osp_wr_max_rpcs_in_prog, 0 },
+	{ "create_count",	osp_rd_create_count,
+				osp_wr_create_count, 0 },
+	{ "max_create_count",	osp_rd_max_create_count,
+				osp_wr_max_create_count, 0 },
+	{ "prealloc_next_id",	osp_rd_prealloc_next_id, 0, 0 },
+	{ "prealloc_last_id",	osp_rd_prealloc_last_id, 0, 0 },
+	{ "prealloc_reserved",	osp_rd_prealloc_reserved, 0, 0 },
 	{ "timeouts",		lprocfs_rd_timeouts, 0, 0 },
 	{ "import",		lprocfs_rd_import, lprocfs_wr_import, 0 },
 	{ "state",		lprocfs_rd_state, 0, 0 },
+	{ "maxage",		osp_rd_maxage, osp_wr_maxage, 0 },
+	{ "prealloc_status",	osp_rd_pre_status, 0, 0 },
+	{ "sync_changes",	osp_rd_syn_changes, 0, 0 },
+	{ "sync_in_flight",	osp_rd_syn_in_flight, 0, 0 },
+	{ "sync_in_progress",	osp_rd_syn_in_prog, 0, 0 },
+	{ "old_sync_processed",	osp_rd_old_sync_processed, 0, 0 },
+
+	/* for compatibility reasons */
+	{ "destroys_in_flight",	osp_rd_destroys_in_flight, 0, 0 },
 	{ 0 }
 };
 
