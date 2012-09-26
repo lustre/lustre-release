@@ -40,10 +40,6 @@
 
 #include "lquota_internal.h"
 
-static int hash_lqs_cur_bits = HASH_LQS_CUR_BITS;
-CFS_MODULE_PARM(hash_lqs_cur_bits, "i", int, 0444,
-		"the current bits of lqs hash");
-
 /* register lquota key */
 LU_KEY_INIT_FINI(lquota, struct lquota_thread_info);
 LU_CONTEXT_KEY_DEFINE(lquota, LCT_MD_THREAD | LCT_DT_THREAD | LCT_LOCAL);

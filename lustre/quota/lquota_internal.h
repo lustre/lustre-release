@@ -49,6 +49,211 @@ enum lquota_local_oid {
 	LQUOTA_GENERATED_OID	= 4096UL,
 };
 
+/*
+ * lquota_entry support
+ */
+
+/* Common operations supported by a lquota_entry */
+struct lquota_entry_operations {
+	/* Initialize specific fields of a lquota entry */
+	void (*lqe_init)(struct lquota_entry *, void *arg);
+
+	/* Read quota settings from disk and update lquota entry */
+	int (*lqe_read)(const struct lu_env *, struct lquota_entry *,
+			void *arg);
+
+	/* Print debug information about a given lquota entry */
+	void (*lqe_debug)(struct lquota_entry *, void *,
+			  struct libcfs_debug_msg_data *, const char *,
+			  va_list);
+};
+
+/* Per-ID information specific to the quota master target */
+struct lquota_mst_entry {
+	/* global hard limit, in inodes or kbytes */
+	__u64			lme_hardlimit;
+
+	/* global quota soft limit, in inodes or kbytes */
+	__u64			lme_softlimit;
+
+	/* grace time, in seconds */
+	__u64			lme_gracetime;
+
+	/* last time we glimpsed */
+	__u64			lme_revoke_time;
+
+	/* r/w semaphore used to protect concurrent access to the quota
+	 * parameters which are stored on disk */
+	cfs_rw_semaphore_t	lme_sem;
+
+	/* quota space that may be released after glimpse */
+	__u64			lme_may_rel;
+};
+
+/* Per-ID information specific to the quota slave */
+struct lquota_slv_entry {
+	/* [ib]tune size, inodes or kbytes */
+	__u64			lse_qtune;
+
+	/* per-ID lock handle */
+	struct lustre_handle	lse_lockh;
+
+	/* pending write which were granted quota space but haven't completed
+	 * yet, in inodes or kbytes. */
+	__u64			lse_pending_write;
+
+	/* writes waiting for quota space, in inodes or kbytes. */
+	__u64			lse_waiting_write;
+
+	/* pending release, in inodes or kbytes */
+	__u64			lse_pending_rel;
+
+	/* pending dqacq/dqrel requests. */
+	unsigned int		lse_pending_req;
+
+	/* rw spinlock protecting in-memory counters (i.e. lse_pending*) */
+	cfs_rwlock_t		lse_lock;
+
+	/* waiter for pending request done */
+	cfs_waitq_t		lse_waiters;
+
+	/* hint on current on-disk usage, in inodes or kbytes */
+	__u64			lse_usage;
+
+	/* time to trigger quota adjust */
+	__u64			lse_adjust_time;
+};
+
+/* In-memory entry for each enforced quota id
+ * A lquota_entry structure belong to a single lquota_site */
+struct lquota_entry {
+	/* link to site hash table */
+	cfs_hlist_node_t	 lqe_hash;
+
+	/* quota identifier associated with this entry */
+	union lquota_id		 lqe_id;
+
+	/* site this quota entry belongs to */
+	struct lquota_site	*lqe_site;
+
+	/* reference counter */
+	cfs_atomic_t		 lqe_ref;
+
+	/* linked to list of lqes which:
+	 * - need quota space adjustment on slave
+	 * - need glimpse to be sent on master */
+	cfs_list_t		 lqe_link;
+
+	/* current quota settings/usage of this ID */
+	__u64		lqe_granted; /* granted limit, inodes or kbytes */
+	__u64		lqe_qunit; /* [ib]unit size, inodes or kbytes */
+	union {
+		struct	lquota_mst_entry me; /* params specific to QMT */
+		struct	lquota_slv_entry se; /* params specific to QSD */
+	} u;
+
+	/* flags describing the state of the lquota_entry */
+	unsigned long	lqe_enforced:1,/* quota enforced or not */
+			lqe_uptodate:1,/* successfully read from disk */
+			lqe_edquot:1,  /* id out of quota space on QMT */
+			lqe_gl:1,      /* glimpse is in progress */
+			lqe_nopreacq:1;/* pre-acquire disabled */
+};
+
+/* Compartment within which lquota_entry are unique.
+ * lquota_entry structures are kept in a hash table and read from disk if not
+ * present.  */
+struct lquota_site {
+	/* Hash table storing lquota_entry structures */
+	cfs_hash_t	*lqs_hash;
+
+	/* Quota type, either user or group. */
+	int		 lqs_qtype;
+
+	/* Record whether this site is for a QMT or a slave */
+	int		 lqs_is_mst;
+
+	/* Vector of operations which can be done on lquota entry belonging to
+	 * this quota site */
+	struct lquota_entry_operations	*lqs_ops;
+
+	/* Backpointer to parent structure, either QMT pool info for master or
+	 * QSD for slave */
+	void		*lqs_parent;
+};
+
+#define lqe_hardlimit		u.me.lme_hardlimit
+#define lqe_softlimit		u.me.lme_softlimit
+#define lqe_gracetime		u.me.lme_gracetime
+#define lqe_revoke_time		u.me.lme_revoke_time
+#define lqe_sem			u.me.lme_sem
+#define lqe_may_rel		u.me.lme_may_rel
+
+#define lqe_qtune		u.se.lse_qtune
+#define lqe_pending_write	u.se.lse_pending_write
+#define lqe_waiting_write	u.se.lse_waiting_write
+#define lqe_pending_rel		u.se.lse_pending_rel
+#define lqe_pending_req		u.se.lse_pending_req
+#define lqe_waiters		u.se.lse_waiters
+#define lqe_lock		u.se.lse_lock
+#define lqe_usage		u.se.lse_usage
+#define lqe_adjust_time		u.se.lse_adjust_time
+#define lqe_lockh		u.se.lse_lockh
+
+#define LQUOTA_BUMP_VER 0x1
+#define LQUOTA_SET_VER  0x2
+
+/* helper routine to get/put reference on lquota_entry */
+static inline void lqe_getref(struct lquota_entry *lqe)
+{
+	cfs_atomic_inc(&lqe->lqe_ref);
+}
+
+static inline void lqe_putref(struct lquota_entry *lqe)
+{
+	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+	if (atomic_dec_and_test(&lqe->lqe_ref))
+		OBD_FREE_PTR(lqe);
+}
+
+static inline int lqe_is_master(struct lquota_entry *lqe)
+{
+	return lqe->lqe_site->lqs_is_mst;
+}
+
+/* lqe locking helpers */
+static inline void lqe_write_lock(struct lquota_entry *lqe)
+{
+	if (lqe_is_master(lqe))
+		cfs_down_write(&lqe->lqe_sem);
+	else
+		cfs_write_lock(&lqe->lqe_lock);
+}
+
+static inline void lqe_write_unlock(struct lquota_entry *lqe)
+{
+	if (lqe_is_master(lqe))
+		cfs_up_write(&lqe->lqe_sem);
+	else
+		cfs_write_unlock(&lqe->lqe_lock);
+}
+
+static inline void lqe_read_lock(struct lquota_entry *lqe)
+{
+	if (lqe_is_master(lqe))
+		cfs_down_read(&lqe->lqe_sem);
+	else
+		cfs_read_lock(&lqe->lqe_lock);
+}
+
+static inline void lqe_read_unlock(struct lquota_entry *lqe)
+{
+	if (lqe_is_master(lqe))
+		cfs_up_read(&lqe->lqe_sem);
+	else
+		cfs_read_unlock(&lqe->lqe_lock);
+}
+
 /* Common data shared by quota-level handlers. This is allocated per-thread to
  * reduce stack consumption */
 struct lquota_thread_info {
@@ -85,12 +290,62 @@ struct lquota_thread_info *lquota_info(const struct lu_env *env)
 	return info;
 }
 
+/* debugging macros */
+#ifdef LIBCFS_DEBUG
+#define lquota_lqe_debug(msgdata, mask, cdls, lqe, fmt, a...) do {      \
+	CFS_CHECK_STACK(msgdata, mask, cdls);                           \
+                                                                        \
+	if (((mask) & D_CANTMASK) != 0 ||                               \
+	    ((libcfs_debug & (mask)) != 0 &&                            \
+	     (libcfs_subsystem_debug & DEBUG_SUBSYSTEM) != 0))          \
+		lquota_lqe_debug0(lqe, msgdata, fmt, ##a);              \
+} while(0)
+
+void lquota_lqe_debug0(struct lquota_entry *lqe,
+		       struct libcfs_debug_msg_data *data, const char *fmt, ...)
+	__attribute__ ((format (printf, 3, 4)));
+
+#define LQUOTA_DEBUG_LIMIT(mask, lqe, fmt, a...) do {                          \
+	static cfs_debug_limit_state_t _lquota_cdls;                           \
+	LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, mask, &_lquota_cdls);              \
+	lquota_lqe_debug(&msgdata, mask, &_lquota_cdls, lqe, "$$$ "fmt" ",     \
+			 ##a);                                                 \
+} while (0)
+
+#define LQUOTA_ERROR(lqe, fmt, a...) LQUOTA_DEBUG_LIMIT(D_ERROR, lqe, fmt, ## a)
+#define LQUOTA_WARN(lqe, fmt, a...) \
+	LQUOTA_DEBUG_LIMIT(D_WARNING, lqe, fmt, ## a)
+#define LQUOTA_CONSOLE(lqe, fmt, a...) \
+	LQUOTA_DEBUG_LIMIT(D_CONSOLE, lqe, fmt, ## a)
+
+#define LQUOTA_DEBUG(lock, fmt, a...) do {                                 \
+	LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_QUOTA, NULL);                \
+	lquota_lqe_debug(&msgdata, D_QUOTA, NULL, lqe, "$$$ "fmt" ", ##a); \
+} while (0)
+#else /* !LIBCFS_DEBUG */
+# define LQUOTA_DEBUG(lqe, fmt, a...) ((void)0)
+# define LQUOTA_ERROR(lqe, fmt, a...) ((void)0)
+# define LQUOTA_WARN(lqe, fmt, a...) ((void)0)
+# define LQUOTA_CONSOLE(lqe, fmt, a...) ((void)0)
+# define lquota_lqe_debug(cdls, level, lqe, file, func, line, fmt, a...) \
+		((void)0)
+#endif
+
 /* lquota_lib.c */
 struct dt_object *acct_obj_lookup(const struct lu_env *, struct dt_device *,
 				  int);
 void lquota_generate_fid(struct lu_fid *, int, int, int);
 int lquota_extract_fid(struct lu_fid *, int *, int *, int *);
 const struct dt_index_features *glb_idx_feature(struct lu_fid *);
+
+/* lquota_entry.c */
+/* site create/destroy */
+struct lquota_site *lquota_site_alloc(const struct lu_env *, void *, bool,
+				      short, struct lquota_entry_operations *);
+void lquota_site_free(const struct lu_env *, struct lquota_site *);
+/* quota entry operations */
+struct lquota_entry *lqe_locate(const struct lu_env *, struct lquota_site *,
+				union lquota_id *);
 
 /* lquota_disk.c */
 struct dt_object *lquota_disk_dir_find_create(const struct lu_env *,
