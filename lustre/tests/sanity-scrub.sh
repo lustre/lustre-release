@@ -122,7 +122,7 @@ test_1b() {
 
 		local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
 		[ "$FLAGS" == "recreated" ] ||
-			error "(3) Expect 'recreated', but got '$STATUS'"
+			error "(3) Expect 'recreated', but got '$FLAGS'"
 
 		$START_SCRUB || error "(4) Fail to start OI scrub!"
 		sleep 3
@@ -683,11 +683,12 @@ test_11() {
 	echo "setupall"
 	setupall > /dev/null
 
+	local CREATED=100
 	local tname=`date +%s`
 	rm -rf $MOUNT/$tname > /dev/null
 	mkdir $MOUNT/$tname || error "(1) Fail to mkdir $MOUNT/$tname"
 
-	createmany -o $MOUNT/$tname/f 100 || error "(2) Fail to create!"
+	createmany -o $MOUNT/$tname/f $CREATED || error "(2) Fail to create!"
 
 	# reset OI scrub start point by force
 	$START_SCRUB -r || error "(3) Fail to start OI scrub!"
@@ -698,8 +699,13 @@ test_11() {
 
 	# OI scrub should skip the new created objects for the first accessing
 	local SKIPPED=$($SHOW_SCRUB | awk '/^noscrub/ { print $2 }')
-	[ $SKIPPED -eq 101 ] ||
-		error "(5) Expect 101 objects skipped, but got $SKIPPED"
+	# notice we're creating a new llog for every OST on every startup
+	# new features can make this even less stable, so we only check
+	# that the number of skipped files is less than 1.5x the number of files
+	local MAXIMUM=$((CREATED * 3 / 2))
+	local MINIMUM=$((CREATED + 1)) # files + directory
+	[ $SKIPPED -ge $MAXIMUM -o $SKIPPED -lt $MINIMUM] &&
+	error "(5) Expect [ $MINIMUM , $MAXIMUM ) objects skipped, got $SKIPPED"
 
 	# reset OI scrub start point by force
 	$START_SCRUB -r || error "(6) Fail to start OI scrub!"

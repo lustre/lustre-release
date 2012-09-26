@@ -1105,7 +1105,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		}
 	}
 
-	if (rc == 0 && !scrub->os_no_scrub &&
+	if (rc == 0 && !dev->od_noscrub &&
 	    ((sf->sf_status == SS_PAUSED) ||
 	     (sf->sf_status == SS_CRASHED &&
 	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_AUTO)) ||

@@ -627,8 +627,8 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	struct dt_thread_info	*dti = dt_info(env);
 	struct ls_device	*ls;
 	struct los_ondisk	 losd;
-	struct dt_object	*o;
 	struct dt_object	*root = NULL;
+	struct dt_object	*o = NULL;
 	struct thandle		*th;
 	int			 rc;
 
@@ -654,12 +654,6 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	cfs_atomic_inc(&ls->ls_refcount);
 	cfs_list_add(&(*los)->los_list, &ls->ls_los_list);
 
-	/* initialize data allowing to generate new fids,
-	 * literally we need a sequence */
-	o = ls_locate(env, ls, first_fid);
-	if (IS_ERR(o))
-		GOTO(out_los, rc = PTR_ERR(o));
-
 	rc = dt_root_get(env, dev, &dti->dti_fid);
 	if (rc)
 		GOTO(out_los, rc);
@@ -668,11 +662,25 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	if (IS_ERR(root))
 		GOTO(out_los, rc = PTR_ERR(root));
 
-	if (dt_try_as_dir(env, root) == 0)
-		GOTO(out_los, rc = -ENOTDIR);
+	snprintf(dti->dti_buf, sizeof(dti->dti_buf), "seq-%Lx-lastid",
+		 fid_seq(first_fid));
+	rc = dt_lookup_dir(env, root, dti->dti_buf, &dti->dti_fid);
+	if (rc != 0 && rc != -ENOENT)
+		GOTO(out_los, rc);
+
+	/* initialize data allowing to generate new fids,
+	 * literally we need a sequence */
+	if (rc == 0)
+		o = ls_locate(env, ls, &dti->dti_fid);
+	else
+		o = ls_locate(env, ls, first_fid);
+	if (IS_ERR(o))
+		GOTO(out_los, rc = PTR_ERR(o));
 
 	dt_write_lock(env, o, 0);
 	if (!dt_object_exists(o)) {
+		LASSERT(rc == -ENOENT);
+
 		th = dt_trans_create(env, dev);
 		if (IS_ERR(th))
 			GOTO(out_lock, rc = PTR_ERR(th));
@@ -686,8 +694,6 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		if (rc)
 			GOTO(out_trans, rc);
 
-		snprintf(dti->dti_buf, sizeof(dti->dti_buf),
-			"seq-%Lx-lastid", fid_seq(first_fid));
 		rc = dt_declare_insert(env, root,
 				       (const struct dt_rec *)lu_object_fid(&o->do_lu),
 				       (const struct dt_key *)dti->dti_buf,
@@ -766,12 +772,15 @@ out_trans:
 out_lock:
 	dt_write_unlock(env, o);
 out_los:
-	if (root)
+	if (root != NULL && !IS_ERR(root))
 		lu_object_put_nocache(env, &root->do_lu);
-	if (rc) {
+
+	if (rc != 0) {
+		cfs_list_del(&(*los)->los_list);
+		cfs_atomic_dec(&ls->ls_refcount);
 		OBD_FREE_PTR(*los);
 		*los = NULL;
-		if (o)
+		if (o != NULL && !IS_ERR(o))
 			lu_object_put_nocache(env, &o->do_lu);
 	} else {
 		(*los)->los_seq = fid_seq(first_fid);

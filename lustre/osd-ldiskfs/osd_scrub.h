@@ -198,7 +198,6 @@ struct osd_scrub {
 						* found by RPC prior */
 				os_waiting:1, /* Waiting for scan window. */
 				os_full_speed:1, /* run w/o speed limit */
-				os_no_scrub:1, /* NOT auto trigger OI scrub*/
 				os_paused:1; /* The scrub is paused. */
 };
 

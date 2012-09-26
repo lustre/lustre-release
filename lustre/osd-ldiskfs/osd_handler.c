@@ -276,12 +276,10 @@ osd_iget_verify(struct osd_thread_info *info, struct osd_device *dev,
 		return inode;
 
 	rc = osd_get_lma(inode, &info->oti_obj_dentry, lma);
+	if (rc == -ENODATA)
+		return inode;
+
 	if (rc != 0) {
-		if (rc == -ENODATA) {
-			CDEBUG(D_LFSCK, "inconsistent obj: NULL, %lu, "DFID"\n",
-			       inode->i_ino, PFID(fid));
-			rc = -EREMCHG;
-		}
 		iput(inode);
 		return ERR_PTR(rc);
 	}
@@ -292,6 +290,7 @@ osd_iget_verify(struct osd_thread_info *info, struct osd_device *dev,
 		iput(inode);
 		return ERR_PTR(EREMCHG);
 	}
+
 	return inode;
 }
 
@@ -326,20 +325,18 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
 		RETURN(-ENOENT);
 
-	if (fid_is_norm(fid)) {
-		/* Search order: 1. per-thread cache. */
-		if (lu_fid_eq(fid, &oic->oic_fid)) {
+	/* Search order: 1. per-thread cache. */
+	if (lu_fid_eq(fid, &oic->oic_fid)) {
+		goto iget;
+	} else if (!cfs_list_empty(&scrub->os_inconsistent_items)) {
+		/* Search order: 2. OI scrub pending list. */
+		result = osd_oii_lookup(dev, fid, id);
+		if (result == 0)
 			goto iget;
-		} else if (!cfs_list_empty(&scrub->os_inconsistent_items)) {
-			/* Search order: 2. OI scrub pending list. */
-			result = osd_oii_lookup(dev, fid, id);
-			if (result == 0)
-				goto iget;
-		}
-
-		if (sf->sf_flags & SF_INCONSISTENT)
-			verify = 1;
 	}
+
+	if (sf->sf_flags & SF_INCONSISTENT)
+		verify = 1;
 
 	/*
 	 * Objects are created as locking anchors or place holders for objects
@@ -380,7 +377,7 @@ iget:
 trigger:
 			if (thread_is_running(&scrub->os_thread)) {
 				result = -EINPROGRESS;
-			} else if (!scrub->os_no_scrub) {
+			} else if (!dev->od_noscrub) {
 				result = osd_scrub_start(dev);
 				LCONSOLE_ERROR("%.16s: trigger OI scrub by RPC "
 					       "for "DFID", rc = %d [1]\n",
@@ -3321,6 +3318,9 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 	int		     rc;
 	ENTRY;
 
+	if (!fid_is_norm(fid) && !fid_is_igif(fid))
+		RETURN(0);
+
 again:
 	rc = osd_oi_lookup(oti, dev, fid, id);
 	if (rc != 0 && rc != -ENOENT)
@@ -3341,7 +3341,7 @@ again:
 		RETURN(rc);
 	}
 
-	if (!scrub->os_no_scrub && ++once == 1) {
+	if (!dev->od_noscrub && ++once == 1) {
 		CDEBUG(D_LFSCK, "Trigger OI scrub by RPC for "DFID"\n",
 		       PFID(fid));
 		rc = osd_scrub_start(dev);
@@ -3353,7 +3353,7 @@ again:
 			goto again;
 	}
 
-	RETURN(rc = -EREMCHG);
+	RETURN(0);
 }
 
 /**
@@ -3406,7 +3406,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 			rc = osd_ea_fid_get(env, obj, ino, fid, &oic->oic_lid);
 		else
 			osd_id_gen(&oic->oic_lid, ino, OSD_OII_NOGEN);
-		if (rc != 0 || !fid_is_norm(fid)) {
+		if (rc != 0) {
 			fid_zero(&oic->oic_fid);
 			GOTO(out, rc);
 		}
@@ -3416,7 +3416,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		    (sf->sf_flags & SF_INCONSISTENT ||
 		     ldiskfs_test_bit(osd_oi_fid2idx(dev, fid),
 				      sf->sf_oi_bitmap)))
-			rc = osd_consistency_check(oti, dev, oic);
+			osd_consistency_check(oti, dev, oic);
 	} else {
 		rc = -ENOENT;
 	}
@@ -4148,16 +4148,11 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 			   it->oie_dirent->oied_name,
 			   it->oie_dirent->oied_namelen,
 			   it->oie_dirent->oied_type, attr);
-	if (!fid_is_norm(fid)) {
-		fid_zero(&oic->oic_fid);
-		RETURN(0);
-	}
-
 	oic->oic_fid = *fid;
 	if ((scrub->os_pos_current <= ino) &&
 	    (sf->sf_flags & SF_INCONSISTENT ||
 	     ldiskfs_test_bit(osd_oi_fid2idx(dev, fid), sf->sf_oi_bitmap)))
-		rc = osd_consistency_check(oti, dev, oic);
+		osd_consistency_check(oti, dev, oic);
 
 	RETURN(rc);
 }
@@ -4227,7 +4222,6 @@ static int osd_index_ea_lookup(const struct lu_env *env, struct dt_object *dt,
                 return -EACCES;
 
         rc = osd_ea_lookup_rec(env, obj, rec, key);
-
         if (rc == 0)
                 rc = +1;
         RETURN(rc);
@@ -4430,7 +4424,7 @@ static int osd_mount(const struct lu_env *env,
         } else
                 o->od_iop_mode = 1;
 	if (lmd_flags & LMD_FLG_NOSCRUB)
-		o->od_scrub.os_no_scrub = 1;
+		o->od_noscrub = 1;
 
 out:
 	if (__page)

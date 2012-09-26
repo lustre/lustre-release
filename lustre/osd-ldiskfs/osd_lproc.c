@@ -452,7 +452,7 @@ static int lprocfs_osd_rd_auto_scrub(char *page, char **start, off_t off,
 		return -EINPROGRESS;
 
 	*eof = 1;
-	return snprintf(page, count, "%d\n", !dev->od_scrub.os_no_scrub);
+	return snprintf(page, count, "%d\n", !dev->od_noscrub);
 }
 
 static int lprocfs_osd_wr_auto_scrub(struct file *file, const char *buffer,
@@ -469,7 +469,7 @@ static int lprocfs_osd_wr_auto_scrub(struct file *file, const char *buffer,
 	if (rc)
 		return rc;
 
-	dev->od_scrub.os_no_scrub = !val;
+	dev->od_noscrub = !val;
 	return count;
 }
 
