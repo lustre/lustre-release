@@ -1302,7 +1302,7 @@ check_ldlm_reply(void)
 }
 
 static void
-check_ldlm_lvb(void)
+check_ldlm_ost_lvb(void)
 {
         BLANK_LINE();
         CHECK_STRUCT(ost_lvb);
@@ -1312,6 +1312,34 @@ check_ldlm_lvb(void)
         CHECK_MEMBER(ost_lvb, lvb_ctime);
         CHECK_MEMBER(ost_lvb, lvb_blocks);
 }
+
+static void
+check_ldlm_lquota_lvb(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(lquota_lvb);
+	CHECK_MEMBER(lquota_lvb, lvb_flags);
+	CHECK_MEMBER(lquota_lvb, lvb_id_may_rel);
+	CHECK_MEMBER(lquota_lvb, lvb_id_rel);
+	CHECK_MEMBER(lquota_lvb, lvb_id_qunit);
+	CHECK_MEMBER(lquota_lvb, lvb_pad1);
+	CHECK_VALUE(LQUOTA_FL_EDQUOT);
+}
+
+static void
+check_ldlm_gl_lquota_desc(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(ldlm_gl_lquota_desc);
+	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_id);
+	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_flags);
+	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_ver);
+	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_hardlimit);
+	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_softlimit);
+	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_pad1);
+	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_pad2);
+}
+
 
 static void
 check_mgs_send_param(void)
@@ -2146,7 +2174,9 @@ main(int argc, char **argv)
         check_ldlm_lock_desc();
         check_ldlm_request();
         check_ldlm_reply();
-        check_ldlm_lvb();
+        check_ldlm_ost_lvb();
+        check_ldlm_lquota_lvb();
+        check_ldlm_gl_lquota_desc();
         check_mgs_send_param();
         check_cfg_marker();
         check_llog_logid();

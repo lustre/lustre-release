@@ -1637,6 +1637,11 @@ int ldlm_work_gl_ast_lock(struct ptlrpc_request_set *rqset, void *opaq)
 	cfs_list_del_init(&gl_work->gl_list);
 
 	lock = gl_work->gl_lock;
+
+	/* transfer the glimpse descriptor to ldlm_cb_set_arg */
+	arg->gl_desc = gl_work->gl_desc;
+
+	/* invoke the actual glimpse callback */
 	if (lock->l_glimpse_ast(lock, (void*)arg) == 0)
 		rc = 1;
 

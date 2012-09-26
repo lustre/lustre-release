@@ -234,6 +234,9 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 	/* The glimpse callback is sent to one single extent lock. As a result,
 	 * the gl_work list is just composed of one element */
 	cfs_list_add_tail(&gl_work.gl_list, &gl_list);
+	/* There is actually no need for a glimpse descriptor when glimpsing
+	 * extent locks */
+	gl_work.gl_desc = NULL;
 	/* the ldlm_glimpse_work structure is allocated on the stack */
 	gl_work.gl_flags = LDLM_GL_WORK_NOFREE;
 

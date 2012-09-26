@@ -576,6 +576,8 @@ struct ldlm_glimpse_work {
 	struct ldlm_lock	*gl_lock; /* lock to glimpse */
 	cfs_list_t		 gl_list; /* linkage to other gl work structs */
 	__u32			 gl_flags;/* see LDLM_GL_WORK_* below */
+	union ldlm_gl_desc	*gl_desc; /* glimpse descriptor to be packed in
+					   * glimpse callback request */
 };
 
 /* the ldlm_glimpse_work is allocated on the stack and should not be freed */

@@ -219,6 +219,7 @@ extern struct req_format RQF_LDLM_CALLBACK;
 extern struct req_format RQF_LDLM_CP_CALLBACK;
 extern struct req_format RQF_LDLM_BL_CALLBACK;
 extern struct req_format RQF_LDLM_GL_CALLBACK;
+extern struct req_format RQF_LDLM_GL_DESC_CALLBACK;
 /* LOG req_format */
 extern struct req_format RQF_LOG_CANCEL;
 extern struct req_format RQF_LLOG_ORIGIN_HANDLE_CREATE;
@@ -252,6 +253,7 @@ extern struct req_msg_field RMF_CONNECT_DATA;
 extern struct req_msg_field RMF_DLM_REQ;
 extern struct req_msg_field RMF_DLM_REP;
 extern struct req_msg_field RMF_DLM_LVB;
+extern struct req_msg_field RMF_DLM_GL_DESC;
 extern struct req_msg_field RMF_LDLM_INTENT;
 extern struct req_msg_field RMF_MDT_MD;
 extern struct req_msg_field RMF_REC_REINT;

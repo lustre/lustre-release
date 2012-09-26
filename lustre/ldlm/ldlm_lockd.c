@@ -1012,16 +1012,30 @@ int ldlm_server_glimpse_ast(struct ldlm_lock *lock, void *data)
 	struct ptlrpc_request		*req;
 	struct ldlm_cb_async_args	*ca;
 	int				 rc;
+	struct req_format		*req_fmt;
         ENTRY;
 
         LASSERT(lock != NULL);
 
+	if (arg->gl_desc != NULL)
+		/* There is a glimpse descriptor to pack */
+		req_fmt = &RQF_LDLM_GL_DESC_CALLBACK;
+	else
+		req_fmt = &RQF_LDLM_GL_CALLBACK;
+
         req = ptlrpc_request_alloc_pack(lock->l_export->exp_imp_reverse,
-                                        &RQF_LDLM_GL_CALLBACK,
-                                        LUSTRE_DLM_VERSION, LDLM_GL_CALLBACK);
+					req_fmt, LUSTRE_DLM_VERSION,
+					LDLM_GL_CALLBACK);
 
         if (req == NULL)
                 RETURN(-ENOMEM);
+
+	if (arg->gl_desc != NULL) {
+		/* copy the GL descriptor */
+		union ldlm_gl_desc	*desc;
+		desc = req_capsule_client_get(&req->rq_pill, &RMF_DLM_GL_DESC);
+		*desc = *arg->gl_desc;
+	}
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
         body->lock_handle[0] = lock->l_remote_handle;

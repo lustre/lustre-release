@@ -360,6 +360,12 @@ static const struct req_msg_field *ldlm_cp_callback_client[] = {
         &RMF_DLM_LVB
 };
 
+static const struct req_msg_field *ldlm_gl_callback_desc_client[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REQ,
+	&RMF_DLM_GL_DESC
+};
+
 static const struct req_msg_field *ldlm_gl_callback_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_DLM_LVB
@@ -638,6 +644,7 @@ static struct req_format *req_formats[] = {
         &RQF_LDLM_CP_CALLBACK,
         &RQF_LDLM_BL_CALLBACK,
         &RQF_LDLM_GL_CALLBACK,
+	&RQF_LDLM_GL_DESC_CALLBACK,
         &RQF_LDLM_INTENT,
         &RQF_LDLM_INTENT_GETATTR,
         &RQF_LDLM_INTENT_OPEN,
@@ -903,6 +910,11 @@ struct req_msg_field RMF_DLM_LVB =
         DEFINE_MSGF("dlm_lvb", 0, sizeof(union ldlm_wire_lvb), lustre_swab_lvb,
         NULL);
 EXPORT_SYMBOL(RMF_DLM_LVB);
+
+struct req_msg_field RMF_DLM_GL_DESC =
+	DEFINE_MSGF("dlm_gl_desc", 0, sizeof(union ldlm_gl_desc),
+		    lustre_swab_gl_desc, NULL);
+EXPORT_SYMBOL(RMF_DLM_GL_DESC);
 
 struct req_msg_field RMF_MDT_MD =
         DEFINE_MSGF("mdt_md", RMF_F_NO_SIZE_CHECK, MIN_MD_SIZE, NULL, NULL);
@@ -1225,6 +1237,11 @@ struct req_format RQF_LDLM_GL_CALLBACK =
         DEFINE_REQ_FMT0("LDLM_GL_CALLBACK", ldlm_enqueue_client,
                         ldlm_gl_callback_server);
 EXPORT_SYMBOL(RQF_LDLM_GL_CALLBACK);
+
+struct req_format RQF_LDLM_GL_DESC_CALLBACK =
+	DEFINE_REQ_FMT0("LDLM_GL_CALLBACK", ldlm_gl_callback_desc_client,
+			ldlm_gl_callback_server);
+EXPORT_SYMBOL(RQF_LDLM_GL_DESC_CALLBACK);
 
 struct req_format RQF_LDLM_INTENT =
         DEFINE_REQ_FMT0("LDLM_INTENT",

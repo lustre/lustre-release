@@ -99,6 +99,7 @@ struct ldlm_cb_set_arg {
 	int				 type; /* LDLM_{CP,BL,GL}_CALLBACK */
 	cfs_atomic_t			 restart;
 	cfs_list_t			*list;
+	union ldlm_gl_desc		*gl_desc; /* glimpse AST descriptor */
 };
 
 typedef enum {

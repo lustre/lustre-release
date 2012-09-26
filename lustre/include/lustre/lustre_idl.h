@@ -1843,7 +1843,7 @@ struct quota_body {
  * lock (IT_QUOTA_CONN) reply, qb_fid contains slave index file FID. */
 #define qb_slv_fid       qb_fid
 /* qb_usage is the current qunit (in kbytes/inodes) when quota_body is used in
- * acquire reply */
+ * quota reply */
 #define qb_qunit         qb_usage
 
 extern void lustre_swab_quota_body(struct quota_body *b);
@@ -2456,14 +2456,51 @@ typedef union {
 
 extern void lustre_swab_ldlm_policy_data (ldlm_wire_policy_data_t *d);
 
+/* Data structures associated with the quota locks */
+
+/* Glimpse descriptor used for the index & per-ID quota locks */
+struct ldlm_gl_lquota_desc {
+	union lquota_id	gl_id;    /* quota ID subject to the glimpse */
+	__u64		gl_flags; /* see LQUOTA_FL* below */
+	__u64		gl_ver;   /* new index version */
+	__u64		gl_hardlimit; /* new hardlimit or qunit value */
+	__u64		gl_softlimit; /* new softlimit */
+	__u64		gl_pad1;
+	__u64		gl_pad2;
+};
+#define gl_qunit	gl_hardlimit /* current qunit value used when
+				      * glimpsing per-ID quota locks */
+
+/* quota glimpse flags */
+#define LQUOTA_FL_EDQUOT 0x1 /* user/group out of quota space on QMT */
+
+/* LVB used with quota (global and per-ID) locks */
+struct lquota_lvb {
+	__u64	lvb_flags;	/* see LQUOTA_FL* above */
+	__u64	lvb_id_may_rel; /* space that might be released later */
+	__u64	lvb_id_rel;     /* space released by the slave for this ID */
+	__u64	lvb_id_qunit;   /* current qunit value */
+	__u64	lvb_pad1;
+};
+
+/* LVB used with global quota lock */
+#define lvb_glb_ver  lvb_id_may_rel /* current version of the global index */
+
 /* Similarly to ldlm_wire_policy_data_t, there is one common swabber for all
  * LVB types. As a result, any new LVB structure must match the fields of the
  * ost_lvb structure. */
 union ldlm_wire_lvb {
-        struct ost_lvb l_ost;
+	struct ost_lvb		l_ost;
+	struct lquota_lvb	l_lquota;
 };
 
 extern void lustre_swab_lvb(union ldlm_wire_lvb *);
+
+union ldlm_gl_desc {
+	struct ldlm_gl_lquota_desc	lquota_desc;
+};
+
+extern void lustre_swab_gl_desc(union ldlm_gl_desc *);
 
 struct ldlm_intent {
         __u64 opc;

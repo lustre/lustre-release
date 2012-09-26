@@ -1822,6 +1822,17 @@ void lustre_swab_generic_32s(__u32 *val)
 }
 EXPORT_SYMBOL(lustre_swab_generic_32s);
 
+void lustre_swab_gl_desc(union ldlm_gl_desc *desc)
+{
+	lustre_swab_lu_fid(&desc->lquota_desc.gl_id.qid_fid);
+	__swab64s(&desc->lquota_desc.gl_flags);
+	__swab64s(&desc->lquota_desc.gl_ver);
+	__swab64s(&desc->lquota_desc.gl_hardlimit);
+	__swab64s(&desc->lquota_desc.gl_softlimit);
+	CLASSERT(offsetof(typeof(desc->lquota_desc), gl_pad1) != 0);
+	CLASSERT(offsetof(typeof(desc->lquota_desc), gl_pad2) != 0);
+}
+
 void lustre_swab_lvb(union ldlm_wire_lvb *lvb)
 {
         /* The ldlm_wire_lvb union represents all the possible LVB types.
