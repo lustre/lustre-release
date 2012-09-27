@@ -114,19 +114,8 @@ struct fsfilt_operations {
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
         int     (* fs_setup)(struct super_block *sb);
         int     (* fs_get_op_len)(int, struct fsfilt_objinfo *, int);
-        int     (* fs_quotacheck)(struct super_block *sb,
-                                  struct obd_quotactl *oqctl);
         __u64   (* fs_get_version) (struct inode *inode);
         __u64   (* fs_set_version) (struct inode *inode, __u64 new_version);
-        int     (* fs_quotactl)(struct super_block *sb,
-                                struct obd_quotactl *oqctl);
-        int     (* fs_quotainfo)(struct lustre_quota_info *lqi, int type,
-                                 int cmd);
-        int     (* fs_qids)(struct file *file, struct inode *inode, int type,
-                            cfs_list_t *list);
-        int     (* fs_get_mblk)(struct super_block *sb, int *count,
-                                struct inode *inode, int frags);
-        int     (* fs_dquot)(struct lustre_dquot *dquot, int cmd);
         lvfs_sbdev_type (* fs_journal_sbdev)(struct super_block *sb);
         struct dentry  *(* fs_fid2dentry)(struct vfsmount *mnt,
                                           struct fsfilt_fid *fid,
@@ -411,59 +400,6 @@ static inline int fsfilt_statfs(struct obd_device *obd, struct super_block *sb,
 static inline int fsfilt_sync(struct obd_device *obd, struct super_block *sb)
 {
         return obd->obd_fsops->fs_sync(sb);
-}
-
-static inline int fsfilt_quotacheck(struct obd_device *obd,
-                                    struct super_block *sb,
-                                    struct obd_quotactl *oqctl)
-{
-        if (obd->obd_fsops->fs_quotacheck)
-                return obd->obd_fsops->fs_quotacheck(sb, oqctl);
-        return -ENOTSUPP;
-}
-
-static inline int fsfilt_quotactl(struct obd_device *obd,
-                                  struct super_block *sb,
-                                  struct obd_quotactl *oqctl)
-{
-        if (obd->obd_fsops->fs_quotactl)
-                return obd->obd_fsops->fs_quotactl(sb, oqctl);
-        return -ENOTSUPP;
-}
-
-static inline int fsfilt_quotainfo(struct obd_device *obd,
-                                   struct lustre_quota_info *lqi,
-                                   int type, int cmd)
-{
-        if (obd->obd_fsops->fs_quotainfo)
-                return obd->obd_fsops->fs_quotainfo(lqi, type, cmd);
-        return -ENOTSUPP;
-}
-
-static inline int fsfilt_qids(struct obd_device *obd, struct file *file,
-                              struct inode *inode, int type,
-                              cfs_list_t *list)
-{
-        if (obd->obd_fsops->fs_qids)
-                return obd->obd_fsops->fs_qids(file, inode, type, list);
-        return -ENOTSUPP;
-}
-
-static inline int fsfilt_dquot(struct obd_device *obd,
-                               struct lustre_dquot *dquot, int cmd)
-{
-        if (obd->obd_fsops->fs_dquot)
-                return obd->obd_fsops->fs_dquot(dquot, cmd);
-        return -ENOTSUPP;
-}
-
-static inline int fsfilt_get_mblk(struct obd_device *obd,
-                                  struct super_block *sb, int *count,
-                                  struct inode *inode, int frags)
-{
-        if (obd->obd_fsops->fs_get_mblk)
-                return obd->obd_fsops->fs_get_mblk(sb, count, inode, frags);
-        return -ENOTSUPP;
 }
 
 static inline int fsfilt_map_inode_pages(struct obd_device *obd,

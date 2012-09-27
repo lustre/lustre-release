@@ -1027,25 +1027,6 @@ static int osd_init_capa_ctxt(const struct lu_env *env, struct dt_device *d,
 }
 
 /**
- * Concurrency: serialization provided by callers.
- */
-static void osd_init_quota_ctxt(const struct lu_env *env, struct dt_device *d,
-                               struct dt_quota_ctxt *ctxt, void *data)
-{
-        struct obd_device *obd = (void *)ctxt;
-        struct vfsmount *mnt = (struct vfsmount *)data;
-        ENTRY;
-
-        obd->u.obt.obt_sb = mnt->mnt_root->d_inode->i_sb;
-        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = mnt;
-        obd->obd_lvfs_ctxt.pwd = mnt->mnt_root;
-        obd->obd_lvfs_ctxt.fs = get_ds();
-
-        EXIT;
-}
-
-/**
  * Note: we do not count into QUOTA here.
  * If we mount with --data_journal we may need more.
  */
@@ -1113,7 +1094,6 @@ static const struct dt_device_operations osd_dt_ops = {
         .dt_ro             = osd_ro,
         .dt_commit_async   = osd_commit_async,
         .dt_init_capa_ctxt = osd_init_capa_ctxt,
-        .dt_init_quota_ctxt= osd_init_quota_ctxt,
 };
 
 static void osd_object_read_lock(const struct lu_env *env,

@@ -65,7 +65,6 @@ struct thandle;
 struct dt_device;
 struct dt_object;
 struct dt_index_features;
-struct dt_quota_ctxt;
 struct niobuf_local;
 struct niobuf_remote;
 
@@ -174,12 +173,6 @@ struct dt_device_operations {
                                    struct dt_device *dev,
                                    int mode, unsigned long timeout,
                                    __u32 alg, struct lustre_capa_key *keys);
-        /**
-         * Initialize quota context.
-         */
-        void (*dt_init_quota_ctxt)(const struct lu_env *env,
-                                   struct dt_device *dev,
-                                   struct dt_quota_ctxt *ctxt, void *data);
 };
 
 struct dt_index_features {
