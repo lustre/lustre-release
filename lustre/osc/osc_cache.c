@@ -2722,9 +2722,9 @@ void osc_cache_truncate_end(const struct lu_env *env, struct osc_io *oio,
  * The caller must have called osc_cache_writeback_range() to issue IO
  * otherwise it will take a long time for this function to finish.
  *
- * Caller must hold inode_mutex and i_alloc_sem, or cancel exclusive
- * dlm lock so that nobody else can dirty this range of file while we're
- * waiting for extents to be written.
+ * Caller must hold inode_mutex , or cancel exclusive dlm lock so that
+ * nobody else can dirty this range of file while we're waiting for
+ * extents to be written.
  */
 int osc_cache_wait_range(const struct lu_env *env, struct osc_object *obj,
 			 pgoff_t start, pgoff_t end)

@@ -448,7 +448,6 @@ struct page *osd_get_page(struct dt_object *dt, loff_t offset, int rw)
 /*
  * there are following "locks":
  * journal_start
- * i_alloc_sem
  * i_mutex
  * page lock
 

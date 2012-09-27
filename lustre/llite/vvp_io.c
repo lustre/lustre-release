@@ -292,9 +292,9 @@ static int vvp_io_setattr_iter_init(const struct lu_env *env,
 	 * This last one is especially bad for racing o_append users on other
 	 * nodes.
 	 */
-	mutex_unlock(&inode->i_mutex);
 	if (cl_io_is_trunc(ios->cis_io))
-		UP_WRITE_I_ALLOC_SEM(inode);
+		inode_dio_write_done(inode);
+	mutex_unlock(&inode->i_mutex);
 	cio->u.setattr.cui_locks_released = 1;
 	return 0;
 }
@@ -346,7 +346,7 @@ static int vvp_io_setattr_trunc(const struct lu_env *env,
                                 const struct cl_io_slice *ios,
                                 struct inode *inode, loff_t size)
 {
-	DOWN_WRITE_I_ALLOC_SEM(inode);
+	inode_dio_wait(inode);
 	return 0;
 }
 
@@ -418,7 +418,7 @@ static void vvp_io_setattr_fini(const struct lu_env *env,
 	if (cio->u.setattr.cui_locks_released) {
 		mutex_lock(&inode->i_mutex);
 		if (cl_io_is_trunc(io))
-			DOWN_WRITE_I_ALLOC_SEM(inode);
+			inode_dio_wait(inode);
 		cio->u.setattr.cui_locks_released = 0;
 	}
 	vvp_io_fini(env, ios);
@@ -659,18 +659,19 @@ static int vvp_io_kernel_fault(struct vvp_fault_io *cfio)
 static int vvp_io_fault_start(const struct lu_env *env,
                               const struct cl_io_slice *ios)
 {
-        struct vvp_io       *vio     = cl2vvp_io(env, ios);
-        struct cl_io        *io      = ios->cis_io;
-        struct cl_object    *obj     = io->ci_obj;
-        struct inode        *inode   = ccc_object_inode(obj);
-        struct cl_fault_io  *fio     = &io->u.ci_fault;
-        struct vvp_fault_io *cfio    = &vio->u.fault;
-        loff_t               offset;
-        int                  result  = 0;
-        cfs_page_t          *vmpage  = NULL;
-        struct cl_page      *page;
-        loff_t               size;
-        pgoff_t              last; /* last page in a file data region */
+	struct vvp_io       *vio     = cl2vvp_io(env, ios);
+	struct cl_io        *io      = ios->cis_io;
+	struct cl_object    *obj     = io->ci_obj;
+	struct inode        *inode   = ccc_object_inode(obj);
+	struct ll_inode_info *lli    = ll_i2info(inode);
+	struct cl_fault_io  *fio     = &io->u.ci_fault;
+	struct vvp_fault_io *cfio    = &vio->u.fault;
+	loff_t               offset;
+	int                  result  = 0;
+	cfs_page_t          *vmpage  = NULL;
+	struct cl_page      *page;
+	loff_t               size;
+	pgoff_t              last; /* last page in a file data region */
 
         if (fio->ft_executable &&
             LTIME_S(inode->i_mtime) != vio->u.fault.ft_mtime)
@@ -685,30 +686,32 @@ static int vvp_io_fault_start(const struct lu_env *env,
         if (result != 0)
                 return result;
 
-        /* must return locked page */
-        if (fio->ft_mkwrite) {
-		/* we grab alloc_sem to exclude truncate case.
+	/* must return locked page */
+	if (fio->ft_mkwrite) {
+		/* we grab lli_trunc_sem to exclude truncate case.
 		 * Otherwise, we could add dirty pages into osc cache
 		 * while truncate is on-going. */
-		DOWN_READ_I_ALLOC_SEM(inode);
+		cfs_down_read(&lli->lli_trunc_sem);
 
-                LASSERT(cfio->ft_vmpage != NULL);
-                lock_page(cfio->ft_vmpage);
-        } else {
-                result = vvp_io_kernel_fault(cfio);
-                if (result != 0)
-                        return result;
-        }
+		LASSERT(cfio->ft_vmpage != NULL);
+		lock_page(cfio->ft_vmpage);
+	} else {
+		result = vvp_io_kernel_fault(cfio);
+		if (result != 0)
+			return result;
+	}
 
-        vmpage = cfio->ft_vmpage;
-        LASSERT(PageLocked(vmpage));
+	vmpage = cfio->ft_vmpage;
+	LASSERT(PageLocked(vmpage));
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_FAULT_TRUNC_RACE))
-                ll_invalidate_page(vmpage);
+	if (OBD_FAIL_CHECK(OBD_FAIL_LLITE_FAULT_TRUNC_RACE))
+		ll_invalidate_page(vmpage);
 
+	size = i_size_read(inode);
         /* Though we have already held a cl_lock upon this page, but
          * it still can be truncated locally. */
-        if (unlikely(vmpage->mapping == NULL)) {
+	if (unlikely((vmpage->mapping != inode->i_mapping) ||
+		     (page_offset(vmpage) > size))) {
                 CDEBUG(D_PAGE, "llite: fault and truncate race happened!\n");
 
                 /* return +1 to stop cl_io_loop() and ll_fault() will catch
@@ -756,7 +759,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
                 }
         }
 
-        size = i_size_read(inode);
         last = cl_index(obj, size - 1);
         LASSERT(fio->ft_index <= last);
         if (fio->ft_index == last)
@@ -772,11 +774,11 @@ static int vvp_io_fault_start(const struct lu_env *env,
         EXIT;
 
 out:
-        /* return unlocked vmpage to avoid deadlocking */
+	/* return unlocked vmpage to avoid deadlocking */
 	if (vmpage != NULL)
 		unlock_page(vmpage);
 	if (fio->ft_mkwrite)
-		UP_READ_I_ALLOC_SEM(inode);
+		cfs_up_read(&lli->lli_trunc_sem);
 #ifdef HAVE_VM_OP_FAULT
 	cfio->fault.ft_flags &= ~VM_FAULT_LOCKED;
 #endif

@@ -429,7 +429,6 @@ static void vvp_transient_page_verify(const struct cl_page *page)
 	struct inode *inode = ccc_object_inode(page->cp_obj);
 
 	LASSERT(!mutex_trylock(&inode->i_mutex));
-	/* LASSERT_SEM_LOCKED(&inode->i_alloc_sem); */
 }
 
 static int vvp_transient_page_own(const struct lu_env *env,

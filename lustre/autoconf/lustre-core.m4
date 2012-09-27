@@ -1794,26 +1794,6 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
-# 3.1.1 has ext4_blocks_for_truncate
-#
-AC_DEFUN([LC_BLOCKS_FOR_TRUNCATE],
-[AC_MSG_CHECKING([if kernel has ext4_blocks_for_truncate])
-LB_LINUX_TRY_COMPILE([
-	#include <linux/fs.h>
-	#include "$LINUX/fs/ext4/ext4_jbd2.h"
-	#include "$LINUX/fs/ext4/truncate.h"
-],[
-	ext4_blocks_for_truncate(NULL);
-],[
-	AC_MSG_RESULT([yes])
-	AC_DEFINE(HAVE_BLOCKS_FOR_TRUNCATE, 1,
-		  [kernel has ext4_blocks_for_truncate])
-],[
-	AC_MSG_RESULT([no])
-])
-])
-
-#
 # 3.1 renames lock-manager ops(lock_manager_operations) from fl_xxx to lm_xxx
 # see kernel commit 8fb47a4fbf858a164e973b8ea8ef5e83e61f2e50
 #
@@ -1828,6 +1808,47 @@ LB_LINUX_TRY_COMPILE([
 	AC_DEFINE(HAVE_LM_XXX_LOCK_MANAGER_OPS, 1,
 		  [lock-manager ops renamed to lm_xxx])
 	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
+# 3.1 kills inode->i_alloc_sem, use i_dio_count and inode_dio_wait/
+#     inode_dio_done instead.
+# see kernel commit bd5fe6c5eb9c548d7f07fe8f89a150bb6705e8e3
+#
+AC_DEFUN([LC_INODE_DIO_WAIT],
+[AC_MSG_CHECKING([if inode->i_alloc_sem is killed and use inode_dio_wait/done.])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	inode_dio_wait((struct inode *)0);
+	inode_dio_done((struct inode *)0);
+],[
+	AC_DEFINE(HAVE_INODE_DIO_WAIT, 1,
+		  [inode->i_alloc_sem is killed and use inode_dio_wait/done])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
+# 3.1.1 has ext4_blocks_for_truncate
+#
+AC_DEFUN([LC_BLOCKS_FOR_TRUNCATE],
+[AC_MSG_CHECKING([if kernel has ext4_blocks_for_truncate])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	#include "$LINUX/fs/ext4/ext4_jbd2.h"
+	#include "$LINUX/fs/ext4/truncate.h"
+],[
+	ext4_blocks_for_truncate(NULL);
+],[
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_BLOCKS_FOR_TRUNCATE, 1,
+		  [kernel has ext4_blocks_for_truncate])
 ],[
 	AC_MSG_RESULT([no])
 ])
@@ -2013,11 +2034,12 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_REQUEST_QUEUE_UNPLUG_FN
 	 LC_HAVE_FSTYPE_MOUNT
 
-	 # 3.1.1
-	 LC_BLOCKS_FOR_TRUNCATE
-
 	 # 3.1
 	 LC_LM_XXX_LOCK_MANAGER_OPS
+	 LC_INODE_DIO_WAIT
+
+	 # 3.1.1
+	 LC_BLOCKS_FOR_TRUNCATE
 
 	 # 3.3
 	 LC_HAVE_MIGRATE_HEADER
