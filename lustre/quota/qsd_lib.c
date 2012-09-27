@@ -40,6 +40,11 @@
 
 #include "qsd_internal.h"
 
+/* define qsd thread key */
+LU_KEY_INIT_FINI(qsd, struct qsd_thread_info);
+LU_CONTEXT_KEY_DEFINE(qsd, LCT_MD_THREAD | LCT_DT_THREAD | LCT_LOCAL);
+LU_KEY_INIT_GENERIC(qsd);
+
 /* some procfs helpers */
 static int lprocfs_qsd_rd_state(char *page, char **start, off_t off,
 				int count, int *eof, void *data)
@@ -319,3 +324,21 @@ out:
 	RETURN(qsd);
 }
 EXPORT_SYMBOL(qsd_init);
+
+/*
+ * Global initialization performed at module load time
+ */
+int qsd_glb_init(void)
+{
+	qsd_key_init_generic(&qsd_thread_key, NULL);
+	lu_context_key_register(&qsd_thread_key);
+	return 0;
+}
+
+/*
+ * Companion of qsd_glb_init() called at module unload time
+ */
+void qsd_glb_fini(void)
+{
+	lu_context_key_degister(&qsd_thread_key);
+}

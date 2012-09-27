@@ -1682,6 +1682,8 @@ enum {
         LUSTRE_RES_ID_SEQ_OFF = 0,
         LUSTRE_RES_ID_VER_OID_OFF = 1,
         LUSTRE_RES_ID_WAS_VER_OFF = 2, /* see note above */
+	LUSTRE_RES_ID_QUOTA_SEQ_OFF = 2,
+	LUSTRE_RES_ID_QUOTA_VER_OID_OFF = 3,
         LUSTRE_RES_ID_HSH_OFF = 3
 };
 

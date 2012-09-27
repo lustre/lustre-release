@@ -379,4 +379,8 @@ int lquota_disk_update_ver(const struct lu_env *, struct dt_device *,
 
 /* lproc_quota.c */
 extern struct file_operations lprocfs_quota_seq_fops;
+
+/* qsd_lib.c */
+int qsd_glb_init(void);
+void qsd_glb_fini(void);
 #endif /* _LQUOTA_INTERNAL_H */
