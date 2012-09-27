@@ -3006,45 +3006,70 @@ mounted_lustre_filesystems() {
 }
 
 init_facet_vars () {
-    [ "$CLIENTONLY" ] && return 0
-    local facet=$1
-    shift
-    local device=$1
+	[ "$CLIENTONLY" ] && return 0
+	local facet=$1
+	shift
+	local device=$1
 
-    shift
+	shift
 
-    eval export ${facet}_dev=${device}
-    eval export ${facet}_opt=\"$@\"
+	eval export ${facet}_dev=${device}
+	eval export ${facet}_opt=\"$@\"
 
-    local dev=${facet}_dev
-	local label=$(devicelabel ${facet} ${!dev})
-    [ -z "$label" ] && echo no label for ${!dev} && exit 1
+	local dev=${facet}_dev
 
-    eval export ${facet}_svc=${label}
+	# We need to loop for the label
+	# in case its not initialized yet.
+	for wait_time in {0,1,3,5,10}; do
 
-    local varname=${facet}failover_HOST
-    if [ -z "${!varname}" ]; then
-       eval $varname=$(facet_host $facet) 
-    fi
+		if [ $wait_time -gt 0 ]; then
+			echo "${!dev} not yet initialized,"\
+				"waiting ${wait_time} seconds."
+			sleep $wait_time
+		fi
 
-    # ${facet}failover_dev is set in cfg file
-    varname=${facet}failover_dev
-    if [ -n "${!varname}" ] ; then
-        eval export ${facet}failover_dev=${!varname}
-    else
-        eval export ${facet}failover_dev=$device
-    fi
+		local label=$(devicelabel ${facet} ${!dev})
 
-    # get mount point of already mounted device
-    # is facet_dev is already mounted then use the real
-    #  mount point of this facet; otherwise use $(facet_mntpt $facet)
-    # i.e. ${facet}_MOUNT if specified by user or default
-    local mntpt=$(do_facet ${facet} cat /proc/mounts | \
-            awk '"'${!dev}'" == $1 && $3 == "lustre" { print $2 }')
-    if [ -z $mntpt ]; then
-        mntpt=$(facet_mntpt $facet)
-    fi
-    eval export ${facet}_MOUNT=$mntpt
+		# Check to make sure the label does
+		# not include ffff at the end of the label.
+		# This indicates it has not been initialized yet.
+
+		if [[ $label =~ [f|F]{4}$ ]]; then
+			# label is not initialized, unset the result
+			# and either try again or fail
+			unset label
+		else
+			break
+		fi
+	done
+
+	[ -z "$label" ] && echo no label for ${!dev} && exit 1
+
+	eval export ${facet}_svc=${label}
+
+	local varname=${facet}failover_HOST
+	if [ -z "${!varname}" ]; then
+		eval $varname=$(facet_host $facet)
+	fi
+
+	# ${facet}failover_dev is set in cfg file
+	varname=${facet}failover_dev
+	if [ -n "${!varname}" ] ; then
+		eval export ${facet}failover_dev=${!varname}
+	else
+		eval export ${facet}failover_dev=$device
+	fi
+
+	# get mount point of already mounted device
+	# is facet_dev is already mounted then use the real
+	#  mount point of this facet; otherwise use $(facet_mntpt $facet)
+	# i.e. ${facet}_MOUNT if specified by user or default
+	local mntpt=$(do_facet ${facet} cat /proc/mounts | \
+			awk '"'${!dev}'" == $1 && $3 == "lustre" { print $2 }')
+	if [ -z $mntpt ]; then
+		mntpt=$(facet_mntpt $facet)
+	fi
+	eval export ${facet}_MOUNT=$mntpt
 }
 
 init_facets_vars () {
