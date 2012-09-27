@@ -628,6 +628,10 @@ struct lu_site {
          * Top-level device for this stack.
          */
         struct lu_device         *ls_top_dev;
+	/**
+	 * Bottom-level device for this stack
+	 */
+	struct lu_device	*ls_bottom_dev;
         /**
          * Linkage into global list of sites.
          */

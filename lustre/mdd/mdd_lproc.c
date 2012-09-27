@@ -217,17 +217,26 @@ static int lprocfs_changelog_users_cb(const struct lu_env *env,
 static int lprocfs_rd_changelog_users(char *page, char **start, off_t off,
                                       int count, int *eof, void *data)
 {
-        struct mdd_device *mdd = data;
-        struct llog_ctxt *ctxt;
-        struct cucb_data cucb;
-        __u64 cur;
+	struct lu_env		 env;
+	struct mdd_device	*mdd = data;
+	struct llog_ctxt	*ctxt;
+	struct cucb_data	 cucb;
+	__u64			 cur;
+	int			 rc;
 
         *eof = 1;
 
-        ctxt = llog_get_context(mdd2obd_dev(mdd),LLOG_CHANGELOG_USER_ORIG_CTXT);
+        ctxt = llog_get_context(mdd2obd_dev(mdd),
+				LLOG_CHANGELOG_USER_ORIG_CTXT);
         if (ctxt == NULL)
                 return -ENXIO;
         LASSERT(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc) {
+		llog_ctxt_put(ctxt);
+		return rc;
+	}
 
         cfs_spin_lock(&mdd->mdd_cl.mc_lock);
         cur = mdd->mdd_cl.mc_index;
@@ -243,11 +252,12 @@ static int lprocfs_rd_changelog_users(char *page, char **start, off_t off,
         cucb.idx += snprintf(cucb.page + cucb.idx, cucb.count - cucb.idx,
                               "%-5s %s\n", "ID", "index");
 
-	llog_cat_process(NULL, ctxt->loc_handle, lprocfs_changelog_users_cb,
+	llog_cat_process(&env, ctxt->loc_handle, lprocfs_changelog_users_cb,
 			 &cucb, 0, 0);
 
-        llog_ctxt_put(ctxt);
-        return cucb.idx;
+	lu_env_fini(&env);
+	llog_ctxt_put(ctxt);
+	return cucb.idx;
 }
 
 static int lprocfs_rd_sync_perm(char *page, char **start, off_t off,

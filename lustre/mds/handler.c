@@ -130,8 +130,6 @@ static int mds_postsetup(struct obd_device *obd)
         if (rc)
                 RETURN(rc);
 
-        mds_changelog_llog_init(obd, obd);
-
         if (mds->mds_profile) {
                 struct lustre_profile *lprof;
                 /* The profile defines which osc and mdc to connect to, for a

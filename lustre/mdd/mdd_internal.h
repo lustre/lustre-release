@@ -79,6 +79,13 @@ struct mdd_changelog {
         int                              mc_lastuser;
 };
 
+static inline __u64 cl_time(void) {
+	cfs_fs_time_t time;
+
+	cfs_fs_time_current(&time);
+	return (((__u64)time.tv_sec) << 30) + time.tv_nsec;
+}
+
 /** Objects in .lustre dir */
 struct mdd_dot_lustre_objs {
         struct mdd_object *mdd_obf;
@@ -112,6 +119,7 @@ struct mdd_device {
         struct md_device                 mdd_md_dev;
 	struct obd_export               *mdd_child_exp;
         struct dt_device                *mdd_child;
+	struct dt_device		*mdd_bottom;
         struct lu_fid                    mdd_root_fid;
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans; /* PENDING directory */
@@ -387,11 +395,11 @@ int mdd_readpage(const struct lu_env *env, struct md_object *obj,
 int mdd_declare_llog_record(const struct lu_env *env, struct mdd_device *mdd,
                             int reclen, struct thandle *handle);
 int mdd_declare_changelog_store(const struct lu_env *env,
-                                struct mdd_device *mdd,
-                                const struct lu_name *fname,
-                                struct thandle *handle);
-int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
-                  int flags, struct md_object *obj);
+				struct mdd_device *mdd,
+				const struct lu_name *fname,
+				struct thandle *handle);
+int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
+			struct llog_changelog_rec *rec, struct thandle *th);
 int mdd_declare_object_create_internal(const struct lu_env *env,
 				       struct mdd_object *p,
 				       struct mdd_object *c,
@@ -435,17 +443,6 @@ void mdd_lfsck_cleanup(const struct lu_env *env, struct mdd_device *mdd);
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *d);
-struct llog_changelog_rec;
-int mdd_changelog_llog_write(struct mdd_device         *mdd,
-                             struct llog_changelog_rec *rec,
-                             struct thandle            *handle);
-int mdd_changelog_ext_llog_write(struct mdd_device *mdd,
-				 struct llog_changelog_ext_rec *rec,
-				 struct thandle *handle);
-int mdd_changelog_llog_cancel(const struct lu_env *env, struct mdd_device *mdd,
-			      long long endrec);
-int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags);
-int mdd_changelog_on(struct mdd_device *mdd, int on);
 
 /* mdd_permission.c */
 #define mdd_cap_t(x) (x)

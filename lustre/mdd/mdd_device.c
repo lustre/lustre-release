@@ -42,11 +42,11 @@
 
 #define DEBUG_SUBSYSTEM S_MDS
 
+#include <linux/module.h>
 #include <obd_class.h>
-#include <lprocfs_status.h>
-#include <lustre_fid.h>
 #include <lustre_mds.h>
-#include <lustre_disk.h>      /* for changelogs */
+#include <obd_support.h>
+#include <lu_object.h>
 #include <lustre_param.h>
 #include <lustre_fid.h>
 
@@ -105,6 +105,7 @@ static int mdd_connect_to_next(const struct lu_env *env, struct mdd_device *m,
 	lud->ld_site = m->mdd_child_exp->exp_obd->obd_lu_dev->ld_site;
 	LASSERT(lud->ld_site);
 	m->mdd_child = lu2dt_dev(m->mdd_child_exp->exp_obd->obd_lu_dev);
+	m->mdd_bottom = lu2dt_dev(lud->ld_site->ls_bottom_dev);
 	lu_dev_add_linkage(lud->ld_site, lud);
 
 out:
@@ -192,7 +193,6 @@ static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
 {
         struct mdd_device *mdd = (struct mdd_device *)data;
         struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
-        ENTRY;
 
         LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
         LASSERT(rec->cr_hdr.lrh_type == CHANGELOG_REC);
@@ -204,7 +204,7 @@ static int changelog_init_cb(const struct lu_env *env, struct llog_handle *llh,
                llh->lgh_id.lgl_oid);
 
         mdd->mdd_cl.mc_index = rec->cr.cr_index;
-        RETURN(LLOG_PROC_BREAK);
+        return LLOG_PROC_BREAK;
 }
 
 static int changelog_user_init_cb(const struct lu_env *env,
@@ -214,7 +214,6 @@ static int changelog_user_init_cb(const struct lu_env *env,
         struct mdd_device *mdd = (struct mdd_device *)data;
         struct llog_changelog_user_rec *rec =
                 (struct llog_changelog_user_rec *)hdr;
-        ENTRY;
 
         LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
         LASSERT(rec->cur_hdr.lrh_type == CHANGELOG_USER_REC);
@@ -227,93 +226,220 @@ static int changelog_user_init_cb(const struct lu_env *env,
         mdd->mdd_cl.mc_lastuser = rec->cur_id;
         cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
-        RETURN(LLOG_PROC_BREAK);
+        return LLOG_PROC_BREAK;
 }
 
-
-static int mdd_changelog_llog_init(struct mdd_device *mdd)
+static int llog_changelog_cancel_cb(const struct lu_env *env,
+				    struct llog_handle *llh,
+				    struct llog_rec_hdr *hdr, void *data)
 {
-        struct obd_device *obd = mdd2obd_dev(mdd);
-        struct llog_ctxt *ctxt;
-        int rc;
+	struct llog_changelog_rec *rec = (struct llog_changelog_rec *)hdr;
+	struct llog_cookie	 cookie;
+	long long		 endrec = *(long long *)data;
+	int			 rc;
 
-        /* Find last changelog entry number */
-        ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
-        if (ctxt == NULL) {
-                CERROR("no changelog context\n");
-                return -EINVAL;
-        }
-        if (!ctxt->loc_handle) {
-                llog_ctxt_put(ctxt);
-                return -EINVAL;
-        }
+	ENTRY;
 
-	rc = llog_cat_reverse_process(NULL, ctxt->loc_handle,
+	/* This is always a (sub)log, not the catalog */
+	LASSERT(llh->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN);
+
+	if (rec->cr.cr_index > endrec)
+		/* records are in order, so we're done */
+		RETURN(LLOG_PROC_BREAK);
+
+	cookie.lgc_lgl = llh->lgh_id;
+	cookie.lgc_index = hdr->lrh_index;
+
+	/* cancel them one at a time.  I suppose we could store up the cookies
+	 * and cancel them all at once; probably more efficient, but this is
+	 * done as a user call, so who cares... */
+	rc = llog_cat_cancel_records(env, llh->u.phd.phd_cat_handle, 1,
+				     &cookie);
+	RETURN(rc < 0 ? rc : 0);
+}
+
+static int llog_changelog_cancel(const struct lu_env *env,
+				 struct llog_ctxt *ctxt,
+				 struct lov_stripe_md *lsm, int count,
+				 struct llog_cookie *cookies, int flags)
+{
+	struct llog_handle	*cathandle = ctxt->loc_handle;
+	int			 rc;
+
+	ENTRY;
+
+	/* This should only be called with the catalog handle */
+	LASSERT(cathandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
+
+	rc = llog_cat_process(env, cathandle, llog_changelog_cancel_cb,
+			      (void *)cookies, 0, 0);
+	if (rc >= 0)
+		/* 0 or 1 means we're done */
+		rc = 0;
+	else
+		CERROR("%s: cancel idx %u of catalog "LPX64" rc=%d\n",
+		       ctxt->loc_obd->obd_name, cathandle->lgh_last_idx,
+		       cathandle->lgh_id.lgl_oid, rc);
+
+	RETURN(rc);
+}
+
+static struct llog_operations changelog_orig_logops;
+
+int mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on);
+
+static int mdd_changelog_llog_init(const struct lu_env *env,
+				   struct mdd_device *mdd)
+{
+	struct obd_device	*obd = mdd2obd_dev(mdd);
+	struct llog_ctxt	*ctxt = NULL, *uctxt = NULL;
+	struct lu_fid		 rfid;
+	int			 rc;
+
+	OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
+	obd->obd_lvfs_ctxt.dt = mdd->mdd_bottom;
+	rc = dt_root_get(env, mdd->mdd_bottom, &rfid);
+	if (rc)
+		RETURN(-ENODEV);
+
+	changelog_orig_logops = llog_osd_ops;
+	changelog_orig_logops.lop_cancel = llog_changelog_cancel;
+	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CHANGELOG_ORIG_CTXT,
+			obd, &changelog_orig_logops);
+	if (rc) {
+		CERROR("%s: changelog llog setup failed: rc = %d\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	rc = llog_open_create(env, ctxt, &ctxt->loc_handle, NULL,
+			      CHANGELOG_CATALOG);
+	if (rc)
+		GOTO(out_cleanup, rc);
+
+	ctxt->loc_handle->lgh_logops->lop_add = llog_cat_add_rec;
+	ctxt->loc_handle->lgh_logops->lop_declare_add =
+					llog_cat_declare_add_rec;
+
+	rc = llog_cat_init_and_process(env, ctxt->loc_handle);
+	if (rc)
+		GOTO(out_close, rc);
+
+	rc = llog_cat_reverse_process(env, ctxt->loc_handle,
 				      changelog_init_cb, mdd);
-        llog_ctxt_put(ctxt);
 
-        if (rc < 0) {
-                CERROR("changelog init failed: %d\n", rc);
-                return rc;
-        }
-        CDEBUG(D_IOCTL, "changelog starting index="LPU64"\n",
-               mdd->mdd_cl.mc_index);
+	if (rc < 0) {
+		CERROR("%s: changelog init failed: rc = %d\n", obd->obd_name,
+		       rc);
+		GOTO(out_close, rc);
+	}
 
-        /* Find last changelog user id */
-        ctxt = llog_get_context(obd, LLOG_CHANGELOG_USER_ORIG_CTXT);
-        if (ctxt == NULL) {
-                CERROR("no changelog user context\n");
-                return -EINVAL;
-        }
-        if (!ctxt->loc_handle) {
-                llog_ctxt_put(ctxt);
-                return -EINVAL;
-        }
+	CDEBUG(D_IOCTL, "changelog starting index="LPU64"\n",
+	       mdd->mdd_cl.mc_index);
 
-	rc = llog_cat_reverse_process(NULL, ctxt->loc_handle,
+	/* setup user changelog */
+	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CHANGELOG_USER_ORIG_CTXT,
+			obd, &changelog_orig_logops);
+	if (rc) {
+		CERROR("%s: changelog users llog setup failed: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(out_close, rc);
+	}
+
+	uctxt = llog_get_context(obd, LLOG_CHANGELOG_USER_ORIG_CTXT);
+	LASSERT(ctxt);
+
+	rc = llog_open_create(env, uctxt, &uctxt->loc_handle, NULL,
+			      CHANGELOG_USERS);
+	if (rc)
+		GOTO(out_ucleanup, rc);
+
+	uctxt->loc_handle->lgh_logops->lop_add = llog_cat_add_rec;
+	uctxt->loc_handle->lgh_logops->lop_declare_add = llog_cat_declare_add_rec;
+
+	rc = llog_cat_init_and_process(env, uctxt->loc_handle);
+	if (rc)
+		GOTO(out_uclose, rc);
+
+	rc = llog_cat_reverse_process(env, ctxt->loc_handle,
 				      changelog_user_init_cb, mdd);
-        llog_ctxt_put(ctxt);
+	if (rc < 0) {
+		CERROR("%s: changelog user init failed: rc = %d\n",
+		       obd->obd_name, rc);
+		GOTO(out_uclose, rc);
+	}
 
-        if (rc < 0) {
-                CERROR("changelog user init failed: %d\n", rc);
-                return rc;
-        }
-
-        /* If we have registered users, assume we want changelogs on */
-        if (mdd->mdd_cl.mc_lastuser > 0)
-                rc = mdd_changelog_on(mdd, 1);
-
-        return rc;
+	/* If we have registered users, assume we want changelogs on */
+	if (mdd->mdd_cl.mc_lastuser > 0) {
+		rc = mdd_changelog_on(env, mdd, 1);
+		if (rc < 0)
+			GOTO(out_uclose, rc);
+	}
+	llog_ctxt_put(ctxt);
+	llog_ctxt_put(uctxt);
+	RETURN(0);
+out_uclose:
+	llog_cat_close(env, uctxt->loc_handle);
+out_ucleanup:
+	llog_cleanup(env, uctxt);
+out_close:
+	llog_cat_close(env, ctxt->loc_handle);
+out_cleanup:
+	llog_cleanup(env, ctxt);
+	return rc;
 }
 
 static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 {
-        int rc;
+	struct obd_device	*obd = mdd2obd_dev(mdd);
+	int			 rc;
 
-        mdd->mdd_cl.mc_index = 0;
-        cfs_spin_lock_init(&mdd->mdd_cl.mc_lock);
-        mdd->mdd_cl.mc_starttime = cfs_time_current_64();
-        mdd->mdd_cl.mc_flags = 0; /* off by default */
-        mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
-        cfs_spin_lock_init(&mdd->mdd_cl.mc_user_lock);
-        mdd->mdd_cl.mc_lastuser = 0;
+	mdd->mdd_cl.mc_index = 0;
+	cfs_spin_lock_init(&mdd->mdd_cl.mc_lock);
+	mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+	mdd->mdd_cl.mc_flags = 0; /* off by default */
+	mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
+	cfs_spin_lock_init(&mdd->mdd_cl.mc_user_lock);
+	mdd->mdd_cl.mc_lastuser = 0;
 
-        rc = mdd_changelog_llog_init(mdd);
-        if (rc) {
-                CERROR("Changelog setup during init failed %d\n", rc);
-                mdd->mdd_cl.mc_flags |= CLM_ERR;
-        }
+	rc = mdd_changelog_llog_init(env, mdd);
+	if (rc) {
+		CERROR("%s: changelog setup during init failed: rc = %d\n",
+		       obd->obd_name, rc);
+		mdd->mdd_cl.mc_flags |= CLM_ERR;
+	}
 
-        return rc;
+	return rc;
 }
 
-static void mdd_changelog_fini(const struct lu_env *env, struct mdd_device *mdd)
+static void mdd_changelog_fini(const struct lu_env *env,
+			       struct mdd_device *mdd)
 {
-        mdd->mdd_cl.mc_flags = 0;
+	struct obd_device	*obd = mdd2obd_dev(mdd);
+	struct llog_ctxt	*ctxt;
+
+	mdd->mdd_cl.mc_flags = 0;
+
+	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+	if (ctxt) {
+		llog_cat_close(env, ctxt->loc_handle);
+		llog_cleanup(env, ctxt);
+	}
+	ctxt = llog_get_context(obd, LLOG_CHANGELOG_USER_ORIG_CTXT);
+	if (ctxt) {
+		llog_cat_close(env, ctxt->loc_handle);
+		llog_cleanup(env, ctxt);
+	}
 }
+
+int mdd_changelog_write_header(const struct lu_env *env,
+			       struct mdd_device *mdd, int markerflags);
 
 /* Start / stop recording */
-int mdd_changelog_on(struct mdd_device *mdd, int on)
+int mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on)
 {
         int rc = 0;
 
@@ -328,95 +454,16 @@ int mdd_changelog_on(struct mdd_device *mdd, int on)
                         cfs_spin_lock(&mdd->mdd_cl.mc_lock);
                         mdd->mdd_cl.mc_flags |= CLM_ON;
                         cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
-                        rc = mdd_changelog_write_header(mdd, CLM_START);
+			rc = mdd_changelog_write_header(env, mdd, CLM_START);
                 }
         } else if ((on == 0) && ((mdd->mdd_cl.mc_flags & CLM_ON) == CLM_ON)) {
                 LCONSOLE_INFO("%s: changelog off\n",mdd2obd_dev(mdd)->obd_name);
-                rc = mdd_changelog_write_header(mdd, CLM_FINI);
+		rc = mdd_changelog_write_header(env, mdd, CLM_FINI);
                 cfs_spin_lock(&mdd->mdd_cl.mc_lock);
                 mdd->mdd_cl.mc_flags &= ~CLM_ON;
                 cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
         }
         return rc;
-}
-
-static __u64 cl_time(void) {
-        cfs_fs_time_t time;
-
-        cfs_fs_time_current(&time);
-        return (((__u64)time.tv_sec) << 30) + time.tv_nsec;
-}
-
-/** Add a changelog entry \a rec to the changelog llog
- * \param mdd
- * \param rec
- * \param handle - currently ignored since llogs start their own transaction;
- *                 this will hopefully be fixed in llog rewrite
- * \retval 0 ok
- */
-int mdd_changelog_llog_write(struct mdd_device         *mdd,
-                             struct llog_changelog_rec *rec,
-                             struct thandle            *handle)
-{
-        struct obd_device *obd = mdd2obd_dev(mdd);
-        struct llog_ctxt *ctxt;
-        int rc;
-
-        rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
-        /* llog_lvfs_write_rec sets the llog tail len */
-        rec->cr_hdr.lrh_type = CHANGELOG_REC;
-        rec->cr.cr_time = cl_time();
-        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
-        /* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
-           but as long as the MDD transactions are ordered correctly for e.g.
-           rename conflicts, I don't think this should matter. */
-        rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
-        ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
-        if (ctxt == NULL)
-                return -ENXIO;
-
-        /* nested journal transaction */
-	rc = llog_obd_add(NULL, ctxt, &rec->cr_hdr, NULL, NULL, 0);
-        llog_ctxt_put(ctxt);
-
-        return rc;
-}
-
-/** Add a changelog_ext entry \a rec to the changelog llog
- * \param mdd
- * \param rec
- * \param handle - currently ignored since llogs start their own transaction;
- *		this will hopefully be fixed in llog rewrite
- * \retval 0 ok
- */
-int mdd_changelog_ext_llog_write(struct mdd_device *mdd,
-				 struct llog_changelog_ext_rec *rec,
-				 struct thandle *handle)
-{
-	struct obd_device *obd = mdd2obd_dev(mdd);
-	struct llog_ctxt *ctxt;
-	int rc;
-
-	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
-	/* llog_lvfs_write_rec sets the llog tail len */
-	rec->cr_hdr.lrh_type = CHANGELOG_REC;
-	rec->cr.cr_time = cl_time();
-	cfs_spin_lock(&mdd->mdd_cl.mc_lock);
-	/* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
-	 * but as long as the MDD transactions are ordered correctly for e.g.
-	 * rename conflicts, I don't think this should matter. */
-	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-	cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
-	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
-	if (ctxt == NULL)
-		return -ENXIO;
-
-	/* nested journal transaction */
-	rc = llog_obd_add(NULL, ctxt, &rec->cr_hdr, NULL, NULL, 0);
-	llog_ctxt_put(ctxt);
-
-	return rc;
 }
 
 /** Remove entries with indicies up to and including \a endrec from the
@@ -453,7 +500,7 @@ int mdd_changelog_llog_cancel(const struct lu_env *env,
            allright. */
         if (endrec == cur) {
                 /* XXX: transaction is started by llog itself */
-                rc = mdd_changelog_write_header(mdd, CLM_PURGE);
+                rc = mdd_changelog_write_header(env, mdd, CLM_PURGE);
                 if (rc)
                       goto out;
         }
@@ -463,7 +510,6 @@ int mdd_changelog_llog_cancel(const struct lu_env *env,
            changed since the last purge) */
         mdd->mdd_cl.mc_starttime = cfs_time_current_64();
 
-        /* XXX: transaction is started by llog itself */
 	rc = llog_cancel(env, ctxt, NULL, 1, (struct llog_cookie *)&endrec, 0);
 out:
         llog_ctxt_put(ctxt);
@@ -475,36 +521,54 @@ out:
  * \param markerflags - CLM_*
  * \retval 0 ok
  */
-int mdd_changelog_write_header(struct mdd_device *mdd, int markerflags)
+int mdd_changelog_write_header(const struct lu_env *env,
+			       struct mdd_device *mdd, int markerflags)
 {
-        struct obd_device *obd = mdd2obd_dev(mdd);
-        struct llog_changelog_rec *rec;
-        int reclen;
-        int len = strlen(obd->obd_name);
-        int rc;
-        ENTRY;
+	struct obd_device		*obd = mdd2obd_dev(mdd);
+	struct llog_changelog_rec	*rec;
+	struct lu_buf			*buf;
+	struct llog_ctxt		*ctxt;
+	int				 reclen;
+	int				 len = strlen(obd->obd_name);
+	int				 rc;
 
-        reclen = llog_data_len(sizeof(*rec) + len);
-        OBD_ALLOC(rec, reclen);
-        if (rec == NULL)
-                RETURN(-ENOMEM);
+	ENTRY;
+
+	if (mdd->mdd_cl.mc_mask & (1 << CL_MARK)) {
+		mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+		RETURN(0);
+	}
+
+	reclen = llog_data_len(sizeof(*rec) + len);
+	buf = mdd_buf_alloc(env, reclen);
+	if (buf->lb_buf == NULL)
+		RETURN(-ENOMEM);
+	rec = buf->lb_buf;
 
         rec->cr.cr_flags = CLF_VERSION;
         rec->cr.cr_type = CL_MARK;
         rec->cr.cr_namelen = len;
         memcpy(rec->cr.cr_name, obd->obd_name, rec->cr.cr_namelen);
         /* Status and action flags */
-        rec->cr.cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
+	rec->cr.cr_markerflags = mdd->mdd_cl.mc_flags | markerflags;
+	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
+	rec->cr_hdr.lrh_type = CHANGELOG_REC;
+	rec->cr.cr_time = cl_time();
+	cfs_spin_lock(&mdd->mdd_cl.mc_lock);
+	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
+	cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
 
-        /* XXX: transaction is started by llog itself */
-        rc = (mdd->mdd_cl.mc_mask & (1 << CL_MARK)) ?
-                mdd_changelog_llog_write(mdd, rec, NULL) : 0;
+	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
+	LASSERT(ctxt);
 
-        /* assume on or off event; reset repeat-access time */
-        mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cr_hdr, NULL, NULL);
+	if (rc > 0)
+		rc = 0;
+	llog_ctxt_put(ctxt);
 
-        OBD_FREE(rec, reclen);
-        RETURN(rc);
+	/* assume on or off event; reset repeat-access time */
+	mdd->mdd_cl.mc_starttime = cfs_time_current_64();
+	RETURN(rc);
 }
 
 /**
@@ -1070,8 +1134,6 @@ static int mdd_process_config(const struct lu_env *env,
                 if (rc)
                         GOTO(out, rc);
                 dt->dd_ops->dt_conf_get(env, dt, &m->mdd_dt_conf);
-
-                mdd_changelog_init(env, m);
                 break;
         case LCFG_CLEANUP:
 		rc = next->ld_ops->ldo_process_config(env, next, cfg);
@@ -1143,7 +1205,14 @@ static int mdd_prepare(const struct lu_env *env,
 		GOTO(out, rc = PTR_ERR(root));
 
 	mdd->mdd_capa = root;
+
 	rc = mdd_lfsck_setup(env, mdd);
+	if (rc) {
+		CERROR("%s: failed to initialize lfsck: rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name, rc);
+		GOTO(out, rc);
+	}
+	rc = mdd_changelog_init(env, mdd);
 
 	GOTO(out, rc);
 
@@ -1380,14 +1449,16 @@ struct md_capainfo *md_capainfo(const struct lu_env *env)
 }
 EXPORT_SYMBOL(md_capainfo);
 
-static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
+static int mdd_changelog_user_register(const struct lu_env *env,
+				       struct mdd_device *mdd, int *id)
 {
         struct llog_ctxt *ctxt;
         struct llog_changelog_user_rec *rec;
         int rc;
         ENTRY;
 
-        ctxt = llog_get_context(mdd2obd_dev(mdd),LLOG_CHANGELOG_USER_ORIG_CTXT);
+        ctxt = llog_get_context(mdd2obd_dev(mdd),
+				LLOG_CHANGELOG_USER_ORIG_CTXT);
         if (ctxt == NULL)
                 RETURN(-ENXIO);
 
@@ -1398,7 +1469,7 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
         }
 
         /* Assume we want it on since somebody registered */
-        rc = mdd_changelog_on(mdd, 1);
+        rc = mdd_changelog_on(env, mdd, 1);
         if (rc)
                 GOTO(out, rc);
 
@@ -1414,42 +1485,13 @@ static int mdd_changelog_user_register(struct mdd_device *mdd, int *id)
         rec->cur_endrec = mdd->mdd_cl.mc_index;
         cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
-	rc = llog_obd_add(NULL, ctxt, &rec->cur_hdr, NULL, NULL, 0);
+	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cur_hdr, NULL, NULL);
 
         CDEBUG(D_IOCTL, "Registered changelog user %d\n", *id);
 out:
         OBD_FREE_PTR(rec);
         llog_ctxt_put(ctxt);
         RETURN(rc);
-}
-
-int mdd_declare_llog_cancel(const struct lu_env *env, struct mdd_device *mdd,
-                            struct thandle *handle)
-{
-        int rc;
-
-
-        /* XXX: this is a temporary solution to declare llog changes
-         *      will be fixed in 2.3 with new llog implementation */
-
-        LASSERT(mdd->mdd_capa);
-
-        /* the llog record could be canceled either by modifying
-         * the plain llog's header or by destroying the llog itself
-         * when this record is the last one in it, it can't be known
-         * here, but the catlog's header will also be modified for
-         * the second case, then the first case can be covered and
-         * is no need to declare it */
-
-        /* destroy empty plain log */
-        rc = dt_declare_destroy(env, mdd->mdd_capa, handle);
-        if (rc)
-                return rc;
-
-        /* record the catlog's header if an empty plain log was destroyed */
-        rc = dt_declare_record_write(env, mdd->mdd_capa,
-                                     sizeof(struct llog_logid_rec), 0, handle);
-        return rc;
 }
 
 struct mdd_changelog_user_data {
@@ -1459,7 +1501,6 @@ struct mdd_changelog_user_data {
         __u32 mcud_minid;  /**< user id with lowest rec reference */
         __u32 mcud_usercount;
         int   mcud_found:1;
-        struct mdd_device   *mcud_mdd;
 };
 #define MCUD_UNREGISTER -1LL
 
@@ -1503,35 +1544,15 @@ static int mdd_changelog_user_purge_cb(const struct lu_env *env,
         /* Special case: unregister this user */
         if (mcud->mcud_endrec == MCUD_UNREGISTER) {
                 struct llog_cookie cookie;
-                void *th;
-                struct mdd_device *mdd = mcud->mcud_mdd;
 
                 cookie.lgc_lgl = llh->lgh_id;
                 cookie.lgc_index = hdr->lrh_index;
-
-                /* XXX This is a workaround for the deadlock of changelog
-                 * adding vs. changelog cancelling. LU-81. */
-		th = mdd_trans_create(env, mdd);
-                if (IS_ERR(th)) {
-                        CERROR("Cannot get thandle\n");
-                        RETURN(-ENOMEM);
-                }
-
-		rc = mdd_declare_llog_cancel(env, mdd, th);
-                if (rc)
-                        GOTO(stop, rc);
-
-		rc = mdd_trans_start(env, mdd, th);
-                if (rc)
-                        GOTO(stop, rc);
 
 		rc = llog_cat_cancel_records(env, llh->u.phd.phd_cat_handle,
 					     1, &cookie);
                 if (rc == 0)
                         mcud->mcud_usercount--;
 
-stop:
-		mdd_trans_stop(env, mdd, 0, th);
                 RETURN(rc);
         }
 
@@ -1541,8 +1562,8 @@ stop:
 
         /* hdr+1 is loc of data */
         hdr->lrh_len -= sizeof(*hdr) + sizeof(struct llog_rec_tail);
-	rc = llog_write_rec(env, llh, hdr, NULL, 0, (void *)(hdr + 1),
-			    hdr->lrh_index, NULL);
+	rc = llog_write(env, llh, hdr, NULL, 0, (void *)(hdr + 1),
+			hdr->lrh_index);
 
         RETURN(rc);
 }
@@ -1563,7 +1584,6 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
         data.mcud_minrec = 0;
         data.mcud_usercount = 0;
         data.mcud_endrec = endrec;
-        data.mcud_mdd = mdd;
         cfs_spin_lock(&mdd->mdd_cl.mc_lock);
         endrec = mdd->mdd_cl.mc_index;
         cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
@@ -1572,9 +1592,11 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
              (data.mcud_endrec != MCUD_UNREGISTER)))
                 data.mcud_endrec = endrec;
 
-        ctxt = llog_get_context(mdd2obd_dev(mdd),LLOG_CHANGELOG_USER_ORIG_CTXT);
+        ctxt = llog_get_context(mdd2obd_dev(mdd),
+				LLOG_CHANGELOG_USER_ORIG_CTXT);
         if (ctxt == NULL)
                 return -ENXIO;
+
         LASSERT(ctxt->loc_handle->lgh_hdr->llh_flags & LLOG_F_IS_CAT);
 
 	rc = llog_cat_process(env, ctxt->loc_handle,
@@ -1601,7 +1623,7 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
 
         if (!rc && data.mcud_usercount == 0)
                 /* No more users; turn changelogs off */
-                rc = mdd_changelog_on(mdd, 0);
+                rc = mdd_changelog_on(env, mdd, 0);
 
         RETURN (rc);
 }
@@ -1666,7 +1688,7 @@ static int mdd_iocontrol(const struct lu_env *env, struct md_device *m,
 
         switch (cmd) {
         case OBD_IOC_CHANGELOG_REG:
-                rc = mdd_changelog_user_register(mdd, &data->ioc_u32_1);
+                rc = mdd_changelog_user_register(env, mdd, &data->ioc_u32_1);
                 break;
         case OBD_IOC_CHANGELOG_DEREG:
                 rc = mdd_changelog_user_purge(env, mdd, data->ioc_u32_1,

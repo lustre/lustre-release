@@ -947,19 +947,17 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
  * \param mdd_obj - mdd_object of change
  * \param handle - transacion handle
  */
-static int mdd_changelog_data_store(const struct lu_env     *env,
-                                    struct mdd_device       *mdd,
-                                    enum changelog_rec_type type,
-                                    int                     flags,
-                                    struct mdd_object       *mdd_obj,
-                                    struct thandle          *handle)
+static int mdd_changelog_data_store(const struct lu_env *env,
+				    struct mdd_device *mdd,
+				    enum changelog_rec_type type,
+				    int flags, struct mdd_object *mdd_obj,
+				    struct thandle *handle)
 {
-        const struct lu_fid *tfid = mdo2fid(mdd_obj);
-        struct llog_changelog_rec *rec;
-        struct thandle *th = NULL;
-        struct lu_buf *buf;
-        int reclen;
-        int rc;
+	const struct lu_fid		*tfid = mdo2fid(mdd_obj);
+	struct llog_changelog_rec	*rec;
+	struct lu_buf			*buf;
+	int				 reclen;
+	int				 rc;
 
         /* Not recording */
         if (!(mdd->mdd_cl.mc_flags & CLM_ON))
@@ -982,7 +980,7 @@ static int mdd_changelog_data_store(const struct lu_env     *env,
         buf = mdd_buf_alloc(env, reclen);
         if (buf->lb_buf == NULL)
                 RETURN(-ENOMEM);
-        rec = (struct llog_changelog_rec *)buf->lb_buf;
+	rec = buf->lb_buf;
 
         rec->cr.cr_flags = CLF_VERSION | (CLF_FLAGMASK & flags);
         rec->cr.cr_type = (__u32)type;
@@ -990,18 +988,9 @@ static int mdd_changelog_data_store(const struct lu_env     *env,
         rec->cr.cr_namelen = 0;
         mdd_obj->mod_cltime = cfs_time_current_64();
 
-        rc = mdd_changelog_llog_write(mdd, rec, handle ? : th);
+	rc = mdd_changelog_store(env, mdd, rec, handle);
 
-        if (th)
-                mdd_trans_stop(env, mdd, rc, th);
-
-        if (rc < 0) {
-                CERROR("changelog failed: rc=%d op%d t"DFID"\n",
-                       rc, type, PFID(tfid));
-                return -EFAULT;
-        }
-
-        return 0;
+	RETURN(rc);
 }
 
 int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
@@ -1015,7 +1004,7 @@ int mdd_changelog(const struct lu_env *env, enum changelog_rec_type type,
 
         handle = mdd_trans_create(env, mdd);
         if (IS_ERR(handle))
-                return(PTR_ERR(handle));
+		RETURN(PTR_ERR(handle));
 
         rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
         if (rc)
@@ -1083,10 +1072,6 @@ static int mdd_declare_attr_set(const struct lu_env *env,
         if (rc)
                 return rc;
 
-        rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
-        if (rc)
-                return rc;
-
 #ifdef CONFIG_FS_POSIX_ACL
 	if (attr->la_valid & LA_MODE) {
                 mdd_read_lock(env, obj, MOR_TGT_CHILD);
@@ -1109,7 +1094,8 @@ static int mdd_declare_attr_set(const struct lu_env *env,
         }
 #endif
 
-        return rc;
+	rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+	return rc;
 }
 
 /* set attr and LOV EA at once, return updated attr */
@@ -1213,6 +1199,7 @@ static int mdd_declare_xattr_set(const struct lu_env *env,
         if ((strncmp("user.", name, 5) == 0))
                 rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
 
+	rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
         return rc;
 }
 

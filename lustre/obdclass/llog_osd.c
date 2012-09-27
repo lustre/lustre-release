@@ -708,6 +708,28 @@ out:
 	return rc;
 }
 
+struct dt_object *llog_osd_dir_get(const struct lu_env *env,
+				   struct llog_ctxt *ctxt)
+{
+	struct dt_device	*dt;
+	struct dt_thread_info	*dti = dt_info(env);
+	struct dt_object	*dir;
+	int			 rc;
+
+	dt = ctxt->loc_exp->exp_obd->obd_lvfs_ctxt.dt;
+	if (ctxt->loc_dir == NULL) {
+		rc = dt_root_get(env, dt, &dti->dti_fid);
+		if (rc)
+			return ERR_PTR(rc);
+		dir = dt_locate(env, dt, &dti->dti_fid);
+	} else {
+		lu_object_get(&ctxt->loc_dir->do_lu);
+		dir = ctxt->loc_dir;
+	}
+
+	return dir;
+}
+
 static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 			 struct llog_logid *logid, char *name,
 			 enum llog_open_param open_param)
@@ -744,10 +766,15 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 	if (logid != NULL) {
 		logid_to_fid(logid, &lgi->lgi_fid);
 	} else if (name) {
-		LASSERT(ctxt->loc_dir);
-		dt_read_lock(env, ctxt->loc_dir, 0);
-		rc = dt_lookup_dir(env, ctxt->loc_dir, name, &lgi->lgi_fid);
-		dt_read_unlock(env, ctxt->loc_dir);
+		struct dt_object *llog_dir;
+
+		llog_dir = llog_osd_dir_get(env, ctxt);
+		if (IS_ERR(llog_dir))
+			GOTO(out, rc = PTR_ERR(llog_dir));
+		dt_read_lock(env, llog_dir, 0);
+		rc = dt_lookup_dir(env, llog_dir, name, &lgi->lgi_fid);
+		dt_read_unlock(env, llog_dir);
+		lu_object_put(env, &llog_dir->do_lu);
 		if (rc == -ENOENT && open_param == LLOG_OPEN_NEW) {
 			/* generate fid for new llog */
 			rc = local_object_fid_generate(env, los,
@@ -830,12 +857,17 @@ static int llog_osd_declare_create(const struct lu_env *env,
 		RETURN(rc);
 
 	if (res->lgh_name) {
-		LASSERT(res->lgh_ctxt->loc_dir);
+		struct dt_object *llog_dir;
+
+		llog_dir = llog_osd_dir_get(env, res->lgh_ctxt);
+		if (IS_ERR(llog_dir))
+			RETURN(PTR_ERR(llog_dir));
 		dt_declare_ref_add(env, o, th);
 		logid_to_fid(&res->lgh_id, &lgi->lgi_fid);
-		rc = dt_declare_insert(env, res->lgh_ctxt->loc_dir,
+		rc = dt_declare_insert(env, llog_dir,
 				       (struct dt_rec *)&lgi->lgi_fid,
 				       (struct dt_key *)res->lgh_name, th);
+		lu_object_put(env, &llog_dir->do_lu);
 		if (rc)
 			CERROR("%s: can't declare named llog %s: rc = %d\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
@@ -879,14 +911,20 @@ static int llog_osd_create(const struct lu_env *env, struct llog_handle *res,
 		RETURN(rc);
 
 	if (res->lgh_name) {
-		LASSERT(res->lgh_ctxt->loc_dir);
+		struct dt_object *llog_dir;
+
+		llog_dir = llog_osd_dir_get(env, res->lgh_ctxt);
+		if (IS_ERR(llog_dir))
+			RETURN(PTR_ERR(llog_dir));
+
 		logid_to_fid(&res->lgh_id, &lgi->lgi_fid);
-		dt_read_lock(env, res->lgh_ctxt->loc_dir, 0);
-		rc = dt_insert(env, res->lgh_ctxt->loc_dir,
+		dt_read_lock(env, llog_dir, 0);
+		rc = dt_insert(env, llog_dir,
 			       (struct dt_rec *)&lgi->lgi_fid,
 			       (struct dt_key *)res->lgh_name,
 			       th, BYPASS_CAPA, 1);
-		dt_read_unlock(env, res->lgh_ctxt->loc_dir);
+		dt_read_unlock(env, llog_dir);
+		lu_object_put(env, &llog_dir->do_lu);
 		if (rc)
 			CERROR("%s: can't create named llog %s: rc = %d\n",
 			       o->do_lu.lo_dev->ld_obd->obd_name,
@@ -920,7 +958,7 @@ static int llog_osd_destroy(const struct lu_env *env,
 			    struct llog_handle *loghandle)
 {
 	struct llog_ctxt	*ctxt;
-	struct dt_object	*o;
+	struct dt_object	*o, *llog_dir = NULL;
 	struct dt_device	*d;
 	struct thandle		*th;
 	char			*name = NULL;
@@ -943,10 +981,13 @@ static int llog_osd_destroy(const struct lu_env *env,
 		RETURN(PTR_ERR(th));
 
 	if (loghandle->lgh_name) {
-		LASSERT(ctxt->loc_dir);
+		llog_dir = llog_osd_dir_get(env, ctxt);
+		if (IS_ERR(llog_dir))
+			GOTO(out_trans, rc = PTR_ERR(llog_dir));
+
 		dt_declare_ref_del(env, o, th);
 		name = loghandle->lgh_name;
-		rc = dt_declare_delete(env, ctxt->loc_dir,
+		rc = dt_declare_delete(env, llog_dir,
 				       (struct dt_key *)name, th);
 		if (rc)
 			GOTO(out_trans, rc);
@@ -966,11 +1007,11 @@ static int llog_osd_destroy(const struct lu_env *env,
 	if (dt_object_exists(o)) {
 		if (name) {
 			dt_ref_del(env, o, th);
-			dt_read_lock(env, ctxt->loc_dir, 0);
-			rc = dt_delete(env, ctxt->loc_dir,
+			dt_read_lock(env, llog_dir, 0);
+			rc = dt_delete(env, llog_dir,
 				       (struct dt_key *) name,
 				       th, BYPASS_CAPA);
-			dt_read_unlock(env, ctxt->loc_dir);
+			dt_read_unlock(env, llog_dir);
 			if (rc) {
 				CERROR("%s: can't remove llog %s: rc = %d\n",
 				       o->do_lu.lo_dev->ld_obd->obd_name,
@@ -987,6 +1028,8 @@ out_unlock:
 	dt_write_unlock(env, o);
 out_trans:
 	dt_trans_stop(env, d, th);
+	if (llog_dir != NULL)
+		lu_object_put(env, &llog_dir->do_lu);
 	RETURN(rc);
 }
 

@@ -12,8 +12,8 @@ ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   68b   $SANIT
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 # with LOD/OSP landing
-# bug number for skipped tests: LU2036 LU2034
-ALWAYS_EXCEPT="                 76     160     $ALWAYS_EXCEPT"
+# bug number for skipped tests: LU2036
+ALWAYS_EXCEPT="                 76     $ALWAYS_EXCEPT"
 
 
 # Tests that fail on uml

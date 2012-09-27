@@ -4514,6 +4514,7 @@ static int osd_device_init0(const struct lu_env *env,
 	rc = lu_site_init(&o->od_site, l);
 	if (rc)
 		GOTO(out_compat, rc);
+	o->od_site.ls_bottom_dev = l;
 
 	rc = lu_site_init_finish(&o->od_site);
 	if (rc)

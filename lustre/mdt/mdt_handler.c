@@ -2286,11 +2286,6 @@ static int mdt_llog_ctxt_clone(const struct lu_env *env, struct mdt_device *mdt,
 
         rc = next->md_ops->mdo_llog_ctxt_get(env, next, idx, (void **)&ctxt);
         if (rc || ctxt == NULL) {
-		/* XXX: no support for changelogs yet - in another patch */
-		/*CERROR("Can't get mdd ctxt %d\n", rc);*/
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 3, 90, 0)
-#error "do not forget about changelogs"
-#endif
 		return 0;
         }
 
@@ -5132,10 +5127,6 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_fs_cleanup, rc);
 
-        rc = mdt_llog_ctxt_clone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
-        if (rc)
-                GOTO(err_llog_cleanup, rc);
-
         mdt_adapt_sptlrpc_conf(obd, 1);
 
         next = m->mdt_child;
@@ -5400,6 +5391,10 @@ static int mdt_prepare(const struct lu_env *env,
 	LASSERT(obd);
 
 	rc = next->ld_ops->ldo_prepare(env, cdev, next);
+	if (rc)
+		RETURN(rc);
+
+	rc = mdt_llog_ctxt_clone(env, mdt, LLOG_CHANGELOG_ORIG_CTXT);
 	if (rc)
 		RETURN(rc);
 

@@ -548,6 +548,7 @@ static int osd_mount(const struct lu_env *env,
 	rc = lu_site_init(&o->od_site, osd2lu_dev(o));
 	if (rc)
 		GOTO(err, rc);
+	o->od_site.ls_bottom_dev = osd2lu_dev(o);
 
 	rc = lu_site_init_finish(&o->od_site);
 	if (rc)
