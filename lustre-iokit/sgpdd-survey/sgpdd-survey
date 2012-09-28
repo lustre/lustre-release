@@ -9,10 +9,10 @@
 # rawdevs=${rawdevs:-"/dev/raw/raw1"}
 # scsidevs=`ls /dev/sd[a-z] /dev/sd[a-z][a-z]` # all devices, if you use udev
 
-# result file prefix.  date/time+hostname makes unique
-# NB ensure the path exists if it includes subdirs
+# result file prefix.
+# NB ensure the path exists on all servers if it includes subdirs
 rslt_loc=${rslt_loc:-"/tmp"}
-rslt=${rslt:-"$rslt_loc/sgpdd_survey_`date +%F@%R`_`uname -n`"}
+rslt=${rslt:-"$rslt_loc/sgpdd_survey_`date +%F@%R`"}
 
 # what to do (read or write)
 actions=${actions:-"write read"}
@@ -44,71 +44,163 @@ thrhi=${thrhi:-4096}
 # and max # threads one instance will spawn
 SG_MAX_QUEUE=16
 
-# is the sg module loaded?
-sg_is_loaded=$(grep -q "^sg " /proc/modules && echo true || echo false)
 
-# did we load it?
-sg_was_loaded=false
+unique () {
+    echo "$@" | xargs -n1 echo | sort -u
+}
 
-# map given device names into SG device names
-i=0
-devs=()
-if [ "$scsidevs" ]; then
-        # we will test for a LUN, the test for a partition
-        # if the partition number is > 9 this will fail
+split_hostname () {
+    local name=$1
+    case $name in
+    *:*) host=`echo $name | sed 's/:.*$//'`
+	 name=`echo $name | sed 's/[^:]*://'`
+	 ;;
+    *)   host=localhost
+	 ;;
+    esac
+    echo "$host $name"
+}
 
-    # make sure sg kernel module is loaded
-    if ! $sg_is_loaded; then
-	echo "loading the sg kernel module"
-	modprobe sg && sg_was_loaded=true
-	sg_is_loaded=true
+DSH=${DSH:-"ssh"}
+
+dsh () {
+    local node="$1"
+    local user="$2"
+    shift 2
+    local command="$@"
+
+    command="export PATH=/sbin:/usr/sbin:\$PATH; $command"
+
+    case $DSH in
+	ssh)
+	    if [ -n "$user" ]; then
+		user="$user@"
+	    fi
+	    $DSH $user$node "$command"
+	    ;;
+	rsh)
+	    if [ -n "$user" ]; then
+		user="-l $user"
+	    fi
+	    $DSH $user $node "$command"
+	    ;;
+    esac
+}
+
+# how to run commands on other nodes
+remote_shell () {
+    local host=$1
+    shift
+    local cmds="$@"
+    if [ "$host" = "localhost" -o "$host" = `uname -n` ]; then
+	eval "$cmds"
+    else
+	# split $host into $host and $user
+	local user=""
+	if [[ $host == *@* ]]; then
+	    user=${host%@*}
+	    host=${host#*@}
+	fi
+	dsh $host "$user" "$cmds"
     fi
+}
 
-    for d in $scsidevs; do
-        if [[ -L "$d" ]]; then
-            echo "Device $d specified by alias. Will 'readlink' for device name"
-            d=$(readlink -f $d)
-        fi
-        devs[$i]=`sg_map | awk "{if (\\\$2 == \"$d\") print \\\$1}"`
-        if [ -z "${devs[i]}" ]; then
-            echo "Can't find SG device for $d, testing for partition"
-            pt=`echo $d | sed 's/[0-9]*$//'`
-            # Try again
-            devs[$i]=`sg_map | awk "{if (\\\$2 == \"$pt\") print \\\$1}"`
-            if [ -z "${devs[i]}" ]; then
-                echo -e "Can't find SG device $pt.\nDo you have the sg module configured for your kernel?"
-                exit 1
-           fi
-	fi
-	i=$((i+1))
-    done
-elif [ "$rawdevs" ]; then
-    for r in $rawdevs; do
-	RES=`raw -q $r`
-	if [ $? -eq 0 ];then
-	    devs[$i]=$r
-	    i=$((i+1))
-	else
-	    echo "Raw device $r not set up"
-	    exit 1
-	fi
-    done
-else
-    echo "Must specify scsidevs or rawdevs"
+
+# check either scsidevs or rawdevs is specified
+# but only one of them
+if [ -n "$scsidevs" -a -n "$rawdevs" -o -z "$scsidevs$rawdevs" ]; then
+    echo "Must either specify scsidevs or rawdevs"
     exit 1
 fi
 
-ndevs=${#devs[@]}
+# retrieve host and device if specified as "hostname:device"
+ndevs=0
+devs=()
+for d in $scsidevs $rawdevs; do
+    str=(`split_hostname $d`)
+    hosts[$ndevs]=${str[0]}
+    devs[$ndevs]=${str[1]}
+    ndevs=$((ndevs+1))
+done
+unique_hosts=(`unique ${hosts[@]}`)
 
-# determine block size. This should also work for raw devices
-# If it fails, set to 512
-bs=$((`sg_readcap -lb ${devs[0]} | awk '{print $2}'`))
-if [ $bs == 0  ];then
-	echo "sg_readcap failed, setting block size to 512"
-	bs=512
+# map given device names into SG device names
+if [ "$scsidevs" ]; then
+    # make sure sg kernel module is loaded
+    for host in ${unique_hosts[@]}; do
+	sg_is_loaded=$(remote_shell $host grep -q "^sg " /proc/modules \
+		       && echo true || echo false)
+	if ! $sg_is_loaded; then
+	    echo "loading the sg kernel module on $host"
+	    remote_shell $host modprobe sg
+	    sg_was_loaded_on="$sg_was_loaded_on $host"
+	fi
+    done
+
+    for ((i=0; i < $ndevs; i++)); do
+	# resolv symbolic link if any
+	devs[$i]=$(remote_shell ${hosts[$i]} readlink -f ${devs[$i]})
+
+	# retrieve associated sg device
+	# we will test for a LUN, the test for a partition
+	# if the partition number is > 9 this will fail
+	devs[$i]=$(remote_shell ${hosts[$i]} sg_map | \
+		   awk -v dev=${devs[$i]} '{if ($2 == dev) print $1}')
+	if [ -z "${devs[i]}" ]; then
+	    echo "Can't find SG device for ${hosts[$i]}:${devs[$i]}, " \
+		 "testing for partition"
+	    pt=`echo ${devs[$i]} | sed 's/[0-9]*$//'`
+	    # Try again
+	    devs[$i]=$(remote_shell ${hosts[$i]} sg_map | \
+		       awk -v dev=$pt '{if ($2 == dev) print $1}')
+	    if [ -z "${devs[i]}" ]; then
+		echo -e "Can't find SG device ${hosts[$i]}:$pt.\n" \
+			"Do you have the sg module configured for your kernel?"
+		exit 1
+	   fi
+	fi
+    done
+elif [ "$rawdevs" ]; then
+    for ((i=0; i < $ndevs; i++)); do
+	RES=$(remote_shell ${hosts[$i]} raw -q ${devs[$i]})
+	if [ $? -ne 0 ];then
+	    echo "Raw device ${hosts[$i]}:${devs[$i]} not set up"
+	    exit 1
+	fi
+    done
 fi
+
+# determine block size of each device. This should also work for raw devices
+# If it fails, set to 512
+for ((i=0; i < $ndevs; i++)); do
+    # retrieve device size (in kbytes) and block size (in bytes)
+    tmp=( `remote_shell ${hosts[$i]} sg_readcap -lb ${devs[$i]}` )
+    bs[$i]=$((tmp[1]))
+    if [ ${bs[$i]} == 0  ]; then
+	echo "sg_readcap on device ${hosts[$i]}:${devs[$i]} failed, " \
+	     "setting block size to 512"
+	bs[$i]=512
+    fi
+    devsize=$((tmp[0]*bs[$i]/1024))
+
+    # check record size is a multiple of block size
+    if [ $((rszlo*1024%bs[$i])) -ne 0 ]; then
+	echo "Record size is not a multiple of block size (${bs[$i]} bytes) " \
+	     "for device ${hosts[$i]}:${devs[$i]}"
+	exit 1
+    fi
+
+    # check device size
+    if [ $devsize -lt $((size*1024)) ]; then
+	echo -e "device ${hosts[$i]}:${devs[$i]} not big enough: " \
+		"$devsize < $((size*1024)).\nConsider reducing \$size"
+	exit 1
+    fi
+done
+
 rsltf=${rslt}.summary
 workf=${rslt}.detail
+cmdsf=${rslt}.script
 echo -n > $rsltf
 echo -n > $workf
 
@@ -130,38 +222,52 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 	    if ((thr < crg || thr/crg > SG_MAX_QUEUE)); then
 		continue
 	    fi
-	    # compute parameters
-	    bpt=$((rsz*1024/bs))
-	    blocks=$((size*((1024*1024)/bs)/crg))
-	    count=$blocks
-	    # show computed parameters
-	    actual_rsz=$((bpt*bs/1024))
-	    actual_size=$((bs*count*crg/1024))
-	    str=`printf 'total_size %8dK rsz %4d crg %5d thr %5d ' \
-		         $((actual_size*ndevs)) $actual_rsz $((crg*ndevs)) $((thr*ndevs))`
+	    # compute total size (in kbytes)
+	    total_size=0
+	    for ((i=0; i < $ndevs; i++)); do
+		tsize=$((size*1024*1024/bs[$i]/crg*crg*bs[$i]/1024))
+		total_size=$((total_size+tsize))
+	    done
+	    # show test parameters
+	    str=`printf 'dev %2d sz %8dK rsz %4dK crg %5d thr %5d ' \
+			 $ndevs $total_size $rsz $((crg*ndevs)) $((thr*ndevs))`
 	    echo "==============> $str" >> $workf
 	    print_summary -n "$str"
-	    freemem=`awk < /proc/meminfo '/^MemTotal:/ {printf "%d\n", $2}'`
-	    if (((actual_rsz*thr/crg + 64)*crg*ndevs > freemem)); then
-		print_summary "ENOMEM"
-		continue
-	    fi
+
+	    # check memory for each host
+	    for host in ${unique_hosts[@]}; do
+		numdevs=0
+		for ((i=0; i < $ndevs; i++)); do
+		    if [ ${hosts[$i]} == $host ]; then
+			numdevs=$((numdevs+1))
+		    fi
+		done
+		freemem=$(remote_shell $host cat /proc/meminfo | \
+			  awk '/^MemTotal:/ {printf "%d\n", $2}')
+		if (((rsz*thr/crg + 64)*crg*numdevs > freemem)); then
+		    echo "ENOMEM on $host" >> $workf
+		    print_summary "ENOMEM"
+		    continue 2
+		fi
+	    done
+
 	    # run tests
 	    for action in $actions; do
+		declare -a pidarray
 		print_summary -n "$action "
 		echo "=====> $action" >> $workf
 		tmpf=${workf}_tmp
-                # start test
-		t0=`date +%s.%N`
-		for ((i=0;i<ndevs;i++)); do
-		    dev=${devs[i]}
-		    devsize=$((bs*`sg_readcap -lb ${dev} | awk '{print $1}'`/1024))
-		    if [ $devsize -lt $actual_size ]; then
-			_dev=$(sg_map | grep $dev | awk '{ print $2; }')
-			echo -e "device $_dev not big enough: $devsize <" \
-				"$actual_size.\nConsider reducing \$size"
-			exit 1
-		    fi
+
+		# create per-host script files
+		for host in ${unique_hosts[@]}; do
+		    echo -n > ${cmdsf}_${host}
+		done
+		for ((i=0; i < $ndevs; i++)); do
+		    bpt=$((rsz*1024/bs[$i]))
+		    blocks=$((size*((1024*1024)/bs[$i])/crg))
+		    count=$blocks
+		    host=${hosts[$i]}
+		    dev=${devs[$i]}
 		    if [ $action = read ]; then
 			inf="if=$dev"
 			outf="of=/dev/null"
@@ -172,37 +278,65 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
 			skip=seek
 		    fi
 		    for ((j=0;j<crg;j++)); do 
-			sgp_dd 2> ${tmpf}_${i}_${j} \
-			    $inf $outf ${skip}=$((boundary+j*blocks)) \
-			    thr=$((thr/crg)) count=$count bs=$bs bpt=$bpt time=1&
+			echo >> ${cmdsf}_${host} \
+				"sgp_dd 2> ${tmpf}_${i}_${j} $inf $outf " \
+				"${skip}=$((boundary+j*blocks)) " \
+				"thr=$((thr/crg)) count=$count bs=${bs[$i]} " \
+				"bpt=$bpt time=1&"
 		    done
-		done 
-		wait
+		done
+		for host in ${unique_hosts[@]}; do
+		    echo "wait" >> ${cmdsf}_${host}
+		done
+
+		# run of all the per-host script files
+		t0=`date +%s.%N`
+		pidcount=0
+		for host in ${unique_hosts[@]}; do
+		    remote_shell $host bash < ${cmdsf}_${host} &
+		    pidarray[$pidcount]=$!
+		    pidcount=$((pidcount+1))
+		done
+		pidcount=0
+		for host in ${unique_hosts[@]}; do
+		    wait ${pidarray[$pidcount]}
+		    pidcount=$((pidcount+1))
+		done
 		t1=`date +%s.%N`
-	        # collect/check individual stats
+
+		# clean up per-host script files
+		for host in ${unique_hosts[@]}; do
+		    rm ${cmdsf}_${host}
+		done
+
+		# collect/check individual stats
 		echo > $tmpf
 		ok=0
 		for ((i=0;i<ndevs;i++)); do
 		    for ((j=0;j<crg;j++)); do
-			rtmp=${tmpf}_${i}_${j}
+			rtmp=${tmpf}_${i}_${j}_local
+			remote_shell ${hosts[$i]} cat ${tmpf}_${i}_${j} > $rtmp
 			if grep 'error' $rtmp > /dev/null 2>&1; then
-				echo "Error found in $rtmp"
+			    echo "Error found in $rtmp"
 			elif grep 'time to transfer data' $rtmp > /dev/null 2>&1; then
 			    ok=$((ok + 1))
 			fi
 			cat ${rtmp} >> $tmpf
 			cat ${rtmp} >> $workf
 			rm  ${rtmp}
+			remote_shell ${hosts[$i]} rm ${tmpf}_${i}_${j}
 		    done
 		done
 		if ((ok != ndevs*crg)); then
 		    print_summary -n "$((ndevs*crg - ok)) failed "
 		else
-	            # compute MB/sec from elapsed
-		    bw=`awk "BEGIN {printf \"%7.2f MB/s\", $actual_size * $ndevs / (( $t1 - $t0 ) * 1024); exit}"`
-	            # compute MB/sec from nregions*slowest
+		    # compute MB/sec from elapsed
+		    bw=`awk "BEGIN {printf \"%7.2f MB/s\", \
+				    $total_size / (( $t1 - $t0 ) * 1024); exit}"`
+		    # compute MB/sec from nregions*slowest
 		    check=`awk < $tmpf \
-			'/time to transfer data/ {mb=$8/1.048576; if (n == 0 || mb < min) min = mb; n++}\
+			'/time to transfer data/ {mb=$8/1.048576; \
+						  if (n == 0 || mb < min) min = mb; n++}\
 			END {printf "%5d x %6.2f = %7.2f MB/s", n, min, min * n}'`
 		    print_summary -n "$bw $check "
 		fi
@@ -213,7 +347,7 @@ for ((rsz=$rszlo;rsz<=$rszhi;rsz*=2)); do
     done
 done
 
-if $sg_was_loaded; then
-    echo "unloading sg module"
-    rmmod sg
-fi
+for host in $sg_was_loaded_on; do
+    echo "unloading sg module on $host"
+    remote_shell $host rmmod sg
+done
