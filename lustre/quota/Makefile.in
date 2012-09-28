@@ -2,7 +2,7 @@ MODULES := lquota
 
 quota-objs := lproc_quota.o lquota_lib.o lquota_disk.o lquota_entry.o
 
-qsd-objs := qsd_lib.o qsd_request.o
+qsd-objs := qsd_lib.o qsd_request.o qsd_entry.o
 
 lquota-objs := $(quota-objs) $(qsd-objs)
 

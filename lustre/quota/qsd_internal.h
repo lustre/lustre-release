@@ -103,6 +103,13 @@ struct qsd_qtype_info {
  * Helper functions & prototypes
  */
 
+/* helper routine to find qsd_instance associated a lquota_entry */
+static inline struct qsd_qtype_info *lqe2qqi(struct lquota_entry *lqe)
+{
+	LASSERT(!lqe_is_master(lqe));
+	return (struct qsd_qtype_info *)lqe->lqe_site->lqs_parent;
+}
+
 /* qqi_getref/putref is used to track users of a qqi structure  */
 static inline void qqi_getref(struct qsd_qtype_info *qqi)
 {
@@ -143,9 +150,51 @@ struct qsd_thread_info *qsd_info(const struct lu_env *env)
 	struct qsd_thread_info *info;
 
 	info = lu_context_key_get(&env->le_ctx, &qsd_thread_key);
+	if (info == NULL) {
+		lu_env_refill((struct lu_env *)env);
+		info = lu_context_key_get(&env->le_ctx, &qsd_thread_key);
+	}
 	LASSERT(info);
 	return info;
 }
+
+static inline void qsd_set_qunit(struct lquota_entry *lqe, __u64 qunit)
+{
+	if (lqe->lqe_qunit == qunit)
+		return;
+
+	lqe->lqe_qunit = qunit;
+
+	/* With very large qunit support, we can't afford to have a static
+	 * qtune value, e.g. with a 1PB qunit and qtune set to 50%, we would
+	 * start pre-allocation when 512TB of free quota space remains.
+	 * Therefore, we adapt qtune depending on the actual qunit value */
+	if (qunit == 0)				/* if qunit is NULL           */
+		lqe->lqe_qtune = 0;		/*  qtune = 0                 */
+	else if (qunit == 1024)			/* if 1MB or 1K inodes        */
+		lqe->lqe_qtune = qunit >> 1;	/*  => 50%                    */
+	else if (qunit <= 1024 * 1024)		/* up to 1GB or 1M inodes     */
+		lqe->lqe_qtune = qunit >> 2;	/*  => 25%                    */
+	else if (qunit <= 4 * 1024 * 1024)	/* up to 16GB or 16M inodes   */
+		lqe->lqe_qtune = qunit >> 3;	/*  => 12.5%                  */
+	else					/* above 4GB/4M               */
+		lqe->lqe_qtune = 1024 * 1024;	/*  value capped to 1GB/1M    */
+
+	LQUOTA_DEBUG(lqe, "changing qunit & qtune");
+
+	/* turn on pre-acquire when qunit is modified */
+	lqe->lqe_nopreacq = false;
+}
+
+/* qsd_entry.c */
+extern struct lquota_entry_operations qsd_lqe_ops;
+int qsd_refresh_usage(const struct lu_env *, struct lquota_entry *);
+int qsd_update_index(const struct lu_env *, struct qsd_qtype_info *,
+		     union lquota_id *, bool, __u64, void *);
+int qsd_update_lqe(const struct lu_env *, struct lquota_entry *, bool,
+		   void *);
+int qsd_write_version(const struct lu_env *, struct qsd_qtype_info *,
+		      __u64, bool);
 
 /* qsd_request.c */
 typedef void (*qsd_req_completion_t) (const struct lu_env *,
@@ -162,5 +211,12 @@ int qsd_intent_lock(const struct lu_env *, struct obd_export *,
 		    struct qsd_qtype_info *, union ldlm_wire_lvb *, void *);
 int qsd_fetch_index(const struct lu_env *, struct obd_export *,
 		    struct idx_info *, unsigned int, cfs_page_t **, bool *);
+
+/* qsd_writeback.c */
+/* XXX to be replaced with real function when reintegration landed. */
+static inline void qsd_bump_version(struct qsd_qtype_info *qqi, __u64 ver,
+				    bool global)
+{
+}
 
 #endif /* _QSD_INTERNAL_H */
