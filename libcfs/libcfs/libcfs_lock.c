@@ -189,25 +189,25 @@ cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int lock)
 struct cfs_percpt_lock *
 cfs_percpt_lock_alloc(struct cfs_cpt_table *cptab)
 {
-	return (struct cfs_percpt_lock *)CFS_PERCPT_LOCK_MAGIC;
+	return ((struct cfs_percpt_lock *) &CFS_PERCPT_LOCK_MAGIC);
 }
 
 void
 cfs_percpt_lock_free(struct cfs_percpt_lock *pcl)
 {
-	LASSERT(pcl == (struct cfs_percpt_lock *)CFS_PERCPT_LOCK_MAGIC);
+	LASSERT(pcl == (struct cfs_percpt_lock *) &CFS_PERCPT_LOCK_MAGIC);
 }
 
 void
 cfs_percpt_lock(struct cfs_percpt_lock *pcl, int index)
 {
-	LASSERT(pcl == (struct cfs_percpt_lock *)CFS_PERCPT_LOCK_MAGIC);
+	LASSERT(pcl == (struct cfs_percpt_lock *) &CFS_PERCPT_LOCK_MAGIC);
 }
 
 void
 cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index)
 {
-	LASSERT(pcl == (struct cfs_percpt_lock *)CFS_PERCPT_LOCK_MAGIC);
+	LASSERT(pcl == (struct cfs_percpt_lock *) &CFS_PERCPT_LOCK_MAGIC);
 }
 
 # endif /* HAVE_LIBPTHREAD */

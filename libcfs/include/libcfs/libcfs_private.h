@@ -489,11 +489,13 @@ struct cfs_percpt_lock {
 };
 
 # else /* !HAVE_LIBPTHREAD */
-#define CFS_PERCPT_LOCK_MAGIC          0xbabecafe;
 
 struct cfs_percpt_lock {
 	int			pcl_lock;
 };
+
+static const struct cfs_percpt_lock CFS_PERCPT_LOCK_MAGIC;
+
 # endif /* HAVE_LIBPTHREAD */
 # define cfs_percpt_lock_num(pcl)        1
 #endif /* __KERNEL__ */
