@@ -23,6 +23,10 @@ if [ -z ${MDSSURVEY} ]; then
     skip_env "mds-survey not found" && exit
 fi
 
+if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.51) ]; then
+	skip_env "Need MDS version at least 2.3.51" && exit
+fi
+
 build_test_filter
 check_and_setup_lustre
 
