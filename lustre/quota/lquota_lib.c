@@ -325,9 +325,14 @@ const struct dt_index_features *glb_idx_feature(struct lu_fid *fid)
 
 static int __init init_lquota(void)
 {
-	/* new quota initialization */
+	int	rc;
+
 	lquota_key_init_generic(&lquota_thread_key, NULL);
 	lu_context_key_register(&lquota_thread_key);
+
+	rc = qmt_glb_init();
+	if (rc)
+		return rc;
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2,7,50,0)
 	dt_quota_iusr_features = dt_quota_busr_features = dt_quota_glb_features;
@@ -341,6 +346,7 @@ static int __init init_lquota(void)
 
 static void exit_lquota(void)
 {
+	qmt_glb_fini();
 	lu_context_key_degister(&lquota_thread_key);
 }
 

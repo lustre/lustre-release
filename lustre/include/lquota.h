@@ -32,6 +32,9 @@
 #ifndef _LUSTRE_LQUOTA_H
 #define _LUSTRE_LQUOTA_H
 
+struct lquota_id_info;
+struct lquota_trans;
+
 /* Gather all quota record type in an union that can be used to read any records
  * from disk. All fields of these records must be 64-bit aligned, otherwise the
  * OSD layer may swab them incorrectly. */
@@ -54,6 +57,93 @@ extern struct dt_index_features dt_quota_bgrp_features;
  * the OSTs, with pool ID 0 too). */
 #define QUOTA_METAPOOL_NAME   "mdt="
 #define QUOTA_DATAPOOL_NAME   "ost="
+
+/*
+ * Quota Master Target support
+ */
+
+/* Request handlers for quota master operations.
+ * This is used by the MDT to pass quota/lock requests to the quota master
+ * target. This won't be needed any more once the QMT is a real target and
+ * does not rely any more on the MDT service threads and namespace. */
+struct qmt_handlers {
+	/* Handle quotactl request from client. */
+	int (*qmth_quotactl)(const struct lu_env *, struct lu_device *,
+			     struct obd_quotactl *);
+
+	/* Handle dqacq/dqrel request from slave. */
+	int (*qmth_dqacq)(const struct lu_env *, struct lu_device *,
+			  struct ptlrpc_request *);
+
+	/* LDLM intent policy associated with quota locks */
+	int (*qmth_intent_policy)(const struct lu_env *, struct lu_device *,
+				  struct ptlrpc_request *, struct ldlm_lock **,
+				  int);
+
+	/* Initialize LVB of ldlm resource associated with quota objects */
+	int (*qmth_lvbo_init)(struct lu_device *, struct ldlm_resource *);
+
+	/* Update LVB of ldlm resource associated with quota objects */
+	int (*qmth_lvbo_update)(struct lu_device *, struct ldlm_resource *,
+				struct ptlrpc_request *, int);
+
+	/* Return size of LVB to be packed in ldlm message */
+	int (*qmth_lvbo_size)(struct lu_device *, struct ldlm_lock *);
+
+	/* Fill request buffer with lvb */
+	int (*qmth_lvbo_fill)(struct lu_device *, struct ldlm_lock *, void *,
+			      int);
+
+	/* Free lvb associated with ldlm resource */
+	int (*qmth_lvbo_free)(struct lu_device *, struct ldlm_resource *);
+};
+
+/* actual handlers are defined in lustre/quota/qmt_handler.c */
+extern struct qmt_handlers qmt_hdls;
+
+/*
+ * Quota enforcement support on slaves
+ */
+
+struct qsd_instance;
+
+/* The quota slave feature is implemented under the form of a library.
+ * The API is the following:
+ *
+ * - qsd_init(): the user (mostly the OSD layer) should first allocate a qsd
+ *               instance via qsd_init(). This sets up on-disk objects
+ *               associated with the quota slave feature and initiates the quota
+ *               reintegration procedure if needed. qsd_init() should typically
+ *               be called when ->ldo_start is invoked.
+ *
+ * - qsd_fini(): is used to release a qsd_instance structure allocated with
+ *               qsd_init(). This releases all quota slave objects and frees the
+ *               structures associated with the qsd_instance.
+ *
+ * Below are the function prototypes to be used by OSD layer to manage quota
+ * enforcement. Arguments are documented where each function is defined.  */
+
+struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,
+			      cfs_proc_dir_entry_t *);
+
+void qsd_fini(const struct lu_env *, struct qsd_instance *);
+
+/* XXX: dummy qsd_op_begin() & qsd_op_end(), will be replaced with the real
+ *      one once all the enforcement code landed. */
+static inline int qsd_op_begin(const struct lu_env *env,
+			       struct qsd_instance *qsd,
+			       struct lquota_trans *trans,
+			       struct lquota_id_info *qi,
+			       int *flags)
+{
+	return 0;
+}
+
+static inline void qsd_op_end(const struct lu_env *env,
+			      struct qsd_instance *qsd,
+			      struct lquota_trans *trans)
+{
+}
 
 /*
  * Quota information attached to a transaction
@@ -90,8 +180,8 @@ struct lquota_id_info {
 
 /* all qids involved in a single transaction */
 struct lquota_trans {
-        unsigned short         lqt_id_cnt;
-        struct lquota_id_info  lqt_ids[QUOTA_MAX_TRANSIDS];
+	unsigned short		lqt_id_cnt;
+	struct lquota_id_info	lqt_ids[QUOTA_MAX_TRANSIDS];
 };
 
 /* flags for quota local enforcement */
@@ -99,52 +189,12 @@ struct lquota_trans {
 #define QUOTA_FL_OVER_GRPQUOTA  0x02
 #define QUOTA_FL_SYNC           0x04
 
-/*
- * Quota enforcement support on slaves
- */
-
-struct qsd_instance;
-
-/* The quota slave feature is implemented under the form of a library.
- * The API is the following:
- *
- * - qsd_init(): the user (mostly the OSD layer) should first allocate a qsd
- *               instance via qsd_init(). This sets up on-disk objects
- *               associated with the quota slave feature and initiates the quota
- *               reintegration procedure if needed. qsd_init() should typically
- *               be called when ->ldo_start is invoked.
- *
- * - qsd_fini(): is used to release a qsd_instance structure allocated with
- *               qsd_init(). This releases all quota slave objects and frees the
- *               structures associated with the qsd_instance.
- *
- * Below are the function prototypes to be used by OSD layer to manage quota
- * enforcement. Arguments are documented where each function is defined.  */
-
-struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,
-			      cfs_proc_dir_entry_t *);
-
-void qsd_fini(const struct lu_env *, struct qsd_instance *);
+#define IS_LQUOTA_RES(res)						\
+	(res->lr_name.name[LUSTRE_RES_ID_SEQ_OFF] == FID_SEQ_QUOTA ||	\
+	 res->lr_name.name[LUSTRE_RES_ID_SEQ_OFF] == FID_SEQ_QUOTA_GLB)
 
 /* helper function used by MDT & OFD to retrieve quota accounting information
  * on slave */
 int lquotactl_slv(const struct lu_env *, struct dt_device *,
 		  struct obd_quotactl *);
-
-/* XXX: dummy qsd_op_begin() & qsd_op_end(), will be replaced with the real
- *      one once all the enforcement code landed. */
-static inline int qsd_op_begin(const struct lu_env *env,
-			       struct qsd_instance *qsd,
-			       struct lquota_trans *trans,
-			       struct lquota_id_info *qi,
-			       int *flags)
-{
-	return 0;
-}
-
-static inline void qsd_op_end(const struct lu_env *env,
-			      struct qsd_instance *qsd,
-			      struct lquota_trans *trans)
-{
-}
 #endif /* _LUSTRE_LQUOTA_H */

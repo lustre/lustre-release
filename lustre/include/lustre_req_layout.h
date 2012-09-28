@@ -209,6 +209,7 @@ extern struct req_format RQF_LDLM_ENQUEUE;
 extern struct req_format RQF_LDLM_ENQUEUE_LVB;
 extern struct req_format RQF_LDLM_CONVERT;
 extern struct req_format RQF_LDLM_INTENT;
+extern struct req_format RQF_LDLM_INTENT_BASIC;
 extern struct req_format RQF_LDLM_INTENT_GETATTR;
 extern struct req_format RQF_LDLM_INTENT_OPEN;
 extern struct req_format RQF_LDLM_INTENT_CREATE;

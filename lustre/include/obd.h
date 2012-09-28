@@ -846,6 +846,7 @@ struct niobuf_local {
 #define LUSTRE_CACHEOBD_NAME    "cobd"
 #define LUSTRE_ECHO_NAME        "obdecho"
 #define LUSTRE_ECHO_CLIENT_NAME "echo_client"
+#define LUSTRE_QMT_NAME         "qmt"
 
 /* Constant obd names (post-rename) */
 #define LUSTRE_MDS_OBDNAME "MDS"

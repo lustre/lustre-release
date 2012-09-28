@@ -71,6 +71,7 @@
 #include <lustre_idmap.h>
 #include <lustre_eacl.h>
 #include <lustre_fsfilt.h>
+#include <lquota.h>
 
 /* check if request's xid is equal to last one or not*/
 static inline int req_xid_is_last(struct ptlrpc_request *req)
@@ -179,6 +180,11 @@ struct mdt_device {
         int                        mdt_sec_level;
         struct rename_stats        mdt_rename_stats;
 	struct lu_fid		   mdt_md_root_fid;
+
+	/* connection to quota master */
+	struct obd_export	  *mdt_qmt_exp;
+	/* quota master device associated with this MDT */
+	struct lu_device	  *mdt_qmt_dev;
 };
 
 #define MDT_SERVICE_WATCHDOG_FACTOR     (2)

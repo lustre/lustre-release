@@ -36,21 +36,93 @@
 /* Called with res->lr_lvb_sem held */
 static int mdt_lvbo_init(struct ldlm_resource *res)
 {
+	if (IS_LQUOTA_RES(res)) {
+		struct mdt_device	*mdt;
+
+		mdt = ldlm_res_to_ns(res)->ns_lvbp;
+		if (mdt->mdt_qmt_dev == NULL)
+			return 0;
+
+		/* call lvbo init function of quota master */
+		return qmt_hdls.qmth_lvbo_init(mdt->mdt_qmt_dev, res);
+	}
+
 	return 0;
 }
 
+static int mdt_lvbo_update(struct ldlm_resource *res,
+			   struct ptlrpc_request *req,
+			   int increase_only)
+{
+	if (IS_LQUOTA_RES(res)) {
+		struct mdt_device	*mdt;
+
+		mdt = ldlm_res_to_ns(res)->ns_lvbp;
+		if (mdt->mdt_qmt_dev == NULL)
+			return 0;
+
+		/* call lvbo update function of quota master */
+		return qmt_hdls.qmth_lvbo_update(mdt->mdt_qmt_dev, res, req,
+						 increase_only);
+	}
+
+	return 0;
+}
+
+
 static int mdt_lvbo_size(struct ldlm_lock *lock)
 {
+	if (IS_LQUOTA_RES(lock->l_resource)) {
+		struct mdt_device	*mdt;
+
+		mdt = ldlm_res_to_ns(lock->l_resource)->ns_lvbp;
+		if (mdt->mdt_qmt_dev == NULL)
+			return 0;
+
+		/* call lvbo size function of quota master */
+		return qmt_hdls.qmth_lvbo_size(mdt->mdt_qmt_dev, lock);
+	}
+
 	return 0;
 }
 
 static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 {
+	if (IS_LQUOTA_RES(lock->l_resource)) {
+		struct mdt_device	*mdt;
+
+		mdt = ldlm_res_to_ns(lock->l_resource)->ns_lvbp;
+		if (mdt->mdt_qmt_dev == NULL)
+			return 0;
+
+		/* call lvbo fill function of quota master */
+		return qmt_hdls.qmth_lvbo_fill(mdt->mdt_qmt_dev, lock, lvb,
+					       lvblen);
+	}
+
+	return 0;
+}
+
+static int mdt_lvbo_free(struct ldlm_resource *res)
+{
+	if (IS_LQUOTA_RES(res)) {
+		struct mdt_device	*mdt;
+
+		mdt = ldlm_res_to_ns(res)->ns_lvbp;
+		if (mdt->mdt_qmt_dev == NULL)
+			return 0;
+
+		/* call lvbo free function of quota master */
+		return qmt_hdls.qmth_lvbo_free(mdt->mdt_qmt_dev, res);
+	}
+
 	return 0;
 }
 
 struct ldlm_valblock_ops mdt_lvbo = {
 	lvbo_init:	mdt_lvbo_init,
-	lvbo_size: 	mdt_lvbo_size,
-	lvbo_fill: 	mdt_lvbo_fill
+	lvbo_update:	mdt_lvbo_update,
+	lvbo_size:	mdt_lvbo_size,
+	lvbo_fill:	mdt_lvbo_fill,
+	lvbo_free:	mdt_lvbo_free
 };

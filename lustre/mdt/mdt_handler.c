@@ -2049,6 +2049,7 @@ static int mdt_quotactl(struct mdt_thread_info *info)
 	struct req_capsule	*pill = info->mti_pill;
 	struct obd_quotactl	*oqctl, *repoqc;
 	int			 id, rc;
+	struct lu_device	*qmt = info->mti_mdt->mdt_qmt_dev;
 	ENTRY;
 
 	oqctl = req_capsule_client_get(pill, &RMF_OBD_QUOTACTL);
@@ -2073,6 +2074,8 @@ static int mdt_quotactl(struct mdt_thread_info *info)
 	case Q_SETINFO:
 	case Q_SETQUOTA:
 	case Q_GETQUOTA:
+		if (qmt == NULL)
+			RETURN(-EOPNOTSUPP);
 		/* slave quotactl */
 	case Q_GETOINFO:
 	case Q_GETOQUOTA:
@@ -2117,25 +2120,17 @@ static int mdt_quotactl(struct mdt_thread_info *info)
 
 	switch (oqctl->qc_cmd) {
 
-		/* master quotactl */
 	case Q_GETINFO:
 	case Q_SETINFO:
 	case Q_SETQUOTA:
-		/* XXX: not implemented yet. Will be when qmt support is
-		 * added */
-		CERROR("quotactl operation %d not implemented yet\n",
-					oqctl->qc_cmd);
-		RETURN(-EOPNOTSUPP);
 	case Q_GETQUOTA:
-		/* XXX: return no limit for now, just for testing purpose */
-		memset(&oqctl->qc_dqblk, 0, sizeof(struct obd_dqblk));
-		oqctl->qc_dqblk.dqb_valid = QIF_LIMITS;
-		rc = 0;
+		/* forward quotactl request to QMT */
+		rc = qmt_hdls.qmth_quotactl(info->mti_env, qmt, oqctl);
 		break;
 
-		/* slave quotactl */
 	case Q_GETOINFO:
 	case Q_GETOQUOTA:
+		/* slave quotactl */
 		rc = lquotactl_slv(info->mti_env, info->mti_mdt->mdt_bottom,
 				   oqctl);
 		break;
@@ -2429,6 +2424,22 @@ static int mdt_sec_ctx_handle(struct mdt_thread_info *info)
         CFS_FAIL_TIMEOUT(OBD_FAIL_SEC_CTX_HDL_PAUSE, cfs_fail_val);
 
         return rc;
+}
+
+/*
+ * quota request handlers
+ */
+static int mdt_quota_dqacq(struct mdt_thread_info *info)
+{
+	struct lu_device	*qmt = info->mti_mdt->mdt_qmt_dev;
+	int			 rc;
+	ENTRY;
+
+	if (qmt == NULL)
+		RETURN(err_serious(-EOPNOTSUPP));
+
+	rc = qmt_hdls.qmth_dqacq(info->mti_env, qmt, mdt_info_req(info));
+	RETURN(rc);
 }
 
 static struct mdt_object *mdt_obj(struct lu_object *o)
@@ -3468,6 +3479,7 @@ enum mdt_it_code {
         MDT_IT_TRUNC,
         MDT_IT_GETXATTR,
         MDT_IT_LAYOUT,
+	MDT_IT_QUOTA,
         MDT_IT_NR
 };
 
@@ -3892,6 +3904,10 @@ static int mdt_intent_code(long itcode)
         case IT_LAYOUT:
                 rc = MDT_IT_LAYOUT;
                 break;
+	case IT_QUOTA_DQACQ:
+	case IT_QUOTA_CONN:
+		rc = MDT_IT_QUOTA;
+		break;
         default:
                 CERROR("Unknown intent opcode: %ld\n", itcode);
                 rc = -EINVAL;
@@ -3914,8 +3930,21 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
                 RETURN(-EINVAL);
 
         pill = info->mti_pill;
-        flv  = &mdt_it_flavor[opc];
 
+	if (opc == MDT_IT_QUOTA) {
+		struct lu_device *qmt = info->mti_mdt->mdt_qmt_dev;
+
+		if (qmt == NULL)
+			RETURN(-EOPNOTSUPP);
+
+		/* pass the request to quota master */
+		rc = qmt_hdls.qmth_intent_policy(info->mti_env, qmt,
+						 mdt_info_req(info), lockp,
+						 flags);
+		RETURN(rc);
+	}
+
+	flv  = &mdt_it_flavor[opc];
         if (flv->it_fmt != NULL)
                 req_capsule_extend(pill, flv->it_fmt);
 
@@ -3956,7 +3985,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         LASSERT(pill->rc_req == req);
 
         if (req->rq_reqmsg->lm_bufcount > DLM_INTENT_IT_OFF) {
-                req_capsule_extend(pill, &RQF_LDLM_INTENT);
+		req_capsule_extend(pill, &RQF_LDLM_INTENT_BASIC);
                 it = req_capsule_client_get(pill, &RMF_LDLM_INTENT);
                 if (it != NULL) {
                         rc = mdt_intent_opc(it->opc, info, lockp, flags);
@@ -4846,6 +4875,154 @@ cleanup_mem:
 	RETURN(rc);
 }
 
+/* setup quota master target on MDT0 */
+static int mdt_quota_init(const struct lu_env *env, struct mdt_device *mdt,
+			  struct lustre_cfg *cfg)
+{
+	struct obd_device	*obd;
+	char			*dev = lustre_cfg_string(cfg, 0);
+	char			*qmtname, *uuid, *p;
+	struct lustre_cfg_bufs	*bufs;
+	struct lustre_cfg	*lcfg;
+	struct lustre_profile	*lprof;
+	struct obd_connect_data	*data;
+	int			 rc;
+	ENTRY;
+
+	LASSERT(mdt->mdt_qmt_exp == NULL);
+	LASSERT(mdt->mdt_qmt_dev == NULL);
+
+	/* quota master is on MDT0 only for now */
+	if (mdt->mdt_mite.ms_node_id != 0)
+		RETURN(0);
+
+	/* MGS generates config commands which look as follows:
+	 *   #01 (160)setup   0:lustre-MDT0000  1:lustre-MDT0000_UUID  2:0
+	 *                    3:lustre-MDT0000-mdtlov  4:f
+	 *
+	 * We generate the QMT name from the MDT one, just replacing MD with QM
+	 * after all the preparations, the logical equivalent will be:
+	 *   #01 (160)setup   0:lustre-QMT0000  1:lustre-QMT0000_UUID  2:0
+	 *                    3:lustre-MDT0000-osd  4:f */
+	OBD_ALLOC(qmtname, MAX_OBD_NAME);
+	OBD_ALLOC(uuid, UUID_MAX);
+	OBD_ALLOC_PTR(bufs);
+	OBD_ALLOC_PTR(data);
+	if (qmtname == NULL || uuid == NULL || bufs == NULL || data == NULL)
+		GOTO(cleanup_mem, rc = -ENOMEM);
+
+	strcpy(qmtname, dev);
+	p = strstr(qmtname, "-MDT");
+	if (p == NULL)
+		GOTO(cleanup_mem, rc = -ENOMEM);
+	/* replace MD with QM */
+	p[1] = 'Q';
+	p[2] = 'M';
+
+	snprintf(uuid, UUID_MAX, "%s_UUID", qmtname);
+
+	lprof = class_get_profile(lustre_cfg_string(cfg, 0));
+	if (lprof == NULL || lprof->lp_dt == NULL) {
+		CERROR("can't find profile for %s\n",
+		       lustre_cfg_string(cfg, 0));
+		GOTO(cleanup_mem, rc = -EINVAL);
+	}
+
+	lustre_cfg_bufs_reset(bufs, qmtname);
+	lustre_cfg_bufs_set_string(bufs, 1, LUSTRE_QMT_NAME);
+	lustre_cfg_bufs_set_string(bufs, 2, uuid);
+	lustre_cfg_bufs_set_string(bufs, 3, lprof->lp_dt);
+
+	lcfg = lustre_cfg_new(LCFG_ATTACH, bufs);
+	if (!lcfg)
+		GOTO(cleanup_mem, rc = -ENOMEM);
+
+	rc = class_attach(lcfg);
+	if (rc)
+		GOTO(lcfg_cleanup, rc);
+
+	obd = class_name2obd(qmtname);
+	if (!obd) {
+		CERROR("Can not find obd %s (%s in config)\n", qmtname,
+		       lustre_cfg_string(cfg, 0));
+		GOTO(class_detach, rc = -EINVAL);
+	}
+
+	lustre_cfg_free(lcfg);
+
+	lustre_cfg_bufs_reset(bufs, qmtname);
+	lustre_cfg_bufs_set_string(bufs, 1, uuid);
+	lustre_cfg_bufs_set_string(bufs, 2, dev);
+
+	/* for quota, the next device should be the OSD device */
+	lustre_cfg_bufs_set_string(bufs, 3,
+				   mdt->mdt_bottom->dd_lu_dev.ld_obd->obd_name);
+
+	lcfg = lustre_cfg_new(LCFG_SETUP, bufs);
+
+	rc = class_setup(obd, lcfg);
+	if (rc)
+		GOTO(class_detach, rc);
+
+	mdt->mdt_qmt_dev = obd->obd_lu_dev;
+
+	/* configure local quota objects */
+	rc = mdt->mdt_qmt_dev->ld_ops->ldo_prepare(env,
+						   &mdt->mdt_md_dev.md_lu_dev,
+						   mdt->mdt_qmt_dev);
+	if (rc)
+		GOTO(class_cleanup, rc);
+
+	/* connect to quota master target */
+	data->ocd_connect_flags = OBD_CONNECT_VERSION;
+	data->ocd_version = LUSTRE_VERSION_CODE;
+	rc = obd_connect(NULL, &mdt->mdt_qmt_exp, obd, &obd->obd_uuid,
+			 data, NULL);
+	if (rc) {
+		CERROR("cannot connect to quota master device %s (%d)\n",
+		       qmtname, rc);
+		GOTO(class_cleanup, rc);
+	}
+
+	EXIT;
+class_cleanup:
+	if (rc) {
+		class_manual_cleanup(obd);
+		mdt->mdt_qmt_dev = NULL;
+	}
+class_detach:
+	if (rc)
+		class_detach(obd, lcfg);
+lcfg_cleanup:
+	lustre_cfg_free(lcfg);
+cleanup_mem:
+	if (bufs)
+		OBD_FREE_PTR(bufs);
+	if (qmtname)
+		OBD_FREE(qmtname, MAX_OBD_NAME);
+	if (uuid)
+		OBD_FREE(uuid, UUID_MAX);
+	if (data)
+		OBD_FREE_PTR(data);
+	return rc;
+}
+
+/* Shutdown quota master target associated with mdt */
+static void mdt_quota_fini(const struct lu_env *env, struct mdt_device *mdt)
+{
+	ENTRY;
+
+	if (mdt->mdt_qmt_exp == NULL)
+		RETURN_EXIT;
+	LASSERT(mdt->mdt_qmt_dev != NULL);
+
+	/* the qmt automatically shuts down when the mdt disconnects */
+	obd_disconnect(mdt->mdt_qmt_exp);
+	mdt->mdt_qmt_exp = NULL;
+	mdt->mdt_qmt_dev = NULL;
+	EXIT;
+}
+
 /**
  * setup CONFIG_ORIG context, used to access local config log.
  * this may need to be rewrite as part of llog rewrite for lu-api.
@@ -4918,6 +5095,8 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         obd_zombie_barrier();
 
         mdt_procfs_fini(m);
+
+	mdt_quota_fini(env, m);
 
         lut_fini(env, &m->mdt_lut);
         mdt_fs_cleanup(env, m);
@@ -5169,9 +5348,13 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 GOTO(err_recovery, rc);
         }
 
+	rc = mdt_quota_init(env, m, cfg);
+	if (rc)
+		GOTO(err_procfs, rc);
+
         rc = mdt_start_ptlrpc_service(m);
         if (rc)
-                GOTO(err_procfs, rc);
+		GOTO(err_quota, rc);
 
         ping_evictor_start();
 
@@ -5191,6 +5374,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 
         ping_evictor_stop();
         mdt_stop_ptlrpc_service(m);
+err_quota:
+	mdt_quota_fini(env, m);
 err_procfs:
         mdt_procfs_fini(m);
 err_recovery:
@@ -6413,6 +6598,13 @@ static struct mdt_handler mdt_sec_ctx_ops[] = {
         DEF_SEC_CTX_HNDL(FINI,          mdt_sec_ctx_handle)
 };
 
+#define DEF_QUOTA_HNDLF(flags, name, fn)                   \
+	DEF_HNDL(QUOTA, DQACQ, , flags, name, fn, &RQF_QUOTA_ ## name)
+
+static struct mdt_handler mdt_quota_ops[] = {
+	DEF_QUOTA_HNDLF(HABEO_REFERO, DQACQ, mdt_quota_dqacq),
+};
+
 static struct mdt_opc_slice mdt_regular_handlers[] = {
         {
                 .mos_opc_start = MDS_GETATTR,
@@ -6439,6 +6631,11 @@ static struct mdt_opc_slice mdt_regular_handlers[] = {
                 .mos_opc_end   = SEC_LAST_OPC,
                 .mos_hs        = mdt_sec_ctx_ops
         },
+	{
+		.mos_opc_start = QUOTA_DQACQ,
+		.mos_opc_end   = QUOTA_LAST_OPC,
+		.mos_hs        = mdt_quota_ops
+	},
         {
                 .mos_hs        = NULL
         }

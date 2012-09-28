@@ -371,6 +371,12 @@ static const struct req_msg_field *ldlm_gl_callback_server[] = {
         &RMF_DLM_LVB
 };
 
+static const struct req_msg_field *ldlm_intent_basic_client[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REQ,
+	&RMF_LDLM_INTENT,
+};
+
 static const struct req_msg_field *ldlm_intent_client[] = {
         &RMF_PTLRPC_BODY,
         &RMF_DLM_REQ,
@@ -646,6 +652,7 @@ static struct req_format *req_formats[] = {
         &RQF_LDLM_GL_CALLBACK,
 	&RQF_LDLM_GL_DESC_CALLBACK,
         &RQF_LDLM_INTENT,
+	&RQF_LDLM_INTENT_BASIC,
         &RQF_LDLM_INTENT_GETATTR,
         &RQF_LDLM_INTENT_OPEN,
         &RQF_LDLM_INTENT_CREATE,
@@ -1242,6 +1249,11 @@ struct req_format RQF_LDLM_GL_DESC_CALLBACK =
 	DEFINE_REQ_FMT0("LDLM_GL_CALLBACK", ldlm_gl_callback_desc_client,
 			ldlm_gl_callback_server);
 EXPORT_SYMBOL(RQF_LDLM_GL_DESC_CALLBACK);
+
+struct req_format RQF_LDLM_INTENT_BASIC =
+	DEFINE_REQ_FMT0("LDLM_INTENT_BASIC",
+			ldlm_intent_basic_client, ldlm_enqueue_lvb_server);
+EXPORT_SYMBOL(RQF_LDLM_INTENT_BASIC);
 
 struct req_format RQF_LDLM_INTENT =
         DEFINE_REQ_FMT0("LDLM_INTENT",
