@@ -97,6 +97,11 @@ struct lu_server_fld {
         /**
          * Fld service name in form "fld-srv-lustre-MDTXXX" */
         char                     lsf_name[80];
+
+	/**
+	 * Backend does not support range lookups,
+	 * indexes other that 0 will be prohibited */
+	int			 lsf_no_range_lookup;
 };
 
 struct lu_client_fld {

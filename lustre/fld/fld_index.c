@@ -72,7 +72,7 @@ static const struct lu_seq_range IGIF_FLD_RANGE = {
 };
 
 const struct dt_index_features fld_index_features = {
-        .dif_flags       = DT_IND_UPDATE,
+	.dif_flags       = DT_IND_UPDATE | DT_IND_RANGE,
         .dif_keysize_min = sizeof(seqno_t),
         .dif_keysize_max = sizeof(seqno_t),
         .dif_recsize_min = sizeof(struct lu_seq_range),
@@ -149,6 +149,11 @@ int fld_declare_index_create(struct lu_server_fld *fld,
 
         ENTRY;
 
+	if (fld->lsf_no_range_lookup) {
+		/* Stub for underlying FS which can't lookup ranges */
+		return 0;
+	}
+
         start = range->lsr_start;
         LASSERT(range_is_sane(range));
 
@@ -179,6 +184,17 @@ int fld_index_create(struct lu_server_fld *fld,
         int rc;
 
         ENTRY;
+
+	if (fld->lsf_no_range_lookup) {
+		/* Stub for underlying FS which can't lookup ranges */
+		if (range->lsr_index != 0) {
+			CERROR("%s: FLD backend does not support range"
+			       "lookups, so DNE and FIDs-on-OST are not"
+			       "supported in this configuration\n",
+			       fld->lsf_name);
+			return -EINVAL;
+		}
+	}
 
         start = range->lsr_start;
         LASSERT(range_is_sane(range));
@@ -247,6 +263,17 @@ int fld_index_lookup(struct lu_server_fld *fld,
         int rc;
 
         ENTRY;
+
+	if (fld->lsf_no_range_lookup) {
+		/* Stub for underlying FS which can't lookup ranges */
+		range->lsr_start = 0;
+		range->lsr_end = ~0;
+		range->lsr_index = 0;
+		range->lsr_flags = LU_SEQ_RANGE_MDT;
+
+		range_cpu_to_be(range, range);
+		return 0;
+	}
 
         info = lu_context_key_get(&env->le_ctx, &fld_thread_key);
         fld_rec = &info->fti_rec;
@@ -322,9 +349,21 @@ int fld_index_init(struct lu_server_fld *fld,
                                 lu_object_put(env, &dt_obj->do_lu);
                                 fld->lsf_obj = NULL;
                         }
-                } else
-                        CERROR("%s: File \"%s\" is not an index!\n",
-                               fld->lsf_name, fld_index_name);
+		} else if (rc == -ERANGE) {
+			CWARN("%s: File \"%s\" doesn't support range lookup, "
+			      "using stub. DNE and FIDs on OST will not work "
+			      "with this backend\n",
+			      fld->lsf_name, fld_index_name);
+
+			LASSERT(dt_obj->do_index_ops == NULL);
+			fld->lsf_no_range_lookup = 1;
+			rc = 0;
+		} else {
+			CERROR("%s: File \"%s\" is not index, rc %d!\n",
+			       fld->lsf_name, fld_index_name, rc);
+			lu_object_put(env, &fld->lsf_obj->do_lu);
+			fld->lsf_obj = NULL;
+		}
 
 
         } else {
