@@ -93,8 +93,8 @@ static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 			lqe->lqe_enforced = true;
 		break;
 	default:
-		LQUOTA_ERROR(lqe, "failed to read quota entry from global index"
-			     "copy, rc:%d", rc);
+		LQUOTA_ERROR(lqe, "failed to read quota entry from global "
+			     "index copy, rc:%d", rc);
 		return rc;
 	}
 
@@ -110,8 +110,8 @@ static int qsd_lqe_read(const struct lu_env *env, struct lquota_entry *lqe,
 		lqe->lqe_granted = qti->qti_slv_rec.qsr_granted;
 		break;
 	default:
-		LQUOTA_ERROR(lqe, "failed to read quota entry from slave index"
-			     "copy, rc:%d", rc);
+		LQUOTA_ERROR(lqe, "failed to read quota entry from slave "
+			     "index copy, rc:%d", rc);
 		return rc;
 	}
 
@@ -261,7 +261,6 @@ int qsd_update_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	if (rc)
 		GOTO(out, rc);
 
-	/* write lock lquota entry */
 	if (global) {
 		/* Update record in global index copy */
 		struct lquota_glb_rec *glb_rec = (struct lquota_glb_rec *)rec;

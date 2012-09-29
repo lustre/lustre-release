@@ -186,10 +186,6 @@ static int qsd_intent_interpret(const struct lu_env *env,
 	RETURN(rc);
 }
 
-/* XXX to be removed when the qsd lock landed */
-struct ldlm_enqueue_info qsd_glb_einfo;
-struct ldlm_enqueue_info qsd_id_einfo;
-
 /*
  * Get intent per-ID lock or global-index lock from master.
  *

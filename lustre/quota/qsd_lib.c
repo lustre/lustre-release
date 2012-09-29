@@ -88,6 +88,10 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 	qqi = qsd->qsd_type_array[qtype];
 	qsd->qsd_type_array[qtype] = NULL;
 
+	/* by now, all qqi users should have gone away */
+	LASSERT(cfs_atomic_read(&qqi->qqi_ref) == 1);
+	lu_ref_fini(&qqi->qqi_reference);
+
 	/* release accounting object */
 	if (qqi->qqi_acct_obj != NULL && !IS_ERR(qqi->qqi_acct_obj)) {
 		lu_object_put(env, &qqi->qqi_acct_obj->do_lu);
@@ -140,12 +144,18 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	if (qqi == NULL)
 		RETURN(-ENOMEM);
 	qsd->qsd_type_array[qtype] = qqi;
+	cfs_atomic_set(&qqi->qqi_ref, 1); /* referenced from qsd */
 
 	/* set backpointer and other parameters */
 	qqi->qqi_qsd   = qsd;
 	qqi->qqi_qtype = qtype;
+	lu_ref_init(&qqi->qqi_reference);
 	lquota_generate_fid(&qqi->qqi_fid, qsd->qsd_pool_id, QSD_RES_TYPE(qsd),
 			    qtype);
+	qqi->qqi_glb_uptodate = false;
+	qqi->qqi_slv_uptodate = false;
+	qqi->qqi_reint        = false;
+	memset(&qqi->qqi_lockh, 0, sizeof(qqi->qqi_lockh));
 
         /* open accounting object */
         LASSERT(qqi->qqi_acct_obj == NULL);
@@ -274,6 +284,7 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	if (qsd == NULL)
 		RETURN(ERR_PTR(-ENOMEM));
 
+	cfs_rwlock_init(&qsd->qsd_lock);
 	/* copy service name */
 	strncpy(qsd->qsd_svname, svname, MAX_OBD_NAME);
 

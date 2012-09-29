@@ -65,6 +65,16 @@ struct qsd_instance {
 	 * future. For the time being, we can just use an array. */
 	struct qsd_qtype_info	*qsd_type_array[MAXQUOTAS];
 
+	/* r/w spinlock protecting:
+	 * - the state flags
+	 * - the qsd update list
+	 * - the deferred list
+	 * - flags of the qsd_qtype_info
+	 *
+	 * probably way too much :(
+	 */
+	cfs_rwlock_t	 	 qsd_lock;
+
 	unsigned long		 qsd_is_md:1,    /* managing quota for mdt */
 				 qsd_stopping:1; /* qsd_instance is stopping */
 };
@@ -89,6 +99,9 @@ struct qsd_qtype_info {
 	 * immutable after creation. */
 	struct qsd_instance	*qqi_qsd;
 
+	/* handle of global quota lock */
+	struct lustre_handle	 qqi_lockh;
+
 	/* Local index files storing quota settings for this quota type */
 	struct dt_object	*qqi_acct_obj; /* accounting object */
 	struct dt_object	*qqi_slv_obj;  /* slave index copy */
@@ -97,6 +110,17 @@ struct qsd_qtype_info {
 	/* Current object versions */
 	__u64			 qqi_slv_ver; /* slave index version */
 	__u64			 qqi_glb_ver; /* global index version */
+
+	/* Various flags representing the current state of the slave for this
+	 * quota type. */
+	unsigned long		 qqi_glb_uptodate:1, /* global index uptodate
+							with master */
+				 qqi_slv_uptodate:1, /* slave index uptodate
+							with master */
+				 qqi_reint:1;    /* in reintegration or not */
+
+	/* A list of references to this instance, for debugging */
+	struct lu_ref		 qqi_reference;
 };
 
 /*
@@ -121,6 +145,14 @@ static inline void qqi_putref(struct qsd_qtype_info *qqi)
 	LASSERT(cfs_atomic_read(&qqi->qqi_ref) > 0);
 	cfs_atomic_dec(&qqi->qqi_ref);
 }
+
+/* all kind of operations supported by qsd_dqacq() */
+enum qsd_ops {
+	QSD_ADJ, /* adjust quota space based on current qunit */
+	QSD_ACQ, /* acquire space for requests */
+	QSD_REL, /* release all space quota space uncondionnally */
+	QSD_REP, /* report space usage during reintegration */
+};
 
 #define QSD_RES_TYPE(qsd) ((qsd)->qsd_is_md ? LQUOTA_RES_MD : LQUOTA_RES_DT)
 
@@ -196,6 +228,16 @@ int qsd_update_lqe(const struct lu_env *, struct lquota_entry *, bool,
 int qsd_write_version(const struct lu_env *, struct qsd_qtype_info *,
 		      __u64, bool);
 
+/* qsd_lock.c */
+extern struct ldlm_enqueue_info qsd_glb_einfo;
+extern struct ldlm_enqueue_info qsd_id_einfo;
+int qsd_id_lock_match(struct lustre_handle *, struct lustre_handle *);
+int qsd_id_lock_cancel(const struct lu_env *, struct lquota_entry *);
+
+/* qsd_reint.c */
+int qsd_start_reint_thread(struct qsd_qtype_info *);
+void qsd_stop_reint_thread(struct qsd_qtype_info *);
+
 /* qsd_request.c */
 typedef void (*qsd_req_completion_t) (const struct lu_env *,
 				      struct qsd_qtype_info *,
@@ -213,10 +255,16 @@ int qsd_fetch_index(const struct lu_env *, struct obd_export *,
 		    struct idx_info *, unsigned int, cfs_page_t **, bool *);
 
 /* qsd_writeback.c */
-/* XXX to be replaced with real function when reintegration landed. */
-static inline void qsd_bump_version(struct qsd_qtype_info *qqi, __u64 ver,
-				    bool global)
+void qsd_bump_version(struct qsd_qtype_info *, __u64, bool);
+void qsd_upd_schedule(struct qsd_qtype_info *, struct lquota_entry *,
+		      union lquota_id *, union lquota_rec *, __u64, bool);
+
+/* qsd_handler.c */
+/* XXX to be replaced with real function once qsd_handler landed */
+static inline int qsd_dqacq(const struct lu_env *env, struct lquota_entry *lqe,
+			    enum qsd_ops op)
 {
+	return 0;
 }
 
 #endif /* _QSD_INTERNAL_H */
