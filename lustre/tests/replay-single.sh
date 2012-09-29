@@ -2278,7 +2278,8 @@ test_89() {
         client_up || return 1
         wait_mds_ost_sync
         BLOCKS2=$(df -P $MOUNT | tail -n 1 | awk '{ print $3 }')
-        [ "$BLOCKS1" == "$BLOCKS2" ] || error $((BLOCKS2 - BLOCKS1)) blocks leaked
+	[ $((BLOCKS2 - BLOCKS1)) -le 4  ] || \
+		error $((BLOCKS2 - BLOCKS1)) blocks leaked
 }
 
 run_test 89 "no disk space leak on late ost connection"
