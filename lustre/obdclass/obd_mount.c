@@ -389,7 +389,6 @@ static int server_start_mgs(struct super_block *sb)
         struct lustre_mount_info *lmi;
         int    rc = 0;
         ENTRY;
-        LASSERT(mnt);
 
         /* It is impossible to have more than 1 MGS per node, since
            MGC wouldn't know which to connect to */

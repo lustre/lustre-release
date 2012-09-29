@@ -789,6 +789,15 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	int			 rc = 0;
 	ENTRY;
 
+	if (dev->ld_site && lu_device_is_md(dev->ld_site->ls_top_dev)) {
+		/* MDT/MDD still use old infrastructure to create
+		 * special files */
+		rc = llo_local_objects_setup(env, lu2md_dev(pdev),
+					     lu2dt_dev(dev));
+		if (rc)
+			RETURN(rc);
+	}
+
 	/* initialize quota slave instance */
 	osd->od_quota_slave = qsd_init(env, osd->od_svname, &osd->od_dt_dev,
 				       osd->od_proc_entry);
