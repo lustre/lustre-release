@@ -249,6 +249,7 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *hdesc,
 
 	if (hash_len == NULL) {
 		crypto_free_hash(((struct hash_desc *)hdesc)->tfm);
+		cfs_free(hdesc);
 		return 0;
 	}
 	if (hash == NULL || *hash_len < size) {
@@ -262,6 +263,7 @@ int cfs_crypto_hash_final(struct cfs_crypto_hash_desc *hdesc,
 		return err;
 	}
 	crypto_free_hash(((struct hash_desc *)hdesc)->tfm);
+	cfs_free(hdesc);
 	return err;
 }
 EXPORT_SYMBOL(cfs_crypto_hash_final);
