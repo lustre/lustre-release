@@ -147,6 +147,7 @@ struct osd_thread_info {
 
 	char			 oti_str[64];
 	char			 oti_key[MAXNAMELEN + 1];
+	struct lustre_mdt_attrs oti_mdt_attrs;
 
 	struct lu_attr		 oti_la;
 	struct osa_attr		 oti_osa;
@@ -215,6 +216,7 @@ struct osd_device {
 	uint64_t		 od_ost_compat_grp0;
 
 	unsigned int		 od_rdonly:1,
+				 od_xattr_in_sa:1,
 				 od_quota_iused_est:1;
 	char			 od_mntdev[128];
 	char			 od_svname[128];
@@ -409,6 +411,31 @@ int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 		  struct lustre_capa *capa);
 int osd_xattr_list(const struct lu_env *env, struct dt_object *dt,
 		   struct lu_buf *lb, struct lustre_capa *capa);
+void __osd_xattr_declare_set(const struct lu_env *env, struct osd_object *obj,
+			int vallen, const char *name, struct osd_thandle *oh);
+int __osd_sa_xattr_set(const struct lu_env *env, struct osd_object *obj,
+		       const struct lu_buf *buf, const char *name, int fl,
+		       struct osd_thandle *oh);;
+int __osd_xattr_set(const struct lu_env *env, struct osd_object *obj,
+		    const struct lu_buf *buf, const char *name, int fl,
+		    struct osd_thandle *oh);
+static inline int
+osd_xattr_set_internal(const struct lu_env *env, struct osd_object *obj,
+		       const struct lu_buf *buf, const char *name, int fl,
+		       struct osd_thandle *oh, struct lustre_capa *capa)
+{
+	int rc;
+
+	if (osd_obj2dev(obj)->od_xattr_in_sa) {
+		rc = __osd_sa_xattr_set(env, obj, buf, name, fl, oh);
+		if (rc == -EFBIG)
+			rc = __osd_xattr_set(env, obj, buf, name, fl, oh);
+	} else {
+		rc = __osd_xattr_set(env, obj, buf, name, fl, oh);
+	}
+
+	return rc;
+}
 
 #endif
 #endif /* _OSD_INTERNAL_H */

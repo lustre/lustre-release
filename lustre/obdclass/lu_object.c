@@ -1797,6 +1797,24 @@ static void lu_site_stats_get(cfs_hash_t *hs,
 
 #ifdef __KERNEL__
 
+/*
+ * There exists a potential lock inversion deadlock scenario when using
+ * Lustre on top of ZFS. This occurs between one of ZFS's
+ * buf_hash_table.ht_lock's, and Lustre's lu_sites_guard lock. Essentially,
+ * thread A will take the lu_sites_guard lock and sleep on the ht_lock,
+ * while thread B will take the ht_lock and sleep on the lu_sites_guard
+ * lock. Obviously neither thread will wake and drop their respective hold
+ * on their lock.
+ *
+ * To prevent this from happening we must ensure the lu_sites_guard lock is
+ * not taken while down this code path. ZFS reliably does not set the
+ * __GFP_FS bit in its code paths, so this can be used to determine if it
+ * is safe to take the lu_sites_guard lock.
+ *
+ * Ideally we should accurately return the remaining number of cached
+ * objects without taking the  lu_sites_guard lock, but this is not
+ * possible in the current implementation.
+ */
 static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 {
         lu_site_stats_t stats;
@@ -1806,11 +1824,25 @@ static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
         int remain = shrink_param(sc, nr_to_scan);
         CFS_LIST_HEAD(splice);
 
-        if (remain != 0) {
-                if (!(shrink_param(sc, gfp_mask) & __GFP_FS))
+	if (!(shrink_param(sc, gfp_mask) & __GFP_FS)) {
+		if (remain != 0)
                         return -1;
-                CDEBUG(D_INODE, "Shrink %d objects\n", remain);
+		else
+			/* We must not take the lu_sites_guard lock when
+			 * __GFP_FS is *not* set because of the deadlock
+			 * possibility detailed above. Additionally,
+			 * since we cannot determine the number of
+			 * objects in the cache without taking this
+			 * lock, we're in a particularly tough spot. As
+			 * a result, we'll just lie and say our cache is
+			 * empty. This _should_ be ok, as we can't
+			 * reclaim objects when __GFP_FS is *not* set
+			 * anyways.
+			 */
+			return 0;
         }
+
+	CDEBUG(D_INODE, "Shrink %d objects\n", remain);
 
         cfs_mutex_lock(&lu_sites_guard);
         cfs_list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {

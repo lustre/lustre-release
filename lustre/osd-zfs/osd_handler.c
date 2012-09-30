@@ -505,9 +505,17 @@ static int osd_shutdown(const struct lu_env *env, struct osd_device *o)
 	RETURN(0);
 }
 
+static void osd_xattr_changed_cb(void *arg, uint64_t newval)
+{
+	struct osd_device *osd = arg;
+
+	osd->od_xattr_in_sa = (newval == ZFS_XATTR_SA);
+}
+
 static int osd_mount(const struct lu_env *env,
 		     struct osd_device *o, struct lustre_cfg *cfg)
 {
+	struct dsl_dataset *ds;
 	char	  *dev  = lustre_cfg_string(cfg, 1);
 	dmu_buf_t *rootdb;
 	int	   rc;
@@ -528,6 +536,13 @@ static int osd_mount(const struct lu_env *env,
 		CERROR("can't open objset %s: %d\n", o->od_mntdev, rc);
 		RETURN(rc);
 	}
+
+	ds = dmu_objset_ds(o->od_objset.os);
+	LASSERT(ds);
+	rc = dsl_prop_register(ds, "xattr", osd_xattr_changed_cb, o);
+	if (rc)
+		CERROR("%s: cat not register xattr callback, ignore: %d\n",
+		       o->od_svname, rc);
 
 	rc = __osd_obj2dbuf(env, o->od_objset.os, o->od_objset.root,
 				&rootdb, root_tag);
@@ -668,6 +683,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 					 struct lu_device *d)
 {
 	struct osd_device *o = osd_dev(d);
+	struct dsl_dataset *ds;
 	int		   rc;
 	ENTRY;
 
@@ -675,6 +691,11 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	osd_oi_fini(env, o);
 
 	if (o->od_objset.os) {
+		ds = dmu_objset_ds(o->od_objset.os);
+		rc = dsl_prop_unregister(ds, "xattr", osd_xattr_changed_cb, o);
+		if (rc)
+			CERROR("%s: dsl_prop_unregister xattr error %d\n",
+				o->od_svname, rc);
 		arc_remove_prune_callback(o->arc_prune_cb);
 		o->arc_prune_cb = NULL;
 		osd_sync(env, lu2dt_dev(d));

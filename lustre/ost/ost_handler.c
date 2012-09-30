@@ -555,9 +555,20 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
 		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
 			int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
 			int len = desc->bd_iov[i].kiov_len;
+			struct page *np = cfs_alloc_page(CFS_ALLOC_STD);
 			char *ptr = kmap(desc->bd_iov[i].kiov_page) + off;
-			memcpy(ptr, "bad3", min(4, len));
-			kunmap(desc->bd_iov[i].kiov_page);
+
+			if (np) {
+				char *ptr2 = kmap(np) + off;
+
+				memcpy(ptr2, ptr, len);
+				memcpy(ptr2, "bad3", min(4, len));
+				kunmap(np);
+				cfs_page_unpin(desc->bd_iov[i].kiov_page);
+				desc->bd_iov[i].kiov_page = np;
+			} else {
+				CERROR("can't alloc page for corruption\n");
+			}
 		}
 		cfs_crypto_hash_update_page(hdesc, desc->bd_iov[i].kiov_page,
 				  desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK,
@@ -569,11 +580,20 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
 		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
 			int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
 			int len = desc->bd_iov[i].kiov_len;
+			struct page *np = cfs_alloc_page(CFS_ALLOC_STD);
 			char *ptr = kmap(desc->bd_iov[i].kiov_page) + off;
-			memcpy(ptr, "bad4", min(4, len));
-			kunmap(desc->bd_iov[i].kiov_page);
-			/* nobody should use corrupted page again */
-			ClearPageUptodate(desc->bd_iov[i].kiov_page);
+
+			if (np) {
+				char *ptr2 = kmap(np) + off;
+
+				memcpy(ptr2, ptr, len);
+				memcpy(ptr2, "bad4", min(4, len));
+				kunmap(np);
+				cfs_page_unpin(desc->bd_iov[i].kiov_page);
+				desc->bd_iov[i].kiov_page = np;
+			} else {
+				CERROR("can't alloc page for corruption\n");
+			}
 		}
 	}
 

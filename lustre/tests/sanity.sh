@@ -3985,6 +3985,11 @@ run_test 56w "check lfs_migrate -c stripe_count works"
 
 test_57a() {
 	# note test will not do anything if MDS is not local
+	if [ "$(facet_type_fstype MDS)" != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local MNTDEV="osd*.*MDT*.mntdev"
 	DEV=$(do_facet $SINGLEMDS lctl get_param -n $MNTDEV)
@@ -4000,6 +4005,11 @@ test_57a() {
 run_test 57a "verify MDS filesystem created with large inodes =="
 
 test_57b() {
+	if [ "$(facet_type_fstype MDS)" != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
 	local dir=$DIR/d57b
 

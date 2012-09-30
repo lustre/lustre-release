@@ -729,10 +729,6 @@ static int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 	       osfs->os_blocks, osfs->os_bfree, osfs->os_bavail,
 	       osfs->os_files, osfs->os_ffree, osfs->os_state);
 
-	if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOSPC,
-				 ofd->ofd_lut.lut_lsd.lsd_ost_index))
-		osfs->os_bfree = osfs->os_bavail = 2;
-
 	if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOINO,
 				 ofd->ofd_lut.lut_lsd.lsd_ost_index))
 		osfs->os_ffree = 0;
@@ -752,6 +748,10 @@ static int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 		osfs->os_bavail <<= ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT;
 		osfs->os_bsize    = 1 << COMPAT_BSIZE_SHIFT;
 	}
+
+	if (OBD_FAIL_CHECK_VALUE(OBD_FAIL_OST_ENOSPC,
+				 ofd->ofd_lut.lut_lsd.lsd_ost_index))
+		osfs->os_bfree = osfs->os_bavail = 2;
 
 	EXIT;
 out:

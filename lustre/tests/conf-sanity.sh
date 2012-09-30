@@ -19,6 +19,10 @@ if [ "$FAILURE_MODE" = "HARD" ]; then
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
 fi
 
+# LU-2059
+ALWAYS_EXCEPT="$ALWAYS_EXCEPT 5d 19b 21b 27a"
+
+
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
 
@@ -558,6 +562,11 @@ is_blkdev () {
 #
 
 test_17() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
         setup
         check_mount || return 41
         cleanup || return $?
@@ -1191,6 +1200,11 @@ cleanup_32() {
 }
 
 test_32a() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
 	client_only && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return 0
@@ -1258,6 +1272,11 @@ test_32a() {
 run_test 32a "Upgrade from 1.8 (not live)"
 
 test_32b() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
 	client_only && skip "client only testing" && return 0
 	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
 	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return
@@ -1691,6 +1710,11 @@ test_37() {
 run_test 37 "verify set tunables works for symlink device"
 
 test_38() { # bug 14222
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
 	setup
 	# like runtests
 	COUNT=10
@@ -2441,6 +2465,11 @@ diff_files_xattrs()
 }
 
 test_52() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
 	start_mds
 	[ $? -eq 0 ] || { error "Unable to start MDS"; return 1; }
 	start_ost
@@ -2646,6 +2675,11 @@ test_53b() {
 run_test 53b "check MDT thread count params"
 
 test_54a() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
     do_rpc_nodes $(facet_host ost1) run_llverdev $(ostdevname 1) -p
     [ $? -eq 0 ] || error "llverdev failed!"
     reformat_and_config
@@ -2653,6 +2687,11 @@ test_54a() {
 run_test 54a "test llverdev and partial verify of device"
 
 test_54b() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
     setup
     run_llverfs $MOUNT -p
     [ $? -eq 0 ] || error "llverfs failed!"
@@ -2667,6 +2706,11 @@ lov_objid_size()
 }
 
 test_55() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
 	local mdsdev=$(mdsdevname 1)
 	local mdsvdev=$(mdsvdevname 1)
 
@@ -2742,8 +2786,8 @@ count_osts() {
 }
 
 test_58() { # bug 22658
-	if [ $(facet_fstype mds) == zfs ]; then
-		skip "Does not work with ZFS-based MDTs yet"
+	if [ $(facet_fstype mds) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
 		return
 	fi
 	setup_noconfig
@@ -2890,6 +2934,11 @@ test_61() { # LU-80
 run_test 61 "large xattr"
 
 test_62() {
+	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
+		skip "Only applicable to ldiskfs-based MDTs"
+		return
+	fi
+
 	# MRP-118
 	local mdsdev=$(mdsdevname 1)
 	local ostdev=$(ostdevname 1)

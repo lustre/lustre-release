@@ -455,6 +455,7 @@ load_modules_local() {
         grep -q -w jbd2 $SYMLIST || { modprobe jbd2 2>/dev/null || true; }
 		[ "$LQUOTA" != "no" ] && load_module quota/lquota $LQUOTAOPTS
 		if [[ $(node_fstypes $HOSTNAME) == *zfs* ]]; then
+			modprobe zfs
 			load_module osd-zfs/osd_zfs
 		fi
 		load_module mgs/mgs

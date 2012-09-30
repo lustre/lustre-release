@@ -125,8 +125,10 @@ osd_object_sa_dirty_add(struct osd_object *obj, struct osd_thandle *oh)
 		return;
 
 	cfs_down(&oh->ot_sa_lock);
+	cfs_write_lock(&obj->oo_attr_lock);
 	if (likely(cfs_list_empty(&obj->oo_sa_linkage)))
 		cfs_list_add(&obj->oo_sa_linkage, &oh->ot_sa_list);
+	cfs_write_unlock(&obj->oo_attr_lock);
 	cfs_up(&oh->ot_sa_lock);
 }
 
@@ -142,7 +144,9 @@ void osd_object_sa_dirty_rele(struct osd_thandle *oh)
 		obj = cfs_list_entry(oh->ot_sa_list.next,
 				     struct osd_object, oo_sa_linkage);
 		sa_spill_rele(obj->oo_sa_hdl);
+		cfs_write_lock(&obj->oo_attr_lock);
 		cfs_list_del_init(&obj->oo_sa_linkage);
+		cfs_write_unlock(&obj->oo_attr_lock);
 	}
 	cfs_up(&oh->ot_sa_lock);
 }
@@ -731,6 +735,10 @@ static int osd_attr_get(const struct lu_env *env,
 	 * from within sa_object_size() can block on a mutex, so
 	 * we can't call sa_object_size() holding rwlock */
 	sa_object_size(obj->oo_sa_hdl, &blksize, &blocks);
+	/* we do not control size of indices, so always calculate
+	 * it from number of blocks reported by DMU */
+	if (S_ISDIR(attr->la_mode))
+		attr->la_size = 512 * blocks;
 	/* Block size may be not set; suggest maximal I/O transfers. */
 	if (blksize == 0)
 		blksize = 1ULL << SPA_MAXBLOCKSHIFT;
@@ -1079,6 +1087,9 @@ static int osd_declare_object_create(const struct lu_env *env,
 
 	dmu_tx_hold_sa_create(oh->ot_tx, ZFS_SA_BASE_ATTR_SIZE);
 
+	__osd_xattr_declare_set(env, obj, sizeof(struct lustre_mdt_attrs),
+				XATTR_NAME_LMA, oh);
+
 	RETURN(osd_declare_quota(env, osd, attr->la_uid, attr->la_gid, 1, oh,
 				 false, NULL, false));
 }
@@ -1361,6 +1372,24 @@ static osd_obj_type_f osd_create_type_f(enum dt_format_type type)
 /*
  * Primitives for directory (i.e. ZAP) handling
  */
+static inline int osd_init_lma(const struct lu_env *env, struct osd_object *obj,
+			       const struct lu_fid *fid, struct osd_thandle *oh)
+{
+	struct osd_thread_info	*info = osd_oti_get(env);
+	struct lustre_mdt_attrs	*lma = &info->oti_mdt_attrs;
+	struct lu_buf		 buf;
+	int rc;
+
+	lustre_lma_init(lma, fid);
+	lustre_lma_swab(lma);
+	buf.lb_buf = lma;
+	buf.lb_len = sizeof(*lma);
+
+	rc = osd_xattr_set_internal(env, obj, &buf, XATTR_NAME_LMA,
+				    LU_XATTR_CREATE, oh, BYPASS_CAPA);
+
+	return rc;
+}
 
 /*
  * Concurrency: @dt is write locked.
@@ -1435,6 +1464,14 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 	rc = osd_object_init0(env, obj);
 	LASSERT(ergo(rc == 0, dt_object_exists(dt)));
 	LASSERT(osd_invariant(obj));
+
+	rc = osd_init_lma(env, obj, fid, oh);
+	if (rc) {
+		CERROR("%s: can not set LMA on "DFID": rc = %d\n",
+		       osd->od_svname, PFID(fid), rc);
+		/* ignore errors during LMA initialization */
+		rc = 0;
+	}
 
 out:
 	cfs_up(&obj->oo_guard);
