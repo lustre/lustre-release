@@ -835,10 +835,13 @@ int ofd_setattr(const struct lu_env *env, struct obd_export *exp,
 	obdo_from_la(oinfo->oi_oa, &info->fti_attr,
 		     OFD_VALID_FLAGS | LA_UID | LA_GID);
 	ofd_info2oti(info, oti);
+
+	ofd_counter_incr(exp, LPROC_OFD_STATS_SETATTR, oti->oti_jobid, 1);
+	EXIT;
 out_unlock:
 	ofd_object_put(env, fo);
 out:
-	RETURN(rc);
+	return rc;
 }
 
 static int ofd_punch(const struct lu_env *env, struct obd_export *exp,
@@ -916,10 +919,13 @@ static int ofd_punch(const struct lu_env *env, struct obd_export *exp,
 	obdo_from_la(oinfo->oi_oa, &info->fti_attr,
 		     OFD_VALID_FLAGS | LA_UID | LA_GID);
 	ofd_info2oti(info, oti);
+
+	ofd_counter_incr(exp, LPROC_OFD_STATS_PUNCH, oti->oti_jobid, 1);
+	EXIT;
 out:
 	ofd_object_put(env, fo);
 out_env:
-	RETURN(rc);
+	return rc;
 }
 
 static int ofd_destroy_by_fid(const struct lu_env *env,
@@ -1103,10 +1109,10 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 		    oa->o_id > ofd_last_id(ofd, oa->o_seq)) {
 			CERROR("recreate objid "LPU64" > last id "LPU64"\n",
 					oa->o_id, ofd_last_id(ofd, oa->o_seq));
-			GOTO(out, rc = -EINVAL);
+			GOTO(out_nolock, rc = -EINVAL);
 		}
 		/* do nothing because we create objects during first write */
-		GOTO(out, rc = 0);
+		GOTO(out_nolock, rc = 0);
 	}
 	/* former ofd_handle_precreate */
 	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
@@ -1115,7 +1121,7 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 		if (oti->oti_conn_cnt < exp->exp_conn_cnt) {
 			CERROR("%s: dropping old orphan cleanup request\n",
 			       ofd_obd(ofd)->obd_name);
-			GOTO(out, rc = 0);
+			GOTO(out_nolock, rc = 0);
 		}
 		/* This causes inflight precreates to abort and drop lock */
 		cfs_set_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
@@ -1200,6 +1206,7 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 	ofd_info2oti(info, oti);
 out:
 	cfs_mutex_unlock(&ofd->ofd_create_locks[oa->o_seq]);
+out_nolock:
 	if (rc == 0 && ea != NULL) {
 		struct lov_stripe_md *lsm = *ea;
 
@@ -1285,13 +1292,18 @@ static int ofd_sync(const struct lu_env *env, struct obd_export *exp,
 	if (!ofd_object_exists(fo))
 		GOTO(unlock, rc = -ENOENT);
 
-	rc = dt_object_sync(env, ofd_object_child(fo));
-	if (rc)
-		GOTO(unlock, rc);
+	if (dt_version_get(env, ofd_object_child(fo)) >
+	    ofd_obd(ofd)->obd_last_committed) {
+		rc = dt_object_sync(env, ofd_object_child(fo));
+		if (rc)
+			GOTO(unlock, rc);
+	}
 
 	oinfo->oi_oa->o_valid = OBD_MD_FLID;
 	rc = ofd_attr_get(env, fo, &info->fti_attr);
 	obdo_from_la(oinfo->oi_oa, &info->fti_attr, OFD_VALID_FLAGS);
+
+	ofd_counter_incr(exp, LPROC_OFD_STATS_SYNC, oinfo->oi_jobid, 1);
 	EXIT;
 unlock:
 	ofd_write_unlock(env, fo);
@@ -1360,17 +1372,23 @@ static int ofd_ping(const struct lu_env *env, struct obd_export *exp)
 	return 0;
 }
 
-static int ofd_health_check(const struct lu_env *env, struct obd_device *obd)
+static int ofd_health_check(const struct lu_env *nul, struct obd_device *obd)
 {
 	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
 	struct ofd_thread_info	*info;
+	struct lu_env		 env;
 #ifdef USE_HEALTH_CHECK_WRITE
 	struct thandle		*th;
 #endif
 	int			 rc = 0;
 
-	info = ofd_info_init(env, NULL);
-	rc = dt_statfs(env, ofd->ofd_osd, &info->fti_u.osfs);
+	/* obd_proc_read_health pass NULL env, we need real one */
+	rc = lu_env_init(&env, LCT_DT_THREAD);
+	if (rc)
+		RETURN(rc);
+
+	info = ofd_info_init(&env, NULL);
+	rc = dt_statfs(&env, ofd->ofd_osd, &info->fti_u.osfs);
 	if (unlikely(rc))
 		GOTO(out, rc);
 
@@ -1385,27 +1403,28 @@ static int ofd_health_check(const struct lu_env *env, struct obd_device *obd)
 	info->fti_buf.lb_len = CFS_PAGE_SIZE;
 	info->fti_off = 0;
 
-	th = dt_trans_create(env, ofd->ofd_osd);
+	th = dt_trans_create(&env, ofd->ofd_osd);
 	if (IS_ERR(th))
 		GOTO(out, rc = PTR_ERR(th));
 
-	rc = dt_declare_record_write(env, ofd->ofd_health_check_file,
+	rc = dt_declare_record_write(&env, ofd->ofd_health_check_file,
 				     info->fti_buf.lb_len, info->fti_off, th);
 	if (rc == 0) {
 		th->th_sync = 1; /* sync IO is needed */
-		rc = dt_trans_start_local(env, ofd->ofd_osd, th);
+		rc = dt_trans_start_local(&env, ofd->ofd_osd, th);
 		if (rc == 0)
-			rc = dt_record_write(env, ofd->ofd_health_check_file,
+			rc = dt_record_write(&env, ofd->ofd_health_check_file,
 					     &info->fti_buf, &info->fti_off,
 					     th);
 	}
-	dt_trans_stop(env, ofd->ofd_osd, th);
+	dt_trans_stop(&env, ofd->ofd_osd, th);
 
 	OBD_FREE(info->fti_buf.lb_buf, CFS_PAGE_SIZE);
 
 	CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
 #endif
 out:
+	lu_env_fini(&env);
 	return !!rc;
 }
 

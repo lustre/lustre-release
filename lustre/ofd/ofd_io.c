@@ -42,10 +42,12 @@
 
 #include "ofd_internal.h"
 
-static int ofd_preprw_read(const struct lu_env *env, struct ofd_device *ofd,
-			   struct lu_fid *fid, struct lu_attr *la, int niocount,
+static int ofd_preprw_read(const struct lu_env *env, struct obd_export *exp,
+			   struct ofd_device *ofd, struct lu_fid *fid,
+			   struct lu_attr *la, int niocount,
 			   struct niobuf_remote *rnb, int *nr_local,
-			   struct niobuf_local *lnb)
+			   struct niobuf_local *lnb,
+			   struct obd_trans_info *oti)
 {
 	struct ofd_object	*fo;
 	int			 i, j, rc, tot_bytes = 0;
@@ -86,6 +88,8 @@ static int ofd_preprw_read(const struct lu_env *env, struct ofd_device *ofd,
 		GOTO(buf_put, rc);
 	lprocfs_counter_add(ofd_obd(ofd)->obd_stats,
 			    LPROC_OFD_READ_BYTES, tot_bytes);
+	ofd_counter_incr(exp, LPROC_OFD_STATS_READ,
+			 oti->oti_jobid, tot_bytes);
 	RETURN(0);
 
 buf_put:
@@ -178,23 +182,26 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 	*nr_local = j;
 	LASSERT(*nr_local > 0 && *nr_local <= PTLRPC_MAX_BRW_PAGES);
 
-	lprocfs_counter_add(ofd_obd(ofd)->obd_stats,
-			    LPROC_OFD_WRITE_BYTES, tot_bytes);
 	rc = dt_write_prep(env, ofd_object_child(fo), lnb, *nr_local);
 	if (unlikely(rc != 0)) {
 		dt_bufs_put(env, ofd_object_child(fo), lnb, *nr_local);
 		ofd_read_unlock(env, fo);
 		/* ofd_grant_prepare_write() was called, so we must commit */
 		ofd_grant_commit(env, exp, rc);
+		GOTO(out, rc);
 	}
 
-	RETURN(rc);
+	lprocfs_counter_add(ofd_obd(ofd)->obd_stats,
+			    LPROC_OFD_WRITE_BYTES, tot_bytes);
+	ofd_counter_incr(exp, LPROC_OFD_STATS_WRITE,
+			 oti->oti_jobid, tot_bytes);
+	RETURN(0);
 out:
 	/* let's still process incoming grant information packed in the oa,
 	 * but without enforcing grant since we won't proceed with the write.
 	 * Just like a read request actually. */
 	ofd_grant_prepare_read(env, exp, oa);
-	RETURN(rc);
+	return rc;
 }
 
 int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
@@ -236,9 +243,9 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 				   capa, CAPA_OPC_OSS_READ);
 		if (rc == 0) {
 			ofd_grant_prepare_read(env, exp, oa);
-			rc = ofd_preprw_read(env, ofd, &info->fti_fid,
+			rc = ofd_preprw_read(env, exp, ofd, &info->fti_fid,
 					     &info->fti_attr, obj->ioo_bufcnt,
-					     rnb, nr_local, lnb);
+					     rnb, nr_local, lnb, oti);
 			obdo_from_la(oa, &info->fti_attr, LA_ATIME);
 		}
 	} else {

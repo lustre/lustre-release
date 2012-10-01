@@ -72,6 +72,24 @@ enum {
 	LPROC_OFD_LAST,
 };
 
+/* for job stats */
+enum {
+	LPROC_OFD_STATS_READ = 0,
+	LPROC_OFD_STATS_WRITE = 1,
+	LPROC_OFD_STATS_SETATTR = 2,
+	LPROC_OFD_STATS_PUNCH = 3,
+	LPROC_OFD_STATS_SYNC = 4,
+	LPROC_OFD_STATS_LAST,
+};
+
+static inline void ofd_counter_incr(struct obd_export *exp, int opcode,
+				    char *jobid, long amount)
+{
+	if (exp->exp_obd && exp->exp_obd->u.obt.obt_jobstats.ojs_hash &&
+	    (exp->exp_connect_flags & OBD_CONNECT_JOBSTATS))
+		lprocfs_job_stats_log(exp->exp_obd, jobid, opcode, amount);
+}
+
 struct ofd_device {
 	struct dt_device	 ofd_dt_dev;
 	struct dt_device	*ofd_osd;
@@ -329,9 +347,19 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 		    void *cookie);
 
 /* lproc_ofd.c */
+#ifdef LPROCFS
 void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars);
 int lproc_ofd_attach_seqstat(struct obd_device *dev);
 extern struct file_operations ofd_per_nid_stats_fops;
+void ofd_stats_counter_init(struct lprocfs_stats *stats);
+#else
+static void lprocfs_ofd_init_vars(struct lprocfs_static_vars *lvars)
+{
+	memset(lvars, 0, sizeof(*lvars));
+}
+static inline int lproc_ofd_attach_seqstat(struct obd_device *dev) {}
+static inline void ofd_stats_counter_init(struct lprocfs_stats *stats) {}
+#endif
 
 /* ofd_objects.c */
 struct ofd_object *ofd_object_find(const struct lu_env *env,

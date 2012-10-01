@@ -389,8 +389,14 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 		       obd->obd_name, rc);
 		GOTO(free_obd_stats, rc);
 	}
-	RETURN(0);
 
+	rc = lprocfs_job_stats_init(obd, LPROC_OFD_STATS_LAST,
+				    ofd_stats_counter_init);
+	if (rc)
+		GOTO(remove_entry_clear, rc);
+	RETURN(0);
+remove_entry_clear:
+	lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
 free_obd_stats:
 	lprocfs_free_obd_stats(obd);
 obd_cleanup:
@@ -402,6 +408,7 @@ static int ofd_procfs_fini(struct ofd_device *ofd)
 {
 	struct obd_device *obd = ofd_obd(ofd);
 
+	lprocfs_job_stats_fini(obd);
 	lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
 	lprocfs_free_per_client_stats(obd);
 	lprocfs_free_obd_stats(obd);

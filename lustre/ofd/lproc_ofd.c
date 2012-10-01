@@ -464,6 +464,8 @@ static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "capa",		 lprocfs_ofd_rd_capa,
 				 lprocfs_ofd_wr_capa, 0 },
 	{ "capa_count",		 lprocfs_ofd_rd_capa_count, 0, 0 },
+	{ "job_cleanup_interval", lprocfs_rd_job_interval,
+				  lprocfs_wr_job_interval, 0},
 	{ 0 }
 };
 
@@ -618,4 +620,19 @@ static ssize_t ofd_per_nid_stats_seq_write(struct file *file, const char *buf,
 }
 
 LPROC_SEQ_FOPS(ofd_per_nid_stats);
+
+void ofd_stats_counter_init(struct lprocfs_stats *stats)
+{
+	LASSERT(stats && stats->ls_num == LPROC_OFD_STATS_LAST);
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_READ,
+			     LPROCFS_CNTR_AVGMINMAX, "read", "bytes");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_WRITE,
+			     LPROCFS_CNTR_AVGMINMAX, "write", "bytes");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_SETATTR,
+			     0, "setattr", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_PUNCH,
+			     0, "punch", "reqs");
+	lprocfs_counter_init(stats, LPROC_OFD_STATS_SYNC,
+			     0, "sync", "reqs");
+}
 #endif /* LPROCFS */
