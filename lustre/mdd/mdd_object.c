@@ -2425,7 +2425,9 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         ENTRY;
 
         if (ma->ma_valid & MA_FLAGS && ma->ma_attr_flags & MDS_KEEP_ORPHAN) {
-                mdd_obj->mod_count--;
+		mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
+		mdd_obj->mod_count--;
+		mdd_write_unlock(env, mdd_obj);
 
                 if (mdd_obj->mod_flags & ORPHAN_OBJ && !mdd_obj->mod_count)
                         CDEBUG(D_HA, "Object "DFID" is retained in orphan "
@@ -2433,10 +2435,13 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
                 RETURN(0);
         }
 
-        /* check without any lock */
-        if (mdd_obj->mod_count == 1 &&
-            (mdd_obj->mod_flags & (ORPHAN_OBJ | DEAD_OBJ)) != 0) {
+	/* mdd_finish_unlink() will always set orphan object as DEAD_OBJ, but
+	 * it might fail to add the object to orphan list (w/o ORPHAN_OBJ). */
+	/* check without any lock */
+	is_orphan = mdd_obj->mod_count == 1 &&
+		    (mdd_obj->mod_flags & (ORPHAN_OBJ | DEAD_OBJ)) != 0;
  again:
+	if (is_orphan) {
                 handle = mdd_trans_create(env, mdo2mdd(obj));
                 if (IS_ERR(handle))
                         RETURN(PTR_ERR(handle));
@@ -2455,81 +2460,81 @@ static int mdd_close(const struct lu_env *env, struct md_object *obj,
         }
 
         mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
-        if (handle == NULL && mdd_obj->mod_count == 1 &&
-            (mdd_obj->mod_flags & ORPHAN_OBJ) != 0) {
-                mdd_write_unlock(env, mdd_obj);
-                goto again;
-        }
+	rc = mdd_iattr_get(env, mdd_obj, ma);
+	if (rc != 0) {
+		CERROR("Failed to get iattr of "DFID": %d\n",
+		       PFID(mdd_object_fid(mdd_obj)), rc);
+		GOTO(out, rc);
+	}
 
-        /* release open count */
-        mdd_obj->mod_count --;
+	/* check again with lock */
+	is_orphan = (mdd_obj->mod_count == 1) &&
+		    ((mdd_obj->mod_flags & (ORPHAN_OBJ | DEAD_OBJ)) != 0 ||
+		     ma->ma_attr.la_nlink == 0);
 
-        if (mdd_obj->mod_count == 0 && mdd_obj->mod_flags & ORPHAN_OBJ) {
-                /* remove link to object from orphan index */
-                LASSERT(handle != NULL);
-                rc = __mdd_orphan_del(env, mdd_obj, handle);
-                if (rc == 0) {
-                        CDEBUG(D_HA, "Object "DFID" is deleted from orphan "
-                               "list, OSS objects to be destroyed.\n",
-                               PFID(mdd_object_fid(mdd_obj)));
-                        is_orphan = 1;
-                } else {
-                        CERROR("Object "DFID" can not be deleted from orphan "
-                                "list, maybe cause OST objects can not be "
-                                "destroyed (err: %d).\n",
-                                PFID(mdd_object_fid(mdd_obj)), rc);
-                        /* If object was not deleted from orphan list, do not
-                         * destroy OSS objects, which will be done when next
-                         * recovery. */
-                        GOTO(out, rc);
-                }
-        }
+	if (is_orphan && handle == NULL) {
+		mdd_write_unlock(env, mdd_obj);
+		goto again; /* create transaction handle */
+	}
 
-        rc = mdd_iattr_get(env, mdd_obj, ma);
-        /* Object maybe not in orphan list originally, it is rare case for
-         * mdd_finish_unlink() failure. */
-        if (rc == 0 && (ma->ma_attr.la_nlink == 0 || is_orphan)) {
+	mdd_obj->mod_count--; /* release open count */
+
+	if (!is_orphan)
+		GOTO(out, rc = 0);
+
+	/* Orphan object */
+	/* NB: Object maybe not in orphan list originally, it is rare case for
+	 * mdd_finish_unlink() failure, in that case, the object doesn't have
+	 * ORPHAN_OBJ flag. */
+	if ((mdd_obj->mod_flags & ORPHAN_OBJ) != 0) {
+		/* remove link to object from orphan index */
+		rc = __mdd_orphan_del(env, mdd_obj, handle);
+		if (rc != 0) {
+			CERROR("Object "DFID" can not be deleted from orphan "
+			       "list, maybe cause OST objects can not be "
+			       "destroyed (err: %d).\n",
+			       PFID(mdd_object_fid(mdd_obj)), rc);
+			/* If object was not deleted from orphan list, do not
+			 * destroy OSS objects, which will be done when next
+			 * recovery. */
+			GOTO(out, rc);
+		}
+
+		CDEBUG(D_HA, "Object "DFID" is deleted from orphan "
+		       "list, OSS objects to be destroyed.\n",
+		       PFID(mdd_object_fid(mdd_obj)));
+	}
+
+	/* refresh ma after _mdd_orphan_del */
+	ma->ma_valid &= ~MA_INODE;
+	rc = mdd_iattr_get(env, mdd_obj, ma);
+	if (rc != 0) {
+		CERROR("Failed to get iattr of "DFID": %d\n",
+		       PFID(mdd_object_fid(mdd_obj)), rc);
+		GOTO(out, rc);
+	}
+
 #ifdef HAVE_QUOTA_SUPPORT
-                if (mds->mds_quota) {
-                        quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
-                        mdd_quota_wrapper(&ma->ma_attr, qids);
-                }
+	if (mds->mds_quota) {
+		quota_opc = FSFILT_OP_UNLINK_PARTIAL_CHILD;
+		mdd_quota_wrapper(&ma->ma_attr, qids);
+	}
 #endif
-                /* MDS_CLOSE_CLEANUP means destroy OSS objects by MDS. */
-                if (ma->ma_valid & MA_FLAGS &&
-                    ma->ma_attr_flags & MDS_CLOSE_CLEANUP) {
-                        rc = mdd_lov_destroy(env, mdd, mdd_obj, &ma->ma_attr);
-                } else {
-                        if (handle == NULL) {
-                                handle = mdd_trans_create(env, mdo2mdd(obj));
-                                if (IS_ERR(handle))
-                                        GOTO(out, rc = PTR_ERR(handle));
+	/* MDS_CLOSE_CLEANUP means destroy OSS objects by MDS. */
+	if ((ma->ma_valid & MA_FLAGS) != 0 &&
+	    (ma->ma_attr_flags & MDS_CLOSE_CLEANUP) != 0) {
+		rc = mdd_lov_destroy(env, mdd, mdd_obj, &ma->ma_attr);
+	} else {
+		rc = mdd_object_kill(env, mdd_obj, ma, handle);
+		if (rc == 0)
+			reset = 0;
+	}
 
-                                rc = mdd_declare_object_kill(env, mdd_obj, ma,
-                                                             handle);
-                                if (rc)
-                                        GOTO(out, rc);
-
-                                rc = mdd_declare_changelog_store(env, mdd,
-                                                                 NULL, handle);
-                                if (rc)
-                                        GOTO(stop, rc);
-
-                                rc = mdd_trans_start(env, mdo2mdd(obj), handle);
-                                if (rc)
-                                        GOTO(out, rc);
-                        }
-
-                        rc = mdd_object_kill(env, mdd_obj, ma, handle);
-                        if (rc == 0)
-                                reset = 0;
-                }
-
-                if (rc != 0)
-                        CERROR("Error when prepare to delete Object "DFID" , "
-                               "which will cause OST objects can not be "
-                               "destroyed.\n",  PFID(mdd_object_fid(mdd_obj)));
-        }
+	if (rc != 0) {
+		CERROR("Error when prepare to delete Object "DFID" , "
+		       "which will cause OST objects can not be "
+		       "destroyed.\n",  PFID(mdd_object_fid(mdd_obj)));
+	}
         EXIT;
 
 out:
