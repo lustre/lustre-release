@@ -141,6 +141,38 @@ static int lprocfs_ofd_wr_grant_ratio(struct file *file, const char *buffer,
 	return count;
 }
 
+static int lprocfs_ofd_rd_precreate_batch(char *page, char **start, off_t off,
+					  int count, int *eof, void *data)
+{
+	struct obd_device *obd = (struct obd_device *)data;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+
+	LASSERT(obd != NULL);
+	*eof = 1;
+	return snprintf(page, count, "%d\n", ofd->ofd_precreate_batch);
+}
+
+static int lprocfs_ofd_wr_precreate_batch(struct file *file, const char *buffer,
+					  unsigned long count, void *data)
+{
+	struct obd_device *obd = (struct obd_device *)data;
+	struct ofd_device *ofd = ofd_dev(obd->obd_lu_dev);
+	int val;
+	int rc;
+
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
+
+	if (val < 1)
+		return -EINVAL;
+
+	cfs_spin_lock(&ofd->ofd_objid_lock);
+	ofd->ofd_precreate_batch = val;
+	cfs_spin_unlock(&ofd->ofd_objid_lock);
+	return count;
+}
+
 static int lprocfs_ofd_rd_last_id(char *page, char **start, off_t off,
 				  int count, int *eof, void *data)
 {
@@ -438,6 +470,8 @@ static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "grant_precreate",	 lprocfs_ofd_rd_grant_precreate, 0, 0 },
 	{ "grant_ratio",	 lprocfs_ofd_rd_grant_ratio,
 				 lprocfs_ofd_wr_grant_ratio, 0, 0 },
+	{ "precreate_batch",	 lprocfs_ofd_rd_precreate_batch,
+				 lprocfs_ofd_wr_precreate_batch, 0 },
 	{ "recovery_status",	 lprocfs_obd_rd_recovery_status, 0, 0 },
 	{ "recovery_time_soft",	 lprocfs_obd_rd_recovery_time_soft,
 				 lprocfs_obd_wr_recovery_time_soft, 0},

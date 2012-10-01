@@ -1159,8 +1159,10 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 		}
 	}
 	if (diff > 0) {
-		obd_id next_id = ofd_last_id(ofd, oa->o_seq) + 1;
-		int i;
+		cfs_time_t	 enough_time = cfs_time_shift(DISK_TIMEOUT);
+		obd_id		 next_id;
+		int		 created = 0;
+		int		 count;
 
 		if (!(oa->o_valid & OBD_MD_FLFLAGS) ||
 		    !(oa->o_flags & OBD_FL_DELORPHAN)) {
@@ -1176,16 +1178,33 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 			}
 		}
 
-		CDEBUG(D_HA,
-		       "%s: reserve %d objects in group "LPU64" at "LPU64"\n",
-		       ofd_obd(ofd)->obd_name, diff, oa->o_seq, next_id);
-		for (i = 0; i < diff; i++) {
-			rc = ofd_precreate_object(env, ofd, next_id + i,
-						  oa->o_seq);
-			if (rc)
+		while (diff > 0) {
+			next_id = ofd_last_id(ofd, oa->o_seq) + 1;
+			count = ofd_precreate_batch(ofd, diff);
+
+			CDEBUG(D_HA, "%s: reserve %d objects in group "LPU64
+			       " at "LPU64"\n", ofd_obd(ofd)->obd_name,
+			       count, oa->o_seq, next_id);
+
+			if (cfs_time_after(jiffies, enough_time)) {
+				LCONSOLE_WARN("%s: Slow creates, %d/%d objects"
+					      " created at a rate of %d/s\n",
+					      ofd_obd(ofd)->obd_name,
+					      created, diff + created,
+					      created / DISK_TIMEOUT);
 				break;
 		}
-		if (i > 0) {
+
+			rc = ofd_precreate_objects(env, ofd, next_id,
+						   oa->o_seq, count);
+			if (rc > 0) {
+				created += rc;
+				diff -= rc;
+			} else if (rc < 0) {
+				break;
+			}
+		}
+		if (created > 0) {
 			/* some objects got created, we can return
 			 * them, even if last creation failed */
 			oa->o_id = ofd_last_id(ofd, oa->o_seq);

@@ -49,6 +49,7 @@
 #define OFD_INCOMPAT_SUPP (OBD_INCOMPAT_GROUPS | OBD_INCOMPAT_OST | \
 			   OBD_INCOMPAT_COMMON_LR)
 #define OFD_MAX_GROUPS	256
+#define OFD_PRECREATE_BATCH_DEFAULT (FILTER_SUBDIR_COUNT * 4)
 
 /* Limit the returned fields marked valid to those that we actually might set */
 #define OFD_VALID_FLAGS (LA_TYPE | LA_MODE | LA_SIZE | LA_BLOCKS | \
@@ -114,6 +115,7 @@ struct ofd_device {
 	struct dt_object	*ofd_lastid_obj[OFD_MAX_GROUPS];
 	cfs_spinlock_t		 ofd_objid_lock;
 	unsigned long		 ofd_destroys_in_progress;
+	int			 ofd_precreate_batch;
 
 	/* protect all statfs-related counters */
 	cfs_spinlock_t		 ofd_osfs_lock;
@@ -322,6 +324,7 @@ int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int);
 int ofd_fs_setup(const struct lu_env *env, struct ofd_device *ofd,
 		 struct obd_device *obd);
 void ofd_fs_cleanup(const struct lu_env *env, struct ofd_device *ofd);
+int ofd_precreate_batch(struct ofd_device *ofd, int batch);
 
 /* ofd_io.c */
 int ofd_preprw(const struct lu_env *env,int cmd, struct obd_export *exp,
@@ -370,8 +373,8 @@ struct ofd_object *ofd_object_find_or_create(const struct lu_env *env,
 					     const struct lu_fid *fid,
 					     struct lu_attr *attr);
 int ofd_object_ff_check(const struct lu_env *env, struct ofd_object *fo);
-int ofd_precreate_object(const struct lu_env *env, struct ofd_device *ofd,
-			 obd_id id, obd_seq seq);
+int ofd_precreate_objects(const struct lu_env *env, struct ofd_device *ofd,
+			  obd_id id, obd_seq group, int nr);
 
 void ofd_object_put(const struct lu_env *env, struct ofd_object *fo);
 int ofd_attr_set(const struct lu_env *env, struct ofd_object *fo,
