@@ -3052,6 +3052,25 @@ osc_ensure_active () {
     [ $period -lt $timeout ] || log "$count OST are inactive after $timeout seconds, give up"
 }
 
+set_conf_param_and_check() {
+	local myfacet=$1
+	local TEST=$2
+	local PARAM=$3
+	local ORIG=$(do_facet $myfacet "$TEST")
+	if [ $# -gt 3 ]; then
+		local FINAL=$4
+	else
+		local -i FINAL
+		FINAL=$((ORIG + 5))
+	fi
+	echo "Setting $PARAM from $ORIG to $FINAL"
+	do_facet mgs "$LCTL conf_param $PARAM='$FINAL'" ||
+		error "conf_param $PARAM failed"
+
+	wait_update $(facet_host $myfacet) "$TEST" "$FINAL" ||
+		error "check $PARAM failed!"
+}
+
 init_param_vars () {
 	remote_mds_nodsh ||
 		TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")

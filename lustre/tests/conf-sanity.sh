@@ -957,29 +957,14 @@ test_26() {
 }
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
 
-set_and_check() {
-	local myfacet=$1
-	local TEST=$2
-	local PARAM=$3
-	local ORIG=$(do_facet $myfacet "$TEST")
-	if [ $# -gt 3 ]; then
-	    local FINAL=$4
-	else
-	    local -i FINAL
-	    FINAL=$(($ORIG + 5))
-	fi
-	echo "Setting $PARAM from $ORIG to $FINAL"
-	do_facet mgs "$LCTL conf_param $PARAM='$FINAL'" || error conf_param failed
-
-	wait_update $(facet_host $myfacet) "$TEST" "$FINAL" || error check failed!
-}
-
 test_27a() {
 	start_ost || return 1
 	start_mds || return 2
 	echo "Requeue thread should have started: "
 	ps -e | grep ll_cfg_requeue
-	set_and_check ost1 "lctl get_param -n obdfilter.$FSNAME-OST0000.client_cache_seconds" "$FSNAME-OST0000.ost.client_cache_seconds" || return 3
+	set_conf_param_and_check ost1					      \
+	   "lctl get_param -n obdfilter.$FSNAME-OST0000.client_cache_seconds" \
+	   "$FSNAME-OST0000.ost.client_cache_seconds" || return 3
 	cleanup_nocli
 }
 run_test 27a "Reacquire MGS lock if OST started first"
@@ -990,8 +975,12 @@ test_27b() {
         local device=$(do_facet $SINGLEMDS "lctl get_param -n devices" | awk '($3 ~ "mdt" && $4 ~ "MDT") { print $4 }')
 
 	facet_failover $SINGLEMDS
-	set_and_check $SINGLEMDS "lctl get_param -n mdt.$device.identity_acquire_expire" "$device.mdt.identity_acquire_expire" || return 3
-	set_and_check client "lctl get_param -n mdc.$device-mdc-*.max_rpcs_in_flight" "$device.mdc.max_rpcs_in_flight" || return 4
+	set_conf_param_and_check $SINGLEMDS				\
+		"lctl get_param -n mdt.$device.identity_acquire_expire"	\
+		"$device.mdt.identity_acquire_expire" || return 3
+	set_conf_param_and_check client					\
+		"lctl get_param -n mdc.$device-mdc-*.max_rpcs_in_flight"\
+		"$device.mdc.max_rpcs_in_flight" || return 4
 	check_mount
 	cleanup
 }
@@ -1003,9 +992,9 @@ test_28() {
 	PARAM="$FSNAME.llite.max_read_ahead_whole_mb"
 	ORIG=$($TEST)
 	FINAL=$(($ORIG + 1))
-	set_and_check client "$TEST" "$PARAM" $FINAL || return 3
+	set_conf_param_and_check client "$TEST" "$PARAM" $FINAL || return 3
 	FINAL=$(($FINAL + 1))
-	set_and_check client "$TEST" "$PARAM" $FINAL || return 4
+	set_conf_param_and_check client "$TEST" "$PARAM" $FINAL || return 4
 	umount_client $MOUNT || return 200
 	mount_client $MOUNT
 	RESULT=$($TEST)
@@ -1015,7 +1004,7 @@ test_28() {
 	else
 	    echo "New config success: got $RESULT"
 	fi
-	set_and_check client "$TEST" "$PARAM" $ORIG || return 5
+	set_conf_param_and_check client "$TEST" "$PARAM" $ORIG || return 5
 	cleanup
 }
 run_test 28 "permanent parameter setting"
@@ -1032,7 +1021,8 @@ test_29() {
 
         ACTV=$(lctl get_param -n $PROC_ACT)
 	DEAC=$((1 - $ACTV))
-	set_and_check client "lctl get_param -n $PROC_ACT" "$PARAM" $DEAC || return 2
+	set_conf_param_and_check client \
+		"lctl get_param -n $PROC_ACT" "$PARAM" $DEAC || return 2
         # also check ost_server_uuid status
 	RESULT=$(lctl get_param -n $PROC_UUID | grep DEACTIV)
 	if [ -z "$RESULT" ]; then
@@ -1076,7 +1066,8 @@ test_29() {
 	fi
 
 	# make sure it reactivates
-	set_and_check client "lctl get_param -n $PROC_ACT" "$PARAM" $ACTV || return 6
+	set_conf_param_and_check client \
+		"lctl get_param -n $PROC_ACT" "$PARAM" $ACTV || return 6
 
 	umount_client $MOUNT
 	stop_ost2
@@ -1094,7 +1085,8 @@ test_30a() {
 	ORIG=$($TEST)
 	LIST=(1 2 3 4 5 4 3 2 1 2 3 4 5 4 3 2 1 2 3 4 5)
 	for i in ${LIST[@]}; do
-	    set_and_check client "$TEST" "$FSNAME.llite.max_read_ahead_whole_mb" $i || return 3
+		set_conf_param_and_check client "$TEST" \
+			"$FSNAME.llite.max_read_ahead_whole_mb" $i || return 3
 	done
 	# make sure client restart still works
 	umount_client $MOUNT
@@ -1128,7 +1120,9 @@ test_30b() {
 	echo "Using fake nid $NEW"
 
 	TEST="$LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids | sed -n 's/.*\($NEW\).*/\1/p'"
-	set_and_check client "$TEST" "$FSNAME-OST0000.failover.node" $NEW || error "didn't add failover nid $NEW"
+	set_conf_param_and_check client "$TEST" \
+		"$FSNAME-OST0000.failover.node" $NEW ||
+		error "didn't add failover nid $NEW"
 	NIDS=$($LCTL get_param -n osc.$FSNAME-OST0000-osc-[^M]*.import | grep failover_nids)
 	echo $NIDS
 	NIDCOUNT=$(($(echo "$NIDS" | wc -w) - 1))
@@ -1861,17 +1855,17 @@ test_42() { #bug 14693
 run_test 42 "invalid config param should not prevent client from mounting"
 
 test_43() {
-    [ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
-    setup
-    chmod ugo+x $DIR || error "chmod 0 failed"
-    set_and_check mds                                        \
-        "lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"  \
-        "$FSNAME.mdt.root_squash"                            \
-        "0:0"
-    set_and_check mds                                        \
-       "lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids" \
-       "$FSNAME.mdt.nosquash_nids"                           \
-       "NONE"
+	[ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
+	setup
+	chmod ugo+x $DIR || error "chmod 0 failed"
+	set_conf_param_and_check mds					\
+		"lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"	\
+		"$FSNAME.mdt.root_squash"				\
+		"0:0"
+	set_conf_param_and_check mds					\
+		"lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
+		"$FSNAME.mdt.nosquash_nids"				\
+		"NONE"
 
     #
     # create set of test files
@@ -1887,15 +1881,15 @@ test_43() {
     chmod go-rwx $DIR/$tdir-rootdir   || error "chmod 3 failed"
     touch $DIR/$tdir-rootdir/tfile-1  || error "touch failed"
 
-    #
-    # check root_squash:
-    #   set root squash UID:GID to RUNAS_ID
-    #   root should be able to access only files owned by RUNAS_ID
-    #
-    set_and_check mds                                        \
-       "lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"   \
-       "$FSNAME.mdt.root_squash"                             \
-       "$RUNAS_ID:$RUNAS_ID"
+	#
+	# check root_squash:
+	#   set root squash UID:GID to RUNAS_ID
+	#   root should be able to access only files owned by RUNAS_ID
+	#
+	set_conf_param_and_check mds					\
+		"lctl get_param -n mdt.$FSNAME-MDT0000.root_squash"	\
+		"$FSNAME.mdt.root_squash"				\
+		"$RUNAS_ID:$RUNAS_ID"
 
     ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-userfile)
     dd if=$DIR/$tfile-userfile 1>/dev/null 2>/dev/null || \
@@ -1926,18 +1920,18 @@ test_43() {
         error "$ST: root create permission is granted"
     echo "$ST: root create permission is denied - ok"
 
-    #
-    # check nosquash_nids:
-    #   put client's NID into nosquash_nids list,
-    #   root should be able to access root file after that
-    #
-    local NIDLIST=$(lctl list_nids all | tr '\n' ' ')
-    NIDLIST="2@elan $NIDLIST 192.168.0.[2,10]@tcp"
-    NIDLIST=$(echo $NIDLIST | tr -s ' ' ' ')
-    set_and_check mds                                        \
-       "lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids" \
-       "$FSNAME-MDTall.mdt.nosquash_nids"                    \
-       "$NIDLIST"
+	#
+	# check nosquash_nids:
+	#   put client's NID into nosquash_nids list,
+	#   root should be able to access root file after that
+	#
+	local NIDLIST=$(lctl list_nids all | tr '\n' ' ')
+	NIDLIST="2@elan $NIDLIST 192.168.0.[2,10]@tcp"
+	NIDLIST=$(echo $NIDLIST | tr -s ' ' ' ')
+	set_conf_param_and_check mds					\
+		"lctl get_param -n mdt.$FSNAME-MDT0000.nosquash_nids"	\
+		"$FSNAME-MDTall.mdt.nosquash_nids"			\
+		"$NIDLIST"
 
     ST=$(stat -c "%n: owner uid %u (%A)" $DIR/$tfile-rootfile)
     dd if=$DIR/$tfile-rootfile 1>/dev/null 2>/dev/null || \
