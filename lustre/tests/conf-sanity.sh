@@ -10,7 +10,7 @@ set -e
 ONLY=${ONLY:-"$*"}
 
 # bug number for skipped test:
-#               15977
+ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 if [ "$FAILURE_MODE" = "HARD" ]; then
