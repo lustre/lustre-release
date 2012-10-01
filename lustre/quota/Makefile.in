@@ -5,7 +5,7 @@ qmt-objs := qmt_dev.o qmt_handler.o qmt_lock.o
 quota-objs := lproc_quota.o lquota_lib.o lquota_disk.o lquota_entry.o
 
 qsd-objs := qsd_lib.o qsd_request.o qsd_entry.o qsd_lock.o
-qsd-objs += qsd_reint.o qsd_writeback.o
+qsd-objs += qsd_reint.o qsd_writeback.o qsd_config.o
 
 lquota-objs := $(quota-objs) $(qsd-objs)
 

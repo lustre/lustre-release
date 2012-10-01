@@ -2264,12 +2264,11 @@ static int mgs_write_log_quota(const struct lu_env *env, struct mgs_device *mgs,
 			       struct fs_db *fsdb, struct mgs_target_info *mti,
 			       char *quota, char *ptr)
 {
-	struct lustre_cfg_bufs bufs;
-	struct lustre_cfg *lcfg;
-	char *tmp;
-	char sep;
-	int cmd = LCFG_PARAM;
-	int rc;
+	struct mgs_thread_info	*mgi = mgs_env_info(env);
+	struct lustre_cfg	*lcfg;
+	char			*tmp;
+	char			 sep;
+	int			 rc, cmd = LCFG_PARAM;
 
 	/* support only 'meta' and 'data' pools so far */
 	if (class_match_param(ptr, QUOTA_METAPOOL_NAME, &tmp) != 0 &&
@@ -2291,9 +2290,9 @@ static int mgs_write_log_quota(const struct lu_env *env, struct mgs_device *mgs,
 		}
 	}
 
-	lustre_cfg_bufs_reset(&bufs, NULL);
-	lustre_cfg_bufs_set_string(&bufs, 1, quota);
-	lcfg = lustre_cfg_new(cmd, &bufs);
+	lustre_cfg_bufs_reset(&mgi->mgi_bufs, mti->mti_fsname);
+	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, quota);
+	lcfg = lustre_cfg_new(cmd, &mgi->mgi_bufs);
 	/* truncate the comment to the parameter name */
 	ptr = tmp - 1;
 	sep = *ptr;

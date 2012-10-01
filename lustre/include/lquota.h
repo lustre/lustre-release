@@ -111,10 +111,16 @@ struct qsd_instance;
  * The API is the following:
  *
  * - qsd_init(): the user (mostly the OSD layer) should first allocate a qsd
- *               instance via qsd_init(). This sets up on-disk objects
- *               associated with the quota slave feature and initiates the quota
- *               reintegration procedure if needed. qsd_init() should typically
- *               be called when ->ldo_start is invoked.
+ *               instance via qsd_init(). This creates all required structures
+ *               to manage quota enforcement for this target and performs all
+ *               low-level initialization which does not involve any lustre
+ *               object. qsd_init() should typically be called when the OSD
+ *               is being set up.
+ *
+ * - qsd_prepare(): This sets up on-disk objects associated with the quota slave
+ *                  feature and initiates the quota reintegration procedure if
+ *                  needed. qsd_prepare() should typically be called when
+ *                  ->ldo_prepare is invoked.
  *
  * - qsd_fini(): is used to release a qsd_instance structure allocated with
  *               qsd_init(). This releases all quota slave objects and frees the
@@ -125,6 +131,8 @@ struct qsd_instance;
 
 struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,
 			      cfs_proc_dir_entry_t *);
+
+int qsd_prepare(const struct lu_env *, struct qsd_instance *);
 
 void qsd_fini(const struct lu_env *, struct qsd_instance *);
 

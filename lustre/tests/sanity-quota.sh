@@ -9,11 +9,9 @@ set -e
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
-# only accounting tests are supported for the time being
-ONLY="33 34 35"
-
 ONLY=${ONLY:-"$*"}
-ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT"
+# only accounting tests and test 22 are supported for the time being
+ALWAYS_EXCEPT="0 1 2 3 4 5 6 7 8 9 10 11 12 13 15 17 18 19 20 21 23 24 27 30 36 $SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] &&
@@ -304,7 +302,7 @@ cleanup_quota_test() {
 	rm -rf $DIR/$tdir
 	echo "Wait for unlink objects finished..."
 	wait_delete_completed
-	sync_all_data
+	sync_all_data || true
 }
 
 quota_show_check() {
@@ -338,7 +336,7 @@ quota_show_check() {
 	fi
 }
 
-# enalbe quota debug
+# enable quota debug
 quota_init() {
 	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+quota"
 }
@@ -415,7 +413,7 @@ test_1() {
 
 	rm -f $TESTFILE
 	wait_delete_completed
-	sync_all_data
+	sync_all_data || true
 	USED=$(getquota -u $TSTUSR global curspace)
 	[ $USED -ne 0 ] && quota_error u $TSTUSR \
 		"user quota isn't released after deletion"
@@ -583,7 +581,7 @@ test_block_soft() {
 	echo "Unlink file to stop timer"
 	rm -f $TESTFILE
 	wait_delete_completed
-	sync_all_data
+	sync_all_data || true
 
 	$SHOW_QUOTA_USER
 	$SHOW_QUOTA_GROUP
@@ -841,7 +839,7 @@ test_6() {
 	$RUNAS2 $DD of=$TESTFILE2 count=1 ||
 		error "write $TESTFILE2 failure, expect success"
 	sync; sync
-	sync_all_data
+	sync_all_data || true
 
 	# set a small timeout value, to make the quota RPC timedout before
 	# the watchdog triggered.
@@ -1238,7 +1236,7 @@ test_12() {
 	echo "Free space from ost0..."
 	rm -f $TESTFILE0
 	wait_delete_completed
-	sync_all_data
+	sync_all_data || true
 
 	echo "Write to ost1 after space freed from ost0..."
 	$RUNAS $DD of=$TESTFILE1 count=$blk_cnt oflag=sync ||
@@ -1301,7 +1299,7 @@ test_15(){
 	local LIMIT=$((24 * 1024 * 1024 * 1024 * 1024)) # 24 TB
 
 	wait_delete_completed
-	sync_all_data
+	sync_all_data || true
 
         # test for user
 	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
@@ -1365,7 +1363,7 @@ test_17sub() {
 		sleep 1
 	done
 
-	sync; sync_all_data
+	sync; sync_all_data || true
 
 	USED=$(getquota -u $TSTUSR global curspace)
 	[ $USED -ge $(($BLKS * 1024)) ] || quota_error u $TSTUSR \
@@ -1728,7 +1726,7 @@ test_24() {
 	runas -u 0 -g 0 $DD of=$TESTFILE count=$((blimit + 1)) ||
 		error "write failure, expect success"
 	cancel_lru_locks osc
-	sync_all_data
+	sync_all_data || true
 
 	$SHOW_QUOTA_USER | grep '*' || error "no matching *"
 
@@ -1820,7 +1818,7 @@ test_33() {
 		echo "Iteration $i/$INODES completed"
 	done
 	cancel_lru_locks osc
-	sync; sync_all_data
+	sync; sync_all_data || true
 
 	echo "Verify disk usage after write"
 	USED=$(getquota -u $TSTID global curspace)
@@ -1869,7 +1867,7 @@ test_34() {
 	$DD of=$DIR/$tdir/$tfile count=$BLK_CNT 2>/dev/null ||
 		error "write failed"
 	cancel_lru_locks osc
-	sync; sync_all_data
+	sync; sync_all_data || true
 
 	echo "chown the file to user $TSTID"
 	chown $TSTID $DIR/$tdir/$tfile || error "chown failed"
@@ -1916,7 +1914,7 @@ test_35() {
 	$RUNAS $DD of=$DIR/$tdir/$tfile count=$BLK_CNT 2>/dev/null ||
 		error "write failed"
 	cancel_lru_locks osc
-	sync; sync_all_data
+	sync; sync_all_data || true
 
 	echo "Save disk usage before restart"
 	local ORIG_USR_SPACE=$(getquota -u $TSTID global curspace)
@@ -1964,7 +1962,7 @@ test_35() {
 	$RUNAS $DD of=$DIR/$tdir/$tfile count=$BLK_CNT seek=1 2>/dev/null ||
 		error "write failed"
 	cancel_lru_locks osc
-	sync; sync_all_data
+	sync; sync_all_data || true
 
 	echo "Verify space usage is increased"
 	USED=$(getquota -u $TSTID global curspace)

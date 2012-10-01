@@ -21,15 +21,32 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2012 Whamcloud, Inc.
+ * Copyright (c) 2012 Intel, Inc.
  * Use is subject to license terms.
  *
- * Author: Johann Lombardi <johann@whamcloud.com>
- * Author: Niu    Yawei    <niu@whamcloud.com>
+ * Author: Johann Lombardi <johann.lombardi@intel.com>
+ * Author: Niu    Yawei    <yawei.niu@intel.com>
  */
 
 /*
  * Quota Slave Driver (QSD) management.
+ *
+ * The quota slave feature is implemented under the form of a library called
+ * QSD. Each OSD device should create a QSD instance via qsd_init() which will
+ * be used to manage quota enforcement for this device. This implies:
+ * - completing the reintegration procedure with the quota master (aka QMT, see
+ *   qmt_dev.c) to retrieve the latest quota settings and space distribution.
+ * - managing quota locks in order to be notified of configuration changes.
+ * - acquiring space from the QMT when quota space for a given user/group is
+ *   close to exhaustion.
+ * - allocating quota space to service threads for local request processing.
+ *
+ * Once the QSD instance created, the OSD device should invoke qsd_start()
+ * when recovery is completed. This notifies the QSD that we are about to
+ * process new requests on which quota should be strictly enforced.
+ * Then, qsd_op_begin/end can be used to reserve/release/pre-acquire quota space
+ * for/after each operation until shutdown where the QSD instance should be
+ * freed via qsd_fini().
  */
 
 #ifndef EXPORT_SYMTAB
@@ -38,6 +55,7 @@
 
 #define DEBUG_SUBSYSTEM S_LQUOTA
 
+#include <obd_class.h>
 #include "qsd_internal.h"
 
 /* define qsd thread key */
@@ -62,8 +80,27 @@ static int lprocfs_qsd_rd_state(char *page, char **start, off_t off,
 			qsd->qsd_is_md ? "md" : "dt");
 }
 
+static int lprocfs_qsd_rd_enabled(char *page, char **start, off_t off,
+				  int count, int *eof, void *data)
+{
+	struct qsd_instance	*qsd = (struct qsd_instance *)data;
+	char			 enabled[5];
+	LASSERT(qsd != NULL);
+
+	memset(enabled, 0, sizeof(enabled));
+	if (qsd_type_enabled(qsd, USRQUOTA))
+		strcat(enabled, "u");
+	if (qsd_type_enabled(qsd, GRPQUOTA))
+		strcat(enabled, "g");
+	if (strlen(enabled) == 0)
+		strcat(enabled, "none");
+
+	return snprintf(page, count, "%s\n", enabled);
+}
+
 static struct lprocfs_vars lprocfs_quota_qsd_vars[] = {
 	{ "info", lprocfs_qsd_rd_state, 0, 0},
+	{ "enabled", lprocfs_qsd_rd_enabled, 0, 0},
 	{ NULL }
 };
 
@@ -119,7 +156,8 @@ static void qsd_qtype_fini(const struct lu_env *env, struct qsd_instance *qsd,
 /*
  * Allocate and initialize a qsd_qtype_info structure for quota type \qtype.
  * This opens the accounting object and initializes the proc file.
- * It's called on OSD start when the qsd instance is created.
+ * It's called on OSD start when the qsd_prepare() is invoked on the qsd
+ * instance.
  *
  * \param env  - the environment passed by the caller
  * \param qsd  - is the qsd instance which will be in charge of the new
@@ -229,8 +267,16 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	CDEBUG(D_QUOTA, "%s: initiating QSD shutdown\n", qsd->qsd_svname);
 	qsd->qsd_stopping = true;
 
+	/* remove from the list of fsinfo */
+	if (!cfs_list_empty(&qsd->qsd_link)) {
+		LASSERT(qsd->qsd_fsinfo != NULL);
+		cfs_down(&qsd->qsd_fsinfo->qfs_sem);
+		cfs_list_del_init(&qsd->qsd_link);
+		cfs_up(&qsd->qsd_fsinfo->qfs_sem);
+	}
+
 	/* remove qsd proc entry */
-	if (qsd->qsd_proc != NULL && !IS_ERR(qsd->qsd_proc)) {
+	if (qsd->qsd_proc != NULL) {
 		lprocfs_remove(&qsd->qsd_proc);
 		qsd->qsd_proc = NULL;
 	}
@@ -239,8 +285,12 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++)
 		qsd_qtype_fini(env, qsd, qtype);
 
+	/* release per-filesystem information */
+	if (qsd->qsd_fsinfo != NULL)
+		qsd_put_fsinfo(qsd->qsd_fsinfo);
+
 	/* release quota root directory */
-	if (qsd->qsd_root != NULL && !IS_ERR(qsd->qsd_root)) {
+	if (qsd->qsd_root != NULL) {
 		lu_object_put(env, &qsd->qsd_root->do_lu);
 		qsd->qsd_root = NULL;
 	}
@@ -259,8 +309,7 @@ EXPORT_SYMBOL(qsd_fini);
 
 /*
  * Create a new qsd_instance to be associated with backend osd device
- * identified by \dev. For now, this function just create procfs files which
- * dumps the accounting information
+ * identified by \dev.
  *
  * \param env    - the environment passed by the caller
  * \param svname - is the service name of the OSD device creating this instance
@@ -275,8 +324,9 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 			      struct dt_device *dev,
 			      cfs_proc_dir_entry_t *osd_proc)
 {
+	struct qsd_thread_info	*qti = qsd_info(env);
 	struct qsd_instance	*qsd;
-	int			 rc, qtype;
+	int			 rc;
 	ENTRY;
 
 	/* allocate qsd instance */
@@ -285,6 +335,7 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	cfs_rwlock_init(&qsd->qsd_lock);
+	CFS_INIT_LIST_HEAD(&qsd->qsd_link);
 	/* copy service name */
 	strncpy(qsd->qsd_svname, svname, MAX_OBD_NAME);
 
@@ -298,35 +349,35 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	 * the configuration log in the future */
 	qsd->qsd_pool_id  = 0;
 
-	/* Record whether this qsd instance is managing quota enforcement for a
-	 * MDT (i.e. inode quota) or OST (block quota) */
-	qsd->qsd_is_md = lu_device_is_md(dev->dd_lu_dev.ld_site->ls_top_dev);
-
-	/* look-up on-disk directory for the quota slave */
-	qsd->qsd_root = lquota_disk_dir_find_create(env, dev, NULL, QSD_DIR);
-	if (IS_ERR(qsd->qsd_root)) {
-		rc = PTR_ERR(qsd->qsd_root);
-		CERROR("%s: failed to create quota slave root dir (%d)\n",
-		       svname, rc);
+	/* get fsname from svname */
+	rc = server_name2fsname(svname, qti->qti_buf, NULL);
+	if (rc) {
+		CERROR("%s: fail to extract filesystem name\n", svname);
 		GOTO(out, rc);
 	}
+
+	/* look up quota setting for the filesystem the target belongs to */
+	qsd->qsd_fsinfo = qsd_get_fsinfo(qti->qti_buf, 1);
+	if (qsd->qsd_fsinfo == NULL) {
+		CERROR("%s: failed to locate filesystem information\n", svname);
+		GOTO(out, rc = -EINVAL);
+	}
+
+	/* add in the list of lquota_fsinfo */
+	cfs_down(&qsd->qsd_fsinfo->qfs_sem);
+	list_add_tail(&qsd->qsd_link, &qsd->qsd_fsinfo->qfs_qsd_list);
+	cfs_up(&qsd->qsd_fsinfo->qfs_sem);
 
 	/* register procfs directory */
 	qsd->qsd_proc = lprocfs_register(QSD_DIR, osd_proc,
 					 lprocfs_quota_qsd_vars, qsd);
 	if (IS_ERR(qsd->qsd_proc)) {
 		rc = PTR_ERR(qsd->qsd_proc);
+		qsd->qsd_proc = NULL;
 		CERROR("%s: fail to create quota slave proc entry (%d)\n",
 		       svname, rc);
 		GOTO(out, rc);
         }
-
-	/* initialize per-quota type data */
-	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
-		rc = qsd_qtype_init(env, qsd, qtype);
-		if (rc)
-			GOTO(out, rc);
-	}
 out:
 	if (rc) {
 		qsd_fini(env, qsd);
@@ -337,12 +388,64 @@ out:
 EXPORT_SYMBOL(qsd_init);
 
 /*
+ * Initialize on-disk structures in order to manage quota enforcement for
+ * the target associated with the qsd instance \qsd and starts the reintegration
+ * procedure for each quota type as soon as possible.
+ * The last step of the reintegration will be completed once qsd_start() is
+ * called, at which points the space reconciliation with the master will be
+ * executed.
+ * This function must be called when the server stack is fully configured,
+ * typically when ->ldo_prepare is called across the stack.
+ *
+ * \param env - the environment passed by the caller
+ * \param qsd - is qsd_instance to prepare
+ *
+ * \retval - 0 on success, appropriate error on failure
+ */
+int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
+{
+	int	rc, qtype;
+	ENTRY;
+
+	LASSERT(qsd != NULL);
+
+	/* Record whether this qsd instance is managing quota enforcement for a
+	 * MDT (i.e. inode quota) or OST (block quota) */
+	if (lu_device_is_md(qsd->qsd_dev->dd_lu_dev.ld_site->ls_top_dev))
+		qsd->qsd_is_md = true;
+
+	/* look-up on-disk directory for the quota slave */
+	qsd->qsd_root = lquota_disk_dir_find_create(env, qsd->qsd_dev, NULL,
+						    QSD_DIR);
+	if (IS_ERR(qsd->qsd_root)) {
+		rc = PTR_ERR(qsd->qsd_root);
+		qsd->qsd_root = NULL;
+		CERROR("%s: failed to create quota slave root dir (%d)\n",
+		       qsd->qsd_svname, rc);
+		RETURN(rc);
+	}
+
+	/* initialize per-quota type data */
+	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
+		rc = qsd_qtype_init(env, qsd, qtype);
+		if (rc)
+			RETURN(rc);
+	}
+
+	RETURN(0);
+}
+EXPORT_SYMBOL(qsd_prepare);
+
+void lustre_register_quota_process_config(int (*qpc)(struct lustre_cfg *lcfg));
+
+/*
  * Global initialization performed at module load time
  */
 int qsd_glb_init(void)
 {
 	qsd_key_init_generic(&qsd_thread_key, NULL);
 	lu_context_key_register(&qsd_thread_key);
+	lustre_register_quota_process_config(qsd_process_config);
 	return 0;
 }
 
@@ -351,5 +454,6 @@ int qsd_glb_init(void)
  */
 void qsd_glb_fini(void)
 {
+	lustre_register_quota_process_config(NULL);
 	lu_context_key_degister(&qsd_thread_key);
 }

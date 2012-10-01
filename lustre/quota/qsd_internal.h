@@ -31,6 +31,7 @@
 #define _QSD_INTERNAL_H
 
 struct qsd_type_info;
+struct qsd_fsinfo;
 
 /*
  * A QSD instance implements quota enforcement support for a given OSD.
@@ -73,7 +74,13 @@ struct qsd_instance {
 	 *
 	 * probably way too much :(
 	 */
-	cfs_rwlock_t	 	 qsd_lock;
+	cfs_rwlock_t		 qsd_lock;
+
+	/* per-filesystem quota information */
+	struct qsd_fsinfo	*qsd_fsinfo;
+
+	/* link into qfs_qsd_list of qfs_fsinfo */
+	cfs_list_t		 qsd_link;
 
 	unsigned long		 qsd_is_md:1,    /* managing quota for mdt */
 				 qsd_stopping:1; /* qsd_instance is stopping */
@@ -121,6 +128,28 @@ struct qsd_qtype_info {
 
 	/* A list of references to this instance, for debugging */
 	struct lu_ref		 qqi_reference;
+};
+
+/*
+ * Per-filesystem quota information
+ * Structure tracking quota enforcement status on a per-filesystem basis
+ */
+struct qsd_fsinfo {
+	/* filesystem name */
+	char			qfs_name[MTI_NAME_MAXLEN];
+
+	/* what type of quota is enabled for each resource type. */
+	unsigned int		qfs_enabled[LQUOTA_NR_RES];
+
+	/* list of all qsd_instance for this fs */
+	cfs_list_t		qfs_qsd_list;
+	cfs_semaphore_t		qfs_sem;
+
+	/* link to the global quota fsinfo list.  */
+	cfs_list_t		qfs_link;
+
+	/* reference count */
+	int			qfs_ref;
 };
 
 /*
@@ -190,6 +219,24 @@ struct qsd_thread_info *qsd_info(const struct lu_env *env)
 	return info;
 }
 
+/* helper function to check whether a given quota type is enabled */
+static inline int qsd_type_enabled(struct qsd_instance *qsd, int type)
+{
+	int	enabled, pool;
+
+	LASSERT(qsd != NULL);
+	LASSERT(type < MAXQUOTAS);
+
+	if (qsd->qsd_fsinfo == NULL)
+		return 0;
+
+	pool = qsd->qsd_is_md ? LQUOTA_RES_MD : LQUOTA_RES_DT;
+	enabled = qsd->qsd_fsinfo->qfs_enabled[pool - LQUOTA_FIRST_RES];
+
+	return enabled & (1 << type);
+}
+
+/* helper function to set new qunit and compute associated qtune value */
 static inline void qsd_set_qunit(struct lquota_entry *lqe, __u64 qunit)
 {
 	if (lqe->lqe_qunit == qunit)
@@ -258,6 +305,10 @@ int qsd_fetch_index(const struct lu_env *, struct obd_export *,
 void qsd_bump_version(struct qsd_qtype_info *, __u64, bool);
 void qsd_upd_schedule(struct qsd_qtype_info *, struct lquota_entry *,
 		      union lquota_id *, union lquota_rec *, __u64, bool);
+/* qsd_config.c */
+struct qsd_fsinfo *qsd_get_fsinfo(char *, bool);
+void qsd_put_fsinfo(struct qsd_fsinfo *);
+int qsd_process_config(struct lustre_cfg *);
 
 /* qsd_handler.c */
 /* XXX to be replaced with real function once qsd_handler landed */

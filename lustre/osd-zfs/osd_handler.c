@@ -579,6 +579,14 @@ static int osd_mount(const struct lu_env *env,
 
 	o->arc_prune_cb = arc_add_prune_callback(arc_prune_func, o);
 
+	/* initialize quota slave instance */
+	o->od_quota_slave = qsd_init(env, o->od_svname, &o->od_dt_dev,
+				     o->od_proc_entry);
+	if (IS_ERR(o->od_quota_slave)) {
+		rc = PTR_ERR(o->od_quota_slave);
+		o->od_quota_slave = NULL;
+		GOTO(err, rc);
+	}
 err:
 	RETURN(rc);
 }
@@ -819,13 +827,9 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 			RETURN(rc);
 	}
 
-	/* initialize quota slave instance */
-	osd->od_quota_slave = qsd_init(env, osd->od_svname, &osd->od_dt_dev,
-				       osd->od_proc_entry);
-	if (IS_ERR(osd->od_quota_slave)) {
-		rc = PTR_ERR(osd->od_quota_slave);
-		osd->od_quota_slave = NULL;
-	}
+	if (osd->od_quota_slave != NULL)
+		/* set up quota slave objects */
+		rc = qsd_prepare(env, osd->od_quota_slave);
 
 	RETURN(rc);
 }

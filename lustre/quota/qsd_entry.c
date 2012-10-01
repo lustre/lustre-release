@@ -24,8 +24,8 @@
  * Copyright (c) 2011, 2012, Intel, Inc.
  * Use is subject to license terms.
  *
- * Author: Johann Lombardi <johann@whamcloud.com>
- * Author: Niu    Yawei    <niu@whamcloud.com>
+ * Author: Johann Lombardi <johann.lombardi@intel.com>
+ * Author: Niu    Yawei    <yawei.niu@intel.com>
  */
 
 #ifndef EXPORT_SYMTAB

@@ -4532,7 +4532,18 @@ static int osd_device_init0(const struct lu_env *env,
 
 	LASSERT(l->ld_site->ls_linkage.next && l->ld_site->ls_linkage.prev);
 
+	/* initialize quota slave instance */
+	o->od_quota_slave = qsd_init(env, o->od_svname, &o->od_dt_dev,
+				     o->od_proc_entry);
+	if (IS_ERR(o->od_quota_slave)) {
+		rc = PTR_ERR(o->od_quota_slave);
+		o->od_quota_slave = NULL;
+		GOTO(out_procfs, rc);
+	}
+
 	RETURN(0);
+out_procfs:
+	osd_procfs_fini(o);
 out_site:
 	lu_site_fini(&o->od_site);
 out_compat:
@@ -4690,13 +4701,9 @@ static int osd_prepare(const struct lu_env *env, struct lu_device *pdev,
 			RETURN(result);
 	}
 
-	/* 2. setup quota slave instance */
-	osd->od_quota_slave = qsd_init(env, osd->od_svname, &osd->od_dt_dev,
-				       osd->od_proc_entry);
-	if (IS_ERR(osd->od_quota_slave)) {
-		result = PTR_ERR(osd->od_quota_slave);
-		osd->od_quota_slave = NULL;
-	}
+	if (osd->od_quota_slave != NULL)
+		/* set up quota slave objects */
+		result = qsd_prepare(env, osd->od_quota_slave);
 
 	RETURN(result);
 }

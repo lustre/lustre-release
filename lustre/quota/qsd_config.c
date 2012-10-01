@@ -1,0 +1,174 @@
+/*
+ * GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; if not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+ * Boston, MA 021110-1307, USA
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright (c) 2012 Intel, Inc.
+ * Use is subject to license terms.
+ *
+ * Author: Johann Lombardi <johann.lombardi@intel.com>
+ * Author: Niu    Yawei    <yawei.niu@intel.com>
+ */
+
+#ifndef EXPORT_SYMTAB
+# define EXPORT_SYMTAB
+#endif
+
+#define DEBUG_SUBSYSTEM S_LQUOTA
+
+#include <obd_class.h>
+#include <lustre_param.h>
+
+#include "qsd_internal.h"
+
+static CFS_LIST_HEAD(qfs_list);
+/* protect the qfs_list */
+static DEFINE_SPINLOCK(qfs_list_lock);
+
+/*
+ * Put reference of qsd_fsinfo.
+ *
+ * \param  qfs    - the qsd_fsinfo to be put
+ */
+void qsd_put_fsinfo(struct qsd_fsinfo *qfs)
+{
+	ENTRY;
+	LASSERT(qfs != NULL);
+
+	cfs_spin_lock(&qfs_list_lock);
+	LASSERT(qfs->qfs_ref > 0);
+	qfs->qfs_ref--;
+	if (qfs->qfs_ref == 0) {
+		LASSERT(cfs_list_empty(&qfs->qfs_qsd_list));
+		cfs_list_del(&qfs->qfs_link);
+		OBD_FREE_PTR(qfs);
+	}
+	cfs_spin_unlock(&qfs_list_lock);
+	EXIT;
+}
+
+/*
+ * Find or create a qsd_fsinfo
+ *
+ * \param  name   - filesystem name
+ * \param  create - when @create is non-zero, create new one if fail to
+ *                  find existing qfs by @name
+ *
+ * \retval qsd_fsinfo - success
+ * \retval NULL          - failure
+ */
+struct qsd_fsinfo *qsd_get_fsinfo(char *name, bool create)
+{
+	struct qsd_fsinfo	*qfs, *new = NULL;
+	ENTRY;
+
+	if (name == NULL ||  strlen(name) >= MTI_NAME_MAXLEN)
+		RETURN(NULL);
+
+	if (create) {
+		/* pre-allocate a qsd_fsinfo in case there isn't one already.
+		 * we can afford the extra cost since qsd_get_fsinfo() isn't
+		 * called very often with create = true */
+
+		OBD_ALLOC_PTR(new);
+		if (new == NULL)
+			RETURN(NULL);
+
+		cfs_sema_init(&new->qfs_sem, 1);
+		CFS_INIT_LIST_HEAD(&new->qfs_qsd_list);
+		strcpy(new->qfs_name, name);
+		new->qfs_ref = 1;
+	}
+
+	/* search in the fsinfo list */
+	cfs_spin_lock(&qfs_list_lock);
+	cfs_list_for_each_entry(qfs, &qfs_list, qfs_link) {
+		if (!strcmp(qfs->qfs_name, name)) {
+			qfs->qfs_ref++;
+			goto out;
+		}
+	}
+
+	qfs = NULL; /* not found */
+
+	if (new) {
+		/* not found, but we were asked to create a new one */
+		cfs_list_add_tail(&new->qfs_link, &qfs_list);
+		qfs = new;
+		new = NULL;
+	}
+out:
+	cfs_spin_unlock(&qfs_list_lock);
+
+	if (new)
+		OBD_FREE_PTR(new);
+	RETURN(qfs);
+}
+
+/*
+ * Quota configuration handlers in charge of processing all per-filesystem quota
+ * parameters set via conf_param.
+ *
+ * \param lcfg - quota configuration log to be processed
+ */
+int qsd_process_config(struct lustre_cfg *lcfg)
+{
+	struct qsd_fsinfo	*qfs;
+	char			*fsname = lustre_cfg_string(lcfg, 0);
+	char			*cfgstr = lustre_cfg_string(lcfg, 1);
+	char			*keystr, *valstr;
+	int			 rc, pool, enabled = 0;
+	ENTRY;
+
+	CDEBUG(D_QUOTA, "processing quota parameter: fs:%s cfgstr:%s\n", fsname,
+	       cfgstr);
+
+	if (class_match_param(cfgstr, PARAM_QUOTA, &keystr) != 0)
+		RETURN(-EINVAL);
+
+	if (!class_match_param(keystr, QUOTA_METAPOOL_NAME, &valstr))
+		pool = LQUOTA_RES_MD;
+	else if (!class_match_param(keystr, QUOTA_DATAPOOL_NAME, &valstr))
+		pool = LQUOTA_RES_DT;
+	else
+		RETURN(-EINVAL);
+
+	qfs = qsd_get_fsinfo(fsname, 0);
+	if (qfs == NULL) {
+		CERROR("Fail to find quota filesystem information for %s\n",
+		       fsname);
+		RETURN(-ENOENT);
+	}
+
+	if (strchr(valstr, 'u'))
+		enabled |= 1 << USRQUOTA;
+	if (strchr(valstr, 'g'))
+		enabled |= 1 << GRPQUOTA;
+
+	if (qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] == enabled)
+		/* no change required */
+		GOTO(out, rc = 0);
+
+	qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] = enabled;
+out:
+	qsd_put_fsinfo(qfs);
+	RETURN(0);
+}
