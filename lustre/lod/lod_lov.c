@@ -458,7 +458,7 @@ int lod_generate_and_set_lovea(const struct lu_env *env,
 
 		objs[i].l_object_id  = cpu_to_le64(info->lti_ostid.oi_id);
 		objs[i].l_object_seq = cpu_to_le64(info->lti_ostid.oi_seq);
-		objs[i].l_ost_gen    = cpu_to_le32(1);
+		objs[i].l_ost_gen    = cpu_to_le32(0);
 		objs[i].l_ost_idx    = cpu_to_le32(fid_idif_ost_idx(fid));
 	}
 
