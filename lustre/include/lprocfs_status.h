@@ -681,6 +681,7 @@ int lprocfs_obd_rd_ir_factor(char *page, char **start, off_t off,
 int lprocfs_obd_wr_ir_factor(struct file *file, const char *buffer,
                              unsigned long count, void *data);
 
+extern int lprocfs_single_release(cfs_inode_t *, struct file *);
 extern int lprocfs_seq_release(cfs_inode_t *, struct file *);
 
 /* You must use these macros when you want to refer to
@@ -702,7 +703,7 @@ extern int lprocfs_seq_release(cfs_inode_t *, struct file *);
   a read-write proc entry, and then call LPROC_SEQ_SEQ instead. Finally,
   call lprocfs_obd_seq_create(obd, filename, 0444, &name#_fops, data); */
 #define __LPROC_SEQ_FOPS(name, custom_seq_write)                           \
-static int name##_seq_open(cfs_inode_t *inode, struct file *file) {        \
+static int name##_single_open(cfs_inode_t *inode, struct file *file) {     \
         struct proc_dir_entry *dp = PDE(inode);                            \
         int rc;                                                            \
         LPROCFS_ENTRY_AND_CHECK(dp);                                       \
@@ -715,11 +716,11 @@ static int name##_seq_open(cfs_inode_t *inode, struct file *file) {        \
 }                                                                          \
 struct file_operations name##_fops = {                                     \
         .owner   = THIS_MODULE,                                            \
-        .open    = name##_seq_open,                                        \
+        .open    = name##_single_open,                                     \
         .read    = seq_read,                                               \
         .write   = custom_seq_write,                                       \
         .llseek  = seq_lseek,                                              \
-        .release = lprocfs_seq_release,                                    \
+        .release = lprocfs_single_release,                                 \
 }
 
 #define LPROC_SEQ_FOPS_RO(name)         __LPROC_SEQ_FOPS(name, NULL)

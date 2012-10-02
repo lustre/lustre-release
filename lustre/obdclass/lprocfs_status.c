@@ -63,6 +63,13 @@ CFS_MODULE_PARM(lprocfs_no_percpu_stats, "i", int, 0644,
 CFS_DECLARE_RWSEM(_lprocfs_lock);
 EXPORT_SYMBOL(_lprocfs_lock);
 
+int lprocfs_single_release(struct inode *inode, struct file *file)
+{
+        LPROCFS_EXIT();
+        return single_release(inode, file);
+}
+EXPORT_SYMBOL(lprocfs_single_release);
+
 int lprocfs_seq_release(struct inode *inode, struct file *file)
 {
         LPROCFS_EXIT();
