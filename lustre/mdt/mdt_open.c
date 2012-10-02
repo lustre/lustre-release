@@ -1104,6 +1104,10 @@ int mdt_open_by_fid(struct mdt_thread_info* info,
 	if (unlikely(mdt_object_remote(o))) {
                 /* the child object was created on remote server */
                 struct mdt_body *repbody;
+
+		mdt_set_disposition(info, rep, (DISP_IT_EXECD |
+						DISP_LOOKUP_EXECD |
+						DISP_LOOKUP_POS));
                 repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
                 repbody->fid1 = *rr->rr_fid2;
                 repbody->valid |= (OBD_MD_FLID | OBD_MD_MDS);
@@ -1432,8 +1436,15 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                PFID(rr->rr_fid1), rr->rr_name,
                PFID(rr->rr_fid2), create_flags,
                ma->ma_attr.la_mode, msg_flags);
-
-	if (req_is_replay(req) ||
+	if (info->mti_cross_ref) {
+		/* This is cross-ref open */
+		mdt_set_disposition(info, ldlm_rep,
+			    (DISP_IT_EXECD | DISP_LOOKUP_EXECD |
+			     DISP_LOOKUP_POS));
+		result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep,
+					create_flags);
+		GOTO(out, result);
+	} else if (req_is_replay(req) ||
 	    (req->rq_export->exp_libclient && create_flags & MDS_OPEN_HAS_EA)) {
 		/* This is a replay request or from liblustre with ea. */
 		result = mdt_open_by_fid(info, ldlm_rep);
@@ -1452,11 +1463,11 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 			GOTO(out, result = -EFAULT);
 		}
 		CDEBUG(D_INFO, "No object(1), continue as regular open.\n");
-	} else if ((rr->rr_namelen == 0 && !info->mti_cross_ref &&
-		    create_flags & MDS_OPEN_LOCK) ||
+	} else if ((rr->rr_namelen == 0 && create_flags & MDS_OPEN_LOCK) ||
 		   (create_flags & MDS_OPEN_BY_FID)) {
 		result = mdt_open_by_fid_lock(info, ldlm_rep, lhc);
-		if (result != -ENOENT && !(create_flags & MDS_OPEN_CREAT))
+		if ((result != -ENOENT && !(create_flags & MDS_OPEN_CREAT)) &&
+		     result != -EREMOTE)
 			GOTO(out, result);
 		if (unlikely(rr->rr_namelen == 0))
 			GOTO(out, result = -EINVAL);
@@ -1468,14 +1479,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
 
         mdt_set_disposition(info, ldlm_rep,
                             (DISP_IT_EXECD | DISP_LOOKUP_EXECD));
-
-        if (info->mti_cross_ref) {
-                /* This is cross-ref open */
-                mdt_set_disposition(info, ldlm_rep, DISP_LOOKUP_POS);
-                result = mdt_cross_open(info, rr->rr_fid1, ldlm_rep,
-                                        create_flags);
-                GOTO(out, result);
-        }
 
         lh = &info->mti_lh[MDT_LH_PARENT];
         mdt_lock_pdo_init(lh, (create_flags & MDS_OPEN_CREAT) ?
