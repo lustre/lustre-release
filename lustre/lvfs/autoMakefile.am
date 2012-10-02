@@ -52,11 +52,14 @@ if LINUX
 modulefs_DATA := lvfs$(KMODEXT)
 
 if SERVER
+if LDISKFS_ENABLED
 modulefs_DATA += fsfilt_ldiskfs$(KMODEXT)
 
 sources: fsfilt_ldiskfs.c
 	touch sources
-
+else #LDISKFS_ENABLED
+sources:
+endif #LDISKFS_ENABLED
 else #SERVER
 sources:
 

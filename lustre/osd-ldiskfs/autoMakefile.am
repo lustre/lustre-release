@@ -35,7 +35,9 @@
 #
 
 if MODULES
+if LDISKFS_ENABLED
 modulefs_DATA = osd_ldiskfs$(KMODEXT)
+endif
 endif
 
 MOSTLYCLEANFILES := @MOSTLYCLEANFILES@

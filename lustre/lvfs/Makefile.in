@@ -1,9 +1,9 @@
 MODULES := lvfs
-@SERVER_TRUE@MODULES += fsfilt_ldiskfs
+@LDISKFS_ENABLED_TRUE@MODULES += fsfilt_ldiskfs
 
 lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o lvfs_lib.o
 
-fsfilt_ldiskfs-objs := fsfilt-ldiskfs.o
+@LDISKFS_ENABLED_TRUE@fsfilt_ldiskfs-objs := fsfilt-ldiskfs.o
 
 $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
