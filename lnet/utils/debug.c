@@ -585,11 +585,21 @@ int jt_dbg_debug_kernel(int argc, char **argv)
         /* If we are dumping raw (which means no conversion step to ASCII)
          * then dump directly to any supplied filename, otherwise this is
          * just a temp file and we dump to the real file at convert time. */
-        if (argc > 1 && raw)
-                strcpy(filename, argv[1]);
-        else
-                sprintf(filename, "%s"CFS_TIME_T".%u",
-			LIBCFS_DEBUG_FILE_PATH_DEFAULT, time(NULL), getpid());
+	if (argc > 1 && raw) {
+		if (strlen(argv[1]) > sizeof(filename)-1) {
+			fprintf(stderr, "File name too long: %s\n", argv[1]);
+			return 1;
+		}
+		strncpy(filename, argv[1], sizeof(filename));
+	} else {
+		if (snprintf(filename, sizeof(filename), "%s"CFS_TIME_T".%u",
+			     LIBCFS_DEBUG_FILE_PATH_DEFAULT, time(NULL),
+			     getpid()) >=
+		    sizeof(filename)) {
+			fprintf(stderr, "File name too long\n");
+			return 1;
+		}
+	}
 
         if (stat(filename, &st) == 0 && S_ISREG(st.st_mode))
                 unlink(filename);

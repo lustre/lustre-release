@@ -45,7 +45,7 @@
 #include <signal.h>
 #include <string.h>
 #include <stdlib.h>
-
+#include <errno.h>
 
 #define TRACK_BY_GID 0
 #define TRACK_BY_PPID 1
@@ -66,14 +66,10 @@
 #define LEN_CLIENT 1024
 
 /* size of output of llstat command we read at a time */
-#define MAX 1024
-
-/* max strlen of outfile we get on command line */
-#define LEN_OUT 1024
+#define LLSTAT_READ_SIZE 1024
 
 /* Length of command given on command line */
 #define COMM_LEN 4096
-pid_t llstat[1024];
 
 /* print usage */
 void print_usage()
@@ -200,12 +196,12 @@ void check_llstat()
 
 pid_t fork_llstat_command(char* llstat_file,char* stats_path)
 {
-        char truncate_command[100];
-        char llstat_command[LEN_LLSTAT];
-        pid_t pid_llstat_command;
-        FILE *fp_popen, *fp_out;
-        char buffer[MAX];
-        int ret;
+	char truncate_command[100];
+	char llstat_command[LEN_LLSTAT];
+	pid_t pid_llstat_command;
+	FILE *fp_popen, *fp_out;
+	char buffer[LLSTAT_READ_SIZE];
+	int ret;
         
         /* Truncating llstat output file as it will be opened in while
          * loop to append output */
@@ -236,37 +232,37 @@ pid_t fork_llstat_command(char* llstat_file,char* stats_path)
                                 "\"%s\"n", llstat_command);
                         exit(1);
                 }
-                while (fgets(buffer, 1024, fp_popen) != NULL) {
-                        /* Following code should be in while loop as llstat 
-                         * will keep on sending output each second and will
-                         * not exit on itself. It will be killed when we finsh
-                         * with our command so we must make the output file 
-                         * consistent after writing each 1024 bytes chunk */
+		while (fgets(buffer, LLSTAT_READ_SIZE, fp_popen) != NULL) {
+			/* Following code should be in while loop as llstat
+			 * will keep on sending output each second and will
+			 * not exit on itself. It will be killed when we finsh
+			 * with our command so we must make the output file
+			 * consistent after writing each 1024 bytes chunk */
 
-                        /* opening file where llstat will write its output */
-                        fp_out = fopen(llstat_file, "a");
-                        if (!fp_out) {
-                                fprintf(stderr, "Error: Couldn't open llstat"
-                                        "outfile file: %s\n",
-                                        llstat_file);
-                                exit(1);
-                        }
-                        /* fgets reads the popen output and fprintf writes it to
-                         * output file */
+			/* opening file where llstat will write its output */
+			fp_out = fopen(llstat_file, "a");
+			if (!fp_out) {
+				fprintf(stderr, "Error: Couldn't open llstat"
+					"outfile file: %s\n",
+					llstat_file);
+				exit(1);
+			}
+			/* fgets reads the popen output and fprintf writes it to
+			 * output file */
 
-                        if (fputs(buffer, fp_out) == EOF) {
-                                 fprintf(stderr, "Error: Couldn't write output"
-                                         "of llstat to out file\n");
-                                 exit(1);
-                        }
+			if (fputs(buffer, fp_out) == EOF) {
+				fprintf(stderr, "Error: Couldn't write output"
+					"of llstat to out file\n");
+				exit(1);
+			}
 
-                        /* closing file opened for storing llstat's output */
-                        if (fclose(fp_out)) {
-                                fprintf(stderr, "Error: Couldn't close llstat"
-                                        "outfile: %s\n", llstat_file);
-                                exit(1);
-                        }
-                }
+			/* closing file opened for storing llstat's output */
+			if (fclose(fp_out)) {
+				fprintf(stderr, "Error: Couldn't close llstat"
+					"outfile: %s\n", llstat_file);
+				exit(1);
+			}
+		}
                 /* closing popen for llstat */
                 if (pclose(fp_popen) < 0) {
                         fprintf(stderr, "Error: Couldn't pclos"
@@ -453,12 +449,13 @@ int main(int argc, char **argv)
         while ((c = getopt(argc, argv, "l:g:c:i:a:h")) != 1)
                 switch (c) {
                         case 'l':
-                                strcpy(llstat_file, optarg);
-                                if (strlen(llstat_file) > LEN_OUT) {
+				if (strlen(optarg) > sizeof(llstat_file)-1) {
                                         fprintf(stderr, "length of outfile file"
                                                 " is too long\n");
                                         exit(1);
-                                }
+				}
+				strncpy(llstat_file, optarg,
+					sizeof(llstat_file));
                                 break;
 
                         /* When any value is written to vfs_track_gid, then VFS
@@ -467,7 +464,9 @@ int main(int argc, char **argv)
                          * write_track_xid writes given <gid> in vfs_track_gid
                          * here. */
                         case 'g':
-                                strcpy(gid_string, optarg);
+				if (strlen(optarg) > sizeof(gid_string)-1)
+					return -E2BIG;
+				strncpy(gid_string, optarg, sizeof(gid_string));
                                 get_command_from_argv(optind, argc, argv, "",
                                                       command);
                                 gid = atoi(gid_string);

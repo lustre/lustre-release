@@ -619,7 +619,11 @@ struct sptlrpc_conf *sptlrpc_conf_get(const char *fsname,
         if (conf == NULL)
                 return NULL;
 
-        strcpy(conf->sc_fsname, fsname);
+	if (strlcpy(conf->sc_fsname, fsname, sizeof(conf->sc_fsname)) >=
+	    sizeof(conf->sc_fsname)) {
+		OBD_FREE_PTR(conf);
+		return NULL;
+	}
         sptlrpc_rule_set_init(&conf->sc_rset);
         CFS_INIT_LIST_HEAD(&conf->sc_tgts);
         cfs_list_add(&conf->sc_list, &sptlrpc_confs);

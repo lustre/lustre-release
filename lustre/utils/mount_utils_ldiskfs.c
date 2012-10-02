@@ -1130,9 +1130,17 @@ static char *absolute_path(char *devname)
 			return NULL;
 		}
 		strcat(buf, "/");
-		strcat(buf, devname);
+		if (strlen(devname) > sizeof(buf)-strlen(buf)-1) {
+			free(path);
+			return NULL;
+		}
+		strncat(buf, devname, sizeof(buf)-strlen(buf)-1);
 	} else {
-		strcpy(buf, devname);
+		if (strlen(devname) > sizeof(buf)-1) {
+			free(path);
+			return NULL;
+		}
+		strncpy(buf, devname, sizeof(buf));
 	}
 	/* truncate filename before calling realpath */
 	ptr = strrchr(buf, '/');

@@ -3240,7 +3240,9 @@ static int check_and_complete_ostname(char *fsname, char *ostname)
                         ostname, fsname);
                 return -EINVAL;
         } else {
-             strcpy(real_ostname, ostname);
+		if (strlen(ostname) > sizeof(real_ostname)-1)
+			return -E2BIG;
+		strncpy(real_ostname, ostname, sizeof(real_ostname));
         }
         /* real_ostname is fsname-????? */
         ptr = real_ostname + strlen(fsname) + 1;
@@ -3715,15 +3717,24 @@ int jt_changelog_register(int argc, char **argv)
         }
         obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
 
-        if (data.ioc_u32_1 == 0) {
-                fprintf(stderr, "received invalid userid!\n");
-                return EPROTO;
-        }
+	if (data.ioc_u32_1 == 0) {
+		fprintf(stderr, "received invalid userid!\n");
+		return -EPROTO;
+	}
 
-        if (lcfg_get_devname() != NULL)
-                strcpy(devname, lcfg_get_devname());
-        else
-                sprintf(devname, "dev %d", cur_device);
+	if (lcfg_get_devname() != NULL) {
+		if (strlen(lcfg_get_devname()) > sizeof(devname)-1) {
+			fprintf(stderr, "Dev name too long\n");
+			return -E2BIG;
+		}
+		strncpy(devname, lcfg_get_devname(), sizeof(devname));
+	} else {
+		if (snprintf(devname, sizeof(devname), "dev %d", cur_device) >=
+		    sizeof(devname)) {
+			fprintf(stderr, "Dev name too long\n");
+			return -E2BIG;
+		}
+	}
 
         if (argc == 2)
                 /* -n means bare name */
@@ -3771,17 +3782,26 @@ int jt_changelog_deregister(int argc, char **argv)
         }
         obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
 
-        if (data.ioc_u32_1 != id) {
-                fprintf(stderr, "No changelog user '%s'.  Blocking user"
-                        " is '"CHANGELOG_USER_PREFIX"%d'.\n", argv[1],
-                        data.ioc_u32_1);
-                return ENOENT;
-        }
+	if (data.ioc_u32_1 != id) {
+		fprintf(stderr, "No changelog user '%s'.  Blocking user"
+			" is '"CHANGELOG_USER_PREFIX"%d'.\n", argv[1],
+			data.ioc_u32_1);
+		return -ENOENT;
+	}
 
-        if (lcfg_get_devname() != NULL)
-                strcpy(devname, lcfg_get_devname());
-        else
-                sprintf(devname, "dev %d", cur_device);
+	if (lcfg_get_devname() != NULL) {
+		if (strlen(lcfg_get_devname()) > sizeof(devname)-1) {
+			fprintf(stderr, "Dev name too long\n");
+			return -E2BIG;
+		}
+		strncpy(devname, lcfg_get_devname(), sizeof(devname));
+	} else {
+		if (snprintf(devname, sizeof(devname), "dev %d", cur_device) >=
+		    sizeof(devname)) {
+			fprintf(stderr, "Dev name too long\n");
+			return -E2BIG;
+		}
+	}
 
         printf("%s: Deregistered changelog user '"CHANGELOG_USER_PREFIX"%d'\n",
                devname, data.ioc_u32_1);

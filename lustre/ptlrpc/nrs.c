@@ -1194,7 +1194,11 @@ int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf)
 	if (desc == NULL)
 		GOTO(fail, rc = -ENOMEM);
 
-	strncpy(desc->pd_name, conf->nc_name, NRS_POL_NAME_MAX);
+	if (strlcpy(desc->pd_name, conf->nc_name, sizeof(desc->pd_name)) >=
+	    sizeof(desc->pd_name)) {
+		OBD_FREE_PTR(desc);
+		GOTO(fail, rc = -E2BIG);
+	}
 	desc->pd_ops		 = conf->nc_ops;
 	desc->pd_compat		 = conf->nc_compat;
 	desc->pd_compat_svc_name = conf->nc_compat_svc_name;

@@ -460,7 +460,9 @@ int Parser_help(int argc, char **argv)
 
         line[0]='\0';
         for ( i = 1 ;  i < argc ; i++ ) {
-                strcat(line, argv[i]);
+		if (strlen(argv[i]) > sizeof(line)-strlen(line)-1)
+			return -E2BIG;
+		strncat(line, argv[i], sizeof(line)-strlen(line)-1);
         }
 
         switch ( process(line, &next, top_level, &result, &prev) ) {

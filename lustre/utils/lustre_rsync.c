@@ -633,13 +633,23 @@ int lr_add_pc(const char *pfid, const char *tfid, const char *name)
         p = calloc(1, sizeof(*p));
         if (!p)
                 return -ENOMEM;
-        strcpy(p->pc_log.pcl_pfid, pfid);
-        strcpy(p->pc_log.pcl_tfid, tfid);
-        strcpy(p->pc_log.pcl_name, name);
+	if (strlen(pfid) > sizeof(p->pc_log.pcl_pfid)-1)
+		goto out_err;
+	strncpy(p->pc_log.pcl_pfid, pfid, sizeof(p->pc_log.pcl_pfid));
+	if (strlen(tfid) > sizeof(p->pc_log.pcl_tfid)-1)
+		goto out_err;
+	strncpy(p->pc_log.pcl_tfid, tfid, sizeof(p->pc_log.pcl_tfid));
+	if (strlen(name) > sizeof(p->pc_log.pcl_name)-1)
+		goto out_err;
+	strncpy(p->pc_log.pcl_name, name, sizeof(p->pc_log.pcl_name));
 
         p->pc_next = parents;
         parents = p;
         return 0;
+
+out_err:
+	free(p);
+	return -E2BIG;
 }
 
 void lr_cascade_move(const char *fid, const char *dest, struct lr_info *info)
