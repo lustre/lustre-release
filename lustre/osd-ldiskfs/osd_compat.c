@@ -483,9 +483,9 @@ struct named_oid {
 };
 
 static const struct named_oid oids[] = {
-	{ FLD_INDEX_OID,        "" /* "fld" */ },
-	{ FID_SEQ_CTL_OID,      "" /* "seq_ctl" */ },
-	{ FID_SEQ_SRV_OID,      "" /* "seq_srv" */ },
+	{ FLD_INDEX_OID,        "fld" },
+	{ FID_SEQ_CTL_OID,      "seq_ctl" },
+	{ FID_SEQ_SRV_OID,      "seq_srv" },
 	{ MDD_ROOT_INDEX_OID,   "" /* "ROOT" */ },
 	{ MDD_ORPHAN_OID,       "" /* "PENDING" */ },
 	{ MDD_LOV_OBJ_OID,      LOV_OBJID },

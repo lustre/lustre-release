@@ -332,10 +332,20 @@ int fld_index_init(struct lu_server_fld *fld,
 {
         struct dt_object *dt_obj;
         struct lu_fid fid;
+	struct lu_attr attr;
+	struct dt_object_format dof;
         int rc;
         ENTRY;
 
-        dt_obj = dt_store_open(env, dt, "", fld_index_name, &fid);
+	lu_local_obj_fid(&fid, FLD_INDEX_OID);
+
+	memset(&attr, 0, sizeof(attr));
+	attr.la_valid = LA_MODE;
+	attr.la_mode = S_IFREG | 0666;
+	dof.dof_type = DFT_INDEX;
+	dof.u.dof_idx.di_feat = &fld_index_features;
+
+	dt_obj = dt_find_or_create(env, dt, &fid, &dof, &attr);
         if (!IS_ERR(dt_obj)) {
                 fld->lsf_obj = dt_obj;
                 rc = dt_obj->do_ops->do_index_try(env, dt_obj,

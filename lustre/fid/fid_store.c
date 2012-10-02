@@ -275,15 +275,27 @@ int seq_store_init(struct lu_server_seq *seq,
                    struct dt_device *dt)
 {
         struct dt_object *dt_obj;
-        struct lu_fid fid;
+	struct lu_fid fid;
+	struct lu_attr attr;
+	struct dt_object_format dof;
         const char *name;
         int rc;
         ENTRY;
 
-        name = seq->lss_type == LUSTRE_SEQ_SERVER ?
-                LUSTRE_SEQ_SRV_NAME : LUSTRE_SEQ_CTL_NAME;
+	name = seq->lss_type == LUSTRE_SEQ_SERVER ?
+		LUSTRE_SEQ_SRV_NAME : LUSTRE_SEQ_CTL_NAME;
 
-        dt_obj = dt_store_open(env, dt, "", name, &fid);
+	if (seq->lss_type == LUSTRE_SEQ_SERVER)
+		lu_local_obj_fid(&fid, FID_SEQ_SRV_OID);
+	else
+		lu_local_obj_fid(&fid, FID_SEQ_CTL_OID);
+
+	memset(&attr, 0, sizeof(attr));
+	attr.la_valid = LA_MODE;
+	attr.la_mode = S_IFREG | 0666;
+	dof.dof_type = DFT_REGULAR;
+
+	dt_obj = dt_find_or_create(env, dt, &fid, &dof, &attr);
         if (!IS_ERR(dt_obj)) {
                 seq->lss_obj = dt_obj;
                 rc = 0;

@@ -509,9 +509,9 @@ int seq_server_init(struct lu_server_seq *seq,
                         LUSTRE_SEQ_SPACE_RANGE;
 
                 seq->lss_space.lsr_index = ms->ms_node_id;
-                CDEBUG(D_INFO, "%s: No data found "
-                       "on store. Initialize space\n",
-                       seq->lss_name);
+		LCONSOLE_INFO("%s: No data found "
+			      "on store. Initialize space\n",
+			      seq->lss_name);
 
                 rc = seq_store_update(env, seq, NULL, 0);
                 if (rc) {
@@ -557,18 +557,6 @@ EXPORT_SYMBOL(seq_server_fini);
 
 cfs_proc_dir_entry_t *seq_type_proc_dir = NULL;
 
-static struct lu_local_obj_desc llod_seq_srv = {
-        .llod_name      = LUSTRE_SEQ_SRV_NAME,
-        .llod_oid       = FID_SEQ_SRV_OID,
-        .llod_is_index  = 0,
-};
-
-static struct lu_local_obj_desc llod_seq_ctl = {
-        .llod_name      = LUSTRE_SEQ_CTL_NAME,
-        .llod_oid       = FID_SEQ_CTL_OID,
-        .llod_is_index  = 0,
-};
-
 static int __init fid_mod_init(void)
 {
         seq_type_proc_dir = lprocfs_register(LUSTRE_SEQ_NAME,
@@ -577,9 +565,6 @@ static int __init fid_mod_init(void)
         if (IS_ERR(seq_type_proc_dir))
                 return PTR_ERR(seq_type_proc_dir);
 
-        llo_local_obj_register(&llod_seq_srv);
-        llo_local_obj_register(&llod_seq_ctl);
-
         LU_CONTEXT_KEY_INIT(&seq_thread_key);
         lu_context_key_register(&seq_thread_key);
         return 0;
@@ -587,9 +572,6 @@ static int __init fid_mod_init(void)
 
 static void __exit fid_mod_exit(void)
 {
-        llo_local_obj_unregister(&llod_seq_srv);
-        llo_local_obj_unregister(&llod_seq_ctl);
-
         lu_context_key_degister(&seq_thread_key);
         if (seq_type_proc_dir != NULL && !IS_ERR(seq_type_proc_dir)) {
                 lprocfs_remove(&seq_type_proc_dir);
