@@ -53,10 +53,17 @@ static int osp_name2fsname(char *ospname, char *fsname)
 	sprintf(fsname, "-%s-", LUSTRE_OSP_NAME);
 
 	ptr = strstr(ospname, fsname);
-	if (ptr) {
-		strncpy(fsname, ospname, ptr - ospname);
-		fsname[ptr - ospname] = '\0';
+	if (ptr == NULL)
+		return -EINVAL;
+
+	while (*(--ptr) != '-') {
+		if (ptr == ospname)
+			return -EINVAL;
 	}
+
+	strncpy(fsname, ospname, ptr - ospname);
+	fsname[ptr - ospname] = '\0';
+
 	return 0;
 }
 
