@@ -52,12 +52,125 @@ struct qmt_device {
 	 * index files */
 	struct obd_export	*qmt_child_exp;
 	struct dt_device	*qmt_child;
+
+	/* pointer to ldlm namespace to be used for quota locks */
+	struct ldlm_namespace	*qmt_ns;
+
+	/* Hash table containing a qmt_pool_info structure for each pool
+	 * this quota master is in charge of. We only have 2 pools in this
+	 * hash for the time being:
+	 * - one for quota management on the default metadata pool
+	 * - one for quota managment on the default data pool
+	 *
+	 * Once we support quota on non-default pools, then more pools will
+	 * be added to this hash table and pool master setup would have to be
+	 * handled via configuration logs */
+	cfs_hash_t		*qmt_pool_hash;
+
+	/* List of pools managed by this master target */
+	cfs_list_t		 qmt_pool_list;
+
+	/* procfs root directory for this qmt */
+	cfs_proc_dir_entry_t	*qmt_proc;
+
+	unsigned long		 qmt_stopping:1; /* qmt is stopping */
+
+};
+
+/*
+ * Per-pool quota information.
+ * The qmt creates one such structure for each pool
+ * with quota enforced. All the structures are kept in a hash which is used to
+ * determine whether or not quota is enforced for a given pool.
+ * We currently only support the default data pool and default metadata pool
+ * with the pool_id 0.
+ */
+struct qmt_pool_info {
+	/* link to qmt's pool hash */
+	cfs_hlist_node_t	 qpi_hash;
+
+	/* chained list of all pools managed by the same qmt */
+	cfs_list_t		 qpi_linkage;
+
+	/* Pool key composed of pool_id | (pool_type << 16)
+	 * Only pool ID 0 is supported for now and the pool type is either
+	 * QUOTA_RES_MD or QUOTA_RES_DT.
+	 * immutable after creation. */
+	__u32			 qpi_key;
+
+	/* track users of this pool instance */
+	cfs_atomic_t		 qpi_ref;
+
+	/* back pointer to master target
+	 * immutable after creation. */
+	struct qmt_device	*qpi_qmt;
+
+	/* pointer to dt object associated with global indexes for both user
+	 * and group quota */
+	struct dt_object	*qpi_glb_obj[MAXQUOTAS];
+
+	/* A pool supports two different quota types: user and group quota.
+	 * Each quota type has its own global index and lquota_entry hash table.
+	 */
+	struct lquota_site	*qpi_site[MAXQUOTAS];
+
+	/* number of slaves registered for each quota types */
+	int			 qpi_slv_nr[MAXQUOTAS];
+
+	/* procfs root directory for this pool */
+	cfs_proc_dir_entry_t	*qpi_proc;
+
+	/* pool directory where all indexes related to this pool instance are
+	 * stored */
+	struct dt_object	*qpi_root;
+
+	/* Global quota parameters which apply to all quota type */
+	/* the least value of qunit */
+	unsigned long		 qpi_least_qunit;
+};
+
+/*
+ * Helper routines and prototypes
+ */
+
+/* helper routine to find qmt_pool_info associated a lquota_entry */
+static inline struct qmt_pool_info *lqe2qpi(struct lquota_entry *lqe)
+{
+	LASSERT(lqe_is_master(lqe));
+	return (struct qmt_pool_info *)lqe->lqe_site->lqs_parent;
+}
+
+/* return true if someone holds either a read or write lock on the lqe */
+static inline bool lqe_is_locked(struct lquota_entry *lqe)
+{
+	LASSERT(lqe_is_master(lqe));
+	if (cfs_down_write_trylock(&lqe->lqe_sem) == 0)
+		return true;
+	lqe_write_unlock(lqe);
+	return false;
+}
+
+/* value to be restored if someone wrong happens during lqe writeback */
+struct qmt_lqe_restore {
+	__u64	qlr_hardlimit;
+	__u64	qlr_softlimit;
+	__u64	qlr_gracetime;
+	__u64	qlr_granted;
+	__u64	qlr_qunit;
 };
 
 /* Common data shared by qmt handlers */
 struct qmt_thread_info {
 	union lquota_rec	qti_rec;
 	union lquota_id		qti_id;
+	union lquota_id		qti_id_bis;
+	char			qti_buf[MTI_NAME_MAXLEN];
+	struct lu_fid		qti_fid;
+	struct ldlm_res_id	qti_resid;
+	union ldlm_gl_desc	qti_gl_desc;
+	struct quota_body	qti_body;
+	struct quota_body	qti_repbody;
+	struct qmt_lqe_restore	qti_restore;
 };
 
 extern struct lu_context_key qmt_thread_key;
@@ -88,6 +201,47 @@ static inline struct lu_device *qmt2lu_dev(struct qmt_device *qmt)
 {
 	return &qmt->qmt_dt_dev.dd_lu_dev;
 }
+
+#define LQE_ROOT(lqe)    (lqe2qpi(lqe)->qpi_root)
+#define LQE_GLB_OBJ(lqe) (lqe2qpi(lqe)->qpi_glb_obj[lqe->lqe_site->lqs_qtype])
+
+static inline void qmt_restore(struct lquota_entry *lqe,
+			       struct qmt_lqe_restore *restore)
+{
+	lqe->lqe_hardlimit = restore->qlr_hardlimit;
+	lqe->lqe_softlimit = restore->qlr_softlimit;
+	lqe->lqe_gracetime = restore->qlr_gracetime;
+	lqe->lqe_granted   = restore->qlr_granted;
+	lqe->lqe_qunit     = restore->qlr_qunit;
+}
+
+/* qmt_pool.c */
+void qmt_pool_fini(const struct lu_env *, struct qmt_device *);
+int qmt_pool_init(const struct lu_env *, struct qmt_device *);
+int qmt_pool_prepare(const struct lu_env *, struct qmt_device *,
+		   struct dt_object *);
+int qmt_pool_new_conn(const struct lu_env *, struct qmt_device *,
+		      struct lu_fid *, struct lu_fid *, __u64 *,
+		      struct obd_uuid *);
+struct lquota_entry *qmt_pool_lqe_lookup(const struct lu_env *,
+					 struct qmt_device *, int, int, int,
+					 union lquota_id *);
+/* qmt_entry.c */
+extern struct lquota_entry_operations qmt_lqe_ops;
+struct thandle *qmt_trans_start_with_slv(const struct lu_env *,
+					 struct lquota_entry *,
+					 struct dt_object *,
+					 struct qmt_lqe_restore *);
+struct thandle *qmt_trans_start(const struct lu_env *, struct lquota_entry *,
+				struct qmt_lqe_restore *);
+int qmt_glb_write(const struct lu_env *, struct thandle *,
+		  struct lquota_entry *, __u32, __u64 *);
+int qmt_slv_write(const struct lu_env *, struct thandle *,
+		  struct lquota_entry *, struct dt_object *, __u32, __u64 *,
+		  __u64);
+int qmt_slv_read(const struct lu_env *, struct lquota_entry *,
+		 struct dt_object *, __u64 *);
+int qmt_validate_limits(struct lquota_entry *, __u64, __u64);
 
 /* qmt_lock.c */
 int qmt_intent_policy(const struct lu_env *, struct lu_device *,

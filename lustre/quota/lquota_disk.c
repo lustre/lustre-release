@@ -92,18 +92,6 @@ lquota_disk_find_create(const struct lu_env *env, struct dt_device *dev,
 	obj = dt_locate(env, dev, &qti->qti_fid);
 	if (IS_ERR(obj))
 		GOTO(out, obj);
-
-	/* install index operation vector */
-	if (obj->do_index_ops == NULL) {
-		rc = obj->do_ops->do_index_try(env, obj, idx_feat);
-		if (rc) {
-			CERROR("%s: fail to setup index operations for "DFID
-			       " rc:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
-			       PFID(lu_object_fid(&obj->do_lu)), rc);
-			lu_object_put(env, &obj->do_lu);
-			obj = ERR_PTR(rc);
-		}
-	}
 out:
 	local_oid_storage_fini(env, los);
 	RETURN(obj);
@@ -291,10 +279,26 @@ struct dt_object *lquota_disk_glb_find_create(const struct lu_env *env,
 							      idx_feat);
 	}
 
-	if (IS_ERR(glb_idx))
+	if (IS_ERR(glb_idx)) {
 		CERROR("%s: failed to look-up/create idx file "DFID" rc:%ld "
 		       "local:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
 		       PFID(fid), PTR_ERR(glb_idx), local);
+		RETURN(glb_idx);
+	}
+
+	/* install index operation vector */
+	if (glb_idx->do_index_ops == NULL) {
+		int rc;
+
+		rc = glb_idx->do_ops->do_index_try(env, glb_idx, idx_feat);
+		if (rc) {
+			CERROR("%s: failed to setup index operations for "DFID
+			       " rc:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
+			       PFID(lu_object_fid(&glb_idx->do_lu)), rc);
+			lu_object_put(env, &glb_idx->do_lu);
+			glb_idx = ERR_PTR(rc);
+		}
+	}
 
 	RETURN(glb_idx);
 }
@@ -433,6 +437,22 @@ struct dt_object *lquota_disk_slv_find_create(const struct lu_env *env,
 						  &qti->qti_fid,
 						  &dt_quota_slv_features,
 						  qti->qti_buf);
+	}
+
+	if (IS_ERR(slv_idx))
+		RETURN(slv_idx);
+
+	/* install index operation vector */
+	if (slv_idx->do_index_ops == NULL) {
+		rc = slv_idx->do_ops->do_index_try(env, slv_idx,
+						   &dt_quota_slv_features);
+		if (rc) {
+			CERROR("%s: failed to setup index operations for "DFID
+			       " rc:%d\n", dev->dd_lu_dev.ld_obd->obd_name,
+			       PFID(lu_object_fid(&slv_idx->do_lu)), rc);
+			lu_object_put(env, &slv_idx->do_lu);
+			slv_idx = ERR_PTR(rc);
+		}
 	}
 
 	RETURN(slv_idx);

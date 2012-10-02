@@ -40,6 +40,19 @@
 
 #include "lquota_internal.h"
 
+cfs_mem_cache_t *lqe_kmem;
+
+struct lu_kmem_descr lquota_caches[] = {
+	{
+		.ckd_cache = &lqe_kmem,
+		.ckd_name  = "lqe_kmem",
+		.ckd_size  = sizeof(struct lquota_entry)
+	},
+	{
+		.ckd_cache = NULL
+	}
+};
+
 /* register lquota key */
 LU_KEY_INIT_FINI(lquota, struct lquota_thread_info);
 LU_CONTEXT_KEY_DEFINE(lquota, LCT_MD_THREAD | LCT_DT_THREAD | LCT_LOCAL);
@@ -244,7 +257,7 @@ void lquota_generate_fid(struct lu_fid *fid, int pool_id, int pool_type,
  * Helper routine used to extract pool ID, pool type and quota type from a
  * given FID.
  */
-int lquota_extract_fid(struct lu_fid *fid, int *pool_id, int *pool_type,
+int lquota_extract_fid(const struct lu_fid *fid, int *pool_id, int *pool_type,
 		       int *quota_type)
 {
 	unsigned int	 tmp;
@@ -338,9 +351,13 @@ static int __init init_lquota(void)
 #warning "remove old quota compatibility code"
 #endif
 
-	rc = qmt_glb_init();
+	rc = lu_kmem_init(lquota_caches);
 	if (rc)
 		GOTO(out_key, rc);
+
+	rc = qmt_glb_init();
+	if (rc)
+		GOTO(out_caches, rc);
 
 	rc = qsd_glb_init();
 	if (rc)
@@ -350,6 +367,8 @@ static int __init init_lquota(void)
 
 out_qmt:
 	qmt_glb_fini();
+out_caches:
+	lu_kmem_fini(lquota_caches);
 out_key:
 	lu_context_key_degister(&lquota_thread_key);
 	return rc;
@@ -359,6 +378,7 @@ static void exit_lquota(void)
 {
 	qsd_glb_fini();
 	qmt_glb_fini();
+	lu_kmem_fini(lquota_caches);
 	lu_context_key_degister(&lquota_thread_key);
 }
 

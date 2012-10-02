@@ -32,6 +32,7 @@
 #define _LQUOTA_INTERNAL_H
 
 #define QTYPE_NAME(qtype) ((qtype) == USRQUOTA ? "usr" : "grp")
+#define RES_NAME(res) ((res) == LQUOTA_RES_MD ? "md" : "dt")
 
 #define QIF_IFLAGS (QIF_INODES | QIF_ITIME | QIF_ILIMITS)
 #define QIF_BFLAGS (QIF_SPACE | QIF_BTIME | QIF_BLIMITS)
@@ -254,6 +255,14 @@ static inline void lqe_read_unlock(struct lquota_entry *lqe)
 		cfs_read_unlock(&lqe->lqe_lock);
 }
 
+/*
+ * Helper functions & prototypes
+ */
+
+/* minimum qunit size, 1K inode for metadata pool and 1MB for data pool */
+#define LQUOTA_LEAST_QUNIT(type) \
+	(type == LQUOTA_RES_MD ? (1 << 10) : toqb(PTLRPC_MAX_BRW_SIZE))
+
 /* Common data shared by quota-level handlers. This is allocated per-thread to
  * reduce stack consumption */
 struct lquota_thread_info {
@@ -335,8 +344,9 @@ void lquota_lqe_debug0(struct lquota_entry *lqe,
 struct dt_object *acct_obj_lookup(const struct lu_env *, struct dt_device *,
 				  int);
 void lquota_generate_fid(struct lu_fid *, int, int, int);
-int lquota_extract_fid(struct lu_fid *, int *, int *, int *);
+int lquota_extract_fid(const struct lu_fid *, int *, int *, int *);
 const struct dt_index_features *glb_idx_feature(struct lu_fid *);
+extern cfs_mem_cache_t *lqe_kmem;
 
 /* lquota_entry.c */
 /* site create/destroy */

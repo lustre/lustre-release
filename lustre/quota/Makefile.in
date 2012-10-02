@@ -1,6 +1,6 @@
 MODULES := lquota
 
-qmt-objs := qmt_dev.o qmt_handler.o qmt_lock.o
+qmt-objs := qmt_dev.o qmt_handler.o qmt_lock.o qmt_entry.o qmt_pool.o
 
 quota-objs := lproc_quota.o lquota_lib.o lquota_disk.o lquota_entry.o
 

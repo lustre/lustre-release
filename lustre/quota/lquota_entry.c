@@ -41,7 +41,6 @@
 static int hash_lqs_cur_bits = HASH_LQE_CUR_BITS;
 CFS_MODULE_PARM(hash_lqs_cur_bits, "i", int, 0444,
                 "the current bits of lqe hash");
-cfs_mem_cache_t *lqe_kmem;
 
 static unsigned lqe64_hash_hash(cfs_hash_t *hs, const void *key, unsigned mask)
 {

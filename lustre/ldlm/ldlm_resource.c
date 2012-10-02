@@ -936,6 +936,7 @@ void ldlm_namespace_get(struct ldlm_namespace *ns)
 {
         cfs_atomic_inc(&ns->ns_bref);
 }
+EXPORT_SYMBOL(ldlm_namespace_get);
 
 void ldlm_namespace_put(struct ldlm_namespace *ns)
 {
@@ -944,6 +945,7 @@ void ldlm_namespace_put(struct ldlm_namespace *ns)
                 cfs_spin_unlock(&ns->ns_lock);
         }
 }
+EXPORT_SYMBOL(ldlm_namespace_put);
 
 /* Register @ns in the list of namespaces */
 void ldlm_namespace_register(struct ldlm_namespace *ns, ldlm_side_t client)

@@ -14,24 +14,18 @@
  * in the LICENSE file that accompanied this code).
  *
  * You should have received a copy of the GNU General Public License
- * version 2 along with this program; If not, see
- * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
- *
- * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
- * CA 95054 USA or visit www.sun.com if you need additional information or
- * have any questions.
+ * version 2 along with this program; if not, write to the
+ * Free Software Foundation, Inc., 59 Temple Place - Suite 330,
+ * Boston, MA 021110-1307, USA
  *
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2008, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2012 Intel, Inc.
  * Use is subject to license terms.
  *
- * Copyright (c) 2011, Whamcloud, Inc.
- */
-/*
- * This file is part of Lustre, http://www.lustre.org/
- * Lustre is a trademark of Sun Microsystems, Inc.
+ * Author: Johann Lombardi <johann.lombardi@intel.com>
+ * Author: Niu    Yawei    <yawei.niu@intel.com>
  */
 
 #define DEBUG_SUBSYSTEM S_LQUOTA
@@ -167,20 +161,22 @@ static void *lprocfs_quota_seq_next(struct seq_file *p, void *v, loff_t *pos)
 /*
  * Output example:
  *
- * user_accounting:
+ * usr_accounting:
  * - id:      0
- *   usage:   { inodes:                  209, bytes:             26161152 }
+ *   usage:   { inodes:                  209, kbytes:             2616 }
  * - id:      840000038
- *   usage:   { inodes:                    1, bytes:             10485760 }
+ *   usage:   { inodes:                    1, kbytes:             1048 }
  */
 static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 {
-	struct lquota_procfs	*lqp = p->private;
-	const struct dt_it_ops	*iops;
-	struct dt_it		*it;
-	struct dt_key		*key;
-	struct lquota_acct_rec	 rec;
-	int			 rc;
+	struct lquota_procfs		*lqp = p->private;
+	struct lquota_thread_info	*qti = lquota_info(&lqp->lqp_env);
+	const struct dt_it_ops		*iops;
+	struct dt_it			*it;
+	struct dt_key			*key;
+	struct dt_rec			*rec = (struct dt_rec *)&qti->qti_rec;
+	const struct lu_fid		*fid;
+	int				 rc;
 
 	LASSERT(lqp);
 	if (lqp->lqp_obj == NULL) {
@@ -188,14 +184,26 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 		return 0;
 	}
 
-	if (v == SEQ_START_TOKEN) {
-		const struct lu_fid *fid = lu_object_fid(&lqp->lqp_obj->do_lu);
+	fid = lu_object_fid(&lqp->lqp_obj->do_lu);
 
-		LASSERT(fid_is_acct(fid));
-		if (fid_oid(fid) == ACCT_USER_OID)
-			seq_printf(p, "user_accounting:\n");
-		else
-			seq_printf(p, "group_accounting:\n");
+	if (v == SEQ_START_TOKEN) {
+		if (fid_is_acct(fid)) {
+			if (fid_oid(fid) == ACCT_USER_OID)
+				seq_printf(p, "usr_accounting:\n");
+			else
+				seq_printf(p, "grp_accounting:\n");
+		} else if (fid_seq(fid) == FID_SEQ_QUOTA_GLB) {
+			int	poolid, rtype, qtype;
+
+			rc = lquota_extract_fid(fid, &poolid, &rtype, &qtype);
+			if (rc)
+				return rc;
+
+			seq_printf(p, "global_pool%d_%s_%s\n", poolid,
+				   RES_NAME(rtype), QTYPE_NAME(qtype));
+		} else {
+			return -ENOTSUPP;
+		}
 		return 0;
 	}
 
@@ -210,7 +218,7 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 		return PTR_ERR(key);
 	}
 
-	rc = iops->rec(&lqp->lqp_env, it, (struct dt_rec *)&rec, 0);
+	rc = iops->rec(&lqp->lqp_env, it, rec, 0);
 	if (rc) {
 		CERROR("%s: failed to get rec: rc = %d\n",
 		       lqp->lqp_obj->do_lu.lo_dev->ld_obd->obd_name, rc);
@@ -218,8 +226,19 @@ static int lprocfs_quota_seq_show(struct seq_file *p, void *v)
 	}
 
 	seq_printf(p, "- %-8s %llu\n", "id:", *((__u64 *)key));
-	seq_printf(p, "  %-8s { inodes: %20"LPF64"u, bytes: %20"LPF64"u }\n",
-		   "usage:", rec.ispace, rec.bspace);
+	if (fid_is_acct(fid))
+		seq_printf(p, "  %-8s { inodes: %20"LPF64"u, kbytes: %20"LPF64
+			   "u }\n", "usage:",
+			   ((struct lquota_acct_rec *)rec)->ispace,
+			   toqb(((struct lquota_acct_rec *)rec)->bspace));
+	else if (fid_seq(fid) == FID_SEQ_QUOTA_GLB)
+		seq_printf(p, "  %-8s { hard: %20"LPF64"u, soft: %20"LPF64
+			   "u, granted: %20"LPF64"u, time: %20"LPF64"u }\n",
+			   "limits:",
+			   ((struct lquota_glb_rec *)rec)->qbr_hardlimit,
+			   ((struct lquota_glb_rec *)rec)->qbr_softlimit,
+			   ((struct lquota_glb_rec *)rec)->qbr_granted,
+			   ((struct lquota_glb_rec *)rec)->qbr_time);
 	return 0;
 }
 

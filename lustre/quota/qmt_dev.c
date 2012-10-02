@@ -99,12 +99,29 @@ static struct lu_device *qmt_device_fini(const struct lu_env *env,
 	LASSERT(qmt != NULL);
 
 	CDEBUG(D_QUOTA, "%s: initiating QMT shutdown\n", qmt->qmt_svname);
+	qmt->qmt_stopping = true;
+
+	/* remove qmt proc entry */
+	if (qmt->qmt_proc != NULL && !IS_ERR(qmt->qmt_proc)) {
+		lprocfs_remove(&qmt->qmt_proc);
+		qmt->qmt_proc = NULL;
+	}
+
+	/* kill pool instances, if any */
+	qmt_pool_fini(env, qmt);
 
 	/* disconnect from OSD */
 	if (qmt->qmt_child_exp != NULL) {
 		obd_disconnect(qmt->qmt_child_exp);
 		qmt->qmt_child_exp = NULL;
-		qmt->qmt_child     = NULL;
+		qmt->qmt_child = NULL;
+	}
+
+	/* release reference on MDT namespace */
+	if (ld->ld_obd->obd_namespace != NULL) {
+		ldlm_namespace_put(ld->ld_obd->obd_namespace);
+		ld->ld_obd->obd_namespace = NULL;
+		qmt->qmt_ns = NULL;
 	}
 
 	RETURN(NULL);
@@ -159,7 +176,7 @@ static int qmt_connect_to_osd(const struct lu_env *env, struct qmt_device *qmt,
 	/* initialize site (although it isn't used anywhere) and lu_device
 	 * pointer to next device */
 	qmt->qmt_child = lu2dt_dev(qmt->qmt_child_exp->exp_obd->obd_lu_dev);
-	ld->ld_site    = qmt->qmt_child_exp->exp_obd->obd_lu_dev->ld_site;
+	ld->ld_site = qmt->qmt_child_exp->exp_obd->obd_lu_dev->ld_site;
 	EXIT;
 out:
 	if (data)
@@ -187,7 +204,8 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 			    struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
 	struct lu_device	*ld = qmt2lu_dev(qmt);
-	struct obd_device	*obd;
+	struct obd_device	*obd, *mdt_obd;
+	struct obd_type		*type;
 	int			 rc;
 	ENTRY;
 
@@ -204,11 +222,42 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	obd->obd_lu_dev = ld;
 	ld->ld_obd      = obd;
 
+	/* look-up the parent MDT to steal its ldlm namespace ... */
+	mdt_obd = class_name2obd(lustre_cfg_string(cfg, 2));
+	if (mdt_obd == NULL)
+		RETURN(-ENOENT);
+
+	/* grab reference on MDT namespace. kind of a hack until we have our
+	 * own namespace & service threads */
+	LASSERT(mdt_obd->obd_namespace != NULL);
+	ldlm_namespace_get(mdt_obd->obd_namespace);
+	obd->obd_namespace = mdt_obd->obd_namespace;
+	qmt->qmt_ns = obd->obd_namespace;
+
 	/* connect to backend osd device */
 	rc = qmt_connect_to_osd(env, qmt, cfg);
 	if (rc)
 		GOTO(out, rc);
 
+	/* at the moment there is no linkage between lu_type and obd_type, so
+	 * we lookup obd_type this way */
+	type = class_search_type(LUSTRE_QMT_NAME);
+	LASSERT(type != NULL);
+
+	/* register proc directory associated with this qmt */
+	qmt->qmt_proc = lprocfs_register(qmt->qmt_svname, type->typ_procroot,
+					 NULL, NULL);
+	if (IS_ERR(qmt->qmt_proc)) {
+		rc = PTR_ERR(qmt->qmt_proc);
+		CERROR("%s: failed to create qmt proc entry (%d)\n",
+		       qmt->qmt_svname, rc);
+		GOTO(out, rc);
+	}
+
+	/* initialize pool configuration */
+	rc = qmt_pool_init(env, qmt);
+	if (rc)
+		GOTO(out, rc);
 	EXIT;
 out:
 	if (rc)
@@ -372,7 +421,27 @@ static int qmt_device_prepare(const struct lu_env *env,
 			      struct lu_device *parent,
 			      struct lu_device *ld)
 {
-	return 0;
+	struct qmt_device	*qmt = lu2qmt_dev(ld);
+	struct dt_object	*qmt_root;
+	int			 rc;
+	ENTRY;
+
+	/* initialize quota master root directory where all index files will be
+	 * stored */
+	qmt_root = lquota_disk_dir_find_create(env, qmt->qmt_child, NULL,
+					       QMT_DIR);
+	if (IS_ERR(qmt_root)) {
+		rc = PTR_ERR(qmt_root);
+		CERROR("%s: failed to create master quota directory (%d)\n",
+		       qmt->qmt_svname, rc);
+		RETURN(rc);
+	}
+
+	/* initialize on-disk indexes associated with each pool */
+	rc = qmt_pool_prepare(env, qmt, qmt_root);
+
+	lu_object_put(env, &qmt_root->do_lu);
+	RETURN(rc);
 }
 
 /*
