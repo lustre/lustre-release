@@ -1013,8 +1013,7 @@ static ssize_t osd_declare_write(const struct lu_env *env, struct dt_object *dt,
         else
                 credits = osd_dto_credits_noquota[DTO_WRITE_BLOCK];
 
-        OSD_DECLARE_OP(oh, write);
-        oh->ot_credits += credits;
+	OSD_DECLARE_OP(oh, write, credits);
 
 	inode = osd_dt_obj(dt)->oo_inode;
 
@@ -1174,8 +1173,6 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
         LASSERT(th);
         oh = container_of(th, struct osd_thandle, ot_super);
 
-        OSD_DECLARE_OP(oh, punch);
-
         /*
          * we don't need to reserve credits for whole truncate
          * it's not possible as truncate may need to free too many
@@ -1184,8 +1181,8 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
          * orphan list. if needed truncate will extend or restart
          * transaction
          */
-        oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
-        oh->ot_credits += 3;
+	OSD_DECLARE_OP(oh, punch,
+		       osd_dto_credits_noquota[DTO_ATTR_SET_BASE] + 3);
 
 	inode = osd_dt_obj(dt)->oo_inode;
 	LASSERT(inode);

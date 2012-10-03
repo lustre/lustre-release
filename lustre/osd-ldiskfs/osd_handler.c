@@ -591,12 +591,12 @@ static void __osd_th_check_slow(void *oth, struct osd_device *dev,
 /*
  * Concurrency: doesn't access mutable data.
  */
-static int osd_param_is_sane(const struct osd_device *dev,
-                             const struct thandle *th)
+static int osd_param_is_not_sane(const struct osd_device *dev,
+				 const struct thandle *th)
 {
-        struct osd_thandle *oh;
-        oh = container_of0(th, struct osd_thandle, ot_super);
-        return oh->ot_credits <= osd_journal(dev)->j_max_transaction_buffers;
+	struct osd_thandle *oh = container_of(th, typeof(*oh), ot_super);
+
+	return oh->ot_credits > osd_journal(dev)->j_max_transaction_buffers;
 }
 
 /*
@@ -692,30 +692,48 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
         if (rc != 0)
                 GOTO(out, rc);
 
-        if (!osd_param_is_sane(dev, th)) {
+	if (unlikely(osd_param_is_not_sane(dev, th))) {
+		static unsigned long last_printed;
+		static int last_credits;
+
 		CWARN("%.16s: too many transaction credits (%d > %d)\n",
 		      LDISKFS_SB(osd_sb(dev))->s_es->s_volume_name,
 		      oh->ot_credits,
 		      osd_journal(dev)->j_max_transaction_buffers);
-                /* XXX Limit the credits to 'max_transaction_buffers', and
-                 *     let the underlying filesystem to catch the error if
-                 *     we really need so many credits.
-                 *
-                 *     This should be removed when we can calculate the
-                 *     credits precisely. */
-                oh->ot_credits = osd_journal(dev)->j_max_transaction_buffers;
 #ifdef OSD_TRACK_DECLARES
-                CERROR("  attr_set: %d, punch: %d, xattr_set: %d,\n",
-                       oh->ot_declare_attr_set, oh->ot_declare_punch,
-                       oh->ot_declare_xattr_set);
-                CERROR("  create: %d, ref_add: %d, ref_del: %d, write: %d\n",
-                       oh->ot_declare_create, oh->ot_declare_ref_add,
-                       oh->ot_declare_ref_del, oh->ot_declare_write);
-                CERROR("  insert: %d, delete: %d, destroy: %d\n",
-                       oh->ot_declare_insert, oh->ot_declare_delete,
-                       oh->ot_declare_destroy);
+		CWARN("  create: %u/%u, delete: %u/%u, destroy: %u/%u\n",
+		      oh->ot_declare_create, oh->ot_declare_create_cred,
+		      oh->ot_declare_delete, oh->ot_declare_delete_cred,
+		      oh->ot_declare_destroy, oh->ot_declare_destroy_cred);
+		CWARN("  attr_set: %u/%u, xattr_set: %u/%u\n",
+		      oh->ot_declare_attr_set, oh->ot_declare_attr_set_cred,
+		      oh->ot_declare_xattr_set, oh->ot_declare_xattr_set_cred);
+		CWARN("  write: %u/%u, punch: %u/%u, quota %u/%u\n",
+		      oh->ot_declare_write, oh->ot_declare_write_cred,
+		      oh->ot_declare_punch, oh->ot_declare_punch_cred,
+		      oh->ot_declare_quota, oh->ot_declare_quota_cred);
+		CWARN("  insert: %u/%u, delete: %u/%u\n",
+		      oh->ot_declare_insert, oh->ot_declare_insert_cred,
+		      oh->ot_declare_delete, oh->ot_declare_destroy_cred);
+		CWARN("  ref_add: %u/%u, ref_del: %u/%u\n",
+		      oh->ot_declare_ref_add, oh->ot_declare_ref_add_cred,
+		      oh->ot_declare_ref_del, oh->ot_declare_ref_del_cred);
+
+		if (last_credits != oh->ot_credits &&
+		    time_after(jiffies, last_printed + 60 * HZ)) {
+			libcfs_debug_dumpstack(NULL);
+			last_credits = oh->ot_credits;
+			last_printed = jiffies;
+		}
 #endif
-        }
+		/* XXX Limit the credits to 'max_transaction_buffers', and
+		 *     let the underlying filesystem to catch the error if
+		 *     we really need so many credits.
+		 *
+		 *     This should be removed when we can calculate the
+		 *     credits precisely. */
+		oh->ot_credits = osd_journal(dev)->j_max_transaction_buffers;
+	}
 
         /*
          * XXX temporary stuff. Some abstraction layer should
@@ -1379,8 +1397,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, attr_set);
-	oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
+	OSD_DECLARE_OP(oh, attr_set,
+		       osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
 
 	if (attr == NULL || obj->oo_inode == NULL)
 		RETURN(rc);
@@ -1916,42 +1934,40 @@ static int __osd_oi_insert(const struct lu_env *env, struct osd_object *obj,
 }
 
 static int osd_declare_object_create(const struct lu_env *env,
-                                     struct dt_object *dt,
-                                     struct lu_attr *attr,
-                                     struct dt_allocation_hint *hint,
-                                     struct dt_object_format *dof,
-                                     struct thandle *handle)
+				     struct dt_object *dt,
+				     struct lu_attr *attr,
+				     struct dt_allocation_hint *hint,
+				     struct dt_object_format *dof,
+				     struct thandle *handle)
 {
 	struct osd_thandle	*oh;
 	int			 rc;
 	ENTRY;
 
-        LASSERT(handle != NULL);
+	LASSERT(handle != NULL);
 
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, create);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_OBJECT_CREATE];
-        /* XXX: So far, only normal fid needs be inserted into the oi,
-         *      things could be changed later. Revise following code then. */
-        if (fid_is_norm(lu_object_fid(&dt->do_lu))) {
-                OSD_DECLARE_OP(oh, insert);
-                oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+	OSD_DECLARE_OP(oh, create, osd_dto_credits_noquota[DTO_OBJECT_CREATE]);
+	/* XXX: So far, only normal fid needs be inserted into the oi,
+	 *      things could be changed later. Revise following code then. */
+	if (fid_is_norm(lu_object_fid(&dt->do_lu))) {
 		/* Reuse idle OI block may cause additional one OI block
 		 * to be changed. */
-		oh->ot_credits += 1;
-        }
-        /* If this is directory, then we expect . and .. to be inserted as
-         * well. The one directory block always needs to be created for the
-         * directory, so we could use DTO_WRITE_BASE here (GDT, block bitmap,
-         * block), there is no danger of needing a tree for the first block.
-         */
-        if (attr && S_ISDIR(attr->la_mode)) {
-                OSD_DECLARE_OP(oh, insert);
-                OSD_DECLARE_OP(oh, insert);
-                oh->ot_credits += osd_dto_credits_noquota[DTO_WRITE_BASE];
-        }
+		OSD_DECLARE_OP(oh, insert,
+			       osd_dto_credits_noquota[DTO_INDEX_INSERT] + 1);
+	}
+	/* If this is directory, then we expect . and .. to be inserted as
+	 * well. The one directory block always needs to be created for the
+	 * directory, so we could use DTO_WRITE_BASE here (GDT, block bitmap,
+	 * block), there is no danger of needing a tree for the first block.
+	 */
+	if (attr && S_ISDIR(attr->la_mode)) {
+		OSD_DECLARE_OP(oh, insert,
+			       osd_dto_credits_noquota[DTO_WRITE_BASE]);
+		OSD_DECLARE_OP(oh, insert, 0);
+	}
 
 	if (!attr)
 		RETURN(0);
@@ -2001,40 +2017,36 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
  * Concurrency: must be locked
  */
 static int osd_declare_object_destroy(const struct lu_env *env,
-                                      struct dt_object *dt,
-                                      struct thandle *th)
+				      struct dt_object *dt,
+				      struct thandle *th)
 {
-        struct osd_object  *obj = osd_dt_obj(dt);
-        struct inode       *inode = obj->oo_inode;
-        struct osd_thandle *oh;
-	int                 rc;
-        ENTRY;
+	struct osd_object  *obj = osd_dt_obj(dt);
+	struct inode       *inode = obj->oo_inode;
+	struct osd_thandle *oh;
+	int		    rc;
+	ENTRY;
 
-        oh = container_of0(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
-        LASSERT(inode);
+	oh = container_of0(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
+	LASSERT(inode);
 
-        OSD_DECLARE_OP(oh, destroy);
-        OSD_DECLARE_OP(oh, delete);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_OBJECT_DELETE];
-        /* XXX: So far, only normal fid needs to be inserted into the OI,
-         *      so only normal fid needs to be removed from the OI also. */
-        if (fid_is_norm(lu_object_fid(&dt->do_lu))) {
-		oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
-		/* Recycle idle OI leaf may cause additional three OI blocks
-		 * to be changed. */
-		oh->ot_credits += 3;
-        }
+	OSD_DECLARE_OP(oh, delete, osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
+	/* XXX: So far, only normal fid needs to be inserted into the OI,
+	 *      so only normal fid needs to be removed from the OI also.
+	 * Recycle idle OI leaf may cause additional three OI blocks
+	 * to be changed. */
+	OSD_DECLARE_OP(oh, destroy, fid_is_norm(lu_object_fid(&dt->do_lu)) ?
+			osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3 : 0);
 
 	/* one less inode */
-        rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, -1, oh,
+	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, -1, oh,
 				   false, true, NULL, false);
 	if (rc)
 		RETURN(rc);
 	/* data to be truncated */
-	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh, true,
-				   true, NULL, false);
-        RETURN(rc);
+	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, 0, oh,
+				   true, true, NULL, false);
+	RETURN(rc);
 }
 
 static int osd_object_destroy(const struct lu_env *env,
@@ -2239,10 +2251,9 @@ static int osd_declare_object_ref_add(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, ref_add);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
+	OSD_DECLARE_OP(oh, ref_add, osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
 
-        return 0;
+	return 0;
 }
 
 /*
@@ -2298,10 +2309,9 @@ static int osd_declare_object_ref_del(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, ref_del);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
+	OSD_DECLARE_OP(oh, ref_del, osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
 
-        return 0;
+	return 0;
 }
 
 /*
@@ -2393,11 +2403,9 @@ static int osd_declare_xattr_set(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, xattr_set);
-	if (strcmp(name, XATTR_NAME_VERSION) == 0)
-		oh->ot_credits += osd_dto_credits_noquota[DTO_ATTR_SET_BASE];
-	else
-		oh->ot_credits += osd_dto_credits_noquota[DTO_XATTR_SET];
+	OSD_DECLARE_OP(oh, xattr_set, strcmp(name, XATTR_NAME_VERSION) == 0 ?
+		       osd_dto_credits_noquota[DTO_ATTR_SET_BASE] :
+		       osd_dto_credits_noquota[DTO_XATTR_SET]);
 
 	return 0;
 }
@@ -2479,10 +2487,9 @@ static int osd_declare_xattr_del(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, xattr_set);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_XATTR_SET];
+	OSD_DECLARE_OP(oh, xattr_set, osd_dto_credits_noquota[DTO_XATTR_SET]);
 
-        return 0;
+	return 0;
 }
 
 /*
@@ -2853,10 +2860,9 @@ static int osd_index_declare_iam_delete(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, delete);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+	OSD_DECLARE_OP(oh, delete, osd_dto_credits_noquota[DTO_INDEX_DELETE]);
 
-        return 0;
+	return 0;
 }
 
 /**
@@ -2916,23 +2922,22 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
 }
 
 static int osd_index_declare_ea_delete(const struct lu_env *env,
-                                       struct dt_object *dt,
-                                       const struct dt_key *key,
-                                       struct thandle *handle)
+				       struct dt_object *dt,
+				       const struct dt_key *key,
+				       struct thandle *handle)
 {
-        struct osd_thandle *oh;
+	struct osd_thandle *oh;
 	struct inode	   *inode;
 	int		    rc;
 	ENTRY;
 
-        LASSERT(dt_object_exists(dt));
-        LASSERT(handle != NULL);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(handle != NULL);
 
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, delete);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_DELETE];
+	OSD_DECLARE_OP(oh, delete, osd_dto_credits_noquota[DTO_INDEX_DELETE]);
 
 	inode = osd_dt_obj(dt)->oo_inode;
 	LASSERT(inode);
@@ -3107,10 +3112,9 @@ static int osd_index_declare_iam_insert(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, insert);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+	OSD_DECLARE_OP(oh, insert, osd_dto_credits_noquota[DTO_INDEX_INSERT]);
 
-        return 0;
+	return 0;
 }
 
 /**
@@ -3523,24 +3527,23 @@ static inline void osd_object_put(const struct lu_env *env,
 }
 
 static int osd_index_declare_ea_insert(const struct lu_env *env,
-                                       struct dt_object *dt,
-                                       const struct dt_rec *rec,
-                                       const struct dt_key *key,
-                                       struct thandle *handle)
+				       struct dt_object *dt,
+				       const struct dt_rec *rec,
+				       const struct dt_key *key,
+				       struct thandle *handle)
 {
-        struct osd_thandle *oh;
+	struct osd_thandle *oh;
 	struct inode	   *inode;
 	int		    rc;
 	ENTRY;
 
-        LASSERT(dt_object_exists(dt));
-        LASSERT(handle != NULL);
+	LASSERT(dt_object_exists(dt));
+	LASSERT(handle != NULL);
 
-        oh = container_of0(handle, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle == NULL);
+	oh = container_of0(handle, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle == NULL);
 
-        OSD_DECLARE_OP(oh, insert);
-        oh->ot_credits += osd_dto_credits_noquota[DTO_INDEX_INSERT];
+	OSD_DECLARE_OP(oh, insert, osd_dto_credits_noquota[DTO_INDEX_INSERT]);
 
 	inode = osd_dt_obj(dt)->oo_inode;
 	LASSERT(inode);

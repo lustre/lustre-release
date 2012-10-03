@@ -304,26 +304,28 @@ struct osd_device {
 
 #define OSD_TRACK_DECLARES
 #ifdef OSD_TRACK_DECLARES
-#define OSD_DECLARE_OP(oh, op)   {                               \
-        LASSERT(oh->ot_handle == NULL);                          \
-        ((oh)->ot_declare_ ##op)++; }
-#define OSD_EXEC_OP(handle,op)      {                            \
-        struct osd_thandle *oh;                                  \
-        oh = container_of0(handle, struct osd_thandle, ot_super);\
-        if (((oh)->ot_declare_ ##op) > 0) {                      \
-                ((oh)->ot_declare_ ##op)--;                      \
-        }                                                        \
-        }
+#define OSD_DECLARE_OP(oh, op, credits)					\
+do {									\
+	LASSERT((oh)->ot_handle == NULL);				\
+	((oh)->ot_declare_ ##op)++;					\
+	((oh)->ot_declare_ ##op ##_cred) += (credits);			\
+	(oh)->ot_credits += (credits);					\
+} while (0)
+#define OSD_EXEC_OP(handle, op)						\
+do {									\
+	struct osd_thandle *oh = container_of(handle, typeof(*oh), ot_super); \
+	LASSERT((oh)->ot_declare_ ##op > 0);				\
+	((oh)->ot_declare_ ##op)--;					\
+} while (0)
 #else
-#define OSD_DECLARE_OP(oh, op)
+#define OSD_DECLARE_OP(oh, op, credits) (oh)->ot_credits += (credits)
 #define OSD_EXEC_OP(oh, op)
 #endif
 
 /* There are at most 10 uid/gids are affected in a transaction, and
  * that's rename case:
  * - 2 for source parent uid & gid;
- * - 2 for source child uid & gid ('..' entry update when the child
- *   is directory);
+ * - 2 for source child uid & gid ('..' entry update when child is directory);
  * - 2 for target parent uid & gid;
  * - 2 for target child uid & gid (if the target child exists);
  * - 2 for root uid & gid (last_rcvd, llog, etc);
@@ -347,16 +349,32 @@ struct osd_thandle {
 	struct lquota_trans    *ot_quota_trans;
 
 #ifdef OSD_TRACK_DECLARES
-        unsigned char           ot_declare_attr_set;
-        unsigned char           ot_declare_punch;
-        unsigned char           ot_declare_xattr_set;
-        unsigned char           ot_declare_create;
-        unsigned char           ot_declare_destroy;
-        unsigned char           ot_declare_ref_add;
-        unsigned char           ot_declare_ref_del;
-        unsigned char           ot_declare_write;
-        unsigned char           ot_declare_insert;
-        unsigned char           ot_declare_delete;
+	/* Tracking for transaction credits, to allow debugging and optimizing
+	 * cases where a large number of credits are being allocated for
+	 * single transaction. */
+	unsigned char		ot_declare_attr_set;
+	unsigned char		ot_declare_punch;
+	unsigned char		ot_declare_xattr_set;
+	unsigned char		ot_declare_create;
+	unsigned char		ot_declare_destroy;
+	unsigned char		ot_declare_ref_add;
+	unsigned char		ot_declare_ref_del;
+	unsigned char		ot_declare_write;
+	unsigned char		ot_declare_insert;
+	unsigned char		ot_declare_delete;
+	unsigned char		ot_declare_quota;
+
+	unsigned short		ot_declare_attr_set_cred;
+	unsigned short		ot_declare_punch_cred;
+	unsigned short		ot_declare_xattr_set_cred;
+	unsigned short		ot_declare_create_cred;
+	unsigned short		ot_declare_destroy_cred;
+	unsigned short		ot_declare_ref_add_cred;
+	unsigned short		ot_declare_ref_del_cred;
+	unsigned short		ot_declare_write_cred;
+	unsigned short		ot_declare_insert_cred;
+	unsigned short		ot_declare_delete_cred;
+	unsigned short		ot_declare_quota_cred;
 #endif
 
 #if OSD_THANDLE_STATS
