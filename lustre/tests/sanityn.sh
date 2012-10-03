@@ -2516,8 +2516,10 @@ test_55d()
 run_test 55d "rename file vs link"
 
 test_60() {
-	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
-	{ skip "Need MDS version at least 2.3.0"; return; }
+	local MDSVER=$(lustre_build_version $SINGLEMDS)
+	[ $(version_code $MDSVER) -lt $(version_code 2.3.0) ] &&
+		skip "MDS version $MDSVER must be >= 2.3.0" && return 0
+
 	# Create a file
 	test_mkdir -p $DIR1/$tdir
 	file1=$DIR1/$tdir/file
