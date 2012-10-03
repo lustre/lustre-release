@@ -919,6 +919,17 @@ int osd_statfs(const struct lu_env *env, struct dt_device *d,
         return result;
 }
 
+/**
+ * Estimate space needed for file creations. We assume the largest filename
+ * which is 2^64 - 1, hence a filename of 20 chars.
+ * This is 28 bytes per object which is 28MB for 1M objects ... no so bad.
+ */
+#ifdef __LDISKFS_DIR_REC_LEN
+#define PER_OBJ_USAGE __LDISKFS_DIR_REC_LEN(20)
+#else
+#define PER_OBJ_USAGE LDISKFS_DIR_REC_LEN(20)
+#endif
+
 /*
  * Concurrency: doesn't access mutable data.
  */
@@ -936,6 +947,15 @@ static void osd_conf_get(const struct lu_env *env,
         param->ddp_max_nlink    = LDISKFS_LINK_MAX;
 	param->ddp_block_shift  = sb->s_blocksize_bits;
 	param->ddp_mount_type     = LDD_MT_LDISKFS;
+	param->ddp_maxbytes       = sb->s_maxbytes;
+	/* Overhead estimate should be fairly accurate, so we really take a tiny
+	 * error margin which also avoids fragmenting the filesystem too much */
+	param->ddp_grant_reserved = 2; /* end up to be 1.9% after conversion */
+	/* inode are statically allocated, so per-inode space consumption
+	 * is the space consumed by the directory entry */
+	param->ddp_inodespace     = PER_OBJ_USAGE;
+	/* per-fragment overhead to be used by the client code */
+	param->ddp_grant_frag     = 6 * LDISKFS_BLOCK_SIZE(sb);
         param->ddp_mntopts      = 0;
         if (test_opt(sb, XATTR_USER))
                 param->ddp_mntopts |= MNTOPT_USERXATTR;
