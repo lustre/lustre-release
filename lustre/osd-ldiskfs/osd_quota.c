@@ -120,7 +120,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 #define QUOTA_IT_READ_ERROR(it, rc)                                    \
 	CERROR("%s: Error while trying to read quota information, "    \
 	       "failed with %d\n",                                     \
-	       it->oiq_obj->oo_dt.do_lu.lo_dev->ld_obd->obd_name, rc); \
+	       osd_dev(it->oiq_obj->oo_dt.do_lu.lo_dev)->od_svname, rc); \
 
 /**
  * Initialize osd Iterator for given osd index object.

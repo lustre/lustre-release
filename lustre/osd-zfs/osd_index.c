@@ -468,18 +468,18 @@ struct osd_object *osd_object_find(const struct lu_env *env,
 		else
 			LU_OBJECT_DEBUG(D_ERROR, env, luch,
 					"%s: object can't be located "DFID"\n",
-					ludev->ld_obd->obd_name, PFID(fid));
+					osd_dev(ludev)->od_svname, PFID(fid));
 
 		if (child == NULL) {
 			lu_object_put(env, luch);
 			CERROR("%s: Unable to get osd_object "DFID"\n",
-			       ludev->ld_obd->obd_name, PFID(fid));
+			       osd_dev(ludev)->od_svname, PFID(fid));
 			child = ERR_PTR(-ENOENT);
 		}
 	} else {
 		LU_OBJECT_DEBUG(D_ERROR, env, luch,
 				"%s: lu_object does not exists "DFID"\n",
-				ludev->ld_obd->obd_name, PFID(fid));
+				osd_dev(ludev)->od_svname, PFID(fid));
 		lu_object_put(env, luch);
 		child = ERR_PTR(-ENOENT);
 	}

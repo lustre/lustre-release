@@ -96,7 +96,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	if (rc == -ENOENT)
 		/* user/group has not created anything yet */
 		CDEBUG(D_QUOTA, "%s: id %s not found in DMU accounting ZAP\n",
-			osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name, buf);
+		       osd->od_svname, buf);
 	else if (rc)
 		RETURN(rc);
 
@@ -115,7 +115,7 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	if (rc == -ENOENT)
 		/* user/group has not created any file yet */
 		CDEBUG(D_QUOTA, "%s: id %s not found in accounting ZAP\n",
-			osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name, buf);
+		       osd->od_svname, buf);
 	else if (rc)
 		RETURN(rc);
 
@@ -286,7 +286,7 @@ static int osd_it_acct_rec(const struct lu_env *env,
 	if (rc == -ENOENT)
 		/* user/group has not created any file yet */
 		CDEBUG(D_QUOTA, "%s: id %s not found in accounting ZAP\n",
-			osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name, buf);
+		       osd->od_svname, buf);
 	else if (rc)
 		RETURN(rc);
 

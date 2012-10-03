@@ -209,11 +209,10 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		if (!lu_device_is_md(&d->dd_lu_dev) && rc == -ENOSPC)
 			CERROR("%s: failed to start transaction due to ENOSPC. "
 			       "Metadata overhead is underestimated or "
-			       "grant_ratio is too low.\n",
-			       osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name);
+			       "grant_ratio is too low.\n", osd->od_svname);
 		else
 			CERROR("%s: can't assign tx: rc = %d\n",
-			       osd->od_dt_dev.dd_lu_dev.ld_obd->obd_name, rc);
+			       osd->od_svname, rc);
 	} else {
 		/* add commit callback */
 		dmu_tx_callback_register(oh->ot_tx, osd_trans_commit_cb, oh);
