@@ -62,10 +62,6 @@ extern struct lu_context_key seq_thread_key;
 int seq_client_alloc_super(struct lu_client_seq *seq,
                            const struct lu_env *env);
 
-int seq_client_replay_super(struct lu_client_seq *seq,
-                            struct lu_seq_range *range,
-                            const struct lu_env *env);
-
 /* Store API functions. */
 int seq_store_init(struct lu_server_seq *seq,
                    const struct lu_env *env,

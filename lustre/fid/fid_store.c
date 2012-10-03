@@ -88,26 +88,6 @@ void seq_update_cb(struct lu_env *env, struct thandle *th,
 	OBD_FREE_PTR(ccb);
 }
 
-struct thandle *seq_store_trans_create(struct lu_server_seq *seq,
-                                       const struct lu_env *env)
-{
-        struct dt_device *dt_dev;
-
-        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
-        return dt_trans_create(env, dt_dev);
-}
-
-int seq_store_trans_start(struct lu_server_seq *seq, const struct lu_env *env,
-                          struct thandle *th)
-{
-        struct dt_device *dt_dev;
-        ENTRY;
-
-        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
-
-        return dt_trans_start(env, dt_dev, th);
-}
-
 int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
 {
 	struct seq_update_callback *ccb;
@@ -133,67 +113,25 @@ int seq_update_cb_add(struct thandle *th, struct lu_server_seq *seq)
 	return rc;
 }
 
-int seq_declare_store_write(struct lu_server_seq *seq,
-                            const struct lu_env *env,
-                            struct thandle *th)
-{
-        struct dt_object *dt_obj = seq->lss_obj;
-        int rc;
-        ENTRY;
-
-        rc = dt_obj->do_body_ops->dbo_declare_write(env, dt_obj,
-                                                    sizeof(struct lu_seq_range),
-                                                    0, th);
-        return rc;
-}
-
 /* This function implies that caller takes care about locking. */
-int seq_store_write(struct lu_server_seq *seq,
-                    const struct lu_env *env,
-                    struct thandle *th)
-{
-        struct dt_object *dt_obj = seq->lss_obj;
-        struct seq_thread_info *info;
-        loff_t pos = 0;
-        int rc;
-        ENTRY;
-
-        info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
-        LASSERT(info != NULL);
-
-        /* Store ranges in le format. */
-        range_cpu_to_le(&info->sti_space, &seq->lss_space);
-
-        rc = dt_obj->do_body_ops->dbo_write(env, dt_obj,
-                                            seq_store_buf(info),
-                                            &pos, th, BYPASS_CAPA, 1);
-        if (rc == sizeof(info->sti_space)) {
-                CDEBUG(D_INFO, "%s: Space - "DRANGE"\n",
-                       seq->lss_name, PRANGE(&seq->lss_space));
-                rc = 0;
-        } else if (rc >= 0) {
-                rc = -EIO;
-        }
-
-
-        RETURN(rc);
-}
-
 int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
                      struct lu_seq_range *out, int sync)
 {
-        struct dt_device *dt_dev;
-        struct thandle *th;
-        int rc;
-        ENTRY;
+	struct dt_device *dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
+	struct seq_thread_info *info;
+	struct thandle *th;
+	loff_t pos = 0;
+	int rc;
 
-        dt_dev = lu2dt_dev(seq->lss_obj->do_lu.lo_dev);
+	info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
+	LASSERT(info != NULL);
 
-        th = seq_store_trans_create(seq, env);
-        if (IS_ERR(th))
-                RETURN(PTR_ERR(th));
+	th = dt_trans_create(env, dt_dev);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
 
-        rc = seq_declare_store_write(seq, env, th);
+	rc = dt_declare_record_write(env, seq->lss_obj,
+				     sizeof(struct lu_seq_range), 0, th);
         if (rc)
                 GOTO(exit, rc);
 
@@ -204,25 +142,27 @@ int seq_store_update(const struct lu_env *env, struct lu_server_seq *seq,
                         GOTO(exit, rc);
         }
 
-        rc = seq_store_trans_start(seq, env, th);
+	rc = dt_trans_start_local(env, dt_dev, th);
         if (rc)
                 GOTO(exit, rc);
 
-        rc = seq_store_write(seq, env, th);
+	/* Store ranges in le format. */
+	range_cpu_to_le(&info->sti_space, &seq->lss_space);
+
+	rc = dt_record_write(env, seq->lss_obj, seq_store_buf(info), &pos, th);
         if (rc) {
                 CERROR("%s: Can't write space data, rc %d\n",
                        seq->lss_name, rc);
-                GOTO(exit,rc);
+		GOTO(exit, rc);
         } else if (out != NULL) {
                 rc = fld_server_create(seq->lss_site->ms_server_fld,
                                        env, out, th);
                 if (rc) {
                         CERROR("%s: Can't Update fld database, rc %d\n",
                                seq->lss_name, rc);
-                        GOTO(exit,rc);
+			GOTO(exit, rc);
                 }
         }
-
         /* next sequence update will need sync until this update is committed
          * in case of sync operation this is not needed obviously */
         if (!sync)
@@ -242,7 +182,6 @@ exit:
 int seq_store_read(struct lu_server_seq *seq,
                    const struct lu_env *env)
 {
-        struct dt_object *dt_obj = seq->lss_obj;
         struct seq_thread_info *info;
         loff_t pos = 0;
         int rc;
@@ -251,8 +190,9 @@ int seq_store_read(struct lu_server_seq *seq,
         info = lu_context_key_get(&env->le_ctx, &seq_thread_key);
         LASSERT(info != NULL);
 
-        rc = dt_obj->do_body_ops->dbo_read(env, dt_obj, seq_store_buf(info),
-                                           &pos, BYPASS_CAPA);
+	rc = seq->lss_obj->do_body_ops->dbo_read(env, seq->lss_obj,
+						 seq_store_buf(info),
+						 &pos, BYPASS_CAPA);
 
         if (rc == sizeof(info->sti_space)) {
                 range_le_to_cpu(&seq->lss_space, &info->sti_space);
@@ -261,7 +201,7 @@ int seq_store_read(struct lu_server_seq *seq,
                 rc = 0;
         } else if (rc == 0) {
                 rc = -ENODATA;
-        } else if (rc >= 0) {
+	} else if (rc > 0) {
                 CERROR("%s: Read only %d bytes of %d\n", seq->lss_name,
                        rc, (int)sizeof(info->sti_space));
                 rc = -EIO;

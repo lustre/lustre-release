@@ -500,10 +500,8 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         mti = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
         req = mdt_info_req(mti);
 
-        if (mti->mti_mdt == NULL || req == NULL || mti->mti_no_need_trans) {
-                mti->mti_no_need_trans = 0;
-                return 0;
-        }
+	if (mti->mti_mdt == NULL || req == NULL)
+		return 0;
 
         if (mti->mti_has_trans) {
                 /* XXX: currently there are allowed cases, but the wrong cases

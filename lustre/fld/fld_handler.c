@@ -102,7 +102,6 @@ int fld_declare_server_create(struct lu_server_fld *fld,
                               const struct lu_env *env,
                               struct thandle *th)
 {
-        struct dt_object *dt_obj = fld->lsf_obj;
         int rc;
 
         ENTRY;
@@ -114,16 +113,15 @@ int fld_declare_server_create(struct lu_server_fld *fld,
 
         /* for ldiskfs OSD it's enough to declare operation with any ops
          * with DMU we'll probably need to specify exact key/value */
-        rc = dt_obj->do_index_ops->dio_declare_delete(env, dt_obj, NULL, th);
-        if (rc)
-                GOTO(out, rc);
-        rc = dt_obj->do_index_ops->dio_declare_delete(env, dt_obj, NULL, th);
-        if (rc)
-                GOTO(out, rc);
-        rc = dt_obj->do_index_ops->dio_declare_insert(env, dt_obj,
-                                                      NULL, NULL, th);
+	rc = dt_declare_delete(env, fld->lsf_obj, NULL, th);
+	if (rc)
+		GOTO(out, rc);
+	rc = dt_declare_delete(env, fld->lsf_obj, NULL, th);
+	if (rc)
+		GOTO(out, rc);
+	rc = dt_declare_insert(env, fld->lsf_obj, NULL, NULL, th);
 out:
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(fld_declare_server_create);
 

@@ -65,10 +65,10 @@
 const char fld_index_name[] = "fld";
 
 static const struct lu_seq_range IGIF_FLD_RANGE = {
-        .lsr_start = 1,
-        .lsr_end   = FID_SEQ_IDIF,
-        .lsr_index   = 0,
-        .lsr_flags  = LU_SEQ_RANGE_MDT
+	.lsr_start = FID_SEQ_IGIF,
+	.lsr_end   = FID_SEQ_IGIF_MAX + 1,
+	.lsr_index = 0,
+	.lsr_flags = LU_SEQ_RANGE_MDT
 };
 
 const struct dt_index_features fld_index_features = {
@@ -109,42 +109,11 @@ static struct dt_rec *fld_rec(const struct lu_env *env,
         RETURN((void *)rec);
 }
 
-struct thandle *fld_trans_create(struct lu_server_fld *fld,
-                                const struct lu_env *env)
-{
-        struct dt_device *dt_dev;
-
-        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
-
-        return dt_dev->dd_ops->dt_trans_create(env, dt_dev);
-}
-
-int fld_trans_start(struct lu_server_fld *fld,
-                                const struct lu_env *env, struct thandle *th)
-{
-        struct dt_device *dt_dev;
-
-        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
-
-        return dt_dev->dd_ops->dt_trans_start(env, dt_dev, th);
-}
-
-void fld_trans_stop(struct lu_server_fld *fld,
-                    const struct lu_env *env, struct thandle* th)
-{
-        struct dt_device *dt_dev;
-
-        dt_dev = lu2dt_dev(fld->lsf_obj->do_lu.lo_dev);
-        dt_dev->dd_ops->dt_trans_stop(env, th);
-}
-
 int fld_declare_index_create(struct lu_server_fld *fld,
                              const struct lu_env *env,
                              const struct lu_seq_range *range,
                              struct thandle *th)
 {
-        struct dt_object *dt_obj = fld->lsf_obj;
-        seqno_t start;
         int rc;
 
         ENTRY;
@@ -154,12 +123,10 @@ int fld_declare_index_create(struct lu_server_fld *fld,
 		return 0;
 	}
 
-        start = range->lsr_start;
         LASSERT(range_is_sane(range));
 
-        rc = dt_obj->do_index_ops->dio_declare_insert(env, dt_obj,
-                                                      fld_rec(env, range),
-                                                      fld_key(env, start), th);
+	rc = dt_declare_insert(env, fld->lsf_obj, fld_rec(env, range),
+			      fld_key(env, range->lsr_start), th);
         RETURN(rc);
 }
 
@@ -173,14 +140,11 @@ int fld_declare_index_create(struct lu_server_fld *fld,
  *      \retval  0  success
  *      \retval  -ve error
  */
-
 int fld_index_create(struct lu_server_fld *fld,
                      const struct lu_env *env,
                      const struct lu_seq_range *range,
                      struct thandle *th)
 {
-        struct dt_object *dt_obj = fld->lsf_obj;
-        seqno_t start;
         int rc;
 
         ENTRY;
@@ -196,14 +160,10 @@ int fld_index_create(struct lu_server_fld *fld,
 		}
 	}
 
-        start = range->lsr_start;
         LASSERT(range_is_sane(range));
 
-        rc = dt_obj->do_index_ops->dio_insert(env, dt_obj,
-                                              fld_rec(env, range),
-                                              fld_key(env, start),
-                                              th, BYPASS_CAPA, 1);
-
+	rc = dt_insert(env, fld->lsf_obj, fld_rec(env, range),
+		       fld_key(env, range->lsr_start), th, BYPASS_CAPA, 1);
         CDEBUG(D_INFO, "%s: insert given range : "DRANGE" rc = %d\n",
                fld->lsf_name, PRANGE(range), rc);
         RETURN(rc);
@@ -218,24 +178,19 @@ int fld_index_create(struct lu_server_fld *fld,
  *      \retval  0  success
  *      \retval  -ve error
  */
-
 int fld_index_delete(struct lu_server_fld *fld,
                      const struct lu_env *env,
                      struct lu_seq_range *range,
                      struct thandle   *th)
 {
-        struct dt_object *dt_obj = fld->lsf_obj;
-        seqno_t seq = range->lsr_start;
         int rc;
 
         ENTRY;
 
-        rc = dt_obj->do_index_ops->dio_delete(env, dt_obj, fld_key(env, seq),
-                                              th, BYPASS_CAPA);
-
+	rc = dt_delete(env, fld->lsf_obj, fld_key(env, range->lsr_start), th,
+		       BYPASS_CAPA);
         CDEBUG(D_INFO, "%s: delete given range : "DRANGE" rc = %d\n",
                fld->lsf_name, PRANGE(range), rc);
-
         RETURN(rc);
 }
 
@@ -304,26 +259,24 @@ static int fld_insert_igif_fld(struct lu_server_fld *fld,
         int rc;
         ENTRY;
 
-        /* FLD_TXN_INDEX_INSERT_CREDITS */
-        th = fld_trans_create(fld, env);
-        if (IS_ERR(th))
-                RETURN(PTR_ERR(th));
-        rc = fld_declare_index_create(fld, env, &IGIF_FLD_RANGE, th);
-        if (rc) {
-                fld_trans_stop(fld, env, th);
-                RETURN(rc);
-        }
-        rc = fld_trans_start(fld, env, th);
-        if (rc) {
-                fld_trans_stop(fld, env, th);
-                RETURN(rc);
-        }
+	th = dt_trans_create(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev));
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+	rc = fld_declare_index_create(fld, env, &IGIF_FLD_RANGE, th);
+	if (rc)
+		GOTO(out, rc);
 
-        rc = fld_index_create(fld, env, &IGIF_FLD_RANGE, th);
-        fld_trans_stop(fld, env, th);
-        if (rc == -EEXIST)
-                rc = 0;
-        RETURN(rc);
+	rc = dt_trans_start_local(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev),
+				  th);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = fld_index_create(fld, env, &IGIF_FLD_RANGE, th);
+	if (rc == -EEXIST)
+		rc = 0;
+out:
+	dt_trans_stop(env, lu2dt_dev(fld->lsf_obj->do_lu.lo_dev), th);
+	RETURN(rc);
 }
 
 int fld_index_init(struct lu_server_fld *fld,

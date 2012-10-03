@@ -336,7 +336,6 @@ struct mdt_thread_info {
         const struct ldlm_request *mti_dlm_req;
 
         __u32                      mti_has_trans:1, /* has txn already? */
-                                   mti_no_need_trans:1,
                                    mti_cross_ref:1;
 
         /* opdata for mdt_reint_open(), has the same as

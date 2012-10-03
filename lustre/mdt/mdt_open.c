@@ -1515,7 +1515,6 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                         ma->ma_need = 0;
                         ma->ma_valid = 0;
                         ma->ma_cookie_size = 0;
-                        info->mti_no_need_trans = 1;
                         rc = mdo_unlink(info->mti_env,
                                         mdt_object_child(parent),
                                         mdt_object_child(child),
