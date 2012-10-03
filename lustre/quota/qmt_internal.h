@@ -73,6 +73,15 @@ struct qmt_device {
 	/* procfs root directory for this qmt */
 	cfs_proc_dir_entry_t	*qmt_proc;
 
+	/* dedicated thread in charge of space rebalancing */
+	struct ptlrpc_thread	 qmt_reba_thread;
+
+	/* list of lqe entry which need space rebalancing */
+	cfs_list_t		 qmt_reba_list;
+
+	/* lock protecting rebalancing list */
+	cfs_spinlock_t		 qmt_reba_lock;
+
 	unsigned long		 qmt_stopping:1; /* qmt is stopping */
 
 };
@@ -252,4 +261,8 @@ int qmt_lvbo_update(struct lu_device *, struct ldlm_resource *,
 int qmt_lvbo_size(struct lu_device *, struct ldlm_lock *);
 int qmt_lvbo_fill(struct lu_device *, struct ldlm_lock *, void *, int);
 int qmt_lvbo_free(struct lu_device *, struct ldlm_resource *);
+int qmt_start_reba_thread(struct qmt_device *);
+void qmt_stop_reba_thread(struct qmt_device *);
+void qmt_glb_lock_notify(const struct lu_env *, struct lquota_entry *, __u64);
+void qmt_id_lock_notify(struct qmt_device *, struct lquota_entry *);
 #endif /* _QMT_INTERNAL_H */

@@ -110,6 +110,9 @@ static struct lu_device *qmt_device_fini(const struct lu_env *env,
 		qmt->qmt_proc = NULL;
 	}
 
+	/* stop rebalance thread */
+	qmt_stop_reba_thread(qmt);
+
 	/* disconnect from OSD */
 	if (qmt->qmt_child_exp != NULL) {
 		obd_disconnect(qmt->qmt_child_exp);
@@ -117,12 +120,9 @@ static struct lu_device *qmt_device_fini(const struct lu_env *env,
 		qmt->qmt_child = NULL;
 	}
 
-	/* release reference on MDT namespace */
-	if (ld->ld_obd->obd_namespace != NULL) {
-		ldlm_namespace_put(ld->ld_obd->obd_namespace);
-		ld->ld_obd->obd_namespace = NULL;
-		qmt->qmt_ns = NULL;
-	}
+	/* clear references to MDT namespace */
+	ld->ld_obd->obd_namespace = NULL;
+	qmt->qmt_ns = NULL;
 
 	RETURN(NULL);
 }
@@ -227,10 +227,9 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	if (mdt_obd == NULL)
 		RETURN(-ENOENT);
 
-	/* grab reference on MDT namespace. kind of a hack until we have our
-	 * own namespace & service threads */
+	/* borrow  MDT namespace. kind of a hack until we have our own namespace
+	 * & service threads */
 	LASSERT(mdt_obd->obd_namespace != NULL);
-	ldlm_namespace_get(mdt_obd->obd_namespace);
 	obd->obd_namespace = mdt_obd->obd_namespace;
 	qmt->qmt_ns = obd->obd_namespace;
 
@@ -238,6 +237,18 @@ static int qmt_device_init0(const struct lu_env *env, struct qmt_device *qmt,
 	rc = qmt_connect_to_osd(env, qmt, cfg);
 	if (rc)
 		GOTO(out, rc);
+
+	/* set up and start rebalance thread */
+	thread_set_flags(&qmt->qmt_reba_thread, SVC_STOPPED);
+	cfs_waitq_init(&qmt->qmt_reba_thread.t_ctl_waitq);
+	CFS_INIT_LIST_HEAD(&qmt->qmt_reba_list);
+	cfs_spin_lock_init(&qmt->qmt_reba_lock);
+	rc = qmt_start_reba_thread(qmt);
+	if (rc) {
+		CERROR("%s: failed to start rebalance thread (%d)\n",
+		       qmt->qmt_svname, rc);
+		GOTO(out, rc);
+	}
 
 	/* at the moment there is no linkage between lu_type and obd_type, so
 	 * we lookup obd_type this way */

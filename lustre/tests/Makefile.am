@@ -9,6 +9,7 @@ AM_CFLAGS = $(LLCFLAGS)
 DIST_SUBDIRS = mpi
 
 noinst_DATA = disk1_8.tar.bz2
+noinst_DATA += admin_quotafile_v2.usr admin_quotafile_v2.grp
 noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh functions.sh
 noinst_SCRIPTS += test-framework.sh runvmstat runiozone runtests
 noinst_SCRIPTS += sanity.sh rundbench acceptance-small.sh compile.sh

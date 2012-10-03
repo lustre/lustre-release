@@ -291,6 +291,9 @@ out_nolock:
 	if (th != NULL && !IS_ERR(th))
 		dt_trans_stop(env, qmt->qmt_child, th);
 
+	if (rc == 0 && bump_version)
+		qmt_glb_lock_notify(env, lqe, ver);
+
 	return rc;
 }
 

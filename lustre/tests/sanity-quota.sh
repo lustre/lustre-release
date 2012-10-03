@@ -11,7 +11,7 @@ export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
 # only accounting tests and test 22 are supported for the time being
-ALWAYS_EXCEPT="0 1 2 3 4 5 6 7 8 9 10 11 12 13 15 17 18 19 20 21 23 24 27 30 36 $SANITY_QUOTA_EXCEPT"
+ALWAYS_EXCEPT="0 1 2 3 4 5 6 7 8 9 10 11 12 13 15 17 18 19 20 21 23 24 27 30 $SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] &&
@@ -1994,8 +1994,12 @@ test_36() {
 	echo "Copy admin quota files into MDT0..."
 	local mntpt=$(facet_mntpt $SINGLEMDS)
 	local mdt0_fstype=$(facet_fstype $SINGLEMDS)
-	echo "$mdt0_node, $mdt0_dev, $mntpt"
-	do_node $mdt0_node mount -t $mdt0_fstype $MDS_MOUNT_OPTS $mdt0_dev $mntpt
+	local opt
+	if ! do_node $mdt0_node test -b $mdt0_fstype; then
+		opt="-o loop"
+	fi
+	echo "$mdt0_node, $mdt0_dev, $mntpt, $opt"
+	do_node $mdt0_node mount -t $mdt0_fstype $opt $mdt0_dev $mntpt
 	do_node $mdt0_node mkdir $mntpt/OBJECTS
 	do_node $mdt0_node cp $LUSTRE/tests/admin_quotafile_v2.usr $mntpt/OBJECTS
 	do_node $mdt0_node cp $LUSTRE/tests/admin_quotafile_v2.grp $mntpt/OBJECTS
@@ -2010,7 +2014,7 @@ test_36() {
 
 	local proc="qmt.*.md-0x0.glb-usr"
 	id_cnt=$(do_node $mdt0_node $LCTL get_param -n $proc | wc -l)
-	[ $id_cnt -eq 201 ] || error "Migrate inode user limit failed"
+	[ $id_cnt -eq 401 ] || error "Migrate inode user limit failed: $id_cnt"
 	limit=$(getquota -u 1 global isoftlimit)
 	[ $limit -eq 1024 ] || error "User inode softlimit: $limit"
 	limit=$(getquota -u 1 global ihardlimit)
@@ -2018,7 +2022,7 @@ test_36() {
 
 	proc="qmt.*.md-0x0.glb-grp"
 	id_cnt=$(do_node $mdt0_node $LCTL get_param -n $proc | wc -l)
-	[ $id_cnt -eq 201 ] || error "Migrate inode group limit failed"
+	[ $id_cnt -eq 401 ] || error "Migrate inode group limit failed: $id_cnt"
 	limit=$(getquota -g 1 global isoftlimit)
 	[ $limit -eq 1024 ] || error "Group inode softlimit: $limit"
 	limit=$(getquota -g 1 global ihardlimit)
@@ -2026,7 +2030,7 @@ test_36() {
 
 	proc=" qmt.*.dt-0x0.glb-usr"
 	id_cnt=$(do_node $mdt0_node $LCTL get_param -n $proc | wc -l)
-	[ $id_cnt -eq 201 ] || error "Migrate block user limit failed"
+	[ $id_cnt -eq 401 ] || error "Migrate block user limit failed: $id_cnt"
 	limit=$(getquota -u 60001 global bsoftlimit)
 	[ $limit -eq 10485760 ] || error "User block softlimit: $limit"
 	limit=$(getquota -u 60001 global bhardlimit)
@@ -2034,7 +2038,7 @@ test_36() {
 
 	proc="qmt.*.dt-0x0.glb-grp"
 	id_cnt=$(do_node $mdt0_node $LCTL get_param -n $proc | wc -l)
-	[ $id_cnt -eq 201 ] || error "Migrate block user limit failed"
+	[ $id_cnt -eq 401 ] || error "Migrate block user limit failed: $id_cnt"
 	limit=$(getquota -g 60001 global bsoftlimit)
 	[ $limit -eq 10485760 ] || error "Group block softlimit: $limit"
 	limit=$(getquota -g 60001 global bhardlimit)
