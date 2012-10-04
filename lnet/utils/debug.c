@@ -897,6 +897,8 @@ static struct mod_paths {
         {"cmm", "lustre/cmm"},
         {"fid", "lustre/fid"},
         {"fld", "lustre/fld"},
+	{"lod", "lustre/lod"},
+	{"osp", "lustre/osp"},
         {NULL, NULL}
 };
 
