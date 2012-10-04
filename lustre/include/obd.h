@@ -490,6 +490,9 @@ struct client_obd {
         struct lu_client_seq    *cl_seq;
 
         cfs_atomic_t             cl_resends; /* resend count */
+
+        /* hash tables for osc_quota_info */
+        cfs_hash_t              *cl_quota_hash[MAXQUOTAS];
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
 

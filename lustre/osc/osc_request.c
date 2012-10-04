@@ -4468,7 +4468,7 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         rc = client_obd_setup(obd, lcfg);
         if (rc) {
                 ptlrpcd_decref();
-        } else {
+        } else if ((rc = lquota_setup(quota_interface, obd)) == 0) {
                 struct lprocfs_static_vars lvars = { 0 };
                 struct client_obd *cli = &obd->u.cli;
 
