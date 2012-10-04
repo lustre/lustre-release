@@ -593,16 +593,24 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
         obj  = need->cld_obj;
         head = cl_object_header(obj);
 
-        cfs_spin_lock(&head->coh_lock_guard);
-        lock = cl_lock_lookup(env, obj, io, need);
-        cfs_spin_unlock(&head->coh_lock_guard);
+	do {
+		cfs_spin_lock(&head->coh_lock_guard);
+		lock = cl_lock_lookup(env, obj, io, need);
+		cfs_spin_unlock(&head->coh_lock_guard);
+		if (lock == NULL)
+			return NULL;
 
-        if (lock == NULL)
-                return NULL;
+		cl_lock_mutex_get(env, lock);
+		if (lock->cll_state == CLS_INTRANSIT)
+			/* Don't care return value. */
+			cl_lock_state_wait(env, lock);
+		if (lock->cll_state == CLS_FREEING) {
+			cl_lock_mutex_put(env, lock);
+			cl_lock_put(env, lock);
+			lock = NULL;
+		}
+	} while (lock == NULL);
 
-        cl_lock_mutex_get(env, lock);
-        if (lock->cll_state == CLS_INTRANSIT)
-                cl_lock_state_wait(env, lock); /* Don't care return value. */
 	cl_lock_hold_add(env, lock, scope, source);
 	cl_lock_user_add(env, lock);
 	if (lock->cll_state == CLS_CACHED)
