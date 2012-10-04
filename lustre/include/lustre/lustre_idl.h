@@ -421,13 +421,12 @@ enum fid_seq {
 	/* sequence for local pre-defined FIDs listed in local_oid */
         FID_SEQ_LOCAL_FILE = 0x200000001ULL,
         FID_SEQ_DOT_LUSTRE = 0x200000002ULL,
-        /* XXX 0x200000003ULL is reserved for FID_SEQ_LLOG_OBJ */
 	/* sequence is used for local named objects FIDs generated
 	 * by local_object_storage library */
+	FID_SEQ_LOCAL_NAME = 0x200000003ULL,
         FID_SEQ_SPECIAL    = 0x200000004ULL,
         FID_SEQ_QUOTA      = 0x200000005ULL,
         FID_SEQ_QUOTA_GLB  = 0x200000006ULL,
-	FID_SEQ_LOCAL_NAME = 0x200000007ULL,
         FID_SEQ_NORMAL     = 0x200000400ULL,
         FID_SEQ_LOV_DEFAULT= 0xffffffffffffffffULL
 };
