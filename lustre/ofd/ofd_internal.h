@@ -308,6 +308,7 @@ void ofd_free_capa_keys(struct ofd_device *ofd);
 
 /* ofd_dev.c */
 extern struct lu_context_key ofd_thread_key;
+int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd);
 
 /* ofd_obd.c */
 extern struct obd_ops ofd_obd_ops;

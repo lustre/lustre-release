@@ -265,6 +265,9 @@ static inline void lqe_read_unlock(struct lquota_entry *lqe)
 #define LQUOTA_LEAST_QUNIT(type) \
 	(type == LQUOTA_RES_MD ? (1 << 10) : toqb(PTLRPC_MAX_BRW_SIZE))
 
+#define LQUOTA_OVER_FL(type) \
+	(type == USRQUOTA ? QUOTA_FL_OVER_USRQUOTA : QUOTA_FL_OVER_GRPQUOTA)
+
 /* Common data shared by quota-level handlers. This is allocated per-thread to
  * reduce stack consumption */
 struct lquota_thread_info {

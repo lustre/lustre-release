@@ -122,36 +122,48 @@ struct qsd_instance;
  *                  needed. qsd_prepare() should typically be called when
  *                  ->ldo_prepare is invoked.
  *
+ * - qsd_start(): a qsd instance should be started once recovery is completed
+ *                (i.e. when ->ldo_recovery_complete is called). This is used
+ *                to notify the qsd layer that quota should now be enforced
+ *                again via the qsd_op_begin/end functions. The last step of the
+ *                reintegration prodecure (namely usage reconciliation) will be
+ *                completed during start.
+ *
  * - qsd_fini(): is used to release a qsd_instance structure allocated with
  *               qsd_init(). This releases all quota slave objects and frees the
  *               structures associated with the qsd_instance.
+ *
+ * - qsd_op_begin(): is used to enforce quota, it must be called in the
+ *                   declaration of each operation. qsd_op_end() should then be
+ *                   invoked later once all operations have been completed in
+ *                   order to release/adjust the quota space.
+ *                   Running qsd_op_begin() before qsd_start() isn't fatal and
+ *                   will return success.
+ *                   Once qsd_start() has been run, qsd_op_begin() will block
+ *                   until the reintegration procedure is completed.
+ *
+ * - qsd_op_end(): performs the post operation quota processing. This must be
+ *                 called after the operation transaction stopped.
+ *                 While qsd_op_begin() must be invoked each time a new
+ *                 operation is declared, qsd_op_end() should be called only
+ *                 once for the whole transaction.
+ *
+ * - qsd_adjust_quota(): triggers pre-acquire/release if necessary.
  *
  * Below are the function prototypes to be used by OSD layer to manage quota
  * enforcement. Arguments are documented where each function is defined.  */
 
 struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,
 			      cfs_proc_dir_entry_t *);
-
 int qsd_prepare(const struct lu_env *, struct qsd_instance *);
-
+int qsd_start(const struct lu_env *, struct qsd_instance *);
 void qsd_fini(const struct lu_env *, struct qsd_instance *);
-
-/* XXX: dummy qsd_op_begin() & qsd_op_end(), will be replaced with the real
- *      one once all the enforcement code landed. */
-static inline int qsd_op_begin(const struct lu_env *env,
-			       struct qsd_instance *qsd,
-			       struct lquota_trans *trans,
-			       struct lquota_id_info *qi,
-			       int *flags)
-{
-	return 0;
-}
-
-static inline void qsd_op_end(const struct lu_env *env,
-			      struct qsd_instance *qsd,
-			      struct lquota_trans *trans)
-{
-}
+int qsd_op_begin(const struct lu_env *, struct qsd_instance *,
+		 struct lquota_trans *, struct lquota_id_info *, int *);
+void qsd_op_end(const struct lu_env *, struct qsd_instance *,
+		struct lquota_trans *);
+void qsd_adjust_quota(const struct lu_env *, struct qsd_instance *,
+		      union lquota_id *, int);
 
 /*
  * Quota information attached to a transaction

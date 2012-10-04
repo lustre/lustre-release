@@ -293,16 +293,34 @@ static struct lu_object *ofd_object_alloc(const struct lu_env *env,
 
 extern int ost_handle(struct ptlrpc_request *req);
 
-static int ofd_start(const struct lu_env *env, struct lu_device *dev)
+static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
+		       struct lu_device *dev)
 {
+	struct ofd_thread_info *info;
 	struct ofd_device	*ofd = ofd_dev(dev);
+	struct obd_device	*obd = ofd_obd(ofd);
 	struct lu_device	*next = &ofd->ofd_osd->dd_lu_dev;
 	int			 rc;
 
 	ENTRY;
 
+	rc = lu_env_refill((struct lu_env *)env);
+	if (rc != 0) {
+		CERROR("Failure to refill session: '%d'\n", rc);
+		RETURN(rc);
+	}
+
+	info = ofd_info_init(env, NULL);
+	if (info == NULL)
+		RETURN(-EFAULT);
+
 	/* initialize lower device */
 	rc = next->ld_ops->ldo_prepare(env, dev, next);
+
+	target_recovery_init(&ofd->ofd_lut, ost_handle);
+
+	if (obd->obd_recovering == 0)
+		ofd_postrecov(env, ofd);
 
 	RETURN(rc);
 }
@@ -331,6 +349,7 @@ static struct lu_device_operations ofd_lu_ops = {
 	.ldo_object_alloc	= ofd_object_alloc,
 	.ldo_process_config	= ofd_process_config,
 	.ldo_recovery_complete	= ofd_recovery_complete,
+	.ldo_prepare		= ofd_prepare,
 };
 
 static int ofd_procfs_init(struct ofd_device *ofd)
@@ -546,10 +565,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_grant_ratio =
 		ofd_grant_ratio_conv(m->ofd_dt_conf.ddp_grant_reserved);
 
-	rc = ofd_start(env, &m->ofd_dt_dev.dd_lu_dev);
-	if (rc)
-		GOTO(err_fini_stack, rc);
-
 	rc = lut_init(env, &m->ofd_lut, obd, m->ofd_osd);
 	if (rc)
 		GOTO(err_free_ns, rc);
@@ -557,8 +572,6 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	rc = ofd_fs_setup(env, m, obd);
 	if (rc)
 		GOTO(err_fini_lut, rc);
-
-	target_recovery_init(&m->ofd_lut, ost_handle);
 
 	RETURN(0);
 err_fini_lut:

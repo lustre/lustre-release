@@ -425,6 +425,14 @@ static int ofd_destroy_export(struct obd_export *exp)
 	return 0;
 }
 
+int ofd_postrecov(const struct lu_env *env, struct ofd_device *ofd)
+{
+	struct lu_device *ldev = &ofd->ofd_dt_dev.dd_lu_dev;
+
+	CDEBUG(D_HA, "%s: recovery is over\n", ofd_obd(ofd)->obd_name);
+	return ldev->ld_ops->ldo_recovery_complete(env, ldev);
+}
+
 int ofd_obd_postrecov(struct obd_device *obd)
 {
 	struct lu_env		 env;
@@ -438,7 +446,8 @@ int ofd_obd_postrecov(struct obd_device *obd)
 		RETURN(rc);
 	ofd_info_init(&env, obd->obd_self_export);
 
-	rc = ldev->ld_ops->ldo_recovery_complete(&env, ldev);
+	rc = ofd_postrecov(&env, ofd_dev(ldev));
+
 	lu_env_fini(&env);
 	RETURN(rc);
 }

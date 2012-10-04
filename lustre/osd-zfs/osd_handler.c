@@ -754,8 +754,17 @@ static int osd_process_config(const struct lu_env *env,
 
 static int osd_recovery_complete(const struct lu_env *env, struct lu_device *d)
 {
+	struct osd_device	*osd = osd_dev(d);
+	int			 rc = 0;
 	ENTRY;
-	RETURN(0);
+
+	if (osd->od_quota_slave == NULL)
+		RETURN(0);
+
+	/* start qsd instance on recovery completion, this notifies the quota
+	 * slave code that we are about to process new requests now */
+	rc = qsd_start(env, osd->od_quota_slave);
+	RETURN(rc);
 }
 
 /*

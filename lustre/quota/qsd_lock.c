@@ -227,10 +227,10 @@ static int qsd_glb_glimpse_ast(struct ldlm_lock *lock, void *data)
 		/* valid race */
 		GOTO(out, rc = -ELDLM_NO_LOCK_DATA);
 
-	LCONSOLE_INFO("%s: glimpse on glb quota locks, id:"LPU64" ver:"LPU64
-		      " hard:" LPU64" soft:"LPU64"\n", qqi->qqi_qsd->qsd_svname,
-		      desc->gl_id.qid_uid, desc->gl_ver, desc->gl_hardlimit,
-		      desc->gl_softlimit);
+	CDEBUG(D_QUOTA, "%s: glimpse on glb quota locks, id:"LPU64" ver:"LPU64
+	       " hard:" LPU64" soft:"LPU64"\n", qqi->qqi_qsd->qsd_svname,
+	       desc->gl_id.qid_uid, desc->gl_ver, desc->gl_hardlimit,
+	       desc->gl_softlimit);
 
 	if (desc->gl_ver == 0) {
 		CERROR("%s: invalid global index version "LPU64"\n",
@@ -380,8 +380,8 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 		/* valid race */
 		GOTO(out, rc = -ELDLM_NO_LOCK_DATA);
 
-	LQUOTA_CONSOLE(lqe, "glimpse on quota locks, new qunit:"LPU64,
-		       desc->gl_qunit);
+	LQUOTA_DEBUG(lqe, "glimpse on quota locks, new qunit:"LPU64,
+		     desc->gl_qunit);
 
 	qsd = lqe2qqi(lqe)->qqi_qsd;
 
@@ -400,14 +400,14 @@ static int qsd_id_glimpse_ast(struct ldlm_lock *lock, void *data)
 
 		if (space > 0) {
 			if (lqe->lqe_pending_req > 0) {
-				LQUOTA_ERROR(lqe, "request in flight, postpone "
+				LQUOTA_DEBUG(lqe, "request in flight, postpone "
 					     "release of "LPD64, space);
 				lvb->lvb_id_may_rel = space;
 			} else {
 				lqe->lqe_pending_req++;
 
 				/* release quota space in glimpse reply */
-				LQUOTA_ERROR(lqe, "releasing "LPD64, space);
+				LQUOTA_DEBUG(lqe, "releasing "LPD64, space);
 				lqe->lqe_granted -= space;
 				lvb->lvb_id_rel   = space;
 

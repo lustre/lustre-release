@@ -136,6 +136,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 	char			*cfgstr = lustre_cfg_string(lcfg, 1);
 	char			*keystr, *valstr;
 	int			 rc, pool, enabled = 0;
+	bool			 reint = false;
 	ENTRY;
 
 	CDEBUG(D_QUOTA, "processing quota parameter: fs:%s cfgstr:%s\n", fsname,
@@ -153,7 +154,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 
 	qfs = qsd_get_fsinfo(fsname, 0);
 	if (qfs == NULL) {
-		CERROR("Fail to find quota filesystem information for %s\n",
+		CERROR("failed to find quota filesystem information for %s\n",
 		       fsname);
 		RETURN(-ENOENT);
 	}
@@ -163,12 +164,42 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 	if (strchr(valstr, 'g'))
 		enabled |= 1 << GRPQUOTA;
 
+	cfs_down(&qfs->qfs_sem);
 	if (qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] == enabled)
 		/* no change required */
 		GOTO(out, rc = 0);
 
+	if ((qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] & enabled) != enabled)
+		reint = true;
+
 	qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] = enabled;
+
+	/* trigger reintegration for all qsd */
+	if (reint) {
+		struct qsd_instance	*qsd;
+		struct qsd_qtype_info	*qqi;
+
+		cfs_list_for_each_entry(qsd, &qfs->qfs_qsd_list, qsd_link) {
+			bool	skip = false;
+			int	type;
+
+			/* start reintegration only if qsd_prepare() was
+			 * successfully called */
+			cfs_read_lock(&qsd->qsd_lock);
+			if (!qsd->qsd_prepared)
+				skip = true;
+			cfs_read_unlock(&qsd->qsd_lock);
+			if (skip)
+				continue;
+
+			for (type = USRQUOTA; type < MAXQUOTAS; type++) {
+				qqi = qsd->qsd_type_array[type];
+				qsd_start_reint_thread(qqi);
+			}
+		}
+	}
 out:
+	cfs_up(&qfs->qfs_sem);
 	qsd_put_fsinfo(qfs);
 	RETURN(0);
 }

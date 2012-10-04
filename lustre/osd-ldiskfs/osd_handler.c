@@ -837,8 +837,24 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 
         osd_index_fini(obj);
         if (inode != NULL) {
+		struct qsd_instance	*qsd = osd_obj2dev(obj)->od_quota_slave;
+		qid_t			 uid = inode->i_uid;
+		qid_t			 gid = inode->i_gid;
+
                 iput(inode);
                 obj->oo_inode = NULL;
+
+		if (qsd != NULL) {
+			struct osd_thread_info	*info = osd_oti_get(env);
+			struct lquota_id_info	*qi = &info->oti_qi;
+
+			/* Release granted quota to master if necessary */
+			qi->lqi_id.qid_uid = uid;
+			qsd_adjust_quota(env, qsd, &qi->lqi_id, USRQUOTA);
+
+			qi->lqi_id.qid_uid = gid;
+			qsd_adjust_quota(env, qsd, &qi->lqi_id, GRPQUOTA);
+		}
         }
 }
 
@@ -4624,7 +4640,17 @@ static int osd_process_config(const struct lu_env *env,
 static int osd_recovery_complete(const struct lu_env *env,
                                  struct lu_device *d)
 {
-        RETURN(0);
+	struct osd_device	*osd = osd_dev(d);
+	int			 rc = 0;
+	ENTRY;
+
+	if (osd->od_quota_slave == NULL)
+		RETURN(0);
+
+	/* start qsd instance on recovery completion, this notifies the quota
+	 * slave code that we are about to process new requests now */
+	rc = qsd_start(env, osd->od_quota_slave);
+	RETURN(rc);
 }
 
 /*

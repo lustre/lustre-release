@@ -55,6 +55,12 @@ struct qsd_instance {
 	 * are exported */
 	cfs_proc_dir_entry_t	*qsd_proc;
 
+	/* export used for the connection to quota master */
+	struct obd_export     *qsd_exp;
+
+	/* ldlm namespace used for quota locks */
+	struct ldlm_namespace *qsd_ns;
+
 	/* on-disk directory where to store index files for this qsd instance */
 	struct dt_object	*qsd_root;
 
@@ -66,23 +72,41 @@ struct qsd_instance {
 	 * future. For the time being, we can just use an array. */
 	struct qsd_qtype_info	*qsd_type_array[MAXQUOTAS];
 
-	/* r/w spinlock protecting:
-	 * - the state flags
-	 * - the qsd update list
-	 * - the deferred list
-	 * - flags of the qsd_qtype_info
-	 *
-	 * probably way too much :(
-	 */
-	cfs_rwlock_t		 qsd_lock;
-
 	/* per-filesystem quota information */
 	struct qsd_fsinfo	*qsd_fsinfo;
 
 	/* link into qfs_qsd_list of qfs_fsinfo */
 	cfs_list_t		 qsd_link;
 
+	/* list of lqe entry which might need quota space adjustment */
+	cfs_list_t		 qsd_adjust_list;
+
+	/* lock protecting adjust list */
+	cfs_spinlock_t		 qsd_adjust_lock;
+
+	/* dedicated thread for updating slave index files. */
+	struct ptlrpc_thread	 qsd_upd_thread;
+
+	/* list of update tasks */
+	cfs_list_t		 qsd_upd_list;
+
+	/* r/w spinlock protecting:
+	 * - the state flags
+	 * - the qsd update list
+	 * - the deferred list
+	 * - flags of the qsd_qtype_info */
+	cfs_rwlock_t		 qsd_lock;
+
+	/* Default quota settings which apply to all identifiers */
+	/* when blk qunit reaches this value, later write reqs from client
+	 * should be sync. b=16642 */
+	unsigned long		 qsd_sync_threshold;
+
 	unsigned long		 qsd_is_md:1,    /* managing quota for mdt */
+				 qsd_started:1,  /* instance is now started */
+				 qsd_prepared:1, /* qsd_prepare() successfully
+						  * called */
+				 qsd_exp_valid:1,/* qsd_exp is now valid */
 				 qsd_stopping:1; /* qsd_instance is stopping */
 };
 
@@ -102,6 +126,9 @@ struct qsd_qtype_info {
 	/* Global index FID to use for this quota type */
 	struct lu_fid		 qqi_fid;
 
+	/* Slave index FID allocated by the master */
+	struct lu_fid		 qqi_slv_fid;
+
 	/* back pointer to qsd device
 	 * immutable after creation. */
 	struct qsd_instance	*qqi_qsd;
@@ -117,6 +144,21 @@ struct qsd_qtype_info {
 	/* Current object versions */
 	__u64			 qqi_slv_ver; /* slave index version */
 	__u64			 qqi_glb_ver; /* global index version */
+
+	/* per quota ID information. All lquota entry are kept in a hash table
+	 * and read from disk on cache miss. */
+	struct lquota_site	*qqi_site;
+
+	/* Reintegration thread */
+	struct ptlrpc_thread	 qqi_reint_thread;
+
+	/* statistics on operations performed by this slave */
+	struct lprocfs_stats	*qqi_stats;
+
+	/* deferred update for the global index copy */
+	cfs_list_t		 qqi_deferred_glb;
+	/* deferred update for the slave index copy */
+	cfs_list_t		 qqi_deferred_slv;
 
 	/* Various flags representing the current state of the slave for this
 	 * quota type. */
@@ -184,6 +226,17 @@ enum qsd_ops {
 };
 
 #define QSD_RES_TYPE(qsd) ((qsd)->qsd_is_md ? LQUOTA_RES_MD : LQUOTA_RES_DT)
+
+/* udpate record for slave & global index copy */
+struct qsd_upd_rec {
+	cfs_list_t		qur_link; /* link into qsd_upd_list */
+	union lquota_id		qur_qid;
+	union lquota_rec	qur_rec;
+	struct qsd_qtype_info  *qur_qqi;
+	struct lquota_entry    *qur_lqe;
+	__u64			qur_ver;
+	bool			qur_global;
+};
 
 /* Common data shared by qsd-level handlers. This is allocated per-thread to
  * reduce stack consumption.  */
@@ -265,6 +318,8 @@ static inline void qsd_set_qunit(struct lquota_entry *lqe, __u64 qunit)
 	lqe->lqe_nopreacq = false;
 }
 
+#define QSD_WB_INTERVAL	15 /* 15 seconds */
+
 /* qsd_entry.c */
 extern struct lquota_entry_operations qsd_lqe_ops;
 int qsd_refresh_usage(const struct lu_env *, struct lquota_entry *);
@@ -311,11 +366,14 @@ void qsd_put_fsinfo(struct qsd_fsinfo *);
 int qsd_process_config(struct lustre_cfg *);
 
 /* qsd_handler.c */
-/* XXX to be replaced with real function once qsd_handler landed */
-static inline int qsd_dqacq(const struct lu_env *env, struct lquota_entry *lqe,
-			    enum qsd_ops op)
-{
-	return 0;
-}
+int qsd_dqacq(const struct lu_env *, struct lquota_entry *, enum qsd_ops);
+__u64 qsd_calc_grants(struct lquota_entry *, __u64, __u32);
 
+/* qsd_writeback.c */
+void qsd_upd_schedule(struct qsd_qtype_info *, struct lquota_entry *,
+		      union lquota_id *, union lquota_rec *, __u64, bool);
+void qsd_bump_version(struct qsd_qtype_info *, __u64, bool);
+int qsd_start_upd_thread(struct qsd_instance *);
+void qsd_stop_upd_thread(struct qsd_instance *);
+void qsd_adjust_schedule(struct lquota_entry *, bool, bool);
 #endif /* _QSD_INTERNAL_H */
