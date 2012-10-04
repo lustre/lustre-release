@@ -186,6 +186,12 @@ static int ofd_lvbo_update(struct ldlm_resource *res,
 			       lvb->lvb_ctime, rpc_lvb->lvb_ctime);
 			lvb->lvb_ctime = rpc_lvb->lvb_ctime;
 		}
+		if (rpc_lvb->lvb_blocks > lvb->lvb_blocks || !increase_only) {
+			CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks: "
+			       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+			       lvb->lvb_blocks, rpc_lvb->lvb_blocks);
+			lvb->lvb_blocks = rpc_lvb->lvb_blocks;
+		}
 		unlock_res(res);
 	}
 
@@ -226,7 +232,7 @@ disk_update:
 		       lvb->lvb_ctime, info->fti_attr.la_ctime);
 		lvb->lvb_ctime = info->fti_attr.la_ctime;
 	}
-	if (lvb->lvb_blocks != info->fti_attr.la_blocks) {
+	if (info->fti_attr.la_blocks > lvb->lvb_blocks || !increase_only) {
 		CDEBUG(D_DLMTRACE,"res: "LPU64" updating lvb blocks from disk: "
 		       LPU64" -> %llu\n", res->lr_name.name[0],
 		       lvb->lvb_blocks,
