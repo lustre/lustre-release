@@ -422,9 +422,11 @@ static int lod_declare_xattr_set(const struct lu_env *env,
 	 * allow to declare predefined striping on a new (!mode) object
 	 * which is supposed to be replay of regular file creation
 	 * (when LOV setting is declared)
+	 * LU_XATTR_REPLACE is set to indicate a layout swap
 	 */
 	mode = dt->do_lu.lo_header->loh_attr & S_IFMT;
-	if ((S_ISREG(mode) || !mode) && !strcmp(name, XATTR_NAME_LOV)) {
+	if ((S_ISREG(mode) || !mode) && !strcmp(name, XATTR_NAME_LOV) &&
+	     !(fl & LU_XATTR_REPLACE)) {
 		/*
 		 * this is a request to manipulate object's striping
 		 */
@@ -509,9 +511,9 @@ static int lod_xattr_set(const struct lu_env *env,
 			 const char *name, int fl, struct thandle *th,
 			 struct lustre_capa *capa)
 {
-	struct dt_object *next = dt_object_child(dt);
-	__u32		  attr;
-	int		  rc;
+	struct dt_object	*next = dt_object_child(dt);
+	__u32			 attr;
+	int			 rc;
 	ENTRY;
 
 	attr = dt->do_lu.lo_header->loh_attr & S_IFMT;
@@ -523,12 +525,15 @@ static int lod_xattr_set(const struct lu_env *env,
 			rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
 
 	} else if (S_ISREG(attr) && !strcmp(name, XATTR_NAME_LOV)) {
-		/*
-		 * XXX: check striping match what we already have
-		 * during req replay, declare_xattr_set() defines striping,
-		 * then create() does the work
-		 */
-		rc = lod_striping_create(env, dt, NULL, NULL, th);
+		/* in case of lov EA swap, just set it
+		 * if not, it is a replay so check striping match what we
+		 * already have during req replay, declare_xattr_set()
+		 * defines striping, then create() does the work
+		*/
+		if (fl & LU_XATTR_REPLACE)
+			rc = dt_xattr_set(env, next, buf, name, fl, th, capa);
+		else
+			rc = lod_striping_create(env, dt, NULL, NULL, th);
 		RETURN(rc);
 	} else {
 		/*

@@ -637,6 +637,14 @@ static int dot_lustre_mdd_xattr_del(const struct lu_env *env,
         return -EPERM;
 }
 
+static int dot_lustre_mdd_swap_layouts(const struct lu_env *env,
+				       struct md_object *obj1,
+				       struct md_object *obj2,
+				       __u64 flags)
+{
+	return -EPERM;
+}
+
 static int dot_lustre_mdd_readlink(const struct lu_env *env,
                                    struct md_object *obj, struct lu_buf *buf)
 {
@@ -715,25 +723,26 @@ static int dot_file_unlock(const struct lu_env *env, struct md_object *obj,
 }
 
 static struct md_object_operations mdd_dot_lustre_obj_ops = {
-        .moo_permission    = dot_lustre_mdd_permission,
-	.moo_attr_get      = mdd_attr_get,
-	.moo_attr_set      = mdd_attr_set,
-        .moo_xattr_get     = dot_lustre_mdd_xattr_get,
-        .moo_xattr_list    = dot_lustre_mdd_xattr_list,
-        .moo_xattr_set     = dot_lustre_mdd_xattr_set,
-        .moo_xattr_del     = dot_lustre_mdd_xattr_del,
-        .moo_readpage      = mdd_readpage,
-        .moo_readlink      = dot_lustre_mdd_readlink,
-        .moo_object_create = dot_lustre_mdd_object_create,
-        .moo_ref_add       = dot_lustre_mdd_ref_add,
-        .moo_ref_del       = dot_lustre_mdd_ref_del,
-        .moo_open          = dot_lustre_mdd_open,
-        .moo_close         = dot_lustre_mdd_close,
-        .moo_capa_get      = mdd_capa_get,
-        .moo_object_sync   = dot_lustre_mdd_object_sync,
-        .moo_path          = dot_lustre_mdd_path,
-        .moo_file_lock     = dot_file_lock,
-        .moo_file_unlock   = dot_file_unlock,
+	.moo_permission		= dot_lustre_mdd_permission,
+	.moo_attr_get		= mdd_attr_get,
+	.moo_attr_set		= mdd_attr_set,
+	.moo_xattr_get		= dot_lustre_mdd_xattr_get,
+	.moo_xattr_list		= dot_lustre_mdd_xattr_list,
+	.moo_xattr_set		= dot_lustre_mdd_xattr_set,
+	.moo_xattr_del		= dot_lustre_mdd_xattr_del,
+	.moo_swap_layouts	= dot_lustre_mdd_swap_layouts,
+	.moo_readpage		= mdd_readpage,
+	.moo_readlink		= dot_lustre_mdd_readlink,
+	.moo_object_create	= dot_lustre_mdd_object_create,
+	.moo_ref_add		= dot_lustre_mdd_ref_add,
+	.moo_ref_del		= dot_lustre_mdd_ref_del,
+	.moo_open		= dot_lustre_mdd_open,
+	.moo_close		= dot_lustre_mdd_close,
+	.moo_capa_get		= mdd_capa_get,
+	.moo_object_sync	= dot_lustre_mdd_object_sync,
+	.moo_path		= dot_lustre_mdd_path,
+	.moo_file_lock		= dot_file_lock,
+	.moo_file_unlock	= dot_file_unlock,
 };
 
 

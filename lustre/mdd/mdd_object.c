@@ -1181,24 +1181,24 @@ static int mdd_xattr_sanity_check(const struct lu_env *env,
 }
 
 static int mdd_declare_xattr_set(const struct lu_env *env,
-                                 struct mdd_device *mdd,
-                                 struct mdd_object *obj,
-                                 const struct lu_buf *buf,
-                                 const char *name,
-                                 struct thandle *handle)
+				 struct mdd_device *mdd,
+				 struct mdd_object *obj,
+				 const struct lu_buf *buf,
+				 const char *name,
+				 int fl, struct thandle *handle)
 {
-        int rc;
+	int	rc;
 
-        rc = mdo_declare_xattr_set(env, obj, buf, name, 0, handle);
-        if (rc)
-                return rc;
+	rc = mdo_declare_xattr_set(env, obj, buf, name, fl, handle);
+	if (rc)
+		return rc;
 
-        /* Only record user xattr changes */
-        if ((strncmp("user.", name, 5) == 0))
-                rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
+	/* Only record user xattr changes */
+	if ((strncmp("user.", name, 5) == 0))
+		rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
 
 	rc = mdd_declare_changelog_store(env, mdd, NULL, handle);
-        return rc;
+	return rc;
 }
 
 /**
@@ -1206,13 +1206,13 @@ static int mdd_declare_xattr_set(const struct lu_env *env,
  * after xattr_set if needed.
  */
 static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
-                         const struct lu_buf *buf, const char *name,
-                         int fl)
+			 const struct lu_buf *buf, const char *name,
+			 int fl)
 {
-        struct mdd_object *mdd_obj = md2mdd_obj(obj);
-        struct mdd_device *mdd = mdo2mdd(obj);
-        struct thandle *handle;
-        int  rc;
+	struct mdd_object	*mdd_obj = md2mdd_obj(obj);
+	struct mdd_device	*mdd = mdo2mdd(obj);
+	struct thandle		*handle;
+	int			 rc;
         ENTRY;
 
 	if (!strcmp(name, XATTR_NAME_ACL_ACCESS)) {
@@ -1220,25 +1220,25 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 		RETURN(rc);
 	}
 
-        rc = mdd_xattr_sanity_check(env, mdd_obj);
-        if (rc)
-                RETURN(rc);
+	rc = mdd_xattr_sanity_check(env, mdd_obj);
+	if (rc)
+		RETURN(rc);
 
-        handle = mdd_trans_create(env, mdd);
-        if (IS_ERR(handle))
-                RETURN(PTR_ERR(handle));
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
 
-        rc = mdd_declare_xattr_set(env, mdd, mdd_obj, buf, name, handle);
-        if (rc)
-                GOTO(stop, rc);
+	rc = mdd_declare_xattr_set(env, mdd, mdd_obj, buf, name, 0, handle);
+	if (rc)
+		GOTO(stop, rc);
 
-        rc = mdd_trans_start(env, mdd, handle);
-        if (rc)
-                GOTO(stop, rc);
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
 
-        /* security-replated changes may require sync */
-        if (!strcmp(name, XATTR_NAME_ACL_ACCESS))
-                handle->th_sync |= !!mdd->mdd_sync_permission;
+	/* security-replated changes may require sync */
+	if (!strcmp(name, XATTR_NAME_ACL_ACCESS))
+		handle->th_sync |= !!mdd->mdd_sync_permission;
 
 	mdd_write_lock(env, mdd_obj, MOR_TGT_CHILD);
 	rc = mdo_xattr_set(env, mdd_obj, buf, name, fl, handle,
@@ -1247,20 +1247,20 @@ static int mdd_xattr_set(const struct lu_env *env, struct md_object *obj,
 	if (rc)
 		GOTO(stop, rc);
 
-        /* Only record system & user xattr changes */
+	/* Only record system & user xattr changes */
 	if (strncmp(XATTR_USER_PREFIX, name,
-                                  sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
-                          strncmp(POSIX_ACL_XATTR_ACCESS, name,
-                                  sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
-                          strncmp(POSIX_ACL_XATTR_DEFAULT, name,
-				  sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0)
-                rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj,
-                                              handle);
+			sizeof(XATTR_USER_PREFIX) - 1) == 0 ||
+	    strncmp(POSIX_ACL_XATTR_ACCESS, name,
+			sizeof(POSIX_ACL_XATTR_ACCESS) - 1) == 0 ||
+	    strncmp(POSIX_ACL_XATTR_DEFAULT, name,
+			sizeof(POSIX_ACL_XATTR_DEFAULT) - 1) == 0)
+		rc = mdd_changelog_data_store(env, mdd, CL_XATTR, 0, mdd_obj,
+					      handle);
 
 stop:
-        mdd_trans_stop(env, mdd, rc, handle);
+	mdd_trans_stop(env, mdd, rc, handle);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdd_declare_xattr_del(const struct lu_env *env,
@@ -1332,6 +1332,302 @@ stop:
         mdd_trans_stop(env, mdd, rc, handle);
 
         RETURN(rc);
+}
+
+/*
+ * read lov EA of an object
+ * return the lov EA in an allocated lu_buf
+ */
+static struct lu_buf *mdd_get_lov_ea(const struct lu_env *env,
+				     struct mdd_object *obj)
+{
+	struct lu_buf	*buf = &mdd_env_info(env)->mti_big_buf;
+	struct lu_buf	*lmm_buf = NULL;
+	int		 rc, sz;
+	ENTRY;
+
+repeat:
+	rc = mdo_xattr_get(env, obj, buf, XATTR_NAME_LOV,
+			   mdd_object_capa(env, obj));
+	if (rc < 0)
+		GOTO(out, rc);
+
+	if (rc == 0)
+		GOTO(out, rc = -ENODATA);
+
+	sz = rc;
+	if (memcmp(buf, &LU_BUF_NULL, sizeof(*buf)) == 0) {
+		/* mti_big_buf was not allocated, so we have to
+		 * allocate it based on the ea size */
+		buf = mdd_buf_alloc(env, sz);
+		if (buf->lb_buf == NULL)
+			GOTO(out, rc = -ENOMEM);
+		goto repeat;
+	}
+
+	OBD_ALLOC_PTR(lmm_buf);
+	if (!lmm_buf)
+		GOTO(out, rc = -ENOMEM);
+
+	OBD_ALLOC(lmm_buf->lb_buf, sz);
+	if (!lmm_buf->lb_buf)
+		GOTO(free, rc = -ENOMEM);
+
+	memcpy(lmm_buf->lb_buf, buf->lb_buf, sz);
+	lmm_buf->lb_len = sz;
+
+	GOTO(out, rc = 0);
+
+free:
+	if (lmm_buf)
+		OBD_FREE_PTR(lmm_buf);
+out:
+	if (rc)
+		return ERR_PTR(rc);
+	return lmm_buf;
+}
+
+
+/*
+ *  check if layout swapping between 2 objects is allowed
+ *  the rules are:
+ *  - same type of objects
+ *  - same owner/group (so quotas are still valid)
+ */
+static int mdd_layout_swap_allowed(const struct lu_env *env,
+				   struct mdd_object *o1,
+				   struct mdd_object *o2)
+{
+	const struct lu_fid	*fid1, *fid2;
+	__u32			 uid, gid;
+	struct lu_attr		*tmp_la = &mdd_env_info(env)->mti_la;
+	int			 rc;
+	ENTRY;
+
+	fid1 = mdo2fid(o1);
+	fid2 = mdo2fid(o2);
+
+	if (!fid_is_norm(fid1) || !fid_is_norm(fid2) ||
+	    (mdd_object_type(o1) != mdd_object_type(o2)))
+		RETURN(-EPERM);
+
+	tmp_la->la_valid = 0;
+	rc = mdd_la_get(env, o1, tmp_la, BYPASS_CAPA);
+	if (rc)
+		RETURN(rc);
+	uid = tmp_la->la_uid;
+	gid = tmp_la->la_gid;
+
+	tmp_la->la_valid = 0;
+	rc = mdd_la_get(env, o2, tmp_la, BYPASS_CAPA);
+	if (rc)
+		RETURN(rc);
+
+	if ((uid != tmp_la->la_uid) || (gid != tmp_la->la_gid))
+		RETURN(-EPERM);
+
+	RETURN(0);
+}
+
+/**
+ * swap layouts between 2 lustre objects
+ */
+static int mdd_swap_layouts(const struct lu_env *env, struct md_object *obj1,
+			    struct md_object *obj2, __u64 flags)
+{
+	struct mdd_object	*o1, *o2, *fst_o, *snd_o;
+	struct lu_buf		*lmm1_buf = NULL, *lmm2_buf = NULL;
+	struct lu_buf		*fst_buf, *snd_buf;
+	struct lov_mds_md	*fst_lmm, *snd_lmm, *old_fst_lmm = NULL;
+	struct thandle		*handle;
+	struct mdd_device	*mdd = mdo2mdd(obj1);
+	int			 rc;
+	__u16			 fst_gen, snd_gen;
+	ENTRY;
+
+	/* we have to sort the 2 obj, so locking will always
+	 * be in the same order, even in case of 2 concurrent swaps */
+	rc = lu_fid_cmp(mdo2fid(md2mdd_obj(obj1)),
+		       mdo2fid(md2mdd_obj(obj2)));
+	/* same fid ? */
+	if (rc == 0)
+		RETURN(-EPERM);
+
+	if (rc > 0) {
+		o1 = md2mdd_obj(obj1);
+		o2 = md2mdd_obj(obj2);
+	} else {
+		o1 = md2mdd_obj(obj2);
+		o2 = md2mdd_obj(obj1);
+	}
+
+	/* check if layout swapping is allowed */
+	rc = mdd_layout_swap_allowed(env, o1, o2);
+	if (rc)
+		RETURN(rc);
+
+	handle = mdd_trans_create(env, mdd);
+	if (IS_ERR(handle))
+		RETURN(PTR_ERR(handle));
+
+	/* objects are already sorted */
+	mdd_write_lock(env, o1, MOR_TGT_CHILD);
+	mdd_write_lock(env, o2, MOR_TGT_CHILD);
+
+	lmm1_buf = mdd_get_lov_ea(env, o1);
+	if (IS_ERR(lmm1_buf)) {
+		rc = PTR_ERR(lmm1_buf);
+		lmm1_buf = NULL;
+		if (rc != -ENODATA)
+			GOTO(unlock, rc);
+	}
+
+	lmm2_buf = mdd_get_lov_ea(env, o2);
+	if (IS_ERR(lmm2_buf)) {
+		rc = PTR_ERR(lmm2_buf);
+		lmm2_buf = NULL;
+		if (rc != -ENODATA)
+			GOTO(unlock, rc);
+	}
+
+	/* swapping 2 non existant layouts is a success */
+	if ((lmm1_buf == NULL) && (lmm2_buf == NULL))
+		GOTO(unlock, rc = 0);
+
+	/* to help inode migration between MDT, it is better to
+	 * start by the no layout file (if one), so we order the swap */
+	if (lmm1_buf == NULL) {
+		fst_o = o1;
+		fst_buf = lmm1_buf;
+		snd_o = o2;
+		snd_buf = lmm2_buf;
+	} else {
+		fst_o = o2;
+		fst_buf = lmm2_buf;
+		snd_o = o1;
+		snd_buf = lmm1_buf;
+	}
+
+	/* lmm and generation layout initialization */
+	if (fst_buf) {
+		fst_lmm = fst_buf->lb_buf;
+		fst_gen = le16_to_cpu(fst_lmm->lmm_layout_gen);
+	} else {
+		fst_lmm = NULL;
+		fst_gen = 0;
+	}
+
+	if (snd_buf) {
+		snd_lmm = snd_buf->lb_buf;
+		snd_gen = le16_to_cpu(snd_lmm->lmm_layout_gen);
+	} else {
+		snd_lmm = NULL;
+		snd_gen = 0;
+	}
+
+	/* save the orignal lmm common header of first file
+	 * to be able to roll back */
+	OBD_ALLOC_PTR(old_fst_lmm);
+	if (old_fst_lmm == NULL)
+		GOTO(unlock, rc = -ENOMEM);
+
+	memcpy(old_fst_lmm, fst_lmm, sizeof(*old_fst_lmm));
+
+	/* increase the generation layout numbers */
+	snd_gen++;
+	fst_gen++;
+
+	/* set the file specific informations in lmm */
+	if (fst_lmm) {
+		fst_lmm->lmm_layout_gen = cpu_to_le16(snd_gen);
+		fst_lmm->lmm_object_seq = snd_lmm->lmm_object_seq;
+		fst_lmm->lmm_object_id = snd_lmm->lmm_object_id;
+	}
+
+	if (snd_lmm) {
+		snd_lmm->lmm_layout_gen = cpu_to_le16(fst_gen);
+		snd_lmm->lmm_object_seq = old_fst_lmm->lmm_object_seq;
+		snd_lmm->lmm_object_id = old_fst_lmm->lmm_object_id;
+	}
+
+	/* prepare transaction */
+	rc = mdd_declare_xattr_set(env, mdd, fst_o, snd_buf, XATTR_NAME_LOV,
+				   LU_XATTR_REPLACE, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_declare_xattr_set(env, mdd, snd_o, fst_buf, XATTR_NAME_LOV,
+				   LU_XATTR_REPLACE, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdd_trans_start(env, mdd, handle);
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdo_xattr_set(env, fst_o, snd_buf, XATTR_NAME_LOV,
+			   LU_XATTR_REPLACE, handle,
+			   mdd_object_capa(env, fst_o));
+	if (rc)
+		GOTO(stop, rc);
+
+	rc = mdo_xattr_set(env, snd_o, fst_buf, XATTR_NAME_LOV,
+			   LU_XATTR_REPLACE, handle,
+			   mdd_object_capa(env, snd_o));
+	if (rc) {
+		int	rc2;
+
+		/* failure on second file, but first was done, so we have
+		 * to roll back first */
+		/* restore object_id, object_seq and generation number
+		 * on first file */
+		if (fst_lmm) {
+			fst_lmm->lmm_object_id = old_fst_lmm->lmm_object_id;
+			fst_lmm->lmm_object_seq = old_fst_lmm->lmm_object_seq;
+			fst_lmm->lmm_layout_gen = old_fst_lmm->lmm_layout_gen;
+		}
+
+		rc2 = mdo_xattr_set(env, fst_o, fst_buf, XATTR_NAME_LOV,
+				    LU_XATTR_REPLACE, handle,
+				    mdd_object_capa(env, fst_o));
+		if (rc2) {
+			/* very bad day */
+			CERROR("%s: unable to roll back after swap layouts"
+			       " failure between "DFID" and "DFID
+			       " rc2 = %d rc = %d)\n",
+			       mdd2obd_dev(mdd)->obd_name,
+			       PFID(mdo2fid(snd_o)), PFID(mdo2fid(fst_o)),
+			       rc2, rc);
+			/* a solution to avoid journal commit is to panic,
+			 * but it has strong consequences so we use LBUG to
+			 * allow sysdamin to choose to panic or not
+			 */
+			LBUG();
+		}
+		GOTO(stop, rc);
+	}
+	EXIT;
+
+stop:
+	mdd_trans_stop(env, mdd, rc, handle);
+unlock:
+	mdd_write_unlock(env, o2);
+	mdd_write_unlock(env, o1);
+
+	if (lmm1_buf && lmm1_buf->lb_buf)
+		OBD_FREE(lmm1_buf->lb_buf, lmm1_buf->lb_len);
+	if (lmm1_buf)
+		OBD_FREE_PTR(lmm1_buf);
+
+	if (lmm2_buf && lmm2_buf->lb_buf)
+		OBD_FREE(lmm2_buf->lb_buf, lmm2_buf->lb_len);
+	if (lmm2_buf)
+		OBD_FREE_PTR(lmm2_buf);
+
+	if (old_fst_lmm)
+		OBD_FREE_PTR(old_fst_lmm);
+
+	return rc;
 }
 
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
@@ -1793,19 +2089,20 @@ static int mdd_object_sync(const struct lu_env *env, struct md_object *obj)
 }
 
 const struct md_object_operations mdd_obj_ops = {
-        .moo_permission    = mdd_permission,
-        .moo_attr_get      = mdd_attr_get,
-        .moo_attr_set      = mdd_attr_set,
-        .moo_xattr_get     = mdd_xattr_get,
-        .moo_xattr_set     = mdd_xattr_set,
-        .moo_xattr_list    = mdd_xattr_list,
-        .moo_xattr_del     = mdd_xattr_del,
-        .moo_open          = mdd_open,
-        .moo_close         = mdd_close,
-        .moo_readpage      = mdd_readpage,
-        .moo_readlink      = mdd_readlink,
-        .moo_changelog     = mdd_changelog,
-        .moo_capa_get      = mdd_capa_get,
-        .moo_object_sync   = mdd_object_sync,
-        .moo_path          = mdd_path,
+	.moo_permission		= mdd_permission,
+	.moo_attr_get		= mdd_attr_get,
+	.moo_attr_set		= mdd_attr_set,
+	.moo_xattr_get		= mdd_xattr_get,
+	.moo_xattr_set		= mdd_xattr_set,
+	.moo_xattr_list		= mdd_xattr_list,
+	.moo_xattr_del		= mdd_xattr_del,
+	.moo_swap_layouts	= mdd_swap_layouts,
+	.moo_open		= mdd_open,
+	.moo_close		= mdd_close,
+	.moo_readpage		= mdd_readpage,
+	.moo_readlink		= mdd_readlink,
+	.moo_changelog		= mdd_changelog,
+	.moo_capa_get		= mdd_capa_get,
+	.moo_object_sync	= mdd_object_sync,
+	.moo_path		= mdd_path,
 };
