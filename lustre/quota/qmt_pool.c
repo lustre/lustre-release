@@ -273,6 +273,10 @@ static void qmt_pool_free(const struct lu_env *env, struct qmt_pool_info *pool)
 	/* release per-quota type site used to manage quota entries as well as
 	 * references to global index files */
 	for (qtype = 0; qtype < MAXQUOTAS; qtype++) {
+		/* release lqe storing grace time */
+		if (pool->qpi_grace_lqe[qtype] != NULL)
+			lqe_putref(pool->qpi_grace_lqe[qtype]);
+
 		/* release site */
 		if (pool->qpi_site[qtype] != NULL &&
 		    !IS_ERR(pool->qpi_site[qtype]))
@@ -460,8 +464,9 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 	/* iterate over each pool in the hash and allocate a quota site for each
 	 * one. This involves creating a global index file on disk */
 	cfs_list_for_each(pos, &qmt->qmt_pool_list) {
-		struct dt_object *obj;
-		int               pool_type, pool_id;
+		struct dt_object	*obj;
+		int			 pool_type, pool_id;
+		struct lquota_entry	*lqe;
 
 		pool = cfs_list_entry(pos, struct qmt_pool_info,
 				      qpi_linkage);
@@ -525,6 +530,17 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 				       qmt->qmt_svname, QTYPE_NAME(qtype), rc);
 				RETURN(rc);
 			}
+
+			/* Global grace time is stored in quota settings of
+			 * ID 0. */
+			qti->qti_id.qid_uid = 0;
+
+			/* look-up quota entry storing grace time */
+			lqe = lqe_locate(env, pool->qpi_site[qtype],
+					 &qti->qti_id);
+			if (IS_ERR(lqe))
+				RETURN(PTR_ERR(lqe));
+			pool->qpi_grace_lqe[qtype] = lqe;
 #ifdef LPROCFS
 			/* add procfs file to dump the global index, mostly for
 			 * debugging purpose */
@@ -633,10 +649,18 @@ struct lquota_entry *qmt_pool_lqe_lookup(const struct lu_env *env,
 	if (IS_ERR(pool))
 		RETURN((void *)pool);
 
+	if (qid->qid_uid == 0) {
+		/* caller wants to access grace time, no need to look up the
+		 * entry since we keep a reference on ID 0 all the time */
+		lqe = pool->qpi_grace_lqe[qtype];
+		lqe_getref(lqe);
+		GOTO(out, 0);
+	}
+
 	/* now that we have the pool, let's look-up the quota entry in the
 	 * right quota site */
 	lqe = lqe_locate(env, pool->qpi_site[qtype], qid);
-
+out:
 	qpi_putref(env, pool);
 	RETURN(lqe);
 }

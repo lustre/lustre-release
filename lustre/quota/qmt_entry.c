@@ -412,3 +412,236 @@ int qmt_validate_limits(struct lquota_entry *lqe, __u64 hard, __u64 soft)
 		RETURN(-EINVAL);
 	RETURN(0);
 }
+
+/*
+ * Set/clear edquot flag after quota space allocation/release or settings
+ * change. Slaves will be notified of changes via glimpse on per-ID lock
+ *
+ * \param lqe - is the quota entry to check
+ * \param now - is the current time in second used for grace time managment
+ */
+void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
+{
+	struct qmt_pool_info	*pool = lqe2qpi(lqe);
+
+	if (!lqe->lqe_enforced)
+		RETURN_EXIT;
+
+	if (!lqe->lqe_edquot) {
+		/* space exhausted flag not set, let's check whether it is time
+		 * to set the flag */
+
+		if (!qmt_space_exhausted(lqe, now))
+			/* the qmt still has available space */
+			RETURN_EXIT;
+
+		if (lqe->lqe_qunit != pool->qpi_least_qunit)
+			/* we haven't reached the minimal qunit yet, so there is
+			 * still hope that the rebalancing process might free up
+			 * some quota space */
+			RETURN_EXIT;
+
+		if (lqe->lqe_may_rel != 0 &&
+		    cfs_time_beforeq_64(lqe->lqe_revoke_time,
+					cfs_time_shift_64(-QMT_REBA_TIMEOUT)))
+			/* Let's give more time to slave to release space */
+			RETURN_EXIT;
+
+		/* set edquot flag */
+		lqe->lqe_edquot = true;
+	} else {
+		/* space exhausted flag set, let's check whether it is time to
+		 * clear it */
+
+		if (qmt_space_exhausted(lqe, now))
+			/* the qmt still has not space */
+			RETURN_EXIT;
+
+		if (lqe->lqe_hardlimit != 0 &&
+		    lqe->lqe_granted + pool->qpi_least_qunit >
+							lqe->lqe_hardlimit)
+			/* we clear the flag only once at least one least qunit
+			 * is available */
+			RETURN_EXIT;
+
+		/* clear edquot flag */
+		lqe->lqe_edquot = false;
+	}
+
+	LQUOTA_DEBUG(lqe, "changing edquot flag");
+
+	/* let's notify slave by issuing glimpse on per-ID lock.
+	 * the rebalance thread will take care of this */
+	qmt_id_lock_notify(pool->qpi_qmt, lqe);
+}
+
+/*
+ * Try to grant more quota space back to slave.
+ *
+ * \param lqe     - is the quota entry for which we would like to allocate more
+ *                  space
+ * \param granted - is how much was already granted as part of the request
+ *                  processing
+ * \param spare   - is how much unused quota space the slave already owns
+ *
+ * \retval return how additional space can be granted to the slave
+ */
+__u64 qmt_alloc_expand(struct lquota_entry *lqe, __u64 granted, __u64 spare)
+{
+	struct qmt_pool_info	*pool = lqe2qpi(lqe);
+	__u64			 remaining, qunit;
+	int			 slv_cnt;
+
+	LASSERT(lqe->lqe_enforced && lqe->lqe_qunit != 0);
+
+	slv_cnt = lqe2qpi(lqe)->qpi_slv_nr[lqe->lqe_site->lqs_qtype];
+	qunit   = lqe->lqe_qunit;
+
+	if (lqe->lqe_softlimit != 0)
+		remaining = lqe->lqe_softlimit;
+	else
+		remaining = lqe->lqe_hardlimit;
+
+	if (lqe->lqe_granted >= remaining)
+		RETURN(0);
+
+	remaining -= lqe->lqe_granted;
+
+	do {
+		if (spare >= qunit)
+			break;
+
+		granted &= (qunit - 1);
+
+		if (remaining > (slv_cnt * qunit) >> 1) {
+			/* enough room to grant more space w/o additional
+			 * shrinking ... at least for now */
+			remaining -= (slv_cnt * qunit) >> 1;
+		} else if (qunit != pool->qpi_least_qunit) {
+			qunit >>= 2;
+			continue;
+		}
+
+		granted &= (qunit - 1);
+		if (spare > 0)
+			RETURN(min_t(__u64, qunit - spare, remaining));
+		else
+			RETURN(min_t(__u64, qunit - granted, remaining));
+	} while (qunit >= pool->qpi_least_qunit);
+
+	RETURN(0);
+}
+
+/*
+ * Adjust qunit size according to quota limits and total granted count.
+ * The caller must have locked the lqe.
+ *
+ * \param env - the environment passed by the caller
+ * \param lqe - is the qid entry to be adjusted
+ */
+void qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
+{
+	struct qmt_pool_info	*pool = lqe2qpi(lqe);
+	int			 slv_cnt;
+	__u64			 qunit, limit;
+	ENTRY;
+
+	LASSERT(lqe_is_locked(lqe));
+
+	if (!lqe->lqe_enforced)
+		/* no quota limits */
+		RETURN_EXIT;
+
+	/* record how many slaves have already registered */
+	slv_cnt = pool->qpi_slv_nr[lqe->lqe_site->lqs_qtype];
+	if (slv_cnt == 0)
+		/* wait for at least one slave to join */
+		RETURN_EXIT;
+
+	/* Qunit calculation is based on soft limit, if any, hard limit
+	 * otherwise. This means that qunit is shrunk to the minimum when
+	 * beyond the soft limit. This will impact performance, but that's the
+	 * price of an accurate grace time management. */
+	if (lqe->lqe_softlimit != 0) {
+		limit = lqe->lqe_softlimit;
+	} else if (lqe->lqe_hardlimit != 0) {
+		limit = lqe->lqe_hardlimit;
+	} else {
+		LQUOTA_ERROR(lqe, "enforced bit set, but neither hard nor soft "
+			     "limit are set");
+		RETURN_EXIT;
+	}
+
+	qunit = lqe->lqe_qunit == 0 ? pool->qpi_least_qunit : lqe->lqe_qunit;
+
+	/* The qunit value is computed as follows: limit / (2 * slv_cnt).
+	 * Then 75% of the quota space can be granted with current qunit value.
+	 * The remaining 25% are then used with reduced qunit size (by a factor
+	 * of 4) which is then divided in a similar manner.
+	 *
+	 * |---------------------limit---------------------|
+	 * |-------limit / 2-------|-limit / 4-|-limit / 4-|
+	 * |qunit|qunit|qunit|qunit|           |           |
+	 * |----slv_cnt * qunit----|           |           |
+	 * |-grow limit-|          |           |           |
+	 * |--------------shrink limit---------|           |
+	 * |---space granted in qunit chunks---|-remaining-|
+	 *                                    /             \
+	 *                                   /               \
+	 *                                  /                 \
+	 *                                 /                   \
+	 *                                /                     \
+	 *     qunit >>= 2;            |qunit*slv_cnt|qunit*slv_cnt|
+	 *                             |---space in qunit---|remain|
+	 *                                  ...                               */
+	if (qunit == pool->qpi_least_qunit ||
+	    limit >= lqe->lqe_granted + ((slv_cnt * qunit) >> 1)) {
+		/* current qunit value still fits, let's see if we can afford to
+		 * increase qunit now ...
+		 * To increase qunit again, we have to be under 25% */
+		while (limit >= lqe->lqe_granted + 6 * qunit * slv_cnt)
+			qunit <<= 2;
+	} else {
+		/* shrink qunit until we find a suitable value */
+		while (qunit > pool->qpi_least_qunit &&
+		       limit < lqe->lqe_granted + ((slv_cnt * qunit) >> 1))
+			qunit >>= 2;
+	}
+
+	if (lqe->lqe_qunit == qunit)
+		/* keep current qunit */
+		RETURN_EXIT;
+
+	LQUOTA_DEBUG(lqe, "%s qunit to "LPU64,
+		     lqe->lqe_qunit < qunit ? "increasing" : "decreasing",
+		     qunit);
+
+	/* store new qunit value */
+	swap(lqe->lqe_qunit, qunit);
+
+	/* reset revoke time */
+	lqe->lqe_revoke_time = 0;
+
+	if (lqe->lqe_qunit < qunit)
+		/* let's notify slave of qunit shrinking */
+		qmt_id_lock_notify(pool->qpi_qmt, lqe);
+	else if (lqe->lqe_qunit == pool->qpi_least_qunit)
+		/* initial qunit value is the smallest one */
+		lqe->lqe_revoke_time = cfs_time_current_64();
+	EXIT;
+}
+
+/*
+ * Adjust qunit & edquot flag in case it wasn't initialized already (e.g.
+ * limit set while no slaves were connected yet)
+ */
+void qmt_revalidate(const struct lu_env *env, struct lquota_entry *lqe)
+{
+	if (lqe->lqe_qunit == 0) {
+		/* lqe was read from disk, but neither qunit, nor edquot flag
+		 * were initialized */
+		qmt_adjust_qunit(env, lqe);
+		if (lqe->lqe_qunit != 0)
+			qmt_adjust_edquot(lqe, cfs_time_current_sec());
+	}
+}

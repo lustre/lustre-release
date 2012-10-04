@@ -126,6 +126,9 @@ struct qmt_pool_info {
 	/* number of slaves registered for each quota types */
 	int			 qpi_slv_nr[MAXQUOTAS];
 
+	/* reference on lqe (ID 0) storing grace time. */
+	struct lquota_entry	*qpi_grace_lqe[MAXQUOTAS];
+
 	/* procfs root directory for this pool */
 	cfs_proc_dir_entry_t	*qpi_proc;
 
@@ -172,13 +175,11 @@ struct qmt_lqe_restore {
 struct qmt_thread_info {
 	union lquota_rec	qti_rec;
 	union lquota_id		qti_id;
-	union lquota_id		qti_id_bis;
 	char			qti_buf[MTI_NAME_MAXLEN];
 	struct lu_fid		qti_fid;
 	struct ldlm_res_id	qti_resid;
 	union ldlm_gl_desc	qti_gl_desc;
 	struct quota_body	qti_body;
-	struct quota_body	qti_repbody;
 	struct qmt_lqe_restore	qti_restore;
 };
 
@@ -214,6 +215,18 @@ static inline struct lu_device *qmt2lu_dev(struct qmt_device *qmt)
 #define LQE_ROOT(lqe)    (lqe2qpi(lqe)->qpi_root)
 #define LQE_GLB_OBJ(lqe) (lqe2qpi(lqe)->qpi_glb_obj[lqe->lqe_site->lqs_qtype])
 
+/* helper function returning grace time to use for a given lquota entry */
+static inline __u64 qmt_lqe_grace(struct lquota_entry *lqe)
+{
+	struct qmt_pool_info	*pool = lqe2qpi(lqe);
+	struct lquota_entry	*grace_lqe;
+
+	grace_lqe = pool->qpi_grace_lqe[lqe->lqe_site->lqs_qtype];
+	LASSERT(grace_lqe != NULL);
+
+	return grace_lqe->lqe_gracetime;
+}
+
 static inline void qmt_restore(struct lquota_entry *lqe,
 			       struct qmt_lqe_restore *restore)
 {
@@ -223,6 +236,36 @@ static inline void qmt_restore(struct lquota_entry *lqe,
 	lqe->lqe_granted   = restore->qlr_granted;
 	lqe->lqe_qunit     = restore->qlr_qunit;
 }
+
+#define QMT_GRANT(lqe, slv, cnt)             \
+	do {                                 \
+		(lqe)->lqe_granted += (cnt); \
+		(slv) += (cnt);              \
+	} while (0)
+#define QMT_REL(lqe, slv, cnt)               \
+	do {                                 \
+		(lqe)->lqe_granted -= (cnt); \
+		(slv) -= (cnt);              \
+	} while (0)
+
+/* helper routine returning true when the id has run out of quota space, which
+ * means that it has either:
+ * - reached hardlimit
+ * OR
+ * - reached softlimit and grace time expired already */
+static inline bool qmt_space_exhausted(struct lquota_entry *lqe, __u64 now)
+{
+	if (lqe->lqe_hardlimit != 0 && lqe->lqe_granted >= lqe->lqe_hardlimit)
+		return true;
+	if (lqe->lqe_softlimit != 0 && lqe->lqe_granted > lqe->lqe_softlimit &&
+	    lqe->lqe_gracetime != 0 && now >= lqe->lqe_gracetime)
+		return true;
+	return false;
+}
+
+/* number of seconds to wait for slaves to release quota space after
+ * rebalancing */
+#define QMT_REBA_TIMEOUT 2
 
 /* qmt_pool.c */
 void qmt_pool_fini(const struct lu_env *, struct qmt_device *);
@@ -251,6 +294,15 @@ int qmt_slv_write(const struct lu_env *, struct thandle *,
 int qmt_slv_read(const struct lu_env *, struct lquota_entry *,
 		 struct dt_object *, __u64 *);
 int qmt_validate_limits(struct lquota_entry *, __u64, __u64);
+void qmt_adjust_qunit(const struct lu_env *, struct lquota_entry *);
+void qmt_adjust_edquot(struct lquota_entry *, __u64);
+void qmt_revalidate(const struct lu_env *, struct lquota_entry *);
+__u64 qmt_alloc_expand(struct lquota_entry *, __u64, __u64);
+
+/* qmt_handler.c */
+int qmt_dqacq0(const struct lu_env *, struct lquota_entry *,
+	       struct qmt_device *, struct obd_uuid *, __u32, __u64, __u64,
+	       struct quota_body *);
 
 /* qmt_lock.c */
 int qmt_intent_policy(const struct lu_env *, struct lu_device *,

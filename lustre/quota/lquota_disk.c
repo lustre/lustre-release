@@ -100,7 +100,7 @@ out:
 /*
  * helper function to generate the filename associated with a slave index file
  */
-static inline int lquota_disk_slv_filename(struct lu_fid *glb_fid,
+static inline int lquota_disk_slv_filename(const struct lu_fid *glb_fid,
 					   struct obd_uuid *uuid,
 					   char *filename)
 {
@@ -320,7 +320,7 @@ struct dt_object *lquota_disk_glb_find_create(const struct lu_env *env,
 struct dt_object *lquota_disk_slv_find(const struct lu_env *env,
 				       struct dt_device *dev,
 				       struct dt_object *parent,
-				       struct lu_fid *glb_fid,
+				       const struct lu_fid *glb_fid,
 				       struct obd_uuid *uuid)
 {
 	struct lquota_thread_info	*qti = lquota_info(env);

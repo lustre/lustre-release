@@ -52,7 +52,7 @@ static int qmt_getinfo(const struct lu_env *env, struct qmt_device *qmt,
 		       __u16 pool_id, __u8 restype, __u8 qtype, __u64 *time)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
-	union lquota_id		*id  = &qti->qti_id_bis;
+	union lquota_id		*id  = &qti->qti_id;
 	struct lquota_entry	*lqe;
 	ENTRY;
 
@@ -90,7 +90,7 @@ static int qmt_setinfo(const struct lu_env *env, struct qmt_device *qmt,
 		       __u16 pool_id, __u8 restype, __u8 qtype, __u64 time)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
-	union lquota_id		*id  = &qti->qti_id_bis;
+	union lquota_id		*id  = &qti->qti_id;
 	struct lquota_entry	*lqe;
 	struct thandle		*th = NULL;
 	int			 rc;
@@ -204,15 +204,10 @@ static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct lquota_entry	*lqe;
 	struct thandle		*th = NULL;
-	__u64			 grace, ver;
+	__u64			 ver, now;
 	bool			 dirtied = false, bump_version = false;
 	int			 rc = 0;
 	ENTRY;
-
-	/* fetch global grace time */
-	rc = qmt_getinfo(env, qmt, pool_id, restype, qtype, &grace);
-	if (rc)
-		RETURN(rc);
 
 	/* look-up quota entry associated with this ID */
 	lqe = qmt_pool_lqe_lookup(env, qmt, pool_id, restype, qtype, id);
@@ -224,6 +219,8 @@ static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
 	th = qmt_trans_start(env, lqe, &qti->qti_restore);
 	if (IS_ERR(th))
 		GOTO(out_nolock, rc = PTR_ERR(th));
+
+	now = cfs_time_current_sec();
 
 	lqe_write_lock(lqe);
 	LQUOTA_DEBUG(lqe, "setquota valid:%x hard:"LPU64" soft:"LPU64
@@ -243,6 +240,9 @@ static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
 		if (rc)
 			GOTO(out, rc);
 
+		/* recompute qunit in case it was never initialized */
+		qmt_revalidate(env, lqe);
+
 		/* change quota limits */
 		lqe->lqe_hardlimit = hard;
 		lqe->lqe_softlimit = soft;
@@ -255,7 +255,7 @@ static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
 			lqe->lqe_gracetime = 0;
 		else if ((valid & QIF_TIMES) == 0)
 			/* set grace only if user hasn't provided his own */
-			 lqe->lqe_gracetime = cfs_time_current_sec() + grace;
+			 lqe->lqe_gracetime = now + qmt_lqe_grace(lqe);
 
 		/* change enforced status based on new parameters */
 		if (lqe->lqe_hardlimit == 0 && lqe->lqe_softlimit == 0)
@@ -281,6 +281,13 @@ static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
 			qmt_restore(lqe, &qti->qti_restore);
 			GOTO(out, rc);
 		}
+
+		/* compute new qunit value now that we have modified the quota
+		 * settings */
+		qmt_adjust_qunit(env, lqe);
+
+		/* clear/set edquot flag as needed */
+		qmt_adjust_edquot(lqe, now);
 	}
 	EXIT;
 out:
@@ -431,6 +438,255 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 }
 
 /*
+ * Helper function to handle quota request from slave.
+ *
+ * \param env     - is the environment passed by the caller
+ * \param lqe     - is the lquota_entry subject to the quota request
+ * \param qmt     - is the master device
+ * \param uuid    - is the uuid associated with the slave
+ * \param qb_flags - are the quota request flags as packed in the quota_body
+ * \param qb_count - is the amount of quota space the slave wants to
+ *                   acquire/release
+ * \param qb_usage - is the current space usage on the slave
+ * \param repbody - is the quota_body of reply
+ *
+ * \retval 0            : success
+ * \retval -EDQUOT      : out of quota
+ *         -EINPROGRESS : inform client to retry write/create
+ *         -ve          : other appropriate errors
+ */
+int qmt_dqacq0(const struct lu_env *env, struct lquota_entry *lqe,
+	       struct qmt_device *qmt, struct obd_uuid *uuid, __u32 qb_flags,
+	       __u64 qb_count, __u64 qb_usage, struct quota_body *repbody)
+{
+	struct qmt_thread_info	*qti = qmt_info(env);
+	__u64			 now, count;
+	struct dt_object	*slv_obj = NULL;
+	__u64			 slv_granted, slv_granted_bck;
+	struct thandle		*th = NULL;
+	int			 rc, ret;
+	ENTRY;
+
+	LASSERT(uuid != NULL);
+
+	/* initialize reply */
+	memset(repbody, 0, sizeof(*repbody));
+	memcpy(&repbody->qb_id, &lqe->lqe_id, sizeof(repbody->qb_id));
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_QUOTA_RECOVERABLE_ERR))
+		RETURN(-cfs_fail_val);
+
+	/* look-up index file associated with acquiring slave */
+	slv_obj = lquota_disk_slv_find(env, qmt->qmt_child, LQE_ROOT(lqe),
+				       lu_object_fid(&LQE_GLB_OBJ(lqe)->do_lu),
+				       uuid);
+	if (IS_ERR(slv_obj))
+		GOTO(out, rc = PTR_ERR(slv_obj));
+
+	/* pack slave fid in reply just for sanity check */
+	memcpy(&repbody->qb_slv_fid, lu_object_fid(&slv_obj->do_lu),
+	       sizeof(struct lu_fid));
+
+	/* allocate & start transaction with enough credits to update
+	 * global & slave indexes */
+	th = qmt_trans_start_with_slv(env, lqe, slv_obj, &qti->qti_restore);
+	if (IS_ERR(th))
+		GOTO(out, rc = PTR_ERR(th));
+
+	lqe_write_lock(lqe);
+	LQUOTA_DEBUG(lqe, "dqacq starts uuid:%s flags:0x%x wanted:"LPU64
+		     " usage:"LPU64, obd_uuid2str(uuid), qb_flags, qb_count,
+		     qb_usage);
+
+	/* Legal race, limits have been removed on master, but slave didn't
+	 * receive the change yet. Just return EINPROGRESS until the slave gets
+	 * notified. */
+	if (!lqe->lqe_enforced && !req_is_rel(qb_flags))
+		GOTO(out_locked, rc = -EINPROGRESS);
+
+	/* recompute qunit in case it was never initialized */
+	qmt_revalidate(env, lqe);
+
+	/* slave just wants to acquire per-ID lock */
+	if (req_is_acq(qb_flags) && qb_count == 0)
+		GOTO(out_locked, rc = 0);
+
+	/* fetch how much quota space is already granted to this slave */
+	rc = qmt_slv_read(env, lqe, slv_obj, &slv_granted);
+	if (rc) {
+		LQUOTA_ERROR(lqe, "Failed to get granted for slave %s, rc=%d",
+			     obd_uuid2str(uuid), rc);
+		GOTO(out_locked, rc);
+	}
+	/* recall how much space this slave currently owns in order to restore
+	 * it in case of failure */
+	slv_granted_bck = slv_granted;
+
+	/* record current time for soft limit & grace time management */
+	now = (__u64)cfs_time_current_sec();
+
+	if (req_is_rel(qb_flags)) {
+		/* Slave would like to release quota space */
+		if (slv_granted < qb_count ||
+		    lqe->lqe_granted < qb_count) {
+			/* can't release more than granted */
+			LQUOTA_ERROR(lqe, "Release too much! uuid:%s release:"
+				     LPU64" granted:"LPU64", total:"LPU64,
+				     obd_uuid2str(uuid), qb_count,
+				     slv_granted, lqe->lqe_granted);
+			GOTO(out_locked, rc = -EINVAL);
+		}
+
+		repbody->qb_count = qb_count;
+		/* put released space back to global pool */
+		QMT_REL(lqe, slv_granted, qb_count);
+		GOTO(out_write, rc = 0);
+	}
+
+	if (req_has_rep(qb_flags) && slv_granted < qb_usage) {
+		/* Slave is reporting space usage in quota request and it turns
+		 * out to be using more quota space than owned, so we adjust
+		 * granted space regardless of the current state of affairs */
+		repbody->qb_count = qb_usage - slv_granted;
+		QMT_GRANT(lqe, slv_granted, repbody->qb_count);
+	}
+
+	if (!req_is_acq(qb_flags) && !req_is_preacq(qb_flags))
+		GOTO(out_write, rc = 0);
+
+	qmt_adjust_edquot(lqe, now);
+	if (lqe->lqe_edquot)
+		/* no hope to claim further space back */
+		GOTO(out_write, rc = -EDQUOT);
+
+	if (qmt_space_exhausted(lqe, now)) {
+		/* might have some free space once rebalancing is completed */
+		rc = req_is_acq(qb_flags) ? -EINPROGRESS : -EDQUOT;
+		GOTO(out_write, rc);
+	}
+
+	if (req_is_preacq(qb_flags)) {
+		/* slave would like to pre-acquire quota space. To do so, it
+		 * reports in qb_count how much spare quota space it owns and we
+		 * can grant back quota space which is consistent with qunit
+		 * value. */
+
+		if (qb_count >= lqe->lqe_qunit)
+			/* slave already own the maximum it should */
+			GOTO(out_write, rc = 0);
+
+		count = qmt_alloc_expand(lqe, slv_granted, qb_count);
+		if (count == 0)
+			GOTO(out_write, rc = -EDQUOT);
+
+		repbody->qb_count += count;
+		QMT_GRANT(lqe, slv_granted, count);
+		GOTO(out_write, rc = 0);
+	}
+
+	/* processing acquire request with clients waiting */
+	if (lqe->lqe_hardlimit != 0 &&
+	    lqe->lqe_granted + qb_count > lqe->lqe_hardlimit) {
+		/* cannot grant as much as asked, but can still afford to grant
+		 * some quota space back */
+		count = lqe->lqe_hardlimit - lqe->lqe_granted;
+		repbody->qb_count += count;
+		QMT_GRANT(lqe, slv_granted, count);
+		GOTO(out_write, rc = 0);
+	}
+
+	/* Whouhou! we can satisfy the slave request! */
+	repbody->qb_count += qb_count;
+	QMT_GRANT(lqe, slv_granted, qb_count);
+
+	/* Try to expand the acquired count for DQACQ */
+	count = qmt_alloc_expand(lqe, slv_granted, 0);
+	if (count != 0) {
+		/* can even grant more than asked, it is like xmas ... */
+		repbody->qb_count += count;
+		QMT_GRANT(lqe, slv_granted, count);
+		GOTO(out_write, rc = 0);
+	}
+
+	GOTO(out_write, rc = 0);
+out_write:
+	if (repbody->qb_count == 0)
+		GOTO(out_locked, rc);
+
+	/* start/stop grace timer if required */
+	if (lqe->lqe_softlimit != 0) {
+		if (lqe->lqe_granted > lqe->lqe_softlimit &&
+		    lqe->lqe_gracetime == 0)
+			/* first time over soft limit, let's start grace
+			 * timer */
+			lqe->lqe_gracetime = now + qmt_lqe_grace(lqe);
+		else if (lqe->lqe_granted <= lqe->lqe_softlimit &&
+			 lqe->lqe_gracetime != 0)
+			/* Clear grace timer */
+			lqe->lqe_gracetime = 0;
+	}
+
+	/* Update slave index first since it is easier to roll back */
+	ret = qmt_slv_write(env, th, lqe, slv_obj, LQUOTA_BUMP_VER,
+			    &repbody->qb_slv_ver, slv_granted);
+	if (ret) {
+		/* restore initial quota settings */
+		qmt_restore(lqe, &qti->qti_restore);
+		/* reset qb_count */
+		repbody->qb_count = 0;
+		GOTO(out_locked, rc = ret);
+	}
+
+	/* Update global index, no version bump needed */
+	ret = qmt_glb_write(env, th, lqe, 0, NULL);
+	if (ret) {
+		rc = ret;
+		/* restore initial quota settings */
+		qmt_restore(lqe, &qti->qti_restore);
+		/* reset qb_count */
+		repbody->qb_count = 0;
+
+		/* restore previous granted value */
+		ret = qmt_slv_write(env, th, lqe, slv_obj, 0, NULL,
+				    slv_granted_bck);
+		if (ret) {
+			LQUOTA_ERROR(lqe, "failed to restore initial slave "
+				     "value rc:%d ret%d", rc, ret);
+			LBUG();
+		}
+		qmt_adjust_edquot(lqe, now);
+		GOTO(out_locked, rc);
+	}
+
+	/* Total granted has been changed, let's try to adjust the qunit
+	 * size according to the total granted & limits. */
+	qmt_adjust_qunit(env, lqe);
+
+	/* clear/set edquot flag and notify slaves via glimpse if needed */
+	qmt_adjust_edquot(lqe, now);
+out_locked:
+	LQUOTA_DEBUG(lqe, "dqacq ends count:"LPU64" ver:"LPU64" rc:%d",
+		     repbody->qb_count, repbody->qb_slv_ver, rc);
+	lqe_write_unlock(lqe);
+out:
+	if (th != NULL && !IS_ERR(th))
+		dt_trans_stop(env, qmt->qmt_child, th);
+
+	if (slv_obj != NULL && !IS_ERR(slv_obj))
+		lu_object_put(env, &slv_obj->do_lu);
+
+	if ((req_is_acq(qb_flags) || req_is_preacq(qb_flags)) &&
+	    OBD_FAIL_CHECK(OBD_FAIL_QUOTA_EDQUOT)) {
+		/* introduce inconsistency between granted value in slave index
+		 * and slave index copy of slave */
+		repbody->qb_count = 0;
+		rc = -EDQUOT;
+	}
+
+	RETURN(rc);
+}
+
+/*
  * Handle quota request from slave.
  *
  * \param env  - is the environment passed by the caller
@@ -440,7 +696,13 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 		     struct ptlrpc_request *req)
 {
+	struct qmt_device	*qmt = lu2qmt_dev(ld);
 	struct quota_body	*qbody, *repbody;
+	struct obd_uuid		*uuid;
+	struct ldlm_lock	*lock;
+	struct lquota_entry	*lqe;
+	int			 pool_id, pool_type, qtype;
+	int			 rc;
 	ENTRY;
 
 	qbody = req_capsule_client_get(&req->rq_pill, &RMF_QUOTA_BODY);
@@ -451,9 +713,82 @@ static int qmt_dqacq(const struct lu_env *env, struct lu_device *ld,
 	if (repbody == NULL)
 		RETURN(err_serious(-EFAULT));
 
-	/* XXX: to be implemented */
+	/* verify if global lock is stale */
+	if (!lustre_handle_is_used(&qbody->qb_glb_lockh))
+		RETURN(-ENOLCK);
 
-	RETURN(0);
+	lock = ldlm_handle2lock(&qbody->qb_glb_lockh);
+	if (lock == NULL)
+		RETURN(-ENOLCK);
+	LDLM_LOCK_PUT(lock);
+
+	uuid = &req->rq_export->exp_client_uuid;
+
+	if (req_is_rel(qbody->qb_flags) + req_is_acq(qbody->qb_flags) +
+	    req_is_preacq(qbody->qb_flags) > 1) {
+		CERROR("%s: malformed quota request with conflicting flags set "
+		       "(%x) from slave %s\n", qmt->qmt_svname,
+		       qbody->qb_flags, obd_uuid2str(uuid));
+		RETURN(-EPROTO);
+	}
+
+	if (req_is_acq(qbody->qb_flags) || req_is_preacq(qbody->qb_flags)) {
+		/* acquire and pre-acquire should use a valid ID lock */
+
+		if (!lustre_handle_is_used(&qbody->qb_lockh))
+			RETURN(-ENOLCK);
+
+		lock = ldlm_handle2lock(&qbody->qb_lockh);
+		if (lock == NULL)
+			/* no lock associated with this handle */
+			RETURN(-ENOLCK);
+
+		LDLM_DEBUG(lock, "%sacquire request",
+			   req_is_preacq(qbody->qb_flags) ? "pre" : "");
+
+		if (!obd_uuid_equals(&lock->l_export->exp_client_uuid, uuid)) {
+			/* sorry, no way to cheat ... */
+			LDLM_LOCK_PUT(lock);
+			RETURN(-ENOLCK);
+		}
+
+		if ((lock->l_flags & LDLM_FL_AST_SENT) != 0) {
+			struct ptlrpc_service_part	*svc;
+			unsigned int			 timeout;
+
+			svc = req->rq_rqbd->rqbd_svcpt;
+			timeout = at_est2timeout(at_get(&svc->scp_at_estimate));
+			timeout = max(timeout, ldlm_timeout);
+
+			/* lock is being cancelled, prolong timeout */
+			ldlm_refresh_waiting_lock(lock, timeout);
+		}
+		LDLM_LOCK_PUT(lock);
+	}
+
+	/* extract pool & quota information from global index FID packed in the
+	 * request */
+	rc = lquota_extract_fid(&qbody->qb_fid, &pool_id, &pool_type, &qtype);
+	if (rc)
+		RETURN(-EINVAL);
+
+	/* Find the quota entry associated with the quota id */
+	lqe = qmt_pool_lqe_lookup(env, qmt, pool_id, pool_type, qtype,
+				  &qbody->qb_id);
+	if (IS_ERR(lqe))
+		RETURN(PTR_ERR(lqe));
+
+	/* process quota request */
+	rc = qmt_dqacq0(env, lqe, qmt, uuid, qbody->qb_flags, qbody->qb_count,
+			qbody->qb_usage, repbody);
+
+	if (lustre_handle_is_used(&qbody->qb_lockh))
+		/* return current qunit value only to slaves owning an per-ID
+		 * quota lock. For enqueue, the qunit value will be returned in
+		 * the LVB */
+		 repbody->qb_qunit = lqe->lqe_qunit;
+	lqe_putref(lqe);
+	RETURN(rc);
 }
 
 /* Vector of quota request handlers. This vector is used by the MDT to forward

@@ -207,11 +207,13 @@ struct lquota_site {
 /* helper routine to get/put reference on lquota_entry */
 static inline void lqe_getref(struct lquota_entry *lqe)
 {
+	LASSERT(lqe != NULL);
 	cfs_atomic_inc(&lqe->lqe_ref);
 }
 
 static inline void lqe_putref(struct lquota_entry *lqe)
 {
+	LASSERT(lqe != NULL);
 	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
 	if (atomic_dec_and_test(&lqe->lqe_ref))
 		OBD_FREE_PTR(lqe);
@@ -299,6 +301,11 @@ struct lquota_thread_info *lquota_info(const struct lu_env *env)
 	return info;
 }
 
+#define req_is_acq(flags)    ((flags & QUOTA_DQACQ_FL_ACQ) != 0)
+#define req_is_preacq(flags) ((flags & QUOTA_DQACQ_FL_PREACQ) != 0)
+#define req_is_rel(flags)    ((flags & QUOTA_DQACQ_FL_REL) != 0)
+#define req_has_rep(flags)   ((flags & QUOTA_DQACQ_FL_REPORT) != 0)
+
 /* debugging macros */
 #ifdef LIBCFS_DEBUG
 #define lquota_lqe_debug(msgdata, mask, cdls, lqe, fmt, a...) do {      \
@@ -376,7 +383,8 @@ int lquota_disk_for_each_slv(const struct lu_env *, struct dt_object *,
 			     struct lu_fid *, lquota_disk_slv_cb_t, void *);
 struct dt_object *lquota_disk_slv_find(const struct lu_env *,
 				       struct dt_device *, struct dt_object *,
-				       struct lu_fid *, struct obd_uuid *);
+				       const struct lu_fid *,
+				       struct obd_uuid *);
 int lquota_disk_read(const struct lu_env *, struct dt_object *,
 		     union lquota_id *, struct dt_rec *);
 int lquota_disk_declare_write(const struct lu_env *, struct thandle *,

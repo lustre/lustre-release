@@ -1081,6 +1081,22 @@ int ldlm_glimpse_locks(struct ldlm_resource *res, cfs_list_t *gl_work_list)
 	RETURN(rc);
 }
 
+/* return ldlm lock associated with a lock callback request */
+struct ldlm_lock *ldlm_request_lock(struct ptlrpc_request *req)
+{
+	struct ldlm_cb_async_args	*ca;
+	struct ldlm_lock		*lock;
+	ENTRY;
+
+	ca = ptlrpc_req_async_args(req);
+	lock = ca->ca_lock;
+	if (lock == NULL)
+		RETURN(ERR_PTR(-EFAULT));
+
+	RETURN(lock);
+}
+EXPORT_SYMBOL(ldlm_request_lock);
+
 static void ldlm_svc_get_eopc(const struct ldlm_request *dlm_req,
                        struct lprocfs_stats *srv_stats)
 {
