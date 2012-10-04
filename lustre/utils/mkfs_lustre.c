@@ -88,8 +88,12 @@ int verbose = 1;
 static int print_only = 0;
 static int upgrade_to_18 = 0;
 
+#ifdef HAVE_LDISKFS_OSD
 #define FSLIST_LDISKFS "ldiskfs"
 #define HAVE_FSLIST
+#else
+ #define FSLIST_LDISKFS ""
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
  #ifdef HAVE_FSLIST
    #define FSLIST_ZFS "|zfs"
@@ -209,7 +213,11 @@ void set_defaults(struct mkfs_opts *mop)
 	mop->mo_ldd.ldd_magic = LDD_MAGIC;
 	mop->mo_ldd.ldd_config_ver = 1;
 	mop->mo_ldd.ldd_flags = LDD_F_NEED_INDEX | LDD_F_UPDATE | LDD_F_VIRGIN;
+#ifdef HAVE_LDISKFS_OSD
 	mop->mo_ldd.ldd_mount_type = LDD_MT_LDISKFS;
+#else
+	mop->mo_ldd.ldd_mount_type = LDD_MT_ZFS;
+#endif
 	mop->mo_ldd.ldd_svindex = INDEX_UNASSIGNED;
 	mop->mo_mgs_failnodes = 0;
 	mop->mo_stripe_count = 1;

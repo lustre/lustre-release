@@ -5017,60 +5017,6 @@ static void mdt_quota_fini(const struct lu_env *env, struct mdt_device *mdt)
 	EXIT;
 }
 
-/**
- * setup CONFIG_ORIG context, used to access local config log.
- * this may need to be rewrite as part of llog rewrite for lu-api.
- */
-static int mdt_obd_llog_setup(struct obd_device *obd,
-                              struct lustre_sb_info *lsi)
-{
-        int     rc;
-
-	return 0;
-
-        LASSERT(obd->obd_fsops == NULL);
-
-	obd->obd_fsops = fsfilt_get_ops(lsi->lsi_fstype);
-        if (IS_ERR(obd->obd_fsops))
-                return PTR_ERR(obd->obd_fsops);
-
-        rc = fsfilt_setup(obd, lsi->lsi_srv_mnt->mnt_sb);
-        if (rc) {
-                fsfilt_put_ops(obd->obd_fsops);
-                return rc;
-        }
-
-        OBD_SET_CTXT_MAGIC(&obd->obd_lvfs_ctxt);
-        obd->obd_lvfs_ctxt.pwdmnt = lsi->lsi_srv_mnt;
-        obd->obd_lvfs_ctxt.pwd = lsi->lsi_srv_mnt->mnt_root;
-        obd->obd_lvfs_ctxt.fs = get_ds();
-
-	rc = llog_setup(NULL, obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT, obd,
-			&llog_lvfs_ops);
-        if (rc) {
-                CERROR("llog_setup() failed: %d\n", rc);
-                fsfilt_put_ops(obd->obd_fsops);
-        }
-
-        return rc;
-}
-
-static void mdt_obd_llog_cleanup(struct obd_device *obd)
-{
-        struct llog_ctxt *ctxt;
-
-	return;
-
-        ctxt = llog_get_context(obd, LLOG_CONFIG_ORIG_CTXT);
-        if (ctxt)
-		llog_cleanup(NULL, ctxt);
-
-        if (obd->obd_fsops) {
-                fsfilt_put_ops(obd->obd_fsops);
-                obd->obd_fsops = NULL;
-        }
-}
-
 static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 {
         struct md_device  *next = m->mdt_child;
@@ -5084,7 +5030,6 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         mdt_stop_ptlrpc_service(m);
         mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
-        mdt_obd_llog_cleanup(obd);
         obd_exports_barrier(obd);
         obd_zombie_barrier();
 
@@ -5300,14 +5245,9 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         if (rc)
                 GOTO(err_capa, rc);
 
-        rc = mdt_obd_llog_setup(obd, lsi);
-        if (rc)
-                GOTO(err_fs_cleanup, rc);
-
         mdt_adapt_sptlrpc_conf(obd, 1);
 
         next = m->mdt_child;
-
         rc = next->md_ops->mdo_iocontrol(env, next, OBD_IOC_GET_MNTOPT, 0,
                                          &mntopts);
         if (rc)
@@ -5378,8 +5318,6 @@ err_recovery:
         m->mdt_identity_cache = NULL;
 err_llog_cleanup:
         mdt_llog_ctxt_unclone(env, m, LLOG_CHANGELOG_ORIG_CTXT);
-        mdt_obd_llog_cleanup(obd);
-err_fs_cleanup:
         mdt_fs_cleanup(env, m);
 err_capa:
         cfs_timer_disarm(&m->mdt_ck_timer);

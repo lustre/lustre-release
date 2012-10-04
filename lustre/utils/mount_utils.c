@@ -383,10 +383,12 @@ int osd_write_ldd(struct mkfs_opts *mop)
 	int ret;
 
 	switch (ldd->ldd_mount_type) {
+#ifdef HAVE_LDISKFS_OSD
 	case LDD_MT_LDISKFS:
 	case LDD_MT_LDISKFS2:
 		ret = ldiskfs_write_ldd(mop);
 		break;
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	case LDD_MT_ZFS:
 		ret = zfs_write_ldd(mop);
@@ -409,10 +411,12 @@ int osd_read_ldd(char *dev, struct lustre_disk_data *ldd)
 	int ret;
 
 	switch (ldd->ldd_mount_type) {
+#ifdef HAVE_LDISKFS_OSD
 	case LDD_MT_LDISKFS:
 	case LDD_MT_LDISKFS2:
 		ret = ldiskfs_read_ldd(dev, ldd);
 		break;
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	case LDD_MT_ZFS:
 		ret = zfs_read_ldd(dev, ldd);
@@ -434,10 +438,12 @@ int osd_is_lustre(char *dev, unsigned *mount_type)
 {
 	vprint("checking for existing Lustre data: ");
 
+#ifdef HAVE_LDISKFS_OSD
 	if (ldiskfs_is_lustre(dev, mount_type)) {
 		vprint("found\n");
 		return 1;
 	}
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	if (zfs_is_lustre(dev, mount_type)) {
 		vprint("found\n");
@@ -456,10 +462,12 @@ int osd_make_lustre(struct mkfs_opts *mop)
 	int ret;
 
 	switch (ldd->ldd_mount_type) {
+#ifdef HAVE_LDISKFS_OSD
 	case LDD_MT_LDISKFS:
 	case LDD_MT_LDISKFS2:
 		ret = ldiskfs_make_lustre(mop);
 		break;
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	case LDD_MT_ZFS:
 		ret = zfs_make_lustre(mop);
@@ -484,12 +492,14 @@ int osd_prepare_lustre(struct mkfs_opts *mop,
 	int ret;
 
 	switch (ldd->ldd_mount_type) {
+#ifdef HAVE_LDISKFS_OSD
 	case LDD_MT_LDISKFS:
 	case LDD_MT_LDISKFS2:
 		ret = ldiskfs_prepare_lustre(mop,
 					     default_mountopts, default_len,
 					     always_mountopts, always_len);
 		break;
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	case LDD_MT_ZFS:
 		ret = zfs_prepare_lustre(mop,
@@ -514,10 +524,12 @@ int osd_tune_lustre(char *dev, struct mount_opts *mop)
 	int ret;
 
 	switch (ldd->ldd_mount_type) {
+#ifdef HAVE_LDISKFS_OSD
 	case LDD_MT_LDISKFS:
 	case LDD_MT_LDISKFS2:
 		ret = ldiskfs_tune_lustre(dev, mop);
 		break;
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	case LDD_MT_ZFS:
 		ret = zfs_tune_lustre(dev, mop);
@@ -540,10 +552,12 @@ int osd_label_lustre(struct mount_opts *mop)
 	int ret;
 
 	switch (ldd->ldd_mount_type) {
+#ifdef HAVE_LDISKFS_OSD
 	case LDD_MT_LDISKFS:
 	case LDD_MT_LDISKFS2:
 		ret = ldiskfs_label_lustre(mop);
 		break;
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	case LDD_MT_ZFS:
 		ret = zfs_label_lustre(mop);
@@ -564,9 +578,11 @@ int osd_init(void)
 {
 	int ret = 0;
 
+#ifdef HAVE_LDISKFS_OSD
 	ret = ldiskfs_init();
 	if (ret)
 		return ret;
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	ret = zfs_init();
 	/* we want to be able to set up a ldiskfs-based filesystem w/o
@@ -580,7 +596,9 @@ int osd_init(void)
 
 void osd_fini(void)
 {
+#ifdef HAVE_LDISKFS_OSD
 	ldiskfs_fini();
+#endif /* HAVE_LDISKFS_OSD */
 #ifdef HAVE_ZFS_OSD
 	zfs_fini();
 #endif /* HAVE_ZFS_OSD */

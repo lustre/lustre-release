@@ -430,6 +430,7 @@ out_close:
 }
 EXPORT_SYMBOL(llog_ioctl);
 
+#ifdef HAVE_LDISKFS_OSD
 int llog_catalog_list(struct obd_device *obd, int count,
                       struct obd_ioctl_data *data)
 {
@@ -475,3 +476,4 @@ out:
 
 }
 EXPORT_SYMBOL(llog_catalog_list);
+#endif

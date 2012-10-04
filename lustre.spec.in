@@ -252,7 +252,7 @@ if [ -f $RPM_BUILD_ROOT%{_libdir}/liblustre.so ] ; then
   echo '%attr(-, root, root) %{_libdir}/liblustre.so' >>lustre.files
 fi
 
-if [ -f $RPM_BUILD_DIR/lustre-%{version}/lustre/utils/libiam.c ] ; then
+if [ -f $RPM_BUILD_ROOT%{_libdir}/libiam.a ] ; then
   echo '%attr(-, root, root) %{_libdir}/libiam.a' >>lustre.files
 fi
 

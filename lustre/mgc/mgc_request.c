@@ -1183,10 +1183,12 @@ static int mgc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
 
         LASSERT(olg == &obd->obd_olg);
 
+#ifdef HAVE_LDISKFS_OSD
 	rc = llog_setup(NULL, obd, olg, LLOG_CONFIG_ORIG_CTXT, tgt,
 			&llog_lvfs_ops);
 	if (rc)
 		RETURN(rc);
+#endif
 
 	rc = llog_setup(NULL, obd, olg, LLOG_CONFIG_REPL_CTXT, tgt,
 			&llog_client_ops);
@@ -1560,6 +1562,12 @@ out:
         return rc;
 }
 
+#ifdef HAVE_LDISKFS_OSD
+
+/*
+ * XXX: mgc_copy_llog() does not support osd-based llogs yet
+ */
+
 /* identical to mgs_log_is_empty */
 static int mgc_llog_is_empty(struct obd_device *obd, struct llog_ctxt *ctxt,
 			     char *name)
@@ -1684,6 +1692,7 @@ out:
         OBD_FREE(temp_log, strlen(logname) + 1);
         RETURN(rc);
 }
+#endif
 
 /* local_only means it cannot get remote llogs */
 static int mgc_process_cfg_log(struct obd_device *mgc,
@@ -1691,7 +1700,9 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
                                int local_only)
 {
         struct llog_ctxt *ctxt, *lctxt = NULL;
+#ifdef HAVE_LDISKFS_OSD
         struct client_obd *cli = &mgc->u.cli;
+#endif
         struct lvfs_run_ctxt *saved_ctxt;
         struct lustre_sb_info *lsi = NULL;
         int rc = 0, must_pop = 0;
@@ -1724,6 +1735,10 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
 
         lctxt = llog_get_context(mgc, LLOG_CONFIG_ORIG_CTXT);
 
+#ifdef HAVE_LDISKFS_OSD
+	/*
+	 * XXX: at the moment mgc_copy_llog() works with lvfs-based llogs
+	 */
         /* Copy the setup log locally if we can. Don't mess around if we're
            running an MGS though (logs are already local). */
 	if (lctxt && lsi && IS_SERVER(lsi) &&
@@ -1751,7 +1766,9 @@ static int mgc_process_cfg_log(struct obd_device *mgc,
                 llog_ctxt_put(ctxt);
                 ctxt = lctxt;
                 lctxt = NULL;
-        } else if (local_only) { /* no local log at client side */
+	} else
+#endif
+		if (local_only) { /* no local log at client side */
                 GOTO(out_pop, rc = -EIO);
         }
 

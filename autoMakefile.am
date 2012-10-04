@@ -77,12 +77,15 @@ checkstack-clean:
 
 module-dist-hook:
 	if [ -d CVS -o -d .git ]; then \
-	    perl lustre/scripts/make_META.pl > $(distdir)/META; \
-	    cp $(distdir)/META $(distdir)/ldiskfs/META; \
+		perl lustre/scripts/make_META.pl > $(distdir)/META; \
 	elif [ -f META ]; then \
-	    cp META $(distdir)/META; \
-	    cp $(distdir)/META $(distdir)/ldiskfs/META; \
+		cp META $(distdir)/META; \
 	else \
-	    echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
-	    exit 1; \
+		echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugzilla.lustre.org/"; \
+		exit 1; \
 	fi
+if LDISKFS_ENABLED
+	if [ -f $(distdir)/META -a -d $(distdir)/ldiskfs ]; then \
+		cp $(distdir)/META $(distdir)/ldiskfs/META; \
+	fi
+endif

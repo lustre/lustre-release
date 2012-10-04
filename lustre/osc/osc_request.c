@@ -3268,118 +3268,13 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 }
 
 
-static struct llog_operations osc_size_repl_logops = {
-        lop_cancel: llog_obd_repl_cancel
-};
-
-static struct llog_operations osc_mds_ost_orig_logops;
-
-static int __osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
-			   struct obd_device *tgt, struct llog_catid *catid)
-{
-	struct llog_ctxt	*ctxt = NULL;
-	struct llog_handle	*lgh;
-	int			 rc;
-
-	ENTRY;
-
-	osc_mds_ost_orig_logops = llog_lvfs_ops;
-	osc_mds_ost_orig_logops.lop_obd_add = llog_obd_origin_add;
-	osc_mds_ost_orig_logops.lop_connect = llog_origin_connect;
-	rc = llog_setup(NULL, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, tgt,
-			&osc_mds_ost_orig_logops);
-	if (rc)
-		RETURN(rc);
-
-	ctxt = llog_get_context(obd, LLOG_MDS_OST_ORIG_CTXT);
-	LASSERT(ctxt);
-
-	/* context might be initialized already */
-	if (ctxt->loc_handle != NULL) {
-		/* sanity check for valid loc_handle */
-		LASSERT(ctxt->loc_handle->lgh_ctxt == ctxt);
-		GOTO(out, rc = 0);
-	}
-
-	/* first try to open existent llog by ID */
-	if (likely(catid->lci_logid.lgl_oid != 0)) {
-		rc = llog_open(NULL, ctxt, &lgh, &catid->lci_logid, NULL,
-			       LLOG_OPEN_EXISTS);
-		/* re-create llog if it is missing */
-		if (rc == -ENOENT)
-			catid->lci_logid.lgl_oid = 0;
-		else if (rc < 0)
-			GOTO(out_cleanup, rc);
-	}
-	/* create new llog if llog ID is not specified or llog is missed */
-	if (unlikely(catid->lci_logid.lgl_oid == 0)) {
-		rc = llog_open_create(NULL, ctxt, &lgh, NULL, NULL);
-		if (rc < 0)
-			GOTO(out_cleanup, rc);
-		catid->lci_logid = lgh->lgh_id;
-	}
-
-	ctxt->loc_handle = lgh;
-
-	rc = llog_cat_init_and_process(NULL, lgh);
-	if (rc)
-		GOTO(out_close, rc);
-
-	rc = llog_setup(NULL, obd, &obd->obd_olg, LLOG_SIZE_REPL_CTXT, tgt,
-			&osc_size_repl_logops);
-	if (rc)
-		GOTO(out_close, rc);
-out:
-	llog_ctxt_put(ctxt);
-	RETURN(0);
-out_close:
-	llog_cat_close(NULL, lgh);
-out_cleanup:
-	llog_cleanup(NULL, ctxt);
-	CERROR("%s: fail to init llog #"LPX64"#"LPX64"#%08x tgt '%s': "
-	       "rc = %d\n", obd->obd_name, catid->lci_logid.lgl_oid,
-	       catid->lci_logid.lgl_oseq, catid->lci_logid.lgl_ogen,
-	       tgt->obd_name, rc);
-	return rc;
-}
-
 static int osc_llog_init(struct obd_device *obd, struct obd_llog_group *olg,
                          struct obd_device *disk_obd, int *index)
 {
-        struct llog_catid catid;
-        static char name[32] = CATLIST;
-        int rc;
-        ENTRY;
-
-        LASSERT(olg == &obd->obd_olg);
-
-        cfs_mutex_lock(&olg->olg_cat_processing);
-        rc = llog_get_cat_list(disk_obd, name, *index, 1, &catid);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
-        CDEBUG(D_INFO, "%s: Init llog for %d - catid "LPX64"/"LPX64":%x\n",
-               obd->obd_name, *index, catid.lci_logid.lgl_oid,
-               catid.lci_logid.lgl_oseq, catid.lci_logid.lgl_ogen);
-
-        rc = __osc_llog_init(obd, olg, disk_obd, &catid);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
-        rc = llog_put_cat_list(disk_obd, name, *index, 1, &catid);
-        if (rc) {
-                CERROR("rc: %d\n", rc);
-                GOTO(out, rc);
-        }
-
- out:
-        cfs_mutex_unlock(&olg->olg_cat_processing);
-
-        return rc;
+	/* this code is not supposed to be used with LOD/OSP
+	 * to be removed soon */
+	LBUG();
+	return 0;
 }
 
 static int osc_llog_finish(struct obd_device *obd, int count)
