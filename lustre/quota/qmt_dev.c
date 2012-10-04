@@ -101,14 +101,14 @@ static struct lu_device *qmt_device_fini(const struct lu_env *env,
 	CDEBUG(D_QUOTA, "%s: initiating QMT shutdown\n", qmt->qmt_svname);
 	qmt->qmt_stopping = true;
 
+	/* kill pool instances, if any */
+	qmt_pool_fini(env, qmt);
+
 	/* remove qmt proc entry */
 	if (qmt->qmt_proc != NULL && !IS_ERR(qmt->qmt_proc)) {
 		lprocfs_remove(&qmt->qmt_proc);
 		qmt->qmt_proc = NULL;
 	}
-
-	/* kill pool instances, if any */
-	qmt_pool_fini(env, qmt);
 
 	/* disconnect from OSD */
 	if (qmt->qmt_child_exp != NULL) {
