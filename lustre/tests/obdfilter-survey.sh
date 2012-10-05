@@ -210,7 +210,7 @@ test_3a () {
 }
 run_test 3a "Network survey"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 cleanup_echo_devs
 check_and_cleanup_lustre
 exit_status

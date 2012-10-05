@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
 # vim:shiftwidth=4:softtabstop=4:tabstop=4:
 
@@ -11,7 +11,7 @@ init_logging
 #
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT $LNET_SELFTEST_EXCEPT"
 
-[ x$LST = x ] &&  { skip_env "$0 : lst not found LST=$LST" && exit 0; }
+[ x$LST = x ] && { skip_env "lst not found LST=$LST" && exit 0; }
 
 # FIXME: what is the reasonable value here?
 lst_LOOP=${lst_LOOP:-100000}
@@ -157,7 +157,7 @@ test_smoke () {
 }
 run_test smoke "lst regression test"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 if [ "$RESTORE_MOUNT" = yes ]; then
     setupall
 fi 

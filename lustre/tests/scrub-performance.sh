@@ -175,5 +175,5 @@ run_test 0 "OI scrub performance test"
 
 # cleanup the system at last
 scrub_cleanup
-complete $(basename $0) $SECONDS
+complete $SECONDS
 exit_status

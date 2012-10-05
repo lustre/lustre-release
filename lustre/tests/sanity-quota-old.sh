@@ -2405,7 +2405,10 @@ quota_fini()
 quota_fini
 
 cd $ORIG_PWD
-complete sanity-quota.sh $SECONDS
+
+# override TESTSUITE so Maloo keeps only one set of sanity-quota results
+TESTSUITE=sanity-quota.sh
+complete $SECONDS
 check_and_cleanup_lustre
 export QUOTA_AUTO=$QUOTA_AUTO_OLD
 exit_status

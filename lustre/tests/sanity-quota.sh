@@ -2033,7 +2033,7 @@ quota_fini()
 quota_fini
 
 cd $ORIG_PWD
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 export QUOTA_AUTO=$QUOTA_AUTO_OLD
 exit_status

@@ -738,5 +738,5 @@ OSTSIZE=${SAVED_OSTSIZE}
 # cleanup the system at last
 formatall
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 exit_status

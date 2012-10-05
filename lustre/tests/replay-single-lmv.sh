@@ -113,6 +113,6 @@ test_3b() {
 }
 run_test 3b "mkdir cross-node dir (fail mds with inode)"
 
-equals_msg test complete, cleaning up
+complete $SECONDS
 $CLEANUP
 

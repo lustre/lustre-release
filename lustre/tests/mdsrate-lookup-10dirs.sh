@@ -109,10 +109,11 @@ else
     fi
 fi
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $SECONDS
 # FIXME: does it make sense to add the possibility to unlink dirfmt to mdsrate?
 for i in $(seq 0 $NUM_DIRS); do
-    mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $BASEDIR/lookup-$i 'f%%d' --ignore
+	mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES \
+		$BASEDIR/lookup-$i 'f%%d' --ignore
 done
 
 rmdir $BASEDIR || true

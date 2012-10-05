@@ -342,6 +342,6 @@ test_pios_fpp() {
 }
 run_test pios_fpp "pios file per process"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

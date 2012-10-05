@@ -21,9 +21,9 @@ init_logging
 
 remote_mds_nodsh && log "SKIP: remote MDS with nodsh" && exit 0
 
-[ -n "$CLIENTS" ] || { skip_env "$0: Need two or more clients" && exit 0; }
-[ $CLIENTCOUNT -ge 2 ] || \
-    { skip_env "$0: Need two or more remote clients, have $CLIENTCOUNT" && exit 0; }
+[ -z "$CLIENTS" ] && skip_env "$TESTSUITE: Need two or more clients" && exit 0
+[ $CLIENTCOUNT -lt 2 ] &&
+	skip_env "$TESTSUITE: Need 2+ clients, have only $CLIENTCOUNT" && exit 0
 
 #
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
@@ -49,7 +49,7 @@ test_3a() {
     # a half of clients by default
     increment=${INCREMENT:-$(( CLIENTCOUNT / 2 ))}
 
-    machinefile=${MACHINEFILE:-$TMP/$(basename $0 .sh).machines}
+    machinefile=${MACHINEFILE:-$TMP/$TESTSUITE.machines}
     local LOG=$TMP/${TESTSUITE}_$tfile
 
     local var=${SINGLEMDS}_svc
@@ -119,6 +119,6 @@ test_3a() {
 
 run_test 3a "recovery time, $CLIENTCOUNT clients"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

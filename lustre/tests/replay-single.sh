@@ -2374,6 +2374,6 @@ test_90() { # bug 19494
 }
 run_test 90 "lfs find identifies the missing striped file segments"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

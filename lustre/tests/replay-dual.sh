@@ -68,7 +68,7 @@ run_test 0a "expired recovery with lost client"
 if [ -f "$LU482_FAILED" ]; then
 	log "Found check file $LU482_FAILED, aborting test script"
 	rm -vf "$LU482_FAILED"
-	complete $(basename $0) $SECONDS
+	complete $SECONDS
 	do_nodes $CLIENTS umount -f $MOUNT2 || true
 	do_nodes $CLIENTS umount -f $MOUNT || true
 	# copied from stopall, but avoid the MDS recovery
@@ -576,7 +576,7 @@ run_test 21b "commit on sharing, two clients"
 
 # end commit on sharing tests 
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 SLEEP=$((`date +%s` - $NOW))
 [ $SLEEP -lt $TIMEOUT ] && sleep $SLEEP
 [ "$MOUNTED2" = yes ] && zconf_umount $HOSTNAME $MOUNT2 || true

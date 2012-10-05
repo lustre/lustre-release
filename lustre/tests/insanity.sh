@@ -17,11 +17,11 @@ init_logging
 ALWAYS_EXCEPT="10  $INSANITY_EXCEPT"
 
 if [ "$FAILURE_MODE" = "HARD" ]; then
-        skip_env "$0: is not functional with FAILURE_MODE = HARD, please use recovery-double-scale, bz20407"
-        exit 0
+	skip_env "$TESTSUITE: is not functional with FAILURE_MODE = HARD, " \
+		"please use recovery-double-scale, bz20407"
+	exit 0
 fi
 
-#
 [ "$SLOW" = "no" ] && EXCEPT_SLOW=""
 
 SETUP=${SETUP:-""}
@@ -44,7 +44,7 @@ require_dsh_ost || exit 0
 FAIL_CLIENTS=$(echo " $FAIL_CLIENTS " | sed -re "s/\s+$LIVE_CLIENT\s+/ /g")
 
 DIR=${DIR:-$MOUNT}
-TESTDIR=$DIR/d0.$(basename $0 .sh)
+TESTDIR=$DIR/d0.$TESTSUITE
 
 #####
 # fail clients round robin
@@ -567,6 +567,6 @@ test_10() {
 }
 run_test 10 "Running Availability for 6 hours..."
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -572,5 +572,5 @@ sec_unsetup
 
 sec_cleanup
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 exit_status

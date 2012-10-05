@@ -113,6 +113,6 @@ test_1() {
 }
 run_test 1 "build, install, run posix on ext4 and lustre, then compare"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -124,6 +124,6 @@ test_statahead () {
 }
 run_test statahead "statahead test, multiple clients"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

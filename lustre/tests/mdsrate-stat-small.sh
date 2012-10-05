@@ -107,7 +107,7 @@ else
     fi
 fi
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $SECONDS
 mdsrate_cleanup $NUM_CLIENTS $MACHINEFILE $NUM_FILES $TESTDIR 'f%%d'
 rmdir $BASEDIR || true
 rm -f $MACHINEFILE

@@ -106,6 +106,6 @@ elif ! zconf_mount_clients $CLIENTS $MOUNT; then
     error_noexit false "failed to mount lustre after nfs test"
 fi
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

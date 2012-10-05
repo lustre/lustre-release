@@ -260,7 +260,7 @@ else
     skip_env "$0 : write_disjoint not found "
 fi
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 rm -rf $TESTDIR
 rm -f $MACHINEFILE
 check_and_cleanup_lustre

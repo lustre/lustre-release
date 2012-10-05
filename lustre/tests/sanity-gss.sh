@@ -795,6 +795,6 @@ test_151() {
 }
 run_test 151 "secure mgs connection: server flavor control"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

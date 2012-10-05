@@ -79,5 +79,5 @@ test_2 () {
 }
 run_test 2 "sgpdd-survey, osts, scsidevs"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 exit_status

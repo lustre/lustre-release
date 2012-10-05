@@ -3231,5 +3231,5 @@ fi
 
 cleanup_gss
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 exit_status

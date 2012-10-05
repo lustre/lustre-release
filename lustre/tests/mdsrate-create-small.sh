@@ -138,7 +138,7 @@ else
     fi
 fi
 
-equals_msg `basename $0`: test complete, cleaning up
+complete $SECONDS
 rmdir $BASEDIR || true
 rm -f $MACHINEFILE 
 check_and_cleanup_lustre

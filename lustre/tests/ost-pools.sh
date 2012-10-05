@@ -1447,7 +1447,7 @@ run_test 26 "Choose other OSTs in the pool first in the creation remedy"
 
 cd $ORIG_PWD
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 cleanup_pools $FSNAME
 check_and_cleanup_lustre
 exit_status

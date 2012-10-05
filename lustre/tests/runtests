@@ -127,7 +127,7 @@ if [ `expr $NOWUSED - $USED` -gt 1024 ]; then
 	echo "Space not all freed: now ${NOWUSED}kB, was ${USED}kB." 1>&2
 fi
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 rm -f $FILES
 check_and_cleanup_lustre
 exit_status

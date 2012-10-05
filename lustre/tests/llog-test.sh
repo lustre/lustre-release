@@ -101,6 +101,5 @@ test_3() {
 }
 run_test 3 "Remove testset"
 
-equals_msg test complete, cleaning up
+complete $SECONDS
 FORCE=--force $CLEANUP
-echo "$0: completed"

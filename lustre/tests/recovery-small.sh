@@ -1536,6 +1536,6 @@ test_106() { # LU-1789
 }
 run_test 106 "lightweight connection support"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status

@@ -247,6 +247,6 @@ run_test failover_ost "failover OST"
 zconf_mount $HOSTNAME $MOUNT || error "mount $MOUNT on $HOSTNAME failed"
 client_up || error "start client on $HOSTNAME failed"
 
-complete $(basename $0) $SECONDS
+complete $SECONDS
 check_and_cleanup_lustre
 exit_status
