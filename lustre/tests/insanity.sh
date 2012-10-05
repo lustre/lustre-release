@@ -1,4 +1,7 @@
-#!/bin/sh
+#!/bin/bash
+# -*- mode: Bash; tab-width: 4; indent-tabs-mode: t; -*-
+# vim:shiftwidth=4:softtabstop=4:tabstop=4:
+#
 # Test multiple failures, AKA Test 17
 
 set -e
@@ -61,12 +64,12 @@ set_fail_client() {
 }
 
 fail_clients() {
-    num=$1
+	num=$1
 
-    log "Request clients to fail: ${num}. Num of clients to fail: ${FAIL_NUM}, already failed: $DOWN_NUM"
-    if [ -z "$num"  ] || [ "$num" -gt $((FAIL_NUM - DOWN_NUM)) ]; then
-	num=$((FAIL_NUM - DOWN_NUM)) 
-    fi
+	log "Request fail clients: $num, to fail: $FAIL_NUM, failed: $DOWN_NUM"
+	if [ -z "$num"  ] || [ "$num" -gt $((FAIL_NUM - DOWN_NUM)) ]; then
+		num=$((FAIL_NUM - DOWN_NUM))
+	fi
     
     if [ -z "$num" ] || [ "$num" -le 0 ]; then
         log "No clients failed!"
@@ -84,56 +87,57 @@ fail_clients() {
 
     echo "down clients: $DOWN_CLIENTS"
 
-    for client in $DOWN_CLIENTS; do
-	boot_node $client
-    done
-    DOWN_NUM=`echo $DOWN_CLIENTS | wc -w`
-    client_rmdirs
+	for client in $DOWN_CLIENTS; do
+		boot_node $client
+	done
+	DOWN_NUM=`echo $DOWN_CLIENTS | wc -w`
+	client_rmdirs
 }
 
 reintegrate_clients() {
-    for client in $DOWN_CLIENTS; do
-	wait_for_host $client
-	echo "Restarting $client"
-	zconf_mount $client $MOUNT || return 1
-    done
-    DOWN_CLIENTS=""
-    DOWN_NUM=0
+	for client in $DOWN_CLIENTS; do
+		wait_for_host $client
+		echo "Restarting $client"
+		zconf_mount $client $MOUNT || return 1
+	done
+
+	DOWN_CLIENTS=""
+	DOWN_NUM=0
 }
 
 start_ost() {
-    start ost$1 `ostdevname $1` $OST_MOUNT_OPTS
+	start ost$1 `ostdevname $1` $OST_MOUNT_OPTS
 }
 
 trap exit INT
 
 client_touch() {
-    file=$1
-    for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
-	if echo $DOWN_CLIENTS | grep -q $c; then continue; fi
-	$PDSH $c touch $TESTDIR/${c}_$file || return 1
-    done
+	file=$1
+	for c in $LIVE_CLIENT $FAIL_CLIENTS; do
+		echo $DOWN_CLIENTS | grep -q $c && continue
+		$PDSH $c touch $TESTDIR/${c}_$file || return 1
+	done
 }
 
 client_rm() {
-    file=$1
-    for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
-	$PDSH $c rm $TESTDIR/${c}_$file
-    done
+	file=$1
+	for c in $LIVE_CLIENT $FAIL_CLIENTS; do
+		$PDSH $c rm $TESTDIR/${c}_$file
+	done
 }
 
 client_mkdirs() {
-    for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
-	echo "$c mkdir $TESTDIR/$c"
-	$PDSH $c "mkdir $TESTDIR/$c && ls -l $TESTDIR/$c"
-    done
+	for c in $LIVE_CLIENT $FAIL_CLIENTS; do
+		echo "$c mkdir $TESTDIR/$c"
+		$PDSH $c "mkdir $TESTDIR/$c && ls -l $TESTDIR/$c"
+	done
 }
 
 client_rmdirs() {
-    for c in $LIVE_CLIENT $FAIL_CLIENTS;  do
-	echo "rmdir $TESTDIR/$c"
-	$PDSH $LIVE_CLIENT "rmdir $TESTDIR/$c"
-    done
+	for c in $LIVE_CLIENT $FAIL_CLIENTS; do
+		echo "rmdir $TESTDIR/$c"
+		$PDSH $LIVE_CLIENT "rmdir $TESTDIR/$c"
+	done
 }
 
 clients_recover_osts() {
@@ -169,8 +173,11 @@ run_test 1 "MDS/MDS failure"
 
 ############### Second Failure Mode ###############
 test_2() {
-    echo "Verify Lustre filesystem is up and running"
-    [ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+	echo "Verify Lustre filesystem is up and running"
+	[ -z "$(mounted_lustre_filesystems)" ] && error "Lustre is not running"
+
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "LU-2059: no local config for ZFS OSTs" && return
 
     clients_up
 
@@ -239,7 +246,10 @@ run_test 3  "Thirdb Failure Mode: MDS/CLIENT `date`"
 
 ############### Fourth Failure Mode ###############
 test_4() {
-    echo "Fourth Failure Mode: OST/MDS `date`"
+	echo "Fourth Failure Mode: OST/MDS `date`"
+
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "LU-2059: no local config for ZFS OSTs" && return
 
     #OST Portion
     shutdown_facet ost1

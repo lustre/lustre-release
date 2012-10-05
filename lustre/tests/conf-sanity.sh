@@ -19,9 +19,6 @@ if [ "$FAILURE_MODE" = "HARD" ]; then
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT $CONFIG_EXCEPTIONS"
 fi
 
-# LU-2059
-ALWAYS_EXCEPT="$ALWAYS_EXCEPT 5d 19b 21b 27a"
-
 # bug number for skipped test:
 # a tool to create lustre filesystem images
 ALWAYS_EXCEPT="32newtarball $ALWAYS_EXCEPT"
@@ -421,6 +418,9 @@ test_5d() {
 	grep " $MOUNT " /etc/mtab && \
 		error false "unexpected entry in mtab before mount" && return 10
 
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "LU-2059: no local config for ZFS OSTs" && return
+
 	local rc=0
 	start_ost
 	start_mds
@@ -660,6 +660,9 @@ test_19a() {
 run_test 19a "start/stop MDS without OSTs"
 
 test_19b() {
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "LU-2059: no local config for ZFS OSTs" && return
+
 	start_ost || return 1
 	stop_ost -f || return 2
 }
@@ -696,6 +699,9 @@ test_21a() {
 run_test 21a "start mds before ost, stop ost first"
 
 test_21b() {
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "LU-2059: no local config for ZFS OSTs" && return
+
         start_ost
 	start_mds
         wait_osc_import_state mds ost FULL
@@ -961,6 +967,9 @@ test_26() {
 run_test 26 "MDT startup failure cleans LOV (should return errs)"
 
 test_27a() {
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "LU-2059: no local config for ZFS OSTs" && return
+
 	start_ost || return 1
 	start_mds || return 2
 	echo "Requeue thread should have started: "
