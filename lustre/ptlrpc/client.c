@@ -155,8 +155,8 @@ EXPORT_SYMBOL(ptlrpc_prep_bulk_imp);
  * Data to transfer in the page starts at offset \a pageoffset and
  * amount of data to transfer from the page is \a len
  */
-void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
-                           cfs_page_t *page, int pageoffset, int len)
+void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
+			     cfs_page_t *page, int pageoffset, int len, int pin)
 {
         LASSERT(desc->bd_iov_count < desc->bd_max_iov);
         LASSERT(page != NULL);
@@ -166,16 +166,18 @@ void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 
         desc->bd_nob += len;
 
-        cfs_page_pin(page);
+	if (pin)
+		cfs_page_pin(page);
+
         ptlrpc_add_bulk_page(desc, page, pageoffset, len);
 }
-EXPORT_SYMBOL(ptlrpc_prep_bulk_page);
+EXPORT_SYMBOL(__ptlrpc_prep_bulk_page);
 
 /**
  * Uninitialize and free bulk descriptor \a desc.
  * Works on bulk descriptors both from server and client side.
  */
-void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
+void __ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc, int unpin)
 {
         int i;
         ENTRY;
@@ -192,14 +194,16 @@ void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *desc)
         else
                 class_import_put(desc->bd_import);
 
-        for (i = 0; i < desc->bd_iov_count ; i++)
-                cfs_page_unpin(desc->bd_iov[i].kiov_page);
+	if (unpin) {
+		for (i = 0; i < desc->bd_iov_count ; i++)
+			cfs_page_unpin(desc->bd_iov[i].kiov_page);
+	}
 
         OBD_FREE(desc, offsetof(struct ptlrpc_bulk_desc,
                                 bd_iov[desc->bd_max_iov]));
         EXIT;
 }
-EXPORT_SYMBOL(ptlrpc_free_bulk);
+EXPORT_SYMBOL(__ptlrpc_free_bulk);
 
 /**
  * Set server timelimit for this req, i.e. how long are we willing to wait

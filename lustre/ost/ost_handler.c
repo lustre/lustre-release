@@ -74,6 +74,15 @@ static char *oss_io_cpts;
 CFS_MODULE_PARM(oss_io_cpts, "s", charp, 0444,
 		"CPU partitions OSS IO threads should run on");
 
+/*
+ * this page is allocated statically when module is initializing
+ * it is used to simulate data corruptions, see ost_checksum_bulk()
+ * for details. as the original pages provided by the layers below
+ * can be remain in the internal cache, we do not want to modify
+ * them.
+ */
+static struct page *ost_page_to_corrupt = NULL;
+
 /**
  * Do not return server-side uid/gid to remote client
  */
@@ -555,7 +564,7 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
 		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_RECEIVE)) {
 			int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
 			int len = desc->bd_iov[i].kiov_len;
-			struct page *np = cfs_alloc_page(CFS_ALLOC_STD);
+			struct page *np = ost_page_to_corrupt;
 			char *ptr = kmap(desc->bd_iov[i].kiov_page) + off;
 
 			if (np) {
@@ -564,7 +573,6 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
 				memcpy(ptr2, ptr, len);
 				memcpy(ptr2, "bad3", min(4, len));
 				kunmap(np);
-				cfs_page_unpin(desc->bd_iov[i].kiov_page);
 				desc->bd_iov[i].kiov_page = np;
 			} else {
 				CERROR("can't alloc page for corruption\n");
@@ -580,7 +588,7 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
 		    OBD_FAIL_CHECK(OBD_FAIL_OST_CHECKSUM_SEND)) {
 			int off = desc->bd_iov[i].kiov_offset & ~CFS_PAGE_MASK;
 			int len = desc->bd_iov[i].kiov_len;
-			struct page *np = cfs_alloc_page(CFS_ALLOC_STD);
+			struct page *np = ost_page_to_corrupt;
 			char *ptr = kmap(desc->bd_iov[i].kiov_page) + off;
 
 			if (np) {
@@ -589,7 +597,6 @@ static __u32 ost_checksum_bulk(struct ptlrpc_bulk_desc *desc, int opc,
 				memcpy(ptr2, ptr, len);
 				memcpy(ptr2, "bad4", min(4, len));
 				kunmap(np);
-				cfs_page_unpin(desc->bd_iov[i].kiov_page);
 				desc->bd_iov[i].kiov_page = np;
 			} else {
 				CERROR("can't alloc page for corruption\n");
@@ -809,9 +816,9 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
                 nob += page_rc;
                 if (page_rc != 0) {             /* some data! */
                         LASSERT (local_nb[i].page != NULL);
-                        ptlrpc_prep_bulk_page(desc, local_nb[i].page,
-					      local_nb[i].lnb_page_offset,
-                                              page_rc);
+			ptlrpc_prep_bulk_page_nopin(desc, local_nb[i].page,
+						    local_nb[i].lnb_page_offset,
+						    page_rc);
                 }
 
                 if (page_rc != local_nb[i].len) { /* short read */
@@ -859,7 +866,7 @@ out_tls:
         ost_tls_put(req);
 out_bulk:
         if (desc && !CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2))
-                ptlrpc_free_bulk(desc);
+		ptlrpc_free_bulk_nopin(desc);
 out:
         LASSERT(rc <= 0);
         if (rc == 0) {
@@ -1043,9 +1050,9 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         /* NB Having prepped, we must commit... */
 
         for (i = 0; i < npages; i++)
-                ptlrpc_prep_bulk_page(desc, local_nb[i].page,
-				      local_nb[i].lnb_page_offset,
-                                      local_nb[i].len);
+		ptlrpc_prep_bulk_page_nopin(desc, local_nb[i].page,
+					    local_nb[i].lnb_page_offset,
+					    local_nb[i].len);
 
         rc = sptlrpc_svc_prep_bulk(req, desc);
         if (rc != 0)
@@ -1168,7 +1175,7 @@ out_tls:
         ost_tls_put(req);
 out_bulk:
         if (desc)
-                ptlrpc_free_bulk(desc);
+		ptlrpc_free_bulk_nopin(desc);
 out:
         if (rc == 0) {
                 oti_to_request(oti, req);
@@ -2677,6 +2684,8 @@ static int __init ost_init(void)
         int rc;
         ENTRY;
 
+	ost_page_to_corrupt = cfs_alloc_page(CFS_ALLOC_STD);
+
         lprocfs_ost_init_vars(&lvars);
         rc = class_register_type(&ost_obd_ops, NULL, lvars.module_vars,
                                  LUSTRE_OSS_NAME, NULL);
@@ -2693,6 +2702,9 @@ static int __init ost_init(void)
 
 static void /*__exit*/ ost_exit(void)
 {
+	if (ost_page_to_corrupt)
+		page_cache_release(ost_page_to_corrupt);
+
         class_unregister_type(LUSTRE_OSS_NAME);
 }
 
