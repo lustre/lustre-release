@@ -450,8 +450,13 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 {
 	struct qsd_thread_info	*qti = qsd_info(env);
 	struct qsd_instance	*qsd;
-	int			 rc;
+	int			 rc, type, idx;
 	ENTRY;
+
+	/* only configure qsd for MDT & OST */
+	type = server_name2index(svname, &idx, NULL);
+	if (type != LDD_F_SV_TYPE_MDT && type != LDD_F_SV_TYPE_OST)
+		RETURN(NULL);
 
 	/* allocate qsd instance */
 	OBD_ALLOC_PTR(qsd);
