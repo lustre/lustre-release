@@ -10,8 +10,7 @@ SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$PWD/$SRCDIR/../utils:$PATH:/sbin
 
 ONLY=${ONLY:-"$*"}
-# only accounting tests and test 22 are supported for the time being
-ALWAYS_EXCEPT="0 1 2 3 4 5 6 7 8 9 10 11 12 13 15 17 18 19 20 21 23 24 27 30 $SANITY_QUOTA_EXCEPT"
+ALWAYS_EXCEPT="$SANITY_QUOTA_EXCEPT"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 [ "$ALWAYS_EXCEPT$EXCEPT" ] &&
@@ -841,17 +840,6 @@ test_6() {
 	sync; sync
 	sync_all_data || true
 
-	# set a small timeout value, to make the quota RPC timedout before
-	# the watchdog triggered.
-	local timeout
-	if at_is_enabled; then
-		timeout=$(at_max_get ost)
-		at_max_set 20 ost
-	else
-		timeout=$(do_facet ost1 $LCTL get_param -n timeout)
-		do_facet ost1 $LCTL set_param timeout=20
-	fi
-
 	#define QUOTA_DQACQ 601
 	#define OBD_FAIL_PTLRPC_DROP_REQ_OPC 0x513
 	lustre_fail mds 0x513 601
@@ -865,19 +853,13 @@ test_6() {
 	$RUNAS $DD of=$TESTFILE count=2 seek=1 oflag=sync conv=notrunc &
 	DDPID=$!
 
-	echo "Sleep for $timeout"
-	sleep $timeout
+	echo "Sleep for $TIMEOUT"
+	sleep $TIMEOUT
 
 	# write should be blocked and never finished
 	if ! ps -p $DDPID  > /dev/null 2>&1; then
 		lustre_fail mds 0 0
 		error "write finished incorrectly!"
-	fi
-
-	if at_is_enabled; then
-		at_max_set $timeout ost
-	else
-		do_facet ost1 $LCTL set_param timeout=$timeout
 	fi
 
 	lustre_fail mds 0 0
