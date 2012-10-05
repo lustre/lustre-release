@@ -2076,7 +2076,9 @@ static int mdd_rename(const struct lu_env *env,
         struct thandle *handle;
         const struct lu_fid *tpobj_fid = mdo2fid(mdd_tpobj);
         const struct lu_fid *spobj_fid = mdo2fid(mdd_spobj);
-        int is_dir;
+        bool is_dir;
+	bool tobj_ref = 0;
+	bool tobj_locked = 0;
 	unsigned cl_flags = 0;
         int rc, rc2;
         ENTRY;
@@ -2201,8 +2203,8 @@ static int mdd_rename(const struct lu_env *env,
          */
         if (tobj && mdd_object_exists(mdd_tobj)) {
                 mdd_write_lock(env, mdd_tobj, MOR_TGT_CHILD);
+		tobj_locked = 1;
                 if (mdd_is_dead_obj(mdd_tobj)) {
-                        mdd_write_unlock(env, mdd_tobj);
                         /* shld not be dead, something is wrong */
                         CERROR("tobj is dead, something is wrong\n");
                         rc = -EINVAL;
@@ -2213,31 +2215,51 @@ static int mdd_rename(const struct lu_env *env,
                 /* Remove dot reference. */
 		if (S_ISDIR(tg_attr->la_mode))
                         mdo_ref_del(env, mdd_tobj, handle);
+		tobj_ref = 1;
 
 		/* fetch updated nlink */
 		rc = mdd_la_get(env, mdd_tobj, tg_attr,
 				mdd_object_capa(env, mdd_tobj));
-		if (rc)
+		if (rc != 0) {
+			CERROR("%s: Failed to get nlink for tobj "
+				DFID": rc = %d\n",
+				mdd2obd_dev(mdd)->obd_name,
+				PFID(tpobj_fid), rc);
 			GOTO(fixup_tpobj, rc);
+		}
 
-                la->la_valid = LA_CTIME;
-                rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);
-                if (rc)
-                        GOTO(fixup_tpobj, rc);
+		la->la_valid = LA_CTIME;
+		rc = mdd_attr_check_set_internal(env, mdd_tobj, la, handle, 0);
+		if (rc != 0) {
+			CERROR("%s: Failed to set ctime for tobj "
+				DFID": rc = %d\n",
+				mdd2obd_dev(mdd)->obd_name,
+				PFID(tpobj_fid), rc);
+			GOTO(fixup_tpobj, rc);
+		}
 
 		/* XXX: this transfer to ma will be removed with LOD/OSP */
 		ma->ma_attr = *tg_attr;
 		ma->ma_valid |= MA_INODE;
-                rc = mdd_finish_unlink(env, mdd_tobj, ma, handle);
-                mdd_write_unlock(env, mdd_tobj);
-                if (rc)
-                        GOTO(fixup_tpobj, rc);
+		rc = mdd_finish_unlink(env, mdd_tobj, ma, handle);
+		if (rc != 0) {
+			CERROR("%s: Failed to unlink tobj "
+				DFID": rc = %d\n",
+				mdd2obd_dev(mdd)->obd_name,
+				PFID(tpobj_fid), rc);
+			GOTO(fixup_tpobj, rc);
+		}
 
 		/* fetch updated nlink */
 		rc = mdd_la_get(env, mdd_tobj, tg_attr,
 				mdd_object_capa(env, mdd_tobj));
-		if (rc)
+		if (rc != 0) {
+			CERROR("%s: Failed to get nlink for tobj "
+				DFID": rc = %d\n",
+				mdd2obd_dev(mdd)->obd_name,
+				PFID(tpobj_fid), rc);
 			GOTO(fixup_tpobj, rc);
+		}
 		/* XXX: this transfer to ma will be removed with LOD/OSP */
 		ma->ma_attr = *tg_attr;
 		ma->ma_valid |= MA_INODE;
@@ -2282,6 +2304,12 @@ fixup_tpobj:
 
                 if (mdd_tobj && mdd_object_exists(mdd_tobj) &&
                     !mdd_is_dead_obj(mdd_tobj)) {
+			if (tobj_ref) {
+				mdo_ref_add(env, mdd_tobj, handle);
+				if (is_dir)
+					mdo_ref_add(env, mdd_tobj, handle);
+			}
+
                         rc2 = __mdd_index_insert(env, mdd_tpobj,
                                          mdo2fid(mdd_tobj), tname,
                                          is_dir, handle,
@@ -2315,6 +2343,8 @@ fixup_spobj2:
                         CWARN("sp obj fix error %d\n",rc2);
         }
 cleanup:
+	if (tobj_locked)
+		mdd_write_unlock(env, mdd_tobj);
         if (likely(tdlh) && sdlh != tdlh)
                 mdd_pdo_write_unlock(env, mdd_tpobj, tdlh);
         if (likely(sdlh))
