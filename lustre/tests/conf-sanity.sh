@@ -22,6 +22,9 @@ fi
 # LU-2059
 ALWAYS_EXCEPT="$ALWAYS_EXCEPT 5d 19b 21b 27a"
 
+# bug number for skipped test:
+# a tool to create lustre filesystem images
+ALWAYS_EXCEPT="32newtarball $ALWAYS_EXCEPT"
 
 SRCDIR=`dirname $0`
 PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$PATH
@@ -1149,202 +1152,434 @@ test_31() { # bug 10734
 }
 run_test 31 "Connect to non-existent node (shouldn't crash)"
 
-# Use these start32/stop32 fn instead of t-f start/stop fn,
-# for local devices, to skip global facet vars init
-stop32 () {
-	local facet=$1
-	shift
-	echo "Stopping local ${MOUNT%/*}/${facet} (opts:$@)"
-	umount -d $@ ${MOUNT%/*}/${facet}
-	losetup -a
-}
+#
+# This is not really a test but a tool to create new disk
+# image tarballs for the upgrade tests.
+#
+# Disk image tarballs should be created on single-node
+# clusters by running this test with default configurations
+# plus a few mandatory environment settings that are verified
+# at the beginning of the test.
+#
+test_32newtarball() {
+	local version
+	local dst=.
+	local src=/etc/rc.d
+	local tmp=$TMP/t32_image_create
 
-start32 () {
-	local facet=$1
-	shift
-	local device=$1
-	shift
-	mkdir -p ${MOUNT%/*}/${facet}
-
-	echo "Starting local ${facet}: $@ $device ${MOUNT%/*}/${facet}"
-	mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}
-	local RC=$?
-	if [ $RC -ne 0 ]; then
-		echo "mount -t lustre $@ ${device} ${MOUNT%/*}/${facet}"
-		echo "Start of ${device} of local ${facet} failed ${RC}"
+	if [ $FSNAME != t32fs -o $MDSCOUNT -ne 1 -o								\
+		 \( -z "$MDSDEV" -a -z "$MDSDEV1" \) -o $OSTCOUNT -ne 1 -o			\
+		 -z "$OSTDEV1" ]; then
+		error "Needs FSNAME=t32fs MDSCOUNT=1 MDSDEV1=<nonexistent_file>"	\
+			  "(or MDSDEV, in the case of b1_8) OSTCOUNT=1"					\
+			  "OSTDEV1=<nonexistent_file>"
 	fi
-	losetup -a
-	return $RC
+
+	mkdir $tmp || {
+		echo "Found stale $tmp"
+		return 1
+	}
+
+	mkdir $tmp/src
+	tar cf - -C $src . | tar xf - -C $tmp/src
+
+	formatall
+
+	setupall
+	tar cf - -C $tmp/src . | tar xf - -C /mnt/$FSNAME
+	stopall
+
+	mkdir $tmp/img
+
+	setupall
+	pushd /mnt/$FSNAME
+	ls -Rni --time-style=+%s >$tmp/img/list
+	find . ! -name .lustre -type f -exec sha1sum {} \; |
+		sort -k 2 >$tmp/img/sha1sums
+	popd
+	$LCTL get_param -n version | head -n 1 |
+		sed -e 's/^lustre: *//' >$tmp/img/commit
+	stopall
+
+	pushd $tmp/src
+	find -type f -exec sha1sum {} \; | sort -k 2 >$tmp/sha1sums.src
+	popd
+
+	if ! diff -u $tmp/sha1sums.src $tmp/img/sha1sums; then
+		echo "Data verification failed"
+	fi
+
+	uname -r >$tmp/img/kernel
+	uname -m >$tmp/img/arch
+
+	mv ${MDSDEV1:-$MDSDEV} $tmp/img
+	mv $OSTDEV1 $tmp/img
+
+	version=$(sed -e 's/\(^[0-9]\+\.[0-9]\+\)\(.*$\)/\1/' $tmp/img/commit |
+			  sed -e 's/\./_/g')	# E.g., "1.8.7" -> "1_8"
+	dst=$(cd $dst; pwd)
+	pushd $tmp/img
+	tar cjvf $dst/disk$version-$FSTYPE.tar.bz2 -S *
+	popd
+
+	rm -r $tmp
+}
+#run_test 32newtarball "Create a new test_32 disk image tarball for this version"
+
+#
+# The list of applicable tarballs is returned via the caller's
+# variable "tarballs".
+#
+t32_check() {
+	local node=$(facet_active_host $SINGLEMDS)
+	local r="do_node $node"
+
+	if [ "$CLIENTONLY" ]; then
+		skip "Client-only testing"
+		exit 0
+	fi
+
+	if ! $r which $TUNEFS; then
+		skip_env "tunefs.lustre required on $node"
+		exit 0
+	fi
+
+	local IMGTYPE=$FSTYPE
+
+	[ ! -z "$MDSFSTYPE" ] && IMGTYPE=$MDSFSTYPE
+	tarballs=$($r find $RLUSTRE/tests -maxdepth 1 -name \'disk*-$IMGTYPE.tar.bz2\')
+
+	if [ -z "$tarballs" ]; then
+		skip "No applicable tarballs found"
+		exit 0
+	fi
 }
 
-cleanup_nocli32 () {
-	stop32 mds1 -f
-	stop32 ost1 -f
-	wait_exit_ST client
+t32_test_cleanup() {
+	local node=$(facet_active_host $SINGLEMDS)
+	local r="do_node $node"
+	local tmp=$TMP/t32
+	local rc=$?
+
+	if $shall_cleanup_lustre; then
+		umount $tmp/mnt/lustre || rc=$?
+	fi
+	if $shall_cleanup_mdt; then
+		$r umount -d $tmp/mnt/mdt || rc=$?
+	fi
+	if $shall_cleanup_ost; then
+		$r umount -d $tmp/mnt/ost || rc=$?
+	fi
+	$r rm -rf $tmp || rc=$?
+	rm -rf $tmp || rc=$?
+	return $rc
 }
 
-cleanup_32() {
-	trap 0
-	echo "Cleanup test_32 umount $MOUNT ..."
-	umount -f $MOUNT || true
-	echo "Cleanup local mds ost1 ..."
-	cleanup_nocli32
-	combined_mgs_mds || start_mgs
-	unload_modules_conf
+t32_bits_per_long() {
+	#
+	# Yes, this is not meant to be perfect.
+	#
+	case $1 in
+		ppc64|x86_64)
+			echo -n 64;;
+		i*86)
+			echo -n 32;;
+	esac
+}
+
+t32_reload_modules() {
+	local node=$1
+	local all_removed=false
+	local i=0
+
+	while ((i < 20)); do
+		echo "Unloading modules on $node: Attempt $i"
+		do_rpc_nodes $node $LUSTRE_RMMOD $FSTYPE && all_removed=true
+		do_rpc_nodes $node check_mem_leak || return 1
+		if $all_removed; then
+			load_modules
+			return 0
+		fi
+		sleep 5
+		i=$((i + 1))
+	done
+	echo "Unloading modules on $node: Given up"
+	return 1
+}
+
+t32_wait_til_devices_gone() {
+	local node=$1
+	local devices
+	local i=0
+
+	echo wait for devices to go
+	while ((i < 20)); do
+		devices=$(do_rpc_nodes $node $LCTL device_list | wc -l)
+		echo $device
+		((devices == 0)) && return 1
+		sleep 5
+		i=$((i + 1))
+	done
+	echo "waiting for devices on $node: Given up"
+	return 1
+}
+
+t32_test() {
+	local tarball=$1
+	local writeconf=$2
+	local shall_cleanup_mdt=false
+	local shall_cleanup_ost=false
+	local shall_cleanup_lustre=false
+	local node=$(facet_active_host $SINGLEMDS)
+	local r="do_node $node"
+	local tmp=$TMP/t32
+	local img_commit
+	local img_kernel
+	local img_arch
+	local fsname=t32fs
+	local nid=$($r $LCTL list_nids | head -1)
+	local mopts
+	local uuid
+	local nrpcs_orig
+	local nrpcs
+	local list
+
+	trap 'trap - RETURN; t32_test_cleanup' RETURN
+
+	mkdir -p $tmp/mnt/lustre
+	$r mkdir -p $tmp/mnt/{mdt,ost}
+	$r tar xjvf $tarball -S -C $tmp || {
+		error_noexit "Unpacking the disk image tarball"
+		return 1
+	}
+	img_commit=$($r cat $tmp/commit)
+	img_kernel=$($r cat $tmp/kernel)
+	img_arch=$($r cat $tmp/arch)
+	echo "Upgrading from $(basename $tarball), created with:"
+	echo "  Commit: $img_commit"
+	echo "  Kernel: $img_kernel"
+	echo "    Arch: $img_arch"
+
+	$r $LCTL set_param debug="$PTLDEBUG"
+
+	$r $TUNEFS --dryrun $tmp/mdt || {
+		error_noexit "tunefs.lustre before mounting the MDT"
+		return 1
+	}
+	if [ "$writeconf" ]; then
+		mopts=loop,writeconf
+	else
+		mopts=loop,exclude=$fsname-OST0000
+	fi
+
+	t32_wait_til_devices_gone $node
+
+	$r mount -t lustre -o $mopts $tmp/mdt $tmp/mnt/mdt || {
+		error_noexit "Mounting the MDT"
+		return 1
+	}
+	shall_cleanup_mdt=true
+
+	uuid=$($r $LCTL get_param -n mdt.$fsname-MDT0000.uuid) || {
+		error_noexit "Getting MDT UUID"
+		return 1
+	}
+	if [ "$uuid" != $fsname-MDT0000_UUID ]; then
+		error_noexit "Unexpected MDT UUID: \"$uuid\""
+		return 1
+	fi
+
+	$r $TUNEFS --dryrun $tmp/ost || {
+		error_noexit "tunefs.lustre before mounting the OST"
+		return 1
+	}
+	if [ "$writeconf" ]; then
+		mopts=loop,mgsnode=$nid,$writeconf
+	else
+		mopts=loop,mgsnode=$nid
+	fi
+	$r mount -t lustre -o $mopts $tmp/ost $tmp/mnt/ost || {
+		error_noexit "Mounting the OST"
+		return 1
+	}
+	shall_cleanup_ost=true
+
+	uuid=$($r $LCTL get_param -n obdfilter.$fsname-OST0000.uuid) || {
+		error_noexit "Getting OST UUID"
+		return 1
+	}
+	if [ "$uuid" != $fsname-OST0000_UUID ]; then
+		error_noexit "Unexpected OST UUID: \"$uuid\""
+		return 1
+	fi
+
+	$r $LCTL conf_param $fsname-OST0000.osc.max_dirty_mb=15 || {
+		error_noexit "Setting \"max_dirty_mb\""
+		return 1
+	}
+	$r $LCTL conf_param $fsname-OST0000.failover.node=$nid || {
+		error_noexit "Setting OST \"failover.node\""
+		return 1
+	}
+	$r $LCTL conf_param $fsname-MDT0000.mdc.max_rpcs_in_flight=9 || {
+		error_noexit "Setting \"max_rpcs_in_flight\""
+		return 1
+	}
+	$r $LCTL conf_param $fsname-MDT0000.failover.node=$nid || {
+		error_noexit "Setting MDT \"failover.node\""
+		return 1
+	}
+	$r $LCTL pool_new $fsname.interop || {
+		error_noexit "Setting \"interop\""
+		return 1
+	}
+	$r $LCTL conf_param $fsname-MDT0000.lov.stripesize=4M || {
+		error_noexit "Setting \"lov.stripesize\""
+		return 1
+	}
+
+	if [ "$writeconf" ]; then
+		mount -t lustre $nid:/$fsname $tmp/mnt/lustre || {
+			error_noexit "Mounting the client"
+			return 1
+		}
+		shall_cleanup_lustre=true
+		$LCTL set_param debug="$PTLDEBUG"
+
+		if $r test -f $tmp/sha1sums; then
+			$r sort -k 2 $tmp/sha1sums >$tmp/sha1sums.orig
+			pushd $tmp/mnt/lustre
+			find ! -name .lustre -type f -exec sha1sum {} \; |
+				sort -k 2 >$tmp/sha1sums || {
+				error_noexit "sha1sum"
+				return 1
+			}
+			popd
+			if ! diff -ub $tmp/sha1sums.orig $tmp/sha1sums; then
+				error_noexit "sha1sum verification failed"
+				return 1
+			fi
+		else
+			echo "sha1sum verification skipped"
+		fi
+
+		if $r test -f $tmp/list; then
+			#
+			# There is not a Test Framework API to copy files to or
+			# from a remote node.
+			#
+			$r sort -k 6 $tmp/list >$tmp/list.orig
+			pushd $tmp/mnt/lustre
+			ls -Rni --time-style=+%s | sort -k 6 >$tmp/list || {
+				error_noexit "ls"
+				return 1
+			}
+			popd
+			#
+			# 32-bit and 64-bit clients use different algorithms to
+			# convert FIDs into inode numbers.  Hence, remove the inode
+			# numbers from the lists, if the original list was created
+			# on an architecture with different number of bits per
+			# "long".
+			#
+			if [ $(t32_bits_per_long $(uname -m)) !=						\
+				 $(t32_bits_per_long $img_arch) ]; then
+				echo "Different number of bits per \"long\" from the disk image"
+				for list in list.orig list; do
+					sed -i -e 's/^[0-9]\+[ \t]\+//' $tmp/$list
+				done
+			fi
+			if ! diff -ub $tmp/list.orig $tmp/list; then
+				error_noexit "list verification failed"
+				return 1
+			fi
+		else
+			echo "list verification skipped"
+		fi
+
+		#
+		# When adding new data verification tests, please check for
+		# the presence of the required reference files first, like
+		# the "sha1sums" and "list" tests above, to avoid the need to
+		# regenerate every image for each test addition.
+		#
+
+		nrpcs_orig=$($LCTL get_param -n mdc.*.max_rpcs_in_flight) || {
+			error_noexit "Getting \"max_rpcs_in_flight\""
+			return 1
+		}
+		nrpcs=$((nrpcs_orig + 5))
+		$r $LCTL conf_param $fsname-MDT0000.mdc.max_rpcs_in_flight=$nrpcs || {
+			error_noexit "Changing \"max_rpcs_in_flight\""
+			return 1
+		}
+		wait_update $HOSTNAME "$LCTL get_param -n mdc.*.max_rpcs_in_flight"	\
+		            $nrpcs || {
+			error_noexit "Verifying \"max_rpcs_in_flight\""
+			return 1
+		}
+
+		umount $tmp/mnt/lustre || {
+			error_noexit "Unmounting the client"
+			return 1
+		}
+		shall_cleanup_lustre=false
+	else
+		$r umount -d $tmp/mnt/mdt || {
+			error_noexit "Unmounting the MDT"
+			return 1
+		}
+		shall_cleanup_mdt=false
+		$r umount -d $tmp/mnt/ost || {
+			error_noexit "Unmounting the OST"
+			return 1
+		}
+		shall_cleanup_ost=false
+
+		t32_reload_modules $node || {
+			error_noexit "Reloading modules"
+			return 1
+		}
+
+		# mount a second time to make sure we didnt leave upgrade flag on
+		$r $TUNEFS --dryrun $tmp/mdt || {
+			error_noexit "tunefs.lustre before remounting the MDT"
+			return 1
+		}
+		$r mount -t lustre -o loop,exclude=$fsname-OST0000 $tmp/mdt			\
+				 $tmp/mnt/mdt || {
+			error_noexit "Remounting the MDT"
+			return 1
+		}
+		shall_cleanup_mdt=true
+	fi
 }
 
 test_32a() {
-	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
-		return
-	fi
+	local tarballs
+	local tarball
+	local rc=0
 
-	client_only && skip "client only testing" && return 0
-	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return 0
-
-	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
-	[ ! -r $DISK1_8 ] && skip_env "Cannot find $DISK1_8" && return 0
-	local tmpdir=$TMP/conf32a
-	mkdir -p $tmpdir
-	tar xjvf $DISK1_8 -C $tmpdir || \
-		{ skip_env "Cannot untar $DISK1_8" && return 0; }
-
-	load_modules
-	$LCTL set_param debug="$PTLDEBUG"
-
-	$TUNEFS $tmpdir/mds || error "tunefs failed"
-
-	combined_mgs_mds || stop mgs
-
-	# nids are wrong, so client wont work, but server should start
-	start32 mds1 $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
-		trap cleanup_32 EXIT INT || return 3
-
-	local UUID=$($LCTL get_param -n mdt.lustre-MDT0000.uuid)
-	echo MDS uuid $UUID
-	[ "$UUID" == "lustre-MDT0000_UUID" ] || error "UUID is wrong: $UUID"
-
-	$TUNEFS --mgsnode=$HOSTNAME $tmpdir/ost1 || error "tunefs failed"
-	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
-	UUID=$($LCTL get_param -n obdfilter.lustre-OST0000.uuid)
-	echo OST uuid $UUID
-	[ "$UUID" == "lustre-OST0000_UUID" ] || error "UUID is wrong: $UUID"
-
-	local NID=$($LCTL list_nids | head -1)
-
-	echo "OSC changes should succeed:"
-	$LCTL conf_param lustre-OST0000.osc.max_dirty_mb=15 || return 7
-	$LCTL conf_param lustre-OST0000.failover.node=$NID || return 8
-	echo "ok."
-
-	echo "MDC changes should succeed:"
-	$LCTL conf_param lustre-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
-	$LCTL conf_param lustre-MDT0000.failover.node=$NID || return 10
-	echo "ok."
-
-	echo "LOV changes should succeed:"
-	$LCTL pool_new lustre.interop || return 11
-	$LCTL conf_param lustre-MDT0000.lov.stripesize=4M || return 12
-	echo "ok."
-
-	cleanup_32
-
-	# mount a second time to make sure we didnt leave upgrade flag on
-	load_modules
-	$TUNEFS --dryrun $tmpdir/mds || error "tunefs failed"
-
-	combined_mgs_mds || stop mgs
-
-	start32 mds1 $tmpdir/mds "-o loop,exclude=lustre-OST0000" && \
-		trap cleanup_32 EXIT INT || return 12
-
-	cleanup_32
-
-	rm -rf $tmpdir || true	# true is only for TMP on NFS
+	t32_check
+	for tarball in $tarballs; do
+		t32_test $tarball || rc=$?
+	done
+	return $rc
 }
-run_test 32a "Upgrade from 1.8 (not live)"
+run_test 32a "Upgrade (not live)"
 
 test_32b() {
-	if [ $(facet_fstype $SINGLEMDS) != ldiskfs ]; then
-		skip "Only applicable to ldiskfs-based MDTs"
-		return
-	fi
+	local tarballs
+	local tarball
+	local rc=0
 
-	client_only && skip "client only testing" && return 0
-	[ "$NETTYPE" = "tcp" ] || { skip "NETTYPE != tcp" && return 0; }
-	[ -z "$TUNEFS" ] && skip_env "No tunefs" && return
-
-	local DISK1_8=$LUSTRE/tests/disk1_8.tar.bz2
-	[ ! -r $DISK1_8 ] && skip_env "Cannot find $DISK1_8" && return 0
-	local tmpdir=$TMP/conf32b
-	mkdir -p $tmpdir
-	tar xjvf $DISK1_8 -C $tmpdir || \
-		{ skip_env "Cannot untar $DISK1_8" && return ; }
-
-	load_modules
-	$LCTL set_param debug="+config"
-	local NEWNAME=lustre
-
-	# writeconf will cause servers to register with their current nids
-	$TUNEFS --writeconf --erase-params \
-        --param mdt.identity_upcall=$L_GETIDENTITY \
-        --fsname=$NEWNAME $tmpdir/mds || error "tunefs failed"
-	combined_mgs_mds || stop mgs
-
-	start32 mds1 $tmpdir/mds "-o loop" && \
-		trap cleanup_32 EXIT INT || return 3
-
-	local UUID=$($LCTL get_param -n mdt.${NEWNAME}-MDT0000.uuid)
-	echo MDS uuid $UUID
-	[ "$UUID" == "${NEWNAME}-MDT0000_UUID" ] || error "UUID is wrong: $UUID"
-
-	$TUNEFS  --writeconf --erase-params \
-        --mgsnode=$HOSTNAME --fsname=$NEWNAME $tmpdir/ost1 ||\
-	    error "tunefs failed"
-	start32 ost1 $tmpdir/ost1 "-o loop" || return 5
-	UUID=$($LCTL get_param -n obdfilter.${NEWNAME}-OST0000.uuid)
-	echo OST uuid $UUID
-	[ "$UUID" == "${NEWNAME}-OST0000_UUID" ] || error "UUID is wrong: $UUID"
-
-	local NID=$($LCTL list_nids | head -1)
-
-	echo "OSC changes should succeed:"
-	$LCTL conf_param ${NEWNAME}-OST0000.osc.max_dirty_mb=15 || return 7
-	$LCTL conf_param ${NEWNAME}-OST0000.failover.node=$NID || return 8
-	echo "ok."
-
-	echo "MDC changes should succeed:"
-	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=9 || return 9
-	$LCTL conf_param ${NEWNAME}-MDT0000.failover.node=$NID || return 10
-	echo "ok."
-
-	echo "LOV changes should succeed:"
-	$LCTL pool_new ${NEWNAME}.interop || return 11
-	$LCTL conf_param ${NEWNAME}-MDT0000.lov.stripesize=4M || return 12
-	echo "ok."
-
-	# MDT and OST should have registered with new nids, so we should have
-	# a fully-functioning client
-	echo "Check client and old fs contents"
-
-	local device=`h2$NETTYPE $HOSTNAME`:/$NEWNAME
-	echo "Starting local client: $HOSTNAME: $device $MOUNT"
-	mount -t lustre $device $MOUNT || return 1
-
-	local old=$($LCTL get_param -n mdc.*.max_rpcs_in_flight)
-	local new=$((old + 5))
-	$LCTL conf_param ${NEWNAME}-MDT0000.mdc.max_rpcs_in_flight=$new
-	wait_update $HOSTNAME "$LCTL get_param -n mdc.*.max_rpcs_in_flight" $new || return 11
-
-	[ "$(cksum $MOUNT/passwd | cut -d' ' -f 1,2)" == "94306271 1478" ] || return 12
-	echo "ok."
-
-	cleanup_32
-
-	rm -rf $tmpdir || true  # true is only for TMP on NFS
+	t32_check
+	for tarball in $tarballs; do
+		t32_test $tarball writeconf || rc=$?
+	done
+	return $rc
 }
-run_test 32b "Upgrade from 1.8 with writeconf"
+run_test 32b "Upgrade with writeconf"
 
 test_33a() { # bug 12333, was test_33
         local rc=0

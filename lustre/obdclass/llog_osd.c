@@ -957,6 +957,7 @@ static int llog_osd_close(const struct lu_env *env, struct llog_handle *handle)
 static int llog_osd_destroy(const struct lu_env *env,
 			    struct llog_handle *loghandle)
 {
+	struct llog_thread_info *lgi = llog_info(env);
 	struct llog_ctxt	*ctxt;
 	struct dt_object	*o, *llog_dir = NULL;
 	struct dt_device	*d;
@@ -1019,7 +1020,18 @@ static int llog_osd_destroy(const struct lu_env *env,
 				GOTO(out_unlock, rc);
 			}
 		}
-		dt_ref_del(env, o, th);
+		/*
+		 * XXX: compatibility bits
+		 *      on old filesystems llogs are referenced by the name
+		 *      on the new ones they are referenced by OI and by
+		 *      the name
+		 */
+		rc = dt_attr_get(env, o, &lgi->lgi_attr, NULL);
+		if (rc)
+			GOTO(out_unlock, rc);
+		LASSERT(lgi->lgi_attr.la_nlink < 2);
+		if (lgi->lgi_attr.la_nlink == 1)
+			dt_ref_del(env, o, th);
 		rc = dt_destroy(env, o, th);
 		if (rc)
 			GOTO(out_unlock, rc);
