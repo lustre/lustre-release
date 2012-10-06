@@ -121,6 +121,10 @@ struct obd_type *class_get_type(const char *name)
 #ifdef HAVE_MODULE_LOADING_SUPPORT
         if (!type) {
                 const char *modname = name;
+
+		if (strcmp(modname, "obdfilter") == 0)
+			modname = "ofd";
+
                 if (!cfs_request_module("%s", modname)) {
                         CDEBUG(D_INFO, "Loaded module '%s'\n", modname);
                         type = class_search_type(name);

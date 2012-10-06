@@ -2650,9 +2650,6 @@ thread_sanity() {
         lassert 28 "$msg" '(($tstarted == $tmin && $tstarted == $tmax ))' || return $?
         cleanup
 
-        # Workaround a YALA bug where YALA expects that modules will remain
-        # loaded on the servers
-        LOAD_MODULES_REMOTE=false
         load_modules
         setup
         cleanup

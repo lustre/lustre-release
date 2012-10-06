@@ -2507,8 +2507,6 @@ lustre/obdclass/autoMakefile
 lustre/obdclass/linux/Makefile
 lustre/obdecho/Makefile
 lustre/obdecho/autoMakefile
-lustre/obdfilter/Makefile
-lustre/obdfilter/autoMakefile
 lustre/ofd/Makefile
 lustre/ofd/autoMakefile
 lustre/osc/Makefile

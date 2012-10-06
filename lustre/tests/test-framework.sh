@@ -426,21 +426,6 @@ llite_lloop_enabled() {
 
 load_modules_local() {
 	[ $(facet_fstype ost1) == "zfs" ] && export USE_OFD=yes
-	if [ "$USE_OFD" == yes ]; then
-		if module_loaded obdfilter; then
-			if ! $LUSTRE_RMMOD ldiskfs; then
-				echo "$HOSTNAME may still be using obdfilter.ko"
-				return 1
-			fi
-		fi
-	else
-		if module_loaded ofd; then
-			if ! $LUSTRE_RMMOD ldiskfs; then
-				echo "$HOSTNAME may still be using ofd.ko"
-				return 1
-			fi
-		fi
-	fi
 
 	if [ -n "$MODPROBE" ]; then
 		# use modprobe
@@ -525,11 +510,7 @@ load_modules_local() {
 		load_module ost/ost
 		load_module lod/lod
 		load_module osp/osp
-		if [ "$USE_OFD" == yes ]; then
-			load_module ofd/ofd
-		else
-			load_module obdfilter/obdfilter
-		fi
+		load_module ofd/ofd
 		load_module osp/osp
     fi
 
