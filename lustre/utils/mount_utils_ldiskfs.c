@@ -1101,6 +1101,63 @@ out:
 	return ret;
 }
 
+static int is_feature_enabled(const char *feature, const char *devpath)
+{
+	char cmd[PATH_MAX];
+	FILE *fp;
+	char enabled_features[4096] = "";
+
+	snprintf(cmd, sizeof(cmd), "%s -R features %s 2>&1",
+		 DEBUGFS, devpath);
+
+	/* Using popen() instead of run_command() since debugfs does
+	 * not return proper error code if command is not supported */
+	fp = popen(cmd, "r");
+	if (!fp) {
+		fprintf(stderr, "%s: %s\n", progname, strerror(errno));
+		return 0;
+	}
+
+	fread(enabled_features, 1, sizeof(enabled_features), fp);
+	fclose(fp);
+
+	if (strstr(enabled_features, feature))
+		return 1;
+	return 0;
+}
+
+/* Enable quota accounting */
+int ldiskfs_enable_quota(struct mkfs_opts *mop)
+{
+	char *dev;
+	char cmd[512];
+	int cmdsz = sizeof(cmd), ret;
+
+	if (is_e2fsprogs_feature_supp("-O quota") != 0) {
+		fprintf(stderr, "%s: \"-O quota\" is is not supported by "
+			"current e2fsprogs\n", progname);
+		return EINVAL;
+	}
+
+	dev = mop->mo_device;
+	if (mop->mo_flags & MO_IS_LOOP)
+		dev = mop->mo_loopdev;
+
+	/* Quota feature is already enabled? */
+	if (is_feature_enabled("quota", dev)) {
+		vprint("Quota feature is already enabled.\n");
+		return 0;
+	}
+
+	/* Turn on quota feature by "tune2fs -O quota" */
+	snprintf(cmd, cmdsz, "%s -O quota %s", TUNE2FS, dev);
+	ret = run_command(cmd, cmdsz);
+	if (ret)
+		fprintf(stderr, "command:%s (%d)", cmd, ret);
+
+	return ret;
+}
+
 int ldiskfs_init(void)
 {
 	/* Required because full path to DEBUGFS is not specified */

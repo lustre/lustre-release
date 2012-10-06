@@ -592,6 +592,37 @@ int osd_label_lustre(struct mount_opts *mop)
 	return ret;
 }
 
+/* Enable quota accounting */
+int osd_enable_quota(struct mkfs_opts *mop)
+{
+	struct lustre_disk_data *ldd = &mop->mo_ldd;
+	int ret;
+
+	switch (ldd->ldd_mount_type) {
+#ifdef HAVE_LDISKFS_OSD
+	case LDD_MT_EXT3:
+	case LDD_MT_LDISKFS:
+	case LDD_MT_LDISKFS2:
+		ret = ldiskfs_enable_quota(mop);
+		break;
+#endif /* HAVE_LDISKFS_OSD */
+#ifdef HAVE_ZFS_OSD
+	case LDD_MT_ZFS:
+		fprintf(stderr, "this option is only valid for ldiskfs\n");
+		ret = EINVAL;
+		break;
+#endif /* HAVE_ZFS_OSD */
+	default:
+		fatal();
+		fprintf(stderr, "unknown fs type %d '%s'\n",
+			ldd->ldd_mount_type, MT_STR(ldd));
+		ret = EINVAL;
+		break;
+	}
+
+	return ret;
+}
+
 int osd_init(void)
 {
 	int ret = 0;

@@ -166,6 +166,7 @@ void usage(FILE *out)
 		"\t\t--erase-params: erase all old parameter settings\n"
 		"\t\t--nomgs: turn off MGS service on this MDT\n"
 		"\t\t--writeconf: erase all config logs for this fs.\n"
+		"\t\t--quota: enable space accounting on old 2.x device.\n"
 #endif
 		"\t\t--comment=<user comment>: arbitrary string (%d bytes)\n"
 		"\t\t--dryrun: report what we would do; don't write to disk\n"
@@ -314,6 +315,7 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 {"writeconf", 0, 0, 'w'},
                 {"upgrade_to_18", 0, 0, 'U'},
                 {"network", 1, 0, 't'},
+		{"quota", 0, 0, 'Q'},
                 {0, 0, 0, 0}
         };
         char *optstring = "b:c:C:d:ef:Ghi:k:L:m:MnNo:Op:Pqrs:t:Uu:vw";
@@ -521,6 +523,9 @@ int parse_opts(int argc, char *const argv[], struct mkfs_opts *mop,
                 case 'U':
                         upgrade_to_18 = 1;
                         break;
+		case 'Q':
+			mop->mo_flags |= MO_QUOTA;
+			break;
                 default:
                         if (opt != '?') {
                                 fatal();
@@ -769,6 +774,13 @@ int main(int argc, char *const argv[])
 		opts.mo_source = mop.mo_device;
 		(void) osd_label_lustre(&opts);
 	}
+
+	/* Enable quota accounting */
+	if (mop.mo_flags & MO_QUOTA) {
+		ret = osd_enable_quota(&mop);
+		goto out;
+	}
+
 #endif
 
         /* Write our config files */
