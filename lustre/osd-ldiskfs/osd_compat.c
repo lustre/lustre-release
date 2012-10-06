@@ -493,7 +493,7 @@ static const struct named_oid oids[] = {
 	{ MDT_LAST_RECV_OID,    LAST_RCVD },
 	{ LFSCK_BOOKMARK_OID,   "" /* "lfsck_bookmark" */ },
 	{ OTABLE_IT_OID,	"" /* "otable iterator" */},
-	{ OFD_LAST_RECV_OID,    "" /* LAST_RCVD */ },
+	{ OFD_LAST_RECV_OID,    LAST_RCVD },
 	{ OFD_LAST_GROUP_OID,   "LAST_GROUP" },
 	{ LLOG_CATALOGS_OID,    "CATALOGS" },
 	{ MGS_CONFIGS_OID,      "" /* MOUNT_CONFIGS_DIR */ },
@@ -531,6 +531,8 @@ int osd_compat_spec_insert(struct osd_thread_info *info,
                 seq = fid_oid(fid) - OFD_GROUP0_LAST_OID;
                 LASSERT(seq < MAX_OBJID_GROUP);
                 LASSERT(map->groups[seq].groot);
+		rc = osd_compat_add_entry(info, osd, map->groups[seq].groot,
+					  "LAST_ID", id, th);
         } else {
                 name = oid2name(fid_oid(fid));
                 if (name == NULL)
@@ -547,17 +549,32 @@ int osd_compat_spec_lookup(struct osd_thread_info *info,
 			   struct osd_device *osd, const struct lu_fid *fid,
 			   struct osd_inode_id *id)
 {
+	struct dentry	*root;
 	struct dentry *dentry;
 	struct inode  *inode;
 	char	      *name;
 	int	       rc = -ENOENT;
 	ENTRY;
 
-	name = oid2name(fid_oid(fid));
-	if (name == NULL || strlen(name) == 0)
-		RETURN(-ENOENT);
+	if (fid_oid(fid) >= OFD_GROUP0_LAST_OID &&
+	    fid_oid(fid) < OFD_GROUP4K_LAST_OID) {
+		struct osd_compat_objid	*map = osd->od_ost_map;
+		int			 seq;
 
-	dentry = ll_lookup_one_len(name, osd_sb(osd)->s_root, strlen(name));
+		LASSERT(map);
+		seq = fid_oid(fid) - OFD_GROUP0_LAST_OID;
+		LASSERT(seq < MAX_OBJID_GROUP);
+		LASSERT(map->groups[seq].groot);
+		root = map->groups[seq].groot;
+		name = "LAST_ID";
+	} else {
+		root = osd_sb(osd)->s_root;
+		name = oid2name(fid_oid(fid));
+		if (name == NULL || strlen(name) == 0)
+			RETURN(-ENOENT);
+	}
+
+	dentry = ll_lookup_one_len(name, root, strlen(name));
 	if (!IS_ERR(dentry)) {
 		inode = dentry->d_inode;
 		if (inode) {
@@ -569,6 +586,9 @@ int osd_compat_spec_lookup(struct osd_thread_info *info,
 				rc = 0;
 			}
 		}
+		/* if dentry is accessible after osd_compat_spec_insert it
+		 * will still contain NULL inode, so don't keep it in cache */
+		d_invalidate(dentry);
 		dput(dentry);
 	}
 
