@@ -3193,12 +3193,14 @@ void cl_req_completion(const struct lu_env *env, struct cl_req *req, int ioret);
  * anchor and wakes up waiting thread when transfer is complete.
  */
 struct cl_sync_io {
-        /** number of pages yet to be transferred. */
-        cfs_atomic_t          csi_sync_nr;
-        /** completion to be signaled when transfer is complete. */
-        cfs_waitq_t          csi_waitq;
-        /** error code. */
-        int                   csi_sync_rc;
+	/** number of pages yet to be transferred. */
+	cfs_atomic_t		csi_sync_nr;
+	/** error code. */
+	int			csi_sync_rc;
+	/** barrier of destroy this structure */
+	cfs_atomic_t		csi_barrier;
+	/** completion to be signaled when transfer is complete. */
+	cfs_waitq_t		csi_waitq;
 };
 
 void cl_sync_io_init(struct cl_sync_io *anchor, int nrpages);
