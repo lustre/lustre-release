@@ -108,6 +108,7 @@ int ldlm_expired_completion_wait(void *data)
 
         RETURN(0);
 }
+EXPORT_SYMBOL(ldlm_expired_completion_wait);
 
 /* We use the same basis for both server side and client side functions
    from a single node. */
@@ -175,6 +176,7 @@ int ldlm_completion_ast_async(struct ldlm_lock *lock, int flags, void *data)
         ldlm_reprocess_all(lock->l_resource);
         RETURN(0);
 }
+EXPORT_SYMBOL(ldlm_completion_ast_async);
 
 /**
  * Client side LDLM "completion" AST. This is called in several cases:
@@ -272,6 +274,7 @@ noreproc:
 
         RETURN(ldlm_completion_tail(lock));
 }
+EXPORT_SYMBOL(ldlm_completion_ast);
 
 /**
  * A helper to build a blocking ast function
@@ -308,6 +311,7 @@ int ldlm_blocking_ast_nocheck(struct ldlm_lock *lock)
         }
         RETURN(0);
 }
+EXPORT_SYMBOL(ldlm_blocking_ast_nocheck);
 
 /**
  * Server blocking AST
@@ -344,6 +348,7 @@ int ldlm_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
         }
         RETURN(ldlm_blocking_ast_nocheck(lock));
 }
+EXPORT_SYMBOL(ldlm_blocking_ast);
 
 /*
  * ->l_glimpse_ast() for DLM extent locks acquired on the server-side. See
@@ -371,6 +376,7 @@ int ldlm_glimpse_ast(struct ldlm_lock *lock, void *reqp)
          */
         return -ELDLM_NO_LOCK_DATA;
 }
+EXPORT_SYMBOL(ldlm_glimpse_ast);
 
 int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            const struct ldlm_res_id *res_id,
@@ -434,6 +440,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
  out_nolock:
         return err;
 }
+EXPORT_SYMBOL(ldlm_cli_enqueue_local);
 
 static void failed_lock_cleanup(struct ldlm_namespace *ns,
                                 struct ldlm_lock *lock, int mode)
@@ -658,6 +665,7 @@ cleanup:
         LDLM_LOCK_RELEASE(lock);
         return rc;
 }
+EXPORT_SYMBOL(ldlm_cli_enqueue_fini);
 
 /* PAGE_SIZE-512 is to allow TCP/IP and LNET headers to fit into
  * a single page on the send/receive side. XXX: 512 should be changed
@@ -757,6 +765,7 @@ int ldlm_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
         }
         RETURN(0);
 }
+EXPORT_SYMBOL(ldlm_prep_elc_req);
 
 int ldlm_prep_enqueue_req(struct obd_export *exp, struct ptlrpc_request *req,
                           cfs_list_t *cancels, int count)
@@ -764,6 +773,7 @@ int ldlm_prep_enqueue_req(struct obd_export *exp, struct ptlrpc_request *req,
         return ldlm_prep_elc_req(exp, req, LUSTRE_DLM_VERSION, LDLM_ENQUEUE,
                                  LDLM_ENQUEUE_CANCEL_OFF, cancels, count);
 }
+EXPORT_SYMBOL(ldlm_prep_enqueue_req);
 
 /* If a request has some specific initialisation it is passed in @reqp,
  * otherwise it is created in ldlm_cli_enqueue.
@@ -914,6 +924,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(ldlm_cli_enqueue);
 
 static int ldlm_cli_convert_local(struct ldlm_lock *lock, int new_mode,
                                   __u32 *flags)
@@ -1012,6 +1023,7 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, __u32 *flags)
         ptlrpc_req_finished(req);
         return rc;
 }
+EXPORT_SYMBOL(ldlm_cli_convert);
 
 /* Cancel locks locally.
  * Returns:
@@ -1178,6 +1190,7 @@ int ldlm_cli_cancel_req(struct obd_export *exp, cfs_list_t *cancels,
 out:
         return sent ? sent : rc;
 }
+EXPORT_SYMBOL(ldlm_cli_cancel_req);
 
 static inline struct ldlm_pool *ldlm_imp2pl(struct obd_import *imp)
 {
@@ -1282,6 +1295,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         ldlm_cli_cancel_list(&cancels, count, NULL, 0);
         RETURN(0);
 }
+EXPORT_SYMBOL(ldlm_cli_cancel);
 
 /* XXX until we will have compound requests and can cut cancels from generic rpc
  * we need send cancels with LDLM_FL_BL_AST flag as separate rpc */
@@ -1325,6 +1339,7 @@ int ldlm_cli_cancel_list_local(cfs_list_t *cancels, int count,
 
         RETURN(count);
 }
+EXPORT_SYMBOL(ldlm_cli_cancel_list_local);
 
 /**
  * Cancel as many locks as possible w/o sending any rpcs (e.g. to write back
@@ -1750,6 +1765,7 @@ int ldlm_cancel_resource_local(struct ldlm_resource *res,
 
         RETURN(ldlm_cli_cancel_list_local(cancels, count, cancel_flags));
 }
+EXPORT_SYMBOL(ldlm_cancel_resource_local);
 
 /* If @req is NULL, send CANCEL request to server with handles of locks
  * in the @cancels. If EARLY_CANCEL is not supported, send CANCEL requests
@@ -1802,6 +1818,7 @@ int ldlm_cli_cancel_list(cfs_list_t *cancels, int count,
         LASSERT(count == 0);
         RETURN(0);
 }
+EXPORT_SYMBOL(ldlm_cli_cancel_list);
 
 int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
                                     const struct ldlm_res_id *res_id,
@@ -1834,6 +1851,7 @@ int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,
         ldlm_resource_putref(res);
         RETURN(0);
 }
+EXPORT_SYMBOL(ldlm_cli_cancel_unused_resource);
 
 struct ldlm_cli_cancel_arg {
         int     lc_flags;
@@ -1887,6 +1905,7 @@ int ldlm_cli_cancel_unused(struct ldlm_namespace *ns,
                 RETURN(ELDLM_OK);
         }
 }
+EXPORT_SYMBOL(ldlm_cli_cancel_unused);
 
 /* Lock iterators. */
 
@@ -1927,6 +1946,7 @@ int ldlm_resource_foreach(struct ldlm_resource *res, ldlm_iterator_t iter,
         unlock_res(res);
         RETURN(rc);
 }
+EXPORT_SYMBOL(ldlm_resource_foreach);
 
 struct iter_helper_data {
         ldlm_iterator_t iter;
@@ -1959,6 +1979,7 @@ void ldlm_namespace_foreach(struct ldlm_namespace *ns,
                                  ldlm_res_iter_helper, &helper);
 
 }
+EXPORT_SYMBOL(ldlm_namespace_foreach);
 
 /* non-blocking function to manipulate a lock whose cb_data is being put away.
  * return  0:  find no resource
@@ -1988,6 +2009,7 @@ int ldlm_resource_iterate(struct ldlm_namespace *ns,
         ldlm_resource_putref(res);
         RETURN(rc);
 }
+EXPORT_SYMBOL(ldlm_resource_iterate);
 
 /* Lock replay */
 
@@ -2212,3 +2234,4 @@ int ldlm_replay_locks(struct obd_import *imp)
 
         RETURN(rc);
 }
+EXPORT_SYMBOL(ldlm_replay_locks);

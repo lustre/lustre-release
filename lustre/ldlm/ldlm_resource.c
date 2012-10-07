@@ -658,6 +658,7 @@ out_ref:
         ldlm_put_ref();
         RETURN(NULL);
 }
+EXPORT_SYMBOL(ldlm_namespace_new);
 
 extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
 
@@ -780,6 +781,7 @@ int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
         cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_resource_complain, NULL);
         return ELDLM_OK;
 }
+EXPORT_SYMBOL(ldlm_namespace_cleanup);
 
 static int __ldlm_namespace_free(struct ldlm_namespace *ns, int force)
 {
@@ -931,6 +933,7 @@ void ldlm_namespace_free(struct ldlm_namespace *ns,
         ldlm_namespace_free_prior(ns, imp, force);
         ldlm_namespace_free_post(ns);
 }
+EXPORT_SYMBOL(ldlm_namespace_free);
 
 void ldlm_namespace_get(struct ldlm_namespace *ns)
 {
@@ -1107,6 +1110,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 
         return res;
 }
+EXPORT_SYMBOL(ldlm_resource_get);
 
 struct ldlm_resource *ldlm_resource_getref(struct ldlm_resource *res)
 {
@@ -1166,6 +1170,7 @@ int ldlm_resource_putref(struct ldlm_resource *res)
         }
         return 0;
 }
+EXPORT_SYMBOL(ldlm_resource_putref);
 
 /* Returns 1 if the resource was freed, 0 if it remains. */
 int ldlm_resource_putref_locked(struct ldlm_resource *res)
@@ -1247,6 +1252,7 @@ void ldlm_resource_unlink_lock(struct ldlm_lock *lock)
                 ldlm_extent_unlink_lock(lock);
         cfs_list_del_init(&lock->l_res_link);
 }
+EXPORT_SYMBOL(ldlm_resource_unlink_lock);
 
 void ldlm_res2desc(struct ldlm_resource *res, struct ldlm_resource_desc *desc)
 {
@@ -1271,6 +1277,7 @@ void ldlm_dump_all_namespaces(ldlm_side_t client, int level)
 
         cfs_mutex_unlock(ldlm_namespace_lock(client));
 }
+EXPORT_SYMBOL(ldlm_dump_all_namespaces);
 
 static int ldlm_res_hash_dump(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                               cfs_hlist_node_t *hnode, void *arg)
@@ -1304,6 +1311,7 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
         ns->ns_next_dump = cfs_time_shift(10);
         cfs_spin_unlock(&ns->ns_lock);
 }
+EXPORT_SYMBOL(ldlm_namespace_dump);
 
 void ldlm_resource_dump(int level, struct ldlm_resource *res)
 {

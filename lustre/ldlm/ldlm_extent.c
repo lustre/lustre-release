@@ -798,6 +798,7 @@ __u64 ldlm_extent_shift_kms(struct ldlm_lock *lock, __u64 old_kms)
 
         RETURN(kms);
 }
+EXPORT_SYMBOL(ldlm_extent_shift_kms);
 
 cfs_mem_cache_t *ldlm_interval_slab;
 struct ldlm_interval *ldlm_interval_alloc(struct ldlm_lock *lock)

@@ -35,7 +35,7 @@
 #define DEBUG_SUBSYSTEM S_LDLM
 #ifdef __KERNEL__
 #include <libcfs/libcfs.h>
-#else 
+#else
 #include <liblustre.h>
 #endif
 
@@ -59,6 +59,7 @@ struct ldlm_resource * lock_res_and_lock(struct ldlm_lock *lock)
 	lock->l_res_locked = 1;
 	return lock->l_resource;
 }
+EXPORT_SYMBOL(lock_res_and_lock);
 
 void unlock_res_and_lock(struct ldlm_lock *lock)
 {
@@ -69,3 +70,4 @@ void unlock_res_and_lock(struct ldlm_lock *lock)
 	if (!lock->l_ns_srv)
 		cfs_spin_unlock(&lock->l_lock);
 }
+EXPORT_SYMBOL(unlock_res_and_lock);
