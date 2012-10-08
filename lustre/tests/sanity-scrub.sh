@@ -122,7 +122,7 @@ test_1b() {
 
 		local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
 		[ "$FLAGS" == "recreated" ] ||
-			error "(3) Expect 'recreated', but got '$STATUS'"
+			error "(3) Expect 'recreated', but got '$FLAGS'"
 
 		$START_SCRUB || error "(4) Fail to start OI scrub!"
 		sleep 3

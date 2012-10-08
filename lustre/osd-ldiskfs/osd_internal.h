@@ -280,11 +280,8 @@ struct osd_device {
         struct obd_statfs         od_statfs;
         cfs_spinlock_t            od_osfs_lock;
 
-        /**
-         * The following flag indicates, if it is interop mode or not.
-         * It will be initialized, using mount param.
-         */
-        __u32                     od_iop_mode;
+	unsigned int		  od_iop_mode:1,
+				  od_noscrub:1;
 
         struct fsfilt_operations *od_fsops;
 

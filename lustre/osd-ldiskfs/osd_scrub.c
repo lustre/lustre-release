@@ -385,12 +385,15 @@ iget:
 		GOTO(out, rc = -ENOMEM);
 	}
 
-	if (ops == DTO_INDEX_UPDATE)
+	if (ops == DTO_INDEX_UPDATE) {
 		rc = iam_update(jh, bag, (const struct iam_key *)oi_fid,
 				(struct iam_rec *)oi_id, ipd);
-	else
+	} else {
 		rc = iam_insert(jh, bag, (const struct iam_key *)oi_fid,
 				(struct iam_rec *)oi_id, ipd);
+		if (rc == -EEXIST)
+			rc = 1;
+	}
 	osd_ipd_put(info->oti_env, bag, ipd);
 	ldiskfs_journal_stop(jh);
 	if (rc == 0) {
@@ -403,11 +406,13 @@ iget:
 	GOTO(out, rc);
 
 out:
-	if (rc != 0) {
+	if (rc < 0) {
 		sf->sf_items_failed++;
 		if (sf->sf_pos_first_inconsistent == 0 ||
 		    sf->sf_pos_first_inconsistent > lid->oii_ino)
 			sf->sf_pos_first_inconsistent = lid->oii_ino;
+	} else {
+		rc = 0;
 	}
 
 	if (ops == DTO_INDEX_INSERT) {
@@ -1042,8 +1047,6 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	cfs_init_rwsem(&scrub->os_rwsem);
 	cfs_spin_lock_init(&scrub->os_lock);
 	CFS_INIT_LIST_HEAD(&scrub->os_inconsistent_items);
-	if (get_mount_flags(dev->od_mount->lmi_sb) & LMD_FLG_NOSCRUB)
-		scrub->os_no_scrub = 1;
 
 	push_ctxt(&saved, ctxt, NULL);
 	filp = filp_open(osd_scrub_name, O_RDWR | O_CREAT, 0644);
@@ -1107,7 +1110,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 		}
 	}
 
-	if (rc == 0 && !scrub->os_no_scrub &&
+	if (rc == 0 && !dev->od_noscrub &&
 	    ((sf->sf_status == SS_PAUSED) ||
 	     (sf->sf_status == SS_CRASHED &&
 	      sf->sf_flags & (SF_RECREATED | SF_INCONSISTENT | SF_AUTO)) ||

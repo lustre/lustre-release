@@ -366,12 +366,10 @@ osd_iget_verify(struct osd_thread_info *info, struct osd_device *dev,
 		return inode;
 
 	rc = osd_get_lma(inode, &info->oti_obj_dentry, lma);
+	if (rc == -ENODATA)
+		return inode;
+
 	if (rc != 0) {
-		if (rc == -ENODATA) {
-			CDEBUG(D_LFSCK, "inconsistent obj: NULL, %lu, "DFID"\n",
-			       inode->i_ino, PFID(fid));
-			rc = -EREMCHG;
-		}
 		iput(inode);
 		return ERR_PTR(rc);
 	}
@@ -380,7 +378,7 @@ osd_iget_verify(struct osd_thread_info *info, struct osd_device *dev,
 		CDEBUG(D_LFSCK, "inconsistent obj: "DFID", %lu, "DFID"\n",
 		       PFID(&lma->lma_self_fid), inode->i_ino, PFID(fid));
 		iput(inode);
-		return ERR_PTR(EREMCHG);
+		return ERR_PTR(-EREMCHG);
 	}
 	return inode;
 }
@@ -411,25 +409,26 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 	info = osd_oti_get(env);
 	LASSERT(info);
 	oic = &info->oti_cache;
-	id  = &oic->oic_lid;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT))
 		RETURN(-ENOENT);
 
-	if (fid_is_norm(fid)) {
-		/* Search order: 1. per-thread cache. */
-		if (lu_fid_eq(fid, &oic->oic_fid)) {
-			goto iget;
-		} else if (!cfs_list_empty(&scrub->os_inconsistent_items)) {
-			/* Search order: 2. OI scrub pending list. */
-			result = osd_oii_lookup(dev, fid, id);
-			if (result == 0)
-				goto iget;
-		}
-
-		if (sf->sf_flags & SF_INCONSISTENT)
-			verify = 1;
+	/* Search order: 1. per-thread cache. */
+	if (lu_fid_eq(fid, &oic->oic_fid)) {
+		id = &oic->oic_lid;
+		goto iget;
 	}
+
+	id = &info->oti_id;
+	if (!cfs_list_empty(&scrub->os_inconsistent_items)) {
+		/* Search order: 2. OI scrub pending list. */
+		result = osd_oii_lookup(dev, fid, id);
+		if (result == 0)
+			goto iget;
+	}
+
+	if (sf->sf_flags & SF_INCONSISTENT)
+		verify = 1;
 
 	/*
 	 * Objects are created as locking anchors or place holders for objects
@@ -470,7 +469,7 @@ iget:
 trigger:
 			if (thread_is_running(&scrub->os_thread)) {
 				result = -EINPROGRESS;
-			} else if (!scrub->os_no_scrub) {
+			} else if (!dev->od_noscrub) {
 				result = osd_scrub_start(dev);
 				LCONSOLE_ERROR("%.16s: trigger OI scrub by RPC "
 					       "for "DFID", rc = %d [1]\n",
@@ -3327,7 +3326,7 @@ static int osd_ea_add_rec(const struct lu_env *env, struct osd_object *pobj,
         return rc;
 }
 
-static int
+static void
 osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 		      struct osd_idmap_cache *oic)
 {
@@ -3338,13 +3337,16 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 	int		     rc;
 	ENTRY;
 
+	if (!fid_is_norm(fid) && !fid_is_igif(fid))
+		RETURN_EXIT;
+
 again:
 	rc = osd_oi_lookup(oti, dev, fid, id);
 	if (rc != 0 && rc != -ENOENT)
-		RETURN(rc);
+		RETURN_EXIT;
 
 	if (rc == 0 && osd_id_eq(id, &oic->oic_lid))
-		RETURN(0);
+		RETURN_EXIT;
 
 	if (thread_is_running(&scrub->os_thread)) {
 		rc = osd_oii_insert(dev, oic, rc == -ENOENT);
@@ -3355,10 +3357,10 @@ again:
 		if (unlikely(rc == -EAGAIN))
 			goto again;
 
-		RETURN(rc);
+		RETURN_EXIT;
 	}
 
-	if (!scrub->os_no_scrub && ++once == 1) {
+	if (!dev->od_noscrub && ++once == 1) {
 		CDEBUG(D_LFSCK, "Trigger OI scrub by RPC for "DFID"\n",
 		       PFID(fid));
 		rc = osd_scrub_start(dev);
@@ -3370,7 +3372,7 @@ again:
 			goto again;
 	}
 
-	RETURN(rc = -EREMCHG);
+	EXIT;
 }
 
 /**
@@ -3423,7 +3425,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 			rc = osd_ea_fid_get(env, obj, ino, fid, &oic->oic_lid);
 		else
 			osd_id_gen(&oic->oic_lid, ino, OSD_OII_NOGEN);
-		if (rc != 0 || !fid_is_norm(fid)) {
+		if (rc != 0) {
 			fid_zero(&oic->oic_fid);
 			GOTO(out, rc);
 		}
@@ -3433,7 +3435,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
 		    (sf->sf_flags & SF_INCONSISTENT ||
 		     ldiskfs_test_bit(osd_oi_fid2idx(dev, fid),
 				      sf->sf_oi_bitmap)))
-			rc = osd_consistency_check(oti, dev, oic);
+			osd_consistency_check(oti, dev, oic);
 	} else {
 		rc = -ENOENT;
 	}
@@ -4130,8 +4132,10 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 
 	if (!fid_is_sane(fid)) {
 		rc = osd_ea_fid_get(env, obj, ino, fid, &oic->oic_lid);
-		if (rc != 0)
+		if (rc != 0) {
+			fid_zero(&oic->oic_fid);
 			RETURN(rc);
+		}
 	} else {
 		osd_id_gen(&oic->oic_lid, ino, OSD_OII_NOGEN);
 	}
@@ -4140,16 +4144,11 @@ static inline int osd_it_ea_rec(const struct lu_env *env,
 			   it->oie_dirent->oied_name,
 			   it->oie_dirent->oied_namelen,
 			   it->oie_dirent->oied_type, attr);
-	if (!fid_is_norm(fid)) {
-		fid_zero(&oic->oic_fid);
-		RETURN(0);
-	}
-
 	oic->oic_fid = *fid;
 	if ((scrub->os_pos_current <= ino) &&
 	    (sf->sf_flags & SF_INCONSISTENT ||
 	     ldiskfs_test_bit(osd_oi_fid2idx(dev, fid), sf->sf_oi_bitmap)))
-		rc = osd_consistency_check(oti, dev, oic);
+		osd_consistency_check(oti, dev, oic);
 
 	RETURN(rc);
 }
@@ -4219,7 +4218,6 @@ static int osd_index_ea_lookup(const struct lu_env *env, struct dt_object *dt,
                 return -EACCES;
 
         rc = osd_ea_lookup_rec(env, obj, rec, key);
-
         if (rc == 0)
                 rc = +1;
         RETURN(rc);
@@ -4374,6 +4372,9 @@ static int osd_mount(const struct lu_env *env,
 
         lsi = s2lsi(lmi->lmi_sb);
         ldd = lsi->lsi_ldd;
+
+	if (get_mount_flags(lmi->lmi_sb) & LMD_FLG_NOSCRUB)
+		o->od_noscrub = 1;
 
         if (ldd->ldd_flags & LDD_F_IAM_DIR) {
                 o->od_iop_mode = 0;
