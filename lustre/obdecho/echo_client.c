@@ -2136,7 +2136,7 @@ static int echo_md_handler(struct echo_device *ed, int command,
         if (IS_ERR(parent)) {
                 CERROR("Can not resolve the path %s: rc = %ld\n", path,
                         PTR_ERR(parent));
-		GOTO(out_free, PTR_ERR(parent));
+		GOTO(out_free, rc = PTR_ERR(parent));
         }
 
         if (namelen > 0) {
