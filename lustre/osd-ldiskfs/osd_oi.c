@@ -532,6 +532,7 @@ static int osd_oi_iam_insert(struct osd_thread_info *oti, struct osd_oi *oi,
 
         LASSERT(oi);
         LASSERT(oi->oi_inode);
+	ll_vfs_dq_init(oi->oi_inode);
 
         bag = &oi->oi_dir.od_container;
         ipd = osd_idx_ipd_get(oti->oti_env, bag);
@@ -587,6 +588,8 @@ static int osd_oi_iam_delete(struct osd_thread_info *oti, struct osd_oi *oi,
         ENTRY;
 
         LASSERT(oi);
+	LASSERT(oi->oi_inode);
+	ll_vfs_dq_init(oi->oi_inode);
 
         bag = &oi->oi_dir.od_container;
         ipd = osd_idx_ipd_get(oti->oti_env, bag);

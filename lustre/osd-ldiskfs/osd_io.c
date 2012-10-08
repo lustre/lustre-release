@@ -1123,6 +1123,8 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
                 return -EACCES;
 
         LASSERT(handle != NULL);
+	LASSERT(inode != NULL);
+	ll_vfs_dq_init(inode);
 
         /* XXX: don't check: one declared chunk can be used many times */
         /* OSD_EXEC_OP(handle, write); */
@@ -1193,6 +1195,8 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
         LASSERT(end == OBD_OBJECT_EOF);
         LASSERT(dt_object_exists(dt));
         LASSERT(osd_invariant(obj));
+	LASSERT(inode != NULL);
+	ll_vfs_dq_init(inode);
 
         LASSERT(th);
         oh = container_of(th, struct osd_thandle, ot_super);
