@@ -93,8 +93,14 @@ int generic_error_remove_page(struct address_space *mapping, struct page *page)
 }
 #endif
 
-static void osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,int rw)
+static void __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
+			     int rw, int line)
 {
+	LASSERTF(iobuf->dr_elapsed_valid == 0,
+		 "iobuf %p, reqs %d, rw %d, line %d\n", iobuf,
+		 cfs_atomic_read(&iobuf->dr_numreqs), iobuf->dr_rw,
+		 iobuf->dr_init_at);
+
         cfs_waitq_init(&iobuf->dr_wait);
         cfs_atomic_set(&iobuf->dr_numreqs, 0);
         iobuf->dr_max_pages = PTLRPC_MAX_BRW_PAGES;
@@ -104,9 +110,10 @@ static void osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,int rw)
         iobuf->dr_frags = 0;
         iobuf->dr_elapsed = 0;
         /* must be counted before, so assert */
-        LASSERT(iobuf->dr_elapsed_valid == 0);
         iobuf->dr_rw = rw;
+	iobuf->dr_init_at = line;
 }
+#define osd_init_iobuf(dev,iobuf,rw) __osd_init_iobuf(dev, iobuf, rw, __LINE__)
 
 static void osd_iobuf_add_page(struct osd_iobuf *iobuf, struct page *page)
 {
@@ -188,11 +195,19 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         if (error != 0 && iobuf->dr_error == 0)
                 iobuf->dr_error = error;
 
-        if (cfs_atomic_dec_and_test(&iobuf->dr_numreqs)) {
-                iobuf->dr_elapsed = jiffies - iobuf->dr_start_time;
-                iobuf->dr_elapsed_valid = 1;
-                cfs_waitq_signal(&iobuf->dr_wait);
-        }
+	/*
+	 * set dr_elapsed before dr_numreqs turns to 0, otherwise
+	 * it's possible that service thread will see dr_numreqs
+	 * is zero, but dr_elapsed is not set yet, leading to lost
+	 * data in this processing and an assertion in a subsequent
+	 * call to OSD.
+	 */
+	if (cfs_atomic_read(&iobuf->dr_numreqs) == 1) {
+		iobuf->dr_elapsed = jiffies - iobuf->dr_start_time;
+		iobuf->dr_elapsed_valid = 1;
+	}
+	if (cfs_atomic_dec_and_test(&iobuf->dr_numreqs))
+		cfs_waitq_signal(&iobuf->dr_wait);
 
         /* Completed bios used to be chained off iobuf->dr_bios and freed in
          * filter_clear_dreq().  It was then possible to exhaust the biovec-256

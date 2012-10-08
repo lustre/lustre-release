@@ -504,6 +504,7 @@ struct osd_iobuf {
         unsigned long      dr_start_time;
         unsigned long      dr_elapsed;  /* how long io took */
         struct osd_device *dr_dev;
+	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
 };
 
 struct osd_thread_info {
