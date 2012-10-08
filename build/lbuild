@@ -321,7 +321,7 @@ check_options() {
         2.6-sles10)
             CANONICAL_TARGET="sles10-2.6"
             ;;
-        2.6-sles11)
+        2.6-sles11 | 3.0-sles11)
             CANONICAL_TARGET="sles11"
             ;;
         2.6-oel5)

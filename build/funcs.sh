@@ -184,7 +184,7 @@ autodetect_target() {
          rhel5) target="2.6-rhel5";;
          rhel6) target="2.6-rhel6";;
         sles10) target="2.6-sles10";;
-        sles11) target="2.6-sles11";;
+        sles11) target="$(uname -r | cut -d . -f 1,2)-sles11";;
           fc15) target="2.6-fc15";;
             *) fatal 1 "I don't know what distro $distro is.\nEither update autodetect_target() or use the --target argument.";;
     esac
