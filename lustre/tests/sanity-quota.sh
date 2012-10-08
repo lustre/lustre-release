@@ -79,14 +79,6 @@ SHOW_QUOTA_INFO_GROUP="$LFS quota -t -g $DIR"
 
 build_test_filter
 
-# Use OFD for all quota testing
-cleanupall
-USE_OFD_OLD="$USE_OFD"
-LOAD_MODULES_REMOTE_OLD="$LOAD_MODULES_REMOTE"
-export USE_OFD="yes"
-export LOAD_MODULES_REMOTE="true"
-setupall
-
 lustre_fail() {
         local fail_node=$1
 	local fail_loc=$2
@@ -2041,7 +2033,5 @@ quota_fini
 cd $ORIG_PWD
 complete $(basename $0) $SECONDS
 check_and_cleanup_lustre
-export USE_OFD="$USE_OFD_OLD"
-export LOAD_MODULES_REMOTE="$LOAD_MODULES_REMOTE_OLD"
 export QUOTA_AUTO=$QUOTA_AUTO_OLD
 exit_status
