@@ -598,6 +598,9 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
 	int			hash64	= sbi->ll_flags & LL_SBI_64BIT_HASH;
 	int			api32	= ll_need_32bit_api(sbi);
 	int			rc;
+#ifdef HAVE_TOUCH_ATIME_1ARG
+	struct path		path;
+#endif
 	ENTRY;
 
 	CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) pos %lu/%llu "
@@ -623,14 +626,20 @@ static int ll_readdir(struct file *filp, void *cookie, filldir_t filldir)
                 else
                         filp->f_pos = pos;
         }
-        filp->f_version = inode->i_version;
-        touch_atime(filp->f_vfsmnt, filp->f_dentry);
+	filp->f_version = inode->i_version;
+#ifdef HAVE_TOUCH_ATIME_1ARG
+	path.mnt = filp->f_vfsmnt;
+	path.dentry = filp->f_dentry;
+	touch_atime(&path);
+#else
+	touch_atime(filp->f_vfsmnt, filp->f_dentry);
+#endif
 
 out:
-        if (!rc)
-                ll_stats_ops_tally(sbi, LPROC_LL_READDIR, 1);
+	if (!rc)
+		ll_stats_ops_tally(sbi, LPROC_LL_READDIR, 1);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int ll_send_mgc_param(struct obd_export *mgc, char *string)

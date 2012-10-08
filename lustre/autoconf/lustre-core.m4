@@ -2010,6 +2010,25 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
+# 3.4 switchs touch_atime to struct path
+# see kernel commit 68ac1234fb949b66941d94dce4157742799fc581
+#
+AC_DEFUN([LC_TOUCH_ATIME_1ARG],
+[AC_MSG_CHECKING([if touch_atime use one argument])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	touch_atime((struct path *)NULL);
+],[
+	AC_DEFINE(HAVE_TOUCH_ATIME_1ARG, 1,
+		  [touch_atime use one argument])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2168,6 +2187,9 @@ AC_DEFUN([LC_PROG_LINUX],
 	 LC_MIGRATEPAGE_4ARGS
 	 LC_SUPEROPS_USE_DENTRY
 	 LC_INODEOPS_USE_UMODE_T
+
+	 # 3.4
+	 LC_TOUCH_ATIME_1ARG
 
          #
          if test x$enable_server = xyes ; then
