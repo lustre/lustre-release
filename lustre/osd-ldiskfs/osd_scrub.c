@@ -385,12 +385,15 @@ iget:
 		GOTO(out, rc = -ENOMEM);
 	}
 
-	if (ops == DTO_INDEX_UPDATE)
+	if (ops == DTO_INDEX_UPDATE) {
 		rc = iam_update(jh, bag, (const struct iam_key *)oi_fid,
 				(struct iam_rec *)oi_id, ipd);
-	else
+	} else {
 		rc = iam_insert(jh, bag, (const struct iam_key *)oi_fid,
 				(struct iam_rec *)oi_id, ipd);
+		if (rc == -EEXIST)
+			rc = 1;
+	}
 	osd_ipd_put(info->oti_env, bag, ipd);
 	ldiskfs_journal_stop(jh);
 	if (rc == 0) {
@@ -403,11 +406,13 @@ iget:
 	GOTO(out, rc);
 
 out:
-	if (rc != 0) {
+	if (rc < 0) {
 		sf->sf_items_failed++;
 		if (sf->sf_pos_first_inconsistent == 0 ||
 		    sf->sf_pos_first_inconsistent > lid->oii_ino)
 			sf->sf_pos_first_inconsistent = lid->oii_ino;
+	} else {
+		rc = 0;
 	}
 
 	if (ops == DTO_INDEX_INSERT) {
