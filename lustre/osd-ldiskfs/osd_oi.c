@@ -419,6 +419,9 @@ out:
 
 void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd)
 {
+	if (unlikely(osd->od_oi_table == NULL))
+		return;
+
         osd_oi_table_put(info, osd->od_oi_table, osd->od_oi_count);
 
         OBD_FREE(osd->od_oi_table,
