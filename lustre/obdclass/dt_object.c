@@ -49,7 +49,7 @@
 /* fid_be_to_cpu() */
 #include <lustre_fid.h>
 
-#include <lquota.h>
+#include <lustre_quota.h>
 
 /* context key constructor/destructor: dt_global_key_init, dt_global_key_fini */
 LU_KEY_INIT(dt_global, struct dt_thread_info);

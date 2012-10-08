@@ -45,7 +45,7 @@
  * The QMT device is currently set up by the MDT and should probably be moved
  * to a separate target in the future. Meanwhile, the MDT forwards all quota
  * requests to the QMT via a list of request handlers (see struct qmt_handlers
- * in lquota.h). The QMT also borrows the LDLM namespace from the MDT.
+ * in lustre_quota.h). The QMT also borrows the LDLM namespace from the MDT.
  *
  * To bring up a QMT device, the following steps must be completed:
  *

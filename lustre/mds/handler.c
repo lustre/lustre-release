@@ -373,7 +373,6 @@ static int mds_cmd_cleanup(struct obd_device *obd)
                 mds->mds_objects_dir = NULL;
         }
 
-        ll_vfs_dq_off(obd->u.obt.obt_sb, 0);
         shrink_dcache_sb(mds->mds_obt.obt_sb);
         fsfilt_put_ops(obd->obd_fsops);
 

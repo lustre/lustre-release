@@ -701,8 +701,13 @@ check_obd_ioobj(void)
 static void
 check_obd_quotactl(void)
 {
+
 	BLANK_LINE();
 	CHECK_UNION(lquota_id);
+
+	BLANK_LINE();
+	CHECK_VALUE(QUOTABLOCK_BITS);
+	CHECK_VALUE(QUOTABLOCK_SIZE);
 
         BLANK_LINE();
         CHECK_STRUCT(obd_quotactl);
@@ -1643,18 +1648,6 @@ check_ll_fiemap_info_key(void)
 }
 
 static void
-check_qunit_data(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(qunit_data);
-        CHECK_MEMBER(qunit_data, qd_id);
-        CHECK_MEMBER(qunit_data, qd_flags);
-        CHECK_MEMBER(qunit_data, qd_count);
-        CHECK_MEMBER(qunit_data, qd_qunit);
-        CHECK_MEMBER(qunit_data, padding);
-}
-
-static void
 check_quota_body(void)
 {
 	BLANK_LINE();
@@ -1747,18 +1740,6 @@ check_posix_acl_xattr_header(void)
         CHECK_STRUCT_TYPEDEF(posix_acl_xattr_header);
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_version);
         CHECK_MEMBER_TYPEDEF(posix_acl_xattr_header, a_entries);
-}
-
-static void
-check_quota_adjust_qunit(void)
-{
-        BLANK_LINE();
-        CHECK_STRUCT(quota_adjust_qunit);
-        CHECK_MEMBER(quota_adjust_qunit, qaq_flags);
-        CHECK_MEMBER(quota_adjust_qunit, qaq_id);
-        CHECK_MEMBER(quota_adjust_qunit, qaq_bunit_sz);
-        CHECK_MEMBER(quota_adjust_qunit, qaq_iunit_sz);
-        CHECK_MEMBER(quota_adjust_qunit, padding1);
 }
 
 static void
@@ -2029,16 +2010,6 @@ main(int argc, char **argv)
         CHECK_VALUE_X(MF_SOM_AU);
         CHECK_VALUE_X(MF_GETATTR_LOCK);
 
-        CHECK_VALUE(LQUOTA_FLAGS_GRP);
-        CHECK_VALUE(LQUOTA_FLAGS_BLK);
-        CHECK_VALUE(LQUOTA_FLAGS_ADJBLK);
-        CHECK_VALUE(LQUOTA_FLAGS_ADJINO);
-        CHECK_VALUE(LQUOTA_FLAGS_CHG_QS);
-        CHECK_VALUE(LQUOTA_FLAGS_RECOVERY);
-        CHECK_VALUE(LQUOTA_FLAGS_SETQUOTA);
-
-        CHECK_VALUE_X(LQUOTA_QAQ_CREATE_LQS);
-
         CHECK_VALUE_64X(MDS_ATTR_MODE);
         CHECK_VALUE_64X(MDS_ATTR_UID);
         CHECK_VALUE_64X(MDS_ATTR_GID);
@@ -2202,9 +2173,7 @@ main(int argc, char **argv)
         check_llogd_body();
         check_llogd_conn_body();
         check_ll_fiemap_info_key();
-        check_qunit_data();
 	check_quota_body();
-        check_quota_adjust_qunit();
         check_mgs_target_info();
         check_lustre_capa();
         check_lustre_capa_key();

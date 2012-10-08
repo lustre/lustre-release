@@ -72,8 +72,7 @@
 
 /* llo_* api support */
 #include <md_object.h>
-/* dt_acct_features */
-#include <lquota.h>
+#include <lustre_quota.h>
 
 #ifdef HAVE_LDISKFS_PDO
 int ldiskfs_pdo = 1;

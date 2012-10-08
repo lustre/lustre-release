@@ -72,7 +72,7 @@
 #include <obd_class.h>
 #include <lustre_disk.h>
 #include <dt_object.h>
-#include <lquota.h>
+#include <lustre_quota.h>
 
 #include "osd_oi.h"
 #include "osd_iam.h"

@@ -63,7 +63,6 @@
 #include <lu_ref.h>
 #include <lustre_lib.h>
 #include <lustre_export.h>
-#include <lustre_quota.h>
 #include <lustre_fld.h>
 #include <lustre_capa.h>
 
@@ -275,9 +274,6 @@ struct obd_device_target {
         struct lu_target         *obt_lut;
 #endif
         __u64                     obt_mount_count;
-        cfs_semaphore_t           obt_quotachecking;
-        struct lustre_quota_ctxt  obt_qctxt;
-        lustre_quota_version_t    obt_qfmt;
         cfs_rw_semaphore_t        obt_rwsem;
         struct vfsmount          *obt_vfsmnt;
         struct file              *obt_health_check_filp;
@@ -378,9 +374,6 @@ struct filter_obd {
         cfs_spinlock_t           fo_llog_list_lock;
 
         struct brw_stats         fo_filter_stats;
-        struct lustre_quota_ctxt fo_quota_ctxt;
-        cfs_spinlock_t           fo_quotacheck_lock;
-        cfs_atomic_t             fo_quotachecking;
 
         int                      fo_fmd_max_num; /* per exp filter_mod_data */
         int                      fo_fmd_max_age; /* jiffies to fmd expiry */
@@ -535,8 +528,12 @@ struct client_obd {
         /* also protected by the poorly named _loi_list_lock lock above */
         struct osc_async_rc      cl_ar;
 
-        /* used by quotacheck */
-        int                      cl_qchk_stat; /* quotacheck stat of the peer */
+	/* used by quotacheck when the servers are older than 2.4 */
+	int                      cl_qchk_stat; /* quotacheck stat of the peer */
+#define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
+#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 7, 50, 0)
+#warning "please consider removing quotacheck compatibility code"
+#endif
 
         /* sequence manager */
         struct lu_client_seq    *cl_seq;
@@ -549,8 +546,6 @@ struct client_obd {
 	cfs_hash_t              *cl_quota_hash[MAXQUOTAS];
 };
 #define obd2cli_tgt(obd) ((char *)(obd)->u.cli.cl_target_uuid.uuid)
-
-#define CL_NOT_QUOTACHECKED 1   /* client->cl_qchk_stat init value */
 
 struct mds_obd {
         /* NB this field MUST be first */
@@ -586,14 +581,12 @@ struct mds_obd {
         __u32                            mds_lov_objid_lastidx;
 
 
-        struct lustre_quota_info         mds_quota_info;
         cfs_rw_semaphore_t               mds_qonoff_sem;
         unsigned long                    mds_fl_user_xattr:1,
                                          mds_fl_acl:1,
                                          mds_evict_ost_nids:1,
                                          mds_fl_cfglog:1,
                                          mds_fl_synced:1,
-                                         mds_quota:1,
                                          mds_fl_target:1; /* mds have one or
                                                            * more targets */
 

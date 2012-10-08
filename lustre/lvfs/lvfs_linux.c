@@ -58,7 +58,6 @@
 
 #include <obd.h>
 #include <lustre_lib.h>
-#include <lustre_quota.h>
 
 __u64 obd_max_pages = 0;
 __u64 obd_max_alloc = 0;

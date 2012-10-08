@@ -51,7 +51,6 @@
 #include <linux/init.h>
 #include <lprocfs_status.h>
 #include <libcfs/list.h>
-#include <lustre_quota.h>
 #include "ost_internal.h"
 
 static int oss_num_threads;
@@ -1670,7 +1669,6 @@ int ost_msg_check_version(struct lustre_msg *msg)
         case OST_GET_INFO:
         case OST_QUOTACHECK:
         case OST_QUOTACTL:
-        case OST_QUOTA_ADJUST_QUNIT:
                 rc = lustre_msg_check_version(msg, LUSTRE_OST_VERSION);
                 if (rc)
                         CERROR("bad opc %u version %08x, expecting %08x\n",
@@ -1699,6 +1697,10 @@ int ost_msg_check_version(struct lustre_msg *msg)
                                lustre_msg_get_version(msg),
                                LUSTRE_LOG_VERSION);
                 break;
+	case OST_QUOTA_ADJUST_QUNIT:
+		rc = -ENOTSUPP;
+		CERROR("Quota adjust is deprecated as of 2.4.0\n");
+		break;
         default:
                 CERROR("Unexpected opcode %d\n", lustre_msg_get_opc(msg));
                 rc = -ENOTSUPP;

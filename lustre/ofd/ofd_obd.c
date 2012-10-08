@@ -44,7 +44,7 @@
 
 #include "ofd_internal.h"
 #include <obd_cksum.h>
-#include <lquota.h>
+#include <lustre_quota.h>
 
 static int ofd_export_stats_init(struct ofd_device *ofd,
 				 struct obd_export *exp, void *client_nid)

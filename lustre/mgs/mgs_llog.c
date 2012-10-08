@@ -49,7 +49,7 @@
 #include <obd_lov.h>
 #include <lustre_param.h>
 #include <lustre_sec.h>
-#include <lquota.h>
+#include <lustre_quota.h>
 
 #include "mgs_internal.h"
 

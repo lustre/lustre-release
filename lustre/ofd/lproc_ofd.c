@@ -41,7 +41,6 @@
 #include <obd.h>
 #include <lprocfs_status.h>
 #include <linux/seq_file.h>
-#include <lquota.h>
 
 #include "ofd_internal.h"
 

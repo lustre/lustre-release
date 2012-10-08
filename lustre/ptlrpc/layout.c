@@ -121,15 +121,6 @@ static const struct req_msg_field *quotactl_only[] = {
         &RMF_PTLRPC_BODY,
         &RMF_OBD_QUOTACTL
 };
-static const struct req_msg_field *quota_adjust_qunit_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_QUOTA_ADJUST_QUNIT
-};
-
-static const struct req_msg_field *qunit_data_only[] = {
-        &RMF_PTLRPC_BODY,
-        &RMF_QUNIT_DATA
-};
 
 static const struct req_msg_field *quota_body_only[] = {
 	&RMF_PTLRPC_BODY,
@@ -622,13 +613,11 @@ static struct req_format *req_formats[] = {
         &RQF_MDS_REINT_SETXATTR,
         &RQF_MDS_QUOTACHECK,
         &RQF_MDS_QUOTACTL,
-        &RQF_MDS_QUOTA_DQACQ,
         &RQF_QC_CALLBACK,
         &RQF_OST_CONNECT,
         &RQF_OST_DISCONNECT,
         &RQF_OST_QUOTACHECK,
         &RQF_OST_QUOTACTL,
-        &RQF_OST_QUOTA_ADJUST_QUNIT,
         &RQF_OST_GETATTR,
         &RQF_OST_SETATTR,
         &RQF_OST_CREATE,
@@ -795,17 +784,6 @@ struct req_msg_field RMF_OBD_QUOTACTL =
                     sizeof(struct obd_quotactl),
                     lustre_swab_obd_quotactl, NULL);
 EXPORT_SYMBOL(RMF_OBD_QUOTACTL);
-
-struct req_msg_field RMF_QUOTA_ADJUST_QUNIT =
-        DEFINE_MSGF("quota_adjust_qunit", 0,
-                    sizeof(struct quota_adjust_qunit),
-                    lustre_swab_quota_adjust_qunit, NULL);
-EXPORT_SYMBOL(RMF_QUOTA_ADJUST_QUNIT);
-
-struct req_msg_field RMF_QUNIT_DATA =
-        DEFINE_MSGF("qunit_data", 0,
-                    sizeof(struct qunit_data), lustre_swab_qdata, NULL);
-EXPORT_SYMBOL(RMF_QUNIT_DATA);
 
 struct req_msg_field RMF_QUOTA_BODY =
 	DEFINE_MSGF("quota_body", 0,
@@ -1092,18 +1070,9 @@ struct req_format RQF_OST_QUOTACTL =
         DEFINE_REQ_FMT0("OST_QUOTACTL", quotactl_only, quotactl_only);
 EXPORT_SYMBOL(RQF_OST_QUOTACTL);
 
-struct req_format RQF_OST_QUOTA_ADJUST_QUNIT =
-        DEFINE_REQ_FMT0("OST_QUOTA_ADJUST_QUNIT", quota_adjust_qunit_only,
-                        quota_adjust_qunit_only);
-EXPORT_SYMBOL(RQF_OST_QUOTA_ADJUST_QUNIT);
-
 struct req_format RQF_QC_CALLBACK =
         DEFINE_REQ_FMT0("QC_CALLBACK", quotactl_only, empty);
 EXPORT_SYMBOL(RQF_QC_CALLBACK);
-
-struct req_format RQF_MDS_QUOTA_DQACQ =
-        DEFINE_REQ_FMT0("MDS_QUOTA_DQACQ", qunit_data_only, qunit_data_only);
-EXPORT_SYMBOL(RQF_MDS_QUOTA_DQACQ);
 
 struct req_format RQF_QUOTA_DQACQ =
 	DEFINE_REQ_FMT0("QUOTA_DQACQ", quota_body_only, quota_body_only);

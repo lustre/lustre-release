@@ -1977,16 +1977,6 @@ void lustre_swab_obd_quotactl (struct obd_quotactl *q)
 }
 EXPORT_SYMBOL(lustre_swab_obd_quotactl);
 
-void lustre_swab_quota_adjust_qunit (struct quota_adjust_qunit *q)
-{
-        __swab32s (&q->qaq_flags);
-        __swab32s (&q->qaq_id);
-        __swab64s (&q->qaq_bunit_sz);
-        __swab64s (&q->qaq_iunit_sz);
-        __swab64s (&q->padding1);
-}
-EXPORT_SYMBOL(lustre_swab_quota_adjust_qunit);
-
 void lustre_swab_mdt_remote_perm (struct mdt_remote_perm *p)
 {
         __swab32s (&p->rp_uid);
@@ -2261,16 +2251,6 @@ int llog_log_swabbed(struct llog_log_hdr *hdr)
         return -1;
 }
 
-void lustre_swab_qdata(struct qunit_data *d)
-{
-        __swab32s (&d->qd_id);
-        __swab32s (&d->qd_flags);
-        __swab64s (&d->qd_count);
-        __swab64s (&d->qd_qunit);
-        CLASSERT(offsetof(typeof(*d), padding) != 0);
-}
-EXPORT_SYMBOL(lustre_swab_qdata);
-
 void lustre_swab_quota_body(struct quota_body *b)
 {
 	lustre_swab_lu_fid(&b->qb_fid);
@@ -2375,68 +2355,6 @@ void dump_rcs(__u32 *rc)
         CDEBUG(D_RPCTRACE, "rmf_rcs: %d\n", *rc);
 }
 EXPORT_SYMBOL(dump_rcs);
-
-#ifdef __KERNEL__
-
-/**
- * got qdata from request(req/rep)
- */
-struct qunit_data *quota_get_qdata(void *r, int is_req, int is_exp)
-{
-        struct ptlrpc_request *req = (struct ptlrpc_request *)r;
-        struct qunit_data *qdata;
-        __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
-                       req->rq_import->imp_connect_data.ocd_connect_flags;
-
-        LASSERT(req);
-        /* support for quota64 */
-        LASSERT(flags & OBD_CONNECT_QUOTA64);
-        /* support for change_qs */
-        LASSERT(flags & OBD_CONNECT_CHANGE_QS);
-
-        if (is_req == QUOTA_REQUEST)
-                qdata = req_capsule_client_get(&req->rq_pill, &RMF_QUNIT_DATA);
-        else
-                qdata = req_capsule_server_get(&req->rq_pill, &RMF_QUNIT_DATA);
-        if (qdata == NULL)
-                return ERR_PTR(-EPROTO);
-
-        QDATA_SET_CHANGE_QS(qdata);
-        return qdata;
-}
-EXPORT_SYMBOL(quota_get_qdata);
-
-/**
- * copy qdata to request(req/rep)
- */
-int quota_copy_qdata(void *r, struct qunit_data *qdata, int is_req,
-                     int is_exp)
-{
-        struct ptlrpc_request *req = (struct ptlrpc_request *)r;
-        void *target;
-        __u64  flags = is_exp ? req->rq_export->exp_connect_flags :
-                req->rq_import->imp_connect_data.ocd_connect_flags;
-
-        LASSERT(req);
-        LASSERT(qdata);
-        /* support for quota64 */
-        LASSERT(flags & OBD_CONNECT_QUOTA64);
-        /* support for change_qs */
-        LASSERT(flags & OBD_CONNECT_CHANGE_QS);
-
-        if (is_req == QUOTA_REQUEST)
-                target = req_capsule_client_get(&req->rq_pill, &RMF_QUNIT_DATA);
-        else
-                target = req_capsule_server_get(&req->rq_pill, &RMF_QUNIT_DATA);
-        if (target == NULL)
-                return -EPROTO;
-
-        LASSERT(target != qdata);
-        memcpy(target, qdata, sizeof(*qdata));
-        return 0;
-}
-EXPORT_SYMBOL(quota_copy_qdata);
-#endif /* __KERNEL__ */
 
 static inline int req_ptlrpc_body_swabbed(struct ptlrpc_request *req)
 {

@@ -71,7 +71,7 @@
 #include <lustre_idmap.h>
 #include <lustre_eacl.h>
 #include <lustre_fsfilt.h>
-#include <lquota.h>
+#include <lustre_quota.h>
 
 /* check if request's xid is equal to last one or not*/
 static inline int req_xid_is_last(struct ptlrpc_request *req)

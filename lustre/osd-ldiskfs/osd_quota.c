@@ -28,7 +28,7 @@
  * Author: Niu    Yawei    <niu@whamcloud.com>
  */
 
-#include <lquota.h>
+#include <lustre_quota.h>
 #include "osd_internal.h"
 
 /**

@@ -1136,7 +1136,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_RMT_CLIENT        0x10000ULL /*Remote client */
 #define OBD_CONNECT_RMT_CLIENT_FORCE  0x20000ULL /*Remote client by force */
 #define OBD_CONNECT_BRW_SIZE          0x40000ULL /*Max bytes per rpc */
-#define OBD_CONNECT_QUOTA64           0x80000ULL /*64bit qunit_data.qd_count */
+#define OBD_CONNECT_QUOTA64           0x80000ULL /*Not used since 2.4 */
 #define OBD_CONNECT_MDS_CAPA         0x100000ULL /*MDS capability */
 #define OBD_CONNECT_OSS_CAPA         0x200000ULL /*OSS capability */
 #define OBD_CONNECT_CANCELSET        0x400000ULL /*Early batched cancels. */
@@ -1145,7 +1145,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OBD_CONNECT_LRU_RESIZE      0x2000000ULL /*LRU resize feature. */
 #define OBD_CONNECT_MDS_MDS         0x4000000ULL /*MDS-MDS connection */
 #define OBD_CONNECT_REAL            0x8000000ULL /*real connection */
-#define OBD_CONNECT_CHANGE_QS      0x10000000ULL /*shrink/enlarge qunit */
+#define OBD_CONNECT_CHANGE_QS      0x10000000ULL /*Not used since 2.4 */
 #define OBD_CONNECT_CKSUM          0x20000000ULL /*support several cksum algos*/
 #define OBD_CONNECT_FID            0x40000000ULL /*FID is supported by server */
 #define OBD_CONNECT_VBR            0x80000000ULL /*version based recovery */
@@ -1210,11 +1210,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
-                                OBD_CONNECT_BRW_SIZE | OBD_CONNECT_QUOTA64 | \
+				OBD_CONNECT_BRW_SIZE | OBD_CONNECT_OSS_CAPA | \
                                 OBD_CONNECT_CANCELSET | OBD_CONNECT_AT | \
                                 LRU_RESIZE_CONNECT_FLAG | OBD_CONNECT_CKSUM | \
-                                OBD_CONNECT_CHANGE_QS | \
-                                OBD_CONNECT_OSS_CAPA  | \
                                 OBD_CONNECT_RMT_CLIENT | \
                                 OBD_CONNECT_RMT_CLIENT_FORCE | OBD_CONNECT_VBR | \
                                 OBD_CONNECT_MDS | OBD_CONNECT_SKIP_ORPHAN | \
@@ -1346,7 +1344,7 @@ typedef enum {
         OST_SET_INFO   = 17,
         OST_QUOTACHECK = 18,
         OST_QUOTACTL   = 19,
-        OST_QUOTA_ADJUST_QUNIT = 20,
+	OST_QUOTA_ADJUST_QUNIT = 20, /* not used since 2.4 */
         OST_LAST_OPC
 } ost_cmd_t;
 #define OST_FIRST_OPC  OST_REPLY
@@ -1597,6 +1595,183 @@ struct ost_lvb {
 };
 
 /*
+ *   lquota data structures
+ */
+
+#ifndef QUOTABLOCK_BITS
+#define QUOTABLOCK_BITS 10
+#endif
+
+#ifndef QUOTABLOCK_SIZE
+#define QUOTABLOCK_SIZE (1 << QUOTABLOCK_BITS)
+#endif
+
+#ifndef toqb
+#define toqb(x) (((x) + QUOTABLOCK_SIZE - 1) >> QUOTABLOCK_BITS)
+#endif
+
+/* The lquota_id structure is an union of all the possible identifier types that
+ * can be used with quota, this includes:
+ * - 64-bit user ID
+ * - 64-bit group ID
+ * - a FID which can be used for per-directory quota in the future */
+union lquota_id {
+	struct lu_fid	qid_fid; /* FID for per-directory quota */
+	__u64		qid_uid; /* user identifier */
+	__u64		qid_gid; /* group identifier */
+};
+
+/* quotactl management */
+struct obd_quotactl {
+	__u32			qc_cmd;
+	__u32			qc_type; /* see Q_* flag below */
+	__u32			qc_id;
+	__u32			qc_stat;
+	struct obd_dqinfo	qc_dqinfo;
+	struct obd_dqblk	qc_dqblk;
+};
+
+extern void lustre_swab_obd_quotactl(struct obd_quotactl *q);
+
+#define Q_QUOTACHECK	0x800100 /* deprecated as of 2.4 */
+#define Q_INITQUOTA	0x800101 /* deprecated as of 2.4  */
+#define Q_GETOINFO	0x800102 /* get obd quota info */
+#define Q_GETOQUOTA	0x800103 /* get obd quotas */
+#define Q_FINVALIDATE	0x800104 /* deprecated as of 2.4 */
+
+#define Q_COPY(out, in, member) (out)->member = (in)->member
+
+#define QCTL_COPY(out, in)		\
+do {					\
+	Q_COPY(out, in, qc_cmd);	\
+	Q_COPY(out, in, qc_type);	\
+	Q_COPY(out, in, qc_id);		\
+	Q_COPY(out, in, qc_stat);	\
+	Q_COPY(out, in, qc_dqinfo);	\
+	Q_COPY(out, in, qc_dqblk);	\
+} while (0)
+
+/* Body of quota request used for quota acquire/release RPCs between quota
+ * master (aka QMT) and slaves (ak QSD). */
+struct quota_body {
+	struct lu_fid	qb_fid;     /* FID of global index packing the pool ID
+				      * and type (data or metadata) as well as
+				      * the quota type (user or group). */
+	union lquota_id	qb_id;      /* uid or gid or directory FID */
+	__u32		qb_flags;   /* see below */
+	__u32		qb_padding;
+	__u64		qb_count;   /* acquire/release count (kbytes/inodes) */
+	__u64		qb_usage;   /* current slave usage (kbytes/inodes) */
+	__u64		qb_slv_ver; /* slave index file version */
+	struct lustre_handle	qb_lockh;     /* per-ID lock handle */
+	struct lustre_handle	qb_glb_lockh; /* global lock handle */
+	__u64		qb_padding1[4];
+};
+
+/* When the quota_body is used in the reply of quota global intent
+ * lock (IT_QUOTA_CONN) reply, qb_fid contains slave index file FID. */
+#define qb_slv_fid	qb_fid
+/* qb_usage is the current qunit (in kbytes/inodes) when quota_body is used in
+ * quota reply */
+#define qb_qunit	qb_usage
+
+#define QUOTA_DQACQ_FL_ACQ	0x1  /* acquire quota */
+#define QUOTA_DQACQ_FL_PREACQ	0x2  /* pre-acquire */
+#define QUOTA_DQACQ_FL_REL	0x4  /* release quota */
+#define QUOTA_DQACQ_FL_REPORT	0x8  /* report usage */
+
+extern void lustre_swab_quota_body(struct quota_body *b);
+
+/* Quota types currently supported */
+enum {
+	LQUOTA_TYPE_USR	= 0x00, /* maps to USRQUOTA */
+	LQUOTA_TYPE_GRP	= 0x01, /* maps to GRPQUOTA */
+	LQUOTA_TYPE_MAX
+};
+
+/* There are 2 different resource types on which a quota limit can be enforced:
+ * - inodes on the MDTs
+ * - blocks on the OSTs */
+enum {
+	LQUOTA_RES_MD		= 0x01, /* skip 0 to avoid null oid in FID */
+	LQUOTA_RES_DT		= 0x02,
+	LQUOTA_LAST_RES,
+	LQUOTA_FIRST_RES	= LQUOTA_RES_MD
+};
+#define LQUOTA_NR_RES (LQUOTA_LAST_RES - LQUOTA_FIRST_RES + 1)
+
+/*
+ * Space accounting support
+ * Format of an accounting record, providing disk usage information for a given
+ * user or group
+ */
+struct lquota_acct_rec { /* 16 bytes */
+	__u64 bspace;  /* current space in use */
+	__u64 ispace;  /* current # inodes in use */
+};
+
+/*
+ * Global quota index support
+ * Format of a global record, providing global quota settings for a given quota
+ * identifier
+ */
+struct lquota_glb_rec { /* 32 bytes */
+	__u64 qbr_hardlimit; /* quota hard limit, in #inodes or kbytes */
+	__u64 qbr_softlimit; /* quota soft limit, in #inodes or kbytes */
+	__u64 qbr_time;      /* grace time, in seconds */
+	__u64 qbr_granted;   /* how much is granted to slaves, in #inodes or
+			      * kbytes */
+};
+
+/*
+ * Slave index support
+ * Format of a slave record, recording how much space is granted to a given
+ * slave
+ */
+struct lquota_slv_rec { /* 8 bytes */
+	__u64 qsr_granted; /* space granted to the slave for the key=ID,
+			    * in #inodes or kbytes */
+};
+
+/* Data structures associated with the quota locks */
+
+/* Glimpse descriptor used for the index & per-ID quota locks */
+struct ldlm_gl_lquota_desc {
+	union lquota_id	gl_id;    /* quota ID subject to the glimpse */
+	__u64		gl_flags; /* see LQUOTA_FL* below */
+	__u64		gl_ver;   /* new index version */
+	__u64		gl_hardlimit; /* new hardlimit or qunit value */
+	__u64		gl_softlimit; /* new softlimit */
+	__u64		gl_pad1;
+	__u64		gl_pad2;
+};
+#define gl_qunit	gl_hardlimit /* current qunit value used when
+				      * glimpsing per-ID quota locks */
+
+/* quota glimpse flags */
+#define LQUOTA_FL_EDQUOT 0x1 /* user/group out of quota space on QMT */
+
+/* LVB used with quota (global and per-ID) locks */
+struct lquota_lvb {
+	__u64	lvb_flags;	/* see LQUOTA_FL* above */
+	__u64	lvb_id_may_rel; /* space that might be released later */
+	__u64	lvb_id_rel;     /* space released by the slave for this ID */
+	__u64	lvb_id_qunit;   /* current qunit value */
+	__u64	lvb_pad1;
+};
+
+/* LVB used with global quota lock */
+#define lvb_glb_ver  lvb_id_may_rel /* current version of the global index */
+
+/* op codes */
+typedef enum {
+	QUOTA_DQACQ	= 601,
+	QUOTA_DQREL	= 602,
+	QUOTA_LAST_OPC
+} quota_cmd_t;
+#define QUOTA_FIRST_OPC	QUOTA_DQACQ
+
+/*
  *   MDS REQ RECORDS
  */
 
@@ -1795,167 +1970,6 @@ struct mdt_ioepoch {
 };
 
 extern void lustre_swab_mdt_ioepoch (struct mdt_ioepoch *b);
-
-/* The lquota_id structure is an union of all the possible identifier types that
- * can be used with quota, this includes:
- * - 64-bit user ID
- * - 64-bit group ID
- * - a FID which can be used for per-directory quota in the future */
-union lquota_id {
-	struct lu_fid	qid_fid; /* FID for per-directory quota */
-	__u64		qid_uid; /* user identifier */
-	__u64		qid_gid; /* group identifier */
-};
-
-#define Q_QUOTACHECK    0x800100
-#define Q_INITQUOTA     0x800101        /* init slave limits */
-#define Q_GETOINFO      0x800102        /* get obd quota info */
-#define Q_GETOQUOTA     0x800103        /* get obd quotas */
-#define Q_FINVALIDATE   0x800104        /* invalidate operational quotas */
-
-#define Q_TYPEMATCH(id, type) \
-        ((id) == (type) || (id) == UGQUOTA)
-
-#define Q_TYPESET(oqc, type) Q_TYPEMATCH((oqc)->qc_type, type)
-
-#define Q_GETOCMD(oqc) \
-        ((oqc)->qc_cmd == Q_GETOINFO || (oqc)->qc_cmd == Q_GETOQUOTA)
-
-#define QCTL_COPY(out, in)              \
-do {                                    \
-        Q_COPY(out, in, qc_cmd);        \
-        Q_COPY(out, in, qc_type);       \
-        Q_COPY(out, in, qc_id);         \
-        Q_COPY(out, in, qc_stat);       \
-        Q_COPY(out, in, qc_dqinfo);     \
-        Q_COPY(out, in, qc_dqblk);      \
-} while (0)
-
-struct obd_quotactl {
-        __u32                   qc_cmd;
-        __u32                   qc_type;
-        __u32                   qc_id;
-        __u32                   qc_stat;
-        struct obd_dqinfo       qc_dqinfo;
-        struct obd_dqblk        qc_dqblk;
-};
-
-extern void lustre_swab_obd_quotactl(struct obd_quotactl *q);
-
-#define QUOTA_DQACQ_FL_ACQ      0x1  /* acquire quota */
-#define QUOTA_DQACQ_FL_PREACQ   0x2  /* pre-acquire */
-#define QUOTA_DQACQ_FL_REL      0x4  /* release quota */
-#define QUOTA_DQACQ_FL_REPORT   0x8  /* report usage */
-
-struct quota_body {
-	struct lu_fid    qb_fid;     /* FID of global index packing the pool ID
-				      * and type (data or metadata) as well as
-				      * the quota type (user or group). */
-	union lquota_id  qb_id;      /* uid or gid or directory FID */
-	__u32            qb_flags;   /* see above */
-	__u32            qb_padding;
-	__u64            qb_count;   /* acquire/release count (kbytes/inodes) */
-	__u64            qb_usage;   /* current slave usage (kbytes/inodes) */
-	__u64            qb_slv_ver; /* slave index file version */
-	struct lustre_handle qb_lockh;     /* per-ID lock handle */
-	struct lustre_handle qb_glb_lockh; /* global lock handle */
-	__u64            qb_padding1[4];
-};
-
-/* When the quota_body is used in the reply of quota global intent
- * lock (IT_QUOTA_CONN) reply, qb_fid contains slave index file FID. */
-#define qb_slv_fid       qb_fid
-/* qb_usage is the current qunit (in kbytes/inodes) when quota_body is used in
- * quota reply */
-#define qb_qunit         qb_usage
-
-extern void lustre_swab_quota_body(struct quota_body *b);
-
-struct quota_adjust_qunit {
-        __u32 qaq_flags;
-        __u32 qaq_id;
-        __u64 qaq_bunit_sz;
-        __u64 qaq_iunit_sz;
-        __u64 padding1;
-};
-extern void lustre_swab_quota_adjust_qunit(struct quota_adjust_qunit *q);
-
-/* Quota types currently supported */
-enum {
-	LQUOTA_TYPE_USR	= 0x00, /* maps to USRQUOTA */
-	LQUOTA_TYPE_GRP	= 0x01, /* maps to GRPQUOTA */
-	LQUOTA_TYPE_MAX
-};
-
-/* There are 2 different resource types on which a quota limit can be enforced:
- * - inodes on the MDTs
- * - blocks on the OSTs */
-enum {
-	LQUOTA_RES_MD		= 0x01, /* skip 0 to avoid null oid in FID */
-	LQUOTA_RES_DT		= 0x02,
-	LQUOTA_LAST_RES,
-	LQUOTA_FIRST_RES	= LQUOTA_RES_MD
-};
-#define LQUOTA_NR_RES (LQUOTA_LAST_RES - LQUOTA_FIRST_RES + 1)
-
-/*
- * Space accounting support
- * Format of an accounting record, providing disk usage information for a given
- * user or group
- */
-struct lquota_acct_rec { /* 16 bytes */
-	__u64 bspace;  /* current space in use */
-	__u64 ispace;  /* current # inodes in use */
-};
-
-/*
- * Global quota index support
- * Format of a global record, providing global quota settings for a given quota
- * identifier
- */
-struct lquota_glb_rec { /* 32 bytes */
-	__u64 qbr_hardlimit; /* quota hard limit, in #inodes or kbytes */
-	__u64 qbr_softlimit; /* quota soft limit, in #inodes or kbytes */
-	__u64 qbr_time;      /* grace time, in seconds */
-	__u64 qbr_granted;   /* how much is granted to slaves, in #inodes or
-			      * kbytes */
-};
-
-/*
- * Slave index support
- * Format of a slave record, recording how much space is granted to a given
- * slave
- */
-struct lquota_slv_rec { /* 8 bytes */
-	__u64 qsr_granted; /* space granted to the slave for the key=ID,
-			    * in #inodes or kbytes */
-};
-
-/* flags is shared among quota structures */
-#define LQUOTA_FLAGS_GRP       1UL   /* 0 is user, 1 is group */
-#define LQUOTA_FLAGS_BLK       2UL   /* 0 is inode, 1 is block */
-#define LQUOTA_FLAGS_ADJBLK    4UL   /* adjust the block qunit size */
-#define LQUOTA_FLAGS_ADJINO    8UL   /* adjust the inode qunit size */
-#define LQUOTA_FLAGS_CHG_QS   16UL   /* indicate whether it has capability of
-                                      * OBD_CONNECT_CHANGE_QS */
-#define LQUOTA_FLAGS_RECOVERY 32UL   /* recovery is going on a uid/gid */
-#define LQUOTA_FLAGS_SETQUOTA 64UL   /* being setquota on a uid/gid */
-
-/* flags is specific for quota_adjust_qunit */
-#define LQUOTA_QAQ_CREATE_LQS  (1UL << 31) /* when it is set, need create lqs */
-
-/* the status of lqs_flags in struct lustre_qunit_size  */
-#define LQUOTA_QUNIT_FLAGS (LQUOTA_FLAGS_GRP | LQUOTA_FLAGS_BLK)
-
-#define QAQ_IS_GRP(qaq)    ((qaq)->qaq_flags & LQUOTA_FLAGS_GRP)
-#define QAQ_IS_ADJBLK(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJBLK)
-#define QAQ_IS_ADJINO(qaq) ((qaq)->qaq_flags & LQUOTA_FLAGS_ADJINO)
-#define QAQ_IS_CREATE_LQS(qaq)  ((qaq)->qaq_flags & LQUOTA_QAQ_CREATE_LQS)
-
-#define QAQ_SET_GRP(qaq)    ((qaq)->qaq_flags |= LQUOTA_FLAGS_GRP)
-#define QAQ_SET_ADJBLK(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJBLK)
-#define QAQ_SET_ADJINO(qaq) ((qaq)->qaq_flags |= LQUOTA_FLAGS_ADJINO)
-#define QAQ_SET_CREATE_LQS(qaq) ((qaq)->qaq_flags |= LQUOTA_QAQ_CREATE_LQS)
 
 /* permissions for md_perm.mp_perm */
 enum {
@@ -2477,36 +2491,6 @@ typedef union {
 } ldlm_wire_policy_data_t;
 
 extern void lustre_swab_ldlm_policy_data (ldlm_wire_policy_data_t *d);
-
-/* Data structures associated with the quota locks */
-
-/* Glimpse descriptor used for the index & per-ID quota locks */
-struct ldlm_gl_lquota_desc {
-	union lquota_id	gl_id;    /* quota ID subject to the glimpse */
-	__u64		gl_flags; /* see LQUOTA_FL* below */
-	__u64		gl_ver;   /* new index version */
-	__u64		gl_hardlimit; /* new hardlimit or qunit value */
-	__u64		gl_softlimit; /* new softlimit */
-	__u64		gl_pad1;
-	__u64		gl_pad2;
-};
-#define gl_qunit	gl_hardlimit /* current qunit value used when
-				      * glimpsing per-ID quota locks */
-
-/* quota glimpse flags */
-#define LQUOTA_FL_EDQUOT 0x1 /* user/group out of quota space on QMT */
-
-/* LVB used with quota (global and per-ID) locks */
-struct lquota_lvb {
-	__u64	lvb_flags;	/* see LQUOTA_FL* above */
-	__u64	lvb_id_may_rel; /* space that might be released later */
-	__u64	lvb_id_rel;     /* space released by the slave for this ID */
-	__u64	lvb_id_qunit;   /* current qunit value */
-	__u64	lvb_pad1;
-};
-
-/* LVB used with global quota lock */
-#define lvb_glb_ver  lvb_id_may_rel /* current version of the global index */
 
 /* Similarly to ldlm_wire_policy_data_t, there is one common swabber for all
  * LVB types. As a result, any new LVB structure must match the fields of the
@@ -3123,67 +3107,6 @@ union lu_page {
 	struct lu_idxpage	lp_idx; /* for OBD_IDX_READ */
 	char			lp_array[LU_PAGE_SIZE];
 };
-
-/* this will be used when OBD_CONNECT_CHANGE_QS is set */
-struct qunit_data {
-        /**
-         * ID appiles to (uid, gid)
-         */
-        __u32 qd_id;
-        /**
-         * LQUOTA_FLAGS_* affect the responding bits
-         */
-        __u32 qd_flags;
-        /**
-         * acquire/release count (bytes for block quota)
-         */
-        __u64 qd_count;
-        /**
-         * when a master returns the reply to a slave, it will
-         * contain the current corresponding qunit size
-         */
-        __u64 qd_qunit;
-        __u64 padding;
-};
-
-#define QDATA_IS_GRP(qdata)    ((qdata)->qd_flags & LQUOTA_FLAGS_GRP)
-#define QDATA_IS_BLK(qdata)    ((qdata)->qd_flags & LQUOTA_FLAGS_BLK)
-#define QDATA_IS_ADJBLK(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_ADJBLK)
-#define QDATA_IS_ADJINO(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_ADJINO)
-#define QDATA_IS_CHANGE_QS(qdata) ((qdata)->qd_flags & LQUOTA_FLAGS_CHG_QS)
-
-#define QDATA_SET_GRP(qdata)    ((qdata)->qd_flags |= LQUOTA_FLAGS_GRP)
-#define QDATA_SET_BLK(qdata)    ((qdata)->qd_flags |= LQUOTA_FLAGS_BLK)
-#define QDATA_SET_ADJBLK(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_ADJBLK)
-#define QDATA_SET_ADJINO(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_ADJINO)
-#define QDATA_SET_CHANGE_QS(qdata) ((qdata)->qd_flags |= LQUOTA_FLAGS_CHG_QS)
-
-#define QDATA_CLR_GRP(qdata)        ((qdata)->qd_flags &= ~LQUOTA_FLAGS_GRP)
-#define QDATA_CLR_CHANGE_QS(qdata)  ((qdata)->qd_flags &= ~LQUOTA_FLAGS_CHG_QS)
-
-extern void lustre_swab_qdata(struct qunit_data *d);
-extern struct qunit_data *quota_get_qdata(void *req, int is_req, int is_exp);
-extern int quota_copy_qdata(void *request, struct qunit_data *qdata,
-                            int is_req, int is_exp);
-
-typedef enum {
-        QUOTA_DQACQ     = 601,
-        QUOTA_DQREL     = 602,
-        QUOTA_LAST_OPC
-} quota_cmd_t;
-#define QUOTA_FIRST_OPC QUOTA_DQACQ
-
-#define QUOTA_REQUEST   1
-#define QUOTA_REPLY     0
-#define QUOTA_EXPORT    1
-#define QUOTA_IMPORT    0
-
-/* quota check function */
-#define QUOTA_RET_OK           0 /**< return successfully */
-#define QUOTA_RET_NOQUOTA      1 /**< not support quota */
-#define QUOTA_RET_NOLIMIT      2 /**< quota limit isn't set */
-#define QUOTA_RET_ACQUOTA      4 /**< need to acquire extra quota */
-
 
 /* security opcodes */
 typedef enum {
