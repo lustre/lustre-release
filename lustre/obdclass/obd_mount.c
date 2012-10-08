@@ -1286,6 +1286,9 @@ static int client_osp_config_process(const struct lu_env *env,
 	case LCFG_ADD_UUID: {
 		if (clli->cfg_flags == CFG_F_MARKER) {
 			rc = lustre_osp_setup(lcfg, lsi);
+			/* XXX: process only the first nid as
+			 * we don't need another instance of osp */
+			clli->cfg_flags |= CFG_F_SKIP;
 		} else if (clli->cfg_flags == (CFG_F_MARKER | CFG_F_SKIP)) {
 			rc = class_add_uuid(lustre_cfg_string(lcfg, 1),
 					lcfg->lcfg_nid);
