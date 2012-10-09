@@ -4,8 +4,8 @@
 
 set -e
 
-# bug number:  10124
-ALWAYS_EXCEPT="15c   $REPLAY_DUAL_EXCEPT"
+# bug number:  LU-2012 10124
+ALWAYS_EXCEPT="14b     15c   $REPLAY_DUAL_EXCEPT"
 
 SAVE_PWD=$PWD
 PTLDEBUG=${PTLDEBUG:--1}
@@ -312,34 +312,37 @@ run_test 13 "close resend timeout"
 test_14b() {
 	wait_mds_ost_sync
 	wait_delete_completed
-    BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
-    mkdir -p $MOUNT1/$tdir
-    $SETSTRIPE -i 0 $MOUNT1/$tdir
-    replay_barrier $SINGLEMDS
-    createmany -o $MOUNT1/$tdir/$tfile- 5
 
-    $SETSTRIPE -i 0 $MOUNT2/f14b-3
-    echo "data" > $MOUNT2/f14b-3
-    createmany -o $MOUNT1/$tdir/$tfile-3- 5
-    umount $MOUNT2
+	local BEFOREUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
 
-    fail $SINGLEMDS
-    wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
+	mkdir -p $MOUNT1/$tdir
+	$SETSTRIPE -i 0 $MOUNT1/$tdir
+	replay_barrier $SINGLEMDS
+	createmany -o $MOUNT1/$tdir/$tfile- 5
 
-    # first 25 files should have been replayed
-    unlinkmany $MOUNT1/$tdir/$tfile- 5 || return 2
-    unlinkmany $MOUNT1/$tdir/$tfile-3- 5 || return 3
+	$SETSTRIPE -i 0 $MOUNT2/$tfile-2
+	dd if=/dev/zero of=$MOUNT2/$tfile-2 bs=1M count=5
+	createmany -o $MOUNT1/$tdir/$tfile-3- 5
+	umount $MOUNT2
 
-    zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
+	fail $SINGLEMDS
+	wait_recovery_complete $SINGLEMDS || error "MDS recovery not done"
 
-	wait_mds_ost_sync || return 4
-	wait_delete_completed || return 5
+	# first set of files should have been replayed
+	unlinkmany $MOUNT1/$tdir/$tfile- 5 || error "first unlinks failed"
+	unlinkmany $MOUNT1/$tdir/$tfile-3- 5 || error "second unlinks failed"
 
-    AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
-    log "before $BEFOREUSED, after $AFTERUSED"
-    [ $AFTERUSED -ne $BEFOREUSED ] && \
-        error "after $AFTERUSED > before $BEFOREUSED" && return 4
-    return 0
+	zconf_mount $HOSTNAME $MOUNT2 || error "mount $MOUNT2 failed"
+	[ -f $MOUNT2/$tfile-2 ] && error "$MOUNT2/$tfile-2 exists!"
+
+	wait_mds_ost_sync || error "wait_mds_ost_sync failed"
+	wait_delete_completed || error "wait_delete_complete failed"
+
+	local AFTERUSED=$(df -P $DIR | tail -1 | awk '{ print $3 }')
+	log "before $BEFOREUSED, after $AFTERUSED"
+	# leave some margin for some files/dirs to be modified (OI, llog, etc)
+	[ $AFTERUSED -gt $((BEFOREUSED + 128)) ] &&
+		error "after $AFTERUSED > before $BEFOREUSED" || true
 }
 run_test 14b "delete ost orphans if gap occured in objids due to VBR"
 
