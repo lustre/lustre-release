@@ -1,9 +1,9 @@
 #!/bin/bash
 
-# FIXME - there is no reason to use all of these different
-#   return codes, espcially when most of them are mapped to something
-#   else anyway.  The combination of test number and return code
-#   figure out what failed.
+# FIXME - there is no reason to use all of these different return codes,
+#   espcially when most of them are mapped to something else anyway.
+#   The tests should use error() to describe the failure more clearly,
+#   and reduce the need to look into the tests to see what failed.
 
 set -e
 
@@ -2726,7 +2726,7 @@ test_48() { # bug 17636
 run_test 48 "too many acls on file"
 
 # check PARAM_SYS_LDLM_TIMEOUT option of MKFS.LUSTRE
-test_49() { # bug 17710
+test_49a() { # bug 17710
 	local timeout_orig=$TIMEOUT
 	local ldlm_timeout_orig=$LDLM_TIMEOUT
 	local LOCAL_TIMEOUT=20
@@ -2736,49 +2736,60 @@ test_49() { # bug 17710
 
 	reformat
 	setup_noconfig
-	check_mount || return 1
+	check_mount || error "client mount failed"
 
 	echo "check ldlm_timout..."
-	LDLM_MDS="`do_facet $SINGLEMDS lctl get_param -n ldlm_timeout`"
-	LDLM_OST1="`do_facet ost1 lctl get_param -n ldlm_timeout`"
-	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
+	local LDLM_MDS="$(do_facet $SINGLEMDS lctl get_param -n ldlm_timeout)"
+	local LDLM_OST1="$(do_facet ost1 lctl get_param -n ldlm_timeout)"
+	local LDLM_CLIENT="$(do_facet client lctl get_param -n ldlm_timeout)"
 
-	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
+	if [ $LDLM_MDS -ne $LDLM_OST1 -o $LDLM_MDS -ne $LDLM_CLIENT ]; then
 		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
 	fi
 
 	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT / 3)) ]; then
-		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
+		error "LDLM_TIMEOUT($LDLM_MDS) is not $((LOCAL_TIMEOUT / 3))"
 	fi
 
 	umount_client $MOUNT
-	stop_ost || return 2
-	stop_mds || return 3
-
-	LDLM_TIMEOUT=$((LOCAL_TIMEOUT - 1))
-
-	reformat
-	setup_noconfig
-	check_mount || return 7
-
-	LDLM_MDS="`do_facet $SINGLEMDS lctl get_param -n ldlm_timeout`"
-	LDLM_OST1="`do_facet ost1 lctl get_param -n ldlm_timeout`"
-	LDLM_CLIENT="`do_facet client lctl get_param -n ldlm_timeout`"
-
-	if [ $LDLM_MDS -ne $LDLM_OST1 ] || [ $LDLM_MDS -ne $LDLM_CLIENT ]; then
-		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
-	fi
-
-	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT - 1)) ]; then
-		error "LDLM_TIMEOUT($LDLM_MDS) is not correct"
-	fi
-
-	cleanup || return $?
+	stop_ost || error "problem stopping OSS"
+	stop_mds || error "problem stopping MDS"
 
 	LDLM_TIMEOUT=$ldlm_timeout_orig
 	TIMEOUT=$timeout_orig
 }
-run_test 49 "check PARAM_SYS_LDLM_TIMEOUT option of MKFS.LUSTRE"
+run_test 49a "check PARAM_SYS_LDLM_TIMEOUT option of mkfs.lustre"
+
+test_49b() { # bug 17710
+	local timeout_orig=$TIMEOUT
+	local ldlm_timeout_orig=$LDLM_TIMEOUT
+	local LOCAL_TIMEOUT=20
+
+	LDLM_TIMEOUT=$((LOCAL_TIMEOUT - 1))
+	TIMEOUT=$LOCAL_TIMEOUT
+
+	reformat
+	setup_noconfig
+	check_mount || error "client mount failed"
+
+	local LDLM_MDS="$(do_facet $SINGLEMDS lctl get_param -n ldlm_timeout)"
+	local LDLM_OST1="$(do_facet ost1 lctl get_param -n ldlm_timeout)"
+	local LDLM_CLIENT="$(do_facet client lctl get_param -n ldlm_timeout)"
+
+	if [ $LDLM_MDS -ne $LDLM_OST1 -o $LDLM_MDS -ne $LDLM_CLIENT ]; then
+		error "Different LDLM_TIMEOUT:$LDLM_MDS $LDLM_OST1 $LDLM_CLIENT"
+	fi
+
+	if [ $LDLM_MDS -ne $((LOCAL_TIMEOUT - 1)) ]; then
+		error "LDLM_TIMEOUT($LDLM_MDS) is not $((LOCAL_TIMEOUT - 1))"
+	fi
+
+	cleanup || error "cleanup failed"
+
+	LDLM_TIMEOUT=$ldlm_timeout_orig
+	TIMEOUT=$timeout_orig
+}
+run_test 49b "check PARAM_SYS_LDLM_TIMEOUT option of mkfs.lustre"
 
 lazystatfs() {
         # Test both statfs and lfs df and fail if either one fails
