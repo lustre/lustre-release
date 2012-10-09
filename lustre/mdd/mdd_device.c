@@ -364,7 +364,7 @@ static int mdd_changelog_llog_init(const struct lu_env *env,
 	if (rc)
 		GOTO(out_uclose, rc);
 
-	rc = llog_cat_reverse_process(env, ctxt->loc_handle,
+	rc = llog_cat_reverse_process(env, uctxt->loc_handle,
 				      changelog_user_init_cb, mdd);
 	if (rc < 0) {
 		CERROR("%s: changelog user init failed: rc = %d\n",
