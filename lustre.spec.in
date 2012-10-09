@@ -208,6 +208,11 @@ elif [ -e ${llog_base}.o ]; then
   cp ${llog_base}.o $RPM_BUILD_ROOT/lib/modules/%{kversion}/updates/kernel/fs/lustre
 fi
 
+# The .ha_v2 extension identifies the heartbeat resource agent as using
+# legacy syntax. Install a compatibility symlink to avoid conflicts when
+# newer-style agents are added.
+ln -s Lustre.ha_v2 $RPM_BUILD_ROOT/etc/ha.d/resource.d/Lustre
+
 # Create the pristine source directory.
 cd $RPM_BUILD_DIR/lustre-%{version}
 mkdir -p $RPM_BUILD_ROOT/usr/src
@@ -240,6 +245,7 @@ cat >lustre.files <<EOF
 %attr(-, root, root) %{_sysconfdir}/ldev.conf
 %attr(-, root, root) %{_sysconfdir}/sysconfig/lustre
 %attr(-, root, root) %{_libexecdir}/lustre/haconfig
+%attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2
 %attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre
 EOF
 
