@@ -4012,7 +4012,7 @@ run_test 56w "check lfs_migrate -c stripe_count works"
 
 test_57a() {
 	# note test will not do anything if MDS is not local
-	if [ "$(facet_type_fstype MDS)" != ldiskfs ]; then
+	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
 		skip "Only applicable to ldiskfs-based MDTs"
 		return
 	fi
@@ -4032,7 +4032,7 @@ test_57a() {
 run_test 57a "verify MDS filesystem created with large inodes =="
 
 test_57b() {
-	if [ "$(facet_type_fstype MDS)" != ldiskfs ]; then
+	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
 		skip "Only applicable to ldiskfs-based MDTs"
 		return
 	fi
@@ -7093,7 +7093,7 @@ set_dir_limits () {
 	done
 }
 test_129() {
-	if [ "$(facet_type_fstype MDS)" != ldiskfs ]; then
+	if [ "$(facet_fstype $SINGLEMDS)" != ldiskfs ]; then
 		skip "Only applicable to ldiskfs-based MDTs"
 		return
 	fi
