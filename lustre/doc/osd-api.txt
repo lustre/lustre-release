@@ -1,0 +1,1310 @@
+               ****************************************************
+               * Overview of the Lustre Object Storage Device API *
+               ****************************************************
+
+Original Authors:
+=================
+Alex    Zhuravlev <alexey.zhuravlev@intel.com>
+Andreas Dilger    <andreas.dilger@intel.com>
+Johann  Lombardi  <johann.lombardi@intel.com>
+Li      Wei       <wei.g.li@intel.com>
+Niu     Yawei     <yawei.niu@intel.com>
+
+Last Updated: October 9, 2012
+
+Copyright © 2012 Intel, Corp.
+
+This file is released under the GPLv2.
+
+Topics
+======
+
+I.   Introduction
+	1. What OSD API is
+	2. What OSD API is Not
+	3. Layering
+	4. Audience/Goal
+II.  Backend Storage Subsystem Requirements
+	1. Atomicity of Updates
+	2. Object Attributes
+		i.  Standard POSIX Attributes
+		ii. Extended Attributes
+	3. Efficient Index
+	4. Commit Callbacks
+	5. Space Accounting
+III. OSD & LU Infrastructure
+	1. Devices
+		i.   Device Overview
+		ii.  Device Type & Operations
+		iii. Device Operations
+		iv.  OBD Methods
+	2. Objects
+		i.   Object Overview
+		ii.  Object Lifecycle
+		iii. Special Objects
+		iv.  Object Operations
+	3. Lustre Environment
+IV.  Data (DT) API
+	1. Data Device
+	2. Data Objects
+		i.   Common Storage Operations
+		ii.  Data Object Operations
+		iii. Indice Operations
+	3. Transactions
+		i.   Description
+		ii.  Lifetime
+		iii. Methods
+	4. Locking
+		i.   Description
+		ii.  Methods
+V.   Quota Enforcement
+	1. Overview
+	2. QSD API
+Appendix 1. A brief note on Lustre configuration.
+Appendix 2. Sample Code
+
+===================
+= I. Introduction =
+===================
+
+1. What OSD API is
+==================
+
+OSD API is the interface to access and modify data that is supposed to be stored
+persistently. This API layer is the interface to code that bridges individual
+file systems such as ext4 or ZFS to Lustre.
+The API is a generic interface to transaction and journaling based file systems
+so many backend file systems can be supported in a Lustre implementation.
+Data can be cached within the OSD or backend target and could be destroyed
+before hitting storage, but in general the final target is a persistent storage.
+This API creates many possibilities, including using object-storage devices or
+other new persistent storage technologies.
+
+2. What OSD API is Not
+======================
+
+OSD API should not be used to control in-core-only state (like ldlm locking),
+configuration, etc. The upper layers of the IO/metadata stack should not be
+involved with the underlying layout or allocation in the OSD storage.
+
+3. Layering
+===========
+
+Lustre is composed of different kernel modules, each implementing different
+layers in the software stack in an object-oriented approach. Generally, each
+layer builds (or stacks) upon another, and each object is a child of the
+generic LU object class. Hence the term "LU stack" is often used to reference
+this hierarchy of lustre modules and objects.
+
+Each layer (i.e. mdt/mdd/lod/osp/ofd/osd) defines its own generic item
+(lu_object/lu_device) which are thus gathered in a compound item (lu_site/
+lu_object_layer) representing the multi-layered stacks. Different classes of
+operations can then be implemented by each layer, depending on its natures.
+
+As a result, each OSD is expected to implement:
+- the generic LU API used to manage the device stack and objects (see chapter
+  III)
+- the DT API (most commonly called OSD API) used to manipulate on-disk
+  structures (see chapter IV).
+
+4. Audience/Goal
+================
+
+The goal of this document is to provide the reader with the information
+necessary to accurately construct a new Object Storage Device (OSD) module
+interface layer for Lustre in order to use a new backend file system with
+Lustre 2.4 and greater.
+
+==============================================
+= II. Backend Storage Subsystem Requirements =
+==============================================
+
+The purpose of this section is to gather the requirements for the storage
+subsystems below the OSD API.
+
+1. Atomicity of Updates
+=======================
+
+The underlying OSD storage must be able to provide some form of atomic commit
+for multiple arbitrary updates to OSD storage within a single transaction.
+It will always know in advance of the transaction starting which objects will
+be modified, and how they will be modified.
+
+If any of the updates associated with a transaction are stored persistently
+(i.e. some state in the OSD is modified), then all of the updates in that
+transaction must also be stored persistently (Atomic). If the OSD should fail
+in some manner that prevents all the updates of a transaction from being
+completed, then none of the updates shall be completed (Consistent).
+Once the updates have been reported committed to the caller (i.e. commit
+callbacks have been run), they cannot be rolled back for any reason (Durable).
+
+2. Object Attributes
+====================
+
+i. Standard POSIX Attributes
+----------------------------
+The OSD object should be able to store normal POSIX attributes on each object
+as specified by Lustre:
+- user ID (32 bits)
+- group ID (32 bits)
+- object type (16 bits)
+- access mode (16 bits)
+- metadata change time (96 bits, 64-bit seconds, 32-bit nanoseconds)
+- data modification time (96 bits, 64-bit seconds, 32-bit nanoseconds)
+- data access time (96 bits, 64-bit seconds, 32-bit nanoseconds)
+- creation time (96 bits, 64-bit seconds, 32-bit nanoseconds, optional)
+- object size (64 bits)
+- link count (32 bits)
+- flags (32 bits)
+- object version (64 bits)
+
+The OSD object shall not modify these attributes itself.
+
+In addition, it is desirable track the object allocation size (“blocks”), which
+the OSD manages itself. Lustre will query the object allocation size, but will
+never modify it. If these attributes are not managed by the OSD natively as part
+of the object itself, they can be stored in an extended attribute associated
+with the object.
+
+ii. Extended Attributes
+------------------------
+The OSD should have an efficient mechanism for storing small extended attributes
+with each object. This implies that the extended attributes can be accessed at
+the same time as the object (without extra seek/read operations). There is also
+a requirement to store larger extended attributes in some cases (over 1kB in
+size), but the performance of such attributes can be slower proportional to the
+attribute size.
+
+3. Efficient Index
+==================
+
+The OSD must provide a mechanism for efficient key=value retrieval, for both
+fixed-length and variable length keys and values. It is expected that an index
+may hold tens of millions of keys, and must be able to do random key lookups
+in an efficient manner. It must also provide a mechanism for iterating over all
+of the keys in a particular index and returning these to the caller in a
+consistent order across multiple calls. It must be able to provide a cookie that
+defines the current index at which the iteration is positioned, and must be able
+to continue iteration at this index at a later time.
+
+4. Commit Callbacks
+===================
+
+The OSD must provide some mechanism to register multiple arbitrary callback
+functions for each transaction, and call these functions after the transaction
+with which they are associated has committed to persistent storage.
+It is not required that they be called immediately at transaction commit time,
+but they cannot be delayed an arbitrarily long time, or other parts of the
+system may suffer resource exhaustion. If this mechanism is not implemented by
+the underlying storage, then it needs to be provided in some manner by the OSD
+implementation itself.
+
+5. Space Accounting
+===================
+
+In order to provide quota functionality for the OSD, it must be able to track
+the object allocation size against at least two different keys (typically User
+ID and Group ID). The actual mechanism of tracking this allocation is internal
+to the OSD. Lustre will specify the owners of the object against which to track
+this space. Space accounting information will be accessed by Lustre via the
+index API on special objects dedicated to space allocation management.
+
+================================
+= III. OSD & LU Infrastructure =
+================================
+
+As a member of the LU stack, each OSD module is expected to implement the
+generic LU API used to manage devices and objects.
+
+1. Devices
+==========
+
+i. Device Overview
+------------------
+Each layer in the stack is represented by a lu_device structure which holds
+the very basic data like reference counter, a reference to the site (Lustre
+object collection in-core, very similar to inode cache), a reference to
+struct lu_type which in turn describe this specific type of devices
+(type name, operations etc).
+
+OSD device is created and initialized at mount time to let configuration
+component access data it needs before the whole Lustre stack is ready.
+OSD device is destroyed when all the devices using that are destroyed too.
+Usually this happen when the server stack shuts down at unmount time.
+
+There might be few OSD devices of the given type (say, few zfs-osd and
+ldiskfs-osd). The type stores method common for all OSD instances of given type
+(below they start with ldto_ prefix). Then every instance of OSD device can get
+few specific methods (below the start with ldo_ prefix).
+
+To connect devices into a stack, ->o_connect() method is used (see struct
+obd_ops). Currently OSD should implement this method to track all it’s users.
+Then to disconnect ->o_disconnect() method is used. OSD should implement this
+method, track remaining users and once no users left, call
+class_manual_cleanup() function which initiate removal of OSD.
+
+As the stack involves many devices and there may be cross-references between
+them, it’s easier to break the whole shutdown procedure into the two steps and
+do not set a specific order in which different devices shutdown: at the first
+step the devices should release all the resources they use internally
+(so-called pre-cleanup procedure), at the second step they are actually
+destroyed.
+
+ii. Device Type & Operations
+----------------------------
+The first thing to do when developing a new OSD is to define a lu_device_type
+structure to define and register the new OSD type. The following fields of the
+lu_device_type needs to be filled appropriately:
+ldt_tags
+	is the type of device, typically data, metadata or client (see
+	lu_device_tag). An OSD device is of data type and should always
+	registers as such by setting this field to LU_DEVICE_DT.
+ldt_name
+	is the name associated with the new OSD type.
+	See LUSTRE_OSD_{LDISKFS,ZFS}_NAME for reference.
+ldt_ops
+	is the vector of lu_device_type operations, please see below for
+	further details
+ldt_ctxt_type
+	is the lu_context_tag to be used for operations.
+	This should be set to LCT_LOCAL for OSDs.
+
+In the original 2.0 MDS stack the devices were built from the top down and OSD
+was the final device to setup. This schema does not work very well when you have
+to access on-disk data early and when you have OSD shared among few services
+(e.g. MDS + MGS on a same storage). So the schema has changed to a reverse one:
+mount procedure sets up correct OSD, then the stack is built from the bottom up.
+And instead of introducing another set of methods we decided to use existing
+obd_connect() and obd_disconnect() given that many existing devices have been
+already configured this way by the configuration component. Notice also that
+configuration profiles are organized in this order (LOV/LOD go first, then MDT).
+Given that device “below” is ready at every step, there is no point in calling
+separate init method.
+
+Due to complexity in other modules, when the device itself can be referenced by
+number of entities like exports, RPCs, transactions, callbacks, access via
+procfs, the notion of precleanup was introduced to be able all the activity
+safely before the actual cleanup takes place. Similarly ->ldto_device_fini()
+and ->ldto_device_free() were introduced. So, the former should be used to break
+any interaction with the outside, the latter - to actually free the device.
+
+So, the configuration component meets SETUP command in the configuration profile
+(see Appendix 1), finds appropriate device and calls ->ldto_device_alloc() to
+set up it as an LU device.
+
+The prototypes of device type operations are the following:
+
+struct lu_device *(*ldto_device_alloc)(const struct lu_env *,
+                                       struct lu_device_type *,
+                                       struct lustre_cfg *);
+struct lu_device *(*ldto_device_free)(const struct lu_env *,
+                                      struct lu_device *);
+int  (*ldto_device_init)(const struct lu_env *, struct lu_device *,
+                         const char *, struct lu_device *);
+struct lu_device *(*ldto_device_fini)(const struct lu_env *env, struct lu_device *);
+int  (*ldto_init)(struct lu_device_type *t);
+void (*ldto_fini)(struct lu_device_type *t);
+void (*ldto_start)(struct lu_device_type *t);
+void (*ldto_stop)(struct lu_device_type *t);
+
+ldto_device_alloc
+	The method is called by configuration component (in case of disk file
+	system OSD, this is lustre/obdclass/obd_mount.c) to allocate device.
+	Notice generic struct lu_device does not hold a pointer to private data.
+	Instead OSD should embed struct lu_device into own structure (like
+	struct osd_device) and return address of lu_device in that structure.
+ldto_device_fini
+	The method is called when OSD is about to release. OSD should detach
+	from resources like disk file system, procfs, release objects it holds
+	internally, etc. This is so-called precleanup procedure.
+ldto_device_free
+	The method is called to actually release memory allocated in
+	->ldto_device_alloc().
+ldto_device_ini
+	The method is not used by OSD currently.
+ldto_init
+	The method is called when specific type of OSD is registered in the
+	system. Currently the method is used to register OSD-specific data for
+	environments (see Lustre environment in section 3).
+	See LU_TYPE_INIT_FINI() macro as an example.
+ldto_fini
+	The method is called when specific type of OSD unregisters.
+	Currently used to unregister OSD-specific data from environment.
+ldto_start
+	The method is called when the first device of this type is being
+	instantiated. Currently used to fill existing environments with
+	OSD-specific data.
+ldto_stop
+	This method is called when the last instance of specific OSD has gone.
+	Currently used to release OSD-specific data from environments.
+
+iii. Device Operations
+----------------------
+Now that the osd device can be set up, we need to export methods to handle
+device-level operation. All those methods are listed in the lu_device_operations
+structure, this includes:
+
+struct lu_object *(*ldo_object_alloc)(const struct lu_env *,
+		                      const struct lu_object_header *,
+				      struct lu_device *);
+int (*ldo_process_config)(const struct lu_env *, struct lu_device *,
+			  struct lustre_cfg *);
+int (*ldo_recovery_complete)(const struct lu_env *, struct lu_device *);
+int (*ldo_prepare)(const struct lu_env *, struct lu_device *,
+		   struct lu_device *);
+
+ldo_object_alloc
+	The method is called when a high-level service wants to access an
+	object not found in local lustre cache (see struct lu_site).
+	OSD should allocate a structure, initialize object’s methods and return
+	a pointer to struct lu_device which is embedded into OSD object
+	structure.
+ldo_process_config
+	The method is called in case of configuration changes. Mostly used by
+	high-level services to update local tunables. It’s also possible to let
+	MGS store OSD tunables and set them properly on every server mount or
+	when tunables change run-time.
+ldto_recovery_complete
+	The method is called when recovery procedure between a server and
+	clients is completed. This method is used by high-level devices mostly
+	(like OSP to cleanup OST orphans, MDD to cleanup open unlinked files
+	left by missing client, etc).
+ldo_prepare
+	The method is called when all the devices belonging to the stack are
+	configured and setup properly. At this point the server becomes ready
+	to handle RPCs and start recovery procedure.
+	In current implementation OSD uses this method to initialize local quota
+	management.
+
+iv.  OBD Methods
+----------------
+Although the LU infrastructure aims at replacing the storage operations of the
+legacy OBD API (see struct obd_ops in lustre/include/obd.h). The OBD API is
+still used in several places for device configuration and on the Lustre client
+(e.g. it’s still used on the client for LDLM locking). The OBD API storage
+operations are not needed for server components, and should be ignored.
+
+As far as the OSD layer is concerned, upper layers still connect/disconnect
+to/from the OSD instance via obd_ops::o_connect/disconnect. As a result, each
+OSD should implement those two operations:
+
+int (*o_connect)(const struct lu_env *, struct obd_export **,
+		 struct obd_device *, struct obd_uuid *,
+		 struct obd_connect_data *, void *);
+int (*o_disconnect)(struct obd_export *);
+
+o_connect
+	The method should track number of connections made (i.e. number of
+	active users of this OSD) and call class_connect() and return a struct
+	obd_export via class_conn2export(), see osd_obd_connect(). The structure
+	holds a reference on the device, preventing it from early release.
+o_disconnect
+	The method is called then some one using this OSD does not need its
+	service any more (i.e. at unmount). For every passed struct export the
+	method should call class_disconnect(export). Once the last user has
+	gone, OSD should call class_manual_cleanup() to schedule the device
+	removal.
+
+2. Objects
+==========
+
+i. Object Overview
+------------------
+Lustre identifies objects in the underlying OSD storage by a unique 128-bit
+File IDentifier (FID) that is specified by Lustre and is the only identifier
+that Lustre is aware of for this object. The FID is known to Lustre before any
+access to the object is done (even before it is created), using
+lu_object_find(). Since Lustre only uses the FID to identify an object, if the
+underlying OSD storage cannot directly use the Lustre-specified FID to retrieve
+the object at a later time, it must create a table or index object (normally
+called the Object Index (OI)) to map Lustre FIDs to an internal object
+identifier. Lustre does not need to understand the format or value of the
+internal object identifier at any time outside of the OSD.
+
+The FID itself is composed of 3 members:
+struct lu_fid {
+	__u64	f_seq;
+	__u32	f_oid;
+	__u32	f_ver;
+};
+
+While the OSD itself should typically not interpret the FID, it may be possible
+to optimize the OSD performance by understanding the properties of a FID.
+
+The f_seq (sequence) component is allocated in piecewise (though not contiguous)
+manner to different nodes, and each sequence forms a “group” of related objects.
+The sequence number may be any value in the range [1, 263], but there are
+typically not a huge number of sequences in use at one time (typically less than
+one million at the maximum). Within a single sequence, it is likely that tens to
+thousands (and less commonly millions) of mostly-sequential f_oid values will be
+allocated. In order to efficiently map FIDs into objects, it is desirable to
+also be able to associate the OSD-internal index with key-value pairs.
+
+Every object is represented with a header (struct lu_header) and so-called slice
+on every layer of the stack. Core Lustre code maintains a cache of objects
+(so-called lu-site, see struct lu_site). which is very similar to Linux inode
+cache.
+
+ii. Object Lifecycle
+--------------------
+In-core object is created when high-level service needs it to process RPC or
+perform some background job like LFSCK. FID of the object is supposed to be
+known before the object is created. FID can come from RPC or from a disk.
+Having the FID lu_object_find() function is called, it search for the object in
+the cache (see struct lu_site) and if the object is not found, creates it
+using ->ldo_device_alloc(), ->loo_object_init() and ->loo_object_start()
+methods.
+
+Objects are referenced and tracked by Lustre core. If object is not in use,
+it’s put on LRU list and at some point (subject to internal caching policy or
+memory pressure callbacks from the kernel) Lustre schedules such an object for
+removal from the cache. To do so Lustre core marks the object is going out and
+calls ->loo_object_release() and ->loo_object_free() iterating over all the
+layers involved.
+
+iii. Special Objects
+--------------------
+Lustre uses a set of special objects using the FID_SEQ_LOCAL_FILE sequence.
+All the objects are listed in the local_oid enum, which includes:
+- OTABLE_OT_OID which is an index object providing list of all existing
+  objects on this storage. The key is an opaque string and the record is FID.
+  This object is used by high-level components like LFSCK to iterate over
+  objects.
+- ACCT_USER_OID/ACCT_GROUP_OID are used for accessing space accounting
+  information for respectively users and groups.
+- MDT_LAST_RECV_OID/OFD_LAST_RECV_OID is the last_rcvd file for respectively
+  the MDT and OST.
+
+iv. Object Operations
+---------------------
+Object management methods are called by Lustre to manipulate OSD-specific
+(private) data associated with a specific object during the lifetime of an
+object. All the object operations are described in struct lu_object_operations:
+
+int (*loo_object_init)(const struct lu_env *, struct lu_object *,
+		       const struct lu_object_conf *);
+int (*loo_object_start)(const struct lu_env *, struct lu_object *);
+void (*loo_object_delete)(const struct lu_env *, struct lu_object *);
+void (*loo_object_free)(const struct lu_env *, struct lu_object *);
+void (*loo_object_release)(const struct lu_env *, struct lu_object *);
+int (*loo_object_print)(const struct lu_env *, void *, lu_printer_t,
+			const struct lu_object *);
+int (*loo_object_invariant)(const struct lu_object *);
+
+loo_object_init
+	This method is called when a new object is being created (see
+	lu_object_alloc(), it’s purpose is to initialize object’s internals,
+	usually file system lookups object on a disk (notice a header storing
+	FID is already created by a top device) using Object Index mapping FID
+	to local object id like dnode. LOC_F_NEW can be passed to the method
+	when the caller knows the object is new and OSD can skip OI lookup to
+	improve performance. If the object exists, then the LOHA_FLAG flag in
+	loh_flags (struct lu_object_header) is set.
+loo_object_start
+	The method is called when all the structures and the header are
+	initialized. Currently user by high-level service to as a post-init
+	procedure (i.e. to setup own methods depending on object type which is
+	brought into the header by OSD’s ->loo_object_init())
+loo_object_delete
+	is called to let OSD release resources behind an object (except memory
+	allocated for an object), like release file system’s inode.
+	It’s separated from ->loo_object_free() to be able to iterate over
+	still-existing objects. the main purpose to separate
+	->loo_object_delete() and ->loo_object_free() is to avoid recursion
+	during potentially stack consuming resource release.
+loo_object_free
+	is called to actually release memory allocated by ->ldo->object_alloc()
+loo_object_release
+	is called when object last it’s last user and moves onto LRU list of
+	unused objects. implementation of this method is optional to OSD.
+loo_object_print
+	is used for debugging purpose, it should output details of an object in
+	human-readable format. Details usually include information like address
+	of an object, local object number (dnode/inode), type of an object, etc.
+loo_object_invariant
+	another optional method for debugging purposes which is called to verify
+	internal consistency of object.
+
+3. Lustre Environment
+=====================
+
+There is a notion of an environment represented by struct lu_env in many
+functions and methods. Literally this is a Thread Local Storage (TLS), which is
+bound to every service thread and used by that thread exclusively, there is no
+need to serialize access to the data stored here.
+The original purpose of the environment was to workaround small Linux stack
+(4-8K). A component (like device or library) can register its own descriptor
+(see LU_KEY_INIT macro) and then every new thread will be populating the
+environment with buffers described.
+
+=====================
+= IV. Data (DT) API =
+=====================
+
+The previous section listed all the methods that have to be provided by an OSD
+module in order to fit in the LU stack. In addition to those generic functions,
+each layer should implement a different class of operations depending on its
+natures. There are currently 3 classes of devices:
+- LU_DEVICE_DT: DaTa device (e.g. lod, osp, osd, ofd),
+- LU_DEVICE_MD: MetaData device (e.g. mdt, mdd),
+- LU_DEVICE_CL: CLient I/O device (e.g. vvp, lov, lovsub, osc).
+
+The purpose of this section is to document the DT API (used for devices and
+objects) which has to be implemented by each OSD module. The DT API is most
+commonly called the OSD API.
+
+1. Data Device
+==============
+
+To access disk file system, Lustre defines a new device type called dt_device
+which is a sub-class of generic lu_device. It includes a new operation vector
+(namely dt_device_operations structure) defining all the actions that can be
+performed against a dt_device. Here are the operation prototypes:
+
+int   (*dt_statfs)(const struct lu_env *, struct dt_device *,
+		   struct obd_statfs *);
+struct thandle *(*dt_trans_create)(const struct lu_env *, struct dt_device *);
+int   (*dt_trans_start)(const struct lu_env *, struct dt_device *,
+			struct thandle *th);
+int   (*dt_trans_stop)(const struct lu_env *, struct thandle *);
+int   (*dt_trans_cb_add)(struct thandle *, struct dt_txn_commit_cb *);
+int   (*dt_root_get)(const struct lu_env *, struct dt_device *,
+		     struct lu_fid *);
+void  (*dt_conf_get)(const struct lu_env *, const struct dt_device *,
+                     struct dt_device_param *);
+int   (*dt_sync)(const struct lu_env *, struct dt_device *);
+int   (*dt_ro)(const struct lu_env *, struct dt_device *);
+int   (*dt_commit_async)(const struct lu_env *, struct dt_device *);
+int   (*dt_init_capa_ctxt)(const struct lu_env *, struct dt_device *, int,
+			   unsigned long, __u32, struct lustre_capa_key *);
+
+dt_trans_create
+dt_trans_start
+dt_trans_stop
+dt_trans_cb_add
+	please refer to IV.3
+dt_statfs
+	called to report current file system usage information: all, free and
+	available blocks/objects.
+dt_root_get
+	called to get FID of the root object. Used to follow backend filesystem
+	rules and support backend file system in a state where users can mount
+	it directly (with ldiskfs/zfs/etc).
+dt_sync
+	called to flush all complete but not written transactions. Should block
+	until the flush is completed.
+dt_ro
+	called to turn backend into read-only mode.
+	Used by testing infrastructure to simulate recovery cases.
+dt_commit_async
+	called to notify OSD/backend that higher level need transaction to be
+	flushed as soon as possible. Used by Commit-on-Share feature.
+	Should return immediately and not block for long.
+dt_init_capa_ctxt
+	called to initialize context for capabilities. not in use currently.
+
+2. Data Objects
+===============
+
+There are two types of DT objects:
+1) regular objects, storing unstructured data (e.g. flat files, OST objects,
+   llog objects)
+2) index objects, storing key=value pairs (e.g. directories, quota indexes,
+   FLDB)
+
+As a result, there are 3 sets of methods that should be implemented by the OSD
+layer:
+- core methods used to create/destroy/manipulate attributes of objects
+- data methods used to access the object body as a flat address space
+  (read/write/truncate/punch) for regular objects
+- index operations to access index objects as a key-value association
+
+A data object is represented by the dt_object structure which is defined as
+a sub-class of lu_object, plus operation vectors for the core, data and index
+methods as listed above.
+
+i. Common Storage Operations
+----------------------------
+The core methods are defined in dt_object_operations as follows:
+
+void (*do_read_lock)(const struct lu_env *, struct dt_object *, unsigned);
+void (*do_write_lock)(const struct lu_env *, struct dt_object *, unsigned);
+void (*do_read_unlock)(const struct lu_env *, struct dt_object *);
+void (*do_write_unlock)(const struct lu_env *, struct dt_object *);
+int  (*do_write_locked)(const struct lu_env *, struct dt_object *);
+int  (*do_attr_get)(const struct lu_env *, struct dt_object *,
+		     struct lu_attr *, struct lustre_capa *);
+int  (*do_declare_attr_set)(const struct lu_env *, struct dt_object *,
+                            const struct lu_attr *, struct thandle *);
+int  (*do_attr_set)(const struct lu_env *, struct dt_object *,
+		    const struct lu_attr *, struct thandle *,
+		    struct lustre_capa *);
+int  (*do_xattr_get)(const struct lu_env *, struct dt_object *,
+		      struct lu_buf *, const char *, struct lustre_capa *);
+int  (*do_declare_xattr_set)(const struct lu_env *, struct dt_object *,
+                             const struct lu_buf *, const char *, int,
+			     struct thandle *);
+int  (*do_xattr_set)(const struct lu_env *, struct dt_object *,
+		      const struct lu_buf *, const char *, int,
+		      struct thandle *, struct lustre_capa *);
+int  (*do_declare_xattr_del)(const struct lu_env *, struct dt_object *,
+			      const char *, struct thandle *);
+int  (*do_xattr_del)(const struct lu_env *, struct dt_object *, const char *,
+		      struct thandle *, struct lustre_capa *);
+int  (*do_xattr_list)(const struct lu_env *, struct dt_object *,
+                       struct lu_buf *, struct lustre_capa *);
+void (*do_ah_init)(const struct lu_env *, struct dt_allocation_hint *,
+                    struct dt_object *, struct dt_object *, cfs_umode_t);
+int  (*do_declare_create)(const struct lu_env *, struct dt_object *,
+			   struct lu_attr *, struct dt_allocation_hint *,
+			   struct dt_object_format *, struct thandle *);
+int  (*do_create)(const struct lu_env *, struct dt_object *, struct lu_attr *,
+		   struct dt_allocation_hint *, struct dt_object_format *,
+		   struct thandle *);
+int  (*do_declare_destroy)(const struct lu_env *, struct dt_object *,
+			   struct thandle *);
+int  (*do_destroy)(const struct lu_env *, struct dt_object *, struct thandle *);
+int  (*do_index_try)(const struct lu_env *, struct dt_object *, 
+		     const struct dt_index_features *);
+int  (*do_declare_ref_add)(const struct lu_env *, struct dt_object *,
+			   struct thandle *);
+int  (*do_ref_add)(const struct lu_env *, struct dt_object *, struct thandle *);
+int  (*do_declare_ref_del)(const struct lu_env *, struct dt_object *,
+			   struct thandle *);
+int  (*do_ref_del)(const struct lu_env *, struct dt_object *, struct thandle *);
+struct obd_capa *(*do_capa_get)(const struct lu_env *, struct dt_object *,
+                                struct lustre_capa *, __u64);
+int  (*do_object_sync)(const struct lu_env *, struct dt_object *);
+
+do_read_lock
+do_write_lock
+do_read_unlock
+do_write_unlock
+do_write_locked
+	please refer to IV.4
+do_attr_get
+	The method is called to get regular attributes an object stores.
+	The lu_attr fields maps the usual unix file attributes, like ownership
+	or size. The object must exist.
+do_declare_attr_set
+	the method is called to notify OSD the caller is going to modify regular
+	attributes of an object in specified transaction. OSD should use this
+	method to reserve resources needed to change attributes. Can be called
+	on an non-existing object.
+do_attr_set
+	the method is called to change attributes of an object. The object
+	must exist. If the fl argument has LU_XATTR_CREATE, the extended
+	argument must not exist, otherwise -EEXIST should be returned.
+	If the fl argument has LU_XATTR_REPLACE, the extended argument must
+	exist, otherwise -ENODATA should be returned. The object must exist.
+	The maximum size of extended attribute supported by OSD should be
+	present in struct dt_device_param the caller can get with
+	->dt_conf_get() method.
+do_xattr_get
+	called when the caller needs to get an extended attribute with a
+	specified name. If the struct lu_buf argument has a null lb_buf, the
+	size of the extended attribute should be returned. If the requested
+	extended attribute does not exist, -ENODATA should be returned.
+	The object must exist. If buffer space (specified in lu_buf.lb_len) is
+	not enough to fit the value, then return -ERANGE.
+do_declare_xattr_set
+	called to notify OSD the caller is going to set/change an extended
+	attribute on an object. OSD should use this method to reserve resources
+	needed to change an attribute.
+do_xattr_set
+	called when the caller needs to change an extended attribute with
+	specified name.
+do_declare_xattr_del
+	called to notify OSD the caller is going to remove an extended attribute
+	with a specified name
+do_xattr_del
+	called when the caller needs to remove an extended attribute with a
+	specified name. Deleting an nonexistent extended attribute is allowed.
+	The object must exist. The method called on a non-existing attribute
+	returns 0.
+do_xattr_list
+	called when the caller needs to get a list of existing extended
+	attributes (only names of attributes are returned). The size of the list
+	is returned, including the string terminator. If the lu_buf argument has
+	a null lb_buf, how many bytes the list would require is returned to help
+	the caller to allocate a buffer of an appropriate size.
+	The object must exist.
+do_ah_init
+	called to let OSD to prepare allocation hint which stores information
+	about object locality, type. later this allocation hint is passed to
+	->do_create() method and use OSD can use this information to optimize
+	on-disk object location. allocation hint is opaque for the caller and
+	can contain OSD-specific information.
+do_declare_create
+	called to notify OSD the caller is going to create a new object in a
+	specified transaction.
+do_create
+	called to create an object on the OSD in a specified transaction.
+	For index objects the caller can request a set of index properties (like
+	key/value size). If OSD can not support requested properties, it should
+	return an error. The object shouldn't exist already (i.e.
+	dt_object_exist() should return false).
+do_declare_destroy
+	called to notify OSD the caller is going to destroy an object in a
+	specified transaction.
+do_destroy
+	called to destroy an object in a specified transaction. Semantically,
+	it’s dual to object creation and does not care about on-disk reference
+	to the object (in contrast with POSIX unlink operation).
+	The object must exist (i.e. dt_object_exist() must return true).
+do_index_try
+	called when the caller needs to use an object as an index (the object
+	should be created as an index before). Also the caller specify a set of
+	properties she expect the index should support.
+do_declare_ref_add
+	called to notify OSD the caller is going to increment nlink attribute
+	in a specified transaction.
+do_ref_add
+	called to increment nlink attribute in a specified transaction.
+	The object must exist.
+do_declare_ref_del
+	called to notify OSD the caller is going to decrement nlink attribute
+	in a specified transaction.
+do_ref_del
+	called to decrement nlink attribute in a specified transaction.
+	This is typically done on an object when a record referring to it is
+	deleted from an index object. The object must exist.
+do_capa_get
+	called to get a capability for a specified object. not used currently.
+do_object_sync
+	called to flush a given object on-disk. It’s a fine grained version of
+	->do_sync() method which should make sure an object is stored on-disk.
+	OSD (or backend file system) can track a status of every object and if
+	an object is already flushed, then just the method can return
+	immediately. The method is used on OSS now, but can also be used on MDS
+	at some point to improve performance of COS.
+do_data_get
+	the method is not used any more and planned for removal.
+
+ii. Data Object Operations
+--------------------------
+Set of methods described in struct dt_body_operations which should be used with
+regular objects storing unstructured data:
+
+ssize_t (*dbo_read)(const struct lu_env *, struct dt_object *, struct lu_buf *,
+	            loff_t *pos, struct lustre_capa *);
+ssize_t (*dbo_declare_write)(const struct lu_env *, struct dt_object *,
+			     const loff_t, loff_t, struct thandle *);
+ssize_t (*dbo_write)(const struct lu_env , struct dt_object *,
+		     const struct lu_buf *, loff_t *, struct thandle *,
+		     struct lustre_capa *, int);
+int (*dbo_bufs_get)(const struct lu_env *, struct dt_object *, loff_t,
+		    ssize_t, struct niobuf_local *, int, struct lustre_capa *);
+int (*dbo_bufs_put)(const struct lu_env *, struct dt_object *,
+		    struct niobuf_local *, int);
+int (*dbo_write_prep)(const struct lu_env *, struct dt_object *,
+		      struct niobuf_local *, int);
+int (*dbo_declare_write_commit)(const struct lu_env *, struct dt_object *,
+                                struct niobuf_local *,int, struct thandle *);
+int (*dbo_write_commit)(const struct lu_env *, struct dt_object *,
+			struct niobuf_local *, int, struct thandle *);
+int (*dbo_read_prep)(const struct lu_env *, struct dt_object *,
+		     struct niobuf_local *, int);
+int (*dbo_fiemap_get)(const struct lu_env *, struct dt_object *,
+		      struct ll_user_fiemap *);
+int (*do_declare_punch)(const struct lu_env*, struct dt_object *, __u64,
+			  __u64,struct thandle *);
+int (*do_punch)(const struct lu_env *, struct dt_object *, __u64, __u64,
+		struct thandle *, struct lustre_capa *);
+
+dbo_read
+	is called to read raw unstructured data from a specified range of an
+	object. It returns number of bytes read or an error. Usually OSD
+	implements this method using internal buffering (to be able to put data
+	at non-aligned address). So this method should not be used to move a
+	lot of data. Lustre services use it to read to read small internal data
+	like last_rcvd file, llog files. It's also used to fetch body symlinks.
+dbo_declare_write
+	is called to notify OSD the caller will be writing data to a specific
+	range of an object in a specified transaction.
+dbo_write
+	is called to write raw unstructured data to a specified range of an
+	object in a specified transaction. data should be written atomically
+	with another change in the transaction. The method is used by Lustre
+	services to update small portions on a disk. OSD should maintain size
+	attribute consistent with data written.
+dbo_bufs_get
+	is called to fill memory with buffer descriptors (see struct
+	niobuf_local) for a specified range of an object. memory for the set is
+	provided by the caller, no concurrent access to this memory is allowed.
+	OSD can fill all fields of the descriptor except lnb_grant_used.
+	The caller specify whether buffers will be user to read or write data.
+	This method is used to access file system's internal buffers for
+	zero-copy IO. Internal buffers referenced by descriptors are supposed to
+	be pinned in memory
+dbo_bufs_put
+	is called to unpin/release internal buffers referenced by the
+	descriptors dbo_bufs_get returns. After this point pointers in the
+	descriptors are not valid.
+dbo_write_prep
+	is called to fill internal buffers with actual data. this is required
+	for buffers which do not match filesystem blocksize, as later the buffer
+	is supposed to be written as a whole. for example, ldiskfs uses 4k
+	blocks, but the caller wants to update just a half of that. to prevent
+	data corruption, this method is called OSD compares range to be written
+	with 4k, if they do not match, then OSD fetches data from a disk.
+	If they do match, then all the data will be overwritten and there is no
+	need to fetch data from a disk.
+dbo_declare_write_commit
+	is called to notify OSD the caller is going to write internal buffers
+	and OSD needs to reserve enough resource in a transaction.
+dbo_write_commit
+	is called to actually make data in internal buffers part of a specified
+	transaction. Data is supposed to be written by the moment the
+	transaction is considered committed. This is slightly different from
+	generic transaction model because in this case it's allowed to have
+	data written, but not have transaction committed.
+	If no dbo_write_commit is called, then dbo_bufs_put should discard
+	internal buffers and possible changes made to internal buffers should
+	not be visible.
+dbo_read_prep
+	is called to fill all internal buffers referenced by descriptors with
+	actual data. buffers may already contain valid data (be cached), so OSD
+	can just verify the data is valid and return immediately.
+dbo_fiemap_get
+	is called to map logical range of an object to physical blocks where
+	corresponded range of data is actually stored.
+dbo_declare_punch
+	is called to notify OSD the caller is going to punch (deallocate)
+	specified range in a transaction.
+dbo_punch
+	is called to punch (deallocate) specified range of data in a
+	transaction. this method is allowed to use few disk file system
+	transactions (within the same lustre transaction handle).
+	Currently Lustre calls the method in form of truncate only where the end
+	offset is EOF always.
+
+iii. Indice Operations
+----------------------
+In contrast with raw unstructured data they are collection of key=value pairs.
+OSD should provide with few methods to lookup, insert, delete and scan pairs.
+Indices may have different properties like key/value size, string/binary keys,
+etc. When user need to use an index, it needs to check whether the index has
+required properties with a special method. indices are used by Lustre services
+to maintain user-visible namespace, FLD, index of unlinked files, etc.
+
+The method prototypes are defined in dt_index_operations as follows:
+
+int (*dio_lookup)(const struct lu_env *, struct dt_object *, struct dt_rec *,
+		  const struct dt_key *, struct lustre_capa *);
+int (*dio_declare_insert)(const struct lu_env *, struct dt_object *,
+			  const struct dt_rec *, const struct dt_key *,
+			  struct thandle *);
+int (*dio_insert)(const struct lu_env *, struct dt_object *,
+		  const struct dt_rec *, const struct dt_key *,
+		  struct thandle *, struct lustre_capa *, int);
+int (*dio_declare_delete)(const struct lu_env *, struct dt_object *,
+                          const struct dt_key *, struct thandle *);
+int (*dio_delete)(const struct lu_env *, struct dt_object *,
+		  const struct dt_key *, struct thandle *,
+		  struct lustre_capa *);
+
+dio_lookup
+	is called to lookup exact key=value pair. A value is copied into a
+	buffer provided by the caller. so the caller should make sure the
+	buffer's size is big enough. this should be done with ->do_index_try()
+	method.
+dio_declare_insert
+	is called to notify OSD the caller is going to insert key=value pair in
+	a transaction. exact key is specified by a caller so OSD can use this to
+	make reservation better (i.e. smaller).
+dio_insert
+	is called to insert key/value pair into an index object. it's up to OSD
+	whether to allow concurrent inserts or not. the caller is not required
+	to serialize access to an index
+dio_declare_delete
+	is called to notify OSD the caller is going to remove a specified key
+	in a transaction. exact key is specified by a caller so OSD can use this
+	to make reservation better.
+dio_delete
+	is called to remove a key/value pair specified by a caller.
+
+To iterate over all key=value pair stored in an index, OSD should provide the
+following set of methods:
+
+struct dt_it *(*init)(const struct lu_env *, struct dt_object *, __u32,
+                      struct lustre_capa *);
+void  (*fini)(const struct lu_env *, struct dt_it *);
+int   (*get)(const struct lu_env *, struct dt_it *, const struct dt_key *);
+void  (*put)(const struct lu_env *, struct dt_it *);
+int   (*next)(const struct lu_env *, struct dt_it *);
+struct dt_key *(*key)(const struct lu_env *, const struct dt_it *);
+int   (*key_size)(const struct lu_env *, const struct dt_it *);
+int   (*rec)(const struct lu_env *, const struct dt_it *, struct dt_rec *,
+	     __u32);
+__u64 (*store)(const struct lu_env *, const struct dt_it *);
+int   (*load)(const struct lu_env *, const struct dt_it *, __u64);
+int   (*key_rec)(const struct lu_env *, const struct dt_it *, void *);
+
+init
+	is called to allocate and initialize an instance of "iterator" which
+	subsequent methods will be passed in. the structure is not accessed by
+	Lustre and its content is totally internal to OSD. Usually it contains a
+	reference to index, current position in an index.
+	It may contain prefetched key/value pairs. It's not required to maintain
+	this cache up-to-date, if index changes this is not required to be
+	reflected by an already initialized iterator. In the extreme case
+	->init() can prefetch all existing pairs to be returned by subsequent
+	calls to an iterator.
+fini
+	is called to release an iterator and all its resources.
+	For example, iterator can unpin an index, free prefetched pairs, etc.
+get
+	is called to move an iterator to a specified key. if key does not exist
+	then it should be the closest position from the beginning of iteration.
+put
+	is called to release an iterator.
+next
+	is called to move an iterator to a next item
+key
+	is called to fill specified buffer with a key at a current position of
+	an iterator. it’s the caller responsibility to pass big enough buffer.
+	In turn OSD should not exceed sizes negotiated with ->do_index_try()
+	method
+key_size
+	is called to learn size of a key at current position of an iterator
+rec
+	is called to fill specified buffer with a value at a current position of
+	an iterator. it’s the caller responsibility to pass big enough buffer.
+	in turn OSD should not exceed sizes negotiated with ->do_index_try()
+	method.
+store
+	is called to get a 64bit cookie of a current position of an iterator.
+load
+	is called to reset current position of an iterator to match 64bit
+	cookie ->store() method returns. these two methods allow to implement
+	functionality like POSIX readdir where current position is stored as an
+	integer.
+key_rec
+	is not used currently
+
+3. Transactions
+===============
+
+i. Description
+--------------
+Transactions are used by Lustre to implement recovery protocol and support
+failover. The main purpose of transactions is to atomically update backend file
+system. This include as regular changes (file creation, for example) as special
+Lustre changes (last_rcvd file, lastid, llogs). OSD is supposed to provide the
+transactional mechanism and let Lustre to control what specific updates to put
+into transactions.
+
+Lustre relies on the following rule for transactions order: if transaction T1
+starts before transaction T2 starts, then the commit of T2 means that T1 is
+committed at the same time or earlier. Notice that the creation of a transaction
+does not imply the immediate start of the updates on storage, do not confuse
+creation of a transaction with start of a transaction.
+
+It’s up to OSD and backend file system to group few transactions for better
+performance given it still follow the rule above.
+
+Transactions are identified in the OSD API by an opaque transaction handle,
+which is a pointer to an OSD-private data structure that it can use to track
+(and optionally verify) the updates done within that transaction. This handle is
+returned by the OSD to the caller when the transaction is first created.
+Any potential updates (modifications to the underlying storage) must be declared
+as part of a transaction, after the transaction has been created, and before the
+transaction is started. The transaction handle is passed when declaring all
+updates. If any part of the declaration should fail, the transaction is aborted
+without having modified the storage.
+
+After all updates have been declared, and have completed successfully, the
+handle is passed to the transaction start. After the transaction has started,
+the handle will be passed to every update that is done as part of that
+transaction. All updates done under the transaction must previously have been
+declared. Once the transaction has started, it is not permitted to add new
+updates to the transaction, nor is it possible to roll back the transaction
+after this point. Should some update to the storage fail, the caller will try
+to undo the previous updates within the context of the transaction itself, to
+ensure that the resulting OSD state is correct.
+
+Any update that was not previously declared is an implementation error in the
+caller. Not all declared updates need to be executed, as they form a worst-case
+superset of the possible updates that may be required in order to complete the
+desired operation in a consistent manner.
+
+OSD should let a caller to register callback function(s) to be called on
+transaction commit to a disk. Also OSD should be able to call a special of
+transaction hooks on all the stages (creation, start, stop, commit) on
+per-devices basis so that high-level services (like MDT) which are not involved
+directly into controlling transactions still can be involved.
+Every commit callback gets a result of transaction commit, if disk filesystem was
+not able to commit the transaction, then an appropriate error code will be passed.
+
+It’s important to note that OSD and disk file system should use asynchronous IO
+to implement transactions, otherwise the performance is expected to be bad.
+
+The maximum number of updates that make up a single transaction is OSD-specific,
+but is expected to be at least in the tens of updates to multiple objects in the
+OSD (extending writes of multiple MB of data, modifying or adding attributes,
+extended attributes, references, etc). For example, in ext4, each update to the
+filesystem will modify one or more blocks of storage. Since one transaction is
+limited to one quarter of the journal size, if the caller declares a series of
+updates that modify more than this number of blocks, the declaration must fail
+or it could not be committed atomically.
+In general, every constraint must be checked here to ensure that all changes
+that must commit atomically can complete successfully.
+
+ii. Lifetime
+------------
+From Lustre point of view a transaction goes through the following steps:
+1. creation
+2. declaration of all possible changes planned in transaction
+3. transaction start
+4. execution of planned and declared changes
+5. transaction stop
+6. commit callback(s)
+
+iii. Methods
+------------
+OSD should implement the following methods to let Lustre control transactions:
+
+struct thandle *(*dt_trans_create)(const struct lu_env *, struct dt_device *);
+int (*dt_trans_start)(const struct lu_env *, struct dt_device *,
+		      struct thandle *);
+int   (*dt_trans_stop)(const struct lu_env *, struct thandle *);
+int   (*dt_trans_cb_add)(struct thandle *, struct dt_txn_commit_cb *);
+
+dt_trans_create
+	is called to allocate and initialize transaction handle (see struct
+	thandle). This structure has no pointer to a private data so, it should
+	be embedded into private representation of transaction at OSD layer.
+	This method can block.
+dt_trans_start
+	is called to notify OSD a specified transaction has got all the
+	declarations and now OSD should tell whether it has enough resources to
+	proceed with declared changes or to return an error to a caller.
+	This method can block. OSD should call dt_txn_hook_start() function
+	before underlying file system’s transaction starts to support per-device
+	transaction hooks. If OSD (or disk files system) can not start
+	transaction, then an error is returned and transaction handle is
+	destroyed, no commit callbacks are called.
+dt_trans_stop
+	is called to notify OSD a specified transaction has been executed and no
+	more changes are expected in a context of that. Usually this mean that at
+	this point OSD is free to start writeout preserving notion
+	all-or-nothing. This method can block.
+	If th_sync flag is set at this point, then OSD should start to commit
+	this transaction and block until the transaction is committed. the order
+	of unblock event and transaction’s commit callback functions is not
+	defined by the API. OSD should call dt_txn_hook_stop() functions once
+	underlying file system’s transaction is stopped to support per-device
+	transaction hooks.
+dt_trans_cb_add
+	is called to register commit callback function(s), which OSD will be
+	calling up on transaction commit to a storage. when all the callback
+	functions are processed, transaction handle can be freed by OSD.
+	There are no constraints on how many callback functions can be running
+	concurrently. They should not be running in an interrupt context.
+	Usually this method should not block and use spinlocks. As part of
+	commit callback functions processing dt_txn_hook_commit() function
+	should be called to support per-device transaction hooks.
+
+The callback mechanism let layers not commanding transactions be involved.
+For example, MDT registers its set and now every transaction happening on
+corresponded OSD will be seen by MDT, which adds recovery information to the
+transactions: generate transaction number, puts it into a special file -- all
+this happen within the context of the transaction, so atomically.
+Similarly VBR functionality in MDT updates objects versions.
+
+4. Locking
+==========
+
+i. Description
+--------------
+OSD is expected to maintain internal consistency of the file system and its
+object on its own, requiring no additional locking or serialization from higher
+levels. This let OSD to control how fine the locking is depending on the
+internal structuring of a specific file system. If few update conflict then the
+result is not defined by OSD API and left to OSD.
+
+OSD should provide the caller with few methods to serialize access to an object
+in shared and exclusive mode. It’s up to caller how to use them, to define order
+of locking. In general the locks provided by OSD are used to group complex
+updates so that other threads do not see intermediate result of operations.
+
+ii. Methods
+-----------
+Methods to lock/unlock object
+The set of methods exported by each OSD to manage locking is the following:
+void (*do_read_lock)(const struct lu_env *, struct dt_object *, unsigned);
+void (*do_write_lock)(const struct lu_env *, struct dt_object *, unsigned);
+void (*do_read_unlock)(const struct lu_env *, struct dt_object *);
+void (*do_write_unlock)(const struct lu_env *, struct dt_object *);
+int  (*do_write_locked)(const struct lu_env *, struct dt_object *);
+
+do_read_lock
+	get a shared lock on the object, this is a blocking lock.
+do_write_lock
+	get an exclusive lock on the object, this is a blocking lock.
+do_read_unlock
+	release a shared lock on an object, this is a blocking lock.
+do_write_unlock
+	release an exclusive lock on an object, this is a blocking lock.
+do_write_locked
+	check whether an object is exclusive-locked.
+
+It is highly desirable that an OSD object can be accessed and modified by
+multiple threads concurrently.
+
+For regular objects, the preferred implementation allows an object to be read
+concurrently at overlapping offsets, and written by multiple threads at
+non-overlapping offsets with the minimum amount of contention possible, or any
+combination of concurrent read/write operations. Lustre will not itself perform
+concurrent overlapping writes to a single region of the object, due to
+serialization at a higher level.
+
+For index objects, the preferred implementation allows key/value pair to be
+looked up concurrently, allows non-conflicting keys to be inserted or removed
+concurrently, or any combination of concurrent lookup, insertion, or removal.
+Lustre does not require the storage of multiple identical keys. Operations on
+the same key should be serialized.
+
+========================
+= V. Quota Enforcement =
+========================
+
+1. Overview
+===========
+
+The OSD layer is in charge of setting up a Quota Slave Device (aka QSD) to
+manage quota enforcement for a specific OSD device. The QSD is implemented under
+the form of a library. Each OSD device should create a QSD instance which will
+be used to manage quota enforcement for this device. This implies:
+- completing the reintegration procedure with the quota master (aka QMT) to
+  to retrieve the latest quota settings and quota space distribution for each
+  UID/GID.
+- managing quota locks in order to be notified of configuration changes.
+- acquiring space from the QMT when quota space for a given user/group is
+  close to exhaustion.
+- allocating quota space to service threads for local request processing.
+
+The reintegration procedure allows a disconnected slave to re-synchronize with
+the quota master, which means:
+- re-acquiring quota locks,
+- fetching up-to-date quota settings (e.g. list of UIDs with quota enforced),
+- reporting space usage to master for newly (e.g. setquota was run while the
+  slave wasn't connected) enforced UID/GID,
+- adjusting spare quota space (e.g. slave hold a large amount of unused quota
+  space for a user which ran out of quota space on the master while the slave
+  was disconnected).
+
+The latter two actions are known as reconciliation.
+
+2. QSD API
+==========
+
+The QSD API is defined in lustre/include/lustre_quota.h as follows:
+
+struct qsd_instance *qsd_init(const struct lu_env *, char *, struct dt_device *,
+                              cfs_proc_dir_entry_t *);
+int qsd_prepare(const struct lu_env *, struct qsd_instance *);
+int qsd_start(const struct lu_env *, struct qsd_instance *);
+void qsd_fini(const struct lu_env *, struct qsd_instance *);
+int qsd_op_begin(const struct lu_env *, struct qsd_instance *,
+                 struct lquota_trans *, struct lquota_id_info *, int *);
+void qsd_op_end(const struct lu_env *, struct qsd_instance *,
+                struct lquota_trans *);
+void qsd_adjust_quota(const struct lu_env *, struct qsd_instance *,
+                      union lquota_id *, int);
+
+qsd_init
+	The OSD module should first allocate a qsd instance via qsd_init.
+	This creates all required structures to manage quota enforcement for
+	this target and performs all low-level initialization which does not
+	involve any lustre object. qsd_init should typically be called when
+	the OSD is being set up.
+
+qsd_prepare
+	This sets up on-disk objects associated with the quota slave feature
+	and initiates the quota reintegration procedure if needed.
+	qsd_prepare should typically be called when ->ldo_prepare is invoked.
+
+qsd_start
+	a qsd instance should be started once recovery is completed (i.e. when
+	->ldo_recovery_complete is called). This is used to notify the qsd layer
+	that quota should now be enforced again via the qsd_op_begin/end
+	functions. The last step of the reintegration procedure (namely usage
+	reconciliation) will be completed during start.
+
+qsd_fini
+	is used to release a qsd_instance structure allocated with qsd_init.
+	This releases all quota slave objects and frees the structures
+	associated with the qsd_instance.
+
+qsd_op_begin
+	is used to enforce quota, it must be called in the declaration of each
+	operation. qsd_op_end should then be invoked later once all operations
+	have been completed in order to release/adjust the quota space.
+	Running qsd_op_begin before qsd_start isn't fatal and will return
+	success. Once qsd_start has been run, qsd_op_begin will block until the
+	reintegration procedure is completed.
+
+qsd_op_end
+	performs the post operation quota processing. This must be called after
+	the operation transaction stopped. While qsd_op_begin must be invoked
+	each time a new operation is declared, qsd_op_end should be called only
+	once for the whole transaction.
+
+qsd_adjust_quota
+	Trigger pre-acquire/release if necessary, it's only used for ldiskfs osd
+	so far. When unlink a file in ldiskfs, the quota accounting isn't
+	updated when the transaction stopped. Instead, it'll be updated on the
+	final iput, so qsd_adjust_quota() will be called then (in
+	osd_object_delete()) to trigger quota release if necessary.
+
+Appendix 1. A brief note on Lustre configuration.
+=================================================
+
+In the current versions (1.8, 2.x) MGS is used to store configuration of the
+servers, so called profile. The profile stores configuration commands and
+arguments to setup specific stack. To see how it looks exactly you can fetch
+MDT profile with debugfs -R "dump /CONFIGS/lustre-MDT0000 <tempfile>", then
+parse it with: llog_reader <tempfile>. Here is a short extract:
+
+#02 (136)attach    0:lustre-MDT0000-mdtlov  1:lov  2:lustre-MDT0000-mdtlov_UUID
+#03 (176)lov_setup 0:lustre-MDT0000-mdtlov  1:(struct lov_desc)
+                uuid=lustre-MDT0000-mdtlov_UUID  stripe:cnt=1 size=1048576 offset=18446744073709551615 pattern=0x1
+#06 (120)attach    0:lustre-MDT0000  1:mdt  2:lustre-MDT0000_UUID
+#07 (112)mount_option 0:  1:lustre-MDT0000  2:lustre-MDT0000-mdtlov
+#08 (160)setup     0:lustre-MDT0000  1:lustre-MDT0000_UUID  2:0  3:lustre-MDT0000-mdtlov  4:f
+#23 (080)add_uuid  nid=10.0.2.15@tcp(0x200000a00020f)  0:  1:10.0.2.15@tcp
+#24 (144)attach    0:lustre-OST0000-osc-MDT0000  1:osc  2:lustre-MDT0000-mdtlov_UUID
+#25 (144)setup     0:lustre-OST0000-osc-MDT0000  1:lustre-OST0000_UUID  2:10.0.2.15@tcp
+#26 (136)lov_modify_tgts add 0:lustre-MDT0000-mdtlov  1:lustre-OST0000_UUID  2:0  3:1
+#32 (080)add_uuid  nid=10.0.2.15@tcp(0x200000a00020f)  0:  1:10.0.2.15@tcp
+#33 (144)attach    0:lustre-OST0001-osc-MDT0000  1:osc  2:lustre-MDT0000-mdtlov_UUID
+#34 (144)setup     0:lustre-OST0001-osc-MDT0000  1:lustre-OST0001_UUID  2:10.0.2.15@tcp
+#35 (136)lov_modify_tgts add 0:lustre-MDT0000-mdtlov  1:lustre-OST0001_UUID  2:1  3:1
+#41 (120)param 0:  1:sys.jobid_var=procname_uid  2:procname_uid
+#44 (080)set_timeout=20
+#48 (112)param 0:lustre-MDT0000-mdtlov  1:lov.stripesize=1048576
+#51 (112)param 0:lustre-MDT0000-mdtlov  1:lov.stripecount=-1
+#54 (160)param 0:lustre-MDT0000  1:mdt.identity_upcall=/work/lustre/head/lustre-release/lustre/utils/l_getidentity
+
+Every line starts with a specific command (attach, lov_setup, set, etc) to do
+specific configuration action. Then arguments follow. Often the first argument
+is a device name. For example,
+#02 (136)attach    0:lustre-MDT0000-mdtlov  1:lov  2:lustre-MDT0000-mdtlov_UUID
+
+This command will be setting up device “lustre-MDT0000-mdtlov” of type “lov”
+with additional argument “lustre-MDT0000-mdtlov_UUID”. All these arguments are
+packed into lustre configuration buffers ( struct lustre_cfg).
+
+Another commands will be attaching device into the stack (like setup and
+lov_modify_tgts).
+
+Appendix 2. Sample Code
+=======================
+
+Lustre currently has 2 different OSD implementations:
+- ldiskfs OSD under lustre/osd-ldiskfs
+  http://git.whamcloud.com/?p=fs/lustre-release.git;a=tree;f=lustre/osd-ldiskfs;hb=HEAD
+- ZFS OSD under lustre/zfs-osd
+  http://git.whamcloud.com/?p=fs/lustre-release.git;a=tree;f=lustre/osd-zfs;hb=HEAD
