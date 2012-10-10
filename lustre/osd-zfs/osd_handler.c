@@ -695,6 +695,7 @@ static struct lu_device *osd_device_fini(const struct lu_env *env,
 	ENTRY;
 
 
+	osd_shutdown(env, o);
 	osd_oi_fini(env, o);
 
 	if (o->od_objset.os) {
