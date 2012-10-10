@@ -699,6 +699,10 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(out, rc);
 
+	rc = lod_qos_ost_in_use_clear(env, lo->ldo_stripenr);
+	if (rc)
+		GOTO(out, rc);
+
 	if (--lqr->lqr_start_count <= 0) {
 		lqr->lqr_start_idx = cfs_rand() % osts->op_count;
 		lqr->lqr_start_count =
@@ -1030,6 +1034,10 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	if (rc)
 		GOTO(out, rc);
 
+	rc = lod_qos_ost_in_use_clear(env, lo->ldo_stripenr);
+	if (rc)
+		GOTO(out, rc);
+
 	good_osts = 0;
 	/* Find all the OSTs that are valid stripe candidates */
 	for (i = 0; i < osts->op_count; i++) {
@@ -1140,27 +1148,42 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			 */
 			if (lod_qos_is_ost_used(env, idx, nfound))
 				continue;
+			lod_qos_ost_in_use(env, nfound, idx);
 
 			o = lod_qos_declare_object_on(env, m, idx, th);
 			if (IS_ERR(o)) {
-				CERROR("can't declare new object on #%u: %d\n",
-				       idx, (int) PTR_ERR(o));
+				QOS_DEBUG("can't declare object on #%u: %d\n",
+					  idx, (int) PTR_ERR(o));
 				continue;
 			}
-			lod_qos_ost_in_use(env, nfound, idx);
 			lo->ldo_stripe[nfound++] = o;
 			lod_qos_used(m, osts, idx, &total_weight);
 			rc = 0;
 			break;
 		}
-
-		/* should never satisfy below condition */
-		if (rc) {
-			CERROR("Didn't find any OSTs?\n");
-			break;
-		}
 	}
-	LASSERT(nfound == stripe_cnt);
+
+	if (unlikely(nfound != stripe_cnt)) {
+		/*
+		 * when the decision to use weighted algorithm was made
+		 * we had enough appropriate OSPs, but this state can
+		 * change anytime (no space on OST, broken connection, etc)
+		 * so it's possible OSP won't be able to provide us with
+		 * an object due to just changed state
+		 */
+		LCONSOLE_INFO("wanted %d, found %d\n", stripe_cnt, nfound);
+		for (i = 0; i < nfound; i++) {
+			LASSERT(lo->ldo_stripe[i]);
+			lu_object_put(env, &lo->ldo_stripe[i]->do_lu);
+			lo->ldo_stripe[i] = NULL;
+		}
+
+		/* makes sense to rebalance next time */
+		m->lod_qos.lq_dirty = 1;
+		m->lod_qos.lq_same_space = 0;
+
+		rc = -EAGAIN;
+	}
 
 out:
 	cfs_up_write(&m->lod_qos.lq_rw_sem);
@@ -1375,10 +1398,6 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		if (lo->ldo_stripe == NULL)
 			GOTO(out, rc = -ENOMEM);
 		lo->ldo_stripes_allocated = lo->ldo_stripenr;
-
-		rc = lod_qos_ost_in_use_clear(env, lo->ldo_stripenr);
-		if (rc)
-			GOTO(out, rc);
 
 		lod_getref(d);
 		/* XXX: support for non-0 files w/o objects */

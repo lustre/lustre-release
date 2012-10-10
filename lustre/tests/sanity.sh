@@ -5963,7 +5963,7 @@ free_min_max () {
 	echo Max free space: OST $MAXI: $MAXV
 }
 
-test_116() {
+test_116a() { # was previously test_116()
 	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs" && return
 
 	echo -n "Free space priority "
@@ -6046,7 +6046,21 @@ test_116() {
 
 	rm -rf $DIR/$tdir
 }
-run_test 116 "stripe QOS: free space balance ==================="
+run_test 116a "stripe QOS: free space balance ==================="
+
+test_116b() { # LU-2093
+#define OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147
+	local old_rr
+	old_rr=$(do_facet $SINGLEMDS lctl get_param -n lov.*mdtlov*.qos_threshold_rr)
+	do_facet $SINGLEMDS lctl set_param lov.*mdtlov*.qos_threshold_rr 0
+	mkdir -p $DIR/$tdir
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x147
+	createmany -o $DIR/$tdir/f- 20 || error "can't create"
+	do_facet $SINGLEMDS lctl set_param fail_loc=0
+	rm -rf $DIR/$tdir
+	do_facet $SINGLEMDS lctl set_param lov.*mdtlov*.qos_threshold_rr $old_rr
+}
+run_test 116b "QoS shouldn't LBUG if not enough OSTs found on the 2nd pass"
 
 test_117() # bug 10891
 {

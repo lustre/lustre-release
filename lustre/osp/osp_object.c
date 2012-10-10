@@ -171,6 +171,12 @@ static int osp_declare_object_create(const struct lu_env *env,
 
 	ENTRY;
 
+	/* should happen to non-0 OSP only so that at least one object
+	 * has been already declared in the scenario and LOD should
+	 * cleanup that */
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_CREATE_FAIL) && d->opd_index == 1)
+		RETURN(-ENOSPC);
+
 	LASSERT(d->opd_last_used_file);
 	fid = lu_object_fid(&dt->do_lu);
 
