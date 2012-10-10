@@ -1014,6 +1014,7 @@ static const char *obd_connect_names[] = {
 	"lvb_type",
 	"unknown",
 	"lightweight_conn",
+	"short_io",
         NULL
 };
 
