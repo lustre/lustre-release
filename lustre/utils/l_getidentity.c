@@ -99,58 +99,69 @@ static void errlog(const char *fmt, ...)
 }
 
 int get_groups_local(struct identity_downcall_data *data,
-                     unsigned int maxgroups)
+		     unsigned int maxgroups)
 {
-        gid_t *groups;
-        unsigned int ngroups = 0;
-        struct passwd *pw;
-        struct group *gr;
-        char *pw_name;
-        int namelen;
-        int i;
+	gid_t *groups, *groups_tmp = NULL;
+	unsigned int ngroups = 0;
+	int ngroups_tmp;
+	struct passwd *pw;
+	char *pw_name;
+	int namelen;
+	int i;
 
-        pw = getpwuid(data->idd_uid);
-        if (!pw) {
-                errlog("no such user %u\n", data->idd_uid);
-                data->idd_err = errno ? errno : EIDRM;
-                return -1;
-        }
+	pw = getpwuid(data->idd_uid);
+	if (!pw) {
+		errlog("no such user %u\n", data->idd_uid);
+		data->idd_err = errno ? errno : EIDRM;
+		return -1;
+	}
 
-        data->idd_gid = pw->pw_gid;
-        namelen = sysconf(_SC_LOGIN_NAME_MAX);
-        if (namelen < _POSIX_LOGIN_NAME_MAX)
-                namelen = _POSIX_LOGIN_NAME_MAX;
+	data->idd_gid = pw->pw_gid;
+	namelen = sysconf(_SC_LOGIN_NAME_MAX);
+	if (namelen < _POSIX_LOGIN_NAME_MAX)
+		namelen = _POSIX_LOGIN_NAME_MAX;
 
-        pw_name = (char *)malloc(namelen);
-        if (!pw_name) {
-                errlog("malloc error\n");
-                data->idd_err = errno;
-                return -1;
-        }
+	pw_name = malloc(namelen);
+	if (!pw_name) {
+		errlog("malloc error\n");
+		data->idd_err = errno;
+		return -1;
+	}
 
-        memset(pw_name, 0, namelen);
-        strncpy(pw_name, pw->pw_name, namelen - 1);
-        groups = data->idd_groups;
+	memset(pw_name, 0, namelen);
+	strncpy(pw_name, pw->pw_name, namelen - 1);
+	groups = data->idd_groups;
 
-        while ((gr = getgrent()) && ngroups < maxgroups) {
-                if (gr->gr_gid == groups[0])
-                        continue;
-                if (!gr->gr_mem)
-                        continue;
-                for (i = 0; gr->gr_mem[i]; i++) {
-                        if (!strcmp(gr->gr_mem[i], pw_name)) {
-                                groups[ngroups++] = gr->gr_gid;
-                                break;
-                        }
-                }
-        }
-        endgrent();
-        if (ngroups > 0)
-                qsort(groups, ngroups, sizeof(*groups), compare_u32);
-        data->idd_ngroups = ngroups;
+	/* Allocate array of size maxgroups instead of handling two
+	 * consecutive and potentially racy getgrouplist() calls. */
+	groups_tmp = malloc(maxgroups * sizeof(gid_t));
+	if (groups_tmp == NULL) {
+		free(pw_name);
+		errlog("malloc error\n");
+		return -1;
+	}
 
-        free(pw_name);
-        return 0;
+	ngroups_tmp = maxgroups;
+	if (getgrouplist(pw->pw_name, pw->pw_gid, groups_tmp, &ngroups_tmp) <
+	    0) {
+		free(pw_name);
+		free(groups_tmp);
+		errlog("getgrouplist() error\n");
+		return -1;
+	}
+
+	/* Do not place user's group ID in to the resulting groups list */
+	for (i = 0; i < ngroups_tmp; i++)
+		if (pw->pw_gid != groups_tmp[i])
+			groups[ngroups++] = groups_tmp[i];
+
+	if (ngroups > 0)
+		qsort(groups, ngroups, sizeof(*groups), compare_u32);
+	data->idd_ngroups = ngroups;
+
+	free(pw_name);
+	free(groups_tmp);
+	return 0;
 }
 
 static inline int comment_line(char *line)
