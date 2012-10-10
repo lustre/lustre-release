@@ -1775,7 +1775,7 @@ void lustre_swab_obd_statfs (struct obd_statfs *os)
         __swab32s (&os->os_namelen);
         __swab64s (&os->os_maxbytes);
         __swab32s (&os->os_state);
-        CLASSERT(offsetof(typeof(*os), os_spare1) != 0);
+	CLASSERT(offsetof(typeof(*os), os_fprecreated) != 0);
         CLASSERT(offsetof(typeof(*os), os_spare2) != 0);
         CLASSERT(offsetof(typeof(*os), os_spare3) != 0);
         CLASSERT(offsetof(typeof(*os), os_spare4) != 0);

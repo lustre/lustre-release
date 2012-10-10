@@ -379,7 +379,7 @@ static int lod_osts_seq_show(struct seq_file *p, void *v)
 	struct obd_device   *obd = p->private;
 	struct lod_ost_desc *ost_desc = v;
 	struct lod_device   *lod;
-	int                  idx, rc;
+	int                  idx, rc, active;
 	struct dt_device    *next;
 	struct obd_statfs    sfs;
 
@@ -392,13 +392,17 @@ static int lod_osts_seq_show(struct seq_file *p, void *v)
 		return -EINVAL;
 
 	/* XXX: should be non-NULL env, but it's very expensive */
+	active = 1;
 	rc = dt_statfs(NULL, next, &sfs);
-	if (rc)
+	if (rc == -ENOTCONN) {
+		active = 0;
+		rc = 0;
+	} else if (rc)
 		return rc;
 
 	return seq_printf(p, "%d: %s %sACTIVE\n", idx,
 			  obd_uuid2str(&ost_desc->ltd_uuid),
-			  sfs.os_blocks > 0 ? "" : "IN");
+			  active ? "" : "IN");
 }
 
 struct seq_operations lod_osts_sops = {

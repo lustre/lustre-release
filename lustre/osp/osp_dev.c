@@ -319,19 +319,8 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 
 	ENTRY;
 
-	if (unlikely(d->opd_imp_active == 0)) {
-		/*
-		 * in case of inactive OST we return nulls
-		 * so that caller can understand this device
-		 * is unusable for new objects
-		 *
-		 * XXX: shouldn't we take normal statfs and fill
-		 * just few specific fields with zeroes?
-		 */
-		memset(sfs, 0, sizeof(*sfs));
-		sfs->os_bsize = 4096;
-		RETURN(0);
-	}
+	if (unlikely(d->opd_imp_active == 0))
+		RETURN(-ENOTCONN);
 
 	/* return recently updated data */
 	*sfs = d->opd_statfs;
@@ -341,7 +330,7 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	 * how many objects are available for immediate creation
 	 */
 	cfs_spin_lock(&d->opd_pre_lock);
-	sfs->os_ffree = d->opd_pre_last_created - d->opd_pre_next;
+	sfs->os_fprecreated = d->opd_pre_last_created - d->opd_pre_next;
 	cfs_spin_unlock(&d->opd_pre_lock);
 
 	CDEBUG(D_OTHER, "%s: "LPU64" blocks, "LPU64" free, "LPU64" avail, "

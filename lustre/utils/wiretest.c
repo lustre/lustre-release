@@ -1471,10 +1471,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct obd_statfs, os_state));
         LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_state) == 4, "found %lld\n",
                  (long long)(int)sizeof(((struct obd_statfs *)0)->os_state));
-        LASSERTF((int)offsetof(struct obd_statfs, os_spare1) == 108, "found %lld\n",
-                 (long long)(int)offsetof(struct obd_statfs, os_spare1));
-        LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_spare1) == 4, "found %lld\n",
-                 (long long)(int)sizeof(((struct obd_statfs *)0)->os_spare1));
+	LASSERTF((int)offsetof(struct obd_statfs, os_fprecreated) == 108, "found %lld\n",
+		 (long long)(int)offsetof(struct obd_statfs, os_fprecreated));
+	LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_fprecreated) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct obd_statfs *)0)->os_fprecreated));
         LASSERTF((int)offsetof(struct obd_statfs, os_spare2) == 112, "found %lld\n",
                  (long long)(int)offsetof(struct obd_statfs, os_spare2));
         LASSERTF((int)sizeof(((struct obd_statfs *)0)->os_spare2) == 4, "found %lld\n",

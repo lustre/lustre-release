@@ -156,14 +156,14 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	LASSERT(ost);
 
 	rc = dt_statfs(env, ost->ltd_ost, sfs);
-	if (rc)
-		return rc;
+	if (rc && rc != -ENOTCONN)
+		CERROR("%s: statfs: rc = %d\n", lod2obd(d)->obd_name, rc);
 
 	/* check whether device has changed state (active, inactive) */
-	if (unlikely(sfs->os_blocks == 0 && ost->ltd_active)) {
+	if (rc != 0 && ost->ltd_active) {
 		/* turned inactive? */
 		cfs_spin_lock(&d->lod_desc_lock);
-		if (sfs->os_blocks == 0 && ost->ltd_active) {
+		if (ost->ltd_active) {
 			ost->ltd_active = 0;
 			LASSERT(d->lod_desc.ld_active_tgt_count > 0);
 			d->lod_desc.ld_active_tgt_count--;
@@ -173,11 +173,11 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			       ost->ltd_exp->exp_obd->obd_name);
 		}
 		cfs_spin_unlock(&d->lod_desc_lock);
-	} else if (unlikely(sfs->os_blocks && ost->ltd_active == 0)) {
+	} else if (rc == 0 && ost->ltd_active == 0) {
 		/* turned active? */
 		LASSERT(d->lod_desc.ld_active_tgt_count < d->lod_ostnr);
 		cfs_spin_lock(&d->lod_desc_lock);
-		if (sfs->os_blocks && ost->ltd_active == 0) {
+		if (ost->ltd_active == 0) {
 			ost->ltd_active = 1;
 			d->lod_desc.ld_active_tgt_count++;
 			d->lod_qos.lq_dirty = 1;
@@ -191,13 +191,6 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	return rc;
 }
 
-/*
- * Update statfs data if the current osfs age is older than max_age.
- * If wait is not set, it means that we are called from lov_create()
- * and we should just issue the rpcs without waiting for them to complete.
- * If wait is set, we are called from alloc_qos() and we just have
- * to wait for the request set to complete.
- */
 static void lod_qos_statfs_update(const struct lu_env *env,
 				  struct lod_device *lod)
 {
@@ -207,7 +200,7 @@ static void lod_qos_statfs_update(const struct lu_env *env,
 	__u64		   max_age, avail;
 	ENTRY;
 
-	max_age = cfs_time_shift_64(-2*lod->lod_desc.ld_qos_maxage);
+	max_age = cfs_time_shift_64(-2 * lod->lod_desc.ld_qos_maxage);
 
 	if (cfs_time_beforeq_64(max_age, obd->obd_osfs_age))
 		/* statfs data are quite recent, don't need to refresh it */
@@ -222,11 +215,8 @@ static void lod_qos_statfs_update(const struct lu_env *env,
 		avail = OST_TGT(lod,idx)->ltd_statfs.os_bavail;
 		rc = lod_statfs_and_check(env, lod, idx,
 					  &OST_TGT(lod,idx)->ltd_statfs);
-		if (rc) {
-			/* XXX: disable this OST till next refresh? */
-			CERROR("can't refresh statfs: %d\n", rc);
+		if (rc)
 			break;
-		}
 		if (OST_TGT(lod,idx)->ltd_statfs.os_bavail != avail)
 			/* recalculate weigths */
 			lod->lod_qos.lq_dirty = 1;
@@ -260,9 +250,11 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 				oss->lqo_bavail = 0;
 	lod->lod_qos.lq_active_oss_count = 0;
 
-	/* How badly user wants to select osts "widely" (not recently chosen
-	   and not on recent oss's).  As opposed to "freely" (free space
-	   avail.) 0-256. */
+	/*
+	 * How badly user wants to select OSTs "widely" (not recently chosen
+	 * and not on recent OSS's).  As opposed to "freely" (free space
+	 * avail.) 0-256
+	 */
 	prio_wide = 256 - lod->lod_qos.lq_prio_free;
 
 	ba_min = (__u64)(-1);
@@ -291,7 +283,7 @@ static int lod_qos_calc_ppo(struct lod_device *lod)
 
 		age = (now - OST_TGT(lod,i)->ltd_qos.ltq_used) >> 3;
 		if (lod->lod_qos.lq_reset ||
-				age > 32 * lod->lod_desc.ld_qos_maxage)
+		    age > 32 * lod->lod_desc.ld_qos_maxage)
 			OST_TGT(lod,i)->ltd_qos.ltq_penalty = 0;
 		else if (age > lod->lod_desc.ld_qos_maxage)
 			/* Decay the penalty by half for every 8x the update
@@ -663,7 +655,7 @@ static int lod_qos_is_ost_used(const struct lu_env *env, int ost, int stripes)
 	return 0;
 }
 
-/* Allocate objects on osts with round-robin algorithm */
+/* Allocate objects on OSTs with round-robin algorithm */
 static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 			int flags, struct thandle *th)
 {
@@ -731,8 +723,8 @@ repeat_find:
 		  lqr->lqr_offset_idx, osts->op_count, osts->op_count,
 		  array_idx);
 
-	for (i = 0; i < osts->op_count;
-			i++, array_idx = (array_idx + 1) % osts->op_count) {
+	for (i = 0; i < osts->op_count && stripe_idx < lo->ldo_stripenr;
+	     i++, array_idx = (array_idx + 1) % osts->op_count) {
 		++lqr->lqr_start_idx;
 		ost_idx = lqr->lqr_pool.op_array[array_idx];
 
@@ -741,7 +733,7 @@ repeat_find:
 			  stripe_idx, array_idx, ost_idx);
 
 		if ((ost_idx == LOV_QOS_EMPTY) ||
-				!cfs_bitmap_check(m->lod_ost_bitmap, ost_idx))
+		    !cfs_bitmap_check(m->lod_ost_bitmap, ost_idx))
 			continue;
 
 		/* Fail Check before osc_precreate() is called
@@ -752,15 +744,6 @@ repeat_find:
 		rc = lod_statfs_and_check(env, m, ost_idx, sfs);
 		if (rc) {
 			/* this OSP doesn't feel well */
-			CERROR("can't statfs #%u: %d\n", ost_idx, rc);
-			continue;
-		}
-
-		/*
-		 * skip empty devices - usually it means inactive device
-		 */
-		if (sfs->os_blocks == 0) {
-			QOS_DEBUG("#%d: inactive\n", ost_idx);
 			continue;
 		}
 
@@ -776,7 +759,7 @@ repeat_find:
 		 * We expect number of precreated objects in f_ffree at
 		 * the first iteration, skip OSPs with no objects ready
 		 */
-		if (sfs->os_ffree == 0 && speed == 0) {
+		if (sfs->os_fprecreated == 0 && speed == 0) {
 			QOS_DEBUG("#%d: precreation is empty\n", ost_idx);
 			continue;
 		}
@@ -784,7 +767,7 @@ repeat_find:
 		/*
 		 * try to use another OSP if this one is degraded
 		 */
-		if (sfs->os_state == OS_STATE_DEGRADED && speed == 0) {
+		if (sfs->os_state == OS_STATE_DEGRADED && speed < 2) {
 			QOS_DEBUG("#%d: degraded\n", ost_idx);
 			continue;
 		}
@@ -810,9 +793,6 @@ repeat_find:
 		lo->ldo_stripe[stripe_idx] = o;
 		stripe_idx++;
 
-		/* We have enough stripes */
-		if (stripe_idx == lo->ldo_stripenr)
-			break;
 	}
 	if ((speed < 2) && (stripe_idx < stripe_cnt_min)) {
 		/* Try again, allowing slower OSCs */
@@ -856,6 +836,10 @@ static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 	struct ost_pool   *osts;
 	ENTRY;
 
+	rc = lod_qos_ost_in_use_clear(env, lo->ldo_stripenr);
+	if (rc)
+		GOTO(out, rc);
+
 	if (lo->ldo_pool)
 		pool = lod_find_pool(m, lo->ldo_pool);
 
@@ -896,6 +880,12 @@ repeat_find:
 		if (OBD_FAIL_CHECK(OBD_FAIL_MDS_OSC_PRECREATE) && ost_idx == 0)
 			continue;
 
+		/*
+		 * do not put >1 objects on a single OST
+		 */
+		if (lod_qos_is_ost_used(env, ost_idx, stripe_num))
+			continue;
+
 		/* Drop slow OSCs if we can, but not for requested start idx.
 		 *
 		 * This means "if OSC is slow and it is not the requested
@@ -905,22 +895,15 @@ repeat_find:
 		rc = lod_statfs_and_check(env, m, ost_idx, sfs);
 		if (rc) {
 			/* this OSP doesn't feel well */
-			CERROR("can't statfs #%u: %d\n", ost_idx, rc);
 			continue;
 		}
-
-		/*
-		 * skip empty devices - usually it means inactive device
-		 */
-		if (sfs->os_blocks == 0)
-			continue;
 
 		/*
 		 * We expect number of precreated objects in f_ffree at
 		 * the first iteration, skip OSPs with no objects ready
 		 * don't apply this logic to OST specified with stripe_offset
 		 */
-		if (i != 0 && sfs->os_ffree == 0 && speed == 0)
+		if (i != 0 && sfs->os_fprecreated == 0 && speed == 0)
 			continue;
 
 		o = lod_qos_declare_object_on(env, m, ost_idx, th);
@@ -983,7 +966,7 @@ static inline int lod_qos_is_usable(struct lod_device *lod)
 	return 1;
 }
 
-/* Alloc objects on osts with optimization based on:
+/* Alloc objects on OSTs with optimization based on:
    - free space
    - network resources (shared OSS's)
  */
@@ -1047,15 +1030,8 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		rc = lod_statfs_and_check(env, m, osts->op_array[i], sfs);
 		if (rc) {
 			/* this OSP doesn't feel well */
-			CERROR("can't statfs #%u: %d\n", i, rc);
 			continue;
 		}
-
-		/*
-		 * skip empty devices - usually it means inactive device
-		 */
-		if (sfs->os_blocks == 0)
-			continue;
 
 		/*
 		 * skip full devices

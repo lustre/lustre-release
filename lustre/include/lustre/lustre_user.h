@@ -96,7 +96,9 @@ struct obd_statfs {
         __u32           os_namelen;
         __u64           os_maxbytes;
         __u32           os_state;       /**< obd_statfs_state OS_STATE_* flag */
-        __u32           os_spare1;
+	__u32           os_fprecreated;	/* objs available now to the caller */
+					/* used in QoS code to find preferred
+					 * OSTs */
         __u32           os_spare2;
         __u32           os_spare3;
         __u32           os_spare4;
