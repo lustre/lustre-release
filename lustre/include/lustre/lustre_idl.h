@@ -3099,6 +3099,7 @@ struct lu_idxpage {
 	 * For the time being, we only support fixed-size key & record. */
 	char	lip_entries[0];
 };
+extern void lustre_swab_lip_header(struct lu_idxpage *lip);
 
 #define LIP_HDR_SIZE (offsetof(struct lu_idxpage, lip_entries))
 

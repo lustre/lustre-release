@@ -1155,10 +1155,6 @@ setup_quota(){
 		return
 	fi
 
-	# XXX remove it once all quota code landed
-	echo "skip quota setup"
-	return
-
 	local mntpt=$1
 
 	# save old quota type & set new quota type

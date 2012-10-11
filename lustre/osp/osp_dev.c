@@ -212,7 +212,7 @@ int osp_disconnect(struct osp_device *d)
 	(void)ptlrpc_pinger_del_import(imp);
 
 	rc = ptlrpc_disconnect_import(imp, 0);
-	if (rc)
+	if (rc && rc != -ETIMEDOUT)
 		CERROR("%s: can't disconnect: rc = %d\n",
 		       d->opd_obd->obd_name, rc);
 

@@ -118,14 +118,14 @@ static void qmt_lqe_debug(struct lquota_entry *lqe, void *arg,
 	libcfs_debug_vmsg2(msgdata, fmt, args,
 			   "qmt:%s pool:%d-%s id:"LPU64" enforced:%d hard:"LPU64
 			   " soft:"LPU64" granted:"LPU64" time:"LPU64" qunit:"
-			   LPU64" edquot:%d revoke:"LPU64"\n",
+			   LPU64" edquot:%d may_rel:"LPU64" revoke:"LPU64"\n",
 			   pool->qpi_qmt->qmt_svname,
 			   pool->qpi_key & 0x0000ffff,
 			   RES_NAME(pool->qpi_key >> 16),
 			   lqe->lqe_id.qid_uid, lqe->lqe_enforced,
 			   lqe->lqe_hardlimit, lqe->lqe_softlimit,
 			   lqe->lqe_granted, lqe->lqe_gracetime,
-			   lqe->lqe_qunit, lqe->lqe_edquot,
+			   lqe->lqe_qunit, lqe->lqe_edquot, lqe->lqe_may_rel,
 			   lqe->lqe_revoke_time);
 }
 
@@ -423,6 +423,7 @@ int qmt_validate_limits(struct lquota_entry *lqe, __u64 hard, __u64 soft)
 void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 {
 	struct qmt_pool_info	*pool = lqe2qpi(lqe);
+	ENTRY;
 
 	if (!lqe->lqe_enforced)
 		RETURN_EXIT;
@@ -441,9 +442,13 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 			 * some quota space */
 			RETURN_EXIT;
 
+		if (lqe->lqe_revoke_time == 0)
+			/* least qunit value not sent to all slaves yet */
+			RETURN_EXIT;
+
 		if (lqe->lqe_may_rel != 0 &&
-		    cfs_time_beforeq_64(lqe->lqe_revoke_time,
-					cfs_time_shift_64(-QMT_REBA_TIMEOUT)))
+		    cfs_time_before_64(cfs_time_shift_64(-QMT_REBA_TIMEOUT),
+				       lqe->lqe_revoke_time))
 			/* Let's give more time to slave to release space */
 			RETURN_EXIT;
 
@@ -473,6 +478,7 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 	/* let's notify slave by issuing glimpse on per-ID lock.
 	 * the rebalance thread will take care of this */
 	qmt_id_lock_notify(pool->qpi_qmt, lqe);
+	EXIT;
 }
 
 /*

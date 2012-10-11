@@ -52,9 +52,10 @@ static void qsd_reint_completion(const struct lu_env *env,
 	ENTRY;
 
 	if (rc) {
-		CERROR("%s: failed to enqueue global quota lock, glb "
-		       "fid:"DFID", rc:%d\n", qsd->qsd_svname,
-		       PFID(&req_qbody->qb_fid), rc);
+		CDEBUG_LIMIT(rc != -EAGAIN ? D_ERROR : D_QUOTA,
+			     "%s: failed to enqueue global quota lock, glb fid:"
+			     DFID", rc:%d\n", qsd->qsd_svname,
+			     PFID(&req_qbody->qb_fid), rc);
 		RETURN_EXIT;
 	}
 
@@ -82,6 +83,8 @@ static int qsd_reint_qid(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	if (IS_ERR(lqe))
 		RETURN(PTR_ERR(lqe));
 
+	LQUOTA_DEBUG(lqe, "reintegrating entry");
+
 	rc = qsd_update_lqe(env, lqe, global, rec);
 	if (rc)
 		GOTO(out, rc);
@@ -99,25 +102,48 @@ static int qsd_reint_entries(const struct lu_env *env,
 			     unsigned int npages, bool need_swab)
 {
 	struct qsd_thread_info	*qti = qsd_info(env);
+	struct qsd_instance	*qsd = qqi->qqi_qsd;
 	union lquota_id		*qid = &qti->qti_id;
 	int			 i, j, k, size;
 	int			 rc = 0;
 	ENTRY;
 
+	CDEBUG(D_QUOTA, "%s: processing %d pages for %s index\n",
+	       qsd->qsd_svname, npages, global ? "global" : "slave");
+
 	/* sanity check on the record size */
 	if ((global && ii->ii_recsize != sizeof(struct lquota_glb_rec)) ||
 	    (!global && ii->ii_recsize != sizeof(struct lquota_slv_rec))) {
-		CERROR("Invalid record size:%d, global:%s\n",
-		       ii->ii_recsize, global ? "true" : "false");
+		CERROR("%s: invalid record size (%d) for %s index\n",
+		       qsd->qsd_svname, ii->ii_recsize,
+		       global ? "global" : "slave");
 		RETURN(-EINVAL);
 	}
 
-	size = ii->ii_recsize + ii->ii_keysize + sizeof(__u64);
+	size = ii->ii_recsize + ii->ii_keysize;
 
 	for (i = 0; i < npages; i++) {
 		union lu_page	*lip = cfs_kmap(pages[i]);
 
 		for (j = 0; j < LU_PAGE_COUNT; j++) {
+			if (need_swab)
+				/* swab header */
+				lustre_swab_lip_header(&lip->lp_idx);
+
+			if (lip->lp_idx.lip_magic != LIP_MAGIC) {
+				CERROR("%s: invalid magic (%x != %x) for page "
+				       "%d/%d while transferring %s index\n",
+				       qsd->qsd_svname, lip->lp_idx.lip_magic,
+				       LIP_MAGIC, i + 1, npages,
+				       global ? "global" : "slave");
+				GOTO(out, rc = -EINVAL);
+			}
+
+			CDEBUG(D_QUOTA, "%s: processing page %d/%d with %d "
+			       "entries for %s index\n", qsd->qsd_svname, i + 1,
+			       npages, lip->lp_idx.lip_nr,
+			       global ? "global" : "slave");
+
 			for (k = 0; k < lip->lp_idx.lip_nr; k++) {
 				char *entry;
 

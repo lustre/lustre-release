@@ -227,7 +227,6 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	if (req == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	req->rq_no_resend = req->rq_no_delay = 1;
 	rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
 	if (rc) {
 		ptlrpc_request_free(req);
@@ -296,6 +295,9 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	case IT_QUOTA_DQACQ:
 		/* grab reference on lqe for new lock */
 		lqe_getref((struct lquota_entry *)arg);
+		/* all acquire/release request are sent with no_resend and
+		 * no_delay flag */
+		req->rq_no_resend = req->rq_no_delay = 1;
 		break;
 	default:
 		break;

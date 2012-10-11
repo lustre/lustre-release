@@ -318,7 +318,7 @@ static inline void qsd_set_qunit(struct lquota_entry *lqe, __u64 qunit)
 	lqe->lqe_nopreacq = false;
 }
 
-#define QSD_WB_INTERVAL	15 /* 15 seconds */
+#define QSD_WB_INTERVAL	60 /* 60 seconds */
 
 /* qsd_entry.c */
 extern struct lquota_entry_operations qsd_lqe_ops;

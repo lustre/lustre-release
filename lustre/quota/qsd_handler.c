@@ -158,16 +158,19 @@ static void qsd_dqacq_completion(const struct lu_env *env,
 
 	lqe_write_lock(lqe);
 
-	if (ret != 0 && ret != -EDQUOT && ret != -EINPROGRESS) {
-		LQUOTA_ERROR(lqe, "DQACQ failed with %d, op:%x", ret,
-			     reqbody->qb_flags);
-		GOTO(out, ret);
-	}
+	LQUOTA_DEBUG(lqe, "DQACQ returned %d, flags:%x", ret,
+		     reqbody->qb_flags);
 
 	/* despite -EDQUOT & -EINPROGRESS errors, the master might still
 	 * grant us back quota space to adjust quota overrun */
-
-	LQUOTA_DEBUG(lqe, "DQACQ returned %d", ret);
+	if (ret != 0 && ret != -EDQUOT && ret != -EINPROGRESS) {
+		if (ret != -ETIMEDOUT && ret != -ENOTCONN &&
+		   ret != -ESHUTDOWN && ret != -EAGAIN)
+			/* print errors only if return code is unexpected */
+			LQUOTA_ERROR(lqe, "DQACQ failed with %d, flags:%x", ret,
+				     reqbody->qb_flags);
+		GOTO(out, ret);
+	}
 
 	/* Set the lqe_lockh */
 	if (lustre_handle_is_used(lockh) &&
@@ -736,9 +739,8 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 		 struct lquota_trans *trans, struct lquota_id_info *qi,
 		 int *flags)
 {
-	struct qsd_qtype_info *qqi;
-	int                    i, rc;
-	bool                   found = false;
+	int	i, rc;
+	bool	found = false;
 	ENTRY;
 
 	if (unlikely(qsd == NULL))
@@ -757,15 +759,10 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	    (qsd->qsd_is_md && qi->lqi_is_blk))
 		RETURN(0);
 
-	qqi = qsd->qsd_type_array[qi->lqi_type];
-
 	/* ignore quota enforcement request when:
 	 *    - quota isn't enforced for this quota type
-	 * or - we failed to access the accounting object for this quota type
-	 * or - the space to acquire is null
 	 * or - the user/group is root */
-	if (!qsd_type_enabled(qsd, qi->lqi_type) || qqi->qqi_acct_obj == NULL ||
-	    qi->lqi_id.qid_uid == 0)
+	if (!qsd_type_enabled(qsd, qi->lqi_type) || qi->lqi_id.qid_uid == 0)
 		RETURN(0);
 
 	LASSERTF(trans->lqt_id_cnt <= QUOTA_MAX_TRANSIDS, "id_cnt=%d",
@@ -795,8 +792,8 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 	}
 
 	/* manage quota enforcement for this ID */
-	rc = qsd_op_begin0(env, qqi, &trans->lqt_ids[i], qi->lqi_space, flags);
-
+	rc = qsd_op_begin0(env, qsd->qsd_type_array[qi->lqi_type],
+			   &trans->lqt_ids[i], qi->lqi_space, flags);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(qsd_op_begin);

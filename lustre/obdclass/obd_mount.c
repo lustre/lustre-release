@@ -2106,8 +2106,12 @@ static void server_put_super(struct super_block *sb)
 
 	/* disconnect the osp-on-ost first to drain off the inflight request */
 	if (IS_OST(lsi) || IS_MDT(lsi)) {
-		if (lustre_disconnect_osp(sb) < 0)
-			CERROR("%s: Fail to disconnect osp-on-ost!\n", tmpname);
+		int	rc;
+
+		rc = lustre_disconnect_osp(sb);
+		if (rc && rc != ETIMEDOUT)
+			CERROR("%s: failed to disconnect osp-on-ost (rc=%d)!\n",
+			       tmpname, rc);
 	}
 
         /* Stop the target */

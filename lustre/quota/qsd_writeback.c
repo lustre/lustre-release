@@ -367,7 +367,10 @@ static bool qsd_job_pending(struct qsd_instance *qsd, cfs_list_t *upd,
 		if (!qsd_type_enabled(qsd, qtype))
 			continue;
 
-		if (!qqi->qqi_glb_uptodate || !qqi->qqi_slv_uptodate)
+		if ((!qqi->qqi_glb_uptodate || !qqi->qqi_slv_uptodate) &&
+		     !qqi->qqi_reint)
+			/* global or slave index not up to date and reint
+			 * thread not running */
 			*uptodate = false;
 	}
 

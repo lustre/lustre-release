@@ -2038,6 +2038,15 @@ void lustre_swab_idx_info(struct idx_info *ii)
 	__swab16s(&ii->ii_recsize);
 }
 
+void lustre_swab_lip_header(struct lu_idxpage *lip)
+{
+	/* swab header */
+	__swab32s(&lip->lip_magic);
+	__swab16s(&lip->lip_flags);
+	__swab16s(&lip->lip_nr);
+}
+EXPORT_SYMBOL(lustre_swab_lip_header);
+
 void lustre_swab_mdt_rec_reint (struct mdt_rec_reint *rr)
 {
         __swab32s (&rr->rr_opcode);

@@ -122,6 +122,7 @@ static int lprocfs_qsd_rd_enabled(char *page, char **start, off_t off,
 {
 	struct qsd_instance	*qsd = (struct qsd_instance *)data;
 	char			 enabled[5];
+
 	LASSERT(qsd != NULL);
 
 	memset(enabled, 0, sizeof(enabled));
@@ -135,9 +136,48 @@ static int lprocfs_qsd_rd_enabled(char *page, char **start, off_t off,
 	return snprintf(page, count, "%s\n", enabled);
 }
 
+/* force reintegration procedure to be executed.
+ * Used for test/debugging purpose */
+static int lprocfs_qsd_wr_force_reint(struct file *file, const char *buffer,
+				      unsigned long count, void *data)
+{
+	struct qsd_instance	*qsd = (struct qsd_instance *)data;
+	int			 rc = 0, qtype;
+
+	LASSERT(qsd != NULL);
+
+	cfs_write_lock(&qsd->qsd_lock);
+	if (qsd->qsd_stopping) {
+		/* don't mess up with shutdown procedure, it is already
+		 * complicated enough */
+		rc = -ESHUTDOWN;
+	} else if (!qsd->qsd_prepared) {
+		rc = -EAGAIN;
+	} else {
+		/* mark all indexes as stale */
+		for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
+			qsd->qsd_type_array[qtype]->qqi_glb_uptodate = false;
+			qsd->qsd_type_array[qtype]->qqi_slv_uptodate = false;
+		}
+	}
+	cfs_write_unlock(&qsd->qsd_lock);
+
+	if (rc)
+		return rc;
+
+	/* kick off reintegration */
+	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
+		rc = qsd_start_reint_thread(qsd->qsd_type_array[qtype]);
+		if (rc)
+			break;
+	}
+	return rc == 0 ? count : rc;
+}
+
 static struct lprocfs_vars lprocfs_quota_qsd_vars[] = {
 	{ "info", lprocfs_qsd_rd_state, 0, 0},
 	{ "enabled", lprocfs_qsd_rd_enabled, 0, 0},
+	{ "force_reint", 0, lprocfs_qsd_wr_force_reint, 0},
 	{ NULL }
 };
 
@@ -365,6 +405,9 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	int	qtype;
 	ENTRY;
 
+	if (unlikely(qsd == NULL))
+		RETURN_EXIT;
+
 	CDEBUG(D_QUOTA, "%s: initiating QSD shutdown\n", qsd->qsd_svname);
 	cfs_write_lock(&qsd->qsd_lock);
 	qsd->qsd_stopping = true;
@@ -547,7 +590,8 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	int			 qtype, rc = 0;
 	ENTRY;
 
-	LASSERT(qsd != NULL);
+	if (unlikely(qsd == NULL))
+		RETURN(0);
 
 	cfs_read_lock(&qsd->qsd_lock);
 	if (qsd->qsd_prepared) {
@@ -646,6 +690,9 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 {
 	int	type, rc = 0;
 	ENTRY;
+
+	if (unlikely(qsd == NULL))
+		RETURN(0);
 
 	cfs_write_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_prepared) {

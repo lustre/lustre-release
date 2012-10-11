@@ -1159,9 +1159,6 @@ test_22() {
 run_test 22 "Simultaneous manipulation of a pool"
 
 test_23a() {
-	# XXX remove this once all quota code landed
-	skip_env "quota isn't functional" && return
-
     set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return
@@ -1228,9 +1225,6 @@ test_23a() {
 run_test 23a "OST pools and quota"
 
 test_23b() {
-	# XXX remove this once all quota code landed
-	skip_env "quota isn't functional" && return
-
     set_cleanup_trap
     local POOL_ROOT=${POOL_ROOT:-$DIR/$tdir}
     [[ $OSTCOUNT -le 1 ]] && skip_env "Need at least 2 OSTs" && return 0

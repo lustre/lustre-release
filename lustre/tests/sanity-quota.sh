@@ -802,6 +802,8 @@ run_test 5 "Chown & chgrp successfully even out of block/file quota"
 
 # test dropping acquire request on master
 test_6() {
+	local LIMIT=3 # 3M
+
 	setup_quota_test
 	trap cleanup_quota_test EXIT
 
@@ -824,7 +826,7 @@ test_6() {
 	chown $TSTUSR2.$TSTUSR2 $TESTFILE2
 
 	# cache per-ID lock for $TSTUSR on slave
-	$LFS setquota -u $TSTUSR -b 0 -B 2M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR
 	$RUNAS $DD of=$TESTFILE count=1 ||
 		error "write $TESTFILE failure, expect success"
 	$RUNAS2 $DD of=$TESTFILE2 count=1 ||
@@ -837,12 +839,12 @@ test_6() {
 	lustre_fail mds 0x513 601
 
 	# write to un-enforced ID ($TSTUSR2) should succeed
-	$RUNAS2 $DD of=$TESTFILE2 count=1 seek=1 oflag=sync conv=notrunc ||
+	$RUNAS2 $DD of=$TESTFILE2 count=$LIMIT seek=1 oflag=sync conv=notrunc ||
 		error "write failure, expect success"
 
 	# write to enforced ID ($TSTUSR) in background, exceeding limit
 	# to make sure DQACQ is sent
-	$RUNAS $DD of=$TESTFILE count=2 seek=1 oflag=sync conv=notrunc &
+	$RUNAS $DD of=$TESTFILE count=$LIMIT seek=1 oflag=sync conv=notrunc &
 	DDPID=$!
 
 	echo "Sleep for $TIMEOUT"

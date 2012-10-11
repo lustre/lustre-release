@@ -330,7 +330,7 @@ int qsd_update_lqe(const struct lu_env *env, struct lquota_entry *lqe,
 				     glb_rec->qbr_softlimit) ? true : false;
 
 		LQUOTA_DEBUG(lqe, "updating global index hardlimit: "LPU64", "
-			     "softlimit: "LPU64"\n", glb_rec->qbr_hardlimit,
+			     "softlimit: "LPU64, glb_rec->qbr_hardlimit,
 			     glb_rec->qbr_softlimit);
 	} else {
 		struct lquota_slv_rec *slv_rec = (struct lquota_slv_rec *)rec;
