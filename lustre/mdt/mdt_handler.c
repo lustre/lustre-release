@@ -5772,42 +5772,50 @@ static int mdt_rpc_fid2path(struct mdt_thread_info *info, void *key,
 }
 
 static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
-                        struct getinfo_fid2path *fp)
+		struct getinfo_fid2path *fp)
 {
-        struct mdt_object *obj;
-        int    rc;
-        ENTRY;
+	struct mdt_object *obj;
+	struct obd_device *obd = mdt2obd_dev(mdt);
+	int    rc;
+	ENTRY;
 
-        CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
-               PFID(&fp->gf_fid), fp->gf_recno, fp->gf_linkno);
+	CDEBUG(D_IOCTL, "path get "DFID" from "LPU64" #%d\n",
+		PFID(&fp->gf_fid), fp->gf_recno, fp->gf_linkno);
 
-        if (!fid_is_sane(&fp->gf_fid))
-                RETURN(-EINVAL);
+	if (!fid_is_sane(&fp->gf_fid))
+		RETURN(-EINVAL);
 
-        obj = mdt_object_find(env, mdt, &fp->gf_fid);
-        if (obj == NULL || IS_ERR(obj)) {
-                CDEBUG(D_IOCTL, "no object "DFID": %ld\n", PFID(&fp->gf_fid),
-                       PTR_ERR(obj));
-                RETURN(-EINVAL);
-        }
+	if (!fid_is_norm(&fp->gf_fid) && !fid_is_igif(&fp->gf_fid)) {
+		CWARN("%s: "DFID" is invalid, sequence should be "
+			">= "LPX64"\n", obd->obd_name,
+			PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);
+		RETURN(-EINVAL);
+	}
 
-        rc = lu_object_exists(&obj->mot_obj.mo_lu);
-        if (rc <= 0) {
-                if (rc == -1)
-                        rc = -EREMOTE;
-                else
-                        rc = -ENOENT;
-                mdt_object_put(env, obj);
-                CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n",
-                       PFID(&fp->gf_fid), rc);
-                RETURN(rc);
-        }
+	obj = mdt_object_find(env, mdt, &fp->gf_fid);
+	if (obj == NULL || IS_ERR(obj)) {
+		CDEBUG(D_IOCTL, "no object "DFID": %ld\n", PFID(&fp->gf_fid),
+			PTR_ERR(obj));
+		RETURN(-EINVAL);
+	}
 
-        rc = mo_path(env, md_object_next(&obj->mot_obj), fp->gf_path,
-                     fp->gf_pathlen, &fp->gf_recno, &fp->gf_linkno);
-        mdt_object_put(env, obj);
+	rc = lu_object_exists(&obj->mot_obj.mo_lu);
+	if (rc <= 0) {
+		if (rc == -1)
+			rc = -EREMOTE;
+		else
+			rc = -ENOENT;
+		mdt_object_put(env, obj);
+		CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n",
+			PFID(&fp->gf_fid), rc);
+		RETURN(rc);
+	}
 
-        RETURN(rc);
+	rc = mo_path(env, md_object_next(&obj->mot_obj), fp->gf_path,
+			fp->gf_pathlen, &fp->gf_recno, &fp->gf_linkno);
+	mdt_object_put(env, obj);
+
+	RETURN(rc);
 }
 
 static int mdt_get_info(struct mdt_thread_info *info)
