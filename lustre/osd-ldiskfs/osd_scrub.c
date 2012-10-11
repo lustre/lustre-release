@@ -950,6 +950,9 @@ again:
 	}
 	cfs_spin_unlock(&scrub->os_lock);
 
+	if (scrub->os_file.sf_status == SS_COMPLETED)
+		flags |= SS_RESET;
+
 	scrub->os_start_flags = flags;
 	thread_set_flags(thread, 0);
 	rc = cfs_create_thread(osd_scrub_main, dev, 0);
@@ -968,16 +971,12 @@ again:
 
 int osd_scrub_start(struct osd_device *dev)
 {
-	__u32 flags = SS_AUTO;
-	int   rc;
+	int rc;
 	ENTRY;
-
-	if (dev->od_scrub.os_file.sf_status == SS_COMPLETED)
-		flags |= SS_RESET;
 
 	/* od_otable_mutex: prevent curcurrent start/stop */
 	cfs_mutex_lock(&dev->od_otable_mutex);
-	rc = do_osd_scrub_start(dev, flags);
+	rc = do_osd_scrub_start(dev, SS_AUTO);
 	cfs_mutex_unlock(&dev->od_otable_mutex);
 
 	RETURN(rc == -EALREADY ? 0 : rc);
