@@ -104,16 +104,19 @@ static void usage_stop(void)
 		"-h: Help information.\n");
 }
 
-static int lfsck_pack_dev(struct obd_ioctl_data *data, char *arg)
+static int lfsck_pack_dev(struct obd_ioctl_data *data, char *device, char *arg)
 {
-	data->ioc_inllen4 = strlen(arg) + 1;
-	if (data->ioc_inllen4 > MAX_OBD_NAME) {
+	int len = strlen(arg) + 1;
+
+	if (len > MAX_OBD_NAME) {
 		fprintf(stderr, "MDT device name is too long. "
 			"Valid length should be less than %d\n", MAX_OBD_NAME);
 		return -EINVAL;
 	}
 
-	data->ioc_inlbuf4 = arg;
+	memcpy(device, arg, len);
+	data->ioc_inlbuf4 = device;
+	data->ioc_inllen4 = len;
 	data->ioc_dev = OBD_DEV_BY_DEVNAME;
 	return 0;
 }
@@ -124,18 +127,23 @@ int jt_lfsck_start(int argc, char **argv)
 	char rawbuf[MAX_IOC_BUFLEN], *buf = rawbuf;
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
-	char *optstring = "M:e:hi:n:rs:t:";
+	char *optstring = "M:e:hn:rs:t:";
 	int opt, index, rc, val, i;
 
 	memset(&data, 0, sizeof(data));
 	memset(&start, 0, sizeof(start));
+	memset(device, 0, MAX_OBD_NAME);
 	start.ls_version = LFSCK_VERSION_V1;
 	start.ls_active = LFSCK_TYPES_DEF;
+
+	/* Reset the 'optind' for the case of getopt_long() called multiple
+	 * times under the same lctl. */
+	optind = 0;
 	while ((opt = getopt_long(argc, argv, optstring, long_opt_start,
 				  &index)) != EOF) {
 		switch (opt) {
 		case 'M':
-			rc = lfsck_pack_dev(&data, optarg);
+			rc = lfsck_pack_dev(&data, device, optarg);
 			if (rc != 0)
 				return rc;
 			break;
@@ -228,9 +236,6 @@ int jt_lfsck_start(int argc, char **argv)
 		return -EINVAL;
 	}
 
-	memset(device, 0, MAX_OBD_NAME);
-	memcpy(device, data.ioc_inlbuf4, data.ioc_inllen4);
-	data.ioc_inlbuf4 = device;
 	data.ioc_inlbuf1 = (char *)&start;
 	data.ioc_inllen1 = sizeof(start);
 	memset(buf, 0, sizeof(rawbuf));
@@ -247,10 +252,10 @@ int jt_lfsck_start(int argc, char **argv)
 	}
 
 	obd_ioctl_unpack(&data, buf, sizeof(rawbuf));
-	printf("Started LFSCK on the MDT device %s:", device);
 	if (start.ls_active == 0) {
-		printf(" noop");
+		printf("Started LFSCK on the MDT device %s", device);
 	} else {
+		printf("Started LFSCK on the MDT device %s:", device);
 		for (i = 0; i < 2; i++) {
 			if (start.ls_active & lfsck_types_names[i].type) {
 				printf(" %s", lfsck_types_names[i].name);
@@ -260,7 +265,7 @@ int jt_lfsck_start(int argc, char **argv)
 		if (start.ls_active != 0)
 			printf(" unknown(0x%x)", start.ls_active);
 	}
-	printf("\n");
+	printf(".\n");
 	return 0;
 }
 
@@ -273,11 +278,16 @@ int jt_lfsck_stop(int argc, char **argv)
 	int opt, index, rc;
 
 	memset(&data, 0, sizeof(data));
+	memset(device, 0, MAX_OBD_NAME);
+
+	/* Reset the 'optind' for the case of getopt_long() called multiple
+	 * times under the same lctl. */
+	optind = 0;
 	while ((opt = getopt_long(argc, argv, optstring, long_opt_stop,
 				  &index)) != EOF) {
 		switch (opt) {
 		case 'M':
-			rc = lfsck_pack_dev(&data, optarg);
+			rc = lfsck_pack_dev(&data, device, optarg);
 			if (rc != 0)
 				return rc;
 			break;
@@ -296,9 +306,6 @@ int jt_lfsck_stop(int argc, char **argv)
 		return -EINVAL;
 	}
 
-	memset(device, 0, MAX_OBD_NAME);
-	memcpy(device, data.ioc_inlbuf4, data.ioc_inllen4);
-	data.ioc_inlbuf4 = device;
 	memset(buf, 0, sizeof(rawbuf));
 	rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
 	if (rc) {
