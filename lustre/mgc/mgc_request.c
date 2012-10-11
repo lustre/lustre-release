@@ -1484,7 +1484,7 @@ again:
                 GOTO(out, rc = -ENOMEM);
 
         for (i = 0; i < nrpages; i++)
-                ptlrpc_prep_bulk_page(desc, pages[i], 0, CFS_PAGE_SIZE);
+		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0, CFS_PAGE_SIZE);
 
         ptlrpc_request_set_replen(req);
         rc = ptlrpc_queue_wait(req);

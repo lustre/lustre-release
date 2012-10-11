@@ -1560,12 +1560,12 @@ static int mdt_sendpage(struct mdt_thread_info *info,
 	for (i = 0, tmpcount = nob; i < rdpg->rp_npages && tmpcount > 0;
 	     i++, tmpcount -= tmpsize) {
                 tmpsize = min_t(int, tmpcount, CFS_PAGE_SIZE);
-                ptlrpc_prep_bulk_page(desc, rdpg->rp_pages[i], 0, tmpsize);
+		ptlrpc_prep_bulk_page_pin(desc, rdpg->rp_pages[i], 0, tmpsize);
         }
 
         LASSERT(desc->bd_nob == nob);
         rc = target_bulk_io(exp, desc, lwi);
-        ptlrpc_free_bulk(desc);
+	ptlrpc_free_bulk_pin(desc);
         RETURN(rc);
 }
 
@@ -1738,7 +1738,7 @@ cleanup_lwi:
 cleanup_page:
         cfs_free_page(page);
 desc_cleanup:
-        ptlrpc_free_bulk(desc);
+	ptlrpc_free_bulk_pin(desc);
         RETURN(rc);
 }
 #endif

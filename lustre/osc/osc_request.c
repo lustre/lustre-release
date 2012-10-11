@@ -1306,7 +1306,7 @@ static int osc_brw_prep_request(int cmd, struct client_obd *cli,struct obdo *oa,
                 LASSERT((pga[0]->flag & OBD_BRW_SRVLOCK) ==
                         (pg->flag & OBD_BRW_SRVLOCK));
 
-                ptlrpc_prep_bulk_page(desc, pg->pg, poff, pg->count);
+		ptlrpc_prep_bulk_page_pin(desc, pg->pg, poff, pg->count);
                 requested_nob += pg->count;
 
                 if (i > 0 && can_merge_pages(pg_prev, pg)) {

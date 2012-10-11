@@ -1773,7 +1773,7 @@ struct ptlrpc_request *ptlrpc_request_addref(struct ptlrpc_request *req);
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_imp(struct ptlrpc_request *req,
                                               int npages, int type, int portal);
 void __ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk, int pin);
-static inline void ptlrpc_free_bulk(struct ptlrpc_bulk_desc *bulk)
+static inline void ptlrpc_free_bulk_pin(struct ptlrpc_bulk_desc *bulk)
 {
 	__ptlrpc_free_bulk(bulk, 1);
 }
@@ -1783,9 +1783,9 @@ static inline void ptlrpc_free_bulk_nopin(struct ptlrpc_bulk_desc *bulk)
 }
 void __ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
 			     cfs_page_t *page, int pageoffset, int len, int);
-static inline void ptlrpc_prep_bulk_page(struct ptlrpc_bulk_desc *desc,
-					 cfs_page_t *page, int pageoffset,
-					 int len)
+static inline void ptlrpc_prep_bulk_page_pin(struct ptlrpc_bulk_desc *desc,
+					     cfs_page_t *page, int pageoffset,
+					     int len)
 {
 	__ptlrpc_prep_bulk_page(desc, page, pageoffset, len, 1);
 }

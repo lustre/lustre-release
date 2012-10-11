@@ -2276,8 +2276,8 @@ static void __ptlrpc_free_req(struct ptlrpc_request *request, int locked)
                 class_import_put(request->rq_import);
                 request->rq_import = NULL;
         }
-        if (request->rq_bulk != NULL)
-                ptlrpc_free_bulk(request->rq_bulk);
+	if (request->rq_bulk != NULL)
+		ptlrpc_free_bulk_pin(request->rq_bulk);
 
         if (request->rq_reqbuf != NULL || request->rq_clrbuf != NULL)
                 sptlrpc_cli_free_reqbuf(request);

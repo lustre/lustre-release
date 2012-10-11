@@ -1053,7 +1053,7 @@ restart_bulk:
 
         /* NB req now owns desc and will free it when it gets freed */
         for (i = 0; i < op_data->op_npages; i++)
-                ptlrpc_prep_bulk_page(desc, pages[i], 0, CFS_PAGE_SIZE);
+		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0, CFS_PAGE_SIZE);
 
         mdc_readdir_pack(req, op_data->op_offset,
                          CFS_PAGE_SIZE * op_data->op_npages,

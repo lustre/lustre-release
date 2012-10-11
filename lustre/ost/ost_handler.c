@@ -899,7 +899,7 @@ out:
                 lwi1 = LWI_TIMEOUT_INTR(cfs_time_seconds(3), NULL, NULL, NULL);
                 l_wait_event(waitq, 0, &lwi1);
                 rc = target_bulk_io(exp, desc, &lwi);
-                ptlrpc_free_bulk(desc);
+		ptlrpc_free_bulk_nopin(desc);
         }
 
         RETURN(rc);

@@ -681,13 +681,13 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
                 GOTO(out, rc = -ENOMEM);
 
         for (i = 0; i < page_count && bytes > 0; i++) {
-                ptlrpc_prep_bulk_page(desc, pages[i], 0,
-                                min_t(int, bytes, CFS_PAGE_SIZE));
+		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0,
+					  min_t(int, bytes, CFS_PAGE_SIZE));
                 bytes -= CFS_PAGE_SIZE;
         }
 
         rc = target_bulk_io(req->rq_export, desc, &lwi);
-        ptlrpc_free_bulk(desc);
+	ptlrpc_free_bulk_pin(desc);
 
 out:
 	for (i = 0; i < nrpages; i++) {
