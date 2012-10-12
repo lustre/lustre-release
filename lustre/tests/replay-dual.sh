@@ -267,7 +267,7 @@ test_12() {
     multiop_bg_pause $DIR/$tfile mo_c || return 1
     MULTIPID=$!
 
-#define OBD_FAIL_LDLM_ENQUEUE            0x302
+#define OBD_FAIL_LDLM_ENQUEUE_NET			0x302
     do_facet $SINGLEMDS lctl set_param fail_loc=0x80000302
     facet_failover $SINGLEMDS
     do_facet $SINGLEMDS lctl set_param fail_loc=0
@@ -426,7 +426,7 @@ test_18() { # bug 3822 - evicting client with enqueued lock
     NOW=`date +%s`
     do_facet $SINGLEMDS lctl set_param fail_loc=0x8000030b  # hold enqueue
     sleep 1
-#define OBD_FAIL_LDLM_BL_CALLBACK        0x305
+#define OBD_FAIL_LDLM_BL_CALLBACK_NET			0x305
     do_facet client lctl set_param fail_loc=0x80000305  # drop cb, evict
     cancel_lru_locks mdc
     usleep 500 # wait to ensure first client is one that will be evicted

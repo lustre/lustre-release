@@ -1642,7 +1642,7 @@ test_33b() {	# was test_34
 
         do_facet client dd if=/dev/zero of=$MOUNT/24 bs=1024k count=1
         # Drop lock cancelation reply during umount
-	#define OBD_FAIL_LDLM_CANCEL             0x304
+	#define OBD_FAIL_LDLM_CANCEL_NET			0x304
         do_facet client lctl set_param fail_loc=0x80000304
         #lctl set_param debug=-1
         umount_client $MOUNT

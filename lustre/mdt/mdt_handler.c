@@ -6426,115 +6426,99 @@ static void __exit mdt_mod_exit(void)
 	lu_kmem_fini(mdt_caches);
 }
 
-
-#define DEF_HNDL(prefix, base, suffix, flags, opc, fn, fmt)             \
-[prefix ## _ ## opc - prefix ## _ ## base] = {                          \
-        .mh_name    = #opc,                                             \
-        .mh_fail_id = OBD_FAIL_ ## prefix ## _  ## opc ## suffix,       \
-        .mh_opc     = prefix ## _  ## opc,                              \
-        .mh_flags   = flags,                                            \
-        .mh_act     = fn,                                               \
-        .mh_fmt     = fmt                                               \
+#define DEFINE_RPC_HANDLER(base, flags, opc, fn, fmt)			\
+[opc - base] = {							\
+	.mh_name	= #opc,						\
+	.mh_fail_id	= OBD_FAIL_ ## opc ## _NET,			\
+	.mh_opc		= opc,						\
+	.mh_flags	= flags,					\
+	.mh_act		= fn,						\
+	.mh_fmt		= fmt						\
 }
 
-#define DEF_MDT_HNDL(flags, name, fn, fmt)                                  \
-        DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn, fmt)
+/* Request with a format known in advance */
+#define DEF_MDT_HDL(flags, name, fn)					\
+	DEFINE_RPC_HANDLER(MDS_GETATTR, flags, name, fn, &RQF_ ## name)
 
-#define DEF_SEQ_HNDL(flags, name, fn, fmt)                      \
-        DEF_HNDL(SEQ, QUERY, _NET, flags, name, fn, fmt)
+/* Request with a format we do not yet know */
+#define DEF_MDT_HDL_VAR(flags, name, fn)				\
+	DEFINE_RPC_HANDLER(MDS_GETATTR, flags, name, fn, NULL)
 
-#define DEF_FLD_HNDL(flags, name, fn, fmt)                      \
-        DEF_HNDL(FLD, QUERY, _NET, flags, name, fn, fmt)
-/*
- * Request with a format known in advance
- */
-#define DEF_MDT_HNDL_F(flags, name, fn)                                 \
-        DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn, &RQF_MDS_ ## name)
-
-#define DEF_SEQ_HNDL_F(flags, name, fn)                                 \
-        DEF_HNDL(SEQ, QUERY, _NET, flags, name, fn, &RQF_SEQ_ ## name)
-
-#define DEF_FLD_HNDL_F(flags, name, fn)                                 \
-        DEF_HNDL(FLD, QUERY, _NET, flags, name, fn, &RQF_FLD_ ## name)
-/*
- * Request with a format we do not yet know
- */
-#define DEF_MDT_HNDL_0(flags, name, fn)                                 \
-        DEF_HNDL(MDS, GETATTR, _NET, flags, name, fn, NULL)
+/* Map one non-standard request format handler.  This should probably get
+ * a common OBD_SET_INFO RPC opcode instead of this mismatch. */
+#define RQF_MDS_SET_INFO RQF_OBD_SET_INFO
 
 static struct mdt_handler mdt_mds_ops[] = {
-DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
-DEF_MDT_HNDL_F(0,                         DISCONNECT,   mdt_disconnect),
-DEF_MDT_HNDL  (0,                         SET_INFO,     mdt_set_info,
-                                                             &RQF_OBD_SET_INFO),
-DEF_MDT_HNDL_F(0,                         GET_INFO,     mdt_get_info),
-DEF_MDT_HNDL_F(0           |HABEO_REFERO, GETSTATUS,    mdt_getstatus),
-DEF_MDT_HNDL_F(HABEO_CORPUS,              GETATTR,      mdt_getattr),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, GETATTR_NAME, mdt_getattr_name),
-DEF_MDT_HNDL_F(HABEO_CORPUS,              GETXATTR,     mdt_getxattr),
-DEF_MDT_HNDL_F(0           |HABEO_REFERO, STATFS,       mdt_statfs),
-DEF_MDT_HNDL_F(0           |MUTABOR,      REINT,        mdt_reint),
-DEF_MDT_HNDL_F(HABEO_CORPUS,              CLOSE,        mdt_close),
-DEF_MDT_HNDL_F(HABEO_CORPUS,              DONE_WRITING, mdt_done_writing),
-DEF_MDT_HNDL_F(0           |HABEO_REFERO, PIN,          mdt_pin),
-DEF_MDT_HNDL_0(0,                         SYNC,         mdt_sync),
-DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, IS_SUBDIR,    mdt_is_subdir),
-DEF_MDT_HNDL_F(0,                         QUOTACHECK,   mdt_quotacheck),
-DEF_MDT_HNDL_F(0,                         QUOTACTL,     mdt_quotactl)
+DEF_MDT_HDL(0,				MDS_CONNECT,	  mdt_connect),
+DEF_MDT_HDL(0,				MDS_DISCONNECT,	  mdt_disconnect),
+DEF_MDT_HDL(0,				MDS_SET_INFO,	  mdt_set_info),
+DEF_MDT_HDL(0,				MDS_GET_INFO,	  mdt_get_info),
+DEF_MDT_HDL(0		| HABEO_REFERO,	MDS_GETSTATUS,	  mdt_getstatus),
+DEF_MDT_HDL(HABEO_CORPUS,		MDS_GETATTR,	  mdt_getattr),
+DEF_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_GETATTR_NAME, mdt_getattr_name),
+DEF_MDT_HDL(HABEO_CORPUS,		MDS_GETXATTR,	  mdt_getxattr),
+DEF_MDT_HDL(0		| HABEO_REFERO,	MDS_STATFS,	  mdt_statfs),
+DEF_MDT_HDL(0		| MUTABOR,	MDS_REINT,	  mdt_reint),
+DEF_MDT_HDL(HABEO_CORPUS,		MDS_CLOSE,	  mdt_close),
+DEF_MDT_HDL(HABEO_CORPUS,		MDS_DONE_WRITING, mdt_done_writing),
+DEF_MDT_HDL(0		| HABEO_REFERO,	MDS_PIN,	  mdt_pin),
+DEF_MDT_HDL_VAR(0,			MDS_SYNC,	  mdt_sync),
+DEF_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_IS_SUBDIR,	  mdt_is_subdir),
+DEF_MDT_HDL(0,				MDS_QUOTACHECK,	  mdt_quotacheck),
+DEF_MDT_HDL(0,				MDS_QUOTACTL,	  mdt_quotactl)
 };
 
-#define DEF_OBD_HNDL(flags, name, fn)                   \
-        DEF_HNDL(OBD, PING, _NET, flags, name, fn, NULL)
-
+#define DEF_OBD_HDL(flags, name, fn)					\
+	DEFINE_RPC_HANDLER(OBD_PING, flags, name, fn, NULL)
 
 static struct mdt_handler mdt_obd_ops[] = {
-        DEF_OBD_HNDL(0, PING,           mdt_obd_ping),
-        DEF_OBD_HNDL(0, LOG_CANCEL,     mdt_obd_log_cancel),
-	DEF_OBD_HNDL(0, QC_CALLBACK,    mdt_obd_qc_callback),
-	DEF_OBD_HNDL(0, IDX_READ,       mdt_obd_idx_read)
+DEF_OBD_HDL(0,				OBD_PING,	  mdt_obd_ping),
+DEF_OBD_HDL(0,				OBD_LOG_CANCEL,	  mdt_obd_log_cancel),
+DEF_OBD_HDL(0,				OBD_QC_CALLBACK,  mdt_obd_qc_callback),
+DEF_OBD_HDL(0,				OBD_IDX_READ,	  mdt_obd_idx_read)
 };
 
-#define DEF_DLM_HNDL_0(flags, name, fn)                   \
-        DEF_HNDL(LDLM, ENQUEUE, , flags, name, fn, NULL)
-#define DEF_DLM_HNDL_F(flags, name, fn)                   \
-        DEF_HNDL(LDLM, ENQUEUE, , flags, name, fn, &RQF_LDLM_ ## name)
+#define DEF_DLM_HDL_VAR(flags, name, fn)				\
+	DEFINE_RPC_HANDLER(LDLM_ENQUEUE, flags, name, fn, NULL)
+#define DEF_DLM_HDL(flags, name, fn)					\
+	DEFINE_RPC_HANDLER(LDLM_ENQUEUE, flags, name, fn, &RQF_ ## name)
 
 static struct mdt_handler mdt_dlm_ops[] = {
-        DEF_DLM_HNDL_F(HABEO_CLAVIS, ENQUEUE,        mdt_enqueue),
-        DEF_DLM_HNDL_0(HABEO_CLAVIS, CONVERT,        mdt_convert),
-        DEF_DLM_HNDL_0(0,            BL_CALLBACK,    mdt_bl_callback),
-        DEF_DLM_HNDL_0(0,            CP_CALLBACK,    mdt_cp_callback)
+DEF_DLM_HDL    (HABEO_CLAVIS,		LDLM_ENQUEUE,	  mdt_enqueue),
+DEF_DLM_HDL_VAR(HABEO_CLAVIS,		LDLM_CONVERT,	  mdt_convert),
+DEF_DLM_HDL_VAR(0,			LDLM_BL_CALLBACK, mdt_bl_callback),
+DEF_DLM_HDL_VAR(0,			LDLM_CP_CALLBACK, mdt_cp_callback)
 };
 
-#define DEF_LLOG_HNDL(flags, name, fn)                   \
-        DEF_HNDL(LLOG, ORIGIN_HANDLE_CREATE, _NET, flags, name, fn, NULL)
+#define DEF_LLOG_HDL(flags, name, fn)					\
+	DEFINE_RPC_HANDLER(LLOG_ORIGIN_HANDLE_CREATE, flags, name, fn, NULL)
 
 static struct mdt_handler mdt_llog_ops[] = {
-        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_CREATE,      mdt_llog_create),
-        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_NEXT_BLOCK,  mdt_llog_next_block),
-        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_READ_HEADER, mdt_llog_read_header),
-        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_WRITE_REC,   NULL),
-        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_CLOSE,       NULL),
-        DEF_LLOG_HNDL(0, ORIGIN_CONNECT,            NULL),
-        DEF_LLOG_HNDL(0, CATINFO,                   NULL),
-        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_PREV_BLOCK,  mdt_llog_prev_block),
-        DEF_LLOG_HNDL(0, ORIGIN_HANDLE_DESTROY,     mdt_llog_destroy),
+DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_CREATE,	  mdt_llog_create),
+DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	  mdt_llog_next_block),
+DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_READ_HEADER,	  mdt_llog_read_header),
+DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_WRITE_REC,	  NULL),
+DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_CLOSE,	  NULL),
+DEF_LLOG_HDL(0,		LLOG_ORIGIN_CONNECT,		  NULL),
+DEF_LLOG_HDL(0,		LLOG_CATINFO,			  NULL),
+DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_PREV_BLOCK,	  mdt_llog_prev_block),
+DEF_LLOG_HDL(0,		LLOG_ORIGIN_HANDLE_DESTROY,	  mdt_llog_destroy),
 };
 
-#define DEF_SEC_CTX_HNDL(name, fn)                      \
-        DEF_HNDL(SEC_CTX, INIT, _NET, 0, name, fn, NULL)
+#define DEF_SEC_HDL(flags, name, fn)					\
+	DEFINE_RPC_HANDLER(SEC_CTX_INIT, flags, name, fn, NULL)
 
 static struct mdt_handler mdt_sec_ctx_ops[] = {
-        DEF_SEC_CTX_HNDL(INIT,          mdt_sec_ctx_handle),
-        DEF_SEC_CTX_HNDL(INIT_CONT,     mdt_sec_ctx_handle),
-        DEF_SEC_CTX_HNDL(FINI,          mdt_sec_ctx_handle)
+DEF_SEC_HDL(0,				SEC_CTX_INIT,	  mdt_sec_ctx_handle),
+DEF_SEC_HDL(0,				SEC_CTX_INIT_CONT,mdt_sec_ctx_handle),
+DEF_SEC_HDL(0,				SEC_CTX_FINI,	  mdt_sec_ctx_handle)
 };
 
-#define DEF_QUOTA_HNDLF(flags, name, fn)                   \
-	DEF_HNDL(QUOTA, DQACQ, , flags, name, fn, &RQF_QUOTA_ ## name)
+#define DEF_QUOTA_HDL(flags, name, fn)				\
+	DEFINE_RPC_HANDLER(QUOTA_DQACQ, flags, name, fn, &RQF_ ## name)
 
 static struct mdt_handler mdt_quota_ops[] = {
-	DEF_QUOTA_HNDLF(HABEO_REFERO, DQACQ, mdt_quota_dqacq),
+DEF_QUOTA_HDL(HABEO_REFERO,		QUOTA_DQACQ,	  mdt_quota_dqacq),
 };
 
 static struct mdt_opc_slice mdt_regular_handlers[] = {
@@ -6573,19 +6557,14 @@ static struct mdt_opc_slice mdt_regular_handlers[] = {
         }
 };
 
+/* Readpage/readdir handlers */
 static struct mdt_handler mdt_readpage_ops[] = {
-        DEF_MDT_HNDL_F(0,                         CONNECT,  mdt_connect),
-        DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, READPAGE, mdt_readpage),
-#ifdef HAVE_SPLIT_SUPPORT
-        DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, WRITEPAGE, mdt_writepage),
-#endif
-
-        /*
-         * XXX: this is ugly and should be fixed one day, see mdc_close() for
-         * detailed comments. --umka
-         */
-        DEF_MDT_HNDL_F(HABEO_CORPUS,              CLOSE,    mdt_close),
-        DEF_MDT_HNDL_F(HABEO_CORPUS,              DONE_WRITING,    mdt_done_writing),
+DEF_MDT_HDL(0,			MDS_CONNECT,  mdt_connect),
+DEF_MDT_HDL(HABEO_CORPUS | HABEO_REFERO, MDS_READPAGE, mdt_readpage),
+/* XXX: this is ugly and should be fixed one day, see mdc_close() for
+ * detailed comments. --umka */
+DEF_MDT_HDL(HABEO_CORPUS,		MDS_CLOSE,	  mdt_close),
+DEF_MDT_HDL(HABEO_CORPUS,		MDS_DONE_WRITING, mdt_done_writing),
 };
 
 static struct mdt_opc_slice mdt_readpage_handlers[] = {
@@ -6604,11 +6583,12 @@ static struct mdt_opc_slice mdt_readpage_handlers[] = {
         }
 };
 
+/* Cross MDT operation handlers for DNE */
 static struct mdt_handler mdt_xmds_ops[] = {
-        DEF_MDT_HNDL_F(0,                         CONNECT,      mdt_connect),
-        DEF_MDT_HNDL_F(HABEO_CORPUS             , GETATTR,      mdt_getattr),
-        DEF_MDT_HNDL_F(0 | MUTABOR              , REINT,        mdt_reint),
-        DEF_MDT_HNDL_F(HABEO_CORPUS|HABEO_REFERO, IS_SUBDIR,    mdt_is_subdir),
+DEF_MDT_HDL(0,				MDS_CONNECT,	  mdt_connect),
+DEF_MDT_HDL(HABEO_CORPUS,		MDS_GETATTR,	  mdt_getattr),
+DEF_MDT_HDL(0		| MUTABOR,	MDS_REINT,	  mdt_reint),
+DEF_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_IS_SUBDIR,	  mdt_is_subdir),
 };
 
 static struct mdt_opc_slice mdt_xmds_handlers[] = {
@@ -6632,8 +6612,12 @@ static struct mdt_opc_slice mdt_xmds_handlers[] = {
         }
 };
 
+/* Sequence service handlers */
+#define DEF_SEQ_HDL(flags, name, fn)					\
+	DEFINE_RPC_HANDLER(SEQ_QUERY, flags, name, fn, &RQF_ ## name)
+
 static struct mdt_handler mdt_seq_ops[] = {
-        DEF_SEQ_HNDL_F(0, QUERY, (int (*)(struct mdt_thread_info *))seq_query)
+DEF_SEQ_HDL(0,				SEQ_QUERY,	  (void *)seq_query),
 };
 
 static struct mdt_opc_slice mdt_seq_handlers[] = {
@@ -6647,8 +6631,12 @@ static struct mdt_opc_slice mdt_seq_handlers[] = {
         }
 };
 
+/* FID Location Database handlers */
+#define DEF_FLD_HDL(flags, name, fn)					\
+	DEFINE_RPC_HANDLER(FLD_QUERY, flags, name, fn, &RQF_ ## name)
+
 static struct mdt_handler mdt_fld_ops[] = {
-        DEF_FLD_HNDL_F(0, QUERY, (int (*)(struct mdt_thread_info *))fld_query)
+DEF_FLD_HDL(0,				FLD_QUERY,	  (void *)fld_query),
 };
 
 static struct mdt_opc_slice mdt_fld_handlers[] = {
@@ -6663,7 +6651,7 @@ static struct mdt_opc_slice mdt_fld_handlers[] = {
 };
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
-MODULE_DESCRIPTION("Lustre Meta-data Target ("LUSTRE_MDT_NAME")");
+MODULE_DESCRIPTION("Lustre Metadata Target ("LUSTRE_MDT_NAME")");
 MODULE_LICENSE("GPL");
 
-cfs_module(mdt, "0.2.0", mdt_mod_init, mdt_mod_exit);
+cfs_module(mdt, LUSTRE_VERSION_STRING, mdt_mod_init, mdt_mod_exit);

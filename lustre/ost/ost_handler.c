@@ -2334,30 +2334,30 @@ int ost_handle(struct ptlrpc_request *req)
                 if (rc)
                         RETURN(rc);
                 RETURN(ptlrpc_reply(req));
-        case LDLM_ENQUEUE:
-                CDEBUG(D_INODE, "enqueue\n");
-                req_capsule_set(&req->rq_pill, &RQF_LDLM_ENQUEUE);
-                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE))
-                        RETURN(0);
-                rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
-                                         ost_blocking_ast,
-                                         ldlm_server_glimpse_ast);
-                fail = OBD_FAIL_OST_LDLM_REPLY_NET;
-                break;
-        case LDLM_CONVERT:
-                CDEBUG(D_INODE, "convert\n");
-                req_capsule_set(&req->rq_pill, &RQF_LDLM_CONVERT);
-                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CONVERT))
-                        RETURN(0);
-                rc = ldlm_handle_convert(req);
-                break;
-        case LDLM_CANCEL:
-                CDEBUG(D_INODE, "cancel\n");
-                req_capsule_set(&req->rq_pill, &RQF_LDLM_CANCEL);
-                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL))
-                        RETURN(0);
-                rc = ldlm_handle_cancel(req);
-                break;
+	case LDLM_ENQUEUE:
+		CDEBUG(D_INODE, "enqueue\n");
+		req_capsule_set(&req->rq_pill, &RQF_LDLM_ENQUEUE);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_ENQUEUE_NET))
+			RETURN(0);
+		rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
+					 ost_blocking_ast,
+					 ldlm_server_glimpse_ast);
+		fail = OBD_FAIL_OST_LDLM_REPLY_NET;
+		break;
+	case LDLM_CONVERT:
+		CDEBUG(D_INODE, "convert\n");
+		req_capsule_set(&req->rq_pill, &RQF_LDLM_CONVERT);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CONVERT_NET))
+			RETURN(0);
+		rc = ldlm_handle_convert(req);
+		break;
+	case LDLM_CANCEL:
+		CDEBUG(D_INODE, "cancel\n");
+		req_capsule_set(&req->rq_pill, &RQF_LDLM_CANCEL);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_NET))
+			RETURN(0);
+		rc = ldlm_handle_cancel(req);
+		break;
         case LDLM_BL_CALLBACK:
         case LDLM_CP_CALLBACK:
                 CDEBUG(D_INODE, "callback\n");

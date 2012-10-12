@@ -295,12 +295,12 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 
 #define OBD_FAIL_LDLM                    0x300
 #define OBD_FAIL_LDLM_NAMESPACE_NEW      0x301
-#define OBD_FAIL_LDLM_ENQUEUE            0x302
-#define OBD_FAIL_LDLM_CONVERT            0x303
-#define OBD_FAIL_LDLM_CANCEL             0x304
-#define OBD_FAIL_LDLM_BL_CALLBACK        0x305
-#define OBD_FAIL_LDLM_CP_CALLBACK        0x306
-#define OBD_FAIL_LDLM_GL_CALLBACK        0x307
+#define OBD_FAIL_LDLM_ENQUEUE_NET			0x302
+#define OBD_FAIL_LDLM_CONVERT_NET			0x303
+#define OBD_FAIL_LDLM_CANCEL_NET			0x304
+#define OBD_FAIL_LDLM_BL_CALLBACK_NET			0x305
+#define OBD_FAIL_LDLM_CP_CALLBACK_NET			0x306
+#define OBD_FAIL_LDLM_GL_CALLBACK_NET			0x307
 #define OBD_FAIL_LDLM_ENQUEUE_EXTENT_ERR 0x308
 #define OBD_FAIL_LDLM_ENQUEUE_INTENT_ERR 0x309
 #define OBD_FAIL_LDLM_CREATE_RESOURCE    0x30a
@@ -404,7 +404,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MGS_PAUSE_REQ           0x904
 #define OBD_FAIL_MGS_PAUSE_TARGET_REG    0x905
 
-#define OBD_FAIL_QUOTA_DQACQ             0xA01
+#define OBD_FAIL_QUOTA_DQACQ_NET			0xA01
 #define OBD_FAIL_QUOTA_EDQUOT            0xA02
 #define OBD_FAIL_QUOTA_DELAY_REINT       0xA03
 #define OBD_FAIL_QUOTA_RECOVERABLE_ERR   0xA04

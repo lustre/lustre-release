@@ -1983,19 +1983,19 @@ static int ldlm_callback_handler(struct ptlrpc_request *req)
         LASSERT(req->rq_export != NULL);
         LASSERT(req->rq_export->exp_obd != NULL);
 
-        switch (lustre_msg_get_opc(req->rq_reqmsg)) {
-        case LDLM_BL_CALLBACK:
-                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_BL_CALLBACK))
-                        RETURN(0);
-                break;
-        case LDLM_CP_CALLBACK:
-                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CP_CALLBACK))
-                        RETURN(0);
-                break;
-        case LDLM_GL_CALLBACK:
-                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_GL_CALLBACK))
-                        RETURN(0);
-                break;
+	switch (lustre_msg_get_opc(req->rq_reqmsg)) {
+	case LDLM_BL_CALLBACK:
+		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_BL_CALLBACK_NET))
+			RETURN(0);
+		break;
+	case LDLM_CP_CALLBACK:
+		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CP_CALLBACK_NET))
+			RETURN(0);
+		break;
+	case LDLM_GL_CALLBACK:
+		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_GL_CALLBACK_NET))
+			RETURN(0);
+		break;
         case LDLM_SET_INFO:
                 rc = ldlm_handle_setinfo(req);
                 ldlm_callback_reply(req, rc);
@@ -2191,8 +2191,8 @@ static int ldlm_cancel_handler(struct ptlrpc_request *req)
         case LDLM_CANCEL:
                 req_capsule_set(&req->rq_pill, &RQF_LDLM_CANCEL);
                 CDEBUG(D_INODE, "cancel\n");
-                if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL))
-                        RETURN(0);
+		if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_CANCEL_NET))
+			RETURN(0);
                 rc = ldlm_handle_cancel(req);
                 if (rc)
                         break;

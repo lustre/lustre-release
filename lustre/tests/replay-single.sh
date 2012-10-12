@@ -1915,7 +1915,7 @@ test_73a() {
     rm -f $DIR/$tfile
 
     replay_barrier $SINGLEMDS
-#define OBD_FAIL_LDLM_ENQUEUE       0x302
+#define OBD_FAIL_LDLM_ENQUEUE_NET			0x302
     do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000302"
     fail $SINGLEMDS
     kill -USR1 $pid
