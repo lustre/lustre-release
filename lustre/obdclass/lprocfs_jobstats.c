@@ -245,7 +245,11 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 	if (job2 != job) {
 		job_putref(job);
 		job = job2;
-		LASSERT(!cfs_list_empty(&job->js_list));
+		/* We cannot LASSERT(!cfs_list_empty(&job->js_list)) here,
+		 * since we just lost the race for inserting "job" into the
+		 * ojs_list, and some other thread is doing it _right_now_.
+		 * Instead, be content the other thread is doing this, since
+		 * "job2" was initialized in job_alloc() already. LU-2163 */
 	} else {
 		LASSERT(cfs_list_empty(&job->js_list));
 		cfs_write_lock(&stats->ojs_lock);

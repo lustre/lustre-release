@@ -129,7 +129,7 @@ int lustre_get_jobid(char *jobid)
 
 	/* Use process name + fsuid as jobid */
 	if (strcmp(obd_jobid_var, JOBSTATS_PROCNAME_UID) == 0) {
-		snprintf(jobid, JOBSTATS_JOBID_SIZE, "%s_%u",
+		snprintf(jobid, JOBSTATS_JOBID_SIZE, "%s.%u",
 			 cfs_curproc_comm(), cfs_curproc_fsuid());
 		RETURN(0);
 	}
