@@ -244,7 +244,7 @@ struct config_llog_data *do_config_log_add(struct obd_device *obd,
 
         if (cld_is_sptlrpc(cld)) {
                 rc = mgc_process_log(obd, cld);
-                if (rc)
+		if (rc && rc != -ENOENT)
                         CERROR("failed processing sptlrpc log: %d\n", rc);
         }
 

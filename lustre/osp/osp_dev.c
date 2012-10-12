@@ -212,7 +212,9 @@ int osp_disconnect(struct osp_device *d)
 	(void)ptlrpc_pinger_del_import(imp);
 
 	rc = ptlrpc_disconnect_import(imp, 0);
-	if (rc && rc != -ETIMEDOUT)
+	if (rc == -ETIMEDOUT || rc == -ENOTCONN || rc == -ESHUTDOWN)
+		rc = 0;
+	if (rc)
 		CERROR("%s: can't disconnect: rc = %d\n",
 		       d->opd_obd->obd_name, rc);
 
@@ -838,6 +840,8 @@ static int osp_import_event(struct obd_device *obd, struct obd_import *imp,
 		ldlm_namespace_cleanup(obd->obd_namespace, LDLM_FL_LOCAL_ONLY);
 		break;
 	case IMP_EVENT_OCD:
+	case IMP_EVENT_DEACTIVATE:
+	case IMP_EVENT_ACTIVATE:
 		break;
 	default:
 		CERROR("%s: unsupported import event: %#x\n",

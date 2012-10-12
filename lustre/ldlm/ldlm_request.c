@@ -1179,8 +1179,9 @@ int ldlm_cli_cancel_req(struct obd_export *exp, cfs_list_t *cancels,
                         ptlrpc_req_finished(req);
                         continue;
                 } else if (rc != ELDLM_OK) {
-                        CERROR("Got rc %d from cancel RPC: canceling "
-                               "anyway\n", rc);
+			if (rc != -ESHUTDOWN)
+				CERROR("Got rc %d from cancel RPC: canceling "
+				       "anyway\n", rc);
                         break;
                 }
                 sent = count;
@@ -1812,7 +1813,8 @@ int ldlm_cli_cancel_list(cfs_list_t *cancels, int count,
                 }
 
                 if (res < 0) {
-                        CERROR("ldlm_cli_cancel_list: %d\n", res);
+			if (res != -ESHUTDOWN)
+				CERROR("ldlm_cli_cancel_list: %d\n", res);
                         res = count;
                 }
 

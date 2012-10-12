@@ -267,7 +267,7 @@ int ofd_groups_init(const struct lu_env *env, struct ofd_device *ofd)
 		}
 	}
 
-	CWARN("%s: %u groups initialized\n",
+	CDEBUG(D_OTHER, "%s: %u groups initialized\n",
 	      ofd_obd(ofd)->obd_name, ofd->ofd_max_group + 1);
 cleanup:
 	RETURN(rc);

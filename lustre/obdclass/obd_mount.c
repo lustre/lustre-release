@@ -1595,7 +1595,8 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 	LASSERT(!(rc & LDD_F_NEED_INDEX));
 	/* keep only LDD flags */
 	mti->mti_flags = lsi->lsi_flags & LDD_F_MASK;
-	mti->mti_flags |= LDD_F_UPDATE;
+	if (mti->mti_flags & (LDD_F_WRITECONF | LDD_F_VIRGIN))
+		mti->mti_flags |= LDD_F_UPDATE;
 	strncpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
 		sizeof(mti->mti_params));
 	return 0;

@@ -1221,13 +1221,9 @@ dont_check_exports:
 	}
 
 	cfs_spin_lock(&export->exp_lock);
-	if (export->exp_imp_reverse != NULL) {
+	if (export->exp_imp_reverse != NULL)
 		/* destroyed import can be still referenced in ctxt */
-		obd_set_info_async(req->rq_svc_thread->t_env, export,
-				   sizeof(KEY_REVIMP_UPD), KEY_REVIMP_UPD,
-				   0, NULL, NULL);
 		tmp_imp = export->exp_imp_reverse;
-	}
 	export->exp_imp_reverse = revimp;
 	cfs_spin_unlock(&export->exp_lock);
 

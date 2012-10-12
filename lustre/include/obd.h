@@ -1182,7 +1182,6 @@ enum obd_cleanup_stage {
 #define KEY_NEXT_ID             "next_id"
 #define KEY_READ_ONLY           "read-only"
 #define KEY_REGISTER_TARGET     "register_target"
-#define KEY_REVIMP_UPD          "revimp_update"
 #define KEY_SET_FS              "set_fs"
 #define KEY_TGT_COUNT           "tgt_count"
 /*      KEY_SET_INFO in lustre_idl.h */
