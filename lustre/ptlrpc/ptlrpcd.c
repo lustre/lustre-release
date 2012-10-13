@@ -477,12 +477,14 @@ static int ptlrpcd(void *arg)
         if (!cfs_list_empty(&set->set_requests))
                 ptlrpc_set_wait(set);
         lu_context_fini(&env.le_ctx);
-        cfs_complete(&pc->pc_finishing);
 
         cfs_clear_bit(LIOD_START, &pc->pc_flags);
         cfs_clear_bit(LIOD_STOP, &pc->pc_flags);
         cfs_clear_bit(LIOD_FORCE, &pc->pc_flags);
         cfs_clear_bit(LIOD_BIND, &pc->pc_flags);
+
+        cfs_complete(&pc->pc_finishing);
+
         return 0;
 }
 
