@@ -5301,7 +5301,7 @@ test_101d() {
         { skip "Need free space ${size}M, have $space" && return; }
 
     echo Creating ${size}M test file $file
-    dd if=/dev/zero of=$file bs=1M count=$size
+    dd if=/dev/zero of=$file bs=1M count=$size || error "dd failed"
     echo Cancel LRU locks on lustre client to flush the client cache
     cancel_lru_locks osc
 

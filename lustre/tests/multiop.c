@@ -369,9 +369,12 @@ int main(int argc, char **argv)
                                         perror("read");
                                         exit(save_errno);
                                 }
-                                if (rc < len)
-                                        fprintf(stderr, "short read: %u/%u\n",
-                                                rc, len);
+				if (rc < len) {
+					fprintf(stderr, "short read: %u/%u\n",
+						rc, len);
+					if (rc == 0)
+						exit(ENODATA);
+				}
                                 len -= rc;
                                 if (verbose >= 2)
                                         printf("%.*s\n", rc, buf_align);
