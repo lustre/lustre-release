@@ -33,151 +33,29 @@
  * This file is part of Lustre, http://www.lustre.org/
  * Lustre is a trademark of Sun Microsystems, Inc.
  *
- * Lustre Common Target
- * These are common function for MDT and OST recovery-related functionality
+ * Lustre Unified Target
+ * These are common function to work with last_received file
  *
- *   Author: Mikhail Pershin <tappro@sun.com>
+ * Author: Mikhail Pershin <mike.pershin@intel.com>
  */
-
 #include <obd.h>
-#include <lustre_fsfilt.h>
 #include <obd_class.h>
 #include <lustre_fid.h>
 
-/**
- * Common data shared by tg-level handlers. This is allocated per-thread to
- * reduce stack consumption.
- */
-struct tg_thread_info {
-	/* server and client data buffers */
-	struct lr_server_data  tti_lsd;
-	struct lsd_client_data tti_lcd;
-	struct lu_buf	       tti_buf;
-	loff_t		       tti_off;
-};
+#include "tgt_internal.h"
 
-static inline struct lu_buf *tti_buf_lsd(struct tg_thread_info *tti)
+static inline struct lu_buf *tti_buf_lsd(struct tgt_thread_info *tti)
 {
 	tti->tti_buf.lb_buf = &tti->tti_lsd;
 	tti->tti_buf.lb_len = sizeof(tti->tti_lsd);
 	return &tti->tti_buf;
 }
 
-static inline struct lu_buf *tti_buf_lcd(struct tg_thread_info *tti)
+static inline struct lu_buf *tti_buf_lcd(struct tgt_thread_info *tti)
 {
 	tti->tti_buf.lb_buf = &tti->tti_lcd;
 	tti->tti_buf.lb_len = sizeof(tti->tti_lcd);
 	return &tti->tti_buf;
-}
-
-extern struct lu_context_key tg_thread_key;
-
-static inline struct tg_thread_info *tg_th_info(const struct lu_env *env)
-{
-	struct tg_thread_info *tti;
-
-	tti = lu_context_key_get(&env->le_ctx, &tg_thread_key);
-	LASSERT(tti);
-	return tti;
-}
-
-/**
- * Update client data in last_rcvd file. An obd API
- */
-static int obt_client_data_update(struct obd_export *exp)
-{
-        struct tg_export_data *ted = &exp->exp_target_data;
-        struct obd_device_target *obt = &exp->exp_obd->u.obt;
-        struct lu_target *lut = class_exp2tgt(exp);
-        loff_t off = ted->ted_lr_off;
-        int rc = 0;
-
-        rc = fsfilt_write_record(exp->exp_obd, obt->obt_rcvd_filp,
-                                 ted->ted_lcd, sizeof(*ted->ted_lcd), &off, 0);
-
-        CDEBUG(D_INFO, "update client idx %u last_epoch %#x (%#x)\n",
-               ted->ted_lr_idx, le32_to_cpu(ted->ted_lcd->lcd_last_epoch),
-               le32_to_cpu(lut->lut_lsd.lsd_start_epoch));
-
-        return rc;
-}
-
-/**
- * Update server data in last_rcvd file. An obd API
- */
-int obt_server_data_update(struct lu_target *lut, int force_sync)
-{
-        struct obd_device_target *obt = &lut->lut_obd->u.obt;
-        loff_t off = 0;
-        int rc;
-        ENTRY;
-
-        CDEBUG(D_SUPER,
-               "%s: mount_count is "LPU64", last_transno is "LPU64"\n",
-               lut->lut_lsd.lsd_uuid,
-               le64_to_cpu(lut->lut_lsd.lsd_mount_count),
-               le64_to_cpu(lut->lut_lsd.lsd_last_transno));
-
-        rc = fsfilt_write_record(lut->lut_obd, obt->obt_rcvd_filp,
-                                 &lut->lut_lsd, sizeof(lut->lut_lsd),
-                                 &off, force_sync);
-        if (rc)
-                CERROR("error writing lr_server_data: rc = %d\n", rc);
-
-        RETURN(rc);
-}
-
-/**
- * Update client epoch with server's one
- */
-void obt_client_epoch_update(struct obd_export *exp)
-{
-        struct lsd_client_data *lcd = exp->exp_target_data.ted_lcd;
-        struct lu_target *lut = class_exp2tgt(exp);
-
-        /** VBR: set client last_epoch to current epoch */
-        if (le32_to_cpu(lcd->lcd_last_epoch) >=
-            le32_to_cpu(lut->lut_lsd.lsd_start_epoch))
-                return;
-        lcd->lcd_last_epoch = lut->lut_lsd.lsd_start_epoch;
-        obt_client_data_update(exp);
-}
-
-/**
- * Increment server epoch. An obd API
- */
-static void obt_boot_epoch_update(struct lu_target *lut)
-{
-        struct obd_device *obd = lut->lut_obd;
-        __u32 start_epoch;
-        struct ptlrpc_request *req;
-        cfs_list_t client_list;
-
-        cfs_spin_lock(&lut->lut_translock);
-        start_epoch = lr_epoch(le64_to_cpu(lut->lut_last_transno)) + 1;
-        lut->lut_last_transno = cpu_to_le64((__u64)start_epoch <<
-                                            LR_EPOCH_BITS);
-        lut->lut_lsd.lsd_start_epoch = cpu_to_le32(start_epoch);
-        cfs_spin_unlock(&lut->lut_translock);
-
-        CFS_INIT_LIST_HEAD(&client_list);
-        cfs_spin_lock(&obd->obd_recovery_task_lock);
-        cfs_list_splice_init(&obd->obd_final_req_queue, &client_list);
-        cfs_spin_unlock(&obd->obd_recovery_task_lock);
-
-        /**
-         * go through list of exports participated in recovery and
-         * set new epoch for them
-         */
-        cfs_list_for_each_entry(req, &client_list, rq_list) {
-                LASSERT(!req->rq_export->exp_delayed);
-                obt_client_epoch_update(req->rq_export);
-        }
-        /** return list back at once */
-        cfs_spin_lock(&obd->obd_recovery_task_lock);
-        cfs_list_splice_init(&client_list, &obd->obd_final_req_queue);
-        cfs_spin_unlock(&obd->obd_recovery_task_lock);
-        obt_server_data_update(lut, 1);
 }
 
 /**
@@ -225,7 +103,7 @@ EXPORT_SYMBOL(lut_client_free);
 int lut_client_data_read(const struct lu_env *env, struct lu_target *tg,
 			 struct lsd_client_data *lcd, loff_t *off, int index)
 {
-	struct tg_thread_info *tti = tg_th_info(env);
+	struct tgt_thread_info *tti = tgt_th_info(env);
 	int rc;
 
 	tti_buf_lcd(tti);
@@ -251,7 +129,7 @@ int lut_client_data_write(const struct lu_env *env, struct lu_target *tg,
 			  struct lsd_client_data *lcd, loff_t *off,
 			  struct thandle *th)
 {
-	struct tg_thread_info *tti = tg_th_info(env);
+	struct tgt_thread_info *tti = tgt_th_info(env);
 
 	lcd_cpu_to_le(lcd, &tti->tti_lcd);
 	tti_buf_lcd(tti);
@@ -267,7 +145,7 @@ int lut_client_data_update(const struct lu_env *env, struct obd_export *exp)
 {
 	struct tg_export_data *ted = &exp->exp_target_data;
 	struct lu_target      *tg = class_exp2tgt(exp);
-	struct tg_thread_info *tti = tg_th_info(env);
+	struct tgt_thread_info *tti = tgt_th_info(env);
 	struct thandle	      *th;
 	int		       rc = 0;
 
@@ -316,7 +194,7 @@ out:
 
 int lut_server_data_read(const struct lu_env *env, struct lu_target *tg)
 {
-	struct tg_thread_info *tti = tg_th_info(env);
+	struct tgt_thread_info *tti = tgt_th_info(env);
 	int rc;
 
 	tti->tti_off = 0;
@@ -335,7 +213,7 @@ EXPORT_SYMBOL(lut_server_data_read);
 int lut_server_data_write(const struct lu_env *env, struct lu_target *tg,
 			  struct thandle *th)
 {
-	struct tg_thread_info *tti = tg_th_info(env);
+	struct tgt_thread_info *tti = tgt_th_info(env);
 	int rc;
 	ENTRY;
 
@@ -360,7 +238,7 @@ EXPORT_SYMBOL(lut_server_data_write);
 int lut_server_data_update(const struct lu_env *env, struct lu_target *tg,
 			   int sync)
 {
-	struct tg_thread_info *tti = tg_th_info(env);
+	struct tgt_thread_info *tti = tgt_th_info(env);
 	struct thandle	*th;
 	int		    rc = 0;
 
@@ -466,9 +344,6 @@ void lut_boot_epoch_update(struct lu_target *lut)
 
         if (lut->lut_obd->obd_stopping)
                 return;
-        /** Increase server epoch after recovery */
-        if (lut->lut_bottom == NULL)
-                return obt_boot_epoch_update(lut);
 
 	rc = lu_env_init(&env, LCT_DT_THREAD);
         if (rc) {
@@ -799,87 +674,3 @@ int lut_client_del(const struct lu_env *env, struct obd_export *exp)
 	RETURN(rc);
 }
 EXPORT_SYMBOL(lut_client_del);
-
-int lut_init(const struct lu_env *env, struct lu_target *lut,
-	     struct obd_device *obd, struct dt_device *dt)
-{
-	struct dt_object_format	dof;
-	struct lu_attr		attr;
-	struct lu_fid		fid;
-	struct dt_object       *o;
-	int			rc = 0;
-        ENTRY;
-
-        LASSERT(lut);
-        LASSERT(obd);
-        lut->lut_obd = obd;
-        lut->lut_bottom = dt;
-        lut->lut_last_rcvd = NULL;
-        obd->u.obt.obt_lut = lut;
-
-        cfs_spin_lock_init(&lut->lut_translock);
-
-        OBD_ALLOC(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
-        if (lut->lut_client_bitmap == NULL)
-                RETURN(-ENOMEM);
-
-        /** obdfilter has no lu_device stack yet */
-        if (dt == NULL)
-                RETURN(rc);
-
-	memset(&attr, 0, sizeof(attr));
-	attr.la_valid = LA_MODE;
-	attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
-	dof.dof_type = dt_mode_to_dft(S_IFREG);
-
-	lu_local_obj_fid(&fid, MDT_LAST_RECV_OID);
-
-	o = dt_find_or_create(env, lut->lut_bottom, &fid, &dof, &attr);
-        if (!IS_ERR(o)) {
-                lut->lut_last_rcvd = o;
-        } else {
-                OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
-                lut->lut_client_bitmap = NULL;
-                rc = PTR_ERR(o);
-                CERROR("cannot open %s: rc = %d\n", LAST_RCVD, rc);
-        }
-
-        RETURN(rc);
-}
-EXPORT_SYMBOL(lut_init);
-
-void lut_fini(const struct lu_env *env, struct lu_target *lut)
-{
-        ENTRY;
-
-        if (lut->lut_client_bitmap) {
-                OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
-                lut->lut_client_bitmap = NULL;
-        }
-        if (lut->lut_last_rcvd) {
-                lu_object_put(env, &lut->lut_last_rcvd->do_lu);
-                lut->lut_last_rcvd = NULL;
-        }
-        EXIT;
-}
-EXPORT_SYMBOL(lut_fini);
-
-/* context key constructor/destructor: tg_key_init, tg_key_fini */
-LU_KEY_INIT_FINI(tg, struct tg_thread_info);
-/* context key: tg_thread_key */
-LU_CONTEXT_KEY_DEFINE(tg, LCT_MD_THREAD|LCT_DT_THREAD);
-LU_KEY_INIT_GENERIC(tg);
-EXPORT_SYMBOL(tg_thread_key);
-
-int lut_mod_init(void)
-{
-	tg_key_init_generic(&tg_thread_key, NULL);
-	lu_context_key_register_many(&tg_thread_key, NULL);
-	return 0;
-}
-
-void lut_mod_exit(void)
-{
-	lu_context_key_degister_many(&tg_thread_key, NULL);
-}
-

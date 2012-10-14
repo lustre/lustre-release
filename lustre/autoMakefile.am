@@ -43,7 +43,7 @@ ALWAYS_SUBDIRS = include lvfs obdclass ldlm ptlrpc obdecho \
 	mgc fid fld doc utils tests scripts autoconf contrib conf
 
 SERVER_SUBDIRS = ost mds mgs mdt cmm mdd ofd osd-zfs osd-ldiskfs \
-	quota osp lod
+	quota osp lod target
 
 CLIENT_SUBDIRS = mdc lmv llite lclient lov osc
 

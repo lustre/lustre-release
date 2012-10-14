@@ -2522,6 +2522,7 @@ lustre/mgc/Makefile
 lustre/mgc/autoMakefile
 lustre/mgs/Makefile
 lustre/mgs/autoMakefile
+lustre/target/Makefile
 lustre/ptlrpc/Makefile
 lustre/ptlrpc/autoMakefile
 lustre/ptlrpc/gss/Makefile

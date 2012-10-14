@@ -112,7 +112,7 @@ __init int ptlrpc_init(void)
 
 #ifdef __KERNEL__
 	cleanup_phase = 7;
-	rc = lut_mod_init();
+	rc = tgt_mod_init();
 	if (rc)
 		GOTO(cleanup, rc);
 #endif
@@ -146,7 +146,7 @@ cleanup:
 #ifdef __KERNEL__
 static void __exit ptlrpc_exit(void)
 {
-	lut_mod_exit();
+	tgt_mod_exit();
         llog_recov_fini();
         sptlrpc_fini();
         ldlm_exit();

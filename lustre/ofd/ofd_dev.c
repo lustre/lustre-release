@@ -565,7 +565,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_grant_ratio =
 		ofd_grant_ratio_conv(m->ofd_dt_conf.ddp_grant_reserved);
 
-	rc = lut_init(env, &m->ofd_lut, obd, m->ofd_osd);
+	rc = tgt_init(env, &m->ofd_lut, obd, m->ofd_osd);
 	if (rc)
 		GOTO(err_free_ns, rc);
 
@@ -575,7 +575,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 
 	RETURN(0);
 err_fini_lut:
-	lut_fini(env, &m->ofd_lut);
+	tgt_fini(env, &m->ofd_lut);
 err_free_ns:
 	ldlm_namespace_free(m->ofd_namespace, 0, obd->obd_force);
 	obd->obd_namespace = m->ofd_namespace = NULL;
@@ -595,7 +595,7 @@ static void ofd_fini(const struct lu_env *env, struct ofd_device *m)
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
 
-	lut_fini(env, &m->ofd_lut);
+	tgt_fini(env, &m->ofd_lut);
 	ofd_fs_cleanup(env, m);
 
 	ofd_free_capa_keys(m);

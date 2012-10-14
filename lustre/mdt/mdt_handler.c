@@ -5035,7 +5035,7 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
 
         mdt_procfs_fini(m);
 
-        lut_fini(env, &m->mdt_lut);
+        tgt_fini(env, &m->mdt_lut);
         mdt_fs_cleanup(env, m);
         upcall_cache_cleanup(m->mdt_identity_cache);
         m->mdt_identity_cache = NULL;
@@ -5215,7 +5215,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
                 }
         }
 
-        rc = lut_init(env, &m->mdt_lut, obd, m->mdt_bottom);
+        rc = tgt_init(env, &m->mdt_lut, obd, m->mdt_bottom);
         if (rc)
                 GOTO(err_fini_stack, rc);
 
@@ -5328,7 +5328,7 @@ err_free_ns:
 err_fini_seq:
         mdt_seq_fini(env, m);
         mdt_fld_fini(env, m);
-        lut_fini(env, &m->mdt_lut);
+        tgt_fini(env, &m->mdt_lut);
 err_fini_stack:
         mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 err_lmi:

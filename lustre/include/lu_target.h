@@ -70,9 +70,9 @@ void lut_boot_epoch_update(struct lu_target *lut);
 int lut_last_commit_cb_add(struct thandle *th, struct lu_target *lut,
 			   struct obd_export *exp, __u64 transno);
 int lut_new_client_cb_add(struct thandle *th, struct obd_export *exp);
-int lut_init(const struct lu_env *env, struct lu_target *lut,
+int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	     struct obd_device *obd, struct dt_device *dt);
-void lut_fini(const struct lu_env *env, struct lu_target *lut);
+void tgt_fini(const struct lu_env *env, struct lu_target *lut);
 int lut_client_alloc(struct obd_export *exp);
 void lut_client_free(struct obd_export *exp);
 int lut_client_del(const struct lu_env *env, struct obd_export *exp);

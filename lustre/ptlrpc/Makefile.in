@@ -1,7 +1,8 @@
 MODULES := ptlrpc
 LDLM := @top_srcdir@/lustre/ldlm/
+TARGET := @top_srcdir@/lustre/target/
 
-ldlm_objs := $(LDLM)l_lock.o $(LDLM)ldlm_lock.o 
+ldlm_objs := $(LDLM)l_lock.o $(LDLM)ldlm_lock.o
 ldlm_objs += $(LDLM)ldlm_resource.o $(LDLM)ldlm_lib.o
 ldlm_objs += $(LDLM)ldlm_plain.o $(LDLM)ldlm_extent.o
 ldlm_objs += $(LDLM)ldlm_request.o $(LDLM)ldlm_lockd.o
@@ -15,9 +16,10 @@ ptlrpc_objs += pers.o lproc_ptlrpc.o wiretest.o layout.o
 ptlrpc_objs += sec.o sec_bulk.o sec_gc.o sec_config.o sec_lproc.o
 ptlrpc_objs += sec_null.o sec_plain.o
 
-@SERVER_TRUE@ptlrpc_objs += target.o
+target_objs := $(TARGET)tgt_main.o $(TARGET)tgt_lastrcvd.o
 
 ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs)
+@SERVER_TRUE@ptlrpc-objs += $(target_objs)
 
 @GSS_TRUE@subdir-m += gss
 
@@ -32,7 +34,12 @@ l_lock.c: @LUSTRE@/ldlm/l_lock.c
 interval_tree.c: @LUSTRE@/ldlm/interval_tree.c
 	ln -sf $< $@
 
-EXTRA_DIST = $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
-EXTRA_PRE_CFLAGS := -I@LUSTRE@/ldlm
+tgt_%.c: @LUSTRE@/target/tgt_%.c
+	ln -sf $< $@
+
+EXTRA_DIST := $(ptlrpc_objs:.o=.c) ptlrpc_internal.h
+@SERVER_TRUE@EXTRA_DIST += $(TARGET)tgt_internal.h
+
+EXTRA_PRE_CFLAGS := -I@LUSTRE@/ldlm -I@LUSTRE@/target
 
 @INCLUDE_RULES@

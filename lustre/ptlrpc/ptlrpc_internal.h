@@ -156,16 +156,15 @@ static inline int ll_rpc_recoverable_error(int rc)
 }
 
 #ifdef HAVE_SERVER_SUPPORT
-/* target.c */
-int lut_mod_init(void);
-void lut_mod_exit(void);
+int tgt_mod_init(void);
+void tgt_mod_exit(void);
 #else
-static inline int lut_mod_init(void)
+static inline int tgt_mod_init(void)
 {
 	return 0;
 }
 
-static inline void lut_mod_exit(void)
+static inline void tgt_mod_exit(void)
 {
 	return;
 }
