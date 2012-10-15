@@ -1585,6 +1585,7 @@ static int osd_attr_set(const struct lu_env *env,
         OSD_EXEC_OP(handle, attr_set);
 
         inode = obj->oo_inode;
+	ll_vfs_dq_init(inode);
 
 	rc = osd_quota_transfer(inode, attr);
 	if (rc)
@@ -2103,6 +2104,7 @@ static int __osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
         if (fl & LU_XATTR_CREATE)
                 fs_flags |= XATTR_CREATE;
 
+	ll_vfs_dq_init(inode);
         dentry->d_inode = inode;
         rc = inode->i_op->setxattr(dentry, name, buf->lb_buf,
                                    buf->lb_len, fs_flags);
@@ -2503,6 +2505,7 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 
         OSD_EXEC_OP(handle, xattr_set);
 
+	ll_vfs_dq_init(inode);
         dentry->d_inode = inode;
         rc = inode->i_op->removexattr(dentry, name);
         return rc;
@@ -2988,6 +2991,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
                 RETURN(-EACCES);
 
+	ll_vfs_dq_init(dir);
         dentry = osd_child_dentry_get(env, obj,
                                       (char *)key, strlen((char *)key));
 
@@ -3207,6 +3211,8 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
         } else {
                 child->d_fsdata = NULL;
         }
+	LASSERT(pobj->oo_inode);
+	ll_vfs_dq_init(pobj->oo_inode);
         rc = osd_ldiskfs_add_entry(oth->ot_handle, child, cinode, hlock);
 
         RETURN(rc);

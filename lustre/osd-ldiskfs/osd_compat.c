@@ -314,6 +314,7 @@ int osd_compat_del_entry(struct osd_thread_info *info, struct osd_device *osd,
         child->d_parent = dird;
         child->d_inode = NULL;
 
+	ll_vfs_dq_init(dir);
 	mutex_lock(&dir->i_mutex);
 	rc = -ENOENT;
 	bh = osd_ldiskfs_find_entry(dir, child, &de, NULL);
@@ -352,6 +353,7 @@ int osd_compat_add_entry(struct osd_thread_info *info, struct osd_device *osd,
         child->d_parent = dir;
         child->d_inode = inode;
 
+	ll_vfs_dq_init(dir->d_inode);
 	mutex_lock(&dir->d_inode->i_mutex);
 	rc = osd_ldiskfs_add_entry(oh->ot_handle, child, inode, NULL);
 	mutex_unlock(&dir->d_inode->i_mutex);
