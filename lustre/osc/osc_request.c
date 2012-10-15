@@ -3163,27 +3163,28 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
            Even if something bad goes through, we'd get a -EINVAL from OST
            anyway. */
 
-        if (KEY_IS(KEY_GRANT_SHRINK))
-                req = ptlrpc_request_alloc(imp, &RQF_OST_SET_GRANT_INFO);
-        else
-                req = ptlrpc_request_alloc(imp, &RQF_OBD_SET_INFO);
+	req = ptlrpc_request_alloc(imp, KEY_IS(KEY_GRANT_SHRINK) ?
+						&RQF_OST_SET_GRANT_INFO :
+						&RQF_OBD_SET_INFO);
+	if (req == NULL)
+		RETURN(-ENOMEM);
 
-        if (req == NULL)
-                RETURN(-ENOMEM);
+	req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
+			     RCL_CLIENT, keylen);
+	if (!KEY_IS(KEY_GRANT_SHRINK))
+		req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL,
+				     RCL_CLIENT, vallen);
+	rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_SET_INFO);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
-        req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_KEY,
-                             RCL_CLIENT, keylen);
-        req_capsule_set_size(&req->rq_pill, &RMF_SETINFO_VAL,
-                             RCL_CLIENT, vallen);
-        rc = ptlrpc_request_pack(req, LUSTRE_OST_VERSION, OST_SET_INFO);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
-
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
-        memcpy(tmp, key, keylen);
-        tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
+	tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_KEY);
+	memcpy(tmp, key, keylen);
+	tmp = req_capsule_client_get(&req->rq_pill, KEY_IS(KEY_GRANT_SHRINK) ?
+							&RMF_OST_BODY :
+							&RMF_SETINFO_VAL);
         memcpy(tmp, val, vallen);
 
 	if (KEY_IS(KEY_GRANT_SHRINK)) {

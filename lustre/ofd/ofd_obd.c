@@ -514,6 +514,7 @@ static int ofd_set_info_async(const struct lu_env *env, struct obd_export *exp,
 	} else if (KEY_IS(KEY_GRANT_SHRINK)) {
 		struct ost_body *body = val;
 
+		ofd_info_init(env, exp);
 		/** handle grant shrink, similar to a read request */
 		ofd_grant_prepare_read(env, exp, &body->oa);
 	} else {
