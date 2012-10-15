@@ -2105,11 +2105,11 @@ ptlrpc_handle_rs(struct ptlrpc_reply_state *rs)
         if (nlocks == 0 && !been_handled) {
                 /* If we see this, we should already have seen the warning
                  * in mds_steal_ack_locks()  */
-                CWARN("All locks stolen from rs %p x"LPD64".t"LPD64
-                      " o%d NID %s\n",
-                      rs,
-                      rs->rs_xid, rs->rs_transno, rs->rs_opc,
-                      libcfs_nid2str(exp->exp_connection->c_peer.nid));
+		CDEBUG(D_HA, "All locks stolen from rs %p x"LPD64".t"LPD64
+		       " o%d NID %s\n",
+		       rs,
+		       rs->rs_xid, rs->rs_transno, rs->rs_opc,
+		       libcfs_nid2str(exp->exp_connection->c_peer.nid));
         }
 
         if ((!been_handled && rs->rs_on_net) || nlocks > 0) {

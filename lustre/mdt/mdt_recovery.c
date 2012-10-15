@@ -615,11 +615,11 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
 
                 cfs_list_del_init (&oldrep->rs_exp_list);
 
-                CWARN("Stealing %d locks from rs %p x"LPD64".t"LPD64
-                      " o%d NID %s\n",
-                      oldrep->rs_nlocks, oldrep,
-                      oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_opc,
-                      libcfs_nid2str(exp->exp_connection->c_peer.nid));
+		CDEBUG(D_HA, "Stealing %d locks from rs %p x"LPD64".t"LPD64
+		       " o%d NID %s\n",
+		       oldrep->rs_nlocks, oldrep,
+		       oldrep->rs_xid, oldrep->rs_transno, oldrep->rs_opc,
+		       libcfs_nid2str(exp->exp_connection->c_peer.nid));
 
                 for (i = 0; i < oldrep->rs_nlocks; i++)
                         ptlrpc_save_lock(req, &oldrep->rs_locks[i],

@@ -2460,7 +2460,7 @@ void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id)
         rs->rs_xid       = req->rq_xid;
         rs->rs_transno   = req->rq_transno;
         rs->rs_export    = exp;
-        rs->rs_opc       = lustre_msg_get_opc(rs->rs_msg);
+        rs->rs_opc       = lustre_msg_get_opc(req->rq_reqmsg);
 
         cfs_spin_lock(&exp->exp_uncommitted_replies_lock);
         CDEBUG(D_NET, "rs transno = "LPU64", last committed = "LPU64"\n",
