@@ -59,33 +59,33 @@ struct lu_target {
         unsigned long           *lut_client_bitmap;
 };
 
-typedef void (*lut_cb_t)(struct lu_target *lut, __u64 transno,
+typedef void (*tgt_cb_t)(struct lu_target *lut, __u64 transno,
                          void *data, int err);
-struct lut_commit_cb {
-        lut_cb_t  lut_cb_func;
-        void     *lut_cb_data;
+struct tgt_commit_cb {
+        tgt_cb_t  tgt_cb_func;
+        void     *tgt_cb_data;
 };
 
-void lut_boot_epoch_update(struct lu_target *lut);
-int lut_last_commit_cb_add(struct thandle *th, struct lu_target *lut,
+void tgt_boot_epoch_update(struct lu_target *lut);
+int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *lut,
 			   struct obd_export *exp, __u64 transno);
-int lut_new_client_cb_add(struct thandle *th, struct obd_export *exp);
+int tgt_new_client_cb_add(struct thandle *th, struct obd_export *exp);
 int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	     struct obd_device *obd, struct dt_device *dt);
 void tgt_fini(const struct lu_env *env, struct lu_target *lut);
-int lut_client_alloc(struct obd_export *exp);
-void lut_client_free(struct obd_export *exp);
-int lut_client_del(const struct lu_env *env, struct obd_export *exp);
-int lut_client_add(const struct lu_env *env, struct obd_export *exp, int);
-int lut_client_new(const struct lu_env *env, struct obd_export *exp);
-int lut_client_data_read(const struct lu_env *env, struct lu_target *tg,
+int tgt_client_alloc(struct obd_export *exp);
+void tgt_client_free(struct obd_export *exp);
+int tgt_client_del(const struct lu_env *env, struct obd_export *exp);
+int tgt_client_add(const struct lu_env *env, struct obd_export *exp, int);
+int tgt_client_new(const struct lu_env *env, struct obd_export *exp);
+int tgt_client_data_read(const struct lu_env *env, struct lu_target *tg,
 			 struct lsd_client_data *lcd, loff_t *off, int index);
-int lut_client_data_write(const struct lu_env *env, struct lu_target *tg,
+int tgt_client_data_write(const struct lu_env *env, struct lu_target *tg,
 			  struct lsd_client_data *lcd, loff_t *off, struct thandle *th);
-int lut_server_data_read(const struct lu_env *env, struct lu_target *tg);
-int lut_server_data_write(const struct lu_env *env, struct lu_target *tg,
+int tgt_server_data_read(const struct lu_env *env, struct lu_target *tg);
+int tgt_server_data_write(const struct lu_env *env, struct lu_target *tg,
 			  struct thandle *th);
-int lut_server_data_update(const struct lu_env *env, struct lu_target *tg, int sync);
-int lut_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg, loff_t off);
+int tgt_server_data_update(const struct lu_env *env, struct lu_target *tg, int sync);
+int tgt_truncate_last_rcvd(const struct lu_env *env, struct lu_target *tg, loff_t off);
 
 #endif /* __LUSTRE_LU_TARGET_H */

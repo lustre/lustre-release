@@ -2075,7 +2075,7 @@ static int target_recovery_thread(void *arg)
          */
         CDEBUG(D_INFO, "3: final stage - process recovery completion pings\n");
         /** Update server last boot epoch */
-        lut_boot_epoch_update(lut);
+        tgt_boot_epoch_update(lut);
         /* We drop recoverying flag to forward all new requests
          * to regular mds_handle() since now */
         cfs_spin_lock(&obd->obd_dev_lock);
@@ -2176,7 +2176,7 @@ void target_recovery_init(struct lu_target *lut, svc_handler_t handler)
         struct obd_device *obd = lut->lut_obd;
         if (obd->obd_max_recoverable_clients == 0) {
                 /** Update server last boot epoch */
-                lut_boot_epoch_update(lut);
+                tgt_boot_epoch_update(lut);
                 return;
         }
 

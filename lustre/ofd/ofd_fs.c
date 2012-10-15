@@ -299,7 +299,7 @@ int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
 		 * fsfilt_read_record(), in case sizeof(*lcd)
 		 * isn't the same as fsd->lsd_client_size.  */
 		off = lsd->lsd_client_start + cl_idx * lsd->lsd_client_size;
-		rc = lut_client_data_read(env, &ofd->ofd_lut, lcd, &off, cl_idx);
+		rc = tgt_client_data_read(env, &ofd->ofd_lut, lcd, &off, cl_idx);
 		if (rc) {
 			CERROR("error reading FILT %s idx %d off %llu: rc %d\n",
 			       LAST_RCVD, cl_idx, off, rc);
@@ -336,7 +336,7 @@ int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
 		fed = &exp->exp_filter_data;
 		*fed->fed_ted.ted_lcd = *lcd;
 
-		rc = lut_client_add(env, exp, cl_idx);
+		rc = tgt_client_add(env, exp, cl_idx);
 		LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 		/* VBR: set export last committed version */
 		exp->exp_last_committed = last_rcvd;
@@ -394,7 +394,7 @@ int ofd_server_data_init(const struct lu_env *env, struct ofd_device *ofd)
 		lsd->lsd_subdir_count = FILTER_SUBDIR_COUNT;
 		lsd->lsd_feature_incompat = OBD_INCOMPAT_OST;
 	} else {
-		rc = lut_server_data_read(env, &ofd->ofd_lut);
+		rc = tgt_server_data_read(env, &ofd->ofd_lut);
 		if (rc) {
 			CDEBUG(D_INODE,"OBD ofd: error reading %s: rc %d\n",
 			       LAST_RCVD, rc);
@@ -457,7 +457,7 @@ int ofd_server_data_init(const struct lu_env *env, struct ofd_device *ofd)
 	cfs_spin_unlock(&ofd->ofd_lut.lut_translock);
 
 	/* save it, so mount count and last_transno is current */
-	rc = lut_server_data_update(env, &ofd->ofd_lut, 0);
+	rc = tgt_server_data_update(env, &ofd->ofd_lut, 0);
 	if (rc)
 		GOTO(err_fsd, rc);
 

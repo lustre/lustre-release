@@ -177,7 +177,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 			lsd->lsd_feature_compat |= OBD_COMPAT_OST;
 			/* sync is not needed here as lut_client_add will
 			 * set exp_need_sync flag */
-			lut_server_data_update(env, &ofd->ofd_lut, 0);
+			tgt_server_data_update(env, &ofd->ofd_lut, 0);
 		} else if (index != data->ocd_index) {
 			LCONSOLE_ERROR_MSG(0x136, "Connection from %s to index"
 					   " %u doesn't match actual OST index"
@@ -307,7 +307,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 
 		memcpy(ted->ted_lcd->lcd_uuid, cluuid,
 		       sizeof(ted->ted_lcd->lcd_uuid));
-		rc = lut_client_new(env, exp);
+		rc = tgt_client_new(env, exp);
 		if (rc != 0)
 			GOTO(out, rc);
 		ofd_export_stats_init(ofd, exp, localdata);
@@ -355,7 +355,7 @@ static int ofd_obd_disconnect(struct obd_export *exp)
 	/* Do not erase record for recoverable client. */
 	if (exp->exp_obd->obd_replayable &&
 	    (!exp->exp_obd->obd_fail || exp->exp_failed))
-		lut_client_del(&env, exp);
+		tgt_client_del(&env, exp);
 	lu_env_fini(&env);
 
 	class_export_put(exp);
@@ -377,7 +377,7 @@ static int ofd_init_export(struct obd_export *exp)
 				     &exp->exp_client_uuid)))
 		return 0;
 
-	rc = lut_client_alloc(exp);
+	rc = tgt_client_alloc(exp);
 	if (rc == 0)
 		ldlm_init_export(exp);
 	if (rc)
@@ -402,7 +402,7 @@ static int ofd_destroy_export(struct obd_export *exp)
 		return 0;
 
 	ldlm_destroy_export(exp);
-	lut_client_free(exp);
+	tgt_client_free(exp);
 
 	ofd_fmd_cleanup(exp);
 

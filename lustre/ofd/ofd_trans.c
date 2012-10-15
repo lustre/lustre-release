@@ -133,7 +133,7 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 	if (lcd == NULL) {
 		CWARN("commit transaction for disconnected client %s: rc %d\n",
 		      info->fti_exp->exp_client_uuid.uuid, rc);
-		err = lut_server_data_write(info->fti_env, &ofd->ofd_lut, th);
+		err = tgt_server_data_write(info->fti_env, &ofd->ofd_lut, th);
 		RETURN(err);
 	}
 	/* ofd connect may cause transaction before export has last_rcvd
@@ -157,7 +157,7 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 		ofd->ofd_lut.lut_lsd.lsd_last_transno =
 						ofd->ofd_lut.lut_last_transno;
 		cfs_spin_unlock(&ofd->ofd_lut.lut_translock);
-		lut_server_data_write(info->fti_env, &ofd->ofd_lut, th);
+		tgt_server_data_write(info->fti_env, &ofd->ofd_lut, th);
 	}
 
 	*transno_p = info->fti_transno;
@@ -179,10 +179,10 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 		}
 		cfs_spin_unlock(&tg->lut_translock);
 		if (update)
-			err = lut_server_data_write(info->fti_env, tg, th);
+			err = tgt_server_data_write(info->fti_env, tg, th);
 	} else {
 		LASSERT(fed->fed_ted.ted_lr_off > 0);
-		err = lut_client_data_write(info->fti_env, &ofd->ofd_lut, lcd,
+		err = tgt_client_data_write(info->fti_env, &ofd->ofd_lut, lcd,
 				    &off, th);
 	}
 
@@ -244,7 +244,7 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 	       info->fti_transno, ofd_obd(ofd)->obd_last_committed);
 
 	/* if can't add callback, do sync write */
-	txn->th_sync = !!lut_last_commit_cb_add(txn, &ofd->ofd_lut,
+	txn->th_sync = !!tgt_last_commit_cb_add(txn, &ofd->ofd_lut,
 						info->fti_exp,
 						info->fti_transno);
 

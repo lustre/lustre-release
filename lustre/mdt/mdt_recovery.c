@@ -106,7 +106,7 @@ static int mdt_clients_data_init(const struct lu_env *env,
                 off = lsd->lsd_client_start +
                         cl_idx * lsd->lsd_client_size;
 
-		rc = lut_client_data_read(env, &mdt->mdt_lut, lcd, &off, cl_idx);
+		rc = tgt_client_data_read(env, &mdt->mdt_lut, lcd, &off, cl_idx);
                 if (rc) {
                         CERROR("error reading MDS %s idx %d, off %llu: rc %d\n",
                                LAST_RCVD, cl_idx, off, rc);
@@ -146,7 +146,7 @@ static int mdt_clients_data_init(const struct lu_env *env,
                 mti->mti_exp = exp;
                 /* copy on-disk lcd to the export */
                 *exp->exp_target_data.ted_lcd = *lcd;
-		rc = lut_client_add(env, exp, cl_idx);
+		rc = tgt_client_add(env, exp, cl_idx);
                 /* can't fail existing */
                 LASSERTF(rc == 0, "rc = %d\n", rc);
                 /* VBR: set export last committed version */
@@ -221,7 +221,7 @@ static int mdt_server_data_init(const struct lu_env *env,
                                             OBD_INCOMPAT_MULTI_OI;
         } else {
                 LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
-		rc = lut_server_data_read(env, &mdt->mdt_lut);
+		rc = tgt_server_data_read(env, &mdt->mdt_lut);
                 if (rc) {
                         CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
                         GOTO(out, rc);
@@ -258,7 +258,7 @@ static int mdt_server_data_init(const struct lu_env *env,
                         LCONSOLE_WARN("Mounting %s at first time on 1.8 FS, "
                                       "remove all clients for interop needs\n",
                                       obd->obd_name);
-			rc = lut_truncate_last_rcvd(env, &mdt->mdt_lut,
+			rc = tgt_truncate_last_rcvd(env, &mdt->mdt_lut,
 						    lsd->lsd_client_start);
 			if (rc)
 				GOTO(out, rc);
@@ -317,7 +317,7 @@ static int mdt_server_data_init(const struct lu_env *env,
         lsd->lsd_mount_count = obd->u.obt.obt_mount_count;
 
         /* save it, so mount count and last_transno is current */
-	rc = lut_server_data_update(env, &mdt->mdt_lut, 0);
+	rc = tgt_server_data_update(env, &mdt->mdt_lut, 0);
         if (rc)
                 GOTO(err_client, rc);
 
@@ -358,7 +358,7 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
                 cfs_mutex_unlock(&ted->ted_lcd_lock);
                 CWARN("commit transaction for disconnected client %s: rc %d\n",
                       req->rq_export->exp_client_uuid.uuid, rc);
-		err = lut_server_data_write(mti->mti_env, &mdt->mdt_lut, th);
+		err = tgt_server_data_write(mti->mti_env, &mdt->mdt_lut, th);
                 RETURN(err);
         }
 
@@ -440,14 +440,14 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
 		cfs_spin_unlock(&tg->lut_translock);
 
 		if (update)
-			err = lut_server_data_write(mti->mti_env, tg, th);
+			err = tgt_server_data_write(mti->mti_env, tg, th);
 	} else if (off <= 0) {
 		CERROR("%s: client idx %d has offset %lld\n",
 		       mdt2obd_dev(mdt)->obd_name, ted->ted_lr_idx, off);
 		cfs_mutex_unlock(&ted->ted_lcd_lock);
 		err = -EINVAL;
 	} else {
-		err = lut_client_data_write(mti->mti_env, &mdt->mdt_lut, lcd,
+		err = tgt_client_data_write(mti->mti_env, &mdt->mdt_lut, lcd,
 					    &off, th);
 		cfs_mutex_unlock(&ted->ted_lcd_lock);
         }
@@ -543,7 +543,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         req->rq_transno = mti->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, mti->mti_transno);
         /* if can't add callback, do sync write */
-        txn->th_sync |= !!lut_last_commit_cb_add(txn, &mdt->mdt_lut,
+        txn->th_sync |= !!tgt_last_commit_cb_add(txn, &mdt->mdt_lut,
                                                  mti->mti_exp,
                                                  mti->mti_transno);
         return mdt_last_rcvd_update(mti, txn);
