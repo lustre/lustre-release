@@ -99,11 +99,14 @@ lustre_fail() {
 
 RUNAS="runas -u $TSTID -g $TSTID"
 RUNAS2="runas -u $TSTID2 -g $TSTID2"
-FAIL_ON_ERROR=true check_runas_id $TSTID $TSTID $RUNAS
-FAIL_ON_ERROR=true check_runas_id $TSTID2 $TSTID2 $RUNAS2
 DD="dd if=/dev/zero bs=1M"
 
 FAIL_ON_ERROR=false
+
+check_runas_id_ret $TSTUSR $TSTUSR $RUNAS ||
+	error "Please create user $TSTUSR($TSTID) and group $TSTUSR($TSTID)"
+check_runas_id_ret $TSTUSR2 $TSTUSR2 $RUNAS2 ||
+	error "Please create user $TSTUSR2($TSTID2) and group $TSTUSR2($TSTID2)"
 
 # clear quota limits for a user or a group
 # usage: resetquota -u username
@@ -351,11 +354,16 @@ test_quota_performance() {
 
 # test basic quota performance b=21696
 test_0() {
-	setup_quota_test
-	trap cleanup_quota_test EXIT
-
 	local MB=100 # 100M
 	[ "$SLOW" = "no" ] && MB=10
+
+	local free_space=$(lfs df | grep "filesystem summary" | \
+				awk '{print $5}')
+	[ $free_space -le $((MB * 1024)) ] &&
+		skip "not enough space ${free_space} KB, " \
+			"required $((MB * 1024)) KB" && return
+	setup_quota_test
+	trap cleanup_quota_test EXIT
 
 	set_ost_qtype "none" || error "disable ost quota failed"
 	test_quota_performance $MB
