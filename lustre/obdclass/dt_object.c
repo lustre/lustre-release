@@ -675,6 +675,11 @@ static int dt_index_page_build(const struct lu_env *env, union lu_page *lp,
 		hash = iops->store(env, it);
 		ii->ii_hash_end = hash;
 
+		if (OBD_FAIL_CHECK(OBD_FAIL_OBD_IDX_READ_BREAK)) {
+			if (lip->lip_nr != 0)
+				GOTO(out, rc = 0);
+		}
+
 		if (nob < size) {
 			if (lip->lip_nr == 0)
 				GOTO(out, rc = -EINVAL);

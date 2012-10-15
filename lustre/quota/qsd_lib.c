@@ -401,13 +401,23 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 		GOTO(out, rc = PTR_ERR(qqi->qqi_site));
 	}
 
-	/* register proc entry for accounting object */
+	/* register proc entry for accounting & global index copy objects */
 	rc = lprocfs_seq_create(qsd->qsd_proc,
 				qtype == USRQUOTA ? "acct_user" : "acct_group",
 				0444, &lprocfs_quota_seq_fops,
 				qqi->qqi_acct_obj);
 	if (rc) {
 		CERROR("%s: can't add procfs entry for accounting file %d\n",
+		       qsd->qsd_svname, rc);
+		GOTO(out, rc);
+	}
+
+	rc = lprocfs_seq_create(qsd->qsd_proc,
+				qtype == USRQUOTA ? "limit_user" : "limit_group",
+				0444, &lprocfs_quota_seq_fops,
+				qqi->qqi_glb_obj);
+	if (rc) {
+		CERROR("%s: can't add procfs entry for global index copy %d\n",
 		       qsd->qsd_svname, rc);
 		GOTO(out, rc);
 	}

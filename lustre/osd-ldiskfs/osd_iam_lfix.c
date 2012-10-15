@@ -331,8 +331,7 @@ static int iam_lfix_lookup(struct iam_leaf *l, const struct iam_key *k)
 
 static int iam_lfix_ilookup(struct iam_leaf *l, const struct iam_ikey *ik)
 {
-        assert(0);
-        return IAM_LOOKUP_OK;
+	return iam_lfix_lookup(l, (const struct iam_key *)ik);
 }
 
 static void iam_lfix_key_set(struct iam_leaf *l, const struct iam_key *k)

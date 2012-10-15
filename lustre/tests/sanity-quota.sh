@@ -1044,6 +1044,42 @@ test_7c() {
 }
 run_test 7c "Quota reintegration (restart mds during reintegration)"
 
+# Quota reintegration (Transfer index in multiple bulks)
+test_7d(){
+	local TESTFILE=$DIR/$tdir/$tfile
+	local TESTFILE1="$DIR/$tdir/$tfile"-1
+	local limit=20 #20M
+
+	setup_quota_test
+	trap cleanup_quota_test EXIT
+
+	set_ost_qtype "none" || error "disable ost quota failed"
+	$LFS setquota -u $TSTUSR -B ${limit}M $DIR
+	$LFS setquota -u $TSTUSR2 -B ${limit}M $DIR
+
+	#define OBD_FAIL_OBD_IDX_READ_BREAK 0x608
+	lustre_fail mds 0x608 0
+
+	# enable quota to tirgger reintegration
+	set_ost_qtype "u" || error "enable ost quota failed"
+	wait_ost_reint "u" || error "reintegration failed"
+
+	lustre_fail mds 0
+
+	# hardlimit should have been fetched by slave during global
+	# reintegration, write will exceed quota
+	$RUNAS $DD of=$TESTFILE count=$((limit + 1)) oflag=sync &&
+		quota_error u $TSTUSR "$TSTUSR write success, expect EDQUOT"
+
+	$RUNAS2 $DD of=$TESTFILE1 count=$((limit + 1)) oflag=sync &&
+		quota_error u $TSTUSR2 "$TSTUSR2 write success, expect EDQUOT"
+
+	cleanup_quota_test
+	resetquota -u $TSTUSR
+	resetquota -u $TSTUSR2
+}
+run_test 7d "Quota reintegration (Transfer index in multiple bulks)"
+
 # run dbench with quota enabled
 test_8() {
 	local BLK_LIMIT="100g" #100G
@@ -1995,7 +2031,7 @@ test_36() {
 
 	local proc="qmt.*.md-0x0.glb-usr"
 	id_cnt=$(do_node $mdt0_node $LCTL get_param -n $proc | wc -l)
-	[ $id_cnt -eq 401 ] || error "Migrate inode user limit failed: $id_cnt"
+	[ $id_cnt -eq 403 ] || error "Migrate inode user limit failed: $id_cnt"
 	limit=$(getquota -u 1 global isoftlimit)
 	[ $limit -eq 1024 ] || error "User inode softlimit: $limit"
 	limit=$(getquota -u 1 global ihardlimit)
@@ -2003,7 +2039,7 @@ test_36() {
 
 	proc="qmt.*.md-0x0.glb-grp"
 	id_cnt=$(do_node $mdt0_node $LCTL get_param -n $proc | wc -l)
-	[ $id_cnt -eq 401 ] || error "Migrate inode group limit failed: $id_cnt"
+	[ $id_cnt -eq 403 ] || error "Migrate inode group limit failed: $id_cnt"
 	limit=$(getquota -g 1 global isoftlimit)
 	[ $limit -eq 1024 ] || error "Group inode softlimit: $limit"
 	limit=$(getquota -g 1 global ihardlimit)
@@ -2011,7 +2047,7 @@ test_36() {
 
 	proc=" qmt.*.dt-0x0.glb-usr"
 	id_cnt=$(do_node $mdt0_node $LCTL get_param -n $proc | wc -l)
-	[ $id_cnt -eq 401 ] || error "Migrate block user limit failed: $id_cnt"
+	[ $id_cnt -eq 403 ] || error "Migrate block user limit failed: $id_cnt"
 	limit=$(getquota -u 60001 global bsoftlimit)
 	[ $limit -eq 10485760 ] || error "User block softlimit: $limit"
 	limit=$(getquota -u 60001 global bhardlimit)
@@ -2019,7 +2055,7 @@ test_36() {
 
 	proc="qmt.*.dt-0x0.glb-grp"
 	id_cnt=$(do_node $mdt0_node $LCTL get_param -n $proc | wc -l)
-	[ $id_cnt -eq 401 ] || error "Migrate block user limit failed: $id_cnt"
+	[ $id_cnt -eq 403 ] || error "Migrate block user limit failed: $id_cnt"
 	limit=$(getquota -g 60001 global bsoftlimit)
 	[ $limit -eq 10485760 ] || error "Group block softlimit: $limit"
 	limit=$(getquota -g 60001 global bhardlimit)
