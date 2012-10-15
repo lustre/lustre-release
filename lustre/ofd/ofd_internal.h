@@ -51,6 +51,11 @@
 #define OFD_MAX_GROUPS	256
 #define OFD_PRECREATE_BATCH_DEFAULT (FILTER_SUBDIR_COUNT * 4)
 
+/* on small filesystems we should not precreate too many objects in
+ * a single transaction, otherwise we can overflow transactions */
+#define OFD_PRECREATE_SMALL_FS		(1024ULL * 1024 * 1024)
+#define OFD_PRECREATE_BATCH_SMALL	8
+
 /* Limit the returned fields marked valid to those that we actually might set */
 #define OFD_VALID_FLAGS (LA_TYPE | LA_MODE | LA_SIZE | LA_BLOCKS | \
 			 LA_BLKSIZE | LA_ATIME | LA_MTIME | LA_CTIME)

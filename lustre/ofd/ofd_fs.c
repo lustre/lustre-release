@@ -232,7 +232,6 @@ int ofd_groups_init(const struct lu_env *env, struct ofd_device *ofd)
 	if (rc)
 		GOTO(cleanup, rc);
 
-	ofd->ofd_precreate_batch = OFD_PRECREATE_BATCH_DEFAULT;
 	groups_size = (unsigned long)info->fti_attr.la_size;
 
 	if (groups_size == sizeof(last_group)) {
