@@ -3790,6 +3790,11 @@ test_64b () {
 }
 run_test 64b "check out-of-space detection on client ==========="
 
+test_64c() {
+	$LCTL set_param osc.*OST0000-osc-[^mM]*.cur_grant_bytes=0
+}
+run_test 64c "verify grant shrink ========================------"
+
 # bug 1414 - set/get directories' stripe info
 test_65a() {
 	mkdir -p $DIR/d65
