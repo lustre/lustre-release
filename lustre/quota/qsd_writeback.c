@@ -103,13 +103,25 @@ static void qsd_upd_add(struct qsd_instance *qsd, struct qsd_upd_rec *upd)
 /* must hold the qsd_lock */
 static void qsd_add_deferred(cfs_list_t *list, struct qsd_upd_rec *upd)
 {
-	struct qsd_upd_rec	*tmp;
+	struct qsd_upd_rec	*tmp, *n;
 
 	/* Sort the updates in ascending order */
-	cfs_list_for_each_entry_reverse(tmp, list, qur_link) {
+	cfs_list_for_each_entry_safe_reverse(tmp, n, list, qur_link) {
 
-		LASSERTF(upd->qur_ver != tmp->qur_ver, "ver:"LPU64"\n",
-			 upd->qur_ver);
+		/* There could be some legacy records which have duplicated
+		 * version. Imagine following scenario: slave received global
+		 * glimpse and queued a record in the deferred list, then
+		 * master crash and rollback to an ealier version, then the
+		 * version of queued record will be conflicting with later
+		 * updates. We should just delete the legacy record in such
+		 * case. */
+		if (upd->qur_ver == tmp->qur_ver) {
+			LASSERT(tmp->qur_lqe);
+			LQUOTA_ERROR(tmp->qur_lqe, "Found a conflict record "
+				     "with ver:"LPU64"", tmp->qur_ver);
+			cfs_list_del_init(&tmp->qur_link);
+			qsd_upd_free(tmp);
+		}
 
 		if (upd->qur_ver < tmp->qur_ver) {
 			continue;

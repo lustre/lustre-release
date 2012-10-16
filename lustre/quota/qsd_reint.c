@@ -558,6 +558,72 @@ void qsd_stop_reint_thread(struct qsd_qtype_info *qqi)
 	}
 }
 
+static int qsd_entry_iter_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+			     cfs_hlist_node_t *hnode, void *data)
+{
+	struct lquota_entry	*lqe;
+	int			*pending = (int *)data;
+
+	lqe = cfs_hlist_entry(hnode, struct lquota_entry, lqe_hash);
+	LASSERT(atomic_read(&lqe->lqe_ref) > 0);
+
+	lqe_read_lock(lqe);
+	*pending += lqe->lqe_pending_req;
+	lqe_read_unlock(lqe);
+
+	return 0;
+}
+
+static bool qsd_pending_updates(struct qsd_qtype_info *qqi)
+{
+	struct qsd_instance	*qsd = qqi->qqi_qsd;
+	struct qsd_upd_rec	*upd;
+	struct lquota_entry	*lqe, *n;
+	int			 dqacq = 0;
+	bool			 updates = false;
+	ENTRY;
+
+	/* any pending quota adjust? */
+	cfs_spin_lock(&qsd->qsd_adjust_lock);
+	cfs_list_for_each_entry_safe(lqe, n, &qsd->qsd_adjust_list, lqe_link) {
+		if (lqe2qqi(lqe) == qqi) {
+			cfs_list_del_init(&lqe->lqe_link);
+			lqe_putref(lqe);
+		}
+	}
+	cfs_spin_unlock(&qsd->qsd_adjust_lock);
+
+	/* any pending updates? */
+	cfs_read_lock(&qsd->qsd_lock);
+	cfs_list_for_each_entry(upd, &qsd->qsd_upd_list, qur_link) {
+		if (upd->qur_qqi == qqi) {
+			cfs_read_unlock(&qsd->qsd_lock);
+			CDEBUG(D_QUOTA, "%s: pending %s updates for type:%d.\n",
+			       qsd->qsd_svname,
+			       upd->qur_global ? "global" : "slave",
+			       qqi->qqi_qtype);
+			GOTO(out, updates = true);
+		}
+	}
+	cfs_read_unlock(&qsd->qsd_lock);
+
+	/* any pending quota request? */
+	cfs_hash_for_each_safe(qqi->qqi_site->lqs_hash, qsd_entry_iter_cb,
+			       &dqacq);
+	if (dqacq) {
+		CDEBUG(D_QUOTA, "%s: pending dqacq for type:%d.\n",
+		       qsd->qsd_svname, qqi->qqi_qtype);
+		updates = true;
+	}
+	EXIT;
+out:
+	if (updates)
+		CERROR("%s: Delaying reintegration for qtype:%d until pending "
+		       "updates are flushed.\n",
+		       qsd->qsd_svname, qqi->qqi_qtype);
+	return updates;
+}
+
 int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 {
 	struct ptlrpc_thread	*thread = &qqi->qqi_reint_thread;
@@ -581,6 +647,16 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 	qqi->qqi_reint = 1;
 
 	cfs_write_unlock(&qsd->qsd_lock);
+
+	/* there could be some unfinished global or index entry updates
+	 * (very unlikely), to avoid them messing up with the reint
+	 * procedure, we just return and try to re-start reint later. */
+	if (qsd_pending_updates(qqi)) {
+		cfs_write_lock(&qsd->qsd_lock);
+		qqi->qqi_reint = 0;
+		cfs_write_unlock(&qsd->qsd_lock);
+		RETURN(0);
+	}
 
 	rc = cfs_create_thread(qsd_reint_main, (void *)qqi, 0);
 	if (rc < 0) {

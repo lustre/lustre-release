@@ -455,6 +455,12 @@ test_2() {
 
 	[ "$SLOW" = "no" ] && LIMIT=1024 # 1k inodes
 
+	local FREE_INODES=$(lfs df -i | grep "filesystem summary" | \
+				awk '{print $5}')
+	[ $FREE_INODES -lt $LIMIT ] &&
+		skip "not enough free inodes $FREE_INODES required $LIMIT" &&
+		return
+
 	setup_quota_test
 	trap cleanup_quota_test EXIT
 
@@ -936,6 +942,25 @@ test_7a() {
 	# reintegration, write will exceed quota
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT + 1)) oflag=sync &&
 		quota_error u $TSTUSR "write success, but expect EDQUOT"
+
+	rm -f $TESTFILE
+	wait_delete_completed
+	sync_all_data || true
+	sleep 3
+
+	echo "Stop ost1..."
+	stop ost1
+
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
+
+	echo "Start ost1..."
+	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
+
+	wait_ost_reint "ug" || error "reintegration failed"
+
+	# hardlimit should be cleared on slave during reintegration
+	$RUNAS $DD of=$TESTFILE count=$((LIMIT + 1)) oflag=sync ||
+		quota_error u $TSTUSR "write error, but expect success"
 
 	cleanup_quota_test
 	resetquota -u $TSTUSR

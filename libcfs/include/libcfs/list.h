@@ -35,6 +35,8 @@ typedef struct list_head cfs_list_t;
         list_for_each_entry(pos, head, member)
 #define cfs_list_for_each_entry_reverse(pos, head, member) \
         list_for_each_entry_reverse(pos, head, member)
+#define cfs_list_for_each_entry_safe_reverse(pos, n, head, member) \
+	list_for_each_entry_safe_reverse(pos, n, head, member)
 #define cfs_list_for_each_entry_safe(pos, n, head, member) \
         list_for_each_entry_safe(pos, n, head, member)
 #ifdef list_for_each_entry_safe_from

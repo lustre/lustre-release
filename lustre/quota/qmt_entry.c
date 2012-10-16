@@ -261,21 +261,16 @@ int qmt_glb_write(const struct lu_env *env, struct thandle *th,
 
 	LQUOTA_DEBUG(lqe, "write glb");
 
-	if (!lqe->lqe_enforced && lqe->lqe_granted == 0 &&
-	    lqe->lqe_id.qid_uid != 0) {
-		/* quota isn't enforced any more for this entry and there is no
-		 * more space granted to slaves, let's just remove the entry
-		 * from the index */
-		rec = NULL;
-	} else {
-		rec = &qti->qti_glb_rec;
+	/* never delete the entry even when the id isn't enforced and
+	 * no any guota granted, otherwise, this entry will not be
+	 * synced to slave during the reintegration. */
+	rec = &qti->qti_glb_rec;
 
-		/* fill global index with updated quota settings */
-		rec->qbr_granted   = lqe->lqe_granted;
-		rec->qbr_hardlimit = lqe->lqe_hardlimit;
-		rec->qbr_softlimit = lqe->lqe_softlimit;
-		rec->qbr_time      = lqe->lqe_gracetime;
-	}
+	/* fill global index with updated quota settings */
+	rec->qbr_granted   = lqe->lqe_granted;
+	rec->qbr_hardlimit = lqe->lqe_hardlimit;
+	rec->qbr_softlimit = lqe->lqe_softlimit;
+	rec->qbr_time      = lqe->lqe_gracetime;
 
 	/* write new quota settings */
 	rc = lquota_disk_write(env, th, LQE_GLB_OBJ(lqe), &lqe->lqe_id,
@@ -372,16 +367,12 @@ int qmt_slv_write(const struct lu_env *env, struct thandle *th,
 	LQUOTA_DEBUG(lqe, "write slv "DFID" granted:"LPU64,
 		     PFID(lu_object_fid(&slv_obj->do_lu)), granted);
 
-	if (granted == 0) {
-		/* this slave does not own any quota space for this ID any more,
-		 * so let's just remove the entry from the index */
-		rec = NULL;
-	} else {
-		rec = &qti->qti_slv_rec;
+	/* never delete the entry, otherwise, it'll not be transferred
+	 * to slave during reintegration. */
+	rec = &qti->qti_slv_rec;
 
-		/* updated space granted to this slave */
-		rec->qsr_granted = granted;
-	}
+	/* updated space granted to this slave */
+	rec->qsr_granted = granted;
 
 	/* write new granted space */
 	rc = lquota_disk_write(env, th, slv_obj, &lqe->lqe_id,

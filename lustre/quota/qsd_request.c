@@ -110,6 +110,7 @@ int qsd_send_dqacq(const struct lu_env *env, struct obd_export *exp,
 		GOTO(out, rc = -ENOMEM);
 
 	req->rq_no_resend = req->rq_no_delay = 1;
+	req->rq_no_retry_einprogress = 1;
 	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, QUOTA_DQACQ);
 	if (rc) {
 		ptlrpc_request_free(req);
@@ -227,6 +228,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	if (req == NULL)
 		GOTO(out, rc = -ENOMEM);
 
+	req->rq_no_retry_einprogress = 1;
 	rc = ldlm_prep_enqueue_req(exp, req, NULL, 0);
 	if (rc) {
 		ptlrpc_request_free(req);

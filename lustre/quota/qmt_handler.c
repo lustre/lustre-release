@@ -502,7 +502,7 @@ int qmt_dqacq0(const struct lu_env *env, struct lquota_entry *lqe,
 	 * receive the change yet. Just return EINPROGRESS until the slave gets
 	 * notified. */
 	if (!lqe->lqe_enforced && !req_is_rel(qb_flags))
-		GOTO(out_locked, rc = -EINPROGRESS);
+		GOTO(out_locked, rc = -ESRCH);
 
 	/* recompute qunit in case it was never initialized */
 	qmt_revalidate(env, lqe);
