@@ -951,6 +951,10 @@ static int ofd_destroy_by_fid(const struct lu_env *env,
 
 	ENTRY;
 
+	fo = ofd_object_find(env, ofd, fid);
+	if (IS_ERR(fo))
+		RETURN(PTR_ERR(fo));
+
 	/* Tell the clients that the object is gone now and that they should
 	 * throw away any cached pages. */
 	ofd_build_resid(fid, &info->fti_resid);
@@ -963,9 +967,6 @@ static int ofd_destroy_by_fid(const struct lu_env *env,
 	if (rc == ELDLM_OK)
 		ldlm_lock_decref(&lockh, LCK_PW);
 
-	fo = ofd_object_find(env, ofd, fid);
-	if (IS_ERR(fo))
-		RETURN(PTR_ERR(fo));
 	LASSERT(fo != NULL);
 
 	rc = ofd_object_destroy(env, fo, orphan);
@@ -1013,14 +1014,15 @@ int ofd_destroy(const struct lu_env *env, struct obd_export *exp,
 		lrc = ofd_destroy_by_fid(env, ofd, &info->fti_fid, 0);
 		if (lrc == -ENOENT) {
 			CDEBUG(D_INODE,
-			       "destroying non-existent object "LPU64"\n",
-			       oa->o_id);
+			       "%s: destroying non-existent object "DFID"\n",
+			       ofd_obd(ofd)->obd_name, PFID(&info->fti_fid));
 			/* rewrite rc with -ENOENT only if it is 0 */
 			if (rc == 0)
 				rc = lrc;
 		} else if (lrc != 0) {
-			CEMERG("error destroying object "LPU64": %d\n",
-			       oa->o_id, rc);
+			CERROR("%s: error destroying object "DFID": %d\n",
+			       ofd_obd(ofd)->obd_name, PFID(&info->fti_fid),
+			       rc);
 			rc = lrc;
 		}
 		count--;

@@ -1506,6 +1506,9 @@ int ldlm_request_cancel(struct ptlrpc_request *req,
         if (first >= count)
                 RETURN(0);
 
+	if (count == 1 && dlm_req->lock_handle[0].cookie == 0)
+		RETURN(0);
+
         /* There is no lock on the server at the replay time,
          * skip lock cancelling to make replay tests to pass. */
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY)
