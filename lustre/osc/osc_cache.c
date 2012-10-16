@@ -845,6 +845,17 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 	RETURN(0);
 }
 
+static int extent_wait_cb(struct osc_extent *ext, int state)
+{
+	int ret;
+
+	osc_object_lock(ext->oe_obj);
+	ret = ext->oe_state == state;
+	osc_object_unlock(ext->oe_obj);
+
+	return ret;
+}
+
 /**
  * Wait for the extent's state to become @state.
  */
@@ -852,7 +863,8 @@ static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 			   int state)
 {
 	struct osc_object *obj = ext->oe_obj;
-	struct l_wait_info lwi = LWI_INTR(LWI_ON_SIGNAL_NOOP, NULL);
+	struct l_wait_info lwi = LWI_TIMEOUT_INTR(cfs_time_seconds(600), NULL,
+						  LWI_ON_SIGNAL_NOOP, NULL);
 	int rc = 0;
 	ENTRY;
 
@@ -874,7 +886,11 @@ static int osc_extent_wait(const struct lu_env *env, struct osc_extent *ext,
 		osc_extent_release(env, ext);
 
 	/* wait for the extent until its state becomes @state */
-	rc = l_wait_event(ext->oe_waitq, ext->oe_state == state, &lwi);
+	rc = l_wait_event(ext->oe_waitq, extent_wait_cb(ext, state), &lwi);
+	if (rc == -ETIMEDOUT) {
+		OSC_EXTENT_DUMP(D_ERROR, ext, "wait ext %d timedout\n", state);
+		LBUG();
+	}
 	if (rc == 0 && ext->oe_rc < 0)
 		rc = ext->oe_rc;
 	RETURN(rc);
