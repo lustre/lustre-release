@@ -158,7 +158,7 @@ static void qsd_dqacq_completion(const struct lu_env *env,
 
 	lqe_write_lock(lqe);
 
-	LQUOTA_DEBUG(lqe, "DQACQ returned %d, flags:%x", ret,
+	LQUOTA_DEBUG(lqe, "DQACQ returned %d, flags:0x%x", ret,
 		     reqbody->qb_flags);
 
 	/* despite -EDQUOT & -EINPROGRESS errors, the master might still
@@ -167,8 +167,8 @@ static void qsd_dqacq_completion(const struct lu_env *env,
 		if (ret != -ETIMEDOUT && ret != -ENOTCONN &&
 		   ret != -ESHUTDOWN && ret != -EAGAIN)
 			/* print errors only if return code is unexpected */
-			LQUOTA_ERROR(lqe, "DQACQ failed with %d, flags:%x", ret,
-				     reqbody->qb_flags);
+			LQUOTA_ERROR(lqe, "DQACQ failed with %d, flags:0x%x",
+				     ret, reqbody->qb_flags);
 		GOTO(out, ret);
 	}
 
@@ -388,7 +388,7 @@ again:
 		}
 
 		if (!lqe->lqe_edquot && !lqe->lqe_nopreacq &&
-		    lustre_handle_is_used(&lqe->lqe_lockh) &&
+		    lustre_handle_is_used(&lqe->lqe_lockh) && usage > 0 &&
 		    lqe->lqe_qunit != 0 && granted < usage + lqe->lqe_qtune) {
 			/* To pre-acquire quota space, we report how much spare
 			 * quota space the slave currently owns, then the master
