@@ -5006,6 +5006,7 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	s = m->mdt_md_dev.md_lu_dev.ld_site;
 	mite = &m->mdt_mite;
 	s->ld_md_site = mite;
+	mite->ms_lu = s;
 
         /* set server index */
 	mite->ms_node_id = node_id;
