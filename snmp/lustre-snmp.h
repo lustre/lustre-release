@@ -57,6 +57,7 @@ FindVarMethod var_mdcTable;
 FindVarMethod var_cliTable;
 FindVarMethod var_ldlmTable;
 FindVarMethod var_lovTable;
+FindVarMethod var_lnetInformation;
 FindVarMethod var_mdsNbSampledReq;
 WriteMethod write_sysStatus;
 

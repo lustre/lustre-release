@@ -112,8 +112,22 @@
 #define LDLMUNUSEDLOCKCOUNT 103
 #define LDLMRESOURCECOUNT   104
 
+#define LNETNUMBER          110
+#define LNETMSGSALLOC       111
+#define LNETMSGSMAX         112
+#define LNETERRORS          113
+#define LNETSENDCOUNT       114
+#define LNETRECVCOUNT       115
+#define LNETROUTECOUNT      116
+#define LNETDROPCOUNT       117
+#define LNETSENDBYTES       118
+#define LNETRECVBYTES       119
+#define LNETROUTEBYTES      120
+#define LNETDROPBYTES       121
+
 /* Defining the proc paths for Lustre file system */
 #define LUSTRE_PATH                 "/proc/fs/lustre/"
+#define LNET_PATH                   "/proc/sys/lnet/"
 #define OSD_PATH                    LUSTRE_PATH "obdfilter/"
 #define OSC_PATH                    LUSTRE_PATH "osc/"
 #define MDS_PATH                    LUSTRE_PATH "mds/"
@@ -215,6 +229,7 @@ unsigned char *
         const char *path,
         struct oid_table *ptable);
 
+void convert_ull(counter64 *c64, unsigned long long ull, size_t *var_len);
 int stats_values(char * filepath,char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square);
 extern int mds_stats_values(char * name_value, unsigned long long * nb_sample, unsigned long long * min, unsigned long long * max, unsigned long long * sum, unsigned long long * sum_square);
 

@@ -43,6 +43,7 @@ metaDataClients        OBJECT IDENTIFIER ::= { lustreMIB 5 }
 lustreClients          OBJECT IDENTIFIER ::= { lustreMIB 6 }
 logicalObjectVolume    OBJECT IDENTIFIER ::= { lustreMIB 7 }
 lustreLDLM             OBJECT IDENTIFIER ::= { lustreMIB 8 }
+lnetInformation        OBJECT IDENTIFIER ::= { lustreMIB 9 }
 
 
 --============================================================================
@@ -523,7 +524,7 @@ mdcMDSServerUUID OBJECT-TYPE
     DESCRIPTION
         "The Lustre Meta data server UUID accessed by Metadata Client.
          This string also contains a state name, and possibly a DEACTIVATED flag." 
-    ::= { mdcEntry 4 }    
+    ::= { mdcEntry 4 }
 
 mdcCapacity OBJECT-TYPE
     SYNTAX Counter64
@@ -916,6 +917,99 @@ ldlmResourceCount OBJECT-TYPE
     DESCRIPTION
         "Resource count of particular LDLM namespace."
     ::= { ldlmEntry 5 }    
+
+--============================================================================
+--
+-- Lustre Lnet
+--
+--============================================================================
+lnetMsgsAlloc OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet messages allocated."
+    ::= { lnetInformation 1 }
+
+lnetMsgsMax OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet messages maximum."
+    ::= { lnetInformation 2 }
+
+lnetErrors OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet errors."
+    ::= { lnetInformation 3 }
+
+lnetSendCount OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet send RPCs."
+    ::= { lnetInformation 4 }
+
+lnetRecvCount OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet receive RPCs."
+    ::= { lnetInformation 5 }
+
+lnetRouteCount OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet routed RPCs."
+    ::= { lnetInformation 6 }
+
+lnetDropCount OBJECT-TYPE
+    SYNTAX Unsigned32
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet dropped RPCs."
+    ::= { lnetInformation 7 }
+
+lnetSendBytes OBJECT-TYPE
+    SYNTAX Unsigned64
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet send bytes."
+    ::= { lnetInformation 8 }
+
+lnetRecvBytes OBJECT-TYPE
+    SYNTAX Unsigned64
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet receive bytes."
+    ::= { lnetInformation 9 }
+
+lnetRouteBytes OBJECT-TYPE
+    SYNTAX Unsigned64
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet routed bytes."
+    ::= { lnetInformation 10 }
+
+lnetDropBytes OBJECT-TYPE
+    SYNTAX Unsigned64
+    MAX-ACCESS read-only
+    STATUS current
+    DESCRIPTION
+        "LNet dropped bytes."
+    ::= { lnetInformation 11 }
 
 --============================================================================
 --

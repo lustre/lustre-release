@@ -45,6 +45,8 @@
 #include <pthread.h>
 #include "lustre-snmp.h"
 
+#define LNET_CHECK_INTERVAL 500
+
 /* 
  * clusterFileSystems_variables_oid:
  *   this is the top level oid that we want to register under.  This
@@ -135,7 +137,7 @@ struct variable7 clusterFileSystems_variables[] = {
   /* logicalObjectVolume 2.1.7 */
   { LOVNUMBER           , ASN_UNSIGNED  , RONLY , var_clusterFileSystems, 4, { 2,1,7,1 } },
 
-  /* logicalObjectVolume.osdTable.lovTable 2.1.2.2.1 */
+  /* logicalObjectVolume.osdTable.lovTable 2.1.7.2.1 */
   { LOVUUID             , ASN_OCTET_STR , RONLY , var_lovTable, 6, { 2,1,7,2,1,2 } },
   { LOVCOMMONNAME       , ASN_OCTET_STR , RONLY , var_lovTable, 6, { 2,1,7,2,1,3 } },
   { LOVNUMOBD           , ASN_UNSIGNED ,  RONLY , var_lovTable, 6, { 2,1,7,2,1,4 } },
@@ -158,6 +160,18 @@ struct variable7 clusterFileSystems_variables[] = {
   { LDLMUNUSEDLOCKCOUNT , ASN_UNSIGNED  , RONLY , var_ldlmTable, 6, { 2,1,8,2,1,4 } },
   { LDLMRESOURCECOUNT   , ASN_UNSIGNED  , RONLY , var_ldlmTable, 6, { 2,1,8,2,1,5 } },
 
+  /* lnetInformation 2.1.9 */
+  { LNETMSGSALLOC,  ASN_UNSIGNED,  RONLY, var_lnetInformation, 4, { 2,1,9,1 } },
+  { LNETMSGSMAX,    ASN_UNSIGNED,  RONLY, var_lnetInformation, 4, { 2,1,9,2 } },
+  { LNETERRORS,     ASN_UNSIGNED,  RONLY, var_lnetInformation, 4, { 2,1,9,3 } },
+  { LNETSENDCOUNT,  ASN_UNSIGNED,  RONLY, var_lnetInformation, 4, { 2,1,9,4 } },
+  { LNETRECVCOUNT,  ASN_UNSIGNED,  RONLY, var_lnetInformation, 4, { 2,1,9,5 } },
+  { LNETROUTECOUNT, ASN_UNSIGNED,  RONLY, var_lnetInformation, 4, { 2,1,9,6 } },
+  { LNETDROPCOUNT,  ASN_UNSIGNED,  RONLY, var_lnetInformation, 4, { 2,1,9,7 } },
+  { LNETSENDBYTES,  ASN_COUNTER64, RONLY, var_lnetInformation, 4, { 2,1,9,8 } },
+  { LNETRECVBYTES,  ASN_COUNTER64, RONLY, var_lnetInformation, 4, { 2,1,9,9 } },
+  { LNETROUTEBYTES, ASN_COUNTER64, RONLY, var_lnetInformation, 4, { 2,1,9,10 } },
+  { LNETDROPBYTES,  ASN_COUNTER64, RONLY, var_lnetInformation, 4, { 2,1,9,11 } },
 };
 
 /*****************************************************************************
@@ -528,6 +542,95 @@ var_ldlmTable(struct variable *vp,
         LDLM_PATH,ldlm_table);
 }
 
+/*****************************************************************************
+ * Function: var_lnetInformation
+ *
+ ****************************************************************************/
+unsigned char *
+var_lnetInformation(struct variable *vp,
+                    oid             *name,
+                    size_t          *length,
+                    int              exact,
+                    size_t          *var_len,
+                    WriteMethod    **write_method)
+{
+        /* variables we may use later */
+        static unsigned char      string[SPRINT_MAX_LEN];
+        static unsigned int       i[7];
+        static unsigned long long ull[4];
+        static unsigned long      next_update;
+        static counter64          c64;
+        static unsigned int       c32;
+        struct timeval            current_tv;
+        unsigned long             current;
+        char                      file_path[MAX_PATH_SIZE];
+
+        /* Update at most every LNET_STATS_INTERVAL milliseconds */
+        gettimeofday(&current_tv, NULL);
+        current = current_tv.tv_sec * 1000000 + current_tv.tv_usec;
+        if (current >= next_update) {
+                sprintf(file_path, "%s%s", LNET_PATH, "stats");
+                if (read_string(file_path, (char *) string, sizeof(string))
+                    != SUCCESS)
+                        return NULL;
+
+                sscanf((char *) string,
+                       "%u %u %u %u %u %u %u %llu %llu %llu %llu",
+                       &i[0], &i[1], &i[2], &i[3], &i[4], &i[5], &i[6],
+                       &ull[0], &ull[1], &ull[2], &ull[3]);
+
+                next_update = current + (LNET_CHECK_INTERVAL * 1000);
+        }
+
+        if (header_generic(vp, name, length, exact, var_len, write_method)
+            == MATCH_FAILED)
+                return NULL;
+
+        switch (vp->magic) {
+        case LNETMSGSALLOC:
+                *var_len = sizeof(c32);
+                c32 = i[0];
+                return (unsigned char *) &c32;
+        case LNETMSGSMAX:
+                *var_len = sizeof(c32);
+                c32 = i[1];
+                return (unsigned char *) &c32;
+        case LNETERRORS:
+                *var_len = sizeof(c32);
+                c32 = i[2];
+                return (unsigned char *) &c32;
+        case LNETSENDCOUNT:
+                *var_len = sizeof(c32);
+                c32 = i[3];
+                return (unsigned char *) &c32;
+        case LNETRECVCOUNT:
+                *var_len = sizeof(c32);
+                c32 = i[4];
+                return (unsigned char *) &c32;
+        case LNETROUTECOUNT:
+                *var_len = sizeof(c32);
+                c32 = i[5];
+                return (unsigned char *) &c32;
+        case LNETDROPCOUNT:
+                *var_len = sizeof(c32);
+                c32 = i[6];
+                return (unsigned char *) &c32;
+        case LNETSENDBYTES:
+                convert_ull(&c64, ull[0], var_len);
+                return (unsigned char *) &c64;
+        case LNETRECVBYTES:
+                convert_ull(&c64, ull[1], var_len);
+                return (unsigned char *) &c64;
+        case LNETROUTEBYTES:
+                convert_ull(&c64, ull[2], var_len);
+                return (unsigned char *) &c64;
+        case LNETDROPBYTES:
+                convert_ull(&c64, ull[3], var_len);
+                return (unsigned char *) &c64;
+        default:
+                return NULL;
+        }
+}
 
 /*****************************************************************************
  * Function: var_mdsNbSampledReq
