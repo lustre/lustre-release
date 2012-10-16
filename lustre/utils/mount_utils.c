@@ -37,6 +37,7 @@
 #  include "config.h"
 #endif /* HAVE_CONFIG_H */
 
+#include "mount_utils.h"
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
@@ -45,7 +46,6 @@
 #include <lustre_ver.h>
 #include <sys/stat.h>
 #include <sys/utsname.h>
-#include "mount_utils.h"
 
 extern char *progname;
 extern int verbose;

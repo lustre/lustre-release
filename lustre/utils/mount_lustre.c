@@ -42,6 +42,7 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include "mount_utils.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -52,7 +53,6 @@
 #include <lustre_ver.h>
 #include <ctype.h>
 #include <limits.h>
-#include "mount_utils.h"
 
 #define MAXOPT 4096
 #define MAX_RETRIES 99

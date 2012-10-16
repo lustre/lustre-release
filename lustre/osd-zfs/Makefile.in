@@ -4,7 +4,7 @@ osd_zfs-objs += osd_object.o osd_io.o osd_oi.o osd_xattr.o osd_index.o
 
 EXTRA_PRE_CFLAGS += -I@SPL_DIR@ -I@SPL_DIR@/include
 EXTRA_PRE_CFLAGS += -include @SPL_OBJ@/spl_config.h
-EXTRA_PRE_CFLAGS += -I@ZFS_DIR@ -I@ZFS_DIR@/include
+EXTRA_PRE_CFLAGS += -I@ZFS_OBJ@ -I@ZFS_OBJ@/include
 EXTRA_PRE_CFLAGS += -include @ZFS_OBJ@/zfs_config.h
 
 @INCLUDE_RULES@

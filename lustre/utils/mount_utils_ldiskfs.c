@@ -47,6 +47,7 @@
 #ifndef _GNU_SOURCE
 #define _GNU_SOURCE
 #endif
+#include "mount_utils.h"
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
@@ -78,7 +79,6 @@
 #include <lustre_param.h>
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
-#include "mount_utils.h"
 
 #define MAX_HW_SECTORS_KB_PATH	"queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH	"queue/max_sectors_kb"

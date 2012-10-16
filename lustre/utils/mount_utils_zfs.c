@@ -27,13 +27,11 @@
 /*
  * Author: Brian Behlendorf <behlendorf1@llnl.gov>
  */
-
+#include "mount_utils.h"
 #include <stdio.h>
 #include <string.h>
-#include <libzfs/libzfs.h>
+#include <libzfs.h>
 #include <dlfcn.h>
-
-#include "mount_utils.h"
 
 /* Persistent mount data is stored in these user  attributes */
 #define LDD_VERSION_PROP                "lustre:version"
