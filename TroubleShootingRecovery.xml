@@ -18,7 +18,7 @@
     </itemizedlist>
     <section xml:id="dbdoclet.50438225_71141">
         <title><indexterm><primary>recovery</primary><secondary>corruption of backing file system</secondary></indexterm>Recovering from Errors or Corruption on a Backing File System</title>
-        <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the file system. <literal>ldiskfs</literal> journaling ensures that the file system remains coherent. The backing file systems are never accessed directly from the client, so client crashes are not relevant.</para>
+        <para>When an OSS, MDS, or MGS server crash occurs, it is not necessary to run e2fsck on the file system. <literal>ldiskfs</literal> journaling ensures that the file system remains consistent over a system crash. The backing file systems are never accessed directly from the client, so client crashes are not relevant for server filesystem consistency.</para>
         <para>The only time it is REQUIRED that <literal>e2fsck</literal> be run on a device is when an event causes problems that ldiskfs journaling is unable to handle, such as a hardware device failure or I/O error. If the ldiskfs kernel code detects corruption on the disk, it mounts the file system as read-only to prevent further corruption, but still allows read access to the device. This appears as error &quot;-30&quot; (<literal>EROFS</literal>) in the syslogs on the server, e.g.:</para>
         <screen>Dec 29 14:11:32 mookie kernel: LDISKFS-fs error (device sdz):
             ldiskfs_lookup: unlinked inode 5384166 in dir #145170469</screen>
@@ -26,7 +26,7 @@
         <para>In such a situation, it is normally required that e2fsck only be run on the bad device before placing the device back into service.</para>
         <para>In the vast majority of cases, Lustre can cope with any inconsistencies it finds on the disk and between other devices in the file system.</para>
         <note>
-            <para><literal>lfsck</literal> is rarely required for Lustre operation.</para>
+            <para>The offline <literal>lfsck</literal> tool included with e2fsprogs is rarely required for Lustre operation.</para>
         </note>
         <para>For problem analysis, it is strongly recommended that <literal>e2fsck</literal> be run under a logger, like script, to record all of the output and changes that are made to the file system in case this information is needed later.</para>
         <para>If time permits, it is also a good idea to first run <literal>e2fsck</literal> in non-fixing mode (-n option) to assess the type and extent of damage to the file system. The drawback is that in this mode, <literal>e2fsck</literal> does not recover the file system journal, so there may appear to be file system corruption when none really exists.</para>
@@ -35,15 +35,15 @@
         <para>This causes the journal to be recovered.</para>
         <para>The <literal>e2fsck</literal> utility works well when fixing file system corruption (better than similar file system recovery tools and a primary reason why <literal>ldiskfs</literal> was chosen over other file systems for Lustre). However, it is often useful to identify the type of damage that has occurred so an <literal>ldiskfs</literal> expert can make intelligent decisions about what needs fixing, in place of <literal>e2fsck</literal>.</para>
         <screen>root# {stop lustre services for this device, if running}
-            root# script /tmp/e2fsck.sda
-            Script started, file is /tmp/e2fsck.sda
-            root# mount -t ldiskfs /dev/sda /mnt/ost
-            root# umount /mnt/ost
-            root# e2fsck -fn /dev/sda   # don&apos;t fix file system, just check for corruption
-            :
-            [e2fsck output]
-            :
-            root# e2fsck -fp /dev/sda   # fix filesystem using &quot;prudent&quot; answers (usually &apos;y&apos;)
+root# script /tmp/e2fsck.sda
+Script started, file is /tmp/e2fsck.sda
+root# mount -t ldiskfs /dev/sda /mnt/ost
+root# umount /mnt/ost
+root# e2fsck -fn /dev/sda   # don&apos;t fix file system, just check for corruption
+:
+[e2fsck output]
+:
+root# e2fsck -fp /dev/sda   # fix errors with prudent answers (usually <literal>yes</literal>)
         </screen>
         <para>In addition, the <literal>e2fsprogs</literal> package contains the <literal>lfsck</literal> tool, which does distributed coherency checking for the Lustre file system after <literal>e2fsck</literal> has been run. Running <literal>lfsck</literal> is NOT required in a large majority of cases, at a small risk of having some leaked space in the file system. To avoid a lengthy downtime, it can be run (with care) after Lustre is started.</para>
     </section>
@@ -65,46 +65,46 @@
                 <para>The <literal>mds</literal>db file can grow fairly large, depending on the number of files in the file system (10 GB or more for millions of files, though the actual file size is larger because the file is sparse). It is quicker to write the file to a local file system due to seeking and small writes. Depending on the number of files, this step can take several hours to complete.</para>
                 <para><emphasis role="bold">Example</emphasis></para>
                 <screen>e2fsck -n -v --mdsdb /tmp/mdsdb /dev/sdb
-                    e2fsck 1.39.cfs1 (29-May-2006)
-                    Warning: skipping journal recovery because doing a read-only filesystem check.
-                    lustre-MDT0000 contains a file system with errors, check forced.
-                    Pass 1: Checking inodes, blocks, and sizes
-                    MDS: ost_idx 0 max_id 288
-                    MDS: got 8 bytes = 1 entries in lov_objids
-                    MDS: max_files = 13
-                    MDS: num_osts = 1
-                    mds info db file written
-                    Pass 2: Checking directory structure
-                    Pass 3: Checking directory connectivity
-                    Pass 4: Checking reference counts
-                    Pass 5: Checking group summary information
-                    Free blocks count wrong (656160, counted=656058).
-                    Fix? no
+e2fsck 1.42.5.wc3 (15-Sep-2012)
+Warning: skipping journal recovery because doing a read-only filesystem check.
+lustre-MDT0000 contains a file system with errors, check forced.
+Pass 1: Checking inodes, blocks, and sizes
+MDS: ost_idx 0 max_id 288
+MDS: got 8 bytes = 1 entries in lov_objids
+MDS: max_files = 13
+MDS: num_osts = 1
+mds info db file written
+Pass 2: Checking directory structure
+Pass 3: Checking directory connectivity
+Pass 4: Checking reference counts
+Pass 5: Checking group summary information
+Free blocks count wrong (656160, counted=656058).
+Fix? no
 
-                    Free inodes count wrong (786419, counted=786036).
-                    Fix? no
+Free inodes count wrong (786419, counted=786036).
+Fix? no
 
-                    Pass 6: Acquiring information for lfsck
-                    MDS: max_files = 13
-                    MDS: num_osts = 1
-                    MDS: &apos;lustre-MDT0000_UUID&apos; mdt idx 0: compat 0x4 rocomp 0x1 incomp 0x4
-                    lustre-MDT0000: ******* WARNING: Filesystem still has errors *******
-                    13 inodes used (0%)
-                    2 non-contiguous inodes (15.4%)
-                    # of inodes with ind/dind/tind blocks: 0/0/0
-                    130272 blocks used (16%)
-                    0 bad blocks
-                    1 large file
-                    296 regular files
-                    91 directories
-                    0 character device files
-                    0 block device files
-                    0 fifos
-                    0 links
-                    0 symbolic links (0 fast symbolic links)
-                    0 sockets
-                    --------
-                    387 files
+Pass 6: Acquiring information for lfsck
+MDS: max_files = 13
+MDS: num_osts = 1
+MDS: &apos;lustre-MDT0000_UUID&apos; mdt idx 0: compat 0x4 rocomp 0x1 incomp 0x4
+lustre-MDT0000: ******* WARNING: Filesystem still has errors *******
+13 inodes used (0%)
+2 non-contiguous inodes (15.4%)
+# of inodes with ind/dind/tind blocks: 0/0/0
+130272 blocks used (16%)
+0 bad blocks
+1 large file
+296 regular files
+91 directories
+0 character device files
+0 block device files
+0 fifos
+0 links
+0 symbolic links (0 fast symbolic links)
+0 sockets
+--------
+387 files
                 </screen>
             </listitem>
             <listitem>
@@ -122,43 +122,43 @@
                 </note>
                 <para><emphasis role="bold">Example:</emphasis></para>
                 <screen>[root@oss161 ~]# e2fsck -n -v --mdsdb /tmp/mdsdb --ostdb \ /tmp/ostdb /dev/sda
-                    e2fsck 1.39.cfs1 (29-May-2006)
-                    Warning: skipping journal recovery because doing a read-only filesystem check.
-                    lustre-OST0000 contains a file system with errors, check forced.
-                    Pass 1: Checking inodes, blocks, and sizes
-                    Pass 2: Checking directory structure
-                    Pass 3: Checking directory connectivity
-                    Pass 4: Checking reference counts
-                    Pass 5: Checking group summary information
-                    Free blocks count wrong (989015, counted=817968).
-                    Fix? no
+e2fsck 1.42.5.wc3 (15-Sep-2012)
+Warning: skipping journal recovery because doing a read-only filesystem check.
+lustre-OST0000 contains a file system with errors, check forced.
+Pass 1: Checking inodes, blocks, and sizes
+Pass 2: Checking directory structure
+Pass 3: Checking directory connectivity
+Pass 4: Checking reference counts
+Pass 5: Checking group summary information
+Free blocks count wrong (989015, counted=817968).
+Fix? no
 
-                    Free inodes count wrong (262088, counted=261767).
-                    Fix? no
+Free inodes count wrong (262088, counted=261767).
+Fix? no
 
-                    Pass 6: Acquiring information for lfsck
-                    OST: &apos;lustre-OST0000_UUID&apos; ost idx 0: compat 0x2 rocomp 0 incomp 0x2
-                    OST: num files = 321
-                    OST: last_id = 321
+Pass 6: Acquiring information for lfsck
+OST: &apos;lustre-OST0000_UUID&apos; ost idx 0: compat 0x2 rocomp 0 incomp 0x2
+OST: num files = 321
+OST: last_id = 321
 
-                    lustre-OST0000: ******* WARNING: Filesystem still has errors *******
+lustre-OST0000: ******* WARNING: Filesystem still has errors *******
 
-                    56 inodes used (0%)
-                    27 non-contiguous inodes (48.2%)
-                    # of inodes with ind/dind/tind blocks: 13/0/0
-                    59561 blocks used (5%)
-                    0 bad blocks
-                    1 large file
-                    329 regular files
-                    39 directories
-                    0 character device files
-                    0 block device files
-                    0 fifos
-                    0 links
-                    0 symbolic links (0 fast symbolic links)
-                    0 sockets
-                    --------
-                    368 files
+56 inodes used (0%)
+27 non-contiguous inodes (48.2%)
+# of inodes with ind/dind/tind blocks: 13/0/0
+59561 blocks used (5%)
+0 bad blocks
+1 large file
+329 regular files
+39 directories
+0 character device files
+0 block device files
+0 fifos
+0 links
+0 symbolic links (0 fast symbolic links)
+0 sockets
+--------
+368 files
                 </screen>
             </listitem>
             <listitem>
@@ -167,23 +167,23 @@
                     lfsck -n -v --mdsdb /tmp/mdsdb --ostdb /tmp/{ost1db} /tmp/{ost2db} ... /lustre/mount/point\</screen>
                 <para><emphasis role="bold">Example:</emphasis></para>
                 <screen>script /root/lfsck.lustre.log
-                    lfsck -n -v --mdsdb /home/mdsdb --ostdb /home/{ost1db} /mnt/lustre/client/
-                    MDSDB: /home/mdsdb
-                    OSTDB[0]: /home/ostdb
-                    MOUNTPOINT: /mnt/lustre/client/
-                    MDS: max_id 288 OST: max_id 321
-                    lfsck: ost_idx 0: pass1: check for duplicate objects
-                    lfsck: ost_idx 0: pass1 OK (287 files total)
-                    lfsck: ost_idx 0: pass2: check for missing inode objects
-                    lfsck: ost_idx 0: pass2 OK (287 objects)
-                    lfsck: ost_idx 0: pass3: check for orphan objects
-                    [0] uuid lustre-OST0000_UUID
-                    [0] last_id 288
-                    [0] zero-length orphan objid 1
-                    lfsck: ost_idx 0: pass3 OK (321 files total)
-                    lfsck: pass4: check for duplicate object references
-                    lfsck: pass4 OK (no duplicates)
-                    lfsck: fixed 0 errors</screen>
+lfsck -n -v --mdsdb /home/mdsdb --ostdb /home/{ost1db} /mnt/lustre/client/
+MDSDB: /home/mdsdb
+OSTDB[0]: /home/ostdb
+MOUNTPOINT: /mnt/lustre/client/
+MDS: max_id 288 OST: max_id 321
+lfsck: ost_idx 0: pass1: check for duplicate objects
+lfsck: ost_idx 0: pass1 OK (287 files total)
+lfsck: ost_idx 0: pass2: check for missing inode objects
+lfsck: ost_idx 0: pass2 OK (287 objects)
+lfsck: ost_idx 0: pass3: check for orphan objects
+[0] uuid lustre-OST0000_UUID
+[0] last_id 288
+[0] zero-length orphan objid 1
+lfsck: ost_idx 0: pass3 OK (321 files total)
+lfsck: pass4: check for duplicate object references
+lfsck: pass4 OK (no duplicates)
+lfsck: fixed 0 errors</screen>
                 <para>By default, <literal>lfsck</literal> reports errors, but it does not repair any inconsistencies found. <literal>lfsck</literal> checks for three kinds of inconsistencies:</para>
                 <itemizedlist>
                     <listitem>
@@ -221,9 +221,10 @@
         </note>
     </section>
     <section xml:id="dbdoclet.lfsckadmin">
-        <title><indexterm><primary>recovery</primary><secondary>oiscrub</secondary></indexterm><indexterm><primary>recovery</primary><secondary>lfsck</secondary></indexterm>Checking the Lustre file system with LFSCK</title>
-        <para>LFSCK is an administrative tool that has been introduced in Lustre 2.3. Control and monitoring of LFSCK is through a user interface. LFSCK included in Lustre 2.3 contains functionality to repair the OI table (OI Scrub) which is useful in restoring from a file-level backup, see <xref linkend='dbdoclet.50438207_71633'/>.</para>
-        <para>The LFSCK user interface is implemented through LFSCK and <literal>procfs</literal> interfaces. LFSCK supports three types of interface: switch interfaces, status interfaces and adjustments interfaces. These interfaces are detailed below.</para>
+        <title><indexterm><primary>recovery</primary><secondary>oiscrub</secondary></indexterm><indexterm><primary>recovery</primary><secondary>lfsck</secondary></indexterm>Checking the file system with LFSCK</title>
+        <para>LFSCK is an administrative tool introduced in Lustre 2.3 for checking and repair of the Lustre-specific attributes of a mounted Lustre filesystem.  It is similar in concept to the offline <literal>lfsck</literal> Lustre repair tool that is included with the Lustre <literal>e2fsprogs</literal> package (see <xref linkend='dbdoclet.50438225_37365'/>), but LFSCK is implemented to run as part of Lustre while the filesystem is mounted and in use.  This allows Lustre consistency checking and repair without unnecessary downtime, and can be run on the largest Lustre filesystems.</para>
+        <para>In Lustre 2.3, LFSCK can verify and repair the Object Index (OI) table that is used internally to map Lustre File Identifiers (FIDs) to MDT internal inode numbers, through a process called OI Scrub.  An OI Scrub is required after restoring from a file-level MDT backup (<xref linkend='dbdoclet.50438207_71633'/>), or in case the OI table is otherwise corrupted.  Later phases of LFSCK will add further checks to the Lustre distributed filesystem state.</para>
+	<para>Control and monitoring of LFSCK is through <literal>lfsck</literal> and the <literal>/proc filesystem</literal> interfaces.  LFSCK supports three types of interface: switch interfaces, status interfaces and adjustments interfaces. These interfaces are detailed below.</para>
     </section>
     <section>
         <title>LFSCK switch interface</title>

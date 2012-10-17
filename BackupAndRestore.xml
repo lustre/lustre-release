@@ -194,7 +194,7 @@ Changelog records consumed: 42</screen>
       <para>Keeping an updated full backup of the MDT is especially important because a permanent failure of the MDT file system renders the much larger amount of data in all the OSTs largely inaccessible and unusable.</para>
     </note>
     <warning>
-        <para>In Lustre 2.0 and 2.1 the only successful way to backup and restore an MDT is to do a device-level backup as is described in this section. File-level backup of an MDT is not available before Lustre 2.3 as the Object Index (OI) file cannot be rebuilt after restore (see bug 22741 for details). <emphasis role='bold'>Since Lustre 2.3 </emphasis> OI files are automatically rebuilt and file-level backup is supported (see <xref linkend='dbdoclet.50438207_21638'/>.)</para>
+        <para>In Lustre 2.0 through 2.2, the only successful way to backup and restore an MDT is to do a device-level backup as is described in this section. File-level restore of an MDT is not possible before Lustre 2.3, as the Object Index (OI) file cannot be rebuilt after restore without the OI Scrub functionality. <emphasis role='bold'>Since Lustre 2.3</emphasis>, Object Index files are automatically rebuilt at first mount after a restore is detected (see <link xl:href='http://jira.whamcloud.com/browse/LU-957'>LU-957</link>), and file-level backup is supported (see <xref linkend='dbdoclet.50438207_21638'/>).</para>
     </warning>
     <para>If hardware replacement is the reason for the backup or if a spare storage device is available, it is possible to do a raw copy of the MDT or OST from one block device to the other, as long as the new device is at least as large as the original device. To do this, run:</para>
     <screen>dd if=/dev/{original} of=/dev/{newdev} bs=1M</screen>
@@ -211,7 +211,7 @@ Changelog records consumed: 42</screen>
       <title><indexterm><primary>backup</primary><secondary>OST file system</secondary></indexterm><indexterm><primary>backup</primary><secondary>MDT file system</secondary></indexterm>Making a File-Level Backup of an OST or MDT File System</title>
     <para>This procedure provides an alternative to backup or migrate the data of an OST or MDT at the file level. At the file-level, unused space is omitted from the backed up and the process may be completed quicker with smaller total backup size. Backing up a single OST device is not necessarily the best way to perform backups of the Lustre file system, since the files stored in the backup are not usable without metadata stored on the MDT and additional file stripes that may be on other OSTs. However, it is the preferred method for migration of OST devices, especially when it is desirable to reformat the underlying file system with different configuration options or to reduce fragmentation.</para>
     <note>
-        <para>Prior to Lustre 2.3, the only successful way to perform an MDT backup and restore is to do a device-level backup as is described in <xref linkend='dbdoclet.50438207_71633'/>. The ability to do MDT file-level backups is not available for Lustre 2.0 thru 2.2 because restoration of the Object Index (OI) file is not supported. <emphasis role='bold'>Since Lustre 2.3</emphasis> OI files are automatically rebuilt and file-level backup is supported (see <link xl:href='http://jira.whamcloud.com/browse/LU-957'>LU-957</link>.)</para>
+        <para>Prior to Lustre 2.3, the only successful way to perform an MDT backup and restore is to do a device-level backup as is described in <xref linkend='dbdoclet.50438207_71633'/>. The ability to do MDT file-level backups is not available for Lustre 2.0 thru 2.2, because restoration of the Object Index (OI) file does not return the MDT to a functioning state. <emphasis role='bold'>Since Lustre 2.3</emphasis>, Object Index files are automatically rebuilt at first mount after a restore is detected (see <link xl:href='http://jira.whamcloud.com/browse/LU-957'>LU-957</link>), so file-level MDT restore is supported.</para>
     </note>
     <para>For Lustre 2.3 and newer with MDT file-level backup support, substitute <literal>mdt</literal> for <literal>ost</literal> in the instructions below.</para>
     <orderedlist>
@@ -231,10 +231,10 @@ Changelog records consumed: 42</screen>
         <para><emphasis role="bold">Back up the extended attributes.</emphasis></para>
         <screen>[oss]# getfattr -R -d -m &apos;.*&apos; -e hex -P . &gt; ea-$(date +%Y%m%d).bak</screen>
         <note>
-          <para>If the <literal>tar(1)</literal> command supports the <literal>--xattr</literal> option, the <literal>getfattr</literal> step may be unnecessary as long as tar does a backup of the &quot;trusted.*&quot; attributes. However, completing this step is not harmful and can serve as an added safety measure.</para>
+          <para>If the <literal>tar(1)</literal> command supports the <literal>--xattr</literal> option, the <literal>getfattr</literal> step may be unnecessary as long as tar does a backup of the <literal>trusted.*</literal> attributes. However, completing this step is not harmful and can serve as an added safety measure.</para>
         </note>
         <note>
-          <para>In most distributions, the <literal>getfattr</literal> command is part of the &quot;<literal>attr</literal>&quot; package. If the <literal>getfattr</literal> command returns errors like <literal>Operation not supported</literal>, then the kernel does not correctly support EAs. Stop and use a different backup method.</para>
+          <para>In most distributions, the <literal>getfattr</literal> command is part of the <literal>attr</literal> package. If the <literal>getfattr</literal> command returns errors like <literal>Operation not supported</literal>, then the kernel does not correctly support EAs. Stop and use a different backup method.</para>
         </note>
       </listitem>
       <listitem>
@@ -282,6 +282,10 @@ trusted.fid= \
       <listitem>
         <para>Format the new device.</para>
         <screen>[oss]# mkfs.lustre --ost --index {<emphasis>OST index</emphasis>} {<emphasis>other options</emphasis>} /dev/<emphasis>{newdev}</emphasis></screen>
+      </listitem>
+      <listitem>
+        <para>Set the file system label.</para>
+        <screen>[oss]# e2label {fsname}-OST{index in hex} /mnt/ost</screen>
       </listitem>
       <listitem>
         <para>Mount the file system.</para>
