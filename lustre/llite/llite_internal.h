@@ -1110,9 +1110,10 @@ static inline struct obd_export *ll_i2mdexp(struct inode *inode)
 static inline struct lu_fid *ll_inode2fid(struct inode *inode)
 {
         struct lu_fid *fid;
+
         LASSERT(inode != NULL);
         fid = &ll_i2info(inode)->lli_fid;
-        LASSERT(fid_is_igif(fid) || fid_ver(fid) == 0);
+
         return fid;
 }
 

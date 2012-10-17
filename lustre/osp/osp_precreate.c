@@ -112,7 +112,7 @@ out:
 	/* couldn't update statfs, try again as soon as possible */
 	cfs_waitq_signal(&d->opd_pre_waitq);
 	if (req->rq_import_generation == imp->imp_generation)
-		CERROR("%s: couldn't update statfs: rc = %d\n",
+		CDEBUG(D_CACHE, "%s: couldn't update statfs: rc = %d\n",
 		       d->opd_obd->obd_name, rc);
 	RETURN(rc);
 }

@@ -1065,8 +1065,8 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 	skip_orphan = !!(exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN);
 
 	last = ofd_last_id(ofd, oa->o_seq);
-	CWARN("%s: deleting orphan objects from "LPU64" to "LPU64"\n",
-	      ofd_obd(ofd)->obd_name, oa->o_id + 1, last);
+	LCONSOLE_INFO("%s: deleting orphan objects from "LPU64" to "LPU64"\n",
+		      ofd_obd(ofd)->obd_name, oa->o_id + 1, last);
 
 	for (oi.oi_id = last; oi.oi_id > oa->o_id; oi.oi_id--) {
 		fid_ostid_unpack(&info->fti_fid, &oi, 0);

@@ -2321,24 +2321,23 @@ ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
         RETURN(rc);
 }
 
-static int ll_inode_revalidate_fini(struct inode *inode, int rc) {
-	if (rc == -ENOENT) { /* Already unlinked. Just update nlink
-			      * and return success */
+static int ll_inode_revalidate_fini(struct inode *inode, int rc)
+{
+	/* Already unlinked. Just update nlink and return success */
+	if (rc == -ENOENT) {
 		clear_nlink(inode);
 		/* This path cannot be hit for regular files unless in
 		 * case of obscure races, so no need to to validate
 		 * size. */
-		if (!S_ISREG(inode->i_mode) &&
-		    !S_ISDIR(inode->i_mode))
+		if (!S_ISREG(inode->i_mode) && !S_ISDIR(inode->i_mode))
 			return 0;
+	} else if (rc != 0) {
+		CERROR("%s: revalidate FID "DFID" error: rc = %d\n",
+		       ll_get_fsname(inode->i_sb, NULL, 0),
+		       PFID(ll_inode2fid(inode)), rc);
 	}
 
-	if (rc) {
-		CERROR("failure %d inode %lu\n", rc, inode->i_ino);
-		return -abs(rc);
-	}
-
-	return 0;
+	return rc;
 }
 
 int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
@@ -2350,10 +2349,7 @@ int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
         int rc = 0;
         ENTRY;
 
-        if (!inode) {
-                CERROR("REPORT THIS LINE TO PETER\n");
-                RETURN(0);
-        }
+        LASSERT(inode != NULL);
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),name=%s\n",
                inode->i_ino, inode->i_generation, inode, dentry->d_name.name);
