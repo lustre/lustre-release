@@ -1497,12 +1497,17 @@ run_test 105 "IR: NON IR clients support"
 cleanup_106() {
 	trap 0
 	umount_client $DIR2
+	debugrestore
 }
 
 test_106() { # LU-1789
+	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.50) ]] ||
+		{ skip "Need MDS version at least 2.3.50"; return 0; }
+
 #define OBD_FAIL_MDC_LIGHTWEIGHT         0x805
 	$LCTL set_param fail_loc=0x805
 
+	debugsave
 	trap cleanup_106 EXIT
 
 	# enable lightweight flag on mdc connection
@@ -1515,16 +1520,17 @@ test_106() { # LU-1789
 
 	touch $DIR2/$tfile || error "failed to create empty file"
 	replay_barrier $SINGLEMDS
+
+	$LCTL set_param debug=console
+	$LCTL clear
 	facet_failover $SINGLEMDS
 
 	# lightweight connection must be evicted
 	touch -c $DIR2/$tfile || true
-	evicted=`dmesg | awk '/test 106/ {start = 1;}
-			      /This client was evicted by .*MDT0000/ {
-				      if (start) {
-					      print;
-				      }
-			      }'`
+	$LCTL dk $TMP/lustre-log-$TESTNAME.log
+	evicted=`awk '/This client was evicted by .*MDT0000/ {
+				      print;
+		      }' $TMP/lustre-log-$TESTNAME.log`
 	[ -z "$evicted" ] && error "lightweight client not evicted by mds"
 
 	# and all operations performed by lightweight client should be
