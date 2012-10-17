@@ -291,7 +291,7 @@ static int osp_rd_prealloc_next_id(char *page, char **start, off_t off,
 	if (osp == NULL)
 		return 0;
 
-	return snprintf(page, count, LPU64"\n", osp->opd_pre_next);
+	return snprintf(page, count, LPU64"\n", osp->opd_pre_used_id + 1);
 }
 
 static int osp_rd_prealloc_last_id(char *page, char **start, off_t off,

@@ -199,7 +199,7 @@ static inline int osp_precreate_stopped(struct osp_device *d)
 
 static inline int osp_precreate_near_empty_nolock(struct osp_device *d)
 {
-	int window = d->opd_pre_last_created - d->opd_pre_next;
+	int window = d->opd_pre_last_created - d->opd_pre_used_id;
 
 	/* don't consider new precreation till OST is healty and
 	 * has free space */
@@ -281,7 +281,7 @@ static int osp_precreate_send(struct osp_device *d)
 		GOTO(out_req, rc = -EPROTO);
 
 	CDEBUG(D_HA, "new last_created %lu\n", (unsigned long) body->oa.o_id);
-	LASSERT(body->oa.o_id > d->opd_pre_next);
+	LASSERT(body->oa.o_id > d->opd_pre_used_id);
 
 	diff = body->oa.o_id - d->opd_pre_last_created;
 
@@ -300,7 +300,7 @@ static int osp_precreate_send(struct osp_device *d)
 	d->opd_pre_last_created = body->oa.o_id;
 	cfs_spin_unlock(&d->opd_pre_lock);
 	CDEBUG(D_OTHER, "current precreated pool: %llu-%llu\n",
-	       d->opd_pre_next, d->opd_pre_last_created);
+	       d->opd_pre_used_id, d->opd_pre_last_created);
 
 out_req:
 	/* now we can wakeup all users awaiting for objects */
@@ -437,13 +437,13 @@ static int osp_precreate_cleanup_orphans(struct osp_device *d)
 		d->opd_pre_grow_count = OST_MIN_PRECREATE;
 		d->opd_pre_last_created = body->oa.o_id + 1;
 	}
-	d->opd_pre_next = d->opd_pre_last_created;
+	d->opd_pre_used_id = d->opd_pre_last_created - 1;
 	d->opd_pre_grow_slow = 0;
 	cfs_spin_unlock(&d->opd_pre_lock);
 
 	CDEBUG(D_HA, "Got last_id "LPU64" from OST, last_used is "LPU64
 	       ", next "LPU64"\n", body->oa.o_id,
-	       le64_to_cpu(d->opd_last_used_id), d->opd_pre_next);
+	       le64_to_cpu(d->opd_last_used_id), d->opd_pre_used_id);
 
 out:
 	if (req)
@@ -619,8 +619,12 @@ static int osp_precreate_thread(void *_arg)
 
 static int osp_precreate_ready_condition(struct osp_device *d)
 {
+	__u64 next;
+
 	/* ready if got enough precreated objects */
-	if (d->opd_pre_next + d->opd_pre_reserved < d->opd_pre_last_created)
+	/* we need to wait for others (opd_pre_reserved) and our object (+1) */
+	next = d->opd_pre_used_id + d->opd_pre_reserved + 1;
+	if (next <= d->opd_pre_last_created)
 		return 1;
 
 	/* ready if OST reported no space and no destoys in progress */
@@ -639,7 +643,7 @@ static int osp_precreate_timeout_condition(void *data)
 		      "reserved="LPU64", syn_changes=%lu, "
 		      "syn_rpc_in_progress=%d, status=%d\n",
 		      d->opd_obd->obd_name, d->opd_pre_last_created,
-		      d->opd_pre_next, d->opd_pre_reserved,
+		      d->opd_pre_used_id, d->opd_pre_reserved,
 		      d->opd_syn_changes, d->opd_syn_rpc_in_progress,
 		      d->opd_pre_status);
 
@@ -662,7 +666,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 
 	ENTRY;
 
-	LASSERT(d->opd_pre_last_created >= d->opd_pre_next);
+	LASSERT(d->opd_pre_last_created >= d->opd_pre_used_id);
 
 	lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout),
 			  osp_precreate_timeout_condition, d);
@@ -680,21 +684,23 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 				break;
 		}
 
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 3, 90, 0)
-#error "remove this before the release"
-#endif
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 90, 0)
 		/*
 		 * to address Andreas's concern on possible busy-loop
 		 * between this thread and osp_precreate_send()
 		 */
-		LASSERT(count++ < 1000);
+		if (unlikely(count++ == 1000)) {
+			osp_precreate_timeout_condition(d);
+			LBUG();
+		}
+#endif
 
 		/*
 		 * increase number of precreations
 		 */
 		if (d->opd_pre_grow_count < d->opd_pre_max_grow_count &&
 		    d->opd_pre_grow_slow == 0 &&
-		    (d->opd_pre_last_created - d->opd_pre_next <=
+		    (d->opd_pre_last_created - d->opd_pre_used_id <=
 		     d->opd_pre_grow_count / 4 + 1)) {
 			cfs_spin_lock(&d->opd_pre_lock);
 			d->opd_pre_grow_slow = 1;
@@ -706,7 +712,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 		 * we never use the last object in the window
 		 */
 		cfs_spin_lock(&d->opd_pre_lock);
-		precreated = d->opd_pre_last_created - d->opd_pre_next;
+		precreated = d->opd_pre_last_created - d->opd_pre_used_id;
 		if (precreated > d->opd_pre_reserved) {
 			d->opd_pre_reserved++;
 			cfs_spin_unlock(&d->opd_pre_lock);
@@ -761,8 +767,8 @@ __u64 osp_precreate_get_id(struct osp_device *d)
 
 	/* grab next id from the pool */
 	cfs_spin_lock(&d->opd_pre_lock);
-	LASSERT(d->opd_pre_next <= d->opd_pre_last_created);
-	objid = d->opd_pre_next++;
+	LASSERT(d->opd_pre_used_id < d->opd_pre_last_created);
+	objid = ++d->opd_pre_used_id;
 	d->opd_pre_reserved--;
 	/*
 	 * last_used_id must be changed along with getting new id otherwise
@@ -861,8 +867,8 @@ int osp_init_precreate(struct osp_device *d)
 
 	/* initially precreation isn't ready */
 	d->opd_pre_status = -EAGAIN;
-	d->opd_pre_next = 1;
-	d->opd_pre_last_created = 1;
+	d->opd_pre_used_id = 0;
+	d->opd_pre_last_created = 0;
 	d->opd_pre_reserved = 0;
 	d->opd_got_disconnected = 1;
 	d->opd_pre_grow_slow = 0;

@@ -103,8 +103,8 @@ struct osp_device {
 	 * Precreation pool
 	 */
 	cfs_spinlock_t			 opd_pre_lock;
-	/* next id to assign in creation */
-	__u64				 opd_pre_next;
+	/* last id assigned in creation */
+	__u64				 opd_pre_used_id;
 	/* last created id OST reported, next-created - available id's */
 	__u64				 opd_pre_last_created;
 	/* how many ids are reserved in declare, we shouldn't block in create */

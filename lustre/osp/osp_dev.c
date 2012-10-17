@@ -330,8 +330,11 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	 * how many objects are available for immediate creation
 	 */
 	cfs_spin_lock(&d->opd_pre_lock);
-	sfs->os_fprecreated = d->opd_pre_last_created - d->opd_pre_next;
+	sfs->os_fprecreated = d->opd_pre_last_created - d->opd_pre_used_id;
+	sfs->os_fprecreated -= d->opd_pre_reserved;
 	cfs_spin_unlock(&d->opd_pre_lock);
+
+	LASSERT(sfs->os_fprecreated <= OST_MAX_PRECREATE);
 
 	CDEBUG(D_OTHER, "%s: "LPU64" blocks, "LPU64" free, "LPU64" avail, "
 	       LPU64" files, "LPU64" free files\n", d->opd_obd->obd_name,
