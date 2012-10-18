@@ -639,10 +639,16 @@ int main(int argc, char *const argv[])
                 goto out;
         }
 
-	if (IS_OST(ldd) && (mop.mo_ldd.ldd_flags & LDD_F_NEED_INDEX))
+	if (mop.mo_ldd.ldd_flags & LDD_F_NEED_INDEX)
 		fprintf(stderr, "warning: %s: for Lustre 2.4 and later, the "
 			"target index must be specified with --index\n",
 			mop.mo_device);
+
+	/* If no index is supplied for MDT by default set index to zero */
+	if (IS_MDT(ldd) && (ldd->ldd_svindex == INDEX_UNASSIGNED)) {
+		mop.mo_ldd.ldd_flags &= ~LDD_F_NEED_INDEX;
+		mop.mo_ldd.ldd_svindex = 0;
+	}
 
 #if 0
         /*
