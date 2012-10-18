@@ -271,7 +271,6 @@ static int mgs_get_fsdb_from_llog(const struct lu_env *env,
 	rc = name_create(&logname, fsdb->fsdb_name, "-client");
 	if (rc)
 		GOTO(out_put, rc);
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
 	rc = llog_open_create(env, ctxt, &loghandle, NULL, logname);
 	if (rc)
 		GOTO(out_pop, rc);
@@ -288,7 +287,6 @@ static int mgs_get_fsdb_from_llog(const struct lu_env *env,
 out_close:
 	llog_close(env, loghandle);
 out_pop:
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
         name_destroy(&logname);
 out_put:
         llog_ctxt_put(ctxt);
@@ -435,27 +433,30 @@ int mgs_find_or_make_fsdb(const struct lu_env *env,
         struct fs_db *fsdb;
         int rc = 0;
 
+	ENTRY;
         cfs_mutex_lock(&mgs->mgs_mutex);
 	fsdb = mgs_find_fsdb(mgs, name);
         if (fsdb) {
                 cfs_mutex_unlock(&mgs->mgs_mutex);
                 *dbh = fsdb;
-                return 0;
+		RETURN(0);
         }
 
         CDEBUG(D_MGS, "Creating new db\n");
 	fsdb = mgs_new_fsdb(env, mgs, name);
+	/* lock fsdb_mutex until the db is loaded from llogs */
+	if (fsdb)
+		cfs_mutex_lock(&fsdb->fsdb_mutex);
         cfs_mutex_unlock(&mgs->mgs_mutex);
         if (!fsdb)
-                return -ENOMEM;
+		RETURN(-ENOMEM);
 
         if (!cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
                 /* populate the db from the client llog */
 		rc = mgs_get_fsdb_from_llog(env, mgs, fsdb);
                 if (rc) {
                         CERROR("Can't get db from client log %d\n", rc);
-			mgs_free_fsdb(mgs, fsdb);
-                        return rc;
+			GOTO(out_free, rc);
                 }
         }
 
@@ -463,13 +464,18 @@ int mgs_find_or_make_fsdb(const struct lu_env *env,
 	rc = mgs_get_fsdb_srpc_from_llog(env, mgs, fsdb);
         if (rc) {
                 CERROR("Can't get db from params log %d\n", rc);
-		mgs_free_fsdb(mgs, fsdb);
-                return rc;
+		GOTO(out_free, rc);
         }
 
+	cfs_mutex_unlock(&fsdb->fsdb_mutex);
         *dbh = fsdb;
 
-        return 0;
+        RETURN(0);
+
+out_free:
+	cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mgs_free_fsdb(mgs, fsdb);
+	return rc;
 }
 
 /* 1 = index in use
@@ -537,6 +543,7 @@ static int mgs_set_index(const struct lu_env *env,
                 RETURN(rc);
         }
 
+	cfs_mutex_lock(&fsdb->fsdb_mutex);
         if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                 imap = fsdb->fsdb_ost_index_map;
         } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
@@ -544,16 +551,16 @@ static int mgs_set_index(const struct lu_env *env,
                 if (fsdb->fsdb_mdt_count >= MAX_MDT_COUNT) {
                         LCONSOLE_ERROR_MSG(0x13f, "The max mdt count"
                                            "is %d\n", (int)MAX_MDT_COUNT);
-                        RETURN(-ERANGE);
+			GOTO(out_up, rc = -ERANGE);
                 }
         } else {
-                RETURN(-EINVAL);
+		GOTO(out_up, rc = -EINVAL);
         }
 
         if (mti->mti_flags & LDD_F_NEED_INDEX) {
                 rc = next_index(imap, INDEX_MAP_SIZE);
                 if (rc == -1)
-                        RETURN(-ERANGE);
+			GOTO(out_up, rc = -ERANGE);
                 mti->mti_stripe_index = rc;
                 if (mti->mti_flags & LDD_F_SV_TYPE_MDT)
                         fsdb->fsdb_mdt_count ++;
@@ -564,7 +571,7 @@ static int mgs_set_index(const struct lu_env *env,
                                    "but the max index is %d.\n",
                                    mti->mti_svname, mti->mti_stripe_index,
                                    INDEX_MAP_SIZE * 8);
-                RETURN(-ERANGE);
+		GOTO(out_up, rc = -ERANGE);
         }
 
         if (cfs_test_bit(mti->mti_stripe_index, imap)) {
@@ -575,16 +582,17 @@ static int mgs_set_index(const struct lu_env *env,
                                            "use. Use --writeconf to force\n",
                                            mti->mti_svname,
                                            mti->mti_stripe_index);
-                        RETURN(-EADDRINUSE);
+			GOTO(out_up, rc = -EADDRINUSE);
                 } else {
                         CDEBUG(D_MGS, "Server %s updating index %d\n",
                                mti->mti_svname, mti->mti_stripe_index);
-                        RETURN(EALREADY);
+			GOTO(out_up, rc = EALREADY);
                 }
         }
 
         cfs_set_bit(mti->mti_stripe_index, imap);
         cfs_clear_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
+	cfs_mutex_unlock(&fsdb->fsdb_mutex);
 	server_make_name(mti->mti_flags & ~(LDD_F_VIRGIN | LDD_F_WRITECONF),
 			 mti->mti_stripe_index, mti->mti_fsname, mti->mti_svname);
 
@@ -592,6 +600,9 @@ static int mgs_set_index(const struct lu_env *env,
                mti->mti_stripe_index);
 
         RETURN(0);
+out_up:
+	cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	return rc;
 }
 
 struct mgs_modify_lookup {
