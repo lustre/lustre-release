@@ -109,11 +109,12 @@ static int llog_osd_pad(const struct lu_env *env, struct dt_object *o,
 
 	lgi->lgi_buf.lb_buf = &lgi->lgi_lrh;
 	lgi->lgi_buf.lb_len = sizeof(lgi->lgi_lrh);
+	dt_write_lock(env, o, 0);
 	rc = dt_record_write(env, o, &lgi->lgi_buf, off, th);
 	if (rc) {
 		CERROR("%s: error writing padding record: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name, rc);
-		RETURN(rc);
+		GOTO(out, rc);
 	}
 
 	lgi->lgi_buf.lb_buf = &lgi->lgi_tail;
@@ -123,7 +124,8 @@ static int llog_osd_pad(const struct lu_env *env, struct dt_object *o,
 	if (rc)
 		CERROR("%s: error writing padding record: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name, rc);
-
+out:
+	dt_write_unlock(env, o);
 	RETURN(rc);
 }
 
@@ -157,6 +159,8 @@ static int llog_osd_write_blob(const struct lu_env *env, struct dt_object *o,
 	}
 
 	/* the buf case */
+	/* protect the following 3 writes from concurrent read */
+	dt_write_lock(env, o, 0);
 	rec->lrh_len = sizeof(*rec) + buflen + sizeof(lgi->lgi_tail);
 	lgi->lgi_buf.lb_len = sizeof(*rec);
 	lgi->lgi_buf.lb_buf = rec;
@@ -185,6 +189,7 @@ static int llog_osd_write_blob(const struct lu_env *env, struct dt_object *o,
 		CERROR("%s: error writing log tail: rc = %d\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name, rc);
 out:
+	dt_write_unlock(env, o);
 	RETURN(rc);
 }
 
@@ -536,7 +541,19 @@ static int llog_osd_next_block(const struct lu_env *env,
 		lgi->lgi_buf.lb_len = LLOG_CHUNK_SIZE -
 				      (*cur_offset & (LLOG_CHUNK_SIZE - 1));
 		lgi->lgi_buf.lb_buf = buf;
+
+		/* Note: read lock is not needed around la_size get above at
+		 * the time of dt_attr_get(). There are only two cases that
+		 * matter. Either la_size == cur_offset, in which case the
+		 * entire read is skipped, or la_size > cur_offset and the loop
+		 * is entered and this thread is blocked at dt_read_lock()
+		 * until the write is completed. When the write completes, then
+		 * the dt_read() will be done with the full length, and will
+		 * get the full data.
+		 */
+		dt_read_lock(env, o, 0);
 		rc = dt_read(env, o, &lgi->lgi_buf, cur_offset);
+		dt_read_unlock(env, o);
 		if (rc < 0) {
 			CERROR("%s: can't read llog block from log "DFID
 			       " offset "LPU64": rc = %d\n",
@@ -646,7 +663,12 @@ static int llog_osd_prev_block(const struct lu_env *env,
 
 		lgi->lgi_buf.lb_len = len;
 		lgi->lgi_buf.lb_buf = buf;
+		/* It is OK to have locking around dt_read() only, see
+		 * comment in llog_osd_next_block for details
+		 */
+		dt_read_lock(env, o, 0);
 		rc = dt_read(env, o, &lgi->lgi_buf, &cur_offset);
+		dt_read_unlock(env, o);
 		if (rc < 0) {
 			CERROR("%s: can't read llog block from log "DFID
 			       " offset "LPU64": rc = %d\n",
