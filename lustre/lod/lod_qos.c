@@ -1137,6 +1137,11 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 			rc = 0;
 			break;
 		}
+
+		if (rc) {
+			/* no OST found on this iteration, give up */
+			break;
+		}
 	}
 
 	if (unlikely(nfound != stripe_cnt)) {
