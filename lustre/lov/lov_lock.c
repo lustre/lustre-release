@@ -155,7 +155,7 @@ static struct cl_lock *lov_sublock_alloc(const struct lu_env *env,
 
                 parent = lck->lls_cl.cls_lock;
                 lls    = &lck->lls_sub[idx];
-                descr  = &lls->sub_descr;
+                descr  = &lls->sub_got;
 
                 subenv = lov_sublock_env_get(env, parent, lls);
                 if (!IS_ERR(subenv)) {
