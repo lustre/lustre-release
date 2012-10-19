@@ -56,10 +56,10 @@ struct qsd_instance {
 	cfs_proc_dir_entry_t	*qsd_proc;
 
 	/* export used for the connection to quota master */
-	struct obd_export     *qsd_exp;
+	struct obd_export	*qsd_exp;
 
 	/* ldlm namespace used for quota locks */
-	struct ldlm_namespace *qsd_ns;
+	struct ldlm_namespace	*qsd_ns;
 
 	/* on-disk directory where to store index files for this qsd instance */
 	struct dt_object	*qsd_root;
@@ -101,6 +101,11 @@ struct qsd_instance {
 	/* when blk qunit reaches this value, later write reqs from client
 	 * should be sync. b=16642 */
 	unsigned long		 qsd_sync_threshold;
+
+	/* how long a service thread can wait for quota space.
+	 * value dynamically computed from obd_timeout and at_max if not
+	 * enforced here (via procfs) */
+	int			 qsd_timeout;
 
 	unsigned long		 qsd_is_md:1,    /* managing quota for mdt */
 				 qsd_started:1,  /* instance is now started */
@@ -217,14 +222,6 @@ static inline void qqi_putref(struct qsd_qtype_info *qqi)
 	cfs_atomic_dec(&qqi->qqi_ref);
 }
 
-/* all kind of operations supported by qsd_dqacq() */
-enum qsd_ops {
-	QSD_ADJ, /* adjust quota space based on current qunit */
-	QSD_ACQ, /* acquire space for requests */
-	QSD_REL, /* release all space quota space uncondionnally */
-	QSD_REP, /* report space usage during reintegration */
-};
-
 #define QSD_RES_TYPE(qsd) ((qsd)->qsd_is_md ? LQUOTA_RES_MD : LQUOTA_RES_DT)
 
 /* udpate record for slave & global index copy */
@@ -320,6 +317,15 @@ static inline void qsd_set_qunit(struct lquota_entry *lqe, __u64 qunit)
 
 #define QSD_WB_INTERVAL	60 /* 60 seconds */
 
+/* helper function calculating how long a service thread should be waiting for
+ * quota space */
+static inline int qsd_wait_timeout(struct qsd_instance *qsd)
+{
+	if (qsd->qsd_timeout != 0)
+		return qsd->qsd_timeout;
+	return min_t(int, at_max / 2, obd_timeout / 2);
+}
+
 /* qsd_entry.c */
 extern struct lquota_entry_operations qsd_lqe_ops;
 int qsd_refresh_usage(const struct lu_env *, struct lquota_entry *);
@@ -366,8 +372,7 @@ void qsd_put_fsinfo(struct qsd_fsinfo *);
 int qsd_process_config(struct lustre_cfg *);
 
 /* qsd_handler.c */
-int qsd_dqacq(const struct lu_env *, struct lquota_entry *, enum qsd_ops);
-__u64 qsd_calc_grants(struct lquota_entry *, __u64, __u32);
+int qsd_adjust(const struct lu_env *, struct lquota_entry *);
 
 /* qsd_writeback.c */
 void qsd_upd_schedule(struct qsd_qtype_info *, struct lquota_entry *,

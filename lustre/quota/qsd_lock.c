@@ -339,7 +339,7 @@ static int qsd_id_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *de
 		 * which means there could be a short window that slave is
 		 * holding spare grant wihtout per-ID lock. */
 		if (rel)
-			rc = qsd_dqacq(env, lqe, QSD_REL);
+			rc = qsd_adjust(env, lqe);
 
 		/* release lqe reference grabbed by qsd_id_ast_data_get() */
 		lqe_putref(lqe);

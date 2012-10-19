@@ -344,38 +344,32 @@ static int qsd_reconciliation(const struct lu_env *env,
 
 		lqe = lqe_locate(env, qqi->qqi_site, qid);
 		if (IS_ERR(lqe)) {
-			CWARN("%s: Fail to locate lqe. "DFID", %ld\n",
+			CWARN("%s: failed to locate lqe. "DFID", %ld\n",
 			      qsd->qsd_svname, PFID(&qqi->qqi_fid),
 			      PTR_ERR(lqe));
 			GOTO(out, rc = PTR_ERR(lqe));
 		}
 
-		if (!lqe->lqe_enforced) {
-			lqe_putref(lqe);
-			goto next;
-		}
-
 		rc = qsd_refresh_usage(env, lqe);
 		if (rc) {
-			CWARN("%s: Fail to get usage. "DFID", %d\n",
+			CWARN("%s: failed to get usage. "DFID", %d\n",
 			      qsd->qsd_svname, PFID(&qqi->qqi_fid), rc);
 			lqe_putref(lqe);
 			GOTO(out, rc);
 		}
 
-		rc = qsd_dqacq(env, lqe, QSD_REP);
+		rc = qsd_adjust(env, lqe);
 		lqe_putref(lqe);
-
 		if (rc) {
-			CWARN("%s: Fail to report quota. "DFID", %d\n",
+			CWARN("%s: failed to report quota. "DFID", %d\n",
 			      qsd->qsd_svname, PFID(&qqi->qqi_fid), rc);
 			GOTO(out, rc);
 		}
 next:
 		rc = iops->next(env, it);
 		if (rc < 0)
-			CWARN("%s: Error next "DFID". %d\n", qsd->qsd_svname,
-			      PFID(&qqi->qqi_fid), rc);
+			CWARN("%s: failed to parse index, ->next error:%d "DFID
+			      "\n", qsd->qsd_svname, rc, PFID(&qqi->qqi_fid));
 	} while (rc == 0);
 
 	/* reach the end */

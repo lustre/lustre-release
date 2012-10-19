@@ -174,10 +174,37 @@ static int lprocfs_qsd_wr_force_reint(struct file *file, const char *buffer,
 	return rc == 0 ? count : rc;
 }
 
+static int lprocfs_qsd_rd_timeout(char *page, char **start, off_t off,
+				  int count, int *eof, void *data)
+{
+	struct qsd_instance	*qsd = (struct qsd_instance *)data;
+	LASSERT(qsd != NULL);
+
+	return snprintf(page, count, "%d\n", qsd_wait_timeout(qsd));
+}
+
+static int lprocfs_qsd_wr_timeout(struct file *file, const char *buffer,
+				  unsigned long count, void *data)
+{
+	struct qsd_instance	*qsd = (struct qsd_instance *)data;
+	int			 timeout, rc;
+	LASSERT(qsd != NULL);
+
+	rc = lprocfs_write_helper(buffer, count, &timeout);
+	if (rc)
+		return rc;
+	if (timeout < 0)
+		return -EINVAL;
+
+	qsd->qsd_timeout = timeout;
+	return count;
+}
+
 static struct lprocfs_vars lprocfs_quota_qsd_vars[] = {
 	{ "info", lprocfs_qsd_rd_state, 0, 0},
 	{ "enabled", lprocfs_qsd_rd_enabled, 0, 0},
 	{ "force_reint", 0, lprocfs_qsd_wr_force_reint, 0},
+	{ "timeout", lprocfs_qsd_rd_timeout, lprocfs_qsd_wr_timeout, 0},
 	{ NULL }
 };
 

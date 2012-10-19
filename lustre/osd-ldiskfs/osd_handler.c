@@ -865,10 +865,10 @@ static void osd_object_delete(const struct lu_env *env, struct lu_object *l)
 
 			/* Release granted quota to master if necessary */
 			qi->lqi_id.qid_uid = uid;
-			qsd_adjust_quota(env, qsd, &qi->lqi_id, USRQUOTA);
+			qsd_op_adjust(env, qsd, &qi->lqi_id, USRQUOTA);
 
 			qi->lqi_id.qid_uid = gid;
-			qsd_adjust_quota(env, qsd, &qi->lqi_id, GRPQUOTA);
+			qsd_op_adjust(env, qsd, &qi->lqi_id, GRPQUOTA);
 		}
         }
 }

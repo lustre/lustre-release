@@ -1211,8 +1211,8 @@ int qsd_op_begin(const struct lu_env *, struct qsd_instance *,
                  struct lquota_trans *, struct lquota_id_info *, int *);
 void qsd_op_end(const struct lu_env *, struct qsd_instance *,
                 struct lquota_trans *);
-void qsd_adjust_quota(const struct lu_env *, struct qsd_instance *,
-                      union lquota_id *, int);
+void qsd_op_adjust(const struct lu_env *, struct qsd_instance *,
+                   union lquota_id *, int);
 
 qsd_init
 	The OSD module should first allocate a qsd instance via qsd_init.
@@ -1252,11 +1252,11 @@ qsd_op_end
 	each time a new operation is declared, qsd_op_end should be called only
 	once for the whole transaction.
 
-qsd_adjust_quota
+qsd_op_adjust
 	Trigger pre-acquire/release if necessary, it's only used for ldiskfs osd
 	so far. When unlink a file in ldiskfs, the quota accounting isn't
 	updated when the transaction stopped. Instead, it'll be updated on the
-	final iput, so qsd_adjust_quota() will be called then (in
+	final iput, so qsd_op_adjust() will be called then (in
 	osd_object_delete()) to trigger quota release if necessary.
 
 Appendix 1. A brief note on Lustre configuration.

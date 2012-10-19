@@ -325,7 +325,7 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 
 	RETURN(rc);
 out:
-	completion(env, qqi, qbody, NULL, &qti->qti_lockh, NULL, arg, rc);
+	completion(env, qqi, qbody, NULL, &qti->qti_lockh, lvb, arg, rc);
 	return rc;
 }
 

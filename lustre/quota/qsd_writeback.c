@@ -276,12 +276,12 @@ static int qsd_process_upd(const struct lu_env *env, struct qsd_upd_rec *upd)
 		rc = qsd_update_lqe(env, lqe, upd->qur_global, &upd->qur_rec);
 		if (rc)
 			GOTO(out, rc);
+		/* refresh usage */
+		qsd_refresh_usage(env, lqe);
 		/* Report usage asynchronously */
-		if (lqe->lqe_enforced &&
-		    !qsd_refresh_usage(env, lqe)) {
-			rc = qsd_dqacq(env, lqe, QSD_REP);
-			LQUOTA_DEBUG(lqe, "Report usage. rc:%d", rc);
-		}
+		rc = qsd_adjust(env, lqe);
+		if (rc)
+			LQUOTA_ERROR(lqe, "failed to report usage, rc:%d", rc);
 	}
 
 	rc = qsd_update_index(env, qqi, &upd->qur_qid, upd->qur_global,
@@ -440,7 +440,7 @@ static int qsd_upd_thread(void *arg)
 				if (lqe->lqe_adjust_time == 0)
 					qsd_id_lock_cancel(env, lqe);
 				else
-					qsd_dqacq(env, lqe, QSD_ADJ);
+					qsd_adjust(env, lqe);
 			}
 
 			lqe_putref(lqe);

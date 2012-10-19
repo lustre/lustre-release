@@ -118,12 +118,8 @@ resetquota() {
 		error "resetquota: wrong specifier $1 passed"
 
 	$LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT
-	# The usage should be 0 now, enforce quota to trigger quota
-	# release for each slave, sleep 3 seconds to wait for the release
-	# done, then we can make sure granted quota for each slave is 0.
-	$LFS setquota "$1" "$2" -b 0 -B 1 -i 0 -I 1 $MOUNT
-	sleep 3
-	$LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT
+	# give a chance to slave to release space
+	sleep 1
 }
 
 quota_scan() {
@@ -855,8 +851,9 @@ test_6() {
 	$RUNAS $DD of=$TESTFILE count=$LIMIT seek=1 oflag=sync conv=notrunc &
 	DDPID=$!
 
-	echo "Sleep for $TIMEOUT"
-	sleep $TIMEOUT
+	# watchdog timer uses a factor of 2
+	echo "Sleep for $((TIMEOUT * 2 + 1)) seconds ..."
+	sleep $((TIMEOUT * 2 + 1))
 
 	# write should be blocked and never finished
 	if ! ps -p $DDPID  > /dev/null 2>&1; then

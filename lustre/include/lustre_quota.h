@@ -161,7 +161,7 @@ struct qsd_instance;
  *                 operation is declared, qsd_op_end() should be called only
  *                 once for the whole transaction.
  *
- * - qsd_adjust_quota(): triggers pre-acquire/release if necessary.
+ * - qsd_op_adjust(): triggers pre-acquire/release if necessary.
  *
  * Below are the function prototypes to be used by OSD layer to manage quota
  * enforcement. Arguments are documented where each function is defined.  */
@@ -175,8 +175,8 @@ int qsd_op_begin(const struct lu_env *, struct qsd_instance *,
 		 struct lquota_trans *, struct lquota_id_info *, int *);
 void qsd_op_end(const struct lu_env *, struct qsd_instance *,
 		struct lquota_trans *);
-void qsd_adjust_quota(const struct lu_env *, struct qsd_instance *,
-		      union lquota_id *, int);
+void qsd_op_adjust(const struct lu_env *, struct qsd_instance *,
+		   union lquota_id *, int);
 
 /*
  * Quota information attached to a transaction
