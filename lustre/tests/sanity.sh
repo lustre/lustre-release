@@ -5955,89 +5955,89 @@ test_101c() {
 run_test 101c "check stripe_size aligned read-ahead ================="
 
 set_read_ahead() {
-   $LCTL get_param -n llite.*.max_read_ahead_mb | head -n 1
-   $LCTL set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
+	$LCTL get_param -n llite.*.max_read_ahead_mb | head -n 1
+	$LCTL set_param -n llite.*.max_read_ahead_mb $1 > /dev/null 2>&1
 }
 
 test_101d() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	local file=$DIR/$tfile
-	local size=${FILESIZE_101c:-500}
+	local sz_MB=${FILESIZE_101d:-500}
 	local ra_MB=${READAHEAD_MB:-40}
 
-	local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
-	[ $space -gt $((size * 1024)) ] ||
-		{ skip "Need free space ${size}M, have ${space}K" && return; }
+	local free_MB=$(($(df -P $DIR | tail -n 1 | awk '{ print $4 }') / 1024))
+	[ $free_MB -lt $sz_MB ] &&
+		skip "Need free space ${sz_MB}M, have ${free_MB}M" && return
 
-	echo "Creating test file $file of size ${size}M with ${space}K free space"
+	echo "Create test file $file size ${sz_MB}M, ${free_MB}M free"
 	$SETSTRIPE -c -1 $file || error "setstripe failed"
-	dd if=/dev/zero of=$file bs=1M count=$size || error "dd failed"
+
+	dd if=/dev/zero of=$file bs=1M count=$sz_MB || error "dd failed"
 	echo Cancel LRU locks on lustre client to flush the client cache
 	cancel_lru_locks osc
 
-    echo Disable read-ahead
-    local old_READAHEAD=$(set_read_ahead 0)
+	echo Disable read-ahead
+	local old_READAHEAD=$(set_read_ahead 0)
 
-    echo Reading the test file $file with read-ahead disabled
-    time_ra_OFF=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$size")
+	echo Reading the test file $file with read-ahead disabled
+	local raOFF=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$sz_MB")
 
-    echo Cancel LRU locks on lustre client to flush the client cache
-    cancel_lru_locks osc
-    echo Enable read-ahead with ${ra_MB}MB
-    set_read_ahead $ra_MB
+	echo Cancel LRU locks on lustre client to flush the client cache
+	cancel_lru_locks osc
+	echo Enable read-ahead with ${ra_MB}MB
+	set_read_ahead $ra_MB
 
-    echo Reading the test file $file with read-ahead enabled
-    time_ra_ON=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$size")
+	echo Reading the test file $file with read-ahead enabled
+	local raON=$(do_and_time "dd if=$file of=/dev/null bs=1M count=$sz_MB")
 
-    echo read-ahead disabled time read $time_ra_OFF
-    echo read-ahead enabled  time read $time_ra_ON
+	echo "read-ahead disabled time read $raOFF"
+	echo "read-ahead enabled  time read $raON"
 
 	set_read_ahead $old_READAHEAD
 	rm -f $file
 	wait_delete_completed
 
-    [ $time_ra_ON -lt $time_ra_OFF ] ||
-        error "read-ahead enabled  time read (${time_ra_ON}s) is more than
-               read-ahead disabled time read (${time_ra_OFF}s) filesize ${size}M"
+	[ $raOFF -le 1 -o $raON -lt $raOFF ] ||
+		error "readahead ${raON}s > no-readahead ${raOFF}s ${sz_MB}M"
 }
-run_test 101d "file read with and without read-ahead enabled  ================="
+run_test 101d "file read with and without read-ahead enabled"
 
 test_101e() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
-    local file=$DIR/$tfile
-    local size=500  #KB
-    local count=100
-    local blksize=1024
+	local file=$DIR/$tfile
+	local size_KB=500  #KB
+	local count=100
+	local bsize=1024
 
-    local space=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
-    local need_space=$((count * size))
-    [ $space -gt $need_space ] ||
-        { skip_env "Need free space $need_space, have $space" && return; }
+	local free_KB=$(df -P $DIR | tail -n 1 | awk '{ print $4 }')
+	local need_KB=$((count * size_KB))
+	[ $free_KB -le $need_KB ] &&
+		skip_env "Need free space $need_KB, have $free_KB" && return
 
-    echo Creating $count ${size}K test files
-    for ((i = 0; i < $count; i++)); do
-        dd if=/dev/zero of=${file}_${i} bs=$blksize count=$size 2>/dev/null
-    done
+	echo "Creating $count ${size_KB}K test files"
+	for ((i = 0; i < $count; i++)); do
+		dd if=/dev/zero of=$file.$i bs=$bsize count=$size_KB 2>/dev/null
+	done
 
-    echo Cancel LRU locks on lustre client to flush the client cache
-    cancel_lru_locks osc
+	echo "Cancel LRU locks on lustre client to flush the client cache"
+	cancel_lru_locks osc
 
-    echo Reset readahead stats
-    $LCTL set_param -n llite.*.read_ahead_stats 0
+	echo "Reset readahead stats"
+	$LCTL set_param -n llite.*.read_ahead_stats 0
 
-    for ((i = 0; i < $count; i++)); do
-        dd if=${file}_${i} of=/dev/null bs=$blksize count=$size 2>/dev/null
-    done
+	for ((i = 0; i < $count; i++)); do
+		dd if=$file.$i of=/dev/null bs=$bsize count=$size_KB 2>/dev/null
+	done
 
-    local miss=$($LCTL get_param -n llite.*.read_ahead_stats | \
-          get_named_value 'misses' | cut -d" " -f1 | calc_total)
+	local miss=$($LCTL get_param -n llite.*.read_ahead_stats |
+		     get_named_value 'misses' | cut -d" " -f1 | calc_total)
 
-    for ((i = 0; i < $count; i++)); do
-        rm -rf ${file}_${i} 2>/dev/null
-    done
+	for ((i = 0; i < $count; i++)); do
+		rm -rf $file.$i 2>/dev/null
+	done
 
-    #10000 means 20% reads are missing in readahead
-    [ $miss -lt 10000 ] ||  error "misses too much for small reads"
+	#10000 means 20% reads are missing in readahead
+	[ $miss -lt 10000 ] ||  error "misses too much for small reads"
 }
 run_test 101e "check read-ahead for small read(1k) for small files(500k)"
 
