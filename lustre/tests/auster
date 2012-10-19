@@ -65,7 +65,7 @@ repeat_count=1
 upload_logs=false
 reformat=false
 test_logs_dir=/tmp/test_logs/$(date +%Y-%m-%d)/$(date +%H%M%S)
-export SLOW=no
+export ${SLOW:=no}
 export ${NAME:=local}
 while getopts "c:d:D:nkf:S:g:i:rRslhv" opt
 do
