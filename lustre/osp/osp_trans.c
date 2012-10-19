@@ -973,7 +973,6 @@ struct thandle *osp_trans_create(const struct lu_env *env, struct dt_device *d)
 	oth->ot_magic = OSP_THANDLE_MAGIC;
 	th = &oth->ot_super;
 	th->th_dev = d;
-	th->th_tags = LCT_TX_HANDLE;
 
 	atomic_set(&oth->ot_refcount, 1);
 	INIT_LIST_HEAD(&oth->ot_commit_dcb_list);

@@ -874,6 +874,26 @@ osp_reserved_mb_low_seq_write(struct file *file, const char __user *buffer,
 }
 LPROC_SEQ_FOPS(osp_reserved_mb_low);
 
+static ssize_t
+lprocfs_force_sync_seq_write(struct file *file, const char __user *buffer,
+			     size_t count, loff_t *off)
+{
+	struct seq_file	  *m = file->private_data;
+	struct obd_device *dev = m->private;
+	struct dt_device  *dt = lu2dt_dev(dev->obd_lu_dev);
+	struct lu_env	   env;
+	int		   rc;
+
+	rc = lu_env_init(&env, LCT_LOCAL);
+	if (rc)
+		return rc;
+	rc = dt_sync(&env, dt);
+	lu_env_fini(&env);
+
+	return rc == 0 ? count : rc;
+}
+LPROC_SEQ_FOPS_WR_ONLY(osp, force_sync);
+
 static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ .name =	"ping",
 	  .fops =	&osp_ping_fops,
@@ -926,6 +946,8 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	  .fops =	&osp_reserved_mb_high_fops	},
 	{ .name =	"reserved_mb_low",
 	  .fops =	&osp_reserved_mb_low_fops	},
+	{ .name	=	"force_sync",
+	  .fops	=	&osp_force_sync_fops	},
 
 	/* for compatibility reasons */
 	{ .name =	"destroys_in_flight",
