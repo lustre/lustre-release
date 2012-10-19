@@ -1217,7 +1217,7 @@ static void update_key_fini(const struct lu_context *ctx,
 LU_KEY_INIT(update, struct update_thread_info);
 /* context key: update_thread_key */
 LU_CONTEXT_KEY_DEFINE(update, LCT_MD_THREAD | LCT_MG_THREAD |
-			      LCT_DT_THREAD | LCT_TX_HANDLE | LCT_LOCAL);
+			      LCT_DT_THREAD | LCT_LOCAL);
 EXPORT_SYMBOL(update_thread_key);
 LU_KEY_INIT_GENERIC(update);
 

@@ -14175,9 +14175,10 @@ test_239() {
 	mkdir -p $DIR/$tdir
 	createmany -o $DIR/$tdir/f- 5000
 	unlinkmany $DIR/$tdir/f- 5000
-	do_nodes $list "lctl set_param -n osp*.*.sync_changes 1"
-	changes=$(do_nodes $list "lctl get_param -n osc.*MDT*.sync_changes \
-			osc.*MDT*.sync_in_flight" | calc_sum)
+	[ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.10.1) ] &&
+		do_nodes $list "lctl set_param -n osp.*.force_sync=1"
+	changes=$(do_nodes $list "lctl get_param -n osp.*MDT*.sync_changes \
+			osp.*MDT*.sync_in_flight" | calc_sum)
 	[ "$changes" -eq 0 ] || error "$changes not synced"
 }
 run_test 239 "osp_sync test"

@@ -169,8 +169,6 @@ static void osd_trans_commit_cb(void *cb_data, int error)
 
 	lu_device_put(lud);
 	th->th_dev = NULL;
-	lu_context_exit(&th->th_ctx);
-	lu_context_fini(&th->th_ctx);
 	OBD_FREE_PTR(oh);
 
 	EXIT;
@@ -228,8 +226,6 @@ static int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		/* add commit callback */
 		dmu_tx_callback_register(oh->ot_tx, osd_trans_commit_cb, oh);
 		oh->ot_assigned = 1;
-		lu_context_init(&th->th_ctx, th->th_tags);
-		lu_context_enter(&th->th_ctx);
 		lu_device_get(&d->dd_lu_dev);
 	}
 
@@ -367,7 +363,6 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	th = &oh->ot_super;
 	th->th_dev = dt;
 	th->th_result = 0;
-	th->th_tags = LCT_TX_HANDLE;
 	RETURN(th);
 }
 

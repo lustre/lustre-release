@@ -1886,11 +1886,6 @@ struct thandle {
 	 * top thandle here for now, will fix it when we have better
 	 * callback mechanism */
 	struct thandle	*th_top;
-	/** context for this transaction, tag is LCT_TX_HANDLE */
-	struct lu_context th_ctx;
-
-	/** additional tags (layers can add in declare) */
-	__u32             th_tags;
 
 	/** the last operation result in this transaction.
 	 * this value is used in recovery */

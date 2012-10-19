@@ -998,10 +998,6 @@ enum lu_context_tag {
          */
         LCT_DT_THREAD = 1 << 1,
         /**
-         * Context for transaction handle
-         */
-        LCT_TX_HANDLE = 1 << 2,
-        /**
          * Thread on client
          */
         LCT_CL_THREAD = 1 << 3,

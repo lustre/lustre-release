@@ -224,17 +224,20 @@ struct osp_device {
 	/* osd api's commit cb control structure */
 	struct dt_txn_callback		 opd_sync_txn_cb;
 	/* last used change number -- semantically similar to transno */
-	__u64				 opd_sync_last_used_id;
+	unsigned long			 opd_sync_last_used_id;
 	/* last committed change number -- semantically similar to
 	 * last_committed */
 	__u64				 opd_sync_last_committed_id;
-	/* last processed (taken from llog) id */
-	volatile __u64			 opd_sync_last_processed_id;
-	struct osp_id_tracker		*opd_sync_tracker;
-	struct list_head		 opd_sync_ontrack;
+	/* last processed catalog index */
+	int                              opd_sync_last_catalog_idx;
+	/* number of processed records */
+	atomic64_t			 opd_sync_processed_recs;
 	/* stop processing new requests until barrier=0 */
 	atomic_t			 opd_sync_barrier;
 	wait_queue_head_t		 opd_sync_barrier_waitq;
+	/* last generated id */
+	cfs_time_t			 opd_sync_next_commit_cb;
+	atomic_t			 opd_commits_registered;
 
 	/*
 	 * statfs related fields: OSP maintains it on its own
@@ -812,6 +815,11 @@ int osp_sync_add(const struct lu_env *env, struct osp_object *o,
 int osp_sync_init(const struct lu_env *env, struct osp_device *d);
 int osp_sync_fini(struct osp_device *d);
 void osp_sync_check_for_work(struct osp_device *osp);
+void osp_sync_force(const struct lu_env *env, struct osp_device *d);
+int osp_sync_add_commit_cb(const struct lu_env *env, struct osp_device *d,
+			   struct thandle *th);
+int osp_sync_add_commit_cb_1s(const struct lu_env *env, struct osp_device *d,
+			      struct thandle *th);
 
 /* lwp_dev.c */
 extern struct obd_ops lwp_obd_device_ops;

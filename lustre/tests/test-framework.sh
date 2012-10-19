@@ -2517,7 +2517,7 @@ wait_update_facet() {
 
 sync_all_data() {
 	do_nodes $(comma_list $(mdts_nodes)) \
-	    "lctl set_param -n osd*.*MDT*.force_sync=1"
+	    "lctl set_param -n os[cd]*.*MDT*.force_sync=1"
 	do_nodes $(comma_list $(osts_nodes)) \
 	    "lctl set_param -n osd*.*OS*.force_sync=1" 2>&1 |
 		grep -v 'Found no match'
@@ -2558,7 +2558,7 @@ wait_delete_completed_mds() {
 	mds2sync=$(comma_list $mds2sync)
 
 	# sync MDS transactions
-	do_nodes $mds2sync "$LCTL set_param -n osd*.*MD*.force_sync 1"
+	do_nodes $mds2sync "$LCTL set_param -n os[cd]*.*MD*.force_sync 1"
 
 	# wait till all changes are sent and commmitted by OSTs
 	# for ldiskfs space is released upon execution, but DMU
