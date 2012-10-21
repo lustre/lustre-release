@@ -83,6 +83,7 @@ struct osc_io {
 	struct obd_info    oi_info;
 	struct obdo        oi_oa;
 	struct osc_async_cbargs {
+		bool		  opc_rpc_sent;
 		int               opc_rc;
 		cfs_completion_t  opc_sync;
 	} oi_cbarg;

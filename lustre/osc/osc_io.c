@@ -482,6 +482,7 @@ static int osc_io_setattr_start(const struct lu_env *env,
                                                         &oinfo, NULL,
 							osc_async_upcall,
                                                         cbargs, PTLRPCD_SET);
+		cbargs->opc_rpc_sent = result == 0;
         }
         return result;
 }
@@ -493,11 +494,12 @@ static void osc_io_setattr_end(const struct lu_env *env,
 	struct osc_io    *oio = cl2osc_io(env, slice);
 	struct cl_object *obj = slice->cis_obj;
 	struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
-        int result;
+        int result = 0;
 
-        cfs_wait_for_completion(&cbargs->opc_sync);
-
-        result = io->ci_result = cbargs->opc_rc;
+	if (cbargs->opc_rpc_sent) {
+		cfs_wait_for_completion(&cbargs->opc_sync);
+		result = io->ci_result = cbargs->opc_rc;
+	}
         if (result == 0) {
                 if (oio->oi_lockless) {
                         /* lockless truncate */
