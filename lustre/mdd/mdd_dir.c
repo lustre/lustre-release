@@ -165,16 +165,17 @@ static int mdd_is_parent(const struct lu_env *env,
                         GOTO(out, rc = 1);
                 if (parent)
                         mdd_object_put(env, parent);
-                parent = mdd_object_find(env, mdd, pfid);
 
-                /* cross-ref parent */
-                if (parent == NULL) {
-                        if (pf != NULL)
-                                *pf = *pfid;
-                        GOTO(out, rc = -EREMOTE);
-                } else if (IS_ERR(parent))
-                        GOTO(out, rc = PTR_ERR(parent));
-                p1 = parent;
+		parent = mdd_object_find(env, mdd, pfid);
+		if (IS_ERR(parent)) {
+			GOTO(out, rc = PTR_ERR(parent));
+		} else if (mdd_object_exists(parent) < 0) {
+			/*FIXME: Because of the restriction of rename in Phase I.
+			 * If the parent is remote, we just assumed lf is not the
+			 * parent of P1 for now */
+			GOTO(out, rc = 0);
+		}
+		p1 = parent;
         }
         EXIT;
 out:

@@ -892,6 +892,13 @@ static int mdt_reint_link(struct mdt_thread_info *info,
         if (IS_ERR(ms))
                 GOTO(out_unlock_parent, rc = PTR_ERR(ms));
 
+	if (mdt_object_exists(ms) < 0) {
+		mdt_object_put(info->mti_env, ms);
+		CERROR("Target directory "DFID" is on another MDT\n",
+			PFID(rr->rr_fid1));
+		GOTO(out_unlock_parent, rc = -EXDEV);
+	}
+
         rc = mdt_object_lock(info, ms, lhs, MDS_INODELOCK_UPDATE,
                             MDT_CROSS_LOCK);
         if (rc != 0) {
@@ -1141,7 +1148,12 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
                                 GOTO(out_put_target, rc);
                         /* get and save correct version after locking */
                         mdt_version_get_save(info, mtgtdir, 1);
-                }
+		} else if (rc < 0) {
+			CERROR("Source dir "DFID" target dir "DFID
+			       "on different MDTs\n", PFID(rr->rr_fid1),
+			       PFID(rr->rr_fid2));
+			GOTO(out_put_target, rc = -EXDEV);
+		}
         }
 
         /* step 3: find & lock the old object. */
@@ -1155,9 +1167,14 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
         if (lu_fid_eq(old_fid, rr->rr_fid1) || lu_fid_eq(old_fid, rr->rr_fid2))
                 GOTO(out_unlock_target, rc = -EINVAL);
 
-        mold = mdt_object_find(info->mti_env, info->mti_mdt, old_fid);
-        if (IS_ERR(mold))
-                GOTO(out_unlock_target, rc = PTR_ERR(mold));
+	mold = mdt_object_find(info->mti_env, info->mti_mdt, old_fid);
+	if (IS_ERR(mold))
+		GOTO(out_unlock_target, rc = PTR_ERR(mold));
+	if (mdt_object_exists(mold) < 0) {
+		mdt_object_put(info->mti_env, mold);
+		CERROR("Source child "DFID" is on another MDT\n", PFID(old_fid));
+		GOTO(out_unlock_target, rc = -EXDEV);
+	}
 
 	if (mdt_object_obf(mold)) {
 		mdt_object_put(info->mti_env, mold);
@@ -1201,6 +1218,13 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 		if (mdt_object_obf(mnew)) {
 			mdt_object_put(info->mti_env, mnew);
 			GOTO(out_unlock_old, rc = -EPERM);
+		}
+
+		if (mdt_object_exists(mnew) < 0) {
+			mdt_object_put(info->mti_env, mnew);
+			CERROR("Source child "DFID" is on another MDT\n",
+			       PFID(new_fid));
+			GOTO(out_unlock_old, rc = -EXDEV);
 		}
 
                 rc = mdt_object_lock(info, mnew, lh_newp,
