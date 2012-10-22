@@ -63,18 +63,24 @@ static int __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
 static int mdd_declare_links_add(const struct lu_env *env,
                                  struct mdd_object *mdd_obj,
                                  struct thandle *handle);
-static int mdd_links_add(const struct lu_env *env,
-                         struct mdd_object *mdd_obj,
-                         const struct lu_fid *pfid,
-                         const struct lu_name *lname,
-                         struct thandle *handle, int first);
+static inline int mdd_links_add(const struct lu_env *env,
+				struct mdd_object *mdd_obj,
+				const struct lu_fid *pfid,
+				const struct lu_name *lname,
+				struct thandle *handle, int first);
+static inline int mdd_links_del(const struct lu_env *env,
+				struct mdd_object *mdd_obj,
+				const struct lu_fid *pfid,
+				const struct lu_name *lname,
+				struct thandle *handle);
 static int mdd_links_rename(const struct lu_env *env,
-                            struct mdd_object *mdd_obj,
-                            const struct lu_fid *oldpfid,
-                            const struct lu_name *oldlname,
-                            const struct lu_fid *newpfid,
-                            const struct lu_name *newlname,
-                            struct thandle *handle);
+			    struct mdd_object *mdd_obj,
+			    const struct lu_fid *oldpfid,
+			    const struct lu_name *oldlname,
+			    const struct lu_fid *newpfid,
+			    const struct lu_name *newlname,
+			    struct thandle *handle,
+			    int first, int check);
 
 static int
 __mdd_lookup_locked(const struct lu_env *env, struct md_object *pobj,
@@ -1212,9 +1218,8 @@ static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
 				mdd_object_capa(env, mdd_cobj));
 
         if (!is_dir)
-                /* old files may not have link ea; ignore errors */
-                mdd_links_rename(env, mdd_cobj, mdo2fid(mdd_pobj),
-                                 lname, NULL, NULL, handle);
+		/* old files may not have link ea; ignore errors */
+		mdd_links_del(env, mdd_cobj, mdo2fid(mdd_pobj), lname, handle);
 
 	/* if object is removed then we can't get its attrs, use last get */
 	if (cattr->la_nlink == 0) {
@@ -2281,8 +2286,8 @@ static int mdd_rename(const struct lu_env *env,
 
         if (rc == 0 && mdd_sobj) {
                 mdd_write_lock(env, mdd_sobj, MOR_SRC_CHILD);
-                rc = mdd_links_rename(env, mdd_sobj, mdo2fid(mdd_spobj), lsname,
-                                      mdo2fid(mdd_tpobj), ltname, handle);
+		rc = mdd_links_rename(env, mdd_sobj, mdo2fid(mdd_spobj), lsname,
+				      mdo2fid(mdd_tpobj), ltname, handle, 0, 0);
                 if (rc == -ENOENT)
                         /* Old files might not have EA entry */
                         mdd_links_add(env, mdd_sobj, mdo2fid(mdd_spobj),
@@ -2364,10 +2369,92 @@ out_pending:
         return rc;
 }
 
-/** enable/disable storing of hardlink info */
-int mdd_linkea_enable = 1;
-CFS_MODULE_PARM(mdd_linkea_enable, "d", int, 0644,
-                "record hardlink info in EAs");
+/**
+ * The data that link search is done on.
+ */
+struct mdd_link_data {
+	/**
+	 * Buffer to keep link EA body.
+	 */
+	struct lu_buf           *ml_buf;
+	/**
+	 * The matched header, entry and its lenght in the EA
+	 */
+	struct link_ea_header   *ml_leh;
+	struct link_ea_entry    *ml_lee;
+	int                      ml_reclen;
+};
+
+static int mdd_links_new(const struct lu_env *env,
+			 struct mdd_link_data *ldata)
+{
+	ldata->ml_buf = mdd_buf_alloc(env, CFS_PAGE_SIZE);
+	if (ldata->ml_buf->lb_buf == NULL)
+		return -ENOMEM;
+	ldata->ml_leh = ldata->ml_buf->lb_buf;
+	ldata->ml_leh->leh_magic = LINK_EA_MAGIC;
+	ldata->ml_leh->leh_len = sizeof(struct link_ea_header);
+	ldata->ml_leh->leh_reccount = 0;
+	return 0;
+}
+
+/** Read the link EA into a temp buffer.
+ * Uses the mdd_thread_info::mti_big_buf since it is generally large.
+ * A pointer to the buffer is stored in \a ldata::ml_buf.
+ *
+ * \retval 0 or error
+ */
+int mdd_links_read(const struct lu_env *env,
+		   struct mdd_object *mdd_obj,
+		   struct mdd_link_data *ldata)
+{
+	struct lustre_capa *capa;
+	struct link_ea_header *leh;
+	int rc;
+
+	/* First try a small buf */
+	LASSERT(env != NULL);
+	ldata->ml_buf = mdd_buf_alloc(env, CFS_PAGE_SIZE);
+	if (ldata->ml_buf->lb_buf == NULL)
+		return -ENOMEM;
+
+	if (!mdd_object_exists(mdd_obj))
+		return -ENODATA;
+
+	capa = mdd_object_capa(env, mdd_obj);
+	rc = mdo_xattr_get(env, mdd_obj, ldata->ml_buf,
+			   XATTR_NAME_LINK, capa);
+	if (rc == -ERANGE) {
+		/* Buf was too small, figure out what we need. */
+		mdd_buf_put(ldata->ml_buf);
+		rc = mdo_xattr_get(env, mdd_obj, ldata->ml_buf,
+				   XATTR_NAME_LINK, capa);
+		if (rc < 0)
+			return rc;
+		ldata->ml_buf = mdd_buf_alloc(env, rc);
+		if (ldata->ml_buf->lb_buf == NULL)
+			return -ENOMEM;
+		rc = mdo_xattr_get(env, mdd_obj, ldata->ml_buf,
+				   XATTR_NAME_LINK, capa);
+	}
+	if (rc < 0)
+		return rc;
+
+	leh = ldata->ml_buf->lb_buf;
+	if (leh->leh_magic == __swab32(LINK_EA_MAGIC)) {
+		leh->leh_magic = LINK_EA_MAGIC;
+		leh->leh_reccount = __swab32(leh->leh_reccount);
+		leh->leh_len = __swab64(leh->leh_len);
+		/* entries are swabbed by mdd_lee_unpack */
+	}
+	if (leh->leh_magic != LINK_EA_MAGIC)
+		return -EINVAL;
+	if (leh->leh_reccount == 0)
+		return -ENODATA;
+
+	ldata->ml_leh = leh;
+	return 0;
+}
 
 /** Read the link EA into a temp buffer.
  * Uses the name_buf since it is generally large.
@@ -2375,50 +2462,24 @@ CFS_MODULE_PARM(mdd_linkea_enable, "d", int, 0644,
  * \retval ptr to \a lu_buf (always \a mti_big_buf)
  */
 struct lu_buf *mdd_links_get(const struct lu_env *env,
-                             struct mdd_object *mdd_obj)
+			     struct mdd_object *mdd_obj)
 {
-        struct lu_buf *buf;
-        struct lustre_capa *capa;
-        struct link_ea_header *leh;
-        int rc;
+	struct mdd_link_data ldata = { 0 };
+	int rc;
 
-        /* First try a small buf */
-        buf = mdd_buf_alloc(env, CFS_PAGE_SIZE);
-        if (buf->lb_buf == NULL)
-                return ERR_PTR(-ENOMEM);
+	rc = mdd_links_read(env, mdd_obj, &ldata);
+	return rc ? ERR_PTR(rc) : ldata.ml_buf;
+}
 
-	if (!mdd_object_exists(mdd_obj))
-		return ERR_PTR(-ENODATA);
-
-        capa = mdd_object_capa(env, mdd_obj);
-        rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_LINK, capa);
-        if (rc == -ERANGE) {
-                /* Buf was too small, figure out what we need. */
-                mdd_buf_put(buf);
-                rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_LINK, capa);
-                if (rc < 0)
-                        return ERR_PTR(rc);
-                buf = mdd_buf_alloc(env, rc);
-                if (buf->lb_buf == NULL)
-                        return ERR_PTR(-ENOMEM);
-                rc = mdo_xattr_get(env, mdd_obj, buf, XATTR_NAME_LINK, capa);
-        }
-        if (rc < 0)
-                return ERR_PTR(rc);
-
-        leh = buf->lb_buf;
-        if (leh->leh_magic == __swab32(LINK_EA_MAGIC)) {
-                leh->leh_magic = LINK_EA_MAGIC;
-                leh->leh_reccount = __swab32(leh->leh_reccount);
-                leh->leh_len = __swab64(leh->leh_len);
-                /* entries are swabbed by mdd_lee_unpack */
-        }
-        if (leh->leh_magic != LINK_EA_MAGIC)
-                return ERR_PTR(-EINVAL);
-        if (leh->leh_reccount == 0)
-                return ERR_PTR(-ENODATA);
-
-        return buf;
+static int mdd_links_write(const struct lu_env *env,
+			   struct mdd_object *mdd_obj,
+			   struct mdd_link_data *ldata,
+			   struct thandle *handle)
+{
+	const struct lu_buf *buf = mdd_buf_get_const(env, ldata->ml_buf->lb_buf,
+						     ldata->ml_leh->leh_len);
+	return mdo_xattr_set(env, mdd_obj, buf, XATTR_NAME_LINK, 0, handle,
+			     mdd_object_capa(env, mdd_obj));
 }
 
 /** Pack a link_ea_entry.
@@ -2452,34 +2513,6 @@ void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
         lname->ln_namelen = *reclen - sizeof(struct link_ea_entry);
 }
 
-/** Add a record to the end of link ea buf */
-static int __mdd_links_add(const struct lu_env *env, struct lu_buf *buf,
-                           const struct lu_fid *pfid,
-                           const struct lu_name *lname)
-{
-        struct link_ea_header *leh;
-        struct link_ea_entry *lee;
-        int reclen;
-
-        if (lname == NULL || pfid == NULL)
-                return -EINVAL;
-
-        /* Make sure our buf is big enough for the new one */
-        leh = buf->lb_buf;
-        reclen = lname->ln_namelen + sizeof(struct link_ea_entry);
-        if (leh->leh_len + reclen > buf->lb_len) {
-                if (mdd_buf_grow(env, leh->leh_len + reclen) < 0)
-                        return -ENOMEM;
-        }
-
-        leh = buf->lb_buf;
-        lee = buf->lb_buf + leh->leh_len;
-        reclen = mdd_lee_pack(lee, lname, pfid);
-        leh->leh_len += reclen;
-        leh->leh_reccount++;
-        return 0;
-}
-
 static int mdd_declare_links_add(const struct lu_env *env,
                                  struct mdd_object *mdd_obj,
                                  struct thandle *handle)
@@ -2500,153 +2533,251 @@ static int mdd_declare_links_add(const struct lu_env *env,
  */
 #define LINKEA_MAX_COUNT 128
 
-static int mdd_links_add(const struct lu_env *env,
-                         struct mdd_object *mdd_obj,
-                         const struct lu_fid *pfid,
-                         const struct lu_name *lname,
-                         struct thandle *handle, int first)
+/** Add a record to the end of link ea buf */
+static int mdd_links_add_buf(const struct lu_env *env,
+			     struct mdd_link_data *ldata,
+			     const struct lu_name *lname,
+			     const struct lu_fid *pfid)
 {
-        struct lu_buf *buf;
-        struct link_ea_header *leh;
-        int rc;
-        ENTRY;
+	LASSERT(ldata->ml_leh != NULL);
 
-        if (!mdd_linkea_enable)
-                RETURN(0);
+	if (lname == NULL || pfid == NULL)
+		return -EINVAL;
 
-        buf = first ? ERR_PTR(-ENODATA) : mdd_links_get(env, mdd_obj);
-        if (IS_ERR(buf)) {
-                rc = PTR_ERR(buf);
-                if (rc != -ENODATA) {
-                        CERROR("link_ea read failed %d "DFID"\n", rc,
-                               PFID(mdd_object_fid(mdd_obj)));
-                        RETURN (rc);
-                }
-                /* empty EA; start one */
-                buf = mdd_buf_alloc(env, CFS_PAGE_SIZE);
-                if (buf->lb_buf == NULL)
-                        RETURN(-ENOMEM);
-                leh = buf->lb_buf;
-                leh->leh_magic = LINK_EA_MAGIC;
-                leh->leh_len = sizeof(struct link_ea_header);
-                leh->leh_reccount = 0;
-        }
+	/* Make sure our buf is big enough for the new one */
+	if (ldata->ml_leh->leh_reccount > LINKEA_MAX_COUNT)
+		return -EOVERFLOW;
 
-        leh = buf->lb_buf;
-        if (leh->leh_reccount > LINKEA_MAX_COUNT)
-                RETURN(-EOVERFLOW);
+	ldata->ml_reclen = lname->ln_namelen + sizeof(struct link_ea_entry);
+	if (ldata->ml_leh->leh_len + ldata->ml_reclen >
+	    ldata->ml_buf->lb_len) {
+		if (mdd_buf_grow(env, ldata->ml_leh->leh_len +
+				 ldata->ml_reclen) < 0)
+			return -ENOMEM;
+	}
 
-        rc = __mdd_links_add(env, buf, pfid, lname);
-        if (rc)
-                RETURN(rc);
+	ldata->ml_leh = ldata->ml_buf->lb_buf;
+	ldata->ml_lee = ldata->ml_buf->lb_buf + ldata->ml_leh->leh_len;
+	ldata->ml_reclen = mdd_lee_pack(ldata->ml_lee, lname, pfid);
+	ldata->ml_leh->leh_len += ldata->ml_reclen;
+	ldata->ml_leh->leh_reccount++;
+	CDEBUG(D_INODE, "New link_ea name '%.*s' is added\n",
+	       lname->ln_namelen, lname->ln_name);
+	return 0;
+}
 
-        leh = buf->lb_buf;
-	rc = mdo_xattr_set(env, mdd_obj,
-                             mdd_buf_get_const(env, buf->lb_buf, leh->leh_len),
-			     XATTR_NAME_LINK, 0, handle,
-			     mdd_object_capa(env, mdd_obj));
-        if (rc) {
-                if (rc == -ENOSPC)
-                        CDEBUG(D_INODE, "link_ea add failed %d "DFID"\n", rc,
-                               PFID(mdd_object_fid(mdd_obj)));
-                else
-                        CERROR("link_ea add failed %d "DFID"\n", rc,
-                               PFID(mdd_object_fid(mdd_obj)));
-        }
+/** Del the current record from the link ea buf */
+static void mdd_links_del_buf(const struct lu_env *env,
+			      struct mdd_link_data *ldata,
+			      const struct lu_name *lname)
+{
+	LASSERT(ldata->ml_leh != NULL);
 
-        if (buf->lb_len > OBD_ALLOC_BIG)
-                /* if we vmalloced a large buffer drop it */
-                mdd_buf_put(buf);
+	ldata->ml_leh->leh_reccount--;
+	ldata->ml_leh->leh_len -= ldata->ml_reclen;
+	memmove(ldata->ml_lee, (char *)ldata->ml_lee + ldata->ml_reclen,
+		(char *)ldata->ml_leh + ldata->ml_leh->leh_len -
+		(char *)ldata->ml_lee);
+	CDEBUG(D_INODE, "Old link_ea name '%.*s' is removed\n",
+	       lname->ln_namelen, lname->ln_name);
 
-        RETURN (rc);
+}
+
+/**
+ * Check if such a link exists in linkEA.
+ *
+ * \param mdd_obj object being handled
+ * \param pfid parent fid the link to be found for
+ * \param lname name in the parent's directory entry pointing to this object
+ * \param ldata link data the search to be done on
+ *
+ * \retval   0 success
+ * \retval -ENOENT link does not exist
+ * \retval -ve on error
+ */
+static int mdd_links_find(const struct lu_env  *env,
+			  struct mdd_object    *mdd_obj,
+			  struct mdd_link_data *ldata,
+			  const struct lu_name *lname,
+			  const struct lu_fid  *pfid)
+{
+	struct lu_name *tmpname = &mdd_env_info(env)->mti_name2;
+	struct lu_fid  *tmpfid = &mdd_env_info(env)->mti_fid;
+	int count;
+
+	LASSERT(ldata->ml_leh != NULL);
+
+	/* link #0 */
+	ldata->ml_lee = (struct link_ea_entry *)(ldata->ml_leh + 1);
+
+	for (count = 0; count < ldata->ml_leh->leh_reccount; count++) {
+		mdd_lee_unpack(ldata->ml_lee, &ldata->ml_reclen,
+			       tmpname, tmpfid);
+		if (tmpname->ln_namelen == lname->ln_namelen &&
+		    lu_fid_eq(tmpfid, pfid) &&
+		    (strncmp(tmpname->ln_name, lname->ln_name,
+			     tmpname->ln_namelen) == 0))
+			break;
+		ldata->ml_lee = (struct link_ea_entry *)((char *)ldata->ml_lee +
+							 ldata->ml_reclen);
+	}
+
+	if (count == ldata->ml_leh->leh_reccount) {
+		CDEBUG(D_INODE, "Old link_ea name '%.*s' not found\n",
+		       lname->ln_namelen, lname->ln_name);
+		return -ENOENT;
+	}
+	return 0;
+}
+
+static int __mdd_links_add(const struct lu_env *env,
+			   struct mdd_object *mdd_obj,
+			   struct mdd_link_data *ldata,
+			   const struct lu_name *lname,
+			   const struct lu_fid *pfid,
+			   int first, int check)
+{
+	int rc;
+
+	if (ldata->ml_leh == NULL) {
+		rc = first ? -ENODATA : mdd_links_read(env, mdd_obj, ldata);
+		if (rc) {
+			if (rc != -ENODATA)
+				return rc;
+			rc = mdd_links_new(env, ldata);
+			if (rc)
+				return rc;
+		}
+	}
+
+	if (check) {
+		rc = mdd_links_find(env, mdd_obj, ldata, lname, pfid);
+		if (rc && rc != -ENOENT)
+			return rc;
+		if (rc == 0)
+			return -EEXIST;
+	}
+
+	return mdd_links_add_buf(env, ldata, lname, pfid);
+}
+
+static int __mdd_links_del(const struct lu_env *env,
+			   struct mdd_object *mdd_obj,
+			   struct mdd_link_data *ldata,
+			   const struct lu_name *lname,
+			   const struct lu_fid *pfid)
+{
+	int rc;
+
+	if (ldata->ml_leh == NULL) {
+		rc = mdd_links_read(env, mdd_obj, ldata);
+		if (rc)
+			return rc;
+	}
+
+	rc = mdd_links_find(env, mdd_obj, ldata, lname, pfid);
+	if (rc)
+		return rc;
+
+	mdd_links_del_buf(env, ldata, lname);
+	return 0;
 }
 
 static int mdd_links_rename(const struct lu_env *env,
-                            struct mdd_object *mdd_obj,
-                            const struct lu_fid *oldpfid,
-                            const struct lu_name *oldlname,
-                            const struct lu_fid *newpfid,
-                            const struct lu_name *newlname,
-                            struct thandle *handle)
+			    struct mdd_object *mdd_obj,
+			    const struct lu_fid *oldpfid,
+			    const struct lu_name *oldlname,
+			    const struct lu_fid *newpfid,
+			    const struct lu_name *newlname,
+			    struct thandle *handle,
+			    int first, int check)
 {
-        struct lu_buf  *buf;
-        struct link_ea_header *leh;
-        struct link_ea_entry  *lee;
-        struct lu_name *tmpname = &mdd_env_info(env)->mti_name;
-        struct lu_fid  *tmpfid = &mdd_env_info(env)->mti_fid;
-        int reclen = 0;
-        int count;
-        int rc, rc2 = 0;
-        ENTRY;
+	struct mdd_link_data ldata = { 0 };
+	int updated = 0;
+	int rc2 = 0;
+	int rc = 0;
+	ENTRY;
 
-        if (!mdd_linkea_enable)
-                RETURN(0);
+	LASSERT(oldpfid != NULL || newpfid != NULL);
 
-        if (mdd_obj->mod_flags & DEAD_OBJ)
-                /* No more links, don't bother */
-                RETURN(0);
+	if (mdd_obj->mod_flags & DEAD_OBJ)
+		/* No more links, don't bother */
+		RETURN(0);
 
-        buf = mdd_links_get(env, mdd_obj);
-        if (IS_ERR(buf)) {
-                rc = PTR_ERR(buf);
-                if (rc == -ENODATA)
-                        CDEBUG(D_INODE, "link_ea read failed %d "DFID"\n",
-                               rc, PFID(mdd_object_fid(mdd_obj)));
-                else
-                        CERROR("link_ea read failed %d "DFID"\n",
-                               rc, PFID(mdd_object_fid(mdd_obj)));
-                RETURN(rc);
-        }
-        leh = buf->lb_buf;
-        lee = (struct link_ea_entry *)(leh + 1); /* link #0 */
+	if (oldpfid != NULL) {
+		rc = __mdd_links_del(env, mdd_obj, &ldata,
+				     oldlname, oldpfid);
+		if (rc) {
+			if ((check == 0) ||
+			    (rc != -ENODATA && rc != -ENOENT))
+				GOTO(out, rc);
+			/* No changes done. */
+			rc = 0;
+		} else {
+			updated = 1;
+		}
+	}
 
-        /* Find the old record */
-        for(count = 0; count < leh->leh_reccount; count++) {
-                mdd_lee_unpack(lee, &reclen, tmpname, tmpfid);
-                if (tmpname->ln_namelen == oldlname->ln_namelen &&
-                    lu_fid_eq(tmpfid, oldpfid) &&
-                    (strncmp(tmpname->ln_name, oldlname->ln_name,
-                             tmpname->ln_namelen) == 0))
-                        break;
-                lee = (struct link_ea_entry *)((char *)lee + reclen);
-        }
-        if ((count + 1) > leh->leh_reccount) {
-                CDEBUG(D_INODE, "Old link_ea name '%.*s' not found\n",
-                       oldlname->ln_namelen, oldlname->ln_name);
-                GOTO(out, rc = -ENOENT);
-        }
+	/* If renaming, add the new record */
+	if (newpfid != NULL) {
+		/* even if the add fails, we still delete the out-of-date
+		 * old link */
+		rc2 = __mdd_links_add(env, mdd_obj, &ldata,
+				      newlname, newpfid, first, check);
+		if (rc2 == -EEXIST)
+			rc2 = 0;
+		else if (rc2 == 0)
+			updated = 1;
+	}
 
-        /* Remove the old record */
-        leh->leh_reccount--;
-        leh->leh_len -= reclen;
-        memmove(lee, (char *)lee + reclen, (char *)leh + leh->leh_len -
-                (char *)lee);
-
-        /* If renaming, add the new record */
-        if (newpfid != NULL) {
-                /* if the add fails, we still delete the out-of-date old link */
-                rc2 = __mdd_links_add(env, buf, newpfid, newlname);
-                leh = buf->lb_buf;
-        }
-
-	rc = mdo_xattr_set(env, mdd_obj,
-			   mdd_buf_get_const(env, buf->lb_buf, leh->leh_len),
-			   XATTR_NAME_LINK, 0, handle,
-			   mdd_object_capa(env, mdd_obj));
-
+	if (updated)
+		rc = mdd_links_write(env, mdd_obj, &ldata, handle);
+	EXIT;
 out:
-        if (rc == 0)
-                rc = rc2;
-        if (rc)
-                CDEBUG(D_INODE, "link_ea mv/unlink '%.*s' failed %d "DFID"\n",
-                       oldlname->ln_namelen, oldlname->ln_name, rc,
-                       PFID(mdd_object_fid(mdd_obj)));
+	if (rc == 0)
+		rc = rc2;
+	if (rc) {
+		if (oldpfid == NULL)
+			CERROR("link_ea add '%.*s' failed %d "DFID"\n",
+			       newlname->ln_namelen, newlname->ln_name,
+			       rc, PFID(mdd_object_fid(mdd_obj)));
+		else if (newpfid == NULL)
+			CERROR("link_ea del '%.*s' failed %d "DFID"\n",
+			       oldlname->ln_namelen, oldlname->ln_name,
+			       rc, PFID(mdd_object_fid(mdd_obj)));
+		else
+			CERROR("link_ea rename '%.*s'->'%.*s' failed %d "
+			       DFID"\n",
+			       oldlname->ln_namelen, oldlname->ln_name,
+			       newlname->ln_namelen, newlname->ln_name,
+			       rc, PFID(mdd_object_fid(mdd_obj)));
+	}
 
-        if (buf->lb_len > OBD_ALLOC_BIG)
-                /* if we vmalloced a large buffer drop it */
-                mdd_buf_put(buf);
+	if (ldata.ml_buf && ldata.ml_buf->lb_len > OBD_ALLOC_BIG)
+		/* if we vmalloced a large buffer drop it */
+		mdd_buf_put(ldata.ml_buf);
 
-        RETURN (rc);
+	return rc;
+}
+
+static inline int mdd_links_add(const struct lu_env *env,
+				struct mdd_object *mdd_obj,
+				const struct lu_fid *pfid,
+				const struct lu_name *lname,
+				struct thandle *handle, int first)
+{
+	return mdd_links_rename(env, mdd_obj, NULL, NULL,
+				pfid, lname, handle, first, 0);
+}
+
+static inline int mdd_links_del(const struct lu_env *env,
+				struct mdd_object *mdd_obj,
+				const struct lu_fid *pfid,
+				const struct lu_name *lname,
+				struct thandle *handle)
+{
+	return mdd_links_rename(env, mdd_obj, pfid, lname,
+				NULL, NULL, handle, 0, 0);
 }
 
 const struct md_dir_operations mdd_dir_ops = {

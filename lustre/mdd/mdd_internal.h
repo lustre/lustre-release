@@ -184,6 +184,7 @@ struct mdd_thread_info {
         struct lu_buf             mti_buf;
         struct lu_buf             mti_big_buf; /* biggish persistent buf */
         struct lu_name            mti_name;
+	struct lu_name            mti_name2;
         struct obdo               mti_oa;
         char                      mti_xattr_buf[LUSTRE_POSIX_ACL_MAX_SIZE];
         struct dt_allocation_hint mti_hint;
