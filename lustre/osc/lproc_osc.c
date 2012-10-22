@@ -496,6 +496,22 @@ static int lprocfs_osc_wr_max_pages_per_rpc(struct file *file,
 	return count;
 }
 
+static int osc_rd_unstable_stats(char *page, char **start, off_t off,
+				int count, int *eof, void *data)
+{
+	struct obd_device *dev = data;
+	struct client_obd *cli = &dev->u.cli;
+	int pages, mb;
+
+	pages = cfs_atomic_read(&cli->cl_unstable_count);
+	mb    = (pages * PAGE_CACHE_SIZE) >> 20;
+
+	return snprintf(page, count,
+			"unstable_pages: %8d\n"
+			"unstable_mb:    %8d\n",
+			pages, mb);
+}
+
 static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
         { "ping",            0, lprocfs_wr_ping,     0, 0, 0222 },
@@ -536,6 +552,8 @@ static struct lprocfs_vars lprocfs_osc_obd_vars[] = {
         { "state",           lprocfs_rd_state,         0, 0 },
         { "pinger_recov",    lprocfs_rd_pinger_recov,
                              lprocfs_wr_pinger_recov,  0, 0 },
+        { "unstable_stats",  osc_rd_unstable_stats, 0, 0},
+
         { 0 }
 };
 
