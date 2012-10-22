@@ -217,8 +217,6 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1,struct inode *i2);
 typedef int (*intent_finish_cb)(struct ptlrpc_request *,
                                 struct inode *parent, struct pnode *pnode,
                                 struct lookup_intent *, int offset, obd_id ino);
-int llu_intent_lock(struct inode *parent, struct pnode *pnode,
-                    struct lookup_intent *, int flags, intent_finish_cb);
 
 static inline __u64 ll_file_maxbytes(struct inode *inode)
 {

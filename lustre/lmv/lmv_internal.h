@@ -157,19 +157,19 @@ int lmv_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                     void *lmm, int lmmsize, struct lookup_intent *it,
                     int flags, struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking,
-                    int extra_lock_flags);
+		    __u64 extra_lock_flags);
 
 int lmv_intent_lookup(struct obd_export *exp, struct md_op_data *op_data,
                       void *lmm, int lmmsize, struct lookup_intent *it,
                       int flags, struct ptlrpc_request **reqp,
                       ldlm_blocking_callback cb_blocking,
-                      int extra_lock_flags);
+		      __u64 extra_lock_flags);
 
 int lmv_intent_open(struct obd_export *exp, struct md_op_data *op_data,
                     void *lmm, int lmmsize, struct lookup_intent *it,
                     int flags, struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking,
-                    int extra_lock_flags);
+		    __u64 extra_lock_flags);
 
 int lmv_allocate_slaves(struct obd_device *obd, struct lu_fid *pid,
                         struct md_op_data *op, struct lu_fid *fid);
@@ -177,7 +177,7 @@ int lmv_allocate_slaves(struct obd_device *obd, struct lu_fid *pid,
 int lmv_revalidate_slaves(struct obd_export *, struct ptlrpc_request **,
                           const struct lu_fid *, struct lookup_intent *, int,
 			  ldlm_blocking_callback cb_blocking,
-                          int extra_lock_flags);
+			  __u64 extra_lock_flags);
 
 int lmv_handle_split(struct obd_export *, const struct lu_fid *);
 int lmv_blocking_ast(struct ldlm_lock *, struct ldlm_lock_desc *,

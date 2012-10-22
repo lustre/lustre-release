@@ -943,7 +943,7 @@ static int ofd_destroy_by_fid(const struct lu_env *env,
 {
 	struct ofd_thread_info	*info = ofd_info(env);
 	struct lustre_handle	 lockh;
-	int			 flags = LDLM_AST_DISCARD_DATA, rc = 0;
+	__u64			 flags = LDLM_AST_DISCARD_DATA, rc = 0;
 	ldlm_policy_data_t	 policy = {
 					.l_extent = { 0, OBD_OBJECT_EOF }
 				 };

@@ -2564,6 +2564,9 @@ struct ldlm_reply {
 
 extern void lustre_swab_ldlm_reply (struct ldlm_reply *r);
 
+#define ldlm_flags_to_wire(flags)    ((__u32)(flags))
+#define ldlm_flags_from_wire(flags)  ((__u64)(flags))
+
 /*
  * Opcodes for mountconf (mgs and mgc)
  */

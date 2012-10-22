@@ -120,7 +120,7 @@ static ldlm_mode_t llu_take_md_lock(struct inode *inode, __u64 bits,
         ldlm_policy_data_t policy = { .l_inodebits = {bits}};
         struct lu_fid *fid;
         ldlm_mode_t rc;
-        int flags;
+	__u64 flags;
         ENTRY;
 
         fid = &llu_i2info(inode)->lli_fid;
@@ -368,7 +368,7 @@ static int llu_have_md_lock(struct inode *inode, __u64 lockpart)
         struct lustre_handle lockh;
         ldlm_policy_data_t policy = { .l_inodebits = { lockpart } };
         struct lu_fid *fid;
-        int flags;
+	__u64 flags;
         ENTRY;
 
         LASSERT(inode);
@@ -1275,7 +1275,7 @@ static int llu_file_flock(struct inode *ino,
 
         struct lustre_handle lockh = {0};
         ldlm_policy_data_t flock;
-        int flags = 0;
+	__u64 flags = 0;
         int rc;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%llu file_lock=%p\n",
@@ -1331,7 +1331,7 @@ static int llu_file_flock(struct inode *ino,
                 LBUG();
         }
 
-        CDEBUG(D_DLMTRACE, "inode=%llu, pid=%u, cmd=%d, flags=%#x, mode=%u, "
+	CDEBUG(D_DLMTRACE, "inode=%llu, pid=%u, cmd=%d, flags=%#llx, mode=%u, "
                "start="LPX64", end="LPX64"\n", (unsigned long long)st->st_ino,
                flock.l_flock.pid, cmd, flags, einfo.ei_mode, flock.l_flock.start,
                flock.l_flock.end);

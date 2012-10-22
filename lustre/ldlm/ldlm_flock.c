@@ -129,14 +129,14 @@ static inline void ldlm_flock_blocking_unlink(struct ldlm_lock *req)
 }
 
 static inline void
-ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, int flags)
+ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, __u64 flags)
 {
         ENTRY;
 
-        LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: 0x%x)",
-                   mode, flags);
+	LDLM_DEBUG(lock, "ldlm_flock_destroy(mode: %d, flags: 0x%llx)",
+		   mode, flags);
 
-        /* Safe to not lock here, since it should be empty anyway */
+	/* Safe to not lock here, since it should be empty anyway */
 	LASSERT(cfs_hlist_unhashed(&lock->l_exp_flock_hash));
 
         cfs_list_del_init(&lock->l_res_link);
@@ -198,8 +198,8 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 }
 
 int
-ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
-                        ldlm_error_t *err, cfs_list_t *work_list)
+ldlm_process_flock_lock(struct ldlm_lock *req, __u64 *flags, int first_enq,
+			ldlm_error_t *err, cfs_list_t *work_list)
 {
         struct ldlm_resource *res = req->l_resource;
         struct ldlm_namespace *ns = ldlm_res_to_ns(res);
@@ -217,8 +217,9 @@ ldlm_process_flock_lock(struct ldlm_lock *req, int *flags, int first_enq,
 	int rc;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "flags %#x owner "LPU64" pid %u mode %u start "LPU64
-               " end "LPU64"\n", *flags, new->l_policy_data.l_flock.owner,
+	CDEBUG(D_DLMTRACE, "flags %#llx owner "LPU64" pid %u mode %u start "
+	       LPU64" end "LPU64"\n", *flags,
+	       new->l_policy_data.l_flock.owner,
                new->l_policy_data.l_flock.pid, mode,
                req->l_policy_data.l_flock.start,
                req->l_policy_data.l_flock.end);
@@ -560,7 +561,7 @@ ldlm_flock_interrupted_wait(void *data)
  * \retval <0   : failure
  */
 int
-ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
+ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 {
         cfs_flock_t                    *getlk = lock->l_ast_data;
         struct obd_device              *obd;
@@ -571,7 +572,7 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, int flags, void *data)
         int                             rc = 0;
         ENTRY;
 
-        CDEBUG(D_DLMTRACE, "flags: 0x%x data: %p getlk: %p\n",
+	CDEBUG(D_DLMTRACE, "flags: 0x%llx data: %p getlk: %p\n",
                flags, data, getlk);
 
         /* Import invalidation. We need to actually release the lock
@@ -680,7 +681,7 @@ granted:
                 cfs_flock_set_end(getlk,
                                   (loff_t)lock->l_policy_data.l_flock.end);
         } else {
-                int noreproc = LDLM_FL_WAIT_NOREPROC;
+		__u64 noreproc = LDLM_FL_WAIT_NOREPROC;
 
                 /* We need to reprocess the lock to do merges or splits
                  * with existing locks owned by this process. */

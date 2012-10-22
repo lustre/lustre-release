@@ -2273,7 +2273,7 @@ int ll_have_md_lock(struct inode *inode, __u64 *bits,  ldlm_mode_t l_req_mode)
         ldlm_mode_t mode = (l_req_mode == LCK_MINMODE) ?
                                 (LCK_CR|LCK_CW|LCK_PR|LCK_PW) : l_req_mode;
         struct lu_fid *fid;
-        int flags;
+	__u64 flags;
         int i;
         ENTRY;
 
@@ -2313,7 +2313,7 @@ ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
         ldlm_policy_data_t policy = { .l_inodebits = {bits}};
         struct lu_fid *fid;
         ldlm_mode_t rc;
-        int flags;
+	__u64 flags;
         ENTRY;
 
         fid = &ll_i2info(inode)->lli_fid;

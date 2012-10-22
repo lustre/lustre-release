@@ -1732,7 +1732,7 @@ static int
 lmv_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
             struct lookup_intent *it, struct md_op_data *op_data,
             struct lustre_handle *lockh, void *lmm, int lmmsize,
-            struct ptlrpc_request **req, int extra_lock_flags)
+	    struct ptlrpc_request **req, __u64 extra_lock_flags)
 {
         struct obd_device        *obd = exp->exp_obd;
         struct lmv_obd           *lmv = &obd->u.lmv;
@@ -2884,7 +2884,7 @@ int lmv_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
         RETURN(rc);
 }
 
-ldlm_mode_t lmv_lock_match(struct obd_export *exp, int flags,
+ldlm_mode_t lmv_lock_match(struct obd_export *exp, __u64 flags,
                            const struct lu_fid *fid, ldlm_type_t type,
                            ldlm_policy_data_t *policy, ldlm_mode_t mode,
                            struct lustre_handle *lockh)

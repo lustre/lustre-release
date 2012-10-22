@@ -178,34 +178,17 @@ typedef enum {
 #define LDLM_FL_BLOCK_GRANTED                     0x000002
 #define LDLM_FL_BLOCK_CONV                        0x000004
 #define LDLM_FL_BLOCK_WAIT                        0x000008
-#define LDLM_FL_CBPENDING                         0x000010
 #define LDLM_FL_AST_SENT                          0x000020
-#define LDLM_FL_WAIT_NOREPROC                     0x000040
-#define LDLM_FL_CANCEL                            0x000080
 #define LDLM_FL_REPLAY                            0x000100
 #define LDLM_FL_INTENT_ONLY                       0x000200
-#define LDLM_FL_LOCAL_ONLY                        0x000400
-#define LDLM_FL_FAILED                            0x000800
 #define LDLM_FL_HAS_INTENT                        0x001000
-#define LDLM_FL_CANCELING                         0x002000
-#define LDLM_FL_LOCAL                             0x004000
-#define LDLM_FL_WARN                              0x008000
 #define LDLM_FL_DISCARD_DATA                      0x010000
 #define LDLM_FL_NO_TIMEOUT                        0x020000
 #define LDLM_FL_BLOCK_NOWAIT                      0x040000
 #define LDLM_FL_TEST_LOCK                         0x080000
-#define LDLM_FL_LVB_READY                         0x100000
-#define LDLM_FL_KMS_IGNORE                        0x200000
-#define LDLM_FL_NO_LRU                            0x400000
 #define LDLM_FL_CANCEL_ON_BLOCK                   0x800000
-#define LDLM_FL_CP_REQD                          0x1000000
-#define LDLM_FL_CLEANED                          0x2000000
-#define LDLM_FL_ATOMIC_CB                        0x4000000
-#define LDLM_FL_BL_AST                          0x10000000
-#define LDLM_FL_BL_DONE                         0x20000000
 #define LDLM_FL_DENY_ON_CONTENTION              0x40000000
 #define LDLM_AST_DISCARD_DATA                   0x80000000
-
 
 
 #define LDLM_ENQUEUE (101)
@@ -975,31 +958,15 @@ const value_string lustre_ldlm_flags_vals[] = {
   {0x000002 , "LDLM_FL_BLOCK_GRANTED"},
   {0x000004 , "LDLM_FL_BLOCK_CONV"},
   {0x000008 , "LDLM_FL_BLOCK_WAIT"},
-  {0x000010 , "LDLM_FL_CBPENDING"},
   {0x000020 , "LDLM_FL_AST_SENT"},
-  {0x000040 , "LDLM_FL_WAIT_NOREPROC"},
-  {0x000080 , "LDLM_FL_CANCEL"},
   {0x000100 , "LDLM_FL_REPLAY"},
   {0x000200 , "LDLM_FL_INTENT_ONLY"},
-  {0x000400 , "LDLM_FL_LOCAL_ONLY"},
-  {0x000800 , "LDLM_FL_FAILED"},
   {0x001000 , "LDLM_FL_HAS_INTENT"},
-  {0x002000 , "LDLM_FL_CANCELING"},
-  {0x004000 , "LDLM_FL_LOCAL"},
-  {0x008000 , "LDLM_FL_WARN"},
   {0x010000 , "LDLM_FL_DISCARD_DATA"},
   {0x020000 , "LDLM_FL_NO_TIMEOUT"},
   {0x040000 , "LDLM_FL_BLOCK_NOWAIT"},
   {0x080000 , "LDLM_FL_TEST_LOCK"},
-  {0x100000 , "LDLM_FL_LVB_READY"},
-  {0x200000 , "LDLM_FL_KMS_IGNORE"},
-  {0x400000 , "LDLM_FL_NO_LRU"},
   {0x800000 , "LDLM_FL_CANCEL_ON_BLOCK"},
-  {0x1000000 , "LDLM_FL_CP_REQD"},
-  {0x2000000 , "LDLM_FL_CLEANED"},
-  {0x4000000 , "LDLM_FL_ATOMIC_CB"},
-  {0x10000000 , "LDLM_FL_BL_AST"},
-  {0x20000000 , "LDLM_FL_BL_DONE"},
   {0x40000000 , "LDLM_FL_DENY_ON_CONTENTION"},
   {0x80000000 , "LDLM_AST_DISCARD_DATA"},
   { 0, NULL }
@@ -10027,31 +9994,15 @@ void proto_register_dcerpc_lustre(void)
     {&hf_lustre_ldlm_fl_block_granted, {"LDLM_FL_BLOCK_GRANTED", "lustre.ldlm_fl_block_granted", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BLOCK_GRANTED, "", HFILL}},
     {&hf_lustre_ldlm_fl_block_conv, {"LDLM_FL_BLOCK_CONV", "lustre.ldlm_fl_block_conv", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BLOCK_CONV, "", HFILL}},
     {&hf_lustre_ldlm_fl_block_wait, {"LDLM_FL_BLOCK_WAIT", "lustre.ldlm_fl_block_wait", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BLOCK_WAIT, "", HFILL}},
-    {&hf_lustre_ldlm_fl_cbpending, {"LDLM_FL_CBPENDING", "lustre.ldlm_fl_cbpending", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_CBPENDING, "", HFILL}},
     {&hf_lustre_ldlm_fl_ast_sent, {"LDLM_FL_AST_SENT", "lustre.ldlm_fl_ast_sent", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_AST_SENT, "", HFILL}},
-    {&hf_lustre_ldlm_fl_wait_noreproc, {"LDLM_FL_WAIT_NOREPROC", "lustre.ldlm_fl_wait_noreproc", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_WAIT_NOREPROC, "", HFILL}},
-    {&hf_lustre_ldlm_fl_cancel, {"LDLM_FL_CANCEL", "lustre.ldlm_fl_cancel", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_CANCEL, "", HFILL}},
     {&hf_lustre_ldlm_fl_replay, {"LDLM_FL_REPLAY", "lustre.ldlm_fl_replay", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_REPLAY, "", HFILL}},
     {&hf_lustre_ldlm_fl_intent_only, {"LDLM_FL_INTENT_ONLY", "lustre.ldlm_fl_intent_only", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_INTENT_ONLY, "", HFILL}},
-    {&hf_lustre_ldlm_fl_local_only, {"LDLM_FL_LOCAL_ONLY", "lustre.ldlm_fl_local_only", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_LOCAL_ONLY, "", HFILL}},
-    {&hf_lustre_ldlm_fl_failed, {"LDLM_FL_FAILED", "lustre.ldlm_fl_failed", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_FAILED, "", HFILL}},
     {&hf_lustre_ldlm_fl_has_intent, {"LDLM_FL_HAS_INTENT", "lustre.ldlm_fl_has_intent", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_HAS_INTENT, "", HFILL}},
-    {&hf_lustre_ldlm_fl_canceling, {"LDLM_FL_CANCELING", "lustre.ldlm_fl_canceling", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_CANCELING, "", HFILL}},
-    {&hf_lustre_ldlm_fl_local, {"LDLM_FL_LOCAL", "lustre.ldlm_fl_local", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_LOCAL, "", HFILL}},
-    {&hf_lustre_ldlm_fl_warn, {"LDLM_FL_WARN", "lustre.ldlm_fl_warn", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_WARN, "", HFILL}},
     {&hf_lustre_ldlm_fl_discard_data, {"LDLM_FL_DISCARD_DATA", "lustre.ldlm_fl_discard_data", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_DISCARD_DATA, "", HFILL}},
     {&hf_lustre_ldlm_fl_no_timeout, {"LDLM_FL_NO_TIMEOUT", "lustre.ldlm_fl_no_timeout", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_NO_TIMEOUT, "", HFILL}},
     {&hf_lustre_ldlm_fl_block_nowait, {"LDLM_FL_BLOCK_NOWAIT", "lustre.ldlm_fl_block_nowait", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BLOCK_NOWAIT, "", HFILL}},
     {&hf_lustre_ldlm_fl_test_lock, {"LDLM_FL_TEST_LOCK", "lustre.ldlm_fl_test_lock", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_TEST_LOCK, "", HFILL}},
-    {&hf_lustre_ldlm_fl_lvb_ready, {"LDLM_FL_LVB_READY", "lustre.ldlm_fl_lvb_ready", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_LVB_READY, "", HFILL}},
-    {&hf_lustre_ldlm_fl_kms_ignore, {"LDLM_FL_KMS_IGNORE", "lustre.ldlm_fl_kms_ignore", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_KMS_IGNORE, "", HFILL}},
-    {&hf_lustre_ldlm_fl_no_lru, {"LDLM_FL_NO_LRU", "lustre.ldlm_fl_no_lru", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_NO_LRU, "", HFILL}},
     {&hf_lustre_ldlm_fl_cancel_on_block, {"LDLM_FL_CANCEL_ON_BLOCK", "lustre.ldlm_fl_cancel_on_block", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_CANCEL_ON_BLOCK, "", HFILL}},
-    {&hf_lustre_ldlm_fl_cp_reqd, {"LDLM_FL_CP_REQD", "lustre.ldlm_fl_cp_reqd", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_CP_REQD, "", HFILL}},
-    {&hf_lustre_ldlm_fl_cleaned, {"LDLM_FL_CLEANED", "lustre.ldlm_fl_cleaned", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_CLEANED, "", HFILL}},
-    {&hf_lustre_ldlm_fl_atomic_cb, {"LDLM_FL_ATOMIC_CB", "lustre.ldlm_fl_atomic_cb", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_ATOMIC_CB, "", HFILL}},
-    {&hf_lustre_ldlm_fl_bl_ast, {"LDLM_FL_BL_AST", "lustre.ldlm_fl_bl_ast", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BL_AST, "", HFILL}},
-    {&hf_lustre_ldlm_fl_bl_done, {"LDLM_FL_BL_DONE", "lustre.ldlm_fl_bl_done", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BL_DONE, "", HFILL}},
     {&hf_lustre_ldlm_fl_deny_on_contention, {"LDLM_FL_DENY_ON_CONTENTION", "lustre.ldlm_fl_deny_on_contention", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_DENY_ON_CONTENTION, "", HFILL}},
     {&hf_lustre_ldlm_ast_discard_data, {"LDLM_AST_DISCARD_DATA", "lustre.ldlm_ast_discard_data", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_AST_DISCARD_DATA, "", HFILL}},
 

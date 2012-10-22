@@ -150,7 +150,7 @@ struct obd_info {
            - while stats, the flags used for control delay/resend.
            - while setattr, the flags used for distinguish punch operation
          */
-        int                     oi_flags;
+	__u64                   oi_flags;
         /* Lock handle specific for every OSC lock. */
         struct lustre_handle   *oi_lockh;
         /* lsm data specific for every OSC. */
@@ -1578,7 +1578,7 @@ struct md_ops {
         int (*m_enqueue)(struct obd_export *, struct ldlm_enqueue_info *,
                          struct lookup_intent *, struct md_op_data *,
                          struct lustre_handle *, void *, int,
-                         struct ptlrpc_request **, int);
+			 struct ptlrpc_request **, __u64);
         int (*m_getattr)(struct obd_export *, struct md_op_data *,
                          struct ptlrpc_request **);
         int (*m_getattr_name)(struct obd_export *, struct md_op_data *,
@@ -1586,7 +1586,7 @@ struct md_ops {
         int (*m_intent_lock)(struct obd_export *, struct md_op_data *,
                              void *, int, struct lookup_intent *, int,
                              struct ptlrpc_request **,
-                             ldlm_blocking_callback, int);
+			     ldlm_blocking_callback, __u64);
         int (*m_link)(struct obd_export *, struct md_op_data *,
                       struct ptlrpc_request **);
         int (*m_rename)(struct obd_export *, struct md_op_data *,
@@ -1631,7 +1631,7 @@ struct md_ops {
                                         struct obd_client_handle *);
         int (*m_set_lock_data)(struct obd_export *, __u64 *, void *, __u64 *);
 
-        ldlm_mode_t (*m_lock_match)(struct obd_export *, int,
+	ldlm_mode_t (*m_lock_match)(struct obd_export *, __u64,
                                     const struct lu_fid *, ldlm_type_t,
                                     ldlm_policy_data_t *, ldlm_mode_t,
                                     struct lustre_handle *);

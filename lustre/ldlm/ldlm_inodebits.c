@@ -141,7 +141,7 @@ ldlm_inodebits_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
   * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
   *   - blocking ASTs have not been sent
   *   - must call this function with the ns lock held once */
-int ldlm_process_inodebits_lock(struct ldlm_lock *lock, int *flags,
+int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
                                 int first_enq, ldlm_error_t *err,
                                 cfs_list_t *work_list)
 {

@@ -555,7 +555,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {
         struct lprocfs_static_vars lvars;
         int                        rc;
-        int                        lock_flags = 0;
+	__u64                      lock_flags = 0;
         struct ldlm_res_id         res_id = {.name = {1}};
         char                       ns_name[48];
         ENTRY;

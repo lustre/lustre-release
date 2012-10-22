@@ -163,7 +163,7 @@ static int qsd_intent_interpret(const struct lu_env *env,
 	struct quota_body	 *rep_qbody = NULL, *req_qbody;
 	struct ldlm_intent	 *lit;
 	struct qsd_async_args	 *aa = (struct qsd_async_args *)arg;
-	int			  flags = LDLM_FL_HAS_INTENT;
+	__u64			  flags = LDLM_FL_HAS_INTENT;
 	ENTRY;
 
 	LASSERT(aa->aa_exp);
@@ -215,7 +215,8 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	struct qsd_async_args	*aa = NULL;
 	struct ldlm_intent	*lit;
 	struct quota_body	*req_qbody;
-	int			 rc, flags = LDLM_FL_HAS_INTENT;
+	__u64			 flags = LDLM_FL_HAS_INTENT;
+	int			 rc;
 	ENTRY;
 
 	LASSERT(exp != NULL);

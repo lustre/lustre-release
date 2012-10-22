@@ -116,7 +116,7 @@ void osc_update_next_shrink(struct client_obd *cli);
 extern struct ptlrpc_request_set *PTLRPCD_SET;
 
 int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
-                     int *flags, ldlm_policy_data_t *policy,
+		     __u64 *flags, ldlm_policy_data_t *policy,
                      struct ost_lvb *lvb, int kms_valid,
                      obd_enqueue_update_f upcall,
                      void *cookie, struct ldlm_enqueue_info *einfo,

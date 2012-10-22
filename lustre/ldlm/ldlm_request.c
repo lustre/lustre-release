@@ -156,7 +156,7 @@ static int ldlm_completion_tail(struct ldlm_lock *lock)
  * until lock is granted. Suitable for locks enqueued through ptlrpcd, of
  * other threads that cannot block for long.
  */
-int ldlm_completion_ast_async(struct ldlm_lock *lock, int flags, void *data)
+int ldlm_completion_ast_async(struct ldlm_lock *lock, __u64 flags, void *data)
 {
         ENTRY;
 
@@ -199,7 +199,7 @@ EXPORT_SYMBOL(ldlm_completion_ast_async);
  * or penultimate cases happen in some other thread.
  *
  */
-int ldlm_completion_ast(struct ldlm_lock *lock, int flags, void *data)
+int ldlm_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 {
         /* XXX ALLOCATE - 160 bytes */
         struct lock_wait_data lwd;
@@ -381,7 +381,7 @@ EXPORT_SYMBOL(ldlm_glimpse_ast);
 int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            const struct ldlm_res_id *res_id,
                            ldlm_type_t type, ldlm_policy_data_t *policy,
-                           ldlm_mode_t mode, int *flags,
+			   ldlm_mode_t mode, __u64 *flags,
                            ldlm_blocking_callback blocking,
                            ldlm_completion_callback completion,
                            ldlm_glimpse_callback glimpse,
@@ -486,7 +486,7 @@ static void failed_lock_cleanup(struct ldlm_namespace *ns,
 
 int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                           ldlm_type_t type, __u8 with_policy, ldlm_mode_t mode,
-                          int *flags, void *lvb, __u32 lvb_len,
+			  __u64 *flags, void *lvb, __u32 lvb_len,
                           struct lustre_handle *lockh,int rc)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
@@ -551,14 +551,16 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                 lock->l_remote_handle = reply->lock_handle;
         }
 
-        *flags = reply->lock_flags;
-        lock->l_flags |= reply->lock_flags & LDLM_INHERIT_FLAGS;
+	*flags = ldlm_flags_from_wire(reply->lock_flags);
+	lock->l_flags |= ldlm_flags_from_wire(reply->lock_flags &
+					      LDLM_INHERIT_FLAGS);
         /* move NO_TIMEOUT flag to the lock to force ldlm_lock_match()
          * to wait with no timeout as well */
-        lock->l_flags |= reply->lock_flags & LDLM_FL_NO_TIMEOUT;
+	lock->l_flags |= ldlm_flags_from_wire(reply->lock_flags &
+					      LDLM_FL_NO_TIMEOUT);
         unlock_res_and_lock(lock);
 
-        CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%x\n",
+	CDEBUG(D_INFO, "local: %p, remote cookie: "LPX64", flags: 0x%llx\n",
                lock, reply->lock_handle.cookie, *flags);
 
         /* If enqueue returned a blocked lock but the completion handler has
@@ -784,7 +786,7 @@ EXPORT_SYMBOL(ldlm_prep_enqueue_req);
 int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      struct ldlm_enqueue_info *einfo,
                      const struct ldlm_res_id *res_id,
-                     ldlm_policy_data_t const *policy, int *flags,
+		     ldlm_policy_data_t const *policy, __u64 *flags,
                      void *lvb, __u32 lvb_len, struct lustre_handle *lockh,
                      int async)
 {
@@ -874,7 +876,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
         /* Dump lock data into the request buffer */
         body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
         ldlm_lock2desc(lock, &body->lock_desc);
-        body->lock_flags = *flags;
+	body->lock_flags = ldlm_flags_to_wire(*flags);
         body->lock_handle[0] = *lockh;
 
         /* Continue as normal. */
@@ -988,7 +990,7 @@ int ldlm_cli_convert(struct lustre_handle *lockh, int new_mode, __u32 *flags)
         body->lock_handle[0] = lock->l_remote_handle;
 
         body->lock_desc.l_req_mode = new_mode;
-        body->lock_flags = *flags;
+	body->lock_flags = ldlm_flags_to_wire(*flags);
 
 
         ptlrpc_request_set_replen(req);
@@ -1030,20 +1032,20 @@ EXPORT_SYMBOL(ldlm_cli_convert);
  * LDLM_FL_LOCAL_ONLY if tere is no need in a CANCEL rpc to the server;
  * LDLM_FL_CANCELING otherwise;
  * LDLM_FL_BL_AST if there is a need in a separate CANCEL rpc. */
-static int ldlm_cli_cancel_local(struct ldlm_lock *lock)
+static __u64 ldlm_cli_cancel_local(struct ldlm_lock *lock)
 {
-        int rc = LDLM_FL_LOCAL_ONLY;
+	__u64 rc = LDLM_FL_LOCAL_ONLY;
         ENTRY;
 
         if (lock->l_conn_export) {
-                int local_only;
+                bool local_only;
 
                 LDLM_DEBUG(lock, "client-side cancel");
                 /* Set this flag to prevent others from getting new references*/
                 lock_res_and_lock(lock);
                 lock->l_flags |= LDLM_FL_CBPENDING;
-                local_only = (lock->l_flags &
-                              (LDLM_FL_LOCAL_ONLY|LDLM_FL_CANCEL_ON_BLOCK));
+		local_only = !!(lock->l_flags &
+				(LDLM_FL_LOCAL_ONLY|LDLM_FL_CANCEL_ON_BLOCK));
                 ldlm_cancel_callback(lock);
                 rc = (lock->l_flags & LDLM_FL_BL_AST) ?
                         LDLM_FL_BL_AST : LDLM_FL_CANCELING;
@@ -1255,7 +1257,8 @@ EXPORT_SYMBOL(ldlm_cli_update_pool);
 int ldlm_cli_cancel(struct lustre_handle *lockh)
 {
         struct obd_export *exp;
-        int avail, flags, count = 1, rc = 0;
+	int avail, flags, count = 1;
+	__u64 rc = 0;
         struct ldlm_namespace *ns;
         struct ldlm_lock *lock;
         CFS_LIST_HEAD(cancels);
@@ -1269,9 +1272,9 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
         }
 
         rc = ldlm_cli_cancel_local(lock);
-        if (rc < 0 || rc == LDLM_FL_LOCAL_ONLY) {
+	if (rc == LDLM_FL_LOCAL_ONLY) {
                 LDLM_LOCK_RELEASE(lock);
-                RETURN(rc < 0 ? rc : 0);
+		RETURN(0);
         }
         /* Even if the lock is marked as LDLM_FL_BL_AST, this is a LDLM_CANCEL
          * rpc which goes to canceld portal, so we can cancel other lru locks
@@ -1304,7 +1307,8 @@ int ldlm_cli_cancel_list_local(cfs_list_t *cancels, int count,
 {
         CFS_LIST_HEAD(head);
         struct ldlm_lock *lock, *next;
-        int left = 0, bl_ast = 0, rc;
+	int left = 0, bl_ast = 0;
+	__u64 rc;
 
         left = count;
         cfs_list_for_each_entry_safe(lock, next, cancels, l_bl_ast) {
@@ -2141,7 +2145,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 
         body = req_capsule_client_get(&req->rq_pill, &RMF_DLM_REQ);
         ldlm_lock2desc(lock, &body->lock_desc);
-        body->lock_flags = flags;
+	body->lock_flags = ldlm_flags_to_wire(flags);
 
         ldlm_lock2handle(lock, &body->lock_handle[0]);
         if (lock->l_lvb_len != 0) {

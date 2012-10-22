@@ -544,7 +544,7 @@ EXPORT_SYMBOL(ldlm_lock2handle);
  */
 
 struct ldlm_lock *__ldlm_handle2lock(const struct lustre_handle *handle,
-                                     int flags)
+				     __u64 flags)
 {
         struct ldlm_lock *lock;
         ENTRY;
@@ -1039,7 +1039,7 @@ static struct ldlm_lock *search_queue(cfs_list_t *queue,
                                       ldlm_mode_t *mode,
                                       ldlm_policy_data_t *policy,
                                       struct ldlm_lock *old_lock,
-                                      int flags, int unref)
+				      __u64 flags, int unref)
 {
         struct ldlm_lock *lock;
         cfs_list_t       *tmp;
@@ -1166,7 +1166,7 @@ EXPORT_SYMBOL(ldlm_lock_allow_match);
  * caller code unchanged), the context failure will be discovered by caller
  * sometime later.
  */
-ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, int flags,
+ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, __u64 flags,
                             const struct ldlm_res_id *res_id, ldlm_type_t type,
                             ldlm_policy_data_t *policy, ldlm_mode_t mode,
                             struct lustre_handle *lockh, int unref)
@@ -1383,7 +1383,7 @@ out:
 
 ldlm_error_t ldlm_lock_enqueue(struct ldlm_namespace *ns,
                                struct ldlm_lock **lockp,
-                               void *cookie, int *flags)
+			       void *cookie, __u64 *flags)
 {
         struct ldlm_lock *lock = *lockp;
         struct ldlm_resource *res = lock->l_resource;
@@ -1511,7 +1511,7 @@ int ldlm_reprocess_queue(struct ldlm_resource *res, cfs_list_t *queue,
 {
         cfs_list_t *tmp, *pos;
         ldlm_processing_policy policy;
-        int flags;
+	__u64 flags;
         int rc = LDLM_ITER_CONTINUE;
         ldlm_error_t err;
         ENTRY;
@@ -2035,7 +2035,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
                 } else {
                         /* This should never happen, because of the way the
                          * server handles conversions. */
-                        LDLM_ERROR(lock, "Erroneous flags %d on local lock\n",
+			LDLM_ERROR(lock, "Erroneous flags %x on local lock\n",
                                    *flags);
                         LBUG();
 
@@ -2049,7 +2049,7 @@ struct ldlm_resource *ldlm_lock_convert(struct ldlm_lock *lock, int new_mode,
         } else {
                 int rc;
                 ldlm_error_t err;
-                int pflags = 0;
+		__u64 pflags = 0;
                 ldlm_processing_policy policy;
                 policy = ldlm_processing_policy_table[res->lr_type];
                 rc = policy(lock, &pflags, 0, &err, &rpc_list);

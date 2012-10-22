@@ -78,7 +78,7 @@ struct osc_fsync_args {
 
 struct osc_enqueue_args {
         struct obd_export        *oa_exp;
-        int                      *oa_flags;
+	__u64                    *oa_flags;
         obd_enqueue_update_f      oa_upcall;
         void                     *oa_cookie;
         struct ost_lvb           *oa_lvb;

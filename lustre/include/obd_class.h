@@ -1960,18 +1960,18 @@ static inline int md_getattr_name(struct obd_export *exp,
 }
 
 static inline int md_intent_lock(struct obd_export *exp,
-                                 struct md_op_data *op_data, void *lmm,
-                                 int lmmsize, struct lookup_intent *it,
-                                 int flags, struct ptlrpc_request **reqp,
-                                 ldlm_blocking_callback cb_blocking,
-                                 int extra_lock_flags)
+				 struct md_op_data *op_data, void *lmm,
+				 int lmmsize, struct lookup_intent *it,
+				 int lookup_flags, struct ptlrpc_request **reqp,
+				 ldlm_blocking_callback cb_blocking,
+				 __u64 extra_lock_flags)
 {
         int rc;
         ENTRY;
         EXP_CHECK_MD_OP(exp, intent_lock);
         EXP_MD_COUNTER_INCREMENT(exp, intent_lock);
         rc = MDP(exp->exp_obd, intent_lock)(exp, op_data, lmm, lmmsize,
-                                            it, flags, reqp, cb_blocking,
+                                            it, lookup_flags, reqp, cb_blocking,
                                             extra_lock_flags);
         RETURN(rc);
 }
@@ -2158,7 +2158,7 @@ static inline int md_cancel_unused(struct obd_export *exp,
         RETURN(rc);
 }
 
-static inline ldlm_mode_t md_lock_match(struct obd_export *exp, int flags,
+static inline ldlm_mode_t md_lock_match(struct obd_export *exp, __u64 flags,
                                         const struct lu_fid *fid,
                                         ldlm_type_t type,
                                         ldlm_policy_data_t *policy,

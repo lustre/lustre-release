@@ -152,7 +152,7 @@ int mdc_set_lock_data(struct obd_export *exp, __u64 *lockh, void *data,
         RETURN(0);
 }
 
-ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
+ldlm_mode_t mdc_lock_match(struct obd_export *exp, __u64 flags,
                            const struct lu_fid *fid, ldlm_type_t type,
                            ldlm_policy_data_t *policy, ldlm_mode_t mode,
                            struct lustre_handle *lockh)
@@ -475,7 +475,7 @@ static int mdc_finish_enqueue(struct obd_export *exp,
          * actually get a lock, just perform the intent. */
         if (req->rq_transno || req->rq_replay) {
                 lockreq = req_capsule_client_get(pill, &RMF_DLM_REQ);
-                lockreq->lock_flags |= LDLM_FL_INTENT_ONLY;
+		lockreq->lock_flags |= ldlm_flags_to_wire(LDLM_FL_INTENT_ONLY);
         }
 
         if (rc == ELDLM_LOCK_ABORTED) {
@@ -667,11 +667,11 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 struct lookup_intent *it, struct md_op_data *op_data,
                 struct lustre_handle *lockh, void *lmm, int lmmsize,
-                struct ptlrpc_request **reqp, int extra_lock_flags)
+		struct ptlrpc_request **reqp, __u64 extra_lock_flags)
 {
         struct obd_device     *obddev = class_exp2obd(exp);
         struct ptlrpc_request *req = NULL;
-        int                    flags, saved_flags = extra_lock_flags;
+	__u64                  flags, saved_flags = extra_lock_flags;
         int                    rc;
         struct ldlm_res_id res_id;
         static const ldlm_policy_data_t lookup_policy =
@@ -996,7 +996,7 @@ int mdc_intent_lock(struct obd_export *exp, struct md_op_data *op_data,
                     void *lmm, int lmmsize, struct lookup_intent *it,
                     int lookup_flags, struct ptlrpc_request **reqp,
                     ldlm_blocking_callback cb_blocking,
-                    int extra_lock_flags)
+		    __u64 extra_lock_flags)
 {
         struct lustre_handle lockh;
         int rc = 0;
@@ -1072,7 +1072,7 @@ static int mdc_intent_getattr_async_interpret(const struct lu_env *env,
         struct lookup_intent     *it;
         struct lustre_handle     *lockh;
         struct obd_device        *obddev;
-        int                       flags = LDLM_FL_HAS_INTENT;
+	__u64                     flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 
         it    = &minfo->mi_it;
@@ -1123,7 +1123,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
                                                          MDS_INODELOCK_UPDATE }
                                  };
         int                      rc = 0;
-        int                      flags = LDLM_FL_HAS_INTENT;
+	__u64                    flags = LDLM_FL_HAS_INTENT;
         ENTRY;
 
         CDEBUG(D_DLMTRACE,"name: %.*s in inode "DFID", intent: %s flags %#o\n",

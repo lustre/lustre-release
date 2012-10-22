@@ -92,11 +92,12 @@ int mdc_intent_lock(struct obd_export *exp,
                     void *lmm, int lmmsize,
                     struct lookup_intent *, int,
                     struct ptlrpc_request **reqp,
-                    ldlm_blocking_callback cb_blocking, int extra_lock_flags);
+		    ldlm_blocking_callback cb_blocking,
+		    __u64 extra_lock_flags);
 int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
                 struct lookup_intent *it, struct md_op_data *op_data,
                 struct lustre_handle *lockh, void *lmm, int lmmsize,
-                struct ptlrpc_request **req, int extra_lock_flags);
+		struct ptlrpc_request **req, __u64 extra_lock_flags);
 
 int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
                             cfs_list_t *cancels, ldlm_mode_t mode,
@@ -162,7 +163,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
                              struct md_enqueue_info *minfo,
                              struct ldlm_enqueue_info *einfo);
 
-ldlm_mode_t mdc_lock_match(struct obd_export *exp, int flags,
+ldlm_mode_t mdc_lock_match(struct obd_export *exp, __u64 flags,
                            const struct lu_fid *fid, ldlm_type_t type,
                            ldlm_policy_data_t *policy, ldlm_mode_t mode,
                            struct lustre_handle *lockh);

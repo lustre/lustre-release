@@ -274,9 +274,9 @@ static void osc_lock_build_policy(const struct lu_env *env,
         policy->l_extent.gid = d->cld_gid;
 }
 
-static int osc_enq2ldlm_flags(__u32 enqflags)
+static __u64 osc_enq2ldlm_flags(__u32 enqflags)
 {
-        int result = 0;
+        __u64 result = 0;
 
         LASSERT((enqflags & ~CEF_MASK) == 0);
 
@@ -791,7 +791,7 @@ static int osc_ldlm_blocking_ast(struct ldlm_lock *dlmlock,
 }
 
 static int osc_ldlm_completion_ast(struct ldlm_lock *dlmlock,
-                                   int flags, void *data)
+				   __u64 flags, void *data)
 {
         struct cl_env_nest nest;
         struct lu_env     *env;
@@ -1547,7 +1547,7 @@ static int osc_lock_print(const struct lu_env *env, void *cookie,
         /*
          * XXX print ldlm lock and einfo properly.
          */
-        (*p)(env, cookie, "%p %08x "LPX64" %d %p ",
+	(*p)(env, cookie, "%p %#16llx "LPX64" %d %p ",
              lock->ols_lock, lock->ols_flags, lock->ols_handle.cookie,
              lock->ols_state, lock->ols_owner);
         osc_lvb_print(env, cookie, p, &lock->ols_lvb);

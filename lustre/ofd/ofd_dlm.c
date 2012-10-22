@@ -88,7 +88,7 @@ static enum interval_iter ofd_intent_cb(struct interval_node *n, void *args)
 }
 
 int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
-		      void *req_cookie, ldlm_mode_t mode, int flags,
+		      void *req_cookie, ldlm_mode_t mode, __u64 flags,
 		      void *data)
 {
 	struct ptlrpc_request		*req = req_cookie;
@@ -98,8 +98,8 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 	struct ost_lvb			*res_lvb, *reply_lvb;
 	struct ldlm_reply		*rep;
 	ldlm_error_t			 err;
-	int				 idx, rc;
-	int				 tmpflags = 0, only_liblustre = 1;
+	int				 idx, rc, only_liblustre = 1;
+	__u64				 tmpflags = 0;
 	struct ldlm_interval_tree	*tree;
 	struct ofd_intent_args		 arg;
 	__u32				 repsize[3] = {

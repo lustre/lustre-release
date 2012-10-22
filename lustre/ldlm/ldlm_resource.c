@@ -666,11 +666,11 @@ extern struct ldlm_lock *ldlm_lock_get(struct ldlm_lock *lock);
  * This is currently only used for recovery, and we make certain assumptions
  * as a result--notably, that we shouldn't cancel locks with refs. -phil */
 static void cleanup_resource(struct ldlm_resource *res, cfs_list_t *q,
-                             int flags)
+			     __u64 flags)
 {
-        cfs_list_t *tmp;
-        int rc = 0, client = ns_is_client(ldlm_res_to_ns(res));
-        int local_only = (flags & LDLM_FL_LOCAL_ONLY);
+	cfs_list_t *tmp;
+	int rc = 0, client = ns_is_client(ldlm_res_to_ns(res));
+	bool local_only = !!(flags & LDLM_FL_LOCAL_ONLY);
 
         do {
                 struct ldlm_lock *lock = NULL;
@@ -741,7 +741,7 @@ static int ldlm_resource_clean(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                                cfs_hlist_node_t *hnode, void *arg)
 {
         struct ldlm_resource *res = cfs_hash_object(hs, hnode);
-        int    flags = (int)(unsigned long)arg;
+	__u64 flags = *(__u64 *)arg;
 
         cleanup_resource(res, &res->lr_granted, flags);
         cleanup_resource(res, &res->lr_converting, flags);
@@ -769,15 +769,14 @@ static int ldlm_resource_complain(cfs_hash_t *hs, cfs_hash_bd_t *bd,
         return 0;
 }
 
-int ldlm_namespace_cleanup(struct ldlm_namespace *ns, int flags)
+int ldlm_namespace_cleanup(struct ldlm_namespace *ns, __u64 flags)
 {
         if (ns == NULL) {
                 CDEBUG(D_INFO, "NULL ns, skipping cleanup\n");
                 return ELDLM_OK;
         }
 
-        cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_resource_clean,
-                                 (void *)(unsigned long)flags);
+	cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_resource_clean, &flags);
         cfs_hash_for_each_nolock(ns->ns_rs_hash, ldlm_resource_complain, NULL);
         return ELDLM_OK;
 }

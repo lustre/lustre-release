@@ -724,7 +724,7 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
                                ldlm_mode_t mode,
                                ldlm_policy_data_t *policy,
                                const struct ldlm_res_id *res_id,
-                               int flags, const __u64 *client_cookie)
+			       __u64 flags, const __u64 *client_cookie)
 {
         int rc;
 

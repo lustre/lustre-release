@@ -211,7 +211,7 @@ static int ost_destroy(struct obd_export *exp, struct ptlrpc_request *req,
  */
 static int ost_lock_get(struct obd_export *exp, struct obdo *oa,
                         __u64 start, __u64 count, struct lustre_handle *lh,
-                        int mode, int flags)
+			int mode, __u64 flags)
 {
         struct ldlm_res_id res_id;
         ldlm_policy_data_t policy;
@@ -369,8 +369,9 @@ static int ost_punch(struct obd_export *exp, struct ptlrpc_request *req,
                      struct obd_trans_info *oti)
 {
         struct ost_body *body, *repbody;
-        int rc, flags = 0;
+	__u64 flags = 0;
         struct lustre_handle lh = {0,};
+	int rc;
         ENTRY;
 
         /* check that we do support OBD_CONNECT_TRUNCLOCK. */
@@ -615,7 +616,7 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
                             struct obd_ioobj *obj, struct niobuf_remote *nb,
                             struct lustre_handle *lh)
 {
-        int flags                 = 0;
+	__u64 flags               = 0;
         int nrbufs                = obj->ioo_bufcnt;
         struct ldlm_res_id res_id;
         ldlm_policy_data_t policy;

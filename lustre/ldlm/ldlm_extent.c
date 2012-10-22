@@ -252,7 +252,7 @@ ldlm_extent_internal_policy_waiting(struct ldlm_lock *req,
 /* In order to determine the largest possible extent we can grant, we need
  * to scan all of the queues. */
 static void ldlm_extent_policy(struct ldlm_resource *res,
-                               struct ldlm_lock *lock, int *flags)
+			       struct ldlm_lock *lock, __u64 *flags)
 {
         struct ldlm_extent new_ex = { .start = 0, .end = OBD_OBJECT_EOF };
 
@@ -353,8 +353,8 @@ static enum interval_iter ldlm_extent_compat_cb(struct interval_node *n,
  */
 static int
 ldlm_extent_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
-                         int *flags, ldlm_error_t *err,
-                         cfs_list_t *work_list, int *contended_locks)
+			 __u64 *flags, ldlm_error_t *err,
+			 cfs_list_t *work_list, int *contended_locks)
 {
         cfs_list_t *tmp;
         struct ldlm_lock *lock;
@@ -641,8 +641,9 @@ static void discard_bl_list(cfs_list_t *bl_list)
   * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
   *   - blocking ASTs have not been sent
   *   - must call this function with the ns lock held once */
-int ldlm_process_extent_lock(struct ldlm_lock *lock, int *flags, int first_enq,
-                             ldlm_error_t *err, cfs_list_t *work_list)
+int ldlm_process_extent_lock(struct ldlm_lock *lock, __u64 *flags,
+			     int first_enq, ldlm_error_t *err,
+			     cfs_list_t *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
         CFS_LIST_HEAD(rpc_list);

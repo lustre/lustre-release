@@ -109,8 +109,9 @@ ldlm_plain_compat_queue(cfs_list_t *queue, struct ldlm_lock *req,
  * If first_enq is 1 (ie, called from ldlm_lock_enqueue):
  *   - blocking ASTs have not been sent
  *   - must call this function with the resource lock held */
-int ldlm_process_plain_lock(struct ldlm_lock *lock, int *flags, int first_enq,
-                            ldlm_error_t *err, cfs_list_t *work_list)
+int ldlm_process_plain_lock(struct ldlm_lock *lock, __u64 *flags,
+			    int first_enq, ldlm_error_t *err,
+			    cfs_list_t *work_list)
 {
         struct ldlm_resource *res = lock->l_resource;
         CFS_LIST_HEAD(rpc_list);
