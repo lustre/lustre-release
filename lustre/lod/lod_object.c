@@ -101,19 +101,140 @@ static struct dt_it *lod_it_init(const struct lu_env *env,
 				 struct dt_object *dt, __u32 attr,
 				 struct lustre_capa *capa)
 {
-	struct dt_object   *next = dt_object_child(dt);
+	struct dt_object	*next = dt_object_child(dt);
+	struct lod_it		*it = &lod_env_info(env)->lti_it;
+	struct dt_it		*it_next;
 
-	return next->do_index_ops->dio_it.init(env, next, attr, capa);
+
+	it_next = next->do_index_ops->dio_it.init(env, next, attr, capa);
+	if (IS_ERR(it_next))
+		return it_next;
+
+	/* currently we do not use more than one iterator per thread
+	 * so we store it in thread info. if at some point we need
+	 * more active iterators in a single thread, we can allocate
+	 * additional ones */
+	LASSERT(it->lit_obj == NULL);
+
+	it->lit_it = it_next;
+	it->lit_obj = next;
+
+	return (struct dt_it *)it;
+}
+
+#define LOD_CHECK_IT(env, it)					\
+{								\
+	/* IT is supposed to be in thread info always */	\
+	LASSERT((it) == &lod_env_info(env)->lti_it);		\
+	LASSERT((it)->lit_obj != NULL);				\
+	LASSERT((it)->lit_it != NULL);				\
+} while(0)
+
+void lod_it_fini(const struct lu_env *env, struct dt_it *di)
+{
+	struct lod_it *it = (struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	it->lit_obj->do_index_ops->dio_it.fini(env, it->lit_it);
+
+	/* the iterator not in use any more */
+	it->lit_obj = NULL;
+	it->lit_it = NULL;
+}
+
+int lod_it_get(const struct lu_env *env, struct dt_it *di,
+	       const struct dt_key *key)
+{
+	const struct lod_it *it = (const struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.get(env, it->lit_it, key);
+}
+
+void lod_it_put(const struct lu_env *env, struct dt_it *di)
+{
+	struct lod_it *it = (struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.put(env, it->lit_it);
+}
+
+int lod_it_next(const struct lu_env *env, struct dt_it *di)
+{
+	struct lod_it *it = (struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.next(env, it->lit_it);
+}
+
+struct dt_key *lod_it_key(const struct lu_env *env, const struct dt_it *di)
+{
+	const struct lod_it *it = (const struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.key(env, it->lit_it);
+}
+
+int lod_it_key_size(const struct lu_env *env, const struct dt_it *di)
+{
+	struct lod_it *it = (struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.key_size(env, it->lit_it);
+}
+
+int lod_it_rec(const struct lu_env *env, const struct dt_it *di,
+	       struct dt_rec *rec, __u32 attr)
+{
+	const struct lod_it *it = (const struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.rec(env, it->lit_it, rec, attr);
+}
+
+__u64 lod_it_store(const struct lu_env *env, const struct dt_it *di)
+{
+	const struct lod_it *it = (const struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.store(env, it->lit_it);
+}
+
+int lod_it_load(const struct lu_env *env, const struct dt_it *di, __u64 hash)
+{
+	const struct lod_it *it = (const struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.load(env, it->lit_it, hash);
+}
+
+int lod_it_key_rec(const struct lu_env *env, const struct dt_it *di,
+		   void* key_rec)
+{
+	const struct lod_it *it = (const struct lod_it *)di;
+
+	LOD_CHECK_IT(env, it);
+	return it->lit_obj->do_index_ops->dio_it.key_rec(env, it->lit_it, key_rec);
 }
 
 static struct dt_index_operations lod_index_ops = {
-	.dio_lookup	    = lod_index_lookup,
-	.dio_declare_insert = lod_declare_index_insert,
-	.dio_insert	    = lod_index_insert,
-	.dio_declare_delete = lod_declare_index_delete,
-	.dio_delete	    = lod_index_delete,
-	.dio_it     = {
-		.init	    = lod_it_init,
+	.dio_lookup		= lod_index_lookup,
+	.dio_declare_insert	= lod_declare_index_insert,
+	.dio_insert		= lod_index_insert,
+	.dio_declare_delete	= lod_declare_index_delete,
+	.dio_delete		= lod_index_delete,
+	.dio_it	= {
+		.init		= lod_it_init,
+		.fini		= lod_it_fini,
+		.get		= lod_it_get,
+		.put		= lod_it_put,
+		.next		= lod_it_next,
+		.key		= lod_it_key,
+		.key_size	= lod_it_key_size,
+		.rec		= lod_it_rec,
+		.store		= lod_it_store,
+		.load		= lod_it_load,
+		.key_rec	= lod_it_key_rec,
 	}
 };
 
@@ -907,15 +1028,8 @@ static int lod_index_try(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(next->do_ops->do_index_try);
 
 	rc = next->do_ops->do_index_try(env, next, feat);
-	if (next->do_index_ops && dt->do_index_ops == NULL) {
+	if (next->do_index_ops && dt->do_index_ops == NULL)
 		dt->do_index_ops = &lod_index_ops;
-		/* XXX: iterators don't accept device, so bypass LOD */
-		/* will be fixed with DNE */
-		if (lod_index_ops.dio_it.fini == NULL) {
-			lod_index_ops.dio_it = next->do_index_ops->dio_it;
-			lod_index_ops.dio_it.init = lod_it_init;
-		}
-	}
 
 	RETURN(rc);
 }

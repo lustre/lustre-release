@@ -311,7 +311,7 @@ int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd)
 
 	lfsck->ml_bookmark_obj = obj;
 
-	obj = dt_locate(env, mdd->mdd_bottom, &lfsck_it_fid);
+	obj = dt_locate(env, mdd->mdd_child, &lfsck_it_fid);
 	if (IS_ERR(obj))
 		return PTR_ERR(obj);
 

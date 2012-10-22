@@ -145,6 +145,11 @@ struct lod_object {
 };
 
 
+struct lod_it {
+	struct dt_object	*lit_obj; /* object from the layer below */
+	struct dt_it		*lit_it;  /* iterator from the layer below */
+};
+
 struct lod_thread_info {
 	/* per-thread buffer for LOV EA */
 	void             *lti_ea_store;
@@ -154,6 +159,7 @@ struct lod_thread_info {
 	struct lu_fid     lti_fid;
 	struct obd_statfs lti_osfs;
 	struct lu_attr    lti_attr;
+	struct lod_it	  lti_it;
 };
 
 extern const struct lu_device_operations lod_lu_ops;
