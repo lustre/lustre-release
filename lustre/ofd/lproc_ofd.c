@@ -469,6 +469,25 @@ int lprocfs_ofd_wr_grant_compat_disable(struct file *file, const char *buffer,
 	return count;
 }
 
+int lprocfs_ofd_rd_soft_sync_limit(char *page, char **start, off_t off,
+				   int count, int *eof, void *data)
+{
+	struct obd_device	*obd = data;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+
+	return lprocfs_rd_uint(page, start, off, count, eof,
+			       &ofd->ofd_soft_sync_limit);
+}
+
+int lprocfs_ofd_wr_soft_sync_limit(struct file *file, const char *buffer,
+				   unsigned long count, void *data)
+{
+	struct obd_device	*obd = data;
+	struct ofd_device	*ofd = ofd_dev(obd->obd_lu_dev);
+
+	return lprocfs_wr_uint(file, buffer, count, &ofd->ofd_soft_sync_limit);
+}
+
 static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "uuid",		 lprocfs_rd_uuid, 0, 0 },
 	{ "blocksize",		 lprocfs_rd_blksize, 0, 0 },
@@ -516,6 +535,8 @@ static struct lprocfs_vars lprocfs_ofd_obd_vars[] = {
 	{ "capa_count",		 lprocfs_ofd_rd_capa_count, 0, 0 },
 	{ "job_cleanup_interval", lprocfs_rd_job_interval,
 				  lprocfs_wr_job_interval, 0},
+	{ "soft_sync_limit",	 lprocfs_ofd_rd_soft_sync_limit,
+				 lprocfs_ofd_wr_soft_sync_limit, 0},
 	{ 0 }
 };
 

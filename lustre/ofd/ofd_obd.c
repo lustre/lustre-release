@@ -348,6 +348,7 @@ static int ofd_init_export(struct obd_export *exp)
 
 	spin_lock_init(&exp->exp_filter_data.fed_lock);
 	CFS_INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
+	atomic_set(&exp->exp_filter_data.fed_soft_sync_count, 0);
 	spin_lock(&exp->exp_lock);
 	exp->exp_connecting = 1;
 	spin_unlock(&exp->exp_lock);

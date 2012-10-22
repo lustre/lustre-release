@@ -166,6 +166,7 @@ static int ofd_preprw_write(const struct lu_env *env, struct obd_export *exp,
 			lnb[j+k].lnb_flags = rnb[i].rnb_flags;
 			if (!(rnb[i].rnb_flags & OBD_BRW_GRANTED))
 				lnb[j+k].lnb_rc = -ENOSPC;
+
 			/* remote client can't break through quota */
 			if (exp_connect_rmtclient(exp))
 				lnb[j+k].lnb_flags &= ~OBD_BRW_NOQUOTA;
@@ -395,10 +396,56 @@ out:
 	return rc;
 }
 
+struct ofd_soft_sync_callback {
+	struct dt_txn_commit_cb	 ossc_cb;
+	struct obd_export	*ossc_exp;
+};
+
+static void ofd_cb_soft_sync(struct lu_env *env, struct thandle *th,
+			     struct dt_txn_commit_cb *cb, int err)
+{
+	struct ofd_soft_sync_callback	*ossc;
+
+	ossc = container_of(cb, struct ofd_soft_sync_callback, ossc_cb);
+
+	CDEBUG(D_INODE, "export %p soft sync count is reset\n", ossc->ossc_exp);
+	atomic_set(&ossc->ossc_exp->exp_filter_data.fed_soft_sync_count, 0);
+
+	class_export_cb_put(ossc->ossc_exp);
+	OBD_FREE_PTR(ossc);
+}
+
+static int ofd_soft_sync_cb_add(struct thandle *th, struct obd_export *exp)
+{
+	struct ofd_soft_sync_callback		*ossc;
+	struct dt_txn_commit_cb			*dcb;
+	int					 rc;
+
+	OBD_ALLOC_PTR(ossc);
+	if (ossc == NULL)
+		return -ENOMEM;
+
+	ossc->ossc_exp = class_export_cb_get(exp);
+
+	dcb = &ossc->ossc_cb;
+	dcb->dcb_func = ofd_cb_soft_sync;
+	CFS_INIT_LIST_HEAD(&dcb->dcb_linkage);
+	strncpy(dcb->dcb_name, "ofd_cb_soft_sync", MAX_COMMIT_CB_STR_LEN);
+	dcb->dcb_name[MAX_COMMIT_CB_STR_LEN - 1] = '\0';
+
+	rc = dt_trans_cb_add(th, dcb);
+	if (rc) {
+		class_export_cb_put(exp);
+		OBD_FREE_PTR(ossc);
+	}
+
+	return rc;
+}
+
 static int
-ofd_commitrw_write(const struct lu_env *env, struct ofd_device *ofd,
-		   struct lu_fid *fid, struct lu_attr *la,
-		   struct filter_fid *ff, int objcount,
+ofd_commitrw_write(const struct lu_env *env, struct obd_export *exp,
+		   struct ofd_device *ofd, struct lu_fid *fid,
+		   struct lu_attr *la, struct filter_fid *ff, int objcount,
 		   int niocount, struct niobuf_local *lnb, int old_rc)
 {
 	struct ofd_thread_info	*info = ofd_info(env);
@@ -408,6 +455,9 @@ ofd_commitrw_write(const struct lu_env *env, struct ofd_device *ofd,
 	int			 rc = 0;
 	int			 retries = 0;
 	int			 i;
+	struct filter_export_data *fed = &exp->exp_filter_data;
+	bool			 soft_sync = false;
+	bool			 cb_registered = false;
 
 	ENTRY;
 
@@ -447,6 +497,8 @@ retry:
 				th->th_sync = 1;
 				break;
 			}
+			if (lnb[i].lnb_flags & OBD_BRW_SOFT_SYNC)
+				soft_sync = true;
 		}
 	}
 
@@ -487,12 +539,25 @@ out_stop:
 	if (rc == -ENOSPC)
 		th->th_sync = 1;
 
+	/* do this before trans stop in case commit has finished */
+	if (!th->th_sync && soft_sync && !cb_registered) {
+		ofd_soft_sync_cb_add(th, exp);
+		cb_registered = true;
+	}
+
 	ofd_trans_stop(env, ofd, th, rc);
 	if (rc == -ENOSPC && retries++ < 3) {
 		CDEBUG(D_INODE, "retry after force commit, retries:%d\n",
 		       retries);
 		goto retry;
 	}
+
+	if (!soft_sync)
+		/* reset fed_soft_sync_count upon non-SOFT_SYNC RPC */
+		atomic_set(&fed->fed_soft_sync_count, 0);
+	else if (atomic_inc_return(&fed->fed_soft_sync_count) ==
+		 ofd->ofd_soft_sync_limit)
+		dt_commit_async(env, ofd->ofd_osd);
 
 out:
 	dt_bufs_put(env, o, lnb, niocount);
@@ -543,7 +608,7 @@ int ofd_commitrw(const struct lu_env *env, int cmd, struct obd_export *exp,
 			ofd_prepare_fidea(ff, oa);
 		}
 
-		rc = ofd_commitrw_write(env, ofd, &info->fti_fid,
+		rc = ofd_commitrw_write(env, exp, ofd, &info->fti_fid,
 					&info->fti_attr, ff, objcount, npages,
 					lnb, old_rc);
 		if (rc == 0)
