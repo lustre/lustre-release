@@ -245,15 +245,24 @@ static int vvp_page_prep_write(const struct lu_env *env,
  */
 static void vvp_vmpage_error(struct inode *inode, cfs_page_t *vmpage, int ioret)
 {
-        if (ioret == 0)
-                ClearPageError(vmpage);
-        else if (ioret != -EINTR) {
-                SetPageError(vmpage);
-                if (ioret == -ENOSPC)
-                        set_bit(AS_ENOSPC, &inode->i_mapping->flags);
-                else
-                        set_bit(AS_EIO, &inode->i_mapping->flags);
-        }
+	struct ccc_object *obj = cl_inode2ccc(inode);
+
+	if (ioret == 0) {
+		ClearPageError(vmpage);
+		obj->cob_discard_page_warned = 0;
+	} else {
+		SetPageError(vmpage);
+		if (ioret == -ENOSPC)
+			set_bit(AS_ENOSPC, &inode->i_mapping->flags);
+		else
+			set_bit(AS_EIO, &inode->i_mapping->flags);
+
+		if ((ioret == -ESHUTDOWN || ioret == -EINTR) &&
+		     obj->cob_discard_page_warned == 0) {
+			obj->cob_discard_page_warned = 1;
+			ll_dirty_page_discard_warn(vmpage, ioret);
+		}
+	}
 }
 
 static void vvp_page_completion_read(const struct lu_env *env,
