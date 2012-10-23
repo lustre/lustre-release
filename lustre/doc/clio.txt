@@ -1,0 +1,1595 @@
+               ******************************************************
+               * Overview of the Lustre Client I/O (CLIO) subsystem *
+               ******************************************************
+
+Original Authors:
+=================
+Nikita Danilov <Nikita_Danilov@xyratex.com>
+
+Topics
+======
+
+1. Overview
+        1.1. Goals
+        1.2. Terminology
+                i.   I/O vs. Transfer
+                ii.  Top-{object,lock,page}, Sub-{object,lock,page}
+                iii. VVP, SLP, CCC
+        1.3. Main Differences with the Pre-CLIO Client Code
+        1.4. Layered objects, Slices, Headers
+        1.5. Instantiation
+        1.6. Life Cycle
+        1.7. State Machines
+        1.8. Finalization
+        1.9. Code Structure
+2. Layers
+        2.1. VVP, SLP, Echo-client
+        2.2. LOV, LOVSUB (layouts)
+        2.3. OSC
+3. Objects
+        3.1. FID, Hashing, Caching, LRU
+        3.2. Top-object, Sub-object
+        3.3. Object Operations
+        3.4. Object Attributes
+4. Pages
+        4.1. Page Indexing
+        4.2. Page Ownership
+        4.3. Page Transfer Locking
+        4.4. Page Operations
+5. Locks
+        5.1. Lock Life Cycle
+        5.2. Top-lock and Sub-locks
+        5.3. Lock State Machine
+        5.4. Lock Concurrency
+        5.5. Shared Sub-locks
+        5.6. Use Case: Lock Invalidation
+6. IO
+        6.1. Fixed IO Types
+        6.2. IO State Machine
+        6.3. Parallel IO
+        6.4. Data-flow: From Stack to IO Slice
+7. Transfer
+        7.1. Immediate vs. Opportunistic Transfers
+        7.2. Page Lists
+        7.3. Transfer States: Prepare, Completion
+        7.4. Page Completion Handlers, Synchronous Transfer
+8. LU Environment (lu_env)
+        8.1. Motivation, Server Environment Usage
+        8.2. Client Usage
+        8.3. Sub-environments
+9. Use Cases
+        9.1. Inode Creation
+        9.2. First IO to a File
+                i. Read, Read-ahead
+                ii. Write
+        9.3. Cached IO
+        9.4. Lock-less and No-cache IO
+
+================
+= 1. Overview =
+================
+
+1.1. Goals
+==========
+
+CLIO is a re-write of interfaces between layers in the client data-path (read,
+write, truncate). Its goals are:
+
+- Reduce the number of bugs in the IO path;
+
+- Introduce more logical layer interfaces instead of current all-in-one OBD
+  device interface;
+
+- Define clear and precise semantics for the interface entry points;
+
+- Simplify the structure of the client code.
+
+- Support upcoming features:
+
+        . SNS,
+        . p2p caching,
+        . parallel non-blocking IO,
+        . pNFS;
+
+- Reduce stack consumption.
+
+Restrictions:
+
+- No meta-data changes;
+- No support for 2.4 kernels;
+- Portable code;
+- No changes to recovery;
+- The same layers with mostly the same functionality;
+- As few changes to the core logic of each Lustre data-stack layer as possible
+  (e.g., no changes to the read-ahead or OSC RPC logic).
+
+1.2. Terminology
+================
+
+Any discussion of client functionality has to talk about `read' and `write'
+system calls on the one hand and about `read' and `write' requests to the
+server on the other hand. To avoid confusion, the former high level operations
+are called `IO', while the latter are called `transfer'.
+
+Many concepts apply uniformly to pages, locks, files, and IO contexts, such as
+reference counting, caching, etc. To describe such situations, a common term is
+needed to denote things from any of the above classes. `Object' would be a
+natural choice, but files and especially stripes are already called objects, so
+the term `entity' is used instead.
+
+Due to the striping it's often a case that some entity is composed of multiple
+entities of the same kind: a file is composed of stripe objects, a logical lock
+on a file is composed of stripe locks on the file's stripes, etc. In these
+cases we shall talk about top-object, top-lock, top-page, top-IO, etc. being
+constructed from sub-objects, sub-locks, sub-pages, sub-io's respectively.
+
+The topmost module in the Linux client, is traditionally known as `llite'.  The
+corresponding CLIO layer is called `VVP' (VFS, VM, POSIX) to reflect its
+functional responsibilities. The top-level layer for liblustre is called `SLP'.
+VVP and SLP share a lot of logic and data-types. Their common functions and
+types are prefixed with `ccc' which stands for "Common Client Code".
+
+1.3. Main Differences with the Pre-CLIO Client Code
+===================================================
+
+- Locks on files (as opposed to locks on stripes) are first-class objects (i.e.
+  layered entities);
+
+- Sub-objects (stripes) are first-class objects;
+
+- Stripe-related logic is moved out of llite (almost);
+
+- IO control flow is different:
+
+        . Pre-CLIO: llite implements control flow, calling underlying OBD
+          methods as necessary;
+
+        . CLIO: generic code (cl_io_loop()) controls IO logic calling all
+          layers, including VVP.
+
+  In other words, VVP (or any other top-layer) instead of calling some
+  pre-existing `lustre interface', also implements parts of this interface.
+
+- The lu_env allocator from MDT is used on the client.
+
+1.4. Layered Objects
+====================
+
+CLIO continues the layered object approach that was found to be useful for the
+MDS rewrite in Lustre 2.0. In this approach, instances of key entity types
+(files, pages, locks, etc.) are represented as a header, containing attributes
+shared by all layers. Each header contains a linked list of per-layer `slices',
+each of which contains a pointer to a vector of function pointers. Generic
+operations on layered objects are implemented by going through the list of
+slices and invoking the corresponding function from the operation vector at
+every layer.  In this way generic object behavior is delegated to the layers.
+
+For example, a page entity is represented by struct cl_page, from which hangs
+off a list of cl_page_slice structures, one for each layer in the stack.
+cl_page_slice contains a pointer to struct cl_page_operations.
+cl_page_operations has the field
+
+        void (*cpo_completion)(const struct lu_env *env,
+              const struct cl_page_slice *slice, int ioret);
+
+When transfer of a page is finished, ->cpo_completion() methods are called in a
+particular order (bottom to top in this case).
+
+Allocation of slices is done during instance creation. If a layer needs some
+private state for an object, it embeds the slice into its own data structure.
+For example, the OSC layer defines
+
+        struct osc_lock {
+                struct cl_lock_slice ols_cl;
+                struct ldlm_lock *ols_lock;
+                ...
+        };
+
+When an operation from cl_lock_operations is called, it is given a pointer to
+struct cl_lock_slice, and the layer casts it to its private structure (for
+example, struct osc_lock) to access per-layer state.
+
+The following types of layered objects exist in CLIO:
+
+- File system objects (files and stripes): struct cl_object_header, slices
+  are of type struct cl_object;
+
+- Cached pages with data: struct cl_page, slices are of type
+  cl_page_slice;
+
+- Extent locks: struct cl_lock, slices are of type cl_lock_slice;
+
+- IO content: struct cl_io, slices are of type cl_io_slice;
+
+- Transfer request: struct cl_req, slices are of type cl_req_slice.
+
+1.5. Instantiation
+==================
+
+Entities with different sequences of slices can co-exist. A typical example of
+this is a local vs. remote object on the MDS. A local object, based on some
+file in the local file system has MDT, MDD, LOD and OSD as its layers, whereas
+a remote object (representing an object local to some other MDT) has MDT, MDD,
+LOD, and OSP layers.
+
+When the client is being mounted, its device stack is configured according to
+llog configuration records. The typical configuration is
+
+                           vvp_device
+                                |
+                                V
+                           lov_device
+                                |
+                        +---+---+---+---+
+                        |   |   |   |   |
+                        V   V   V   V   V
+                      .... osc_device's ....
+
+In this tree every node knows its descendants. When a new file (inode) is
+created, every layer, starting from the top, creates a slice with a state and
+an operation vector for this layer, appends this slice to the tail of a list
+anchored at the object header, and then calls the corresponding lower layer
+device to do the same. That is, the file object structure is determined by the
+configuration of devices to which this file belongs.
+
+Pages and locks, in turn, belong to the file objects, and when a new page is
+created for a given object, slices of this object are iterated through and
+every slice is asked to initialize a new page, which includes (usually)
+allocation of a new page slice and its insertion into a list of page slices.
+Locks and IO context instantiation is handled similarly.
+
+1.6. Life cycle
+===============
+
+All layered objects except IO contexts and transfer requests (which leaves file
+objects, pages and locks) are reference counted and cached. They have a uniform
+caching mechanism:
+
+- Objects are kept in some sort of an index (global FID hash for file objects,
+  per-file radix tree for pages, and per-file list for locks);
+
+- A reference for an object can be acquired by cl_{object,page,lock}_find()
+  functions that search the index, and if object is not there, create a new one
+  and insert it into the index;
+
+- A reference is released by cl_{object,page,lock}_put() functions. When the
+  last reference is released, the object is returned to the cache (still in the
+  index), except when the user explicitly set `do not cache' flag for this
+  object. In the latter case the object is destroyed immediately.
+
+IO contexts are owned by a thread (or, potentially a group of threads) doing
+IO, and need neither reference counting nor indexing. Similarly, transfer
+requests are owned by a OSC device, and their lifetime is from RPC creation
+until completion notification.
+
+1.7. State Machines
+===================
+
+All types of layered objects contain a state-machine, although for the transfer
+requests this machine is trivial (CREATED -> PREPARED -> INFLIGHT ->
+COMPLETED), and for the file objects it is very simple.  Page, lock, and IO
+state machines are described in more detail below.
+
+As a generic rule, state machine transitions are made under some kind of lock:
+VM lock for a page, a per-lock mutex for a cl_lock, and LU site spin-lock for
+an object. After some event that might cause a state transition, such lock is
+taken, and the object state is analysed to check whether transition is
+possible.  If it is, the state machine is advanced to the new state and the
+lock is released. IO state transitions do not require concurrency control.
+
+1.8. Finalization
+=================
+
+State machine and reference counting interact during object destruction. In
+addition to temporary pointers to an entity (that are counted in its reference
+counter), an entity is reachable through
+
+- Indexing structures described above
+
+- Pointers internal to some layer of this entity. For example, a page is
+  reachable through a pointer from VM page, lock might be reachable through a
+  ldlm_lock::l_ast_data pointer, and sub-{lock,object,page} might be reachable
+  through a pointer from its top-entity.
+
+Entity destruction happens in three phases:
+
+- First, a decision is made to destroy an entity, when, for example, a lock is
+  cancelled, or a page is truncated from a file. At this point the `do not
+  cache' bit is set in the entity header, and all ways to reach entity from
+  internal pointers are severed.
+
+  cl_{page,lock,object}_get() functions never return an entity with the `do not
+  cache' bit set, so from this moment no new internal pointers can be
+  obtained.
+
+  See: cl_page_delete(), cl_lock_delete();
+
+- Pointers `drain' for some time as existing references are released. In
+  this phase the entity is reachable through
+
+        . temporary pointers, counted in its reference counter, and
+        . possibly a pointer in the indexing structure.
+
+- When the last reference is released, the entity can be safely freed (after
+  possibly removing it from the index).
+
+  See lu_object_put(), cl_page_put(), cl_lock_put().
+
+1.9. Code Structure
+===================
+
+The CLIO code resides in the following files:
+
+  {llite,lov,osc}/*_{dev,object,lock,page,io}.c
+  liblustre/llite_cl.c
+  lclient/*.c
+  obdclass/cl_*.c
+  include/cl_object.h
+
+All global CLIO data-types are defined in include/cl_object.h header which
+contains detailed documentation. Generic clio code is in
+obdclass/cl_{object,page,lock,io}.c
+
+An implementation of CLIO interfaces for a layer foo is located in
+foo/foo_{dev,object,page,lock,io}.c files, with (temporary) exception of
+liblustre code that is located in liblustre/llite_cl.c.
+
+Definitions of data-structures shared within a layer are in
+foo/foo_cl_internal.h
+
+VVP and SLP share most of the CLIO functionality and data-structures. Common
+functions are defined in the lustre/lclient directory, and common types are in
+the lustre/include/lclient.h header.
+
+=============
+= 2. Layers =
+=============
+
+This section briefly outlines responsibility of every layer in the stack. More
+detailed description of functionality is in the following sections on objects,
+pages and locks.
+
+2.1. VVP, SLP, Echo-client
+==========================
+
+There are currently 3 options for the top-most Lustre layer:
+
+- VVP: linux kernel client,
+- SLP: liblustre client, and
+- echo-client: special client used by the Lustre testing sub-system.
+
+Other possibilities are:
+
+- Client ports to other operating systems (OSX, Windows, Solaris),
+- pNFS and NFS exports.
+
+The responsibilities of the top-most layer include:
+
+- Definition of the entry points through which Lustre is accessed by the
+  applications;
+- Interaction with the hosting VM/MM system;
+- Interaction with the hosting VFS or equivalent;
+- Implementation of the desired semantics of top of Lustre (e.g. POSIX
+  or Win32 semantics).
+
+Let's look at VVP in more detail. First, VVP implements VFS entry points
+required by the Linux kernel interface: ll_file_{read,write,sendfile}(). Then,
+VVP implements VM entry points: ll_{write,invalidate,release}page().
+
+For file objects, VVP slice (ccc_object, shared with liblustre) contains a
+pointer to an inode.
+
+For pages, the VVP slice (ccc_page) contains a pointer to the VM page
+(cfs_page_t), a `defer up to date' flag to track read-ahead hits (similar to
+the pre-CLIO client), and fields necessary for synchronous transfer (see
+below).  VVP is responsible for implementation of the interaction between
+client page (cl_page) and the VM.
+
+There is no special VVP private state for locks.
+
+For IO, VVP implements
+
+- Mapping from Linux specific entry points (readv, writev, sendfile, etc.)
+  to Lustre IO loop,
+
+- mmap,
+
+- POSIX features like short reads, O_APPEND atomicity, etc.
+
+- Read-ahead (this is arguably not the best layer in which to implement
+  read-ahead, as the existing read-ahead algorithm is network-aware).
+
+2.2. LOV, LOVSUB
+================
+
+The LOV layer implements RAID-0 striping. It maps top-entities (file objects,
+locks, pages, IOs) to one or more sub-entities. LOVSUB is a companion layer
+that does the reverse mapping.
+
+2.3. OSC
+========
+
+The OSC layer deals with networking stuff:
+
+- It decides when an efficient RPC can be formed from cached data;
+
+- It calls LNET to initiate a transfer and to get notification of completion;
+
+- It calls LDLM to implement distributed cache coherency, and to get
+  notifications of lock cancellation requests;
+
+==============
+= 3. Objects =
+==============
+
+3.1. FID, Hashing, Caching, LRU
+===============================
+
+Files and stripes are collectively known as (file system) `objects'. The CLIO
+client reuses support for layered objects from the MDT stack. Both client and
+MDT objects are based on struct lu_object type, representing a slice of a file
+system object. lu_object's for a given object are linked through the
+->lo_linkage field into a list hanging off field ->loh_layers of struct
+lu_object_header, that represents a whole layered object.
+
+lu_object and lu_object_header provide functionality common between a client
+and a server:
+
+- An object is uniquely identified by a FID; all objects are kept in a hash
+  table indexed by a FID;
+
+- Objects are reference counted. When the last reference to an object is
+  released it is returned back into the cache, unless it has been explicitly
+  marked for deletion, in which case it is immediately destroyed;
+
+- Objects in the cache are kept in a LRU list that is scanned to keep cache
+  size under control.
+
+On the MDT, lu_object is wrapped into struct md_object where additional state
+that all server-side objects have is stored. Similarly, on a client, lu_object
+and lu_object_header are embedded into struct cl_object and struct
+cl_object_header where additional client state is stored.
+
+cl_object_header contains following additional state:
+
+- ->coh_tree: a radix tree of cached pages for this object. In this tree pages
+  are indexed by their logical offset from the beginning of this object. This
+  tree is protected by ->coh_page_guard spin-lock;
+
+- ->coh_locks: a double-linked list of all locks for this object. Locks in all
+  possible states (see Locks section below) reside in this list without any
+  particular ordering.
+
+3.2. Top-object, Sub-object
+===========================
+
+An important distinction from the server side, where md_object and dt_object
+are used, is that cl_object "fans out" at the LOV level: depending on the file
+layout, a single file is represented as a set of "sub-objects" (stripes). At
+the implementation level, struct lov_object contains an array of cl_objects.
+Each sub-object is a full-fledged cl_object, having its FID and living in the
+LRU and hash table. Each sub-object has its own radix tree of pages, and its
+own list of locks.
+
+This leads to the next important difference with the server side: on the
+client, it's quite usual to have objects with the different sequence of layers.
+For example, typical top-object is composed of the following layers:
+
+- VVP
+- LOV
+
+whereas its sub-objects are composed of layers:
+
+- LOVSUB
+- OSC
+
+Here "LOVSUB" is a mostly dummy layer, whose purpose is to keep track of the
+object-subobject relationship:
+
+                  cl_object_header-+--->radix tree of pages
+                          |        |
+                          V        +--->list of locks
+           inode<----ccc_object
+                          |
+                          V
+                     lov_object
+                          |
+                  +---+---+---+---+
+                  |   |   |   |   |
+                  V   |   |   |   |
+     cl_object_header |   .   .   .
+           |          |   .   .   .
+           |          V
+           .  cl_object_header-+--->radix tree of pages
+                      |        |
+                      V        +--->list of locks
+                lovsub_object
+                      |
+                      V
+                 osc_object
+
+Sub-objects are not cached independently: when top-object is about to be
+discarded from the memory, all its sub-objects are torn-down and destroyed too.
+
+3.3. Object Operations
+======================
+
+In addition to the lu_object_operations vector, each cl_object slice has
+cl_object_operations. lu_object_operations deals with object creation and
+destruction of objects. Client specific cl_object_operations fall into two
+categories:
+
+- Creation of dependent entities: these are ->coo_{page,lock,io}_init()
+  methods called at every layer when a new page, lock or IO context are being
+  created, and
+
+- Object attributes: ->coo_attr_{get,set}() methods that are called to get or
+  set common client object attributes (struct cl_attr): size, [mac]times, etc.
+
+3.4. Object Attributes
+======================
+
+A cl_object has a set of attributes defined by struct cl_attr. Attributes
+include object size, object known-minimum-size (KMS), access, change and
+modification times and ownership identifiers. Description of KMS is beyond the
+scope of this document, refer to the (non-)existent Lustre documentation on the
+subject.
+
+Both top-objects and sub-objects have attributes. Consistency of the attributes
+is protected by a lock on the top-object, accessible through
+cl_object_attr_{un,}lock() calls. This allows a sub-object and its top-object
+attributes to be changed atomically.
+
+Attributes are accessible through cl_object_attr_{g,s}et() functions that call
+per-layer ->coo_attr_{s,g}et() object methods. Top-object attributes are
+calculated from the sub-object ones by lov_attr_get() that optimizes for the
+case when none of sub-object attributes have changed since the last call to
+lov_attr_get().
+
+As a further potential optimization, one can recalculate top-object attributes
+at the moment when any sub-object attribute is changed. This would allow to
+avoid collecting cumulative attributes over all sub-objects. To implement this
+optimization _all_ changes of sub-object attributes must go through
+cl_object_attr_set().
+
+============
+= 4. Pages =
+============
+
+A cl_page represents a portion of a file, cached in the memory. All pages of
+the given file are of the same size, and are kept in the radix tree hanging off
+the cl_object_header.
+
+A cl_page is associated with a VM page of the hosting environment (struct page
+in the Linux kernel, for example), cfs_page_t. It is assumed that this
+association is implemented by one of cl_page layers (top layer in the current
+design) that
+
+- intercepts per-VM-page call-backs made by the host environment (e.g., memory
+  pressure),
+
+- translates state (page flag bits) and locking between lustre and the host
+  environment.
+
+The association between cl_page and cfs_page_t is immutable and established
+when cl_page is created. It is possible to imagine a setup where different
+pages get their backing VM buffers from different sources. For example, in the
+case if pNFS export, some pages might be backed by local DMU buffers, while
+others (representing data in remote stripes), by normal VM pages.
+
+4.1. Page Indexing
+==================
+
+Pages within a given object are linearly ordered. The page index is stored in
+the ->cpo_index field. In a typical Lustre setup, a top-object has an array of
+sub-objects, and every page in a top-object corresponds to a page in one of its
+sub-objects. This second page (a sub-page of a first), is a first class
+cl_page, and, in particular, it is inserted into the sub-object's radix tree,
+where it is indexed by its offset within the sub-object. Sub-page and top-page
+are linked together through the ->cp_child and ->cp_parent fields in struct
+cl_page:
+
+                       +------>radix tree of pages
+                       |                  /|\
+                       |                 /.|.\
+                       |                 ..V..
+           cl_object_header<------------cl_page<-----------------+
+                   |          ->cp_obj     |                     |
+                   V                       V                     |
+    inode<----ccc_object<---------------ccc_page---->cfs_page_t  |
+                   |        ->cpl_obj      |                     |
+                   V                       V                     | ->cp_child
+              lov_object<---------------lov_page                 |
+                   |        ->cpl_obj                            | ->cp_parent
+           +---+---+---+---+                                     |
+           |   |   |   |   |                                     |
+           .   |   .   .   .                                     |
+               |                                                 |
+               |   +------>radix tree of pages                   |
+               |   |                       /|\                   |
+               |   |                      /.|.\                  |
+               V   |                      ..V..                  |
+       cl_object_header<-----------------cl_page<----------------+
+               |            ->cp_obj        |
+               V                            V
+         lovsub_object<-----------------lovsub_page
+               |            ->cpl_obj       |
+               V                            V
+          osc_object<--------------------osc_page
+                            ->cpl_obj
+
+4.2. Page Ownership
+===================
+
+A cl_page can be "owned" by a particular cl_io (see below), guaranteeing this
+IO an exclusive access to this page with regard to other IO attempts and
+various events changing page state (such as transfer completion, or eviction of
+the page from memory). Note, that in general a cl_io cannot be identified with
+a particular thread, and page ownership is not exactly equal to the current
+thread holding a lock on the page. The layer implementing the association
+between cl_page and cfs_page_t has to implement ownership on top of available
+synchronization mechanisms.
+
+While the Lustre client maintains the notion of page ownership by IO, the
+hosting MM/VM usually has its own page concurrency control mechanisms. For
+example, in Linux, page access is synchronized by the per-page PG_locked
+bit-lock, and generic kernel code (generic_file_*()) takes care to acquire and
+release such locks as necessary around the calls to the file system methods
+(->readpage(), ->prepare_write(), ->commit_write(), etc.). This leads to the
+situation when there are two different ways to own a page in the client:
+
+- Client code explicitly and voluntary owns the page (cl_page_own());
+
+- The hosting VM locks a page and then calls the client, which has to "assume"
+  ownership from the VM (cl_page_assume()).
+
+Dual methods to release ownership are cl_page_disown() and cl_page_unassume().
+
+4.3. Page Transfer Locking
+==========================
+
+cl_page implements a simple locking design: as noted above, a page is protected
+by a VM lock while IO owns it. The same lock is kept while the page is in
+transfer.  Note that this is different from the standard Linux kernel behavior
+where page write-out is protected by a lock (PG_writeback) separate from VM
+lock (PG_locked). It is felt that this single-lock design is more portable and,
+moreover, Lustre cannot benefit much from a separate write-out lock due to LDLM
+locking.
+
+4.4. Page Operations
+====================
+
+See documentation for cl_object.h:cl_page_operations. See cl_page state
+descriptions in documentation for cl_object.h:cl_page_state.
+
+============
+= 5. Locks =
+============
+
+A struct cl_lock represents an extent lock on cached file or stripe data.
+cl_lock is used only to maintain distributed cache coherency and provides no
+intra-node synchronization. It should be noted that, as with other Lustre DLM
+locks, cl_lock is actually a lock _request_, rather than a lock itself.
+
+As locks protect cached data, and the unit of data caching is a page, locks are
+of page granularity.
+
+5.1. Lock Life Cycle
+====================
+
+Locks for a given file are cached in a per-file doubly linked list. The overall
+lock life cycle is as following:
+
+- The lock is created in the CLS_NEW state. At this moment the lock doesn't
+  actually protect anything;
+
+- The Lock is enqueued, that is, sent to server, passing through the
+  CLS_QUEUING state. In this state multiple network communications with
+  multiple servers may occur;
+
+- Once fully enqueued, the lock moves into the CLS_ENQUEUED state where it
+  waits for a final reply from the server or servers;
+
+- When a reply granting this lock is received, the lock moves into the CLS_HELD
+  state. In this state the lock protects file data, and pages in the lock
+  extent can be cached (and dirtied for a write lock);
+
+- When the lock is not actively used, it is `unused' and, moving through the
+  CLS_UNLOCKING state, lands in the CLS_CACHED state. In this state the lock
+  still protects cached data. The difference with CLS_HELD state is that a lock
+  in the CLS_CACHED state can be cancelled;
+
+- Ultimately, the lock is either cancelled, or destroyed without cancellation.
+  In any case, it is moved in CLS_FREEING state and eventually freed.
+
+  A lock can be cancelled by a client either voluntarily (in reaction to memory
+  pressure, by explicit user request, or as part of early cancellation), or
+  involuntarily, when a blocking AST arrives.
+
+  A lock can be destroyed without cancellation when its object is destroyed
+  (there should be no cached data at this point), or during eviction (when
+  cached data are invalid);
+
+- If an unrecoverable error occurs at any point (e.g., due to network timeout,
+  or a server's refusal to grant a lock), the lock is moved into the
+  CLS_FREEING state.
+
+The description above matches the slow IO path. In the common fast path there
+is already a cached lock covering the extent which the IO is against. In this
+case, the cl_lock_find() function finds the cached lock. If the found lock is
+in the CLS_HELD state, it can be used for IO immediately. If the found lock is
+in CLS_CACHED state, it is removed from the cache and transitions to CLS_HELD.
+If the lock is in the CLS_QUEUING or CLS_ENQUEUED state, some other IO is
+currently in the process of enqueuing it, and the current thread helps that
+other thread by continuing the enqueue operation.
+
+The actual process of finding a lock in the cache is in fact more involved than
+the above description, because there are cases when a lock matching the IO
+extent and mode still cannot be used for this IO. For example, locks covering
+multiple stripes cannot be used for regular IO, due to the danger of cascading
+evictions. For such situations, every layer can optionally define
+cl_lock_operations::clo_fits_into() method that might declare a given lock
+unsuitable for a given IO. See lov_lock_fits_into() as an example.
+
+5.2. Top-lock and Sub-locks
+===========================
+
+A top-lock protects cached pages of a top-object, and is based on a set of
+sub-locks, protecting cached pages of sub-objects:
+
+                    +--------->list of locks
+                    |                   |
+                    |                   V
+        cl_object_header<------------cl_lock
+                |          ->cld_obj    |
+                V                       V
+           ccc_object<---------------ccc_lock
+                |          ->cls_obj    |
+                V                       V
+           lov_object<---------------lov_lock
+                |          ->cls_obj    |
+        +---+---+---+---+           +---+---+---+---+
+        |   |   |   |   |           |   |   |   |   |
+        .   |   .   .   .           .   .   .   |   .
+            |                                   |
+            |   +-------------->list of locks   |
+            |   |                           |   |
+            V   |                           V   V
+    cl_object_header<----------------------cl_lock
+            |              ->cp_obj           |
+            V                                 V
+      lovsub_object<---------------------lovsub_lock
+            |              ->cls_obj          |
+            V                                 V
+       osc_object<------------------------osc_lock
+                           ->cls_obj
+
+When a top-lock is created, it creates sub-locks based on the striping method
+(RAID0 currently). Sub-locks are `created' in the same manner as top-locks: by
+calling cl_lock_find() function to go through the lock cache. To enqueue a
+top-lock all of its sub-locks have to be enqueued also, with ordering
+constraints defined by enqueue options:
+
+- To enqueue a regular top-lock, each sub-lock has to be enqueued and granted
+  before the next one can be enqueued. This is necessary to avoid deadlock;
+
+- For `try-lock' style top-lock (e.g., a glimpse request, or O_NONBLOCK IO
+  locks), requests can be enqueued in parallel, because dead-lock is not
+  possible in this case.
+
+Sub-lock state depends on its top-lock state:
+
+- When top-lock is being enqueued, its sub-locks are in QUEUING, ENQUEUED,
+  or HELD state;
+
+- When a top-lock is in HELD state, its sub-locks are in HELD state too;
+
+- When a top-lock is in CACHED state, its sub-locks are in CACHED state too;
+
+- When a top-lock is in FREEING state, it detaches itself from all sub-locks,
+  and those are usually deleted too.
+
+A sub-lock can be cancelled while its top-lock is in CACHED state. To maintain
+an invariant that CACHED lock is immediately ready for re-use by IO, the
+top-lock is moved into NEW state. The next attempt to use this lock will
+enqueue it again, resulting in the creation and enqueue of any missing
+sub-locks.  As follows from the description above, the top-lock provides
+somewhat weaker guarantees than one might expect:
+
+- Some of its sub-locks can be missing, and
+
+- Top-lock does not necessarily protect the whole of its extent.
+
+In other words, a top-lock is potentially porous, and in effect, it is just a
+hint, describing what sub-locks are likely to exist. Nonetheless, in the most
+important cases of a file per client, and of clients working in the disjoint
+areas of a shared file this hint is precise.
+
+5.3. Lock State Machine
+=======================
+
+A cl_lock is a state machine. This requires some clarification. One of the
+goals of CLIO is to make IO path non-blocking, or at least to make it easier to
+make it non-blocking in the future. Here `non-blocking' means that when a
+system call (read, write, truncate) reaches a situation where it has to wait
+for a communication with the server, it should--instead of waiting--remember
+its current state and switch to some other work. That is, instead of waiting
+for a lock enqueue, the client should proceed doing IO on the next stripe, etc.
+Obviously this is rather radical redesign, and it is not planned to be fully
+implemented at this time. Instead we are putting some infrastructure in place
+that would make it easier to do asynchronous non-blocking IO in the future.
+Specifically, where the old locking code goes to sleep (waiting for enqueue,
+for example), the new code returns cl_lock_transition::CLO_WAIT. When the
+enqueue reply comes, its completion handler signals that the lock state-machine
+is ready to move to the next state. There is some generic code in cl_lock.c
+that sleeps, waiting for these signals. As a result, for users of this
+cl_lock.c code, it looks like locking is done in the normal blocking fashion,
+and at the same time it is possible to switch to the non-blocking locking
+(simply by returning cl_lock_transition::CLO_WAIT from cl_lock.c functions).
+
+For a description of state machine states and transitions see enum
+cl_lock_state.
+
+There are two ways to restrict a set of states which a lock might move to:
+
+- Placing a "hold" on a lock guarantees that the lock will not be moved into
+  cl_lock_state::CLS_FREEING state until the hold is released. A hold can only
+  be acquired on a lock that is not in cl_lock_state::CLS_FREEING. All holds on
+  a lock are counted in cl_lock::cll_holds. A hold protects the lock from
+  cancellation and destruction. Requests to cancel and destroy a lock on hold
+  will be recorded, but only honoured when the last hold on a lock is released;
+
+- Placing a "user" on a lock guarantees that lock will not leave the set of
+  states cl_lock_state::CLS_NEW, cl_lock_state::CLS_QUEUING,
+  cl_lock_state::CLS_ENQUEUED and cl_lock_state::CLS_HELD, once it enters this
+  set. That is, if a user is added onto a lock in a state not from this set, it
+  doesn't immediately force the lock to move to this set, but once the lock
+  enters this set it will remain there until all users are removed. Lock users
+  are counted in cl_lock::cll_users.
+
+  A user is used to assure that the lock is not cancelled or destroyed while it
+  is being enqueued or actively used by some IO.
+
+  Currently, a user always comes with a hold (cl_lock_invariant() checks that a
+  number of holds is not less than a number of users).
+
+Lock "users" are used by the top-level IO code to guarantee that a lock is not
+cancelled when IO it protects is going on. Lock "holds" are used by a top-lock
+(LOV code) to guarantee that its sub-locks are in an expected state.
+
+5.4. Lock Concurrency
+=====================
+
+The following describes how the lock state-machine operates. The fields of
+struct cl_lock are protected by the cl_lock::cll_guard mutex.
+
+- The mutex is taken, and cl_lock::cll_state is examined.
+
+- For every state there are possible target states which the lock can move
+  into. They are tried in order. Attempts to move into the next state are
+  done by _try() functions in cl_lock.c:cl_{enqueue,unlock,wait}_try().
+
+- If the transition can be performed immediately, the state is changed and the
+  mutex is released.
+
+- If the transition requires blocking, the _try() function returns
+  cl_lock_transition::CLO_WAIT. The caller unlocks the mutex and goes to sleep,
+  waiting for the possibility of a lock state change. It is woken up when some
+  event occurs that makes lock state change possible (e.g., the reception of
+  the reply from the server), and repeats the loop.
+
+Top-lock and sub-lock have separate mutices and the latter has to be taken
+first to avoid deadlock.
+
+To see an example of interaction of all these issues, take a look at the
+lov_cl.c:lov_lock_enqueue() function. It is called as part of cl_enqueue_try(),
+and tries to advance top-lock to the ENQUEUED state by advancing the
+state-machines of its sub-locks (lov_lock_enqueue_one()). Note also that it
+uses trylock to take the sub-lock mutex to avoid deadlock. It also has to
+handle CEF_ASYNC enqueue, when sub-locks enqueues have to be done in parallel
+(this is used for glimpse locks which cannot deadlock).
+
+              +------------------>NEW
+              |                    |
+              |                    | cl_enqueue_try()
+              |                    |
+              |    cl_unuse_try()  V
+              |  +--------------QUEUING (*)
+              |  |                 |
+              |  |                 | cl_enqueue_try()
+              |  |                 |
+              |  | cl_unuse_try()  V
+     sub-lock |  +-------------ENQUEUED (*)
+    cancelled |  |                 |
+              |  |                 | cl_wait_try()
+              |  |                 |
+              |  |                 V
+              |  |                HELD<---------+
+              |  |                 |            |
+              |  |                 |            |
+              |  | cl_unuse_try()  |            |
+              |  |                 |            |
+              |  |                 V            | cached
+              |  +------------>UNLOCKING (*)    | lock found
+              |                    |            |
+              |    cl_unuse_try()  |            |
+              |                    |            |
+              |                    |            | cl_use_try()
+              |                    V            |
+              +------------------CACHED---------+
+                                   |
+                              (Cancelled)
+                                   |
+                                   V
+                                FREEING
+
+5.5. Shared Sub-locks
+=====================
+
+For various reasons, the same sub-lock can be shared by multiple top-locks. For
+example, a large sub-lock can match multiple small top-locks. In general, a
+sub-lock keeps a list of all its parents, and propagates certain events to
+them, e.g., as described above, when a sub-lock is cancelled, it moves _all_ of
+its top-locks from CACHED to NEW state.
+
+This leads to a curious situation, when an operation on some top-lock (e.g.,
+enqueue), changes state of one of its sub-locks, and this change has to be
+propagated to the other top-locks of this sub-lock. The resulting locking
+pattern is top->bottom->top, which is obviously not deadlock safe. To avoid
+deadlocks, try-locking is used in such situations. See
+cl_object.h:cl_lock_closure documentation for details.
+
+5.6. Use Case: Lock Invalidation
+================================
+
+To demonstrate how objects, pages and lock data-structures interact, let's look
+at the example of stripe lock invalidation.
+
+Imagine that on the client C0 there is a file object F, striped over stripes
+S0, S1 and S2 (files and stripes are represented by cl_object_header). Further,
+there is a write lock LF, for the extent [a, b] (recall that lock extents are
+measured in pages) of file F. This lock is based on write sub-locks LS0, LS1
+and LS2 for the corresponding extents of S0, S1 and S2 respectively.
+
+All locks are in CACHED state. Each LSi sub-lock has a osc_lock slice, where a
+pointer to the struct ldlm_lock is stored. The ->l_ast_data field of ldlm_lock
+points back to the sub-lock's osc_lock.
+
+The client caches clean and dirty pages for F, some in [a, b] and some outside
+of it (these latter are necessarily covered by some other locks). Each of these
+pages is in F's radix tree, and points through cl_page::cp_child to a sub-page
+which is in radix-tree of one of Si's.
+
+Some other client requests a lock that conflicts with LS1. The OST where S1
+lives, sends a blocking AST to C0.
+
+C0's LDLM invokes lock->l_blocking_ast(), which is osc_ldlm_blocking_ast(),
+which eventually calls acquires a mutex on the sub-lock and calls
+cl_lock_cancel(sub-lock). cl_lock_cancel() ascends through sub-lock's slices
+(which are osc_lock and lovsub_lock), calling ->clo_cancel() method at every
+stripe, that is, calling osc_lock_cancel() (the LOVSUB layer doesn't define
+->clo_cancel()).
+
+osc_lock_cancel() calls cl_lock_page_out() to invalidate all pages cached under
+this lock after sending dirty ones back to stripe S1's server.
+
+To do this, cl_lock_page_out() obtains the sub-lock's object and sweeps through
+its radix tree from the starting to ending offset of the sub-lock (recall that
+a sub-lock extent is measured in page offsets within a sub-object). For every
+page thus found cl_page_unmap() function is called to invalidate it. This
+function goes through sub-page slices bottom-to-top, then follows ->cp_parent
+pointer to go to the top-page and repeats the same process. Eventually
+vvp_page_unmap() is called which unmaps a page (top-page by this time) from the
+page tables.
+
+After a page is invalidated, it is prepared for transfer if it is dirty. This
+step also includes a bottom-to-top scan of the page and top-page slices, and
+calls to ->cpo_prep() methods at each layer, allowing vvp_page_prep_write() to
+announce to the VM that the VM page is being written.
+
+Once all pages are written, they are removed from radix-trees and destroyed.
+This completes invalidation of a sub-lock, and osc_lock_cancel() exits.  Note
+that:
+
+- No special cancellation logic for the top-lock is necessary;
+
+- Specifically, VVP knows nothing about striping and there is no need to
+  handle the case where only part of the top-lock is cancelled;
+
+- There is no need to convert between file and stripe offsets during this
+  process;
+
+- There is no need to keep track of locks protecting the given page.
+
+=========
+= 6. IO =
+=========
+
+An IO context (struct cl_io) is a layered object describing the state of an
+ongoing IO operation (such as a system call).
+
+6.1. Fixed IO Types
+===================
+
+There are two classes of IO contexts, represented by cl_io:
+
+- An IO for a specific type of client activity, enumerated by enum cl_io_type:
+
+        . CIT_READ: read system call including read(2), readv(2), pread(2),
+          sendfile(2);
+        . CIT_WRITE: write system call;
+        . CIT_TRUNC: truncate system call;
+        . CIT_FAULT: page fault handling;
+
+- A `catch-all' CIT_MISC IO type for all other IO activity:
+
+        . cancellation of an extent lock,
+        . VM induced page write-out,
+        . glimpse,
+        . other miscellaneous stuff.
+
+The difference between CIT_MISC and other IO types is that CIT_MISC IO is
+merely a context in which pages are owned and locks are enqueued, whereas
+other IO types, in addition to being a context, are also state machines.
+
+6.2. IO State Machine
+=====================
+
+The idea behind the cl_io state machine is that initial `work' that has to be
+done (e.g., writing a 3MB user buffer into a given file) is done as a sequence
+of `iterations', and an iteration is executed as following an idiomatic
+sequence of steps:
+
+- Prepare: determine what work is to be done at this iteration;
+
+- Lock: enqueue and acquire all locks necessary to perform this iteration;
+
+- Start: either perform iteration work synchronously, or post it
+  asynchronously, or both;
+
+- End: wait for the completion of asynchronous work;
+
+- Unlock: release locks, acquired at the "lock" step;
+
+- Finalize: finalize iteration state.
+
+cl_io is a layered entity and each step above is performed by invoking the
+corresponding cl_io_operations method on every layer. As will be explained
+below, this is especially important in the `prepare' step, as it allows layers
+to cooperate in determining the scope of the current iteration.
+
+For CIT_READ or CIT_WRITE IO, a typical scenario is splitting the original user
+buffer into chunks that map completely inside of a single stripe in the target
+file, and processing each chunk as a separate iteration. In this case, it is
+the LOV layer that (in lov_io_rw_iter_init() function) determines the extent of
+the current iteration.
+
+Once the iteration is prepared, the `lock' step acquires all necessary DLM
+locks to cover the region of a file that is affected by the current iteration.
+The `start' step does the actual processing, which for write means placing
+pages from the user buffer into the cache, and for read means fetching pages
+from the server, including read-ahead pages (see `immediate transfer' below).
+Truncate and page fault are executed in one iteration (currently that is, it's
+easy to change truncate implementation to, for instance, truncate each stripe
+in a separate iteration, should the need arise).
+
+6.3. Parallel IO
+================
+
+One important planned generalization of this model is an out of order execution
+of iterations.
+
+A motivating example for this is a write of a large user level buffer,
+overlapping with multiple stripes. Typically, a busy Lustre client has its
+per-OSC caches for the dirty pages nearly full, which means that the write
+often has to block, waiting for the cache to drain. Instead of blocking the
+whole IO operation, CIT_WRITE might switch to the next stripe and try to do IO
+there.  Without such a `non-blocking' IO, a slow OST or an unfair network
+degrades the performance of the whole cluster.
+
+Another example is a legacy single-threaded application running on a multi-core
+client machine, where IO throughput is limited by the single thread copying
+data between the user buffer to the kernel pages. Multiple concurrent IO
+iterations that can be scheduled independently on the available processors
+eliminate this bottleneck by copying the data in parallel.
+
+Obviously, parallel IO is not compatible with the usual `sequential IO'
+semantics. For example, POSIX read and write have a very simple failure model,
+where some initial (possibly empty) segment of a user buffer is processed
+successfully, and none of the remaining bytes were read and written. Parallel
+IO can fail in much more complex ways.
+
+For now, only sequential iterations are supported.
+
+6.4. Data-flow: From Stack to IO Slice
+======================================
+
+The parallel IO design outlined above implies that an ongoing IO can be
+preempted by other IO and later resumed, all potentially in the same thread.
+This means that IO state cannot be kept on a stack, as it is customarily done
+in UNIX file system drivers. Instead, the layered cl_io is used to store
+information about the current iteration and progress within it.  Coincidentally
+(almost) this is similar to the way IO requests are used by the Windows driver
+stack.
+
+A set of common fields in struct cl_io describe the IO and are shared by all
+layers.  Important properties so described include:
+
+- The IO type;
+
+- A file (struct cl_object) against which this IO is executed;
+
+- A position in a file where the read or write is taking place, and a count of
+  bytes remaining to be processed (for CIT_READ and CIT_WRITE);
+
+- A size to which file is being truncated or expanded (for CIT_TRUNC);
+
+- A list of locks acquired for this IO;
+
+Each layer keeps IO state in its `IO slice', described below, with all slices
+chained to the list hanging off of struct cl_io:
+
+- vvp_io, ccc_io: these two slices are used by the top-most layer of the Linux
+  kernel client. ccc_io is a state common between kernel client and liblustre,
+  and vvp_io is a state private to the kernel client.
+
+  The most important state in ccc_io is an array of struct iovec, describing
+  user space buffers from or to which IO is taking place. Note that other
+  layers in the IO stack have no idea that data actually came from user space.
+
+  vvp_io contains kernel specific fields, such as VM information describing a
+  page fault, or the sendfile target.
+
+- lov_io: IO state private for the LOV layer is kept here. The most important IO
+  state at the LOV layer is an array of sub-IO's. Each sub-IO is a normal
+  struct cl_io, representing a part of the IO process for a given iteration.
+  With current sequential iterations, only one sub-IO is active at a time.
+
+- osc_io: this slice stores IO state private to the OSC layer that exists within
+  each sub-IO created by LOV.
+
+===============
+= 7. Transfer =
+===============
+
+7.1. Immediate vs. Opportunistic Transfers
+==========================================
+
+There are two possible modes of transfer initiation on the client:
+
+- Immediate transfer: this is started when a high level IO wants a page or a
+  collection of pages to be transferred right away. Examples: read-ahead,
+  a synchronous read in the case of non-page aligned write, page write-out as
+  part of an extent lock cancellation, page write-out as a part of memory
+  cleansing. Immediate transfer can be both cl_req_type::CRT_READ and
+  cl_req_type::CRT_WRITE;
+
+- Opportunistic transfer (cl_req_type::CRT_WRITE only), that happens when IO
+  wants to transfer a page to the server some time later, when it can be done
+  efficiently. Example: pages dirtied by the write(2) path. Pages submitted for
+  an opportunistic transfer are kept in a "staging area".
+
+In any case, a transfer takes place in the form of a cl_req, which is a
+representation for a network RPC.
+
+Pages queued for an opportunistic transfer are placed into a staging area
+(represented as a set of per-object and per-device queues at the OSC layer)
+until it is decided that an efficient RPC can be composed of them. This
+decision is made by "a req-formation engine", currently implemented as part of
+the OSC layer. Req-formation depends on many factors: the size of the resulting
+RPC, RPC alignment, whether or not multi-object RPCs are supported by the
+server, max-RPC-in-flight limitations, size of the staging area, etc. CLIO uses
+unmodified RPC formation logic from OSC, so it is not discussed here.
+
+For an immediate transfer the IO submits a cl_page_list which the req-formation
+engine slices into cl_req's, possibly adding cached pages to some of the
+resulting req's.
+
+Whenever a page from cl_page_list is added to a newly constructed req, its
+cl_page_operations::cpo_prep() layer methods are called. At that moment, the
+page state is atomically changed from cl_page_state::CPS_OWNED to
+cl_page_state::CPS_PAGEOUT or cl_page_state::CPS_PAGEIN, cl_page::cp_owner is
+zeroed, and cl_page::cp_req is set to the req. cl_page_operations::cpo_prep()
+method at a particular layer might return -EALREADY to indicate that it does
+not need to submit this page at all. This is possible, for example, if a page
+submitted for read became up-to-date in the meantime; and for write, if the
+page don't have dirty bit set. See cl_io_submit_rw() for details.
+
+Whenever a staged page is added to a newly constructed req, its
+cl_page_operations::cpo_make_ready() layer methods are called. At that moment,
+the page state is atomically changed from cl_page_state::CPS_CACHED to
+cl_page_state::CPS_PAGEOUT, and cl_page::cp_req is set to req. The
+cl_page_operations::cpo_make_ready() method at a particular layer might return
+-EAGAIN to indicate that this page is not currently eligible for the transfer.
+
+The RPC engine guarantees that once the ->cpo_prep() or ->cpo_make_ready()
+method has been called, the page completion routine (->cpo_completion() layer
+method) will eventually be called (either as a result of successful page
+transfer completion, or due to timeout).
+
+To summarize, there are two main entry points into transfer sub-system:
+
+- cl_io_submit_rw(): submits a list of pages for immediate transfer;
+
+- cl_page_cache_add(): places a page into staging area for future
+  opportunistic transfer.
+
+7.2. Page Lists
+===============
+
+To submit a group of pages for immediate transfer struct cl_2queue is used. It
+contains two page lists: qin (input queue) and qout (output queue). Pages are
+linked into these queues by cl_page::cp_batch list heads. Qin is populated with
+the pages to be submitted to the transfer, and pages that were actually
+submitted are placed onto qout. Not all pages from qin might end up on qout due
+to
+
+- ->cpo_prep() methods deciding that page should not be transferred, or
+
+- unrecoverable submission error.
+
+Pages not moved to qout remain on qin. It is up to the transfer submitter to
+decide when to remove pages from qin and qout. Remaining pages on qin are
+usually removed from this list right after (partially unsuccessful) transfer
+submission. Pages are usually left on qout until transfer completion. This way
+the caller can determine when all pages from the list were transferred.
+
+The association between a page and an immediate transfer queue is protected by
+cl_page::cl_mutex. This mutex is acquired when a cl_page is added in a
+cl_page_list and released when a page is removed from the list.
+
+When an RPC is formed, all of its constituent pages are linked together through
+cl_page::cp_flight list hanging off of cl_req::crq_pages. Pages are removed
+from this list just before the transfer completion method is invoked. No
+special lock protects this list, as pages in transfer are under a VM lock.
+
+7.3. Transfer States: Prepare, Completion
+=========================================
+
+The transfer (cl_req) state machine is trivial, and it is not explicitly coded.
+A newly created transfer is in the "prepare" state while pages are collected.
+When all pages are gathered, the transfer enters the "in-flight" state where it
+remains until it reaches the "completion" state where page completion handlers
+are invoked.
+
+The per-layer ->cro_prep() transfer method is called when transfer preparation
+is completed and transfer is about to enter the in-flight state. Similarly, the
+per-layer ->cro_completion() method is called when the transfer completes
+before per-page completion methods are called.
+
+Additionally, before moving a transfer out of the prepare state, the RPC engine
+calls the cl_req_attr_set() function.  This function invokes ->cro_attr_set()
+methods on every layer to fill in RPC header that server uses to determine
+where to get or put data. This replaces the old ->ap_{update,fill}_obdo()
+methods.
+
+Further, cl_req's are not reference counted and access to them is not
+synchronized. This is because they are accessed only by the RPC engine in OSC
+which fully controls RPC life-time, and it uses an internal OSC lock
+(client_obd::cl_loi_list_lock spin-lock) for serialization.
+
+7.4. Page Completion Handlers, Synchronous Transfer
+===================================================
+
+When a transfer completes, cl_req completion methods are called on every layer.
+Then, for every transfer page, per-layer page completion methods
+->cpo_completion() are invoked. The page is still under the VM lock at this
+moment.  Completion methods are called bottom-to-top and it is responsibility
+of the last of them (i.e., the completion method of the top-most layer---VVP)
+to release the VM lock.
+
+Both immediate and opportunistic transfers are asynchronous in the sense that
+control can return to the caller before the transfer completes. CLIO doesn't
+provide a synchronous transfer interface at all and it is up to a particular
+caller to implement it if necessary. The simplest way to wait for the transfer
+completion is wait on a page VM lock. This approach is used implicitly by the
+Linux kernel. There is a case, though, where one wants to do transfer
+completely synchronously without releasing the page VM lock: when
+->prepare_write() method determines that a write goes from a non page-aligned
+buffer into a not up-to-date page, a portion of a page has to be fetched from
+the server. The VM page lock cannot be used to synchronize transfer completion
+in this case, because it is used to mark the page as owned by IO. To handle
+this, VVP attaches struct cl_sync_io to struct vvp_page. cl_sync_io contains a
+number of pages still in IO and a synchronization primitive (struct completion)
+which is signalled when transfer of the last page completes. The VVP page
+completion handler (vvp_page_completion_common()) checks for attached
+cl_sync_io and if it is there, decreases the number of in-flight pages and
+signals completion when that number drops to 0. A similar mechanism is used for
+direct-IO.
+
+=============
+= 8. lu_env =
+=============
+
+8.1. Motivation, Server Environment Usage
+=========================================
+
+lu_env and related data-types (struct lu_context and struct lu_context_key)
+together implement a memory pre-allocation interface that Lustre uses to
+decrease stack consumption without resorting to fully dynamic allocation.
+
+Stack space is severely limited in the Linux kernel. Lustre traditionally
+allocated a lot of automatic variables, resulting in spurious stack overflows
+that are hard to trigger (they usually need a certain combination of driver
+calls and interrupts to happen, making them extremely difficult to reproduce)
+and debug (as stack overflow can easily result in corruption of thread-related
+data-structures in the kernel memory, confusing the debugger).
+
+The simplest way to handle this is to replace automatic variables with calls
+to the generic memory allocator, but
+
+- The generic allocator has scalability problems, and
+
+- Additional code to free allocated memory is needed.
+
+The lu_env interface was originally introduced in the MDS rewrite for Lustre
+2.0 and matches server-side threading model very well. Roughly speaking,
+lu_context represents a context in which computation is executed and
+lu_context_key is a description of per-context data. In the simplest case
+lu_context corresponds to a server thread; then lu_context_key is effectively a
+thread-local storage (TLS). For a similar idea see the user-level pthreads
+interface pthread_key_create().
+
+More formally, lu_context_key defines a constructor-destructor pair and a tags
+bit-mask. When lu_context is initialized (with a given tag bit-mask), a global
+array of all registered lu_context_keys is scanned, constructors for all keys
+with matching tags are invoked and their return values are stored in
+lu_context.
+
+Once lu_context has been initialized, a value of any key allocated for this
+context can be retrieved very efficiently by indexing in the per-context
+array. lu_context_key_get() function is used for this.
+
+When context is finalized, destructors are called for all keys allocated in
+this context.
+
+The typical server usage is to have a lu_context for every server thread,
+initialized when the thread is started. To reduce stack consumption by the
+code running in this thread, a lu_context_key is registered that allocates in
+its constructor a struct containing as fields values otherwise allocated on
+the stack. See {mdt,osd,cmm,mdd}_thread_info for examples. Instead of doing
+
+        int function(args) {
+                /* structure "bar" in module "foo" */
+                struct foo_bar bar;
+                ...
+
+the code roughly does
+
+        struct foo_thread_info {
+                struct foo_bar fti_bar;
+                ...
+        };
+
+        int function(const struct lu_env *env, args) {
+                struct foo_bar *bar;
+                ...
+                bar = &lu_context_key_get(&env->le_ctx, &foo_thread_key)->fti_
+
+etc.
+
+struct lu_env contains 2 contexts:
+
+- le_ctx: this context is embedded in lu_env. By convention, this context is
+  used _only_ to avoid allocations on the stack, and it should never be used to
+  pass parameters between functions or layers. The reason for this restriction
+  is that using contexts for implicit state sharing leads to a code that is
+  difficult to understand and modify.
+
+- le_ses: this is a pointer to a context shared by all threads handling given
+  RPC. Context itself is embedded into struct ptlrpc_request. Currently a
+  request is always processed by a single thread, but this might change in the
+  future in a design where a small pool of threads processes RPCs
+  asynchronously.
+
+Additionally, state kept in env->le_ses context is shared by multiple layers.
+For example, remote user credentials are stored there.
+
+8.2. Client Environment Usage
+=============================
+
+On a client there is a lu_env associated with every thread executing Lustre
+code. Again, it contains &env->le_ctx context used to reduce stack consumption.
+env->le_ses is used to share state between all threads handling a given IO.
+Again, currently an IO is processed by a single thread. env->le_ses is used to
+efficiently allocate cl_io slices ({vvp,lov,osc}_io).
+
+There are three important differences with lu_env usage on the server:
+
+- While on the server there is a fixed pool of threads, any client thread can
+  execute Lustre code. This makes it impractical to pre-allocate and
+  pre-initialize lu_context for every thread. Instead, contexts are constructed
+  on demand and after use returned into a global cache that amortizes creation
+  cost;
+
+- Client call-chains frequentyly cross Lustre-VFS and Lustre-VM boundaries.
+  This means that just passing lu_env as a first parameter to every Lustre
+  function and method is not enough. To work around this problem, a pointer to
+  lu_env is stored in a field in the kernel data-structure associated with the
+  current thread (task_struct::journal_info), from where it is recovered when
+  Lustre code is re-entered from VFS or VM;
+
+- Sometimes client code is re-entered in a fashion that precludes re-use of the
+  higher level lu _env. For example, when a read or write incurs a page fault
+  in the user space buffer memory-mapped from a Lustre file, page fault
+  handling is a separate IO, independent of the already ongoing system call.
+  The Lustre page fault handler allocates a new lu_env (by calling
+  lu_env_get_nested()) in which the nested IO is going on. A similar situation
+  occurs when client DLM lock LRU shrinking code is invoked in the context of a
+  system call.
+
+8.3. Sub-environments
+=====================
+
+As described above, lu_env (specifically, lu_env->le_ses) is used on a client
+to allocate per-IO state, including foo_io data on every layer. This leads to a
+complication at the LOV layer, which maintains multiple sub-IOs. As layers
+below LOV allocate their IO slices in lu_env->le_ses, LOV has to allocate an
+lu_env for every sub-IO and to carefully juggle them when invoking lower layer
+methods. The case of a single IO is optimized by re-using the top-environment.
+
+================
+= 9. Use cases =
+================
+
+9.1. Inode Creation
+===================
+
+Lookup ends up calling ll_update_inode() to setup a new inode with a given
+meta-data descriptor (obtained from the meta-data path). cl_inode_init() calls
+cl_object_find() eventually calling lu_object_find_try() that either finds a
+cl_object in the cache or allocates a new one, calling
+lu_device_operations::ldo_object_{alloc,init}() methods on every layer top to
+bottom. Every layer allocates its private data structure ({vvp,lov}_object) and
+links it into an object header (cl_object_header) by calling lu_object_add().
+At the VVP layer, vvp_object contains a pointer to the inode. The LOV layer
+allocates a lov_object containing an array of pointers to sub-objects that are
+found in the cache or allocated by calling cl_object_find (recursively). These
+sub-objects have LOVSUB and OSC layer data.
+
+A top-object and its sub-objects are inserted into a global FID-based hash
+table and a global LRU list.
+
+9.2. First IO to a File
+=======================
+
+After an object is instantiated as described in the previous use case, the
+first IO call against this object has to create DLM locks. The following
+operations re-use cached locks (see below).
+
+A read call starts at ll_file_readv() which eventually calls
+ll_file_io_generic(). This function calls cl_io_init() to initialize an IO
+context, which calls the cl_object_operations::coo_io_init() method on every
+layer.  As in the case of object instantiation, these methods allocate
+layer-private IO state ({vvp,lov}_io) and add it to the list hanging off of the
+IO context header cl_io by calling cl_io_add(). At the VVP layer, vvp_io_init()
+handles special cases (like count == 0), updates statistic counters, and in the
+case of write it takes a per-inode semaphore to avoid possible deadlock.
+
+At the LOV layer, lov_io_init_raid0() allocates a struct lov_io and stores in
+it the original IO parameters (starting offset and byte count). This is needed
+because LOV is going to modify these parameters. Sub-IOs are not allocated at
+this point---they are lazily instantiated later.
+
+Once the top-IO has been initialized, ll_file_io_generic() enters the main IO
+loop cl_io_loop() that drives IO iterations, going through
+
+- cl_io_iter_init() calling cl_io_operations::cio_iter_init() top-to-bottom
+- cl_io_lock() calling cl_io_operations::cio_lock() top-to-bottom
+- cl_io_start() calling cl_io_operations::cio_start() top-to-bottom
+- cl_io_end() calling cl_io_operations::cio_end() bottom-to-top
+- cl_io_unlock() calling cl_io_operations::cio_unlock() bottom-to-top
+- cl_io_iter_fini() calling cl_io_operations::cio_iter_fini() bottom-to-top
+- cl_io_rw_advance() calling cl_io_operations::cio_advance() bottom-to-top
+
+repeatedly until cl_io::ci_continue remains 0 after an iteration. These "IO
+iterations" move an IO context through consecutive states (see enum
+cl_io_state).  ->cio_iter_init() decides at each layer what part of the
+remaining IO is to be done during current iteration. Currently,
+lov_io_rw_iter_init() is the only non-trivial implementation of this method. It
+does the following:
+
+- Except for the cases of truncate and O_APPEND write, it shrinks the IO extent
+  recorded in the top-IO (starting offset and bytes count) so that this extent
+  is fully contained within a single stripe. This avoids "cascading evictions";
+
+- It allocates sub-IOs for all stripes intersecting with the resulting IO range
+  (which, in case of non-append write or read means creating single sub-io) by
+  calling cl_io_init() that (as above) creates a cl_io context with lovsub_io
+  and osc_io layers. The initialized cl_io is primed from the top-IO
+  (lov_io_sub_inherit()) and cl_io_iter_init() is called against it;
+
+- Finally all sub-ios for the current iteration are linked together into a
+  lov_io::lis_active list.
+
+Now we have a top-IO and its sub-IO in CIS_IT_STARTED state. cl_io_lock()
+collects locks on all layers without actually enqueuing them: vvp_io_rw_lock()
+requests a lock on the IO extent (possibly shrunk by LOV, see above) and
+optionally on extents of Lustre files that happen to be memory-mapped onto the
+user-level buffer used for this IO. In the future layers like SNS might request
+additional locks, e.g., to protect parity blocks.
+
+Locks requested by ->cio_lock() methods are added to the cl_lockset embedded
+into top cl_io. The lockset contains 3 lock queues: "todo", "current" and
+"done".  Locks are initially placed in the todo queue. Once locks from all
+layers have been collected, they are sorted to avoid deadlocks
+(cl_io_locks_sort()) and them enqueued by cl_lockset_lock(). The latter can
+enqueue multiple locks concurrently if the enqueuing mode guarantees this is
+safe (e.g., lock is a try-lock). Locks being enqueued are in the "current"
+queue, from where they are moved into "done" queue when the lock is granted.
+
+At this stage we have top- and sub-IO in the CIS_LOCKED state with all needed
+locks held. cl_io_start() moves cl_io into CIS_IO_GOING mode and calls
+->cio_start() method. In the VVP layer this method invokes some version of
+generic_file_{read,write}() function.
+
+In the case of read, generic_file_read() calls for every non-up-to-date page
+the a_ops->readpage() method that eventually (after obtaining cl_page
+corresponding to the VM page supplied to it) calls cl_io_read_page() which in
+turn calls cl_io_operations::cio_read_page().
+
+vvp_io_read_page() populates a queue by a target page and pages from read-ahead
+window. The resulting queue is then submitted for immediate transfer by calling
+cl_io_submit_rw() which ends up calling osc_io_submit_page() for every
+not-up-to-date page in the queue.
+
+->readpage() returns at this point, and the VM waits on a VM page lock, which
+is released by the transfer completion handler before copying page data to the
+user buffer.
+
+In the case of write, generic_file_write() calls the a_ops->prepare_write() and
+a_ops->commit_write() address space methods that end up calling
+cl_io_prepare_write() and cl_io_commit_write() respectively. These functions
+follow the normal Linux protocol for write, including a possible synchronous
+read of a non-overwritten part of a page (vvp_page_sync_io() call in
+vvp_io_prepare_partial()). In the normal case it ends up placing the dirtied
+page into the staging area (cl_page_cache_add() call in vvp_io_commit_write()).
+If the staging area is full already, cl_page_cache_add() fails with -EDQUOT and
+the page is transferred immediately by calling vvp_page_sync_io().
+
+9.3. Cached IO
+==============
+
+Subsequent IO calls will, most likely, find suitable locks already cached on
+the client. This happens because the server tries to grant as large a lock as
+possible, to reduce future enqueue RPC traffic for a given file from a given
+client. Cached locks are kept (in no particular order) on a
+cl_object_header::coh_locks list. When, in the cl_io_lock() step, a layer
+requests a lock, this list is scanned for a matching lock. If a found lock is
+in the HELD or CACHED state it can be re-used immediately by simply calling
+cl_lock_use() method, which eventually calls ldlm_lock_addref_try() to protect
+the underlying DLM lock from a concurrent cancellation while IO is going on. If
+a lock in another (NEW, QUEUING or ENQUEUED) state is found, it is enqueued as
+usual.
+
+9.4. Lock-less and No-cache IO
+==============================
+
+IO context has a "locking mode" selected from MAYBE, NEVER or MANDATORY set
+(enum cl_io_lock_dmd), that specifies what degree of distributed cache
+coherency is assumed by this IO. MANDATORY mode requires all caches accessed by
+this IO to be protected by distributed locks. In NEVER mode no distributed
+coherency is needed at the expense of not caching the data. This mode is
+required for the cases where client can not or will not participate in the
+cache coherency protocol (e.g., a liblustre client that cannot respond to the
+lock blocking call-backs while in the compute phase). In MAYBE mode some of the
+caches involved in this IO are used and are globally coherent, and some other
+caches are bypassed.
+
+O_APPEND writes and truncates are always executed in MANDATORY mode. All other
+calls are executed in NEVER mode by liblustre (see below) and in MAYBE mode by
+a normal Linux client.
+
+In MAYBE mode every OSC individually decides whether to use DLM. An OST might
+return -EUSERS to an enqueue RPC indicating that the stripe in question is
+contended and that the client should switch to the lockless IO mode. If this
+happens, OSC, instead of using ldlm_lock, creates a special "lockless OSC lock"
+that is not backed up by a DLM lock. This lock conflicts with any other lock in
+its range and self-cancels when its last user is removed. As a result, when IO
+proceeds to the stripe that is in lockless mode, all conflicting extent locks
+are cancelled, purging the cache. When IO against this stripe ends, the lock is
+cancelled, sending dirty pages (just placed in the cache by IO) back to the
+server and invalidating the cache again. "Lockless locks" allow lockless and
+no-cache IO mode to be implemented by the same code paths as cached IO.
+
+* * * END * * *
