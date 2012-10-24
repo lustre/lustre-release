@@ -407,6 +407,10 @@ static void qsd_req_completion(const struct lu_env *env,
 		lqe->lqe_nopreacq = true;
 out:
 	adjust = qsd_adjust_needed(lqe);
+	if (reqbody && req_is_acq(reqbody->qb_flags) && ret != -EDQUOT) {
+		lqe->lqe_acq_rc = ret;
+		lqe->lqe_acq_time = cfs_time_current_64();
+	}
 out_noadjust:
 	qsd_request_exit(lqe);
 	lqe_write_unlock(lqe);
@@ -556,6 +560,14 @@ static int qsd_acquire_remote(const struct lu_env *env,
 		lqe_write_unlock(lqe);
 		LQUOTA_DEBUG(lqe, "No acquire required");
 		RETURN(0);
+	}
+
+	/* check whether an acquire request completed recently */
+	if (lqe->lqe_acq_rc != 0 &&
+	    cfs_time_before_64(cfs_time_shift_64(-1), lqe->lqe_acq_time)) {
+		lqe_write_unlock(lqe);
+		LQUOTA_DEBUG(lqe, "using cached return code %d", lqe->lqe_acq_rc);
+		RETURN(lqe->lqe_acq_rc);
 	}
 
 	/* only 1 quota request in flight for a given ID is allowed */
@@ -898,8 +910,13 @@ int qsd_adjust(const struct lu_env *env, struct lquota_entry *lqe)
 
 	memset(qbody, 0, sizeof(*qbody));
 	rc = qsd_ready(lqe, &qbody->qb_glb_lockh);
-	if (rc)
-		RETURN(rc);
+	if (rc) {
+		/* add to adjust list again to trigger adjustment later when
+		 * slave is ready */
+		LQUOTA_DEBUG(lqe, "delaying adjustment since qsd isn't ready");
+		qsd_adjust_schedule(lqe, true, false);
+		RETURN(0);
+	}
 
 	qqi = lqe2qqi(lqe);
 	qsd = qqi->qqi_qsd;
@@ -909,7 +926,7 @@ int qsd_adjust(const struct lu_env *env, struct lquota_entry *lqe)
 	/* fill qb_count & qb_flags */
 	if (!qsd_calc_adjust(lqe, qbody)) {
 		lqe_write_unlock(lqe);
-		LQUOTA_DEBUG(lqe, "No adjust required");
+		LQUOTA_DEBUG(lqe, "no adjustment required");
 		RETURN(0);
 	}
 

@@ -123,6 +123,12 @@ struct lquota_slv_entry {
 
 	/* time to trigger quota adjust */
 	__u64			lse_adjust_time;
+
+	/* return code of latest acquire RPC */
+	int			lse_acq_rc;
+
+	/* when latest acquire RPC completed */
+	__u64			lse_acq_time;
 };
 
 /* In-memory entry for each enforced quota id
@@ -200,6 +206,8 @@ struct lquota_site {
 #define lqe_usage		u.se.lse_usage
 #define lqe_adjust_time		u.se.lse_adjust_time
 #define lqe_lockh		u.se.lse_lockh
+#define lqe_acq_rc		u.se.lse_acq_rc
+#define lqe_acq_time		u.se.lse_acq_time
 
 #define LQUOTA_BUMP_VER 0x1
 #define LQUOTA_SET_VER  0x2
