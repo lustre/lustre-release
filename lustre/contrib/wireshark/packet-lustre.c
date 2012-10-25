@@ -33,8 +33,8 @@
 #include <epan/packet.h>
 
 #include <epan/dissectors/packet-windows-common.h>
-#include <plugins/lnet/packet-lnet.h>
 
+const true_false_string lnet_flags_set_truth = { "Set", "Unset" };
 
 /* --------------------------------------------------------------------------------------- */
 /* def and macro to know where we are the the lustre payload */
@@ -75,6 +75,79 @@
 #define LOV_MAGIC_V1      0x0BD10BD0
 #define LOV_MAGIC         LOV_MAGIC_V1
 #define LOV_MAGIC_JOIN_V1 0x0BD20BD0
+
+/* defined in lustre/include/lustre/lustre_idl.h */
+typedef enum {
+	CONNMGR_REQUEST_PORTAL = 1,
+	CONNMGR_REPLY_PORTAL = 2,
+	OSC_REQUEST_PORTAL = 3,
+	OSC_REPLY_PORTAL = 4,
+	OSC_BULK_PORTAL = 5,
+	OST_IO_PORTAL = 6,
+	OST_CREATE_PORTAL = 7,
+	OST_BULK_PORTAL = 8,
+	MDC_REQUEST_PORTAL = 9,
+	MDC_REPLY_PORTAL = 10,
+	MDC_BULK_PORTAL = 11,
+	MDS_REQUEST_PORTAL = 12,
+	MDS_REPLY_PORTAL = 13,
+	MDS_BULK_PORTAL = 14,
+	LDLM_CB_REQUEST_PORTAL = 15,
+	LDLM_CB_REPLY_PORTAL = 16,
+	LDLM_CANCEL_REQUEST_PORTAL = 17,
+	LDLM_CANCEL_REPLY_PORTAL = 18,
+	PTLBD_REQUEST_PORTAL = 19,
+	PTLBD_REPLY_PORTAL = 20,
+	PTLBD_BULK_PORTAL = 21,
+	MDS_SETATTR_PORTAL = 22,
+	MDS_READPAGE_PORTAL = 23,
+	MDS_MDS_PORTAL = 24,
+	MGC_REPLY_PORTAL = 25,
+	MGS_REQUEST_PORTAL = 26,
+	MGS_REPLY_PORTAL = 27,
+	OST_REQUEST_PORTAL = 28,
+	FLD_REQUEST_PORTAL = 29,
+	SEQ_METADATA_PORTAL = 30,
+	SEQ_DATA_PORTAL = 31,
+	SEQ_CONTROLLER_PORTAL = 32,
+	MGS_BULK_PORTAL = 33
+} portal_index_t;
+
+static const value_string portal_indices[] = {
+	{ CONNMGR_REQUEST_PORTAL, "CONNMGR_REQUEST_PORTAL"},
+	{ CONNMGR_REPLY_PORTAL , "CONNMGR_REPLY_PORTAL"},
+	{ OSC_REQUEST_PORTAL , "OSC_REQUEST_PORTAL(obsolete)"},
+	{ OSC_REPLY_PORTAL , "OSC_REPLY_PORTAL"},
+	{ OSC_BULK_PORTAL , "OSC_BULK_PORTAL(obsolete)"},
+	{ OST_IO_PORTAL , "OST_IO_PORTAL"},
+	{ OST_CREATE_PORTAL , "OST_CREATE_PORTAL"},
+	{ OST_BULK_PORTAL , "OST_BULK_PORTAL"},
+	{ MDC_REQUEST_PORTAL , "MDC_REQUEST_PORTAL(obsolete)"},
+	{ MDC_REPLY_PORTAL , "MDC_REPLY_PORTAL"},
+	{ MDC_BULK_PORTAL , "MDC_BULK_PORTAL(obsolete)"},
+	{ MDS_REQUEST_PORTAL , "MDS_REQUEST_PORTAL"},
+	{ MDS_REPLY_PORTAL , "MDS_REPLY_PORTAL(obsolete)"},
+	{ MDS_BULK_PORTAL , "MDS_BULK_PORTAL"},
+	{ LDLM_CB_REQUEST_PORTAL , "LDLM_CB_REQUEST_PORTAL"},
+	{ LDLM_CB_REPLY_PORTAL , "LDLM_CB_REPLY_PORTAL"},
+	{ LDLM_CANCEL_REQUEST_PORTAL , "LDLM_CANCEL_REQUEST_PORTAL"},
+	{ LDLM_CANCEL_REPLY_PORTAL , "LDLM_CANCEL_REPLY_PORTAL"},
+	{ PTLBD_REQUEST_PORTAL , "PTLBD_REQUEST_PORTAL(obsolete)"},
+	{ PTLBD_REPLY_PORTAL , "PTLBD_REPLY_PORTAL(obsolete)"},
+	{ PTLBD_BULK_PORTAL , "PTLBD_BULK_PORTAL(obsolete)"},
+	{ MDS_SETATTR_PORTAL , "MDS_SETATTR_PORTAL"},
+	{ MDS_READPAGE_PORTAL , "MDS_READPAGE_PORTAL"},
+	{ MDS_MDS_PORTAL, "MDS_MDS_PORTAL"},
+	{ MGC_REPLY_PORTAL , "MGC_REPLY_PORTAL"},
+	{ MGS_REQUEST_PORTAL , "MGS_REQUEST_PORTAL"},
+	{ MGS_REPLY_PORTAL , "MGS_REPLY_PORTAL"},
+	{ OST_REQUEST_PORTAL , "OST_REQUEST_PORTAL"},
+	{ FLD_REQUEST_PORTAL , "FLD_REQUEST_PORTAL"},
+	{ SEQ_METADATA_PORTAL, "SEQ_METADATA_PORTAL"},
+	{ SEQ_DATA_PORTAL, "SEQ_DATA_PORTAL"},
+	{ SEQ_CONTROLLER_PORTAL, "SEQ_CONTROLLER_PORTAL"},
+	{ MGS_BULK_PORTAL, "MGS_BULK_PORTAL"}
+};
 
 typedef enum {
   OST_REPLY      =  0,       /* reply ? */
@@ -178,15 +251,31 @@ typedef enum {
 #define LDLM_FL_BLOCK_GRANTED                     0x000002
 #define LDLM_FL_BLOCK_CONV                        0x000004
 #define LDLM_FL_BLOCK_WAIT                        0x000008
+#define LDLM_FL_CBPENDING		0x000010
 #define LDLM_FL_AST_SENT                          0x000020
+#define LDLM_FL_WAIT_NOREPROC		0x000040
+#define LDLM_FL_CANCEL			0x000080
 #define LDLM_FL_REPLAY                            0x000100
 #define LDLM_FL_INTENT_ONLY                       0x000200
+#define LDLM_FL_LOCAL_ONLY		0x000400
+#define LDLM_FL_FAILED			0x000800
 #define LDLM_FL_HAS_INTENT                        0x001000
+#define LDLM_FL_CANCELING		0x002000
+#define LDLM_FL_LOCAL			0x004000
+#define LDLM_FL_WARN			0x008000
 #define LDLM_FL_DISCARD_DATA                      0x010000
 #define LDLM_FL_NO_TIMEOUT                        0x020000
 #define LDLM_FL_BLOCK_NOWAIT                      0x040000
 #define LDLM_FL_TEST_LOCK                         0x080000
+#define LDLM_FL_LVB_READY		0x100000
+#define LDLM_FL_KMS_IGNORE		0x200000
+#define LDLM_FL_NO_LRU			0x400000
 #define LDLM_FL_CANCEL_ON_BLOCK                   0x800000
+#define LDLM_FL_CP_REQD			0x1000000
+#define LDLM_FL_CLEANED			0x2000000
+#define LDLM_FL_ATOMIC_CB		0x4000000
+#define LDLM_FL_BL_AST			0x10000000
+#define LDLM_FL_BL_DONE			0x20000000
 #define LDLM_FL_DENY_ON_CONTENTION              0x40000000
 #define LDLM_AST_DISCARD_DATA                   0x80000000
 
@@ -490,7 +579,7 @@ static int hf_lustre_mdt_rec_create_cr_fid2 = -1;
 static int hf_lustre_mdt_rec_create_cr_old_handle = -1;
 static int hf_lustre_mdt_rec_create_cr_time = -1;
 static int hf_lustre_mdt_rec_create_cr_rdev = -1;
-static int hf_lustre_mdt_rec_create_cr_cr_ioepoch = -1;
+static int hf_lustre_mdt_rec_create_cr_ioepoch = -1;
 static int hf_lustre_mdt_rec_create_cr_padding_1 = -1;
 static int hf_lustre_mdt_rec_create_cr_mode = -1;
 static int hf_lustre_mdt_rec_create_cr_bias = -1;
@@ -958,15 +1047,31 @@ const value_string lustre_ldlm_flags_vals[] = {
   {0x000002 , "LDLM_FL_BLOCK_GRANTED"},
   {0x000004 , "LDLM_FL_BLOCK_CONV"},
   {0x000008 , "LDLM_FL_BLOCK_WAIT"},
+	{0x000010 , "LDLM_FL_CBPENDING"},
   {0x000020 , "LDLM_FL_AST_SENT"},
+	{0x000040 , "LDLM_FL_WAIT_NOREPROC"},
+	{0x000080 , "LDLM_FL_CANCEL"},
   {0x000100 , "LDLM_FL_REPLAY"},
   {0x000200 , "LDLM_FL_INTENT_ONLY"},
+	{0x000400 , "LDLM_FL_LOCAL_ONLY"},
+	{0x000800 , "LDLM_FL_FAILED"},
   {0x001000 , "LDLM_FL_HAS_INTENT"},
+	{0x002000 , "LDLM_FL_CANCELING"},
+	{0x004000 , "LDLM_FL_LOCAL"},
+	{0x008000 , "LDLM_FL_WARN"},
   {0x010000 , "LDLM_FL_DISCARD_DATA"},
   {0x020000 , "LDLM_FL_NO_TIMEOUT"},
   {0x040000 , "LDLM_FL_BLOCK_NOWAIT"},
   {0x080000 , "LDLM_FL_TEST_LOCK"},
+	{0x100000 , "LDLM_FL_LVB_READY"},
+	{0x200000 , "LDLM_FL_KMS_IGNORE"},
+	{0x400000 , "LDLM_FL_NO_LRU"},
   {0x800000 , "LDLM_FL_CANCEL_ON_BLOCK"},
+	{0x1000000 , "LDLM_FL_CP_REQD"},
+	{0x2000000 , "LDLM_FL_CLEANED"},
+	{0x4000000 , "LDLM_FL_ATOMIC_CB"},
+	{0x10000000 , "LDLM_FL_BL_AST"},
+	{0x20000000 , "LDLM_FL_BL_DONE"},
   {0x40000000 , "LDLM_FL_DENY_ON_CONTENTION"},
   {0x80000000 , "LDLM_AST_DISCARD_DATA"},
   { 0, NULL }
@@ -1144,6 +1249,28 @@ const value_string lustre_llog_cmd_t_vals[] = {
   { LLOG_ORIGIN_HANDLE_DESTROY, "LLOG_ORIGIN_HANDLE_DESTROY" },
   { 0, NULL }
 };
+
+#ifndef ENABLE_STATIC
+const gchar version[] = VERSION;
+
+/* Start the functions we need for the plugin stuff */
+
+void
+plugin_register(void)
+{
+	extern void proto_register_dcerpc_lustre(void);
+
+	proto_register_dcerpc_lustre();
+}
+
+void
+plugin_reg_handoff(void)
+{
+	extern void proto_reg_handoff_lustre(void);
+
+	proto_reg_handoff_lustre();
+}
+#endif
 
 
 /* ------------------------------------------------------------------- */
@@ -2026,7 +2153,6 @@ lustre_dissect_element_ost_lvb_lvb_atime(tvbuff_t *tvb _U_, int offset _U_, pack
   ns.nsecs=0;
   proto_tree_add_time(tree, hf_lustre_ost_lvb_lvb_atime, tvb, offset, 8, &ns );
   offset+=8;
-  return offset;
 
   return offset;
 }
@@ -2040,7 +2166,6 @@ lustre_dissect_element_ost_lvb_lvb_ctime(tvbuff_t *tvb _U_, int offset _U_, pack
   ns.nsecs=0;
   proto_tree_add_time(tree, hf_lustre_ost_lvb_lvb_ctime, tvb, offset, 8, &ns );
   offset+=8;
-  return offset;
 
   return offset;
 }
@@ -2849,7 +2974,7 @@ lustre_dissect_element_mdt_body_padding_9(tvbuff_t *tvb _U_, int offset _U_, pac
 static int
 lustre_dissect_element_mdt_body_padding_10(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
 {
-  offset=dissect_uin64(tvb, offset, pinfo, tree,  hf_lustre_mdt_body_padding_10);
+  offset= dissect_uint64(tvb, offset, pinfo, tree,  hf_lustre_mdt_body_padding_10);
 
   return offset;
 }
@@ -7993,7 +8118,8 @@ lustre_dissect_element_string (tvbuff_t *tvb _U_, int offset _U_, packet_info *p
   string_len = tvb_get_letohl(tvb, LUSTRE_BUFLEN_OFF + 4 * buf_num) ; /* 4 because a buflen is on a guint32 */
   proto_tree_add_item(parent_tree, hf_index, tvb, offset, string_len, TRUE);
   if(string_len>1)
-    display_info_fstr(parent_tree, pinfo->cinfo, COL_INFO, " filename : %s", tvb_get_string(tvb,offset,string_len) );
+    display_info_fstr(parent_tree, pinfo->cinfo, COL_INFO, " filename : %s",
+			(const gchar *) tvb_get_string(tvb,offset,string_len) );
 
   offset+=string_len;
   proto_item_set_len(item, offset-old_offset);
@@ -8546,9 +8672,13 @@ lustre_llog_opcode_process(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo
         /* [keyword][if keyword=config  [char*] else [nothing]] */
         offset=lustre_dissect_element_string(tvb, offset, pinfo, tree, hf_lustre_llogd_keyword,
             LUSTRE_REQ_REC_OFF);
-        if(strcmp(tvb_get_string(tvb, LUSTRE_REQ_REC_OFF, tvb_get_letohl(tvb,
-                  LUSTRE_BUFLEN_OFF+4*LUSTRE_REQ_REC_OFF)), "config")==0) /*  if(keyword ==
-                                                                              "config") */
+			if (strcmp((const char *)tvb_get_string(tvb,
+					LUSTRE_REQ_REC_OFF,
+					tvb_get_letohl(tvb,
+					LUSTRE_BUFLEN_OFF + 4 *
+					LUSTRE_REQ_REC_OFF)),
+					"config") == 0)
+					/* if(keyword == "config") */
           offset=lustre_dissect_element_string(tvb, offset, pinfo, tree, hf_lustre_llogd_client,
               LUSTRE_REQ_REC_OFF+1);
       }
@@ -9328,21 +9458,24 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_body,
       { "mdt body", "lustre.mdt_body", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL }},
     { &hf_lustre_mdt_body_fid1,
-      { "Fid1", "lustre.mdt_body.fid1", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Fid1", "lustre.mdt_body.fid1", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_body_fid2,
-      { "Fid2", "lustre.mdt_body.fid2", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Fid2", "lustre.mdt_body.fid2", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_body_handle,
-      { "Handle", "lustre.mdt_body.handle", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Handle", "lustre.mdt_body.handle", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_body_valid,
       { "Valid", "lustre.mdt_body.valid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_body_size,
       { "Size", "lustre.mdt_body.size", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_body_mtime,
-      { "Mtime", "lustre.mdt_body.mtime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Mtime", "lustre.mdt_body.mtime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_body_atime,
-      { "Atime", "lustre.mdt_body.atime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Atime", "lustre.mdt_body.atime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_body_ctime,
-      { "Ctime", "lustre.mdt_body.ctime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Ctime", "lustre.mdt_body.ctime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_body_blocks,
       { "Blocks", "lustre.mdt_body.blocks", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_body_ioepoch,
@@ -9419,7 +9552,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_setattr_sa_padding_1_h,
       { "Sa Padding 1 H", "lustre.mdt_rec_setattr.sa_padding_1_h", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_fid,
-      { "Sa Fid", "lustre.mdt_rec_setattr.sa_fid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Sa Fid", "lustre.mdt_rec_setattr.sa_fid", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_setattr_sa_valid,
       { "Sa Valid", "lustre.mdt_rec_setattr.sa_valid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_uid,
@@ -9431,11 +9565,11 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_setattr_sa_blocks,
       { "Sa Blocks", "lustre.mdt_rec_setattr.sa_blocks", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_mtime,
-      { "Sa Mtime", "lustre.mdt_rec_setattr.sa_mtime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Sa Mtime", "lustre.mdt_rec_setattr.sa_mtime",FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_setattr_sa_atime,
-      { "Sa Atime", "lustre.mdt_rec_setattr.sa_atime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Sa Atime", "lustre.mdt_rec_setattr.sa_atime",FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_setattr_sa_ctime,
-      { "Sa Ctime", "lustre.mdt_rec_setattr.sa_ctime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Sa Ctime", "lustre.mdt_rec_setattr.sa_ctime",FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_setattr_sa_attr_flags,
       { "Sa Attr Flags", "lustre.mdt_rec_setattr.sa_attr_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setattr_sa_mode,
@@ -9472,13 +9606,15 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_create_cr_suppgid2_h,
       { "Cr Suppgid2 H", "lustre.mdt_rec_create.cr_suppgid2_h", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_create_cr_fid1,
-      { "Cr Fid1", "lustre.mdt_rec_create.cr_fid1", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Cr Fid1", "lustre.mdt_rec_create.cr_fid1", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_create_cr_fid2,
-      { "Cr Fid2", "lustre.mdt_rec_create.cr_fid2", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Cr Fid2", "lustre.mdt_rec_create.cr_fid2", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_create_cr_old_handle,
-      { "Cr Old Handle", "lustre.mdt_rec_create.cr_old_handle", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Cr Old Handle", "lustre.mdt_rec_create.cr_old_handle", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_create_cr_time,
-      { "Cr Time", "lustre.mdt_rec_create.cr_time",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Cr Time", "lustre.mdt_rec_create.cr_time",FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_create_cr_rdev,
       { "Cr Rdev", "lustre.mdt_rec_create.cr_rdev", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_create_cr_ioepoch,
@@ -9521,11 +9657,14 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_link_lk_suppgid2_h,
       { "Lk Suppgid2 H", "lustre.mdt_rec_link.lk_suppgid2_h", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_link_lk_fid1,
-      { "Lk Fid1", "lustre.mdt_rec_link.lk_fid1", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lk Fid1", "lustre.mdt_rec_link.lk_fid1", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_link_lk_fid2,
-      { "Lk Fid2", "lustre.mdt_rec_link.lk_fid2", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lk Fid2", "lustre.mdt_rec_link.lk_fid2", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_link_lk_time,
-      { "Lk Time", "lustre.mdt_rec_link.lk_time",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Lk Time", "lustre.mdt_rec_link.lk_time",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_link_lk_padding_1,
       { "Lk Padding 1", "lustre.mdt_rec_link.lk_padding_1", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_link_lk_padding_2,
@@ -9570,11 +9709,13 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_unlink_ul_suppgid2_h,
       { "Ul Suppgid2 H", "lustre.mdt_rec_unlink.ul_suppgid2_h", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_unlink_ul_fid1,
-      { "Ul Fid1", "lustre.mdt_rec_unlink.ul_fid1", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Ul Fid1", "lustre.mdt_rec_unlink.ul_fid1", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_unlink_ul_fid2,
-      { "Ul Fid2", "lustre.mdt_rec_unlink.ul_fid2", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Ul Fid2", "lustre.mdt_rec_unlink.ul_fid2", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_unlink_ul_time,
-      { "Ul Time", "lustre.mdt_rec_unlink.ul_time",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Ul Time", "lustre.mdt_rec_unlink.ul_time",FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_unlink_ul_padding_2,
       { "Ul Padding 2", "lustre.mdt_rec_unlink.ul_padding_2", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_unlink_ul_padding_3,
@@ -9619,11 +9760,13 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_rename_rn_suppgid2_h,
       { "Rn Suppgid2 H", "lustre.mdt_rec_rename.rn_suppgid2_h", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_rename_rn_fid1,
-      { "Rn Fid1", "lustre.mdt_rec_rename.rn_fid1", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Rn Fid1", "lustre.mdt_rec_rename.rn_fid1", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_rename_rn_fid2,
-      { "Rn Fid2", "lustre.mdt_rec_rename.rn_fid2", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Rn Fid2", "lustre.mdt_rec_rename.rn_fid2", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_rename_rn_time,
-      { "Rn Time", "lustre.mdt_rec_rename.rn_time",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Rn Time", "lustre.mdt_rec_rename.rn_time",FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_rename_rn_padding_1,
       { "Rn Padding 1", "lustre.mdt_rec_rename.rn_padding_1", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_rename_rn_padding_2,
@@ -9668,7 +9811,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_setxattr_sx_suppgid2_h,
       { "Sx Suppgid2 H", "lustre.mdt_rec_setxattr.sx_suppgid2_h", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setxattr_sx_fid,
-      { "Sx Fid", "lustre.mdt_rec_setxattr.sx_fid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Sx Fid", "lustre.mdt_rec_setxattr.sx_fid", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_setxattr_sx_padding_1,
       { "Sx Padding 1", "lustre.mdt_rec_setxattr.sx_padding_1", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setxattr_sx_padding_2,
@@ -9678,7 +9822,7 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mdt_rec_setxattr_sx_valid,
       { "Sx Valid", "lustre.mdt_rec_setxattr.sx_valid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setxattr_sx_time,
-      { "Sx Time", "lustre.mdt_rec_setxattr.sx_time",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Sx Time", "lustre.mdt_rec_setxattr.sx_time",FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mdt_rec_setxattr_sx_padding_5,
       { "Sx Padding 5", "lustre.mdt_rec_setxattr.sx_padding_5", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setxattr_sx_padding_6,
@@ -9687,7 +9831,7 @@ void proto_register_dcerpc_lustre(void)
       { "Sx Padding 7", "lustre.mdt_rec_setxattr.sx_padding_7", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setxattr_sx_size,
       { "Sx Size", "lustre.mdt_rec_setxattr.sx_size", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_mdt_rec_setxattr_sx_flgas,
+    { &hf_lustre_mdt_rec_setxattr_sx_flags,
       { "Sx Flags", "lustre.mdt_rec_setxattr.sx_flags", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mdt_rec_setxattr_sx_padding_8,
       { "Sx Padding 8", "lustre.mdt_rec_setxattr.sx_padding_8", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
@@ -9711,9 +9855,11 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_ptlrpc_body_pb_slv,
       { "Pb Slv", "lustre.ptlrpc_body.pb_slv", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v1_lm_handle,
-      { "Lm Handle", "lustre.lustre_msg_v1.lm_handle", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lm Handle", "lustre.lustre_msg_v1.lm_handle", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_ost_lvb_lvb_atime,
-      { "Lvb Atime", "lustre.ost_lvb.lvb_atime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Lvb Atime", "lustre.ost_lvb.lvb_atime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_ptlrpc_body_pb_timeout,
       { "Pb Timeout", "lustre.ptlrpc_body.pb_timeout", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_statfs_os_bavail,
@@ -9743,7 +9889,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_ptlrpc_body_pb_op_flags,
       { "Pb Op Flags", "lustre.ptlrpc_body.pb_op_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ost_lvb_lvb_ctime,
-      { "Lvb Ctime", "lustre.ost_lvb.lvb_ctime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Lvb Ctime", "lustre.ost_lvb.lvb_ctime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_ptlrpc_body_pb_type,
       { "Pb Type", "lustre.ptlrpc_body.pb_type", FT_UINT32, BASE_DEC, VALS(lustre_LMTypes), 0, "", HFILL }},
     { &hf_lustre_obd_connect_data_ocd_nllg,
@@ -9753,7 +9900,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_ll_fid_generation,
       { "Generation", "lustre.ll_fid.generation", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ost_lvb_lvb_mtime,
-      { "Lvb Mtime", "lustre.ost_lvb.lvb_mtime",FT_ABSOLUTE_TIME, BASE_NONE, NULL, 0, "", HFILL }},
+      { "Lvb Mtime", "lustre.ost_lvb.lvb_mtime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_obd_connect_data_ocd_ibits_known,
       { "Ocd Ibits Known", "lustre.obd_connect_data.ocd_ibits_known", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v2_lm_padding_3,
@@ -9819,7 +9967,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_obd_connect_data_ocd_version,
       { "Ocd Version", "lustre.obd_connect_data.ocd_version", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_mds_md_v1_lmm_objects,
-      { "Lmm Objects", "lustre.lov_mds_md_v1.lmm_objects", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lmm Objects", "lustre.lov_mds_md_v1.lmm_objects", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obd_statfs_os_namelen,
       { "Os Namelen", "lustre.obd_statfs.os_namelen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_statfs_os_blocks,
@@ -9860,8 +10009,9 @@ void proto_register_dcerpc_lustre(void)
       { "Lmm Object Id", "lustre.lov_mds_md_v1.lmm_object_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ptlrpc_body_pb_last_seen,
       { "Pb Last Seen", "lustre.ptlrpc_body.pb_last_seen", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_obd_ioobj_ioo_type,  /* TODO : create the corresponding value_string */
-      { "Ioo Type", "lustre.obd_ioobj.ioo_type", FT_UINT32, BASE_HEX, NULL, 0, "", HFILL }},
+    { &hf_lustre_obd_ioobj_ioo_type,  /* TODO : create the
+						   corresponding value_string */
+		  { "Ioo Type", "lustre.obd_ioobj.ioo_type", FT_UINT32, BASE_HEX, NULL, 0, "", HFILL } },
     { &hf_lustre_ptlrpc_body_pb_last_xid,
       { "Pb Last Xid", "lustre.ptlrpc_body.pb_last_xid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ptlrpc_body_pb_status,
@@ -9889,7 +10039,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_lustre_msg_v2_lm_bufcount,
       { "Lm Bufcount", "lustre.lustre_msg_v2.lm_bufcount", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ptlrpc_body_pb_handle,
-      { "Pb Handle", "lustre.ptlrpc_body.pb_handle", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Pb Handle", "lustre.ptlrpc_body.pb_handle", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obd_connect_data_ocd_transno,
       { "Ocd Transno", "lustre.obd_connect_data.ocd_transno", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lustre_msg_v1_lm_magic,
@@ -9939,7 +10090,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_quota_adjust_qunit,
       { "obd quota adjust qunit", "lustre.quota_adjust_qunit", FT_NONE, BASE_NONE, NULL , 0 , "", HFILL }},
     { &hf_lustre_llog_unlink_rec_lur_tail,
-      { "Lur Tail", "lustre.llog_unlink_rec.lur_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lur Tail", "lustre.llog_unlink_rec.lur_tail", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_size_change_rec_lsc_io_epoch,
       { "Lsc Io Epoch", "lustre.llog_size_change_rec.lsc_io_epoch", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mgs_target_info_mti_flags,
@@ -9955,7 +10107,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_quota_adjust_qunit_padding1,
       { "Padding1", "lustre.quota_adjust_qunit.padding1", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_size_change_rec_lsc_fid,
-      { "Lsc Fid", "lustre.llog_size_change_rec.lsc_fid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lsc Fid", "lustre.llog_size_change_rec.lsc_fid", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_rec_hdr_padding,
       { "Padding", "lustre.llog_rec_hdr.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_nlink,
@@ -9990,27 +10143,43 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_ldlm_reply_lock_flags,
       { "Lock Flags", "lustre.ldlm_reply.lock_flags", FT_UINT32,BASE_HEX, NULL, 0, "", HFILL }},
 
-    {&hf_lustre_ldlm_fl_lock_changed, {"LDLM_FL_LOCK_CHANGED", "lustre.ldlm_fl_lock_changed", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_LOCK_CHANGED, "", HFILL}},
-    {&hf_lustre_ldlm_fl_block_granted, {"LDLM_FL_BLOCK_GRANTED", "lustre.ldlm_fl_block_granted", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BLOCK_GRANTED, "", HFILL}},
-    {&hf_lustre_ldlm_fl_block_conv, {"LDLM_FL_BLOCK_CONV", "lustre.ldlm_fl_block_conv", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BLOCK_CONV, "", HFILL}},
-    {&hf_lustre_ldlm_fl_block_wait, {"LDLM_FL_BLOCK_WAIT", "lustre.ldlm_fl_block_wait", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BLOCK_WAIT, "", HFILL}},
-    {&hf_lustre_ldlm_fl_ast_sent, {"LDLM_FL_AST_SENT", "lustre.ldlm_fl_ast_sent", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_AST_SENT, "", HFILL}},
-    {&hf_lustre_ldlm_fl_replay, {"LDLM_FL_REPLAY", "lustre.ldlm_fl_replay", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_REPLAY, "", HFILL}},
-    {&hf_lustre_ldlm_fl_intent_only, {"LDLM_FL_INTENT_ONLY", "lustre.ldlm_fl_intent_only", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_INTENT_ONLY, "", HFILL}},
-    {&hf_lustre_ldlm_fl_has_intent, {"LDLM_FL_HAS_INTENT", "lustre.ldlm_fl_has_intent", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_HAS_INTENT, "", HFILL}},
-    {&hf_lustre_ldlm_fl_discard_data, {"LDLM_FL_DISCARD_DATA", "lustre.ldlm_fl_discard_data", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_DISCARD_DATA, "", HFILL}},
-    {&hf_lustre_ldlm_fl_no_timeout, {"LDLM_FL_NO_TIMEOUT", "lustre.ldlm_fl_no_timeout", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_NO_TIMEOUT, "", HFILL}},
-    {&hf_lustre_ldlm_fl_block_nowait, {"LDLM_FL_BLOCK_NOWAIT", "lustre.ldlm_fl_block_nowait", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_BLOCK_NOWAIT, "", HFILL}},
-    {&hf_lustre_ldlm_fl_test_lock, {"LDLM_FL_TEST_LOCK", "lustre.ldlm_fl_test_lock", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_TEST_LOCK, "", HFILL}},
-    {&hf_lustre_ldlm_fl_cancel_on_block, {"LDLM_FL_CANCEL_ON_BLOCK", "lustre.ldlm_fl_cancel_on_block", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_CANCEL_ON_BLOCK, "", HFILL}},
-    {&hf_lustre_ldlm_fl_deny_on_contention, {"LDLM_FL_DENY_ON_CONTENTION", "lustre.ldlm_fl_deny_on_contention", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_FL_DENY_ON_CONTENTION, "", HFILL}},
-    {&hf_lustre_ldlm_ast_discard_data, {"LDLM_AST_DISCARD_DATA", "lustre.ldlm_ast_discard_data", FT_BOOLEAN, 32, TFS(&flags_set_truth), LDLM_AST_DISCARD_DATA, "", HFILL}},
-
+    {&hf_lustre_ldlm_fl_lock_changed, {"LDLM_FL_LOCK_CHANGED", "lustre.ldlm_fl_lock_changed", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_LOCK_CHANGED, "", HFILL } },
+    {&hf_lustre_ldlm_fl_block_granted, {"LDLM_FL_BLOCK_GRANTED", "lustre.ldlm_fl_block_granted", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BLOCK_GRANTED, "", HFILL } },
+    {&hf_lustre_ldlm_fl_block_conv, {"LDLM_FL_BLOCK_CONV", "lustre.ldlm_fl_block_conv", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BLOCK_CONV, "", HFILL } },
+    {&hf_lustre_ldlm_fl_block_wait, {"LDLM_FL_BLOCK_WAIT", "lustre.ldlm_fl_block_wait", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BLOCK_WAIT, "", HFILL } },
+    {&hf_lustre_ldlm_fl_cbpending, {"LDLM_FL_CBPENDING", "lustre.ldlm_fl_cbpending", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CBPENDING, "", HFILL } },
+    {&hf_lustre_ldlm_fl_ast_sent, {"LDLM_FL_AST_SENT", "lustre.ldlm_fl_ast_sent", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_AST_SENT, "", HFILL } },
+    {&hf_lustre_ldlm_fl_wait_noreproc, {"LDLM_FL_WAIT_NOREPROC", "lustre.ldlm_fl_wait_noreproc", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_WAIT_NOREPROC, "", HFILL } },
+    {&hf_lustre_ldlm_fl_cancel, {"LDLM_FL_CANCEL", "lustre.ldlm_fl_cancel", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CANCEL, "", HFILL } },
+    {&hf_lustre_ldlm_fl_replay, {"LDLM_FL_REPLAY", "lustre.ldlm_fl_replay", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_REPLAY, "", HFILL } },
+    {&hf_lustre_ldlm_fl_intent_only, {"LDLM_FL_INTENT_ONLY", "lustre.ldlm_fl_intent_only", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_INTENT_ONLY, "", HFILL } },
+    {&hf_lustre_ldlm_fl_local_only, {"LDLM_FL_LOCAL_ONLY", "lustre.ldlm_fl_local_only", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_LOCAL_ONLY, "", HFILL } },
+    {&hf_lustre_ldlm_fl_failed, {"LDLM_FL_FAILED", "lustre.ldlm_fl_failed", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_FAILED, "", HFILL } },
+    {&hf_lustre_ldlm_fl_has_intent, {"LDLM_FL_HAS_INTENT", "lustre.ldlm_fl_has_intent", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_HAS_INTENT, "", HFILL } },
+    {&hf_lustre_ldlm_fl_canceling, {"LDLM_FL_CANCELING", "lustre.ldlm_fl_canceling", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CANCELING, "", HFILL } },
+    {&hf_lustre_ldlm_fl_local, {"LDLM_FL_LOCAL", "lustre.ldlm_fl_local", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_LOCAL, "", HFILL } },
+    {&hf_lustre_ldlm_fl_warn, {"LDLM_FL_WARN", "lustre.ldlm_fl_warn", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_WARN, "", HFILL } },
+    {&hf_lustre_ldlm_fl_discard_data, {"LDLM_FL_DISCARD_DATA", "lustre.ldlm_fl_discard_data", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_DISCARD_DATA, "", HFILL } },
+    {&hf_lustre_ldlm_fl_no_timeout, {"LDLM_FL_NO_TIMEOUT", "lustre.ldlm_fl_no_timeout", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_NO_TIMEOUT, "", HFILL } },
+    {&hf_lustre_ldlm_fl_block_nowait, {"LDLM_FL_BLOCK_NOWAIT", "lustre.ldlm_fl_block_nowait", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BLOCK_NOWAIT, "", HFILL } },
+    {&hf_lustre_ldlm_fl_test_lock, {"LDLM_FL_TEST_LOCK", "lustre.ldlm_fl_test_lock", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_TEST_LOCK, "", HFILL } },
+    {&hf_lustre_ldlm_fl_lvb_ready, {"LDLM_FL_LVB_READY", "lustre.ldlm_fl_lvb_ready", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_LVB_READY, "", HFILL } },
+    {&hf_lustre_ldlm_fl_kms_ignore, {"LDLM_FL_KMS_IGNORE", "lustre.ldlm_fl_kms_ignore", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_KMS_IGNORE, "", HFILL } },
+    {&hf_lustre_ldlm_fl_no_lru, {"LDLM_FL_NO_LRU", "lustre.ldlm_fl_no_lru", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_NO_LRU, "", HFILL } },
+    {&hf_lustre_ldlm_fl_cancel_on_block, {"LDLM_FL_CANCEL_ON_BLOCK", "lustre.ldlm_fl_cancel_on_block", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CANCEL_ON_BLOCK, "", HFILL } },
+    {&hf_lustre_ldlm_fl_cp_reqd, {"LDLM_FL_CP_REQD", "lustre.ldlm_fl_cp_reqd", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CP_REQD, "", HFILL } },
+    {&hf_lustre_ldlm_fl_cleaned, {"LDLM_FL_CLEANED", "lustre.ldlm_fl_cleaned", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_CLEANED, "", HFILL } },
+    {&hf_lustre_ldlm_fl_atomic_cb, {"LDLM_FL_ATOMIC_CB", "lustre.ldlm_fl_atomic_cb", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_ATOMIC_CB, "", HFILL } },
+    {&hf_lustre_ldlm_fl_bl_ast, {"LDLM_FL_BL_AST", "lustre.ldlm_fl_bl_ast", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BL_AST, "", HFILL } },
+    {&hf_lustre_ldlm_fl_bl_done, {"LDLM_FL_BL_DONE", "lustre.ldlm_fl_bl_done", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_BL_DONE, "", HFILL } },
+    {&hf_lustre_ldlm_fl_deny_on_contention, {"LDLM_FL_DENY_ON_CONTENTION", "lustre.ldlm_fl_deny_on_contention", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_FL_DENY_ON_CONTENTION, "", HFILL } },
+    {&hf_lustre_ldlm_ast_discard_data, {"LDLM_AST_DISCARD_DATA", "lustre.ldlm_ast_discard_data", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), LDLM_AST_DISCARD_DATA, "", HFILL } },
 
     { &hf_lustre_obdo_o_misc,
       { "O Misc", "lustre.obdo.o_misc", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_request_lock_handle,
-      { "Lock Handle", "lustre.ldlm_request.lock_handle", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lock Handle", "lustre.ldlm_request.lock_handle", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_logid_lgl_oid,
       { "Lgl Oid", "lustre.llog_logid.lgl_oid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_inodebits_bits,
@@ -10018,7 +10187,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_llog_log_hdr_llh_count,
       { "Llh Count", "lustre.llog_log_hdr.llh_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_gen_rec_lgr_tail,
-      { "Lgr Tail", "lustre.llog_gen_rec.lgr_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lgr Tail", "lustre.llog_gen_rec.lgr_tail", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_catid_lci_padding3,
       { "Lci Padding3", "lustre.llog_catid.lci_padding3", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_qd_qunit,
@@ -10026,9 +10196,10 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_llog_setattr_rec_padding,
       { "Padding", "lustre.llog_setattr_rec.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_cookie_lgc_lgl,
-      { "Lgc Lgl", "lustre.llog_cookie.lgc_lgl", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lgc Lgl", "lustre.llog_cookie.lgc_lgl", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obd_quotactl_qc_dqinfo,
-      { "Qc Dqinfo", "lustre.obd_quotactl.qc_dqinfo", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Qc Dqinfo", "lustre.obd_quotactl.qc_dqinfo", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_log_hdr_llh_bitmap,
       { "Llh Bitmap", "lustre.llog_log_hdr.llh_bitmap", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_quotactl_qc_stat,
@@ -10038,31 +10209,33 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_llog_logid_rec_padding2,
       { "Padding2", "lustre.llog_logid_rec.padding2", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_orphan_rec_lor_tail,
-      { "Lor Tail", "lustre.llog_orphan_rec.lor_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lor Tail", "lustre.llog_orphan_rec.lor_tail", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_logid_rec_padding5,
       { "Padding5", "lustre.llog_logid_rec.padding5", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     /*-------------------------------------------------------------------------------------------------------------*/
     /*all this flags are uint64, but I don't find the way to use something like TFS() with a Uint64*/
-    { &hf_lustre_ldlm_intent_opc_open,
-      { "open", "lustre.ldlm_intent.opc_open", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_OPEN,  "", HFILL}},
+    /*like TFS() with a Uint64 */
+		{ &hf_lustre_ldlm_intent_opc_open,
+      { "open", "lustre.ldlm_intent.opc_open", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_OPEN,  "", HFILL } },
     { &hf_lustre_ldlm_intent_opc_creat,
-      { "creat", "lustre.ldlm_intent.opc_creat", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_CREAT  ,  "", HFILL}},
+      { "creat", "lustre.ldlm_intent.opc_creat", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_CREAT  ,  "", HFILL } },
     { &hf_lustre_ldlm_intent_opc_readdir,
-      { "readdir", "lustre.ldlm_intent.opc_readdir", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_READDIR  ,  "", HFILL}},
+      { "readdir", "lustre.ldlm_intent.opc_readdir", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_READDIR  ,  "", HFILL } },
     { &hf_lustre_ldlm_intent_opc_getattr,
-      { "getattr", "lustre.ldlm_intent.opc_getattr", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_GETATTR,  "", HFILL}},
+      { "getattr", "lustre.ldlm_intent.opc_getattr", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_GETATTR,  "", HFILL } },
     { &hf_lustre_ldlm_intent_opc_lookup,
-      { "lookup", "lustre.ldlm_intent.opc_lookup", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_LOOKUP ,  "", HFILL}},
+      { "lookup", "lustre.ldlm_intent.opc_lookup", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_LOOKUP ,  "", HFILL } },
     { &hf_lustre_ldlm_intent_opc_unlink,
-      { "unlink", "lustre.ldlm_intent.opc_unlink", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_UNLINK ,  "", HFILL}},
+      { "unlink", "lustre.ldlm_intent.opc_unlink", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_UNLINK ,  "", HFILL } },
     { &hf_lustre_ldlm_intent_opc_getxattr,
-      { "getxattr", "lustre.ldlm_intent.opc_getxattr", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_GETXATTR ,  "", HFILL}},
+      { "getxattr", "lustre.ldlm_intent.opc_getxattr", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_GETXATTR ,  "", HFILL } },
     { &hf_lustre_ldlm_intent_opc_exec,
-      { "exec", "lustre.ldlm_intent.opc_exec", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_EXEC ,  "", HFILL}},
+      { "exec", "lustre.ldlm_intent.opc_exec", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_EXEC ,  "", HFILL } },
     { &hf_lustre_ldlm_intent_opc_pin,
-      { "pin", "lustre.ldlm_intent.opc_pin", FT_BOOLEAN, 32, TFS(&flags_set_truth), IT_PIN ,  "", HFILL}},
-    /*-------------------------------------------------------------------------------------------------------------*/
-    { &hf_lustre_ldlm_intent_opc,
+      { "pin", "lustre.ldlm_intent.opc_pin", FT_BOOLEAN, 32, TFS(&lnet_flags_set_truth), IT_PIN ,  "", HFILL } },
+	/*-------------------------------------------------------------------*/
+		{ &hf_lustre_ldlm_intent_opc,
       { "intent opcode", "lustre.ldlm_intent.opc", FT_NONE, BASE_NONE, NULL, 0,  "", HFILL}},
     { &hf_lustre_llog_rec_hdr_lrh_type,
       { "Lrh Type", "lustre.llog_rec_hdr.lrh_type", FT_UINT32, BASE_HEX, VALS(lustre_llog_op_type), 0, "", HFILL }},
@@ -10077,23 +10250,29 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mgs_target_info_padding,
       { "Padding", "lustre.mgs_target_info.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_quotactl_qc_dqblk,
-      { "Qc Dqblk", "lustre.obd_quotactl.qc_dqblk", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Qc Dqblk", "lustre.obd_quotactl.qc_dqblk", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llogd_conn_body_lgdc_gen,
-      { "Lgdc Gen", "lustre.llogd_conn_body.lgdc_gen", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lgdc Gen", "lustre.llogd_conn_body.lgdc_gen", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_log_hdr_llh_tail,
-      { "Llh Tail", "lustre.llog_log_hdr.llh_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Llh Tail", "lustre.llog_log_hdr.llh_tail", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_size,
       { "O Size", "lustre.obdo.o_size", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_extent_start,
       { "Start", "lustre.ldlm_extent.start", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_size_change_rec_lsc_hdr,
-      { "Lsc Hdr", "lustre.llog_size_change_rec.lsc_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lsc Hdr", "lustre.llog_size_change_rec.lsc_hdr", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_create_rec_lcr_tail,
-      { "Lcr Tail", "lustre.llog_create_rec.lcr_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lcr Tail", "lustre.llog_create_rec.lcr_tail", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_logid_lgl_oseq,
       { "Lgl SEQ", "lustre.llog_logid.lgl_oseq", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_create_rec_lcr_hdr,
-      { "Lcr Hdr", "lustre.llog_create_rec.lcr_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lcr Hdr", "lustre.llog_create_rec.lcr_hdr", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_cookie_lgc_padding,
       { "Lgc Padding", "lustre.llog_cookie.lgc_padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_old_qd_type,
@@ -10113,19 +10292,21 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_mgs_target_info_mti_svname,
       { "Mti Svname", "lustre.mgs_target_info.mti_svname", FT_UINT8, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_body_lgd_logid,
-      { "Lgd Logid", "lustre.llogd_body.lgd_logid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lgd Logid", "lustre.llogd_body.lgd_logid", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_log_hdr_llh_size,
       { "Llh Size", "lustre.llog_log_hdr.llh_size", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_create_rec_padding,
       { "Padding", "lustre.llog_create_rec.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_handle,
-      { "O Handle", "lustre.obdo.o_handle", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "O Handle", "lustre.obdo.o_handle", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_atime,
-      { "O Atime", "lustre.obdo.o_atime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "O Atime", "lustre.obdo.o_atime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_quota_adjust_qunit_qaq_id,
       { "Qaq Id", "lustre.quota_adjust_qunit.qaq_id", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_lock_desc_l_policy_data,
-      { "L Policy Data", "lustre.ldlm_lock_desc.l_policy_data", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "L Policy Data", "lustre.ldlm_lock_desc.l_policy_data", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obd_quotactl_qc_cmd,
       { "Qc Cmd", "lustre.obd_quotactl.qc_cmd", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_padding,
@@ -10139,7 +10320,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_obdo_o_gid,
       { "O Gid", "lustre.obdo.o_gid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_catid_lci_logid,
-      { "Lci Logid", "lustre.llog_catid.lci_logid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lci Logid", "lustre.llog_catid.lci_logid", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_rec_tail_lrt_index,
       { "Lrt Index", "lustre.llog_rec_tail.lrt_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_desc_ld_default_stripe_count,
@@ -10149,7 +10331,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_cfg_marker_cm_vers,
       { "Cm Vers", "lustre.cfg_marker.cm_vers", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_unlink_rec_lur_hdr,
-      { "Lur Hdr", "lustre.llog_unlink_rec.lur_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lur Hdr", "lustre.llog_unlink_rec.lur_hdr", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llogd_body_lgd_index,
       { "Lgd Index", "lustre.llogd_body.lgd_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_cfg_marker_cm_tgtname,
@@ -10157,21 +10340,22 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_llog_setattr_rec_lsr_ogen,
       { "Lsr Ogen", "lustre.llog_setattr_rec.lsr_ogen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_logid_rec_lid_hdr,
-      { "Lid Hdr", "lustre.llog_logid_rec.lid_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lid Hdr", "lustre.llog_logid_rec.lid_hdr", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_ioepoch,
       { "O IOEpoch", "lustre.obdo.o_ioepoch", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ost_body_oa,
-      { "Oa", "lustre.ost_body.oa", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Oa", "lustre.ost_body.oa", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_logid_rec_padding3,
       { "Padding3", "lustre.llog_logid_rec.padding3", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_log_hdr_llh_flags,
       { "Llh Flags", "lustre.llog_log_hdr.llh_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     {&hf_lustre_llog_hdr_llh_flag_zap_when_empty,
-      {"LLOG_F_ZAP_WHEN_EMPTY","lustre.lustre.llog_log_hdr.llh_flag_zap",FT_BOOLEAN,32,TFS(&flags_set_truth),LLOG_F_ZAP_WHEN_EMPTY,"",HFILL}},
+      {"LLOG_F_ZAP_WHEN_EMPTY","lustre.lustre.llog_log_hdr.llh_flag_zap",FT_BOOLEAN,32,TFS(&lnet_flags_set_truth),LLOG_F_ZAP_WHEN_EMPTY,"",HFILL } },
     {&hf_lustre_llog_hdr_llh_flag_is_cat,
-      {"LLOG_F_IS_CAT","lustre.lustre.llog_log_hdr.llh_flag_cat",FT_BOOLEAN,32,TFS(&flags_set_truth),LLOG_F_IS_CAT,"",HFILL}},
+      {"LLOG_F_IS_CAT","lustre.lustre.llog_log_hdr.llh_flag_cat",FT_BOOLEAN,32,TFS(&lnet_flags_set_truth),LLOG_F_IS_CAT,"",HFILL } },
     {&hf_lustre_llog_hdr_llh_flag_is_play,
-      {"LOG_F_IS_PLAIN","lustre.lustre.llog_log_hdr.llh_flag_play",FT_BOOLEAN,32,TFS(&flags_set_truth),LLOG_F_IS_PLAIN,"",HFILL}},
+      {"LOG_F_IS_PLAIN","lustre.lustre.llog_log_hdr.llh_flag_play",FT_BOOLEAN,32,TFS(&lnet_flags_set_truth),LLOG_F_IS_PLAIN,"",HFILL } },
 
     { &hf_lustre_llog_setattr_rec_lsr_oid,
       { "Lsr Oid", "lustre.llog_setattr_rec.lsr_oid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
@@ -10188,9 +10372,10 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_lov_desc_ld_active_tgt_count,
       { "Ld Active Tgt Count", "lustre.lov_desc.ld_active_tgt_count", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_lcookie,
-      { "O Lcookie", "lustre.obdo.o_lcookie", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "O Lcookie", "lustre.obdo.o_lcookie", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_gen_rec_lgr_gen,
-      { "Lgr Gen", "lustre.llog_gen_rec.lgr_gen", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lgr Gen", "lustre.llog_gen_rec.lgr_gen", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_id,
       { "O Id", "lustre.obdo.o_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mgs_target_info_mti_uuid,
@@ -10198,7 +10383,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_llog_rec_hdr_lrh_index,
       { "Lrh Index", "lustre.llog_rec_hdr.lrh_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_setattr_rec_lsr_hdr,
-      { "Lsr Hdr", "lustre.llog_setattr_rec.lsr_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lsr Hdr", "lustre.llog_setattr_rec.lsr_hdr", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_mgs_target_info_mti_stripe_index,
       { "Mti Stripe Index", "lustre.mgs_target_info.mti_stripe_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_gen_conn_cnt,
@@ -10208,23 +10394,26 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_llog_cookie_lgc_index,
       { "Lgc Index", "lustre.llog_cookie.lgc_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_desc_ld_uuid,
-      { "Ld Uuid", "lustre.lov_desc.ld_uuid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Ld Uuid", "lustre.lov_desc.ld_uuid", FT_NONE, BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_create_rec_lcr_oid,
       { "Lcr Oid", "lustre.llog_create_rec.lcr_oid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_reply_lock_desc,
-      { "Lock Desc", "lustre.ldlm_reply.lock_desc", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lock Desc", "lustre.ldlm_reply.lock_desc", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_lov_desc_ld_padding_0,
       { "Ld Padding 0", "lustre.lov_desc.ld_padding_0", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_unlink_rec_lur_ogen,
       { "Lur Ogen", "lustre.llog_unlink_rec.lur_ogen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_orphan_rec_lor_hdr,
-      { "Lor Hdr", "lustre.llog_orphan_rec.lor_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lor Hdr", "lustre.llog_orphan_rec.lor_hdr", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_cfg_marker_cm_flags,
       { "Cm Flags", "lustre.cfg_marker.cm_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_padding_3,
       { "O Padding 3", "lustre.obdo.o_padding_3", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_request_lock_desc,
-      { "Lock Desc", "lustre.ldlm_request.lock_desc", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lock Desc", "lustre.ldlm_request.lock_desc", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_orphan_rec_padding,
       { "Padding", "lustre.llog_orphan_rec.padding", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_flags,
@@ -10240,13 +10429,15 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_qunit_data_qd_count,
       { "Qd Count", "lustre.qunit_data.qd_count", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_mtime,
-      { "O Mtime", "lustre.obdo.o_mtime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "O Mtime", "lustre.obdo.o_mtime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_blksize,
       { "O Blksize", "lustre.obdo.o_blksize", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_res_id_name,
       { "Name", "lustre.ldlm_res_id.name", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_reply_lock_handle,
-      { "Lock Handle", "lustre.ldlm_reply.lock_handle", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lock Handle", "lustre.ldlm_reply.lock_handle", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llogd_body_lgd_saved_index,
       { "Lgd Saved Index", "lustre.llogd_body.lgd_saved_index", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_qunit_data_old_qd_isblk,
@@ -10256,7 +10447,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_lov_desc_ld_padding_2,
       { "Ld Padding 2", "lustre.lov_desc.ld_padding_2", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_logid_rec_lid_tail,
-      { "Lid Tail", "lustre.llog_logid_rec.lid_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lid Tail", "lustre.llog_logid_rec.lid_tail", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_grant,
       { "O Grant", "lustre.obdo.o_grant", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_padding_2,
@@ -10270,7 +10462,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_ldlm_extent_end,
       { "End", "lustre.ldlm_extent.end", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_gen_rec_lgr_hdr,
-      { "Lgr Hdr", "lustre.llog_gen_rec.lgr_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lgr Hdr", "lustre.llog_gen_rec.lgr_hdr", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_orphan_rec_lor_ogen,
       { "Lor Ogen", "lustre.llog_orphan_rec.lor_ogen", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_body_lgd_llh_flags,
@@ -10298,7 +10491,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_obdo_o_stripe_idx,
       { "O Stripe Idx", "lustre.obdo.o_stripe_idx", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_conn_body_lgdc_logid,
-      { "Lgdc Logid", "lustre.llogd_conn_body.lgdc_logid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lgdc Logid", "lustre.llogd_conn_body.lgdc_logid", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_ldlm_flock_blocking_pid,
       { "Blocking Pid", "lustre.ldlm_flock.blocking_pid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_lov_desc_ld_tgt_count,
@@ -10322,27 +10516,30 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_lov_desc_ld_default_stripe_size,
       { "Ld Default Stripe Size", "lustre.lov_desc.ld_default_stripe_size", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_log_hdr_llh_tgtuuid,
-      { "Llh Tgtuuid", "lustre.llog_log_hdr.llh_tgtuuid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Llh Tgtuuid", "lustre.llog_log_hdr.llh_tgtuuid", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_cfg_marker_cm_step,
       { "Cm Step", "lustre.cfg_marker.cm_step", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_mgs_send_param_mgs_param,
       { "Mgs Param", "lustre.mgs_send_param.mgs_param", FT_UINT8, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_create_rec_lcr_fid,
-      { "Lcr Fid", "lustre.llog_create_rec.lcr_fid", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lcr Fid", "lustre.llog_create_rec.lcr_fid", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_lov_desc_ld_default_stripe_offset,
       { "Ld Default Stripe Offset", "lustre.lov_desc.ld_default_stripe_offset", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_resource_desc_lr_name,
-      { "Lr Name", "lustre.ldlm_resource_desc.lr_name", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lr Name", "lustre.ldlm_resource_desc.lr_name", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_rec_tail_lrt_len,
       { "Lrt Len", "lustre.llog_rec_tail.lrt_len", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_log_hdr_llh_timestamp,
-      { "Llh Timestamp", "lustre.llog_log_hdr.llh_timestamp", FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Llh Timestamp", "lustre.llog_log_hdr.llh_timestamp", FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_catid_lci_padding2,
       { "Lci Padding2", "lustre.llog_catid.lci_padding2", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_conn_body_lgdc_ctxt_idx,
       { "Lgdc Ctxt Idx", "lustre.llogd_conn_body.lgdc_ctxt_idx", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_cfg_marker_cm_canceltime,
-      { "Cm Canceltime", "lustre.cfg_marker.cm_canceltime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Cm Canceltime", "lustre.cfg_marker.cm_canceltime",FT_ABSOLUTE_TIME, ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_mgs_target_info_mti_lustre_ver,
       { "Mti Lustre Ver", "lustre.mgs_target_info.mti_lustre_ver", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obdo_o_parent_ver,
@@ -10350,17 +10547,20 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_qunit_data_qd_flags,
       { "Qd Flags", "lustre.qunit_data.qd_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_logid_rec_lid_id,
-      { "Lid Id", "lustre.llog_logid_rec.lid_id", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lid Id", "lustre.llog_logid_rec.lid_id", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_parent_oid,
       { "O Parent OID", "lustre.obdo.o_parent_oid", FT_UINT32, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_gen_mnt_cnt,
       { "Mnt Cnt", "lustre.llog_gen.mnt_cnt", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_size_change_rec_lsc_tail,
-      { "Lsc Tail", "lustre.llog_size_change_rec.lsc_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lsc Tail", "lustre.llog_size_change_rec.lsc_tail", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_padding_5,
       { "O Padding 5", "lustre.obdo.o_padding_5", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_lock_desc_l_resource,
-      { "L Resource", "lustre.ldlm_lock_desc.l_resource", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "L Resource", "lustre.ldlm_lock_desc.l_resource", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_obdo_o_parent_seq,
       { "O Parent SEQ", "lustre.obdo.o_parent_seq", FT_UINT64, BASE_HEX, NULL, 0, "", HFILL }},
     { &hf_lustre_ldlm_request_lock_count,
@@ -10379,7 +10579,8 @@ void proto_register_dcerpc_lustre(void)
       { "ost lvb data", "lustre.ost_lvb", FT_NONE, BASE_NONE, NULL, 0, "", HFILL }},
 
     { &hf_lustre_obdo_o_ctime,
-      { "O Ctime", "lustre.obdo.o_ctime",FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "O Ctime", "lustre.obdo.o_ctime",FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_ldlm_reply_lock_policy_res2,
       { "Lock Policy Res2", "lustre.ldlm_reply.lock_policy_res2", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llogd_body_lgd_ctxt_idx,
@@ -10389,11 +10590,13 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_ldlm_resource_desc_lr_type,
       { "Lr Type", "lustre.ldlm_resource_desc.lr_type", FT_UINT16, BASE_DEC, VALS(lustre_ldlm_type_t_vals), 0, "", HFILL }},
     { &hf_lustre_llog_setattr_rec_lsr_tail,
-      { "Lsr Tail", "lustre.llog_setattr_rec.lsr_tail", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Lsr Tail", "lustre.llog_setattr_rec.lsr_tail", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_cookie_lgc_subsys,
       { "Lgc Subsys", "lustre.llog_cookie.lgc_subsys", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_llog_log_hdr_llh_hdr,
-      { "Llh Hdr", "lustre.llog_log_hdr.llh_hdr", FT_NONE, BASE_HEX, NULL, 0, "", HFILL }},
+      { "Llh Hdr", "lustre.llog_log_hdr.llh_hdr", FT_NONE,
+		    BASE_NONE, NULL, 0, "", HFILL } },
     { &hf_lustre_llog_log_hdr_llh_reserved,
       { "Llh Reserved", "lustre.llog_log_hdr.llh_reserved", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
 
@@ -10414,7 +10617,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_obd_dqblk_dqb_curspace,
       { "Dqb Curspace", "lustre.obd_dqblk.dqb_curspace", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_dqblk_dqb_itime,
-      { "Dqb Itime", "lustre.obd_dqblk.dqb_itime", FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Dqb Itime", "lustre.obd_dqblk.dqb_itime", FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_obd_dqblk_dqb_valid,
       { "Dqb Valid", "lustre.obd_dqblk.dqb_valid", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_dqinfo_dqi_igrace,
@@ -10430,7 +10634,8 @@ void proto_register_dcerpc_lustre(void)
     { &hf_lustre_obd_dqinfo_dqi_flags,
       { "Dqi Flags", "lustre.obd_dqinfo.dqi_flags", FT_UINT32, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_obd_dqblk_dqb_btime,
-      { "Dqb Btime", "lustre.obd_dqblk.dqb_btime", FT_ABSOLUTE_TIME, BASE_DEC, NULL, 0, "", HFILL }},
+      { "Dqb Btime", "lustre.obd_dqblk.dqb_btime", FT_ABSOLUTE_TIME,
+		    ABSOLUTE_TIME_LOCAL, NULL, 0, "", HFILL } },
     { &hf_lustre_obd_dqblk_dqb_ihardlimit,
       { "Dqb Ihardlimit", "lustre.obd_dqblk.dqb_ihardlimit", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }}
 
@@ -10472,78 +10677,38 @@ void proto_register_dcerpc_lustre(void)
     &ett_lustre_ldlm_flock,
     &ett_lustre_ldlm_intent_opc,
     &ett_lustre_ldlm_resource_desc,
-    &ett_lustre_ldlm_res_id,
     &ett_lustre_ldlm_lock_desc,
-    &ett_lustre_ldlm_resource_desc,
     &ett_lustre_ldlm_request,
-    &ett_lustre_ldlm_lock_desc,
     &ett_lustre_lustre_handle,
     &ett_lustre_ldlm_reply,
-    &ett_lustre_ldlm_lock_desc,
-    &ett_lustre_lustre_handle,
     &ett_lustre_mgs_send_param,
     &ett_lustre_mgs_target_info,
     &ett_lustre_cfg_marker,
-    &ett_lustre_llog_logid,
     &ett_lustre_llog_catid,
     &ett_lustre_llog_logid,
     &ett_lustre_lov_mds_md,
-    &ett_lustre_llog_logid,
     &ett_lustre_llog_rec_hdr,
     &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_logid_rec,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_llog_logid,
-    &ett_lustre_llog_rec_tail,
-    &ett_lustre_lov_mds_md,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_create_rec,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_ll_fid,
-    &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_orphan_rec,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_unlink_rec,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_setattr_rec,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_size_change_rec,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_ll_fid,
-    &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_gen,
     &ett_lustre_llog_gen_rec,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_llog_gen,
-    &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_log_hdr,
-    &ett_lustre_llog_rec_hdr,
-    &ett_lustre_obd_uuid,
-    &ett_lustre_llog_rec_tail,
     &ett_lustre_llog_cookie,
-    &ett_lustre_llog_logid,
     &ett_lustre_llogd_body,
-    &ett_lustre_llog_logid,
     &ett_lustre_llogd_conn_body,
-    &ett_lustre_llog_gen,
-    &ett_lustre_llog_logid,
-    &ett_lustre_llog_logid,
     &ett_lustre_obdo,
-    &ett_lustre_lustre_handle,
-    &ett_lustre_llog_cookie,
     &ett_lustre_ost_body,
-    &ett_lustre_obdo,
     &ett_lustre_qunit_data,
     &ett_lustre_qunit_data_old2,
     &ett_lustre_qunit_data_old,
     &ett_lustre_ldlm_lock_flags,
-    &ett_lustre_llog_log_llh_flags,
-
-  };
+    &ett_lustre_llog_log_llh_flags
+	};
 
   proto_lustre = proto_register_protocol("Lustre", "lustre", "lustre");
   proto_register_field_array(proto_lustre, hf, array_length (hf));
@@ -10575,4 +10740,9 @@ void proto_reg_handoff_lustre(void)
   dissector_add("lnet.ptl_index", MGS_REQUEST_PORTAL        , lustre_handle);
   dissector_add("lnet.ptl_index", MGS_REPLY_PORTAL          , lustre_handle);
   dissector_add("lnet.ptl_index", OST_REQUEST_PORTAL        , lustre_handle);
+	dissector_add("lnet.ptl_index", FLD_REQUEST_PORTAL, lustre_handle);
+	dissector_add("lnet.ptl_index", SEQ_METADATA_PORTAL, lustre_handle);
+	dissector_add("lnet.ptl_index", SEQ_DATA_PORTAL, lustre_handle);
+	dissector_add("lnet.ptl_index", SEQ_CONTROLLER_PORTAL, lustre_handle);
+	dissector_add("lnet.ptl_index", MGS_BULK_PORTAL, lustre_handle);
 }
