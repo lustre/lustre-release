@@ -428,6 +428,10 @@ int main(int argc, char **argv)
         maxgroups = sysconf(_SC_NGROUPS_MAX);
         if (maxgroups > NGROUPS_MAX)
                 maxgroups = NGROUPS_MAX;
+	if (maxgroups == -1) {
+		rc = -EINVAL;
+		goto out;
+	}
 
         size = offsetof(struct identity_downcall_data, idd_groups[maxgroups]);
         data = malloc(size);

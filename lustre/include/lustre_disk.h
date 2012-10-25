@@ -201,7 +201,7 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
 
 /* Get the index from the obd name */
 int server_name2index(char *svname, __u32 *idx, char **endptr);
-int server_name2svname(char *label, char *svname, char **endptr);
+int server_name2svname(char *label, char *svname, char **endptr, size_t svsize);
 
 
 /****************** mount command *********************/

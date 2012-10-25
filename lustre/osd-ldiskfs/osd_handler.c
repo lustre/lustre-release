@@ -4108,6 +4108,7 @@ osd_it_pack_dirent(struct lu_dirent *ent, struct lu_fid *fid, __u64 offset,
 	ent->lde_reclen = cpu_to_le16(lu_dirent_calc_size(namelen, attr));
 
 	strncpy(ent->lde_name, name, namelen);
+	ent->lde_name[namelen] = '\0';
 	ent->lde_namelen = cpu_to_le16(namelen);
 
 	/* append lustre attributes */
@@ -5043,7 +5044,9 @@ static int osd_device_init(const struct lu_env *env, struct lu_device *d,
 {
 	struct osd_device *osd = osd_dev(d);
 
-	strncpy(osd->od_svname, name, MAX_OBD_NAME);
+	if (strlcpy(osd->od_svname, name, sizeof(osd->od_svname))
+	    >= sizeof(osd->od_svname))
+		return -E2BIG;
 	return osd_procfs_init(osd, name);
 }
 
@@ -5197,6 +5200,7 @@ static int osd_device_init0(const struct lu_env *env,
 	struct lu_device	*l = osd2lu_dev(o);
 	struct osd_thread_info *info;
 	int			rc;
+	int			cplen = 0;
 
 	/* if the module was re-loaded, env can loose its keys */
 	rc = lu_env_refill((struct lu_env *) env);
@@ -5230,8 +5234,12 @@ static int osd_device_init0(const struct lu_env *env,
 	if (rc < 0)
 		GOTO(out_mnt, rc);
 
-	strncpy(o->od_svname, lustre_cfg_string(cfg, 4),
-			sizeof(o->od_svname) - 1);
+	cplen = strlcpy(o->od_svname, lustre_cfg_string(cfg, 4),
+			sizeof(o->od_svname));
+	if (cplen >= sizeof(o->od_svname)) {
+		rc = -E2BIG;
+		GOTO(out_mnt, rc);
+	}
 
 	rc = osd_obj_map_init(o);
 	if (rc != 0)

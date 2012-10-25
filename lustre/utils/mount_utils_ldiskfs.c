@@ -287,7 +287,7 @@ static int file_in_dev(char *file_name, char *dev_name)
 		pclose(fp);
 		return 1;
 	}
-	i = fread(debugfs_cmd, 1, sizeof(debugfs_cmd), fp);
+	i = fread(debugfs_cmd, 1, sizeof(debugfs_cmd) - 1, fp);
 	if (i) {
 		debugfs_cmd[i] = 0;
 		fprintf(stderr, "%s", debugfs_cmd);
@@ -346,7 +346,8 @@ static int is_e2fsprogs_feature_supp(const char *feature)
 			fprintf(stderr, "%s: %s\n", progname, strerror(errno));
 			return 0;
 		}
-		ret = fread(supp_features, 1, sizeof(supp_features), fp);
+		ret = fread(supp_features, 1, sizeof(supp_features) - 1, fp);
+		supp_features[ret] = '\0';
 		fclose(fp);
 	}
 	if (ret > 0 && strstr(supp_features,
@@ -1104,6 +1105,7 @@ static int is_feature_enabled(const char *feature, const char *devpath)
 	char cmd[PATH_MAX];
 	FILE *fp;
 	char enabled_features[4096] = "";
+	int ret = 1;
 
 	snprintf(cmd, sizeof(cmd), "%s -R features %s 2>&1",
 		 DEBUGFS, devpath);
@@ -1116,7 +1118,8 @@ static int is_feature_enabled(const char *feature, const char *devpath)
 		return 0;
 	}
 
-	fread(enabled_features, 1, sizeof(enabled_features), fp);
+	ret = fread(enabled_features, 1, sizeof(enabled_features) - 1, fp);
+	enabled_features[ret] = '\0';
 	fclose(fp);
 
 	if (strstr(enabled_features, feature))

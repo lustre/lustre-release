@@ -1260,10 +1260,15 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
                 RETURN(-ENOMEM);
 
 	if (!IS_SERVER(lsi)) {
-                pos = sprintf(inst, "%p", cfg->cfg_instance);
+		pos = snprintf(inst, CFS_PAGE_SIZE, "%p", cfg->cfg_instance);
+		if (pos >= CFS_PAGE_SIZE) {
+			OBD_FREE(inst, CFS_PAGE_SIZE);
+			return -E2BIG;
+		}
         } else {
 		LASSERT(IS_MDT(lsi));
-		rc = server_name2svname(lsi->lsi_svname, inst, NULL);
+		rc = server_name2svname(lsi->lsi_svname, inst, NULL,
+					CFS_PAGE_SIZE);
 		if (rc) {
 			OBD_FREE(inst, CFS_PAGE_SIZE);
 			RETURN(-EINVAL);
@@ -1484,7 +1489,9 @@ again:
         body = req_capsule_client_get(&req->rq_pill, &RMF_MGS_CONFIG_BODY);
         LASSERT(body != NULL);
         LASSERT(sizeof(body->mcb_name) > strlen(cld->cld_logname));
-        strncpy(body->mcb_name, cld->cld_logname, sizeof(body->mcb_name));
+	if (strlcpy(body->mcb_name, cld->cld_logname, sizeof(body->mcb_name))
+	    >= sizeof(body->mcb_name))
+		GOTO(out, rc = -E2BIG);
         body->mcb_offset = cfg->cfg_last_idx + 1;
         body->mcb_type   = cld->cld_type;
         body->mcb_bits   = CFS_PAGE_SHIFT;

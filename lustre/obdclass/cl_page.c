@@ -1267,6 +1267,8 @@ int cl_page_prep(const struct lu_env *env, struct cl_io *io,
          * PG_writeback without risking other layers deciding to skip this
          * page.
          */
+	if (crt >= CRT_NR)
+		return -EINVAL;
         result = cl_page_invoke(env, io, pg, CL_PAGE_OP(io[crt].cpo_prep));
         if (result == 0)
                 cl_page_io_start(env, pg, crt);
@@ -1312,6 +1314,8 @@ void cl_page_completion(const struct lu_env *env,
         }
 
         cl_page_state_set(env, pg, CPS_CACHED);
+	if (crt >= CRT_NR)
+		return;
         CL_PAGE_INVOID_REVERSE(env, pg, CL_PAGE_OP(io[crt].cpo_completion),
                                (const struct lu_env *,
                                 const struct cl_page_slice *, int), ioret);
@@ -1351,6 +1355,8 @@ int cl_page_make_ready(const struct lu_env *env, struct cl_page *pg,
         PINVRNT(env, pg, crt < CRT_NR);
 
         ENTRY;
+	if (crt >= CRT_NR)
+		RETURN(-EINVAL);
         result = CL_PAGE_INVOKE(env, pg, CL_PAGE_OP(io[crt].cpo_make_ready),
                                 (const struct lu_env *,
                                  const struct cl_page_slice *));
@@ -1386,6 +1392,9 @@ int cl_page_cache_add(const struct lu_env *env, struct cl_io *io,
 	PINVRNT(env, pg, cl_page_invariant(pg));
 
 	ENTRY;
+
+	if (crt >= CRT_NR)
+		RETURN(-EINVAL);
 
 	cfs_list_for_each_entry(scan, &pg->cp_layers, cpl_linkage) {
 		if (scan->cpl_ops->io[crt].cpo_cache_add == NULL)

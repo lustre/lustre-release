@@ -937,7 +937,7 @@ static inline struct iam_entry *dx_node_get_entries(struct iam_path *path,
 static inline struct iam_ikey *iam_path_ikey(const struct iam_path *path,
                                              int nr)
 {
-        assert(0 <= nr && nr < ARRAY_SIZE(path->ip_data->ipd_key_scratch));
+	LASSERT(0 <= nr && nr < ARRAY_SIZE(path->ip_data->ipd_key_scratch));
         return path->ip_data->ipd_key_scratch[nr];
 }
 

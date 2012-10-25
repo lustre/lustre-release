@@ -1398,16 +1398,21 @@ static int record_marker(const struct lu_env *env,
 	struct mgs_thread_info *mgi = mgs_env_info(env);
 	struct lustre_cfg *lcfg;
 	int rc;
+	int cplen = 0;
 
 	if (flags & CM_START)
 		fsdb->fsdb_gen++;
 	mgi->mgi_marker.cm_step = fsdb->fsdb_gen;
 	mgi->mgi_marker.cm_flags = flags;
 	mgi->mgi_marker.cm_vers = LUSTRE_VERSION_CODE;
-	strncpy(mgi->mgi_marker.cm_tgtname, tgtname,
-		sizeof(mgi->mgi_marker.cm_tgtname));
-	strncpy(mgi->mgi_marker.cm_comment, comment,
-		sizeof(mgi->mgi_marker.cm_comment));
+	cplen = strlcpy(mgi->mgi_marker.cm_tgtname, tgtname,
+			sizeof(mgi->mgi_marker.cm_tgtname));
+	if (cplen >= sizeof(mgi->mgi_marker.cm_tgtname))
+		return -E2BIG;
+	cplen = strlcpy(mgi->mgi_marker.cm_comment, comment,
+			sizeof(mgi->mgi_marker.cm_comment));
+	if (cplen >= sizeof(mgi->mgi_marker.cm_comment))
+		return -E2BIG;
 	mgi->mgi_marker.cm_createtime = cfs_time_current_sec();
 	mgi->mgi_marker.cm_canceltime = 0;
 	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
@@ -1653,6 +1658,7 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
            2: found mdc;
         */
         static int last_step = -1;
+	int cplen = 0;
 
         ENTRY;
 
@@ -1683,8 +1689,10 @@ static int mgs_steal_llog_handler(const struct lu_env *env,
 		    (marker->cm_flags & CM_START) &&
 		     !(marker->cm_flags & CM_SKIP)) {
                         got_an_osc_or_mdc = 1;
-                        strncpy(tmti->mti_svname, marker->cm_tgtname,
-                                sizeof(tmti->mti_svname));
+			cplen = strlcpy(tmti->mti_svname, marker->cm_tgtname,
+					sizeof(tmti->mti_svname));
+			if (cplen >= sizeof(tmti->mti_svname))
+				RETURN(-E2BIG);
 			rc = record_start_log(env, mgs, &mdt_llh,
 					      mti->mti_svname);
 			if (rc)
@@ -3832,9 +3840,15 @@ int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
         OBD_ALLOC_PTR(mti);
         if (!mti)
                 GOTO(out, rc = -ENOMEM);
-        strncpy(mti->mti_fsname, fsname, MTI_NAME_MAXLEN);
-        strncpy(mti->mti_svname, devname, MTI_NAME_MAXLEN);
-        strncpy(mti->mti_params, param, sizeof(mti->mti_params));
+	if (strlcpy(mti->mti_fsname, fsname, sizeof(mti->mti_fsname))
+	    >= sizeof(mti->mti_fsname))
+		GOTO(out, rc = -E2BIG);
+	if (strlcpy(mti->mti_svname, devname, sizeof(mti->mti_svname))
+	    >= sizeof(mti->mti_svname))
+		GOTO(out, rc = -E2BIG);
+	if (strlcpy(mti->mti_params, param, sizeof(mti->mti_params))
+	    >= sizeof(mti->mti_params))
+		GOTO(out, rc = -E2BIG);
         rc = server_name2index(mti->mti_svname, &mti->mti_stripe_index, &tmp);
         if (rc < 0)
                 /* Not a valid server; may be only fsname */

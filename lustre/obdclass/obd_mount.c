@@ -1539,7 +1539,7 @@ int server_mti_print(char *title, struct mgs_target_info *mti)
  * rc < 0 on error
  * if endptr isn't NULL it is set to end of fsname *
  */
-int server_name2svname(char *label, char *svname, char **endptr)
+int server_name2svname(char *label, char *svname, char **endptr, size_t svsize)
 {
 	int rc;
 	char *dash;
@@ -1552,7 +1552,8 @@ int server_name2svname(char *label, char *svname, char **endptr)
 	if (*dash != '-')
 		return -1;
 
-	strncpy(svname, dash + 1, MTI_NAME_MAXLEN);
+	if (strlcpy(svname, dash + 1, svsize) >= svsize)
+		return -E2BIG;
 
 	return 0;
 }
@@ -1604,12 +1605,15 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 {
 	lnet_process_id_t id;
 	int rc, i = 0;
+	int cplen = 0;
         ENTRY;
 
 	if (!IS_SERVER(lsi))
                 RETURN(-EINVAL);
 
-	strncpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname));
+	if (strlcpy(mti->mti_svname, lsi->lsi_svname, sizeof(mti->mti_svname))
+	    >= sizeof(mti->mti_svname))
+		RETURN(-E2BIG);
 
         mti->mti_nid_count = 0;
         while (LNetGetId(i++, &id) != -ENOENT) {
@@ -1653,8 +1657,10 @@ static int server_lsi2mti(struct lustre_sb_info *lsi,
 	mti->mti_flags = lsi->lsi_flags & LDD_F_MASK;
 	if (mti->mti_flags & (LDD_F_WRITECONF | LDD_F_VIRGIN))
 		mti->mti_flags |= LDD_F_UPDATE;
-	strncpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
-		sizeof(mti->mti_params));
+	cplen = strlcpy(mti->mti_params, lsi->lsi_lmd->lmd_params,
+			sizeof(mti->mti_params));
+	if (cplen >= sizeof(mti->mti_params))
+		return -E2BIG;
 	return 0;
 }
 

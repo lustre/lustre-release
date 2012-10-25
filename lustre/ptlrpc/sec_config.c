@@ -593,7 +593,7 @@ struct sptlrpc_conf_tgt *sptlrpc_conf_get_tgt(struct sptlrpc_conf *conf,
 
         OBD_ALLOC_PTR(conf_tgt);
         if (conf_tgt) {
-                strncpy(conf_tgt->sct_name, name, sizeof(conf_tgt->sct_name));
+		strlcpy(conf_tgt->sct_name, name, sizeof(conf_tgt->sct_name));
                 sptlrpc_rule_set_init(&conf_tgt->sct_rset);
                 cfs_list_add(&conf_tgt->sct_list, &conf->sc_tgts);
         }

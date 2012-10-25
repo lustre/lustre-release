@@ -61,7 +61,8 @@ static int lmv_rd_numobd(char *page, char **start, off_t off, int count,
 
 static const char *placement_name[] = {
         [PLACEMENT_CHAR_POLICY] = "CHAR",
-        [PLACEMENT_NID_POLICY]  = "NID"
+	[PLACEMENT_NID_POLICY]  = "NID",
+	[PLACEMENT_INVAL_POLICY]  = "INVAL"
 };
 
 static placement_policy_t placement_name2policy(char *name, int len)

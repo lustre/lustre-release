@@ -1785,7 +1785,9 @@ kiblnd_init_poolset(kib_poolset_t *ps, int cpt,
         ps->ps_node_init    = nd_init;
         ps->ps_node_fini    = nd_fini;
         ps->ps_pool_size    = size;
-        strncpy(ps->ps_name, name, IBLND_POOL_NAME_LEN);
+	if (strlcpy(ps->ps_name, name, sizeof(ps->ps_name))
+	    >= sizeof(ps->ps_name))
+		return -E2BIG;
 	spin_lock_init(&ps->ps_lock);
         CFS_INIT_LIST_HEAD(&ps->ps_pool_list);
         CFS_INIT_LIST_HEAD(&ps->ps_failed_pool_list);
