@@ -402,8 +402,7 @@ out:
 static int osp_init0(const struct lu_env *env, struct osp_device *m,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
-	struct lprocfs_static_vars	 lvars = { 0 };
-	struct proc_dir_entry		*osc_proc_dir;
+	struct obd_device		*obd;
 	struct obd_import		*imp;
 	class_uuid_t			 uuid;
 	char				*src, *ost, *mdt, *osdname = NULL;
@@ -411,12 +410,13 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 
 	ENTRY;
 
-	m->opd_obd = class_name2obd(lustre_cfg_string(cfg, 0));
-	if (m->opd_obd == NULL) {
+	obd = class_name2obd(lustre_cfg_string(cfg, 0));
+	if (obd == NULL) {
 		CERROR("Cannot find obd with name %s\n",
 		       lustre_cfg_string(cfg, 0));
 		RETURN(-ENODEV);
 	}
+	m->opd_obd = obd;
 
 	/* There is no record in the MDT configuration for the local disk
 	 * device, so we have to extract this from elsewhere in the profile.
@@ -438,8 +438,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 
 	idx = simple_strtol(ost + 4, &mdt, 16);
 	if (mdt[0] != '-' || idx > INT_MAX || idx < 0) {
-		CERROR("%s: invalid OST index in '%s'\n",
-		       m->opd_obd->obd_name, src);
+		CERROR("%s: invalid OST index in '%s'\n", obd->obd_name, src);
 		GOTO(out_fini, rc = -EINVAL);
 	}
 	m->opd_index = idx;
@@ -447,8 +446,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	idx = ost - src;
 	/* check the fsname length, and after this everything else will fit */
 	if (idx > MTI_NAME_MAXLEN) {
-		CERROR("%s: fsname too long in '%s'\n",
-		       m->opd_obd->obd_name, src);
+		CERROR("%s: fsname too long in '%s'\n", obd->obd_name, src);
 		GOTO(out_fini, rc = -EINVAL);
 	}
 
@@ -465,12 +463,11 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	else
 		strcat(osdname, mdt);
 	strcat(osdname, "-osd");
-	CDEBUG(D_HA, "%s: connect to %s (%s)\n",
-	       m->opd_obd->obd_name, osdname, src);
+	CDEBUG(D_HA, "%s: connect to %s (%s)\n", obd->obd_name, osdname, src);
 
 	m->opd_dt_dev.dd_lu_dev.ld_ops = &osp_lu_ops;
 	m->opd_dt_dev.dd_ops = &osp_dt_ops;
-	m->opd_obd->obd_lu_dev = &m->opd_dt_dev.dd_lu_dev;
+	obd->obd_lu_dev = &m->opd_dt_dev.dd_lu_dev;
 
 	rc = osp_connect_to_osd(env, m, osdname);
 	if (rc)
@@ -480,34 +477,13 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	if (rc)
 		GOTO(out_disconnect, rc);
 
-	rc = client_obd_setup(m->opd_obd, cfg);
+	rc = client_obd_setup(obd, cfg);
 	if (rc) {
 		CERROR("%s: can't setup obd: %d\n", m->opd_obd->obd_name, rc);
 		GOTO(out_ref, rc);
 	}
 
-	lprocfs_osp_init_vars(&lvars);
-	if (lprocfs_obd_setup(m->opd_obd, lvars.obd_vars) == 0)
-		ptlrpc_lprocfs_register_obd(m->opd_obd);
-
-	/* for compatibility we link old procfs's OSC entries to osp ones */
-	osc_proc_dir = lprocfs_srch(proc_lustre_root, "osc");
-	if (osc_proc_dir) {
-		cfs_proc_dir_entry_t	*symlink = NULL;
-		char			*name;
-
-		OBD_ALLOC(name, strlen(m->opd_obd->obd_name) + 1);
-		if (name == NULL)
-			GOTO(out, rc = -ENOMEM);
-
-		strcpy(name, m->opd_obd->obd_name);
-		if (strstr(name, "osc"))
-			symlink = lprocfs_add_symlink(name, osc_proc_dir,
-						      "../osp/%s",
-						      m->opd_obd->obd_name);
-		OBD_FREE(name, strlen(m->opd_obd->obd_name) + 1);
-		m->opd_symlink = symlink;
-	}
+	osp_lprocfs_init(m);
 
 	/*
 	 * Initialize last id from the storage - will be used in orphan cleanup
@@ -537,7 +513,7 @@ static int osp_init0(const struct lu_env *env, struct osp_device *m,
 	ll_generate_random_uuid(uuid);
 	class_uuid_unparse(uuid, &m->opd_cluuid);
 
-	imp = m->opd_obd->u.cli.cl_import;
+	imp = obd->u.cli.cl_import;
 
 	rc = ptlrpc_init_import(imp);
 	if (rc)
@@ -555,10 +531,10 @@ out_precreat:
 out_last_used:
 	osp_last_used_fini(env, m);
 out_proc:
-	ptlrpc_lprocfs_unregister_obd(m->opd_obd);
-	lprocfs_obd_cleanup(m->opd_obd);
-	class_destroy_import(m->opd_obd->u.cli.cl_import);
-	client_obd_cleanup(m->opd_obd);
+	ptlrpc_lprocfs_unregister_obd(obd);
+	lprocfs_obd_cleanup(obd);
+	class_destroy_import(obd->u.cli.cl_import);
+	client_obd_cleanup(obd);
 out_ref:
 	ptlrpcd_decref();
 out_disconnect:
@@ -1033,4 +1009,3 @@ MODULE_DESCRIPTION("Lustre OST Proxy Device ("LUSTRE_OSP_NAME")");
 MODULE_LICENSE("GPL");
 
 cfs_module(osp, LUSTRE_VERSION_STRING, osp_mod_init, osp_mod_exit);
-

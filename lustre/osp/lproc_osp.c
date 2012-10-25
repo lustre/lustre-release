@@ -402,12 +402,6 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ "uuid",		lprocfs_rd_uuid, 0, 0 },
 	{ "ping",		0, lprocfs_wr_ping, 0, 0, 0222 },
 	{ "connect_flags",	lprocfs_rd_connect_flags, 0, 0 },
-	{ "blocksize",		lprocfs_rd_blksize, 0, 0 },
-	{ "kbytestotal",	lprocfs_rd_kbytestotal, 0, 0 },
-	{ "kbytesfree",		lprocfs_rd_kbytesfree, 0, 0 },
-	{ "kbytesavail",	lprocfs_rd_kbytesavail, 0, 0 },
-	{ "filestotal",		lprocfs_rd_filestotal, 0, 0 },
-	{ "filesfree",		lprocfs_rd_filesfree, 0, 0 },
 	{ "ost_server_uuid",	lprocfs_rd_server_uuid, 0, 0 },
 	{ "ost_conn_uuid",	lprocfs_rd_conn_uuid, 0, 0 },
 	{ "active",		osp_rd_active, osp_wr_active, 0 },
@@ -437,6 +431,16 @@ static struct lprocfs_vars lprocfs_osp_obd_vars[] = {
 	{ 0 }
 };
 
+static struct lprocfs_vars lprocfs_osp_osd_vars[] = {
+	{ "blocksize",		lprocfs_osd_rd_blksize, 0, 0 },
+	{ "kbytestotal",	lprocfs_osd_rd_kbytestotal, 0, 0 },
+	{ "kbytesfree",		lprocfs_osd_rd_kbytesfree, 0, 0 },
+	{ "kbytesavail",	lprocfs_osd_rd_kbytesavail, 0, 0 },
+	{ "filestotal",		lprocfs_osd_rd_filestotal, 0, 0 },
+	{ "filesfree",		lprocfs_osd_rd_filesfree, 0, 0 },
+	{ 0 }
+};
+
 static struct lprocfs_vars lprocfs_osp_module_vars[] = {
 	{ "num_refs",		lprocfs_rd_numrefs, 0, 0 },
 	{ 0 }
@@ -447,5 +451,52 @@ void lprocfs_osp_init_vars(struct lprocfs_static_vars *lvars)
 	lvars->module_vars = lprocfs_osp_module_vars;
 	lvars->obd_vars = lprocfs_osp_obd_vars;
 }
+
+void osp_lprocfs_init(struct osp_device *osp)
+{
+	struct obd_device	*obd = osp->opd_obd;
+	struct proc_dir_entry	*osc_proc_dir;
+	int			 rc;
+
+	obd->obd_proc_entry = lprocfs_register(obd->obd_name,
+					       obd->obd_type->typ_procroot,
+					       lprocfs_osp_osd_vars,
+					       &osp->opd_dt_dev);
+	if (IS_ERR(obd->obd_proc_entry)) {
+		CERROR("%s: can't register in lprocfs: %ld\n",
+		       obd->obd_name, PTR_ERR(obd->obd_proc_entry));
+		obd->obd_proc_entry = NULL;
+		return;
+	}
+
+	rc = lprocfs_add_vars(obd->obd_proc_entry, lprocfs_osp_obd_vars, obd);
+	if (rc) {
+		CERROR("%s: can't register in lprocfs: %ld\n",
+		       obd->obd_name, PTR_ERR(obd->obd_proc_entry));
+		return;
+	}
+
+	ptlrpc_lprocfs_register_obd(obd);
+
+	/* for compatibility we link old procfs's OSC entries to osp ones */
+	osc_proc_dir = lprocfs_srch(proc_lustre_root, "osc");
+	if (osc_proc_dir) {
+		cfs_proc_dir_entry_t	*symlink = NULL;
+		char			*name;
+
+		OBD_ALLOC(name, strlen(obd->obd_name) + 1);
+		if (name == NULL)
+			return;
+
+		strcpy(name, obd->obd_name);
+		if (strstr(name, "osc"))
+			symlink = lprocfs_add_symlink(name, osc_proc_dir,
+						      "../osp/%s",
+						      obd->obd_name);
+		OBD_FREE(name, strlen(obd->obd_name) + 1);
+		osp->opd_symlink = symlink;
+	}
+}
+
 #endif /* LPROCFS */
 

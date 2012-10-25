@@ -305,6 +305,7 @@ void osp_statfs_need_now(struct osp_device *d);
 
 /* lproc_osp.c */
 void lprocfs_osp_init_vars(struct lprocfs_static_vars *lvars);
+void osp_lprocfs_init(struct osp_device *osp);
 
 /* osp_sync.c */
 int osp_sync_declare_add(const struct lu_env *env, struct osp_object *o,
