@@ -383,6 +383,7 @@ static int osd_commit_async(const struct lu_env *env, struct dt_device *dev)
 	tx_state_t	  *tx = &dmu_objset_pool(osd->od_objset.os)->dp_tx;
 	uint64_t	   txg;
 
+	mutex_enter(&tx->tx_sync_lock);
 	txg = tx->tx_open_txg + 1;
 	if (tx->tx_quiesce_txg_waiting < txg) {
 		tx->tx_quiesce_txg_waiting = txg;
