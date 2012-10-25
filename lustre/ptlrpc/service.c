@@ -64,7 +64,7 @@ CFS_MODULE_PARM(at_extra, "i", int, 0644,
 
 /* forward ref */
 static int ptlrpc_server_post_idle_rqbds(struct ptlrpc_service_part *svcpt);
-static void ptlrpc_hpreq_fini(struct ptlrpc_request *req);
+static void ptlrpc_server_hpreq_fini(struct ptlrpc_request *req);
 static void ptlrpc_at_remove_timed(struct ptlrpc_request *req);
 
 static CFS_LIST_HEAD(ptlrpc_all_services);
@@ -964,7 +964,7 @@ void ptlrpc_server_drop_request(struct ptlrpc_request *req)
 static void ptlrpc_server_finish_request(struct ptlrpc_service_part *svcpt,
 					 struct ptlrpc_request *req)
 {
-	ptlrpc_hpreq_fini(req);
+	ptlrpc_server_hpreq_fini(req);
 
 	cfs_spin_lock(&svcpt->scp_req_lock);
 	svcpt->scp_nreqs_active--;
@@ -1447,8 +1447,8 @@ static int ptlrpc_at_check_timed(struct ptlrpc_service_part *svcpt)
  * Put the request to the export list if the request may become
  * a high priority one.
  */
-static int ptlrpc_hpreq_init(struct ptlrpc_service *svc,
-                             struct ptlrpc_request *req)
+static int ptlrpc_server_hpreq_init(struct ptlrpc_service *svc,
+				    struct ptlrpc_request *req)
 {
         int rc = 0;
         ENTRY;
@@ -1475,7 +1475,7 @@ static int ptlrpc_hpreq_init(struct ptlrpc_service *svc,
 }
 
 /** Remove the request from the export list. */
-static void ptlrpc_hpreq_fini(struct ptlrpc_request *req)
+static void ptlrpc_server_hpreq_fini(struct ptlrpc_request *req)
 {
         ENTRY;
         if (req->rq_export && req->rq_ops) {
@@ -1497,9 +1497,7 @@ static int ptlrpc_hpreq_check(struct ptlrpc_request *req)
 }
 
 static struct ptlrpc_hpreq_ops ptlrpc_hpreq_common = {
-	.hpreq_lock_match  = NULL,
 	.hpreq_check       = ptlrpc_hpreq_check,
-	.hpreq_fini        = NULL,
 };
 
 /* Hi-Priority RPC check by RPC operation code. */
@@ -1566,21 +1564,17 @@ void ptlrpc_hpreq_reorder(struct ptlrpc_request *req)
 }
 EXPORT_SYMBOL(ptlrpc_hpreq_reorder);
 
-/** Check if the request is a high priority one. */
-static int ptlrpc_server_hpreq_check(struct ptlrpc_service *svc,
-                                     struct ptlrpc_request *req)
-{
-	return ptlrpc_hpreq_init(svc, req);
-}
-
-/** Check if a request is a high priority one. */
+/**
+ * Add a request to the regular or HP queue; optionally perform HP request
+ * initialization.
+ */
 static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 				     struct ptlrpc_request *req)
 {
 	int	rc;
 	ENTRY;
 
-	rc = ptlrpc_server_hpreq_check(svcpt->scp_service, req);
+	rc = ptlrpc_server_hpreq_init(svcpt->scp_service, req);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -1833,7 +1827,7 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt)
         /* Move it over to the request processing queue */
 	rc = ptlrpc_server_request_add(svcpt, req);
 	if (rc) {
-		ptlrpc_hpreq_fini(req);
+		ptlrpc_server_hpreq_fini(req);
 		GOTO(err_req, rc);
 	}
 	cfs_waitq_signal(&svcpt->scp_waitq);
@@ -3047,7 +3041,7 @@ ptlrpc_service_purge_all(struct ptlrpc_service *svc)
 			req = ptlrpc_server_request_get(svcpt, 1);
 			cfs_list_del(&req->rq_list);
 			svcpt->scp_nreqs_active++;
-			ptlrpc_hpreq_fini(req);
+			ptlrpc_server_hpreq_fini(req);
 
 			if (req->rq_export != NULL)
 				class_export_rpc_put(req->rq_export);
