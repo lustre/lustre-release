@@ -73,9 +73,6 @@ do {                                                                    \
                                       OBD_CONNECT_RMT_CLIENT_FORCE |    \
                                       OBD_CONNECT_MDS_CAPA |            \
                                       OBD_CONNECT_OSS_CAPA);            \
-        cfs_spin_lock(&exp->exp_lock);                                  \
-        exp->exp_connect_flags = reply->ocd_connect_flags;              \
-        cfs_spin_unlock(&exp->exp_lock);                                \
 } while (0)
 
 int mdt_init_sec_level(struct mdt_thread_info *info)
@@ -180,10 +177,6 @@ int mdt_init_sec_level(struct mdt_thread_info *info)
                                 reply->ocd_connect_flags &= ~OBD_CONNECT_MDS_CAPA;
                         if (!mdt->mdt_opts.mo_oss_capa)
                                 reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
-
-                        cfs_spin_lock(&exp->exp_lock);
-                        exp->exp_connect_flags = reply->ocd_connect_flags;
-                        cfs_spin_unlock(&exp->exp_lock);
                 }
                 break;
         default:
