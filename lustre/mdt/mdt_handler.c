@@ -1195,25 +1195,43 @@ static int mdt_set_info(struct mdt_thread_info *info)
         RETURN(0);
 }
 
+/**
+ * Top-level handler for MDT connection requests.
+ */
 static int mdt_connect(struct mdt_thread_info *info)
 {
-        int rc;
-        struct ptlrpc_request *req;
+	int rc;
+	struct obd_connect_data *reply;
+	struct obd_export *exp;
+	struct ptlrpc_request *req = mdt_info_req(info);
 
-        req = mdt_info_req(info);
-        rc = target_handle_connect(req);
-        if (rc == 0) {
-                LASSERT(req->rq_export != NULL);
-                info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
-                rc = mdt_init_sec_level(info);
-                if (rc == 0)
-                        rc = mdt_init_idmap(info);
-                if (rc != 0)
-                        obd_disconnect(class_export_get(req->rq_export));
-        } else {
-                rc = err_serious(rc);
-        }
-        return rc;
+	rc = target_handle_connect(req);
+	if (rc != 0)
+		return err_serious(rc);
+
+	LASSERT(req->rq_export != NULL);
+	info->mti_mdt = mdt_dev(req->rq_export->exp_obd->obd_lu_dev);
+	rc = mdt_init_sec_level(info);
+	if (rc != 0) {
+		obd_disconnect(class_export_get(req->rq_export));
+		return rc;
+	}
+
+	/* To avoid exposing partially initialized connection flags, changes up
+	 * to this point have been staged in reply->ocd_connect_flags. Now that
+	 * connection handling has completed successfully, atomically update
+	 * the connect flags in the shared export data structure. LU-1623 */
+	reply = req_capsule_server_get(info->mti_pill, &RMF_CONNECT_DATA);
+	exp = req->rq_export;
+	cfs_spin_lock(&exp->exp_lock);
+	exp->exp_connect_flags = reply->ocd_connect_flags;
+	cfs_spin_unlock(&exp->exp_lock);
+
+	rc = mdt_init_idmap(info);
+	if (rc != 0)
+		obd_disconnect(class_export_get(req->rq_export));
+
+	return rc;
 }
 
 static int mdt_disconnect(struct mdt_thread_info *info)
@@ -4919,79 +4937,87 @@ static int mdt_obd_set_info_async(struct obd_export *exp,
         RETURN(0);
 }
 
-/* mds_connect_internal */
+/**
+ * Match client and server connection feature flags.
+ *
+ * Compute the compatibility flags for a connection request based on
+ * features mutually supported by client and server.
+ *
+ * The obd_export::exp_connect_flags field in \a exp must not be updated
+ * here, otherwise a partially initialized value may be exposed. After
+ * the connection request is successfully processed, the top-level MDT
+ * connect request handler atomically updates the export connect flags
+ * from the obd_connect_data::ocd_connect_flags field of the reply.
+ * \see mdt_connect().
+ *
+ * \param exp   the obd_export associated with this client/target pair
+ * \param mdt   the target device for the connection
+ * \param data  stores data for this connect request
+ *
+ * \retval 0       success
+ * \retval -EPROTO \a data unexpectedly has zero obd_connect_data::ocd_brw_size
+ * \retval -EBADE  client and server feature requirements are incompatible
+ */
 static int mdt_connect_internal(struct obd_export *exp,
-                                struct mdt_device *mdt,
-                                struct obd_connect_data *data)
+				struct mdt_device *mdt,
+				struct obd_connect_data *data)
 {
-        if (data != NULL) {
-                data->ocd_connect_flags &= MDT_CONNECT_SUPPORTED;
-                data->ocd_ibits_known &= MDS_INODELOCK_FULL;
+	LASSERT(data != NULL);
 
-                /* If no known bits (which should not happen, probably,
-                   as everybody should support LOOKUP and UPDATE bits at least)
-                   revert to compat mode with plain locks. */
-                if (!data->ocd_ibits_known &&
-                    data->ocd_connect_flags & OBD_CONNECT_IBITS)
-                        data->ocd_connect_flags &= ~OBD_CONNECT_IBITS;
+	data->ocd_connect_flags &= MDT_CONNECT_SUPPORTED;
+	data->ocd_ibits_known &= MDS_INODELOCK_FULL;
 
-                if (!mdt->mdt_opts.mo_acl)
-                        data->ocd_connect_flags &= ~OBD_CONNECT_ACL;
+	/* If no known bits (which should not happen, probably,
+	   as everybody should support LOOKUP and UPDATE bits at least)
+	   revert to compat mode with plain locks. */
+	if (!data->ocd_ibits_known &&
+	    data->ocd_connect_flags & OBD_CONNECT_IBITS)
+		data->ocd_connect_flags &= ~OBD_CONNECT_IBITS;
 
-                if (!mdt->mdt_opts.mo_user_xattr)
-                        data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
+	if (!mdt->mdt_opts.mo_acl)
+		data->ocd_connect_flags &= ~OBD_CONNECT_ACL;
 
-                if (!mdt->mdt_som_conf)
-                        data->ocd_connect_flags &= ~OBD_CONNECT_SOM;
+	if (!mdt->mdt_opts.mo_user_xattr)
+		data->ocd_connect_flags &= ~OBD_CONNECT_XATTR;
 
-                if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
-                        data->ocd_brw_size = min(data->ocd_brw_size,
-                               (__u32)(PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT));
-                        if (data->ocd_brw_size == 0) {
-                                CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
-                                       " ocd_version: %x ocd_grant: %d "
-                                       "ocd_index: %u ocd_brw_size is "
-                                       "unexpectedly zero, network data "
-                                       "corruption? Refusing connection of this"
-                                       " client\n",
-                                       exp->exp_obd->obd_name,
-                                       exp->exp_client_uuid.uuid,
-                                       exp, data->ocd_connect_flags, data->ocd_version,
-                                       data->ocd_grant, data->ocd_index);
-                                return -EPROTO;
-                        }
-                }
+	if (!mdt->mdt_som_conf)
+		data->ocd_connect_flags &= ~OBD_CONNECT_SOM;
 
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_connect_flags = data->ocd_connect_flags;
-                cfs_spin_unlock(&exp->exp_lock);
-                data->ocd_version = LUSTRE_VERSION_CODE;
-                exp->exp_mdt_data.med_ibits_known = data->ocd_ibits_known;
-        }
+	if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
+		data->ocd_brw_size = min(data->ocd_brw_size,
+			(__u32)(PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT));
+		if (data->ocd_brw_size == 0) {
+			CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
+			       " ocd_version: %x ocd_grant: %d "
+			       "ocd_index: %u ocd_brw_size is "
+			       "unexpectedly zero, network data "
+			       "corruption? Refusing connection of this"
+			       " client\n",
+			       exp->exp_obd->obd_name,
+			       exp->exp_client_uuid.uuid,
+			       exp, data->ocd_connect_flags, data->ocd_version,
+			       data->ocd_grant, data->ocd_index);
+			return -EPROTO;
+		}
+	}
 
-#if 0
-        if (mdt->mdt_opts.mo_acl &&
-            ((exp->exp_connect_flags & OBD_CONNECT_ACL) == 0)) {
-                CWARN("%s: MDS requires ACL support but client does not\n",
-                      mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
-                return -EBADE;
-        }
-#endif
+	data->ocd_version = LUSTRE_VERSION_CODE;
+	exp->exp_mdt_data.med_ibits_known = data->ocd_ibits_known;
 
-        if ((exp->exp_connect_flags & OBD_CONNECT_FID) == 0) {
-                CWARN("%s: MDS requires FID support, but client not\n",
-                      mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
-                return -EBADE;
-        }
+	if ((data->ocd_connect_flags & OBD_CONNECT_FID) == 0) {
+		CWARN("%s: MDS requires FID support, but client not\n",
+		      mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
+		return -EBADE;
+	}
 
-        if (mdt->mdt_som_conf && !exp_connect_som(exp) &&
-            !(exp->exp_connect_flags & OBD_CONNECT_MDS_MDS)) {
-                CWARN("%s: MDS has SOM enabled, but client does not support "
-                      "it\n", mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
-                return -EBADE;
-        }
+	if (mdt->mdt_som_conf &&
+	    !(data->ocd_connect_flags & (OBD_CONNECT_MDS_MDS|OBD_CONNECT_SOM))){
+		CWARN("%s: MDS has SOM enabled, but client does not support "
+		      "it\n", mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
+		return -EBADE;
+	}
 
-        return 0;
+	return 0;
 }
 
 static int mdt_connect_check_sptlrpc(struct mdt_device *mdt,

@@ -1034,8 +1034,8 @@ dont_check_exports:
         cfs_spin_lock(&export->exp_lock);
         if (export->exp_conn_cnt >= lustre_msg_get_conn_cnt(req->rq_reqmsg)) {
                 cfs_spin_unlock(&export->exp_lock);
-                CDEBUG(D_RPCTRACE, "%s: %s already connected at higher "
-                       "conn_cnt: %d > %d\n",
+		CDEBUG(D_RPCTRACE, "%s: %s already connected at greater "
+		       "or equal conn_cnt: %d >= %d\n",
                        cluuid.uuid, libcfs_nid2str(req->rq_peer.nid),
                        export->exp_conn_cnt,
                        lustre_msg_get_conn_cnt(req->rq_reqmsg));
@@ -1145,13 +1145,13 @@ dont_check_exports:
          * ptlrpc_handle_server_req_in->lustre_unpack_msg() */
         revimp->imp_msg_magic = req->rq_reqmsg->lm_magic;
 
-        if ((export->exp_connect_flags & OBD_CONNECT_AT) &&
-            (revimp->imp_msg_magic != LUSTRE_MSG_MAGIC_V1))
-                revimp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
-        else
-                revimp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
+	if ((data->ocd_connect_flags & OBD_CONNECT_AT) &&
+	    (revimp->imp_msg_magic != LUSTRE_MSG_MAGIC_V1))
+		revimp->imp_msghdr_flags |= MSGHDR_AT_SUPPORT;
+	else
+		revimp->imp_msghdr_flags &= ~MSGHDR_AT_SUPPORT;
 
-        if ((export->exp_connect_flags & OBD_CONNECT_FULL20) &&
+	if ((data->ocd_connect_flags & OBD_CONNECT_FULL20) &&
             (revimp->imp_msg_magic != LUSTRE_MSG_MAGIC_V1))
                 revimp->imp_msghdr_flags |= MSGHDR_CKSUM_INCOMPAT18;
         else
