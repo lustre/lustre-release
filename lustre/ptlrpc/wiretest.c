@@ -2000,10 +2000,6 @@ void lustre_assert_wire_constants(void)
                  MDS_OPEN_OWNEROVERRIDE);
         LASSERTF(MDS_OPEN_JOIN_FILE == 000400000000UL, "found 0%.11oUL\n",
                  MDS_OPEN_JOIN_FILE);
-        LASSERTF(MDS_CREATE_RMT_ACL == 001000000000UL, "found 0%.11oUL\n",
-                 MDS_CREATE_RMT_ACL);
-        LASSERTF(MDS_CREATE_SLAVE_OBJ == 002000000000UL, "found 0%.11oUL\n",
-                 MDS_CREATE_SLAVE_OBJ);
         LASSERTF(MDS_OPEN_LOCK == 004000000000UL, "found 0%.11oUL\n",
                  MDS_OPEN_LOCK);
         LASSERTF(MDS_OPEN_HAS_EA == 010000000000UL, "found 0%.11oUL\n",

@@ -90,8 +90,6 @@
 #define LDD_F_UPGRADE14     0x0200
 /** process as lctl conf_param */
 #define LDD_F_PARAM         0x0400
-/** backend fs make use of IAM directory format. */
-#define LDD_F_IAM_DIR       0x0800
 /** all nodes are specified as service nodes */
 #define LDD_F_NO_PRIMNODE   0x1000
 /** IR enable flag */
@@ -105,7 +103,7 @@
 #define LDD_F_OPC_READY 0x40000000
 #define LDD_F_OPC_MASK  0xf0000000
 
-#define LDD_F_ONDISK_MASK  (LDD_F_SV_TYPE_MASK | LDD_F_IAM_DIR)
+#define LDD_F_ONDISK_MASK  (LDD_F_SV_TYPE_MASK)
 
 #define LDD_F_MASK          0xFFFF
 

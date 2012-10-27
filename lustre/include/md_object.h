@@ -214,9 +214,6 @@ struct md_op_spec {
         /** Current lock mode for parent dir where create is performing. */
         mdl_mode_t sp_cr_mode;
 
-        /** Check for split */
-        int        sp_ck_split;
-
         /** to create directory */
         const struct dt_index_features *sp_feat;
 };

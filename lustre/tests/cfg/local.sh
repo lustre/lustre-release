@@ -15,7 +15,6 @@ TMP=${TMP:-/tmp}
 DAEMONSIZE=${DAEMONSIZE:-500}
 MDSCOUNT=${MDSCOUNT:-1}
 [ $MDSCOUNT -gt 4 ] && MDSCOUNT=4
-[ $MDSCOUNT -gt 1 ] && IAMDIR=yes
 for num in $(seq $MDSCOUNT); do
     eval mds${num}_HOST=\$\{mds${num}_HOST:-$mds_HOST\}
     eval mds${num}failover_HOST=\$\{mds${num}failover_HOST:-$mdsfailover_HOST\}

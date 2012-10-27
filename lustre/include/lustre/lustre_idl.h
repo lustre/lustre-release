@@ -2083,11 +2083,7 @@ extern void lustre_swab_mdt_rec_setattr (struct mdt_rec_setattr *sa);
                                            * anymore, reserve this flags
                                            * just for preventing such bit
                                            * to be reused. */
-#define MDS_CREATE_RMT_ACL    01000000000 /* indicate create on remote server
-                                           * with default ACL */
-#define MDS_CREATE_SLAVE_OBJ  02000000000 /* indicate create slave object
-                                           * actually, this is for create, not
-                                           * conflict with other open flags */
+
 #define MDS_OPEN_LOCK         04000000000 /* This open requires open lock */
 #define MDS_OPEN_HAS_EA      010000000000 /* specify object create pattern */
 #define MDS_OPEN_HAS_OBJS    020000000000 /* Just set the EA the obj exist */

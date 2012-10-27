@@ -2066,7 +2066,7 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 	lsi->lsi_flags |= rc;
 
 	/* Add mount line flags that used to be in ldd:
-	 * writeconf, mgs, iam, anything else?
+	 * writeconf, mgs, anything else?
 	 */
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_WRITECONF) ?
 		LDD_F_WRITECONF : 0;
@@ -2074,8 +2074,6 @@ static int lsi_prepare(struct lustre_sb_info *lsi)
 		LDD_F_VIRGIN : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_MGS) ?
 		LDD_F_SV_TYPE_MGS : 0;
-	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_IAM) ?
-		LDD_F_IAM_DIR : 0;
 	lsi->lsi_flags |= (lsi->lsi_lmd->lmd_flags & LMD_FLG_NO_PRIMNODE) ?
 		LDD_F_NO_PRIMNODE : 0;
 

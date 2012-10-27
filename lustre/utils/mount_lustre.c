@@ -364,8 +364,6 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 		append_option(options, "virgin");
 	if (ldd->ldd_flags & LDD_F_WRITECONF)
 		append_option(options, "writeconf");
-	if (ldd->ldd_flags & LDD_F_IAM_DIR)
-		append_option(options, "iam");
 	if (ldd->ldd_flags & LDD_F_NO_PRIMNODE)
 		append_option(options, "noprimnode");
 

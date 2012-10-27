@@ -357,56 +357,6 @@ out_put_parent:
         RETURN(rc);
 }
 
-/* Partial request to create object only */
-static int mdt_md_mkobj(struct mdt_thread_info *info)
-{
-        struct mdt_device      *mdt = info->mti_mdt;
-        struct mdt_object      *o;
-        struct mdt_body        *repbody;
-        struct md_attr         *ma = &info->mti_attr;
-        int rc;
-        ENTRY;
-
-        DEBUG_REQ(D_INODE, mdt_info_req(info), "Partial create "DFID"",
-                  PFID(info->mti_rr.rr_fid2));
-
-        repbody = req_capsule_server_get(info->mti_pill, &RMF_MDT_BODY);
-
-        o = mdt_object_find(info->mti_env, mdt, info->mti_rr.rr_fid2);
-        if (!IS_ERR(o)) {
-                struct md_object *next = mdt_object_child(o);
-
-                ma->ma_need = MA_INODE;
-                ma->ma_valid = 0;
-
-                /*
-                 * Cross-ref create can encounter already created obj in case of
-                 * recovery, just get attr in that case.
-                 */
-                if (mdt_object_exists(o) == 1) {
-			rc = mdt_attr_get_complex(info, o, ma);
-                } else {
-                        /*
-                         * Here, NO permission check for object_create,
-                         * such check has been done on the original MDS.
-                         */
-                        rc = mo_object_create(info->mti_env, next,
-                                              &info->mti_spec, ma);
-                }
-                if (rc == 0) {
-                        /* Return fid & attr to client. */
-                        if (ma->ma_valid & MA_INODE)
-                                mdt_pack_attr2body(info, repbody, &ma->ma_attr,
-                                                   mdt_object_fid(o));
-                }
-                mdt_object_put(info->mti_env, o);
-        } else
-                rc = PTR_ERR(o);
-
-        mdt_create_pack_capa(info, rc, o, repbody);
-        RETURN(rc);
-}
-
 int mdt_attr_set(struct mdt_thread_info *info, struct mdt_object *mo,
                  struct md_attr *ma, int flags)
 {
@@ -614,35 +564,29 @@ static int mdt_reint_create(struct mdt_thread_info *info,
         if (info->mti_dlm_req)
                 ldlm_request_cancel(mdt_info_req(info), info->mti_dlm_req, 0);
 
+	LASSERT(info->mti_rr.rr_namelen > 0);
         switch (info->mti_attr.ma_attr.la_mode & S_IFMT) {
-        case S_IFDIR:{
-                /* Cross-ref case. */
-                /* TODO: we can add LPROC_MDT_CROSS for cross-ref stats */
-                if (info->mti_cross_ref) {
-                        rc = mdt_md_mkobj(info);
-                } else {
-                        LASSERT(info->mti_rr.rr_namelen > 0);
-			mdt_counter_incr(req, LPROC_MDT_MKDIR);
-                        rc = mdt_md_create(info);
-                }
-                break;
-        }
+	case S_IFDIR:
+		mdt_counter_incr(req, LPROC_MDT_MKDIR);
+		break;
         case S_IFREG:
         case S_IFLNK:
         case S_IFCHR:
         case S_IFBLK:
         case S_IFIFO:
-        case S_IFSOCK:{
-                /* Special file should stay on the same node as parent. */
-                LASSERT(info->mti_rr.rr_namelen > 0);
+	case S_IFSOCK:
+		/* Special file should stay on the same node as parent. */
 		mdt_counter_incr(req, LPROC_MDT_MKNOD);
-                rc = mdt_md_create(info);
-                break;
-        }
-        default:
-                rc = err_serious(-EOPNOTSUPP);
-        }
-        RETURN(rc);
+		break;
+	default:
+		CERROR("%s: Unsupported mode %o\n",
+		       mdt2obd_dev(info->mti_mdt)->obd_name,
+		       info->mti_attr.ma_attr.la_mode);
+		RETURN(err_serious(-EOPNOTSUPP));
+	}
+
+	rc = mdt_md_create(info);
+	RETURN(rc);
 }
 
 /*
@@ -674,29 +618,16 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 RETURN(err_serious(-ENOENT));
 
         /*
-         * step 1: lock the parent. Note, this may be child in case of
-         * remote operation denoted by ->mti_cross_ref flag.
+	 * step 1: lock the parent.
          */
         parent_lh = &info->mti_lh[MDT_LH_PARENT];
-        if (info->mti_cross_ref) {
-                /*
-                 * Init reg lock for cross ref case when we need to do only
-                 * ref del locally.
-                 */
-                mdt_lock_reg_init(parent_lh, LCK_PW);
-        } else {
-                mdt_lock_pdo_init(parent_lh, LCK_PW, rr->rr_name,
-                                  rr->rr_namelen);
-        }
+	mdt_lock_pdo_init(parent_lh, LCK_PW, rr->rr_name,
+			  rr->rr_namelen);
+
         mp = mdt_object_find_lock(info, rr->rr_fid1, parent_lh,
                                   MDS_INODELOCK_UPDATE);
-        if (IS_ERR(mp)) {
-                rc = PTR_ERR(mp);
-                /* errors are possible here in cross-ref cases, see below */
-                if (info->mti_cross_ref)
-                        rc = 0;
-                GOTO(out, rc);
-        }
+	if (IS_ERR(mp))
+		GOTO(out, rc = PTR_ERR(mp));
 
         if (mdt_object_obf(mp))
                 GOTO(out_unlock_parent, rc = -EPERM);
@@ -706,24 +637,6 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
                 GOTO(out_unlock_parent, rc);
 
         mdt_reint_init_ma(info, ma);
-
-        if (info->mti_cross_ref) {
-                /*
-                 * Remote partial operation. It is possible that replay may
-                 * happen on parent MDT and this operation will be repeated.
-                 * Therefore the object absense is allowed case and nothing
-                 * should be done here.
-                 */
-                if (mdt_object_exists(mp) > 0) {
-                        mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
-                        rc = mo_ref_del(info->mti_env,
-                                        mdt_object_child(mp), ma);
-                        if (rc == 0)
-                                mdt_handle_last_unlink(info, mp, ma);
-                } else
-                        rc = 0;
-                GOTO(out_unlock_parent, rc);
-        }
 
         /* step 2: find & lock the child */
         lname = mdt_name(info->mti_env, (char *)rr->rr_name, rr->rr_namelen);
@@ -818,21 +731,6 @@ static int mdt_reint_link(struct mdt_thread_info *info,
 
         if (info->mti_dlm_req)
                 ldlm_request_cancel(req, info->mti_dlm_req, 0);
-
-        if (info->mti_cross_ref) {
-                /* MDT holding name ask us to add ref. */
-                lhs = &info->mti_lh[MDT_LH_CHILD];
-                mdt_lock_reg_init(lhs, LCK_EX);
-                ms = mdt_object_find_lock(info, rr->rr_fid1, lhs,
-                                          MDS_INODELOCK_UPDATE);
-                if (IS_ERR(ms))
-                        RETURN(PTR_ERR(ms));
-
-                mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
-                rc = mo_ref_add(info->mti_env, mdt_object_child(ms), ma);
-                mdt_object_unlock_put(info, ms, lhs, rc);
-                RETURN(rc);
-        }
 
         /* Invalid case so return error immediately instead of
          * processing it */
@@ -932,79 +830,6 @@ static int mdt_pdir_hash_lock(struct mdt_thread_info *info,
         rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
                           res_id, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB,
                           &info->mti_exp->exp_handle.h_cookie);
-        return rc;
-}
-
-/* partial operation for rename */
-static int mdt_reint_rename_tgt(struct mdt_thread_info *info)
-{
-        struct mdt_reint_record *rr = &info->mti_rr;
-        struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_attr          *ma = &info->mti_attr;
-        struct mdt_object       *mtgtdir;
-        struct mdt_object       *mtgt = NULL;
-        struct mdt_lock_handle  *lh_tgtdir;
-        struct mdt_lock_handle  *lh_tgt = NULL;
-        struct lu_fid           *tgt_fid = &info->mti_tmp_fid1;
-        struct lu_name          *lname;
-        int                      rc;
-        ENTRY;
-
-        DEBUG_REQ(D_INODE, req, "rename_tgt: insert (%s->"DFID") in "DFID,
-                  rr->rr_tgt, PFID(rr->rr_fid2), PFID(rr->rr_fid1));
-
-        /* step 1: lookup & lock the tgt dir. */
-        lh_tgtdir = &info->mti_lh[MDT_LH_PARENT];
-        mdt_lock_pdo_init(lh_tgtdir, LCK_PW, rr->rr_tgt,
-                          rr->rr_tgtlen);
-        mtgtdir = mdt_object_find_lock(info, rr->rr_fid1, lh_tgtdir,
-                                       MDS_INODELOCK_UPDATE);
-        if (IS_ERR(mtgtdir))
-                RETURN(PTR_ERR(mtgtdir));
-
-        /* step 2: find & lock the target object if exists. */
-        mdt_set_capainfo(info, 0, rr->rr_fid1, BYPASS_CAPA);
-        lname = mdt_name(info->mti_env, (char *)rr->rr_tgt, rr->rr_tgtlen);
-        rc = mdo_lookup(info->mti_env, mdt_object_child(mtgtdir),
-                        lname, tgt_fid, &info->mti_spec);
-        if (rc != 0 && rc != -ENOENT) {
-                GOTO(out_unlock_tgtdir, rc);
-        } else if (rc == 0) {
-                /*
-                 * In case of replay that name can be already inserted, check
-                 * that and do nothing if so.
-                 */
-                if (lu_fid_eq(tgt_fid, rr->rr_fid2))
-                        GOTO(out_unlock_tgtdir, rc);
-
-                lh_tgt = &info->mti_lh[MDT_LH_CHILD];
-                mdt_lock_reg_init(lh_tgt, LCK_EX);
-
-                mtgt = mdt_object_find_lock(info, tgt_fid, lh_tgt,
-                                            MDS_INODELOCK_LOOKUP);
-                if (IS_ERR(mtgt))
-                        GOTO(out_unlock_tgtdir, rc = PTR_ERR(mtgt));
-
-                mdt_reint_init_ma(info, ma);
-
-                rc = mdo_rename_tgt(info->mti_env, mdt_object_child(mtgtdir),
-                                    mdt_object_child(mtgt), rr->rr_fid2,
-                                    lname, ma);
-        } else /* -ENOENT */ {
-                rc = mdo_name_insert(info->mti_env, mdt_object_child(mtgtdir),
-                                     lname, rr->rr_fid2, ma);
-        }
-
-        /* handle last link of tgt object */
-        if (rc == 0 && mtgt)
-                mdt_handle_last_unlink(info, mtgt, ma);
-
-        EXIT;
-
-        if (mtgt)
-                mdt_object_unlock_put(info, mtgt, lh_tgt, rc);
-out_unlock_tgtdir:
-        mdt_object_unlock_put(info, mtgtdir, lh_tgtdir, rc);
         return rc;
 }
 
@@ -1125,11 +950,6 @@ static int mdt_reint_rename(struct mdt_thread_info *info,
 
         if (info->mti_dlm_req)
                 ldlm_request_cancel(req, info->mti_dlm_req, 0);
-
-        if (info->mti_cross_ref) {
-                rc = mdt_reint_rename_tgt(info);
-                RETURN(rc);
-        }
 
         DEBUG_REQ(D_INODE, req, "rename "DFID"/%s to "DFID"/%s",
                   PFID(rr->rr_fid1), rr->rr_name,

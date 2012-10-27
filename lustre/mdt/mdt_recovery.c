@@ -268,9 +268,6 @@ static int mdt_server_data_init(const struct lu_env *env,
                 lsd->lsd_feature_compat |= OBD_COMPAT_20;
         }
 
-	if (lsi->lsi_flags & LDD_F_IAM_DIR)
-                lsd->lsd_feature_incompat |= OBD_INCOMPAT_IAM_DIR;
-
         lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
 
         cfs_spin_lock(&mdt->mdt_lut.lut_translock);

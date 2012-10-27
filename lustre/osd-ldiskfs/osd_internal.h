@@ -271,8 +271,7 @@ struct osd_device {
         struct obd_statfs         od_statfs;
         cfs_spinlock_t            od_osfs_lock;
 
-	unsigned int		  od_iop_mode:1,
-				  od_noscrub:1;
+	unsigned int		  od_noscrub:1;
 
         struct fsfilt_operations *od_fsops;
 	int			  od_connects;

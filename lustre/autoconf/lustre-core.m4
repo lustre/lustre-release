@@ -2520,8 +2520,6 @@ lustre/mds/Makefile
 lustre/mds/autoMakefile
 lustre/mdt/Makefile
 lustre/mdt/autoMakefile
-lustre/cmm/Makefile
-lustre/cmm/autoMakefile
 lustre/mdd/Makefile
 lustre/mdd/autoMakefile
 lustre/fld/Makefile

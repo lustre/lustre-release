@@ -150,11 +150,7 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
 
                 l = &mo->oo_dt.do_lu;
                 dt_object_init(&mo->oo_dt, NULL, d);
-                if (osd_dev(d)->od_iop_mode)
-                        mo->oo_dt.do_ops = &osd_obj_ea_ops;
-                else
-                        mo->oo_dt.do_ops = &osd_obj_ops;
-
+		mo->oo_dt.do_ops = &osd_obj_ea_ops;
                 l->lo_ops = &osd_lu_obj_ops;
                 cfs_init_rwsem(&mo->oo_sem);
                 cfs_init_rwsem(&mo->oo_ext_idx_sem);
@@ -397,10 +393,9 @@ trigger:
 
         obj->oo_inode = inode;
         LASSERT(obj->oo_inode->i_sb == osd_sb(dev));
-        if (dev->od_iop_mode) {
-                obj->oo_compat_dot_created = 1;
-                obj->oo_compat_dotdot_created = 1;
-        }
+
+	obj->oo_compat_dot_created = 1;
+	obj->oo_compat_dotdot_created = 1;
 
         if (!S_ISDIR(inode->i_mode) || !ldiskfs_pdo) /* done */
 		GOTO(out, result = 0);
@@ -1690,7 +1685,6 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
 {
         int result;
         struct osd_thandle *oth;
-        struct osd_device *osd = osd_obj2dev(obj);
         __u32 mode = (attr->la_mode & (S_IFMT | S_IRWXUGO | S_ISVTX));
 
         LASSERT(S_ISDIR(attr->la_mode));
@@ -1698,16 +1692,7 @@ static int osd_mkdir(struct osd_thread_info *info, struct osd_object *obj,
         oth = container_of(th, struct osd_thandle, ot_super);
         LASSERT(oth->ot_handle->h_transaction != NULL);
         result = osd_mkfile(info, obj, mode, hint, th);
-        if (result == 0 && osd->od_iop_mode == 0) {
-                LASSERT(obj->oo_inode != NULL);
-                /*
-                 * XXX uh-oh... call low-level iam function directly.
-                 */
 
-                result = iam_lvar_create(obj->oo_inode, OSD_NAME_LEN, 4,
-                                         sizeof (struct osd_fid_pack),
-                                         oth->ot_handle);
-        }
         return result;
 }
 
@@ -2703,7 +2688,6 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 	int			 result;
 	int			 skip_iam = 0;
 	struct osd_object	*obj = osd_dt_obj(dt);
-	struct osd_device	*osd = osd_obj2dev(obj);
 
         LINVRNT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
@@ -2711,7 +2695,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_is_root(obj)) {
                 dt->do_index_ops = &osd_index_ea_ops;
                 result = 0;
-        } else if (feat == &dt_directory_features && osd->od_iop_mode) {
+	} else if (feat == &dt_directory_features) {
                 dt->do_index_ops = &osd_index_ea_ops;
                 if (S_ISDIR(obj->oo_inode->i_mode))
                         result = 0;
@@ -3878,6 +3862,7 @@ static const struct dt_index_operations osd_index_iam_ops = {
         }
 };
 
+
 /**
  * Creates or initializes iterator context.
  *
@@ -4447,11 +4432,6 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	}
 
-	if (lmd_flags & LMD_FLG_IAM) {
-                o->od_iop_mode = 0;
-		LCONSOLE_WARN("%s: OSD: IAM mode enabled\n", name);
-        } else
-                o->od_iop_mode = 1;
 	if (lmd_flags & LMD_FLG_NOSCRUB)
 		o->od_noscrub = 1;
 
