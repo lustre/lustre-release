@@ -185,20 +185,14 @@ void osd_oi_fini(struct osd_thread_info *info, struct osd_oi *oi)
         }
 }
 
-static inline int fid_is_oi_fid(const struct lu_fid *fid)
-{
-        /* We need to filter-out oi obj's fid. As we can not store it, while
-         * oi-index create operation.
-         */
-        return (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
-                fid_oid(fid) == OSD_OI_FID_16_OID));
-}
-
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
                   const struct lu_fid *fid, struct osd_inode_id *id)
 {
         struct lu_fid *oi_fid = &info->oti_fid;
         int rc;
+
+	if (fid_seq(fid) == FID_SEQ_LOCAL_FILE)
+		return -ENOENT;
 
         if (osd_fid_is_igif(fid)) {
                 lu_igif_to_id(fid, id);
@@ -206,9 +200,6 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_oi *oi,
         } else {
                 struct dt_object    *idx;
                 const struct dt_key *key;
-
-                if (fid_is_oi_fid(fid))
-                        return -ENOENT;
 
                 idx = oi->oi_dir;
                 fid_cpu_to_be(oi_fid, fid);
@@ -235,10 +226,10 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_oi *oi,
         struct osd_inode_id *id;
         const struct dt_key *key;
 
-        if (osd_fid_is_igif(fid))
-                return 0;
+	if (fid_seq(fid) == FID_SEQ_LOCAL_FILE)
+		return 0;
 
-        if (fid_is_oi_fid(fid))
+        if (osd_fid_is_igif(fid))
                 return 0;
 
         idx = oi->oi_dir;
