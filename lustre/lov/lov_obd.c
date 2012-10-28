@@ -221,10 +221,6 @@ int lov_connect_obd(struct obd_device *obd, __u32 index, int activate,
         }
 #endif
 
-        rc = qos_add_tgt(obd, index);
-        if (rc)
-                CERROR("qos_add_tgt failed %d\n", rc);
-
         RETURN(0);
 }
 
@@ -334,8 +330,6 @@ static int lov_disconnect_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
                 rc = 0;
         }
 
-        qos_del_tgt(obd, tgt);
-
         tgt->ltd_exp = NULL;
         RETURN(0);
 }
@@ -441,8 +435,6 @@ static int lov_set_osc_active(struct obd_device *obd, struct obd_uuid *uuid,
                         lov->desc.ld_active_tgt_count--;
                         lov->lov_tgts[index]->ltd_exp->exp_obd->obd_inactive = 1;
                 }
-                /* remove any old qos penalty */
-                lov->lov_tgts[index]->ltd_qos.ltq_penalty = 0;
         } else {
                 CERROR("Unknown event(%d) for uuid %s", ev, uuid->uuid);
         }
@@ -813,21 +805,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         cfs_mutex_init(&lov->lov_lock);
         cfs_atomic_set(&lov->lov_refcount, 0);
-        CFS_INIT_LIST_HEAD(&lov->lov_qos.lq_oss_list);
-        cfs_init_rwsem(&lov->lov_qos.lq_rw_sem);
         lov->lov_sp_me = LUSTRE_SP_CLI;
-        lov->lov_qos.lq_dirty = 1;
-        lov->lov_qos.lq_rr.lqr_dirty = 1;
-        lov->lov_qos.lq_reset = 1;
-        /* Default priority is toward free space balance */
-        lov->lov_qos.lq_prio_free = 232;
-        /* Default threshold for rr (roughly 17%) */
-        lov->lov_qos.lq_threshold_rr = 43;
-        /* Init statfs fields */
-        OBD_ALLOC_PTR(lov->lov_qos.lq_statfs_data);
-        if (NULL == lov->lov_qos.lq_statfs_data)
-                RETURN(-ENOMEM);
-        cfs_waitq_init(&lov->lov_qos.lq_statfs_waitq);
 
         lov->lov_pools_hash_body = cfs_hash_create("POOLS", HASH_POOLS_CUR_BITS,
                                                    HASH_POOLS_MAX_BITS,
@@ -840,10 +818,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lov->lov_pool_count = 0;
         rc = lov_ost_pool_init(&lov->lov_packed, 0);
         if (rc)
-                GOTO(out_free_statfs, rc);
-        rc = lov_ost_pool_init(&lov->lov_qos.lq_rr.lqr_pool, 0);
-        if (rc)
-                GOTO(out_free_lov_packed, rc);
+		GOTO(out, rc);
 
         lprocfs_lov_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
@@ -863,10 +838,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 
         RETURN(0);
 
-out_free_lov_packed:
-        lov_ost_pool_free(&lov->lov_packed);
-out_free_statfs:
-        OBD_FREE_PTR(lov->lov_qos.lq_statfs_data);
+out:
         return rc;
 }
 
@@ -914,7 +886,6 @@ static int lov_cleanup(struct obd_device *obd)
                 lov_pool_del(obd, pool->pool_name);
         }
         cfs_hash_putref(lov->lov_pools_hash_body);
-        lov_ost_pool_free(&(lov->lov_qos.lq_rr.lqr_pool));
         lov_ost_pool_free(&lov->lov_packed);
 
 	lprocfs_obd_cleanup(obd);
@@ -942,7 +913,6 @@ static int lov_cleanup(struct obd_device *obd)
                          lov->lov_tgt_size);
                 lov->lov_tgt_size = 0;
         }
-        OBD_FREE_PTR(lov->lov_qos.lq_statfs_data);
         RETURN(0);
 }
 
@@ -1011,82 +981,6 @@ out:
         RETURN(rc);
 }
 
-#ifndef log2
-#define log2(n) cfs_ffz(~(n))
-#endif
-
-static int lov_clear_orphans(struct obd_export *export, struct obdo *src_oa,
-                             struct lov_stripe_md **ea,
-                             struct obd_trans_info *oti)
-{
-        struct lov_obd *lov;
-        struct obdo *tmp_oa;
-        struct obd_uuid *ost_uuid = NULL;
-        int rc = 0, i;
-        ENTRY;
-
-        LASSERT(src_oa->o_valid & OBD_MD_FLFLAGS &&
-                src_oa->o_flags == OBD_FL_DELORPHAN);
-
-        lov = &export->exp_obd->u.lov;
-
-        OBDO_ALLOC(tmp_oa);
-        if (tmp_oa == NULL)
-                RETURN(-ENOMEM);
-
-        if (oti->oti_ost_uuid) {
-                ost_uuid = oti->oti_ost_uuid;
-                CDEBUG(D_HA, "clearing orphans only for %s\n",
-                       ost_uuid->uuid);
-        }
-
-        obd_getref(export->exp_obd);
-        for (i = 0; i < lov->desc.ld_tgt_count; i++) {
-                struct lov_stripe_md obj_md;
-                struct lov_stripe_md *obj_mdp = &obj_md;
-                struct lov_tgt_desc *tgt;
-                int err;
-
-                tgt = lov->lov_tgts[i];
-                if (!tgt)
-                        continue;
-
-                /* if called for a specific target, we don't
-                   care if it is not active. */
-                if (!lov->lov_tgts[i]->ltd_active && ost_uuid == NULL) {
-                        CDEBUG(D_HA, "lov idx %d inactive\n", i);
-                        continue;
-                }
-
-                if (ost_uuid && !obd_uuid_equals(ost_uuid, &tgt->ltd_uuid))
-                        continue;
-
-                CDEBUG(D_CONFIG,"Clear orphans for %d:%s\n", i,
-                       obd_uuid2str(ost_uuid));
-
-                memcpy(tmp_oa, src_oa, sizeof(*tmp_oa));
-
-                LASSERT(lov->lov_tgts[i]->ltd_exp);
-                /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
-                err = obd_create(NULL, lov->lov_tgts[i]->ltd_exp,
-                                 tmp_oa, &obj_mdp, oti);
-                if (err) {
-                        /* This export will be disabled until it is recovered,
-                           and then orphan recovery will be completed. */
-                        CERROR("error in orphan recovery on OST idx %d/%d: "
-                               "rc = %d\n", i, lov->desc.ld_tgt_count, err);
-                        rc = err;
-                }
-
-                if (ost_uuid)
-                        break;
-        }
-        obd_putref(export->exp_obd);
-
-        OBDO_FREE(tmp_oa);
-        RETURN(rc);
-}
-
 static int lov_recreate(struct obd_export *exp, struct obdo *src_oa,
                         struct lov_stripe_md **ea, struct obd_trans_info *oti)
 {
@@ -1134,10 +1028,6 @@ static int lov_create(const struct lu_env *env, struct obd_export *exp,
                       struct obd_trans_info *oti)
 {
         struct lov_obd *lov;
-        struct obd_info oinfo;
-        struct lov_request_set *set = NULL;
-        struct lov_request *req;
-        struct l_wait_info  lwi = { 0 };
         int rc = 0;
         ENTRY;
 
@@ -1147,8 +1037,8 @@ static int lov_create(const struct lu_env *env, struct obd_export *exp,
 
         if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
             src_oa->o_flags == OBD_FL_DELORPHAN) {
-                rc = lov_clear_orphans(exp, src_oa, ea, oti);
-                RETURN(rc);
+		/* should be used with LOV anymore */
+		LBUG();
         }
 
         lov = &exp->exp_obd->u.lov;
@@ -1160,37 +1050,8 @@ static int lov_create(const struct lu_env *env, struct obd_export *exp,
         if ((src_oa->o_valid & OBD_MD_FLFLAGS) &&
             (src_oa->o_flags & OBD_FL_RECREATE_OBJS)) {
                  rc = lov_recreate(exp, src_oa, ea, oti);
-                 GOTO(out, rc);
         }
 
-        /* issue statfs rpcs if the osfs data is older than qos_maxage - 1s,
-         * later in alloc_qos(), we will wait for those rpcs to complete if
-         * the osfs age is older than 2 * qos_maxage */
-        qos_statfs_update(exp->exp_obd,
-                          cfs_time_shift_64(-lov->desc.ld_qos_maxage +
-                                            OBD_STATFS_CACHE_SECONDS),
-                          0);
-
-        rc = lov_prep_create_set(exp, &oinfo, ea, src_oa, oti, &set);
-        if (rc)
-                GOTO(out, rc);
-
-        cfs_list_for_each_entry(req, &set->set_list, rq_link) {
-                /* XXX: LOV STACKING: use real "obj_mdp" sub-data */
-                rc = obd_create_async(lov->lov_tgts[req->rq_idx]->ltd_exp,
-                                      &req->rq_oi, &req->rq_oi.oi_md, oti);
-        }
-
-        /* osc_create have timeout equ obd_timeout/2 so waiting don't be
-         * longer then this */
-	l_wait_event(set->set_waitq, lov_set_finished(set, 1), &lwi);
-
-        /* we not have ptlrpc set for assign set->interpret and should
-         * be call interpret function himself. calling from cb_create_update
-         * not permited because lov_fini_create_set can sleep for long time,
-         * but we must avoid sleeping in ptlrpcd interpret function. */
-        rc = lov_fini_create_set(set, ea);
-out:
         obd_putref(exp->exp_obd);
         RETURN(rc);
 }

@@ -200,106 +200,6 @@ static int lov_rd_desc_uuid(char *page, char **start, off_t off, int count,
         return snprintf(page, count, "%s\n", lov->desc.ld_uuid.uuid);
 }
 
-/* free priority (0-255): how badly user wants to choose empty osts */ 
-static int lov_rd_qos_priofree(char *page, char **start, off_t off, int count,
-                               int *eof, void *data)
-{
-        struct obd_device *dev = (struct obd_device*) data;
-        struct lov_obd *lov;
-
-        LASSERT(dev != NULL);
-        lov = &dev->u.lov;
-        *eof = 1;
-        return snprintf(page, count, "%d%%\n", 
-                        (lov->lov_qos.lq_prio_free * 100 + 255) >> 8);
-}
-
-static int lov_wr_qos_priofree(struct file *file, const char *buffer,
-                               unsigned long count, void *data)
-{
-        struct obd_device *dev = (struct obd_device *)data;
-        struct lov_obd *lov;
-        int val, rc;
-        LASSERT(dev != NULL);
-
-        lov = &dev->u.lov;
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val > 100)
-                return -EINVAL;
-        lov->lov_qos.lq_prio_free = (val << 8) / 100;
-        lov->lov_qos.lq_dirty = 1;
-        lov->lov_qos.lq_reset = 1;
-        return count;
-}
-
-static int lov_rd_qos_thresholdrr(char *page, char **start, off_t off,
-                                  int count, int *eof, void *data)
-{
-        struct obd_device *dev = (struct obd_device*) data;
-        struct lov_obd *lov;
-
-        LASSERT(dev != NULL);
-        lov = &dev->u.lov;
-        *eof = 1;
-        return snprintf(page, count, "%d%%\n",
-                        (lov->lov_qos.lq_threshold_rr * 100 + 255) >> 8);
-}
-
-static int lov_wr_qos_thresholdrr(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
-{
-        struct obd_device *dev = (struct obd_device *)data;
-        struct lov_obd *lov;
-        int val, rc;
-        LASSERT(dev != NULL);
-
-        lov = &dev->u.lov;
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val > 100 || val < 0)
-                return -EINVAL;
-
-        lov->lov_qos.lq_threshold_rr = (val << 8) / 100;
-        lov->lov_qos.lq_dirty = 1;
-        return count;
-}
-
-static int lov_rd_qos_maxage(char *page, char **start, off_t off, int count,
-                             int *eof, void *data)
-{
-        struct obd_device *dev = (struct obd_device*) data;
-        struct lov_obd *lov;
-
-        LASSERT(dev != NULL);
-        lov = &dev->u.lov;
-        *eof = 1;
-        return snprintf(page, count, "%u Sec\n", lov->desc.ld_qos_maxage);
-}
-
-static int lov_wr_qos_maxage(struct file *file, const char *buffer,
-                             unsigned long count, void *data)
-{
-        struct obd_device *dev = (struct obd_device *)data;
-        struct lov_obd *lov;
-        int val, rc;
-        LASSERT(dev != NULL);
-
-        lov = &dev->u.lov;
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
-
-        if (val <= 0)
-                return -EINVAL;
-        lov->desc.ld_qos_maxage = val;
-        return count;
-}
-
 static void *lov_tgt_seq_start(struct seq_file *p, loff_t *pos)
 {
         struct obd_device *dev = p->private;
@@ -378,9 +278,6 @@ struct lprocfs_vars lprocfs_lov_obd_vars[] = {
         { "kbytesfree",   lprocfs_rd_kbytesfree,  0, 0 },
         { "kbytesavail",  lprocfs_rd_kbytesavail, 0, 0 },
         { "desc_uuid",    lov_rd_desc_uuid,       0, 0 },
-        { "qos_prio_free",lov_rd_qos_priofree,    lov_wr_qos_priofree, 0 },
-        { "qos_threshold_rr",  lov_rd_qos_thresholdrr, lov_wr_qos_thresholdrr, 0 },
-        { "qos_maxage",   lov_rd_qos_maxage,      lov_wr_qos_maxage, 0 },
         { 0 }
 };
 

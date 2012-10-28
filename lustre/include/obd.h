@@ -519,7 +519,6 @@ struct client_obd {
 
         struct mdc_rpc_lock     *cl_rpc_lock;
         struct mdc_rpc_lock     *cl_close_lock;
-        struct osc_creator       cl_oscc;
 
         /* mgc datastruct */
         cfs_semaphore_t          cl_mgc_sem;
@@ -691,7 +690,6 @@ struct lov_obd {
                                                           array */
         cfs_mutex_t             lov_lock;
         struct obd_connect_data lov_ocd;
-        struct lov_qos          lov_qos;               /* qos info per lov */
         cfs_atomic_t            lov_refcount;
         __u32                   lov_tgt_count;         /* how many OBD's */
         __u32                   lov_active_tgt_count;  /* how many active */

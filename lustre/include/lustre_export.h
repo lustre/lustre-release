@@ -83,22 +83,6 @@ struct mdt_export_data {
         struct lustre_idmap_table *med_idmap;
 };
 
-struct osc_creator {
-        cfs_spinlock_t          oscc_lock;
-        cfs_list_t              oscc_wait_create_list;
-        struct obd_device      *oscc_obd;
-        obd_id                  oscc_last_id;//last available pre-created object
-        obd_id                  oscc_next_id;// what object id to give out next
-        int                     oscc_grow_count;
-        /**
-         * Limit oscc_grow_count value, can be changed via proc fs
-         */
-        int                     oscc_max_grow_count;
-        struct obdo             oscc_oa;
-        int                     oscc_flags;
-        cfs_waitq_t             oscc_waitq; /* creating procs wait on this */
-};
-
 struct ec_export_data { /* echo client */
         cfs_list_t eced_locks;
 };

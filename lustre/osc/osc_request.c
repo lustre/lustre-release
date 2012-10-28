@@ -704,6 +704,31 @@ static int osc_can_send_destroy(struct client_obd *cli)
         return 0;
 }
 
+int osc_create(const struct lu_env *env, struct obd_export *exp,
+	       struct obdo *oa, struct lov_stripe_md **ea,
+	       struct obd_trans_info *oti)
+{
+	int rc = 0;
+	ENTRY;
+
+	LASSERT(oa);
+	LASSERT(ea);
+	LASSERT(oa->o_valid & OBD_MD_FLGROUP);
+
+	if ((oa->o_valid & OBD_MD_FLFLAGS) &&
+	    oa->o_flags == OBD_FL_RECREATE_OBJS) {
+		RETURN(osc_real_create(exp, oa, ea, oti));
+	}
+
+	if (!fid_seq_is_mdt(oa->o_seq))
+		RETURN(osc_real_create(exp, oa, ea, oti));
+
+	/* we should not get here anymore */
+	LBUG();
+
+	RETURN(rc);
+}
+
 /* Destroy requests can be async always on the client, and we don't even really
  * care about the return code since the client cannot do anything at all about
  * a destroy failure.
@@ -2678,9 +2703,7 @@ static int osc_statfs_interpret(const struct lu_env *env,
                                 struct ptlrpc_request *req,
                                 struct osc_async_args *aa, int rc)
 {
-        struct client_obd *cli = &req->rq_import->imp_obd->u.cli;
         struct obd_statfs *msfs;
-        __u64 used;
         ENTRY;
 
         if (rc == -EBADR)
@@ -2702,51 +2725,6 @@ static int osc_statfs_interpret(const struct lu_env *env,
         if (msfs == NULL) {
                 GOTO(out, rc = -EPROTO);
         }
-
-        /* Reinitialize the RDONLY and DEGRADED flags at the client
-         * on each statfs, so they don't stay set permanently. */
-        cfs_spin_lock(&cli->cl_oscc.oscc_lock);
-
-        if (unlikely(msfs->os_state & OS_STATE_DEGRADED))
-                cli->cl_oscc.oscc_flags |= OSCC_FLAG_DEGRADED;
-        else if (unlikely(cli->cl_oscc.oscc_flags & OSCC_FLAG_DEGRADED))
-                cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_DEGRADED;
-
-        if (unlikely(msfs->os_state & OS_STATE_READONLY))
-                cli->cl_oscc.oscc_flags |= OSCC_FLAG_RDONLY;
-        else if (unlikely(cli->cl_oscc.oscc_flags & OSCC_FLAG_RDONLY))
-                cli->cl_oscc.oscc_flags &= ~OSCC_FLAG_RDONLY;
-
-        /* Add a bit of hysteresis so this flag isn't continually flapping,
-         * and ensure that new files don't get extremely fragmented due to
-         * only a small amount of available space in the filesystem.
-         * We want to set the NOSPC flag when there is less than ~0.1% free
-         * and clear it when there is at least ~0.2% free space, so:
-         *                   avail < ~0.1% max          max = avail + used
-         *            1025 * avail < avail + used       used = blocks - free
-         *            1024 * avail < used
-         *            1024 * avail < blocks - free
-         *                   avail < ((blocks - free) >> 10)
-         *
-         * On very large disk, say 16TB 0.1% will be 16 GB. We don't want to
-         * lose that amount of space so in those cases we report no space left
-         * if their is less than 1 GB left.                             */
-        used = min_t(__u64,(msfs->os_blocks - msfs->os_bfree) >> 10, 1 << 30);
-        if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) == 0) &&
-                     ((msfs->os_ffree < 32) || (msfs->os_bavail < used))))
-                cli->cl_oscc.oscc_flags |= OSCC_FLAG_NOSPC;
-        else if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) != 0) &&
-                          (msfs->os_ffree > 64) &&
-                          (msfs->os_bavail > (used << 1)))) {
-                cli->cl_oscc.oscc_flags &= ~(OSCC_FLAG_NOSPC |
-                                             OSCC_FLAG_NOSPC_BLK);
-        }
-
-        if (unlikely(((cli->cl_oscc.oscc_flags & OSCC_FLAG_NOSPC) != 0) &&
-                     (msfs->os_bavail < used)))
-                cli->cl_oscc.oscc_flags |= OSCC_FLAG_NOSPC_BLK;
-
-        cfs_spin_unlock(&cli->cl_oscc.oscc_lock);
 
         *aa->aa_oi->oi_osfs = *msfs;
 out:
@@ -3109,40 +3087,6 @@ static int osc_get_info(const struct lu_env *env, struct obd_export *exp,
         RETURN(-EINVAL);
 }
 
-static int osc_setinfo_mds_connect_import(struct obd_import *imp)
-{
-        struct llog_ctxt *ctxt;
-        int rc = 0;
-        ENTRY;
-
-        ctxt = llog_get_context(imp->imp_obd, LLOG_MDS_OST_ORIG_CTXT);
-        if (ctxt) {
-                rc = llog_initiator_connect(ctxt);
-                llog_ctxt_put(ctxt);
-        } else {
-                /* XXX return an error? skip setting below flags? */
-        }
-
-        cfs_spin_lock(&imp->imp_lock);
-        imp->imp_server_timeout = 1;
-        imp->imp_pingable = 1;
-        cfs_spin_unlock(&imp->imp_lock);
-        CDEBUG(D_RPCTRACE, "pinging OST %s\n", obd2cli_tgt(imp->imp_obd));
-
-        RETURN(rc);
-}
-
-static int osc_setinfo_mds_conn_interpret(const struct lu_env *env,
-                                          struct ptlrpc_request *req,
-                                          void *aa, int rc)
-{
-        ENTRY;
-        if (rc != 0)
-                RETURN(rc);
-
-        RETURN(osc_setinfo_mds_connect_import(req->rq_import));
-}
-
 static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
                               obd_count keylen, void *key, obd_count vallen,
                               void *val, struct ptlrpc_request_set *set)
@@ -3155,32 +3099,6 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
         ENTRY;
 
         OBD_FAIL_TIMEOUT(OBD_FAIL_OSC_SHUTDOWN, 10);
-
-        if (KEY_IS(KEY_NEXT_ID)) {
-                obd_id new_val;
-                struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-
-                if (vallen != sizeof(obd_id))
-                        RETURN(-ERANGE);
-                if (val == NULL)
-                        RETURN(-EINVAL);
-
-                if (vallen != sizeof(obd_id))
-                        RETURN(-EINVAL);
-
-                /* avoid race between allocate new object and set next id
-                 * from ll_sync thread */
-                cfs_spin_lock(&oscc->oscc_lock);
-                new_val = *((obd_id*)val) + 1;
-                if (new_val > oscc->oscc_next_id)
-                        oscc->oscc_next_id = new_val;
-                cfs_spin_unlock(&oscc->oscc_lock);
-                CDEBUG(D_HA, "%s: set oscc_next_id = "LPU64"\n",
-                       exp->exp_obd->obd_name,
-                       obd->u.cli.cl_oscc.oscc_next_id);
-
-                RETURN(0);
-        }
 
         if (KEY_IS(KEY_CHECKSUM)) {
                 if (vallen != sizeof(int))
@@ -3259,15 +3177,7 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
         tmp = req_capsule_client_get(&req->rq_pill, &RMF_SETINFO_VAL);
         memcpy(tmp, val, vallen);
 
-        if (KEY_IS(KEY_MDS_CONN)) {
-                struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-
-                oscc->oscc_oa.o_seq = (*(__u32 *)val);
-                oscc->oscc_oa.o_valid |= OBD_MD_FLGROUP;
-                LASSERT_SEQ_IS_MDT(oscc->oscc_oa.o_seq);
-                req->rq_no_delay = req->rq_no_resend = 1;
-                req->rq_interpret_reply = osc_setinfo_mds_conn_interpret;
-        } else if (KEY_IS(KEY_GRANT_SHRINK)) {
+	if (KEY_IS(KEY_GRANT_SHRINK)) {
                 struct osc_grant_args *aa;
                 struct obdo *oa;
 
@@ -3402,14 +3312,6 @@ static int osc_import_event(struct obd_device *obd,
 
         switch (event) {
         case IMP_EVENT_DISCON: {
-                /* Only do this on the MDS OSC's */
-                if (imp->imp_server_timeout) {
-                        struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-
-                        cfs_spin_lock(&oscc->oscc_lock);
-                        oscc->oscc_flags |= OSCC_FLAG_RECOVERING;
-                        cfs_spin_unlock(&oscc->oscc_lock);
-                }
                 cli = &obd->u.cli;
                 client_obd_list_lock(&cli->cl_loi_list_lock);
                 cli->cl_avail_grant = 0;
@@ -3441,15 +3343,6 @@ static int osc_import_event(struct obd_device *obd,
                 break;
         }
         case IMP_EVENT_ACTIVE: {
-                /* Only do this on the MDS OSC's */
-                if (imp->imp_server_timeout) {
-                        struct osc_creator *oscc = &obd->u.cli.cl_oscc;
-
-                        cfs_spin_lock(&oscc->oscc_lock);
-                        oscc->oscc_flags &= ~(OSCC_FLAG_NOSPC |
-                                              OSCC_FLAG_NOSPC_BLK);
-                        cfs_spin_unlock(&oscc->oscc_lock);
-                }
                 rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);
                 break;
         }
@@ -3550,7 +3443,6 @@ int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 		ptlrpc_lprocfs_register_obd(obd);
 	}
 
-	oscc_init(obd);
 	/* We need to allocate a few requests more, because
 	 * brw_interpret tries to create new requests before freeing
 	 * previous ones, Ideally we want to have 2x max_rpcs_in_flight
@@ -3684,9 +3576,7 @@ struct obd_ops osc_obd_ops = {
         .o_statfs_async         = osc_statfs_async,
         .o_packmd               = osc_packmd,
         .o_unpackmd             = osc_unpackmd,
-        .o_precreate            = osc_precreate,
         .o_create               = osc_create,
-        .o_create_async         = osc_create_async,
         .o_destroy              = osc_destroy,
         .o_getattr              = osc_getattr,
         .o_getattr_async        = osc_getattr_async,

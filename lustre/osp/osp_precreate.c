@@ -469,6 +469,20 @@ void osp_pre_update_status(struct osp_device *d, int rc)
 	if (rc)
 		goto out;
 
+	/* Add a bit of hysteresis so this flag isn't continually flapping,
+	 * and ensure that new files don't get extremely fragmented due to
+	 * only a small amount of available space in the filesystem.
+	 * We want to set the NOSPC flag when there is less than ~0.1% free
+	 * and clear it when there is at least ~0.2% free space, so:
+	 *                   avail < ~0.1% max          max = avail + used
+	 *            1025 * avail < avail + used       used = blocks - free
+	 *            1024 * avail < used
+	 *            1024 * avail < blocks - free
+	 *                   avail < ((blocks - free) >> 10)
+	 *
+	 * On very large disk, say 16TB 0.1% will be 16 GB. We don't want to
+	 * lose that amount of space so in those cases we report no space left
+	 * if their is less than 1 GB left.                             */
 	if (likely(msfs->os_type)) {
 		used = min_t(__u64, (msfs->os_blocks - msfs->os_bfree) >> 10,
 				    1 << 30);

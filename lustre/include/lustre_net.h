@@ -708,7 +708,6 @@ struct ptlrpc_request {
                 rq_no_resend:1, rq_waiting:1, rq_receiving_reply:1,
                 rq_no_delay:1, rq_net_err:1, rq_wait_ctx:1,
                 rq_early:1, rq_must_unlink:1,
-                rq_fake:1,          /* this fake req */
                 rq_memalloc:1,      /* req originated from "kswapd" */
                 /* server-side flags */
                 rq_packed_final:1,  /* packed final reply */
@@ -1755,11 +1754,6 @@ struct ptlrpc_request *ptlrpc_request_alloc_pack(struct obd_import *imp,
 int ptlrpc_request_bufs_pack(struct ptlrpc_request *request,
                              __u32 version, int opcode, char **bufs,
                              struct ptlrpc_cli_ctx *ctx);
-struct ptlrpc_request *ptlrpc_prep_fakereq(struct obd_import *imp,
-                                           unsigned int timeout,
-                                           ptlrpc_interpterer_t interpreter);
-void ptlrpc_fakereq_finished(struct ptlrpc_request *req);
-
 struct ptlrpc_request *ptlrpc_prep_req(struct obd_import *imp, __u32 version,
                                        int opcode, int count, __u32 *lengths,
                                        char **bufs);

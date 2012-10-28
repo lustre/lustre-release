@@ -85,25 +85,11 @@ struct osc_cache_waiter {
         int                     ocw_rc;
 };
 
-#define OSCC_FLAG_RECOVERING         0x01
-#define OSCC_FLAG_CREATING           0x02
-#define OSCC_FLAG_NOSPC              0x04 /* can't create more objects on OST */
-#define OSCC_FLAG_SYNC_IN_PROGRESS   0x08 /* only allow one thread to sync */
-#define OSCC_FLAG_LOW                0x10
-#define OSCC_FLAG_EXITING            0x20
-#define OSCC_FLAG_DEGRADED           0x40
-#define OSCC_FLAG_RDONLY             0x80
-#define OSCC_FLAG_NOSPC_BLK          0x100 /* no more block space on OST */
-
-int osc_precreate(struct obd_export *exp);
 int osc_create(const struct lu_env *env, struct obd_export *exp,
                struct obdo *oa, struct lov_stripe_md **ea,
                struct obd_trans_info *oti);
-int osc_create_async(struct obd_export *exp, struct obd_info *oinfo,
-                     struct lov_stripe_md **ea, struct obd_trans_info *oti);
 int osc_real_create(struct obd_export *exp, struct obdo *oa,
                     struct lov_stripe_md **ea, struct obd_trans_info *oti);
-void oscc_init(struct obd_device *obd);
 void osc_wake_cache_waiters(struct client_obd *cli);
 int osc_shrink_grant_to_target(struct client_obd *cli, long target);
 void osc_update_next_shrink(struct client_obd *cli);
