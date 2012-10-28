@@ -291,9 +291,9 @@ init_test_env() {
     export RLUSTRE=${RLUSTRE:-$LUSTRE}
     export RPWD=${RPWD:-$PWD}
     export I_MOUNTED=${I_MOUNTED:-"no"}
-    if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mds.ko -a \
-        ! -f /lib/modules/$(uname -r)/updates/kernel/fs/lustre/mds.ko -a \
-        ! -f `dirname $0`/../mds/mds.ko ]; then
+    if [ ! -f /lib/modules/$(uname -r)/kernel/fs/lustre/mdt.ko -a \
+        ! -f /lib/modules/$(uname -r)/updates/kernel/fs/lustre/mdt.ko -a \
+        ! -f `dirname $0`/../mdt/mdt.ko ]; then
         export CLIENTMODSONLY=yes
     fi
 
@@ -493,7 +493,6 @@ load_modules_local() {
 			load_module osd-zfs/osd_zfs
 		fi
 		load_module mgs/mgs
-		load_module mds/mds
 		load_module mdd/mdd
 		if [[ $(node_fstypes $HOSTNAME) == *ldiskfs* ]]; then
 			#

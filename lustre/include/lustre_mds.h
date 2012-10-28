@@ -54,16 +54,6 @@
 #include <lustre_dlm.h>
 #include <lustre_export.h>
 
-#if defined(__linux__)
-#include <linux/lustre_mds.h>
-#elif defined(__APPLE__)
-#include <darwin/lustre_mds.h>
-#elif defined(__WINNT__)
-#include <winnt/lustre_mds.h>
-#else
-#error Unsupported operating system.
-#endif
-
 struct mds_group_info {
         struct obd_uuid *uuid;
         int group;
@@ -73,14 +63,6 @@ struct mds_capa_info {
         struct obd_uuid        *uuid;
         struct lustre_capa_key *capa;
 };
-
-/* mds/mds_lov.c */
-int mds_lov_write_objids(struct obd_device *obd);
-int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm);
-void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm);
-int mds_log_op_unlink(struct obd_device *, struct lov_mds_md *, int,
-                      struct llog_cookie *, int);
-
 
 #define MDD_OBD_NAME     "mdd_obd"
 #define MDD_OBD_UUID     "mdd_obd_uuid"

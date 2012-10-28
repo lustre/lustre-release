@@ -1,6 +1,0 @@
-MODULES := mds
-mds-objs := handler.o  lproc_mds.o  mds_fs.o  mds_log.o  mds_lov.o
-
-EXTRA_DIST := $(mds-objs:%.o=%.c) mds_internal.h
-
-@INCLUDE_RULES@

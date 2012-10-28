@@ -1259,31 +1259,15 @@ static int mdd_statfs(const struct lu_env *env, struct md_device *m,
 /*
  * No permission check is needed.
  */
-static int mdd_maxsize_get(const struct lu_env *env, struct md_device *m,
-                           int *md_size, int *cookie_size)
-{
-        struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        ENTRY;
-
-        *md_size = mdd_lov_mdsize(env, mdd);
-        *cookie_size = mdd_lov_cookiesize(env, mdd);
-
-        RETURN(0);
-}
-
 static int mdd_init_capa_ctxt(const struct lu_env *env, struct md_device *m,
                               int mode, unsigned long timeout, __u32 alg,
                               struct lustre_capa_key *keys)
 {
         struct mdd_device *mdd = lu2mdd_dev(&m->md_lu_dev);
-        struct mds_obd    *mds = &mdd2obd_dev(mdd)->u.mds;
         int rc;
         ENTRY;
 
         /* need barrier for mds_capa_keys access. */
-        cfs_down_write(&mds->mds_notify_lock);
-        mds->mds_capa_keys = keys;
-        cfs_up_write(&mds->mds_notify_lock);
 
         rc = mdd_child_ops(mdd)->dt_init_capa_ctxt(env, mdd->mdd_child, mode,
                                                    timeout, alg, keys);
@@ -1707,7 +1691,6 @@ LU_TYPE_INIT_FINI(mdd, &mdd_thread_key, &mdd_ucred_key, &mdd_capainfo_key);
 const struct md_device_operations mdd_ops = {
         .mdo_statfs         = mdd_statfs,
         .mdo_root_get       = mdd_root_get,
-        .mdo_maxsize_get    = mdd_maxsize_get,
         .mdo_init_capa_ctxt = mdd_init_capa_ctxt,
         .mdo_update_capa_key= mdd_update_capa_key,
         .mdo_llog_ctxt_get  = mdd_llog_ctxt_get,

@@ -549,20 +549,6 @@ static inline cfs_umode_t mdd_object_type(const struct mdd_object *obj)
         return lu_object_attr(&obj->mod_obj.mo_lu);
 }
 
-static inline int mdd_lov_mdsize(const struct lu_env *env,
-                                 struct mdd_device *mdd)
-{
-        struct obd_device *obd = mdd2obd_dev(mdd);
-        return obd->u.mds.mds_max_mdsize;
-}
-
-static inline int mdd_lov_cookiesize(const struct lu_env *env,
-                                     struct mdd_device *mdd)
-{
-        struct obd_device *obd = mdd2obd_dev(mdd);
-        return obd->u.mds.mds_max_cookiesize;
-}
-
 static inline int mdd_is_immutable(struct mdd_object *obj)
 {
         return obj->mod_flags & IMMUTE_OBJ;
