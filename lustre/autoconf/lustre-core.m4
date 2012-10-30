@@ -1896,6 +1896,27 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.2 protects inode->i_nlink from direct modification
+# see kernel commit a78ef704a8dd430225955f0709b22d4a6ba21deb
+# at the same time adds set_nlink(), so checks set_nlink() for it.
+#
+AC_DEFUN([LC_HAVE_PROTECT_I_NLINK],
+[AC_MSG_CHECKING([if inode->i_nlink is protected from direct modification])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	struct inode i;
+	set_nlink(&i, 1);
+],[
+	AC_DEFINE(HAVE_PROTECT_I_NLINK, 1,
+		  [inode->i_nlink is protected from direct modification])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # 3.3 introduces migrate_mode.h and migratepage has 4 args
 #
 AC_DEFUN([LC_HAVE_MIGRATE_HEADER],
@@ -2085,6 +2106,7 @@ AC_DEFUN([LC_PROG_LINUX],
 
 	 # 3.2
 	 LC_HAVE_VOID_MAKE_REQUEST_FN
+	 LC_HAVE_PROTECT_I_NLINK
 
 	 # 3.3
 	 LC_HAVE_MIGRATE_HEADER

@@ -1239,24 +1239,24 @@ int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
 
         rc = md_setattr(sbi->ll_md_exp, op_data, NULL, 0, NULL, 0,
                         &request, mod);
-        if (rc) {
-                ptlrpc_req_finished(request);
-                if (rc == -ENOENT) {
-                        inode->i_nlink = 0;
-                        /* Unlinked special device node? Or just a race?
-                         * Pretend we done everything. */
-                        if (!S_ISREG(inode->i_mode) &&
-                            !S_ISDIR(inode->i_mode)) {
-                                ia_valid = op_data->op_attr.ia_valid;
-                                op_data->op_attr.ia_valid &= ~TIMES_SET_FLAGS;
-                                rc = simple_setattr(dentry, &op_data->op_attr);
-                                op_data->op_attr.ia_valid = ia_valid;
-                        }
-                } else if (rc != -EPERM && rc != -EACCES && rc != -ETXTBSY) {
-                        CERROR("md_setattr fails: rc = %d\n", rc);
-                }
-                RETURN(rc);
-        }
+	if (rc) {
+		ptlrpc_req_finished(request);
+		if (rc == -ENOENT) {
+			clear_nlink(inode);
+			/* Unlinked special device node? Or just a race?
+			 * Pretend we done everything. */
+			if (!S_ISREG(inode->i_mode) &&
+			    !S_ISDIR(inode->i_mode)) {
+				ia_valid = op_data->op_attr.ia_valid;
+				op_data->op_attr.ia_valid &= ~TIMES_SET_FLAGS;
+				rc = simple_setattr(dentry, &op_data->op_attr);
+				op_data->op_attr.ia_valid = ia_valid;
+			}
+		} else if (rc != -EPERM && rc != -EACCES && rc != -ETXTBSY) {
+			CERROR("md_setattr fails: rc = %d\n", rc);
+		}
+		RETURN(rc);
+	}
 
         rc = md_get_lustre_md(sbi->ll_md_exp, request, sbi->ll_dt_exp,
                               sbi->ll_md_exp, &md);
@@ -1743,16 +1743,16 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
         } else {
                 inode->i_blkbits = inode->i_sb->s_blocksize_bits;
         }
-        if (body->valid & OBD_MD_FLUID)
-                inode->i_uid = body->uid;
-        if (body->valid & OBD_MD_FLGID)
-                inode->i_gid = body->gid;
-        if (body->valid & OBD_MD_FLFLAGS)
-                inode->i_flags = ll_ext_to_inode_flags(body->flags);
-        if (body->valid & OBD_MD_FLNLINK)
-                inode->i_nlink = body->nlink;
-        if (body->valid & OBD_MD_FLRDEV)
-                inode->i_rdev = old_decode_dev(body->rdev);
+	if (body->valid & OBD_MD_FLUID)
+		inode->i_uid = body->uid;
+	if (body->valid & OBD_MD_FLGID)
+		inode->i_gid = body->gid;
+	if (body->valid & OBD_MD_FLFLAGS)
+		inode->i_flags = ll_ext_to_inode_flags(body->flags);
+	if (body->valid & OBD_MD_FLNLINK)
+		set_nlink(inode, body->nlink);
+	if (body->valid & OBD_MD_FLRDEV)
+		inode->i_rdev = old_decode_dev(body->rdev);
 
         if (body->valid & OBD_MD_FLID) {
                 /* FID shouldn't be changed! */

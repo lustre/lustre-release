@@ -196,7 +196,7 @@ static int ll_ddelete(HAVE_D_DELETE_CONST struct dentry *de)
 	/* if not ldlm lock for this inode, set i_nlink to 0 so that
 	 * this inode can be recycled later b=20433 */
 	if (de->d_inode && !find_cbdata(de->d_inode))
-		de->d_inode->i_nlink = 0;
+		clear_nlink(de->d_inode);
 #endif
 
 	if (d_lustre_invalid((struct dentry *)de))
@@ -694,10 +694,10 @@ out_it:
 
 void ll_d_iput(struct dentry *de, struct inode *inode)
 {
-        LASSERT(inode);
-        if (!find_cbdata(inode))
-                inode->i_nlink = 0;
-        iput(inode);
+	LASSERT(inode);
+	if (!find_cbdata(inode))
+		clear_nlink(inode);
+	iput(inode);
 }
 
 struct dentry_operations ll_d_ops = {

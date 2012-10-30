@@ -2326,24 +2326,23 @@ ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
 }
 
 static int ll_inode_revalidate_fini(struct inode *inode, int rc) {
-        if (rc == -ENOENT) { /* Already unlinked. Just update nlink
-                              * and return success */
-                inode->i_nlink = 0;
-                /* This path cannot be hit for regular files unless in
-                 * case of obscure races, so no need to to validate
-                 * size. */
-                if (!S_ISREG(inode->i_mode) &&
-                    !S_ISDIR(inode->i_mode))
-                        return 0;
-        }
+	if (rc == -ENOENT) { /* Already unlinked. Just update nlink
+			      * and return success */
+		clear_nlink(inode);
+		/* This path cannot be hit for regular files unless in
+		 * case of obscure races, so no need to to validate
+		 * size. */
+		if (!S_ISREG(inode->i_mode) &&
+		    !S_ISDIR(inode->i_mode))
+			return 0;
+	}
 
-        if (rc) {
-                CERROR("failure %d inode %lu\n", rc, inode->i_ino);
-                return -abs(rc);
+	if (rc) {
+		CERROR("failure %d inode %lu\n", rc, inode->i_ino);
+		return -abs(rc);
+	}
 
-        }
-
-        return 0;
+	return 0;
 }
 
 int __ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
