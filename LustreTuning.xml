@@ -7,7 +7,16 @@
       <para><xref linkend="dbdoclet.50438272_55226"/></para>
     </listitem>
     <listitem>
+      <para><xref linkend="dbdoclet.mdstuning"/></para>
+    </listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438272_73839"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.libcfstuning"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.lndtuning"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438272_25884"/></para>
@@ -55,15 +64,25 @@
     <note>
       <para>If there are too many threads, the latency for individual I/O requests can become very high and should be avoided. Set the desired maximum thread count permanently using the method described above.</para>
     </note>
-    <section remap="h3">
+    <section>
       <title><indexterm><primary>tuning</primary><secondary>OSS threads</secondary></indexterm>Specifying the OSS Service Thread Count</title>
       <para>The <literal>oss_num_threads</literal> parameter enables the number of OST service threads to be specified at module load time on the OSS nodes:</para>
       <screen>options ost oss_num_threads={N}</screen>
       <para>After startup, the minimum and maximum number of OSS thread counts can be set via the <literal>{service}.thread_{min,max,started}</literal> tunable. To change the tunable at runtime, run:</para>
       <para><screen>lctl {get,set}_param {service}.thread_{min,max,started}</screen></para>
-      <para>For details, see <xref linkend="dbdoclet.50438271_87260"/>.</para>
+      <para>Lustre 2.3 introduced binding service threads to CPU partition. This works in a similar fashion to binding of threads on MDS. MDS thread tuning is covered in <xref linkend="dbdoclet.mdsbinding"/>.</para>
+    <itemizedlist>
+      <listitem>
+        <para><literal>oss_cpts=[EXPRESSION]</literal> binds the default OSS service on CPTs defined by <literal>[EXPRESSION]</literal>.</para>
+      </listitem>
+      <listitem>
+        <para><literal>oss_io_cpts=[EXPRESSION]</literal> binds the IO OSS service on CPTs defined by <literal>[EXPRESSION]</literal>.</para>
+      </listitem>
+    </itemizedlist>
+
+      <para>For further details, see <xref linkend="dbdoclet.50438271_87260"/>.</para>
     </section>
-    <section remap="h3">
+    <section xml:id="dbdoclet.mdstuning">
       <title><indexterm><primary>tuning</primary><secondary>MDS threads</secondary></indexterm>Specifying the MDS Service Thread Count</title>
       <para>The <literal>mds_num_threads</literal> parameter enables the number of MDS service threads to be specified at module load time on the MDS node:</para>
       <screen>options mds mds_num_threads={N}</screen>
@@ -74,13 +93,37 @@
       <note>
         <para>The OSS and MDS automatically start new service threads dynamically, in response to server load within a factor of 4. The default value is calculated the same way as before. Setting the <literal>_mu_threads</literal> module parameter disables automatic thread creation behavior.</para>
       </note>
+	<para>Lustre 2.3 introduced new parameters to provide more control to administrators.</para>
+	    <itemizedlist>
+	      <listitem>
+		<para><literal>mds_rdpg_num_threads</literal> controls the number of threads in providing the read page service. The read page service handles file close and readdir operations.</para>
+	      </listitem>
+	      <listitem>
+		<para><literal>mds_attr_num_threads</literal> controls the number of threads in providing the setattr service to 1.8 clients.</para>
+	      </listitem>
+	    </itemizedlist>
+	<note><para>Default values for the thread counts are automatically selected. The values are chosen to best exploit the number of CPUs present in the system and to provide best overall performance for typical workloads.</para></note>
     </section>
+  </section>
+    <section xml:id="dbdoclet.mdsbinding">
+      <title><indexterm><primary>tuning</primary><secondary>MDS binding</secondary></indexterm>Binding MDS Service Thread to CPU Partitions</title>
+	<para>With the introduction of Node Affinity (<xref linkend="nodeaffdef"/>) in Lustre 2.3, MDS threads can be bound to particular CPU Partitions (CPTs). Default values for bindings are selected automatically to provide good overall performance for a given CPU count. However, an administrator can deviate from these setting if they choose.</para>
+	    <itemizedlist>
+	      <listitem>
+		<para><literal>mds_num_cpts=[EXPRESSION]</literal> binds the default MDS service threads to CPTs defined by <literal>EXPRESSION</literal>. For example <literal>mdt_num_cpts=[0-3]</literal> will bind the MDS service threads to <literal>CPT[0,1,2,3]</literal>.</para>
+	      </listitem>
+	      <listitem>
+		<para><literal>mds_rdpg_num_cpts=[EXPRESSION]</literal> binds the read page service threads to CPTs defined by <literal>EXPRESSION</literal>. The read page service handles file close and readdir requests. For example <literal>mdt_rdpg_num_cpts=[4]</literal> will bind the read page threads to <literal>CPT4</literal>.</para>
+	      </listitem>
+	      <listitem>
+		<para><literal>mds_attr_num_cpts=[EXPRESSION]</literal> binds the setattr service threads to CPTs defined by <literal>EXPRESSION</literal>.</para>
+	      </listitem>
+	    </itemizedlist>
   </section>
   <section xml:id="dbdoclet.50438272_73839">
       <title>
           <indexterm><primary>LNET</primary><secondary>tuning</secondary>
-      </indexterm><indexterm><primary>tuning</primary><secondary>LNET</secondary></indexterm>
-      Tuning LNET Parameters</title>
+      </indexterm><indexterm><primary>tuning</primary><secondary>LNET</secondary></indexterm>Tuning LNET Parameters</title>
     <para>This section describes LNET tunables. that may be necessary on some systems to improve performance. To test the performance of your Lustre network, see <link xl:href="LNETSelfTest.html#50438223_71556">Chapter 23</link>: <link xl:href="LNETSelfTest.html#50438223_21832">Testing Lustre Network Performance (LNET Self-Test)</link>.</para>
     <section remap="h3">
       <title>Transmit and Receive Buffer Size</title>
@@ -98,6 +141,75 @@
       <screen>options ksocklnd enable_irq_affinity=0</screen>
       <para>By default, this parameter is off. As always, you should test the performance to compare the impact of changing this parameter.</para>
     </section>
+	<section><title><indexterm><primary>tuning</primary><secondary>Network interface binding</secondary></indexterm>Binding Network Interface Against CPU Partitions</title>
+	<para>Luster 2.3 and beyond provide enhanced network interface control. The enhancement means that an administrator can bind an interface to one or more CPU Partitions. Bindings are specified as options to the lnet modules. For more information on specifying module options, see <xref linkend="dbdoclet.50438293_15350"/></para>
+<para>For example, <literal>o2ib0(ib0)[0,1]</literal> will ensure that all messages for <literal>o2ib0</literal> will be handled by LND threads executing on <literal>CPT0</literal> and <literal>CPT1</literal>. An additional example might be: <literal>tcp1(eth0)[0]</literal>. Messages for <literal>tcp1</literal> are handled by threads on <literal>CPT0</literal>.</para>
+    </section>
+	<section><title><indexterm><primary>tuning</primary><secondary>Network interface credits</secondary></indexterm>Network Interface Credits</title>
+	<para>Network interface (NI) credits are shared across all CPU partitions (CPT). For example, a machine has 4 CPTs and NI credits is 512, then each partition will has 128 credits. If a large number of CPTs exist on the system,  LNet will check and validate the NI credits value for each CPT to ensure each CPT has workable number of credits. For example, a machine has 16 CPTs and NI credits is set to 256, then each partition only has 16 credits. 16 NI credits is low and could negatively impact performance. As a result, LNet will automatically make an adjustment to 8*peer_credits (peer_credits is 8 by default), so credits for each partition is still 64.</para>
+	<para>Modifying the NI Credit count can be performed by an administrator using <literal>ksoclnd</literal> or <literal>ko2iblnd</literal>. For example:</para>
+	<screen>ksocklnd credits=256</screen>
+	<para>applies 256 credits to TCP connections. Applying 256 credits to IB connections can be achieved with:</para>
+	<screen>ko2iblnd credits=256</screen>
+	<note><para>From Lustre 2.3 and beyond, it is possible that LNet may revalidate the NI Credits and the administrator's request do not persist.</para></note>
+	</section>
+	<section><title><indexterm><primary>tuning</primary><secondary>router buffers</secondary></indexterm>Router Buffers</title>
+	<para>Router buffers are shared by all CPU partitions. For a machine with a large number of CPTs, the router buffer number may need to be specified manually for best performance. A low number of router buffers risks starving the CPU Partitions of resources.</para>
+	<para>The default setting for router buffers will typically perform well. LNet automatically sets a default value to reduce the likelihood of resource starvation</para>
+	<para>An administrator may modify router buffers using the <literal>large_router_buffers</literal> parameter. For example:</para>
+	<screen>lnet large_router_buffers=8192</screen>
+	<note><para>From Lustre 2.3 and beyond, it is possible that LNet may revalidate the router buffer setting and the administrator's request do not persist.</para></note>
+	</section>
+	<section><title><indexterm><primary>tuning</primary><secondary>portal round-robin</secondary></indexterm>Portal Round-Robin</title>
+	<para>Portal round-robin defines the policy LNet applies to deliver events and messages to the upper layers. The upper layers are ptlrpc service or LNet selftest.</para>
+	<para>If portal round-robin is disabled, LNet will deliver messages to CPTs based on a hash of the source NID. Hence, all messages from a specific peer will be handled by the same CPT. This can reduce data traffic between CPUs. However, for some workloads, this behavior may result in poorly balancing loads across the CPU.</para>
+	<para>If portal round-robin is enabled, LNet will round-robin incoming events across all CPTs. This may balance load better across the CPU but can incur a cross CPU overhead.</para>
+	<para>The current policy can be changed by an administrator with <literal>echo &lt;VALUE&gt; &gt; /proc/sys/lnet/portal_rotor</literal>. There are four options for <literal>&lt;VALUE&gt;</literal>:</para>
+    <itemizedlist>
+      <listitem>
+        <para><literal>OFF</literal></para>
+		<para>Disable portal round-robin on all incoming requests.</para>
+      </listitem>
+      <listitem>
+        <para><literal>ON</literal></para>
+		<para>Enable portal round-robin on all incoming requests.</para>
+      </listitem>
+      <listitem>
+        <para><literal>RR_RT</literal></para>
+		<para>Enable portal round-robin only for routed messages.</para>
+      </listitem>
+      <listitem>
+        <para><literal>HASH_RT</literal></para>
+		<para>Routed messages will be delivered to the upper layer by hash of source NID (instead of NID of router.) This is the default value.</para>
+      </listitem>
+    </itemizedlist>
+
+    </section>
+  </section>
+  <section xml:id="dbdoclet.libcfstuning">
+      <title><indexterm><primary>tuning</primary><secondary>libcfs</secondary></indexterm>libcfs Tuning</title>
+<para>By default, Lustre will automatically generate CPU Partitions (CPT) based on the number of CPUs in the system. The CPT number will be 1 if the online CPU number is less than five.</para>
+        <para>The CPT number can be explicitly set on the libcfs module using <literal>cpu_npartitions=NUMBER</literal>. The value of <literal>cpu_npartitions</literal> must be an integer between 1 and the number of online CPUs.</para>
+<tip><para>Setting CPT to 1 will disable most of the SMP Node Affinity functionality.</para></tip>
+        <section>
+                <title>CPU Partition String Patterns</title>
+        <para>CPU Partitions can be described using string pattern notation. For example:</para>
+    <itemizedlist>
+      <listitem>
+        <para><literal>cpu_pattern="0[0,2,4,6] 1[1,3,5,7]</literal></para>
+                <para>Create two CPTs, CPT0 contains CPU[0, 2, 4, 6]. CPT1 contains CPU[1,3,5,7].</para>
+      </listitem>
+      <listitem> <para><literal>cpu_pattern="N 0[0-3] 1[4-7]</literal></para>
+                <para>Create two CPTs, CPT0 contains all CPUs in NUMA node[0-3], CPT1 contains all CPUs in NUMA node [4-7].</para>
+      </listitem>
+    </itemizedlist>
+        <para>The current configuration of the CPU partition can be read from <literal>/proc/sys/lnet/cpu_paratitions</literal></para>
+        </section>
+  </section>
+  <section xml:id="dbdoclet.lndtuning">
+      <title><indexterm><primary>tuning</primary><secondary>LND tuning</secondary></indexterm>LND Tuning</title>
+      <para>LND tuning allows the number of threads per CPU partition to be specified. An administrator can set the threads for both <literal>ko2iblnd</literal> and <literal>ksocklnd</literal> using the <literal>nscheds</literal> parameter. This adjusts the number of threads for each partition, not the overall number of threads on the LND.</para>
+                <note><para>Lustre 2.3 has greatly decreased the default number of threads for <literal>ko2iblnd</literal> and <literal>ksocklnd</literal> on high-core count machines. The current default values are automatically set and are chosen to work well across a number of typical scenarios.</para></note>
   </section>
   <section xml:id="dbdoclet.50438272_25884">
       <title><indexterm><primary>tuning</primary><secondary>lockless I/O</secondary></indexterm>Lockless I/O Tunables</title>

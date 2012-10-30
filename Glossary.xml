@@ -443,6 +443,20 @@
         <para>A subset of the LNET RPC module that implements a library for sending large network requests, moving buffers with RDMA.</para>
       </glossdef>
     </glossentry>
+    <glossentry xml:id="nodeaffdef">
+      <glossterm>Node Affinity
+        </glossterm>
+      <glossdef>
+        <para>Node Affinity describes the property of a multithreaded application to behave sensibably on multiple cores. Without the property of Node Affinity, an operating scheduler may move application threads accross processors in an sub-optimal way that significantly reduces performance of the application overall.</para>
+      </glossdef>
+    </glossentry>
+    <glossentry xml:id="NUMAdef">
+      <glossterm>NUMA
+        </glossterm>
+      <glossdef>
+        <para>Non-Uniform Memory Access describes a mulitprocessing architecture where the time taken to access given memory differs depending on memory location releative to a given processor. Typically machines with multiple sockets are NUMA architectures.</para>
+      </glossdef>
+    </glossentry>
   </glossdiv>
   <glossdiv>
     <title>O</title>
