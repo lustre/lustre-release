@@ -2029,6 +2029,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.4 converts d_alloc_root to d_make_root
+# see kernel commit 32991ab305ace7017c62f8eecbe5eb36dc32e13b
+#
+AC_DEFUN([LC_HAVE_D_MAKE_ROOT],
+[AC_MSG_CHECKING([if have d_make_root])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	d_make_root((struct inode *)NULL);
+],[
+	AC_DEFINE(HAVE_D_MAKE_ROOT, 1,
+		  [have d_make_root])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2190,15 +2209,16 @@ AC_DEFUN([LC_PROG_LINUX],
 
 	 # 3.4
 	 LC_TOUCH_ATIME_1ARG
+	 LC_HAVE_D_MAKE_ROOT
 
-         #
-         if test x$enable_server = xyes ; then
-             AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
-             LC_FUNC_DEV_SET_RDONLY
-             LC_STACK_SIZE
-             LC_QUOTA64
-             LC_QUOTA_CONFIG
-         fi
+	 #
+	 if test x$enable_server = xyes ; then
+		AC_DEFINE(HAVE_SERVER_SUPPORT, 1, [support server])
+		LC_FUNC_DEV_SET_RDONLY
+		LC_STACK_SIZE
+		LC_QUOTA64
+		LC_QUOTA_CONFIG
+	 fi
 ])
 
 #

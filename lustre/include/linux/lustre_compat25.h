@@ -728,4 +728,17 @@ static inline void set_nlink(struct inode *inode, unsigned int nlink)
 # define ll_umode_t	int
 #endif
 
+#include <linux/dcache.h>
+#ifndef HAVE_D_MAKE_ROOT
+static inline struct dentry *d_make_root(struct inode *root)
+{
+	struct dentry *res = d_alloc_root(root);
+
+	if (res == NULL && root)
+		iput(root);
+
+	return res;
+}
+#endif
+
 #endif /* _COMPAT25_H */

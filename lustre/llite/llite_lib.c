@@ -555,7 +555,13 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 				 KEY_CACHE_SET, sizeof(sbi->ll_cache),
 				 &sbi->ll_cache, NULL);
 
-	sb->s_root = d_alloc_root(root);
+	sb->s_root = d_make_root(root);
+	if (sb->s_root == NULL) {
+		CERROR("%s: can't make root dentry\n",
+			ll_get_fsname(sb, NULL, 0));
+		GOTO(out_lock_cn_cb, err = -ENOMEM);
+	}
+
 #ifdef HAVE_DCACHE_LOCK
 	sb->s_root->d_op = &ll_d_root_ops;
 #else

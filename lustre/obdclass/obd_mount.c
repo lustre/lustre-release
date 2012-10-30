@@ -2277,19 +2277,18 @@ static int server_fill_super_common(struct super_block *sb)
                 RETURN(-EIO);
         }
 
-        /* returns -EIO for every operation */
-        /* make_bad_inode(root); -- badness - can't umount */
-        /* apparently we need to be a directory for the mount to finish */
-        root->i_mode = S_IFDIR;
+	/* returns -EIO for every operation */
+	/* make_bad_inode(root); -- badness - can't umount */
+	/* apparently we need to be a directory for the mount to finish */
+	root->i_mode = S_IFDIR;
 
-        sb->s_root = d_alloc_root(root);
-        if (!sb->s_root) {
-                CERROR("Can't make root dentry\n");
-                iput(root);
-                RETURN(-EIO);
-        }
+	sb->s_root = d_make_root(root);
+	if (!sb->s_root) {
+		CERROR("%s: can't make root dentry\n", sb->s_id);
+		RETURN(-EIO);
+	}
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int osd_start(struct lustre_sb_info *lsi, unsigned long mflags)
