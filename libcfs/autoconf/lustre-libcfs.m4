@@ -214,6 +214,21 @@ LB_LINUX_TRY_COMPILE([
 		AC_MSG_RESULT(no)
 	])
 
+	AC_MSG_CHECKING([whether OFED backports have cpumask_of_node])
+	# Some OFED has cpumask_of_node backports defined in
+	# its private include/linux/cpumask.h. However, it is
+	# defined conflictingly with kernel's cpumask_of_node.
+	if test -f $OFED_BACKPORT_PATH/linux/cpumask.h; then
+		grep -q cpumask_of_node $OFED_BACKPORT_PATH/linux/cpumask.h 2>/dev/null
+		rc=$?
+		if test $rc -eq 0; then
+			AC_DEFINE(HAVE_OFED_CPUMASK_OF_NODE, 1, [have cpumask_of_node])
+			AC_MSG_RESULT(yes)
+		else
+			AC_MSG_RESULT(no)
+		fi
+	fi
+
 	AC_MSG_CHECKING([whether have cpumask_of_node])
 	LB_LINUX_TRY_COMPILE([
 		#include <linux/topology.h>
@@ -221,6 +236,18 @@ LB_LINUX_TRY_COMPILE([
 		cpumask_t *mask = cpumask_of_node(0);
 	],[
 		AC_DEFINE(HAVE_CPUMASK_OF_NODE, 1, [have cpumask_of_node])
+		AC_MSG_RESULT(yes)
+	],[
+		AC_MSG_RESULT(no)
+	])
+
+	AC_MSG_CHECKING([whether have cpumask_copy])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/cpumask.h>
+	],[
+		cpumask_copy(NULL, NULL);
+	],[
+		AC_DEFINE(HAVE_CPUMASK_COPY, 1, [have cpumask_copy])
 		AC_MSG_RESULT(yes)
 	],[
 		AC_MSG_RESULT(no)

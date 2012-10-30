@@ -410,20 +410,21 @@ static int ptlrpcd(void *arg)
         int rc, exit = 0;
         ENTRY;
 
-        cfs_daemonize_ctxt(pc->pc_name);
-#if defined(CONFIG_SMP) && defined(HAVE_NODE_TO_CPUMASK)
+	cfs_daemonize_ctxt(pc->pc_name);
+#if defined(CONFIG_SMP) && \
+(defined(HAVE_CPUMASK_OF_NODE) || defined(HAVE_NODE_TO_CPUMASK))
 	if (test_bit(LIOD_BIND, &pc->pc_flags)) {
-                int index = pc->pc_index;
+		int index = pc->pc_index;
 
                 if (index >= 0 && index < cfs_num_possible_cpus()) {
-                        while (!cpu_online(index)) {
-                                if (++index >= cfs_num_possible_cpus())
-                                        index = 0;
-                        }
-                        cfs_set_cpus_allowed(cfs_current(),
-                                     node_to_cpumask(cpu_to_node(index)));
-                }
-        }
+			while (!cpu_online(index)) {
+				if (++index >= cfs_num_possible_cpus())
+					index = 0;
+			}
+			cfs_set_cpus_allowed(cfs_current(),
+				     *cpumask_of_node(cpu_to_node(index)));
+		}
+	}
 #endif
         /*
          * XXX So far only "client" ptlrpcd uses an environment. In
@@ -526,14 +527,13 @@ static int ptlrpcd(void *arg)
 # endif
 static int ptlrpcd_bind(int index, int max)
 {
-        struct ptlrpcd_ctl *pc;
-        int rc = 0;
-#if defined(CONFIG_NUMA) && defined(HAVE_NODE_TO_CPUMASK)
-        struct ptlrpcd_ctl *ppc;
-        int node, i, pidx;
-        cpumask_t mask;
+	struct ptlrpcd_ctl *pc;
+	int rc = 0;
+#if defined(CONFIG_NUMA) && \
+(defined(HAVE_CPUMASK_OF_NODE) || defined(HAVE_NODE_TO_CPUMASK))
+	cpumask_t mask;
 #endif
-        ENTRY;
+	ENTRY;
 
         LASSERT(index <= max - 1);
         pc = &ptlrpcds->pd_threads[index];
@@ -549,14 +549,17 @@ static int ptlrpcd_bind(int index, int max)
                 LASSERT(max % 2 == 0);
                 pc->pc_npartners = 1;
                 break;
-        case PDB_POLICY_NEIGHBOR:
-#if defined(CONFIG_NUMA) && defined(HAVE_NODE_TO_CPUMASK)
-                node = cpu_to_node(index);
-                mask = node_to_cpumask(node);
-                for (i = max; i < cfs_num_online_cpus(); i++)
-                        cpu_clear(i, mask);
-                pc->pc_npartners = cpus_weight(mask) - 1;
+	case PDB_POLICY_NEIGHBOR:
+#if defined(CONFIG_NUMA) && \
+(defined(HAVE_CPUMASK_OF_NODE) || defined(HAVE_NODE_TO_CPUMASK))
+	{
+		int i;
+		mask = *cpumask_of_node(cpu_to_node(index));
+		for (i = max; i < cfs_num_online_cpus(); i++)
+			cpu_clear(i, mask);
+		pc->pc_npartners = cpus_weight(mask) - 1;
 		set_bit(LIOD_BIND, &pc->pc_flags);
+	}
 #else
                 LASSERT(max >= 3);
                 pc->pc_npartners = 2;
@@ -584,23 +587,28 @@ static int ptlrpcd_bind(int index, int max)
                                                 pc_partners[0] = pc;
                                 }
                                 break;
-                        case PDB_POLICY_NEIGHBOR:
-#if defined(CONFIG_NUMA) && defined(HAVE_NODE_TO_CPUMASK)
-                                /* partners are cores in the same NUMA node.
-                                 * setup partnership only with ptlrpcd threads
-                                 * that are already initialized
-                                 */
-                                for (pidx = 0, i = 0; i < index; i++) {
-                                        if (cpu_isset(i, mask)) {
-                                                ppc = &ptlrpcds->pd_threads[i];
-                                                pc->pc_partners[pidx++] = ppc;
-                                                ppc->pc_partners[ppc->
-                                                          pc_npartners++] = pc;
-                                        }
-                                }
+			case PDB_POLICY_NEIGHBOR:
+#if defined(CONFIG_NUMA) && \
+(defined(HAVE_CPUMASK_OF_NODE) || defined(HAVE_NODE_TO_CPUMASK))
+			{
+				struct ptlrpcd_ctl *ppc;
+				int i, pidx;
+				/* partners are cores in the same NUMA node.
+				 * setup partnership only with ptlrpcd threads
+				 * that are already initialized
+				 */
+				for (pidx = 0, i = 0; i < index; i++) {
+					if (cpu_isset(i, mask)) {
+						ppc = &ptlrpcds->pd_threads[i];
+						pc->pc_partners[pidx++] = ppc;
+						ppc->pc_partners[ppc->
+							  pc_npartners++] = pc;
+					}
+				}
                                 /* adjust number of partners to the number
                                  * of partnership really setup */
                                 pc->pc_npartners = pidx;
+			}
 #else
                                 if (index & 0x1)
 					set_bit(LIOD_BIND, &pc->pc_flags);

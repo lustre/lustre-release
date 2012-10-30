@@ -79,7 +79,7 @@ static struct cfs_cpt_data	cpt_data;
 void
 cfs_cpu_core_siblings(int cpu, cpumask_t *mask)
 {
-#if defined(HAVE_TOPOLOGY_CORE_CPUMASK)
+#if defined(HAVE_TOPOLOGY_CORE_CPUMASK) && defined(HAVE_CPUMASK_COPY)
 	/* return cpumask of cores in the same socket */
 	cpumask_copy(mask, topology_core_cpumask(cpu));
 #elif defined(HAVE_TOPOLOGY_CORE_SIBLINGS)
@@ -112,7 +112,7 @@ EXPORT_SYMBOL(cfs_cpu_core_nsiblings);
 void
 cfs_cpu_ht_siblings(int cpu, cpumask_t *mask)
 {
-#if defined(HAVE_TOPOLOGY_THREAD_CPUMASK)
+#if defined(HAVE_TOPOLOGY_THREAD_CPUMASK) && defined(HAVE_CPUMASK_COPY)
 	cpumask_copy(mask, topology_thread_cpumask(cpu));
 #elif defined(HAVE_TOPOLOGY_THREAD_SIBLINGS)
 	*mask = topology_thread_siblings(cpu);
@@ -143,7 +143,7 @@ EXPORT_SYMBOL(cfs_cpu_ht_nsiblings);
 void
 cfs_node_to_cpumask(int node, cpumask_t *mask)
 {
-#if defined(HAVE_CPUMASK_OF_NODE)
+#if defined(HAVE_CPUMASK_OF_NODE) && defined(HAVE_CPUMASK_COPY)
 	cpumask_copy(mask, cpumask_of_node(node));
 #elif defined(HAVE_NODE_TO_CPUMASK)
 	*mask = node_to_cpumask(node);
