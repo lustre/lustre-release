@@ -552,23 +552,23 @@ static struct dentry *ll_lookup_it(struct inode *parent, struct dentry *dentry,
 struct lookup_intent *ll_convert_intent(struct open_intent *oit,
                                         int lookup_flags)
 {
-        struct lookup_intent *it;
+	struct lookup_intent *it;
 
-        OBD_ALLOC(it, sizeof(*it));
-        if (!it)
-                return ERR_PTR(-ENOMEM);
+	OBD_ALLOC(it, sizeof(*it));
+	if (!it)
+		return ERR_PTR(-ENOMEM);
 
-        if (lookup_flags & LOOKUP_OPEN) {
-                it->it_op = IT_OPEN;
-                if (lookup_flags & LOOKUP_CREATE)
-                        it->it_op |= IT_CREAT;
-                it->it_create_mode = (oit->create_mode & S_IALLUGO) | S_IFREG;
-                it->it_flags = oit->flags;
-        } else {
-                it->it_op = IT_GETATTR;
-        }
+	if (lookup_flags & LOOKUP_OPEN) {
+		it->it_op = IT_OPEN;
+		if (lookup_flags & LOOKUP_CREATE)
+			it->it_op |= IT_CREAT;
+		it->it_create_mode = (oit->create_mode & S_IALLUGO) | S_IFREG;
+		it->it_flags = ll_namei_to_lookup_intent_flag(oit->flags);
+	} else {
+		it->it_op = IT_GETATTR;
+	}
 
-        return it;
+	return it;
 }
 
 static struct dentry *ll_lookup_nd(struct inode *parent, struct dentry *dentry,

@@ -691,4 +691,19 @@ static inline bool selinux_is_enabled(void)
 # define lm_compare_owner	fl_compare_owner
 #endif
 
+/*
+ * After 3.1, kernel's nameidata.intent.open.flags is different
+ * with lustre's lookup_intent.it_flags, as lustre's it_flags'
+ * lower bits equal to FMODE_xxx while kernel doesn't transliterate
+ * lower bits of nameidata.intent.open.flags to FMODE_xxx.
+ * */
+#include <linux/version.h>
+static inline int ll_namei_to_lookup_intent_flag(int flag)
+{
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 1, 0)
+	flag = (flag & ~O_ACCMODE) | OPEN_FMODE(flag);
+#endif
+	return flag;
+}
+
 #endif /* _COMPAT25_H */
