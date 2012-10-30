@@ -49,7 +49,6 @@
 #include <linux/uio.h>
 #include <linux/fs.h>
 
-#include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/io.h>
 

@@ -50,7 +50,6 @@
 #include <linux/errno.h>
 #include <linux/version.h>
 #include <linux/unistd.h>
-#include <asm/system.h>
 #include <asm/uaccess.h>
 #include <linux/fs.h>
 #include <linux/stat.h>

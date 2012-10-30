@@ -50,7 +50,6 @@
 #include <linux/uio.h>
 #include <linux/if.h>
 
-#include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/irq.h>
 

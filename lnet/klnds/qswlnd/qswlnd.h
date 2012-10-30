@@ -55,7 +55,6 @@
 #include <net/sock.h>
 #include <linux/uio.h>
 
-#include <asm/system.h>
 #include <asm/uaccess.h>
 
 #include <linux/fs.h>

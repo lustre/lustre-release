@@ -45,7 +45,6 @@
 #include <linux/errno.h>
 #include <linux/unistd.h>
 #include <linux/writeback.h>
-#include <asm/system.h>
 #include <asm/uaccess.h>
 
 #include <linux/fs.h>

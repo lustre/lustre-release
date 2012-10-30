@@ -47,7 +47,6 @@
 #include <linux/unistd.h>
 #include <linux/uio.h>
 
-#include <asm/system.h>
 #include <asm/uaccess.h>
 #include <asm/io.h>
 
