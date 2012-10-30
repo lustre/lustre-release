@@ -23,31 +23,6 @@ ifeq ($(PATCHLEVEL),)
 
 include autoMakefile
 
-# The kernel ABI files for the nonfree modules.
-KABIS := $(NONFREE_MODULES:%$(KMODEXT)=%.kabi)
-
-all: archive-nonfree-modules
-
-# Where to archive the nonfree modules for binary distribution.
-# If this directory has a colon in it, SSH/SCP are used to go out on the network.
-nonfreedir := $$HOME/nonfree
-#nonfreedir := moraine.clusterfs.com:/home/lustre-nonfree
-
-# Put the nonfree modules and corresponding KABI files into the binary
-# archive.  We assume that if the CVS subdirectory doesn't exist, we
-# don't want to archive.
-archive-nonfree-modules: $(KABIS) $(NONFREE_MODULES)
-	test -d CVS || exit 0; \
-	list="$(NONFREE_MODULES)"; for mod in $$list; do \
-	  perl $(top_srcdir)/build/kabi -v archive $(nonfreedir) $$mod || exit $$?; \
-	done
-
-# Generate the Kernel ABI files for the nonfree modules.
-$(KABIS): $(NONFREE_MODULES)
-	for mod in $(NONFREE_MODULES); do \
-	  CC="$(CC)" perl $(top_srcdir)/build/kabi --with-linux="$(LINUX)" module $$mod || exit $$?; \
-	done
-
 fix-kext-ownership:
 	@if test -d $(DESTDIR)$(kextdir) ; then \
 		echo chown -R root:wheel $(DESTDIR)$(kextdir) ; \
