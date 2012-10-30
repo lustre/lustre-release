@@ -338,7 +338,8 @@ static unsigned int loop_get_bio(struct lloop_device *lo, struct bio **req)
         return count;
 }
 
-static int loop_make_request(struct request_queue *q, struct bio *old_bio)
+static ll_mrf_ret
+loop_make_request(struct request_queue *q, struct bio *old_bio)
 {
         struct lloop_device *lo = q->queuedata;
         int rw = bio_rw(old_bio);
@@ -366,10 +367,10 @@ static int loop_make_request(struct request_queue *q, struct bio *old_bio)
                 goto err;
         }
         loop_add_bio(lo, old_bio);
-        return 0;
+	LL_MRF_RETURN(0);
 err:
-        cfs_bio_io_error(old_bio, old_bio->bi_size);
-        return 0;
+	cfs_bio_io_error(old_bio, old_bio->bi_size);
+	LL_MRF_RETURN(0);
 }
 
 #ifdef HAVE_REQUEST_QUEUE_UNPLUG_FN

@@ -1875,6 +1875,27 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.2 request_queue.make_request_fn defined as function returns with void
+# see kernel commit 5a7bbad27a410350e64a2d7f5ec18fc73836c14f
+#
+AC_DEFUN([LC_HAVE_VOID_MAKE_REQUEST_FN],
+[AC_MSG_CHECKING([if request_queue.make_request_fn returns void but not int])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/blkdev.h>
+],[
+	int ret;
+	make_request_fn		*mrf;
+	ret = mrf(NULL, NULL);
+],[
+	AC_MSG_RESULT([no])
+],[
+	AC_DEFINE(HAVE_VOID_MAKE_REQUEST_FN, 1,
+		  [request_queue.make_request_fn returns void but not int])
+	AC_MSG_RESULT([yes])
+])
+])
+
+#
 # 3.3 introduces migrate_mode.h and migratepage has 4 args
 #
 AC_DEFUN([LC_HAVE_MIGRATE_HEADER],
@@ -2061,6 +2082,9 @@ AC_DEFUN([LC_PROG_LINUX],
 
 	 # 3.1.1
 	 LC_BLOCKS_FOR_TRUNCATE
+
+	 # 3.2
+	 LC_HAVE_VOID_MAKE_REQUEST_FN
 
 	 # 3.3
 	 LC_HAVE_MIGRATE_HEADER
