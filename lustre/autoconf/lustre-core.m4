@@ -1835,6 +1835,26 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.1 adds get_acl method to inode_operations to read ACL from disk.
+# see kernel commit 4e34e719e457f2e031297175410fc0bd4016a085
+#
+AC_DEFUN([LC_IOP_GET_ACL],
+[AC_MSG_CHECKING([inode_operations has .get_acl member function])
+LB_LINUX_TRY_COMPILE([
+        #include <linux/fs.h>
+],[
+        struct inode_operations iop;
+        iop.get_acl = NULL;
+],[
+        AC_DEFINE(HAVE_IOP_GET_ACL, 1,
+                  [inode_operations has .get_acl member function])
+        AC_MSG_RESULT([yes])
+],[
+        AC_MSG_RESULT([no])
+])
+])
+
+#
 # 3.1.1 has ext4_blocks_for_truncate
 #
 AC_DEFUN([LC_BLOCKS_FOR_TRUNCATE],
@@ -2037,6 +2057,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 3.1
 	 LC_LM_XXX_LOCK_MANAGER_OPS
 	 LC_INODE_DIO_WAIT
+	 LC_IOP_GET_ACL
 
 	 # 3.1.1
 	 LC_BLOCKS_FOR_TRUNCATE

@@ -739,6 +739,8 @@ int ll_getattr_it(struct vfsmount *mnt, struct dentry *de,
                struct lookup_intent *it, struct kstat *stat);
 int ll_getattr(struct vfsmount *mnt, struct dentry *de, struct kstat *stat);
 struct ll_file_data *ll_file_data_get(void);
+struct posix_acl * ll_get_acl(struct inode *inode, int type);
+
 #ifdef HAVE_GENERIC_PERMISSION_4ARGS
 int ll_inode_permission(struct inode *inode, int mask, unsigned int flags);
 #else
@@ -748,6 +750,7 @@ int ll_inode_permission(struct inode *inode, int mask, struct nameidata *nd);
 int ll_inode_permission(struct inode *inode, int mask);
 # endif
 #endif
+
 int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
                              int flags, struct lov_user_md *lum,
                              int lum_size);

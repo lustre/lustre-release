@@ -1176,31 +1176,37 @@ static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
 }
 
 struct inode_operations ll_dir_inode_operations = {
-        .mknod              = ll_mknod,
-        .lookup             = ll_lookup_nd,
-        .create             = ll_create_nd,
-        /* We need all these non-raw things for NFSD, to not patch it. */
-        .unlink             = ll_unlink,
-        .mkdir              = ll_mkdir,
-        .rmdir              = ll_rmdir,
-        .symlink            = ll_symlink,
-        .link               = ll_link,
-        .rename             = ll_rename,
-        .setattr            = ll_setattr,
-        .getattr            = ll_getattr,
-        .permission         = ll_inode_permission,
-        .setxattr           = ll_setxattr,
-        .getxattr           = ll_getxattr,
-        .listxattr          = ll_listxattr,
-        .removexattr        = ll_removexattr,
+	.mknod              = ll_mknod,
+	.lookup             = ll_lookup_nd,
+	.create             = ll_create_nd,
+	/* We need all these non-raw things for NFSD, to not patch it. */
+	.unlink             = ll_unlink,
+	.mkdir              = ll_mkdir,
+	.rmdir              = ll_rmdir,
+	.symlink            = ll_symlink,
+	.link               = ll_link,
+	.rename             = ll_rename,
+	.setattr            = ll_setattr,
+	.getattr            = ll_getattr,
+	.permission         = ll_inode_permission,
+	.setxattr           = ll_setxattr,
+	.getxattr           = ll_getxattr,
+	.listxattr          = ll_listxattr,
+	.removexattr        = ll_removexattr,
+#ifdef HAVE_IOP_GET_ACL
+	.get_acl	    = ll_get_acl,
+#endif
 };
 
 struct inode_operations ll_special_inode_operations = {
-        .setattr        = ll_setattr,
-        .getattr        = ll_getattr,
-        .permission     = ll_inode_permission,
-        .setxattr       = ll_setxattr,
-        .getxattr       = ll_getxattr,
-        .listxattr      = ll_listxattr,
-        .removexattr    = ll_removexattr,
+	.setattr        = ll_setattr,
+	.getattr        = ll_getattr,
+	.permission     = ll_inode_permission,
+	.setxattr       = ll_setxattr,
+	.getxattr       = ll_getxattr,
+	.listxattr      = ll_listxattr,
+	.removexattr    = ll_removexattr,
+#ifdef HAVE_IOP_GET_ACL
+	.get_acl	    = ll_get_acl,
+#endif
 };
