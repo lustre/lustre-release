@@ -3407,7 +3407,7 @@ run_e2fsck() {
     local extra_opts=$3
 
     df > /dev/null      # update statfs data on disk
-    local cmd="$E2FSCK -d -v -t -t -f -n $extra_opts $target_dev"
+    local cmd="$E2FSCK -d -v -t -t -f $extra_opts $target_dev"
     echo $cmd
     local rc=0
     do_node $node $cmd || rc=$?
@@ -3443,14 +3443,14 @@ generate_db() {
 
     [ $MDSCOUNT -eq 1 ] || error "CMD is not supported"
 
-    run_e2fsck $(mdts_nodes) $MDTDEV "--mdsdb $MDSDB"
+    run_e2fsck $(mdts_nodes) $MDTDEV "-n --mdsdb $MDSDB"
 
     i=0
     ostidx=0
     OSTDB_LIST=""
     for node in $(osts_nodes); do
         for dev in ${OSTDEVS[i]}; do
-            run_e2fsck $node $dev "--mdsdb $MDSDB --ostdb $OSTDB-$ostidx"
+            run_e2fsck $node $dev "-n --mdsdb $MDSDB --ostdb $OSTDB-$ostidx"
             OSTDB_LIST="$OSTDB_LIST $OSTDB-$ostidx"
             ostidx=$((ostidx + 1))
         done
@@ -5557,12 +5557,13 @@ run_llverfs()
 {
         local dir=$1
         local llverfs_opts=$2
+        local use_partial_arg=$3
         local partial_arg=""
         local size=$(df -B G $dir |tail -n 1 |awk '{print $2}' |sed 's/G//') #GB
 
         # Run in partial (fast) mode if the size
         # of a partition > 1 GB
-        [ $size -gt 1 ] && partial_arg="-p"
+        [ "x$use_partial_arg" != "xno" ] && [ $size -gt 1 ] && partial_arg="-p"
 
         llverfs $partial_arg $llverfs_opts $dir
 }
