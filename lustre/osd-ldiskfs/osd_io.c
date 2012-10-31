@@ -977,7 +977,7 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
          * on-disk symlinks for ldiskfs.
          */
         if (S_ISLNK(dt->do_lu.lo_header->loh_attr) &&
-            (buf->lb_len <= sizeof(LDISKFS_I(inode)->i_data)))
+            (buf->lb_len < sizeof(LDISKFS_I(inode)->i_data)))
                 rc = osd_ldiskfs_readlink(inode, buf->lb_buf, buf->lb_len);
         else
                 rc = osd_ldiskfs_read(inode, buf->lb_buf, buf->lb_len, pos);
