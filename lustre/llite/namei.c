@@ -818,7 +818,7 @@ static int ll_mknod_generic(struct inode *dir, struct qstr *name, int mode,
 }
 
 static int ll_create_nd(struct inode *dir, struct dentry *dentry,
-                        int mode, struct nameidata *nd)
+			ll_umode_t mode, struct nameidata *nd)
 {
         struct lookup_intent *it = ll_d2d(dentry)->lld_it;
         int rc;
@@ -1133,7 +1133,7 @@ static int ll_rename_generic(struct inode *src, struct dentry *src_dparent,
         RETURN(err);
 }
 
-static int ll_mknod(struct inode *dir, struct dentry *dchild, int mode,
+static int ll_mknod(struct inode *dir, struct dentry *dchild, ll_umode_t mode,
 		    dev_t rdev)
 {
 	return ll_mknod_generic(dir, &dchild->d_name, mode,
@@ -1144,25 +1144,30 @@ static int ll_unlink(struct inode * dir, struct dentry *dentry)
 {
         return ll_unlink_generic(dir, NULL, dentry, &dentry->d_name);
 }
-static int ll_mkdir(struct inode *dir, struct dentry *dentry, int mode)
+
+static int ll_mkdir(struct inode *dir, struct dentry *dentry, ll_umode_t mode)
 {
         return ll_mkdir_generic(dir, &dentry->d_name, mode, dentry);
 }
+
 static int ll_rmdir(struct inode *dir, struct dentry *dentry)
 {
         return ll_rmdir_generic(dir, NULL, dentry, &dentry->d_name);
 }
+
 static int ll_symlink(struct inode *dir, struct dentry *dentry,
                       const char *oldname)
 {
         return ll_symlink_generic(dir, &dentry->d_name, oldname, dentry);
 }
+
 static int ll_link(struct dentry *old_dentry, struct inode *dir,
                    struct dentry *new_dentry)
 {
         return ll_link_generic(old_dentry->d_inode, dir, &new_dentry->d_name,
                                new_dentry);
 }
+
 static int ll_rename(struct inode *old_dir, struct dentry *old_dentry,
                      struct inode *new_dir, struct dentry *new_dentry)
 {

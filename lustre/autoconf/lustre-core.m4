@@ -1955,6 +1955,61 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.3 switchs super_operations to use dentry as parameter (but not vfsmount)
+# see kernel commit 34c80b1d93e6e20ca9dea0baf583a5b5510d92d4
+#
+AC_DEFUN([LC_SUPEROPS_USE_DENTRY],
+[AC_MSG_CHECKING([if super_operations use dentry as parameter])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	int show_options(struct seq_file *seq, struct dentry *root){
+		return 0;
+	}
+],[
+	struct super_operations ops;
+	ops.show_options = show_options;
+],[
+	AC_DEFINE(HAVE_SUPEROPS_USE_DENTRY, 1,
+		  [super_operations use dentry as parameter])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+#
+# 3.3 switchs inode_operations to use umode_t as parameter (but not int)
+# see kernel commit 1a67aafb5f72a436ca044293309fa7e6351d6a35
+#
+AC_DEFUN([LC_INODEOPS_USE_UMODE_T],
+[AC_MSG_CHECKING([if inode_operations use umode_t as parameter])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	#include <linux/types.h>
+	int my_mknod(struct inode *dir, struct dentry *dchild,
+		     umode_t mode, dev_t dev)
+	{
+		return 0;
+	}
+],[
+	struct inode_operations ops;
+	ops.mknod = my_mknod;
+],[
+	AC_DEFINE(HAVE_INODEOPS_USE_UMODE_T, 1,
+		  [inode_operations use umode_t as parameter])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2111,6 +2166,8 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 3.3
 	 LC_HAVE_MIGRATE_HEADER
 	 LC_MIGRATEPAGE_4ARGS
+	 LC_SUPEROPS_USE_DENTRY
+	 LC_INODEOPS_USE_UMODE_T
 
          #
          if test x$enable_server = xyes ; then

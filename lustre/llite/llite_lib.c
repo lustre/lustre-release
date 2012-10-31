@@ -2316,12 +2316,21 @@ void ll_finish_md_op_data(struct md_op_data *op_data)
         OBD_FREE_PTR(op_data);
 }
 
+#ifdef HAVE_SUPEROPS_USE_DENTRY
+int ll_show_options(struct seq_file *seq, struct dentry *dentry)
+#else
 int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
+#endif
 {
         struct ll_sb_info *sbi;
 
-        LASSERT((seq != NULL) && (vfs != NULL));
-        sbi = ll_s2sbi(vfs->mnt_sb);
+#ifdef HAVE_SUPEROPS_USE_DENTRY
+	LASSERT((seq != NULL) && (dentry != NULL));
+	sbi = ll_s2sbi(dentry->d_sb);
+#else
+	LASSERT((seq != NULL) && (vfs != NULL));
+	sbi = ll_s2sbi(vfs->mnt_sb);
+#endif
 
         if (sbi->ll_flags & LL_SBI_NOLCK)
                 seq_puts(seq, ",nolock");
