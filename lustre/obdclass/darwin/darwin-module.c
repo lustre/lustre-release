@@ -48,7 +48,11 @@
 #include <lprocfs_status.h>
 
 #ifndef OBD_MAX_IOCTL_BUFFER
-#define OBD_MAX_IOCTL_BUFFER 8192
+#ifdef CONFIG_LUSTRE_OBD_MAX_IOCTL_BUFFER
+#define OBD_MAX_IOCTL_BUFFER	CONFIG_LUSTRE_OBD_MAX_IOCTL_BUFFER
+#else
+#define OBD_MAX_IOCTL_BUFFER	8192
+#endif
 #endif
 
 /* buffer MUST be at least the size of obd_ioctl_hdr */

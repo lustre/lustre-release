@@ -62,7 +62,7 @@ AC_ARG_WITH([obd-buffer-size],
 		OBD_BUFFER_SIZE=8192
 	])
 AC_MSG_RESULT([$OBD_BUFFER_SIZE bytes])
-AC_DEFINE_UNQUOTED(OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
+AC_DEFINE_UNQUOTED(CONFIG_LUSTRE_OBD_MAX_IOCTL_BUFFER, $OBD_BUFFER_SIZE, [IOCTL Buffer Size])
 ])
 
 #
@@ -2829,7 +2829,7 @@ AC_ARG_ENABLE([invariants],
 AC_MSG_CHECKING([whether to check invariants (expensive cpu-wise)])
 AC_MSG_RESULT([$enable_invariants])
 if test x$enable_invariants = xyes ; then
-        AC_DEFINE([INVARIANT_CHECK], 1, [enable invariant checking])
+	AC_DEFINE([CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK], 1, [enable invariant checking])
 fi
 
 AC_ARG_ENABLE([lu_ref],

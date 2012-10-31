@@ -94,6 +94,7 @@ int do_set_info_async(struct obd_import *imp,
                       struct ptlrpc_request_set *set);
 
 #define OBD_RECOVERY_MAX_TIME (obd_timeout * 18) /* b13079 */
+#define OBD_MAX_IOCTL_BUFFER CONFIG_LUSTRE_OBD_MAX_IOCTL_BUFFER
 
 void target_send_reply(struct ptlrpc_request *req, int rc, int fail_id);
 

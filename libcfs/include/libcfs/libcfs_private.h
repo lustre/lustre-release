@@ -107,7 +107,7 @@ do {									\
 # define LASSERTF(cond, ...) ((void)sizeof!!(cond))
 #endif /* !LIBCFS_DEBUG */
 
-#ifdef INVARIANT_CHECK
+#ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 /**
  * This is for more expensive checks that one doesn't want to be enabled all
  * the time. LINVRNT() has to be explicitly enabled by --enable-invariants
@@ -274,7 +274,7 @@ do {                                                                           \
           assert(cond);                                                        \
 } while (0)
 #  define LBUG()   assert(0)
-#  ifdef INVARIANT_CHECK
+#  ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 #   define LINVRNT(exp) LASSERT(exp)
 #  else
 #   define LINVRNT(exp) ((void)sizeof!!(exp))

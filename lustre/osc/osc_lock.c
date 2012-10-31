@@ -1354,7 +1354,7 @@ static void osc_lock_cancel(const struct lu_env *env,
         osc_lock_detach(env, olck);
 }
 
-#ifdef INVARIANT_CHECK
+#ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 static int check_cb(const struct lu_env *env, struct cl_io *io,
                     struct cl_page *page, void *cbdata)
 {
@@ -1425,7 +1425,7 @@ static int osc_lock_has_pages(struct osc_lock *olck)
 {
         return 0;
 }
-#endif /* INVARIANT_CHECK */
+#endif /* CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK */
 
 static void osc_lock_delete(const struct lu_env *env,
                             const struct cl_lock_slice *slice)

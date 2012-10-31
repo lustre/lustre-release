@@ -10,13 +10,13 @@ AC_ARG_WITH([max-payload-mb],
                        [set maximum lnet payload in MBytes]),
         [
 		AC_MSG_RESULT([$with_max_payload_mb])
-	        LNET_MAX_PAYLOAD_MB=$with_max_payload_mb
-		LNET_MAX_PAYLOAD="(($with_max_payload_mb)<<20)"
+		CONFIG_LNET_MAX_PAYLOAD_MB=$with_max_payload_mb
+		CONFIG_LNET_MAX_PAYLOAD="(($with_max_payload_mb)<<20)"
 	], [
 		AC_MSG_RESULT([no])
-		LNET_MAX_PAYLOAD="LNET_MTU"
+		CONFIG_LNET_MAX_PAYLOAD="LNET_MTU"
 	])
-        AC_DEFINE_UNQUOTED(LNET_MAX_PAYLOAD, $LNET_MAX_PAYLOAD,
+	AC_DEFINE_UNQUOTED(CONFIG_LNET_MAX_PAYLOAD, $CONFIG_LNET_MAX_PAYLOAD,
 			   [Max LNET payload])
 ])
 

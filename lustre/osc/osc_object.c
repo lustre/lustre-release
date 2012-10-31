@@ -77,7 +77,7 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
         int i;
 
         osc->oo_oinfo = cconf->u.coc_oinfo;
-#ifdef INVARIANT_CHECK
+#ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 	mutex_init(&osc->oo_debug_mutex);
 #endif
 	spin_lock_init(&osc->oo_seatbelt);

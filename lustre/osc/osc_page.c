@@ -529,7 +529,7 @@ int osc_page_init(const struct lu_env *env, struct cl_object *obj,
 	 * Cannot assert osc_page_protected() here as read-ahead
 	 * creates temporary pages outside of a lock.
 	 */
-#ifdef INVARIANT_CHECK
+#ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
 	opg->ops_temp = !osc_page_protected(env, opg, CLM_READ, 1);
 #endif
 	/* ops_inflight and ops_lru are the same field, but it doesn't

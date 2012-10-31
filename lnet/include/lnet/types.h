@@ -279,9 +279,10 @@ typedef struct {
 #define LNET_MAX_IOV    256
 
 /* Max payload size */
-#ifndef LNET_MAX_PAYLOAD
-# error "LNET_MAX_PAYLOAD must be defined in config.h"
+#ifndef CONFIG_LNET_MAX_PAYLOAD
+# error "CONFIG_LNET_MAX_PAYLOAD must be defined in config.h"
 #else
+# define LNET_MAX_PAYLOAD	CONFIG_LNET_MAX_PAYLOAD
 # if (LNET_MAX_PAYLOAD < LNET_MTU)
 #  error "LNET_MAX_PAYLOAD too small - error in configure --with-max-payload-mb"
 # elif defined(__KERNEL__)

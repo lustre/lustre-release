@@ -123,7 +123,7 @@ struct osc_object {
          */
         int                oo_contended;
         cfs_time_t         oo_contention_time;
-#ifdef INVARIANT_CHECK
+#ifdef CONFIG_LUSTRE_DEBUG_EXPENSIVE_CHECK
         /**
          * IO context used for invariant checks in osc_lock_has_pages().
          */
