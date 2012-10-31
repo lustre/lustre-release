@@ -314,49 +314,6 @@ AC_DEFUN([LC_BIT_SPINLOCK_H],
 ])
 
 #
-# LC_CONST_ACL_SIZE
-#
-AC_DEFUN([LC_CONST_ACL_SIZE],
-[AC_MSG_CHECKING([calc acl size])
-tmp_flags="$CFLAGS"
-CFLAGS="$CFLAGS -I$LINUX/include -I$LINUX_OBJ/include -I$LINUX_OBJ/include2 -I$LINUX/arch/`echo $target_cpu|sed -e 's/powerpc64/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -include $AUTOCONF_HDIR/autoconf.h $EXTRA_KCFLAGS"
-AC_TRY_RUN([
-        #define __KERNEL__
-        #include <linux/types.h>
-        #undef __KERNEL__
-        // block include
-        #define __LINUX_POSIX_ACL_H
-
-        #ifdef CONFIG_FS_POSIX_ACL
-        # include <linux/posix_acl_xattr.h>
-        #endif
-
-        #include <stdio.h>
-
-        int main(void)
-        {
-                /* LUSTRE_POSIX_ACL_MAX_ENTRIES  = 32 */
-            int size = posix_acl_xattr_size(32);
-            FILE *f = fopen("acl.size","w+");
-            fprintf(f,"%d", size);
-            fclose(f);
-
-            return 0;
-        }
-],[
-	acl_size=`cat acl.size`
-	AC_MSG_RESULT([ACL size $acl_size])
-        AC_DEFINE_UNQUOTED(XATTR_ACL_SIZE, AS_TR_SH([$acl_size]), [size of xattr acl])
-],[
-        AC_ERROR([ACL size can't be computed])
-],[
-	AC_MSG_RESULT([can't check ACL size, make it 260])
-        AC_DEFINE_UNQUOTED(XATTR_ACL_SIZE,260)
-])
-CFLAGS="$tmp_flags"
-])
-
-#
 # LC_CAPA_CRYPTO
 #
 AC_DEFUN([LC_CAPA_CRYPTO],
@@ -2273,8 +2230,6 @@ AC_DEFUN([LC_PROG_LINUX],
 
          LC_FILEMAP_POPULATE
          LC_BIT_SPINLOCK_H
-
-         LC_CONST_ACL_SIZE
 
          LC_CAPA_CRYPTO
          LC_CONFIG_RMTCLIENT
