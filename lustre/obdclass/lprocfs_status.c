@@ -413,23 +413,6 @@ void lprocfs_remove_nolock(struct proc_dir_entry **rooth)
                          "0x%p  %s/%s len %d\n", rm_entry, temp->name,
                          rm_entry->name, (int)strlen(rm_entry->name));
 
-#ifdef HAVE_PROCFS_USERS
-                /* if procfs uses user count to synchronize deletion of
-                 * proc entry, there is no protection for rm_entry->data,
-                 * then lprocfs_fops_read and lprocfs_fops_write maybe
-                 * call proc_dir_entry->read_proc (or write_proc) with
-                 * proc_dir_entry->data == NULL, then cause kernel Oops.
-                 * see bug19706 for detailed information */
-
-                /* procfs won't free rm_entry->data if it isn't a LINK,
-                 * and Lustre won't use rm_entry->data if it is a LINK */
-                if (S_ISLNK(rm_entry->mode))
-                        rm_entry->data = NULL;
-#else
-                /* Now, the rm_entry->deleted flags is protected
-                 * by _lprocfs_lock. */
-                rm_entry->data = NULL;
-#endif
                 remove_proc_entry(rm_entry->name, temp);
                 if (temp == parent)
                         break;
