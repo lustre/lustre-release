@@ -1,4 +1,5 @@
 #!/bin/bash
+# -*- tab-width: 4; indent-tabs-mode: t; -*-
 #
 # Run select tests by setting ONLY, or as arguments to the script.
 # Skip specific tests by setting EXCEPT.
@@ -7731,8 +7732,10 @@ size_in_KMGT() {
 
 get_rename_size() {
     local size=$1
+    local context=${2:-.}
     local sample=$(do_facet $SINGLEMDS $LCTL get_param mdt.*.rename_stats |
-                   awk '/ '${size}'/ {print $4}' | sed -e "s/,//g")
+		grep -A1 $context |
+		awk '/ '${size}'/ {print $4}' | sed -e "s/,//g")
     echo $sample
 }
 
@@ -7798,8 +7801,8 @@ test_133d() {
 
     eval $cmd || error "$cmd failed"
     local crossdir=$($cmd | grep 'crossdir')
-    local src_sample=$(get_rename_size $testdir1_size)
-    local tgt_sample=$(get_rename_size $testdir2_size)
+    local src_sample=$(get_rename_size $testdir1_size crossdir_src)
+    local tgt_sample=$(get_rename_size $testdir2_size crossdir_tgt)
     [ -z "$crossdir" ] && error "crossdir_rename_size count error"
     [ "$src_sample" -eq 1 ] || error "crossdir_rename_size error $src_sample"
     [ "$tgt_sample" -eq 1 ] || error "crossdir_rename_size error $tgt_sample"
