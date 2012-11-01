@@ -1,6 +1,6 @@
 .TH lfs_migrate 1 "Jul 21, 2010" Lustre "utilities"
 .SH NAME
-.Blfs_migrate
+.B lfs_migrate
 \- simple tool to migrate files between Lustre OSTs
 .SH SYNOPSIS
 .B lfs_migrate
@@ -20,8 +20,8 @@ is a simple tool to assist migration of files between Lustre OSTs.  It
 is simply copying each specified file to a new file, verifying the file
 contents have not changed, and then renaming the new file back to the
 original filename.  This allows balancing space usage between OSTs, moving
-files of OSTs that are starting to show hardware problems (though are still
-functional), or OSTs will be discontinued.
+files off OSTs that are starting to show hardware problems (though are still
+functional), or OSTs that will be removed from the filesystem.
 .PP
 Because
 .B lfs_migrate
