@@ -866,8 +866,8 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
          * the proc entries under the being destroyed export{}, so I have
          * to drop the lock at first here.
          * - jay, jxiong@clusterfs.com */
-        class_incref(obd, __FUNCTION__, cfs_current());
         LPROCFS_EXIT();
+	class_incref(obd, __FUNCTION__, cfs_current());
 
         if (strncmp(tmpbuf, "nid:", 4) == 0)
                 obd_export_evict_by_nid(obd, tmpbuf + 4);
@@ -876,8 +876,8 @@ int lprocfs_wr_evict_client(struct file *file, const char *buffer,
         else
                 obd_export_evict_by_uuid(obd, tmpbuf);
 
+	class_decref(obd, __FUNCTION__, cfs_current());
         LPROCFS_ENTRY();
-        class_decref(obd, __FUNCTION__, cfs_current());
 
 out:
         OBD_FREE(kbuf, BUFLEN);

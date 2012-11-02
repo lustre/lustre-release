@@ -1387,13 +1387,25 @@ EXPORT_SYMBOL(obd_export_nid2str);
 
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 {
+	cfs_hash_t *nid_hash;
         struct obd_export *doomed_exp = NULL;
         int exports_evicted = 0;
 
         lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
 
+	cfs_spin_lock(&obd->obd_dev_lock);
+	/* umount has run already, so evict thread should leave
+	 * its task to umount thread now */
+	if (obd->obd_stopping) {
+		cfs_spin_unlock(&obd->obd_dev_lock);
+		return exports_evicted;
+	}
+	nid_hash = obd->obd_nid_hash;
+	cfs_hash_getref(nid_hash);
+	cfs_spin_unlock(&obd->obd_dev_lock);
+
         do {
-                doomed_exp = cfs_hash_lookup(obd->obd_nid_hash, &nid_key);
+		doomed_exp = cfs_hash_lookup(nid_hash, &nid_key);
                 if (doomed_exp == NULL)
                         break;
 
@@ -1411,6 +1423,8 @@ int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
                 class_export_put(doomed_exp);
         } while (1);
 
+	cfs_hash_putref(nid_hash);
+
         if (!exports_evicted)
                 CDEBUG(D_HA,"%s: can't disconnect NID '%s': no exports found\n",
                        obd->obd_name, nid);
@@ -1420,17 +1434,28 @@ EXPORT_SYMBOL(obd_export_evict_by_nid);
 
 int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 {
+	cfs_hash_t *uuid_hash;
         struct obd_export *doomed_exp = NULL;
         struct obd_uuid doomed_uuid;
         int exports_evicted = 0;
 
+	cfs_spin_lock(&obd->obd_dev_lock);
+	if (obd->obd_stopping) {
+		cfs_spin_unlock(&obd->obd_dev_lock);
+		return exports_evicted;
+	}
+	uuid_hash = obd->obd_uuid_hash;
+	cfs_hash_getref(uuid_hash);
+	cfs_spin_unlock(&obd->obd_dev_lock);
+
         obd_str2uuid(&doomed_uuid, uuid);
         if (obd_uuid_equals(&doomed_uuid, &obd->obd_uuid)) {
                 CERROR("%s: can't evict myself\n", obd->obd_name);
+		cfs_hash_putref(uuid_hash);
                 return exports_evicted;
         }
 
-        doomed_exp = cfs_hash_lookup(obd->obd_uuid_hash, &doomed_uuid);
+	doomed_exp = cfs_hash_lookup(uuid_hash, &doomed_uuid);
 
         if (doomed_exp == NULL) {
                 CERROR("%s: can't disconnect %s: no exports found\n",
@@ -1442,6 +1467,7 @@ int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
                 class_export_put(doomed_exp);
                 exports_evicted++;
         }
+	cfs_hash_putref(uuid_hash);
 
         return exports_evicted;
 }
