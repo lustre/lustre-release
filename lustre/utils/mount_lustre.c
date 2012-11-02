@@ -518,7 +518,7 @@ int main(int argc, char *const argv[])
 	 * LU-1279. When LNET modules have not loaded, and mounting multiple
 	 * targets at the same time could fail.
 	 */
-	rc = system("/sbin/modprobe ptlrpc 2>&1 > /dev/null");
+	rc = system("/sbin/modprobe ptlrpc >/dev/null 2>&1");
 
 	set_defaults(&mop);
 
