@@ -8207,6 +8207,10 @@ test_156() {
     local AFTER
     local file="$DIR/$tfile"
 
+	[ "$(facet_fstype ost1)" = "zfs" ] &&
+		skip "LU-1956/LU-2261: stats unimplemented on OSD ZFS" &&
+		return
+
     log "Turn on read and write cache"
     set_cache read on
     set_cache writethrough on
