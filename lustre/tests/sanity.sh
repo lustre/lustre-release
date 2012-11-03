@@ -542,7 +542,7 @@ test_17m() {
 	echo "erase them"
 	rm -f $WDIR/*
 	sync
-	sleep 2
+	wait_delete_completed
 
 	echo "recreate the 512 symlink files with a shorter string"
 	for ((i = 0; i < 512; ++i)); do
@@ -859,20 +859,28 @@ page_size() {
 	getconf PAGE_SIZE
 }
 
+simple_cleanup_common() {
+	trap 0
+	rm -rf $DIR/$tdir
+	wait_delete_completed
+}
+
 test_24v() {
 	local NRFILES=100000
 	local FREE_INODES=`lfs df -i|grep "filesystem summary" | awk '{print $5}'`
 	[ $FREE_INODES -lt $NRFILES ] && \
-		skip "not enough free inodes $FREE_INODES required $NRFILES" && \
+		skip "not enough free inodes $FREE_INODES required $NRFILES" &&
 		return
 
-	mkdir -p $DIR/d24v
-	createmany -m $DIR/d24v/$tfile $NRFILES
+	trap simple_cleanup_common EXIT
+
+	mkdir -p $DIR/$tdir
+	createmany -m $DIR/$tdir/$tfile $NRFILES
 
 	cancel_lru_locks mdc
 	lctl set_param mdc.*.stats clear
 
-	ls $DIR/d24v >/dev/null || error "error in listing large dir"
+	ls $DIR/$tdir >/dev/null || error "error in listing large dir"
 
 	# LU-5 large readdir
 	# DIRENT_SIZE = 32 bytes for sizeof(struct lu_dirent) +
@@ -888,7 +896,7 @@ test_24v() {
 	[ $mds_readpage -gt $RPC_NUM ] && \
 		error "large readdir doesn't take effect"
 
-	rm $DIR/d24v -rf
+	simple_cleanup_common
 }
 run_test 24v "list directory with large files (handle hash collision, bug: 17560)"
 
@@ -1069,30 +1077,31 @@ test_27l() {
 run_test 27l "check setstripe permissions (should return error)"
 
 test_27m() {
-	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" && return
+	[ "$OSTCOUNT" -lt "2" ] && skip_env "$OSTCOUNT < 2 OSTs -- skipping" &&
+		return
 	if [ $ORIGFREE -gt $MAXFREE ]; then
 		skip "$ORIGFREE > $MAXFREE skipping out-of-space test on OST0"
 		return
 	fi
-	mkdir -p $DIR/d27
-	$SETSTRIPE -i 0 -c 1 $DIR/d27/f27m_1
-	dd if=/dev/zero of=$DIR/d27/f27m_1 bs=1024 count=$MAXFREE &&
+	trap simple_cleanup_common EXIT
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -i 0 -c 1 $DIR/$tdir/f27m_1
+	dd if=/dev/zero of=$DIR/$tdir/f27m_1 bs=1024 count=$MAXFREE &&
 		error "dd should fill OST0"
 	i=2
-	while $SETSTRIPE -i 0 -c 1 $DIR/d27/f27m_$i; do
+	while $SETSTRIPE -i 0 -c 1 $DIR/$tdir/f27m_$i; do
 		i=`expr $i + 1`
 		[ $i -gt 256 ] && break
 	done
 	i=`expr $i + 1`
-	touch $DIR/d27/f27m_$i
-	[ `$GETSTRIPE $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+	touch $DIR/$tdir/f27m_$i
+	[ `$GETSTRIPE $DIR/$tdir/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] &&
 		error "OST0 was full but new created file still use it"
 	i=`expr $i + 1`
-	touch $DIR/d27/f27m_$i
-	[ `$GETSTRIPE $DIR/d27/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] && \
+	touch $DIR/$tdir/f27m_$i
+	[ `$GETSTRIPE $DIR/$tdir/f27m_$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "0"` ] &&
 		error "OST0 was full but new created file still use it"
-	rm -r $DIR/d27
-	sleep 15
+	simple_cleanup_common
 }
 run_test 27m "create file while OST0 was full =================="
 
@@ -1761,42 +1770,51 @@ test_31m() {
 }
 run_test 31m "link to file: the same, non-existing, dir==============="
 
+cleanup_test32_mount() {
+	trap 0
+	$UMOUNT $DIR/$tdir/ext2-mountpoint
+}
+
 test_32a() {
 	echo "== more mountpoints and symlinks ================="
-	[ -e $DIR/d32a ] && rm -fr $DIR/d32a
-	mkdir -p $DIR/d32a/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32a/ext2-mountpoint || error
-	$CHECKSTAT -t dir $DIR/d32a/ext2-mountpoint/.. || error
-	$UMOUNT $DIR/d32a/ext2-mountpoint || error
+	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
+	trap cleanup_test32_mount EXIT
+	mkdir -p $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	$CHECKSTAT -t dir $DIR/$tdir/ext2-mountpoint/.. || error
+	cleanup_test32_mount
 }
 run_test 32a "stat d32a/ext2-mountpoint/.. ====================="
 
 test_32b() {
-	[ -e $DIR/d32b ] && rm -fr $DIR/d32b
-	mkdir -p $DIR/d32b/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32b/ext2-mountpoint || error
-	ls -al $DIR/d32b/ext2-mountpoint/.. || error
-	$UMOUNT $DIR/d32b/ext2-mountpoint || error
+	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
+	trap cleanup_test32_mount EXIT
+	mkdir -p $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	ls -al $DIR/$tdir/ext2-mountpoint/.. || error
+	cleanup_test32_mount
 }
 run_test 32b "open d32b/ext2-mountpoint/.. ====================="
 
 test_32c() {
-	[ -e $DIR/d32c ] && rm -fr $DIR/d32c
-	mkdir -p $DIR/d32c/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32c/ext2-mountpoint || error
-	mkdir -p $DIR/d32c/d2/test_dir
-	$CHECKSTAT -t dir $DIR/d32c/ext2-mountpoint/../d2/test_dir || error
-	$UMOUNT $DIR/d32c/ext2-mountpoint || error
+	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
+	trap cleanup_test32_mount EXIT
+	mkdir -p $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	mkdir -p $DIR/$tdir/d2/test_dir
+	$CHECKSTAT -t dir $DIR/$tdir/ext2-mountpoint/../d2/test_dir || error
+	cleanup_test32_mount
 }
 run_test 32c "stat d32c/ext2-mountpoint/../d2/test_dir ========="
 
 test_32d() {
-	[ -e $DIR/d32d ] && rm -fr $DIR/d32d
-	mkdir -p $DIR/d32d/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32d/ext2-mountpoint || error
-	mkdir -p $DIR/d32d/d2/test_dir
-	ls -al $DIR/d32d/ext2-mountpoint/../d2/test_dir || error
-	$UMOUNT $DIR/d32d/ext2-mountpoint || error
+	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
+	trap cleanup_test32_mount EXIT
+	mkdir -p $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	mkdir -p $DIR/$tdir/d2/test_dir
+	ls -al $DIR/$tdir/ext2-mountpoint/../d2/test_dir || error
+	cleanup_test32_mount
 }
 run_test 32d "open d32d/ext2-mountpoint/../d2/test_dir ========="
 
@@ -1846,44 +1864,48 @@ test_32h() {
 run_test 32h "open d32h/symlink->tmp/symlink->lustre-subdir/${tdir}2"
 
 test_32i() {
-	[ -e $DIR/d32i ] && rm -fr $DIR/d32i
-	mkdir -p $DIR/d32i/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32i/ext2-mountpoint || error
-	touch $DIR/d32i/test_file
-	$CHECKSTAT -t file $DIR/d32i/ext2-mountpoint/../test_file || error
-	$UMOUNT $DIR/d32i/ext2-mountpoint || error
+	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
+	trap cleanup_test32_mount EXIT
+	mkdir -p $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	touch $DIR/$tdir/test_file
+	$CHECKSTAT -t file $DIR/$tdir/ext2-mountpoint/../test_file || error
+	cleanup_test32_mount
 }
 run_test 32i "stat d32i/ext2-mountpoint/../test_file ==========="
 
 test_32j() {
-	[ -e $DIR/d32j ] && rm -fr $DIR/d32j
-	mkdir -p $DIR/d32j/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32j/ext2-mountpoint || error
-	touch $DIR/d32j/test_file
-	cat $DIR/d32j/ext2-mountpoint/../test_file || error
-	$UMOUNT $DIR/d32j/ext2-mountpoint || error
+	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
+	trap cleanup_test32_mount EXIT
+	mkdir -p $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	touch $DIR/$tdir/test_file
+	cat $DIR/$tdir/ext2-mountpoint/../test_file || error
+	cleanup_test32_mount
 }
 run_test 32j "open d32j/ext2-mountpoint/../test_file ==========="
 
 test_32k() {
-	rm -fr $DIR/d32k
-	mkdir -p $DIR/d32k/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32k/ext2-mountpoint
-	mkdir -p $DIR/d32k/d2
-	touch $DIR/d32k/d2/test_file || error
-	$CHECKSTAT -t file $DIR/d32k/ext2-mountpoint/../d2/test_file || error
-	$UMOUNT $DIR/d32k/ext2-mountpoint || error
+	rm -fr $DIR/$tdir
+	trap cleanup_test32_mount EXIT
+	mkdir -p $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint
+	mkdir -p $DIR/$tdir/d2
+	touch $DIR/$tdir/d2/test_file || error
+	$CHECKSTAT -t file $DIR/$tdir/ext2-mountpoint/../d2/test_file || error
+	cleanup_test32_mount
 }
 run_test 32k "stat d32k/ext2-mountpoint/../d2/test_file ========"
 
 test_32l() {
-	rm -fr $DIR/d32l
-	mkdir -p $DIR/d32l/ext2-mountpoint
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32l/ext2-mountpoint || error
-	mkdir -p $DIR/d32l/d2
-	touch $DIR/d32l/d2/test_file
-	cat  $DIR/d32l/ext2-mountpoint/../d2/test_file || error
-	$UMOUNT $DIR/d32l/ext2-mountpoint || error
+	rm -fr $DIR/$tdir
+	trap cleanup_test32_mount EXIT
+	mkdir -p $DIR/$tdir/ext2-mountpoint
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir/ext2-mountpoint || error
+	mkdir -p $DIR/$tdir/d2
+	touch $DIR/$tdir/d2/test_file
+	cat  $DIR/$tdir/ext2-mountpoint/../d2/test_file || error
+	cleanup_test32_mount
 }
 run_test 32l "open d32l/ext2-mountpoint/../d2/test_file ========"
 
@@ -1946,23 +1968,30 @@ test_32p() {
 }
 run_test 32p "open d32p/symlink->tmp/symlink->lustre-root/$tfile"
 
+cleanup_testdir_mount() {
+	trap 0
+	$UMOUNT $DIR/$tdir
+}
+
 test_32q() {
-	[ -e $DIR/d32q ] && rm -fr $DIR/d32q
-	mkdir -p $DIR/d32q
-        touch $DIR/d32q/under_the_mount
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32q
-	ls $DIR/d32q/under_the_mount && error || true
-	$UMOUNT $DIR/d32q || error
+	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
+	trap cleanup_testdir_mount EXIT
+	mkdir -p $DIR/$tdir
+        touch $DIR/$tdir/under_the_mount
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir
+	ls $DIR/$tdir | grep "\<under_the_mount\>" && error
+	cleanup_testdir_mount
 }
 run_test 32q "stat follows mountpoints in Lustre (should return error)"
 
 test_32r() {
-	[ -e $DIR/d32r ] && rm -fr $DIR/d32r
-	mkdir -p $DIR/d32r
-        touch $DIR/d32r/under_the_mount
-	mount -t ext2 -o loop $EXT2_DEV $DIR/d32r
-	ls $DIR/d32r | grep -q under_the_mount && error || true
-	$UMOUNT $DIR/d32r || error
+	[ -e $DIR/$tdir ] && rm -fr $DIR/$tdir
+	trap cleanup_testdir_mount EXIT
+	mkdir -p $DIR/$tdir
+        touch $DIR/$tdir/under_the_mount
+	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir
+	ls $DIR/$tdir | grep -q under_the_mount && error || true
+	cleanup_testdir_mount
 }
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
@@ -2267,15 +2296,7 @@ test_36h() {
 }
 run_test 36h "utime on file racing with OST BRW write =========="
 
-test_37() {
-	mkdir -p $DIR/$tdir
-	echo f > $DIR/$tdir/fbugfile
-	mount -t ext2 -o loop $EXT2_DEV $DIR/$tdir
-	ls $DIR/$tdir | grep "\<fbugfile\>" && error
-	$UMOUNT $DIR/$tdir || error
-	rm -f $DIR/$tdir/fbugfile || error
-}
-run_test 37 "ls a mounted file system to check old content ====="
+# test_37 - duplicate with tests 32q 32r
 
 test_38() {
 	local file=$DIR/$tfile
@@ -4118,8 +4139,8 @@ test_59() {
 	echo "rm 130 files"
 	unlinkmany $DIR/f59- 130
 	sync
-	sleep 2
-        # wait for commitment of removal
+	# wait for commitment of removal
+	wait_delete_completed
 }
 run_test 59 "verify cancellation of llog records async ========="
 
@@ -4559,7 +4580,6 @@ test_72a() { # bug 5695 - Test that on 2.6 remove_suid works properly
 	# Now test that MDS is updated too
 	cancel_lru_locks mdc
 	test -u $DIR/f72 -o -g $DIR/f72 && error "S/gid is not dropped on MDS"
-	true
 	rm -f $DIR/f72
 }
 run_test 72a "Test that remove suid works properly (bug5695) ===="
@@ -4980,7 +5000,6 @@ test_80() { # bug 10718
 
         [ -n "$hosts" ] && do_nodes $hosts lctl set_param $soc=$soc_old
 
-        true
         rm -f $DIR/$tfile
 }
 run_test 80 "Page eviction is equally fast at high offsets too  ===="
@@ -5921,14 +5940,18 @@ test_107() {
 run_test 107 "Coredump on SIG"
 
 test_110() {
-	mkdir -p $DIR/d110
-	mkdir $DIR/d110/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa || error "mkdir with 255 char fail"
-	mkdir $DIR/d110/bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb && error "mkdir with 256 char should fail, but not"
-	touch $DIR/d110/xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx || error "create with 255 char fail"
-	touch $DIR/d110/yyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy && error ""create with 256 char should fail, but not
+	mkdir -p $DIR/$tdir
+	mkdir $DIR/$tdir/$(str_repeat 'a' 255) ||
+		error "mkdir with 255 char failed"
+	mkdir $DIR/$tdir/$(str_repeat 'b' 256) &&
+		error "mkdir with 256 char should fail, but did not"
+	touch $DIR/$tdir/$(str_repeat 'x' 255) ||
+		error "create with 255 char failed"
+	touch $DIR/$tdir/$(str_repeat 'y' 256) &&
+		error "create with 256 char should fail, but did not"
 
-	ls -l $DIR/d110
-    rm -fr $DIR/d110
+	ls -l $DIR/$tdir
+	rm -rf $DIR/$tdir
 }
 run_test 110 "filename length checking"
 
