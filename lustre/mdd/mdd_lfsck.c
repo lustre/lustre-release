@@ -318,11 +318,8 @@ int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd)
 	rc = obj->do_ops->do_index_try(env, obj, &dt_otable_features);
 	if (rc != 0) {
 		lu_object_put(env, &obj->do_lu);
-		if (rc == -ENOTSUPP) {
-			CERROR("%s: Lustre LFSCK unsupported on this device.\n",
-				mdd2obd_dev(mdd)->obd_name);
+		if (rc == -ENOTSUPP)
 			rc = 0;
-		}
 		return rc;
 	}
 
