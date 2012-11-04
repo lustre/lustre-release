@@ -2761,7 +2761,7 @@ test_60() { # LU-471
 }
 run_test 60 "check mkfs.lustre --mkfsoptions -E -O options setting"
 
-test_61() { # LU-2237
+test_65() { # LU-2237
 	# Currently, the test is only valid for ldiskfs backend
 	[ "$FSTYPE" != "ldiskfs" ] && skip "non-ldiskfs backend" && return
 
@@ -2792,12 +2792,12 @@ test_61() { # LU-2237
 
 	# restart MDS, the "last_rcvd" file should be recreated.
 	start_mds || error "fail to restart the MDS"
+	stop_mds
 	obj=$(do_facet $SINGLEMDS \
 	      "$DEBUGFS -c -R \\\"stat last_rcvd\\\" $devname" | grep Inode)
-	[ ! -z "$obj" ] || error "fail to re-create the last_rcvd"
-	stop_mds
+	[ -n "$obj" ] || error "fail to re-create the last_rcvd"
 }
-run_test 61 "re-create the lost last_rcvd file when server mount"
+run_test 65 "re-create the lost last_rcvd file when server mount"
 
 if ! combined_mgs_mds ; then
 	stop mgs
