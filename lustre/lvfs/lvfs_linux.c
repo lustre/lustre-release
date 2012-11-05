@@ -585,43 +585,38 @@ EXPORT_SYMBOL(obd_pages_max);
 __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
                           enum lprocfs_fields_flags field)
 {
-        __s64 ret = 0;
-        int centry;
+	__s64 ret = 0;
 
-        if (!lc)
-                RETURN(0);
-        do {
-                centry = cfs_atomic_read(&lc->lc_cntl.la_entry);
+	if (lc == NULL)
+		RETURN(0);
 
-                switch (field) {
-                        case LPROCFS_FIELDS_FLAGS_CONFIG:
-                                ret = lc->lc_config;
-                                break;
-                        case LPROCFS_FIELDS_FLAGS_SUM:
-                                ret = lc->lc_sum + lc->lc_sum_irq;
-                                break;
-                        case LPROCFS_FIELDS_FLAGS_MIN:
-                                ret = lc->lc_min;
-                                break;
-                        case LPROCFS_FIELDS_FLAGS_MAX:
-                                ret = lc->lc_max;
-                                break;
-                        case LPROCFS_FIELDS_FLAGS_AVG:
-                                ret = (lc->lc_max - lc->lc_min)/2;
-                                break;
-                        case LPROCFS_FIELDS_FLAGS_SUMSQUARE:
-                                ret = lc->lc_sumsquare;
-                                break;
-                        case LPROCFS_FIELDS_FLAGS_COUNT:
-                                ret = lc->lc_count;
-                                break;
-                        default:
-                                break;
-                };
-        } while (centry != cfs_atomic_read(&lc->lc_cntl.la_entry) &&
-                 centry != cfs_atomic_read(&lc->lc_cntl.la_exit));
+	switch (field) {
+		case LPROCFS_FIELDS_FLAGS_CONFIG:
+			ret = lc->lc_config;
+			break;
+		case LPROCFS_FIELDS_FLAGS_SUM:
+			ret = lc->lc_sum + lc->lc_sum_irq;
+			break;
+		case LPROCFS_FIELDS_FLAGS_MIN:
+			ret = lc->lc_min;
+			break;
+		case LPROCFS_FIELDS_FLAGS_MAX:
+			ret = lc->lc_max;
+			break;
+		case LPROCFS_FIELDS_FLAGS_AVG:
+			ret = (lc->lc_max - lc->lc_min) / 2;
+			break;
+		case LPROCFS_FIELDS_FLAGS_SUMSQUARE:
+			ret = lc->lc_sumsquare;
+			break;
+		case LPROCFS_FIELDS_FLAGS_COUNT:
+			ret = lc->lc_count;
+			break;
+		default:
+			break;
+	};
 
-        RETURN(ret);
+	RETURN(ret);
 }
 EXPORT_SYMBOL(lprocfs_read_helper);
 #endif /* LPROCFS */

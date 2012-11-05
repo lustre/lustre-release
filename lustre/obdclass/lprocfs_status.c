@@ -876,50 +876,36 @@ EXPORT_SYMBOL(lprocfs_rd_conn_uuid);
 void lprocfs_stats_collect(struct lprocfs_stats *stats, int idx,
                            struct lprocfs_counter *cnt)
 {
+	struct lprocfs_counter *ptr;
 	unsigned int		num_entry;
-	struct lprocfs_counter	t;
-	struct lprocfs_counter *percpu_cntr;
-	int			centry;
 	int			i;
 	unsigned long		flags = 0;
 
-        memset(cnt, 0, sizeof(*cnt));
+	memset(cnt, 0, sizeof(*cnt));
 
-        if (stats == NULL) {
-                /* set count to 1 to avoid divide-by-zero errs in callers */
-                cnt->lc_count = 1;
-                return;
-        }
+	if (stats == NULL) {
+		/* set count to 1 to avoid divide-by-zero errs in callers */
+		cnt->lc_count = 1;
+		return;
+	}
 
-        cnt->lc_min = LC_MIN_INIT;
+	cnt->lc_min = LC_MIN_INIT;
 
 	num_entry = lprocfs_stats_lock(stats, LPROCFS_GET_NUM_CPU, &flags);
 
 	for (i = 0; i < num_entry; i++) {
 		if (stats->ls_percpu[i] == NULL)
 			continue;
-		percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[idx];
 
-                do {
-                        centry = cfs_atomic_read(&percpu_cntr-> \
-                                                 lc_cntl.la_entry);
-                        t.lc_count = percpu_cntr->lc_count;
-                        t.lc_sum = percpu_cntr->lc_sum;
-                        t.lc_min = percpu_cntr->lc_min;
-                        t.lc_max = percpu_cntr->lc_max;
-                        t.lc_sumsquare = percpu_cntr->lc_sumsquare;
-                } while (centry != cfs_atomic_read(&percpu_cntr->lc_cntl. \
-                                                   la_entry) &&
-                         centry != cfs_atomic_read(&percpu_cntr->lc_cntl. \
-                                                   la_exit));
-                cnt->lc_count += t.lc_count;
-                cnt->lc_sum += t.lc_sum;
-                if (t.lc_min < cnt->lc_min)
-                        cnt->lc_min = t.lc_min;
-                if (t.lc_max > cnt->lc_max)
-                        cnt->lc_max = t.lc_max;
-                cnt->lc_sumsquare += t.lc_sumsquare;
-        }
+		ptr = &(stats->ls_percpu[i])->lp_cntr[idx];
+		cnt->lc_count += ptr->lc_count;
+		cnt->lc_sum += ptr->lc_sum;
+		if (ptr->lc_min < cnt->lc_min)
+			cnt->lc_min = ptr->lc_min;
+		if (ptr->lc_max > cnt->lc_max)
+			cnt->lc_max = ptr->lc_max;
+		cnt->lc_sumsquare += ptr->lc_sumsquare;
+	}
 
 	cnt->lc_units = stats->ls_percpu[0]->lp_cntr[idx].lc_units;
 	lprocfs_stats_unlock(stats, LPROCFS_GET_NUM_CPU, &flags);
@@ -1464,13 +1450,11 @@ void lprocfs_clear_stats(struct lprocfs_stats *stats)
 			continue;
 		for (j = 0; j < stats->ls_num; j++) {
 			percpu_cntr = &(stats->ls_percpu[i])->lp_cntr[j];
-			cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
 			percpu_cntr->lc_count = 0;
 			percpu_cntr->lc_sum = 0;
 			percpu_cntr->lc_min = LC_MIN_INIT;
 			percpu_cntr->lc_max = 0;
 			percpu_cntr->lc_sumsquare = 0;
-			cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
 		}
 	}
 

@@ -86,10 +86,7 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
 		return;
 
         percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
-        if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
-                cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         percpu_cntr->lc_count++;
-
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
 		/*
 		 * lprocfs_counter_add() can be called in interrupt context,
@@ -108,8 +105,6 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
                 if (amount > percpu_cntr->lc_max)
                         percpu_cntr->lc_max = amount;
         }
-        if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
-                cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
         lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
 }
 EXPORT_SYMBOL(lprocfs_counter_add);
@@ -130,8 +125,6 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
 		return;
 
         percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
-        if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
-                cfs_atomic_inc(&percpu_cntr->lc_cntl.la_entry);
         if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
 		/*
 		 * Sometimes we use RCU callbacks to free memory which calls
@@ -145,8 +138,6 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
                 else
                         percpu_cntr->lc_sum -= amount;
         }
-        if (!(stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU))
-                cfs_atomic_inc(&percpu_cntr->lc_cntl.la_exit);
         lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
 }
 EXPORT_SYMBOL(lprocfs_counter_sub);

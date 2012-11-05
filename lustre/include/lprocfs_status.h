@@ -144,15 +144,9 @@ enum {
         LPROCFS_TYPE_CYCLE        = 0x0800,
 };
 
-struct lprocfs_atomic {
-        cfs_atomic_t               la_entry;
-        cfs_atomic_t               la_exit;
-};
-
 #define LC_MIN_INIT ((~(__u64)0) >> 1)
 
 struct lprocfs_counter {
-        struct lprocfs_atomic  lc_cntl;  /* may need to move to per set */
         unsigned int           lc_config;
         __s64                  lc_count;
         __s64                  lc_sum;
