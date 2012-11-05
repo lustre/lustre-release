@@ -572,6 +572,10 @@ int main(int argc, char *const argv[])
         /* device is last arg */
         strscpy(mop.mo_device, argv[argc - 1], sizeof(mop.mo_device));
 
+	ret = osd_init();
+	if (ret)
+		return ret;
+
 #ifdef TUNEFS
         /* For tunefs, we must read in the old values before parsing any
            new ones. */
@@ -585,6 +589,7 @@ int main(int argc, char *const argv[])
                 ret = ENODEV;
                 goto out;
         }
+	mop.mo_ldd.ldd_mount_type = mount_type;
 
 	ret = osd_read_ldd(mop.mo_device, &mop.mo_ldd);
         if (ret) {
@@ -601,10 +606,6 @@ int main(int argc, char *const argv[])
         if (verbose > 0)
                 print_ldd("Read previous values", &(mop.mo_ldd));
 #endif
-
-	ret = osd_init();
-	if (ret)
-		return ret;
 
         ret = parse_opts(argc, argv, &mop, &mountopts);
         if (ret)
