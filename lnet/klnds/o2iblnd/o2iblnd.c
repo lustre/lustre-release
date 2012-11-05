@@ -2238,11 +2238,103 @@ kiblnd_net_init_pools(kib_net_t *net, __u32 *cpts, int ncpts)
 	int		rc;
 	int		i;
 
+	cfs_read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	if (*kiblnd_tunables.kib_map_on_demand == 0 &&
+	    net->ibn_dev->ibd_hdev->ibh_nmrs == 1) {
+		cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
+					   flags);
+		goto create_tx_pool;
+	}
+
+	cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+
+	if (*kiblnd_tunables.kib_fmr_pool_size <
+	    *kiblnd_tunables.kib_ntx / 4) {
+		CERROR("Can't set fmr pool size (%d) < ntx / 4(%d)\n",
+		       *kiblnd_tunables.kib_fmr_pool_size,
+		       *kiblnd_tunables.kib_ntx / 4);
+		rc = -EINVAL;
+		goto failed;
+	}
+
+	/* TX pool must be created later than FMR/PMR, see LU-2268
+	 * for details */
+	LASSERT(net->ibn_tx_ps == NULL);
+
+	/* premapping can fail if ibd_nmr > 1, so we always create
+	 * FMR/PMR pool and map-on-demand if premapping failed */
+
+	net->ibn_fmr_ps = cfs_percpt_alloc(lnet_cpt_table(),
+					   sizeof(kib_fmr_poolset_t));
+	if (net->ibn_fmr_ps == NULL) {
+		CERROR("Failed to allocate FMR pool array\n");
+		rc = -ENOMEM;
+		goto failed;
+	}
+
+	for (i = 0; i < ncpts; i++) {
+		cpt = (cpts == NULL) ? i : cpts[i];
+		rc = kiblnd_init_fmr_poolset(net->ibn_fmr_ps[cpt], cpt, net,
+					     kiblnd_fmr_pool_size(ncpts),
+					     kiblnd_fmr_flush_trigger(ncpts));
+		if (rc == -ENOSYS && i == 0) /* no FMR */
+			break; /* create PMR pool */
+
+		if (rc != 0) { /* a real error */
+			CERROR("Can't initialize FMR pool for CPT %d: %d\n",
+			       cpt, rc);
+			goto failed;
+		}
+	}
+
+	if (i > 0) {
+		LASSERT(i == ncpts);
+		goto create_tx_pool;
+	}
+
+	cfs_percpt_free(net->ibn_fmr_ps);
+	net->ibn_fmr_ps = NULL;
+
+	CWARN("Device does not support FMR, failing back to PMR\n");
+
+	if (*kiblnd_tunables.kib_pmr_pool_size <
+	    *kiblnd_tunables.kib_ntx / 4) {
+		CERROR("Can't set pmr pool size (%d) < ntx / 4(%d)\n",
+		       *kiblnd_tunables.kib_pmr_pool_size,
+		       *kiblnd_tunables.kib_ntx / 4);
+		rc = -EINVAL;
+		goto failed;
+	}
+
+	net->ibn_pmr_ps = cfs_percpt_alloc(lnet_cpt_table(),
+					   sizeof(kib_pmr_poolset_t));
+	if (net->ibn_pmr_ps == NULL) {
+		CERROR("Failed to allocate PMR pool array\n");
+		rc = -ENOMEM;
+		goto failed;
+	}
+
+	for (i = 0; i < ncpts; i++) {
+		cpt = (cpts == NULL) ? i : cpts[i];
+		rc = kiblnd_init_poolset(&net->ibn_pmr_ps[cpt]->pps_poolset,
+					 cpt, net, "PMR",
+					 kiblnd_pmr_pool_size(ncpts),
+					 kiblnd_create_pmr_pool,
+					 kiblnd_destroy_pmr_pool, NULL, NULL);
+		if (rc != 0) {
+			CERROR("Can't initialize PMR pool for CPT %d: %d\n",
+			       cpt, rc);
+			goto failed;
+		}
+	}
+
+ create_tx_pool:
 	net->ibn_tx_ps = cfs_percpt_alloc(lnet_cpt_table(),
 					  sizeof(kib_tx_poolset_t));
 	if (net->ibn_tx_ps == NULL) {
 		CERROR("Failed to allocate tx pool array\n");
-		return -ENOMEM;
+		rc = -ENOMEM;
+		goto failed;
 	}
 
 	for (i = 0; i < ncpts; i++) {
@@ -2254,83 +2346,16 @@ kiblnd_net_init_pools(kib_net_t *net, __u32 *cpts, int ncpts)
 					 kiblnd_destroy_tx_pool,
 					 kiblnd_tx_init, NULL);
 		if (rc != 0) {
-			CERROR("Failed to initialize TX pool\n");
+			CERROR("Can't initialize TX pool for CPT %d: %d\n",
+			       cpt, rc);
 			goto failed;
 		}
 	}
 
-	cfs_read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-	if (*kiblnd_tunables.kib_map_on_demand == 0 &&
-	    net->ibn_dev->ibd_hdev->ibh_nmrs == 1) {
-		cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
-					   flags);
-		return 0;
-	}
-
-	cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
-
-	if (*kiblnd_tunables.kib_fmr_pool_size <
-	    *kiblnd_tunables.kib_ntx / 4) {
-		CERROR("Can't set fmr pool size (%d) < ntx / 4(%d)\n",
-		       *kiblnd_tunables.kib_fmr_pool_size,
-		       *kiblnd_tunables.kib_ntx / 4);
-		goto failed;
-	}
-
-	/* premapping can fail if ibd_nmr > 1, so we always create
-	 * FMR/PMR pool and map-on-demand if premapping failed */
-
-	net->ibn_fmr_ps = cfs_percpt_alloc(lnet_cpt_table(),
-					   sizeof(kib_fmr_poolset_t));
-	if (net->ibn_fmr_ps == NULL) {
-		CERROR("Failed to allocate FMR pool array\n");
-		goto failed;
-	}
-
-	for (i = 0; i < ncpts; i++) {
-		cpt = (cpts == NULL) ? i : cpts[i];
-		rc = kiblnd_init_fmr_poolset(net->ibn_fmr_ps[cpt], cpt, net,
-					     kiblnd_fmr_pool_size(ncpts),
-					     kiblnd_fmr_flush_trigger(ncpts));
-		if (rc == -ENOSYS && i == 0) /* no FMR */
-			break; /* create PMR pool */
-		if (rc != 0)
-			goto failed; /* a real error */
-	}
-
-	cfs_percpt_free(net->ibn_fmr_ps);
-	net->ibn_fmr_ps = NULL;
-
-	if (*kiblnd_tunables.kib_pmr_pool_size <
-	    *kiblnd_tunables.kib_ntx / 4) {
-		CERROR("Can't set pmr pool size (%d) < ntx / 4(%d)\n",
-		       *kiblnd_tunables.kib_pmr_pool_size,
-		       *kiblnd_tunables.kib_ntx / 4);
-		goto failed;
-	}
-
-	net->ibn_pmr_ps = cfs_percpt_alloc(lnet_cpt_table(),
-					   sizeof(kib_pmr_poolset_t));
-	if (net->ibn_pmr_ps == NULL) {
-		CERROR("Failed to allocate PMR pool array\n");
-		goto failed;
-	}
-
-	for (i = 0; i < ncpts; i++) {
-		cpt = (cpts == NULL) ? i : cpts[i];
-		rc = kiblnd_init_poolset(&net->ibn_pmr_ps[cpt]->pps_poolset,
-					 cpt, net, "PMR",
-					 kiblnd_pmr_pool_size(ncpts),
-					 kiblnd_create_pmr_pool,
-					 kiblnd_destroy_pmr_pool, NULL, NULL);
-		if (rc != 0)
-			goto failed;
-	}
-
 	return 0;
-
  failed:
 	kiblnd_net_fini_pools(net);
+	LASSERT(rc != 0);
 	return rc;
 }
 
