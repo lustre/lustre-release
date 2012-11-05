@@ -300,10 +300,9 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
         }
 
         newdev = obd_device_alloc();
-        if (newdev == NULL) {
-                class_put_type(type);
-                RETURN(ERR_PTR(-ENOMEM));
-        }
+	if (newdev == NULL)
+		GOTO(out_type, result = ERR_PTR(-ENOMEM));
+
         LASSERT(newdev->obd_magic == OBD_DEVICE_MAGIC);
 
         cfs_write_lock(&obd_dev_lock);
@@ -343,17 +342,21 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
         if (result == NULL && i >= class_devno_max()) {
                 CERROR("all %u OBD devices used, increase MAX_OBD_DEVICES\n",
                        class_devno_max());
-                RETURN(ERR_PTR(-EOVERFLOW));
+		GOTO(out, result = ERR_PTR(-EOVERFLOW));
         }
 
-        if (IS_ERR(result)) {
-                obd_device_free(newdev);
-                class_put_type(type);
-        } else {
-                CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
-                       result->obd_name, result);
-        }
-        RETURN(result);
+	if (IS_ERR(result))
+		GOTO(out, result);
+
+	CDEBUG(D_IOCTL, "Adding new device %s (%p)\n",
+	       result->obd_name, result);
+
+	RETURN(result);
+out:
+	obd_device_free(newdev);
+out_type:
+	class_put_type(type);
+	return result;
 }
 
 void class_release_dev(struct obd_device *obd)
