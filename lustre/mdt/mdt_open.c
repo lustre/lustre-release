@@ -912,8 +912,6 @@ int mdt_finish_open(struct mdt_thread_info *info,
                 RETURN(0);
         }
 
-        mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
-
         /*
          * We need to return the existing object's fid back, so it is done here,
          * after preparing the reply.
@@ -957,11 +955,15 @@ int mdt_finish_open(struct mdt_thread_info *info,
                                 else
                                         repbody->valid |= OBD_MD_FLEASIZE;
                         }
+			mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
                         RETURN(0);
                 }
         }
 
         rc = mdt_mfd_open(info, p, o, flags, created);
+	if (!rc)
+		mdt_set_disposition(info, rep, DISP_OPEN_OPEN);
+
         RETURN(rc);
 }
 
@@ -1156,8 +1158,7 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
                 GOTO(out, rc);
         }
         mdt_set_disposition(info, rep, (DISP_IT_EXECD |
-                                        DISP_LOOKUP_EXECD |
-                                        DISP_LOOKUP_POS));
+					DISP_LOOKUP_EXECD));
 
         if (flags & FMODE_WRITE)
                 lm = LCK_CW;
@@ -1189,12 +1190,16 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
                 }
         }
 
-        if (flags & MDS_OPEN_LOCK)
-                mdt_set_disposition(info, rep, DISP_OPEN_LOCK);
         rc = mdt_finish_open(info, parent, o, flags, 0, rep);
 
         if (!(flags & MDS_OPEN_LOCK) || rc)
                 mdt_object_unlock(info, o, lhc, 1);
+
+	if (!rc) {
+		mdt_set_disposition(info, rep, DISP_LOOKUP_POS);
+		if (flags & MDS_OPEN_LOCK)
+			mdt_set_disposition(info, rep, DISP_OPEN_LOCK);
+	}
 
         GOTO(out, rc);
 out:
@@ -1537,10 +1542,12 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                              created, ldlm_rep);
         if (rc) {
                 result = rc;
-                if (lustre_handle_is_used(&lhc->mlh_reg_lh))
+		if (lustre_handle_is_used(&lhc->mlh_reg_lh)) {
                         /* openlock was acquired and mdt_finish_open failed -
                            drop the openlock */
                         mdt_object_unlock(info, child, lhc, 1);
+			mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_LOCK);
+		}
                 if (created) {
                         ma->ma_need = 0;
                         ma->ma_valid = 0;
@@ -1552,6 +1559,7 @@ int mdt_reint_open(struct mdt_thread_info *info, struct mdt_lock_handle *lhc)
                                         &info->mti_attr);
                         if (rc != 0)
                                 CERROR("Error in cleanup of open\n");
+			mdt_clear_disposition(info, ldlm_rep, DISP_OPEN_CREATE);
                 }
         }
         EXIT;
