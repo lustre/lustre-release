@@ -219,11 +219,9 @@ int ldiskfs_read_ldd(char *dev, struct lustre_disk_data *mo_ldd)
 		if (num_read < 1 && ferror(filep)) {
 			fprintf(stderr, "%s: Unable to read from file %s: %s\n",
 				progname, filepnm, strerror(errno));
-			goto out_close;
 		}
+		fclose(filep);
 	}
-out_close:
-	fclose(filep);
 
 	snprintf(cmd, cmdsz, "rm -rf %s", tmpdir);
 	run_command(cmd, cmdsz);
