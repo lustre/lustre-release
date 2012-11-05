@@ -827,6 +827,17 @@ int mdt_finish_open(struct mdt_thread_info *info,
         islnk = S_ISLNK(la->la_mode);
         mdt_pack_attr2body(info, repbody, la, mdt_object_fid(o));
 
+	/* LU-2275, simulate broken behaviour (esp. prevalent in
+	 * pre-2.4 servers where a very strange reply is sent on error
+	 * that looks like it was actually almost succesful and a failure at the
+	 * same time */
+	if (OBD_FAIL_CHECK(OBD_FAIL_MDS_NEGATIVE_POSITIVE)) {
+		mdt_set_disposition(info, rep, DISP_OPEN_LOCK | \
+			            DISP_OPEN_OPEN | DISP_LOOKUP_NEG | \
+				    DISP_LOOKUP_POS);
+		RETURN(-ENOENT);
+	}
+
         if (exp_connect_rmtclient(exp)) {
                 void *buf = req_capsule_server_get(info->mti_pill, &RMF_ACL);
 

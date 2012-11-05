@@ -505,7 +505,9 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 	intent->it_lock_handle = lockh->cookie;
 	intent->it_data = req;
 
-	if (intent->it_status < 0 && req->rq_replay)
+	/* Technically speaking rq_transno must already be zero if
+	 * it_status is in error, so the check is a bit redundant */
+	if ((!req->rq_transno || intent->it_status < 0) && req->rq_replay)
 		mdc_clear_replay_flag(req, intent->it_status);
 
         /* If we're doing an IT_OPEN which did not result in an actual
