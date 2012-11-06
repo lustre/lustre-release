@@ -977,14 +977,12 @@ static void osc_lock_to_lockless(const struct lu_env *env,
                                  struct osc_lock *ols, int force)
 {
         struct cl_lock_slice *slice = &ols->ols_cl;
-        struct cl_lock *lock        = slice->cls_lock;
 
         LASSERT(ols->ols_state == OLS_NEW ||
                 ols->ols_state == OLS_UPCALL_RECEIVED);
 
         if (force) {
                 ols->ols_locklessable = 1;
-                LASSERT(cl_lock_is_mutexed(lock));
                 slice->cls_ops = &osc_lock_lockless_ops;
         } else {
                 struct osc_io *oio     = osc_env_io(env);
@@ -1154,12 +1152,8 @@ static int osc_lock_enqueue(const struct lu_env *env,
         LASSERT(lock->cll_state == CLS_QUEUING);
         LASSERT(ols->ols_state == OLS_NEW);
 
-        ols->ols_flags = osc_enq2ldlm_flags(enqflags);
-        if (ols->ols_flags & LDLM_FL_HAS_INTENT)
-                ols->ols_glimpse = 1;
-        if (!osc_lock_is_lockless(ols) && !(enqflags & CEF_MUST))
-                /* try to convert this lock to a lockless lock */
-                osc_lock_to_lockless(env, ols, (enqflags & CEF_NEVER));
+	LASSERTF(ergo(ols->ols_glimpse, lock->cll_descr.cld_mode <= CLM_READ),
+			"lock = %p, ols = %p\n", lock, ols);
 
         result = osc_lock_enqueue_wait(env, ols);
         if (result == 0) {
@@ -1169,9 +1163,6 @@ static int osc_lock_enqueue(const struct lu_env *env,
                         struct ldlm_res_id       *resname = &info->oti_resname;
                         ldlm_policy_data_t       *policy = &info->oti_policy;
                         struct ldlm_enqueue_info *einfo = &ols->ols_einfo;
-
-                        if (ols->ols_locklessable)
-                                ols->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
 
                         /* a reference for lock, passed as an upcall cookie */
                         cl_lock_get(lock);
@@ -1312,7 +1303,8 @@ static void osc_lock_cancel(const struct lu_env *env,
                 int do_cancel;
 
                 discard = !!(dlmlock->l_flags & LDLM_FL_DISCARD_DATA);
-                result = osc_lock_flush(olck, discard);
+		if (olck->ols_state >= OLS_GRANTED)
+			result = osc_lock_flush(olck, discard);
                 osc_lock_unhold(olck);
 
                 lock_res_and_lock(dlmlock);
@@ -1618,10 +1610,24 @@ int osc_lock_init(const struct lu_env *env,
 
         OBD_SLAB_ALLOC_PTR_GFP(clk, osc_lock_kmem, CFS_ALLOC_IO);
         if (clk != NULL) {
-                osc_lock_build_einfo(env, lock, clk, &clk->ols_einfo);
-                cfs_atomic_set(&clk->ols_pageref, 0);
-                clk->ols_state = OLS_NEW;
-                cl_lock_slice_add(lock, &clk->ols_cl, obj, &osc_lock_ops);
+		__u32 enqflags = lock->cll_descr.cld_enq_flags;
+
+		osc_lock_build_einfo(env, lock, clk, &clk->ols_einfo);
+		cfs_atomic_set(&clk->ols_pageref, 0);
+		clk->ols_state = OLS_NEW;
+
+		clk->ols_flags = osc_enq2ldlm_flags(enqflags);
+		if (clk->ols_flags & LDLM_FL_HAS_INTENT)
+			clk->ols_glimpse = 1;
+
+		cl_lock_slice_add(lock, &clk->ols_cl, obj, &osc_lock_ops);
+
+		if (!(enqflags & CEF_MUST))
+			/* try to convert this lock to a lockless lock */
+			osc_lock_to_lockless(env, clk, (enqflags & CEF_NEVER));
+		if (clk->ols_locklessable && !(enqflags & CEF_DISCARD_DATA))
+			clk->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
+
                 result = 0;
         } else
                 result = -ENOMEM;

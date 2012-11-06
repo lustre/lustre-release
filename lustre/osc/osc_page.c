@@ -264,9 +264,9 @@ static int osc_page_addref_lock(const struct lu_env *env,
         olock = osc_lock_at(lock);
         if (cfs_atomic_inc_return(&olock->ols_pageref) <= 0) {
                 cfs_atomic_dec(&olock->ols_pageref);
-                cl_lock_put(env, lock);
-                rc = 1;
+                rc = -ENODATA;
         } else {
+		cl_lock_get(lock);
                 opg->ops_lock = lock;
                 rc = 0;
         }
@@ -293,16 +293,16 @@ static int osc_page_is_under_lock(const struct lu_env *env,
                                   struct cl_io *unused)
 {
         struct cl_lock *lock;
-        int             result;
+        int             result = -ENODATA;
 
         ENTRY;
         lock = cl_lock_at_page(env, slice->cpl_obj, slice->cpl_page,
                                NULL, 1, 0);
-        if (lock != NULL &&
-            osc_page_addref_lock(env, cl2osc_page(slice), lock) == 0)
-                result = -EBUSY;
-        else
-                result = -ENODATA;
+        if (lock != NULL) {
+		if (osc_page_addref_lock(env, cl2osc_page(slice), lock) == 0)
+			result = -EBUSY;
+		cl_lock_put(env, lock);
+	}
         RETURN(result);
 }
 
