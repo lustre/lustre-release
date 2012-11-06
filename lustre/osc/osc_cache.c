@@ -2389,7 +2389,7 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 	struct cl_page    *cp    = ops->ops_cl.cpl_page;
 	pgoff_t            index = cp->cp_index;
 	struct osc_async_page *oap = &ops->ops_oap;
-	int unplug = 0;
+	bool unplug = false;
 	int rc = 0;
 	ENTRY;
 
@@ -2437,7 +2437,7 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 		OSC_EXTENT_DUMP(D_CACHE, ext,
 				"flush page %p make it urgent.\n", oap);
 		cfs_list_add_tail(&ext->oe_link, &obj->oo_urgent_exts);
-		unplug = 1;
+		unplug = true;
 	}
 	rc = 0;
 	EXIT;
@@ -2698,6 +2698,8 @@ void osc_cache_truncate_end(const struct lu_env *env, struct osc_io *oio,
 
 	oio->oi_trunc = NULL;
 	if (ext != NULL) {
+		bool unplug = false;
+
 		EASSERT(ext->oe_nr_pages > 0, ext);
 		EASSERT(ext->oe_state == OES_TRUNC, ext);
 		EASSERT(!ext->oe_urgent, ext);
@@ -2708,12 +2710,14 @@ void osc_cache_truncate_end(const struct lu_env *env, struct osc_io *oio,
 		if (ext->oe_fsync_wait && !ext->oe_urgent) {
 			ext->oe_urgent = 1;
 			cfs_list_move_tail(&ext->oe_link, &obj->oo_urgent_exts);
+			unplug = true;
 		}
 		osc_update_pending(obj, OBD_BRW_WRITE, ext->oe_nr_pages);
 		osc_object_unlock(obj);
 		osc_extent_put(env, ext);
 
-		osc_list_maint(osc_cli(obj), obj);
+		if (unplug)
+			osc_io_unplug_async(env, osc_cli(obj), obj);
 	}
 }
 
@@ -2787,7 +2791,7 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 {
 	struct osc_extent *ext;
 	CFS_LIST_HEAD(discard_list);
-	int unplug = 0;
+	bool unplug = false;
 	int result = 0;
 	ENTRY;
 
@@ -2817,7 +2821,7 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 				}
 				if (list != NULL) {
 					cfs_list_move_tail(&ext->oe_link, list);
-					unplug = 1;
+					unplug = true;
 				}
 			} else {
 				/* the only discarder is lock cancelling, so
