@@ -1264,7 +1264,7 @@ enum {
         /**
          * Maximal number of tld slots.
          */
-        LU_CONTEXT_KEY_NR = 32
+        LU_CONTEXT_KEY_NR = 40
 };
 
 static struct lu_context_key *lu_keys[LU_CONTEXT_KEY_NR] = { NULL, };
