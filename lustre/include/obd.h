@@ -504,8 +504,8 @@ struct client_obd {
         struct obd_histogram     cl_write_offset_hist;
 
 	/* lru for osc caching pages */
-	struct cl_client_lru    *cl_lru;
-	cfs_list_t		 cl_lru_osc; /* member of cl_lru->ccl_list */
+	struct cl_client_cache	*cl_cache;
+	cfs_list_t		 cl_lru_osc; /* member of cl_cache->ccc_lru */
 	cfs_atomic_t		*cl_lru_left;
 	cfs_atomic_t		 cl_lru_busy;
 	cfs_atomic_t		 cl_lru_shrinkers;
@@ -702,8 +702,8 @@ struct lov_obd {
         cfs_proc_dir_entry_t   *lov_pool_proc_entry;
         enum lustre_sec_part    lov_sp_me;
 
-	/* cached LRU data from upper layer */
-	void		       *lov_lru;
+	/* Cached LRU pages from upper layer */
+	void		       *lov_cache;
 };
 
 struct lmv_tgt_desc {
@@ -1187,8 +1187,8 @@ enum obd_cleanup_stage {
 #define KEY_CONNECT_FLAG        "connect_flags"
 #define KEY_SYNC_LOCK_CANCEL    "sync_lock_cancel"
 
-#define KEY_LRU_SET		"lru_set"
-#define KEY_LRU_SHRINK		"lru_shrink"
+#define KEY_CACHE_SET		"cache_set"
+#define KEY_CACHE_LRU_SHRINK	"cache_lru_shrink"
 
 struct lu_context;
 

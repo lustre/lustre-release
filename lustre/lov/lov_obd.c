@@ -629,10 +629,10 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         if (!tgt->ltd_exp)
                 GOTO(out, rc = 0);
 
-	if (lov->lov_lru != NULL) {
+	if (lov->lov_cache != NULL) {
 		rc = obd_set_info_async(NULL, tgt->ltd_exp,
-				sizeof(KEY_LRU_SET), KEY_LRU_SET,
-				sizeof(struct cl_client_lru), lov->lov_lru,
+				sizeof(KEY_CACHE_SET), KEY_CACHE_SET,
+				sizeof(struct cl_client_cache), lov->lov_cache,
 				NULL);
 		if (rc < 0)
 			GOTO(out, rc);
@@ -2578,9 +2578,9 @@ static int lov_set_info_async(const struct lu_env *env, struct obd_export *exp,
                 mds_con = 1;
         } else if (KEY_IS(KEY_CAPA_KEY)) {
                 capa = 1;
-	} else if (KEY_IS(KEY_LRU_SET)) {
-		LASSERT(lov->lov_lru == NULL);
-		lov->lov_lru = val;
+	} else if (KEY_IS(KEY_CACHE_SET)) {
+		LASSERT(lov->lov_cache == NULL);
+		lov->lov_cache = val;
 		do_inactive = 1;
 	}
 

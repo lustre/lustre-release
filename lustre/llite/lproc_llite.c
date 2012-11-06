@@ -363,27 +363,27 @@ static int ll_wr_max_read_ahead_whole_mb(struct file *file, const char *buffer,
 static int ll_rd_max_cached_mb(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {
-	struct super_block *sb = data;
-	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	struct cl_client_lru *lru = &sbi->ll_lru;
+	struct super_block     *sb    = data;
+	struct ll_sb_info      *sbi   = ll_s2sbi(sb);
+	struct cl_client_cache *cache = &sbi->ll_cache;
 	int shift = 20 - CFS_PAGE_SHIFT;
 	int max_cached_mb;
 	int unused_mb;
 
 	*eof = 1;
-	max_cached_mb = lru->ccl_page_max >> shift;
-	unused_mb = cfs_atomic_read(&lru->ccl_page_left) >> shift;
+	max_cached_mb = cache->ccc_lru_max >> shift;
+	unused_mb = cfs_atomic_read(&cache->ccc_lru_left) >> shift;
 	return snprintf(page, count,
 			"users: %d\n"
 			"max_cached_mb: %d\n"
 			"used_mb: %d\n"
 			"unused_mb: %d\n"
 			"reclaim_count: %u\n",
-			cfs_atomic_read(&lru->ccl_users),
+			cfs_atomic_read(&cache->ccc_users),
 			max_cached_mb,
 			max_cached_mb - unused_mb,
 			unused_mb,
-			lru->ccl_reclaim_count);
+			cache->ccc_lru_shrinkers);
 }
 
 static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
@@ -391,7 +391,7 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 {
 	struct super_block *sb = data;
 	struct ll_sb_info *sbi = ll_s2sbi(sb);
-	struct cl_client_lru *lru = &sbi->ll_lru;
+	struct cl_client_cache *cache = &sbi->ll_cache;
 	int mult, rc, pages_number;
 	int diff = 0;
 	int nrpages = 0;
@@ -414,12 +414,12 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 		RETURN(-ENODEV);
 
 	cfs_spin_lock(&sbi->ll_lock);
-	diff = pages_number - lru->ccl_page_max;
+	diff = pages_number - cache->ccc_lru_max;
 	cfs_spin_unlock(&sbi->ll_lock);
 
 	/* easy - add more LRU slots. */
 	if (diff >= 0) {
-		cfs_atomic_add(diff, &lru->ccl_page_left);
+		cfs_atomic_add(diff, &cache->ccc_lru_left);
 		GOTO(out, rc = 0);
 	}
 
@@ -431,12 +431,12 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 		do {
 			int ov, nv;
 
-			ov = cfs_atomic_read(&lru->ccl_page_left);
+			ov = cfs_atomic_read(&cache->ccc_lru_left);
 			if (ov == 0)
 				break;
 
 			nv = ov > diff ? ov - diff : 0;
-			rc = cfs_atomic_cmpxchg(&lru->ccl_page_left, ov, nv);
+			rc = cfs_atomic_cmpxchg(&cache->ccc_lru_left, ov, nv);
 			if (likely(ov == rc)) {
 				diff -= ov - nv;
 				nrpages += ov - nv;
@@ -450,7 +450,8 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 		/* difficult - have to ask OSCs to drop LRU slots. */
 		tmp = diff << 1;
 		rc = obd_set_info_async(NULL, sbi->ll_dt_exp,
-				sizeof(KEY_LRU_SHRINK), KEY_LRU_SHRINK,
+				sizeof(KEY_CACHE_LRU_SHRINK),
+				KEY_CACHE_LRU_SHRINK,
 				sizeof(tmp), &tmp, NULL);
 		if (rc < 0)
 			break;
@@ -459,11 +460,11 @@ static int ll_wr_max_cached_mb(struct file *file, const char *buffer,
 out:
 	if (rc >= 0) {
 		cfs_spin_lock(&sbi->ll_lock);
-		lru->ccl_page_max = pages_number;
+		cache->ccc_lru_max = pages_number;
 		cfs_spin_unlock(&sbi->ll_lock);
 		rc = count;
 	} else {
-		cfs_atomic_add(nrpages, &lru->ccl_page_left);
+		cfs_atomic_add(nrpages, &cache->ccc_lru_left);
 	}
 	return rc;
 }

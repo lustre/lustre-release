@@ -610,7 +610,7 @@ static const int lru_shrink_max = 32 << (20 - CFS_PAGE_SHIFT); /* 32M */
  * Return how many LRU pages should be freed. */
 static int osc_cache_too_much(struct client_obd *cli)
 {
-	struct cl_client_lru *lru = cli->cl_lru;
+	struct cl_client_cache *cache = cli->cl_cache;
 	int pages = cfs_atomic_read(&cli->cl_lru_in_list) >> 1;
 
 	if (cfs_atomic_read(&osc_lru_waiters) > 0 &&
@@ -620,11 +620,11 @@ static int osc_cache_too_much(struct client_obd *cli)
 
 	/* if it's going to run out LRU slots, we should free some, but not
 	 * too much to maintain faireness among OSCs. */
-	if (cfs_atomic_read(cli->cl_lru_left) < lru->ccl_page_max >> 4) {
-		unsigned long budget;
+	if (cfs_atomic_read(cli->cl_lru_left) < cache->ccc_lru_max >> 4) {
+		unsigned long tmp;
 
-		budget = lru->ccl_page_max / cfs_atomic_read(&lru->ccl_users);
-		if (pages > budget)
+		tmp = cache->ccc_lru_max / cfs_atomic_read(&cache->ccc_users);
+		if (pages > tmp)
 			return min(pages, lru_shrink_max);
 
 		return pages > lru_shrink_min ? lru_shrink_min : 0;
@@ -822,13 +822,13 @@ static void osc_lru_del(struct client_obd *cli, struct osc_page *opg, bool del)
 
 static int osc_lru_reclaim(struct client_obd *cli)
 {
-	struct cl_client_lru *lru = cli->cl_lru;
+	struct cl_client_cache *cache = cli->cl_cache;
 	struct client_obd *victim;
 	struct client_obd *tmp;
 	int rc;
 
-	LASSERT(lru != NULL);
-	LASSERT(!cfs_list_empty(&lru->ccl_list));
+	LASSERT(cache != NULL);
+	LASSERT(!cfs_list_empty(&cache->ccc_lru));
 
 	rc = osc_lru_shrink(cli, lru_shrink_min);
 	if (rc > 0) {
@@ -844,10 +844,10 @@ static int osc_lru_reclaim(struct client_obd *cli)
 
 	/* Reclaim LRU slots from other client_obd as it can't free enough
 	 * from its own. This should rarely happen. */
-	cfs_spin_lock(&lru->ccl_lock);
-	lru->ccl_reclaim_count++;
-	cfs_list_move_tail(&cli->cl_lru_osc, &lru->ccl_list);
-	cfs_list_for_each_entry_safe(victim, tmp, &lru->ccl_list, cl_lru_osc) {
+	cfs_spin_lock(&cache->ccc_lru_lock);
+	cache->ccc_lru_shrinkers++;
+	cfs_list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
+	cfs_list_for_each_entry_safe(victim, tmp, &cache->ccc_lru, cl_lru_osc) {
 		if (victim == cli)
 			break;
 
@@ -856,11 +856,11 @@ static int osc_lru_reclaim(struct client_obd *cli)
 			cfs_atomic_read(&victim->cl_lru_in_list),
 			cfs_atomic_read(&victim->cl_lru_busy));
 
-		cfs_list_move_tail(&victim->cl_lru_osc, &lru->ccl_list);
+		cfs_list_move_tail(&victim->cl_lru_osc, &cache->ccc_lru);
 		if (cfs_atomic_read(&victim->cl_lru_in_list) > 0)
 			break;
 	}
-	cfs_spin_unlock(&lru->ccl_lock);
+	cfs_spin_unlock(&cache->ccc_lru_lock);
 	if (victim == cli) {
 		CDEBUG(D_CACHE, "%s: can't get any free LRU slots.\n",
 			cli->cl_import->imp_obd->obd_name);
@@ -885,7 +885,7 @@ static int osc_lru_reserve(const struct lu_env *env, struct osc_object *obj,
 	int rc = 0;
 	ENTRY;
 
-	if (cli->cl_lru == NULL) /* shall not be in LRU */
+	if (cli->cl_cache == NULL) /* shall not be in LRU */
 		RETURN(0);
 
 	LASSERT(cfs_atomic_read(cli->cl_lru_left) >= 0);

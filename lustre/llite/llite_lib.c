@@ -104,11 +104,11 @@ static struct ll_sb_info *ll_init_sbi(void)
 	}
 
 	/* initialize lru data */
-	cfs_atomic_set(&sbi->ll_lru.ccl_users, 0);
-	sbi->ll_lru.ccl_page_max = lru_page_max;
-	cfs_atomic_set(&sbi->ll_lru.ccl_page_left, lru_page_max);
-	cfs_spin_lock_init(&sbi->ll_lru.ccl_lock);
-	CFS_INIT_LIST_HEAD(&sbi->ll_lru.ccl_list);
+	cfs_atomic_set(&sbi->ll_cache.ccc_users, 0);
+	sbi->ll_cache.ccc_lru_max = lru_page_max;
+	cfs_atomic_set(&sbi->ll_cache.ccc_lru_left, lru_page_max);
+	cfs_spin_lock_init(&sbi->ll_cache.ccc_lru_lock);
+	CFS_INIT_LIST_HEAD(&sbi->ll_cache.ccc_lru);
 
         sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
                                            SBI_DEFAULT_READAHEAD_MAX);
@@ -551,9 +551,9 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                  NULL);
         cl_sb_init(sb);
 
-	err = obd_set_info_async(NULL, sbi->ll_dt_exp, sizeof(KEY_LRU_SET),
-				 KEY_LRU_SET, sizeof(sbi->ll_lru),
-				 &sbi->ll_lru, NULL);
+	err = obd_set_info_async(NULL, sbi->ll_dt_exp, sizeof(KEY_CACHE_SET),
+				 KEY_CACHE_SET, sizeof(sbi->ll_cache),
+				 &sbi->ll_cache, NULL);
 
 	sb->s_root = d_alloc_root(root);
 #ifdef HAVE_DCACHE_LOCK

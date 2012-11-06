@@ -3117,24 +3117,24 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
                 RETURN(0);
         }
 
-	if (KEY_IS(KEY_LRU_SET)) {
+	if (KEY_IS(KEY_CACHE_SET)) {
 		struct client_obd *cli = &obd->u.cli;
 
-		LASSERT(cli->cl_lru == NULL); /* only once */
-		cli->cl_lru = (struct cl_client_lru *)val;
-		cfs_atomic_inc(&cli->cl_lru->ccl_users);
-		cli->cl_lru_left = &cli->cl_lru->ccl_page_left;
+		LASSERT(cli->cl_cache == NULL); /* only once */
+		cli->cl_cache = (struct cl_client_cache *)val;
+		cfs_atomic_inc(&cli->cl_cache->ccc_users);
+		cli->cl_lru_left = &cli->cl_cache->ccc_lru_left;
 
 		/* add this osc into entity list */
 		LASSERT(cfs_list_empty(&cli->cl_lru_osc));
-		cfs_spin_lock(&cli->cl_lru->ccl_lock);
-		cfs_list_add(&cli->cl_lru_osc, &cli->cl_lru->ccl_list);
-		cfs_spin_unlock(&cli->cl_lru->ccl_lock);
+		cfs_spin_lock(&cli->cl_cache->ccc_lru_lock);
+		cfs_list_add(&cli->cl_lru_osc, &cli->cl_cache->ccc_lru);
+		cfs_spin_unlock(&cli->cl_cache->ccc_lru_lock);
 
 		RETURN(0);
 	}
 
-	if (KEY_IS(KEY_LRU_SHRINK)) {
+	if (KEY_IS(KEY_CACHE_LRU_SHRINK)) {
 		struct client_obd *cli = &obd->u.cli;
 		int nr = cfs_atomic_read(&cli->cl_lru_in_list) >> 1;
 		int target = *(int *)val;
@@ -3519,14 +3519,14 @@ int osc_cleanup(struct obd_device *obd)
 	ENTRY;
 
 	/* lru cleanup */
-	if (cli->cl_lru != NULL) {
-		LASSERT(cfs_atomic_read(&cli->cl_lru->ccl_users) > 0);
-		cfs_spin_lock(&cli->cl_lru->ccl_lock);
+	if (cli->cl_cache != NULL) {
+		LASSERT(cfs_atomic_read(&cli->cl_cache->ccc_users) > 0);
+		cfs_spin_lock(&cli->cl_cache->ccc_lru_lock);
 		cfs_list_del_init(&cli->cl_lru_osc);
-		cfs_spin_unlock(&cli->cl_lru->ccl_lock);
+		cfs_spin_unlock(&cli->cl_cache->ccc_lru_lock);
 		cli->cl_lru_left = NULL;
-		cfs_atomic_dec(&cli->cl_lru->ccl_users);
-		cli->cl_lru = NULL;
+		cfs_atomic_dec(&cli->cl_cache->ccc_users);
+		cli->cl_cache = NULL;
 	}
 
         /* free memory of osc quota cache */
