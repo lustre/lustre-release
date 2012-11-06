@@ -308,120 +308,6 @@ fi
 ])
 
 #
-# Support for --enable-uoss
-#
-AC_DEFUN([LB_UOSS],
-[AC_MSG_CHECKING([whether to enable uoss])
-AC_ARG_ENABLE([uoss],
-	AC_HELP_STRING([--enable-uoss],
-			[enable userspace OSS]),
-	[enable_uoss='yes'],[enable_uoss='no'])
-AC_MSG_RESULT([$enable_uoss])
-if test x$enable_uoss = xyes; then
-	AC_DEFINE(UOSS_SUPPORT, 1, Enable user-level OSS)
-	AC_DEFINE(LUSTRE_ULEVEL_MT, 1, Multi-threaded user-level lustre port)
-	enable_uoss='yes'
-	enable_ulevel_mt='yes'
-	enable_modules='no'
-	enable_client='no'
-	enable_tests='no'
-	enable_liblustre='no'
-	with_ldiskfs='no'
-fi
-AC_SUBST(enable_uoss)
-])
-
-#
-# Support for --enable-posix-osd
-#
-AC_DEFUN([LB_POSIX_OSD],
-[AC_MSG_CHECKING([whether to enable posix osd])
-AC_ARG_ENABLE([posix-osd],
-	AC_HELP_STRING([--enable-posix-osd],
-			[enable using of posix osd]),
-	[enable_posix_osd='yes'],[enable_posix_osd='no'])
-AC_MSG_RESULT([$enable_posix_osd])
-if test x$enable_uoss = xyes -a x$enable_posix_osd = xyes ; then
-	AC_DEFINE(POSIX_OSD, 1, Enable POSIX OSD)
-	posix_osd='yes'
-fi
-AM_CONDITIONAL(POSIX_OSD_ENABLED, test x$posix_osd = xyes)
-])
-
-#
-# LB_PATH_DMU
-#
-AC_DEFUN([LB_PATH_DMU],
-[AC_ARG_ENABLE([dmu],
-	AC_HELP_STRING([--enable-dmu],
-	               [enable the DMU backend]),
-	[],[with_dmu='default'])
-AC_MSG_CHECKING([whether to enable DMU])
-case x$with_dmu in
-	xyes)
-		dmu_osd='yes'
-		;;
-	xno)
-		dmu_osd='no'
-		;;
-	xdefault)
-		if test x$enable_uoss = xyes -a x$posix_osd != xyes; then
-			# Enable the DMU if we're configuring a userspace server
-			dmu_osd='yes'
-		else
-			# Enable the DMU by default on the b_hd_kdmu branch
-			if test -d $PWD/zfs -a x$enable_server = xyes; then
-				dmu_osd='yes'
-			else
-				dmu_osd='no'
-			fi
-		fi
-		;;
-	*)
-		dmu_osd='yes'
-		;;
-esac
-AC_MSG_RESULT([$dmu_osd])
-if test x$dmu_osd = xyes; then
-	AC_DEFINE(DMU_OSD, 1, Enable DMU OSD)
-	if test x$enable_uoss = xyes; then
-		# Userspace DMU
-		DMU_SRC="$PWD/lustre/zfs-lustre"
-		AC_SUBST(DMU_SRC)
-		LB_CHECK_FILE([$DMU_SRC/src/.patched],[],[
-			AC_MSG_ERROR([A complete (patched) DMU tree was not found.])
-		])
-		AC_CONFIG_SUBDIRS(lustre/zfs-lustre)
-	else
-		# Kernel DMU
-		SPL_SUBDIR="spl"
-		ZFS_SUBDIR="zfs"
-
-		SPL_DIR="$PWD/$SPL_SUBDIR"
-		ZFS_DIR="$PWD/$ZFS_SUBDIR"
-
-		LB_CHECK_FILE([$SPL_DIR/module/spl/spl-generic.c],[],[
-			AC_MSG_ERROR([A complete SPL tree was not found in $SPL_DIR.])
-		])
-
-		LB_CHECK_FILE([$ZFS_DIR/module/zfs/dmu.c],[],[
-			AC_MSG_ERROR([A complete kernel DMU tree was not found in $ZFS_DIR.])
-		])
-
-		AC_CONFIG_SUBDIRS(spl)
-		ac_configure_args="$ac_configure_args --with-spl=$SPL_DIR"
-		AC_CONFIG_SUBDIRS(zfs)
-	fi
-fi
-AC_SUBST(SPL_SUBDIR)
-AC_SUBST(ZFS_SUBDIR)
-AC_SUBST(SPL_DIR)
-AC_SUBST(ZFS_DIR)
-AM_CONDITIONAL(DMU_OSD_ENABLED, test x$dmu_osd = xyes)
-AM_CONDITIONAL(KDMU, test x$dmu_osd$enable_uoss = xyesno)
-])
-
-#
 # LB_PATH_SNMP
 #
 # check for in-tree snmp support
@@ -729,8 +615,6 @@ LB_PATH_DEFAULTS
 
 LB_PROG_CC
 
-LB_UOSS
-LB_POSIX_OSD
 LC_OSD_ADDON
 
 LB_CONFIG_DOCS
@@ -746,7 +630,6 @@ LC_QUOTA
 LB_CONFIG_MODULES
 LN_CONFIG_USERSPACE
 
-LB_PATH_DMU
 LB_PATH_LIBSYSIO
 LB_PATH_SNMP
 LB_PATH_LDISKFS
