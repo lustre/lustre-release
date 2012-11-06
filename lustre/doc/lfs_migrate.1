@@ -27,7 +27,7 @@ Because
 .B lfs_migrate
 is
 .B not
-closely integrated with the MDS, it cannot determine whether a file
+yet closely integrated with the MDS, it cannot determine whether a file
 is currently open and/or in-use by other applications or nodes.  That makes
 it
 .B
@@ -88,15 +88,20 @@ against original to verify correctness.
 Answer 'y' to usage warning without prompting (for scripts, use with caution).
 .SH EXAMPLES
 To rebalance all files within
-.IR /mnt/lustre/dir :
+.I /testfs/jobs/2011
+(which are known not to be modified by in-use programs):
 .IP
-lfs_migrate /mnt/lustre/dir
+lfs_migrate /testfs/jobs/2011
 .PP
 To migrate files within the
-.I /test
-filesystem on OST0004 larger than 4GB in size:
+.I /testfs
+filesystem on OST0004 (perhaps because it is much more full than other OSTs),
+larger than 4GB (because it is more efficient to just migrate large files),
+and older than two days (to avoid files that are in use, though this is NOT
+a guarantee the files are not being modified, that is workload specific):
 .IP
-lfs find /test -obd test-OST0004 -size +4G | lfs_migrate -y
+lfs find /testfs -obd test-OST0004 -size +4G -mtime +2d |
+    lfs_migrate -y
 .SH KNOWN BUGS
 Hard links could be handled correctly in Lustre 2.0 by using
 .BR lfs (1) " fid2path" .
