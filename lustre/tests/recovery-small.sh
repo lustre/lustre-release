@@ -446,6 +446,36 @@ test_19b() {
 }
 run_test 19b "test expired_lock_main on ost (2867)"
 
+test_19c() {
+	local BEFORE=`date +%s`
+
+	mount_client $DIR2
+	$LCTL set_param ldlm.namespaces.*.early_lock_cancel=0
+
+	mkdir -p $DIR1/$tfile
+	stat $DIR1/$tfile
+
+#define OBD_FAIL_PTLRPC_CANCEL_RESEND 0x516
+	do_facet mds $LCTL set_param fail_loc=0x80000516
+
+	touch $DIR2/$tfile/file1 &
+	PID1=$!
+	# let touch to get blocked on the server
+	sleep 2
+
+	wait $PID1
+	$LCTL set_param ldlm.namespaces.*.early_lock_cancel=1
+	umount_client $DIR2
+
+	# let the client reconnect
+	sleep 5
+	EVICT=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state |
+	   awk -F"[ [,]" '/EVICTED]$/ { if (mx<$4) {mx=$4;} } END { print mx }')
+
+	[ -z "$EVICT" ] || [[ $EVICT -le $BEFORE ]] || error "eviction happened"
+}
+run_test 19c "check reconnect and lock resend do not trigger expired_lock_main"
+
 test_20a() {	# bug 2983 - ldlm_handle_enqueue cleanup
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 

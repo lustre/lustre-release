@@ -1151,8 +1151,6 @@ int ldlm_cli_cancel_req(struct obd_export *exp, cfs_list_t *cancels,
                         ptlrpc_request_free(req);
                         GOTO(out, rc);
                 }
-                req->rq_no_resend = 1;
-                req->rq_no_delay = 1;
 
                 req->rq_request_portal = LDLM_CANCEL_REQUEST_PORTAL;
                 req->rq_reply_portal = LDLM_CANCEL_REPLY_PORTAL;

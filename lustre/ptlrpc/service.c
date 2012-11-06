@@ -1598,10 +1598,20 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
 static int ptlrpc_server_allow_high(struct ptlrpc_service_part *svcpt,
 				    int force)
 {
+	int running = svcpt->scp_nthrs_running;
+
 	if (force)
 		return 1;
 
-	if (svcpt->scp_nreqs_active >= svcpt->scp_nthrs_running - 1)
+	if (unlikely(svcpt->scp_service->srv_req_portal == MDS_REQUEST_PORTAL &&
+		     CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CANCEL_RESEND))) {
+		/* leave just 1 thread for normal RPCs */
+		running = PTLRPC_NTHRS_INIT;
+		if (svcpt->scp_service->srv_ops.so_hpreq_handler != NULL)
+			running += 1;
+	}
+
+	if (svcpt->scp_nreqs_active >= running - 1)
 		return 0;
 
 	if (svcpt->scp_nhreqs_active == 0)
@@ -1630,15 +1640,24 @@ static int ptlrpc_server_high_pending(struct ptlrpc_service_part *svcpt,
 static int ptlrpc_server_allow_normal(struct ptlrpc_service_part *svcpt,
 				      int force)
 {
+	int running = svcpt->scp_nthrs_running;
 #ifndef __KERNEL__
 	if (1) /* always allow to handle normal request for liblustre */
 		return 1;
 #endif
+	if (unlikely(svcpt->scp_service->srv_req_portal == MDS_REQUEST_PORTAL &&
+		     CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CANCEL_RESEND))) {
+		/* leave just 1 thread for normal RPCs */
+		running = PTLRPC_NTHRS_INIT;
+		if (svcpt->scp_service->srv_ops.so_hpreq_handler != NULL)
+			running += 1;
+	}
+
 	if (force ||
-	    svcpt->scp_nreqs_active < svcpt->scp_nthrs_running - 2)
+	    svcpt->scp_nreqs_active < running - 2)
 		return 1;
 
-	if (svcpt->scp_nreqs_active >= svcpt->scp_nthrs_running - 1)
+	if (svcpt->scp_nreqs_active >= running - 1)
 		return 0;
 
 	return svcpt->scp_nhreqs_active > 0 ||

@@ -672,8 +672,6 @@ void client_common_put_super(struct super_block *sb)
         }
 #endif
 
-        obd_cancel_unused(sbi->ll_dt_exp, NULL, 0, NULL);
-
         ll_close_thread_shutdown(sbi->ll_lcq);
 
         cl_sb_fini(sb);
