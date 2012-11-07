@@ -663,7 +663,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
 	struct cl_io        *io      = ios->cis_io;
 	struct cl_object    *obj     = io->ci_obj;
 	struct inode        *inode   = ccc_object_inode(obj);
-	struct ll_inode_info *lli    = ll_i2info(inode);
 	struct cl_fault_io  *fio     = &io->u.ci_fault;
 	struct vvp_fault_io *cfio    = &vio->u.fault;
 	loff_t               offset;
@@ -688,11 +687,6 @@ static int vvp_io_fault_start(const struct lu_env *env,
 
 	/* must return locked page */
 	if (fio->ft_mkwrite) {
-		/* we grab lli_trunc_sem to exclude truncate case.
-		 * Otherwise, we could add dirty pages into osc cache
-		 * while truncate is on-going. */
-		cfs_down_read(&lli->lli_trunc_sem);
-
 		LASSERT(cfio->ft_vmpage != NULL);
 		lock_page(cfio->ft_vmpage);
 	} else {
@@ -777,8 +771,6 @@ out:
 	/* return unlocked vmpage to avoid deadlocking */
 	if (vmpage != NULL)
 		unlock_page(vmpage);
-	if (fio->ft_mkwrite)
-		cfs_up_read(&lli->lli_trunc_sem);
 #ifdef HAVE_VM_OP_FAULT
 	cfio->fault.ft_flags &= ~VM_FAULT_LOCKED;
 #endif

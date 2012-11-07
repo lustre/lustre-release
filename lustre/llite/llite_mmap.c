@@ -172,38 +172,51 @@ struct cl_io *ll_fault_io_init(struct vm_area_struct *vma,
 static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
                             bool *retry)
 {
-        struct lu_env           *env;
-        struct cl_io            *io;
-        struct vvp_io           *vio;
-        struct cl_env_nest       nest;
-        int                      result;
+	struct lu_env           *env;
+	struct cl_io            *io;
+	struct vvp_io           *vio;
+	struct cl_env_nest       nest;
+	int                      result;
 	cfs_sigset_t             set;
-        ENTRY;
+	struct inode             *inode;
+	struct ll_inode_info     *lli;
+	ENTRY;
 
-        LASSERT(vmpage != NULL);
+	LASSERT(vmpage != NULL);
 
-        io = ll_fault_io_init(vma, &env,  &nest, vmpage->index, NULL);
-        if (IS_ERR(io))
-                GOTO(out, result = PTR_ERR(io));
+	io = ll_fault_io_init(vma, &env,  &nest, vmpage->index, NULL);
+	if (IS_ERR(io))
+		GOTO(out, result = PTR_ERR(io));
 
-        result = io->ci_result;
-        if (result < 0)
-                GOTO(out, result);
+	result = io->ci_result;
+	if (result < 0)
+		GOTO(out, result);
 
-        /* Don't enqueue new locks for page_mkwrite().
-         * If the lock has been cancelled then page must have been
-         * truncated, in that case, kernel will handle it.
-         */
-        io->ci_lockreq = CILR_PEEK;
-        io->u.ci_fault.ft_mkwrite = 1;
-        io->u.ci_fault.ft_writable = 1;
+	/* Don't enqueue new locks for page_mkwrite().
+	 * If the lock has been cancelled then page must have been
+	 * truncated, in that case, kernel will handle it.
+	 */
+	io->ci_lockreq = CILR_PEEK;
+	io->u.ci_fault.ft_mkwrite = 1;
+	io->u.ci_fault.ft_writable = 1;
 
-        vio = vvp_env_io(env);
-        vio->u.fault.ft_vma    = vma;
-        vio->u.fault.ft_vmpage = vmpage;
+	vio = vvp_env_io(env);
+	vio->u.fault.ft_vma    = vma;
+	vio->u.fault.ft_vmpage = vmpage;
 
 	set = cfs_block_sigsinv(sigmask(SIGKILL) | sigmask(SIGTERM));
+
+	/* we grab lli_trunc_sem to exclude truncate case.
+	 * Otherwise, we could add dirty pages into osc cache
+	 * while truncate is on-going. */
+	inode = ccc_object_inode(io->ci_obj);
+	lli = ll_i2info(inode);
+	cfs_down_read(&lli->lli_trunc_sem);
+
 	result = cl_io_loop(env, io);
+
+	cfs_up_read(&lli->lli_trunc_sem);
+
 	cfs_restore_sigs(set);
 
         if (result == -ENODATA) /* peek failed, no lock caching. */
