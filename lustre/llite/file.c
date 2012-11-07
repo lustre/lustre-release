@@ -779,11 +779,10 @@ int ll_merge_lvb(struct inode *inode)
 		CDEBUG(D_VFSTRACE, DFID" updating i_size "LPU64"\n",
 				PFID(&lli->lli_fid), lvb.lvb_size);
 		inode->i_blocks = lvb.lvb_blocks;
-
-		LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
-		LTIME_S(inode->i_atime) = lvb.lvb_atime;
-		LTIME_S(inode->i_ctime) = lvb.lvb_ctime;
 	}
+	LTIME_S(inode->i_mtime) = lvb.lvb_mtime;
+	LTIME_S(inode->i_atime) = lvb.lvb_atime;
+	LTIME_S(inode->i_ctime) = lvb.lvb_ctime;
 	ll_inode_size_unlock(inode);
 	ccc_inode_lsm_put(inode, lsm);
 
@@ -2071,9 +2070,9 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         struct ll_inode_info *lli = ll_i2info(inode);
         struct ptlrpc_request *req;
         struct obd_capa *oc;
-	struct lov_stripe_md *lsm;
         int rc, err;
         ENTRY;
+
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p)\n", inode->i_ino,
                inode->i_generation, inode);
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_FSYNC, 1);
@@ -2108,8 +2107,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
         if (!err)
                 ptlrpc_req_finished(req);
 
-	lsm = ccc_inode_lsm_get(inode);
-	if (data && lsm) {
+	if (data) {
 		struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
 
 		err = cl_sync_file_range(inode, 0, OBD_OBJECT_EOF,
@@ -2121,7 +2119,6 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data)
 		else
 			fd->fd_write_failed = false;
 	}
-	ccc_inode_lsm_put(inode, lsm);
 
 #ifdef HAVE_FILE_FSYNC_4ARGS
 	mutex_unlock(&inode->i_mutex);
@@ -2308,19 +2305,18 @@ int ll_have_md_lock(struct inode *inode, __u64 *bits,  ldlm_mode_t l_req_mode)
 }
 
 ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
-                            struct lustre_handle *lockh)
+                            struct lustre_handle *lockh, __u64 flags)
 {
         ldlm_policy_data_t policy = { .l_inodebits = {bits}};
         struct lu_fid *fid;
         ldlm_mode_t rc;
-	__u64 flags;
         ENTRY;
 
         fid = &ll_i2info(inode)->lli_fid;
         CDEBUG(D_INFO, "trying to match res "DFID"\n", PFID(fid));
 
-        flags = LDLM_FL_BLOCK_GRANTED | LDLM_FL_CBPENDING;
-        rc = md_lock_match(ll_i2mdexp(inode), flags, fid, LDLM_IBITS, &policy,
+        rc = md_lock_match(ll_i2mdexp(inode), LDLM_FL_BLOCK_GRANTED|flags,
+			   fid, LDLM_IBITS, &policy,
                            LCK_CR|LCK_CW|LCK_PR|LCK_PW, lockh);
         RETURN(rc);
 }
@@ -2453,21 +2449,17 @@ int ll_inode_revalidate_it(struct dentry *dentry, struct lookup_intent *it,
         ENTRY;
 
         rc = __ll_inode_revalidate_it(dentry, it, ibits);
+	if (rc != 0)
+		RETURN(rc);
 
-        /* if object not yet allocated, don't validate size */
-	if (rc == 0 && !ll_i2info(dentry->d_inode)->lli_has_smd) {
-                LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_lvb.lvb_atime;
-                LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_lvb.lvb_mtime;
-                LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_lvb.lvb_ctime;
-                RETURN(0);
-        }
-
-        /* ll_glimpse_size will prefer locally cached writes if they extend
-         * the file */
-
-        if (rc == 0)
-                rc = ll_glimpse_size(inode);
-
+	/* if object isn't regular file, don't validate size */
+	if (!S_ISREG(inode->i_mode)) {
+		LTIME_S(inode->i_atime) = ll_i2info(inode)->lli_lvb.lvb_atime;
+		LTIME_S(inode->i_mtime) = ll_i2info(inode)->lli_lvb.lvb_mtime;
+		LTIME_S(inode->i_ctime) = ll_i2info(inode)->lli_lvb.lvb_ctime;
+	} else {
+		rc = ll_glimpse_size(inode);
+	}
         RETURN(rc);
 }
 
@@ -2871,17 +2863,19 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	struct ll_inode_info  *lli = ll_i2info(inode);
 	struct ll_sb_info     *sbi = ll_i2sbi(inode);
 	struct md_op_data     *op_data = NULL;
-	struct ptlrpc_request *req = NULL;
 	struct lookup_intent   it = { .it_op = IT_LAYOUT };
-	struct lustre_handle   lockh;
+	struct lustre_handle   lockh = { 0 };
 	ldlm_mode_t	       mode;
-	struct cl_object_conf  conf = {  .coc_inode = inode,
-					 .coc_validate_only = true };
+	struct ldlm_enqueue_info einfo = { .ei_type = LDLM_IBITS,
+					   .ei_mode = LCK_CR,
+					   .ei_cb_bl = ll_md_blocking_ast,
+					   .ei_cb_cp = ldlm_completion_ast,
+					   .ei_cbdata = inode };
 	int rc;
 	ENTRY;
 
 	*gen = 0;
-	if (!(ll_i2sbi(inode)->ll_flags & LL_SBI_LAYOUT_LOCK))
+	if (!(sbi->ll_flags & LL_SBI_LAYOUT_LOCK))
 		RETURN(0);
 
 	/* sanity checks */
@@ -2890,16 +2884,14 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 
 	/* mostly layout lock is caching on the local side, so try to match
 	 * it before grabbing layout lock mutex. */
-	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh);
+	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh,
+				LDLM_FL_LVB_READY);
 	if (mode != 0) { /* hit cached lock */
-		struct lov_stripe_md *lsm;
+		/* lsm_layout_gen is started from 0, plus 1 here to distinguish
+		 * the cases of no layout and first layout. */
+		*gen = lli->lli_layout_gen + 1;
 
-		lsm = ccc_inode_lsm_get(inode);
-		if (lsm != NULL)
-			*gen = lsm->lsm_layout_gen;
-		ccc_inode_lsm_put(inode, lsm);
 		ldlm_lock_decref(&lockh, mode);
-
 		RETURN(0);
 	}
 
@@ -2911,60 +2903,71 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	/* take layout lock mutex to enqueue layout lock exclusively. */
 	cfs_mutex_lock(&lli->lli_layout_mutex);
 
-	/* make sure the old conf goes away */
-	ll_layout_conf(inode, &conf);
+	/* try again inside layout mutex */
+	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh,
+				LDLM_FL_LVB_READY);
+	if (mode != 0) { /* hit cached lock */
+		*gen = lli->lli_layout_gen + 1;
 
-	/* enqueue layout lock */
-	rc = md_intent_lock(sbi->ll_md_exp, op_data, NULL, 0, &it, 0,
-			&req, ll_md_blocking_ast, 0);
-	if (rc == 0) {
-		/* we get a new lock, so update the lock data */
-		lockh.cookie = it.d.lustre.it_lock_handle;
-		md_set_lock_data(sbi->ll_md_exp, &lockh.cookie, inode, NULL);
-
-		/* req == NULL is when lock was found in client cache, without
-		 * any request to server (but lsm can be canceled just after a
-		 * release) */
-		if (req != NULL) {
-			struct ldlm_lock *lock = ldlm_handle2lock(&lockh);
-			struct lustre_md md = { NULL };
-			void *lmm;
-			int lmmsize;
-
-			/* for IT_LAYOUT lock, lmm is returned in lock's lvb
-			 * data via completion callback */
-			LASSERT(lock != NULL);
-			lmm = lock->l_lvb_data;
-			lmmsize = lock->l_lvb_len;
-			if (lmm != NULL)
-				rc = obd_unpackmd(sbi->ll_dt_exp, &md.lsm,
-						lmm, lmmsize);
-			if (rc == 0) {
-				if (md.lsm != NULL)
-					*gen = md.lsm->lsm_layout_gen;
-
-				memset(&conf, 0, sizeof conf);
-				conf.coc_inode = inode;
-				conf.u.coc_md = &md;
-				ll_layout_conf(inode, &conf);
-				/* is this racy? */
-				lli->lli_has_smd = md.lsm != NULL;
-			}
-			if (md.lsm != NULL)
-				obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
-
-			LDLM_LOCK_PUT(lock);
-			ptlrpc_req_finished(req);
-		} else { /* hit caching lock */
-			struct lov_stripe_md *lsm;
-
-			lsm = ccc_inode_lsm_get(inode);
-			if (lsm != NULL)
-				*gen = lsm->lsm_layout_gen;
-			ccc_inode_lsm_put(inode, lsm);
-		}
-		ll_intent_drop_lock(&it);
+		ldlm_lock_decref(&lockh, mode);
+		cfs_mutex_unlock(&lli->lli_layout_mutex);
+		ll_finish_md_op_data(op_data);
+		RETURN(0);
 	}
+
+	/* have to enqueue one */
+	rc = md_enqueue(sbi->ll_md_exp, &einfo, &it, op_data, &lockh,
+			NULL, 0, NULL, 0);
+	if (it.d.lustre.it_data != NULL)
+		ptlrpc_req_finished(it.d.lustre.it_data);
+	it.d.lustre.it_data = NULL;
+
+	if (rc == 0) {
+		struct ldlm_lock *lock;
+		struct cl_object_conf conf;
+		struct lustre_md md = { NULL };
+		void *lmm;
+		int lmmsize;
+
+		LASSERT(lustre_handle_is_used(&lockh));
+
+		/* set lock data in case this is a new lock */
+		ll_set_lock_data(sbi->ll_md_exp, inode, &it, NULL);
+
+		lock = ldlm_handle2lock(&lockh);
+		LASSERT(lock != NULL);
+
+		/* for IT_LAYOUT lock, lmm is returned in lock's lvb
+		 * data via completion callback */
+		lmm = lock->l_lvb_data;
+		lmmsize = lock->l_lvb_len;
+		if (lmm != NULL) {
+			rc = obd_unpackmd(sbi->ll_dt_exp, &md.lsm,
+					lmm, lmmsize);
+			if (rc >= 0) {
+				if (md.lsm != NULL)
+					*gen = md.lsm->lsm_layout_gen + 1;
+				rc = 0;
+			} else {
+				CERROR("file: "DFID" unpackmd error: %d\n",
+					PFID(&lli->lli_fid), rc);
+			}
+		}
+		LDLM_LOCK_PUT(lock);
+
+		/* set layout to file. This may cause lock expiration as we
+		 * set layout inside layout ibits lock. */
+		memset(&conf, 0, sizeof conf);
+		conf.coc_inode = inode;
+		conf.u.coc_md = &md;
+		ll_layout_conf(inode, &conf);
+		/* is this racy? */
+		lli->lli_has_smd = md.lsm != NULL;
+		if (md.lsm != NULL)
+			obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
+	}
+	ll_intent_drop_lock(&it);
+
 	cfs_mutex_unlock(&lli->lli_layout_mutex);
 	ll_finish_md_op_data(op_data);
 

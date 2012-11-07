@@ -88,14 +88,22 @@ static void vvp_io_fini(const struct lu_env *env, const struct cl_io_slice *ios)
 	struct cl_io     *io  = ios->cis_io;
 	struct cl_object *obj = io->ci_obj;
 	struct ccc_io    *cio = cl2ccc_io(env, ios);
-	__u32 gen;
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-	/* check layout version */
-	ll_layout_refresh(ccc_object_inode(obj), &gen);
-	if (cio->cui_layout_gen > 0)
-		io->ci_need_restart = cio->cui_layout_gen == gen;
+	CDEBUG(D_VFSTRACE, "ignore/verify layout %d/%d, layout version %d.\n",
+		io->ci_ignore_layout, io->ci_verify_layout, cio->cui_layout_gen);
+
+	if (!io->ci_ignore_layout && io->ci_verify_layout) {
+		__u32 gen = 0;
+
+		/* check layout version */
+		ll_layout_refresh(ccc_object_inode(obj), &gen);
+		io->ci_need_restart = cio->cui_layout_gen != gen;
+		if (io->ci_need_restart)
+			CDEBUG(D_VFSTRACE, "layout changed from %d to %d.\n",
+				cio->cui_layout_gen, gen);
+	}
 }
 
 static void vvp_io_fault_fini(const struct lu_env *env,

@@ -112,7 +112,7 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
         ENTRY;
 
         while (!cfs_list_empty(&io->ci_layers)) {
-                slice = container_of(io->ci_layers.next, struct cl_io_slice,
+                slice = container_of(io->ci_layers.prev, struct cl_io_slice,
                                      cis_linkage);
                 cfs_list_del_init(&slice->cis_linkage);
                 if (slice->cis_iop->op[io->ci_type].cio_fini != NULL)
@@ -137,10 +137,11 @@ void cl_io_fini(const struct lu_env *env, struct cl_io *io)
 	case CIT_FSYNC:
 		LASSERT(!io->ci_need_restart);
 		break;
+	case CIT_SETATTR:
 	case CIT_MISC:
 		/* Check ignore layout change conf */
-		LASSERT(ergo(io->ci_ignore_layout, !io->ci_need_restart));
-	case CIT_SETATTR:
+		LASSERT(ergo(io->ci_ignore_layout || !io->ci_verify_layout,
+				!io->ci_need_restart));
 		break;
 	default:
 		LBUG();

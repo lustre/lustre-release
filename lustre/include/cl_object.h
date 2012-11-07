@@ -277,11 +277,6 @@ struct cl_object_conf {
          */
         struct inode             *coc_inode;
 	/**
-	 * Validate object conf. If object is using an invalid conf,
-	 * then invalidate it and set the new layout.
-	 */
-	bool			  coc_validate_only;
-	/**
 	 * Invalidate the current stripe configuration due to losing
 	 * layout lock.
 	 */
@@ -2360,18 +2355,19 @@ struct cl_io {
 	 */
 			     ci_need_restart:1,
 	/**
-	 * Ignore layout change.
-	 * Most of the CIT_MISC operations can ignore layout change, because
-	 * the purpose to create this kind of cl_io is to give an environment
-	 * to run clio methods, for example:
-	 *   1. request group lock;
-	 *   2. flush caching pages by osc;
-	 *   3. writepage
-	 *   4. echo client
-	 * So far, only direct IO and glimpse clio need restart if layout
-	 * change during IO time.
+	 * to not refresh layout - the IO issuer knows that the layout won't
+	 * change(page operations, layout change causes all page to be
+	 * discarded), or it doesn't matter if it changes(sync).
 	 */
-			     ci_ignore_layout:1;
+			     ci_ignore_layout:1,
+	/**
+	 * Check if layout changed after the IO finishes. Mainly for HSM
+	 * requirement. If IO occurs to openning files, it doesn't need to
+	 * verify layout because HSM won't release openning files.
+	 * Right now, only two opertaions need to verify layout: glimpse
+	 * and setattr.
+	 */
+			     ci_verify_layout:1;
         /**
          * Number of pages owned by this IO. For invariant checking.
          */

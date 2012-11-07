@@ -1249,7 +1249,7 @@ ldlm_mode_t ldlm_lock_match(struct ldlm_namespace *ns, __u64 flags,
                         /* XXX FIXME see comment on CAN_MATCH in lustre_dlm.h */
                         l_wait_event(lock->l_waitq,
                                      lock->l_flags & LDLM_FL_LVB_READY ||
-                                     lock->l_failed,
+				     lock->l_destroyed || lock->l_failed,
                                      &lwi);
                         if (!(lock->l_flags & LDLM_FL_LVB_READY)) {
                                 if (flags & LDLM_FL_TEST_LOCK)

@@ -165,8 +165,7 @@ struct ll_inode_info {
         __u64                           lli_open_fd_read_count;
         __u64                           lli_open_fd_write_count;
         __u64                           lli_open_fd_exec_count;
-        /* Protects access to och pointers and their usage counters, also
-	 * atomicity of check-update of lli_has_smd */
+        /* Protects access to och pointers and their usage counters */
         cfs_mutex_t                     lli_och_mutex;
 
         struct inode                    lli_vfs_inode;
@@ -270,6 +269,8 @@ struct ll_inode_info {
 
 	/* mutex to request for layout lock exclusively. */
 	cfs_mutex_t		        lli_layout_mutex;
+	/* valid only inside LAYOUT ibits lock, protected by lli_layout_mutex */
+	__u32				lli_layout_gen;
 };
 
 /*
@@ -704,7 +705,7 @@ extern int ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,
 extern int ll_have_md_lock(struct inode *inode, __u64 *bits,
                            ldlm_mode_t l_req_mode);
 extern ldlm_mode_t ll_take_md_lock(struct inode *inode, __u64 bits,
-                                   struct lustre_handle *lockh);
+                                   struct lustre_handle *lockh, __u64 flags);
 int __ll_inode_revalidate_it(struct dentry *, struct lookup_intent *,
                              __u64 bits);
 int ll_revalidate_nd(struct dentry *dentry, struct nameidata *nd);

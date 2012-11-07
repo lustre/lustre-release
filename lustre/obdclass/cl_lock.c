@@ -828,8 +828,8 @@ static void cl_lock_delete0(const struct lu_env *env, struct cl_lock *lock)
 
                 cfs_spin_lock(&head->coh_lock_guard);
                 cfs_list_del_init(&lock->cll_linkage);
-
                 cfs_spin_unlock(&head->coh_lock_guard);
+
                 /*
                  * From now on, no new references to this lock can be acquired
                  * by cl_lock_lookup().

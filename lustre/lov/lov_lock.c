@@ -1186,6 +1186,41 @@ int lov_lock_init_raid0(const struct lu_env *env, struct cl_object *obj,
         RETURN(result);
 }
 
+static void lov_empty_lock_fini(const struct lu_env *env,
+				struct cl_lock_slice *slice)
+{
+	struct lov_lock *lck = cl2lov_lock(slice);
+	OBD_SLAB_FREE_PTR(lck, lov_lock_kmem);
+}
+
+static int lov_empty_lock_print(const struct lu_env *env, void *cookie,
+			lu_printer_t p, const struct cl_lock_slice *slice)
+{
+	(*p)(env, cookie, "empty\n");
+	return 0;
+}
+
+static const struct cl_lock_operations lov_empty_lock_ops = {
+	.clo_fini  = lov_empty_lock_fini,
+	.clo_print = lov_empty_lock_print
+};
+
+int lov_lock_init_empty(const struct lu_env *env, struct cl_object *obj,
+		struct cl_lock *lock, const struct cl_io *io)
+{
+	struct lov_lock *lck;
+	int result = -ENOMEM;
+
+	ENTRY;
+	OBD_SLAB_ALLOC_PTR_GFP(lck, lov_lock_kmem, CFS_ALLOC_IO);
+	if (lck != NULL) {
+		cl_lock_slice_add(lock, &lck->lls_cl, obj, &lov_empty_lock_ops);
+		lck->lls_orig = lock->cll_descr;
+		result = 0;
+	}
+	RETURN(result);
+}
+
 static struct cl_lock_closure *lov_closure_get(const struct lu_env *env,
                                                struct cl_lock *parent)
 {

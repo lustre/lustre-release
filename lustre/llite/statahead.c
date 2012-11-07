@@ -138,10 +138,7 @@ ll_sa_entry_unhash(struct ll_statahead_info *sai, struct ll_sa_entry *entry)
 static inline int agl_should_run(struct ll_statahead_info *sai,
                                  struct inode *inode)
 {
-	if (inode != NULL && S_ISREG(inode->i_mode) &&
-	    ll_i2info(inode)->lli_has_smd && sai->sai_agl_valid)
-		return 1;
-	return 0;
+	return (inode != NULL && S_ISREG(inode->i_mode) && sai->sai_agl_valid);
 }
 
 static inline struct ll_sa_entry *

@@ -262,7 +262,20 @@ void ll_intent_drop_lock(struct lookup_intent *it)
         struct lustre_handle *handle;
 
         if (it->it_op && it->d.lustre.it_lock_mode) {
-                handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
+		struct ldlm_lock *lock;
+
+		handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
+		lock = ldlm_handle2lock(handle);
+		if (lock != NULL) {
+			/* it can only be allowed to match after layout is
+			 * applied to inode otherwise false layout would be
+			 * seen. Applying layout shoud happen before dropping
+			 * the intent lock. */
+			if (it->d.lustre.it_lock_bits & MDS_INODELOCK_LAYOUT)
+				ldlm_lock_allow_match(lock);
+			LDLM_LOCK_PUT(lock);
+		}
+
                 CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
                        " from it %p\n", handle->cookie, it);
                 ldlm_lock_decref(handle, it->d.lustre.it_lock_mode);
@@ -543,6 +556,9 @@ out:
         if (req != NULL && !it_disposition(it, DISP_ENQ_COMPLETE))
                 ptlrpc_req_finished(req);
         if (rc == 0) {
+		/* mdt may grant layout lock for the newly created file, so
+		 * release the lock to avoid leaking */
+		ll_intent_drop_lock(it);
 		ll_invalidate_aliases(de->d_inode);
 	} else {
 		__u64 bits = 0;

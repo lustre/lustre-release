@@ -579,6 +579,8 @@ int   lovsub_lock_init    (const struct lu_env *env, struct cl_object *obj,
 
 int   lov_lock_init_raid0 (const struct lu_env *env, struct cl_object *obj,
                            struct cl_lock *lock, const struct cl_io *io);
+int   lov_lock_init_empty (const struct lu_env *env, struct cl_object *obj,
+                           struct cl_lock *lock, const struct cl_io *io);
 int   lov_io_init_raid0   (const struct lu_env *env, struct cl_object *obj,
                            struct cl_io *io);
 int   lov_io_init_empty   (const struct lu_env *env, struct cl_object *obj,

@@ -1334,6 +1334,14 @@ __u32 cl_fid_build_gen(const struct lu_fid *fid)
         RETURN(gen);
 }
 
+/* lsm is unreliable after hsm implementation as layout can be changed at
+ * any time. This is only to support old, non-clio-ized interfaces. It will
+ * cause deadlock if clio operations are called with this extra layout refcount
+ * because in case the layout changed during the IO, ll_layout_refresh() will
+ * have to wait for the refcount to become zero to destroy the older layout.
+ *
+ * Notice that the lsm returned by this function may not be valid unless called
+ * inside layout lock - MDS_INODELOCK_LAYOUT. */
 struct lov_stripe_md *ccc_inode_lsm_get(struct inode *inode)
 {
 	return lov_lsm_get(cl_i2info(inode)->lli_clob);

@@ -173,6 +173,7 @@ int cl_glimpse_lock(const struct lu_env *env, struct cl_io *io,
                         cl_lock_release(env, lock, "glimpse", cfs_current());
                 } else {
                         CDEBUG(D_DLMTRACE, "No objects for inode\n");
+			cl_merge_lvb(inode);
                 }
         }
 
@@ -225,6 +226,7 @@ int cl_glimpse_size0(struct inode *inode, int agl)
         result = cl_io_get(inode, &env, &io, &refcheck);
         if (result > 0) {
 	again:
+		io->ci_verify_layout = 1;
                 result = cl_io_init(env, io, CIT_MISC, io->ci_obj);
                 if (result > 0)
                         /*

@@ -308,7 +308,8 @@ static void lov_io_slice_init(struct lov_io *lio,
 	io->ci_result = 0;
 	lio->lis_object = obj;
 
-	LASSERT(lio->lis_lsm != NULL);
+	LASSERT(obj->lo_lsm != NULL);
+	lio->lis_lsm = lsm_addref(obj->lo_lsm);
         lio->lis_stripe_count = lio->lis_lsm->lsm_stripe_count;
 
         switch (io->ci_type) {
@@ -932,13 +933,15 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
 	switch (io->ci_type) {
 	default:
 		LBUG();
+	case CIT_MISC:
+	case CIT_READ:
+		result = 0;
+		break;
 	case CIT_FSYNC:
-        case CIT_MISC:
-        case CIT_READ:
-                result = 0;
-                break;
+	case CIT_SETATTR:
+		result = +1;
+		break;
         case CIT_WRITE:
-        case CIT_SETATTR:
                 result = -EBADF;
                 break;
         case CIT_FAULT:
@@ -949,8 +952,8 @@ int lov_io_init_empty(const struct lu_env *env, struct cl_object *obj,
         }
         if (result == 0)
                 cl_io_slice_add(io, &lio->lis_cl, obj, &lov_empty_io_ops);
-        io->ci_result = result;
-        RETURN(result != 0);
+	io->ci_result = result < 0 ? result : 0;
+	RETURN(result != 0);
 }
 
 /** @} lov */
