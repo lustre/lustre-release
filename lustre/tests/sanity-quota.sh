@@ -1505,7 +1505,7 @@ test_18() {
 
 	# check if watchdog is triggered
 	do_facet ost1 dmesg > $TMP/lustre-log-${TESTNAME}.log
-	local watchdog=$(awk '/test 18b/ {start = 1;}
+	local watchdog=$(awk '/sanity-quota test 18/ {start = 1;}
 	               /Service thread pid/ && /was inactive/ {
 			       if (start) {
 				       print;
