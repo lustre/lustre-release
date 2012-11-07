@@ -441,7 +441,7 @@ int zfs_make_lustre(struct mkfs_opts *mop)
 		goto out;
 	}
 
-	/* Due to zfs_name_valid() check the '/' must exist */
+	/* Due to zfs_prepare_lustre() check the '/' must exist */
 	strchr(pool, '/')[0] = '\0';
 
 	/* If --reformat was given attempt to destroy the previous dataset */
@@ -536,15 +536,19 @@ int zfs_prepare_lustre(struct mkfs_opts *mop,
 		char *default_mountopts, int default_len,
 		char *always_mountopts, int always_len)
 {
-	int ret;
-
 	if (osd_check_zfs_setup() == 0)
 		return EINVAL;
 
-	ret = zfs_name_valid(mop->mo_device, ZFS_TYPE_FILESYSTEM);
-	if (!ret) {
+	if (zfs_name_valid(mop->mo_device, ZFS_TYPE_FILESYSTEM) == 0) {
 		fatal();
 		fprintf(stderr, "Invalid filesystem name %s\n", mop->mo_device);
+		return EINVAL;
+	}
+
+	if (strchr(mop->mo_device, '/') == NULL) {
+		fatal();
+		fprintf(stderr, "Missing pool in filesystem name %s\n",
+			mop->mo_device);
 		return EINVAL;
 	}
 
