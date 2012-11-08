@@ -5683,10 +5683,12 @@ get_block_size() {
 
 # Check whether the "large_xattr" feature is enabled or not.
 large_xattr_enabled() {
-    local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
+	[[ $(facet_fstype $SINGLEMDS) == zfs ]] && return 0
 
-    do_facet $SINGLEMDS "$DUMPE2FS -h $mds_dev 2>&1 | grep -q large_xattr"
-    return ${PIPESTATUS[0]}
+	local mds_dev=$(mdsdevname ${SINGLEMDS//mds/})
+
+	do_facet $SINGLEMDS "$DUMPE2FS -h $mds_dev 2>&1 | grep -q large_xattr"
+	return ${PIPESTATUS[0]}
 }
 
 # Get the maximum xattr size supported by the filesystem.
