@@ -26,7 +26,7 @@
       <title>
           <indexterm><primary>Quotas</primary><secondary>configuring</secondary></indexterm>
           Working with Quotas</title>
-    <para>Quotas allow a system administrator to limit the amount of disk space a user or group can use in a directory. Quotas are set by root, and can be specified for individual users and/or groups. Before a file is written to a partition where quotas are set, the quota of the creator&apos;s group is checked. If a quota exists, then the file size counts towards the group&apos;s quota. If no quota exists, then the owner&apos;s user quota is checked before the file is written. Similarly, inode usage for specific functions can be controlled if a user over-uses the allocated space.</para>
+    <para>Quotas allow a system administrator to limit the amount of disk space a user or group can use. Quotas are set by root, and can be specified for individual users and/or groups. Before a file is written to a partition where quotas are set, the quota of the creator&apos;s group is checked. If a quota exists, then the file size counts towards the group&apos;s quota. If no quota exists, then the owner&apos;s user quota is checked before the file is written. Similarly, inode usage for specific functions can be controlled if a user over-uses the allocated space.</para>
     <para>Lustre quota enforcement differs from standard Linux quota enforcement in several ways:</para>
     <itemizedlist>
       <listitem>
