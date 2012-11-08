@@ -33,6 +33,7 @@ noinst_SCRIPTS += mds-survey.sh parallel-scale-nfs.sh large-lun.sh
 noinst_SCRIPTS += parallel-scale-nfsv3.sh parallel-scale-nfsv4.sh
 noinst_SCRIPTS += posix.sh sanity-scrub.sh scrub-performance.sh
 noinst_SCRIPTS += sanity-quota-old.sh
+noinst_SCRIPTS += resolveip
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += test-groups/regression test-groups/regression-mpi
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh

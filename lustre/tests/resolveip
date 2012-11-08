@@ -1,0 +1,39 @@
+#!/usr/bin/perl
+=pod
+
+=head1 NAME
+
+resolveip - Resolve IP address for given hostname
+
+=head1 DESCRIPTION
+
+Tries to resolve IP address of given hostname and return its value,
+returns empty value if unable to detect it.
+
+=cut
+
+use Socket;
+$hostname = $ARGV[0];
+
+sub resolve_ip {
+	($hostname) = @_;
+
+	return unless defined $hostname;
+
+	$packed_ip = gethostbyname($hostname);
+	if (defined $packed_ip) {
+		$ip_address = inet_ntoa($packed_ip);
+		return $ip_address;
+	}
+}
+
+$ip = resolve_ip($hostname);
+
+if (not $ip or $ip eq '') {
+	print STDERR "Unable to detect ip address for host: '$hostname'\n";
+	exit 1;
+}
+
+print $ip;
+
+exit 0;
