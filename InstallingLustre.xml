@@ -19,9 +19,9 @@
       <title>
           <indexterm><primary>installing</primary><secondary>preparation</secondary></indexterm>
           Preparing to Install the Lustre Software</title>
-    <para>If you are using a supported Linux distribution and architecture, you can install Lustre from downloaded packages (RPMs). For a list of supported configurations, see the <link xl:href="http://wiki.whamcloud.com/">Lustre 2.0</link> topic on the Lustre wiki.</para>
-    <para>A list of supported Lustre LNET drivers can be found in <xref linkend="understandinglustrenetworking"/>.</para>
-    <para>If you are not using a supported configuration, you can install Lustre directly from the source code. For more information on this installation method, see <xref linkend="installinglustrefromsourcecode"/>.</para>
+    <para>If you are using a supported Linux distribution and architecture, you can install Lustre from downloaded packages (RPMs). For a list of available packages, see the <link xl:href="http://wiki.whamcloud.com/display/PUB/Lustre+Releases">Lustre Downloads</link> page.</para>
+    <para>A list of available Lustre LNET drivers can be found in <xref linkend="understandinglustrenetworking"/>.</para>
+    <para>If you are not using a configuration with pre-built packages, you can install Lustre directly from the source code. For more information on this installation method, see <xref linkend="installinglustrefromsourcecode"/>.</para>
     <section xml:id="dbdoclet.50438261_37079">
       <title><indexterm><primary>installing</primary><secondary>requirements</secondary></indexterm>
 Required Software</title>
@@ -257,7 +257,7 @@ Required Software</title>
         </tgroup>
       </table>
       <para>In all supported Lustre installations, a patched kernel must be run on each server, including the the MGS, the MDS, and all OSSs. Running a patched kernel on a Lustre client is only required if the client will be used for multiple purposes, such as running as both a client and an OST or if you want to use the same kernel on all nodes.</para>
-      <para>Lustre RPM packages are available on the <link xl:href="http://build.whamcloud.com">Whamcloud download site</link>. They must be installed in the order described in the <xref linkend="dbdoclet.50438261_41900"/>.</para>
+      <para>Lustre RPM packages are available on the <link xl:href="http://downloads.whamcloud.com">Intel download site</link>. They must be installed in the order described in the <xref linkend="dbdoclet.50438261_41900"/>.</para>
       <section remap="h4">
         <title><indexterm><primary>installing</primary><secondary>network</secondary></indexterm>
 Network-specific Kernel Modules and Libraries</title>
@@ -270,7 +270,7 @@ Lustre-Specific Tools and Utilities</title>
         <itemizedlist>
           <listitem>
             <para><emphasis role="bold">e2fsprogs</emphasis> : Lustre requires a recent version of e2fsprogs that understands extents and large xattr. Use <literal>e2fsprogs-1.41.90.wc4</literal> or later, available at:</para>
-            <para><link xl:href="http://build.whamcloud.com/">http://build.whamcloud.com/</link></para>
+            <para><link xl:href="http://downloads.whamcloud.com/">http://downloads.whamcloud.com/</link></para>
             <para>A quilt patchset of all changes to the vanilla e2fsprogs is available in <literal>e2fsprogs-{version}-patches.tgz</literal>.</para>
             <note>
               <para>The Lustre-patched <literal>e2fsprogs</literal> utility is only required on machines that mount backend (<literal>ldiskfs</literal>) file systems, such as the OSS, MDS and MGS nodes. It does not need to be loaded on clients.</para>
@@ -288,12 +288,12 @@ Lustre-Specific Tools and Utilities</title>
       </section>
       <section remap="h4">
         <title>(Optional) Debugging Tools and Other Optional Packages</title>
-        <para>A variety of optional packages are provided on the <emphasis>
-            <link xl:href="http://downloads.whamcloud.com">Whamcloud download site</link>
-          </emphasis>. These include debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages.</para>
-        <para>For more information about debugging tools, see the topic <emphasis>
+        <para>A variety of optional packages are provided on the
+            <link xl:href="http://downloads.whamcloud.com">Intel download site</link>.
+          These include debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages.</para>
+        <para>For more information about debugging tools, see the topic
             <link xl:href="http://wiki.lustre.org/index.php/Debugging_Lustre">Debugging Lustre</link>
-          </emphasis> on the Lustre wiki.</para>
+          on the Lustre wiki.</para>
       </section>
     </section>
     <section xml:id="dbdoclet.50438261_19503">
@@ -355,7 +355,7 @@ Environmental Requirements</title>
         <para>Download the Lustre RPMs.</para>
         <orderedlist>
           <listitem>
-            <para>On the <link xl:href="http://build.whamcloud.com/">Lustre download site</link>, select your platform.</para>
+            <para>On the <link xl:href="http://downloads.whamcloud.com/">Lustre download site</link>, select your platform.</para>
             <para>The files required to install Lustre (kernels, modules and utilities RPMs) are listed for the selected platform.</para>
           </listitem>
           <listitem>
@@ -411,16 +411,16 @@ lustre-modules-&lt;ver&gt; lustre-ldiskfs-&lt;ver&gt;
             <para>If <literal>e2fsprogs</literal> is already installed on your Linux system, install the Lustre-specific <literal>e2fsprogs</literal> version by using <literal>rpm -Uvh</literal> to upgrade the existing <literal>e2fsprogs</literal> package. For example:</para>
             <screen>$ rpm -Uvh e2fsprogs-&lt;ver&gt; </screen>
             <note>
-              <para>The <literal>rpm</literal> command options <literal>--force</literal> or <literal>--nodeps</literal> should not be used to install or update the Lustre-specific <literal>e2fsprogs</literal> package. If errors are reported, file a bug (for instructions see the topic <emphasis>
+              <para>The <literal>rpm</literal> command options <literal>--force</literal> or <literal>--nodeps</literal> should not be used to install or update the Lustre-specific <literal>e2fsprogs</literal> package. If errors are reported, file a bug (for instructions see the topic
                   <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>
-                </emphasis> on the Lustre wiki).</para>
+                on the Lustre wiki).</para>
             </note>
           </listitem>
           <listitem>
             <para><emphasis role="italic">
                 <emphasis role="italic">(Optional)</emphasis>
               </emphasis> To add optional packages to your Lustre file system, install them now.</para>
-            <para>Optional packages include file system creation and repair tools, debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages. A complete list of optional packages for your platform is provided on the <link xl:href="http://wiki.whamcloud.com">Whamcloud wiki</link>.</para>
+            <para>Optional packages include file system creation and repair tools, debugging tools, test programs and scripts, Linux kernel and Lustre source code, and other packages. A complete list of optional packages for your platform is provided on the <link xl:href="http://downloads.whamcloud.com/">Lustre Downloads</link> page.</para>
           </listitem>
         </orderedlist>
       </listitem>

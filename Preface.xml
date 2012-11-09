@@ -4,7 +4,7 @@
   <para>This operations manual provides detailed information and procedures to install, configure and tune the Lustre file system. The manual covers topics such as failover, quotas, striping and bonding. The Lustre manual also contains troubleshooting information and tips to improve Lustre operation and performance.</para>
   <section remap="h2">
     <title>About this Document</title>
-    <para>This document is maintained by Whamcloud, Inc in Docbook format. The canonical version is available at <link xl:href="http://wiki.whamcloud.com">http://wiki.whamcloud.com/</link>. </para>
+    <para>This document is maintained by Intel in Docbook format. The canonical version is available at <link xl:href="http://wiki.whamcloud.com/display/PUB/Documentation">http://wiki.whamcloud.com/display/PUB/Documentation</link>. </para>
 
     <section remap="h2">
       <title>UNIX Commands</title>

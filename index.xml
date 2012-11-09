@@ -7,16 +7,17 @@
     <copyright>
       <year>2010</year>
       <year>2011</year>
-      <holder>Oracle and/or its affiliates. (The original version of this Operations Manual without the Whamcloud modifications.)</holder>
+      <holder>Oracle and/or its affiliates. (The original version of this Operations Manual without the Intel modifications.)</holder>
     </copyright>
     <copyright>
       <year>2011</year>
-      <holder>Whamcloud, Inc. (Whamcloud modifications to the original version of this Operations Manual.)</holder>
+      <year>2012</year>
+      <holder>Intel Corporation. (Intel modifications to the original version of this Operations Manual.)</holder>
     </copyright>
     <legalnotice>
-      <para>Notwithstanding Whamcloud’s ownership of the copyright in the modifications to the original version of this Operations Manual, as between Whamcloud and Oracle, Oracle and/or its affiliates retain sole ownership of the copyright in the unmodified portions of this Operations Manual.</para>
+      <para>Notwithstanding Intel’s ownership of the copyright in the modifications to the original version of this Operations Manual, as between Intel and Oracle, Oracle and/or its affiliates retain sole ownership of the copyright in the unmodified portions of this Operations Manual.</para>
     </legalnotice>
-    <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="legalnoticeWhamcloud.xml"/>
+    <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="legalnoticeIntel.xml"/>
      <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="legalnoticeOracle.xml"/>
   </info>
   <xi:include href="Preface.xml"/>

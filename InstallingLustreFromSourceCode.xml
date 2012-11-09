@@ -99,7 +99,7 @@
         </listitem>
         <listitem>
           <para>Download the Lustre source code.</para>
-          <para>On the <link xl:href="http://git.whamcloud.com/">Lustre download site</link>, select a version of Lustre to download and then select &apos;Source&apos; as the platform.</para>
+          <para>On the <link xl:href="http://downloads.whamcloud.com/">Lustre download site</link>, select a version of Lustre to download and then select &apos;Source&apos; as the platform.</para>
         </listitem>
         <listitem>
           <para>Download the unpatched kernel.</para>
@@ -266,7 +266,7 @@ $ echo &apos;%_topdir %(echo $HOME)/rpmbuild&apos; &gt; .rpmmacros</screen>
           </listitem>
           <listitem>
             <para>Install the patched Lustre source code.</para>
-            <para>This RPM is available at the <link xl:href="http://build.whamcloud.com">Lustre download site</link>.</para>
+            <para>This RPM is available at the <link xl:href="http://downloads.whamcloud.com">Lustre download site</link>.</para>
             <screen>$ rpm -ivh \
 kernel-lustre-source-2.6.18-92.1.10.el5_lustre.1.6.6.x86_64.rpm</screen>
           </listitem>
@@ -310,7 +310,7 @@ $ make install</screen>
         <para>Compile and install the Lustre source code.</para>
         <orderedlist>
           <listitem>
-            <para>Install the Lustre source (this can be done via RPM or tarball). The source file is available at the <link xl:href="http://git.whamcloud.com/">Lustre download site</link>. This example shows installation via the tarball.</para>
+            <para>Install the Lustre source (this can be done via RPM or tarball). The source file is available at the <link xl:href="http://git.whamcloud.com/">Lustre Git site</link>. This example shows installation via the tarball.</para>
             <screen>$ cd /usr/src/
 $ gunzip lustre-1.6.6.tar.gz
 $ tar -xvf lustre-1.6.6.tar

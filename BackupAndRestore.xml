@@ -252,15 +252,14 @@ trusted.fid= \
 	    backing up an MDT. In order to have <literal>--sparse</literal>
 	    behave correctly, and complete the backup of and MDT in finite
 	    time, the version of tar must be specified. Correctly functioning
-	    versions of tar include: Whamcloud
+	    versions of tar include the Lustre-enhanced tar
 	    <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>,
 	    Red Hat tar from RHEL 6.3 onwards and GNU tar version 1.25 or
 	    more recent.</para>
         </note>
         <warning>
             <para>The tar <literal>--xattrs</literal> option is only available
-	    in GNU tar distributions from Red Hat or Whamcloud. Whamcloud tar
-	    is available at <link xl:href='http://build.whamcloud.com/job/lustre-tar-master/'>http://build.whamcloud.com/job/lustre-tar-master/</link>.</para>
+	    in GNU tar distributions from Red Hat or Intel.</para>
         </warning>
       </listitem>
       <listitem>

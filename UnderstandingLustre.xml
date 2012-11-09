@@ -29,7 +29,7 @@
     <para>Lustre is currently not particularly well suited for &quot;peer-to-peer&quot; usage models where there are clients and servers running on the same node, each sharing a small amount of storage, due to the lack of Lustre-level data replication. In such uses, if one client/server fails, then the data stored on that node will not be accessible until the node is restarted.</para>
     <section remap="h3">
       <title><indexterm><primary>Lustre</primary><secondary>features</secondary></indexterm>Lustre Features</title>
-      <para>Lustre runs on a variety of vendor&apos;s kernels. For more details, see <link xl:href="http://wiki.whamcloud.com/">Lustre Release Information</link> on the Whamcloud wiki.</para>
+      <para>Lustre runs on a variety of vendor&apos;s kernels. For more details, see <link xl:href="http://wiki.whamcloud.com/display/PUB/Lustre+Support+Matrix">Lustre Support Matrix</link> on the Intel Lustre wiki.</para>
       <para>A Lustre installation can be scaled up or down with respect to the number of client nodes, disk storage and bandwidth. Scalability and performance are dependent on available disk and network bandwidth and the processing power of the servers in the system. Lustre can be deployed in a wide variety of configurations that can be scaled well beyond the size and performance observed in production systems to date.</para>
       <para><xref linkend="understandinglustre.tab1"/> shows the practical range of scalability and performance characteristics of the Lustre file system and some test results in production systems.</para>
       <table frame="all">

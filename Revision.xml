@@ -2,13 +2,26 @@
 <section xmlns="http://docbook.org/ns/docbook" xmlns:xl="http://www.w3.org/1999/xlink" version="5.0" xml:lang="en-US">
     <title>Revisions</title>
     <para>
+    Note that the Lustre 2.x manual is intended to be relevant for all 2.x
+    releases of Lustre.  Most of the manual content is relevant to all of
+    the releases.  However, any features and content that are added for new
+    versions of Lustre should be clearly marked with the version in which
+    this functionality is added.  Similarly, features that are no longer
+    available in Lustre 2.x should be marked with the version in which they
+    are deprecated or removed.
     <revhistory>
     <revision>
-        <revnumber>1.0</revnumber>
+        <revnumber>2.3</revnumber>
+        <date>November 2012</date>
+        <author><orgname>Intel Corporation</orgname></author>
+        <revremark>Release of Lustre 2.3 manual</revremark>
+    </revision>
+    <revision>
+        <revnumber>2.1</revnumber>
         <date>June 2011</date>
         <author><orgname>Whamcloud, Inc</orgname></author>
-        <revremark>First release of Lustre 2.x manual</revremark>
+        <revremark>First release of Lustre 2.1 manual</revremark>
     </revision>
-</revhistory>
-</para>
+    </revhistory>
+    </para>
 </section>

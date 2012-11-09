@@ -406,7 +406,7 @@ Inode      Pathname
       <para><literal>Debugfs</literal>&apos; &apos;&apos;ncheck&apos;&apos; is a brute-force search that may take a long time to complete.</para>
     </note>
     <note>
-      <para>To find the Lustre file from a disk LBA, follow the steps listed in the document at this URL: <emphasis><link xl:href="http://smartmontools.sourceforge.net/badblockhowto.html">http://smartmontools.sourceforge.net/badblockhowto.html</link>. </emphasis> Then, follow the steps above to resolve the Lustre filename.</para>
+      <para>To find the Lustre file from a disk LBA, follow the steps listed in the document at this URL: <link xl:href="http://smartmontools.sourceforge.net/badblockhowto.html">http://smartmontools.sourceforge.net/badblockhowto.html</link>. Then, follow the steps above to resolve the Lustre filename.</para>
     </note>
   </section>
 </chapter>
