@@ -542,19 +542,15 @@ void mdt_client_compatibility(struct mdt_thread_info *info)
         EXIT;
 }
 
-static int mdt_big_lmm_get(const struct lu_env *env, struct mdt_object *o,
-			   struct md_attr *ma)
+static int mdt_big_xattr_get(struct mdt_thread_info *info, struct mdt_object *o,
+			     char *name)
 {
-	struct mdt_thread_info *info;
+	const struct lu_env *env = info->mti_env;
 	int rc;
 	ENTRY;
 
-	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-	LASSERT(info != NULL);
-	LASSERT(ma->ma_lmm_size > 0);
 	LASSERT(info->mti_big_lmm_used == 0);
-	rc = mo_xattr_get(env, mdt_object_child(o), &LU_BUF_NULL,
-			  XATTR_NAME_LOV);
+	rc = mo_xattr_get(env, mdt_object_child(o), &LU_BUF_NULL, name);
 	if (rc < 0)
 		RETURN(rc);
 
@@ -580,21 +576,9 @@ static int mdt_big_lmm_get(const struct lu_env *env, struct mdt_object *o,
 
 	info->mti_buf.lb_buf = info->mti_big_lmm;
 	info->mti_buf.lb_len = info->mti_big_lmmsize;
-	rc = mo_xattr_get(env, mdt_object_child(o), &info->mti_buf,
-			  XATTR_NAME_LOV);
-	if (rc < 0)
-		RETURN(rc);
+	rc = mo_xattr_get(env, mdt_object_child(o), &info->mti_buf, name);
 
-	info->mti_big_lmm_used = 1;
-	ma->ma_valid |= MA_LOV;
-	ma->ma_lmm = info->mti_big_lmm;
-	ma->ma_lmm_size = rc;
-
-	/* update mdt_max_mdsize so all clients will be aware about that */
-	if (info->mti_mdt->mdt_max_mdsize < rc)
-		info->mti_mdt->mdt_max_mdsize = rc;
-
-	RETURN(0);
+	RETURN(rc);
 }
 
 int mdt_attr_get_lov(struct mdt_thread_info *info,
@@ -615,10 +599,68 @@ int mdt_attr_get_lov(struct mdt_thread_info *info,
 		/* no LOV EA */
 		rc = 0;
 	} else if (rc == -ERANGE) {
-		rc = mdt_big_lmm_get(info->mti_env, o, ma);
+		rc = mdt_big_xattr_get(info, o, XATTR_NAME_LOV);
+		if (rc > 0) {
+			info->mti_big_lmm_used = 1;
+			ma->ma_valid |= MA_LOV;
+			ma->ma_lmm = info->mti_big_lmm;
+			ma->ma_lmm_size = rc;
+			/* update mdt_max_mdsize so all clients
+			 * will be aware about that */
+			if (info->mti_mdt->mdt_max_mdsize < rc)
+				info->mti_mdt->mdt_max_mdsize = rc;
+			rc = 0;
+		}
 	}
 
 	return rc;
+}
+
+int mdt_attr_get_pfid(struct mdt_thread_info *info,
+		      struct mdt_object *o, struct lu_fid *pfid)
+{
+	struct lu_buf		*buf = &info->mti_buf;
+	struct link_ea_header	*leh;
+	struct link_ea_entry	*lee;
+	int			 rc;
+	ENTRY;
+
+	buf->lb_buf = info->mti_big_lmm;
+	buf->lb_len = info->mti_big_lmmsize;
+	rc = mo_xattr_get(info->mti_env, mdt_object_child(o),
+			  buf, XATTR_NAME_LINK);
+	/* ignore errors, MA_PFID won't be set and it is
+	 * up to the caller to treat this as an error */
+	if (rc == -ERANGE || buf->lb_len == 0) {
+		rc = mdt_big_xattr_get(info, o, XATTR_NAME_LINK);
+		buf->lb_buf = info->mti_big_lmm;
+		buf->lb_len = info->mti_big_lmmsize;
+	}
+
+	if (rc < 0)
+		RETURN(rc);
+	if (rc < sizeof(*leh)) {
+		CERROR("short LinkEA on "DFID": rc = %d\n",
+		       PFID(mdt_object_fid(o)), rc);
+		RETURN(-ENODATA);
+	}
+
+	leh = (struct link_ea_header *) buf->lb_buf;
+	lee = (struct link_ea_entry *)(leh + 1);
+	if (leh->leh_magic == __swab32(LINK_EA_MAGIC)) {
+		leh->leh_magic = LINK_EA_MAGIC;
+		leh->leh_reccount = __swab32(leh->leh_reccount);
+		leh->leh_len = __swab64(leh->leh_len);
+	}
+	if (leh->leh_magic != LINK_EA_MAGIC)
+		RETURN(-EINVAL);
+	if (leh->leh_reccount == 0)
+		RETURN(-ENODATA);
+
+	memcpy(pfid, &lee->lee_parent_fid, sizeof(*pfid));
+	fid_be_to_cpu(pfid, pfid);
+
+	RETURN(0);
 }
 
 int mdt_attr_get_complex(struct mdt_thread_info *info,
@@ -632,9 +674,6 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 	int                  rc = 0, rc2;
 	ENTRY;
 
-	/* do we really need PFID */
-	LASSERT((ma->ma_need & MA_PFID) == 0);
-
 	ma->ma_valid = 0;
 
 	if (need & MA_INODE) {
@@ -643,6 +682,14 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 		if (rc)
 			GOTO(out, rc);
 		ma->ma_valid |= MA_INODE;
+	}
+
+	if (need & MA_PFID) {
+		rc = mdt_attr_get_pfid(info, o, &ma->ma_pfid);
+		if (rc == 0)
+			ma->ma_valid |= MA_PFID;
+		/* ignore this error, parent fid is not mandatory */
+		rc = 0;
 	}
 
 	if (need & MA_LOV && (S_ISREG(mode) || S_ISDIR(mode))) {
