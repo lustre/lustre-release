@@ -260,8 +260,8 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 		break;
 	case IT_QUOTA_DQACQ:
 		/* build resource name associated for per-ID quota lock */
-		fid_build_quota_resid(&qbody->qb_fid, &qbody->qb_id,
-				      &qti->qti_resid);
+		fid_build_quota_res_name(&qbody->qb_fid, &qbody->qb_id,
+					 &qti->qti_resid);
 
 		/* copy einfo template and fill ei_cbdata with lqe pointer */
 		memcpy(&qti->qti_einfo, &qsd_id_einfo, sizeof(qti->qti_einfo));

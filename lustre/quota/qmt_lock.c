@@ -174,14 +174,12 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 
 	/* initialize environment */
 	rc = lu_env_init(env, LCT_MD_THREAD);
-	if (rc) {
-		OBD_FREE_PTR(env);
-		RETURN(rc);
-	}
+	if (rc != 0)
+		GOTO(out_free, rc);
 	qti = qmt_info(env);
 
 	/* extract global index FID and quota identifier */
-	fid_extract_quota_resid(&res->lr_name, &qti->qti_fid, &qti->qti_id);
+	fid_extract_from_quota_res(&qti->qti_fid, &qti->qti_id, &res->lr_name);
 
 	/* sanity check the global index FID */
 	rc = lquota_extract_fid(&qti->qti_fid, &pool_id, &pool_type, &qtype);
@@ -222,10 +220,11 @@ int qmt_lvbo_init(struct lu_device *ld, struct ldlm_resource *res)
 		CDEBUG(D_QUOTA, DFID" initialized lvb\n", PFID(&qti->qti_fid));
 	}
 
-	res->lr_lvb_len  = sizeof(struct lquota_lvb);
+	res->lr_lvb_len = sizeof(struct lquota_lvb);
 	EXIT;
 out:
 	lu_env_fini(env);
+out_free:
 	OBD_FREE_PTR(env);
 	return rc;
 }
@@ -612,7 +611,7 @@ static void qmt_id_lock_glimpse(const struct lu_env *env,
 
 	lquota_generate_fid(&qti->qti_fid, pool->qpi_key & 0x0000ffff,
 			    pool->qpi_key >> 16, lqe->lqe_site->lqs_qtype);
-	fid_build_quota_resid(&qti->qti_fid, &lqe->lqe_id, &qti->qti_resid);
+	fid_build_quota_res_name(&qti->qti_fid, &lqe->lqe_id, &qti->qti_resid);
 	res = ldlm_resource_get(qmt->qmt_ns, NULL, &qti->qti_resid, LDLM_PLAIN,
 				0);
 	if (res == NULL) {

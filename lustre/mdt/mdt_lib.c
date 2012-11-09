@@ -548,7 +548,7 @@ void mdt_dump_lmm(int level, const struct lov_mds_md *lmm)
 	LASSERT(count <= LOV_MAX_STRIPE_COUNT);
 	for (i = 0, lod = lmm->lmm_objects; i < count; i++, lod++) {
 		struct ost_id	oi;
-		ostid_le_to_cpu((struct ost_id *)&lod->l_ost_oi, &oi);
+		ostid_le_to_cpu(&lod->l_ost_oi, &oi);
 		CDEBUG(level, "stripe %u idx %u subobj "DOSTID"\n",
 		       i, le32_to_cpu(lod->l_ost_idx), POSTID(&oi));
 	}

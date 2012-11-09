@@ -133,7 +133,7 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 
 	/* XXX get fid by resource id. why don't include fid in ldlm_resource */
 	fid = &info->mti_tmp_fid2;
-	fid_build_from_res_name(fid, &lock->l_resource->lr_name);
+	fid_extract_from_res_name(fid, &lock->l_resource->lr_name);
 
 	obj = mdt_object_find(&env, info->mti_mdt, fid);
 	if (IS_ERR(obj))
