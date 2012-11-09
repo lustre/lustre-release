@@ -60,13 +60,33 @@
 #define NUMPRINTCOLUMNS 32	/* # columns of data to print on each line */
 
 /*
+ * Each test run will work with one or more separate file descriptors for the
+ * same file.  This allows testing cache coherency across multiple mountpoints
+ * of the same network filesystem on a single client.
+ */
+struct test_file {
+	char *path;
+	int fd;
+} *test_files = NULL;
+
+int num_test_files;
+enum fd_iteration_policy {
+	FD_SINGLE,
+	FD_ROTATE,
+	FD_RANDOM,
+};
+int fd_policy = FD_RANDOM;
+int fd_last;
+
+/*
  *	A log entry is an operation and a bunch of arguments.
  */
 
 struct log_entry {
-	int	operation;
-	struct timeval tv;
-	int	args[3];
+	int			operation;
+	int			args[3];
+	struct timeval		tv;
+	const struct test_file	*tf;
 };
 
 #define	LOGSIZE	100000
@@ -178,22 +198,42 @@ prterr(char *prefix)
 
 
 void
-log4(int operation, int arg0, int arg1, int arg2, struct timeval *tv)
+log4(int operation, int arg0, int arg1, int arg2, struct timeval *tv,
+	const struct test_file *tf)
 {
 	struct log_entry *le;
 
 	le = &oplog[logptr];
-	le->tv = *tv;
 	le->operation = operation;
 	le->args[0] = arg0;
 	le->args[1] = arg1;
 	le->args[2] = arg2;
+	le->tv = *tv;
+	le->tf = tf;
 	logptr++;
 	logcount++;
 	if (logptr >= LOGSIZE)
 		logptr = 0;
 }
 
+const char *
+fill_tf_buf(const struct test_file *tf)
+{
+	static int max_tf_len;
+	static char tf_buf[32];
+
+	if (fd_policy == FD_SINGLE)
+		return "";
+
+	if (max_tf_len == 0)
+		max_tf_len = snprintf(tf_buf, sizeof(tf_buf) - 1,
+				      "%u", num_test_files - 1);
+
+	sprintf(tf_buf, "[%0*lu]", max_tf_len,
+		(unsigned long)(tf - test_files));
+
+	return tf_buf;
+}
 
 void
 logdump(void)
@@ -214,7 +254,7 @@ logdump(void)
 
 		opnum = i+1 + (logcount/LOGSIZE)*LOGSIZE;
 		lp = &oplog[i];
-		prt("%d: %lu.%06lu ", opnum,
+		prt("%d%s: %lu.%06lu ", opnum, fill_tf_buf(lp->tf),
 		    lp->tv.tv_sec, lp->tv.tv_usec);
 
 		switch (lp->operation) {
@@ -388,20 +428,6 @@ check_buffers(unsigned offset, unsigned size)
 	}
 }
 
-struct test_file {
-	char *path;
-	int fd;
-} *test_files = NULL;
-
-int num_test_files = 0;
-enum fd_iteration_policy {
-	FD_SINGLE,
-	FD_ROTATE,
-	FD_RANDOM,
-};
-int fd_policy = FD_RANDOM;
-int fd_last = 0;
-
 struct test_file *
 get_tf(void)
 {
@@ -552,55 +578,10 @@ check_trunc_hack(void)
         }
 }
 
-static char *tf_buf = NULL;
-static int max_tf_len = 0;
-
-void
-alloc_tf_buf(void)
-{
-	char dummy = '\0';
-	int highest = num_test_files - 1;
-	int len;
-
-	len = snprintf(&dummy, 0, "%u ", highest);
-	if (len < 1) {
-		prterr("finding max tf_buf");
-		exit(1);
-	}
-	len++;
-	tf_buf = malloc(len);
-	if (tf_buf == NULL) {
-		prterr("allocating tf_buf");
-		exit(1);
-	}
-	max_tf_len = snprintf(tf_buf, len, "%u ", highest);
-	if (max_tf_len < 1) {
-		prterr("fiding max_tv_len\n");
-		exit(1);
-	}
-	if (max_tf_len != len - 1) {
-		warn("snprintf() gave %d instead of %d?\n",
-				max_tf_len, len - 1);
-		exit(1);
-	}
-}
-
-char *
-fill_tf_buf(struct test_file *tf)
-{
-	if (tf_buf == NULL)
-		alloc_tf_buf();
-
-	sprintf(tf_buf,"%lu ", (unsigned long)(tf - test_files));
-	return tf_buf;
-}
-
 void
 output_line(struct test_file *tf, int op, unsigned offset,
 		unsigned size, struct timeval *tv)
 {
-	char *tf_num = "";
-
 	char *ops[] = {
 		[OP_READ] = "read",
 		[OP_WRITE] = "write",
@@ -608,9 +589,6 @@ output_line(struct test_file *tf, int op, unsigned offset,
 		[OP_MAPREAD] = "mapread",
 		[OP_MAPWRITE] = "mapwrite",
 	};
-
-	if (fd_policy != FD_SINGLE)
-		tf_num = fill_tf_buf(tf);
 
 	/* W. */
 	if (!(!quiet && ((progressinterval &&
@@ -621,9 +599,9 @@ output_line(struct test_file *tf, int op, unsigned offset,
 			  (monitorend == -1 || offset <= monitorend)))))))
 		return;
 
-	prt("%06lu %lu.%06lu %.*s%-10s %#08x %s %#08x\t(0x%x bytes)\n",
-		testcalls, tv->tv_sec, tv->tv_usec, max_tf_len,
-		tf_num, ops[op],
+	prt("%06lu%s %lu.%06lu %-10s %#08x %s %#08x\t(0x%x bytes)\n",
+		testcalls, fill_tf_buf(tf), tv->tv_sec, tv->tv_usec,
+		ops[op],
 		offset, op == OP_TRUNCATE ? " to " : "thru",
 		offset + size - 1, size);
 }
@@ -642,17 +620,17 @@ doread(unsigned offset, unsigned size)
 	if (size == 0) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping zero size read\n");
-		log4(OP_SKIPPED, OP_READ, offset, size, &t);
+		log4(OP_SKIPPED, OP_READ, offset, size, &t, tf);
 		return;
 	}
 	if (size + offset > file_size) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping seek/read past end of file\n");
-		log4(OP_SKIPPED, OP_READ, offset, size, &t);
+		log4(OP_SKIPPED, OP_READ, offset, size, &t, tf);
 		return;
 	}
 
-	log4(OP_READ, offset, size, 0, &t);
+	log4(OP_READ, offset, size, 0, &t, tf);
 
 	if (testcalls <= simulatedopcount)
 		return;
@@ -699,17 +677,17 @@ domapread(unsigned offset, unsigned size)
 	if (size == 0) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping zero size read\n");
-		log4(OP_SKIPPED, OP_MAPREAD, offset, size, &t);
+		log4(OP_SKIPPED, OP_MAPREAD, offset, size, &t, tf);
 		return;
 	}
 	if (size + offset > file_size) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping seek/read past end of file\n");
-		log4(OP_SKIPPED, OP_MAPREAD, offset, size, &t);
+		log4(OP_SKIPPED, OP_MAPREAD, offset, size, &t, tf);
 		return;
 	}
 
-	log4(OP_MAPREAD, offset, size, 0, &t);
+	log4(OP_MAPREAD, offset, size, 0, &t, tf);
 
 	if (testcalls <= simulatedopcount)
 		return;
@@ -781,11 +759,11 @@ dowrite(unsigned offset, unsigned size)
 	if (size == 0) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping zero size write\n");
-		log4(OP_SKIPPED, OP_WRITE, offset, size, &t);
+		log4(OP_SKIPPED, OP_WRITE, offset, size, &t, tf);
 		return;
 	}
 
-	log4(OP_WRITE, offset, size, file_size, &t);
+	log4(OP_WRITE, offset, size, file_size, &t, tf);
 
 	gendata(original_buf, good_buf, offset, size);
 	if (file_size < offset + size) {
@@ -843,12 +821,12 @@ domapwrite(unsigned offset, unsigned size)
 	if (size == 0) {
 		if (!quiet && testcalls > simulatedopcount)
 			prt("skipping zero size write\n");
-		log4(OP_SKIPPED, OP_MAPWRITE, offset, size, &t);
+		log4(OP_SKIPPED, OP_MAPWRITE, offset, size, &t, tf);
 		return;
 	}
 	cur_filesize = file_size;
 
-	log4(OP_MAPWRITE, offset, size, 0, &t);
+	log4(OP_MAPWRITE, offset, size, 0, &t, tf);
 
 	gendata(original_buf, good_buf, offset, size);
 	if (file_size < offset + size) {
@@ -943,7 +921,7 @@ dotruncate(unsigned size)
 			prt("truncating to largest ever: 0x%x\n", size);
 	}
 
-	log4(OP_TRUNCATE, size, (unsigned)file_size, 0, &t);
+	log4(OP_TRUNCATE, size, (unsigned)file_size, 0, &t, tf);
 
 	if (size > file_size)
 		memset(good_buf + file_size, '\0', size - file_size);
@@ -1004,7 +982,7 @@ docloseopen(void)
 		return;
 
 	gettimeofday(&t, NULL);
-	log4(OP_CLOSEOPEN, file_size, (unsigned)file_size, 0, &t);
+	log4(OP_CLOSEOPEN, file_size, (unsigned)file_size, 0, &t, tf);
 
 	if (debug)
 		prt("%06lu %lu.%06lu close/open\n", testcalls, t.tv_sec,
