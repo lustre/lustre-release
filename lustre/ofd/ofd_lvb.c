@@ -54,7 +54,7 @@ static int ofd_lvbo_free(struct ldlm_resource *res)
 /* Called with res->lr_lvb_sem held */
 static int ofd_lvbo_init(struct ldlm_resource *res)
 {
-	struct ost_lvb		*lvb = NULL;
+	struct ost_lvb		*lvb;
 	struct ofd_device	*ofd;
 	struct ofd_object	*fo;
 	struct ofd_thread_info	*info;
@@ -81,7 +81,7 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 
 	OBD_ALLOC_PTR(lvb);
 	if (lvb == NULL)
-		GOTO(out, rc = -ENOMEM);
+		GOTO(out_env, rc = -ENOMEM);
 
 	res->lr_lvb_data = lvb;
 	res->lr_lvb_len = sizeof(*lvb);
@@ -90,11 +90,11 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	ost_fid_from_resid(&info->fti_fid, &res->lr_name);
 	fo = ofd_object_find(&env, ofd, &info->fti_fid);
 	if (IS_ERR(fo))
-		GOTO(out, rc = PTR_ERR(fo));
+		GOTO(out_lvb, rc = PTR_ERR(fo));
 
 	rc = ofd_attr_get(&env, fo, &info->fti_attr);
 	if (rc)
-		GOTO(out_put, rc);
+		GOTO(out_obj, rc);
 
 	lvb->lvb_size = info->fti_attr.la_size;
 	lvb->lvb_blocks = info->fti_attr.la_blocks;
@@ -102,18 +102,19 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	lvb->lvb_atime = info->fti_attr.la_atime;
 	lvb->lvb_ctime = info->fti_attr.la_ctime;
 
-	CDEBUG(D_DLMTRACE, "res: "LPX64" initial lvb size: "LPX64", "
+	CDEBUG(D_DLMTRACE, "res: "DFID" initial lvb size: "LPU64", "
 	       "mtime: "LPX64", blocks: "LPX64"\n",
-	       res->lr_name.name[0], lvb->lvb_size,
+	       PFID(&info->fti_fid), lvb->lvb_size,
 	       lvb->lvb_mtime, lvb->lvb_blocks);
 
 	EXIT;
-out_put:
+out_obj:
 	ofd_object_put(&env, fo);
-out:
-	lu_env_fini(&env);
-	if (rc && lvb != NULL)
+out_lvb:
+	if (rc != 0)
 		OST_LVB_SET_ERR(lvb->lvb_blocks, rc);
+out_env:
+	lu_env_fini(&env);
 	/* Don't free lvb data on lookup error */
 	return rc;
 }
@@ -142,18 +143,20 @@ static int ofd_lvbo_update(struct ldlm_resource *res,
 	ofd = ldlm_res_to_ns(res)->ns_lvbp;
 	LASSERT(ofd != NULL);
 
-	lvb = res->lr_lvb_data;
-	if (lvb == NULL) {
-		CERROR("%s: no lvb when running lvbo_update, res: "LPU64"!\n",
-		       ofd_obd(ofd)->obd_name, res->lr_name.name[0]);
-		RETURN(0);
-	}
-
 	rc = lu_env_init(&env, LCT_DT_THREAD);
 	if (rc)
-		GOTO(out_unlock, rc);
+		RETURN(rc);
 
 	info = ofd_info_init(&env, NULL);
+	fid_extract_from_res_name(&info->fti_fid, &res->lr_name);
+
+	lvb = res->lr_lvb_data;
+	if (lvb == NULL) {
+		CERROR("%s: no LVB data for "DFID"\n",
+		       ofd_obd(ofd)->obd_name, PFID(&info->fti_fid));
+		GOTO(out_env, rc = 0);
+	}
+
 	/* Update the LVB from the network message */
 	if (req != NULL) {
 		struct ost_lvb *rpc_lvb;
@@ -187,32 +190,32 @@ static int ofd_lvbo_update(struct ldlm_resource *res,
 
 		lock_res(res);
 		if (rpc_lvb->lvb_size > lvb->lvb_size || !increase_only) {
-			CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "
-			       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb size: "
+			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
 			       lvb->lvb_size, rpc_lvb->lvb_size);
 			lvb->lvb_size = rpc_lvb->lvb_size;
 		}
 		if (rpc_lvb->lvb_mtime > lvb->lvb_mtime || !increase_only) {
-			CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime: "
-			       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb mtime: "
+			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
 			       lvb->lvb_mtime, rpc_lvb->lvb_mtime);
 			lvb->lvb_mtime = rpc_lvb->lvb_mtime;
 		}
 		if (rpc_lvb->lvb_atime > lvb->lvb_atime || !increase_only) {
-			CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb atime: "
-			       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb atime: "
+			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
 			       lvb->lvb_atime, rpc_lvb->lvb_atime);
 			lvb->lvb_atime = rpc_lvb->lvb_atime;
 		}
 		if (rpc_lvb->lvb_ctime > lvb->lvb_ctime || !increase_only) {
-			CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb ctime: "
-			       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb ctime: "
+			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
 			       lvb->lvb_ctime, rpc_lvb->lvb_ctime);
 			lvb->lvb_ctime = rpc_lvb->lvb_ctime;
 		}
 		if (rpc_lvb->lvb_blocks > lvb->lvb_blocks || !increase_only) {
-			CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb blocks: "
-			       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+			CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb blocks: "
+			       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
 			       lvb->lvb_blocks, rpc_lvb->lvb_blocks);
 			lvb->lvb_blocks = rpc_lvb->lvb_blocks;
 		}
@@ -232,34 +235,33 @@ disk_update:
 
 	lock_res(res);
 	if (info->fti_attr.la_size > lvb->lvb_size || !increase_only) {
-		CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size from disk: "
-		       LPU64" -> %llu\n", res->lr_name.name[0],
+		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb size from disk: "
+		       LPU64" -> %llu\n", PFID(&info->fti_fid),
 		       lvb->lvb_size, info->fti_attr.la_size);
 		lvb->lvb_size = info->fti_attr.la_size;
 	}
 
 	if (info->fti_attr.la_mtime >lvb->lvb_mtime || !increase_only) {
-		CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb mtime from disk: "
-		       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb mtime from disk: "
+		       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
 		       lvb->lvb_mtime, info->fti_attr.la_mtime);
 		lvb->lvb_mtime = info->fti_attr.la_mtime;
 	}
 	if (info->fti_attr.la_atime >lvb->lvb_atime || !increase_only) {
-		CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb atime from disk: "
-		       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb atime from disk: "
+		       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
 		       lvb->lvb_atime, info->fti_attr.la_atime);
 		lvb->lvb_atime = info->fti_attr.la_atime;
 	}
 	if (info->fti_attr.la_ctime >lvb->lvb_ctime || !increase_only) {
-		CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb ctime from disk: "
-		       LPU64" -> "LPU64"\n", res->lr_name.name[0],
+		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb ctime from disk: "
+		       LPU64" -> "LPU64"\n", PFID(&info->fti_fid),
 		       lvb->lvb_ctime, info->fti_attr.la_ctime);
 		lvb->lvb_ctime = info->fti_attr.la_ctime;
 	}
 	if (info->fti_attr.la_blocks > lvb->lvb_blocks || !increase_only) {
-		CDEBUG(D_DLMTRACE,"res: "LPU64" updating lvb blocks from disk: "
-		       LPU64" -> %llu\n", res->lr_name.name[0],
-		       lvb->lvb_blocks,
+		CDEBUG(D_DLMTRACE, "res: "DFID" updating lvb blocks from disk: "
+		       LPU64" -> %llu\n", PFID(&info->fti_fid), lvb->lvb_blocks,
 		       (unsigned long long)info->fti_attr.la_blocks);
 		lvb->lvb_blocks = info->fti_attr.la_blocks;
 	}
@@ -269,7 +271,6 @@ out_obj:
 	ofd_object_put(&env, fo);
 out_env:
 	lu_env_fini(&env);
-out_unlock:
 	return rc;
 }
 
@@ -304,9 +305,9 @@ static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int buflen)
 }
 
 struct ldlm_valblock_ops ofd_lvbo = {
-	lvbo_init:	ofd_lvbo_init,
-	lvbo_update:	ofd_lvbo_update,
-	lvbo_free:	ofd_lvbo_free,
-	lvbo_size: 	ofd_lvbo_size,
-	lvbo_fill: 	ofd_lvbo_fill
+	.lvbo_init	= ofd_lvbo_init,
+	.lvbo_update	= ofd_lvbo_update,
+	.lvbo_free	= ofd_lvbo_free,
+	.lvbo_size	= ofd_lvbo_size,
+	.lvbo_fill	= ofd_lvbo_fill
 };

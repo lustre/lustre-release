@@ -986,31 +986,31 @@ out_unlock_parent:
  * (lh->mlh_pdo_hash) in parallel directory lock.
  */
 static int mdt_pdir_hash_lock(struct mdt_thread_info *info,
-                       struct mdt_lock_handle *lh,
-                       struct mdt_object *obj, __u64 ibits)
+			      struct mdt_lock_handle *lh,
+			      struct mdt_object *obj, __u64 ibits)
 {
-        struct ldlm_res_id *res_id = &info->mti_res_id;
-        struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
-        ldlm_policy_data_t *policy = &info->mti_policy;
-        int rc;
+	struct ldlm_res_id *res = &info->mti_res_id;
+	struct ldlm_namespace *ns = info->mti_mdt->mdt_namespace;
+	ldlm_policy_data_t *policy = &info->mti_policy;
+	int rc;
 
-        /*
-         * Finish res_id initializing by name hash marking part of
-         * directory which is taking modification.
-         */
-        LASSERT(lh->mlh_pdo_hash != 0);
-        fid_build_pdo_res_name(mdt_object_fid(obj), lh->mlh_pdo_hash, res_id);
-        memset(policy, 0, sizeof(*policy));
-        policy->l_inodebits.bits = ibits;
-        /*
-         * Use LDLM_FL_LOCAL_ONLY for this lock. We do not know yet if it is
-         * going to be sent to client. If it is - mdt_intent_policy() path will
-         * fix it up and turn FL_LOCAL flag off.
-         */
-        rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
-                          res_id, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB,
-                          &info->mti_exp->exp_handle.h_cookie);
-        return rc;
+	/*
+	 * Finish res_id initializing by name hash marking part of
+	 * directory which is taking modification.
+	 */
+	LASSERT(lh->mlh_pdo_hash != 0);
+	fid_build_pdo_res_name(mdt_object_fid(obj), lh->mlh_pdo_hash, res);
+	memset(policy, 0, sizeof(*policy));
+	policy->l_inodebits.bits = ibits;
+	/*
+	 * Use LDLM_FL_LOCAL_ONLY for this lock. We do not know yet if it is
+	 * going to be sent to client. If it is - mdt_intent_policy() path will
+	 * fix it up and turn FL_LOCAL flag off.
+	 */
+	rc = mdt_fid_lock(ns, &lh->mlh_reg_lh, lh->mlh_reg_mode, policy,
+			  res, LDLM_FL_LOCAL_ONLY | LDLM_FL_ATOMIC_CB,
+			  &info->mti_exp->exp_handle.h_cookie);
+	return rc;
 }
 
 static int mdt_rename_lock(struct mdt_thread_info *info,
