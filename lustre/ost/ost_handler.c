@@ -784,7 +784,8 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         /* Check if client was evicted while we were doing i/o before touching
            network */
         if (rc == 0) {
-                rc = target_bulk_io(exp, desc, &lwi);
+                if (likely(!CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2)))
+                        rc = target_bulk_io(exp, desc, &lwi);
                 no_reply = rc != 0;
         }
 
@@ -801,7 +802,7 @@ out_lock:
 out_tls:
         ost_tls_put(req);
 out_bulk:
-        if (desc)
+        if (desc && !CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2))
                 ptlrpc_free_bulk(desc);
 out:
         LASSERT(rc <= 0);
@@ -823,6 +824,20 @@ out:
                               exp->exp_obd->obd_name,
                               obd_uuid2str(&exp->exp_client_uuid),
                               obd_export_nid2str(exp), rc);
+        }
+        /* send a bulk after reply to simulate a network delay or reordering
+         * by a router */
+        if (unlikely(CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CLIENT_BULK_CB2))) {
+                cfs_waitq_t              waitq;
+                struct l_wait_info       lwi1;
+
+                CDEBUG(D_INFO, "reorder BULK\n");
+                cfs_waitq_init(&waitq);
+
+                lwi1 = LWI_TIMEOUT_INTR(cfs_time_seconds(3), NULL, NULL, NULL);
+                l_wait_event(waitq, 0, &lwi1);
+                rc = target_bulk_io(exp, desc, &lwi);
+                ptlrpc_free_bulk(desc);
         }
 
         RETURN(rc);
