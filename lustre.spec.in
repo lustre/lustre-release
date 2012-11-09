@@ -292,6 +292,10 @@ pushd $RPM_BUILD_ROOT >/dev/null
 find lib/modules/%{kversion}/updates -type f | awk "!/(ZZZZZZZZZZ$modules_excludes)/ {print \"%attr(-, root, root) /\"\$0}" >>$RPM_BUILD_DIR/lustre-%{version}/lustre-modules.files
 popd >/dev/null
 
+# mark modules executable for find-debuginfo.sh
+find $RPM_BUILD_ROOT/lib/modules/%{kversion}/updates -name "*.ko" -type f | \
+	xargs --no-run-if-empty chmod u+x
+
 %files -f lustre.files
 
 %files modules -f lustre-modules.files

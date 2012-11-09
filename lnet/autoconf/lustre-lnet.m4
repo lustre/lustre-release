@@ -117,11 +117,12 @@ PTLLNDCPPFLAGS=""
 if test $ENABLEPORTALS -eq 0; then
 	AC_MSG_RESULT([no])
 elif test ! \( -f ${PORTALS}/include/portals/p30.h \); then
-        AC_MSG_RESULT([no])
+	AC_MSG_RESULT([no])
 	AC_MSG_ERROR([bad --with-portals path])
 else
-        AC_MSG_RESULT([$PORTALS])
-        PTLLNDCPPFLAGS="-I${PORTALS}/include"
+	PORTALS=$(readlink --canonicalize $PORTALS)
+	AC_MSG_RESULT([$PORTALS])
+	PTLLNDCPPFLAGS="-I${PORTALS}/include"
 fi
 AC_SUBST(PTLLNDCPPFLAGS)
 ])
@@ -247,6 +248,7 @@ if test -d $QSNET/drivers/net/qsnet ; then
 	QSWLND="qswlnd"
 	AC_MSG_CHECKING([for multirail EKC])
 	if test -f $QSNET/include/elan/epcomms.h; then
+		QSNET=$(readlink --canonicalize $QSNET)
 		AC_MSG_RESULT([supported])
 		QSWCPPFLAGS="-I$QSNET/include -DMULTIRAIL_EKC=1"
 	else
@@ -309,6 +311,7 @@ elif test ! \( -f ${MXPATH}/include/myriexpress.h -a \
        *) AC_MSG_ERROR([internal error]);;
        esac
 else
+       MXPATH=$(readlink --canonicalize $MXPATH)
        MXCPPFLAGS="-I$MXPATH/include"
        EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
        EXTRA_KCFLAGS="$EXTRA_KCFLAGS $MXCPPFLAGS"
@@ -404,6 +407,7 @@ else
 			*) AC_MSG_ERROR([internal error]);;
 		esac
 	else
+		O2IBPATH=$(readlink --canonicalize $O2IBPATH)
 		O2IBCPPFLAGS="-I$O2IBPATH/include"
 		EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
 		EXTRA_KCFLAGS="$EXTRA_KCFLAGS $O2IBCPPFLAGS"
