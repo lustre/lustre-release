@@ -43,6 +43,7 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 #include <sys/vfs.h>
+#include <sys/ioctl.h>
 #include <signal.h>
 #include <stdlib.h>
 #include <unistd.h>

@@ -121,6 +121,7 @@
 
 #include <libcfs/libcfsutil.h>
 #include <lustre/lustreapi.h>
+#include <lustre/lustre_idl.h>
 #include "lustre_rsync.h"
 
 #define REPLICATE_STATUS_VER 1

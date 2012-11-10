@@ -45,9 +45,14 @@
  */
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <getopt.h>
 #include <signal.h>
+#include <errno.h>
+#include <sys/types.h>
+#include <unistd.h>
 
+#include <libcfs/libcfs.h>
 #include <lustre/lustreapi.h>
 
 void *ctdata;

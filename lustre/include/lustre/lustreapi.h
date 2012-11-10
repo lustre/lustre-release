@@ -43,7 +43,6 @@
  */
 
 #include <lustre/lustre_user.h>
-#include <lustre/lustre_idl.h>
 
 typedef void (*llapi_cb_t)(char *obd_type_name, char *obd_name, char *obd_uuid, void *args);
 
