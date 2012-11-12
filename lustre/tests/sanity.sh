@@ -1404,37 +1404,53 @@ test_27y() {
         [ $fcount -eq 0 ] && skip "not enough space on OST0" && return
         [ $fcount -gt $OSTCOUNT ] && fcount=$OSTCOUNT
 
-        MDS_OSCS=`do_facet $SINGLEMDS lctl dl | awk '/[oO][sS][cC].*md[ts]/ { print $4 }'`
-        OFFSET=$(($OSTCOUNT-1))
-        OST=-1
-        for OSC in $MDS_OSCS; do
-                if [ $OST == -1 ]; then {
-                        OST=`osc_to_ost $OSC`
-                } else {
-                        echo $OSC "is Deactivate:"
-                        do_facet $SINGLEMDS lctl --device  %$OSC deactivate
-                } fi
-        done
+	local MDS_OSCS=$(do_facet $SINGLEMDS lctl dl |
+			 awk '/[oO][sS][cC].*md[ts]/ { print $4 }')
+	local OST_DEACTIVE_IDX=-1
+	local OSC
+	local OSTIDX
+	local OST
 
-        OSTIDX=$(index_from_ostuuid $OST)
-        mkdir -p $DIR/$tdir
-        $SETSTRIPE -c 1 $DIR/$tdir      # 1 stripe / file
+	for OSC in $MDS_OSCS; do
+		OST=$(osc_to_ost $OSC)
+		OSTIDX=$(index_from_ostuuid $OST)
+		if [ $OST_DEACTIVE_IDX == -1 ]; then
+			OST_DEACTIVE_IDX=$OSTIDX
+		fi
+		if [ $OSTIDX != $OST_DEACTIVE_IDX ]; then
+			echo $OSC "is Deactivated:"
+			do_facet $SINGLEMDS lctl --device  %$OSC deactivate
+		fi
+	done
 
-        do_facet ost$((OSTIDX+1)) lctl set_param -n obdfilter.$OST.degraded 1
-        sleep_maxage
-        createmany -o $DIR/$tdir/$tfile $fcount
-        do_facet ost$((OSTIDX+1)) lctl set_param -n obdfilter.$OST.degraded 0
+	OSTIDX=$(index_from_ostuuid $OST)
+	mkdir -p $DIR/$tdir
+	$SETSTRIPE -c 1 $DIR/$tdir      # 1 stripe / file
 
-        for i in `seq 0 $OFFSET`; do
-                [ `$GETSTRIPE $DIR/$tdir/$tfile$i | grep -A 10 obdidx | awk '{print $1}'| grep -w "$OSTIDX"` ] || \
-                      error "files created on deactivated OSTs instead of degraded OST"
-        done
-        for OSC in $MDS_OSCS; do
-                [ `osc_to_ost $OSC` != $OST  ] && {
-                        echo $OSC "is activate"
-                        do_facet $SINGLEMDS lctl --device %$OSC activate
-                }
-        done
+	for OSC in $MDS_OSCS; do
+		OST=$(osc_to_ost $OSC)
+		OSTIDX=$(index_from_ostuuid $OST)
+		if [ $OSTIDX == $OST_DEACTIVE_IDX ]; then
+			echo $OST "is degraded:"
+			do_facet ost$((OSTIDX+1)) lctl set_param -n \
+						obdfilter.$OST.degraded=1
+		fi
+	done
+
+	sleep_maxage
+	createmany -o $DIR/$tdir/$tfile $fcount
+
+	for OSC in $MDS_OSCS; do
+		OST=$(osc_to_ost $OSC)
+		OSTIDX=$(index_from_ostuuid $OST)
+		if [ $OSTIDX == $OST_DEACTIVE_IDX ]; then
+			echo $OST "is recovered from degraded:"
+			do_facet ost$((OSTIDX+1)) lctl set_param -n \
+						obdfilter.$OST.degraded=0
+		else
+			do_facet $SINGLEMDS lctl --device %$OSC activate
+		fi
+	done
 }
 run_test 27y "create files while OST0 is degraded and the rest inactive"
 
@@ -2602,15 +2618,15 @@ TEST_39_ATIME=`date -d "1 year" +%s`
 
 test_39l() {
 	remote_mds_nodsh && skip "remote MDS with nodsh" && return
-	local atime_diff=$(do_facet $SINGLEMDS lctl get_param -n mdd.*.atime_diff)
-
+	local atime_diff=$(do_facet $SINGLEMDS \
+				lctl get_param -n mdd.*MDT0000*.atime_diff)
 	mkdir -p $DIR/$tdir
 
 	# test setting directory atime to future
 	touch -a -d @$TEST_39_ATIME $DIR/$tdir
 	local atime=$(stat -c %X $DIR/$tdir)
 	[ "$atime" = $TEST_39_ATIME ] || \
-		error "atime is not set to future: $atime, should be $TEST_39_ATIME"
+		error "atime is not set to future: $atime, $TEST_39_ATIME"
 
 	# test setting directory atime from future to now
 	local d1=$(date +%s)
@@ -2620,9 +2636,9 @@ test_39l() {
 	cancel_lru_locks mdc
 	atime=$(stat -c %X $DIR/$tdir)
 	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
-		error "atime is not updated from future: $atime, should be $d1<atime<$d2"
+		error "atime is not updated from future: $atime, $d1<atime<$d2"
 
-	do_facet $SINGLEMDS lctl set_param -n mdd.*.atime_diff=2
+	do_facet $SINGLEMDS lctl set_param -n mdd.*MDT0000*.atime_diff=2
 	sleep 3
 
 	# test setting directory atime when now > dir atime + atime_diff
@@ -2634,7 +2650,7 @@ test_39l() {
 	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
 		error "atime is not updated  : $atime, should be $d2"
 
-	do_facet $SINGLEMDS lctl set_param -n mdd.*.atime_diff=60
+	do_facet $SINGLEMDS lctl set_param -n mdd.*MDT0000*.atime_diff=60
 	sleep 3
 
 	# test not setting directory atime when now < dir atime + atime_diff
@@ -2644,7 +2660,8 @@ test_39l() {
 	[ "$atime" -ge "$d1" -a "$atime" -le "$d2" ] || \
 		error "atime is updated to $atime, should remain $d1<atime<$d2"
 
-	do_facet $SINGLEMDS lctl set_param -n mdd.*.atime_diff=$atime_diff
+	do_facet $SINGLEMDS \
+		lctl set_param -n mdd.*MDT0000*.atime_diff=$atime_diff
 }
 run_test 39l "directory atime update ==========================="
 
@@ -3270,56 +3287,6 @@ test_51ba() { # LU-993
 		echo "nlink after: $AFTER"
 }
 run_test 51ba "verify nlink for many subdirectory cleanup"
-
-test_51bb() {
-	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
-
-	local ndirs=${TEST51BB_NDIRS:-10}
-	local nfiles=${TEST51BB_NFILES:-100}
-
-	local numfree=`df -i -P $DIR | tail -n 1 | awk '{ print $4 }'`
-
-	[ $numfree -lt $(( ndirs * nfiles)) ] && \
-		nfiles=$(( numfree / ndirs - 10 ))
-
-	local dir=$DIR/d51bb
-	mkdir -p $dir
-	local savePOLICY=$(lctl get_param -n lmv.*.placement)
-	lctl set_param -n lmv.*.placement=CHAR
-
-	lfs df -i $dir
-	local IUSED=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-	OLDUSED=($IUSED)
-
-	declare -a dirs
-	for ((i=0; i < $ndirs; i++)); do
-		dirs[i]=$dir/$RANDOM
-		echo Creating directory ${dirs[i]}
-		mkdir -p ${dirs[i]}
-		ls $dir
-		echo Creating $nfiles in dir ${dirs[i]} ...
-		echo "createmany -o ${dirs[i]}/$tfile- $nfiles"
-		createmany -o ${dirs[i]}/$tfile- $nfiles
-	done
-	ls $dir
-
-	sleep 1
-
-	IUSED=$(lfs df -i $dir | grep MDT | awk '{print $3}')
-	NEWUSED=($IUSED)
-
-	local rc=0
-	for ((i=0; i<${#NEWUSED[@]}; i++)); do
-		echo "mds $i: inodes count OLD ${OLDUSED[$i]} NEW ${NEWUSED[$i]}"
-		[ ${OLDUSED[$i]} -lt ${NEWUSED[$i]} ] || rc=$((rc + 1))
-	done
-
-	lctl set_param -n lmv.*.placement=$savePOLICY
-
-	[ $rc -ne $MDSCOUNT ] || \
-		error "Objects/inodes are not distributed over all mds servers"
-}
-run_test 51bb "mkdir createmany CMD $MDSCOUNT  ===================="
 
 test_51d() {
         [  "$OSTCOUNT" -lt "3" ] && skip_env "skipping test with few OSTs" && return
@@ -5781,9 +5748,9 @@ test_103 () {
 
     declare -a identity_old
 
-    for num in `seq $MDSCOUNT`; do
-        switch_identity $num true || identity_old[$num]=$?
-    done
+	for num in $(seq $MDSCOUNT); do
+		switch_identity $num true || identity_old[$num]=$?
+	done
 
     SAVE_UMASK=`umask`
     umask 0022
@@ -5816,11 +5783,11 @@ test_103 () {
     cd $SAVE_PWD
     umask $SAVE_UMASK
 
-    for num in `seq $MDSCOUNT`; do
-	if [ "${identity_old[$num]}" = 1 ]; then
-            switch_identity $num false || identity_old[$num]=$?
-	fi
-    done
+	for num in $(seq $MDSCOUNT); do
+		if [ "${identity_old[$num]}" = 1 ]; then
+			switch_identity $num false || identity_old[$num]=$?
+		fi
+	done
 }
 run_test 103 "acl test ========================================="
 
@@ -7136,10 +7103,13 @@ set_dir_limits () {
 	local node
 
 	local LDPROC=/proc/fs/ldiskfs
+	local facets=$(get_facets MDS)
 
-	for facet in $(get_facets MDS); do
-		canondev=$(ldiskfs_canon *.$(convert_facet2label $facet).mntdev $facet)
-		do_facet $facet "test -e $LDPROC/$canondev/max_dir_size" || LDPROC=/sys/fs/ldiskfs
+	for facet in ${facets//,/ }; do
+		canondev=$(ldiskfs_canon \
+			   *.$(convert_facet2label $facet).mntdev $facet)
+		do_facet $facet "test -e $LDPROC/$canondev/max_dir_size" ||
+						LDPROC=/sys/fs/ldiskfs
 		do_facet $facet "echo $1 >$LDPROC/$canondev/max_dir_size"
 	done
 }
@@ -7154,11 +7124,10 @@ test_129() {
 	MAX=16384
 
 	set_dir_limits $MAX
-
 	mkdir -p $DIR/$tdir
 
-	I=0
-	J=0
+	local I=0
+	local J=0
 	while [ ! $I -gt $((MAX * MDSCOUNT)) ]; do
 		$MULTIOP $DIR/$tdir/$J Oc
 		rc=$?
@@ -9970,8 +9939,8 @@ test_900() {
         for ls in /proc/fs/lustre/ldlm/namespaces/MGC*/lru_size; do
                 echo "clear" > $ls
         done
-        FAIL_ON_ERROR=true cleanup
-        FAIL_ON_ERROR=true setup
+	FAIL_ON_ERROR=true cleanup
+	FAIL_ON_ERROR=true setup
 }
 run_test 900 "umount should not race with any mgc requeue thread"
 
