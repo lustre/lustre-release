@@ -3,9 +3,7 @@ FSNAME=${FSNAME:-lustre}
 # facet hosts
 mds_HOST=${mds_HOST:-`hostname`}
 mdsfailover_HOST=${mdsfailover_HOST}
-mds1_HOST=${mds1_HOST:-$mds_HOST}
-mds1failover_HOST=${mds1failover_HOST:-$mdsfailover_HOST}
-mgs_HOST=${mgs_HOST:-$mds1_HOST}
+mgs_HOST=${mgs_HOST:-$mds_HOST}
 ost_HOST=${ost_HOST:-`hostname`}
 ostfailover_HOST=${ostfailover_HOST}
 CLIENTS=""
@@ -14,11 +12,6 @@ TMP=${TMP:-/tmp}
 
 DAEMONSIZE=${DAEMONSIZE:-500}
 MDSCOUNT=${MDSCOUNT:-1}
-[ $MDSCOUNT -gt 4 ] && MDSCOUNT=4
-for num in $(seq $MDSCOUNT); do
-    eval mds${num}_HOST=\$\{mds${num}_HOST:-$mds_HOST\}
-    eval mds${num}failover_HOST=\$\{mds${num}failover_HOST:-$mdsfailover_HOST\}
-done
 MDSDEVBASE=${MDSDEVBASE:-$TMP/${FSNAME}-mdt}
 MDSSIZE=${MDSSIZE:-200000}
 #
@@ -39,7 +32,6 @@ MDSOPT=${MDSOPT:-}
 MDS_FS_MKFS_OPTS=${MDS_FS_MKFS_OPTS:-}
 MDS_MOUNT_OPTS=${MDS_MOUNT_OPTS:-}
 
-MGSDEV=${MGSDEV:-$MDSDEV1}
 MGSSIZE=${MGSSIZE:-$MDSSIZE}
 MGSOPT=${MGSOPT:-}
 MGS_FS_MKFS_OPTS=${MGS_FS_MKFS_OPTS:-}

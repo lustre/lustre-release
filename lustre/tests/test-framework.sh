@@ -2045,32 +2045,58 @@ affected_facets () {
 }
 
 facet_failover() {
-    local facet=$1
-    local sleep_time=$2
-    local host=$(facet_active_host $facet)
+	local facets=$1
+	local sleep_time=$2
+	local -a affecteds
+	local facet
+	local total=0
+	local index=0
+	local skip
 
-    echo "Failing $facet on node $host"
+	#Because it will only get up facets, we need get affected
+	#facets before shutdown
+	#For HARD Failure mode, it needs make sure facets on the same
+	#HOST will only be shutdown and reboot once
+	for facet in ${facets//,/ }; do
+		local affected_facet
+		skip=0
+		#check whether facet has been included in other affected facets
+		for ((index=0; index<$total; index++)); do
+			[[ *,$facet,* == ,${affecteds[index]}, ]] && skip=1
+		done
 
-    local affected=$(affected_facets $facet)
+		if [ $skip -eq 0 ]; then
+			affecteds[$total]=$(affected_facets $facet)
+			total=$((total+1))
+		fi
+	done
 
-    shutdown_facet $facet
+	for ((index=0; index<$total; index++)); do
+		facet=$(echo ${affecteds[index]} | tr -s " " | cut -d"," -f 1)
+		local host=$(facet_active_host $facet)
+		echo "Failing ${affecteds[index]} on $host"
+		shutdown_facet $facet
+	done
 
-    echo affected facets: $affected
+	for ((index=0; index<$total; index++)); do
+		facet=$(echo ${affecteds[index]} | tr -s " " | cut -d"," -f 1)
+		echo reboot facets: ${affecteds[index]}
 
-    [ -n "$sleep_time" ] && sleep $sleep_time
+		reboot_facet $facet
 
-    reboot_facet $facet
+		change_active ${affecteds[index]}
 
-    change_active $affected
-
-    wait_for_facet $affected
-    # start mgs first if it is affected
-    if ! combined_mgs_mds && list_member $affected mgs; then
-        mount_facet mgs || error "Restart of mgs failed"
-    fi
-    # FIXME; has to be changed to mount all facets concurrently
-    affected=$(exclude_items_from_list $affected mgs)
-    mount_facets $affected
+		wait_for_facet ${affecteds[index]}
+		# start mgs first if it is affected
+		if ! combined_mgs_mds &&
+			list_member ${affecteds[index]} mgs; then
+			mount_facet mgs || error "Restart of mgs failed"
+		fi
+		# FIXME; has to be changed to mount all facets concurrently
+		affected=$(exclude_items_from_list ${affecteds[index]} mgs)
+		echo mount facets: ${affecteds[index]}
+		mount_facets ${affecteds[index]}
+	done
 }
 
 obd_name() {
@@ -2294,21 +2320,26 @@ hostlist_expand() {
 }
 
 facet_host() {
-    local facet=$1
+	local facet=$1
+	local varname
 
-    [ "$facet" == client ] && echo -n $HOSTNAME && return
-    varname=${facet}_HOST
-    if [ -z "${!varname}" ]; then
-        if [ "${facet:0:3}" == "ost" ]; then
-            eval ${facet}_HOST=${ost_HOST}
-        fi
-    fi
-    echo -n ${!varname}
+	[ "$facet" == client ] && echo -n $HOSTNAME && return
+	varname=${facet}_HOST
+	if [ -z "${!varname}" ]; then
+		if [ "${facet:0:3}" == "ost" ]; then
+			eval export ${facet}_HOST=${ost_HOST}
+		elif [ "${facet:0:3}" == "mdt" -o \
+			"${facet:0:3}" == "mds" -o \
+			"${facet:0:3}" == "mgs" ]; then
+			eval export ${facet}_HOST=${mds_HOST}
+		fi
+	fi
+	echo -n ${!varname}
 }
 
 facet_failover_host() {
 	local facet=$1
-	local var
+	local varname
 
 	var=${facet}failover_HOST
 	if [ -n "${!var}" ]; then
@@ -2316,12 +2347,18 @@ facet_failover_host() {
 		return
 	fi
 
+	if [ "${facet:0:3}" == "mdt" -o "${facet:0:3}" == "mds" -o \
+	     "${facet:0:3}" == "mgs" ]; then
+
+		eval export ${facet}failover_host=${mds_HOST}
+		echo ${mds_HOST}
+		return
+	fi
+
 	if [[ $facet == ost* ]]; then
-		var=ostfailover_HOST
-		if [ -n "${!var}" ]; then
-			echo ${!var}
-			return
-		fi
+		eval export ${facet}failover_host=${ost_HOST}
+		echo ${ost_HOST}
+		return
 	fi
 }
 
@@ -2628,9 +2665,10 @@ mdsvdevname() {
 }
 
 mgsdevname() {
-	DEVNAME=MGSDEV
+	local DEVNAME=MGSDEV
+	local MDSDEV1=$(mdsdevname 1)
 
-	local fstype=$(facet_fstype mds$num)
+	local fstype=$(facet_fstype mds1)
 
 	case $fstype in
 		ldiskfs )
@@ -2649,7 +2687,7 @@ mgsdevname() {
 mgsvdevname() {
 	DEVNAME=MGSDEV
 
-	local fstype=$(facet_fstype mds$num)
+	local fstype=$(facet_fstype mds1)
 
 	case $fstype in
 		ldiskfs )
@@ -2734,7 +2772,8 @@ cleanupall() {
 }
 
 combined_mgs_mds () {
-    [[ $MDSDEV1 = $MGSDEV ]] && [[ $mds1_HOST = $mgs_HOST ]]
+	[[ "$(mdsdevname 1)" = "$(mgsdevname)" ]] &&
+		[[ "$(facet_host mds1)" = "$(facet_host mgs)" ]]
 }
 
 lower() {
@@ -2747,9 +2786,11 @@ upper() {
 
 mkfs_opts() {
 	local facet=$1
+	local dev=$2
 	local type=$(facet_type $facet)
 	local index=$(($(facet_number $facet) - 1))
 	local fstype=$(facet_fstype $facet)
+	local host=$(facet_host $facet)
 	local opts
 	local fs_mkfs_opts
 	local var
@@ -2758,7 +2799,9 @@ mkfs_opts() {
 		return 1
 	fi
 
-	if [ $type == MGS ] || ( [ $type == MDS ] && combined_mgs_mds ); then
+	if [ $type == MGS ] || ( [ $type == MDS ] &&
+                                 [ "$dev" == $(mgsdevname) ] &&
+				 [ "$host" == "$(facet_host mgs)" ] ); then
 		opts="--mgs"
 	else
 		opts="--mgsnode=$MGSNID"
@@ -2835,23 +2878,23 @@ formatall() {
 	echo Formatting mgs, mds, osts
 	if ! combined_mgs_mds ; then
 		echo "Format mgs: $(mgsdevname)"
-		add mgs $(mkfs_opts mgs) --reformat $(mgsdevname) \
-			$(mgsvdevname) ${quiet:+>/dev/null} || exit 10
-		fi
+		add mgs $(mkfs_opts mgs $(mgsdevname)) --reformat \
+		$(mgsdevname) $(mgsvdevname) ${quiet:+>/dev/null} || exit 10
+	fi
 
-		for num in `seq $MDSCOUNT`; do
-			echo "Format mds$num: $(mdsdevname $num)"
-			add mds$num $(mkfs_opts mds$num) --reformat \
-			$(mdsdevname $num) $(mdsvdevname $num) \
-			${quiet:+>/dev/null} || exit 10
-		done
+	for num in $(seq $MDSCOUNT); do
+		echo "Format mds$num: $(mdsdevname $num)"
+		add mds$num $(mkfs_opts mds$num $(mdsdevname ${num})) \
+		--reformat $(mdsdevname $num) $(mdsvdevname $num) \
+		${quiet:+>/dev/null} || exit 10
+	done
 
-		for num in `seq $OSTCOUNT`; do
-			echo "Format ost$num: $(ostdevname $num)"
-			add ost$num $(mkfs_opts ost$num) --reformat \
-			$(ostdevname $num) $(ostvdevname ${num}) \
-			${quiet:+>/dev/null} || exit 10
-		done
+	for num in $(seq $OSTCOUNT); do
+		echo "Format ost$num: $(ostdevname $num)"
+		add ost$num $(mkfs_opts ost$num $(ostdevname ${num})) \
+		--reformat $(ostdevname $num) $(ostvdevname ${num}) \
+		${quiet:+>/dev/null} || exit 10
+	done
 }
 
 mount_client() {
@@ -3044,8 +3087,13 @@ init_facet_vars () {
 
 	local varname=${facet}failover_HOST
 	if [ -z "${!varname}" ]; then
-		eval $varname=$(facet_host $facet)
+		eval export $varname=$(facet_host $facet)
 	fi
+
+	varname=${facet}_HOST
+	if [ -z "${!varname}" ]; then
+		eval export $varname=$(facet_host $facet)
+ 	fi
 
 	# ${facet}failover_dev is set in cfg file
 	varname=${facet}failover_dev
@@ -3068,23 +3116,26 @@ init_facet_vars () {
 }
 
 init_facets_vars () {
-    local DEVNAME
+	local DEVNAME
 
-    if ! remote_mds_nodsh; then 
-        for num in `seq $MDSCOUNT`; do
-            DEVNAME=`mdsdevname $num`
-            init_facet_vars mds$num $DEVNAME $MDS_MOUNT_OPTS
-        done
-    fi
+	if ! remote_mds_nodsh; then
+		for num in $(seq $MDSCOUNT); do
+			DEVNAME=`mdsdevname $num`
+			eval export MDSDEV${num}=$DEVNAME
+			init_facet_vars mds$num $DEVNAME $MDS_MOUNT_OPTS
+		done
+	fi
 
+	eval export MGSDEV=$(mgsdevname)
 	combined_mgs_mds || init_facet_vars mgs $(mgsdevname) $MGS_MOUNT_OPTS
 
-    remote_ost_nodsh && return
-
-    for num in `seq $OSTCOUNT`; do
-        DEVNAME=`ostdevname $num`
-        init_facet_vars ost$num $DEVNAME $OST_MOUNT_OPTS
-    done
+	if ! remote_ost_nodsh; then
+		for num in $(seq $OSTCOUNT); do
+			DEVNAME=$(ostdevname $num)
+			eval export OSTDEV${num}=$DEVNAME
+			init_facet_vars ost$num $DEVNAME $OST_MOUNT_OPTS
+		done
+	fi
 }
 
 osc_ensure_active () {
