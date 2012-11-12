@@ -432,12 +432,12 @@ static int osp_precreate_cleanup_orphans(struct osp_device *d)
 		d->opd_pre_grow_count = OST_MIN_PRECREATE +
 					le64_to_cpu(d->opd_last_used_id) -
 					body->oa.o_id;
-		d->opd_pre_last_created = le64_to_cpu(d->opd_last_used_id) + 1;
+		d->opd_pre_last_created = le64_to_cpu(d->opd_last_used_id);
 	} else {
 		d->opd_pre_grow_count = OST_MIN_PRECREATE;
-		d->opd_pre_last_created = body->oa.o_id + 1;
+		d->opd_pre_last_created = body->oa.o_id;
 	}
-	d->opd_pre_used_id = d->opd_pre_last_created - 1;
+	d->opd_pre_used_id = d->opd_pre_last_created;
 	d->opd_pre_grow_slow = 0;
 	cfs_spin_unlock(&d->opd_pre_lock);
 
@@ -722,9 +722,6 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 			cfs_spin_unlock(&d->opd_pre_lock);
 		}
 
-		/*
-		 * we never use the last object in the window
-		 */
 		cfs_spin_lock(&d->opd_pre_lock);
 		precreated = d->opd_pre_last_created - d->opd_pre_used_id;
 		if (precreated > d->opd_pre_reserved) {
