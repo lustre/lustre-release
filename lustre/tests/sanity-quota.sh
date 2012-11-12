@@ -117,7 +117,8 @@ resetquota() {
 	[ "$1" != "-u" -a "$1" != "-g" ] &&
 		error "resetquota: wrong specifier $1 passed"
 
-	$LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT
+	$LFS setquota "$1" "$2" -b 0 -B 0 -i 0 -I 0 $MOUNT ||
+		error "clear quota for [type:$1 name:$2] failed"
 	# give a chance to slave to release space
 	sleep 1
 }
@@ -365,7 +366,8 @@ test_0() {
 	test_quota_performance $MB
 
 	set_ost_qtype "ug" || error "enable ost quota failed"
-	$LFS setquota -u $TSTUSR -b 0 -B 10G -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 10G -i 0 -I 0 $DIR ||
+		error "set quota failed"
 	test_quota_performance $MB
 
 	cleanup_quota_test
@@ -386,7 +388,8 @@ test_1() {
 
 	# test for user
 	log "User quota (block hardlimit:$LIMIT MB)"
-	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+		error "set user quota failed"
 
 	# make sure the system is clean
 	local USED=$(getquota -u $TSTUSR global curspace)
@@ -417,7 +420,8 @@ test_1() {
 	# test for group
 	log "--------------------------------------"
 	log "Group quota (block hardlimit:$LIMIT MB)"
-	$LFS setquota -g $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+		error "set group quota failed"
 
 	TESTFILE="$DIR/$tdir/$tfile-1"
 	# make sure the system is clean
@@ -469,7 +473,8 @@ test_2() {
 
 	# test for user
 	log "User quota (inode hardlimit:$LIMIT files)"
-	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR ||
+		error "set user quota failed"
 
 	# make sure the system is clean
 	local USED=$(getquota -u $TSTUSR global curinodes)
@@ -495,7 +500,8 @@ test_2() {
 	# test for group
 	log "--------------------------------------"
 	log "Group quota (inode hardlimit:$LIMIT files)"
-	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i 0 -I $LIMIT $DIR ||
+		error "set group quota failed"
 
         TESTFILE=$DIR/$tdir/$tfile-1
 	# make sure the system is clean
@@ -612,8 +618,10 @@ test_3() {
 	local USED=$(getquota -u $TSTUSR global curspace)
 	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
 
-	$LFS setquota -t -u --block-grace $GRACE --inode-grace $MAX_IQ_TIME $DIR
-	$LFS setquota -u $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR
+	$LFS setquota -t -u --block-grace $GRACE --inode-grace \
+		$MAX_IQ_TIME $DIR || error "set user grace time failed"
+	$LFS setquota -u $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR ||
+		error "set user quota failed"
 
 	test_block_soft $TESTFILE $GRACE $LIMIT
 	resetquota -u $TSTUSR
@@ -624,17 +632,19 @@ test_3() {
 	USED=$(getquota -g $TSTUSR global curspace)
 	[ $USED -ne 0 ] && error "Used space($USED) for group $TSTUSR isn't 0."
 
-	$LFS setquota -t -g --block-grace $GRACE --inode-grace $MAX_IQ_TIME $DIR
-	$LFS setquota -g $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR
+	$LFS setquota -t -g --block-grace $GRACE --inode-grace \
+		$MAX_IQ_TIME $DIR || error "set group grace time failed"
+	$LFS setquota -g $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR ||
+		error "set group quota failed"
 
 	test_block_soft $TESTFILE $GRACE $LIMIT
 	resetquota -g $TSTUSR
 
 	# cleanup
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
-		$MAX_IQ_TIME $DIR
+		$MAX_IQ_TIME $DIR || error "restore user grace time failed"
 	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace \
-		$MAX_IQ_TIME $DIR
+		$MAX_IQ_TIME $DIR || error "restore group grace time failed"
 }
 run_test 3 "Block soft limit (start timer, timer goes off, stop timer)"
 
@@ -708,8 +718,10 @@ test_4a() {
 	local USED=$(getquota -u $TSTUSR global curinodes)
 	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
 
-	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace $GRACE $DIR
-	$LFS setquota -u $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR
+	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
+		$GRACE $DIR || error "set user grace time failed"
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR ||
+		error "set user quota failed"
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
 	resetquota -u $TSTUSR
@@ -719,8 +731,10 @@ test_4a() {
 	USED=$(getquota -g $TSTUSR global curinodes)
 	[ $USED -ne 0 ] && error "Used space($USED) for group $TSTUSR isn't 0."
 
-	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace $GRACE $DIR
-	$LFS setquota -g $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR
+	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace \
+		$GRACE $DIR || error "set group grace time failed"
+	$LFS setquota -g $TSTUSR -b 0 -B 0 -i $LIMIT -I 0 $DIR ||
+		error "set group quota failed"
 	TESTFILE=$DIR/$tdir/$tfile-1
 
 	test_file_soft $TESTFILE $LIMIT $GRACE
@@ -728,9 +742,9 @@ test_4a() {
 
 	# cleanup
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
-		$MAX_IQ_TIME $DIR
+		$MAX_IQ_TIME $DIR || error "restore user grace time failed"
 	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace \
-		$MAX_IQ_TIME $DIR
+		$MAX_IQ_TIME $DIR || error "restore group grace time failed"
 }
 run_test 4a "File soft limit (start timer, timer goes off, stop timer)"
 
@@ -746,9 +760,11 @@ test_4b() {
 
 	# test of valid grace strings handling
 	echo "Valid grace strings test"
-	$LFS setquota -t -u --block-grace $GR_STR1 --inode-grace $GR_STR2 $DIR
+	$LFS setquota -t -u --block-grace $GR_STR1 --inode-grace \
+		$GR_STR2 $DIR || error "set user grace time failed"
 	$LFS quota -u -t $DIR | grep "Block grace time: $GR_STR1"
-	$LFS setquota -t -g --block-grace $GR_STR3 --inode-grace $GR_STR4 $DIR
+	$LFS setquota -t -g --block-grace $GR_STR3 --inode-grace \
+		$GR_STR4 $DIR || error "set group grace time quota failed"
 	$LFS quota -g -t $DIR | grep "Inode grace time: $GR_STR4"
 
 	# test of invalid grace strings handling
@@ -758,9 +774,9 @@ test_4b() {
 
 	# cleanup
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
-		$MAX_IQ_TIME $DIR
+		$MAX_IQ_TIME $DIR || error "restore user grace time failed"
 	$LFS setquota -t -g --block-grace $MAX_DQ_TIME --inode-grace \
-		$MAX_IQ_TIME $DIR
+		$MAX_IQ_TIME $DIR || error "restore group grace time failed"
 }
 run_test 4b "Grace time strings handling"
 
@@ -776,8 +792,10 @@ test_5() {
 	set_ost_qtype "ug" || error "enable ost quota failed"
 
 	echo "Set quota limit (0 ${BLIMIT}M 0 $ILIMIT) for $TSTUSR.$TSTUSR"
-	$LFS setquota -u $TSTUSR -b 0 -B ${BLIMIT}M -i 0 -I $ILIMIT $DIR
-	$LFS setquota -g $TSTUSR -b 0 -B ${BLIMIT}M -i 0 -I $ILIMIT $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B ${BLIMIT}M -i 0 -I $ILIMIT $DIR ||
+		error "set user quota failed"
+	$LFS setquota -g $TSTUSR -b 0 -B ${BLIMIT}M -i 0 -I $ILIMIT $DIR ||
+		error "set group quota failed"
 
 	# make sure the system is clean
 	local USED=$(getquota -u $TSTUSR global curinodes)
@@ -836,7 +854,8 @@ test_6() {
 	chown $TSTUSR2.$TSTUSR2 $TESTFILE2
 
 	# cache per-ID lock for $TSTUSR on slave
-	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+		error "set quota failed"
 	$RUNAS $DD of=$TESTFILE count=1 ||
 		error "write $TESTFILE failure, expect success"
 	$RUNAS2 $DD of=$TESTFILE2 count=1 ||
@@ -931,7 +950,8 @@ test_7a() {
 
 	echo "Enable quota & set quota limit for $TSTUSR"
 	set_ost_qtype "ug" || error "enable ost quota failed"
-	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+		error "set quota failed"
 
 	echo "Start ost1..."
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
@@ -951,7 +971,8 @@ test_7a() {
 	echo "Stop ost1..."
 	stop ost1
 
-	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR ||
+		error "clear quota failed"
 
 	echo "Start ost1..."
 	start ost1 $(ostdevname 1) $OST_MOUNT_OPTS
@@ -1002,7 +1023,8 @@ test_7b() {
 	lustre_fail mds 0xa02
 
 	set_ost_qtype "ug" || error "enable ost quota failed"
-	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR ||
+		error "set quota failed"
 
 	# ignore the write error
 	$RUNAS $DD of=$TESTFILE count=1 seek=1 oflag=sync conv=notrunc
@@ -1041,7 +1063,8 @@ test_7c() {
 	[ $USED -ne 0 ] && error "Used space($USED) for user $TSTUSR isn't 0."
 
 	set_ost_qtype "none" || error "disable ost quota failed"
-	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B ${LIMIT}M -i 0 -I 0 $DIR ||
+		error "set quota failed"
 
 	# define OBD_FAIL_QUOTA_DELAY_REINT 0xa03
 	lustre_fail ost 0xa03
@@ -1079,8 +1102,13 @@ test_7d(){
 	trap cleanup_quota_test EXIT
 
 	set_ost_qtype "none" || error "disable ost quota failed"
-	$LFS setquota -u $TSTUSR -B ${limit}M $DIR
-	$LFS setquota -u $TSTUSR2 -B ${limit}M $DIR
+	# LU-2284. Enable trace for debug log.
+	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+trace"
+	$LFS setquota -u $TSTUSR -B ${limit}M $DIR ||
+		error "set quota for $TSTUSR failed"
+	$LFS setquota -u $TSTUSR2 -B ${limit}M $DIR ||
+		error "set quota for $TSTUSR2 failed"
+	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-trace"
 
 	#define OBD_FAIL_OBD_IDX_READ_BREAK 0x608
 	lustre_fail mds 0x608 0
@@ -1117,9 +1145,11 @@ test_8() {
 	set_ost_qtype "ug" || error "enable ost quota failed"
 
 	echo "Set enough high limit for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
+		error "set user quota failed"
 	echo "Set enough high limit for group: $TSTUSR"
-	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
+		error "set group quota failed"
 
 	local duration=""
 	[ "$SLOW" = "no" ] && duration=" -t 120"
@@ -1165,11 +1195,13 @@ test_9() {
 
 	log "Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT)" \
 		"for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
+		error "set user quota failed"
 
 	log "Set enough high limit(block:$BLK_LIMIT; file: $FILE_LIMIT)" \
 		"for group: $TSTUSR"
-	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B $BLK_LIMIT -i 0 -I $FILE_LIMIT $DIR ||
+		error "set group quota failed"
 
 	quota_show_check a u $TSTUSR
 	quota_show_check a g $TSTUSR
@@ -1209,7 +1241,8 @@ test_10() {
 	# root user can overrun quota
 	set_ost_qtype "ug" || "enable ost quota failed"
 
-	$LFS setquota -u $TSTUSR -b 0 -B 2M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 2M -i 0 -I 0 $DIR ||
+		error "set quota failed"
 	quota_show_check b u $TSTUSR
 
 	$LFS setstripe $TESTFILE -c 1
@@ -1229,7 +1262,8 @@ test_11() {
 	trap cleanup_quota_test EXIT
 
 	set_mdt_qtype "ug" || "enable mdt quota failed"
-	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 1 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 1 $DIR ||
+		error "set quota failed"
 
 	touch "$TESTFILE"-0
 	touch "$TESTFILE"-1
@@ -1260,7 +1294,8 @@ test_12() {
 	set_ost_qtype "u" || "enable ost quota failed"
 	quota_show_check b u $TSTUSR
 
-	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $DIR ||
+		error "set quota failed"
 
 	$LFS setstripe $TESTFILE0 -c 1 -i 0
 	$LFS setstripe $TESTFILE1 -c 1 -i 1
@@ -1300,7 +1335,8 @@ test_13(){
 	set_ost_qtype "u" || "enable ost quota failed"
 	quota_show_check b u $TSTUSR
 
-	$LFS setquota -u $TSTUSR -b 0 -B 10M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 10M -i 0 -I 0 $DIR ||
+		error "set quota failed"
 	$LFS setstripe $TESTFILE -c 1 -i 0
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
@@ -1344,14 +1380,16 @@ test_15(){
 	sync_all_data || true
 
         # test for user
-	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR ||
+		error "set user quota failed"
 	local TOTAL_LIMIT=$(getquota -u $TSTUSR global bhardlimit)
 	[ $TOTAL_LIMIT -eq $LIMIT ] ||
 		error "(user) limit:$TOTAL_LIMIT, expect:$LIMIT, failed!"
 	resetquota -u $TSTUSR
 
 	# test for group
-	$LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR
+	$LFS setquota -g $TSTUSR -b 0 -B $LIMIT -i 0 -I 0 $DIR ||
+		error "set group quota failed"
 	TOTAL_LIMIT=$(getquota -g $TSTUSR global bhardlimit)
 	[ $TOTAL_LIMIT -eq $LIMIT ] ||
 		error "(group) limits:$TOTAL_LIMIT, expect:$LIMIT, failed!"
@@ -1374,7 +1412,8 @@ test_17sub() {
 	set_ost_qtype "ug" || error "enable ost quota failed"
 	# make sure no granted quota on ost
 	resetquota -u $TSTUSR
-	$LFS setquota -u $TSTUSR -b 0 -B 10M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B 10M -i 0 -I 0 $DIR ||
+		error "set quota failed"
 
 	quota_show_check b u $TSTUSR
 
@@ -1446,7 +1485,8 @@ test_18_sub () {
 
 	set_ost_qtype "u" || error "enable ost quota failed"
 	log "User quota (limit: $blimit)"
-	$LFS setquota -u $TSTUSR -b 0 -B $blimit -i 0 -I 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B $blimit -i 0 -I 0 $MOUNT ||
+		error "set quota failed"
 	quota_show_check b u $TSTUSR
 
 	$LFS setstripe $TESTFILE -i 0 -c 1
@@ -1530,10 +1570,12 @@ test_19() {
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	echo "Set user quota (limit: "$blimit"M)"
-	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $MOUNT ||
+		error "set user quota failed"
 	quota_show_check b u $TSTUSR
 	echo "Update quota limits"
-	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $MOUNT ||
+		error "set group quota failed"
 	quota_show_check b u $TSTUSR
 
 	# first wirte might be cached
@@ -1600,9 +1642,11 @@ test_21() {
 	set_ost_qtype "ug" || error "Enable ost quota failed"
 
 	log "Set limit(block:${BLIMIT}G; file:$ILIMIT) for user: $TSTUSR"
-	$LFS setquota -u $TSTUSR -b 0 -B ${BLIMIT}G -i 0 -I $ILIMIT $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B ${BLIMIT}G -i 0 -I $ILIMIT $MOUNT ||
+		error "set user quota failed"
 	log "Set limit(block:${BLIMIT}G; file:$ILIMIT) for group: $TSTUSR"
-	$LFS setquota -g $TSTUSR -b 0 -B $BLIMIT -i 0 -I $ILIMIT $MOUNT
+	$LFS setquota -g $TSTUSR -b 0 -B $BLIMIT -i 0 -I $ILIMIT $MOUNT ||
+		error "set group quota failed"
 
 	# repeat writing on a 1M file
 	test_21_sub ${TESTFILE}_1 1 30 &
@@ -1700,7 +1744,8 @@ test_23_sub() {
 
 	# test for user
 	log "User quota (limit: $LIMIT MB)"
-	$LFS setquota -u $TSTUSR -b 0 -B "$LIMIT"M -i 0 -I 0 $DIR
+	$LFS setquota -u $TSTUSR -b 0 -B "$LIMIT"M -i 0 -I 0 $DIR ||
+		error "set quota failed"
 	quota_show_check b u $TSTUSR
 
 	$LFS setstripe $TESTFILE -c 1 -i 0
@@ -1762,7 +1807,8 @@ test_24() {
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
 	echo "Set user quota (limit: "$blimit"M)"
-	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $MOUNT
+	$LFS setquota -u $TSTUSR -b 0 -B "$blimit"M -i 0 -I 0 $MOUNT ||
+		error "set quota failed"
 
 	# overrun quota by root user
 	runas -u 0 -g 0 $DD of=$TESTFILE count=$((blimit + 1)) ||
@@ -1813,12 +1859,14 @@ test_30() {
 	$LFS setstripe $TESTFILE -i 0 -c 1
 	chown $TSTUSR.$TSTUSR $TESTFILE
 
-	$LFS setquota -t -u --block-grace $GRACE --inode-grace $MAX_IQ_TIME $DIR
-	$LFS setquota -u $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR
+	$LFS setquota -t -u --block-grace $GRACE --inode-grace \
+		$MAX_IQ_TIME $DIR || error "set grace time failed"
+	$LFS setquota -u $TSTUSR -b ${LIMIT}M -B 0 -i 0 -I 0 $DIR ||
+		error "set quota failed"
 	$RUNAS $DD of=$TESTFILE count=$((LIMIT * 2)) || true
 	cancel_lru_locks osc
 	sleep $GRACE
-	$LFS setquota -u $TSTUSR -B 0 $DIR
+	$LFS setquota -u $TSTUSR -B 0 $DIR || error "clear quota failed"
 	# over-quota flag has not yet settled since we do not trigger async
 	# events based on grace time period expiration
 	$SHOW_QUOTA_USER
@@ -1832,7 +1880,7 @@ test_30() {
 	cleanup_quota_test
 	resetquota -u $TSTUSR
 	$LFS setquota -t -u --block-grace $MAX_DQ_TIME --inode-grace \
-		$MAX_IQ_TIME $DIR
+		$MAX_IQ_TIME $DIR || error "restore grace time failed"
 }
 run_test 30 "Hard limit updates should not reset grace times"
 
