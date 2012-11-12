@@ -911,20 +911,26 @@ test_24p() {
 }
 run_test 24p "mkdir .../R12{a,b}; rename .../R12a .../R12b"
 
+cleanup_multiop_pause() {
+	trap 0
+	kill -USR1 $MULTIPID
+}
+
 test_24q() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	test_mkdir $DIR/R13a
 	test_mkdir $DIR/R13b
-	DIRINO=`ls -lid $DIR/R13a | awk '{ print $1 }'`
-	multiop_bg_pause $DIR/R13b D_c || return 1
+	local DIRINO=$(ls -lid $DIR/R13a | awk '{ print $1 }')
+	multiop_bg_pause $DIR/R13b D_c || error "multiop failed to start"
 	MULTIPID=$!
 
+	trap cleanup_multiop_pause EXIT
 	mrename $DIR/R13a $DIR/R13b
-	$CHECKSTAT -a $DIR/R13a || error
-	$CHECKSTAT -t dir $DIR/R13b || error
-	DIRINO2=`ls -lid $DIR/R13b | awk '{ print $1 }'`
+	$CHECKSTAT -a $DIR/R13a || error "R13a still exists"
+	$CHECKSTAT -t dir $DIR/R13b || error "R13b does not exist"
+	local DIRINO2=$(ls -lid $DIR/R13b | awk '{ print $1 }')
 	[ "$DIRINO" = "$DIRINO2" ] || error "R13a $DIRINO != R13b $DIRINO2"
-	kill -USR1 $MULTIPID
+	cleanup_multiop_pause
 	wait $MULTIPID || error "multiop close failed"
 }
 run_test 24q "mkdir .../R13{a,b}; open R13b rename R13a R13b ==="
