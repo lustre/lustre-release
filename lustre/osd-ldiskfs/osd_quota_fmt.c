@@ -180,7 +180,7 @@ loff_t find_tree_dqentry(const struct lu_env *env,
 
 	if (!buf)
 		RETURN(-ENOMEM);
-	ret = quota_read_blk(env, obj, 0, blk, buf);
+	ret = quota_read_blk(env, obj, type, blk, buf);
 	if (ret < 0) {
 		CERROR("Can't read quota tree block %u.\n", blk);
 		GOTO(out_buf, ret);
