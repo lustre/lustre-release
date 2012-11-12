@@ -408,8 +408,7 @@ static int osp_precreate_cleanup_orphans(struct osp_device *d)
 	body->oa.o_valid = OBD_MD_FLFLAGS | OBD_MD_FLGROUP;
 	body->oa.o_seq = FID_SEQ_OST_MDT0;
 
-	/* remove from NEXT after used one */
-	body->oa.o_id = d->opd_last_used_id + 1;
+	body->oa.o_id = d->opd_last_used_id;
 
 	ptlrpc_request_set_replen(req);
 
