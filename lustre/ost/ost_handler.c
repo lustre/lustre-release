@@ -2237,7 +2237,7 @@ int ost_handle(struct ptlrpc_request *req)
                         RETURN(0);
                 if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOSPC))
                         GOTO(out, rc = -ENOSPC);
-                if (OBD_FAIL_CHECK(OBD_FAIL_OST_EROFS))
+                if (OBD_FAIL_TIMEOUT(OBD_FAIL_OST_EROFS, 1))
                         GOTO(out, rc = -EROFS);
                 rc = ost_brw_write(req, oti);
                 LASSERT(current->journal_info == NULL);
