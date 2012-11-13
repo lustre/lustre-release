@@ -3536,7 +3536,13 @@ is_empty_fs() {
 	[ $(find $1 -maxdepth 1 -name lost+found -o -name .lustre -prune -o \
 		-print | wc -l) = 1 ] || return 1
 	[ ! -d $1/lost+found ] || is_empty_dir $1/lost+found || return 1
-	[ ! -d $1/.lustre ] || is_empty_dir $1/.lustre || return 1
+	if [ $(lustre_version_code $SINGLEMDS) -gt $(version_code 2.4.0) ]; then
+		# exclude .lustre/fid (LU-2780)
+		[ $(find $1/.lustre -maxdepth 1 -name fid -prune -o \
+			-print | wc -l) = 1 ] || return 1
+	else
+		[ ! -d $1/.lustre ] || is_empty_dir $1/.lustre || return 1
+	fi
 	return 0
 }
 
