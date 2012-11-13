@@ -1371,11 +1371,20 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
                 pos += sprintf(params, "%s.import=%s", cname, "connection=");
                 uuid = buf + pos;
 
+		cfs_down_read(&obd->u.cli.cl_sem);
+		if (obd->u.cli.cl_import == NULL) {
+			/* client does not connect to the OST yet */
+			cfs_up_read(&obd->u.cli.cl_sem);
+			rc = 0;
+			continue;
+		}
+
                 /* TODO: iterate all nids to find one */
                 /* find uuid by nid */
                 rc = client_import_find_conn(obd->u.cli.cl_import,
                                              entry->u.nids[0],
                                              (struct obd_uuid *)uuid);
+		cfs_up_read(&obd->u.cli.cl_sem);
                 if (rc < 0) {
                         CERROR("mgc: cannot find uuid by nid %s\n",
                                libcfs_nid2str(entry->u.nids[0]));
