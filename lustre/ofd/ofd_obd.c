@@ -1204,7 +1204,7 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 					      created, diff + created,
 					      created / DISK_TIMEOUT);
 				break;
-		}
+			}
 
 			rc = ofd_precreate_objects(env, ofd, next_id,
 						   oa->o_seq, count);
