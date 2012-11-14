@@ -2973,6 +2973,7 @@ static int mdt_filter_recovery_request(struct ptlrpc_request *req,
         case OST_CONNECT: /* This will never get here, but for completeness. */
         case MDS_DISCONNECT:
         case OST_DISCONNECT:
+	case OBD_IDX_READ:
                *process = 1;
                RETURN(0);
 
