@@ -25,3 +25,4 @@ prune-icache-use-trylock-rhel5.patch
 jbd2-jcberr-2.6-rhel5.patch
 jbd2-commit-timer-no-jiffies-rounding.diff
 lustre_iser_max_sectors_tuning_lustre2.0.patch
+make-bi_phys_segments-uint.patch
