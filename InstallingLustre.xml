@@ -89,33 +89,16 @@ Required Software</title>
                 <para> &#160;</para>
               </entry>
               <entry>
-                <para> kernel-&lt;ver&gt;_lustre.&lt;ver&gt;</para>
+                <para>kernel-&lt;ver&gt;_lustre.&lt;arch&gt;</para>
               </entry>
               <entry>
-                <para> For OEL 5 or RHEL 5 server platform</para>
+                <para>Lustre patched server kernel.</para>
               </entry>
               <entry>
                 <para> X*</para>
               </entry>
               <entry>
                 <para> &#160;</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> &#160;</para>
-              </entry>
-              <entry>
-                <para> kernel-ib-&lt;ver&gt;</para>
-              </entry>
-              <entry>
-                <para> Lustre OFED package. Required only if the network interconnect is InfiniBand.</para>
-              </entry>
-              <entry>
-                <para> X*</para>
-              </entry>
-              <entry>
-                <para> X</para>
               </entry>
             </row>
             <row>
