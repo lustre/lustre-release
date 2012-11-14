@@ -5149,10 +5149,13 @@ err_lmi:
         return (rc);
 }
 
-/* For interoperability between 1.8 and 2.0. */
+/* For interoperability, the left element is old parameter, the right one
+ * is the new version of the parameter, if some parameter is deprecated,
+ * the new version should be set as NULL. */
 static struct cfg_interop_param mdt_interop_param[] = {
 	{ "mdt.group_upcall",	NULL },
-	{ "mdt.quota_type",	"mdd.quota_type" },
+	{ "mdt.quota_type",	NULL },
+	{ "mdd.quota_type",	NULL },
 	{ "mdt.rootsquash",	"mdt.root_squash" },
 	{ "mdt.nosquash_nid",	"mdt.nosquash_nids" },
 	{ NULL }
@@ -5165,7 +5168,7 @@ static int mdt_process_config(const struct lu_env *env,
         struct mdt_device *m = mdt_dev(d);
         struct md_device *md_next = m->mdt_child;
         struct lu_device *next = md2lu_dev(md_next);
-        int rc = 0;
+        int rc;
         ENTRY;
 
 	switch (cfg->lcfg_command) {
@@ -5173,7 +5176,7 @@ static int mdt_process_config(const struct lu_env *env,
 		struct lprocfs_static_vars  lvars;
 		struct obd_device	   *obd = d->ld_obd;
 
-		/* For interoperability between 1.8 and 2.0. */
+		/* For interoperability */
 		struct cfg_interop_param   *ptr = NULL;
 		struct lustre_cfg	   *old_cfg = NULL;
 		char			   *param = NULL;
@@ -5188,9 +5191,10 @@ static int mdt_process_config(const struct lu_env *env,
 		ptr = class_find_old_param(param, mdt_interop_param);
 		if (ptr != NULL) {
 			if (ptr->new_param == NULL) {
-				CWARN("For 1.8 interoperability, skip this %s."
+				rc = 0;
+				CWARN("For interoperability, skip this %s."
 				      " It is obsolete.\n", ptr->old_param);
-					break;
+				break;
 			}
 
 			CWARN("Found old param %s, changed it to %s.\n",

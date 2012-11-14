@@ -48,7 +48,7 @@
  * @{
  */
 
-/* For interoperability between 1.8 and 2.0. */
+/* For interoperability */
 struct cfg_interop_param {
 	char *old_param;
 	char *new_param;

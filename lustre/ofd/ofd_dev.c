@@ -179,6 +179,12 @@ static void ofd_stack_fini(const struct lu_env *env, struct ofd_device *m,
 	EXIT;
 }
 
+/* For interoperability, see mdt_interop_param[]. */
+static struct cfg_interop_param ofd_interop_param[] = {
+	{ "ost.quota_type",	NULL },
+	{ NULL }
+};
+
 /* used by MGS to process specific configurations */
 static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 			      struct lustre_cfg *cfg)
@@ -193,6 +199,38 @@ static int ofd_process_config(const struct lu_env *env, struct lu_device *d,
 	switch (cfg->lcfg_command) {
 	case LCFG_PARAM: {
 		struct lprocfs_static_vars lvars;
+
+		/* For interoperability */
+		struct cfg_interop_param   *ptr = NULL;
+		struct lustre_cfg	   *old_cfg = NULL;
+		char			   *param = NULL;
+
+		param = lustre_cfg_string(cfg, 1);
+		if (param == NULL) {
+			CERROR("param is empty\n");
+			rc = -EINVAL;
+			break;
+		}
+
+		ptr = class_find_old_param(param, ofd_interop_param);
+		if (ptr != NULL) {
+			if (ptr->new_param == NULL) {
+				rc = 0;
+				CWARN("For interoperability, skip this %s."
+				      " It is obsolete.\n", ptr->old_param);
+				break;
+			}
+
+			CWARN("Found old param %s, changed it to %s.\n",
+			      ptr->old_param, ptr->new_param);
+
+			old_cfg = cfg;
+			cfg = lustre_cfg_rename(old_cfg, ptr->new_param);
+			if (IS_ERR(cfg)) {
+				rc = PTR_ERR(cfg);
+				break;
+			}
+		}
 
 		lprocfs_ofd_init_vars(&lvars);
 		rc = class_process_proc_param(PARAM_OST, lvars.obd_vars, cfg,
