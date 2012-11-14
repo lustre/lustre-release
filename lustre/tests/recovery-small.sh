@@ -903,6 +903,7 @@ test_29a() { # bug 22273 - error adding new clients
 	# fail abort so client will be new again
 	fail_abort $SINGLEMDS
 	client_up || error "reconnect failed"
+	wait_osc_import_state mds ost FULL
 	return 0
 }
 run_test 29a "error adding new clients doesn't cause LBUG (bug 22273)"
@@ -1643,6 +1644,99 @@ test_107 () {
 	return $rc
 }
 run_test 107 "drop reint reply, then restart MDT"
+
+test_110a () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local remote_dir=$DIR/$tdir/remote_dir
+	local MDTIDX=1
+
+	mkdir -p $DIR/$tdir
+	drop_request "$LFS mkdir -i $MDTIDX $remote_dir" ||
+					error "lfs mkdir failed"
+	local diridx=$($GETSTRIPE -M $remote_dir)
+	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 110a "create remote directory: drop client req"
+
+test_110b () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local remote_dir=$DIR/$tdir/remote_dir
+	local MDTIDX=1
+
+	mkdir -p $DIR/$tdir
+	drop_reint_reply "$LFS mkdir -i $MDTIDX $remote_dir" ||
+					error "lfs mkdir failed"
+
+	diridx=$($GETSTRIPE -M $remote_dir)
+	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 110b "create remote directory: drop Master rep"
+
+test_110c () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local remote_dir=$DIR/$tdir/remote_dir
+	local MDTIDX=1
+
+	mkdir -p $DIR/$tdir
+	drop_update_reply $((MDTIDX + 1)) "$LFS mkdir -i $MDTIDX $remote_dir" ||
+						error "lfs mkdir failed"
+
+	diridx=$($GETSTRIPE -M $remote_dir)
+	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 110c "create remote directory: drop update rep on slave MDT"
+
+test_110d () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local remote_dir=$DIR/$tdir/remote_dir
+	local MDTIDX=1
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	drop_request "rm -rf $remote_dir" || error "rm remote dir failed"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 110d "remove remote directory: drop client req"
+
+test_110e () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local remote_dir=$DIR/$tdir/remote_dir
+	local MDTIDX=1
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir  || error "lfs mkdir failed"
+	drop_reint_reply "rm -rf $remote_dir" || error "rm remote dir failed"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 110e "remove remote directory: drop master rep"
+
+test_110f () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local remote_dir=$DIR/$tdir/remote_dir
+	local MDTIDX=1
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+	drop_update_reply $MDTIDX "rm -rf $remote_dir" ||
+					error "rm remote dir failed"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+}
+run_test 110f "remove remote directory: drop slave rep"
+
 complete $SECONDS
 check_and_cleanup_lustre
 exit_status
