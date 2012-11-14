@@ -326,7 +326,8 @@ $ mount -t lustre /dev/sda /mnt/test/ost12</screen>
       <title><indexterm><primary>maintenance</primary><secondary>restoring a OST</secondary></indexterm>
       <indexterm><primary>maintenance</primary><secondary>removing a OST</secondary></indexterm>
 Removing and Restoring OSTs</title>
-      <para>OSTs can be removed from and restored to a Lustre file system. Currently in Lustre, removing an OST really means that the OST is &apos;deactivated&apos; in the file system, not permanently removed. A removed OST still appears in the file system; do not create a new OST with the same name.</para>
+      <para>OSTs can be removed from and restored to a Lustre file system. Currently in Lustre, removing a OST means the OST is &apos;deactivated&apos; in the file system, not permanently removed.</para>
+  	  	<note><para>A removed OST still appears in the file system; do not create a new OST with the same name.</para></note>
       <para>You may want to remove (deactivate) an OST and prevent new files from being written to it in several situations:</para>
       <itemizedlist>
         <listitem>
@@ -335,6 +336,9 @@ Removing and Restoring OSTs</title>
         <listitem>
           <para>OST is nearing its space capacity</para>
         </listitem>
+        <listitem>
+		  <para>OST storage has failed permanently</para>
+	    </listitem>
       </itemizedlist>
       <section condition="l24" xml:id="dbdoclet.rmremotedir">
       <title><indexterm><primary>maintenance</primary><secondary>removing a MDT</secondary></indexterm>Removing a MDT from the File System</title>
@@ -358,19 +362,6 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
       <section remap="h3">
       <title><indexterm><primary>maintenance</primary><secondary>removing a OST</secondary></indexterm>
         Removing an OST from the File System</title>
-        <para>OSTs can be removed from a Lustre file system. Currently in Lustre, removing an OST actually means that the OST is &apos;deactivated&apos; from the file system, not permanently removed. A removed OST still appears in the device listing; you should not normally create a new OST with the same name.</para>
-        <para>You may want to deactivate an OST and prevent new files from being written to it in several situations:</para>
-        <itemizedlist>
-          <listitem>
-            <para>OST is nearing its space capacity</para>
-          </listitem>
-          <listitem>
-            <para>Hard drive has failed and a RAID resync/rebuild is underway</para>
-          </listitem>
-          <listitem>
-            <para>OST storage has failed permanently</para>
-          </listitem>
-        </itemizedlist>
         <para>When removing an OST, remember that the MDT does not communicate directly with OSTs. Rather, each OST has a corresponding OSC which communicates with the MDT. It is necessary to determine the device number of the OSC that corresponds to the OST. Then, you use this device number to deactivate the OSC on the MDT.</para>
         <para>To remove an OST from the file system:</para>
         <orderedlist>
