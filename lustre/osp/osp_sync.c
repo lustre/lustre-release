@@ -316,11 +316,23 @@ int osp_sync_gap(const struct lu_env *env, struct osp_device *d,
 static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 {
 	struct osp_device *d = req->rq_cb_data;
+	struct obd_import *imp = req->rq_import;
 
 	CDEBUG(D_HA, "commit req %p, transno "LPU64"\n", req, req->rq_transno);
 
 	if (unlikely(req->rq_transno == 0))
 		return;
+
+	if (unlikely(req->rq_transno > imp->imp_peer_committed_transno)) {
+		/* this request was aborted by the shutdown procedure,
+		 * not committed by the peer.  we should preserve llog
+		 * record */
+		cfs_spin_lock(&d->opd_syn_lock);
+		d->opd_syn_rpc_in_progress--;
+		cfs_spin_unlock(&d->opd_syn_lock);
+		cfs_waitq_signal(&d->opd_syn_waitq);
+		return;
+	}
 
 	/* XXX: what if request isn't committed for very long? */
 	LASSERT(d);
@@ -865,7 +877,13 @@ static int osp_sync_thread(void *_arg)
 		 d->opd_syn_changes, d->opd_syn_rpc_in_progress,
 		 d->opd_syn_rpc_in_flight);
 
-	osp_sync_process_committed(&env, d);
+	/* wait till all the requests are completed */
+	while (d->opd_syn_rpc_in_progress > 0) {
+		osp_sync_process_committed(&env, d);
+		l_wait_event(d->opd_syn_waitq,
+			     d->opd_syn_rpc_in_progress == 0,
+			     &lwi);
+	}
 
 	llog_cat_close(&env, llh);
 	rc = llog_cleanup(&env, ctxt);
@@ -873,13 +891,6 @@ static int osp_sync_thread(void *_arg)
 		CERROR("can't cleanup llog: %d\n", rc);
 out:
 	thread->t_flags = SVC_STOPPED;
-
-	/*
-	 * there might be a race between osp sync thread sending RPCs and
-	 * import invalidation. this can result in RPCs being in ptlrpcd
-	 * till this point. for safete reason let's wait till they are done
-	 */
-	l_wait_event(d->opd_syn_waitq, d->opd_syn_rpc_in_flight == 0, &lwi);
 
 	cfs_waitq_signal(&thread->t_ctl_waitq);
 	LASSERTF(d->opd_syn_rpc_in_progress == 0,
