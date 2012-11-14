@@ -586,6 +586,59 @@ test_17m() {
 }
 run_test 17m "run e2fsck against MDT which contains short/long symlink"
 
+check_fs_consistency_17n() {
+	local mdt_index
+	local devname
+	local cmd
+	local rc=0
+
+	for mdt_index in $(seq 1 $MDSCOUNT); do
+		devname=$(mdsdevname $mdt_index)
+		cmd="$E2FSCK -fnvd $devname"
+
+		echo "stop and checking mds${mdt_index}: $cmd"
+		# e2fsck should not return error
+		stop mds${mdt_index}
+		do_facet mds${mdt_index} $cmd || rc=$?
+
+		start mds${mdt_index} $devname $MDS_MOUNT_OPTS
+		df $MOUNT > /dev/null 2>&1
+		[ $rc -ne 0 ] && break
+	done
+	return $rc
+}
+
+test_17n() {
+	local i
+
+	[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.0) ] &&
+	[ $(lustre_version_code $SINGLEMDS) -le $(version_code 2.2.93) ] &&
+		skip "MDS 2.2.0-2.2.93 do not NUL-terminate symlinks" && return
+
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "only for ldiskfs MDT" && return 0
+
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	mkdir -p $DIR/$tdir
+	for ((i=0; i<10; i++)); do
+		$LFS mkdir -i 1 $DIR/$tdir/remote_dir_${i} ||
+			error "create remote dir error $i"
+		createmany -o $DIR/$tdir/remote_dir_${i}/f 10 ||
+			error "create files under remote dir failed $i"
+	done
+
+	check_fs_consistency_17n || error "e2fsck report error"
+
+	for ((i=0;i<10;i++)); do
+		rm -rf $DIR/$tdir/remote_dir_${i} ||
+			error "destroy remote dir error $i"
+	done
+
+	check_fs_consistency_17n || error "e2fsck report error"
+}
+run_test 17n "run e2fsck against master/slave MDT which contains remote dir"
+
 test_18() {
 	touch $DIR/f
 	ls $DIR || error
@@ -927,6 +980,80 @@ test_24w() { # bug21506
                 error "Error reading at the end of the file $tfile"
 }
 run_test 24w "Reading a file larger than 4Gb"
+
+test_24x() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir ||
+		error "create remote directory failed"
+
+	mkdir -p $DIR/$tdir/src_dir
+	touch $DIR/$tdir/src_file
+	mkdir -p $remote_dir/tgt_dir
+	touch $remote_dir/tgt_file
+
+	mrename $DIR/$tdir/src_dir $remote_dir/tgt_dir &&
+		error "rename dir cross MDT works!"
+
+	mrename $DIR/$tdir/src_file $remote_dir/tgt_file &&
+		error "rename file cross MDT works!"
+
+	ln $DIR/$tdir/src_file $remote_dir/tgt_file1 &&
+		error "ln file cross MDT should not work!"
+
+	rm -rf $DIR/$tdir || error "Can not delete directories"
+}
+run_test 24x "cross rename/link should be failed"
+
+test_24y() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir ||
+	           error "create remote directory failed"
+
+	mkdir -p $remote_dir/src_dir
+	touch $remote_dir/src_file
+	mkdir -p $remote_dir/tgt_dir
+	touch $remote_dir/tgt_file
+
+	mrename $remote_dir/src_dir $remote_dir/tgt_dir ||
+		error "rename subdir in the same remote dir failed!"
+
+	mrename $remote_dir/src_file $remote_dir/tgt_file ||
+		error "rename files in the same remote dir failed!"
+
+	ln $remote_dir/tgt_file $remote_dir/tgt_file1 ||
+		error "link files in the same remote dir failed!"
+
+	rm -rf $DIR/$tdir || error "Can not delete directories"
+}
+run_test 24y "rename/link on the same dir should succeed"
+
+test_24z() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local remote_src=$DIR/$tdir/remote_dir
+	local remote_tgt=$DIR/$tdir/remote_tgt
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_src ||
+		   error "create remote directory failed"
+
+	$LFS mkdir -i $MDTIDX $remote_tgt ||
+		   error "create remote directory failed"
+
+	mrename $remote_src $remote_tgt &&
+		error "rename remote dirs should not work!"
+
+	rm -rf $DIR/$tdir || error "Can not delete directories"
+}
+run_test 24z "rename one remote dir to another remote dir should fail"
 
 test_25a() {
 	echo '== symlink sanity ============================================='
@@ -2028,7 +2155,7 @@ test_32r() {
 }
 run_test 32r "opendir follows mountpoints in Lustre (should return error)"
 
-test_33() {
+test_33aa() {
 	rm -f $DIR/$tfile
 	touch $DIR/$tfile
 	chmod 444 $DIR/$tfile
@@ -2037,7 +2164,7 @@ test_33() {
 	$RUNAS $OPENFILE -f O_RDWR $DIR/$tfile && error || true
 	log 33_2
 }
-run_test 33 "write file with mode 444 (should return error) ===="
+run_test 33aa "write file with mode 444 (should return error) ===="
 
 test_33a() {
         rm -fr $DIR/d33
@@ -2121,6 +2248,31 @@ test_33c() {
         fi
 }
 run_test 33c "test llobdstat and write_bytes"
+
+test_33d() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir ||
+		error "create remote directory failed"
+
+	touch $remote_dir/$tfile
+	chmod 444 $remote_dir/$tfile
+	chown $RUNAS_ID $remote_dir/$tfile
+
+	$RUNAS $OPENFILE -f O_RDWR $DIR/$tfile && error || true
+
+	chown $RUNAS_ID $remote_dir
+	$RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $remote_dir/f33 ||
+					error "create" || true
+	$RUNAS $OPENFILE -f O_RDWR:O_CREAT -m 0444 $remote_dir/f33 &&
+				    error "open RDWR" || true
+	$RUNAS $OPENFILE -f 1286739555 $remote_dir/f33 &&
+				    error "create" || true
+}
+run_test 33d "openfile with 444 modes and malformed flags under remote dir"
 
 TEST_34_SIZE=${TEST_34_SIZE:-2000000000000}
 test_34a() {
@@ -9752,19 +9904,21 @@ mcreate_path2fid () {
 	local rc
 	local fid_path
 
-	$MCREATE --mode=$1 --major=$2 --minor=$3 $path || \
-		error "error: cannot create $desc"
+	$MCREATE --mode=$1 --major=$2 --minor=$3 $path ||
+		error "cannot create $desc"
 
 	fid=$($LFS path2fid $path)
 	rc=$?
-	[ $rc -ne 0 ] && error "error: cannot get fid of a $desc"
+	[ $rc -ne 0 ] && error "cannot get fid of a $desc"
 
-	fid_path=$($LFS fid2path $DIR $fid)
+	fid_path=$($LFS fid2path $DIR "$fid")
 	rc=$?
-	[ $rc -ne 0 ] && error "error: cannot get path of a $desc by fid"
+	[ $rc -ne 0 ] && error "cannot get path of $desc by $DIR $path $fid"
 
-	[ "$path" == "$fid_path" ] || \
-		error "error: fid2path returned \`$fid_path', expected \`$path'"
+	[ "$path" == "$fid_path" ] ||
+		error "fid2path returned $fid_path, expected $path"
+
+	echo "pass with $path and $fid"
 }
 
 test_226 () {
@@ -9926,6 +10080,45 @@ test_228c() {
 	[ $blk1 == $blk2 ] || error "old blk1=$blk1, new blk2=$blk2, unmatched!"
 }
 run_test 228c "NOT shrink the last entry in OI index node to recycle idle leaf"
+
+test_230a() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+
+	mkdir -p $DIR/$tdir/test_230_local
+	local mdt_idx=$($GETSTRIPE -M $DIR/$tdir/test_230_local)
+	[ $mdt_idx -ne 0 ] &&
+		error "create local directory on wrong MDT $mdt_idx"
+
+	$LFS mkdir -i $MDTIDX $DIR/$tdir/test_230 ||
+			error "create remote directory failed"
+	local mdt_idx=$($GETSTRIPE -M $DIR/$tdir/test_230)
+	[ $mdt_idx -ne $MDTIDX ] &&
+		error "create remote directory on wrong MDT $mdt_idx"
+
+	createmany -o $DIR/$tdir/test_230/t- 10 ||
+		error "create files on remote directory failed"
+	mdt_idx=$($GETSTRIPE -M $DIR/$tdir/test_230/t-0)
+	[ $mdt_idx -ne $MDTIDX ] && error "create files on wrong MDT $mdt_idx"
+	rm -r $DIR/$tdir || error "unlink remote directory failed"
+}
+run_test 230a "Create remote directory and files under the remote directory"
+
+test_230b() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir ||
+		error "create remote directory failed"
+
+	$LFS mkdir -i 0 $remote_dir/new_dir &&
+		error "nested remote directory create succeed!"
+
+	rm -r $DIR/$tdir || error "unlink remote directory failed"
+}
+run_test 230b "nested remote directory should be failed"
 
 #
 # tests that do cleanup/setup should be run at the end
