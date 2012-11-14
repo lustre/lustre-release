@@ -5908,3 +5908,64 @@ generate_logname() {
 
 	echo "$TESTLOG_PREFIX.$TESTNAME.$logname.$(hostname -s).log"
 }
+
+# mkdir directory on different MDTs
+test_mkdir() {
+	local option
+	local parent
+	local child
+	local path
+	local dir
+	local rc=0
+
+	if [ $# -eq 2 ]; then
+		option=$1
+		path=$2
+	else
+		path=$1
+	fi
+
+	child=${path##*/}
+	parent=${path%/*}
+
+	if [ "$parent" == "$child" ]; then
+		parent=$(pwd)
+	fi
+
+	if [ "$option" == "-p" -a -d ${parent}/${child} ]; then
+		return $rc
+	fi
+
+	# it needs to check whether there is further / in child
+	dir=$(echo $child | awk -F '/' '{print $2}')
+	if [ ! -z "$dir" ]; then
+		local subparent=$(echo $child | awk -F '/' '{ print $1 }')
+		parent=${parent}"/"${subparent}
+		child=$dir
+	fi
+
+	if [ ! -d ${parent} ]; then
+		if [ "$option" == "-p" ]; then
+			mkdir -p ${parent}
+		else
+			return 1
+		fi
+	fi
+
+	if [ $MDSCOUNT -le 1 ]; then
+		mkdir $option ${parent}/${child} || rc=$?
+	else
+		local mdt_idx=$($LFS getstripe -M $parent)
+
+		if [ "$mdt_idx" -ne 0 ]; then
+			mkdir $option ${parent}/${child} || rc=$?
+			return $rc
+		fi
+
+		local test_num=$(echo $testnum | sed -e 's/[^0-9]*//g')
+		local mdt_idx=$((test_num % MDSCOUNT))
+		echo "mkdir $mdt_idx for ${parent}/${child}"
+		$LFS setdirstripe -i $mdt_idx ${parent}/${child} || rc=$?
+	fi
+	return $rc
+}
