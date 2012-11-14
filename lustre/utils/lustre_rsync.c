@@ -1138,7 +1138,7 @@ int lr_parse_line(void *priv, struct lr_info *info)
 /* Initialize the replication parameters */
 int lr_init_status()
 {
-        size_t size = sizeof(struct lustre_rsync_status) + PATH_MAX;
+        size_t size = sizeof(struct lustre_rsync_status) + PATH_MAX + 1;
 
         if (status != NULL)
                 return 0;
@@ -1217,7 +1217,7 @@ int lr_read_log()
         struct lustre_rsync_status *s;
         int fd = -1;
         size_t size;
-        size_t read_size = sizeof(struct lustre_rsync_status) + PATH_MAX;
+        size_t read_size = sizeof(struct lustre_rsync_status) + PATH_MAX + 1;
         int rc = 0;
 
         if (statuslog == NULL)
@@ -1264,7 +1264,7 @@ int lr_read_log()
                 }
                 status->ls_num_targets = s->ls_num_targets;
                 memcpy(status->ls_targets, s->ls_targets,
-                       PATH_MAX * s->ls_num_targets);
+                       (PATH_MAX + 1) * s->ls_num_targets);
         }
         if (status->ls_last_recno == -1)
                 status->ls_last_recno = s->ls_last_recno;
@@ -1604,7 +1604,7 @@ int main(int argc, char *argv[])
                                 status->ls_num_targets = numtargets;
                         }
                         newsize = sizeof (struct lustre_rsync_status) +
-                                (status->ls_num_targets * PATH_MAX);
+                                (status->ls_num_targets * (PATH_MAX + 1));
                         if (status->ls_size != newsize) {
                                 status->ls_size = newsize;
                                 status = lr_grow_buf(status, newsize);
