@@ -396,7 +396,6 @@ int zfs_is_lustre(char *ds, unsigned *mount_type)
 
 	ret = zfs_read_ldd(ds, &tmp_ldd);
 	if ((ret == 0) && (tmp_ldd.ldd_config_ver > 0) &&
-	    (strlen(tmp_ldd.ldd_fsname) > 0) &&
 	    (strlen(tmp_ldd.ldd_svname) > 0)) {
 		*mount_type = tmp_ldd.ldd_mount_type;
 		return 1;
