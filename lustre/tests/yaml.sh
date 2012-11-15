@@ -88,9 +88,10 @@ release() {
 }
 
 yml_build_info() {
-    TEST_DISTRO=$(release)
-    LUSTRE_VERSION=$(lctl lustre_build_version | awk '/Lustre version:/ {print $3}')
-    LUSTRE_BUILD=${LUSTRE_BUILD_SOURCE:-$(sed 's/-.*//' <<<$LUSTRE_VERSION)}
+    local TEST_DISTRO=$(release)
+    local LUSTRE_VERSION=$(lctl lustre_build_version | awk '/Lustre version:/ {print $3}')
+    local LUSTRE_BUILD=${LUSTRE_BUILD_SOURCE:-$(sed 's/-.*//' <<<$LUSTRE_VERSION)}
+    local FILE_SYSTEM=$(node_fstypes $(hostname -s))
 
 cat <<EOF
     lbats_build_id: $LBATS_ID
@@ -101,6 +102,7 @@ cat <<EOF
     lustre_version: $LUSTRE_VERSION
     lustre_build: $LUSTRE_BUILD
     kernel_version: $(uname -r)
+    file_system: ${FILE_SYSTEM:-"NA"}
 EOF
 }
 
