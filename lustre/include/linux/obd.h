@@ -57,7 +57,10 @@ struct ll_iattr {
 	unsigned int	ia_attr_flags;
 };
 
+#ifdef __KERNEL__
 #define CLIENT_OBD_LIST_LOCK_DEBUG 1
+#endif
+
 typedef struct {
 	spinlock_t		lock;
 
@@ -71,8 +74,7 @@ typedef struct {
 
 #ifdef CLIENT_OBD_LIST_LOCK_DEBUG
 static inline void __client_obd_list_lock(client_obd_lock_t *lock,
-                                          const char *func,
-                                          int line)
+                                          const char *func, int line)
 {
 	unsigned long cur = jiffies;
 	while (1) {
@@ -87,20 +89,26 @@ static inline void __client_obd_list_lock(client_obd_lock_t *lock,
 
                 if ((jiffies - cur > 5 * CFS_HZ) &&
                     (jiffies - lock->time > 5 * CFS_HZ)) {
-                        LCONSOLE_WARN("LOCK UP! the lock %p was acquired"
-                                      " by <%s:%d:%s:%d> %lu time, I'm %s:%d\n",
-                                      lock, lock->task->comm, lock->task->pid,
+			struct task_struct *task = lock->task;
+
+			if (task == NULL)
+				continue;
+
+                        LCONSOLE_WARN("%s:%d: lock %p was acquired"
+                                      " by <%s:%d:%s:%d> for %lu seconds.\n",
+				      current->comm, current->pid,
+                                      lock, task->comm, task->pid,
                                       lock->func, lock->line,
-                                      (jiffies - lock->time),
-                                      current->comm, current->pid);
+                                      (jiffies - lock->time) / CFS_HZ);
                         LCONSOLE_WARN("====== for process holding the "
                                       "lock =====\n");
-                        libcfs_debug_dumpstack(lock->task);
+                        libcfs_debug_dumpstack(task);
                         LCONSOLE_WARN("====== for current process =====\n");
                         libcfs_debug_dumpstack(NULL);
                         LCONSOLE_WARN("====== end =======\n");
                         cfs_pause(1000 * CFS_HZ);
                 }
+		cpu_relax();
         }
 }
 
