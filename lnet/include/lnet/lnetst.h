@@ -469,7 +469,10 @@ typedef struct {
 } lst_test_ping_param_t;
 
 /* more tests */
+#ifdef __WINNT__
 #include <libcfs/libcfs_pack.h>
+#include <libcfs/libcfs_unpack.h>
+#endif
 typedef struct {
         __u32 errors;
         __u32 rpcs_sent;
@@ -488,6 +491,5 @@ typedef struct {
         __u32 brw_errors;
         __u32 ping_errors;
 } WIRE_ATTR sfw_counters_t;
-#include <libcfs/libcfs_unpack.h>
 
 #endif

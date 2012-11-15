@@ -48,6 +48,8 @@
 #include <lnet/darwin/lib-types.h>
 #elif defined(__WINNT__)
 #include <lnet/winnt/lib-types.h>
+#include <libcfs/libcfs_pack.h>
+#include <libcfs/libcfs_unpack.h>
 #else
 #error Unsupported Operating System
 #endif
@@ -59,7 +61,6 @@
 #define WIRE_ATTR       __attribute__((packed))
 
 /* Packed version of lnet_process_id_t to transfer via network */
-#include <libcfs/libcfs_pack.h>
 typedef struct {
         lnet_nid_t nid;
         lnet_pid_t pid;   /* node id / process id */
@@ -73,7 +74,6 @@ typedef struct {
         __u64 wh_interface_cookie;
         __u64 wh_object_cookie;
 } WIRE_ATTR lnet_handle_wire_t;
-#include <libcfs/libcfs_unpack.h>
 
 typedef enum {
         LNET_MSG_ACK = 0,
@@ -87,7 +87,6 @@ typedef enum {
  * byte boundary in the message header.  Note that all types used in these
  * wire structs MUST be fixed size and the smaller types are placed at the
  * end. */
-#include <libcfs/libcfs_pack.h>
 typedef struct lnet_ack {
         lnet_handle_wire_t  dst_wmd;
         __u64               match_bits;
@@ -177,7 +176,6 @@ typedef struct {
         __u32       acr_version;                /* protocol version */
         __u64       acr_nid;                    /* target NID */
 } WIRE_ATTR lnet_acceptor_connreq_t;
-#include <libcfs/libcfs_unpack.h>
 
 #define LNET_PROTO_ACCEPTOR_VERSION       1
 
@@ -557,7 +555,6 @@ typedef struct {
         lnet_kiov_t            rb_kiov[0];          /* the buffer space */
 } lnet_rtrbuf_t;
 
-#include <libcfs/libcfs_pack.h>
 typedef struct {
         __u32        msgs_alloc;
         __u32        msgs_max;
@@ -571,7 +568,6 @@ typedef struct {
         __u64        route_length;
         __u64        drop_length;
 } WIRE_ATTR lnet_counters_t;
-#include <libcfs/libcfs_unpack.h>
 
 #define LNET_PEER_HASHSIZE   503                /* prime! */
 

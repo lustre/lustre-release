@@ -65,7 +65,10 @@ typedef enum {
         SRPC_MSG_JOIN_REPLY     = 17,
 } srpc_msg_type_t;
 
+#ifdef __WINNT__
 #include <libcfs/libcfs_pack.h>
+#include <libcfs/libcfs_unpack.h>
+#endif
 
 /* CAVEAT EMPTOR:
  * All srpc_*_reqst_t's 1st field must be matchbits of reply buffer,
@@ -283,8 +286,6 @@ typedef struct srpc_msg {
                 srpc_brw_reply_t     brw_reply;
         }     msg_body;
 } WIRE_ATTR srpc_msg_t;
-
-#include <libcfs/libcfs_unpack.h>
 
 static inline void
 srpc_unpack_msg_hdr(srpc_msg_t *msg)

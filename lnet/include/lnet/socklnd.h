@@ -50,7 +50,10 @@
 
 #define SOCKLND_CONN_ACK        SOCKLND_CONN_BULK_IN
 
+#ifdef __WINNT__
 #include <libcfs/libcfs_pack.h>
+#include <libcfs/libcfs_unpack.h>
+#endif
 typedef struct {
         __u32                   kshm_magic;     /* magic number of socklnd message */
         __u32                   kshm_version;   /* version of socklnd message */
@@ -92,8 +95,6 @@ socklnd_init_msg(ksock_msg_t *msg, int type)
         msg->ksm_type           = type;
         msg->ksm_zc_cookies[0]  = msg->ksm_zc_cookies[1]  = 0;
 }
-
-#include <libcfs/libcfs_unpack.h>
 
 #define KSOCK_MSG_NOOP          0xc0            /* ksm_u empty */
 #define KSOCK_MSG_LNET          0xc1            /* lnet msg */
