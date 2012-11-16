@@ -904,8 +904,6 @@ out:
 	RETURN(0);
 }
 
-static struct llog_operations osp_mds_ost_orig_logops;
-
 static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 {
 	struct osp_thread_info *osi = osp_env_info(env);
@@ -937,7 +935,6 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	       osi->osi_cid.lci_logid.lgl_oseq,
 	       osi->osi_cid.lci_logid.lgl_ogen);
 
-	osp_mds_ost_orig_logops = llog_osd_ops;
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_MDS_OST_ORIG_CTXT, obd,
 			&osp_mds_ost_orig_logops);
 	if (rc)
@@ -964,8 +961,6 @@ static int osp_sync_llog_init(const struct lu_env *env, struct osp_device *d)
 	}
 
 	ctxt->loc_handle = lgh;
-	lgh->lgh_logops->lop_add = llog_cat_add_rec;
-	lgh->lgh_logops->lop_declare_add = llog_cat_declare_add_rec;
 
 	rc = llog_cat_init_and_process(env, lgh);
 	if (rc)

@@ -295,6 +295,7 @@ static inline struct dt_object *osp_object_child(struct osp_object *o)
 
 /* osp_dev.c */
 void osp_update_last_id(struct osp_device *d, obd_id objid);
+extern struct llog_operations osp_mds_ost_orig_logops;
 
 /* osp_precreate.c */
 int osp_init_precreate(struct osp_device *d);
