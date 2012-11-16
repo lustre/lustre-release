@@ -741,3 +741,69 @@ out:
 	dt_trans_stop(env, dev, th);
 	return rc;
 }
+
+/*
+ * Write a global record
+ *
+ * \param env - is the environment passed by the caller
+ * \param obj - is the on-disk global index to be updated
+ * \param id  - index to be updated
+ * \param rec - record to be written
+ */
+int lquota_disk_write_glb(const struct lu_env *env, struct dt_object *obj,
+			  __u64 id, struct lquota_glb_rec *rec)
+{
+	struct dt_device	*dev = lu2dt_dev(obj->do_lu.lo_dev);
+	struct thandle		*th;
+	struct dt_key		*key = (struct dt_key *)&id;
+	int			 rc;
+	ENTRY;
+
+	th = dt_trans_create(env, dev);
+	if (IS_ERR(th))
+		RETURN(PTR_ERR(th));
+
+	/* the entry with 0 key can always be found in IAM file. */
+	if (id == 0) {
+		rc = dt_declare_delete(env, obj, key, th);
+		if (rc)
+			GOTO(out, rc);
+	}
+
+	rc = dt_declare_insert(env, obj, (struct dt_rec *)rec, key, th);
+	if (rc)
+		GOTO(out, rc);
+
+	rc = dt_trans_start_local(env, dev, th);
+	if (rc)
+		GOTO(out, rc);
+
+	dt_write_lock(env, obj, 0);
+
+	if (id == 0) {
+		struct lquota_glb_rec *tmp;
+
+		OBD_ALLOC_PTR(tmp);
+		if (tmp == NULL)
+			GOTO(out_lock, rc = -ENOMEM);
+
+		rc = dt_lookup(env, obj, (struct dt_rec *)tmp, key,
+			       BYPASS_CAPA);
+
+		OBD_FREE_PTR(tmp);
+		if (rc == 0) {
+			rc = dt_delete(env, obj, key, th, BYPASS_CAPA);
+			if (rc)
+				GOTO(out_lock, rc);
+		}
+		rc = 0;
+	}
+
+	rc = dt_insert(env, obj, (struct dt_rec *)rec, key, th, BYPASS_CAPA, 1);
+out_lock:
+	dt_write_unlock(env, obj);
+out:
+	dt_trans_stop(env, dev, th);
+	RETURN(rc);
+}
+EXPORT_SYMBOL(lquota_disk_write_glb);

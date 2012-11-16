@@ -723,63 +723,6 @@ const struct dt_index_operations osd_admin_index_ops = {
 	}
 };
 
-static int write_quota_rec(const struct lu_env *env, struct dt_object *dt,
-			   __u64 id, struct lquota_glb_rec *rec)
-{
-	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
-	struct thandle		*th;
-	struct dt_key		*key = (struct dt_key *)&id;
-	int			 rc;
-	ENTRY;
-
-	th = dt_trans_create(env, &osd->od_dt_dev);
-	if (IS_ERR(th))
-		RETURN(PTR_ERR(th));
-
-	/* the entry with 0 key can always be found in IAM file. */
-	if (id == 0) {
-		rc = dt_declare_delete(env, dt, key, th);
-		if (rc)
-			GOTO(out, rc);
-	}
-
-	rc = dt_declare_insert(env, dt, (struct dt_rec *)rec, key, th);
-	if (rc)
-		GOTO(out, rc);
-
-	rc = dt_trans_start_local(env, &osd->od_dt_dev, th);
-	if (rc)
-		GOTO(out, rc);
-
-	dt_write_lock(env, dt, 0);
-
-	if (id == 0) {
-		struct lquota_glb_rec *tmp;
-
-		OBD_ALLOC_PTR(tmp);
-		if (tmp == NULL)
-			GOTO(out_lock, rc = -ENOMEM);
-
-		rc = dt_lookup(env, dt, (struct dt_rec *)tmp, key,
-			       BYPASS_CAPA);
-
-		OBD_FREE_PTR(tmp);
-		if (rc == 0) {
-			rc = dt_delete(env, dt, key, th, BYPASS_CAPA);
-			if (rc)
-				GOTO(out_lock, rc);
-		}
-		rc = 0;
-	}
-
-	rc = dt_insert(env, dt, (struct dt_rec *)rec, key, th, BYPASS_CAPA, 1);
-out_lock:
-	dt_write_unlock(env, dt);
-out:
-	dt_trans_stop(env, &osd->od_dt_dev, th);
-	RETURN(rc);
-}
-
 static int convert_quota_file(const struct lu_env *env,
 			      struct dt_object *old, struct dt_object *new,
 			      bool isblk)
@@ -829,7 +772,7 @@ static int convert_quota_file(const struct lu_env *env,
 	grace = isblk ? dqinfo->dqi_bgrace : dqinfo->dqi_igrace;
 	if (grace != 0) {
 		glb_rec->qbr_time = grace;
-		rc = write_quota_rec(env, new, 0, glb_rec);
+		rc = lquota_disk_write_glb(env, new, 0, glb_rec);
 		if (rc)
 			GOTO(out, rc);
 		glb_rec->qbr_time = 0;
@@ -866,7 +809,7 @@ static int convert_quota_file(const struct lu_env *env,
 		glb_rec->qbr_softlimit = isblk ? dqblk->dqb_bsoftlimit :
 						 dqblk->dqb_isoftlimit;
 
-		rc = write_quota_rec(env, new, *((__u64 *)key), glb_rec);
+		rc = lquota_disk_write_glb(env, new, *((__u64 *)key), glb_rec);
 		if (rc)
 			GOTO(out_it, rc);
 next:
@@ -1001,7 +944,7 @@ int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
 	struct dt_object	*root, *parent = NULL, *admin = NULL;
 	dt_obj_version_t	 version;
 	char			*fname;
-	bool			 isblk;
+	bool			 isblk, converted = false;
 	int			 rc;
 	ENTRY;
 
@@ -1103,7 +1046,24 @@ int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
 	if (rc)
 		CERROR("%s: Migrate old admin quota file(%s) failed, rc:%d\n",
 		       osd->od_svname, fname, rc);
+	converted = true;
 out:
+	/* if no migration happen, we need to set the default grace time. */
+	if (!converted && rc == 0) {
+		struct lquota_glb_rec *rec = &oti->oti_quota_rec.lqr_glb_rec;
+
+		rec->qbr_hardlimit = 0;
+		rec->qbr_softlimit = 0;
+		rec->qbr_granted = 0;
+		rec->qbr_time = isblk ? MAX_DQ_TIME : MAX_IQ_TIME;
+
+		rc = lquota_disk_write_glb(env, dt, 0, rec);
+		if (rc)
+			CERROR("%s: Failed to set default grace time for "
+			       "index("DFID"), rc:%d\n", osd->od_svname,
+			       PFID(lu_object_fid(&dt->do_lu)), rc);
+	}
+
 	/* bump index version to 1, so the migration will be skipped
 	 * next time. */
 	if (rc == 0) {

@@ -453,8 +453,10 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 		     struct dt_object *qmt_root)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
+	struct lquota_glb_rec	*rec = &qti->qti_glb_rec;
 	struct qmt_pool_info	*pool;
 	struct dt_device	*dev = NULL;
+	dt_obj_version_t	 version;
 	cfs_list_t		*pos;
 	int			 rc = 0, qtype;
 	ENTRY;
@@ -504,6 +506,34 @@ int qmt_pool_prepare(const struct lu_env *env, struct qmt_device *qmt,
 			}
 
 			pool->qpi_glb_obj[qtype] = obj;
+
+			version = dt_version_get(env, obj);
+			/* set default grace time for newly created index */
+			if (version == 0) {
+				rec->qbr_hardlimit = 0;
+				rec->qbr_softlimit = 0;
+				rec->qbr_granted = 0;
+				rec->qbr_time = pool_type == LQUOTA_RES_MD ?
+					MAX_IQ_TIME : MAX_DQ_TIME;
+
+				rc = lquota_disk_write_glb(env, obj, 0, rec);
+				if (rc) {
+					CERROR("%s: failed to set default "
+					       "grace time for %s type (%d)\n",
+					       qmt->qmt_svname,
+					       QTYPE_NAME(qtype), rc);
+					RETURN(rc);
+				}
+
+				rc = lquota_disk_update_ver(env, dev, obj, 1);
+				if (rc) {
+					CERROR("%s: failed to set initial "
+					       "version for %s type (%d)\n",
+					       qmt->qmt_svname,
+					       QTYPE_NAME(qtype), rc);
+					RETURN(rc);
+				}
+			}
 
 			/* create quota entry site for this quota type */
 			pool->qpi_site[qtype] = lquota_site_alloc(env, pool,
