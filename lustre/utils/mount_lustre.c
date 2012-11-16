@@ -53,6 +53,19 @@
 #include <lustre_ver.h>
 #include <ctype.h>
 #include <limits.h>
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 10, 51, 0)
+/*
+ * LU-1783
+ * We only #include a kernel level include file here because
+ * important MS_ flag #defines are missing from the SLES version
+ * of sys/mount.h
+ * In the future if SLES updates sys/mount.h to have a more complete
+ * set of flag #defines we should stop including linux/fs.h
+ */
+#warn remove kernel include
+#else
+#include <linux/fs.h>
+#endif
 
 #define MAXOPT 4096
 #define MAX_RETRIES 99
@@ -254,10 +267,21 @@ int parse_options(struct mount_opts *mop, char *orig_options, int *flagp)
                 }
         }
 #ifdef MS_STRICTATIME
-                /* set strictatime to default if NOATIME or RELATIME
-                   not given explicit */
-        if (!(*flagp & (MS_NOATIME | MS_RELATIME)))
-                *flagp |= MS_STRICTATIME;
+#if LUSTRE_VERSION_CODE > OBD_OCD_VERSION(2, 10, 51, 0)
+/*
+ * LU-1783
+ * In the future when upstream fixes land in all supported kernels
+ * we should stop forcing MS_STRICTATIME in lustre mounts.
+ * We override the kernel level default of MS_RELATIME for now
+ * due to a kernel vfs level bug in atime updates that fails
+ * to reset timestamps from the future.
+ */
+#warn remove MS_STRICTATIME override
+#endif
+	/* set strictatime to default if NOATIME or RELATIME
+	   not given explicit */
+	if (!(*flagp & (MS_NOATIME | MS_RELATIME)))
+		*flagp |= MS_STRICTATIME;
 #endif
         strcpy(orig_options, options);
         free(options);
