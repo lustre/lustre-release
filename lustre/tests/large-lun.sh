@@ -141,8 +141,8 @@ test_2 () {
 			$(ostdevname $num) > /dev/null ||
 			error "format ost${num} error"
 		run_dumpe2fs ost${num} $dev
-		do_facet ost${num} mount -t $FSTYPE $dev $ostmnt \
-			"$OST_MOUNT_OPTS"
+		do_facet ost${num} mount -t $(facet_fstype ost${num}) $dev \
+			$ostmnt "$OST_MOUNT_OPTS"
 
 		# Run llverfs on the mounted ldiskfs filesystem in partial mode
 		# to ensure that the kernel can perform filesystem operations
@@ -162,8 +162,8 @@ test_2 () {
 
 		if $FULL_MODE; then
 			log "full mode, mount the OST $dev as a ldiskfs again"
-			do_facet ost${num} mount -t $FSTYPE $dev $ostmnt \
-				"$OST_MOUNT_OPTS"
+			do_facet ost${num} mount -t $(facet_fstype ost${num}) \
+				$dev $ostmnt "$OST_MOUNT_OPTS"
 			cleanup_dirs ost${num} $ostmnt
 			do_facet ost${num} "sync"
 

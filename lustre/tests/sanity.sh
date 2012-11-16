@@ -4983,7 +4983,7 @@ test_80() { # bug 10718
         local soc="obdfilter.*.sync_on_lock_cancel"
         local soc_old=$(do_facet ost1 lctl get_param -n $soc | head -n1)
         local hosts=
-        if [ "$soc_old" != "never" -a "$FSTYPE" != "ldiskfs" ]; then
+        if [ "$soc_old" != "never" -a "$(facet_fstype ost1)" != "ldiskfs" ]; then
                 hosts=$(for host in $(seq -f "ost%g" 1 $OSTCOUNT); do
                           facet_active_host $host; done | sort -u)
                 do_nodes $hosts lctl set_param $soc=never
@@ -9795,7 +9795,8 @@ run_test 227 "running truncated executable does not cause OOM"
 
 # LU-1512 try to reuse idle OI blocks
 test_228a() {
-	[ "$FSTYPE" != "ldiskfs" ] && skip "non-ldiskfs backend" && return
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "non-ldiskfs backend" && return
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -9834,7 +9835,8 @@ test_228a() {
 run_test 228a "try to reuse idle OI blocks"
 
 test_228b() {
-	[ "$FSTYPE" != "ldiskfs" ] && skip "non-ldiskfs backend" && return
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "non-ldiskfs backend" && return
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir
@@ -9881,7 +9883,8 @@ run_test 228b "idle OI blocks can be reused after MDT restart"
 
 #LU-1881
 test_228c() {
-	[ "$FSTYPE" != "ldiskfs" ] && skip "non-ldiskfs backend" && return
+	[ "$(facet_fstype $SINGLEMDS)" != "ldiskfs" ] &&
+		skip "non-ldiskfs backend" && return
 
 	local MDT_DEV=$(mdsdevname ${SINGLEMDS//mds/})
 	local myDIR=$DIR/$tdir

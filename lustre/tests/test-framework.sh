@@ -1120,7 +1120,7 @@ setup_quota_old(){
 mdt_quota_type() {
 	local varsvc=${SINGLEMDS}_svc
 	do_facet $SINGLEMDS $LCTL get_param -n \
-		osd-$FSTYPE.${!varsvc}.quota_slave.enabled
+		osd-$(facet_fstype $SINGLEMDS).${!varsvc}.quota_slave.enabled
 }
 
 # get ost quota type
@@ -1128,7 +1128,7 @@ ost_quota_type() {
 	# All OSTs should have same quota type
 	local varsvc=ost1_svc
 	do_facet ost1 $LCTL get_param -n \
-		osd-$FSTYPE.${!varsvc}.quota_slave.enabled
+		osd-$(facet_fstype ost1).${!varsvc}.quota_slave.enabled
 }
 
 # restore old quota type settings

@@ -193,11 +193,14 @@ getquota() {
 set_mdt_qtype() {
 	local qtype=$1
 	local varsvc=${SINGLEMDS}_svc
+	local cmd
 	do_facet mgs $LCTL conf_param $FSNAME.quota.mdt=$qtype
 	if $(facet_up $SINGLEMDS); then
-		wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-			osd-$FSTYPE.${!varsvc}.quota_slave.enabled" "$qtype" ||
-				return 1
+		cmd="$LCTL get_param -n "
+		cmd=${cmd}osd-$(facet_fstype $SINGLEMDS).${!varsvc}
+		cmd=${cmd}.quota_slave.enabled
+
+		wait_update_facet $SINGLEMDS "$cmd" "$qtype" || return 1
 	fi
 	return 0
 }
@@ -208,14 +211,17 @@ set_ost_qtype() {
 	local qtype=$1
 	local varsvc
 	local osts=$(get_facets OST)
+	local cmd
 	do_facet mgs $LCTL conf_param $FSNAME.quota.ost=$qtype
 	# we have to make sure each OST received config changes
 	for ost in ${osts//,/ }; do
 		varsvc=${ost}_svc
+		cmd="$LCTL get_param -n "
+		cmd=${cmd}osd-$(facet_fstype $ost).${!varsvc}
+		cmd=${cmd}.quota_slave.enabled
+
 		if $(facet_up $ost); then
-			wait_update_facet $ost "$LCTL get_param -n \
-				osd-$FSTYPE.${!varsvc}.quota_slave.enabled" \
-					"$qtype" || return 1
+			wait_update_facet $ost "$cmd" "$qtype" || return 1
 		fi
 	done
 	return 0
@@ -226,12 +232,16 @@ wait_reintegration() {
 	local qtype=$2
 	local result="glb[1],slv[1],reint[0]"
 	local varsvc
+	local cmd
 
 	if [ $ntype == "mdt" ]; then
 		varsvc=${SINGLEMDS}_svc
+		cmd="$LCTL get_param -n "
+		cmd=${cmd}osd-$(facet_fstype $SINGLEMDS).${!varsvc}
+		cmd=${cmd}.quota_slave.info
+
 		if $(facet_up $SINGLEMDS); then
-			wait_update_facet $SINGLEMDS "$LCTL get_param -n \
-			osd-$FSTYPE.${!varsvc}.quota_slave.info |
+			wait_update_facet $SINGLEMDS "$cmd |
 			grep "$qtype" | awk '{ print \\\$3 }'" "$result" ||
 				return 1
 		fi
@@ -239,9 +249,12 @@ wait_reintegration() {
 		local osts=$(get_facets OST)
 		for ost in ${osts//,/ }; do
 			varsvc=${ost}_svc
+			cmd="$LCTL get_param -n "
+			cmd=${cmd}osd-$(facet_fstype $ost).${!varsvc}
+			cmd=${cmd}.quota_slave.info
+
 			if $(facet_up $ost); then
-				wait_update_facet $ost "$LCTL get_param -n \
-				osd-$FSTYPE.${!varsvc}.quota_slave.info |
+				wait_update_facet $ost "$cmd |
 				grep "$qtype" | awk '{ print \\\$3 }'" \
 					"$result" || return 1
 			fi

@@ -17,7 +17,7 @@ CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT"
 
 case `uname -r` in
-2.6*) FSTYPE=${FSTYPE:-ldiskfs}; ALWAYS_EXCEPT="$ALWAYS_EXCEPT " ;;
+2.6*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT " ;;
 *) error "unsupported kernel (gss only works with 2.6.x)" ;;
 esac
 

@@ -332,7 +332,7 @@ COUNT=${COUNT:-2500}
 # The FSXNUM reduction for ZFS is needed until ORI-487 is fixed.
 # We don't want to skip it entirely, but ZFS is VERY slow and cannot
 # pass a 2500 operation dual-mount run within the time limit.
-if [ "$OSTFSTYPE" = "zfs" ]; then
+if [ "$(facet_fstype ost1)" = "zfs" ]; then
 	FSXNUM=$((COUNT / 5))
 	FSXP=1
 elif [ "$SLOW" = "yes" ]; then

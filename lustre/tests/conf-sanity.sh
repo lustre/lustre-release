@@ -1228,7 +1228,7 @@ test_32newtarball() {
 			  sed -e 's/\./_/g')	# E.g., "1.8.7" -> "1_8"
 	dst=$(cd $dst; pwd)
 	pushd $tmp/img
-	tar cjvf $dst/disk$version-$FSTYPE.tar.bz2 -S *
+	tar cjvf $dst/disk$version-$(facet_fstype $SINGLEMDS).tar.bz2 -S *
 	popd
 
 	rm -r $tmp
@@ -1253,9 +1253,8 @@ t32_check() {
 		exit 0
 	fi
 
-	local IMGTYPE=$FSTYPE
+	local IMGTYPE=$(facet_fstype $SINGLEMDS)
 
-	[ ! -z "$MDSFSTYPE" ] && IMGTYPE=$MDSFSTYPE
 	tarballs=$($r find $RLUSTRE/tests -maxdepth 1 -name \'disk*-$IMGTYPE.tar.bz2\')
 
 	if [ -z "$tarballs" ]; then
@@ -1303,7 +1302,8 @@ t32_reload_modules() {
 
 	while ((i < 20)); do
 		echo "Unloading modules on $node: Attempt $i"
-		do_rpc_nodes $node $LUSTRE_RMMOD $FSTYPE && all_removed=true
+		do_rpc_nodes $node $LUSTRE_RMMOD $(facet_fstype $SINGLEMDS) &&
+			all_removed=true
 		do_rpc_nodes $node check_mem_leak || return 1
 		if $all_removed; then
 			load_modules
