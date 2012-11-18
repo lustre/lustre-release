@@ -38,6 +38,14 @@ rm -rf $DIR/[df][0-9]*
 
 [ "$DAEMONFILE" ] && $LCTL debug_daemon start $DAEMONFILE $DAEMONSIZE
 
+# if there is no CLIENT1 defined, some tests can be ran on localhost
+CLIENT1=${CLIENT1:-$HOSTNAME}
+# if CLIENT2 doesn't exist then use CLIENT1 instead
+# All tests should use CLIENT2 with MOUNT2 only therefore it will work if
+# $CLIENT2 == CLIENT1
+# Exception is the test which need two separate nodes
+CLIENT2=${CLIENT2:-$CLIENT1}
+
 # LU-482 Avert LVM and VM inability to flush caches in pre .33 kernels
 if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
 	sync
@@ -571,11 +579,282 @@ test_21b() {
     [ $n_attempts -gt 3 ] &&
         error "The test cannot check whether COS works or not: all renames are replied w/o COS"
     done
+    zconf_mount_clients $CLIENTS $MOUNT2
     restore_lustre_params < $param_file
     rm -f $param_file
     return 0
 }
 run_test 21b "commit on sharing, two clients"
+
+checkstat_22() {
+	checkstat $MOUNT1/$remote_dir || return 1
+	checkstat $MOUNT1/$remote_dir/dir || return 2
+	checkstat $MOUNT1/$remote_dir/$tfile-1 || return 3
+	checkstat $MOUNT1/$remote_dir/dir/$tfile-1 || return 4
+	return 0
+}
+
+create_remote_dir_files_22() {
+	do_node $CLIENT2 mkdir ${MOUNT2}/$remote_dir/dir || return 1
+	do_node $CLIENT1 createmany -o $MOUNT1/$remote_dir/dir/$tfile- 2 ||
+							    return 2
+	do_node $CLIENT2 createmany -o $MOUNT2/$remote_dir/$tfile- 2 ||
+							    return 3
+	return 0
+}
+
+test_22a () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local MDTIDX=1
+	local remote_dir=${tdir}/remote_dir
+
+	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
+	CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+	wait $CLIENT_PID || error "lfs mkdir failed"
+
+	replay_barrier mds${MDTIDX}
+	create_remote_dir_files_22 || error "Remote creation failed $?"
+	fail mds${MDTIDX}
+
+	checkstat_22 || error "check stat failed $?"
+
+	rm -rf $MOUNT1/$tdir || error "rmdir remote_dir failed"
+	return 0
+}
+run_test 22a "c1 lfs mkdir -i 1 dir1, M0 drop reply & fail, c2 mkdir dir1/dir"
+
+test_22b () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local MDTIDX=1
+	local remote_dir=$tdir/remote_dir
+
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
+	CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX},mds$((MDTIDX + 1))
+	wait $CLIENT_PID || error "lfs mkdir failed"
+
+	replay_barrier mds$MDTIDX
+	create_remote_dir_files_22 || error "Remote creation failed $?"
+	fail mds${MDTIDX}
+
+	checkstat_22 || error "check stat failed $?"
+
+	rm -rf $MOUNT1/$tdir || error "rmdir remote_dir failed"
+	return 0
+}
+run_test 22b "c1 lfs mkdir -i 1 d1, M0 drop reply & fail M0/M1, c2 mkdir d1/dir"
+
+test_22c () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+	local MDTIDX=1
+	local remote_dir=${tdir}/remote_dir
+
+	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE       0x188
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x188
+	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
+	CLIENT_PID=$!
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+
+	fail mds$((MDTIDX+1))
+	wait $CLIENT_PID || error "lfs mkdir failed"
+
+	replay_barrier mds$MDTIDX
+	create_remote_dir_files_22 || error "Remote creation failed $?"
+	fail mds$MDTIDX
+
+	checkstat_22 || error "check stat failed $?"
+
+	rm -rf $MOUNT1/$tdir || error "rmdir remote_dir failed"
+	return 0
+}
+run_test 22c "c1 lfs mkdir -i 1 d1, M1 drop update & fail M1, c2 mkdir d1/dir"
+
+test_22d () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local MDTIDX=1
+	local remote_dir=${tdir}/remote_dir
+
+	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE       0x188
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x188
+	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir &
+	CLIENT_PID=$!
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+
+	fail mds${MDTIDX},mds$((MDTIDX + 1))
+	wait $CLIENT_PID || error "lfs mkdir failed"
+
+	replay_barrier mds$MDTIDX
+	create_remote_dir_files_22 || error "Remote creation failed $?"
+	fail mds$MDTIDX
+
+	checkstat_22 || error "check stat failed $?"
+
+	rm -rf $MOUNT1/$tdir || error "rmdir remote_dir failed"
+	return 0
+}
+run_test 22d "c1 lfs mkdir -i 1 d1, M1 drop update & fail M0/M1,c2 mkdir d1/dir"
+
+checkstat_23() {
+	checkstat $MOUNT1/$remote_dir || return 1
+	checkstat $MOUNT1/$remote_dir/$tfile-1 || return 2
+	return 0
+}
+
+create_remote_dir_files_23() {
+	do_node $CLIENT2 mkdir ${MOUNT2}/$remote_dir || return 1
+	do_node $CLIENT2 createmany -o $MOUNT2/$remote_dir/$tfile- 2 || return 2
+	return 0
+}
+
+test_23a () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+	local MDTIDX=1
+	local remote_dir=$tdir/remote_dir
+
+	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
+			error "lfs mkdir failed"
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
+	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+
+	fail mds$((MDTIDX + 1))
+	wait $CLIENT_PID || error "rmdir remote dir failed"
+
+	replay_barrier mds${MDTIDX}
+	create_remote_dir_files_23 || error "Remote creation failed $?"
+	fail mds${MDTIDX}
+
+	checkstat_23 || error "check stat failed $?"
+
+	rm -rf $MOUNT1/$tdir || error "rmdir remote_dir failed"
+	return 0
+}
+run_test 23a "c1 rmdir d1, M1 drop reply and fail, client2 mkdir d1"
+
+test_23b () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local MDTIDX=1
+	local remote_dir=$tdir/remote_dir
+
+	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
+			error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x119
+	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+
+	fail mds${MDTIDX},mds$((MDTIDX + 1))
+	wait $CLIENT_PID || error "rmdir remote dir failed"
+
+	replay_barrier mds${MDTIDX}
+	create_remote_dir_files_23 || error "Remote creation failed $?"
+	fail mds${MDTIDX}
+
+	checkstat_23 || error "check stat failed $?"
+
+	rm -rf $MOUNT1/$tdir || error "rmdir remote_dir failed"
+	return 0
+}
+run_test 23b "c1 rmdir d1, M1 drop reply and fail M0/M1, c2 mkdir d1"
+
+test_23c () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+	local MDTIDX=1
+	local remote_dir=$tdir/remote_dir
+
+	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
+			error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE       0x188
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x188
+	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
+	CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+	wait $CLIENT_PID || error "rmdir remote dir failed"
+
+	replay_barrier mds${MDTIDX}
+	create_remote_dir_files_23 || error "Remote creation failed $?"
+	fail mds${MDTIDX}
+
+	checkstat_23 || error "check stat failed $?"
+
+	rm -rf $MOUNT1/$tdir || return 6
+	return 0
+}
+run_test 23c "c1 rmdir d1, M0 drop update reply and fail M0, c2 mkdir d1"
+
+test_23d () {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local MDTIDX=1
+	local remote_dir=$tdir/remote_dir
+
+	do_node $CLIENT1 mkdir -p $MOUNT1/${tdir}
+	do_node $CLIENT1 $LFS mkdir -i $MDTIDX $MOUNT1/$remote_dir ||
+			error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE       0x188
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x188
+	do_node $CLIENT1 rmdir $MOUNT1/$remote_dir &
+	CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX},mds$((MDTIDX + 1))
+	wait $CLIENT_PID || error "rmdir remote dir failed"
+
+	replay_barrier mds${MDTIDX}
+	create_remote_dir_files_23 || error "Remote creation failed $?"
+	fail mds${MDTIDX}
+
+	checkstat_23 || error "check stat failed $?"
+
+	rm -rf $MOUNT1/$tdir || return 6
+	return 0
+}
+run_test 23d "c1 rmdir d1, M0 drop update reply and fail M0/M1, c2 mkdir d1"
 
 # end commit on sharing tests 
 
