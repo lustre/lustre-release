@@ -52,8 +52,8 @@ TRACE=${TRACE:-""}
 
 check_and_setup_lustre
 
-LOVNAME=`lctl get_param -n llite.*.lov.common_name | tail -n 1`
-OSTCOUNT=`lctl get_param -n lov.$LOVNAME.numobd`
+LOVNAME=$($LCTL get_param -n llite.*.lov.common_name | tail -n 1)
+OSTCOUNT=$($LCTL get_param -n lov.$LOVNAME.numobd)
 
 assert_DIR
 rm -rf $DIR1/[df][0-9]* $DIR1/lnk
@@ -132,6 +132,41 @@ test_2e() {
         $RUNAS dd if=/dev/zero of=$DIR2/$tfile count=1 || error
 }
 run_test 2e "check chmod on root is propagated to others"
+
+test_2f() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	local MDTIDX=1
+	local remote_dir=$tdir/remote_dir
+
+	mkdir -p $DIR1/$tdir
+	$LFS mkdir -i $MDTIDX $DIR1/$remote_dir ||
+	           error "Create remote directory failed"
+
+	touch $DIR1/$remote_dir/$tfile ||
+		error "Create file under remote directory failed"
+	chmod 777 $DIR1/$remote_dir/$tfile ||
+		error "Chmod file under remote directory failed"
+
+	$CHECKSTAT -t file -p 0777 $DIR2/$remote_dir/$tfile ||
+		error "Check attr of file under remote directory failed"
+
+	chown $RUNAS_ID:$RUNAS_GID $DIR1/$remote_dir/$tfile ||
+		error "Chown file under remote directory failed"
+
+	$CHECKSTAT -u \#$RUNAS_ID -g \#$RUNAS_GID $DIR2/$remote_dir/$tfile ||
+		error "Check owner of file under remote directory failed"
+
+	cd $DIR2/$remote_dir || error "enter remote dir"
+	rm -rf $DIR1/$remote_dir/$tfile ||
+		error "Unlink remote directory failed"
+
+	$CHECKSTAT -t file $DIR2/$remote_dir/$tfile &&
+		error "unlink file still exists!"
+
+        cd $DIR2/$tdir || error "exit remote dir"
+	rm -rf $DIR1/$tdir || error "unlink directory failed"
+}
+run_test 2f "check attr/owner updates on DNE with 2 mtpt's"
 
 test_3() {
 	local target="this/is/good"
@@ -221,7 +256,7 @@ test_10b() {
 run_test 10b "write of file with sub-page size on multiple mounts "
 
 test_11() {
-	mkdir $DIR1/d11
+	test_mkdir $DIR1/d11
 	multiop_bg_pause $DIR1/d11/f O_c || return 1
 	MULTIPID=$!
 	cp -p /bin/ls $DIR1/d11/f
@@ -239,7 +274,7 @@ test_12() {
 run_test 12 "test lock ordering (link, stat, unlink) ==========="
 
 test_13() {	# bug 2451 - directory coherency
-       mkdir $DIR1/d13 || error
+	test_mkdir $DIR1/d13 || error
        cd $DIR1/d13 || error
        ls
        ( touch $DIR1/d13/f13 ) # needs to be a separate shell
@@ -255,7 +290,7 @@ test_13() {	# bug 2451 - directory coherency
 run_test 13 "test directory page revocation ===================="
 
 test_14() {
-	mkdir -p $DIR1/$tdir
+	test_mkdir -p $DIR1/$tdir
 	cp -p /bin/ls $DIR1/$tdir/$tfile
 	multiop_bg_pause $DIR1/$tdir/$tfile Ow_c || return 1
 	MULTIPID=$!
@@ -267,7 +302,7 @@ test_14() {
 run_test 14 "execution of file open for write returns -ETXTBSY ="
 
 test_14a() {
-        mkdir -p $DIR1/d14
+	test_mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
         MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
         MULTIOP_PID=$!
@@ -279,7 +314,7 @@ test_14a() {
 run_test 14a "open(RDWR) of executing file returns -ETXTBSY ===="
 
 test_14b() { # bug 3192, 7040
-        mkdir -p $DIR1/d14
+	test_mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
         MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
         MULTIOP_PID=$!
@@ -293,7 +328,7 @@ test_14b() { # bug 3192, 7040
 run_test 14b "truncate of executing file returns -ETXTBSY ======"
 
 test_14c() { # bug 3430, 7040
-	mkdir -p $DIR1/d14
+	test_mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
 	MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
         MULTIOP_PID=$!
@@ -306,7 +341,7 @@ test_14c() { # bug 3430, 7040
 run_test 14c "open(O_TRUNC) of executing file return -ETXTBSY =="
 
 test_14d() { # bug 10921
-	mkdir -p $DIR1/d14
+	test_mkdir -p $DIR1/d14
 	cp -p `which multiop` $DIR1/d14/multiop || error "cp failed"
 	MULTIOP_PROG=$DIR1/d14/multiop multiop_bg_pause $TMP/test14.junk O_c || return 1
         MULTIOP_PID=$!
@@ -421,7 +456,7 @@ test_19() { # bug3811
 run_test 19 "test concurrent uncached read races ==============="
 
 test_20() {
-	mkdir $DIR1/d20
+	test_mkdir $DIR1/d20
 	cancel_lru_locks osc
 	CNT=$((`lctl get_param -n llite.*.dump_page_cache | wc -l`))
 	$MULTIOP $DIR1/f20 Ow8190c
@@ -440,7 +475,7 @@ cleanup_21() {
 }
 
 test_21() { # Bug 5907
-	mkdir $DIR1/d21
+	test_mkdir $DIR1/d21
 	mount /etc $DIR1/d21 --bind || error "mount failed" # Poor man's mount.
 	trap cleanup_21 EXIT
 	rmdir -v $DIR1/d21 && error "Removed mounted directory"
@@ -504,9 +539,10 @@ test_24b() {
 }
 run_test 24b "lfs df should show both filesystems ==============="
 
-test_25() {
-	[ `lctl get_param -n mdc.*-mdc-*.connect_flags | grep -c acl` -lt 2 ] &&
-		skip "must have acl, skipping" && return
+test_25a() {
+	local acl=$(lctl get_param -n mdc.*MDT0000-mdc-*.connect_flags |
+								grep -c acl)
+	[ "$acl" -lt 1 ] && skip "must have acl, skipping" && return
 
 	mkdir -p $DIR1/$tdir
 	touch $DIR1/$tdir/f1 || error "touch $DIR1/$tdir/f1"
@@ -528,7 +564,37 @@ test_25() {
 
 	rm -rf $DIR1/$tdir
 }
-run_test 25 "change ACL on one mountpoint be seen on another ==="
+run_test 25a "change ACL on one mountpoint be seen on another ==="
+
+test_25b() {
+	local acl=$(lctl get_param -n mdc.*MDT0000-mdc-*.connect_flags |
+							grep -c acl)
+	[ "$acl" -lt 1 ] && skip "must have acl, skipping" && return
+
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	rm -rf $DIR1/$tdir
+	$LFS mkdir -i 1 $DIR1/$tdir
+	touch $DIR1/$tdir/f1 || error "touch $DIR1/$tdir/f1"
+	chmod 0755 $DIR1/$tdir/f1 || error "chmod 0755 $DIR1/$tdir/f1"
+
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #1"
+	setfacl -m u:$RUNAS_ID:--- -m g:$RUNAS_GID:--- $DIR1/$tdir ||
+		error "setfacl $DIR2/$tdir #1"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #2"
+	setfacl -m u:$RUNAS_ID:r-x -m g:$RUNAS_GID:r-x $DIR1/$tdir ||
+		error "setfacl $DIR2/$tdir #2"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #3"
+	setfacl -m u:$RUNAS_ID:--- -m g:$RUNAS_GID:--- $DIR1/$tdir ||
+		error "setfacl $DIR2/$tdir #3"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 && error "checkstat $DIR2/$tdir/f1 #4"
+	setfacl -x u:$RUNAS_ID: -x g:$RUNAS_GID: $DIR1/$tdir ||
+		error "setfacl $DIR2/$tdir #4"
+	$RUNAS $CHECKSTAT $DIR2/$tdir/f1 || error "checkstat $DIR2/$tdir/f1 #5"
+
+	rm -rf $DIR1/$tdir
+}
+run_test 25b "change ACL under remote dir on one mountpoint be seen on another"
 
 test_26a() {
         utime $DIR1/f26a -s $DIR2/f26a || error
@@ -621,26 +687,29 @@ test_29() { # bug 10999
 run_test 29 "lock put race between glimpse and enqueue ========="
 
 test_30() { #bug #11110
-    mkdir -p $DIR1/$tdir
-    cp -f /bin/bash $DIR1/$tdir/bash
-    /bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash; cp /bin/bash $DIR2/$tdir' &
-    err=$($DIR1/$tdir/bash -c 'sleep 2; openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?')
-    wait
-    [ $err -ne 116 ] && error_ignore 12900 "return code ($err) != -ESTALE" && return
-    true
+	test_mkdir -p $DIR1/$tdir
+	cp -f /bin/bash $DIR1/$tdir/bash
+	/bin/sh -c 'sleep 1; rm -f $DIR2/$tdir/bash;
+		    cp /bin/bash $DIR2/$tdir' &
+	local err=$($DIR1/$tdir/bash -c 'sleep 2;
+		openfile -f O_RDONLY /proc/$$/exe >& /dev/null; echo $?')
+	wait
+	[ $err -ne 116 ] &&
+		error_ignore 12900 "return code ($err) != -ESTALE" && return
+	true
 }
 
-run_test 30 "recreate file race ========="
+run_test 30 "recreate file race"
 
 test_31a() {
-        mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
-        writes=`LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile count=1 2>&1 |
-                awk 'BEGIN { FS="+" } /out/ {print $1}'`
-        #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
-        lctl set_param fail_loc=0x314
-        reads=`LANG=C dd if=$DIR2/$tdir/$tfile of=/dev/null 2>&1 |
-               awk 'BEGIN { FS="+" } /in/ {print $1}'`
-        [ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
+	test_mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
+	local writes=$(LANG=C dd if=/dev/zero of=$DIR/$tdir/$tfile \
+		       count=1 2>&1 | awk 'BEGIN { FS="+" } /out/ {print $1}')
+	#define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
+	lctl set_param fail_loc=0x314
+	local reads=$(LANG=C dd if=$DIR2/$tdir/$tfile of=/dev/null 2>&1 |
+		      awk 'BEGIN { FS="+" } /in/ {print $1}')
+	[ $reads -eq $writes ] || error "read" $reads "blocks, must be" $writes
 }
 run_test 31a "voluntary cancel / blocking ast race=============="
 
@@ -652,7 +721,7 @@ test_31b() {
 	wait_mds_ost_sync || error "wait_mds_ost_sync()"
 	wait_delete_completed || error "wait_delete_completed()"
 
-        mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
+	test_mkdir -p $DIR1/$tdir || error "Creating dir $DIR1/$tdir"
         lfs setstripe $DIR/$tdir/$tfile -i 0 -c 1
         cp /etc/hosts $DIR/$tdir/$tfile
         #define OBD_FAIL_LDLM_CANCEL_BL_CB_RACE   0x314
@@ -821,6 +890,65 @@ test_33a() {
 }
 run_test 33a "commit on sharing, cross crete/delete, 2 clients, benchmark"
 
+# commit on sharing tests
+test_33b() {
+	remote_mds_nodsh && skip "remote MDS with nodsh" && return
+
+	[ -n "$CLIENTS" ] || { skip "Need two or more clients" && return 0; }
+	[ $CLIENTCOUNT -ge 2 ] ||
+		{ skip "Need two or more clients, have $CLIENTCOUNT" &&
+								return 0; }
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+
+	local nfiles=${TEST33_NFILES:-10000}
+	local param_file=$TMP/$tfile-params
+
+	save_lustre_params $(comma_list $(mdts_nodes)) \
+				"mdt.*.commit_on_sharing" > $param_file
+	local COS
+	local jbdold
+	local jbdnew
+	local jbd
+	local MDTIDX=1
+
+	for COS in 0 1; do
+		do_facet $SINGLEMDS lctl set_param mdt.*.commit_on_sharing=$COS
+		avgjbd=0
+		avgtime=0
+		for i in 1 2 3; do
+			do_node $CLIENT1 "$LFS mkdir -i $MDTIDX -p \
+					  $DIR1/$tdir-\\\$(hostname)-$i"
+
+			jbdold=$(print_jbd_stat)
+			echo "=== START createmany old: $jbdold transaction"
+			local elapsed=$(do_and_time "do_nodes $CLIENT1,$CLIENT2\
+				createmany -o $DIR1/$tdir-\\\$(hostname)-$i/f- \
+				-r $DIR2/$tdir-\\\$(hostname)-$i/f- $nfiles > \
+								/dev/null 2>&1")
+			jbdnew=$(print_jbd_stat)
+			jbd=$(( jbdnew - jbdold ))
+			echo "=== END   createmany new: $jbdnew transaction : \
+			$jbd transactions nfiles $nfiles time $elapsed COS=$COS"
+			avgjbd=$(( avgjbd + jbd ))
+			avgtime=$(( avgtime + elapsed ))
+		done
+		eval cos${COS}_jbd=$((avgjbd / 3))
+		eval cos${COS}_time=$((avgtime / 3))
+	done
+
+	echo "COS=0 transactions (avg): $cos0_jbd  time (avg): $cos0_time"
+	echo "COS=1 transactions (avg): $cos1_jbd  time (avg): $cos1_time"
+	[ "$cos0_jbd" != 0 ] &&
+	    echo "COS=1 vs COS=0 jbd: $(((cos1_jbd/cos0_jbd - 1) * 100)) %"
+	[ "$cos0_time" != 0 ] &&
+	    echo "COS=1 vs COS=0 time: $(((cos1_time/cos0_time - 1) * 100)) %"
+
+	restore_lustre_params < $param_file
+	rm -f $param_file
+	return 0
+}
+run_test 33b "COS: cross create/delete, 2 clients, benchmark under remote dir"
+
 # End commit on sharing tests
 
 get_ost_lock_timeouts() {
@@ -886,7 +1014,7 @@ test_35() { # bug 17645
             let count=count+1
         done
 
-        mkdir -p $MOUNT1/$tfile
+	test_mkdir -p $MOUNT1/$tfile
         cancel_lru_locks mdc
 
         # Let's initiate -EINTR situation by setting fail_loc and take
@@ -938,7 +1066,7 @@ test_36() { #bug 16417
 	local SIZE_B
 	local i
 
-	mkdir -p $DIR1/$tdir
+	test_mkdir -p $DIR1/$tdir
 	$LFS setstripe -c -1 $DIR1/$tdir
 	i=0
 	SIZE=50
@@ -976,7 +1104,7 @@ test_36() { #bug 16417
 run_test 36 "handle ESTALE/open-unlink correctly"
 
 test_37() { # bug 18695
-	mkdir -p $DIR1/$tdir
+	test_mkdir -p $DIR1/$tdir
 	multiop_bg_pause $DIR1/$tdir D_c || return 1
 	MULTIPID=$!
 	# create large directory (32kB seems enough from e2fsck, ~= 1000 files)
@@ -1119,6 +1247,12 @@ test_40a() {
 	rm $DIR2/$tfile-4 $DIR2/$tfile-5
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS mkdir -i 1 $DIR2/$tfile-6
+		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
+	fi
+
 	# all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
 	wait $PID1
@@ -1148,7 +1282,13 @@ test_40b() {
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
 	# all operations above shouldn't wait the first one
-	check_pdo_conflict $PID1 || error "parallel operation is blocked"
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS mkdir -i 1 $DIR2/$tfile-6
+		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
+	fi
+
+        check_pdo_conflict $PID1 || error "parallel operation is blocked"
 	wait $PID1
 	rm -r $DIR1/*
 	return 0
@@ -1176,7 +1316,13 @@ test_40c() {
 	rm $DIR2/$tfile-4 $DIR2/$tfile-5
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
-	# all operations above shouldn't wait the first one
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS mkdir -i 1 $DIR2/$tfile-6
+		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
+	fi
+
+        # all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
 	wait $PID1
 	rm -r $DIR1/*
@@ -1205,6 +1351,12 @@ test_40d() {
 	rm $DIR2/$tfile-4 $DIR2/$tfile-5
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS mkdir -i 1 $DIR2/$tfile-6
+		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
+	fi
+
 	# all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
 	wait $PID1
@@ -1231,7 +1383,13 @@ test_40e() {
 	rm $DIR2/$tfile-4 $DIR2/$tfile-2
 	rmdir $DIR2/$tfile-3
 	check_pdo_conflict $PID1 || error "unlink is blocked"
-	# all operations above shouldn't wait the first one
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		$LFS mkdir -i 1 $DIR2/$tfile-6
+		check_pdo_conflict $PID1 || error "remote mkdir is blocked"
+	fi
+
+       # all operations above shouldn't wait the first one
 	check_pdo_conflict $PID1 || error "parallel operation is blocked"
 	wait $PID1
 	rm -r $DIR1/*
@@ -1568,6 +1726,22 @@ test_43h() {
 }
 run_test 43h "pdirops: unlink vs readdir =============="
 
+test_43i() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	touch $DIR1/$tfile
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	rm $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	$LFS mkdir -i 1 $DIR2/$tfile || error "remote mkdir must succeed"
+	check_pdo_conflict $PID1 &&
+		{ wait $PID1; error "remote mkdir isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 43i "pdirops: unlink vs remote mkdir"
+
 # test 44: rename tgt and blocking operations
 test_44a() {
 	touch $DIR1/$tfile-2
@@ -1685,6 +1859,23 @@ test_44h() {
 }
 run_test 44h "pdirops: rename tgt vs readdir =============="
 
+# test 44: rename tgt and blocking operations
+test_44i() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	touch $DIR1/$tfile-2
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK2   0x146
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000146
+	mv $DIR1/$tfile-2 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	$LFS mkdir -i 1 $DIR2/$tfile && error "remote mkdir must fail"
+	check_pdo_conflict $PID1 && { wait $PID1;
+				error "remote mkdir isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 44i "pdirops: rename tgt vs remote mkdir"
+
 # test 45: rename src and blocking operations
 test_45a() {
 	touch $DIR1/$tfile
@@ -1800,6 +1991,22 @@ test_45h() {
 }
 run_test 45h "pdirops: unlink vs readdir =============="
 
+test_45i() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	touch $DIR1/$tfile
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	mv $DIR1/$tfile $DIR1/$tfile-2 &
+	PID1=$!
+	sleep 1
+	$LFS mkdir -i 1 $DIR2/$tfile || error "create remote dir must succeed"
+	check_pdo_conflict $PID1 && { wait $PID1;
+				error "create remote dir isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 45i "pdirops: rename src vs remote mkdir"
+
 # test 46: link and blocking operations
 test_46a() {
 	touch $DIR1/$tfile-2
@@ -1909,11 +2116,134 @@ test_46h() {
 	PID1=$!
 	sleep 1
 	ls -lia $DIR2/ > /dev/null
-	check_pdo_conflict $PID1 && { wait $PID1; error "readdir isn't blocked"; }
+	check_pdo_conflict $PID1 && { wait $PID1;
+			error "readdir isn't blocked"; }
 	rm -r $DIR1/*
 	return 0
 }
 run_test 46h "pdirops: link vs readdir =============="
+
+test_46i() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	touch $DIR1/$tfile-2
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	link $DIR1/$tfile-2 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	$LFS mkdir -i 1 $DIR2/$tfile && error "remote mkdir must fail"
+	check_pdo_conflict $PID1 && { wait $PID1;
+				error "remote mkdir isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 46i "pdirops: link vs remote mkdir"
+
+# test 47: remote mkdir and blocking operations
+test_47a() {
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	$LFS mkdir -i 1 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	mkdir $DIR2/$tfile && error "mkdir must fail"
+	check_pdo_conflict $PID1 && { wait $PID1; error "mkdir isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 47a "pdirops: remote mkdir vs mkdir"
+
+test_47b() {
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	$LFS mkdir -i 1 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	multiop $DIR2/$tfile oO_CREAT:O_EXCL:c && error "create must fail"
+	check_pdo_conflict $PID1 && { wait $PID1;
+					error "create isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 47b "pdirops: remote mkdir vs create"
+
+test_47c() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	touch $DIR1/$tfile-2
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	$LFS mkdir -i 1 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	link $DIR2/$tfile-2 $DIR2/$tfile && error "link must fail"
+	check_pdo_conflict $PID1 && { wait $PID1; error "link isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 47c "pdirops: remote mkdir vs link"
+
+test_47d() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	$LFS mkdir -i 1 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	rmdir $DIR2/$tfile || error "unlink must succeed"
+	check_pdo_conflict $PID1 && { wait $PID1;
+					error "unlink isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 47d "pdirops: remote mkdir vs unlink"
+
+test_47e() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+	touch $DIR1/$tfile-2
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	$LFS mkdir -i 1 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	mv -T $DIR2/$tfile-2 $DIR2/$tfile && error "rename must fail"
+	check_pdo_conflict $PID1 && { wait $PID1;
+					error "rename isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 47e "pdirops: remote mkdir and rename (tgt)"
+
+test_47f() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	$LFS mkdir -i 1 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	mv $DIR2/$tfile $DIR2/$tfile-2 || error "rename must succeed"
+	check_pdo_conflict $PID1 && { wait $PID1;
+					error "rename isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 47f "pdirops: remote mkdir and rename (src)"
+
+test_47g() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return
+#define OBD_FAIL_ONCE|OBD_FAIL_MDS_PDO_LOCK    0x145
+	do_facet $SINGLEMDS lctl set_param fail_loc=0x80000145
+	$LFS mkdir -i 1 $DIR1/$tfile &
+	PID1=$!
+	sleep 1
+	stat $DIR2/$tfile > /dev/null || error "stat must succeed"
+	check_pdo_conflict $PID1 && { wait $PID1;
+					error "getattr isn't blocked"; }
+	rm -r $DIR1/*
+	return 0
+}
+run_test 47g "pdirops: remote mkdir vs getattr"
 
 test_50() {
         trunc_size=4096
@@ -1932,7 +2262,7 @@ test_60() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
 	{ skip "Need MDS version at least 2.3.0"; return; }
 	# Create a file
-	mkdir -p $DIR1/$tdir
+	test_mkdir -p $DIR1/$tdir
 	file1=$DIR1/$tdir/file
 	file2=$DIR2/$tdir/file
 
@@ -1976,6 +2306,24 @@ test_60() {
 	    error "chown should not change data version: $version5 != $version7"
 }
 run_test 60 "Verify data_version behaviour"
+
+test_70() {
+	local test_dir=$tdir/test_dir
+
+	mkdir -p $DIR1/$tdir
+	if [ $MDSCOUNT -ge 2 ]; then
+		local MDTIDX=1
+		$LFS mkdir -i $MDTIDX $DIR1/$test_dir ||
+			error "Create remote directory failed"
+	else
+		mkdir -p $DIR1/$test_dir
+	fi
+	cd $DIR2/$test_dir || error "cd directory failed"
+	rm -rf $DIR1/$test_dir || error "unlink directory failed"
+
+	cd $DIR2/$tdir || error "exit directory"
+}
+run_test 70 "cd directory && rm directory"
 
 log "cleanup: ======================================================"
 
