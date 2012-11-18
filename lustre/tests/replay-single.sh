@@ -1701,19 +1701,23 @@ run_test 66a "AT: verify MDT service time adjusts with no early replies"
 
 test_66b() #bug 3055
 {
-    remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-    at_start || return 0
-    ORIG=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $4}')
-    $LCTL set_param fail_val=$(($ORIG + 5))
-#define OBD_FAIL_PTLRPC_PAUSE_REP      0x50c
-    $LCTL set_param fail_loc=0x50c
-    ls $DIR/$tfile > /dev/null 2>&1
-    $LCTL set_param fail_loc=0
-    CUR=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $4}')
-    WORST=$(lctl get_param -n mdc.${FSNAME}-*.timeouts | awk '/network/ {print $6}')
-    echo "network timeout orig $ORIG, cur $CUR, worst $WORST"
-    [ $WORST -gt $ORIG ] || error "Worst $WORST should be worse than orig $ORIG"
+	at_start || return 0
+	ORIG=$(lctl get_param -n mdc.${FSNAME}-MDT0000*.timeouts |
+			awk '/network/ {print $4}')
+	$LCTL set_param fail_val=$(($ORIG + 5))
+	#define OBD_FAIL_PTLRPC_PAUSE_REP      0x50c
+	$LCTL set_param fail_loc=0x50c
+	ls $DIR/$tfile > /dev/null 2>&1
+	$LCTL set_param fail_loc=0
+	CUR=$(lctl get_param -n mdc.${FSNAME}-MDT0000*.timeouts |
+				awk '/network/ {print $4}')
+	WORST=$(lctl get_param -n mdc.${FSNAME}-MDT0000*.timeouts |
+				awk '/network/ {print $6}')
+	echo "network timeout orig $ORIG, cur $CUR, worst $WORST"
+	[ $WORST -gt $ORIG ] ||
+		error "Worst $WORST should be worse than orig $ORIG"
 }
 run_test 66b "AT: verify net latency adjusts"
 
@@ -1973,72 +1977,471 @@ test_74() {
 }
 run_test 74 "Ensure applications don't fail waiting for OST recovery"
 
-test_80a() {
-    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+remote_dir_check_80() {
+	local MDTIDX=1
+	local diridx=$($GETSTRIPE -M $remote_dir)
+	[ $diridx -eq $MDTIDX ] || error "$diridx != $MDTIDX"
 
-    mkdir -p $DIR/$tdir
-    replay_barrier mds2
-    $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
-    rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
-    fail mds2
-    stat $DIR/$tdir 2&>/dev/null && error "$DIR/$tdir still exist after recovery!"
-    return 0
+	createmany -o $remote_dir/f-%d 20 || error "creation failed"
+	local fileidx=$($GETSTRIPE -M $remote_dir/f-1)
+	[ $fileidx -eq $MDTIDX ] || error "$fileidx != $MDTIDX"
+
+	return 0
 }
-run_test 80a "CMD: unlink cross-node dir (fail mds with inode)"
+
+test_80a() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE         0x188
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x188
+	$LFS mkdir -i $MDTIDX $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "remote creation failed"
+
+	remote_dir_check_80 || error "remote dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 80a "DNE: create remote dir, drop update rep from MDT1, fail MDT1"
 
 test_80b() {
-    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
 
-    mkdir -p $DIR/$tdir
-    replay_barrier $SINGLEMDS
-    $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir $DIR/$tdir failed"
-    rmdir $DIR/$tdir || error "rmdir $DIR/$tdir failed"
-    fail $SINGLEMDS
-    stat $DIR/$tdir 2&>/dev/null && error "$DIR/$tdir still exist after recovery!"
-    return 0
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE         0x188
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x188
+	$LFS mkdir -i $MDTIDX $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+
+	wait $CLIENT_PID || error "remote creation failed"
+
+	remote_dir_check_80 || error "remote dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
 }
-run_test 80b "CMD: unlink cross-node dir (fail mds with name)"
+run_test 80b "DNE: create remote dir, drop update rep from MDT1, fail MDT0"
+
+test_80c() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE         0x188
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x188
+	$LFS mkdir -i $MDTIDX $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "remote creation failed"
+
+	remote_dir_check_80 || error "remote dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 80c "DNE: create remote dir, drop update rep from MDT1, fail MDT[0,1]"
+
+test_80d() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE         0x188
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0x188
+	$LFS mkdir -i $MDTIDX $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds$((MDTIDX + 1)) lctl set_param fail_loc=0
+
+	fail mds${MDTIDX},mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "remote creation failed"
+
+	remote_dir_check_80 || error "remote dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 80d "DNE: create remote dir, drop update rep from MDT1, fail 2 MDTs"
+
+test_80e() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	$LFS mkdir -i $MDTIDX $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+
+	wait $CLIENT_PID || error "remote creation failed"
+
+	remote_dir_check_80 || error "remote dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 80e "DNE: create remote dir, drop MDT0 rep, fail MDT0"
+
+test_80f() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	$LFS mkdir -i $MDTIDX $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "remote creation failed"
+
+	remote_dir_check_80 || error "remote dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 80f "DNE: create remote dir, drop MDT0 rep, fail MDT1"
+
+test_80g() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	$LFS mkdir -i $MDTIDX $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "remote creation failed"
+
+	remote_dir_check_80 || error "remote dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 80g "DNE: create remote dir, drop MDT0 rep, fail MDT0, then MDT1"
+
+test_80h() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	$LFS mkdir -i $MDTIDX $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX},mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || return 1
+
+	remote_dir_check_80 || error "remote dir check failed"
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 80h "DNE: create remote dir, drop MDT0 rep, fail 2 MDTs"
 
 test_81a() {
-    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
 
-    mkdir -p $DIR/$tdir
-    createmany -o $DIR/$tdir/f 3000 || error "createmany failed"
-    sleep 10
-    $CHECKSTAT -t dir $DIR/$tdir || error "$CHECKSTAT -t dir failed"
-    $CHECKSTAT -t file $DIR/$tdir/f1002 || error "$CHECKSTAT -t file failed"
-    replay_barrier $SINGLEMDS
-    rm $DIR/$tdir/f1002 || error "rm $DIR/$tdir/f1002 failed"
-    fail $SINGLEMDS
-    stat $DIR/$tdir/f1002
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE         0x188
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x188
+	rmdir $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "rm remote dir failed"
+
+	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
 }
-run_test 81a "CMD: unlink cross-node file (fail mds with name)"
+run_test 81a "DNE: unlink remote dir, drop MDT0 update rep,  fail MDT1"
 
-test_82a() {
-    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+test_81b() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
 
-    local dir=$DIR/d82a
-    replay_barrier mds2
-    mkdir $dir || error "mkdir $dir failed"
-    log "FAILOVER mds2"
-    fail mds2
-    stat $DIR
-    $CHECKSTAT -t dir $dir || error "$CHECKSTAT -t dir $dir failed"
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE         0x188
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x188
+	rmdir $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+
+	wait $CLIENT_PID || error "rm remote dir failed"
+
+	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
 }
-run_test 82a "CMD: mkdir cross-node dir (fail mds with inode)"
+run_test 81b "DNE: unlink remote dir, drop MDT0 update reply,  fail MDT0"
 
-test_82b() {
-    [ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+test_81c() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
 
-    local dir=$DIR/d82b
-    replay_barrier $SINGLEMDS
-    mkdir $dir || error "mkdir $dir failed"
-    log "FAILOVER mds1"
-    fail $SINGLEMDS
-    stat $DIR
-    $CHECKSTAT -t dir $dir || error "$CHECKSTAT -t dir $dir failed"
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE         0x188
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x188
+	rmdir $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "rm remote dir failed"
+
+	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
 }
-run_test 82b "CMD: mkdir cross-node dir (fail mds with name)"
+run_test 81c "DNE: unlink remote dir, drop MDT0 update reply, fail MDT0,MDT1"
+
+test_81d() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_DROP_OBJ_UPDATE         0x188
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x188
+	rmdir $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX},mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "rm remote dir failed"
+
+	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 81d "DNE: unlink remote dir, drop MDT0 update reply,  fail 2 MDTs"
+
+test_81e() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	rmdir $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+
+	wait $CLIENT_PID || error "rm remote dir failed"
+
+	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 81e "DNE: unlink remote dir, drop MDT1 req reply, fail MDT0"
+
+test_81f() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	rmdir $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "rm remote dir failed"
+
+	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 81f "DNE: unlink remote dir, drop MDT1 req reply, fail MDT1"
+
+test_81g() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	([ $FAILURE_MODE == "HARD" ] &&
+		[ "$(facet_host mds1)" == "$(facet_host mds2)" ]) &&
+		skip "MDTs needs to be on diff hosts for HARD fail mode" &&
+		return 0
+
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	rmdir $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX}
+	fail mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "rm remote dir failed"
+
+	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 81g "DNE: unlink remote dir, drop req reply, fail M0, then M1"
+
+test_81h() {
+	[ $MDSCOUNT -lt 2 ] && skip "needs >= 2 MDTs" && return 0
+	local MDTIDX=1
+	local remote_dir=$DIR/$tdir/remote_dir
+
+	mkdir -p $DIR/$tdir
+	$LFS mkdir -i $MDTIDX $remote_dir || error "lfs mkdir failed"
+
+	# OBD_FAIL_MDS_REINT_NET_REP       0x119
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0x119
+	rmdir $remote_dir &
+	local CLIENT_PID=$!
+	do_facet mds${MDTIDX} lctl set_param fail_loc=0
+
+	fail mds${MDTIDX},mds$((MDTIDX + 1))
+
+	wait $CLIENT_PID || error "rm remote dir failed"
+
+	stat $remote_dir 2&>/dev/null && error "$remote_dir still exist!"
+
+	rm -rf $DIR/$tdir || error "rmdir failed"
+
+	return 0
+}
+run_test 81h "DNE: unlink remote dir, drop request reply, fail 2 MDTs"
 
 test_83a() {
     mkdir -p $DIR/$tdir
