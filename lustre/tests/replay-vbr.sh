@@ -211,7 +211,18 @@ test_2a() {  # extended former test_0d
     if (($pre != $post)); then
         error "version was changed: pre $pre, post $post"
     fi
-    do_node $CLIENT1 rm $DIR/$tfile-*
+	# remote directory
+	if [ $MDSCOUNT -ge 2 ]; then
+		#create remote dir
+		local MDT_IDX=1
+		pre=$(get_version $CLIENT1 $DIR)
+		do_node $CLIENT1 $LFS mkdir -i $MDT_IDX $DIR/$tfile-remote_dir
+		post=$(get_version $CLIENT1 $DIR)
+		if (($pre != $post)); then
+			error "version was changed: pre $pre, post $post"
+		fi
+	fi
+	do_node $CLIENT1 rm -rf $DIR/$tfile-*
 
 }
 run_test 2a "create operations doesn't change version of parent"
@@ -249,6 +260,18 @@ test_3a() { # former test_0f
     if (($pre != $post)); then
         error "version was changed: pre $pre, post $post"
     fi
+
+	if [ $MDSCOUNT -ge 2 ]; then
+		#create remote dir
+		local MDT_IDX=1
+		do_node $CLIENT1 $LFS mkdir -i $MDT_IDX $DIR/$tfile-remote_dir
+		pre=$(get_version $CLIENT1 $DIR)
+		do_node $CLIENT1 rmdir $DIR/$tfile-remote_dir
+		post=$(get_version $CLIENT1 $DIR)
+		if (($pre != $post)); then
+			error "version was changed: pre $pre, post $post"
+		fi
+	fi
 }
 run_test 3a "unlink doesn't change version of parent"
 
