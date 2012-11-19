@@ -973,7 +973,7 @@ test_36() { #bug 16417
 		let i=i+1
 	done
 }
-run_test 36 "handle ESTALE/open-unlink corectly"
+run_test 36 "handle ESTALE/open-unlink correctly"
 
 test_37() { # bug 18695
 	mkdir -p $DIR1/$tdir
