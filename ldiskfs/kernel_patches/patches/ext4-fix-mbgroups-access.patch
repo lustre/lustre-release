@@ -1,0 +1,34 @@
+Index: linux-stage/fs/ext4/mballoc.c
+===================================================================
+--- linux-stage.orig/fs/ext4/mballoc.c	2012-11-21 11:22:19.000000000 +0200
++++ linux-stage/fs/ext4/mballoc.c	2012-11-21 11:24:33.000000000 +0200
+@@ -2622,6 +2622,9 @@ int ext4_mb_release(struct super_block *
+ 	struct ext4_group_info *grinfo;
+ 	struct ext4_sb_info *sbi = EXT4_SB(sb);
+ 
++	if (sbi->s_proc)
++		remove_proc_entry("mb_groups", sbi->s_proc);
++
+ 	if (sbi->s_group_info) {
+ 		for (i = 0; i < ngroups; i++) {
+ 			grinfo = ext4_get_group_info(sb, i);
+@@ -2673,7 +2676,6 @@ int ext4_mb_release(struct super_block *
+ 
+ 	free_percpu(sbi->s_locality_groups);
+ 	if (sbi->s_proc) {
+-		remove_proc_entry("mb_groups", sbi->s_proc);
+ 		remove_proc_entry(EXT4_MB_PREALLOC_TABLE, sbi->s_proc);
+ 	}
+ 
+@@ -4801,6 +4803,11 @@ do_more:
+ 		 * be used until this transaction is committed
+ 		 */
+ 		new_entry = kmem_cache_alloc(ext4_free_data_cachep, GFP_NOFS);
++ 		if (!new_entry) {
++ 			ext4_mb_release_desc(&e4b);
++ 			err = -ENOMEM;
++ 			goto error_return;
++ 		}
+ 		new_entry->efd_start_blk = bit;
+ 		new_entry->efd_group  = block_group;
+ 		new_entry->efd_count = count;
