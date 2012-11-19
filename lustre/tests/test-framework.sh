@@ -3732,11 +3732,11 @@ drop_ldlm_cancel() {
 
 drop_bl_callback() {
 #define OBD_FAIL_LDLM_BL_CALLBACK_NET			0x305
-    RC=0
-    do_facet client lctl set_param fail_loc=0x305
-    do_facet client "$@" || RC=$?
-    do_facet client lctl set_param fail_loc=0
-    return $RC
+	RC=0
+	do_facet client lctl set_param fail_loc=0x80000305
+	do_facet client "$@" || RC=$?
+	do_facet client lctl set_param fail_loc=0
+	return $RC
 }
 
 drop_ldlm_reply() {

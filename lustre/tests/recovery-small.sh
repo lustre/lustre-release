@@ -29,7 +29,7 @@ CLEANUP=${CLEANUP:-""}
 check_and_setup_lustre
 
 assert_DIR
-rm -rf $DIR/[df][0-9]*
+rm -rf $DIR/d[0-9]* $DIR/f.${TESTSUITE}*
 
 test_1() {
 	local f1="$DIR/$tfile"
@@ -146,56 +146,70 @@ run_test 9 "pause bulk on OST (bug 1420)"
 
 #bug 1521
 test_10() {
-    do_facet client mcreate $DIR/$tfile        || return 1
-    drop_bl_callback "chmod 0777 $DIR/$tfile"  || echo "evicted as expected"
-    # wait for the mds to evict the client
-    #echo "sleep $(($TIMEOUT*2))"
-    #sleep $(($TIMEOUT*2))
-    do_facet client touch $DIR/$tfile || echo "touch failed, evicted"
-    do_facet client checkstat -v -p 0777 $DIR/$tfile  || return 3
-    do_facet client "munlink $DIR/$tfile"
+	do_facet client mcreate $DIR/$tfile ||
+		{ error "mcreate failed: $?"; return 1; }
+	drop_bl_callback "chmod 0777 $DIR/$tfile"  || echo "evicted as expected"
+	# wait for the mds to evict the client
+	#echo "sleep $(($TIMEOUT*2))"
+	#sleep $(($TIMEOUT*2))
+	do_facet client touch $DIR/$tfile || echo "touch failed, evicted"
+	do_facet client checkstat -v -p 0777 $DIR/$tfile ||
+		{ error "client checkstat failed: $?"; return 3; }
+	do_facet client "munlink $DIR/$tfile"
+	# allow recovery to complete
+	client_up || client_up || sleep $TIMEOUT
 }
 run_test 10 "finish request on server after client eviction (bug 1521)"
 
 #bug 2460
 # wake up a thread waiting for completion after eviction
 test_11(){
-    do_facet client $MULTIOP $DIR/$tfile Ow  || return 1
-    do_facet client $MULTIOP $DIR/$tfile or  || return 2
+	do_facet client $MULTIOP $DIR/$tfile Ow  ||
+		{ error "multiop write failed: $?"; return 1; }
+	do_facet client $MULTIOP $DIR/$tfile or  ||
+		{ error "multiop read failed: $?"; return 2; }
 
-    cancel_lru_locks osc
+	cancel_lru_locks osc
 
-    do_facet client $MULTIOP $DIR/$tfile or  || return 3
-    drop_bl_callback $MULTIOP $DIR/$tfile Ow || echo "evicted as expected"
+	do_facet client $MULTIOP $DIR/$tfile or  ||
+		{ error "multiop read failed: $?"; return 3; }
+	drop_bl_callback $MULTIOP $DIR/$tfile Ow || echo "evicted as expected"
 
-    do_facet client munlink $DIR/$tfile  || return 4
+	do_facet client munlink $DIR/$tfile ||
+		{ error "munlink failed: $?"; return 4; }
+	# allow recovery to complete
+	client_up || client_up || sleep $TIMEOUT
 }
 run_test 11 "wake up a thread waiting for completion after eviction (b=2460)"
 
 #b=2494
 test_12(){
-    $LCTL mark $MULTIOP $DIR/$tfile OS_c
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x115"
-    clear_failloc $SINGLEMDS $((TIMEOUT * 2)) &
-    multiop_bg_pause $DIR/$tfile OS_c || return 1
-    PID=$!
+	$LCTL mark $MULTIOP $DIR/$tfile OS_c
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x115"
+	clear_failloc $SINGLEMDS $((TIMEOUT * 2)) &
+	multiop_bg_pause $DIR/$tfile OS_c ||
+		{ error "multiop failed: $?"; return 1; }
+	PID=$!
 #define OBD_FAIL_MDS_CLOSE_NET           0x115
-    kill -USR1 $PID
-    echo "waiting for multiop $PID"
-    wait $PID || return 2
-    do_facet client munlink $DIR/$tfile  || return 3
+	kill -USR1 $PID
+	echo "waiting for multiop $PID"
+	wait $PID || { error "wait for multiop faile: $?"; return 2; }
+	do_facet client munlink $DIR/$tfile ||
+		{ error "client munlink failed: $?"; return 3; }
+	# allow recovery to complete
+	client_up || client_up || sleep $TIMEOUT
 }
 run_test 12 "recover from timed out resend in ptlrpcd (b=2494)"
 
 # Bug 113, check that readdir lost recv timeout works.
 test_13() {
-    mkdir -p $DIR/$tdir || return 1
-    touch $DIR/$tdir/newentry || return
+	mkdir -p $DIR/$tdir || { error "mkdir failed: $?"; return 1; }
+	touch $DIR/$tdir/newentry || { error "touch failed: $?"; return 2; }
 # OBD_FAIL_MDS_READPAGE_NET|OBD_FAIL_ONCE
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000104"
-    ls $DIR/$tdir || return 3
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-    rm -rf $DIR/$tdir || return 4
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000104"
+	ls $DIR/$tdir || { error "ls failed: $?"; return 3; }
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	rm -rf $DIR/$tdir || { error "remove test dir failed: $?"; return 4; }
 }
 run_test 13 "mdc_readpage restart test (bug 1138)"
 
@@ -913,10 +927,11 @@ test_51() {
 	SEQ="1 5 10 $(seq $TIMEOUT 5 $(($TIMEOUT+10)))"
         echo will failover at $SEQ
         for i in $SEQ
-          do
-          echo failover in $i sec
-          sleep $i
-          facet_failover $SINGLEMDS
+        do
+		#echo failover in $i sec
+		log "test_$testnum: failover in $i sec"
+		sleep $i
+		facet_failover $SINGLEMDS
         done
 	# client process should see no problems even though MDS went down
 	# and recovery was interrupted
