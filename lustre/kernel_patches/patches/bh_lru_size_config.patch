@@ -1,3 +1,20 @@
+Allow increasing the buffer-head per-CPU LRU size to allow efficient
+filesystem operations that access many blocks for each transaction.
+For example, creating a file in a large ext4 directory with quota
+enabled will accesses multiple buffer heads and will overflow the LRU
+at the default 8-block LRU size:
+
+* parent directory inode table block (ctime, nlinks for subdirs)
+* new inode bitmap
+* inode table block
+* 2 quota blocks
+* directory leaf block (not reused, but pollutes one cache entry)
+* 2 levels htree blocks (only one is reused, other pollutes cache)
+* 2 levels indirect/index blocks (only one is reused)
+
+Signed-off-by: Liang Zhen <liang@whamcoud.com>
+Signed-off-by: Andreas Dilger <adilger@whamcloud.com>
+
 --- linux-2.6.32-131.6.1/fs/buffer.c
 +++ linux-2.6.32-131.6.1-pdo/fs/buffer.c
 @@ -1250,8 +1250,7 @@
@@ -19,7 +36,7 @@
 +config BH_LRU_SIZE
 +      int "buffer head per-CPU LRU size"
 +      range 8 64
-+      default "8"
++      default "16"
 +      help
 +        This sets the per-CPU LRU size for buffer heads in memory.
 +        More complex filesystems may be modiyfing multiple blocks
