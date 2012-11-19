@@ -63,6 +63,9 @@ enum {
         VERBOSE  = 'V',
         DEBUG    = 'v',
         HELP     = 'h',
+	MNT	 = 'M',
+	MNTCOUNT = 'N',
+	MDTCOUNT = 'T',
 };
 
 struct option longOpts[] = {
@@ -90,7 +93,10 @@ struct option longOpts[] = {
         {"verbose",       0, NULL, VERBOSE    },
         {"debug",         0, NULL, DEBUG      },
         {"help",          0, NULL, HELP       },
-        { 0,              0, NULL, 0          }
+	{"mdtcount",      1, NULL, MDTCOUNT   },
+	{"mntcount",      1, NULL, MNTCOUNT   },
+	{"mntfmt",        1, NULL, MNT        },
+	{ 0,              0, NULL, 0          }
 };
 
 int foo1, foo2;
@@ -114,6 +120,7 @@ struct dirent *dir_entry;
 int    nfiles;
 char   filefmt[PATH_MAX];
 char   filename[PATH_MAX];
+char   path[PATH_MAX];
 int    stripes = -1;
 int    begin;
 int    beginsave;
@@ -129,6 +136,9 @@ int    ignore;
 int    verbose;
 int    debug;
 struct stat statbuf;
+int    mnt_count = -1;
+int    mdt_count = 1;
+char  *mntfmt;
 
 #define dmesg if (debug) printf
 
@@ -157,7 +167,8 @@ char *usage_msg = "usage: %s\n"
                   "    [ --dirfmt <str> ] [ --ndirs  <num> ]\n"
                   "    [ --filefmt <str> ] [ --stripes <num> ]\n"
                   "    [ --random_order [--seed <num> | --seedfile <file>] ]\n"
-                  "    [ --readdir_order ]\n";
+		  "    [ --readdir_order ] [ --mntfmt <str> ]\n"
+		  "    [ --mntcount <num> ] [ --mdtcount <num> ]\n";
 
 static void
 usage(FILE *stream, char *fmt, ...)
@@ -413,6 +424,26 @@ process_args(int argc, char *argv[])
                         break;
                 case HELP:
                         usage(stdout, NULL);
+			break;
+		case MNT:
+			if (strlen(optarg) > (PATH_MAX - 16))
+				fatal(0, "--mnt too long\n");
+			mntfmt = optarg;
+			break;
+		case MNTCOUNT:
+			mnt_count = strtol(optarg, &endptr, 0);
+			if ((*endptr != 0) || (mnt_count <= 0)) {
+				fatal(0, "Invalid --mnt_count value %s.\n",
+				      optarg);
+			}
+			break;
+		case MDTCOUNT:
+			mdt_count = strtol(optarg, &endptr, 0);
+			if ((*endptr != 0) || (mdt_count <= 0)) {
+				fatal(0, "Invalid --mdt_count value %s.\n",
+				      optarg);
+			}
+			break;
                 default:
                         usage(stderr, "unrecognized option: '%c'.\n", optopt);
                 }
@@ -421,6 +452,12 @@ process_args(int argc, char *argv[])
         if (optind < argc) {
                 usage(stderr, "too many arguments %d >= %d.\n", optind, argc);
         }
+
+	if ((mnt_count != -1 && mntfmt == NULL) ||
+	    (mnt_count == -1 && mntfmt != NULL)) {
+		usage(stderr, "mnt_count and mntfmt must be specified at the "
+			     "same time\n");
+	}
 
         if (mode == CREATE || mode == MKNOD || mode == UNLINK || mode == STAT) {
                 if (seconds != 0) {
@@ -485,6 +522,11 @@ process_args(int argc, char *argv[])
         if ((end > tmpend) || (end <= 0))
                 end -= dirthreads;
 
+	/* make sure mnt_count <= nthreads, otherwise it might div 0 in
+	 * the following test */
+	if (mnt_count > nthreads)
+		mnt_count = nthreads;
+
         begin += offset;
         if (begin < 0)
                 begin = INT_MAX;
@@ -497,17 +539,38 @@ process_args(int argc, char *argv[])
         if (dirfmt == NULL) {
                 strcpy(dir, ".");
         } else {
-                sprintf(dir, dirfmt, dirnum);
+		int dir_len = 0;
 
-                sprintf(mkdir_cmd, "/bin/mkdir -p %s", dir);
-                #ifdef _LIGHTWEIGHT_KERNEL
-                        printf("NOTICE: not running system(%s)\n", mkdir_cmd);
-                #else
-                        rc = system(mkdir_cmd);
-                        if (rc) {
-                                fatal(myrank, "'%s' failed.\n", mkdir_cmd);
-                        }
-                #endif
+		if (mntfmt != NULL) {
+			sprintf(dir, mntfmt, (myrank / (nthreads/mnt_count)));
+			strcat(dir, "/");
+			dir_len = strlen(dir);
+		}
+		sprintf(dir + dir_len, dirfmt, dirnum);
+
+		if (mdt_count > 1) {
+			struct stat sb;
+			if (stat(dir, &sb) == 0) {
+				if (!S_ISDIR(sb.st_mode))
+					fatal(myrank, "'%s' is not dir\n", dir);
+			} else if (errno == ENOENT) {
+				sprintf(mkdir_cmd, "lfs mkdir -i %d %s",
+					myrank % mdt_count, dir);
+			} else {
+				fatal(myrank, "'%s' stat failed\n", dir);
+			}
+		} else {
+			sprintf(mkdir_cmd, "mkdir -p %s", dir);
+		}
+
+		dmesg("%d: %s\n", myrank, mkdir_cmd);
+#ifdef _LIGHTWEIGHT_KERNEL
+		printf("NOTICE: not running system(%s)\n", mkdir_cmd);
+#else
+		rc = system(mkdir_cmd);
+		if (rc)
+			fatal(myrank, "'%s' failed.\n", mkdir_cmd);
+#endif
 
                 rc = chdir(dir);
                 if (rc) {
