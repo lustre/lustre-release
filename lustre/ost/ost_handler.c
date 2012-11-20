@@ -906,6 +906,53 @@ out:
         RETURN(rc);
 }
 
+static void ost_warn_on_cksum(struct ptlrpc_request *req,
+			      struct ptlrpc_bulk_desc *desc,
+			      struct niobuf_local *local_nb, int npages,
+			      obd_count client_cksum, obd_count server_cksum,
+			      int mmap)
+{
+	struct obd_export *exp = req->rq_export;
+	struct ost_body *body;
+	char *router;
+	char *via;
+
+	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
+	LASSERT	(body != NULL);
+
+	if (req->rq_peer.nid == desc->bd_sender) {
+		via = router = "";
+	} else {
+		via = " via ";
+		router = libcfs_nid2str(desc->bd_sender);
+	}
+
+	if (mmap) {
+		CDEBUG_LIMIT(D_INFO, "client csum %x, server csum %x\n",
+			     client_cksum, server_cksum);
+		return;
+	}
+
+	LCONSOLE_ERROR_MSG(0x168, "BAD WRITE CHECKSUM: %s from %s%s%s inode "
+			   DFID" object "LPU64"/"LPU64" extent ["LPU64"-"LPU64
+			   "]: client csum %x, server csum %x\n",
+			   exp->exp_obd->obd_name, libcfs_id2str(req->rq_peer),
+			   via, router,
+			   body->oa.o_valid & OBD_MD_FLFID ?
+			   body->oa.o_parent_seq : (__u64)0,
+			   body->oa.o_valid & OBD_MD_FLFID ?
+			   body->oa.o_parent_oid : 0,
+			   body->oa.o_valid & OBD_MD_FLFID ?
+			   body->oa.o_parent_ver : 0,
+			   body->oa.o_id,
+			   body->oa.o_valid & OBD_MD_FLGROUP ?
+			   body->oa.o_seq : (__u64)0,
+			   local_nb[0].lnb_file_offset,
+			   local_nb[npages-1].lnb_file_offset +
+			   local_nb[npages-1].len - 1,
+			   client_cksum, server_cksum);
+}
+
 static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
 {
         struct ptlrpc_bulk_desc *desc = NULL;
@@ -1071,10 +1118,10 @@ skip_transfer:
                 repbody->oa.o_cksum = server_cksum;
                 cksum_counter++;
                 if (unlikely(client_cksum != server_cksum)) {
-                        CDEBUG_LIMIT(mmap ? D_INFO : D_ERROR,
-                                     "client csum %x, server csum %x\n",
-                                     client_cksum, server_cksum);
+			ost_warn_on_cksum(req, desc, local_nb, npages,
+					  client_cksum, server_cksum, mmap);
                         cksum_counter = 0;
+
                 } else if ((cksum_counter & (-cksum_counter)) == cksum_counter){
                         CDEBUG(D_INFO, "Checksum %u from %s OK: %x\n",
                                cksum_counter, libcfs_id2str(req->rq_peer),
@@ -1103,49 +1150,6 @@ skip_transfer:
          * otherwise it will have to glimpse anyway (see bug 21489, comment 32)
          */
         repbody->oa.o_valid &= ~(OBD_MD_FLMTIME | OBD_MD_FLATIME);
-
-        if (unlikely(client_cksum != server_cksum && rc == 0 && !mmap)) {
-                int  new_cksum = ost_checksum_bulk(desc, OST_WRITE, cksum_type);
-                char *msg;
-                char *via;
-                char *router;
-
-                if (new_cksum == server_cksum)
-                        msg = "changed in transit before arrival at OST";
-                else if (new_cksum == client_cksum)
-                        msg = "initial checksum before message complete";
-                else
-                        msg = "changed in transit AND after initial checksum";
-
-                if (req->rq_peer.nid == desc->bd_sender) {
-                        via = router = "";
-                } else {
-                        via = " via ";
-                        router = libcfs_nid2str(desc->bd_sender);
-                }
-
-                LCONSOLE_ERROR_MSG(0x168, "%s: BAD WRITE CHECKSUM: %s from "
-                                   "%s%s%s inode "DFID" object "
-                                   LPU64"/"LPU64" extent ["LPU64"-"LPU64"]\n",
-                                   exp->exp_obd->obd_name, msg,
-                                   libcfs_id2str(req->rq_peer),
-                                   via, router,
-                                   body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_seq : (__u64)0,
-                                   body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_oid : 0,
-                                   body->oa.o_valid & OBD_MD_FLFID ?
-                                                body->oa.o_parent_ver : 0,
-                                   body->oa.o_id,
-                                   body->oa.o_valid & OBD_MD_FLGROUP ?
-                                                body->oa.o_seq : (__u64)0,
-				   local_nb[0].lnb_file_offset,
-				   local_nb[npages-1].lnb_file_offset +
-                                   local_nb[npages-1].len - 1 );
-                CERROR("client csum %x, original server csum %x, "
-                       "server csum now %x\n",
-                       client_cksum, server_cksum, new_cksum);
-        }
 
         if (rc == 0) {
                 int nob = 0;
