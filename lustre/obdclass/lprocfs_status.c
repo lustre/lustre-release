@@ -595,18 +595,6 @@ int lprocfs_rd_name(char *page, char **start, off_t off, int count,
 }
 EXPORT_SYMBOL(lprocfs_rd_name);
 
-int lprocfs_rd_fstype(char *page, char **start, off_t off, int count, int *eof,
-                      void *data)
-{
-        struct obd_device *obd = data;
-
-        LASSERT(obd != NULL);
-        LASSERT(obd->obd_fsops != NULL);
-        LASSERT(obd->obd_fsops->fs_type != NULL);
-        return snprintf(page, count, "%s\n", obd->obd_fsops->fs_type);
-}
-EXPORT_SYMBOL(lprocfs_rd_fstype);
-
 int lprocfs_rd_blksize(char *page, char **start, off_t off, int count,
                        int *eof, void *data)
 {

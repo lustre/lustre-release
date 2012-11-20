@@ -149,8 +149,7 @@ int lproc_mgs_setup(struct mgs_device *mgs, char *osd_name)
 {
 	struct obd_device *obd = mgs->mgs_obd;
 	struct obd_device *osd_obd = mgs->mgs_bottom->dd_lu_dev.ld_obd;
-	int		   osd_suffix = strlen(osd_name) - strlen("-osd");
-	char		   c = osd_name[osd_suffix];
+	int		   osd_len = strlen(osd_name) - strlen("-osd");
 	int		   rc;
 
         rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
@@ -175,14 +174,25 @@ int lproc_mgs_setup(struct mgs_device *mgs, char *osd_name)
                 obd->obd_proc_exports_entry = NULL;
         }
 
-	osd_name[osd_suffix] = '\0'; /* Remove the "-osd" suffix. */
+	mgs->mgs_proc_osd = lprocfs_add_symlink("osd",
+						obd->obd_proc_entry,
+						"../../%s/%.*s",
+						osd_obd->obd_type->typ_name,
+						osd_len, /* Strip "-osd". */
+						osd_name);
+	if (mgs->mgs_proc_osd == NULL)
+		rc = -ENOMEM;
+
 	mgs->mgs_proc_mntdev = lprocfs_add_symlink("mntdev",
 						   obd->obd_proc_entry,
-						   "../../%s/%s/mntdev",
-						   osd_obd->obd_type->typ_name,
-						   osd_name);
-	osd_name[osd_suffix] = c;
+						   "osd/mntdev");
 	if (mgs->mgs_proc_mntdev == NULL)
+		rc = -ENOMEM;
+
+	mgs->mgs_proc_fstype = lprocfs_add_symlink("fstype",
+						   obd->obd_proc_entry,
+						   "osd/fstype");
+	if (mgs->mgs_proc_fstype == NULL)
 		rc = -ENOMEM;
 
 	return rc;
@@ -194,6 +204,12 @@ int lproc_mgs_cleanup(struct mgs_device *mgs)
 
         if (!obd)
                 return -EINVAL;
+
+	if (mgs->mgs_proc_osd != NULL)
+		lprocfs_remove(&mgs->mgs_proc_osd);
+
+	if (mgs->mgs_proc_fstype != NULL)
+		lprocfs_remove(&mgs->mgs_proc_fstype);
 
 	if (mgs->mgs_proc_mntdev)
 		lprocfs_remove(&mgs->mgs_proc_mntdev);
@@ -283,7 +299,6 @@ int lproc_mgs_del_live(struct mgs_device *mgs, struct fs_db *fsdb)
 
 struct lprocfs_vars lprocfs_mgs_obd_vars[] = {
         { "uuid",            lprocfs_rd_uuid,        0, 0 },
-        { "fstype",          lprocfs_rd_fstype,      0, 0 },
         { "num_exports",     lprocfs_rd_num_exports, 0, 0 },
         { "hash_stats",      lprocfs_obd_rd_hash,    0, 0 },
         { "evict_client",    0, lprocfs_wr_evict_client, 0 },

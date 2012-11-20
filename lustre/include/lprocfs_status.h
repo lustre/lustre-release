@@ -581,8 +581,6 @@ extern int lprocfs_rd_uuid(char *page, char **start, off_t off,
                            int count, int *eof, void *data);
 extern int lprocfs_rd_name(char *page, char **start, off_t off,
                            int count, int *eof, void *data);
-extern int lprocfs_rd_fstype(char *page, char **start, off_t off,
-                             int count, int *eof, void *data);
 extern int lprocfs_rd_server_uuid(char *page, char **start, off_t off,
                                   int count, int *eof, void *data);
 extern int lprocfs_rd_conn_uuid(char *page, char **start, off_t off,
