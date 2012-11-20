@@ -813,11 +813,11 @@ int target_handle_connect(struct ptlrpc_request *req)
         if (target->obd_no_conn) {
 		spin_unlock(&target->obd_dev_lock);
 
-                LCONSOLE_WARN("%s: Temporarily refusing client connection "
-                              "from %s\n", target->obd_name,
-                              libcfs_nid2str(req->rq_peer.nid));
-                GOTO(out, rc = -EAGAIN);
-        }
+		CDEBUG(D_INFO, "%s: Temporarily refusing client connection "
+			       "from %s\n", target->obd_name,
+			       libcfs_nid2str(req->rq_peer.nid));
+		GOTO(out, rc = -EAGAIN);
+	}
 
 	/* Make sure the target isn't cleaned up while we're here. Yes,
 	 * there's still a race between the above check and our incref here.
