@@ -243,7 +243,7 @@ static int qsd_glb_glimpse_ast(struct ldlm_lock *lock, void *data)
 	/* extract new hard & soft limits from the glimpse descriptor */
 	rec.qbr_hardlimit = desc->gl_hardlimit;
 	rec.qbr_softlimit = desc->gl_softlimit;
-	rec.qbr_time      = 0;
+	rec.qbr_time      = desc->gl_time;
 	rec.qbr_granted   = 0;
 
 	/* We can't afford disk io in the context of glimpse callback handling

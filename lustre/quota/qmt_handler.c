@@ -38,109 +38,6 @@
 #include "qmt_internal.h"
 
 /*
- * Fetch grace time for either inode or block.
- *
- * \param env     - is the environment passed by the caller
- * \param qmt     - is the quota master target
- * \param pool_id - is the 16-bit pool identifier
- * \param restype - is the pool type, either block (i.e. LQUOTA_RES_DT) or inode
- *                  (i.e. LQUOTA_RES_MD)
- * \param qtype   - is the quota type
- * \param time    - is the output variable where to copy the grace time
- */
-static int qmt_getinfo(const struct lu_env *env, struct qmt_device *qmt,
-		       __u16 pool_id, __u8 restype, __u8 qtype, __u64 *time)
-{
-	struct qmt_thread_info	*qti = qmt_info(env);
-	union lquota_id		*id  = &qti->qti_id;
-	struct lquota_entry	*lqe;
-	ENTRY;
-
-	/* Global grace time is stored in quota settings of ID 0. */
-	id->qid_uid = 0;
-
-	/* look-up quota entry storing grace time */
-	lqe = qmt_pool_lqe_lookup(env, qmt, pool_id, restype, qtype, id);
-	if (IS_ERR(lqe))
-		RETURN(PTR_ERR(lqe));
-
-	lqe_read_lock(lqe);
-	LQUOTA_DEBUG(lqe, "getinfo");
-	/* copy grace time */
-	*time = lqe->lqe_gracetime;
-	lqe_read_unlock(lqe);
-
-	lqe_putref(lqe);
-	RETURN(0);
-}
-
-/*
- * Update grace time for either inode or block.
- * Global grace time is stored in quota settings of ID 0.
- *
- * \param env     - is the environment passed by the caller
- * \param qmt     - is the quota master target
- * \param pool_id - is the 16-bit pool identifier
- * \param restype - is the pool type, either block (i.e. LQUOTA_RES_DT) or inode
- *                  (i.e. LQUOTA_RES_MD)
- * \param qtype   - is the quota type
- * \param time    - is the new grace time
- */
-static int qmt_setinfo(const struct lu_env *env, struct qmt_device *qmt,
-		       __u16 pool_id, __u8 restype, __u8 qtype, __u64 time)
-{
-	struct qmt_thread_info	*qti = qmt_info(env);
-	union lquota_id		*id  = &qti->qti_id;
-	struct lquota_entry	*lqe;
-	struct thandle		*th = NULL;
-	int			 rc;
-	ENTRY;
-
-	/* Global grace time is stored in quota settings of ID 0. */
-	id->qid_uid = 0;
-
-	/* look-up quota entry storing the global grace time */
-	lqe = qmt_pool_lqe_lookup(env, qmt, pool_id, restype, qtype, id);
-	if (IS_ERR(lqe))
-		RETURN(PTR_ERR(lqe));
-
-	/* allocate & start transaction with enough credits to update grace
-	 * time in the global index file */
-	th = qmt_trans_start(env, lqe, &qti->qti_restore);
-	if (IS_ERR(th))
-		GOTO(out_nolock, rc = PTR_ERR(th));
-
-	/* write lock quota entry storing the grace time */
-	lqe_write_lock(lqe);
-	if (lqe->lqe_gracetime == time)
-		/* grace time is the same */
-		GOTO(out, rc = 0);
-
-	LQUOTA_DEBUG(lqe, "setinfo time:"LPU64, time);
-
-	/* set new grace time */
-	lqe->lqe_gracetime = time;
-	/* always set enforced bit for ID 0 to make sure it does not go away */
-	lqe->lqe_enforced  = true;
-
-	/* write new grace time to disk, no need for version bump */
-	rc = qmt_glb_write(env, th, lqe, 0, NULL);
-	if (rc) {
-		/* restore initial grace time */
-		qmt_restore(lqe, &qti->qti_restore);
-		GOTO(out, rc);
-	}
-	EXIT;
-out:
-	lqe_write_unlock(lqe);
-out_nolock:
-	lqe_putref(lqe);
-	if (th != NULL && !IS_ERR(th))
-		dt_trans_stop(env, qmt->qmt_child, th);
-	return rc;
-}
-
-/*
  * Retrieve quota settings for a given identifier.
  *
  * \param env     - is the environment passed by the caller
@@ -155,10 +52,9 @@ out_nolock:
  * \param soft    - is the output variable where to copy the soft limit
  * \param time    - is the output variable where to copy the grace time
  */
-static int qmt_getquota(const struct lu_env *env, struct qmt_device *qmt,
-			__u16 pool_id, __u8 restype, __u8 qtype,
-			union lquota_id *id, __u64 *hard, __u64 *soft,
-			__u64 *time)
+static int qmt_get(const struct lu_env *env, struct qmt_device *qmt,
+		   __u16 pool_id, __u8 restype, __u8 qtype, union lquota_id *id,
+		   __u64 *hard, __u64 *soft, __u64 *time)
 {
 	struct lquota_entry	*lqe;
 	ENTRY;
@@ -170,10 +66,13 @@ static int qmt_getquota(const struct lu_env *env, struct qmt_device *qmt,
 
 	/* copy quota settings */
 	lqe_read_lock(lqe);
-	LQUOTA_DEBUG(lqe, "getquota");
-	*hard = lqe->lqe_hardlimit;
-	*soft = lqe->lqe_softlimit;
-	*time = lqe->lqe_gracetime;
+	LQUOTA_DEBUG(lqe, "fetch settings");
+	if (hard != NULL)
+		*hard = lqe->lqe_hardlimit;
+	if (soft != NULL)
+		*soft = lqe->lqe_softlimit;
+	if (time != NULL)
+		*time = lqe->lqe_gracetime;
 	lqe_read_unlock(lqe);
 
 	lqe_putref(lqe);
@@ -196,16 +95,16 @@ static int qmt_getquota(const struct lu_env *env, struct qmt_device *qmt,
  * \param time    - is the new grace time
  * \param valid   - is the list of settings to change
  */
-static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
-			__u16 pool_id, __u8 restype, __u8 qtype,
-			union lquota_id *id, __u64 hard, __u64 soft, __u64 time,
-			__u32 valid)
+static int qmt_set(const struct lu_env *env, struct qmt_device *qmt,
+		   __u16 pool_id, __u8 restype, __u8 qtype,
+		   union lquota_id *id, __u64 hard, __u64 soft, __u64 time,
+		   __u32 valid)
 {
 	struct qmt_thread_info	*qti = qmt_info(env);
 	struct lquota_entry	*lqe;
 	struct thandle		*th = NULL;
 	__u64			 ver, now;
-	bool			 dirtied = false, bump_version = false;
+	bool			 dirtied = false;
 	int			 rc = 0;
 	ENTRY;
 
@@ -223,8 +122,8 @@ static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
 	now = cfs_time_current_sec();
 
 	lqe_write_lock(lqe);
-	LQUOTA_DEBUG(lqe, "setquota valid:%x hard:"LPU64" soft:"LPU64
-		     " time:"LPU64, valid, hard, soft, time);
+	LQUOTA_DEBUG(lqe, "changing quota settings valid:%x hard:"LPU64" soft:"
+		     LPU64" time:"LPU64, valid, hard, soft, time);
 
 	if ((valid & QIF_TIMES) != 0 && lqe->lqe_gracetime != time) {
 		/* change time settings */
@@ -234,8 +133,6 @@ static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
 
 	if ((valid & QIF_LIMITS) != 0 &&
 	    (lqe->lqe_hardlimit != hard || lqe->lqe_softlimit != soft)) {
-		bool enforced = lqe->lqe_enforced;
-
 		rc = qmt_validate_limits(lqe, hard, soft);
 		if (rc)
 			GOTO(out, rc);
@@ -263,19 +160,12 @@ static int qmt_setquota(const struct lu_env *env, struct qmt_device *qmt,
 		else
 			lqe->lqe_enforced = true;
 
-		if ((enforced && !lqe->lqe_enforced) ||
-		    (!enforced && lqe->lqe_enforced))
-			/* if enforced status has changed, we need to inform
-			 * slave, therefore we need to bump the version */
-			 bump_version = true;
-
 		dirtied = true;
 	}
 
 	if (dirtied) {
 		/* write new quota settings to disk */
-		rc = qmt_glb_write(env, th, lqe,
-				   bump_version ? LQUOTA_BUMP_VER : 0, &ver);
+		rc = qmt_glb_write(env, th, lqe, LQUOTA_BUMP_VER, &ver);
 		if (rc) {
 			/* restore initial quota settings */
 			qmt_restore(lqe, &qti->qti_restore);
@@ -298,7 +188,7 @@ out_nolock:
 	if (th != NULL && !IS_ERR(th))
 		dt_trans_stop(env, qmt->qmt_child, th);
 
-	if (rc == 0 && bump_version)
+	if (rc == 0 && dirtied)
 		qmt_glb_lock_notify(env, lqe, ver);
 
 	return rc;
@@ -330,35 +220,42 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 	switch (oqctl->qc_cmd) {
 
 	case Q_GETINFO:  /* read grace times */
+		/* Global grace time is stored in quota settings of ID 0. */
+		id->qid_uid = 0;
+
 		/* read inode grace time */
-		rc = qmt_getinfo(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type,
-				 &oqctl->qc_dqinfo.dqi_igrace);
+		rc = qmt_get(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type, id,
+			     NULL, NULL, &oqctl->qc_dqinfo.dqi_igrace);
 		if (rc)
 			break;
 
 		/* read block grace time */
-		rc = qmt_getinfo(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type,
-				 &oqctl->qc_dqinfo.dqi_bgrace);
+		rc = qmt_get(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type, id,
+			     NULL, NULL, &oqctl->qc_dqinfo.dqi_bgrace);
 		break;
 
 	case Q_SETINFO:  /* modify grace times */
 		/* setinfo should be using dqi->dqi_valid, but lfs incorrectly
 		 * sets the valid flags in dqb->dqb_valid instead, try to live
 		 * with that ... */
+
+		/* Global grace time is stored in quota settings of ID 0. */
+		id->qid_uid = 0;
+
 		if ((dqb->dqb_valid & QIF_ITIME) != 0) {
 			/* set inode grace time */
-			rc = qmt_setinfo(env, qmt, 0, LQUOTA_RES_MD,
-					 oqctl->qc_type,
-					 oqctl->qc_dqinfo.dqi_igrace);
+			rc = qmt_set(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type,
+				     id, 0, 0, oqctl->qc_dqinfo.dqi_igrace,
+				     QIF_TIMES);
 			if (rc)
 				break;
 		}
 
 		if ((dqb->dqb_valid & QIF_BTIME) != 0)
 			/* set block grace time */
-			rc = qmt_setinfo(env, qmt, 0, LQUOTA_RES_DT,
-					 oqctl->qc_type,
-					 oqctl->qc_dqinfo.dqi_bgrace);
+			rc = qmt_set(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type,
+				     id, 0, 0, oqctl->qc_dqinfo.dqi_bgrace,
+				     QIF_TIMES);
 		break;
 
 	case Q_GETQUOTA: /* consult quota limit */
@@ -372,9 +269,9 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		id->qid_uid = oqctl->qc_id;
 
 		/* look-up inode quota settings */
-		rc = qmt_getquota(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type,
-				  id, &dqb->dqb_ihardlimit,
-				  &dqb->dqb_isoftlimit, &dqb->dqb_itime);
+		rc = qmt_get(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type, id,
+			     &dqb->dqb_ihardlimit, &dqb->dqb_isoftlimit,
+			     &dqb->dqb_itime);
 		if (rc)
 			break;
 
@@ -383,9 +280,9 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 		dqb->dqb_curinodes = 0;
 
 		/* look-up block quota settings */
-		rc = qmt_getquota(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type,
-				  id, &dqb->dqb_bhardlimit,
-				  &dqb->dqb_bsoftlimit, &dqb->dqb_btime);
+		rc = qmt_get(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type, id,
+			     &dqb->dqb_bhardlimit, &dqb->dqb_bsoftlimit,
+			     &dqb->dqb_btime);
 		if (rc)
 			break;
 
@@ -403,22 +300,20 @@ static int qmt_quotactl(const struct lu_env *env, struct lu_device *ld,
 
 		if ((dqb->dqb_valid & QIF_IFLAGS) != 0) {
 			/* update inode quota settings */
-			rc = qmt_setquota(env, qmt, 0, LQUOTA_RES_MD,
-					  oqctl->qc_type, id,
-					  dqb->dqb_ihardlimit,
-					  dqb->dqb_isoftlimit, dqb->dqb_itime,
-					  dqb->dqb_valid & QIF_IFLAGS);
+			rc = qmt_set(env, qmt, 0, LQUOTA_RES_MD, oqctl->qc_type,
+				     id, dqb->dqb_ihardlimit,
+				     dqb->dqb_isoftlimit, dqb->dqb_itime,
+				     dqb->dqb_valid & QIF_IFLAGS);
 			if (rc)
 				break;
 		}
 
 		if ((dqb->dqb_valid & QIF_BFLAGS) != 0)
 			/* update block quota settings */
-			rc = qmt_setquota(env, qmt, 0, LQUOTA_RES_DT,
-					  oqctl->qc_type, id,
-					  dqb->dqb_bhardlimit,
-					  dqb->dqb_bsoftlimit, dqb->dqb_btime,
-					  dqb->dqb_valid & QIF_BFLAGS);
+			rc = qmt_set(env, qmt, 0, LQUOTA_RES_DT, oqctl->qc_type,
+				     id, dqb->dqb_bhardlimit,
+				     dqb->dqb_bsoftlimit, dqb->dqb_btime,
+				     dqb->dqb_valid & QIF_BFLAGS);
 		break;
 
 	case Q_QUOTAON:

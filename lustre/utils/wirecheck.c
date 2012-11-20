@@ -1380,7 +1380,7 @@ check_ldlm_gl_lquota_desc(void)
 	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_ver);
 	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_hardlimit);
 	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_softlimit);
-	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_pad1);
+	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_time);
 	CHECK_MEMBER(ldlm_gl_lquota_desc, gl_pad2);
 }
 

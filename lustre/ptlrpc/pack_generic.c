@@ -1829,7 +1829,7 @@ void lustre_swab_gl_desc(union ldlm_gl_desc *desc)
 	__swab64s(&desc->lquota_desc.gl_ver);
 	__swab64s(&desc->lquota_desc.gl_hardlimit);
 	__swab64s(&desc->lquota_desc.gl_softlimit);
-	CLASSERT(offsetof(typeof(desc->lquota_desc), gl_pad1) != 0);
+	__swab64s(&desc->lquota_desc.gl_time);
 	CLASSERT(offsetof(typeof(desc->lquota_desc), gl_pad2) != 0);
 }
 

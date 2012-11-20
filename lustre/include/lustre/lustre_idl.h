@@ -1768,7 +1768,7 @@ struct ldlm_gl_lquota_desc {
 	__u64		gl_ver;   /* new index version */
 	__u64		gl_hardlimit; /* new hardlimit or qunit value */
 	__u64		gl_softlimit; /* new softlimit */
-	__u64		gl_pad1;
+	__u64		gl_time;
 	__u64		gl_pad2;
 };
 #define gl_qunit	gl_hardlimit /* current qunit value used when

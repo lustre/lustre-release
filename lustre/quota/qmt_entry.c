@@ -416,7 +416,7 @@ void qmt_adjust_edquot(struct lquota_entry *lqe, __u64 now)
 	struct qmt_pool_info	*pool = lqe2qpi(lqe);
 	ENTRY;
 
-	if (!lqe->lqe_enforced)
+	if (!lqe->lqe_enforced || lqe->lqe_id.qid_uid == 0)
 		RETURN_EXIT;
 
 	if (!lqe->lqe_edquot) {
@@ -545,7 +545,7 @@ void qmt_adjust_qunit(const struct lu_env *env, struct lquota_entry *lqe)
 
 	LASSERT(lqe_is_locked(lqe));
 
-	if (!lqe->lqe_enforced)
+	if (!lqe->lqe_enforced || lqe->lqe_id.qid_uid == 0)
 		/* no quota limits */
 		RETURN_EXIT;
 

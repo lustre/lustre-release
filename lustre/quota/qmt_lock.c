@@ -550,6 +550,7 @@ void qmt_glb_lock_notify(const struct lu_env *env, struct lquota_entry *lqe,
 	qti->qti_gl_desc.lquota_desc.gl_flags     = 0;
 	qti->qti_gl_desc.lquota_desc.gl_hardlimit = lqe->lqe_hardlimit;
 	qti->qti_gl_desc.lquota_desc.gl_softlimit = lqe->lqe_softlimit;
+	qti->qti_gl_desc.lquota_desc.gl_time      = lqe->lqe_gracetime;
 	qti->qti_gl_desc.lquota_desc.gl_ver       = ver;
 
 	/* look up ldlm resource associated with global index */

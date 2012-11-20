@@ -3204,10 +3204,10 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct ldlm_gl_lquota_desc, gl_softlimit));
         LASSERTF((int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_softlimit) == 8, "found %lld\n",
                  (long long)(int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_softlimit));
-        LASSERTF((int)offsetof(struct ldlm_gl_lquota_desc, gl_pad1) == 48, "found %lld\n",
-                 (long long)(int)offsetof(struct ldlm_gl_lquota_desc, gl_pad1));
-        LASSERTF((int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad1) == 8, "found %lld\n",
-                 (long long)(int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad1));
+        LASSERTF((int)offsetof(struct ldlm_gl_lquota_desc, gl_time) == 48, "found %lld\n",
+                 (long long)(int)offsetof(struct ldlm_gl_lquota_desc, gl_time));
+        LASSERTF((int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_time) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_time));
         LASSERTF((int)offsetof(struct ldlm_gl_lquota_desc, gl_pad2) == 56, "found %lld\n",
                  (long long)(int)offsetof(struct ldlm_gl_lquota_desc, gl_pad2));
         LASSERTF((int)sizeof(((struct ldlm_gl_lquota_desc *)0)->gl_pad2) == 8, "found %lld\n",
