@@ -356,6 +356,10 @@ static int ofd_prepare(const struct lu_env *env, struct lu_device *pdev,
 	rc = next->ld_ops->ldo_prepare(env, dev, next);
 
 	target_recovery_init(&ofd->ofd_lut, ost_handle);
+	LASSERT(obd->obd_no_conn);
+	spin_lock(&obd->obd_dev_lock);
+	obd->obd_no_conn = 0;
+	spin_unlock(&obd->obd_dev_lock);
 
 	if (obd->obd_recovering == 0)
 		ofd_postrecov(env, ofd);

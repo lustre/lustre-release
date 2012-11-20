@@ -1457,23 +1457,6 @@ out:
 	return !!rc;
 }
 
-static int ofd_obd_notify(struct obd_device *obd, struct obd_device *unused,
-			  enum obd_notify_event ev, void *data)
-{
-	switch (ev) {
-	case OBD_NOTIFY_CONFIG:
-		LASSERT(obd->obd_no_conn);
-		spin_lock(&obd->obd_dev_lock);
-		obd->obd_no_conn = 0;
-		spin_unlock(&obd->obd_dev_lock);
-		break;
-	default:
-		CDEBUG(D_INFO, "%s: Unhandled notification %#x\n",
-		       obd->obd_name, ev);
-	}
-	return 0;
-}
-
 /*
  * Handle quota control requests to consult current usage/limit.
  *
@@ -1527,6 +1510,5 @@ struct obd_ops ofd_obd_ops = {
 	.o_precleanup		= ofd_precleanup,
 	.o_ping			= ofd_ping,
 	.o_health_check		= ofd_health_check,
-	.o_notify		= ofd_obd_notify,
 	.o_quotactl		= ofd_quotactl,
 };

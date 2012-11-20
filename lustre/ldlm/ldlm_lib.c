@@ -1039,23 +1039,25 @@ no_export:
 		/* allow lightweight connections during recovery */
 		if (target->obd_recovering && !lw_client) {
                         cfs_time_t t;
-			int	   c; /* connected */
-			int	   i; /* in progress */
-			int	   k; /* known */
+			int	c; /* connected */
+			int	i; /* in progress */
+			int	k; /* known */
+			int	s; /* stale/evicted */
 
 			c = cfs_atomic_read(&target->obd_connected_clients);
 			i = cfs_atomic_read(&target->obd_lock_replay_clients);
 			k = target->obd_max_recoverable_clients;
+			s = target->obd_stale_clients;
 			t = cfs_timer_deadline(&target->obd_recovery_timer);
 			t = cfs_time_sub(t, cfs_time_current());
 			t = cfs_duration_sec(t);
 			LCONSOLE_WARN("%s: Denying connection for new client "
 				      "%s (at %s), waiting for all %d known "
 				      "clients (%d recovered, %d in progress, "
-				      "and %d unseen) to recover in %d:%.02d\n",
+				      "and %d evicted) to recover in %d:%.02d\n",
 				      target->obd_name, cluuid.uuid,
 				      libcfs_nid2str(req->rq_peer.nid), k,
-				      c - i, i, k - c, (int)t / 60,
+				      c - i, i, s, (int)t / 60,
 				      (int)t % 60);
                         rc = -EBUSY;
                 } else {
@@ -1602,7 +1604,8 @@ static void extend_recovery_timer(struct obd_device *obd, int drt, bool extend)
 
         if (to > obd->obd_recovery_time_hard)
                 to = obd->obd_recovery_time_hard;
-        if (obd->obd_recovery_timeout < to) {
+	if (obd->obd_recovery_timeout < to ||
+	    obd->obd_recovery_timeout == obd->obd_recovery_time_hard) {
                 obd->obd_recovery_timeout = to;
                 cfs_timer_arm(&obd->obd_recovery_timer,
                               cfs_time_shift(drt));
@@ -1696,10 +1699,8 @@ static int check_for_clients(struct obd_device *obd)
         if (obd->obd_abort_recovery || obd->obd_recovery_expired)
                 return 1;
         LASSERT(clnts <= obd->obd_max_recoverable_clients);
-        if (obd->obd_no_conn == 0 &&
-            clnts + obd->obd_stale_clients == obd->obd_max_recoverable_clients)
-                return 1;
-        return 0;
+	return (clnts + obd->obd_stale_clients ==
+		obd->obd_max_recoverable_clients);
 }
 
 static int check_for_next_transno(struct obd_device *obd)

@@ -1133,12 +1133,21 @@ void class_export_recovery_cleanup(struct obd_export *exp)
 	spin_lock(&obd->obd_recovery_task_lock);
 	if (exp->exp_delayed)
 		obd->obd_delayed_clients--;
-	if (obd->obd_recovering && exp->exp_in_recovery) {
-		spin_lock(&exp->exp_lock);
-		exp->exp_in_recovery = 0;
-		spin_unlock(&exp->exp_lock);
-		LASSERT_ATOMIC_POS(&obd->obd_connected_clients);
-		cfs_atomic_dec(&obd->obd_connected_clients);
+	if (obd->obd_recovering) {
+		if (exp->exp_in_recovery) {
+			spin_lock(&exp->exp_lock);
+			exp->exp_in_recovery = 0;
+			spin_unlock(&exp->exp_lock);
+			LASSERT_ATOMIC_POS(&obd->obd_connected_clients);
+			cfs_atomic_dec(&obd->obd_connected_clients);
+		}
+
+		/* if called during recovery then should update
+		 * obd_stale_clients counter,
+		 * lightweight exports are not counted */
+		if (exp->exp_failed &&
+		    (exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) == 0)
+			exp->exp_obd->obd_stale_clients++;
 	}
 	spin_unlock(&obd->obd_recovery_task_lock);
 	/** Cleanup req replay fields */
@@ -1148,7 +1157,7 @@ void class_export_recovery_cleanup(struct obd_export *exp)
 		spin_unlock(&exp->exp_lock);
 		LASSERT(cfs_atomic_read(&obd->obd_req_replay_clients));
 		cfs_atomic_dec(&obd->obd_req_replay_clients);
-        }
+	}
 	/** Cleanup lock replay data */
 	if (exp->exp_lock_replay_needed) {
 		spin_lock(&exp->exp_lock);
@@ -1313,7 +1322,7 @@ void class_disconnect_stale_exports(struct obd_device *obd,
 			continue;
 
 		spin_lock(&exp->exp_lock);
-		if (test_export(exp)) {
+		if (exp->exp_failed || test_export(exp)) {
 			spin_unlock(&exp->exp_lock);
 			continue;
 		}
@@ -1330,14 +1339,13 @@ void class_disconnect_stale_exports(struct obd_device *obd,
         }
 	spin_unlock(&obd->obd_dev_lock);
 
-        if (evicted) {
-                LCONSOLE_WARN("%s: disconnecting %d stale clients\n",
-                              obd->obd_name, evicted);
-                obd->obd_stale_clients += evicted;
-        }
-        class_disconnect_export_list(&work_list, exp_flags_from_obd(obd) |
-                                                 OBD_OPT_ABORT_RECOV);
-        EXIT;
+	if (evicted)
+		LCONSOLE_WARN("%s: disconnecting %d stale clients\n",
+			      obd->obd_name, evicted);
+
+	class_disconnect_export_list(&work_list, exp_flags_from_obd(obd) |
+						 OBD_OPT_ABORT_RECOV);
+	EXIT;
 }
 EXPORT_SYMBOL(class_disconnect_stale_exports);
 
