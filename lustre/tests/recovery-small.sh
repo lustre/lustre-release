@@ -418,7 +418,7 @@ test_19a() {
 	do_facet client "munlink $DIR/$tfile"
 
 	# let the client reconnect
-	sleep 5
+	client_reconnect
 	EVICT=$(do_facet client $LCTL get_param mdc.$FSNAME-MDT*.state | \
 	    awk -F"[ [,]" '/EVICTED]$/ { if (mx<$4) {mx=$4;} } END { print mx }')
 
@@ -438,7 +438,7 @@ test_19b() {
 	do_facet client munlink $DIR/$tfile
 
 	# let the client reconnect
-	sleep 5
+	client_reconnect
 	EVICT=$(do_facet client $LCTL get_param osc.$FSNAME-OST*.state | \
 	    awk -F"[ [,]" '/EVICTED]$/ { if (mx<$4) {mx=$4;} } END { print mx }')
 
