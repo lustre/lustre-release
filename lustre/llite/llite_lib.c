@@ -1410,9 +1410,9 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
         int rc = 0, rc1 = 0;
         ENTRY;
 
-	CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu (%p) to %llu, valid %x\n",
-		inode->i_ino,
-		inode,i_size_read(inode),
+	CDEBUG(D_VFSTRACE, "%s: setattr inode %p/fid:"DFID" from %llu to %llu, "
+		"valid %x\n", ll_get_fsname(inode->i_sb, NULL, 0), inode,
+		PFID(&lli->lli_fid), i_size_read(inode), attr->ia_size,
 		attr->ia_valid);
 
         if (ia_valid & ATTR_SIZE) {

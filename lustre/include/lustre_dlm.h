@@ -990,6 +990,10 @@ extern struct obd_ops ldlm_obd_ops;
 extern char *ldlm_lockname[];
 extern char *ldlm_typename[];
 extern char *ldlm_it2str(int it);
+
+#define LDLM_DEBUG_NOLOCK(format, a...)                 \
+        CDEBUG(D_DLMTRACE, "### " format "\n" , ##a)
+
 #ifdef LIBCFS_DEBUG
 #define ldlm_lock_debug(msgdata, mask, cdls, lock, fmt, a...) do {      \
         CFS_CHECK_STACK(msgdata, mask, cdls);                           \
@@ -1015,17 +1019,19 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
 #define LDLM_WARN(lock, fmt, a...)  LDLM_DEBUG_LIMIT(D_WARNING, lock, fmt, ## a)
 
 #define LDLM_DEBUG(lock, fmt, a...)   do {                                  \
-        LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_DLMTRACE, NULL);              \
-        ldlm_lock_debug(&msgdata, D_DLMTRACE, NULL, lock, "### " fmt , ##a);\
+	if (likely(lock != NULL)) {					    \
+		LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_DLMTRACE, NULL);      \
+		ldlm_lock_debug(&msgdata, D_DLMTRACE, NULL, lock, 	    \
+				"### " fmt , ##a);			    \
+	} else {							    \
+		LDLM_DEBUG_NOLOCK("no dlm lock: " fmt, ##a);		    \
+	}								    \
 } while (0)
 #else /* !LIBCFS_DEBUG */
 # define LDLM_DEBUG_LIMIT(mask, lock, fmt, a...) ((void)0)
 # define LDLM_DEBUG(lock, fmt, a...) ((void)0)
 # define LDLM_ERROR(lock, fmt, a...) ((void)0)
 #endif
-
-#define LDLM_DEBUG_NOLOCK(format, a...)                 \
-        CDEBUG(D_DLMTRACE, "### " format "\n" , ##a)
 
 typedef int (*ldlm_processing_policy)(struct ldlm_lock *lock, __u64 *flags,
                                       int first_enq, ldlm_error_t *err,

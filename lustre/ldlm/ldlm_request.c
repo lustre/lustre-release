@@ -840,7 +840,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
                 if (einfo->ei_type == LDLM_EXTENT)
                         lock->l_req_extent = policy->l_extent;
-                LDLM_DEBUG(lock, "client-side enqueue START");
+                LDLM_DEBUG(lock, "client-side enqueue START, flags %llx\n",
+			   *flags);
         }
 
 	lock->l_conn_export = exp;

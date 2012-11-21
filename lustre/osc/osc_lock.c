@@ -1329,8 +1329,9 @@ static int osc_lock_flush(struct osc_lock *ols, int discard)
 			result = osc_cache_writeback_range(env, obj,
 					descr->cld_start, descr->cld_end,
 					1, discard);
-			CDEBUG(D_DLMTRACE, "write out %d pages for lock %p.\n",
-			       result, lock);
+			LDLM_DEBUG(ols->ols_lock,
+				"lock %p: %d pages were %s.\n", lock, result,
+				discard ? "discarded" : "written");
 			if (result > 0)
 				result = 0;
 		}
@@ -1714,6 +1715,9 @@ int osc_lock_init(const struct lu_env *env,
 			osc_lock_to_lockless(env, clk, (enqflags & CEF_NEVER));
 		if (clk->ols_locklessable && !(enqflags & CEF_DISCARD_DATA))
 			clk->ols_flags |= LDLM_FL_DENY_ON_CONTENTION;
+
+		LDLM_DEBUG_NOLOCK("lock %p, osc lock %p, flags %llx\n",
+				lock, clk, clk->ols_flags);
 
                 result = 0;
         } else
