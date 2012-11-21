@@ -420,7 +420,7 @@ typedef struct file_lock {
 
 /* quota */
 #define QUOTA_OK 0
-#define NO_QUOTA (-EDQUOT)
+#define NO_QUOTA 1
 
 /* ACL */
 typedef struct {

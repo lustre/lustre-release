@@ -587,9 +587,18 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 # define ll_vfs_dq_off(sb, remount) vfs_dq_off(sb, remount)
 #endif
 
-#ifndef HAVE_BDI_INIT
-#define bdi_init(bdi)    0
-#define bdi_destroy(bdi) do { } while (0)
+#ifdef HAVE_BDI_INIT
+#define ll_bdi_init(bdi)    bdi_init(bdi)
+#define ll_bdi_destroy(bdi) bdi_destroy(bdi)
+#else
+#define ll_bdi_init(bdi)    0
+#define ll_bdi_destroy(bdi) do { } while(0)
+#endif
+
+#ifdef HAVE_NEW_BACKING_DEV_INFO
+# define ll_bdi_wb_cnt(bdi) ((bdi).wb_cnt)
+#else
+# define ll_bdi_wb_cnt(bdi) 1
 #endif
 
 #ifdef HAVE_BLK_QUEUE_MAX_SECTORS /* removed in rhel6 */
@@ -626,13 +635,15 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #endif
 
 #ifdef HAVE_ADD_TO_PAGE_CACHE_LRU
+#define ll_add_to_page_cache_lru(pg, mapping, off, gfp) \
+        add_to_page_cache_lru(pg, mapping, off, gfp)
 #define ll_pagevec_init(pv, cold)       do {} while (0)
 #define ll_pagevec_add(pv, pg)          (0)
 #define ll_pagevec_lru_add_file(pv)     do {} while (0)
 #else
-#define add_to_page_cache_lru(pg, mapping, off, gfp) \
+#define ll_add_to_page_cache_lru(pg, mapping, off, gfp) \
         add_to_page_cache(pg, mapping, off, gfp)
-#define ll_pagevec_init(pv, cold)       pagevec_init(pv, cold);
+#define ll_pagevec_init(pv, cold)       pagevec_init(&lru_pvec, cold);
 #define ll_pagevec_add(pv, pg)					\
 ({								\
 	int __ret;						\
@@ -646,6 +657,13 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #if !defined(HAVE_NODE_TO_CPUMASK) && defined(HAVE_CPUMASK_OF_NODE)
 #define node_to_cpumask(i)         (*(cpumask_of_node(i)))
 #define HAVE_NODE_TO_CPUMASK
+#endif
+
+#ifndef QUOTA_OK
+# define QUOTA_OK 0
+#endif
+#ifndef NO_QUOTA
+# define NO_QUOTA (-EDQUOT)
 #endif
 
 #if !defined(_ASM_GENERIC_BITOPS_EXT2_NON_ATOMIC_H_) && !defined(ext2_set_bit)
