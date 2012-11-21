@@ -112,7 +112,9 @@ struct qsd_instance {
 				 qsd_prepared:1, /* qsd_prepare() successfully
 						  * called */
 				 qsd_exp_valid:1,/* qsd_exp is now valid */
-				 qsd_stopping:1; /* qsd_instance is stopping */
+				 qsd_stopping:1, /* qsd_instance is stopping */
+				 qsd_acct_failed:1; /* failed to set up acct
+						     * for one quota type */
 };
 
 /*

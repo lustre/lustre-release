@@ -272,8 +272,13 @@ static int lprocfs_quota_seq_open(struct inode *inode, struct file *file)
 	/* Initialize the common environment to be used in the seq operations */
 	rc = lu_env_init(&lqp->lqp_env, LCT_LOCAL);
 	if (rc) {
+		char *obd_name = "quota";
+
+		if (lqp->lqp_obj != NULL)
+			obd_name = lqp->lqp_obj->do_lu.lo_dev->ld_obd->obd_name;
+
 		CERROR("%s: error initializing procfs quota env: rc = %d\n",
-		       lqp->lqp_obj->do_lu.lo_dev->ld_obd->obd_name, rc);
+		       obd_name, rc);
 		goto out_lqp;
 	}
 

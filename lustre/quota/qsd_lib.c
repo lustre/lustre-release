@@ -104,16 +104,26 @@ static int lprocfs_qsd_rd_state(char *page, char **start, off_t off,
 		      qsd->qsd_is_md ? "md" : "dt", enabled,
 		      qsd->qsd_exp_valid ? "setup" : "not setup yet");
 
-	if (qsd->qsd_prepared)
+	if (qsd->qsd_prepared) {
+		memset(enabled, 0, sizeof(enabled));
+		if (qsd->qsd_type_array[USRQUOTA]->qqi_acct_obj != NULL)
+			strcat(enabled, "u");
+		if (qsd->qsd_type_array[GRPQUOTA]->qqi_acct_obj != NULL)
+			strcat(enabled, "g");
+		if (strlen(enabled) == 0)
+			strcat(enabled, "none");
 		rc +=  snprintf(page + rc, count - rc,
+				"space acct:     %s\n"
 				"user uptodate:  glb[%d],slv[%d],reint[%d]\n"
 				"group uptodate: glb[%d],slv[%d],reint[%d]\n",
+				enabled,
 				qsd->qsd_type_array[USRQUOTA]->qqi_glb_uptodate,
 				qsd->qsd_type_array[USRQUOTA]->qqi_slv_uptodate,
 				qsd->qsd_type_array[USRQUOTA]->qqi_reint,
 				qsd->qsd_type_array[GRPQUOTA]->qqi_glb_uptodate,
 				qsd->qsd_type_array[GRPQUOTA]->qqi_slv_uptodate,
 				qsd->qsd_type_array[GRPQUOTA]->qqi_reint);
+	}
 	return rc;
 }
 
@@ -357,12 +367,14 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	/* open accounting object */
 	LASSERT(qqi->qqi_acct_obj == NULL);
 	qqi->qqi_acct_obj = acct_obj_lookup(env, qsd->qsd_dev, qtype);
-	if (qqi->qqi_acct_obj == NULL) {
-		LCONSOLE_ERROR("%s: No %s space accounting support. Please use "
-			       "tunefs.lustre --quota option to enable quota "
-			       "accounting.\n",
-			       qsd->qsd_svname, QTYPE_NAME(qtype));
-		GOTO(out, rc = -ENOENT);
+	if (IS_ERR(qqi->qqi_acct_obj)) {
+		LCONSOLE_WARN("%s: No %s space accounting support. Please "
+			      "consider running tunefs.lustre --quota on an "
+			      "unmounted filesystem to enable quota accounting."
+			      "\n", qsd->qsd_svname,
+			      QTYPE_NAME(qtype));
+		qqi->qqi_acct_obj = NULL;
+		qsd->qsd_acct_failed = true;
 	}
 
 	/* open global index copy */
@@ -675,6 +687,15 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
 		struct qsd_qtype_info	*qqi = qsd->qsd_type_array[qtype];
 
+		if (qsd_type_enabled(qsd, qtype) && qsd->qsd_acct_failed) {
+			LCONSOLE_ERROR("%s: can't enable quota enforcement "
+				       "since space accounting isn't functional"
+				       ". Please run tunefs.lustre --quota on "
+				       "an unmounted filesystem if not done "
+				       "already\n", qsd->qsd_svname);
+			break;
+		}
+
 		rc = qsd_start_reint_thread(qqi);
 		if (rc) {
 			CERROR("%s: failed to start reint thread for type %s "
@@ -733,7 +754,7 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 
 	write_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_prepared) {
-		CERROR("%s: can't start qsd instance since it was properly "
+		CERROR("%s: can't start qsd instance since it wasn't properly "
 		       "initialized\n", qsd->qsd_svname);
 		rc = -EFAULT;
 	} else if (qsd->qsd_started) {

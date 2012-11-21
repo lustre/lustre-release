@@ -636,6 +636,10 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 	if (!qsd_type_enabled(qqi->qqi_qsd, qqi->qqi_qtype))
 		RETURN(0);
 
+	if (qqi->qqi_qsd->qsd_acct_failed)
+		/* no space accounting support, can't enable enforcement */
+		RETURN(0);
+
 	/* check if the reintegration has already started or finished */
 	write_lock(&qsd->qsd_lock);
 
