@@ -2444,10 +2444,11 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 		ext->oe_memalloc = 1;
 
 	ext->oe_urgent = 1;
-	if (ext->oe_state == OES_CACHE && cfs_list_empty(&ext->oe_link)) {
+	if (ext->oe_state == OES_CACHE) {
 		OSC_EXTENT_DUMP(D_CACHE, ext,
 				"flush page %p make it urgent.\n", oap);
-		cfs_list_add_tail(&ext->oe_link, &obj->oo_urgent_exts);
+		if (cfs_list_empty(&ext->oe_link))
+			cfs_list_add_tail(&ext->oe_link, &obj->oo_urgent_exts);
 		unplug = true;
 	}
 	rc = 0;
@@ -2830,10 +2831,9 @@ int osc_cache_writeback_range(const struct lu_env *env, struct osc_object *obj,
 					ext->oe_urgent = 1;
 					list = &obj->oo_urgent_exts;
 				}
-				if (list != NULL) {
+				if (list != NULL)
 					cfs_list_move_tail(&ext->oe_link, list);
-					unplug = true;
-				}
+				unplug = true;
 			} else {
 				/* the only discarder is lock cancelling, so
 				 * [start, end] must contain this extent */
