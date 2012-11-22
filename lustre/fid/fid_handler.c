@@ -418,13 +418,24 @@ int seq_server_init(struct lu_server_seq *seq,
 		    struct seq_server_site *ss,
 		    const struct lu_env *env)
 {
-        int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
-        ENTRY;
+	int rc, is_srv = (type == LUSTRE_SEQ_SERVER);
+	ENTRY;
 
-        LASSERT(dev != NULL);
-        LASSERT(prefix != NULL);
+	LASSERT(dev != NULL);
+	LASSERT(prefix != NULL);
 	LASSERT(ss != NULL);
 	LASSERT(ss->ss_lu != NULL);
+
+	/* A compile-time check for FIDs that used to be in lustre_idl.h
+	 * but is moved here to remove CLASSERT/LASSERT in that header.
+	 * Check all lu_fid fields are converted in fid_cpu_to_le() and friends
+	 * and that there is no padding added by compiler to the struct. */
+	{
+		struct lu_fid tst;
+
+		CLASSERT(sizeof(tst) == sizeof(tst.f_seq) +
+			 sizeof(tst.f_oid) + sizeof(tst.f_ver));
+	}
 
 	seq->lss_cli = NULL;
 	seq->lss_type = type;
