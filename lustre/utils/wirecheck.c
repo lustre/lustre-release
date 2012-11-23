@@ -207,15 +207,37 @@ check_lustre_mdt_attrs(void)
         CHECK_MEMBER(lustre_mdt_attrs, lma_incompat);
         CHECK_MEMBER(lustre_mdt_attrs, lma_self_fid);
         CHECK_MEMBER(lustre_mdt_attrs, lma_flags);
-        CHECK_MEMBER(lustre_mdt_attrs, lma_ioepoch);
-        CHECK_MEMBER(lustre_mdt_attrs, lma_som_size);
-        CHECK_MEMBER(lustre_mdt_attrs, lma_som_blocks);
-        CHECK_MEMBER(lustre_mdt_attrs, lma_som_mountid);
 
         CHECK_DEFINE(LMA_INCOMPAT_SUPP);
 
+	CHECK_VALUE_X(LMAI_RELEASED);
+
         CHECK_VALUE_X(LMAC_HSM);
         CHECK_VALUE_X(LMAC_SOM);
+}
+
+static void
+check_som_attrs(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(som_attrs);
+	CHECK_MEMBER(som_attrs, som_compat);
+	CHECK_MEMBER(som_attrs, som_incompat);
+	CHECK_MEMBER(som_attrs, som_ioepoch);
+	CHECK_MEMBER(som_attrs, som_size);
+	CHECK_MEMBER(som_attrs, som_blocks);
+	CHECK_MEMBER(som_attrs, som_mountid);
+}
+
+static void
+check_hsm_attrs(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(hsm_attrs);
+	CHECK_MEMBER(hsm_attrs, hsm_compat);
+	CHECK_MEMBER(hsm_attrs, hsm_flags);
+	CHECK_MEMBER(hsm_attrs, hsm_arch_id);
+	CHECK_MEMBER(hsm_attrs, hsm_arch_ver);
 }
 
 static void
@@ -2123,6 +2145,8 @@ main(int argc, char **argv)
         CHECK_STRUCT(obd_uuid);
         check_lu_seq_range();
         check_lustre_mdt_attrs();
+	check_som_attrs();
+	check_hsm_attrs();
         check_ost_id();
         check_lu_dirent();
         check_luda_type();

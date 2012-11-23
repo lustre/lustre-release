@@ -161,14 +161,22 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
         }
 }
 
-static int osd_get_lma(struct inode *inode, struct dentry *dentry,
-		       struct lustre_mdt_attrs *lma)
+static int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
+		       struct dentry *dentry, struct lustre_mdt_attrs *lma)
 {
 	int rc;
 
 	dentry->d_inode = inode;
 	rc = inode->i_op->getxattr(dentry, XATTR_NAME_LMA, (void *)lma,
 				   sizeof(*lma));
+	if (rc == -ERANGE) {
+		/* try with old lma size */
+		rc = inode->i_op->getxattr(dentry, XATTR_NAME_LMA,
+					   info->oti_mdt_attrs_old,
+					   LMA_OLD_SIZE);
+		if (rc > 0)
+			memcpy(lma, info->oti_mdt_attrs_old, sizeof(*lma));
+	}
 	if (rc > 0) {
 		/* Check LMA compatibility */
 		if (lma->lma_incompat & ~cpu_to_le32(LMA_INCOMPAT_SUPP)) {
@@ -246,7 +254,7 @@ struct inode *osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	if (IS_ERR(inode))
 		return inode;
 
-	rc = osd_get_lma(inode, &info->oti_obj_dentry, lma);
+	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc == 0) {
 		*fid = lma->lma_self_fid;
 	} else if (rc == -ENODATA) {
@@ -270,7 +278,7 @@ osd_iget_verify(struct osd_thread_info *info, struct osd_device *dev,
 	if (IS_ERR(inode))
 		return inode;
 
-	rc = osd_get_lma(inode, &info->oti_obj_dentry, lma);
+	rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
 	if (rc == -ENODATA)
 		return inode;
 

@@ -16,7 +16,7 @@ obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o mea.o
 obdclass-all-objs += lu_object.o dt_object.o capa.o lu_time.o
 obdclass-all-objs += cl_object.o cl_page.o cl_lock.o cl_io.o lu_ref.o
 obdclass-all-objs += acl.o idmap.o
-obdclass-all-objs += md_local_object.o
+obdclass-all-objs += md_local_object.o md_attrs.o
 
 obdclass-objs := $(obdclass-linux-objs) $(obdclass-all-objs)
 

@@ -603,7 +603,11 @@ struct osd_thread_info {
         /** used in osd_fid_set() to put xattr */
         struct lu_buf          oti_buf;
         /** used in osd_ea_fid_set() to set fid into common ea */
-        struct lustre_mdt_attrs oti_mdt_attrs;
+	union {
+		struct lustre_mdt_attrs oti_mdt_attrs;
+		/* old LMA for compatibility */
+		char			oti_mdt_attrs_old[LMA_OLD_SIZE];
+	};
         /** 0-copy IO */
         struct osd_iobuf       oti_iobuf;
         struct inode           oti_inode;

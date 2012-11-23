@@ -217,18 +217,13 @@ int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
 /**
  * Update SOM on-disk attributes.
  * If enabling, write update inodes and lustre-ea with the proper IOEpoch,
- * mountid and attributes. If disabling, zero IOEpoch id in lustre-ea.
+ * mountid and attributes. If disabling, clean SOM xattr.
  * Call under ->mot_ioepoch_mutex.
  */
 static int mdt_som_attr_set(struct mdt_thread_info *info,
-                            struct mdt_object *obj, __u64 ioepoch, int enable)
+			    struct mdt_object *obj, __u64 ioepoch, bool enable)
 {
-	struct lustre_mdt_attrs	*lma;
-	struct md_attr		*ma = &info->mti_attr;
-	struct lu_buf		*buf = &info->mti_buf;
 	struct md_object	*next = mdt_object_child(obj);
-	struct mdt_device	*mdt = info->mti_mdt;
-	struct lu_attr		*la = &ma->ma_attr;
 	int			 rc;
         ENTRY;
 
@@ -236,34 +231,34 @@ static int mdt_som_attr_set(struct mdt_thread_info *info,
                " on "DFID".\n", enable ? "update" : "disabling",
                ioepoch, PFID(mdt_object_fid(obj)));
 
-	lma = (struct lustre_mdt_attrs *) info->mti_xattr_buf;
-	CLASSERT(sizeof(info->mti_xattr_buf) >= sizeof(*lma));
+	if (enable) {
+		struct lu_buf		*buf = &info->mti_buf;
+		struct som_attrs	*attrs;
+		struct md_attr		*ma = &info->mti_attr;
+		struct lu_attr		*la = &ma->ma_attr;
+		struct obd_device	*obd = info->mti_mdt->mdt_lut.lut_obd;
 
-	buf->lb_buf = lma;
-	buf->lb_len = sizeof(info->mti_xattr_buf);
-	rc = mo_xattr_get(info->mti_env, next, buf, XATTR_NAME_LMA);
-	if (rc > 0) {
-		lustre_lma_swab(lma);
-	} else if (rc == -ENODATA) {
-		memset(lma, 0, sizeof(*lma));
+		attrs = (struct som_attrs *)info->mti_xattr_buf;
+		CLASSERT(sizeof(info->mti_xattr_buf) >= sizeof(*attrs));
+
+		/* pack SOM attributes */
+		memset(attrs, 0, sizeof(*attrs));
+		attrs->som_ioepoch = ioepoch;
+		attrs->som_mountid = obd->u.obt.obt_mount_count;
+		if ((la->la_valid & LA_SIZE) != 0)
+			attrs->som_size = la->la_size;
+		if ((la->la_valid & LA_BLOCKS) != 0)
+			attrs->som_blocks = la->la_blocks;
+		lustre_som_swab(attrs);
+
+		/* update SOM attributes */
+		buf->lb_buf = attrs;
+		buf->lb_len = sizeof(*attrs);
+		rc = mo_xattr_set(info->mti_env, next, buf, XATTR_NAME_SOM, 0);
 	} else {
-		RETURN(rc);
+		/* delete SOM attributes */
+		rc = mo_xattr_del(info->mti_env, next, XATTR_NAME_SOM);
 	}
-
-	/* Copy FID */
-	memcpy(&lma->lma_self_fid, mdt_object_fid(obj), sizeof(lma->lma_self_fid));
-
-	/* Copy SOM data */
-	lma->lma_ioepoch     = ioepoch;
-	lma->lma_som_size    = la->la_valid & LA_SIZE ? la->la_size : 0;
-	lma->lma_som_blocks  = la->la_valid & LA_BLOCKS ?  la->la_blocks : 0;
-	lma->lma_som_mountid = mdt->mdt_lut.lut_obd->u.obt.obt_mount_count;
-	if (enable)
-		lma->lma_compat |= LMAC_SOM;
-	else
-		lma->lma_compat &= ~LMAC_SOM;
-
-	rc = mo_xattr_set(info->mti_env, next, buf, XATTR_NAME_LMA, 0);
 
         RETURN(rc);
 }

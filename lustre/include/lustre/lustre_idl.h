@@ -265,6 +265,8 @@ static inline int range_compare_loc(const struct lu_seq_range *r1,
 
 /**
  * Flags for lustre_mdt_attrs::lma_compat and lustre_mdt_attrs::lma_incompat.
+ * Deprecated since HSM and SOM attributes are now stored in separate on-disk
+ * xattr.
  */
 enum lma_compat {
         LMAC_HSM = 0x00000001,
@@ -275,9 +277,10 @@ enum lma_compat {
  * Masks for all features that should be supported by a Lustre version to
  * access a specific file.
  * This information is stored in lustre_mdt_attrs::lma_incompat.
- *
- * NOTE: No incompat feature should be added before bug #17670 is landed.
  */
+enum lma_incompat {
+	LMAI_RELEASED = 0x0000001, /* file is released */
+};
 #define LMA_INCOMPAT_SUPP 0x0
 
 /**
@@ -300,59 +303,56 @@ struct lustre_mdt_attrs {
         struct lu_fid  lma_self_fid;
         /** mdt/ost type, others */
         __u64   lma_flags;
-        /* IO Epoch SOM attributes belongs to */
-        __u64   lma_ioepoch;
-        /** total file size in objects */
-        __u64   lma_som_size;
-        /** total fs blocks in objects */
-        __u64   lma_som_blocks;
-        /** mds mount id the size is valid for */
-        __u64   lma_som_mountid;
 };
 
 /**
- * Fill \a lma with its first content.
- * Only fid is stored.
+ * Prior to 2.4, the LMA structure also included SOM attributes which has since
+ * been moved to a dedicated xattr
  */
-static inline void lustre_lma_init(struct lustre_mdt_attrs *lma,
-                                   const struct lu_fid *fid)
-{
-        lma->lma_compat      = 0;
-        lma->lma_incompat    = 0;
-        memcpy(&lma->lma_self_fid, fid, sizeof(*fid));
-        lma->lma_flags       = 0;
-        lma->lma_ioepoch     = 0;
-        lma->lma_som_size    = 0;
-        lma->lma_som_blocks  = 0;
-        lma->lma_som_mountid = 0;
+#define LMA_OLD_SIZE (sizeof(struct lustre_mdt_attrs) + 4 * sizeof(__u64))
 
-        /* If a field is added in struct lustre_mdt_attrs, zero it explicitly
-         * and change the test below. */
-        LASSERT(sizeof(*lma) ==
-                (offsetof(struct lustre_mdt_attrs, lma_som_mountid) +
-                 sizeof(lma->lma_som_mountid)));
+extern void lustre_lma_swab(struct lustre_mdt_attrs *lma);
+extern void lustre_lma_init(struct lustre_mdt_attrs *lma,
+			    const struct lu_fid *fid);
+/**
+ * SOM on-disk attributes stored in a separate xattr.
+ */
+struct som_attrs {
+	/** Bitfield for supported data in this structure. For future use. */
+	__u32	som_compat;
+
+	/** Incompat feature list. The supported feature mask is availabe in
+	 * SOM_INCOMPAT_SUPP */
+	__u32	som_incompat;
+
+	/** IO Epoch SOM attributes belongs to */
+	__u64	som_ioepoch;
+	/** total file size in objects */
+	__u64	som_size;
+	/** total fs blocks in objects */
+	__u64	som_blocks;
+	/** mds mount id the size is valid for */
+	__u64	som_mountid;
 };
+extern void lustre_som_swab(struct som_attrs *attrs);
 
-extern void lustre_swab_lu_fid(struct lu_fid *fid);
+#define SOM_INCOMPAT_SUPP 0x0
 
 /**
- * Swab, if needed, lustre_mdt_attr struct to on-disk format.
- * Otherwise, do not touch it.
+ * HSM on-disk attributes stored in a separate xattr.
  */
-static inline void lustre_lma_swab(struct lustre_mdt_attrs *lma)
-{
-        /* Use LUSTRE_MSG_MAGIC to detect local endianess. */
-        if (LUSTRE_MSG_MAGIC != cpu_to_le32(LUSTRE_MSG_MAGIC)) {
-                __swab32s(&lma->lma_compat);
-                __swab32s(&lma->lma_incompat);
-                lustre_swab_lu_fid(&lma->lma_self_fid);
-                __swab64s(&lma->lma_flags);
-                __swab64s(&lma->lma_ioepoch);
-                __swab64s(&lma->lma_som_size);
-                __swab64s(&lma->lma_som_blocks);
-                __swab64s(&lma->lma_som_mountid);
-        }
+struct hsm_attrs {
+	/** Bitfield for supported data in this structure. For future use. */
+	__u32	hsm_compat;
+
+	/** HSM flags, see hsm_flags enum below */
+	__u32	hsm_flags;
+	/** backend archive id associated with the file */
+	__u64	hsm_arch_id;
+	/** version associated with the last archiving, if any */
+	__u64	hsm_arch_ver;
 };
+extern void lustre_hsm_swab(struct hsm_attrs *attrs);
 
 /* This is the maximum number of MDTs allowed in CMD testing until such
  * a time that FID-on-OST is implemented.  This is due to the limitations
@@ -1451,6 +1451,8 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_NAME_LINK         "trusted.link"
 #define XATTR_NAME_FID          "trusted.fid"
 #define XATTR_NAME_VERSION      "trusted.version"
+#define XATTR_NAME_SOM		"trusted.som"
+#define XATTR_NAME_HSM		"trusted.hsm"
 
 
 struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */

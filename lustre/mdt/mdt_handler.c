@@ -712,40 +712,30 @@ int mdt_attr_get_complex(struct mdt_thread_info *info,
 			GOTO(out, rc = rc2);
 	}
 
-
-	if (rc == 0 && S_ISREG(mode) && (need & (MA_HSM | MA_SOM))) {
-		struct lustre_mdt_attrs *lma;
-
-		lma = (struct lustre_mdt_attrs *)info->mti_xattr_buf;
-		CLASSERT(sizeof(*lma) <= sizeof(info->mti_xattr_buf));
-
-		buf->lb_buf = lma;
+	if (need & MA_SOM && S_ISREG(mode)) {
+		buf->lb_buf = info->mti_xattr_buf;
 		buf->lb_len = sizeof(info->mti_xattr_buf);
-		rc = mo_xattr_get(env, next, buf, XATTR_NAME_LMA);
-		if (rc > 0) {
-			lustre_lma_swab(lma);
-			/* Swab and copy LMA */
-			if (need & MA_HSM) {
-				if (lma->lma_compat & LMAC_HSM)
-					ma->ma_hsm.mh_flags =
-						lma->lma_flags & HSM_FLAGS_MASK;
-				else
-					ma->ma_hsm.mh_flags = 0;
-				ma->ma_valid |= MA_HSM;
-			}
-			/* Copy SOM */
-			if (need & MA_SOM && lma->lma_compat & LMAC_SOM) {
-				LASSERT(ma->ma_som != NULL);
-				ma->ma_som->msd_ioepoch = lma->lma_ioepoch;
-				ma->ma_som->msd_size    = lma->lma_som_size;
-				ma->ma_som->msd_blocks  = lma->lma_som_blocks;
-				ma->ma_som->msd_mountid = lma->lma_som_mountid;
-				ma->ma_valid |= MA_SOM;
-			}
-			rc = 0;
-		} else if (rc == -ENODATA) {
-			rc = 0;
-		}
+		CLASSERT(sizeof(struct som_attrs) <=
+			 sizeof(info->mti_xattr_buf));
+		rc2 = mo_xattr_get(info->mti_env, next, buf, XATTR_NAME_SOM);
+		rc2 = lustre_buf2som(info->mti_xattr_buf, rc2, ma->ma_som);
+		if (rc2 == 0)
+			ma->ma_valid |= MA_SOM;
+		else if (rc2 < 0 && rc2 != -ENODATA)
+			GOTO(out, rc = rc2);
+	}
+
+	if (need & MA_HSM && S_ISREG(mode)) {
+		buf->lb_buf = info->mti_xattr_buf;
+		buf->lb_len = sizeof(info->mti_xattr_buf);
+		CLASSERT(sizeof(struct hsm_attrs) <=
+			 sizeof(info->mti_xattr_buf));
+		rc2 = mo_xattr_get(info->mti_env, next, buf, XATTR_NAME_HSM);
+		rc2 = lustre_buf2hsm(info->mti_xattr_buf, rc2, &ma->ma_hsm);
+		if (rc2 == 0)
+			ma->ma_valid |= MA_HSM;
+		else if (rc2 < 0 && rc2 != -ENODATA)
+			GOTO(out, rc = rc2);
 	}
 
 #ifdef CONFIG_FS_POSIX_ACL
