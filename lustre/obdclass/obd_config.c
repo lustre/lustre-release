@@ -1118,16 +1118,19 @@ int class_process_config(struct lustre_cfg *lcfg)
                     client_process_config) {
                         err = (*client_process_config)(lcfg);
                         GOTO(out, err);
-                } else if ((class_match_param(lustre_cfg_string(lcfg, 1),
-                                              PARAM_SYS, &tmp) == 0)) {
-                        /* Global param settings */
-                        err = class_set_global(tmp, lcfg->lcfg_num);
-                        /* Note that since LCFG_PARAM is LCFG_REQUIRED, new
-                           unknown globals would cause config to fail */
-                        if (err)
-                                CWARN("Ignoring unknown param %s\n", tmp);
-                        GOTO(out, 0);
-                }
+		} else if ((class_match_param(lustre_cfg_string(lcfg, 1),
+					      PARAM_SYS, &tmp) == 0)) {
+			/* Global param settings */
+			err = class_set_global(tmp, lcfg->lcfg_num);
+			/*
+			 * Client or server should not fail to mount if
+			 * it hits an unknown configuration parameter.
+			 */
+			if (err != 0)
+				CWARN("Ignoring unknown param %s\n", tmp);
+
+			GOTO(out, err = 0);
+		}
 
                 /* Fall through */
                 break;
