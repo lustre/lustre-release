@@ -11,7 +11,7 @@
 #	sles8-update_rcfile_setting.sh			       \
 #	update_oldconfig
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 
 # Override the default distclean, which removes Makefile
 distclean: distclean-recursive

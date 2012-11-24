@@ -5,8 +5,8 @@
 AUTOMAKE_OPTIONS = foreign
 
 FIND_TAG_FILES_CMD = find $(top_srcdir) \
-		     -path $(top_srcdir)/ldiskfs/ldiskfs/linux-stage -prune -false -o\
-		     -type f -name '*.[hc]'
+		     -path $(top_srcdir)/ldiskfs/ldiskfs/linux-stage \
+		     -prune -false -o -type f -name '*.[hc]'
 
 MAKEEACHSUBDIR =					\
 	for subdir in $(RPM_SUBDIRS) ; do		\

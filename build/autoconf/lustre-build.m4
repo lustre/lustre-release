@@ -120,9 +120,9 @@ AC_DEFUN([LB_CHECK_FILE],
 [AS_VAR_PUSHDEF([lb_File], [lb_cv_file_$1])dnl
 AC_CACHE_CHECK([for $1], lb_File,
 [if test -r "$1"; then
-  AS_VAR_SET(lb_File, yes)
+	AS_VAR_SET(lb_File, yes)
 else
-  AS_VAR_SET(lb_File, no)
+	AS_VAR_SET(lb_File, no)
 fi])
 AS_IF([test AS_VAR_GET(lb_File) = yes], [$2], [$3])[]dnl
 AS_VAR_POPDEF([lb_File])dnl
@@ -578,11 +578,11 @@ AC_SUBST(ENABLE_INIT_SCRIPTS)
 #
 # add -include config.h
 #
-AC_DEFUN([LB_CONFIG_HEADERS],
-[AC_CONFIG_HEADERS([config.h])
-CPPFLAGS="-include $PWD/config.h $CPPFLAGS"
-EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
-AC_SUBST(EXTRA_KCFLAGS)
+AC_DEFUN([LB_CONFIG_HEADERS],[
+	AC_CONFIG_HEADERS([config.h])
+	CPPFLAGS="-include $PWD/config.h $CPPFLAGS"
+	EXTRA_KCFLAGS="-include $PWD/config.h $EXTRA_KCFLAGS"
+	AC_SUBST(EXTRA_KCFLAGS)
 ])
 
 #
@@ -590,9 +590,9 @@ AC_SUBST(EXTRA_KCFLAGS)
 #
 # defines for including the toplevel Rules
 #
-AC_DEFUN([LB_INCLUDE_RULES],
-[INCLUDE_RULES="include $PWD/Rules"
-AC_SUBST(INCLUDE_RULES)
+AC_DEFUN([LB_INCLUDE_RULES],[
+	INCLUDE_RULES="include $PWD/Rules"
+	AC_SUBST(INCLUDE_RULES)
 ])
 
 #
@@ -659,7 +659,7 @@ AC_CHECK_SIZEOF(unsigned long long, 0)
 echo "---> size SIZEOF $SIZEOF_unsigned_long_long"
 echo "---> size SIZEOF $ac_cv_sizeof_unsigned_long_long"
 if test $ac_cv_sizeof_unsigned_long_long != 8 ; then
-        AC_MSG_ERROR([** we assume that sizeof(long long) == 8.  Tell phil@clusterfs.com])
+	AC_MSG_ERROR([** we assume that sizeof(long long) == 8.])
 fi
 
 if test $target_cpu == "powerpc64"; then

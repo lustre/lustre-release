@@ -1,7 +1,7 @@
 #
 # There are four ways this Makefile can be called:
 #
-# 
+#
 # 1.  As a subdirectory from the toplevel, for automake
 #
 # 2.  A wrapper around the kernel's makefile when building modules, to

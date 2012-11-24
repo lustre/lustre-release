@@ -4,3 +4,4 @@
 /lustre.spec
 /Module.symvers
 /Modules.symvers
+!Makefile

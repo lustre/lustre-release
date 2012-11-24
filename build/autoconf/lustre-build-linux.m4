@@ -354,7 +354,7 @@ if test -e $LINUX/include/asm-um ; then
 		# see notes in Rules.in
 		UML_CFLAGS='-O0'
 		AC_MSG_RESULT(yes)
-    	else
+	else
 		AC_MSG_RESULT([no])
 	fi
 else
@@ -420,7 +420,7 @@ AC_DEFUN([LB_LINUX_ARCH],
 #
 AC_DEFUN([LB_LINUX_TRY_COMPILE],
 [LB_LINUX_COMPILE_IFELSE(
- 	[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
+	[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
 	[modules],
 	[test -s build/conftest.o],
 	[$3], [$4])])
@@ -430,21 +430,21 @@ AC_DEFUN([LB_LINUX_TRY_COMPILE],
 #
 # check if a given config option is defined
 #
-AC_DEFUN([LB_LINUX_CONFIG],
-[AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
-LB_LINUX_TRY_COMPILE([
-#include <$AUTOCONF_HDIR/autoconf.h>
-],[
-#ifndef CONFIG_$1
-#error CONFIG_$1 not #defined
-#endif
-],[
-AC_MSG_RESULT([yes])
-$2
-],[
-AC_MSG_RESULT([no])
-$3
-])
+AC_DEFUN([LB_LINUX_CONFIG],[
+	AC_MSG_CHECKING([if Linux was built with CONFIG_$1])
+	LB_LINUX_TRY_COMPILE([
+		#include <$AUTOCONF_HDIR/autoconf.h>
+	],[
+		#ifndef CONFIG_$1
+		#error CONFIG_$1 not #defined
+		#endif
+	],[
+		AC_MSG_RESULT([yes])
+		$2
+	],[
+		AC_MSG_RESULT([no])
+		$3
+	])
 ])
 
 #
@@ -452,21 +452,21 @@ $3
 #
 # check if a given config option is builtin or as module
 #
-AC_DEFUN([LB_LINUX_CONFIG_IM],
-[AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
-LB_LINUX_TRY_COMPILE([
-#include <$AUTOCONF_HDIR/autoconf.h>
-],[
-#if !(defined(CONFIG_$1) || defined(CONFIG_$1_MODULE))
-#error CONFIG_$1 and CONFIG_$1_MODULE not #defined
-#endif
-],[
-AC_MSG_RESULT([yes])
-$2
-],[
-AC_MSG_RESULT([no])
-$3
-])
+AC_DEFUN([LB_LINUX_CONFIG_IM],[
+	AC_MSG_CHECKING([if Linux was built with CONFIG_$1 in or as module])
+	LB_LINUX_TRY_COMPILE([
+		#include <$AUTOCONF_HDIR/autoconf.h>
+	],[
+		#if !(defined(CONFIG_$1) || defined(CONFIG_$1_MODULE))
+		#error CONFIG_$1 and CONFIG_$1_MODULE not #defined
+		#endif
+	],[
+		AC_MSG_RESULT([yes])
+		$2
+	],[
+		AC_MSG_RESULT([no])
+		$3
+	])
 ])
 
 #
@@ -475,7 +475,11 @@ $3
 # like LB_LINUX_TRY_COMPILE, but with different arguments
 #
 AC_DEFUN([LB_LINUX_TRY_MAKE],
-[LB_LINUX_COMPILE_IFELSE([AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])], [$3], [$4], [$5], [$6])])
+	[LB_LINUX_COMPILE_IFELSE(
+		[AC_LANG_SOURCE([LB_LANG_PROGRAM([[$1]], [[$2]])])],
+		[$3], [$4], [$5], [$6]
+	)]
+)
 
 #
 # LB_LINUX_CONFIG_BIG_STACK
@@ -569,23 +573,26 @@ fi
 AC_DEFUN([LC_MODULE_LOADING],
 [AC_MSG_CHECKING([if kernel module loading is possible])
 LB_LINUX_TRY_MAKE([
-        #include <linux/kmod.h>
+	#include <linux/kmod.h>
 ],[
-        int myretval=ENOSYS ;
-        return myretval;
+	int myretval=ENOSYS ;
+	return myretval;
 ],[
-        $makerule LUSTRE_KERNEL_TEST=conftest.i
+	$makerule LUSTRE_KERNEL_TEST=conftest.i
+],[dnl
+	grep request_module build/conftest.i |dnl
+		grep -v `grep "int myretval=" build/conftest.i |dnl
+			cut -d= -f2 | cut -d" "  -f1`dnl
+		>/dev/null dnl
 ],[
-        grep request_module build/conftest.i | grep -v `grep "int myretval=" build/conftest.i | cut -d= -f2 | cut -d" "  -f1` >/dev/null
+	AC_MSG_RESULT(yes)
+	AC_DEFINE(HAVE_MODULE_LOADING_SUPPORT, 1,
+		  [kernel module loading is possible])
 ],[
-        AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_MODULE_LOADING_SUPPORT, 1,
-                [kernel module loading is possible])
-],[
-        AC_MSG_RESULT(no)
-        AC_MSG_WARN([])
-        AC_MSG_WARN([Kernel module loading support is highly recommended.])
-        AC_MSG_WARN([])
+	AC_MSG_RESULT(no)
+	AC_MSG_WARN([])
+	AC_MSG_WARN([Kernel module loading support is highly recommended.])
+	AC_MSG_WARN([])
 ])
 ])
 
@@ -648,25 +655,25 @@ AC_DEFUN([LB_CHECK_SYMBOL_EXPORT],
 grep -q -E '[[[:space:]]]$1[[[:space:]]]' $LINUX/$SYMVERFILE 2>/dev/null
 rc=$?
 if test $rc -ne 0; then
-    export=0
-    for file in $2; do
-    	grep -q -E "EXPORT_SYMBOL.*\($1\)" "$LINUX/$file" 2>/dev/null
-    	rc=$?
-	if test $rc -eq 0; then
-		export=1
-		break;
+	export=0
+	for file in $2; do
+		grep -q -E "EXPORT_SYMBOL.*\($1\)" "$LINUX/$file" 2>/dev/null
+		rc=$?
+		if test $rc -eq 0; then
+			export=1
+			break;
+		fi
+	done
+	if test $export -eq 0; then
+		AC_MSG_RESULT([no])
+		$4
+	else
+		AC_MSG_RESULT([yes])
+		$3
 	fi
-    done
-    if test $export -eq 0; then
-    	AC_MSG_RESULT([no])
-    	$4
-    else
-    	AC_MSG_RESULT([yes])
-    	$3
-    fi
 else
-    AC_MSG_RESULT([yes])
-    $3
+	AC_MSG_RESULT([yes])
+	$3
 fi
 ])
 
