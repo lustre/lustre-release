@@ -92,9 +92,6 @@ extern int ext3_xattr_set_handle(handle_t *, struct inode *, int, const char *, 
 #elif defined(HAVE_JBD2_JOURNAL_CALLBACK_SET)
 # define fsfilt_journal_callback_set(handle, func, jcb) \
          jbd2_journal_callback_set(handle, func, jcb)
-#elif defined(HAVE_JOURNAL_CALLBACK_SET)
-# define fsfilt_journal_callback_set(handle, func, jcb) \
-         journal_callback_set(handle, func, jcb)
 #else
 # error missing journal commit callback
 #endif /* HAVE_EXT4_JOURNAL_CALLBACK_ADD */

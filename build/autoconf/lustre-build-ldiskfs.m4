@@ -138,7 +138,7 @@ fi
 #
 # LB_LDISKFS_EXT_DIR
 #
-# Determine the location of the ext3/ext4 source code.  It it required
+# Determine the location of the ext4 source code.  It it required
 # for several configure tests and to build ldiskfs.
 #
 AC_DEFUN([LB_LDISKFS_EXT_DIR],
@@ -166,7 +166,7 @@ AC_SUBST(EXT_DIR)
 #
 # LB_LDISKFS_EXT_SOURCE
 #
-# Spot check the existance of several source files common to ext3/ext4.
+# Spot check the existance of several source files common to ext4.
 # Detecting this at configure time allows us to avoid a potential build
 # failure and provide a useful error message to explain what is wrong.
 #
@@ -252,18 +252,12 @@ AC_DEFINE(CONFIG_LDISKFSDEV_FS_SECURITY, 1,
 # callbacks.  When LU-433 lands jbd2_journal_callback_set() will only
 # remain for legacy reasons and AC_MSG_ERROR can be removed.
 #
-# 2.6.18 with ext3 still uses journal_callback_set() for commit callbacks.
-#
 AC_DEFUN([LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET],
 [
 	LB_CHECK_SYMBOL_EXPORT([jbd2_journal_callback_set],
-	[fs/jbd2/journal.c],
-	[AC_DEFINE(HAVE_JBD2_JOURNAL_CALLBACK_SET, 1,
-		[kernel exports jbd2_journal_callback_set])],
-	[LB_CHECK_SYMBOL_EXPORT([journal_callback_set],
-		[fs/jbd/journal.c],
-		[AC_DEFINE(HAVE_JOURNAL_CALLBACK_SET, 1,
-			[kernel exports journal_callback_set])])])
+		[fs/jbd2/journal.c],
+		[AC_DEFINE(HAVE_JBD2_JOURNAL_CALLBACK_SET, 1,
+			[kernel exports jbd2_journal_callback_set])])
 ])
 
 #
