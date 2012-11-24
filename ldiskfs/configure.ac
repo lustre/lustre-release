@@ -56,9 +56,7 @@ AC_MSG_RESULT([$enable_modules])
 
 if test x$enable_modules = xyes ; then
 	LB_PROG_LINUX
-if test x$linux25 = xyes ; then
 	LB_LINUX_MODPOST
-fi
 fi
 
 LB_LDISKFS_SERIES([test x$enable_dist = xno])
@@ -82,7 +80,6 @@ LB_CONFIG_HEADERS
 AM_CONDITIONAL(MODULES, true)
 AM_CONDITIONAL(LINUX, true)
 AM_CONDITIONAL(DARWIN, true)
-AM_CONDITIONAL(LINUX25, true)
 
 LDISKFSDIR="$PWD/ldiskfs"
 AC_SUBST(LDISKFSDIR)

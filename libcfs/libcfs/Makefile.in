@@ -25,19 +25,9 @@ endif
 
 default: all
 
-ifeq (@linux25@,no)
-sources:
-	@for i in $(libcfs-linux-objs:%.o=%.c) ; do \
-		echo "ln -s @srcdir@/linux/$$i ." ; \
-		ln -sf @srcdir@/linux/$$i . || exit 1 ; \
-	done
-
-else
 sources:
 
 libcfs-linux-objs := $(addprefix linux/,$(libcfs-linux-objs))
-
-endif
 
 libcfs-all-objs := debug.o fail.o nidstrings.o lwt.o module.o tracefile.o \
 		   watchdog.o libcfs_string.o hash.o kernel_user_comm.o \
