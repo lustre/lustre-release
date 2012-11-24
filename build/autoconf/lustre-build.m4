@@ -624,35 +624,6 @@ LC_PATH_DEFAULTS
 #
 AC_DEFUN([LB_PROG_CC],
 [AC_PROG_RANLIB
-AC_MSG_CHECKING([for buggy compiler])
-CC_VERSION=`$CC -v 2>&1 | grep "^gcc version"`
-bad_cc() {
-	AC_MSG_RESULT([buggy compiler found!])
-	echo
-	echo "   '$CC_VERSION'"
-	echo "  has been known to generate bad code, "
-	echo "  please get an updated compiler."
-	AC_MSG_ERROR([sorry])
-}
-case "$CC_VERSION" in
-	"gcc version 2.95"*)
-		bad_cc
-		;;
-	# ost_pack_niobuf putting 64bit NTOH temporaries on the stack
-	# without "sub    $0xc,%esp" to protect the stack from being
-	# stomped on by interrupts (bug 606)
-	"gcc version 2.96 20000731 (Red Hat Linux 7.1 2.96-98)")
-		bad_cc
-		;;
-	# mandrake's similar sub 0xc compiler bug
-	# http://marc.theaimsgroup.com/?l=linux-kernel&m=104748366226348&w=2
-	"gcc version 2.96 20000731 (Mandrake Linux 8.1 2.96-0.62mdk)")
-		bad_cc
-		;;
-	*)
-		AC_MSG_RESULT([no known problems])
-		;;
-esac
 
 # ---------  unsigned long long sane? -------
 AC_CHECK_SIZEOF(unsigned long long, 0)
