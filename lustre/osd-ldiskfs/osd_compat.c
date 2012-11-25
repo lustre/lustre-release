@@ -345,6 +345,7 @@ int osd_compat_add_entry(struct osd_thread_info *info, struct osd_device *osd,
         inode = &info->oti_inode;
         inode->i_sb = osd_sb(osd);
 	osd_id_to_inode(inode, id);
+	inode->i_mode = S_IFREG; /* for type in ldiskfs dir entry */
 
         child = &info->oti_child_dentry;
         child->d_name.hash = 0;
