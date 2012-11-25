@@ -172,6 +172,8 @@ static int osp_last_used_init(const struct lu_env *env, struct osp_device *m)
 		if (rc)
 			GOTO(out, rc);
 	}
+	CDEBUG(D_HA, "%s: Read last used ID: "LPU64"\n", m->opd_obd->obd_name,
+	       le64_to_cpu(m->opd_last_used_id));
 	RETURN(0);
 out:
 	CERROR("%s: can't initialize lov_objid: %d\n",

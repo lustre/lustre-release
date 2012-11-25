@@ -288,6 +288,9 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 	rc = dt_record_write(env, d->opd_last_used_file, &osi->osi_lb,
 			     &osi->osi_off, th);
 
+	CDEBUG(D_HA, "%s: Wrote last used ID: "LPU64": %d\n",
+	       d->opd_obd->obd_name, le64_to_cpu(d->opd_last_used_id), rc);
+
 	RETURN(rc);
 }
 

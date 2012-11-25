@@ -280,7 +280,8 @@ static int osp_precreate_send(struct osp_device *d)
 	if (body == NULL)
 		GOTO(out_req, rc = -EPROTO);
 
-	CDEBUG(D_HA, "new last_created %lu\n", (unsigned long) body->oa.o_id);
+	CDEBUG(D_HA, "%s: new last_created "LPU64"\n", d->opd_obd->obd_name,
+	       body->oa.o_id);
 	LASSERT(body->oa.o_id > d->opd_pre_used_id);
 
 	diff = body->oa.o_id - d->opd_pre_last_created;
@@ -440,8 +441,8 @@ static int osp_precreate_cleanup_orphans(struct osp_device *d)
 	d->opd_pre_grow_slow = 0;
 	cfs_spin_unlock(&d->opd_pre_lock);
 
-	CDEBUG(D_HA, "Got last_id "LPU64" from OST, last_used is "LPU64
-	       ", next "LPU64"\n", body->oa.o_id,
+	CDEBUG(D_HA, "%s: Got last_id "LPU64" from OST, last_used is "LPU64
+	       ", pre_used "LPU64"\n", d->opd_obd->obd_name, body->oa.o_id,
 	       le64_to_cpu(d->opd_last_used_id), d->opd_pre_used_id);
 
 out:
