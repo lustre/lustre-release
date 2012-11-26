@@ -510,7 +510,9 @@ int llog_cat_cancel_records(const struct lu_env *env,
 
 		rc = llog_cat_id2handle(env, cathandle, &loghandle, lgl);
 		if (rc) {
-			CERROR("Cannot find log "LPX64"\n", lgl->lgl_oid);
+			CERROR("%s: cannot find handle for llog "LPX64": %d\n",
+			       cathandle->lgh_ctxt->loc_obd->obd_name,
+			       lgl->lgl_oid, rc);
 			break;
 		}
 
@@ -565,11 +567,12 @@ int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
                rec->lrh_index, cat_llh->lgh_id.lgl_oid);
 
 	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
-        if (rc) {
-                CERROR("Cannot find handle for log "LPX64"\n",
-                       lir->lid_id.lgl_oid);
-                RETURN(rc);
-        }
+	if (rc) {
+		CERROR("%s: cannot find handle for llog "LPX64": %d\n",
+		       cat_llh->lgh_ctxt->loc_obd->obd_name,
+		       lir->lid_id.lgl_oid, rc);
+		RETURN(rc);
+	}
 
         if (rec->lrh_index < d->lpd_startcat)
                 /* Skip processing of the logs until startcat */
@@ -726,11 +729,12 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
                le32_to_cpu(rec->lrh_index), cat_llh->lgh_id.lgl_oid);
 
 	rc = llog_cat_id2handle(env, cat_llh, &llh, &lir->lid_id);
-        if (rc) {
-                CERROR("Cannot find handle for log "LPX64"\n",
-                       lir->lid_id.lgl_oid);
-                RETURN(rc);
-        }
+	if (rc) {
+		CERROR("%s: cannot find handle for llog "LPX64": %d\n",
+		       cat_llh->lgh_ctxt->loc_obd->obd_name,
+		       lir->lid_id.lgl_oid, rc);
+		RETURN(rc);
+	}
 
 	rc = llog_reverse_process(env, llh, d->lpd_cb, d->lpd_data, NULL);
         RETURN(rc);
@@ -830,8 +834,8 @@ int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
 
 	rc = llog_cat_id2handle(env, cathandle, &loghandle, &lir->lid_id);
 	if (rc) {
-		CERROR("%s: cannot find handle for llog "LPX64"\n: %d",
-		       loghandle->lgh_ctxt->loc_obd->obd_name,
+		CERROR("%s: cannot find handle for llog "LPX64": %d\n",
+		       cathandle->lgh_ctxt->loc_obd->obd_name,
 		       lir->lid_id.lgl_oid, rc);
 		if (rc == -ENOENT || rc == -ESTALE) {
 			index = rec->lrh_index;
