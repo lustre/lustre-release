@@ -1,0 +1,10 @@
+# EXTRA_DIST is not actually taken from here but rather from
+# build/autoMakefile.am.toplevel
+
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
+
+# Override the default distclean, which removes Makefile
+distclean: distclean-recursive
+	@true
+
+SUBDIRS = autoconf

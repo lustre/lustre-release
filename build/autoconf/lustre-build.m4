@@ -698,13 +698,12 @@ LC_CONDITIONALS
 #
 AC_DEFUN([LB_CONFIG_FILES],
 [
-AC_CONFIG_FILES(
-[Makefile
-autoMakefile
-]
-[Rules:build/Rules.in]
-AC_PACKAGE_TARNAME[.spec]
-)
+	AC_CONFIG_FILES([
+		Makefile
+		autoMakefile]
+		[Rules:build/Rules.in]
+		AC_PACKAGE_TARNAME[.spec]
+	)
 ])
 
 #

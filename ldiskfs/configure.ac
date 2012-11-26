@@ -4,15 +4,15 @@ AC_INIT([Lustre ldiskfs], 3.3.0, [http://bugs.whamcloud.com/])
 AC_CONFIG_SRCDIR([lustre-ldiskfs.spec.in])
 
 # Don't look for install-sh, etc. in ..
-AC_CONFIG_AUX_DIR([.])
+AC_CONFIG_AUX_DIR([build/autoconf])
+
+AC_CONFIG_MACRO_DIR([build/autoconf])
 
 AC_CANONICAL_SYSTEM
 
 AM_INIT_AUTOMAKE([1.9 tar-ustar])
 
 AC_PROG_CC
-
-LB_CANONICAL_SYSTEM
 
 LB_DOWNSTREAM_RELEASE
 

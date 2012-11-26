@@ -1,0 +1,39 @@
+# Directories building kernel modules should have two files:
+#
+# Makefile.in:
+#
+# MODULES := <module-name>
+# <module-name>-objs := file1.o file2.o file3.o
+# @INCLUDE_RULES@
+#
+# and autoMakefile.am:
+#
+# if MODULES
+# modulefs_DATA = <module-name>$(KMODEXT)
+# endif
+#
+# DIST_SOURCES = $(<module-name>-objs:.o=.c) <other sources>
+# MOSTLYCLEANFILES = *.o *.ko *.mod.c
+
+ifeq ($(PATCHLEVEL),)
+
+include autoMakefile
+
+fix-kext-ownership:
+	@if test -d $(DESTDIR)$(kextdir) ; then \
+		echo chown -R root:wheel $(DESTDIR)$(kextdir) ; \
+		chown -R root:wheel $(DESTDIR)$(kextdir) || \
+			echo >&2 "*** WARNING: Could not fix kext ownership for $(DESTDIR)$(kextdir)" ; \
+	fi
+
+else
+
+include @LINUX_CONFIG@
+
+EXTRA_CFLAGS := $(EXTRA_PRE_CFLAGS)
+EXTRA_CFLAGS += @EXTRA_KCFLAGS@ @UML_CFLAGS@ @CFLAGS@
+EXTRA_CFLAGS += $(EXTRA_POST_CFLAGS)
+
+obj-m := $(patsubst %,%.o,$(MODULES))
+
+endif # PATCHLEVEL

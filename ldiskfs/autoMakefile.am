@@ -2,11 +2,6 @@ SUBDIRS = . ldiskfs
 SOURCES_SUBDIRS = ldiskfs
 DIST_SUBDIRS = ldiskfs
 
-# this is in fact irrelevant in this file but needed to keep
-# autoMakefile.am.toplevel happy
-BUILD_SERVER = true
-BUILD_TESTS = false
-
 include build/autoMakefile.am.toplevel
 
 EXTRA_DIST += kernel_patches
@@ -17,8 +12,5 @@ module-dist-hook:
 	if ! grep "AC_INIT(\[Lustre\], \[LUSTRE_VERSION\], \[http:\/\/bugs\.whamcloud\.com\/], \[lustre\])" ../configure.ac; then \
 	    if [ -f META ]; then \
 		cp META $(distdir)/META; \
-	    else \
-		echo -e "I have no idea how to create a META file in $(distdir).\nPlease file a bug at http://bugs.whamcloud.com/"; \
-		exit 1; \
 	    fi; \
 	fi

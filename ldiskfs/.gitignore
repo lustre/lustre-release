@@ -1,14 +1,10 @@
 /Rules
 /aclocal.m4
 /autom4te.cache
-/config.guess
 /config.h
 /config.h.in
-/config.sub
-/install-sh
 /lustre-ldiskfs-*.tar.gz
 /lustre-ldiskfs.spec
-/missing
 /mkinstalldirs
 /module.order
 /modules.order
