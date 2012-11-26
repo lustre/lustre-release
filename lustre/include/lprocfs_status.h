@@ -556,12 +556,14 @@ extern int lprocfs_obd_setup(struct obd_device *obd, struct lprocfs_vars *list);
 extern int lprocfs_obd_cleanup(struct obd_device *obd);
 extern struct file_operations lprocfs_evict_client_fops;
 
-extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name,
-                              mode_t mode, struct file_operations *seq_fops,
-                              void *data);
-extern int lprocfs_obd_seq_create(struct obd_device *dev, char *name,
-                                  mode_t mode, struct file_operations *seq_fops,
-                                  void *data);
+extern int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, const char *name,
+			      mode_t mode,
+			      const struct file_operations *seq_fops,
+			      void *data);
+extern int lprocfs_obd_seq_create(struct obd_device *dev, const char *name,
+				  mode_t mode,
+				  const struct file_operations *seq_fops,
+				  void *data);
 
 /* Generic callbacks */
 

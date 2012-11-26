@@ -294,8 +294,9 @@ int qos_add_tgt(struct lod_device*, struct lod_ost_desc *);
 int qos_del_tgt(struct lod_device *, struct lod_ost_desc *);
 
 /* lproc_lod.c */
-extern struct file_operations lod_proc_target_fops;
 void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars);
+int lod_procfs_init(struct lod_device *lod);
+void lod_procfs_fini(struct lod_device *lod);
 
 /* lod_object.c */
 int lod_object_set_pool(struct lod_object *o, char *pool);

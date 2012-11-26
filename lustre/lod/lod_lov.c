@@ -846,7 +846,6 @@ void lod_fix_desc(struct lov_desc *desc)
 
 int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 {
-	struct lprocfs_static_vars  lvars = { 0 };
 	struct obd_device	   *obd;
 	struct lov_desc		   *desc;
 	int			    rc;
@@ -932,35 +931,8 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 	lod->lod_death_row = 0;
 	lod->lod_refcount  = 0;
 
-	lprocfs_lod_init_vars(&lvars);
-	lprocfs_obd_setup(obd, lvars.obd_vars);
-
-#ifdef LPROCFS
-	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
-				0444, &lod_proc_target_fops, obd);
-	if (rc) {
-		CWARN("%s: Error adding the target_obd file %d\n",
-		      obd->obd_name, rc);
-		GOTO(out_lproc, rc);
-	}
-	lod->lod_pool_proc_entry = lprocfs_register("pools",
-						    obd->obd_proc_entry,
-						    NULL, NULL);
-	if (IS_ERR(lod->lod_pool_proc_entry)) {
-		int ret = PTR_ERR(lod->lod_pool_proc_entry);
-		lod->lod_pool_proc_entry = NULL;
-		CWARN("%s: Failed to create pool proc file %d\n",
-		      obd->obd_name, ret);
-		rc = lod_pools_fini(lod);
-		RETURN(ret);
-	}
-#endif
-
 	RETURN(0);
 
-out_lproc:
-	lprocfs_obd_cleanup(obd);
-	lod_ost_pool_free(&lod->lod_qos.lq_rr.lqr_pool);
 out_pool_info:
 	lod_ost_pool_free(&lod->lod_pool_info);
 out_hash:
@@ -1003,15 +975,6 @@ int lod_pools_fini(struct lod_device *lod)
 	cfs_hash_putref(lod->lod_pools_hash_body);
 	lod_ost_pool_free(&(lod->lod_qos.lq_rr.lqr_pool));
 	lod_ost_pool_free(&lod->lod_pool_info);
-
-	/* clear pools parent proc entry only after all pools are killed */
-	if (lod->lod_pool_proc_entry) {
-		lprocfs_remove(&lod->lod_pool_proc_entry);
-		lod->lod_pool_proc_entry = NULL;
-	}
-
-	lprocfs_obd_cleanup(obd);
-
 	OBD_FREE_PTR(lod->lod_qos.lq_statfs_data);
 	RETURN(0);
 }

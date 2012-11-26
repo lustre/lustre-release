@@ -406,7 +406,6 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 		     struct lu_device_type *ldt, struct lustre_cfg *cfg)
 {
 	struct dt_device_param ddp;
-	struct proc_dir_entry *lov_proc_dir;
 	struct obd_device     *obd;
 	int		       rc;
 	ENTRY;
@@ -435,23 +434,9 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 	if (rc)
 		GOTO(out_disconnect, rc);
 
-	/* for compatibility we link old procfs's OSC entries to osp ones */
-	lov_proc_dir = lprocfs_srch(proc_lustre_root, "lov");
-	if (lov_proc_dir) {
-		cfs_proc_dir_entry_t *symlink = NULL;
-		char *name;
-		OBD_ALLOC(name, strlen(obd->obd_name) + 1);
-		if (name) {
-			strcpy(name, obd->obd_name);
-			if (strstr(name, "lov"))
-				symlink = lprocfs_add_symlink(name,
-						lov_proc_dir,
-						"../lod/%s",
-						obd->obd_name);
-			OBD_FREE(name, strlen(obd->obd_name) + 1);
-			lod->lod_symlink = symlink;
-		}
-	}
+	rc = lod_procfs_init(lod);
+	if (rc)
+		GOTO(out_pools, rc);
 
 	mutex_init(&lod->lod_mutex);
 	init_rwsem(&lod->lod_rw_sem);
@@ -459,6 +444,8 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 
 	RETURN(0);
 
+out_pools:
+	lod_pools_fini(lod);
 out_disconnect:
 	obd_disconnect(lod->lod_child_exp);
 	RETURN(rc);
@@ -508,10 +495,9 @@ static struct lu_device *lod_device_fini(const struct lu_env *env,
 	struct lod_device *lod = lu2lod_dev(d);
 	ENTRY;
 
-	if (lod->lod_symlink)
-		lprocfs_remove(&lod->lod_symlink);
-
 	lod_pools_fini(lod);
+
+	lod_procfs_fini(lod);
 
 	RETURN(NULL);
 }

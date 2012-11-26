@@ -405,7 +405,7 @@ static int lod_osts_seq_show(struct seq_file *p, void *v)
 			  active ? "" : "IN");
 }
 
-struct seq_operations lod_osts_sops = {
+static const struct seq_operations lod_osts_sops = {
 	.start	= lod_osts_seq_start,
 	.stop	= lod_osts_seq_stop,
 	.next	= lod_osts_seq_next,
@@ -430,7 +430,7 @@ static int lod_osts_seq_open(struct inode *inode, struct file *file)
 	return 0;
 }
 
-struct lprocfs_vars lprocfs_lod_obd_vars[] = {
+static struct lprocfs_vars lprocfs_lod_obd_vars[] = {
 	{ "uuid",         lprocfs_rd_uuid,        0, 0 },
 	{ "stripesize",   lod_rd_stripesize,      lod_wr_stripesize, 0 },
 	{ "stripeoffset", lod_rd_stripeoffset,    lod_wr_stripeoffset, 0 },
@@ -438,17 +438,20 @@ struct lprocfs_vars lprocfs_lod_obd_vars[] = {
 	{ "stripetype",   lod_rd_stripetype,      lod_wr_stripetype, 0 },
 	{ "numobd",       lod_rd_numobd,          0, 0 },
 	{ "activeobd",    lod_rd_activeobd,       0, 0 },
-	{ "filestotal",   lprocfs_rd_filestotal,  0, 0 },
-	{ "filesfree",    lprocfs_rd_filesfree,   0, 0 },
-	/*{ "filegroups", lprocfs_rd_filegroups,  0, 0 },*/
-	{ "blocksize",    lprocfs_rd_blksize,     0, 0 },
-	{ "kbytestotal",  lprocfs_rd_kbytestotal, 0, 0 },
-	{ "kbytesfree",   lprocfs_rd_kbytesfree,  0, 0 },
-	{ "kbytesavail",  lprocfs_rd_kbytesavail, 0, 0 },
 	{ "desc_uuid",    lod_rd_desc_uuid,       0, 0 },
 	{ "qos_prio_free",lod_rd_qos_priofree,    lod_wr_qos_priofree, 0 },
 	{ "qos_threshold_rr",  lod_rd_qos_thresholdrr, lod_wr_qos_thresholdrr, 0 },
 	{ "qos_maxage",   lod_rd_qos_maxage,      lod_wr_qos_maxage, 0 },
+	{ 0 }
+};
+
+static struct lprocfs_vars lprocfs_lod_osd_vars[] = {
+	{ "blocksize",    lprocfs_osd_rd_blksize, 0, 0 },
+	{ "kbytestotal",  lprocfs_osd_rd_kbytestotal, 0, 0 },
+	{ "kbytesfree",   lprocfs_osd_rd_kbytesfree, 0, 0 },
+	{ "kbytesavail",  lprocfs_osd_rd_kbytesavail, 0, 0 },
+	{ "filestotal",   lprocfs_osd_rd_filestotal, 0, 0 },
+	{ "filesfree",    lprocfs_osd_rd_filesfree, 0, 0 },
 	{ 0 }
 };
 
@@ -463,12 +466,86 @@ void lprocfs_lod_init_vars(struct lprocfs_static_vars *lvars)
 	lvars->obd_vars		= lprocfs_lod_obd_vars;
 }
 
-struct file_operations lod_proc_target_fops = {
+static const struct file_operations lod_proc_target_fops = {
 	.owner   = THIS_MODULE,
 	.open    = lod_osts_seq_open,
 	.read    = seq_read,
 	.llseek  = seq_lseek,
 	.release = lprocfs_seq_release,
 };
+
+int lod_procfs_init(struct lod_device *lod)
+{
+	struct obd_device *obd = lod2obd(lod);
+	struct lprocfs_static_vars lvars;
+	cfs_proc_dir_entry_t *lov_proc_dir;
+	int rc;
+
+	lprocfs_lod_init_vars(&lvars);
+	rc = lprocfs_obd_setup(obd, lvars.obd_vars);
+	if (rc) {
+		CERROR("%s: cannot setup procfs entry: %d\n",
+		       obd->obd_name, rc);
+		RETURN(rc);
+	}
+
+	rc = lprocfs_add_vars(obd->obd_proc_entry, lprocfs_lod_osd_vars,
+			      &lod->lod_dt_dev);
+	if (rc) {
+		CERROR("%s: cannot setup procfs entry: %d\n",
+		       obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+
+	rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
+				0444, &lod_proc_target_fops, obd);
+	if (rc) {
+		CWARN("%s: Error adding the target_obd file %d\n",
+		      obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+
+	lod->lod_pool_proc_entry = lprocfs_register("pools",
+						    obd->obd_proc_entry,
+						    NULL, NULL);
+	if (IS_ERR(lod->lod_pool_proc_entry)) {
+		rc = PTR_ERR(lod->lod_pool_proc_entry);
+		lod->lod_pool_proc_entry = NULL;
+		CWARN("%s: Failed to create pool proc file: %d\n",
+		      obd->obd_name, rc);
+		GOTO(out, rc);
+	}
+
+	/* for compatibility we link old procfs's OSC entries to osp ones */
+	lov_proc_dir = lprocfs_srch(proc_lustre_root, "lov");
+	if (lov_proc_dir != NULL && strstr(obd->obd_name, "lov") != NULL)
+		lod->lod_symlink = lprocfs_add_symlink(obd->obd_name,
+						       lov_proc_dir,
+						       "../lod/%s",
+						       obd->obd_name);
+
+	RETURN(0);
+
+out:
+	lprocfs_obd_cleanup(obd);
+
+	return rc;
+}
+
+void lod_procfs_fini(struct lod_device *lod)
+{
+	struct obd_device *obd = lod2obd(lod);
+
+	if (lod->lod_symlink != NULL)
+		lprocfs_remove(&lod->lod_symlink);
+
+	if (lod->lod_pool_proc_entry != NULL) {
+		lprocfs_remove(&lod->lod_pool_proc_entry);
+		lod->lod_pool_proc_entry = NULL;
+	}
+
+	lprocfs_obd_cleanup(obd);
+}
+
 #endif /* LPROCFS */
 

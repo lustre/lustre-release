@@ -2346,8 +2346,11 @@ char *lprocfs_find_named_value(const char *buffer, const char *name,
 }
 EXPORT_SYMBOL(lprocfs_find_named_value);
 
-int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, mode_t mode,
-                       struct file_operations *seq_fops, void *data)
+int lprocfs_seq_create(cfs_proc_dir_entry_t *parent,
+		       const char *name,
+		       mode_t mode,
+		       const struct file_operations *seq_fops,
+		       void *data)
 {
         struct proc_dir_entry *entry;
         ENTRY;
@@ -2367,10 +2370,11 @@ int lprocfs_seq_create(cfs_proc_dir_entry_t *parent, char *name, mode_t mode,
 }
 EXPORT_SYMBOL(lprocfs_seq_create);
 
-__inline__ int lprocfs_obd_seq_create(struct obd_device *dev, char *name,
-                                      mode_t mode,
-                                      struct file_operations *seq_fops,
-                                      void *data)
+int lprocfs_obd_seq_create(struct obd_device *dev,
+			   const char *name,
+			   mode_t mode,
+			   const struct file_operations *seq_fops,
+			   void *data)
 {
         return (lprocfs_seq_create(dev->obd_proc_entry, name,
                                    mode, seq_fops, data));
