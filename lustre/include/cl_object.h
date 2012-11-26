@@ -2784,9 +2784,18 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
 struct cl_lock *cl_lock_request(const struct lu_env *env, struct cl_io *io,
                                 const struct cl_lock_descr *need,
                                 const char *scope, const void *source);
-struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
-                                struct cl_page *page, struct cl_lock *except,
-                                int pending, int canceld);
+struct cl_lock *cl_lock_at_pgoff(const struct lu_env *env, struct cl_object *obj,
+                                 pgoff_t index, struct cl_lock *except,
+                                 int pending, int canceld);
+static inline struct cl_lock *cl_lock_at_page(const struct lu_env *env,
+                                              struct cl_object *obj,
+                                              struct cl_page *page,
+                                              struct cl_lock *except,
+                                              int pending, int canceld)
+{
+        return cl_lock_at_pgoff(env, obj, page->cp_index, except,
+                                pending, canceld);
+}
 
 const struct cl_lock_slice *cl_lock_at(const struct cl_lock *lock,
                                        const struct lu_device_type *dtype);

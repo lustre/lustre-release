@@ -1840,9 +1840,9 @@ EXPORT_SYMBOL(cl_lock_cancel);
  * Finds an existing lock covering given page and optionally different from a
  * given \a except lock.
  */
-struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
-                                struct cl_page *page, struct cl_lock *except,
-                                int pending, int canceld)
+struct cl_lock *cl_lock_at_pgoff(const struct lu_env *env, struct cl_object *obj,
+                                 pgoff_t index, struct cl_lock *except,
+                                 int pending, int canceld)
 {
         struct cl_object_header *head;
         struct cl_lock          *scan;
@@ -1857,7 +1857,7 @@ struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
 
         need->cld_mode = CLM_READ; /* CLM_READ matches both READ & WRITE, but
                                     * not PHANTOM */
-        need->cld_start = need->cld_end = page->cp_index;
+        need->cld_start = need->cld_end = index;
         need->cld_enq_flags = 0;
 
         cfs_spin_lock(&head->coh_lock_guard);
@@ -1886,7 +1886,7 @@ struct cl_lock *cl_lock_at_page(const struct lu_env *env, struct cl_object *obj,
         cfs_spin_unlock(&head->coh_lock_guard);
         RETURN(lock);
 }
-EXPORT_SYMBOL(cl_lock_at_page);
+EXPORT_SYMBOL(cl_lock_at_pgoff);
 
 /**
  * Calculate the page offset at the layer of @lock.
@@ -1917,8 +1917,8 @@ static int check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
                 struct cl_lock *tmp;
 
                 /* refresh non-overlapped index */
-                tmp = cl_lock_at_page(env, lock->cll_descr.cld_obj, page, lock,
-                                      1, 0);
+                tmp = cl_lock_at_pgoff(env, lock->cll_descr.cld_obj, index, lock,
+                                       1, 0);
                 if (tmp != NULL) {
                         /* Cache the first-non-overlapped index so as to skip
                          * all pages within [index, clt_fn_index). This
