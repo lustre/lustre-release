@@ -102,6 +102,10 @@ AC_DEFUN([AC_KERBEROS_V5],[
   AC_CHECK_LIB($gssapi_lib, krb5_get_init_creds_opt_set_addressless,
     AC_DEFINE(HAVE_KRB5_GET_INIT_CREDS_OPT_SET_ADDRESSLESS, 1, [Define this if the function krb5_get_init_creds_opt_set_addressless is available]), ,$KRBLIBS)
 
+  dnl Check for krb5int_derive_key
+  AC_CHECK_LIB($gssapi_lib, krb5int_derive_key,
+    AC_DEFINE(HAVE_KRB5INT_DERIVE_KEY, 1, [Define this if the function krb5int_derive_key is available]), ,$KRBLIBS)
+
   dnl If they specified a directory and it didn't work, give them a warning
   if test "x$krb5_with" != "x" -a "$krb5_with" != "$KRBDIR"; then
     AC_MSG_WARN(Using $KRBDIR instead of requested value of $krb5_with for Kerberos!)

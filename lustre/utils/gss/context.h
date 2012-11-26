@@ -39,6 +39,13 @@
 #define KRB5_CTX_FLAG_CFX               0x00000002
 #define KRB5_CTX_FLAG_ACCEPTOR_SUBKEY   0x00000004
 
+#if HAVE_KRB5INT_DERIVE_KEY
+extern int krb5int_derive_key();
+extern int krb5_k_create_key();
+#else /* !HAVE_KRB5INT_DERIVE_KEY */
+extern int krb5_derive_key();
+#endif
+
 int serialize_context_for_kernel(gss_ctx_id_t ctx, gss_buffer_desc *buf,
 				 gss_OID mech);
 int serialize_spkm3_ctx(gss_ctx_id_t ctx, gss_buffer_desc *buf);
