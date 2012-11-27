@@ -850,7 +850,7 @@ EXPORT_SYMBOL(dt_index_walk);
  * \retval appropriate error otherwise.
  */
 int dt_index_read(const struct lu_env *env, struct dt_device *dev,
-                  struct idx_info *ii, const struct lu_rdpg *rdpg)
+		  struct idx_info *ii, const struct lu_rdpg *rdpg)
 {
 	const struct dt_index_features	*feat;
 	struct dt_object		*obj;
@@ -862,14 +862,14 @@ int dt_index_read(const struct lu_env *env, struct dt_device *dev,
 	if (rdpg->rp_count <= 0 && (rdpg->rp_count & (LU_PAGE_SIZE - 1)) != 0)
 		RETURN(-EFAULT);
 
-	if (fid_seq(&ii->ii_fid) < FID_SEQ_SPECIAL)
-		/* block access to local files */
-		RETURN(-EPERM);
-
 	if (fid_seq(&ii->ii_fid) >= FID_SEQ_NORMAL)
 		/* we don't support directory transfer via OBD_IDX_READ for the
 		 * time being */
 		RETURN(-EOPNOTSUPP);
+
+	if (!fid_is_quota(&ii->ii_fid))
+		/* block access to all local files except quota files */
+		RETURN(-EPERM);
 
 	/* lookup index object subject to the transfer */
 	obj = dt_locate(env, dev, &ii->ii_fid);

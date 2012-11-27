@@ -57,11 +57,6 @@
  * super-class definitions.
  */
 #include <dt_object.h>
-#include <lvfs.h>
-
-/* LU-1051, temperary solution to reduce llog credits */
-#define DECLARE_LLOG_REWRITE  0
-#define DECLARE_LLOG_WRITE    INT_MAX
 
 struct md_device;
 struct md_device_operations;

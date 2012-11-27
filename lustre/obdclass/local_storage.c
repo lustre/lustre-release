@@ -436,11 +436,7 @@ struct dt_object *local_file_find_or_create_with_fid(const struct lu_env *env,
 
 	rc = dt_lookup_dir(env, parent, name, &dti->dti_fid);
 	if (rc == 0) {
-		/* name is found, get the object */
-		if (!lu_fid_eq(fid, &dti->dti_fid))
-			dto = ERR_PTR(-EINVAL);
-		else
-			dto = dt_locate(env, dt, fid);
+		dto = dt_locate(env, dt, &dti->dti_fid);
 	} else if (rc != -ENOENT) {
 		dto = ERR_PTR(rc);
 	} else {
@@ -566,6 +562,81 @@ local_index_find_or_create_with_fid(const struct lu_env *env,
 }
 EXPORT_SYMBOL(local_index_find_or_create_with_fid);
 
+static int local_object_declare_unlink(const struct lu_env *env,
+				       struct dt_device *dt,
+				       struct dt_object *p,
+				       struct dt_object *c, const char *name,
+				       struct thandle *th)
+{
+	int rc;
+
+	rc = dt_declare_delete(env, p, (const struct dt_key *)name, th);
+	if (rc < 0)
+		return rc;
+
+	rc = dt_declare_ref_del(env, c, th);
+	if (rc < 0)
+		return rc;
+
+	return dt_declare_destroy(env, c, th);
+}
+
+int local_object_unlink(const struct lu_env *env, struct dt_device *dt,
+			struct dt_object *parent, const char *name)
+{
+	struct dt_thread_info	*dti = dt_info(env);
+	struct dt_object	*dto;
+	struct thandle		*th;
+	int			 rc;
+
+	ENTRY;
+
+	rc = dt_lookup_dir(env, parent, name, &dti->dti_fid);
+	if (rc == -ENOENT)
+		RETURN(0);
+	else if (rc < 0)
+		RETURN(rc);
+
+	dto = dt_locate(env, dt, &dti->dti_fid);
+	if (unlikely(IS_ERR(dto)))
+		RETURN(PTR_ERR(dto));
+
+	th = dt_trans_create(env, dt);
+	if (IS_ERR(th))
+		GOTO(out, rc = PTR_ERR(th));
+
+	rc = local_object_declare_unlink(env, dt, parent, dto, name, th);
+	if (rc < 0)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start_local(env, dt, th);
+	if (rc < 0)
+		GOTO(stop, rc);
+
+	dt_write_lock(env, dto, 0);
+	rc = dt_delete(env, parent, (struct dt_key *)name, th, BYPASS_CAPA);
+	if (rc < 0)
+		GOTO(unlock, rc);
+
+	rc = dt_ref_del(env, dto, th);
+	if (rc < 0) {
+		rc = dt_insert(env, parent,
+			       (const struct dt_rec *)&dti->dti_fid,
+			       (const struct dt_key *)name, th, BYPASS_CAPA, 1);
+		GOTO(unlock, rc);
+	}
+
+	rc = dt_destroy(env, dto, th);
+unlock:
+	dt_write_unlock(env, dto);
+stop:
+	dt_trans_stop(env, dt, th);
+out:
+	lu_object_put_nocache(env, &dto->do_lu);
+	return rc;
+}
+EXPORT_SYMBOL(local_object_unlink);
+
 struct local_oid_storage *dt_los_find(struct ls_device *ls, __u64 seq)
 {
 	struct local_oid_storage *los, *ret = NULL;
@@ -648,22 +719,20 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	if (IS_ERR(root))
 		GOTO(out_los, rc = PTR_ERR(root));
 
+	/* initialize data allowing to generate new fids,
+	 * literally we need a sequence */
 	snprintf(dti->dti_buf, sizeof(dti->dti_buf), "seq-%Lx-lastid",
 		 fid_seq(first_fid));
 	rc = dt_lookup_dir(env, root, dti->dti_buf, &dti->dti_fid);
-	if (rc != 0 && rc != -ENOENT)
+	if (rc == -ENOENT)
+		dti->dti_fid = *first_fid;
+	else if (rc < 0)
 		GOTO(out_los, rc);
 
-	/* initialize data allowing to generate new fids,
-	 * literally we need a sequence */
-	if (rc == 0)
-		o = ls_locate(env, ls, &dti->dti_fid);
-	else
-		o = ls_locate(env, ls, first_fid);
+	o = ls_locate(env, ls, &dti->dti_fid);
 	if (IS_ERR(o))
 		GOTO(out_los, rc = PTR_ERR(o));
-
-	dt_write_lock(env, o, 0);
+	LASSERT(fid_seq(&dti->dti_fid) == fid_seq(first_fid));
 	if (!dt_object_exists(o)) {
 		LASSERT(rc == -ENOENT);
 
@@ -681,16 +750,9 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 			GOTO(out_trans, rc);
 
 		rc = dt_declare_insert(env, root,
-				       (const struct dt_rec *)lu_object_fid(&o->do_lu),
+				       (const struct dt_rec *)&dti->dti_fid,
 				       (const struct dt_key *)dti->dti_buf,
 				       th);
-		if (rc)
-			GOTO(out_trans, rc);
-
-		dti->dti_lb.lb_buf = NULL;
-		dti->dti_lb.lb_len = sizeof(dti->dti_lma);
-		rc = dt_declare_xattr_set(env, o, &dti->dti_lb, XATTR_NAME_LMA,
-					  0, th);
 		if (rc)
 			GOTO(out_trans, rc);
 
@@ -702,11 +764,15 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		if (rc)
 			GOTO(out_trans, rc);
 
-		LASSERT(!dt_object_exists(o));
-		rc = dt_create(env, o, &dti->dti_attr, NULL, &dti->dti_dof, th);
+		dt_write_lock(env, root, 0);
+		dt_write_lock(env, o, 0);
+		if (dt_object_exists(o))
+			GOTO(out_lock, rc = 0);
+
+		rc = dt_create(env, o, &dti->dti_attr, NULL, &dti->dti_dof,
+			       th);
 		if (rc)
-			GOTO(out_trans, rc);
-		LASSERT(dt_object_exists(o));
+			GOTO(out_lock, rc);
 
 		losd.lso_magic = cpu_to_le32(LOS_MAGIC);
 		losd.lso_next_oid = cpu_to_le32(fid_oid(first_fid) + 1);
@@ -716,7 +782,7 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		dti->dti_lb.lb_len = sizeof(losd);
 		rc = dt_record_write(env, o, &dti->dti_lb, &dti->dti_off, th);
 		if (rc)
-			GOTO(out_trans, rc);
+			GOTO(out_lock, rc);
 #if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 3, 90, 0)
 #error "fix this before release"
 #endif
@@ -725,29 +791,32 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		 * proper hanlding of named vs no-name objects.
 		 * Llog objects have name always as they are placed in O/d/...
 		 */
-		if (fid_seq(lu_object_fid(&o->do_lu)) != FID_SEQ_LLOG) {
+		if (fid_seq(&dti->dti_fid) != FID_SEQ_LLOG) {
 			rc = dt_insert(env, root,
-				       (const struct dt_rec *)first_fid,
+				       (const struct dt_rec *)&dti->dti_fid,
 				       (const struct dt_key *)dti->dti_buf,
 				       th, BYPASS_CAPA, 1);
 			if (rc)
-				GOTO(out_trans, rc);
+				GOTO(out_lock, rc);
 		}
+out_lock:
+		dt_write_unlock(env, o);
+		dt_write_unlock(env, root);
 out_trans:
 		dt_trans_stop(env, dev, th);
 	} else {
 		dti->dti_off = 0;
 		dti->dti_lb.lb_buf = &losd;
 		dti->dti_lb.lb_len = sizeof(losd);
+		dt_read_lock(env, o, 0);
 		rc = dt_record_read(env, o, &dti->dti_lb, &dti->dti_off);
+		dt_read_unlock(env, o);
 		if (rc == 0 && le32_to_cpu(losd.lso_magic) != LOS_MAGIC) {
 			CERROR("local storage file "DFID" is corrupted\n",
 			       PFID(first_fid));
 			rc = -EINVAL;
 		}
 	}
-out_lock:
-	dt_write_unlock(env, o);
 out_los:
 	if (root != NULL && !IS_ERR(root))
 		lu_object_put_nocache(env, &root->do_lu);

@@ -2143,13 +2143,12 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	LASSERT(oh->ot_handle == NULL);
 	LASSERT(inode);
 
-	osd_trans_declare_op(env, oh, OSD_OT_DELETE,
+	osd_trans_declare_op(env, oh, OSD_OT_DESTROY,
 			     osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
 	/* Recycle idle OI leaf may cause additional three OI blocks
 	 * to be changed. */
-	osd_trans_declare_op(env, oh, OSD_OT_DESTROY,
+	osd_trans_declare_op(env, oh, OSD_OT_DELETE,
 			     osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3);
-
 	/* one less inode */
 	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, -1, oh,
 				   false, true, NULL, false);

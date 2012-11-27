@@ -554,60 +554,6 @@ static int __mdd_index_delete(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
-int mdd_declare_llog_record(const struct lu_env *env, struct mdd_device *mdd,
-                            int reclen, struct thandle *handle)
-{
-        int rc;
-
-        /* XXX: this is a temporary solution to declare llog changes
-         *      will be fixed in 2.3 with new llog implementation */
-
-        LASSERT(mdd->mdd_capa);
-
-        /* XXX: Since we use the 'mdd_capa' as fake llog object here, we
-         *      have to set the parameter 'size' as INT_MAX or 0 to inform
-         *      OSD that this record write is for a llog write or catalog
-         *      header update, and osd declare function will reserve less
-         *      credits for optimization purpose.
-         *
-         *      Reserve 6 blocks for a llog write, since the llog file is
-         *      usually small, reserve 2 blocks for catalog header update,
-         *      because we know for sure that catalog header is already
-         *      allocated.
-         *
-         *      This hack should be removed in 2.3.
-         */
-
-        /* record itself */
-        rc = dt_declare_record_write(env, mdd->mdd_capa,
-                                     DECLARE_LLOG_WRITE, 0, handle);
-        if (rc)
-                return rc;
-
-        /* header will be updated as well */
-        rc = dt_declare_record_write(env, mdd->mdd_capa,
-                                     DECLARE_LLOG_WRITE, 0, handle);
-        if (rc)
-                return rc;
-
-        /* also we should be able to create new plain log */
-        rc = dt_declare_create(env, mdd->mdd_capa, NULL, NULL, NULL, handle);
-        if (rc)
-                return rc;
-
-        /* new record referencing new plain llog */
-        rc = dt_declare_record_write(env, mdd->mdd_capa,
-                                     DECLARE_LLOG_WRITE, 0, handle);
-        if (rc)
-                return rc;
-
-        /* catalog's header will be updated as well */
-        rc = dt_declare_record_write(env, mdd->mdd_capa,
-                                     DECLARE_LLOG_REWRITE, 0, handle);
-
-        return rc;
-}
-
 int mdd_declare_changelog_store(const struct lu_env *env,
 				struct mdd_device *mdd,
 				const struct lu_name *fname,

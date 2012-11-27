@@ -1096,10 +1096,6 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	{ "ROOT", { FID_SEQ_ROOT, 1, 0 },
 		OLF_SCAN_SUBITEMS | OLF_HIDE_FID, osd_ios_ROOT_scan, NULL },
 
-	/* capa_keys */
-	{ CAPA_KEYS, { FID_SEQ_LOCAL_FILE, MDD_CAPA_KEYS_OID, 0 }, 0,
-		NULL, NULL },
-
 	/* changelog_catalog */
 	{ CHANGELOG_CATALOG, { 0, 0, 0 }, 0, NULL, NULL },
 
@@ -1155,7 +1151,7 @@ static const struct osd_lf_map osd_lf_maps[] = {
 		OLF_SHOW_NAME, NULL, NULL },
 
 	/* lfsck_namespace */
-	{ "lfsck_namespace", { FID_SEQ_LOCAL_FILE, LFSCK_NAMESPACE_OID, 0 }, 0,
+	{ "lfsck_namespace", { FID_SEQ_LOCAL_FILE, LFSCK_BOOKMARK_OID, 0 }, 0,
 		NULL, NULL },
 
 	/* OBJECTS, upgrade from old device */

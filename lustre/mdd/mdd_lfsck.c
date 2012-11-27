@@ -683,99 +683,6 @@ static int mdd_lfsck_namespace_init(const struct lu_env *env,
 	return rc;
 }
 
-static int mdd_declare_lfsck_namespace_unlink(const struct lu_env *env,
-					      struct mdd_device *mdd,
-					      struct dt_object *p,
-					      struct dt_object *c,
-					      const char *name,
-					      struct thandle *handle)
-{
-	int rc;
-
-	rc = dt_declare_delete(env, p, (const struct dt_key *)name, handle);
-	if (rc != 0)
-		return rc;
-
-	rc = dt_declare_ref_del(env, c, handle);
-	if (rc != 0)
-		return rc;
-
-	rc = dt_declare_destroy(env, c, handle);
-	return rc;
-}
-
-static int mdd_lfsck_namespace_unlink(const struct lu_env *env,
-				      struct mdd_device *mdd,
-				      struct lfsck_component *com)
-{
-	struct mdd_thread_info	*info	= mdd_env_info(env);
-	struct lu_fid		*fid	= &info->mti_fid;
-	struct dt_object	*child  = com->lc_obj;
-	struct dt_object	*parent;
-	struct thandle		*handle;
-	bool			 locked = false;
-	int			 rc;
-	ENTRY;
-
-	parent = dt_store_resolve(env, mdd->mdd_bottom, "", fid);
-	if (IS_ERR(parent))
-		RETURN(rc = PTR_ERR(parent));
-
-	if (!dt_try_as_dir(env, parent))
-		GOTO(out, rc = -ENOTDIR);
-
-	handle = dt_trans_create(env, mdd->mdd_bottom);
-	if (IS_ERR(handle))
-		GOTO(out, rc = PTR_ERR(handle));
-
-	rc = mdd_declare_lfsck_namespace_unlink(env, mdd, parent, child,
-						lfsck_namespace_name, handle);
-	if (rc != 0)
-		GOTO(stop, rc);
-
-	rc = dt_trans_start_local(env, mdd->mdd_bottom, handle);
-	if (rc != 0)
-		GOTO(stop, rc);
-
-	dt_write_lock(env, child, MOR_TGT_CHILD);
-	locked = true;
-	rc = dt_delete(env, parent, (struct dt_key *)lfsck_namespace_name,
-		       handle, BYPASS_CAPA);
-	if (rc != 0)
-		GOTO(stop, rc);
-
-	rc = child->do_ops->do_ref_del(env, child, handle);
-	if (rc != 0) {
-		lu_local_obj_fid(fid, LFSCK_NAMESPACE_OID);
-		rc = dt_insert(env, parent,
-			       (const struct dt_rec*)fid,
-			       (const struct dt_key *)lfsck_namespace_name,
-			       handle, BYPASS_CAPA, 1);
-
-		GOTO(stop, rc);
-	}
-
-
-	rc = dt_destroy(env, child, handle);
-
-	GOTO(stop, rc);
-
-stop:
-	if (locked)
-		dt_write_unlock(env, child);
-
-	if (rc == 0) {
-		lu_object_put(env, &child->do_lu);
-		com->lc_obj = NULL;
-	}
-
-	dt_trans_stop(env, mdd->mdd_bottom, handle);
-
-out:
-	lu_object_put(env, &parent->do_lu);
-	return rc;
-}
-
 static int mdd_lfsck_namespace_lookup(const struct lu_env *env,
 				      struct lfsck_component *com,
 				      const struct lu_fid *fid,
@@ -1067,12 +974,9 @@ stop:
 static int mdd_lfsck_namespace_reset(const struct lu_env *env,
 				     struct lfsck_component *com, bool init)
 {
-	struct mdd_thread_info	*info = mdd_env_info(env);
-	struct lu_fid		*fid  = &info->mti_fid;
 	struct lfsck_namespace	*ns   = (struct lfsck_namespace *)com->lc_file_ram;
 	struct mdd_device	*mdd  = mdd_lfsck2mdd(com->lc_lfsck);
-	struct md_object	*mdo;
-	struct dt_object	*dto;
+	struct dt_object	*dto, *root;
 	int			 rc;
 	ENTRY;
 
@@ -1090,32 +994,32 @@ static int mdd_lfsck_namespace_reset(const struct lu_env *env,
 	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
 	ns->ln_status = LS_INIT;
 
-	rc = mdd_lfsck_namespace_unlink(env, mdd, com);
+	root = dt_locate(env, mdd->mdd_bottom, &mdd->mdd_local_root_fid);
+	if (unlikely(IS_ERR(root)))
+		GOTO(out, rc = PTR_ERR(root));
+
+	rc = local_object_unlink(env, mdd->mdd_bottom, root,
+				 lfsck_namespace_name);
 	if (rc != 0)
 		GOTO(out, rc);
 
-	lu_local_obj_fid(fid, LFSCK_NAMESPACE_OID);
-	mdo = llo_store_create_index(env, &mdd->mdd_md_dev, mdd->mdd_bottom, "",
-				     lfsck_namespace_name, fid,
-				     &dt_lfsck_features);
-	if (IS_ERR(mdo))
-		GOTO(out, rc = PTR_ERR(mdo));
-
-	lu_object_put(env, &mdo->mo_lu);
-	dto = dt_store_open(env, mdd->mdd_bottom, "", lfsck_namespace_name, fid);
+	dto = local_index_find_or_create(env, mdd->mdd_los, root,
+					 lfsck_namespace_name,
+					 S_IFREG | S_IRUGO | S_IWUSR,
+					 &dt_lfsck_features);
 	if (IS_ERR(dto))
 		GOTO(out, rc = PTR_ERR(dto));
 
-	com->lc_obj = dto;
 	rc = dto->do_ops->do_index_try(env, dto, &dt_lfsck_features);
 	if (rc != 0)
 		GOTO(out, rc);
+	com->lc_obj = dto;
 
 	rc = mdd_lfsck_namespace_store(env, com, true);
 
 	GOTO(out, rc);
-
 out:
+	lu_object_put(env, &root->do_lu);
 	up_write(&com->lc_sem);
 	return rc;
 }
@@ -1980,11 +1884,11 @@ static struct lfsck_operations mdd_lfsck_namespace_ops = {
 static int mdd_lfsck_namespace_setup(const struct lu_env *env,
 				     struct md_lfsck *lfsck)
 {
-	struct mdd_device      *mdd = mdd_lfsck2mdd(lfsck);
-	struct lfsck_component *com;
-	struct lfsck_namespace *ns;
-	struct dt_object       *obj;
-	int			rc;
+	struct mdd_device	*mdd = mdd_lfsck2mdd(lfsck);
+	struct lfsck_component	*com;
+	struct lfsck_namespace	*ns;
+	struct dt_object	*obj, *root;
+	int			 rc;
 	ENTRY;
 
 	OBD_ALLOC_PTR(com);
@@ -2007,8 +1911,15 @@ static int mdd_lfsck_namespace_setup(const struct lu_env *env,
 	if (com->lc_file_disk == NULL)
 		GOTO(out, rc = -ENOMEM);
 
-	obj = dt_store_open(env, mdd->mdd_bottom, "", lfsck_namespace_name,
-			    &mdd_env_info(env)->mti_fid);
+	root = dt_locate(env, mdd->mdd_bottom, &mdd->mdd_local_root_fid);
+	if (unlikely(IS_ERR(root)))
+		GOTO(out, rc = PTR_ERR(root));
+
+	obj = local_index_find_or_create(env, mdd->mdd_los, root,
+					 lfsck_namespace_name,
+					 S_IFREG | S_IRUGO | S_IWUSR,
+					 &dt_lfsck_features);
+	lu_object_put(env, &root->do_lu);
 	if (IS_ERR(obj))
 		GOTO(out, rc = PTR_ERR(obj));
 
@@ -2615,7 +2526,7 @@ static int mdd_lfsck_main(void *args)
 	ENTRY;
 
 	cfs_daemonize("lfsck");
-	rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
+	rc = lu_env_init(&env, LCT_MD_THREAD);
 	if (rc != 0) {
 		CERROR("%s: LFSCK, fail to init env, rc = %d\n",
 		       mdd_lfsck2name(lfsck), rc);
@@ -2938,9 +2849,11 @@ static const struct lu_fid lfsck_it_fid = { .f_seq = FID_SEQ_LOCAL_FILE,
 
 int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd)
 {
-	struct md_lfsck  *lfsck = &mdd->mdd_lfsck;
-	struct dt_object *obj;
-	int		  rc;
+	struct md_lfsck		*lfsck = &mdd->mdd_lfsck;
+	struct dt_object	*obj;
+	struct lu_fid		 fid;
+	int			 rc;
+
 	ENTRY;
 
 	LASSERT(!lfsck->ml_initialized);
@@ -2962,27 +2875,40 @@ int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd)
 	rc = obj->do_ops->do_index_try(env, obj, &dt_otable_features);
 	if (rc != 0) {
 		if (rc == -ENOTSUPP)
-			rc = 0;
-
-		RETURN(rc);
+			RETURN(0);
+		GOTO(out, rc);
 	}
 
-	obj = dt_store_open(env, mdd->mdd_bottom, "", lfsck_bookmark_name,
-			    &mdd_env_info(env)->mti_fid);
-	if (IS_ERR(obj))
-		RETURN(PTR_ERR(obj));
+	/* LFSCK bookmark */
+	fid_zero(&fid);
+	rc = mdd_local_file_create(env, mdd, &mdd->mdd_local_root_fid,
+				   lfsck_bookmark_name,
+				   S_IFREG | S_IRUGO | S_IWUSR, &fid);
+	if (rc < 0)
+		GOTO(out, rc);
 
+	obj = dt_locate(env, mdd->mdd_bottom, &fid);
+	if (IS_ERR(obj))
+		GOTO(out, rc = PTR_ERR(obj));
+
+	LASSERT(lu_object_exists(&obj->do_lu));
 	lfsck->ml_bookmark_obj = obj;
+
 	rc = mdd_lfsck_bookmark_load(env, lfsck);
 	if (rc == -ENODATA)
 		rc = mdd_lfsck_bookmark_init(env, lfsck);
 	if (rc != 0)
-		RETURN(rc);
+		GOTO(out, rc);
 
 	rc = mdd_lfsck_namespace_setup(env, lfsck);
+	if (rc < 0)
+		GOTO(out, rc);
 	/* XXX: LFSCK components initialization to be added here. */
-
-	RETURN(rc);
+	RETURN(0);
+out:
+	lu_object_put(env, &lfsck->ml_obj_oit->do_lu);
+	lfsck->ml_obj_oit = NULL;
+	return 0;
 }
 
 void mdd_lfsck_cleanup(const struct lu_env *env, struct mdd_device *mdd)

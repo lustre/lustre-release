@@ -883,6 +883,8 @@ local_index_find_or_create_with_fid(const struct lu_env *env,
 				    struct dt_object *parent,
 				    const char *name, __u32 mode,
 				    const struct dt_index_features *ft);
+int local_object_unlink(const struct lu_env *env, struct dt_device *dt,
+			struct dt_object *parent, const char *name);
 
 static inline int dt_object_lock(const struct lu_env *env,
 				 struct dt_object *o, struct lustre_handle *lh,

@@ -518,26 +518,32 @@ out:
  */
 int orph_index_init(const struct lu_env *env, struct mdd_device *mdd)
 {
-        struct lu_fid fid;
-        struct dt_object *d;
-        int rc = 0;
-        ENTRY;
+	struct lu_fid		 fid;
+	struct dt_object	*d;
+	int			 rc = 0;
 
-        d = dt_store_open(env, mdd->mdd_child, "", orph_index_name, &fid);
-        if (!IS_ERR(d)) {
-                mdd->mdd_orphans = d;
-                if (!dt_try_as_dir(env, d)) {
-                        rc = -ENOTDIR;
-                        CERROR("\"%s\" is not an index! : rc = %d\n",
-                                        orph_index_name, rc);
-                }
-        } else {
-                CERROR("cannot find \"%s\" obj %d\n",
-                       orph_index_name, (int)PTR_ERR(d));
-                rc = PTR_ERR(d);
-        }
+	ENTRY;
 
-        RETURN(rc);
+	/* create PENDING dir */
+	fid_zero(&fid);
+	rc = mdd_local_file_create(env, mdd, &mdd->mdd_local_root_fid,
+				   orph_index_name, S_IFDIR | S_IRUGO |
+				   S_IWUSR | S_IXUGO, &fid);
+	if (rc < 0)
+		RETURN(rc);
+
+	d = dt_locate(env, mdd->mdd_child, &fid);
+	if (IS_ERR(d))
+		RETURN(PTR_ERR(d));
+	LASSERT(lu_object_exists(&d->do_lu));
+	if (!dt_try_as_dir(env, d)) {
+		CERROR("%s: \"%s\" is not an index: rc = %d\n",
+		       mdd2obd_dev(mdd)->obd_name, orph_index_name, rc);
+		lu_object_put(env, &d->do_lu);
+		RETURN(-ENOTDIR);
+	}
+	mdd->mdd_orphans = d;
+	RETURN(0);
 }
 
 void orph_index_fini(const struct lu_env *env, struct mdd_device *mdd)

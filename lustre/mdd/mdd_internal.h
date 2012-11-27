@@ -106,7 +106,6 @@ struct mdd_device {
 	struct lu_fid			 mdd_local_root_fid;
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans; /* PENDING directory */
-        struct dt_object                *mdd_capa;
         cfs_proc_dir_entry_t            *mdd_proc_entry;
         struct mdd_changelog             mdd_cl;
         unsigned long                    mdd_atime_diff;
@@ -115,6 +114,7 @@ struct mdd_device {
 	struct md_lfsck			 mdd_lfsck;
 	unsigned int			 mdd_sync_permission;
 	int				 mdd_connects;
+	struct local_oid_storage	*mdd_los;
 };
 
 enum mod_flags {
@@ -384,8 +384,6 @@ struct mdd_object *mdd_object_find(const struct lu_env *env,
 int mdd_get_default_md(struct mdd_object *mdd_obj, struct lov_mds_md *lmm);
 int mdd_readpage(const struct lu_env *env, struct md_object *obj,
                  const struct lu_rdpg *rdpg);
-int mdd_declare_llog_record(const struct lu_env *env, struct mdd_device *mdd,
-                            int reclen, struct thandle *handle);
 int mdd_declare_changelog_store(const struct lu_env *env,
 				struct mdd_device *mdd,
 				const struct lu_name *fname,
@@ -448,6 +446,9 @@ int mdd_lfsck_dump(const struct lu_env *env, struct md_lfsck *lfsck,
 struct lu_object *mdd_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *d);
+int mdd_local_file_create(const struct lu_env *env, struct mdd_device *mdd,
+			  const struct lu_fid *pfid, const char *name,
+			  __u32 mode, struct lu_fid *fid);
 
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
                   struct thandle *handle);
