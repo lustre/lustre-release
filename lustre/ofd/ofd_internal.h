@@ -94,6 +94,16 @@ static inline void ofd_counter_incr(struct obd_export *exp, int opcode,
 	if (exp->exp_obd && exp->exp_obd->u.obt.obt_jobstats.ojs_hash &&
 	    (exp->exp_connect_flags & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd, jobid, opcode, amount);
+
+	if (exp->exp_nid_stats != NULL &&
+	    exp->exp_nid_stats->nid_stats != NULL) {
+		if (opcode == LPROC_OFD_STATS_READ)
+			lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
+					    LPROC_OFD_READ_BYTES, amount);
+		else if (opcode == LPROC_OFD_STATS_WRITE)
+			lprocfs_counter_add(exp->exp_nid_stats->nid_stats,
+					    LPROC_OFD_WRITE_BYTES, amount);
+	}
 }
 
 struct ofd_device {

@@ -8011,6 +8011,51 @@ test_133d() {
 }
 run_test 133d "Verifying rename_stats ========================================"
 
+test_133e() {
+	local testdir=$DIR/${tdir}/stats_testdir
+	local ctr f0 f1 bs=32768 count=42 sum
+
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
+	mkdir -p ${testdir} || error "mkdir failed"
+
+	$SETSTRIPE -c 1 -i 0 ${testdir}/${tfile}
+
+	for ctr in {write,read}_bytes; do
+		sync
+		cancel_lru_locks osc
+
+		do_facet ost1 $LCTL set_param -n \
+			"obdfilter.*.exports.clear=clear"
+
+		if [ $ctr = write_bytes ]; then
+			f0=/dev/zero
+			f1=${testdir}/${tfile}
+		else
+			f0=${testdir}/${tfile}
+			f1=/dev/null
+		fi
+
+		dd if=$f0 of=$f1 conv=notrunc bs=$bs count=$count || \
+			error "dd failed"
+		sync
+		cancel_lru_locks osc
+
+		sum=$(do_facet ost1 $LCTL get_param \
+				"obdfilter.*.exports.*.stats" | \
+			  awk -v ctr=$ctr '\
+				BEGIN { sum = 0 }
+				$1 == ctr { sum += $7 }
+				END { print sum }')
+
+		if ((sum != bs * count)); then
+			error "Bad $ctr sum, expected $((bs * count)), got $sum"
+		fi
+	done
+
+	rm -rf $DIR/${tdir}
+}
+run_test 133e "Verifying OST {read,write}_bytes nid stats ================="
+
 test_140() { #bug-17379
         test_mkdir -p $DIR/$tdir || error "Creating dir $DIR/$tdir"
         cd $DIR/$tdir || error "Changing to $DIR/$tdir"
