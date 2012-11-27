@@ -75,7 +75,6 @@ start_zfs_services ()
 stop_devices ()
 {
 	local labels=$*
-	local result=0
 	local label devtype
 	for label in $labels; do
 		devtype=`$LDEV -t $label`
@@ -102,10 +101,6 @@ import_zpool ()
 		args="$args -c $cache"
 	elif [ -n "$ZPOOL_IMPORT_DIR" ] ; then
 		args="$args -d $ZPOOL_IMPORT_DIR"
-	elif [ -d "/dev/disk/by-vdev" ] ; then
-		args="$args -d /dev/disk/by-vdev"
-	elif [ -d "/dev/mapper" ] ; then
-		args="$args -d /dev/mapper"
 	fi
 
 	if zpool status $pool >/dev/null 2>&1 ; then
@@ -113,6 +108,9 @@ import_zpool ()
 	elif [ -n "$pool" ] ; then
 		zpool import $pool $args 2>/dev/null
 		result=$?
+	fi
+	if [ $result -ne 0 ] ; then
+		echo "Unexpected return code from import of pool $pool: $result"
 	fi
 	return $result
 }
