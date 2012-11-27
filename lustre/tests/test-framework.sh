@@ -1043,13 +1043,14 @@ quota_save_version() {
 # XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
-quota_type () {
-    local fsname=${1:-$FSNAME}
-    local rc=0
-    do_facet mgs lctl get_param mdd.${fsname}-MDT*.quota_type || rc=$?
-    do_nodes $(comma_list $(osts_nodes)) \
-        lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
-    return $rc 
+quota_type() {
+	local fsname=${1:-$FSNAME}
+	local rc=0
+	do_facet $SINGLEMDS lctl get_param mdd.${fsname}-MDT*.quota_type ||
+		rc=$?
+	do_nodes $(comma_list $(osts_nodes)) \
+		lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
+	return $rc 
 }
 
 # XXX This function is kept for interoperability with old server (< 2.3.50),
