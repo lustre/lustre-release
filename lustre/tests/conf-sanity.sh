@@ -1481,7 +1481,9 @@ t32_test() {
 		$LCTL set_param debug="$PTLDEBUG"
 
 		if $r test -f $tmp/sha1sums; then
-			$r sort -k 2 $tmp/sha1sums >$tmp/sha1sums.orig
+			# LU-2393 - do both sorts on same node to ensure locale
+			# is identical
+			$r cat $tmp/sha1sums | sort -k 2 >$tmp/sha1sums.orig
 			pushd $tmp/mnt/lustre
 			find ! -name .lustre -type f -exec sha1sum {} \; |
 				sort -k 2 >$tmp/sha1sums || {
@@ -1502,7 +1504,9 @@ t32_test() {
 			# There is not a Test Framework API to copy files to or
 			# from a remote node.
 			#
-			$r sort -k 6 $tmp/list >$tmp/list.orig
+			# LU-2393 - do both sorts on same node to ensure locale
+			# is identical
+			$r cat $tmp/list | sort -k 6 >$tmp/list.orig
 			pushd $tmp/mnt/lustre
 			ls -Rni --time-style=+%s | sort -k 6 >$tmp/list || {
 				error_noexit "ls"
