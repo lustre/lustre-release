@@ -90,6 +90,12 @@ $RSYNC --help 2>&1 | grep -q acls && RSYNC_OPTS="$RSYNC_OPTS -A"
 # If rsync copies lustre xattrs in the future, then we can skip lfs (bug 22189)
 strings $(which $RSYNC) 2>&1 | grep -q lustre && LFS=:
 
+# rsync creates its temporary files with lenient permissions, even if
+# permissions on the original files are more strict. Tighten umask here
+# to avoid the brief window where unprivileged users might be able to
+# access the temporary file.
+umask 0077
+
 lfs_migrate() {
 	while IFS='' read -d '' OLDNAME; do
 		$ECHO -n "$OLDNAME: "
