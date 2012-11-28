@@ -29,8 +29,7 @@
     <para>Use <literal>llapi_file_create</literal> to set Lustre properties for a new file.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>#include &lt;lustre/liblustreapi.h&gt;
-#include &lt;lustre/lustre_user.h&gt;
+      <screen>#include &lt;lustre/lustreapi.h&gt;
 
 int llapi_file_create(char *name, long stripe_size, int stripe_offset, int stripe_count, int stripe_pattern);
 </screen>
@@ -132,13 +131,8 @@ return -1;
     <para>Use <literal>llapi_file_get_stripe</literal> to get striping information for a file or directory on a Lustre file system.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>#include &lt;sys/types.h&gt; 
-#include &lt;sys/stat.h&gt; 
-#include &lt;fcntl.h&gt; 
-#include &lt;liblustre.h&gt; 
-#include &lt;lustre/lustre_idl.h&gt; 
-#include &lt;lustre/liblustreapi.h&gt; 
-#include &lt;lustre/lustre_user.h&gt; 
+      <screen>
+#include &lt;lustre/lustreapi.h&gt;
  
 int llapi_file_get_stripe(const char *<emphasis>path</emphasis>, void *<emphasis>lum</emphasis>);</screen>
     </section>
@@ -365,54 +359,54 @@ struct lov_user_ost_data_v1 lmm_objects[0];
     </section>
     <section remap="h5">
       <title>Examples</title>
-      <screen>#include &lt;sys/vfs.h&gt;
-#include &lt;liblustre.h&gt;
-#include &lt;lnet/lnetctl.h&gt;
-#include &lt;obd.h&gt;
-#include &lt;lustre_lib.h&gt;
-#include &lt;lustre/liblustreapi.h&gt;
-#include &lt;obd_lov.h&gt;
+      <programlisting>
+#include &lt;stdio.h&gt;
+#include &lt;stdlib.h&gt;
+#include &lt;errno.h&gt;
+#include &lt;lustre/lustreapi.h&gt;
+
 static inline int maxint(int a, int b)
 {
-return a &gt; b ? a : b;
+	return a &gt; b ? a : b;
 }
 static void *alloc_lum()
 {
-int v1, v3, join;
-v1 = sizeof(struct lov_user_md_v1) +
-LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
-v3 = sizeof(struct lov_user_md_v3) +
-LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
-return malloc(maxint(v1, v3));
+	int v1, v3, join;
+	v1 = sizeof(struct lov_user_md_v1) +
+		LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
+	v3 = sizeof(struct lov_user_md_v3) +
+		LOV_MAX_STRIPE_COUNT * sizeof(struct lov_user_ost_data_v1);
+	return malloc(maxint(v1, v3));
 }
 int main(int argc, char** argv)
 {
-struct lov_user_md *lum_file = NULL;
-int rc;
-int lum_size;
-if (argc != 2) {
-fprintf(stderr, &quot;Usage: %s &lt;filename&gt;\n&quot;, argv[0]);
-return 1;
-}
-lum_file = alloc_lum();
-if (lum_file == NULL) {
-rc = ENOMEM;
-goto cleanup;
-}
-rc = llapi_file_get_stripe(argv[1], lum_file);
-if (rc) {
-rc = errno;
-goto cleanup;
-}
-/* stripe_size stripe_count */
-printf(&quot;%d %d\n&quot;,
-lum_file-&gt;lmm_stripe_size,
-lum_file-&gt;lmm_stripe_count);
+	struct lov_user_md *lum_file = NULL;
+	int rc;
+	int lum_size;
+	if (argc != 2) {
+		fprintf(stderr, &quot;Usage: %s &lt;filename&gt;\n&quot;, argv[0]);
+		return 1;
+	}
+	lum_file = alloc_lum();
+	if (lum_file == NULL) {
+		rc = ENOMEM;
+		goto cleanup;
+	}
+	rc = llapi_file_get_stripe(argv[1], lum_file);
+	if (rc) {
+		rc = errno;
+		goto cleanup;
+	}
+	/* stripe_size stripe_count */
+	printf(&quot;%d %d\n&quot;,
+			lum_file-&gt;lmm_stripe_size,
+			lum_file-&gt;lmm_stripe_count);
 cleanup:
-if (lum_file != NULL)
-free(lum_file);
-return rc;
-}</screen>
+	if (lum_file != NULL)
+		free(lum_file);
+	return rc;
+}
+</programlisting>
     </section>
   </section>
   <section xml:id="dbdoclet.50438215_86607">
@@ -422,13 +416,7 @@ return rc;
     <para>The <literal>llapi_file_open</literal> command opens (or creates) a file or device on a Lustre filesystem.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>#include &lt;sys/types.h&gt; 
-#include &lt;sys/stat.h&gt; 
-#include &lt;fcntl.h&gt; 
-#include &lt;liblustre.h&gt; 
-#include &lt;lustre/lustre_idl.h&gt; 
-#include &lt;lustre/liblustreapi.h&gt; 
-#include &lt;lustre/lustre_user.h&gt;
+      <screen>#include &lt;lustre/lustreapi.h&gt;
 int llapi_file_open(const char *<emphasis>name</emphasis>, int <emphasis>flags</emphasis>, int <emphasis>mode</emphasis>, 
    unsigned long long <emphasis>stripe_size</emphasis>, int <emphasis>stripe_offset</emphasis>, 
    int <emphasis>stripe_count</emphasis>, int <emphasis>stripe_pattern</emphasis>);
@@ -569,29 +557,25 @@ int llapi_file_create(const char *<emphasis>name</emphasis>, unsigned long long 
     </section>
     <section remap="h5">
       <title>Example</title>
-      <screen>#include &lt;sys/types.h&gt;
-#include &lt;sys/stat.h&gt;
-#include &lt;fcntl.h&gt;
-#include &lt;errno.h&gt;
+      <programlisting>
 #include &lt;stdio.h&gt;
-#include &lt;liblustre.h&gt;
-#include &lt;lustre/lustre_idl.h&gt;
-#include &lt;lustre/liblustreapi.h&gt;
-#include &lt;lustre/lustre_user.h&gt;
+#include &lt;lustre/lustreapi.h&gt;
+
 int main(int argc, char *argv[])
 {
-   int rc;
-   if (argc != 2)
-           return -1;
-   rc = llapi_file_create(argv[1], 1048576, 0, 2, LOV_PATTERN_RAID0);
-   if (rc &lt; 0) {
-           fprintf(stderr, &quot;file creation has failed, %s\n&quot;,         strerror(-rc));
-           return -1;
-   }
-   printf(&quot;%s with stripe size 1048576, striped across 2 OSTs,&quot;
-           &quot; has been created!\n&quot;, argv[1]);
-   return 0;
-}</screen>
+	int rc;
+	if (argc != 2)
+		return -1;
+	rc = llapi_file_create(argv[1], 1048576, 0, 2, LOV_PATTERN_RAID0);
+	if (rc &lt; 0) {
+		fprintf(stderr, &quot;file creation has failed, %s\n&quot;,         strerror(-rc));
+		return -1;
+	}
+	printf(&quot;%s with stripe size 1048576, striped across 2 OSTs,&quot;
+			&quot; has been created!\n&quot;, argv[1]);
+	return 0;
+}
+</programlisting>
     </section>
   </section>
   <section xml:id="dbdoclet.50438215_12433">
@@ -601,10 +585,7 @@ int main(int argc, char *argv[])
     <para>Use <literal>llapi_quotact</literal>l to manipulate disk quotas on a Lustre file system.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>#include &lt;liblustre.h&gt;
-#include &lt;lustre/lustre_idl.h&gt;
-#include &lt;lustre/liblustreapi.h&gt;
-#include &lt;lustre/lustre_user.h&gt;
+      <screen>#include &lt;lustre/lustreapi.h&gt;
 int llapi_quotactl(char&quot; &quot; *mnt,&quot; &quot; struct if_quotactl&quot; &quot; *qctl)
  
 struct if_quotactl {
@@ -809,8 +790,7 @@ struct obd_uuid {
     <para>Use <literal>llapi_path2fid</literal> to get the FID from the pathname.</para>
     <section remap="h5">
       <title>Synopsis</title>
-      <screen>#include &lt;lustre/liblustreapi.h&gt;
-#include &lt;lustre/lustre_user.h&gt;
+      <screen>#include &lt;lustre/lustreapi.h&gt;
  
 int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long *oid, unsigned long *ver)</screen>
     </section>
@@ -828,41 +808,28 @@ int llapi_path2fid(const char *path, unsigned long long *seq, unsigned long *oid
   <section xml:id="dbdoclet.50438215_marker-1297700">
     <title>Example Using the <literal>llapi</literal> Library</title>
     <para>Use <literal>llapi_file_create</literal> to set Lustre properties for a new file. For a synopsis and description of llapi_file_create and examples of how to use it, see <xref linkend="configurationfilesmoduleparameters"/>.</para>
-    <para>You can set striping from inside programs like <literal>ioctl</literal>. To compile the sample program, you need to download libtest.c and liblustreapi.c files from the Lustre source tree.</para>
+    <para>You can set striping from inside programs like <literal>ioctl</literal>. To compile the sample program, you need to install the Lustre client source RPM.</para>
     <para><emphasis role="bold">A simple C program to demonstrate striping API - libtest.c</emphasis></para>
-    <screen>/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
+    <programlisting>
+/* -*- mode: c; c-basic-offset: 8; indent-tabs-mode: nil; -*-
  * vim:expandtab:shiftwidth=8:tabstop=8:
  *
- * lustredemo - simple code examples of liblustreapi functions
+ * lustredemo - a simple example of lustreapi functions
  */
- 
 #include &lt;stdio.h&gt;
 #include &lt;fcntl.h&gt;
-#include &lt;sys/stat.h&gt;
-#include &lt;sys/types.h&gt;
 #include &lt;dirent.h&gt;
 #include &lt;errno.h&gt;
-#include &lt;string.h&gt;
-#include &lt;unistd.h&gt;
 #include &lt;stdlib.h&gt;
-#include &lt;lustre/liblustreapi.h&gt;
-#include &lt;lustre/lustre_user.h&gt;
+#include &lt;lustre/lustreapi.h&gt;
 #define MAX_OSTS 1024
 #define LOV_EA_SIZE(lum, num) (sizeof(*lum) + num * sizeof(*lum-&gt;lmm_objects))
 #define LOV_EA_MAX(lum) LOV_EA_SIZE(lum, MAX_OSTS)
 
-
-
-
- 
-/* 
-This program provides crude examples of using the liblustre API functions 
-*/
- 
+/*
+ * This program provides crude examples of using the lustreapi API functions
+ */
 /* Change these definitions to suit */
-
-
-
 
 #define TESTDIR &quot;/tmp&quot;           /* Results directory */
 #define TESTFILE &quot;lustre_dummy&quot;  /* Name for the file we create/destroy */
@@ -870,182 +837,173 @@ This program provides crude examples of using the liblustre API functions
 #define DUMWORD &quot;DEADBEEF&quot;       /* Dummy word used to fill files */
 #define MY_STRIPE_WIDTH 2                  /* Set this to the number of OST required */
 #define MY_LUSTRE_DIR &quot;/mnt/lustre/ftest&quot;
- 
- 
+
 int close_file(int fd)
-{      
-   if (close(fd) &lt; 0) {
-           fprintf(stderr, &quot;File close failed: %d (%s)\n&quot;, errno, strerror(errno));
-           return -1;
-   }
-   return 0;
+{
+        if (close(fd) &lt; 0) {
+                fprintf(stderr, &quot;File close failed: %d (%s)\n&quot;, errno, strerror(errno));
+                return -1;
+        }
+        return 0;
 }
- 
+
 int write_file(int fd)
 {
-   char *stng =  DUMWORD;
-   int cnt = 0;
- 
-   for( cnt = 0; cnt &lt; FILESIZE; cnt++) {
+        char *stng =  DUMWORD;
+        int cnt = 0;
+
+        for( cnt = 0; cnt &lt; FILESIZE; cnt++) {
                 write(fd, stng, sizeof(stng));
-   }
-   return 0;
+        }
+        return 0;
 }
 /* Open a file, set a specific stripe count, size and starting OST
-   Adjust the parameters to suit */
-  
+ *    Adjust the parameters to suit */
 int open_stripe_file()
 {
-   char *tfile = TESTFILE;
-   int stripe_size = 65536;    /* System default is 4M */
-   int stripe_offset = -1;     /* Start at default */
-   int stripe_count = MY_STRIPE_WIDTH;  /*Single stripe for this demo*/
-   int stripe_pattern = 0;     /* only RAID 0 at this time */
-   int rc, fd;
-   /* 
-   */
-   rc = llapi_file_create(tfile,
-stripe_size,stripe_offset,stripe_count,stripe_pattern);
-   /* result code is inverted, we may return -EINVAL or an ioctl error.
-   We borrow an error message from sanity.c 
-   */
-   if (rc) {
+        char *tfile = TESTFILE;
+        int stripe_size = 65536;    /* System default is 4M */
+        int stripe_offset = -1;     /* Start at default */
+        int stripe_count = MY_STRIPE_WIDTH;  /*Single stripe for this demo*/
+        int stripe_pattern = 0;     /* only RAID 0 at this time */
+        int rc, fd;
+
+        rc = llapi_file_create(tfile,
+                        stripe_size,stripe_offset,stripe_count,stripe_pattern);
+        /* result code is inverted, we may return -EINVAL or an ioctl error.
+         * We borrow an error message from sanity.c
+         */
+        if (rc) {
                 fprintf(stderr,&quot;llapi_file_create failed: %d (%s) \n&quot;, rc, strerror(-rc));
                 return -1;
         }
         /* llapi_file_create closes the file descriptor, we must re-open */
         fd = open(tfile, O_CREAT | O_RDWR | O_LOV_DELAY_CREATE, 0644);
         if (fd &lt; 0) {
-                fprintf(stderr, &quot;Can&apos;t open %s file: %d (%s)\n&quot;, tfile, errno, strerror(errno));
-           return -1;
+                fprintf(stderr, &quot;Can't open %s file: %d (%s)\n&quot;, tfile, errno, strerror(errno));
+                return -1;
         }
         return fd;
 }
- 
+
 /* output a list of uuids for this file */
 int get_my_uuids(int fd)
 {
-   struct obd_uuid uuids[1024], *uuidp;        /* Output var */
-   int obdcount = 1024;    
-   int rc,i;
- 
-   rc = llapi_lov_get_uuids(fd, uuids, &amp;obdcount);
-   if (rc != 0) {
-           fprintf(stderr, &quot;get uuids failed: %d (%s)\n&quot;,errno, strerror(errno));
+        struct obd_uuid uuids[1024], *uuidp;        /* Output var */
+        int obdcount = 1024;
+        int rc,i;
+
+        rc = llapi_lov_get_uuids(fd, uuids, &amp;obdcount);
+        if (rc != 0) {
+                fprintf(stderr, &quot;get uuids failed: %d (%s)\n&quot;,errno, strerror(errno));
         }
         printf(&quot;This file system has %d obds\n&quot;, obdcount);
         for (i = 0, uuidp = uuids; i &lt; obdcount; i++, uuidp++) {
-           printf(&quot;UUID %d is %s\n&quot;,i, uuidp-&gt;uuid);
+                printf(&quot;UUID %d is %s\n&quot;,i, uuidp-&gt;uuid);
         }
         return 0;
 }
- 
+
 /* Print out some LOV attributes. List our objects */
 int get_file_info(char *path)
 {
- 
-   struct lov_user_md *lump;
-   int rc;
-   int i;
-     
-   lump = malloc(LOV_EA_MAX(lump));
-   if (lump == NULL) {
-           return -1;
+
+        struct lov_user_md *lump;
+        int rc;
+        int i;
+
+        lump = malloc(LOV_EA_MAX(lump));
+        if (lump == NULL) {
+                return -1;
         }
- 
+
         rc = llapi_file_get_stripe(path, lump);
-        
+
         if (rc != 0) {
-           fprintf(stderr, &quot;get_stripe failed: %d (%s)\n&quot;,errno, strerror(errno));
-           return -1;
+                fprintf(stderr, &quot;get_stripe failed: %d (%s)\n&quot;,errno, strerror(errno));
+                return -1;
         }
- 
-   printf(&quot;Lov magic %u\n&quot;, lump-&gt;lmm_magic);
-   printf(&quot;Lov pattern %u\n&quot;, lump-&gt;lmm_pattern);
-   printf(&quot;Lov object id %llu\n&quot;, lump-&gt;lmm_object_id);
-   printf(&quot;Lov object group %llu\n&quot;, lump-&gt;lmm_object_gr);
-   printf(&quot;Lov stripe size %u\n&quot;, lump-&gt;lmm_stripe_size);
-   printf(&quot;Lov stripe count %hu\n&quot;, lump-&gt;lmm_stripe_count);
-   printf(&quot;Lov stripe offset %u\n&quot;, lump-&gt;lmm_stripe_offset);
-   for (i = 0; i &lt; lump-&gt;lmm_stripe_count; i++) {
-           printf(&quot;Object index %d Objid %llu\n&quot;, lump-&gt;lmm_objects[i].l_ost_idx, lump-&gt;lmm_objects[i].l_object_id);
+
+        printf(&quot;Lov magic %u\n&quot;, lump-&gt;lmm_magic);
+        printf(&quot;Lov pattern %u\n&quot;, lump-&gt;lmm_pattern);
+        printf(&quot;Lov object id %llu\n&quot;, lump-&gt;lmm_object_id);
+        printf(&quot;Lov stripe size %u\n&quot;, lump-&gt;lmm_stripe_size);
+        printf(&quot;Lov stripe count %hu\n&quot;, lump-&gt;lmm_stripe_count);
+        printf(&quot;Lov stripe offset %u\n&quot;, lump-&gt;lmm_stripe_offset);
+        for (i = 0; i &lt; lump-&gt;lmm_stripe_count; i++) {
+                printf(&quot;Object index %d Objid %llu\n&quot;, lump-&gt;lmm_objects[i].l_ost_idx, lump-&gt;lmm_objects[i].l_object_id);
         }
-    
- 
-   free(lump);
-   return rc;
-   
+
+        free(lump);
+        return rc;
+
 }
+
 /* Ping all OSTs that belong to this filesystem */
- 
 int ping_osts()
 {
-   DIR *dir;
-   struct dirent *d;
-   char osc_dir[100];
-   int rc;
- 
-   sprintf(osc_dir, &quot;/proc/fs/lustre/osc&quot;);
-   dir = opendir(osc_dir);
-   if (dir == NULL) {
-           printf(&quot;Can&apos;t open dir\n&quot;);
-           return -1;
-   }
-   while((d = readdir(dir)) != NULL) {
-           if ( d-&gt;d_type == DT_DIR ) {
-                   if (! strncmp(d-&gt;d_name, &quot;OSC&quot;, 3)) {
-                           printf(&quot;Pinging OSC %s &quot;, d-&gt;d_name);
-                           rc = llapi_ping(&quot;osc&quot;, d-&gt;d_name);
-                           if (rc) {
-                                   printf(&quot;  bad\n&quot;);
-                           } else {
-                                   printf(&quot;  good\n&quot;);
-                           }
-                   }
-           }
-   }
-   return 0;
- 
+        DIR *dir;
+        struct dirent *d;
+        char osc_dir[100];
+        int rc;
+
+        sprintf(osc_dir, &quot;/proc/fs/lustre/osc&quot;);
+        dir = opendir(osc_dir);
+        if (dir == NULL) {
+                printf(&quot;Can't open dir\n&quot;);
+                return -1;
+        }
+        while((d = readdir(dir)) != NULL) {
+                if ( d-&gt;d_type == DT_DIR ) {
+                        if (! strncmp(d-&gt;d_name, &quot;OSC&quot;, 3)) {
+                                printf(&quot;Pinging OSC %s &quot;, d-&gt;d_name);
+                                rc = llapi_ping(&quot;osc&quot;, d-&gt;d_name);
+                                if (rc) {
+                                        printf(&quot;  bad\n&quot;);
+                                } else {
+                                        printf(&quot;  good\n&quot;);
+                                }
+                        }
+                }
+        }
+        return 0;
+
 }
- 
+
 int main()
 {
-   int file;
-   int rc;
-   char filename[100];
-   char sys_cmd[100];
- 
-   sprintf(filename, &quot;%s/%s&quot;,MY_LUSTRE_DIR, TESTFILE);
-    
-   printf(&quot;Open a file with striping\n&quot;);
-   file = open_stripe_file();
-   if ( file &lt; 0 ) {
-           printf(&quot;Exiting\n&quot;);
-           exit(1);
-   
- 
- 
- 
-   }
-   printf(&quot;Getting uuid list\n&quot;);
-   rc = get_my_uuids(file);
-   printf(&quot;Write to the file\n&quot;);
-   rc = write_file(file);
-   rc = close_file(file);
-   printf(&quot;Listing LOV data\n&quot;);
-   rc = get_file_info(filename);
-   printf(&quot;Ping our OSTs\n&quot;);
-   rc = ping_osts();
- 
-   /* the results should match lfs getstripe */
-   printf(&quot;Confirming our results with lfs getstripe\n&quot;);
-   sprintf(sys_cmd, &quot;/usr/bin/lfs getstripe %s/%s&quot;, MY_LUSTRE_DIR, TESTFILE);
-   system(sys_cmd);
- 
-   printf(&quot;All done\n&quot;);
-   exit(rc);
-}  
-</screen>
+        int file;
+        int rc;
+        char filename[100];
+        char sys_cmd[100];
+
+        sprintf(filename, &quot;%s/%s&quot;,MY_LUSTRE_DIR, TESTFILE);
+
+        printf(&quot;Open a file with striping\n&quot;);
+        file = open_stripe_file();
+        if ( file &lt; 0 ) {
+                printf(&quot;Exiting\n&quot;);
+                exit(1);
+        }
+        printf(&quot;Getting uuid list\n&quot;);
+        rc = get_my_uuids(file);
+        printf(&quot;Write to the file\n&quot;);
+        rc = write_file(file);
+        rc = close_file(file);
+        printf(&quot;Listing LOV data\n&quot;);
+        rc = get_file_info(filename);
+        printf(&quot;Ping our OSTs\n&quot;);
+        rc = ping_osts();
+
+        /* the results should match lfs getstripe */
+        printf(&quot;Confirming our results with lfs getstripe\n&quot;);
+        sprintf(sys_cmd, &quot;/usr/bin/lfs getstripe %s/%s&quot;, MY_LUSTRE_DIR, TESTFILE);
+        system(sys_cmd);
+
+        printf(&quot;All done\n&quot;);
+        exit(rc);
+}
+</programlisting>
     <para><emphasis role="bold">Makefile for sample application:</emphasis></para>
     <screen> 
 gcc -g -O2 -Wall -o lustredemo libtest.c -llustreapi
