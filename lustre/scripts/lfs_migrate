@@ -20,7 +20,7 @@ LFS=${LFS:-lfs}
 
 usage() {
     cat -- <<USAGE 1>&2
-usage: lfs_migrate [-c <stripe_count>] [-h] [-l] [-n] [-q] [-R] [-s] [-y]
+usage: lfs_migrate [-c <stripe_count>] [-h] [-l] [-n] [-q] [-R] [-s] [-y] [-0]
                    [file|dir ...]
     -c <stripe_count>
        restripe file using the specified stripe count
@@ -31,6 +31,7 @@ usage: lfs_migrate [-c <stripe_count>] [-h] [-l] [-n] [-q] [-R] [-s] [-y]
     -R restripe file using default directory striping
     -s skip file data comparison after migrate
     -y answer 'y' to usage question
+    -0 input file names on stdin are separated by a null character
 
 The -c <stripe_count> option may not be specified at the same time as
 the -R option.
@@ -47,7 +48,7 @@ USAGE
 OPT_CHECK=y
 OPT_STRIPE_COUNT=""
 
-while getopts "c:hlnqRsy" opt $*; do
+while getopts "c:hlnqRsy0" opt $*; do
     case $opt in
 	c) OPT_STRIPE_COUNT=$OPTARG;;
 	l) OPT_NLINK=y;;
@@ -56,6 +57,7 @@ while getopts "c:hlnqRsy" opt $*; do
 	R) OPT_RESTRIPE=y;;
 	s) OPT_CHECK="";;
 	y) OPT_YES=y;;
+	0) OPT_NULL=y;;
 	h|\?) usage;;
     esac
 done
@@ -89,7 +91,7 @@ $RSYNC --help 2>&1 | grep -q acls && RSYNC_OPTS="$RSYNC_OPTS -A"
 strings $(which $RSYNC) 2>&1 | grep -q lustre && LFS=:
 
 lfs_migrate() {
-	while read OLDNAME; do
+	while IFS='' read -d '' OLDNAME; do
 		$ECHO -n "$OLDNAME: "
 
 		# avoid duplicate stat if possible
@@ -163,13 +165,17 @@ lfs_migrate() {
 }
 
 if [ "$#" -eq 0 ]; then
-	lfs_migrate
+	if [ "$OPT_NULL" ]; then
+		lfs_migrate
+	else
+		tr '\n' '\0' | lfs_migrate
+	fi
 else
 	while [ "$1" ]; do
 		if [ -d "$1" ]; then
-			lfs find "$1" -type f | lfs_migrate
+			lfs find "$1" -type f -print0 | lfs_migrate
 		else
-			echo $1 | lfs_migrate
+			echo -en "$1\0" | lfs_migrate
 		fi
 		shift
 	done
