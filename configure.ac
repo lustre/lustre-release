@@ -1,4 +1,4 @@
-
+AC_PREREQ([2.57])
 AC_INIT([Lustre], [LUSTRE_VERSION], [http://bugs.whamcloud.com/], [lustre])
 sinclude(lustre/autoconf/lustre-version.ac)
 
@@ -12,7 +12,7 @@ LC_CONFIG_SRCDIR
 
 AC_CANONICAL_SYSTEM
 
-AM_INIT_AUTOMAKE([1.9 tar-ustar])
+AM_INIT_AUTOMAKE([1.10 tar-ustar -Wno-portability])
 # AM_MAINTAINER_MODE
 
 AC_PROG_CC
