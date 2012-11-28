@@ -93,7 +93,7 @@ lfs_migrate() {
 		$ECHO -n "$OLDNAME: "
 
 		# avoid duplicate stat if possible
-		TYPE_LINK=($(stat -c "%h %F" "$OLDNAME" || true))
+		TYPE_LINK=($(LANG=C stat -c "%h %F" "$OLDNAME" || true))
 
 		# skip non-regular files, since they don't have any objects
 		# and there is no point in trying to migrate them.
