@@ -2871,6 +2871,7 @@ static inline struct cl_lock *cl_lock_at_page(const struct lu_env *env,
 					      struct cl_lock *except,
 					      int pending, int canceld)
 {
+	LASSERT(cl_object_header(obj) == cl_object_header(page->cp_obj));
 	return cl_lock_at_pgoff(env, obj, page->cp_index, except,
 				pending, canceld);
 }

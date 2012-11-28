@@ -1923,9 +1923,9 @@ static int check_and_discard_cb(const struct lu_env *env, struct cl_io *io,
         if (index >= info->clt_fn_index) {
                 struct cl_lock *tmp;
 
-                /* refresh non-overlapped index */
-                tmp = cl_lock_at_page(env, lock->cll_descr.cld_obj, page, lock,
-                                      1, 0);
+		/* refresh non-overlapped index */
+		tmp = cl_lock_at_pgoff(env, lock->cll_descr.cld_obj, index,
+					lock, 1, 0);
                 if (tmp != NULL) {
                         /* Cache the first-non-overlapped index so as to skip
                          * all pages within [index, clt_fn_index). This
