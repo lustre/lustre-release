@@ -1251,6 +1251,16 @@ test_61()
 }
 run_test 61 "Verify to not reuse orphan objects - bug 17025"
 
+# test_62 as seen it b2_1 please do not reuse test_62
+#test_62()
+#{
+#	zconf_umount `hostname` $DIR
+#	#define OBD_FAIL_PTLRPC_DELAY_IMP_FULL   0x516
+#	lctl set_param fail_loc=0x516
+#	mount_client $DIR
+#}
+#run_test 62 "Verify connection flags race - bug LU-1716"
+
 check_cli_ir_state()
 {
         local NODE=${1:-$HOSTNAME}
