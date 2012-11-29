@@ -79,9 +79,15 @@ make -j $RPM_BUILD_NCPUS -s
 
 %install
 make install DESTDIR=$RPM_BUILD_ROOT
+# Kernel module needs to be executable at the end of the install
+# section to allow the find-debuginfo.sh to produce a proper
+# debuginfo package.  Permissions will be corrected in the files
+# section.
+chmod 755 ${RPM_BUILD_ROOT}/lib/modules/%{kversion}/updates/kernel/fs/lustre-ldiskfs/ldiskfs.ko
 
 %files
-%attr(-, root, root) /lib/modules/%{kversion}/updates/kernel/fs/lustre-ldiskfs
+%defattr(644, root, root, 755)
+/lib/modules/%{kversion}/updates/kernel/fs/lustre-ldiskfs
 
 %post
 if [ -f /boot/System.map-%{kversion} ]; then

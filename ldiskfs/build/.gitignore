@@ -1,7 +1,0 @@
-/Rules
-/modules.order
-/Module.markers
-/lustre.spec
-/Module.symvers
-/Modules.symvers
-!Makefile
