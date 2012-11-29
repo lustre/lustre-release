@@ -1092,11 +1092,11 @@ setup_quota_old(){
     local quota_usrs=$QUOTA_USERS
 
     # get_filesystem_size
-    local disksz=$(lfs df $mntpt | grep "filesystem summary:"  | awk '{print $3}')
+    local disksz=$(lfs_df $mntpt | grep "summary"  | awk '{print $2}')
     local blk_soft=$((disksz + 1024))
     local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
 
-    local Inodes=$(lfs df -i $mntpt | grep "filesystem summary:"  | awk '{print $3}')
+    local Inodes=$(lfs_df -i $mntpt | grep "summary"  | awk '{print $2}')
     local i_soft=$Inodes
     local i_hard=$((i_soft + i_soft / 20))
 
@@ -1149,6 +1149,13 @@ restore_quota() {
 	fi
 }
 
+# Handle the case when there is a space in the lfs df
+# "filesystem summary" line the same as when there is no space.
+# This will allow fixing the "lfs df" summary line in the future.
+lfs_df() {
+	$LFS df $* | sed -e 's/filesystem /filesystem_/'
+}
+
 setup_quota(){
 	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
 		setup_quota_old $1
@@ -1175,13 +1182,11 @@ setup_quota(){
 	local quota_usrs=$QUOTA_USERS
 
 	# get_filesystem_size
-	local disksz=$(lfs df $mntpt | grep "filesystem summary:" |
-		     awk '{print $3}')
+	local disksz=$(lfs_df $mntpt | grep "summary" | awk '{print $2}')
 	local blk_soft=$((disksz + 1024))
 	local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
 
-	local inodes=$(lfs df -i $mntpt | grep "filesystem summary:" |
-		     awk '{print $3}')
+	local inodes=$(lfs_df -i $mntpt | grep "summary" | awk '{print $2}')
 	local i_soft=$inodes
 	local i_hard=$((i_soft + i_soft / 20))
 

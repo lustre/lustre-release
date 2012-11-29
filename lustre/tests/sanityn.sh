@@ -499,7 +499,7 @@ run_test 24a "lfs df [-ih] [path] test ========================="
 
 test_24b() {
 	touch $DIR1/$tfile
-	fsnum=`lfs df | grep -c "filesystem summary:"`
+	fsnum=$(lfs_df | grep -c "summary")
 	[ $fsnum -eq 2 ] || error "lfs df shows $fsnum != 2 filesystems."
 }
 run_test 24b "lfs df should show both filesystems ==============="

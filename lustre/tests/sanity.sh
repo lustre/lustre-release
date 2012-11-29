@@ -868,7 +868,7 @@ simple_cleanup_common() {
 
 test_24v() {
 	local NRFILES=100000
-	local FREE_INODES=`lfs df -i|grep "filesystem summary" | awk '{print $5}'`
+	local FREE_INODES=$(lfs_df -i | grep "summary" | awk '{print $4}')
 	[ $FREE_INODES -lt $NRFILES ] && \
 		skip "not enough free inodes $FREE_INODES required $NRFILES" &&
 		return
