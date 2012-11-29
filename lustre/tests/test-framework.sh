@@ -2109,9 +2109,21 @@ combined_mgs_mds () {
     [[ $MDSDEV1 = $MGSDEV ]] && [[ $mds1_HOST = $mgs_HOST ]]
 }
 
-mkfs_opts () {
+facet_number() {
     local facet=$1
 
+    local number=$(echo -n $facet | sed -e 's/^fs[0-9]\+//' |
+                   sed -e 's/^[a-z]\+//')
+
+    [[ -z $number ]] && number=1
+
+    echo -n $number
+}
+
+mkfs_opts() {
+    local facet=$1
+
+    local index=$(($(facet_number $facet) - 1))
     local tgt=$(echo $facet | tr -d [:digit:] | tr "[:lower:]" "[:upper:]")
     local optvar=${tgt}_MKFS_OPTS
     local opt=${!optvar}
@@ -2119,8 +2131,11 @@ mkfs_opts () {
     # FIXME: ! combo  mgs/mds + mgsfailover is not supported yet
     [[ $facet = mgs ]] && echo $opt && return
 
+    # --index option
+    [[ $opt != *--index* ]] && opt+=" --index=$index"
+
     # 1.
-    # --failnode options 
+    # --failnode options
     local var=${facet}failover_HOST
     if [ x"${!var}" != x ] && [ x"${!var}" != x$(facet_host $facet) ] ; then
         local failnode=$(h2$NETTYPE ${!var})
@@ -2441,7 +2456,12 @@ init_param_vars () {
             setup_quota $MOUNT || return 2
         else
             echo "disable quota as required"
-            $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
+            local major=$(get_mds_version_major $SINGLEMDS)
+            local minor=$(get_mds_version_minor $SINGLEMDS)
+
+            if [[ $major -le 2 && $minor -le 2 ]]; then
+                $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
+            fi
         fi
     fi
 
@@ -2609,8 +2629,10 @@ check_and_setup_lustre() {
         set_default_debug_nodes $(comma_list $(nodes_list))
     fi
 
-    init_gss
-    set_flavor_all $SEC
+    if $GSS; then
+        init_gss
+        set_flavor_all $SEC
+    fi
 
     if [ "$ONLY" == "setup" ]; then
         exit 0
