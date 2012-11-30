@@ -1298,6 +1298,10 @@ ll_statahead_enter(struct inode *dir, struct dentry **dentryp, int only_unplug)
         if (lli->lli_opendir_pid != cfs_curproc_pid())
                 return -EAGAIN;
 
+	/* statahead has been stopped */
+	if (lli->lli_opendir_key == NULL)
+		return -EAGAIN;
+
         ldd = ll_d2d(*dentryp);
         /*
          * When stats a dentry, the system trigger more than once "revalidate"
