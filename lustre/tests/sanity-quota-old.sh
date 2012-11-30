@@ -147,11 +147,6 @@ FAIL_ON_ERROR=false
 run_test_with_stat() {
 	(($# != 2)) && error "the number of arguments is wrong"
 
-	if [ "$USE_OFD" == "yes" ]; then
-		run_test "$@"
-		return
-	fi
-
 	do_facet $SINGLEMDS "lctl set_param lquota.mdd_obd-${FSNAME}-MDT*.stats=0" > /dev/null
 	for j in `seq $OSTCOUNT`; do
 	    do_facet ost$j "lctl set_param lquota.${FSNAME}-OST*.stats=0" > /dev/null

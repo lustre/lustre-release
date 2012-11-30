@@ -72,8 +72,7 @@ ZFS_MKFS_OPTS=${ZFS_MKFS_OPTS:-}
 # LOAD_MODULES_REMOTE is true or b) modprobe(8) is configured to
 # blacklist the undesired (and aliased the other, if necessary).
 #
-USE_OFD=${USE_OFD:-yes}
-LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-true}
+LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
 
 STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}

@@ -282,8 +282,6 @@ init_test_env() {
             IDENTITY_UPCALL=false
             ;;
     esac
-    USE_OFD=${USE_OFD:-yes}
-    [ "$USE_OFD" = "yes" ] && LOAD_MODULES_REMOTE=true
 
     export LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
 
@@ -425,8 +423,6 @@ llite_lloop_enabled() {
 }
 
 load_modules_local() {
-	[ $(facet_fstype ost1) == "zfs" ] && export USE_OFD=yes
-
 	if [ -n "$MODPROBE" ]; then
 		# use modprobe
 		echo "Using modprobe to load modules"
@@ -2485,8 +2481,6 @@ get_env_vars() {
 		value=${!var}
 		echo -n " ${var}=\"$value\""
 	done
-
-	echo -n " USE_OFD=$USE_OFD"
 
 	for facet in ${facets//,/ }; do
 		var=${facet}_FSTYPE
