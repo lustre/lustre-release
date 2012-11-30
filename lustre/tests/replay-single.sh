@@ -34,7 +34,7 @@ check_and_setup_lustre
 mkdir -p $DIR
 
 assert_DIR
-rm -rf $DIR/[df][0-9]*
+rm -rf $DIR/[df][0-9]* $DIR/f.$TESTSUITE.*
 
 # LU-482 Avert LVM and VM inability to flush caches in pre .33 kernels
 if [ $LINUX_VERSION_CODE -lt $(version_code 2.6.33) ]; then
@@ -894,49 +894,53 @@ test_43() { # bug 2530
 run_test 43 "mds osc import failure during recovery; don't LBUG"
 
 test_44a() { # was test_44
-    local at_max_saved=0
+	local at_max_saved=0
 
-    mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || return 2
-    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
+	local mdcdev=$($LCTL get_param -n devices |
+		awk "/ ${FSNAME}-MDT0000-mdc-/ {print \$1}")
+	[ "$mdcdev" ] || return 2
+	[ $(echo $mdcdev | wc -w) -eq 1 ] ||
+		{ echo mdcdev=$mdcdev; $LCTL dl; return 3; }
 
-    # adaptive timeouts slow this way down
-    if at_is_enabled; then
-        at_max_saved=$(at_max_get mds)
-        at_max_set 40 mds
-    fi
+        # adaptive timeouts slow this way down
+	if at_is_enabled; then
+		at_max_saved=$(at_max_get mds)
+		at_max_set 40 mds
+	fi
 
-    for i in `seq 1 10`; do
-        echo "$i of 10 ($(date +%s))"
-        do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
-        #define OBD_FAIL_TGT_CONN_RACE     0x701
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000701"
-        # lctl below may fail, it is valid case
-        $LCTL --device $mdcdev recover
-        df $MOUNT
-    done
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-    [ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds
-    return 0
+	for i in `seq 1 10`; do
+		echo "$i of 10 ($(date +%s))"
+		do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
+#define OBD_FAIL_TGT_CONN_RACE     0x701
+		do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000701"
+                # lctl below may fail, it is valid case
+		$LCTL --device $mdcdev recover
+		df $MOUNT
+	done
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	[ $at_max_saved -ne 0 ] && at_max_set $at_max_saved mds
+	return 0
 }
 run_test 44a "race in target handle connect"
 
 test_44b() {
-    local mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || return 2
-    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
+	local mdcdev=$($LCTL get_param -n devices |
+		awk "/ ${FSNAME}-MDT0000-mdc-/ {print \$1}")
+	[ "$mdcdev" ] || return 2
+	[ $(echo $mdcdev | wc -w) -eq 1 ] ||
+		{ echo mdcdev=$mdcdev; $LCTL dl; return 3; }
 
-    for i in `seq 1 10`; do
-        echo "$i of 10 ($(date +%s))"
-        do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
+	for i in `seq 1 10`; do
+		echo "$i of 10 ($(date +%s))"
+		do_facet $SINGLEMDS "lctl get_param -n mdt.*.mdt.timeouts | grep service"
         #define OBD_FAIL_TGT_DELAY_RECONNECT 0x704
-        do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000704"
+		do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000704"
         # lctl below may fail, it is valid case
-        $LCTL --device $mdcdev recover
-        df $MOUNT
-    done
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
-    return 0
+		$LCTL --device $mdcdev recover
+		df $MOUNT
+	done
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+	return 0
 }
 run_test 44b "race in target handle connect"
 
@@ -955,28 +959,30 @@ run_test 44c "race in target handle connect"
 
 # Handle failed close
 test_45() {
-    mdcdev=`lctl get_param -n devices | awk '/MDT0000-mdc-/ {print $1}'`
-    [ "$mdcdev" ] || return 2
-    [ $(echo $mdcdev | wc -w) -eq 1 ] || { echo $mdcdev=$mdcdev && return 3; }
+	local mdcdev=$($LCTL get_param -n devices |
+		awk "/ ${FSNAME}-MDT0000-mdc-/ {print \$1}")
+	[ "$mdcdev" ] || return 2
+	[ $(echo $mdcdev | wc -w) -eq 1 ] ||
+		{ echo mdcdev=$mdcdev; $LCTL dl; return 3; }
 
-    $LCTL --device $mdcdev recover || return 6 
+	$LCTL --device $mdcdev recover || return 6
 
-    multiop_bg_pause $DIR/$tfile O_c || return 1
-    pid=$!
+	multiop_bg_pause $DIR/$tfile O_c || return 1
+	pid=$!
 
-    # This will cause the CLOSE to fail before even
-    # allocating a reply buffer
-    $LCTL --device $mdcdev deactivate || return 4
+	# This will cause the CLOSE to fail before even
+	# allocating a reply buffer
+	$LCTL --device $mdcdev deactivate || return 4
 
-    # try the close
-    kill -USR1 $pid
-    wait $pid || return 1
+	# try the close
+	kill -USR1 $pid
+	wait $pid || return 1
 
-    $LCTL --device $mdcdev activate || return 5
-    sleep 1
+	$LCTL --device $mdcdev activate || return 5
+	sleep 1
 
-    $CHECKSTAT -t file $DIR/$tfile || return 2
-    return 0
+	$CHECKSTAT -t file $DIR/$tfile || return 2
+	return 0
 }
 run_test 45 "Handle failed close"
 
