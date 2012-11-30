@@ -278,6 +278,10 @@ rebuild:
 
         ptlrpc_request_set_replen(req);
 
+	/* ask ptlrpc not to resend on EINPROGRESS since we have our own retry
+	 * logic here */
+	req->rq_no_retry_einprogress = 1;
+
         if (resends) {
                 req->rq_generation_set = 1;
                 req->rq_import_generation = generation;

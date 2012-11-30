@@ -1214,6 +1214,15 @@ static int after_reply(struct ptlrpc_request *req)
 		req->rq_resend = 1;
 		req->rq_nr_resend++;
 
+		/* allocate new xid to avoid reply reconstruction */
+		if (!req->rq_bulk) {
+			/* new xid is already allocated for bulk in
+			 * ptlrpc_check_set() */
+			req->rq_xid = ptlrpc_next_xid();
+			DEBUG_REQ(D_RPCTRACE, req, "Allocating new xid for "
+				  "resend on EINPROGRESS");
+		}
+
 		/* Readjust the timeout for current conditions */
 		ptlrpc_at_set_req_timeout(req);
 		/* delay resend to give a chance to the server to get ready.
