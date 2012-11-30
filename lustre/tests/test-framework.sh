@@ -336,7 +336,7 @@ version_code() {
     # split arguments like "1.8.6-wc3" into "1", "8", "6", "wc3"
     eval set -- $(tr "[:punct:]" " " <<< $*)
 
-    echo -n $((($1 << 16) | ($2 << 8) | $3))
+    echo -n "$((($1 << 16) | ($2 << 8) | $3))"
 }
 
 export LINUX_VERSION=$(uname -r | sed -e "s/[-.]/ /3" -e "s/ .*//")
@@ -2109,42 +2109,42 @@ obd_name() {
 }
 
 replay_barrier() {
-    local facet=$1
-    do_facet $facet "sync; sync; sync"
-    df $MOUNT
+	local facet=$1
+	do_facet $facet "sync; sync; sync"
+	df $MOUNT
 
-    # make sure there will be no seq change
-    local clients=${CLIENTS:-$HOSTNAME}
-    local f=fsa-\\\$\(hostname\)
-    do_nodes $clients "mcreate $MOUNT/$f; rm $MOUNT/$f"
-    do_nodes $clients "if [ -d $MOUNT2 ]; then mcreate $MOUNT2/$f; rm $MOUNT2/$f; fi"
+        # make sure there will be no seq change
+	local clients=${CLIENTS:-$HOSTNAME}
+	local f=fsa-\\\$\(hostname\)
+	do_nodes $clients "mcreate $MOUNT/$f; rm $MOUNT/$f"
+	do_nodes $clients "if [ -d $MOUNT2 ]; then mcreate $MOUNT2/$f; rm $MOUNT2/$f; fi"
 
-    local svc=${facet}_svc
-    do_facet $facet $LCTL --device %${!svc} notransno
-    do_facet $facet $LCTL --device %${!svc} readonly
-    do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
-    $LCTL mark "local REPLAY BARRIER on ${!svc}"
+	local svc=${facet}_svc
+	do_facet $facet $LCTL --device ${!svc} notransno
+	do_facet $facet $LCTL --device ${!svc} readonly
+	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
+	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
 replay_barrier_nodf() {
-    local facet=$1    echo running=${running}
-    do_facet $facet "sync; sync; sync"
-    local svc=${facet}_svc
-    echo Replay barrier on ${!svc}
-    do_facet $facet $LCTL --device %${!svc} notransno
-    do_facet $facet $LCTL --device %${!svc} readonly
-    do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
-    $LCTL mark "local REPLAY BARRIER on ${!svc}"
+	local facet=$1    echo running=${running}
+	do_facet $facet "sync; sync; sync"
+	local svc=${facet}_svc
+	echo Replay barrier on ${!svc}
+	do_facet $facet $LCTL --device ${!svc} notransno
+	do_facet $facet $LCTL --device ${!svc} readonly
+	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
+	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
 replay_barrier_nosync() {
-    local facet=$1    echo running=${running}
-    local svc=${facet}_svc
-    echo Replay barrier on ${!svc}
-    do_facet $facet $LCTL --device %${!svc} notransno
-    do_facet $facet $LCTL --device %${!svc} readonly
-    do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
-    $LCTL mark "local REPLAY BARRIER on ${!svc}"
+	local facet=$1    echo running=${running}
+	local svc=${facet}_svc
+	echo Replay barrier on ${!svc}
+	do_facet $facet $LCTL --device ${!svc} notransno
+	do_facet $facet $LCTL --device ${!svc} readonly
+	do_facet $facet $LCTL mark "$facet REPLAY BARRIER on ${!svc}"
+	$LCTL mark "local REPLAY BARRIER on ${!svc}"
 }
 
 mds_evict_client() {
