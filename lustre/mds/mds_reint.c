@@ -97,19 +97,19 @@ struct dentry *mds_lookup(struct obd_device *obd, const char *fid_name,
         if (!IS_ERR(dchild) && (dchild->d_inode != NULL) &&
             unlikely((lsd->lsd_feature_incompat & OBD_INCOMPAT_FID) ||
                       OBD_FAIL_CHECK(OBD_FAIL_MDS_REMOVE_COMMON_EA))) {
-                struct inode *inode = dchild->d_inode; 
+                struct inode *inode = dchild->d_inode;
                 void         *handle;
 
                 LOCK_INODE_MUTEX(inode);
                 if (fsfilt_get_md(obd, inode, NULL, 0, "lma") > 0) {
+                        int rc2;
+
                         handle = fsfilt_start(obd, inode,
                                               FSFILT_OP_SETATTR, NULL);
                         if (IS_ERR(handle))
                                 GOTO(err, rc = PTR_ERR(handle));
 
                         rc = fsfilt_set_md(obd, inode, handle, NULL, 0, "lma");
-                        if (rc)
-                                GOTO(err, rc);
 
                         /* Force sync. Needed to avoid a case when client gets
                          * IGIF, MDS fails to write this info to disk, upgrade
@@ -119,9 +119,9 @@ struct dentry *mds_lookup(struct obd_device *obd, const char *fid_name,
                          * with LMA, i.e. created after upgrade.
                          * As downgrade is an emergency unexpected case, this
                          * is a feasible way. */
-                        rc = fsfilt_commit(obd, inode, handle, 1);
-                        if (rc)
-                                GOTO(err, rc);
+                        rc2 = fsfilt_commit(obd, inode, handle, 1);
+                        if (rc != 0 || rc2 != 0)
+                                GOTO(err, rc = rc ?: rc2);
                 }
                 UNLOCK_INODE_MUTEX(inode);
         }
