@@ -233,6 +233,12 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_PDO_LOCK2           0x146
 #define OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147
 #define OBD_FAIL_MDS_NEGATIVE_POSITIVE	 0x148
+#define OBD_FAIL_MDS_HSM_STATE_GET_NET		0x149
+#define OBD_FAIL_MDS_HSM_STATE_SET_NET		0x14a
+#define OBD_FAIL_MDS_HSM_PROGRESS_NET		0x14b
+#define OBD_FAIL_MDS_HSM_REQUEST_NET		0x14c
+#define OBD_FAIL_MDS_HSM_CT_REGISTER_NET	0x14d
+#define OBD_FAIL_MDS_HSM_CT_UNREGISTER_NET	0x14e
 
 /* layout lock */
 #define OBD_FAIL_MDS_NO_LL_GETATTR	 0x170

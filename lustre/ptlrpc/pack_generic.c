@@ -2485,33 +2485,18 @@ void lustre_swab_hsm_state(struct hsm_state_set_ioc *hssi)
 }
 EXPORT_SYMBOL(lustre_swab_hsm_state);
 
-void lustre_swab_hsm_user_request(struct hsm_user_request *hur)
+void lustre_swab_hsm_extent(struct hsm_extent *extent)
 {
-        int i;
-
-        __swab32s(&hur->hur_action);
-        __swab32s(&hur->hur_itemcount);
-        __swab32s(&hur->hur_data_len);
-        for (i = 0; i < hur->hur_itemcount; i++) {
-                struct hsm_user_item *hui = &hur->hur_user_item[i];
-                lustre_swab_lu_fid(&hui->hui_fid);
-                __swab64s(&hui->hui_extent.offset);
-                __swab64s(&hui->hui_extent.length);
-        }
-        /* Note: data blob is not swabbed here */
+	__swab64s(&extent->offset);
+	__swab64s(&extent->length);
 }
-EXPORT_SYMBOL(lustre_swab_hsm_user_request);
 
-void lustre_swab_hsm_progress(struct hsm_progress *hp)
+void lustre_swab_hsm_user_item(struct hsm_user_item *hui)
 {
-        lustre_swab_lu_fid(&hp->hp_fid);
-        __swab64s(&hp->hp_cookie);
-        __swab64s(&hp->hp_extent.offset);
-        __swab64s(&hp->hp_extent.length);
-        __swab16s(&hp->hp_flags);
-        __swab16s(&hp->hp_errval);
+	lustre_swab_lu_fid(&hui->hui_fid);
+	lustre_swab_hsm_extent(&hui->hui_extent);
 }
-EXPORT_SYMBOL(lustre_swab_hsm_progress);
+EXPORT_SYMBOL(lustre_swab_hsm_user_item);
 
 void lustre_swab_layout_intent(struct layout_intent *li)
 {
@@ -2521,3 +2506,15 @@ void lustre_swab_layout_intent(struct layout_intent *li)
 	__swab64s(&li->li_end);
 }
 EXPORT_SYMBOL(lustre_swab_layout_intent);
+
+void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk)
+{
+	lustre_swab_lu_fid(&hpk->hpk_fid);
+	__swab64s(&hpk->hpk_cookie);
+	__swab64s(&hpk->hpk_extent.offset);
+	__swab64s(&hpk->hpk_extent.length);
+	__swab16s(&hpk->hpk_flags);
+	__swab16s(&hpk->hpk_errval);
+}
+EXPORT_SYMBOL(lustre_swab_hsm_progress_kernel);
+

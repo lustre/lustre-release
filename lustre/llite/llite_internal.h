@@ -784,6 +784,7 @@ int ll_merge_lvb(struct inode *inode);
 int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg);
 int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg);
 int ll_fid2path(struct inode *inode, void *arg);
+int ll_data_version(struct inode *inode, __u64 *data_version, int extent_lock);
 
 /* llite/dcache.c */
 
@@ -855,6 +856,8 @@ char *ll_get_fsname(struct super_block *sb, char *buf, int buflen);
 /* llite/llite_nfs.c */
 extern struct export_operations lustre_export_operations;
 __u32 get_uuid2int(const char *name, int len);
+struct inode *search_inode_for_lustre(struct super_block *sb,
+				      const struct lu_fid *fid);
 
 /* llite/special.c */
 extern struct inode_operations ll_special_inode_operations;

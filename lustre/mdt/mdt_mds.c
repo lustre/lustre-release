@@ -141,7 +141,12 @@ DEF_MDT_HDL(0		| HABEO_REFERO,	MDS_PIN,	  mdt_pin),
 DEF_MDT_HDL_VAR(0,			MDS_SYNC,	  mdt_sync),
 DEF_MDT_HDL(HABEO_CORPUS| HABEO_REFERO,	MDS_IS_SUBDIR,	  mdt_is_subdir),
 DEF_MDT_HDL(0,				MDS_QUOTACHECK,	  mdt_quotacheck),
-DEF_MDT_HDL(0,				MDS_QUOTACTL,	  mdt_quotactl)
+DEF_MDT_HDL(0,				MDS_QUOTACTL,	  mdt_quotactl),
+DEF_MDT_HDL(0		| HABEO_REFERO, MDS_HSM_PROGRESS, mdt_hsm_progress),
+DEF_MDT_HDL(0		| HABEO_REFERO, MDS_HSM_CT_REGISTER,
+						mdt_hsm_ct_register),
+DEF_MDT_HDL(0		| HABEO_REFERO, MDS_HSM_CT_UNREGISTER,
+						mdt_hsm_ct_unregister),
 };
 
 #define DEF_OBD_HDL(flags, name, fn)					\

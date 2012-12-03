@@ -78,61 +78,63 @@ static int mdc_wr_max_rpcs_in_flight(struct file *file, const char *buffer,
 
 /* temporary for testing */
 static int mdc_wr_kuc(struct file *file, const char *buffer,
-                      unsigned long count, void *data)
+		      unsigned long count, void *data)
 {
-        struct obd_device *obd = data;
-        struct kuc_hdr *lh;
-        struct hsm_action_list *hal;
-        struct hsm_action_item *hai;
-        int len;
-        int fd, rc;
+	struct obd_device	*obd = data;
+	struct kuc_hdr		*lh;
+	struct hsm_action_list	*hal;
+	struct hsm_action_item	*hai;
+	int			 len;
+	int			 fd, rc;
+	ENTRY;
 
-        rc = lprocfs_write_helper(buffer, count, &fd);
-        if (rc)
-                return rc;
+	rc = lprocfs_write_helper(buffer, count, &fd);
+	if (rc)
+		RETURN(rc);
 
-        if (fd < 0)
-                return -ERANGE;
-        CWARN("message to fd %d\n", fd);
+	if (fd < 0)
+		RETURN(-ERANGE);
+	CWARN("message to fd %d\n", fd);
 
-        len = sizeof(*lh) + sizeof(*hal) + MTI_NAME_MAXLEN +
-                /* for mockup below */ 2 * cfs_size_round(sizeof(*hai));
+	len = sizeof(*lh) + sizeof(*hal) + MTI_NAME_MAXLEN +
+		/* for mockup below */ 2 * cfs_size_round(sizeof(*hai));
 
-        OBD_ALLOC(lh, len);
+	OBD_ALLOC(lh, len);
 
-        lh->kuc_magic = KUC_MAGIC;
-        lh->kuc_transport = KUC_TRANSPORT_HSM;
-        lh->kuc_msgtype = HMT_ACTION_LIST;
-        lh->kuc_msglen = len;
+	lh->kuc_magic = KUC_MAGIC;
+	lh->kuc_transport = KUC_TRANSPORT_HSM;
+	lh->kuc_msgtype = HMT_ACTION_LIST;
+	lh->kuc_msglen = len;
 
-        hal = (struct hsm_action_list *)(lh + 1);
-        hal->hal_version = HAL_VERSION;
-        hal->hal_archive_num = 1;
-        obd_uuid2fsname(hal->hal_fsname, obd->obd_name, MTI_NAME_MAXLEN);
+	hal = (struct hsm_action_list *)(lh + 1);
+	hal->hal_version = HAL_VERSION;
+	hal->hal_archive_num = 1;
+	hal->hal_flags = 0;
+	obd_uuid2fsname(hal->hal_fsname, obd->obd_name, MTI_NAME_MAXLEN);
 
-        /* mock up an action list */
-        hal->hal_count = 2;
-        hai = hai_zero(hal);
-        hai->hai_action = HSMA_ARCHIVE;
-        hai->hai_fid.f_oid = 5;
-        hai->hai_len = sizeof(*hai);
-        hai = hai_next(hai);
-        hai->hai_action = HSMA_RESTORE;
-        hai->hai_fid.f_oid = 10;
-        hai->hai_len = sizeof(*hai);
+	/* mock up an action list */
+	hal->hal_count = 2;
+	hai = hai_zero(hal);
+	hai->hai_action = HSMA_ARCHIVE;
+	hai->hai_fid.f_oid = 5;
+	hai->hai_len = sizeof(*hai);
+	hai = hai_next(hai);
+	hai->hai_action = HSMA_RESTORE;
+	hai->hai_fid.f_oid = 10;
+	hai->hai_len = sizeof(*hai);
 
-        /* This works for either broadcast or unicast to a single fd */
-        if (fd == 0) {
-                rc = libcfs_kkuc_group_put(KUC_GRP_HSM, lh);
-        } else {
-                cfs_file_t *fp = cfs_get_fd(fd);
-                rc = libcfs_kkuc_msg_put(fp, lh);
-                cfs_put_file(fp);
-        }
-        OBD_FREE(lh, len);
-        if (rc < 0)
-                return rc;
-        return count;
+	/* This works for either broadcast or unicast to a single fd */
+	if (fd == 0) {
+		rc = libcfs_kkuc_group_put(KUC_GRP_HSM, lh);
+	} else {
+		cfs_file_t *fp = cfs_get_fd(fd);
+		rc = libcfs_kkuc_msg_put(fp, lh);
+		cfs_put_file(fp);
+	}
+	OBD_FREE(lh, len);
+	if (rc < 0)
+		RETURN(rc);
+	RETURN(count);
 }
 
 static struct lprocfs_vars lprocfs_mdc_obd_vars[] = {

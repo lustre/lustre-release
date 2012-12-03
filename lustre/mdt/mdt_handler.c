@@ -3100,6 +3100,10 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         case MDS_SETXATTR:
         case MDS_SET_INFO:
         case MDS_GET_INFO:
+	case MDS_HSM_PROGRESS:
+	case MDS_HSM_REQUEST:
+	case MDS_HSM_CT_REGISTER:
+	case MDS_HSM_CT_UNREGISTER:
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
         case QUOTA_DQACQ:
@@ -5623,63 +5627,6 @@ int mdt_obd_postrecov(struct obd_device *obd)
         rc = mdt_postrecov(&env, mdt_dev(obd->obd_lu_dev));
         lu_env_fini(&env);
         return rc;
-}
-
-/**
- * Send a copytool req to a client
- * Note this sends a request RPC from a server (MDT) to a client (MDC),
- * backwards of normal comms.
- */
-int mdt_hsm_copytool_send(struct obd_export *exp)
-{
-        struct kuc_hdr *lh;
-        struct hsm_action_list *hal;
-        struct hsm_action_item *hai;
-        int rc, len;
-        ENTRY;
-
-        CWARN("%s: writing to mdc at %s\n", exp->exp_obd->obd_name,
-              libcfs_nid2str(exp->exp_connection->c_peer.nid));
-
-        len = sizeof(*lh) + sizeof(*hal) + MTI_NAME_MAXLEN +
-                /* for mockup below */ 2 * cfs_size_round(sizeof(*hai));
-        OBD_ALLOC(lh, len);
-        if (lh == NULL)
-                RETURN(-ENOMEM);
-
-        lh->kuc_magic = KUC_MAGIC;
-        lh->kuc_transport = KUC_TRANSPORT_HSM;
-        lh->kuc_msgtype = HMT_ACTION_LIST;
-        lh->kuc_msglen = len;
-
-        hal = (struct hsm_action_list *)(lh + 1);
-        hal->hal_version = HAL_VERSION;
-        hal->hal_archive_num = 1;
-        obd_uuid2fsname(hal->hal_fsname, exp->exp_obd->obd_name,
-                        MTI_NAME_MAXLEN);
-
-        /* mock up an action list */
-        hal->hal_count = 2;
-        hai = hai_zero(hal);
-        hai->hai_action = HSMA_ARCHIVE;
-        hai->hai_fid.f_oid = 0xA00A;
-        hai->hai_len = sizeof(*hai);
-        hai = hai_next(hai);
-        hai->hai_action = HSMA_RESTORE;
-        hai->hai_fid.f_oid = 0xB00B;
-        hai->hai_len = sizeof(*hai);
-
-        /* Uses the ldlm reverse import; this rpc will be seen by
-          the ldlm_callback_handler */
-        rc = do_set_info_async(exp->exp_imp_reverse,
-                               LDLM_SET_INFO, LUSTRE_OBD_VERSION,
-                               sizeof(KEY_HSM_COPYTOOL_SEND),
-                               KEY_HSM_COPYTOOL_SEND,
-                               len, lh, NULL);
-
-        OBD_FREE(lh, len);
-
-        RETURN(rc);
 }
 
 static struct obd_ops mdt_obd_device_ops = {

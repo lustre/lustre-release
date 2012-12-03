@@ -39,7 +39,7 @@
  * The copytool acts on action requests from Lustre to copy files to and from
  * an HSM archive system.
  *
- * Note: under Linux, until llapi_copytool_fini is called (or the program is
+ * Note: under Linux, until llapi_hsm_copytool_fini is called (or the program is
  * killed), the libcfs module will be referenced and unremovable,
  * even after Lustre services stop.
  */
@@ -63,7 +63,7 @@ void handler(int signal ) {
          * and doesn't remove us from mtab (EINPROGRESS). The lustre client
          * does successfully unmount and the mount is actually gone, but the
          * mtab entry remains. So this just makes mtab happier. */
-        llapi_copytool_fini(&ctdata);
+	llapi_hsm_copytool_fini(&ctdata);
         exit(1);
 }
 
@@ -94,7 +94,7 @@ int main(int argc, char **argv) {
                 return -EINVAL;
         }
 
-        rc = llapi_copytool_start(&ctdata, argv[optind], 0,
+	rc = llapi_hsm_copytool_start(&ctdata, argv[optind], 0,
                                   ARRAY_SIZE(archives), archives);
         if (rc < 0) {
                 fprintf(stderr, "Can't start copytool interface: %s\n",
@@ -103,7 +103,7 @@ int main(int argc, char **argv) {
         }
 
         if (test)
-                return -llapi_copytool_fini(&ctdata);
+		return -llapi_hsm_copytool_fini(&ctdata);
 
         printf("Waiting for message from kernel (pid=%d)\n", getpid());
 
@@ -114,7 +114,7 @@ int main(int argc, char **argv) {
                 struct hsm_action_item *hai;
                 int msgsize, i = 0;
 
-                rc = llapi_copytool_recv(ctdata, &hal, &msgsize);
+		rc = llapi_hsm_copytool_recv(ctdata, &hal, &msgsize);
                 if (rc == -ESHUTDOWN) {
                         fprintf(stderr, "shutting down");
                         break;
@@ -139,10 +139,10 @@ int main(int argc, char **argv) {
                         hai = hai_next(hai);
                 }
 
-                llapi_copytool_free(&hal);
+		llapi_hsm_copytool_free(&hal);
         }
 
-        llapi_copytool_fini(&ctdata);
+	llapi_hsm_copytool_fini(&ctdata);
 
         return -rc;
 }

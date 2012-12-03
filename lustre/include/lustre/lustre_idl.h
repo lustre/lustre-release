@@ -1821,28 +1821,35 @@ typedef enum {
 
 /* opcodes */
 typedef enum {
-        MDS_GETATTR      = 33,
-        MDS_GETATTR_NAME = 34,
-        MDS_CLOSE        = 35,
-        MDS_REINT        = 36,
-        MDS_READPAGE     = 37,
-        MDS_CONNECT      = 38,
-        MDS_DISCONNECT   = 39,
-        MDS_GETSTATUS    = 40,
-        MDS_STATFS       = 41,
-        MDS_PIN          = 42,
-        MDS_UNPIN        = 43,
-        MDS_SYNC         = 44,
-        MDS_DONE_WRITING = 45,
-        MDS_SET_INFO     = 46,
-        MDS_QUOTACHECK   = 47,
-        MDS_QUOTACTL     = 48,
-        MDS_GETXATTR     = 49,
-        MDS_SETXATTR     = 50, /* obsolete, now it's MDS_REINT op */
-        MDS_WRITEPAGE    = 51,
-        MDS_IS_SUBDIR    = 52,
-        MDS_GET_INFO     = 53,
-        MDS_LAST_OPC
+	MDS_GETATTR		= 33,
+	MDS_GETATTR_NAME	= 34,
+	MDS_CLOSE		= 35,
+	MDS_REINT		= 36,
+	MDS_READPAGE		= 37,
+	MDS_CONNECT		= 38,
+	MDS_DISCONNECT		= 39,
+	MDS_GETSTATUS		= 40,
+	MDS_STATFS		= 41,
+	MDS_PIN			= 42,
+	MDS_UNPIN		= 43,
+	MDS_SYNC		= 44,
+	MDS_DONE_WRITING	= 45,
+	MDS_SET_INFO		= 46,
+	MDS_QUOTACHECK		= 47,
+	MDS_QUOTACTL		= 48,
+	MDS_GETXATTR		= 49,
+	MDS_SETXATTR		= 50, /* obsolete, now it's MDS_REINT op */
+	MDS_WRITEPAGE		= 51,
+	MDS_IS_SUBDIR		= 52,
+	MDS_GET_INFO		= 53,
+	MDS_HSM_STATE_GET	= 54,
+	MDS_HSM_STATE_SET	= 55,
+	MDS_HSM_ACTION		= 56,
+	MDS_HSM_PROGRESS	= 57,
+	MDS_HSM_REQUEST		= 58,
+	MDS_HSM_CT_REGISTER	= 59,
+	MDS_HSM_CT_UNREGISTER	= 60,
+	MDS_LAST_OPC
 } mds_cmd_t;
 
 #define MDS_FIRST_OPC    MDS_GETATTR
@@ -3292,6 +3299,28 @@ struct layout_intent {
 };
 
 void lustre_swab_layout_intent(struct layout_intent *li);
+
+/**
+ * On the wire version of hsm_progress structure.
+ *
+ * Contains the userspace hsm_progress and some internal fields.
+ */
+struct hsm_progress_kernel {
+	/* Field taken from struct hsm_progress */
+	lustre_fid		hpk_fid;
+	__u64			hpk_cookie;
+	struct hsm_extent	hpk_extent;
+	__u16			hpk_flags;
+	__u16			hpk_errval; /* positive val */
+	__u32			hpk_padding1;
+	/* Additional fields */
+	__u64			hpk_data_version;
+	__u64			hpk_padding2;
+} __attribute__((packed));
+
+extern void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
+extern void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk);
+extern void lustre_swab_hsm_user_item(struct hsm_user_item *hui);
 
 #endif
 /** @} lustreidl */

@@ -1795,40 +1795,40 @@ error:
  * Version is computed using server side locking.
  *
  * @param extent_lock  Take extent lock. Not needed if a process is already
- *                     holding the OST object group locks.
+ *		       holding the OST object group locks.
  */
-static int ll_data_version(struct inode *inode, __u64 *data_version,
-                           int extent_lock)
+int ll_data_version(struct inode *inode, __u64 *data_version,
+		    int extent_lock)
 {
-	struct lov_stripe_md *lsm = NULL;
-	struct ll_sb_info    *sbi = ll_i2sbi(inode);
-	struct obdo          *obdo = NULL;
-	int                   rc;
+	struct lov_stripe_md	*lsm = NULL;
+	struct ll_sb_info	*sbi = ll_i2sbi(inode);
+	struct obdo		*obdo = NULL;
+	int			 rc;
 	ENTRY;
 
 	/* If no stripe, we consider version is 0. */
 	lsm = ccc_inode_lsm_get(inode);
 	if (lsm == NULL) {
-                *data_version = 0;
-                CDEBUG(D_INODE, "No object for inode\n");
-                RETURN(0);
-        }
+		*data_version = 0;
+		CDEBUG(D_INODE, "No object for inode\n");
+		RETURN(0);
+	}
 
-        OBD_ALLOC_PTR(obdo);
+	OBD_ALLOC_PTR(obdo);
 	if (obdo == NULL) {
 		ccc_inode_lsm_put(inode, lsm);
 		RETURN(-ENOMEM);
 	}
 
-        rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, obdo, 0, extent_lock);
-        if (!rc) {
-                if (!(obdo->o_valid & OBD_MD_FLDATAVERSION))
-                        rc = -EOPNOTSUPP;
-                else
-                        *data_version = obdo->o_data_version;
-        }
+	rc = ll_lsm_getattr(lsm, sbi->ll_dt_exp, NULL, obdo, 0, extent_lock);
+	if (!rc) {
+		if (!(obdo->o_valid & OBD_MD_FLDATAVERSION))
+			rc = -EOPNOTSUPP;
+		else
+			*data_version = obdo->o_data_version;
+	}
 
-        OBD_FREE_PTR(obdo);
+	OBD_FREE_PTR(obdo);
 	ccc_inode_lsm_put(inode, lsm);
 
 	RETURN(rc);

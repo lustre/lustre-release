@@ -586,6 +586,16 @@ static const struct req_msg_field *ost_get_fiemap_server[] = {
         &RMF_FIEMAP_VAL
 };
 
+static const struct req_msg_field *mdt_hsm_progress[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDS_HSM_PROGRESS,
+};
+
+static const struct req_msg_field *mdt_hsm_ct_register[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDS_HSM_ARCHIVE,
+};
+
 static struct req_format *req_formats[] = {
         &RQF_OBD_PING,
         &RQF_OBD_SET_INFO,
@@ -625,6 +635,9 @@ static struct req_format *req_formats[] = {
         &RQF_MDS_REINT_SETXATTR,
         &RQF_MDS_QUOTACHECK,
         &RQF_MDS_QUOTACTL,
+	&RQF_MDS_HSM_PROGRESS,
+	&RQF_MDS_HSM_CT_REGISTER,
+	&RQF_MDS_HSM_CT_UNREGISTER,
         &RQF_QC_CALLBACK,
         &RQF_OST_CONNECT,
         &RQF_OST_DISCONNECT,
@@ -1004,6 +1017,22 @@ struct req_msg_field RMF_IDX_INFO =
 		    lustre_swab_idx_info, NULL);
 EXPORT_SYMBOL(RMF_IDX_INFO);
 
+struct req_msg_field RMF_MDS_HSM_PROGRESS =
+	DEFINE_MSGF("hsm_progress", 0, sizeof(struct hsm_progress_kernel),
+		    lustre_swab_hsm_progress_kernel, NULL);
+EXPORT_SYMBOL(RMF_MDS_HSM_PROGRESS);
+
+struct req_msg_field RMF_MDS_HSM_USER_ITEM =
+	DEFINE_MSGF("hsm_user_item", RMF_F_STRUCT_ARRAY,
+		    sizeof(struct hsm_user_item), lustre_swab_hsm_user_item,
+		    NULL);
+EXPORT_SYMBOL(RMF_MDS_HSM_USER_ITEM);
+
+struct req_msg_field RMF_MDS_HSM_ARCHIVE =
+	DEFINE_MSGF("hsm_archive", 0,
+		    sizeof(__u32), lustre_swab_generic_32s, NULL);
+EXPORT_SYMBOL(RMF_MDS_HSM_ARCHIVE);
+
 /*
  * Request formats.
  */
@@ -1302,6 +1331,18 @@ struct req_format RQF_MDS_READPAGE =
         DEFINE_REQ_FMT0("MDS_READPAGE",
                         mdt_body_capa, mdt_body_only);
 EXPORT_SYMBOL(RQF_MDS_READPAGE);
+
+struct req_format RQF_MDS_HSM_PROGRESS =
+	DEFINE_REQ_FMT0("MDS_HSM_PROGRESS", mdt_hsm_progress, empty);
+EXPORT_SYMBOL(RQF_MDS_HSM_PROGRESS);
+
+struct req_format RQF_MDS_HSM_CT_REGISTER =
+	DEFINE_REQ_FMT0("MDS_HSM_CT_REGISTER", mdt_hsm_ct_register, empty);
+EXPORT_SYMBOL(RQF_MDS_HSM_CT_REGISTER);
+
+struct req_format RQF_MDS_HSM_CT_UNREGISTER =
+	DEFINE_REQ_FMT0("MDS_HSM_CT_UNREGISTER", empty, empty);
+EXPORT_SYMBOL(RQF_MDS_HSM_CT_UNREGISTER);
 
 /* This is for split */
 struct req_format RQF_MDS_WRITEPAGE =

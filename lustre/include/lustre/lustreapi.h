@@ -208,6 +208,8 @@ extern int llapi_getname(const char *path, char *buf, size_t size);
 extern void llapi_ping_target(char *obd_type, char *obd_name,
                               char *obd_uuid, void *args);
 
+extern int llapi_search_rootpath(char *pathname, const char *fsname);
+
 struct mntent;
 #define HAVE_LLAPI_IS_LUSTRE_MNT
 extern int llapi_is_lustre_mnt(struct mntent *mnt);
@@ -260,14 +262,27 @@ extern int llapi_changelog_free(struct changelog_ext_rec **rech);
 extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
                                  long long endrec);
 
-/* HSM copytool interface.  priv is private state, managed internally
-   by these functions */
-extern int llapi_copytool_start(void **priv, char *fsname, int flags,
-                                int archive_count, int *archives);
-extern int llapi_copytool_fini(void **priv);
-extern int llapi_copytool_recv(void *priv, struct hsm_action_list **hal,
-                               int *msgsize);
-extern int llapi_copytool_free(struct hsm_action_list **hal);
+/* HSM copytool interface.
+ * priv is private state, managed internally by these functions
+ */
+extern int llapi_hsm_copytool_start(void **priv, char *fsname, int flags,
+				    int archive_count, int *archives);
+extern int llapi_hsm_copytool_fini(void **priv);
+extern int llapi_hsm_copytool_recv(void *priv, struct hsm_action_list **hal,
+				   int *msgsize);
+extern int llapi_hsm_copytool_free(struct hsm_action_list **hal);
+extern int llapi_hsm_copy_start(char *mnt, struct hsm_copy *copy,
+				const struct hsm_action_item *hai);
+extern int llapi_hsm_copy_end(char *mnt, struct hsm_copy *copy,
+			      const struct hsm_progress *hp);
+extern int llapi_hsm_request(char *mnt, struct hsm_user_request *request);
+extern int llapi_hsm_progress(char *mnt, struct hsm_progress *hp);
+extern struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
+							     int data_len);
+extern int llapi_hsm_import(const char *dst, int archive, struct stat *st,
+			    unsigned long long stripe_size, int stripe_offset,
+			    int stripe_count, int stripe_pattern,
+			    char *pool_name, lustre_fid *newfid);
 
 /** @} llapi */
 

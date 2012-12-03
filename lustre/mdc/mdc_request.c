@@ -1197,6 +1197,83 @@ out:
         return rc;
 }
 
+static int mdc_ioc_hsm_progress(struct obd_export *exp,
+				struct hsm_progress_kernel *hpk)
+{
+	struct obd_import		*imp = class_exp2cliimp(exp);
+	struct hsm_progress_kernel	*req_hpk;
+	struct ptlrpc_request		*req;
+	int				 rc;
+	ENTRY;
+
+	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_HSM_PROGRESS,
+					LUSTRE_MDS_VERSION, MDS_HSM_PROGRESS);
+	if (req == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	/* Copy hsm_progress struct */
+	req_hpk = req_capsule_client_get(&req->rq_pill, &RMF_MDS_HSM_PROGRESS);
+	LASSERT(req_hpk);
+	*req_hpk = *hpk;
+
+	ptlrpc_request_set_replen(req);
+
+	rc = ptlrpc_queue_wait(req);
+	GOTO(out, rc);
+out:
+	ptlrpc_req_finished(req);
+	return rc;
+}
+
+static int mdc_ioc_hsm_ct_register(struct obd_import *imp, __u32 archives)
+{
+	__u32			*archive_mask;
+	struct ptlrpc_request	*req;
+	int			 rc;
+	ENTRY;
+
+	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_HSM_CT_REGISTER,
+					LUSTRE_MDS_VERSION,
+					MDS_HSM_CT_REGISTER);
+	if (req == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	/* Copy hsm_progress struct */
+	archive_mask = req_capsule_client_get(&req->rq_pill,
+					      &RMF_MDS_HSM_ARCHIVE);
+	LASSERT(archive_mask);
+	*archive_mask = archives;
+
+	ptlrpc_request_set_replen(req);
+
+	rc = ptlrpc_queue_wait(req);
+	GOTO(out, rc);
+out:
+	ptlrpc_req_finished(req);
+	return rc;
+}
+
+static int mdc_ioc_hsm_ct_unregister(struct obd_import *imp)
+{
+	struct ptlrpc_request	*req;
+	int			 rc;
+	ENTRY;
+
+	req = ptlrpc_request_alloc_pack(imp, &RQF_MDS_HSM_CT_UNREGISTER,
+					LUSTRE_MDS_VERSION,
+					MDS_HSM_CT_UNREGISTER);
+	if (req == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	ptlrpc_request_set_replen(req);
+
+	rc = ptlrpc_queue_wait(req);
+	GOTO(out, rc);
+out:
+	ptlrpc_req_finished(req);
+	return rc;
+}
+
 static struct kuc_hdr *changelog_kuc_hdr(char *buf, int len, int flags)
 {
         struct kuc_hdr *lh = (struct kuc_hdr *)buf;
@@ -1457,9 +1534,6 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 return -EINVAL;
         }
         switch (cmd) {
-        case LL_IOC_HSM_CT_START:
-                rc = mdc_ioc_hsm_ct_start(exp, karg);
-                GOTO(out, rc);
         case OBD_IOC_CHANGELOG_SEND:
                 rc = mdc_ioc_changelog_send(obd, karg);
                 GOTO(out, rc);
@@ -1472,10 +1546,15 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                                         NULL);
                 GOTO(out, rc);
         }
-        case OBD_IOC_FID2PATH: {
-                rc = mdc_ioc_fid2path(exp, karg);
-                GOTO(out, rc);
-        }
+	case OBD_IOC_FID2PATH:
+		rc = mdc_ioc_fid2path(exp, karg);
+		GOTO(out, rc);
+	case LL_IOC_HSM_CT_START:
+		rc = mdc_ioc_hsm_ct_start(exp, karg);
+		GOTO(out, rc);
+	case LL_IOC_HSM_PROGRESS:
+		rc = mdc_ioc_hsm_progress(exp, karg);
+		GOTO(out, rc);
         case OBD_IOC_CLIENT_RECOVER:
                 rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1, 0);
                 if (rc < 0)
@@ -1624,28 +1703,30 @@ int mdc_get_info_rpc(struct obd_export *exp,
 
 static void lustre_swab_hai(struct hsm_action_item *h)
 {
-        __swab32s(&h->hai_len);
-        __swab32s(&h->hai_action);
-        lustre_swab_lu_fid(&h->hai_fid);
-        __swab64s(&h->hai_cookie);
-        __swab64s(&h->hai_extent.offset);
-        __swab64s(&h->hai_extent.length);
-        __swab64s(&h->hai_gid);
+	__swab32s(&h->hai_len);
+	__swab32s(&h->hai_action);
+	lustre_swab_lu_fid(&h->hai_fid);
+	lustre_swab_lu_fid(&h->hai_dfid);
+	__swab64s(&h->hai_cookie);
+	__swab64s(&h->hai_extent.offset);
+	__swab64s(&h->hai_extent.length);
+	__swab64s(&h->hai_gid);
 }
 
 static void lustre_swab_hal(struct hsm_action_list *h)
 {
-        struct hsm_action_item *hai;
-        int i;
+	struct hsm_action_item	*hai;
+	int			 i;
 
-        __swab32s(&h->hal_version);
-        __swab32s(&h->hal_count);
-        __swab32s(&h->hal_archive_num);
-        hai = hai_zero(h);
-        for (i = 0; i < h->hal_count; i++) {
-                lustre_swab_hai(hai);
-                hai = hai_next(hai);
-        }
+	__swab32s(&h->hal_version);
+	__swab32s(&h->hal_count);
+	__swab32s(&h->hal_archive_num);
+	__swab64s(&h->hal_flags);
+	hai = hai_zero(h);
+	for (i = 0; i < h->hal_count; i++) {
+		lustre_swab_hai(hai);
+		hai = hai_next(hai);
+	}
 }
 
 static void lustre_swab_kuch(struct kuc_hdr *l)
@@ -1657,33 +1738,36 @@ static void lustre_swab_kuch(struct kuc_hdr *l)
 }
 
 static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
-                                struct lustre_kernelcomm *lk)
+				struct lustre_kernelcomm *lk)
 {
-        int rc = 0;
+	struct obd_import  *imp = class_exp2cliimp(exp);
+	__u32		    archive = lk->lk_data;
+	int		    rc = 0;
 
-        if (lk->lk_group != KUC_GRP_HSM) {
-                CERROR("Bad copytool group %d\n", lk->lk_group);
-                return -EINVAL;
-        }
+	if (lk->lk_group != KUC_GRP_HSM) {
+		CERROR("Bad copytool group %d\n", lk->lk_group);
+		return -EINVAL;
+	}
 
-        CDEBUG(D_HSM, "CT start r%d w%d u%d g%d f%#x\n", lk->lk_rfd, lk->lk_wfd,
-               lk->lk_uid, lk->lk_group, lk->lk_flags);
+	CDEBUG(D_HSM, "CT start r%d w%d u%d g%d f%#x\n", lk->lk_rfd, lk->lk_wfd,
+	       lk->lk_uid, lk->lk_group, lk->lk_flags);
 
-        if (lk->lk_flags & LK_FLG_STOP)
-                rc = libcfs_kkuc_group_rem(lk->lk_uid,lk->lk_group);
-        else {
-                cfs_file_t *fp = cfs_get_fd(lk->lk_wfd);
-                rc = libcfs_kkuc_group_add(fp, lk->lk_uid,lk->lk_group,
-                                           lk->lk_data);
-                if (rc && fp)
-                        cfs_put_file(fp);
-        }
+	if (lk->lk_flags & LK_FLG_STOP) {
+		rc = libcfs_kkuc_group_rem(lk->lk_uid, lk->lk_group);
+		/* Unregister with the coordinator */
+		if (rc == 0)
+			rc = mdc_ioc_hsm_ct_unregister(imp);
+	} else {
+		cfs_file_t *fp = cfs_get_fd(lk->lk_wfd);
+		rc = libcfs_kkuc_group_add(fp, lk->lk_uid, lk->lk_group,
+					   lk->lk_data);
+		if (rc && fp)
+			cfs_put_file(fp);
+		if (rc == 0)
+			rc = mdc_ioc_hsm_ct_register(imp, archive);
+	}
 
-        /* lk_data is archive number mask */
-        /* TODO: register archive num with mdt so coordinator can choose
-           correct agent. */
-
-        return rc;
+	return rc;
 }
 
 /**
@@ -1693,47 +1777,79 @@ static int mdc_ioc_hsm_ct_start(struct obd_export *exp,
  */
 static int mdc_hsm_copytool_send(int len, void *val)
 {
-        struct kuc_hdr *lh = (struct kuc_hdr *)val;
-        struct hsm_action_list *hal = (struct hsm_action_list *)(lh + 1);
-        int rc;
-        ENTRY;
+	struct kuc_hdr		*lh = (struct kuc_hdr *)val;
+	struct hsm_action_list	*hal = (struct hsm_action_list *)(lh + 1);
+	int			 rc;
+	ENTRY;
 
-        if (len < sizeof(*lh) + sizeof(*hal)) {
-                CERROR("Short HSM message %d < %d\n", len,
-                      (int) (sizeof(*lh) + sizeof(*hal)));
-                RETURN(-EPROTO);
-        }
-        if (lh->kuc_magic == __swab16(KUC_MAGIC)) {
-                lustre_swab_kuch(lh);
-                lustre_swab_hal(hal);
-        } else if (lh->kuc_magic != KUC_MAGIC) {
-                CERROR("Bad magic %x!=%x\n", lh->kuc_magic, KUC_MAGIC);
-                RETURN(-EPROTO);
-        }
+	if (len < sizeof(*lh) + sizeof(*hal)) {
+		CERROR("Short HSM message %d < %d\n", len,
+		       (int) (sizeof(*lh) + sizeof(*hal)));
+		RETURN(-EPROTO);
+	}
+	if (lh->kuc_magic == __swab16(KUC_MAGIC)) {
+		lustre_swab_kuch(lh);
+		lustre_swab_hal(hal);
+	} else if (lh->kuc_magic != KUC_MAGIC) {
+		CERROR("Bad magic %x!=%x\n", lh->kuc_magic, KUC_MAGIC);
+		RETURN(-EPROTO);
+	}
 
-        CDEBUG(D_HSM, " Received message mg=%x t=%d m=%d l=%d actions=%d\n",
-               lh->kuc_magic, lh->kuc_transport, lh->kuc_msgtype,
-               lh->kuc_msglen, hal->hal_count);
+	CDEBUG(D_HSM, " Received message mg=%x t=%d m=%d l=%d actions=%d "
+	       "on %s\n",
+	       lh->kuc_magic, lh->kuc_transport, lh->kuc_msgtype,
+	       lh->kuc_msglen, hal->hal_count, hal->hal_fsname);
 
-        /* Broadcast to HSM listeners */
-        rc = libcfs_kkuc_group_put(KUC_GRP_HSM, lh);
+	/* Broadcast to HSM listeners */
+	rc = libcfs_kkuc_group_put(KUC_GRP_HSM, lh);
 
-        RETURN(rc);
+	RETURN(rc);
+}
+
+/**
+ * callback function passed to kuc for re-registering each HSM copytool
+ * running on MDC, after MDT shutdown/recovery.
+ * @param data archive id served by the copytool
+ * @param cb_arg callback argument (obd_import)
+ */
+static int mdc_hsm_ct_reregister(__u32 data, void *cb_arg)
+{
+	struct obd_import	*imp = (struct obd_import *)cb_arg;
+	__u32			 archive = data;
+	int			 rc;
+
+	CDEBUG(D_HA, "recover copytool registration to MDT (archive=%#x)\n",
+	       archive);
+	rc = mdc_ioc_hsm_ct_register(imp, archive);
+
+	/* ignore error if the copytool is already registered */
+	return ((rc != 0) && (rc != -EEXIST)) ? rc : 0;
+}
+
+/**
+ * Re-establish all kuc contexts with MDT
+ * after MDT shutdown/recovery.
+ */
+static int mdc_kuc_reregister(struct obd_import *imp)
+{
+	/* re-register HSM agents */
+	return libcfs_kkuc_group_foreach(KUC_GRP_HSM, mdc_hsm_ct_reregister,
+					 (void *)imp);
 }
 
 int mdc_set_info_async(const struct lu_env *env,
-                       struct obd_export *exp,
-                       obd_count keylen, void *key,
-                       obd_count vallen, void *val,
-                       struct ptlrpc_request_set *set)
+		       struct obd_export *exp,
+		       obd_count keylen, void *key,
+		       obd_count vallen, void *val,
+		       struct ptlrpc_request_set *set)
 {
-        struct obd_import *imp = class_exp2cliimp(exp);
-        int                rc = -EINVAL;
-        ENTRY;
+	struct obd_import	*imp = class_exp2cliimp(exp);
+	int			 rc;
+	ENTRY;
 
-        if (KEY_IS(KEY_READ_ONLY)) {
-                if (vallen != sizeof(int))
-                        RETURN(-EINVAL);
+	if (KEY_IS(KEY_READ_ONLY)) {
+		if (vallen != sizeof(int))
+			RETURN(-EINVAL);
 
 		spin_lock(&imp->imp_lock);
 		if (*((int *)val)) {
@@ -1778,7 +1894,8 @@ int mdc_set_info_async(const struct lu_env *env,
                 RETURN(rc);
         }
 
-        RETURN(rc);
+	CERROR("Unknown key %s\n", (char *)key);
+	RETURN(-EINVAL);
 }
 
 int mdc_get_info(const struct lu_env *env, struct obd_export *exp,
@@ -1970,10 +2087,12 @@ static int mdc_import_event(struct obd_device *obd, struct obd_import *imp,
 
                 break;
         }
-        case IMP_EVENT_ACTIVE: {
-                rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);
-                break;
-        }
+	case IMP_EVENT_ACTIVE:
+		rc = obd_notify_observer(obd, obd, OBD_NOTIFY_ACTIVE, NULL);
+		/* restore re-establish kuc registration after reconnecting */
+		if (rc == 0)
+			rc = mdc_kuc_reregister(imp);
+		break;
         case IMP_EVENT_OCD:
                 rc = obd_notify_observer(obd, obd, OBD_NOTIFY_OCD, NULL);
                 break;

@@ -772,6 +772,11 @@ __u32 mdt_identity_get_perm(struct md_identity *, __u32, lnet_nid_t);
 
 int mdt_pack_remote_perm(struct mdt_thread_info *, struct mdt_object *, void *);
 
+/* mdt/mdt_hsm.c */
+int mdt_hsm_progress(struct mdt_thread_info *info);
+int mdt_hsm_ct_register(struct mdt_thread_info *info);
+int mdt_hsm_ct_unregister(struct mdt_thread_info *info);
+
 extern struct lu_context_key       mdt_thread_key;
 /* debug issues helper starts here*/
 static inline int mdt_fail_write(const struct lu_env *env,

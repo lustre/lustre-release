@@ -860,6 +860,176 @@ int ll_get_mdt_idx(struct inode *inode)
         return mdtidx;
 }
 
+/**
+ * Generic handler to do any pre-copy work.
+ *
+ * It send a first hsm_progress (with extent length == 0) to coordinator as a
+ * first information for it that real work has started.
+ *
+ * Moreover, for a ARCHIVE request, it will sample the file data version and
+ * store it in \a copy.
+ *
+ * \return 0 on success.
+ */
+static int ll_ioc_copy_start(struct super_block *sb, struct hsm_copy *copy)
+{
+	struct ll_sb_info		*sbi = ll_s2sbi(sb);
+	struct hsm_progress_kernel	 hpk;
+	int				 rc;
+	ENTRY;
+
+	/* Forge a hsm_progress based on data from copy. */
+	hpk.hpk_fid = copy->hc_hai.hai_fid;
+	hpk.hpk_cookie = copy->hc_hai.hai_cookie;
+	hpk.hpk_extent.offset = copy->hc_hai.hai_extent.offset;
+	hpk.hpk_extent.length = 0;
+	hpk.hpk_flags = 0;
+	hpk.hpk_errval = 0;
+	hpk.hpk_data_version = 0;
+
+
+	/* For archive request, we need to read the current file version. */
+	if (copy->hc_hai.hai_action == HSMA_ARCHIVE) {
+		struct inode	*inode;
+		__u64		 data_version = 0;
+
+		/* Get inode for this fid */
+		inode = search_inode_for_lustre(sb, &copy->hc_hai.hai_fid);
+		if (IS_ERR(inode)) {
+			hpk.hpk_flags |= HP_FLAG_RETRY;
+			/* hpk_errval is >= 0 */
+			hpk.hpk_errval = -PTR_ERR(inode);
+			GOTO(progress, rc = PTR_ERR(inode));
+		}
+
+		/* Read current file data version */
+		rc = ll_data_version(inode, &data_version, 1);
+		iput(inode);
+		if (rc != 0) {
+			CDEBUG(D_HSM, "Could not read file data version of "
+				      DFID" (rc = %d). Archive request ("
+				      LPX64") could not be done.\n",
+				      PFID(&copy->hc_hai.hai_fid), rc,
+				      copy->hc_hai.hai_cookie);
+			hpk.hpk_flags |= HP_FLAG_RETRY;
+			/* hpk_errval must be >= 0 */
+			hpk.hpk_errval = -rc;
+			GOTO(progress, rc);
+		}
+
+		/* Store it the hsm_copy for later copytool use.
+		 * Always modified even if no lsm. */
+		copy->hc_data_version = data_version;
+	}
+
+progress:
+	rc = obd_iocontrol(LL_IOC_HSM_PROGRESS, sbi->ll_md_exp, sizeof(hpk),
+			   &hpk, NULL);
+
+	RETURN(rc);
+}
+
+/**
+ * Generic handler to do any post-copy work.
+ *
+ * It will send the last hsm_progress update to coordinator to inform it
+ * that copy is finished and whether it was successful or not.
+ *
+ * Moreover,
+ * - for ARCHIVE request, it will sample the file data version and compare it
+ *   with the version saved in ll_ioc_copy_start(). If they do not match, copy
+ *   will be considered as failed.
+ * - for RESTORE request, it will sample the file data version and send it to
+ *   coordinator which is useful if the file was imported as 'released'.
+ *
+ * \return 0 on success.
+ */
+static int ll_ioc_copy_end(struct super_block *sb, struct hsm_copy *copy)
+{
+	struct ll_sb_info		*sbi = ll_s2sbi(sb);
+	struct hsm_progress_kernel	 hpk;
+	int				 rc;
+	ENTRY;
+
+	/* If you modify the logic here, also check llapi_hsm_copy_end(). */
+	/* Take care: copy->hc_hai.hai_action, len, gid and data are not
+	 * initialized if copy_end was called with copy == NULL.
+	 */
+
+	/* Forge a hsm_progress based on data from copy. */
+	hpk.hpk_fid = copy->hc_hai.hai_fid;
+	hpk.hpk_cookie = copy->hc_hai.hai_cookie;
+	hpk.hpk_extent = copy->hc_hai.hai_extent;
+	hpk.hpk_flags = copy->hc_flags | HP_FLAG_COMPLETED;
+	hpk.hpk_errval = copy->hc_errval;
+	hpk.hpk_data_version = 0;
+
+	/* For archive request, we need to check the file data was not changed.
+	 *
+	 * For restore request, we need to send the file data version, this is
+	 * useful when the file was created using hsm_import.
+	 */
+	if (((copy->hc_hai.hai_action == HSMA_ARCHIVE) ||
+	     (copy->hc_hai.hai_action == HSMA_RESTORE)) &&
+	    (copy->hc_errval == 0)) {
+		struct inode	*inode;
+		__u64		 data_version = 0;
+
+		/* Get lsm for this fid */
+		inode = search_inode_for_lustre(sb, &copy->hc_hai.hai_fid);
+		if (IS_ERR(inode)) {
+			hpk.hpk_flags |= HP_FLAG_RETRY;
+			/* hpk_errval must be >= 0 */
+			hpk.hpk_errval = -PTR_ERR(inode);
+			GOTO(progress, rc = PTR_ERR(inode));
+		}
+
+		rc = ll_data_version(inode, &data_version,
+				     copy->hc_hai.hai_action == HSMA_ARCHIVE);
+		iput(inode);
+		if (rc) {
+			CDEBUG(D_HSM, "Could not read file data version. "
+				      "Request could not be confirmed.\n");
+			if (hpk.hpk_errval == 0)
+				hpk.hpk_errval = rc;
+			GOTO(progress, rc);
+		}
+
+		/* Store it the hsm_copy for later copytool use.
+		 * Always modified even if no lsm. */
+		hpk.hpk_data_version = data_version;
+
+		/* File could have been stripped during archiving, so we need
+		 * to check anyway. */
+		if ((copy->hc_hai.hai_action == HSMA_ARCHIVE) &&
+		    (copy->hc_data_version != data_version)) {
+			CDEBUG(D_HSM, "File data version mismatched. "
+			      "File content was changed during archiving. "
+			       DFID", start:"LPX64" current:"LPX64"\n",
+			       PFID(&copy->hc_hai.hai_fid),
+			       copy->hc_data_version, data_version);
+			/* File was changed, send error to cdt. Do not ask for
+			 * retry because if a file is modified frequently,
+			 * the cdt will loop on retried archive requests.
+			 * The policy engine will ask for a new archive later
+			 * when the file will not be modified for some tunable
+			 * time */
+			/* we do not notify caller */
+			hpk.hpk_flags &= ~HP_FLAG_RETRY;
+			/* hpk_errval must be >= 0 */
+			hpk.hpk_errval = EBUSY;
+		}
+
+	}
+
+progress:
+	rc = obd_iocontrol(LL_IOC_HSM_PROGRESS, sbi->ll_md_exp, sizeof(hpk),
+			   &hpk, NULL);
+
+	RETURN(rc);
+}
+
+
 static int copy_and_ioctl(int cmd, struct obd_export *exp, void *data, int len)
 {
         void *ptr;
@@ -1460,14 +1630,74 @@ out_free:
                 RETURN(rc);
         case OBD_IOC_FID2PATH:
 		RETURN(ll_fid2path(inode, (void *)arg));
-        case LL_IOC_HSM_CT_START:
-                rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void *)arg,
-                                    sizeof(struct lustre_kernelcomm));
-                RETURN(rc);
+	case LL_IOC_HSM_PROGRESS: {
+		struct hsm_progress_kernel	hpk;
+		struct hsm_progress		hp;
 
-        default:
-                RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp,0,NULL,(void *)arg));
-        }
+		if (cfs_copy_from_user(&hp, (void *)arg, sizeof(hp)))
+			RETURN(-EFAULT);
+
+		hpk.hpk_fid = hp.hp_fid;
+		hpk.hpk_cookie = hp.hp_cookie;
+		hpk.hpk_extent = hp.hp_extent;
+		hpk.hpk_flags = hp.hp_flags;
+		hpk.hpk_errval = hp.hp_errval;
+		hpk.hpk_data_version = 0;
+
+		/* File may not exist in Lustre; all progress
+		 * reported to Lustre root */
+		rc = obd_iocontrol(cmd, sbi->ll_md_exp, sizeof(hpk), &hpk,
+				   NULL);
+		RETURN(rc);
+	}
+	case LL_IOC_HSM_CT_START:
+		rc = copy_and_ioctl(cmd, sbi->ll_md_exp, (void *)arg,
+				    sizeof(struct lustre_kernelcomm));
+		RETURN(rc);
+
+	case LL_IOC_HSM_COPY_START: {
+		struct hsm_copy	*copy;
+		int		 rc;
+
+		OBD_ALLOC_PTR(copy);
+		if (copy == NULL)
+			RETURN(-ENOMEM);
+		if (cfs_copy_from_user(copy, (char *)arg, sizeof(*copy))) {
+			OBD_FREE_PTR(copy);
+			RETURN(-EFAULT);
+		}
+
+		rc = ll_ioc_copy_start(inode->i_sb, copy);
+		if (cfs_copy_to_user((char *)arg, copy, sizeof(*copy)))
+			rc = -EFAULT;
+
+		OBD_FREE_PTR(copy);
+		RETURN(rc);
+	}
+	case LL_IOC_HSM_COPY_END: {
+		struct hsm_copy	*copy;
+		int		 rc;
+
+		OBD_ALLOC_PTR(copy);
+		if (copy == NULL)
+			RETURN(-ENOMEM);
+		if (cfs_copy_from_user(copy, (char *)arg, sizeof(*copy))) {
+			OBD_FREE_PTR(copy);
+			RETURN(-EFAULT);
+		}
+
+		rc = ll_ioc_copy_end(inode->i_sb, copy);
+		if (cfs_copy_to_user((char *)arg, copy, sizeof(*copy)))
+			rc = -EFAULT;
+
+		OBD_FREE_PTR(copy);
+		RETURN(rc);
+	}
+
+	default:
+		RETURN(obd_iocontrol(cmd, sbi->ll_dt_exp, 0, NULL,
+				     (void *)arg));
+	}
 }
 
 static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)

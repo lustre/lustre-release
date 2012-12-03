@@ -73,6 +73,7 @@
 #include <obd.h>
 #include <obd_lov.h>
 #include <lustre/lustreapi.h>
+#include "lustreapi_internal.h"
 
 static unsigned llapi_dir_filetype_table[] = {
         [DT_UNKNOWN]= 0,
@@ -650,13 +651,7 @@ int llapi_file_create_pool(const char *name, unsigned long long stripe_size,
  * Find the fsname, the full path, and/or an open fd.
  * Either the fsname or path must not be NULL
  */
-#define WANT_PATH   0x1
-#define WANT_FSNAME 0x2
-#define WANT_FD     0x4
-#define WANT_INDEX  0x8
-#define WANT_ERROR  0x10
-static int get_root_path(int want, char *fsname, int *outfd, char *path,
-                         int index)
+int get_root_path(int want, char *fsname, int *outfd, char *path, int index)
 {
         struct mntent mnt;
         char buf[PATH_MAX], mntdir[PATH_MAX];
@@ -805,6 +800,11 @@ int llapi_search_fsname(const char *pathname, char *fsname)
         rc = get_root_path(WANT_FSNAME | WANT_ERROR, fsname, NULL, path, -1);
         free(path);
         return rc;
+}
+
+int llapi_search_rootpath(char *pathname, const char *fsname)
+{
+	return get_root_path(WANT_PATH, (char *)fsname, NULL, pathname, -1);
 }
 
 int llapi_getname(const char *path, char *buf, size_t size)
@@ -3424,8 +3424,8 @@ static int get_mdtname(char *name, char *format, char *buf)
  * \param mdtidxp pointer to integer within data to be filled in with the
  *    mdt index (0 if no mdt is specified).  NULL won't be filled.
  */
-static int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
-                      int want_error)
+int root_ioctl(const char *mdtname, int opc, void *data, int *mdtidxp,
+	       int want_error)
 {
         char fsname[20];
         char *ptr;
@@ -3759,183 +3759,6 @@ int llapi_path2fid(const char *path, lustre_fid *fid)
 
 	close(fd);
 	return rc;
-}
-
-/****** HSM Copytool API ********/
-#define CT_PRIV_MAGIC 0xC0BE2001
-struct copytool_private {
-        int magic;
-        char *fsname;
-        lustre_kernelcomm kuc;
-        __u32 archives;
-};
-
-#include <libcfs/libcfs.h>
-
-/** Register a copytool
- * @param[out] priv Opaque private control structure
- * @param fsname Lustre filesystem
- * @param flags Open flags, currently unused (e.g. O_NONBLOCK)
- * @param archive_count
- * @param archives Which archive numbers this copytool is responsible for
- */
-int llapi_copytool_start(void **priv, char *fsname, int flags,
-                         int archive_count, int *archives)
-{
-        struct copytool_private *ct;
-        int rc;
-
-        if (archive_count > 0 && archives == NULL) {
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "NULL archive numbers");
-                return -EINVAL;
-        }
-
-        ct = calloc(1, sizeof(*ct));
-        if (ct == NULL)
-                return -ENOMEM;
-
-        ct->fsname = malloc(strlen(fsname) + 1);
-        if (ct->fsname == NULL) {
-                rc = -ENOMEM;
-                goto out_err;
-        }
-        strcpy(ct->fsname, fsname);
-        ct->magic = CT_PRIV_MAGIC;
-        ct->archives = 0;
-        for (rc = 0; rc < archive_count; rc++) {
-                if (archives[rc] > sizeof(ct->archives)) {
-                        llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                          "Maximum of %d archives supported",
-                                          sizeof(ct->archives));
-                        goto out_err;
-                }
-                ct->archives |= 1 << archives[rc];
-        }
-        /* special case: if no archives specified, default to archive #0. */
-        if (ct->archives == 0)
-                ct->archives = 1;
-
-        rc = libcfs_ukuc_start(&ct->kuc, KUC_GRP_HSM);
-        if (rc < 0)
-                goto out_err;
-
-        /* Storing archive(s) in lk_data; see mdc_ioc_hsm_ct_start */
-        ct->kuc.lk_data = ct->archives;
-        rc = root_ioctl(ct->fsname, LL_IOC_HSM_CT_START, &(ct->kuc), NULL,
-                        WANT_ERROR);
-        /* Only the kernel reference keeps the write side open */
-        close(ct->kuc.lk_wfd);
-        ct->kuc.lk_wfd = 0;
-        if (rc < 0)
-                goto out_err;
-
-        *priv = ct;
-        return 0;
-
-out_err:
-        if (ct->fsname)
-                free(ct->fsname);
-        free(ct);
-        return rc;
-}
-
-/** Deregister a copytool */
-int llapi_copytool_fini(void **priv)
-{
-        struct copytool_private *ct = (struct copytool_private *)*priv;
-
-        if (!ct || (ct->magic != CT_PRIV_MAGIC))
-                return -EINVAL;
-
-        /* Tell the kernel to stop sending us messages */
-        ct->kuc.lk_flags = LK_FLG_STOP;
-        root_ioctl(ct->fsname, LL_IOC_HSM_CT_START, &(ct->kuc), NULL, 0);
-
-        /* Shut down the kernelcomms */
-        libcfs_ukuc_stop(&ct->kuc);
-
-        free(ct->fsname);
-        free(ct);
-        *priv = NULL;
-        return 0;
-}
-
-/** Wait for the next hsm_action_list
- * @param priv Opaque private control structure
- * @param halh Action list handle, will be allocated here
- * @param msgsize Number of bytes in the message, will be set here
- * @return 0 valid message received; halh and msgsize are set
- *         <0 error code
- */
-int llapi_copytool_recv(void *priv, struct hsm_action_list **halh, int *msgsize)
-{
-        struct copytool_private *ct = (struct copytool_private *)priv;
-        struct kuc_hdr *kuch;
-        struct hsm_action_list *hal;
-        int rc = 0;
-
-        if (!ct || (ct->magic != CT_PRIV_MAGIC))
-                return -EINVAL;
-        if (halh == NULL || msgsize == NULL)
-                return -EINVAL;
-
-        kuch = malloc(HAL_MAXSIZE + sizeof(*kuch));
-        if (kuch == NULL)
-                return -ENOMEM;
-
-        rc = libcfs_ukuc_msg_get(&ct->kuc, (char *)kuch,
-                                 HAL_MAXSIZE + sizeof(*kuch),
-                                 KUC_TRANSPORT_HSM);
-        if (rc < 0)
-                goto out_free;
-
-        /* Handle generic messages */
-        if (kuch->kuc_transport == KUC_TRANSPORT_GENERIC &&
-            kuch->kuc_msgtype == KUC_MSG_SHUTDOWN) {
-                rc = -ESHUTDOWN;
-                goto out_free;
-        }
-
-        if (kuch->kuc_transport != KUC_TRANSPORT_HSM ||
-            kuch->kuc_msgtype != HMT_ACTION_LIST) {
-                llapi_err_noerrno(LLAPI_MSG_ERROR,
-                                  "Unknown HSM message type %d:%d\n",
-                                  kuch->kuc_transport, kuch->kuc_msgtype);
-                rc = -EPROTO;
-                goto out_free;
-        }
-
-        /* Our message is a hsm_action_list.  Use pointer math to skip
-         * kuch_hdr and point directly to the message payload.
-         */
-        hal = (struct hsm_action_list *)(kuch + 1);
-
-        /* Check that we have registered for this archive # */
-        if (((1 << hal->hal_archive_num) & ct->archives) == 0) {
-                    llapi_err_noerrno(LLAPI_MSG_INFO,
-                             "Ignoring request for archive #%d (bitmask %#x)\n",
-                             hal->hal_archive_num, ct->archives);
-                rc = 0;
-                goto out_free;
-        }
-
-        *halh = hal;
-        *msgsize = kuch->kuc_msglen - sizeof(*kuch);
-        return 0;
-
-out_free:
-        *halh = NULL;
-        *msgsize = 0;
-        free(kuch);
-        return rc;
-}
-
-/** Release the action list when done with it. */
-int llapi_copytool_free(struct hsm_action_list **hal)
-{
-	/* Reuse the llapi_changelog_free function */
-	return llapi_changelog_free((struct changelog_ext_rec **)hal);
 }
 
 int llapi_get_connect_flags(const char *mnt, __u64 *flags)

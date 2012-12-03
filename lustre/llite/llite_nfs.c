@@ -66,8 +66,8 @@ static int ll_nfs_test_inode(struct inode *inode, void *opaque)
                          (struct lu_fid *)opaque);
 }
 
-static struct inode *search_inode_for_lustre(struct super_block *sb,
-                                             const struct lu_fid *fid)
+struct inode *search_inode_for_lustre(struct super_block *sb,
+				      const struct lu_fid *fid)
 {
         struct ll_sb_info     *sbi = ll_s2sbi(sb);
         struct ptlrpc_request *req = NULL;
