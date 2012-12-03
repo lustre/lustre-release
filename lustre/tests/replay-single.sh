@@ -1961,8 +1961,8 @@ run_test 73c "open(O_CREAT), unlink, replay, reconnect at last_replay, close"
 test_74() {
     local clients=${CLIENTS:-$HOSTNAME}
 
-    stop ost1
     zconf_umount_clients $clients $MOUNT
+    stop ost1
     facet_failover $SINGLEMDS
     zconf_mount_clients $clients $MOUNT
     mount_facet ost1
