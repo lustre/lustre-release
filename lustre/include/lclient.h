@@ -190,6 +190,18 @@ struct ccc_object {
          * \see ll_vm_open(), ll_vm_close().
          */
         cfs_atomic_t            cob_mmap_cnt;
+
+        /**
+         * various flags
+         * cob_discard_page_warned
+         *      if pages belonging to this object are discarded when a client
+         * is evicted, some debug info will be printed, this flag will be set
+         * during processing the first discarded page, then avoid flooding
+         * debug message for lots of discarded pages.
+         *
+         * \see ll_dirty_page_discard_warn.
+         */
+        int                     cob_discard_page_warned:1;
 };
 
 /**

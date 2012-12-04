@@ -2,8 +2,8 @@
 
 set -e
 
-#         bug  5494 5493
-ALWAYS_EXCEPT="24   52 $RECOVERY_SMALL_EXCEPT"
+#         bug  5493
+ALWAYS_EXCEPT="52 $RECOVERY_SMALL_EXCEPT"
 
 PTLDEBUG=${PTLDEBUG:--1}
 LUSTRE=${LUSTRE:-`dirname $0`/..}
@@ -621,7 +621,7 @@ test_23() { #b=4561
 }
 run_test 23 "client hang when close a file after mds crash"
 
-test_24() { # bug 11710 details correct fsync() behavior
+test_24a() { # bug 11710 details correct fsync() behavior
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
 	mkdir -p $DIR/$tdir
@@ -637,7 +637,7 @@ test_24() { # bug 11710 details correct fsync() behavior
 	client_reconnect
 	[ $rc -eq 0 ] && error_ignore 5494 "multiop didn't fail fsync: rc $rc" || true
 }
-run_test 24 "fsync error (should return error)"
+run_test 24a "fsync error (should return error)"
 
 wait_client_evicted () {
 	local facet=$1
@@ -645,9 +645,42 @@ wait_client_evicted () {
 	local varsvc=${facet}_svc
 
 	wait_update $(facet_active_host $facet) \
-                "lctl get_param -n *.${!varsvc}.num_exports | cut -d' ' -f2" \
-                $((exports - 1)) $3
+		"lctl get_param -n *.${!varsvc}.num_exports | cut -d' ' -f2" \
+		$((exports - 1)) $3
 }
+
+test_24b() {
+	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
+
+	dmesg -c
+	mkdir -p $DIR/$tdir
+	lfs setstripe $DIR/$tdir -s 0 -i 0 -c 1
+	cancel_lru_locks osc
+	multiop_bg_pause $DIR/$tdir/$tfile-1 Ow8192_yc ||
+		error "mulitop Ow8192_yc failed"
+
+	MULTI_PID1=$!
+	multiop_bg_pause $DIR/$tdir/$tfile-2 Ow8192_c ||
+		error "mulitop Ow8192_c failed"
+
+	MULTI_PID2=$!
+	ost_evict_client
+
+	kill -USR1 $MULTI_PID1
+	wait $MULTI_PID1
+	rc1=$?
+	kill -USR1 $MULTI_PID2
+	wait $MULTI_PID2
+	rc2=$?
+	lctl set_param fail_loc=0x0
+	client_reconnect
+	[ $rc1 -eq 0 -o $rc2 -eq 0 ] &&
+	error_ignore "multiop didn't fail fsync: $rc1 or close: $rc2" || true
+
+	dmesg | grep "dirty page discard:" ||
+		error "no discarded dirty page found!"
+}
+run_test 24b "test dirty page discard due to client eviction"
 
 test_26a() {      # was test_26 bug 5921 - evict dead exports by pinger
 # this test can only run from a client on a separate node.

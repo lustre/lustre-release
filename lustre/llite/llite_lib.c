@@ -2245,3 +2245,48 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs)
 
         RETURN(0);
 }
+
+static char *ll_d_path(struct dentry *dentry, char *buf, int bufsize)
+{
+        char *path = NULL;
+
+#ifdef HAVE_FS_STRUCT_USE_PATH
+        struct path p;
+
+        p.dentry = dentry;
+        p.mnt = current->fs->root.mnt;
+        path_get(&p);
+        path = d_path(&p, buf, bufsize);
+        path_put(&p);
+#else
+        path = d_path(dentry, current->fs->rootmnt, buf, bufsize);
+#endif
+
+        return path;
+}
+
+void ll_dirty_page_discard_warn(cfs_page_t *page, int ioret)
+{
+        char *buf, *path = NULL;
+        struct dentry *dentry = NULL;
+        struct ccc_object *obj = cl_inode2ccc(page->mapping->host);
+
+        buf = (char *)__get_free_page(GFP_KERNEL);
+        if (buf != NULL) {
+                dentry = d_find_alias(page->mapping->host);
+                if (dentry != NULL)
+                        path = ll_d_path(dentry, buf, PAGE_SIZE);
+        }
+
+        CWARN("dirty page discard: %s/fid: "DFID"/%s may get corrupted "
+              "(rc %d)\n",
+              s2lsi(page->mapping->host->i_sb)->lsi_lmd->lmd_dev,
+              PFID(&obj->cob_header.coh_lu.loh_fid),
+              (path && !IS_ERR(path)) ? path : "", ioret);
+
+        if (dentry != NULL)
+                dput(dentry);
+
+        if (buf != NULL)
+                free_page((unsigned long)buf);
+}

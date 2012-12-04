@@ -750,6 +750,7 @@ void ll_umount_begin(struct super_block *sb);
 #endif
 int ll_remount_fs(struct super_block *sb, int *flags, char *data);
 int ll_show_options(struct seq_file *seq, struct vfsmount *vfs);
+void ll_dirty_page_discard_warn(cfs_page_t *page, int ioret);
 int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
                   struct super_block *);
 void lustre_dump_dentry(struct dentry *, int recur);
