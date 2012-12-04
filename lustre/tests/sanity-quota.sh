@@ -230,6 +230,7 @@ set_ost_qtype() {
 wait_reintegration() {
 	local ntype=$1
 	local qtype=$2
+	local max=$3
 	local result="glb[1],slv[1],reint[0]"
 	local varsvc
 	local cmd
@@ -242,8 +243,8 @@ wait_reintegration() {
 
 		if $(facet_up $SINGLEMDS); then
 			wait_update_facet $SINGLEMDS "$cmd |
-			grep "$qtype" | awk '{ print \\\$3 }'" "$result" ||
-				return 1
+			grep "$qtype" | awk '{ print \\\$3 }'" \
+				"$result" $max || return 1
 		fi
 	else
 		local osts=$(get_facets OST)
@@ -256,7 +257,7 @@ wait_reintegration() {
 			if $(facet_up $ost); then
 				wait_update_facet $ost "$cmd |
 				grep "$qtype" | awk '{ print \\\$3 }'" \
-					"$result" || return 1
+					"$result" $max || return 1
 			fi
 		done
 	fi
@@ -265,26 +266,28 @@ wait_reintegration() {
 
 wait_mdt_reint() {
 	local qtype=$1
+	local max=${2:-90}
 
 	if [ $qtype == "u" ] || [ $qtype == "ug" ]; then
-		wait_reintegration "mdt" "user" || return 1
+		wait_reintegration "mdt" "user" $max || return 1
 	fi
 
 	if [ $qtype == "g" ] || [ $qtype == "ug" ]; then
-		wait_reintegration "mdt" "group" || return 1
+		wait_reintegration "mdt" "group" $max || return 1
 	fi
 	return 0
 }
 
 wait_ost_reint() {
 	local qtype=$1
+	local max=${2:-90}
 
 	if [ $qtype == "u" ] || [ $qtype == "ug" ]; then
-		wait_reintegration "ost" "user" || return 1
+		wait_reintegration "ost" "user" $max || return 1
 	fi
 
 	if [ $qtype == "g" ] || [ $qtype == "ug" ]; then
-		wait_reintegration "ost" "group" || return 1
+		wait_reintegration "ost" "group" $max || return 1
 	fi
 	return 0
 }
@@ -1088,8 +1091,12 @@ test_7c() {
 	# define OBD_FAIL_QUOTA_DELAY_REINT 0xa03
 	lustre_fail ost 0xa03
 
-	# enable ost quota to trigger reintegration
+	# enable ost quota
 	set_ost_qtype "ug" || error "enable ost quota failed"
+	# trigger reintegration
+	local procf="osd-$(facet_fstype ost1).$FSNAME-OST*."
+	procf=${procf}quota_slave.force_reint
+	$LCTL set_param $procf=1 || "force reintegration failed"
 
 	echo "Stop mds..."
 	stop mds1
@@ -1100,7 +1107,9 @@ test_7c() {
 	start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS
 	quota_init
 
-	wait_ost_reint "ug" || error "reintegration failed"
+	# wait longer than usual to make sure the reintegration
+	# is triggered by quota wb thread.
+	wait_ost_reint "ug" 200 || error "reintegration failed"
 
 	# hardlimit should have been fetched by slave during global
 	# reintegration, write will exceed quota
