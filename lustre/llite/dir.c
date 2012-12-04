@@ -390,7 +390,7 @@ struct page *ll_get_dir_page(struct inode *dir, __u64 hash,
         }
         ldlm_lock_dump_handle(D_OTHER, &lockh);
 
-        cfs_mutex_lock(&lli->lli_readdir_mutex);
+	mutex_lock(&lli->lli_readdir_mutex);
         page = ll_dir_page_locate(dir, &lhash, &start, &end);
         if (IS_ERR(page)) {
                 CERROR("dir page locate: "DFID" at "LPU64": rc %ld\n",
@@ -463,7 +463,7 @@ hash_collision:
                 goto fail;
         }
 out_unlock:
-        cfs_mutex_unlock(&lli->lli_readdir_mutex);
+	mutex_unlock(&lli->lli_readdir_mutex);
         ldlm_lock_decref(&lockh, mode);
         return page;
 
@@ -1470,7 +1470,7 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
         loff_t ret = -EINVAL;
         ENTRY;
 
-        cfs_mutex_lock(&inode->i_mutex);
+	mutex_lock(&inode->i_mutex);
         switch (origin) {
                 case SEEK_SET:
                         break;
@@ -1508,7 +1508,7 @@ static loff_t ll_dir_seek(struct file *file, loff_t offset, int origin)
         GOTO(out, ret);
 
 out:
-        cfs_mutex_unlock(&inode->i_mutex);
+	mutex_unlock(&inode->i_mutex);
         return ret;
 }
 

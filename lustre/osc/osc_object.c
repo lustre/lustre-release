@@ -78,9 +78,9 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 
         osc->oo_oinfo = cconf->u.coc_oinfo;
 #ifdef INVARIANT_CHECK
-        cfs_mutex_init(&osc->oo_debug_mutex);
+	mutex_init(&osc->oo_debug_mutex);
 #endif
-        cfs_spin_lock_init(&osc->oo_seatbelt);
+	spin_lock_init(&osc->oo_seatbelt);
         for (i = 0; i < CRT_NR; ++i)
                 CFS_INIT_LIST_HEAD(&osc->oo_inflight[i]);
 
@@ -96,7 +96,7 @@ static int osc_object_init(const struct lu_env *env, struct lu_object *obj,
 	CFS_INIT_LIST_HEAD(&osc->oo_reading_exts);
 	cfs_atomic_set(&osc->oo_nr_reads, 0);
 	cfs_atomic_set(&osc->oo_nr_writes, 0);
-	cfs_spin_lock_init(&osc->oo_lock);
+	spin_lock_init(&osc->oo_lock);
 
 	return 0;
 }

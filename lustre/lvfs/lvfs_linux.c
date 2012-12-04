@@ -542,42 +542,42 @@ EXPORT_SYMBOL(lvfs_check_io_health);
 
 void obd_update_maxusage()
 {
-        __u64 max1, max2;
+	__u64 max1, max2;
 
-        max1 = obd_pages_sum();
-        max2 = obd_memory_sum();
+	max1 = obd_pages_sum();
+	max2 = obd_memory_sum();
 
-        cfs_spin_lock(&obd_updatemax_lock);
-        if (max1 > obd_max_pages)
-                obd_max_pages = max1;
-        if (max2 > obd_max_alloc)
-                obd_max_alloc = max2;
-        cfs_spin_unlock(&obd_updatemax_lock);
+	spin_lock(&obd_updatemax_lock);
+	if (max1 > obd_max_pages)
+		obd_max_pages = max1;
+	if (max2 > obd_max_alloc)
+		obd_max_alloc = max2;
+	spin_unlock(&obd_updatemax_lock);
 
 }
 EXPORT_SYMBOL(obd_update_maxusage);
 
 __u64 obd_memory_max(void)
 {
-        __u64 ret;
+	__u64 ret;
 
-        cfs_spin_lock(&obd_updatemax_lock);
-        ret = obd_max_alloc;
-        cfs_spin_unlock(&obd_updatemax_lock);
+	spin_lock(&obd_updatemax_lock);
+	ret = obd_max_alloc;
+	spin_unlock(&obd_updatemax_lock);
 
-        return ret;
+	return ret;
 }
 EXPORT_SYMBOL(obd_memory_max);
 
 __u64 obd_pages_max(void)
 {
-        __u64 ret;
+	__u64 ret;
 
-        cfs_spin_lock(&obd_updatemax_lock);
-        ret = obd_max_pages;
-        cfs_spin_unlock(&obd_updatemax_lock);
+	spin_lock(&obd_updatemax_lock);
+	ret = obd_max_pages;
+	spin_unlock(&obd_updatemax_lock);
 
-        return ret;
+	return ret;
 }
 EXPORT_SYMBOL(obd_pages_max);
 

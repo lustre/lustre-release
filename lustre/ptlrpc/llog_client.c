@@ -54,7 +54,7 @@
 #include <libcfs/list.h>
 
 #define LLOG_CLIENT_ENTRY(ctxt, imp) do {                             \
-        cfs_mutex_lock(&ctxt->loc_mutex);                             \
+	mutex_lock(&ctxt->loc_mutex);                             \
         if (ctxt->loc_imp) {                                          \
                 imp = class_import_get(ctxt->loc_imp);                \
         } else {                                                      \
@@ -63,19 +63,19 @@
                        "but I'll try again next time.  Not fatal.\n", \
                        ctxt->loc_idx);                                \
                 imp = NULL;                                           \
-                cfs_mutex_unlock(&ctxt->loc_mutex);                   \
+		mutex_unlock(&ctxt->loc_mutex);                   \
                 return (-EINVAL);                                     \
         }                                                             \
-        cfs_mutex_unlock(&ctxt->loc_mutex);                           \
+	mutex_unlock(&ctxt->loc_mutex);                           \
 } while(0)
 
 #define LLOG_CLIENT_EXIT(ctxt, imp) do {                              \
-        cfs_mutex_lock(&ctxt->loc_mutex);                             \
+	mutex_lock(&ctxt->loc_mutex);                             \
         if (ctxt->loc_imp != imp)                                     \
                 CWARN("loc_imp has changed from %p to %p\n",          \
                        ctxt->loc_imp, imp);                           \
         class_import_put(imp);                                        \
-        cfs_mutex_unlock(&ctxt->loc_mutex);                           \
+	mutex_unlock(&ctxt->loc_mutex);                           \
 } while(0)
 
 /* This is a callback from the llog_* functions.

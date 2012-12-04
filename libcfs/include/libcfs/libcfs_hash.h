@@ -131,8 +131,8 @@ struct cfs_hash_lock_ops;
 struct cfs_hash_hlist_ops;
 
 typedef union {
-        cfs_rwlock_t                rw;             /**< rwlock */
-        cfs_spinlock_t              spin;           /**< spinlock */
+	rwlock_t		rw;		/**< rwlock */
+	spinlock_t		spin;		/**< spinlock */
 } cfs_hash_lock_t;
 
 /**
@@ -307,7 +307,7 @@ typedef struct cfs_hash {
         cfs_hash_bucket_t         **hs_rehash_buckets;
 #if CFS_HASH_DEBUG_LEVEL >= CFS_HASH_DEBUG_1
         /** serialize debug members */
-        cfs_spinlock_t              hs_dep_lock;
+	spinlock_t			hs_dep_lock;
         /** max depth */
         unsigned int                hs_dep_max;
         /** id of the deepest bucket */

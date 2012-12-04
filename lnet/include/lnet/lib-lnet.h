@@ -175,14 +175,14 @@ lnet_net_lock_current(void)
 
 #ifdef __KERNEL__
 
-#define lnet_ptl_lock(ptl)	cfs_spin_lock(&(ptl)->ptl_lock)
-#define lnet_ptl_unlock(ptl)	cfs_spin_unlock(&(ptl)->ptl_lock)
-#define lnet_eq_wait_lock()	cfs_spin_lock(&the_lnet.ln_eq_wait_lock)
-#define lnet_eq_wait_unlock()	cfs_spin_unlock(&the_lnet.ln_eq_wait_lock)
-#define lnet_ni_lock(ni)	cfs_spin_lock(&(ni)->ni_lock)
-#define lnet_ni_unlock(ni)	cfs_spin_unlock(&(ni)->ni_lock)
-#define LNET_MUTEX_LOCK(m)	cfs_mutex_lock(m)
-#define LNET_MUTEX_UNLOCK(m)	cfs_mutex_unlock(m)
+#define lnet_ptl_lock(ptl)	spin_lock(&(ptl)->ptl_lock)
+#define lnet_ptl_unlock(ptl)	spin_unlock(&(ptl)->ptl_lock)
+#define lnet_eq_wait_lock()	spin_lock(&the_lnet.ln_eq_wait_lock)
+#define lnet_eq_wait_unlock()	spin_unlock(&the_lnet.ln_eq_wait_lock)
+#define lnet_ni_lock(ni)	spin_lock(&(ni)->ni_lock)
+#define lnet_ni_unlock(ni)	spin_unlock(&(ni)->ni_lock)
+#define LNET_MUTEX_LOCK(m)	mutex_lock(m)
+#define LNET_MUTEX_UNLOCK(m)	mutex_unlock(m)
 
 #else /* !__KERNEL__ */
 

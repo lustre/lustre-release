@@ -112,11 +112,11 @@ static struct llog_canceld_ctxt *llcd_alloc(struct llog_commit_master *lcm)
         llcd->llcd_cookiebytes = 0;
         llcd->llcd_size = size;
 
-        cfs_spin_lock(&lcm->lcm_lock);
-        llcd->llcd_lcm = lcm;
-        cfs_atomic_inc(&lcm->lcm_count);
-        cfs_list_add_tail(&llcd->llcd_list, &lcm->lcm_llcds);
-        cfs_spin_unlock(&lcm->lcm_lock);
+	spin_lock(&lcm->lcm_lock);
+	llcd->llcd_lcm = lcm;
+	cfs_atomic_inc(&lcm->lcm_count);
+	cfs_list_add_tail(&llcd->llcd_list, &lcm->lcm_llcds);
+	spin_unlock(&lcm->lcm_lock);
         cfs_atomic_inc(&llcd_count);
 
         CDEBUG(D_RPCTRACE, "Alloc llcd %p on lcm %p (%d)\n",
@@ -139,11 +139,11 @@ static void llcd_free(struct llog_canceld_ctxt *llcd)
                         llcd_print(llcd, __FUNCTION__, __LINE__);
                         LBUG();
                 }
-                cfs_spin_lock(&lcm->lcm_lock);
-                LASSERT(!cfs_list_empty(&llcd->llcd_list));
-                cfs_list_del_init(&llcd->llcd_list);
-                cfs_atomic_dec(&lcm->lcm_count);
-                cfs_spin_unlock(&lcm->lcm_lock);
+		spin_lock(&lcm->lcm_lock);
+		LASSERT(!cfs_list_empty(&llcd->llcd_list));
+		cfs_list_del_init(&llcd->llcd_list);
+		cfs_atomic_dec(&lcm->lcm_count);
+		spin_unlock(&lcm->lcm_lock);
 
                 CDEBUG(D_RPCTRACE, "Free llcd %p on lcm %p (%d)\n",
                        llcd, lcm, cfs_atomic_read(&lcm->lcm_count));
@@ -230,7 +230,7 @@ static int llcd_send(struct llog_canceld_ctxt *llcd)
          * Check if we're in exit stage. Do not send llcd in
          * this case.
          */
-        if (cfs_test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags))
+	if (test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags))
                 GOTO(exit, rc = -ENODEV);
 
         CDEBUG(D_RPCTRACE, "Sending llcd %p\n", llcd);
@@ -418,7 +418,7 @@ void llog_recov_thread_stop(struct llog_commit_master *lcm, int force)
          * Let all know that we're stopping. This will also make
          * llcd_send() refuse any new llcds.
          */
-        cfs_set_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags);
+	set_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags);
 
         /*
          * Stop processing thread. No new rpcs will be accepted for
@@ -438,13 +438,13 @@ void llog_recov_thread_stop(struct llog_commit_master *lcm, int force)
                 CERROR("Busy llcds found (%d) on lcm %p\n",
                        cfs_atomic_read(&lcm->lcm_count), lcm);
 
-                cfs_spin_lock(&lcm->lcm_lock);
-                cfs_list_for_each(tmp, &lcm->lcm_llcds) {
-                        llcd = cfs_list_entry(tmp, struct llog_canceld_ctxt,
-                                              llcd_list);
-                        llcd_print(llcd, __FUNCTION__, __LINE__);
-                }
-                cfs_spin_unlock(&lcm->lcm_lock);
+		spin_lock(&lcm->lcm_lock);
+		cfs_list_for_each(tmp, &lcm->lcm_llcds) {
+			llcd = cfs_list_entry(tmp, struct llog_canceld_ctxt,
+					      llcd_list);
+			llcd_print(llcd, __func__, __LINE__);
+		}
+		spin_unlock(&lcm->lcm_lock);
 
                 /*
                  * No point to go further with busy llcds at this point
@@ -483,7 +483,7 @@ struct llog_commit_master *llog_recov_thread_init(char *name)
 
         cfs_atomic_set(&lcm->lcm_count, 0);
         cfs_atomic_set(&lcm->lcm_refcount, 1);
-        cfs_spin_lock_init(&lcm->lcm_lock);
+	spin_lock_init(&lcm->lcm_lock);
         CFS_INIT_LIST_HEAD(&lcm->lcm_llcds);
         rc = llog_recov_thread_start(lcm);
         if (rc) {
@@ -567,10 +567,10 @@ int llog_obd_repl_connect(struct llog_ctxt *ctxt,
         /*
          * Start recovery in separate thread.
          */
-        cfs_mutex_lock(&ctxt->loc_mutex);
+	mutex_lock(&ctxt->loc_mutex);
         ctxt->loc_gen = *gen;
         rc = llog_recov_thread_replay(ctxt, ctxt->llog_proc_cb, logid);
-        cfs_mutex_unlock(&ctxt->loc_mutex);
+	mutex_unlock(&ctxt->loc_mutex);
 
         RETURN(rc);
 }
@@ -592,7 +592,7 @@ int llog_obd_repl_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
 
         LASSERT(ctxt != NULL);
 
-        cfs_mutex_lock(&ctxt->loc_mutex);
+	mutex_lock(&ctxt->loc_mutex);
         if (!ctxt->loc_lcm) {
                 CDEBUG(D_RPCTRACE, "No lcm for ctxt %p\n", ctxt);
                 GOTO(out, rc = -ENODEV);
@@ -614,7 +614,7 @@ int llog_obd_repl_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
                 GOTO(out, rc = -ENODEV);
         }
 
-        if (cfs_test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags)) {
+	if (test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags)) {
                 CDEBUG(D_RPCTRACE, "Commit thread is stopping for ctxt %p\n",
                        ctxt);
                 GOTO(out, rc = -ENODEV);
@@ -634,7 +634,7 @@ int llog_obd_repl_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
                          * Allocation is successful, let's check for stop
                          * flag again to fall back as soon as possible.
                          */
-                        if (cfs_test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags))
+			if (test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags))
                                 GOTO(out, rc = -ENODEV);
                 }
 
@@ -653,7 +653,7 @@ int llog_obd_repl_cancel(const struct lu_env *env, struct llog_ctxt *ctxt,
                          * Allocation is successful, let's check for stop
                          * flag again to fall back as soon as possible.
                          */
-                        if (cfs_test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags))
+			if (test_bit(LLOG_LCM_FL_EXIT, &lcm->lcm_flags))
                                 GOTO(out, rc = -ENODEV);
                 }
 
@@ -682,7 +682,7 @@ out:
 	if (flags & OBD_LLOG_FL_EXIT)
 		ctxt->loc_flags = LLOG_CTXT_FLAG_STOP;
 
-        cfs_mutex_unlock(&ctxt->loc_mutex);
+	mutex_unlock(&ctxt->loc_mutex);
         return rc;
 }
 EXPORT_SYMBOL(llog_obd_repl_cancel);
@@ -696,7 +696,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp,
         /*
          * Flush any remaining llcd.
          */
-        cfs_mutex_lock(&ctxt->loc_mutex);
+	mutex_lock(&ctxt->loc_mutex);
         if (exp && (ctxt->loc_imp == exp->exp_imp_reverse)) {
                 /*
                  * This is ost->mds connection, we can't be sure that mds
@@ -708,7 +708,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp,
 		if (flags & OBD_LLOG_FL_EXIT)
 			ctxt->loc_flags = LLOG_CTXT_FLAG_STOP;
 
-                cfs_mutex_unlock(&ctxt->loc_mutex);
+		mutex_unlock(&ctxt->loc_mutex);
         } else {
                 /*
                  * This is either llog_sync() from generic llog code or sync
@@ -716,7 +716,7 @@ int llog_obd_repl_sync(struct llog_ctxt *ctxt, struct obd_export *exp,
                  * llcds to the target with waiting for completion.
                  */
                 CDEBUG(D_RPCTRACE, "Sync cached llcd\n");
-                cfs_mutex_unlock(&ctxt->loc_mutex);
+		mutex_unlock(&ctxt->loc_mutex);
 		rc = llog_cancel(NULL, ctxt, NULL, 0, NULL,
 				 OBD_LLOG_FL_SENDNOW | flags);
         }

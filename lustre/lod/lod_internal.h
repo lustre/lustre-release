@@ -81,7 +81,7 @@ struct lod_device {
 	struct lov_desc	      lod_desc;
 
 	/* use to protect ld_active_tgt_count and all ltd_active */
-	cfs_spinlock_t        lod_desc_lock;
+	spinlock_t	     lod_desc_lock;
 
 	/* list of known OSTs */
 	struct lod_ost_desc_idx *lod_ost_idx[OST_PTRS];
@@ -101,9 +101,9 @@ struct lod_device {
 	/* Table refcount used for delayed deletion */
 	int		      lod_refcount;
 	/* mutex to serialize concurrent updates to the ost table */
-	cfs_mutex_t	      lod_mutex;
+	struct mutex	      lod_mutex;
 	/* read/write semaphore used for array relocation */
-	cfs_rw_semaphore_t    lod_rw_sem;
+	struct rw_semaphore	lod_rw_sem;
 
 	/* QoS info per LOD */
 	struct lov_qos	      lod_qos; /* qos info per lod */

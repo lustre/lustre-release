@@ -50,7 +50,7 @@
  * Infrastructure to support tracking of last committed llog record
  */
 struct osp_id_tracker {
-	cfs_spinlock_t		 otr_lock;
+	spinlock_t		 otr_lock;
 	__u32			 otr_next_id;
 	__u32			 otr_committed_id;
 	/* callback is register once per diskfs -- that's the whole point */
@@ -102,7 +102,7 @@ struct osp_device {
 	/*
 	 * Precreation pool
 	 */
-	cfs_spinlock_t			 opd_pre_lock;
+	spinlock_t			 opd_pre_lock;
 	/* last id assigned in creation */
 	__u64				 opd_pre_used_id;
 	/* last created id OST reported, next-created - available id's */
@@ -127,7 +127,7 @@ struct osp_device {
 	/*
 	 * OST synchronization
 	 */
-	cfs_spinlock_t			 opd_syn_lock;
+	spinlock_t			 opd_syn_lock;
 	/* unique generation, to recognize start of new records in the llog */
 	struct llog_gen			 opd_syn_generation;
 	/* number of changes to sync, used to wake up sync thread */

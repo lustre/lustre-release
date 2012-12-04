@@ -238,7 +238,7 @@ struct inode {
         int             i_uid;
         int             i_gid;
         __u32           i_flags;
-        cfs_mutex_t     i_sem;
+	struct mutex	i_sem;
         void *          i_priv;
 };
 

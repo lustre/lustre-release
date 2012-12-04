@@ -94,10 +94,10 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 	struct ldlm_lock	*lock;
 	ENTRY;
 
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	/* is the qsd about to shut down? */
 	if (qsd->qsd_stopping) {
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 		LQUOTA_DEBUG(lqe, "dropping quota req since qsd is stopping");
 		/* Target is about to shut down, client will retry */
 		RETURN(-EINPROGRESS);
@@ -107,7 +107,7 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 	if (qsd->qsd_exp_valid)
 		imp = class_exp2cliimp(qsd->qsd_exp);
 	if (imp == NULL || imp->imp_invalid) {
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 		LQUOTA_DEBUG(lqe, "connection to master not ready");
 		RETURN(-ENOTCONN);
 	}
@@ -120,7 +120,7 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 	 * If the previous reintegration failed for some reason, we'll
 	 * re-trigger it here as well. */
 	if (!qqi->qqi_glb_uptodate || !qqi->qqi_slv_uptodate) {
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 		LQUOTA_DEBUG(lqe, "not up-to-date, dropping request and "
 			     "kicking off reintegration");
 		qsd_start_reint_thread(qqi);
@@ -130,7 +130,7 @@ static int qsd_ready(struct lquota_entry *lqe, struct lustre_handle *lockh)
 	/* Fill the remote global lock handle, master will check this handle
 	 * to see if the slave is sending request with stale lock */
 	lustre_handle_copy(lockh, &qqi->qqi_lockh);
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 
 	if (!lustre_handle_is_used(lockh))
 		RETURN(-ENOLCK);
@@ -835,12 +835,12 @@ int qsd_op_begin(const struct lu_env *env, struct qsd_instance *qsd,
 		RETURN(0);
 
 	/* We don't enforce quota until the qsd_instance is started */
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_started) {
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 		RETURN(0);
 	}
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 
 	/* ignore block quota on MDTs, ignore inode quota on OSTs */
 	if ((!qsd->qsd_is_md && !qi->lqi_is_blk) ||
@@ -1075,12 +1075,12 @@ void qsd_op_end(const struct lu_env *env, struct qsd_instance *qsd,
 		RETURN_EXIT;
 
 	/* We don't enforce quota until the qsd_instance is started */
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_started) {
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 		RETURN_EXIT;
 	}
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 
 	LASSERT(trans != NULL);
 
@@ -1127,12 +1127,12 @@ void qsd_op_adjust(const struct lu_env *env, struct qsd_instance *qsd,
 		RETURN_EXIT;
 
 	/* We don't enforce quota until the qsd_instance is started */
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_started) {
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 		RETURN_EXIT;
 	}
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 
 	qqi = qsd->qsd_type_array[qtype];
 	LASSERT(qqi);
@@ -1141,12 +1141,12 @@ void qsd_op_adjust(const struct lu_env *env, struct qsd_instance *qsd,
 	    qid->qid_uid == 0)
 		RETURN_EXIT;
 
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_started) {
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 		RETURN_EXIT;
 	}
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 
 	lqe = lqe_locate(env, qqi->qqi_site, qid);
 	if (IS_ERR(lqe)) {

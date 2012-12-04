@@ -111,7 +111,7 @@ typedef struct
         cfs_list_t             rad_ready_conns;/* connections ready to tx/rx */
         cfs_list_t             rad_new_conns; /* new connections to complete */
         cfs_waitq_t            rad_waitq;     /* scheduler waits here */
-        cfs_spinlock_t         rad_lock;      /* serialise */
+	spinlock_t		rad_lock;	/* serialise */
         void                  *rad_scheduler; /* scheduling thread */
         unsigned int           rad_nphysmap;  /* # phys mappings */
         unsigned int           rad_nppphysmap;/* # phys pages mapped */
@@ -129,7 +129,7 @@ typedef struct
         kra_device_t      kra_devices[RANAL_MAXDEVS]; /* device/ptag/cq */
         int               kra_ndevs;           /* # devices */
 
-        cfs_rwlock_t      kra_global_lock;     /* stabilize peer/conn ops */
+	rwlock_t	  kra_global_lock;	/* stabilize peer/conn ops */
 
         cfs_list_t       *kra_peers;           /* hash table of all my known peers */
         int               kra_peer_hash_size;  /* size of kra_peers */
@@ -145,16 +145,16 @@ typedef struct
 
         long              kra_new_min_timeout; /* minimum timeout on any new conn */
         cfs_waitq_t       kra_reaper_waitq;    /* reaper sleeps here */
-        cfs_spinlock_t    kra_reaper_lock;     /* serialise */
+	spinlock_t	  kra_reaper_lock;     /* serialise */
 
         cfs_list_t        kra_connd_peers;     /* peers waiting for a connection */
         cfs_list_t        kra_connd_acceptq;   /* accepted sockets to handshake */
         cfs_waitq_t       kra_connd_waitq;     /* connection daemons sleep here */
-        cfs_spinlock_t    kra_connd_lock;      /* serialise */
+	spinlock_t	  kra_connd_lock;	/* serialise */
 
         cfs_list_t        kra_idle_txs;        /* idle tx descriptors */
         __u64             kra_next_tx_cookie;  /* RDMA completion cookie */
-        cfs_spinlock_t    kra_tx_lock;         /* serialise */
+	spinlock_t	  kra_tx_lock;		/* serialise */
 } kra_data_t;
 
 #define RANAL_INIT_NOTHING         0
@@ -308,7 +308,7 @@ typedef struct kra_conn
         unsigned int        rac_close_recvd;   /* I've received CLOSE */
         unsigned int        rac_state;         /* connection state */
         unsigned int        rac_scheduled;     /* being attented to */
-        cfs_spinlock_t      rac_lock;          /* serialise */
+	spinlock_t	    rac_lock;		/* serialise */
         kra_device_t       *rac_device;        /* which device */
         RAP_PVOID           rac_rihandle;      /* RA endpoint */
         kra_msg_t          *rac_rxmsg;         /* incoming message (FMA prefix) */

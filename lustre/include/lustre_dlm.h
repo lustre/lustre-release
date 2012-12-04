@@ -339,7 +339,7 @@ struct ldlm_pool {
         /**
          * Lock for protecting slv/clv updates.
          */
-        cfs_spinlock_t         pl_lock;
+	spinlock_t		pl_lock;
         /**
          * Number of allowed locks in in pool, both, client and server side.
          */
@@ -471,7 +471,7 @@ struct ldlm_namespace {
         /**
          * serialize
          */
-        cfs_spinlock_t         ns_lock;
+	spinlock_t		ns_lock;
 
         /**
          * big refcount (by bucket)
@@ -676,7 +676,7 @@ struct ldlm_lock {
          * Internal spinlock protects l_resource.  we should hold this lock
          * first before grabbing res_lock.
          */
-        cfs_spinlock_t           l_lock;
+	spinlock_t		l_lock;
         /**
          * ldlm_lock_change_resource() can change this.
          */
@@ -869,11 +869,11 @@ struct ldlm_lock {
 };
 
 struct ldlm_resource {
-        struct ldlm_ns_bucket *lr_ns_bucket;
+	struct ldlm_ns_bucket	*lr_ns_bucket;
 
-        /* protected by ns_hash_lock */
-        cfs_hlist_node_t       lr_hash;
-        cfs_spinlock_t         lr_lock;
+	/* protected by ns_hash_lock */
+	cfs_hlist_node_t	lr_hash;
+	spinlock_t		lr_lock;
 
         /* protected by lr_lock */
         cfs_list_t             lr_granted;
@@ -888,7 +888,7 @@ struct ldlm_resource {
 
         /* Server-side-only lock value block elements */
         /** to serialize lvbo_init */
-        cfs_mutex_t            lr_lvb_mutex;
+	struct mutex		lr_lvb_mutex;
         __u32                  lr_lvb_len;
         /** protect by lr_lock */
         void                  *lr_lvb_data;
@@ -1343,18 +1343,18 @@ enum lock_res_type {
 
 static inline void lock_res(struct ldlm_resource *res)
 {
-        cfs_spin_lock(&res->lr_lock);
+	spin_lock(&res->lr_lock);
 }
 
 static inline void lock_res_nested(struct ldlm_resource *res,
                                    enum lock_res_type mode)
 {
-        cfs_spin_lock_nested(&res->lr_lock, mode);
+	spin_lock_nested(&res->lr_lock, mode);
 }
 
 static inline void unlock_res(struct ldlm_resource *res)
 {
-        cfs_spin_unlock(&res->lr_lock);
+	spin_unlock(&res->lr_lock);
 }
 
 static inline void check_res_locked(struct ldlm_resource *res)

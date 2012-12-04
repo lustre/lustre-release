@@ -83,7 +83,7 @@ struct fld_cache *fld_cache_init(const char *name,
         CFS_INIT_LIST_HEAD(&cache->fci_lru);
 
         cache->fci_cache_count = 0;
-        cfs_spin_lock_init(&cache->fci_lock);
+	spin_lock_init(&cache->fci_lock);
 
         strncpy(cache->fci_name, name,
                 sizeof(cache->fci_name));
@@ -259,14 +259,14 @@ static int fld_cache_shrink(struct fld_cache *cache)
  */
 void fld_cache_flush(struct fld_cache *cache)
 {
-        ENTRY;
+	ENTRY;
 
-        cfs_spin_lock(&cache->fci_lock);
-        cache->fci_cache_size = 0;
-        fld_cache_shrink(cache);
-        cfs_spin_unlock(&cache->fci_lock);
+	spin_lock(&cache->fci_lock);
+	cache->fci_cache_size = 0;
+	fld_cache_shrink(cache);
+	spin_unlock(&cache->fci_lock);
 
-        EXIT;
+	EXIT;
 }
 
 /**
@@ -412,7 +412,7 @@ void fld_cache_insert(struct fld_cache *cache,
          * So we don't need to search new entry before starting insertion loop.
          */
 
-        cfs_spin_lock(&cache->fci_lock);
+	spin_lock(&cache->fci_lock);
         fld_cache_shrink(cache);
 
         head = &cache->fci_entries_head;
@@ -440,22 +440,21 @@ void fld_cache_insert(struct fld_cache *cache,
         /* Add new entry to cache and lru list. */
         fld_cache_entry_add(cache, f_new, prev);
 out:
-        cfs_spin_unlock(&cache->fci_lock);
-        EXIT;
+	spin_unlock(&cache->fci_lock);
+	EXIT;
 }
 
 /**
  * lookup \a seq sequence for range in fld cache.
  */
 int fld_cache_lookup(struct fld_cache *cache,
-                     const seqno_t seq, struct lu_seq_range *range)
+		     const seqno_t seq, struct lu_seq_range *range)
 {
-        struct fld_cache_entry *flde;
-        cfs_list_t *head;
-        ENTRY;
+	struct fld_cache_entry *flde;
+	cfs_list_t *head;
+	ENTRY;
 
-
-        cfs_spin_lock(&cache->fci_lock);
+	spin_lock(&cache->fci_lock);
         head = &cache->fci_entries_head;
 
         cache->fci_stat.fst_count++;
@@ -469,10 +468,10 @@ int fld_cache_lookup(struct fld_cache *cache,
                         /* update position of this entry in lru list. */
                         cfs_list_move(&flde->fce_lru, &cache->fci_lru);
                         cache->fci_stat.fst_cache++;
-                        cfs_spin_unlock(&cache->fci_lock);
-                        RETURN(0);
-                }
-        }
-        cfs_spin_unlock(&cache->fci_lock);
-        RETURN(-ENOENT);
+			spin_unlock(&cache->fci_lock);
+			RETURN(0);
+		}
+	}
+	spin_unlock(&cache->fci_lock);
+	RETURN(-ENOENT);
 }

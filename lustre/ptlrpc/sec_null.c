@@ -425,7 +425,7 @@ static void null_init_internal(void)
         null_sec.ps_flvr.sf_flags = 0;
         null_sec.ps_part = LUSTRE_SP_ANY;
         null_sec.ps_dying = 0;
-        cfs_spin_lock_init(&null_sec.ps_lock);
+	spin_lock_init(&null_sec.ps_lock);
         cfs_atomic_set(&null_sec.ps_nctx, 1);         /* for "null_cli_ctx" */
         CFS_INIT_LIST_HEAD(&null_sec.ps_gc_list);
         null_sec.ps_gc_interval = 0;
@@ -439,9 +439,9 @@ static void null_init_internal(void)
         null_cli_ctx.cc_flags = PTLRPC_CTX_CACHED | PTLRPC_CTX_ETERNAL |
                                 PTLRPC_CTX_UPTODATE;
         null_cli_ctx.cc_vcred.vc_uid = 0;
-        cfs_spin_lock_init(&null_cli_ctx.cc_lock);
-        CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_req_list);
-        CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_gc_chain);
+	spin_lock_init(&null_cli_ctx.cc_lock);
+	CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_req_list);
+	CFS_INIT_LIST_HEAD(&null_cli_ctx.cc_gc_chain);
 }
 
 int sptlrpc_null_init(void)

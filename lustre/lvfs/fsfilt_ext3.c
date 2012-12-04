@@ -1160,7 +1160,7 @@ int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
 int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                                 int pages, unsigned long *blocks,
                                 int *created, int create,
-                                cfs_mutex_t *optional_mutex)
+				struct mutex *optional_mutex)
 {
         int rc;
 
@@ -1170,11 +1170,11 @@ int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
                 return rc;
         }
         if (optional_mutex != NULL)
-                cfs_mutex_lock(optional_mutex);
+		mutex_lock(optional_mutex);
         rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
                                             created, create);
         if (optional_mutex != NULL)
-                cfs_mutex_unlock(optional_mutex);
+		mutex_unlock(optional_mutex);
 
         return rc;
 }
@@ -1187,8 +1187,8 @@ int fsfilt_ext3_read(struct inode *inode, void *buf, int size, loff_t *offs)
 
         /* prevent reading after eof */
 	spin_lock(&inode->i_lock);
-        if (i_size_read(inode) < *offs + size) {
-                size = i_size_read(inode) - *offs;
+	if (i_size_read(inode) < *offs + size) {
+		size = i_size_read(inode) - *offs;
 		spin_unlock(&inode->i_lock);
                 if (size < 0) {
                         CDEBUG(D_EXT2, "size %llu is too short for read @%llu\n",
@@ -1282,14 +1282,14 @@ int fsfilt_ext3_write_handle(struct inode *inode, void *buf, int bufsize,
         /* correct in-core and on-disk sizes */
         if (new_size > i_size_read(inode)) {
 		spin_lock(&inode->i_lock);
-                if (new_size > i_size_read(inode))
-                        i_size_write(inode, new_size);
-                if (i_size_read(inode) > EXT3_I(inode)->i_disksize)
-                        EXT3_I(inode)->i_disksize = i_size_read(inode);
-                if (i_size_read(inode) > old_size) {
+		if (new_size > i_size_read(inode))
+			i_size_write(inode, new_size);
+		if (i_size_read(inode) > EXT3_I(inode)->i_disksize)
+			EXT3_I(inode)->i_disksize = i_size_read(inode);
+		if (i_size_read(inode) > old_size) {
 			spin_unlock(&inode->i_lock);
-                        mark_inode_dirty(inode);
-                } else {
+			mark_inode_dirty(inode);
+		} else {
 			spin_unlock(&inode->i_lock);
                 }
         }

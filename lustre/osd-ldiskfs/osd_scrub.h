@@ -172,8 +172,8 @@ struct osd_scrub {
 
 	/* write lock for scrub prep/update/post/checkpoint,
 	 * read lock for scrub dump. */
-	cfs_rw_semaphore_t      os_rwsem;
-	cfs_spinlock_t		os_lock;
+	struct rw_semaphore	os_rwsem;
+	spinlock_t		os_lock;
 
 	/* Scrub file in memory. */
 	struct scrub_file       os_file;

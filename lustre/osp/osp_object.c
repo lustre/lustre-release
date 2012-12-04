@@ -220,7 +220,7 @@ static int osp_declare_object_create(const struct lu_env *env,
 					     th);
 	} else {
 		/* not needed in the cache anymore */
-		cfs_set_bit(LU_OBJECT_HEARD_BANSHEE,
+		set_bit(LU_OBJECT_HEARD_BANSHEE,
 			    &dt->do_lu.lo_header->loh_flags);
 	}
 	RETURN(rc);
@@ -247,9 +247,9 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 		rc = fid_ostid_pack(lu_object_fid(&dt->do_lu), &osi->osi_oi);
 		LASSERT(rc == 0);
 		osi->osi_id = ostid_id(&osi->osi_oi);
-		cfs_spin_lock(&d->opd_pre_lock);
+		spin_lock(&d->opd_pre_lock);
 		osp_update_last_id(d, osi->osi_id);
-		cfs_spin_unlock(&d->opd_pre_lock);
+		spin_unlock(&d->opd_pre_lock);
 	}
 
 	LASSERT(osi->osi_id);
@@ -263,20 +263,20 @@ static int osp_object_create(const struct lu_env *env, struct dt_object *dt,
 
 	/* we might have lost precreated objects */
 	if (unlikely(d->opd_gap_count) > 0) {
-		cfs_spin_lock(&d->opd_pre_lock);
+		spin_lock(&d->opd_pre_lock);
 		if (d->opd_gap_count > 0) {
 			int count = d->opd_gap_count;
 
 			osi->osi_oi.oi_id = d->opd_gap_start;
 			d->opd_gap_count = 0;
-			cfs_spin_unlock(&d->opd_pre_lock);
+			spin_unlock(&d->opd_pre_lock);
 
 			CDEBUG(D_HA, "Found gap "LPU64"+%d in objids\n",
 			       d->opd_gap_start, count);
 			/* real gap handling is disabled intil ORI-692 will be
 			 * fixed, now we only report gaps */
 		} else {
-			cfs_spin_unlock(&d->opd_pre_lock);
+			spin_unlock(&d->opd_pre_lock);
 		}
 	}
 
@@ -325,7 +325,7 @@ static int osp_object_destroy(const struct lu_env *env, struct dt_object *dt,
 	rc = osp_sync_add(env, o, MDS_UNLINK64_REC, th, NULL);
 
 	/* not needed in cache any more */
-	cfs_set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
+	set_bit(LU_OBJECT_HEARD_BANSHEE, &dt->do_lu.lo_header->loh_flags);
 
 	RETURN(rc);
 }
@@ -372,12 +372,12 @@ static void osp_object_release(const struct lu_env *env, struct lu_object *o)
 	 */
 	if (unlikely(po->opo_reserved)) {
 		LASSERT(d->opd_pre_reserved > 0);
-		cfs_spin_lock(&d->opd_pre_lock);
+		spin_lock(&d->opd_pre_lock);
 		d->opd_pre_reserved--;
-		cfs_spin_unlock(&d->opd_pre_lock);
+		spin_unlock(&d->opd_pre_lock);
 
 		/* not needed in cache any more */
-		cfs_set_bit(LU_OBJECT_HEARD_BANSHEE, &o->lo_header->loh_flags);
+		set_bit(LU_OBJECT_HEARD_BANSHEE, &o->lo_header->loh_flags);
 	}
 	EXIT;
 }

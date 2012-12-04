@@ -55,7 +55,7 @@
 typedef struct udmu_objset {
 	struct objset	*os;
 	uint64_t	root;  /* id of root znode */
-	cfs_spinlock_t	lock;  /* protects objects below */
+	spinlock_t	lock;  /* protects objects below */
 	uint64_t	objects; /* in-core counter of objects */
 	/* SA attr mapping->id,
 	 * name is the same as in ZFS to use defines SA_ZPL_...*/

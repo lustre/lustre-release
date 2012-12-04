@@ -155,7 +155,7 @@ int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
         ENTRY;
 
         LASSERT(ctxt);
-        cfs_mutex_lock(&ctxt->loc_mutex);
+	mutex_lock(&ctxt->loc_mutex);
         if (ctxt->loc_imp != imp) {
                 if (ctxt->loc_imp) {
                         CWARN("changing the import %p - %p\n",
@@ -164,7 +164,7 @@ int llog_receptor_accept(struct llog_ctxt *ctxt, struct obd_import *imp)
                 }
                 ctxt->loc_imp = class_import_get(imp);
         }
-        cfs_mutex_unlock(&ctxt->loc_mutex);
+	mutex_unlock(&ctxt->loc_mutex);
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_receptor_accept);
@@ -188,13 +188,13 @@ int llog_initiator_connect(struct llog_ctxt *ctxt)
         new_imp = ctxt->loc_obd->u.cli.cl_import;
         LASSERTF(ctxt->loc_imp == NULL || ctxt->loc_imp == new_imp,
                  "%p - %p\n", ctxt->loc_imp, new_imp);
-        cfs_mutex_lock(&ctxt->loc_mutex);
+	mutex_lock(&ctxt->loc_mutex);
         if (ctxt->loc_imp != new_imp) {
                 if (ctxt->loc_imp)
                         class_import_put(ctxt->loc_imp);
                 ctxt->loc_imp = class_import_get(new_imp);
         }
-        cfs_mutex_unlock(&ctxt->loc_mutex);
+	mutex_unlock(&ctxt->loc_mutex);
         RETURN(0);
 }
 EXPORT_SYMBOL(llog_initiator_connect);

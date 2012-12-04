@@ -74,9 +74,9 @@ static void lov_getref(struct obd_device *obd)
         struct lov_obd *lov = &obd->u.lov;
 
         /* nobody gets through here until lov_putref is done */
-        cfs_mutex_lock(&lov->lov_lock);
+	mutex_lock(&lov->lov_lock);
         cfs_atomic_inc(&lov->lov_refcount);
-        cfs_mutex_unlock(&lov->lov_lock);
+	mutex_unlock(&lov->lov_lock);
         return;
 }
 
@@ -86,7 +86,7 @@ static void lov_putref(struct obd_device *obd)
 {
         struct lov_obd *lov = &obd->u.lov;
 
-        cfs_mutex_lock(&lov->lov_lock);
+	mutex_lock(&lov->lov_lock);
         /* ok to dec to 0 more than once -- ltd_exp's will be null */
         if (cfs_atomic_dec_and_test(&lov->lov_refcount) && lov->lov_death_row) {
                 CFS_LIST_HEAD(kill);
@@ -107,7 +107,7 @@ static void lov_putref(struct obd_device *obd)
                         lov->lov_tgts[i] = NULL;
                         lov->lov_death_row--;
                 }
-                cfs_mutex_unlock(&lov->lov_lock);
+		mutex_unlock(&lov->lov_lock);
 
                 cfs_list_for_each_entry_safe(tgt, n, &kill, ltd_kill) {
                         cfs_list_del(&tgt->ltd_kill);
@@ -115,7 +115,7 @@ static void lov_putref(struct obd_device *obd)
                         __lov_del_obd(obd, tgt);
                 }
         } else {
-                cfs_mutex_unlock(&lov->lov_lock);
+		mutex_unlock(&lov->lov_lock);
         }
 }
 
@@ -539,13 +539,13 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         if (tgt_obd == NULL)
                 RETURN(-EINVAL);
 
-        cfs_mutex_lock(&lov->lov_lock);
+	mutex_lock(&lov->lov_lock);
 
         if ((index < lov->lov_tgt_size) && (lov->lov_tgts[index] != NULL)) {
                 tgt = lov->lov_tgts[index];
                 CERROR("UUID %s already assigned at LOV target index %d\n",
                        obd_uuid2str(&tgt->ltd_uuid), index);
-                cfs_mutex_unlock(&lov->lov_lock);
+		mutex_unlock(&lov->lov_lock);
                 RETURN(-EEXIST);
         }
 
@@ -559,7 +559,7 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
                         newsize = newsize << 1;
                 OBD_ALLOC(newtgts, sizeof(*newtgts) * newsize);
                 if (newtgts == NULL) {
-                        cfs_mutex_unlock(&lov->lov_lock);
+			mutex_unlock(&lov->lov_lock);
                         RETURN(-ENOMEM);
                 }
 
@@ -584,13 +584,13 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
 
         OBD_ALLOC_PTR(tgt);
         if (!tgt) {
-                cfs_mutex_unlock(&lov->lov_lock);
+		mutex_unlock(&lov->lov_lock);
                 RETURN(-ENOMEM);
         }
 
         rc = lov_ost_pool_add(&lov->lov_packed, index, lov->lov_tgt_size);
         if (rc) {
-                cfs_mutex_unlock(&lov->lov_lock);
+		mutex_unlock(&lov->lov_lock);
                 OBD_FREE_PTR(tgt);
                 RETURN(rc);
         }
@@ -605,7 +605,7 @@ static int lov_add_target(struct obd_device *obd, struct obd_uuid *uuidp,
         if (index >= lov->desc.ld_tgt_count)
                 lov->desc.ld_tgt_count = index + 1;
 
-        cfs_mutex_unlock(&lov->lov_lock);
+	mutex_unlock(&lov->lov_lock);
 
         CDEBUG(D_CONFIG, "idx=%d ltd_gen=%d ld_tgt_count=%d\n",
                 index, tgt->ltd_gen, lov->desc.ld_tgt_count);
@@ -803,7 +803,7 @@ int lov_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lov->desc = *desc;
         lov->lov_tgt_size = 0;
 
-        cfs_mutex_init(&lov->lov_lock);
+	mutex_init(&lov->lov_lock);
         cfs_atomic_set(&lov->lov_refcount, 0);
         lov->lov_sp_me = LUSTRE_SP_CLI;
 
@@ -2679,18 +2679,18 @@ static int lov_extent_calc(struct obd_export *exp, struct lov_stripe_md *lsm,
 
 void lov_stripe_lock(struct lov_stripe_md *md)
 {
-        LASSERT(md->lsm_lock_owner != cfs_curproc_pid());
-        cfs_spin_lock(&md->lsm_lock);
-        LASSERT(md->lsm_lock_owner == 0);
-        md->lsm_lock_owner = cfs_curproc_pid();
+	LASSERT(md->lsm_lock_owner != cfs_curproc_pid());
+	spin_lock(&md->lsm_lock);
+	LASSERT(md->lsm_lock_owner == 0);
+	md->lsm_lock_owner = cfs_curproc_pid();
 }
 EXPORT_SYMBOL(lov_stripe_lock);
 
 void lov_stripe_unlock(struct lov_stripe_md *md)
 {
-        LASSERT(md->lsm_lock_owner == cfs_curproc_pid());
-        md->lsm_lock_owner = 0;
-        cfs_spin_unlock(&md->lsm_lock);
+	LASSERT(md->lsm_lock_owner == cfs_curproc_pid());
+	md->lsm_lock_owner = 0;
+	spin_unlock(&md->lsm_lock);
 }
 EXPORT_SYMBOL(lov_stripe_unlock);
 

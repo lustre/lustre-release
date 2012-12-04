@@ -340,7 +340,7 @@ static void *lod_osts_seq_start(struct seq_file *p, loff_t *pos)
 	if (*pos >= lod->lod_ost_bitmap->size)
 		return NULL;
 
-	*pos = cfs_find_next_bit(lod->lod_ost_bitmap->data,
+	*pos = find_next_bit(lod->lod_ost_bitmap->data,
 				 lod->lod_ost_bitmap->size, *pos);
 	if (*pos < lod->lod_ost_bitmap->size)
 		return OST_TGT(lod,*pos);
@@ -366,7 +366,7 @@ static void *lod_osts_seq_next(struct seq_file *p, void *v, loff_t *pos)
 	if (*pos >= lod->lod_ost_bitmap->size - 1)
 		return NULL;
 
-	*pos = cfs_find_next_bit(lod->lod_ost_bitmap->data,
+	*pos = find_next_bit(lod->lod_ost_bitmap->data,
 				 lod->lod_ost_bitmap->size, *pos + 1);
 	if (*pos < lod->lod_ost_bitmap->size)
 		return OST_TGT(lod,*pos);

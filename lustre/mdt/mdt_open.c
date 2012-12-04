@@ -118,7 +118,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
 
         ma->ma_need = MA_INODE | MA_LOV;
         ma->ma_valid = 0;
-        cfs_mutex_lock(&o->mot_lov_mutex);
+	mutex_lock(&o->mot_lov_mutex);
         if (!(o->mot_flags & MOF_LOV_CREATED)) {
                 rc = mdo_create_data(info->mti_env,
                                      p ? mdt_object_child(p) : NULL,
@@ -129,7 +129,7 @@ static int mdt_create_data(struct mdt_thread_info *info,
                 if (rc == 0 && ma->ma_valid & MA_LOV)
                         o->mot_flags |= MOF_LOV_CREATED;
         }
-        cfs_mutex_unlock(&o->mot_lov_mutex);
+	mutex_unlock(&o->mot_lov_mutex);
         RETURN(rc);
 }
 
@@ -172,14 +172,14 @@ int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
             !S_ISREG(lu_object_attr(&o->mot_obj.mo_lu)))
                 RETURN(0);
 
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
-        if (mdt_ioepoch_opened(o)) {
-                /* Epoch continues even if there is no writers yet. */
-                CDEBUG(D_INODE, "continue epoch "LPU64" for "DFID"\n",
-                       o->mot_ioepoch, PFID(mdt_object_fid(o)));
-        } else {
-                /* XXX: ->mdt_ioepoch is not initialized at the mount */
-                cfs_spin_lock(&mdt->mdt_ioepoch_lock);
+	mutex_lock(&o->mot_ioepoch_mutex);
+	if (mdt_ioepoch_opened(o)) {
+		/* Epoch continues even if there is no writers yet. */
+		CDEBUG(D_INODE, "continue epoch "LPU64" for "DFID"\n",
+		       o->mot_ioepoch, PFID(mdt_object_fid(o)));
+	} else {
+		/* XXX: ->mdt_ioepoch is not initialized at the mount */
+		spin_lock(&mdt->mdt_ioepoch_lock);
                 if (mdt->mdt_ioepoch < info->mti_replayepoch)
                         mdt->mdt_ioepoch = info->mti_replayepoch;
 
@@ -190,16 +190,16 @@ int mdt_ioepoch_open(struct mdt_thread_info *info, struct mdt_object *o,
                 else
                         o->mot_ioepoch = mdt->mdt_ioepoch;
 
-                cfs_spin_unlock(&mdt->mdt_ioepoch_lock);
+		spin_unlock(&mdt->mdt_ioepoch_lock);
 
-                CDEBUG(D_INODE, "starting epoch "LPU64" for "DFID"\n",
-                       o->mot_ioepoch, PFID(mdt_object_fid(o)));
-                if (created)
-                        o->mot_flags |= MOF_SOM_CREATED;
-                cancel = 1;
-        }
-        o->mot_ioepoch_count++;
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+		CDEBUG(D_INODE, "starting epoch "LPU64" for "DFID"\n",
+		       o->mot_ioepoch, PFID(mdt_object_fid(o)));
+		if (created)
+			o->mot_flags |= MOF_SOM_CREATED;
+		cancel = 1;
+	}
+	o->mot_ioepoch_count++;
+	mutex_unlock(&o->mot_ioepoch_mutex);
 
         /* Cancel Size-on-MDS attributes cached on clients for the open case.
          * In the truncate case, see mdt_reint_setattr(). */
@@ -274,7 +274,7 @@ static inline int mdt_ioepoch_close_on_eviction(struct mdt_thread_info *info,
 {
         int rc = 0;
 
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         CDEBUG(D_INODE, "Eviction. Closing IOepoch "LPU64" on "DFID". "
                "Count %d\n", o->mot_ioepoch, PFID(mdt_object_fid(o)),
                o->mot_ioepoch_count);
@@ -287,7 +287,7 @@ static inline int mdt_ioepoch_close_on_eviction(struct mdt_thread_info *info,
                 rc = mdt_som_attr_set(info, o, o->mot_ioepoch, MDT_SOM_DISABLE);
                 mdt_object_som_enable(o, o->mot_ioepoch);
         }
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         RETURN(rc);
 }
 
@@ -302,7 +302,7 @@ static inline int mdt_ioepoch_close_on_replay(struct mdt_thread_info *info,
         int rc = MDT_IOEPOCH_CLOSED;
         ENTRY;
 
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         CDEBUG(D_INODE, "Replay. Closing epoch "LPU64" on "DFID". Count %d\n",
                o->mot_ioepoch, PFID(mdt_object_fid(o)), o->mot_ioepoch_count);
         o->mot_ioepoch_count--;
@@ -314,7 +314,7 @@ static inline int mdt_ioepoch_close_on_replay(struct mdt_thread_info *info,
 
         if (!mdt_ioepoch_opened(o))
                 mdt_object_som_enable(o, info->mti_ioepoch->ioepoch);
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
 
         RETURN(rc);
 }
@@ -343,7 +343,7 @@ static inline int mdt_ioepoch_close_reg(struct mdt_thread_info *info,
         la = &info->mti_attr.ma_attr;
         achange = (info->mti_ioepoch->flags & MF_SOM_CHANGE);
 
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         o->mot_ioepoch_count--;
 
         tmp_ma = &info->mti_u.som.attr;
@@ -410,7 +410,7 @@ static inline int mdt_ioepoch_close_reg(struct mdt_thread_info *info,
                 mdt_object_som_enable(o, o->mot_ioepoch);
         }
 
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         /* If recovery is needed, tell the client to perform GETATTR under
          * the lock. */
         if (ret == MDT_IOEPOCH_GETATTR && recovery) {
@@ -422,7 +422,7 @@ static inline int mdt_ioepoch_close_reg(struct mdt_thread_info *info,
         RETURN(rc ? : ret);
 
 error_up:
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         return rc;
 }
 
@@ -491,7 +491,7 @@ int mdt_som_au_close(struct mdt_thread_info *info, struct mdt_object *o)
              !(info->mti_attr.ma_attr.la_valid & LA_SIZE)))
                 act = MDT_SOM_DISABLE;
 
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         /* Mark the object it is the recovery state if we failed to obtain
          * SOM attributes. */
         if (act == MDT_SOM_DISABLE)
@@ -505,7 +505,7 @@ int mdt_som_au_close(struct mdt_thread_info *info, struct mdt_object *o)
                         rc = mdt_som_attr_set(info, o, ioepoch, act);
                 mdt_object_som_enable(o, ioepoch);
         }
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         RETURN(rc);
 }
 
@@ -513,9 +513,9 @@ int mdt_write_read(struct mdt_object *o)
 {
         int rc = 0;
         ENTRY;
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         rc = o->mot_writecount;
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         RETURN(rc);
 }
 
@@ -523,21 +523,21 @@ int mdt_write_get(struct mdt_object *o)
 {
         int rc = 0;
         ENTRY;
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         if (o->mot_writecount < 0)
                 rc = -ETXTBSY;
         else
                 o->mot_writecount++;
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         RETURN(rc);
 }
 
 void mdt_write_put(struct mdt_object *o)
 {
         ENTRY;
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         o->mot_writecount--;
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         EXIT;
 }
 
@@ -545,21 +545,21 @@ static int mdt_write_deny(struct mdt_object *o)
 {
         int rc = 0;
         ENTRY;
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         if (o->mot_writecount > 0)
                 rc = -ETXTBSY;
         else
                 o->mot_writecount--;
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         RETURN(rc);
 }
 
 static void mdt_write_allow(struct mdt_object *o)
 {
         ENTRY;
-        cfs_mutex_lock(&o->mot_ioepoch_mutex);
+	mutex_lock(&o->mot_ioepoch_mutex);
         o->mot_writecount++;
-        cfs_mutex_unlock(&o->mot_ioepoch_mutex);
+	mutex_unlock(&o->mot_ioepoch_mutex);
         EXIT;
 }
 
@@ -576,7 +576,7 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
         if (lustre_msg_get_transno(req->rq_repmsg) != 0)
                 RETURN_EXIT;
 
-        cfs_spin_lock(&mdt->mdt_lut.lut_translock);
+	spin_lock(&mdt->mdt_lut.lut_translock);
 	if (rc != 0) {
 		if (info->mti_transno != 0) {
 			struct obd_export *exp = req->rq_export;
@@ -589,13 +589,13 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 			RETURN_EXIT;
 		}
 	} else if (info->mti_transno == 0) {
-                info->mti_transno = ++ mdt->mdt_lut.lut_last_transno;
-        } else {
-                /* should be replay */
-                if (info->mti_transno > mdt->mdt_lut.lut_last_transno)
-                        mdt->mdt_lut.lut_last_transno = info->mti_transno;
+		info->mti_transno = ++mdt->mdt_lut.lut_last_transno;
+	} else {
+		/* should be replay */
+		if (info->mti_transno > mdt->mdt_lut.lut_last_transno)
+			mdt->mdt_lut.lut_last_transno = info->mti_transno;
 	}
-        cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
+	spin_unlock(&mdt->mdt_lut.lut_translock);
 
         CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
                         info->mti_transno,
@@ -607,7 +607,7 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
         /* update lcd in memory only for resent cases */
         ted = &req->rq_export->exp_target_data;
         LASSERT(ted);
-        cfs_mutex_lock(&ted->ted_lcd_lock);
+	mutex_lock(&ted->ted_lcd_lock);
         lcd = ted->ted_lcd;
 	if (info->mti_transno < lcd->lcd_last_transno &&
 	    info->mti_transno != 0) {
@@ -615,7 +615,7 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 		 * last rcvd info if replay req transno < last transno,
 		 * otherwise the following resend(after replay) can not
 		 * be checked correctly by xid */
-		cfs_mutex_unlock(&ted->ted_lcd_lock);
+		mutex_unlock(&ted->ted_lcd_lock);
 		CDEBUG(D_HA, "%s: transno = "LPU64" < last_transno = "LPU64"\n",
 			mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name,
 			info->mti_transno, lcd->lcd_last_transno);
@@ -644,7 +644,7 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
                 lcd->lcd_last_result = rc;
                 lcd->lcd_last_data = info->mti_opdata;
         }
-        cfs_mutex_unlock(&ted->ted_lcd_lock);
+	mutex_unlock(&ted->ted_lcd_lock);
 
         EXIT;
 }
@@ -754,10 +754,10 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                                        "cookie=" LPX64"\n", mfd,
                                        PFID(mdt_object_fid(mfd->mfd_object)),
                                        info->mti_rr.rr_handle->cookie);
-                                cfs_spin_lock(&med->med_open_lock);
-                                class_handle_unhash(&old_mfd->mfd_handle);
-                                cfs_list_del_init(&old_mfd->mfd_list);
-                                cfs_spin_unlock(&med->med_open_lock);
+				spin_lock(&med->med_open_lock);
+				class_handle_unhash(&old_mfd->mfd_handle);
+				cfs_list_del_init(&old_mfd->mfd_list);
+				spin_unlock(&med->med_open_lock);
                                 /* no attr update for that close */
                                 la->la_valid = 0;
                                 ma->ma_valid |= MA_FLAGS;
@@ -774,15 +774,15 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
 
                 if (req->rq_export->exp_disconnected) {
-                        cfs_spin_lock(&med->med_open_lock);
-                        class_handle_unhash(&mfd->mfd_handle);
-                        cfs_list_del_init(&mfd->mfd_list);
-                        cfs_spin_unlock(&med->med_open_lock);
-                        mdt_mfd_close(info, mfd);
-                } else {
-                        cfs_spin_lock(&med->med_open_lock);
-                        cfs_list_add(&mfd->mfd_list, &med->med_open_head);
-                        cfs_spin_unlock(&med->med_open_lock);
+			spin_lock(&med->med_open_lock);
+			class_handle_unhash(&mfd->mfd_handle);
+			cfs_list_del_init(&mfd->mfd_list);
+			spin_unlock(&med->med_open_lock);
+			mdt_mfd_close(info, mfd);
+		} else {
+			spin_lock(&med->med_open_lock);
+			cfs_list_add(&mfd->mfd_list, &med->med_open_head);
+			spin_unlock(&med->med_open_lock);
                 }
 
                 mdt_empty_transno(info, rc);
@@ -942,15 +942,14 @@ int mdt_finish_open(struct mdt_thread_info *info,
 
         mfd = NULL;
         if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_RESENT) {
-                cfs_spin_lock(&med->med_open_lock);
-                cfs_list_for_each(t, &med->med_open_head) {
-                        mfd = cfs_list_entry(t, struct mdt_file_data, mfd_list);
-                        if (mfd->mfd_xid == req->rq_xid) {
-                                break;
-                        }
-                        mfd = NULL;
-                }
-                cfs_spin_unlock(&med->med_open_lock);
+		spin_lock(&med->med_open_lock);
+		cfs_list_for_each(t, &med->med_open_head) {
+			mfd = cfs_list_entry(t, struct mdt_file_data, mfd_list);
+			if (mfd->mfd_xid == req->rq_xid)
+				break;
+			mfd = NULL;
+		}
+		spin_unlock(&med->med_open_lock);
 
                 if (mfd != NULL) {
                         repbody->handle.cookie = mfd->mfd_handle.h_cookie;
@@ -1628,10 +1627,10 @@ int mdt_mfd_close(struct mdt_thread_info *info, struct mdt_file_data *mfd)
 
                 LASSERT(mdt_info_req(info));
                 med = &mdt_info_req(info)->rq_export->exp_mdt_data;
-                cfs_spin_lock(&med->med_open_lock);
-                cfs_list_add(&mfd->mfd_list, &med->med_open_head);
-                class_handle_hash_back(&mfd->mfd_handle);
-                cfs_spin_unlock(&med->med_open_lock);
+		spin_lock(&med->med_open_lock);
+		cfs_list_add(&mfd->mfd_list, &med->med_open_head);
+		class_handle_hash_back(&mfd->mfd_handle);
+		spin_unlock(&med->med_open_lock);
 
                 if (ret == MDT_IOEPOCH_OPENED) {
                         ret = 0;
@@ -1701,19 +1700,19 @@ int mdt_close(struct mdt_thread_info *info)
         }
 
         med = &req->rq_export->exp_mdt_data;
-        cfs_spin_lock(&med->med_open_lock);
-        mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
-        if (mdt_mfd_closed(mfd)) {
-                cfs_spin_unlock(&med->med_open_lock);
-                CDEBUG(D_INODE, "no handle for file close: fid = "DFID
-                       ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
-                       info->mti_ioepoch->handle.cookie);
-                /** not serious error since bug 3633 */
-                rc = -ESTALE;
-        } else {
-                class_handle_unhash(&mfd->mfd_handle);
-                cfs_list_del_init(&mfd->mfd_list);
-                cfs_spin_unlock(&med->med_open_lock);
+	spin_lock(&med->med_open_lock);
+	mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
+	if (mdt_mfd_closed(mfd)) {
+		spin_unlock(&med->med_open_lock);
+		CDEBUG(D_INODE, "no handle for file close: fid = "DFID
+		       ": cookie = "LPX64"\n", PFID(info->mti_rr.rr_fid1),
+		       info->mti_ioepoch->handle.cookie);
+		/** not serious error since bug 3633 */
+		rc = -ESTALE;
+	} else {
+		class_handle_unhash(&mfd->mfd_handle);
+		cfs_list_del_init(&mfd->mfd_list);
+		spin_unlock(&med->med_open_lock);
 
                 /* Do not lose object before last unlink. */
                 o = mfd->mfd_object;
@@ -1773,10 +1772,10 @@ int mdt_done_writing(struct mdt_thread_info *info)
                 RETURN(lustre_msg_get_status(req->rq_repmsg));
 
         med = &info->mti_exp->exp_mdt_data;
-        cfs_spin_lock(&med->med_open_lock);
-        mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
-        if (mfd == NULL) {
-                cfs_spin_unlock(&med->med_open_lock);
+	spin_lock(&med->med_open_lock);
+	mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
+	if (mfd == NULL) {
+		spin_unlock(&med->med_open_lock);
                 CDEBUG(D_INODE, "no handle for done write: fid = "DFID
                        ": cookie = "LPX64" ioepoch = "LPU64"\n",
                        PFID(info->mti_rr.rr_fid1),
@@ -1796,7 +1795,7 @@ int mdt_done_writing(struct mdt_thread_info *info)
                 mfd->mfd_mode == MDS_FMODE_TRUNC);
         class_handle_unhash(&mfd->mfd_handle);
         cfs_list_del_init(&mfd->mfd_list);
-        cfs_spin_unlock(&med->med_open_lock);
+	spin_unlock(&med->med_open_lock);
 
         /* Set EPOCH CLOSE flag if not set by client. */
         info->mti_ioepoch->flags |= MF_EPOCH_CLOSE;

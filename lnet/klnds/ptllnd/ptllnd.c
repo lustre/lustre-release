@@ -59,12 +59,12 @@ kptllnd_ptlid2str(ptl_process_id_t id)
 
         unsigned long  flags;
         char          *str;
-        
-        cfs_spin_lock_irqsave(&kptllnd_data.kptl_ptlid2str_lock, flags);
+
+	spin_lock_irqsave(&kptllnd_data.kptl_ptlid2str_lock, flags);
         str = strs[idx++];
         if (idx >= sizeof(strs)/sizeof(strs[0]))
                 idx = 0;
-        cfs_spin_unlock_irqrestore(&kptllnd_data.kptl_ptlid2str_lock, flags);
+	spin_unlock_irqrestore(&kptllnd_data.kptl_ptlid2str_lock, flags);
 
         snprintf(str, sizeof(strs[0]), FMT_PTLID, id.pid, id.nid);
         return str;
@@ -491,10 +491,10 @@ kptllnd_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
         if (kptllnd_find_target(net, id, &peer) != 0)
                 return;
 
-        cfs_spin_lock_irqsave(&peer->peer_lock, flags);
+	spin_lock_irqsave(&peer->peer_lock, flags);
         if (peer->peer_last_alive != 0)
                 *when = peer->peer_last_alive;
-        cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+	spin_unlock_irqrestore(&peer->peer_lock, flags);
         kptllnd_peer_decref(peer);
         return;
 }
@@ -507,9 +507,9 @@ kptllnd_base_shutdown (void)
         unsigned long     flags;
         lnet_process_id_t process_id;
 
-        cfs_read_lock(&kptllnd_data.kptl_net_rw_lock);
+	read_lock(&kptllnd_data.kptl_net_rw_lock);
         LASSERT (cfs_list_empty(&kptllnd_data.kptl_nets));
-        cfs_read_unlock(&kptllnd_data.kptl_net_rw_lock);
+	read_unlock(&kptllnd_data.kptl_net_rw_lock);
 
         switch (kptllnd_data.kptl_init) {
         default:
@@ -523,11 +523,11 @@ kptllnd_base_shutdown (void)
                 LASSERT (cfs_list_empty(&kptllnd_data.kptl_sched_rxbq));
 
                 /* lock to interleave cleanly with peer birth/death */
-                cfs_write_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
+		write_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
                 LASSERT (kptllnd_data.kptl_shutdown == 0);
                 kptllnd_data.kptl_shutdown = 1; /* phase 1 == destroy peers */
                 /* no new peers possible now */
-                cfs_write_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock,
+		write_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock,
                                             flags);
 
                 /* nuke all existing peers */
@@ -535,7 +535,7 @@ kptllnd_base_shutdown (void)
                 process_id.pid = LNET_PID_ANY;
                 kptllnd_peer_del(process_id);
 
-                cfs_read_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
+		read_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
 
                 LASSERT (kptllnd_data.kptl_n_active_peers == 0);
 
@@ -546,12 +546,12 @@ kptllnd_base_shutdown (void)
                                "Waiting for %d peers to terminate\n",
                                kptllnd_data.kptl_npeers);
 
-                        cfs_read_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock,
+			read_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock,
                                                    flags);
 
                         cfs_pause(cfs_time_seconds(1));
 
-                        cfs_read_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock,
+			read_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock,
                                               flags);
                 }
 
@@ -561,7 +561,7 @@ kptllnd_base_shutdown (void)
                 for (i = 0; i < kptllnd_data.kptl_peer_hash_size; i++)
                         LASSERT (cfs_list_empty (&kptllnd_data.kptl_peers[i]));
 
-                cfs_read_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock,
+		read_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock,
                                            flags);
                 CDEBUG(D_NET, "All peers deleted\n");
 
@@ -672,21 +672,21 @@ kptllnd_base_startup (void)
         kptllnd_data.kptl_eqh = PTL_INVALID_HANDLE;
         kptllnd_data.kptl_nih = PTL_INVALID_HANDLE;
 
-        cfs_rwlock_init(&kptllnd_data.kptl_net_rw_lock);
+	rwlock_init(&kptllnd_data.kptl_net_rw_lock);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_nets);
 
         /* Setup the sched locks/lists/waitq */
-        cfs_spin_lock_init(&kptllnd_data.kptl_sched_lock);
+	spin_lock_init(&kptllnd_data.kptl_sched_lock);
         cfs_waitq_init(&kptllnd_data.kptl_sched_waitq);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_txq);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxq);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_sched_rxbq);
 
         /* Init kptl_ptlid2str_lock before any call to kptllnd_ptlid2str */
-        cfs_spin_lock_init(&kptllnd_data.kptl_ptlid2str_lock);
+	spin_lock_init(&kptllnd_data.kptl_ptlid2str_lock);
 
         /* Setup the tx locks/lists */
-        cfs_spin_lock_init(&kptllnd_data.kptl_tx_lock);
+	spin_lock_init(&kptllnd_data.kptl_tx_lock);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_idle_txs);
         cfs_atomic_set(&kptllnd_data.kptl_ntx, 0);
 
@@ -771,7 +771,7 @@ kptllnd_base_startup (void)
         kptllnd_data.kptl_nak_msg->ptlm_srcpid   = the_lnet.ln_pid;
         kptllnd_data.kptl_nak_msg->ptlm_srcstamp = kptllnd_data.kptl_incarnation;
 
-        cfs_rwlock_init(&kptllnd_data.kptl_peer_rw_lock);
+	rwlock_init(&kptllnd_data.kptl_peer_rw_lock);
         cfs_waitq_init(&kptllnd_data.kptl_watchdog_waitq);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_closing_peers);
         CFS_INIT_LIST_HEAD(&kptllnd_data.kptl_zombie_peers);
@@ -905,9 +905,9 @@ kptllnd_startup (lnet_ni_t *ni)
         kptllnd_data.kptl_nak_msg->ptlm_srcnid = ni->ni_nid;
 
         cfs_atomic_set(&net->net_refcount, 1);
-        cfs_write_lock(&kptllnd_data.kptl_net_rw_lock);
+	write_lock(&kptllnd_data.kptl_net_rw_lock);
         cfs_list_add_tail(&net->net_list, &kptllnd_data.kptl_nets);
-        cfs_write_unlock(&kptllnd_data.kptl_net_rw_lock);
+	write_unlock(&kptllnd_data.kptl_net_rw_lock);
         return 0;
 
  failed:
@@ -937,15 +937,15 @@ kptllnd_shutdown (lnet_ni_t *ni)
         ni->ni_data = NULL;
         net->net_ni = NULL;
 
-        cfs_write_lock(&kptllnd_data.kptl_net_rw_lock);
+	write_lock(&kptllnd_data.kptl_net_rw_lock);
         kptllnd_net_decref(net);
         cfs_list_del_init(&net->net_list);
-        cfs_write_unlock(&kptllnd_data.kptl_net_rw_lock);
+	write_unlock(&kptllnd_data.kptl_net_rw_lock);
 
         /* Can't nuke peers here - they are shared among all NIs */
-        cfs_write_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
+	write_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
         net->net_shutdown = 1;   /* Order with peer creation */
-        cfs_write_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock, flags);
+	write_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock, flags);
 
         i = 2;
         while (cfs_atomic_read(&net->net_refcount) != 0) {

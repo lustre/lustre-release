@@ -118,10 +118,10 @@ struct lu_ref_link;
  * etc.) refer to.
  */
 struct lu_ref {
-        /**
-         * Spin-lock protecting lu_ref::lf_list.
-         */
-        cfs_spinlock_t       lf_guard;
+	/**
+	 * Spin-lock protecting lu_ref::lf_list.
+	 */
+	spinlock_t		lf_guard;
         /**
          * List of all outstanding references (each represented by struct
          * lu_ref_link), pointing to this object.

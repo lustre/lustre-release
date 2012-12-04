@@ -116,15 +116,15 @@ struct upcall_cache_ops {
 };
 
 struct upcall_cache {
-        cfs_list_t              uc_hashtable[UC_CACHE_HASH_SIZE];
-        cfs_spinlock_t          uc_lock;
-        cfs_rwlock_t            uc_upcall_rwlock;
+	cfs_list_t		uc_hashtable[UC_CACHE_HASH_SIZE];
+	spinlock_t		uc_lock;
+	rwlock_t		uc_upcall_rwlock;
 
-        char                    uc_name[40];            /* for upcall */
-        char                    uc_upcall[UC_CACHE_UPCALL_MAXPATH];
-        int                     uc_acquire_expire;      /* seconds */
-        int                     uc_entry_expire;        /* seconds */
-        struct upcall_cache_ops *uc_ops;
+	char			uc_name[40];		/* for upcall */
+	char			uc_upcall[UC_CACHE_UPCALL_MAXPATH];
+	int			uc_acquire_expire;	/* seconds */
+	int			uc_entry_expire;	/* seconds */
+	struct upcall_cache_ops	*uc_ops;
 };
 
 struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,

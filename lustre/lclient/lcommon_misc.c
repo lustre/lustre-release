@@ -102,13 +102,13 @@ int cl_ocd_update(struct obd_device *host,
                 flags = cli->cl_import->imp_connect_data.ocd_connect_flags;
                 CDEBUG(D_SUPER, "Changing connect_flags: "LPX64" -> "LPX64"\n",
                        lco->lco_flags, flags);
-                cfs_mutex_lock(&lco->lco_lock);
+		mutex_lock(&lco->lco_lock);
                 lco->lco_flags &= flags;
                 /* for each osc event update ea size */
                 if (lco->lco_dt_exp)
                         cl_init_ea_size(lco->lco_md_exp, lco->lco_dt_exp);
 
-                cfs_mutex_unlock(&lco->lco_lock);
+		mutex_unlock(&lco->lco_lock);
                 result = 0;
         } else {
                 CERROR("unexpected notification from %s %s!\n",

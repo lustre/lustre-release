@@ -173,17 +173,16 @@ struct lu_fld_hash fld_hash[] = {
 };
 
 static struct lu_fld_target *
-fld_client_get_target(struct lu_client_fld *fld,
-                      seqno_t seq)
+fld_client_get_target(struct lu_client_fld *fld, seqno_t seq)
 {
-        struct lu_fld_target *target;
-        ENTRY;
+	struct lu_fld_target *target;
+	ENTRY;
 
-        LASSERT(fld->lcf_hash != NULL);
+	LASSERT(fld->lcf_hash != NULL);
 
-        cfs_spin_lock(&fld->lcf_lock);
-        target = fld->lcf_hash->fh_scan_func(fld, seq);
-        cfs_spin_unlock(&fld->lcf_lock);
+	spin_lock(&fld->lcf_lock);
+	target = fld->lcf_hash->fh_scan_func(fld, seq);
+	spin_unlock(&fld->lcf_lock);
 
         if (target != NULL) {
                 CDEBUG(D_INFO, "%s: Found target (idx "LPU64
@@ -223,10 +222,10 @@ int fld_client_add_target(struct lu_client_fld *fld,
         if (target == NULL)
                 RETURN(-ENOMEM);
 
-        cfs_spin_lock(&fld->lcf_lock);
-        cfs_list_for_each_entry(tmp, &fld->lcf_targets, ft_chain) {
-                if (tmp->ft_idx == tar->ft_idx) {
-                        cfs_spin_unlock(&fld->lcf_lock);
+	spin_lock(&fld->lcf_lock);
+	cfs_list_for_each_entry(tmp, &fld->lcf_targets, ft_chain) {
+		if (tmp->ft_idx == tar->ft_idx) {
+			spin_unlock(&fld->lcf_lock);
                         OBD_FREE_PTR(target);
                         CERROR("Target %s exists in FLD and known as %s:#"LPU64"\n",
                                name, fld_target_name(tmp), tmp->ft_idx);
@@ -244,26 +243,25 @@ int fld_client_add_target(struct lu_client_fld *fld,
                           &fld->lcf_targets);
 
         fld->lcf_count++;
-        cfs_spin_unlock(&fld->lcf_lock);
+	spin_unlock(&fld->lcf_lock);
 
-        RETURN(0);
+	RETURN(0);
 }
 EXPORT_SYMBOL(fld_client_add_target);
 
 /* Remove export from FLD */
-int fld_client_del_target(struct lu_client_fld *fld,
-                          __u64 idx)
+int fld_client_del_target(struct lu_client_fld *fld, __u64 idx)
 {
-        struct lu_fld_target *target, *tmp;
-        ENTRY;
+	struct lu_fld_target *target, *tmp;
+	ENTRY;
 
-        cfs_spin_lock(&fld->lcf_lock);
-        cfs_list_for_each_entry_safe(target, tmp,
-                                     &fld->lcf_targets, ft_chain) {
-                if (target->ft_idx == idx) {
-                        fld->lcf_count--;
-                        cfs_list_del(&target->ft_chain);
-                        cfs_spin_unlock(&fld->lcf_lock);
+	spin_lock(&fld->lcf_lock);
+	cfs_list_for_each_entry_safe(target, tmp,
+				     &fld->lcf_targets, ft_chain) {
+		if (target->ft_idx == idx) {
+			fld->lcf_count--;
+			cfs_list_del(&target->ft_chain);
+			spin_unlock(&fld->lcf_lock);
 
                         if (target->ft_exp != NULL)
                                 class_export_put(target->ft_exp);
@@ -272,8 +270,8 @@ int fld_client_del_target(struct lu_client_fld *fld,
                         RETURN(0);
                 }
         }
-        cfs_spin_unlock(&fld->lcf_lock);
-        RETURN(-ENOENT);
+	spin_unlock(&fld->lcf_lock);
+	RETURN(-ENOENT);
 }
 EXPORT_SYMBOL(fld_client_del_target);
 
@@ -357,7 +355,7 @@ int fld_client_init(struct lu_client_fld *fld,
         }
 
         fld->lcf_count = 0;
-        cfs_spin_lock_init(&fld->lcf_lock);
+	spin_lock_init(&fld->lcf_lock);
         fld->lcf_hash = &fld_hash[hash];
         fld->lcf_flags = LUSTRE_FLD_INIT;
         CFS_INIT_LIST_HEAD(&fld->lcf_targets);
@@ -392,10 +390,10 @@ EXPORT_SYMBOL(fld_client_init);
 
 void fld_client_fini(struct lu_client_fld *fld)
 {
-        struct lu_fld_target *target, *tmp;
-        ENTRY;
+	struct lu_fld_target *target, *tmp;
+	ENTRY;
 
-        cfs_spin_lock(&fld->lcf_lock);
+	spin_lock(&fld->lcf_lock);
         cfs_list_for_each_entry_safe(target, tmp,
                                      &fld->lcf_targets, ft_chain) {
                 fld->lcf_count--;
@@ -404,7 +402,7 @@ void fld_client_fini(struct lu_client_fld *fld)
                         class_export_put(target->ft_exp);
                 OBD_FREE_PTR(target);
         }
-        cfs_spin_unlock(&fld->lcf_lock);
+	spin_unlock(&fld->lcf_lock);
 
         if (fld->lcf_cache != NULL) {
                 if (!IS_ERR(fld->lcf_cache))

@@ -2258,17 +2258,17 @@ static int osc_set_lock_data_with_check(struct ldlm_lock *lock,
         LASSERT(lock->l_glimpse_ast == einfo->ei_cb_gl);
 
         lock_res_and_lock(lock);
-        cfs_spin_lock(&osc_ast_guard);
+	spin_lock(&osc_ast_guard);
 
-        if (lock->l_ast_data == NULL)
-                lock->l_ast_data = data;
-        if (lock->l_ast_data == data)
-                set = 1;
+	if (lock->l_ast_data == NULL)
+		lock->l_ast_data = data;
+	if (lock->l_ast_data == data)
+		set = 1;
 
-        cfs_spin_unlock(&osc_ast_guard);
-        unlock_res_and_lock(lock);
+	spin_unlock(&osc_ast_guard);
+	unlock_res_and_lock(lock);
 
-        return set;
+	return set;
 }
 
 static int osc_set_data_with_check(struct lustre_handle *lockh,
@@ -2797,10 +2797,10 @@ static int osc_statfs(const struct lu_env *env, struct obd_export *exp,
 
         /*Since the request might also come from lprocfs, so we need
          *sync this with client_disconnect_export Bug15684*/
-        cfs_down_read(&obd->u.cli.cl_sem);
+	down_read(&obd->u.cli.cl_sem);
         if (obd->u.cli.cl_import)
                 imp = class_import_get(obd->u.cli.cl_import);
-        cfs_up_read(&obd->u.cli.cl_sem);
+	up_read(&obd->u.cli.cl_sem);
         if (!imp)
                 RETURN(-ENODEV);
 
@@ -3136,9 +3136,9 @@ static int osc_set_info_async(const struct lu_env *env, struct obd_export *exp,
 
 		/* add this osc into entity list */
 		LASSERT(cfs_list_empty(&cli->cl_lru_osc));
-		cfs_spin_lock(&cli->cl_cache->ccc_lru_lock);
+		spin_lock(&cli->cl_cache->ccc_lru_lock);
 		cfs_list_add(&cli->cl_lru_osc, &cli->cl_cache->ccc_lru);
-		cfs_spin_unlock(&cli->cl_cache->ccc_lru_lock);
+		spin_unlock(&cli->cl_cache->ccc_lru_lock);
 
 		RETURN(0);
 	}
@@ -3487,9 +3487,9 @@ static int osc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 CDEBUG(D_HA, "Deactivating import %s\n", obd->obd_name);
                 /* ptlrpc_abort_inflight to stop an mds_lov_synchronize */
                 ptlrpc_deactivate_import(imp);
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_pingable = 0;
-                cfs_spin_unlock(&imp->imp_lock);
+		spin_lock(&imp->imp_lock);
+		imp->imp_pingable = 0;
+		spin_unlock(&imp->imp_lock);
                 break;
         }
         case OBD_CLEANUP_EXPORTS: {
@@ -3530,9 +3530,9 @@ int osc_cleanup(struct obd_device *obd)
 	/* lru cleanup */
 	if (cli->cl_cache != NULL) {
 		LASSERT(cfs_atomic_read(&cli->cl_cache->ccc_users) > 0);
-		cfs_spin_lock(&cli->cl_cache->ccc_lru_lock);
+		spin_lock(&cli->cl_cache->ccc_lru_lock);
 		cfs_list_del_init(&cli->cl_lru_osc);
-		cfs_spin_unlock(&cli->cl_cache->ccc_lru_lock);
+		spin_unlock(&cli->cl_cache->ccc_lru_lock);
 		cli->cl_lru_left = NULL;
 		cfs_atomic_dec(&cli->cl_cache->ccc_users);
 		cli->cl_cache = NULL;
@@ -3611,8 +3611,8 @@ struct obd_ops osc_obd_ops = {
 };
 
 extern struct lu_kmem_descr osc_caches[];
-extern cfs_spinlock_t       osc_ast_guard;
-extern cfs_lock_class_key_t osc_ast_guard_class;
+extern spinlock_t osc_ast_guard;
+extern struct lock_class_key osc_ast_guard_class;
 
 int __init osc_init(void)
 {
@@ -3636,10 +3636,10 @@ int __init osc_init(void)
                 RETURN(rc);
         }
 
-        cfs_spin_lock_init(&osc_ast_guard);
-        cfs_lockdep_set_class(&osc_ast_guard, &osc_ast_guard_class);
+	spin_lock_init(&osc_ast_guard);
+	lockdep_set_class(&osc_ast_guard, &osc_ast_guard_class);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 #ifdef __KERNEL__

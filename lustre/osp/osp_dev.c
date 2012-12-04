@@ -202,9 +202,9 @@ int osp_disconnect(struct osp_device *d)
 	 * of the cleanup RPCs fails (e.g. ldlm cancel, etc).  We don't
 	 * fully deactivate the import, or that would drop all requests. */
 	LASSERT(imp != NULL);
-	cfs_spin_lock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
 	imp->imp_deactive = 1;
-	cfs_spin_unlock(&imp->imp_lock);
+	spin_unlock(&imp->imp_lock);
 
 	ptlrpc_deactivate_import(imp);
 
@@ -333,10 +333,10 @@ static int osp_statfs(const struct lu_env *env, struct dt_device *dev,
 	 * layer above osp (usually lod) can use ffree to estimate
 	 * how many objects are available for immediate creation
 	 */
-	cfs_spin_lock(&d->opd_pre_lock);
+	spin_lock(&d->opd_pre_lock);
 	sfs->os_fprecreated = d->opd_pre_last_created - d->opd_pre_used_id;
 	sfs->os_fprecreated -= d->opd_pre_reserved;
-	cfs_spin_unlock(&d->opd_pre_lock);
+	spin_unlock(&d->opd_pre_lock);
 
 	LASSERT(sfs->os_fprecreated <= OST_MAX_PRECREATE * 2);
 
@@ -750,10 +750,10 @@ static int osp_obd_statfs(const struct lu_env *env, struct obd_export *exp,
 
 	/* Since the request might also come from lprocfs, so we need
 	 * sync this with client_disconnect_export Bug15684 */
-	cfs_down_read(&exp->exp_obd->u.cli.cl_sem);
+	down_read(&exp->exp_obd->u.cli.cl_sem);
 	if (exp->exp_obd->u.cli.cl_import)
 		imp = class_import_get(exp->exp_obd->u.cli.cl_import);
-	cfs_up_read(&exp->exp_obd->u.cli.cl_sem);
+	up_read(&exp->exp_obd->u.cli.cl_sem);
 	if (!imp)
 		RETURN(-ENODEV);
 

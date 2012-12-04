@@ -201,7 +201,7 @@ static int lov_init_raid0(const struct lu_env *env,
         if (r0->lo_sub != NULL) {
                 result = 0;
                 subconf->coc_inode = conf->coc_inode;
-                cfs_spin_lock_init(&r0->lo_sub_lock);
+		spin_lock_init(&r0->lo_sub_lock);
                 /*
                  * Create stripe cl_objects.
                  */
@@ -269,12 +269,12 @@ static void lov_subobject_kill(const struct lu_env *env, struct lov_object *lov,
                         /* this wait-queue is signaled at the end of
                          * lu_object_free(). */
                         cfs_set_current_state(CFS_TASK_UNINT);
-                        cfs_spin_lock(&r0->lo_sub_lock);
-                        if (r0->lo_sub[idx] == los) {
-                                cfs_spin_unlock(&r0->lo_sub_lock);
-                                cfs_waitq_wait(waiter, CFS_TASK_UNINT);
-                        } else {
-                                cfs_spin_unlock(&r0->lo_sub_lock);
+			spin_lock(&r0->lo_sub_lock);
+			if (r0->lo_sub[idx] == los) {
+				spin_unlock(&r0->lo_sub_lock);
+				cfs_waitq_wait(waiter, CFS_TASK_UNINT);
+			} else {
+				spin_unlock(&r0->lo_sub_lock);
                                 cfs_set_current_state(CFS_TASK_RUNNING);
                                 break;
                         }
@@ -476,13 +476,13 @@ const static struct lov_layout_operations lov_dispatch[] = {
 static inline void lov_conf_freeze(struct lov_object *lov)
 {
 	if (lov->lo_owner != cfs_current())
-		cfs_down_read(&lov->lo_type_guard);
+		down_read(&lov->lo_type_guard);
 }
 
 static inline void lov_conf_thaw(struct lov_object *lov)
 {
 	if (lov->lo_owner != cfs_current())
-		cfs_up_read(&lov->lo_type_guard);
+		up_read(&lov->lo_type_guard);
 }
 
 #define LOV_2DISPATCH_MAYLOCK(obj, op, lock, ...)                       \
@@ -520,7 +520,7 @@ do {                                                                    \
 static void lov_conf_lock(struct lov_object *lov)
 {
 	LASSERT(lov->lo_owner != cfs_current());
-	cfs_down_write(&lov->lo_type_guard);
+	down_write(&lov->lo_type_guard);
 	LASSERT(lov->lo_owner == NULL);
 	lov->lo_owner = cfs_current();
 }
@@ -528,7 +528,7 @@ static void lov_conf_lock(struct lov_object *lov)
 static void lov_conf_unlock(struct lov_object *lov)
 {
 	lov->lo_owner = NULL;
-	cfs_up_write(&lov->lo_type_guard);
+	up_write(&lov->lo_type_guard);
 }
 
 static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov)
@@ -621,7 +621,7 @@ int lov_object_init(const struct lu_env *env, struct lu_object *obj,
         int result;
 
         ENTRY;
-        cfs_init_rwsem(&lov->lo_type_guard);
+	init_rwsem(&lov->lo_type_guard);
 	cfs_waitq_init(&lov->lo_waitq);
 
         /* no locking is necessary, as object is being created */

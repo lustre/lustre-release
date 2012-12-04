@@ -80,7 +80,7 @@ static int ofd_export_stats_init(struct ofd_device *ofd,
 		GOTO(clean, rc = -ENOMEM);
 
 	for (i = 0; i < BRW_LAST; i++)
-		cfs_spin_lock_init(&stats->nid_brw_stats->hist[i].oh_lock);
+		spin_lock_init(&stats->nid_brw_stats->hist[i].oh_lock);
 
 	rc = lprocfs_seq_create(stats->nid_proc, "brw_stats", 0644,
 				&ofd_per_nid_stats_fops, stats);
@@ -366,11 +366,11 @@ static int ofd_init_export(struct obd_export *exp)
 {
 	int rc;
 
-	cfs_spin_lock_init(&exp->exp_filter_data.fed_lock);
+	spin_lock_init(&exp->exp_filter_data.fed_lock);
 	CFS_INIT_LIST_HEAD(&exp->exp_filter_data.fed_mod_list);
-	cfs_spin_lock(&exp->exp_lock);
+	spin_lock(&exp->exp_lock);
 	exp->exp_connecting = 1;
-	cfs_spin_unlock(&exp->exp_lock);
+	spin_unlock(&exp->exp_lock);
 
 	/* self-export doesn't need client data and ldlm initialization */
 	if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
@@ -469,10 +469,10 @@ static int ofd_adapt_sptlrpc_conf(const struct lu_env *env,
 
 	sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
 
-	cfs_write_lock(&fo->fo_sptlrpc_lock);
+	write_lock(&fo->fo_sptlrpc_lock);
 	sptlrpc_rule_set_free(&fo->fo_sptlrpc_rset);
 	fo->fo_sptlrpc_rset = tmp_rset;
-	cfs_write_unlock(&fo->fo_sptlrpc_lock);
+	write_unlock(&fo->fo_sptlrpc_lock);
 
 	return 0;
 }
@@ -620,7 +620,7 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 {
 	int rc;
 
-	cfs_spin_lock(&ofd->ofd_osfs_lock);
+	spin_lock(&ofd->ofd_osfs_lock);
 	if (cfs_time_before_64(ofd->ofd_osfs_age, max_age) || max_age == 0) {
 		obd_size unstable;
 
@@ -639,7 +639,7 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 		/* record value of inflight counter before running statfs to
 		 * compute the diff once statfs is completed */
 		unstable = ofd->ofd_osfs_inflight;
-		cfs_spin_unlock(&ofd->ofd_osfs_lock);
+		spin_unlock(&ofd->ofd_osfs_lock);
 
 		/* statfs can sleep ... hopefully not for too long since we can
 		 * call it fairly often as space fills up */
@@ -647,8 +647,8 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 		if (unlikely(rc))
 			return rc;
 
-		cfs_spin_lock(&ofd->ofd_grant_lock);
-		cfs_spin_lock(&ofd->ofd_osfs_lock);
+		spin_lock(&ofd->ofd_grant_lock);
+		spin_lock(&ofd->ofd_osfs_lock);
 		/* calculate how much space was written while we released the
 		 * ofd_osfs_lock */
 		unstable = ofd->ofd_osfs_inflight - unstable;
@@ -672,7 +672,7 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 		/* similarly, there is some uncertainty on write requests
 		 * between prepare & commit */
 		ofd->ofd_osfs_unstable += ofd->ofd_tot_pending;
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 
 		/* finally udpate cached statfs data */
 		ofd->ofd_osfs = *osfs;
@@ -681,14 +681,14 @@ int ofd_statfs_internal(const struct lu_env *env, struct ofd_device *ofd,
 		ofd->ofd_statfs_inflight--; /* stop tracking */
 		if (ofd->ofd_statfs_inflight == 0)
 			ofd->ofd_osfs_inflight = 0;
-		cfs_spin_unlock(&ofd->ofd_osfs_lock);
+		spin_unlock(&ofd->ofd_osfs_lock);
 
 		if (from_cache)
 			*from_cache = 0;
 	} else {
 		/* use cached statfs data */
 		*osfs = ofd->ofd_osfs;
-		cfs_spin_unlock(&ofd->ofd_osfs_lock);
+		spin_unlock(&ofd->ofd_osfs_lock);
 		if (from_cache)
 			*from_cache = 1;
 	}
@@ -1135,9 +1135,9 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 			GOTO(out_nolock, rc = 0);
 		}
 		/* This causes inflight precreates to abort and drop lock */
-		cfs_set_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
-		cfs_mutex_lock(&ofd->ofd_create_locks[oa->o_seq]);
-		if (!cfs_test_bit(oa->o_seq, &ofd->ofd_destroys_in_progress)) {
+		set_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
+		mutex_lock(&ofd->ofd_create_locks[oa->o_seq]);
+		if (!test_bit(oa->o_seq, &ofd->ofd_destroys_in_progress)) {
 			CERROR("%s:["LPU64"] destroys_in_progress already cleared\n",
 			       exp->exp_obd->obd_name, oa->o_seq);
 			GOTO(out, rc = 0);
@@ -1150,13 +1150,13 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 			rc = 0;
 		} else if (diff < 0) {
 			rc = ofd_orphans_destroy(env, exp, ofd, oa);
-			cfs_clear_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
+			clear_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
 		} else {
 			/* XXX: Used by MDS for the first time! */
-			cfs_clear_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
+			clear_bit(oa->o_seq, &ofd->ofd_destroys_in_progress);
 		}
 	} else {
-		cfs_mutex_lock(&ofd->ofd_create_locks[oa->o_seq]);
+		mutex_lock(&ofd->ofd_create_locks[oa->o_seq]);
 		if (oti->oti_conn_cnt < exp->exp_conn_cnt) {
 			CERROR("%s: dropping old precreate request\n",
 			       ofd_obd(ofd)->obd_name);
@@ -1235,7 +1235,7 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 
 	ofd_info2oti(info, oti);
 out:
-	cfs_mutex_unlock(&ofd->ofd_create_locks[oa->o_seq]);
+	mutex_unlock(&ofd->ofd_create_locks[oa->o_seq]);
 out_nolock:
 	if (rc == 0 && ea != NULL) {
 		struct lov_stripe_md *lsm = *ea;
@@ -1462,9 +1462,9 @@ static int ofd_obd_notify(struct obd_device *obd, struct obd_device *unused,
 	switch (ev) {
 	case OBD_NOTIFY_CONFIG:
 		LASSERT(obd->obd_no_conn);
-		cfs_spin_lock(&obd->obd_dev_lock);
+		spin_lock(&obd->obd_dev_lock);
 		obd->obd_no_conn = 0;
-		cfs_spin_unlock(&obd->obd_dev_lock);
+		spin_unlock(&obd->obd_dev_lock);
 		break;
 	default:
 		CDEBUG(D_INFO, "%s: Unhandled notification %#x\n",

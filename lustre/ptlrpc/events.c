@@ -73,9 +73,9 @@ void request_out_callback(lnet_event_t *ev)
                 /* Failed send: make it seem like the reply timed out, just
                  * like failing sends in client.c does currently...  */
 
-                cfs_spin_lock(&req->rq_lock);
-                req->rq_net_err = 1;
-                cfs_spin_unlock(&req->rq_lock);
+		spin_lock(&req->rq_lock);
+		req->rq_net_err = 1;
+		spin_unlock(&req->rq_lock);
 
                 ptlrpc_client_wake_req(req);
         }
@@ -103,7 +103,7 @@ void reply_in_callback(lnet_event_t *ev)
            for adaptive timeouts' early reply. */
         LASSERT((ev->md.options & LNET_MD_MANAGE_REMOTE) != 0);
 
-        cfs_spin_lock(&req->rq_lock);
+	spin_lock(&req->rq_lock);
 
         req->rq_receiving_reply = 0;
         req->rq_early = 0;
@@ -167,8 +167,8 @@ out_wake:
         /* NB don't unlock till after wakeup; req can disappear under us
          * since we don't have our own ref */
         ptlrpc_client_wake_req(req);
-        cfs_spin_unlock(&req->rq_lock);
-        EXIT;
+	spin_unlock(&req->rq_lock);
+	EXIT;
 }
 
 /*
@@ -198,7 +198,7 @@ void client_bulk_callback (lnet_event_t *ev)
                "event type %d, status %d, desc %p\n",
                ev->type, ev->status, desc);
 
-        cfs_spin_lock(&desc->bd_lock);
+	spin_lock(&desc->bd_lock);
         req = desc->bd_req;
         LASSERT(desc->bd_network_rw);
         desc->bd_network_rw = 0;
@@ -209,9 +209,9 @@ void client_bulk_callback (lnet_event_t *ev)
                 desc->bd_sender = ev->sender;
         } else {
                 /* start reconnect and resend if network error hit */
-                cfs_spin_lock(&req->rq_lock);
-                req->rq_net_err = 1;
-                cfs_spin_unlock(&req->rq_lock);
+		spin_lock(&req->rq_lock);
+		req->rq_net_err = 1;
+		spin_unlock(&req->rq_lock);
         }
 
         /* release the encrypted pages for write */
@@ -222,8 +222,8 @@ void client_bulk_callback (lnet_event_t *ev)
          * otherwise */
         ptlrpc_client_wake_req(req);
 
-        cfs_spin_unlock(&desc->bd_lock);
-        EXIT;
+	spin_unlock(&desc->bd_lock);
+	EXIT;
 }
 
 /*
@@ -338,7 +338,7 @@ void request_in_callback(lnet_event_t *ev)
         req->rq_self = ev->target.nid;
         req->rq_rqbd = rqbd;
         req->rq_phase = RQ_PHASE_NEW;
-        cfs_spin_lock_init(&req->rq_lock);
+	spin_lock_init(&req->rq_lock);
         CFS_INIT_LIST_HEAD(&req->rq_timed_list);
 	CFS_INIT_LIST_HEAD(&req->rq_exp_list);
         cfs_atomic_set(&req->rq_refcount, 1);
@@ -348,7 +348,7 @@ void request_in_callback(lnet_event_t *ev)
 
         CDEBUG(D_RPCTRACE, "peer: %s\n", libcfs_id2str(req->rq_peer));
 
-	cfs_spin_lock(&svcpt->scp_lock);
+	spin_lock(&svcpt->scp_lock);
 
 	ptlrpc_req_add_history(svcpt, req);
 
@@ -378,7 +378,7 @@ void request_in_callback(lnet_event_t *ev)
 	 * has been queued and we unlock, so do the wake now... */
 	cfs_waitq_signal(&svcpt->scp_waitq);
 
-	cfs_spin_unlock(&svcpt->scp_lock);
+	spin_unlock(&svcpt->scp_lock);
 	EXIT;
 }
 
@@ -410,8 +410,8 @@ void reply_out_callback(lnet_event_t *ev)
         if (ev->unlinked) {
                 /* Last network callback. The net's ref on 'rs' stays put
                  * until ptlrpc_handle_rs() is done with it */
-		cfs_spin_lock(&svcpt->scp_rep_lock);
-		cfs_spin_lock(&rs->rs_lock);
+		spin_lock(&svcpt->scp_rep_lock);
+		spin_lock(&rs->rs_lock);
 
 		rs->rs_on_net = 0;
 		if (!rs->rs_no_ack ||
@@ -419,8 +419,8 @@ void reply_out_callback(lnet_event_t *ev)
 		    rs->rs_export->exp_obd->obd_last_committed)
 			ptlrpc_schedule_difficult_reply(rs);
 
-		cfs_spin_unlock(&rs->rs_lock);
-		cfs_spin_unlock(&svcpt->scp_rep_lock);
+		spin_unlock(&rs->rs_lock);
+		spin_unlock(&svcpt->scp_rep_lock);
 	}
 	EXIT;
 }
@@ -446,7 +446,7 @@ void server_bulk_callback (lnet_event_t *ev)
                "event type %d, status %d, desc %p\n",
                ev->type, ev->status, desc);
 
-        cfs_spin_lock(&desc->bd_lock);
+	spin_lock(&desc->bd_lock);
 
         if ((ev->type == LNET_EVENT_ACK ||
              ev->type == LNET_EVENT_REPLY) &&
@@ -465,8 +465,8 @@ void server_bulk_callback (lnet_event_t *ev)
                 cfs_waitq_signal(&desc->bd_waitq);
         }
 
-        cfs_spin_unlock(&desc->bd_lock);
-        EXIT;
+	spin_unlock(&desc->bd_lock);
+	EXIT;
 }
 #endif
 
@@ -803,7 +803,7 @@ int ptlrpc_init_portals(void)
                 liblustre_register_wait_callback("liblustre_check_services",
                                                  &liblustre_check_services,
                                                  NULL);
-        cfs_init_completion_module(liblustre_wait_event);
+	init_completion_module(liblustre_wait_event);
 #endif
         rc = ptlrpcd_addref();
         if (rc == 0)

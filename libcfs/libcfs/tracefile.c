@@ -50,7 +50,7 @@ union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[CFS_NR_CPUS] __cache
 char cfs_tracefile[TRACEFILE_NAME_SIZE];
 long long cfs_tracefile_size = CFS_TRACEFILE_SIZE;
 static struct tracefiled_ctl trace_tctl;
-cfs_mutex_t cfs_trace_thread_mutex;
+struct mutex cfs_trace_thread_mutex;
 static int thread_running = 0;
 
 cfs_atomic_t cfs_tage_allocated = CFS_ATOMIC_INIT(0);
@@ -198,7 +198,7 @@ static void cfs_tcd_shrink(struct cfs_trace_cpu_data *tcd)
                        pgcount + 1, tcd->tcd_cur_pages);
 
         CFS_INIT_LIST_HEAD(&pc.pc_pages);
-        cfs_spin_lock_init(&pc.pc_lock);
+	spin_lock_init(&pc.pc_lock);
 
         cfs_list_for_each_entry_safe_typed(tage, tmp, &tcd->tcd_pages,
                                            struct cfs_trace_page, linkage) {
@@ -532,10 +532,10 @@ panic_collect_pages(struct page_collection *pc)
 
 static void collect_pages_on_all_cpus(struct page_collection *pc)
 {
-        struct cfs_trace_cpu_data *tcd;
-        int i, cpu;
+	struct cfs_trace_cpu_data *tcd;
+	int i, cpu;
 
-        cfs_spin_lock(&pc->pc_lock);
+	spin_lock(&pc->pc_lock);
         cfs_for_each_possible_cpu(cpu) {
                 cfs_tcd_for_each_type_lock(tcd, i, cpu) {
                         cfs_list_splice_init(&tcd->tcd_pages, &pc->pc_pages);
@@ -547,7 +547,7 @@ static void collect_pages_on_all_cpus(struct page_collection *pc)
                         }
                 }
         }
-        cfs_spin_unlock(&pc->pc_lock);
+	spin_unlock(&pc->pc_lock);
 }
 
 static void collect_pages(struct page_collection *pc)
@@ -568,7 +568,7 @@ static void put_pages_back_on_all_cpus(struct page_collection *pc)
         struct cfs_trace_page *tmp;
         int i, cpu;
 
-        cfs_spin_lock(&pc->pc_lock);
+	spin_lock(&pc->pc_lock);
         cfs_for_each_possible_cpu(cpu) {
                 cfs_tcd_for_each_type_lock(tcd, i, cpu) {
                         cur_head = tcd->tcd_pages.next;
@@ -588,7 +588,7 @@ static void put_pages_back_on_all_cpus(struct page_collection *pc)
                         }
                 }
         }
-        cfs_spin_unlock(&pc->pc_lock);
+	spin_unlock(&pc->pc_lock);
 }
 
 static void put_pages_back(struct page_collection *pc)
@@ -602,12 +602,12 @@ static void put_pages_back(struct page_collection *pc)
  * if we have been steadily writing (and otherwise discarding) pages via the
  * debug daemon. */
 static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
-                                         struct cfs_trace_cpu_data *tcd)
+					 struct cfs_trace_cpu_data *tcd)
 {
-        struct cfs_trace_page *tage;
-        struct cfs_trace_page *tmp;
+	struct cfs_trace_page *tage;
+	struct cfs_trace_page *tmp;
 
-        cfs_spin_lock(&pc->pc_lock);
+	spin_lock(&pc->pc_lock);
         cfs_list_for_each_entry_safe_typed(tage, tmp, &pc->pc_pages,
                                            struct cfs_trace_page, linkage) {
 
@@ -632,7 +632,7 @@ static void put_pages_on_tcd_daemon_list(struct page_collection *pc,
                         tcd->tcd_cur_daemon_pages--;
                 }
         }
-        cfs_spin_unlock(&pc->pc_lock);
+	spin_unlock(&pc->pc_lock);
 }
 
 static void put_pages_on_daemon_list(struct page_collection *pc)
@@ -648,11 +648,11 @@ static void put_pages_on_daemon_list(struct page_collection *pc)
 
 void cfs_trace_debug_print(void)
 {
-        struct page_collection pc;
-        struct cfs_trace_page *tage;
-        struct cfs_trace_page *tmp;
+	struct page_collection pc;
+	struct cfs_trace_page *tage;
+	struct cfs_trace_page *tmp;
 
-        cfs_spin_lock_init(&pc.pc_lock);
+	spin_lock_init(&pc.pc_lock);
 
         pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
@@ -708,7 +708,7 @@ int cfs_tracefile_dump_all_pages(char *filename)
                 goto out;
         }
 
-        cfs_spin_lock_init(&pc.pc_lock);
+	spin_lock_init(&pc.pc_lock);
         pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
         if (cfs_list_empty(&pc.pc_pages)) {
@@ -749,11 +749,11 @@ int cfs_tracefile_dump_all_pages(char *filename)
 
 void cfs_trace_flush_pages(void)
 {
-        struct page_collection pc;
-        struct cfs_trace_page *tage;
-        struct cfs_trace_page *tmp;
+	struct page_collection pc;
+	struct cfs_trace_page *tage;
+	struct cfs_trace_page *tmp;
 
-        cfs_spin_lock_init(&pc.pc_lock);
+	spin_lock_init(&pc.pc_lock);
 
         pc.pc_want_daemon_pages = 1;
         collect_pages(&pc);
@@ -1001,8 +1001,8 @@ static int tracefiled(void *arg)
         /* this is so broken in uml?  what on earth is going on? */
         cfs_daemonize("ktracefiled");
 
-        cfs_spin_lock_init(&pc.pc_lock);
-        cfs_complete(&tctl->tctl_start);
+	spin_lock_init(&pc.pc_lock);
+	complete(&tctl->tctl_start);
 
         while (1) {
                 cfs_waitlink_t __wait;
@@ -1095,7 +1095,7 @@ end_loop:
                                     cfs_time_seconds(1));
                 cfs_waitq_del(&tctl->tctl_waitq, &__wait);
         }
-        cfs_complete(&tctl->tctl_stop);
+	complete(&tctl->tctl_stop);
         return 0;
 }
 
@@ -1104,12 +1104,12 @@ int cfs_trace_start_thread(void)
         struct tracefiled_ctl *tctl = &trace_tctl;
         int rc = 0;
 
-        cfs_mutex_lock(&cfs_trace_thread_mutex);
+	mutex_lock(&cfs_trace_thread_mutex);
         if (thread_running)
                 goto out;
 
-        cfs_init_completion(&tctl->tctl_start);
-        cfs_init_completion(&tctl->tctl_stop);
+	init_completion(&tctl->tctl_start);
+	init_completion(&tctl->tctl_stop);
         cfs_waitq_init(&tctl->tctl_waitq);
         cfs_atomic_set(&tctl->tctl_shutdown, 0);
 
@@ -1118,10 +1118,10 @@ int cfs_trace_start_thread(void)
                 goto out;
         }
 
-        cfs_wait_for_completion(&tctl->tctl_start);
+	wait_for_completion(&tctl->tctl_start);
         thread_running = 1;
 out:
-        cfs_mutex_unlock(&cfs_trace_thread_mutex);
+	mutex_unlock(&cfs_trace_thread_mutex);
         return rc;
 }
 
@@ -1129,15 +1129,15 @@ void cfs_trace_stop_thread(void)
 {
         struct tracefiled_ctl *tctl = &trace_tctl;
 
-        cfs_mutex_lock(&cfs_trace_thread_mutex);
+	mutex_lock(&cfs_trace_thread_mutex);
         if (thread_running) {
                 printk(CFS_KERN_INFO
                        "Lustre: shutting down debug daemon thread...\n");
                 cfs_atomic_set(&tctl->tctl_shutdown, 1);
-                cfs_wait_for_completion(&tctl->tctl_stop);
+		wait_for_completion(&tctl->tctl_stop);
                 thread_running = 0;
         }
-        cfs_mutex_unlock(&cfs_trace_thread_mutex);
+	mutex_unlock(&cfs_trace_thread_mutex);
 }
 
 int cfs_tracefile_init(int max_pages)
@@ -1197,14 +1197,14 @@ static void trace_cleanup_on_all_cpus(void)
 
 static void cfs_trace_cleanup(void)
 {
-        struct page_collection pc;
+	struct page_collection pc;
 
-        CFS_INIT_LIST_HEAD(&pc.pc_pages);
-        cfs_spin_lock_init(&pc.pc_lock);
+	CFS_INIT_LIST_HEAD(&pc.pc_pages);
+	spin_lock_init(&pc.pc_lock);
 
-        trace_cleanup_on_all_cpus();
+	trace_cleanup_on_all_cpus();
 
-        cfs_tracefile_fini_arch();
+	cfs_tracefile_fini_arch();
 }
 
 void cfs_tracefile_exit(void)

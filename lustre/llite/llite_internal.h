@@ -128,15 +128,15 @@ enum lli_flags {
 };
 
 struct ll_inode_info {
-        __u32                           lli_inode_magic;
-        __u32                           lli_flags;
-        __u64                           lli_ioepoch;
+	__u32				lli_inode_magic;
+	__u32				lli_flags;
+	__u64				lli_ioepoch;
 
-        cfs_spinlock_t                  lli_lock;
-        struct posix_acl               *lli_posix_acl;
+	spinlock_t			lli_lock;
+	struct posix_acl		*lli_posix_acl;
 
-        cfs_hlist_head_t               *lli_remote_perms;
-        cfs_mutex_t                     lli_rmtperm_mutex;
+	cfs_hlist_head_t		*lli_remote_perms;
+	struct mutex				lli_rmtperm_mutex;
 
         /* identifying fields for both metadata and data stacks. */
         struct lu_fid                   lli_fid;
@@ -166,21 +166,21 @@ struct ll_inode_info {
         __u64                           lli_open_fd_write_count;
         __u64                           lli_open_fd_exec_count;
         /* Protects access to och pointers and their usage counters */
-        cfs_mutex_t                     lli_och_mutex;
+	struct mutex			lli_och_mutex;
 
-        struct inode                    lli_vfs_inode;
+	struct inode			lli_vfs_inode;
 
-        /* the most recent timestamps obtained from mds */
-        struct ost_lvb                  lli_lvb;
-        cfs_spinlock_t                  lli_agl_lock;
+	/* the most recent timestamps obtained from mds */
+	struct ost_lvb			lli_lvb;
+	spinlock_t			lli_agl_lock;
 
-        /* Try to make the d::member and f::member are aligned. Before using
-         * these members, make clear whether it is directory or not. */
-        union {
-                /* for directory */
-                struct {
-                        /* serialize normal readdir and statahead-readdir. */
-                        cfs_mutex_t                     d_readdir_mutex;
+	/* Try to make the d::member and f::member are aligned. Before using
+	 * these members, make clear whether it is directory or not. */
+	union {
+		/* for directory */
+		struct {
+			/* serialize normal readdir and statahead-readdir. */
+			struct mutex			d_readdir_mutex;
 
                         /* metadata statahead */
                         /* since parent-child threads can share the same @file
@@ -191,11 +191,11 @@ struct ll_inode_info {
                         struct ll_statahead_info       *d_sai;
                         struct posix_acl               *d_def_acl;
                         /* protect statahead stuff. */
-                        cfs_spinlock_t                  d_sa_lock;
-                        /* "opendir_pid" is the token when lookup/revalid
-                         * -- I am the owner of dir statahead. */
-                        pid_t                           d_opendir_pid;
-                } d;
+			spinlock_t			d_sa_lock;
+			/* "opendir_pid" is the token when lookup/revalid
+			 * -- I am the owner of dir statahead. */
+			pid_t                           d_opendir_pid;
+		} d;
 
 #define lli_readdir_mutex       u.d.d_readdir_mutex
 #define lli_opendir_key         u.d.d_opendir_key
@@ -204,29 +204,29 @@ struct ll_inode_info {
 #define lli_sa_lock             u.d.d_sa_lock
 #define lli_opendir_pid         u.d.d_opendir_pid
 
-                /* for non-directory */
-                struct {
-                        cfs_semaphore_t                 f_size_sem;
-                        void                           *f_size_sem_owner;
-                        char                           *f_symlink_name;
-                        __u64                           f_maxbytes;
-                        /*
-                         * cfs_rw_semaphore_t {
-                         *    signed long      count;     // align u.d.d_def_acl
-                         *    cfs_spinlock_t   wait_lock; // align u.d.d_sa_lock
-                         *    struct list_head wait_list;
-                         * }
-                         */
-                        cfs_rw_semaphore_t              f_trunc_sem;
-                        cfs_mutex_t                     f_write_mutex;
+		/* for non-directory */
+		struct {
+			struct semaphore		f_size_sem;
+			void				*f_size_sem_owner;
+			char				*f_symlink_name;
+			__u64				f_maxbytes;
+			/*
+			 * struct rw_semaphore {
+			 *    signed long	count;     // align d.d_def_acl
+			 *    spinlock_t	wait_lock; // align d.d_sa_lock
+			 *    struct list_head wait_list;
+			 * }
+			 */
+			struct rw_semaphore		f_trunc_sem;
+			struct mutex			f_write_mutex;
 
-			cfs_rw_semaphore_t		f_glimpse_sem;
+			struct rw_semaphore		f_glimpse_sem;
 			cfs_time_t			f_glimpse_time;
 			cfs_list_t			f_agl_list;
 			__u64				f_agl_index;
 
-                        /* for writepage() only to communicate to fsync */
-                        int				f_async_rc;
+			/* for writepage() only to communicate to fsync */
+			int				f_async_rc;
 
 			/*
 			 * whenever a process try to read/write the file, the
@@ -268,7 +268,7 @@ struct ll_inode_info {
 	struct cl_object	       *lli_clob;
 
 	/* mutex to request for layout lock exclusively. */
-	cfs_mutex_t		        lli_layout_mutex;
+	struct mutex			lli_layout_mutex;
 	/* valid only inside LAYOUT ibits lock, protected by lli_layout_mutex */
 	__u32				lli_layout_gen;
 };
@@ -408,8 +408,8 @@ struct rmtacl_ctl_entry {
 };
 
 struct rmtacl_ctl_table {
-        cfs_spinlock_t   rct_lock;
-        cfs_list_t       rct_entries[RCE_HASHES];
+	spinlock_t	rct_lock;
+	cfs_list_t	rct_entries[RCE_HASHES];
 };
 
 #define EE_HASHES       32
@@ -423,17 +423,17 @@ struct eacl_entry {
 };
 
 struct eacl_table {
-        cfs_spinlock_t   et_lock;
-        cfs_list_t       et_entries[EE_HASHES];
+	spinlock_t	et_lock;
+	cfs_list_t	et_entries[EE_HASHES];
 };
 
 struct ll_sb_info {
-        cfs_list_t                ll_list;
-        /* this protects pglist and ra_info.  It isn't safe to
-         * grab from interrupt contexts */
-        cfs_spinlock_t            ll_lock;
-        cfs_spinlock_t            ll_pp_extent_lock; /* Lock for pp_extent entries */
-        cfs_spinlock_t            ll_process_lock; /* Lock for ll_rw_process_info */
+	cfs_list_t		  ll_list;
+	/* this protects pglist and ra_info.  It isn't safe to
+	 * grab from interrupt contexts */
+	spinlock_t		  ll_lock;
+	spinlock_t		  ll_pp_extent_lock; /* pp_extent entry*/
+	spinlock_t		  ll_process_lock; /* ll_rw_process_info */
         struct obd_uuid           ll_sb_uuid;
         struct obd_export        *ll_md_exp;
         struct obd_export        *ll_dt_exp;
@@ -502,7 +502,7 @@ struct ll_ra_read {
  * per file-descriptor read-ahead data.
  */
 struct ll_readahead_state {
-        cfs_spinlock_t  ras_lock;
+	spinlock_t  ras_lock;
         /*
          * index of the last page that read(2) needed and that wasn't in the
          * cache. Used by ras_update() to detect seeks.
@@ -601,7 +601,7 @@ struct ll_file_data {
 
 struct lov_stripe_md;
 
-extern cfs_spinlock_t inode_lock;
+extern spinlock_t inode_lock;
 
 extern struct proc_dir_entry *proc_lustre_fs_root;
 
@@ -855,11 +855,11 @@ extern struct inode_operations ll_fast_symlink_inode_operations;
 
 /* llite/llite_close.c */
 struct ll_close_queue {
-        cfs_spinlock_t          lcq_lock;
-        cfs_list_t              lcq_head;
-        cfs_waitq_t             lcq_waitq;
-        cfs_completion_t        lcq_comp;
-        cfs_atomic_t            lcq_stop;
+	spinlock_t		lcq_lock;
+	cfs_list_t		lcq_head;
+	cfs_waitq_t		lcq_waitq;
+	struct completion	lcq_comp;
+	cfs_atomic_t		lcq_stop;
 };
 
 struct ccc_object *cl_inode2ccc(struct inode *inode);
@@ -1244,8 +1244,8 @@ struct ll_statahead_info {
         cfs_list_t              sai_entries_stated;   /* entries stated */
         cfs_list_t              sai_entries_agl; /* AGL entries to be sent */
         cfs_list_t              sai_cache[LL_SA_CACHE_SIZE];
-        cfs_spinlock_t          sai_cache_lock[LL_SA_CACHE_SIZE];
-        cfs_atomic_t            sai_cache_count;      /* entry count in cache */
+	spinlock_t		sai_cache_lock[LL_SA_CACHE_SIZE];
+	cfs_atomic_t		sai_cache_count; /* entry count in cache */
 };
 
 int do_statahead_enter(struct inode *dir, struct dentry **dentry,
@@ -1254,14 +1254,14 @@ void ll_stop_statahead(struct inode *dir, void *key);
 
 static inline int ll_glimpse_size(struct inode *inode)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        int rc;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	int rc;
 
-        cfs_down_read(&lli->lli_glimpse_sem);
-        rc = cl_glimpse_size(inode);
-        lli->lli_glimpse_time = cfs_time_current();
-        cfs_up_read(&lli->lli_glimpse_sem);
-        return rc;
+	down_read(&lli->lli_glimpse_sem);
+	rc = cl_glimpse_size(inode);
+	lli->lli_glimpse_time = cfs_time_current();
+	up_read(&lli->lli_glimpse_sem);
+	return rc;
 }
 
 static inline void

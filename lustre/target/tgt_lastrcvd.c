@@ -93,7 +93,7 @@ void tgt_client_free(struct obd_export *exp)
 		return;
 	/* Clear bit when lcd is freed */
 	LASSERT(lut->lut_client_bitmap);
-	if (!cfs_test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap)) {
+	if (!test_and_clear_bit(ted->ted_lr_idx, lut->lut_client_bitmap)) {
 		CERROR("%s: client %u bit already clear in bitmap\n",
 		       exp->exp_obd->obd_name, ted->ted_lr_idx);
 		LBUG();
@@ -176,9 +176,9 @@ int tgt_client_data_update(const struct lu_env *env, struct obd_export *exp)
 		/* can't add callback, do sync now */
 		th->th_sync = 1;
 	} else {
-		cfs_spin_lock(&exp->exp_lock);
+		spin_lock(&exp->exp_lock);
 		exp->exp_need_sync = 1;
-		cfs_spin_unlock(&exp->exp_lock);
+		spin_unlock(&exp->exp_lock);
 	}
 
 	tti->tti_off = ted->ted_lr_off;
@@ -253,9 +253,9 @@ int tgt_server_data_update(const struct lu_env *env, struct lu_target *tgt,
 	       tgt->lut_last_transno);
 
 	/* Always save latest transno to keep it fresh */
-	cfs_spin_lock(&tgt->lut_translock);
+	spin_lock(&tgt->lut_translock);
 	tgt->lut_lsd.lsd_last_transno = tgt->lut_last_transno;
-	cfs_spin_unlock(&tgt->lut_translock);
+	spin_unlock(&tgt->lut_translock);
 
 	th = dt_trans_create(env, tgt->lut_bottom);
 	if (IS_ERR(th))
@@ -355,20 +355,20 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 		return;
 	}
 
-	cfs_spin_lock(&tgt->lut_translock);
+	spin_lock(&tgt->lut_translock);
 	start_epoch = lr_epoch(tgt->lut_last_transno) + 1;
 	tgt->lut_last_transno = (__u64)start_epoch << LR_EPOCH_BITS;
 	tgt->lut_lsd.lsd_start_epoch = start_epoch;
-	cfs_spin_unlock(&tgt->lut_translock);
+	spin_unlock(&tgt->lut_translock);
 
 	CFS_INIT_LIST_HEAD(&client_list);
 	/**
 	 * The recovery is not yet finished and final queue can still be updated
 	 * with resend requests. Move final list to separate one for processing
 	 */
-	cfs_spin_lock(&tgt->lut_obd->obd_recovery_task_lock);
+	spin_lock(&tgt->lut_obd->obd_recovery_task_lock);
 	cfs_list_splice_init(&tgt->lut_obd->obd_final_req_queue, &client_list);
-	cfs_spin_unlock(&tgt->lut_obd->obd_recovery_task_lock);
+	spin_unlock(&tgt->lut_obd->obd_recovery_task_lock);
 
 	/**
 	 * go through list of exports participated in recovery and
@@ -380,9 +380,9 @@ void tgt_boot_epoch_update(struct lu_target *tgt)
 			tgt_client_epoch_update(&env, req->rq_export);
 	}
 	/** return list back at once */
-	cfs_spin_lock(&tgt->lut_obd->obd_recovery_task_lock);
+	spin_lock(&tgt->lut_obd->obd_recovery_task_lock);
 	cfs_list_splice_init(&client_list, &tgt->lut_obd->obd_final_req_queue);
-	cfs_spin_unlock(&tgt->lut_obd->obd_recovery_task_lock);
+	spin_unlock(&tgt->lut_obd->obd_recovery_task_lock);
 	/** update server epoch */
 	tgt_server_data_update(&env, tgt, 1);
 	lu_env_fini(&env);
@@ -409,17 +409,17 @@ void tgt_cb_last_committed(struct lu_env *env, struct thandle *th,
 	LASSERT(ccb->llcc_tgt != NULL);
 	LASSERT(ccb->llcc_exp->exp_obd == ccb->llcc_tgt->lut_obd);
 
-	cfs_spin_lock(&ccb->llcc_tgt->lut_translock);
+	spin_lock(&ccb->llcc_tgt->lut_translock);
 	if (ccb->llcc_transno > ccb->llcc_tgt->lut_obd->obd_last_committed)
 		ccb->llcc_tgt->lut_obd->obd_last_committed = ccb->llcc_transno;
 
 	LASSERT(ccb->llcc_exp);
 	if (ccb->llcc_transno > ccb->llcc_exp->exp_last_committed) {
 		ccb->llcc_exp->exp_last_committed = ccb->llcc_transno;
-		cfs_spin_unlock(&ccb->llcc_tgt->lut_translock);
+		spin_unlock(&ccb->llcc_tgt->lut_translock);
 		ptlrpc_commit_replies(ccb->llcc_exp);
 	} else {
-		cfs_spin_unlock(&ccb->llcc_tgt->lut_translock);
+		spin_unlock(&ccb->llcc_tgt->lut_translock);
 	}
 	class_export_cb_put(ccb->llcc_exp);
 	if (ccb->llcc_transno)
@@ -481,9 +481,9 @@ void tgt_cb_new_client(struct lu_env *env, struct thandle *th,
 	       ccb->lncc_exp->exp_obd->obd_name,
 	       ccb->lncc_exp->exp_client_uuid.uuid);
 
-	cfs_spin_lock(&ccb->lncc_exp->exp_lock);
+	spin_lock(&ccb->lncc_exp->exp_lock);
 	ccb->lncc_exp->exp_need_sync = 0;
-	cfs_spin_unlock(&ccb->lncc_exp->exp_lock);
+	spin_unlock(&ccb->lncc_exp->exp_lock);
 	class_export_cb_put(ccb->lncc_exp);
 
 	OBD_FREE_PTR(ccb);
@@ -533,7 +533,7 @@ int tgt_client_new(const struct lu_env *env, struct obd_export *exp)
 	if (!strcmp(ted->ted_lcd->lcd_uuid, tgt->lut_obd->obd_uuid.uuid))
 		RETURN(0);
 
-	cfs_mutex_init(&ted->ted_lcd_lock);
+	mutex_init(&ted->ted_lcd_lock);
 
 	if ((exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
 		RETURN(0);
@@ -541,7 +541,7 @@ int tgt_client_new(const struct lu_env *env, struct obd_export *exp)
 	/* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
 	 * there's no need for extra complication here
 	 */
-	idx = cfs_find_first_zero_bit(tgt->lut_client_bitmap, LR_MAX_CLIENTS);
+	idx = find_first_zero_bit(tgt->lut_client_bitmap, LR_MAX_CLIENTS);
 repeat:
 	if (idx >= LR_MAX_CLIENTS ||
 	    OBD_FAIL_CHECK(OBD_FAIL_MDS_CLIENT_ADD)) {
@@ -549,8 +549,8 @@ repeat:
 		       tgt->lut_obd->obd_name,  idx);
 		RETURN(-EOVERFLOW);
 	}
-	if (cfs_test_and_set_bit(idx, tgt->lut_client_bitmap)) {
-		idx = cfs_find_next_zero_bit(tgt->lut_client_bitmap,
+	if (test_and_set_bit(idx, tgt->lut_client_bitmap)) {
+		idx = find_next_zero_bit(tgt->lut_client_bitmap,
 					     LR_MAX_CLIENTS, idx);
 		goto repeat;
 	}
@@ -602,7 +602,7 @@ int tgt_client_add(const struct lu_env *env,  struct obd_export *exp, int idx)
 	    (exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
 		RETURN(0);
 
-	if (cfs_test_and_set_bit(idx, tgt->lut_client_bitmap)) {
+	if (test_and_set_bit(idx, tgt->lut_client_bitmap)) {
 		CERROR("%s: client %d: bit already set in bitmap!!\n",
 		       tgt->lut_obd->obd_name,  idx);
 		LBUG();
@@ -615,7 +615,7 @@ int tgt_client_add(const struct lu_env *env,  struct obd_export *exp, int idx)
 	ted->ted_lr_off = tgt->lut_lsd.lsd_client_start +
 			  idx * tgt->lut_lsd.lsd_client_size;
 
-	cfs_mutex_init(&ted->ted_lcd_lock);
+	mutex_init(&ted->ted_lcd_lock);
 
 	LASSERTF(ted->ted_lr_off > 0, "ted_lr_off = %llu\n", ted->ted_lr_off);
 
@@ -645,7 +645,7 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 
 	/* Clear the bit _after_ zeroing out the client so we don't
 	   race with filter_client_add and zero out new clients.*/
-	if (!cfs_test_bit(ted->ted_lr_idx, tgt->lut_client_bitmap)) {
+	if (!test_bit(ted->ted_lr_idx, tgt->lut_client_bitmap)) {
 		CERROR("%s: client %u: bit already clear in bitmap!!\n",
 		       tgt->lut_obd->obd_name, ted->ted_lr_idx);
 		LBUG();
@@ -666,10 +666,10 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 		RETURN(rc);
 	}
 
-	cfs_mutex_lock(&ted->ted_lcd_lock);
+	mutex_lock(&ted->ted_lcd_lock);
 	memset(ted->ted_lcd->lcd_uuid, 0, sizeof ted->ted_lcd->lcd_uuid);
 	rc = tgt_client_data_update(env, exp);
-	cfs_mutex_unlock(&ted->ted_lcd_lock);
+	mutex_unlock(&ted->ted_lcd_lock);
 
 	CDEBUG(rc == 0 ? D_INFO : D_ERROR,
 	       "%s: zeroing out client %s at idx %u (%llu), rc %d\n",

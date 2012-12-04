@@ -266,11 +266,11 @@ int ldlm_lock_remove_from_lru(struct ldlm_lock *lock)
                 RETURN(0);
         }
 
-        cfs_spin_lock(&ns->ns_lock);
-        rc = ldlm_lock_remove_from_lru_nolock(lock);
-        cfs_spin_unlock(&ns->ns_lock);
-        EXIT;
-        return rc;
+	spin_lock(&ns->ns_lock);
+	rc = ldlm_lock_remove_from_lru_nolock(lock);
+	spin_unlock(&ns->ns_lock);
+	EXIT;
+	return rc;
 }
 
 void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
@@ -287,13 +287,13 @@ void ldlm_lock_add_to_lru_nolock(struct ldlm_lock *lock)
 
 void ldlm_lock_add_to_lru(struct ldlm_lock *lock)
 {
-        struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
+	struct ldlm_namespace *ns = ldlm_lock_to_ns(lock);
 
-        ENTRY;
-        cfs_spin_lock(&ns->ns_lock);
-        ldlm_lock_add_to_lru_nolock(lock);
-        cfs_spin_unlock(&ns->ns_lock);
-        EXIT;
+	ENTRY;
+	spin_lock(&ns->ns_lock);
+	ldlm_lock_add_to_lru_nolock(lock);
+	spin_unlock(&ns->ns_lock);
+	EXIT;
 }
 
 void ldlm_lock_touch_in_lru(struct ldlm_lock *lock)
@@ -307,13 +307,13 @@ void ldlm_lock_touch_in_lru(struct ldlm_lock *lock)
                 return;
         }
 
-        cfs_spin_lock(&ns->ns_lock);
-        if (!cfs_list_empty(&lock->l_lru)) {
-                ldlm_lock_remove_from_lru_nolock(lock);
-                ldlm_lock_add_to_lru_nolock(lock);
-        }
-        cfs_spin_unlock(&ns->ns_lock);
-        EXIT;
+	spin_lock(&ns->ns_lock);
+	if (!cfs_list_empty(&lock->l_lru)) {
+		ldlm_lock_remove_from_lru_nolock(lock);
+		ldlm_lock_add_to_lru_nolock(lock);
+	}
+	spin_unlock(&ns->ns_lock);
+	EXIT;
 }
 
 /* This used to have a 'strict' flag, which recovery would use to mark an
@@ -432,7 +432,7 @@ static struct ldlm_lock *ldlm_lock_new(struct ldlm_resource *resource)
         if (lock == NULL)
                 RETURN(NULL);
 
-        cfs_spin_lock_init(&lock->l_lock);
+	spin_lock_init(&lock->l_lock);
         lock->l_resource = resource;
         lu_ref_add(&resource->lr_reference, "lock", lock);
 
@@ -506,7 +506,7 @@ int ldlm_lock_change_resource(struct ldlm_namespace *ns, struct ldlm_lock *lock,
          * lock->l_lock, and are taken in the memory address order to avoid
          * dead-locks.
          */
-        cfs_spin_lock(&lock->l_lock);
+	spin_lock(&lock->l_lock);
         oldres = lock->l_resource;
         if (oldres < newres) {
                 lock_res(oldres);

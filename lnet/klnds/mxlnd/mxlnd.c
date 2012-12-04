@@ -63,9 +63,9 @@ mxlnd_free_pages(kmx_pages_t *p)
         for (i = 0; i < npages; i++) {
                 if (p->mxg_pages[i] != NULL) {
                         __free_page(p->mxg_pages[i]);
-                        cfs_spin_lock(&kmxlnd_data.kmx_mem_lock);
-                        kmxlnd_data.kmx_mem_used -= PAGE_SIZE;
-                        cfs_spin_unlock(&kmxlnd_data.kmx_mem_lock);
+			spin_lock(&kmxlnd_data.kmx_mem_lock);
+			kmxlnd_data.kmx_mem_used -= PAGE_SIZE;
+			spin_unlock(&kmxlnd_data.kmx_mem_lock);
                 }
         }
 
@@ -96,9 +96,9 @@ mxlnd_alloc_pages(kmx_pages_t **pp, int npages)
                         mxlnd_free_pages(p);
                         return -ENOMEM;
                 }
-                cfs_spin_lock(&kmxlnd_data.kmx_mem_lock);
-                kmxlnd_data.kmx_mem_used += PAGE_SIZE;
-                cfs_spin_unlock(&kmxlnd_data.kmx_mem_lock);
+		spin_lock(&kmxlnd_data.kmx_mem_lock);
+		kmxlnd_data.kmx_mem_used += PAGE_SIZE;
+		spin_unlock(&kmxlnd_data.kmx_mem_lock);
         }
 
         *pp = p;
@@ -393,7 +393,7 @@ mxlnd_thread_start(int (*fn)(void *arg), void *arg)
         int     i   = (int) ((long) arg);
 
         cfs_atomic_inc(&kmxlnd_data.kmx_nthreads);
-        cfs_init_completion(&kmxlnd_data.kmx_completions[i]);
+	init_completion(&kmxlnd_data.kmx_completions[i]);
 
         pid = cfs_create_thread(fn, arg, 0);
         if (pid < 0) {
@@ -414,7 +414,7 @@ mxlnd_thread_stop(long id)
 {
         int     i       = (int) id;
         cfs_atomic_dec (&kmxlnd_data.kmx_nthreads);
-        cfs_complete(&kmxlnd_data.kmx_completions[i]);
+	complete(&kmxlnd_data.kmx_completions[i]);
 }
 
 /**
@@ -451,8 +451,8 @@ mxlnd_shutdown (lnet_ni_t *ni)
 
                 /* wakeup request_waitds */
                 mx_wakeup(kmxlnd_data.kmx_endpt);
-                cfs_up(&kmxlnd_data.kmx_tx_queue_sem);
-                cfs_up(&kmxlnd_data.kmx_conn_sem);
+		up(&kmxlnd_data.kmx_tx_queue_sem);
+		up(&kmxlnd_data.kmx_conn_sem);
                 mxlnd_sleep(2 * CFS_HZ);
 
                 /* fall through */
@@ -462,13 +462,13 @@ mxlnd_shutdown (lnet_ni_t *ni)
                 CDEBUG(D_NET, "waiting on threads\n");
                 /* wait for threads to complete */
                 for (i = 0; i < nthreads; i++) {
-                        cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+			wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
                 LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
 
                 CDEBUG(D_NET, "freeing completions\n");
                 MXLND_FREE(kmxlnd_data.kmx_completions,
-                            nthreads * sizeof(cfs_completion_t));
+			    nthreads * sizeof(struct completion));
 
                 /* fall through */
 
@@ -558,25 +558,25 @@ mxlnd_startup (lnet_ni_t *ni)
         kmxlnd_data.kmx_incarnation = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
         CDEBUG(D_NET, "my incarnation is %llu\n", kmxlnd_data.kmx_incarnation);
 
-        cfs_rwlock_init (&kmxlnd_data.kmx_global_lock);
-        cfs_spin_lock_init (&kmxlnd_data.kmx_mem_lock);
+	rwlock_init (&kmxlnd_data.kmx_global_lock);
+	spin_lock_init (&kmxlnd_data.kmx_mem_lock);
 
         CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_reqs);
         CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_conn_zombies);
         CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_orphan_msgs);
-        cfs_spin_lock_init (&kmxlnd_data.kmx_conn_lock);
-        cfs_sema_init(&kmxlnd_data.kmx_conn_sem, 0);
+	spin_lock_init (&kmxlnd_data.kmx_conn_lock);
+	sema_init(&kmxlnd_data.kmx_conn_sem, 0);
 
         for (i = 0; i < MXLND_HASH_SIZE; i++) {
                 CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_peers[i]);
         }
 
         CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_idle);
-        cfs_spin_lock_init (&kmxlnd_data.kmx_tx_idle_lock);
-        kmxlnd_data.kmx_tx_next_cookie = 1;
-        CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_queue);
-        cfs_spin_lock_init (&kmxlnd_data.kmx_tx_queue_lock);
-        cfs_sema_init(&kmxlnd_data.kmx_tx_queue_sem, 0);
+	spin_lock_init (&kmxlnd_data.kmx_tx_idle_lock);
+	kmxlnd_data.kmx_tx_next_cookie = 1;
+	CFS_INIT_LIST_HEAD (&kmxlnd_data.kmx_tx_queue);
+	spin_lock_init (&kmxlnd_data.kmx_tx_queue_lock);
+	sema_init(&kmxlnd_data.kmx_tx_queue_sem, 0);
 
         kmxlnd_data.kmx_init = MXLND_INIT_DATA;
         /*****************************************************/
@@ -601,13 +601,13 @@ mxlnd_startup (lnet_ni_t *ni)
         /* start threads */
 
         MXLND_ALLOC(kmxlnd_data.kmx_completions,
-                     nthreads * sizeof(cfs_completion_t));
+		     nthreads * sizeof(struct completion));
         if (kmxlnd_data.kmx_completions == NULL) {
                 CERROR("failed to alloc kmxlnd_data.kmx_completions\n");
                 goto failed;
         }
         memset(kmxlnd_data.kmx_completions, 0,
-               nthreads * sizeof(cfs_completion_t));
+	       nthreads * sizeof(struct completion));
 
         CDEBUG(D_NET, "using %d %s in mx_wait_any()\n",
                 *kmxlnd_tunables.kmx_n_waitd,
@@ -620,11 +620,11 @@ mxlnd_startup (lnet_ni_t *ni)
                         cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                         mx_wakeup(kmxlnd_data.kmx_endpt);
                         for (--i; i >= 0; i--) {
-                                cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+				wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                         }
                         LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
                         MXLND_FREE(kmxlnd_data.kmx_completions,
-                                nthreads * sizeof(cfs_completion_t));
+				nthreads * sizeof(struct completion));
 
                         goto failed;
                 }
@@ -635,11 +635,11 @@ mxlnd_startup (lnet_ni_t *ni)
                 cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                 mx_wakeup(kmxlnd_data.kmx_endpt);
                 for (--i; i >= 0; i--) {
-                        cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+			wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
                 LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
                 MXLND_FREE(kmxlnd_data.kmx_completions,
-                        nthreads * sizeof(cfs_completion_t));
+			nthreads * sizeof(struct completion));
                 goto failed;
         }
         ret = mxlnd_thread_start(mxlnd_timeoutd, (void*)((long)i++));
@@ -647,13 +647,13 @@ mxlnd_startup (lnet_ni_t *ni)
                 CERROR("Starting mxlnd_timeoutd failed with %d\n", ret);
                 cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                 mx_wakeup(kmxlnd_data.kmx_endpt);
-                cfs_up(&kmxlnd_data.kmx_tx_queue_sem);
+		up(&kmxlnd_data.kmx_tx_queue_sem);
                 for (--i; i >= 0; i--) {
-                        cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+			wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
                 LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
                 MXLND_FREE(kmxlnd_data.kmx_completions,
-                        nthreads * sizeof(cfs_completion_t));
+			nthreads * sizeof(struct completion));
                 goto failed;
         }
         ret = mxlnd_thread_start(mxlnd_connd, (void*)((long)i++));
@@ -661,13 +661,13 @@ mxlnd_startup (lnet_ni_t *ni)
                 CERROR("Starting mxlnd_connd failed with %d\n", ret);
                 cfs_atomic_set(&kmxlnd_data.kmx_shutdown, 1);
                 mx_wakeup(kmxlnd_data.kmx_endpt);
-                cfs_up(&kmxlnd_data.kmx_tx_queue_sem);
+		up(&kmxlnd_data.kmx_tx_queue_sem);
                 for (--i; i >= 0; i--) {
-                        cfs_wait_for_completion(&kmxlnd_data.kmx_completions[i]);
+			wait_for_completion(&kmxlnd_data.kmx_completions[i]);
                 }
                 LASSERT(cfs_atomic_read(&kmxlnd_data.kmx_nthreads) == 0);
                 MXLND_FREE(kmxlnd_data.kmx_completions,
-                        nthreads * sizeof(cfs_completion_t));
+			nthreads * sizeof(struct completion));
                 goto failed;
         }
 

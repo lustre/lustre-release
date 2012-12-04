@@ -38,7 +38,7 @@
 
 #define OFF_BY_START(start)     ((start)/BITS_PER_LONG)
 
-unsigned long cfs_find_next_bit(unsigned long *addr,
+unsigned long find_next_bit(unsigned long *addr,
                                 unsigned long size, unsigned long offset)
 {
         unsigned long *word, *last;
@@ -72,7 +72,7 @@ found:
         return base + bit;
 }
 
-unsigned long cfs_find_next_zero_bit(unsigned long *addr,
+unsigned long find_next_zero_bit(unsigned long *addr,
                                      unsigned long size, unsigned long offset)
 {
         unsigned long *word, *last;

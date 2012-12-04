@@ -60,7 +60,7 @@ CFS_MODULE_PARM(lprocfs_no_percpu_stats, "i", int, 0644,
 #define MAX_STRING_SIZE 128
 
 /* for bug 10866, global variable */
-CFS_DECLARE_RWSEM(_lprocfs_lock);
+DECLARE_RWSEM(_lprocfs_lock);
 EXPORT_SYMBOL(_lprocfs_lock);
 
 int lprocfs_single_release(struct inode *inode, struct file *file)
@@ -1057,7 +1057,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
                       "]\n"
                       "    connection:\n"
                       "       failover_nids: [");
-        cfs_spin_lock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
         j = 0;
         cfs_list_for_each_entry(conn, &imp->imp_conn_list, oic_item) {
                 i += snprintf(page + i, count - i, "%s%s", j ? ", " : "",
@@ -1075,7 +1075,7 @@ int lprocfs_rd_import(char *page, char **start, off_t off, int count,
 		      imp->imp_conn_cnt,
 		      imp->imp_generation,
 		      cfs_atomic_read(&imp->imp_inval_count));
-	cfs_spin_unlock(&imp->imp_lock);
+	spin_unlock(&imp->imp_lock);
 
         lprocfs_stats_collect(obd->obd_svc_stats, PTLRPC_REQWAIT_CNTR, &ret);
         if (ret.lc_count != 0) {
@@ -1405,7 +1405,7 @@ struct lprocfs_stats *lprocfs_alloc_stats(unsigned int num,
 	stats->ls_num = num;
 	stats->ls_biggest_alloc_num = 1;
 	stats->ls_flags = flags;
-	cfs_spin_lock_init(&stats->ls_lock);
+	spin_lock_init(&stats->ls_lock);
 
 	percpusize = offsetof(struct lprocfs_percpu, lp_cntr[num]);
 	if (num_entry > 1)
@@ -1985,9 +1985,9 @@ static int lprocfs_nid_stats_clear_write_cb(void *obj, void *data)
         CDEBUG(D_INFO,"refcnt %d\n", cfs_atomic_read(&stat->nid_exp_ref_count));
         if (cfs_atomic_read(&stat->nid_exp_ref_count) == 1) {
                 /* object has only hash references. */
-                cfs_spin_lock(&stat->nid_obd->obd_nid_lock);
-                cfs_list_move(&stat->nid_list, data);
-                cfs_spin_unlock(&stat->nid_obd->obd_nid_lock);
+		spin_lock(&stat->nid_obd->obd_nid_lock);
+		cfs_list_move(&stat->nid_list, data);
+		spin_unlock(&stat->nid_obd->obd_nid_lock);
                 RETURN(1);
         }
         /* we has reference to object - only clear data*/
@@ -2111,9 +2111,9 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
         exp->exp_nid_stats = new_stat;
         *newnid = 1;
         /* protect competitive add to list, not need locking on destroy */
-        cfs_spin_lock(&obd->obd_nid_lock);
-        cfs_list_add(&new_stat->nid_list, &obd->obd_nid_stats);
-        cfs_spin_unlock(&obd->obd_nid_lock);
+	spin_lock(&obd->obd_nid_lock);
+	cfs_list_add(&new_stat->nid_list, &obd->obd_nid_stats);
+	spin_unlock(&obd->obd_nid_lock);
 
         RETURN(rc);
 
@@ -2395,12 +2395,12 @@ EXPORT_SYMBOL(lprocfs_obd_seq_create);
 
 void lprocfs_oh_tally(struct obd_histogram *oh, unsigned int value)
 {
-        if (value >= OBD_HIST_MAX)
-                value = OBD_HIST_MAX - 1;
+	if (value >= OBD_HIST_MAX)
+		value = OBD_HIST_MAX - 1;
 
-        cfs_spin_lock(&oh->oh_lock);
-        oh->oh_buckets[value]++;
-        cfs_spin_unlock(&oh->oh_lock);
+	spin_lock(&oh->oh_lock);
+	oh->oh_buckets[value]++;
+	spin_unlock(&oh->oh_lock);
 }
 EXPORT_SYMBOL(lprocfs_oh_tally);
 
@@ -2428,9 +2428,9 @@ EXPORT_SYMBOL(lprocfs_oh_sum);
 
 void lprocfs_oh_clear(struct obd_histogram *oh)
 {
-        cfs_spin_lock(&oh->oh_lock);
-        memset(oh->oh_buckets, 0, sizeof(oh->oh_buckets));
-        cfs_spin_unlock(&oh->oh_lock);
+	spin_lock(&oh->oh_lock);
+	memset(oh->oh_buckets, 0, sizeof(oh->oh_buckets));
+	spin_unlock(&oh->oh_lock);
 }
 EXPORT_SYMBOL(lprocfs_oh_clear);
 

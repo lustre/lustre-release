@@ -128,7 +128,7 @@ void ctx_destroy_pf(struct ptlrpc_sec *sec, struct ptlrpc_cli_ctx *ctx)
 static
 void ctx_enhash_pf(struct ptlrpc_cli_ctx *ctx, cfs_hlist_head_t *hash)
 {
-        cfs_set_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
+	set_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
         cfs_atomic_inc(&ctx->cc_refcount);
         cfs_hlist_add_head(&ctx->cc_cache, hash);
 }
@@ -141,10 +141,10 @@ void ctx_unhash_pf(struct ptlrpc_cli_ctx *ctx, cfs_hlist_head_t *freelist)
 {
         LASSERT_SPIN_LOCKED(&ctx->cc_sec->ps_lock);
         LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
-        LASSERT(cfs_test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags));
+	LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags));
         LASSERT(!cfs_hlist_unhashed(&ctx->cc_cache));
 
-        cfs_clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
+	clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags);
 
         if (cfs_atomic_dec_and_test(&ctx->cc_refcount)) {
                 __cfs_hlist_del(&ctx->cc_cache);
@@ -176,7 +176,7 @@ int ctx_check_death_locked_pf(struct ptlrpc_cli_ctx *ctx,
 {
         LASSERT(ctx->cc_sec);
         LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
-        LASSERT(cfs_test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags));
+	LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags));
 
         return ctx_check_death_pf(ctx, freelist);
 }
@@ -201,7 +201,7 @@ void ctx_list_destroy_pf(cfs_hlist_head_t *head)
                                       cc_cache);
 
                 LASSERT(cfs_atomic_read(&ctx->cc_refcount) == 0);
-                LASSERT(cfs_test_bit(PTLRPC_CTX_CACHED_BIT,
+		LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT,
                                      &ctx->cc_flags) == 0);
 
                 cfs_hlist_del_init(&ctx->cc_cache);
@@ -226,23 +226,23 @@ int gss_cli_ctx_validate_pf(struct ptlrpc_cli_ctx *ctx)
 static
 void gss_cli_ctx_die_pf(struct ptlrpc_cli_ctx *ctx, int grace)
 {
-        LASSERT(ctx->cc_sec);
-        LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
+	LASSERT(ctx->cc_sec);
+	LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
 
-        cli_ctx_expire(ctx);
+	cli_ctx_expire(ctx);
 
-        cfs_spin_lock(&ctx->cc_sec->ps_lock);
+	spin_lock(&ctx->cc_sec->ps_lock);
 
-        if (cfs_test_and_clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags)) {
-                LASSERT(!cfs_hlist_unhashed(&ctx->cc_cache));
-                LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 1);
+	if (test_and_clear_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags)) {
+		LASSERT(!cfs_hlist_unhashed(&ctx->cc_cache));
+		LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 1);
 
-                cfs_hlist_del_init(&ctx->cc_cache);
-                if (cfs_atomic_dec_and_test(&ctx->cc_refcount))
-                        LBUG();
-        }
+		cfs_hlist_del_init(&ctx->cc_cache);
+		if (cfs_atomic_dec_and_test(&ctx->cc_refcount))
+			LBUG();
+	}
 
-        cfs_spin_unlock(&ctx->cc_sec->ps_lock);
+	spin_unlock(&ctx->cc_sec->ps_lock);
 }
 
 /****************************************
@@ -272,7 +272,7 @@ void gss_sec_ctx_replace_pf(struct gss_sec *gsec,
                               (__u64) new->cc_vcred.vc_uid);
         LASSERT(hash < gsec_pf->gsp_chash_size);
 
-        cfs_spin_lock(&gsec->gs_base.ps_lock);
+	spin_lock(&gsec->gs_base.ps_lock);
 
         cfs_hlist_for_each_entry_safe(ctx, pos, next,
                                       &gsec_pf->gsp_chash[hash], cc_cache) {
@@ -286,7 +286,7 @@ void gss_sec_ctx_replace_pf(struct gss_sec *gsec,
 
         ctx_enhash_pf(new, &gsec_pf->gsp_chash[hash]);
 
-        cfs_spin_unlock(&gsec->gs_base.ps_lock);
+	spin_unlock(&gsec->gs_base.ps_lock);
 
         ctx_list_destroy_pf(&freelist);
         EXIT;
@@ -438,7 +438,7 @@ struct ptlrpc_cli_ctx * gss_sec_lookup_ctx_pf(struct ptlrpc_sec *sec,
         LASSERT(hash < gsec_pf->gsp_chash_size);
 
 retry:
-        cfs_spin_lock(&sec->ps_lock);
+	spin_lock(&sec->ps_lock);
 
         /* gc_next == 0 means never do gc */
         if (remove_dead && sec->ps_gc_next &&
@@ -474,30 +474,30 @@ retry:
         } else {
                 /* don't allocate for reverse sec */
                 if (sec_is_reverse(sec)) {
-                        cfs_spin_unlock(&sec->ps_lock);
-                        RETURN(NULL);
-                }
+			spin_unlock(&sec->ps_lock);
+			RETURN(NULL);
+		}
 
-                if (new) {
-                        ctx_enhash_pf(new, hash_head);
-                        ctx = new;
-                } else if (create) {
-                        cfs_spin_unlock(&sec->ps_lock);
-                        new = ctx_create_pf(sec, vcred);
-                        if (new) {
-                                cfs_clear_bit(PTLRPC_CTX_NEW_BIT,
-                                              &new->cc_flags);
-                                goto retry;
-                        }
-                } else
-                        ctx = NULL;
-        }
+		if (new) {
+			ctx_enhash_pf(new, hash_head);
+			ctx = new;
+		} else if (create) {
+			spin_unlock(&sec->ps_lock);
+			new = ctx_create_pf(sec, vcred);
+			if (new) {
+				clear_bit(PTLRPC_CTX_NEW_BIT, &new->cc_flags);
+				goto retry;
+			}
+		} else {
+			ctx = NULL;
+		}
+	}
 
-        /* hold a ref */
-        if (ctx)
-                cfs_atomic_inc(&ctx->cc_refcount);
+	/* hold a ref */
+	if (ctx)
+		cfs_atomic_inc(&ctx->cc_refcount);
 
-        cfs_spin_unlock(&sec->ps_lock);
+	spin_unlock(&sec->ps_lock);
 
         /* the allocator of the context must give the first push to refresh */
         if (new) {
@@ -514,13 +514,13 @@ void gss_sec_release_ctx_pf(struct ptlrpc_sec *sec,
                             struct ptlrpc_cli_ctx *ctx,
                             int sync)
 {
-        LASSERT(cfs_test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
+	LASSERT(test_bit(PTLRPC_CTX_CACHED_BIT, &ctx->cc_flags) == 0);
         LASSERT(cfs_hlist_unhashed(&ctx->cc_cache));
 
         /* if required async, we must clear the UPTODATE bit to prevent extra
          * rpcs during destroy procedure. */
         if (!sync)
-                cfs_clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
+		clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
         /* destroy this context */
         ctx_destroy_pf(sec, ctx);
@@ -554,7 +554,7 @@ int gss_sec_flush_ctx_cache_pf(struct ptlrpc_sec *sec,
         gsec = container_of(sec, struct gss_sec, gs_base);
         gsec_pf = container_of(gsec, struct gss_sec_pipefs, gsp_base);
 
-        cfs_spin_lock(&sec->ps_lock);
+	spin_lock(&sec->ps_lock);
         for (i = 0; i < gsec_pf->gsp_chash_size; i++) {
                 cfs_hlist_for_each_entry_safe(ctx, pos, next,
                                               &gsec_pf->gsp_chash[i],
@@ -577,16 +577,16 @@ int gss_sec_flush_ctx_cache_pf(struct ptlrpc_sec *sec,
                         }
                         ctx_unhash_pf(ctx, &freelist);
 
-                        cfs_set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags);
-                        if (!grace)
-                                cfs_clear_bit(PTLRPC_CTX_UPTODATE_BIT,
-                                              &ctx->cc_flags);
-                }
-        }
-        cfs_spin_unlock(&sec->ps_lock);
+			set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags);
+			if (!grace)
+				clear_bit(PTLRPC_CTX_UPTODATE_BIT,
+					  &ctx->cc_flags);
+		}
+	}
+	spin_unlock(&sec->ps_lock);
 
-        ctx_list_destroy_pf(&freelist);
-        RETURN(busy);
+	ctx_list_destroy_pf(&freelist);
+	RETURN(busy);
 }
 
 /****************************************
@@ -665,18 +665,18 @@ static struct dentry *de_pipes[MECH_MAX] = { NULL, };
 /* all upcall messgaes linked here */
 static cfs_list_t upcall_lists[MECH_MAX];
 /* and protected by this */
-static cfs_spinlock_t upcall_locks[MECH_MAX];
+static spinlock_t upcall_locks[MECH_MAX];
 
 static inline
 void upcall_list_lock(int idx)
 {
-        cfs_spin_lock(&upcall_locks[idx]);
+	spin_lock(&upcall_locks[idx]);
 }
 
 static inline
 void upcall_list_unlock(int idx)
 {
-        cfs_spin_unlock(&upcall_locks[idx]);
+	spin_unlock(&upcall_locks[idx]);
 }
 
 static
@@ -761,7 +761,7 @@ void gss_msg_fail_ctx(struct gss_upcall_msg *gmsg)
 
                 LASSERT(cfs_atomic_read(&ctx->cc_refcount) > 0);
                 sptlrpc_cli_ctx_expire(ctx);
-                cfs_set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
+		set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
         }
 }
 
@@ -923,11 +923,11 @@ ssize_t gss_pipe_downcall(struct file *filp, const char *src, size_t mlen)
                 ctx = &gctx->gc_base;
                 sptlrpc_cli_ctx_expire(ctx);
                 if (rc != -ERESTART || gss_err != GSS_S_COMPLETE)
-                        cfs_set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
+			set_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags);
 
                 CERROR("refresh ctx %p(uid %d) failed: %d/0x%08x: %s\n",
                        ctx, ctx->cc_vcred.vc_uid, rc, gss_err,
-                       cfs_test_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags) ?
+		       test_bit(PTLRPC_CTX_ERROR_BIT, &ctx->cc_flags) ?
                        "fatal error" : "non-fatal");
         }
 
@@ -1209,9 +1209,9 @@ int __init gss_init_pipefs_upcall(void)
 
         de_pipes[MECH_KRB5] = de;
         CFS_INIT_LIST_HEAD(&upcall_lists[MECH_KRB5]);
-        cfs_spin_lock_init(&upcall_locks[MECH_KRB5]);
+	spin_lock_init(&upcall_locks[MECH_KRB5]);
 
-        return 0;
+	return 0;
 }
 
 static

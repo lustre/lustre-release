@@ -44,11 +44,11 @@
 #include <linux/lustre_patchless_compat.h>
 
 #ifdef HAVE_FS_STRUCT_RWLOCK
-# define LOCK_FS_STRUCT(fs)   cfs_write_lock(&(fs)->lock)
-# define UNLOCK_FS_STRUCT(fs) cfs_write_unlock(&(fs)->lock)
+# define LOCK_FS_STRUCT(fs)	write_lock(&(fs)->lock)
+# define UNLOCK_FS_STRUCT(fs)	write_unlock(&(fs)->lock)
 #else
-# define LOCK_FS_STRUCT(fs)   cfs_spin_lock(&(fs)->lock)
-# define UNLOCK_FS_STRUCT(fs) cfs_spin_unlock(&(fs)->lock)
+# define LOCK_FS_STRUCT(fs)	spin_lock(&(fs)->lock)
+# define UNLOCK_FS_STRUCT(fs)	spin_unlock(&(fs)->lock)
 #endif
 
 #ifdef HAVE_FS_STRUCT_USE_PATH
@@ -218,11 +218,11 @@ static inline unsigned int mnt_get_count(struct vfsmount *mnt)
 #endif
 
 #ifdef HAVE_RW_TREE_LOCK
-#define TREE_READ_LOCK_IRQ(mapping)     read_lock_irq(&(mapping)->tree_lock)
-#define TREE_READ_UNLOCK_IRQ(mapping) read_unlock_irq(&(mapping)->tree_lock)
+#define TREE_READ_LOCK_IRQ(mapping)	read_lock_irq(&(mapping)->tree_lock)
+#define TREE_READ_UNLOCK_IRQ(mapping)	read_unlock_irq(&(mapping)->tree_lock)
 #else
-#define TREE_READ_LOCK_IRQ(mapping) cfs_spin_lock_irq(&(mapping)->tree_lock)
-#define TREE_READ_UNLOCK_IRQ(mapping) cfs_spin_unlock_irq(&(mapping)->tree_lock)
+#define TREE_READ_LOCK_IRQ(mapping)	spin_lock_irq(&(mapping)->tree_lock)
+#define TREE_READ_UNLOCK_IRQ(mapping)	spin_unlock_irq(&(mapping)->tree_lock)
 #endif
 
 #ifdef HAVE_UNREGISTER_BLKDEV_RETURN_INT

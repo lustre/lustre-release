@@ -108,8 +108,8 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 
 	maxsize = ofd->ofd_osfs.os_blocks << ofd->ofd_blockbits;
 
-	cfs_spin_lock(&obd->obd_dev_lock);
-	cfs_spin_lock(&ofd->ofd_grant_lock);
+	spin_lock(&obd->obd_dev_lock);
+	spin_lock(&ofd->ofd_grant_lock);
 	cfs_list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
 		int error = 0;
 
@@ -128,16 +128,16 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 			       " > maxsize("LPU64")\n", obd->obd_name,
 			       exp->exp_client_uuid.uuid, exp, fed->fed_grant,
 			       fed->fed_pending, maxsize);
-			cfs_spin_unlock(&obd->obd_dev_lock);
-			cfs_spin_unlock(&ofd->ofd_grant_lock);
+			spin_unlock(&obd->obd_dev_lock);
+			spin_unlock(&ofd->ofd_grant_lock);
 			LBUG();
 		}
 		if (fed->fed_dirty > maxsize) {
 			CERROR("%s: cli %s/%p fed_dirty(%ld) > maxsize("LPU64
 			       ")\n", obd->obd_name, exp->exp_client_uuid.uuid,
 			       exp, fed->fed_dirty, maxsize);
-			cfs_spin_unlock(&obd->obd_dev_lock);
-			cfs_spin_unlock(&ofd->ofd_grant_lock);
+			spin_unlock(&obd->obd_dev_lock);
+			spin_unlock(&ofd->ofd_grant_lock);
 			LBUG();
 		}
 		CDEBUG_LIMIT(error ? D_ERROR : D_CACHE, "%s: cli %s/%p dirty "
@@ -148,7 +148,7 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 		tot_pending += fed->fed_pending;
 		tot_dirty += fed->fed_dirty;
 	}
-	cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_unlock(&obd->obd_dev_lock);
 	fo_tot_granted = ofd->ofd_tot_granted;
 	fo_tot_pending = ofd->ofd_tot_pending;
 	fo_tot_dirty = ofd->ofd_tot_dirty;
@@ -171,7 +171,7 @@ void ofd_grant_sanity_check(struct obd_device *obd, const char *func)
 	if (tot_dirty > maxsize)
 		CERROR("%s: tot_dirty "LPU64" > maxsize "LPU64"\n",
 		       func, tot_dirty, maxsize);
-	cfs_spin_unlock(&ofd->ofd_grant_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 }
 
 /**
@@ -230,11 +230,11 @@ static obd_size ofd_grant_space_left(struct obd_export *exp)
 	ENTRY;
 	LASSERT_SPIN_LOCKED(&ofd->ofd_grant_lock);
 
-	cfs_spin_lock(&ofd->ofd_osfs_lock);
+	spin_lock(&ofd->ofd_osfs_lock);
 	/* get available space from cached statfs data */
 	left = ofd->ofd_osfs.os_bavail << ofd->ofd_blockbits;
 	unstable = ofd->ofd_osfs_unstable; /* those might be accounted twice */
-	cfs_spin_unlock(&ofd->ofd_osfs_lock);
+	spin_unlock(&ofd->ofd_osfs_lock);
 
 	tot_granted = ofd->ofd_tot_granted;
 
@@ -345,7 +345,7 @@ static void ofd_grant_incoming(const struct lu_env *env, struct obd_export *exp,
 		CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       fed->fed_dirty, fed->fed_pending, fed->fed_grant);
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		LBUG();
 	}
 	EXIT;
@@ -565,7 +565,7 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
 		CERROR("%s: cli %s/%p dirty %ld pend %ld grant %ld\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       fed->fed_dirty, fed->fed_pending, fed->fed_grant);
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		LBUG();
 	}
 	EXIT;
@@ -642,7 +642,7 @@ static long ofd_grant(struct obd_export *exp, obd_size curgrant,
 		CERROR("%s: cli %s/%p grant %ld want "LPU64" current "LPU64"\n",
 		       obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       fed->fed_grant, want, curgrant);
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		LBUG();
 	}
 
@@ -684,7 +684,7 @@ long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
 refresh:
 	ofd_grant_statfs(env, exp, force, &from_cache);
 
-	cfs_spin_lock(&ofd->ofd_grant_lock);
+	spin_lock(&ofd->ofd_grant_lock);
 
 	/* Grab free space from cached info and take out space already granted
 	 * to clients as well as reserved space */
@@ -692,7 +692,7 @@ refresh:
 
 	/* get fresh statfs data if we are short in ungranted space */
 	if (from_cache && left < 32 * ofd_grant_chunk(exp, ofd)) {
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		CDEBUG(D_CACHE, "fs has no space left and statfs too old\n");
 		force = 1;
 		goto refresh;
@@ -705,7 +705,7 @@ refresh:
 	grant = ofd_grant_to_cli(exp, ofd, (obd_size)fed->fed_grant);
 	ofd->ofd_tot_granted_clients++;
 
-	cfs_spin_unlock(&ofd->ofd_grant_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 
 	CDEBUG(D_CACHE, "%s: cli %s/%p ocd_grant: %ld want: "LPU64" left: "
 	       LPU64"\n", exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
@@ -728,7 +728,7 @@ void ofd_grant_discard(struct obd_export *exp)
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 
-	cfs_spin_lock(&ofd->ofd_grant_lock);
+	spin_lock(&ofd->ofd_grant_lock);
 	LASSERTF(ofd->ofd_tot_granted >= fed->fed_grant,
 		 "%s: tot_granted "LPU64" cli %s/%p fed_grant %ld\n",
 		 obd->obd_name, ofd->ofd_tot_granted,
@@ -747,7 +747,7 @@ void ofd_grant_discard(struct obd_export *exp)
 		 exp->exp_client_uuid.uuid, exp, fed->fed_dirty);
 	ofd->ofd_tot_dirty -= fed->fed_dirty;
 	fed->fed_dirty = 0;
-	cfs_spin_unlock(&ofd->ofd_grant_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 }
 
 /**
@@ -783,7 +783,7 @@ void ofd_grant_prepare_read(const struct lu_env *env,
 		ofd_grant_statfs(env, exp, 1, NULL);
 
 		/* protect all grant counters */
-		cfs_spin_lock(&ofd->ofd_grant_lock);
+		spin_lock(&ofd->ofd_grant_lock);
 
 		/* Grab free space from cached statfs data and take out space
 		 * already granted to clients as well as reserved space */
@@ -796,7 +796,7 @@ void ofd_grant_prepare_read(const struct lu_env *env,
 		 * since we don't grant space back on reads, no point
 		 * in running statfs, so just skip it and process
 		 * incoming grant data directly. */
-		cfs_spin_lock(&ofd->ofd_grant_lock);
+		spin_lock(&ofd->ofd_grant_lock);
 		do_shrink = 0;
 	}
 
@@ -810,7 +810,7 @@ void ofd_grant_prepare_read(const struct lu_env *env,
 	else
 		oa->o_grant = 0;
 
-	cfs_spin_unlock(&ofd->ofd_grant_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 }
 
 /**
@@ -840,7 +840,7 @@ refresh:
 	/* get statfs information from OSD layer */
 	ofd_grant_statfs(env, exp, force, &from_cache);
 
-	cfs_spin_lock(&ofd->ofd_grant_lock); /* protect all grant counters */
+	spin_lock(&ofd->ofd_grant_lock); /* protect all grant counters */
 
 	/* Grab free space from cached statfs data and take out space already
 	 * granted to clients as well as reserved space */
@@ -848,7 +848,7 @@ refresh:
 
 	/* Get fresh statfs data if we are short in ungranted space */
 	if (from_cache && left < 32 * ofd_grant_chunk(exp, ofd)) {
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		CDEBUG(D_CACHE, "%s: fs has no space left and statfs too old\n",
 		       obd->obd_name);
 		force = 1;
@@ -873,7 +873,7 @@ refresh:
 		if (!from_grant) {
 			/* at least one network buffer requires acquiring grant
 			 * space on the server */
-			cfs_spin_unlock(&ofd->ofd_grant_lock);
+			spin_unlock(&ofd->ofd_grant_lock);
 			/* discard errors, at least we tried ... */
 			rc = dt_sync(env, ofd->ofd_osd);
 			force = 2;
@@ -888,7 +888,7 @@ refresh:
 	ofd_grant_check(env, exp, oa, rnb, niocount, &left);
 
 	if (!(oa->o_valid & OBD_MD_FLGRANT)) {
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		RETURN_EXIT;
 	}
 
@@ -900,7 +900,7 @@ refresh:
 	else
 		/* grant more space back to the client if possible */
 		oa->o_grant = ofd_grant(exp, oa->o_grant, oa->o_undirty, left);
-	cfs_spin_unlock(&ofd->ofd_grant_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 }
 
 /**
@@ -933,13 +933,13 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 	ofd_grant_statfs(env, exp, 1, NULL);
 
 	/* protect all grant counters */
-	cfs_spin_lock(&ofd->ofd_grant_lock);
+	spin_lock(&ofd->ofd_grant_lock);
 
 	/* fail precreate request if there is not enough blocks available for
 	 * writing */
 	if (ofd->ofd_osfs.os_bavail - (fed->fed_grant >> ofd->ofd_blockbits) <
 	    (ofd->ofd_osfs.os_blocks >> 10)) {
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		CDEBUG(D_RPCTRACE, "%s: not enough space for create "LPU64"\n",
 		       ofd_obd(ofd)->obd_name,
 		       ofd->ofd_osfs.os_bavail * ofd->ofd_osfs.os_blocks);
@@ -961,7 +961,7 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 		if (*nr == 0) {
 			/* we really have no space any more for precreation,
 			 * fail the precreate request with ENOSPC */
-			cfs_spin_unlock(&ofd->ofd_grant_lock);
+			spin_unlock(&ofd->ofd_grant_lock);
 			RETURN(-ENOSPC);
 		}
 		/* compute space needed for the new number of creations */
@@ -985,7 +985,7 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 	/* grant more space (twice as much as needed for this request) for
 	 * precreate purpose if possible */
 	ofd_grant(exp, fed->fed_grant, wanted * 2, left);
-	cfs_spin_unlock(&ofd->ofd_grant_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 	RETURN(0);
 }
 
@@ -1010,7 +1010,7 @@ void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 	if (pending == 0)
 		RETURN_EXIT;
 
-	cfs_spin_lock(&ofd->ofd_grant_lock);
+	spin_lock(&ofd->ofd_grant_lock);
 	/* Don't update statfs data for errors raised before commit (e.g.
 	 * bulk transfer failed, ...) since we know those writes have not been
 	 * processed. For other errors hit during commit, we cannot really tell
@@ -1018,7 +1018,7 @@ void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 	 * In any case, this should not be fatal since we always get fresh
 	 * statfs data before failing a request with ENOSPC */
 	if (rc == 0) {
-		cfs_spin_lock(&ofd->ofd_osfs_lock);
+		spin_lock(&ofd->ofd_osfs_lock);
 		/* Take pending out of cached statfs data */
 		ofd->ofd_osfs.os_bavail -= min_t(obd_size,
 						 ofd->ofd_osfs.os_bavail,
@@ -1027,14 +1027,14 @@ void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 			/* someone is running statfs and want to be notified of
 			 * writes happening meanwhile */
 			ofd->ofd_osfs_inflight += pending;
-		cfs_spin_unlock(&ofd->ofd_osfs_lock);
+		spin_unlock(&ofd->ofd_osfs_lock);
 	}
 
 	if (exp->exp_filter_data.fed_pending < pending) {
 		CERROR("%s: cli %s/%p fed_pending(%lu) < grant_used(%lu)\n",
 		       exp->exp_obd->obd_name, exp->exp_client_uuid.uuid, exp,
 		       exp->exp_filter_data.fed_pending, pending);
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		LBUG();
 	}
 	exp->exp_filter_data.fed_pending -= pending;
@@ -1044,7 +1044,7 @@ void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 			"\n", exp->exp_obd->obd_name,
 			exp->exp_client_uuid.uuid, exp, ofd->ofd_tot_granted,
 			pending);
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		LBUG();
 	}
 	ofd->ofd_tot_granted -= pending;
@@ -1053,10 +1053,10 @@ void ofd_grant_commit(const struct lu_env *env, struct obd_export *exp,
 		 CERROR("%s: cli %s/%p tot_pending("LPU64") < grant_used(%lu)"
 			"\n", exp->exp_obd->obd_name, exp->exp_client_uuid.uuid,
 			exp, ofd->ofd_tot_pending, pending);
-		cfs_spin_unlock(&ofd->ofd_grant_lock);
+		spin_unlock(&ofd->ofd_grant_lock);
 		LBUG();
 	}
 	ofd->ofd_tot_pending -= pending;
-	cfs_spin_unlock(&ofd->ofd_grant_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 	EXIT;
 }

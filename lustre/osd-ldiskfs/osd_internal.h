@@ -121,11 +121,11 @@ struct osd_object {
          * to protect index ops.
          */
         struct htree_lock_head *oo_hl_head;
-        cfs_rw_semaphore_t      oo_ext_idx_sem;
-        cfs_rw_semaphore_t      oo_sem;
-        struct osd_directory   *oo_dir;
-        /** protects inode attributes. */
-        cfs_spinlock_t          oo_guard;
+	struct rw_semaphore	oo_ext_idx_sem;
+	struct rw_semaphore	oo_sem;
+	struct osd_directory	*oo_dir;
+	/** protects inode attributes. */
+	spinlock_t		oo_guard;
         /**
          * Following two members are used to indicate the presence of dot and
          * dotdot in the given directory. This is required for interop mode
@@ -269,11 +269,11 @@ struct osd_device {
          */
         cfs_time_t                od_osfs_age;
         struct obd_statfs         od_statfs;
-        cfs_spinlock_t            od_osfs_lock;
+	spinlock_t		  od_osfs_lock;
 
 	unsigned int		  od_noscrub:1;
 
-        struct fsfilt_operations *od_fsops;
+	struct fsfilt_operations *od_fsops;
 	int			  od_connects;
 	struct lu_site		  od_site;
 
@@ -290,7 +290,7 @@ struct osd_device {
         cfs_atomic_t              od_r_in_flight;
         cfs_atomic_t              od_w_in_flight;
 
-	cfs_mutex_t		  od_otable_mutex;
+	struct mutex		  od_otable_mutex;
 	struct osd_otable_it	 *od_otable_it;
 	struct osd_scrub	  od_scrub;
 

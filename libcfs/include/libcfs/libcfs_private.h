@@ -470,7 +470,7 @@ struct cfs_percpt_lock {
 	/* exclusively locked */
 	unsigned int		pcl_locked;
 	/* private lock table */
-	cfs_spinlock_t		**pcl_locks;
+	spinlock_t		**pcl_locks;
 };
 
 /* return number of private locks */

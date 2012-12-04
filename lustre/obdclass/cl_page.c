@@ -203,7 +203,7 @@ int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
         hdr = cl_object_header(obj);
         pvec = cl_env_info(env)->clt_pvec;
         dtype = cl_object_top(obj)->co_lu.lo_dev->ld_type;
-        cfs_spin_lock(&hdr->coh_page_guard);
+	spin_lock(&hdr->coh_page_guard);
         while ((nr = radix_tree_gang_lookup(&hdr->coh_tree, (void **)pvec,
                                             idx, CLT_PVEC_SIZE)) > 0) {
                 int end_of_region = 0;
@@ -249,7 +249,7 @@ int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                  * check that pages weren't truncated (cl_page_own() returns
                  * error in the latter case).
                  */
-                cfs_spin_unlock(&hdr->coh_page_guard);
+		spin_unlock(&hdr->coh_page_guard);
                 tree_lock = 0;
 
                 for (i = 0; i < j; ++i) {
@@ -268,12 +268,12 @@ int cl_page_gang_lookup(const struct lu_env *env, struct cl_object *obj,
                 if (res != CLP_GANG_OKAY)
                         break;
 
-                cfs_spin_lock(&hdr->coh_page_guard);
-                tree_lock = 1;
-        }
-        if (tree_lock)
-                cfs_spin_unlock(&hdr->coh_page_guard);
-        RETURN(res);
+		spin_lock(&hdr->coh_page_guard);
+		tree_lock = 1;
+	}
+	if (tree_lock)
+		spin_unlock(&hdr->coh_page_guard);
+	RETURN(res);
 }
 EXPORT_SYMBOL(cl_page_gang_lookup);
 
@@ -342,12 +342,12 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
                                                      "cl_page", page);
                 page->cp_index = ind;
                 cl_page_state_set_trust(page, CPS_CACHED);
-		cfs_spin_lock_init(&page->cp_lock);
-                page->cp_type = type;
-                CFS_INIT_LIST_HEAD(&page->cp_layers);
-                CFS_INIT_LIST_HEAD(&page->cp_batch);
-                CFS_INIT_LIST_HEAD(&page->cp_flight);
-                cfs_mutex_init(&page->cp_mutex);
+		spin_lock_init(&page->cp_lock);
+		page->cp_type = type;
+		CFS_INIT_LIST_HEAD(&page->cp_layers);
+		CFS_INIT_LIST_HEAD(&page->cp_batch);
+		CFS_INIT_LIST_HEAD(&page->cp_flight);
+		mutex_init(&page->cp_mutex);
                 lu_ref_init(&page->cp_reference);
                 head = o->co_lu.lo_header;
                 cfs_list_for_each_entry(o, &head->loh_layers,
@@ -459,7 +459,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
          * XXX optimization: use radix_tree_preload() here, and change tree
          * gfp mask to GFP_KERNEL in cl_object_header_init().
          */
-        cfs_spin_lock(&hdr->coh_page_guard);
+	spin_lock(&hdr->coh_page_guard);
         err = radix_tree_insert(&hdr->coh_tree, idx, page);
         if (err != 0) {
                 ghost = page;
@@ -487,7 +487,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
                 }
                 hdr->coh_pages++;
         }
-        cfs_spin_unlock(&hdr->coh_page_guard);
+	spin_unlock(&hdr->coh_page_guard);
 
         if (unlikely(ghost != NULL)) {
                 cfs_atomic_dec(&site->cs_pages.cs_busy);
@@ -670,7 +670,7 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
                          * inside the cp_lock. So that if it gets here,
                          * it is the REALLY last reference to this page.
                          */
-                        cfs_spin_unlock(&page->cp_lock);
+			spin_unlock(&page->cp_lock);
 
                         LASSERT(cfs_atomic_read(&page->cp_ref) == 0);
                         PASSERT(env, page, page->cp_owner == NULL);
@@ -684,10 +684,10 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
                         EXIT;
                         return;
                 }
-                cfs_spin_unlock(&page->cp_lock);
-        }
+		spin_unlock(&page->cp_lock);
+	}
 
-        EXIT;
+	EXIT;
 }
 EXPORT_SYMBOL(cl_page_put);
 
@@ -739,16 +739,16 @@ struct cl_page *cl_vmpage_page(cfs_page_t *vmpage, struct cl_object *obj)
 	if (top == NULL)
 		RETURN(NULL);
 
-	cfs_spin_lock(&top->cp_lock);
-        for (page = top; page != NULL; page = page->cp_child) {
-                if (cl_object_same(page->cp_obj, obj)) {
-                        cl_page_get_trust(page);
-                        break;
-                }
-        }
-        cfs_spin_unlock(&top->cp_lock);
-        LASSERT(ergo(page, page->cp_type == CPT_CACHEABLE));
-        RETURN(page);
+	spin_lock(&top->cp_lock);
+	for (page = top; page != NULL; page = page->cp_child) {
+		if (cl_object_same(page->cp_obj, obj)) {
+			cl_page_get_trust(page);
+			break;
+		}
+	}
+	spin_unlock(&top->cp_lock);
+	LASSERT(ergo(page, page->cp_type == CPT_CACHEABLE));
+	RETURN(page);
 }
 EXPORT_SYMBOL(cl_vmpage_page);
 
@@ -1157,13 +1157,13 @@ static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg,
                         struct cl_object_header *hdr;
 
                         hdr = cl_object_header(tmp->cp_obj);
-                        cfs_spin_lock(&hdr->coh_page_guard);
-                        value = radix_tree_delete(&hdr->coh_tree,
-                                                  tmp->cp_index);
-                        PASSERT(env, tmp, value == tmp);
-                        PASSERT(env, tmp, hdr->coh_pages > 0);
-                        hdr->coh_pages--;
-                        cfs_spin_unlock(&hdr->coh_page_guard);
+			spin_lock(&hdr->coh_page_guard);
+			value = radix_tree_delete(&hdr->coh_tree,
+						  tmp->cp_index);
+			PASSERT(env, tmp, value == tmp);
+			PASSERT(env, tmp, hdr->coh_pages > 0);
+			hdr->coh_pages--;
+			spin_unlock(&hdr->coh_page_guard);
                 }
         }
 

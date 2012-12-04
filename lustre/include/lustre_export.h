@@ -59,28 +59,28 @@ struct mdt_idmap_table;
  * Target-specific export data
  */
 struct tg_export_data {
-        /** Protects led_lcd below */
-        cfs_mutex_t             ted_lcd_lock;
-        /** Per-client data for each export */
-        struct lsd_client_data *ted_lcd;
-        /** Offset of record in last_rcvd file */
-        loff_t                  ted_lr_off;
-        /** Client index in last_rcvd file */
-        int                     ted_lr_idx;
+	/** Protects led_lcd below */
+	struct mutex		ted_lcd_lock;
+	/** Per-client data for each export */
+	struct lsd_client_data	*ted_lcd;
+	/** Offset of record in last_rcvd file */
+	loff_t			ted_lr_off;
+	/** Client index in last_rcvd file */
+	int			ted_lr_idx;
 };
 
 /**
  * MDT-specific export data
  */
 struct mdt_export_data {
-        struct tg_export_data   med_ted;
-        /** List of all files opened by client on this MDT */
-        cfs_list_t              med_open_head;
-        cfs_spinlock_t          med_open_lock; /* lock med_open_head, mfd_list*/
-        /** Bitmask of all ibit locks this MDT understands */
-        __u64                   med_ibits_known;
-        cfs_mutex_t             med_idmap_mutex;
-        struct lustre_idmap_table *med_idmap;
+	struct tg_export_data	med_ted;
+	/** List of all files opened by client on this MDT */
+	cfs_list_t		med_open_head;
+	spinlock_t		med_open_lock; /* med_open_head, mfd_list */
+	/** Bitmask of all ibit locks this MDT understands */
+	__u64			med_ibits_known;
+	struct mutex		med_idmap_mutex;
+	struct lustre_idmap_table *med_idmap;
 };
 
 struct ec_export_data { /* echo client */
@@ -90,8 +90,8 @@ struct ec_export_data { /* echo client */
 /* In-memory access to client data from OST struct */
 /** Filter (oss-side) specific import data */
 struct filter_export_data {
-        struct tg_export_data      fed_ted;
-        cfs_spinlock_t             fed_lock;     /**< protects fed_mod_list */
+	struct tg_export_data	fed_ted;
+	spinlock_t		fed_lock;	/**< protects fed_mod_list */
         long                       fed_dirty;    /* in bytes */
         long                       fed_grant;    /* in bytes */
         cfs_list_t                 fed_mod_list; /* files being modified */
@@ -102,8 +102,8 @@ struct filter_export_data {
 };
 
 struct mgs_export_data {
-        cfs_list_t                 med_clients; /* mgc fs client via this exp */
-        cfs_spinlock_t             med_lock;    /* protect med_clients */
+	cfs_list_t		med_clients;	/* mgc fs client via this exp */
+	spinlock_t		med_lock;	/* protect med_clients */
 };
 
 /**
@@ -169,7 +169,7 @@ struct obd_export {
         cfs_atomic_t              exp_locks_count; /** Lock references */
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
         cfs_list_t                exp_locks_list;
-        cfs_spinlock_t            exp_locks_list_guard;
+	spinlock_t		  exp_locks_list_guard;
 #endif
         /** UUID of client connected to this export */
         struct obd_uuid           exp_client_uuid;
@@ -206,7 +206,7 @@ struct obd_export {
 	cfs_hash_t               *exp_flock_hash;
         cfs_list_t                exp_outstanding_replies;
         cfs_list_t                exp_uncommitted_replies;
-        cfs_spinlock_t            exp_uncommitted_replies_lock;
+	spinlock_t		  exp_uncommitted_replies_lock;
         /** Last committed transno for this export */
         __u64                     exp_last_committed;
         /** When was last request received */
@@ -217,7 +217,7 @@ struct obd_export {
 	 * protects exp_flags, exp_outstanding_replies and the change
 	 * of exp_imp_reverse
 	 */
-        cfs_spinlock_t            exp_lock;
+	spinlock_t		  exp_lock;
         /** Compatibility flags for this export */
         __u64                     exp_connect_flags;
         enum obd_option           exp_flags;
@@ -248,12 +248,12 @@ struct obd_export {
         cfs_time_t                exp_flvr_expire[2];   /* seconds */
 
         /** protects exp_hp_rpcs */
-        cfs_spinlock_t            exp_rpc_lock;
-        cfs_list_t                exp_hp_rpcs;  /* (potential) HP RPCs */
+	spinlock_t		  exp_rpc_lock;
+	cfs_list_t		  exp_hp_rpcs;	/* (potential) HP RPCs */
 
         /** blocking dlm lock list, protected by exp_bl_list_lock */
         cfs_list_t                exp_bl_list;
-        cfs_spinlock_t            exp_bl_list_lock;
+	spinlock_t		  exp_bl_list_lock;
 
         /** Target specific data */
         union {

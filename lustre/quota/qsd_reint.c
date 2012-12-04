@@ -385,9 +385,9 @@ static int qsd_connected(struct qsd_instance *qsd)
 {
 	int	connected;
 
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	connected = qsd->qsd_exp_valid ? 1 : 0;
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 
 	return connected;
 }
@@ -396,9 +396,9 @@ static int qsd_started(struct qsd_instance *qsd)
 {
 	int	started;
 
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	started = qsd->qsd_started ? 1 : 0;
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 
 	return started;
 }
@@ -451,17 +451,17 @@ static int qsd_reint_main(void *args)
 
 	memset(&qti->qti_lvb, 0, sizeof(qti->qti_lvb));
 
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	/* check whether we already own a global quota lock for this type */
 	if (lustre_handle_is_used(&qqi->qqi_lockh) &&
 	    ldlm_lock_addref_try(&qqi->qqi_lockh, qsd_glb_einfo.ei_mode) == 0) {
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 		/* force refresh of global & slave index copy */
 		qti->qti_lvb.l_lquota.lvb_glb_ver = ~0ULL;
 		qti->qti_slv_ver = ~0ULL;
 	} else {
 		/* no valid lock found, let's enqueue a new one */
-		cfs_read_unlock(&qsd->qsd_lock);
+		read_unlock(&qsd->qsd_lock);
 
 		memset(&qti->qti_body, 0, sizeof(qti->qti_body));
 		memcpy(&qti->qti_body.qb_fid, &qqi->qqi_fid,
@@ -532,9 +532,9 @@ out_env_init:
 out_env:
 	OBD_FREE_PTR(env);
 out:
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 	qqi->qqi_reint = 0;
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 
 	qqi_putref(qqi);
 	lu_ref_del(&qqi->qqi_reference, "reint_thread", thread);
@@ -584,20 +584,20 @@ static bool qsd_pending_updates(struct qsd_qtype_info *qqi)
 	ENTRY;
 
 	/* any pending quota adjust? */
-	cfs_spin_lock(&qsd->qsd_adjust_lock);
+	spin_lock(&qsd->qsd_adjust_lock);
 	cfs_list_for_each_entry_safe(lqe, n, &qsd->qsd_adjust_list, lqe_link) {
 		if (lqe2qqi(lqe) == qqi) {
 			cfs_list_del_init(&lqe->lqe_link);
 			lqe_putref(lqe);
 		}
 	}
-	cfs_spin_unlock(&qsd->qsd_adjust_lock);
+	spin_unlock(&qsd->qsd_adjust_lock);
 
 	/* any pending updates? */
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	cfs_list_for_each_entry(upd, &qsd->qsd_upd_list, qur_link) {
 		if (upd->qur_qqi == qqi) {
-			cfs_read_unlock(&qsd->qsd_lock);
+			read_unlock(&qsd->qsd_lock);
 			CDEBUG(D_QUOTA, "%s: pending %s updates for type:%d.\n",
 			       qsd->qsd_svname,
 			       upd->qur_global ? "global" : "slave",
@@ -605,7 +605,7 @@ static bool qsd_pending_updates(struct qsd_qtype_info *qqi)
 			GOTO(out, updates = true);
 		}
 	}
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 
 	/* any pending quota request? */
 	cfs_hash_for_each_safe(qqi->qqi_site->lqs_hash, qsd_entry_iter_cb,
@@ -637,33 +637,33 @@ int qsd_start_reint_thread(struct qsd_qtype_info *qqi)
 		RETURN(0);
 
 	/* check if the reintegration has already started or finished */
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 
 	if ((qqi->qqi_glb_uptodate && qqi->qqi_slv_uptodate) ||
 	     qqi->qqi_reint || qsd->qsd_stopping) {
-		cfs_write_unlock(&qsd->qsd_lock);
+		write_unlock(&qsd->qsd_lock);
 		RETURN(0);
 	}
 	qqi->qqi_reint = 1;
 
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 
 	/* there could be some unfinished global or index entry updates
 	 * (very unlikely), to avoid them messing up with the reint
 	 * procedure, we just return and try to re-start reint later. */
 	if (qsd_pending_updates(qqi)) {
-		cfs_write_lock(&qsd->qsd_lock);
+		write_lock(&qsd->qsd_lock);
 		qqi->qqi_reint = 0;
-		cfs_write_unlock(&qsd->qsd_lock);
+		write_unlock(&qsd->qsd_lock);
 		RETURN(0);
 	}
 
 	rc = cfs_create_thread(qsd_reint_main, (void *)qqi, 0);
 	if (rc < 0) {
 		thread_set_flags(thread, SVC_STOPPED);
-		cfs_write_lock(&qsd->qsd_lock);
+		write_lock(&qsd->qsd_lock);
 		qqi->qqi_reint = 0;
-		cfs_write_unlock(&qsd->qsd_lock);
+		write_unlock(&qsd->qsd_lock);
 		RETURN(rc);
 	}
 

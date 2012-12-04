@@ -60,7 +60,7 @@ static int nidtbl_is_sane(struct mgs_nidtbl *tbl)
         struct mgs_nidtbl_target *tgt;
         int version = 0;
 
-        LASSERT(cfs_mutex_is_locked(&tbl->mn_lock));
+	LASSERT(mutex_is_locked(&tbl->mn_lock));
         cfs_list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
                 if (!tgt->mnt_version)
                         continue;
@@ -99,7 +99,7 @@ static int mgs_nidtbl_read(struct obd_export *exp, struct mgs_nidtbl *tbl,
         LASSERT((unit_size & (unit_size - 1)) == 0);
         LASSERT(nrpages << CFS_PAGE_SHIFT >= units_total * unit_size);
 
-        cfs_mutex_lock(&tbl->mn_lock);
+	mutex_lock(&tbl->mn_lock);
         LASSERT(nidtbl_is_sane(tbl));
 
         /* no more entries ? */
@@ -217,7 +217,7 @@ out:
         LASSERT(version <= tbl->mn_version);
         res->mcr_size = tbl->mn_version;
         res->mcr_offset = nobuf ? version : tbl->mn_version;
-        cfs_mutex_unlock(&tbl->mn_lock);
+	mutex_unlock(&tbl->mn_lock);
         LASSERT(ergo(version == 1, rc == 0)); /* get the log first time */
 
         CDEBUG(D_MGS, "Read IR logs %s return with %d, version %llu\n",
@@ -240,7 +240,7 @@ static int nidtbl_update_version(const struct lu_env *env,
 	int		  rc;
         ENTRY;
 
-	LASSERT(cfs_mutex_is_locked(&tbl->mn_lock));
+	LASSERT(mutex_is_locked(&tbl->mn_lock));
 
 	fsdb = local_file_find_or_create(env, mgs->mgs_los, mgs->mgs_nidtbl_dir,
 					 tbl->mn_fsdb->fsdb_name,
@@ -288,7 +288,7 @@ static int nidtbl_read_version(const struct lu_env *env,
         int                  rc;
         ENTRY;
 
-        LASSERT(cfs_mutex_is_locked(&tbl->mn_lock));
+	LASSERT(mutex_is_locked(&tbl->mn_lock));
 
 	LASSERT(mgs->mgs_nidtbl_dir);
 	rc = dt_lookup_dir(env, mgs->mgs_nidtbl_dir, tbl->mn_fsdb->fsdb_name,
@@ -333,7 +333,7 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
         LASSERT(type != 0);
 
         tbl = &fsdb->fsdb_nidtbl;
-        cfs_mutex_lock(&tbl->mn_lock);
+	mutex_lock(&tbl->mn_lock);
         cfs_list_for_each_entry(tgt, &tbl->mn_targets, mnt_list) {
                 struct mgs_target_info *info = &tgt->mnt_mti;
                 if (type == tgt->mnt_type &&
@@ -364,7 +364,7 @@ static int mgs_nidtbl_write(const struct lu_env *env, struct fs_db *fsdb,
         EXIT;
 
 out:
-        cfs_mutex_unlock(&tbl->mn_lock);
+	mutex_unlock(&tbl->mn_lock);
         if (rc)
                 CERROR("Write NID table version for file system %s error %d\n",
                        fsdb->fsdb_name, rc);
@@ -376,10 +376,10 @@ static void mgs_nidtbl_fini_fs(struct fs_db *fsdb)
         struct mgs_nidtbl *tbl = &fsdb->fsdb_nidtbl;
         CFS_LIST_HEAD(head);
 
-        cfs_mutex_lock(&tbl->mn_lock);
+	mutex_lock(&tbl->mn_lock);
         tbl->mn_nr_targets = 0;
         cfs_list_splice_init(&tbl->mn_targets, &head);
-        cfs_mutex_unlock(&tbl->mn_lock);
+	mutex_unlock(&tbl->mn_lock);
 
         while (!cfs_list_empty(&head)) {
                 struct mgs_nidtbl_target *tgt;
@@ -395,12 +395,12 @@ static int mgs_nidtbl_init_fs(const struct lu_env *env, struct fs_db *fsdb)
 	int rc;
 
         CFS_INIT_LIST_HEAD(&tbl->mn_targets);
-        cfs_mutex_init(&tbl->mn_lock);
+	mutex_init(&tbl->mn_lock);
         tbl->mn_nr_targets = 0;
         tbl->mn_fsdb = fsdb;
-        cfs_mutex_lock(&tbl->mn_lock);
+	mutex_lock(&tbl->mn_lock);
 	rc = nidtbl_read_version(env, fsdb->fsdb_mgs, tbl, &tbl->mn_version);
-        cfs_mutex_unlock(&tbl->mn_lock);
+	mutex_unlock(&tbl->mn_lock);
 	if (rc < 0)
 		CERROR("%s: IR: failed to read current version, rc = %d\n",
 		       fsdb->fsdb_mgs->mgs_obd->obd_name, rc);
@@ -442,7 +442,7 @@ static int mgs_ir_notify(void *arg)
         sprintf(name, "mgs_%s_notify", fsdb->fsdb_name);
         cfs_daemonize(name);
 
-        cfs_complete(&fsdb->fsdb_notify_comp);
+	complete(&fsdb->fsdb_notify_comp);
 
         set_user_nice(current, -2);
 
@@ -464,7 +464,7 @@ static int mgs_ir_notify(void *arg)
 		mgs_revoke_lock(fsdb->fsdb_mgs, fsdb, CONFIG_T_RECOVER);
         }
 
-        cfs_complete(&fsdb->fsdb_notify_comp);
+	complete(&fsdb->fsdb_notify_comp);
         return 0;
 }
 
@@ -487,10 +487,10 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 	fsdb->fsdb_mgs = mgs;
         cfs_atomic_set(&fsdb->fsdb_notify_phase, 0);
         cfs_waitq_init(&fsdb->fsdb_notify_waitq);
-        cfs_init_completion(&fsdb->fsdb_notify_comp);
+	init_completion(&fsdb->fsdb_notify_comp);
         rc = cfs_create_thread(mgs_ir_notify, fsdb, CFS_DAEMON_FLAGS);
         if (rc > 0)
-                cfs_wait_for_completion(&fsdb->fsdb_notify_comp);
+		wait_for_completion(&fsdb->fsdb_notify_comp);
         else
                 CERROR("Start notify thread error %d\n", rc);
 
@@ -500,7 +500,7 @@ int mgs_ir_init_fs(const struct lu_env *env, struct mgs_device *mgs,
 
 void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb)
 {
-        if (cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags))
+	if (test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags))
                 return;
 
         mgs_fsc_cleanup_by_fsdb(fsdb);
@@ -511,7 +511,7 @@ void mgs_ir_fini_fs(struct mgs_device *mgs, struct fs_db *fsdb)
 
         fsdb->fsdb_notify_stop = 1;
         cfs_waitq_signal(&fsdb->fsdb_notify_waitq);
-        cfs_wait_for_completion(&fsdb->fsdb_notify_comp);
+	wait_for_completion(&fsdb->fsdb_notify_comp);
 }
 
 /* caller must have held fsdb_mutex */
@@ -546,7 +546,7 @@ int mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,
                 return rc;
 
         /* check ir state */
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
         ir_state_graduate(fsdb);
         switch (fsdb->fsdb_ir_state) {
         case IR_FULL:
@@ -560,7 +560,7 @@ int mgs_ir_update(const struct lu_env *env, struct mgs_device *mgs,
         default:
                 LBUG();
         }
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
 
         LASSERT(ergo(mti->mti_flags & LDD_F_IR_CAPABLE, notify));
         if (notify) {
@@ -716,11 +716,11 @@ static int lprocfs_ir_set_state(struct fs_db *fsdb, const char *buf)
 
         CDEBUG(D_MGS, "change fsr state of %s from %s to %s\n",
                fsdb->fsdb_name, strings[fsdb->fsdb_ir_state], strings[state]);
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
         if (state == IR_FULL && fsdb->fsdb_nonir_clients)
                 state = IR_PARTIAL;
         fsdb->fsdb_ir_state = state;
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
 
         return 0;
 }
@@ -885,10 +885,10 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
                         !!(exp->exp_connect_flags & OBD_CONNECT_IMP_RECOV);
 
         rc = -EEXIST;
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
 
-        /* tend to find it in export list because this list is shorter. */
-        cfs_spin_lock(&data->med_lock);
+	/* tend to find it in export list because this list is shorter. */
+	spin_lock(&data->med_lock);
         cfs_list_for_each_entry(fsc, &data->med_clients, mfc_export_list) {
                 if (strcmp(fsname, fsc->mfc_fsdb->fsdb_name) == 0) {
                         found = true;
@@ -911,8 +911,8 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
                 }
                 rc = 0;
         }
-        cfs_spin_unlock(&data->med_lock);
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	spin_unlock(&data->med_lock);
+	mutex_unlock(&fsdb->fsdb_mutex);
 
         if (new_fsc) {
                 class_export_put(new_fsc->mfc_export);
@@ -923,33 +923,33 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
 
 void mgs_fsc_cleanup(struct obd_export *exp)
 {
-        struct mgs_export_data *data = &exp->u.eu_mgs_data;
-        struct mgs_fsc *fsc, *tmp;
-        CFS_LIST_HEAD(head);
+	struct mgs_export_data *data = &exp->u.eu_mgs_data;
+	struct mgs_fsc *fsc, *tmp;
+	CFS_LIST_HEAD(head);
 
-        cfs_spin_lock(&data->med_lock);
-        cfs_list_splice_init(&data->med_clients, &head);
-        cfs_spin_unlock(&data->med_lock);
+	spin_lock(&data->med_lock);
+	cfs_list_splice_init(&data->med_clients, &head);
+	spin_unlock(&data->med_lock);
 
-        cfs_list_for_each_entry_safe(fsc, tmp, &head, mfc_export_list) {
-                struct fs_db *fsdb = fsc->mfc_fsdb;
+	cfs_list_for_each_entry_safe(fsc, tmp, &head, mfc_export_list) {
+		struct fs_db *fsdb = fsc->mfc_fsdb;
 
-                LASSERT(fsc->mfc_export == exp);
+		LASSERT(fsc->mfc_export == exp);
 
-                cfs_mutex_lock(&fsdb->fsdb_mutex);
-                cfs_list_del_init(&fsc->mfc_fsdb_list);
-                if (fsc->mfc_ir_capable == 0) {
-                        --fsdb->fsdb_nonir_clients;
-                        LASSERT(fsdb->fsdb_ir_state != IR_FULL);
-                        if (fsdb->fsdb_nonir_clients == 0 &&
-                            fsdb->fsdb_ir_state == IR_PARTIAL)
-                                fsdb->fsdb_ir_state = IR_FULL;
-                }
-                cfs_mutex_unlock(&fsdb->fsdb_mutex);
-                cfs_list_del_init(&fsc->mfc_export_list);
-                class_export_put(fsc->mfc_export);
-                OBD_FREE_PTR(fsc);
-        }
+		mutex_lock(&fsdb->fsdb_mutex);
+		cfs_list_del_init(&fsc->mfc_fsdb_list);
+		if (fsc->mfc_ir_capable == 0) {
+			--fsdb->fsdb_nonir_clients;
+			LASSERT(fsdb->fsdb_ir_state != IR_FULL);
+			if (fsdb->fsdb_nonir_clients == 0 &&
+			    fsdb->fsdb_ir_state == IR_PARTIAL)
+				fsdb->fsdb_ir_state = IR_FULL;
+		}
+		mutex_unlock(&fsdb->fsdb_mutex);
+		cfs_list_del_init(&fsc->mfc_export_list);
+		class_export_put(fsc->mfc_export);
+		OBD_FREE_PTR(fsc);
+	}
 }
 
 /* must be called with fsdb->fsdb_mutex held */
@@ -964,9 +964,9 @@ void mgs_fsc_cleanup_by_fsdb(struct fs_db *fsdb)
                 LASSERT(fsdb == fsc->mfc_fsdb);
                 cfs_list_del_init(&fsc->mfc_fsdb_list);
 
-                cfs_spin_lock(&data->med_lock);
-                cfs_list_del_init(&fsc->mfc_export_list);
-                cfs_spin_unlock(&data->med_lock);
+		spin_lock(&data->med_lock);
+		cfs_list_del_init(&fsc->mfc_export_list);
+		spin_unlock(&data->med_lock);
                 class_export_put(fsc->mfc_export);
                 OBD_FREE_PTR(fsc);
         }

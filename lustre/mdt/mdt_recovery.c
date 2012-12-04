@@ -151,20 +151,20 @@ static int mdt_clients_data_init(const struct lu_env *env,
                 LASSERTF(rc == 0, "rc = %d\n", rc);
                 /* VBR: set export last committed version */
                 exp->exp_last_committed = last_transno;
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_connecting = 0;
-                exp->exp_in_recovery = 0;
-                cfs_spin_unlock(&exp->exp_lock);
-                obd->obd_max_recoverable_clients++;
-                class_export_put(exp);
+		spin_lock(&exp->exp_lock);
+		exp->exp_connecting = 0;
+		exp->exp_in_recovery = 0;
+		spin_unlock(&exp->exp_lock);
+		obd->obd_max_recoverable_clients++;
+		class_export_put(exp);
 
-                CDEBUG(D_OTHER, "client at idx %d has last_transno="LPU64"\n",
-                       cl_idx, last_transno);
-                /* protect __u64 value update */
-                cfs_spin_lock(&mdt->mdt_lut.lut_translock);
-                mdt->mdt_lut.lut_last_transno = max(last_transno,
-                                                mdt->mdt_lut.lut_last_transno);
-                cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
+		CDEBUG(D_OTHER, "client at idx %d has last_transno ="LPU64"\n",
+		       cl_idx, last_transno);
+		/* protect __u64 value update */
+		spin_lock(&mdt->mdt_lut.lut_translock);
+		mdt->mdt_lut.lut_last_transno = max(last_transno,
+						mdt->mdt_lut.lut_last_transno);
+		spin_unlock(&mdt->mdt_lut.lut_translock);
         }
 
 err_client:
@@ -270,9 +270,9 @@ static int mdt_server_data_init(const struct lu_env *env,
 
         lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
 
-        cfs_spin_lock(&mdt->mdt_lut.lut_translock);
-        mdt->mdt_lut.lut_last_transno = lsd->lsd_last_transno;
-        cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
+	spin_lock(&mdt->mdt_lut.lut_translock);
+	mdt->mdt_lut.lut_last_transno = lsd->lsd_last_transno;
+	spin_unlock(&mdt->mdt_lut.lut_translock);
 
         CDEBUG(D_INODE, "========BEGIN DUMPING LAST_RCVD========\n");
         CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
@@ -303,11 +303,11 @@ static int mdt_server_data_init(const struct lu_env *env,
         if (rc)
                 GOTO(err_client, rc);
 
-        cfs_spin_lock(&mdt->mdt_lut.lut_translock);
-        /* obd_last_committed is used for compatibility
-         * with other lustre recovery code */
-        obd->obd_last_committed = mdt->mdt_lut.lut_last_transno;
-        cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
+	spin_lock(&mdt->mdt_lut.lut_translock);
+	/* obd_last_committed is used for compatibility
+	 * with other lustre recovery code */
+	obd->obd_last_committed = mdt->mdt_lut.lut_last_transno;
+	spin_unlock(&mdt->mdt_lut.lut_translock);
 
         obd->u.obt.obt_mount_count = mount_count + 1;
         obd->u.obt.obt_instance = (__u32)obd->u.obt.obt_mount_count;
@@ -347,12 +347,12 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
         ted = &req->rq_export->exp_target_data;
         LASSERT(ted);
 
-        cfs_mutex_lock(&ted->ted_lcd_lock);
-        lcd = ted->ted_lcd;
-        /* if the export has already been disconnected, we have no last_rcvd slot,
-         * update server data with latest transno then */
-        if (lcd == NULL) {
-                cfs_mutex_unlock(&ted->ted_lcd_lock);
+	mutex_lock(&ted->ted_lcd_lock);
+	lcd = ted->ted_lcd;
+	/* if the export has already been disconnected, we have no last_rcvd
+	 * slot, update server data with latest transno then */
+	if (lcd == NULL) {
+		mutex_unlock(&ted->ted_lcd_lock);
                 CWARN("commit transaction for disconnected client %s: rc %d\n",
                       req->rq_export->exp_client_uuid.uuid, rc);
 		err = tgt_server_data_write(mti->mti_env, &mdt->mdt_lut, th);
@@ -371,11 +371,11 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
                                        lcd->lcd_last_close_transno,
                                        mti->mti_transno, req_is_replay(req));
                                 if (req_is_replay(req)) {
-                                        cfs_spin_lock(&req->rq_export->exp_lock);
-                                        req->rq_export->exp_vbr_failed = 1;
-                                        cfs_spin_unlock(&req->rq_export->exp_lock);
-                                }
-                                cfs_mutex_unlock(&ted->ted_lcd_lock);
+					spin_lock(&req->rq_export->exp_lock);
+					req->rq_export->exp_vbr_failed = 1;
+					spin_unlock(&req->rq_export->exp_lock);
+				}
+				mutex_unlock(&ted->ted_lcd_lock);
                                 RETURN(req_is_replay(req) ? -EOVERFLOW : 0);
                         }
                         lcd->lcd_last_close_transno = mti->mti_transno;
@@ -399,11 +399,11 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
                                        lcd->lcd_last_transno,
                                        mti->mti_transno, req_is_replay(req));
                                 if (req_is_replay(req)) {
-                                        cfs_spin_lock(&req->rq_export->exp_lock);
-                                        req->rq_export->exp_vbr_failed = 1;
-                                        cfs_spin_unlock(&req->rq_export->exp_lock);
-                                }
-                                cfs_mutex_unlock(&ted->ted_lcd_lock);
+					spin_lock(&req->rq_export->exp_lock);
+					req->rq_export->exp_vbr_failed = 1;
+					spin_unlock(&req->rq_export->exp_lock);
+				}
+				mutex_unlock(&ted->ted_lcd_lock);
                                 RETURN(req_is_replay(req) ? -EOVERFLOW : 0);
                         }
                         lcd->lcd_last_transno = mti->mti_transno;
@@ -424,31 +424,31 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
 		struct lu_target	*tg = &mdt->mdt_lut;
 		bool			 update = false;
 
-		cfs_mutex_unlock(&ted->ted_lcd_lock);
+		mutex_unlock(&ted->ted_lcd_lock);
 		err = 0;
 
 		/* All operations performed by LW clients are synchronous and
 		 * we store the committed transno in the last_rcvd header */
-		cfs_spin_lock(&tg->lut_translock);
+		spin_lock(&tg->lut_translock);
 		if (mti->mti_transno > tg->lut_lsd.lsd_last_transno) {
 			tg->lut_lsd.lsd_last_transno = mti->mti_transno;
 			update = true;
 		}
-		cfs_spin_unlock(&tg->lut_translock);
+		spin_unlock(&tg->lut_translock);
 
 		if (update)
 			err = tgt_server_data_write(mti->mti_env, tg, th);
 	} else if (off <= 0) {
 		CERROR("%s: client idx %d has offset %lld\n",
 		       mdt2obd_dev(mdt)->obd_name, ted->ted_lr_idx, off);
-		cfs_mutex_unlock(&ted->ted_lcd_lock);
+		mutex_unlock(&ted->ted_lcd_lock);
 		err = -EINVAL;
 	} else {
 		err = tgt_client_data_write(mti->mti_env, &mdt->mdt_lut, lcd,
 					    &off, th);
-		cfs_mutex_unlock(&ted->ted_lcd_lock);
-        }
-        RETURN(err);
+		mutex_unlock(&ted->ted_lcd_lock);
+	}
+	RETURN(err);
 }
 
 extern struct lu_context_key mdt_thread_key;
@@ -509,7 +509,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
         }
 
         mti->mti_has_trans = 1;
-        cfs_spin_lock(&mdt->mdt_lut.lut_translock);
+	spin_lock(&mdt->mdt_lut.lut_translock);
         if (txn->th_result != 0) {
                 if (mti->mti_transno != 0) {
 			CERROR("Replay transno "LPU64" failed: rc %d\n",
@@ -523,7 +523,7 @@ static int mdt_txn_stop_cb(const struct lu_env *env,
                 if (mti->mti_transno > mdt->mdt_lut.lut_last_transno)
                         mdt->mdt_lut.lut_last_transno = mti->mti_transno;
         }
-        cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
+	spin_unlock(&mdt->mdt_lut.lut_translock);
         /* sometimes the reply message has not been successfully packed */
         LASSERT(req != NULL && req->rq_repmsg != NULL);
 
@@ -594,7 +594,7 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
         int                        i;
 
         /* CAVEAT EMPTOR: spinlock order */
-        cfs_spin_lock(&exp->exp_lock);
+	spin_lock(&exp->exp_lock);
         cfs_list_for_each (tmp, &exp->exp_outstanding_replies) {
                 oldrep = cfs_list_entry(tmp, struct ptlrpc_reply_state,
                                         rs_exp_list);
@@ -609,7 +609,7 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                                 oldrep->rs_opc);
 
 		svcpt = oldrep->rs_svcpt;
-		cfs_spin_lock(&svcpt->scp_rep_lock);
+		spin_lock(&svcpt->scp_rep_lock);
 
                 cfs_list_del_init (&oldrep->rs_exp_list);
 
@@ -625,14 +625,14 @@ static void mdt_steal_ack_locks(struct ptlrpc_request *req)
                 oldrep->rs_nlocks = 0;
 
                 DEBUG_REQ(D_HA, req, "stole locks for");
-                cfs_spin_lock(&oldrep->rs_lock);
-                ptlrpc_schedule_difficult_reply (oldrep);
-                cfs_spin_unlock(&oldrep->rs_lock);
+		spin_lock(&oldrep->rs_lock);
+		ptlrpc_schedule_difficult_reply(oldrep);
+		spin_unlock(&oldrep->rs_lock);
 
-		cfs_spin_unlock(&svcpt->scp_rep_lock);
-                break;
-        }
-        cfs_spin_unlock(&exp->exp_lock);
+		spin_unlock(&svcpt->scp_rep_lock);
+		break;
+	}
+	spin_unlock(&exp->exp_lock);
 }
 
 /**
@@ -764,17 +764,17 @@ static void mdt_reconstruct_setattr(struct mdt_thread_info *mti,
 
                 repbody = req_capsule_server_get(mti->mti_pill, &RMF_MDT_BODY);
                 repbody->ioepoch = obj->mot_ioepoch;
-                cfs_spin_lock(&med->med_open_lock);
-                cfs_list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
-                        if (mfd->mfd_xid == req->rq_xid)
-                                break;
-                }
-                LASSERT(&mfd->mfd_list != &med->med_open_head);
-                cfs_spin_unlock(&med->med_open_lock);
-                repbody->handle.cookie = mfd->mfd_handle.h_cookie;
-        }
+		spin_lock(&med->med_open_lock);
+		cfs_list_for_each_entry(mfd, &med->med_open_head, mfd_list) {
+			if (mfd->mfd_xid == req->rq_xid)
+				break;
+		}
+		LASSERT(&mfd->mfd_list != &med->med_open_head);
+		spin_unlock(&med->med_open_lock);
+		repbody->handle.cookie = mfd->mfd_handle.h_cookie;
+	}
 
-        mdt_object_put(mti->mti_env, obj);
+	mdt_object_put(mti->mti_env, obj);
 }
 
 typedef void (*mdt_reconstructor)(struct mdt_thread_info *mti,

@@ -148,7 +148,7 @@ int cfs_create_thread(int (*func)(void *), void *arg, unsigned long flag)
  */
 
 
-static CFS_DECLARE_RWSEM(cfs_symbol_lock);
+static DECLARE_RWSEM(cfs_symbol_lock);
 CFS_LIST_HEAD(cfs_symbol_list);
 
 int libcfs_is_mp_system = FALSE;
@@ -174,7 +174,7 @@ cfs_symbol_get(const char *name)
     cfs_list_t              *walker;
     struct cfs_symbol       *sym = NULL;
 
-    cfs_down_read(&cfs_symbol_lock);
+	down_read(&cfs_symbol_lock);
     cfs_list_for_each(walker, &cfs_symbol_list) {
         sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
         if (!strcmp(sym->name, name)) {
@@ -182,7 +182,7 @@ cfs_symbol_get(const char *name)
             break;
         }
     }
-    cfs_up_read(&cfs_symbol_lock);
+	up_read(&cfs_symbol_lock);
 
     if (sym != NULL)
         return sym->value;
@@ -210,7 +210,7 @@ cfs_symbol_put(const char *name)
     cfs_list_t              *walker;
     struct cfs_symbol       *sym = NULL;
 
-    cfs_down_read(&cfs_symbol_lock);
+	down_read(&cfs_symbol_lock);
     cfs_list_for_each(walker, &cfs_symbol_list) {
         sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
         if (!strcmp(sym->name, name)) {
@@ -219,7 +219,7 @@ cfs_symbol_put(const char *name)
             break;
         }
     }
-    cfs_up_read(&cfs_symbol_lock);
+	up_read(&cfs_symbol_lock);
 
     LASSERT(sym != NULL);
 }
@@ -257,17 +257,17 @@ cfs_symbol_register(const char *name, const void *value)
     new->ref = 0;
     CFS_INIT_LIST_HEAD(&new->sym_list);
 
-    cfs_down_write(&cfs_symbol_lock);
-    cfs_list_for_each(walker, &cfs_symbol_list) {
-        sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
-        if (!strcmp(sym->name, name)) {
-            cfs_up_write(&cfs_symbol_lock);
-            cfs_free(new);
-            return 0; // alreay registerred
-        }
-    }
-    cfs_list_add_tail(&new->sym_list, &cfs_symbol_list);
-    cfs_up_write(&cfs_symbol_lock);
+	down_write(&cfs_symbol_lock);
+	cfs_list_for_each(walker, &cfs_symbol_list) {
+		sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
+		if (!strcmp(sym->name, name)) {
+			up_write(&cfs_symbol_lock);
+			cfs_free(new);
+			return 0; /* alreay registerred */
+		}
+	}
+	cfs_list_add_tail(&new->sym_list, &cfs_symbol_list);
+	up_write(&cfs_symbol_lock);
 
     return 0;
 }
@@ -293,7 +293,7 @@ cfs_symbol_unregister(const char *name)
     cfs_list_t              *nxt;
     struct cfs_symbol       *sym = NULL;
 
-    cfs_down_write(&cfs_symbol_lock);
+	down_write(&cfs_symbol_lock);
     cfs_list_for_each_safe(walker, nxt, &cfs_symbol_list) {
         sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
         if (!strcmp(sym->name, name)) {
@@ -303,7 +303,7 @@ cfs_symbol_unregister(const char *name)
             break;
         }
     }
-    cfs_up_write(&cfs_symbol_lock);
+	up_write(&cfs_symbol_lock);
 }
 
 /*
@@ -326,15 +326,15 @@ cfs_symbol_clean()
     cfs_list_t          *walker;
     struct cfs_symbol   *sym = NULL;
 
-    cfs_down_write(&cfs_symbol_lock);
-    cfs_list_for_each(walker, &cfs_symbol_list) {
-        sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
-        LASSERT(sym->ref == 0);
-        cfs_list_del (&sym->sym_list);
-        cfs_free(sym);
-    }
-    cfs_up_write(&cfs_symbol_lock);
-    return;
+	down_write(&cfs_symbol_lock);
+	cfs_list_for_each(walker, &cfs_symbol_list) {
+		sym = cfs_list_entry (walker, struct cfs_symbol, sym_list);
+		LASSERT(sym->ref == 0);
+		cfs_list_del (&sym->sym_list);
+		cfs_free(sym);
+	}
+	up_write(&cfs_symbol_lock);
+	return;
 }
 
 
@@ -761,16 +761,16 @@ void cfs_libc_init();
 int
 libcfs_arch_init(void)
 {
-    int         rc;
+	int		rc;
+	spinlock_t	lock;
 
-    cfs_spinlock_t  lock;
-    /* Workground to check the system is MP build or UP build */
-    cfs_spin_lock_init(&lock);
-    cfs_spin_lock(&lock);
-    libcfs_is_mp_system = (int)lock.lock;
-    /* MP build system: it's a real spin, for UP build system, it
-       only raises the IRQL to DISPATCH_LEVEL */
-    cfs_spin_unlock(&lock);
+	/* Workground to check the system is MP build or UP build */
+	spin_lock_init(&lock);
+	spin_lock(&lock);
+	libcfs_is_mp_system = (int)lock.lock;
+	/* MP build system: it's a real spin, for UP build system, it
+	 * only raises the IRQL to DISPATCH_LEVEL */
+	spin_unlock(&lock);
 
     /* initialize libc routines (confliction between libcnptr.lib
        and kernel ntoskrnl.lib) */

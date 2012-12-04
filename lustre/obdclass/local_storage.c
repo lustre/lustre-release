@@ -36,7 +36,7 @@
 
 /* all initialized local storages on this node are linked on this */
 static CFS_LIST_HEAD(ls_list_head);
-static CFS_DEFINE_MUTEX(ls_list_mutex);
+static DEFINE_MUTEX(ls_list_mutex);
 
 static int ls_object_init(const struct lu_env *env, struct lu_object *o,
 			  const struct lu_object_conf *unused)
@@ -122,9 +122,9 @@ struct ls_device *ls_find_dev(struct dt_device *dev)
 {
 	struct ls_device *ls;
 
-	cfs_mutex_lock(&ls_list_mutex);
+	mutex_lock(&ls_list_mutex);
 	ls = __ls_find_dev(dev);
-	cfs_mutex_unlock(&ls_list_mutex);
+	mutex_unlock(&ls_list_mutex);
 
 	return ls;
 }
@@ -145,7 +145,7 @@ struct ls_device *ls_device_get(struct dt_device *dev)
 
 	ENTRY;
 
-	cfs_mutex_lock(&ls_list_mutex);
+	mutex_lock(&ls_list_mutex);
 	ls = __ls_find_dev(dev);
 	if (ls)
 		GOTO(out_ls, ls);
@@ -157,7 +157,7 @@ struct ls_device *ls_device_get(struct dt_device *dev)
 
 	cfs_atomic_set(&ls->ls_refcount, 1);
 	CFS_INIT_LIST_HEAD(&ls->ls_los_list);
-	cfs_mutex_init(&ls->ls_los_mutex);
+	mutex_init(&ls->ls_los_mutex);
 
 	ls->ls_osd = dev;
 
@@ -169,7 +169,7 @@ struct ls_device *ls_device_get(struct dt_device *dev)
 	/* finally add ls to the list */
 	cfs_list_add(&ls->ls_linkage, &ls_list_head);
 out_ls:
-	cfs_mutex_unlock(&ls_list_mutex);
+	mutex_unlock(&ls_list_mutex);
 	RETURN(ls);
 }
 
@@ -179,7 +179,7 @@ void ls_device_put(const struct lu_env *env, struct ls_device *ls)
 	if (!cfs_atomic_dec_and_test(&ls->ls_refcount))
 		return;
 
-	cfs_mutex_lock(&ls_list_mutex);
+	mutex_lock(&ls_list_mutex);
 	if (cfs_atomic_read(&ls->ls_refcount) == 0) {
 		LASSERT(cfs_list_empty(&ls->ls_los_list));
 		cfs_list_del(&ls->ls_linkage);
@@ -187,7 +187,7 @@ void ls_device_put(const struct lu_env *env, struct ls_device *ls)
 		lu_device_fini(&ls->ls_top_dev.dd_lu_dev);
 		OBD_FREE_PTR(ls);
 	}
-	cfs_mutex_unlock(&ls_list_mutex);
+	mutex_unlock(&ls_list_mutex);
 }
 
 /**
@@ -206,11 +206,11 @@ int local_object_fid_generate(const struct lu_env *env,
 	 * the latest generated fid atomically with
 	 * object creation see local_object_create() */
 
-	cfs_mutex_lock(&los->los_id_lock);
+	mutex_lock(&los->los_id_lock);
 	fid->f_seq = los->los_seq;
 	fid->f_oid = los->los_last_oid++;
 	fid->f_ver = 0;
-	cfs_mutex_unlock(&los->los_id_lock);
+	mutex_unlock(&los->los_id_lock);
 
 	return 0;
 }
@@ -277,7 +277,7 @@ int local_object_create(const struct lu_env *env,
 	/* many threads can be updated this, serialize
 	 * them here to avoid the race where one thread
 	 * takes the value first, but writes it last */
-	cfs_mutex_lock(&los->los_id_lock);
+	mutex_lock(&los->los_id_lock);
 
 	/* update local oid number on disk so that
 	 * we know the last one used after reboot */
@@ -289,7 +289,7 @@ int local_object_create(const struct lu_env *env,
 	dti->dti_lb.lb_len = sizeof(losd);
 	rc = dt_record_write(env, los->los_obj, &dti->dti_lb, &dti->dti_off,
 			     th);
-	cfs_mutex_unlock(&los->los_id_lock);
+	mutex_unlock(&los->los_id_lock);
 
 	RETURN(rc);
 }
@@ -638,7 +638,7 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 	if (IS_ERR(ls))
 		RETURN(PTR_ERR(ls));
 
-	cfs_mutex_lock(&ls->ls_los_mutex);
+	mutex_lock(&ls->ls_los_mutex);
 	*los = dt_los_find(ls, fid_seq(first_fid));
 	if (*los != NULL)
 		GOTO(out, rc = 0);
@@ -649,7 +649,7 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		GOTO(out, rc = -ENOMEM);
 
 	cfs_atomic_set(&(*los)->los_refcount, 1);
-	cfs_mutex_init(&(*los)->los_id_lock);
+	mutex_init(&(*los)->los_id_lock);
 	(*los)->los_dev = &ls->ls_top_dev;
 	cfs_atomic_inc(&ls->ls_refcount);
 	cfs_list_add(&(*los)->los_list, &ls->ls_los_list);
@@ -788,7 +788,7 @@ out_los:
 		(*los)->los_obj = o;
 	}
 out:
-	cfs_mutex_unlock(&ls->ls_los_mutex);
+	mutex_unlock(&ls->ls_los_mutex);
 	ls_device_put(env, ls);
 	return rc;
 }
@@ -806,14 +806,14 @@ void local_oid_storage_fini(const struct lu_env *env,
 	LASSERT(los->los_dev);
 	ls = dt2ls_dev(los->los_dev);
 
-	cfs_mutex_lock(&ls->ls_los_mutex);
+	mutex_lock(&ls->ls_los_mutex);
 	if (cfs_atomic_read(&los->los_refcount) == 0) {
 		if (los->los_obj)
 			lu_object_put_nocache(env, &los->los_obj->do_lu);
 		cfs_list_del(&los->los_list);
 		OBD_FREE_PTR(los);
 	}
-	cfs_mutex_unlock(&ls->ls_los_mutex);
+	mutex_unlock(&ls->ls_los_mutex);
 	ls_device_put(env, ls);
 }
 EXPORT_SYMBOL(local_oid_storage_fini);

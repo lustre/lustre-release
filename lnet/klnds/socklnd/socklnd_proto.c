@@ -358,32 +358,32 @@ ksocknal_match_tx_v3(ksock_conn_t *conn, ksock_tx_t *tx, int nonblk)
 static int
 ksocknal_handle_zcreq(ksock_conn_t *c, __u64 cookie, int remote)
 {
-        ksock_peer_t   *peer = c->ksnc_peer;
-        ksock_conn_t   *conn;
-        ksock_tx_t     *tx;
-        int             rc;
+	ksock_peer_t   *peer = c->ksnc_peer;
+	ksock_conn_t   *conn;
+	ksock_tx_t     *tx;
+	int             rc;
 
-        cfs_read_lock (&ksocknal_data.ksnd_global_lock);
+	read_lock(&ksocknal_data.ksnd_global_lock);
 
-        conn = ksocknal_find_conn_locked(peer, NULL, !!remote);
-        if (conn != NULL) {
-                ksock_sched_t *sched = conn->ksnc_scheduler;
+	conn = ksocknal_find_conn_locked(peer, NULL, !!remote);
+	if (conn != NULL) {
+		ksock_sched_t *sched = conn->ksnc_scheduler;
 
-                LASSERT (conn->ksnc_proto->pro_queue_tx_zcack != NULL);
+		LASSERT(conn->ksnc_proto->pro_queue_tx_zcack != NULL);
 
-                cfs_spin_lock_bh (&sched->kss_lock);
+		spin_lock_bh(&sched->kss_lock);
 
-                rc = conn->ksnc_proto->pro_queue_tx_zcack(conn, NULL, cookie);
+		rc = conn->ksnc_proto->pro_queue_tx_zcack(conn, NULL, cookie);
 
-                cfs_spin_unlock_bh (&sched->kss_lock);
+		spin_unlock_bh(&sched->kss_lock);
 
-                if (rc) { /* piggybacked */
-                        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
-                        return 0;
-                }
-        }
+		if (rc) { /* piggybacked */
+			read_unlock(&ksocknal_data.ksnd_global_lock);
+			return 0;
+		}
+	}
 
-        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+	read_unlock(&ksocknal_data.ksnd_global_lock);
 
         /* ACK connection is not ready, or can't piggyback the ACK */
         tx = ksocknal_alloc_tx_noop(cookie, !!remote);
@@ -418,7 +418,7 @@ ksocknal_handle_zcack(ksock_conn_t *conn, __u64 cookie1, __u64 cookie2)
                 return count == 1 ? 0 : -EPROTO;
         }
 
-        cfs_spin_lock(&peer->ksnp_lock);
+	spin_lock(&peer->ksnp_lock);
 
         cfs_list_for_each_entry_safe(tx, tmp,
                                      &peer->ksnp_zc_req_list, tx_zc_list) {
@@ -434,7 +434,7 @@ ksocknal_handle_zcack(ksock_conn_t *conn, __u64 cookie1, __u64 cookie2)
                 }
         }
 
-        cfs_spin_unlock(&peer->ksnp_lock);
+	spin_unlock(&peer->ksnp_lock);
 
         while (!cfs_list_empty(&zlist)) {
                 tx = cfs_list_entry(zlist.next, ksock_tx_t, tx_zc_list);

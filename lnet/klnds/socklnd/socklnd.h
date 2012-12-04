@@ -66,7 +66,7 @@ struct ksock_sched_info;
 
 typedef struct                                  /* per scheduler state */
 {
-	cfs_spinlock_t		kss_lock;	/* serialise */
+	spinlock_t		kss_lock;	/* serialise */
 	cfs_list_t		kss_rx_conns;	/* conn waiting to be read */
 	/* conn waiting to be written */
 	cfs_list_t		kss_tx_conns;
@@ -153,13 +153,13 @@ typedef struct
 
 typedef struct
 {
-        __u64             ksnn_incarnation;     /* my epoch */
-        cfs_spinlock_t    ksnn_lock;            /* serialise */
+	__u64		  ksnn_incarnation;	/* my epoch */
+	spinlock_t	  ksnn_lock;		/* serialise */
 	cfs_list_t	  ksnn_list;		/* chain on global list */
-        int               ksnn_npeers;          /* # peers */
-        int               ksnn_shutdown;        /* shutting down? */
-        int               ksnn_ninterfaces;     /* IP interfaces */
-        ksock_interface_t ksnn_interfaces[LNET_MAX_INTERFACES];
+	int		  ksnn_npeers;		/* # peers */
+	int		  ksnn_shutdown;	/* shutting down? */
+	int		  ksnn_ninterfaces;	/* IP interfaces */
+	ksock_interface_t ksnn_interfaces[LNET_MAX_INTERFACES];
 } ksock_net_t;
 
 /** connd timeout */
@@ -173,7 +173,7 @@ typedef struct
 	int			ksnd_nnets;	/* # networks set up */
 	cfs_list_t		ksnd_nets;	/* list of nets */
 	/* stabilize peer/conn ops */
-	cfs_rwlock_t		ksnd_global_lock;
+	rwlock_t		ksnd_global_lock;
 	/* hash table of all my known peers */
 	cfs_list_t		*ksnd_peers;
 	int			ksnd_peer_hash_size; /* size of ksnd_peers */
@@ -190,7 +190,7 @@ typedef struct
         cfs_list_t        ksnd_enomem_conns;   /* conns to retry: reaper_lock*/
         cfs_waitq_t       ksnd_reaper_waitq;   /* reaper sleeps here */
         cfs_time_t        ksnd_reaper_waketime;/* when reaper will wake */
-        cfs_spinlock_t    ksnd_reaper_lock;    /* serialise */
+	spinlock_t	  ksnd_reaper_lock;	/* serialise */
 
         int               ksnd_enomem_tx;      /* test ENOMEM sender */
         int               ksnd_stall_tx;       /* test sluggish sender */
@@ -208,10 +208,10 @@ typedef struct
         long              ksnd_connd_starting_stamp;
         /** # running connd */
         unsigned          ksnd_connd_running;
-        cfs_spinlock_t    ksnd_connd_lock;     /* serialise */
+	spinlock_t	  ksnd_connd_lock;	/* serialise */
 
-        cfs_list_t        ksnd_idle_noop_txs;  /* list head for freed noop tx */
-        cfs_spinlock_t    ksnd_tx_lock;        /* serialise, NOT safe in g_lock */
+	cfs_list_t	  ksnd_idle_noop_txs;	/* list head for freed noop tx */
+	spinlock_t	  ksnd_tx_lock;		/* serialise, g_lock unsafe */
 
 } ksock_nal_data_t;
 
@@ -374,7 +374,7 @@ typedef struct ksock_peer
         cfs_list_t            ksnp_conns;    /* all active connections */
         cfs_list_t            ksnp_routes;   /* routes */
         cfs_list_t            ksnp_tx_queue; /* waiting packets */
-        cfs_spinlock_t        ksnp_lock;     /* serialize, NOT safe in g_lock */
+	spinlock_t	      ksnp_lock;	/* serialize, g_lock unsafe */
         cfs_list_t            ksnp_zc_req_list;   /* zero copy requests wait for ACK  */
         cfs_time_t            ksnp_send_keepalive; /* time to send keepalive */
         lnet_ni_t            *ksnp_ni;       /* which network */
@@ -468,13 +468,13 @@ ksocknal_connsock_addref (ksock_conn_t *conn)
 {
         int   rc = -ESHUTDOWN;
 
-        cfs_read_lock (&ksocknal_data.ksnd_global_lock);
-        if (!conn->ksnc_closing) {
-                LASSERT (cfs_atomic_read(&conn->ksnc_sock_refcount) > 0);
-                cfs_atomic_inc(&conn->ksnc_sock_refcount);
-                rc = 0;
-        }
-        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+	read_lock(&ksocknal_data.ksnd_global_lock);
+	if (!conn->ksnc_closing) {
+		LASSERT(cfs_atomic_read(&conn->ksnc_sock_refcount) > 0);
+		cfs_atomic_inc(&conn->ksnc_sock_refcount);
+		rc = 0;
+	}
+	read_unlock(&ksocknal_data.ksnd_global_lock);
 
         return (rc);
 }

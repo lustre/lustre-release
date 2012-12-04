@@ -66,68 +66,67 @@
  */
 
 /*
- * cfs_spin_lock
+ * spin_lock
  *
- * - cfs_spin_lock_init(x)
- * - cfs_spin_lock(x)
- * - cfs_spin_unlock(x)
- * - cfs_spin_trylock(x)
- * - cfs_spin_lock_bh_init(x)
- * - cfs_spin_lock_bh(x)
- * - cfs_spin_unlock_bh(x)
+ * - spin_lock_init(x)
+ * - spin_lock(x)
+ * - spin_unlock(x)
+ * - spin_trylock(x)
+ * - spin_lock_bh_init(x)
+ * - spin_lock_bh(x)
+ * - spin_unlock_bh(x)
  *
- * - cfs_spin_is_locked(x)
- * - cfs_spin_lock_irqsave(x, f)
- * - cfs_spin_unlock_irqrestore(x, f)
+ * - spin_is_locked(x)
+ * - spin_lock_irqsave(x, f)
+ * - spin_unlock_irqrestore(x, f)
  *
  * No-op implementation.
  */
-struct cfs_spin_lock {int foo;};
+struct spin_lock { int foo; };
 
-typedef struct cfs_spin_lock cfs_spinlock_t;
+typedef struct spin_lock spinlock_t;
 
-#define DEFINE_SPINLOCK(lock)		cfs_spinlock_t lock = { }
-#define LASSERT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
-#define LINVRNT_SPIN_LOCKED(lock) do {(void)sizeof(lock);} while(0)
-#define LASSERT_SEM_LOCKED(sem) do {(void)sizeof(sem);} while(0)
-#define LASSERT_MUTEX_LOCKED(x) do {(void)sizeof(x);} while(0)
+#define DEFINE_SPINLOCK(lock)		spinlock_t lock = { }
+#define LASSERT_SPIN_LOCKED(lock)	do { (void)sizeof(lock); } while (0)
+#define LINVRNT_SPIN_LOCKED(lock)	do { (void)sizeof(lock); } while (0)
+#define LASSERT_SEM_LOCKED(sem)		do { (void)sizeof(sem); } while (0)
+#define LASSERT_MUTEX_LOCKED(x)		do { (void)sizeof(x); } while (0)
 
-void cfs_spin_lock_init(cfs_spinlock_t *lock);
-void cfs_spin_lock(cfs_spinlock_t *lock);
-void cfs_spin_unlock(cfs_spinlock_t *lock);
-int cfs_spin_trylock(cfs_spinlock_t *lock);
-void cfs_spin_lock_bh_init(cfs_spinlock_t *lock);
-void cfs_spin_lock_bh(cfs_spinlock_t *lock);
-void cfs_spin_unlock_bh(cfs_spinlock_t *lock);
+void spin_lock_init(spinlock_t *lock);
+void spin_lock(spinlock_t *lock);
+void spin_unlock(spinlock_t *lock);
+int  spin_trylock(spinlock_t *lock);
+void spin_lock_bh_init(spinlock_t *lock);
+void spin_lock_bh(spinlock_t *lock);
+void spin_unlock_bh(spinlock_t *lock);
 
-static inline int cfs_spin_is_locked(cfs_spinlock_t *l) {return 1;}
-static inline void cfs_spin_lock_irqsave(cfs_spinlock_t *l, unsigned long f){}
-static inline void cfs_spin_unlock_irqrestore(cfs_spinlock_t *l,
-                                              unsigned long f){}
+static inline int spin_is_locked(spinlock_t *l) { return 1; }
+static inline void spin_lock_irqsave(spinlock_t *l, unsigned long f) {}
+static inline void spin_unlock_irqrestore(spinlock_t *l, unsigned long f) {}
 
 /*
  * Semaphore
  *
- * - cfs_sema_init(x, v)
+ * - sema_init(x, v)
  * - __down(x)
  * - __up(x)
  */
-typedef struct cfs_semaphore {
-    int foo;
-} cfs_semaphore_t;
+struct semaphore {
+	int foo;
+};
 
-void cfs_sema_init(cfs_semaphore_t *s, int val);
-void __up(cfs_semaphore_t *s);
-void __down(cfs_semaphore_t *s);
-int __down_interruptible(cfs_semaphore_t *s);
+void sema_init(struct semaphore *s, int val);
+void __up(struct semaphore *s);
+void __down(struct semaphore *s);
+int __down_interruptible(struct semaphore *s);
 
-#define CFS_DEFINE_SEMAPHORE(name)      cfs_semaphore_t name = { 1 }
+#define DEFINE_SEMAPHORE(name)      struct semaphore name = { 1 }
 
-#define cfs_up(s)                       __up(s)
-#define cfs_down(s)                     __down(s)
-#define cfs_down_interruptible(s)       __down_interruptible(s)
+#define up(s)				__up(s)
+#define down(s)			__down(s)
+#define down_interruptible(s)		__down_interruptible(s)
 
-static inline int cfs_down_trylock(cfs_semaphore_t *sem)
+static inline int down_trylock(struct semaphore *sem)
 {
         return 0;
 }
@@ -135,94 +134,102 @@ static inline int cfs_down_trylock(cfs_semaphore_t *sem)
 /*
  * Completion:
  *
- * - cfs_init_completion_module(c)
- * - cfs_call_wait_handler(t)
- * - cfs_init_completion(c)
- * - cfs_complete(c)
- * - cfs_wait_for_completion(c)
- * - cfs_wait_for_completion_interruptible(c)
+ * - init_completion_module(c)
+ * - call_wait_handler(t)
+ * - init_completion(c)
+ * - complete(c)
+ * - wait_for_completion(c)
+ * - wait_for_completion_interruptible(c)
  */
-typedef struct {
-        unsigned int done;
-        cfs_waitq_t wait;
-} cfs_completion_t;
+struct completion {
+	unsigned int done;
+	cfs_waitq_t wait;
+};
 
-typedef int (*cfs_wait_handler_t) (int timeout);
-void cfs_init_completion_module(cfs_wait_handler_t handler);
-int  cfs_call_wait_handler(int timeout);
-void cfs_init_completion(cfs_completion_t *c);
-void cfs_complete(cfs_completion_t *c);
-void cfs_wait_for_completion(cfs_completion_t *c);
-int cfs_wait_for_completion_interruptible(cfs_completion_t *c);
+typedef int (*wait_handler_t) (int timeout);
+void init_completion_module(wait_handler_t handler);
+int  call_wait_handler(int timeout);
+void init_completion(struct completion *c);
+void complete(struct completion *c);
+void wait_for_completion(struct completion *c);
+int wait_for_completion_interruptible(struct completion *c);
 
-#define CFS_COMPLETION_INITIALIZER(work) \
-        { 0, __WAIT_QUEUE_HEAD_INITIALIZER((work).wait) }
+#define COMPLETION_INITIALIZER(work) \
+	{ 0, __WAIT_QUEUE_HEAD_INITIALIZER((work).wait) }
 
-#define CFS_DECLARE_COMPLETION(work) \
-        cfs_completion_t work = CFS_COMPLETION_INITIALIZER(work)
 
-#define CFS_INIT_COMPLETION(x)      ((x).done = 0)
+#define INIT_COMPLETION(x)	((x).done = 0)
 
 
 /*
- * cfs_rw_semaphore:
+ * rw_semaphore:
  *
- * - cfs_init_rwsem(x)
- * - cfs_down_read(x)
- * - cfs_down_read_trylock(x)
- * - cfs_down_write(struct cfs_rw_semaphore *s);
- * - cfs_down_write_trylock(struct cfs_rw_semaphore *s);
- * - cfs_up_read(x)
- * - cfs_up_write(x)
- * - cfs_fini_rwsem(x)
+ * - init_rwsem(x)
+ * - down_read(x)
+ * - down_read_trylock(x)
+ * - down_write(struct rw_semaphore *s);
+ * - down_write_trylock(struct rw_semaphore *s);
+ * - up_read(x)
+ * - up_write(x)
+ * - fini_rwsem(x)
  */
-typedef struct cfs_rw_semaphore {
-        int foo;
-} cfs_rw_semaphore_t;
+struct rw_semaphore {
+	int foo;
+};
 
-void cfs_init_rwsem(cfs_rw_semaphore_t *s);
-void cfs_down_read(cfs_rw_semaphore_t *s);
-int cfs_down_read_trylock(cfs_rw_semaphore_t *s);
-void cfs_down_write(cfs_rw_semaphore_t *s);
-int cfs_down_write_trylock(cfs_rw_semaphore_t *s);
-void cfs_up_read(cfs_rw_semaphore_t *s);
-void cfs_up_write(cfs_rw_semaphore_t *s);
-void cfs_fini_rwsem(cfs_rw_semaphore_t *s);
-#define CFS_DECLARE_RWSEM(name)  cfs_rw_semaphore_t name = { }
+void init_rwsem(struct rw_semaphore *s);
+void down_read(struct rw_semaphore *s);
+int down_read_trylock(struct rw_semaphore *s);
+void down_write(struct rw_semaphore *s);
+int down_write_trylock(struct rw_semaphore *s);
+void up_read(struct rw_semaphore *s);
+void up_write(struct rw_semaphore *s);
+void fini_rwsem(struct rw_semaphore *s);
+#define DECLARE_RWSEM(name)  struct rw_semaphore name = { }
 
 /*
  * read-write lock : Need to be investigated more!!
  * XXX nikita: for now, let rwlock_t to be identical to rw_semaphore
  *
- * - cfs_rwlock_init(x)
- * - cfs_read_lock(x)
- * - cfs_read_unlock(x)
- * - cfs_write_lock(x)
- * - cfs_write_unlock(x)
- * - cfs_write_lock_irqsave(x)
- * - cfs_write_unlock_irqrestore(x)
- * - cfs_read_lock_irqsave(x)
- * - cfs_read_unlock_irqrestore(x)
+ * - rwlock_init(x)
+ * - read_lock(x)
+ * - read_unlock(x)
+ * - write_lock(x)
+ * - write_unlock(x)
+ * - write_lock_irqsave(x)
+ * - write_unlock_irqrestore(x)
+ * - read_lock_irqsave(x)
+ * - read_unlock_irqrestore(x)
  */
-typedef cfs_rw_semaphore_t cfs_rwlock_t;
-#define DEFINE_RWLOCK(lock)	cfs_rwlock_t lock = { }
+#define rwlock_t		struct rw_semaphore
+#define DEFINE_RWLOCK(lock)	rwlock_t lock = { }
 
-#define cfs_rwlock_init(pl)         cfs_init_rwsem(pl)
+#define rwlock_init(pl)		init_rwsem(pl)
 
-#define cfs_read_lock(l)            cfs_down_read(l)
-#define cfs_read_unlock(l)          cfs_up_read(l)
-#define cfs_write_lock(l)           cfs_down_write(l)
-#define cfs_write_unlock(l)         cfs_up_write(l)
+#define read_lock(l)		down_read(l)
+#define read_unlock(l)		up_read(l)
+#define write_lock(l)		down_write(l)
+#define write_unlock(l)		up_write(l)
 
-static inline void
-cfs_write_lock_irqsave(cfs_rwlock_t *l, unsigned long f) { cfs_write_lock(l); }
-static inline void
-cfs_write_unlock_irqrestore(cfs_rwlock_t *l, unsigned long f) { cfs_write_unlock(l); }
+static inline void write_lock_irqsave(rwlock_t *l, unsigned long f)
+{
+	write_lock(l);
+}
 
-static inline void
-cfs_read_lock_irqsave(cfs_rwlock_t *l, unsigned long f) { cfs_read_lock(l); }
-static inline void
-cfs_read_unlock_irqrestore(cfs_rwlock_t *l, unsigned long f) { cfs_read_unlock(l); }
+static inline void write_unlock_irqrestore(rwlock_t *l, unsigned long f)
+{
+	write_unlock(l);
+}
+
+static inline void read_lock_irqsave(rwlock_t *l, unsigned long f)
+{
+	read_lock(l);
+}
+
+static inline void read_unlock_irqrestore(rwlock_t *l, unsigned long f)
+{
+	read_unlock(l);
+}
 
 /*
  * Atomic for single-threaded user-space
@@ -260,26 +267,26 @@ typedef struct {
         int c_done;
         pthread_cond_t c_cond;
         pthread_mutex_t c_mut;
-} cfs_mt_completion_t;
+} mt_completion_t;
 
-void cfs_mt_init_completion(cfs_mt_completion_t *c);
-void cfs_mt_fini_completion(cfs_mt_completion_t *c);
-void cfs_mt_complete(cfs_mt_completion_t *c);
-void cfs_mt_wait_for_completion(cfs_mt_completion_t *c);
+void mt_init_completion(mt_completion_t *c);
+void mt_fini_completion(mt_completion_t *c);
+void mt_complete(mt_completion_t *c);
+void mt_wait_for_completion(mt_completion_t *c);
 
 /*
  * Multi-threaded user space atomic APIs
  */
 
-typedef struct { volatile int counter; } cfs_mt_atomic_t;
+typedef struct { volatile int counter; } mt_atomic_t;
 
-int cfs_mt_atomic_read(cfs_mt_atomic_t *a);
-void cfs_mt_atomic_set(cfs_mt_atomic_t *a, int b);
-int cfs_mt_atomic_dec_and_test(cfs_mt_atomic_t *a);
-void cfs_mt_atomic_inc(cfs_mt_atomic_t *a);
-void cfs_mt_atomic_dec(cfs_mt_atomic_t *a);
-void cfs_mt_atomic_add(int b, cfs_mt_atomic_t *a);
-void cfs_mt_atomic_sub(int b, cfs_mt_atomic_t *a);
+int mt_atomic_read(mt_atomic_t *a);
+void mt_atomic_set(mt_atomic_t *a, int b);
+int mt_atomic_dec_and_test(mt_atomic_t *a);
+void mt_atomic_inc(mt_atomic_t *a);
+void mt_atomic_dec(mt_atomic_t *a);
+void mt_atomic_add(int b, mt_atomic_t *a);
+void mt_atomic_sub(int b, mt_atomic_t *a);
 
 #endif /* HAVE_LIBPTHREAD */
 
@@ -288,28 +295,28 @@ void cfs_mt_atomic_sub(int b, cfs_mt_atomic_t *a);
  * Mutex interface.
  *
  **************************************************************************/
-typedef struct cfs_semaphore cfs_mutex_t;
+#define mutex semaphore
 
-#define CFS_DEFINE_MUTEX(m) CFS_DEFINE_SEMAPHORE(m)
+#define DEFINE_MUTEX(m) DEFINE_SEMAPHORE(m)
 
-static inline void cfs_mutex_init(cfs_mutex_t *mutex)
+static inline void mutex_init(struct mutex *mutex)
 {
-        cfs_sema_init(mutex, 1);
+	sema_init(mutex, 1);
 }
 
-static inline void cfs_mutex_lock(cfs_mutex_t *mutex)
+static inline void mutex_lock(struct mutex *mutex)
 {
-        cfs_down(mutex);
+	down(mutex);
 }
 
-static inline void cfs_mutex_unlock(cfs_mutex_t *mutex)
+static inline void mutex_unlock(struct mutex *mutex)
 {
-        cfs_up(mutex);
+	up(mutex);
 }
 
-static inline int cfs_mutex_lock_interruptible(cfs_mutex_t *mutex)
+static inline int mutex_lock_interruptible(struct mutex *mutex)
 {
-        return cfs_down_interruptible(mutex);
+	return down_interruptible(mutex);
 }
 
 /**
@@ -321,12 +328,12 @@ static inline int cfs_mutex_lock_interruptible(cfs_mutex_t *mutex)
  * \retval 1 try-lock succeeded (lock acquired).
  * \retval 0 indicates lock contention.
  */
-static inline int cfs_mutex_trylock(cfs_mutex_t *mutex)
+static inline int mutex_trylock(struct mutex *mutex)
 {
-        return !cfs_down_trylock(mutex);
+	return !down_trylock(mutex);
 }
 
-static inline void cfs_mutex_destroy(cfs_mutex_t *lock)
+static inline void mutex_destroy(struct mutex *lock)
 {
 }
 
@@ -338,7 +345,7 @@ static inline void cfs_mutex_destroy(cfs_mutex_t *lock)
  *
  * \retval 0 mutex is not locked. This should never happen.
  */
-static inline int cfs_mutex_is_locked(cfs_mutex_t *lock)
+static inline int mutex_is_locked(struct mutex *lock)
 {
         return 1;
 }
@@ -350,27 +357,26 @@ static inline int cfs_mutex_is_locked(cfs_mutex_t *lock)
  *
  **************************************************************************/
 
-typedef struct cfs_lock_class_key {
+struct lock_class_key {
         int foo;
-} cfs_lock_class_key_t;
+};
 
-static inline void cfs_lockdep_set_class(void *lock,
-                                         cfs_lock_class_key_t *key)
+static inline void lockdep_set_class(void *lock, struct lock_class_key *key)
 {
 }
 
-static inline void cfs_lockdep_off(void)
+static inline void lockdep_off(void)
 {
 }
 
-static inline void cfs_lockdep_on(void)
+static inline void lockdep_on(void)
 {
 }
 
-#define cfs_mutex_lock_nested(mutex, subclass) cfs_mutex_lock(mutex)
-#define cfs_spin_lock_nested(lock, subclass) cfs_spin_lock(lock)
-#define cfs_down_read_nested(lock, subclass) cfs_down_read(lock)
-#define cfs_down_write_nested(lock, subclass) cfs_down_write(lock)
+#define mutex_lock_nested(mutex, subclass) mutex_lock(mutex)
+#define spin_lock_nested(lock, subclass) spin_lock(lock)
+#define down_read_nested(lock, subclass) down_read(lock)
+#define down_write_nested(lock, subclass) down_write(lock)
 
 
 /* !__KERNEL__ */

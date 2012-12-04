@@ -78,16 +78,16 @@ void mdt_exit_ucred(struct mdt_thread_info *info)
         }
 }
 
-static int match_nosquash_list(cfs_rw_semaphore_t *sem,
-                               cfs_list_t *nidlist,
-                               lnet_nid_t peernid)
+static int match_nosquash_list(struct rw_semaphore *sem,
+			       cfs_list_t *nidlist,
+			       lnet_nid_t peernid)
 {
-        int rc;
-        ENTRY;
-        cfs_down_read(sem);
-        rc = cfs_match_nid(peernid, nidlist);
-        cfs_up_read(sem);
-        RETURN(rc);
+	int rc;
+	ENTRY;
+	down_read(sem);
+	rc = cfs_match_nid(peernid, nidlist);
+	up_read(sem);
+	RETURN(rc);
 }
 
 /* root_squash for inter-MDS operations */

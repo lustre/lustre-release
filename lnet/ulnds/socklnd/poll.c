@@ -200,7 +200,7 @@ usocklnd_poll_thread(void *arg)
         }
 
         /* unblock usocklnd_shutdown() */
-        cfs_mt_complete(&pt_data->upt_completion);
+	mt_complete(&pt_data->upt_completion);
 
         return 0;
 }

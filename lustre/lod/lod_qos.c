@@ -67,7 +67,7 @@ int qos_add_tgt(struct lod_device *lod, struct lod_ost_desc *ost_desc)
 	cfs_list_t	   *list;
 	ENTRY;
 
-	cfs_down_write(&lod->lod_qos.lq_rw_sem);
+	down_write(&lod->lod_qos.lq_rw_sem);
 	/*
 	 * a bit hacky approach to learn NID of corresponding connection
 	 * but there is no official API to access information like this
@@ -114,7 +114,7 @@ int qos_add_tgt(struct lod_device *lod, struct lod_ost_desc *ost_desc)
 	lod->lod_qos.lq_rr.lqr_dirty = 1;
 
 out:
-	cfs_up_write(&lod->lod_qos.lq_rw_sem);
+	up_write(&lod->lod_qos.lq_rw_sem);
 	RETURN(rc);
 }
 
@@ -124,7 +124,7 @@ int qos_del_tgt(struct lod_device *lod, struct lod_ost_desc *ost_desc)
 	int                 rc = 0;
 	ENTRY;
 
-	cfs_down_write(&lod->lod_qos.lq_rw_sem);
+	down_write(&lod->lod_qos.lq_rw_sem);
 	oss = ost_desc->ltd_qos.ltq_oss;
 	if (!oss)
 		GOTO(out, rc = -ENOENT);
@@ -141,7 +141,7 @@ int qos_del_tgt(struct lod_device *lod, struct lod_ost_desc *ost_desc)
 	lod->lod_qos.lq_dirty = 1;
 	lod->lod_qos.lq_rr.lqr_dirty = 1;
 out:
-	cfs_up_write(&lod->lod_qos.lq_rw_sem);
+	up_write(&lod->lod_qos.lq_rw_sem);
 	RETURN(rc);
 }
 
@@ -162,7 +162,7 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 	/* check whether device has changed state (active, inactive) */
 	if (rc != 0 && ost->ltd_active) {
 		/* turned inactive? */
-		cfs_spin_lock(&d->lod_desc_lock);
+		spin_lock(&d->lod_desc_lock);
 		if (ost->ltd_active) {
 			ost->ltd_active = 0;
 			LASSERT(d->lod_desc.ld_active_tgt_count > 0);
@@ -172,11 +172,11 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			CDEBUG(D_CONFIG, "%s: turns inactive\n",
 			       ost->ltd_exp->exp_obd->obd_name);
 		}
-		cfs_spin_unlock(&d->lod_desc_lock);
+		spin_unlock(&d->lod_desc_lock);
 	} else if (rc == 0 && ost->ltd_active == 0) {
 		/* turned active? */
 		LASSERT(d->lod_desc.ld_active_tgt_count < d->lod_ostnr);
-		cfs_spin_lock(&d->lod_desc_lock);
+		spin_lock(&d->lod_desc_lock);
 		if (ost->ltd_active == 0) {
 			ost->ltd_active = 1;
 			d->lod_desc.ld_active_tgt_count++;
@@ -185,7 +185,7 @@ static int lod_statfs_and_check(const struct lu_env *env, struct lod_device *d,
 			CDEBUG(D_CONFIG, "%s: turns active\n",
 			       ost->ltd_exp->exp_obd->obd_name);
 		}
-		cfs_spin_unlock(&d->lod_desc_lock);
+		spin_unlock(&d->lod_desc_lock);
 	}
 
 	return rc;
@@ -206,7 +206,7 @@ static void lod_qos_statfs_update(const struct lu_env *env,
 		/* statfs data are quite recent, don't need to refresh it */
 		RETURN_EXIT;
 
-	cfs_down_write(&lod->lod_qos.lq_rw_sem);
+	down_write(&lod->lod_qos.lq_rw_sem);
 	if (cfs_time_beforeq_64(max_age, obd->obd_osfs_age))
 		GOTO(out, rc = 0);
 
@@ -224,7 +224,7 @@ static void lod_qos_statfs_update(const struct lu_env *env,
 	obd->obd_osfs_age = cfs_time_current_64();
 
 out:
-	cfs_up_write(&lod->lod_qos.lq_rw_sem);
+	up_write(&lod->lod_qos.lq_rw_sem);
 }
 
 /* Recalculate per-object penalties for OSSs and OSTs,
@@ -454,7 +454,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 	}
 
 	/* Do actual allocation. */
-	cfs_down_write(&lod->lod_qos.lq_rw_sem);
+	down_write(&lod->lod_qos.lq_rw_sem);
 
 	/*
 	 * Check again. While we were sleeping on @lq_rw_sem something could
@@ -462,7 +462,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 	 */
 	if (!lqr->lqr_dirty) {
 		LASSERT(lqr->lqr_pool.op_size);
-		cfs_up_write(&lod->lod_qos.lq_rw_sem);
+		up_write(&lod->lod_qos.lq_rw_sem);
 		RETURN(0);
 	}
 
@@ -475,7 +475,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 	lqr->lqr_pool.op_count = real_count;
 	rc = lod_ost_pool_extend(&lqr->lqr_pool, real_count);
 	if (rc) {
-		cfs_up_write(&lod->lod_qos.lq_rw_sem);
+		up_write(&lod->lod_qos.lq_rw_sem);
 		RETURN(rc);
 	}
 	for (i = 0; i < lqr->lqr_pool.op_count; i++)
@@ -510,7 +510,7 @@ static int lod_qos_calc_rr(struct lod_device *lod, struct ost_pool *src_pool,
 	}
 
 	lqr->lqr_dirty = 0;
-	cfs_up_write(&lod->lod_qos.lq_rw_sem);
+	up_write(&lod->lod_qos.lq_rw_sem);
 
 	if (placed != real_count) {
 		/* This should never happen */
@@ -613,7 +613,7 @@ static int inline lod_qos_dev_is_full(struct obd_statfs *msfs)
 
 	/* the minimum of 0.1% used blocks and 1GB bytes. */
 	used = min_t(__u64, (msfs->os_blocks - msfs->os_bfree) >> 10,
-			1 << (31 - cfs_ffs(bs)));
+			1 << (31 - ffs(bs)));
 	return (msfs->os_bavail < used);
 }
 
@@ -679,7 +679,7 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		pool = lod_find_pool(m, lo->ldo_pool);
 
 	if (pool != NULL) {
-		cfs_down_read(&pool_tgt_rw_sem(pool));
+		down_read(&pool_tgt_rw_sem(pool));
 		osts = &(pool->pool_obds);
 		lqr = &(pool->pool_rr);
 	} else {
@@ -709,7 +709,7 @@ static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
 		if (stripe_cnt > 1 && (osts->op_count % stripe_cnt) != 1)
 			++lqr->lqr_offset_idx;
 	}
-	cfs_down_read(&m->lod_qos.lq_rw_sem);
+	down_read(&m->lod_qos.lq_rw_sem);
 	ost_start_idx_temp = lqr->lqr_start_idx;
 
 repeat_find:
@@ -801,7 +801,7 @@ repeat_find:
 		goto repeat_find;
 	}
 
-	cfs_up_read(&m->lod_qos.lq_rw_sem);
+	up_read(&m->lod_qos.lq_rw_sem);
 
 	if (stripe_idx) {
 		lo->ldo_stripenr = stripe_idx;
@@ -814,7 +814,7 @@ repeat_find:
 
 out:
 	if (pool != NULL) {
-		cfs_up_read(&pool_tgt_rw_sem(pool));
+		up_read(&pool_tgt_rw_sem(pool));
 		/* put back ref got by lod_find_pool() */
 		lod_pool_putref(pool);
 	}
@@ -844,7 +844,7 @@ static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
 		pool = lod_find_pool(m, lo->ldo_pool);
 
 	if (pool != NULL) {
-		cfs_down_read(&pool_tgt_rw_sem(pool));
+		down_read(&pool_tgt_rw_sem(pool));
 		osts = &(pool->pool_obds);
 	} else {
 		osts = &(m->lod_pool_info);
@@ -941,7 +941,7 @@ repeat_find:
 	rc = -EFBIG;
 out:
 	if (pool != NULL) {
-		cfs_up_read(&pool_tgt_rw_sem(pool));
+		up_read(&pool_tgt_rw_sem(pool));
 		/* put back ref got by lod_find_pool() */
 		lod_pool_putref(pool);
 	}
@@ -993,7 +993,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		pool = lod_find_pool(m, lo->ldo_pool);
 
 	if (pool != NULL) {
-		cfs_down_read(&pool_tgt_rw_sem(pool));
+		down_read(&pool_tgt_rw_sem(pool));
 		osts = &(pool->pool_obds);
 	} else {
 		osts = &(m->lod_pool_info);
@@ -1004,7 +1004,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		GOTO(out_nolock, rc = -EAGAIN);
 
 	/* Do actual allocation, use write lock here. */
-	cfs_down_write(&m->lod_qos.lq_rw_sem);
+	down_write(&m->lod_qos.lq_rw_sem);
 
 	/*
 	 * Check again, while we were sleeping on @lq_rw_sem things could
@@ -1167,11 +1167,11 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 	}
 
 out:
-	cfs_up_write(&m->lod_qos.lq_rw_sem);
+	up_write(&m->lod_qos.lq_rw_sem);
 
 out_nolock:
 	if (pool != NULL) {
-		cfs_up_read(&pool_tgt_rw_sem(pool));
+		up_read(&pool_tgt_rw_sem(pool));
 		/* put back ref got by lod_find_pool() */
 		lod_pool_putref(pool);
 	}

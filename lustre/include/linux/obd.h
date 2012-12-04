@@ -59,15 +59,14 @@ struct ll_iattr {
 
 #define CLIENT_OBD_LIST_LOCK_DEBUG 1
 typedef struct {
-        cfs_spinlock_t          lock;
+	spinlock_t		lock;
 
 #ifdef CLIENT_OBD_LIST_LOCK_DEBUG
-        unsigned long       time;
-        struct task_struct *task;
-        const char         *func;
-        int                 line;
+	unsigned long       time;
+	struct task_struct *task;
+	const char         *func;
+	int                 line;
 #endif
-
 } client_obd_lock_t;
 
 #ifdef CLIENT_OBD_LIST_LOCK_DEBUG
@@ -75,9 +74,9 @@ static inline void __client_obd_list_lock(client_obd_lock_t *lock,
                                           const char *func,
                                           int line)
 {
-        unsigned long cur = jiffies;
-        while (1) {
-                if (cfs_spin_trylock(&lock->lock)) {
+	unsigned long cur = jiffies;
+	while (1) {
+		if (spin_trylock(&lock->lock)) {
                         LASSERT(lock->task == NULL);
                         lock->task = current;
                         lock->func = func;
@@ -110,28 +109,28 @@ static inline void __client_obd_list_lock(client_obd_lock_t *lock,
 
 static inline void client_obd_list_unlock(client_obd_lock_t *lock)
 {
-        LASSERT(lock->task != NULL);
-        lock->task = NULL;
-        lock->time = jiffies;
-        cfs_spin_unlock(&lock->lock);
+	LASSERT(lock->task != NULL);
+	lock->task = NULL;
+	lock->time = jiffies;
+	spin_unlock(&lock->lock);
 }
 
 #else /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
 static inline void client_obd_list_lock(client_obd_lock_t *lock)
 {
-	cfs_spin_lock(&lock->lock);
+	spin_lock(&lock->lock);
 }
 
 static inline void client_obd_list_unlock(client_obd_lock_t *lock)
 {
-        cfs_spin_unlock(&lock->lock);
+	spin_unlock(&lock->lock);
 }
 
 #endif /* ifdef CLIENT_OBD_LIST_LOCK_DEBUG */
 
 static inline void client_obd_list_lock_init(client_obd_lock_t *lock)
 {
-        cfs_spin_lock_init(&lock->lock);
+	spin_lock_init(&lock->lock);
 }
 
 static inline void client_obd_list_lock_done(client_obd_lock_t *lock)

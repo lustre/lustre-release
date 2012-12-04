@@ -75,24 +75,24 @@ char * ul2dstr(ulong_ptr_t address, char *buf, int len);
 
 unsigned long simple_strtoul(const char *cp,char **endp, unsigned int base);
 
-static inline int cfs_set_bit(int nr, void * addr)
+static inline int set_bit(int nr, void * addr)
 {
     (((volatile ULONG *) addr)[nr >> 5]) |= (1UL << (nr & 31));
     return *((int *) addr);
 }
 
-static inline int cfs_test_bit(int nr, void * addr)
+static inline int test_bit(int nr, void * addr)
 {
     return (int)(((1UL << (nr & 31)) & (((volatile ULONG *) addr)[nr >> 5])) != 0);
 }
 
-static inline int cfs_clear_bit(int nr, void * addr)
+static inline int clear_bit(int nr, void * addr)
 {
     (((volatile ULONG *) addr)[nr >> 5]) &= (~(1UL << (nr & 31)));
     return *((int *) addr);
 }
 
-static inline int cfs_test_and_set_bit(int nr, volatile void *addr)
+static inline int test_and_set_bit(int nr, volatile void *addr)
 {
     int rc;
     unsigned char  mask;
@@ -106,11 +106,11 @@ static inline int cfs_test_and_set_bit(int nr, volatile void *addr)
     return rc;
 }
 
-#define ext2_set_bit(nr,addr)   (cfs_set_bit(nr, addr), 0)
-#define ext2_clear_bit(nr,addr)	(cfs_clear_bit(nr, addr), 0)
-#define ext2_test_bit(nr,addr)  cfs_test_bit(nr, addr)
+#define ext2_set_bit(nr, addr)		(set_bit(nr, addr), 0)
+#define ext2_clear_bit(nr, addr)	(clear_bit(nr, addr), 0)
+#define ext2_test_bit(nr, addr)		test_bit(nr, addr)
 
-static inline int cfs_ffs(int x)
+static inline int ffs(int x)
 {
         int r = 1;
 
@@ -178,7 +178,7 @@ static inline unsigned long __cfs_ffs(unsigned long word)
  * Note fls(0) = 0, fls(1) = 1, fls(0x80000000) = 32.
  */
 static inline
-int cfs_fls(int x)
+int fls(int x)
 {
         int r = 32;
 
@@ -207,7 +207,7 @@ int cfs_fls(int x)
         return r;
 }
 
-static inline unsigned cfs_find_first_bit(const unsigned long *addr,
+static inline unsigned find_first_bit(const unsigned long *addr,
                                           unsigned size)
 {
         unsigned x = 0;

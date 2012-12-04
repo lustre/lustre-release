@@ -278,7 +278,7 @@ kranal_set_conn_uniqueness (kra_conn_t *conn)
 {
         unsigned long  flags;
 
-        cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+	write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
         conn->rac_my_connstamp = kranal_data.kra_connstamp++;
 
@@ -286,7 +286,7 @@ kranal_set_conn_uniqueness (kra_conn_t *conn)
                 conn->rac_cqid = kranal_data.kra_next_cqid++;
         } while (kranal_cqid2conn_locked(conn->rac_cqid) != NULL);
 
-        cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+	write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 }
 
 int
@@ -309,7 +309,7 @@ kranal_create_conn(kra_conn_t **connp, kra_device_t *dev)
         CFS_INIT_LIST_HEAD(&conn->rac_fmaq);
         CFS_INIT_LIST_HEAD(&conn->rac_rdmaq);
         CFS_INIT_LIST_HEAD(&conn->rac_replyq);
-        cfs_spin_lock_init(&conn->rac_lock);
+	spin_lock_init(&conn->rac_lock);
 
         kranal_set_conn_uniqueness(conn);
 
@@ -416,12 +416,12 @@ kranal_close_conn (kra_conn_t *conn, int error)
         unsigned long    flags;
 
 
-        cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+	write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
         if (conn->rac_state == RANAL_CONN_ESTABLISHED)
                 kranal_close_conn_locked(conn, error);
 
-        cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+	write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 }
 
 int
@@ -446,10 +446,10 @@ kranal_set_conn_params(kra_conn_t *conn, kra_connreq_t *connreq,
 
         /* Schedule conn on rad_new_conns */
         kranal_conn_addref(conn);
-        cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+	spin_lock_irqsave(&dev->rad_lock, flags);
         cfs_list_add_tail(&conn->rac_schedlist, &dev->rad_new_conns);
         cfs_waitq_signal(&dev->rad_waitq);
-        cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+	spin_unlock_irqrestore(&dev->rad_lock, flags);
 
         rrc = RapkWaitToConnect(conn->rac_rihandle);
         if (rrc != RAP_SUCCESS) {
@@ -668,11 +668,11 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
                 if (rc != 0)
                         return rc;
 
-                cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+		write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
                 if (!kranal_peer_active(peer)) {
                         /* raced with peer getting unlinked */
-                        cfs_write_unlock_irqrestore(&kranal_data. \
+			write_unlock_irqrestore(&kranal_data. \
                                                     kra_global_lock,
                                                     flags);
                         kranal_conn_decref(conn);
@@ -698,7 +698,7 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
                         return -ENOMEM;
                 }
 
-                cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+		write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
                 peer2 = kranal_find_peer_locked(peer_nid);
                 if (peer2 == NULL) {
@@ -716,7 +716,7 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
          * this while holding the global lock, to synch with connection
          * destruction on NID change. */
         if (kranal_data.kra_ni->ni_nid != dst_nid) {
-                cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock,
+		write_unlock_irqrestore(&kranal_data.kra_global_lock,
                                             flags);
 
                 CERROR("Stale/bad connection with %s: dst_nid %s, expected %s\n",
@@ -733,7 +733,7 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
         if (rc != 0) {
                 LASSERT (!cfs_list_empty(&peer->rap_conns));
                 LASSERT (cfs_list_empty(&peer->rap_tx_queue));
-                cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock,
+		write_unlock_irqrestore(&kranal_data.kra_global_lock,
                                             flags);
                 CWARN("Not creating duplicate connection to %s: %d\n",
                       libcfs_nid2str(peer_nid), rc);
@@ -769,7 +769,7 @@ kranal_conn_handshake (struct socket *sock, kra_peer_t *peer)
 
         nstale = kranal_close_stale_conns_locked(peer, conn);
 
-        cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+	write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         /* CAVEAT EMPTOR: passive peer can disappear NOW */
 
@@ -811,7 +811,7 @@ kranal_connect (kra_peer_t *peer)
         CDEBUG(D_NET, "Done handshake %s:%d \n", 
                libcfs_nid2str(peer->rap_nid), rc);
 
-        cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+	write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
         LASSERT (peer->rap_connecting);
         peer->rap_connecting = 0;
@@ -823,7 +823,7 @@ kranal_connect (kra_peer_t *peer)
 
                 peer->rap_reconnect_interval = 0; /* OK to reconnect at any time */
 
-                cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock,
+		write_unlock_irqrestore(&kranal_data.kra_global_lock,
                                             flags);
                 return;
         }
@@ -843,7 +843,7 @@ kranal_connect (kra_peer_t *peer)
         cfs_list_add(&zombies, &peer->rap_tx_queue);
         cfs_list_del_init(&peer->rap_tx_queue);
 
-        cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+	write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         if (cfs_list_empty(&zombies))
                 return;
@@ -888,12 +888,12 @@ kranal_accept (lnet_ni_t *ni, struct socket *sock)
 
         ras->ras_sock = sock;
 
-        cfs_spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+	spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
 
         cfs_list_add_tail(&ras->ras_list, &kranal_data.kra_connd_acceptq);
         cfs_waitq_signal(&kranal_data.kra_connd_waitq);
 
-        cfs_spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+	spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
         return 0;
 }
 
@@ -921,11 +921,11 @@ kranal_create_peer (kra_peer_t **peerp, lnet_nid_t nid)
 
         peer->rap_reconnect_interval = 0;       /* OK to connect at any time */
 
-        cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+	write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
         if (kranal_data.kra_nonewpeers) {
                 /* shutdown has started already */
-                cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock,
+		write_unlock_irqrestore(&kranal_data.kra_global_lock,
                                             flags);
 
                 LIBCFS_FREE(peer, sizeof(*peer));
@@ -935,7 +935,7 @@ kranal_create_peer (kra_peer_t **peerp, lnet_nid_t nid)
 
         cfs_atomic_inc(&kranal_data.kra_npeers);
 
-        cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+	write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         *peerp = peer;
         return 0;
@@ -994,11 +994,11 @@ kranal_find_peer (lnet_nid_t nid)
 {
         kra_peer_t     *peer;
 
-        cfs_read_lock(&kranal_data.kra_global_lock);
+	read_lock(&kranal_data.kra_global_lock);
         peer = kranal_find_peer_locked(nid);
         if (peer != NULL)                       /* +1 ref for caller? */
                 kranal_peer_addref(peer);
-        cfs_read_unlock(&kranal_data.kra_global_lock);
+	read_unlock(&kranal_data.kra_global_lock);
 
         return peer;
 }
@@ -1024,7 +1024,7 @@ kranal_get_peer_info (int index, lnet_nid_t *nidp, __u32 *ipp, int *portp,
         cfs_list_t        *ptmp;
         int                i;
 
-        cfs_read_lock(&kranal_data.kra_global_lock);
+	read_lock(&kranal_data.kra_global_lock);
 
         for (i = 0; i < kranal_data.kra_peer_hash_size; i++) {
 
@@ -1042,12 +1042,12 @@ kranal_get_peer_info (int index, lnet_nid_t *nidp, __u32 *ipp, int *portp,
                         *portp = peer->rap_port;
                         *persistencep = peer->rap_persistence;
 
-                        cfs_read_unlock(&kranal_data.kra_global_lock);
+			read_unlock(&kranal_data.kra_global_lock);
                         return 0;
                 }
         }
 
-        cfs_read_unlock(&kranal_data.kra_global_lock);
+	read_unlock(&kranal_data.kra_global_lock);
         return -ENOENT;
 }
 
@@ -1066,7 +1066,7 @@ kranal_add_persistent_peer (lnet_nid_t nid, __u32 ip, int port)
         if (rc != 0)
                 return rc;
 
-        cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+	write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
         peer2 = kranal_find_peer_locked(nid);
         if (peer2 != NULL) {
@@ -1082,7 +1082,7 @@ kranal_add_persistent_peer (lnet_nid_t nid, __u32 ip, int port)
         peer->rap_port = port;
         peer->rap_persistence++;
 
-        cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+	write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
         return 0;
 }
 
@@ -1119,7 +1119,7 @@ kranal_del_peer (lnet_nid_t nid)
         int                i;
         int                rc = -ENOENT;
 
-        cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+	write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
         if (nid != LNET_NID_ANY)
                 lo = hi = kranal_nid2peerlist(nid) - kranal_data.kra_peers;
@@ -1142,7 +1142,7 @@ kranal_del_peer (lnet_nid_t nid)
                 }
         }
 
-        cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+	write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         return rc;
 }
@@ -1156,7 +1156,7 @@ kranal_get_conn_by_idx (int index)
         cfs_list_t        *ctmp;
         int                i;
 
-        cfs_read_lock (&kranal_data.kra_global_lock);
+	read_lock(&kranal_data.kra_global_lock);
 
         for (i = 0; i < kranal_data.kra_peer_hash_size; i++) {
                 cfs_list_for_each (ptmp, &kranal_data.kra_peers[i]) {
@@ -1175,13 +1175,13 @@ kranal_get_conn_by_idx (int index)
                                        libcfs_nid2str(conn->rac_peer->rap_nid),
                                        cfs_atomic_read(&conn->rac_refcount));
                                 cfs_atomic_inc(&conn->rac_refcount);
-                                cfs_read_unlock(&kranal_data.kra_global_lock);
+				read_unlock(&kranal_data.kra_global_lock);
                                 return conn;
                         }
                 }
         }
 
-        cfs_read_unlock(&kranal_data.kra_global_lock);
+	read_unlock(&kranal_data.kra_global_lock);
         return NULL;
 }
 
@@ -1215,7 +1215,7 @@ kranal_close_matching_conns (lnet_nid_t nid)
         int                 i;
         int                 count = 0;
 
-        cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+	write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
         if (nid != LNET_NID_ANY)
                 lo = hi = kranal_nid2peerlist(nid) - kranal_data.kra_peers;
@@ -1238,7 +1238,7 @@ kranal_close_matching_conns (lnet_nid_t nid)
                 }
         }
 
-        cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
+	write_unlock_irqrestore(&kranal_data.kra_global_lock, flags);
 
         /* wildcards always succeed */
         if (nid == LNET_NID_ANY)
@@ -1448,9 +1448,9 @@ kranal_shutdown (lnet_ni_t *ni)
 
         case RANAL_INIT_ALL:
                 /* Prevent new peers from being created */
-                cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+		write_lock_irqsave(&kranal_data.kra_global_lock, flags);
                 kranal_data.kra_nonewpeers = 1;
-                cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock,
+		write_unlock_irqrestore(&kranal_data.kra_global_lock,
                                             flags);
 
                 /* Remove all existing peers from the peer table */
@@ -1458,19 +1458,19 @@ kranal_shutdown (lnet_ni_t *ni)
 
                 /* Wait for pending conn reqs to be handled */
                 i = 2;
-                cfs_spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+		spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
                 while (!cfs_list_empty(&kranal_data.kra_connd_acceptq)) {
-                        cfs_spin_unlock_irqrestore(&kranal_data.kra_connd_lock,
+			spin_unlock_irqrestore(&kranal_data.kra_connd_lock,
                                                    flags);
                         i++;
                         CDEBUG(((i & (-i)) == i) ? D_WARNING : D_NET, /* 2**n */
                                "waiting for conn reqs to clean up\n");
                         cfs_pause(cfs_time_seconds(1));
 
-                        cfs_spin_lock_irqsave(&kranal_data.kra_connd_lock,
+			spin_lock_irqsave(&kranal_data.kra_connd_lock,
                                               flags);
                 }
-                cfs_spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+		spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
                 /* Wait for all peers to be freed */
                 i = 2;
@@ -1500,19 +1500,19 @@ kranal_shutdown (lnet_ni_t *ni)
         for (i = 0; i < kranal_data.kra_ndevs; i++) {
                 kra_device_t *dev = &kranal_data.kra_devices[i];
 
-                cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+		spin_lock_irqsave(&dev->rad_lock, flags);
                 cfs_waitq_signal(&dev->rad_waitq);
-                cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+		spin_unlock_irqrestore(&dev->rad_lock, flags);
         }
 
-        cfs_spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
+	spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
         cfs_waitq_broadcast(&kranal_data.kra_reaper_waitq);
-        cfs_spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
+	spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
 
         LASSERT (cfs_list_empty(&kranal_data.kra_connd_peers));
-        cfs_spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+	spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
         cfs_waitq_broadcast(&kranal_data.kra_connd_waitq);
-        cfs_spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+	spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
         /* Wait for threads to exit */
         i = 2;
@@ -1603,7 +1603,7 @@ kranal_startup (lnet_ni_t *ni)
         kranal_data.kra_connstamp =
         kranal_data.kra_peerstamp = (((__u64)tv.tv_sec) * 1000000) + tv.tv_usec;
 
-        cfs_rwlock_init(&kranal_data.kra_global_lock);
+	rwlock_init(&kranal_data.kra_global_lock);
 
         for (i = 0; i < RANAL_MAXDEVS; i++ ) {
                 kra_device_t  *dev = &kranal_data.kra_devices[i];
@@ -1612,20 +1612,20 @@ kranal_startup (lnet_ni_t *ni)
                 CFS_INIT_LIST_HEAD(&dev->rad_ready_conns);
                 CFS_INIT_LIST_HEAD(&dev->rad_new_conns);
                 cfs_waitq_init(&dev->rad_waitq);
-                cfs_spin_lock_init(&dev->rad_lock);
+		spin_lock_init(&dev->rad_lock);
         }
 
         kranal_data.kra_new_min_timeout = CFS_MAX_SCHEDULE_TIMEOUT;
         cfs_waitq_init(&kranal_data.kra_reaper_waitq);
-        cfs_spin_lock_init(&kranal_data.kra_reaper_lock);
+	spin_lock_init(&kranal_data.kra_reaper_lock);
 
         CFS_INIT_LIST_HEAD(&kranal_data.kra_connd_acceptq);
         CFS_INIT_LIST_HEAD(&kranal_data.kra_connd_peers);
         cfs_waitq_init(&kranal_data.kra_connd_waitq);
-        cfs_spin_lock_init(&kranal_data.kra_connd_lock);
+	spin_lock_init(&kranal_data.kra_connd_lock);
 
         CFS_INIT_LIST_HEAD(&kranal_data.kra_idle_txs);
-        cfs_spin_lock_init(&kranal_data.kra_tx_lock);
+	spin_lock_init(&kranal_data.kra_tx_lock);
 
         /* OK to call kranal_api_shutdown() to cleanup now */
         kranal_data.kra_init = RANAL_INIT_DATA;

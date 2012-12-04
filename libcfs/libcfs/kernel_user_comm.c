@@ -192,7 +192,7 @@ struct kkuc_reg {
 };
 static cfs_list_t kkuc_groups[KUC_GRP_MAX+1] = {};
 /* Protect message sending against remove and adds */
-static CFS_DECLARE_RWSEM(kg_sem);
+static DECLARE_RWSEM(kg_sem);
 
 /** Add a receiver to a broadcast group
  * @param filp pipe to write into
@@ -221,11 +221,11 @@ int libcfs_kkuc_group_add(cfs_file_t *filp, int uid, int group, __u32 data)
         reg->kr_uid = uid;
         reg->kr_data = data;
 
-        cfs_down_write(&kg_sem);
+	down_write(&kg_sem);
         if (kkuc_groups[group].next == NULL)
                 CFS_INIT_LIST_HEAD(&kkuc_groups[group]);
         cfs_list_add(&reg->kr_chain, &kkuc_groups[group]);
-        cfs_up_write(&kg_sem);
+	up_write(&kg_sem);
 
         CDEBUG(D_KUC, "Added uid=%d fp=%p to group %d\n", uid, filp, group);
 
@@ -252,7 +252,7 @@ int libcfs_kkuc_group_rem(int uid, int group)
                 libcfs_kkuc_group_put(group, &lh);
         }
 
-        cfs_down_write(&kg_sem);
+	down_write(&kg_sem);
         cfs_list_for_each_entry_safe(reg, next, &kkuc_groups[group], kr_chain) {
                 if ((uid == 0) || (uid == reg->kr_uid)) {
                         cfs_list_del(&reg->kr_chain);
@@ -263,7 +263,7 @@ int libcfs_kkuc_group_rem(int uid, int group)
                         cfs_free(reg);
                 }
         }
-        cfs_up_write(&kg_sem);
+	up_write(&kg_sem);
 
         RETURN(0);
 }
@@ -275,7 +275,7 @@ int libcfs_kkuc_group_put(int group, void *payload)
         int rc = 0;
         ENTRY;
 
-        cfs_down_read(&kg_sem);
+	down_read(&kg_sem);
         cfs_list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
                 if (reg->kr_fp != NULL) {
                 rc = libcfs_kkuc_msg_put(reg->kr_fp, payload);
@@ -285,7 +285,7 @@ int libcfs_kkuc_group_put(int group, void *payload)
                         }
                 }
         }
-        cfs_up_read(&kg_sem);
+	up_read(&kg_sem);
 
         RETURN(rc);
 }
@@ -313,13 +313,13 @@ int libcfs_kkuc_group_foreach(int group, libcfs_kkuc_cb_t cb_func,
         if (kkuc_groups[group].next == NULL)
                 RETURN(0);
 
-        cfs_down_read(&kg_sem);
+	down_read(&kg_sem);
         cfs_list_for_each_entry(reg, &kkuc_groups[group], kr_chain) {
                 if (reg->kr_fp != NULL) {
                         rc = cb_func(reg->kr_data, cb_arg);
                 }
         }
-        cfs_up_read(&kg_sem);
+	up_read(&kg_sem);
 
         RETURN(rc);
 }

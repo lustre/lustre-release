@@ -97,7 +97,7 @@ struct mgs_fsc {
 struct mgs_nidtbl {
         struct fs_db *mn_fsdb;
         struct file  *mn_version_file;
-        cfs_mutex_t   mn_lock;
+	struct mutex	mn_lock;
         u64           mn_version;
         int           mn_nr_targets;
         cfs_list_t    mn_targets;
@@ -121,7 +121,7 @@ struct mgs_tgt_srpc_conf {
 struct fs_db {
         char              fsdb_name[9];
         cfs_list_t        fsdb_list;           /* list of databases */
-        cfs_mutex_t       fsdb_mutex;
+	struct mutex	  fsdb_mutex;
         void             *fsdb_ost_index_map;  /* bitmap of used indicies */
         void             *fsdb_mdt_index_map;  /* bitmap of used indicies */
         int               fsdb_mdt_count;
@@ -145,7 +145,7 @@ struct fs_db {
         /* async thread to notify clients */
 	struct mgs_device   *fsdb_mgs;
         cfs_waitq_t          fsdb_notify_waitq;
-        cfs_completion_t     fsdb_notify_comp;
+	struct completion	fsdb_notify_comp;
         cfs_time_t           fsdb_notify_start;
         cfs_atomic_t         fsdb_notify_phase;
         volatile int         fsdb_notify_async:1,
@@ -164,13 +164,13 @@ struct mgs_device {
 	struct dt_object		*mgs_configs_dir;
 	struct dt_object		*mgs_nidtbl_dir;
 	cfs_list_t			 mgs_fs_db_list;
-	cfs_spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
+	spinlock_t			 mgs_lock; /* covers mgs_fs_db_list */
 	cfs_proc_dir_entry_t		*mgs_proc_live;
 	cfs_proc_dir_entry_t		*mgs_proc_mntdev;
 	cfs_time_t			 mgs_start_time;
 	struct obd_device		*mgs_obd;
 	struct local_oid_storage	*mgs_los;
-	cfs_mutex_t			 mgs_mutex;
+	struct mutex			 mgs_mutex;
 };
 
 /* this is a top object */

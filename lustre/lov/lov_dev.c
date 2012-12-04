@@ -58,7 +58,7 @@ cfs_mem_cache_t *lovsub_req_kmem;
 cfs_mem_cache_t *lov_lock_link_kmem;
 
 /** Lock class of lov_device::ld_mutex. */
-cfs_lock_class_key_t cl_lov_device_mutex_class;
+struct lock_class_key cl_lov_device_mutex_class;
 
 struct lu_kmem_descr lov_caches[] = {
         {
@@ -385,7 +385,7 @@ static int lov_expand_targets(const struct lu_env *env, struct lov_device *dev)
 
                 OBD_ALLOC(newd, tgt_size * sz);
                 if (newd != NULL) {
-                        cfs_mutex_lock(&dev->ld_mutex);
+			mutex_lock(&dev->ld_mutex);
                         if (sub_size > 0) {
                                 memcpy(newd, dev->ld_target, sub_size * sz);
                                 OBD_FREE(dev->ld_target, sub_size * sz);
@@ -396,7 +396,7 @@ static int lov_expand_targets(const struct lu_env *env, struct lov_device *dev)
                         if (dev->ld_emrg != NULL)
                                 lov_emerg_free(dev->ld_emrg, sub_size);
                         dev->ld_emrg = emerg;
-                        cfs_mutex_unlock(&dev->ld_mutex);
+			mutex_unlock(&dev->ld_mutex);
                 } else {
                         lov_emerg_free(emerg, tgt_size);
                         result = -ENOMEM;
@@ -502,8 +502,8 @@ static struct lu_device *lov_device_alloc(const struct lu_env *env,
         d->ld_ops        = &lov_lu_ops;
         ld->ld_cl.cd_ops = &lov_cl_ops;
 
-        cfs_mutex_init(&ld->ld_mutex);
-        cfs_lockdep_set_class(&ld->ld_mutex, &cl_lov_device_mutex_class);
+	mutex_init(&ld->ld_mutex);
+	lockdep_set_class(&ld->ld_mutex, &cl_lov_device_mutex_class);
 
         /* setup the LOV OBD */
         obd = class_name2obd(lustre_cfg_string(cfg, 0));

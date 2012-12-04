@@ -121,19 +121,19 @@ static int mdt_version_check(struct ptlrpc_request *req,
         /** Sanity check for malformed buffers */
         if (pre_ver == NULL) {
                 CERROR("No versions in request buffer\n");
-                cfs_spin_lock(&req->rq_export->exp_lock);
-                req->rq_export->exp_vbr_failed = 1;
-                cfs_spin_unlock(&req->rq_export->exp_lock);
-                RETURN(-EOVERFLOW);
-        } else if (pre_ver[idx] != version) {
-                CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
-                       pre_ver[idx], version);
-                cfs_spin_lock(&req->rq_export->exp_lock);
-                req->rq_export->exp_vbr_failed = 1;
-                cfs_spin_unlock(&req->rq_export->exp_lock);
-                RETURN(-EOVERFLOW);
-        }
-        RETURN(0);
+		spin_lock(&req->rq_export->exp_lock);
+		req->rq_export->exp_vbr_failed = 1;
+		spin_unlock(&req->rq_export->exp_lock);
+		RETURN(-EOVERFLOW);
+	} else if (pre_ver[idx] != version) {
+		CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
+		       pre_ver[idx], version);
+		spin_lock(&req->rq_export->exp_lock);
+		req->rq_export->exp_vbr_failed = 1;
+		spin_unlock(&req->rq_export->exp_lock);
+		RETURN(-EOVERFLOW);
+	}
+	RETURN(0);
 }
 
 /**
@@ -466,9 +466,9 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 mfd->mfd_object = mo;
                 mfd->mfd_xid = req->rq_xid;
 
-                cfs_spin_lock(&med->med_open_lock);
-                cfs_list_add(&mfd->mfd_list, &med->med_open_head);
-                cfs_spin_unlock(&med->med_open_lock);
+		spin_lock(&med->med_open_lock);
+		cfs_list_add(&mfd->mfd_list, &med->med_open_head);
+		spin_unlock(&med->med_open_lock);
                 repbody->handle.cookie = mfd->mfd_handle.h_cookie;
         }
 
@@ -479,10 +479,10 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
                 LASSERT(mdt_conn_flags(info) & OBD_CONNECT_SOM);
                 LASSERT(info->mti_ioepoch);
 
-                cfs_spin_lock(&med->med_open_lock);
-                mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
-                if (mfd == NULL) {
-                        cfs_spin_unlock(&med->med_open_lock);
+		spin_lock(&med->med_open_lock);
+		mfd = mdt_handle2mfd(info, &info->mti_ioepoch->handle);
+		if (mfd == NULL) {
+			spin_unlock(&med->med_open_lock);
                         CDEBUG(D_INODE, "no handle for file close: "
                                "fid = "DFID": cookie = "LPX64"\n",
                                PFID(info->mti_rr.rr_fid1),
@@ -494,7 +494,7 @@ static int mdt_reint_setattr(struct mdt_thread_info *info,
 
                 class_handle_unhash(&mfd->mfd_handle);
                 cfs_list_del_init(&mfd->mfd_list);
-                cfs_spin_unlock(&med->med_open_lock);
+		spin_unlock(&med->med_open_lock);
 
                 mdt_mfd_close(info, mfd);
 	} else if ((ma->ma_valid & MA_INODE) && ma->ma_attr.la_valid) {

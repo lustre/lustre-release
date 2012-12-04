@@ -238,9 +238,9 @@ static int lprocfs_rd_changelog_users(char *page, char **start, off_t off,
 		return rc;
 	}
 
-        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
-        cur = mdd->mdd_cl.mc_index;
-        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
+	spin_lock(&mdd->mdd_cl.mc_lock);
+	cur = mdd->mdd_cl.mc_index;
+	spin_unlock(&mdd->mdd_cl.mc_lock);
 
         cucb.count = count;
         cucb.page = page;

@@ -434,15 +434,15 @@ static int llog_osd_write_rec(const struct lu_env *env,
 	/* The caller should make sure only 1 process access the lgh_last_idx,
 	 * Otherwise it might hit the assert.*/
 	LASSERT(index < LLOG_BITMAP_SIZE(llh));
-	cfs_spin_lock(&loghandle->lgh_hdr_lock);
+	spin_lock(&loghandle->lgh_hdr_lock);
 	if (ext2_set_bit(index, llh->llh_bitmap)) {
 		CERROR("%s: index %u already set in log bitmap\n",
 		       o->do_lu.lo_dev->ld_obd->obd_name, index);
-		cfs_spin_unlock(&loghandle->lgh_hdr_lock);
+		spin_unlock(&loghandle->lgh_hdr_lock);
 		LBUG(); /* should never happen */
 	}
 	llh->llh_count++;
-	cfs_spin_unlock(&loghandle->lgh_hdr_lock);
+	spin_unlock(&loghandle->lgh_hdr_lock);
 	llh->llh_tail.lrt_index = index;
 
 	lgi->lgi_off = 0;
@@ -777,9 +777,9 @@ static int llog_osd_open(const struct lu_env *env, struct llog_handle *handle,
 	if (IS_ERR(ls))
 		RETURN(PTR_ERR(ls));
 
-	cfs_mutex_lock(&ls->ls_los_mutex);
+	mutex_lock(&ls->ls_los_mutex);
 	los = dt_los_find(ls, FID_SEQ_LLOG);
-	cfs_mutex_unlock(&ls->ls_los_mutex);
+	mutex_unlock(&ls->ls_los_mutex);
 	LASSERT(los);
 	ls_device_put(env, ls);
 
@@ -1107,9 +1107,9 @@ static int llog_osd_cleanup(const struct lu_env *env, struct llog_ctxt *ctxt)
 	if (IS_ERR(ls))
 		RETURN(PTR_ERR(ls));
 
-	cfs_mutex_lock(&ls->ls_los_mutex);
+	mutex_lock(&ls->ls_los_mutex);
 	los = dt_los_find(ls, FID_SEQ_LLOG);
-	cfs_mutex_unlock(&ls->ls_los_mutex);
+	mutex_unlock(&ls->ls_los_mutex);
 	if (los != NULL) {
 		dt_los_put(los);
 		local_oid_storage_fini(env, los);

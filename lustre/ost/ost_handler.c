@@ -1383,14 +1383,14 @@ static int ost_llog_handle_connect(struct obd_export *exp,
         RETURN(rc);
 }
 
-#define ost_init_sec_none(reply, exp)                                   \
-do {                                                                    \
-        reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |          \
-                                      OBD_CONNECT_RMT_CLIENT_FORCE |    \
-                                      OBD_CONNECT_OSS_CAPA);            \
-        cfs_spin_lock(&exp->exp_lock);                                  \
-        exp->exp_connect_flags = reply->ocd_connect_flags;              \
-        cfs_spin_unlock(&exp->exp_lock);                                \
+#define ost_init_sec_none(reply, exp)					\
+do {									\
+	reply->ocd_connect_flags &= ~(OBD_CONNECT_RMT_CLIENT |		\
+				      OBD_CONNECT_RMT_CLIENT_FORCE |	\
+				      OBD_CONNECT_OSS_CAPA);		\
+	spin_lock(&exp->exp_lock);					\
+	exp->exp_connect_flags = reply->ocd_connect_flags;		\
+	spin_unlock(&exp->exp_lock);					\
 } while (0)
 
 static int ost_init_sec_level(struct ptlrpc_request *req)
@@ -1487,9 +1487,9 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
                         if (!filter->fo_fl_oss_capa)
                                 reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
 
-                        cfs_spin_lock(&exp->exp_lock);
-                        exp->exp_connect_flags = reply->ocd_connect_flags;
-                        cfs_spin_unlock(&exp->exp_lock);
+			spin_lock(&exp->exp_lock);
+			exp->exp_connect_flags = reply->ocd_connect_flags;
+			spin_unlock(&exp->exp_lock);
                 }
                 break;
         default:
@@ -1522,14 +1522,14 @@ static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
         }
 
         if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
-                cfs_read_lock(&filter->fo_sptlrpc_lock);
-                sptlrpc_target_choose_flavor(&filter->fo_sptlrpc_rset,
-                                             req->rq_sp_from,
-                                             req->rq_peer.nid,
-                                             &flvr);
-                cfs_read_unlock(&filter->fo_sptlrpc_lock);
+		read_lock(&filter->fo_sptlrpc_lock);
+		sptlrpc_target_choose_flavor(&filter->fo_sptlrpc_rset,
+					     req->rq_sp_from,
+					     req->rq_peer.nid,
+					     &flvr);
+		read_unlock(&filter->fo_sptlrpc_lock);
 
-                cfs_spin_lock(&exp->exp_lock);
+		spin_lock(&exp->exp_lock);
 
                 exp->exp_sp_peer = req->rq_sp_from;
                 exp->exp_flvr = flvr;
@@ -1543,7 +1543,7 @@ static int ost_connect_check_sptlrpc(struct ptlrpc_request *req)
                         rc = -EACCES;
                 }
 
-                cfs_spin_unlock(&exp->exp_lock);
+		spin_unlock(&exp->exp_lock);
         } else {
                 if (exp->exp_sp_peer != req->rq_sp_from) {
                         CERROR("RPC source %s doesn't match %s\n",
@@ -1792,7 +1792,7 @@ static void ost_prolong_locks(struct ost_prolong_data *data)
         }
 
 
-        cfs_spin_lock_bh(&exp->exp_bl_list_lock);
+	spin_lock_bh(&exp->exp_bl_list_lock);
         cfs_list_for_each_entry(lock, &exp->exp_bl_list, l_exp_list) {
                 LASSERT(lock->l_flags & LDLM_FL_AST_SENT);
                 LASSERT(lock->l_resource->lr_type == LDLM_EXTENT);
@@ -1806,9 +1806,9 @@ static void ost_prolong_locks(struct ost_prolong_data *data)
 
                 ost_prolong_lock_one(data, lock);
         }
-        cfs_spin_unlock_bh(&exp->exp_bl_list_lock);
+	spin_unlock_bh(&exp->exp_bl_list_lock);
 
-        EXIT;
+	EXIT;
 }
 
 /**
@@ -2456,7 +2456,7 @@ static int ost_setup(struct obd_device *obd, struct lustre_cfg* lcfg)
         lprocfs_ost_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
 
-        cfs_mutex_init(&ost->ost_health_mutex);
+	mutex_init(&ost->ost_health_mutex);
 
 	svc_conf = (typeof(svc_conf)) {
 		.psc_name		= LUSTRE_OSS_NAME,
@@ -2629,7 +2629,7 @@ static int ost_cleanup(struct obd_device *obd)
         /* there is no recovery for OST OBD, all recovery is controlled by
          * obdfilter OBD */
         LASSERT(obd->obd_recovering == 0);
-        cfs_mutex_lock(&ost->ost_health_mutex);
+	mutex_lock(&ost->ost_health_mutex);
         ptlrpc_unregister_service(ost->ost_service);
         ptlrpc_unregister_service(ost->ost_create_service);
         ptlrpc_unregister_service(ost->ost_io_service);
@@ -2637,7 +2637,7 @@ static int ost_cleanup(struct obd_device *obd)
         ost->ost_create_service = NULL;
 	ost->ost_io_service = NULL;
 
-	cfs_mutex_unlock(&ost->ost_health_mutex);
+	mutex_unlock(&ost->ost_health_mutex);
 
 	lprocfs_obd_cleanup(obd);
 
@@ -2654,11 +2654,11 @@ static int ost_health_check(const struct lu_env *env, struct obd_device *obd)
         struct ost_obd *ost = &obd->u.ost;
         int rc = 0;
 
-        cfs_mutex_lock(&ost->ost_health_mutex);
+	mutex_lock(&ost->ost_health_mutex);
         rc |= ptlrpc_service_health_check(ost->ost_service);
         rc |= ptlrpc_service_health_check(ost->ost_create_service);
         rc |= ptlrpc_service_health_check(ost->ost_io_service);
-        cfs_mutex_unlock(&ost->ost_health_mutex);
+	mutex_unlock(&ost->ost_health_mutex);
 
         /*
          * health_check to return 0 on healthy

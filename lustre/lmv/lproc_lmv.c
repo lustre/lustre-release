@@ -119,9 +119,9 @@ static int lmv_wr_placement(struct file *file, const char *buffer,
 
         policy = placement_name2policy(dummy, len);
         if (policy != PLACEMENT_INVAL_POLICY) {
-                cfs_spin_lock(&lmv->lmv_lock);
-                lmv->lmv_placement = policy;
-                cfs_spin_unlock(&lmv->lmv_lock);
+		spin_lock(&lmv->lmv_lock);
+		lmv->lmv_placement = policy;
+		spin_unlock(&lmv->lmv_lock);
         } else {
                 CERROR("Invalid placement policy \"%s\"!\n", dummy);
                 return -EINVAL;

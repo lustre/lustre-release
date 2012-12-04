@@ -198,7 +198,7 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
                 CDEBUG(D_MGS, "OST index for %s is %u (%s)\n",
                        lustre_cfg_string(lcfg, 1), index,
                        lustre_cfg_string(lcfg, 2));
-                cfs_set_bit(index, fsdb->fsdb_ost_index_map);
+		set_bit(index, fsdb->fsdb_ost_index_map);
         }
 
         /* Figure out mdt indicies */
@@ -214,7 +214,7 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
                 }
                 rc = 0;
                 CDEBUG(D_MGS, "MDT index is %u\n", index);
-                cfs_set_bit(index, fsdb->fsdb_mdt_index_map);
+		set_bit(index, fsdb->fsdb_mdt_index_map);
                 fsdb->fsdb_mdt_count ++;
         }
 
@@ -230,13 +230,13 @@ static int mgs_fsdb_handler(const struct lu_env *env, struct llog_handle *llh,
         /*
          * compat to 1.8, check osc name used by MDT0 to OSTs, bz18548.
          */
-        if (!cfs_test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags) &&
+	if (!test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags) &&
             lcfg->lcfg_command == LCFG_ATTACH &&
             strcmp(lustre_cfg_string(lcfg, 1), LUSTRE_OSC_NAME) == 0) {
                 if (OBD_OCD_VERSION_MAJOR(d->ver) == 1 &&
                     OBD_OCD_VERSION_MINOR(d->ver) <= 8) {
                         CWARN("MDT using 1.8 OSC name scheme\n");
-                        cfs_set_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags);
+			set_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags);
                 }
         }
 
@@ -280,7 +280,7 @@ static int mgs_get_fsdb_from_llog(const struct lu_env *env,
 		GOTO(out_close, rc);
 
 	if (llog_get_size(loghandle) <= 1)
-		cfs_set_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
+		set_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
 
 	rc = llog_process(env, loghandle, mgs_fsdb_handler, (void *)&d, NULL);
 	CDEBUG(D_INFO, "get_db = %d\n", rc);
@@ -345,12 +345,12 @@ static struct fs_db *mgs_new_fsdb(const struct lu_env *env,
                 RETURN(NULL);
 
         strcpy(fsdb->fsdb_name, fsname);
-        cfs_mutex_init(&fsdb->fsdb_mutex);
-        cfs_set_bit(FSDB_UDESC, &fsdb->fsdb_flags);
+	mutex_init(&fsdb->fsdb_mutex);
+	set_bit(FSDB_UDESC, &fsdb->fsdb_flags);
 	fsdb->fsdb_gen = 1;
 
         if (strcmp(fsname, MGSSELF_NAME) == 0) {
-                cfs_set_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags);
+		set_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags);
         } else {
                 OBD_ALLOC(fsdb->fsdb_ost_index_map, INDEX_MAP_SIZE);
                 OBD_ALLOC(fsdb->fsdb_mdt_index_map, INDEX_MAP_SIZE);
@@ -389,7 +389,7 @@ err:
 static void mgs_free_fsdb(struct mgs_device *mgs, struct fs_db *fsdb)
 {
         /* wait for anyone with the sem */
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
 	lproc_mgs_del_live(mgs, fsdb);
         cfs_list_del(&fsdb->fsdb_list);
 
@@ -403,7 +403,7 @@ static void mgs_free_fsdb(struct mgs_device *mgs, struct fs_db *fsdb)
         name_destroy(&fsdb->fsdb_clilov);
         name_destroy(&fsdb->fsdb_clilmv);
         mgs_free_fsdb_srpc(fsdb);
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
         OBD_FREE_PTR(fsdb);
 }
 
@@ -417,12 +417,12 @@ int mgs_cleanup_fsdb_list(struct mgs_device *mgs)
 {
         struct fs_db *fsdb;
         cfs_list_t *tmp, *tmp2;
-        cfs_mutex_lock(&mgs->mgs_mutex);
+	mutex_lock(&mgs->mgs_mutex);
         cfs_list_for_each_safe(tmp, tmp2, &mgs->mgs_fs_db_list) {
                 fsdb = cfs_list_entry(tmp, struct fs_db, fsdb_list);
 		mgs_free_fsdb(mgs, fsdb);
         }
-        cfs_mutex_unlock(&mgs->mgs_mutex);
+	mutex_unlock(&mgs->mgs_mutex);
         return 0;
 }
 
@@ -434,10 +434,10 @@ int mgs_find_or_make_fsdb(const struct lu_env *env,
         int rc = 0;
 
 	ENTRY;
-        cfs_mutex_lock(&mgs->mgs_mutex);
+	mutex_lock(&mgs->mgs_mutex);
 	fsdb = mgs_find_fsdb(mgs, name);
         if (fsdb) {
-                cfs_mutex_unlock(&mgs->mgs_mutex);
+		mutex_unlock(&mgs->mgs_mutex);
                 *dbh = fsdb;
 		RETURN(0);
         }
@@ -446,12 +446,12 @@ int mgs_find_or_make_fsdb(const struct lu_env *env,
 	fsdb = mgs_new_fsdb(env, mgs, name);
 	/* lock fsdb_mutex until the db is loaded from llogs */
 	if (fsdb)
-		cfs_mutex_lock(&fsdb->fsdb_mutex);
-        cfs_mutex_unlock(&mgs->mgs_mutex);
+		mutex_lock(&fsdb->fsdb_mutex);
+	mutex_unlock(&mgs->mgs_mutex);
         if (!fsdb)
 		RETURN(-ENOMEM);
 
-        if (!cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
+	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
                 /* populate the db from the client llog */
 		rc = mgs_get_fsdb_from_llog(env, mgs, fsdb);
                 if (rc) {
@@ -467,13 +467,13 @@ int mgs_find_or_make_fsdb(const struct lu_env *env,
 		GOTO(out_free, rc);
         }
 
-	cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
         *dbh = fsdb;
 
         RETURN(0);
 
 out_free:
-	cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
 	mgs_free_fsdb(mgs, fsdb);
 	return rc;
 }
@@ -498,7 +498,7 @@ int mgs_check_index(const struct lu_env *env,
                 RETURN(rc);
         }
 
-        if (cfs_test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags))
+	if (test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags))
                 RETURN(-1);
 
         if (mti->mti_flags & LDD_F_SV_TYPE_OST)
@@ -508,7 +508,7 @@ int mgs_check_index(const struct lu_env *env,
         else
                 RETURN(-EINVAL);
 
-        if (cfs_test_bit(mti->mti_stripe_index, imap))
+	if (test_bit(mti->mti_stripe_index, imap))
                 RETURN(1);
         RETURN(0);
 }
@@ -517,7 +517,7 @@ static __inline__ int next_index(void *index_map, int map_len)
 {
         int i;
         for (i = 0; i < map_len * 8; i++)
-                 if (!cfs_test_bit(i, index_map)) {
+		if (!test_bit(i, index_map)) {
                          return i;
                  }
         CERROR("max index %d exceeded.\n", i);
@@ -543,7 +543,7 @@ static int mgs_set_index(const struct lu_env *env,
                 RETURN(rc);
         }
 
-	cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
         if (mti->mti_flags & LDD_F_SV_TYPE_OST) {
                 imap = fsdb->fsdb_ost_index_map;
         } else if (mti->mti_flags & LDD_F_SV_TYPE_MDT) {
@@ -574,7 +574,7 @@ static int mgs_set_index(const struct lu_env *env,
 		GOTO(out_up, rc = -ERANGE);
         }
 
-        if (cfs_test_bit(mti->mti_stripe_index, imap)) {
+	if (test_bit(mti->mti_stripe_index, imap)) {
                 if ((mti->mti_flags & LDD_F_VIRGIN) &&
                     !(mti->mti_flags & LDD_F_WRITECONF)) {
                         LCONSOLE_ERROR_MSG(0x140, "Server %s requested index "
@@ -590,9 +590,9 @@ static int mgs_set_index(const struct lu_env *env,
                 }
         }
 
-        cfs_set_bit(mti->mti_stripe_index, imap);
-        cfs_clear_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
-	cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	set_bit(mti->mti_stripe_index, imap);
+	clear_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags);
+	mutex_unlock(&fsdb->fsdb_mutex);
 	server_make_name(mti->mti_flags & ~(LDD_F_VIRGIN | LDD_F_WRITECONF),
 			 mti->mti_stripe_index, mti->mti_fsname, mti->mti_svname);
 
@@ -601,7 +601,7 @@ static int mgs_set_index(const struct lu_env *env,
 
         RETURN(0);
 out_up:
-	cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
 	return rc;
 }
 
@@ -680,7 +680,7 @@ static int mgs_modify(const struct lu_env *env, struct mgs_device *mgs,
 
         ENTRY;
 
-	LASSERT(cfs_mutex_is_locked(&fsdb->fsdb_mutex));
+	LASSERT(mutex_is_locked(&fsdb->fsdb_mutex));
 	CDEBUG(D_MGS, "modify %s/%s/%s fl=%x\n", logname, devname, comment,
 	       flags);
 
@@ -1706,7 +1706,7 @@ static int name_create_mdt_and_lov(char **logname, char **lovname,
 	if (rc)
 		return rc;
         /* COMPAT_180 */
-        if (i == 0 && cfs_test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
+	if (i == 0 && test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
 		rc = name_create(lovname, fsdb->fsdb_name, "-mdtlov");
         else
 		rc = name_create(lovname, *logname, "-mdtlov");
@@ -1722,7 +1722,7 @@ static inline int name_create_mdt_osc(char **oscname, char *ostname,
 {
         char suffix[16];
 
-        if (i == 0 && cfs_test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
+	if (i == 0 && test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
                 sprintf(suffix, "-osc");
         else
                 sprintf(suffix, "-osc-MDT%04x", i);
@@ -1814,7 +1814,7 @@ static int mgs_write_log_mdt(const struct lu_env *env,
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
                 char *mdtname;
                 if (i !=  mti->mti_stripe_index &&
-                    cfs_test_bit(i,  fsdb->fsdb_mdt_index_map)) {
+		    test_bit(i,  fsdb->fsdb_mdt_index_map)) {
 			rc = name_create_mdt(&mdtname, mti->mti_fsname, i);
 			if (rc)
 				GOTO(out_end, rc);
@@ -1864,7 +1864,7 @@ static int mgs_write_log_osc_to_lov(const struct lu_env *env,
 		GOTO(out_free, rc);
 	/* for the system upgraded from old 1.8, keep using the old osc naming
 	 * style for mdt, see name_create_mdt_osc(). LU-1257 */
-	if (cfs_test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
+	if (test_bit(FSDB_OSCNAME18, &fsdb->fsdb_flags))
 		rc = name_create(&oscname, svname, "");
 	else
 		rc = name_create(&oscname, svname, suffix);
@@ -1991,7 +1991,7 @@ out_end:
         /* We also have to update the other logs where this osc is part of
            the lov */
 
-        if (cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
+	if (test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
                 /* If we're upgrading, the old mdt log already has our
                    entry. Let's do a fake one for fun. */
                 /* Note that we can't add any new failnids, since we don't
@@ -2009,7 +2009,7 @@ out_end:
 
         /* Add ost to all MDT lov defs */
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
-                if (cfs_test_bit(i, fsdb->fsdb_mdt_index_map)) {
+		if (test_bit(i, fsdb->fsdb_mdt_index_map)) {
                         char mdt_index[9];
 
 			rc = name_create_mdt_and_lov(&logname, &lovname, fsdb,
@@ -2147,7 +2147,7 @@ static int mgs_write_log_add_failnid(const struct lu_env *env,
                 int i;
 
                 for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-                        if (!cfs_test_bit(i, fsdb->fsdb_mdt_index_map))
+			if (!test_bit(i, fsdb->fsdb_mdt_index_map))
                                 continue;
 			rc = name_create_mdt(&logname, mti->mti_fsname, i);
 			if (rc)
@@ -2408,10 +2408,10 @@ static int mgs_srpc_set_param_udesc_mem(struct fs_db *fsdb,
                 goto error_out;
 
         if (strcmp(ptr, "yes") == 0) {
-                cfs_set_bit(FSDB_UDESC, &fsdb->fsdb_flags);
+		set_bit(FSDB_UDESC, &fsdb->fsdb_flags);
                 CWARN("Enable user descriptor shipping from client to MDT\n");
         } else if (strcmp(ptr, "no") == 0) {
-                cfs_clear_bit(FSDB_UDESC, &fsdb->fsdb_flags);
+		clear_bit(FSDB_UDESC, &fsdb->fsdb_flags);
                 CWARN("Disable user descriptor shipping from client to MDT\n");
         } else {
                 *(ptr - 1) = '=';
@@ -2455,7 +2455,7 @@ static int mgs_srpc_set_param_mem(struct fs_db *fsdb,
                 RETURN(rc);
 
         /* mgs rules implies must be mgc->mgs */
-        if (cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
+	if (test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
                 if ((rule.sr_from != LUSTRE_SP_MGC &&
                      rule.sr_from != LUSTRE_SP_ANY) ||
                     (rule.sr_to != LUSTRE_SP_MGS &&
@@ -2539,7 +2539,7 @@ static int mgs_srpc_set_param(const struct lu_env *env,
         if (rc)
                 goto out_free;
 
-        if (cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
+	if (test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags)) {
                 /*
                  * for mgs rules, make them effective immediately.
                  */
@@ -2769,7 +2769,7 @@ static int mgs_write_log_param(const struct lu_env *env,
                 /* Modify mdtlov */
                 /* Add to all MDT logs for CMD */
                 for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-                        if (!cfs_test_bit(i, fsdb->fsdb_mdt_index_map))
+			if (!test_bit(i, fsdb->fsdb_mdt_index_map))
                                 continue;
 			rc = name_create_mdt(&logname, mti->mti_fsname, i);
 			if (rc)
@@ -2787,7 +2787,7 @@ static int mgs_write_log_param(const struct lu_env *env,
                                            "changes were made to the "
                                            "config log.\n",
                                            mti->mti_svname, rc);
-                        if (cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags))
+			if (test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags))
                                 LCONSOLE_ERROR_MSG(0x146, "This may be"
                                                    " because the log"
                                                    "is in the old 1.4"
@@ -2845,7 +2845,7 @@ static int mgs_write_log_param(const struct lu_env *env,
             (class_match_param(ptr, PARAM_LLITE, NULL) == 0)) {
                 char *cname;
 
-		if (cfs_test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
+		if (test_bit(FSDB_OLDLOG14, &fsdb->fsdb_flags)) {
 			LCONSOLE_ERROR_MSG(0x148, "Upgraded client logs for %s"
 					   " cannot be modified. Consider"
 					   " updating the configuration with"
@@ -2883,7 +2883,7 @@ static int mgs_write_log_param(const struct lu_env *env,
                         int i;
 
                         for (i = 0; i < INDEX_MAP_SIZE * 8; i++){
-                                if (!cfs_test_bit(i, fsdb->fsdb_mdt_index_map))
+				if (!test_bit(i, fsdb->fsdb_mdt_index_map))
                                         continue;
                                 name_destroy(&cname);
 				rc = name_create_mdt_osc(&cname, mti->mti_svname,
@@ -2928,7 +2928,7 @@ static int mgs_write_log_param(const struct lu_env *env,
                         goto active_err;
                 if (rc & LDD_F_SV_ALL) {
                         for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-                                if (!cfs_test_bit(i,
+				if (!test_bit(i,
                                                   fsdb->fsdb_mdt_index_map))
                                         continue;
 				rc = name_create_mdt(&logname,
@@ -2997,9 +2997,9 @@ int mgs_check_failnid(const struct lu_env *env, struct mgs_device *mgs,
            the failover list.  Modify mti->params for rewriting back at
            server_register_target(). */
 
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
         rc = mgs_write_log_add_failnid(obd, fsdb, mti);
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
 
         RETURN(rc);
 #endif
@@ -3033,7 +3033,7 @@ int mgs_write_log_target(const struct lu_env *env,
 		mti->mti_flags &= ~LDD_F_UPDATE;
 	}
 
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
 
         if (mti->mti_flags &
             (LDD_F_VIRGIN | LDD_F_UPGRADE14 | LDD_F_WRITECONF)) {
@@ -3082,7 +3082,7 @@ int mgs_write_log_target(const struct lu_env *env,
         OBD_FREE(buf, strlen(mti->mti_params) + 1);
 
 out_up:
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
         RETURN(rc);
 }
 
@@ -3126,14 +3126,14 @@ int mgs_erase_logs(const struct lu_env *env, struct mgs_device *mgs, char *fsnam
 	if (rc)
 		RETURN(rc);
 
-        cfs_mutex_lock(&mgs->mgs_mutex);
+	mutex_lock(&mgs->mgs_mutex);
 
         /* Delete the fs db */
 	fsdb = mgs_find_fsdb(mgs, fsname);
         if (fsdb)
 		mgs_free_fsdb(mgs, fsdb);
 
-        cfs_mutex_unlock(&mgs->mgs_mutex);
+	mutex_unlock(&mgs->mgs_mutex);
 
 	cfs_list_for_each_entry_safe(dirent, n, &list, list) {
 		cfs_list_del(&dirent->list);
@@ -3230,8 +3230,8 @@ int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
 	rc = mgs_find_or_make_fsdb(env, mgs, fsname, &fsdb);
         if (rc)
                 RETURN(rc);
-        if (!cfs_test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
-            cfs_test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
+	if (!test_bit(FSDB_MGS_SELF, &fsdb->fsdb_flags) &&
+	    test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
                 CERROR("No filesystem targets for %s.  cfg_device from lctl "
                        "is '%s'\n", fsname, devname);
 		mgs_free_fsdb(mgs, fsdb);
@@ -3257,9 +3257,9 @@ int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
 
         mti->mti_flags = rc | LDD_F_PARAM;
 
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
 	rc = mgs_write_log_param(env, mgs, fsdb, mti, mti->mti_params);
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
 
         /*
          * Revoke lock so everyone updates.  Should be alright if
@@ -3316,7 +3316,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
                 CERROR("Can't get db for %s\n", fsname);
                 RETURN(rc);
         }
-        if (cfs_test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
+	if (test_bit(FSDB_LOG_EMPTY, &fsdb->fsdb_flags)) {
                 CERROR("%s is not defined\n", fsname);
 		mgs_free_fsdb(mgs, fsdb);
                 RETURN(-EINVAL);
@@ -3370,7 +3370,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
                 break;
         }
 
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
 
         if (canceled_label != NULL) {
                 OBD_ALLOC_PTR(mti);
@@ -3380,11 +3380,11 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 
         /* write pool def to all MDT logs */
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++) {
-                 if (cfs_test_bit(i,  fsdb->fsdb_mdt_index_map)) {
+		if (test_bit(i,  fsdb->fsdb_mdt_index_map)) {
 			rc = name_create_mdt_and_lov(&logname, &lovname,
 						     fsdb, i);
 			if (rc) {
-				cfs_mutex_unlock(&fsdb->fsdb_mutex);
+				mutex_unlock(&fsdb->fsdb_mutex);
 				GOTO(out_mti, rc);
 			}
                         if (canceled_label != NULL) {
@@ -3402,7 +3402,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
                         name_destroy(&logname);
                         name_destroy(&lovname);
 			if (rc) {
-				cfs_mutex_unlock(&fsdb->fsdb_mutex);
+				mutex_unlock(&fsdb->fsdb_mutex);
 				GOTO(out_mti, rc);
 			}
                 }
@@ -3410,14 +3410,14 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 
 	rc = name_create(&logname, fsname, "-client");
 	if (rc) {
-		cfs_mutex_unlock(&fsdb->fsdb_mutex);
+		mutex_unlock(&fsdb->fsdb_mutex);
 		GOTO(out_mti, rc);
 	}
 	if (canceled_label != NULL) {
 		rc = mgs_modify(env, mgs, fsdb, mti, logname,
 				fsdb->fsdb_clilov, canceled_label, CM_SKIP);
 		if (rc < 0) {
-			cfs_mutex_unlock(&fsdb->fsdb_mutex);
+			mutex_unlock(&fsdb->fsdb_mutex);
 			name_destroy(&logname);
 			GOTO(out_mti, rc);
 		}
@@ -3425,7 +3425,7 @@ int mgs_pool_cmd(const struct lu_env *env, struct mgs_device *mgs,
 
 	rc = mgs_write_log_pool(env, mgs, logname, fsdb, fsdb->fsdb_clilov,
 				cmd, fsname, poolname, ostname, label);
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
 	name_destroy(&logname);
         /* request for update */
 	mgs_revoke_lock(mgs, fsdb, CONFIG_T_CONFIG);

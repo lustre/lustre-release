@@ -286,16 +286,15 @@ int FASTCALL cfs_atomic_sub_return(int i, cfs_atomic_t *v)
 	return cfs_atomic_add_return(-i, v);
 }
 
-int FASTCALL cfs_atomic_dec_and_lock(cfs_atomic_t *v, cfs_spinlock_t *lock)
+int FASTCALL cfs_atomic_dec_and_lock(cfs_atomic_t *v, spinlock_t *lock)
 {
-    if (cfs_atomic_read(v) != 1) {
-        return 0;
-    }
+	if (cfs_atomic_read(v) != 1)
+		return 0;
 
-	cfs_spin_lock(lock);
+	spin_lock(lock);
 	if (cfs_atomic_dec_and_test(v))
 		return 1;
-	cfs_spin_unlock(lock);
+	spin_unlock(lock);
 	return 0;
 }
 
@@ -306,19 +305,19 @@ int FASTCALL cfs_atomic_dec_and_lock(cfs_atomic_t *v, cfs_spinlock_t *lock)
 
 
 void
-cfs_rwlock_init(cfs_rwlock_t * rwlock)
+rwlock_init(rwlock_t *rwlock)
 {
-    cfs_spin_lock_init(&rwlock->guard);
-    rwlock->count = 0;
+	spin_lock_init(&rwlock->guard);
+	rwlock->count = 0;
 }
 
 void
-cfs_rwlock_fini(cfs_rwlock_t * rwlock)
+cfs_rwlock_fini(rwlock_t *rwlock)
 {
 }
 
 void
-cfs_read_lock(cfs_rwlock_t * rwlock)
+read_lock(rwlock_t *rwlock)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -334,19 +333,19 @@ cfs_read_lock(cfs_rwlock_t * rwlock)
    
     slot->irql = KeRaiseIrqlToDpcLevel();
 
-    while (TRUE) {
-	    cfs_spin_lock(&rwlock->guard);
-        if (rwlock->count >= 0)
-            break;
-        cfs_spin_unlock(&rwlock->guard);
-    }
+	while (TRUE) {
+		spin_lock(&rwlock->guard);
+			if (rwlock->count >= 0)
+				break;
+		spin_unlock(&rwlock->guard);
+	}
 
 	rwlock->count++;
-	cfs_spin_unlock(&rwlock->guard);
+	spin_unlock(&rwlock->guard);
 }
 
 void
-cfs_read_unlock(cfs_rwlock_t * rwlock)
+read_unlock(rwlock_t *rwlock)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -359,20 +358,19 @@ cfs_read_unlock(cfs_rwlock_t * rwlock)
 
     slot = CONTAINING_RECORD(task, TASK_SLOT, task);
     ASSERT(slot->Magic == TASKSLT_MAGIC);
-   
-    cfs_spin_lock(&rwlock->guard);
-	ASSERT(rwlock->count > 0);
-    rwlock->count--;
-    if (rwlock < 0) {
-        cfs_enter_debugger();
-    }
-	cfs_spin_unlock(&rwlock->guard);
 
-    KeLowerIrql(slot->irql);
+	spin_lock(&rwlock->guard);
+	ASSERT(rwlock->count > 0);
+	rwlock->count--;
+	if (rwlock < 0)
+		cfs_enter_debugger();
+	spin_unlock(&rwlock->guard);
+
+	KeLowerIrql(slot->irql);
 }
 
 void
-cfs_write_lock(cfs_rwlock_t * rwlock)
+write_lock(rwlock_t *rwlock)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -388,19 +386,19 @@ cfs_write_lock(cfs_rwlock_t * rwlock)
    
     slot->irql = KeRaiseIrqlToDpcLevel();
 
-    while (TRUE) {
-	    cfs_spin_lock(&rwlock->guard);
-        if (rwlock->count == 0)
-            break;
-        cfs_spin_unlock(&rwlock->guard);
-    }
+	while (TRUE) {
+		spin_lock(&rwlock->guard);
+		if (rwlock->count == 0)
+			break;
+		spin_unlock(&rwlock->guard);
+	}
 
 	rwlock->count = -1;
-	cfs_spin_unlock(&rwlock->guard);
+	spin_unlock(&rwlock->guard);
 }
 
 void
-cfs_write_unlock(cfs_rwlock_t * rwlock)
+write_unlock(rwlock_t *rwlock)
 {
     cfs_task_t * task = cfs_current();
     PTASK_SLOT   slot = NULL;
@@ -413,11 +411,11 @@ cfs_write_unlock(cfs_rwlock_t * rwlock)
 
     slot = CONTAINING_RECORD(task, TASK_SLOT, task);
     ASSERT(slot->Magic == TASKSLT_MAGIC);
-   
-    cfs_spin_lock(&rwlock->guard);
-	ASSERT(rwlock->count == -1);
-    rwlock->count = 0;
-	cfs_spin_unlock(&rwlock->guard);
 
-    KeLowerIrql(slot->irql);
+	spin_lock(&rwlock->guard);
+	ASSERT(rwlock->count == -1);
+	rwlock->count = 0;
+	spin_unlock(&rwlock->guard);
+
+	KeLowerIrql(slot->irql);
 }

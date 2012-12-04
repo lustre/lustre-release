@@ -372,7 +372,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
                         /* got an object. Find next page. */
                         hdr = cl_object_header(clob);
 
-                        cfs_spin_lock(&hdr->coh_page_guard);
+			spin_lock(&hdr->coh_page_guard);
                         nr = radix_tree_gang_lookup(&hdr->coh_tree,
                                                     (void **)&pg,
                                                     id.vpi_index, 1);
@@ -381,7 +381,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
                                 /* Cant support over 16T file */
                                 nr = !(pg->cp_index > 0xffffffff);
                         }
-                        cfs_spin_unlock(&hdr->coh_page_guard);
+			spin_unlock(&hdr->coh_page_guard);
 
                         lu_object_ref_del(&clob->co_lu, "dump", cfs_current());
                         cl_object_put(env, clob);
@@ -398,7 +398,7 @@ static loff_t vvp_pgcache_find(const struct lu_env *env,
 }
 
 #define seq_page_flag(seq, page, flag, has_flags) do {                  \
-        if (cfs_test_bit(PG_##flag, &(page)->flags)) {                  \
+	if (test_bit(PG_##flag, &(page)->flags)) {                  \
                 seq_printf(seq, "%s"#flag, has_flags ? "|" : "");       \
                 has_flags = 1;                                          \
         }                                                               \
@@ -455,9 +455,9 @@ static int vvp_pgcache_show(struct seq_file *f, void *v)
                 if (clob != NULL) {
                         hdr = cl_object_header(clob);
 
-                        cfs_spin_lock(&hdr->coh_page_guard);
-                        page = cl_page_lookup(hdr, id.vpi_index);
-                        cfs_spin_unlock(&hdr->coh_page_guard);
+			spin_lock(&hdr->coh_page_guard);
+			page = cl_page_lookup(hdr, id.vpi_index);
+			spin_unlock(&hdr->coh_page_guard);
 
                         seq_printf(f, "%8x@"DFID": ",
                                    id.vpi_index, PFID(&hdr->coh_lu.loh_fid));

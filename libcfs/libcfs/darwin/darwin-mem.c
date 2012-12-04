@@ -57,23 +57,23 @@ struct cfs_zone_nob {
 };
 
 static struct cfs_zone_nob      cfs_zone_nob;
-static spinlock_t               cfs_zone_guard;
+static spinlock_t		cfs_zone_guard;
 
 cfs_mem_cache_t *mem_cache_find(const char *name, size_t objsize)
 {
-        cfs_mem_cache_t         *walker = NULL;
+	cfs_mem_cache_t		*walker = NULL;
 
-        LASSERT(cfs_zone_nob.z_nob != NULL);
+	LASSERT(cfs_zone_nob.z_nob != NULL);
 
-        spin_lock(&cfs_zone_guard);
-        list_for_each_entry(walker, cfs_zone_nob.z_nob, mc_link) {
-                if (!strcmp(walker->mc_name, name) && \
-                    walker->mc_size == objsize)
-                        break;
-        }
-        spin_unlock(&cfs_zone_guard);
+	spin_lock(&cfs_zone_guard);
+	list_for_each_entry(walker, cfs_zone_nob.z_nob, mc_link) {
+		if (!strcmp(walker->mc_name, name) && \
+		    walker->mc_size == objsize)
+			break;
+	}
+	spin_unlock(&cfs_zone_guard);
 
-        return walker;
+	return walker;
 }
 
 /*
@@ -270,18 +270,18 @@ static void raw_page_finish(struct xnu_raw_page *pg)
 
 void raw_page_death_row_clean(void)
 {
-        struct xnu_raw_page *pg;
+	struct xnu_raw_page *pg;
 
-        spin_lock(&page_death_row_phylax);
-        while (!list_empty(&page_death_row)) {
-                pg = container_of(page_death_row.next,
-                                  struct xnu_raw_page, link);
-                list_del(&pg->link);
-                spin_unlock(&page_death_row_phylax);
-                raw_page_finish(pg);
-                spin_lock(&page_death_row_phylax);
-        }
-        spin_unlock(&page_death_row_phylax);
+	spin_lock(&page_death_row_phylax);
+	while (!list_empty(&page_death_row)) {
+		pg = container_of(page_death_row.next,
+				  struct xnu_raw_page, link);
+		list_del(&pg->link);
+		spin_unlock(&page_death_row_phylax);
+		raw_page_finish(pg);
+		spin_lock(&page_death_row_phylax);
+	}
+	spin_unlock(&page_death_row_phylax);
 }
 
 /* Free a "page" */
@@ -289,20 +289,20 @@ void free_raw_page(struct xnu_raw_page *pg)
 {
 	if (!atomic_dec_and_test(&pg->count))
 		return;
-        /*
-         * kmem_free()->vm_map_remove()->vm_map_delete()->lock_write() may
-         * block. (raw_page_done()->upl_abort() can block too) On the other
-         * hand, cfs_free_page() may be called in non-blockable context. To
-         * work around this, park pages on global list when cannot block.
-         */
-        if (get_preemption_level() > 0) {
-                spin_lock(&page_death_row_phylax);
-                list_add(&pg->link, &page_death_row);
-                spin_unlock(&page_death_row_phylax);
-        } else {
-                raw_page_finish(pg);
-                raw_page_death_row_clean();
-        }
+	/*
+	 * kmem_free()->vm_map_remove()->vm_map_delete()->lock_write() may
+	 * block. (raw_page_done()->upl_abort() can block too) On the other
+	 * hand, cfs_free_page() may be called in non-blockable context. To
+	 * work around this, park pages on global list when cannot block.
+	 */
+	if (get_preemption_level() > 0) {
+		spin_lock(&page_death_row_phylax);
+		list_add(&pg->link, &page_death_row);
+		spin_unlock(&page_death_row_phylax);
+	} else {
+		raw_page_finish(pg);
+		raw_page_death_row_clean();
+	}
 }
 
 cfs_page_t *cfs_alloc_page(u_int32_t flags)
@@ -471,22 +471,22 @@ int cfs_mem_init(void)
 
                 cfs_zone_nob.z_nob = nob->z_nob;
         }
-        spin_lock_init(&cfs_zone_guard);
+	spin_lock_init(&cfs_zone_guard);
 #endif
-        CFS_INIT_LIST_HEAD(&page_death_row);
-        spin_lock_init(&page_death_row_phylax);
-        raw_page_cache = cfs_mem_cache_create("raw-page", CFS_PAGE_SIZE, 0, 0);
-        return 0;
+	CFS_INIT_LIST_HEAD(&page_death_row);
+	spin_lock_init(&page_death_row_phylax);
+	raw_page_cache = cfs_mem_cache_create("raw-page", CFS_PAGE_SIZE, 0, 0);
+	return 0;
 }
 
 void cfs_mem_fini(void)
 {
-        raw_page_death_row_clean();
-        spin_lock_done(&page_death_row_phylax);
-        cfs_mem_cache_destroy(raw_page_cache);
+	raw_page_death_row_clean();
+	spin_lock_done(&page_death_row_phylax);
+	cfs_mem_cache_destroy(raw_page_cache);
 
-#if     CFS_INDIVIDUAL_ZONE
-        cfs_zone_nob.z_nob = NULL;
-        spin_lock_done(&cfs_zone_guard);
+#if CFS_INDIVIDUAL_ZONE
+	cfs_zone_nob.z_nob = NULL;
+	spin_lock_done(&cfs_zone_guard);
 #endif
 }

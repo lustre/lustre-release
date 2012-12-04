@@ -78,7 +78,7 @@ CFS_MODULE_PARM(osd_oi_count, "i", int, 0444,
                 "it's only valid for new filesystem.");
 
 /** to serialize concurrent OI index initialization */
-static cfs_mutex_t oi_init_lock;
+static struct mutex oi_init_lock;
 
 static struct dt_index_features oi_feat = {
         .dif_flags       = DT_IND_UPDATE,
@@ -350,7 +350,7 @@ int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd)
 	if (oi == NULL)
 		RETURN(-ENOMEM);
 
-	cfs_mutex_lock(&oi_init_lock);
+	mutex_lock(&oi_init_lock);
 	/* try to open existing multiple OIs first */
 	rc = osd_oi_table_open(info, osd, oi, sf->sf_oi_count, false);
 	if (rc < 0)
@@ -413,7 +413,7 @@ out:
 		rc = 0;
 	}
 
-	cfs_mutex_unlock(&oi_init_lock);
+	mutex_unlock(&oi_init_lock);
 	return rc;
 }
 
@@ -639,6 +639,6 @@ int osd_oi_mod_init(void)
                 osd_oi_count = size_roundup_power2(osd_oi_count);
         }
 
-        cfs_mutex_init(&oi_init_lock);
+	mutex_init(&oi_init_lock);
         return 0;
 }

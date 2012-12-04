@@ -171,26 +171,26 @@
 /* provide wrappers around LIBCFS_ALLOC/FREE to keep MXLND specific
  * memory usage stats that include pages */
 
-#define MXLND_ALLOC(x, size) \
-        do { \
-                cfs_spin_lock(&kmxlnd_data.kmx_mem_lock); \
-                kmxlnd_data.kmx_mem_used += size; \
-                cfs_spin_unlock(&kmxlnd_data.kmx_mem_lock); \
-                LIBCFS_ALLOC(x, size); \
-                if (unlikely(x == NULL)) { \
-                        cfs_spin_lock(&kmxlnd_data.kmx_mem_lock); \
-                        kmxlnd_data.kmx_mem_used -= size; \
-                        cfs_spin_unlock(&kmxlnd_data.kmx_mem_lock); \
-                } \
-        } while (0)
+#define MXLND_ALLOC(x, size)					\
+	do {							\
+		spin_lock(&kmxlnd_data.kmx_mem_lock);		\
+		kmxlnd_data.kmx_mem_used += size;		\
+		spin_unlock(&kmxlnd_data.kmx_mem_lock);		\
+		LIBCFS_ALLOC(x, size);				\
+		if (unlikely(x == NULL)) {			\
+			spin_lock(&kmxlnd_data.kmx_mem_lock);	\
+			kmxlnd_data.kmx_mem_used -= size;	\
+			spin_unlock(&kmxlnd_data.kmx_mem_lock);	\
+		}						\
+	} while (0)
 
-#define MXLND_FREE(x, size) \
-        do { \
-                cfs_spin_lock(&kmxlnd_data.kmx_mem_lock); \
-                kmxlnd_data.kmx_mem_used -= size; \
-                cfs_spin_unlock(&kmxlnd_data.kmx_mem_lock); \
-                LIBCFS_FREE(x, size); \
-        } while (0)
+#define MXLND_FREE(x, size)					\
+	do {							\
+		spin_lock(&kmxlnd_data.kmx_mem_lock);		\
+		kmxlnd_data.kmx_mem_used -= size;		\
+		spin_unlock(&kmxlnd_data.kmx_mem_lock);		\
+		LIBCFS_FREE(x, size);				\
+	} while (0)
 
 
 typedef struct kmx_tunables
@@ -220,19 +220,19 @@ typedef struct kmx_data
         int                 kmx_init;           /* initialization state */
         cfs_atomic_t        kmx_shutdown;       /* shutting down? */
         cfs_atomic_t        kmx_nthreads;       /* number of threads */
-        cfs_completion_t   *kmx_completions;   /* array of completion structs */
-        lnet_ni_t          *kmx_ni;             /* the LND instance */
-        u64                 kmx_incarnation;    /* my incarnation value */
-        long                kmx_mem_used;       /* memory used */
-        mx_endpoint_t       kmx_endpt;          /* the MX endpoint */
-        mx_endpoint_addr_t  kmx_epa;            /* the MX endpoint address */
+	struct completion   *kmx_completions;   /* array of completion struct */
+	lnet_ni_t	    *kmx_ni;		/* the LND instance */
+	u64		    kmx_incarnation;	/* my incarnation value */
+	long		    kmx_mem_used;	/* memory used */
+	mx_endpoint_t	    kmx_endpt;		/* the MX endpoint */
+	mx_endpoint_addr_t  kmx_epa;		/* the MX endpoint address */
 
-        cfs_rwlock_t        kmx_global_lock;    /* global lock */
-        cfs_spinlock_t      kmx_mem_lock;       /* memory accounting lock */
+	rwlock_t	    kmx_global_lock;	/* global lock */
+	spinlock_t	    kmx_mem_lock;	/* memory accounting lock */
 
-        cfs_list_t          kmx_conn_reqs;     /* list of connection requests */
-        cfs_spinlock_t      kmx_conn_lock;      /* connection list lock */
-        cfs_semaphore_t     kmx_conn_sem;       /* semaphore for connection request list */
+	cfs_list_t	    kmx_conn_reqs;	/* list of connection reqs */
+	spinlock_t	    kmx_conn_lock;	/* connection list lock */
+	struct semaphore    kmx_conn_sem;	/* connection request list */
         cfs_list_t          kmx_conn_zombies;   /* list of zombie connections */
         cfs_list_t          kmx_orphan_msgs;    /* list of txs to cancel */
 
@@ -244,12 +244,12 @@ typedef struct kmx_data
 
         struct kmx_ctx     *kmx_txs;            /* all tx descriptors */
         cfs_list_t          kmx_tx_idle;        /* list of idle tx */
-        cfs_spinlock_t      kmx_tx_idle_lock;   /* lock for idle tx list */
-        s32                 kmx_tx_used;        /* txs in use */
-        u64                 kmx_tx_next_cookie; /* unique id for tx */
-        cfs_list_t          kmx_tx_queue;       /* generic send queue */
-        cfs_spinlock_t      kmx_tx_queue_lock;  /* lock for generic sends */
-        cfs_semaphore_t     kmx_tx_queue_sem;   /* semaphore for tx queue */
+	spinlock_t	    kmx_tx_idle_lock;	/* lock for idle tx list */
+	s32		    kmx_tx_used;	/* txs in use */
+	u64		    kmx_tx_next_cookie;	/* unique id for tx */
+	cfs_list_t	    kmx_tx_queue;	/* generic send queue */
+	spinlock_t	    kmx_tx_queue_lock;	/* lock for generic sends */
+	struct semaphore    kmx_tx_queue_sem;	/* semaphore for tx queue */
 } kmx_data_t;
 
 #define MXLND_INIT_NOTHING      0       /* in the beginning, there was nothing... */
@@ -409,7 +409,7 @@ typedef struct kmx_conn
 
         mx_endpoint_addr_t  mxk_epa;            /* peer's endpoint address */
 
-        cfs_spinlock_t      mxk_lock;           /* lock */
+	spinlock_t	    mxk_lock;		/* lock */
         unsigned long       mxk_timeout;        /* expiration of oldest pending tx/rx */
         unsigned long       mxk_last_tx;        /* when last tx completed with success */
         unsigned long       mxk_last_rx;        /* when last rx completed */
@@ -530,19 +530,19 @@ do {                                                            \
 } while (0)
 
 
-#define mxlnd_conn_decref(conn)                                       \
-do {                                                                  \
-        LASSERT(conn != NULL);                                        \
-        LASSERT(cfs_atomic_read(&(conn)->mxk_refcount) > 0);          \
-        if (cfs_atomic_dec_and_test(&(conn)->mxk_refcount)) {         \
-                cfs_spin_lock(&kmxlnd_data.kmx_conn_lock);            \
-                LASSERT((conn)->mxk_status == MXLND_CONN_DISCONNECT); \
-                CDEBUG(D_NET, "adding conn %p to zombies\n", (conn)); \
-                cfs_list_add_tail(&(conn)->mxk_zombie,                \
-                                  &kmxlnd_data.kmx_conn_zombies);     \
-                cfs_spin_unlock(&kmxlnd_data.kmx_conn_lock);          \
-                cfs_up(&kmxlnd_data.kmx_conn_sem);                    \
-        }                                                             \
+#define mxlnd_conn_decref(conn)						\
+do {									\
+	LASSERT(conn != NULL);						\
+	LASSERT(cfs_atomic_read(&(conn)->mxk_refcount) > 0);		\
+	if (cfs_atomic_dec_and_test(&(conn)->mxk_refcount)) {		\
+		spin_lock(&kmxlnd_data.kmx_conn_lock);			\
+		LASSERT((conn)->mxk_status == MXLND_CONN_DISCONNECT);	\
+		CDEBUG(D_NET, "adding conn %p to zombies\n", (conn));	\
+		cfs_list_add_tail(&(conn)->mxk_zombie,			\
+				 &kmxlnd_data.kmx_conn_zombies);	\
+		spin_unlock(&kmxlnd_data.kmx_conn_lock);		\
+		up(&kmxlnd_data.kmx_conn_sem);				\
+	}								\
 } while (0)
 
 #define mxlnd_valid_msg_type(type)                              \

@@ -157,7 +157,7 @@ struct upcall_cache_entry *upcall_cache_get_entry(struct upcall_cache *cache,
         head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key)];
 find_again:
         found = 0;
-        cfs_spin_lock(&cache->uc_lock);
+	spin_lock(&cache->uc_lock);
         cfs_list_for_each_entry_safe(entry, next, head, ue_hash) {
                 /* check invalid & expired items */
                 if (check_unlink_entry(cache, entry))
@@ -170,7 +170,7 @@ find_again:
 
         if (!found) {
                 if (!new) {
-                        cfs_spin_unlock(&cache->uc_lock);
+			spin_unlock(&cache->uc_lock);
                         new = alloc_entry(cache, key, args);
                         if (!new) {
                                 CERROR("fail to alloc entry\n");
@@ -194,9 +194,9 @@ find_again:
         if (UC_CACHE_IS_NEW(entry)) {
                 UC_CACHE_SET_ACQUIRING(entry);
                 UC_CACHE_CLEAR_NEW(entry);
-                cfs_spin_unlock(&cache->uc_lock);
-                rc = refresh_entry(cache, entry);
-                cfs_spin_lock(&cache->uc_lock);
+		spin_unlock(&cache->uc_lock);
+		rc = refresh_entry(cache, entry);
+		spin_lock(&cache->uc_lock);
                 entry->ue_acquire_expire =
                         cfs_time_shift(cache->uc_acquire_expire);
                 if (rc < 0) {
@@ -220,12 +220,12 @@ find_again:
                 cfs_waitlink_init(&wait);
                 cfs_waitq_add(&entry->ue_waitq, &wait);
                 cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
-                cfs_spin_unlock(&cache->uc_lock);
+		spin_unlock(&cache->uc_lock);
 
-                left = cfs_waitq_timedwait(&wait, CFS_TASK_INTERRUPTIBLE,
-                                           expiry);
+		left = cfs_waitq_timedwait(&wait, CFS_TASK_INTERRUPTIBLE,
+					   expiry);
 
-                cfs_spin_lock(&cache->uc_lock);
+		spin_lock(&cache->uc_lock);
                 cfs_waitq_del(&entry->ue_waitq, &wait);
                 if (UC_CACHE_IS_ACQUIRING(entry)) {
                         /* we're interrupted or upcall failed in the middle */
@@ -253,36 +253,36 @@ find_again:
                  * without any error, should at least give a
                  * chance to use it once.
                  */
-                if (entry != new) {
-                        put_entry(cache, entry);
-                        cfs_spin_unlock(&cache->uc_lock);
-                        new = NULL;
-                        goto find_again;
-                }
-        }
+		if (entry != new) {
+			put_entry(cache, entry);
+			spin_unlock(&cache->uc_lock);
+			new = NULL;
+			goto find_again;
+		}
+	}
 
         /* Now we know it's good */
 out:
-        cfs_spin_unlock(&cache->uc_lock);
-        RETURN(entry);
+	spin_unlock(&cache->uc_lock);
+	RETURN(entry);
 }
 EXPORT_SYMBOL(upcall_cache_get_entry);
 
 void upcall_cache_put_entry(struct upcall_cache *cache,
                             struct upcall_cache_entry *entry)
 {
-        ENTRY;
+	ENTRY;
 
-        if (!entry) {
-                EXIT;
-                return;
-        }
+	if (!entry) {
+		EXIT;
+		return;
+	}
 
-        LASSERT(cfs_atomic_read(&entry->ue_refcount) > 0);
-        cfs_spin_lock(&cache->uc_lock);
-        put_entry(cache, entry);
-        cfs_spin_unlock(&cache->uc_lock);
-        EXIT;
+	LASSERT(cfs_atomic_read(&entry->ue_refcount) > 0);
+	spin_lock(&cache->uc_lock);
+	put_entry(cache, entry);
+	spin_unlock(&cache->uc_lock);
+	EXIT;
 }
 EXPORT_SYMBOL(upcall_cache_put_entry);
 
@@ -298,7 +298,7 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
 
         head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key)];
 
-        cfs_spin_lock(&cache->uc_lock);
+	spin_lock(&cache->uc_lock);
         cfs_list_for_each_entry(entry, head, ue_hash) {
                 if (downcall_compare(cache, entry, key, args) == 0) {
                         found = 1;
@@ -311,7 +311,7 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
                 CDEBUG(D_OTHER, "%s: upcall for key "LPU64" not expected\n",
                        cache->uc_name, key);
                 /* haven't found, it's possible */
-                cfs_spin_unlock(&cache->uc_lock);
+		spin_unlock(&cache->uc_lock);
                 RETURN(-EINVAL);
         }
 
@@ -333,10 +333,10 @@ int upcall_cache_downcall(struct upcall_cache *cache, __u32 err, __u64 key,
                 GOTO(out, rc = -EINVAL);
         }
 
-        cfs_spin_unlock(&cache->uc_lock);
-        if (cache->uc_ops->parse_downcall)
-                rc = cache->uc_ops->parse_downcall(cache, entry, args);
-        cfs_spin_lock(&cache->uc_lock);
+	spin_unlock(&cache->uc_lock);
+	if (cache->uc_ops->parse_downcall)
+		rc = cache->uc_ops->parse_downcall(cache, entry, args);
+	spin_lock(&cache->uc_lock);
         if (rc)
                 GOTO(out, rc);
 
@@ -350,21 +350,21 @@ out:
                 cfs_list_del_init(&entry->ue_hash);
         }
         UC_CACHE_CLEAR_ACQUIRING(entry);
-        cfs_spin_unlock(&cache->uc_lock);
-        cfs_waitq_broadcast(&entry->ue_waitq);
-        put_entry(cache, entry);
+	spin_unlock(&cache->uc_lock);
+	cfs_waitq_broadcast(&entry->ue_waitq);
+	put_entry(cache, entry);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 EXPORT_SYMBOL(upcall_cache_downcall);
 
 static void cache_flush(struct upcall_cache *cache, int force)
 {
-        struct upcall_cache_entry *entry, *next;
-        int i;
-        ENTRY;
+	struct upcall_cache_entry *entry, *next;
+	int i;
+	ENTRY;
 
-        cfs_spin_lock(&cache->uc_lock);
+	spin_lock(&cache->uc_lock);
         for (i = 0; i < UC_CACHE_HASH_SIZE; i++) {
                 cfs_list_for_each_entry_safe(entry, next,
                                          &cache->uc_hashtable[i], ue_hash) {
@@ -376,8 +376,8 @@ static void cache_flush(struct upcall_cache *cache, int force)
                         free_entry(cache, entry);
                 }
         }
-        cfs_spin_unlock(&cache->uc_lock);
-        EXIT;
+	spin_unlock(&cache->uc_lock);
+	EXIT;
 }
 
 void upcall_cache_flush_idle(struct upcall_cache *cache)
@@ -401,7 +401,7 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
 
         head = &cache->uc_hashtable[UC_CACHE_HASH_INDEX(key)];
 
-        cfs_spin_lock(&cache->uc_lock);
+	spin_lock(&cache->uc_lock);
         cfs_list_for_each_entry(entry, head, ue_hash) {
                 if (upcall_compare(cache, entry, key, args) == 0) {
                         found = 1;
@@ -420,7 +420,7 @@ void upcall_cache_flush_one(struct upcall_cache *cache, __u64 key, void *args)
                 if (!cfs_atomic_read(&entry->ue_refcount))
                         free_entry(cache, entry);
         }
-        cfs_spin_unlock(&cache->uc_lock);
+	spin_unlock(&cache->uc_lock);
 }
 EXPORT_SYMBOL(upcall_cache_flush_one);
 
@@ -435,8 +435,8 @@ struct upcall_cache *upcall_cache_init(const char *name, const char *upcall,
         if (!cache)
                 RETURN(ERR_PTR(-ENOMEM));
 
-        cfs_spin_lock_init(&cache->uc_lock);
-        cfs_rwlock_init(&cache->uc_upcall_rwlock);
+	spin_lock_init(&cache->uc_lock);
+	rwlock_init(&cache->uc_upcall_rwlock);
         for (i = 0; i < UC_CACHE_HASH_SIZE; i++)
                 CFS_INIT_LIST_HEAD(&cache->uc_hashtable[i]);
         strncpy(cache->uc_name, name, sizeof(cache->uc_name) - 1);

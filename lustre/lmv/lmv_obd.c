@@ -93,7 +93,7 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
         CDEBUG(D_INFO, "Searching in lmv %p for uuid %s (activate=%d)\n",
                lmv, uuid->uuid, activate);
 
-        cfs_spin_lock(&lmv->lmv_lock);
+	spin_lock(&lmv->lmv_lock);
         for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgt++) {
                 if (tgt->ltd_exp == NULL)
                         continue;
@@ -129,31 +129,31 @@ static int lmv_set_mdc_active(struct lmv_obd *lmv, struct obd_uuid *uuid,
         EXIT;
 
  out_lmv_lock:
-        cfs_spin_unlock(&lmv->lmv_lock);
-        return rc;
+	spin_unlock(&lmv->lmv_lock);
+	return rc;
 }
 
 static int lmv_set_mdc_data(struct lmv_obd *lmv, struct obd_uuid *uuid,
-                            struct obd_connect_data *data)
+			    struct obd_connect_data *data)
 {
-        struct lmv_tgt_desc    *tgt;
-        int                     i;
-        ENTRY;
+	struct lmv_tgt_desc    *tgt;
+	int                     i;
+	ENTRY;
 
-        LASSERT(data != NULL);
+	LASSERT(data != NULL);
 
-        cfs_spin_lock(&lmv->lmv_lock);
-        for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgt++) {
-                if (tgt->ltd_exp == NULL)
-                        continue;
+	spin_lock(&lmv->lmv_lock);
+	for (i = 0, tgt = lmv->tgts; i < lmv->desc.ld_tgt_count; i++, tgt++) {
+		if (tgt->ltd_exp == NULL)
+			continue;
 
-                if (obd_uuid_equals(uuid, &tgt->ltd_uuid)) {
-                        lmv->datas[tgt->ltd_idx] = *data;
-                        break;
-                }
-        }
-        cfs_spin_unlock(&lmv->lmv_lock);
-        RETURN(0);
+		if (obd_uuid_equals(uuid, &tgt->ltd_uuid)) {
+			lmv->datas[tgt->ltd_idx] = *data;
+			break;
+		}
+	}
+	spin_unlock(&lmv->lmv_lock);
+	RETURN(0);
 }
 
 struct obd_uuid *lmv_get_uuid(struct obd_export *exp) {
@@ -515,18 +515,18 @@ int lmv_add_target(struct obd_device *obd, struct obd_uuid *tgt_uuid)
                         RETURN(-EINVAL);
                 }
         }
-        cfs_spin_lock(&lmv->lmv_lock);
-        tgt = lmv->tgts + lmv->desc.ld_tgt_count++;
-        tgt->ltd_uuid = *tgt_uuid;
-        cfs_spin_unlock(&lmv->lmv_lock);
+	spin_lock(&lmv->lmv_lock);
+	tgt = lmv->tgts + lmv->desc.ld_tgt_count++;
+	tgt->ltd_uuid = *tgt_uuid;
+	spin_unlock(&lmv->lmv_lock);
 
-        if (lmv->connected) {
-                rc = lmv_connect_mdc(obd, tgt);
-                if (rc) {
-                        cfs_spin_lock(&lmv->lmv_lock);
-                        lmv->desc.ld_tgt_count--;
-                        memset(tgt, 0, sizeof(*tgt));
-                        cfs_spin_unlock(&lmv->lmv_lock);
+	if (lmv->connected) {
+		rc = lmv_connect_mdc(obd, tgt);
+		if (rc) {
+			spin_lock(&lmv->lmv_lock);
+			lmv->desc.ld_tgt_count--;
+			memset(tgt, 0, sizeof(*tgt));
+			spin_unlock(&lmv->lmv_lock);
                 } else {
                         int easize = sizeof(struct lmv_stripe_md) +
                                      lmv->desc.ld_tgt_count *
@@ -981,7 +981,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
          * New seq alloc and FLD setup should be atomic. Otherwise we may find
          * on server that seq in new allocated fid is not yet known.
          */
-        cfs_mutex_lock(&tgt->ltd_fid_mutex);
+	mutex_lock(&tgt->ltd_fid_mutex);
 
         if (!tgt->ltd_active)
                 GOTO(out, rc = -ENODEV);
@@ -997,7 +997,7 @@ int __lmv_fid_alloc(struct lmv_obd *lmv, struct lu_fid *fid,
 
         EXIT;
 out:
-        cfs_mutex_unlock(&tgt->ltd_fid_mutex);
+	mutex_unlock(&tgt->ltd_fid_mutex);
         return rc;
 }
 
@@ -1068,7 +1068,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
                 RETURN(-ENOMEM);
 
         for (i = 0; i < LMV_MAX_TGT_COUNT; i++) {
-                cfs_mutex_init(&lmv->tgts[i].ltd_fid_mutex);
+		mutex_init(&lmv->tgts[i].ltd_fid_mutex);
                 lmv->tgts[i].ltd_idx = i;
         }
 
@@ -1086,8 +1086,8 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         lmv->max_easize = 0;
         lmv->lmv_placement = PLACEMENT_CHAR_POLICY;
 
-        cfs_spin_lock_init(&lmv->lmv_lock);
-        cfs_mutex_init(&lmv->init_mutex);
+	spin_lock_init(&lmv->lmv_lock);
+	mutex_init(&lmv->init_mutex);
 
         rc = lmv_object_setup(obd);
         if (rc) {

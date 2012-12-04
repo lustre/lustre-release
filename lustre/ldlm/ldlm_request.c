@@ -249,11 +249,11 @@ noreproc:
                                        interrupted_completion_wait, &lwd);
         }
 
-        if (imp != NULL) {
-                cfs_spin_lock(&imp->imp_lock);
-                lwd.lwd_conn_cnt = imp->imp_conn_cnt;
-                cfs_spin_unlock(&imp->imp_lock);
-        }
+	if (imp != NULL) {
+		spin_lock(&imp->imp_lock);
+		lwd.lwd_conn_cnt = imp->imp_conn_cnt;
+		spin_unlock(&imp->imp_lock);
+	}
 
         if (ns_is_client(ldlm_lock_to_ns(lock)) &&
             OBD_FAIL_CHECK_RESET(OBD_FAIL_LDLM_INTR_CP_AST,
@@ -1244,10 +1244,10 @@ int ldlm_cli_update_pool(struct ptlrpc_request *req)
          * alive in cleanup time. Evil races are possible which may cause
          * oops in that time.
          */
-        cfs_write_lock(&obd->obd_pool_lock);
+	write_lock(&obd->obd_pool_lock);
         obd->obd_pool_slv = new_slv;
         obd->obd_pool_limit = new_limit;
-        cfs_write_unlock(&obd->obd_pool_lock);
+	write_unlock(&obd->obd_pool_lock);
 
         RETURN(0);
 }
@@ -1549,12 +1549,12 @@ ldlm_cancel_lru_policy(struct ldlm_namespace *ns, int flags)
 static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
                                  int count, int max, int flags)
 {
-        ldlm_cancel_lru_policy_t pf;
-        struct ldlm_lock *lock, *next;
-        int added = 0, unused, remained;
-        ENTRY;
+	ldlm_cancel_lru_policy_t pf;
+	struct ldlm_lock *lock, *next;
+	int added = 0, unused, remained;
+	ENTRY;
 
-        cfs_spin_lock(&ns->ns_lock);
+	spin_lock(&ns->ns_lock);
         unused = ns->ns_nr_unused;
         remained = unused;
 
@@ -1596,7 +1596,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
                         break;
 
                 LDLM_LOCK_GET(lock);
-                cfs_spin_unlock(&ns->ns_lock);
+		spin_unlock(&ns->ns_lock);
                 lu_ref_add(&lock->l_reference, __FUNCTION__, cfs_current());
 
                 /* Pass the lock through the policy filter and see if it
@@ -1617,14 +1617,14 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
                         lu_ref_del(&lock->l_reference,
                                    __FUNCTION__, cfs_current());
                         LDLM_LOCK_RELEASE(lock);
-                        cfs_spin_lock(&ns->ns_lock);
-                        break;
-                }
-                if (result == LDLM_POLICY_SKIP_LOCK) {
-                        lu_ref_del(&lock->l_reference,
-                                   __FUNCTION__, cfs_current());
-                        LDLM_LOCK_RELEASE(lock);
-                        cfs_spin_lock(&ns->ns_lock);
+			spin_lock(&ns->ns_lock);
+			break;
+		}
+		if (result == LDLM_POLICY_SKIP_LOCK) {
+			lu_ref_del(&lock->l_reference,
+				   __func__, cfs_current());
+			LDLM_LOCK_RELEASE(lock);
+			spin_lock(&ns->ns_lock);
                         continue;
                 }
 
@@ -1641,7 +1641,7 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
                         lu_ref_del(&lock->l_reference,
                                    __FUNCTION__, cfs_current());
                         LDLM_LOCK_RELEASE(lock);
-                        cfs_spin_lock(&ns->ns_lock);
+			spin_lock(&ns->ns_lock);
                         continue;
                 }
                 LASSERT(!lock->l_readers && !lock->l_writers);
@@ -1671,12 +1671,12 @@ static int ldlm_prepare_lru_list(struct ldlm_namespace *ns, cfs_list_t *cancels,
                 cfs_list_add(&lock->l_bl_ast, cancels);
                 unlock_res_and_lock(lock);
                 lu_ref_del(&lock->l_reference, __FUNCTION__, cfs_current());
-                cfs_spin_lock(&ns->ns_lock);
-                added++;
-                unused--;
-        }
-        cfs_spin_unlock(&ns->ns_lock);
-        RETURN(added);
+		spin_lock(&ns->ns_lock);
+		added++;
+		unused--;
+	}
+	spin_unlock(&ns->ns_lock);
+	RETURN(added);
 }
 
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns, cfs_list_t *cancels,

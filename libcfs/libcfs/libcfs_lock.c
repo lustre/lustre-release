@@ -62,7 +62,7 @@ struct cfs_percpt_lock *
 cfs_percpt_lock_alloc(struct cfs_cpt_table *cptab)
 {
 	struct cfs_percpt_lock	*pcl;
-	cfs_spinlock_t		*lock;
+	spinlock_t		*lock;
 	int			i;
 
 	/* NB: cptab can be NULL, pcl will be for HW CPUs on that case */
@@ -78,7 +78,7 @@ cfs_percpt_lock_alloc(struct cfs_cpt_table *cptab)
 	}
 
 	cfs_percpt_for_each(lock, i, pcl->pcl_locks)
-		cfs_spin_lock_init(lock);
+		spin_lock_init(lock);
 
 	return pcl;
 }
@@ -109,13 +109,13 @@ cfs_percpt_lock(struct cfs_percpt_lock *pcl, int index)
 	}
 
 	if (likely(index != CFS_PERCPT_LOCK_EX)) {
-		cfs_spin_lock(pcl->pcl_locks[index]);
+		spin_lock(pcl->pcl_locks[index]);
 		return;
 	}
 
 	/* exclusive lock request */
 	for (i = 0; i < ncpt; i++) {
-		cfs_spin_lock(pcl->pcl_locks[i]);
+		spin_lock(pcl->pcl_locks[i]);
 		if (i == 0) {
 			LASSERT(!pcl->pcl_locked);
 			/* nobody should take private lock after this
@@ -136,7 +136,7 @@ cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index)
 	index = ncpt == 1 ? 0 : index;
 
 	if (likely(index != CFS_PERCPT_LOCK_EX)) {
-		cfs_spin_unlock(pcl->pcl_locks[index]);
+		spin_unlock(pcl->pcl_locks[index]);
 		return;
 	}
 
@@ -145,7 +145,7 @@ cfs_percpt_unlock(struct cfs_percpt_lock *pcl, int index)
 			LASSERT(pcl->pcl_locked);
 			pcl->pcl_locked = 0;
 		}
-		cfs_spin_unlock(pcl->pcl_locks[i]);
+		spin_unlock(pcl->pcl_locks[i]);
 	}
 }
 CFS_EXPORT_SYMBOL(cfs_percpt_unlock);

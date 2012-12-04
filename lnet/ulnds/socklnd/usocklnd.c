@@ -141,7 +141,7 @@ usocklnd_release_poll_states(int n)
                 libcfs_sock_release(pt->upt_notifier[1]);
 
                 pthread_mutex_destroy(&pt->upt_pollrequests_lock);
-                cfs_mt_fini_completion(&pt->upt_completion);
+		mt_fini_completion(&pt->upt_completion);
 
                 LIBCFS_FREE (pt->upt_pollfd,
                              sizeof(struct pollfd) * pt->upt_npollfd);
@@ -284,7 +284,7 @@ usocklnd_base_startup()
                 CFS_INIT_LIST_HEAD (&pt->upt_pollrequests);
                 CFS_INIT_LIST_HEAD (&pt->upt_stale_list);
                 pthread_mutex_init(&pt->upt_pollrequests_lock, NULL);
-                cfs_mt_init_completion(&pt->upt_completion);
+		mt_init_completion(&pt->upt_completion);
         }
 
         /* Initialize peer hash list */
@@ -333,7 +333,7 @@ usocklnd_base_shutdown(int n)
         for (i = 0; i < n; i++) {
                 usock_pollthread_t *pt = &usock_data.ud_pollthreads[i];
                 usocklnd_wakeup_pollthread(i);
-                cfs_mt_wait_for_completion(&pt->upt_completion);
+		mt_wait_for_completion(&pt->upt_completion);
         }
 
         pthread_rwlock_destroy(&usock_data.ud_peers_lock);

@@ -48,10 +48,10 @@
  */
 void lod_getref(struct lod_device *lod)
 {
-	cfs_down_read(&lod->lod_rw_sem);
-	cfs_mutex_lock(&lod->lod_mutex);
+	down_read(&lod->lod_rw_sem);
+	mutex_lock(&lod->lod_mutex);
 	lod->lod_refcount++;
-	cfs_mutex_unlock(&lod->lod_mutex);
+	mutex_unlock(&lod->lod_mutex);
 }
 
 /*
@@ -63,7 +63,7 @@ void lod_getref(struct lod_device *lod)
  */
 void lod_putref(struct lod_device *lod)
 {
-	cfs_mutex_lock(&lod->lod_mutex);
+	mutex_lock(&lod->lod_mutex);
 	lod->lod_refcount--;
 	if (lod->lod_refcount == 0 && lod->lod_death_row) {
 		struct lod_ost_desc *ost_desc, *tmp;
@@ -90,8 +90,8 @@ void lod_putref(struct lod_device *lod)
 				lod->lod_desc.ld_active_tgt_count--;
 			lod->lod_death_row--;
 		}
-		cfs_mutex_unlock(&lod->lod_mutex);
-		cfs_up_read(&lod->lod_rw_sem);
+		mutex_unlock(&lod->lod_mutex);
+		up_read(&lod->lod_rw_sem);
 
 		cfs_list_for_each_entry_safe(ost_desc, tmp, &kill, ltd_kill) {
 			int rc;
@@ -110,8 +110,8 @@ void lod_putref(struct lod_device *lod)
 			OBD_FREE_PTR(ost_desc);
 		}
 	} else {
-		cfs_mutex_unlock(&lod->lod_mutex);
-		cfs_up_read(&lod->lod_rw_sem);
+		mutex_unlock(&lod->lod_mutex);
+		up_read(&lod->lod_rw_sem);
 	}
 }
 
@@ -123,7 +123,7 @@ static int lod_bitmap_resize(struct lod_device *lod, __u32 newsize)
 
 	/* grab write reference on the lod. Relocating the array requires
 	 * exclusive access */
-	cfs_down_write(&lod->lod_rw_sem);
+	down_write(&lod->lod_rw_sem);
 
 	if (newsize <= lod->lod_osts_size)
 		/* someone else has already resize the array */
@@ -151,7 +151,7 @@ static int lod_bitmap_resize(struct lod_device *lod, __u32 newsize)
 
 	EXIT;
 out:
-	cfs_up_write(&lod->lod_rw_sem);
+	up_write(&lod->lod_rw_sem);
 	return rc;
 }
 
@@ -249,7 +249,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 		lod_getref(lod);
 	}
 
-	cfs_mutex_lock(&lod->lod_mutex);
+	mutex_lock(&lod->lod_mutex);
 	if (cfs_bitmap_check(lod->lod_ost_bitmap, index)) {
 		CERROR("%s: device %d is registered already\n", obd->obd_name,
 		       index);
@@ -287,7 +287,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 	OST_TGT(lod, index) = ost_desc;
 	cfs_bitmap_set(lod->lod_ost_bitmap, index);
 	lod->lod_ostnr++;
-	cfs_mutex_unlock(&lod->lod_mutex);
+	mutex_unlock(&lod->lod_mutex);
 	lod_putref(lod);
 
 	if (lod->lod_recovery_completed)
@@ -298,7 +298,7 @@ int lod_add_device(const struct lu_env *env, struct lod_device *lod,
 out_pool:
 	lod_ost_pool_remove(&lod->lod_pool_info, index);
 out_mutex:
-	cfs_mutex_unlock(&lod->lod_mutex);
+	mutex_unlock(&lod->lod_mutex);
 	lod_putref(lod);
 out_desc:
 	OBD_FREE_PTR(ost_desc);
@@ -358,7 +358,7 @@ int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 	obd_str2uuid(&uuid,  osp);
 
 	lod_getref(lod);
-	cfs_mutex_lock(&lod->lod_mutex);
+	mutex_lock(&lod->lod_mutex);
 	/* check that the index is allocated in the bitmap */
 	if (!cfs_bitmap_check(lod->lod_ost_bitmap, idx) || !OST_TGT(lod,idx)) {
 		CERROR("%s: device %d is not set up\n", obd->obd_name, idx);
@@ -376,7 +376,7 @@ int lod_del_device(const struct lu_env *env, struct lod_device *lod,
 	__lod_del_device(lod, idx);
 	EXIT;
 out:
-	cfs_mutex_unlock(&lod->lod_mutex);
+	mutex_unlock(&lod->lod_mutex);
 	lod_putref(lod);
 	return(rc);
 }
@@ -890,7 +890,7 @@ int lod_pools_init(struct lod_device *lod, struct lustre_cfg *lcfg)
 
 	/* Set up allocation policy (QoS and RR) */
 	CFS_INIT_LIST_HEAD(&lod->lod_qos.lq_oss_list);
-	cfs_init_rwsem(&lod->lod_qos.lq_rw_sem);
+	init_rwsem(&lod->lod_qos.lq_rw_sem);
 	lod->lod_qos.lq_dirty = 1;
 	lod->lod_qos.lq_rr.lqr_dirty = 1;
 	lod->lod_qos.lq_reset = 1;
@@ -987,10 +987,10 @@ int lod_pools_fini(struct lod_device *lod)
 	if (lod->lod_osts_size > 0) {
 		int idx;
 		lod_getref(lod);
-		cfs_mutex_lock(&lod->lod_mutex);
+		mutex_lock(&lod->lod_mutex);
 		cfs_foreach_bit(lod->lod_ost_bitmap, idx)
 			__lod_del_device(lod, idx);
-		cfs_mutex_unlock(&lod->lod_mutex);
+		mutex_unlock(&lod->lod_mutex);
 		lod_putref(lod);
 		CFS_FREE_BITMAP(lod->lod_ost_bitmap);
 		for (idx = 0; idx < OST_PTRS; idx++) {

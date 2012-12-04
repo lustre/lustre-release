@@ -80,7 +80,7 @@ struct qmt_device {
 	cfs_list_t		 qmt_reba_list;
 
 	/* lock protecting rebalancing list */
-	cfs_spinlock_t		 qmt_reba_lock;
+	spinlock_t		 qmt_reba_lock;
 
 	unsigned long		 qmt_stopping:1; /* qmt is stopping */
 
@@ -156,7 +156,7 @@ static inline struct qmt_pool_info *lqe2qpi(struct lquota_entry *lqe)
 static inline bool lqe_is_locked(struct lquota_entry *lqe)
 {
 	LASSERT(lqe_is_master(lqe));
-	if (cfs_down_write_trylock(&lqe->lqe_sem) == 0)
+	if (down_write_trylock(&lqe->lqe_sem) == 0)
 		return true;
 	lqe_write_unlock(lqe);
 	return false;

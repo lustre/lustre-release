@@ -110,9 +110,9 @@ kptllnd_setup_tx_descs()
                 if (tx == NULL)
                         return -ENOMEM;
 
-                cfs_spin_lock(&kptllnd_data.kptl_tx_lock);
+		spin_lock(&kptllnd_data.kptl_tx_lock);
                 cfs_list_add_tail(&tx->tx_list, &kptllnd_data.kptl_idle_txs);
-                cfs_spin_unlock(&kptllnd_data.kptl_tx_lock);
+		spin_unlock(&kptllnd_data.kptl_tx_lock);
         }
 
         return 0;
@@ -159,10 +159,10 @@ kptllnd_get_idle_tx(enum kptl_tx_type type)
                 return NULL;
         }
 
-        cfs_spin_lock(&kptllnd_data.kptl_tx_lock);
+	spin_lock(&kptllnd_data.kptl_tx_lock);
 
         if (cfs_list_empty (&kptllnd_data.kptl_idle_txs)) {
-                cfs_spin_unlock(&kptllnd_data.kptl_tx_lock);
+		spin_unlock(&kptllnd_data.kptl_tx_lock);
 
                 tx = kptllnd_alloc_tx();
                 if (tx == NULL)
@@ -172,7 +172,7 @@ kptllnd_get_idle_tx(enum kptl_tx_type type)
                                     kptl_tx_t, tx_list);
                 cfs_list_del(&tx->tx_list);
 
-                cfs_spin_unlock(&kptllnd_data.kptl_tx_lock);
+		spin_unlock(&kptllnd_data.kptl_tx_lock);
         }
 
         LASSERT (cfs_atomic_read(&tx->tx_refcount)== 0);
@@ -207,14 +207,14 @@ kptllnd_tx_abort_netio(kptl_tx_t *tx)
         LASSERT (cfs_atomic_read(&tx->tx_refcount) == 0);
         LASSERT (!tx->tx_active);
 
-        cfs_spin_lock_irqsave(&peer->peer_lock, flags);
+	spin_lock_irqsave(&peer->peer_lock, flags);
 
         msg_mdh = tx->tx_msg_mdh;
         rdma_mdh = tx->tx_rdma_mdh;
 
         if (PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE) &&
             PtlHandleIsEqual(rdma_mdh, PTL_INVALID_HANDLE)) {
-                cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+		spin_unlock_irqrestore(&peer->peer_lock, flags);
                 return 0;
         }
         
@@ -229,7 +229,7 @@ kptllnd_tx_abort_netio(kptl_tx_t *tx)
         tx->tx_active = 1;
         cfs_list_add_tail(&tx->tx_list, &peer->peer_activeq);
         
-        cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+	spin_unlock_irqrestore(&peer->peer_lock, flags);
 
         /* These unlinks will ensure completion events (normal or unlink) will
          * happen ASAP */
@@ -255,14 +255,14 @@ kptllnd_tx_abort_netio(kptl_tx_t *tx)
         LASSERT (cfs_atomic_read(&tx->tx_refcount) == 0);
         LASSERT (!tx->tx_active);
 
-        cfs_spin_lock_irqsave(&peer->peer_lock, flags);
+	spin_lock_irqsave(&peer->peer_lock, flags);
 
         msg_mdh = tx->tx_msg_mdh;
         rdma_mdh = tx->tx_rdma_mdh;
 
         if (PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE) &&
             PtlHandleIsEqual(rdma_mdh, PTL_INVALID_HANDLE)) {
-                cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+		spin_unlock_irqrestore(&peer->peer_lock, flags);
                 return 0;
         }
         
@@ -272,7 +272,7 @@ kptllnd_tx_abort_netio(kptl_tx_t *tx)
                  (tx->tx_lnet_msg == NULL && 
                   tx->tx_replymsg == NULL));
 
-        cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+	spin_unlock_irqrestore(&peer->peer_lock, flags);
 
         if (!PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE)) {
                 prc = PtlMDUnlink(msg_mdh);
@@ -286,7 +286,7 @@ kptllnd_tx_abort_netio(kptl_tx_t *tx)
                         rdma_mdh = PTL_INVALID_HANDLE;
         }
 
-        cfs_spin_lock_irqsave(&peer->peer_lock, flags);
+	spin_lock_irqsave(&peer->peer_lock, flags);
 
         /* update tx_???_mdh if callback hasn't fired */
         if (PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE))
@@ -301,7 +301,7 @@ kptllnd_tx_abort_netio(kptl_tx_t *tx)
 
         if (PtlHandleIsEqual(msg_mdh, PTL_INVALID_HANDLE) &&
             PtlHandleIsEqual(rdma_mdh, PTL_INVALID_HANDLE)) {
-                cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+		spin_unlock_irqrestore(&peer->peer_lock, flags);
                 return 0;
         }
 
@@ -312,7 +312,7 @@ kptllnd_tx_abort_netio(kptl_tx_t *tx)
 
         kptllnd_peer_addref(peer);              /* extra ref for me... */
 
-        cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+	spin_unlock_irqrestore(&peer->peer_lock, flags);
 
         /* This will get the watchdog thread to try aborting all the peer's
          * comms again.  NB, this deems it fair that 1 failing tx which can't
@@ -355,9 +355,9 @@ kptllnd_tx_fini (kptl_tx_t *tx)
         tx->tx_peer = NULL;
         tx->tx_idle = 1;
 
-        cfs_spin_lock(&kptllnd_data.kptl_tx_lock);
+	spin_lock(&kptllnd_data.kptl_tx_lock);
         cfs_list_add_tail(&tx->tx_list, &kptllnd_data.kptl_idle_txs);
-        cfs_spin_unlock(&kptllnd_data.kptl_tx_lock);
+	spin_unlock(&kptllnd_data.kptl_tx_lock);
 
         /* Must finalize AFTER freeing 'tx' */
         if (msg != NULL)
@@ -491,7 +491,7 @@ kptllnd_tx_callback(ptl_event_t *ev)
         if (!unlinked)
                 return;
 
-        cfs_spin_lock_irqsave(&peer->peer_lock, flags);
+	spin_lock_irqsave(&peer->peer_lock, flags);
 
         if (ismsg)
                 tx->tx_msg_mdh = PTL_INVALID_HANDLE;
@@ -501,24 +501,24 @@ kptllnd_tx_callback(ptl_event_t *ev)
         if (!PtlHandleIsEqual(tx->tx_msg_mdh, PTL_INVALID_HANDLE) ||
             !PtlHandleIsEqual(tx->tx_rdma_mdh, PTL_INVALID_HANDLE) ||
             !tx->tx_active) {
-                cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+		spin_unlock_irqrestore(&peer->peer_lock, flags);
                 return;
         }
 
         cfs_list_del(&tx->tx_list);
         tx->tx_active = 0;
 
-        cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+	spin_unlock_irqrestore(&peer->peer_lock, flags);
 
         /* drop peer's ref, but if it was the last one... */
         if (cfs_atomic_dec_and_test(&tx->tx_refcount)) {
                 /* ...finalize it in thread context! */
-                cfs_spin_lock_irqsave(&kptllnd_data.kptl_sched_lock, flags);
+		spin_lock_irqsave(&kptllnd_data.kptl_sched_lock, flags);
 
                 cfs_list_add_tail(&tx->tx_list, &kptllnd_data.kptl_sched_txq);
                 cfs_waitq_signal(&kptllnd_data.kptl_sched_waitq);
 
-                cfs_spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock,
+		spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock,
                                            flags);
         }
 }

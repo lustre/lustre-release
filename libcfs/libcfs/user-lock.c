@@ -69,44 +69,44 @@
  * No-op implementation.
  */
 
-void cfs_spin_lock_init(cfs_spinlock_t *lock)
+void spin_lock_init(spinlock_t *lock)
 {
-        LASSERT(lock != NULL);
-        (void)lock;
+	LASSERT(lock != NULL);
+	(void)lock;
 }
 
-void cfs_spin_lock(cfs_spinlock_t *lock)
+void spin_lock(spinlock_t *lock)
 {
-        (void)lock;
+	(void)lock;
 }
 
-void cfs_spin_unlock(cfs_spinlock_t *lock)
+void spin_unlock(spinlock_t *lock)
 {
-        (void)lock;
+	(void)lock;
 }
 
-int cfs_spin_trylock(cfs_spinlock_t *lock)
+int spin_trylock(spinlock_t *lock)
 {
-        (void)lock;
+	(void)lock;
 	return 1;
 }
 
-void cfs_spin_lock_bh_init(cfs_spinlock_t *lock)
+void spin_lock_bh_init(spinlock_t *lock)
 {
-        LASSERT(lock != NULL);
-        (void)lock;
+	LASSERT(lock != NULL);
+	(void)lock;
 }
 
-void cfs_spin_lock_bh(cfs_spinlock_t *lock)
+void spin_lock_bh(spinlock_t *lock)
 {
-        LASSERT(lock != NULL);
-        (void)lock;
+	LASSERT(lock != NULL);
+	(void)lock;
 }
 
-void cfs_spin_unlock_bh(cfs_spinlock_t *lock)
+void spin_unlock_bh(spinlock_t *lock)
 {
-        LASSERT(lock != NULL);
-        (void)lock;
+	LASSERT(lock != NULL);
+	(void)lock;
 }
 
 /*
@@ -117,30 +117,30 @@ void cfs_spin_unlock_bh(cfs_spinlock_t *lock)
  * - __up(x)
  */
 
-void cfs_sema_init(cfs_semaphore_t *s, int val)
+void sema_init(struct semaphore *s, int val)
 {
-        LASSERT(s != NULL);
-        (void)s;
-        (void)val;
+	LASSERT(s != NULL);
+	(void)s;
+	(void)val;
 }
 
-void __down(cfs_semaphore_t *s)
+void __down(struct semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 }
 
-int __down_interruptible(cfs_semaphore_t *s)
+int __down_interruptible(struct semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
-        return 0;
+	LASSERT(s != NULL);
+	(void)s;
+	return 0;
 }
 
-void __up(cfs_semaphore_t *s)
+void __up(struct semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 }
 
 
@@ -152,51 +152,51 @@ void __up(cfs_semaphore_t *s)
  * - wait_for_completion(c)
  */
 
-static cfs_wait_handler_t wait_handler;
+static wait_handler_t wait_handler;
 
-void cfs_init_completion_module(cfs_wait_handler_t handler)
+void init_completion_module(wait_handler_t handler)
 {
-        wait_handler = handler;
+	wait_handler = handler;
 }
 
-int cfs_call_wait_handler(int timeout)
+int call_wait_handler(int timeout)
 {
-        if (!wait_handler)
-                return -ENOSYS;
-        return wait_handler(timeout);
+	if (!wait_handler)
+		return -ENOSYS;
+	return wait_handler(timeout);
 }
 
-void cfs_init_completion(cfs_completion_t *c)
+void init_completion(struct completion *c)
 {
-        LASSERT(c != NULL);
-        c->done = 0;
-        cfs_waitq_init(&c->wait);
+	LASSERT(c != NULL);
+	c->done = 0;
+	cfs_waitq_init(&c->wait);
 }
 
-void cfs_complete(cfs_completion_t *c)
+void complete(struct completion *c)
 {
-        LASSERT(c != NULL);
-        c->done  = 1;
-        cfs_waitq_signal(&c->wait);
+	LASSERT(c != NULL);
+	c->done  = 1;
+	cfs_waitq_signal(&c->wait);
 }
 
-void cfs_wait_for_completion(cfs_completion_t *c)
+void wait_for_completion(struct completion *c)
 {
-        LASSERT(c != NULL);
-        do {
-                if (cfs_call_wait_handler(1000) < 0)
-                        break;
-        } while (c->done == 0);
+	LASSERT(c != NULL);
+	do {
+		if (call_wait_handler(1000) < 0)
+			break;
+	} while (c->done == 0);
 }
 
-int cfs_wait_for_completion_interruptible(cfs_completion_t *c)
+int wait_for_completion_interruptible(struct completion *c)
 {
-        LASSERT(c != NULL);
-        do {
-                if (cfs_call_wait_handler(1000) < 0)
-                        break;
-        } while (c->done == 0);
-        return 0;
+	LASSERT(c != NULL);
+	do {
+		if (call_wait_handler(1000) < 0)
+			break;
+	} while (c->done == 0);
+	return 0;
 }
 
 /*
@@ -210,54 +210,54 @@ int cfs_wait_for_completion_interruptible(cfs_completion_t *c)
  * - up_write(x)
  */
 
-void cfs_init_rwsem(cfs_rw_semaphore_t *s)
+void init_rwsem(struct rw_semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 }
 
-void cfs_down_read(cfs_rw_semaphore_t *s)
+void down_read(struct rw_semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 }
 
-int cfs_down_read_trylock(cfs_rw_semaphore_t *s)
+int down_read_trylock(struct rw_semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 	return 1;
 }
 
-void cfs_down_write(cfs_rw_semaphore_t *s)
+void down_write(struct rw_semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 }
 
-int cfs_down_write_trylock(cfs_rw_semaphore_t *s)
+int down_write_trylock(struct rw_semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 	return 1;
 }
 
-void cfs_up_read(cfs_rw_semaphore_t *s)
+void up_read(struct rw_semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 }
 
-void cfs_up_write(cfs_rw_semaphore_t *s)
+void up_write(struct rw_semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 }
 
-void cfs_fini_rwsem(cfs_rw_semaphore_t *s)
+void fini_rwsem(struct rw_semaphore *s)
 {
-        LASSERT(s != NULL);
-        (void)s;
+	LASSERT(s != NULL);
+	(void)s;
 }
 
 #ifdef HAVE_LIBPTHREAD
@@ -266,7 +266,7 @@ void cfs_fini_rwsem(cfs_rw_semaphore_t *s)
  * Multi-threaded user space completion
  */
 
-void cfs_mt_init_completion(cfs_mt_completion_t *c)
+void mt_init_completion(mt_completion_t *c)
 {
         LASSERT(c != NULL);
         c->c_done = 0;
@@ -274,14 +274,14 @@ void cfs_mt_init_completion(cfs_mt_completion_t *c)
         pthread_cond_init(&c->c_cond, NULL);
 }
 
-void cfs_mt_fini_completion(cfs_mt_completion_t *c)
+void mt_fini_completion(mt_completion_t *c)
 {
         LASSERT(c != NULL);
         pthread_mutex_destroy(&c->c_mut);
         pthread_cond_destroy(&c->c_cond);
 }
 
-void cfs_mt_complete(cfs_mt_completion_t *c)
+void mt_complete(mt_completion_t *c)
 {
         LASSERT(c != NULL);
         pthread_mutex_lock(&c->c_mut);
@@ -290,7 +290,7 @@ void cfs_mt_complete(cfs_mt_completion_t *c)
         pthread_mutex_unlock(&c->c_mut);
 }
 
-void cfs_mt_wait_for_completion(cfs_mt_completion_t *c)
+void mt_wait_for_completion(mt_completion_t *c)
 {
         LASSERT(c != NULL);
         pthread_mutex_lock(&c->c_mut);
@@ -306,7 +306,7 @@ void cfs_mt_wait_for_completion(cfs_mt_completion_t *c)
 
 static pthread_mutex_t atomic_guard_lock = PTHREAD_MUTEX_INITIALIZER;
 
-int cfs_mt_atomic_read(cfs_mt_atomic_t *a)
+int mt_atomic_read(mt_atomic_t *a)
 {
         int r;
 
@@ -316,14 +316,14 @@ int cfs_mt_atomic_read(cfs_mt_atomic_t *a)
         return r;
 }
 
-void cfs_mt_atomic_set(cfs_mt_atomic_t *a, int b)
+void mt_atomic_set(mt_atomic_t *a, int b)
 {
         pthread_mutex_lock(&atomic_guard_lock);
         a->counter = b;
         pthread_mutex_unlock(&atomic_guard_lock);
 }
 
-int cfs_mt_atomic_dec_and_test(cfs_mt_atomic_t *a)
+int mt_atomic_dec_and_test(mt_atomic_t *a)
 {
         int r;
 
@@ -333,20 +333,20 @@ int cfs_mt_atomic_dec_and_test(cfs_mt_atomic_t *a)
         return (r == 0);
 }
 
-void cfs_mt_atomic_inc(cfs_mt_atomic_t *a)
+void mt_atomic_inc(mt_atomic_t *a)
 {
         pthread_mutex_lock(&atomic_guard_lock);
         ++a->counter;
         pthread_mutex_unlock(&atomic_guard_lock);
 }
 
-void cfs_mt_atomic_dec(cfs_mt_atomic_t *a)
+void mt_atomic_dec(mt_atomic_t *a)
 {
         pthread_mutex_lock(&atomic_guard_lock);
         --a->counter;
         pthread_mutex_unlock(&atomic_guard_lock);
 }
-void cfs_mt_atomic_add(int b, cfs_mt_atomic_t *a)
+void mt_atomic_add(int b, mt_atomic_t *a)
 
 {
         pthread_mutex_lock(&atomic_guard_lock);
@@ -354,7 +354,7 @@ void cfs_mt_atomic_add(int b, cfs_mt_atomic_t *a)
         pthread_mutex_unlock(&atomic_guard_lock);
 }
 
-void cfs_mt_atomic_sub(int b, cfs_mt_atomic_t *a)
+void mt_atomic_sub(int b, mt_atomic_t *a)
 {
         pthread_mutex_lock(&atomic_guard_lock);
         a->counter -= b;

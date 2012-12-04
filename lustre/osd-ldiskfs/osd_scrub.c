@@ -238,7 +238,7 @@ static int osd_scrub_prep(struct osd_device *dev)
 	int		      rc;
 	ENTRY;
 
-	cfs_down_write(&scrub->os_rwsem);
+	down_write(&scrub->os_rwsem);
 	if (flags & SS_SET_FAILOUT)
 		sf->sf_param |= SP_FAILOUT;
 
@@ -273,12 +273,12 @@ static int osd_scrub_prep(struct osd_device *dev)
 	sf->sf_time_last_checkpoint = sf->sf_time_latest_start;
 	rc = osd_scrub_file_store(scrub);
 	if (rc == 0) {
-		cfs_spin_lock(&scrub->os_lock);
+		spin_lock(&scrub->os_lock);
 		thread_set_flags(thread, SVC_RUNNING);
-		cfs_spin_unlock(&scrub->os_lock);
+		spin_unlock(&scrub->os_lock);
 		cfs_waitq_broadcast(&thread->t_ctl_waitq);
 	}
-	cfs_up_write(&scrub->os_rwsem);
+	up_write(&scrub->os_rwsem);
 
 	RETURN(rc);
 }
@@ -289,13 +289,13 @@ osd_scrub_error(struct osd_device *dev, struct osd_inode_id *lid, int rc)
 	struct osd_scrub  *scrub = &dev->od_scrub;
 	struct scrub_file *sf    = &scrub->os_file;
 
-	cfs_down_write(&scrub->os_rwsem);
+	down_write(&scrub->os_rwsem);
 	scrub->os_new_checked++;
 	sf->sf_items_failed++;
 	if (sf->sf_pos_first_inconsistent == 0 ||
 	    sf->sf_pos_first_inconsistent > lid->oii_ino)
 		sf->sf_pos_first_inconsistent = lid->oii_ino;
-	cfs_up_write(&scrub->os_rwsem);
+	up_write(&scrub->os_rwsem);
 	return sf->sf_param & SP_FAILOUT ? rc : 0;
 }
 
@@ -324,7 +324,7 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 		oii = cfs_list_entry(oic, struct osd_inconsistent_item,
 				     oii_cache);
 
-	cfs_down_write(&scrub->os_rwsem);
+	down_write(&scrub->os_rwsem);
 	scrub->os_new_checked++;
 	if (lid->oii_ino < sf->sf_pos_latest_start && oii == NULL)
 		GOTO(out, rc = 0);
@@ -348,9 +348,9 @@ iget:
 		}
 
 		/* Prevent the inode to be unlinked during OI scrub. */
-		cfs_mutex_lock(&inode->i_mutex);
+		mutex_lock(&inode->i_mutex);
 		if (unlikely(inode->i_nlink == 0)) {
-			cfs_mutex_unlock(&inode->i_mutex);
+			mutex_unlock(&inode->i_mutex);
 			iput(inode);
 			GOTO(out, rc = 0);
 		}
@@ -416,17 +416,17 @@ out:
 	}
 
 	if (ops == DTO_INDEX_INSERT) {
-		cfs_mutex_unlock(&inode->i_mutex);
+		mutex_unlock(&inode->i_mutex);
 		iput(inode);
 	}
-	cfs_up_write(&scrub->os_rwsem);
+	up_write(&scrub->os_rwsem);
 
 	if (oii != NULL) {
 		LASSERT(!cfs_list_empty(&oii->oii_list));
 
-		cfs_spin_lock(&scrub->os_lock);
+		spin_lock(&scrub->os_lock);
 		cfs_list_del_init(&oii->oii_list);
-		cfs_spin_unlock(&scrub->os_lock);
+		spin_unlock(&scrub->os_lock);
 		OBD_FREE_PTR(oii);
 	}
 	RETURN(sf->sf_param & SP_FAILOUT ? rc : 0);
@@ -438,7 +438,7 @@ static int do_osd_scrub_checkpoint(struct osd_scrub *scrub)
 	int		   rc;
 	ENTRY;
 
-	cfs_down_write(&scrub->os_rwsem);
+	down_write(&scrub->os_rwsem);
 	sf->sf_items_checked += scrub->os_new_checked;
 	scrub->os_new_checked = 0;
 	sf->sf_pos_last_checkpoint = scrub->os_pos_current;
@@ -446,7 +446,7 @@ static int do_osd_scrub_checkpoint(struct osd_scrub *scrub)
 	sf->sf_run_time += cfs_duration_sec(cfs_time_current() + HALF_SEC -
 					    scrub->os_time_last_checkpoint);
 	rc = osd_scrub_file_store(scrub);
-	cfs_up_write(&scrub->os_rwsem);
+	up_write(&scrub->os_rwsem);
 
 	RETURN(rc);
 }
@@ -465,10 +465,10 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 	struct scrub_file *sf = &scrub->os_file;
 	ENTRY;
 
-	cfs_down_write(&scrub->os_rwsem);
-	cfs_spin_lock(&scrub->os_lock);
+	down_write(&scrub->os_rwsem);
+	spin_lock(&scrub->os_lock);
 	thread_set_flags(&scrub->os_thread, SVC_STOPPING);
-	cfs_spin_unlock(&scrub->os_lock);
+	spin_unlock(&scrub->os_lock);
 	if (scrub->os_new_checked > 0) {
 		sf->sf_items_checked += scrub->os_new_checked;
 		scrub->os_new_checked = 0;
@@ -496,7 +496,7 @@ static void osd_scrub_post(struct osd_scrub *scrub, int result)
 		CERROR("%.16s: fail to osd_scrub_post, rc = %d\n",
 		       LDISKFS_SB(osd_scrub2sb(scrub))->s_es->s_volume_name,
 		       result);
-	cfs_up_write(&scrub->os_rwsem);
+	up_write(&scrub->os_rwsem);
 
 	EXIT;
 }
@@ -596,9 +596,9 @@ static int osd_scrub_next(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_OSD_SCRUB_CRASH)) {
-		cfs_spin_lock(&scrub->os_lock);
+		spin_lock(&scrub->os_lock);
 		thread_set_flags(thread, SVC_STOPPING);
-		cfs_spin_unlock(&scrub->os_lock);
+		spin_unlock(&scrub->os_lock);
 		return SCRUB_NEXT_CRASH;
 	}
 
@@ -703,10 +703,10 @@ static int osd_scrub_exec(struct osd_thread_info *info, struct osd_device *dev,
 	}
 
 	if (items != NULL) {
-		cfs_down_write(&scrub->os_rwsem);
+		down_write(&scrub->os_rwsem);
 		scrub->os_new_checked++;
 		(*items)++;
-		cfs_up_write(&scrub->os_rwsem);
+		up_write(&scrub->os_rwsem);
 		goto next;
 	}
 
@@ -925,10 +925,10 @@ out:
 	lu_env_fini(&env);
 
 noenv:
-	cfs_spin_lock(&scrub->os_lock);
+	spin_lock(&scrub->os_lock);
 	thread_set_flags(thread, SVC_STOPPED);
 	cfs_waitq_broadcast(&thread->t_ctl_waitq);
-	cfs_spin_unlock(&scrub->os_lock);
+	spin_unlock(&scrub->os_lock);
 	return rc;
 }
 
@@ -942,18 +942,18 @@ static int do_osd_scrub_start(struct osd_device *dev, __u32 flags)
 
 again:
 	/* os_lock: sync status between stop and scrub thread */
-	cfs_spin_lock(&scrub->os_lock);
+	spin_lock(&scrub->os_lock);
 	if (thread_is_running(thread)) {
-		cfs_spin_unlock(&scrub->os_lock);
+		spin_unlock(&scrub->os_lock);
 		RETURN(-EALREADY);
 	} else if (unlikely(thread_is_stopping(thread))) {
-		cfs_spin_unlock(&scrub->os_lock);
+		spin_unlock(&scrub->os_lock);
 		l_wait_event(thread->t_ctl_waitq,
 			     thread_is_stopped(thread),
 			     &lwi);
 		goto again;
 	}
-	cfs_spin_unlock(&scrub->os_lock);
+	spin_unlock(&scrub->os_lock);
 
 	if (scrub->os_file.sf_status == SS_COMPLETED)
 		flags |= SS_RESET;
@@ -980,9 +980,9 @@ int osd_scrub_start(struct osd_device *dev)
 	ENTRY;
 
 	/* od_otable_mutex: prevent curcurrent start/stop */
-	cfs_mutex_lock(&dev->od_otable_mutex);
+	mutex_lock(&dev->od_otable_mutex);
 	rc = do_osd_scrub_start(dev, SS_AUTO);
-	cfs_mutex_unlock(&dev->od_otable_mutex);
+	mutex_unlock(&dev->od_otable_mutex);
 
 	RETURN(rc == -EALREADY ? 0 : rc);
 }
@@ -993,28 +993,28 @@ static void do_osd_scrub_stop(struct osd_scrub *scrub)
 	struct l_wait_info    lwi    = { 0 };
 
 	/* os_lock: sync status between stop and scrub thread */
-	cfs_spin_lock(&scrub->os_lock);
+	spin_lock(&scrub->os_lock);
 	if (!thread_is_init(thread) && !thread_is_stopped(thread)) {
 		thread_set_flags(thread, SVC_STOPPING);
-		cfs_spin_unlock(&scrub->os_lock);
+		spin_unlock(&scrub->os_lock);
 		cfs_waitq_broadcast(&thread->t_ctl_waitq);
 		l_wait_event(thread->t_ctl_waitq,
 			     thread_is_stopped(thread),
 			     &lwi);
 		/* Do not skip the last lock/unlock, which can guarantee that
 		 * the caller cannot return until the OI scrub thread exit. */
-		cfs_spin_lock(&scrub->os_lock);
+		spin_lock(&scrub->os_lock);
 	}
-	cfs_spin_unlock(&scrub->os_lock);
+	spin_unlock(&scrub->os_lock);
 }
 
 static void osd_scrub_stop(struct osd_device *dev)
 {
 	/* od_otable_mutex: prevent curcurrent start/stop */
-	cfs_mutex_lock(&dev->od_otable_mutex);
+	mutex_lock(&dev->od_otable_mutex);
 	dev->od_scrub.os_paused = 1;
 	do_osd_scrub_stop(&dev->od_scrub);
-	cfs_mutex_unlock(&dev->od_otable_mutex);
+	mutex_unlock(&dev->od_otable_mutex);
 }
 
 static const char osd_scrub_name[] = "OI_scrub";
@@ -1043,8 +1043,8 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	ctxt->fs = get_ds();
 
 	cfs_waitq_init(&scrub->os_thread.t_ctl_waitq);
-	cfs_init_rwsem(&scrub->os_rwsem);
-	cfs_spin_lock_init(&scrub->os_lock);
+	init_rwsem(&scrub->os_rwsem);
+	spin_lock_init(&scrub->os_lock);
 	CFS_INIT_LIST_HEAD(&scrub->os_inconsistent_items);
 
 	push_ctxt(&saved, ctxt, NULL);
@@ -1149,7 +1149,7 @@ static struct dt_it *osd_otable_it_init(const struct lu_env *env,
 	ENTRY;
 
 	/* od_otable_mutex: prevent curcurrent init/fini */
-	cfs_mutex_lock(&dev->od_otable_mutex);
+	mutex_lock(&dev->od_otable_mutex);
 	if (dev->od_otable_it != NULL)
 		GOTO(out, it = ERR_PTR(-EALREADY));
 
@@ -1187,7 +1187,7 @@ static struct dt_it *osd_otable_it_init(const struct lu_env *env,
 	GOTO(out, it);
 
 out:
-	cfs_mutex_unlock(&dev->od_otable_mutex);
+	mutex_unlock(&dev->od_otable_mutex);
 	return (struct dt_it *)it;
 }
 
@@ -1197,12 +1197,12 @@ static void osd_otable_it_fini(const struct lu_env *env, struct dt_it *di)
 	struct osd_device    *dev = it->ooi_dev;
 
 	/* od_otable_mutex: prevent curcurrent init/fini */
-	cfs_mutex_lock(&dev->od_otable_mutex);
+	mutex_lock(&dev->od_otable_mutex);
 	do_osd_scrub_stop(&dev->od_scrub);
 	LASSERT(dev->od_otable_it == it);
 
 	dev->od_otable_it = NULL;
-	cfs_mutex_unlock(&dev->od_otable_mutex);
+	mutex_unlock(&dev->od_otable_mutex);
 	OBD_FREE_PTR(it);
 }
 
@@ -1214,9 +1214,9 @@ static void osd_otable_it_put(const struct lu_env *env, struct dt_it *di)
 	struct osd_device *dev = ((struct osd_otable_it *)di)->ooi_dev;
 
 	/* od_otable_mutex: prevent curcurrent init/fini */
-	cfs_mutex_lock(&dev->od_otable_mutex);
+	mutex_lock(&dev->od_otable_mutex);
 	dev->od_scrub.os_paused = 1;
-	cfs_mutex_unlock(&dev->od_otable_mutex);
+	mutex_unlock(&dev->od_otable_mutex);
 }
 
 /**
@@ -1405,9 +1405,9 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 	oii->oii_cache = *oic;
 	oii->oii_insert = insert;
 
-	cfs_spin_lock(&scrub->os_lock);
+	spin_lock(&scrub->os_lock);
 	if (unlikely(!thread_is_running(thread))) {
-		cfs_spin_unlock(&scrub->os_lock);
+		spin_unlock(&scrub->os_lock);
 		OBD_FREE_PTR(oii);
 		RETURN(-EAGAIN);
 	}
@@ -1415,7 +1415,7 @@ int osd_oii_insert(struct osd_device *dev, struct osd_idmap_cache *oic,
 	if (cfs_list_empty(&scrub->os_inconsistent_items))
 		wakeup = 1;
 	cfs_list_add_tail(&oii->oii_list, &scrub->os_inconsistent_items);
-	cfs_spin_unlock(&scrub->os_lock);
+	spin_unlock(&scrub->os_lock);
 
 	if (wakeup != 0)
 		cfs_waitq_broadcast(&thread->t_ctl_waitq);
@@ -1430,15 +1430,15 @@ int osd_oii_lookup(struct osd_device *dev, const struct lu_fid *fid,
 	struct osd_inconsistent_item *oii;
 	ENTRY;
 
-	cfs_spin_lock(&scrub->os_lock);
+	spin_lock(&scrub->os_lock);
 	cfs_list_for_each_entry(oii, &scrub->os_inconsistent_items, oii_list) {
 		if (lu_fid_eq(fid, &oii->oii_cache.oic_fid)) {
 			*id = oii->oii_cache.oic_lid;
-			cfs_spin_unlock(&scrub->os_lock);
+			spin_unlock(&scrub->os_lock);
 			RETURN(0);
 		}
 	}
-	cfs_spin_unlock(&scrub->os_lock);
+	spin_unlock(&scrub->os_lock);
 
 	RETURN(-ENOENT);
 }
@@ -1538,7 +1538,7 @@ int osd_scrub_dump(struct osd_device *dev, char *buf, int len)
 	int		   ret     = -ENOSPC;
 	int		   rc;
 
-	cfs_down_read(&scrub->os_rwsem);
+	down_read(&scrub->os_rwsem);
 	rc = snprintf(buf, len,
 		      "name: OI scrub\n"
 		      "magic: 0x%x\n"
@@ -1644,6 +1644,6 @@ int osd_scrub_dump(struct osd_device *dev, char *buf, int len)
 	ret = save - len;
 
 out:
-	cfs_up_read(&scrub->os_rwsem);
+	up_read(&scrub->os_rwsem);
 	return ret;
 }

@@ -108,7 +108,7 @@ struct fsfilt_operations {
         int     (* fs_map_inode_pages)(struct inode *inode, struct page **page,
                                        int pages, unsigned long *blocks,
                                        int *created, int create,
-                                       cfs_mutex_t *sem);
+				       struct mutex *sem);
         int     (* fs_write_record)(struct file *, void *, int size, loff_t *,
                                     int force_sync);
         int     (* fs_read_record)(struct file *, void *, int size, loff_t *);
@@ -406,7 +406,7 @@ static inline int fsfilt_map_inode_pages(struct obd_device *obd,
                                          struct inode *inode,
                                          struct page **page, int pages,
                                          unsigned long *blocks, int *created,
-                                         int create, cfs_mutex_t *mutex)
+					 int create, struct mutex *mutex)
 {
         return obd->obd_fsops->fs_map_inode_pages(inode, page, pages, blocks,
                                                   created, create, mutex);

@@ -271,7 +271,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
         if (libcfs_catastrophe)
                 rc += snprintf(page + rc, count - rc, "LBUG\n");
 
-        cfs_read_lock(&obd_dev_lock);
+	read_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd;
 
@@ -284,7 +284,7 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                         continue;
 
                 class_incref(obd, __FUNCTION__, cfs_current());
-                cfs_read_unlock(&obd_dev_lock);
+		read_unlock(&obd_dev_lock);
 
                 if (obd_health_check(NULL, obd)) {
                         rc += snprintf(page + rc, count - rc,
@@ -292,9 +292,9 @@ static int obd_proc_read_health(char *page, char **start, off_t off,
                                        obd->obd_name);
                 }
                 class_decref(obd, __FUNCTION__, cfs_current());
-                cfs_read_lock(&obd_dev_lock);
+		read_lock(&obd_dev_lock);
         }
-        cfs_read_unlock(&obd_dev_lock);
+	read_unlock(&obd_dev_lock);
 
         if (rc == 0)
                 return snprintf(page, count, "healthy\n");

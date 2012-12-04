@@ -58,7 +58,7 @@
  *  spinlock & event definitions
  */
 
-typedef struct cfs_spin_lock cfs_spinlock_t;
+typedef struct spin_lock spinlock_t;
 
 /* atomic */
 
@@ -86,7 +86,7 @@ int FASTCALL cfs_atomic_sub_return(int i, cfs_atomic_t *v);
 #define cfs_atomic_inc_return(v)  cfs_atomic_add_return(1, v)
 #define cfs_atomic_dec_return(v)  cfs_atomic_sub_return(1, v)
 
-int FASTCALL cfs_atomic_dec_and_lock(cfs_atomic_t *v, cfs_spinlock_t *lock);
+int FASTCALL cfs_atomic_dec_and_lock(cfs_atomic_t *v, spinlock_t *lock);
 
 /* event */
 
@@ -213,43 +213,43 @@ cfs_clear_event(event_t * event)
  *
  */
 
-struct cfs_spin_lock {
-    KSPIN_LOCK lock;
-    KIRQL      irql;
+struct spin_lock {
+	KSPIN_LOCK	lock;
+	KIRQL		irql;
 };
 
-#define CFS_DECL_SPIN(name)  cfs_spinlock_t name;
-#define CFS_DECL_SPIN_EXTERN(name)  extern cfs_spinlock_t name;
+#define CFS_DECL_SPIN(name)		spinlock_t name;
+#define CFS_DECL_SPIN_EXTERN(name)	extern spinlock_t name;
 
 #define DEFINE_SPINLOCK {0}
 
-static inline void cfs_spin_lock_init(cfs_spinlock_t *lock)
+static inline void spin_lock_init(spinlock_t *lock)
 {
-    KeInitializeSpinLock(&(lock->lock));
+	KeInitializeSpinLock(&(lock->lock));
 }
 
-static inline void cfs_spin_lock(cfs_spinlock_t *lock)
+static inline void spin_lock(spinlock_t *lock)
 {
-    KeAcquireSpinLock(&(lock->lock), &(lock->irql));
+	KeAcquireSpinLock(&(lock->lock), &(lock->irql));
 }
 
-static inline void cfs_spin_lock_nested(cfs_spinlock_t *lock, unsigned subclass)
+static inline void spin_lock_nested(spinlock_t *lock, unsigned subclass)
 {
-    KeAcquireSpinLock(&(lock->lock), &(lock->irql));
+	KeAcquireSpinLock(&(lock->lock), &(lock->irql));
 }
 
-static inline void cfs_spin_unlock(cfs_spinlock_t *lock)
+static inline void spin_unlock(spinlock_t *lock)
 {
-    KIRQL       irql = lock->irql;
-    KeReleaseSpinLock(&(lock->lock), irql);
+	KIRQL	irql = lock->irql;
+	KeReleaseSpinLock(&(lock->lock), irql);
 }
 
 
-#define cfs_spin_lock_irqsave(lock, flags)  \
-do {(flags) = 0; cfs_spin_lock(lock);} while(0)
+#define spin_lock_irqsave(lock, flags)  \
+	do { (flags) = 0; spin_lock(lock); } while (0)
 
-#define cfs_spin_unlock_irqrestore(lock, flags) \
-do {cfs_spin_unlock(lock);} while(0)
+#define spin_unlock_irqrestore(lock, flags) \
+	do { spin_unlock(lock); } while (0)
 
 
 /* There's no  corresponding routine in windows kernel.
@@ -259,78 +259,78 @@ do {cfs_spin_unlock(lock);} while(0)
 
 extern int libcfs_mp_system;
 
-static int cfs_spin_trylock(cfs_spinlock_t *lock)
+static int spin_trylock(spinlock_t *lock)
 {
-    KIRQL   Irql;
-    int     rc = 0;
+	KIRQL   Irql;
+	int     rc = 0;
 
-    ASSERT(lock != NULL);
+	ASSERT(lock != NULL);
 
-    KeRaiseIrql(DISPATCH_LEVEL, &Irql);
+	KeRaiseIrql(DISPATCH_LEVEL, &Irql);
 
-    if (libcfs_mp_system) {
-        if (0 == (ulong_ptr_t)lock->lock) {
+	if (libcfs_mp_system) {
+		if (0 == (ulong_ptr_t)lock->lock) {
 #if _X86_
-            __asm {
-                mov  edx, dword ptr [ebp + 8]
-                lock bts dword ptr[edx], 0
-                jb   lock_failed
-                mov  rc, TRUE
-            lock_failed:
-            }
+			__asm {
+				mov  edx, dword ptr [ebp + 8]
+				lock bts dword ptr[edx], 0
+				jb   lock_failed
+				mov  rc, TRUE
+				lock_failed:
+			}
 #else
-        KdBreakPoint();
+			KdBreakPoint();
 #endif
 
-        }
-    } else {
-        rc = TRUE;
-    }
+		}
+	} else {
+		rc = TRUE;
+	}
 
-    if (rc) {
-        lock->irql = Irql;
-    } else {
-        KeLowerIrql(Irql);
-    }
+	if (rc) {
+		lock->irql = Irql;
+	} else {
+		KeLowerIrql(Irql);
+	}
 
-    return rc;
+	return rc;
 }
 
-static int cfs_spin_is_locked(cfs_spinlock_t *lock)
+static int spin_is_locked(spinlock_t *lock)
 {
 #if _WIN32_WINNT >= 0x502
-    /* KeTestSpinLock only avalilable on 2k3 server or later */
-    return (!KeTestSpinLock(&lock->lock));
+	/* KeTestSpinLock only avalilable on 2k3 server or later */
+	return !KeTestSpinLock(&lock->lock);
 #else
-    return (int) (lock->lock);
+	return (int) (lock->lock);
 #endif
 }
 
 /* synchronization between cpus: it will disable all DPCs
    kernel task scheduler on the CPU */
-#define cfs_spin_lock_bh(x)		    cfs_spin_lock(x)
-#define cfs_spin_unlock_bh(x)	    cfs_spin_unlock(x)
-#define cfs_spin_lock_bh_init(x)	cfs_spin_lock_init(x)
+#define spin_lock_bh(x)		spin_lock(x)
+#define spin_unlock_bh(x)	spin_unlock(x)
+#define spin_lock_bh_init(x)	spin_lock_init(x)
 
 /*
- * cfs_rw_semaphore (using ERESOURCE)
+ * rw_semaphore (using ERESOURCE)
  */
 
 
-typedef struct cfs_rw_semaphore {
-    ERESOURCE   rwsem;
-} cfs_rw_semaphore_t;
+struct rw_semaphore {
+	ERESOURCE	rwsem;
+};
 
 
-#define CFS_DECLARE_RWSEM(name) cfs_rw_semaphore_t name
-#define CFS_DECLARE_RWSEM_EXTERN(name) extern cfs_rw_semaphore_t name
+#define DECLARE_RWSEM(name) struct rw_semaphore name
+#define CFS_DECLARE_RWSEM_EXTERN(name) extern struct rw_semaphore name
 
 /*
- * cfs_init_rwsem
- *   To initialize the the cfs_rw_semaphore_t structure
+ * init_rwsem
+ *   To initialize the the rw_semaphore structure
  *
  * Arguments:
- *   rwsem:  pointer to the cfs_rw_semaphore_t structure
+ *   rwsem:  pointer to the rw_semaphore structure
  *
  * Return Value:
  *   N/A
@@ -339,18 +339,18 @@ typedef struct cfs_rw_semaphore {
  *   N/A
  */
 
-static inline void cfs_init_rwsem(cfs_rw_semaphore_t *s)
+static inline void init_rwsem(struct rw_semaphore *s)
 {
 	ExInitializeResourceLite(&s->rwsem);
 }
-#define rwsem_init cfs_init_rwsem
+#define rwsem_init init_rwsem
 
 /*
- * cfs_fini_rwsem
- *   To finilize/destroy the the cfs_rw_semaphore_t structure
+ * fini_rwsem
+ *   To finilize/destroy the the rw_semaphore structure
  *
  * Arguments:
- *   rwsem:  pointer to the cfs_rw_semaphore_t structure
+ *   rwsem:  pointer to the rw_semaphore structure
  *
  * Return Value:
  *   N/A
@@ -360,17 +360,17 @@ static inline void cfs_init_rwsem(cfs_rw_semaphore_t *s)
  *   Just define it NULL for other systems.
  */
 
-static inline void cfs_fini_rwsem(cfs_rw_semaphore_t *s)
+static inline void fini_rwsem(struct rw_semaphore *s)
 {
-    ExDeleteResourceLite(&s->rwsem);
+	ExDeleteResourceLite(&s->rwsem);
 }
 
 /*
- * cfs_down_read
- *   To acquire read-lock of the cfs_rw_semaphore
+ * down_read
+ *   To acquire read-lock of the rw_semaphore
  *
  * Arguments:
- *   rwsem:  pointer to the cfs_rw_semaphore_t structure
+ *   rwsem:  pointer to the struct rw_semaphore
  *
  * Return Value:
  *   N/A
@@ -379,19 +379,19 @@ static inline void cfs_fini_rwsem(cfs_rw_semaphore_t *s)
  *   N/A
  */
 
-static inline void cfs_down_read(cfs_rw_semaphore_t *s)
+static inline void down_read(struct rw_semaphore *s)
 {
 	ExAcquireResourceSharedLite(&s->rwsem, TRUE);
 }
-#define cfs_down_read_nested cfs_down_read
+#define down_read_nested down_read
 
 
 /*
- * cfs_down_read_trylock
- *   To acquire read-lock of the cfs_rw_semaphore without blocking
+ * down_read_trylock
+ *   To acquire read-lock of the rw_semaphore without blocking
  *
  * Arguments:
- *   rwsem:  pointer to the cfs_rw_semaphore_t structure
+ *   rwsem:  pointer to the struct rw_semaphore
  *
  * Return Value:
  *   Zero: failed to acquire the read lock
@@ -401,18 +401,18 @@ static inline void cfs_down_read(cfs_rw_semaphore_t *s)
  *   This routine will return immediately without waiting.
  */
 
-static inline int cfs_down_read_trylock(cfs_rw_semaphore_t *s)
+static inline int down_read_trylock(struct rw_semaphore *s)
 {
 	return ExAcquireResourceSharedLite(&s->rwsem, FALSE);
 }
 
 
 /*
- * cfs_down_write
- *   To acquire write-lock of the cfs_rw_semaphore
+ * down_write
+ *   To acquire write-lock of the struct rw_semaphore
  *
  * Arguments:
- *   rwsem:  pointer to the cfs_rw_semaphore_t structure
+ *   rwsem:  pointer to the struct rw_semaphore
  *
  * Return Value:
  *   N/A
@@ -421,18 +421,18 @@ static inline int cfs_down_read_trylock(cfs_rw_semaphore_t *s)
  *   N/A
  */
 
-static inline void cfs_down_write(cfs_rw_semaphore_t *s)
+static inline void down_write(struct rw_semaphore *s)
 {
 	ExAcquireResourceExclusiveLite(&(s->rwsem), TRUE);
 }
-#define cfs_down_write_nested cfs_down_write
+#define down_write_nested down_write
 
 /*
  * down_write_trylock
- *   To acquire write-lock of the cfs_rw_semaphore without blocking
+ *   To acquire write-lock of the rw_semaphore without blocking
  *
  * Arguments:
- *   rwsem:  pointer to the cfs_rw_semaphore_t structure
+ *   rwsem:  pointer to the struct rw_semaphore
  *
  * Return Value:
  *   Zero: failed to acquire the write lock
@@ -442,18 +442,18 @@ static inline void cfs_down_write(cfs_rw_semaphore_t *s)
  *   This routine will return immediately without waiting.
  */
 
-static inline int cfs_down_write_trylock(cfs_rw_semaphore_t *s)
+static inline int down_write_trylock(struct rw_semaphore *s)
 {
-    return ExAcquireResourceExclusiveLite(&(s->rwsem), FALSE);
+	return ExAcquireResourceExclusiveLite(&(s->rwsem), FALSE);
 }
 
 
 /*
- * cfs_up_read
- *   To release read-lock of the cfs_rw_semaphore
+ * up_read
+ *   To release read-lock of the rw_semaphore
  *
  * Arguments:
- *   rwsem:  pointer to the cfs_rw_semaphore_t structure
+ *   rwsem:  pointer to the struct rw_semaphore
  *
  * Return Value:
  *   N/A
@@ -462,20 +462,19 @@ static inline int cfs_down_write_trylock(cfs_rw_semaphore_t *s)
  *   N/A
  */
 
-static inline void cfs_up_read(cfs_rw_semaphore_t *s)
+static inline void up_read(struct rw_semaphore *s)
 {
-    ExReleaseResourceForThreadLite(
-            &(s->rwsem),
-            ExGetCurrentResourceThread());
+	ExReleaseResourceForThreadLite(&(s->rwsem),
+				       ExGetCurrentResourceThread());
 }
 
 
 /*
- * cfs_up_write
- *   To release write-lock of the cfs_rw_semaphore
+ * up_write
+ *   To release write-lock of the rw_semaphore
  *
  * Arguments:
- *   rwsem:  pointer to the cfs_rw_semaphore_t structure
+ *   rwsem:  pointer to the struct rw_semaphore
  *
  * Return Value:
  *   N/A
@@ -484,11 +483,10 @@ static inline void cfs_up_read(cfs_rw_semaphore_t *s)
  *   N/A
  */
 
-static inline void cfs_up_write(cfs_rw_semaphore_t *s)
+static inline void up_write(struct rw_semaphore *s)
 {
-    ExReleaseResourceForThreadLite(
-                &(s->rwsem),
-                ExGetCurrentResourceThread());
+	ExReleaseResourceForThreadLite(&(s->rwsem),
+				       ExGetCurrentResourceThread());
 }
 
 /*
@@ -502,37 +500,37 @@ static inline void cfs_up_write(cfs_rw_semaphore_t *s)
  */
 
 typedef struct {
-    cfs_spinlock_t guard;
-    int            count;
-} cfs_rwlock_t;
+	spinlock_t	guard;
+	int		count;
+} rwlock_t;
 
-void cfs_rwlock_init(cfs_rwlock_t * rwlock);
-void cfs_rwlock_fini(cfs_rwlock_t * rwlock);
+void rwlock_init(rwlock_t *rwlock);
+void cfs_rwlock_fini(rwlock_t *rwlock);
 
-void cfs_read_lock(cfs_rwlock_t * rwlock);
-void cfs_read_unlock(cfs_rwlock_t * rwlock);
-void cfs_write_lock(cfs_rwlock_t * rwlock);
-void cfs_write_unlock(cfs_rwlock_t * rwlock);
+void read_lock(rwlock_t *rwlock);
+void read_unlock(rwlock_t *rwlock);
+void write_lock(rwlock_t *rwlock);
+void write_unlock(rwlock_t *rwlock);
 
-#define cfs_write_lock_irqsave(l, f)     do {f = 0; cfs_write_lock(l);} while(0)
-#define cfs_write_unlock_irqrestore(l, f)   do {cfs_write_unlock(l);} while(0)
-#define cfs_read_lock_irqsave(l, f	    do {f=0; cfs_read_lock(l);} while(0)
-#define cfs_read_unlock_irqrestore(l, f)    do {cfs_read_unlock(l);} while(0)
+#define write_lock_irqsave(l, f)	do { f = 0; write_lock(l); } while (0)
+#define write_unlock_irqrestore(l, f)	do { write_unlock(l); } while (0)
+#define read_lock_irqsave(l, f)		do { f = 0; read_lock(l); } while (0)
+#define read_unlock_irqrestore(l, f)	do { read_unlock(l); } while (0)
 
-#define cfs_write_lock_bh   cfs_write_lock
-#define cfs_write_unlock_bh cfs_write_unlock
+#define write_lock_bh		write_lock
+#define write_unlock_bh	write_unlock
 
-typedef struct cfs_lock_class_key {
-        int foo;
-} cfs_lock_class_key_t;
+struct lock_class_key {
+	int foo;
+};
 
-#define cfs_lockdep_set_class(lock, class) do {} while(0)
+#define lockdep_set_class(lock, class) do {} while (0)
 
-static inline void cfs_lockdep_off(void)
+static inline void lockdep_off(void)
 {
 }
 
-static inline void cfs_lockdep_on(void)
+static inline void lockdep_on(void)
 {
 }
 
@@ -544,38 +542,35 @@ static inline void cfs_lockdep_on(void)
  * - __up(x)
  */
 
-typedef struct cfs_semaphore {
+struct semaphore {
 	KSEMAPHORE sem;
-} cfs_semaphore_t;
+};
 
-static inline void cfs_sema_init(cfs_semaphore_t *s, int val)
+static inline void sema_init(struct semaphore *s, int val)
 {
 	KeInitializeSemaphore(&s->sem, val, val);
 }
 
-static inline void __down(cfs_semaphore_t *s)
+static inline void __down(struct semaphore *s)
 {
-   KeWaitForSingleObject( &(s->sem), Executive,
-                          KernelMode, FALSE, NULL );
+	KeWaitForSingleObject(&(s->sem), Executive, KernelMode, FALSE, NULL);
 
 }
-static inline void __up(cfs_semaphore_t *s)
+static inline void __up(struct semaphore *s)
 {
 	KeReleaseSemaphore(&s->sem, 0, 1, FALSE);
 }
 
-static inline int down_trylock(cfs_semaphore_t *s)
+static inline int down_trylock(struct semaphore *s)
 {
-    LARGE_INTEGER  timeout = {0};
-    NTSTATUS status =
-        KeWaitForSingleObject( &(s->sem), Executive,
-                               KernelMode, FALSE, &timeout);
+	LARGE_INTEGER  timeout = {0};
+	NTSTATUS status = KeWaitForSingleObject(&(s->sem), Executive,
+						KernelMode, FALSE, &timeout);
 
-    if (status == STATUS_SUCCESS) {
-        return 0;
-    }
+	if (status == STATUS_SUCCESS)
+		return 0;
 
-    return 1;
+	return 1;
 }
 
 /*
@@ -587,9 +582,9 @@ static inline int down_trylock(cfs_semaphore_t *s)
  * - mutex_down(x)
  */
 
-typedef struct cfs_semaphore cfs_mutex_t;
+#define mutex semaphore
 
-#define CFS_DECLARE_MUTEX(x) cfs_mutex_t x
+#define CFS_DECLARE_MUTEX(x) struct mutex x
 
 /*
  * init_mutex
@@ -604,10 +599,10 @@ typedef struct cfs_semaphore cfs_mutex_t;
  * Notes:
  *   N/A
  */
-#define cfs_mutex_init cfs_init_mutex
-static inline void cfs_init_mutex(cfs_mutex_t *mutex)
+#define mutex_init cfs_init_mutex
+static inline void cfs_init_mutex(struct mutex *mutex)
 {
-    cfs_sema_init(mutex, 1);
+	sema_init(mutex, 1);
 }
 
 /*
@@ -624,22 +619,22 @@ static inline void cfs_init_mutex(cfs_mutex_t *mutex)
  *   N/A
  */
 
-static inline void cfs_mutex_down(cfs_mutex_t *mutex)
+static inline void cfs_mutex_down(struct mutex *mutex)
 {
-    __down(mutex);
+	__down(mutex);
 }
 
-static inline int cfs_mutex_down_interruptible(cfs_mutex_t *mutex)
+static inline int cfs_mutex_down_interruptible(struct mutex *mutex)
 {
-    __down(mutex);
-    return 0;
+	__down(mutex);
+	return 0;
 }
 
-#define cfs_mutex_lock(m)         cfs_mutex_down(m)
-#define cfs_mutex_trylock(s)      down_trylock(s)
-#define cfs_mutex_lock_nested(m)  cfs_mutex_down(m)
-#define cfs_down(m)               cfs_mutex_down(m)
-#define cfs_down_interruptible(m) cfs_mutex_down_interruptible(m)
+#define mutex_lock(m)		cfs_mutex_down(m)
+#define mutex_trylock(s)	down_trylock(s)
+#define mutex_lock_nested(m)	cfs_mutex_down(m)
+#define down(m)			cfs_mutex_down(m)
+#define down_interruptible(m)	cfs_mutex_down_interruptible(m)
 
 /*
  * mutex_up
@@ -655,13 +650,13 @@ static inline int cfs_mutex_down_interruptible(cfs_mutex_t *mutex)
  *   N/A
  */
 
-static inline void cfs_mutex_up(cfs_mutex_t *mutex)
+static inline void cfs_mutex_up(struct mutex *mutex)
 {
-    __up(mutex);
+	__up(mutex);
 }
 
-#define cfs_mutex_unlock(m) cfs_mutex_up(m)
-#define cfs_up(m)           cfs_mutex_up(m)
+#define mutex_unlock(m)		cfs_mutex_up(m)
+#define up(m)			cfs_mutex_up(m)
 
 /*
  * init_mutex_locked
@@ -677,13 +672,13 @@ static inline void cfs_mutex_up(cfs_mutex_t *mutex)
  *   N/A
  */
 
-static inline void cfs_init_mutex_locked(cfs_mutex_t *mutex)
+static inline void cfs_init_mutex_locked(struct mutex *mutex)
 {
-    cfs_init_mutex(mutex);
-    cfs_mutex_down(mutex);
+	cfs_init_mutex(mutex);
+	cfs_mutex_down(mutex);
 }
 
-static inline void cfs_mutex_destroy(cfs_mutex_t *mutex)
+static inline void mutex_destroy(struct mutex *mutex)
 {
 }
 
@@ -695,9 +690,9 @@ static inline void cfs_mutex_destroy(cfs_mutex_t *mutex)
  * - wait_for_completion(c)
  */
 
-typedef struct {
+struct completion{
 	event_t  event;
-} cfs_completion_t;
+};
 
 
 /*
@@ -714,7 +709,7 @@ typedef struct {
  *   N/A
  */
 
-static inline void cfs_init_completion(cfs_completion_t *c)
+static inline void init_completion(struct completion *c)
 {
 	cfs_init_event(&(c->event), 1, FALSE);
 }
@@ -734,7 +729,7 @@ static inline void cfs_init_completion(cfs_completion_t *c)
  *   N/A
  */
 
-static inline void cfs_complete(cfs_completion_t *c)
+static inline void complete(struct completion *c)
 {
 	cfs_wake_event(&(c->event));
 }
@@ -754,17 +749,16 @@ static inline void cfs_complete(cfs_completion_t *c)
  *   N/A
  */
 
-static inline void cfs_wait_for_completion(cfs_completion_t *c)
+static inline void wait_for_completion(struct completion *c)
 {
-    cfs_wait_event_internal(&(c->event), 0);
+	cfs_wait_event_internal(&(c->event), 0);
 }
 
-static inline int cfs_wait_for_completion_interruptible(cfs_completion_t *c)
+static inline int wait_for_completion_interruptible(struct completion *c)
 {
-    cfs_wait_event_internal(&(c->event), 0);
-    return 0;
+	cfs_wait_event_internal(&(c->event), 0);
+	return 0;
 }
 
-#else  /* !__KERNEL__ */
 #endif /* !__KERNEL__ */
 #endif

@@ -261,20 +261,20 @@ EXPORT_SYMBOL(lustre_pack_request);
 
 #if RS_DEBUG
 CFS_LIST_HEAD(ptlrpc_rs_debug_lru);
-cfs_spinlock_t ptlrpc_rs_debug_lock;
+spinlock_t ptlrpc_rs_debug_lock;
 
-#define PTLRPC_RS_DEBUG_LRU_ADD(rs)                                     \
-do {                                                                    \
-        cfs_spin_lock(&ptlrpc_rs_debug_lock);                           \
-        cfs_list_add_tail(&(rs)->rs_debug_list, &ptlrpc_rs_debug_lru);  \
-        cfs_spin_unlock(&ptlrpc_rs_debug_lock);                         \
+#define PTLRPC_RS_DEBUG_LRU_ADD(rs)					\
+do {									\
+	spin_lock(&ptlrpc_rs_debug_lock);				\
+	cfs_list_add_tail(&(rs)->rs_debug_list, &ptlrpc_rs_debug_lru);	\
+	spin_unlock(&ptlrpc_rs_debug_lock);				\
 } while (0)
 
-#define PTLRPC_RS_DEBUG_LRU_DEL(rs)             \
-do {                                            \
-        cfs_spin_lock(&ptlrpc_rs_debug_lock);   \
-        cfs_list_del(&(rs)->rs_debug_list);     \
-        cfs_spin_unlock(&ptlrpc_rs_debug_lock); \
+#define PTLRPC_RS_DEBUG_LRU_DEL(rs)					\
+do {									\
+	spin_lock(&ptlrpc_rs_debug_lock);				\
+	cfs_list_del(&(rs)->rs_debug_list);				\
+	spin_unlock(&ptlrpc_rs_debug_lock);				\
 } while (0)
 #else
 # define PTLRPC_RS_DEBUG_LRU_ADD(rs) do {} while(0)
@@ -286,14 +286,14 @@ lustre_get_emerg_rs(struct ptlrpc_service_part *svcpt)
 {
 	struct ptlrpc_reply_state *rs = NULL;
 
-	cfs_spin_lock(&svcpt->scp_rep_lock);
+	spin_lock(&svcpt->scp_rep_lock);
 
 	/* See if we have anything in a pool, and wait if nothing */
 	while (cfs_list_empty(&svcpt->scp_rep_idle)) {
 		struct l_wait_info	lwi;
 		int			rc;
 
-		cfs_spin_unlock(&svcpt->scp_rep_lock);
+		spin_unlock(&svcpt->scp_rep_lock);
 		/* If we cannot get anything for some long time, we better
 		 * bail out instead of waiting infinitely */
 		lwi = LWI_TIMEOUT(cfs_time_seconds(10), NULL, NULL);
@@ -301,14 +301,14 @@ lustre_get_emerg_rs(struct ptlrpc_service_part *svcpt)
 				  !cfs_list_empty(&svcpt->scp_rep_idle), &lwi);
 		if (rc != 0)
 			goto out;
-		cfs_spin_lock(&svcpt->scp_rep_lock);
+		spin_lock(&svcpt->scp_rep_lock);
 	}
 
 	rs = cfs_list_entry(svcpt->scp_rep_idle.next,
 			    struct ptlrpc_reply_state, rs_list);
 	cfs_list_del(&rs->rs_list);
 
-	cfs_spin_unlock(&svcpt->scp_rep_lock);
+	spin_unlock(&svcpt->scp_rep_lock);
 
 	LASSERT(rs != NULL);
 	memset(rs, 0, svcpt->scp_service->srv_max_reply_size);
@@ -322,9 +322,9 @@ void lustre_put_emerg_rs(struct ptlrpc_reply_state *rs)
 {
 	struct ptlrpc_service_part *svcpt = rs->rs_svcpt;
 
-	cfs_spin_lock(&svcpt->scp_rep_lock);
+	spin_lock(&svcpt->scp_rep_lock);
 	cfs_list_add(&rs->rs_list, &svcpt->scp_rep_idle);
-	cfs_spin_unlock(&svcpt->scp_rep_lock);
+	spin_unlock(&svcpt->scp_rep_lock);
 	cfs_waitq_signal(&svcpt->scp_rep_waitq);
 }
 
@@ -338,9 +338,9 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         LASSERT(req->rq_reply_state == NULL);
 
         if ((flags & LPRFL_EARLY_REPLY) == 0) {
-                cfs_spin_lock(&req->rq_lock);
-                req->rq_packed_final = 1;
-                cfs_spin_unlock(&req->rq_lock);
+		spin_lock(&req->rq_lock);
+		req->rq_packed_final = 1;
+		spin_unlock(&req->rq_lock);
         }
 
         msg_len = lustre_msg_size_v2(count, lens);
@@ -356,7 +356,7 @@ int lustre_pack_reply_v2(struct ptlrpc_request *req, int count,
         CFS_INIT_LIST_HEAD(&rs->rs_exp_list);
         CFS_INIT_LIST_HEAD(&rs->rs_obd_list);
         CFS_INIT_LIST_HEAD(&rs->rs_list);
-        cfs_spin_lock_init(&rs->rs_lock);
+	spin_lock_init(&rs->rs_lock);
 
         req->rq_replen = msg_len;
         req->rq_reply_state = rs;

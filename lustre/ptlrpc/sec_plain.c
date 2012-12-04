@@ -52,7 +52,7 @@
 
 struct plain_sec {
         struct ptlrpc_sec       pls_base;
-        cfs_rwlock_t            pls_lock;
+	rwlock_t            pls_lock;
         struct ptlrpc_cli_ctx  *pls_ctx;
 };
 
@@ -398,11 +398,11 @@ int plain_cli_unwrap_bulk(struct ptlrpc_cli_ctx *ctx,
 static
 struct ptlrpc_cli_ctx *plain_sec_install_ctx(struct plain_sec *plsec)
 {
-        struct ptlrpc_cli_ctx  *ctx, *ctx_new;
+	struct ptlrpc_cli_ctx  *ctx, *ctx_new;
 
-        OBD_ALLOC_PTR(ctx_new);
+	OBD_ALLOC_PTR(ctx_new);
 
-        cfs_write_lock(&plsec->pls_lock);
+	write_lock(&plsec->pls_lock);
 
         ctx = plsec->pls_ctx;
         if (ctx) {
@@ -419,7 +419,7 @@ struct ptlrpc_cli_ctx *plain_sec_install_ctx(struct plain_sec *plsec)
                 ctx->cc_expire = 0;
                 ctx->cc_flags = PTLRPC_CTX_CACHED | PTLRPC_CTX_UPTODATE;
                 ctx->cc_vcred.vc_uid = 0;
-                cfs_spin_lock_init(&ctx->cc_lock);
+		spin_lock_init(&ctx->cc_lock);
                 CFS_INIT_LIST_HEAD(&ctx->cc_req_list);
                 CFS_INIT_LIST_HEAD(&ctx->cc_gc_chain);
 
@@ -430,9 +430,9 @@ struct ptlrpc_cli_ctx *plain_sec_install_ctx(struct plain_sec *plsec)
                 cfs_atomic_inc(&ctx->cc_refcount); /* for caller */
         }
 
-        cfs_write_unlock(&plsec->pls_lock);
+	write_unlock(&plsec->pls_lock);
 
-        return ctx;
+	return ctx;
 }
 
 static
@@ -478,17 +478,17 @@ struct ptlrpc_sec *plain_create_sec(struct obd_import *imp,
         /*
          * initialize plain_sec
          */
-        cfs_rwlock_init(&plsec->pls_lock);
-        plsec->pls_ctx = NULL;
+	rwlock_init(&plsec->pls_lock);
+	plsec->pls_ctx = NULL;
 
-        sec = &plsec->pls_base;
-        sec->ps_policy = &plain_policy;
-        cfs_atomic_set(&sec->ps_refcount, 0);
-        cfs_atomic_set(&sec->ps_nctx, 0);
-        sec->ps_id = sptlrpc_get_next_secid();
-        sec->ps_import = class_import_get(imp);
-        sec->ps_flvr = *sf;
-        cfs_spin_lock_init(&sec->ps_lock);
+	sec = &plsec->pls_base;
+	sec->ps_policy = &plain_policy;
+	cfs_atomic_set(&sec->ps_refcount, 0);
+	cfs_atomic_set(&sec->ps_nctx, 0);
+	sec->ps_id = sptlrpc_get_next_secid();
+	sec->ps_import = class_import_get(imp);
+	sec->ps_flvr = *sf;
+	spin_lock_init(&sec->ps_lock);
         CFS_INIT_LIST_HEAD(&sec->ps_gc_list);
         sec->ps_gc_interval = 0;
         sec->ps_gc_next = 0;
@@ -511,20 +511,20 @@ struct ptlrpc_cli_ctx *plain_lookup_ctx(struct ptlrpc_sec *sec,
                                         struct vfs_cred *vcred,
                                         int create, int remove_dead)
 {
-        struct plain_sec       *plsec = sec2plsec(sec);
-        struct ptlrpc_cli_ctx  *ctx;
-        ENTRY;
+	struct plain_sec       *plsec = sec2plsec(sec);
+	struct ptlrpc_cli_ctx  *ctx;
+	ENTRY;
 
-        cfs_read_lock(&plsec->pls_lock);
-        ctx = plsec->pls_ctx;
-        if (ctx)
-                cfs_atomic_inc(&ctx->cc_refcount);
-        cfs_read_unlock(&plsec->pls_lock);
+	read_lock(&plsec->pls_lock);
+	ctx = plsec->pls_ctx;
+	if (ctx)
+		cfs_atomic_inc(&ctx->cc_refcount);
+	read_unlock(&plsec->pls_lock);
 
-        if (unlikely(ctx == NULL))
-                ctx = plain_sec_install_ctx(plsec);
+	if (unlikely(ctx == NULL))
+		ctx = plain_sec_install_ctx(plsec);
 
-        RETURN(ctx);
+	RETURN(ctx);
 }
 
 static
@@ -554,10 +554,10 @@ int plain_flush_ctx_cache(struct ptlrpc_sec *sec,
         if (uid != -1)
                 RETURN(0);
 
-        cfs_write_lock(&plsec->pls_lock);
+	write_lock(&plsec->pls_lock);
         ctx = plsec->pls_ctx;
         plsec->pls_ctx = NULL;
-        cfs_write_unlock(&plsec->pls_lock);
+	write_unlock(&plsec->pls_lock);
 
         if (ctx)
                 sptlrpc_cli_ctx_put(ctx, 1);

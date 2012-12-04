@@ -86,9 +86,9 @@ static ssize_t osd_read(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt_object_exists(dt));
 	LASSERT(obj->oo_db);
 
-	cfs_read_lock(&obj->oo_attr_lock);
+	read_lock(&obj->oo_attr_lock);
 	old_size = obj->oo_attr.la_size;
-	cfs_read_unlock(&obj->oo_attr_lock);
+	read_unlock(&obj->oo_attr_lock);
 
 	if (*pos + size > old_size) {
 		if (old_size < *pos)
@@ -172,10 +172,10 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 
 	dmu_write(osd->od_objset.os, obj->oo_db->db_object, offset,
 		(uint64_t)buf->lb_len, buf->lb_buf, oh->ot_tx);
-	cfs_write_lock(&obj->oo_attr_lock);
+	write_lock(&obj->oo_attr_lock);
 	if (obj->oo_attr.la_size < offset + buf->lb_len) {
 		obj->oo_attr.la_size = offset + buf->lb_len;
-		cfs_write_unlock(&obj->oo_attr_lock);
+		write_unlock(&obj->oo_attr_lock);
 		/* osd_object_sa_update() will be copying directly from oo_attr
 		 * into dbuf.  any update within a single txg will copy the
 		 * most actual */
@@ -184,7 +184,7 @@ static ssize_t osd_write(const struct lu_env *env, struct dt_object *dt,
 		if (unlikely(rc))
 			GOTO(out, rc);
 	} else {
-		cfs_write_unlock(&obj->oo_attr_lock);
+		write_unlock(&obj->oo_attr_lock);
 	}
 
 	*pos += buf->lb_len;
@@ -692,17 +692,17 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 		RETURN(0);
 	}
 
-	cfs_write_lock(&obj->oo_attr_lock);
+	write_lock(&obj->oo_attr_lock);
 	if (obj->oo_attr.la_size < new_size) {
 		obj->oo_attr.la_size = new_size;
-		cfs_write_unlock(&obj->oo_attr_lock);
+		write_unlock(&obj->oo_attr_lock);
 		/* osd_object_sa_update() will be copying directly from
 		 * oo_attr into dbuf. any update within a single txg will copy
 		 * the most actual */
 		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(uos),
 					&obj->oo_attr.la_size, 8, oh);
 	} else {
-		cfs_write_unlock(&obj->oo_attr_lock);
+		write_unlock(&obj->oo_attr_lock);
 	}
 
 	RETURN(rc);
@@ -793,21 +793,21 @@ static int osd_punch(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
-	cfs_write_lock(&obj->oo_attr_lock);
+	write_lock(&obj->oo_attr_lock);
 	/* truncate */
 	if (end == OBD_OBJECT_EOF || end >= obj->oo_attr.la_size)
 		len = DMU_OBJECT_END;
 	else
 		len = end - start;
-	cfs_write_unlock(&obj->oo_attr_lock);
+	write_unlock(&obj->oo_attr_lock);
 
 	rc = __osd_object_punch(osd->od_objset.os, obj->oo_db, oh->ot_tx,
 				obj->oo_attr.la_size, start, len);
 	/* set new size */
 	if (len == DMU_OBJECT_END) {
-		cfs_write_lock(&obj->oo_attr_lock);
+		write_lock(&obj->oo_attr_lock);
 		obj->oo_attr.la_size = start;
-		cfs_write_unlock(&obj->oo_attr_lock);
+		write_unlock(&obj->oo_attr_lock);
 		rc = osd_object_sa_update(obj, SA_ZPL_SIZE(uos),
 					&obj->oo_attr.la_size, 8, oh);
 	}
@@ -825,7 +825,7 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 
-	cfs_read_lock(&obj->oo_attr_lock);
+	read_lock(&obj->oo_attr_lock);
 	if (end == OBD_OBJECT_EOF || end >= obj->oo_attr.la_size)
 		len = DMU_OBJECT_END;
 	else
@@ -833,10 +833,10 @@ static int osd_declare_punch(const struct lu_env *env, struct dt_object *dt,
 
 	/* declare we'll free some blocks ... */
 	if (start < obj->oo_attr.la_size) {
-		cfs_read_unlock(&obj->oo_attr_lock);
+		read_unlock(&obj->oo_attr_lock);
 		dmu_tx_hold_free(oh->ot_tx, obj->oo_db->db_object, start, len);
 	} else {
-		cfs_read_unlock(&obj->oo_attr_lock);
+		read_unlock(&obj->oo_attr_lock);
 	}
 
 	/* ... and we'll modify size attribute */

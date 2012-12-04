@@ -316,7 +316,7 @@ int lov_alloc_memmd(struct lov_stripe_md **lsmp, __u16 stripe_count,
         }
 
 	cfs_atomic_set(&(*lsmp)->lsm_refc, 1);
-        cfs_spin_lock_init(&(*lsmp)->lsm_lock);
+	spin_lock_init(&(*lsmp)->lsm_lock);
         (*lsmp)->lsm_magic = magic;
         (*lsmp)->lsm_stripe_count = stripe_count;
         (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES * stripe_count;

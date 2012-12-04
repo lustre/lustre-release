@@ -149,7 +149,7 @@ int udmu_objset_open(char *osname, udmu_objset_t *uos)
 	dmu_objset_space(uos->os, &refdbytes, &availbytes, &usedobjs,
 			 &availobjs);
 	uos->objects = usedobjs;
-	cfs_spin_lock_init(&uos->lock);
+	spin_lock_init(&uos->lock);
 
 out:
 	if (error && uos->os != NULL)

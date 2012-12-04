@@ -83,13 +83,13 @@ struct obd_capa {
         struct lustre_capa        c_capa;       /* capa */
         cfs_atomic_t              c_refc;       /* ref count */
         cfs_time_t                c_expiry;     /* jiffies */
-        cfs_spinlock_t            c_lock;       /* protect capa content */
-        int                       c_site;
+	spinlock_t		c_lock;	/* protect capa content */
+	int			c_site;
 
-        union {
-                struct client_capa      cli;
-                struct target_capa      tgt;
-        } u;
+	union {
+		struct client_capa	cli;
+		struct target_capa	tgt;
+	} u;
 };
 
 enum {
@@ -175,7 +175,7 @@ typedef int (* renew_capa_cb_t)(struct obd_capa *, struct lustre_capa *);
 
 /* obdclass/capa.c */
 extern cfs_list_t capa_list[];
-extern cfs_spinlock_t capa_lock;
+extern spinlock_t capa_lock;
 extern int capa_count[];
 extern cfs_mem_cache_t *capa_cachep;
 
@@ -205,7 +205,7 @@ static inline struct obd_capa *alloc_capa(int site)
 
         CFS_INIT_LIST_HEAD(&ocapa->c_list);
         cfs_atomic_set(&ocapa->c_refc, 1);
-        cfs_spin_lock_init(&ocapa->c_lock);
+	spin_lock_init(&ocapa->c_lock);
         ocapa->c_site = site;
         if (ocapa->c_site == CAPA_SITE_CLIENT)
                 CFS_INIT_LIST_HEAD(&ocapa->u.cli.lli_list);

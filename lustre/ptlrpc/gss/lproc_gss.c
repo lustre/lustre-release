@@ -64,7 +64,7 @@ static struct proc_dir_entry *gss_proc_lk = NULL;
  * statistic of "out-of-sequence-window"
  */
 static struct {
-        cfs_spinlock_t  oos_lock;
+	spinlock_t  oos_lock;
         cfs_atomic_t    oos_cli_count;       /* client occurrence */
         int             oos_cli_behind;      /* client max seqs behind */
         cfs_atomic_t    oos_svc_replay[3];   /* server replay detected */
@@ -78,12 +78,12 @@ static struct {
 
 void gss_stat_oos_record_cli(int behind)
 {
-        cfs_atomic_inc(&gss_stat_oos.oos_cli_count);
+	cfs_atomic_inc(&gss_stat_oos.oos_cli_count);
 
-        cfs_spin_lock(&gss_stat_oos.oos_lock);
-        if (behind > gss_stat_oos.oos_cli_behind)
-                gss_stat_oos.oos_cli_behind = behind;
-        cfs_spin_unlock(&gss_stat_oos.oos_lock);
+	spin_lock(&gss_stat_oos.oos_lock);
+	if (behind > gss_stat_oos.oos_cli_behind)
+		gss_stat_oos.oos_cli_behind = behind;
+	spin_unlock(&gss_stat_oos.oos_lock);
 }
 
 void gss_stat_oos_record_svc(int phase, int replay)
@@ -194,9 +194,9 @@ void gss_exit_lproc(void)
 
 int gss_init_lproc(void)
 {
-        int     rc;
+	int     rc;
 
-        cfs_spin_lock_init(&gss_stat_oos.oos_lock);
+	spin_lock_init(&gss_stat_oos.oos_lock);
 
         gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
                                          gss_lprocfs_vars, NULL);

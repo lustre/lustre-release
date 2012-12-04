@@ -170,16 +170,15 @@ int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int idx)
 		rc = 0;
 		if (unlikely(stats->ls_biggest_alloc_num <= idx)) {
 			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE)
-				cfs_spin_lock_irqsave(&stats->ls_lock, flags);
+				spin_lock_irqsave(&stats->ls_lock, flags);
 			else
-				cfs_spin_lock(&stats->ls_lock);
+				spin_lock(&stats->ls_lock);
 			if (stats->ls_biggest_alloc_num <= idx)
 				stats->ls_biggest_alloc_num = idx + 1;
 			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
-				cfs_spin_unlock_irqrestore(&stats->ls_lock,
-							   flags);
+				spin_unlock_irqrestore(&stats->ls_lock, flags);
 			} else {
-				cfs_spin_unlock(&stats->ls_lock);
+				spin_unlock(&stats->ls_lock);
 			}
 		}
 

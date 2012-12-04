@@ -134,9 +134,9 @@ static int lprocfs_ofd_wr_grant_ratio(struct file *file, const char *buffer,
 		      "a huge part of the free space is now reserved for "
 		      "grants\n", obd->obd_name);
 
-	cfs_spin_lock(&ofd->ofd_grant_lock);
+	spin_lock(&ofd->ofd_grant_lock);
 	ofd->ofd_grant_ratio = ofd_grant_ratio_conv(val);
-	cfs_spin_unlock(&ofd->ofd_grant_lock);
+	spin_unlock(&ofd->ofd_grant_lock);
 	return count;
 }
 
@@ -166,9 +166,9 @@ static int lprocfs_ofd_wr_precreate_batch(struct file *file, const char *buffer,
 	if (val < 1)
 		return -EINVAL;
 
-	cfs_spin_lock(&ofd->ofd_objid_lock);
+	spin_lock(&ofd->ofd_objid_lock);
 	ofd->ofd_precreate_batch = val;
-	cfs_spin_unlock(&ofd->ofd_objid_lock);
+	spin_unlock(&ofd->ofd_objid_lock);
 	return count;
 }
 
@@ -317,9 +317,9 @@ int lprocfs_ofd_wr_degraded(struct file *file, const char *buffer,
 	if (rc)
 		return rc;
 
-	cfs_spin_lock(&ofd->ofd_flags_lock);
+	spin_lock(&ofd->ofd_flags_lock);
 	ofd->ofd_raid_degraded = !!val;
-	cfs_spin_unlock(&ofd->ofd_flags_lock);
+	spin_unlock(&ofd->ofd_flags_lock);
 
 	return count;
 }
@@ -363,10 +363,10 @@ int lprocfs_ofd_wr_syncjournal(struct file *file, const char *buffer,
 	if (val < 0)
 		return -EINVAL;
 
-	cfs_spin_lock(&ofd->ofd_flags_lock);
+	spin_lock(&ofd->ofd_flags_lock);
 	ofd->ofd_syncjournal = !!val;
 	ofd_slc_set(ofd);
-	cfs_spin_unlock(&ofd->ofd_flags_lock);
+	spin_unlock(&ofd->ofd_flags_lock);
 
 	return count;
 }
@@ -413,9 +413,9 @@ int lprocfs_ofd_wr_sync_lock_cancel(struct file *file, const char *buffer,
 	if (val < 0 || val > 2)
 		return -EINVAL;
 
-	cfs_spin_lock(&ofd->ofd_flags_lock);
+	spin_lock(&ofd->ofd_flags_lock);
 	ofd->ofd_sync_lock_cancel = val;
-	cfs_spin_unlock(&ofd->ofd_flags_lock);
+	spin_unlock(&ofd->ofd_flags_lock);
 	return count;
 }
 
@@ -445,9 +445,9 @@ int lprocfs_ofd_wr_grant_compat_disable(struct file *file, const char *buffer,
 	if (val < 0)
 		return -EINVAL;
 
-	cfs_spin_lock(&ofd->ofd_flags_lock);
+	spin_lock(&ofd->ofd_flags_lock);
 	ofd->ofd_grant_compat_disable = !!val;
-	cfs_spin_unlock(&ofd->ofd_flags_lock);
+	spin_unlock(&ofd->ofd_flags_lock);
 
 	return count;
 }

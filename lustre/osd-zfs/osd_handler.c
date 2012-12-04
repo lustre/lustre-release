@@ -299,7 +299,7 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
 	oh->ot_tx = tx;
 	CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
 	CFS_INIT_LIST_HEAD(&oh->ot_sa_list);
-	cfs_sema_init(&oh->ot_sa_lock, 1);
+	sema_init(&oh->ot_sa_lock, 1);
 	memset(&oh->ot_quota_trans, 0, sizeof(oh->ot_quota_trans));
 	th = &oh->ot_super;
 	th->th_dev = dt;
@@ -789,9 +789,9 @@ static int osd_obd_connect(const struct lu_env *env, struct obd_export **exp,
 
 	*exp = class_conn2export(&conn);
 
-	cfs_spin_lock(&osd->od_objset.lock);
+	spin_lock(&osd->od_objset.lock);
 	osd->od_connects++;
-	cfs_spin_unlock(&osd->od_objset.lock);
+	spin_unlock(&osd->od_objset.lock);
 
 	RETURN(0);
 }
@@ -808,11 +808,11 @@ static int osd_obd_disconnect(struct obd_export *exp)
 	ENTRY;
 
 	/* Only disconnect the underlying layers on the final disconnect. */
-	cfs_spin_lock(&osd->od_objset.lock);
+	spin_lock(&osd->od_objset.lock);
 	osd->od_connects--;
 	if (osd->od_connects == 0)
 		release = 1;
-	cfs_spin_unlock(&osd->od_objset.lock);
+	spin_unlock(&osd->od_objset.lock);
 
 	rc = class_disconnect(exp); /* bz 9811 */
 

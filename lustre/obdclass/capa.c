@@ -117,19 +117,19 @@ static inline void capa_delete(struct obd_capa *ocapa)
 
 void cleanup_capa_hash(cfs_hlist_head_t *hash)
 {
-        int i;
-        cfs_hlist_node_t *pos, *next;
-        struct obd_capa *oc;
+	int i;
+	cfs_hlist_node_t *pos, *next;
+	struct obd_capa *oc;
 
-        cfs_spin_lock(&capa_lock);
-        for (i = 0; i < NR_CAPAHASH; i++) {
-                cfs_hlist_for_each_entry_safe(oc, pos, next, hash + i,
-                                              u.tgt.c_hash)
-                        capa_delete(oc);
-        }
-        cfs_spin_unlock(&capa_lock);
+	spin_lock(&capa_lock);
+	for (i = 0; i < NR_CAPAHASH; i++) {
+		cfs_hlist_for_each_entry_safe(oc, pos, next, hash + i,
+					      u.tgt.c_hash)
+			capa_delete(oc);
+	}
+	spin_unlock(&capa_lock);
 
-        OBD_FREE(hash, CFS_PAGE_SIZE);
+	OBD_FREE(hash, CFS_PAGE_SIZE);
 }
 EXPORT_SYMBOL(cleanup_capa_hash);
 
@@ -201,7 +201,7 @@ struct obd_capa *capa_add(cfs_hlist_head_t *hash, struct lustre_capa *capa)
         if (IS_ERR(ocapa))
                 return NULL;
 
-        cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
         old = find_capa(capa, head, 0);
         if (!old) {
                 ocapa->c_capa = *capa;
@@ -212,32 +212,32 @@ struct obd_capa *capa_add(cfs_hlist_head_t *hash, struct lustre_capa *capa)
                 capa_count[CAPA_SITE_SERVER]++;
                 if (capa_count[CAPA_SITE_SERVER] > CAPA_HASH_SIZE)
                         capa_delete_lru(list);
-                cfs_spin_unlock(&capa_lock);
-                return ocapa;
-        } else {
-                capa_get(old);
-                cfs_spin_unlock(&capa_lock);
-                capa_put(ocapa);
-                return old;
-        }
+		spin_unlock(&capa_lock);
+		return ocapa;
+	} else {
+		capa_get(old);
+		spin_unlock(&capa_lock);
+		capa_put(ocapa);
+		return old;
+	}
 }
 EXPORT_SYMBOL(capa_add);
 
 struct obd_capa *capa_lookup(cfs_hlist_head_t *hash, struct lustre_capa *capa,
-                             int alive)
+			     int alive)
 {
-        struct obd_capa *ocapa;
+	struct obd_capa *ocapa;
 
-        cfs_spin_lock(&capa_lock);
-        ocapa = find_capa(capa, hash + capa_hashfn(&capa->lc_fid), alive);
-        if (ocapa) {
-                cfs_list_move_tail(&ocapa->c_list,
-                                   &capa_list[CAPA_SITE_SERVER]);
-                capa_get(ocapa);
-        }
-        cfs_spin_unlock(&capa_lock);
+	spin_lock(&capa_lock);
+	ocapa = find_capa(capa, hash + capa_hashfn(&capa->lc_fid), alive);
+	if (ocapa) {
+		cfs_list_move_tail(&ocapa->c_list,
+				   &capa_list[CAPA_SITE_SERVER]);
+		capa_get(ocapa);
+	}
+	spin_unlock(&capa_lock);
 
-        return ocapa;
+	return ocapa;
 }
 EXPORT_SYMBOL(capa_lookup);
 
@@ -384,9 +384,9 @@ EXPORT_SYMBOL(capa_decrypt_id);
 
 void capa_cpy(void *capa, struct obd_capa *ocapa)
 {
-        cfs_spin_lock(&ocapa->c_lock);
-        *(struct lustre_capa *)capa = ocapa->c_capa;
-        cfs_spin_unlock(&ocapa->c_lock);
+	spin_lock(&ocapa->c_lock);
+	*(struct lustre_capa *)capa = ocapa->c_capa;
+	spin_unlock(&ocapa->c_lock);
 }
 EXPORT_SYMBOL(capa_cpy);
 

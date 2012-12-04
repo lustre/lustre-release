@@ -29,22 +29,22 @@
 ksock_tx_t *
 ksocknal_alloc_tx(int type, int size)
 {
-        ksock_tx_t *tx = NULL;
+	ksock_tx_t *tx = NULL;
 
-        if (type == KSOCK_MSG_NOOP) {
-                LASSERT (size == KSOCK_NOOP_TX_SIZE);
+	if (type == KSOCK_MSG_NOOP) {
+		LASSERT(size == KSOCK_NOOP_TX_SIZE);
 
-                /* searching for a noop tx in free list */
-                cfs_spin_lock(&ksocknal_data.ksnd_tx_lock);
+		/* searching for a noop tx in free list */
+		spin_lock(&ksocknal_data.ksnd_tx_lock);
 
-                if (!cfs_list_empty(&ksocknal_data.ksnd_idle_noop_txs)) {
-                        tx = cfs_list_entry(ksocknal_data.ksnd_idle_noop_txs. \
-                                            next, ksock_tx_t, tx_list);
-                        LASSERT(tx->tx_desc_size == size);
-                        cfs_list_del(&tx->tx_list);
-                }
+		if (!cfs_list_empty(&ksocknal_data.ksnd_idle_noop_txs)) {
+			tx = cfs_list_entry(ksocknal_data.ksnd_idle_noop_txs. \
+					    next, ksock_tx_t, tx_list);
+			LASSERT(tx->tx_desc_size == size);
+			cfs_list_del(&tx->tx_list);
+		}
 
-                cfs_spin_unlock(&ksocknal_data.ksnd_tx_lock);
+		spin_unlock(&ksocknal_data.ksnd_tx_lock);
         }
 
         if (tx == NULL)
@@ -93,18 +93,18 @@ ksocknal_alloc_tx_noop(__u64 cookie, int nonblk)
 void
 ksocknal_free_tx (ksock_tx_t *tx)
 {
-        cfs_atomic_dec(&ksocknal_data.ksnd_nactive_txs);
+	cfs_atomic_dec(&ksocknal_data.ksnd_nactive_txs);
 
-        if (tx->tx_lnetmsg == NULL && tx->tx_desc_size == KSOCK_NOOP_TX_SIZE) {
-                /* it's a noop tx */
-                cfs_spin_lock(&ksocknal_data.ksnd_tx_lock);
+	if (tx->tx_lnetmsg == NULL && tx->tx_desc_size == KSOCK_NOOP_TX_SIZE) {
+		/* it's a noop tx */
+		spin_lock(&ksocknal_data.ksnd_tx_lock);
 
-                cfs_list_add(&tx->tx_list, &ksocknal_data.ksnd_idle_noop_txs);
+		cfs_list_add(&tx->tx_list, &ksocknal_data.ksnd_idle_noop_txs);
 
-                cfs_spin_unlock(&ksocknal_data.ksnd_tx_lock);
-        } else {
-                LIBCFS_FREE(tx, tx->tx_desc_size);
-        }
+		spin_unlock(&ksocknal_data.ksnd_tx_lock);
+	} else {
+		LIBCFS_FREE(tx, tx->tx_desc_size);
+	}
 }
 
 int
@@ -457,7 +457,7 @@ ksocknal_check_zc_req(ksock_tx_t *tx)
 
         ksocknal_tx_addref(tx);
 
-        cfs_spin_lock(&peer->ksnp_lock);
+	spin_lock(&peer->ksnp_lock);
 
         /* ZC_REQ is going to be pinned to the peer */
         tx->tx_deadline =
@@ -472,33 +472,33 @@ ksocknal_check_zc_req(ksock_tx_t *tx)
 
         cfs_list_add_tail(&tx->tx_zc_list, &peer->ksnp_zc_req_list);
 
-        cfs_spin_unlock(&peer->ksnp_lock);
+	spin_unlock(&peer->ksnp_lock);
 }
 
 static void
 ksocknal_uncheck_zc_req(ksock_tx_t *tx)
 {
-        ksock_peer_t   *peer = tx->tx_conn->ksnc_peer;
+	ksock_peer_t   *peer = tx->tx_conn->ksnc_peer;
 
-        LASSERT (tx->tx_msg.ksm_type != KSOCK_MSG_NOOP);
-        LASSERT (tx->tx_zc_capable);
+	LASSERT(tx->tx_msg.ksm_type != KSOCK_MSG_NOOP);
+	LASSERT(tx->tx_zc_capable);
 
-        tx->tx_zc_checked = 0;
+	tx->tx_zc_checked = 0;
 
-        cfs_spin_lock(&peer->ksnp_lock);
+	spin_lock(&peer->ksnp_lock);
 
-        if (tx->tx_msg.ksm_zc_cookies[0] == 0) {
-                /* Not waiting for an ACK */
-                cfs_spin_unlock(&peer->ksnp_lock);
-                return;
-        }
+	if (tx->tx_msg.ksm_zc_cookies[0] == 0) {
+		/* Not waiting for an ACK */
+		spin_unlock(&peer->ksnp_lock);
+		return;
+	}
 
-        tx->tx_msg.ksm_zc_cookies[0] = 0;
-        cfs_list_del(&tx->tx_zc_list);
+	tx->tx_msg.ksm_zc_cookies[0] = 0;
+	cfs_list_del(&tx->tx_zc_list);
 
-        cfs_spin_unlock(&peer->ksnp_lock);
+	spin_unlock(&peer->ksnp_lock);
 
-        ksocknal_tx_decref(tx);
+	ksocknal_tx_decref(tx);
 }
 
 int
@@ -532,7 +532,7 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                               counter, conn, cfs_atomic_read(&libcfs_kmemory));
 
                 /* Queue on ksnd_enomem_conns for retry after a timeout */
-                cfs_spin_lock_bh (&ksocknal_data.ksnd_reaper_lock);
+		spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
 
                 /* enomem list takes over scheduler's ref... */
                 LASSERT (conn->ksnc_tx_scheduled);
@@ -543,7 +543,7 @@ ksocknal_process_transmit (ksock_conn_t *conn, ksock_tx_t *tx)
                                    ksocknal_data.ksnd_reaper_waketime))
                         cfs_waitq_signal (&ksocknal_data.ksnd_reaper_waitq);
 
-                cfs_spin_unlock_bh (&ksocknal_data.ksnd_reaper_lock);
+		spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
                 return (rc);
         }
 
@@ -594,13 +594,13 @@ ksocknal_launch_connection_locked (ksock_route_t *route)
         route->ksnr_scheduled = 1;              /* scheduling conn for connd */
         ksocknal_route_addref(route);           /* extra ref for connd */
 
-        cfs_spin_lock_bh (&ksocknal_data.ksnd_connd_lock);
+	spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
 
-        cfs_list_add_tail (&route->ksnr_connd_list,
-                           &ksocknal_data.ksnd_connd_routes);
-        cfs_waitq_signal (&ksocknal_data.ksnd_connd_waitq);
+	cfs_list_add_tail(&route->ksnr_connd_list,
+			  &ksocknal_data.ksnd_connd_routes);
+	cfs_waitq_signal(&ksocknal_data.ksnd_connd_waitq);
 
-        cfs_spin_unlock_bh (&ksocknal_data.ksnd_connd_lock);
+	spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
 }
 
 void
@@ -729,7 +729,7 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
          * but they're used inside spinlocks a lot.
          */
         bufnob = libcfs_sock_wmem_queued(conn->ksnc_sock);
-        cfs_spin_lock_bh (&sched->kss_lock);
+	spin_lock_bh(&sched->kss_lock);
 
         if (cfs_list_empty(&conn->ksnc_tx_queue) && bufnob == 0) {
                 /* First packet starts the timeout */
@@ -775,7 +775,7 @@ ksocknal_queue_tx_locked (ksock_tx_t *tx, ksock_conn_t *conn)
                 cfs_waitq_signal (&sched->kss_waitq);
         }
 
-        cfs_spin_unlock_bh (&sched->kss_lock);
+	spin_unlock_bh(&sched->kss_lock);
 }
 
 
@@ -839,7 +839,7 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
 {
         ksock_peer_t     *peer;
         ksock_conn_t     *conn;
-        cfs_rwlock_t     *g_lock;
+	rwlock_t     *g_lock;
         int               retry;
         int               rc;
 
@@ -848,7 +848,7 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
         g_lock = &ksocknal_data.ksnd_global_lock;
 
         for (retry = 0;; retry = 1) {
-                cfs_read_lock (g_lock);
+		read_lock(g_lock);
                 peer = ksocknal_find_peer_locked(ni, id);
                 if (peer != NULL) {
                         if (ksocknal_find_connectable_route_locked(peer) == NULL) {
@@ -858,22 +858,22 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
                                          * connecting and I do have an actual
                                          * connection... */
                                         ksocknal_queue_tx_locked (tx, conn);
-                                        cfs_read_unlock (g_lock);
+					read_unlock(g_lock);
                                         return (0);
                                 }
                         }
                 }
 
                 /* I'll need a write lock... */
-                cfs_read_unlock (g_lock);
+		read_unlock(g_lock);
 
-                cfs_write_lock_bh (g_lock);
+		write_lock_bh(g_lock);
 
                 peer = ksocknal_find_peer_locked(ni, id);
                 if (peer != NULL)
                         break;
 
-                cfs_write_unlock_bh (g_lock);
+		write_unlock_bh(g_lock);
 
                 if ((id.pid & LNET_PID_USERFLAG) != 0) {
                         CERROR("Refusing to create a connection to "
@@ -902,7 +902,7 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
         if (conn != NULL) {
                 /* Connection exists; queue message on it */
                 ksocknal_queue_tx_locked (tx, conn);
-                cfs_write_unlock_bh (g_lock);
+		write_unlock_bh(g_lock);
                 return (0);
         }
 
@@ -914,11 +914,11 @@ ksocknal_launch_packet (lnet_ni_t *ni, ksock_tx_t *tx, lnet_process_id_t id)
 
                 /* Queue the message until a connection is established */
                 cfs_list_add_tail (&tx->tx_list, &peer->ksnp_tx_queue);
-                cfs_write_unlock_bh (g_lock);
+		write_unlock_bh(g_lock);
                 return 0;
         }
 
-        cfs_write_unlock_bh (g_lock);
+	write_unlock_bh(g_lock);
 
         /* NB Routes may be ignored if connections to them failed recently */
         CNETERR("No usable routes to %s\n", libcfs_id2str(id));
@@ -1014,18 +1014,18 @@ ksocknal_thread_start (int (*fn)(void *arg), void *arg)
         if (pid < 0)
                 return ((int)pid);
 
-        cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
+	write_lock_bh(&ksocknal_data.ksnd_global_lock);
         ksocknal_data.ksnd_nthreads++;
-        cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
+	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
         return (0);
 }
 
 void
 ksocknal_thread_fini (void)
 {
-        cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
+	write_lock_bh(&ksocknal_data.ksnd_global_lock);
         ksocknal_data.ksnd_nthreads--;
-        cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
+	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 }
 
 int
@@ -1352,7 +1352,7 @@ ksocknal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 
         LASSERT (conn->ksnc_rx_scheduled);
 
-        cfs_spin_lock_bh (&sched->kss_lock);
+	spin_lock_bh(&sched->kss_lock);
 
         switch (conn->ksnc_rx_state) {
         case SOCKNAL_RX_PARSE_WAIT:
@@ -1368,24 +1368,24 @@ ksocknal_recv (lnet_ni_t *ni, void *private, lnet_msg_t *msg, int delayed,
 
         conn->ksnc_rx_state = SOCKNAL_RX_LNET_PAYLOAD;
 
-        cfs_spin_unlock_bh (&sched->kss_lock);
-        ksocknal_conn_decref(conn);
-        return (0);
+	spin_unlock_bh(&sched->kss_lock);
+	ksocknal_conn_decref(conn);
+	return 0;
 }
 
 static inline int
 ksocknal_sched_cansleep(ksock_sched_t *sched)
 {
-        int           rc;
+	int           rc;
 
-        cfs_spin_lock_bh (&sched->kss_lock);
+	spin_lock_bh(&sched->kss_lock);
 
-        rc = (!ksocknal_data.ksnd_shuttingdown &&
-              cfs_list_empty(&sched->kss_rx_conns) &&
-              cfs_list_empty(&sched->kss_tx_conns));
+	rc = (!ksocknal_data.ksnd_shuttingdown &&
+	      cfs_list_empty(&sched->kss_rx_conns) &&
+	      cfs_list_empty(&sched->kss_tx_conns));
 
-        cfs_spin_unlock_bh (&sched->kss_lock);
-        return (rc);
+	spin_unlock_bh(&sched->kss_lock);
+	return rc;
 }
 
 int ksocknal_scheduler(void *arg)
@@ -1414,7 +1414,7 @@ int ksocknal_scheduler(void *arg)
 		       name, info->ksi_cpt, rc);
 	}
 
-        cfs_spin_lock_bh (&sched->kss_lock);
+	spin_lock_bh(&sched->kss_lock);
 
         while (!ksocknal_data.ksnd_shuttingdown) {
                 int did_something = 0;
@@ -1434,11 +1434,11 @@ int ksocknal_scheduler(void *arg)
                          * data_ready can set it any time after we release
                          * kss_lock. */
                         conn->ksnc_rx_ready = 0;
-                        cfs_spin_unlock_bh (&sched->kss_lock);
+			spin_unlock_bh(&sched->kss_lock);
 
-                        rc = ksocknal_process_receive(conn);
+			rc = ksocknal_process_receive(conn);
 
-                        cfs_spin_lock_bh (&sched->kss_lock);
+			spin_lock_bh(&sched->kss_lock);
 
                         /* I'm the only one that can clear this flag */
                         LASSERT(conn->ksnc_rx_scheduled);
@@ -1496,7 +1496,7 @@ int ksocknal_scheduler(void *arg)
                          * write_space can set it any time after we release
                          * kss_lock. */
                         conn->ksnc_tx_ready = 0;
-                        cfs_spin_unlock_bh (&sched->kss_lock);
+			spin_unlock_bh(&sched->kss_lock);
 
                         if (!cfs_list_empty(&zlist)) {
                                 /* free zombie noop txs, it's fast because 
@@ -1508,14 +1508,14 @@ int ksocknal_scheduler(void *arg)
 
                         if (rc == -ENOMEM || rc == -EAGAIN) {
                                 /* Incomplete send: replace tx on HEAD of tx_queue */
-                                cfs_spin_lock_bh (&sched->kss_lock);
-                                cfs_list_add (&tx->tx_list,
-                                              &conn->ksnc_tx_queue);
-                        } else {
-                                /* Complete send; tx -ref */
-                                ksocknal_tx_decref (tx);
+				spin_lock_bh(&sched->kss_lock);
+				cfs_list_add(&tx->tx_list,
+					     &conn->ksnc_tx_queue);
+			} else {
+				/* Complete send; tx -ref */
+				ksocknal_tx_decref(tx);
 
-                                cfs_spin_lock_bh (&sched->kss_lock);
+				spin_lock_bh(&sched->kss_lock);
                                 /* assume space for more */
                                 conn->ksnc_tx_ready = 1;
                         }
@@ -1538,7 +1538,7 @@ int ksocknal_scheduler(void *arg)
                 }
                 if (!did_something ||           /* nothing to do */
                     ++nloops == SOCKNAL_RESCHED) { /* hogging CPU? */
-                        cfs_spin_unlock_bh (&sched->kss_lock);
+			spin_unlock_bh(&sched->kss_lock);
 
                         nloops = 0;
 
@@ -1551,13 +1551,13 @@ int ksocknal_scheduler(void *arg)
                                 cfs_cond_resched();
                         }
 
-                        cfs_spin_lock_bh (&sched->kss_lock);
-                }
-        }
+			spin_lock_bh(&sched->kss_lock);
+		}
+	}
 
-        cfs_spin_unlock_bh (&sched->kss_lock);
-        ksocknal_thread_fini ();
-        return (0);
+	spin_unlock_bh(&sched->kss_lock);
+	ksocknal_thread_fini();
+	return 0;
 }
 
 /*
@@ -1566,12 +1566,12 @@ int ksocknal_scheduler(void *arg)
  */
 void ksocknal_read_callback (ksock_conn_t *conn)
 {
-        ksock_sched_t *sched;
-        ENTRY;
+	ksock_sched_t *sched;
+	ENTRY;
 
-        sched = conn->ksnc_scheduler;
+	sched = conn->ksnc_scheduler;
 
-        cfs_spin_lock_bh (&sched->kss_lock);
+	spin_lock_bh(&sched->kss_lock);
 
         conn->ksnc_rx_ready = 1;
 
@@ -1584,9 +1584,9 @@ void ksocknal_read_callback (ksock_conn_t *conn)
 
                 cfs_waitq_signal (&sched->kss_waitq);
         }
-        cfs_spin_unlock_bh (&sched->kss_lock);
+	spin_unlock_bh(&sched->kss_lock);
 
-        EXIT;
+	EXIT;
 }
 
 /*
@@ -1595,12 +1595,12 @@ void ksocknal_read_callback (ksock_conn_t *conn)
  */
 void ksocknal_write_callback (ksock_conn_t *conn)
 {
-        ksock_sched_t *sched;
-        ENTRY;
+	ksock_sched_t *sched;
+	ENTRY;
 
-        sched = conn->ksnc_scheduler;
+	sched = conn->ksnc_scheduler;
 
-        cfs_spin_lock_bh (&sched->kss_lock);
+	spin_lock_bh(&sched->kss_lock);
 
         conn->ksnc_tx_ready = 1;
 
@@ -1615,9 +1615,9 @@ void ksocknal_write_callback (ksock_conn_t *conn)
                 cfs_waitq_signal (&sched->kss_waitq);
         }
 
-        cfs_spin_unlock_bh (&sched->kss_lock);
+	spin_unlock_bh(&sched->kss_lock);
 
-        EXIT;
+	EXIT;
 }
 
 ksock_proto_t *
@@ -1864,7 +1864,7 @@ ksocknal_connect (ksock_route_t *route)
         deadline = cfs_time_add(cfs_time_current(),
                                 cfs_time_seconds(*ksocknal_tunables.ksnd_timeout));
 
-        cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
+	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
         LASSERT (route->ksnr_scheduled);
         LASSERT (!route->ksnr_connecting);
@@ -1904,7 +1904,7 @@ ksocknal_connect (ksock_route_t *route)
                         type = SOCKLND_CONN_BULK_OUT;
                 }
 
-                cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
+		write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
                 if (cfs_time_aftereq(cfs_time_current(), deadline)) {
                         rc = -ETIMEDOUT;
@@ -1935,7 +1935,7 @@ ksocknal_connect (ksock_route_t *route)
                         CDEBUG(D_NET, "peer %s: conn race, retry later.\n",
                                libcfs_nid2str(peer->ksnp_id.nid));
 
-                cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
+		write_lock_bh(&ksocknal_data.ksnd_global_lock);
         }
 
         route->ksnr_scheduled = 0;
@@ -1960,11 +1960,11 @@ ksocknal_connect (ksock_route_t *route)
                 ksocknal_launch_connection_locked(route);
         }
 
-        cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
+	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
         return retry_later;
 
  failed:
-        cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
+	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
         route->ksnr_scheduled = 0;
         route->ksnr_connecting = 0;
@@ -2007,7 +2007,7 @@ ksocknal_connect (ksock_route_t *route)
                 cfs_list_add_tail(&route->ksnr_list, &peer->ksnp_routes);
         }
 #endif
-        cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
+	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
         ksocknal_peer_failed(peer);
         ksocknal_txlist_done(peer->ksnp_ni, &zombies, 1);
@@ -2057,12 +2057,12 @@ ksocknal_connd_check_start(long sec, long *timeout)
 
         ksocknal_data.ksnd_connd_starting_stamp = sec;
         ksocknal_data.ksnd_connd_starting++;
-        cfs_spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
+	spin_unlock_bh(&ksocknal_data.ksnd_connd_lock);
 
-        /* NB: total is the next id */
-        rc = ksocknal_thread_start(ksocknal_connd, (void *)((long)total));
+	/* NB: total is the next id */
+	rc = ksocknal_thread_start(ksocknal_connd, (void *)((long)total));
 
-        cfs_spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
+	spin_lock_bh(&ksocknal_data.ksnd_connd_lock);
         if (rc == 0)
                 return 1;
 
@@ -2144,7 +2144,7 @@ ksocknal_connd_get_route_locked(signed long *timeout_p)
 int
 ksocknal_connd (void *arg)
 {
-        cfs_spinlock_t    *connd_lock = &ksocknal_data.ksnd_connd_lock;
+	spinlock_t    *connd_lock = &ksocknal_data.ksnd_connd_lock;
         long               id = (long)(long_ptr_t)arg;
         char               name[16];
         ksock_connreq_t   *cr;
@@ -2158,7 +2158,7 @@ ksocknal_connd (void *arg)
 
         cfs_waitlink_init (&wait);
 
-        cfs_spin_lock_bh (connd_lock);
+	spin_lock_bh(connd_lock);
 
         LASSERT(ksocknal_data.ksnd_connd_starting > 0);
         ksocknal_data.ksnd_connd_starting--;
@@ -2187,15 +2187,15 @@ ksocknal_connd (void *arg)
                                             next, ksock_connreq_t, ksncr_list);
 
                         cfs_list_del(&cr->ksncr_list);
-                        cfs_spin_unlock_bh(connd_lock);
-                        dropped_lock = 1;
+			spin_unlock_bh(connd_lock);
+			dropped_lock = 1;
 
-                        ksocknal_create_conn(cr->ksncr_ni, NULL,
-                                             cr->ksncr_sock, SOCKLND_CONN_NONE);
-                        lnet_ni_decref(cr->ksncr_ni);
-                        LIBCFS_FREE(cr, sizeof(*cr));
+			ksocknal_create_conn(cr->ksncr_ni, NULL,
+					     cr->ksncr_sock, SOCKLND_CONN_NONE);
+			lnet_ni_decref(cr->ksncr_ni);
+			LIBCFS_FREE(cr, sizeof(*cr));
 
-                        cfs_spin_lock_bh(connd_lock);
+			spin_lock_bh(connd_lock);
                 }
 
                 /* Only handle an outgoing connection request if there
@@ -2208,7 +2208,7 @@ ksocknal_connd (void *arg)
                 if (route != NULL) {
                         cfs_list_del (&route->ksnr_connd_list);
                         ksocknal_data.ksnd_connd_connecting++;
-                        cfs_spin_unlock_bh(connd_lock);
+			spin_unlock_bh(connd_lock);
                         dropped_lock = 1;
 
                         if (ksocknal_connect(route)) {
@@ -2225,38 +2225,37 @@ ksocknal_connd (void *arg)
 
                         ksocknal_route_decref(route);
 
-                        cfs_spin_lock_bh(connd_lock);
-                        ksocknal_data.ksnd_connd_connecting--;
-                }
+			spin_lock_bh(connd_lock);
+			ksocknal_data.ksnd_connd_connecting--;
+		}
 
-                if (dropped_lock) {
-                        if (++nloops < SOCKNAL_RESCHED)
-                                continue;
-                        cfs_spin_unlock_bh(connd_lock);
-                        nloops = 0;
-                        cfs_cond_resched();
-                        cfs_spin_lock_bh(connd_lock);
-                        continue;
-                }
+		if (dropped_lock) {
+			if (++nloops < SOCKNAL_RESCHED)
+				continue;
+			spin_unlock_bh(connd_lock);
+			nloops = 0;
+			cfs_cond_resched();
+			spin_lock_bh(connd_lock);
+			continue;
+		}
 
-                /* Nothing to do for 'timeout'  */
-                cfs_set_current_state (CFS_TASK_INTERRUPTIBLE);
-                cfs_waitq_add_exclusive (&ksocknal_data.ksnd_connd_waitq,
-                                         &wait);
-                cfs_spin_unlock_bh(connd_lock);
+		/* Nothing to do for 'timeout'  */
+		cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
+		cfs_waitq_add_exclusive(&ksocknal_data.ksnd_connd_waitq, &wait);
+		spin_unlock_bh(connd_lock);
 
-                nloops = 0;
-                cfs_waitq_timedwait (&wait, CFS_TASK_INTERRUPTIBLE, timeout);
+		nloops = 0;
+		cfs_waitq_timedwait(&wait, CFS_TASK_INTERRUPTIBLE, timeout);
 
-                cfs_set_current_state (CFS_TASK_RUNNING);
-                cfs_waitq_del (&ksocknal_data.ksnd_connd_waitq, &wait);
-                cfs_spin_lock_bh(connd_lock);
-        }
-        ksocknal_data.ksnd_connd_running--;
-        cfs_spin_unlock_bh(connd_lock);
+		cfs_set_current_state(CFS_TASK_RUNNING);
+		cfs_waitq_del(&ksocknal_data.ksnd_connd_waitq, &wait);
+		spin_lock_bh(connd_lock);
+	}
+	ksocknal_data.ksnd_connd_running--;
+	spin_unlock_bh(connd_lock);
 
-        ksocknal_thread_fini ();
-        return (0);
+	ksocknal_thread_fini();
+	return 0;
 }
 
 ksock_conn_t *
@@ -2350,7 +2349,7 @@ ksocknal_flush_stale_txs(ksock_peer_t *peer)
         ksock_tx_t        *tx;
         CFS_LIST_HEAD      (stale_txs);
 
-        cfs_write_lock_bh (&ksocknal_data.ksnd_global_lock);
+	write_lock_bh(&ksocknal_data.ksnd_global_lock);
 
         while (!cfs_list_empty (&peer->ksnp_tx_queue)) {
                 tx = cfs_list_entry (peer->ksnp_tx_queue.next,
@@ -2364,7 +2363,7 @@ ksocknal_flush_stale_txs(ksock_peer_t *peer)
                 cfs_list_add_tail (&tx->tx_list, &stale_txs);
         }
 
-        cfs_write_unlock_bh (&ksocknal_data.ksnd_global_lock);
+	write_unlock_bh(&ksocknal_data.ksnd_global_lock);
 
         ksocknal_txlist_done(peer->ksnp_ni, &stale_txs, 1);
 }
@@ -2400,34 +2399,34 @@ ksocknal_send_keepalive_locked(ksock_peer_t *peer)
         if (conn != NULL) {
                 sched = conn->ksnc_scheduler;
 
-                cfs_spin_lock_bh (&sched->kss_lock);
-                if (!cfs_list_empty(&conn->ksnc_tx_queue)) {
-                        cfs_spin_unlock_bh(&sched->kss_lock);
-                        /* there is an queued ACK, don't need keepalive */
-                        return 0;
-                }
+		spin_lock_bh(&sched->kss_lock);
+		if (!cfs_list_empty(&conn->ksnc_tx_queue)) {
+			spin_unlock_bh(&sched->kss_lock);
+			/* there is an queued ACK, don't need keepalive */
+			return 0;
+		}
 
-                cfs_spin_unlock_bh(&sched->kss_lock);
-        }
+		spin_unlock_bh(&sched->kss_lock);
+	}
 
-        cfs_read_unlock(&ksocknal_data.ksnd_global_lock);
+	read_unlock(&ksocknal_data.ksnd_global_lock);
 
-        /* cookie = 1 is reserved for keepalive PING */
-        tx = ksocknal_alloc_tx_noop(1, 1);
-        if (tx == NULL) {
-                cfs_read_lock(&ksocknal_data.ksnd_global_lock);
-                return -ENOMEM;
-        }
+	/* cookie = 1 is reserved for keepalive PING */
+	tx = ksocknal_alloc_tx_noop(1, 1);
+	if (tx == NULL) {
+		read_lock(&ksocknal_data.ksnd_global_lock);
+		return -ENOMEM;
+	}
 
-        if (ksocknal_launch_packet(peer->ksnp_ni, tx, peer->ksnp_id) == 0) {
-                cfs_read_lock(&ksocknal_data.ksnd_global_lock);
-                return 1;
-        }
+	if (ksocknal_launch_packet(peer->ksnp_ni, tx, peer->ksnp_id) == 0) {
+		read_lock(&ksocknal_data.ksnd_global_lock);
+		return 1;
+	}
 
-        ksocknal_free_tx(tx);
-        cfs_read_lock(&ksocknal_data.ksnd_global_lock);
+	ksocknal_free_tx(tx);
+	read_lock(&ksocknal_data.ksnd_global_lock);
 
-        return -EIO;
+	return -EIO;
 }
 
 
@@ -2443,7 +2442,7 @@ ksocknal_check_peer_timeouts (int idx)
         /* NB. We expect to have a look at all the peers and not find any
          * connections to time out, so we just use a shared lock while we
          * take a look... */
-        cfs_read_lock (&ksocknal_data.ksnd_global_lock);
+	read_lock(&ksocknal_data.ksnd_global_lock);
 
         cfs_list_for_each_entry_typed(peer, peers, ksock_peer_t, ksnp_list) {
                 cfs_time_t  deadline = 0;
@@ -2451,14 +2450,14 @@ ksocknal_check_peer_timeouts (int idx)
                 int         n     = 0;
 
                 if (ksocknal_send_keepalive_locked(peer) != 0) {
-                        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+			read_unlock(&ksocknal_data.ksnd_global_lock);
                         goto again;
                 }
 
                 conn = ksocknal_find_timed_out_conn (peer);
 
                 if (conn != NULL) {
-                        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+			read_unlock(&ksocknal_data.ksnd_global_lock);
 
                         ksocknal_close_conn_and_siblings (conn, -ETIMEDOUT);
 
@@ -2480,7 +2479,7 @@ ksocknal_check_peer_timeouts (int idx)
                                              tx->tx_deadline)) {
 
                                 ksocknal_peer_addref(peer);
-                                cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+				read_unlock(&ksocknal_data.ksnd_global_lock);
 
                                 ksocknal_flush_stale_txs(peer);
 
@@ -2492,7 +2491,7 @@ ksocknal_check_peer_timeouts (int idx)
                 if (cfs_list_empty(&peer->ksnp_zc_req_list))
                         continue;
 
-                cfs_spin_lock(&peer->ksnp_lock);
+		spin_lock(&peer->ksnp_lock);
                 cfs_list_for_each_entry_typed(tx, &peer->ksnp_zc_req_list,
                                               ksock_tx_t, tx_zc_list) {
                         if (!cfs_time_aftereq(cfs_time_current(),
@@ -2505,7 +2504,7 @@ ksocknal_check_peer_timeouts (int idx)
                 }
 
                 if (n == 0) {
-                        cfs_spin_unlock(&peer->ksnp_lock);
+			spin_unlock(&peer->ksnp_lock);
                         continue;
                 }
 
@@ -2516,8 +2515,8 @@ ksocknal_check_peer_timeouts (int idx)
                 conn     = tx->tx_conn;
                 ksocknal_conn_addref(conn);
 
-                cfs_spin_unlock(&peer->ksnp_lock);
-                cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+		spin_unlock(&peer->ksnp_lock);
+		read_unlock(&ksocknal_data.ksnd_global_lock);
 
                 CERROR("Total %d stale ZC_REQs for peer %s detected; the "
                        "oldest(%p) timed out %ld secs ago, "
@@ -2531,7 +2530,7 @@ ksocknal_check_peer_timeouts (int idx)
                 goto again;
         }
 
-        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+	read_unlock(&ksocknal_data.ksnd_global_lock);
 }
 
 int
@@ -2553,7 +2552,7 @@ ksocknal_reaper (void *arg)
         CFS_INIT_LIST_HEAD(&enomem_conns);
         cfs_waitlink_init (&wait);
 
-        cfs_spin_lock_bh (&ksocknal_data.ksnd_reaper_lock);
+	spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
 
         while (!ksocknal_data.ksnd_shuttingdown) {
 
@@ -2563,12 +2562,12 @@ ksocknal_reaper (void *arg)
                                                ksock_conn_t, ksnc_list);
                         cfs_list_del (&conn->ksnc_list);
 
-                        cfs_spin_unlock_bh (&ksocknal_data.ksnd_reaper_lock);
+			spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
 
-                        ksocknal_terminate_conn (conn);
-                        ksocknal_conn_decref(conn);
+			ksocknal_terminate_conn(conn);
+			ksocknal_conn_decref(conn);
 
-                        cfs_spin_lock_bh (&ksocknal_data.ksnd_reaper_lock);
+			spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
                         continue;
                 }
 
@@ -2577,11 +2576,11 @@ ksocknal_reaper (void *arg)
                                                next, ksock_conn_t, ksnc_list);
                         cfs_list_del (&conn->ksnc_list);
 
-                        cfs_spin_unlock_bh (&ksocknal_data.ksnd_reaper_lock);
+			spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
 
-                        ksocknal_destroy_conn (conn);
+			ksocknal_destroy_conn(conn);
 
-                        cfs_spin_lock_bh (&ksocknal_data.ksnd_reaper_lock);
+			spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
                         continue;
                 }
 
@@ -2591,7 +2590,7 @@ ksocknal_reaper (void *arg)
                         cfs_list_del_init(&ksocknal_data.ksnd_enomem_conns);
                 }
 
-                cfs_spin_unlock_bh (&ksocknal_data.ksnd_reaper_lock);
+		spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
 
                 /* reschedule all the connections that stalled with ENOMEM... */
                 nenomem_conns = 0;
@@ -2602,15 +2601,15 @@ ksocknal_reaper (void *arg)
 
                         sched = conn->ksnc_scheduler;
 
-                        cfs_spin_lock_bh (&sched->kss_lock);
+			spin_lock_bh(&sched->kss_lock);
 
-                        LASSERT (conn->ksnc_tx_scheduled);
-                        conn->ksnc_tx_ready = 1;
-                        cfs_list_add_tail(&conn->ksnc_tx_list,
-                                          &sched->kss_tx_conns);
-                        cfs_waitq_signal (&sched->kss_waitq);
+			LASSERT(conn->ksnc_tx_scheduled);
+			conn->ksnc_tx_ready = 1;
+			cfs_list_add_tail(&conn->ksnc_tx_list,
+					  &sched->kss_tx_conns);
+			cfs_waitq_signal(&sched->kss_waitq);
 
-                        cfs_spin_unlock_bh (&sched->kss_lock);
+			spin_unlock_bh(&sched->kss_lock);
                         nenomem_conns++;
                 }
 
@@ -2664,11 +2663,11 @@ ksocknal_reaper (void *arg)
                 cfs_set_current_state (CFS_TASK_RUNNING);
                 cfs_waitq_del (&ksocknal_data.ksnd_reaper_waitq, &wait);
 
-                cfs_spin_lock_bh (&ksocknal_data.ksnd_reaper_lock);
-        }
+		spin_lock_bh(&ksocknal_data.ksnd_reaper_lock);
+	}
 
-        cfs_spin_unlock_bh (&ksocknal_data.ksnd_reaper_lock);
+	spin_unlock_bh(&ksocknal_data.ksnd_reaper_lock);
 
-        ksocknal_thread_fini ();
-        return (0);
+	ksocknal_thread_fini();
+	return 0;
 }

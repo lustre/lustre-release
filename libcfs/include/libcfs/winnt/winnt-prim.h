@@ -319,7 +319,7 @@ struct seq_file {
 	size_t count;
 	loff_t index;
 	u32    version;
-	cfs_mutex_t lock;
+	struct mutex		lock;
 	const struct seq_operations *op;
 	void *private;
 };
@@ -409,12 +409,11 @@ typedef int cfs_task_state_t;
 #define CFS_WAITLINK_MAGIC  'CWLM'
 
 typedef struct cfs_waitq {
+	unsigned int		magic;
+	unsigned int		flags;
 
-    unsigned int            magic;
-    unsigned int            flags;
-
-    cfs_spinlock_t          guard;
-    cfs_list_t              waiters;
+	spinlock_t		guard;
+	cfs_list_t		waiters;
 
 } cfs_waitq_t;
 
@@ -613,17 +612,15 @@ static inline void task_unlock(cfs_task_t *t)
 #define TASKSLT_MAGIC  'TSLT'   /* Task Slot */
 
 typedef struct _TASK_MAN {
+	ULONG           Magic;		/* Magic and Flags */
+	ULONG           Flags;
 
-    ULONG           Magic;      /* Magic and Flags */
-    ULONG           Flags;
+	spinlock_t	Lock;		/* Protection lock */
 
-    cfs_spinlock_t  Lock;       /* Protection lock */
+	cfs_mem_cache_t	*slab;		/* Memory slab for task slot */
 
-    cfs_mem_cache_t *slab; /* Memory slab for task slot */
-
-    ULONG           NumOfTasks; /* Total tasks (threads) */
-    LIST_ENTRY      TaskList;   /* List of task slots */
-
+	ULONG		NumOfTasks;	/* Total tasks (threads) */
+	LIST_ENTRY	TaskList;	/* List of task slots */
 } TASK_MAN, *PTASK_MAN;
 
 typedef struct _TASK_SLOT {

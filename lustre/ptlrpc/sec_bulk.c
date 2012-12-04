@@ -104,7 +104,7 @@ static struct ptlrpc_enc_page_pool {
         /*
          * in-pool pages bookkeeping
          */
-        cfs_spinlock_t   epp_lock;        /* protect following fields */
+	spinlock_t	 epp_lock;	   /* protect following fields */
         unsigned long    epp_total_pages; /* total pages in pools */
         unsigned long    epp_free_pages;  /* current pages available */
 
@@ -141,7 +141,7 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
 {
         int     rc;
 
-        cfs_spin_lock(&page_pools.epp_lock);
+	spin_lock(&page_pools.epp_lock);
 
         rc = snprintf(page, count,
                       "physical pages:          %lu\n"
@@ -183,8 +183,8 @@ int sptlrpc_proc_read_enc_pool(char *page, char **start, off_t off, int count,
                       page_pools.epp_st_max_wait, CFS_HZ
                      );
 
-        cfs_spin_unlock(&page_pools.epp_lock);
-        return rc;
+	spin_unlock(&page_pools.epp_lock);
+	return rc;
 }
 
 static void enc_pools_release_free_pages(long npages)
@@ -238,8 +238,8 @@ static void enc_pools_release_free_pages(long npages)
  */
 static int enc_pools_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 {
-        if (unlikely(shrink_param(sc, nr_to_scan) != 0)) {
-                cfs_spin_lock(&page_pools.epp_lock);
+	if (unlikely(shrink_param(sc, nr_to_scan) != 0)) {
+		spin_lock(&page_pools.epp_lock);
                 shrink_param(sc, nr_to_scan) = min_t(unsigned long,
                                                    shrink_param(sc, nr_to_scan),
                                                    page_pools.epp_free_pages -
@@ -254,23 +254,23 @@ static int enc_pools_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
                         page_pools.epp_st_shrinks++;
                         page_pools.epp_last_shrink = cfs_time_current_sec();
                 }
-                cfs_spin_unlock(&page_pools.epp_lock);
-        }
+		spin_unlock(&page_pools.epp_lock);
+	}
 
-        /*
-         * if no pool access for a long time, we consider it's fully idle.
-         * a little race here is fine.
-         */
-        if (unlikely(cfs_time_current_sec() - page_pools.epp_last_access >
-                     CACHE_QUIESCENT_PERIOD)) {
-                cfs_spin_lock(&page_pools.epp_lock);
-                page_pools.epp_idle_idx = IDLE_IDX_MAX;
-                cfs_spin_unlock(&page_pools.epp_lock);
-        }
+	/*
+	 * if no pool access for a long time, we consider it's fully idle.
+	 * a little race here is fine.
+	 */
+	if (unlikely(cfs_time_current_sec() - page_pools.epp_last_access >
+		     CACHE_QUIESCENT_PERIOD)) {
+		spin_lock(&page_pools.epp_lock);
+		page_pools.epp_idle_idx = IDLE_IDX_MAX;
+		spin_unlock(&page_pools.epp_lock);
+	}
 
-        LASSERT(page_pools.epp_idle_idx <= IDLE_IDX_MAX);
-        return max((int) page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES, 0) *
-               (IDLE_IDX_MAX - page_pools.epp_idle_idx) / IDLE_IDX_MAX;
+	LASSERT(page_pools.epp_idle_idx <= IDLE_IDX_MAX);
+	return max((int)page_pools.epp_free_pages - PTLRPC_MAX_BRW_PAGES, 0) *
+		(IDLE_IDX_MAX - page_pools.epp_idle_idx) / IDLE_IDX_MAX;
 }
 
 static inline
@@ -321,7 +321,7 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
         LASSERT(npages_to_npools(npages) == npools);
         LASSERT(page_pools.epp_growing);
 
-        cfs_spin_lock(&page_pools.epp_lock);
+	spin_lock(&page_pools.epp_lock);
 
         /*
          * (1) fill all the free slots of current pools.
@@ -388,20 +388,20 @@ static void enc_pools_insert(cfs_page_t ***pools, int npools, int npages)
         CDEBUG(D_SEC, "add %d pages to total %lu\n", npages,
                page_pools.epp_total_pages);
 
-        cfs_spin_unlock(&page_pools.epp_lock);
+	spin_unlock(&page_pools.epp_lock);
 }
 
 static int enc_pools_add_pages(int npages)
 {
-        static CFS_DEFINE_MUTEX(add_pages_mutex);
-        cfs_page_t   ***pools;
-        int             npools, alloced = 0;
-        int             i, j, rc = -ENOMEM;
+	static DEFINE_MUTEX(add_pages_mutex);
+	cfs_page_t   ***pools;
+	int             npools, alloced = 0;
+	int             i, j, rc = -ENOMEM;
 
-        if (npages < PTLRPC_MAX_BRW_PAGES)
-                npages = PTLRPC_MAX_BRW_PAGES;
+	if (npages < PTLRPC_MAX_BRW_PAGES)
+		npages = PTLRPC_MAX_BRW_PAGES;
 
-        cfs_mutex_lock(&add_pages_mutex);
+	mutex_lock(&add_pages_mutex);
 
         if (npages + page_pools.epp_total_pages > page_pools.epp_max_pages)
                 npages = page_pools.epp_max_pages - page_pools.epp_total_pages;
@@ -443,7 +443,7 @@ out:
                 CERROR("Failed to allocate %d enc pages\n", npages);
         }
 
-        cfs_mutex_unlock(&add_pages_mutex);
+	mutex_unlock(&add_pages_mutex);
         return rc;
 }
 
@@ -514,7 +514,7 @@ int sptlrpc_enc_pool_get_pages(struct ptlrpc_bulk_desc *desc)
         if (desc->bd_enc_iov == NULL)
                 return -ENOMEM;
 
-        cfs_spin_lock(&page_pools.epp_lock);
+	spin_lock(&page_pools.epp_lock);
 
         page_pools.epp_st_access++;
 again:
@@ -530,9 +530,9 @@ again:
                 if (enc_pools_should_grow(desc->bd_iov_count, now)) {
                         page_pools.epp_growing = 1;
 
-                        cfs_spin_unlock(&page_pools.epp_lock);
-                        enc_pools_add_pages(page_pools.epp_pages_short / 2);
-                        cfs_spin_lock(&page_pools.epp_lock);
+			spin_unlock(&page_pools.epp_lock);
+			enc_pools_add_pages(page_pools.epp_pages_short / 2);
+			spin_lock(&page_pools.epp_lock);
 
                         page_pools.epp_growing = 0;
 
@@ -547,11 +547,11 @@ again:
                         cfs_waitlink_init(&waitlink);
                         cfs_waitq_add(&page_pools.epp_waitq, &waitlink);
 
-                        cfs_spin_unlock(&page_pools.epp_lock);
-                        cfs_waitq_wait(&waitlink, CFS_TASK_UNINT);
-                        cfs_waitq_del(&page_pools.epp_waitq, &waitlink);
-                        LASSERT(page_pools.epp_waitqlen > 0);
-                        cfs_spin_lock(&page_pools.epp_lock);
+			spin_unlock(&page_pools.epp_lock);
+			cfs_waitq_wait(&waitlink, CFS_TASK_UNINT);
+			cfs_waitq_del(&page_pools.epp_waitq, &waitlink);
+			LASSERT(page_pools.epp_waitqlen > 0);
+			spin_lock(&page_pools.epp_lock);
                         page_pools.epp_waitqlen--;
                 }
 
@@ -603,8 +603,8 @@ again:
 
         page_pools.epp_last_access = cfs_time_current_sec();
 
-        cfs_spin_unlock(&page_pools.epp_lock);
-        return 0;
+	spin_unlock(&page_pools.epp_lock);
+	return 0;
 }
 EXPORT_SYMBOL(sptlrpc_enc_pool_get_pages);
 
@@ -618,7 +618,7 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
 
         LASSERT(desc->bd_iov_count > 0);
 
-        cfs_spin_lock(&page_pools.epp_lock);
+	spin_lock(&page_pools.epp_lock);
 
         p_idx = page_pools.epp_free_pages / PAGES_PER_POOL;
         g_idx = page_pools.epp_free_pages % PAGES_PER_POOL;
@@ -645,11 +645,11 @@ void sptlrpc_enc_pool_put_pages(struct ptlrpc_bulk_desc *desc)
 
         enc_pools_wakeup();
 
-        cfs_spin_unlock(&page_pools.epp_lock);
+	spin_unlock(&page_pools.epp_lock);
 
-        OBD_FREE(desc->bd_enc_iov,
-                 desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
-        desc->bd_enc_iov = NULL;
+	OBD_FREE(desc->bd_enc_iov,
+		 desc->bd_iov_count * sizeof(*desc->bd_enc_iov));
+	desc->bd_enc_iov = NULL;
 }
 EXPORT_SYMBOL(sptlrpc_enc_pool_put_pages);
 
@@ -660,25 +660,25 @@ EXPORT_SYMBOL(sptlrpc_enc_pool_put_pages);
  */
 int sptlrpc_enc_pool_add_user(void)
 {
-        int     need_grow = 0;
+	int     need_grow = 0;
 
-        cfs_spin_lock(&page_pools.epp_lock);
-        if (page_pools.epp_growing == 0 && page_pools.epp_total_pages == 0) {
-                page_pools.epp_growing = 1;
-                need_grow = 1;
-        }
-        cfs_spin_unlock(&page_pools.epp_lock);
+	spin_lock(&page_pools.epp_lock);
+	if (page_pools.epp_growing == 0 && page_pools.epp_total_pages == 0) {
+		page_pools.epp_growing = 1;
+		need_grow = 1;
+	}
+	spin_unlock(&page_pools.epp_lock);
 
-        if (need_grow) {
-                enc_pools_add_pages(PTLRPC_MAX_BRW_PAGES +
-                                    PTLRPC_MAX_BRW_PAGES);
+	if (need_grow) {
+		enc_pools_add_pages(PTLRPC_MAX_BRW_PAGES +
+				    PTLRPC_MAX_BRW_PAGES);
 
-                cfs_spin_lock(&page_pools.epp_lock);
-                page_pools.epp_growing = 0;
-                enc_pools_wakeup();
-                cfs_spin_unlock(&page_pools.epp_lock);
-        }
-        return 0;
+		spin_lock(&page_pools.epp_lock);
+		page_pools.epp_growing = 0;
+		enc_pools_wakeup();
+		spin_unlock(&page_pools.epp_lock);
+	}
+	return 0;
 }
 EXPORT_SYMBOL(sptlrpc_enc_pool_add_user);
 
@@ -725,7 +725,7 @@ int sptlrpc_enc_pool_init(void)
         page_pools.epp_last_shrink = cfs_time_current_sec();
         page_pools.epp_last_access = cfs_time_current_sec();
 
-        cfs_spin_lock_init(&page_pools.epp_lock);
+	spin_lock_init(&page_pools.epp_lock);
         page_pools.epp_total_pages = 0;
         page_pools.epp_free_pages = 0;
 

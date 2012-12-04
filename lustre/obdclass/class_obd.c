@@ -497,7 +497,7 @@ int obd_init_checks(void)
 #define obd_init_checks() do {} while(0)
 #endif
 
-extern cfs_spinlock_t obd_types_lock;
+extern spinlock_t obd_types_lock;
 extern int class_procfs_init(void);
 extern int class_procfs_clean(void);
 
@@ -517,7 +517,7 @@ int init_obdclass(void)
 
         LCONSOLE_INFO("Lustre: Build Version: "BUILD_VERSION"\n");
 
-        cfs_spin_lock_init(&obd_types_lock);
+	spin_lock_init(&obd_types_lock);
         obd_zombie_impexp_init();
 #ifdef LPROCFS
         obd_memory = lprocfs_alloc_stats(OBD_STATS_NUM,

@@ -51,12 +51,12 @@
 
 /*
  * spin_lock (use Linux kernel's primitives)
- * 
+ *
  * - spin_lock_init(x)
  * - spin_lock(x)
  * - spin_unlock(x)
  * - spin_trylock(x)
- * 
+ *
  * - spin_lock_irqsave(x, f)
  * - spin_unlock_irqrestore(x, f)
  */

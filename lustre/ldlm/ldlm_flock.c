@@ -613,9 +613,9 @@ ldlm_flock_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
                 imp = obd->u.cli.cl_import;
 
         if (NULL != imp) {
-                cfs_spin_lock(&imp->imp_lock);
-                fwd.fwd_generation = imp->imp_generation;
-                cfs_spin_unlock(&imp->imp_lock);
+		spin_lock(&imp->imp_lock);
+		fwd.fwd_generation = imp->imp_generation;
+		spin_unlock(&imp->imp_lock);
         }
 
         lwi = LWI_TIMEOUT_INTR(0, NULL, ldlm_flock_interrupted_wait, &fwd);

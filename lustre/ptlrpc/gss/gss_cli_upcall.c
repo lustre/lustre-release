@@ -277,30 +277,30 @@ int gss_do_ctx_init_rpc(__user char *buffer, unsigned long count)
                 RETURN(-EINVAL);
         }
 
-        cfs_spin_lock(&obd->obd_dev_lock);
-        if (obd->obd_stopping) {
-                CERROR("obd %s has stopped\n", obdname);
-                cfs_spin_unlock(&obd->obd_dev_lock);
-                RETURN(-EINVAL);
-        }
+	spin_lock(&obd->obd_dev_lock);
+	if (obd->obd_stopping) {
+		CERROR("obd %s has stopped\n", obdname);
+		spin_unlock(&obd->obd_dev_lock);
+		RETURN(-EINVAL);
+	}
 
-        if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
-            strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) &&
-            strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME)) {
-                CERROR("obd %s is not a client device\n", obdname);
-                cfs_spin_unlock(&obd->obd_dev_lock);
-                RETURN(-EINVAL);
-        }
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	if (strcmp(obd->obd_type->typ_name, LUSTRE_MDC_NAME) &&
+	    strcmp(obd->obd_type->typ_name, LUSTRE_OSC_NAME) &&
+	    strcmp(obd->obd_type->typ_name, LUSTRE_MGC_NAME)) {
+		CERROR("obd %s is not a client device\n", obdname);
+		spin_unlock(&obd->obd_dev_lock);
+		RETURN(-EINVAL);
+	}
+	spin_unlock(&obd->obd_dev_lock);
 
-        cfs_down_read(&obd->u.cli.cl_sem);
-        if (obd->u.cli.cl_import == NULL) {
-                CERROR("obd %s: import has gone\n", obd->obd_name);
-                cfs_up_read(&obd->u.cli.cl_sem);
-                RETURN(-EINVAL);
-        }
-        imp = class_import_get(obd->u.cli.cl_import);
-        cfs_up_read(&obd->u.cli.cl_sem);
+	down_read(&obd->u.cli.cl_sem);
+	if (obd->u.cli.cl_import == NULL) {
+		CERROR("obd %s: import has gone\n", obd->obd_name);
+		up_read(&obd->u.cli.cl_sem);
+		RETURN(-EINVAL);
+	}
+	imp = class_import_get(obd->u.cli.cl_import);
+	up_read(&obd->u.cli.cl_sem);
 
         if (imp->imp_deactive) {
                 CERROR("import has been deactivated\n");

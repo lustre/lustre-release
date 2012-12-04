@@ -94,7 +94,7 @@ typedef struct {
         int                uc_sending;       /* send op is in progress */
         usock_tx_t        *uc_tx_hello;      /* fake tx with hello */
 
-        cfs_mt_atomic_t    uc_refcount;      /* # of users */
+	mt_atomic_t    uc_refcount;      /* # of users */
         pthread_mutex_t    uc_lock;          /* serialize */
         int                uc_errored;       /* a flag for lnet_notify() */
 } usock_conn_t;
@@ -129,7 +129,7 @@ typedef struct usock_peer_s {
         __u64             up_incarnation; /* peer's incarnation */
         int               up_incrn_is_set;/* 0 if peer's incarnation
                                                * hasn't been set so far */
-        cfs_mt_atomic_t   up_refcount;    /* # of users */
+	mt_atomic_t   up_refcount;    /* # of users */
         pthread_mutex_t   up_lock;        /* serialize */
         int               up_errored;     /* a flag for lnet_notify() */
         cfs_time_t        up_last_alive;  /* when the peer was last alive */
@@ -152,7 +152,7 @@ typedef struct {
         cfs_list_t          upt_pollrequests;   /* list of poll requests */
         pthread_mutex_t     upt_pollrequests_lock; /* serialize */
         int                 upt_errno;         /* non-zero if errored */
-        cfs_mt_completion_t upt_completion;    /* wait/signal facility for
+	mt_completion_t upt_completion;    /* wait/signal facility for
                                                 * syncronizing shutdown */
 } usock_pollthread_t;
 
@@ -225,8 +225,8 @@ typedef struct {
 static inline void
 usocklnd_conn_addref(usock_conn_t *conn)
 {
-        LASSERT (cfs_mt_atomic_read(&conn->uc_refcount) > 0);
-        cfs_mt_atomic_inc(&conn->uc_refcount);
+	LASSERT(mt_atomic_read(&conn->uc_refcount) > 0);
+	mt_atomic_inc(&conn->uc_refcount);
 }
 
 void usocklnd_destroy_conn(usock_conn_t *conn);
@@ -234,16 +234,16 @@ void usocklnd_destroy_conn(usock_conn_t *conn);
 static inline void
 usocklnd_conn_decref(usock_conn_t *conn)
 {
-        LASSERT (cfs_mt_atomic_read(&conn->uc_refcount) > 0);
-        if (cfs_mt_atomic_dec_and_test(&conn->uc_refcount))
+	LASSERT(mt_atomic_read(&conn->uc_refcount) > 0);
+	if (mt_atomic_dec_and_test(&conn->uc_refcount))
                 usocklnd_destroy_conn(conn);
 }
 
 static inline void
 usocklnd_peer_addref(usock_peer_t *peer)
 {
-        LASSERT (cfs_mt_atomic_read(&peer->up_refcount) > 0);
-        cfs_mt_atomic_inc(&peer->up_refcount);
+	LASSERT(mt_atomic_read(&peer->up_refcount) > 0);
+	mt_atomic_inc(&peer->up_refcount);
 }
 
 void usocklnd_destroy_peer(usock_peer_t *peer);
@@ -251,8 +251,8 @@ void usocklnd_destroy_peer(usock_peer_t *peer);
 static inline void
 usocklnd_peer_decref(usock_peer_t *peer)
 {
-        LASSERT (cfs_mt_atomic_read(&peer->up_refcount) > 0);
-        if (cfs_mt_atomic_dec_and_test(&peer->up_refcount))
+	LASSERT(mt_atomic_read(&peer->up_refcount) > 0);
+	if (mt_atomic_dec_and_test(&peer->up_refcount))
                 usocklnd_destroy_peer(peer);
 }
 

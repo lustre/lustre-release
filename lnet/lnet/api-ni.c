@@ -92,10 +92,10 @@ lnet_get_networks(void)
 void
 lnet_init_locks(void)
 {
-	cfs_spin_lock_init(&the_lnet.ln_eq_wait_lock);
+	spin_lock_init(&the_lnet.ln_eq_wait_lock);
 	cfs_waitq_init(&the_lnet.ln_eq_waitq);
-	cfs_mutex_init(&the_lnet.ln_lnd_mutex);
-	cfs_mutex_init(&the_lnet.ln_api_mutex);
+	mutex_init(&the_lnet.ln_lnd_mutex);
+	mutex_init(&the_lnet.ln_api_mutex);
 }
 
 void

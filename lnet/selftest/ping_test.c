@@ -46,8 +46,8 @@ int ping_srv_workitems = SFW_TEST_WI_MAX;
 CFS_MODULE_PARM(ping_srv_workitems, "i", int, 0644, "# PING server workitems");
 
 typedef struct {
-        cfs_spinlock_t  pnd_lock;       /* serialize */
-        int             pnd_counter;    /* sequence counter */
+	spinlock_t	pnd_lock;	/* serialize */
+	int		pnd_counter;	/* sequence counter */
 } lst_ping_data_t;
 
 static lst_ping_data_t  lst_ping_data;
@@ -60,10 +60,10 @@ ping_client_init(sfw_test_instance_t *tsi)
 	LASSERT(tsi->tsi_is_client);
 	LASSERT(sn != NULL && (sn->sn_features & ~LST_FEATS_MASK) == 0);
 
-        cfs_spin_lock_init(&lst_ping_data.pnd_lock);
-        lst_ping_data.pnd_counter = 0;
+	spin_lock_init(&lst_ping_data.pnd_lock);
+	lst_ping_data.pnd_counter = 0;
 
-        return 0;
+	return 0;
 }
 
 static void
@@ -103,15 +103,15 @@ ping_client_prep_rpc(sfw_test_unit_t *tsu,
 
         req->pnr_magic = LST_PING_TEST_MAGIC;
 
-        cfs_spin_lock(&lst_ping_data.pnd_lock);
-        req->pnr_seq = lst_ping_data.pnd_counter ++;
-        cfs_spin_unlock(&lst_ping_data.pnd_lock);
+	spin_lock(&lst_ping_data.pnd_lock);
+	req->pnr_seq = lst_ping_data.pnd_counter++;
+	spin_unlock(&lst_ping_data.pnd_lock);
 
-        cfs_fs_timeval(&tv);
-        req->pnr_time_sec  = tv.tv_sec;
-        req->pnr_time_usec = tv.tv_usec;
+	cfs_fs_timeval(&tv);
+	req->pnr_time_sec  = tv.tv_sec;
+	req->pnr_time_usec = tv.tv_usec;
 
-        return rc;
+	return rc;
 }
 
 static void

@@ -678,12 +678,12 @@ void qmt_id_lock_notify(struct qmt_device *qmt, struct lquota_entry *lqe)
 	ENTRY;
 
 	lqe_getref(lqe);
-	cfs_spin_lock(&qmt->qmt_reba_lock);
+	spin_lock(&qmt->qmt_reba_lock);
 	if (!qmt->qmt_stopping && cfs_list_empty(&lqe->lqe_link)) {
 		cfs_list_add_tail(&lqe->lqe_link, &qmt->qmt_reba_list);
 		added = true;
 	}
-	cfs_spin_unlock(&qmt->qmt_reba_lock);
+	spin_unlock(&qmt->qmt_reba_lock);
 
 	if (added)
 		cfs_waitq_signal(&qmt->qmt_reba_thread.t_ctl_waitq);
@@ -735,19 +735,19 @@ static int qmt_reba_thread(void *arg)
 			     !cfs_list_empty(&qmt->qmt_reba_list) ||
 			     !thread_is_running(thread), &lwi);
 
-		cfs_spin_lock(&qmt->qmt_reba_lock);
+		spin_lock(&qmt->qmt_reba_lock);
 		cfs_list_for_each_entry_safe(lqe, tmp, &qmt->qmt_reba_list,
 					     lqe_link) {
 			cfs_list_del_init(&lqe->lqe_link);
-			cfs_spin_unlock(&qmt->qmt_reba_lock);
+			spin_unlock(&qmt->qmt_reba_lock);
 
 			if (thread_is_running(thread))
 				qmt_id_lock_glimpse(env, qmt, lqe, NULL);
 
 			lqe_putref(lqe);
-			cfs_spin_lock(&qmt->qmt_reba_lock);
+			spin_lock(&qmt->qmt_reba_lock);
 		}
-		cfs_spin_unlock(&qmt->qmt_reba_lock);
+		spin_unlock(&qmt->qmt_reba_lock);
 
 		if (!thread_is_running(thread))
 			break;

@@ -45,21 +45,20 @@
 
 int oom_get_adj(struct task_struct *task, int scope)
 {
-
-        int oom_adj;
+	int oom_adj;
 #ifdef HAVE_OOMADJ_IN_SIG
-        unsigned long flags;
+	unsigned long flags;
 
-        spin_lock_irqsave(&task->sighand->siglock, flags);
-        oom_adj = task->signal->oom_adj;
-        task->signal->oom_adj = scope;
-        spin_unlock_irqrestore(&task->sighand->siglock, flags);
+	spin_lock_irqsave(&task->sighand->siglock, flags);
+	oom_adj = task->signal->oom_adj;
+	task->signal->oom_adj = scope;
+	spin_unlock_irqrestore(&task->sighand->siglock, flags);
 
 #else
-        oom_adj = task->oomkilladj;
-        task->oomkilladj = scope;
+	oom_adj = task->oomkilladj;
+	task->oomkilladj = scope;
 #endif
-        return oom_adj;
+	return oom_adj;
 }
 
 int cfs_create_thread(int (*fn)(void *),

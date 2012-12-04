@@ -409,21 +409,21 @@ static int mdt_statfs(struct mdt_thread_info *info)
 		rc = next->md_ops->mdo_statfs(info->mti_env, next, osfs);
 		if (rc)
 			RETURN(rc);
-		cfs_spin_lock(&info->mti_mdt->mdt_osfs_lock);
+		spin_lock(&info->mti_mdt->mdt_osfs_lock);
 		info->mti_mdt->mdt_osfs = *osfs;
 		info->mti_mdt->mdt_osfs_age = cfs_time_current_64();
-		cfs_spin_unlock(&info->mti_mdt->mdt_osfs_lock);
+		spin_unlock(&info->mti_mdt->mdt_osfs_lock);
 	} else {
 		/** use cached statfs data */
-		cfs_spin_lock(&info->mti_mdt->mdt_osfs_lock);
+		spin_lock(&info->mti_mdt->mdt_osfs_lock);
 		*osfs = info->mti_mdt->mdt_osfs;
-		cfs_spin_unlock(&info->mti_mdt->mdt_osfs_lock);
+		spin_unlock(&info->mti_mdt->mdt_osfs_lock);
 	}
 
-        if (rc == 0)
+	if (rc == 0)
 		mdt_counter_incr(req, LPROC_MDT_STATFS);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /**
@@ -1518,12 +1518,12 @@ static int mdt_set_info(struct mdt_thread_info *info)
                 req->rq_status = 0;
                 lustre_msg_set_status(req->rq_repmsg, 0);
 
-                cfs_spin_lock(&req->rq_export->exp_lock);
-                if (*(__u32 *)val)
-                        req->rq_export->exp_connect_flags |= OBD_CONNECT_RDONLY;
-                else
-                        req->rq_export->exp_connect_flags &=~OBD_CONNECT_RDONLY;
-                cfs_spin_unlock(&req->rq_export->exp_lock);
+		spin_lock(&req->rq_export->exp_lock);
+		if (*(__u32 *)val)
+			req->rq_export->exp_connect_flags |= OBD_CONNECT_RDONLY;
+		else
+			req->rq_export->exp_connect_flags &=~OBD_CONNECT_RDONLY;
+		spin_unlock(&req->rq_export->exp_lock);
 
         } else if (KEY_IS(KEY_CHANGELOG_CLEAR)) {
                 struct changelog_setinfo *cs =
@@ -1575,9 +1575,9 @@ static int mdt_connect(struct mdt_thread_info *info)
 	 * the connect flags in the shared export data structure. LU-1623 */
 	reply = req_capsule_server_get(info->mti_pill, &RMF_CONNECT_DATA);
 	exp = req->rq_export;
-	cfs_spin_lock(&exp->exp_lock);
+	spin_lock(&exp->exp_lock);
 	exp->exp_connect_flags = reply->ocd_connect_flags;
-	cfs_spin_unlock(&exp->exp_lock);
+	spin_unlock(&exp->exp_lock);
 
 	rc = mdt_init_idmap(info);
 	if (rc != 0)
@@ -4974,10 +4974,10 @@ static int mdt_adapt_sptlrpc_conf(struct obd_device *obd, int initial)
 
         sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
 
-        cfs_write_lock(&m->mdt_sptlrpc_lock);
+	write_lock(&m->mdt_sptlrpc_lock);
         sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
         m->mdt_sptlrpc_rset = tmp_rset;
-        cfs_write_unlock(&m->mdt_sptlrpc_lock);
+	write_unlock(&m->mdt_sptlrpc_lock);
 
         return 0;
 }
@@ -5038,10 +5038,10 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 		obd->u.obt.obt_magic = OBT_MAGIC;
         }
 
-        cfs_rwlock_init(&m->mdt_sptlrpc_lock);
+	rwlock_init(&m->mdt_sptlrpc_lock);
         sptlrpc_rule_set_init(&m->mdt_sptlrpc_rset);
 
-        cfs_spin_lock_init(&m->mdt_ioepoch_lock);
+	spin_lock_init(&m->mdt_ioepoch_lock);
         m->mdt_opts.mo_compat_resname = 0;
         m->mdt_opts.mo_mds_capa = 1;
         m->mdt_opts.mo_oss_capa = 1;
@@ -5053,8 +5053,8 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         CFS_INIT_LIST_HEAD(&m->mdt_nosquash_nids);
         m->mdt_nosquash_str = NULL;
         m->mdt_nosquash_strlen = 0;
-        cfs_init_rwsem(&m->mdt_squash_sem);
-	cfs_spin_lock_init(&m->mdt_osfs_lock);
+	init_rwsem(&m->mdt_squash_sem);
+	spin_lock_init(&m->mdt_osfs_lock);
 	m->mdt_osfs_age = cfs_time_shift_64(-1000);
 
         m->mdt_md_dev.md_lu_dev.ld_ops = &mdt_lu_ops;
@@ -5324,8 +5324,8 @@ static struct lu_object *mdt_object_alloc(const struct lu_env *env,
                 lu_object_init(o, h, d);
                 lu_object_add_top(h, o);
                 o->lo_ops = &mdt_obj_ops;
-                cfs_mutex_init(&mo->mot_ioepoch_mutex);
-                cfs_mutex_init(&mo->mot_lov_mutex);
+		mutex_init(&mo->mot_ioepoch_mutex);
+		mutex_init(&mo->mot_lov_mutex);
                 RETURN(o);
         } else
                 RETURN(NULL);
@@ -5414,13 +5414,13 @@ static int mdt_prepare(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	LASSERT(!cfs_test_bit(MDT_FL_CFGLOG, &mdt->mdt_state));
+	LASSERT(!test_bit(MDT_FL_CFGLOG, &mdt->mdt_state));
 	target_recovery_init(&mdt->mdt_lut, mdt_recovery_handle);
-	cfs_set_bit(MDT_FL_CFGLOG, &mdt->mdt_state);
+	set_bit(MDT_FL_CFGLOG, &mdt->mdt_state);
 	LASSERT(obd->obd_no_conn);
-	cfs_spin_lock(&obd->obd_dev_lock);
+	spin_lock(&obd->obd_dev_lock);
 	obd->obd_no_conn = 0;
-	cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_unlock(&obd->obd_dev_lock);
 
 	if (obd->obd_recovering == 0)
 		mdt_postrecov(env, mdt);
@@ -5529,9 +5529,9 @@ static int mdt_connect_internal(struct obd_export *exp,
 	 * connection, and it is safe to expose this flag before connection
 	 * processing completes. */
 	if (data->ocd_connect_flags & OBD_CONNECT_LIGHTWEIGHT) {
-		cfs_spin_lock(&exp->exp_lock);
+		spin_lock(&exp->exp_lock);
 		exp->exp_connect_flags |=  OBD_CONNECT_LIGHTWEIGHT;
-		cfs_spin_unlock(&exp->exp_lock);
+		spin_unlock(&exp->exp_lock);
 	}
 
 	data->ocd_version = LUSTRE_VERSION_CODE;
@@ -5554,21 +5554,21 @@ static int mdt_connect_internal(struct obd_export *exp,
 }
 
 static int mdt_connect_check_sptlrpc(struct mdt_device *mdt,
-                                     struct obd_export *exp,
-                                     struct ptlrpc_request *req)
+				     struct obd_export *exp,
+				     struct ptlrpc_request *req)
 {
-        struct sptlrpc_flavor   flvr;
-        int                     rc = 0;
+	struct sptlrpc_flavor   flvr;
+	int                     rc = 0;
 
-        if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
-                cfs_read_lock(&mdt->mdt_sptlrpc_lock);
-                sptlrpc_target_choose_flavor(&mdt->mdt_sptlrpc_rset,
-                                             req->rq_sp_from,
-                                             req->rq_peer.nid,
-                                             &flvr);
-                cfs_read_unlock(&mdt->mdt_sptlrpc_lock);
+	if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
+		read_lock(&mdt->mdt_sptlrpc_lock);
+		sptlrpc_target_choose_flavor(&mdt->mdt_sptlrpc_rset,
+					     req->rq_sp_from,
+					     req->rq_peer.nid,
+					     &flvr);
+		read_unlock(&mdt->mdt_sptlrpc_lock);
 
-                cfs_spin_lock(&exp->exp_lock);
+		spin_lock(&exp->exp_lock);
 
                 exp->exp_sp_peer = req->rq_sp_from;
                 exp->exp_flvr = flvr;
@@ -5582,7 +5582,7 @@ static int mdt_connect_check_sptlrpc(struct mdt_device *mdt,
                         rc = -EACCES;
                 }
 
-                cfs_spin_unlock(&exp->exp_lock);
+		spin_unlock(&exp->exp_lock);
         } else {
                 if (exp->exp_sp_peer != req->rq_sp_from) {
                         CERROR("RPC source %s doesn't match %s\n",
@@ -5625,11 +5625,11 @@ static int mdt_obd_connect(const struct lu_env *env,
 	 * XXX: probably not very appropriate method is used now
 	 *      at some point we should find a better one
 	 */
-	if (!cfs_test_bit(MDT_FL_SYNCED, &mdt->mdt_state)) {
+	if (!test_bit(MDT_FL_SYNCED, &mdt->mdt_state)) {
 		rc = obd_health_check(env, mdt->mdt_child_exp->exp_obd);
 		if (rc)
 			RETURN(-EAGAIN);
-		cfs_set_bit(MDT_FL_SYNCED, &mdt->mdt_state);
+		set_bit(MDT_FL_SYNCED, &mdt->mdt_state);
 	}
 
         rc = class_connect(&conn, obd, cluuid);
@@ -5711,17 +5711,17 @@ static int mdt_export_cleanup(struct obd_export *exp)
         int rc = 0;
         ENTRY;
 
-        cfs_spin_lock(&med->med_open_lock);
-        while (!cfs_list_empty(&med->med_open_head)) {
-                cfs_list_t *tmp = med->med_open_head.next;
-                mfd = cfs_list_entry(tmp, struct mdt_file_data, mfd_list);
+	spin_lock(&med->med_open_lock);
+	while (!cfs_list_empty(&med->med_open_head)) {
+		cfs_list_t *tmp = med->med_open_head.next;
+		mfd = cfs_list_entry(tmp, struct mdt_file_data, mfd_list);
 
-                /* Remove mfd handle so it can't be found again.
-                 * We are consuming the mfd_list reference here. */
-                class_handle_unhash(&mfd->mfd_handle);
-                cfs_list_move_tail(&mfd->mfd_list, &closing_list);
-        }
-        cfs_spin_unlock(&med->med_open_lock);
+		/* Remove mfd handle so it can't be found again.
+		 * We are consuming the mfd_list reference here. */
+		class_handle_unhash(&mfd->mfd_handle);
+		cfs_list_move_tail(&mfd->mfd_list, &closing_list);
+	}
+	spin_unlock(&med->med_open_lock);
         mdt = mdt_dev(obd->obd_lu_dev);
         LASSERT(mdt != NULL);
 
@@ -5786,12 +5786,12 @@ static int mdt_init_export(struct obd_export *exp)
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&med->med_open_head);
-        cfs_spin_lock_init(&med->med_open_lock);
-        cfs_mutex_init(&med->med_idmap_mutex);
-        med->med_idmap = NULL;
-        cfs_spin_lock(&exp->exp_lock);
-        exp->exp_connecting = 1;
-        cfs_spin_unlock(&exp->exp_lock);
+	spin_lock_init(&med->med_open_lock);
+	mutex_init(&med->med_idmap_mutex);
+	med->med_idmap = NULL;
+	spin_lock(&exp->exp_lock);
+	exp->exp_connecting = 1;
+	spin_unlock(&exp->exp_lock);
 
         /* self-export doesn't need client data and ldlm initialization */
         if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,

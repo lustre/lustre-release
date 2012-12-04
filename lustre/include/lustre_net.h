@@ -473,7 +473,7 @@ struct ptlrpc_request_set {
 	 * locked so that any old caller can communicate requests to
 	 * the set holder who can then fold them into the lock-free set
 	 */
-	cfs_spinlock_t        set_new_req_lock;
+	spinlock_t		set_new_req_lock;
 	/** List of new yet unsent requests. Only used with ptlrpcd now. */
 	cfs_list_t            set_new_requests;
 
@@ -535,7 +535,7 @@ struct ptlrpc_reply_state {
         cfs_list_t             rs_debug_list;
 #endif
         /** A spinlock to protect the reply state flags */
-        cfs_spinlock_t         rs_lock;
+	spinlock_t		rs_lock;
         /** Reply state flags */
         unsigned long          rs_difficult:1;     /* ACK/commit stuff */
         unsigned long          rs_no_ack:1;    /* no ACK, even for
@@ -610,8 +610,8 @@ typedef int (*ptlrpc_interpterer_t)(const struct lu_env *env,
  * any allocations (to avoid e.g. OOM).
  */
 struct ptlrpc_request_pool {
-        /** Locks the list */
-        cfs_spinlock_t prp_lock;
+	/** Locks the list */
+	spinlock_t prp_lock;
         /** list of ptlrpc_request structs */
         cfs_list_t prp_req_list;
         /** Maximum message size that would fit into a rquest from this pool */
@@ -691,8 +691,8 @@ struct ptlrpc_request {
         /** Lock to protect request flags and some other important bits, like
          * rq_list
          */
-        cfs_spinlock_t rq_lock;
-        /** client-side flags are serialized by rq_lock */
+	spinlock_t rq_lock;
+	/** client-side flags are serialized by rq_lock */
 	unsigned int rq_intr:1, rq_replied:1, rq_err:1,
                 rq_timedout:1, rq_resend:1, rq_restart:1,
                 /**
@@ -1109,7 +1109,7 @@ struct ptlrpc_bulk_desc {
         /** client side */
         unsigned long bd_registered:1;
         /** For serialization with callback */
-        cfs_spinlock_t bd_lock;
+	spinlock_t bd_lock;
         /** Import generation when request for this bulk was sent */
         int bd_import_generation;
         /** Server side - export this bulk created for */
@@ -1322,7 +1322,7 @@ struct ptlrpc_service_ops {
  */
 struct ptlrpc_service {
 	/** serialize /proc operations */
-	cfs_spinlock_t			srv_lock;
+	spinlock_t			srv_lock;
         /** most often accessed fields */
         /** chain thru all services */
         cfs_list_t                      srv_list;
@@ -1421,7 +1421,7 @@ struct ptlrpc_service_part {
 	 * rqbd list and incoming requests waiting for preprocess,
 	 * threads starting & stopping are also protected by this lock.
 	 */
-	cfs_spinlock_t			scp_lock  __cfs_cacheline_aligned;
+	spinlock_t			scp_lock  __cfs_cacheline_aligned;
 	/** total # req buffer descs allocated */
 	int				scp_nrqbds_total;
 	/** # posted request buffers for receiving */
@@ -1457,7 +1457,7 @@ struct ptlrpc_service_part {
 	 * serialize the following fields, used for processing requests
 	 * sent to this portal
 	 */
-	cfs_spinlock_t			scp_req_lock __cfs_cacheline_aligned;
+	spinlock_t			scp_req_lock __cfs_cacheline_aligned;
 	/** # reqs in either of the queues below */
 	/** reqs waiting for service */
 	cfs_list_t			scp_req_pending;
@@ -1476,7 +1476,7 @@ struct ptlrpc_service_part {
 	 * serialize the following fields, used for changes on
 	 * adaptive timeout
 	 */
-	cfs_spinlock_t			scp_at_lock __cfs_cacheline_aligned;
+	spinlock_t			scp_at_lock __cfs_cacheline_aligned;
 	/** estimated rpc service time */
 	struct adaptive_timeout		scp_at_estimate;
 	/** reqs waiting for replies */
@@ -1493,7 +1493,7 @@ struct ptlrpc_service_part {
 	 * serialize the following fields, used for processing
 	 * replies for this portal
 	 */
-	cfs_spinlock_t			scp_rep_lock __cfs_cacheline_aligned;
+	spinlock_t			scp_rep_lock __cfs_cacheline_aligned;
 	/** all the active replies */
 	cfs_list_t			scp_rep_active;
 #ifndef __KERNEL__
@@ -1518,22 +1518,22 @@ struct ptlrpc_service_part {
  * Declaration of ptlrpcd control structure
  */
 struct ptlrpcd_ctl {
-        /**
-         * Ptlrpc thread control flags (LIOD_START, LIOD_STOP, LIOD_FORCE)
-         */
-        unsigned long               pc_flags;
-        /**
-         * Thread lock protecting structure fields.
-         */
-        cfs_spinlock_t              pc_lock;
-        /**
-         * Start completion.
-         */
-        cfs_completion_t            pc_starting;
-        /**
-         * Stop completion.
-         */
-        cfs_completion_t            pc_finishing;
+	/**
+	 * Ptlrpc thread control flags (LIOD_START, LIOD_STOP, LIOD_FORCE)
+	 */
+	unsigned long			pc_flags;
+	/**
+	 * Thread lock protecting structure fields.
+	 */
+	spinlock_t			pc_lock;
+	/**
+	 * Start completion.
+	 */
+	struct completion		pc_starting;
+	/**
+	 * Stop completion.
+	 */
+	struct completion		pc_finishing;
         /**
          * Thread requests set.
          */
@@ -1651,14 +1651,14 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc);
 
 static inline int ptlrpc_server_bulk_active(struct ptlrpc_bulk_desc *desc)
 {
-        int rc;
+	int rc;
 
-        LASSERT(desc != NULL);
+	LASSERT(desc != NULL);
 
-        cfs_spin_lock(&desc->bd_lock);
-        rc = desc->bd_network_rw;
-        cfs_spin_unlock(&desc->bd_lock);
-        return rc;
+	spin_lock(&desc->bd_lock);
+	rc = desc->bd_network_rw;
+	spin_unlock(&desc->bd_lock);
+	return rc;
 }
 #endif
 
@@ -1679,10 +1679,10 @@ static inline int ptlrpc_client_bulk_active(struct ptlrpc_request *req)
         if (!desc)
                 return 0;
 
-        cfs_spin_lock(&desc->bd_lock);
-        rc = desc->bd_network_rw;
-        cfs_spin_unlock(&desc->bd_lock);
-        return rc;
+	spin_lock(&desc->bd_lock);
+	rc = desc->bd_network_rw;
+	spin_unlock(&desc->bd_lock);
+	return rc;
 }
 
 #define PTLRPC_REPLY_MAYBE_DIFFICULT 0x01
@@ -2080,17 +2080,17 @@ ptlrpc_client_recv(struct ptlrpc_request *req)
 static inline int
 ptlrpc_client_recv_or_unlink(struct ptlrpc_request *req)
 {
-        int rc;
+	int rc;
 
-        cfs_spin_lock(&req->rq_lock);
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
-            req->rq_reply_deadline > cfs_time_current_sec()) {
-                cfs_spin_unlock(&req->rq_lock);
-                return 1;
-        }
-        rc = req->rq_receiving_reply || req->rq_must_unlink;
-        cfs_spin_unlock(&req->rq_lock);
-        return rc;
+	spin_lock(&req->rq_lock);
+	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_LONG_REPL_UNLINK) &&
+	    req->rq_reply_deadline > cfs_time_current_sec()) {
+		spin_unlock(&req->rq_lock);
+		return 1;
+	}
+	rc = req->rq_receiving_reply || req->rq_must_unlink;
+	spin_unlock(&req->rq_lock);
+	return rc;
 }
 
 static inline void
@@ -2157,12 +2157,12 @@ static inline int ptlrpc_send_limit_expired(struct ptlrpc_request *req)
 
 static inline int ptlrpc_no_resend(struct ptlrpc_request *req)
 {
-        if (!req->rq_no_resend && ptlrpc_send_limit_expired(req)) {
-                cfs_spin_lock(&req->rq_lock);
-                req->rq_no_resend = 1;
-                cfs_spin_unlock(&req->rq_lock);
-        }
-        return req->rq_no_resend;
+	if (!req->rq_no_resend && ptlrpc_send_limit_expired(req)) {
+		spin_lock(&req->rq_lock);
+		req->rq_no_resend = 1;
+		spin_unlock(&req->rq_lock);
+	}
+	return req->rq_no_resend;
 }
 
 static inline int

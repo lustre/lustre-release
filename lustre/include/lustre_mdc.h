@@ -70,7 +70,7 @@ struct ptlrpc_request;
 struct obd_device;
 
 struct mdc_rpc_lock {
-	cfs_mutex_t		rpcl_mutex;
+	struct mutex		rpcl_mutex;
 	struct lookup_intent	*rpcl_it;
 	int			rpcl_fakes;
 };
@@ -79,7 +79,7 @@ struct mdc_rpc_lock {
 
 static inline void mdc_init_rpc_lock(struct mdc_rpc_lock *lck)
 {
-        cfs_mutex_init(&lck->rpcl_mutex);
+	mutex_init(&lck->rpcl_mutex);
         lck->rpcl_it = NULL;
 }
 
@@ -98,12 +98,12 @@ static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck,
 	 * Only when all fake requests are finished can normal requests
 	 * be sent, to ensure they are recoverable again. */
  again:
-	cfs_mutex_lock(&lck->rpcl_mutex);
+	mutex_lock(&lck->rpcl_mutex);
 
 	if (CFS_FAIL_CHECK_QUIET(OBD_FAIL_MDC_RPCS_SEM)) {
 		lck->rpcl_it = MDC_FAKE_RPCL_IT;
 		lck->rpcl_fakes++;
-		cfs_mutex_unlock(&lck->rpcl_mutex);
+		mutex_unlock(&lck->rpcl_mutex);
 		return;
 	}
 
@@ -113,7 +113,7 @@ static inline void mdc_get_rpc_lock(struct mdc_rpc_lock *lck,
 	 * in this extremely rare case, just have low overhead in
 	 * the common case when it isn't true. */
 	while (unlikely(lck->rpcl_it == MDC_FAKE_RPCL_IT)) {
-		cfs_mutex_unlock(&lck->rpcl_mutex);
+		mutex_unlock(&lck->rpcl_mutex);
 		cfs_schedule_timeout(cfs_time_seconds(1) / 4);
 		goto again;
 	}
@@ -129,7 +129,7 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
 		goto out;
 
 	if (lck->rpcl_it == MDC_FAKE_RPCL_IT) { /* OBD_FAIL_MDC_RPCS_SEM */
-		cfs_mutex_lock(&lck->rpcl_mutex);
+		mutex_lock(&lck->rpcl_mutex);
 
 		LASSERTF(lck->rpcl_fakes > 0, "%d\n", lck->rpcl_fakes);
 		lck->rpcl_fakes--;
@@ -142,7 +142,7 @@ static inline void mdc_put_rpc_lock(struct mdc_rpc_lock *lck,
 		lck->rpcl_it = NULL;
 	}
 
-	cfs_mutex_unlock(&lck->rpcl_mutex);
+	mutex_unlock(&lck->rpcl_mutex);
  out:
 	EXIT;
 }

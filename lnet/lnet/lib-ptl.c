@@ -776,7 +776,7 @@ lnet_ptl_setup(struct lnet_portal *ptl, int index)
 	CFS_INIT_LIST_HEAD(&ptl->ptl_msg_delayed);
 	CFS_INIT_LIST_HEAD(&ptl->ptl_msg_stealing);
 #ifdef __KERNEL__
-	cfs_spin_lock_init(&ptl->ptl_lock);
+	spin_lock_init(&ptl->ptl_lock);
 #else
 # ifdef HAVE_LIBPTHREAD
 	pthread_mutex_init(&ptl->ptl_lock, NULL);

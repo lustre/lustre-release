@@ -412,7 +412,7 @@ struct lnet_tx_queue {
 
 typedef struct lnet_ni {
 #ifdef __KERNEL__
-	cfs_spinlock_t		ni_lock;
+	spinlock_t		ni_lock;
 #else
 # ifndef HAVE_LIBPTHREAD
 	int			ni_lock;
@@ -638,7 +638,7 @@ struct lnet_match_table {
 
 typedef struct lnet_portal {
 #ifdef __KERNEL__
-	cfs_spinlock_t		ptl_lock;
+	spinlock_t		ptl_lock;
 #else
 # ifndef HAVE_LIBPTHREAD
 	int			ptl_lock;
@@ -721,7 +721,7 @@ typedef struct
 	struct lnet_res_container	ln_eq_container;
 #ifdef __KERNEL__
 	cfs_waitq_t			ln_eq_waitq;
-	cfs_spinlock_t			ln_eq_wait_lock;
+	spinlock_t			ln_eq_wait_lock;
 #else
 # ifndef HAVE_LIBPTHREAD
 	int				ln_eq_wait_lock;
@@ -773,10 +773,10 @@ typedef struct
 	cfs_list_t			ln_rcd_zombie;
 #ifdef __KERNEL__
 	/* serialise startup/shutdown */
-	cfs_semaphore_t			ln_rc_signal;
+	struct semaphore		ln_rc_signal;
 
-	cfs_mutex_t			ln_api_mutex;
-	cfs_mutex_t			ln_lnd_mutex;
+	struct mutex			ln_api_mutex;
+	struct mutex			ln_lnd_mutex;
 #else
 # ifndef HAVE_LIBPTHREAD
 	int				ln_api_mutex;

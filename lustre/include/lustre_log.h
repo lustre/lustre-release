@@ -333,8 +333,8 @@ struct llog_operations {
 
 /* In-memory descriptor for a log object or log catalog */
 struct llog_handle {
-	cfs_rw_semaphore_t	 lgh_lock;
-	cfs_spinlock_t		 lgh_hdr_lock; /* protect lgh_hdr data */
+	struct rw_semaphore	 lgh_lock;
+	spinlock_t		 lgh_hdr_lock; /* protect lgh_hdr data */
 	struct llog_logid	 lgh_id; /* id of this log */
 	struct llog_log_hdr	*lgh_hdr;
 	struct file		*lgh_file;
@@ -383,7 +383,7 @@ struct llog_ctxt {
         struct llog_handle      *loc_handle;
         struct llog_commit_master *loc_lcm;
         struct llog_canceld_ctxt *loc_llcd;
-        cfs_mutex_t              loc_mutex; /* protects loc_llcd and loc_imp */
+	struct mutex		 loc_mutex; /* protect loc_llcd and loc_imp */
         cfs_atomic_t             loc_refcount;
         void                    *llog_proc_cb;
         long                     loc_flags; /* flags, see above defines */
@@ -412,7 +412,7 @@ struct llog_commit_master {
         /**
          * Lock protecting list of llcds.
          */
-        cfs_spinlock_t             lcm_lock;
+	spinlock_t		   lcm_lock;
         /**
          * Llcds in flight for debugging purposes.
          */
@@ -551,64 +551,63 @@ static inline void llog_ctxt_put(struct llog_ctxt *ctxt)
 
 static inline void llog_group_init(struct obd_llog_group *olg, int group)
 {
-        cfs_waitq_init(&olg->olg_waitq);
-        cfs_spin_lock_init(&olg->olg_lock);
-        cfs_mutex_init(&olg->olg_cat_processing);
-        olg->olg_seq = group;
+	cfs_waitq_init(&olg->olg_waitq);
+	spin_lock_init(&olg->olg_lock);
+	mutex_init(&olg->olg_cat_processing);
+	olg->olg_seq = group;
 }
 
 static inline void llog_group_set_export(struct obd_llog_group *olg,
                                          struct obd_export *exp)
 {
-        LASSERT(exp != NULL);
+	LASSERT(exp != NULL);
 
-        cfs_spin_lock(&olg->olg_lock);
-        if (olg->olg_exp != NULL && olg->olg_exp != exp)
-                CWARN("%s: export for group %d is changed: 0x%p -> 0x%p\n",
-                      exp->exp_obd->obd_name, olg->olg_seq,
-                      olg->olg_exp, exp);
-        olg->olg_exp = exp;
-        cfs_spin_unlock(&olg->olg_lock);
+	spin_lock(&olg->olg_lock);
+	if (olg->olg_exp != NULL && olg->olg_exp != exp)
+		CWARN("%s: export for group %d is changed: 0x%p -> 0x%p\n",
+		      exp->exp_obd->obd_name, olg->olg_seq,
+		      olg->olg_exp, exp);
+	olg->olg_exp = exp;
+	spin_unlock(&olg->olg_lock);
 }
 
 static inline int llog_group_set_ctxt(struct obd_llog_group *olg,
                                       struct llog_ctxt *ctxt, int index)
 {
-        LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
+	LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
 
-        cfs_spin_lock(&olg->olg_lock);
-        if (olg->olg_ctxts[index] != NULL) {
-                cfs_spin_unlock(&olg->olg_lock);
-                return -EEXIST;
-        }
-        olg->olg_ctxts[index] = ctxt;
-        cfs_spin_unlock(&olg->olg_lock);
-        return 0;
+	spin_lock(&olg->olg_lock);
+	if (olg->olg_ctxts[index] != NULL) {
+		spin_unlock(&olg->olg_lock);
+		return -EEXIST;
+	}
+	olg->olg_ctxts[index] = ctxt;
+	spin_unlock(&olg->olg_lock);
+	return 0;
 }
 
 static inline struct llog_ctxt *llog_group_get_ctxt(struct obd_llog_group *olg,
                                                     int index)
 {
-        struct llog_ctxt *ctxt;
+	struct llog_ctxt *ctxt;
 
-        LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
+	LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
 
-        cfs_spin_lock(&olg->olg_lock);
-        if (olg->olg_ctxts[index] == NULL) {
-                ctxt = NULL;
-        } else {
-                ctxt = llog_ctxt_get(olg->olg_ctxts[index]);
-        }
-        cfs_spin_unlock(&olg->olg_lock);
-        return ctxt;
+	spin_lock(&olg->olg_lock);
+	if (olg->olg_ctxts[index] == NULL)
+		ctxt = NULL;
+	else
+		ctxt = llog_ctxt_get(olg->olg_ctxts[index]);
+	spin_unlock(&olg->olg_lock);
+	return ctxt;
 }
 
 static inline void llog_group_clear_ctxt(struct obd_llog_group *olg, int index)
 {
 	LASSERT(index >= 0 && index < LLOG_MAX_CTXTS);
-	cfs_spin_lock(&olg->olg_lock);
+	spin_lock(&olg->olg_lock);
 	olg->olg_ctxts[index] = NULL;
-	cfs_spin_unlock(&olg->olg_lock);
+	spin_unlock(&olg->olg_lock);
 }
 
 static inline struct llog_ctxt *llog_get_context(struct obd_device *obd,

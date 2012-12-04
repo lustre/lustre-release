@@ -111,14 +111,14 @@ struct ofd_device {
 
 	int			 ofd_max_group;
 	obd_id			 ofd_last_objids[OFD_MAX_GROUPS];
-	cfs_mutex_t		 ofd_create_locks[OFD_MAX_GROUPS];
+	struct mutex		 ofd_create_locks[OFD_MAX_GROUPS];
 	struct dt_object	*ofd_lastid_obj[OFD_MAX_GROUPS];
-	cfs_spinlock_t		 ofd_objid_lock;
+	spinlock_t		 ofd_objid_lock;
 	unsigned long		 ofd_destroys_in_progress;
 	int			 ofd_precreate_batch;
 
 	/* protect all statfs-related counters */
-	cfs_spinlock_t		 ofd_osfs_lock;
+	spinlock_t		 ofd_osfs_lock;
 	/* statfs optimization: we cache a bit  */
 	struct obd_statfs	 ofd_osfs;
 	__u64			 ofd_osfs_age;
@@ -135,7 +135,7 @@ struct ofd_device {
 
 	/* grants: all values in bytes */
 	/* grant lock to protect all grant counters */
-	cfs_spinlock_t		 ofd_grant_lock;
+	spinlock_t		 ofd_grant_lock;
 	/* total amount of dirty data reported by clients in incoming obdo */
 	obd_size		 ofd_tot_dirty;
 	/* sum of filesystem space granted to clients for async writes */
@@ -154,7 +154,7 @@ struct ofd_device {
 	int			 ofd_fmd_max_num; /* per ofd ofd_mod_data */
 	cfs_duration_t		 ofd_fmd_max_age; /* time to fmd expiry */
 
-	cfs_spinlock_t		 ofd_flags_lock;
+	spinlock_t		 ofd_flags_lock;
 	unsigned long		 ofd_raid_degraded:1,
 				 /* sync journal on writes */
 				 ofd_syncjournal:1,

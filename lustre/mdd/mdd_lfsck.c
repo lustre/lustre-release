@@ -53,7 +53,7 @@ static inline char *mdd_lfsck2name(struct md_lfsck *lfsck)
 
 void mdd_lfsck_set_speed(struct md_lfsck *lfsck, __u32 limit)
 {
-	cfs_spin_lock(&lfsck->ml_lock);
+	spin_lock(&lfsck->ml_lock);
 	lfsck->ml_speed_limit = limit;
 	if (limit != LFSCK_SPEED_NO_LIMIT) {
 		if (limit > CFS_HZ) {
@@ -67,7 +67,7 @@ void mdd_lfsck_set_speed(struct md_lfsck *lfsck, __u32 limit)
 		lfsck->ml_sleep_jif = 0;
 		lfsck->ml_sleep_rate = 0;
 	}
-	cfs_spin_unlock(&lfsck->ml_lock);
+	spin_unlock(&lfsck->ml_lock);
 }
 
 static void mdd_lfsck_control_speed(struct md_lfsck *lfsck)
@@ -77,19 +77,19 @@ static void mdd_lfsck_control_speed(struct md_lfsck *lfsck)
 
 	if (lfsck->ml_sleep_jif > 0 &&
 	    lfsck->ml_new_scanned >= lfsck->ml_sleep_rate) {
-		cfs_spin_lock(&lfsck->ml_lock);
+		spin_lock(&lfsck->ml_lock);
 		if (likely(lfsck->ml_sleep_jif > 0 &&
 			   lfsck->ml_new_scanned >= lfsck->ml_sleep_rate)) {
 			lwi = LWI_TIMEOUT_INTR(lfsck->ml_sleep_jif, NULL,
 					       LWI_ON_SIGNAL_NOOP, NULL);
-			cfs_spin_unlock(&lfsck->ml_lock);
+			spin_unlock(&lfsck->ml_lock);
 
 			l_wait_event(thread->t_ctl_waitq,
 				     !thread_is_running(thread),
 				     &lwi);
 			lfsck->ml_new_scanned = 0;
 		} else {
-			cfs_spin_unlock(&lfsck->ml_lock);
+			spin_unlock(&lfsck->ml_lock);
 		}
 	}
 }
@@ -130,9 +130,9 @@ static int mdd_lfsck_main(void *args)
 	 *      every bookmark, then low layer module can decide the
 	 *      start point for current iteration. */
 
-	cfs_spin_lock(&lfsck->ml_lock);
+	spin_lock(&lfsck->ml_lock);
 	thread_set_flags(thread, SVC_RUNNING);
-	cfs_spin_unlock(&lfsck->ml_lock);
+	spin_unlock(&lfsck->ml_lock);
 	cfs_waitq_broadcast(&thread->t_ctl_waitq);
 
 	/* Call iops->load() to finish the choosing start point. */
@@ -195,10 +195,10 @@ fini_env:
 	lu_env_fini(&env);
 
 noenv:
-	cfs_spin_lock(&lfsck->ml_lock);
+	spin_lock(&lfsck->ml_lock);
 	thread_set_flags(thread, SVC_STOPPED);
 	cfs_waitq_broadcast(&thread->t_ctl_waitq);
-	cfs_spin_unlock(&lfsck->ml_lock);
+	spin_unlock(&lfsck->ml_lock);
 	return rc;
 }
 
@@ -215,15 +215,15 @@ int mdd_lfsck_start(const struct lu_env *env, struct md_lfsck *lfsck,
 	if (lfsck->ml_it_obj == NULL)
 		RETURN(-ENOTSUPP);
 
-	cfs_mutex_lock(&lfsck->ml_mutex);
-	cfs_spin_lock(&lfsck->ml_lock);
+	mutex_lock(&lfsck->ml_mutex);
+	spin_lock(&lfsck->ml_lock);
 	if (thread_is_running(thread)) {
-		cfs_spin_unlock(&lfsck->ml_lock);
-		cfs_mutex_unlock(&lfsck->ml_mutex);
+		spin_unlock(&lfsck->ml_lock);
+		mutex_unlock(&lfsck->ml_mutex);
 		RETURN(-EALREADY);
 	}
 
-	cfs_spin_unlock(&lfsck->ml_lock);
+	spin_unlock(&lfsck->ml_lock);
 	if (start->ls_valid & LSV_SPEED_LIMIT)
 		mdd_lfsck_set_speed(lfsck, start->ls_speed_limit);
 
@@ -255,7 +255,7 @@ int mdd_lfsck_start(const struct lu_env *env, struct md_lfsck *lfsck,
 			     thread_is_running(thread) ||
 			     thread_is_stopped(thread),
 			     &lwi);
-	cfs_mutex_unlock(&lfsck->ml_mutex);
+	mutex_unlock(&lfsck->ml_mutex);
 
 	RETURN(rc < 0 ? rc : 0);
 }
@@ -266,22 +266,22 @@ int mdd_lfsck_stop(const struct lu_env *env, struct md_lfsck *lfsck)
 	struct l_wait_info    lwi    = { 0 };
 	ENTRY;
 
-	cfs_mutex_lock(&lfsck->ml_mutex);
-	cfs_spin_lock(&lfsck->ml_lock);
+	mutex_lock(&lfsck->ml_mutex);
+	spin_lock(&lfsck->ml_lock);
 	if (thread_is_init(thread) || thread_is_stopped(thread)) {
-		cfs_spin_unlock(&lfsck->ml_lock);
-		cfs_mutex_unlock(&lfsck->ml_mutex);
+		spin_unlock(&lfsck->ml_lock);
+		mutex_unlock(&lfsck->ml_mutex);
 		RETURN(-EALREADY);
 	}
 
 	thread_set_flags(thread, SVC_STOPPING);
-	cfs_spin_unlock(&lfsck->ml_lock);
+	spin_unlock(&lfsck->ml_lock);
 
 	cfs_waitq_broadcast(&thread->t_ctl_waitq);
 	l_wait_event(thread->t_ctl_waitq,
 		     thread_is_stopped(thread),
 		     &lwi);
-	cfs_mutex_unlock(&lfsck->ml_mutex);
+	mutex_unlock(&lfsck->ml_mutex);
 
 	RETURN(0);
 }
@@ -301,8 +301,8 @@ int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd)
 	memset(lfsck, 0, sizeof(*lfsck));
 	lfsck->ml_version = LFSCK_VERSION_V1;
 	cfs_waitq_init(&lfsck->ml_thread.t_ctl_waitq);
-	cfs_mutex_init(&lfsck->ml_mutex);
-	cfs_spin_lock_init(&lfsck->ml_lock);
+	mutex_init(&lfsck->ml_mutex);
+	spin_lock_init(&lfsck->ml_lock);
 
 	obj = dt_store_open(env, mdd->mdd_child, "", lfsck_bookmark_name,
 			    &mdd_env_info(env)->mti_fid);

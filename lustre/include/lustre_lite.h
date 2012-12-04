@@ -123,7 +123,7 @@ struct lustre_client_ocd {
          * under ->lco_lock.
          */
         __u64              lco_flags;
-        cfs_mutex_t        lco_lock;
+	struct mutex	   lco_lock;
         struct obd_export *lco_md_exp;
         struct obd_export *lco_dt_exp;
 };

@@ -68,19 +68,19 @@ static DEFINE_SPINLOCK(registered_mechs_lock);
 
 int lgss_mech_register(struct gss_api_mech *gm)
 {
-        cfs_spin_lock(&registered_mechs_lock);
-        cfs_list_add(&gm->gm_list, &registered_mechs);
-        cfs_spin_unlock(&registered_mechs_lock);
-        CWARN("Register %s mechanism\n", gm->gm_name);
-        return 0;
+	spin_lock(&registered_mechs_lock);
+	cfs_list_add(&gm->gm_list, &registered_mechs);
+	spin_unlock(&registered_mechs_lock);
+	CWARN("Register %s mechanism\n", gm->gm_name);
+	return 0;
 }
 
 void lgss_mech_unregister(struct gss_api_mech *gm)
 {
-        cfs_spin_lock(&registered_mechs_lock);
-        cfs_list_del(&gm->gm_list);
-        cfs_spin_unlock(&registered_mechs_lock);
-        CWARN("Unregister %s mechanism\n", gm->gm_name);
+	spin_lock(&registered_mechs_lock);
+	cfs_list_del(&gm->gm_list);
+	spin_unlock(&registered_mechs_lock);
+	CWARN("Unregister %s mechanism\n", gm->gm_name);
 }
 
 
@@ -92,19 +92,19 @@ struct gss_api_mech *lgss_mech_get(struct gss_api_mech *gm)
 
 struct gss_api_mech *lgss_name_to_mech(char *name)
 {
-        struct gss_api_mech *pos, *gm = NULL;
+	struct gss_api_mech *pos, *gm = NULL;
 
-        cfs_spin_lock(&registered_mechs_lock);
-        cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
-                if (0 == strcmp(name, pos->gm_name)) {
-                        if (!cfs_try_module_get(pos->gm_owner))
-                                continue;
-                        gm = pos;
-                        break;
-                }
-        }
-        cfs_spin_unlock(&registered_mechs_lock);
-        return gm;
+	spin_lock(&registered_mechs_lock);
+	cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
+		if (0 == strcmp(name, pos->gm_name)) {
+			if (!cfs_try_module_get(pos->gm_owner))
+				continue;
+			gm = pos;
+			break;
+		}
+	}
+	spin_unlock(&registered_mechs_lock);
+	return gm;
 
 }
 
@@ -122,9 +122,9 @@ int mech_supports_subflavor(struct gss_api_mech *gm, __u32 subflavor)
 
 struct gss_api_mech *lgss_subflavor_to_mech(__u32 subflavor)
 {
-        struct gss_api_mech *pos, *gm = NULL;
+	struct gss_api_mech *pos, *gm = NULL;
 
-        cfs_spin_lock(&registered_mechs_lock);
+	spin_lock(&registered_mechs_lock);
         cfs_list_for_each_entry(pos, &registered_mechs, gm_list) {
                 if (!cfs_try_module_get(pos->gm_owner))
                         continue;
@@ -135,8 +135,8 @@ struct gss_api_mech *lgss_subflavor_to_mech(__u32 subflavor)
                 gm = pos;
                 break;
         }
-        cfs_spin_unlock(&registered_mechs_lock);
-        return gm;
+	spin_unlock(&registered_mechs_lock);
+	return gm;
 }
 
 void lgss_mech_put(struct gss_api_mech *gm)

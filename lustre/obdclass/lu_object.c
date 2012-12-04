@@ -161,7 +161,7 @@ EXPORT_SYMBOL(lu_object_put);
  */
 void lu_object_put_nocache(const struct lu_env *env, struct lu_object *o)
 {
-	cfs_set_bit(LU_OBJECT_HEARD_BANSHEE,
+	set_bit(LU_OBJECT_HEARD_BANSHEE,
 		    &o->lo_header->loh_flags);
 	return lu_object_put(env, o);
 }
@@ -750,7 +750,7 @@ EXPORT_SYMBOL(lu_types_stop);
  * Global list of all sites on this node
  */
 static CFS_LIST_HEAD(lu_sites);
-static CFS_DEFINE_MUTEX(lu_sites_guard);
+static DEFINE_MUTEX(lu_sites_guard);
 
 /**
  * Global environment used by site shrinker.
@@ -921,18 +921,18 @@ cfs_hash_ops_t lu_site_hash_ops = {
 
 void lu_dev_add_linkage(struct lu_site *s, struct lu_device *d)
 {
-	cfs_spin_lock(&s->ls_ld_lock);
+	spin_lock(&s->ls_ld_lock);
 	if (cfs_list_empty(&d->ld_linkage))
 		cfs_list_add(&d->ld_linkage, &s->ls_ld_linkage);
-	cfs_spin_unlock(&s->ls_ld_lock);
+	spin_unlock(&s->ls_ld_lock);
 }
 EXPORT_SYMBOL(lu_dev_add_linkage);
 
 void lu_dev_del_linkage(struct lu_site *s, struct lu_device *d)
 {
-	cfs_spin_lock(&s->ls_ld_lock);
+	spin_lock(&s->ls_ld_lock);
 	cfs_list_del_init(&d->ld_linkage);
-	cfs_spin_unlock(&s->ls_ld_lock);
+	spin_unlock(&s->ls_ld_lock);
 }
 EXPORT_SYMBOL(lu_dev_del_linkage);
 
@@ -1012,11 +1012,11 @@ int lu_site_init(struct lu_site *s, struct lu_device *top)
         lu_ref_add(&top->ld_reference, "site-top", s);
 
         CFS_INIT_LIST_HEAD(&s->ls_ld_linkage);
-        cfs_spin_lock_init(&s->ls_ld_lock);
+	spin_lock_init(&s->ls_ld_lock);
 
 	lu_dev_add_linkage(s, top);
 
-        RETURN(0);
+	RETURN(0);
 }
 EXPORT_SYMBOL(lu_site_init);
 
@@ -1025,9 +1025,9 @@ EXPORT_SYMBOL(lu_site_init);
  */
 void lu_site_fini(struct lu_site *s)
 {
-        cfs_mutex_lock(&lu_sites_guard);
+	mutex_lock(&lu_sites_guard);
         cfs_list_del_init(&s->ls_linkage);
-        cfs_mutex_unlock(&lu_sites_guard);
+	mutex_unlock(&lu_sites_guard);
 
         if (s->ls_obj_hash != NULL) {
                 cfs_hash_putref(s->ls_obj_hash);
@@ -1052,11 +1052,11 @@ EXPORT_SYMBOL(lu_site_fini);
 int lu_site_init_finish(struct lu_site *s)
 {
         int result;
-        cfs_mutex_lock(&lu_sites_guard);
+	mutex_lock(&lu_sites_guard);
         result = lu_context_refill(&lu_shrink_env.le_ctx);
         if (result == 0)
                 cfs_list_add(&s->ls_linkage, &lu_sites);
-        cfs_mutex_unlock(&lu_sites_guard);
+	mutex_unlock(&lu_sites_guard);
         return result;
 }
 EXPORT_SYMBOL(lu_site_init_finish);
@@ -1293,7 +1293,7 @@ int lu_context_key_register(struct lu_context_key *key)
         LASSERT(key->lct_owner != NULL);
 
         result = -ENFILE;
-        cfs_spin_lock(&lu_keys_guard);
+	spin_lock(&lu_keys_guard);
         for (i = 0; i < ARRAY_SIZE(lu_keys); ++i) {
                 if (lu_keys[i] == NULL) {
                         key->lct_index = i;
@@ -1305,8 +1305,8 @@ int lu_context_key_register(struct lu_context_key *key)
                         break;
                 }
         }
-        cfs_spin_unlock(&lu_keys_guard);
-        return result;
+	spin_unlock(&lu_keys_guard);
+	return result;
 }
 EXPORT_SYMBOL(lu_context_key_register);
 
@@ -1338,23 +1338,23 @@ static void key_fini(struct lu_context *ctx, int index)
  */
 void lu_context_key_degister(struct lu_context_key *key)
 {
-        LASSERT(cfs_atomic_read(&key->lct_used) >= 1);
-        LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
+	LASSERT(cfs_atomic_read(&key->lct_used) >= 1);
+	LINVRNT(0 <= key->lct_index && key->lct_index < ARRAY_SIZE(lu_keys));
 
-        lu_context_key_quiesce(key);
+	lu_context_key_quiesce(key);
 
-        ++key_set_version;
-        cfs_spin_lock(&lu_keys_guard);
-        key_fini(&lu_shrink_env.le_ctx, key->lct_index);
-        if (lu_keys[key->lct_index]) {
-                lu_keys[key->lct_index] = NULL;
-                lu_ref_fini(&key->lct_reference);
-        }
-        cfs_spin_unlock(&lu_keys_guard);
+	++key_set_version;
+	spin_lock(&lu_keys_guard);
+	key_fini(&lu_shrink_env.le_ctx, key->lct_index);
+	if (lu_keys[key->lct_index]) {
+		lu_keys[key->lct_index] = NULL;
+		lu_ref_fini(&key->lct_reference);
+	}
+	spin_unlock(&lu_keys_guard);
 
-        LASSERTF(cfs_atomic_read(&key->lct_used) == 1,
-                 "key has instances: %d\n",
-                 cfs_atomic_read(&key->lct_used));
+	LASSERTF(cfs_atomic_read(&key->lct_used) == 1,
+		 "key has instances: %d\n",
+		 cfs_atomic_read(&key->lct_used));
 }
 EXPORT_SYMBOL(lu_context_key_degister);
 
@@ -1476,13 +1476,13 @@ void lu_context_key_quiesce(struct lu_context_key *key)
                 /*
                  * XXX memory barrier has to go here.
                  */
-                cfs_spin_lock(&lu_keys_guard);
-                cfs_list_for_each_entry(ctx, &lu_context_remembered,
-                                        lc_remember)
-                        key_fini(ctx, key->lct_index);
-                cfs_spin_unlock(&lu_keys_guard);
-                ++key_set_version;
-        }
+		spin_lock(&lu_keys_guard);
+		cfs_list_for_each_entry(ctx, &lu_context_remembered,
+					lc_remember)
+			key_fini(ctx, key->lct_index);
+		spin_unlock(&lu_keys_guard);
+		++key_set_version;
+	}
 }
 EXPORT_SYMBOL(lu_context_key_quiesce);
 
@@ -1567,13 +1567,13 @@ int lu_context_init(struct lu_context *ctx, __u32 tags)
 {
 	int	rc;
 
-        memset(ctx, 0, sizeof *ctx);
-        ctx->lc_state = LCS_INITIALIZED;
-        ctx->lc_tags = tags;
-        if (tags & LCT_REMEMBER) {
-                cfs_spin_lock(&lu_keys_guard);
-                cfs_list_add(&ctx->lc_remember, &lu_context_remembered);
-                cfs_spin_unlock(&lu_keys_guard);
+	memset(ctx, 0, sizeof *ctx);
+	ctx->lc_state = LCS_INITIALIZED;
+	ctx->lc_tags = tags;
+	if (tags & LCT_REMEMBER) {
+		spin_lock(&lu_keys_guard);
+		cfs_list_add(&ctx->lc_remember, &lu_context_remembered);
+		spin_unlock(&lu_keys_guard);
 	} else {
 		CFS_INIT_LIST_HEAD(&ctx->lc_remember);
 	}
@@ -1599,10 +1599,10 @@ void lu_context_fini(struct lu_context *ctx)
 		keys_fini(ctx);
 
 	} else { /* could race with key degister */
-		cfs_spin_lock(&lu_keys_guard);
+		spin_lock(&lu_keys_guard);
 		keys_fini(ctx);
 		cfs_list_del_init(&ctx->lc_remember);
-		cfs_spin_unlock(&lu_keys_guard);
+		spin_unlock(&lu_keys_guard);
 	}
 }
 EXPORT_SYMBOL(lu_context_fini);
@@ -1665,37 +1665,37 @@ __u32 lu_session_tags_default = 0;
 
 void lu_context_tags_update(__u32 tags)
 {
-        cfs_spin_lock(&lu_keys_guard);
-        lu_context_tags_default |= tags;
-        key_set_version ++;
-        cfs_spin_unlock(&lu_keys_guard);
+	spin_lock(&lu_keys_guard);
+	lu_context_tags_default |= tags;
+	key_set_version++;
+	spin_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_context_tags_update);
 
 void lu_context_tags_clear(__u32 tags)
 {
-        cfs_spin_lock(&lu_keys_guard);
-        lu_context_tags_default &= ~tags;
-        key_set_version ++;
-        cfs_spin_unlock(&lu_keys_guard);
+	spin_lock(&lu_keys_guard);
+	lu_context_tags_default &= ~tags;
+	key_set_version++;
+	spin_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_context_tags_clear);
 
 void lu_session_tags_update(__u32 tags)
 {
-        cfs_spin_lock(&lu_keys_guard);
-        lu_session_tags_default |= tags;
-        key_set_version ++;
-        cfs_spin_unlock(&lu_keys_guard);
+	spin_lock(&lu_keys_guard);
+	lu_session_tags_default |= tags;
+	key_set_version++;
+	spin_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_session_tags_update);
 
 void lu_session_tags_clear(__u32 tags)
 {
-        cfs_spin_lock(&lu_keys_guard);
-        lu_session_tags_default &= ~tags;
-        key_set_version ++;
-        cfs_spin_unlock(&lu_keys_guard);
+	spin_lock(&lu_keys_guard);
+	lu_session_tags_default &= ~tags;
+	key_set_version++;
+	spin_unlock(&lu_keys_guard);
 }
 EXPORT_SYMBOL(lu_session_tags_clear);
 
@@ -1844,7 +1844,7 @@ static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
 
 	CDEBUG(D_INODE, "Shrink %d objects\n", remain);
 
-        cfs_mutex_lock(&lu_sites_guard);
+	mutex_lock(&lu_sites_guard);
         cfs_list_for_each_entry_safe(s, tmp, &lu_sites, ls_linkage) {
                 if (shrink_param(sc, nr_to_scan) != 0) {
                         remain = lu_site_purge(&lu_shrink_env, s, remain);
@@ -1862,7 +1862,7 @@ static int lu_cache_shrink(SHRINKER_ARGS(sc, nr_to_scan, gfp_mask))
                         break;
         }
         cfs_list_splice(&splice, lu_sites.prev);
-        cfs_mutex_unlock(&lu_sites_guard);
+	mutex_unlock(&lu_sites_guard);
 
         cached = (cached / 100) * sysctl_vfs_cache_pressure;
         if (shrink_param(sc, nr_to_scan) == 0)
@@ -1958,9 +1958,9 @@ int lu_global_init(void)
          * conservatively. This should not be too bad, because this
          * environment is global.
          */
-        cfs_mutex_lock(&lu_sites_guard);
+	mutex_lock(&lu_sites_guard);
         result = lu_env_init(&lu_shrink_env, LCT_SHRINKER);
-        cfs_mutex_unlock(&lu_sites_guard);
+	mutex_unlock(&lu_sites_guard);
         if (result != 0)
                 return result;
 
@@ -2014,9 +2014,9 @@ void lu_global_fini(void)
          * Tear shrinker environment down _after_ de-registering
          * lu_global_key, because the latter has a value in the former.
          */
-        cfs_mutex_lock(&lu_sites_guard);
+	mutex_lock(&lu_sites_guard);
         lu_env_fini(&lu_shrink_env);
-        cfs_mutex_unlock(&lu_sites_guard);
+	mutex_unlock(&lu_sites_guard);
 
         lu_ref_global_fini();
 }

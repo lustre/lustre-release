@@ -92,13 +92,13 @@ static inline int capa_is_to_expire(struct obd_capa *ocapa)
 
 static inline int have_expired_capa(void)
 {
-        struct obd_capa *ocapa = NULL;
-        int expired = 0;
+	struct obd_capa *ocapa = NULL;
+	int expired = 0;
 
-        /* if ll_capa_list has client capa to expire or ll_idle_capas has
-         * expired capa, return 1.
-         */
-        cfs_spin_lock(&capa_lock);
+	/* if ll_capa_list has client capa to expire or ll_idle_capas has
+	 * expired capa, return 1.
+	 */
+	spin_lock(&capa_lock);
         if (!cfs_list_empty(ll_capa_list)) {
                 ocapa = cfs_list_entry(ll_capa_list->next, struct obd_capa,
                                        c_list);
@@ -112,11 +112,11 @@ static inline int have_expired_capa(void)
                 if (!expired)
                         update_capa_timer(ocapa, ocapa->c_expiry);
         }
-        cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 
-        if (expired)
-                DEBUG_CAPA(D_SEC, &ocapa->c_capa, "expired");
-        return expired;
+	if (expired)
+		DEBUG_CAPA(D_SEC, &ocapa->c_capa, "expired");
+	return expired;
 }
 
 static void sort_add_capa(struct obd_capa *ocapa, cfs_list_t *head)
@@ -189,7 +189,7 @@ static int capa_thread_main(void *unused)
 
                 next = NULL;
 
-                cfs_spin_lock(&capa_lock);
+		spin_lock(&capa_lock);
                 cfs_list_for_each_entry_safe(ocapa, tmp, ll_capa_list, c_list) {
                         __u64 ibits;
 
@@ -241,10 +241,10 @@ static int capa_thread_main(void *unused)
 
                         capa_get(ocapa);
                         ll_capa_renewed++;
-                        cfs_spin_unlock(&capa_lock);
-                        rc = md_renew_capa(ll_i2mdexp(inode), ocapa,
-                                           ll_update_capa);
-                        cfs_spin_lock(&capa_lock);
+			spin_unlock(&capa_lock);
+			rc = md_renew_capa(ll_i2mdexp(inode), ocapa,
+					   ll_update_capa);
+			spin_lock(&capa_lock);
                         if (rc) {
                                 DEBUG_CAPA(D_ERROR, &ocapa->c_capa,
                                            "renew failed: %d", rc);
@@ -278,12 +278,12 @@ static int capa_thread_main(void *unused)
                         ll_delete_capa(ocapa);
                 }
 
-                cfs_spin_unlock(&capa_lock);
-        }
+		spin_unlock(&capa_lock);
+	}
 
-        thread_set_flags(&ll_capa_thread, SVC_STOPPED);
-        cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
-        RETURN(0);
+	thread_set_flags(&ll_capa_thread, SVC_STOPPED);
+	cfs_waitq_signal(&ll_capa_thread.t_ctl_waitq);
+	RETURN(0);
 }
 
 void ll_capa_timer_callback(unsigned long unused)
@@ -331,7 +331,7 @@ struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)
         LASSERT(opc == CAPA_OPC_OSS_WRITE || opc == CAPA_OPC_OSS_RW ||
                 opc == CAPA_OPC_OSS_TRUNC);
 
-        cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
         cfs_list_for_each_entry(ocapa, &lli->lli_oss_capas, u.cli.lli_list) {
                 if (capa_is_expired(ocapa))
                         continue;
@@ -368,9 +368,9 @@ struct obd_capa *ll_osscapa_get(struct inode *inode, __u64 opc)
                         cfs_atomic_set(&ll_capa_debug, 0);
                 }
         }
-        cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 
-        RETURN(ocapa);
+	RETURN(ocapa);
 }
 EXPORT_SYMBOL(ll_osscapa_get);
 
@@ -385,9 +385,9 @@ struct obd_capa *ll_mdscapa_get(struct inode *inode)
         if ((ll_i2sbi(inode)->ll_flags & LL_SBI_MDS_CAPA) == 0)
                 RETURN(NULL);
 
-        cfs_spin_lock(&capa_lock);
-        ocapa = capa_get(lli->lli_mds_capa);
-        cfs_spin_unlock(&capa_lock);
+	spin_lock(&capa_lock);
+	ocapa = capa_get(lli->lli_mds_capa);
+	spin_unlock(&capa_lock);
         if (!ocapa && cfs_atomic_read(&ll_capa_debug)) {
                 CERROR("no mds capability for "DFID"\n", PFID(&lli->lli_fid));
                 cfs_atomic_set(&ll_capa_debug, 0);
@@ -410,9 +410,9 @@ static struct obd_capa *do_add_mds_capa(struct inode *inode,
 
                 DEBUG_CAPA(D_SEC, capa, "add MDS");
         } else {
-                cfs_spin_lock(&old->c_lock);
-                old->c_capa = *capa;
-                cfs_spin_unlock(&old->c_lock);
+		spin_lock(&old->c_lock);
+		old->c_capa = *capa;
+		spin_unlock(&old->c_lock);
 
                 DEBUG_CAPA(D_SEC, capa, "update MDS");
 
@@ -481,9 +481,9 @@ static struct obd_capa *do_add_oss_capa(struct inode *inode,
 
                 DEBUG_CAPA(D_SEC, capa, "add OSS");
         } else {
-                cfs_spin_lock(&old->c_lock);
-                old->c_capa = *capa;
-                cfs_spin_unlock(&old->c_lock);
+		spin_lock(&old->c_lock);
+		old->c_capa = *capa;
+		spin_unlock(&old->c_lock);
 
                 DEBUG_CAPA(D_SEC, capa, "update OSS");
 
@@ -497,7 +497,7 @@ static struct obd_capa *do_add_oss_capa(struct inode *inode,
 
 struct obd_capa *ll_add_capa(struct inode *inode, struct obd_capa *ocapa)
 {
-        cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
         ocapa = capa_for_mds(&ocapa->c_capa) ? do_add_mds_capa(inode, ocapa) :
                                                do_add_oss_capa(inode, ocapa);
 
@@ -510,10 +510,10 @@ struct obd_capa *ll_add_capa(struct inode *inode, struct obd_capa *ocapa)
                 update_capa_timer(ocapa, capa_renewal_time(ocapa));
         }
 
-        cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 
-        cfs_atomic_set(&ll_capa_debug, 1);
-        return ocapa;
+	cfs_atomic_set(&ll_capa_debug, 1);
+	return ocapa;
 }
 
 static inline void delay_capa_renew(struct obd_capa *oc, cfs_time_t delay)
@@ -533,7 +533,7 @@ int ll_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
         if (IS_ERR(capa)) {
                 /* set error code */
                 rc = PTR_ERR(capa);
-                cfs_spin_lock(&capa_lock);
+		spin_lock(&capa_lock);
                 if (rc == -ENOENT) {
                         DEBUG_CAPA(D_SEC, &ocapa->c_capa,
                                    "renewal canceled because object removed");
@@ -558,34 +558,34 @@ int ll_update_capa(struct obd_capa *ocapa, struct lustre_capa *capa)
 
                 cfs_list_del_init(&ocapa->c_list);
                 sort_add_capa(ocapa, &ll_idle_capas);
-                cfs_spin_unlock(&capa_lock);
+		spin_unlock(&capa_lock);
 
-                capa_put(ocapa);
-                iput(inode);
-                RETURN(rc);
-        }
+		capa_put(ocapa);
+		iput(inode);
+		RETURN(rc);
+	}
 
-        cfs_spin_lock(&ocapa->c_lock);
-        LASSERT(!memcmp(&ocapa->c_capa, capa,
-                        offsetof(struct lustre_capa, lc_opc)));
-        ocapa->c_capa = *capa;
-        set_capa_expiry(ocapa);
-        cfs_spin_unlock(&ocapa->c_lock);
+	spin_lock(&ocapa->c_lock);
+	LASSERT(!memcmp(&ocapa->c_capa, capa,
+			offsetof(struct lustre_capa, lc_opc)));
+	ocapa->c_capa = *capa;
+	set_capa_expiry(ocapa);
+	spin_unlock(&ocapa->c_lock);
 
-        cfs_spin_lock(&capa_lock);
-        if (capa_for_oss(capa))
-                inode_add_oss_capa(inode, ocapa);
-        DEBUG_CAPA(D_SEC, capa, "renew");
-        EXIT;
+	spin_lock(&capa_lock);
+	if (capa_for_oss(capa))
+		inode_add_oss_capa(inode, ocapa);
+	DEBUG_CAPA(D_SEC, capa, "renew");
+	EXIT;
 retry:
-        cfs_list_del_init(&ocapa->c_list);
-        sort_add_capa(ocapa, ll_capa_list);
-        update_capa_timer(ocapa, capa_renewal_time(ocapa));
-        cfs_spin_unlock(&capa_lock);
+	cfs_list_del_init(&ocapa->c_list);
+	sort_add_capa(ocapa, ll_capa_list);
+	update_capa_timer(ocapa, capa_renewal_time(ocapa));
+	spin_unlock(&capa_lock);
 
-        capa_put(ocapa);
-        iput(inode);
-        return rc;
+	capa_put(ocapa);
+	iput(inode);
+	return rc;
 }
 
 void ll_capa_open(struct inode *inode)
@@ -628,26 +628,26 @@ void ll_truncate_free_capa(struct obd_capa *ocapa)
         /* release ref when find */
         capa_put(ocapa);
         if (likely(ocapa->c_capa.lc_opc == CAPA_OPC_OSS_TRUNC)) {
-                cfs_spin_lock(&capa_lock);
-                ll_delete_capa(ocapa);
-                cfs_spin_unlock(&capa_lock);
-        }
+		spin_lock(&capa_lock);
+		ll_delete_capa(ocapa);
+		spin_unlock(&capa_lock);
+	}
 }
 
 void ll_clear_inode_capas(struct inode *inode)
 {
-        struct ll_inode_info *lli = ll_i2info(inode);
-        struct obd_capa *ocapa, *tmp;
+	struct ll_inode_info *lli = ll_i2info(inode);
+	struct obd_capa *ocapa, *tmp;
 
-        cfs_spin_lock(&capa_lock);
-        ocapa = lli->lli_mds_capa;
-        if (ocapa)
-                ll_delete_capa(ocapa);
+	spin_lock(&capa_lock);
+	ocapa = lli->lli_mds_capa;
+	if (ocapa)
+		ll_delete_capa(ocapa);
 
-        cfs_list_for_each_entry_safe(ocapa, tmp, &lli->lli_oss_capas,
-                                     u.cli.lli_list)
-                ll_delete_capa(ocapa);
-        cfs_spin_unlock(&capa_lock);
+	cfs_list_for_each_entry_safe(ocapa, tmp, &lli->lli_oss_capas,
+				     u.cli.lli_list)
+		ll_delete_capa(ocapa);
+	spin_unlock(&capa_lock);
 }
 
 void ll_print_capa_stat(struct ll_sb_info *sbi)

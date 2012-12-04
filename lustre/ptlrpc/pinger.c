@@ -48,7 +48,7 @@
 #include <obd_class.h>
 #include "ptlrpc_internal.h"
 
-cfs_mutex_t pinger_mutex;
+struct mutex pinger_mutex;
 static CFS_LIST_HEAD(pinger_imports);
 static cfs_list_t timeout_list = CFS_LIST_HEAD_INIT(timeout_list);
 struct ptlrpc_request *
@@ -147,14 +147,14 @@ cfs_duration_t pinger_check_timeout(cfs_time_t time)
         cfs_time_t timeout = PING_INTERVAL;
 
         /* The timeout list is a increase order sorted list */
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         cfs_list_for_each_entry(item, &timeout_list, ti_chain) {
                 int ti_timeout = item->ti_timeout;
                 if (timeout > ti_timeout)
                         timeout = ti_timeout;
                 break;
         }
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
 
         return cfs_time_sub(cfs_time_add(time, cfs_time_seconds(timeout)),
                                          cfs_time_current());
@@ -225,14 +225,14 @@ int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req)
 static void ptlrpc_pinger_process_import(struct obd_import *imp,
                                          unsigned long this_ping)
 {
-        int force, level;
+	int force, level;
 
-        cfs_spin_lock(&imp->imp_lock);
-        level = imp->imp_state;
-        force = imp->imp_force_verify;
-        if (force)
-                imp->imp_force_verify = 0;
-        cfs_spin_unlock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
+	level = imp->imp_state;
+	force = imp->imp_force_verify;
+	if (force)
+		imp->imp_force_verify = 0;
+	spin_unlock(&imp->imp_lock);
 
         CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
                "level %s/%u force %u deactive %u pingable %u\n",
@@ -279,7 +279,7 @@ static int ptlrpc_pinger_main(void *arg)
                 struct timeout_item *item;
                 cfs_list_t *iter;
 
-                cfs_mutex_lock(&pinger_mutex);
+		mutex_lock(&pinger_mutex);
                 cfs_list_for_each_entry(item, &timeout_list, ti_chain) {
                         item->ti_cb(item, item->ti_cb_data);
                 }
@@ -296,7 +296,7 @@ static int ptlrpc_pinger_main(void *arg)
                                                         cfs_time_seconds(PING_INTERVAL))))
                                 ptlrpc_update_next_ping(imp, 0);
                 }
-                cfs_mutex_unlock(&pinger_mutex);
+		mutex_unlock(&pinger_mutex);
                 /* update memory usage info */
                 obd_update_maxusage();
 
@@ -390,10 +390,10 @@ int ptlrpc_stop_pinger(void)
                 RETURN(-EALREADY);
 
         ptlrpc_pinger_remove_timeouts();
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         thread_set_flags(pinger_thread, SVC_STOPPING);
         cfs_waitq_signal(&pinger_thread->t_ctl_waitq);
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
 
         l_wait_event(pinger_thread->t_ctl_waitq,
                      thread_is_stopped(pinger_thread), &lwi);
@@ -420,7 +420,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         if (!cfs_list_empty(&imp->imp_pinger_chain))
                 RETURN(-EALREADY);
 
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         CDEBUG(D_HA, "adding pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         /* if we add to pinger we want recovery on this import */
@@ -431,7 +431,7 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
         class_import_get(imp);
 
         ptlrpc_pinger_wake_up();
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
 
         RETURN(0);
 }
@@ -443,14 +443,14 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         if (cfs_list_empty(&imp->imp_pinger_chain))
                 RETURN(-ENOENT);
 
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         cfs_list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         /* if we remove from pinger we don't want recovery on this import */
         imp->imp_obd->obd_no_recov = 1;
         class_import_put(imp);
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
         RETURN(0);
 }
 EXPORT_SYMBOL(ptlrpc_pinger_del_import);
@@ -517,14 +517,14 @@ int ptlrpc_add_timeout_client(int time, enum timeout_event event,
 {
         struct timeout_item *ti;
 
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         ti = ptlrpc_pinger_register_timeout(time, event, cb, data);
         if (!ti) {
-                cfs_mutex_unlock(&pinger_mutex);
+		mutex_unlock(&pinger_mutex);
                 return (-EINVAL);
         }
         cfs_list_add(obd_list, &ti->ti_obd_list);
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
         return 0;
 }
 EXPORT_SYMBOL(ptlrpc_add_timeout_client);
@@ -536,7 +536,7 @@ int ptlrpc_del_timeout_client(cfs_list_t *obd_list,
 
         if (cfs_list_empty(obd_list))
                 return 0;
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         cfs_list_del_init(obd_list);
         /**
          * If there are no obd attached to the timeout event
@@ -553,7 +553,7 @@ int ptlrpc_del_timeout_client(cfs_list_t *obd_list,
                 cfs_list_del(&ti->ti_chain);
                 OBD_FREE_PTR(ti);
         }
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
         return 0;
 }
 EXPORT_SYMBOL(ptlrpc_del_timeout_client);
@@ -562,13 +562,13 @@ int ptlrpc_pinger_remove_timeouts(void)
 {
         struct timeout_item *item, *tmp;
 
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         cfs_list_for_each_entry_safe(item, tmp, &timeout_list, ti_chain) {
                 LASSERT(cfs_list_empty(&item->ti_obd_list));
                 cfs_list_del(&item->ti_chain);
                 OBD_FREE_PTR(item);
         }
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
         return 0;
 }
 
@@ -592,24 +592,24 @@ static DEFINE_SPINLOCK(pet_lock);
 
 int ping_evictor_wake(struct obd_export *exp)
 {
-        struct obd_device *obd;
+	struct obd_device *obd;
 
-        cfs_spin_lock(&pet_lock);
-        if (pet_state != PET_READY) {
-                /* eventually the new obd will call here again. */
-                cfs_spin_unlock(&pet_lock);
-                return 1;
-        }
+	spin_lock(&pet_lock);
+	if (pet_state != PET_READY) {
+		/* eventually the new obd will call here again. */
+		spin_unlock(&pet_lock);
+		return 1;
+	}
 
-        obd = class_exp2obd(exp);
-        if (cfs_list_empty(&obd->obd_evict_list)) {
-                class_incref(obd, "evictor", obd);
-                cfs_list_add(&obd->obd_evict_list, &pet_list);
-        }
-        cfs_spin_unlock(&pet_lock);
+	obd = class_exp2obd(exp);
+	if (cfs_list_empty(&obd->obd_evict_list)) {
+		class_incref(obd, "evictor", obd);
+		cfs_list_add(&obd->obd_evict_list, &pet_list);
+	}
+	spin_unlock(&pet_lock);
 
-        cfs_waitq_signal(&pet_waitq);
-        return 0;
+	cfs_waitq_signal(&pet_waitq);
+	return 0;
 }
 
 static int ping_evictor_main(void *arg)
@@ -635,10 +635,10 @@ static int ping_evictor_main(void *arg)
                 /* we only get here if pet_exp != NULL, and the end of this
                  * loop is the only place which sets it NULL again, so lock
                  * is not strictly necessary. */
-                cfs_spin_lock(&pet_lock);
-                obd = cfs_list_entry(pet_list.next, struct obd_device,
-                                     obd_evict_list);
-                cfs_spin_unlock(&pet_lock);
+		spin_lock(&pet_lock);
+		obd = cfs_list_entry(pet_list.next, struct obd_device,
+				     obd_evict_list);
+		spin_unlock(&pet_lock);
 
                 expire_time = cfs_time_current_sec() - PING_EVICT_TIMEOUT;
 
@@ -649,15 +649,15 @@ static int ping_evictor_main(void *arg)
                  * the obd lock (class_unlink_export), which means we can't
                  * lose the last ref on the export.  If they've already been
                  * removed from the list, we won't find them here. */
-                cfs_spin_lock(&obd->obd_dev_lock);
-                while (!cfs_list_empty(&obd->obd_exports_timed)) {
-                        exp = cfs_list_entry(obd->obd_exports_timed.next,
-                                             struct obd_export,
-                                             exp_obd_chain_timed);
-                        if (expire_time > exp->exp_last_request_time) {
-                                class_export_get(exp);
-                                cfs_spin_unlock(&obd->obd_dev_lock);
-                                 LCONSOLE_WARN("%s: haven't heard from client %s"
+		spin_lock(&obd->obd_dev_lock);
+		while (!cfs_list_empty(&obd->obd_exports_timed)) {
+			exp = cfs_list_entry(obd->obd_exports_timed.next,
+					     struct obd_export,
+					     exp_obd_chain_timed);
+			if (expire_time > exp->exp_last_request_time) {
+				class_export_get(exp);
+				spin_unlock(&obd->obd_dev_lock);
+				LCONSOLE_WARN("%s: haven't heard from client %s"
                                               " (at %s) in %ld seconds. I think"
                                               " it's dead, and I am evicting"
                                               " it. exp %p, cur %ld expire %ld"
@@ -674,17 +674,17 @@ static int ping_evictor_main(void *arg)
                                        exp->exp_last_request_time);
                                 class_fail_export(exp);
                                 class_export_put(exp);
-                                cfs_spin_lock(&obd->obd_dev_lock);
-                        } else {
-                                /* List is sorted, so everyone below is ok */
-                                break;
-                        }
-                }
-                cfs_spin_unlock(&obd->obd_dev_lock);
+				spin_lock(&obd->obd_dev_lock);
+			} else {
+				/* List is sorted, so everyone below is ok */
+				break;
+			}
+		}
+		spin_unlock(&obd->obd_dev_lock);
 
-                cfs_spin_lock(&pet_lock);
-                cfs_list_del_init(&obd->obd_evict_list);
-                cfs_spin_unlock(&pet_lock);
+		spin_lock(&pet_lock);
+		cfs_list_del_init(&obd->obd_evict_list);
+		spin_unlock(&pet_lock);
 
                 class_decref(obd, "evictor", obd);
         }
@@ -771,7 +771,7 @@ static int pinger_check_rpcs(void *arg)
         set = pd->pd_set;
 
         /* add rpcs into set */
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         cfs_list_for_each(iter, &pinger_imports) {
                 struct obd_import *imp = cfs_list_entry(iter, struct obd_import,
                                                         imp_pinger_chain);
@@ -780,10 +780,10 @@ static int pinger_check_rpcs(void *arg)
                 if (cfs_time_aftereq(pd->pd_this_ping,
                                      imp->imp_next_ping - 5 * CFS_TICK)) {
                         /* Add a ping. */
-                        cfs_spin_lock(&imp->imp_lock);
-                        generation = imp->imp_generation;
-                        level = imp->imp_state;
-                        cfs_spin_unlock(&imp->imp_lock);
+			spin_lock(&imp->imp_lock);
+			generation = imp->imp_generation;
+			level = imp->imp_state;
+			spin_unlock(&imp->imp_lock);
 
                         if (level != LUSTRE_IMP_FULL) {
                                 CDEBUG(D_HA,
@@ -815,7 +815,7 @@ static int pinger_check_rpcs(void *arg)
                 }
         }
         pd->pd_this_ping = curtime;
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
 
         /* Might be empty, that's OK. */
         if (cfs_atomic_read(&set->set_remaining) == 0)
@@ -843,7 +843,7 @@ do_check_set:
         }
 
         /* Expire all the requests that didn't come back. */
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         cfs_list_for_each(iter, &set->set_requests) {
                 req = cfs_list_entry(iter, struct ptlrpc_request,
                                      rq_set_chain);
@@ -861,15 +861,15 @@ do_check_set:
                  * phase and take care of inflights. */
                 ptlrpc_rqphase_move(req, RQ_PHASE_COMPLETE);
                 imp = req->rq_import;
-                cfs_spin_lock(&imp->imp_lock);
-                if (!cfs_list_empty(&req->rq_list)) {
-                        cfs_list_del_init(&req->rq_list);
-                        cfs_atomic_dec(&imp->imp_inflight);
-                }
-                cfs_spin_unlock(&imp->imp_lock);
-                cfs_atomic_dec(&set->set_remaining);
-        }
-        cfs_mutex_unlock(&pinger_mutex);
+		spin_lock(&imp->imp_lock);
+		if (!cfs_list_empty(&req->rq_list)) {
+			cfs_list_del_init(&req->rq_list);
+			cfs_atomic_dec(&imp->imp_inflight);
+		}
+		spin_unlock(&imp->imp_lock);
+		cfs_atomic_dec(&set->set_remaining);
+	}
+	mutex_unlock(&pinger_mutex);
 
         ptlrpc_set_destroy(set);
         pd->pd_set = NULL;
@@ -910,7 +910,7 @@ int ptlrpc_stop_pinger(void)
 void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
 {
 #ifdef ENABLE_PINGER
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         ptlrpc_update_next_ping(imp, 0);
         if (pinger_args.pd_set == NULL &&
             cfs_time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
@@ -918,14 +918,14 @@ void ptlrpc_pinger_sending_on_import(struct obd_import *imp)
                         imp->imp_next_ping, cfs_time_current());
                 pinger_args.pd_next_ping = imp->imp_next_ping;
         }
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
 #endif
 }
 
 void ptlrpc_pinger_commit_expected(struct obd_import *imp)
 {
 #ifdef ENABLE_PINGER
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         ptlrpc_update_next_ping(imp, 1);
         if (pinger_args.pd_set == NULL &&
             cfs_time_before(imp->imp_next_ping, pinger_args.pd_next_ping)) {
@@ -933,7 +933,7 @@ void ptlrpc_pinger_commit_expected(struct obd_import *imp)
                         imp->imp_next_ping, cfs_time_current());
                 pinger_args.pd_next_ping = imp->imp_next_ping;
         }
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
 #endif
 }
 
@@ -960,10 +960,10 @@ int ptlrpc_pinger_add_import(struct obd_import *imp)
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         ptlrpc_pinger_sending_on_import(imp);
 
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         cfs_list_add_tail(&imp->imp_pinger_chain, &pinger_imports);
         class_import_get(imp);
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
 
         RETURN(0);
 }
@@ -974,12 +974,12 @@ int ptlrpc_pinger_del_import(struct obd_import *imp)
         if (cfs_list_empty(&imp->imp_pinger_chain))
                 RETURN(-ENOENT);
 
-        cfs_mutex_lock(&pinger_mutex);
+	mutex_lock(&pinger_mutex);
         cfs_list_del_init(&imp->imp_pinger_chain);
         CDEBUG(D_HA, "removing pingable import %s->%s\n",
                imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd));
         class_import_put(imp);
-        cfs_mutex_unlock(&pinger_mutex);
+	mutex_unlock(&pinger_mutex);
         RETURN(0);
 }
 

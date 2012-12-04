@@ -102,7 +102,7 @@ struct lu_kmem_descr osc_caches[] = {
         }
 };
 
-cfs_lock_class_key_t osc_ast_guard_class;
+struct lock_class_key osc_ast_guard_class;
 
 /*****************************************************************************
  *

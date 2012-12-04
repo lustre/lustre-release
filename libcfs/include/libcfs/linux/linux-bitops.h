@@ -35,17 +35,4 @@
  */
 #include <linux/bitops.h>
 
-#define cfs_test_bit(nr, addr)              test_bit(nr, addr)
-#define cfs_set_bit(nr, addr)               set_bit(nr, addr)
-#define cfs_clear_bit(nr, addr)             clear_bit(nr, addr)
-#define cfs_test_and_set_bit(nr, addr)      test_and_set_bit(nr, addr)
-#define cfs_test_and_clear_bit(nr, addr)    test_and_clear_bit(nr, addr)
-#define cfs_find_first_bit(addr, size)      find_first_bit(addr, size)
-#define cfs_find_first_zero_bit(addr, size) find_first_zero_bit(addr, size)
-#define cfs_find_next_bit(addr, size, off)  find_next_bit(addr, size, off)
-#define cfs_find_next_zero_bit(addr, size, off) \
-        find_next_zero_bit(addr, size, off)
 
-#define cfs_ffz(x)                          ffz(x)
-#define cfs_ffs(x)                          ffs(x)
-#define cfs_fls(x)                          fls(x)

@@ -133,7 +133,7 @@ struct mdt_device {
         /* mdt state flags */
         unsigned long              mdt_state;
         /* lock to protect IOepoch */
-        cfs_spinlock_t             mdt_ioepoch_lock;
+	spinlock_t		   mdt_ioepoch_lock;
         __u64                      mdt_ioepoch;
 
         /* transaction callbacks */
@@ -147,7 +147,7 @@ struct mdt_device {
         struct upcall_cache        *mdt_identity_cache;
 
         /* sptlrpc rules */
-        cfs_rwlock_t               mdt_sptlrpc_lock;
+	rwlock_t		   mdt_sptlrpc_lock;
         struct sptlrpc_rule_set    mdt_sptlrpc_rset;
 
         /* capability keys */
@@ -163,9 +163,9 @@ struct mdt_device {
                                    mdt_som_conf:1;
 
 	/* statfs optimization: we cache a bit  */
-	struct obd_statfs          mdt_osfs;
-	__u64                      mdt_osfs_age;
-	cfs_spinlock_t             mdt_osfs_lock;
+	struct obd_statfs	   mdt_osfs;
+	__u64			   mdt_osfs_age;
+	spinlock_t		   mdt_osfs_lock;
 
         /* root squash */
         uid_t                      mdt_squash_uid;
@@ -173,7 +173,7 @@ struct mdt_device {
         cfs_list_t                 mdt_nosquash_nids;
         char                      *mdt_nosquash_str;
         int                        mdt_nosquash_strlen;
-        cfs_rw_semaphore_t         mdt_squash_sem;
+	struct rw_semaphore	   mdt_squash_sem;
 
         cfs_proc_dir_entry_t      *mdt_proc_entry;
         struct lprocfs_stats      *mdt_stats;
@@ -202,9 +202,9 @@ struct mdt_object {
         int                     mot_ioepoch_count;
         int                     mot_writecount;
         /* Lock to protect object's IO epoch. */
-        cfs_mutex_t             mot_ioepoch_mutex;
+	struct mutex		mot_ioepoch_mutex;
         /* Lock to protect create_data */
-        cfs_mutex_t             mot_lov_mutex;
+	struct mutex		mot_lov_mutex;
 };
 
 enum mdt_object_flags {

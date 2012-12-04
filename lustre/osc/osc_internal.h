@@ -69,8 +69,8 @@ struct osc_async_page {
         struct client_obd       *oap_cli;
 	struct osc_object       *oap_obj;
 
-        struct ldlm_lock        *oap_ldlm_lock;
-        cfs_spinlock_t           oap_lock;
+	struct ldlm_lock	*oap_ldlm_lock;
+	spinlock_t		 oap_lock;
 };
 
 #define oap_page        oap_brw_page.pg
@@ -131,7 +131,7 @@ int osc_build_rpc(const struct lu_env *env, struct client_obd *cli,
 		  cfs_list_t *ext_list, int cmd, pdl_policy_t p);
 int osc_lru_shrink(struct client_obd *cli, int target);
 
-extern cfs_spinlock_t osc_ast_guard;
+extern spinlock_t osc_ast_guard;
 
 int osc_cleanup(struct obd_device *obd);
 int osc_setup(struct obd_device *obd, struct lustre_cfg *lcfg);

@@ -1064,7 +1064,7 @@ ksocknal_data_ready (struct sock *sk, int n)
 
         /* interleave correctly with closing sockets... */
         LASSERT(!in_irq());
-        cfs_read_lock (&ksocknal_data.ksnd_global_lock);
+	read_lock(&ksocknal_data.ksnd_global_lock);
 
         conn = sk->sk_user_data;
         if (conn == NULL) {             /* raced with ksocknal_terminate_conn */
@@ -1073,7 +1073,7 @@ ksocknal_data_ready (struct sock *sk, int n)
         } else
                 ksocknal_read_callback(conn);
 
-        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+	read_unlock(&ksocknal_data.ksnd_global_lock);
 
         EXIT;
 }
@@ -1087,7 +1087,7 @@ ksocknal_write_space (struct sock *sk)
 
         /* interleave correctly with closing sockets... */
         LASSERT(!in_irq());
-        cfs_read_lock (&ksocknal_data.ksnd_global_lock);
+	read_lock(&ksocknal_data.ksnd_global_lock);
 
         conn = sk->sk_user_data;
         wspace = SOCKNAL_WSPACE(sk);
@@ -1106,7 +1106,7 @@ ksocknal_write_space (struct sock *sk)
                 LASSERT (sk->sk_write_space != &ksocknal_write_space);
                 sk->sk_write_space (sk);
 
-                cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+		read_unlock(&ksocknal_data.ksnd_global_lock);
                 return;
         }
 
@@ -1120,7 +1120,7 @@ ksocknal_write_space (struct sock *sk)
                 clear_bit (SOCK_NOSPACE, &sk->sk_socket->flags);
         }
 
-        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+	read_unlock(&ksocknal_data.ksnd_global_lock);
 }
 
 void
@@ -1159,11 +1159,11 @@ ksocknal_lib_reset_callback(struct socket *sock, ksock_conn_t *conn)
 int
 ksocknal_lib_memory_pressure(ksock_conn_t *conn)
 {
-        int            rc = 0;
-        ksock_sched_t *sched;
-        
-        sched = conn->ksnc_scheduler;
-        cfs_spin_lock_bh (&sched->kss_lock);
+	int            rc = 0;
+	ksock_sched_t *sched;
+
+	sched = conn->ksnc_scheduler;
+	spin_lock_bh(&sched->kss_lock);
 
         if (!SOCK_TEST_NOSPACE(conn->ksnc_sock) &&
             !conn->ksnc_tx_ready) {
@@ -1178,7 +1178,7 @@ ksocknal_lib_memory_pressure(ksock_conn_t *conn)
                 rc = -ENOMEM;
         }
 
-        cfs_spin_unlock_bh (&sched->kss_lock);
+	spin_unlock_bh(&sched->kss_lock);
 
-        return rc;
+	return rc;
 }

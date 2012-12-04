@@ -156,7 +156,7 @@ struct lov_device {
          * Serializes access to lov_device::ld_emrg in low-memory
          * conditions.
          */
-        cfs_mutex_t               ld_mutex;
+	struct mutex		  ld_mutex;
 };
 
 /**
@@ -194,7 +194,7 @@ struct lov_object {
          *
          * \see lov_object::lo_type
          */
-        cfs_rw_semaphore_t     lo_type_guard;
+	struct rw_semaphore	lo_type_guard;
         /**
          * Type of an object. Protected by lov_object::lo_type_guard.
          */
@@ -242,7 +242,7 @@ struct lov_object {
                         /**
                          * protect lo_sub
                          */
-                        cfs_spinlock_t         lo_sub_lock;
+			spinlock_t		lo_sub_lock;
                         /**
                          * Cached object attribute, built from sub-object
                          * attributes.

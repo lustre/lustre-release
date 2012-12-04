@@ -59,7 +59,7 @@
 
 struct osd_compat_objid_seq {
         /* protects on-fly initialization */
-        cfs_semaphore_t        dir_init_sem;
+	struct semaphore	dir_init_sem;
         /* file storing last created objid */
         struct osd_inode_id    last_id;
         struct dentry         *groot; /* O/<seq> */
@@ -130,7 +130,7 @@ int osd_compat_seq_init(struct osd_device *osd, int seq)
         if (grp->groot != NULL)
                 RETURN(0);
 
-        cfs_down(&grp->dir_init_sem);
+	down(&grp->dir_init_sem);
 
         sprintf(name, "%d", seq);
         d = simple_mkdir(map->root, osd->od_mnt, name, 0755, 1);
@@ -169,7 +169,7 @@ int osd_compat_seq_init(struct osd_device *osd, int seq)
         if (rc)
                 osd_compat_seq_fini(osd, seq);
 out:
-        cfs_up(&grp->dir_init_sem);
+	up(&grp->dir_init_sem);
         RETURN(rc);
 }
 
@@ -279,7 +279,7 @@ int osd_compat_init(struct osd_device *dev)
 
         /* Initialize all groups */
         for (i = 0; i < MAX_OBJID_GROUP; i++) {
-                cfs_sema_init(&dev->od_ost_map->groups[i].dir_init_sem, 1);
+		sema_init(&dev->od_ost_map->groups[i].dir_init_sem, 1);
                 rc = osd_compat_seq_init(dev, i);
                 if (rc) {
                         osd_compat_fini(dev);

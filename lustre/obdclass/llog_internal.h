@@ -44,7 +44,7 @@ struct llog_process_info {
         void               *lpi_catdata;
         int                 lpi_rc;
         int                 lpi_flags;
-        cfs_completion_t    lpi_completion;
+	struct completion	lpi_completion;
 	const struct lu_env	*lpi_env;
 
 };

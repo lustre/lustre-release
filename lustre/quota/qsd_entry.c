@@ -47,7 +47,7 @@ static void qsd_lqe_init(struct lquota_entry *lqe, void *arg)
 	LASSERT(!lqe_is_master(lqe));
 
 	/* initialize slave parameters */
-	cfs_rwlock_init(&lqe->lqe_lock);
+	rwlock_init(&lqe->lqe_lock);
 	memset(&lqe->lqe_lockh, 0, sizeof(lqe->lqe_lockh));
 	lqe->lqe_pending_write = 0;
 	lqe->lqe_pending_req   = 0;

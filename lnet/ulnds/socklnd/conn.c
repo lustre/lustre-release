@@ -196,7 +196,7 @@ usocklnd_check_peer_stale(lnet_ni_t *ni, lnet_process_id_t id)
                 return;
         }
 
-        if (cfs_mt_atomic_read(&peer->up_refcount) == 2) {
+	if (mt_atomic_read(&peer->up_refcount) == 2) {
                 int i;
                 for (i = 0; i < N_CONN_TYPES; i++)
                         LASSERT (peer->up_conns[i] == NULL);
@@ -250,7 +250,7 @@ usocklnd_create_passive_conn(lnet_ni_t *ni,
         CFS_INIT_LIST_HEAD (&conn->uc_tx_list);
         CFS_INIT_LIST_HEAD (&conn->uc_zcack_list);
         pthread_mutex_init(&conn->uc_lock, NULL);
-        cfs_mt_atomic_set(&conn->uc_refcount, 1); /* 1 ref for me */
+	mt_atomic_set(&conn->uc_refcount, 1); /* 1 ref for me */
 
         *connp = conn;
         return 0;
@@ -307,7 +307,7 @@ usocklnd_create_active_conn(usock_peer_t *peer, int type,
         CFS_INIT_LIST_HEAD (&conn->uc_tx_list);
         CFS_INIT_LIST_HEAD (&conn->uc_zcack_list);
         pthread_mutex_init(&conn->uc_lock, NULL);
-        cfs_mt_atomic_set(&conn->uc_refcount, 1); /* 1 ref for me */
+	mt_atomic_set(&conn->uc_refcount, 1); /* 1 ref for me */
 
         *connp = conn;
         return 0;
@@ -709,7 +709,7 @@ usocklnd_create_peer(lnet_ni_t *ni, lnet_process_id_t id,
         peer->up_incrn_is_set = 0;
         peer->up_errored      = 0;
         peer->up_last_alive   = 0;
-        cfs_mt_atomic_set (&peer->up_refcount, 1); /* 1 ref for caller */
+	mt_atomic_set(&peer->up_refcount, 1); /* 1 ref for caller */
         pthread_mutex_init(&peer->up_lock, NULL);
 
         pthread_mutex_lock(&net->un_lock);

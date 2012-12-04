@@ -692,11 +692,11 @@ void mdc_commit_open(struct ptlrpc_request *req)
          * be put along with freeing \var mod.
          */
         ptlrpc_request_addref(req);
-        cfs_spin_lock(&req->rq_lock);
-        req->rq_committed = 1;
-        cfs_spin_unlock(&req->rq_lock);
-        req->rq_cb_data = NULL;
-        obd_mod_put(mod);
+	spin_lock(&req->rq_lock);
+	req->rq_committed = 1;
+	spin_unlock(&req->rq_lock);
+	req->rq_cb_data = NULL;
+	obd_mod_put(mod);
 }
 
 int mdc_set_open_replay_data(struct obd_export *exp,
@@ -737,13 +737,13 @@ int mdc_set_open_replay_data(struct obd_export *exp,
                 obd_mod_get(mod);
                 obd_mod_get(mod);
 
-                cfs_spin_lock(&open_req->rq_lock);
-                och->och_mod = mod;
-                mod->mod_och = och;
-                mod->mod_open_req = open_req;
-                open_req->rq_cb_data = mod;
-                open_req->rq_commit_cb = mdc_commit_open;
-                cfs_spin_unlock(&open_req->rq_lock);
+		spin_lock(&open_req->rq_lock);
+		och->och_mod = mod;
+		mod->mod_och = och;
+		mod->mod_open_req = open_req;
+		open_req->rq_cb_data = mod;
+		open_req->rq_commit_cb = mdc_commit_open;
+		spin_unlock(&open_req->rq_lock);
         }
 
         rec->cr_fid2 = body->fid1;
@@ -836,9 +836,9 @@ int mdc_close(struct obd_export *exp, struct md_op_data *op_data,
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched open");
                 /* We no longer want to preserve this open for replay even
                  * though the open was committed. b=3632, b=3633 */
-                cfs_spin_lock(&mod->mod_open_req->rq_lock);
-                mod->mod_open_req->rq_replay = 0;
-                cfs_spin_unlock(&mod->mod_open_req->rq_lock);
+		spin_lock(&mod->mod_open_req->rq_lock);
+		mod->mod_open_req->rq_replay = 0;
+		spin_unlock(&mod->mod_open_req->rq_lock);
         } else {
                  CDEBUG(D_HA, "couldn't find open req; expecting close error\n");
         }
@@ -929,9 +929,9 @@ int mdc_done_writing(struct obd_export *exp, struct md_op_data *op_data,
                 DEBUG_REQ(D_HA, mod->mod_open_req, "matched setattr");
                 /* We no longer want to preserve this setattr for replay even
                  * though the open was committed. b=3632, b=3633 */
-                cfs_spin_lock(&mod->mod_open_req->rq_lock);
-                mod->mod_open_req->rq_replay = 0;
-                cfs_spin_unlock(&mod->mod_open_req->rq_lock);
+		spin_lock(&mod->mod_open_req->rq_lock);
+		mod->mod_open_req->rq_replay = 0;
+		spin_unlock(&mod->mod_open_req->rq_lock);
         }
 
         mdc_close_pack(req, op_data);
@@ -1111,10 +1111,10 @@ static int mdc_statfs(const struct lu_env *env,
          * Since the request might also come from lprocfs, so we need
          * sync this with client_disconnect_export Bug15684
          */
-        cfs_down_read(&obd->u.cli.cl_sem);
+	down_read(&obd->u.cli.cl_sem);
         if (obd->u.cli.cl_import)
                 imp = class_import_get(obd->u.cli.cl_import);
-        cfs_up_read(&obd->u.cli.cl_sem);
+	up_read(&obd->u.cli.cl_sem);
         if (!imp)
                 RETURN(-ENODEV);
 
@@ -1735,15 +1735,17 @@ int mdc_set_info_async(const struct lu_env *env,
                 if (vallen != sizeof(int))
                         RETURN(-EINVAL);
 
-                cfs_spin_lock(&imp->imp_lock);
-                if (*((int *)val)) {
-                        imp->imp_connect_flags_orig |= OBD_CONNECT_RDONLY;
-                        imp->imp_connect_data.ocd_connect_flags |= OBD_CONNECT_RDONLY;
-                } else {
-                        imp->imp_connect_flags_orig &= ~OBD_CONNECT_RDONLY;
-                        imp->imp_connect_data.ocd_connect_flags &= ~OBD_CONNECT_RDONLY;
-                }
-                cfs_spin_unlock(&imp->imp_lock);
+		spin_lock(&imp->imp_lock);
+		if (*((int *)val)) {
+			imp->imp_connect_flags_orig |= OBD_CONNECT_RDONLY;
+			imp->imp_connect_data.ocd_connect_flags |=
+							OBD_CONNECT_RDONLY;
+		} else {
+			imp->imp_connect_flags_orig &= ~OBD_CONNECT_RDONLY;
+			imp->imp_connect_data.ocd_connect_flags &=
+							~OBD_CONNECT_RDONLY;
+		}
+		spin_unlock(&imp->imp_lock);
 
                 rc = do_set_info_async(imp, MDS_SET_INFO, LUSTRE_MDS_VERSION,
                                        keylen, key, vallen, val, set);
@@ -1759,9 +1761,9 @@ int mdc_set_info_async(const struct lu_env *env,
         }
         if (KEY_IS(KEY_MDS_CONN)) {
                 /* mds-mds import */
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_server_timeout = 1;
-                cfs_spin_unlock(&imp->imp_lock);
+		spin_lock(&imp->imp_lock);
+		imp->imp_server_timeout = 1;
+		spin_unlock(&imp->imp_lock);
                 imp->imp_client->cli_request_portal = MDS_MDS_PORTAL;
                 CDEBUG(D_OTHER, "%s: timeout / 2\n", exp->exp_obd->obd_name);
                 RETURN(0);
@@ -2335,13 +2337,13 @@ static int mdc_connect(const struct lu_env *env,
                        struct obd_connect_data *data,
                        void *localdata)
 {
-        struct obd_import *imp = obd->u.cli.cl_import;
+	struct obd_import *imp = obd->u.cli.cl_import;
 
-        /* mds-mds import features */
-        if (data && (data->ocd_connect_flags & OBD_CONNECT_MDS_MDS)) {
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_server_timeout = 1;
-                cfs_spin_unlock(&imp->imp_lock);
+	/* mds-mds import features */
+	if (data && (data->ocd_connect_flags & OBD_CONNECT_MDS_MDS)) {
+		spin_lock(&imp->imp_lock);
+		imp->imp_server_timeout = 1;
+		spin_unlock(&imp->imp_lock);
                 imp->imp_client->cli_request_portal = MDS_MDS_PORTAL;
                 CDEBUG(D_OTHER, "%s: Set 'mds' portal and timeout\n",
                        obd->obd_name);

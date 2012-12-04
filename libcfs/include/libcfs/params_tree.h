@@ -74,7 +74,7 @@ typedef struct poll_table_struct                cfs_poll_table_t;
 #define cfs_seq_open(file, ops, rc)             (rc = seq_open(file, ops))
 
 /* in lprocfs_stat.c, to protect the private data for proc entries */
-extern cfs_rw_semaphore_t       _lprocfs_lock;
+extern struct rw_semaphore		_lprocfs_lock;
 
 /* to begin from 2.6.23, Linux defines self file_operations (proc_reg_file_ops)
  * in procfs, the proc file_operation defined by Lustre (lprocfs_generic_fops)
@@ -86,14 +86,14 @@ extern cfs_rw_semaphore_t       _lprocfs_lock;
  */
 #ifndef HAVE_PROCFS_USERS
 
-#define LPROCFS_ENTRY()                 \
-do {                                    \
-        cfs_down_read(&_lprocfs_lock);  \
+#define LPROCFS_ENTRY()		\
+do {					\
+	down_read(&_lprocfs_lock);	\
 } while(0)
 
-#define LPROCFS_EXIT()                  \
-do {                                    \
-        cfs_up_read(&_lprocfs_lock);    \
+#define LPROCFS_EXIT()			\
+do {					\
+	up_read(&_lprocfs_lock);	\
 } while(0)
 
 #else
@@ -121,14 +121,15 @@ int LPROCFS_ENTRY_AND_CHECK(struct proc_dir_entry *dp)
 static inline
 int LPROCFS_ENTRY_AND_CHECK(struct proc_dir_entry *dp)
 {
-        int deleted = 0;
-        spin_lock(&(dp)->pde_unload_lock);
-        if (dp->proc_fops == NULL)
-                deleted = 1;
-        spin_unlock(&(dp)->pde_unload_lock);
-        if (deleted)
-                return -ENODEV;
-        return 0;
+	int deleted = 0;
+
+	spin_lock(&(dp)->pde_unload_lock);
+	if (dp->proc_fops == NULL)
+		deleted = 1;
+	spin_unlock(&(dp)->pde_unload_lock);
+	if (deleted)
+		return -ENODEV;
+	return 0;
 }
 #else /* !HAVE_PROCFS_DELETED*/
 static inline
@@ -148,14 +149,14 @@ do {                                    \
         up_read(&_lprocfs_lock);        \
 } while(0)
 
-#define LPROCFS_WRITE_ENTRY()           \
-do {                                    \
-        cfs_down_write(&_lprocfs_lock); \
+#define LPROCFS_WRITE_ENTRY()		\
+do {					\
+	down_write(&_lprocfs_lock);	\
 } while(0)
 
-#define LPROCFS_WRITE_EXIT()            \
-do {                                    \
-        cfs_up_write(&_lprocfs_lock);   \
+#define LPROCFS_WRITE_EXIT()		\
+do {					\
+	up_write(&_lprocfs_lock);	\
 } while(0)
 #else /* !LPROCFS */
 
@@ -186,7 +187,7 @@ typedef struct cfs_seq_file {
         size_t                     count;
         loff_t                     index;
         loff_t                     version;
-        cfs_mutex_t                lock;
+	struct mutex			lock;
         struct cfs_seq_operations *op;
         void                      *private;
 } cfs_seq_file_t;

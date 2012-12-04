@@ -58,7 +58,7 @@ static void lov_init_set(struct lov_request_set *set)
 	CFS_INIT_LIST_HEAD(&set->set_list);
 	cfs_atomic_set(&set->set_refcount, 1);
 	cfs_waitq_init(&set->set_waitq);
-	cfs_spin_lock_init(&set->set_lock);
+	spin_lock_init(&set->set_lock);
 }
 
 void lov_finish_set(struct lov_request_set *set)
@@ -1320,14 +1320,14 @@ int lov_fini_statfs(struct obd_device *obd, struct obd_statfs *osfs,int success)
 		if (osfs->os_ffree != LOV_U64_MAX)
 			lov_do_div64(osfs->os_ffree, expected_stripes);
 
-                cfs_spin_lock(&obd->obd_osfs_lock);
-                memcpy(&obd->obd_osfs, osfs, sizeof(*osfs));
-                obd->obd_osfs_age = cfs_time_current_64();
-                cfs_spin_unlock(&obd->obd_osfs_lock);
-                RETURN(0);
-        }
+		spin_lock(&obd->obd_osfs_lock);
+		memcpy(&obd->obd_osfs, osfs, sizeof(*osfs));
+		obd->obd_osfs_age = cfs_time_current_64();
+		spin_unlock(&obd->obd_osfs_lock);
+		RETURN(0);
+	}
 
-        RETURN(-EIO);
+	RETURN(-EIO);
 }
 
 int lov_fini_statfs_set(struct lov_request_set *set)
@@ -1447,11 +1447,11 @@ static int cb_statfs_update(void *cookie, int rc)
                 GOTO(out_update, rc);
 
         tgtobd = class_exp2obd(tgt->ltd_exp);
-        cfs_spin_lock(&tgtobd->obd_osfs_lock);
-        memcpy(&tgtobd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
-        if ((oinfo->oi_flags & OBD_STATFS_FROM_CACHE) == 0)
-                tgtobd->obd_osfs_age = cfs_time_current_64();
-        cfs_spin_unlock(&tgtobd->obd_osfs_lock);
+	spin_lock(&tgtobd->obd_osfs_lock);
+	memcpy(&tgtobd->obd_osfs, lov_sfs, sizeof(*lov_sfs));
+	if ((oinfo->oi_flags & OBD_STATFS_FROM_CACHE) == 0)
+		tgtobd->obd_osfs_age = cfs_time_current_64();
+	spin_unlock(&tgtobd->obd_osfs_lock);
 
 out_update:
         lov_update_statfs(osfs, lov_sfs, success);

@@ -147,7 +147,7 @@ typedef struct kptl_rx                          /* receive message */
 
 typedef struct kptl_rx_buffer_pool
 {
-        cfs_spinlock_t          rxbp_lock;
+	spinlock_t		rxbp_lock;
         cfs_list_t              rxbp_list;      /* all allocated buffers */
         int                     rxbp_count;     /* # allocated buffers */
         int                     rxbp_reserved;  /* # requests to buffer */
@@ -225,7 +225,7 @@ struct kptl_peer
         cfs_list_t              peer_list;
         cfs_atomic_t            peer_refcount;          /* The current references */
         enum kptllnd_peer_state peer_state;
-        cfs_spinlock_t          peer_lock;              /* serialize */
+	spinlock_t		peer_lock;		/* serialize */
         cfs_list_t              peer_noops;             /* PTLLND_MSG_TYPE_NOOP txs */
         cfs_list_t              peer_sendq;             /* txs waiting for mh handles */
         cfs_list_t              peer_activeq;           /* txs awaiting completion */
@@ -256,10 +256,10 @@ struct kptl_data
         __u64                   kptl_incarnation;      /* which one am I */
         ptl_handle_eq_t         kptl_eqh;              /* Event Queue (EQ) */
 
-        cfs_rwlock_t            kptl_net_rw_lock;      /* serialise... */
-        cfs_list_t              kptl_nets;             /* kptl_net instances */
+	rwlock_t		kptl_net_rw_lock;	/* serialise... */
+	cfs_list_t		kptl_nets;		/* kptl_net instance*/
 
-        cfs_spinlock_t          kptl_sched_lock;       /* serialise... */
+	spinlock_t		kptl_sched_lock;	/* serialise... */
         cfs_waitq_t             kptl_sched_waitq;      /* schedulers sleep here */
         cfs_list_t              kptl_sched_txq;        /* tx requiring attention */
         cfs_list_t              kptl_sched_rxq;        /* rx requiring attention */
@@ -271,10 +271,10 @@ struct kptl_data
         cfs_mem_cache_t*        kptl_rx_cache;         /* rx descripter cache */
 
         cfs_atomic_t            kptl_ntx;              /* # tx descs allocated */
-        cfs_spinlock_t          kptl_tx_lock;          /* serialise idle tx list*/
-        cfs_list_t              kptl_idle_txs;         /* idle tx descriptors */
+	spinlock_t		kptl_tx_lock;	     /* serialise idle tx list*/
+	cfs_list_t		kptl_idle_txs;       /* idle tx descriptors */
 
-        cfs_rwlock_t            kptl_peer_rw_lock;     /* lock for peer table */
+	rwlock_t		kptl_peer_rw_lock;   /* lock for peer table */
         cfs_list_t             *kptl_peers;            /* hash table of all my known peers */
         cfs_list_t              kptl_closing_peers;    /* peers being closed */
         cfs_list_t              kptl_zombie_peers;     /* peers waiting for refs to drain */
@@ -284,7 +284,7 @@ struct kptl_data
         int                     kptl_expected_peers;   /* # peers I can buffer HELLOs from */
 
         kptl_msg_t             *kptl_nak_msg;          /* common NAK message */
-        cfs_spinlock_t          kptl_ptlid2str_lock;   /* serialise str ops */
+	spinlock_t		kptl_ptlid2str_lock;	/* serialise str ops */
 };
 
 struct kptl_net
@@ -382,25 +382,25 @@ kptllnd_rx_buffer_size(void)
 static inline void
 kptllnd_rx_buffer_addref(kptl_rx_buffer_t *rxb)
 {
-        unsigned long flags;
+	unsigned long flags;
 
-        cfs_spin_lock_irqsave(&rxb->rxb_pool->rxbp_lock, flags);
-        rxb->rxb_refcount++;
-        cfs_spin_unlock_irqrestore(&rxb->rxb_pool->rxbp_lock, flags);
+	spin_lock_irqsave(&rxb->rxb_pool->rxbp_lock, flags);
+	rxb->rxb_refcount++;
+	spin_unlock_irqrestore(&rxb->rxb_pool->rxbp_lock, flags);
 }
 
 static inline void
 kptllnd_rx_buffer_decref_locked(kptl_rx_buffer_t *rxb)
 {
-        if (--(rxb->rxb_refcount) == 0) {
-                cfs_spin_lock(&kptllnd_data.kptl_sched_lock);
+	if (--(rxb->rxb_refcount) == 0) {
+		spin_lock(&kptllnd_data.kptl_sched_lock);
 
-                cfs_list_add_tail(&rxb->rxb_repost_list,
-                                  &kptllnd_data.kptl_sched_rxbq);
-                cfs_waitq_signal(&kptllnd_data.kptl_sched_waitq);
+		cfs_list_add_tail(&rxb->rxb_repost_list,
+				  &kptllnd_data.kptl_sched_rxbq);
+		cfs_waitq_signal(&kptllnd_data.kptl_sched_waitq);
 
-                cfs_spin_unlock(&kptllnd_data.kptl_sched_lock);
-        }
+		spin_unlock(&kptllnd_data.kptl_sched_lock);
+	}
 }
 
 static inline void
@@ -409,9 +409,9 @@ kptllnd_rx_buffer_decref(kptl_rx_buffer_t *rxb)
         unsigned long flags;
         int           count;
 
-        cfs_spin_lock_irqsave(&rxb->rxb_pool->rxbp_lock, flags);
-        count = --(rxb->rxb_refcount);
-        cfs_spin_unlock_irqrestore(&rxb->rxb_pool->rxbp_lock, flags);
+	spin_lock_irqsave(&rxb->rxb_pool->rxbp_lock, flags);
+	count = --(rxb->rxb_refcount);
+	spin_unlock_irqrestore(&rxb->rxb_pool->rxbp_lock, flags);
 
         if (count == 0)
                 kptllnd_rx_buffer_post(rxb);
@@ -503,9 +503,9 @@ kptllnd_id2peer(lnet_process_id_t id)
         kptl_peer_t   *peer;
         unsigned long  flags;
 
-        cfs_read_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
-        peer = kptllnd_id2peer_locked(id);
-        cfs_read_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock, flags);
+	read_lock_irqsave(&kptllnd_data.kptl_peer_rw_lock, flags);
+	peer = kptllnd_id2peer_locked(id);
+	read_unlock_irqrestore(&kptllnd_data.kptl_peer_rw_lock, flags);
 
         return peer;
 }

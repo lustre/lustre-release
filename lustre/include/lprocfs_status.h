@@ -74,8 +74,8 @@ struct lprocfs_static_vars {
 /* if we find more consumers this could be generalized */
 #define OBD_HIST_MAX 32
 struct obd_histogram {
-        cfs_spinlock_t oh_lock;
-        unsigned long  oh_buckets[OBD_HIST_MAX];
+	spinlock_t	oh_lock;
+	unsigned long	oh_buckets[OBD_HIST_MAX];
 };
 
 enum {
@@ -192,16 +192,16 @@ enum lprocfs_fields_flags {
 };
 
 struct lprocfs_stats {
-	unsigned short	       ls_num;   /* # of counters */
-	unsigned short	       ls_biggest_alloc_num;
-					 /* 1 + the highest slot index which has
-					  * been allocated, the 0th entry is
-					  * a statically intialized template */
-	int		       ls_flags; /* See LPROCFS_STATS_FLAG_* */
+	unsigned short		ls_num;	/* # of counters */
+	unsigned short		ls_biggest_alloc_num;
+					/* 1 + the highest slot index which has
+					 * been allocated, the 0th entry is
+					 * a statically intialized template */
+	int			ls_flags; /* See LPROCFS_STATS_FLAG_* */
 	/* Lock used when there are no percpu stats areas; For percpu stats,
 	 * it is used to protect ls_biggest_alloc_num change */
-	cfs_spinlock_t	       ls_lock;
-	struct lprocfs_percpu *ls_percpu[0];
+	spinlock_t		ls_lock;
+	struct lprocfs_percpu	*ls_percpu[0];
 };
 
 #define OPC_RANGE(seg) (seg ## _LAST_OPC - seg ## _FIRST_OPC)
@@ -365,7 +365,7 @@ typedef void (*cntr_init_callback)(struct lprocfs_stats *stats);
 struct obd_job_stats {
 	cfs_hash_t        *ojs_hash;
 	cfs_list_t         ojs_list;
-	cfs_rwlock_t       ojs_lock; /* protect the obj_list */
+	rwlock_t       ojs_lock; /* protect the obj_list */
 	cntr_init_callback ojs_cntr_init_fn;
 	int                ojs_cntr_num;
 	int                ojs_cleanup_interval;
@@ -402,9 +402,9 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int opc,
 
 		/* non-percpu counter stats */
 		if ((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
-			cfs_spin_lock_irqsave(&stats->ls_lock, *flags);
+			spin_lock_irqsave(&stats->ls_lock, *flags);
 		else
-			cfs_spin_lock(&stats->ls_lock);
+			spin_lock(&stats->ls_lock);
 		return 0;
 
 	case LPROCFS_GET_NUM_CPU:
@@ -414,9 +414,9 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int opc,
 
 		/* non-percpu counter stats */
 		if ((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
-			cfs_spin_lock_irqsave(&stats->ls_lock, *flags);
+			spin_lock_irqsave(&stats->ls_lock, *flags);
 		else
-			cfs_spin_lock(&stats->ls_lock);
+			spin_lock(&stats->ls_lock);
 		return 1;
 	}
 }
@@ -431,10 +431,10 @@ static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats, int opc,
 	case LPROCFS_GET_SMP_ID:
 		if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
 			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
-				cfs_spin_unlock_irqrestore(&stats->ls_lock,
+				spin_unlock_irqrestore(&stats->ls_lock,
 							   *flags);
 			} else {
-				cfs_spin_unlock(&stats->ls_lock);
+				spin_unlock(&stats->ls_lock);
 			}
 		} else {
 			cfs_put_cpu();
@@ -444,10 +444,10 @@ static inline void lprocfs_stats_unlock(struct lprocfs_stats *stats, int opc,
 	case LPROCFS_GET_NUM_CPU:
 		if (stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) {
 			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
-				cfs_spin_unlock_irqrestore(&stats->ls_lock,
+				spin_unlock_irqrestore(&stats->ls_lock,
 							   *flags);
 			} else {
-				cfs_spin_unlock(&stats->ls_lock);
+				spin_unlock(&stats->ls_lock);
 			}
 		}
 		return;
@@ -690,14 +690,14 @@ extern int lprocfs_seq_release(cfs_inode_t *, struct file *);
  * the import in a client obd_device for a lprocfs entry */
 #define LPROCFS_CLIMP_CHECK(obd) do {           \
         typecheck(struct obd_device *, obd);    \
-        cfs_down_read(&(obd)->u.cli.cl_sem);    \
+	down_read(&(obd)->u.cli.cl_sem);    \
         if ((obd)->u.cli.cl_import == NULL) {   \
-             cfs_up_read(&(obd)->u.cli.cl_sem); \
+	     up_read(&(obd)->u.cli.cl_sem); \
              return -ENODEV;                    \
         }                                       \
 } while(0)
 #define LPROCFS_CLIMP_EXIT(obd)                 \
-        cfs_up_read(&(obd)->u.cli.cl_sem);
+	up_read(&(obd)->u.cli.cl_sem);
 
 
 /* write the name##_seq_show function, call LPROC_SEQ_FOPS_RO for read-only

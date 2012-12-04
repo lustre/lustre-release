@@ -114,7 +114,7 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
         /* There is race condition:
          * "uc_upcall" was changed just after "is_identity_get_disabled" check.
          */
-        cfs_read_lock(&cache->uc_upcall_rwlock);
+	read_lock(&cache->uc_upcall_rwlock);
         CDEBUG(D_INFO, "The upcall is: '%s'\n", cache->uc_upcall);
 
         if (unlikely(!strcmp(cache->uc_upcall, "NONE"))) {
@@ -142,7 +142,7 @@ static int mdt_identity_do_upcall(struct upcall_cache *cache,
         }
         EXIT;
 out:
-        cfs_read_unlock(&cache->uc_upcall_rwlock);
+	read_unlock(&cache->uc_upcall_rwlock);
         return rc;
 }
 

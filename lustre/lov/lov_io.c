@@ -156,7 +156,7 @@ static int lov_io_sub_init(const struct lu_env *env, struct lov_io *lio,
         sub->sub_borrowed = 0;
 
         if (lio->lis_mem_frozen) {
-                LASSERT(cfs_mutex_is_locked(&ld->ld_mutex));
+		LASSERT(mutex_is_locked(&ld->ld_mutex));
                 sub->sub_io  = &ld->ld_emrg[stripe]->emrg_subio;
                 sub->sub_env = ld->ld_emrg[stripe]->emrg_env;
                 sub->sub_borrowed = 1;
@@ -628,7 +628,7 @@ static int lov_io_submit(const struct lu_env *env,
                  * In order to not make things worse, even don't try to
                  * allocate the memory with __GFP_NOWARN. -jay
                  */
-                cfs_mutex_lock(&ld->ld_mutex);
+		mutex_lock(&ld->ld_mutex);
                 lio->lis_mem_frozen = 1;
         }
 
@@ -681,7 +681,7 @@ static int lov_io_submit(const struct lu_env *env,
                                 lov_io_sub_fini(env, lio, &lio->lis_subs[i]);
                 }
                 lio->lis_mem_frozen = 0;
-                cfs_mutex_unlock(&ld->ld_mutex);
+		mutex_unlock(&ld->ld_mutex);
         }
 
         RETURN(rc);

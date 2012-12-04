@@ -169,7 +169,7 @@ struct osd_thandle {
 	struct thandle		 ot_super;
 	cfs_list_t		 ot_dcb_list;
 	cfs_list_t		 ot_sa_list;
-	cfs_semaphore_t		 ot_sa_lock;
+	struct semaphore	 ot_sa_lock;
 	dmu_tx_t		*ot_tx;
 	struct lquota_trans	 ot_quota_trans;
 	__u32			 ot_write_commit:1,
@@ -255,14 +255,14 @@ struct osd_object {
 	nvlist_t		*oo_sa_xattr;
 	cfs_list_t		 oo_sa_linkage;
 
-	cfs_rw_semaphore_t	 oo_sem;
+	struct rw_semaphore	 oo_sem;
 
 	/* cached attributes */
-	cfs_rwlock_t		 oo_attr_lock;
+	rwlock_t		 oo_attr_lock;
 	struct lu_attr		 oo_attr;
 
 	/* protects extended attributes */
-	cfs_semaphore_t		 oo_guard;
+	struct semaphore	 oo_guard;
 	uint64_t		 oo_xattr;
 
 	/* record size for index file */

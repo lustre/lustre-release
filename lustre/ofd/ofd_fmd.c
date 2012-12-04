@@ -66,9 +66,9 @@ void ofd_fmd_put(struct obd_export *exp, struct ofd_mod_data *fmd)
 	if (fmd == NULL)
 		return;
 
-	cfs_spin_lock(&fed->fed_lock);
+	spin_lock(&fed->fed_lock);
 	ofd_fmd_put_nolock(exp, fmd); /* caller reference */
-	cfs_spin_unlock(&fed->fed_lock);
+	spin_unlock(&fed->fed_lock);
 }
 
 /* expire entries from the end of the list if there are too many
@@ -99,9 +99,9 @@ void ofd_fmd_expire(struct obd_export *exp)
 {
 	struct filter_export_data *fed = &exp->exp_filter_data;
 
-	cfs_spin_lock(&fed->fed_lock);
+	spin_lock(&fed->fed_lock);
 	ofd_fmd_expire_nolock(exp, NULL);
-	cfs_spin_unlock(&fed->fed_lock);
+	spin_unlock(&fed->fed_lock);
 }
 
 /* find specified fid in fed_fmd_list.
@@ -139,11 +139,11 @@ struct ofd_mod_data *ofd_fmd_find(struct obd_export *exp,
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	struct ofd_mod_data		*fmd;
 
-	cfs_spin_lock(&fed->fed_lock);
+	spin_lock(&fed->fed_lock);
 	fmd = ofd_fmd_find_nolock(exp, fid);
 	if (fmd)
 		fmd->fmd_refcount++;    /* caller reference */
-	cfs_spin_unlock(&fed->fed_lock);
+	spin_unlock(&fed->fed_lock);
 
 	return fmd;
 }
@@ -163,7 +163,7 @@ struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, struct lu_fid *fid)
 
 	OBD_SLAB_ALLOC_PTR(fmd_new, ll_fmd_cachep);
 
-	cfs_spin_lock(&fed->fed_lock);
+	spin_lock(&fed->fed_lock);
 	found = ofd_fmd_find_nolock(exp, fid);
 	if (fmd_new) {
 		if (found == NULL) {
@@ -182,7 +182,7 @@ struct ofd_mod_data *ofd_fmd_get(struct obd_export *exp, struct lu_fid *fid)
 		found->fmd_expire = cfs_time_add(now, ofd->ofd_fmd_max_age);
 	}
 
-	cfs_spin_unlock(&fed->fed_lock);
+	spin_unlock(&fed->fed_lock);
 
 	return found;
 }
@@ -197,13 +197,13 @@ void ofd_fmd_drop(struct obd_export *exp, struct lu_fid *fid)
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	struct ofd_mod_data		*found = NULL;
 
-	cfs_spin_lock(&fed->fed_lock);
+	spin_lock(&fed->fed_lock);
 	found = ofd_fmd_find_nolock(exp, fid);
 	if (found) {
 		cfs_list_del_init(&found->fmd_list);
 		ofd_fmd_put_nolock(exp, found);
 	}
-	cfs_spin_unlock(&fed->fed_lock);
+	spin_unlock(&fed->fed_lock);
 }
 #endif
 
@@ -213,7 +213,7 @@ void ofd_fmd_cleanup(struct obd_export *exp)
 	struct filter_export_data	*fed = &exp->exp_filter_data;
 	struct ofd_mod_data		*fmd = NULL, *tmp;
 
-	cfs_spin_lock(&fed->fed_lock);
+	spin_lock(&fed->fed_lock);
 	cfs_list_for_each_entry_safe(fmd, tmp, &fed->fed_mod_list, fmd_list) {
 		cfs_list_del_init(&fmd->fmd_list);
 		if (fmd->fmd_refcount > 1) {
@@ -222,7 +222,7 @@ void ofd_fmd_cleanup(struct obd_export *exp)
 		}
 		ofd_fmd_put_nolock(exp, fmd);
 	}
-	cfs_spin_unlock(&fed->fed_lock);
+	spin_unlock(&fed->fed_lock);
 }
 
 int ofd_fmd_init(void)

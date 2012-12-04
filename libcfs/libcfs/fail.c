@@ -85,7 +85,7 @@ int __cfs_fail_check_set(__u32 id, __u32 value, int set)
                 int count = cfs_atomic_inc_return(&cfs_fail_count);
 
                 if (count >= cfs_fail_val) {
-                        cfs_set_bit(CFS_FAIL_ONCE_BIT, &cfs_fail_loc);
+			set_bit(CFS_FAIL_ONCE_BIT, &cfs_fail_loc);
                         cfs_atomic_set(&cfs_fail_count, 0);
                         /* we are lost race to increase  */
                         if (count > cfs_fail_val)
@@ -95,9 +95,9 @@ int __cfs_fail_check_set(__u32 id, __u32 value, int set)
 
         if ((set == CFS_FAIL_LOC_ORSET || set == CFS_FAIL_LOC_RESET) &&
             (value & CFS_FAIL_ONCE))
-                cfs_set_bit(CFS_FAIL_ONCE_BIT, &cfs_fail_loc);
+		set_bit(CFS_FAIL_ONCE_BIT, &cfs_fail_loc);
         /* Lost race to set CFS_FAILED_BIT. */
-        if (cfs_test_and_set_bit(CFS_FAILED_BIT, &cfs_fail_loc)) {
+	if (test_and_set_bit(CFS_FAILED_BIT, &cfs_fail_loc)) {
                 /* If CFS_FAIL_ONCE is valid, only one process can fail,
                  * otherwise multi-process can fail at the same time. */
                 if (cfs_fail_loc & CFS_FAIL_ONCE)

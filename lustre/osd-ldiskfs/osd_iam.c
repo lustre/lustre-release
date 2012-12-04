@@ -237,13 +237,13 @@ static int iam_format_guess(struct iam_container *c)
 		idle_blocks = (__u32 *)(c->ic_root_bh->b_data +
 					c->ic_descr->id_root_gap +
 					sizeof(struct dx_countlimit));
-		cfs_down(&c->ic_idle_sem);
+		down(&c->ic_idle_sem);
 		bh = iam_load_idle_blocks(c, le32_to_cpu(*idle_blocks));
 		if (bh != NULL && IS_ERR(bh))
 			result = PTR_ERR(bh);
 		else
 			c->ic_idle_bh = bh;
-		cfs_up(&c->ic_idle_sem);
+		up(&c->ic_idle_sem);
 	}
 
 	return result;
@@ -258,9 +258,9 @@ int iam_container_init(struct iam_container *c,
 	memset(c, 0, sizeof *c);
 	c->ic_descr  = descr;
 	c->ic_object = inode;
-	cfs_init_rwsem(&c->ic_sem);
+	init_rwsem(&c->ic_sem);
 	dynlock_init(&c->ic_tree_lock);
-	cfs_sema_init(&c->ic_idle_sem, 1);
+	sema_init(&c->ic_idle_sem, 1);
 	return 0;
 }
 EXPORT_SYMBOL(iam_container_init);
@@ -692,22 +692,22 @@ static int iam_it_get_exact(struct iam_iterator *it, const struct iam_key *k)
 
 void iam_container_write_lock(struct iam_container *ic)
 {
-        cfs_down_write(&ic->ic_sem);
+	down_write(&ic->ic_sem);
 }
 
 void iam_container_write_unlock(struct iam_container *ic)
 {
-        cfs_up_write(&ic->ic_sem);
+	up_write(&ic->ic_sem);
 }
 
 void iam_container_read_lock(struct iam_container *ic)
 {
-        cfs_down_read(&ic->ic_sem);
+	down_read(&ic->ic_sem);
 }
 
 void iam_container_read_unlock(struct iam_container *ic)
 {
-        cfs_up_read(&ic->ic_sem);
+	up_read(&ic->ic_sem);
 }
 
 /*
@@ -1671,9 +1671,9 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 	if (c->ic_idle_bh == NULL)
 		goto newblock;
 
-	cfs_down(&c->ic_idle_sem);
+	down(&c->ic_idle_sem);
 	if (unlikely(c->ic_idle_bh == NULL)) {
-		cfs_up(&c->ic_idle_sem);
+		up(&c->ic_idle_sem);
 		goto newblock;
 	}
 
@@ -1691,7 +1691,7 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 		if (*e != 0)
 			goto fail;
 
-		cfs_up(&c->ic_idle_sem);
+		up(&c->ic_idle_sem);
 		bh = ldiskfs_bread(NULL, inode, *b, 0, e);
 		if (bh == NULL)
 			return NULL;
@@ -1729,7 +1729,7 @@ iam_new_node(handle_t *h, struct iam_container *c, iam_ptr_t *b, int *e)
 	}
 
 	c->ic_idle_bh = idle;
-	cfs_up(&c->ic_idle_sem);
+	up(&c->ic_idle_sem);
 
 got:
 	/* get write access for the found buffer head */
@@ -1750,7 +1750,7 @@ newblock:
 	return bh;
 
 fail:
-	cfs_up(&c->ic_idle_sem);
+	up(&c->ic_idle_sem);
 	ldiskfs_std_error(inode->i_sb, *e);
 	return NULL;
 }
@@ -2388,7 +2388,7 @@ static void iam_recycle_leaf(handle_t *h, struct iam_path *p,
 	int count;
 	int rc;
 
-	cfs_down(&c->ic_idle_sem);
+	down(&c->ic_idle_sem);
 	if (unlikely(c->ic_idle_failed)) {
 		rc = -EFAULT;
 		goto unlock;
@@ -2421,7 +2421,7 @@ static void iam_recycle_leaf(handle_t *h, struct iam_path *p,
 	rc = iam_txn_dirty(h, p, c->ic_idle_bh);
 
 unlock:
-	cfs_up(&c->ic_idle_sem);
+	up(&c->ic_idle_sem);
 	if (rc != 0)
 		CWARN("%.16s: idle blocks failed, will lose the blk %u\n",
 		      LDISKFS_SB(inode->i_sb)->s_es->s_volume_name, blk);

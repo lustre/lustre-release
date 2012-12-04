@@ -49,7 +49,7 @@ typedef struct cfs_wi_sched {
 	cfs_list_t		ws_list;	/* chain on global list */
 #ifdef __KERNEL__
 	/** serialised workitems */
-	cfs_spinlock_t		ws_lock;
+	spinlock_t		ws_lock;
 	/** where schedulers sleep */
 	cfs_waitq_t		ws_waitq;
 #endif
@@ -79,7 +79,7 @@ typedef struct cfs_wi_sched {
 
 struct cfs_workitem_data {
 	/** serialize */
-	cfs_spinlock_t		wi_glock;
+	spinlock_t		wi_glock;
 	/** list of all schedulers */
 	cfs_list_t		wi_scheds;
 	/** WI module is initialized */
@@ -92,13 +92,13 @@ struct cfs_workitem_data {
 static inline void
 cfs_wi_sched_lock(cfs_wi_sched_t *sched)
 {
-        cfs_spin_lock(&sched->ws_lock);
+	spin_lock(&sched->ws_lock);
 }
 
 static inline void
 cfs_wi_sched_unlock(cfs_wi_sched_t *sched)
 {
-        cfs_spin_unlock(&sched->ws_lock);
+	spin_unlock(&sched->ws_lock);
 }
 
 static inline int
@@ -123,13 +123,13 @@ cfs_wi_sched_cansleep(cfs_wi_sched_t *sched)
 static inline void
 cfs_wi_sched_lock(cfs_wi_sched_t *sched)
 {
-        cfs_spin_lock(&cfs_wi_data.wi_glock);
+	spin_lock(&cfs_wi_data.wi_glock);
 }
 
 static inline void
 cfs_wi_sched_unlock(cfs_wi_sched_t *sched)
 {
-        cfs_spin_unlock(&cfs_wi_data.wi_glock);
+	spin_unlock(&cfs_wi_data.wi_glock);
 }
 
 #endif /* __KERNEL__ */
@@ -262,13 +262,13 @@ cfs_wi_scheduler (void *arg)
 	if (sched->ws_cptab != NULL)
 		cfs_cpt_bind(sched->ws_cptab, sched->ws_cpt);
 
-	cfs_spin_lock(&cfs_wi_data.wi_glock);
+	spin_lock(&cfs_wi_data.wi_glock);
 
 	LASSERT(sched->ws_starting == 1);
 	sched->ws_starting--;
 	sched->ws_nthreads++;
 
-	cfs_spin_unlock(&cfs_wi_data.wi_glock);
+	spin_unlock(&cfs_wi_data.wi_glock);
 
 	cfs_wi_sched_lock(sched);
 
@@ -328,11 +328,11 @@ cfs_wi_scheduler (void *arg)
 
         cfs_wi_sched_unlock(sched);
 
-	cfs_spin_lock(&cfs_wi_data.wi_glock);
+	spin_lock(&cfs_wi_data.wi_glock);
 	sched->ws_nthreads--;
-	cfs_spin_unlock(&cfs_wi_data.wi_glock);
+	spin_unlock(&cfs_wi_data.wi_glock);
 
-        return 0;
+	return 0;
 }
 
 #else /* __KERNEL__ */
@@ -340,12 +340,12 @@ cfs_wi_scheduler (void *arg)
 int
 cfs_wi_check_events (void)
 {
-        int               n = 0;
-        cfs_workitem_t   *wi;
+	int               n = 0;
+	cfs_workitem_t   *wi;
 
-        cfs_spin_lock(&cfs_wi_data.wi_glock);
+	spin_lock(&cfs_wi_data.wi_glock);
 
-        for (;;) {
+	for (;;) {
 		struct cfs_wi_sched	*sched = NULL;
 		struct cfs_wi_sched	*tmp;
 
@@ -368,18 +368,18 @@ cfs_wi_check_events (void)
 		LASSERT(sched->ws_nscheduled > 0);
 		sched->ws_nscheduled--;
 
-                LASSERT (wi->wi_scheduled);
-                wi->wi_scheduled = 0;
-                cfs_spin_unlock(&cfs_wi_data.wi_glock);
+		LASSERT(wi->wi_scheduled);
+		wi->wi_scheduled = 0;
+		spin_unlock(&cfs_wi_data.wi_glock);
 
-                n++;
-                (*wi->wi_action) (wi);
+		n++;
+		(*wi->wi_action) (wi);
 
-                cfs_spin_lock(&cfs_wi_data.wi_glock);
-        }
+		spin_lock(&cfs_wi_data.wi_glock);
+	}
 
-        cfs_spin_unlock(&cfs_wi_data.wi_glock);
-        return n;
+	spin_unlock(&cfs_wi_data.wi_glock);
+	return n;
 }
 
 #endif
@@ -392,37 +392,37 @@ cfs_wi_sched_destroy(struct cfs_wi_sched *sched)
 	LASSERT(cfs_wi_data.wi_init);
 	LASSERT(!cfs_wi_data.wi_stopping);
 
-	cfs_spin_lock(&cfs_wi_data.wi_glock);
+	spin_lock(&cfs_wi_data.wi_glock);
 	if (sched->ws_stopping) {
 		CDEBUG(D_INFO, "%s is in progress of stopping\n",
 		       sched->ws_name);
-		cfs_spin_unlock(&cfs_wi_data.wi_glock);
+		spin_unlock(&cfs_wi_data.wi_glock);
 		return;
 	}
 
 	LASSERT(!cfs_list_empty(&sched->ws_list));
 	sched->ws_stopping = 1;
 
-	cfs_spin_unlock(&cfs_wi_data.wi_glock);
+	spin_unlock(&cfs_wi_data.wi_glock);
 
 	i = 2;
 #ifdef __KERNEL__
 	cfs_waitq_broadcast(&sched->ws_waitq);
 
-	cfs_spin_lock(&cfs_wi_data.wi_glock);
+	spin_lock(&cfs_wi_data.wi_glock);
 	while (sched->ws_nthreads > 0) {
 		CDEBUG(IS_PO2(++i) ? D_WARNING : D_NET,
 		       "waiting for %d threads of WI sched[%s] to terminate\n",
 		       sched->ws_nthreads, sched->ws_name);
 
-		cfs_spin_unlock(&cfs_wi_data.wi_glock);
+		spin_unlock(&cfs_wi_data.wi_glock);
 		cfs_pause(cfs_time_seconds(1) / 20);
-		cfs_spin_lock(&cfs_wi_data.wi_glock);
+		spin_lock(&cfs_wi_data.wi_glock);
 	}
 
 	cfs_list_del(&sched->ws_list);
 
-	cfs_spin_unlock(&cfs_wi_data.wi_glock);
+	spin_unlock(&cfs_wi_data.wi_glock);
 #else
 	SET_BUT_UNUSED(i);
 #endif
@@ -453,7 +453,7 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 	sched->ws_cpt = cpt;
 
 #ifdef __KERNEL__
-	cfs_spin_lock_init(&sched->ws_lock);
+	spin_lock_init(&sched->ws_lock);
 	cfs_waitq_init(&sched->ws_waitq);
 #endif
 	CFS_INIT_LIST_HEAD(&sched->ws_runq);
@@ -463,15 +463,15 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 	rc = 0;
 #ifdef __KERNEL__
 	while (nthrs > 0)  {
-		cfs_spin_lock(&cfs_wi_data.wi_glock);
+		spin_lock(&cfs_wi_data.wi_glock);
 		while (sched->ws_starting > 0) {
-			cfs_spin_unlock(&cfs_wi_data.wi_glock);
+			spin_unlock(&cfs_wi_data.wi_glock);
 			cfs_schedule();
-			cfs_spin_lock(&cfs_wi_data.wi_glock);
+			spin_lock(&cfs_wi_data.wi_glock);
 		}
 
 		sched->ws_starting++;
-		cfs_spin_unlock(&cfs_wi_data.wi_glock);
+		spin_unlock(&cfs_wi_data.wi_glock);
 
 		rc = cfs_create_thread(cfs_wi_scheduler, sched, 0);
 		if (rc >= 0) {
@@ -482,13 +482,13 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 		CERROR("Failed to create thread for WI scheduler %s: %d\n",
 		       name, rc);
 
-		cfs_spin_lock(&cfs_wi_data.wi_glock);
+		spin_lock(&cfs_wi_data.wi_glock);
 
 		/* make up for cfs_wi_sched_destroy */
 		cfs_list_add(&sched->ws_list, &cfs_wi_data.wi_scheds);
 		sched->ws_starting--;
 
-		cfs_spin_unlock(&cfs_wi_data.wi_glock);
+		spin_unlock(&cfs_wi_data.wi_glock);
 
 		cfs_wi_sched_destroy(sched);
 		return rc;
@@ -496,9 +496,9 @@ cfs_wi_sched_create(char *name, struct cfs_cpt_table *cptab,
 #else
 	SET_BUT_UNUSED(rc);
 #endif
-	cfs_spin_lock(&cfs_wi_data.wi_glock);
+	spin_lock(&cfs_wi_data.wi_glock);
 	cfs_list_add(&sched->ws_list, &cfs_wi_data.wi_scheds);
-	cfs_spin_unlock(&cfs_wi_data.wi_glock);
+	spin_unlock(&cfs_wi_data.wi_glock);
 
 	*sched_pp = sched;
 	return 0;
@@ -510,7 +510,7 @@ cfs_wi_startup(void)
 {
 	memset(&cfs_wi_data, 0, sizeof(cfs_wi_data));
 
-	cfs_spin_lock_init(&cfs_wi_data.wi_glock);
+	spin_lock_init(&cfs_wi_data.wi_glock);
 	CFS_INIT_LIST_HEAD(&cfs_wi_data.wi_scheds);
 	cfs_wi_data.wi_init = 1;
 
@@ -522,9 +522,9 @@ cfs_wi_shutdown (void)
 {
 	struct cfs_wi_sched	*sched;
 
-	cfs_spin_lock(&cfs_wi_data.wi_glock);
+	spin_lock(&cfs_wi_data.wi_glock);
 	cfs_wi_data.wi_stopping = 1;
-	cfs_spin_unlock(&cfs_wi_data.wi_glock);
+	spin_unlock(&cfs_wi_data.wi_glock);
 
 #ifdef __KERNEL__
 	/* nobody should contend on this list */
@@ -534,14 +534,14 @@ cfs_wi_shutdown (void)
 	}
 
 	cfs_list_for_each_entry(sched, &cfs_wi_data.wi_scheds, ws_list) {
-		cfs_spin_lock(&cfs_wi_data.wi_glock);
+		spin_lock(&cfs_wi_data.wi_glock);
 
 		while (sched->ws_nthreads != 0) {
-			cfs_spin_unlock(&cfs_wi_data.wi_glock);
+			spin_unlock(&cfs_wi_data.wi_glock);
 			cfs_pause(cfs_time_seconds(1) / 20);
-			cfs_spin_lock(&cfs_wi_data.wi_glock);
+			spin_lock(&cfs_wi_data.wi_glock);
 		}
-		cfs_spin_unlock(&cfs_wi_data.wi_glock);
+		spin_unlock(&cfs_wi_data.wi_glock);
 	}
 #endif
 	while (!cfs_list_empty(&cfs_wi_data.wi_scheds)) {

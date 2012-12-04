@@ -134,9 +134,9 @@ static int mgsself_srpc_seq_show(struct seq_file *seq, void *v)
         if (rc)
 		goto out;
 
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
         seq_show_srpc_rules(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
 
 out:
 	lu_env_fini(&env);
@@ -216,16 +216,16 @@ static int mgs_live_seq_show(struct seq_file *seq, void *v)
         struct mgs_tgt_srpc_conf *srpc_tgt;
         int i;
 
-        cfs_mutex_lock(&fsdb->fsdb_mutex);
+	mutex_lock(&fsdb->fsdb_mutex);
 
         seq_printf(seq, "fsname: %s\n", fsdb->fsdb_name);
         seq_printf(seq, "flags: %#lx     gen: %d\n",
                    fsdb->fsdb_flags, fsdb->fsdb_gen);
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
-                 if (cfs_test_bit(i, fsdb->fsdb_mdt_index_map))
+		if (test_bit(i, fsdb->fsdb_mdt_index_map))
                          seq_printf(seq, "%s-MDT%04x\n", fsdb->fsdb_name, i);
         for (i = 0; i < INDEX_MAP_SIZE * 8; i++)
-                 if (cfs_test_bit(i, fsdb->fsdb_ost_index_map))
+		if (test_bit(i, fsdb->fsdb_ost_index_map))
                          seq_printf(seq, "%s-OST%04x\n", fsdb->fsdb_name, i);
 
         seq_printf(seq, "\nSecure RPC Config Rules:\n");
@@ -242,7 +242,7 @@ static int mgs_live_seq_show(struct seq_file *seq, void *v)
 
         lprocfs_rd_ir_state(seq, fsdb);
 
-        cfs_mutex_unlock(&fsdb->fsdb_mutex);
+	mutex_unlock(&fsdb->fsdb_mutex);
         return 0;
 }
 

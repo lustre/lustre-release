@@ -53,7 +53,7 @@ void qsd_put_fsinfo(struct qsd_fsinfo *qfs)
 	ENTRY;
 	LASSERT(qfs != NULL);
 
-	cfs_spin_lock(&qfs_list_lock);
+	spin_lock(&qfs_list_lock);
 	LASSERT(qfs->qfs_ref > 0);
 	qfs->qfs_ref--;
 	if (qfs->qfs_ref == 0) {
@@ -61,7 +61,7 @@ void qsd_put_fsinfo(struct qsd_fsinfo *qfs)
 		cfs_list_del(&qfs->qfs_link);
 		OBD_FREE_PTR(qfs);
 	}
-	cfs_spin_unlock(&qfs_list_lock);
+	spin_unlock(&qfs_list_lock);
 	EXIT;
 }
 
@@ -92,14 +92,14 @@ struct qsd_fsinfo *qsd_get_fsinfo(char *name, bool create)
 		if (new == NULL)
 			RETURN(NULL);
 
-		cfs_sema_init(&new->qfs_sem, 1);
+		sema_init(&new->qfs_sem, 1);
 		CFS_INIT_LIST_HEAD(&new->qfs_qsd_list);
 		strcpy(new->qfs_name, name);
 		new->qfs_ref = 1;
 	}
 
 	/* search in the fsinfo list */
-	cfs_spin_lock(&qfs_list_lock);
+	spin_lock(&qfs_list_lock);
 	cfs_list_for_each_entry(qfs, &qfs_list, qfs_link) {
 		if (!strcmp(qfs->qfs_name, name)) {
 			qfs->qfs_ref++;
@@ -116,7 +116,7 @@ struct qsd_fsinfo *qsd_get_fsinfo(char *name, bool create)
 		new = NULL;
 	}
 out:
-	cfs_spin_unlock(&qfs_list_lock);
+	spin_unlock(&qfs_list_lock);
 
 	if (new)
 		OBD_FREE_PTR(new);
@@ -164,7 +164,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 	if (strchr(valstr, 'g'))
 		enabled |= 1 << GRPQUOTA;
 
-	cfs_down(&qfs->qfs_sem);
+	down(&qfs->qfs_sem);
 	if (qfs->qfs_enabled[pool - LQUOTA_FIRST_RES] == enabled)
 		/* no change required */
 		GOTO(out, rc = 0);
@@ -185,10 +185,10 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 
 			/* start reintegration only if qsd_prepare() was
 			 * successfully called */
-			cfs_read_lock(&qsd->qsd_lock);
+			read_lock(&qsd->qsd_lock);
 			if (!qsd->qsd_prepared)
 				skip = true;
-			cfs_read_unlock(&qsd->qsd_lock);
+			read_unlock(&qsd->qsd_lock);
 			if (skip)
 				continue;
 
@@ -199,7 +199,7 @@ int qsd_process_config(struct lustre_cfg *lcfg)
 		}
 	}
 out:
-	cfs_up(&qfs->qfs_sem);
+	up(&qfs->qfs_sem);
 	qsd_put_fsinfo(qfs);
 	RETURN(0);
 }

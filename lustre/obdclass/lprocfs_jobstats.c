@@ -116,9 +116,9 @@ static void job_free(struct job_stat *job)
 	LASSERT(atomic_read(&job->js_refcount) == 0);
 	LASSERT(job->js_jobstats);
 
-	cfs_write_lock(&job->js_jobstats->ojs_lock);
+	write_lock(&job->js_jobstats->ojs_lock);
 	cfs_list_del_init(&job->js_list);
-	cfs_write_unlock(&job->js_jobstats->ojs_lock);
+	write_unlock(&job->js_jobstats->ojs_lock);
 
 	lprocfs_free_stats(&job->js_stats);
 	OBD_FREE_PTR(job);
@@ -252,9 +252,9 @@ int lprocfs_job_stats_log(struct obd_device *obd, char *jobid,
 		 * "job2" was initialized in job_alloc() already. LU-2163 */
 	} else {
 		LASSERT(cfs_list_empty(&job->js_list));
-		cfs_write_lock(&stats->ojs_lock);
+		write_lock(&stats->ojs_lock);
 		cfs_list_add_tail(&job->js_list, &stats->ojs_list);
-		cfs_write_unlock(&stats->ojs_lock);
+		write_unlock(&stats->ojs_lock);
 	}
 
 found:
@@ -288,7 +288,7 @@ static void *lprocfs_jobstats_seq_start(struct seq_file *p, loff_t *pos)
 	loff_t off = *pos;
 	struct job_stat *job;
 
-	cfs_read_lock(&stats->ojs_lock);
+	read_lock(&stats->ojs_lock);
 	if (off == 0)
 		return SEQ_START_TOKEN;
 	off--;
@@ -303,7 +303,7 @@ static void lprocfs_jobstats_seq_stop(struct seq_file *p, void *v)
 {
 	struct obd_job_stats *stats = p->private;
 
-	cfs_read_unlock(&stats->ojs_lock);
+	read_unlock(&stats->ojs_lock);
 }
 
 static void *lprocfs_jobstats_seq_next(struct seq_file *p, void *v, loff_t *pos)
@@ -516,7 +516,7 @@ int lprocfs_job_stats_init(struct obd_device *obd, int cntr_num,
 		RETURN(-ENOMEM);
 
 	CFS_INIT_LIST_HEAD(&stats->ojs_list);
-	cfs_rwlock_init(&stats->ojs_lock);
+	rwlock_init(&stats->ojs_lock);
 	stats->ojs_cntr_num = cntr_num;
 	stats->ojs_cntr_init_fn = init_fn;
 	stats->ojs_cleanup_interval = 600; /* 10 mins by default */

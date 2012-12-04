@@ -106,10 +106,10 @@ struct smoketest_framework {
         cfs_list_t         fw_zombie_sessions; /* stopping sessions */
         cfs_list_t         fw_tests;           /* registered test cases */
         cfs_atomic_t       fw_nzombies;        /* # zombie sessions */
-        cfs_spinlock_t     fw_lock;            /* serialise */
-        sfw_session_t     *fw_session;         /* _the_ session */
-        int                fw_shuttingdown;    /* shutdown in progress */
-        srpc_server_rpc_t *fw_active_srpc;     /* running RPC */
+	spinlock_t	   fw_lock;		/* serialise */
+	sfw_session_t	  *fw_session;		/* _the_ session */
+	int		   fw_shuttingdown;	/* shutdown in progress */
+	srpc_server_rpc_t *fw_active_srpc;	/* running RPC */
 } sfw_data;
 
 /* forward ref's */
@@ -215,14 +215,14 @@ sfw_deactivate_session (void)
         cfs_atomic_inc(&sfw_data.fw_nzombies);
         cfs_list_add(&sn->sn_list, &sfw_data.fw_zombie_sessions);
 
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	spin_unlock(&sfw_data.fw_lock);
 
-        cfs_list_for_each_entry_typed (tsc, &sfw_data.fw_tests,
-                                       sfw_test_case_t, tsc_list) {
-                srpc_abort_service(tsc->tsc_srv_service);
-        }
+	cfs_list_for_each_entry_typed(tsc, &sfw_data.fw_tests,
+				      sfw_test_case_t, tsc_list) {
+		srpc_abort_service(tsc->tsc_srv_service);
+	}
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
         cfs_list_for_each_entry_typed (tsb, &sn->sn_batches,
                                        sfw_batch_t, bat_list) {
@@ -236,12 +236,11 @@ sfw_deactivate_session (void)
                 return;   /* wait for active batches to stop */
 
         cfs_list_del_init(&sn->sn_list);
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	spin_unlock(&sfw_data.fw_lock);
 
-        sfw_destroy_session(sn);
+	sfw_destroy_session(sn);
 
-        cfs_spin_lock(&sfw_data.fw_lock);
-        return;
+	spin_lock(&sfw_data.fw_lock);
 }
 
 #ifndef __KERNEL__
@@ -257,9 +256,9 @@ sfw_session_removed (void)
 void
 sfw_session_expired (void *data)
 {
-        sfw_session_t *sn = data;
+	sfw_session_t *sn = data;
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
         LASSERT (sn->sn_timer_active);
         LASSERT (sn == sfw_data.fw_session);
@@ -271,8 +270,7 @@ sfw_session_expired (void *data)
         sn->sn_timer_active = 0;
         sfw_deactivate_session();
 
-        cfs_spin_unlock(&sfw_data.fw_lock);
-        return;
+	spin_unlock(&sfw_data.fw_lock);
 }
 
 static inline void
@@ -336,14 +334,13 @@ sfw_client_rpc_fini (srpc_client_rpc_t *rpc)
                 swi_state2str(rpc->crpc_wi.swi_state),
                 rpc->crpc_aborted, rpc->crpc_status);
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
-        /* my callers must finish all RPCs before shutting me down */
-        LASSERT (!sfw_data.fw_shuttingdown);
-        cfs_list_add(&rpc->crpc_list, &sfw_data.fw_zombie_rpcs);
+	/* my callers must finish all RPCs before shutting me down */
+	LASSERT(!sfw_data.fw_shuttingdown);
+	cfs_list_add(&rpc->crpc_list, &sfw_data.fw_zombie_rpcs);
 
-        cfs_spin_unlock(&sfw_data.fw_lock);
-        return;
+	spin_unlock(&sfw_data.fw_lock);
 }
 
 sfw_batch_t *
@@ -484,18 +481,18 @@ sfw_make_session(srpc_mksn_reqst_t *request, srpc_mksn_reply_t *reply)
 	sfw_init_session(sn, request->mksn_sid,
 			 msg->msg_ses_feats, &request->mksn_name[0]);
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
-        sfw_deactivate_session();
-        LASSERT (sfw_data.fw_session == NULL);
-        sfw_data.fw_session = sn;
+	sfw_deactivate_session();
+	LASSERT(sfw_data.fw_session == NULL);
+	sfw_data.fw_session = sn;
 
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	spin_unlock(&sfw_data.fw_lock);
 
-        reply->mksn_status  = 0;
-        reply->mksn_sid     = sn->sn_id;
-        reply->mksn_timeout = sn->sn_timeout;
-        return 0;
+	reply->mksn_status  = 0;
+	reply->mksn_sid     = sn->sn_id;
+	reply->mksn_timeout = sn->sn_timeout;
+	return 0;
 }
 
 int
@@ -520,14 +517,14 @@ sfw_remove_session (srpc_rmsn_reqst_t *request, srpc_rmsn_reply_t *reply)
                 return 0;
         }
 
-        cfs_spin_lock(&sfw_data.fw_lock);
-        sfw_deactivate_session();
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
+	sfw_deactivate_session();
+	spin_unlock(&sfw_data.fw_lock);
 
-        reply->rmsn_status = 0;
-        reply->rmsn_sid    = LST_INVALID_SID;
-        LASSERT (sfw_data.fw_session == NULL);
-        return 0;
+	reply->rmsn_status = 0;
+	reply->rmsn_sid    = LST_INVALID_SID;
+	LASSERT(sfw_data.fw_session == NULL);
+	return 0;
 }
 
 int
@@ -760,7 +757,7 @@ sfw_add_test_instance (sfw_batch_t *tsb, srpc_server_rpc_t *rpc)
         }
 
         memset(tsi, 0, sizeof(*tsi));
-        cfs_spin_lock_init(&tsi->tsi_lock);
+	spin_lock_init(&tsi->tsi_lock);
         cfs_atomic_set(&tsi->tsi_nactive, 0);
         CFS_INIT_LIST_HEAD(&tsi->tsi_units);
         CFS_INIT_LIST_HEAD(&tsi->tsi_free_rpcs);
@@ -856,17 +853,17 @@ sfw_test_unit_done (sfw_test_unit_t *tsu)
                 return;
 
         /* the test instance is done */
-        cfs_spin_lock(&tsi->tsi_lock);
+	spin_lock(&tsi->tsi_lock);
 
-        tsi->tsi_stopping = 0;
+	tsi->tsi_stopping = 0;
 
-        cfs_spin_unlock(&tsi->tsi_lock);
+	spin_unlock(&tsi->tsi_lock);
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
-        if (!cfs_atomic_dec_and_test(&tsb->bat_nactive) ||/* tsb still active */
-            sn == sfw_data.fw_session) {               /* sn also active */
-                cfs_spin_unlock(&sfw_data.fw_lock);
+	if (!cfs_atomic_dec_and_test(&tsb->bat_nactive) ||/* tsb still active */
+	    sn == sfw_data.fw_session) {		  /* sn also active */
+		spin_unlock(&sfw_data.fw_lock);
                 return;
         }
 
@@ -875,16 +872,16 @@ sfw_test_unit_done (sfw_test_unit_t *tsu)
         cfs_list_for_each_entry_typed (tsb, &sn->sn_batches,
                                        sfw_batch_t, bat_list) {
                 if (sfw_batch_active(tsb)) {
-                        cfs_spin_unlock(&sfw_data.fw_lock);
-                        return;
-                }
-        }
+			spin_unlock(&sfw_data.fw_lock);
+			return;
+		}
+	}
 
-        cfs_list_del_init(&sn->sn_list);
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	cfs_list_del_init(&sn->sn_list);
+	spin_unlock(&sfw_data.fw_lock);
 
-        sfw_destroy_session(sn);
-        return;
+	sfw_destroy_session(sn);
+	return;
 }
 
 void
@@ -896,7 +893,7 @@ sfw_test_rpc_done (srpc_client_rpc_t *rpc)
 
         tsi->tsi_ops->tso_done_rpc(tsu, rpc);
 
-        cfs_spin_lock(&tsi->tsi_lock);
+	spin_lock(&tsi->tsi_lock);
 
         LASSERT (sfw_test_active(tsi));
         LASSERT (!cfs_list_empty(&rpc->crpc_list));
@@ -912,7 +909,7 @@ sfw_test_rpc_done (srpc_client_rpc_t *rpc)
         /* dec ref for poster */
         srpc_client_rpc_decref(rpc);
 
-        cfs_spin_unlock(&tsi->tsi_lock);
+	spin_unlock(&tsi->tsi_lock);
 
         if (!done) {
                 swi_schedule_workitem(&tsu->tsu_worker);
@@ -928,10 +925,10 @@ sfw_create_test_rpc(sfw_test_unit_t *tsu, lnet_process_id_t peer,
 		    unsigned features, int nblk, int blklen,
 		    srpc_client_rpc_t **rpcpp)
 {
-        srpc_client_rpc_t   *rpc = NULL;
-        sfw_test_instance_t *tsi = tsu->tsu_instance;
+	srpc_client_rpc_t   *rpc = NULL;
+	sfw_test_instance_t *tsi = tsu->tsu_instance;
 
-        cfs_spin_lock(&tsi->tsi_lock);
+	spin_lock(&tsi->tsi_lock);
 
         LASSERT (sfw_test_active(tsi));
 
@@ -943,7 +940,7 @@ sfw_create_test_rpc(sfw_test_unit_t *tsu, lnet_process_id_t peer,
                 cfs_list_del_init(&rpc->crpc_list);
         }
 
-        cfs_spin_unlock(&tsi->tsi_lock);
+	spin_unlock(&tsi->tsi_lock);
 
 	if (rpc == NULL) {
 		rpc = srpc_create_client_rpc(peer, tsi->tsi_service, nblk,
@@ -982,26 +979,26 @@ sfw_run_test (swi_workitem_t *wi)
 
         LASSERT (rpc != NULL);
 
-        cfs_spin_lock(&tsi->tsi_lock);
+	spin_lock(&tsi->tsi_lock);
 
-        if (tsi->tsi_stopping) {
-                cfs_list_add(&rpc->crpc_list, &tsi->tsi_free_rpcs);
-                cfs_spin_unlock(&tsi->tsi_lock);
-                goto test_done;
-        }
+	if (tsi->tsi_stopping) {
+		cfs_list_add(&rpc->crpc_list, &tsi->tsi_free_rpcs);
+		spin_unlock(&tsi->tsi_lock);
+		goto test_done;
+	}
 
-        if (tsu->tsu_loop > 0)
-                tsu->tsu_loop--;
+	if (tsu->tsu_loop > 0)
+		tsu->tsu_loop--;
 
-        cfs_list_add_tail(&rpc->crpc_list, &tsi->tsi_active_rpcs);
-        cfs_spin_unlock(&tsi->tsi_lock);
+	cfs_list_add_tail(&rpc->crpc_list, &tsi->tsi_active_rpcs);
+	spin_unlock(&tsi->tsi_lock);
 
-        rpc->crpc_timeout = rpc_timeout;
+	rpc->crpc_timeout = rpc_timeout;
 
-        cfs_spin_lock(&rpc->crpc_lock);
-        srpc_post_rpc(rpc);
-        cfs_spin_unlock(&rpc->crpc_lock);
-        return 0;
+	spin_lock(&rpc->crpc_lock);
+	srpc_post_rpc(rpc);
+	spin_unlock(&rpc->crpc_lock);
+	return 0;
 
 test_done:
         /*
@@ -1067,35 +1064,35 @@ sfw_stop_batch (sfw_batch_t *tsb, int force)
 
         cfs_list_for_each_entry_typed (tsi, &tsb->bat_tests,
                                        sfw_test_instance_t, tsi_list) {
-                cfs_spin_lock(&tsi->tsi_lock);
+		spin_lock(&tsi->tsi_lock);
 
-                if (!tsi->tsi_is_client ||
-                    !sfw_test_active(tsi) || tsi->tsi_stopping) {
-                        cfs_spin_unlock(&tsi->tsi_lock);
-                        continue;
-                }
+		if (!tsi->tsi_is_client ||
+		    !sfw_test_active(tsi) || tsi->tsi_stopping) {
+			spin_unlock(&tsi->tsi_lock);
+			continue;
+		}
 
-                tsi->tsi_stopping = 1;
+		tsi->tsi_stopping = 1;
 
-                if (!force) {
-                        cfs_spin_unlock(&tsi->tsi_lock);
-                        continue;
-                }
+		if (!force) {
+			spin_unlock(&tsi->tsi_lock);
+			continue;
+		}
 
-                /* abort launched rpcs in the test */
-                cfs_list_for_each_entry_typed (rpc, &tsi->tsi_active_rpcs,
-                                               srpc_client_rpc_t, crpc_list) {
-                        cfs_spin_lock(&rpc->crpc_lock);
+		/* abort launched rpcs in the test */
+		cfs_list_for_each_entry_typed(rpc, &tsi->tsi_active_rpcs,
+					      srpc_client_rpc_t, crpc_list) {
+			spin_lock(&rpc->crpc_lock);
 
-                        srpc_abort_rpc(rpc, -EINTR);
+			srpc_abort_rpc(rpc, -EINTR);
 
-                        cfs_spin_unlock(&rpc->crpc_lock);
-                }
+			spin_unlock(&rpc->crpc_lock);
+		}
 
-                cfs_spin_unlock(&tsi->tsi_lock);
-        }
+		spin_unlock(&tsi->tsi_lock);
+	}
 
-        return 0;
+	return 0;
 }
 
 int
@@ -1264,29 +1261,29 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 	unsigned	features = LST_FEATS_MASK;
 	int		rc = 0;
 
-        LASSERT (sfw_data.fw_active_srpc == NULL);
-        LASSERT (sv->sv_id <= SRPC_FRAMEWORK_SERVICE_MAX_ID);
+	LASSERT(sfw_data.fw_active_srpc == NULL);
+	LASSERT(sv->sv_id <= SRPC_FRAMEWORK_SERVICE_MAX_ID);
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
-        if (sfw_data.fw_shuttingdown) {
-                cfs_spin_unlock(&sfw_data.fw_lock);
-                return -ESHUTDOWN;
-        }
+	if (sfw_data.fw_shuttingdown) {
+		spin_unlock(&sfw_data.fw_lock);
+		return -ESHUTDOWN;
+	}
 
-        /* Remove timer to avoid racing with it or expiring active session */
-        if (sfw_del_session_timer() != 0) {
-                CERROR ("Dropping RPC (%s) from %s: racing with expiry timer.",
-                        sv->sv_name, libcfs_id2str(rpc->srpc_peer));
-                cfs_spin_unlock(&sfw_data.fw_lock);
-                return -EAGAIN;
-        }
+	/* Remove timer to avoid racing with it or expiring active session */
+	if (sfw_del_session_timer() != 0) {
+		CERROR("Dropping RPC (%s) from %s: racing with expiry timer.",
+		       sv->sv_name, libcfs_id2str(rpc->srpc_peer));
+		spin_unlock(&sfw_data.fw_lock);
+		return -EAGAIN;
+	}
 
-        sfw_data.fw_active_srpc = rpc;
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	sfw_data.fw_active_srpc = rpc;
+	spin_unlock(&sfw_data.fw_lock);
 
-        sfw_unpack_message(request);
-        LASSERT (request->msg_type == srpc_service2request(sv->sv_id));
+	sfw_unpack_message(request);
+	LASSERT(request->msg_type == srpc_service2request(sv->sv_id));
 
 	/* rpc module should have checked this */
 	LASSERT(request->msg_version == SRPC_MSG_VERSION);
@@ -1350,20 +1347,20 @@ sfw_handle_server_rpc(struct srpc_server_rpc *rpc)
 		features = sfw_data.fw_session->sn_features;
  out:
 	reply->msg_ses_feats = features;
-        rpc->srpc_done = sfw_server_rpc_done;
-        cfs_spin_lock(&sfw_data.fw_lock);
+	rpc->srpc_done = sfw_server_rpc_done;
+	spin_lock(&sfw_data.fw_lock);
 
 #ifdef __KERNEL__
-        if (!sfw_data.fw_shuttingdown)
-                sfw_add_session_timer();
+	if (!sfw_data.fw_shuttingdown)
+		sfw_add_session_timer();
 #else
-        LASSERT (!sfw_data.fw_shuttingdown);
-        sfw_add_session_timer();
+	LASSERT(!sfw_data.fw_shuttingdown);
+	sfw_add_session_timer();
 #endif
 
-        sfw_data.fw_active_srpc = NULL;
-        cfs_spin_unlock(&sfw_data.fw_lock);
-        return rc;
+	sfw_data.fw_active_srpc = NULL;
+	spin_unlock(&sfw_data.fw_lock);
+	return rc;
 }
 
 int
@@ -1372,51 +1369,51 @@ sfw_bulk_ready(struct srpc_server_rpc *rpc, int status)
 	struct srpc_service	*sv = rpc->srpc_scd->scd_svc;
 	int			rc;
 
-        LASSERT (rpc->srpc_bulk != NULL);
-        LASSERT (sv->sv_id == SRPC_SERVICE_TEST);
-        LASSERT (sfw_data.fw_active_srpc == NULL);
-        LASSERT (rpc->srpc_reqstbuf->buf_msg.msg_body.tes_reqst.tsr_is_client);
+	LASSERT(rpc->srpc_bulk != NULL);
+	LASSERT(sv->sv_id == SRPC_SERVICE_TEST);
+	LASSERT(sfw_data.fw_active_srpc == NULL);
+	LASSERT(rpc->srpc_reqstbuf->buf_msg.msg_body.tes_reqst.tsr_is_client);
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
-        if (status != 0) {
-                CERROR ("Bulk transfer failed for RPC: "
-                        "service %s, peer %s, status %d\n",
-                        sv->sv_name, libcfs_id2str(rpc->srpc_peer), status);
-                cfs_spin_unlock(&sfw_data.fw_lock);
-                return -EIO;
-        }
+	if (status != 0) {
+		CERROR("Bulk transfer failed for RPC: "
+		       "service %s, peer %s, status %d\n",
+		       sv->sv_name, libcfs_id2str(rpc->srpc_peer), status);
+		spin_unlock(&sfw_data.fw_lock);
+		return -EIO;
+	}
 
-        if (sfw_data.fw_shuttingdown) {
-                cfs_spin_unlock(&sfw_data.fw_lock);
-                return -ESHUTDOWN;
-        }
+	if (sfw_data.fw_shuttingdown) {
+		spin_unlock(&sfw_data.fw_lock);
+		return -ESHUTDOWN;
+	}
 
-        if (sfw_del_session_timer() != 0) {
-                CERROR ("Dropping RPC (%s) from %s: racing with expiry timer",
-                        sv->sv_name, libcfs_id2str(rpc->srpc_peer));
-                cfs_spin_unlock(&sfw_data.fw_lock);
-                return -EAGAIN;
-        }
+	if (sfw_del_session_timer() != 0) {
+		CERROR("Dropping RPC (%s) from %s: racing with expiry timer",
+		       sv->sv_name, libcfs_id2str(rpc->srpc_peer));
+		spin_unlock(&sfw_data.fw_lock);
+		return -EAGAIN;
+	}
 
-        sfw_data.fw_active_srpc = rpc;
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	sfw_data.fw_active_srpc = rpc;
+	spin_unlock(&sfw_data.fw_lock);
 
-        rc = sfw_add_test(rpc);
+	rc = sfw_add_test(rpc);
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
 #ifdef __KERNEL__
-        if (!sfw_data.fw_shuttingdown)
-                sfw_add_session_timer();
+	if (!sfw_data.fw_shuttingdown)
+		sfw_add_session_timer();
 #else
-        LASSERT (!sfw_data.fw_shuttingdown);
-        sfw_add_session_timer();
+	LASSERT(!sfw_data.fw_shuttingdown);
+	sfw_add_session_timer();
 #endif
 
-        sfw_data.fw_active_srpc = NULL;
-        cfs_spin_unlock(&sfw_data.fw_lock);
-        return rc;
+	sfw_data.fw_active_srpc = NULL;
+	spin_unlock(&sfw_data.fw_lock);
+	return rc;
 }
 
 srpc_client_rpc_t *
@@ -1426,7 +1423,7 @@ sfw_create_rpc(lnet_process_id_t peer, int service,
 {
 	srpc_client_rpc_t *rpc = NULL;
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
         LASSERT (!sfw_data.fw_shuttingdown);
         LASSERT (service <= SRPC_FRAMEWORK_SERVICE_MAX_ID);
@@ -1440,7 +1437,7 @@ sfw_create_rpc(lnet_process_id_t peer, int service,
                                      done, sfw_client_rpc_fini, priv);
         }
 
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	spin_unlock(&sfw_data.fw_lock);
 
 	if (rpc == NULL) {
 		rpc = srpc_create_client_rpc(peer, service,
@@ -1603,19 +1600,19 @@ sfw_unpack_message (srpc_msg_t *msg)
 void
 sfw_abort_rpc (srpc_client_rpc_t *rpc)
 {
-        LASSERT (cfs_atomic_read(&rpc->crpc_refcount) > 0);
-        LASSERT (rpc->crpc_service <= SRPC_FRAMEWORK_SERVICE_MAX_ID);
+	LASSERT(cfs_atomic_read(&rpc->crpc_refcount) > 0);
+	LASSERT(rpc->crpc_service <= SRPC_FRAMEWORK_SERVICE_MAX_ID);
 
-        cfs_spin_lock(&rpc->crpc_lock);
-        srpc_abort_rpc(rpc, -EINTR);
-        cfs_spin_unlock(&rpc->crpc_lock);
-        return;
+	spin_lock(&rpc->crpc_lock);
+	srpc_abort_rpc(rpc, -EINTR);
+	spin_unlock(&rpc->crpc_lock);
+	return;
 }
 
 void
 sfw_post_rpc (srpc_client_rpc_t *rpc)
 {
-        cfs_spin_lock(&rpc->crpc_lock);
+	spin_lock(&rpc->crpc_lock);
 
         LASSERT (!rpc->crpc_closed);
         LASSERT (!rpc->crpc_aborted);
@@ -1625,8 +1622,8 @@ sfw_post_rpc (srpc_client_rpc_t *rpc)
         rpc->crpc_timeout = rpc_timeout;
         srpc_post_rpc(rpc);
 
-        cfs_spin_unlock(&rpc->crpc_lock);
-        return;
+	spin_unlock(&rpc->crpc_lock);
+	return;
 }
 
 static srpc_service_t sfw_services[] = 
@@ -1722,7 +1719,7 @@ sfw_startup (void)
 
         sfw_data.fw_session     = NULL;
         sfw_data.fw_active_srpc = NULL;
-        cfs_spin_lock_init(&sfw_data.fw_lock);
+	spin_lock_init(&sfw_data.fw_lock);
         cfs_atomic_set(&sfw_data.fw_nzombies, 0);
         CFS_INIT_LIST_HEAD(&sfw_data.fw_tests);
         CFS_INIT_LIST_HEAD(&sfw_data.fw_zombie_rpcs);
@@ -1790,11 +1787,11 @@ sfw_startup (void)
 void
 sfw_shutdown (void)
 {
-        srpc_service_t  *sv;
-        sfw_test_case_t *tsc;
-        int              i;
+	srpc_service_t	*sv;
+	sfw_test_case_t	*tsc;
+	int		 i;
 
-        cfs_spin_lock(&sfw_data.fw_lock);
+	spin_lock(&sfw_data.fw_lock);
 
         sfw_data.fw_shuttingdown = 1;
 #ifdef __KERNEL__
@@ -1814,7 +1811,7 @@ sfw_shutdown (void)
                        "waiting for %d zombie sessions to die.\n",
                        cfs_atomic_read(&sfw_data.fw_nzombies));
 
-        cfs_spin_unlock(&sfw_data.fw_lock);
+	spin_unlock(&sfw_data.fw_lock);
 
         for (i = 0; ; i++) {
                 sv = &sfw_services[i];

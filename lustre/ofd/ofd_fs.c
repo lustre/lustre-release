@@ -72,9 +72,9 @@ int ofd_precreate_batch(struct ofd_device *ofd, int batch)
 {
 	int count;
 
-	cfs_spin_lock(&ofd->ofd_objid_lock);
+	spin_lock(&ofd->ofd_objid_lock);
 	count = min(ofd->ofd_precreate_batch, batch);
-	cfs_spin_unlock(&ofd->ofd_objid_lock);
+	spin_unlock(&ofd->ofd_objid_lock);
 
 	return count;
 }
@@ -85,9 +85,9 @@ obd_id ofd_last_id(struct ofd_device *ofd, obd_seq group)
 
 	LASSERT(group <= ofd->ofd_max_group);
 
-	cfs_spin_lock(&ofd->ofd_objid_lock);
+	spin_lock(&ofd->ofd_objid_lock);
 	id = ofd->ofd_last_objids[group];
-	cfs_spin_unlock(&ofd->ofd_objid_lock);
+	spin_unlock(&ofd->ofd_objid_lock);
 
 	return id;
 }
@@ -95,10 +95,10 @@ obd_id ofd_last_id(struct ofd_device *ofd, obd_seq group)
 void ofd_last_id_set(struct ofd_device *ofd, obd_id id, obd_seq group)
 {
 	LASSERT(group <= ofd->ofd_max_group);
-	cfs_spin_lock(&ofd->ofd_objid_lock);
+	spin_lock(&ofd->ofd_objid_lock);
 	if (ofd->ofd_last_objids[group] < id)
 		ofd->ofd_last_objids[group] = id;
-	cfs_spin_unlock(&ofd->ofd_objid_lock);
+	spin_unlock(&ofd->ofd_objid_lock);
 }
 
 int ofd_last_id_write(const struct lu_env *env, struct ofd_device *ofd,
@@ -179,7 +179,7 @@ int ofd_group_load(const struct lu_env *env, struct ofd_device *ofd, int group)
 		RETURN(PTR_ERR(dob));
 
 	ofd->ofd_lastid_obj[group] = dob;
-	cfs_mutex_init(&ofd->ofd_create_locks[group]);
+	mutex_init(&ofd->ofd_create_locks[group]);
 
 	rc = dt_attr_get(env, dob, &info->fti_attr, BYPASS_CAPA);
 	if (rc)
@@ -225,7 +225,7 @@ int ofd_groups_init(const struct lu_env *env, struct ofd_device *ofd)
 
 	ENTRY;
 
-	cfs_spin_lock_init(&ofd->ofd_objid_lock);
+	spin_lock_init(&ofd->ofd_objid_lock);
 
 	rc = dt_attr_get(env, ofd->ofd_last_group_file,
 			 &info->fti_attr, BYPASS_CAPA);
@@ -340,10 +340,10 @@ int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
 		LASSERTF(rc == 0, "rc = %d\n", rc); /* can't fail existing */
 		/* VBR: set export last committed version */
 		exp->exp_last_committed = last_rcvd;
-		cfs_spin_lock(&exp->exp_lock);
+		spin_lock(&exp->exp_lock);
 		exp->exp_connecting = 0;
 		exp->exp_in_recovery = 0;
-		cfs_spin_unlock(&exp->exp_lock);
+		spin_unlock(&exp->exp_lock);
 		obd->obd_max_recoverable_clients++;
 		class_export_put(exp);
 
@@ -351,10 +351,10 @@ int ofd_clients_data_init(const struct lu_env *env, struct ofd_device *ofd,
 		CDEBUG(D_OTHER, "client at idx %d has last_rcvd = "LPU64"\n",
 		       cl_idx, last_rcvd);
 
-		cfs_spin_lock(&ofd->ofd_lut.lut_translock);
+		spin_lock(&ofd->ofd_lut.lut_translock);
 		if (last_rcvd > lsd->lsd_last_transno)
 			lsd->lsd_last_transno = last_rcvd;
-		cfs_spin_unlock(&ofd->ofd_lut.lut_translock);
+		spin_unlock(&ofd->ofd_lut.lut_translock);
 	}
 
 err_out:
@@ -451,10 +451,10 @@ int ofd_server_data_init(const struct lu_env *env, struct ofd_device *ofd)
 
 	rc = ofd_clients_data_init(env, ofd, last_rcvd_size);
 
-	cfs_spin_lock(&ofd->ofd_lut.lut_translock);
+	spin_lock(&ofd->ofd_lut.lut_translock);
 	obd->obd_last_committed = lsd->lsd_last_transno;
 	ofd->ofd_lut.lut_last_transno = lsd->lsd_last_transno;
-	cfs_spin_unlock(&ofd->ofd_lut.lut_translock);
+	spin_unlock(&ofd->ofd_lut.lut_translock);
 
 	/* save it, so mount count and last_transno is current */
 	rc = tgt_server_data_update(env, &ofd->ofd_lut, 0);

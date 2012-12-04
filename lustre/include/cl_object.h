@@ -388,9 +388,9 @@ struct cl_object_header {
          */
         /** @{ */
         /** Lock protecting page tree. */
-        cfs_spinlock_t           coh_page_guard;
-        /** Lock protecting lock list. */
-        cfs_spinlock_t           coh_lock_guard;
+	spinlock_t		 coh_page_guard;
+	/** Lock protecting lock list. */
+	spinlock_t		 coh_lock_guard;
         /** @} locks */
         /** Radix tree of cl_page's, cached for this object. */
         struct radix_tree_root   coh_tree;
@@ -414,12 +414,12 @@ struct cl_object_header {
          *
          * \todo XXX this can be read/write lock if needed.
          */
-        cfs_spinlock_t           coh_attr_guard;
-        /**
-         * Number of objects above this one: 0 for a top-object, 1 for its
-         * sub-object, etc.
-         */
-        unsigned                 coh_nesting;
+	spinlock_t		 coh_attr_guard;
+	/**
+	 * Number of objects above this one: 0 for a top-object, 1 for its
+	 * sub-object, etc.
+	 */
+	unsigned                 coh_nesting;
 };
 
 /**
@@ -719,13 +719,11 @@ struct cl_page {
          */
         const enum cl_page_state cp_state;
 	/** Protect to get and put page, see cl_page_put and cl_vmpage_page */
-	cfs_spinlock_t           cp_lock;
-        /**
-         * Linkage of pages within some group. Protected by
-         * cl_page::cp_mutex. */
-        cfs_list_t               cp_batch;
-        /** Mutex serializing membership of a page in a batch. */
-        cfs_mutex_t              cp_mutex;
+	spinlock_t		cp_lock;
+	/** Linkage of pages within group. Protected by cl_page::cp_mutex. */
+	cfs_list_t		cp_batch;
+	/** Mutex serializing membership of a page in a batch. */
+	struct mutex		cp_mutex;
         /** Linkage of pages within cl_req. */
         cfs_list_t               cp_flight;
         /** Transfer error. */
@@ -1552,7 +1550,7 @@ struct cl_lock {
          *
          * \see osc_lock_enqueue_wait(), lov_lock_cancel(), lov_sublock_wait().
          */
-        cfs_mutex_t           cll_guard;
+	struct mutex		cll_guard;
         cfs_task_t           *cll_guarder;
         int                   cll_depth;
 

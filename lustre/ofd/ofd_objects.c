@@ -61,9 +61,9 @@ int ofd_version_get_check(struct ofd_thread_info *info,
 	    info->fti_pre_version != curr_version) {
 		CDEBUG(D_INODE, "Version mismatch "LPX64" != "LPX64"\n",
 		       info->fti_pre_version, curr_version);
-		cfs_spin_lock(&info->fti_exp->exp_lock);
+		spin_lock(&info->fti_exp->exp_lock);
 		info->fti_exp->exp_vbr_failed = 1;
-		cfs_spin_unlock(&info->fti_exp->exp_lock);
+		spin_unlock(&info->fti_exp->exp_lock);
 		RETURN (-EOVERFLOW);
 	}
 	info->fti_pre_version = curr_version;

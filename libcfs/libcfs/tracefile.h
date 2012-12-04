@@ -117,7 +117,7 @@ union cfs_trace_data_union {
 		 * and trace_put_tcd, which are called in libcfs_debug_vmsg2 and
 		 * tcd_for_each_type_lock
 		 */
-		cfs_spinlock_t          tcd_lock;
+		spinlock_t		tcd_lock;
 		unsigned long           tcd_lock_flags;
 
 		/*
@@ -201,7 +201,7 @@ extern union cfs_trace_data_union (*cfs_trace_data[TCD_MAX_TYPES])[CFS_NR_CPUS];
 /* XXX nikita: this declaration is internal to tracefile.c and should probably
  * be moved there */
 struct page_collection {
-	cfs_list_t              pc_pages;
+	cfs_list_t	pc_pages;
 	/*
 	 * spin-lock protecting ->pc_pages. It is taken by smp_call_function()
 	 * call-back functions. XXX nikita: Which is horrible: all processors
@@ -209,23 +209,23 @@ struct page_collection {
 	 * lock. Probably ->pc_pages should be replaced with an array of
 	 * NR_CPUS elements accessed locklessly.
 	 */
-	cfs_spinlock_t          pc_lock;
+	spinlock_t	pc_lock;
 	/*
 	 * if this flag is set, collect_pages() will spill both
 	 * ->tcd_daemon_pages and ->tcd_pages to the ->pc_pages. Otherwise,
 	 * only ->tcd_pages are spilled.
 	 */
-	int                     pc_want_daemon_pages;
+	int		pc_want_daemon_pages;
 };
 
 /* XXX nikita: this declaration is internal to tracefile.c and should probably
  * be moved there */
 struct tracefiled_ctl {
-	cfs_completion_t       tctl_start;
-	cfs_completion_t       tctl_stop;
-	cfs_waitq_t            tctl_waitq;
-	pid_t                  tctl_pid;
-	cfs_atomic_t           tctl_shutdown;
+	struct completion	tctl_start;
+	struct completion	tctl_stop;
+	cfs_waitq_t		tctl_waitq;
+	pid_t			tctl_pid;
+	cfs_atomic_t		tctl_shutdown;
 };
 
 /*

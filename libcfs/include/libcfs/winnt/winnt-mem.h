@@ -106,42 +106,42 @@ typedef struct cfs_page {
 
 /* Make it prettier to test the above... */
 #define UnlockPage(page)        unlock_page(page)
-#define Page_Uptodate(page)     cfs_test_bit(PG_uptodate, &(page)->flags)
-#define SetPageUptodate(page) \
+#define Page_Uptodate(page)     test_bit(PG_uptodate, &(page)->flags)
+#define SetPageUptodate(page)						\
 	do {								\
 		arch_set_page_uptodate(page);				\
-		cfs_set_bit(PG_uptodate, &(page)->flags);               \
+		set_bit(PG_uptodate, &(page)->flags);			\
 	} while (0)
-#define ClearPageUptodate(page) cfs_clear_bit(PG_uptodate, &(page)->flags)
-#define PageDirty(page)         cfs_test_bit(PG_dirty, &(page)->flags)
-#define SetPageDirty(page)      cfs_set_bit(PG_dirty, &(page)->flags)
-#define ClearPageDirty(page)    cfs_clear_bit(PG_dirty, &(page)->flags)
-#define PageLocked(page)        cfs_test_bit(PG_locked, &(page)->flags)
-#define LockPage(page)          cfs_set_bit(PG_locked, &(page)->flags)
-#define TryLockPage(page)       cfs_test_and_set_bit(PG_locked, &(page)->flags)
-#define PageChecked(page)       cfs_test_bit(PG_checked, &(page)->flags)
-#define SetPageChecked(page)    cfs_set_bit(PG_checked, &(page)->flags)
-#define ClearPageChecked(page)  cfs_clear_bit(PG_checked, &(page)->flags)
-#define PageLaunder(page)       cfs_test_bit(PG_launder, &(page)->flags)
-#define SetPageLaunder(page)    cfs_set_bit(PG_launder, &(page)->flags)
-#define ClearPageLaunder(page)  cfs_clear_bit(PG_launder, &(page)->flags)
-#define ClearPageArch1(page)    cfs_clear_bit(PG_arch_1, &(page)->flags)
+#define ClearPageUptodate(page) clear_bit(PG_uptodate, &(page)->flags)
+#define PageDirty(page)	test_bit(PG_dirty, &(page)->flags)
+#define SetPageDirty(page)	set_bit(PG_dirty, &(page)->flags)
+#define ClearPageDirty(page)	clear_bit(PG_dirty, &(page)->flags)
+#define PageLocked(page)	test_bit(PG_locked, &(page)->flags)
+#define LockPage(page)		set_bit(PG_locked, &(page)->flags)
+#define TryLockPage(page)	test_and_set_bit(PG_locked, &(page)->flags)
+#define PageChecked(page)	test_bit(PG_checked, &(page)->flags)
+#define SetPageChecked(page)	set_bit(PG_checked, &(page)->flags)
+#define ClearPageChecked(page)	clear_bit(PG_checked, &(page)->flags)
+#define PageLaunder(page)	test_bit(PG_launder, &(page)->flags)
+#define SetPageLaunder(page)	set_bit(PG_launder, &(page)->flags)
+#define ClearPageLaunder(page)	clear_bit(PG_launder, &(page)->flags)
+#define ClearPageArch1(page)	clear_bit(PG_arch_1, &(page)->flags)
 
-#define PageError(page)		cfs_test_bit(PG_error, &(page)->flags)
-#define SetPageError(page)	cfs_set_bit(PG_error, &(page)->flags)
-#define ClearPageError(page)	cfs_clear_bit(PG_error, &(page)->flags)
-#define PageReferenced(page)    cfs_test_bit(PG_referenced, &(page)->flags)
-#define SetPageReferenced(page) cfs_set_bit(PG_referenced, &(page)->flags)
-#define ClearPageReferenced(page) cfs_clear_bit(PG_referenced, &(page)->flags)
+#define PageError(page)	test_bit(PG_error, &(page)->flags)
+#define SetPageError(page)	set_bit(PG_error, &(page)->flags)
+#define ClearPageError(page)	clear_bit(PG_error, &(page)->flags)
+#define PageReferenced(page)	test_bit(PG_referenced, &(page)->flags)
+#define SetPageReferenced(page) set_bit(PG_referenced, &(page)->flags)
+#define ClearPageReferenced(page) clear_bit(PG_referenced, &(page)->flags)
 
-#define PageActive(page)        cfs_test_bit(PG_active, &(page)->flags)
-#define SetPageActive(page)     cfs_set_bit(PG_active, &(page)->flags)
-#define ClearPageActive(page)   cfs_clear_bit(PG_active, &(page)->flags)
+#define PageActive(page)        test_bit(PG_active, &(page)->flags)
+#define SetPageActive(page)     set_bit(PG_active, &(page)->flags)
+#define ClearPageActive(page)   clear_bit(PG_active, &(page)->flags)
 
-#define PageWriteback(page)	cfs_test_bit(PG_writeback, &(page)->flags)
-#define TestSetPageWriteback(page) cfs_test_and_set_bit(PG_writeback,	\
+#define PageWriteback(page)	test_bit(PG_writeback, &(page)->flags)
+#define TestSetPageWriteback(page) test_and_set_bit(PG_writeback,	\
 							&(page)->flags)
-#define TestClearPageWriteback(page) cfs_test_and_clear_bit(PG_writeback, \
+#define TestClearPageWriteback(page) test_and_clear_bit(PG_writeback,	\
 							&(page)->flags)
 
 #define __GFP_FS    (1)

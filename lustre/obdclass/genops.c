@@ -48,7 +48,7 @@
 #include <lprocfs_status.h>
 
 extern cfs_list_t obd_types;
-cfs_spinlock_t obd_types_lock;
+spinlock_t obd_types_lock;
 
 cfs_mem_cache_t *obd_device_cachep;
 cfs_mem_cache_t *obdo_cachep;
@@ -57,7 +57,7 @@ cfs_mem_cache_t *import_cachep;
 
 cfs_list_t      obd_zombie_imports;
 cfs_list_t      obd_zombie_exports;
-cfs_spinlock_t  obd_zombie_impexp_lock;
+spinlock_t  obd_zombie_impexp_lock;
 static void obd_zombie_impexp_notify(void);
 static void obd_zombie_export_add(struct obd_export *exp);
 static void obd_zombie_import_add(struct obd_import *imp);
@@ -98,19 +98,19 @@ static void obd_device_free(struct obd_device *obd)
 
 struct obd_type *class_search_type(const char *name)
 {
-        cfs_list_t *tmp;
-        struct obd_type *type;
+	cfs_list_t *tmp;
+	struct obd_type *type;
 
-        cfs_spin_lock(&obd_types_lock);
-        cfs_list_for_each(tmp, &obd_types) {
-                type = cfs_list_entry(tmp, struct obd_type, typ_chain);
-                if (strcmp(type->typ_name, name) == 0) {
-                        cfs_spin_unlock(&obd_types_lock);
-                        return type;
-                }
-        }
-        cfs_spin_unlock(&obd_types_lock);
-        return NULL;
+	spin_lock(&obd_types_lock);
+	cfs_list_for_each(tmp, &obd_types) {
+		type = cfs_list_entry(tmp, struct obd_type, typ_chain);
+		if (strcmp(type->typ_name, name) == 0) {
+			spin_unlock(&obd_types_lock);
+			return type;
+		}
+	}
+	spin_unlock(&obd_types_lock);
+	return NULL;
 }
 EXPORT_SYMBOL(class_search_type);
 
@@ -135,22 +135,22 @@ struct obd_type *class_get_type(const char *name)
         }
 #endif
         if (type) {
-                cfs_spin_lock(&type->obd_type_lock);
-                type->typ_refcnt++;
-                cfs_try_module_get(type->typ_dt_ops->o_owner);
-                cfs_spin_unlock(&type->obd_type_lock);
-        }
-        return type;
+		spin_lock(&type->obd_type_lock);
+		type->typ_refcnt++;
+		cfs_try_module_get(type->typ_dt_ops->o_owner);
+		spin_unlock(&type->obd_type_lock);
+	}
+	return type;
 }
 EXPORT_SYMBOL(class_get_type);
 
 void class_put_type(struct obd_type *type)
 {
-        LASSERT(type);
-        cfs_spin_lock(&type->obd_type_lock);
-        type->typ_refcnt--;
-        cfs_module_put(type->typ_dt_ops->o_owner);
-        cfs_spin_unlock(&type->obd_type_lock);
+	LASSERT(type);
+	spin_lock(&type->obd_type_lock);
+	type->typ_refcnt--;
+	cfs_module_put(type->typ_dt_ops->o_owner);
+	spin_unlock(&type->obd_type_lock);
 }
 EXPORT_SYMBOL(class_put_type);
 
@@ -191,7 +191,7 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
         if (md_ops)
                 *(type->typ_md_ops) = *md_ops;
         strcpy(type->typ_name, name);
-        cfs_spin_lock_init(&type->obd_type_lock);
+	spin_lock_init(&type->obd_type_lock);
 
 #ifdef LPROCFS
         type->typ_procroot = lprocfs_register(type->typ_name, proc_lustre_root,
@@ -209,9 +209,9 @@ int class_register_type(struct obd_ops *dt_ops, struct md_ops *md_ops,
                         GOTO (failed, rc);
         }
 
-        cfs_spin_lock(&obd_types_lock);
-        cfs_list_add(&type->typ_chain, &obd_types);
-        cfs_spin_unlock(&obd_types_lock);
+	spin_lock(&obd_types_lock);
+	cfs_list_add(&type->typ_chain, &obd_types);
+	spin_unlock(&obd_types_lock);
 
         RETURN (0);
 
@@ -255,9 +255,9 @@ int class_unregister_type(const char *name)
         if (type->typ_lu)
                 lu_device_type_fini(type->typ_lu);
 
-        cfs_spin_lock(&obd_types_lock);
-        cfs_list_del(&type->typ_chain);
-        cfs_spin_unlock(&obd_types_lock);
+	spin_lock(&obd_types_lock);
+	cfs_list_del(&type->typ_chain);
+	spin_unlock(&obd_types_lock);
         OBD_FREE(type->typ_name, strlen(name) + 1);
         if (type->typ_dt_ops != NULL)
                 OBD_FREE_PTR(type->typ_dt_ops);
@@ -305,7 +305,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
 
         LASSERT(newdev->obd_magic == OBD_DEVICE_MAGIC);
 
-        cfs_write_lock(&obd_dev_lock);
+	write_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
 
@@ -337,7 +337,7 @@ struct obd_device *class_newdev(const char *type_name, const char *name)
                         obd_devs[i] = result;
                 }
         }
-        cfs_write_unlock(&obd_dev_lock);
+	write_unlock(&obd_dev_lock);
 
         if (result == NULL && i >= class_devno_max()) {
                 CERROR("all %u OBD devices used, increase MAX_OBD_DEVICES\n",
@@ -372,9 +372,9 @@ void class_release_dev(struct obd_device *obd)
         CDEBUG(D_INFO, "Release obd device %s at %d obd_type name =%s\n",
                obd->obd_name, obd->obd_minor, obd->obd_type->typ_name);
 
-        cfs_write_lock(&obd_dev_lock);
+	write_lock(&obd_dev_lock);
         obd_devs[obd->obd_minor] = NULL;
-        cfs_write_unlock(&obd_dev_lock);
+	write_unlock(&obd_dev_lock);
         obd_device_free(obd);
 
         class_put_type(obd_type);
@@ -387,7 +387,7 @@ int class_name2dev(const char *name)
         if (!name)
                 return -1;
 
-        cfs_read_lock(&obd_dev_lock);
+	read_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
 
@@ -396,13 +396,13 @@ int class_name2dev(const char *name)
                            out any references */
                         LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
                         if (obd->obd_attached) {
-                                cfs_read_unlock(&obd_dev_lock);
+				read_unlock(&obd_dev_lock);
                                 return i;
                         }
                         break;
                 }
         }
-        cfs_read_unlock(&obd_dev_lock);
+	read_unlock(&obd_dev_lock);
 
         return -1;
 }
@@ -422,17 +422,17 @@ int class_uuid2dev(struct obd_uuid *uuid)
 {
         int i;
 
-        cfs_read_lock(&obd_dev_lock);
+	read_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
 
                 if (obd && obd_uuid_equals(uuid, &obd->obd_uuid)) {
                         LASSERT(obd->obd_magic == OBD_DEVICE_MAGIC);
-                        cfs_read_unlock(&obd_dev_lock);
+			read_unlock(&obd_dev_lock);
                         return i;
                 }
         }
-        cfs_read_unlock(&obd_dev_lock);
+	read_unlock(&obd_dev_lock);
 
         return -1;
 }
@@ -481,7 +481,7 @@ void class_obd_list(void)
         char *status;
         int i;
 
-        cfs_read_lock(&obd_dev_lock);
+	read_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
 
@@ -500,7 +500,7 @@ void class_obd_list(void)
                          obd->obd_name, obd->obd_uuid.uuid,
                          cfs_atomic_read(&obd->obd_refcount));
         }
-        cfs_read_unlock(&obd_dev_lock);
+	read_unlock(&obd_dev_lock);
         return;
 }
 
@@ -513,7 +513,7 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
 {
         int i;
 
-        cfs_read_lock(&obd_dev_lock);
+	read_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
 
@@ -525,12 +525,12 @@ struct obd_device * class_find_client_obd(struct obd_uuid *tgt_uuid,
                                             &obd->u.cli.cl_target_uuid) &&
                             ((grp_uuid)? obd_uuid_equals(grp_uuid,
                                                          &obd->obd_uuid) : 1)) {
-                                cfs_read_unlock(&obd_dev_lock);
+				read_unlock(&obd_dev_lock);
                                 return obd;
                         }
                 }
         }
-        cfs_read_unlock(&obd_dev_lock);
+	read_unlock(&obd_dev_lock);
 
         return NULL;
 }
@@ -551,7 +551,7 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
         else
                 return NULL;
 
-        cfs_read_lock(&obd_dev_lock);
+	read_lock(&obd_dev_lock);
         for (; i < class_devno_max(); i++) {
                 struct obd_device *obd = class_num2obd(i);
 
@@ -560,11 +560,11 @@ struct obd_device * class_devices_in_group(struct obd_uuid *grp_uuid, int *next)
                 if (obd_uuid_equals(grp_uuid, &obd->obd_uuid)) {
                         if (next != NULL)
                                 *next = i+1;
-                        cfs_read_unlock(&obd_dev_lock);
+			read_unlock(&obd_dev_lock);
                         return obd;
                 }
         }
-        cfs_read_unlock(&obd_dev_lock);
+	read_unlock(&obd_dev_lock);
 
         return NULL;
 }
@@ -582,7 +582,7 @@ int class_notify_sptlrpc_conf(const char *fsname, int namelen)
 
         LASSERT(namelen > 0);
 
-        cfs_read_lock(&obd_dev_lock);
+	read_lock(&obd_dev_lock);
         for (i = 0; i < class_devno_max(); i++) {
                 obd = class_num2obd(i);
 
@@ -601,15 +601,15 @@ int class_notify_sptlrpc_conf(const char *fsname, int namelen)
                         continue;
 
                 class_incref(obd, __FUNCTION__, obd);
-                cfs_read_unlock(&obd_dev_lock);
+		read_unlock(&obd_dev_lock);
                 rc2 = obd_set_info_async(NULL, obd->obd_self_export,
                                          sizeof(KEY_SPTLRPC_CONF),
                                          KEY_SPTLRPC_CONF, 0, NULL, NULL);
                 rc = rc ? rc : rc2;
                 class_decref(obd, __FUNCTION__, obd);
-                cfs_read_lock(&obd_dev_lock);
+		read_lock(&obd_dev_lock);
         }
-        cfs_read_unlock(&obd_dev_lock);
+	read_unlock(&obd_dev_lock);
         return rc;
 }
 EXPORT_SYMBOL(class_notify_sptlrpc_conf);
@@ -830,39 +830,39 @@ struct obd_export *class_new_export(struct obd_device *obd,
         cfs_atomic_set(&export->exp_locks_count, 0);
 #if LUSTRE_TRACKS_LOCK_EXP_REFS
         CFS_INIT_LIST_HEAD(&export->exp_locks_list);
-        cfs_spin_lock_init(&export->exp_locks_list_guard);
+	spin_lock_init(&export->exp_locks_list_guard);
 #endif
-        cfs_atomic_set(&export->exp_replay_count, 0);
-        export->exp_obd = obd;
-        CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
-        cfs_spin_lock_init(&export->exp_uncommitted_replies_lock);
-        CFS_INIT_LIST_HEAD(&export->exp_uncommitted_replies);
-        CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
-        CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
-        CFS_INIT_LIST_HEAD(&export->exp_hp_rpcs);
+	cfs_atomic_set(&export->exp_replay_count, 0);
+	export->exp_obd = obd;
+	CFS_INIT_LIST_HEAD(&export->exp_outstanding_replies);
+	spin_lock_init(&export->exp_uncommitted_replies_lock);
+	CFS_INIT_LIST_HEAD(&export->exp_uncommitted_replies);
+	CFS_INIT_LIST_HEAD(&export->exp_req_replay_queue);
+	CFS_INIT_LIST_HEAD(&export->exp_handle.h_link);
+	CFS_INIT_LIST_HEAD(&export->exp_hp_rpcs);
 	class_handle_hash(&export->exp_handle, &export_handle_ops);
 	export->exp_last_request_time = cfs_time_current_sec();
-        cfs_spin_lock_init(&export->exp_lock);
-        cfs_spin_lock_init(&export->exp_rpc_lock);
-        CFS_INIT_HLIST_NODE(&export->exp_uuid_hash);
-        CFS_INIT_HLIST_NODE(&export->exp_nid_hash);
-        cfs_spin_lock_init(&export->exp_bl_list_lock);
-        CFS_INIT_LIST_HEAD(&export->exp_bl_list);
+	spin_lock_init(&export->exp_lock);
+	spin_lock_init(&export->exp_rpc_lock);
+	CFS_INIT_HLIST_NODE(&export->exp_uuid_hash);
+	CFS_INIT_HLIST_NODE(&export->exp_nid_hash);
+	spin_lock_init(&export->exp_bl_list_lock);
+	CFS_INIT_LIST_HEAD(&export->exp_bl_list);
 
-        export->exp_sp_peer = LUSTRE_SP_ANY;
-        export->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
-        export->exp_client_uuid = *cluuid;
-        obd_init_export(export);
+	export->exp_sp_peer = LUSTRE_SP_ANY;
+	export->exp_flvr.sf_rpc = SPTLRPC_FLVR_INVALID;
+	export->exp_client_uuid = *cluuid;
+	obd_init_export(export);
 
-        cfs_spin_lock(&obd->obd_dev_lock);
-         /* shouldn't happen, but might race */
-        if (obd->obd_stopping)
-                GOTO(exit_unlock, rc = -ENODEV);
+	spin_lock(&obd->obd_dev_lock);
+	/* shouldn't happen, but might race */
+	if (obd->obd_stopping)
+		GOTO(exit_unlock, rc = -ENODEV);
 
-        hash = cfs_hash_getref(obd->obd_uuid_hash);
-        if (hash == NULL)
-                GOTO(exit_unlock, rc = -ENODEV);
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	hash = cfs_hash_getref(obd->obd_uuid_hash);
+	if (hash == NULL)
+		GOTO(exit_unlock, rc = -ENODEV);
+	spin_unlock(&obd->obd_dev_lock);
 
         if (!obd_uuid_equals(cluuid, &obd->obd_uuid)) {
                 rc = cfs_hash_add_unique(hash, cluuid, &export->exp_uuid_hash);
@@ -873,7 +873,7 @@ struct obd_export *class_new_export(struct obd_device *obd,
                 }
         }
 
-        cfs_spin_lock(&obd->obd_dev_lock);
+	spin_lock(&obd->obd_dev_lock);
         if (obd->obd_stopping) {
                 cfs_hash_del(hash, cluuid, &export->exp_uuid_hash);
                 GOTO(exit_unlock, rc = -ENODEV);
@@ -884,12 +884,12 @@ struct obd_export *class_new_export(struct obd_device *obd,
         cfs_list_add_tail(&export->exp_obd_chain_timed,
                           &export->exp_obd->obd_exports_timed);
         export->exp_obd->obd_num_exports++;
-        cfs_spin_unlock(&obd->obd_dev_lock);
-        cfs_hash_putref(hash);
-        RETURN(export);
+	spin_unlock(&obd->obd_dev_lock);
+	cfs_hash_putref(hash);
+	RETURN(export);
 
 exit_unlock:
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_unlock(&obd->obd_dev_lock);
 exit_err:
         if (hash)
                 cfs_hash_putref(hash);
@@ -903,20 +903,20 @@ EXPORT_SYMBOL(class_new_export);
 
 void class_unlink_export(struct obd_export *exp)
 {
-        class_handle_unhash(&exp->exp_handle);
+	class_handle_unhash(&exp->exp_handle);
 
-        cfs_spin_lock(&exp->exp_obd->obd_dev_lock);
-        /* delete an uuid-export hashitem from hashtables */
-        if (!cfs_hlist_unhashed(&exp->exp_uuid_hash))
-                cfs_hash_del(exp->exp_obd->obd_uuid_hash,
-                             &exp->exp_client_uuid,
-                             &exp->exp_uuid_hash);
+	spin_lock(&exp->exp_obd->obd_dev_lock);
+	/* delete an uuid-export hashitem from hashtables */
+	if (!cfs_hlist_unhashed(&exp->exp_uuid_hash))
+		cfs_hash_del(exp->exp_obd->obd_uuid_hash,
+			     &exp->exp_client_uuid,
+			     &exp->exp_uuid_hash);
 
-        cfs_list_move(&exp->exp_obd_chain, &exp->exp_obd->obd_unlinked_exports);
-        cfs_list_del_init(&exp->exp_obd_chain_timed);
-        exp->exp_obd->obd_num_exports--;
-        cfs_spin_unlock(&exp->exp_obd->obd_dev_lock);
-        class_export_put(exp);
+	cfs_list_move(&exp->exp_obd_chain, &exp->exp_obd->obd_unlinked_exports);
+	cfs_list_del_init(&exp->exp_obd_chain_timed);
+	exp->exp_obd->obd_num_exports--;
+	spin_unlock(&exp->exp_obd->obd_dev_lock);
+	class_export_put(exp);
 }
 EXPORT_SYMBOL(class_unlink_export);
 
@@ -1014,11 +1014,11 @@ struct obd_import *class_new_import(struct obd_device *obd)
         CFS_INIT_LIST_HEAD(&imp->imp_replay_list);
         CFS_INIT_LIST_HEAD(&imp->imp_sending_list);
         CFS_INIT_LIST_HEAD(&imp->imp_delayed_list);
-        cfs_spin_lock_init(&imp->imp_lock);
-        imp->imp_last_success_conn = 0;
-        imp->imp_state = LUSTRE_IMP_NEW;
-        imp->imp_obd = class_incref(obd, "import", imp);
-        cfs_mutex_init(&imp->imp_sec_mutex);
+	spin_lock_init(&imp->imp_lock);
+	imp->imp_last_success_conn = 0;
+	imp->imp_state = LUSTRE_IMP_NEW;
+	imp->imp_obd = class_incref(obd, "import", imp);
+	mutex_init(&imp->imp_sec_mutex);
         cfs_waitq_init(&imp->imp_recovery_waitq);
 
         cfs_atomic_set(&imp->imp_refcount, 2);
@@ -1041,15 +1041,15 @@ EXPORT_SYMBOL(class_new_import);
 
 void class_destroy_import(struct obd_import *import)
 {
-        LASSERT(import != NULL);
-        LASSERT(import != LP_POISON);
+	LASSERT(import != NULL);
+	LASSERT(import != LP_POISON);
 
-        class_handle_unhash(&import->imp_handle);
+	class_handle_unhash(&import->imp_handle);
 
-        cfs_spin_lock(&import->imp_lock);
-        import->imp_generation++;
-        cfs_spin_unlock(&import->imp_lock);
-        class_import_put(import);
+	spin_lock(&import->imp_lock);
+	import->imp_generation++;
+	spin_unlock(&import->imp_lock);
+	class_import_put(import);
 }
 EXPORT_SYMBOL(class_destroy_import);
 
@@ -1057,7 +1057,7 @@ EXPORT_SYMBOL(class_destroy_import);
 
 void __class_export_add_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
 {
-        cfs_spin_lock(&exp->exp_locks_list_guard);
+	spin_lock(&exp->exp_locks_list_guard);
 
         LASSERT(lock->l_exp_refs_nr >= 0);
 
@@ -1072,13 +1072,13 @@ void __class_export_add_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
         }
         CDEBUG(D_INFO, "lock = %p, export = %p, refs = %u\n",
                lock, exp, lock->l_exp_refs_nr);
-        cfs_spin_unlock(&exp->exp_locks_list_guard);
+	spin_unlock(&exp->exp_locks_list_guard);
 }
 EXPORT_SYMBOL(__class_export_add_lock_ref);
 
 void __class_export_del_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
 {
-        cfs_spin_lock(&exp->exp_locks_list_guard);
+	spin_lock(&exp->exp_locks_list_guard);
         LASSERT(lock->l_exp_refs_nr > 0);
         if (lock->l_exp_refs_target != exp) {
                 LCONSOLE_WARN("lock %p, "
@@ -1091,7 +1091,7 @@ void __class_export_del_lock_ref(struct obd_export *exp, struct ldlm_lock *lock)
         }
         CDEBUG(D_INFO, "lock = %p, export = %p, refs = %u\n",
                lock, exp, lock->l_exp_refs_nr);
-        cfs_spin_unlock(&exp->exp_locks_list_guard);
+	spin_unlock(&exp->exp_locks_list_guard);
 }
 EXPORT_SYMBOL(__class_export_del_lock_ref);
 #endif
@@ -1125,35 +1125,35 @@ EXPORT_SYMBOL(class_connect);
 /* if export is involved in recovery then clean up related things */
 void class_export_recovery_cleanup(struct obd_export *exp)
 {
-        struct obd_device *obd = exp->exp_obd;
+	struct obd_device *obd = exp->exp_obd;
 
-        cfs_spin_lock(&obd->obd_recovery_task_lock);
-        if (exp->exp_delayed)
-                obd->obd_delayed_clients--;
-        if (obd->obd_recovering && exp->exp_in_recovery) {
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_in_recovery = 0;
-                cfs_spin_unlock(&exp->exp_lock);
-                LASSERT_ATOMIC_POS(&obd->obd_connected_clients);
-                cfs_atomic_dec(&obd->obd_connected_clients);
+	spin_lock(&obd->obd_recovery_task_lock);
+	if (exp->exp_delayed)
+		obd->obd_delayed_clients--;
+	if (obd->obd_recovering && exp->exp_in_recovery) {
+		spin_lock(&exp->exp_lock);
+		exp->exp_in_recovery = 0;
+		spin_unlock(&exp->exp_lock);
+		LASSERT_ATOMIC_POS(&obd->obd_connected_clients);
+		cfs_atomic_dec(&obd->obd_connected_clients);
+	}
+	spin_unlock(&obd->obd_recovery_task_lock);
+	/** Cleanup req replay fields */
+	if (exp->exp_req_replay_needed) {
+		spin_lock(&exp->exp_lock);
+		exp->exp_req_replay_needed = 0;
+		spin_unlock(&exp->exp_lock);
+		LASSERT(cfs_atomic_read(&obd->obd_req_replay_clients));
+		cfs_atomic_dec(&obd->obd_req_replay_clients);
         }
-        cfs_spin_unlock(&obd->obd_recovery_task_lock);
-        /** Cleanup req replay fields */
-        if (exp->exp_req_replay_needed) {
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_req_replay_needed = 0;
-                cfs_spin_unlock(&exp->exp_lock);
-                LASSERT(cfs_atomic_read(&obd->obd_req_replay_clients));
-                cfs_atomic_dec(&obd->obd_req_replay_clients);
-        }
-        /** Cleanup lock replay data */
-        if (exp->exp_lock_replay_needed) {
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_lock_replay_needed = 0;
-                cfs_spin_unlock(&exp->exp_lock);
-                LASSERT(cfs_atomic_read(&obd->obd_lock_replay_clients));
-                cfs_atomic_dec(&obd->obd_lock_replay_clients);
-        }
+	/** Cleanup lock replay data */
+	if (exp->exp_lock_replay_needed) {
+		spin_lock(&exp->exp_lock);
+		exp->exp_lock_replay_needed = 0;
+		spin_unlock(&exp->exp_lock);
+		LASSERT(cfs_atomic_read(&obd->obd_lock_replay_clients));
+		cfs_atomic_dec(&obd->obd_lock_replay_clients);
+	}
 }
 
 /* This function removes 1-3 references from the export:
@@ -1172,10 +1172,10 @@ int class_disconnect(struct obd_export *export)
                 RETURN(-EINVAL);
         }
 
-        cfs_spin_lock(&export->exp_lock);
-        already_disconnected = export->exp_disconnected;
-        export->exp_disconnected = 1;
-        cfs_spin_unlock(&export->exp_lock);
+	spin_lock(&export->exp_lock);
+	already_disconnected = export->exp_disconnected;
+	export->exp_disconnected = 1;
+	spin_unlock(&export->exp_lock);
 
         /* class_cleanup(), abort_recovery(), and class_fail_export()
          * all end up in here, and if any of them race we shouldn't
@@ -1204,14 +1204,14 @@ EXPORT_SYMBOL(class_disconnect);
 /* Return non-zero for a fully connected export */
 int class_connected_export(struct obd_export *exp)
 {
-        if (exp) {
-                int connected;
-                cfs_spin_lock(&exp->exp_lock);
-                connected = (exp->exp_conn_cnt > 0);
-                cfs_spin_unlock(&exp->exp_lock);
-                return connected;
-        }
-        return 0;
+	if (exp) {
+		int connected;
+		spin_lock(&exp->exp_lock);
+		connected = (exp->exp_conn_cnt > 0);
+		spin_unlock(&exp->exp_lock);
+		return connected;
+	}
+	return 0;
 }
 EXPORT_SYMBOL(class_connected_export);
 
@@ -1230,9 +1230,9 @@ static void class_disconnect_export_list(cfs_list_t *list,
                 /* need for safe call CDEBUG after obd_disconnect */
                 class_export_get(exp);
 
-                cfs_spin_lock(&exp->exp_lock);
-                exp->exp_flags = flags;
-                cfs_spin_unlock(&exp->exp_lock);
+		spin_lock(&exp->exp_lock);
+		exp->exp_flags = flags;
+		spin_unlock(&exp->exp_lock);
 
                 if (obd_uuid_equals(&exp->exp_client_uuid,
                                     &exp->exp_obd->obd_uuid)) {
@@ -1263,15 +1263,15 @@ static void class_disconnect_export_list(cfs_list_t *list,
 
 void class_disconnect_exports(struct obd_device *obd)
 {
-        cfs_list_t work_list;
-        ENTRY;
+	cfs_list_t work_list;
+	ENTRY;
 
-        /* Move all of the exports from obd_exports to a work list, en masse. */
-        CFS_INIT_LIST_HEAD(&work_list);
-        cfs_spin_lock(&obd->obd_dev_lock);
-        cfs_list_splice_init(&obd->obd_exports, &work_list);
-        cfs_list_splice_init(&obd->obd_delayed_exports, &work_list);
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	/* Move all of the exports from obd_exports to a work list, en masse. */
+	CFS_INIT_LIST_HEAD(&work_list);
+	spin_lock(&obd->obd_dev_lock);
+	cfs_list_splice_init(&obd->obd_exports, &work_list);
+	cfs_list_splice_init(&obd->obd_delayed_exports, &work_list);
+	spin_unlock(&obd->obd_dev_lock);
 
         if (!cfs_list_empty(&work_list)) {
                 CDEBUG(D_HA, "OBD device %d (%p) has exports, "
@@ -1296,7 +1296,7 @@ void class_disconnect_stale_exports(struct obd_device *obd,
         ENTRY;
 
         CFS_INIT_LIST_HEAD(&work_list);
-        cfs_spin_lock(&obd->obd_dev_lock);
+	spin_lock(&obd->obd_dev_lock);
 	cfs_list_for_each_entry_safe(exp, n, &obd->obd_exports,
 				     exp_obd_chain) {
                 /* don't count self-export as client */
@@ -1309,13 +1309,13 @@ void class_disconnect_stale_exports(struct obd_device *obd,
 		if (exp->exp_target_data.ted_lr_idx == -1)
 			continue;
 
-		cfs_spin_lock(&exp->exp_lock);
+		spin_lock(&exp->exp_lock);
 		if (test_export(exp)) {
-			cfs_spin_unlock(&exp->exp_lock);
+			spin_unlock(&exp->exp_lock);
 			continue;
 		}
 		exp->exp_failed = 1;
-		cfs_spin_unlock(&exp->exp_lock);
+		spin_unlock(&exp->exp_lock);
 
                 cfs_list_move(&exp->exp_obd_chain, &work_list);
                 evicted++;
@@ -1325,7 +1325,7 @@ void class_disconnect_stale_exports(struct obd_device *obd,
                        libcfs_nid2str(exp->exp_connection->c_peer.nid));
                 print_export_data(exp, "EVICTING", 0);
         }
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_unlock(&obd->obd_dev_lock);
 
         if (evicted) {
                 LCONSOLE_WARN("%s: disconnecting %d stale clients\n",
@@ -1340,12 +1340,12 @@ EXPORT_SYMBOL(class_disconnect_stale_exports);
 
 void class_fail_export(struct obd_export *exp)
 {
-        int rc, already_failed;
+	int rc, already_failed;
 
-        cfs_spin_lock(&exp->exp_lock);
-        already_failed = exp->exp_failed;
-        exp->exp_failed = 1;
-        cfs_spin_unlock(&exp->exp_lock);
+	spin_lock(&exp->exp_lock);
+	already_failed = exp->exp_failed;
+	exp->exp_failed = 1;
+	spin_unlock(&exp->exp_lock);
 
         if (already_failed) {
                 CDEBUG(D_HA, "disconnecting dead export %p/%s; skipping\n",
@@ -1388,23 +1388,23 @@ EXPORT_SYMBOL(obd_export_nid2str);
 int obd_export_evict_by_nid(struct obd_device *obd, const char *nid)
 {
 	cfs_hash_t *nid_hash;
-        struct obd_export *doomed_exp = NULL;
-        int exports_evicted = 0;
+	struct obd_export *doomed_exp = NULL;
+	int exports_evicted = 0;
 
-        lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
+	lnet_nid_t nid_key = libcfs_str2nid((char *)nid);
 
-	cfs_spin_lock(&obd->obd_dev_lock);
+	spin_lock(&obd->obd_dev_lock);
 	/* umount has run already, so evict thread should leave
 	 * its task to umount thread now */
 	if (obd->obd_stopping) {
-		cfs_spin_unlock(&obd->obd_dev_lock);
+		spin_unlock(&obd->obd_dev_lock);
 		return exports_evicted;
 	}
 	nid_hash = obd->obd_nid_hash;
 	cfs_hash_getref(nid_hash);
-	cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_unlock(&obd->obd_dev_lock);
 
-        do {
+	do {
 		doomed_exp = cfs_hash_lookup(nid_hash, &nid_key);
                 if (doomed_exp == NULL)
                         break;
@@ -1435,18 +1435,18 @@ EXPORT_SYMBOL(obd_export_evict_by_nid);
 int obd_export_evict_by_uuid(struct obd_device *obd, const char *uuid)
 {
 	cfs_hash_t *uuid_hash;
-        struct obd_export *doomed_exp = NULL;
-        struct obd_uuid doomed_uuid;
-        int exports_evicted = 0;
+	struct obd_export *doomed_exp = NULL;
+	struct obd_uuid doomed_uuid;
+	int exports_evicted = 0;
 
-	cfs_spin_lock(&obd->obd_dev_lock);
+	spin_lock(&obd->obd_dev_lock);
 	if (obd->obd_stopping) {
-		cfs_spin_unlock(&obd->obd_dev_lock);
+		spin_unlock(&obd->obd_dev_lock);
 		return exports_evicted;
 	}
 	uuid_hash = obd->obd_uuid_hash;
 	cfs_hash_getref(uuid_hash);
-	cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_unlock(&obd->obd_dev_lock);
 
         obd_str2uuid(&doomed_uuid, uuid);
         if (obd_uuid_equals(&doomed_uuid, &obd->obd_uuid)) {
@@ -1479,20 +1479,20 @@ EXPORT_SYMBOL(class_export_dump_hook);
 #endif
 
 static void print_export_data(struct obd_export *exp, const char *status,
-                              int locks)
+			      int locks)
 {
-        struct ptlrpc_reply_state *rs;
-        struct ptlrpc_reply_state *first_reply = NULL;
-        int nreplies = 0;
+	struct ptlrpc_reply_state *rs;
+	struct ptlrpc_reply_state *first_reply = NULL;
+	int nreplies = 0;
 
-        cfs_spin_lock(&exp->exp_lock);
-        cfs_list_for_each_entry(rs, &exp->exp_outstanding_replies,
-                                rs_exp_list) {
-                if (nreplies == 0)
-                        first_reply = rs;
-                nreplies++;
-        }
-        cfs_spin_unlock(&exp->exp_lock);
+	spin_lock(&exp->exp_lock);
+	cfs_list_for_each_entry(rs, &exp->exp_outstanding_replies,
+				rs_exp_list) {
+		if (nreplies == 0)
+			first_reply = rs;
+		nreplies++;
+	}
+	spin_unlock(&exp->exp_lock);
 
         CDEBUG(D_HA, "%s: %s %p %s %s %d (%d %d %d) %d %d %d %d: %p %s "LPU64"\n",
                exp->exp_obd->obd_name, status, exp, exp->exp_client_uuid.uuid,
@@ -1513,28 +1513,28 @@ void dump_exports(struct obd_device *obd, int locks)
 {
         struct obd_export *exp;
 
-        cfs_spin_lock(&obd->obd_dev_lock);
-        cfs_list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain)
-                print_export_data(exp, "ACTIVE", locks);
-        cfs_list_for_each_entry(exp, &obd->obd_unlinked_exports, exp_obd_chain)
-                print_export_data(exp, "UNLINKED", locks);
-        cfs_list_for_each_entry(exp, &obd->obd_delayed_exports, exp_obd_chain)
-                print_export_data(exp, "DELAYED", locks);
-        cfs_spin_unlock(&obd->obd_dev_lock);
-        cfs_spin_lock(&obd_zombie_impexp_lock);
-        cfs_list_for_each_entry(exp, &obd_zombie_exports, exp_obd_chain)
-                print_export_data(exp, "ZOMBIE", locks);
-        cfs_spin_unlock(&obd_zombie_impexp_lock);
+	spin_lock(&obd->obd_dev_lock);
+	cfs_list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain)
+		print_export_data(exp, "ACTIVE", locks);
+	cfs_list_for_each_entry(exp, &obd->obd_unlinked_exports, exp_obd_chain)
+		print_export_data(exp, "UNLINKED", locks);
+	cfs_list_for_each_entry(exp, &obd->obd_delayed_exports, exp_obd_chain)
+		print_export_data(exp, "DELAYED", locks);
+	spin_unlock(&obd->obd_dev_lock);
+	spin_lock(&obd_zombie_impexp_lock);
+	cfs_list_for_each_entry(exp, &obd_zombie_exports, exp_obd_chain)
+		print_export_data(exp, "ZOMBIE", locks);
+	spin_unlock(&obd_zombie_impexp_lock);
 }
 EXPORT_SYMBOL(dump_exports);
 
 void obd_exports_barrier(struct obd_device *obd)
 {
-        int waited = 2;
-        LASSERT(cfs_list_empty(&obd->obd_exports));
-        cfs_spin_lock(&obd->obd_dev_lock);
-        while (!cfs_list_empty(&obd->obd_unlinked_exports)) {
-                cfs_spin_unlock(&obd->obd_dev_lock);
+	int waited = 2;
+	LASSERT(cfs_list_empty(&obd->obd_exports));
+	spin_lock(&obd->obd_dev_lock);
+	while (!cfs_list_empty(&obd->obd_unlinked_exports)) {
+		spin_unlock(&obd->obd_dev_lock);
                 cfs_schedule_timeout_and_set_state(CFS_TASK_UNINT,
                                                    cfs_time_seconds(waited));
                 if (waited > 5 && IS_PO2(waited)) {
@@ -1546,9 +1546,9 @@ void obd_exports_barrier(struct obd_device *obd)
                         dump_exports(obd, 1);
                 }
                 waited *= 2;
-                cfs_spin_lock(&obd->obd_dev_lock);
-        }
-        cfs_spin_unlock(&obd->obd_dev_lock);
+		spin_lock(&obd->obd_dev_lock);
+	}
+	spin_unlock(&obd->obd_dev_lock);
 }
 EXPORT_SYMBOL(obd_exports_barrier);
 
@@ -1560,12 +1560,12 @@ static int zombies_count = 0;
  */
 void obd_zombie_impexp_cull(void)
 {
-        struct obd_import *import;
-        struct obd_export *export;
-        ENTRY;
+	struct obd_import *import;
+	struct obd_export *export;
+	ENTRY;
 
-        do {
-                cfs_spin_lock(&obd_zombie_impexp_lock);
+	do {
+		spin_lock(&obd_zombie_impexp_lock);
 
                 import = NULL;
                 if (!cfs_list_empty(&obd_zombie_imports)) {
@@ -1583,35 +1583,35 @@ void obd_zombie_impexp_cull(void)
                         cfs_list_del_init(&export->exp_obd_chain);
                 }
 
-                cfs_spin_unlock(&obd_zombie_impexp_lock);
+		spin_unlock(&obd_zombie_impexp_lock);
 
-                if (import != NULL) {
-                        class_import_destroy(import);
-                        cfs_spin_lock(&obd_zombie_impexp_lock);
-                        zombies_count--;
-                        cfs_spin_unlock(&obd_zombie_impexp_lock);
-                }
+		if (import != NULL) {
+			class_import_destroy(import);
+			spin_lock(&obd_zombie_impexp_lock);
+			zombies_count--;
+			spin_unlock(&obd_zombie_impexp_lock);
+		}
 
-                if (export != NULL) {
-                        class_export_destroy(export);
-                        cfs_spin_lock(&obd_zombie_impexp_lock);
-                        zombies_count--;
-                        cfs_spin_unlock(&obd_zombie_impexp_lock);
-                }
+		if (export != NULL) {
+			class_export_destroy(export);
+			spin_lock(&obd_zombie_impexp_lock);
+			zombies_count--;
+			spin_unlock(&obd_zombie_impexp_lock);
+		}
 
-                cfs_cond_resched();
-        } while (import != NULL || export != NULL);
-        EXIT;
+		cfs_cond_resched();
+	} while (import != NULL || export != NULL);
+	EXIT;
 }
 
-static cfs_completion_t         obd_zombie_start;
-static cfs_completion_t         obd_zombie_stop;
-static unsigned long            obd_zombie_flags;
-static cfs_waitq_t              obd_zombie_waitq;
-static pid_t                    obd_zombie_pid;
+static struct completion	obd_zombie_start;
+static struct completion	obd_zombie_stop;
+static unsigned long		obd_zombie_flags;
+static cfs_waitq_t		obd_zombie_waitq;
+static pid_t			obd_zombie_pid;
 
 enum {
-        OBD_ZOMBIE_STOP   = 1 << 1
+	OBD_ZOMBIE_STOP		= 0x0001,
 };
 
 /**
@@ -1619,45 +1619,45 @@ enum {
  */
 static int obd_zombie_impexp_check(void *arg)
 {
-        int rc;
+	int rc;
 
-        cfs_spin_lock(&obd_zombie_impexp_lock);
-        rc = (zombies_count == 0) &&
-             !cfs_test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags);
-        cfs_spin_unlock(&obd_zombie_impexp_lock);
+	spin_lock(&obd_zombie_impexp_lock);
+	rc = (zombies_count == 0) &&
+	     !test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags);
+	spin_unlock(&obd_zombie_impexp_lock);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /**
  * Add export to the obd_zombe thread and notify it.
  */
 static void obd_zombie_export_add(struct obd_export *exp) {
-        cfs_spin_lock(&exp->exp_obd->obd_dev_lock);
-        LASSERT(!cfs_list_empty(&exp->exp_obd_chain));
-        cfs_list_del_init(&exp->exp_obd_chain);
-        cfs_spin_unlock(&exp->exp_obd->obd_dev_lock);
-        cfs_spin_lock(&obd_zombie_impexp_lock);
-        zombies_count++;
-        cfs_list_add(&exp->exp_obd_chain, &obd_zombie_exports);
-        cfs_spin_unlock(&obd_zombie_impexp_lock);
+	spin_lock(&exp->exp_obd->obd_dev_lock);
+	LASSERT(!cfs_list_empty(&exp->exp_obd_chain));
+	cfs_list_del_init(&exp->exp_obd_chain);
+	spin_unlock(&exp->exp_obd->obd_dev_lock);
+	spin_lock(&obd_zombie_impexp_lock);
+	zombies_count++;
+	cfs_list_add(&exp->exp_obd_chain, &obd_zombie_exports);
+	spin_unlock(&obd_zombie_impexp_lock);
 
-        obd_zombie_impexp_notify();
+	obd_zombie_impexp_notify();
 }
 
 /**
  * Add import to the obd_zombe thread and notify it.
  */
 static void obd_zombie_import_add(struct obd_import *imp) {
-        LASSERT(imp->imp_sec == NULL);
-        LASSERT(imp->imp_rq_pool == NULL);
-        cfs_spin_lock(&obd_zombie_impexp_lock);
-        LASSERT(cfs_list_empty(&imp->imp_zombie_chain));
-        zombies_count++;
-        cfs_list_add(&imp->imp_zombie_chain, &obd_zombie_imports);
-        cfs_spin_unlock(&obd_zombie_impexp_lock);
+	LASSERT(imp->imp_sec == NULL);
+	LASSERT(imp->imp_rq_pool == NULL);
+	spin_lock(&obd_zombie_impexp_lock);
+	LASSERT(cfs_list_empty(&imp->imp_zombie_chain));
+	zombies_count++;
+	cfs_list_add(&imp->imp_zombie_chain, &obd_zombie_imports);
+	spin_unlock(&obd_zombie_impexp_lock);
 
-        obd_zombie_impexp_notify();
+	obd_zombie_impexp_notify();
 }
 
 /**
@@ -1678,13 +1678,13 @@ static void obd_zombie_impexp_notify(void)
  */
 static int obd_zombie_is_idle(void)
 {
-        int rc;
+	int rc;
 
-        LASSERT(!cfs_test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags));
-        cfs_spin_lock(&obd_zombie_impexp_lock);
-        rc = (zombies_count == 0);
-        cfs_spin_unlock(&obd_zombie_impexp_lock);
-        return rc;
+	LASSERT(!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags));
+	spin_lock(&obd_zombie_impexp_lock);
+	rc = (zombies_count == 0);
+	spin_unlock(&obd_zombie_impexp_lock);
+	return rc;
 }
 
 /**
@@ -1708,18 +1708,19 @@ EXPORT_SYMBOL(obd_zombie_barrier);
  */
 static int obd_zombie_impexp_thread(void *unused)
 {
-        int rc;
+	int rc;
 
-        if ((rc = cfs_daemonize_ctxt("obd_zombid"))) {
-                cfs_complete(&obd_zombie_start);
-                RETURN(rc);
-        }
+	rc = cfs_daemonize_ctxt("obd_zombid");
+	if (rc != 0) {
+		complete(&obd_zombie_start);
+		RETURN(rc);
+	}
 
-        cfs_complete(&obd_zombie_start);
+	complete(&obd_zombie_start);
 
-        obd_zombie_pid = cfs_curproc_pid();
+	obd_zombie_pid = cfs_curproc_pid();
 
-        while(!cfs_test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
+	while (!test_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags)) {
                 struct l_wait_info lwi = { 0 };
 
                 l_wait_event(obd_zombie_waitq,
@@ -1733,9 +1734,9 @@ static int obd_zombie_impexp_thread(void *unused)
                 cfs_waitq_signal(&obd_zombie_waitq);
         }
 
-        cfs_complete(&obd_zombie_stop);
+	complete(&obd_zombie_stop);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 #else /* ! KERNEL */
@@ -1763,22 +1764,22 @@ int obd_zombie_impexp_kill(void *arg)
  */
 int obd_zombie_impexp_init(void)
 {
-        int rc;
+	int rc;
 
-        CFS_INIT_LIST_HEAD(&obd_zombie_imports);
-        CFS_INIT_LIST_HEAD(&obd_zombie_exports);
-        cfs_spin_lock_init(&obd_zombie_impexp_lock);
-        cfs_init_completion(&obd_zombie_start);
-        cfs_init_completion(&obd_zombie_stop);
-        cfs_waitq_init(&obd_zombie_waitq);
-        obd_zombie_pid = 0;
+	CFS_INIT_LIST_HEAD(&obd_zombie_imports);
+	CFS_INIT_LIST_HEAD(&obd_zombie_exports);
+	spin_lock_init(&obd_zombie_impexp_lock);
+	init_completion(&obd_zombie_start);
+	init_completion(&obd_zombie_stop);
+	cfs_waitq_init(&obd_zombie_waitq);
+	obd_zombie_pid = 0;
 
 #ifdef __KERNEL__
-        rc = cfs_create_thread(obd_zombie_impexp_thread, NULL, 0);
-        if (rc < 0)
-                RETURN(rc);
+	rc = cfs_create_thread(obd_zombie_impexp_thread, NULL, 0);
+	if (rc < 0)
+		RETURN(rc);
 
-        cfs_wait_for_completion(&obd_zombie_start);
+	wait_for_completion(&obd_zombie_start);
 #else
 
         obd_zombie_impexp_work_cb =
@@ -1797,10 +1798,10 @@ int obd_zombie_impexp_init(void)
  */
 void obd_zombie_impexp_stop(void)
 {
-        cfs_set_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags);
+	set_bit(OBD_ZOMBIE_STOP, &obd_zombie_flags);
         obd_zombie_impexp_notify();
 #ifdef __KERNEL__
-        cfs_wait_for_completion(&obd_zombie_stop);
+	wait_for_completion(&obd_zombie_stop);
 #else
         liblustre_deregister_wait_callback(obd_zombie_impexp_work_cb);
         liblustre_deregister_idle_callback(obd_zombie_impexp_idle_cb);

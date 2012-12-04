@@ -73,7 +73,7 @@
 #include "gss_asn1.h"
 #include "gss_krb5.h"
 
-static cfs_spinlock_t krb5_seq_lock;
+static spinlock_t krb5_seq_lock;
 
 struct krb5_enctype {
         char           *ke_dispname;
@@ -773,9 +773,9 @@ static void fill_krb5_header(struct krb5_ctx *kctx,
         }
 
         khdr->kh_filler = 0xff;
-        cfs_spin_lock(&krb5_seq_lock);
-        khdr->kh_seq = cpu_to_be64(kctx->kc_seq_send++);
-        cfs_spin_unlock(&krb5_seq_lock);
+	spin_lock(&krb5_seq_lock);
+	khdr->kh_seq = cpu_to_be64(kctx->kc_seq_send++);
+	spin_unlock(&krb5_seq_lock);
 }
 
 static __u32 verify_krb5_header(struct krb5_ctx *kctx,
@@ -1822,14 +1822,14 @@ static struct gss_api_mech gss_kerberos_mech = {
 
 int __init init_kerberos_module(void)
 {
-        int status;
+	int status;
 
-        cfs_spin_lock_init(&krb5_seq_lock);
+	spin_lock_init(&krb5_seq_lock);
 
-        status = lgss_mech_register(&gss_kerberos_mech);
-        if (status)
-                CERROR("Failed to register kerberos gss mechanism!\n");
-        return status;
+	status = lgss_mech_register(&gss_kerberos_mech);
+	if (status)
+		CERROR("Failed to register kerberos gss mechanism!\n");
+	return status;
 }
 
 void __exit cleanup_kerberos_module(void)

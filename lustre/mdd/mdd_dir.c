@@ -703,12 +703,12 @@ int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 	rec->cr_hdr.lrh_type = CHANGELOG_REC;
 	rec->cr.cr_time = cl_time();
 
-	cfs_spin_lock(&mdd->mdd_cl.mc_lock);
+	spin_lock(&mdd->mdd_cl.mc_lock);
 	/* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
 	 * but as long as the MDD transactions are ordered correctly for e.g.
 	 * rename conflicts, I don't think this should matter. */
 	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-	cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
+	spin_unlock(&mdd->mdd_cl.mc_lock);
 
 	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
 	if (ctxt == NULL)
@@ -741,12 +741,12 @@ int mdd_changelog_ext_store(const struct lu_env *env, struct mdd_device *mdd,
 	rec->cr_hdr.lrh_type = CHANGELOG_REC;
 	rec->cr.cr_time = cl_time();
 
-	cfs_spin_lock(&mdd->mdd_cl.mc_lock);
+	spin_lock(&mdd->mdd_cl.mc_lock);
 	/* NB: I suppose it's possible llog_add adds out of order wrt cr_index,
 	 * but as long as the MDD transactions are ordered correctly for e.g.
 	 * rename conflicts, I don't think this should matter. */
 	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-	cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
+	spin_unlock(&mdd->mdd_cl.mc_lock);
 
 	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
 	if (ctxt == NULL)
@@ -1867,7 +1867,7 @@ out_stop:
 out_free:
         /* The child object shouldn't be cached anymore */
         if (rc)
-                cfs_set_bit(LU_OBJECT_HEARD_BANSHEE,
+		set_bit(LU_OBJECT_HEARD_BANSHEE,
                             &child->mo_lu.lo_header->loh_flags);
         return rc;
 }

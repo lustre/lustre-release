@@ -118,10 +118,10 @@ void statfs_unpack(cfs_kstatfs_t *sfs, struct obd_statfs *osfs);
 
 /* l_lock.c */
 struct lustre_lock {
-        int l_depth;
-        cfs_task_t *l_owner;
-        cfs_semaphore_t l_sem;
-        cfs_spinlock_t l_spin;
+	int			l_depth;
+	cfs_task_t		*l_owner;
+	struct semaphore	l_sem;
+	spinlock_t		l_spin;
 };
 
 void l_lock_init(struct lustre_lock *);

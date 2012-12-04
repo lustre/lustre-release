@@ -256,17 +256,17 @@ static int mdt_ck_thread_main(void *args)
                 next = mdt->mdt_child;
                 rc = next->md_ops->mdo_update_capa_key(&env, next, tmp);
                 if (!rc) {
-                        cfs_spin_lock(&capa_lock);
-                        *bkey = *rkey;
-                        *rkey = *tmp;
-                        cfs_spin_unlock(&capa_lock);
+			spin_lock(&capa_lock);
+			*bkey = *rkey;
+			*rkey = *tmp;
+			spin_unlock(&capa_lock);
 
-                        rc = write_capa_keys(&env, mdt, mdt->mdt_capa_keys);
-                        if (rc) {
-                                cfs_spin_lock(&capa_lock);
-                                *rkey = *bkey;
-                                memset(bkey, 0, sizeof(*bkey));
-                                cfs_spin_unlock(&capa_lock);
+			rc = write_capa_keys(&env, mdt, mdt->mdt_capa_keys);
+			if (rc) {
+				spin_lock(&capa_lock);
+				*rkey = *bkey;
+				memset(bkey, 0, sizeof(*bkey));
+				spin_unlock(&capa_lock);
                         } else {
                                 set_capa_key_expiry(mdt);
                                 DEBUG_CAPA_KEY(D_SEC, rkey, "new");

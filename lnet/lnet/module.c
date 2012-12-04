@@ -39,7 +39,7 @@ static int config_on_load = 0;
 CFS_MODULE_PARM(config_on_load, "i", int, 0444,
                 "configure network at module load");
 
-static cfs_mutex_t lnet_config_mutex;
+static struct mutex lnet_config_mutex;
 
 int
 lnet_configure (void *arg)
@@ -114,7 +114,7 @@ init_lnet(void)
         int                  rc;
         ENTRY;
 
-        cfs_mutex_init(&lnet_config_mutex);
+	mutex_init(&lnet_config_mutex);
 
         rc = LNetInit();
         if (rc != 0) {

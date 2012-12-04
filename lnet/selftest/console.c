@@ -1855,7 +1855,7 @@ lstcon_session_feats_check(unsigned feats)
 		return -EPROTO;
 	}
 
-	cfs_spin_lock(&console_session.ses_rpc_lock);
+	spin_lock(&console_session.ses_rpc_lock);
 
 	if (!console_session.ses_feats_updated) {
 		console_session.ses_feats_updated = 1;
@@ -1865,7 +1865,7 @@ lstcon_session_feats_check(unsigned feats)
 	if (console_session.ses_features != feats)
 		rc = -EPROTO;
 
-	cfs_spin_unlock(&console_session.ses_rpc_lock);
+	spin_unlock(&console_session.ses_rpc_lock);
 
 	if (rc != 0) {
 		CERROR("remote features %x do not match with "
@@ -1889,7 +1889,7 @@ lstcon_acceptor_handle (srpc_server_rpc_t *rpc)
 
         sfw_unpack_message(req);
 
-        cfs_mutex_lock(&console_session.ses_mutex);
+	mutex_lock(&console_session.ses_mutex);
 
         jrep->join_sid = console_session.ses_id;
 
@@ -1954,7 +1954,7 @@ out:
         if (grp != NULL)
                 lstcon_group_put(grp);
 
-        cfs_mutex_unlock(&console_session.ses_mutex);
+	mutex_unlock(&console_session.ses_mutex);
 
         return rc;
 }
@@ -1991,7 +1991,7 @@ lstcon_console_init(void)
 	console_session.ses_features	    = LST_FEATS_MASK;
 	console_session.ses_laststamp	    = cfs_time_current_sec();
 
-        cfs_mutex_init(&console_session.ses_mutex);
+	mutex_init(&console_session.ses_mutex);
 
         CFS_INIT_LIST_HEAD(&console_session.ses_ndl_list);
         CFS_INIT_LIST_HEAD(&console_session.ses_grp_list);
@@ -2051,7 +2051,7 @@ lstcon_console_fini(void)
 
         libcfs_deregister_ioctl(&lstcon_ioctl_handler);
 
-        cfs_mutex_lock(&console_session.ses_mutex);
+	mutex_lock(&console_session.ses_mutex);
 
         srpc_shutdown_service(&lstcon_acceptor_service);
         srpc_remove_service(&lstcon_acceptor_service);
@@ -2061,7 +2061,7 @@ lstcon_console_fini(void)
 
         lstcon_rpc_module_fini();
 
-        cfs_mutex_unlock(&console_session.ses_mutex);
+	mutex_unlock(&console_session.ses_mutex);
 
         LASSERT (cfs_list_empty(&console_session.ses_ndl_list));
         LASSERT (cfs_list_empty(&console_session.ses_grp_list));

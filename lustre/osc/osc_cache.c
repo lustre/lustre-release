@@ -1054,9 +1054,9 @@ static int osc_extent_make_ready(const struct lu_env *env,
 		rc = osc_make_ready(env, oap, OBD_BRW_WRITE);
 		switch (rc) {
 		case 0:
-			cfs_spin_lock(&oap->oap_lock);
+			spin_lock(&oap->oap_lock);
 			oap->oap_async_flags |= ASYNC_READY;
-			cfs_spin_unlock(&oap->oap_lock);
+			spin_unlock(&oap->oap_lock);
 			break;
 		case -EALREADY:
 			LASSERT((oap->oap_async_flags & ASYNC_READY) != 0);
@@ -1270,12 +1270,12 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 	/* Clear opg->ops_transfer_pinned before VM lock is released. */
 	opg->ops_transfer_pinned = 0;
 
-	cfs_spin_lock(&obj->oo_seatbelt);
+	spin_lock(&obj->oo_seatbelt);
 	LASSERT(opg->ops_submitter != NULL);
 	LASSERT(!cfs_list_empty(&opg->ops_inflight));
 	cfs_list_del_init(&opg->ops_inflight);
 	opg->ops_submitter = NULL;
-	cfs_spin_unlock(&obj->oo_seatbelt);
+	spin_unlock(&obj->oo_seatbelt);
 
 	opg->ops_submit_time = 0;
 	srvlock = oap->oap_brw_flags & OBD_BRW_SRVLOCK;
@@ -1753,9 +1753,9 @@ static void osc_ap_completion(const struct lu_env *env, struct client_obd *cli,
 	}
 
 	/* As the transfer for this page is being done, clear the flags */
-	cfs_spin_lock(&oap->oap_lock);
+	spin_lock(&oap->oap_lock);
 	oap->oap_async_flags = 0;
-	cfs_spin_unlock(&oap->oap_lock);
+	spin_unlock(&oap->oap_lock);
 	oap->oap_interrupted = 0;
 
 	if (oap->oap_cmd & OBD_BRW_WRITE && xid > 0) {
@@ -2171,7 +2171,7 @@ int osc_prep_async_page(struct osc_object *osc, struct osc_page *ops,
 	CFS_INIT_LIST_HEAD(&oap->oap_pending_item);
 	CFS_INIT_LIST_HEAD(&oap->oap_rpc_item);
 
-	cfs_spin_lock_init(&oap->oap_lock);
+	spin_lock_init(&oap->oap_lock);
 	CDEBUG(D_INFO, "oap %p page %p obj off "LPU64"\n",
 	       oap, page, oap->oap_obj_off);
 	RETURN(0);
@@ -2425,9 +2425,9 @@ int osc_flush_async_page(const struct lu_env *env, struct cl_io *io,
 	if (rc)
 		GOTO(out, rc);
 
-	cfs_spin_lock(&oap->oap_lock);
+	spin_lock(&oap->oap_lock);
 	oap->oap_async_flags |= ASYNC_READY|ASYNC_URGENT;
-	cfs_spin_unlock(&oap->oap_lock);
+	spin_unlock(&oap->oap_lock);
 
 	if (cfs_memory_pressure_get())
 		ext->oe_memalloc = 1;

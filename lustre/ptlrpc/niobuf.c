@@ -672,7 +672,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 }
         }
 
-        cfs_spin_lock(&request->rq_lock);
+	spin_lock(&request->rq_lock);
         /* If the MD attach succeeds, there _will_ be a reply_in callback */
         request->rq_receiving_reply = !noreply;
         /* We are responsible for unlinking the reply buffer */
@@ -685,7 +685,7 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
         request->rq_resend = 0;
         request->rq_restart = 0;
         request->rq_reply_truncate = 0;
-        cfs_spin_unlock(&request->rq_lock);
+	spin_unlock(&request->rq_lock);
 
         if (!noreply) {
                 reply_md.start     = request->rq_repbuf;
@@ -706,10 +706,10 @@ int ptl_send_rpc(struct ptlrpc_request *request, int noreply)
                 if (rc != 0) {
                         CERROR("LNetMDAttach failed: %d\n", rc);
                         LASSERT (rc == -ENOMEM);
-                        cfs_spin_lock(&request->rq_lock);
-                        /* ...but the MD attach didn't succeed... */
-                        request->rq_receiving_reply = 0;
-                        cfs_spin_unlock(&request->rq_lock);
+			spin_lock(&request->rq_lock);
+			/* ...but the MD attach didn't succeed... */
+			request->rq_receiving_reply = 0;
+			spin_unlock(&request->rq_lock);
                         GOTO(cleanup_me, rc = -ENOMEM);
                 }
 

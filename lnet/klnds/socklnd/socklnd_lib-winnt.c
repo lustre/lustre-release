@@ -542,7 +542,7 @@ ksocknal_lib_push_conn (ksock_conn_t *conn)
 
         ks_get_tconn(tconn);
 
-        cfs_spin_lock(&tconn->kstc_lock);
+	spin_lock(&tconn->kstc_lock);
         if (tconn->kstc_type == kstt_sender) {
                 nagle = tconn->sender.kstc_info.nagle;
                 tconn->sender.kstc_info.nagle = 0;
@@ -552,7 +552,7 @@ ksocknal_lib_push_conn (ksock_conn_t *conn)
                 tconn->child.kstc_info.nagle = 0;
         }
 
-        cfs_spin_unlock(&tconn->kstc_lock);
+	spin_unlock(&tconn->kstc_lock);
 
         val = 1;
         rc = ks_set_tcp_option(
@@ -563,15 +563,15 @@ ksocknal_lib_push_conn (ksock_conn_t *conn)
                     );
 
         LASSERT (rc == 0);
-        cfs_spin_lock(&tconn->kstc_lock);
+	spin_lock(&tconn->kstc_lock);
 
-        if (tconn->kstc_type == kstt_sender) {
-                tconn->sender.kstc_info.nagle = nagle;
-        } else {
-                LASSERT(tconn->kstc_type == kstt_child);
-                tconn->child.kstc_info.nagle = nagle;
-        }
-        cfs_spin_unlock(&tconn->kstc_lock);
+	if (tconn->kstc_type == kstt_sender) {
+		tconn->sender.kstc_info.nagle = nagle;
+	} else {
+		LASSERT(tconn->kstc_type == kstt_child);
+		tconn->child.kstc_info.nagle = nagle;
+	}
+	spin_unlock(&tconn->kstc_lock);
         ks_put_tconn(tconn);
 }
 
@@ -616,28 +616,28 @@ void ksocknal_schedule_callback(struct socket*sock, int mode)
 {
         ksock_conn_t * conn = (ksock_conn_t *) sock->kstc_conn;
 
-        cfs_read_lock (&ksocknal_data.ksnd_global_lock);
+	read_lock(&ksocknal_data.ksnd_global_lock);
         if (mode) {
                 ksocknal_write_callback(conn);
         } else {
                 ksocknal_read_callback(conn);
         }
-        cfs_read_unlock (&ksocknal_data.ksnd_global_lock);
+	read_unlock(&ksocknal_data.ksnd_global_lock);
 }
 
 void
 ksocknal_tx_fini_callback(ksock_conn_t * conn, ksock_tx_t * tx)
 {
-        /* remove tx/conn from conn's outgoing queue */
-        cfs_spin_lock_bh (&conn->ksnc_scheduler->kss_lock);
-        cfs_list_del(&tx->tx_list);
-        if (cfs_list_empty(&conn->ksnc_tx_queue)) {
-                cfs_list_del (&conn->ksnc_tx_list);
-        }
-        cfs_spin_unlock_bh (&conn->ksnc_scheduler->kss_lock);
+	/* remove tx/conn from conn's outgoing queue */
+	spin_lock_bh(&conn->ksnc_scheduler->kss_lock);
+	cfs_list_del(&tx->tx_list);
+	if (cfs_list_empty(&conn->ksnc_tx_queue))
+		cfs_list_del(&conn->ksnc_tx_list);
 
-        /* complete send; tx -ref */
-        ksocknal_tx_decref (tx);
+	spin_unlock_bh(&conn->ksnc_scheduler->kss_lock);
+
+	/* complete send; tx -ref */
+	ksocknal_tx_decref(tx);
 }
 
 void

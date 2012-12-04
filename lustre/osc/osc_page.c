@@ -126,7 +126,7 @@ static int osc_page_protected(const struct lu_env *env,
                 descr->cld_mode = mode;
                 descr->cld_start = page->cp_index;
                 descr->cld_end   = page->cp_index;
-                cfs_spin_lock(&hdr->coh_lock_guard);
+		spin_lock(&hdr->coh_lock_guard);
                 cfs_list_for_each_entry(scan, &hdr->coh_locks, cll_linkage) {
                         /*
                          * Lock-less sub-lock has to be either in HELD state
@@ -144,7 +144,7 @@ static int osc_page_protected(const struct lu_env *env,
                                 break;
                         }
                 }
-                cfs_spin_unlock(&hdr->coh_lock_guard);
+		spin_unlock(&hdr->coh_lock_guard);
         }
         return result;
 }
@@ -207,10 +207,10 @@ static void osc_page_transfer_add(const struct lu_env *env,
 	 * first and then use it as inflight. */
 	osc_lru_del(osc_cli(obj), opg, false);
 
-        cfs_spin_lock(&obj->oo_seatbelt);
-        cfs_list_add(&opg->ops_inflight, &obj->oo_inflight[crt]);
-        opg->ops_submitter = cfs_current();
-        cfs_spin_unlock(&obj->oo_seatbelt);
+	spin_lock(&obj->oo_seatbelt);
+	cfs_list_add(&opg->ops_inflight, &obj->oo_inflight[crt]);
+	opg->ops_submitter = cfs_current();
+	spin_unlock(&obj->oo_seatbelt);
 }
 
 static int osc_page_cache_add(const struct lu_env *env,
@@ -432,13 +432,13 @@ static void osc_page_delete(const struct lu_env *env,
                 LASSERT(0);
         }
 
-	cfs_spin_lock(&obj->oo_seatbelt);
+	spin_lock(&obj->oo_seatbelt);
 	if (opg->ops_submitter != NULL) {
 		LASSERT(!cfs_list_empty(&opg->ops_inflight));
 		cfs_list_del_init(&opg->ops_inflight);
 		opg->ops_submitter = NULL;
 	}
-	cfs_spin_unlock(&obj->oo_seatbelt);
+	spin_unlock(&obj->oo_seatbelt);
 
 	osc_lru_del(osc_cli(obj), opg, true);
 	EXIT;
@@ -454,9 +454,9 @@ void osc_page_clip(const struct lu_env *env, const struct cl_page_slice *slice,
 
         opg->ops_from = from;
         opg->ops_to   = to;
-        cfs_spin_lock(&oap->oap_lock);
-        oap->oap_async_flags |= ASYNC_COUNT_STABLE;
-        cfs_spin_unlock(&oap->oap_lock);
+	spin_lock(&oap->oap_lock);
+	oap->oap_async_flags |= ASYNC_COUNT_STABLE;
+	spin_unlock(&oap->oap_lock);
 }
 
 static int osc_page_cancel(const struct lu_env *env,
@@ -844,7 +844,7 @@ static int osc_lru_reclaim(struct client_obd *cli)
 
 	/* Reclaim LRU slots from other client_obd as it can't free enough
 	 * from its own. This should rarely happen. */
-	cfs_spin_lock(&cache->ccc_lru_lock);
+	spin_lock(&cache->ccc_lru_lock);
 	cache->ccc_lru_shrinkers++;
 	cfs_list_move_tail(&cli->cl_lru_osc, &cache->ccc_lru);
 	cfs_list_for_each_entry_safe(victim, tmp, &cache->ccc_lru, cl_lru_osc) {
@@ -860,7 +860,7 @@ static int osc_lru_reclaim(struct client_obd *cli)
 		if (cfs_atomic_read(&victim->cl_lru_in_list) > 0)
 			break;
 	}
-	cfs_spin_unlock(&cache->ccc_lru_lock);
+	spin_unlock(&cache->ccc_lru_lock);
 	if (victim == cli) {
 		CDEBUG(D_CACHE, "%s: can't get any free LRU slots.\n",
 			cli->cl_import->imp_obd->obd_name);

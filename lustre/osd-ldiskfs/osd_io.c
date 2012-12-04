@@ -171,7 +171,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         }
 
         /* the check is outside of the cycle for performance reason -bzzz */
-        if (!cfs_test_bit(BIO_RW, &bio->bi_rw)) {
+	if (!test_bit(BIO_RW, &bio->bi_rw)) {
                 bio_for_each_segment(bvl, bio, i) {
                         if (likely(error == 0))
                                 SetPageUptodate(bvl->bv_page);
@@ -922,10 +922,10 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
         int err;
 
         /* prevent reading after eof */
-        cfs_spin_lock(&inode->i_lock);
-        if (i_size_read(inode) < *offs + size) {
+	spin_lock(&inode->i_lock);
+	if (i_size_read(inode) < *offs + size) {
 		loff_t diff = i_size_read(inode) - *offs;
-		cfs_spin_unlock(&inode->i_lock);
+		spin_unlock(&inode->i_lock);
 		if (diff < 0) {
 			CDEBUG(D_EXT2, "size %llu is too short to read @%llu\n",
 			       i_size_read(inode), *offs);
@@ -935,9 +935,9 @@ int osd_ldiskfs_read(struct inode *inode, void *buf, int size, loff_t *offs)
 		} else {
 			size = diff;
 		}
-        } else {
-                cfs_spin_unlock(&inode->i_lock);
-        }
+	} else {
+		spin_unlock(&inode->i_lock);
+	}
 
         blocksize = 1 << inode->i_blkbits;
         osize = size;
@@ -1103,14 +1103,14 @@ int osd_ldiskfs_write_record(struct inode *inode, void *buf, int bufsize,
 		--new_size;
         /* correct in-core and on-disk sizes */
         if (new_size > i_size_read(inode)) {
-                cfs_spin_lock(&inode->i_lock);
-                if (new_size > i_size_read(inode))
-                        i_size_write(inode, new_size);
-                if (i_size_read(inode) > LDISKFS_I(inode)->i_disksize) {
-                        LDISKFS_I(inode)->i_disksize = i_size_read(inode);
-                        dirty_inode = 1;
-                }
-                cfs_spin_unlock(&inode->i_lock);
+		spin_lock(&inode->i_lock);
+		if (new_size > i_size_read(inode))
+			i_size_write(inode, new_size);
+		if (i_size_read(inode) > LDISKFS_I(inode)->i_disksize) {
+			LDISKFS_I(inode)->i_disksize = i_size_read(inode);
+			dirty_inode = 1;
+		}
+		spin_unlock(&inode->i_lock);
                 if (dirty_inode)
                         inode->i_sb->s_op->dirty_inode(inode);
         }

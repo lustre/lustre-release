@@ -262,10 +262,10 @@ typedef struct
 
         cfs_list_t           kqn_idletxds;    /* transmit descriptors free to use */
         cfs_list_t           kqn_activetxds;  /* transmit descriptors being used */
-        cfs_spinlock_t       kqn_idletxd_lock; /* serialise idle txd access */
-        cfs_atomic_t         kqn_pending_txs;/* # transmits being prepped */
+	spinlock_t	kqn_idletxd_lock;    /* serialise idle txd access */
+	cfs_atomic_t	kqn_pending_txs;     /* # transmits being prepped */
 
-        cfs_spinlock_t       kqn_sched_lock; /* serialise packet schedulers */
+	spinlock_t	kqn_sched_lock;      /* serialise packet schedulers */
         cfs_waitq_t          kqn_sched_waitq;/* scheduler blocks here */
 
         cfs_list_t           kqn_readyrxds;  /* rxds full of data */

@@ -83,9 +83,9 @@ static void lovsub_object_free(const struct lu_env *env, struct lu_object *obj)
         if (lov) {
                 LASSERT(lov->lo_type == LLT_RAID0);
                 LASSERT(lov->u.raid0.lo_sub[los->lso_index] == los);
-                cfs_spin_lock(&lov->u.raid0.lo_sub_lock);
-                lov->u.raid0.lo_sub[los->lso_index] = NULL;
-                cfs_spin_unlock(&lov->u.raid0.lo_sub_lock);
+		spin_lock(&lov->u.raid0.lo_sub_lock);
+		lov->u.raid0.lo_sub[los->lso_index] = NULL;
+		spin_unlock(&lov->u.raid0.lo_sub_lock);
         }
 
         lu_object_fini(obj);

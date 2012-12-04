@@ -255,7 +255,7 @@ kptllnd_active_rdma(kptl_rx_t *rx, lnet_msg_t *lntmsg, int type,
                 return -EIO;
         }
 
-        cfs_spin_lock_irqsave(&peer->peer_lock, flags);
+	spin_lock_irqsave(&peer->peer_lock, flags);
 
         tx->tx_lnet_msg = lntmsg;
         /* lnet_finalize() will be called when tx is torn down, so I must
@@ -268,7 +268,7 @@ kptllnd_active_rdma(kptl_rx_t *rx, lnet_msg_t *lntmsg, int type,
 
         /* peer has now got my ref on 'tx' */
 
-        cfs_spin_unlock_irqrestore(&peer->peer_lock, flags);
+	spin_unlock_irqrestore(&peer->peer_lock, flags);
 
         tx->tx_tposted = jiffies;
 
@@ -753,7 +753,7 @@ kptllnd_scheduler (void *arg)
 
         cfs_waitlink_init(&waitlink);
 
-        cfs_spin_lock_irqsave(&kptllnd_data.kptl_sched_lock, flags);
+	spin_lock_irqsave(&kptllnd_data.kptl_sched_lock, flags);
 
         /* threads shut down in phase 2 after all peers have been destroyed */
         while (kptllnd_data.kptl_shutdown < 2) {
@@ -765,14 +765,14 @@ kptllnd_scheduler (void *arg)
                                              kptl_rx_t, rx_list);
                         cfs_list_del(&rx->rx_list);
 
-                        cfs_spin_unlock_irqrestore(&kptllnd_data. \
+			spin_unlock_irqrestore(&kptllnd_data. \
                                                    kptl_sched_lock,
                                                    flags);
 
                         kptllnd_rx_parse(rx);
                         did_something = 1;
 
-                        cfs_spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
+			spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
                                               flags);
                 }
 
@@ -782,14 +782,14 @@ kptllnd_scheduler (void *arg)
                                               rxb_repost_list);
                         cfs_list_del(&rxb->rxb_repost_list);
 
-                        cfs_spin_unlock_irqrestore(&kptllnd_data. \
+			spin_unlock_irqrestore(&kptllnd_data. \
                                                    kptl_sched_lock,
                                                    flags);
 
                         kptllnd_rx_buffer_post(rxb);
                         did_something = 1;
 
-                        cfs_spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
+			spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
                                               flags);
                 }
 
@@ -798,13 +798,13 @@ kptllnd_scheduler (void *arg)
                                              kptl_tx_t, tx_list);
                         cfs_list_del_init(&tx->tx_list);
 
-                        cfs_spin_unlock_irqrestore(&kptllnd_data. \
+			spin_unlock_irqrestore(&kptllnd_data. \
                                                    kptl_sched_lock, flags);
 
                         kptllnd_tx_fini(tx);
                         did_something = 1;
 
-                        cfs_spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
+			spin_lock_irqsave(&kptllnd_data.kptl_sched_lock,
                                               flags);
                 }
 
@@ -816,7 +816,7 @@ kptllnd_scheduler (void *arg)
                 cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
                 cfs_waitq_add_exclusive(&kptllnd_data.kptl_sched_waitq,
                                         &waitlink);
-                cfs_spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock,
+		spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock,
                                            flags);
 
                 if (!did_something)
@@ -827,12 +827,12 @@ kptllnd_scheduler (void *arg)
                 cfs_set_current_state(CFS_TASK_RUNNING);
                 cfs_waitq_del(&kptllnd_data.kptl_sched_waitq, &waitlink);
 
-                cfs_spin_lock_irqsave(&kptllnd_data.kptl_sched_lock, flags);
+		spin_lock_irqsave(&kptllnd_data.kptl_sched_lock, flags);
 
                 counter = 0;
         }
 
-        cfs_spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock, flags);
+	spin_unlock_irqrestore(&kptllnd_data.kptl_sched_lock, flags);
 
         kptllnd_thread_fini();
         return 0;

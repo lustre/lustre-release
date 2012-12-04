@@ -64,15 +64,15 @@ static char      libcfs_nidstrings[LNET_NIDSTR_COUNT][LNET_NIDSTR_SIZE];
 static int       libcfs_nidstring_idx = 0;
 
 #ifdef __KERNEL__
-static cfs_spinlock_t libcfs_nidstring_lock;
+static spinlock_t libcfs_nidstring_lock;
 
 void libcfs_init_nidstrings (void)
 {
-        cfs_spin_lock_init(&libcfs_nidstring_lock);
+	spin_lock_init(&libcfs_nidstring_lock);
 }
 
-# define NIDSTR_LOCK(f)   cfs_spin_lock_irqsave(&libcfs_nidstring_lock, f)
-# define NIDSTR_UNLOCK(f) cfs_spin_unlock_irqrestore(&libcfs_nidstring_lock, f)
+# define NIDSTR_LOCK(f)   spin_lock_irqsave(&libcfs_nidstring_lock, f)
+# define NIDSTR_UNLOCK(f) spin_unlock_irqrestore(&libcfs_nidstring_lock, f)
 #else
 # define NIDSTR_LOCK(f)   (f=sizeof(f))  /* avoid set-but-unused warnings */
 # define NIDSTR_UNLOCK(f) (f=sizeof(f))

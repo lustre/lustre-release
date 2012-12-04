@@ -47,7 +47,7 @@ static unsigned int pages_factor[CFS_TCD_TYPE_MAX] = {
 
 char *cfs_trace_console_buffers[NR_CPUS][CFS_TCD_TYPE_MAX];
 
-cfs_rw_semaphore_t cfs_tracefile_sem;
+struct rw_semaphore cfs_tracefile_sem;
 
 int cfs_tracefile_init_arch()
 {
@@ -55,7 +55,7 @@ int cfs_tracefile_init_arch()
 	int    j;
 	struct cfs_trace_cpu_data *tcd;
 
-	cfs_init_rwsem(&cfs_tracefile_sem);
+	init_rwsem(&cfs_tracefile_sem);
 
 	/* initialize trace_data */
 	memset(cfs_trace_data, 0, sizeof(cfs_trace_data));
@@ -70,7 +70,7 @@ int cfs_tracefile_init_arch()
 
 	/* arch related info initialized */
 	cfs_tcd_for_each(tcd, i, j) {
-		cfs_spin_lock_init(&tcd->tcd_lock);
+		spin_lock_init(&tcd->tcd_lock);
 		tcd->tcd_pages_factor = pages_factor[i];
 		tcd->tcd_type = i;
 		tcd->tcd_cpu = j;
@@ -111,27 +111,27 @@ void cfs_tracefile_fini_arch()
 		cfs_trace_data[i] = NULL;
 	}
 
-	cfs_fini_rwsem(&cfs_tracefile_sem);
+	fini_rwsem(&cfs_tracefile_sem);
 }
 
 void cfs_tracefile_read_lock()
 {
-	cfs_down_read(&cfs_tracefile_sem);
+	down_read(&cfs_tracefile_sem);
 }
 
 void cfs_tracefile_read_unlock()
 {
-	cfs_up_read(&cfs_tracefile_sem);
+	up_read(&cfs_tracefile_sem);
 }
 
 void cfs_tracefile_write_lock()
 {
-	cfs_down_write(&cfs_tracefile_sem);
+	down_write(&cfs_tracefile_sem);
 }
 
 void cfs_tracefile_write_unlock()
 {
-	cfs_up_write(&cfs_tracefile_sem);
+	up_write(&cfs_tracefile_sem);
 }
 
 cfs_trace_buf_type_t cfs_trace_buf_idx_get()
@@ -153,28 +153,28 @@ cfs_trace_buf_type_t cfs_trace_buf_idx_get()
 int cfs_trace_lock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 {
 	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
-        if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
-                cfs_spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
-        else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
-                cfs_spin_lock_bh(&tcd->tcd_lock);
-        else if (unlikely(walking))
-                cfs_spin_lock_irq(&tcd->tcd_lock);
-        else
-                cfs_spin_lock(&tcd->tcd_lock);
+	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
+		spin_lock_irqsave(&tcd->tcd_lock, tcd->tcd_lock_flags);
+	else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
+		spin_lock_bh(&tcd->tcd_lock);
+	else if (unlikely(walking))
+		spin_lock_irq(&tcd->tcd_lock);
+	else
+		spin_lock(&tcd->tcd_lock);
 	return 1;
 }
 
 void cfs_trace_unlock_tcd(struct cfs_trace_cpu_data *tcd, int walking)
 {
 	__LASSERT(tcd->tcd_type < CFS_TCD_TYPE_MAX);
-        if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
-                cfs_spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
-        else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
-                cfs_spin_unlock_bh(&tcd->tcd_lock);
-        else if (unlikely(walking))
-                cfs_spin_unlock_irq(&tcd->tcd_lock);
-        else
-                cfs_spin_unlock(&tcd->tcd_lock);
+	if (tcd->tcd_type == CFS_TCD_TYPE_IRQ)
+		spin_unlock_irqrestore(&tcd->tcd_lock, tcd->tcd_lock_flags);
+	else if (tcd->tcd_type == CFS_TCD_TYPE_SOFTIRQ)
+		spin_unlock_bh(&tcd->tcd_lock);
+	else if (unlikely(walking))
+		spin_unlock_irq(&tcd->tcd_lock);
+	else
+		spin_unlock(&tcd->tcd_lock);
 }
 
 int cfs_tcd_owns_tage(struct cfs_trace_cpu_data *tcd,

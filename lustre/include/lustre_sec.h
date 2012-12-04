@@ -512,7 +512,7 @@ struct ptlrpc_cli_ctx {
         unsigned int            cc_early_expire:1;
         unsigned long           cc_flags;
         struct vfs_cred         cc_vcred;
-        cfs_spinlock_t          cc_lock;
+	spinlock_t		cc_lock;
         cfs_list_t              cc_req_list;   /* waiting reqs linked here */
         cfs_list_t              cc_gc_chain;   /* linked to gc chain */
 };
@@ -827,7 +827,7 @@ struct ptlrpc_sec {
         unsigned int                    ps_dying:1;
         /** owning import */
         struct obd_import              *ps_import;
-        cfs_spinlock_t                  ps_lock;
+	spinlock_t			ps_lock;
 
         /*
          * garbage collection

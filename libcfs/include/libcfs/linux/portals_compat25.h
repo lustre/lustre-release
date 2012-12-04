@@ -45,11 +45,11 @@
 // XXX BUG 1511 -- remove this stanza and all callers when bug 1511 is resolved
 
 #define SIGNAL_MASK_LOCK(task, flags)                                  \
-  spin_lock_irqsave(&task->sighand->siglock, flags)
+	spin_lock_irqsave(&task->sighand->siglock, flags)
 #define SIGNAL_MASK_UNLOCK(task, flags)                                \
-  spin_unlock_irqrestore(&task->sighand->siglock, flags)
+	spin_unlock_irqrestore(&task->sighand->siglock, flags)
 #define USERMODEHELPER(path, argv, envp)                               \
-  call_usermodehelper(path, argv, envp, 1)
+	call_usermodehelper(path, argv, envp, 1)
 #define RECALC_SIGPENDING         recalc_sigpending()
 #define CLEAR_SIGPENDING          clear_tsk_thread_flag(current,       \
                                                         TIF_SIGPENDING)

@@ -232,11 +232,11 @@ typedef struct _KS_TSDU_MDL {
 } KS_TSDU_MDL, *PKS_TSDU_MDL;
 
 typedef struct ks_engine_mgr {
-    cfs_spinlock_t          lock;
-    int                     stop;
-    event_t                 exit;
-    event_t                 start;
-    cfs_list_t              list;
+	spinlock_t	lock;
+	int		stop;
+	event_t		exit;
+	event_t		start;
+	cfs_list_t	list;
 } ks_engine_mgr_t;
 
 typedef struct ks_engine_slot {
@@ -248,19 +248,19 @@ typedef struct ks_engine_slot {
 } ks_engine_slot_t;
 
 typedef struct _KS_TSDUMGR {
-    cfs_list_t              TsduList;
-    ULONG                   NumOfTsdu;
-    ULONG                   TotalBytes;
-    KEVENT                  Event;
-    cfs_spinlock_t          Lock;
-    ks_engine_slot_t        Slot;
-    ULONG                   Payload;
-    int                     Busy:1;
-    int                     OOB:1;
+	cfs_list_t		TsduList;
+	ULONG			NumOfTsdu;
+	ULONG			TotalBytes;
+	KEVENT			Event;
+	spinlock_t		Lock;
+	ks_engine_slot_t	Slot;
+	ULONG			Payload;
+	int			Busy:1;
+	int			OOB:1;
 } KS_TSDUMGR, *PKS_TSDUMGR;
 
-#define ks_lock_tsdumgr(mgr)   cfs_spin_lock(&((mgr)->Lock))
-#define ks_unlock_tsdumgr(mgr) cfs_spin_unlock(&((mgr)->Lock))
+#define ks_lock_tsdumgr(mgr)	spin_lock(&((mgr)->Lock))
+#define ks_unlock_tsdumgr(mgr)	spin_unlock(&((mgr)->Lock))
 
 typedef struct _KS_CHAIN {
     KS_TSDUMGR          Normal;      /* normal queue */
@@ -423,7 +423,7 @@ struct socket {
         ulong                       kstc_magic;      /* Magic & Flags */
         ulong                       kstc_flags;
 
-        cfs_spinlock_t              kstc_lock;       /* serialise lock*/
+	spinlock_t		    kstc_lock;       /* serialise lock*/
         void *                      kstc_conn;       /* ks_conn_t */
 
         ks_tconn_type_t             kstc_type;		 /* tdi connection Type */
@@ -614,15 +614,14 @@ typedef struct ks_addr_slot {
 } ks_addr_slot_t;
 
 typedef struct {
+	/*
+	 * Tdi client information
+	 */
 
-    /*
-     * Tdi client information
-     */
+	UNICODE_STRING	ksnd_client_name;	/* tdi client module name */
+	HANDLE		ksnd_pnp_handle;	/* the handle for pnp changes */
 
-    UNICODE_STRING        ksnd_client_name; /* tdi client module name */
-    HANDLE                ksnd_pnp_handle;  /* the handle for pnp changes */
-
-    cfs_spinlock_t        ksnd_addrs_lock;  /* serialize ip address list access */
+	spinlock_t	ksnd_addrs_lock;	/* serialize ip address list */
     LIST_ENTRY            ksnd_addrs_list;  /* list of the ip addresses */
     int                   ksnd_naddrs;      /* number of the ip addresses */
 
@@ -634,15 +633,15 @@ typedef struct {
 
     TDI_PROVIDER_INFO     ksnd_provider;        /* tdi tcp/ip provider's information */
 
-    cfs_spinlock_t        ksnd_tconn_lock;      /* tdi connections access serialise */
+	spinlock_t	ksnd_tconn_lock;	/* tdi connections access lock*/
 
-    int                   ksnd_ntconns;         /* number of tconns attached in list */
-    cfs_list_t            ksnd_tconns;          /* tdi connections list */
-    cfs_mem_cache_t *     ksnd_tconn_slab;      /* slabs for ks_tconn_t allocations */
-    event_t               ksnd_tconn_exit;      /* exit event to be signaled by the last tconn */
+	int		ksnd_ntconns;		/* number of tconns in list */
+	cfs_list_t	ksnd_tconns;		/* tdi connections list */
+	cfs_mem_cache_t *ksnd_tconn_slab;	/* ks_tconn_t allocation slabs*/
+	event_t		ksnd_tconn_exit;	/* event signal by last tconn */
 
-    cfs_spinlock_t        ksnd_tsdu_lock;       /* tsdu access serialise */
-        
+	spinlock_t	ksnd_tsdu_lock;		/* tsdu access serialise */
+
     int                   ksnd_ntsdus;          /* number of tsdu buffers allocated */
     ulong                 ksnd_tsdu_size;       /* the size of a signel tsdu buffer */
     cfs_mem_cache_t       *ksnd_tsdu_slab;       /* slab cache for tsdu buffer allocation */

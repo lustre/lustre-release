@@ -126,31 +126,31 @@ cfs_hash_nl_unlock(cfs_hash_lock_t *lock, int exclusive) {}
 static inline void
 cfs_hash_spin_lock(cfs_hash_lock_t *lock, int exclusive)
 {
-        cfs_spin_lock(&lock->spin);
+	spin_lock(&lock->spin);
 }
 
 static inline void
 cfs_hash_spin_unlock(cfs_hash_lock_t *lock, int exclusive)
 {
-        cfs_spin_unlock(&lock->spin);
+	spin_unlock(&lock->spin);
 }
 
 static inline void
 cfs_hash_rw_lock(cfs_hash_lock_t *lock, int exclusive)
 {
-        if (!exclusive)
-                cfs_read_lock(&lock->rw);
-        else
-                cfs_write_lock(&lock->rw);
+	if (!exclusive)
+		read_lock(&lock->rw);
+	else
+		write_lock(&lock->rw);
 }
 
 static inline void
 cfs_hash_rw_unlock(cfs_hash_lock_t *lock, int exclusive)
 {
-        if (!exclusive)
-                cfs_read_unlock(&lock->rw);
-        else
-                cfs_write_unlock(&lock->rw);
+	if (!exclusive)
+		read_unlock(&lock->rw);
+	else
+		write_unlock(&lock->rw);
 }
 
 /** No lock hash */
@@ -210,15 +210,15 @@ static cfs_hash_lock_ops_t cfs_hash_nr_bkt_rw_lops =
 static void
 cfs_hash_lock_setup(cfs_hash_t *hs)
 {
-        if (cfs_hash_with_no_lock(hs)) {
-                hs->hs_lops = &cfs_hash_nl_lops;
+	if (cfs_hash_with_no_lock(hs)) {
+		hs->hs_lops = &cfs_hash_nl_lops;
 
-        } else if (cfs_hash_with_no_bktlock(hs)) {
-                hs->hs_lops = &cfs_hash_nbl_lops;
-                cfs_spin_lock_init(&hs->hs_lock.spin);
+	} else if (cfs_hash_with_no_bktlock(hs)) {
+		hs->hs_lops = &cfs_hash_nbl_lops;
+		spin_lock_init(&hs->hs_lock.spin);
 
-        } else if (cfs_hash_with_rehash(hs)) {
-                cfs_rwlock_init(&hs->hs_lock.rw);
+	} else if (cfs_hash_with_rehash(hs)) {
+		rwlock_init(&hs->hs_lock.rw);
 
                 if (cfs_hash_with_rw_bktlock(hs))
                         hs->hs_lops = &cfs_hash_bkt_rw_lops;
@@ -506,12 +506,12 @@ cfs_hash_bd_dep_record(cfs_hash_t *hs, cfs_hash_bd_t *bd, int dep_cur)
                    max(warn_on_depth, hs->hs_dep_max) >= dep_cur))
                 return;
 
-        cfs_spin_lock(&hs->hs_dep_lock);
-        hs->hs_dep_max  = dep_cur;
-        hs->hs_dep_bkt  = bd->bd_bucket->hsb_index;
-        hs->hs_dep_off  = bd->bd_offset;
-        hs->hs_dep_bits = hs->hs_cur_bits;
-        cfs_spin_unlock(&hs->hs_dep_lock);
+	spin_lock(&hs->hs_dep_lock);
+	hs->hs_dep_max  = dep_cur;
+	hs->hs_dep_bkt  = bd->bd_bucket->hsb_index;
+	hs->hs_dep_off  = bd->bd_offset;
+	hs->hs_dep_bits = hs->hs_cur_bits;
+	spin_unlock(&hs->hs_dep_lock);
 
 	cfs_wi_schedule(cfs_sched_rehash, &hs->hs_dep_wi);
 # endif
@@ -936,14 +936,14 @@ cfs_hash_buckets_realloc(cfs_hash_t *hs, cfs_hash_bucket_t **old_bkts,
                     cfs_hash_with_no_bktlock(hs))
                         continue;
 
-                if (cfs_hash_with_rw_bktlock(hs))
-                        cfs_rwlock_init(&new_bkts[i]->hsb_lock.rw);
-                else if (cfs_hash_with_spin_bktlock(hs))
-                        cfs_spin_lock_init(&new_bkts[i]->hsb_lock.spin);
-                else
-                        LBUG(); /* invalid use-case */
-        }
-        return new_bkts;
+		if (cfs_hash_with_rw_bktlock(hs))
+			rwlock_init(&new_bkts[i]->hsb_lock.rw);
+		else if (cfs_hash_with_spin_bktlock(hs))
+			spin_lock_init(&new_bkts[i]->hsb_lock.spin);
+		else
+			LBUG(); /* invalid use-case */
+	}
+	return new_bkts;
 }
 
 /**
@@ -960,45 +960,45 @@ static int cfs_hash_rehash_worker(cfs_workitem_t *wi);
 #if CFS_HASH_DEBUG_LEVEL >= CFS_HASH_DEBUG_1
 static int cfs_hash_dep_print(cfs_workitem_t *wi)
 {
-        cfs_hash_t *hs = container_of(wi, cfs_hash_t, hs_dep_wi);
-        int         dep;
-        int         bkt;
-        int         off;
-        int         bits;
+	cfs_hash_t *hs = container_of(wi, cfs_hash_t, hs_dep_wi);
+	int         dep;
+	int         bkt;
+	int         off;
+	int         bits;
 
-        cfs_spin_lock(&hs->hs_dep_lock);
-        dep  = hs->hs_dep_max;
-        bkt  = hs->hs_dep_bkt;
-        off  = hs->hs_dep_off;
-        bits = hs->hs_dep_bits;
-        cfs_spin_unlock(&hs->hs_dep_lock);
+	spin_lock(&hs->hs_dep_lock);
+	dep  = hs->hs_dep_max;
+	bkt  = hs->hs_dep_bkt;
+	off  = hs->hs_dep_off;
+	bits = hs->hs_dep_bits;
+	spin_unlock(&hs->hs_dep_lock);
 
-        LCONSOLE_WARN("#### HASH %s (bits: %d): max depth %d at bucket %d/%d\n",
-                      hs->hs_name, bits, dep, bkt, off);
-        cfs_spin_lock(&hs->hs_dep_lock);
-        hs->hs_dep_bits = 0; /* mark as workitem done */
-        cfs_spin_unlock(&hs->hs_dep_lock);
-        return 0;
+	LCONSOLE_WARN("#### HASH %s (bits: %d): max depth %d at bucket %d/%d\n",
+		      hs->hs_name, bits, dep, bkt, off);
+	spin_lock(&hs->hs_dep_lock);
+	hs->hs_dep_bits = 0; /* mark as workitem done */
+	spin_unlock(&hs->hs_dep_lock);
+	return 0;
 }
 
 static void cfs_hash_depth_wi_init(cfs_hash_t *hs)
 {
-	cfs_spin_lock_init(&hs->hs_dep_lock);
+	spin_lock_init(&hs->hs_dep_lock);
 	cfs_wi_init(&hs->hs_dep_wi, hs, cfs_hash_dep_print);
 }
 
 static void cfs_hash_depth_wi_cancel(cfs_hash_t *hs)
 {
 	if (cfs_wi_deschedule(cfs_sched_rehash, &hs->hs_dep_wi))
-                return;
+		return;
 
-        cfs_spin_lock(&hs->hs_dep_lock);
-        while (hs->hs_dep_bits != 0) {
-                cfs_spin_unlock(&hs->hs_dep_lock);
-                cfs_cond_resched();
-                cfs_spin_lock(&hs->hs_dep_lock);
-        }
-        cfs_spin_unlock(&hs->hs_dep_lock);
+	spin_lock(&hs->hs_dep_lock);
+	while (hs->hs_dep_bits != 0) {
+		spin_unlock(&hs->hs_dep_lock);
+		cfs_cond_resched();
+		spin_lock(&hs->hs_dep_lock);
+	}
+	spin_unlock(&hs->hs_dep_lock);
 }
 
 #else /* CFS_HASH_DEBUG_LEVEL < CFS_HASH_DEBUG_1 */
@@ -2107,7 +2107,7 @@ int cfs_hash_debug_str(cfs_hash_t *hs, char *str, int size)
                 if (maxdep < bd.bd_bucket->hsb_depmax) {
                         maxdep  = bd.bd_bucket->hsb_depmax;
 #ifdef __KERNEL__
-                        maxdepb = cfs_ffz(~maxdep);
+			maxdepb = ffz(~maxdep);
 #endif
                 }
                 total += bd.bd_bucket->hsb_count;

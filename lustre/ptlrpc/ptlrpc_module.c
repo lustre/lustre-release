@@ -47,13 +47,13 @@
 
 #include "ptlrpc_internal.h"
 
-extern cfs_spinlock_t ptlrpc_last_xid_lock;
+extern spinlock_t ptlrpc_last_xid_lock;
 #if RS_DEBUG
-extern cfs_spinlock_t ptlrpc_rs_debug_lock;
+extern spinlock_t ptlrpc_rs_debug_lock;
 #endif
-extern cfs_spinlock_t ptlrpc_all_services_lock;
-extern cfs_mutex_t pinger_mutex;
-extern cfs_mutex_t ptlrpcd_mutex;
+extern spinlock_t ptlrpc_all_services_lock;
+extern struct mutex pinger_mutex;
+extern struct mutex ptlrpcd_mutex;
 
 __init int ptlrpc_init(void)
 {
@@ -62,11 +62,11 @@ __init int ptlrpc_init(void)
 
         lustre_assert_wire_constants();
 #if RS_DEBUG
-        cfs_spin_lock_init(&ptlrpc_rs_debug_lock);
+	spin_lock_init(&ptlrpc_rs_debug_lock);
 #endif
-        cfs_spin_lock_init(&ptlrpc_all_services_lock);
-        cfs_mutex_init(&pinger_mutex);
-        cfs_mutex_init(&ptlrpcd_mutex);
+	spin_lock_init(&ptlrpc_all_services_lock);
+	mutex_init(&pinger_mutex);
+	mutex_init(&ptlrpcd_mutex);
         ptlrpc_init_xid();
 
         rc = req_layout_init();

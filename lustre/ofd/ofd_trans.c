@@ -153,10 +153,10 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 	 */
 	if (info->fti_transno == 0 &&
 	    *transno_p == ofd->ofd_lut.lut_last_transno) {
-		cfs_spin_lock(&ofd->ofd_lut.lut_translock);
+		spin_lock(&ofd->ofd_lut.lut_translock);
 		ofd->ofd_lut.lut_lsd.lsd_last_transno =
 						ofd->ofd_lut.lut_last_transno;
-		cfs_spin_unlock(&ofd->ofd_lut.lut_translock);
+		spin_unlock(&ofd->ofd_lut.lut_translock);
 		tgt_server_data_write(info->fti_env, &ofd->ofd_lut, th);
 	}
 
@@ -172,12 +172,12 @@ static int ofd_last_rcvd_update(struct ofd_thread_info *info,
 		err = 0;
 		/* All operations performed by LW clients are synchronous and
 		 * we store the committed transno in the last_rcvd header */
-		cfs_spin_lock(&tg->lut_translock);
+		spin_lock(&tg->lut_translock);
 		if (info->fti_transno > tg->lut_lsd.lsd_last_transno) {
 			tg->lut_lsd.lsd_last_transno = info->fti_transno;
 			update = true;
 		}
-		cfs_spin_unlock(&tg->lut_translock);
+		spin_unlock(&tg->lut_translock);
 		if (update)
 			err = tgt_server_data_write(info->fti_env, tg, th);
 	} else {
@@ -216,7 +216,7 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 		info->fti_has_trans = 1;
 	}
 
-	cfs_spin_lock(&ofd->ofd_lut.lut_translock);
+	spin_lock(&ofd->ofd_lut.lut_translock);
 	if (txn->th_result != 0) {
 		if (info->fti_transno != 0) {
 			CERROR("Replay transno "LPU64" failed: rc %d\n",
@@ -230,7 +230,7 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 		if (info->fti_transno > ofd->ofd_lut.lut_last_transno)
 			ofd->ofd_lut.lut_last_transno = info->fti_transno;
 	}
-	cfs_spin_unlock(&ofd->ofd_lut.lut_translock);
+	spin_unlock(&ofd->ofd_lut.lut_translock);
 
 	/** VBR: set new versions */
 	if (txn->th_result == 0 && info->fti_obj != NULL) {

@@ -289,7 +289,7 @@ static struct lu_env *ccc_inode_fini_env = NULL;
  * A mutex serializing calls to slp_inode_fini() under extreme memory
  * pressure, when environments cannot be allocated.
  */
-static CFS_DEFINE_MUTEX(ccc_inode_fini_guard);
+static DEFINE_MUTEX(ccc_inode_fini_guard);
 static int dummy_refcheck;
 
 int ccc_global_init(struct lu_device_type *device_type)
@@ -1262,7 +1262,7 @@ void cl_inode_fini(struct inode *inode)
                 env = cl_env_get(&refcheck);
                 emergency = IS_ERR(env);
                 if (emergency) {
-                        cfs_mutex_lock(&ccc_inode_fini_guard);
+			mutex_lock(&ccc_inode_fini_guard);
                         LASSERT(ccc_inode_fini_env != NULL);
                         cl_env_implant(ccc_inode_fini_env, &refcheck);
                         env = ccc_inode_fini_env;
@@ -1278,7 +1278,7 @@ void cl_inode_fini(struct inode *inode)
                 lli->lli_clob = NULL;
                 if (emergency) {
                         cl_env_unplant(ccc_inode_fini_env, &refcheck);
-                        cfs_mutex_unlock(&ccc_inode_fini_guard);
+			mutex_unlock(&ccc_inode_fini_guard);
                 } else
                         cl_env_put(env, &refcheck);
                 cl_env_reexit(cookie);

@@ -211,11 +211,11 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	 * while truncate is on-going. */
 	inode = ccc_object_inode(io->ci_obj);
 	lli = ll_i2info(inode);
-	cfs_down_read(&lli->lli_trunc_sem);
+	down_read(&lli->lli_trunc_sem);
 
 	result = cl_io_loop(env, io);
 
-	cfs_up_read(&lli->lli_trunc_sem);
+	up_read(&lli->lli_trunc_sem);
 
 	cfs_restore_sigs(set);
 

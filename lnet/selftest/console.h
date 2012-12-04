@@ -132,7 +132,7 @@ typedef struct lstcon_test {
 #define LST_CONSOLE_TIMEOUT     300             /* default console timeout */
 
 typedef struct {
-        cfs_mutex_t             ses_mutex;      /* lock for session, only one thread can enter session */
+	struct mutex		ses_mutex;      /* only 1 thread in session */
         lst_sid_t               ses_id;         /* global session id */
         int                     ses_key;        /* local session key */
         int                     ses_state;      /* state of session */
@@ -160,7 +160,7 @@ typedef struct {
         cfs_list_t              ses_ndl_list;   /* global list of nodes */
         cfs_list_t             *ses_ndl_hash;   /* hash table of nodes */
 
-        cfs_spinlock_t          ses_rpc_lock;   /* serialize */
+	spinlock_t          ses_rpc_lock;   /* serialize */
         cfs_atomic_t            ses_rpc_counter;/* # of initialized RPCs */
         cfs_list_t              ses_rpc_freelist; /* idle console rpc */
 } lstcon_session_t;                             /*** session descriptor */

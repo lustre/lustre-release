@@ -169,15 +169,15 @@ LPROC_SEQ_FOPS(mdt_rename_stats);
 
 static int lproc_mdt_attach_rename_seqstat(struct mdt_device *mdt)
 {
-        struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
-        struct obd_device *obd = ld->ld_obd;
-        int i;
+	struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
+	struct obd_device *obd = ld->ld_obd;
+	int i;
 
-        for (i = 0; i < RENAME_LAST; i++)
-                spin_lock_init(&mdt->mdt_rename_stats.hist[i].oh_lock);
+	for (i = 0; i < RENAME_LAST; i++)
+		spin_lock_init(&mdt->mdt_rename_stats.hist[i].oh_lock);
 
-        return lprocfs_obd_seq_create(obd, "rename_stats", 0444,
-                                      &mdt_rename_stats_fops, mdt);
+	return lprocfs_obd_seq_create(obd, "rename_stats", 0444,
+				      &mdt_rename_stats_fops, mdt);
 }
 
 void mdt_rename_counter_tally(struct mdt_thread_info *info,
@@ -376,11 +376,11 @@ static int lprocfs_rd_identity_upcall(char *page, char **start, off_t off,
         struct upcall_cache *hash = mdt->mdt_identity_cache;
         int len;
 
-        *eof = 1;
-        cfs_read_lock(&hash->uc_upcall_rwlock);
-        len = snprintf(page, count, "%s\n", hash->uc_upcall);
-        cfs_read_unlock(&hash->uc_upcall_rwlock);
-        return len;
+	*eof = 1;
+	read_lock(&hash->uc_upcall_rwlock);
+	len = snprintf(page, count, "%s\n", hash->uc_upcall);
+	read_unlock(&hash->uc_upcall_rwlock);
+	return len;
 }
 
 static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
@@ -403,9 +403,9 @@ static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
                 GOTO(failed, rc = -EFAULT);
 
         /* Remove any extraneous bits from the upcall (e.g. linefeeds) */
-        cfs_write_lock(&hash->uc_upcall_rwlock);
-        sscanf(kernbuf, "%s", hash->uc_upcall);
-        cfs_write_unlock(&hash->uc_upcall_rwlock);
+	write_lock(&hash->uc_upcall_rwlock);
+	sscanf(kernbuf, "%s", hash->uc_upcall);
+	write_unlock(&hash->uc_upcall_rwlock);
 
         if (strcmp(hash->uc_name, obd->obd_name) != 0)
                 CWARN("%s: write to upcall name %s\n",
@@ -832,7 +832,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
 
         if (!strcmp(kernbuf, "NONE") || !strcmp(kernbuf, "clear")) {
                 /* empty string is special case */
-                cfs_down_write(&mdt->mdt_squash_sem);
+		down_write(&mdt->mdt_squash_sem);
                 if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
                         cfs_free_nidlist(&mdt->mdt_nosquash_nids);
                         OBD_FREE(mdt->mdt_nosquash_str,
@@ -840,7 +840,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
                         mdt->mdt_nosquash_str = NULL;
                         mdt->mdt_nosquash_strlen = 0;
                 }
-                cfs_up_write(&mdt->mdt_squash_sem);
+		up_write(&mdt->mdt_squash_sem);
                 LCONSOLE_INFO("%s: nosquash_nids is cleared\n",
                               obd->obd_name);
                 OBD_FREE(kernbuf, count + 1);
@@ -853,7 +853,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
                 GOTO(failed, rc = -EINVAL);
         }
 
-        cfs_down_write(&mdt->mdt_squash_sem);
+	down_write(&mdt->mdt_squash_sem);
         if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
                 cfs_free_nidlist(&mdt->mdt_nosquash_nids);
                 OBD_FREE(mdt->mdt_nosquash_str, mdt->mdt_nosquash_strlen);
@@ -864,7 +864,7 @@ static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
 
         LCONSOLE_INFO("%s: nosquash_nids is set to %s\n",
                       obd->obd_name, kernbuf);
-        cfs_up_write(&mdt->mdt_squash_sem);
+	up_write(&mdt->mdt_squash_sem);
         RETURN(count);
 
  failed:

@@ -221,11 +221,11 @@ static int changelog_user_init_cb(const struct lu_env *env,
                " in log "LPX64"\n", hdr->lrh_index, rec->cur_hdr.lrh_index,
                rec->cur_id, rec->cur_endrec, llh->lgh_id.lgl_oid);
 
-        cfs_spin_lock(&mdd->mdd_cl.mc_user_lock);
-        mdd->mdd_cl.mc_lastuser = rec->cur_id;
-        cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	spin_lock(&mdd->mdd_cl.mc_user_lock);
+	mdd->mdd_cl.mc_lastuser = rec->cur_id;
+	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
-        return LLOG_PROC_BREAK;
+	return LLOG_PROC_BREAK;
 }
 
 static int llog_changelog_cancel_cb(const struct lu_env *env,
@@ -397,11 +397,11 @@ static int mdd_changelog_init(const struct lu_env *env, struct mdd_device *mdd)
 	int			 rc;
 
 	mdd->mdd_cl.mc_index = 0;
-	cfs_spin_lock_init(&mdd->mdd_cl.mc_lock);
+	spin_lock_init(&mdd->mdd_cl.mc_lock);
 	mdd->mdd_cl.mc_starttime = cfs_time_current_64();
 	mdd->mdd_cl.mc_flags = 0; /* off by default */
 	mdd->mdd_cl.mc_mask = CHANGELOG_DEFMASK;
-	cfs_spin_lock_init(&mdd->mdd_cl.mc_user_lock);
+	spin_lock_init(&mdd->mdd_cl.mc_user_lock);
 	mdd->mdd_cl.mc_lastuser = 0;
 
 	rc = mdd_changelog_llog_init(env, mdd);
@@ -450,19 +450,19 @@ int mdd_changelog_on(const struct lu_env *env, struct mdd_device *mdd, int on)
                                mdd2obd_dev(mdd)->obd_name);
                         rc = -ESRCH;
                 } else {
-                        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
-                        mdd->mdd_cl.mc_flags |= CLM_ON;
-                        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
+			spin_lock(&mdd->mdd_cl.mc_lock);
+			mdd->mdd_cl.mc_flags |= CLM_ON;
+			spin_unlock(&mdd->mdd_cl.mc_lock);
 			rc = mdd_changelog_write_header(env, mdd, CLM_START);
-                }
-        } else if ((on == 0) && ((mdd->mdd_cl.mc_flags & CLM_ON) == CLM_ON)) {
-                LCONSOLE_INFO("%s: changelog off\n",mdd2obd_dev(mdd)->obd_name);
+		}
+	} else if ((on == 0) && ((mdd->mdd_cl.mc_flags & CLM_ON) == CLM_ON)) {
+		LCONSOLE_INFO("%s: changelog off\n",mdd2obd_dev(mdd)->obd_name);
 		rc = mdd_changelog_write_header(env, mdd, CLM_FINI);
-                cfs_spin_lock(&mdd->mdd_cl.mc_lock);
-                mdd->mdd_cl.mc_flags &= ~CLM_ON;
-                cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
-        }
-        return rc;
+		spin_lock(&mdd->mdd_cl.mc_lock);
+		mdd->mdd_cl.mc_flags &= ~CLM_ON;
+		spin_unlock(&mdd->mdd_cl.mc_lock);
+	}
+	return rc;
 }
 
 /** Remove entries with indicies up to and including \a endrec from the
@@ -483,9 +483,9 @@ int mdd_changelog_llog_cancel(const struct lu_env *env,
         if (ctxt == NULL)
                 return -ENXIO;
 
-        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
-        cur = (long long)mdd->mdd_cl.mc_index;
-        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
+	spin_lock(&mdd->mdd_cl.mc_lock);
+	cur = (long long)mdd->mdd_cl.mc_index;
+	spin_unlock(&mdd->mdd_cl.mc_lock);
         if (endrec > cur)
                 endrec = cur;
 
@@ -553,9 +553,9 @@ int mdd_changelog_write_header(const struct lu_env *env,
 	rec->cr_hdr.lrh_len = llog_data_len(sizeof(*rec) + rec->cr.cr_namelen);
 	rec->cr_hdr.lrh_type = CHANGELOG_REC;
 	rec->cr.cr_time = cl_time();
-	cfs_spin_lock(&mdd->mdd_cl.mc_lock);
+	spin_lock(&mdd->mdd_cl.mc_lock);
 	rec->cr.cr_index = ++mdd->mdd_cl.mc_index;
-	cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
+	spin_unlock(&mdd->mdd_cl.mc_lock);
 
 	ctxt = llog_get_context(obd, LLOG_CHANGELOG_ORIG_CTXT);
 	LASSERT(ctxt);
@@ -1459,15 +1459,15 @@ static int mdd_changelog_user_register(const struct lu_env *env,
 
         rec->cur_hdr.lrh_len = sizeof(*rec);
         rec->cur_hdr.lrh_type = CHANGELOG_USER_REC;
-        cfs_spin_lock(&mdd->mdd_cl.mc_user_lock);
-        if (mdd->mdd_cl.mc_lastuser == (unsigned int)(-1)) {
-                cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
-                CERROR("Maximum number of changelog users exceeded!\n");
-                GOTO(out, rc = -EOVERFLOW);
-        }
-        *id = rec->cur_id = ++mdd->mdd_cl.mc_lastuser;
-        rec->cur_endrec = mdd->mdd_cl.mc_index;
-        cfs_spin_unlock(&mdd->mdd_cl.mc_user_lock);
+	spin_lock(&mdd->mdd_cl.mc_user_lock);
+	if (mdd->mdd_cl.mc_lastuser == (unsigned int)(-1)) {
+		spin_unlock(&mdd->mdd_cl.mc_user_lock);
+		CERROR("Maximum number of changelog users exceeded!\n");
+		GOTO(out, rc = -EOVERFLOW);
+	}
+	*id = rec->cur_id = ++mdd->mdd_cl.mc_lastuser;
+	rec->cur_endrec = mdd->mdd_cl.mc_index;
+	spin_unlock(&mdd->mdd_cl.mc_user_lock);
 
 	rc = llog_cat_add(env, ctxt->loc_handle, &rec->cur_hdr, NULL, NULL);
 
@@ -1568,9 +1568,9 @@ static int mdd_changelog_user_purge(const struct lu_env *env,
         data.mcud_minrec = 0;
         data.mcud_usercount = 0;
         data.mcud_endrec = endrec;
-        cfs_spin_lock(&mdd->mdd_cl.mc_lock);
-        endrec = mdd->mdd_cl.mc_index;
-        cfs_spin_unlock(&mdd->mdd_cl.mc_lock);
+	spin_lock(&mdd->mdd_cl.mc_lock);
+	endrec = mdd->mdd_cl.mc_index;
+	spin_unlock(&mdd->mdd_cl.mc_lock);
         if ((data.mcud_endrec == 0) ||
             ((data.mcud_endrec > endrec) &&
              (data.mcud_endrec != MCUD_UNREGISTER)))

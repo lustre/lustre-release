@@ -422,29 +422,29 @@ static struct ll_readahead_state *ll_ras_get(struct file *f)
 
 void ll_ra_read_in(struct file *f, struct ll_ra_read *rar)
 {
-        struct ll_readahead_state *ras;
+	struct ll_readahead_state *ras;
 
-        ras = ll_ras_get(f);
+	ras = ll_ras_get(f);
 
-        cfs_spin_lock(&ras->ras_lock);
-        ras->ras_requests++;
-        ras->ras_request_index = 0;
-        ras->ras_consecutive_requests++;
-        rar->lrr_reader = current;
+	spin_lock(&ras->ras_lock);
+	ras->ras_requests++;
+	ras->ras_request_index = 0;
+	ras->ras_consecutive_requests++;
+	rar->lrr_reader = current;
 
-        cfs_list_add(&rar->lrr_linkage, &ras->ras_read_beads);
-        cfs_spin_unlock(&ras->ras_lock);
+	cfs_list_add(&rar->lrr_linkage, &ras->ras_read_beads);
+	spin_unlock(&ras->ras_lock);
 }
 
 void ll_ra_read_ex(struct file *f, struct ll_ra_read *rar)
 {
-        struct ll_readahead_state *ras;
+	struct ll_readahead_state *ras;
 
-        ras = ll_ras_get(f);
+	ras = ll_ras_get(f);
 
-        cfs_spin_lock(&ras->ras_lock);
-        cfs_list_del_init(&rar->lrr_linkage);
-        cfs_spin_unlock(&ras->ras_lock);
+	spin_lock(&ras->ras_lock);
+	cfs_list_del_init(&rar->lrr_linkage);
+	spin_unlock(&ras->ras_lock);
 }
 
 static struct ll_ra_read *ll_ra_read_get_locked(struct ll_readahead_state *ras)
@@ -460,15 +460,15 @@ static struct ll_ra_read *ll_ra_read_get_locked(struct ll_readahead_state *ras)
 
 struct ll_ra_read *ll_ra_read_get(struct file *f)
 {
-        struct ll_readahead_state *ras;
-        struct ll_ra_read         *bead;
+	struct ll_readahead_state *ras;
+	struct ll_ra_read         *bead;
 
-        ras = ll_ras_get(f);
+	ras = ll_ras_get(f);
 
-        cfs_spin_lock(&ras->ras_lock);
-        bead = ll_ra_read_get_locked(ras);
-        cfs_spin_unlock(&ras->ras_lock);
-        return bead;
+	spin_lock(&ras->ras_lock);
+	bead = ll_ra_read_get_locked(ras);
+	spin_unlock(&ras->ras_lock);
+	return bead;
 }
 
 static int cl_read_ahead_page(const struct lu_env *env, struct cl_io *io,
@@ -742,7 +742,7 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
                 RETURN(0);
         }
 
-        cfs_spin_lock(&ras->ras_lock);
+	spin_lock(&ras->ras_lock);
         if (vio->cui_ra_window_set)
                 bead = &vio->cui_bead;
         else
@@ -793,7 +793,7 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
                 ria->ria_length = ras->ras_stride_length;
                 ria->ria_pages = ras->ras_stride_pages;
         }
-        cfs_spin_unlock(&ras->ras_lock);
+	spin_unlock(&ras->ras_lock);
 
         if (end == 0) {
                 ll_ra_stats_inc(mapping, RA_STAT_ZERO_WINDOW);
@@ -829,18 +829,18 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
         CDEBUG(D_READA, "ra_end %lu end %lu stride end %lu \n",
                ra_end, end, ria->ria_end);
 
-        if (ra_end != end + 1) {
-                cfs_spin_lock(&ras->ras_lock);
-                if (ra_end < ras->ras_next_readahead &&
-                    index_in_window(ra_end, ras->ras_window_start, 0,
-                                    ras->ras_window_len)) {
-                        ras->ras_next_readahead = ra_end;
-                               RAS_CDEBUG(ras);
-                }
-                cfs_spin_unlock(&ras->ras_lock);
-        }
+	if (ra_end != end + 1) {
+		spin_lock(&ras->ras_lock);
+		if (ra_end < ras->ras_next_readahead &&
+		    index_in_window(ra_end, ras->ras_window_start, 0,
+				    ras->ras_window_len)) {
+			ras->ras_next_readahead = ra_end;
+			RAS_CDEBUG(ras);
+		}
+		spin_unlock(&ras->ras_lock);
+	}
 
-        RETURN(ret);
+	RETURN(ret);
 }
 
 static void ras_set_start(struct ll_readahead_state *ras, unsigned long index)
@@ -872,10 +872,10 @@ static void ras_stride_reset(struct ll_readahead_state *ras)
 
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
 {
-        cfs_spin_lock_init(&ras->ras_lock);
-        ras_reset(ras, 0);
-        ras->ras_requests = 0;
-        CFS_INIT_LIST_HEAD(&ras->ras_read_beads);
+	spin_lock_init(&ras->ras_lock);
+	ras_reset(ras, 0);
+	ras->ras_requests = 0;
+	CFS_INIT_LIST_HEAD(&ras->ras_read_beads);
 }
 
 /*
@@ -990,14 +990,14 @@ static void ras_increase_window(struct ll_readahead_state *ras,
 }
 
 void ras_update(struct ll_sb_info *sbi, struct inode *inode,
-                struct ll_readahead_state *ras, unsigned long index,
-                unsigned hit)
+		struct ll_readahead_state *ras, unsigned long index,
+		unsigned hit)
 {
-        struct ll_ra_info *ra = &sbi->ll_ra_info;
-        int zero = 0, stride_detect = 0, ra_miss = 0;
-        ENTRY;
+	struct ll_ra_info *ra = &sbi->ll_ra_info;
+	int zero = 0, stride_detect = 0, ra_miss = 0;
+	ENTRY;
 
-        cfs_spin_lock(&ras->ras_lock);
+	spin_lock(&ras->ras_lock);
 
         ll_ra_stats_inc_sbi(sbi, hit ? RA_STAT_HIT : RA_STAT_MISS);
 
@@ -1134,10 +1134,10 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                 ras_increase_window(ras, ra, inode);
         EXIT;
 out_unlock:
-        RAS_CDEBUG(ras);
-        ras->ras_request_index++;
-        cfs_spin_unlock(&ras->ras_lock);
-        return;
+	RAS_CDEBUG(ras);
+	ras->ras_request_index++;
+	spin_unlock(&ras->ras_lock);
+	return;
 }
 
 int ll_writepage(struct page *vmpage, struct writeback_control *wbc)

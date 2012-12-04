@@ -51,7 +51,7 @@
 #include "cl_internal.h"
 
 /** Lock class of cl_lock::cll_guard */
-static cfs_lock_class_key_t cl_lock_guard_class;
+static struct lock_class_key cl_lock_guard_class;
 static cfs_mem_cache_t *cl_lock_kmem;
 
 static struct lu_kmem_descr cl_lock_caches[] = {
@@ -142,7 +142,7 @@ static void cl_lock_trace0(int level, const struct lu_env *env,
 #define RETIP ((unsigned long)__builtin_return_address(0))
 
 #ifdef CONFIG_LOCKDEP
-static cfs_lock_class_key_t cl_lock_key;
+static struct lock_class_key cl_lock_key;
 
 static void cl_lock_lockdep_init(struct cl_lock *lock)
 {
@@ -275,7 +275,7 @@ static void cl_lock_free(const struct lu_env *env, struct cl_lock *lock)
         cl_object_put(env, obj);
         lu_ref_fini(&lock->cll_reference);
         lu_ref_fini(&lock->cll_holders);
-        cfs_mutex_destroy(&lock->cll_guard);
+	mutex_destroy(&lock->cll_guard);
         OBD_SLAB_FREE_PTR(lock, cl_lock_kmem);
         EXIT;
 }
@@ -389,8 +389,8 @@ static struct cl_lock *cl_lock_alloc(const struct lu_env *env,
                 CFS_INIT_LIST_HEAD(&lock->cll_inclosure);
                 lu_ref_init(&lock->cll_reference);
                 lu_ref_init(&lock->cll_holders);
-                cfs_mutex_init(&lock->cll_guard);
-                cfs_lockdep_set_class(&lock->cll_guard, &cl_lock_guard_class);
+		mutex_init(&lock->cll_guard);
+		lockdep_set_class(&lock->cll_guard, &cl_lock_guard_class);
                 cfs_waitq_init(&lock->cll_wq);
                 head = obj->co_lu.lo_header;
                 cfs_atomic_inc(&site->cs_locks_state[CLS_NEW]);
@@ -546,24 +546,24 @@ static struct cl_lock *cl_lock_find(const struct lu_env *env,
         head = cl_object_header(obj);
         site = cl_object_site(obj);
 
-        cfs_spin_lock(&head->coh_lock_guard);
-        lock = cl_lock_lookup(env, obj, io, need);
-        cfs_spin_unlock(&head->coh_lock_guard);
+	spin_lock(&head->coh_lock_guard);
+	lock = cl_lock_lookup(env, obj, io, need);
+	spin_unlock(&head->coh_lock_guard);
 
-        if (lock == NULL) {
-                lock = cl_lock_alloc(env, obj, io, need);
-                if (!IS_ERR(lock)) {
-                        struct cl_lock *ghost;
+	if (lock == NULL) {
+		lock = cl_lock_alloc(env, obj, io, need);
+		if (!IS_ERR(lock)) {
+			struct cl_lock *ghost;
 
-                        cfs_spin_lock(&head->coh_lock_guard);
-                        ghost = cl_lock_lookup(env, obj, io, need);
-                        if (ghost == NULL) {
-                                cfs_list_add_tail(&lock->cll_linkage,
-                                                  &head->coh_locks);
-                                cfs_spin_unlock(&head->coh_lock_guard);
-                                cfs_atomic_inc(&site->cs_locks.cs_busy);
-                        } else {
-                                cfs_spin_unlock(&head->coh_lock_guard);
+			spin_lock(&head->coh_lock_guard);
+			ghost = cl_lock_lookup(env, obj, io, need);
+			if (ghost == NULL) {
+				cfs_list_add_tail(&lock->cll_linkage,
+						  &head->coh_locks);
+				spin_unlock(&head->coh_lock_guard);
+				cfs_atomic_inc(&site->cs_locks.cs_busy);
+			} else {
+				spin_unlock(&head->coh_lock_guard);
                                 /*
                                  * Other threads can acquire references to the
                                  * top-lock through its sub-locks. Hence, it
@@ -594,9 +594,9 @@ struct cl_lock *cl_lock_peek(const struct lu_env *env, const struct cl_io *io,
         head = cl_object_header(obj);
 
 	do {
-		cfs_spin_lock(&head->coh_lock_guard);
+		spin_lock(&head->coh_lock_guard);
 		lock = cl_lock_lookup(env, obj, io, need);
-		cfs_spin_unlock(&head->coh_lock_guard);
+		spin_unlock(&head->coh_lock_guard);
 		if (lock == NULL)
 			return NULL;
 
@@ -694,7 +694,7 @@ void cl_lock_mutex_get(const struct lu_env *env, struct cl_lock *lock)
                 info = cl_env_info(env);
                 for (i = 0; i < hdr->coh_nesting; ++i)
                         LASSERT(info->clt_counters[i].ctc_nr_locks_locked == 0);
-                cfs_mutex_lock_nested(&lock->cll_guard, hdr->coh_nesting);
+		mutex_lock_nested(&lock->cll_guard, hdr->coh_nesting);
                 lock->cll_guarder = cfs_current();
                 LINVRNT(lock->cll_depth == 0);
         }
@@ -724,7 +724,7 @@ int cl_lock_mutex_try(const struct lu_env *env, struct cl_lock *lock)
         if (lock->cll_guarder == cfs_current()) {
                 LINVRNT(lock->cll_depth > 0);
                 cl_lock_mutex_tail(env, lock);
-        } else if (cfs_mutex_trylock(&lock->cll_guard)) {
+	} else if (mutex_trylock(&lock->cll_guard)) {
                 LINVRNT(lock->cll_depth == 0);
                 lock->cll_guarder = cfs_current();
                 cl_lock_mutex_tail(env, lock);
@@ -758,7 +758,7 @@ void cl_lock_mutex_put(const struct lu_env *env, struct cl_lock *lock)
         counters->ctc_nr_locks_locked--;
         if (--lock->cll_depth == 0) {
                 lock->cll_guarder = NULL;
-                cfs_mutex_unlock(&lock->cll_guard);
+		mutex_unlock(&lock->cll_guard);
         }
 }
 EXPORT_SYMBOL(cl_lock_mutex_put);
@@ -826,9 +826,9 @@ static void cl_lock_delete0(const struct lu_env *env, struct cl_lock *lock)
 
                 head = cl_object_header(lock->cll_descr.cld_obj);
 
-                cfs_spin_lock(&head->coh_lock_guard);
-                cfs_list_del_init(&lock->cll_linkage);
-                cfs_spin_unlock(&head->coh_lock_guard);
+		spin_lock(&head->coh_lock_guard);
+		cfs_list_del_init(&lock->cll_linkage);
+		spin_unlock(&head->coh_lock_guard);
 
                 /*
                  * From now on, no new references to this lock can be acquired
@@ -1613,10 +1613,10 @@ int cl_lock_modify(const struct lu_env *env, struct cl_lock *lock,
          * now. If locks were indexed according to their extent and/or mode,
          * that index would have to be updated here.
          */
-        cfs_spin_lock(&hdr->coh_lock_guard);
-        lock->cll_descr = *desc;
-        cfs_spin_unlock(&hdr->coh_lock_guard);
-        RETURN(0);
+	spin_lock(&hdr->coh_lock_guard);
+	lock->cll_descr = *desc;
+	spin_unlock(&hdr->coh_lock_guard);
+	RETURN(0);
 }
 EXPORT_SYMBOL(cl_lock_modify);
 
@@ -1867,7 +1867,7 @@ struct cl_lock *cl_lock_at_pgoff(const struct lu_env *env,
 	need->cld_start = need->cld_end = index;
         need->cld_enq_flags = 0;
 
-        cfs_spin_lock(&head->coh_lock_guard);
+	spin_lock(&head->coh_lock_guard);
         /* It is fine to match any group lock since there could be only one
          * with a uniq gid and it conflicts with all other lock modes too */
         cfs_list_for_each_entry(scan, &head->coh_locks, cll_linkage) {
@@ -1890,8 +1890,8 @@ struct cl_lock *cl_lock_at_pgoff(const struct lu_env *env,
                         break;
                 }
         }
-        cfs_spin_unlock(&head->coh_lock_guard);
-        RETURN(lock);
+	spin_unlock(&head->coh_lock_guard);
+	RETURN(lock);
 }
 EXPORT_SYMBOL(cl_lock_at_pgoff);
 
@@ -2040,12 +2040,12 @@ void cl_locks_prune(const struct lu_env *env, struct cl_object *obj, int cancel)
         LASSERT(ergo(!cancel,
                      head->coh_tree.rnode == NULL && head->coh_pages == 0));
 
-        cfs_spin_lock(&head->coh_lock_guard);
-        while (!cfs_list_empty(&head->coh_locks)) {
-                lock = container_of(head->coh_locks.next,
-                                    struct cl_lock, cll_linkage);
-                cl_lock_get_trust(lock);
-                cfs_spin_unlock(&head->coh_lock_guard);
+	spin_lock(&head->coh_lock_guard);
+	while (!cfs_list_empty(&head->coh_locks)) {
+		lock = container_of(head->coh_locks.next,
+				    struct cl_lock, cll_linkage);
+		cl_lock_get_trust(lock);
+		spin_unlock(&head->coh_lock_guard);
                 lu_ref_add(&lock->cll_reference, "prune", cfs_current());
 
 again:
@@ -2069,10 +2069,10 @@ again:
                 cl_lock_mutex_put(env, lock);
                 lu_ref_del(&lock->cll_reference, "prune", cfs_current());
                 cl_lock_put(env, lock);
-                cfs_spin_lock(&head->coh_lock_guard);
-        }
-        cfs_spin_unlock(&head->coh_lock_guard);
-        EXIT;
+		spin_lock(&head->coh_lock_guard);
+	}
+	spin_unlock(&head->coh_lock_guard);
+	EXIT;
 }
 EXPORT_SYMBOL(cl_locks_prune);
 

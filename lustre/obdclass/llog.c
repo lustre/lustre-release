@@ -65,8 +65,8 @@ struct llog_handle *llog_alloc_handle(void)
 	if (loghandle == NULL)
 		return ERR_PTR(-ENOMEM);
 
-	cfs_init_rwsem(&loghandle->lgh_lock);
-	cfs_spin_lock_init(&loghandle->lgh_hdr_lock);
+	init_rwsem(&loghandle->lgh_lock);
+	spin_lock_init(&loghandle->lgh_hdr_lock);
 	CFS_INIT_LIST_HEAD(&loghandle->u.phd.phd_entry);
 
 	return loghandle;
@@ -109,19 +109,19 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
                 RETURN(-EINVAL);
         }
 
-	cfs_spin_lock(&loghandle->lgh_hdr_lock);
+	spin_lock(&loghandle->lgh_hdr_lock);
 	if (!ext2_clear_bit(index, llh->llh_bitmap)) {
-		cfs_spin_unlock(&loghandle->lgh_hdr_lock);
-                CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n", index);
-                RETURN(-ENOENT);
-        }
+		spin_unlock(&loghandle->lgh_hdr_lock);
+		CDEBUG(D_RPCTRACE, "Catalog index %u already clear?\n", index);
+		RETURN(-ENOENT);
+	}
 
-        llh->llh_count--;
+	llh->llh_count--;
 
-        if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
-            (llh->llh_count == 1) &&
-            (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
-		cfs_spin_unlock(&loghandle->lgh_hdr_lock);
+	if ((llh->llh_flags & LLOG_F_ZAP_WHEN_EMPTY) &&
+	    (llh->llh_count == 1) &&
+	    (loghandle->lgh_last_idx == (LLOG_BITMAP_BYTES * 8) - 1)) {
+		spin_unlock(&loghandle->lgh_hdr_lock);
 		rc = llog_destroy(env, loghandle);
 		if (rc < 0) {
 			CERROR("%s: can't destroy empty llog #"LPX64"#"LPX64
@@ -134,7 +134,7 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 		}
 		RETURN(1);
 	}
-	cfs_spin_unlock(&loghandle->lgh_hdr_lock);
+	spin_unlock(&loghandle->lgh_hdr_lock);
 
 	rc = llog_write(env, loghandle, &llh->llh_hdr, NULL, 0, NULL, 0);
 	if (rc < 0) {
@@ -148,10 +148,10 @@ int llog_cancel_rec(const struct lu_env *env, struct llog_handle *loghandle,
 	}
 	RETURN(0);
 out_err:
-	cfs_spin_lock(&loghandle->lgh_hdr_lock);
+	spin_lock(&loghandle->lgh_hdr_lock);
 	ext2_set_bit(index, llh->llh_bitmap);
 	llh->llh_count++;
-	cfs_spin_unlock(&loghandle->lgh_hdr_lock);
+	spin_unlock(&loghandle->lgh_hdr_lock);
 	return rc;
 }
 EXPORT_SYMBOL(llog_cancel_rec);
@@ -411,7 +411,7 @@ static int llog_process_thread_daemonize(void *arg)
 
 	lu_env_fini(&env);
 out:
-	cfs_complete(&lpi->lpi_completion);
+	complete(&lpi->lpi_completion);
 	return rc;
 }
 #endif
@@ -440,7 +440,7 @@ int llog_process_or_fork(const struct lu_env *env,
 		/* The new thread can't use parent env,
 		 * init the new one in llog_process_thread_daemonize. */
 		lpi->lpi_env = NULL;
-		cfs_init_completion(&lpi->lpi_completion);
+		init_completion(&lpi->lpi_completion);
 		rc = cfs_create_thread(llog_process_thread_daemonize, lpi,
 				       CFS_DAEMON_FLAGS);
 		if (rc < 0) {
@@ -449,7 +449,7 @@ int llog_process_or_fork(const struct lu_env *env,
 			OBD_FREE_PTR(lpi);
 			RETURN(rc);
 		}
-		cfs_wait_for_completion(&lpi->lpi_completion);
+		wait_for_completion(&lpi->lpi_completion);
 	} else {
 		lpi->lpi_env = env;
 		llog_process_thread(lpi);
@@ -864,17 +864,17 @@ int llog_write(const struct lu_env *env, struct llog_handle *loghandle,
 		if (rc)
 			GOTO(out_trans, rc);
 
-		cfs_down_write(&loghandle->lgh_lock);
+		down_write(&loghandle->lgh_lock);
 		rc = llog_write_rec(env, loghandle, rec, reccookie,
 				    cookiecount, buf, idx, th);
-		cfs_up_write(&loghandle->lgh_lock);
+		up_write(&loghandle->lgh_lock);
 out_trans:
 		dt_trans_stop(env, dt, th);
 	} else { /* lvfs compatibility */
-		cfs_down_write(&loghandle->lgh_lock);
+		down_write(&loghandle->lgh_lock);
 		rc = llog_write_rec(env, loghandle, rec, reccookie,
 				    cookiecount, buf, idx, NULL);
-		cfs_up_write(&loghandle->lgh_lock);
+		up_write(&loghandle->lgh_lock);
 	}
 	RETURN(rc);
 }

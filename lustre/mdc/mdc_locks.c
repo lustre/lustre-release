@@ -225,11 +225,11 @@ int mdc_find_cbdata(struct obd_export *exp,
 
 static inline void mdc_clear_replay_flag(struct ptlrpc_request *req, int rc)
 {
-        /* Don't hold error requests for replay. */
-        if (req->rq_replay) {
-                cfs_spin_lock(&req->rq_lock);
-                req->rq_replay = 0;
-                cfs_spin_unlock(&req->rq_lock);
+	/* Don't hold error requests for replay. */
+	if (req->rq_replay) {
+		spin_lock(&req->rq_lock);
+		req->rq_replay = 0;
+		spin_unlock(&req->rq_lock);
         }
         if (rc && req->rq_transno != 0) {
                 DEBUG_REQ(D_ERROR, req, "transno returned on error rc %d", rc);
@@ -330,9 +330,9 @@ static struct ptlrpc_request *mdc_intent_open_pack(struct obd_export *exp,
                 return NULL;
         }
 
-        cfs_spin_lock(&req->rq_lock);
-        req->rq_replay = req->rq_import->imp_replayable;
-        cfs_spin_unlock(&req->rq_lock);
+	spin_lock(&req->rq_lock);
+	req->rq_replay = req->rq_import->imp_replayable;
+	spin_unlock(&req->rq_lock);
 
         /* pack the intent */
         lit = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);

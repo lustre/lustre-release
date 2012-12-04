@@ -1049,7 +1049,7 @@ lnet_router_checker_start(void)
                 return 0;
 
 #ifdef __KERNEL__
-        cfs_sema_init(&the_lnet.ln_rc_signal, 0);
+	sema_init(&the_lnet.ln_rc_signal, 0);
         /* EQ size doesn't matter; the callback is guaranteed to get every
          * event */
 	eqsz = 0;
@@ -1070,7 +1070,7 @@ lnet_router_checker_start(void)
         if (rc < 0) {
                 CERROR("Can't start router checker thread: %d\n", rc);
                 /* block until event callback signals exit */
-                cfs_down(&the_lnet.ln_rc_signal);
+		down(&the_lnet.ln_rc_signal);
                 rc = LNetEQFree(the_lnet.ln_rc_eqh);
                 LASSERT (rc == 0);
                 the_lnet.ln_rc_state = LNET_RC_STATE_SHUTDOWN;
@@ -1101,7 +1101,7 @@ lnet_router_checker_stop (void)
 
 #ifdef __KERNEL__
 	/* block until event callback signals exit */
-	cfs_down(&the_lnet.ln_rc_signal);
+	down(&the_lnet.ln_rc_signal);
 #else
 	lnet_router_checker();
 #endif
@@ -1256,7 +1256,7 @@ rescan:
 	lnet_prune_rc_data(1); /* wait for UNLINK */
 
 	the_lnet.ln_rc_state = LNET_RC_STATE_SHUTDOWN;
-	cfs_up(&the_lnet.ln_rc_signal);
+	up(&the_lnet.ln_rc_signal);
 	/* The unlink event callback will signal final completion */
 	return 0;
 }

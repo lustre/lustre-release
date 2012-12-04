@@ -38,9 +38,9 @@
 
 extern cfs_atomic_t ldlm_srv_namespace_nr;
 extern cfs_atomic_t ldlm_cli_namespace_nr;
-extern cfs_mutex_t ldlm_srv_namespace_lock;
+extern struct mutex ldlm_srv_namespace_lock;
 extern cfs_list_t ldlm_srv_namespace_list;
-extern cfs_mutex_t ldlm_cli_namespace_lock;
+extern struct mutex ldlm_cli_namespace_lock;
 extern cfs_list_t ldlm_cli_namespace_list;
 
 static inline cfs_atomic_t *ldlm_namespace_nr(ldlm_side_t client)
@@ -55,7 +55,7 @@ static inline cfs_list_t *ldlm_namespace_list(ldlm_side_t client)
                 &ldlm_srv_namespace_list : &ldlm_cli_namespace_list;
 }
 
-static inline cfs_mutex_t *ldlm_namespace_lock(ldlm_side_t client)
+static inline struct mutex *ldlm_namespace_lock(ldlm_side_t client)
 {
         return client == LDLM_NAMESPACE_SERVER ?
                 &ldlm_srv_namespace_lock : &ldlm_cli_namespace_lock;
@@ -227,9 +227,9 @@ typedef enum ldlm_policy_res ldlm_policy_res_t;
                 struct ldlm_pool *pl = data;                                \
                 type tmp;                                                   \
                                                                             \
-                cfs_spin_lock(&pl->pl_lock);                                \
-                tmp = pl->pl_##var;                                         \
-                cfs_spin_unlock(&pl->pl_lock);                              \
+		spin_lock(&pl->pl_lock);				    \
+		tmp = pl->pl_##var;					    \
+		spin_unlock(&pl->pl_lock);				    \
                                                                             \
                 return lprocfs_rd_uint(page, start, off, count, eof, &tmp); \
         }                                                                   \
@@ -249,9 +249,9 @@ typedef enum ldlm_policy_res ldlm_policy_res_t;
                         return rc;                                          \
                 }                                                           \
                                                                             \
-                cfs_spin_lock(&pl->pl_lock);                                \
-                pl->pl_##var = tmp;                                         \
-                cfs_spin_unlock(&pl->pl_lock);                              \
+		spin_lock(&pl->pl_lock);				    \
+		pl->pl_##var = tmp;					    \
+		spin_unlock(&pl->pl_lock);				    \
                                                                             \
                 return rc;                                                  \
         }                                                                   \

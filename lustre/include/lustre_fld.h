@@ -92,7 +92,7 @@ struct lu_server_fld {
 
         /**
          * Protect index modifications */
-        cfs_mutex_t              lsf_lock;
+	struct mutex		lsf_lock;
 
         /**
          * Fld service name in form "fld-srv-lustre-MDTXXX" */
@@ -123,7 +123,7 @@ struct lu_client_fld {
 
         /**
          * Lock protecting exports list and fld_hash. */
-        cfs_spinlock_t           lcf_lock;
+	spinlock_t		 lcf_lock;
 
         /**
          * Client FLD cache. */

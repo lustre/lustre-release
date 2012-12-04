@@ -62,32 +62,32 @@ cfs_bitmap_t *CFS_ALLOCATE_BITMAP(int size)
 static inline
 void cfs_bitmap_set(cfs_bitmap_t *bitmap, int nbit)
 {
-        cfs_set_bit(nbit, bitmap->data);
+	set_bit(nbit, bitmap->data);
 }
 
 static inline
 void cfs_bitmap_clear(cfs_bitmap_t *bitmap, int nbit)
 {
-        cfs_test_and_clear_bit(nbit, bitmap->data);
+	test_and_clear_bit(nbit, bitmap->data);
 }
 
 static inline
 int cfs_bitmap_check(cfs_bitmap_t *bitmap, int nbit)
 {
-        return cfs_test_bit(nbit, bitmap->data);
+	return test_bit(nbit, bitmap->data);
 }
 
 static inline
 int cfs_bitmap_test_and_clear(cfs_bitmap_t *bitmap, int nbit)
 {
-        return cfs_test_and_clear_bit(nbit, bitmap->data);
+	return test_and_clear_bit(nbit, bitmap->data);
 }
 
 /* return 0 is bitmap has none set bits */
 static inline
 int cfs_bitmap_check_empty(cfs_bitmap_t *bitmap)
 {
-        return cfs_find_first_bit(bitmap->data, bitmap->size) == bitmap->size;
+	return find_first_bit(bitmap->data, bitmap->size) == bitmap->size;
 }
 
 static inline
@@ -101,9 +101,9 @@ void cfs_bitmap_copy(cfs_bitmap_t *new, cfs_bitmap_t *old)
 	new->size = newsize;
 }
 
-#define cfs_foreach_bit(bitmap, pos) \
-	for((pos)=cfs_find_first_bit((bitmap)->data, bitmap->size);   \
-	    (pos) < (bitmap)->size;                               \
-	    (pos) = cfs_find_next_bit((bitmap)->data, (bitmap)->size, (pos)+1))
+#define cfs_foreach_bit(bitmap, pos)					\
+	for ((pos) = find_first_bit((bitmap)->data, bitmap->size);	\
+	     (pos) < (bitmap)->size;					\
+	     (pos) = find_next_bit((bitmap)->data, (bitmap)->size, (pos) + 1))
 
 #endif

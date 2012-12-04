@@ -482,12 +482,12 @@ struct iam_container {
         /*
          * read-write lock protecting index consistency.
          */
-        cfs_rw_semaphore_t   ic_sem;
+	struct rw_semaphore	ic_sem;
 	struct dynlock       ic_tree_lock;
 	/*
 	 * Protect ic_idle_bh
 	 */
-	cfs_semaphore_t      ic_idle_sem;
+	struct semaphore	ic_idle_sem;
 	/*
 	 * BH for idle blocks
 	 */
@@ -1042,9 +1042,9 @@ static inline void iam_lock_bh(struct buffer_head volatile *bh)
 {
         DX_DEVAL(iam_lock_stats.dls_bh_lock++);
 #ifdef CONFIG_SMP
-        while (cfs_test_and_set_bit(BH_DXLock, &bh->b_state)) {
-                DX_DEVAL(iam_lock_stats.dls_bh_busy++);
-                while (cfs_test_bit(BH_DXLock, &bh->b_state))
+	while (test_and_set_bit(BH_DXLock, &bh->b_state)) {
+		DX_DEVAL(iam_lock_stats.dls_bh_busy++);
+		while (test_bit(BH_DXLock, &bh->b_state))
                         cpu_relax();
         }
 #endif

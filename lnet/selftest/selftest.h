@@ -213,8 +213,8 @@ typedef struct srpc_server_rpc {
 
 /* client-side state of a RPC */
 typedef struct srpc_client_rpc {
-        cfs_list_t           crpc_list;   /* chain on user's lists */
-        cfs_spinlock_t       crpc_lock;   /* serialize */
+	cfs_list_t		crpc_list;	/* chain on user's lists */
+	spinlock_t		crpc_lock;	/* serialize */
         int                  crpc_service;
         cfs_atomic_t         crpc_refcount;
         int                  crpc_timeout; /* # seconds to wait for reply */
@@ -273,7 +273,7 @@ do {                                                                    \
 /* CPU partition data of srpc service */
 struct srpc_service_cd {
 	/** serialize */
-	cfs_spinlock_t		scd_lock;
+	spinlock_t		scd_lock;
 	/** backref to service */
 	struct srpc_service	*scd_svc;
 	/** event buffer */
@@ -382,8 +382,8 @@ typedef struct sfw_test_instance {
         int                     tsi_concur;          /* concurrency */
         int                     tsi_loop;            /* loop count */
 
-        /* status of test instance */
-        cfs_spinlock_t          tsi_lock;         /* serialize */
+	/* status of test instance */
+	spinlock_t		tsi_lock;	  /* serialize */
         int                     tsi_stopping:1;   /* test is stopping */
         cfs_atomic_t            tsi_nactive;      /* # of active test unit */
         cfs_list_t              tsi_units;        /* test units */
@@ -549,7 +549,7 @@ srpc_init_client_rpc (srpc_client_rpc_t *rpc, lnet_process_id_t peer,
         CFS_INIT_LIST_HEAD(&rpc->crpc_list);
 	swi_init_workitem(&rpc->crpc_wi, rpc, srpc_send_rpc,
 			  lst_sched_test[lnet_cpt_of_nid(peer.nid)]);
-        cfs_spin_lock_init(&rpc->crpc_lock);
+	spin_lock_init(&rpc->crpc_lock);
         cfs_atomic_set(&rpc->crpc_refcount, 1); /* 1 ref for caller */
 
         rpc->crpc_dest         = peer;
@@ -613,18 +613,18 @@ int selftest_wait_events(void);
 
 #endif
 
-#define lst_wait_until(cond, lock, fmt, ...)                            \
-do {                                                                    \
-        int __I = 2;                                                    \
-        while (!(cond)) {                                               \
-                CDEBUG(IS_PO2(++__I) ? D_WARNING : D_NET,               \
-                       fmt, ## __VA_ARGS__);                            \
-                cfs_spin_unlock(&(lock));                               \
-                                                                        \
-                selftest_wait_events();                                 \
-                                                                        \
-                cfs_spin_lock(&(lock));                                 \
-        }                                                               \
+#define lst_wait_until(cond, lock, fmt, ...)				\
+do {									\
+	int __I = 2;							\
+	while (!(cond)) {						\
+		CDEBUG(IS_PO2(++__I) ? D_WARNING : D_NET,		\
+		       fmt, ## __VA_ARGS__);				\
+		spin_unlock(&(lock));					\
+									\
+		selftest_wait_events();					\
+									\
+		spin_lock(&(lock));					\
+	}								\
 } while (0)
 
 static inline void

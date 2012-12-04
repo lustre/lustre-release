@@ -175,12 +175,12 @@ static int qsd_glb_blocking_ast(struct ldlm_lock *lock,
 
 		/* we are losing the global index lock, so let's mark the
 		 * global & slave indexes as not up-to-date any more */
-		cfs_write_lock(&qqi->qqi_qsd->qsd_lock);
+		write_lock(&qqi->qqi_qsd->qsd_lock);
 		qqi->qqi_glb_uptodate = false;
 		qqi->qqi_slv_uptodate = false;
 		if (lock->l_handle.h_cookie == qqi->qqi_lockh.cookie)
 			memset(&qqi->qqi_lockh, 0, sizeof(qqi->qqi_lockh));
-		cfs_write_unlock(&qqi->qqi_qsd->qsd_lock);
+		write_unlock(&qqi->qqi_qsd->qsd_lock);
 
 		CDEBUG(D_QUOTA, "%s: losing global index lock for %s type\n",
 		       qqi->qqi_qsd->qsd_svname, QTYPE_NAME((qqi->qqi_qtype)));

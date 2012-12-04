@@ -132,12 +132,12 @@ struct lloop_device {
 
         int                  old_gfp_mask;
 
-        cfs_spinlock_t       lo_lock;
-        struct bio          *lo_bio;
-        struct bio          *lo_biotail;
-        int                  lo_state;
-        cfs_semaphore_t      lo_sem;
-        cfs_mutex_t          lo_ctl_mutex;
+	spinlock_t		lo_lock;
+	struct bio		*lo_bio;
+	struct bio		*lo_biotail;
+	int			lo_state;
+	struct semaphore	lo_sem;
+	struct mutex		lo_ctl_mutex;
         cfs_atomic_t         lo_pending;
         cfs_waitq_t          lo_bh_wait;
 
@@ -166,7 +166,7 @@ static int lloop_major;
 static int max_loop = MAX_LOOP_DEFAULT;
 static struct lloop_device *loop_dev;
 static struct gendisk **disks;
-static cfs_mutex_t lloop_mutex;
+static struct mutex lloop_mutex;
 static void *ll_iocontrol_magic = NULL;
 
 static loff_t get_loop_size(struct lloop_device *lo, struct file *file)
@@ -274,19 +274,19 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
  */
 static void loop_add_bio(struct lloop_device *lo, struct bio *bio)
 {
-        unsigned long flags;
+	unsigned long flags;
 
-        cfs_spin_lock_irqsave(&lo->lo_lock, flags);
-        if (lo->lo_biotail) {
-                lo->lo_biotail->bi_next = bio;
-                lo->lo_biotail = bio;
-        } else
-                lo->lo_bio = lo->lo_biotail = bio;
-        cfs_spin_unlock_irqrestore(&lo->lo_lock, flags);
+	spin_lock_irqsave(&lo->lo_lock, flags);
+	if (lo->lo_biotail) {
+		lo->lo_biotail->bi_next = bio;
+		lo->lo_biotail = bio;
+	} else
+		lo->lo_bio = lo->lo_biotail = bio;
+	spin_unlock_irqrestore(&lo->lo_lock, flags);
 
-        cfs_atomic_inc(&lo->lo_pending);
-        if (cfs_waitq_active(&lo->lo_bh_wait))
-                cfs_waitq_signal(&lo->lo_bh_wait);
+	cfs_atomic_inc(&lo->lo_pending);
+	if (cfs_waitq_active(&lo->lo_bh_wait))
+		cfs_waitq_signal(&lo->lo_bh_wait);
 }
 
 /*
@@ -294,18 +294,18 @@ static void loop_add_bio(struct lloop_device *lo, struct bio *bio)
  */
 static unsigned int loop_get_bio(struct lloop_device *lo, struct bio **req)
 {
-        struct bio *first;
-        struct bio **bio;
-        unsigned int count = 0;
-        unsigned int page_count = 0;
-        int rw;
+	struct bio *first;
+	struct bio **bio;
+	unsigned int count = 0;
+	unsigned int page_count = 0;
+	int rw;
 
-        cfs_spin_lock_irq(&lo->lo_lock);
-        first = lo->lo_bio;
-        if (unlikely(first == NULL)) {
-                cfs_spin_unlock_irq(&lo->lo_lock);
-                return 0;
-        }
+	spin_lock_irq(&lo->lo_lock);
+	first = lo->lo_bio;
+	if (unlikely(first == NULL)) {
+		spin_unlock_irq(&lo->lo_lock);
+		return 0;
+	}
 
         /* TODO: need to split the bio, too bad. */
         LASSERT(first->bi_vcnt <= LLOOP_MAX_SEGMENTS);
@@ -334,8 +334,8 @@ static unsigned int loop_get_bio(struct lloop_device *lo, struct bio **req)
                 lo->lo_bio = NULL;
         }
         *req = first;
-        cfs_spin_unlock_irq(&lo->lo_lock);
-        return count;
+	spin_unlock_irq(&lo->lo_lock);
+	return count;
 }
 
 static ll_mrf_ret
@@ -351,9 +351,9 @@ loop_make_request(struct request_queue *q, struct bio *old_bio)
         CDEBUG(D_INFO, "submit bio sector %llu size %u\n",
                (unsigned long long)old_bio->bi_sector, old_bio->bi_size);
 
-        cfs_spin_lock_irq(&lo->lo_lock);
-        inactive = (lo->lo_state != LLOOP_BOUND);
-        cfs_spin_unlock_irq(&lo->lo_lock);
+	spin_lock_irq(&lo->lo_lock);
+	inactive = (lo->lo_state != LLOOP_BOUND);
+	spin_unlock_irq(&lo->lo_lock);
         if (inactive)
                 goto err;
 
@@ -438,15 +438,15 @@ static int loop_thread(void *data)
         /*
          * up sem, we are running
          */
-        cfs_up(&lo->lo_sem);
+	up(&lo->lo_sem);
 
-        for (;;) {
-                cfs_wait_event(lo->lo_bh_wait, loop_active(lo));
-                if (!cfs_atomic_read(&lo->lo_pending)) {
-                        int exiting = 0;
-                        cfs_spin_lock_irq(&lo->lo_lock);
-                        exiting = (lo->lo_state == LLOOP_RUNDOWN);
-                        cfs_spin_unlock_irq(&lo->lo_lock);
+	for (;;) {
+		cfs_wait_event(lo->lo_bh_wait, loop_active(lo));
+		if (!cfs_atomic_read(&lo->lo_pending)) {
+			int exiting = 0;
+			spin_lock_irq(&lo->lo_lock);
+			exiting = (lo->lo_state == LLOOP_RUNDOWN);
+			spin_unlock_irq(&lo->lo_lock);
                         if (exiting)
                                 break;
                 }
@@ -478,7 +478,7 @@ static int loop_thread(void *data)
         cl_env_put(env, &refcheck);
 
 out:
-        cfs_up(&lo->lo_sem);
+	up(&lo->lo_sem);
         return ret;
 }
 
@@ -555,7 +555,7 @@ static int loop_set_fd(struct lloop_device *lo, struct file *unused,
         set_blocksize(bdev, lo->lo_blocksize);
 
         cfs_create_thread(loop_thread, lo, CLONE_KERNEL);
-        cfs_down(&lo->lo_sem);
+	down(&lo->lo_sem);
         return 0;
 
  out:
@@ -579,12 +579,12 @@ static int loop_clr_fd(struct lloop_device *lo, struct block_device *bdev,
         if (filp == NULL)
                 return -EINVAL;
 
-        cfs_spin_lock_irq(&lo->lo_lock);
-        lo->lo_state = LLOOP_RUNDOWN;
-        cfs_spin_unlock_irq(&lo->lo_lock);
-        cfs_waitq_signal(&lo->lo_bh_wait);
+	spin_lock_irq(&lo->lo_lock);
+	lo->lo_state = LLOOP_RUNDOWN;
+	spin_unlock_irq(&lo->lo_lock);
+	cfs_waitq_signal(&lo->lo_bh_wait);
 
-        cfs_down(&lo->lo_sem);
+	down(&lo->lo_sem);
         lo->lo_backing_file = NULL;
         lo->ioctl = NULL;
         lo->lo_device = NULL;
@@ -612,9 +612,9 @@ static int lo_open(struct inode *inode, struct file *file)
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
 #endif
 
-        cfs_mutex_lock(&lo->lo_ctl_mutex);
+	mutex_lock(&lo->lo_ctl_mutex);
         lo->lo_refcnt++;
-        cfs_mutex_unlock(&lo->lo_ctl_mutex);
+	mutex_unlock(&lo->lo_ctl_mutex);
 
         return 0;
 }
@@ -629,9 +629,9 @@ static int lo_release(struct inode *inode, struct file *file)
         struct lloop_device *lo = inode->i_bdev->bd_disk->private_data;
 #endif
 
-        cfs_mutex_lock(&lo->lo_ctl_mutex);
+	mutex_lock(&lo->lo_ctl_mutex);
         --lo->lo_refcnt;
-        cfs_mutex_unlock(&lo->lo_ctl_mutex);
+	mutex_unlock(&lo->lo_ctl_mutex);
 
         return 0;
 }
@@ -653,7 +653,7 @@ static int lo_ioctl(struct inode *inode, struct file *unused,
         int err = 0;
 #endif
 
-        cfs_mutex_lock(&lloop_mutex);
+	mutex_lock(&lloop_mutex);
         switch (cmd) {
         case LL_IOC_LLOOP_DETACH: {
                 err = loop_clr_fd(lo, bdev, 2);
@@ -682,7 +682,7 @@ static int lo_ioctl(struct inode *inode, struct file *unused,
                 err = -EINVAL;
                 break;
         }
-        cfs_mutex_unlock(&lloop_mutex);
+	mutex_unlock(&lloop_mutex);
 
         return err;
 }
@@ -718,7 +718,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
 
         CWARN("Enter llop_ioctl\n");
 
-        cfs_mutex_lock(&lloop_mutex);
+	mutex_lock(&lloop_mutex);
         switch (cmd) {
         case LL_IOC_LLOOP_ATTACH: {
                 struct lloop_device *lo_free = NULL;
@@ -788,7 +788,7 @@ static enum llioc_iter lloop_ioctl(struct inode *unused, struct file *file,
         }
 
 out:
-        cfs_mutex_unlock(&lloop_mutex);
+	mutex_unlock(&lloop_mutex);
 out1:
         if (rcp)
                 *rcp = err;
@@ -834,7 +834,7 @@ static int __init lloop_init(void)
                         goto out_mem3;
         }
 
-        cfs_mutex_init(&lloop_mutex);
+	mutex_init(&lloop_mutex);
 
         for (i = 0; i < max_loop; i++) {
                 struct lloop_device *lo = &loop_dev[i];
@@ -844,11 +844,11 @@ static int __init lloop_init(void)
                 if (!lo->lo_queue)
                         goto out_mem4;
 
-                cfs_mutex_init(&lo->lo_ctl_mutex);
-                cfs_sema_init(&lo->lo_sem, 0);
-                cfs_waitq_init(&lo->lo_bh_wait);
-                lo->lo_number = i;
-                cfs_spin_lock_init(&lo->lo_lock);
+		mutex_init(&lo->lo_ctl_mutex);
+		sema_init(&lo->lo_sem, 0);
+		cfs_waitq_init(&lo->lo_bh_wait);
+		lo->lo_number = i;
+		spin_lock_init(&lo->lo_lock);
                 disk->major = lloop_major;
                 disk->first_minor = i;
                 disk->fops = &lo_fops;

@@ -68,7 +68,7 @@ extern struct address_space_operations_ext ll_aops;
 #endif
 
 #ifndef log2
-#define log2(n) cfs_ffz(~(n))
+#define log2(n) ffz(~(n))
 #endif
 
 static struct ll_sb_info *ll_init_sbi(void)
@@ -85,10 +85,10 @@ static struct ll_sb_info *ll_init_sbi(void)
         if (!sbi)
                 RETURN(NULL);
 
-        cfs_spin_lock_init(&sbi->ll_lock);
-        cfs_mutex_init(&sbi->ll_lco.lco_lock);
-        cfs_spin_lock_init(&sbi->ll_pp_extent_lock);
-        cfs_spin_lock_init(&sbi->ll_process_lock);
+	spin_lock_init(&sbi->ll_lock);
+	mutex_init(&sbi->ll_lco.lco_lock);
+	spin_lock_init(&sbi->ll_pp_extent_lock);
+	spin_lock_init(&sbi->ll_process_lock);
         sbi->ll_rw_stats_on = 0;
 
         si_meminfo(&si);
@@ -107,7 +107,7 @@ static struct ll_sb_info *ll_init_sbi(void)
 	cfs_atomic_set(&sbi->ll_cache.ccc_users, 0);
 	sbi->ll_cache.ccc_lru_max = lru_page_max;
 	cfs_atomic_set(&sbi->ll_cache.ccc_lru_left, lru_page_max);
-	cfs_spin_lock_init(&sbi->ll_cache.ccc_lru_lock);
+	spin_lock_init(&sbi->ll_cache.ccc_lru_lock);
 	CFS_INIT_LIST_HEAD(&sbi->ll_cache.ccc_lru);
 
         sbi->ll_ra_info.ra_max_pages_per_file = min(pages / 32,
@@ -122,9 +122,9 @@ static struct ll_sb_info *ll_init_sbi(void)
         class_uuid_unparse(uuid, &sbi->ll_sb_uuid);
         CDEBUG(D_CONFIG, "generated uuid: %s\n", sbi->ll_sb_uuid.uuid);
 
-        cfs_spin_lock(&ll_sb_lock);
-        cfs_list_add_tail(&sbi->ll_list, &ll_super_blocks);
-        cfs_spin_unlock(&ll_sb_lock);
+	spin_lock(&ll_sb_lock);
+	cfs_list_add_tail(&sbi->ll_list, &ll_super_blocks);
+	spin_unlock(&ll_sb_lock);
 
         sbi->ll_flags |= LL_SBI_VERBOSE;
 #ifdef ENABLE_CHECKSUM
@@ -136,10 +136,10 @@ static struct ll_sb_info *ll_init_sbi(void)
 #endif
 
         for (i = 0; i <= LL_PROCESS_HIST_MAX; i++) {
-                cfs_spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i]. \
-                                   pp_r_hist.oh_lock);
-                cfs_spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i]. \
-                                   pp_w_hist.oh_lock);
+		spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].
+			       pp_r_hist.oh_lock);
+		spin_lock_init(&sbi->ll_rw_extents_info.pp_extents[i].
+			       pp_w_hist.oh_lock);
         }
 
         /* metadata statahead is enabled by default */
@@ -154,16 +154,16 @@ static struct ll_sb_info *ll_init_sbi(void)
 
 void ll_free_sbi(struct super_block *sb)
 {
-        struct ll_sb_info *sbi = ll_s2sbi(sb);
-        ENTRY;
+	struct ll_sb_info *sbi = ll_s2sbi(sb);
+	ENTRY;
 
-        if (sbi != NULL) {
-                cfs_spin_lock(&ll_sb_lock);
-                cfs_list_del(&sbi->ll_list);
-                cfs_spin_unlock(&ll_sb_lock);
-                OBD_FREE(sbi, sizeof(*sbi));
-        }
-        EXIT;
+	if (sbi != NULL) {
+		spin_lock(&ll_sb_lock);
+		cfs_list_del(&sbi->ll_list);
+		spin_unlock(&ll_sb_lock);
+		OBD_FREE(sbi, sizeof(*sbi));
+	}
+	EXIT;
 }
 
 static struct dentry_operations ll_d_root_ops = {
@@ -456,11 +456,11 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 GOTO(out_dt, err);
         }
 
-        cfs_mutex_lock(&sbi->ll_lco.lco_lock);
+	mutex_lock(&sbi->ll_lco.lco_lock);
         sbi->ll_lco.lco_flags = data->ocd_connect_flags;
         sbi->ll_lco.lco_md_exp = sbi->ll_md_exp;
         sbi->ll_lco.lco_dt_exp = sbi->ll_dt_exp;
-        cfs_mutex_unlock(&sbi->ll_lco.lco_lock);
+	mutex_unlock(&sbi->ll_lco.lco_lock);
 
         fid_zero(&sbi->ll_root_fid);
         err = md_getstatus(sbi->ll_md_exp, &sbi->ll_root_fid, &oc);
@@ -887,14 +887,14 @@ next:
 
 void ll_lli_init(struct ll_inode_info *lli)
 {
-        lli->lli_inode_magic = LLI_INODE_MAGIC;
-        lli->lli_flags = 0;
-        lli->lli_ioepoch = 0;
-        lli->lli_maxbytes = MAX_LFS_FILESIZE;
-        cfs_spin_lock_init(&lli->lli_lock);
-        lli->lli_posix_acl = NULL;
-        lli->lli_remote_perms = NULL;
-        cfs_mutex_init(&lli->lli_rmtperm_mutex);
+	lli->lli_inode_magic = LLI_INODE_MAGIC;
+	lli->lli_flags = 0;
+	lli->lli_ioepoch = 0;
+	lli->lli_maxbytes = MAX_LFS_FILESIZE;
+	spin_lock_init(&lli->lli_lock);
+	lli->lli_posix_acl = NULL;
+	lli->lli_remote_perms = NULL;
+	mutex_init(&lli->lli_rmtperm_mutex);
         /* Do not set lli_fid, it has been initialized already. */
         fid_zero(&lli->lli_pfid);
         CFS_INIT_LIST_HEAD(&lli->lli_close_list);
@@ -909,32 +909,32 @@ void ll_lli_init(struct ll_inode_info *lli)
         lli->lli_open_fd_read_count = 0;
         lli->lli_open_fd_write_count = 0;
         lli->lli_open_fd_exec_count = 0;
-        cfs_mutex_init(&lli->lli_och_mutex);
-        cfs_spin_lock_init(&lli->lli_agl_lock);
+	mutex_init(&lli->lli_och_mutex);
+	spin_lock_init(&lli->lli_agl_lock);
 	lli->lli_has_smd = false;
-        lli->lli_clob = NULL;
+	lli->lli_clob = NULL;
 
-        LASSERT(lli->lli_vfs_inode.i_mode != 0);
-        if (S_ISDIR(lli->lli_vfs_inode.i_mode)) {
-                cfs_mutex_init(&lli->lli_readdir_mutex);
-                lli->lli_opendir_key = NULL;
-                lli->lli_sai = NULL;
-                lli->lli_def_acl = NULL;
-                cfs_spin_lock_init(&lli->lli_sa_lock);
-                lli->lli_opendir_pid = 0;
-        } else {
-                cfs_sema_init(&lli->lli_size_sem, 1);
-                lli->lli_size_sem_owner = NULL;
-                lli->lli_symlink_name = NULL;
-                cfs_init_rwsem(&lli->lli_trunc_sem);
-                cfs_mutex_init(&lli->lli_write_mutex);
-		cfs_init_rwsem(&lli->lli_glimpse_sem);
+	LASSERT(lli->lli_vfs_inode.i_mode != 0);
+	if (S_ISDIR(lli->lli_vfs_inode.i_mode)) {
+		mutex_init(&lli->lli_readdir_mutex);
+		lli->lli_opendir_key = NULL;
+		lli->lli_sai = NULL;
+		lli->lli_def_acl = NULL;
+		spin_lock_init(&lli->lli_sa_lock);
+		lli->lli_opendir_pid = 0;
+	} else {
+		sema_init(&lli->lli_size_sem, 1);
+		lli->lli_size_sem_owner = NULL;
+		lli->lli_symlink_name = NULL;
+		init_rwsem(&lli->lli_trunc_sem);
+		mutex_init(&lli->lli_write_mutex);
+		init_rwsem(&lli->lli_glimpse_sem);
 		lli->lli_glimpse_time = 0;
 		CFS_INIT_LIST_HEAD(&lli->lli_agl_list);
 		lli->lli_agl_index = 0;
 		lli->lli_async_rc = 0;
 	}
-	cfs_mutex_init(&lli->lli_layout_mutex);
+	mutex_init(&lli->lli_layout_mutex);
 }
 
 static inline int ll_bdi_register(struct backing_dev_info *bdi)
@@ -1465,7 +1465,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 		if (ia_valid & ATTR_SIZE)
 			inode_dio_write_done(inode);
 		mutex_unlock(&inode->i_mutex);
-		cfs_down_write(&lli->lli_trunc_sem);
+		down_write(&lli->lli_trunc_sem);
 		mutex_lock(&inode->i_mutex);
 		if (ia_valid & ATTR_SIZE)
 			inode_dio_wait(inode);
@@ -1520,7 +1520,7 @@ out:
                 ll_finish_md_op_data(op_data);
         }
         if (!S_ISDIR(inode->i_mode))
-                cfs_up_write(&lli->lli_trunc_sem);
+		up_write(&lli->lli_trunc_sem);
 
         ll_stats_ops_tally(ll_i2sbi(inode), (ia_valid & ATTR_SIZE) ?
                            LPROC_LL_TRUNC : LPROC_LL_SETATTR, 1);
@@ -1652,7 +1652,7 @@ void ll_inode_size_lock(struct inode *inode)
 
         lli = ll_i2info(inode);
         LASSERT(lli->lli_size_sem_owner != current);
-        cfs_down(&lli->lli_size_sem);
+	down(&lli->lli_size_sem);
         LASSERT(lli->lli_size_sem_owner == NULL);
         lli->lli_size_sem_owner = current;
 }
@@ -1664,7 +1664,7 @@ void ll_inode_size_unlock(struct inode *inode)
         lli = ll_i2info(inode);
         LASSERT(lli->lli_size_sem_owner == current);
         lli->lli_size_sem_owner = NULL;
-        cfs_up(&lli->lli_size_sem);
+	up(&lli->lli_size_sem);
 }
 
 void ll_update_inode(struct inode *inode, struct lustre_md *md)
@@ -1698,13 +1698,13 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
                         ll_update_remote_perm(inode, md->remote_perm);
         }
 #ifdef CONFIG_FS_POSIX_ACL
-        else if (body->valid & OBD_MD_FLACL) {
-                cfs_spin_lock(&lli->lli_lock);
-                if (lli->lli_posix_acl)
-                        posix_acl_release(lli->lli_posix_acl);
-                lli->lli_posix_acl = md->posix_acl;
-                cfs_spin_unlock(&lli->lli_lock);
-        }
+	else if (body->valid & OBD_MD_FLACL) {
+		spin_lock(&lli->lli_lock);
+		if (lli->lli_posix_acl)
+			posix_acl_release(lli->lli_posix_acl);
+		lli->lli_posix_acl = md->posix_acl;
+		spin_unlock(&lli->lli_lock);
+	}
 #endif
         inode->i_ino = cl_fid_build_ino(&body->fid1, 0);
         inode->i_generation = cl_fid_build_gen(&body->fid1);
@@ -2299,14 +2299,14 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
 	    !ll_i2info(i2)->lli_has_smd) {
 		struct ll_inode_info *lli = ll_i2info(i2);
 
-		cfs_spin_lock(&lli->lli_lock);
+		spin_lock(&lli->lli_lock);
 		if (likely(!lli->lli_has_smd && !fid_is_zero(&lli->lli_pfid)))
-                        op_data->op_fid1 = lli->lli_pfid;
-                cfs_spin_unlock(&lli->lli_lock);
-                /** We ignore parent's capability temporary. */
-        }
+			op_data->op_fid1 = lli->lli_pfid;
+		spin_unlock(&lli->lli_lock);
+		/** We ignore parent's capability temporary. */
+	}
 
-        return op_data;
+	return op_data;
 }
 
 void ll_finish_md_op_data(struct md_op_data *op_data)

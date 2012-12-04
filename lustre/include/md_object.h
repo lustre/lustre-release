@@ -390,7 +390,7 @@ enum md_upcall_event {
 struct md_upcall {
         /** this lock protects upcall using against its removal
          * read lock is for usage the upcall, write - for init/fini */
-        cfs_rw_semaphore_t      mu_upcall_sem;
+	struct rw_semaphore	mu_upcall_sem;
         /** device to call, upper layer normally */
         struct md_device       *mu_upcall_dev;
         /** upcall function */
@@ -406,39 +406,39 @@ struct md_device {
 
 static inline void md_upcall_init(struct md_device *m, void *upcl)
 {
-        cfs_init_rwsem(&m->md_upcall.mu_upcall_sem);
-        m->md_upcall.mu_upcall_dev = NULL;
-        m->md_upcall.mu_upcall = upcl;
+	init_rwsem(&m->md_upcall.mu_upcall_sem);
+	m->md_upcall.mu_upcall_dev = NULL;
+	m->md_upcall.mu_upcall = upcl;
 }
 
 static inline void md_upcall_dev_set(struct md_device *m, struct md_device *up)
 {
-        cfs_down_write(&m->md_upcall.mu_upcall_sem);
-        m->md_upcall.mu_upcall_dev = up;
-        cfs_up_write(&m->md_upcall.mu_upcall_sem);
+	down_write(&m->md_upcall.mu_upcall_sem);
+	m->md_upcall.mu_upcall_dev = up;
+	up_write(&m->md_upcall.mu_upcall_sem);
 }
 
 static inline void md_upcall_fini(struct md_device *m)
 {
-        cfs_down_write(&m->md_upcall.mu_upcall_sem);
-        m->md_upcall.mu_upcall_dev = NULL;
-        m->md_upcall.mu_upcall = NULL;
-        cfs_up_write(&m->md_upcall.mu_upcall_sem);
+	down_write(&m->md_upcall.mu_upcall_sem);
+	m->md_upcall.mu_upcall_dev = NULL;
+	m->md_upcall.mu_upcall = NULL;
+	up_write(&m->md_upcall.mu_upcall_sem);
 }
 
 static inline int md_do_upcall(const struct lu_env *env, struct md_device *m,
-                               enum md_upcall_event ev, void *data)
+				enum md_upcall_event ev, void *data)
 {
-        int rc = 0;
-        cfs_down_read(&m->md_upcall.mu_upcall_sem);
-        if (m->md_upcall.mu_upcall_dev != NULL &&
-            m->md_upcall.mu_upcall_dev->md_upcall.mu_upcall != NULL) {
-                rc = m->md_upcall.mu_upcall_dev->md_upcall.mu_upcall(env,
-                                              m->md_upcall.mu_upcall_dev,
-                                              ev, data);
-        }
-        cfs_up_read(&m->md_upcall.mu_upcall_sem);
-        return rc;
+	int rc = 0;
+	down_read(&m->md_upcall.mu_upcall_sem);
+	if (m->md_upcall.mu_upcall_dev != NULL &&
+	    m->md_upcall.mu_upcall_dev->md_upcall.mu_upcall != NULL) {
+		rc = m->md_upcall.mu_upcall_dev->md_upcall.mu_upcall(env,
+					      m->md_upcall.mu_upcall_dev,
+					      ev, data);
+	}
+	up_read(&m->md_upcall.mu_upcall_sem);
+	return rc;
 }
 
 struct md_object {

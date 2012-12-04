@@ -186,14 +186,14 @@ static void *pool_proc_next(struct seq_file *s, void *v, loff_t *pos)
 
         /* iterate to find a non empty entry */
         prev_idx = iter->idx;
-        cfs_down_read(&pool_tgt_rw_sem(iter->pool));
+	down_read(&pool_tgt_rw_sem(iter->pool));
         iter->idx++;
         if (iter->idx == pool_tgt_count(iter->pool)) {
                 iter->idx = prev_idx; /* we stay on the last entry */
-                cfs_up_read(&pool_tgt_rw_sem(iter->pool));
+		up_read(&pool_tgt_rw_sem(iter->pool));
                 return NULL;
         }
-        cfs_up_read(&pool_tgt_rw_sem(iter->pool));
+	up_read(&pool_tgt_rw_sem(iter->pool));
         (*pos)++;
         /* return != NULL to continue */
         return iter;
@@ -263,9 +263,9 @@ static int pool_proc_show(struct seq_file *s, void *v)
         LASSERT(iter->pool != NULL);
         LASSERT(iter->idx <= pool_tgt_count(iter->pool));
 
-        cfs_down_read(&pool_tgt_rw_sem(iter->pool));
+	down_read(&pool_tgt_rw_sem(iter->pool));
         tgt = pool_tgt(iter->pool, iter->idx);
-        cfs_up_read(&pool_tgt_rw_sem(iter->pool));
+	up_read(&pool_tgt_rw_sem(iter->pool));
         if (tgt)
                 seq_printf(s, "%s\n", obd_uuid2str(&(tgt->ltd_uuid)));
 
@@ -307,7 +307,7 @@ void lov_dump_pool(int level, struct pool_desc *pool)
 
         CDEBUG(level, "pool "LOV_POOLNAMEF" has %d members\n",
                pool->pool_name, pool->pool_obds.op_count);
-        cfs_down_read(&pool_tgt_rw_sem(pool));
+	down_read(&pool_tgt_rw_sem(pool));
 
         for (i = 0; i < pool_tgt_count(pool) ; i++) {
                 if (!pool_tgt(pool, i) || !(pool_tgt(pool, i))->ltd_exp)
@@ -317,7 +317,7 @@ void lov_dump_pool(int level, struct pool_desc *pool)
                        obd_uuid2str(&((pool_tgt(pool, i))->ltd_uuid)));
         }
 
-        cfs_up_read(&pool_tgt_rw_sem(pool));
+	up_read(&pool_tgt_rw_sem(pool));
         lov_pool_putref(pool);
 }
 
@@ -330,7 +330,7 @@ int lov_ost_pool_init(struct ost_pool *op, unsigned int count)
                 count = LOV_POOL_INIT_COUNT;
         op->op_array = NULL;
         op->op_count = 0;
-        cfs_init_rwsem(&op->op_rw_sem);
+	init_rwsem(&op->op_rw_sem);
         op->op_size = count;
         OBD_ALLOC(op->op_array, op->op_size * sizeof(op->op_array[0]));
         if (op->op_array == NULL) {
@@ -370,7 +370,7 @@ int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
         int rc = 0, i;
         ENTRY;
 
-        cfs_down_write(&op->op_rw_sem);
+	down_write(&op->op_rw_sem);
 
         rc = lov_ost_pool_extend(op, min_count);
         if (rc)
@@ -386,7 +386,7 @@ int lov_ost_pool_add(struct ost_pool *op, __u32 idx, unsigned int min_count)
         op->op_count++;
         EXIT;
 out:
-        cfs_up_write(&op->op_rw_sem);
+	up_write(&op->op_rw_sem);
         return rc;
 }
 
@@ -395,20 +395,20 @@ int lov_ost_pool_remove(struct ost_pool *op, __u32 idx)
         int i;
         ENTRY;
 
-        cfs_down_write(&op->op_rw_sem);
+	down_write(&op->op_rw_sem);
 
         for (i = 0; i < op->op_count; i++) {
                 if (op->op_array[i] == idx) {
                         memmove(&op->op_array[i], &op->op_array[i + 1],
                                 (op->op_count - i - 1) * sizeof(op->op_array[0]));
                         op->op_count--;
-                        cfs_up_write(&op->op_rw_sem);
+			up_write(&op->op_rw_sem);
                         EXIT;
                         return 0;
                 }
         }
 
-        cfs_up_write(&op->op_rw_sem);
+	up_write(&op->op_rw_sem);
         RETURN(-EINVAL);
 }
 
@@ -419,14 +419,14 @@ int lov_ost_pool_free(struct ost_pool *op)
         if (op->op_size == 0)
                 RETURN(0);
 
-        cfs_down_write(&op->op_rw_sem);
+	down_write(&op->op_rw_sem);
 
         OBD_FREE(op->op_array, op->op_size * sizeof(op->op_array[0]));
         op->op_array = NULL;
         op->op_count = 0;
         op->op_size = 0;
 
-        cfs_up_write(&op->op_rw_sem);
+	up_write(&op->op_rw_sem);
         RETURN(0);
 }
 
@@ -481,10 +481,10 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         CDEBUG(D_INFO, "pool %p - proc %p\n", new_pool, new_pool->pool_proc_entry);
 #endif
 
-        cfs_spin_lock(&obd->obd_dev_lock);
-        cfs_list_add_tail(&new_pool->pool_list, &lov->lov_pool_list);
-        lov->lov_pool_count++;
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_lock(&obd->obd_dev_lock);
+	cfs_list_add_tail(&new_pool->pool_list, &lov->lov_pool_list);
+	lov->lov_pool_count++;
+	spin_unlock(&obd->obd_dev_lock);
 
         /* add to find only when it fully ready  */
         rc = cfs_hash_add_unique(lov->lov_pools_hash_body, poolname,
@@ -498,10 +498,10 @@ int lov_pool_new(struct obd_device *obd, char *poolname)
         RETURN(0);
 
 out_err:
-        cfs_spin_lock(&obd->obd_dev_lock);
-        cfs_list_del_init(&new_pool->pool_list);
-        lov->lov_pool_count--;
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_lock(&obd->obd_dev_lock);
+	cfs_list_del_init(&new_pool->pool_list);
+	lov->lov_pool_count--;
+	spin_unlock(&obd->obd_dev_lock);
 
         lprocfs_remove(&new_pool->pool_proc_entry);
 
@@ -531,15 +531,15 @@ int lov_pool_del(struct obd_device *obd, char *poolname)
                 lov_pool_putref(pool);
         }
 
-        cfs_spin_lock(&obd->obd_dev_lock);
-        cfs_list_del_init(&pool->pool_list);
-        lov->lov_pool_count--;
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	spin_lock(&obd->obd_dev_lock);
+	cfs_list_del_init(&pool->pool_list);
+	lov->lov_pool_count--;
+	spin_unlock(&obd->obd_dev_lock);
 
-        /* release last reference */
-        lov_pool_putref(pool);
+	/* release last reference */
+	lov_pool_putref(pool);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 
@@ -647,7 +647,7 @@ int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool)
          */
         lov_pool_getref(pool);
 
-        cfs_down_read(&pool_tgt_rw_sem(pool));
+	down_read(&pool_tgt_rw_sem(pool));
 
         for (i = 0; i < pool_tgt_count(pool); i++) {
                 if (pool_tgt_array(pool)[i] == idx)
@@ -656,7 +656,7 @@ int lov_check_index_in_pool(__u32 idx, struct pool_desc *pool)
         rc = -ENOENT;
         EXIT;
 out:
-        cfs_up_read(&pool_tgt_rw_sem(pool));
+	up_read(&pool_tgt_rw_sem(pool));
 
         lov_pool_putref(pool);
         return rc;

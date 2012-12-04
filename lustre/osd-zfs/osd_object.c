@@ -124,12 +124,12 @@ osd_object_sa_dirty_add(struct osd_object *obj, struct osd_thandle *oh)
 	if (!cfs_list_empty(&obj->oo_sa_linkage))
 		return;
 
-	cfs_down(&oh->ot_sa_lock);
-	cfs_write_lock(&obj->oo_attr_lock);
+	down(&oh->ot_sa_lock);
+	write_lock(&obj->oo_attr_lock);
 	if (likely(cfs_list_empty(&obj->oo_sa_linkage)))
 		cfs_list_add(&obj->oo_sa_linkage, &oh->ot_sa_list);
-	cfs_write_unlock(&obj->oo_attr_lock);
-	cfs_up(&oh->ot_sa_lock);
+	write_unlock(&obj->oo_attr_lock);
+	up(&oh->ot_sa_lock);
 }
 
 /*
@@ -139,16 +139,16 @@ void osd_object_sa_dirty_rele(struct osd_thandle *oh)
 {
 	struct osd_object *obj;
 
-	cfs_down(&oh->ot_sa_lock);
+	down(&oh->ot_sa_lock);
 	while (!cfs_list_empty(&oh->ot_sa_list)) {
 		obj = cfs_list_entry(oh->ot_sa_list.next,
 				     struct osd_object, oo_sa_linkage);
 		sa_spill_rele(obj->oo_sa_hdl);
-		cfs_write_lock(&obj->oo_attr_lock);
+		write_lock(&obj->oo_attr_lock);
 		cfs_list_del_init(&obj->oo_sa_linkage);
-		cfs_write_unlock(&obj->oo_attr_lock);
+		write_unlock(&obj->oo_attr_lock);
 	}
-	cfs_up(&oh->ot_sa_lock);
+	up(&oh->ot_sa_lock);
 }
 
 /*
@@ -299,9 +299,9 @@ struct lu_object *osd_object_alloc(const struct lu_env *env,
 		mo->oo_dt.do_ops = &osd_obj_ops;
 		l->lo_ops = &osd_lu_obj_ops;
 		CFS_INIT_LIST_HEAD(&mo->oo_sa_linkage);
-		cfs_init_rwsem(&mo->oo_sem);
-		cfs_sema_init(&mo->oo_guard, 1);
-		cfs_rwlock_init(&mo->oo_attr_lock);
+		init_rwsem(&mo->oo_sem);
+		sema_init(&mo->oo_guard, 1);
+		rwlock_init(&mo->oo_attr_lock);
 		return l;
 	} else {
 		return NULL;
@@ -500,9 +500,9 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 int __osd_object_free(udmu_objset_t *uos, uint64_t oid, dmu_tx_t *tx)
 {
 	LASSERT(uos->objects != 0);
-	cfs_spin_lock(&uos->lock);
+	spin_lock(&uos->lock);
 	uos->objects--;
-	cfs_spin_unlock(&uos->lock);
+	spin_unlock(&uos->lock);
 
 	return -dmu_object_free(uos->os, oid, tx);
 }
@@ -668,7 +668,7 @@ static void osd_object_read_lock(const struct lu_env *env,
 
 	LASSERT(osd_invariant(obj));
 
-	cfs_down_read(&obj->oo_sem);
+	down_read(&obj->oo_sem);
 }
 
 static void osd_object_write_lock(const struct lu_env *env,
@@ -678,7 +678,7 @@ static void osd_object_write_lock(const struct lu_env *env,
 
 	LASSERT(osd_invariant(obj));
 
-	cfs_down_write(&obj->oo_sem);
+	down_write(&obj->oo_sem);
 }
 
 static void osd_object_read_unlock(const struct lu_env *env,
@@ -687,7 +687,7 @@ static void osd_object_read_unlock(const struct lu_env *env,
 	struct osd_object *obj = osd_dt_obj(dt);
 
 	LASSERT(osd_invariant(obj));
-	cfs_up_read(&obj->oo_sem);
+	up_read(&obj->oo_sem);
 }
 
 static void osd_object_write_unlock(const struct lu_env *env,
@@ -696,7 +696,7 @@ static void osd_object_write_unlock(const struct lu_env *env,
         struct osd_object *obj = osd_dt_obj(dt);
 
         LASSERT(osd_invariant(obj));
-        cfs_up_write(&obj->oo_sem);
+	up_write(&obj->oo_sem);
 }
 
 static int osd_object_write_locked(const struct lu_env *env,
@@ -707,9 +707,9 @@ static int osd_object_write_locked(const struct lu_env *env,
 
 	LASSERT(osd_invariant(obj));
 
-	if (cfs_down_write_trylock(&obj->oo_sem)) {
+	if (down_write_trylock(&obj->oo_sem)) {
 		rc = 0;
-		cfs_up_write(&obj->oo_sem);
+		up_write(&obj->oo_sem);
 	}
 	return rc;
 }
@@ -727,9 +727,9 @@ static int osd_attr_get(const struct lu_env *env,
 	LASSERT(osd_invariant(obj));
 	LASSERT(obj->oo_db);
 
-	cfs_read_lock(&obj->oo_attr_lock);
+	read_lock(&obj->oo_attr_lock);
 	*attr = obj->oo_attr;
-	cfs_read_unlock(&obj->oo_attr_lock);
+	read_unlock(&obj->oo_attr_lock);
 
 	/* with ZFS_DEBUG zrl_add_debug() called by DB_DNODE_ENTER()
 	 * from within sa_object_size() can block on a mutex, so
@@ -944,7 +944,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 				obj->oo_attr.la_gid, rc);
 	}
 
-	cfs_write_lock(&obj->oo_attr_lock);
+	write_lock(&obj->oo_attr_lock);
 	cnt = 0;
 	if (la->la_valid & LA_ATIME) {
 		osa->atime[0] = obj->oo_attr.la_atime = la->la_atime;
@@ -1000,7 +1000,7 @@ static int osd_attr_set(const struct lu_env *env, struct dt_object *dt,
 				 &osa->gid, 8);
 	}
 	obj->oo_attr.la_valid |= la->la_valid;
-	cfs_write_unlock(&obj->oo_attr_lock);
+	write_unlock(&obj->oo_attr_lock);
 
 	rc = osd_object_sa_bulk_update(obj, bulk, cnt, oh);
 
@@ -1182,9 +1182,9 @@ int __osd_object_create(const struct lu_env *env, udmu_objset_t *uos,
 	int	 rc;
 
 	LASSERT(tag);
-	cfs_spin_lock(&uos->lock);
+	spin_lock(&uos->lock);
 	uos->objects++;
-	cfs_spin_unlock(&uos->lock);
+	spin_unlock(&uos->lock);
 
 	/* Assert that the transaction has been assigned to a
 	   transaction group. */
@@ -1223,9 +1223,9 @@ int __osd_zap_create(const struct lu_env *env, udmu_objset_t *uos,
 
 	LASSERT(tag);
 
-	cfs_spin_lock(&uos->lock);
+	spin_lock(&uos->lock);
 	uos->objects++;
-	cfs_spin_unlock(&uos->lock);
+	spin_unlock(&uos->lock);
 
 	/* Assert that the transaction has been assigned to a
 	   transaction group. */
@@ -1415,7 +1415,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 	/* concurrent create declarations should not see
 	 * the object inconsistent (db, attr, etc).
 	 * in regular cases acquisition should be cheap */
-	cfs_down(&obj->oo_guard);
+	down(&obj->oo_guard);
 
 	LASSERT(osd_invariant(obj));
 	LASSERT(!dt_object_exists(dt));
@@ -1474,7 +1474,7 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 	}
 
 out:
-	cfs_up(&obj->oo_guard);
+	up(&obj->oo_guard);
 	RETURN(rc);
 }
 
@@ -1507,9 +1507,9 @@ static int osd_object_ref_add(const struct lu_env *env,
 
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 
-	cfs_write_lock(&obj->oo_attr_lock);
+	write_lock(&obj->oo_attr_lock);
 	nlink = ++obj->oo_attr.la_nlink;
-	cfs_write_unlock(&obj->oo_attr_lock);
+	write_unlock(&obj->oo_attr_lock);
 
 	rc = osd_object_sa_update(obj, SA_ZPL_LINKS(uos), &nlink, 8, oh);
 	return rc;
@@ -1545,9 +1545,9 @@ static int osd_object_ref_del(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(!lu_object_is_dying(dt->do_lu.lo_header));
 
-	cfs_write_lock(&obj->oo_attr_lock);
+	write_lock(&obj->oo_attr_lock);
 	nlink = --obj->oo_attr.la_nlink;
-	cfs_write_unlock(&obj->oo_attr_lock);
+	write_unlock(&obj->oo_attr_lock);
 
 	rc = osd_object_sa_update(obj, SA_ZPL_LINKS(uos), &nlink, 8, oh);
 	return rc;
@@ -1571,14 +1571,14 @@ static int capa_is_sane(const struct lu_env *env, struct osd_device *dev,
 		RETURN(rc);
 	}
 
-	cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
 	for (i = 0; i < 2; i++) {
 		if (keys[i].lk_keyid == capa->lc_keyid) {
 			oti->oti_capa_key = keys[i];
 			break;
 		}
 	}
-	cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 
 	if (i == 2) {
 		DEBUG_CAPA(D_ERROR, capa, "no matched capa key");
@@ -1674,9 +1674,9 @@ static struct obd_capa *osd_capa_get(const struct lu_env *env,
 		RETURN(oc);
 	}
 
-	cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
 	*key = dev->od_capa_keys[1];
-	cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 
 	capa->lc_keyid = key->lk_keyid;
 	capa->lc_expiry = cfs_time_current_sec() + dev->od_capa_timeout;

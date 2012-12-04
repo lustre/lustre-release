@@ -109,12 +109,12 @@ static struct rmtacl_ctl_entry *__rct_search(struct rmtacl_ctl_table *rct,
 
 struct rmtacl_ctl_entry *rct_search(struct rmtacl_ctl_table *rct, pid_t key)
 {
-        struct rmtacl_ctl_entry *rce;
+	struct rmtacl_ctl_entry *rce;
 
-        cfs_spin_lock(&rct->rct_lock);
-        rce = __rct_search(rct, key);
-        cfs_spin_unlock(&rct->rct_lock);
-        return rce;
+	spin_lock(&rct->rct_lock);
+	rce = __rct_search(rct, key);
+	spin_unlock(&rct->rct_lock);
+	return rce;
 }
 
 int rct_add(struct rmtacl_ctl_table *rct, pid_t key, int ops)
@@ -125,54 +125,54 @@ int rct_add(struct rmtacl_ctl_table *rct, pid_t key, int ops)
         if (rce == NULL)
                 return -ENOMEM;
 
-        cfs_spin_lock(&rct->rct_lock);
-        e = __rct_search(rct, key);
-        if (unlikely(e != NULL)) {
-                CWARN("Unexpected stale rmtacl_entry found: "
-                      "[key: %d] [ops: %d]\n", (int)key, ops);
-                rce_free(e);
-        }
-        cfs_list_add_tail(&rce->rce_list, &rct->rct_entries[rce_hashfunc(key)]);
-        cfs_spin_unlock(&rct->rct_lock);
+	spin_lock(&rct->rct_lock);
+	e = __rct_search(rct, key);
+	if (unlikely(e != NULL)) {
+		CWARN("Unexpected stale rmtacl_entry found: "
+		      "[key: %d] [ops: %d]\n", (int)key, ops);
+		rce_free(e);
+	}
+	cfs_list_add_tail(&rce->rce_list, &rct->rct_entries[rce_hashfunc(key)]);
+	spin_unlock(&rct->rct_lock);
 
-        return 0;
+	return 0;
 }
 
 int rct_del(struct rmtacl_ctl_table *rct, pid_t key)
 {
-        struct rmtacl_ctl_entry *rce;
+	struct rmtacl_ctl_entry *rce;
 
-        cfs_spin_lock(&rct->rct_lock);
-        rce = __rct_search(rct, key);
-        if (rce)
-                rce_free(rce);
-        cfs_spin_unlock(&rct->rct_lock);
+	spin_lock(&rct->rct_lock);
+	rce = __rct_search(rct, key);
+	if (rce)
+		rce_free(rce);
+	spin_unlock(&rct->rct_lock);
 
-        return rce ? 0 : -ENOENT;
+	return rce ? 0 : -ENOENT;
 }
 
 void rct_init(struct rmtacl_ctl_table *rct)
 {
-        int i;
+	int i;
 
-        cfs_spin_lock_init(&rct->rct_lock);
-        for (i = 0; i < RCE_HASHES; i++)
-                CFS_INIT_LIST_HEAD(&rct->rct_entries[i]);
+	spin_lock_init(&rct->rct_lock);
+	for (i = 0; i < RCE_HASHES; i++)
+		CFS_INIT_LIST_HEAD(&rct->rct_entries[i]);
 }
 
 void rct_fini(struct rmtacl_ctl_table *rct)
 {
-        struct rmtacl_ctl_entry *rce;
-        int i;
+	struct rmtacl_ctl_entry *rce;
+	int i;
 
-        cfs_spin_lock(&rct->rct_lock);
-        for (i = 0; i < RCE_HASHES; i++)
-                while (!cfs_list_empty(&rct->rct_entries[i])) {
-                        rce = cfs_list_entry(rct->rct_entries[i].next,
-                                             struct rmtacl_ctl_entry, rce_list);
-                        rce_free(rce);
-                }
-        cfs_spin_unlock(&rct->rct_lock);
+	spin_lock(&rct->rct_lock);
+	for (i = 0; i < RCE_HASHES; i++)
+		while (!cfs_list_empty(&rct->rct_entries[i])) {
+			rce = cfs_list_entry(rct->rct_entries[i].next,
+					     struct rmtacl_ctl_entry, rce_list);
+			rce_free(rce);
+		}
+	spin_unlock(&rct->rct_lock);
 }
 
 
@@ -227,25 +227,25 @@ static struct eacl_entry *__et_search_del(struct eacl_table *et, pid_t key,
 struct eacl_entry *et_search_del(struct eacl_table *et, pid_t key,
                                  struct lu_fid *fid, int type)
 {
-        struct eacl_entry *ee;
+	struct eacl_entry *ee;
 
-        cfs_spin_lock(&et->et_lock);
-        ee = __et_search_del(et, key, fid, type);
-        cfs_spin_unlock(&et->et_lock);
-        return ee;
+	spin_lock(&et->et_lock);
+	ee = __et_search_del(et, key, fid, type);
+	spin_unlock(&et->et_lock);
+	return ee;
 }
 
 void et_search_free(struct eacl_table *et, pid_t key)
 {
-        struct eacl_entry *ee, *next;
-        cfs_list_t *head = &et->et_entries[ee_hashfunc(key)];
+	struct eacl_entry *ee, *next;
+	cfs_list_t *head = &et->et_entries[ee_hashfunc(key)];
 
-        cfs_spin_lock(&et->et_lock);
-        cfs_list_for_each_entry_safe(ee, next, head, ee_list)
-                if (ee->ee_key == key)
-                        ee_free(ee);
+	spin_lock(&et->et_lock);
+	cfs_list_for_each_entry_safe(ee, next, head, ee_list)
+		if (ee->ee_key == key)
+			ee_free(ee);
 
-        cfs_spin_unlock(&et->et_lock);
+	spin_unlock(&et->et_lock);
 }
 
 int ee_add(struct eacl_table *et, pid_t key, struct lu_fid *fid, int type,
@@ -257,42 +257,42 @@ int ee_add(struct eacl_table *et, pid_t key, struct lu_fid *fid, int type,
         if (ee == NULL)
                 return -ENOMEM;
 
-        cfs_spin_lock(&et->et_lock);
-        e = __et_search_del(et, key, fid, type);
-        if (unlikely(e != NULL)) {
-                CWARN("Unexpected stale eacl_entry found: "
-                      "[key: %d] [fid: "DFID"] [type: %d]\n",
-                      (int)key, PFID(fid), type);
-                ee_free(e);
-        }
-        cfs_list_add_tail(&ee->ee_list, &et->et_entries[ee_hashfunc(key)]);
-        cfs_spin_unlock(&et->et_lock);
+	spin_lock(&et->et_lock);
+	e = __et_search_del(et, key, fid, type);
+	if (unlikely(e != NULL)) {
+		CWARN("Unexpected stale eacl_entry found: "
+		      "[key: %d] [fid: "DFID"] [type: %d]\n",
+		      (int)key, PFID(fid), type);
+		ee_free(e);
+	}
+	cfs_list_add_tail(&ee->ee_list, &et->et_entries[ee_hashfunc(key)]);
+	spin_unlock(&et->et_lock);
 
-        return 0;
+	return 0;
 }
 
 void et_init(struct eacl_table *et)
 {
-        int i;
+	int i;
 
-        cfs_spin_lock_init(&et->et_lock);
-        for (i = 0; i < EE_HASHES; i++)
-                CFS_INIT_LIST_HEAD(&et->et_entries[i]);
+	spin_lock_init(&et->et_lock);
+	for (i = 0; i < EE_HASHES; i++)
+		CFS_INIT_LIST_HEAD(&et->et_entries[i]);
 }
 
 void et_fini(struct eacl_table *et)
 {
-        struct eacl_entry *ee;
-        int i;
+	struct eacl_entry *ee;
+	int i;
 
-        cfs_spin_lock(&et->et_lock);
-        for (i = 0; i < EE_HASHES; i++)
-                while (!cfs_list_empty(&et->et_entries[i])) {
-                        ee = cfs_list_entry(et->et_entries[i].next,
-                                            struct eacl_entry, ee_list);
-                        ee_free(ee);
-                }
-        cfs_spin_unlock(&et->et_lock);
+	spin_lock(&et->et_lock);
+	for (i = 0; i < EE_HASHES; i++)
+		while (!cfs_list_empty(&et->et_entries[i])) {
+			ee = cfs_list_entry(et->et_entries[i].next,
+					    struct eacl_entry, ee_list);
+			ee_free(ee);
+		}
+	spin_unlock(&et->et_lock);
 }
 
 #endif

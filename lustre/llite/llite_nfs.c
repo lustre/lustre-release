@@ -145,13 +145,13 @@ ll_iget_for_nfs(struct super_block *sb, struct lu_fid *fid, struct lu_fid *paren
          * We have to find the parent to tell MDS how to init lov objects.
          */
 	if (S_ISREG(inode->i_mode) && !ll_i2info(inode)->lli_has_smd &&
-            parent != NULL) {
-                struct ll_inode_info *lli = ll_i2info(inode);
+	    parent != NULL) {
+		struct ll_inode_info *lli = ll_i2info(inode);
 
-                cfs_spin_lock(&lli->lli_lock);
-                lli->lli_pfid = *parent;
-                cfs_spin_unlock(&lli->lli_lock);
-        }
+		spin_lock(&lli->lli_lock);
+		lli->lli_pfid = *parent;
+		spin_unlock(&lli->lli_lock);
+	}
 
         result = d_obtain_alias(inode);
         if (IS_ERR(result))
@@ -232,9 +232,9 @@ static int ll_get_name(struct dentry *dentry, char *name,
         lgd.lgd_fid = ll_i2info(child->d_inode)->lli_fid;
         lgd.lgd_found = 0;
 
-        cfs_mutex_lock(&dir->i_mutex);
+	mutex_lock(&dir->i_mutex);
 	rc = ll_dir_read(dir, &offset, &lgd, ll_nfs_get_name_filldir);
-        cfs_mutex_unlock(&dir->i_mutex);
+	mutex_unlock(&dir->i_mutex);
         if (!rc && !lgd.lgd_found)
                 rc = -ENOENT;
         EXIT;

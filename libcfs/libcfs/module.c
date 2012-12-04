@@ -183,19 +183,19 @@ static int libcfs_psdev_release(unsigned long flags, void *args)
         RETURN(0);
 }
 
-static cfs_rw_semaphore_t ioctl_list_sem;
+static struct rw_semaphore ioctl_list_sem;
 static cfs_list_t ioctl_list;
 
 int libcfs_register_ioctl(struct libcfs_ioctl_handler *hand)
 {
         int rc = 0;
 
-        cfs_down_write(&ioctl_list_sem);
+	down_write(&ioctl_list_sem);
         if (!cfs_list_empty(&hand->item))
                 rc = -EBUSY;
         else
                 cfs_list_add_tail(&hand->item, &ioctl_list);
-        cfs_up_write(&ioctl_list_sem);
+	up_write(&ioctl_list_sem);
 
         return rc;
 }
@@ -205,12 +205,12 @@ int libcfs_deregister_ioctl(struct libcfs_ioctl_handler *hand)
 {
         int rc = 0;
 
-        cfs_down_write(&ioctl_list_sem);
+	down_write(&ioctl_list_sem);
         if (cfs_list_empty(&hand->item))
                 rc = -ENOENT;
         else
                 cfs_list_del_init(&hand->item);
-        cfs_up_write(&ioctl_list_sem);
+	up_write(&ioctl_list_sem);
 
         return rc;
 }
@@ -305,7 +305,7 @@ static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
         default: {
                 struct libcfs_ioctl_handler *hand;
                 err = -EINVAL;
-                cfs_down_read(&ioctl_list_sem);
+		down_read(&ioctl_list_sem);
                 cfs_list_for_each_entry_typed(hand, &ioctl_list,
                         struct libcfs_ioctl_handler, item) {
                         err = hand->handle_ioctl(cmd, data);
@@ -316,7 +316,7 @@ static int libcfs_ioctl_int(struct cfs_psdev_file *pfile,unsigned long cmd,
                                 break;
                         }
                 }
-                cfs_up_read(&ioctl_list_sem);
+		up_read(&ioctl_list_sem);
                 break;
         }
         }
@@ -365,8 +365,8 @@ MODULE_DESCRIPTION("Portals v3.1");
 MODULE_LICENSE("GPL");
 
 extern cfs_psdev_t libcfs_dev;
-extern cfs_rw_semaphore_t cfs_tracefile_sem;
-extern cfs_mutex_t cfs_trace_thread_mutex;
+extern struct rw_semaphore cfs_tracefile_sem;
+extern struct mutex cfs_trace_thread_mutex;
 extern struct cfs_wi_sched *cfs_sched_rehash;
 
 extern void libcfs_init_nidstrings(void);
@@ -379,9 +379,9 @@ static int init_libcfs_module(void)
 
 	libcfs_arch_init();
 	libcfs_init_nidstrings();
-	cfs_init_rwsem(&cfs_tracefile_sem);
-	cfs_mutex_init(&cfs_trace_thread_mutex);
-	cfs_init_rwsem(&ioctl_list_sem);
+	init_rwsem(&cfs_tracefile_sem);
+	mutex_init(&cfs_trace_thread_mutex);
+	init_rwsem(&ioctl_list_sem);
 	CFS_INIT_LIST_HEAD(&ioctl_list);
 	cfs_waitq_init(&cfs_race_waitq);
 
@@ -488,8 +488,8 @@ static void exit_libcfs_module(void)
 		printk(CFS_KERN_ERR "LustreError: libcfs_debug_cleanup: %d\n",
 		       rc);
 
-	cfs_fini_rwsem(&ioctl_list_sem);
-	cfs_fini_rwsem(&cfs_tracefile_sem);
+	fini_rwsem(&ioctl_list_sem);
+	fini_rwsem(&cfs_tracefile_sem);
 
 	libcfs_arch_cleanup();
 }

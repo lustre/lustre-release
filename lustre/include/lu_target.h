@@ -52,11 +52,11 @@ struct lu_target {
         /** Server last transaction number */
         __u64                    lut_last_transno;
         /** Lock protecting last transaction number */
-        cfs_spinlock_t           lut_translock;
-        /** Lock protecting client bitmap */
-        cfs_spinlock_t           lut_client_bitmap_lock;
-        /** Bitmap of known clients */
-        unsigned long           *lut_client_bitmap;
+	spinlock_t		 lut_translock;
+	/** Lock protecting client bitmap */
+	spinlock_t		 lut_client_bitmap_lock;
+	/** Bitmap of known clients */
+	unsigned long           *lut_client_bitmap;
 };
 
 typedef void (*tgt_cb_t)(struct lu_target *lut, __u64 transno,

@@ -453,9 +453,9 @@ static int lod_init0(const struct lu_env *env, struct lod_device *lod,
 		}
 	}
 
-	cfs_mutex_init(&lod->lod_mutex);
-	cfs_init_rwsem(&lod->lod_rw_sem);
-	cfs_spin_lock_init(&lod->lod_desc_lock);
+	mutex_init(&lod->lod_mutex);
+	init_rwsem(&lod->lod_rw_sem);
+	spin_lock_init(&lod->lod_desc_lock);
 
 	RETURN(0);
 
@@ -536,11 +536,11 @@ static int lod_obd_connect(const struct lu_env *env, struct obd_export **exp,
 
 	*exp = class_conn2export(&conn);
 
-	cfs_mutex_lock(&lod->lod_mutex);
+	mutex_lock(&lod->lod_mutex);
 	lod->lod_connects++;
 	/* at the moment we expect the only user */
 	LASSERT(lod->lod_connects == 1);
-	cfs_mutex_unlock(&lod->lod_mutex);
+	mutex_unlock(&lod->lod_mutex);
 
 	RETURN(0);
 }
@@ -557,16 +557,16 @@ static int lod_obd_disconnect(struct obd_export *exp)
 	ENTRY;
 
 	/* Only disconnect the underlying layers on the final disconnect. */
-	cfs_mutex_lock(&lod->lod_mutex);
+	mutex_lock(&lod->lod_mutex);
 	lod->lod_connects--;
 	if (lod->lod_connects != 0) {
 		/* why should there be more than 1 connect? */
-		cfs_mutex_unlock(&lod->lod_mutex);
+		mutex_unlock(&lod->lod_mutex);
 		CERROR("%s: disconnect #%d\n", exp->exp_obd->obd_name,
 		       lod->lod_connects);
 		goto out;
 	}
-	cfs_mutex_unlock(&lod->lod_mutex);
+	mutex_unlock(&lod->lod_mutex);
 
 	/* the last user of lod has gone, let's release the device */
 	release = 1;

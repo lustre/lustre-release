@@ -212,9 +212,9 @@ static inline int osp_precreate_near_empty(struct osp_device *d)
 	int rc;
 
 	/* XXX: do we really need locking here? */
-	cfs_spin_lock(&d->opd_pre_lock);
+	spin_lock(&d->opd_pre_lock);
 	rc = osp_precreate_near_empty_nolock(d);
-	cfs_spin_unlock(&d->opd_pre_lock);
+	spin_unlock(&d->opd_pre_lock);
 	return rc;
 }
 
@@ -254,11 +254,11 @@ static int osp_precreate_send(struct osp_device *d)
 		RETURN(rc);
 	}
 
-	cfs_spin_lock(&d->opd_pre_lock);
+	spin_lock(&d->opd_pre_lock);
 	if (d->opd_pre_grow_count > d->opd_pre_max_grow_count / 2)
 		d->opd_pre_grow_count = d->opd_pre_max_grow_count / 2;
 	grow = d->opd_pre_grow_count;
-	cfs_spin_unlock(&d->opd_pre_lock);
+	spin_unlock(&d->opd_pre_lock);
 
 	body = req_capsule_client_get(&req->rq_pill, &RMF_OST_BODY);
 	LASSERT(body);
@@ -286,7 +286,7 @@ static int osp_precreate_send(struct osp_device *d)
 
 	diff = body->oa.o_id - d->opd_pre_last_created;
 
-	cfs_spin_lock(&d->opd_pre_lock);
+	spin_lock(&d->opd_pre_lock);
 	if (diff < grow) {
 		/* the OST has not managed to create all the
 		 * objects we asked for */
@@ -299,7 +299,7 @@ static int osp_precreate_send(struct osp_device *d)
 		d->opd_pre_grow_slow = 0;
 	}
 	d->opd_pre_last_created = body->oa.o_id;
-	cfs_spin_unlock(&d->opd_pre_lock);
+	spin_unlock(&d->opd_pre_lock);
 	CDEBUG(D_OTHER, "current precreated pool: %llu-%llu\n",
 	       d->opd_pre_used_id, d->opd_pre_last_created);
 
@@ -427,7 +427,7 @@ static int osp_precreate_cleanup_orphans(struct osp_device *d)
 	/*
 	 * OST provides us with id new pool starts from in body->oa.o_id
 	 */
-	cfs_spin_lock(&d->opd_pre_lock);
+	spin_lock(&d->opd_pre_lock);
 	if (le64_to_cpu(d->opd_last_used_id) > body->oa.o_id) {
 		d->opd_pre_grow_count = OST_MIN_PRECREATE +
 					le64_to_cpu(d->opd_last_used_id) -
@@ -439,7 +439,7 @@ static int osp_precreate_cleanup_orphans(struct osp_device *d)
 	}
 	d->opd_pre_used_id = d->opd_pre_last_created;
 	d->opd_pre_grow_slow = 0;
-	cfs_spin_unlock(&d->opd_pre_lock);
+	spin_unlock(&d->opd_pre_lock);
 
 	CDEBUG(D_HA, "%s: Got last_id "LPU64" from OST, last_used is "LPU64
 	       ", pre_used "LPU64"\n", d->opd_obd->obd_name, body->oa.o_id,
@@ -529,9 +529,9 @@ static int osp_precreate_thread(void *_arg)
 	sprintf(pname, "osp-pre-%u\n", d->opd_index);
 	cfs_daemonize(pname);
 
-	cfs_spin_lock(&d->opd_pre_lock);
+	spin_lock(&d->opd_pre_lock);
 	thread->t_flags = SVC_RUNNING;
-	cfs_spin_unlock(&d->opd_pre_lock);
+	spin_unlock(&d->opd_pre_lock);
 	cfs_waitq_signal(&thread->t_ctl_waitq);
 
 	while (osp_precreate_running(d)) {
@@ -716,17 +716,17 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 		    d->opd_pre_grow_slow == 0 &&
 		    (d->opd_pre_last_created - d->opd_pre_used_id <=
 		     d->opd_pre_grow_count / 4 + 1)) {
-			cfs_spin_lock(&d->opd_pre_lock);
+			spin_lock(&d->opd_pre_lock);
 			d->opd_pre_grow_slow = 1;
 			d->opd_pre_grow_count *= 2;
-			cfs_spin_unlock(&d->opd_pre_lock);
+			spin_unlock(&d->opd_pre_lock);
 		}
 
-		cfs_spin_lock(&d->opd_pre_lock);
+		spin_lock(&d->opd_pre_lock);
 		precreated = d->opd_pre_last_created - d->opd_pre_used_id;
 		if (precreated > d->opd_pre_reserved) {
 			d->opd_pre_reserved++;
-			cfs_spin_unlock(&d->opd_pre_lock);
+			spin_unlock(&d->opd_pre_lock);
 			rc = 0;
 
 			/* XXX: don't wake up if precreation is in progress */
@@ -735,7 +735,7 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 
 			break;
 		}
-		cfs_spin_unlock(&d->opd_pre_lock);
+		spin_unlock(&d->opd_pre_lock);
 
 		/*
 		 * all precreated objects have been used and no-space
@@ -777,7 +777,7 @@ __u64 osp_precreate_get_id(struct osp_device *d)
 	obd_id objid;
 
 	/* grab next id from the pool */
-	cfs_spin_lock(&d->opd_pre_lock);
+	spin_lock(&d->opd_pre_lock);
 	LASSERT(d->opd_pre_used_id < d->opd_pre_last_created);
 	objid = ++d->opd_pre_used_id;
 	d->opd_pre_reserved--;
@@ -786,7 +786,7 @@ __u64 osp_precreate_get_id(struct osp_device *d)
 	 * we might miscalculate gap causing object loss or leak
 	 */
 	osp_update_last_id(d, objid);
-	cfs_spin_unlock(&d->opd_pre_lock);
+	spin_unlock(&d->opd_pre_lock);
 
 	/*
 	 * probably main thread suspended orphan cleanup till
@@ -887,7 +887,7 @@ int osp_init_precreate(struct osp_device *d)
 	d->opd_pre_min_grow_count = OST_MIN_PRECREATE;
 	d->opd_pre_max_grow_count = OST_MAX_PRECREATE;
 
-	cfs_spin_lock_init(&d->opd_pre_lock);
+	spin_lock_init(&d->opd_pre_lock);
 	cfs_waitq_init(&d->opd_pre_waitq);
 	cfs_waitq_init(&d->opd_pre_user_waitq);
 	cfs_waitq_init(&d->opd_pre_thread.t_ctl_waitq);

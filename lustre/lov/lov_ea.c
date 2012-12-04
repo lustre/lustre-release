@@ -181,16 +181,16 @@ static void lov_tgt_maxbytes(struct lov_tgt_desc *tgt, __u64 *stripe_maxbytes)
                 return;
         }
 
-        cfs_spin_lock(&imp->imp_lock);
-        if (imp->imp_state == LUSTRE_IMP_FULL &&
-           (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MAXBYTES) &&
-           imp->imp_connect_data.ocd_maxbytes > 0) {
-                if (*stripe_maxbytes > imp->imp_connect_data.ocd_maxbytes)
-                        *stripe_maxbytes = imp->imp_connect_data.ocd_maxbytes;
-        } else {
-                *stripe_maxbytes = LUSTRE_STRIPE_MAXBYTES;
-        }
-        cfs_spin_unlock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state == LUSTRE_IMP_FULL &&
+	    (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MAXBYTES) &&
+	    imp->imp_connect_data.ocd_maxbytes > 0) {
+		if (*stripe_maxbytes > imp->imp_connect_data.ocd_maxbytes)
+			*stripe_maxbytes = imp->imp_connect_data.ocd_maxbytes;
+	} else {
+		*stripe_maxbytes = LUSTRE_STRIPE_MAXBYTES;
+	}
+	spin_unlock(&imp->imp_lock);
 }
 
 static int lsm_lmm_verify_v1(struct lov_mds_md_v1 *lmm, int lmm_bytes,

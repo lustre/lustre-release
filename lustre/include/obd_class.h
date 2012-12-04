@@ -73,7 +73,7 @@
 
 /* OBD Device Declarations */
 extern struct obd_device *obd_devs[MAX_OBD_DEVICES];
-extern cfs_rwlock_t obd_dev_lock;
+extern rwlock_t obd_dev_lock;
 
 /* OBD Operations Declarations */
 extern struct obd_device *class_conn2obd(struct lustre_handle *);
@@ -196,7 +196,7 @@ struct config_llog_data {
         struct config_llog_data    *cld_sptlrpc;/* depended sptlrpc log */
         struct config_llog_data    *cld_recover;    /* imperative recover log */
         struct obd_export          *cld_mgcexp;
-        cfs_mutex_t                 cld_lock;
+	struct mutex		    cld_lock;
         int                         cld_type;
         unsigned int                cld_stopping:1, /* we were told to stop
                                                      * watching */
@@ -662,7 +662,7 @@ static inline void obd_cleanup_client_import(struct obd_device *obd)
 
         /* If we set up but never connected, the
            client import will not have been cleaned. */
-        cfs_down_write(&obd->u.cli.cl_sem);
+	down_write(&obd->u.cli.cl_sem);
         if (obd->u.cli.cl_import) {
                 struct obd_import *imp;
                 imp = obd->u.cli.cl_import;
@@ -676,7 +676,7 @@ static inline void obd_cleanup_client_import(struct obd_device *obd)
                 client_destroy_import(imp);
                 obd->u.cli.cl_import = NULL;
         }
-        cfs_up_write(&obd->u.cli.cl_sem);
+	up_write(&obd->u.cli.cl_sem);
 
         EXIT;
 }
@@ -1251,9 +1251,9 @@ static inline int obd_statfs_async(struct obd_export *exp,
                        obd->obd_name, &obd->obd_osfs,
                        obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
                        obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
-                cfs_spin_lock(&obd->obd_osfs_lock);
-                memcpy(oinfo->oi_osfs, &obd->obd_osfs, sizeof(*oinfo->oi_osfs));
-                cfs_spin_unlock(&obd->obd_osfs_lock);
+		spin_lock(&obd->obd_osfs_lock);
+		memcpy(oinfo->oi_osfs, &obd->obd_osfs, sizeof(*oinfo->oi_osfs));
+		spin_unlock(&obd->obd_osfs_lock);
                 oinfo->oi_flags |= OBD_STATFS_FROM_CACHE;
                 if (oinfo->oi_cb_up)
                         oinfo->oi_cb_up(oinfo, 0);
@@ -1305,22 +1305,22 @@ static inline int obd_statfs(const struct lu_env *env, struct obd_export *exp,
         if (cfs_time_before_64(obd->obd_osfs_age, max_age)) {
                 rc = OBP(obd, statfs)(env, exp, osfs, max_age, flags);
                 if (rc == 0) {
-                        cfs_spin_lock(&obd->obd_osfs_lock);
-                        memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
-                        obd->obd_osfs_age = cfs_time_current_64();
-                        cfs_spin_unlock(&obd->obd_osfs_lock);
-                }
-        } else {
-                CDEBUG(D_SUPER,"%s: use %p cache blocks "LPU64"/"LPU64
-                       " objects "LPU64"/"LPU64"\n",
-                       obd->obd_name, &obd->obd_osfs,
-                       obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
-                       obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
-                cfs_spin_lock(&obd->obd_osfs_lock);
-                memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
-                cfs_spin_unlock(&obd->obd_osfs_lock);
-        }
-        RETURN(rc);
+			spin_lock(&obd->obd_osfs_lock);
+			memcpy(&obd->obd_osfs, osfs, sizeof(obd->obd_osfs));
+			obd->obd_osfs_age = cfs_time_current_64();
+			spin_unlock(&obd->obd_osfs_lock);
+		}
+	} else {
+		CDEBUG(D_SUPER, "%s: use %p cache blocks "LPU64"/"LPU64
+		       " objects "LPU64"/"LPU64"\n",
+		       obd->obd_name, &obd->obd_osfs,
+		       obd->obd_osfs.os_bavail, obd->obd_osfs.os_blocks,
+		       obd->obd_osfs.os_ffree, obd->obd_osfs.os_files);
+		spin_lock(&obd->obd_osfs_lock);
+		memcpy(osfs, &obd->obd_osfs, sizeof(*osfs));
+		spin_unlock(&obd->obd_osfs_lock);
+	}
+	RETURN(rc);
 }
 
 static inline int obd_sync_rqset(struct obd_export *exp, struct obd_info *oinfo,
@@ -1757,13 +1757,13 @@ static inline int obd_register_observer(struct obd_device *obd,
 {
         ENTRY;
         OBD_CHECK_DEV(obd);
-        cfs_down_write(&obd->obd_observer_link_sem);
+	down_write(&obd->obd_observer_link_sem);
         if (obd->obd_observer && observer) {
-                cfs_up_write(&obd->obd_observer_link_sem);
+		up_write(&obd->obd_observer_link_sem);
                 RETURN(-EALREADY);
         }
         obd->obd_observer = observer;
-        cfs_up_write(&obd->obd_observer_link_sem);
+	up_write(&obd->obd_observer_link_sem);
         RETURN(0);
 }
 
@@ -1771,10 +1771,10 @@ static inline int obd_pin_observer(struct obd_device *obd,
                                    struct obd_device **observer)
 {
         ENTRY;
-        cfs_down_read(&obd->obd_observer_link_sem);
+	down_read(&obd->obd_observer_link_sem);
         if (!obd->obd_observer) {
                 *observer = NULL;
-                cfs_up_read(&obd->obd_observer_link_sem);
+		up_read(&obd->obd_observer_link_sem);
                 RETURN(-ENOENT);
         }
         *observer = obd->obd_observer;
@@ -1784,7 +1784,7 @@ static inline int obd_pin_observer(struct obd_device *obd,
 static inline int obd_unpin_observer(struct obd_device *obd)
 {
         ENTRY;
-        cfs_up_read(&obd->obd_observer_link_sem);
+	up_read(&obd->obd_observer_link_sem);
         RETURN(0);
 }
 

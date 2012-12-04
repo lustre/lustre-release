@@ -61,7 +61,7 @@ kqswnal_get_tx_desc (struct libcfs_ioctl_data *data)
 	int                index = data->ioc_count;
 	int                rc = -ENOENT;
 
-	cfs_spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
+	spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
 
 	cfs_list_for_each (tmp, &kqswnal_data.kqn_activetxds) {
 		if (index-- != 0)
@@ -82,7 +82,7 @@ kqswnal_get_tx_desc (struct libcfs_ioctl_data *data)
 		break;
 	}
 
-	cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
+	spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
 	return (rc);
 }
 
@@ -136,9 +136,9 @@ kqswnal_shutdown(lnet_ni_t *ni)
 
 	/**********************************************************************/
 	/* Signal the start of shutdown... */
-	cfs_spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
+	spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
 	kqswnal_data.kqn_shuttingdown = 1;
-	cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
+	spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
 
 	/**********************************************************************/
 	/* wait for sends that have allocated a tx desc to launch or give up */
@@ -298,13 +298,13 @@ kqswnal_startup (lnet_ni_t *ni)
 
 	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_idletxds);
 	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_activetxds);
-	cfs_spin_lock_init (&kqswnal_data.kqn_idletxd_lock);
+	spin_lock_init(&kqswnal_data.kqn_idletxd_lock);
 
 	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_delayedtxds);
 	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_donetxds);
 	CFS_INIT_LIST_HEAD (&kqswnal_data.kqn_readyrxds);
 
-	cfs_spin_lock_init (&kqswnal_data.kqn_sched_lock);
+	spin_lock_init(&kqswnal_data.kqn_sched_lock);
 	cfs_waitq_init (&kqswnal_data.kqn_sched_waitq);
 
 	/* pointers/lists/locks initialised */

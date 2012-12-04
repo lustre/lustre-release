@@ -146,7 +146,7 @@ static int lprocfs_qsd_wr_force_reint(struct file *file, const char *buffer,
 
 	LASSERT(qsd != NULL);
 
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 	if (qsd->qsd_stopping) {
 		/* don't mess up with shutdown procedure, it is already
 		 * complicated enough */
@@ -160,7 +160,7 @@ static int lprocfs_qsd_wr_force_reint(struct file *file, const char *buffer,
 			qsd->qsd_type_array[qtype]->qqi_slv_uptodate = false;
 		}
 	}
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 
 	if (rc)
 		return rc;
@@ -229,10 +229,10 @@ static int qsd_conn_callback(void *data)
 	ldlm_namespace_get(class_exp2obd(qsd->qsd_exp)->obd_namespace);
 	qsd->qsd_ns = class_exp2obd(qsd->qsd_exp)->obd_namespace;
 
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 	/* notify that qsd_exp is now valid */
 	qsd->qsd_exp_valid = true;
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 
 	/* Now that the connection to master is setup, we can initiate the
 	 * reintegration procedure for quota types which are enabled.
@@ -446,16 +446,16 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 		RETURN_EXIT;
 
 	CDEBUG(D_QUOTA, "%s: initiating QSD shutdown\n", qsd->qsd_svname);
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 	qsd->qsd_stopping = true;
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 
 	/* remove from the list of fsinfo */
 	if (!cfs_list_empty(&qsd->qsd_link)) {
 		LASSERT(qsd->qsd_fsinfo != NULL);
-		cfs_down(&qsd->qsd_fsinfo->qfs_sem);
+		down(&qsd->qsd_fsinfo->qfs_sem);
 		cfs_list_del_init(&qsd->qsd_link);
-		cfs_up(&qsd->qsd_fsinfo->qfs_sem);
+		up(&qsd->qsd_fsinfo->qfs_sem);
 	}
 
 	/* remove qsd proc entry */
@@ -544,12 +544,12 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 		RETURN(ERR_PTR(-ENOMEM));
 
 	/* generic initializations */
-	cfs_rwlock_init(&qsd->qsd_lock);
+	rwlock_init(&qsd->qsd_lock);
 	CFS_INIT_LIST_HEAD(&qsd->qsd_link);
 	thread_set_flags(&qsd->qsd_upd_thread, SVC_STOPPED);
 	cfs_waitq_init(&qsd->qsd_upd_thread.t_ctl_waitq);
 	CFS_INIT_LIST_HEAD(&qsd->qsd_upd_list);
-	cfs_spin_lock_init(&qsd->qsd_adjust_lock);
+	spin_lock_init(&qsd->qsd_adjust_lock);
 	CFS_INIT_LIST_HEAD(&qsd->qsd_adjust_list);
 	qsd->qsd_prepared = false;
 	qsd->qsd_started = false;
@@ -582,9 +582,9 @@ struct qsd_instance *qsd_init(const struct lu_env *env, char *svname,
 	}
 
 	/* add in the list of lquota_fsinfo */
-	cfs_down(&qsd->qsd_fsinfo->qfs_sem);
+	down(&qsd->qsd_fsinfo->qfs_sem);
 	list_add_tail(&qsd->qsd_link, &qsd->qsd_fsinfo->qfs_qsd_list);
-	cfs_up(&qsd->qsd_fsinfo->qfs_sem);
+	up(&qsd->qsd_fsinfo->qfs_sem);
 
 	/* register procfs directory */
 	qsd->qsd_proc = lprocfs_register(QSD_DIR, osd_proc,
@@ -630,12 +630,12 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	if (unlikely(qsd == NULL))
 		RETURN(0);
 
-	cfs_read_lock(&qsd->qsd_lock);
+	read_lock(&qsd->qsd_lock);
 	if (qsd->qsd_prepared) {
 		CERROR("%s: qsd instance already prepared\n", qsd->qsd_svname);
 		rc = -EALREADY;
 	}
-	cfs_read_unlock(&qsd->qsd_lock);
+	read_unlock(&qsd->qsd_lock);
 	if (rc)
 		RETURN(rc);
 
@@ -667,9 +667,9 @@ int qsd_prepare(const struct lu_env *env, struct qsd_instance *qsd)
 	}
 
 	/* pools successfully setup, mark the qsd as prepared */
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 	qsd->qsd_prepared = true;
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 
 	/* start reintegration thread for each type, if required */
 	for (qtype = USRQUOTA; qtype < MAXQUOTAS; qtype++) {
@@ -731,7 +731,7 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 	if (unlikely(qsd == NULL))
 		RETURN(0);
 
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 	if (!qsd->qsd_prepared) {
 		CERROR("%s: can't start qsd instance since it was properly "
 		       "initialized\n", qsd->qsd_svname);
@@ -743,7 +743,7 @@ int qsd_start(const struct lu_env *env, struct qsd_instance *qsd)
 		/* notify that the qsd_instance is now started */
 		qsd->qsd_started = true;
 	}
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 
 	if (rc)
 		RETURN(rc);

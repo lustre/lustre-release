@@ -55,10 +55,10 @@ cfs_mem_cache_t *ldlm_resource_slab, *ldlm_lock_slab;
 cfs_atomic_t ldlm_srv_namespace_nr = CFS_ATOMIC_INIT(0);
 cfs_atomic_t ldlm_cli_namespace_nr = CFS_ATOMIC_INIT(0);
 
-cfs_mutex_t ldlm_srv_namespace_lock;
+struct mutex ldlm_srv_namespace_lock;
 CFS_LIST_HEAD(ldlm_srv_namespace_list);
 
-cfs_mutex_t ldlm_cli_namespace_lock;
+struct mutex ldlm_cli_namespace_lock;
 CFS_LIST_HEAD(ldlm_cli_namespace_list);
 
 cfs_proc_dir_entry_t *ldlm_type_proc_dir = NULL;
@@ -649,7 +649,7 @@ struct ldlm_namespace *ldlm_namespace_new(struct obd_device *obd, char *name,
 
         CFS_INIT_LIST_HEAD(&ns->ns_list_chain);
         CFS_INIT_LIST_HEAD(&ns->ns_unused_list);
-        cfs_spin_lock_init(&ns->ns_lock);
+	spin_lock_init(&ns->ns_lock);
         cfs_atomic_set(&ns->ns_bref, 0);
         cfs_waitq_init(&ns->ns_waitq);
 
@@ -880,9 +880,9 @@ void ldlm_namespace_free_prior(struct ldlm_namespace *ns,
                 return;
         }
 
-        cfs_spin_lock(&ns->ns_lock);
-        ns->ns_stopping = 1;
-        cfs_spin_unlock(&ns->ns_lock);
+	spin_lock(&ns->ns_lock);
+	ns->ns_stopping = 1;
+	spin_unlock(&ns->ns_lock);
 
         /*
          * Can fail with -EINTR when force == 0 in which case try harder.
@@ -976,36 +976,36 @@ EXPORT_SYMBOL(ldlm_namespace_get);
 
 void ldlm_namespace_put(struct ldlm_namespace *ns)
 {
-        if (cfs_atomic_dec_and_lock(&ns->ns_bref, &ns->ns_lock)) {
-                cfs_waitq_signal(&ns->ns_waitq);
-                cfs_spin_unlock(&ns->ns_lock);
-        }
+	if (cfs_atomic_dec_and_lock(&ns->ns_bref, &ns->ns_lock)) {
+		cfs_waitq_signal(&ns->ns_waitq);
+		spin_unlock(&ns->ns_lock);
+	}
 }
 EXPORT_SYMBOL(ldlm_namespace_put);
 
 /* Register @ns in the list of namespaces */
 void ldlm_namespace_register(struct ldlm_namespace *ns, ldlm_side_t client)
 {
-        cfs_mutex_lock(ldlm_namespace_lock(client));
-        LASSERT(cfs_list_empty(&ns->ns_list_chain));
-        cfs_list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
-        cfs_atomic_inc(ldlm_namespace_nr(client));
-        cfs_mutex_unlock(ldlm_namespace_lock(client));
+	mutex_lock(ldlm_namespace_lock(client));
+	LASSERT(cfs_list_empty(&ns->ns_list_chain));
+	cfs_list_add(&ns->ns_list_chain, ldlm_namespace_list(client));
+	cfs_atomic_inc(ldlm_namespace_nr(client));
+	mutex_unlock(ldlm_namespace_lock(client));
 }
 
 /* Unregister @ns from the list of namespaces */
 void ldlm_namespace_unregister(struct ldlm_namespace *ns, ldlm_side_t client)
 {
-        cfs_mutex_lock(ldlm_namespace_lock(client));
-        LASSERT(!cfs_list_empty(&ns->ns_list_chain));
-        /*
-         * Some asserts and possibly other parts of code still using
-         * list_empty(&ns->ns_list_chain). This is why it is important
-         * to use list_del_init() here.
-         */
-        cfs_list_del_init(&ns->ns_list_chain);
-        cfs_atomic_dec(ldlm_namespace_nr(client));
-        cfs_mutex_unlock(ldlm_namespace_lock(client));
+	mutex_lock(ldlm_namespace_lock(client));
+	LASSERT(!cfs_list_empty(&ns->ns_list_chain));
+	/*
+	 * Some asserts and possibly other parts of code still using
+	 * list_empty(&ns->ns_list_chain). This is why it is important
+	 * to use list_del_init() here.
+	 */
+	cfs_list_del_init(&ns->ns_list_chain);
+	cfs_atomic_dec(ldlm_namespace_nr(client));
+	mutex_unlock(ldlm_namespace_lock(client));
 }
 
 /* Should be called under ldlm_namespace_lock(client) taken */
@@ -1046,15 +1046,15 @@ static struct ldlm_resource *ldlm_resource_new(void)
         }
 
         cfs_atomic_set(&res->lr_refcount, 1);
-        cfs_spin_lock_init(&res->lr_lock);
-        lu_ref_init(&res->lr_reference);
+	spin_lock_init(&res->lr_lock);
+	lu_ref_init(&res->lr_reference);
 
-        /* one who creates the resource must unlock
-         * the mutex after lvb initialization */
-        cfs_mutex_init(&res->lr_lvb_mutex);
-        cfs_mutex_lock(&res->lr_lvb_mutex);
+	/* one who creates the resource must unlock
+	 * the mutex after lvb initialization */
+	mutex_init(&res->lr_lvb_mutex);
+	mutex_lock(&res->lr_lvb_mutex);
 
-        return res;
+	return res;
 }
 
 /* Args: unlocked namespace
@@ -1081,8 +1081,8 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 res = cfs_hlist_entry(hnode, struct ldlm_resource, lr_hash);
                 /* synchronize WRT resource creation */
                 if (ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
-                        cfs_mutex_lock(&res->lr_lvb_mutex);
-                        cfs_mutex_unlock(&res->lr_lvb_mutex);
+			mutex_lock(&res->lr_lvb_mutex);
+			mutex_unlock(&res->lr_lvb_mutex);
                 }
                 return res;
         }
@@ -1114,14 +1114,14 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
                 /* clean lu_ref for failed resource */
 		lu_ref_fini(&res->lr_reference);
 		/* We have taken lr_lvb_mutex. Drop it. */
-		cfs_mutex_unlock(&res->lr_lvb_mutex);
+		mutex_unlock(&res->lr_lvb_mutex);
 		OBD_SLAB_FREE(res, ldlm_resource_slab, sizeof *res);
 
                 res = cfs_hlist_entry(hnode, struct ldlm_resource, lr_hash);
                 /* synchronize WRT resource creation */
                 if (ns->ns_lvbo && ns->ns_lvbo->lvbo_init) {
-                        cfs_mutex_lock(&res->lr_lvb_mutex);
-                        cfs_mutex_unlock(&res->lr_lvb_mutex);
+			mutex_lock(&res->lr_lvb_mutex);
+			mutex_unlock(&res->lr_lvb_mutex);
                 }
                 return res;
         }
@@ -1142,7 +1142,7 @@ ldlm_resource_get(struct ldlm_namespace *ns, struct ldlm_resource *parent,
 	}
 
 	/* we create resource with locked lr_lvb_mutex */
-	cfs_mutex_unlock(&res->lr_lvb_mutex);
+	mutex_unlock(&res->lr_lvb_mutex);
 
 	return res;
 }
@@ -1303,7 +1303,7 @@ void ldlm_dump_all_namespaces(ldlm_side_t client, int level)
         if (!((libcfs_debug | D_ERROR) & level))
                 return;
 
-        cfs_mutex_lock(ldlm_namespace_lock(client));
+	mutex_lock(ldlm_namespace_lock(client));
 
         cfs_list_for_each(tmp, ldlm_namespace_list(client)) {
                 struct ldlm_namespace *ns;
@@ -1311,7 +1311,7 @@ void ldlm_dump_all_namespaces(ldlm_side_t client, int level)
                 ldlm_namespace_dump(level, ns);
         }
 
-        cfs_mutex_unlock(ldlm_namespace_lock(client));
+	mutex_unlock(ldlm_namespace_lock(client));
 }
 EXPORT_SYMBOL(ldlm_dump_all_namespaces);
 
@@ -1343,9 +1343,9 @@ void ldlm_namespace_dump(int level, struct ldlm_namespace *ns)
         cfs_hash_for_each_nolock(ns->ns_rs_hash,
                                  ldlm_res_hash_dump,
                                  (void *)(unsigned long)level);
-        cfs_spin_lock(&ns->ns_lock);
-        ns->ns_next_dump = cfs_time_shift(10);
-        cfs_spin_unlock(&ns->ns_lock);
+	spin_lock(&ns->ns_lock);
+	ns->ns_next_dump = cfs_time_shift(10);
+	spin_unlock(&ns->ns_lock);
 }
 EXPORT_SYMBOL(ldlm_namespace_dump);
 

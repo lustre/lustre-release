@@ -337,7 +337,7 @@ static int osc_async_upcall(void *a, int rc)
 	struct osc_async_cbargs *args = a;
 
         args->opc_rc = rc;
-        cfs_complete(&args->opc_sync);
+	complete(&args->opc_sync);
         return 0;
 }
 
@@ -471,7 +471,7 @@ static int osc_io_setattr_start(const struct lu_env *env,
 
                 oinfo.oi_oa = oa;
                 oinfo.oi_capa = io->u.ci_setattr.sa_capa;
-                cfs_init_completion(&cbargs->opc_sync);
+		init_completion(&cbargs->opc_sync);
 
                 if (ia_valid & ATTR_SIZE)
                         result = osc_punch_base(osc_export(cl2osc(obj)),
@@ -497,7 +497,7 @@ static void osc_io_setattr_end(const struct lu_env *env,
         int result = 0;
 
 	if (cbargs->opc_rpc_sent) {
-		cfs_wait_for_completion(&cbargs->opc_sync);
+		wait_for_completion(&cbargs->opc_sync);
 		result = io->ci_result = cbargs->opc_rc;
 	}
         if (result == 0) {
@@ -593,7 +593,7 @@ static int osc_fsync_ost(const struct lu_env *env, struct osc_object *obj,
 	memset(oinfo, 0, sizeof(*oinfo));
 	oinfo->oi_oa = oa;
 	oinfo->oi_capa = fio->fi_capa;
-	cfs_init_completion(&cbargs->opc_sync);
+	init_completion(&cbargs->opc_sync);
 
 	rc = osc_sync_base(osc_export(obj), oinfo, osc_async_upcall, cbargs,
 			   PTLRPCD_SET);
@@ -655,7 +655,7 @@ static void osc_io_fsync_end(const struct lu_env *env,
 		struct osc_io           *oio    = cl2osc_io(env, slice);
 		struct osc_async_cbargs *cbargs = &oio->oi_cbarg;
 
-		cfs_wait_for_completion(&cbargs->opc_sync);
+		wait_for_completion(&cbargs->opc_sync);
 		if (result == 0)
 			result = cbargs->opc_rc;
 	}

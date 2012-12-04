@@ -133,7 +133,7 @@ lnet_ni_alloc(__u32 net, struct cfs_expr_list *el, cfs_list_t *nilist)
         }
 
 #ifdef __KERNEL__
-	cfs_spin_lock_init(&ni->ni_lock);
+	spin_lock_init(&ni->ni_lock);
 #else
 # ifdef HAVE_LIBPTHREAD
 	pthread_mutex_init(&ni->ni_lock, NULL);

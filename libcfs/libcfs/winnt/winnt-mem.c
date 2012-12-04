@@ -54,7 +54,7 @@ cfs_page_t * virt_to_page(void * addr)
     pg->addr = (void *)((__u64)addr & (~((__u64)PAGE_SIZE-1)));
     pg->mapping = addr;
     cfs_atomic_set(&pg->count, 1);
-    cfs_set_bit(PG_virt, &(pg->flags));
+	set_bit(PG_virt, &(pg->flags));
     cfs_enter_debugger();
     return pg;
 }
@@ -123,7 +123,7 @@ void cfs_free_page(cfs_page_t *pg)
     ASSERT(pg->addr  != NULL);
     ASSERT(cfs_atomic_read(&pg->count) <= 1);
 
-    if (!cfs_test_bit(PG_virt, &pg->flags)) {
+	if (!test_bit(PG_virt, &pg->flags)) {
         cfs_mem_cache_free(cfs_page_p_slab, pg->addr);
         cfs_atomic_dec(&libcfs_total_pages);
     } else {
@@ -374,7 +374,7 @@ void cfs_mem_cache_free(cfs_mem_cache_t * kmc, void * buf)
     ExFreeToNPagedLookasideList(&(kmc->npll), buf);
 }
 
-cfs_spinlock_t  shrinker_guard = {0};
+spinlock_t  shrinker_guard = {0};
 CFS_LIST_HEAD(shrinker_hdr);
 cfs_timer_t shrinker_timer = {0};
 
@@ -382,22 +382,22 @@ struct cfs_shrinker * cfs_set_shrinker(int seeks, shrink_callback cb)
 {
     struct cfs_shrinker * s = (struct cfs_shrinker *)
         cfs_alloc(sizeof(struct cfs_shrinker), CFS_ALLOC_ZERO);
-    if (s) {
-        s->cb = cb;
-        s->seeks = seeks;
-        s->nr = 2;
-        cfs_spin_lock(&shrinker_guard);
-        cfs_list_add(&s->list, &shrinker_hdr); 
-        cfs_spin_unlock(&shrinker_guard);
-    }
+	if (s) {
+		s->cb = cb;
+		s->seeks = seeks;
+		s->nr = 2;
+		spin_lock(&shrinker_guard);
+		cfs_list_add(&s->list, &shrinker_hdr);
+		spin_unlock(&shrinker_guard);
+	}
 
-    return s;
+	return s;
 }
 
 void cfs_remove_shrinker(struct cfs_shrinker *s)
 {
-    struct cfs_shrinker *tmp;
-    cfs_spin_lock(&shrinker_guard);
+	struct cfs_shrinker *tmp;
+	spin_lock(&shrinker_guard);
 #if TRUE
     cfs_list_for_each_entry_typed(tmp, &shrinker_hdr,
                                   struct cfs_shrinker, list) {
@@ -409,22 +409,22 @@ void cfs_remove_shrinker(struct cfs_shrinker *s)
 #else
     cfs_list_del(&s->list);
 #endif
-    cfs_spin_unlock(&shrinker_guard);
-    cfs_free(s);
+	spin_unlock(&shrinker_guard);
+	cfs_free(s);
 }
 
 /* time ut test proc */
 void shrinker_timer_proc(ulong_ptr_t arg)
 {
-    struct cfs_shrinker *s;
-    cfs_spin_lock(&shrinker_guard);
+	struct cfs_shrinker *s;
+	spin_lock(&shrinker_guard);
 
-    cfs_list_for_each_entry_typed(s, &shrinker_hdr,
-                                  struct cfs_shrinker, list) {
-            s->cb(s->nr, __GFP_FS);
-    }
-    cfs_spin_unlock(&shrinker_guard);
-    cfs_timer_arm(&shrinker_timer, 300);
+	cfs_list_for_each_entry_typed(s, &shrinker_hdr,
+				      struct cfs_shrinker, list) {
+		s->cb(s->nr, __GFP_FS);
+	}
+	spin_unlock(&shrinker_guard);
+	cfs_timer_arm(&shrinker_timer, 300);
 }
 
 int start_shrinker_timer()

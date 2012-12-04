@@ -168,7 +168,7 @@ void obdo_refresh_inode(struct inode *dst, struct obdo *src, obd_flag valid)
                 i_size_write(dst, src->o_size);
 	/* optimum IO size */
 	if (valid & OBD_MD_FLBLKSZ && src->o_blksize > (1 << dst->i_blkbits))
-		dst->i_blkbits = cfs_ffs(src->o_blksize) - 1;
+		dst->i_blkbits = ffs(src->o_blksize) - 1;
 
 	if (dst->i_blkbits < CFS_PAGE_SHIFT)
 		dst->i_blkbits = CFS_PAGE_SHIFT;
@@ -213,7 +213,7 @@ void obdo_to_inode(struct inode *dst, struct obdo *src, obd_flag valid)
 
         }
 	if (valid & OBD_MD_FLBLKSZ)
-		dst->i_blkbits = cfs_ffs(src->o_blksize)-1;
+		dst->i_blkbits = ffs(src->o_blksize)-1;
         if (valid & OBD_MD_FLMODE)
                 dst->i_mode = (dst->i_mode & S_IFMT) | (src->o_mode & ~S_IFMT);
         if (valid & OBD_MD_FLUID)

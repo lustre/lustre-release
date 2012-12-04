@@ -45,7 +45,7 @@ struct ls_device {
 	struct dt_device	*ls_osd;
 	/* list of all local OID storages */
 	cfs_list_t		 ls_los_list;
-	cfs_mutex_t		 ls_los_mutex;
+	struct mutex		 ls_los_mutex;
 };
 
 static inline struct ls_device *dt2ls_dev(struct dt_device *d)

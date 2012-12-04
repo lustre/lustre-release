@@ -346,7 +346,7 @@ KsAllocateKsTsdu()
 {
     PKS_TSDU    KsTsdu = NULL;
 
-    cfs_spin_lock(&(ks_data.ksnd_tsdu_lock));
+	spin_lock(&(ks_data.ksnd_tsdu_lock));
 
     if (!cfs_list_empty (&(ks_data.ksnd_freetsdus))) {
 
@@ -362,7 +362,7 @@ KsAllocateKsTsdu()
                         ks_data.ksnd_tsdu_slab, 0);
     }
 
-    cfs_spin_unlock(&(ks_data.ksnd_tsdu_lock));
+	spin_unlock(&(ks_data.ksnd_tsdu_lock));
 
     if (NULL != KsTsdu) {
         RtlZeroMemory(KsTsdu, ks_data.ksnd_tsdu_size);
@@ -415,14 +415,14 @@ KsPutKsTsdu(
     PKS_TSDU  KsTsdu
     )
 {
-    cfs_spin_lock(&(ks_data.ksnd_tsdu_lock));
-    if (ks_data.ksnd_nfreetsdus > 128) {
-        KsFreeKsTsdu(KsTsdu);
-    } else {
-        cfs_list_add_tail( &(KsTsdu->Link), &(ks_data.ksnd_freetsdus));
-        ks_data.ksnd_nfreetsdus++;
-    }
-    cfs_spin_unlock(&(ks_data.ksnd_tsdu_lock));
+	spin_lock(&(ks_data.ksnd_tsdu_lock));
+	if (ks_data.ksnd_nfreetsdus > 128) {
+		KsFreeKsTsdu(KsTsdu);
+	} else {
+		cfs_list_add_tail( &(KsTsdu->Link), &(ks_data.ksnd_freetsdus));
+		ks_data.ksnd_nfreetsdus++;
+	}
+	spin_unlock(&(ks_data.ksnd_tsdu_lock));
 }
 
 /* with tconn lock acquired */
@@ -1282,7 +1282,7 @@ KsInitializeKsTsduMgr(
     TsduMgr->NumOfTsdu  = 0;
     TsduMgr->TotalBytes = 0;
 
-    cfs_spin_lock_init(&TsduMgr->Lock);
+	spin_lock_init(&TsduMgr->Lock);
 }
 
 
@@ -2953,7 +2953,7 @@ KsAcceptCompletionRoutine(
 
     LASSERT(child->kstc_type == kstt_child);
 
-    cfs_spin_lock(&(child->kstc_lock));
+	spin_lock(&(child->kstc_lock));
 
     LASSERT(parent->kstc_state == ksts_listening);
     LASSERT(child->kstc_state == ksts_connecting);
@@ -2971,7 +2971,7 @@ KsAcceptCompletionRoutine(
             FALSE
             );
 
-        cfs_spin_unlock(&(child->kstc_lock));
+	spin_unlock(&(child->kstc_lock));
 
         KsPrint((2, "KsAcceptCompletionRoutine: singal parent: %p (child: %p)\n",
                     parent, child));
@@ -2983,7 +2983,7 @@ KsAcceptCompletionRoutine(
         child->child.kstc_busy = FALSE;
         child->kstc_state = ksts_associated;
 
-        cfs_spin_unlock(&(child->kstc_lock));
+	spin_unlock(&(child->kstc_lock));
     }
 
     /* now free the Irp */
@@ -3001,7 +3001,7 @@ KsSearchIpAddress(PUNICODE_STRING  DeviceName)
     ks_addr_slot_t * slot = NULL;
     PLIST_ENTRY      list = NULL;
 
-    cfs_spin_lock(&ks_data.ksnd_addrs_lock);
+	spin_lock(&ks_data.ksnd_addrs_lock);
 
     list = ks_data.ksnd_addrs_list.Flink;
     while (list != &ks_data.ksnd_addrs_list) {
@@ -3016,15 +3016,15 @@ KsSearchIpAddress(PUNICODE_STRING  DeviceName)
         slot = NULL;
     }
 
-    cfs_spin_unlock(&ks_data.ksnd_addrs_lock);
+	spin_unlock(&ks_data.ksnd_addrs_lock);
 
-    return slot;
+	return slot;
 }
 
 void
 KsCleanupIpAddresses()
 {
-    cfs_spin_lock(&ks_data.ksnd_addrs_lock);
+	spin_lock(&ks_data.ksnd_addrs_lock);
 
     while (!IsListEmpty(&ks_data.ksnd_addrs_list)) {
 
@@ -3038,7 +3038,7 @@ KsCleanupIpAddresses()
     }
 
     cfs_assert(ks_data.ksnd_naddrs == 0);
-    cfs_spin_unlock(&ks_data.ksnd_addrs_lock);
+	spin_unlock(&ks_data.ksnd_addrs_lock);
 }
 
 VOID
@@ -3081,7 +3081,7 @@ KsAddAddressHandler(
 
             slot = cfs_alloc(sizeof(ks_addr_slot_t) + DeviceName->Length, CFS_ALLOC_ZERO);
             if (slot != NULL) {
-                cfs_spin_lock(&ks_data.ksnd_addrs_lock);
+		spin_lock(&ks_data.ksnd_addrs_lock);
                 InsertTailList(&ks_data.ksnd_addrs_list, &slot->link);
                 sprintf(slot->iface, "eth%d", ks_data.ksnd_naddrs++);
                 slot->ip_addr = ntohl(IpAddress->in_addr);
@@ -3091,7 +3091,7 @@ KsAddAddressHandler(
                 slot->devname.Length = DeviceName->Length;
                 slot->devname.MaximumLength = DeviceName->Length + sizeof(WCHAR);
                 slot->devname.Buffer = slot->buffer;
-                cfs_spin_unlock(&ks_data.ksnd_addrs_lock);
+		spin_unlock(&ks_data.ksnd_addrs_lock);
 
                 KsPrint((0, "KsAddAddressHandle: %s added: ip=%xh(%d.%d.%d.%d)\n",
                             slot->iface, IpAddress->in_addr,
@@ -3142,7 +3142,7 @@ KsRegisterPnpHandlers()
 
     /* initialize the global ks_data members */
     RtlInitUnicodeString(&ks_data.ksnd_client_name, TDILND_MODULE_NAME);
-    cfs_spin_lock_init(&ks_data.ksnd_addrs_lock);
+	spin_lock_init(&ks_data.ksnd_addrs_lock);
     InitializeListHead(&ks_data.ksnd_addrs_list);
 
     /* register the pnp handlers */
@@ -3209,15 +3209,15 @@ KsGetVacancyBacklog(
 
         cfs_list_for_each(tmp, &(parent->listener.kstc_listening.list)) {
             child = cfs_list_entry (tmp, ks_tconn_t, child.kstc_link);
-            cfs_spin_lock(&(child->kstc_lock));
+	    spin_lock(&(child->kstc_lock));
 
             if (!child->child.kstc_busy) {
                 LASSERT(child->kstc_state == ksts_associated);
                 child->child.kstc_busy = TRUE;
-                cfs_spin_unlock(&(child->kstc_lock));
+		spin_unlock(&(child->kstc_lock));
                 break;
             } else {
-                cfs_spin_unlock(&(child->kstc_lock));
+		spin_unlock(&(child->kstc_lock));
                 child = NULL;
             }
         }
@@ -3273,7 +3273,7 @@ KsConnectEventHandler(
 
     LASSERT(parent->kstc_type == kstt_listener);
 
-    cfs_spin_lock(&(parent->kstc_lock));
+	spin_lock(&(parent->kstc_lock));
 
     if (parent->kstc_state == ksts_listening) {
 
@@ -3311,11 +3311,11 @@ KsConnectEventHandler(
 
         if (child) {
 
-            cfs_spin_lock(&(child->kstc_lock));
+	    spin_lock(&(child->kstc_lock));
             child->child.kstc_info.ConnectionInfo = ConnectionInfo;
             child->child.kstc_info.Remote = ConnectionInfo->RemoteAddress;
             child->kstc_state = ksts_connecting;
-            cfs_spin_unlock(&(child->kstc_lock));
+	    spin_unlock(&(child->kstc_lock));
 
         } else {
 
@@ -3354,13 +3354,13 @@ KsConnectEventHandler(
         goto errorout;
     }
 
-    cfs_spin_unlock(&(parent->kstc_lock));
+	spin_unlock(&(parent->kstc_lock));
 
     return Status;
 
 errorout:
 
-    cfs_spin_unlock(&(parent->kstc_lock));
+	spin_unlock(&(parent->kstc_lock));
 
     *AcceptIrp = NULL;
     *ConnectionContext = NULL;
@@ -3436,10 +3436,10 @@ KsDisconnectHelper(PKS_DISCONNECT_WORKITEM WorkItem)
 
     KeSetEvent(&(WorkItem->Event), 0, FALSE);
 
-    cfs_spin_lock(&(tconn->kstc_lock));
-    cfs_clear_flag(tconn->kstc_flags, KS_TCONN_DISCONNECT_BUSY);
-    cfs_spin_unlock(&(tconn->kstc_lock));
-    ks_put_tconn(tconn);
+	spin_lock(&(tconn->kstc_lock));
+	cfs_clear_flag(tconn->kstc_flags, KS_TCONN_DISCONNECT_BUSY);
+	spin_unlock(&(tconn->kstc_lock));
+	ks_put_tconn(tconn);
 }
 
 
@@ -3485,7 +3485,7 @@ KsDisconnectEventHandler(
                  tconn, DisconnectFlags));
 
     ks_get_tconn(tconn);
-    cfs_spin_lock(&(tconn->kstc_lock));
+    spin_lock(&(tconn->kstc_lock));
 
     WorkItem = &(tconn->kstc_disconnect);
 
@@ -3518,7 +3518,7 @@ KsDisconnectEventHandler(
         }
     }
 
-    cfs_spin_unlock(&(tconn->kstc_lock));
+    spin_unlock(&(tconn->kstc_lock));
     ks_put_tconn(tconn);
 
     return  (Status);
@@ -4331,16 +4331,16 @@ ks_create_tconn()
                 tconn
             );
 
-        cfs_spin_lock_init(&(tconn->kstc_lock));
+	spin_lock_init(&(tconn->kstc_lock));
 
         ks_get_tconn(tconn);
-        cfs_spin_lock(&(ks_data.ksnd_tconn_lock));
+	spin_lock(&(ks_data.ksnd_tconn_lock));
 
         /* attach it into global list in ks_data */
 
         cfs_list_add(&(tconn->kstc_list), &(ks_data.ksnd_tconns));
         ks_data.ksnd_ntconns++;
-        cfs_spin_unlock(&(ks_data.ksnd_tconn_lock));
+	spin_unlock(&(ks_data.ksnd_tconn_lock));
 
         tconn->kstc_rcv_wnd = tconn->kstc_snd_wnd = 0x10000;
     }
@@ -4368,7 +4368,7 @@ ks_free_tconn(ks_tconn_t * tconn)
 {
     LASSERT(cfs_atomic_read(&(tconn->kstc_refcount)) == 0);
 
-    cfs_spin_lock(&(ks_data.ksnd_tconn_lock));
+	spin_lock(&(ks_data.ksnd_tconn_lock));
 
     /* remove it from the global list */
     cfs_list_del(&tconn->kstc_list);
@@ -4379,7 +4379,7 @@ ks_free_tconn(ks_tconn_t * tconn)
     if (ks_data.ksnd_ntconns == 0) {
         cfs_wake_event(&ks_data.ksnd_tconn_exit);
     }
-    cfs_spin_unlock(&(ks_data.ksnd_tconn_lock));
+	spin_unlock(&(ks_data.ksnd_tconn_lock));
 
     /* free the structure memory */
     cfs_mem_cache_free(ks_data.ksnd_tconn_slab, tconn);
@@ -4534,13 +4534,13 @@ ks_put_tconn(
 {
     if (cfs_atomic_dec_and_test(&(tconn->kstc_refcount))) {
 
-        cfs_spin_lock(&(tconn->kstc_lock));
+	spin_lock(&(tconn->kstc_lock));
 
         if ( ( tconn->kstc_type == kstt_child ||
                tconn->kstc_type == kstt_sender ) &&
              ( tconn->kstc_state == ksts_connected ) ) {
 
-            cfs_spin_unlock(&(tconn->kstc_lock));
+	    spin_unlock(&(tconn->kstc_lock));
 
             ks_abort_tconn(tconn);
 
@@ -4557,7 +4557,7 @@ ks_put_tconn(
                 cfs_set_flag(tconn->kstc_flags, KS_TCONN_DESTROY_BUSY);
             }
 
-            cfs_spin_unlock(&(tconn->kstc_lock));
+	    spin_unlock(&(tconn->kstc_lock));
         }
     }
 }
@@ -4621,8 +4621,8 @@ ks_destroy_tconn(
                 tconn->kstc_addr.FileObject
                 );
 
-        cfs_spin_lock(&tconn->child.kstc_parent->kstc_lock);
-        cfs_spin_lock(&tconn->kstc_lock);
+	spin_lock(&tconn->child.kstc_parent->kstc_lock);
+	spin_lock(&tconn->kstc_lock);
 
         tconn->kstc_state = ksts_inited;
 
@@ -4646,8 +4646,8 @@ ks_destroy_tconn(
             tconn->child.kstc_queued = FALSE;
         }
 
-        cfs_spin_unlock(&tconn->kstc_lock);
-        cfs_spin_unlock(&tconn->child.kstc_parent->kstc_lock);
+	spin_unlock(&tconn->kstc_lock);
+	spin_unlock(&tconn->child.kstc_parent->kstc_lock);
 
         /* drop the reference of the parent tconn */
         ks_put_tconn(tconn->child.kstc_parent);
@@ -5222,7 +5222,7 @@ ks_build_tconn(
                     NULL
                     );
 
-    cfs_spin_lock(&(tconn->kstc_lock));
+	spin_lock(&(tconn->kstc_lock));
 
     if (NT_SUCCESS(status)) {
 
@@ -5233,7 +5233,7 @@ ks_build_tconn(
         tconn->sender.kstc_info.ConnectionInfo = ConnectionInfo;
         tconn->sender.kstc_info.Remote         = ConnectionInfo->RemoteAddress;
 
-        cfs_spin_unlock(&(tconn->kstc_lock));
+	spin_unlock(&(tconn->kstc_lock));
 
     } else {
 
@@ -5247,7 +5247,7 @@ ks_build_tconn(
         rc = cfs_error_code(status);
 
         tconn->kstc_state = ksts_associated;
-        cfs_spin_unlock(&(tconn->kstc_lock));
+	spin_unlock(&(tconn->kstc_lock));
 
         /* disassocidate the connection and the address object,
            after cleanup,  it's safe to set the state to abort ... */
@@ -5405,7 +5405,7 @@ ks_disconnect_tconn(
             cfs_enter_debugger();
         }
 
-        cfs_spin_lock(&(tconn->kstc_lock));
+	spin_lock(&(tconn->kstc_lock));
 
         /* cleanup the tsdumgr Lists */
         KsCleanupTsdu (tconn);
@@ -5422,7 +5422,7 @@ ks_disconnect_tconn(
         info->ConnectionInfo = NULL;
         info->Remote = NULL;
 
-        cfs_spin_unlock(&(tconn->kstc_lock));
+	spin_unlock(&(tconn->kstc_lock));
     }
 
     status = STATUS_SUCCESS;
@@ -5460,7 +5460,7 @@ ks_abort_tconn(
     WorkItem = &(tconn->kstc_disconnect);
 
     ks_get_tconn(tconn);
-    cfs_spin_lock(&(tconn->kstc_lock));
+	spin_lock(&(tconn->kstc_lock));
 
     if (tconn->kstc_state != ksts_connected) {
         ks_put_tconn(tconn);
@@ -5480,7 +5480,7 @@ ks_abort_tconn(
         }
     }
 
-    cfs_spin_unlock(&(tconn->kstc_lock));
+	spin_unlock(&(tconn->kstc_lock));
 }
 
 
@@ -5556,7 +5556,7 @@ KsQueueTdiEngine(ks_tconn_t * tconn, PKS_TSDUMGR TsduMgr)
     engs = &TsduMgr->Slot;
 
     if (!engs->queued) {
-        cfs_spin_lock(&engm->lock);
+	spin_lock(&engm->lock);
         if (!engs->queued) {
             cfs_list_add_tail(&engs->link, &engm->list);
             engs->queued = TRUE;
@@ -5565,7 +5565,7 @@ KsQueueTdiEngine(ks_tconn_t * tconn, PKS_TSDUMGR TsduMgr)
             engs->tsdumgr = TsduMgr;
             KeSetEvent(&(engm->start),0, FALSE);
         }
-        cfs_spin_unlock(&engm->lock);
+	spin_unlock(&engm->lock);
         KsPrint((4, "KsQueueTdiEngine: TsduMgr=%p is queued to engine %p\n",
                     TsduMgr, engm));
     }
@@ -5582,7 +5582,7 @@ KsRemoveTdiEngine(PKS_TSDUMGR TsduMgr)
     if (engs->queued) {
         engm = engs->emgr;
         LASSERT(engm != NULL);
-        cfs_spin_lock(&engm->lock);
+	spin_lock(&engm->lock);
         if (engs->queued) {
             cfs_list_del(&engs->link);
             engs->queued = FALSE;
@@ -5590,7 +5590,7 @@ KsRemoveTdiEngine(PKS_TSDUMGR TsduMgr)
             engs->emgr = NULL;
             engs->tsdumgr = NULL;
         }
-        cfs_spin_unlock(&engm->lock);
+	spin_unlock(&engm->lock);
         KsPrint((4, "KsQueueTdiEngine: TsduMgr %p is removed from engine %p\n",
                     TsduMgr, engm));
     }
@@ -5807,9 +5807,9 @@ KsDeliveryEngineThread(void * context)
 
         cfs_wait_event_internal(&engm->start, 0);
 
-        cfs_spin_lock(&engm->lock);
+	spin_lock(&engm->lock);
         if (cfs_list_empty(&engm->list)) {
-            cfs_spin_unlock(&engm->lock);
+	    spin_unlock(&engm->lock);
             continue;
         }
 
@@ -5820,7 +5820,7 @@ KsDeliveryEngineThread(void * context)
         LASSERT(engs->queued);
         engs->emgr = NULL;
         engs->queued = FALSE;
-        cfs_spin_unlock(&engm->lock);
+	spin_unlock(&engm->lock);
 
         tconn = engs->tconn;
         LASSERT(tconn->kstc_magic == KS_TCONN_MAGIC);
@@ -5859,7 +5859,7 @@ ks_init_tdi_data()
     /* initialize tconn related globals */
     RtlZeroMemory(&ks_data, sizeof(ks_tdi_data_t));
 
-    cfs_spin_lock_init(&ks_data.ksnd_tconn_lock);
+	spin_lock_init(&ks_data.ksnd_tconn_lock);
     CFS_INIT_LIST_HEAD(&ks_data.ksnd_tconns);
     cfs_init_event(&ks_data.ksnd_tconn_exit, TRUE, FALSE);
 
@@ -5872,7 +5872,7 @@ ks_init_tdi_data()
     }
 
     /* initialize tsdu related globals */
-    cfs_spin_lock_init(&ks_data.ksnd_tsdu_lock);
+	spin_lock_init(&ks_data.ksnd_tsdu_lock);
     CFS_INIT_LIST_HEAD(&ks_data.ksnd_freetsdus);
     ks_data.ksnd_tsdu_size = TDINAL_TSDU_DEFAULT_SIZE; /* 64k */
     ks_data.ksnd_tsdu_slab = cfs_mem_cache_create(
@@ -5895,7 +5895,7 @@ ks_init_tdi_data()
         goto errorout;
     }
     for (i = 0; i < ks_data.ksnd_engine_nums; i++) {
-        cfs_spin_lock_init(&ks_data.ksnd_engine_mgr[i].lock);
+		spin_lock_init(&ks_data.ksnd_engine_mgr[i].lock);
         cfs_init_event(&ks_data.ksnd_engine_mgr[i].start, TRUE, FALSE);
         cfs_init_event(&ks_data.ksnd_engine_mgr[i].exit, TRUE, FALSE);
         CFS_INIT_LIST_HEAD(&ks_data.ksnd_engine_mgr[i].list);
@@ -5954,12 +5954,12 @@ ks_fini_tdi_data()
     }
 
     /* we need wait until all the tconn are freed */
-    cfs_spin_lock(&(ks_data.ksnd_tconn_lock));
+	spin_lock(&(ks_data.ksnd_tconn_lock));
 
     if (cfs_list_empty(&(ks_data.ksnd_tconns))) {
         cfs_wake_event(&ks_data.ksnd_tconn_exit);
     }
-    cfs_spin_unlock(&(ks_data.ksnd_tconn_lock));
+	spin_unlock(&(ks_data.ksnd_tconn_lock));
 
     /* now wait on the tconn exit event */
     cfs_wait_event_internal(&ks_data.ksnd_tconn_exit, 0);
@@ -5969,7 +5969,7 @@ ks_fini_tdi_data()
     ks_data.ksnd_tconn_slab = NULL;
 
     /* clean up all the tsud buffers in the free list */
-    cfs_spin_lock(&(ks_data.ksnd_tsdu_lock));
+	spin_lock(&(ks_data.ksnd_tsdu_lock));
     cfs_list_for_each (list, &ks_data.ksnd_freetsdus) {
         KsTsdu = cfs_list_entry (list, KS_TSDU, Link);
 
@@ -5977,7 +5977,7 @@ ks_fini_tdi_data()
                 ks_data.ksnd_tsdu_slab,
                 KsTsdu );
     }
-    cfs_spin_unlock(&(ks_data.ksnd_tsdu_lock));
+	spin_unlock(&(ks_data.ksnd_tsdu_lock));
 
     /* it's safe to delete the tsdu slab ... */
     cfs_mem_cache_destroy(ks_data.ksnd_tsdu_slab);
@@ -6101,22 +6101,22 @@ ks_replenish_backlogs(
         /* create the backlog child tconn */
         backlog = ks_create_child_tconn(parent);
 
-        cfs_spin_lock(&(parent->kstc_lock));
+	spin_lock(&(parent->kstc_lock));
 
         if (backlog) {
-            cfs_spin_lock(&backlog->kstc_lock);
+	    spin_lock(&backlog->kstc_lock);
             /* attch it into the listing list of daemon */
             cfs_list_add( &backlog->child.kstc_link,
                       &parent->listener.kstc_listening.list );
             parent->listener.kstc_listening.num++;
 
             backlog->child.kstc_queued = TRUE;
-            cfs_spin_unlock(&backlog->kstc_lock);
+	    spin_unlock(&backlog->kstc_lock);
         } else {
             cfs_enter_debugger();
         }
 
-        cfs_spin_unlock(&(parent->kstc_lock));
+	spin_unlock(&(parent->kstc_lock));
     }
 }
 
@@ -6151,13 +6151,13 @@ ks_start_listen(ks_tconn_t *tconn, int nbacklog)
         return rc;
     }
 
-    cfs_spin_lock(&(tconn->kstc_lock));
-    tconn->listener.nbacklog = nbacklog;
-    tconn->kstc_state = ksts_listening;
-    cfs_set_flag(tconn->kstc_flags, KS_TCONN_DAEMON_STARTED);
-    cfs_spin_unlock(&(tconn->kstc_lock));
+	spin_lock(&(tconn->kstc_lock));
+	tconn->listener.nbacklog = nbacklog;
+	tconn->kstc_state = ksts_listening;
+	cfs_set_flag(tconn->kstc_flags, KS_TCONN_DAEMON_STARTED);
+	spin_unlock(&(tconn->kstc_lock));
 
-    return rc;
+	return rc;
 }
 
 void
@@ -6169,7 +6169,7 @@ ks_stop_listen(ks_tconn_t *tconn)
     /* reset all tdi event callbacks to NULL */
     KsResetHandlers (tconn);
 
-    cfs_spin_lock(&tconn->kstc_lock);
+	spin_lock(&tconn->kstc_lock);
 
     cfs_clear_flag(tconn->kstc_flags, KS_TCONN_DAEMON_STARTED);
 
@@ -6181,7 +6181,7 @@ ks_stop_listen(ks_tconn_t *tconn)
         ks_put_tconn(backlog);
     }
 
-    cfs_spin_unlock(&tconn->kstc_lock);
+	spin_unlock(&tconn->kstc_lock);
 
     /* wake up it from the waiting on new incoming connections */
     KeSetEvent(&tconn->listener.kstc_accept_event, 0, FALSE);
@@ -6217,10 +6217,10 @@ ks_wait_child_tconn(
 
     ks_replenish_backlogs(parent, parent->listener.nbacklog);
 
-    cfs_spin_lock(&(parent->kstc_lock));
+	spin_lock(&(parent->kstc_lock));
 
-    if (parent->listener.kstc_listening.num <= 0) {
-        cfs_spin_unlock(&(parent->kstc_lock));
+	if (parent->listener.kstc_listening.num <= 0) {
+		spin_unlock(&(parent->kstc_lock));
         return -1;
     }
 
@@ -6231,7 +6231,7 @@ again:
     cfs_list_for_each(tmp, &(parent->listener.kstc_listening.list)) {
         backlog = cfs_list_entry (tmp, ks_tconn_t, child.kstc_link);
 
-        cfs_spin_lock(&(backlog->kstc_lock));
+	spin_lock(&(backlog->kstc_lock));
 
         if (backlog->child.kstc_accepted) {
 
@@ -6245,16 +6245,16 @@ again:
             parent->listener.kstc_listening.num--;
             backlog->child.kstc_queueno = 1;
 
-            cfs_spin_unlock(&(backlog->kstc_lock));
+	    spin_unlock(&(backlog->kstc_lock));
 
             break;
         } else {
-            cfs_spin_unlock(&(backlog->kstc_lock));
+	    spin_unlock(&(backlog->kstc_lock));
             backlog = NULL;
         }
     }
 
-    cfs_spin_unlock(&(parent->kstc_lock));
+	spin_unlock(&(parent->kstc_lock));
 
     /* we need wait until new incoming connections are requested
        or the case of shuting down the listenig daemon thread  */
@@ -6270,11 +6270,11 @@ again:
                 NULL
                 );
 
-        cfs_spin_lock(&(parent->kstc_lock));
+	spin_lock(&(parent->kstc_lock));
 
         /* check whether it's exptected to exit ? */
         if (!cfs_is_flag_set(parent->kstc_flags, KS_TCONN_DAEMON_STARTED)) {
-            cfs_spin_unlock(&(parent->kstc_lock));
+	    spin_unlock(&(parent->kstc_lock));
         } else {
             goto again;
         }
@@ -6524,7 +6524,7 @@ int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask)
     ks_addr_slot_t * slot = NULL;
     PLIST_ENTRY      list = NULL;
 
-    cfs_spin_lock(&ks_data.ksnd_addrs_lock);
+	spin_lock(&ks_data.ksnd_addrs_lock);
 
     list = ks_data.ksnd_addrs_list.Flink;
     while (list != &ks_data.ksnd_addrs_list) {
@@ -6539,7 +6539,7 @@ int libcfs_ipif_query(char *name, int *up, __u32 *ip, __u32 *mask)
         slot = NULL;
     }
 
-    cfs_spin_unlock(&ks_data.ksnd_addrs_lock);
+	spin_unlock(&ks_data.ksnd_addrs_lock);
 
     return (int)(slot == NULL);
 }
@@ -6550,7 +6550,7 @@ int libcfs_ipif_enumerate(char ***names)
     PLIST_ENTRY      list = NULL;
     int              nips = 0;
 
-    cfs_spin_lock(&ks_data.ksnd_addrs_lock);
+	spin_lock(&ks_data.ksnd_addrs_lock);
 
     *names = cfs_alloc(sizeof(char *) * ks_data.ksnd_naddrs, CFS_ALLOC_ZERO);
     if (*names == NULL) {
@@ -6569,7 +6569,7 @@ int libcfs_ipif_enumerate(char ***names)
 
 errorout:
 
-    cfs_spin_unlock(&ks_data.ksnd_addrs_lock);
+	spin_unlock(&ks_data.ksnd_addrs_lock);
     return nips;
 }
 
@@ -6626,7 +6626,7 @@ void libcfs_sock_abort_accept(struct socket *sock)
 {
     LASSERT(sock->kstc_type == kstt_listener);
 
-    cfs_spin_lock(&(sock->kstc_lock));
+	spin_lock(&(sock->kstc_lock));
 
     /* clear the daemon flag */
     cfs_clear_flag(sock->kstc_flags, KS_TCONN_DAEMON_STARTED);
@@ -6634,7 +6634,7 @@ void libcfs_sock_abort_accept(struct socket *sock)
     /* wake up it from the waiting on new incoming connections */
     KeSetEvent(&sock->listener.kstc_accept_event, 0, FALSE);
 
-    cfs_spin_unlock(&(sock->kstc_lock));
+	spin_unlock(&(sock->kstc_lock));
 }
 
 /*
@@ -6718,7 +6718,7 @@ int libcfs_sock_getaddr(struct socket *socket, int remote, __u32 *ip, int *port)
 {
     PTRANSPORT_ADDRESS  taddr = NULL;
 
-    cfs_spin_lock(&socket->kstc_lock);
+	spin_lock(&socket->kstc_lock);
     if (remote) {
         if (socket->kstc_type == kstt_sender) {
             taddr = socket->sender.kstc_info.Remote;
@@ -6736,12 +6736,12 @@ int libcfs_sock_getaddr(struct socket *socket, int remote, __u32 *ip, int *port)
         if (port != NULL)
             *port = ntohs (addr->sin_port);
     } else {
-        cfs_spin_unlock(&socket->kstc_lock);
-        return -ENOTCONN;
-    }
+		spin_unlock(&socket->kstc_lock);
+		return -ENOTCONN;
+	}
 
-    cfs_spin_unlock(&socket->kstc_lock);
-    return 0;
+	spin_unlock(&socket->kstc_lock);
+	return 0;
 }
 
 int libcfs_sock_write(struct socket *sock, void *buffer, int nob, int timeout)

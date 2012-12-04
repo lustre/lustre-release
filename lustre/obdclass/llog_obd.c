@@ -79,21 +79,21 @@ int __llog_ctxt_put(const struct lu_env *env, struct llog_ctxt *ctxt)
         struct obd_device *obd;
         int rc = 0;
 
-        cfs_spin_lock(&olg->olg_lock);
-        if (!cfs_atomic_dec_and_test(&ctxt->loc_refcount)) {
-                cfs_spin_unlock(&olg->olg_lock);
-                return rc;
-        }
-        olg->olg_ctxts[ctxt->loc_idx] = NULL;
-        cfs_spin_unlock(&olg->olg_lock);
+	spin_lock(&olg->olg_lock);
+	if (!cfs_atomic_dec_and_test(&ctxt->loc_refcount)) {
+		spin_unlock(&olg->olg_lock);
+		return rc;
+	}
+	olg->olg_ctxts[ctxt->loc_idx] = NULL;
+	spin_unlock(&olg->olg_lock);
 
-        if (ctxt->loc_lcm)
-                lcm_put(ctxt->loc_lcm);
+	if (ctxt->loc_lcm)
+		lcm_put(ctxt->loc_lcm);
 
-        obd = ctxt->loc_obd;
-        cfs_spin_lock(&obd->obd_dev_lock);
-        /* sync with llog ctxt user thread */
-        cfs_spin_unlock(&obd->obd_dev_lock);
+	obd = ctxt->loc_obd;
+	spin_lock(&obd->obd_dev_lock);
+	/* sync with llog ctxt user thread */
+	spin_unlock(&obd->obd_dev_lock);
 
         /* obd->obd_starting is needed for the case of cleanup
          * in error case while obd is starting up. */
@@ -171,7 +171,7 @@ int llog_setup(const struct lu_env *env, struct obd_device *obd,
         ctxt->loc_olg = olg;
         ctxt->loc_idx = index;
         ctxt->loc_logops = op;
-        cfs_mutex_init(&ctxt->loc_mutex);
+	mutex_init(&ctxt->loc_mutex);
         ctxt->loc_exp = class_export_get(disk_obd->obd_self_export);
         ctxt->loc_flags = LLOG_CTXT_FLAG_UNINITIALIZED;
 

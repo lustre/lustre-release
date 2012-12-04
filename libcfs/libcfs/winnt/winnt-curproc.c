@@ -204,7 +204,7 @@ task_manager_notify(
     PLIST_ENTRY ListEntry = NULL; 
     PTASK_SLOT  TaskSlot  = NULL;
 
-    cfs_spin_lock(&(cfs_win_task_manger.Lock));
+	spin_lock(&(cfs_win_task_manger.Lock));
 
     ListEntry = cfs_win_task_manger.TaskList.Flink;
     while (ListEntry != (&(cfs_win_task_manger.TaskList))) {
@@ -226,7 +226,7 @@ task_manager_notify(
         ListEntry = ListEntry->Flink;
     }
 
-    cfs_spin_unlock(&(cfs_win_task_manger.Lock));
+	spin_unlock(&(cfs_win_task_manger.Lock));
 }
 
 int
@@ -239,7 +239,7 @@ init_task_manager()
     cfs_win_task_manger.Magic = TASKMAN_MAGIC;
 
     /* initialize the spinlock protection */
-    cfs_spin_lock_init(&cfs_win_task_manger.Lock);
+	spin_lock_init(&cfs_win_task_manger.Lock);
 
     /* create slab memory cache */
     cfs_win_task_manger.slab = cfs_mem_cache_create(
@@ -285,7 +285,7 @@ cleanup_task_manager()
     }
 
     /* cleanup all the taskslots attached to the list */
-    cfs_spin_lock(&(cfs_win_task_manger.Lock));
+	spin_lock(&(cfs_win_task_manger.Lock));
 
     while (!IsListEmpty(&(cfs_win_task_manger.TaskList))) {
 
@@ -296,7 +296,7 @@ cleanup_task_manager()
         cleanup_task_slot(TaskSlot);
     }
 
-    cfs_spin_unlock(&cfs_win_task_manger.Lock);
+	spin_unlock(&cfs_win_task_manger.Lock);
 
     /* destroy the taskslot cache slab */
     cfs_mem_cache_destroy(cfs_win_task_manger.slab);
@@ -319,7 +319,7 @@ cfs_current()
     PLIST_ENTRY ListEntry = NULL; 
     PTASK_SLOT  TaskSlot  = NULL;
 
-    cfs_spin_lock(&(cfs_win_task_manger.Lock));
+	spin_lock(&(cfs_win_task_manger.Lock));
 
     ListEntry = cfs_win_task_manger.TaskList.Flink;
     while (ListEntry != (&(cfs_win_task_manger.TaskList))) {
@@ -415,7 +415,7 @@ cfs_current()
 
 errorout:
 
-    cfs_spin_unlock(&(cfs_win_task_manger.Lock));
+	spin_unlock(&(cfs_win_task_manger.Lock));
 
     if (!TaskSlot) {
         cfs_enter_debugger();

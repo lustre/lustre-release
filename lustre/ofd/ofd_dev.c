@@ -501,27 +501,27 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 	m->ofd_fmd_max_num = OFD_FMD_MAX_NUM_DEFAULT;
 	m->ofd_fmd_max_age = OFD_FMD_MAX_AGE_DEFAULT;
 
-	cfs_spin_lock_init(&m->ofd_flags_lock);
+	spin_lock_init(&m->ofd_flags_lock);
 	m->ofd_raid_degraded = 0;
 	m->ofd_syncjournal = 0;
 	ofd_slc_set(m);
 	m->ofd_grant_compat_disable = 0;
 
 	/* statfs data */
-	cfs_spin_lock_init(&m->ofd_osfs_lock);
+	spin_lock_init(&m->ofd_osfs_lock);
 	m->ofd_osfs_age = cfs_time_shift_64(-1000);
 	m->ofd_osfs_unstable = 0;
 	m->ofd_statfs_inflight = 0;
 	m->ofd_osfs_inflight = 0;
 
 	/* grant data */
-	cfs_spin_lock_init(&m->ofd_grant_lock);
+	spin_lock_init(&m->ofd_grant_lock);
 	m->ofd_tot_dirty = 0;
 	m->ofd_tot_granted = 0;
 	m->ofd_tot_pending = 0;
 	m->ofd_max_group = 0;
 
-	cfs_rwlock_init(&obd->u.filter.fo_sptlrpc_lock);
+	rwlock_init(&obd->u.filter.fo_sptlrpc_lock);
 	sptlrpc_rule_set_init(&obd->u.filter.fo_sptlrpc_rset);
 
 	obd->u.filter.fo_fl_oss_capa = 0;
@@ -575,7 +575,7 @@ static int ofd_init0(const struct lu_env *env, struct ofd_device *m,
 				obd->obd_name, osfs->os_bsize);
 		GOTO(err_fini_stack, rc = -EPROTO);
 	}
-	m->ofd_blockbits = cfs_fls(osfs->os_bsize) - 1;
+	m->ofd_blockbits = fls(osfs->os_bsize) - 1;
 
 	snprintf(info->fti_u.name, sizeof(info->fti_u.name), "filter-%p", m);
 	m->ofd_namespace = ldlm_namespace_new(obd, info->fti_u.name,

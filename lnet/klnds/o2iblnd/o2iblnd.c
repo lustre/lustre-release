@@ -352,7 +352,7 @@ kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
         CFS_INIT_LIST_HEAD(&peer->ibp_conns);
         CFS_INIT_LIST_HEAD(&peer->ibp_tx_queue);
 
-        cfs_write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         /* always called with a ref on ni, which prevents ni being shutdown */
         LASSERT (net->ibn_shutdown == 0);
@@ -360,7 +360,7 @@ kiblnd_create_peer(lnet_ni_t *ni, kib_peer_t **peerp, lnet_nid_t nid)
         /* npeers only grows with the global lock held */
         cfs_atomic_inc(&net->ibn_npeers);
 
-        cfs_write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
         *peerp = peer;
         return 0;
@@ -437,7 +437,7 @@ kiblnd_get_peer_info (lnet_ni_t *ni, int index,
         int                    i;
         unsigned long          flags;
 
-        cfs_read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         for (i = 0; i < kiblnd_data.kib_peer_hash_size; i++) {
 
@@ -457,13 +457,13 @@ kiblnd_get_peer_info (lnet_ni_t *ni, int index,
                         *nidp = peer->ibp_nid;
                         *count = cfs_atomic_read(&peer->ibp_refcount);
 
-                        cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
-                                                   flags);
-                        return 0;
-                }
-        }
+			read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
+					       flags);
+			return 0;
+		}
+	}
 
-        cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
         return -ENOENT;
 }
 
@@ -501,7 +501,7 @@ kiblnd_del_peer (lnet_ni_t *ni, lnet_nid_t nid)
         unsigned long          flags;
         int                    rc = -ENOENT;
 
-        cfs_write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         if (nid != LNET_NID_ANY) {
                 lo = hi = kiblnd_nid2peerlist(nid) - kiblnd_data.kib_peers;
@@ -535,7 +535,7 @@ kiblnd_del_peer (lnet_ni_t *ni, lnet_nid_t nid)
                 }
         }
 
-        cfs_write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
         kiblnd_txlist_done(ni, &zombies, -EIO);
 
@@ -552,7 +552,7 @@ kiblnd_get_conn_by_idx (lnet_ni_t *ni, int index)
         int                    i;
         unsigned long          flags;
 
-        cfs_read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         for (i = 0; i < kiblnd_data.kib_peer_hash_size; i++) {
                 cfs_list_for_each (ptmp, &kiblnd_data.kib_peers[i]) {
@@ -572,14 +572,14 @@ kiblnd_get_conn_by_idx (lnet_ni_t *ni, int index)
                                 conn = cfs_list_entry(ctmp, kib_conn_t,
                                                       ibc_list);
                                 kiblnd_conn_addref(conn);
-                                cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
-                                                           flags);
-                                return conn;
-                        }
-                }
-        }
+				read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
+						       flags);
+				return conn;
+			}
+		}
+	}
 
-        cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
         return NULL;
 }
 
@@ -606,10 +606,10 @@ kiblnd_debug_tx (kib_tx_t *tx)
 void
 kiblnd_debug_conn (kib_conn_t *conn)
 {
-        cfs_list_t           *tmp;
-        int                   i;
+	cfs_list_t	*tmp;
+	int		i;
 
-        cfs_spin_lock(&conn->ibc_lock);
+	spin_lock(&conn->ibc_lock);
 
         CDEBUG(D_CONSOLE, "conn[%d] %p [version %x] -> %s: \n",
                cfs_atomic_read(&conn->ibc_refcount), conn,
@@ -648,7 +648,7 @@ kiblnd_debug_conn (kib_conn_t *conn)
         for (i = 0; i < IBLND_RX_MSGS(conn->ibc_version); i++)
                 kiblnd_debug_rx(&conn->ibc_rxs[i]);
 
-        cfs_spin_unlock(&conn->ibc_lock);
+	spin_unlock(&conn->ibc_lock);
 }
 
 int
@@ -725,7 +725,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
          * she must dispose of 'cmid'.  (Actually I'd block forever if I tried
          * to destroy 'cmid' here since I'm called from the CM which still has
          * its ref on 'cmid'). */
-        cfs_rwlock_t           *glock = &kiblnd_data.kib_global_lock;
+	rwlock_t		*glock = &kiblnd_data.kib_global_lock;
         kib_net_t              *net = peer->ibp_ni->ni_data;
         kib_dev_t              *dev = net->ibn_dev;
         struct ib_qp_init_attr *init_qp_attr;
@@ -772,21 +772,21 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
         CFS_INIT_LIST_HEAD(&conn->ibc_tx_queue_rsrvd);
         CFS_INIT_LIST_HEAD(&conn->ibc_tx_queue_nocred);
         CFS_INIT_LIST_HEAD(&conn->ibc_active_txs);
-        cfs_spin_lock_init(&conn->ibc_lock);
+	spin_lock_init(&conn->ibc_lock);
 
 	LIBCFS_CPT_ALLOC(conn->ibc_connvars, lnet_cpt_table(), cpt,
 			 sizeof(*conn->ibc_connvars));
-        if (conn->ibc_connvars == NULL) {
-                CERROR("Can't allocate in-progress connection state\n");
-                goto failed_2;
-        }
+	if (conn->ibc_connvars == NULL) {
+		CERROR("Can't allocate in-progress connection state\n");
+		goto failed_2;
+	}
 
-        cfs_write_lock_irqsave(glock, flags);
-        if (dev->ibd_failover) {
-                cfs_write_unlock_irqrestore(glock, flags);
-                CERROR("%s: failover in progress\n", dev->ibd_ifname);
-                goto failed_2;
-        }
+	write_lock_irqsave(glock, flags);
+	if (dev->ibd_failover) {
+		write_unlock_irqrestore(glock, flags);
+		CERROR("%s: failover in progress\n", dev->ibd_ifname);
+		goto failed_2;
+	}
 
         if (dev->ibd_hdev->ibh_ibdev != cmid->device) {
                 /* wakeup failover thread and teardown connection */
@@ -796,7 +796,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
                         cfs_waitq_signal(&kiblnd_data.kib_failover_waitq);
                 }
 
-                cfs_write_unlock_irqrestore(glock, flags);
+		write_unlock_irqrestore(glock, flags);
                 CERROR("cmid HCA(%s), kib_dev(%s) need failover\n",
                        cmid->device->name, dev->ibd_ifname);
                 goto failed_2;
@@ -807,7 +807,7 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 
         kiblnd_setup_mtu_locked(cmid);
 
-        cfs_write_unlock_irqrestore(glock, flags);
+	write_unlock_irqrestore(glock, flags);
 
 	LIBCFS_CPT_ALLOC(conn->ibc_rxs, lnet_cpt_table(), cpt,
 			 IBLND_RX_MSGS(version) * sizeof(kib_rx_t));
@@ -818,10 +818,10 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 
 	rc = kiblnd_alloc_pages(&conn->ibc_rx_pages, cpt,
 				IBLND_RX_MSG_PAGES(version));
-        if (rc != 0)
-                goto failed_2;
+	if (rc != 0)
+		goto failed_2;
 
-        kiblnd_map_rx_descs(conn);
+	kiblnd_map_rx_descs(conn);
 
 #ifdef HAVE_OFED_IB_COMP_VECTOR
 	cq = ib_create_cq(cmid->device,
@@ -886,9 +886,9 @@ kiblnd_create_conn(kib_peer_t *peer, struct rdma_cm_id *cmid,
 
                         /* correct # of posted buffers
                          * NB locking needed now I'm racing with completion */
-			cfs_spin_lock_irqsave(&sched->ibs_lock, flags);
+			spin_lock_irqsave(&sched->ibs_lock, flags);
 			conn->ibc_nrx -= IBLND_RX_MSGS(version) - i;
-			cfs_spin_unlock_irqrestore(&sched->ibs_lock, flags);
+			spin_unlock_irqrestore(&sched->ibs_lock, flags);
 
                         /* cmid will be destroyed by CM(ofed) after cm_callback
                          * returned, so we can't refer it anymore
@@ -1053,7 +1053,7 @@ kiblnd_close_matching_conns (lnet_ni_t *ni, lnet_nid_t nid)
         unsigned long           flags;
         int                     count = 0;
 
-        cfs_write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         if (nid != LNET_NID_ANY)
                 lo = hi = kiblnd_nid2peerlist(nid) - kiblnd_data.kib_peers;
@@ -1080,7 +1080,7 @@ kiblnd_close_matching_conns (lnet_ni_t *ni, lnet_nid_t nid)
                 }
         }
 
-        cfs_write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
         /* wildcards always succeed */
         if (nid == LNET_NID_ANY)
@@ -1146,13 +1146,13 @@ kiblnd_ctl(lnet_ni_t *ni, unsigned int cmd, void *arg)
 void
 kiblnd_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
 {
-        cfs_time_t         last_alive = 0;
-        cfs_time_t         now = cfs_time_current();
-        cfs_rwlock_t      *glock = &kiblnd_data.kib_global_lock;
-        kib_peer_t        *peer;
-        unsigned long      flags;
+	cfs_time_t	last_alive = 0;
+	cfs_time_t	now = cfs_time_current();
+	rwlock_t	*glock = &kiblnd_data.kib_global_lock;
+	kib_peer_t	*peer;
+	unsigned long	flags;
 
-        cfs_read_lock_irqsave(glock, flags);
+	read_lock_irqsave(glock, flags);
 
         peer = kiblnd_find_peer_locked(nid);
         if (peer != NULL) {
@@ -1162,7 +1162,7 @@ kiblnd_query (lnet_ni_t *ni, lnet_nid_t nid, cfs_time_t *when)
                 last_alive = peer->ibp_last_alive;
         }
 
-        cfs_read_unlock_irqrestore(glock, flags);
+	read_unlock_irqrestore(glock, flags);
 
         if (last_alive != 0)
                 *when = last_alive;
@@ -1317,22 +1317,23 @@ kiblnd_current_hdev(kib_dev_t *dev)
         unsigned long  flags;
         int            i = 0;
 
-        cfs_read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-        while (dev->ibd_failover) {
-                cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
-                if (i++ % 50 == 0)
-                        CDEBUG(D_NET, "Wait for dev(%s) failover\n", dev->ibd_ifname);
-                cfs_schedule_timeout(cfs_time_seconds(1) / 100);
+	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	while (dev->ibd_failover) {
+		read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+		if (i++ % 50 == 0)
+			CDEBUG(D_NET, "%s: Wait for failover\n",
+			       dev->ibd_ifname);
+		cfs_schedule_timeout(cfs_time_seconds(1) / 100);
 
-                cfs_read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-        }
+		read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	}
 
-        kiblnd_hdev_addref_locked(dev->ibd_hdev);
-        hdev = dev->ibd_hdev;
+	kiblnd_hdev_addref_locked(dev->ibd_hdev);
+	hdev = dev->ibd_hdev;
 
-        cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
-        return hdev;
+	return hdev;
 }
 
 static void
@@ -1525,7 +1526,7 @@ kiblnd_fail_fmr_poolset(kib_fmr_poolset_t *fps, cfs_list_t *zombies)
 	if (fps->fps_net == NULL) /* intialized? */
 		return;
 
-        cfs_spin_lock(&fps->fps_lock);
+	spin_lock(&fps->fps_lock);
 
         while (!cfs_list_empty(&fps->fps_pool_list)) {
                 kib_fmr_pool_t *fpo = cfs_list_entry(fps->fps_pool_list.next,
@@ -1538,7 +1539,7 @@ kiblnd_fail_fmr_poolset(kib_fmr_poolset_t *fps, cfs_list_t *zombies)
                         cfs_list_add(&fpo->fpo_list, &fps->fps_failed_pool_list);
         }
 
-        cfs_spin_unlock(&fps->fps_lock);
+	spin_unlock(&fps->fps_lock);
 }
 
 static void
@@ -1563,7 +1564,7 @@ kiblnd_init_fmr_poolset(kib_fmr_poolset_t *fps, int cpt, kib_net_t *net,
 	fps->fps_cpt = cpt;
 	fps->fps_pool_size = pool_size;
 	fps->fps_flush_trigger = flush_trigger;
-	cfs_spin_lock_init(&fps->fps_lock);
+	spin_lock_init(&fps->fps_lock);
 	CFS_INIT_LIST_HEAD(&fps->fps_pool_list);
 	CFS_INIT_LIST_HEAD(&fps->fps_failed_pool_list);
 
@@ -1605,7 +1606,7 @@ kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status)
         fmr->fmr_pool = NULL;
         fmr->fmr_pfmr = NULL;
 
-        cfs_spin_lock(&fps->fps_lock);
+	spin_lock(&fps->fps_lock);
         fpo->fpo_map_count --;  /* decref the pool */
 
         cfs_list_for_each_entry_safe(fpo, tmp, &fps->fps_pool_list, fpo_list) {
@@ -1618,7 +1619,7 @@ kiblnd_fmr_pool_unmap(kib_fmr_t *fmr, int status)
                         fps->fps_version ++;
                 }
         }
-        cfs_spin_unlock(&fps->fps_lock);
+	spin_unlock(&fps->fps_lock);
 
         if (!cfs_list_empty(&zombies))
                 kiblnd_destroy_fmr_pool_list(&zombies);
@@ -1634,12 +1635,12 @@ kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages, int npages,
         int                 rc;
 
  again:
-        cfs_spin_lock(&fps->fps_lock);
-        version = fps->fps_version;
-        cfs_list_for_each_entry(fpo, &fps->fps_pool_list, fpo_list) {
-                fpo->fpo_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
-                fpo->fpo_map_count ++;
-                cfs_spin_unlock(&fps->fps_lock);
+	spin_lock(&fps->fps_lock);
+	version = fps->fps_version;
+	cfs_list_for_each_entry(fpo, &fps->fps_pool_list, fpo_list) {
+		fpo->fpo_deadline = cfs_time_shift(IBLND_POOL_DEADLINE);
+		fpo->fpo_map_count++;
+		spin_unlock(&fps->fps_lock);
 
                 pfmr = ib_fmr_pool_map_phys(fpo->fpo_fmr_pool,
                                             pages, npages, iov);
@@ -1649,51 +1650,51 @@ kiblnd_fmr_pool_map(kib_fmr_poolset_t *fps, __u64 *pages, int npages,
                         return 0;
                 }
 
-                cfs_spin_lock(&fps->fps_lock);
-                fpo->fpo_map_count --;
-                if (PTR_ERR(pfmr) != -EAGAIN) {
-                        cfs_spin_unlock(&fps->fps_lock);
-                        return PTR_ERR(pfmr);
-                }
+		spin_lock(&fps->fps_lock);
+		fpo->fpo_map_count--;
+		if (PTR_ERR(pfmr) != -EAGAIN) {
+			spin_unlock(&fps->fps_lock);
+			return PTR_ERR(pfmr);
+		}
 
-                /* EAGAIN and ... */
-                if (version != fps->fps_version) {
-                        cfs_spin_unlock(&fps->fps_lock);
-                        goto again;
-                }
-        }
+		/* EAGAIN and ... */
+		if (version != fps->fps_version) {
+			spin_unlock(&fps->fps_lock);
+			goto again;
+		}
+	}
 
-        if (fps->fps_increasing) {
-                cfs_spin_unlock(&fps->fps_lock);
-                CDEBUG(D_NET, "Another thread is allocating new "
-                              "FMR pool, waiting for her to complete\n");
-                cfs_schedule();
-                goto again;
+	if (fps->fps_increasing) {
+		spin_unlock(&fps->fps_lock);
+		CDEBUG(D_NET, "Another thread is allocating new "
+		       "FMR pool, waiting for her to complete\n");
+		cfs_schedule();
+		goto again;
 
-        }
+	}
 
-        if (cfs_time_before(cfs_time_current(), fps->fps_next_retry)) {
-                /* someone failed recently */
-                cfs_spin_unlock(&fps->fps_lock);
-                return -EAGAIN;
-        }
+	if (cfs_time_before(cfs_time_current(), fps->fps_next_retry)) {
+		/* someone failed recently */
+		spin_unlock(&fps->fps_lock);
+		return -EAGAIN;
+	}
 
-        fps->fps_increasing = 1;
-        cfs_spin_unlock(&fps->fps_lock);
+	fps->fps_increasing = 1;
+	spin_unlock(&fps->fps_lock);
 
-        CDEBUG(D_NET, "Allocate new FMR pool\n");
-        rc = kiblnd_create_fmr_pool(fps, &fpo);
-        cfs_spin_lock(&fps->fps_lock);
-        fps->fps_increasing = 0;
-        if (rc == 0) {
-                fps->fps_version ++;
-                cfs_list_add_tail(&fpo->fpo_list, &fps->fps_pool_list);
-        } else {
-                fps->fps_next_retry = cfs_time_shift(IBLND_POOL_RETRY);
-        }
-        cfs_spin_unlock(&fps->fps_lock);
+	CDEBUG(D_NET, "Allocate new FMR pool\n");
+	rc = kiblnd_create_fmr_pool(fps, &fpo);
+	spin_lock(&fps->fps_lock);
+	fps->fps_increasing = 0;
+	if (rc == 0) {
+		fps->fps_version++;
+		cfs_list_add_tail(&fpo->fpo_list, &fps->fps_pool_list);
+	} else {
+		fps->fps_next_retry = cfs_time_shift(IBLND_POOL_RETRY);
+	}
+	spin_unlock(&fps->fps_lock);
 
-        goto again;
+	goto again;
 }
 
 static void
@@ -1737,7 +1738,7 @@ kiblnd_fail_poolset(kib_poolset_t *ps, cfs_list_t *zombies)
 	if (ps->ps_net == NULL) /* intialized? */
 		return;
 
-        cfs_spin_lock(&ps->ps_lock);
+	spin_lock(&ps->ps_lock);
         while (!cfs_list_empty(&ps->ps_pool_list)) {
                 kib_pool_t *po = cfs_list_entry(ps->ps_pool_list.next,
                                             kib_pool_t, po_list);
@@ -1748,7 +1749,7 @@ kiblnd_fail_poolset(kib_poolset_t *ps, cfs_list_t *zombies)
                 else
                         cfs_list_add(&po->po_list, &ps->ps_failed_pool_list);
         }
-        cfs_spin_unlock(&ps->ps_lock);
+	spin_unlock(&ps->ps_lock);
 }
 
 static void
@@ -1781,7 +1782,7 @@ kiblnd_init_poolset(kib_poolset_t *ps, int cpt,
         ps->ps_node_fini    = nd_fini;
         ps->ps_pool_size    = size;
         strncpy(ps->ps_name, name, IBLND_POOL_NAME_LEN);
-        cfs_spin_lock_init(&ps->ps_lock);
+	spin_lock_init(&ps->ps_lock);
         CFS_INIT_LIST_HEAD(&ps->ps_pool_list);
         CFS_INIT_LIST_HEAD(&ps->ps_failed_pool_list);
 
@@ -1812,7 +1813,7 @@ kiblnd_pool_free_node(kib_pool_t *pool, cfs_list_t *node)
         kib_pool_t     *tmp;
         cfs_time_t      now = cfs_time_current();
 
-        cfs_spin_lock(&ps->ps_lock);
+	spin_lock(&ps->ps_lock);
 
         if (ps->ps_node_fini != NULL)
                 ps->ps_node_fini(pool, node);
@@ -1829,10 +1830,10 @@ kiblnd_pool_free_node(kib_pool_t *pool, cfs_list_t *node)
                 if (kiblnd_pool_is_idle(pool, now))
                         cfs_list_move(&pool->po_list, &zombies);
         }
-        cfs_spin_unlock(&ps->ps_lock);
+	spin_unlock(&ps->ps_lock);
 
-        if (!cfs_list_empty(&zombies))
-                kiblnd_destroy_pool_list(&zombies);
+	if (!cfs_list_empty(&zombies))
+		kiblnd_destroy_pool_list(&zombies);
 }
 
 cfs_list_t *
@@ -1843,7 +1844,7 @@ kiblnd_pool_alloc_node(kib_poolset_t *ps)
         int                    rc;
 
  again:
-        cfs_spin_lock(&ps->ps_lock);
+	spin_lock(&ps->ps_lock);
         cfs_list_for_each_entry(pool, &ps->ps_pool_list, po_list) {
                 if (cfs_list_empty(&pool->po_free_list))
                         continue;
@@ -1857,14 +1858,14 @@ kiblnd_pool_alloc_node(kib_poolset_t *ps)
                         /* still hold the lock */
                         ps->ps_node_init(pool, node);
                 }
-                cfs_spin_unlock(&ps->ps_lock);
-                return node;
-        }
+		spin_unlock(&ps->ps_lock);
+		return node;
+	}
 
-        /* no available tx pool and ... */
-        if (ps->ps_increasing) {
-                /* another thread is allocating a new pool */
-                cfs_spin_unlock(&ps->ps_lock);
+	/* no available tx pool and ... */
+	if (ps->ps_increasing) {
+		/* another thread is allocating a new pool */
+		spin_unlock(&ps->ps_lock);
                 CDEBUG(D_NET, "Another thread is allocating new "
                        "%s pool, waiting for her to complete\n",
                        ps->ps_name);
@@ -1872,20 +1873,20 @@ kiblnd_pool_alloc_node(kib_poolset_t *ps)
                 goto again;
         }
 
-        if (cfs_time_before(cfs_time_current(), ps->ps_next_retry)) {
-                /* someone failed recently */
-                cfs_spin_unlock(&ps->ps_lock);
-                return NULL;
-        }
+	if (cfs_time_before(cfs_time_current(), ps->ps_next_retry)) {
+		/* someone failed recently */
+		spin_unlock(&ps->ps_lock);
+		return NULL;
+	}
 
-        ps->ps_increasing = 1;
-        cfs_spin_unlock(&ps->ps_lock);
+	ps->ps_increasing = 1;
+	spin_unlock(&ps->ps_lock);
 
-        CDEBUG(D_NET, "%s pool exhausted, allocate new pool\n", ps->ps_name);
+	CDEBUG(D_NET, "%s pool exhausted, allocate new pool\n", ps->ps_name);
 
-        rc = ps->ps_pool_create(ps, ps->ps_pool_size, &pool);
+	rc = ps->ps_pool_create(ps, ps->ps_pool_size, &pool);
 
-        cfs_spin_lock(&ps->ps_lock);
+	spin_lock(&ps->ps_lock);
         ps->ps_increasing = 0;
         if (rc == 0) {
                 cfs_list_add_tail(&pool->po_list, &ps->ps_pool_list);
@@ -1894,9 +1895,9 @@ kiblnd_pool_alloc_node(kib_poolset_t *ps)
                 CERROR("Can't allocate new %s pool because out of memory\n",
                        ps->ps_name);
         }
-        cfs_spin_unlock(&ps->ps_lock);
+	spin_unlock(&ps->ps_lock);
 
-        goto again;
+	goto again;
 }
 
 void
@@ -2238,15 +2239,15 @@ kiblnd_net_init_pools(kib_net_t *net, __u32 *cpts, int ncpts)
 	int		rc;
 	int		i;
 
-	cfs_read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	read_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 	if (*kiblnd_tunables.kib_map_on_demand == 0 &&
 	    net->ibn_dev->ibd_hdev->ibh_nmrs == 1) {
-		cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
+		read_unlock_irqrestore(&kiblnd_data.kib_global_lock,
 					   flags);
 		goto create_tx_pool;
 	}
 
-	cfs_read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	read_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
 	if (*kiblnd_tunables.kib_fmr_pool_size <
 	    *kiblnd_tunables.kib_ntx / 4) {
@@ -2618,13 +2619,13 @@ kiblnd_dev_failover(kib_dev_t *dev)
                  * because we can fail to create new listener.
                  * But we have to close it now, otherwise rdma_bind_addr
                  * will return EADDRINUSE... How crap! */
-                cfs_write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+		write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
-                cmid = dev->ibd_hdev->ibh_cmid;
-                /* make next schedule of kiblnd_dev_need_failover
-                 * will return 1 for me */
-                dev->ibd_hdev->ibh_cmid  = NULL;
-                cfs_write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+		cmid = dev->ibd_hdev->ibh_cmid;
+		/* make next schedule of kiblnd_dev_need_failover()
+		 * return 1 for me */
+		dev->ibd_hdev->ibh_cmid  = NULL;
+		write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
                 rdma_destroy_id(cmid);
         }
@@ -2686,7 +2687,7 @@ kiblnd_dev_failover(kib_dev_t *dev)
                 goto out;
         }
 
-        cfs_write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
 
         old = dev->ibd_hdev;
         dev->ibd_hdev = hdev; /* take over the refcount */
@@ -2708,7 +2709,7 @@ kiblnd_dev_failover(kib_dev_t *dev)
 		}
 	}
 
-        cfs_write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
  out:
         if (!cfs_list_empty(&zombie_tpo))
                 kiblnd_destroy_pool_list(&zombie_tpo);
@@ -2871,7 +2872,7 @@ void
 kiblnd_shutdown (lnet_ni_t *ni)
 {
         kib_net_t        *net = ni->ni_data;
-        cfs_rwlock_t     *g_lock = &kiblnd_data.kib_global_lock;
+	rwlock_t     *g_lock = &kiblnd_data.kib_global_lock;
         int               i;
         unsigned long     flags;
 
@@ -2883,9 +2884,9 @@ kiblnd_shutdown (lnet_ni_t *ni)
         CDEBUG(D_MALLOC, "before LND net cleanup: kmem %d\n",
                cfs_atomic_read(&libcfs_kmemory));
 
-        cfs_write_lock_irqsave(g_lock, flags);
-        net->ibn_shutdown = 1;
-        cfs_write_unlock_irqrestore(g_lock, flags);
+	write_lock_irqsave(g_lock, flags);
+	net->ibn_shutdown = 1;
+	write_unlock_irqrestore(g_lock, flags);
 
         switch (net->ibn_init) {
         default:
@@ -2908,11 +2909,11 @@ kiblnd_shutdown (lnet_ni_t *ni)
 
 		kiblnd_net_fini_pools(net);
 
-                cfs_write_lock_irqsave(g_lock, flags);
-                LASSERT (net->ibn_dev->ibd_nnets > 0);
-                net->ibn_dev->ibd_nnets--;
-                cfs_list_del(&net->ibn_list);
-                cfs_write_unlock_irqrestore(g_lock, flags);
+		write_lock_irqsave(g_lock, flags);
+		LASSERT(net->ibn_dev->ibd_nnets > 0);
+		net->ibn_dev->ibd_nnets--;
+		cfs_list_del(&net->ibn_list);
+		write_unlock_irqrestore(g_lock, flags);
 
                 /* fall through */
 
@@ -2952,7 +2953,7 @@ kiblnd_base_startup(void)
         PORTAL_MODULE_USE;
         memset(&kiblnd_data, 0, sizeof(kiblnd_data)); /* zero pointers, flags etc */
 
-        cfs_rwlock_init(&kiblnd_data.kib_global_lock);
+	rwlock_init(&kiblnd_data.kib_global_lock);
 
         CFS_INIT_LIST_HEAD(&kiblnd_data.kib_devs);
         CFS_INIT_LIST_HEAD(&kiblnd_data.kib_failed_devs);
@@ -2967,7 +2968,7 @@ kiblnd_base_startup(void)
         for (i = 0; i < kiblnd_data.kib_peer_hash_size; i++)
                 CFS_INIT_LIST_HEAD(&kiblnd_data.kib_peers[i]);
 
-        cfs_spin_lock_init(&kiblnd_data.kib_connd_lock);
+	spin_lock_init(&kiblnd_data.kib_connd_lock);
         CFS_INIT_LIST_HEAD(&kiblnd_data.kib_connd_conns);
         CFS_INIT_LIST_HEAD(&kiblnd_data.kib_connd_zombies);
         cfs_waitq_init(&kiblnd_data.kib_connd_waitq);
@@ -2981,7 +2982,7 @@ kiblnd_base_startup(void)
 	cfs_percpt_for_each(sched, i, kiblnd_data.kib_scheds) {
 		int	nthrs;
 
-		cfs_spin_lock_init(&sched->ibs_lock);
+		spin_lock_init(&sched->ibs_lock);
 		CFS_INIT_LIST_HEAD(&sched->ibs_conns);
 		cfs_waitq_init(&sched->ibs_waitq);
 
@@ -3204,10 +3205,10 @@ kiblnd_startup (lnet_ni_t *ni)
                 goto failed;
         }
 
-        cfs_write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
-        ibdev->ibd_nnets++;
-        cfs_list_add_tail(&net->ibn_list, &ibdev->ibd_nets);
-        cfs_write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
+	write_lock_irqsave(&kiblnd_data.kib_global_lock, flags);
+	ibdev->ibd_nnets++;
+	cfs_list_add_tail(&net->ibn_list, &ibdev->ibd_nets);
+	write_unlock_irqrestore(&kiblnd_data.kib_global_lock, flags);
 
         net->ibn_init = IBLND_INIT_ALL;
 

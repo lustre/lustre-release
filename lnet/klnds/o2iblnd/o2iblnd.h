@@ -265,7 +265,7 @@ struct kib_net;
 
 typedef struct kib_poolset
 {
-        cfs_spinlock_t          ps_lock;                /* serialize */
+	spinlock_t		ps_lock;		/* serialize */
         struct kib_net         *ps_net;                 /* network it belongs to */
         char                    ps_name[IBLND_POOL_NAME_LEN]; /* pool set name */
         cfs_list_t              ps_pool_list;           /* list of pools */
@@ -315,7 +315,7 @@ typedef struct kib_pmr_pool {
 
 typedef struct
 {
-        cfs_spinlock_t          fps_lock;               /* serialize */
+	spinlock_t		fps_lock;		/* serialize */
         struct kib_net         *fps_net;                /* IB network */
         cfs_list_t              fps_pool_list;          /* FMR pool list */
         cfs_list_t              fps_failed_pool_list;   /* FMR pool list */
@@ -369,7 +369,7 @@ typedef struct kib_net
 
 struct kib_sched_info {
 	/* serialise */
-	cfs_spinlock_t		ibs_lock;
+	spinlock_t		ibs_lock;
 	/* schedulers sleep here */
 	cfs_waitq_t		ibs_waitq;
 	/* conns to check for rx completions */
@@ -392,7 +392,7 @@ typedef struct
 	cfs_waitq_t		kib_failover_waitq;
 	cfs_atomic_t		kib_nthreads;	/* # live threads */
 	/* stabilize net/dev/peer/conn ops */
-	cfs_rwlock_t		kib_global_lock;
+	rwlock_t		kib_global_lock;
 	/* hash table of all my known peers */
 	cfs_list_t		*kib_peers;
 	/* size of kib_peers */
@@ -405,7 +405,7 @@ typedef struct
 	cfs_list_t		kib_connd_zombies;
 	/* connection daemon sleeps here */
 	cfs_waitq_t		kib_connd_waitq;
-	cfs_spinlock_t		kib_connd_lock;	/* serialise */
+	spinlock_t		kib_connd_lock;	/* serialise */
 	struct ib_qp_attr	kib_error_qpa;	/* QP->ERROR */
 	/* percpt data for schedulers */
 	struct kib_sched_info	**kib_scheds;
@@ -621,7 +621,7 @@ typedef struct kib_conn
         cfs_list_t           ibc_tx_queue_nocred;/* sends that don't need a credit */
         cfs_list_t           ibc_tx_queue_rsrvd; /* sends that need to reserve an ACK/DONE msg */
         cfs_list_t           ibc_active_txs;     /* active tx awaiting completion */
-        cfs_spinlock_t       ibc_lock;           /* serialise */
+	spinlock_t	     ibc_lock;		 /* serialise */
         kib_rx_t            *ibc_rxs;            /* the rx descs */
         kib_pages_t         *ibc_rx_pages;       /* premapped rx msg pages */
 
@@ -695,20 +695,20 @@ do {                                                            \
         cfs_atomic_inc(&(conn)->ibc_refcount);                  \
 } while (0)
 
-#define kiblnd_conn_decref(conn)                                               \
-do {                                                                           \
-        unsigned long   flags;                                                 \
-                                                                               \
-        CDEBUG(D_NET, "conn[%p] (%d)--\n",                                     \
-               (conn), cfs_atomic_read(&(conn)->ibc_refcount));                \
-        LASSERT_ATOMIC_POS(&(conn)->ibc_refcount);                             \
-        if (cfs_atomic_dec_and_test(&(conn)->ibc_refcount)) {                  \
-                cfs_spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);     \
-                cfs_list_add_tail(&(conn)->ibc_list,                           \
-                                  &kiblnd_data.kib_connd_zombies);             \
-                cfs_waitq_signal(&kiblnd_data.kib_connd_waitq);                \
-                cfs_spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock, flags);\
-        }                                                                      \
+#define kiblnd_conn_decref(conn)					\
+do {									\
+	unsigned long flags;						\
+									\
+	CDEBUG(D_NET, "conn[%p] (%d)--\n",				\
+	       (conn), cfs_atomic_read(&(conn)->ibc_refcount));		\
+	LASSERT_ATOMIC_POS(&(conn)->ibc_refcount);			\
+	if (cfs_atomic_dec_and_test(&(conn)->ibc_refcount)) {		\
+		spin_lock_irqsave(&kiblnd_data.kib_connd_lock, flags);	\
+		cfs_list_add_tail(&(conn)->ibc_list,			\
+				  &kiblnd_data.kib_connd_zombies);	\
+		cfs_waitq_signal(&kiblnd_data.kib_connd_waitq);		\
+		spin_unlock_irqrestore(&kiblnd_data.kib_connd_lock, flags);\
+	}								\
 } while (0)
 
 #define kiblnd_peer_addref(peer)                                \

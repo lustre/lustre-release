@@ -82,7 +82,7 @@ struct qsd_instance {
 	cfs_list_t		 qsd_adjust_list;
 
 	/* lock protecting adjust list */
-	cfs_spinlock_t		 qsd_adjust_lock;
+	spinlock_t		 qsd_adjust_lock;
 
 	/* dedicated thread for updating slave index files. */
 	struct ptlrpc_thread	 qsd_upd_thread;
@@ -95,7 +95,7 @@ struct qsd_instance {
 	 * - the qsd update list
 	 * - the deferred list
 	 * - flags of the qsd_qtype_info */
-	cfs_rwlock_t		 qsd_lock;
+	rwlock_t		 qsd_lock;
 
 	/* Default quota settings which apply to all identifiers */
 	/* when blk qunit reaches this value, later write reqs from client
@@ -190,7 +190,7 @@ struct qsd_fsinfo {
 
 	/* list of all qsd_instance for this fs */
 	cfs_list_t		qfs_qsd_list;
-	cfs_semaphore_t		qfs_sem;
+	struct semaphore	qfs_sem;
 
 	/* link to the global quota fsinfo list.  */
 	cfs_list_t		qfs_link;

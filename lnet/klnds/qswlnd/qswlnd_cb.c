@@ -350,17 +350,17 @@ kqswnal_csum_iov (__u32 csum, int offset, int nob,
 void
 kqswnal_put_idle_tx (kqswnal_tx_t *ktx)
 {
-        unsigned long     flags;
+	unsigned long     flags;
 
-        kqswnal_unmap_tx (ktx);                 /* release temporary mappings */
-        ktx->ktx_state = KTX_IDLE;
+	kqswnal_unmap_tx(ktx);			/* release temporary mappings */
+	ktx->ktx_state = KTX_IDLE;
 
-        cfs_spin_lock_irqsave (&kqswnal_data.kqn_idletxd_lock, flags);
+	spin_lock_irqsave(&kqswnal_data.kqn_idletxd_lock, flags);
 
-        cfs_list_del (&ktx->ktx_list);              /* take off active list */
-        cfs_list_add (&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
+	cfs_list_del(&ktx->ktx_list);		/* take off active list */
+	cfs_list_add(&ktx->ktx_list, &kqswnal_data.kqn_idletxds);
 
-        cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
+	spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
 }
 
 kqswnal_tx_t *
@@ -387,7 +387,7 @@ kqswnal_get_idle_tx (void)
         ktx->ktx_launcher = current->pid;
         cfs_atomic_inc(&kqswnal_data.kqn_pending_txs);
 
-        cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_idletxd_lock, flags);
+	spin_unlock_irqrestore(&kqswnal_data.kqn_idletxd_lock, flags);
 
         /* Idle descs can't have any mapped (as opposed to pre-mapped) pages */
         LASSERT (ktx->ktx_nmappedpages == 0);
@@ -513,13 +513,13 @@ kqswnal_tx_done (kqswnal_tx_t *ktx, int status)
         }
 
         /* Complete the send in thread context */
-        cfs_spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
+	spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
 
-        cfs_list_add_tail(&ktx->ktx_schedlist,
-                          &kqswnal_data.kqn_donetxds);
-        cfs_waitq_signal(&kqswnal_data.kqn_sched_waitq);
+	cfs_list_add_tail(&ktx->ktx_schedlist,
+			   &kqswnal_data.kqn_donetxds);
+	cfs_waitq_signal(&kqswnal_data.kqn_sched_waitq);
 
-        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock, flags);
+	spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock, flags);
 }
 
 static void
@@ -664,13 +664,13 @@ kqswnal_launch (kqswnal_tx_t *ktx)
                 return (0);
 
         case EP_ENOMEM: /* can't allocate ep txd => queue for later */
-                cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+		spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
 
-                cfs_list_add_tail (&ktx->ktx_schedlist,
-                                   &kqswnal_data.kqn_delayedtxds);
-                cfs_waitq_signal (&kqswnal_data.kqn_sched_waitq);
+		cfs_list_add_tail(&ktx->ktx_schedlist,
+				  &kqswnal_data.kqn_delayedtxds);
+		cfs_waitq_signal(&kqswnal_data.kqn_sched_waitq);
 
-                cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock,
+		spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                             flags);
                 return (0);
 
@@ -1538,12 +1538,12 @@ kqswnal_rxhandler(EP_RXD *rxd)
                 return;
         }
 
-        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+	spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
 
-        cfs_list_add_tail (&krx->krx_list, &kqswnal_data.kqn_readyrxds);
-        cfs_waitq_signal (&kqswnal_data.kqn_sched_waitq);
+	cfs_list_add_tail(&krx->krx_list, &kqswnal_data.kqn_readyrxds);
+	cfs_waitq_signal(&kqswnal_data.kqn_sched_waitq);
 
-        cfs_spin_unlock_irqrestore (&kqswnal_data.kqn_sched_lock, flags);
+	spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock, flags);
 }
 
 int
@@ -1684,7 +1684,7 @@ kqswnal_scheduler (void *arg)
         cfs_daemonize ("kqswnal_sched");
         cfs_block_allsigs ();
 
-        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock, flags);
+	spin_lock_irqsave(&kqswnal_data.kqn_sched_lock, flags);
 
         for (;;)
         {
@@ -1695,14 +1695,14 @@ kqswnal_scheduler (void *arg)
                         krx = cfs_list_entry(kqswnal_data.kqn_readyrxds.next,
                                              kqswnal_rx_t, krx_list);
                         cfs_list_del (&krx->krx_list);
-                        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+			spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                                    flags);
 
                         LASSERT (krx->krx_state == KRX_PARSE);
                         kqswnal_parse (krx);
 
                         did_something = 1;
-                        cfs_spin_lock_irqsave(&kqswnal_data.kqn_sched_lock,
+			spin_lock_irqsave(&kqswnal_data.kqn_sched_lock,
                                               flags);
                 }
 
@@ -1711,13 +1711,13 @@ kqswnal_scheduler (void *arg)
                         ktx = cfs_list_entry(kqswnal_data.kqn_donetxds.next,
                                              kqswnal_tx_t, ktx_schedlist);
                         cfs_list_del_init (&ktx->ktx_schedlist);
-                        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+			spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                                    flags);
 
                         kqswnal_tx_done_in_thread_context(ktx);
 
                         did_something = 1;
-                        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock,
+			spin_lock_irqsave(&kqswnal_data.kqn_sched_lock,
                                                flags);
                 }
 
@@ -1726,7 +1726,7 @@ kqswnal_scheduler (void *arg)
                         ktx = cfs_list_entry(kqswnal_data.kqn_delayedtxds.next,
                                              kqswnal_tx_t, ktx_schedlist);
                         cfs_list_del_init (&ktx->ktx_schedlist);
-                        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+			spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                                    flags);
 
                         rc = kqswnal_launch (ktx);
@@ -1738,13 +1738,13 @@ kqswnal_scheduler (void *arg)
                         cfs_atomic_dec (&kqswnal_data.kqn_pending_txs);
 
                         did_something = 1;
-                        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock,
+			spin_lock_irqsave(&kqswnal_data.kqn_sched_lock,
                                                flags);
                 }
 
                 /* nothing to do or hogging CPU */
                 if (!did_something || counter++ == KQSW_RESCHED) {
-                        cfs_spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
+			spin_unlock_irqrestore(&kqswnal_data.kqn_sched_lock,
                                                    flags);
 
                         counter = 0;
@@ -1768,7 +1768,7 @@ kqswnal_scheduler (void *arg)
                         } else if (need_resched())
                                 cfs_schedule ();
 
-                        cfs_spin_lock_irqsave (&kqswnal_data.kqn_sched_lock,
+			spin_lock_irqsave(&kqswnal_data.kqn_sched_lock,
                                                flags);
                 }
         }

@@ -89,11 +89,11 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
         /* It might have committed some after we last spoke, so make sure we
          * get rid of them now.
          */
-        cfs_spin_lock(&imp->imp_lock);
-        imp->imp_last_transno_checked = 0;
-        ptlrpc_free_committed(imp);
-        last_transno = imp->imp_last_replay_transno;
-        cfs_spin_unlock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
+	imp->imp_last_transno_checked = 0;
+	ptlrpc_free_committed(imp);
+	last_transno = imp->imp_last_replay_transno;
+	spin_unlock(&imp->imp_lock);
 
         CDEBUG(D_HA, "import %p from %s committed "LPU64" last "LPU64"\n",
                imp, obd2cli_tgt(imp->imp_obd),
@@ -132,9 +132,9 @@ int ptlrpc_replay_next(struct obd_import *imp, int *inflight)
                 req = NULL;
         }
 
-        cfs_spin_lock(&imp->imp_lock);
-        imp->imp_resend_replay = 0;
-        cfs_spin_unlock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
+	imp->imp_resend_replay = 0;
+	spin_unlock(&imp->imp_lock);
 
         if (req != NULL) {
                 rc = ptlrpc_replay_req(req);
@@ -164,9 +164,9 @@ int ptlrpc_resend(struct obd_import *imp)
          */
         /* Well... what if lctl recover is called twice at the same time?
          */
-        cfs_spin_lock(&imp->imp_lock);
-        if (imp->imp_state != LUSTRE_IMP_RECOVER) {
-                cfs_spin_unlock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state != LUSTRE_IMP_RECOVER) {
+		spin_unlock(&imp->imp_lock);
                 RETURN(-1);
         }
 
@@ -178,9 +178,9 @@ int ptlrpc_resend(struct obd_import *imp)
                 if (!ptlrpc_no_resend(req))
                         ptlrpc_resend_req(req);
         }
-        cfs_spin_unlock(&imp->imp_lock);
+	spin_unlock(&imp->imp_lock);
 
-        RETURN(0);
+	RETURN(0);
 }
 EXPORT_SYMBOL(ptlrpc_resend);
 
@@ -190,17 +190,17 @@ EXPORT_SYMBOL(ptlrpc_resend);
  */
 void ptlrpc_wake_delayed(struct obd_import *imp)
 {
-        cfs_list_t *tmp, *pos;
-        struct ptlrpc_request *req;
+	cfs_list_t *tmp, *pos;
+	struct ptlrpc_request *req;
 
-        cfs_spin_lock(&imp->imp_lock);
-        cfs_list_for_each_safe(tmp, pos, &imp->imp_delayed_list) {
-                req = cfs_list_entry(tmp, struct ptlrpc_request, rq_list);
+	spin_lock(&imp->imp_lock);
+	cfs_list_for_each_safe(tmp, pos, &imp->imp_delayed_list) {
+		req = cfs_list_entry(tmp, struct ptlrpc_request, rq_list);
 
-                DEBUG_REQ(D_HA, req, "waking (set %p):", req->rq_set);
-                ptlrpc_client_wake_req(req);
-        }
-        cfs_spin_unlock(&imp->imp_lock);
+		DEBUG_REQ(D_HA, req, "waking (set %p):", req->rq_set);
+		ptlrpc_client_wake_req(req);
+	}
+	spin_unlock(&imp->imp_lock);
 }
 EXPORT_SYMBOL(ptlrpc_wake_delayed);
 
@@ -230,12 +230,12 @@ void ptlrpc_request_handle_notconn(struct ptlrpc_request *failed_req)
 
         /* Wait for recovery to complete and resend. If evicted, then
            this request will be errored out later.*/
-        cfs_spin_lock(&failed_req->rq_lock);
-        if (!failed_req->rq_no_resend)
-                failed_req->rq_resend = 1;
-        cfs_spin_unlock(&failed_req->rq_lock);
+	spin_lock(&failed_req->rq_lock);
+	if (!failed_req->rq_no_resend)
+		failed_req->rq_resend = 1;
+	spin_unlock(&failed_req->rq_lock);
 
-        EXIT;
+	EXIT;
 }
 
 /**
@@ -261,9 +261,9 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
 
                 /* set before invalidate to avoid messages about imp_inval
                  * set without imp_deactive in ptlrpc_import_delay_req */
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_deactive = 1;
-                cfs_spin_unlock(&imp->imp_lock);
+		spin_lock(&imp->imp_lock);
+		imp->imp_deactive = 1;
+		spin_unlock(&imp->imp_lock);
 
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_DEACTIVATE);
 
@@ -275,9 +275,9 @@ int ptlrpc_set_import_active(struct obd_import *imp, int active)
                 CDEBUG(D_HA, "setting import %s VALID\n",
                        obd2cli_tgt(imp->imp_obd));
 
-                cfs_spin_lock(&imp->imp_lock);
-                imp->imp_deactive = 0;
-                cfs_spin_unlock(&imp->imp_lock);
+		spin_lock(&imp->imp_lock);
+		imp->imp_deactive = 0;
+		spin_unlock(&imp->imp_lock);
                 obd_import_event(imp->imp_obd, imp, IMP_EVENT_ACTIVATE);
 
                 rc = ptlrpc_recover_import(imp, NULL, 0);
@@ -290,14 +290,14 @@ EXPORT_SYMBOL(ptlrpc_set_import_active);
 /* Attempt to reconnect an import */
 int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
 {
-        int rc = 0;
-        ENTRY;
+	int rc = 0;
+	ENTRY;
 
-        cfs_spin_lock(&imp->imp_lock);
-        if (imp->imp_state == LUSTRE_IMP_NEW || imp->imp_deactive ||
-            cfs_atomic_read(&imp->imp_inval_count))
-                rc = -EINVAL;
-        cfs_spin_unlock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state == LUSTRE_IMP_NEW || imp->imp_deactive ||
+	    cfs_atomic_read(&imp->imp_inval_count))
+		rc = -EINVAL;
+	spin_unlock(&imp->imp_lock);
         if (rc)
                 GOTO(out, rc);
 
@@ -315,12 +315,12 @@ int ptlrpc_recover_import(struct obd_import *imp, char *new_uuid, int async)
         }
 
         /* Check if reconnect is already in progress */
-        cfs_spin_lock(&imp->imp_lock);
-        if (imp->imp_state != LUSTRE_IMP_DISCON) {
-                imp->imp_force_verify = 1;
-                rc = -EALREADY;
-        }
-        cfs_spin_unlock(&imp->imp_lock);
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state != LUSTRE_IMP_DISCON) {
+		imp->imp_force_verify = 1;
+		rc = -EALREADY;
+	}
+	spin_unlock(&imp->imp_lock);
         if (rc)
                 GOTO(out, rc);
 
@@ -350,12 +350,12 @@ EXPORT_SYMBOL(ptlrpc_recover_import);
 
 int ptlrpc_import_in_recovery(struct obd_import *imp)
 {
-        int in_recovery = 1;
-        cfs_spin_lock(&imp->imp_lock);
-        if (imp->imp_state == LUSTRE_IMP_FULL ||
-            imp->imp_state == LUSTRE_IMP_CLOSED ||
-            imp->imp_state == LUSTRE_IMP_DISCON)
-                in_recovery = 0;
-        cfs_spin_unlock(&imp->imp_lock);
-        return in_recovery;
+	int in_recovery = 1;
+	spin_lock(&imp->imp_lock);
+	if (imp->imp_state == LUSTRE_IMP_FULL ||
+	    imp->imp_state == LUSTRE_IMP_CLOSED ||
+	    imp->imp_state == LUSTRE_IMP_DISCON)
+		in_recovery = 0;
+	spin_unlock(&imp->imp_lock);
+	return in_recovery;
 }

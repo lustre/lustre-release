@@ -142,7 +142,7 @@ static int mgs_completion_ast_config(struct ldlm_lock *lock, __u64 flags,
                 struct lustre_handle lockh;
 
                 /* clear the bit before lock put */
-                cfs_clear_bit(FSDB_REVOKING_LOCK, &fsdb->fsdb_flags);
+		clear_bit(FSDB_REVOKING_LOCK, &fsdb->fsdb_flags);
 
                 ldlm_lock2handle(lock, &lockh);
                 ldlm_lock_decref_and_cancel(&lockh, LCK_EX);
@@ -196,7 +196,7 @@ void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb, int type)
         switch (type) {
         case CONFIG_T_CONFIG:
                 cp = mgs_completion_ast_config;
-                if (cfs_test_and_set_bit(FSDB_REVOKING_LOCK, &fsdb->fsdb_flags))
+		if (test_and_set_bit(FSDB_REVOKING_LOCK, &fsdb->fsdb_flags))
                         rc = -EALREADY;
                 break;
         case CONFIG_T_RECOVER:
@@ -217,7 +217,7 @@ void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb, int type)
                                le64_to_cpu(res_id.name[1]), rc);
 
                         if (type == CONFIG_T_CONFIG)
-                                cfs_clear_bit(FSDB_REVOKING_LOCK,
+				clear_bit(FSDB_REVOKING_LOCK,
                                               &fsdb->fsdb_flags);
                 }
                 /* lock has been cancelled in completion_ast. */
@@ -506,17 +506,17 @@ static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
                 if (rc)
                         return rc;
 
-                cfs_mutex_lock(&fsdb->fsdb_mutex);
-                if (sptlrpc_rule_set_choose(&fsdb->fsdb_srpc_gen,
-                                            LUSTRE_SP_MGC, LUSTRE_SP_MGS,
-                                            req->rq_peer.nid,
-                                            &flvr) == 0) {
-                        /* by defualt allow any flavors */
-                        flvr.sf_rpc = SPTLRPC_FLVR_ANY;
-                }
-                cfs_mutex_unlock(&fsdb->fsdb_mutex);
+		mutex_lock(&fsdb->fsdb_mutex);
+		if (sptlrpc_rule_set_choose(&fsdb->fsdb_srpc_gen,
+					    LUSTRE_SP_MGC, LUSTRE_SP_MGS,
+					    req->rq_peer.nid,
+					    &flvr) == 0) {
+			/* by defualt allow any flavors */
+			flvr.sf_rpc = SPTLRPC_FLVR_ANY;
+		}
+		mutex_unlock(&fsdb->fsdb_mutex);
 
-                cfs_spin_lock(&exp->exp_lock);
+		spin_lock(&exp->exp_lock);
 
                 exp->exp_sp_peer = req->rq_sp_from;
                 exp->exp_flvr = flvr;
@@ -529,7 +529,7 @@ static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
                         rc = -EACCES;
                 }
 
-                cfs_spin_unlock(&exp->exp_lock);
+		spin_unlock(&exp->exp_lock);
         } else {
                 if (exp->exp_sp_peer != req->rq_sp_from) {
                         CERROR("RPC source %s doesn't match %s\n",
@@ -751,15 +751,15 @@ out:
 
 static inline int mgs_init_export(struct obd_export *exp)
 {
-        struct mgs_export_data *data = &exp->u.eu_mgs_data;
+	struct mgs_export_data *data = &exp->u.eu_mgs_data;
 
-        /* init mgs_export_data for fsc */
-        cfs_spin_lock_init(&data->med_lock);
-        CFS_INIT_LIST_HEAD(&data->med_clients);
+	/* init mgs_export_data for fsc */
+	spin_lock_init(&data->med_lock);
+	CFS_INIT_LIST_HEAD(&data->med_clients);
 
-        cfs_spin_lock(&exp->exp_lock);
-        exp->exp_connecting = 1;
-        cfs_spin_unlock(&exp->exp_lock);
+	spin_lock(&exp->exp_lock);
+	exp->exp_connecting = 1;
+	spin_unlock(&exp->exp_lock);
 
         /* self-export doesn't need client data and ldlm initialization */
         if (unlikely(obd_uuid_equals(&exp->exp_obd->obd_uuid,
@@ -1069,9 +1069,9 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 
 	/* Internal mgs setup */
 	mgs_init_fsdb_list(mgs);
-	cfs_mutex_init(&mgs->mgs_mutex);
+	mutex_init(&mgs->mgs_mutex);
 	mgs->mgs_start_time = cfs_time_current_sec();
-	cfs_spin_lock_init(&mgs->mgs_lock);
+	spin_lock_init(&mgs->mgs_lock);
 
 	/* Setup proc */
 	lprocfs_mgs_init_vars(&lvars);

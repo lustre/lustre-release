@@ -53,7 +53,7 @@ int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *new)
 	struct filter_capa_key	*k, *keys[2] = { NULL, NULL };
 	int			 i;
 
-	cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
 	cfs_list_for_each_entry(k, &obd->u.filter.fo_capa_keys, k_list) {
 		if (k->k_key.lk_seq != new->lk_seq)
 			continue;
@@ -66,7 +66,7 @@ int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *new)
 			keys[0] = k;
 		}
 	}
-	cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 
 	for (i = 0; i < 2; i++) {
 		if (!keys[i])
@@ -76,9 +76,9 @@ int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *new)
 		/* maybe because of recovery or other reasons, MDS sent the
 		 * the old capability key again.
 		 */
-		cfs_spin_lock(&capa_lock);
+		spin_lock(&capa_lock);
 		keys[i]->k_key = *new;
-		cfs_spin_unlock(&capa_lock);
+		spin_unlock(&capa_lock);
 
 		RETURN(0);
 	}
@@ -93,11 +93,11 @@ int ofd_update_capa_key(struct ofd_device *ofd, struct lustre_capa_key *new)
 		CFS_INIT_LIST_HEAD(&k->k_list);
 	}
 
-	cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
 	k->k_key = *new;
 	if (cfs_list_empty(&k->k_list))
 		cfs_list_add(&k->k_list, &obd->u.filter.fo_capa_keys);
-	cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 
 	DEBUG_CAPA_KEY(D_SEC, new, "new");
 	RETURN(0);
@@ -152,12 +152,12 @@ int ofd_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
 
 	oc = capa_lookup(filter->fo_capa_hash, capa, 0);
 	if (oc) {
-		cfs_spin_lock(&oc->c_lock);
+		spin_lock(&oc->c_lock);
 		if (capa_is_expired(oc)) {
 			DEBUG_CAPA(D_ERROR, capa, "expired");
 			rc = -ESTALE;
 		}
-		cfs_spin_unlock(&oc->c_lock);
+		spin_unlock(&oc->c_lock);
 
 		capa_put(oc);
 		RETURN(rc);
@@ -168,7 +168,7 @@ int ofd_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
 		RETURN(-ESTALE);
 	}
 
-	cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
 	cfs_list_for_each_entry(k, &filter->fo_capa_keys, k_list) {
 		if (k->k_key.lk_seq == seq) {
 			keys_ready = 1;
@@ -179,7 +179,7 @@ int ofd_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
 			}
 		}
 	}
-	cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 
 	if (!keys_ready) {
 		CDEBUG(D_SEC, "MDS hasn't propagated capability keys yet, "
@@ -222,10 +222,10 @@ void ofd_free_capa_keys(struct ofd_device *ofd)
 	struct obd_device	*obd = ofd_obd(ofd);
 	struct filter_capa_key	*key, *n;
 
-	cfs_spin_lock(&capa_lock);
+	spin_lock(&capa_lock);
 	cfs_list_for_each_entry_safe(key, n, &obd->u.filter.fo_capa_keys, k_list) {
 		cfs_list_del_init(&key->k_list);
 		OBD_FREE_PTR(key);
 	}
-	cfs_spin_unlock(&capa_lock);
+	spin_unlock(&capa_lock);
 }

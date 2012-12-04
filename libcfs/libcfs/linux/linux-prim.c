@@ -105,11 +105,11 @@ EXPORT_SYMBOL(cfs_waitq_add_exclusive);
 void
 cfs_waitq_add_exclusive_head(cfs_waitq_t *waitq, cfs_waitlink_t *link)
 {
-        unsigned long flags;
+	unsigned long flags;
 
-        spin_lock_irqsave(&LINUX_WAITQ_HEAD(waitq)->lock, flags);
-        __add_wait_queue_exclusive(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
-        spin_unlock_irqrestore(&LINUX_WAITQ_HEAD(waitq)->lock, flags);
+	spin_lock_irqsave(&LINUX_WAITQ_HEAD(waitq)->lock, flags);
+	__add_wait_queue_exclusive(LINUX_WAITQ_HEAD(waitq), LINUX_WAITQ(link));
+	spin_unlock_irqrestore(&LINUX_WAITQ_HEAD(waitq)->lock, flags);
 }
 EXPORT_SYMBOL(cfs_waitq_add_exclusive_head);
 

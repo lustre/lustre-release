@@ -122,7 +122,7 @@ void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
 #else /* !MDD_DISABLE_PDO_LOCK */
 
 #ifdef CONFIG_LOCKDEP
-static cfs_lock_class_key_t mdd_pdirop_key;
+static struct lock_class_key mdd_pdirop_key;
 
 #define RETIP ((unsigned long)__builtin_return_address(0))
 

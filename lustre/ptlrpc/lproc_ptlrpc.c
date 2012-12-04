@@ -303,14 +303,14 @@ ptlrpc_lprocfs_write_req_history_max(struct file *file, const char *buffer,
         if (val > cfs_num_physpages/(2 * bufpages))
                 return -ERANGE;
 
-	cfs_spin_lock(&svc->srv_lock);
+	spin_lock(&svc->srv_lock);
 
 	if (val == 0)
 		svc->srv_hist_nrqbds_cpt_max = 0;
 	else
 		svc->srv_hist_nrqbds_cpt_max = max(1, (val / svc->srv_ncpts));
 
-	cfs_spin_unlock(&svc->srv_lock);
+	spin_unlock(&svc->srv_lock);
 
 	return count;
 }
@@ -339,15 +339,15 @@ ptlrpc_lprocfs_wr_threads_min(struct file *file, const char *buffer,
 	if (val / svc->srv_ncpts < PTLRPC_NTHRS_INIT)
 		return -ERANGE;
 
-	cfs_spin_lock(&svc->srv_lock);
+	spin_lock(&svc->srv_lock);
 	if (val > svc->srv_nthrs_cpt_limit * svc->srv_ncpts) {
-		cfs_spin_unlock(&svc->srv_lock);
+		spin_unlock(&svc->srv_lock);
 		return -ERANGE;
 	}
 
 	svc->srv_nthrs_cpt_init = val / svc->srv_ncpts;
 
-	cfs_spin_unlock(&svc->srv_lock);
+	spin_unlock(&svc->srv_lock);
 
 	return count;
 }
@@ -392,15 +392,15 @@ ptlrpc_lprocfs_wr_threads_max(struct file *file, const char *buffer,
 	if (val / svc->srv_ncpts < PTLRPC_NTHRS_INIT)
 		return -ERANGE;
 
-	cfs_spin_lock(&svc->srv_lock);
+	spin_lock(&svc->srv_lock);
 	if (val < svc->srv_nthrs_cpt_init * svc->srv_ncpts) {
-		cfs_spin_unlock(&svc->srv_lock);
+		spin_unlock(&svc->srv_lock);
 		return -ERANGE;
 	}
 
 	svc->srv_nthrs_cpt_limit = val / svc->srv_ncpts;
 
-	cfs_spin_unlock(&svc->srv_lock);
+	spin_unlock(&svc->srv_lock);
 
 	return count;
 }
@@ -473,9 +473,9 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 	ptlrpc_service_for_each_part(svcpt, i, svc) {
 		srhi->srhi_idx = i;
 
-		cfs_spin_lock(&svcpt->scp_lock);
+		spin_lock(&svcpt->scp_lock);
 		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, *pos);
-		cfs_spin_unlock(&svcpt->scp_lock);
+		spin_unlock(&svcpt->scp_lock);
 		if (rc == 0) {
 			*pos = srhi->srhi_seq;
 			return srhi;
@@ -510,9 +510,9 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
 
 		srhi->srhi_idx = i;
 
-		cfs_spin_lock(&svcpt->scp_lock);
+		spin_lock(&svcpt->scp_lock);
 		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, *pos + 1);
-		cfs_spin_unlock(&svcpt->scp_lock);
+		spin_unlock(&svcpt->scp_lock);
 		if (rc == 0)
 			break;
 	}
@@ -568,7 +568,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 
 	svcpt = svc->srv_parts[srhi->srhi_idx];
 
-	cfs_spin_lock(&svcpt->scp_lock);
+	spin_lock(&svcpt->scp_lock);
 
 	rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, srhi->srhi_seq);
 
@@ -594,7 +594,7 @@ static int ptlrpc_lprocfs_svc_req_history_show(struct seq_file *s, void *iter)
 			svc->srv_ops.so_req_printer(s, srhi->srhi_req);
         }
 
-	cfs_spin_unlock(&svcpt->scp_lock);
+	spin_unlock(&svcpt->scp_lock);
 	return rc;
 }
 
@@ -702,9 +702,9 @@ static int ptlrpc_lprocfs_wr_hp_ratio(struct file *file, const char *buffer,
 	if (val < 0)
 		return -ERANGE;
 
-	cfs_spin_lock(&svc->srv_lock);
+	spin_lock(&svc->srv_lock);
 	svc->srv_hpreq_ratio = val;
-	cfs_spin_unlock(&svc->srv_lock);
+	spin_unlock(&svc->srv_lock);
 
 	return count;
 }
@@ -1009,12 +1009,12 @@ int lprocfs_wr_pinger_recov(struct file *file, const char *buffer,
                 return -ERANGE;
 
         LPROCFS_CLIMP_CHECK(obd);
-        cfs_spin_lock(&imp->imp_lock);
-        imp->imp_no_pinger_recover = !val;
-        cfs_spin_unlock(&imp->imp_lock);
-        LPROCFS_CLIMP_EXIT(obd);
+	spin_lock(&imp->imp_lock);
+	imp->imp_no_pinger_recover = !val;
+	spin_unlock(&imp->imp_lock);
+	LPROCFS_CLIMP_EXIT(obd);
 
-        return count;
+	return count;
 
 }
 EXPORT_SYMBOL(lprocfs_wr_pinger_recov);

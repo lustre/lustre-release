@@ -47,7 +47,7 @@ static void qmt_lqe_init(struct lquota_entry *lqe, void *arg)
 	LASSERT(lqe_is_master(lqe));
 
 	lqe->lqe_revoke_time = 0;
-	cfs_init_rwsem(&lqe->lqe_sem);
+	init_rwsem(&lqe->lqe_sem);
 }
 
 /*

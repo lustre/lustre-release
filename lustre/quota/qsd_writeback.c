@@ -191,14 +191,14 @@ void qsd_bump_version(struct qsd_qtype_info *qqi, __u64 ver, bool global)
 	idx_ver = global ? &qqi->qqi_glb_ver : &qqi->qqi_slv_ver;
 	list    = global ? &qqi->qqi_deferred_glb : &qqi->qqi_deferred_slv;
 
-	cfs_write_lock(&qqi->qqi_qsd->qsd_lock);
+	write_lock(&qqi->qqi_qsd->qsd_lock);
 	*idx_ver = ver;
 	if (global)
 		qqi->qqi_glb_uptodate = 1;
 	else
 		qqi->qqi_slv_uptodate = 1;
 	qsd_kickoff_deferred(qqi, list, ver);
-	cfs_write_unlock(&qqi->qqi_qsd->qsd_lock);
+	write_unlock(&qqi->qqi_qsd->qsd_lock);
 }
 
 /*
@@ -230,13 +230,13 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 	/* If we don't want update index version, no need to sort the
 	 * records in version order, just schedule the updates instantly. */
 	if (ver == 0) {
-		cfs_write_lock(&qsd->qsd_lock);
+		write_lock(&qsd->qsd_lock);
 		qsd_upd_add(qsd, upd);
-		cfs_write_unlock(&qsd->qsd_lock);
+		write_unlock(&qsd->qsd_lock);
 		RETURN_EXIT;
 	}
 
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 
 	cur_ver = global ? qqi->qqi_glb_ver : qqi->qqi_slv_ver;
 
@@ -264,7 +264,7 @@ void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 		qsd_add_deferred(list, upd);
 	}
 
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 
 	EXIT;
 }
@@ -312,7 +312,7 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 	bool			 added = false;
 
 	lqe_getref(lqe);
-	cfs_spin_lock(&qsd->qsd_adjust_lock);
+	spin_lock(&qsd->qsd_adjust_lock);
 
 	/* the lqe is being queued for the per-ID lock cancel, we should
 	 * cancel the lock cancel and re-add it for quota adjust */
@@ -337,7 +337,7 @@ void qsd_adjust_schedule(struct lquota_entry *lqe, bool defer, bool cancel)
 			cfs_list_add(&lqe->lqe_link, &qsd->qsd_adjust_list);
 		added = true;
 	}
-	cfs_spin_unlock(&qsd->qsd_adjust_lock);
+	spin_unlock(&qsd->qsd_adjust_lock);
 
 	if (added)
 		cfs_waitq_signal(&qsd->qsd_upd_thread.t_ctl_waitq);
@@ -356,7 +356,7 @@ static bool qsd_job_pending(struct qsd_instance *qsd, cfs_list_t *upd,
 	LASSERT(cfs_list_empty(upd));
 	*uptodate = true;
 
-	cfs_spin_lock(&qsd->qsd_adjust_lock);
+	spin_lock(&qsd->qsd_adjust_lock);
 	if (!cfs_list_empty(&qsd->qsd_adjust_list)) {
 		struct lquota_entry *lqe;
 		lqe = cfs_list_entry(qsd->qsd_adjust_list.next,
@@ -365,9 +365,9 @@ static bool qsd_job_pending(struct qsd_instance *qsd, cfs_list_t *upd,
 					cfs_time_current_64()))
 			job_pending = true;
 	}
-	cfs_spin_unlock(&qsd->qsd_adjust_lock);
+	spin_unlock(&qsd->qsd_adjust_lock);
 
-	cfs_write_lock(&qsd->qsd_lock);
+	write_lock(&qsd->qsd_lock);
 	if (!cfs_list_empty(&qsd->qsd_upd_list)) {
 		cfs_list_splice_init(&qsd->qsd_upd_list, upd);
 		job_pending = true;
@@ -386,7 +386,7 @@ static bool qsd_job_pending(struct qsd_instance *qsd, cfs_list_t *upd,
 			*uptodate = false;
 	}
 
-	cfs_write_unlock(&qsd->qsd_lock);
+	write_unlock(&qsd->qsd_lock);
 	return job_pending;
 }
 
@@ -435,7 +435,7 @@ static int qsd_upd_thread(void *arg)
 			qsd_upd_free(upd);
 		}
 
-		cfs_spin_lock(&qsd->qsd_adjust_lock);
+		spin_lock(&qsd->qsd_adjust_lock);
 		cur_time = cfs_time_current_64();
 		cfs_list_for_each_entry_safe(lqe, tmp, &qsd->qsd_adjust_list,
 					     lqe_link) {
@@ -445,7 +445,7 @@ static int qsd_upd_thread(void *arg)
 				break;
 
 			cfs_list_del_init(&lqe->lqe_link);
-			cfs_spin_unlock(&qsd->qsd_adjust_lock);
+			spin_unlock(&qsd->qsd_adjust_lock);
 
 			if (thread_is_running(thread) && uptodate) {
 				qsd_refresh_usage(env, lqe);
@@ -456,9 +456,9 @@ static int qsd_upd_thread(void *arg)
 			}
 
 			lqe_putref(lqe);
-			cfs_spin_lock(&qsd->qsd_adjust_lock);
+			spin_lock(&qsd->qsd_adjust_lock);
 		}
-		cfs_spin_unlock(&qsd->qsd_adjust_lock);
+		spin_unlock(&qsd->qsd_adjust_lock);
 
 		if (!thread_is_running(thread))
 			break;
@@ -507,7 +507,7 @@ static void qsd_cleanup_deferred(struct qsd_instance *qsd)
 		if (qqi == NULL)
 			continue;
 
-		cfs_write_lock(&qsd->qsd_lock);
+		write_lock(&qsd->qsd_lock);
 		cfs_list_for_each_entry_safe(upd, tmp, &qqi->qqi_deferred_glb,
 					     qur_link) {
 			CWARN("%s: Free global deferred upd: ID:"LPU64", "
@@ -526,7 +526,7 @@ static void qsd_cleanup_deferred(struct qsd_instance *qsd)
 			list_del_init(&upd->qur_link);
 			qsd_upd_free(upd);
 		}
-		cfs_write_unlock(&qsd->qsd_lock);
+		write_unlock(&qsd->qsd_lock);
 	}
 }
 
@@ -534,14 +534,14 @@ static void qsd_cleanup_adjust(struct qsd_instance *qsd)
 {
 	struct lquota_entry	*lqe;
 
-	cfs_spin_lock(&qsd->qsd_adjust_lock);
+	spin_lock(&qsd->qsd_adjust_lock);
 	while (!cfs_list_empty(&qsd->qsd_adjust_list)) {
 		lqe = cfs_list_entry(qsd->qsd_adjust_list.next,
 				     struct lquota_entry, lqe_link);
 		cfs_list_del_init(&lqe->lqe_link);
 		lqe_putref(lqe);
 	}
-	cfs_spin_unlock(&qsd->qsd_adjust_lock);
+	spin_unlock(&qsd->qsd_adjust_lock);
 }
 
 void qsd_stop_upd_thread(struct qsd_instance *qsd)

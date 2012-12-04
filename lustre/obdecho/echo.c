@@ -106,13 +106,13 @@ static int echo_destroy_export(struct obd_export *exp)
 
  static __u64 echo_next_id(struct obd_device *obddev)
 {
-        obd_id id;
+	obd_id id;
 
-        cfs_spin_lock(&obddev->u.echo.eo_lock);
-        id = ++obddev->u.echo.eo_lastino;
-        cfs_spin_unlock(&obddev->u.echo.eo_lock);
+	spin_lock(&obddev->u.echo.eo_lock);
+	id = ++obddev->u.echo.eo_lastino;
+	spin_unlock(&obddev->u.echo.eo_lock);
 
-        return id;
+	return id;
 }
 
 static int echo_create(const struct lu_env *env, struct obd_export *exp,
@@ -561,7 +561,7 @@ static int echo_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
         ENTRY;
 
         obd->u.echo.eo_obt.obt_magic = OBT_MAGIC;
-        cfs_spin_lock_init(&obd->u.echo.eo_lock);
+	spin_lock_init(&obd->u.echo.eo_lock);
         obd->u.echo.eo_lastino = ECHO_INIT_OID;
 
         sprintf(ns_name, "echotgt-%s", obd->obd_uuid.uuid);

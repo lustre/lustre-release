@@ -201,15 +201,15 @@ int ll_md_real_close(struct inode *inode, int flags)
                 och_usecount = &lli->lli_open_fd_read_count;
         }
 
-        cfs_mutex_lock(&lli->lli_och_mutex);
+	mutex_lock(&lli->lli_och_mutex);
         if (*och_usecount) { /* There are still users of this handle, so
                                 skip freeing it. */
-                cfs_mutex_unlock(&lli->lli_och_mutex);
+		mutex_unlock(&lli->lli_och_mutex);
                 RETURN(0);
         }
         och=*och_p;
         *och_p = NULL;
-        cfs_mutex_unlock(&lli->lli_och_mutex);
+	mutex_unlock(&lli->lli_och_mutex);
 
         if (och) { /* There might be a race and somebody have freed this och
                       already */
@@ -241,7 +241,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                 struct inode *inode = file->f_dentry->d_inode;
                 ldlm_policy_data_t policy = {.l_inodebits={MDS_INODELOCK_OPEN}};
 
-                cfs_mutex_lock(&lli->lli_och_mutex);
+		mutex_lock(&lli->lli_och_mutex);
                 if (fd->fd_omode & FMODE_WRITE) {
                         lockmode = LCK_CW;
                         LASSERT(lli->lli_open_fd_write_count);
@@ -255,7 +255,7 @@ int ll_md_close(struct obd_export *md_exp, struct inode *inode,
                         LASSERT(lli->lli_open_fd_read_count);
                         lli->lli_open_fd_read_count--;
                 }
-                cfs_mutex_unlock(&lli->lli_och_mutex);
+		mutex_unlock(&lli->lli_och_mutex);
 
                 if (!md_lock_match(md_exp, flags, ll_inode2fid(inode),
                                    LDLM_IBITS, &policy, lockmode,
@@ -513,14 +513,14 @@ int ll_file_open(struct inode *inode, struct file *file)
 
         fd->fd_file = file;
         if (S_ISDIR(inode->i_mode)) {
-                cfs_spin_lock(&lli->lli_sa_lock);
-                if (lli->lli_opendir_key == NULL && lli->lli_sai == NULL &&
-                    lli->lli_opendir_pid == 0) {
-                        lli->lli_opendir_key = fd;
-                        lli->lli_opendir_pid = cfs_curproc_pid();
-                        opendir_set = 1;
-                }
-                cfs_spin_unlock(&lli->lli_sa_lock);
+		spin_lock(&lli->lli_sa_lock);
+		if (lli->lli_opendir_key == NULL && lli->lli_sai == NULL &&
+		    lli->lli_opendir_pid == 0) {
+			lli->lli_opendir_key = fd;
+			lli->lli_opendir_pid = cfs_curproc_pid();
+			opendir_set = 1;
+		}
+		spin_unlock(&lli->lli_sa_lock);
         }
 
         if (inode->i_sb->s_root == file->f_dentry) {
@@ -570,14 +570,14 @@ restart:
                 och_usecount = &lli->lli_open_fd_read_count;
         }
 
-        cfs_mutex_lock(&lli->lli_och_mutex);
+	mutex_lock(&lli->lli_och_mutex);
         if (*och_p) { /* Open handle is present */
                 if (it_disposition(it, DISP_OPEN_OPEN)) {
                         /* Well, there's extra open request that we do not need,
                            let's close it somehow. This will decref request. */
                         rc = it_open_error(DISP_OPEN_OPEN, it);
                         if (rc) {
-                                cfs_mutex_unlock(&lli->lli_och_mutex);
+				mutex_unlock(&lli->lli_och_mutex);
                                 GOTO(out_openerr, rc);
                         }
 
@@ -588,7 +588,7 @@ restart:
                 rc = ll_local_open(file, it, fd, NULL);
                 if (rc) {
                         (*och_usecount)--;
-                        cfs_mutex_unlock(&lli->lli_och_mutex);
+			mutex_unlock(&lli->lli_och_mutex);
                         GOTO(out_openerr, rc);
                 }
         } else {
@@ -599,7 +599,7 @@ restart:
                            could be cancelled, and since blocking ast handler
                            would attempt to grab och_mutex as well, that would
                            result in a deadlock */
-                        cfs_mutex_unlock(&lli->lli_och_mutex);
+			mutex_unlock(&lli->lli_och_mutex);
                         it->it_create_mode |= M_CHECK_STALE;
                         rc = ll_intent_file_open(file, NULL, 0, it);
                         it->it_create_mode &= ~M_CHECK_STALE;
@@ -629,7 +629,7 @@ restart:
                 if (rc)
                         GOTO(out_och_free, rc);
         }
-        cfs_mutex_unlock(&lli->lli_och_mutex);
+	mutex_unlock(&lli->lli_och_mutex);
         fd = NULL;
 
         /* Must do this outside lli_och_mutex lock to prevent deadlock where
@@ -657,7 +657,7 @@ out_och_free:
                         *och_p = NULL; /* OBD_FREE writes some magic there */
                         (*och_usecount)--;
                 }
-                cfs_mutex_unlock(&lli->lli_och_mutex);
+		mutex_unlock(&lli->lli_och_mutex);
 
 out_openerr:
                 if (opendir_set != 0)
@@ -857,12 +857,12 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
 #endif
                         if ((iot == CIT_WRITE) &&
                             !(cio->cui_fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-                                if (cfs_mutex_lock_interruptible(&lli->
+				if (mutex_lock_interruptible(&lli->
                                                                lli_write_mutex))
                                         GOTO(out, result = -ERESTARTSYS);
                                 write_mutex_locked = 1;
                         } else if (iot == CIT_READ) {
-                                cfs_down_read(&lli->lli_trunc_sem);
+				down_read(&lli->lli_trunc_sem);
                         }
                         break;
                 case IO_SENDFILE:
@@ -879,9 +879,9 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
                 }
                 result = cl_io_loop(env, io);
                 if (write_mutex_locked)
-                        cfs_mutex_unlock(&lli->lli_write_mutex);
+			mutex_unlock(&lli->lli_write_mutex);
                 else if (args->via_io_subtype == IO_NORMAL && iot == CIT_READ)
-                        cfs_up_read(&lli->lli_trunc_sem);
+			up_read(&lli->lli_trunc_sem);
         } else {
                 /* cl_io_rw_init() handled IO */
                 result = io->ci_result;
@@ -1506,47 +1506,47 @@ int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         if (ll_file_nolock(file))
                 RETURN(-EOPNOTSUPP);
 
-        cfs_spin_lock(&lli->lli_lock);
-        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
-                CWARN("group lock already existed with gid %lu\n",
-                       fd->fd_grouplock.cg_gid);
-                cfs_spin_unlock(&lli->lli_lock);
-                RETURN(-EINVAL);
-        }
-        LASSERT(fd->fd_grouplock.cg_lock == NULL);
-        cfs_spin_unlock(&lli->lli_lock);
+	spin_lock(&lli->lli_lock);
+	if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
+		CWARN("group lock already existed with gid %lu\n",
+		      fd->fd_grouplock.cg_gid);
+		spin_unlock(&lli->lli_lock);
+		RETURN(-EINVAL);
+	}
+	LASSERT(fd->fd_grouplock.cg_lock == NULL);
+	spin_unlock(&lli->lli_lock);
 
-        rc = cl_get_grouplock(cl_i2info(inode)->lli_clob,
-                              arg, (file->f_flags & O_NONBLOCK), &grouplock);
-        if (rc)
-                RETURN(rc);
+	rc = cl_get_grouplock(cl_i2info(inode)->lli_clob,
+			      arg, (file->f_flags & O_NONBLOCK), &grouplock);
+	if (rc)
+		RETURN(rc);
 
-        cfs_spin_lock(&lli->lli_lock);
-        if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
-                cfs_spin_unlock(&lli->lli_lock);
-                CERROR("another thread just won the race\n");
-                cl_put_grouplock(&grouplock);
-                RETURN(-EINVAL);
-        }
+	spin_lock(&lli->lli_lock);
+	if (fd->fd_flags & LL_FILE_GROUP_LOCKED) {
+		spin_unlock(&lli->lli_lock);
+		CERROR("another thread just won the race\n");
+		cl_put_grouplock(&grouplock);
+		RETURN(-EINVAL);
+	}
 
-        fd->fd_flags |= LL_FILE_GROUP_LOCKED;
-        fd->fd_grouplock = grouplock;
-        cfs_spin_unlock(&lli->lli_lock);
+	fd->fd_flags |= LL_FILE_GROUP_LOCKED;
+	fd->fd_grouplock = grouplock;
+	spin_unlock(&lli->lli_lock);
 
-        CDEBUG(D_INFO, "group lock %lu obtained\n", arg);
-        RETURN(0);
+	CDEBUG(D_INFO, "group lock %lu obtained\n", arg);
+	RETURN(0);
 }
 
 int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg)
 {
-        struct ll_inode_info   *lli = ll_i2info(inode);
-        struct ll_file_data    *fd = LUSTRE_FPRIVATE(file);
-        struct ccc_grouplock    grouplock;
-        ENTRY;
+	struct ll_inode_info   *lli = ll_i2info(inode);
+	struct ll_file_data    *fd = LUSTRE_FPRIVATE(file);
+	struct ccc_grouplock    grouplock;
+	ENTRY;
 
-        cfs_spin_lock(&lli->lli_lock);
-        if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
-                cfs_spin_unlock(&lli->lli_lock);
+	spin_lock(&lli->lli_lock);
+	if (!(fd->fd_flags & LL_FILE_GROUP_LOCKED)) {
+		spin_unlock(&lli->lli_lock);
                 CWARN("no group lock held\n");
                 RETURN(-EINVAL);
         }
@@ -1555,18 +1555,18 @@ int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg)
         if (fd->fd_grouplock.cg_gid != arg) {
                 CWARN("group lock %lu doesn't match current id %lu\n",
                        arg, fd->fd_grouplock.cg_gid);
-                cfs_spin_unlock(&lli->lli_lock);
-                RETURN(-EINVAL);
-        }
+		spin_unlock(&lli->lli_lock);
+		RETURN(-EINVAL);
+	}
 
-        grouplock = fd->fd_grouplock;
-        memset(&fd->fd_grouplock, 0, sizeof(fd->fd_grouplock));
-        fd->fd_flags &= ~LL_FILE_GROUP_LOCKED;
-        cfs_spin_unlock(&lli->lli_lock);
+	grouplock = fd->fd_grouplock;
+	memset(&fd->fd_grouplock, 0, sizeof(fd->fd_grouplock));
+	fd->fd_flags &= ~LL_FILE_GROUP_LOCKED;
+	spin_unlock(&lli->lli_lock);
 
-        cl_put_grouplock(&grouplock);
-        CDEBUG(D_INFO, "group lock %lu released\n", arg);
-        RETURN(0);
+	cl_put_grouplock(&grouplock);
+	CDEBUG(D_INFO, "group lock %lu released\n", arg);
+	RETURN(0);
 }
 
 /**
@@ -2546,10 +2546,10 @@ struct posix_acl * ll_get_acl(struct inode *inode, int type)
 	struct posix_acl *acl = NULL;
 	ENTRY;
 
-	cfs_spin_lock(&lli->lli_lock);
+	spin_lock(&lli->lli_lock);
 	/* VFS' acl_permission_check->check_acl will release the refcount */
 	acl = posix_acl_dup(lli->lli_posix_acl);
-	cfs_spin_unlock(&lli->lli_lock);
+	spin_unlock(&lli->lli_lock);
 
 	RETURN(acl);
 }
@@ -2727,7 +2727,7 @@ struct inode_operations ll_file_inode_operations = {
 
 /* dynamic ioctl number support routins */
 static struct llioc_ctl_data {
-        cfs_rw_semaphore_t      ioc_sem;
+	struct rw_semaphore	ioc_sem;
         cfs_list_t              ioc_head;
 } llioc = {
         __RWSEM_INITIALIZER(llioc.ioc_sem),
@@ -2764,9 +2764,9 @@ void *ll_iocontrol_register(llioc_callback_t cb, int count, unsigned int *cmd)
         in_data->iocd_count = count;
         memcpy(in_data->iocd_cmd, cmd, sizeof(unsigned int) * count);
 
-        cfs_down_write(&llioc.ioc_sem);
+	down_write(&llioc.ioc_sem);
         cfs_list_add_tail(&in_data->iocd_list, &llioc.ioc_head);
-        cfs_up_write(&llioc.ioc_sem);
+	up_write(&llioc.ioc_sem);
 
         RETURN(in_data);
 }
@@ -2778,19 +2778,19 @@ void ll_iocontrol_unregister(void *magic)
         if (magic == NULL)
                 return;
 
-        cfs_down_write(&llioc.ioc_sem);
+	down_write(&llioc.ioc_sem);
         cfs_list_for_each_entry(tmp, &llioc.ioc_head, iocd_list) {
                 if (tmp == magic) {
                         unsigned int size = tmp->iocd_size;
 
                         cfs_list_del(&tmp->iocd_list);
-                        cfs_up_write(&llioc.ioc_sem);
+			up_write(&llioc.ioc_sem);
 
                         OBD_FREE(tmp, size);
                         return;
                 }
         }
-        cfs_up_write(&llioc.ioc_sem);
+	up_write(&llioc.ioc_sem);
 
         CWARN("didn't find iocontrol register block with magic: %p\n", magic);
 }
@@ -2805,7 +2805,7 @@ enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
         struct llioc_data *data;
         int rc = -EINVAL, i;
 
-        cfs_down_read(&llioc.ioc_sem);
+	down_read(&llioc.ioc_sem);
         cfs_list_for_each_entry(data, &llioc.ioc_head, iocd_list) {
                 for (i = 0; i < data->iocd_count; i++) {
                         if (cmd != data->iocd_cmd[i])
@@ -2818,7 +2818,7 @@ enum llioc_iter ll_iocontrol_call(struct inode *inode, struct file *file,
                 if (ret == LLIOC_STOP)
                         break;
         }
-        cfs_up_read(&llioc.ioc_sem);
+	up_read(&llioc.ioc_sem);
 
         if (rcp)
                 *rcp = rc;
@@ -2901,7 +2901,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 		RETURN(PTR_ERR(op_data));
 
 	/* take layout lock mutex to enqueue layout lock exclusively. */
-	cfs_mutex_lock(&lli->lli_layout_mutex);
+	mutex_lock(&lli->lli_layout_mutex);
 
 	/* try again inside layout mutex */
 	mode = ll_take_md_lock(inode, MDS_INODELOCK_LAYOUT, &lockh,
@@ -2910,7 +2910,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 		*gen = lli->lli_layout_gen + 1;
 
 		ldlm_lock_decref(&lockh, mode);
-		cfs_mutex_unlock(&lli->lli_layout_mutex);
+		mutex_unlock(&lli->lli_layout_mutex);
 		ll_finish_md_op_data(op_data);
 		RETURN(0);
 	}
@@ -2968,7 +2968,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	}
 	ll_intent_drop_lock(&it);
 
-	cfs_mutex_unlock(&lli->lli_layout_mutex);
+	mutex_unlock(&lli->lli_layout_mutex);
 	ll_finish_md_op_data(op_data);
 
 	RETURN(rc);

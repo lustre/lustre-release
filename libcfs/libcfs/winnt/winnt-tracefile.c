@@ -46,7 +46,7 @@ static unsigned int pages_factor[CFS_TCD_TYPE_MAX] = {
 
 char *cfs_trace_console_buffers[CFS_NR_CPUS][CFS_TCD_TYPE_MAX];
 
-cfs_rw_semaphore_t cfs_tracefile_sem;
+struct rw_semaphore cfs_tracefile_sem;
 
 int cfs_tracefile_init_arch()
 {
@@ -54,7 +54,7 @@ int cfs_tracefile_init_arch()
 	int    j;
 	struct cfs_trace_cpu_data *tcd;
 
-	cfs_init_rwsem(&cfs_tracefile_sem);
+	init_rwsem(&cfs_tracefile_sem);
 
 	/* initialize trace_data */
 	memset(cfs_trace_data, 0, sizeof(cfs_trace_data));
@@ -111,27 +111,27 @@ void cfs_tracefile_fini_arch()
 		cfs_trace_data[i] = NULL;
 	}
 
-	cfs_fini_rwsem(&cfs_tracefile_sem);
+	fini_rwsem(&cfs_tracefile_sem);
 }
 
 void cfs_tracefile_read_lock()
 {
-	cfs_down_read(&cfs_tracefile_sem);
+	down_read(&cfs_tracefile_sem);
 }
 
 void cfs_tracefile_read_unlock()
 {
-	cfs_up_read(&cfs_tracefile_sem);
+	up_read(&cfs_tracefile_sem);
 }
 
 void cfs_tracefile_write_lock()
 {
-	cfs_down_write(&cfs_tracefile_sem);
+	down_write(&cfs_tracefile_sem);
 }
 
 void cfs_tracefile_write_unlock()
 {
-	cfs_up_write(&cfs_tracefile_sem);
+	up_write(&cfs_tracefile_sem);
 }
 
 cfs_trace_buf_type_t cfs_trace_buf_idx_get()

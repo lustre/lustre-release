@@ -331,9 +331,9 @@ int cli_ctx_expire(struct ptlrpc_cli_ctx *ctx)
 {
         LASSERT(cfs_atomic_read(&ctx->cc_refcount));
 
-        if (!cfs_test_and_set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags)) {
+	if (!test_and_set_bit(PTLRPC_CTX_DEAD_BIT, &ctx->cc_flags)) {
                 if (!ctx->cc_early_expire)
-                        cfs_clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
+			clear_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
                 CWARN("ctx %p(%u->%s) get expired: %lu(%+lds)\n",
                       ctx, ctx->cc_vcred.vc_uid, sec2target_str(ctx->cc_sec),
@@ -387,7 +387,7 @@ void gss_cli_ctx_uptodate(struct gss_cli_ctx *gctx)
          * someone else, in which case nobody will make further use
          * of it. we don't care, and mark it UPTODATE will help
          * destroying server side context when it be destroied. */
-        cfs_set_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
+	set_bit(PTLRPC_CTX_UPTODATE_BIT, &ctx->cc_flags);
 
         if (sec_is_reverse(ctx->cc_sec)) {
                 CWARN("server installed reverse ctx %p idx "LPX64", "
@@ -509,7 +509,7 @@ int gss_do_check_seq(unsigned long *window, __u32 win_size, __u32 *max_seq,
                  */
                 switch (phase) {
                 case 0:
-                        if (cfs_test_bit(seq_num % win_size, window))
+			if (test_bit(seq_num % win_size, window))
                                 goto replay;
                         break;
                 case 1:
@@ -539,9 +539,9 @@ replay:
  */
 int gss_check_seq_num(struct gss_svc_seq_data *ssd, __u32 seq_num, int set)
 {
-        int rc = 0;
+	int rc = 0;
 
-        cfs_spin_lock(&ssd->ssd_lock);
+	spin_lock(&ssd->ssd_lock);
 
         if (set == 0) {
                 /*
@@ -575,8 +575,8 @@ int gss_check_seq_num(struct gss_svc_seq_data *ssd, __u32 seq_num, int set)
                         gss_stat_oos_record_svc(2, 0);
         }
 exit:
-        cfs_spin_unlock(&ssd->ssd_lock);
-        return rc;
+	spin_unlock(&ssd->ssd_lock);
+	return rc;
 }
 
 /***************************************
@@ -1117,7 +1117,7 @@ int gss_sec_create_common(struct gss_sec *gsec,
                 return -EOPNOTSUPP;
         }
 
-        cfs_spin_lock_init(&gsec->gs_lock);
+	spin_lock_init(&gsec->gs_lock);
         gsec->gs_rvs_hdl = 0ULL;
 
         /* initialize upper ptlrpc_sec */
@@ -1128,7 +1128,7 @@ int gss_sec_create_common(struct gss_sec *gsec,
         sec->ps_id = sptlrpc_get_next_secid();
         sec->ps_flvr = *sf;
         sec->ps_import = class_import_get(imp);
-        cfs_spin_lock_init(&sec->ps_lock);
+	spin_lock_init(&sec->ps_lock);
         CFS_INIT_LIST_HEAD(&sec->ps_gc_list);
 
         if (!svcctx) {
@@ -1192,7 +1192,7 @@ int gss_cli_ctx_init_common(struct ptlrpc_sec *sec,
         ctx->cc_expire = 0;
         ctx->cc_flags = PTLRPC_CTX_NEW;
         ctx->cc_vcred = *vcred;
-        cfs_spin_lock_init(&ctx->cc_lock);
+	spin_lock_init(&ctx->cc_lock);
         CFS_INIT_LIST_HEAD(&ctx->cc_req_list);
         CFS_INIT_LIST_HEAD(&ctx->cc_gc_chain);
 

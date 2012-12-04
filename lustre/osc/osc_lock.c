@@ -135,12 +135,12 @@ static int osc_lock_invariant(struct osc_lock *ols)
  */
 static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
 {
-        struct ldlm_lock *dlmlock;
+	struct ldlm_lock *dlmlock;
 
-        cfs_spin_lock(&osc_ast_guard);
-        dlmlock = olck->ols_lock;
-        if (dlmlock == NULL) {
-                cfs_spin_unlock(&osc_ast_guard);
+	spin_lock(&osc_ast_guard);
+	dlmlock = olck->ols_lock;
+	if (dlmlock == NULL) {
+		spin_unlock(&osc_ast_guard);
                 return;
         }
 
@@ -149,7 +149,7 @@ static void osc_lock_detach(const struct lu_env *env, struct osc_lock *olck)
          * call to osc_lock_detach() */
         dlmlock->l_ast_data = NULL;
         olck->ols_handle.cookie = 0ULL;
-        cfs_spin_unlock(&osc_ast_guard);
+	spin_unlock(&osc_ast_guard);
 
         lock_res_and_lock(dlmlock);
         if (dlmlock->l_granted_mode == dlmlock->l_req_mode) {
@@ -293,14 +293,14 @@ static __u64 osc_enq2ldlm_flags(__u32 enqflags)
  * Global spin-lock protecting consistency of ldlm_lock::l_ast_data
  * pointers. Initialized in osc_init().
  */
-cfs_spinlock_t osc_ast_guard;
+spinlock_t osc_ast_guard;
 
 static struct osc_lock *osc_ast_data_get(struct ldlm_lock *dlm_lock)
 {
-        struct osc_lock *olck;
+	struct osc_lock *olck;
 
-        lock_res_and_lock(dlm_lock);
-        cfs_spin_lock(&osc_ast_guard);
+	lock_res_and_lock(dlm_lock);
+	spin_lock(&osc_ast_guard);
         olck = dlm_lock->l_ast_data;
         if (olck != NULL) {
                 struct cl_lock *lock = olck->ols_cl.cls_lock;
@@ -320,9 +320,9 @@ static struct osc_lock *osc_ast_data_get(struct ldlm_lock *dlm_lock)
                 } else
                         olck = NULL;
         }
-        cfs_spin_unlock(&osc_ast_guard);
-        unlock_res_and_lock(dlm_lock);
-        return olck;
+	spin_unlock(&osc_ast_guard);
+	unlock_res_and_lock(dlm_lock);
+	return olck;
 }
 
 static void osc_ast_data_put(const struct lu_env *env, struct osc_lock *olck)
@@ -466,11 +466,11 @@ static void osc_lock_upcall0(const struct lu_env *env, struct osc_lock *olck)
         LASSERT(dlmlock != NULL);
 
         lock_res_and_lock(dlmlock);
-        cfs_spin_lock(&osc_ast_guard);
-        LASSERT(dlmlock->l_ast_data == olck);
-        LASSERT(olck->ols_lock == NULL);
-        olck->ols_lock = dlmlock;
-        cfs_spin_unlock(&osc_ast_guard);
+	spin_lock(&osc_ast_guard);
+	LASSERT(dlmlock->l_ast_data == olck);
+	LASSERT(olck->ols_lock == NULL);
+	olck->ols_lock = dlmlock;
+	spin_unlock(&osc_ast_guard);
 
         /*
          * Lock might be not yet granted. In this case, completion ast
@@ -530,11 +530,11 @@ static int osc_lock_upcall(void *cookie, int errcode)
                         dlmlock = ldlm_handle2lock(&olck->ols_handle);
                         if (dlmlock != NULL) {
                                 lock_res_and_lock(dlmlock);
-                                cfs_spin_lock(&osc_ast_guard);
-                                LASSERT(olck->ols_lock == NULL);
-                                dlmlock->l_ast_data = NULL;
-                                olck->ols_handle.cookie = 0ULL;
-                                cfs_spin_unlock(&osc_ast_guard);
+				spin_lock(&osc_ast_guard);
+				LASSERT(olck->ols_lock == NULL);
+				dlmlock->l_ast_data = NULL;
+				olck->ols_handle.cookie = 0ULL;
+				spin_unlock(&osc_ast_guard);
                                 ldlm_lock_fail_match_locked(dlmlock);
                                 unlock_res_and_lock(dlmlock);
                                 LDLM_LOCK_PUT(dlmlock);
@@ -1087,7 +1087,7 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
         if (olck->ols_glimpse)
                 return 0;
 
-        cfs_spin_lock(&hdr->coh_lock_guard);
+	spin_lock(&hdr->coh_lock_guard);
         cfs_list_for_each_entry(scan, &hdr->coh_locks, cll_linkage) {
                 struct cl_lock_descr *cld = &scan->cll_descr;
                 const struct osc_lock *scan_ols;
@@ -1125,7 +1125,7 @@ static int osc_lock_enqueue_wait(const struct lu_env *env,
                 conflict = scan;
                 break;
         }
-        cfs_spin_unlock(&hdr->coh_lock_guard);
+	spin_unlock(&hdr->coh_lock_guard);
 
         if (conflict) {
                 if (lock->cll_descr.cld_mode == CLM_GROUP) {
@@ -1450,7 +1450,7 @@ static int osc_lock_has_pages(struct osc_lock *olck)
         lock  = olck->ols_cl.cls_lock;
         descr = &lock->cll_descr;
 
-        cfs_mutex_lock(&oob->oo_debug_mutex);
+	mutex_lock(&oob->oo_debug_mutex);
 
         io->ci_obj = cl_object_top(obj);
 	io->ci_ignore_layout = 1;
@@ -1465,7 +1465,7 @@ static int osc_lock_has_pages(struct osc_lock *olck)
                         cfs_cond_resched();
         } while (result != CLP_GANG_OKAY);
         cl_io_fini(env, io);
-        cfs_mutex_unlock(&oob->oo_debug_mutex);
+	mutex_unlock(&oob->oo_debug_mutex);
         cl_env_nested_put(&nest, env);
 
         return (result == CLP_GANG_ABORT);
@@ -1723,10 +1723,10 @@ int osc_lock_init(const struct lu_env *env,
 
 int osc_dlm_lock_pageref(struct ldlm_lock *dlm)
 {
-        struct osc_lock *olock;
-        int              rc = 0;
+	struct osc_lock *olock;
+	int              rc = 0;
 
-        cfs_spin_lock(&osc_ast_guard);
+	spin_lock(&osc_ast_guard);
         olock = dlm->l_ast_data;
         /*
          * there's a very rare race with osc_page_addref_lock(), but that
@@ -1739,8 +1739,8 @@ int osc_dlm_lock_pageref(struct ldlm_lock *dlm)
                 cfs_atomic_sub(_PAGEREF_MAGIC, &olock->ols_pageref);
                 rc = 1;
         }
-        cfs_spin_unlock(&osc_ast_guard);
-        return rc;
+	spin_unlock(&osc_ast_guard);
+	return rc;
 }
 
 /** @} osc */

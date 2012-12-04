@@ -47,9 +47,9 @@ struct {
         int                   pta_shutdown;
         cfs_socket_t         *pta_sock;
 #ifdef __KERNEL__
-        cfs_completion_t      pta_signal;
+	struct completion	pta_signal;
 #else
-        cfs_mt_completion_t   pta_signal;
+	mt_completion_t		pta_signal;
 #endif
 } lnet_acceptor_state;
 
@@ -68,10 +68,10 @@ lnet_accept_magic(__u32 magic, __u32 constant)
 
 #ifdef __KERNEL__
 
-#define cfs_mt_init_completion(c)     cfs_init_completion(c)
-#define cfs_mt_wait_for_completion(c) cfs_wait_for_completion(c)
-#define cfs_mt_complete(c)            cfs_complete(c)
-#define cfs_mt_fini_completion(c)     cfs_fini_completion(c)
+#define mt_init_completion(c)     init_completion(c)
+#define mt_wait_for_completion(c) wait_for_completion(c)
+#define mt_complete(c)            complete(c)
+#define mt_fini_completion(c)     fini_completion(c)
 
 EXPORT_SYMBOL(lnet_acceptor_port);
 
@@ -431,7 +431,7 @@ lnet_acceptor(void *arg)
 
         /* set init status and unblock parent */
         lnet_acceptor_state.pta_shutdown = rc;
-        cfs_mt_complete(&lnet_acceptor_state.pta_signal);
+	mt_complete(&lnet_acceptor_state.pta_signal);
 
         if (rc != 0)
                 return rc;
@@ -490,7 +490,7 @@ lnet_acceptor(void *arg)
         CDEBUG(D_NET, "Acceptor stopping\n");
 
         /* unblock lnet_acceptor_stop() */
-        cfs_mt_complete(&lnet_acceptor_state.pta_signal);
+	mt_complete(&lnet_acceptor_state.pta_signal);
         return 0;
 }
 
@@ -531,10 +531,10 @@ lnet_acceptor_start(void)
                 return 0;
 #endif
 
-        cfs_mt_init_completion(&lnet_acceptor_state.pta_signal);
+	mt_init_completion(&lnet_acceptor_state.pta_signal);
         rc = accept2secure(accept_type, &secure);
         if (rc <= 0) {
-                cfs_mt_fini_completion(&lnet_acceptor_state.pta_signal);
+		mt_fini_completion(&lnet_acceptor_state.pta_signal);
                 return rc;
         }
 
@@ -544,13 +544,13 @@ lnet_acceptor_start(void)
         rc2 = cfs_create_thread(lnet_acceptor, (void *)(ulong_ptr_t)secure, 0);
         if (rc2 < 0) {
                 CERROR("Can't start acceptor thread: %d\n", rc);
-                cfs_mt_fini_completion(&lnet_acceptor_state.pta_signal);
+		mt_fini_completion(&lnet_acceptor_state.pta_signal);
 
                 return -ESRCH;
         }
 
         /* wait for acceptor to startup */
-        cfs_mt_wait_for_completion(&lnet_acceptor_state.pta_signal);
+	mt_wait_for_completion(&lnet_acceptor_state.pta_signal);
 
         if (!lnet_acceptor_state.pta_shutdown) {
                 /* started OK */
@@ -559,7 +559,7 @@ lnet_acceptor_start(void)
         }
 
         LASSERT (lnet_acceptor_state.pta_sock == NULL);
-        cfs_mt_fini_completion(&lnet_acceptor_state.pta_signal);
+	mt_fini_completion(&lnet_acceptor_state.pta_signal);
 
         return -ENETDOWN;
 }
@@ -574,9 +574,9 @@ lnet_acceptor_stop(void)
         libcfs_sock_abort_accept(lnet_acceptor_state.pta_sock);
 
         /* block until acceptor signals exit */
-        cfs_mt_wait_for_completion(&lnet_acceptor_state.pta_signal);
+	mt_wait_for_completion(&lnet_acceptor_state.pta_signal);
 
-        cfs_mt_fini_completion(&lnet_acceptor_state.pta_signal);
+	mt_fini_completion(&lnet_acceptor_state.pta_signal);
 }
 
 #else /* single-threaded user-space */

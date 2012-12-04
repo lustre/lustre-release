@@ -641,17 +641,17 @@ struct lu_site {
          * by ls_ld_lock.
          **/
         cfs_list_t                ls_ld_linkage;
-        cfs_spinlock_t            ls_ld_lock;
+	spinlock_t		ls_ld_lock;
 
-        /**
-         * lu_site stats
-         */
-        struct lprocfs_stats     *ls_stats;
-        struct lprocfs_stats     *ls_time_stats;
+	/**
+	 * lu_site stats
+	 */
+	struct lprocfs_stats	*ls_stats;
+	struct lprocfs_stats	*ls_time_stats;
 	/**
 	 * XXX: a hack! fld has to find md_site via site, remove when possible
 	 */
-	struct md_site           *ld_md_site;
+	struct md_site		*ld_md_site;
 };
 
 static inline struct lu_site_bkt_data *
@@ -719,7 +719,7 @@ static inline void lu_object_get(struct lu_object *o)
  */
 static inline int lu_object_is_dying(const struct lu_object_header *h)
 {
-        return cfs_test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
+	return test_bit(LU_OBJECT_HEARD_BANSHEE, &h->loh_flags);
 }
 
 void lu_object_put(const struct lu_env *env, struct lu_object *o);

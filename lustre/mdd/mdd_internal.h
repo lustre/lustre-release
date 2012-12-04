@@ -70,13 +70,13 @@
 #define CLM_PURGE 0x40000
 
 struct mdd_changelog {
-        cfs_spinlock_t                   mc_lock;    /* for index */
-        int                              mc_flags;
-        int                              mc_mask;
-        __u64                            mc_index;
-        __u64                            mc_starttime;
-        cfs_spinlock_t                   mc_user_lock;
-        int                              mc_lastuser;
+	spinlock_t		mc_lock;	/* for index */
+	int			mc_flags;
+	int			mc_mask;
+	__u64			mc_index;
+	__u64			mc_starttime;
+	spinlock_t		mc_user_lock;
+	int			mc_lastuser;
 };
 
 static inline __u64 cl_time(void) {
@@ -94,8 +94,8 @@ struct mdd_dot_lustre_objs {
 extern const char lfsck_bookmark_name[];
 
 struct md_lfsck {
-	cfs_mutex_t	      ml_mutex;
-	cfs_spinlock_t	      ml_lock;
+	struct mutex	      ml_mutex;
+	spinlock_t	      ml_lock;
 	struct ptlrpc_thread  ml_thread;
 	struct dt_object     *ml_bookmark_obj;
 	struct dt_object     *ml_it_obj;

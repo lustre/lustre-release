@@ -61,13 +61,13 @@
 #define AT_FLG_NOHIST 0x1          /* use last reported value only */
 
 struct adaptive_timeout {
-        time_t           at_binstart;         /* bin start time */
-        unsigned int     at_hist[AT_BINS];    /* timeout history bins */
-        unsigned int     at_flags;
-        unsigned int     at_current;          /* current timeout value */
-        unsigned int     at_worst_ever;       /* worst-ever timeout value */
-        time_t           at_worst_time;       /* worst-ever timeout timestamp */
-        cfs_spinlock_t   at_lock;
+	time_t		at_binstart;         /* bin start time */
+	unsigned int	at_hist[AT_BINS];    /* timeout history bins */
+	unsigned int	at_flags;
+	unsigned int	at_current;          /* current timeout value */
+	unsigned int	at_worst_ever;       /* worst-ever timeout value */
+	time_t		at_worst_time;       /* worst-ever timeout timestamp */
+	spinlock_t	at_lock;
 };
 
 struct ptlrpc_at_array {
@@ -188,7 +188,7 @@ struct obd_import {
          * @{
          */
         struct ptlrpc_sec        *imp_sec;
-        cfs_mutex_t               imp_sec_mutex;
+	struct mutex		  imp_sec_mutex;
         cfs_time_t                imp_sec_expire;
         /** @} */
 
@@ -248,7 +248,7 @@ struct obd_import {
         struct obd_import_conn   *imp_conn_current;
 
         /** Protects flags, level, generation, conn_cnt, *_list */
-        cfs_spinlock_t            imp_lock;
+	spinlock_t		  imp_lock;
 
         /* flags */
         unsigned long             imp_no_timeout:1,       /* timeouts are disabled */
@@ -323,7 +323,7 @@ static inline void at_reset(struct adaptive_timeout *at, int val) {
 }
 static inline void at_init(struct adaptive_timeout *at, int val, int flags) {
 	memset(at, 0, sizeof(*at));
-	cfs_spin_lock_init(&at->at_lock);
+	spin_lock_init(&at->at_lock);
 	at->at_flags = flags;
 	at_reset(at, val);
 }

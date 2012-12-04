@@ -70,15 +70,15 @@ cfs_sysctl_table_header_t       root_table_header;
 /* The global lock to protect all the access */
 
 #if LIBCFS_PROCFS_SPINLOCK
-cfs_spinlock_t                  proc_fs_lock;
+spinlock_t			proc_fs_lock;
 
-#define INIT_PROCFS_LOCK()      cfs_spin_lock_init(&proc_fs_lock)
-#define LOCK_PROCFS()           cfs_spin_lock(&proc_fs_lock)
-#define UNLOCK_PROCFS()         cfs_spin_unlock(&proc_fs_lock)
+#define INIT_PROCFS_LOCK()	spin_lock_init(&proc_fs_lock)
+#define LOCK_PROCFS()		spin_lock(&proc_fs_lock)
+#define UNLOCK_PROCFS()		spin_unlock(&proc_fs_lock)
 
 #else
 
-cfs_mutex_t                     proc_fs_lock;
+struct mutex				proc_fs_lock;
 
 #define INIT_PROCFS_LOCK()      cfs_init_mutex(&proc_fs_lock)
 #define LOCK_PROCFS()           cfs_mutex_down(&proc_fs_lock)
@@ -1836,7 +1836,7 @@ int seq_open(struct file *file, const struct seq_operations *op)
 		file->private_data = p;
 	}
 	memset(p, 0, sizeof(*p));
-	cfs_mutex_init(&p->lock);
+	mutex_init(&p->lock);
 	p->op = op;
 
 	/*
@@ -1870,7 +1870,7 @@ ssize_t seq_read(struct file *file, char __user *buf, size_t size, loff_t *ppos)
 	void *p;
 	int err = 0;
 
-	cfs_mutex_lock(&m->lock);
+	mutex_lock(&m->lock);
 	/*
 	 * seq_file->op->..m_start/m_stop/m_next may do special actions
 	 * or optimisations based on the file->f_version, so we want to
@@ -1963,7 +1963,7 @@ Done:
 	else
 		*ppos += copied;
 	file->f_version = m->version;
-	cfs_mutex_unlock(&m->lock);
+	mutex_unlock(&m->lock);
 	return copied;
 Enomem:
 	err = -ENOMEM;
@@ -2040,7 +2040,7 @@ loff_t seq_lseek(struct file *file, loff_t offset, int origin)
 	struct seq_file *m = (struct seq_file *)file->private_data;
 	long long retval = -EINVAL;
 
-	cfs_mutex_lock(&m->lock);
+	mutex_lock(&m->lock);
 	m->version = file->f_version;
 	switch (origin) {
 		case 1:
@@ -2064,7 +2064,7 @@ loff_t seq_lseek(struct file *file, loff_t offset, int origin)
 			}
 	}
 	file->f_version = m->version;
-	cfs_mutex_unlock(&m->lock);
+	mutex_unlock(&m->lock);
 	return retval;
 }
 EXPORT_SYMBOL(seq_lseek);

@@ -205,7 +205,7 @@ static inline __u64 gss_handle_to_u64(rawobj_t *handle)
                                          GSS_SEQ_WIN_MAIN / 4)
 
 struct gss_svc_seq_data {
-        cfs_spinlock_t          ssd_lock;
+	spinlock_t		ssd_lock;
         /*
          * highest sequence number seen so far, for main and back window
          */
@@ -277,10 +277,10 @@ struct gss_cli_ctx_keyring {
 };
 
 struct gss_sec {
-        struct ptlrpc_sec       gs_base;
-        struct gss_api_mech    *gs_mech;
-        cfs_spinlock_t          gs_lock;
-        __u64                   gs_rvs_hdl;
+	struct ptlrpc_sec	gs_base;
+	struct gss_api_mech	*gs_mech;
+	spinlock_t		gs_lock;
+	__u64			gs_rvs_hdl;
 };
 
 struct gss_sec_pipefs {
@@ -308,10 +308,10 @@ struct gss_sec_keyring {
         /*
          * specially serialize upcalls for root context.
          */
-        cfs_mutex_t             gsk_root_uc_lock;
+	struct mutex			gsk_root_uc_lock;
 
 #ifdef HAVE_KEYRING_UPCALL_SERIALIZED
-        cfs_mutex_t             gsk_uc_lock;        /* serialize upcalls */
+	struct mutex		gsk_uc_lock;	/* serialize upcalls */
 #endif
 };
 

@@ -85,7 +85,7 @@ struct osc_io {
 	struct osc_async_cbargs {
 		bool		  opc_rpc_sent;
 		int               opc_rc;
-		cfs_completion_t  opc_sync;
+		struct completion	opc_sync;
 	} oi_cbarg;
 };
 
@@ -129,7 +129,7 @@ struct osc_object {
          */
         struct cl_io       oo_debug_io;
         /** Serialization object for osc_object::oo_debug_io. */
-        cfs_mutex_t        oo_debug_mutex;
+	struct mutex	   oo_debug_mutex;
 #endif
         /**
          * List of pages in transfer.
@@ -139,7 +139,7 @@ struct osc_object {
          * Lock, protecting ccc_object::cob_inflight, because a seat-belt is
          * locked during take-off and landing.
          */
-        cfs_spinlock_t     oo_seatbelt;
+	spinlock_t	   oo_seatbelt;
 
 	/**
 	 * used by the osc to keep track of what objects to build into rpcs.
@@ -168,27 +168,27 @@ struct osc_object {
 
 	/** Protect extent tree. Will be used to protect
 	 * oo_{read|write}_pages soon. */
-	cfs_spinlock_t       oo_lock;
+	spinlock_t	    oo_lock;
 };
 
 static inline void osc_object_lock(struct osc_object *obj)
 {
-	cfs_spin_lock(&obj->oo_lock);
+	spin_lock(&obj->oo_lock);
 }
 
 static inline int osc_object_trylock(struct osc_object *obj)
 {
-	return cfs_spin_trylock(&obj->oo_lock);
+	return spin_trylock(&obj->oo_lock);
 }
 
 static inline void osc_object_unlock(struct osc_object *obj)
 {
-	cfs_spin_unlock(&obj->oo_lock);
+	spin_unlock(&obj->oo_lock);
 }
 
 static inline int osc_object_is_locked(struct osc_object *obj)
 {
-	return cfs_spin_is_locked(&obj->oo_lock);
+	return spin_is_locked(&obj->oo_lock);
 }
 
 /*

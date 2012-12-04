@@ -53,14 +53,14 @@ kranal_device_callback(RAP_INT32 devid, RAP_PVOID arg)
                 if (dev->rad_id != devid)
                         continue;
 
-                cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+		spin_lock_irqsave(&dev->rad_lock, flags);
 
                 if (!dev->rad_ready) {
                         dev->rad_ready = 1;
                         cfs_waitq_signal(&dev->rad_waitq);
                 }
 
-                cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+		spin_unlock_irqrestore(&dev->rad_lock, flags);
                 return;
         }
 
@@ -73,7 +73,7 @@ kranal_schedule_conn(kra_conn_t *conn)
         kra_device_t    *dev = conn->rac_device;
         unsigned long    flags;
 
-        cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+	spin_lock_irqsave(&dev->rad_lock, flags);
 
         if (!conn->rac_scheduled) {
                 kranal_conn_addref(conn);       /* +1 ref for scheduler */
@@ -82,7 +82,7 @@ kranal_schedule_conn(kra_conn_t *conn)
                 cfs_waitq_signal(&dev->rad_waitq);
         }
 
-        cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+	spin_unlock_irqrestore(&dev->rad_lock, flags);
 }
 
 kra_tx_t *
@@ -91,10 +91,10 @@ kranal_get_idle_tx (void)
         unsigned long  flags;
         kra_tx_t      *tx;
 
-        cfs_spin_lock_irqsave(&kranal_data.kra_tx_lock, flags);
+	spin_lock_irqsave(&kranal_data.kra_tx_lock, flags);
 
         if (cfs_list_empty(&kranal_data.kra_idle_txs)) {
-                cfs_spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
+		spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
                 return NULL;
         }
 
@@ -105,7 +105,7 @@ kranal_get_idle_tx (void)
          * got a lock right now... */
         tx->tx_cookie = kranal_data.kra_next_tx_cookie++;
 
-        cfs_spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
+	spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
 
         LASSERT (tx->tx_buftype == RANAL_BUF_NONE);
         LASSERT (tx->tx_msg.ram_type == RANAL_MSG_NONE);
@@ -398,11 +398,11 @@ kranal_tx_done (kra_tx_t *tx, int completion)
         tx->tx_msg.ram_type = RANAL_MSG_NONE;
         tx->tx_conn = NULL;
 
-        cfs_spin_lock_irqsave(&kranal_data.kra_tx_lock, flags);
+	spin_lock_irqsave(&kranal_data.kra_tx_lock, flags);
 
         cfs_list_add_tail(&tx->tx_list, &kranal_data.kra_idle_txs);
 
-        cfs_spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
+	spin_unlock_irqrestore(&kranal_data.kra_tx_lock, flags);
 
         /* finalize AFTER freeing lnet msgs */
         for (i = 0; i < 2; i++) {
@@ -433,10 +433,10 @@ kranal_post_fma (kra_conn_t *conn, kra_tx_t *tx)
 
         tx->tx_conn = conn;
 
-        cfs_spin_lock_irqsave(&conn->rac_lock, flags);
+	spin_lock_irqsave(&conn->rac_lock, flags);
         cfs_list_add_tail(&tx->tx_list, &conn->rac_fmaq);
         tx->tx_qtime = jiffies;
-        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+	spin_unlock_irqrestore(&conn->rac_lock, flags);
 
         kranal_schedule_conn(conn);
 }
@@ -449,7 +449,7 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
         kra_conn_t      *conn;
         int              rc;
         int              retry;
-        cfs_rwlock_t    *g_lock = &kranal_data.kra_global_lock;
+	rwlock_t    *g_lock = &kranal_data.kra_global_lock;
 
         /* If I get here, I've committed to send, so I complete the tx with
          * failure on any problems */
@@ -458,27 +458,27 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
 
         for (retry = 0; ; retry = 1) {
 
-                cfs_read_lock(g_lock);
+		read_lock(g_lock);
 
                 peer = kranal_find_peer_locked(nid);
                 if (peer != NULL) {
                         conn = kranal_find_conn_locked(peer);
                         if (conn != NULL) {
                                 kranal_post_fma(conn, tx);
-                                cfs_read_unlock(g_lock);
+				read_unlock(g_lock);
                                 return;
                         }
                 }
                 
                 /* Making connections; I'll need a write lock... */
-                cfs_read_unlock(g_lock);
-                cfs_write_lock_irqsave(g_lock, flags);
+		read_unlock(g_lock);
+		write_lock_irqsave(g_lock, flags);
 
                 peer = kranal_find_peer_locked(nid);
                 if (peer != NULL)
                         break;
                 
-                cfs_write_unlock_irqrestore(g_lock, flags);
+		write_unlock_irqrestore(g_lock, flags);
                 
                 if (retry) {
                         CERROR("Can't find peer %s\n", libcfs_nid2str(nid));
@@ -500,7 +500,7 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
         if (conn != NULL) {
                 /* Connection exists; queue message on it */
                 kranal_post_fma(conn, tx);
-                cfs_write_unlock_irqrestore(g_lock, flags);
+		write_unlock_irqrestore(g_lock, flags);
                 return;
         }
                         
@@ -511,7 +511,7 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
 
                 if (!(peer->rap_reconnect_interval == 0 || /* first attempt */
                       cfs_time_aftereq(jiffies, peer->rap_reconnect_time))) {
-                        cfs_write_unlock_irqrestore(g_lock, flags);
+			write_unlock_irqrestore(g_lock, flags);
                         kranal_tx_done(tx, -EHOSTUNREACH);
                         return;
                 }
@@ -519,19 +519,19 @@ kranal_launch_tx (kra_tx_t *tx, lnet_nid_t nid)
                 peer->rap_connecting = 1;
                 kranal_peer_addref(peer); /* extra ref for connd */
 
-                cfs_spin_lock(&kranal_data.kra_connd_lock);
+		spin_lock(&kranal_data.kra_connd_lock);
 
                 cfs_list_add_tail(&peer->rap_connd_list,
                               &kranal_data.kra_connd_peers);
                 cfs_waitq_signal(&kranal_data.kra_connd_waitq);
 
-                cfs_spin_unlock(&kranal_data.kra_connd_lock);
+		spin_unlock(&kranal_data.kra_connd_lock);
         }
 
         /* A connection is being established; queue the message... */
         cfs_list_add_tail(&tx->tx_list, &peer->rap_tx_queue);
 
-        cfs_write_unlock_irqrestore(g_lock, flags);
+	write_unlock_irqrestore(g_lock, flags);
 }
 
 void
@@ -571,10 +571,10 @@ kranal_rdma(kra_tx_t *tx, int type,
         rrc = RapkPostRdma(conn->rac_rihandle, &tx->tx_rdma_desc);
         LASSERT (rrc == RAP_SUCCESS);
 
-        cfs_spin_lock_irqsave(&conn->rac_lock, flags);
+	spin_lock_irqsave(&conn->rac_lock, flags);
         cfs_list_add_tail(&tx->tx_list, &conn->rac_rdmaq);
         tx->tx_qtime = jiffies;
-        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+	spin_unlock_irqrestore(&conn->rac_lock, flags);
 }
 
 int
@@ -946,13 +946,13 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
          * in case of hardware/software errors that make this conn seem
          * responsive even though it isn't progressing its message queues. */
 
-        cfs_spin_lock_irqsave(&conn->rac_lock, flags);
+	spin_lock_irqsave(&conn->rac_lock, flags);
 
         cfs_list_for_each (ttmp, &conn->rac_fmaq) {
                 tx = cfs_list_entry(ttmp, kra_tx_t, tx_list);
 
                 if (cfs_time_aftereq(now, tx->tx_qtime + timeout)) {
-                        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+			spin_unlock_irqrestore(&conn->rac_lock, flags);
                         CERROR("tx on fmaq for %s blocked %lu seconds\n",
                                libcfs_nid2str(conn->rac_peer->rap_nid),
                                (now - tx->tx_qtime)/CFS_HZ);
@@ -964,7 +964,7 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
                 tx = cfs_list_entry(ttmp, kra_tx_t, tx_list);
 
                 if (cfs_time_aftereq(now, tx->tx_qtime + timeout)) {
-                        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+			spin_unlock_irqrestore(&conn->rac_lock, flags);
                         CERROR("tx on rdmaq for %s blocked %lu seconds\n",
                                libcfs_nid2str(conn->rac_peer->rap_nid), 
                                (now - tx->tx_qtime)/CFS_HZ);
@@ -976,7 +976,7 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
                 tx = cfs_list_entry(ttmp, kra_tx_t, tx_list);
 
                 if (cfs_time_aftereq(now, tx->tx_qtime + timeout)) {
-                        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+			spin_unlock_irqrestore(&conn->rac_lock, flags);
                         CERROR("tx on replyq for %s blocked %lu seconds\n",
                                libcfs_nid2str(conn->rac_peer->rap_nid),
                                (now - tx->tx_qtime)/CFS_HZ);
@@ -984,7 +984,7 @@ kranal_check_conn_timeouts (kra_conn_t *conn)
                 }
         }
 
-        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+	spin_unlock_irqrestore(&conn->rac_lock, flags);
         return 0;
 }
 
@@ -1000,7 +1000,7 @@ kranal_reaper_check (int idx, unsigned long *min_timeoutp)
  again:
         /* NB. We expect to check all the conns and not find any problems, so
          * we just use a shared lock while we take a look... */
-        cfs_read_lock(&kranal_data.kra_global_lock);
+	read_lock(&kranal_data.kra_global_lock);
 
         cfs_list_for_each (ctmp, conns) {
                 conn = cfs_list_entry(ctmp, kra_conn_t, rac_hashlist);
@@ -1015,13 +1015,13 @@ kranal_reaper_check (int idx, unsigned long *min_timeoutp)
                         continue;
 
                 kranal_conn_addref(conn);
-                cfs_read_unlock(&kranal_data.kra_global_lock);
+		read_unlock(&kranal_data.kra_global_lock);
 
                 CERROR("Conn to %s, cqid %d timed out\n",
                        libcfs_nid2str(conn->rac_peer->rap_nid), 
                        conn->rac_cqid);
 
-                cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+		write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
                 switch (conn->rac_state) {
                 default:
@@ -1036,7 +1036,7 @@ kranal_reaper_check (int idx, unsigned long *min_timeoutp)
                         break;
                 }
 
-                cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock,
+		write_unlock_irqrestore(&kranal_data.kra_global_lock,
                                             flags);
 
                 kranal_conn_decref(conn);
@@ -1045,7 +1045,7 @@ kranal_reaper_check (int idx, unsigned long *min_timeoutp)
                 goto again;
         }
 
-        cfs_read_unlock(&kranal_data.kra_global_lock);
+	read_unlock(&kranal_data.kra_global_lock);
 }
 
 int
@@ -1065,7 +1065,7 @@ kranal_connd (void *arg)
 
         cfs_waitlink_init(&wait);
 
-        cfs_spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+	spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
 
         while (!kranal_data.kra_shutdown) {
                 did_something = 0;
@@ -1075,7 +1075,7 @@ kranal_connd (void *arg)
                                              kra_acceptsock_t, ras_list);
                         cfs_list_del(&ras->ras_list);
 
-                        cfs_spin_unlock_irqrestore(&kranal_data.kra_connd_lock,
+			spin_unlock_irqrestore(&kranal_data.kra_connd_lock,
                                                    flags);
 
                         CDEBUG(D_NET,"About to handshake someone\n");
@@ -1085,7 +1085,7 @@ kranal_connd (void *arg)
 
                         CDEBUG(D_NET,"Finished handshaking someone\n");
 
-                        cfs_spin_lock_irqsave(&kranal_data.kra_connd_lock,
+			spin_lock_irqsave(&kranal_data.kra_connd_lock,
                                               flags);
                         did_something = 1;
                 }
@@ -1095,13 +1095,13 @@ kranal_connd (void *arg)
                                               kra_peer_t, rap_connd_list);
 
                         cfs_list_del_init(&peer->rap_connd_list);
-                        cfs_spin_unlock_irqrestore(&kranal_data.kra_connd_lock,
+			spin_unlock_irqrestore(&kranal_data.kra_connd_lock,
                                                    flags);
 
                         kranal_connect(peer);
                         kranal_peer_decref(peer);
 
-                        cfs_spin_lock_irqsave(&kranal_data.kra_connd_lock,
+			spin_lock_irqsave(&kranal_data.kra_connd_lock,
                                               flags);
                         did_something = 1;
                 }
@@ -1112,17 +1112,17 @@ kranal_connd (void *arg)
                 cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
                 cfs_waitq_add_exclusive(&kranal_data.kra_connd_waitq, &wait);
 
-                cfs_spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+		spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
                 cfs_waitq_wait(&wait, CFS_TASK_INTERRUPTIBLE);
 
                 cfs_set_current_state(CFS_TASK_RUNNING);
                 cfs_waitq_del(&kranal_data.kra_connd_waitq, &wait);
 
-                cfs_spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
+		spin_lock_irqsave(&kranal_data.kra_connd_lock, flags);
         }
 
-        cfs_spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
+	spin_unlock_irqrestore(&kranal_data.kra_connd_lock, flags);
 
         kranal_thread_fini();
         return 0;
@@ -1135,12 +1135,12 @@ kranal_update_reaper_timeout(long timeout)
 
         LASSERT (timeout > 0);
 
-        cfs_spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
+	spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
 
         if (timeout < kranal_data.kra_new_min_timeout)
                 kranal_data.kra_new_min_timeout = timeout;
 
-        cfs_spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
+	spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
 }
 
 int
@@ -1162,7 +1162,7 @@ kranal_reaper (void *arg)
 
         cfs_waitlink_init(&wait);
 
-        cfs_spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
+	spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
 
         while (!kranal_data.kra_shutdown) {
                 /* I wake up every 'p' seconds to check for timeouts on some
@@ -1181,13 +1181,13 @@ kranal_reaper (void *arg)
                         cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
                         cfs_waitq_add(&kranal_data.kra_reaper_waitq, &wait);
 
-                        cfs_spin_unlock_irqrestore(&kranal_data.kra_reaper_lock,
+			spin_unlock_irqrestore(&kranal_data.kra_reaper_lock,
                                                    flags);
 
                         cfs_waitq_timedwait(&wait, CFS_TASK_INTERRUPTIBLE,
                                             timeout);
 
-                        cfs_spin_lock_irqsave(&kranal_data.kra_reaper_lock,
+			spin_lock_irqsave(&kranal_data.kra_reaper_lock,
                                               flags);
 
                         cfs_set_current_state(CFS_TASK_RUNNING);
@@ -1216,7 +1216,7 @@ kranal_reaper (void *arg)
                 }
                 min_timeout = current_min_timeout;
 
-                cfs_spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
+		spin_unlock_irqrestore(&kranal_data.kra_reaper_lock, flags);
 
                 LASSERT (min_timeout > 0);
 
@@ -1237,7 +1237,7 @@ kranal_reaper (void *arg)
 
                 next_check_time += p * CFS_HZ;
 
-                cfs_spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
+		spin_lock_irqsave(&kranal_data.kra_reaper_lock, flags);
 
                 if (((conn_index - chunk <= base_index &&
                       base_index < conn_index) ||
@@ -1284,13 +1284,13 @@ kranal_check_rdma_cq (kra_device_t *dev)
                 LASSERT (rrc == RAP_SUCCESS);
                 LASSERT ((event_type & RAPK_CQ_EVENT_OVERRUN) == 0);
 
-                cfs_read_lock(&kranal_data.kra_global_lock);
+		read_lock(&kranal_data.kra_global_lock);
 
                 conn = kranal_cqid2conn_locked(cqid);
                 if (conn == NULL) {
                         /* Conn was destroyed? */
                         CDEBUG(D_NET, "RDMA CQID lookup %d failed\n", cqid);
-                        cfs_read_unlock(&kranal_data.kra_global_lock);
+			read_unlock(&kranal_data.kra_global_lock);
                         continue;
                 }
 
@@ -1300,7 +1300,7 @@ kranal_check_rdma_cq (kra_device_t *dev)
                 CDEBUG(D_NET, "Completed %p\n",
                        cfs_list_entry(conn->rac_rdmaq.next, kra_tx_t, tx_list));
 
-                cfs_spin_lock_irqsave(&conn->rac_lock, flags);
+		spin_lock_irqsave(&conn->rac_lock, flags);
 
                 LASSERT (!cfs_list_empty(&conn->rac_rdmaq));
                 tx = cfs_list_entry(conn->rac_rdmaq.next, kra_tx_t, tx_list);
@@ -1313,13 +1313,13 @@ kranal_check_rdma_cq (kra_device_t *dev)
                 cfs_list_add_tail(&tx->tx_list, &conn->rac_fmaq);
                 tx->tx_qtime = jiffies;
 
-                cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+		spin_unlock_irqrestore(&conn->rac_lock, flags);
 
                 /* Get conn's fmaq processed, now I've just put something
                  * there */
                 kranal_schedule_conn(conn);
 
-                cfs_read_unlock(&kranal_data.kra_global_lock);
+		read_unlock(&kranal_data.kra_global_lock);
         }
 }
 
@@ -1345,7 +1345,7 @@ kranal_check_fma_cq (kra_device_t *dev)
 
                 if ((event_type & RAPK_CQ_EVENT_OVERRUN) == 0) {
 
-                        cfs_read_lock(&kranal_data.kra_global_lock);
+			read_lock(&kranal_data.kra_global_lock);
 
                         conn = kranal_cqid2conn_locked(cqid);
                         if (conn == NULL) {
@@ -1357,7 +1357,7 @@ kranal_check_fma_cq (kra_device_t *dev)
                                 kranal_schedule_conn(conn);
                         }
 
-                        cfs_read_unlock(&kranal_data.kra_global_lock);
+			read_unlock(&kranal_data.kra_global_lock);
                         continue;
                 }
 
@@ -1367,7 +1367,7 @@ kranal_check_fma_cq (kra_device_t *dev)
 
                 for (i = 0; i < kranal_data.kra_conn_hash_size; i++) {
 
-                        cfs_read_lock(&kranal_data.kra_global_lock);
+			read_lock(&kranal_data.kra_global_lock);
 
                         conns = &kranal_data.kra_conns[i];
 
@@ -1380,7 +1380,7 @@ kranal_check_fma_cq (kra_device_t *dev)
                         }
 
                         /* don't block write lockers for too long... */
-                        cfs_read_unlock(&kranal_data.kra_global_lock);
+			read_unlock(&kranal_data.kra_global_lock);
                 }
         }
 }
@@ -1482,21 +1482,21 @@ kranal_process_fmaq (kra_conn_t *conn)
                 if (!conn->rac_close_recvd)
                         return;
 
-                cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+		write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
                 if (conn->rac_state == RANAL_CONN_CLOSING)
                         kranal_terminate_conn_locked(conn);
 
-                cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock,
+		write_unlock_irqrestore(&kranal_data.kra_global_lock,
                                             flags);
                 return;
         }
 
-        cfs_spin_lock_irqsave(&conn->rac_lock, flags);
+	spin_lock_irqsave(&conn->rac_lock, flags);
 
         if (cfs_list_empty(&conn->rac_fmaq)) {
 
-                cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+		spin_unlock_irqrestore(&conn->rac_lock, flags);
 
                 if (cfs_time_aftereq(jiffies,
                                      conn->rac_last_tx + conn->rac_keepalive *
@@ -1515,7 +1515,7 @@ kranal_process_fmaq (kra_conn_t *conn)
         cfs_list_del(&tx->tx_list);
         more_to_do = !cfs_list_empty(&conn->rac_fmaq);
 
-        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+	spin_unlock_irqrestore(&conn->rac_lock, flags);
 
         expect_reply = 0;
         CDEBUG(D_NET, "sending regular msg: %p, type %02x, cookie "LPX64"\n",
@@ -1572,9 +1572,9 @@ kranal_process_fmaq (kra_conn_t *conn)
                 /* I need credits to send this.  Replace tx at the head of the
                  * fmaq and I'll get rescheduled when credits appear */
                 CDEBUG(D_NET, "EAGAIN on %p\n", conn);
-                cfs_spin_lock_irqsave(&conn->rac_lock, flags);
+		spin_lock_irqsave(&conn->rac_lock, flags);
                 cfs_list_add(&tx->tx_list, &conn->rac_fmaq);
-                cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+		spin_unlock_irqrestore(&conn->rac_lock, flags);
                 return;
         }
 
@@ -1583,10 +1583,10 @@ kranal_process_fmaq (kra_conn_t *conn)
         } else {
                 /* LASSERT(current) above ensures this doesn't race with reply
                  * processing */
-                cfs_spin_lock_irqsave(&conn->rac_lock, flags);
+		spin_lock_irqsave(&conn->rac_lock, flags);
                 cfs_list_add_tail(&tx->tx_list, &conn->rac_replyq);
                 tx->tx_qtime = jiffies;
-                cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+		spin_unlock_irqrestore(&conn->rac_lock, flags);
         }
 
         if (more_to_do) {
@@ -1613,7 +1613,7 @@ kranal_match_reply(kra_conn_t *conn, int type, __u64 cookie)
         kra_tx_t         *tx;
         unsigned long     flags;
 
-        cfs_spin_lock_irqsave(&conn->rac_lock, flags);
+	spin_lock_irqsave(&conn->rac_lock, flags);
 
         cfs_list_for_each(ttmp, &conn->rac_replyq) {
                 tx = cfs_list_entry(ttmp, kra_tx_t, tx_list);
@@ -1625,7 +1625,7 @@ kranal_match_reply(kra_conn_t *conn, int type, __u64 cookie)
                         continue;
 
                 if (tx->tx_msg.ram_type != type) {
-                        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+			spin_unlock_irqrestore(&conn->rac_lock, flags);
                         CWARN("Unexpected type %x (%x expected) "
                               "matched reply from %s\n",
                               tx->tx_msg.ram_type, type,
@@ -1634,11 +1634,11 @@ kranal_match_reply(kra_conn_t *conn, int type, __u64 cookie)
                 }
 
                 cfs_list_del(&tx->tx_list);
-                cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+		spin_unlock_irqrestore(&conn->rac_lock, flags);
                 return tx;
         }
 
-        cfs_spin_unlock_irqrestore(&conn->rac_lock, flags);
+	spin_unlock_irqrestore(&conn->rac_lock, flags);
         CWARN("Unmatched reply %02x/"LPX64" from %s\n",
               type, cookie, libcfs_nid2str(conn->rac_peer->rap_nid));
         return NULL;
@@ -1753,7 +1753,7 @@ kranal_check_fma_rx (kra_conn_t *conn)
         if (msg->ram_type == RANAL_MSG_CLOSE) {
                 CWARN("RX CLOSE from %s\n", libcfs_nid2str(conn->rac_peer->rap_nid));
                 conn->rac_close_recvd = 1;
-                cfs_write_lock_irqsave(&kranal_data.kra_global_lock, flags);
+		write_lock_irqsave(&kranal_data.kra_global_lock, flags);
 
                 if (conn->rac_state == RANAL_CONN_ESTABLISHED)
                         kranal_close_conn_locked(conn, 0);
@@ -1761,7 +1761,7 @@ kranal_check_fma_rx (kra_conn_t *conn)
                          conn->rac_close_sent)
                         kranal_terminate_conn_locked(conn);
 
-                cfs_write_unlock_irqrestore(&kranal_data.kra_global_lock,
+		write_unlock_irqrestore(&kranal_data.kra_global_lock,
                                             flags);
                 goto out;
         }
@@ -1950,18 +1950,18 @@ kranal_scheduler (void *arg)
         dev->rad_scheduler = current;
         cfs_waitlink_init(&wait);
 
-        cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+	spin_lock_irqsave(&dev->rad_lock, flags);
 
         while (!kranal_data.kra_shutdown) {
                 /* Safe: kra_shutdown only set when quiescent */
 
                 if (busy_loops++ >= RANAL_RESCHED) {
-                        cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+			spin_unlock_irqrestore(&dev->rad_lock, flags);
 
                         cfs_cond_resched();
                         busy_loops = 0;
 
-                        cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+			spin_lock_irqsave(&dev->rad_lock, flags);
                 }
 
                 dropped_lock = 0;
@@ -1969,13 +1969,13 @@ kranal_scheduler (void *arg)
                 if (dev->rad_ready) {
                         /* Device callback fired since I last checked it */
                         dev->rad_ready = 0;
-                        cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+			spin_unlock_irqrestore(&dev->rad_lock, flags);
                         dropped_lock = 1;
 
                         kranal_check_rdma_cq(dev);
                         kranal_check_fma_cq(dev);
 
-                        cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+			spin_lock_irqsave(&dev->rad_lock, flags);
                 }
 
                 cfs_list_for_each_safe(tmp, nxt, &dev->rad_ready_conns) {
@@ -1984,7 +1984,7 @@ kranal_scheduler (void *arg)
                         cfs_list_del_init(&conn->rac_schedlist);
                         LASSERT (conn->rac_scheduled);
                         conn->rac_scheduled = 0;
-                        cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+			spin_unlock_irqrestore(&dev->rad_lock, flags);
                         dropped_lock = 1;
 
                         kranal_check_fma_rx(conn);
@@ -1994,7 +1994,7 @@ kranal_scheduler (void *arg)
                                 kranal_complete_closed_conn(conn);
 
                         kranal_conn_decref(conn);
-                        cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+			spin_lock_irqsave(&dev->rad_lock, flags);
                 }
 
                 nsoonest = 0;
@@ -2006,22 +2006,22 @@ kranal_scheduler (void *arg)
                         deadline = conn->rac_last_tx + conn->rac_keepalive;
                         if (cfs_time_aftereq(jiffies, deadline)) {
                                 /* Time to process this new conn */
-                                cfs_spin_unlock_irqrestore(&dev->rad_lock,
+				spin_unlock_irqrestore(&dev->rad_lock,
                                                            flags);
                                 dropped_lock = 1;
 
                                 rc = kranal_process_new_conn(conn);
                                 if (rc != -EAGAIN) {
                                         /* All done with this conn */
-                                        cfs_spin_lock_irqsave(&dev->rad_lock,
+					spin_lock_irqsave(&dev->rad_lock,
                                                               flags);
                                         cfs_list_del_init(&conn->rac_schedlist);
-                                        cfs_spin_unlock_irqrestore(&dev-> \
+					spin_unlock_irqrestore(&dev-> \
                                                                    rad_lock,
                                                                    flags);
 
                                         kranal_conn_decref(conn);
-                                        cfs_spin_lock_irqsave(&dev->rad_lock,
+					spin_lock_irqsave(&dev->rad_lock,
                                                               flags);
                                         continue;
                                 }
@@ -2035,7 +2035,7 @@ kranal_scheduler (void *arg)
                                         conn->rac_keepalive += CFS_HZ;
                                 
                                 deadline = conn->rac_last_tx + conn->rac_keepalive;
-                                cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+				spin_lock_irqsave(&dev->rad_lock, flags);
                         }
 
                         /* Does this conn need attention soonest? */
@@ -2049,7 +2049,7 @@ kranal_scheduler (void *arg)
 
                 cfs_set_current_state(CFS_TASK_INTERRUPTIBLE);
                 cfs_waitq_add_exclusive(&dev->rad_waitq, &wait);
-                cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+		spin_unlock_irqrestore(&dev->rad_lock, flags);
 
                 if (nsoonest == 0) {
                         busy_loops = 0;
@@ -2066,10 +2066,10 @@ kranal_scheduler (void *arg)
 
                 cfs_waitq_del(&dev->rad_waitq, &wait);
                 cfs_set_current_state(CFS_TASK_RUNNING);
-                cfs_spin_lock_irqsave(&dev->rad_lock, flags);
+		spin_lock_irqsave(&dev->rad_lock, flags);
         }
 
-        cfs_spin_unlock_irqrestore(&dev->rad_lock, flags);
+	spin_unlock_irqrestore(&dev->rad_lock, flags);
 
         dev->rad_scheduler = NULL;
         kranal_thread_fini();

@@ -56,7 +56,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	obd->u.obt.obt_lut = lut;
 	obd->u.obt.obt_magic = OBT_MAGIC;
 
-	cfs_spin_lock_init(&lut->lut_translock);
+	spin_lock_init(&lut->lut_translock);
 
 	OBD_ALLOC(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
 	if (lut->lut_client_bitmap == NULL)

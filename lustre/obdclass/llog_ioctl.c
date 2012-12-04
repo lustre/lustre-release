@@ -257,10 +257,10 @@ static int llog_remove_log(const struct lu_env *env, struct llog_handle *cat,
 		CDEBUG(D_IOCTL, "cannot destroy log\n");
 		GOTO(out, rc);
 	}
-	cfs_down_write(&cat->lgh_lock);
+	down_write(&cat->lgh_lock);
 	if (cat->u.chd.chd_current_log == log)
 		cat->u.chd.chd_current_log = NULL;
-	cfs_up_write(&cat->lgh_lock);
+	up_write(&cat->lgh_lock);
 	llog_cat_set_first_idx(cat, index);
 	rc = llog_cancel_rec(env, cat, index);
 out:
@@ -448,7 +448,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         if (!idarray)
                 RETURN(-ENOMEM);
 
-        cfs_mutex_lock(&obd->obd_olg.olg_cat_processing);
+	mutex_lock(&obd->obd_olg.olg_cat_processing);
         rc = llog_get_cat_list(obd, name, 0, count, idarray);
         if (rc)
                 GOTO(out, rc);
@@ -469,7 +469,7 @@ int llog_catalog_list(struct obd_device *obd, int count,
         }
 out:
         /* release semaphore */
-        cfs_mutex_unlock(&obd->obd_olg.olg_cat_processing);
+	mutex_unlock(&obd->obd_olg.olg_cat_processing);
 
         OBD_FREE_LARGE(idarray, size);
         RETURN(rc);

@@ -42,8 +42,8 @@
 
 #define LMV_MAX_TGT_COUNT 128
 
-#define lmv_init_lock(lmv)   cfs_mutex_lock(&lmv->init_mutex);
-#define lmv_init_unlock(lmv) cfs_mutex_unlock(&lmv->init_mutex);
+#define lmv_init_lock(lmv)   mutex_lock(&lmv->init_mutex);
+#define lmv_init_unlock(lmv) mutex_unlock(&lmv->init_mutex);
 
 #define LL_IT2STR(it)				        \
 	((it) ? ldlm_it2str((it)->it_op) : "0")
@@ -77,7 +77,7 @@ struct lmv_object {
         /**
          * Sema for protecting fields.
          */
-        cfs_mutex_t             lo_guard;
+	struct mutex		lo_guard;
         /**
          * Object state like O_FREEING.
          */
@@ -115,14 +115,14 @@ static inline void
 lmv_object_lock(struct lmv_object *obj)
 {
         LASSERT(obj);
-        cfs_mutex_lock(&obj->lo_guard);
+	mutex_lock(&obj->lo_guard);
 }
 
 static inline void
 lmv_object_unlock(struct lmv_object *obj)
 {
         LASSERT(obj);
-        cfs_mutex_unlock(&obj->lo_guard);
+	mutex_unlock(&obj->lo_guard);
 }
 
 void lmv_object_add(struct lmv_object *obj);

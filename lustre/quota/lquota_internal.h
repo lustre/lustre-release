@@ -85,7 +85,7 @@ struct lquota_mst_entry {
 
 	/* r/w semaphore used to protect concurrent access to the quota
 	 * parameters which are stored on disk */
-	cfs_rw_semaphore_t	lme_sem;
+	struct rw_semaphore	lme_sem;
 
 	/* quota space that may be released after glimpse */
 	__u64			lme_may_rel;
@@ -113,7 +113,7 @@ struct lquota_slv_entry {
 	unsigned int		lse_pending_req;
 
 	/* rw spinlock protecting in-memory counters (i.e. lse_pending*) */
-	cfs_rwlock_t		lse_lock;
+	rwlock_t		lse_lock;
 
 	/* waiter for pending request done */
 	cfs_waitq_t		lse_waiters;
@@ -236,33 +236,33 @@ static inline int lqe_is_master(struct lquota_entry *lqe)
 static inline void lqe_write_lock(struct lquota_entry *lqe)
 {
 	if (lqe_is_master(lqe))
-		cfs_down_write(&lqe->lqe_sem);
+		down_write(&lqe->lqe_sem);
 	else
-		cfs_write_lock(&lqe->lqe_lock);
+		write_lock(&lqe->lqe_lock);
 }
 
 static inline void lqe_write_unlock(struct lquota_entry *lqe)
 {
 	if (lqe_is_master(lqe))
-		cfs_up_write(&lqe->lqe_sem);
+		up_write(&lqe->lqe_sem);
 	else
-		cfs_write_unlock(&lqe->lqe_lock);
+		write_unlock(&lqe->lqe_lock);
 }
 
 static inline void lqe_read_lock(struct lquota_entry *lqe)
 {
 	if (lqe_is_master(lqe))
-		cfs_down_read(&lqe->lqe_sem);
+		down_read(&lqe->lqe_sem);
 	else
-		cfs_read_lock(&lqe->lqe_lock);
+		read_lock(&lqe->lqe_lock);
 }
 
 static inline void lqe_read_unlock(struct lquota_entry *lqe)
 {
 	if (lqe_is_master(lqe))
-		cfs_up_read(&lqe->lqe_sem);
+		up_read(&lqe->lqe_sem);
 	else
-		cfs_read_unlock(&lqe->lqe_lock);
+		read_unlock(&lqe->lqe_lock);
 }
 
 /*
