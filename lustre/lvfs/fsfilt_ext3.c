@@ -252,6 +252,23 @@ static __u64 fsfilt_ext3_set_version(struct inode *inode, __u64 new_version)
 
 #endif
 
+/* kernel has ext4_blocks_for_truncate since linux-3.1.1 */
+#ifdef HAVE_BLOCKS_FOR_TRUNCATE
+# include <ext4/truncate.h>
+#else
+static inline unsigned long ext4_blocks_for_truncate(struct inode *inode)
+{
+        ext4_lblk_t needed;
+
+        needed = inode->i_blocks >> (inode->i_sb->s_blocksize_bits - 9);
+        if (needed < 2)
+                needed = 2;
+        if (needed > EXT4_MAX_TRANS_DATA)
+                needed = EXT4_MAX_TRANS_DATA;
+        return EXT4_DATA_TRANS_BLOCKS(inode->i_sb) + needed;
+}
+#endif
+
 /*
  * We don't currently need any additional blocks for rmdir and
  * unlink transactions because we are storing the OST oa_id inside
@@ -329,10 +346,14 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
                             FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
                 break;
         case FSFILT_OP_CANCEL_UNLINK:
+                LASSERT(logs == 1);
+
                 /* blocks for log header bitmap update OR
-                 * blocks for catalog header bitmap update + unlink of logs */
+                 * blocks for catalog header bitmap update + unlink of logs +
+                 * blocks for delete the inode (include blocks truncating). */
                 nblocks = (LLOG_CHUNK_SIZE >> inode->i_blkbits) +
-                        FSFILT_DELETE_TRANS_BLOCKS(inode->i_sb) * logs;
+                          EXT3_DELETE_TRANS_BLOCKS(inode->i_sb) +
+                          ext4_blocks_for_truncate(inode) + 3;
                 break;
         default: CERROR("unknown transaction start op %d\n", op);
                 LBUG();
