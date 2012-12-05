@@ -2066,6 +2066,25 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.5 renames end_writeback() back to clear_inode()...
+# see kernel commit dbd5768f87ff6fb0a4fe09c4d7b6c4a24de99430
+#
+AC_DEFUN([LC_HAVE_CLEAR_INODE],
+[AC_MSG_CHECKING([if have clear_inode])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	clear_inode((struct inode *)NULL);
+],[
+	AC_DEFINE(HAVE_CLEAR_INODE, 1,
+		  [have clear_inode])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2229,6 +2248,9 @@ AC_DEFUN([LC_PROG_LINUX],
 	 LC_TOUCH_ATIME_1ARG
 	 LC_HAVE_D_MAKE_ROOT
 	 LC_KMAP_ATOMIC_HAS_1ARG
+
+	 # 3.5
+	 LC_HAVE_CLEAR_INODE
 
 	 #
 	 if test x$enable_server = xyes ; then
