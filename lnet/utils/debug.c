@@ -856,6 +856,7 @@ static struct mod_paths {
 	{ "kmxlnd", "lnet/klnds/mxlnd" },
 	{ "ko2iblnd", "lnet/klnds/o2iblnd" },
 	{ "kptllnd", "lnet/klnds/ptllnd" },
+	{ "kgnilnd", "lnet/klnds/gnilnd"},
 	{ "kqswlnd", "lnet/klnds/qswlnd" },
 	{ "kralnd", "lnet/klnds/ralnd" },
 	{ "ksocklnd", "lnet/klnds/socklnd" },

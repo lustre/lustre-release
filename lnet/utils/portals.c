@@ -567,7 +567,7 @@ jt_ptl_print_peers (int argc, char **argv)
         int                      rc;
 
         if (!g_net_is_compatible (argv[0], SOCKLND, RALND, PTLLND, MXLND,
-                                  O2IBLND, 0))
+				  O2IBLND, GNILND, 0))
                 return -1;
 
         for (index = 0;;index++) {
@@ -620,6 +620,26 @@ jt_ptl_print_peers (int argc, char **argv)
 				ptl_ipaddr_2_str(data.ioc_u32[0], buffer[1],
 						 sizeof(buffer[1]), 1),
                                 data.ioc_u32[1]); /* peer port */
+		} else if (g_net_is_compatible(NULL, GNILND, 0)) {
+			int disconn = data.ioc_flags >> 16;
+			char *state;
+
+			if (disconn)
+				state = "D";
+			else
+				state = data.ioc_flags & 0xffff ? "C" : "U";
+
+			printf ("%-20s (%d) %s [%d] "LPU64" "
+				"sq %d/%d tx %d/%d/%d\n",
+				libcfs_nid2str(data.ioc_nid), /* peer nid */
+				data.ioc_net, /* gemini device id */
+				state, /* peer is Connecting, Up, or Down */
+				data.ioc_count,   /* peer refcount */
+				data.ioc_u64[0], /* peerstamp */
+				data.ioc_u32[2], data.ioc_u32[3], /* tx and rx seq */
+				/* fmaq, nfma, nrdma */
+				data.ioc_u32[0], data.ioc_u32[1], data.ioc_u32[4]
+				);
                 } else {
                         printf ("%-20s [%d]\n",
                                 libcfs_nid2str(data.ioc_nid), data.ioc_count);
@@ -647,11 +667,12 @@ jt_ptl_add_peer (int argc, char **argv)
         int                      port = 0;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, 0))
+	if (!g_net_is_compatible (argv[0], SOCKLND, RALND,
+				  GNILND, 0))
                 return -1;
 
         if (argc != 4) {
-                fprintf (stderr, "usage(tcp,ra): %s nid ipaddr port\n",
+		fprintf (stderr, "usage(tcp,ra,gni): %s nid ipaddr port\n",
                          argv[0]);
                 return 0;
         }
@@ -699,7 +720,7 @@ jt_ptl_del_peer (int argc, char **argv)
         int                      rc;
 
         if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND, PTLLND,
-                                  O2IBLND, 0))
+				  O2IBLND, GNILND, 0))
                 return -1;
 
         if (g_net_is_compatible(NULL, SOCKLND, 0)) {
@@ -768,7 +789,8 @@ jt_ptl_print_connections (int argc, char **argv)
         int                      index;
         int                      rc;
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND, O2IBLND, 0))
+	if (!g_net_is_compatible (argv[0], SOCKLND, RALND, MXLND, O2IBLND,
+				  GNILND, 0))
                 return -1;
 
         for (index = 0; ; index++) {
@@ -808,6 +830,10 @@ jt_ptl_print_connections (int argc, char **argv)
                         printf ("%s mtu %d\n",
                                 libcfs_nid2str(data.ioc_nid),
                                 data.ioc_u32[0]); /* path MTU */
+		} else if (g_net_is_compatible (NULL, GNILND, 0)) {
+			printf ("%-20s [%d]\n",
+				libcfs_nid2str(data.ioc_nid),
+				data.ioc_u32[0] /* device id */);
                 } else {
                         printf ("%s\n", libcfs_nid2str(data.ioc_nid));
                 }
@@ -837,7 +863,8 @@ int jt_ptl_disconnect(int argc, char **argv)
                 return 0;
         }
 
-        if (!g_net_is_compatible (NULL, SOCKLND, RALND, MXLND, O2IBLND, 0))
+	if (!g_net_is_compatible (NULL, SOCKLND, RALND, MXLND, O2IBLND,
+				  GNILND, 0))
                 return 0;
 
         if (argc >= 2 &&
@@ -879,7 +906,7 @@ int jt_ptl_push_connection (int argc, char **argv)
                 return 0;
         }
 
-        if (!g_net_is_compatible (argv[0], SOCKLND, 0))
+	if (!g_net_is_compatible (argv[0], SOCKLND, GNILND, 0))
                 return -1;
 
         if (argc > 1 &&

@@ -1,0 +1,12 @@
+# Copyright (C) 2009  Cray, Inc.
+#
+# This code is issued under the GNU General Public License.
+# See the file COPYING in this distribution
+
+if MODULES
+if BUILD_GNILND
+modulenet_DATA = kgnilnd$(KMODEXT)
+endif
+endif
+
+MOSTLYCLEANFILES = @MOSTLYCLEANFILES@

@@ -1,0 +1,1 @@
+#define KGNILND_BUILD_REV        SVN_CODE_REV

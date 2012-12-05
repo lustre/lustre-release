@@ -526,13 +526,88 @@ AC_SUBST(RACPPFLAGS)
 AC_SUBST(RALND)
 ])
 
+#
+# LN_CONFIG_GNILND
+#
+# check whether to use the Gemini Network Interface lnd
+#
+AC_DEFUN([LN_CONFIG_GNILND],
+[#### Gemini Network Interface
+AC_MSG_CHECKING([whether to enable GNI lnd])
+AC_ARG_ENABLE([gni],
+	AC_HELP_STRING([--enable-gni],
+			[enable GNI lnd]),
+	[],[enable_gni='no'])
+AC_MSG_RESULT([$enable_gni])
+
+if test x$enable_gni = xyes ; then
+	AC_MSG_CHECKING([if GNI kernel headers are present])
+	# placeholder
+	# GNICPPFLAGS was set in spec file
+	EXTRA_KCFLAGS_save="$EXTRA_KCFLAGS"
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS $GNICPPFLAGS"
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/types.h>
+		#include <gni_pub.h>
+	],[
+		gni_cdm_handle_t	kgni_domain;
+		gni_return_t		rc;
+		int			rrc;
+
+		rc = gni_cdm_create(0, 1, 1, 0, &kgni_domain);
+
+		rrc = (rc == GNI_RC_SUCCESS) ? 0 : 1;
+
+		return rrc;
+	],[
+		AC_MSG_RESULT([yes])
+		GNILND="gnilnd"
+	],[
+		AC_MSG_RESULT([no])
+		AC_MSG_ERROR([can't compile gnilnd with given GNICPPFLAGS: $GNICPPFLAGS])
+	])
+	# at this point, we have gnilnd basic support, now check for extra features
+	AC_MSG_CHECKING([to use RCA in gnilnd])
+	LB_LINUX_TRY_COMPILE([
+		#include <linux/types.h>
+		#include <gni_pub.h>
+		#include <krca_lib.h>
+	],[
+		gni_cdm_handle_t	kgni_domain;
+		gni_return_t		rc;
+		krca_ticket_t		ticket = KRCA_NULL_TICKET;
+		int			rrc;
+		__u32			nid = 0, nic_addr;
+
+		rc = gni_cdm_create(0, 1, 1, 0, &kgni_domain);
+
+		rrc = (rc == GNI_RC_SUCCESS) ? 0 : 1;
+
+		rrc += krca_nid_to_nicaddrs(nid, 1, &nic_addr);
+
+		rrc += krca_register(&ticket, RCA_MAKE_SERVICE_INDEX(RCA_IO_CLASS, 9), 99, 0);
+
+		return rrc;
+	],[
+		AC_MSG_RESULT([yes])
+		GNICPPFLAGS="$GNICPPFLAGS -DGNILND_USE_RCA=1"
+		GNILNDRCA="gnilndrca"
+	],[
+		AC_MSG_RESULT([no])
+	])
+	EXTRA_KCFLAGS="$EXTRA_KCFLAGS_save"
+fi
+AC_SUBST(GNICPPFLAGS)
+AC_SUBST(GNILNDRCA)
+AC_SUBST(GNILND)
+])
 
 
 #
 #
 # LN_CONFIG_USERSPACE
 #
-# This is defined but empty because it is called from 
+# This is defined but empty because it is called from
 # build/autconf/lustre-build.m4 which is shared by all branches.
 #
 AC_DEFUN([LN_CONFIG_USERSPACE],
@@ -598,6 +673,7 @@ LN_CONFIG_BACKOFF
 LN_CONFIG_QUADRICS
 LN_CONFIG_O2IB
 LN_CONFIG_RALND
+LN_CONFIG_GNILND
 LN_CONFIG_PTLLND
 LN_CONFIG_MX
 # 2.6.32
@@ -740,6 +816,8 @@ AC_DEFUN([LN_CONDITIONALS],
 AM_CONDITIONAL(BUILD_MXLND, test x$MXLND = "xmxlnd")
 AM_CONDITIONAL(BUILD_O2IBLND, test x$O2IBLND = "xo2iblnd")
 AM_CONDITIONAL(BUILD_RALND, test x$RALND = "xralnd")
+AM_CONDITIONAL(BUILD_GNILND, test x$GNILND = "xgnilnd")
+AM_CONDITIONAL(BUILD_GNILND_RCA, test x$GNILNDRCA = "xgnilndrca")
 AM_CONDITIONAL(BUILD_PTLLND, test x$PTLLND = "xptllnd")
 AM_CONDITIONAL(BUILD_USOCKLND, test x$USOCKLND = "xusocklnd")
 ])
@@ -769,6 +847,8 @@ lnet/klnds/qswlnd/Makefile
 lnet/klnds/qswlnd/autoMakefile
 lnet/klnds/ralnd/Makefile
 lnet/klnds/ralnd/autoMakefile
+lnet/klnds/gnilnd/Makefile
+lnet/klnds/gnilnd/autoMakefile
 lnet/klnds/socklnd/Makefile
 lnet/klnds/socklnd/autoMakefile
 lnet/klnds/ptllnd/Makefile
