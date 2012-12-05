@@ -309,6 +309,7 @@ void ll_intent_release(struct lookup_intent *it)
 void ll_invalidate_aliases(struct inode *inode)
 {
 	struct dentry *dentry;
+	struct ll_d_hlist_node *p;
 	ENTRY;
 
 	LASSERT(inode != NULL);
@@ -317,11 +318,11 @@ void ll_invalidate_aliases(struct inode *inode)
 	       inode->i_ino, inode->i_generation, inode);
 
 	ll_lock_dcache(inode);
-	cfs_list_for_each_entry(dentry, &inode->i_dentry, d_alias) {
-                CDEBUG(D_DENTRY, "dentry in drop %.*s (%p) parent %p "
-                       "inode %p flags %d\n", dentry->d_name.len,
-                       dentry->d_name.name, dentry, dentry->d_parent,
-                       dentry->d_inode, dentry->d_flags);
+	ll_d_hlist_for_each_entry(dentry, p, &inode->i_dentry, d_alias) {
+		CDEBUG(D_DENTRY, "dentry in drop %.*s (%p) parent %p "
+		       "inode %p flags %d\n", dentry->d_name.len,
+		       dentry->d_name.name, dentry, dentry->d_parent,
+		       dentry->d_inode, dentry->d_flags);
 
                 if (dentry->d_name.len == 1 && dentry->d_name.name[0] == '/') {
                         CERROR("called on root (?) dentry=%p, inode=%p "

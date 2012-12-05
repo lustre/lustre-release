@@ -623,6 +623,22 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define clear_inode(i)		end_writeback(i)
 #endif
 
+#ifdef HAVE_DENTRY_D_ALIAS_HLIST
+#define ll_d_hlist_node hlist_node
+#define ll_d_hlist_empty(list) hlist_empty(list)
+#define ll_d_hlist_entry(ptr, type, name) hlist_entry(ptr.first, type, name)
+#define ll_d_hlist_for_each(tmp, i_dentry) hlist_for_each(tmp, i_dentry)
+#define ll_d_hlist_for_each_entry(dentry, p, i_dentry, alias) \
+        hlist_for_each_entry(dentry, p, i_dentry, alias)
+#else
+#define ll_d_hlist_node list_head
+#define ll_d_hlist_empty(list) list_empty(list)
+#define ll_d_hlist_entry(ptr, type, name) list_entry(ptr.next, type, name)
+#define ll_d_hlist_for_each(tmp, i_dentry) list_for_each(tmp, i_dentry)
+#define ll_d_hlist_for_each_entry(dentry, p, i_dentry, alias) \
+        p = NULL; list_for_each_entry(dentry, i_dentry, alias)
+#endif
+
 
 #ifndef HAVE_BI_HW_SEGMENTS
 #define bio_hw_segments(q, bio) 0

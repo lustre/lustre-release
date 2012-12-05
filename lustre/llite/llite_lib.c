@@ -625,17 +625,17 @@ int ll_get_max_mdsize(struct ll_sb_info *sbi, int *lmmsize)
 
 void ll_dump_inode(struct inode *inode)
 {
-        struct list_head *tmp;
-        int dentry_count = 0;
+	struct ll_d_hlist_node *tmp;
+	int dentry_count = 0;
 
-        LASSERT(inode != NULL);
+	LASSERT(inode != NULL);
 
-        list_for_each(tmp, &inode->i_dentry)
-                dentry_count++;
+	ll_d_hlist_for_each(tmp, &inode->i_dentry)
+		dentry_count++;
 
-        CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u, %d dentries\n",
-               inode, ll_i2mdexp(inode)->exp_obd->obd_name, inode->i_ino,
-               inode->i_mode, atomic_read(&inode->i_count), dentry_count);
+	CERROR("inode %p dump: dev=%s ino=%lu mode=%o count=%u, %d dentries\n",
+	       inode, ll_i2mdexp(inode)->exp_obd->obd_name, inode->i_ino,
+	       inode->i_mode, atomic_read(&inode->i_count), dentry_count);
 }
 
 void lustre_dump_dentry(struct dentry *dentry, int recur)

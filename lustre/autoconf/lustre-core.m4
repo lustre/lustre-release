@@ -2114,6 +2114,33 @@ EXTRA_KCFLAGS="$tmp_flags"
 ])
 
 #
+# 3.6 switch i_dentry/d_alias from list to hlist
+#
+AC_DEFUN([LC_HAVE_DENTRY_D_ALIAS_HLIST],
+[AC_MSG_CHECKING([if i_dentry/d_alias uses hlist])
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	#include <linux/list.h>
+],[
+	struct inode inode;
+	struct dentry dentry;
+	struct hlist_head head;
+	struct hlist_node node;
+	inode.i_dentry = head;
+	dentry.d_alias = node;
+],[
+	AC_DEFINE(HAVE_DENTRY_D_ALIAS_HLIST, 1,
+		  [have i_dentry/d_alias uses hlist])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
+#
 # LC_PROG_LINUX
 #
 # Lustre linux kernel checks
@@ -2281,6 +2308,9 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 3.5
 	 LC_HAVE_CLEAR_INODE
 	 LC_HAVE_ENCODE_FH_PARENT
+
+	 # 3.6
+	 LC_HAVE_DENTRY_D_ALIAS_HLIST
 
 	 #
 	 if test x$enable_server = xyes ; then

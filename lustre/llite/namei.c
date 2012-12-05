@@ -168,9 +168,10 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 static void ll_invalidate_negative_children(struct inode *dir)
 {
 	struct dentry *dentry, *tmp_subdir;
+	struct ll_d_hlist_node *p;
 
 	ll_lock_dcache(dir);
-	list_for_each_entry(dentry, &dir->i_dentry, d_alias) {
+	ll_d_hlist_for_each_entry(dentry, p, &dir->i_dentry, d_alias) {
 		spin_lock(&dentry->d_lock);
 		if (!list_empty(&dentry->d_subdirs)) {
 			struct dentry *child;
@@ -342,14 +343,15 @@ void ll_i2gids(__u32 *suppgids, struct inode *i1, struct inode *i2)
 static struct dentry *ll_find_alias(struct inode *inode, struct dentry *dentry)
 {
 	struct dentry *alias, *discon_alias, *invalid_alias;
+	struct ll_d_hlist_node *p;
 
-	if (list_empty(&inode->i_dentry))
+	if (ll_d_hlist_empty(&inode->i_dentry))
 		return NULL;
 
 	discon_alias = invalid_alias = NULL;
 
 	ll_lock_dcache(inode);
-	list_for_each_entry(alias, &inode->i_dentry, d_alias) {
+	ll_d_hlist_for_each_entry(alias, p, &inode->i_dentry, d_alias) {
 		LASSERT(alias != dentry);
 
 		spin_lock(&alias->d_lock);
@@ -667,7 +669,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));
 
-        LASSERT(list_empty(&inode->i_dentry));
+	LASSERT(ll_d_hlist_empty(&inode->i_dentry));
 
         /* We asked for a lock on the directory, but were granted a
          * lock on the inode.  Since we finally have an inode pointer,
@@ -931,10 +933,10 @@ static int ll_mkdir_generic(struct inode *dir, struct qstr *name,
 static void ll_get_child_fid(struct inode * dir, struct qstr *name,
                              struct lu_fid *fid)
 {
-        struct dentry *parent, *child;
+	struct dentry *parent, *child;
 
-        parent = list_entry(dir->i_dentry.next, struct dentry, d_alias);
-        child = d_lookup(parent, name);
+	parent = ll_d_hlist_entry(dir->i_dentry, struct dentry, d_alias);
+	child = d_lookup(parent, name);
         if (child) {
                 if (child->d_inode)
                         *fid = *ll_inode2fid(child->d_inode);
