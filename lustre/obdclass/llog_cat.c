@@ -147,6 +147,9 @@ out_destroy:
  *
  * Assumes caller has already pushed us into the kernel context and is locking.
  * We return a lock on the handle to ensure nobody yanks it from us.
+ *
+ * This takes extra reference on llog_handle via llog_handle_get() and require
+ * this reference to be put by caller using llog_handle_put()
  */
 int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		       struct llog_handle **res, struct llog_logid *logid)
@@ -185,13 +188,13 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		CERROR("%s: error opening log id "LPX64":%x: rc = %d\n",
 		       cathandle->lgh_ctxt->loc_obd->obd_name,
 		       logid->lgl_oid, logid->lgl_ogen, rc);
-		GOTO(out, rc);
+		RETURN(rc);
 	}
 
 	rc = llog_init_handle(env, loghandle, LLOG_F_IS_PLAIN, NULL);
 	if (rc < 0) {
 		llog_close(env, loghandle);
-		GOTO(out, rc);
+		RETURN(rc);
 	}
 
 	down_write(&cathandle->lgh_lock);
@@ -204,8 +207,9 @@ int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 				loghandle->lgh_hdr->llh_cat_idx;
 	EXIT;
 out:
+	llog_handle_get(loghandle);
 	*res = loghandle;
-	return rc;
+	return 0;
 }
 
 int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle)
@@ -234,15 +238,7 @@ int llog_cat_close(const struct lu_env *env, struct llog_handle *cathandle)
 				       rc);
 
 			index = loghandle->u.phd.phd_cookie.lgc_index;
-
-			LASSERT(index);
-			llog_cat_set_first_idx(cathandle, index);
-			rc = llog_cancel_rec(env, cathandle, index);
-			if (rc == 0)
-				CDEBUG(D_RPCTRACE,
-				       "cancel plain log at index %u of "
-				       "catalog "LPX64"\n",
-				       index, cathandle->lgh_id.lgl_oid);
+			llog_cat_cleanup(env, cathandle, NULL, index);
 		}
 		llog_close(env, loghandle);
 	}
@@ -513,25 +509,15 @@ int llog_cat_cancel_records(const struct lu_env *env,
 			CERROR("%s: cannot find handle for llog "LPX64": %d\n",
 			       cathandle->lgh_ctxt->loc_obd->obd_name,
 			       lgl->lgl_oid, rc);
-			break;
+			failed++;
+			continue;
 		}
 
 		lrc = llog_cancel_rec(env, loghandle, cookies->lgc_index);
 		if (lrc == 1) {          /* log has been destroyed */
 			index = loghandle->u.phd.phd_cookie.lgc_index;
-			down_write(&cathandle->lgh_lock);
-			if (cathandle->u.chd.chd_current_log == loghandle)
-				cathandle->u.chd.chd_current_log = NULL;
-			up_write(&cathandle->lgh_lock);
-			llog_close(env, loghandle);
-
-			LASSERT(index);
-			llog_cat_set_first_idx(cathandle, index);
-			lrc = llog_cancel_rec(env, cathandle, index);
-			if (lrc == 0)
-				CDEBUG(D_RPCTRACE, "cancel plain log at index"
-				       " %u of catalog "LPX64"\n",
-				       index, cathandle->lgh_id.lgl_oid);
+			rc = llog_cat_cleanup(env, cathandle, loghandle,
+					      index);
 		} else if (lrc == -ENOENT) {
 			if (rc == 0) /* ENOENT shouldn't rewrite any error */
 				rc = lrc;
@@ -539,6 +525,7 @@ int llog_cat_cancel_records(const struct lu_env *env,
 			failed++;
 			rc = lrc;
 		}
+		llog_handle_put(loghandle);
 	}
 	if (rc)
 		CERROR("%s: fail to cancel %d of %d llog-records: rc = %d\n",
@@ -585,14 +572,15 @@ int llog_cat_process_cb(const struct lu_env *env, struct llog_handle *cat_llh,
                 cd.lpcd_last_idx = 0;
 		rc = llog_process_or_fork(env, llh, d->lpd_cb, d->lpd_data,
 					  &cd, false);
-                /* Continue processing the next log from idx 0 */
-                d->lpd_startidx = 0;
-        } else {
+		/* Continue processing the next log from idx 0 */
+		d->lpd_startidx = 0;
+	} else {
 		rc = llog_process_or_fork(env, llh, d->lpd_cb, d->lpd_data,
 					  NULL, false);
-        }
+	}
+	llog_handle_put(llh);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 int llog_cat_process_or_fork(const struct lu_env *env,
@@ -737,7 +725,8 @@ static int llog_cat_reverse_process_cb(const struct lu_env *env,
 	}
 
 	rc = llog_reverse_process(env, llh, d->lpd_cb, d->lpd_data, NULL);
-        RETURN(rc);
+	llog_handle_put(llh);
+	RETURN(rc);
 }
 
 int llog_cat_reverse_process(const struct lu_env *env,
@@ -813,13 +802,42 @@ out:
         RETURN(0);
 }
 
+/* Cleanup deleted plain llog traces from catalog */
+int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
+		     struct llog_handle *loghandle, int index)
+{
+	int rc;
+
+	LASSERT(index);
+	if (loghandle != NULL) {
+		/* remove destroyed llog from catalog list and
+		 * chd_current_log variable */
+		down_write(&cathandle->lgh_lock);
+		if (cathandle->u.chd.chd_current_log == loghandle)
+			cathandle->u.chd.chd_current_log = NULL;
+		cfs_list_del_init(&loghandle->u.phd.phd_entry);
+		up_write(&cathandle->lgh_lock);
+		LASSERT(index == loghandle->u.phd.phd_cookie.lgc_index);
+		/* llog was opened and keep in a list, close it now */
+		llog_close(env, loghandle);
+	}
+	/* remove plain llog entry from catalog by index */
+	llog_cat_set_first_idx(cathandle, index);
+	rc = llog_cancel_rec(env, cathandle, index);
+	if (rc == 0)
+		CDEBUG(D_HA, "cancel plain log at index"
+		       " %u of catalog "LPX64"\n",
+		       index, cathandle->lgh_id.lgl_oid);
+	return rc;
+}
+
 int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
 		  struct llog_rec_hdr *rec, void *data)
 {
 	struct llog_logid_rec	*lir = (struct llog_logid_rec *)rec;
 	struct llog_handle	*loghandle;
 	struct llog_log_hdr	*llh;
-	int			 rc, index;
+	int			 rc;
 
 	ENTRY;
 
@@ -838,8 +856,8 @@ int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
 		       cathandle->lgh_ctxt->loc_obd->obd_name,
 		       lir->lid_id.lgl_oid, rc);
 		if (rc == -ENOENT || rc == -ESTALE) {
-			index = rec->lrh_index;
-			goto cat_cleanup;
+			/* remove index from catalog */
+			llog_cat_cleanup(env, cathandle, NULL, rec->lrh_index);
 		}
 		RETURN(rc);
 	}
@@ -852,20 +870,10 @@ int cat_cancel_cb(const struct lu_env *env, struct llog_handle *cathandle,
 			CERROR("%s: fail to destroy empty log: rc = %d\n",
 			       loghandle->lgh_ctxt->loc_obd->obd_name, rc);
 
-		index = loghandle->u.phd.phd_cookie.lgc_index;
-		llog_close(env, loghandle);
-
-cat_cleanup:
-		LASSERT(index);
-		llog_cat_set_first_idx(cathandle, index);
-		rc = llog_cancel_rec(env, cathandle, index);
-		if (rc == 0)
-			CDEBUG(D_HA,
-			       "cancel log "LPX64":%x at index %u of catalog "
-			       LPX64"\n", lir->lid_id.lgl_oid,
-			       lir->lid_id.lgl_ogen, rec->lrh_index,
-			       cathandle->lgh_id.lgl_oid);
+		llog_cat_cleanup(env, cathandle, loghandle,
+				 loghandle->u.phd.phd_cookie.lgc_index);
 	}
+	llog_handle_put(loghandle);
 
 	RETURN(rc);
 }
@@ -881,7 +889,7 @@ int llog_cat_init_and_process(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	rc = llog_process(env, llh, cat_cancel_cb, NULL, NULL);
+	rc = llog_process_or_fork(env, llh, cat_cancel_cb, NULL, NULL, false);
 	if (rc)
 		CERROR("%s: llog_process() with cat_cancel_cb failed: rc = "
 		       "%d\n", llh->lgh_ctxt->loc_obd->obd_name, rc);

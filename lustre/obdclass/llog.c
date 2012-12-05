@@ -70,6 +70,7 @@ struct llog_handle *llog_alloc_handle(void)
 	init_rwsem(&loghandle->lgh_lock);
 	spin_lock_init(&loghandle->lgh_hdr_lock);
 	CFS_INIT_LIST_HEAD(&loghandle->u.phd.phd_entry);
+	cfs_atomic_set(&loghandle->lgh_refcount, 1);
 
 	return loghandle;
 }
@@ -79,20 +80,32 @@ struct llog_handle *llog_alloc_handle(void)
  */
 void llog_free_handle(struct llog_handle *loghandle)
 {
-	if (!loghandle)
-		return;
+	LASSERT(loghandle != NULL);
 
+	/* failed llog_init_handle */
 	if (!loghandle->lgh_hdr)
 		goto out;
+
 	if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_PLAIN)
-		cfs_list_del_init(&loghandle->u.phd.phd_entry);
-	if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
+		LASSERT(cfs_list_empty(&loghandle->u.phd.phd_entry));
+	else if (loghandle->lgh_hdr->llh_flags & LLOG_F_IS_CAT)
 		LASSERT(cfs_list_empty(&loghandle->u.chd.chd_head));
 	LASSERT(sizeof(*(loghandle->lgh_hdr)) == LLOG_CHUNK_SIZE);
 	OBD_FREE(loghandle->lgh_hdr, LLOG_CHUNK_SIZE);
-
 out:
 	OBD_FREE_PTR(loghandle);
+}
+
+void llog_handle_get(struct llog_handle *loghandle)
+{
+	cfs_atomic_inc(&loghandle->lgh_refcount);
+}
+
+void llog_handle_put(struct llog_handle *loghandle)
+{
+	LASSERT(cfs_atomic_read(&loghandle->lgh_refcount) > 0);
+	if (cfs_atomic_dec_and_test(&loghandle->lgh_refcount))
+		llog_free_handle(loghandle);
 }
 
 /* returns negative on error; 0 if success; 1 if success & log destroyed */
@@ -930,10 +943,10 @@ int llog_close(const struct lu_env *env, struct llog_handle *loghandle)
 	if (rc)
 		GOTO(out, rc);
 	if (lop->lop_close == NULL)
-		GOTO(out, -EOPNOTSUPP);
+		GOTO(out, rc = -EOPNOTSUPP);
 	rc = lop->lop_close(env, loghandle);
 out:
-	llog_free_handle(loghandle);
+	llog_handle_put(loghandle);
 	RETURN(rc);
 }
 EXPORT_SYMBOL(llog_close);

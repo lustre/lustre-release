@@ -81,6 +81,8 @@ static inline struct llog_thread_info *llog_info(const struct lu_env *env)
 int llog_info_init(void);
 void llog_info_fini(void);
 
+void llog_handle_get(struct llog_handle *loghandle);
+void llog_handle_put(struct llog_handle *loghandle);
 int llog_cat_id2handle(const struct lu_env *env, struct llog_handle *cathandle,
 		       struct llog_handle **res, struct llog_logid *logid);
 int class_config_dump_handler(const struct lu_env *env,
@@ -90,5 +92,6 @@ int class_config_parse_rec(struct llog_rec_hdr *rec, char *buf, int size);
 int llog_process_or_fork(const struct lu_env *env,
 			 struct llog_handle *loghandle,
 			 llog_cb_t cb, void *data, void *catdata, bool fork);
-int llog_cat_set_first_idx(struct llog_handle *cathandle, int index);
+int llog_cat_cleanup(const struct lu_env *env, struct llog_handle *cathandle,
+		     struct llog_handle *loghandle, int index);
 #endif
