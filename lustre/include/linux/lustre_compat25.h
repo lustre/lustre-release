@@ -625,6 +625,14 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define queue_max_hw_segments(rq)         queue_max_segments(rq)
 #endif
 
+#ifdef HAVE_KMAP_ATOMIC_HAS_1ARG
+#define ll_kmap_atomic(a, b)	kmap_atomic(a)
+#define ll_kunmap_atomic(a, b)	kunmap_atomic(a)
+#else
+#define ll_kmap_atomic(a, b)	kmap_atomic(a, b)
+#define ll_kunmap_atomic(a, b)	kunmap_atomic(a, b)
+#endif
+
 
 #ifndef HAVE_BI_HW_SEGMENTS
 #define bio_hw_segments(q, bio) 0

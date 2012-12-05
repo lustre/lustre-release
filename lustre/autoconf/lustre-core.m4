@@ -2009,6 +2009,24 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
+# 3.4 kmap_atomic removes second argument
+# see kernel commit 1ec9c5ddc17aa398f05646abfcbaf315b544e62f
+#
+AC_DEFUN([LC_KMAP_ATOMIC_HAS_1ARG],
+[AC_MSG_CHECKING([if kmap_atomic has only 1 argument])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/highmem.h>
+],[
+	kmap_atomic(NULL);
+],[
+	AC_DEFINE(HAVE_KMAP_ATOMIC_HAS_1ARG, 1,
+		  [have kmap_atomic has only 1 argument])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
 #
 # 3.4 switchs touch_atime to struct path
 # see kernel commit 68ac1234fb949b66941d94dce4157742799fc581
@@ -2210,6 +2228,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 3.4
 	 LC_TOUCH_ATIME_1ARG
 	 LC_HAVE_D_MAKE_ROOT
+	 LC_KMAP_ATOMIC_HAS_1ARG
 
 	 #
 	 if test x$enable_server = xyes ; then
