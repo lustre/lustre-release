@@ -697,10 +697,27 @@ stop() {
     wait_exit_ST ${facet}
 }
 
+version_code() {
+    # split arguments like "1.8.6-wc3" into "1", "8", "6", "wc3"
+    eval set -- $(tr "[:punct:]" " " <<< $*)
+
+    echo -n $((($1 << 16) | ($2 << 8) | $3))
+}
+
+get_lustre_version() {
+    local facet=${1:-"$SINGLEMDS"}
+    do_facet $facet $LCTL get_param -n version | awk '/^lustre:/ {print $2}'
+}
+
+lustre_version_code() {
+    local facet=${1:-"$SINGLEMDS"}
+    version_code $(get_lustre_version $1)
+}
+
 # save quota version (both administrative and operational quotas)
 # add an additional parameter if mountpoint is ever different from $MOUNT
 #
-# XXX This function is kept for interoperability with old server (< 2.3.51),
+# XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
 quota_save_version() {
@@ -724,19 +741,20 @@ quota_save_version() {
 
 # client could mount several lustre
 #
-# XXX This function is kept for interoperability with old server (< 2.3.51),
+# XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
-quota_type () {
+quota_type() {
     local fsname=${1:-$FSNAME}
     local rc=0
-    do_facet mgs lctl get_param mdd.${fsname}-MDT*.quota_type || rc=$?
+    do_facet $SINGLEMDS lctl get_param mdd.${fsname}-MDT*.quota_type ||
+        rc=$?
     do_nodes $(comma_list $(osts_nodes)) \
         lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
-    return $rc 
+    return $rc
 }
 
-# XXX This function is kept for interoperability with old server (< 2.3.51),
+# XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
 restore_quota_old() {
@@ -749,7 +767,7 @@ restore_quota_old() {
 	quota_save_version $old_QUOTA_TYPE
 }
 
-# XXX This function is kept for interoperability with old server (< 2.3.51),
+# XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
 setup_quota_old(){
@@ -814,7 +832,7 @@ ost_quota_type() {
 
 # restore old quota type settings
 restore_quota() {
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.51) ]; then
+	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
 		restore_quota_old
 		return
 	fi
@@ -830,7 +848,7 @@ restore_quota() {
 }
 
 setup_quota(){
-	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.51) ]; then
+	if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
 		setup_quota_old $1
 		return
 	fi
@@ -2436,12 +2454,6 @@ osc_ensure_active () {
 }
 
 init_param_vars () {
-    if ! remote_ost_nodsh && ! remote_mds_nodsh; then
-        export MDSVER=$(do_facet $SINGLEMDS "lctl get_param version" | cut -d. -f1,2)
-        export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
-        export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
-    fi
-
     remote_mds_nodsh ||
         TIMEOUT=$(do_facet $SINGLEMDS "lctl get_param -n timeout")
 
@@ -2456,12 +2468,8 @@ init_param_vars () {
             setup_quota $MOUNT || return 2
         else
             echo "disable quota as required"
-            local major=$(get_mds_version_major $SINGLEMDS)
-            local minor=$(get_mds_version_minor $SINGLEMDS)
-
-            if [[ $major -le 2 && $minor -le 2 ]]; then
+            [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ] &&
                 $LFS quotaoff -ug $MOUNT > /dev/null 2>&1
-            fi
         fi
     fi
 
@@ -3695,8 +3703,9 @@ is_patchless ()
     lctl get_param version | grep -q patchless
 }
 
-check_versions () {
-    [ "$MDSVER" = "$CLIVER" -a "$OSTVER" = "$CLIVER" ]
+check_versions() {
+    [ "$(lustre_version_code client)" = "$(lustre_version_code $SINGLEMDS)" -a \
+      "$(lustre_version_code client)" = "$(lustre_version_code ost1)" ]
 }
 
 get_node_count() {
@@ -4002,33 +4011,14 @@ get_clientosc_proc_path() {
     echo "${1}-osc-[!M]*"
 }
 
-get_lustre_version () {
-    local facet=${1:-"$SINGLEMDS"}    
-    do_facet $facet $LCTL get_param -n version |  awk '/^lustre:/ {print $2}'
-}
-
-get_mds_version_major () {
-    local facet=${1:-"$SINGLEMDS"}
-    local version=$(get_lustre_version $facet)
-    echo $version | awk -F. '{print $1}'
-}
-
-get_mds_version_minor () {
-    local facet=${1:-"$SINGLEMDS"}
-    local version=$(get_lustre_version $facet)
-    echo $version | awk -F. '{print $2}'
-}
-
 # If the 2.0 MDS was mounted on 1.8 device, then the OSC and LOV names
 # used by MDT would not be changed.
 # mdt lov: fsname-mdtlov
 # mdt osc: fsname-OSTXXXX-osc
 mds_on_old_device() {
     local mds=${1:-"$SINGLEMDS"}
-    local major=$(get_mds_version_major $mds)
-    local minor=$(get_mds_version_minor $mds)
 
-    if [ $major -ge 2 ] || [ $major -eq 1 -a $minor -gt 8 ]; then
+    if [ $(lustre_version_code $mds) -gt $(version_code 1.9.0) ]; then
         do_facet $mds "lctl list_param osc.$FSNAME-OST*-osc \
             > /dev/null 2>&1" && return 0
     fi
@@ -4043,9 +4033,8 @@ get_mdtosc_proc_path() {
     local mdt_label=$(convert_facet2label $mds_facet)
     local mdt_index=$(echo $mdt_label | sed -e 's/^.*-//')
 
-    local major=$(get_mds_version_major $mds_facet)
-    local minor=$(get_mds_version_minor $mds_facet)
-    if [ $major -le 1 -a $minor -le 8 ] || mds_on_old_device $mds_facet; then
+    if [ $(lustre_version_code $mds_facet) -le $(version_code 1.8.0) ] ||
+       mds_on_old_device $mds_facet; then
         echo "${ost_label}-osc"
     else
         echo "${ost_label}-osc-${mdt_index}"
