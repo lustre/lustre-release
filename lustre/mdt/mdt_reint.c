@@ -860,7 +860,8 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                 rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
                                             LCK_EX, &flags, ldlm_blocking_ast,
                                             ldlm_completion_ast, NULL, NULL, 0,
-                                            &info->mti_exp->exp_handle.h_cookie,
+					    LVB_T_NONE,
+					    &info->mti_exp->exp_handle.h_cookie,
                                             lh);
         } else {
                 struct ldlm_enqueue_info einfo = { LDLM_IBITS, LCK_EX,
@@ -870,7 +871,8 @@ static int mdt_rename_lock(struct mdt_thread_info *info,
                  * other clients.
                  */
                 rc = ldlm_cli_enqueue(ms->ms_control_exp, NULL, &einfo, res_id,
-                                      policy, &flags, NULL, 0, lh, 0);
+				      policy, &flags, NULL, 0, LVB_T_NONE, lh,
+				      0);
         }
 
         RETURN(rc);

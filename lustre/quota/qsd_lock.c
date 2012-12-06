@@ -126,6 +126,8 @@ static int qsd_common_glimpse_ast(struct ptlrpc_request *req,
 		RETURN(-EFAULT);
 
 	/* prepare reply */
+	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+			     sizeof(struct lquota_lvb));
 	rc = req_capsule_server_pack(&req->rq_pill);
 	if (rc != 0) {
 		CERROR("Can't pack response, rc %d\n", rc);

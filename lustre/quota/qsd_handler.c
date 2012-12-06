@@ -308,7 +308,7 @@ static void qsd_req_completion(const struct lu_env *env,
 			       struct quota_body *reqbody,
 			       struct quota_body *repbody,
 			       struct lustre_handle *lockh,
-			       union ldlm_wire_lvb *lvb,
+			       struct lquota_lvb *lvb,
 			       void *arg, int ret)
 {
 	struct lquota_entry	*lqe = (struct lquota_entry *)arg;
@@ -390,9 +390,9 @@ static void qsd_req_completion(const struct lu_env *env,
 
 	/* extract information from lvb */
 	if (ret == 0 && lvb != 0) {
-		if (lvb->l_lquota.lvb_id_qunit != 0)
-			qsd_set_qunit(lqe, lvb->l_lquota.lvb_id_qunit);
-		if (lvb->l_lquota.lvb_flags & LQUOTA_FL_EDQUOT)
+		if (lvb->lvb_id_qunit != 0)
+			qsd_set_qunit(lqe, lvb->lvb_id_qunit);
+		if (lvb->lvb_flags & LQUOTA_FL_EDQUOT)
 			lqe->lqe_edquot = true;
 		else
 			lqe->lqe_edquot = false;
@@ -590,7 +590,7 @@ static int qsd_acquire_remote(const struct lu_env *env,
 	/* check whether we already own a valid lock for this ID */
 	rc = qsd_id_lock_match(&qti->qti_lockh, &qbody->qb_lockh);
 	if (rc) {
-		union ldlm_wire_lvb *lvb;
+		struct lquota_lvb *lvb;
 
 		OBD_ALLOC_PTR(lvb);
 		if (lvb == NULL) {
@@ -982,7 +982,7 @@ int qsd_adjust(const struct lu_env *env, struct lquota_entry *lqe)
 				    qsd_req_completion, qqi, &qti->qti_lockh,
 				    lqe);
 	} else {
-		union ldlm_wire_lvb *lvb;
+		struct lquota_lvb *lvb;
 
 		OBD_ALLOC_PTR(lvb);
 		if (lvb == NULL)

@@ -245,7 +245,8 @@ static int ost_lock_get(struct obd_export *exp, struct obdo *oa,
         RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, mode, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
-                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
+				      ldlm_glimpse_ast, NULL, 0, LVB_T_NONE,
+				      NULL, lh));
 }
 
 /* Helper function: release lock, if any. */
@@ -642,7 +643,8 @@ static int ost_brw_lock_get(int mode, struct obd_export *exp,
         RETURN(ldlm_cli_enqueue_local(exp->exp_obd->obd_namespace, &res_id,
                                       LDLM_EXTENT, &policy, mode, &flags,
                                       ldlm_blocking_ast, ldlm_completion_ast,
-                                      ldlm_glimpse_ast, NULL, 0, NULL, lh));
+				      ldlm_glimpse_ast, NULL, 0, LVB_T_NONE,
+				      NULL, lh));
 }
 
 static void ost_brw_lock_put(int mode,

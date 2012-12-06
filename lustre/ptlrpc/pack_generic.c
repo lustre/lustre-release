@@ -1833,20 +1833,39 @@ void lustre_swab_gl_desc(union ldlm_gl_desc *desc)
 	CLASSERT(offsetof(typeof(desc->lquota_desc), gl_pad2) != 0);
 }
 
-void lustre_swab_lvb(union ldlm_wire_lvb *lvb)
+void lustre_swab_ost_lvb_v1(struct ost_lvb_v1 *lvb)
 {
-        /* The ldlm_wire_lvb union represents all the possible LVB types.
-         * Unfortunately, there is no way to know what member of the union we
-         * are dealing with at this point. Therefore, all LVB structures must
-         * have fields of the same types, although used for different purposes
-         */
-        __swab64s(&lvb->l_ost.lvb_size);
-        __swab64s(&lvb->l_ost.lvb_mtime);
-        __swab64s(&lvb->l_ost.lvb_atime);
-        __swab64s(&lvb->l_ost.lvb_ctime);
-        __swab64s(&lvb->l_ost.lvb_blocks);
+	__swab64s(&lvb->lvb_size);
+	__swab64s(&lvb->lvb_mtime);
+	__swab64s(&lvb->lvb_atime);
+	__swab64s(&lvb->lvb_ctime);
+	__swab64s(&lvb->lvb_blocks);
 }
-EXPORT_SYMBOL(lustre_swab_lvb);
+EXPORT_SYMBOL(lustre_swab_ost_lvb_v1);
+
+void lustre_swab_ost_lvb(struct ost_lvb *lvb)
+{
+	__swab64s(&lvb->lvb_size);
+	__swab64s(&lvb->lvb_mtime);
+	__swab64s(&lvb->lvb_atime);
+	__swab64s(&lvb->lvb_ctime);
+	__swab64s(&lvb->lvb_blocks);
+	__swab32s(&lvb->lvb_mtime_ns);
+	__swab32s(&lvb->lvb_atime_ns);
+	__swab32s(&lvb->lvb_ctime_ns);
+	__swab32s(&lvb->lvb_padding);
+}
+EXPORT_SYMBOL(lustre_swab_ost_lvb);
+
+void lustre_swab_lquota_lvb(struct lquota_lvb *lvb)
+{
+	__swab64s(&lvb->lvb_flags);
+	__swab64s(&lvb->lvb_id_may_rel);
+	__swab64s(&lvb->lvb_id_rel);
+	__swab64s(&lvb->lvb_id_qunit);
+	__swab64s(&lvb->lvb_pad1);
+}
+EXPORT_SYMBOL(lustre_swab_lquota_lvb);
 
 void lustre_swab_mdt_body (struct mdt_body *b)
 {

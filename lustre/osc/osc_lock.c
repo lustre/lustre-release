@@ -888,6 +888,11 @@ static int osc_ldlm_glimpse_ast(struct ldlm_lock *dlmlock, void *data)
                                 obj = lock->cll_descr.cld_obj;
                                 result = cl_object_glimpse(env, obj, lvb);
                         }
+			if (!exp_connect_lvb_type(req->rq_export))
+				req_capsule_shrink(&req->rq_pill,
+						   &RMF_DLM_LVB,
+						   sizeof(struct ost_lvb_v1),
+						   RCL_SERVER);
                         osc_ast_data_put(env, olck);
                 } else {
                         /*

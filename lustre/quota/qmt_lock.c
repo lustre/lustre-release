@@ -56,6 +56,8 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	ENTRY;
 
 	req_capsule_extend(&req->rq_pill, &RQF_LDLM_INTENT_QUOTA);
+	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+			     ldlm_lvbo_size(*lockp));
 
 	/* extract quota body and intent opc */
 	it = req_capsule_client_get(&req->rq_pill, &RMF_LDLM_INTENT);
@@ -132,8 +134,6 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	}
 
 	/* on success, pack lvb in reply */
-	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
-			     ldlm_lvbo_size(*lockp));
 	lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
 	ldlm_lvbo_fill(*lockp, lvb, ldlm_lvbo_size(*lockp));
 	EXIT;
@@ -252,7 +252,8 @@ int qmt_lvbo_update(struct lu_device *ld, struct ldlm_resource *res,
 		/* no need to update lvb for global quota locks */
 		RETURN(0);
 
-	lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
+	lvb = req_capsule_server_swab_get(&req->rq_pill, &RMF_DLM_LVB,
+					  lustre_swab_lquota_lvb);
 	if (lvb == NULL) {
 		CERROR("%s: failed to extract lvb from request\n",
 		       qmt->qmt_svname);

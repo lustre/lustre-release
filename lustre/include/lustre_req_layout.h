@@ -89,8 +89,8 @@ int  req_capsule_server_pack(struct req_capsule *pill);
 void *req_capsule_client_get(struct req_capsule *pill,
                              const struct req_msg_field *field);
 void *req_capsule_client_swab_get(struct req_capsule *pill,
-                                  const struct req_msg_field *field,
-                                  void (*swabber)(void*));
+				  const struct req_msg_field *field,
+				  void *swabber);
 void *req_capsule_client_sized_get(struct req_capsule *pill,
                                    const struct req_msg_field *field,
                                    int len);
@@ -102,6 +102,9 @@ void *req_capsule_server_sized_get(struct req_capsule *pill,
 void *req_capsule_server_swab_get(struct req_capsule *pill,
                                   const struct req_msg_field *field,
                                   void *swabber);
+void *req_capsule_server_sized_swab_get(struct req_capsule *pill,
+					const struct req_msg_field *field,
+					int len, void *swabber);
 const void *req_capsule_other_get(struct req_capsule *pill,
                                   const struct req_msg_field *field);
 

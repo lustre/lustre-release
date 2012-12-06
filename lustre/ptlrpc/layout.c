@@ -892,8 +892,7 @@ struct req_msg_field RMF_LDLM_INTENT =
 EXPORT_SYMBOL(RMF_LDLM_INTENT);
 
 struct req_msg_field RMF_DLM_LVB =
-        DEFINE_MSGF("dlm_lvb", 0, sizeof(union ldlm_wire_lvb), lustre_swab_lvb,
-        NULL);
+	DEFINE_MSGF("dlm_lvb", 0, -1, NULL, NULL);
 EXPORT_SYMBOL(RMF_DLM_LVB);
 
 struct req_msg_field RMF_DLM_GL_DESC =
@@ -1815,8 +1814,8 @@ EXPORT_SYMBOL(req_capsule_client_get);
  * unused too.
  */
 void *req_capsule_client_swab_get(struct req_capsule *pill,
-                                  const struct req_msg_field *field,
-                                  void (*swabber)(void* ))
+				  const struct req_msg_field *field,
+				  void *swabber)
 {
         return __req_capsule_get(pill, field, RCL_CLIENT, swabber, 0);
 }
@@ -1878,6 +1877,15 @@ void *req_capsule_server_sized_get(struct req_capsule *pill,
         return __req_capsule_get(pill, field, RCL_SERVER, NULL, 0);
 }
 EXPORT_SYMBOL(req_capsule_server_sized_get);
+
+void *req_capsule_server_sized_swab_get(struct req_capsule *pill,
+					const struct req_msg_field *field,
+					int len, void *swabber)
+{
+	req_capsule_set_size(pill, field, RCL_SERVER, len);
+	return __req_capsule_get(pill, field, RCL_SERVER, swabber, 0);
+}
+EXPORT_SYMBOL(req_capsule_server_sized_swab_get);
 
 /**
  * Returns the buffer of a \a pill corresponding to the given \a field from the

@@ -1331,13 +1331,112 @@ out:
 }
 EXPORT_SYMBOL(ldlm_revalidate_lock_handle);
 
+/* The caller's duty to guarantee the buffer is large enough. */
+int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
+		  enum req_location loc, void *data, int size)
+{
+	void *lvb;
+	ENTRY;
+
+	LASSERT(data != NULL);
+	LASSERT(size >= 0);
+
+	switch (lock->l_lvb_type) {
+	case LVB_T_OST:
+		if (size == sizeof(struct ost_lvb)) {
+			if (loc == RCL_CLIENT)
+				lvb = req_capsule_client_swab_get(pill,
+						&RMF_DLM_LVB,
+						lustre_swab_ost_lvb);
+			else
+				lvb = req_capsule_server_swab_get(pill,
+						&RMF_DLM_LVB,
+						lustre_swab_ost_lvb);
+			if (unlikely(lvb == NULL)) {
+				LDLM_ERROR(lock, "no LVB");
+				RETURN(-EPROTO);
+			}
+
+			memcpy(data, lvb, size);
+		} else if (size == sizeof(struct ost_lvb_v1)) {
+			struct ost_lvb *olvb = data;
+
+			if (loc == RCL_CLIENT)
+				lvb = req_capsule_client_swab_get(pill,
+						&RMF_DLM_LVB,
+						lustre_swab_ost_lvb_v1);
+			else
+				lvb = req_capsule_server_sized_swab_get(pill,
+						&RMF_DLM_LVB, size,
+						lustre_swab_ost_lvb_v1);
+			if (unlikely(lvb == NULL)) {
+				LDLM_ERROR(lock, "no LVB");
+				RETURN(-EPROTO);
+			}
+
+			memcpy(data, lvb, size);
+			olvb->lvb_mtime_ns = 0;
+			olvb->lvb_atime_ns = 0;
+			olvb->lvb_ctime_ns = 0;
+		} else {
+			LDLM_ERROR(lock, "Replied unexpected ost LVB size %d",
+				   size);
+			RETURN(-EINVAL);
+		}
+		break;
+	case LVB_T_LQUOTA:
+		if (size == sizeof(struct lquota_lvb)) {
+			if (loc == RCL_CLIENT)
+				lvb = req_capsule_client_swab_get(pill,
+						&RMF_DLM_LVB,
+						lustre_swab_lquota_lvb);
+			else
+				lvb = req_capsule_server_swab_get(pill,
+						&RMF_DLM_LVB,
+						lustre_swab_lquota_lvb);
+			if (unlikely(lvb == NULL)) {
+				LDLM_ERROR(lock, "no LVB");
+				RETURN(-EPROTO);
+			}
+
+			memcpy(data, lvb, size);
+		} else {
+			LDLM_ERROR(lock, "Replied unexpected lquota LVB size %d",
+				   size);
+			RETURN(-EINVAL);
+		}
+		break;
+	case LVB_T_LAYOUT:
+		if (size == 0)
+			break;
+
+		if (loc == RCL_CLIENT)
+			lvb = req_capsule_client_get(pill, &RMF_DLM_LVB);
+		else
+			lvb = req_capsule_server_get(pill, &RMF_DLM_LVB);
+		if (unlikely(lvb == NULL)) {
+			LDLM_ERROR(lock, "no LVB");
+			RETURN(-EPROTO);
+		}
+
+		memcpy(data, lvb, size);
+		break;
+	default:
+		LDLM_ERROR(lock, "Unexpected LVB type");
+		RETURN(-EINVAL);
+	}
+
+	RETURN(0);
+}
+
 /* Returns a referenced lock */
 struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                                    const struct ldlm_res_id *res_id,
                                    ldlm_type_t type,
                                    ldlm_mode_t mode,
                                    const struct ldlm_callback_suite *cbs,
-                                   void *data, __u32 lvb_len)
+				   void *data, __u32 lvb_len,
+				   enum lvb_type lvb_type)
 {
         struct ldlm_lock *lock;
         struct ldlm_resource *res;
@@ -1377,6 +1476,7 @@ struct ldlm_lock *ldlm_lock_create(struct ldlm_namespace *ns,
                         GOTO(out, 0);
         }
 
+	lock->l_lvb_type = lvb_type;
         if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_NEW_LOCK))
                 GOTO(out, 0);
 
@@ -2129,7 +2229,8 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                 libcfs_debug_vmsg2(msgdata, fmt, args,
                        " ns: \?\? lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: \?\? rrc=\?\? type: \?\?\? flags: "LPX64" nid: %s "
-                       "remote: "LPX64" expref: %d pid: %u timeout: %lu\n",
+                       "remote: "LPX64" expref: %d pid: %u timeout: %lu "
+		       "lvb_type: %d\n",
                        lock,
                        lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
                        lock->l_readers, lock->l_writers,
@@ -2137,7 +2238,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                        ldlm_lockname[lock->l_req_mode],
                        lock->l_flags, nid, lock->l_remote_handle.cookie,
                        exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
-                       lock->l_pid, lock->l_callback_timeout);
+                       lock->l_pid, lock->l_callback_timeout, lock->l_lvb_type);
                 va_end(args);
                 return;
         }
@@ -2148,7 +2249,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s ["LPU64"->"LPU64
                        "] (req "LPU64"->"LPU64") flags: "LPX64" nid: %s remote:"
-                       " "LPX64" expref: %d pid: %u timeout %lu\n",
+                       " "LPX64" expref: %d pid: %u timeout: %lu lvb_type: %d\n",
                        ldlm_lock_to_ns_name(lock), lock,
                        lock->l_handle.h_cookie, cfs_atomic_read(&lock->l_refc),
                        lock->l_readers, lock->l_writers,
@@ -2163,7 +2264,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                        lock->l_req_extent.start, lock->l_req_extent.end,
                        lock->l_flags, nid, lock->l_remote_handle.cookie,
                        exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
-                       lock->l_pid, lock->l_callback_timeout);
+                       lock->l_pid, lock->l_callback_timeout, lock->l_lvb_type);
                 break;
 
         case LDLM_FLOCK:
@@ -2194,7 +2295,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" bits "LPX64" rrc: %d type: %s "
                        "flags: "LPX64" nid: %s remote: "LPX64" expref: %d "
-                       "pid: %u timeout: %lu\n",
+                       "pid: %u timeout: %lu lvb_type: %d\n",
                        ldlm_lock_to_ns_name(lock),
                        lock, lock->l_handle.h_cookie,
                        cfs_atomic_read (&lock->l_refc),
@@ -2208,15 +2309,15 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                        ldlm_typename[resource->lr_type],
                        lock->l_flags, nid, lock->l_remote_handle.cookie,
                        exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
-                       lock->l_pid, lock->l_callback_timeout);
+                       lock->l_pid, lock->l_callback_timeout, lock->l_lvb_type);
                 break;
 
         default:
                 libcfs_debug_vmsg2(msgdata, fmt, args,
                        " ns: %s lock: %p/"LPX64" lrc: %d/%d,%d mode: %s/%s "
                        "res: "LPU64"/"LPU64" rrc: %d type: %s flags: "LPX64" "
-                       "nid: %s remote: "LPX64" expref: %d pid: %u timeout %lu"
-                       "\n",
+                       "nid: %s remote: "LPX64" expref: %d pid: %u timeout: %lu"
+                       "lvb_type: %d\n",
                        ldlm_lock_to_ns_name(lock),
                        lock, lock->l_handle.h_cookie,
                        cfs_atomic_read (&lock->l_refc),
@@ -2229,7 +2330,7 @@ void _ldlm_lock_debug(struct ldlm_lock *lock,
                        ldlm_typename[resource->lr_type],
                        lock->l_flags, nid, lock->l_remote_handle.cookie,
                        exp ? cfs_atomic_read(&exp->exp_refcount) : -99,
-                       lock->l_pid, lock->l_callback_timeout);
+                       lock->l_pid, lock->l_callback_timeout, lock->l_lvb_type);
                 break;
         }
         va_end(args);

@@ -2576,7 +2576,7 @@ int osc_enqueue_base(struct obd_export *exp, struct ldlm_res_id *res_id,
         *flags &= ~LDLM_FL_BLOCK_GRANTED;
 
         rc = ldlm_cli_enqueue(exp, &req, einfo, res_id, policy, flags, lvb,
-                              sizeof(*lvb), lockh, async);
+			      sizeof(*lvb), LVB_T_OST, lockh, async);
         if (rqset) {
                 if (!rc) {
                         struct osc_enqueue_args *aa;

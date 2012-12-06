@@ -210,7 +210,8 @@ void mgs_revoke_lock(struct mgs_device *mgs, struct fs_db *fsdb, int type)
 		rc = ldlm_cli_enqueue_local(mgs->mgs_obd->obd_namespace,
 					    &res_id, LDLM_PLAIN, NULL, LCK_EX,
 					    &flags, ldlm_blocking_ast, cp,
-					    NULL, fsdb, 0, NULL, &lockh);
+					    NULL, fsdb, 0, LVB_T_NONE, NULL,
+					    &lockh);
                 if (rc != ELDLM_OK) {
                         CERROR("can't take cfg lock for "LPX64"/"LPX64"(%d)\n",
                                le64_to_cpu(res_id.name[0]),

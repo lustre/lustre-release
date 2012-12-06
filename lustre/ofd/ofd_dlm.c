@@ -111,6 +111,7 @@ int ofd_intent_policy(struct ldlm_namespace *ns, struct ldlm_lock **lockp,
 	CFS_LIST_HEAD(gl_list);
 	ENTRY;
 
+	lock->l_lvb_type = LVB_T_OST;
 	policy = ldlm_get_processing_policy(res);
 	LASSERT(policy != NULL);
 	LASSERT(req != NULL);

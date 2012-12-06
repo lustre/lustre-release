@@ -1209,7 +1209,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_SOM | OBD_CONNECT_FULL20 | \
 				OBD_CONNECT_64BITHASH | OBD_CONNECT_JOBSTATS | \
 				OBD_CONNECT_EINPROGRESS | \
-				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_UMASK)
+				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_UMASK | \
+				OBD_CONNECT_LVB_TYPE)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -1223,7 +1224,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_64BITHASH | OBD_CONNECT_MAXBYTES | \
                                 OBD_CONNECT_MAX_EASIZE | \
 				OBD_CONNECT_EINPROGRESS | \
-				OBD_CONNECT_JOBSTATS | OBD_CONNECT_LIGHTWEIGHT)
+				OBD_CONNECT_JOBSTATS | \
+				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_LVB_TYPE)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
 				OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV | \
@@ -1592,13 +1594,29 @@ extern void lustre_swab_niobuf_remote (struct niobuf_remote *nbr);
         do { blocks = OST_LVB_ERR_INIT + rc; } while (0)
 #define OST_LVB_GET_ERR(blocks)    (int)(blocks - OST_LVB_ERR_INIT)
 
-struct ost_lvb {
-        __u64     lvb_size;
-        obd_time  lvb_mtime;
-        obd_time  lvb_atime;
-        obd_time  lvb_ctime;
-        __u64     lvb_blocks;
+struct ost_lvb_v1 {
+	__u64		lvb_size;
+	obd_time	lvb_mtime;
+	obd_time	lvb_atime;
+	obd_time	lvb_ctime;
+	__u64		lvb_blocks;
 };
+
+extern void lustre_swab_ost_lvb_v1(struct ost_lvb_v1 *lvb);
+
+struct ost_lvb {
+	__u64		lvb_size;
+	obd_time	lvb_mtime;
+	obd_time	lvb_atime;
+	obd_time	lvb_ctime;
+	__u64		lvb_blocks;
+	__u32		lvb_mtime_ns;
+	__u32		lvb_atime_ns;
+	__u32		lvb_ctime_ns;
+	__u32		lvb_padding;
+};
+
+extern void lustre_swab_ost_lvb(struct ost_lvb *lvb);
 
 /*
  *   lquota data structures
@@ -1765,6 +1783,8 @@ struct lquota_lvb {
 	__u64	lvb_id_qunit;   /* current qunit value */
 	__u64	lvb_pad1;
 };
+
+extern void lustre_swab_lquota_lvb(struct lquota_lvb *lvb);
 
 /* LVB used with global quota lock */
 #define lvb_glb_ver  lvb_id_may_rel /* current version of the global index */
@@ -2494,16 +2514,6 @@ typedef union {
 } ldlm_wire_policy_data_t;
 
 extern void lustre_swab_ldlm_policy_data (ldlm_wire_policy_data_t *d);
-
-/* Similarly to ldlm_wire_policy_data_t, there is one common swabber for all
- * LVB types. As a result, any new LVB structure must match the fields of the
- * ost_lvb structure. */
-union ldlm_wire_lvb {
-	struct ost_lvb		l_ost;
-	struct lquota_lvb	l_lquota;
-};
-
-extern void lustre_swab_lvb(union ldlm_wire_lvb *);
 
 union ldlm_gl_desc {
 	struct ldlm_gl_lquota_desc	lquota_desc;

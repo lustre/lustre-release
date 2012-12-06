@@ -385,7 +385,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            ldlm_blocking_callback blocking,
                            ldlm_completion_callback completion,
                            ldlm_glimpse_callback glimpse,
-                           void *data, __u32 lvb_len,
+			   void *data, __u32 lvb_len, enum lvb_type lvb_type,
                            const __u64 *client_cookie,
                            struct lustre_handle *lockh)
 {
@@ -403,7 +403,8 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                 LBUG();
         }
 
-        lock = ldlm_lock_create(ns, res_id, type, mode, &cbs, data, lvb_len);
+	lock = ldlm_lock_create(ns, res_id, type, mode, &cbs, data, lvb_len,
+				lvb_type);
         if (unlikely(!lock))
                 GOTO(out_nolock, err = -ENOMEM);
 
@@ -493,8 +494,8 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
         int is_replay = *flags & LDLM_FL_REPLAY;
         struct ldlm_lock *lock;
         struct ldlm_reply *reply;
-        struct ost_lvb *tmplvb;
         int cleanup_phase = 1;
+	int size = 0;
         ENTRY;
 
         lock = ldlm_handle2lock(lockh);
@@ -504,35 +505,45 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
                 RETURN(-ENOLCK);
         }
 
+	LASSERTF(ergo(lvb_len != 0, lvb_len == lock->l_lvb_len),
+		 "lvb_len = %d, l_lvb_len = %d\n", lvb_len, lock->l_lvb_len);
+
         if (rc != ELDLM_OK) {
                 LASSERT(!is_replay);
                 LDLM_DEBUG(lock, "client-side enqueue END (%s)",
                            rc == ELDLM_LOCK_ABORTED ? "ABORTED" : "FAILED");
-                if (rc == ELDLM_LOCK_ABORTED) {
-                        /* Before we return, swab the reply */
-                        reply = req_capsule_server_get(&req->rq_pill,
-                                                       &RMF_DLM_REP);
-                        if (reply == NULL)
-                                rc = -EPROTO;
-                        if (lvb_len) {
 
-                                req_capsule_set_size(&req->rq_pill,
-                                                     &RMF_DLM_LVB, RCL_SERVER,
-                                                     lvb_len);
-                                tmplvb = req_capsule_server_get(&req->rq_pill,
-                                                                 &RMF_DLM_LVB);
-                                if (tmplvb == NULL)
-                                        GOTO(cleanup, rc = -EPROTO);
-                                if (lvb != NULL)
-                                        memcpy(lvb, tmplvb, lvb_len);
-                        }
-                }
-                GOTO(cleanup, rc);
-        }
+		if (rc != ELDLM_LOCK_ABORTED)
+			GOTO(cleanup, rc);
+	}
 
-        reply = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
-        if (reply == NULL)
-                GOTO(cleanup, rc = -EPROTO);
+	/* Before we return, swab the reply */
+	reply = req_capsule_server_get(&req->rq_pill, &RMF_DLM_REP);
+	if (reply == NULL)
+		GOTO(cleanup, rc = -EPROTO);
+
+	if (lvb_len != 0) {
+		LASSERT(lvb != NULL);
+
+		size = req_capsule_get_size(&req->rq_pill, &RMF_DLM_LVB,
+					    RCL_SERVER);
+		if (size < 0) {
+			LDLM_ERROR(lock, "Fail to get lvb_len, rc = %d", size);
+			GOTO(cleanup, rc = size);
+		} else if (unlikely(size > lvb_len)) {
+			LDLM_ERROR(lock, "Replied LVB is larger than "
+				   "expectation, expected = %d, replied = %d",
+				   lvb_len, size);
+			GOTO(cleanup, rc = -EINVAL);
+		}
+	}
+
+	if (rc == ELDLM_LOCK_ABORTED) {
+		if (lvb_len != 0)
+			rc = ldlm_fill_lvb(lock, &req->rq_pill, RCL_SERVER,
+					   lvb, size);
+		GOTO(cleanup, rc = (rc != 0 ? rc : ELDLM_LOCK_ABORTED));
+	}
 
         /* lock enqueued on the server */
         cleanup_phase = 0;
@@ -619,25 +630,18 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 
         /* If the lock has already been granted by a completion AST, don't
          * clobber the LVB with an older one. */
-        if (lvb_len) {
-                /* We must lock or a racing completion might update lvb
-                   without letting us know and we'll clobber the correct value.
-                   Cannot unlock after the check either, a that still leaves
-                   a tiny window for completion to get in */
-                lock_res_and_lock(lock);
-                if (lock->l_req_mode != lock->l_granted_mode) {
-
-                        req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB,
-                                             RCL_SERVER, lvb_len);
-                        tmplvb = req_capsule_server_get(&req->rq_pill,
-                                                             &RMF_DLM_LVB);
-                        if (tmplvb == NULL) {
-                                unlock_res_and_lock(lock);
-                                GOTO(cleanup, rc = -EPROTO);
-                        }
-                        memcpy(lock->l_lvb_data, tmplvb, lvb_len);
-                }
-                unlock_res_and_lock(lock);
+	if (lvb_len != 0) {
+		/* We must lock or a racing completion might update lvb without
+		 * letting us know and we'll clobber the correct value.
+		 * Cannot unlock after the check either, a that still leaves
+		 * a tiny window for completion to get in */
+		lock_res_and_lock(lock);
+		if (lock->l_req_mode != lock->l_granted_mode)
+			rc = ldlm_fill_lvb(lock, &req->rq_pill, RCL_SERVER,
+					   lock->l_lvb_data, size);
+		unlock_res_and_lock(lock);
+		if (rc < 0)
+			GOTO(cleanup, rc);
         }
 
         if (!is_replay) {
@@ -787,8 +791,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      struct ldlm_enqueue_info *einfo,
                      const struct ldlm_res_id *res_id,
 		     ldlm_policy_data_t const *policy, __u64 *flags,
-                     void *lvb, __u32 lvb_len, struct lustre_handle *lockh,
-                     int async)
+		     void *lvb, __u32 lvb_len, enum lvb_type lvb_type,
+		     struct lustre_handle *lockh, int async)
 {
         struct ldlm_namespace *ns = exp->exp_obd->obd_namespace;
         struct ldlm_lock      *lock;
@@ -817,7 +821,7 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                 };
                 lock = ldlm_lock_create(ns, res_id, einfo->ei_type,
                                         einfo->ei_mode, &cbs, einfo->ei_cbdata,
-                                        lvb_len);
+					lvb_len, lvb_type);
                 if (lock == NULL)
                         RETURN(-ENOMEM);
                 /* for the local lock, add the reference */
@@ -882,13 +886,12 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
 
         /* Continue as normal. */
         if (!req_passed_in) {
-                if (lvb_len > 0) {
-                        req_capsule_extend(&req->rq_pill,
-                                           &RQF_LDLM_ENQUEUE_LVB);
-                        req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB,
-                                             RCL_SERVER, lvb_len);
-                }
-                ptlrpc_request_set_replen(req);
+		if (lvb_len > 0)
+			req_capsule_extend(&req->rq_pill,
+					   &RQF_LDLM_ENQUEUE_LVB);
+		req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+				     lvb_len);
+		ptlrpc_request_set_replen(req);
         }
 
         /*
@@ -2113,6 +2116,7 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
                 ldlm_lock_cancel(lock);
                 RETURN(0);
         }
+
         /*
          * If granted mode matches the requested mode, this lock is granted.
          *
@@ -2149,11 +2153,10 @@ static int replay_one_lock(struct obd_import *imp, struct ldlm_lock *lock)
 	body->lock_flags = ldlm_flags_to_wire(flags);
 
         ldlm_lock2handle(lock, &body->lock_handle[0]);
-        if (lock->l_lvb_len != 0) {
-                req_capsule_extend(&req->rq_pill, &RQF_LDLM_ENQUEUE_LVB);
-                req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
-                                     lock->l_lvb_len);
-        }
+	if (lock->l_lvb_len > 0)
+		req_capsule_extend(&req->rq_pill, &RQF_LDLM_ENQUEUE_LVB);
+	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+			     lock->l_lvb_len);
         ptlrpc_request_set_replen(req);
         /* notify the server we've replayed all requests.
          * also, we mark the request to be put on a dedicated

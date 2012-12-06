@@ -684,7 +684,8 @@ static int osp_obd_connect(const struct lu_env *env, struct obd_export **exp,
 				 OBD_CONNECT_REQPORTAL |
 				 OBD_CONNECT_SKIP_ORPHAN |
 				 OBD_CONNECT_VERSION |
-				 OBD_CONNECT_FID;
+				 OBD_CONNECT_FID |
+				 OBD_CONNECT_LVB_TYPE;
 
 	if (is_osp_on_ost(osp->opd_obd->obd_name))
 		ocd->ocd_connect_flags |= OBD_CONNECT_LIGHTWEIGHT;

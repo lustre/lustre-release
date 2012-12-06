@@ -245,7 +245,7 @@ struct qsd_thread_info {
 	struct ldlm_enqueue_info	qti_einfo;
 	struct lustre_handle		qti_lockh;
 	__u64                           qti_slv_ver;
-	union ldlm_wire_lvb		qti_lvb;
+	struct lquota_lvb		qti_lvb;
 	union {
 		struct quota_body	qti_body;
 		struct idx_info		qti_ii;
@@ -351,14 +351,14 @@ typedef void (*qsd_req_completion_t) (const struct lu_env *,
 				      struct qsd_qtype_info *,
 				      struct quota_body *, struct quota_body *,
 				      struct lustre_handle *,
-				      union ldlm_wire_lvb *, void *, int);
+				      struct lquota_lvb *, void *, int);
 int qsd_send_dqacq(const struct lu_env *, struct obd_export *,
 		   struct quota_body *, bool, qsd_req_completion_t,
 		   struct qsd_qtype_info *, struct lustre_handle *,
 		   struct lquota_entry *);
 int qsd_intent_lock(const struct lu_env *, struct obd_export *,
 		    struct quota_body *, bool, int, qsd_req_completion_t,
-		    struct qsd_qtype_info *, union ldlm_wire_lvb *, void *);
+		    struct qsd_qtype_info *, struct lquota_lvb *, void *);
 int qsd_fetch_index(const struct lu_env *, struct obd_export *,
 		    struct idx_info *, unsigned int, cfs_page_t **, bool *);
 

@@ -663,6 +663,13 @@ void ldlm_convert_policy_to_local(struct obd_export *exp, ldlm_type_t type,
                                   const ldlm_wire_policy_data_t *wpolicy,
                                   ldlm_policy_data_t *lpolicy);
 
+enum lvb_type {
+	LVB_T_NONE	= 0,
+	LVB_T_OST	= 1,
+	LVB_T_LQUOTA	= 2,
+	LVB_T_LAYOUT	= 3,
+};
+
 struct ldlm_lock {
         /**
          * Must be first in the structure.
@@ -802,6 +809,7 @@ struct ldlm_lock {
          * Client-side-only members.
          */
 
+	enum lvb_type	      l_lvb_type;
         /**
          * Temporary storage for an LVB received during an enqueue operation.
          */
@@ -1273,8 +1281,8 @@ int ldlm_cli_enqueue(struct obd_export *exp, struct ptlrpc_request **reqp,
                      struct ldlm_enqueue_info *einfo,
                      const struct ldlm_res_id *res_id,
 		     ldlm_policy_data_t const *policy, __u64 *flags,
-                     void *lvb, __u32 lvb_len, struct lustre_handle *lockh,
-                     int async);
+		     void *lvb, __u32 lvb_len, enum lvb_type lvb_type,
+		     struct lustre_handle *lockh, int async);
 int ldlm_prep_enqueue_req(struct obd_export *exp,
                           struct ptlrpc_request *req,
                           cfs_list_t *cancels,
@@ -1294,7 +1302,7 @@ int ldlm_cli_enqueue_local(struct ldlm_namespace *ns,
                            ldlm_blocking_callback blocking,
                            ldlm_completion_callback completion,
                            ldlm_glimpse_callback glimpse,
-                           void *data, __u32 lvb_len,
+			   void *data, __u32 lvb_len, enum lvb_type lvb_type,
                            const __u64 *client_cookie,
                            struct lustre_handle *lockh);
 int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,

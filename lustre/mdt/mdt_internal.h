@@ -734,7 +734,7 @@ static inline int mdt_fid_lock(struct ldlm_namespace *ns,
         rc = ldlm_cli_enqueue_local(ns, res_id, LDLM_IBITS, policy,
                                     mode, &flags, mdt_blocking_ast,
                                     ldlm_completion_ast, NULL, NULL, 0,
-                                    client_cookie, lh);
+				    LVB_T_NONE, client_cookie, lh);
         return rc == ELDLM_OK ? 0 : -EIO;
 }
 

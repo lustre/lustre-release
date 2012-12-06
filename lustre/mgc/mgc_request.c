@@ -927,6 +927,8 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
                                         LDLM_ENQUEUE);
         if (req == NULL)
                 RETURN(-ENOMEM);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER, 0);
         ptlrpc_request_set_replen(req);
 
         /* check if this is server or client */
@@ -938,7 +940,7 @@ static int mgc_enqueue(struct obd_export *exp, struct lov_stripe_md *lsm,
         /* Limit how long we will wait for the enqueue to complete */
         req->rq_delay_limit = short_limit ? 5 : MGC_ENQUEUE_LIMIT;
         rc = ldlm_cli_enqueue(exp, &req, &einfo, &cld->cld_resid, NULL, flags,
-                              NULL, 0, lockh, 0);
+			      NULL, 0, LVB_T_NONE, lockh, 0);
         /* A failed enqueue should still call the mgc_blocking_ast,
            where it will be requeued if needed ("grant failed"). */
         ptlrpc_req_finished(req);

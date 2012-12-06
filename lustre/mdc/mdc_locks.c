@@ -437,7 +437,8 @@ static struct ptlrpc_request *mdc_intent_getattr_pack(struct obd_export *exp,
         RETURN(req);
 }
 
-static struct ptlrpc_request *ldlm_enqueue_pack(struct obd_export *exp)
+static struct ptlrpc_request *
+mdc_enqueue_pack(struct obd_export *exp, int lvb_len)
 {
         struct ptlrpc_request *req;
         int rc;
@@ -453,6 +454,7 @@ static struct ptlrpc_request *ldlm_enqueue_pack(struct obd_export *exp)
                 RETURN(ERR_PTR(rc));
         }
 
+	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER, lvb_len);
         ptlrpc_request_set_replen(req);
         RETURN(req);
 }
@@ -635,8 +637,8 @@ static int mdc_finish_enqueue(struct obd_export *exp,
 				void *lvb;
 				void *lmm;
 
-				lvb = req_capsule_server_get(pill,
-							     &RMF_DLM_LVB);
+				lvb = req_capsule_server_sized_get(pill,
+							&RMF_DLM_LVB, lvb_len);
 				if (lvb == NULL) {
 					LDLM_LOCK_PUT(lock);
 					RETURN(-EPROTO);
@@ -685,6 +687,7 @@ int mdc_enqueue(struct obd_export *exp, struct ldlm_enqueue_info *einfo,
         ldlm_policy_data_t const *policy = &lookup_policy;
         int                    generation, resends = 0;
         struct ldlm_reply     *lockrep;
+	enum lvb_type	       lvb_type = 0;
         ENTRY;
 
         LASSERTF(!it || einfo->ei_type == LDLM_IBITS, "lock type %d\n",
@@ -719,13 +722,19 @@ resend:
                 policy = &update_policy;
                 einfo->ei_cbdata = NULL;
                 lmm = NULL;
-        } else if (it->it_op & IT_UNLINK)
-                req = mdc_intent_unlink_pack(exp, it, op_data);
-	else if (it->it_op & (IT_GETATTR | IT_LOOKUP))
+	} else if (it->it_op & IT_UNLINK) {
+		req = mdc_intent_unlink_pack(exp, it, op_data);
+	} else if (it->it_op & (IT_GETATTR | IT_LOOKUP)) {
 		req = mdc_intent_getattr_pack(exp, it, op_data);
-	else if (it->it_op & (IT_READDIR | IT_LAYOUT))
-		req = ldlm_enqueue_pack(exp);
-	else {
+	} else if (it->it_op & IT_READDIR) {
+		req = mdc_enqueue_pack(exp, 0);
+	} else if (it->it_op & IT_LAYOUT) {
+		if (!imp_connect_lvb_type(class_exp2cliimp(exp)))
+			RETURN(-EOPNOTSUPP);
+
+		req = mdc_enqueue_pack(exp, obddev->u.cli.cl_max_mds_easize);
+		lvb_type = LVB_T_LAYOUT;
+	} else {
                 LBUG();
                 RETURN(-EINVAL);
         }
@@ -759,7 +768,7 @@ resend:
         }
 
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, policy, &flags, NULL,
-                              0, lockh, 0);
+			      0, lvb_type, lockh, 0);
         if (!it) {
                 /* For flock requests we immediatelly return without further
                    delay and let caller deal with the rest, since rest of
@@ -1144,7 +1153,7 @@ int mdc_intent_getattr_async(struct obd_export *exp,
         }
 
         rc = ldlm_cli_enqueue(exp, &req, einfo, &res_id, &policy, &flags, NULL,
-                              0, &minfo->mi_lockh, 1);
+			      0, LVB_T_NONE, &minfo->mi_lockh, 1);
         if (rc < 0) {
                 mdc_exit_request(&obddev->u.cli);
                 ptlrpc_req_finished(req);

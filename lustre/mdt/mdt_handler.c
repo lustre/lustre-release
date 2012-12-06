@@ -3819,11 +3819,20 @@ static int mdt_intent_opc(long itopc, struct mdt_thread_info *info,
 		if (qmt == NULL)
 			RETURN(-EOPNOTSUPP);
 
+		(*lockp)->l_lvb_type = LVB_T_LQUOTA;
 		/* pass the request to quota master */
 		rc = qmt_hdls.qmth_intent_policy(info->mti_env, qmt,
 						 mdt_info_req(info), lockp,
 						 flags);
 		RETURN(rc);
+	}
+
+	if (opc == MDT_IT_LAYOUT) {
+		(*lockp)->l_lvb_type = LVB_T_LAYOUT;
+		/* XXX: set replay RMF_DLM_LVB as the real EA size when LAYOUT
+		 *	lock enabled. */
+	} else if (opc == MDT_IT_READDIR) {
+		req_capsule_set_size(pill, &RMF_DLM_LVB, RCL_SERVER, 0);
 	}
 
 	flv  = &mdt_it_flavor[opc];
@@ -3888,6 +3897,7 @@ static int mdt_intent_policy(struct ldlm_namespace *ns,
         } else {
                 /* No intent was provided */
                 LASSERT(pill->rc_fmt == &RQF_LDLM_ENQUEUE);
+		req_capsule_set_size(pill, &RMF_DLM_LVB, RCL_SERVER, 0);
                 rc = req_capsule_server_pack(pill);
                 if (rc)
                         rc = err_serious(rc);

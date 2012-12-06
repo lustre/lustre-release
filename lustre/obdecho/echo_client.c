@@ -3005,7 +3005,7 @@ static int echo_client_setup(const struct lu_env *env,
 
         ocd->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_REQPORTAL |
                                  OBD_CONNECT_GRANT | OBD_CONNECT_FULL20 |
-                                 OBD_CONNECT_64BITHASH;
+				 OBD_CONNECT_64BITHASH | OBD_CONNECT_LVB_TYPE;
         ocd->ocd_version = LUSTRE_VERSION_CODE;
         ocd->ocd_group = FID_SEQ_ECHO;
 

@@ -45,7 +45,7 @@ struct qsd_async_args {
 	struct obd_export     *aa_exp;
 	struct qsd_qtype_info *aa_qqi;
 	void		      *aa_arg;
-	union ldlm_wire_lvb   *aa_lvb;
+	struct lquota_lvb     *aa_lvb;
 	struct lustre_handle   aa_lockh;
 	qsd_req_completion_t   aa_completion;
 };
@@ -173,7 +173,7 @@ static int qsd_intent_interpret(const struct lu_env *env,
 
 	rc = ldlm_cli_enqueue_fini(aa->aa_exp, req, LDLM_PLAIN, 0, LCK_CR,
 				   &flags, (void *)aa->aa_lvb,
-				   sizeof(union ldlm_wire_lvb), lockh, rc);
+				   sizeof(struct lquota_lvb), lockh, rc);
 	if (rc < 0)
 		/* the lock has been destroyed, forget about the lock handle */
 		memset(lockh, 0, sizeof(*lockh));
@@ -208,7 +208,7 @@ static int qsd_intent_interpret(const struct lu_env *env,
 int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 		    struct quota_body *qbody, bool sync, int it_op,
 		    qsd_req_completion_t completion, struct qsd_qtype_info *qqi,
-		    union ldlm_wire_lvb *lvb, void *arg)
+		    struct lquota_lvb *lvb, void *arg)
 {
 	struct qsd_thread_info	*qti = qsd_info(env);
 	struct ptlrpc_request	*req;
@@ -242,6 +242,8 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 	req_qbody = req_capsule_client_get(&req->rq_pill, &RMF_QUOTA_BODY);
 	*req_qbody = *qbody;
 
+	req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+			     sizeof(*lvb));
 	ptlrpc_request_set_replen(req);
 
 	switch(it_op) {
@@ -271,8 +273,8 @@ int qsd_intent_lock(const struct lu_env *env, struct obd_export *exp,
 
 	/* build lock enqueue request */
 	rc = ldlm_cli_enqueue(exp, &req, &qti->qti_einfo, &qti->qti_resid, NULL,
-			      &flags, (void *)lvb, sizeof(*lvb), &qti->qti_lockh,
-			      1);
+			      &flags, (void *)lvb, sizeof(*lvb), LVB_T_LQUOTA,
+			      &qti->qti_lockh, 1);
 	if (rc < 0) {
 		ptlrpc_req_finished(req);
 		GOTO(out, rc);

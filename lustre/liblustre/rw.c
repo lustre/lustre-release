@@ -166,8 +166,12 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
                 GOTO(iput, rc = -ELDLM_NO_LOCK_DATA);
 
         req_capsule_extend(&req->rq_pill, &RQF_LDLM_GL_CALLBACK);
-        req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
-                             sizeof(*lvb));
+	if (exp_connect_lvb_type(req->rq_export))
+		req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+				     sizeof(*lvb));
+	else
+		req_capsule_set_size(&req->rq_pill, &RMF_DLM_LVB, RCL_SERVER,
+				     sizeof(struct ost_lvb_v1));
         rc = req_capsule_server_pack(&req->rq_pill);
         if (rc) {
                 CERROR("failed pack reply: %d\n", rc);

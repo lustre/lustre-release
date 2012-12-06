@@ -681,7 +681,8 @@ static int lustre_start_mgc(struct super_block *sb)
 
 	/* We connect to the MGS at setup, and don't disconnect until cleanup */
 	data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_AT |
-				  OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV;
+				  OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV |
+				  OBD_CONNECT_LVB_TYPE;
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(3, 2, 50, 0)
 	data->ocd_connect_flags |= OBD_CONNECT_MNE_SWAB;
@@ -1056,6 +1057,7 @@ static int lustre_osp_connect(struct obd_device *osp)
 	data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_IBITS |
 				   OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID |
 				   OBD_CONNECT_AT | OBD_CONNECT_FULL20 |
+				   OBD_CONNECT_LVB_TYPE |
 				   OBD_CONNECT_LIGHTWEIGHT;
 	OBD_ALLOC_PTR(uuid);
 	if (uuid == NULL)

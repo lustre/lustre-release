@@ -154,13 +154,34 @@ static int ofd_lvbo_update(struct ldlm_resource *res,
 	/* Update the LVB from the network message */
 	if (req != NULL) {
 		struct ost_lvb *rpc_lvb;
+		bool lvb_type;
 
-		/* XXX update always from reply buffer */
-		rpc_lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
-		if (rpc_lvb == NULL) {
-			CERROR("lustre_swab_buf failed\n");
-			goto disk_update;
+		if (req->rq_import != NULL)
+			lvb_type = imp_connect_lvb_type(req->rq_import);
+		else
+			lvb_type = exp_connect_lvb_type(req->rq_export);
+
+		if (!lvb_type) {
+			struct ost_lvb_v1 *lvb_v1;
+
+			lvb_v1 = req_capsule_server_swab_get(&req->rq_pill,
+					&RMF_DLM_LVB, lustre_swab_ost_lvb_v1);
+			if (lvb_v1 == NULL)
+				goto disk_update;
+
+			rpc_lvb = &info->fti_lvb;
+			memcpy(rpc_lvb, lvb_v1, sizeof *lvb_v1);
+			rpc_lvb->lvb_mtime_ns = 0;
+			rpc_lvb->lvb_atime_ns = 0;
+			rpc_lvb->lvb_ctime_ns = 0;
+		} else {
+			rpc_lvb = req_capsule_server_swab_get(&req->rq_pill,
+							      &RMF_DLM_LVB,
+							lustre_swab_ost_lvb);
+			if (rpc_lvb == NULL)
+				goto disk_update;
 		}
+
 		lock_res(res);
 		if (rpc_lvb->lvb_size > lvb->lvb_size || !increase_only) {
 			CDEBUG(D_DLMTRACE, "res: "LPU64" updating lvb size: "
@@ -249,22 +270,24 @@ out_unlock:
 	return rc;
 }
 
-static int ofd_lvbo_size(struct ldlm_lock *unused)
+static int ofd_lvbo_size(struct ldlm_lock *lock)
 {
-	return sizeof(struct ost_lvb);
+	if (lock->l_export != NULL && exp_connect_lvb_type(lock->l_export))
+		return sizeof(struct ost_lvb);
+	else
+		return sizeof(struct ost_lvb_v1);
 }
 
 static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int buflen)
 {
 	struct ldlm_resource *res = lock->l_resource;
+	int lvb_len = min_t(int, res->lr_lvb_len, buflen);
 
 	lock_res(res);
-	LASSERTF(buflen >= res->lr_lvb_len,
-		 "actual %d, want %d\n", buflen, res->lr_lvb_len);
-	memcpy(buf, res->lr_lvb_data, res->lr_lvb_len);
+	memcpy(buf, res->lr_lvb_data, lvb_len);
 	unlock_res(res);
 
-	return res->lr_lvb_len;
+	return lvb_len;
 }
 
 struct ldlm_valblock_ops ofd_lvbo = {

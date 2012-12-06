@@ -44,7 +44,7 @@ static void qsd_reint_completion(const struct lu_env *env,
 				 struct quota_body *req_qbody,
 				 struct quota_body *rep_qbody,
 				 struct lustre_handle *lockh,
-				 union ldlm_wire_lvb *lvb,
+				 struct lquota_lvb *lvb,
 				 void *arg, int rc)
 {
 	struct qsd_instance	*qsd = qqi->qqi_qsd;
@@ -62,7 +62,7 @@ static void qsd_reint_completion(const struct lu_env *env,
 	CDEBUG(D_QUOTA, "%s: global quota lock successfully acquired, glb "
 	       "fid:"DFID", glb ver:"LPU64", slv fid:"DFID", slv ver:"LPU64"\n",
 	       qsd->qsd_svname, PFID(&req_qbody->qb_fid),
-	       lvb->l_lquota.lvb_glb_ver, PFID(&rep_qbody->qb_slv_fid),
+	       lvb->lvb_glb_ver, PFID(&rep_qbody->qb_slv_fid),
 	       rep_qbody->qb_slv_ver);
 
 	*slv_ver = rep_qbody->qb_slv_ver;
@@ -457,7 +457,7 @@ static int qsd_reint_main(void *args)
 	    ldlm_lock_addref_try(&qqi->qqi_lockh, qsd_glb_einfo.ei_mode) == 0) {
 		read_unlock(&qsd->qsd_lock);
 		/* force refresh of global & slave index copy */
-		qti->qti_lvb.l_lquota.lvb_glb_ver = ~0ULL;
+		qti->qti_lvb.lvb_glb_ver = ~0ULL;
 		qti->qti_slv_ver = ~0ULL;
 	} else {
 		/* no valid lock found, let's enqueue a new one */
@@ -475,7 +475,7 @@ static int qsd_reint_main(void *args)
 
 		CDEBUG(D_QUOTA, "%s: glb_ver:"LPU64"/"LPU64",slv_ver:"LPU64"/"
 		       LPU64"\n", qsd->qsd_svname,
-		       qti->qti_lvb.l_lquota.lvb_glb_ver, qqi->qqi_glb_ver,
+		       qti->qti_lvb.lvb_glb_ver, qqi->qqi_glb_ver,
 		       qti->qti_slv_ver, qqi->qqi_slv_ver);
 	}
 
@@ -485,7 +485,7 @@ static int qsd_reint_main(void *args)
 
 	OBD_FAIL_TIMEOUT(OBD_FAIL_QUOTA_DELAY_REINT, 10);
 
-	if (qqi->qqi_glb_ver != qti->qti_lvb.l_lquota.lvb_glb_ver) {
+	if (qqi->qqi_glb_ver != qti->qti_lvb.lvb_glb_ver) {
 		rc = qsd_reint_index(env, qqi, true);
 		if (rc) {
 			CWARN("%s: reint global for "DFID" failed. %d\n",
