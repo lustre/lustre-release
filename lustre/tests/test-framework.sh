@@ -371,20 +371,24 @@ load_module() {
         optvar="MODOPTS_$(basename $module | tr a-z A-Z)"
         eval set -- \$$optvar
         if [ $# -eq 0 -a -n "$MODPROBECONF" ]; then
-            # Nothing in $MODOPTS_<MODULE>; try modprobe.conf
-            set -- $(grep -P "^options\\s+${BASE}" $MODPROBECONF)
-            # Get rid of "options $module"
-            (($# > 0)) && shift 2
+		# Nothing in $MODOPTS_<MODULE>; try modprobe.conf
+		local opt
+		opt=$(awk -v var="^options $BASE" '$0 ~ var \
+			{gsub("'"options $BASE"'",""); print}' $MODPROBECONF)
+		set -- $(echo -n $opt)
 
-            # Ensure we have accept=all for lnet
-            if [ $(basename $module) = lnet ]; then
-                # OK, this is a bit wordy...
-                local arg accept_all_present=false
-                for arg in "$@"; do
-                    [ "$arg" = accept=all ] && accept_all_present=true
-                done
-                $accept_all_present || set -- "$@" accept=all
-            fi
+		# Ensure we have accept=all for lnet
+		if [ $(basename $module) = lnet ]; then
+			# OK, this is a bit wordy...
+			local arg accept_all_present=false
+
+			for arg in "$@"; do
+				[ "$arg" = accept=all ] && \
+					accept_all_present=true
+			done
+			$accept_all_present || set -- "$@" accept=all
+		fi
+		export $optvar="$*"
         fi
     fi
 
