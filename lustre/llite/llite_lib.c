@@ -221,7 +221,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                   OBD_CONNECT_RMT_CLIENT | OBD_CONNECT_VBR    |
                                   OBD_CONNECT_FULL20   | OBD_CONNECT_64BITHASH|
 				  OBD_CONNECT_EINPROGRESS |
-				  OBD_CONNECT_JOBSTATS | OBD_CONNECT_LVB_TYPE;
+				  OBD_CONNECT_JOBSTATS | OBD_CONNECT_LVB_TYPE |
+				  OBD_CONNECT_LAYOUTLOCK;
 
         if (sbi->ll_flags & LL_SBI_SOM_PREVIEW)
                 data->ocd_connect_flags |= OBD_CONNECT_SOM;
@@ -404,7 +405,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                                   OBD_CONNECT_FULL20 | OBD_CONNECT_64BITHASH |
                                   OBD_CONNECT_MAXBYTES |
 				  OBD_CONNECT_EINPROGRESS |
-				  OBD_CONNECT_JOBSTATS | OBD_CONNECT_LVB_TYPE;
+				  OBD_CONNECT_JOBSTATS | OBD_CONNECT_LVB_TYPE |
+				  OBD_CONNECT_LAYOUTLOCK;
 
         if (sbi->ll_flags & LL_SBI_SOM_PREVIEW)
                 data->ocd_connect_flags |= OBD_CONNECT_SOM;
@@ -923,6 +925,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 	mutex_init(&lli->lli_och_mutex);
 	spin_lock_init(&lli->lli_agl_lock);
 	lli->lli_has_smd = false;
+	lli->lli_layout_gen = LL_LAYOUT_GEN_ZERO;
 	lli->lli_clob = NULL;
 
 	LASSERT(lli->lli_vfs_inode.i_mode != 0);
@@ -1701,21 +1704,9 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
 	LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
 	if (lsm != NULL) {
-		LASSERT(S_ISREG(inode->i_mode));
-		CDEBUG(D_INODE, "adding lsm %p to inode %lu/%u(%p)\n",
-				lsm, inode->i_ino, inode->i_generation, inode);
-		/* cl_file_inode_init must go before lli_has_smd or a race
-		 * is possible where client thinks the file has stripes,
-		 * but lov raid0 is not setup yet and parallel e.g.
-		 * glimpse would try to use uninitialized lov */
-		if (cl_file_inode_init(inode, md) == 0)
-			lli->lli_has_smd = true;
-
 		lli->lli_maxbytes = lsm->lsm_maxbytes;
 		if (lli->lli_maxbytes > MAX_LFS_FILESIZE)
 			lli->lli_maxbytes = MAX_LFS_FILESIZE;
-		if (md->lsm != NULL)
-			obd_free_memmd(ll_i2dtexp(inode), &md->lsm);
 	}
 
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT) {
@@ -2134,13 +2125,11 @@ int ll_remount_fs(struct super_block *sb, int *flags, char *data)
         return 0;
 }
 
-int ll_prep_inode(struct inode **inode,
-                  struct ptlrpc_request *req,
-                  struct super_block *sb)
+int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
+		  struct super_block *sb, struct lookup_intent *it)
 {
 	struct ll_sb_info *sbi = NULL;
 	struct lustre_md md;
-	__u64 ibits;
         int rc;
         ENTRY;
 
@@ -2164,8 +2153,6 @@ int ll_prep_inode(struct inode **inode,
 
                 *inode = ll_iget(sb, cl_fid_build_ino(&md.body->fid1, 0), &md);
                 if (*inode == NULL || IS_ERR(*inode)) {
-                        if (md.lsm)
-                                obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
 #ifdef CONFIG_FS_POSIX_ACL
                         if (md.posix_acl) {
                                 posix_acl_release(md.posix_acl);
@@ -2179,16 +2166,37 @@ int ll_prep_inode(struct inode **inode,
                 }
         }
 
-	/* sanity check for LAYOUT lock. */
-	ibits = MDS_INODELOCK_LAYOUT;
-	if (S_ISREG(md.body->mode) && sbi->ll_flags & LL_SBI_LAYOUT_LOCK &&
-	    md.lsm != NULL && !ll_have_md_lock(*inode, &ibits, LCK_MINMODE)) {
-		CERROR("%s: inode "DFID" (%p) layout lock not granted.\n",
-			ll_get_fsname(sb, NULL, 0),
-			PFID(ll_inode2fid(*inode)), *inode);
+	/* Handling piggyback layout lock.
+	 * Layout lock can be piggybacked by getattr and open request.
+	 * The lsm can be applied to inode only if it comes with a layout lock
+	 * otherwise correct layout may be overwritten, for example:
+	 * 1. proc1: mdt returns a lsm but not granting layout
+	 * 2. layout was changed by another client
+	 * 3. proc2: refresh layout and layout lock granted
+	 * 4. proc1: to apply a stale layout */
+	if (it != NULL && it->d.lustre.it_lock_mode != 0) {
+		struct lustre_handle lockh;
+		struct ldlm_lock *lock;
+
+		lockh.cookie = it->d.lustre.it_lock_handle;
+		lock = ldlm_handle2lock(&lockh);
+		LASSERT(lock != NULL);
+		if (ldlm_has_layout(lock)) {
+			struct cl_object_conf conf;
+
+			memset(&conf, 0, sizeof(conf));
+			conf.coc_opc = OBJECT_CONF_SET;
+			conf.coc_inode = *inode;
+			conf.coc_lock = lock;
+			conf.u.coc_md = &md;
+			(void)ll_layout_conf(*inode, &conf);
+		}
+		LDLM_LOCK_PUT(lock);
 	}
 
 out:
+	if (md.lsm != NULL)
+		obd_free_memmd(sbi->ll_dt_exp, &md.lsm);
 	md_free_lustre_md(sbi->ll_md_exp, &md);
 	RETURN(rc);
 }

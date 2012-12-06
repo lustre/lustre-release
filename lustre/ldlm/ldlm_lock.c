@@ -881,6 +881,20 @@ void ldlm_lock_decref_internal(struct ldlm_lock *lock, __u32 mode)
 
         ldlm_lock_decref_internal_nolock(lock, mode);
 
+	/* release lvb data for layout lock */
+	if (ns_is_client(ns) && !lock->l_readers && !lock->l_writers &&
+	    ldlm_has_layout(lock) && lock->l_flags & LDLM_FL_LVB_READY) {
+		/* this is the last user of a layout lock and stripe has
+		 * been set up, lvb is no longer used.
+		 * This may be a large amount of memory, so we should free it
+		 * when possible. */
+		if (lock->l_lvb_data != NULL) {
+			OBD_FREE_LARGE(lock->l_lvb_data, lock->l_lvb_len);
+			lock->l_lvb_data = NULL;
+			lock->l_lvb_len = 0;
+		}
+	}
+
         if (lock->l_flags & LDLM_FL_LOCAL &&
             !lock->l_readers && !lock->l_writers) {
                 /* If this is a local lock on a server namespace and this was
@@ -1567,7 +1581,8 @@ int ldlm_fill_lvb(struct ldlm_lock *lock, struct req_capsule *pill,
 		memcpy(data, lvb, size);
 		break;
 	default:
-		LDLM_ERROR(lock, "Unexpected LVB type");
+		LDLM_ERROR(lock, "Unknown LVB type: %d\n", lock->l_lvb_type);
+		libcfs_debug_dumpstack(NULL);
 		RETURN(-EINVAL);
 	}
 

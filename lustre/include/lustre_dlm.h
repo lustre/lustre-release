@@ -90,6 +90,7 @@ typedef enum {
         ELDLM_LOCK_ABORTED = 301,
         ELDLM_LOCK_REPLACED = 302,
         ELDLM_NO_LOCK_DATA = 303,
+        ELDLM_LOCK_WOULDBLOCK = 304,
 
         ELDLM_NAMESPACE_EXISTS = 400,
         ELDLM_BAD_NAMESPACE    = 401
@@ -1152,6 +1153,12 @@ struct ldlm_resource {
 
 	struct inode		*lr_lvb_inode;
 };
+
+static inline bool ldlm_has_layout(struct ldlm_lock *lock)
+{
+	return lock->l_resource->lr_type == LDLM_IBITS &&
+		lock->l_policy_data.l_inodebits.bits & MDS_INODELOCK_LAYOUT;
+}
 
 static inline char *
 ldlm_ns_name(struct ldlm_namespace *ns)

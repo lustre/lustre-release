@@ -2258,6 +2258,81 @@ test_50() {
 }
 run_test 50 "osc lvb attrs: enqueue vs. CP AST =============="
 
+test_51a() {
+	local filesize
+	local origfile=/etc/hosts
+
+	filesize=`stat -c %s $origfile`
+
+	# create an empty file
+	$MCREATE $DIR1/$tfile
+	# cache layout lock on both mount point
+	stat $DIR1/$tfile > /dev/null
+	stat $DIR2/$tfile > /dev/null
+
+	# open and sleep 2 seconds then read
+	$MULTIOP $DIR2/$tfile o_2r${filesize}c &
+	local pid=$!
+	sleep 0.1
+
+	# create the layout of testing file
+	dd if=$origfile of=$DIR1/$tfile conv=notrunc > /dev/null
+
+	# MULTIOP proc should be able to read enough bytes and exit
+	sleep 2
+	kill -0 $pid && error "multiop is still there"
+	cmp $origfile $DIR2/$tfile || error "$MCREATE and $DIR2/$tfile differs"
+
+	rm -f $DIR1/$tfile
+}
+run_test 51a "layout lock: refresh layout should work"
+
+test_51b() {
+	local tmpfile=`mktemp`
+
+	# create an empty file
+	$MCREATE $DIR1/$tfile
+
+	# delay glimpse so that layout has changed when glimpse finish
+#define OBD_FAIL_GLIMPSE_DELAY 0x1404
+	$LCTL set_param fail_loc=0x1404
+	stat -c %s $DIR2/$tfile |tee $tmpfile &
+	local pid=$!
+	sleep 0.1
+
+	# create layout of testing file
+	dd if=/dev/zero of=$DIR1/$tfile bs=1k count=1 conv=notrunc > /dev/null
+
+	wait $pid
+	local fsize=`cat $tmpfile`
+
+	[ x$fsize = x1024 ] || error "file size is $fsize, should be 1024"
+
+	rm -f $DIR1/$tfile $tmpfile
+}
+run_test 51b "layout lock: glimpse should be able to restart if layout changed"
+
+test_51c() {
+	# create an empty file
+	$MCREATE $DIR1/$tfile
+
+#define OBD_FAIL_MDS_LL_BLOCK 0x172
+	$LCTL set_param fail_loc=0x172
+
+	# change the layout of testing file
+	echo "Setting layout ..."
+	$LFS setstripe -c $OSTCOUNT $DIR1/$tfile &
+	pid=$!
+	sleep 0.1
+
+	# get layout of this file should wait until dd is finished
+	local stripecnt=`$LFS getstripe -c $DIR2/$tfile`
+	[ $stripecnt -eq $OSTCOUNT ] || error "layout wrong"
+
+	rm -f $DIR1/$tfile
+}
+run_test 51c "layout lock: IT_LAYOUT blocked and correct layout can be returned"
+
 test_60() {
 	[[ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.3.0) ]] ||
 	{ skip "Need MDS version at least 2.3.0"; return; }

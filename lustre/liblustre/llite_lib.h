@@ -117,6 +117,8 @@ struct llu_inode_info {
          * was opened several times without close, we track an
          * open_count here */
         struct ll_file_data    *lli_file_data;
+	/* checking lli_has_smd is reliable only inside an IO
+	 * i.e, lov stripe has been held. */
 	bool                    lli_has_smd;
         int                     lli_open_flags;
         int                     lli_open_count;

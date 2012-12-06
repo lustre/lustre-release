@@ -330,6 +330,11 @@ static inline int imp_connect_lru_resize(struct obd_import *imp)
         return !!(ocd->ocd_connect_flags & OBD_CONNECT_LRU_RESIZE);
 }
 
+static inline int exp_connect_layout(struct obd_export *exp)
+{
+	return !!(exp->exp_connect_flags & OBD_CONNECT_LAYOUTLOCK);
+}
+
 static inline bool exp_connect_lvb_type(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);

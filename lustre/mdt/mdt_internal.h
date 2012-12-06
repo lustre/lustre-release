@@ -245,6 +245,7 @@ enum {
         MDT_LH_PARENT, /* parent lockh */
         MDT_LH_CHILD,  /* child lockh */
         MDT_LH_OLD,    /* old lockh for rename */
+	MDT_LH_LAYOUT = MDT_LH_OLD, /* layout lock */
         MDT_LH_NEW,    /* new lockh for rename */
         MDT_LH_RMT,    /* used for return lh to caller */
         MDT_LH_NR
@@ -568,6 +569,11 @@ int mdt_object_lock(struct mdt_thread_info *,
                     struct mdt_object *,
                     struct mdt_lock_handle *,
                     __u64, int);
+
+int mdt_object_lock_try(struct mdt_thread_info *,
+			struct mdt_object *,
+			struct mdt_lock_handle *,
+			__u64, int);
 
 void mdt_object_unlock(struct mdt_thread_info *,
                        struct mdt_object *,

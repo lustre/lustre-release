@@ -234,6 +234,11 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_MDS_OSC_CREATE_FAIL     0x147
 #define OBD_FAIL_MDS_NEGATIVE_POSITIVE	 0x148
 
+/* layout lock */
+#define OBD_FAIL_MDS_NO_LL_GETATTR	 0x170
+#define OBD_FAIL_MDS_NO_LL_OPEN		 0x171
+#define OBD_FAIL_MDS_LL_BLOCK		 0x172
+
 /* CMD */
 #define OBD_FAIL_MDS_IS_SUBDIR_NET       0x180
 #define OBD_FAIL_MDS_IS_SUBDIR_PACK      0x181
@@ -446,6 +451,7 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 #define OBD_FAIL_LLITE_FAULT_TRUNC_RACE             0x1401
 #define OBD_FAIL_LOCK_STATE_WAIT_INTR               0x1402
 #define OBD_FAIL_LOV_INIT			    0x1403
+#define OBD_FAIL_GLIMPSE_DELAY			    0x1404
 
 /* Assign references to moved code to reduce code changes */
 #define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)

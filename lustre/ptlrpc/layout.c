@@ -383,6 +383,13 @@ static const struct req_msg_field *ldlm_intent_server[] = {
         &RMF_ACL
 };
 
+static const struct req_msg_field *ldlm_intent_layout_client[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_DLM_REQ,
+	&RMF_LDLM_INTENT,
+	&RMF_LAYOUT_INTENT,
+	&RMF_EADATA /* for new layout to be set up */
+};
 static const struct req_msg_field *ldlm_intent_open_server[] = {
         &RMF_PTLRPC_BODY,
         &RMF_DLM_REP,
@@ -642,6 +649,7 @@ static struct req_format *req_formats[] = {
 	&RQF_LDLM_GL_DESC_CALLBACK,
         &RQF_LDLM_INTENT,
 	&RQF_LDLM_INTENT_BASIC,
+        &RQF_LDLM_INTENT_LAYOUT,
         &RQF_LDLM_INTENT_GETATTR,
         &RQF_LDLM_INTENT_OPEN,
         &RQF_LDLM_INTENT_CREATE,
@@ -934,6 +942,12 @@ struct req_msg_field RMF_CAPA2 =
         DEFINE_MSGF("capa", 0, sizeof(struct lustre_capa),
                     lustre_swab_lustre_capa, NULL);
 EXPORT_SYMBOL(RMF_CAPA2);
+
+struct req_msg_field RMF_LAYOUT_INTENT =
+	DEFINE_MSGF("layout_intent", 0,
+		    sizeof(struct layout_intent), lustre_swab_layout_intent,
+		    NULL);
+EXPORT_SYMBOL(RMF_LAYOUT_INTENT);
 
 /*
  * OST request field.
@@ -1228,6 +1242,11 @@ struct req_format RQF_LDLM_INTENT =
                         ldlm_intent_client, ldlm_intent_server);
 EXPORT_SYMBOL(RQF_LDLM_INTENT);
 
+struct req_format RQF_LDLM_INTENT_LAYOUT =
+	DEFINE_REQ_FMT0("LDLM_INTENT_LAYOUT ",
+			ldlm_intent_layout_client, ldlm_enqueue_lvb_server);
+EXPORT_SYMBOL(RQF_LDLM_INTENT_LAYOUT);
+
 struct req_format RQF_LDLM_INTENT_GETATTR =
         DEFINE_REQ_FMT0("LDLM_INTENT_GETATTR",
                         ldlm_intent_getattr_client, ldlm_intent_getattr_server);
@@ -1376,7 +1395,6 @@ struct req_format RQF_OST_GET_INFO_FIEMAP =
         DEFINE_REQ_FMT0("OST_GET_INFO_FIEMAP", ost_get_fiemap_client,
                                                ost_get_fiemap_server);
 EXPORT_SYMBOL(RQF_OST_GET_INFO_FIEMAP);
-
 
 #if !defined(__REQ_LAYOUT_USER__)
 

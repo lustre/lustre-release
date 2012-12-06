@@ -106,7 +106,7 @@ static struct inode *search_inode_for_lustre(struct super_block *sb,
                        PFID(fid), rc);
                 RETURN(ERR_PTR(rc));
         }
-        rc = ll_prep_inode(&inode, req, sb);
+        rc = ll_prep_inode(&inode, req, sb, NULL);
         ptlrpc_req_finished(req);
         if (rc)
                 RETURN(ERR_PTR(rc));

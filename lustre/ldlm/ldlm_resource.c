@@ -808,6 +808,8 @@ static int ldlm_resource_complain(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                res->lr_name.name[0], res->lr_name.name[1],
                res->lr_name.name[2], res->lr_name.name[3],
                cfs_atomic_read(&res->lr_refcount) - 1);
+
+	ldlm_resource_dump(D_ERROR, res);
         return 0;
 }
 

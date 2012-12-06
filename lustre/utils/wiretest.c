@@ -4169,5 +4169,39 @@ void lustre_assert_wire_constants(void)
                  (long long)(int)offsetof(struct hsm_user_state, hus_in_progress_location));
         LASSERTF((int)sizeof(((struct hsm_user_state *)0)->hus_in_progress_location) == 16, "found %lld\n",
                  (long long)(int)sizeof(((struct hsm_user_state *)0)->hus_in_progress_location));
+
+        /* Checks for struct layout_intent */
+        LASSERTF((int)sizeof(struct layout_intent) == 24, "found %lld\n",
+                 (long long)(int)sizeof(struct layout_intent));
+        LASSERTF((int)offsetof(struct layout_intent, li_opc) == 0, "found %lld\n",
+                 (long long)(int)offsetof(struct layout_intent, li_opc));
+        LASSERTF((int)sizeof(((struct layout_intent *)0)->li_opc) == 4, "found %lld\n",
+                 (long long)(int)sizeof(((struct layout_intent *)0)->li_opc));
+        LASSERTF((int)offsetof(struct layout_intent, li_flags) == 4, "found %lld\n",
+                 (long long)(int)offsetof(struct layout_intent, li_flags));
+        LASSERTF((int)sizeof(((struct layout_intent *)0)->li_flags) == 4, "found %lld\n",
+                 (long long)(int)sizeof(((struct layout_intent *)0)->li_flags));
+        LASSERTF((int)offsetof(struct layout_intent, li_start) == 8, "found %lld\n",
+                 (long long)(int)offsetof(struct layout_intent, li_start));
+        LASSERTF((int)sizeof(((struct layout_intent *)0)->li_start) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct layout_intent *)0)->li_start));
+        LASSERTF((int)offsetof(struct layout_intent, li_end) == 16, "found %lld\n",
+                 (long long)(int)offsetof(struct layout_intent, li_end));
+        LASSERTF((int)sizeof(((struct layout_intent *)0)->li_end) == 8, "found %lld\n",
+                 (long long)(int)sizeof(((struct layout_intent *)0)->li_end));
+        LASSERTF(LAYOUT_INTENT_ACCESS == 0, "found %lld\n",
+                 (long long)LAYOUT_INTENT_ACCESS);
+        LASSERTF(LAYOUT_INTENT_READ == 1, "found %lld\n",
+                 (long long)LAYOUT_INTENT_READ);
+        LASSERTF(LAYOUT_INTENT_WRITE == 2, "found %lld\n",
+                 (long long)LAYOUT_INTENT_WRITE);
+        LASSERTF(LAYOUT_INTENT_GLIMPSE == 3, "found %lld\n",
+                 (long long)LAYOUT_INTENT_GLIMPSE);
+        LASSERTF(LAYOUT_INTENT_TRUNC == 4, "found %lld\n",
+                 (long long)LAYOUT_INTENT_TRUNC);
+        LASSERTF(LAYOUT_INTENT_RELEASE == 5, "found %lld\n",
+                 (long long)LAYOUT_INTENT_RELEASE);
+        LASSERTF(LAYOUT_INTENT_RESTORE == 6, "found %lld\n",
+                 (long long)LAYOUT_INTENT_RESTORE);
 }
 

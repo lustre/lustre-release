@@ -692,7 +692,7 @@ static void do_statahead_interpret(struct ll_statahead_info *sai,
         if (rc != 1)
                 GOTO(out, rc = -EAGAIN);
 
-        rc = ll_prep_inode(&child, req, dir->i_sb);
+        rc = ll_prep_inode(&child, req, dir->i_sb, it);
         if (rc)
                 GOTO(out, rc);
 

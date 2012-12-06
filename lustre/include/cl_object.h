@@ -277,10 +277,25 @@ struct cl_object_conf {
          */
         struct inode             *coc_inode;
 	/**
-	 * Invalidate the current stripe configuration due to losing
-	 * layout lock.
+	 * Layout lock handle.
 	 */
-	bool			  coc_invalidate;
+	struct ldlm_lock	 *coc_lock;
+	/**
+	 * Operation to handle layout, OBJECT_CONF_XYZ.
+	 */
+	int			  coc_opc;
+};
+
+enum {
+	/** configure layout, set up a new stripe, must be called while
+	 * holding layout lock. */
+	OBJECT_CONF_SET = 0,
+	/** invalidate the current stripe configuration due to losing
+	 * layout lock. */
+	OBJECT_CONF_INVALIDATE = 1,
+	/** wait for old layout to go away so that new layout can be
+	 * set up. */
+	OBJECT_CONF_WAIT = 2
 };
 
 /**

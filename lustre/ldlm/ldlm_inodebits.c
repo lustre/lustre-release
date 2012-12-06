@@ -190,8 +190,12 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
         LASSERT(cfs_list_empty(&res->lr_converting));
         check_res_locked(res);
 
-        if (!first_enq) {
-                LASSERT(work_list != NULL);
+	/* (*flags & LDLM_FL_BLOCK_NOWAIT) is for layout lock right now. */
+        if (!first_enq || (*flags & LDLM_FL_BLOCK_NOWAIT)) {
+		*err = ELDLM_LOCK_ABORTED;
+		if (*flags & LDLM_FL_BLOCK_NOWAIT)
+			*err = ELDLM_LOCK_WOULDBLOCK;
+
                 rc = ldlm_inodebits_compat_queue(&res->lr_granted, lock, NULL);
                 if (!rc)
                         RETURN(LDLM_ITER_STOP);
@@ -201,6 +205,8 @@ int ldlm_process_inodebits_lock(struct ldlm_lock *lock, __u64 *flags,
 
                 ldlm_resource_unlink_lock(lock);
                 ldlm_grant_lock(lock, work_list);
+
+		*err = ELDLM_OK;
                 RETURN(LDLM_ITER_CONTINUE);
         }
 

@@ -59,6 +59,7 @@
 #define lustre_swab_ldlm_request NULL
 #define lustre_swab_ldlm_reply NULL
 #define lustre_swab_ldlm_intent NULL
+#define lustre_swab_layout_intent NULL
 /* #define lustre_swab_lov_mds_md NULL */
 #define lustre_swab_mdt_rec_reint NULL
 #define lustre_swab_lustre_capa NULL

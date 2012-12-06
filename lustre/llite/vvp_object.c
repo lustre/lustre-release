@@ -128,9 +128,23 @@ int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 {
 	struct ll_inode_info *lli = ll_i2info(conf->coc_inode);
 
-	if (conf->u.coc_md != NULL && conf->u.coc_md->lsm != NULL)
-		lli->lli_layout_gen = conf->u.coc_md->lsm->lsm_layout_gen;
+	if (conf->coc_opc != OBJECT_CONF_SET)
+		return 0;
 
+	if (conf->u.coc_md != NULL && conf->u.coc_md->lsm != NULL) {
+		CDEBUG(D_VFSTRACE, "layout lock change: %u -> %u\n",
+			lli->lli_layout_gen,
+			conf->u.coc_md->lsm->lsm_layout_gen);
+
+		lli->lli_has_smd = true;
+		lli->lli_layout_gen = conf->u.coc_md->lsm->lsm_layout_gen;
+	} else {
+		CDEBUG(D_VFSTRACE, "layout lock destroyed: %u.\n",
+			lli->lli_layout_gen);
+
+		lli->lli_has_smd = false;
+		lli->lli_layout_gen = LL_LAYOUT_GEN_ZERO;
+	}
 	return 0;
 }
 

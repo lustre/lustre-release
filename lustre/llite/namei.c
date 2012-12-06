@@ -150,10 +150,14 @@ struct inode *ll_iget(struct super_block *sb, ino_t hash,
 
                         ll_read_inode2(inode, md);
                         if (S_ISREG(inode->i_mode) &&
-                            ll_i2info(inode)->lli_clob == NULL)
+                            ll_i2info(inode)->lli_clob == NULL) {
+				CDEBUG(D_INODE,
+					"%s: apply lsm %p to inode "DFID".\n",
+					ll_get_fsname(sb, NULL, 0), md->lsm,
+					PFID(ll_inode2fid(inode)));
                                 rc = cl_file_inode_init(inode, md);
+			}
                         if (rc != 0) {
-                                md->lsm = NULL;
                                 make_bad_inode(inode);
                                 unlock_new_inode(inode);
                                 iput(inode);
@@ -258,8 +262,10 @@ int ll_md_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
 
 		lli = ll_i2info(inode);
 		if (bits & MDS_INODELOCK_LAYOUT) {
-			struct cl_object_conf conf = { .coc_inode = inode,
-						       .coc_invalidate = true };
+			struct cl_object_conf conf = { { 0 } };
+
+			conf.coc_opc = OBJECT_CONF_INVALIDATE;
+			conf.coc_inode = inode;
 			rc = ll_layout_conf(inode, &conf);
 			if (rc)
 				CDEBUG(D_INODE, "invaliding layout %d.\n", rc);
@@ -427,7 +433,7 @@ int ll_lookup_it_finish(struct ptlrpc_request *request,
 	CDEBUG(D_DENTRY, "it %p it_disposition %x\n", it,
 	       it->d.lustre.it_disposition);
 	if (!it_disposition(it, DISP_LOOKUP_NEG)) {
-                rc = ll_prep_inode(&inode, request, (*de)->d_sb);
+                rc = ll_prep_inode(&inode, request, (*de)->d_sb, it);
                 if (rc)
                         RETURN(rc);
 
@@ -794,7 +800,7 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
         LASSERT(it_disposition(it, DISP_ENQ_CREATE_REF));
         request = it->d.lustre.it_data;
         it_clear_disposition(it, DISP_ENQ_CREATE_REF);
-        rc = ll_prep_inode(&inode, request, dir->i_sb);
+        rc = ll_prep_inode(&inode, request, dir->i_sb, it);
         if (rc)
                 GOTO(out, inode = ERR_PTR(rc));
 
@@ -898,7 +904,7 @@ static int ll_new_node(struct inode *dir, struct qstr *name,
         ll_update_times(request, dir);
 
         if (dchild) {
-                err = ll_prep_inode(&inode, request, dchild->d_sb);
+                err = ll_prep_inode(&inode, request, dchild->d_sb, NULL);
                 if (err)
                      GOTO(err_exit, err);
 

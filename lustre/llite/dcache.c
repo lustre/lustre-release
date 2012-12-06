@@ -259,26 +259,14 @@ int ll_dops_init(struct dentry *de, int block, int init_sa)
 
 void ll_intent_drop_lock(struct lookup_intent *it)
 {
-        struct lustre_handle *handle;
-
         if (it->it_op && it->d.lustre.it_lock_mode) {
-		struct ldlm_lock *lock;
+		struct lustre_handle handle;
 
-		handle = (struct lustre_handle *)&it->d.lustre.it_lock_handle;
-		lock = ldlm_handle2lock(handle);
-		if (lock != NULL) {
-			/* it can only be allowed to match after layout is
-			 * applied to inode otherwise false layout would be
-			 * seen. Applying layout shoud happen before dropping
-			 * the intent lock. */
-			if (it->d.lustre.it_lock_bits & MDS_INODELOCK_LAYOUT)
-				ldlm_lock_allow_match(lock);
-			LDLM_LOCK_PUT(lock);
-		}
+		handle.cookie = it->d.lustre.it_lock_handle;
 
                 CDEBUG(D_DLMTRACE, "releasing lock with cookie "LPX64
-                       " from it %p\n", handle->cookie, it);
-                ldlm_lock_decref(handle, it->d.lustre.it_lock_mode);
+                       " from it %p\n", handle.cookie, it);
+                ldlm_lock_decref(&handle, it->d.lustre.it_lock_mode);
 
                 /* bug 494: intent_release may be called multiple times, from
                  * this thread and we don't want to double-decref this lock */
@@ -351,7 +339,7 @@ int ll_revalidate_it_finish(struct ptlrpc_request *request,
         if (it_disposition(it, DISP_LOOKUP_NEG))
                 RETURN(-ENOENT);
 
-        rc = ll_prep_inode(&de->d_inode, request, NULL);
+        rc = ll_prep_inode(&de->d_inode, request, NULL, it);
 
         RETURN(rc);
 }

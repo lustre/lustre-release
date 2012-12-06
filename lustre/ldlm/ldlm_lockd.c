@@ -1411,9 +1411,9 @@ existing_lock:
                            "(err=%d, rc=%d)", err, rc);
 
                 if (rc == 0) {
-			int lvb_len = ldlm_lvbo_size(lock);
-
-			if (lvb_len > 0) {
+			if (req_capsule_has_field(&req->rq_pill, &RMF_DLM_LVB,
+						  RCL_SERVER) &&
+			    ldlm_lvbo_size(lock) > 0) {
 				void *buf;
 				int buflen;
 
@@ -1735,12 +1735,13 @@ static void ldlm_handle_cp_callback(struct ptlrpc_request *req,
 					   lock->l_lvb_len, lvb_len);
 				GOTO(out, rc = -EINVAL);
 			}
-		} else { /* for layout lock, lvb has variable length */
+		} else if (ldlm_has_layout(lock)) { /* for layout lock, lvb has
+						     * variable length */
 			void *lvb_data;
 
 			OBD_ALLOC(lvb_data, lvb_len);
 			if (lvb_data == NULL) {
-				LDLM_ERROR(lock, "No memory.\n");
+				LDLM_ERROR(lock, "No memory: %d.\n", lvb_len);
 				GOTO(out, rc = -ENOMEM);
 			}
 
@@ -1829,6 +1830,7 @@ out:
 		lock_res_and_lock(lock);
 		lock->l_flags |= LDLM_FL_FAILED;
 		unlock_res_and_lock(lock);
+		cfs_waitq_signal(&lock->l_waitq);
 	}
 	LDLM_LOCK_RELEASE(lock);
 }

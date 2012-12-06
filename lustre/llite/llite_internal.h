@@ -832,7 +832,7 @@ int ll_show_options(struct seq_file *seq, struct vfsmount *vfs);
 #endif
 void ll_dirty_page_discard_warn(cfs_page_t *page, int ioret);
 int ll_prep_inode(struct inode **inode, struct ptlrpc_request *req,
-		  struct super_block *);
+		  struct super_block *, struct lookup_intent *);
 void lustre_dump_dentry(struct dentry *, int recur);
 void lustre_dump_inode(struct inode *);
 int ll_obd_statfs(struct inode *inode, void *arg);
@@ -1573,6 +1573,7 @@ struct if_quotactl_18 {
 #warning "remove old LL_IOC_QUOTACTL_18 compatibility code"
 #endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0) */
 
+#define LL_LAYOUT_GEN_ZERO	((__u32)-1)
 int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf);
 int ll_layout_refresh(struct inode *inode, __u32 *gen);
 

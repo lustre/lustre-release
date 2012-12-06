@@ -1236,7 +1236,7 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
 				OBD_CONNECT_64BITHASH | OBD_CONNECT_JOBSTATS | \
 				OBD_CONNECT_EINPROGRESS | \
 				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_UMASK | \
-				OBD_CONNECT_LVB_TYPE)
+				OBD_CONNECT_LVB_TYPE | OBD_CONNECT_LAYOUTLOCK)
 #define OST_CONNECT_SUPPORTED  (OBD_CONNECT_SRVLOCK | OBD_CONNECT_GRANT | \
                                 OBD_CONNECT_REQPORTAL | OBD_CONNECT_VERSION | \
                                 OBD_CONNECT_TRUNCLOCK | OBD_CONNECT_INDEX | \
@@ -1251,7 +1251,8 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
                                 OBD_CONNECT_MAX_EASIZE | \
 				OBD_CONNECT_EINPROGRESS | \
 				OBD_CONNECT_JOBSTATS | \
-				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_LVB_TYPE)
+				OBD_CONNECT_LIGHTWEIGHT | OBD_CONNECT_LVB_TYPE|\
+				OBD_CONNECT_LAYOUTLOCK)
 #define ECHO_CONNECT_SUPPORTED (0)
 #define MGS_CONNECT_SUPPORTED  (OBD_CONNECT_VERSION | OBD_CONNECT_AT | \
 				OBD_CONNECT_FULL20 | OBD_CONNECT_IMP_RECOV | \
@@ -1894,10 +1895,7 @@ extern void lustre_swab_generic_32s (__u32 *val);
 #define MDS_INODELOCK_OPEN   0x000004       /* For opened files */
 #define MDS_INODELOCK_LAYOUT 0x000008       /* for layout */
 
-/* Do not forget to increase MDS_INODELOCK_MAXSHIFT when adding new bits
- * XXX: MDS_INODELOCK_MAXSHIFT should be increased to 3 once the layout lock is
- * supported */
-#define MDS_INODELOCK_MAXSHIFT 2
+#define MDS_INODELOCK_MAXSHIFT 3
 /* This FULL lock is useful to take on unlink sort of operations */
 #define MDS_INODELOCK_FULL ((1<<(MDS_INODELOCK_MAXSHIFT+1))-1)
 
@@ -3275,6 +3273,25 @@ struct getinfo_fid2path {
 
 void lustre_swab_fid2path (struct getinfo_fid2path *gf);
 
+enum {
+        LAYOUT_INTENT_ACCESS    = 0,
+        LAYOUT_INTENT_READ      = 1,
+        LAYOUT_INTENT_WRITE     = 2,
+        LAYOUT_INTENT_GLIMPSE   = 3,
+        LAYOUT_INTENT_TRUNC     = 4,
+        LAYOUT_INTENT_RELEASE   = 5,
+        LAYOUT_INTENT_RESTORE   = 6
+};
+
+/* enqueue layout lock with intent */
+struct layout_intent {
+	__u32 li_opc; /* intent operation for enqueue, read, write etc */
+	__u32 li_flags;
+	__u64 li_start;
+	__u64 li_end;
+};
+
+void lustre_swab_layout_intent(struct layout_intent *li);
 
 #endif
 /** @} lustreidl */

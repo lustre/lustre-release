@@ -133,6 +133,12 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
         int result;
 
 	if (OBD_FAIL_CHECK(OBD_FAIL_LOV_INIT)) {
+		/* For sanity:test_206.
+		 * Do not leave the object in cache to avoid accessing
+		 * freed memory. This is because osc_object is referring to
+		 * lov_oinfo of lsm_stripe_data which will be freed due to
+		 * this failure. */
+		cl_object_kill(env, stripe);
 		cl_object_put(env, stripe);
 		return -EIO;
 	}
@@ -541,8 +547,13 @@ static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov)
 		RETURN(0);
 
 	LASSERT(cfs_atomic_read(&lsm->lsm_refc) > 0);
-	while (cfs_atomic_read(&lsm->lsm_refc) > 1) {
+	while (cfs_atomic_read(&lsm->lsm_refc) > 1 && lov->lo_lsm_invalid) {
 		lov_conf_unlock(lov);
+
+		CDEBUG(D_INODE, "file:"DFID" wait for active IO, now: %d.\n",
+			PFID(lu_object_fid(lov2lu(lov))),
+			cfs_atomic_read(&lsm->lsm_refc));
+
 		l_wait_event(lov->lo_waitq,
 			     cfs_atomic_read(&lsm->lsm_refc) == 1, &lwi);
 		lov_conf_lock(lov);
@@ -642,23 +653,34 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 	ENTRY;
 
 	lov_conf_lock(lov);
-	if (conf->coc_invalidate) {
+	if (conf->coc_opc == OBJECT_CONF_INVALIDATE) {
 		lov->lo_lsm_invalid = 1;
 		GOTO(out, result = 0);
 	}
 
+	if (conf->coc_opc == OBJECT_CONF_WAIT) {
+		result = lov_layout_wait(env, lov);
+		GOTO(out, result);
+	}
+
+	LASSERT(conf->coc_opc == OBJECT_CONF_SET);
+
 	if (conf->u.coc_md != NULL)
 		lsm = conf->u.coc_md->lsm;
-
 	if ((lsm == NULL && lov->lo_lsm == NULL) ||
 	    (lsm != NULL && lov->lo_lsm != NULL &&
 	     lov->lo_lsm->lsm_layout_gen == lsm->lsm_layout_gen)) {
+		/* same version of layout */
 		lov->lo_lsm_invalid = 0;
 		GOTO(out, result = 0);
 	}
 
-	/* will change layout */
-	lov_layout_wait(env, lov);
+	/* will change layout - check if there still exists active IO. */
+	if (lov->lo_lsm != NULL &&
+	    cfs_atomic_read(&lov->lo_lsm->lsm_refc) > 1) {
+		lov->lo_lsm_invalid = 1;
+		GOTO(out, result = -EBUSY);
+	}
 
 	/*
 	 * Only LLT_EMPTY <-> LLT_RAID0 transitions are supported.

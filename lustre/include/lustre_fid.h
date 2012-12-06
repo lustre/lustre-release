@@ -498,6 +498,16 @@ static inline int fid_res_name_eq(const struct lu_fid *f,
                name->name[LUSTRE_RES_ID_VER_OID_OFF] == fid_ver_oid(f);
 }
 
+/* reverse function of fid_build_reg_res_name() */
+static inline void fid_build_from_res_name(struct lu_fid *f,
+					   const struct ldlm_res_id *name)
+{
+	fid_zero(f);
+	f->f_seq = name->name[LUSTRE_RES_ID_SEQ_OFF];
+	f->f_oid = name->name[LUSTRE_RES_ID_VER_OID_OFF] & 0xffffffff;
+	f->f_ver = name->name[LUSTRE_RES_ID_VER_OID_OFF] >> 32;
+	LASSERT(fid_res_name_eq(f, name));
+}
 
 static inline struct ldlm_res_id *
 fid_build_pdo_res_name(const struct lu_fid *f,

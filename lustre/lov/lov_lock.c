@@ -1205,6 +1205,7 @@ static int lov_empty_lock_print(const struct lu_env *env, void *cookie,
 	return 0;
 }
 
+/* XXX: more methods will be added later. */
 static const struct cl_lock_operations lov_empty_lock_ops = {
 	.clo_fini  = lov_empty_lock_fini,
 	.clo_print = lov_empty_lock_print

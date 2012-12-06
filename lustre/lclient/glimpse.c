@@ -237,6 +237,8 @@ int cl_glimpse_size0(struct inode *inode, int agl)
                 else if (result == 0)
                         result = cl_glimpse_lock(env, io, inode, io->ci_obj,
                                                  agl);
+
+		OBD_FAIL_TIMEOUT(OBD_FAIL_GLIMPSE_DELAY, 2);
                 cl_io_fini(env, io);
 		if (unlikely(io->ci_need_restart))
 			goto again;

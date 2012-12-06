@@ -2514,4 +2514,11 @@ void lustre_swab_hsm_progress(struct hsm_progress *hp)
 }
 EXPORT_SYMBOL(lustre_swab_hsm_progress);
 
-
+void lustre_swab_layout_intent(struct layout_intent *li)
+{
+	__swab32s(&li->li_opc);
+	__swab32s(&li->li_flags);
+	__swab64s(&li->li_start);
+	__swab64s(&li->li_end);
+}
+EXPORT_SYMBOL(lustre_swab_layout_intent);

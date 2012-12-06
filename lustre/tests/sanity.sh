@@ -9776,6 +9776,41 @@ test_206() {
 }
 run_test 206 "fail lov_init_raid0() doesn't lbug"
 
+test_207a() {
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=$((RANDOM%10+1))
+	local fsz=`stat -c %s $DIR/$tfile`
+	cancel_lru_locks mdc
+
+	# do not return layout in getattr intent
+#define OBD_FAIL_MDS_NO_LL_GETATTR 0x170
+	$LCTL set_param fail_loc=0x170
+	local sz=`stat -c %s $DIR/$tfile`
+
+	[ $fsz -eq $sz ] || error "file size expected $fsz, actual $sz"
+
+	rm -rf $DIR/$tfile
+}
+run_test 207a "can refresh layout at glimpse"
+
+test_207b() {
+	dd if=/dev/zero of=$DIR/$tfile bs=4k count=$((RANDOM%10+1))
+	local cksum=`md5sum $DIR/$tfile`
+	local fsz=`stat -c %s $DIR/$tfile`
+	cancel_lru_locks mdc
+	cancel_lru_locks osc
+
+	# do not return layout in getattr intent
+#define OBD_FAIL_MDS_NO_LL_OPEN 0x171
+	$LCTL set_param fail_loc=0x171
+
+	# it will refresh layout after the file is opened but before read issues
+	echo checksum is "$cksum"
+	echo "$cksum" |md5sum -c --quiet || error "file differs"
+
+	rm -rf $DIR/$tfile
+}
+run_test 207b "can refresh layout at open"
+
 test_212() {
 	size=`date +%s`
 	size=$((size % 8192 + 1))
