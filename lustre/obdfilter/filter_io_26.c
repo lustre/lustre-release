@@ -414,6 +414,7 @@ int filter_do_bio(struct obd_export *exp, struct inode *inode,
 
                         bio->bi_bdev = inode->i_sb->s_bdev;
                         bio->bi_sector = sector;
+                        bio->bi_rw = (rw == OBD_BRW_READ ? READ : WRITE);
                         bio->bi_end_io = dio_complete_routine;
                         bio->bi_private = iobuf;
 
