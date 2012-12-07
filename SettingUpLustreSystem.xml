@@ -61,6 +61,9 @@
       <para>For maximum performance, the MDT should be configured as RAID1 with an internal journal and two disks from different controllers.</para>
       <para>If you need a larger MDT, create multiple RAID1 devices from pairs of disks, and then make a RAID0 array of the RAID1 devices. This ensures maximum reliability because multiple disk failures only have a small chance of hitting both disks in the same RAID1 device.</para>
       <para>Doing the opposite (RAID1 of a pair of RAID0 devices) has a 50% chance that even two disk failures can cause the loss of the whole MDT device. The first failure disables an entire half of the mirror and the second failure has a 50% chance of disabling the remaining mirror.</para>
+      <para condition='l24'>If multiple MDTs are going to be present in the system, each MDT should be specified for the anticipated usage and load.</para>
+      <warning condition='l24'><para>MDT0 contains the root of the Lustre filesystem. If MDT0 is unavailable for any reason, the filesystem cannot be used.</para></warning>
+      <note condition='l24'><para>Additional MDTs can be dedicated to sub-directories off the root filesystem provided by MDT0. Subsequent directories may also be configured to have their own MDT. If an MDT serving a subdirectory becomes unavailable this subdirectory and all directories beneath it will also become unavailable. Configuring multiple levels of MDTs is an experimental feature for Lustre 2.4.</para></note>
     </section>
     <section remap="h3">
       <title><indexterm><primary>setup</primary><secondary>OST</secondary></indexterm>OST Storage Hardware Considerations</title>
@@ -255,9 +258,11 @@
               </entry>
               <entry>
                 <para> 1</para>
+                <para condition='l24'>4096</para>
               </entry>
               <entry>
-                <para>Maximum of 1 MDT per file system, but a single MDS can host multiple MDTs, each one for a separate file system.</para>
+                <para>Lustre 2.3 and earlier allows a maximum of 1 MDT per file system, but a single MDS can host multiple MDTs, each one for a separate file system.</para>
+                <para condition='l24'>Lustre 2.4 and later requires one MDT for the root. Upto 4095 additional MDTs can be added to the filesystem and attached into the namespace with remote directories.</para>
               </entry>
             </row>
             <row>
@@ -379,10 +384,12 @@
               </entry>
               <entry>
                 <para> 4 billion</para>
+                <para condition='l24'>4096 * 4 billion</para>
               </entry>
               <entry>
-                <para>The ldiskfs file system imposes an upper limit of 4 billion inodes. By default, the MDS file system is formatted with 4 KB of space per inode, meaning 512 million inodes per file system of 2 TB.</para>
+                <para>The ldiskfs file system imposes an upper limit of 4 billion inodes. By default, the MDS file system is formatted with 2KB of space per inode, meaning 1 billion inodes per file system of 2 TB.</para>
                 <para>This can be increased initially, at the time of MDS file system creation. For more information, see <xref linkend="settinguplustresystem"/>.</para>
+				<para condition='l24'>Each additional MDT can hold up to 4 billion additional files, depending on available inodes and the distribution directories and files in the filesystem.</para>
               </entry>
             </row>
             <row>

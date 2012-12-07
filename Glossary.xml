@@ -398,6 +398,13 @@
         <para>Metadata Target. A metadata device made available through the Lustre meta-data network protocol.</para>
       </glossdef>
     </glossentry>
+    <glossentry xml:id="mdt0" condition='l24'>
+      <glossterm>MDT0
+        </glossterm>
+      <glossdef>
+        <para>The metadata target for the file system root. Since Lustre 2.4, multiple metadata targets are possible in the same filesystem. MDT0 is the root of the filesystem which must be available for the filesystem to be accessible.</para>
+      </glossdef>
+    </glossentry>
     <glossentry xml:id="metadatawriteback">
       <glossterm>Metadata Write-back Cache
         </glossterm>

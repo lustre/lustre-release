@@ -61,6 +61,11 @@
           <para>See <xref linkend="dbdoclet.50438194_88063"/> for more details.</para> 
         </note>
       </listitem>
+      <listitem xml:id="dbdoclet.addmdtindex" condition='l24'>
+		<para>Optional for Lustre 2.4 and later. Add in additional MDTs.</para>
+        <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgsnode=&lt;nid&gt; --mdt --index=1 &lt;<emphasis>block device name</emphasis>&gt;</screen>
+		<note><para>Up to 4095 additional MDTs can be added.</para></note>
+      </listitem>
       <listitem>
         <para>Mount the combined MGS/MDT file system on the block device. On the MDS node, run:</para>
         <screen>mount -t lustre &lt;<emphasis>block device name</emphasis>&gt; &lt;<emphasis>mount point</emphasis>&gt;</screen>

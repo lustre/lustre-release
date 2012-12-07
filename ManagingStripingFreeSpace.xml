@@ -207,6 +207,10 @@ group
       <para>Typical output is:</para>
       <screen>osc.lustre-OST0002-osc.ost_conn_uuid=192.168.20.1@tcp</screen>
     </section>
+	<section condition='l24'>
+    <title><indexterm><primary>striping</primary><secondary>remote directories</secondary></indexterm>Locating the MDT for a remote directory</title>
+	<para>Lustre 2.4 can be configured with multiple MDTs in the same filesystem. Each sub-directory can have a different MDT. To identify which MDT a given subdirectory is located on, pass the <literal>getstripe -M</literal> parameters to <literal>lfs</literal>. An example of this command is provided in the section <xref linkend='dbdoclet.rmremotedir'/>.</para>
+	</section>
   </section>
   <section xml:id="dbdoclet.50438209_10424">
     <title><indexterm><primary>space</primary><secondary>free space</secondary></indexterm>Managing Free Space</title>

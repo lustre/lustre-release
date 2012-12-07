@@ -45,7 +45,7 @@ lfs getname [-h]|[path...]
 lfs getstripe [--obd|-O &lt;uuid&gt;] [--quiet|-q] [--verbose|-v]
               [--count|-c] [--index|-i | --offset|-o]
               [--size|-s] [--pool|-p] [--directory|-d]
-              [--recursive|-r] [--raw|-R] &lt;dirname|filename&gt; ...
+              [--recursive|-r] [--raw|-R] [-M] &lt;dirname|filename&gt; ...
 lfs setstripe [--size|-s stripe_size] [--count|-c stripe_cnt]
               [--index|-i|--offset|-o start_ost_index]
               [--pool|-p &lt;pool&gt;]
@@ -308,6 +308,7 @@ lfs help
                 <para>Lists striping information for a given filename or directory. By default, the stripe count, stripe size and offset are returned.</para>
                 <para>If you only want specific striping information, then the options of <literal>--count</literal>,<literal>--size</literal>,<literal>--index</literal> or <literal>--offset</literal> plus various combinations of these options can be used to retrieve specific information.</para>
                 <para>If the <literal>--raw</literal> option is specified, the stripe information is printed without substituting the filesystem's default values for unspecified fields. If the striping EA is not set, 0, 0, and -1 will be printed for the stripe count, size, and offset respectively.</para>
+				<para condition='l24'>The <literal>-M</literal> prints the index of the MDT for a given directory. See <xref linkend='dbdoclet.rmremotedir'/>.</para>
               </entry>
             </row>
             <row>

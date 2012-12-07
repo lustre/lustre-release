@@ -25,6 +25,9 @@
       <para><xref linkend="dbdoclet.50438194_88063"/></para>
     </listitem>
     <listitem>
+      <para><xref linkend="dbdoclet.lfsmkdir"/></para>
+    </listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438194_88980"/></para>
     </listitem>
     <listitem>
@@ -174,6 +177,14 @@ ossbarnode# mkfs.lustre --fsname=bar --mgsnode=mgsnode@tcp0 --ost --index=1 /dev
     <screen>mount -t lustre mgsnode@tcp0:/foo /mnt/foo</screen>
     <para>To mount a client on file system bar at mount point <literal>/mnt/bar</literal>, run:</para>
     <screen>mount -t lustre mgsnode@tcp0:/bar /mnt/bar</screen>
+  </section>
+  <section xml:id="dbdoclet.lfsmkdir" condition='l24'>
+    <title><indexterm><primary>operations</primary><secondary>remote directory</secondary></indexterm>Creating a sub-directory on a given MDT</title>
+	<para>Lustre 2.4 enables individual sub-directories to be serviced by unique MDTs. An administrator can allocate a sub-directory to a given MDT using the command:</para>
+	<screen>lfs mkdir –i &lt;mdtindex&gt; &lt;remote_dir&gt;
+	</screen>
+	<para>This command will allocate the sub-directory <literal>remote_dir</literal> onto the MDT of index <literal>mdtindex</literal>. For more information on adding additional MDTs and <literal>mdtindex</literal> see <xref linkend='dbdoclet.addmdtindex'/>.</para>
+	<warning><para>An administrator can allocate remote sub-directories to separate MDTs. Creating remote sub-directories in parent directories not hosted on MDT0 is not recommended. This is because the failure of the parent MDT will leave the namespace below it inaccessible. For this reason, by default it is only possible to create remote sub-directories off MDT0. To relax this restriction and enable remote sub-directories off any MDT, an administrator must issue the command <literal>lctl set_param mdd.*.enable_remote_dir=1</literal>.</para></warning>
   </section>
   <section xml:id="dbdoclet.50438194_88980">
     <title><indexterm><primary>operations</primary><secondary>parameters</secondary></indexterm>Setting and Retrieving Lustre Parameters</title>
@@ -344,10 +355,9 @@ mds1&gt; cat /proc/fs/lustre/mds/testfs-MDT0000/recovery_status</screen>
   </section>
   <section xml:id="dbdoclet.50438194_69998">
     <title><indexterm><primary>operations</primary><secondary>replacing an OST or MDS</secondary></indexterm>Replacing an Existing OST or MDT</title>
-    <para>To copy the contents of an existing OST to a new OST (or an old
-    MDT to a new MDT), follow the process for either OST/MDT backups in
+    <para>To copy the contents of an existing OST to a new OST (or an old MDT to a new MDT), follow the process for either OST/MDT backups in
     <xref linkend='dbdoclet.50438207_71633'/> or
-    <xref linkend='dbdoclet.50438207_21638'/>.</para>
+    <xref linkend='dbdoclet.50438207_21638'/>. For more information on removing a MDT, see <xref linkend='dbdoclet.rmremotedir'/>.</para>
   </section>
   <section xml:id="dbdoclet.50438194_30872">
     <title><indexterm><primary>operations</primary><secondary>identifying OSTs</secondary></indexterm>Identifying To Which Lustre File an OST Object Belongs</title>

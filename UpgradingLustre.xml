@@ -9,6 +9,9 @@
     <listitem>
       <para><xref linkend="dbdoclet.50438205_51369"/>Upgrading Lustre 1.8 to 2.x</para>
     </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.upgradetodne"/>Upgrading to multiple metadata targets</para>
+    </listitem>
   </itemizedlist>
   <section xml:id="dbdoclet.50438205_82079">
       <title><indexterm><primary>Lustre</primary><secondary>upgrading</secondary><see>upgrading</see></indexterm>
@@ -22,6 +25,7 @@
     <note>
       <para>Lustre 2.x servers are compatible with clients 1.8.6 and later, though it is strongly recommended that the clients are upgraded to the latest version of Lustre 1.8 available. If you are planning a heterogeneous environment (mixed 1.8 and 2.x servers), make sure that version 1.8.6 or later is installed on the client nodes that are not upgraded to 2.x.</para>
     </note>
+    <warning condition='l24'><para>Lustre 2.4 allows remote sub-directories to be hosted on separate MDTs. Clients prior to 2.4 can only see the namespace hosted by MDT0, and will return an IO error if a directory on a remote MDT is accessed.</para></warning>
   </section>
   <section xml:id="dbdoclet.50438205_51369">
     <title><indexterm><primary>upgrading</primary><secondary>1.8 to 2.x</secondary></indexterm>Upgrading Lustre 1.8 to 2.x</title>
@@ -119,5 +123,24 @@ lustre-ldiskfs-&lt;ver&gt;</screen>
       </orderedlist>
       <para>If you have a problem upgrading Lustre, use the <link xl:href="https://groups.google.com/a/whamcloud.com/group/wc-discuss/">wc-discuss</link> mailing list, or file a ticket at the <link xl:href="https://bugs.whamcloud.com">Intel Lustre</link> bug tracker.</para>
     </section>
+  </section>
+  <section xml:id='dbdoclet.upgradetodne' condition='l24'>
+    <title><indexterm><primary>upgrading</primary><secondary>multiple metadata targets</secondary></indexterm>Upgrading to multiple metadata targets</title>
+		<para>Lustre 2.4 allows separate metadata servers to serve separate sub directories. To upgrade a filesystem to Lustre 2.4 that support multiple metadata servers:</para>
+          <orderedlist>
+            <listitem>
+				<para>Stop MGT/MDT/OST and upgrade to 2.4</para>
+            </listitem>
+            <listitem>
+                <para>Format new MDT according to <xref linkend="dbdoclet.addingamdt"/>.</para>
+            </listitem>
+            <listitem>
+                <para>Mount all of the targets according to <xref linkend="dbdoclet.addingamdt"/>.</para>
+            </listitem>
+            <listitem>
+                <para>After recovery is completed clients will be connected MDT0.</para>
+				<note><para>Clients prior to 2.4 will only be have the namespace provided by MDT0 visible and will return an IO error if a directory hosted on a remote MDT is accessed.</para></note>
+            </listitem>
+          </orderedlist>
   </section>
 </chapter>

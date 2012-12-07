@@ -19,10 +19,19 @@
       <para><xref linkend="dbdoclet.50438199_31353"/></para>
     </listitem>
     <listitem>
+      <para><xref linkend="dbdoclet.addingamdt"/></para>
+    </listitem>
+    <listitem>
       <para><xref linkend="dbdoclet.50438199_22527"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438199_14978"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.rmremotedir"/></para>
+    </listitem>
+    <listitem>
+      <para><xref linkend="dbdoclet.inactivemdt"/></para>
     </listitem>
     <listitem>
       <para><xref linkend="dbdoclet.50438199_77819"/></para>
@@ -261,6 +270,34 @@ Changing a Server NID</title>
       </orderedlist>
       <para>After the <literal>writeconf</literal> command is run, the configuration logs are re-generated as servers restart, and server NIDs in the updated <literal>list_nids</literal> file are used.</para>
     </section>
+    <section xml:id="dbdoclet.addingamdt" condition='l24'>
+      <title><indexterm><primary>maintenance</primary><secondary>adding an MDT</secondary></indexterm>Adding a new MDT to a Lustre file system</title>
+        <para>Additional MDTs can be added to serve one or more remote sub-directories within the filesystem. It is possible to have multiple remote sub-directories reference the same MDT. However, the root directory will always be located on MDT0. To add a new MDT into the file system:</para>
+      <orderedlist>
+        <listitem>
+			<para>Discover the maximum MDT index. Each MDTs must have unique index.</para>
+		<screen>
+client$ lctl dl | grep mdc
+36 UP mdc lustre-MDT0000-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
+37 UP mdc lustre-MDT0001-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
+38 UP mdc lustre-MDT0002-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
+39 UP mdc lustre-MDT0003-mdc-ffff88004edf3c00 4c8be054-144f-9359-b063-8477566eb84e 5
+		</screen>
+        </listitem>
+        <listitem>
+			<para>Add the new block device as a new MDT at the next available index. In this example, the next available index is 4.</para>
+		<screen>
+mkfs.lustre --reformat --fsname=&lt;filesystemname&gt; --mdt --mgsnode=&lt;mgsnode&gt; --index 4 &lt;blockdevice&gt;
+		</screen>
+        </listitem>
+        <listitem>
+			<para>Mount the MDTs.</para>
+		<screen>
+mount –t lustre &lt;blockdevice&gt; /mnt/mdt4
+		</screen>
+        </listitem>
+      </orderedlist>
+	</section>
     <section xml:id="dbdoclet.50438199_22527">
       <title><indexterm><primary>maintenance</primary><secondary>adding a OST</secondary></indexterm>
 Adding a New OST to a Lustre File System</title>
@@ -299,6 +336,25 @@ Removing and Restoring OSTs</title>
           <para>OST is nearing its space capacity</para>
         </listitem>
       </itemizedlist>
+      <section condition="l24" xml:id="dbdoclet.rmremotedir">
+      <title><indexterm><primary>maintenance</primary><secondary>removing a MDT</secondary></indexterm>Removing a MDT from the File System</title>
+	<para>If the MDT is permanently inaccessible, <literal>lfs rmdir {directory}</literal> can be used to delete the directory entry. A normal <literal>rmdir</literal> will report an IO error due to the remote MDT being inactive. After the remote directory has been removed, the administrator should mark the MDT as permanently inactive with:</para>
+<screen>lctl conf_param {MDT name}.mdc.active=0
+</screen>
+<para>A user can identify the location of a remote sub-directory using the <literal>lfs</literal> utility. For example:</para>
+<screen>client$ lfs getstripe -M /mnt/lustre/remote_dir1
+1
+client$ mkdir /mnt/lustre/local_dir0
+client$ lfs getstripe -M /mnt/lustre/local_dir0
+0
+</screen>
+	<para>The <literal>getstripe -M</literal> parameters return the index of the MDT that is serving the given directory.</para>
+	  </section>
+	  <section xml:id="dbdoclet.inactivemdt" condition='l24'>
+      <title>
+          <indexterm><primary>maintenance</primary></indexterm>
+          <indexterm><primary>maintenance</primary><secondary>inactive MDTs</secondary></indexterm>Working with Inactive MDTs</title>
+    <para>Files located on or below an inactive MDT are inaccessible until the MDT is activated again. Clients accessing an inactive MDT will receive an EIO error.</para></section>
       <section remap="h3">
       <title><indexterm><primary>maintenance</primary><secondary>removing a OST</secondary></indexterm>
         Removing an OST from the File System</title>
@@ -337,7 +393,7 @@ Removing and Restoring OSTs</title>
           </listitem>
           <listitem>
             <para>Temporarily deactivate the OSC on the MDT. On the MDT, run: </para>
-            <screen>$ mdt&gt; lctl --device &gt;devno&lt; deactivate</screen>
+            <screen>$ mdt&gt; lctl --device &lt;devno&gt; deactivate</screen>
             <para>For example, based on the command output in Step 1, to deactivate device 13 (the MDT’s OSC for <literal>OST-0000</literal>), the command would be: 
 </para>
             <screen>$ mdt&gt; lctl --device 13 deactivate</screen>
@@ -376,11 +432,8 @@ Removing and Restoring OSTs</title>
                     <para>This setting is only temporary and will be reset if the clients or MDS are rebooted. It needs to be run on all clients.</para>
                   </note></para>
               </listitem>
-              <listitem>
-                <para>To permanently disable the deactivated OST, enter: <screen>[mgs]# lctl conf_param {OST name}.osc.active=0</screen></para>
-              </listitem>
             </orderedlist>
-            <para>If there is not expected to be a replacement for this OST in the near future, permanently deactivate the OST on all clients and the MDS: </para>
+            <para>If there is not expected to be a replacement for this OST in the near future, permanently deactivate the OST on all clients and the MDS: <screen>[mgs]# lctl conf_param {OST name}.osc.active=0</screen></para>
             <note>
               <para>A removed OST still appears in the file system; do not create a new OST with the same name.</para>
             </note>
