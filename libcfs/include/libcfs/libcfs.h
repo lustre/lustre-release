@@ -226,7 +226,7 @@ void cfs_daemonize(char *str);
 int cfs_daemonize_ctxt(char *str);
 cfs_sigset_t cfs_get_blocked_sigs(void);
 cfs_sigset_t cfs_block_allsigs(void);
-cfs_sigset_t cfs_block_sigs(cfs_sigset_t bits);
+cfs_sigset_t cfs_block_sigs(unsigned long sigs);
 cfs_sigset_t cfs_block_sigsinv(unsigned long sigs);
 void cfs_restore_sigs(cfs_sigset_t);
 int cfs_signal_pending(void);

@@ -301,6 +301,11 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
 
         result = 0;
         switch (parent->cll_state) {
+        case CLS_ENQUEUED:
+                /* See LU-1355 for the case that a glimpse lock is
+                 * interrupted by signal */
+                LASSERT(parent->cll_flags & CLF_CANCELLED);
+                break;
         case CLS_QUEUING:
         case CLS_FREEING:
                 cl_lock_signal(env, parent);
@@ -376,7 +381,6 @@ static int lovsub_lock_delete_one(const struct lu_env *env,
                         }
                 }
                 break;
-        case CLS_ENQUEUED:
         case CLS_HELD:
                 CL_LOCK_DEBUG(D_ERROR, env, parent, "Delete CLS_HELD lock\n");
         default:

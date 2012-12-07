@@ -1797,6 +1797,14 @@ do {                                                                    \
         }                                                               \
 } while (0)
 
+#define CL_LOCK_ASSERT(expr, env, lock) do {                            \
+        if (likely(expr))                                               \
+                break;                                                  \
+                                                                        \
+        CL_LOCK_DEBUG(D_ERROR, env, lock, "failed at %s.\n", #expr);    \
+        LBUG();                                                         \
+} while (0)
+
 /** @} cl_lock */
 
 /** \addtogroup cl_page_list cl_page_list

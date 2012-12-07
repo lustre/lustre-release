@@ -756,7 +756,7 @@ do {                                                                           \
                 }                                                              \
         }                                                                      \
                                                                                \
-        cfs_block_sigs(__blocked);                                             \
+        cfs_restore_sigs(__blocked);                                           \
                                                                                \
         cfs_set_current_state(CFS_TASK_RUNNING);                               \
         cfs_waitq_del(&wq, &__wait);                                           \

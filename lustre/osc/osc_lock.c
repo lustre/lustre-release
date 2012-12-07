@@ -196,14 +196,21 @@ static int osc_lock_unuse(const struct lu_env *env,
 {
         struct osc_lock *ols = cl2osc_lock(slice);
 
-        LASSERT(ols->ols_state == OLS_GRANTED ||
-                ols->ols_state == OLS_UPCALL_RECEIVED);
         LINVRNT(osc_lock_invariant(ols));
+        LASSERT(ols->ols_state == OLS_GRANTED ||
+                ols->ols_state == OLS_ENQUEUED ||
+                ols->ols_state == OLS_UPCALL_RECEIVED);
+
+        if (ols->ols_state == OLS_ENQUEUED) {
+                ols->ols_state = OLS_CANCELLED;
+                return 0;
+        }
 
         if (ols->ols_glimpse) {
                 LASSERT(ols->ols_hold == 0);
                 return 0;
         }
+
         LASSERT(ols->ols_hold);
 
         /*
@@ -1470,6 +1477,9 @@ static int osc_lock_fits_into(const struct lu_env *env,
         struct osc_lock *ols = cl2osc_lock(slice);
 
         if (need->cld_enq_flags & CEF_NEVER)
+                return 0;
+
+        if (ols->ols_state >= OLS_CANCELLED)
                 return 0;
 
         if (need->cld_mode == CLM_PHANTOM) {

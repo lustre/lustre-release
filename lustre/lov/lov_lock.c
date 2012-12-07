@@ -697,7 +697,6 @@ static int lov_lock_unuse(const struct lu_env *env,
                 rc = lov_sublock_lock(env, lck, lls, closure, &subenv);
                 if (rc == 0) {
                         if (lls->sub_flags & LSF_HELD) {
-                                LASSERT(sublock->cll_state == CLS_HELD);
                                 rc = cl_unuse_try(subenv->lse_env, sublock);
                                 rc = lov_sublock_release(env, lck, i, 0, rc);
                         }
@@ -750,17 +749,9 @@ static void lov_lock_cancel(const struct lu_env *env,
 
                         switch(sublock->cll_state) {
                         case CLS_HELD:
-                                rc = cl_unuse_try(subenv->lse_env,
-                                                  sublock);
+                                rc = cl_unuse_try(subenv->lse_env, sublock);
                                 lov_sublock_release(env, lck, i, 0, 0);
                                 break;
-                        case CLS_ENQUEUED:
-                                /* TODO: it's not a good idea to cancel this
-                                 * lock because it's innocent. But it's
-                                 * acceptable. The better way would be to
-                                 * define a new lock method to unhold the
-                                 * dlm lock. */
-                                cl_lock_cancel(env, sublock);
                         default:
                                 lov_sublock_release(env, lck, i, 1, 0);
                                 break;
