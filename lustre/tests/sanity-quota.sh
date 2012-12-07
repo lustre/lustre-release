@@ -346,6 +346,11 @@ quota_init() {
 }
 quota_init
 
+resetquota -u $TSTUSR
+resetquota -g $TSTUSR
+resetquota -u $TSTUSR2
+resetquota -g $TSTUSR2
+
 test_quota_performance() {
 	local TESTFILE="$DIR/$tdir/$tfile-0"
 	local size=$1 # in MB
@@ -1117,13 +1122,10 @@ test_7d(){
 	trap cleanup_quota_test EXIT
 
 	set_ost_qtype "none" || error "disable ost quota failed"
-	# LU-2284. Enable trace for debug log.
-	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=+trace"
 	$LFS setquota -u $TSTUSR -B ${limit}M $DIR ||
 		error "set quota for $TSTUSR failed"
 	$LFS setquota -u $TSTUSR2 -B ${limit}M $DIR ||
 		error "set quota for $TSTUSR2 failed"
-	do_nodes $(comma_list $(nodes_list)) "lctl set_param debug=-trace"
 
 	#define OBD_FAIL_OBD_IDX_READ_BREAK 0x608
 	lustre_fail mds 0x608 0
