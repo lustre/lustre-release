@@ -4204,7 +4204,10 @@ run_one() {
     reset_fail_loc
     check_grant ${testnum} || error "check_grant $testnum failed with $?"
     check_catastrophe || error "LBUG/LASSERT detected"
-    ps auxww | grep -v grep | grep -q multiop && error "multiop still running"
+	if [ "$PARALLEL" != "yes" ]; then
+		ps auxww | grep -v grep | grep -q multiop &&
+					error "multiop still running"
+	fi
     unset TESTNAME
     unset tdir
     umask $SAVE_UMASK
