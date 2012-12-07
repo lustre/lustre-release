@@ -2644,7 +2644,7 @@ AC_ARG_ENABLE([pgstate-track],
 AC_MSG_CHECKING([whether to enable page state tracking])
 AC_MSG_RESULT([$enable_pgstat_track])
 if test x$enable_pgstat_track = xyes ; then
-        AC_DEFINE([LUSTRE_PAGESTATE_TRACKING], 1,
+        AC_DEFINE([CONFIG_DEBUG_PAGESTATE_TRACKING], 1,
                   [enable page state tracking code])
 fi
 

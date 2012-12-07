@@ -389,34 +389,37 @@ EXPORT_SYMBOL(cl_object_has_locks);
 
 void cache_stats_init(struct cache_stats *cs, const char *name)
 {
+	int i;
+
         cs->cs_name = name;
-        cfs_atomic_set(&cs->cs_lookup, 0);
-        cfs_atomic_set(&cs->cs_hit,    0);
-        cfs_atomic_set(&cs->cs_total,  0);
-        cfs_atomic_set(&cs->cs_busy,   0);
+	for (i = 0; i < CS_NR; i++)
+		cfs_atomic_set(&cs->cs_stats[i], 0);
 }
 
 int cache_stats_print(const struct cache_stats *cs,
                       char *page, int count, int h)
 {
-        int nob = 0;
-/*
-       lookup    hit  total cached create
-  env: ...... ...... ...... ...... ......
-*/
-        if (h)
-                nob += snprintf(page, count,
-                                "       lookup    hit  total   busy create\n");
+	int nob = 0;
+	int i;
+	/*
+	 *   lookup    hit    total  cached create
+	 * env: ...... ...... ...... ...... ......
+	 */
+	if (h) {
+		const char *names[CS_NR] = CS_NAMES;
 
-        nob += snprintf(page + nob, count - nob,
-                        "%5.5s: %6u %6u %6u %6u %6u",
-                        cs->cs_name,
-                        cfs_atomic_read(&cs->cs_lookup),
-                        cfs_atomic_read(&cs->cs_hit),
-                        cfs_atomic_read(&cs->cs_total),
-                        cfs_atomic_read(&cs->cs_busy),
-                        cfs_atomic_read(&cs->cs_created));
-        return nob;
+		nob += snprintf(page + nob, count - nob, "%6s", " ");
+		for (i = 0; i < CS_NR; i++)
+			nob += snprintf(page + nob, count - nob,
+					"%8s", names[i]);
+		nob += snprintf(page + nob, count - nob, "\n");
+	}
+
+	nob += snprintf(page + nob, count - nob, "%5.5s:", cs->cs_name);
+	for (i = 0; i < CS_NR; i++)
+		nob += snprintf(page + nob, count - nob, "%8u",
+				cfs_atomic_read(&cs->cs_stats[i]));
+	return nob;
 }
 
 /**
@@ -454,11 +457,7 @@ EXPORT_SYMBOL(cl_site_fini);
 
 static struct cache_stats cl_env_stats = {
         .cs_name    = "envs",
-        .cs_created = CFS_ATOMIC_INIT(0),
-        .cs_lookup  = CFS_ATOMIC_INIT(0),
-        .cs_hit     = CFS_ATOMIC_INIT(0),
-        .cs_total   = CFS_ATOMIC_INIT(0),
-        .cs_busy    = CFS_ATOMIC_INIT(0)
+	.cs_stats = { CFS_ATOMIC_INIT(0), }
 };
 
 /**
@@ -585,13 +584,17 @@ struct cl_env {
         void             *ce_debug;
 };
 
-#define CL_ENV_INC(counter) cfs_atomic_inc(&cl_env_stats.counter)
+#ifdef CONFIG_DEBUG_PAGESTATE_TRACKING
+#define CL_ENV_INC(counter) cfs_atomic_inc(&cl_env_stats.cs_stats[CS_##counter])
 
-#define CL_ENV_DEC(counter)                                             \
-        do {                                                            \
-                LASSERT(cfs_atomic_read(&cl_env_stats.counter) > 0);    \
-                cfs_atomic_dec(&cl_env_stats.counter);                  \
-        } while (0)
+#define CL_ENV_DEC(counter) do {                                              \
+	LASSERT(cfs_atomic_read(&cl_env_stats.cs_stats[CS_##counter]) > 0);   \
+	cfs_atomic_dec(&cl_env_stats.cs_stats[CS_##counter]);                 \
+} while (0)
+#else
+#define CL_ENV_INC(counter)
+#define CL_ENV_DEC(counter)
+#endif
 
 static void cl_env_init0(struct cl_env *cle, void *debug)
 {
@@ -601,7 +604,7 @@ static void cl_env_init0(struct cl_env *cle, void *debug)
 
         cle->ce_ref = 1;
         cle->ce_debug = debug;
-        CL_ENV_INC(cs_busy);
+        CL_ENV_INC(busy);
 }
 
 
@@ -776,8 +779,8 @@ static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
                         OBD_SLAB_FREE_PTR(cle, cl_env_kmem);
                         env = ERR_PTR(rc);
                 } else {
-                        CL_ENV_INC(cs_created);
-                        CL_ENV_INC(cs_total);
+                        CL_ENV_INC(create);
+                        CL_ENV_INC(total);
                 }
         } else
                 env = ERR_PTR(-ENOMEM);
@@ -786,7 +789,7 @@ static struct lu_env *cl_env_new(__u32 ctx_tags, __u32 ses_tags, void *debug)
 
 static void cl_env_fini(struct cl_env *cle)
 {
-        CL_ENV_DEC(cs_total);
+        CL_ENV_DEC(total);
         lu_context_fini(&cle->ce_lu.le_ctx);
         lu_context_fini(&cle->ce_ses);
         OBD_SLAB_FREE_PTR(cle, cl_env_kmem);
@@ -836,7 +839,7 @@ struct lu_env *cl_env_peek(int *refcheck)
         struct lu_env *env;
         struct cl_env *cle;
 
-        CL_ENV_INC(cs_lookup);
+        CL_ENV_INC(lookup);
 
         /* check that we don't go far from untrusted pointer */
         CLASSERT(offsetof(struct cl_env, ce_magic) == 0);
@@ -844,7 +847,7 @@ struct lu_env *cl_env_peek(int *refcheck)
         env = NULL;
         cle = cl_env_fetch();
         if (cle != NULL) {
-                CL_ENV_INC(cs_hit);
+                CL_ENV_INC(hit);
                 env = &cle->ce_lu;
                 *refcheck = ++cle->ce_ref;
         }
@@ -960,7 +963,7 @@ void cl_env_put(struct lu_env *env, int *refcheck)
 
         CDEBUG(D_OTHER, "%d@%p\n", cle->ce_ref, cle);
         if (--cle->ce_ref == 0) {
-                CL_ENV_DEC(cs_busy);
+                CL_ENV_DEC(busy);
                 cl_env_detach(cle);
                 cle->ce_debug = NULL;
                 cl_env_exit(cle);

@@ -90,6 +90,23 @@ static struct lu_kmem_descr cl_page_caches[] = {
         ((void)sizeof(env), (void)sizeof(page), (void)sizeof !!(exp))
 #endif /* !INVARIANT_CHECK */
 
+/* Disable page statistic by default due to huge performance penalty. */
+#ifdef CONFIG_DEBUG_PAGESTATE_TRACKING
+#define CS_PAGE_INC(o, item) \
+	cfs_atomic_inc(&cl_object_site(o)->cs_pages.cs_stats[CS_##item])
+#define CS_PAGE_DEC(o, item) \
+	cfs_atomic_dec(&cl_object_site(o)->cs_pages.cs_stats[CS_##item])
+#define CS_PAGESTATE_INC(o, state) \
+	cfs_atomic_inc(&cl_object_site(o)->cs_pages_state[state])
+#define CS_PAGESTATE_DEC(o, state) \
+	cfs_atomic_dec(&cl_object_site(o)->cs_pages_state[state])
+#else
+#define CS_PAGE_INC(o, item)
+#define CS_PAGE_DEC(o, item)
+#define CS_PAGESTATE_INC(o, state)
+#define CS_PAGESTATE_DEC(o, state)
+#endif
+
 /**
  * Internal version of cl_page_top, it should be called with page referenced,
  * or cp_lock held.
@@ -118,7 +135,7 @@ static void cl_page_get_trust(struct cl_page *page)
          * Checkless version for trusted users.
          */
         if (cfs_atomic_inc_return(&page->cp_ref) == 1)
-                cfs_atomic_inc(&cl_object_site(page->cp_obj)->cs_pages.cs_busy);
+		CS_PAGE_INC(page->cp_obj, busy);
 }
 
 /**
@@ -280,7 +297,6 @@ EXPORT_SYMBOL(cl_page_gang_lookup);
 static void cl_page_free(const struct lu_env *env, struct cl_page *page)
 {
         struct cl_object *obj  = page->cp_obj;
-        struct cl_site   *site = cl_object_site(obj);
 
         PASSERT(env, page, cfs_list_empty(&page->cp_batch));
         PASSERT(env, page, page->cp_owner == NULL);
@@ -298,11 +314,8 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page)
                 cfs_list_del_init(page->cp_layers.next);
                 slice->cpl_ops->cpo_fini(env, slice);
         }
-        cfs_atomic_dec(&site->cs_pages.cs_total);
-
-#ifdef LUSTRE_PAGESTATE_TRACKING
-        cfs_atomic_dec(&site->cs_pages_state[page->cp_state]);
-#endif
+	CS_PAGE_DEC(obj, total);
+	CS_PAGESTATE_DEC(obj, page->cp_state);
         lu_object_ref_del_at(&obj->co_lu, page->cp_obj_ref, "cl_page", page);
         cl_object_put(env, obj);
         lu_ref_fini(&page->cp_reference);
@@ -328,7 +341,6 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
         struct cl_page          *page;
         struct cl_page          *err  = NULL;
         struct lu_object_header *head;
-        struct cl_site          *site = cl_object_site(o);
         int                      result;
 
         ENTRY;
@@ -364,13 +376,10 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
                         }
                 }
                 if (err == NULL) {
-                        cfs_atomic_inc(&site->cs_pages.cs_busy);
-                        cfs_atomic_inc(&site->cs_pages.cs_total);
-
-#ifdef LUSTRE_PAGESTATE_TRACKING
-                        cfs_atomic_inc(&site->cs_pages_state[CPS_CACHED]);
-#endif
-                        cfs_atomic_inc(&site->cs_pages.cs_created);
+			CS_PAGE_INC(o, busy);
+			CS_PAGE_INC(o, total);
+			CS_PAGE_INC(o, create);
+			CS_PAGESTATE_DEC(o, CPS_CACHED);
                         result = 0;
                 }
         } else
@@ -399,7 +408,6 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
         struct cl_page          *page = NULL;
         struct cl_page          *ghost = NULL;
         struct cl_object_header *hdr;
-        struct cl_site          *site = cl_object_site(o);
         int err;
 
         LASSERT(type == CPT_CACHEABLE || type == CPT_TRANSIENT);
@@ -408,7 +416,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
         ENTRY;
 
         hdr = cl_object_header(o);
-        cfs_atomic_inc(&site->cs_pages.cs_lookup);
+	CS_PAGE_INC(o, lookup);
 
         CDEBUG(D_PAGE, "%lu@"DFID" %p %lx %d\n",
                idx, PFID(&hdr->coh_lu.loh_fid), vmpage, vmpage->private, type);
@@ -437,7 +445,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
         }
 
         if (page != NULL) {
-                cfs_atomic_inc(&site->cs_pages.cs_hit);
+		CS_PAGE_INC(o, hit);
                 RETURN(page);
         }
 
@@ -490,7 +498,7 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
 	spin_unlock(&hdr->coh_page_guard);
 
         if (unlikely(ghost != NULL)) {
-                cfs_atomic_dec(&site->cs_pages.cs_busy);
+		CS_PAGE_DEC(o, busy);
                 cl_page_delete0(env, ghost, 0);
                 cl_page_free(env, ghost);
         }
@@ -554,9 +562,6 @@ static void cl_page_state_set0(const struct lu_env *env,
                                struct cl_page *page, enum cl_page_state state)
 {
         enum cl_page_state old;
-#ifdef LUSTRE_PAGESTATE_TRACKING
-        struct cl_site *site = cl_object_site(page->cp_obj);
-#endif
 
         /*
          * Matrix of allowed state transitions [old][new], for sanity
@@ -609,10 +614,8 @@ static void cl_page_state_set0(const struct lu_env *env,
                 PASSERT(env, page,
                         equi(state == CPS_OWNED, page->cp_owner != NULL));
 
-#ifdef LUSTRE_PAGESTATE_TRACKING
-                cfs_atomic_dec(&site->cs_pages_state[page->cp_state]);
-                cfs_atomic_inc(&site->cs_pages_state[state]);
-#endif
+		CS_PAGESTATE_DEC(page->cp_obj, page->cp_state);
+		CS_PAGESTATE_INC(page->cp_obj, state);
                 cl_page_state_set_trust(page, state);
         }
         EXIT;
@@ -651,8 +654,6 @@ EXPORT_SYMBOL(cl_page_get);
  */
 void cl_page_put(const struct lu_env *env, struct cl_page *page)
 {
-        struct cl_site *site = cl_object_site(page->cp_obj);
-
         PASSERT(env, page, cfs_atomic_read(&page->cp_ref) > !!page->cp_parent);
 
         ENTRY;
@@ -660,7 +661,7 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
                        cfs_atomic_read(&page->cp_ref));
 
         if (cfs_atomic_dec_and_lock(&page->cp_ref, &page->cp_lock)) {
-                cfs_atomic_dec(&site->cs_pages.cs_busy);
+		CS_PAGE_DEC(page->cp_obj, busy);
                 /* We're going to access the page w/o a reference, but it's
                  * ok because we have grabbed the lock cp_lock, which
                  * means nobody is able to free this page behind us.
