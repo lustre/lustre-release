@@ -233,10 +233,10 @@ static int do_name2dev(char *func, char *name)
 
         memset(buf, 0, sizeof(rawbuf));
         rc = obd_ioctl_pack(&data, &buf, sizeof(rawbuf));
-        if (rc) {
+	if (rc < 0) {
                 fprintf(stderr, "error: %s: invalid ioctl\n",
                         jt_cmdname(func));
-                return rc;
+		return -rc;
         }
         rc = l2_ioctl(OBD_DEV_ID, OBD_IOC_NAME2DEV, buf);
         if (rc < 0)

@@ -1480,7 +1480,7 @@ static int mgs_log_is_empty(const struct lu_env *env,
 		GOTO(out_ctxt, rc);
 	}
 
-	llog_init_handle(env, llh, LLOG_F_IS_PLAIN, NULL);
+	rc = llog_init_handle(env, llh, LLOG_F_IS_PLAIN, NULL);
 	if (rc)
 		GOTO(out_close, rc);
 	rc = llog_get_size(llh);

@@ -339,7 +339,8 @@ int loop_setup(struct mkfs_opts *mop)
 				continue;
 			if (ret) {
 				fprintf(stderr, "%s: error %d on losetup: %s\n",
-					progname, ret, strerror(ret));
+					progname, ret,
+					ret >= 0 ? strerror(ret) : "");
 				return ret;
 			}
 			strscpy(mop->mo_loopdev, l_device,

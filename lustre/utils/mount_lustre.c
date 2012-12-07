@@ -331,7 +331,8 @@ static int parse_ldd(char *source, struct mount_opts *mop, char *options)
 	rc = osd_read_ldd(source, ldd);
 	if (rc) {
 		fprintf(stderr, "%s: %s failed to read permanent mount"
-			" data: %s\n", progname, source, strerror(rc));
+			" data: %s\n", progname, source,
+			rc >= 0 ? strerror(rc) : "");
 		return rc;
 	}
 

@@ -845,7 +845,7 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         lprocfs_counter_init(pl->pl_stats, LDLM_POOL_TIMING_STAT,
                              LPROCFS_CNTR_AVGMINMAX | LPROCFS_CNTR_STDDEV,
                              "recalc_timing", "sec");
-        lprocfs_register_stats(pl->pl_proc_dir, "stats", pl->pl_stats);
+	rc = lprocfs_register_stats(pl->pl_proc_dir, "stats", pl->pl_stats);
 
         EXIT;
 out_free_name:

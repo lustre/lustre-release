@@ -1916,9 +1916,9 @@ int lu_printk_printer(const struct lu_env *env,
         return 0;
 }
 
-void lu_debugging_setup(void)
+int lu_debugging_setup(void)
 {
-        lu_env_init(&lu_debugging_env, ~0);
+	return lu_env_init(&lu_debugging_env, ~0);
 }
 
 void lu_context_keys_dump(void)

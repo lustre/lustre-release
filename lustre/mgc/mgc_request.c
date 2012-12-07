@@ -1592,8 +1592,9 @@ static int mgc_llog_is_empty(struct obd_device *obd, struct llog_ctxt *ctxt,
 	push_ctxt(&saved, &obd->obd_lvfs_ctxt, NULL);
 	rc = llog_open(NULL, ctxt, &llh, NULL, name, LLOG_OPEN_EXISTS);
 	if (rc == 0) {
-		llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
-		rc = llog_get_size(llh);
+		rc = llog_init_handle(NULL, llh, LLOG_F_IS_PLAIN, NULL);
+		if (rc == 0)
+			rc = llog_get_size(llh);
 		llog_close(NULL, llh);
 	} else if (rc == -ENOENT) {
 		rc = 0;
