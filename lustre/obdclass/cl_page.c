@@ -108,8 +108,9 @@ static struct lu_kmem_descr cl_page_caches[] = {
 #endif
 
 /**
- * Internal version of cl_page_top, it should be called with page referenced,
- * or cp_lock held.
+ * Internal version of cl_page_top, it should be called if the page is
+ * known to be not freed, says with page referenced, or radix tree lock held,
+ * or page owned.
  */
 static struct cl_page *cl_page_top_trusted(struct cl_page *page)
 {
@@ -131,11 +132,8 @@ static struct cl_page *cl_page_top_trusted(struct cl_page *page)
  */
 static void cl_page_get_trust(struct cl_page *page)
 {
-        /*
-         * Checkless version for trusted users.
-         */
-        if (cfs_atomic_inc_return(&page->cp_ref) == 1)
-		CS_PAGE_INC(page->cp_obj, busy);
+        LASSERT(cfs_atomic_read(&page->cp_ref) > 0);
+        cfs_atomic_inc(&page->cp_ref);
 }
 
 /**
@@ -149,11 +147,6 @@ cl_page_at_trusted(const struct cl_page *page,
                    const struct lu_device_type *dtype)
 {
         const struct cl_page_slice *slice;
-
-#ifdef INVARIANT_CHECK
-        if (!cfs_atomic_read(&page->cp_ref))
-                LASSERT_SPIN_LOCKED(&page->cp_lock);
-#endif
         ENTRY;
 
         page = cl_page_top_trusted((struct cl_page *)page);
@@ -180,9 +173,8 @@ struct cl_page *cl_page_lookup(struct cl_object_header *hdr, pgoff_t index)
         LASSERT_SPIN_LOCKED(&hdr->coh_page_guard);
 
         page = radix_tree_lookup(&hdr->coh_tree, index);
-        if (page != NULL) {
+        if (page != NULL)
                 cl_page_get_trust(page);
-        }
         return page;
 }
 EXPORT_SYMBOL(cl_page_lookup);
@@ -348,13 +340,14 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
         OBD_SLAB_ALLOC_PTR_GFP(page, cl_page_kmem, CFS_ALLOC_IO);
         if (page != NULL) {
                 cfs_atomic_set(&page->cp_ref, 1);
+		if (type == CPT_CACHEABLE) /* for radix tree */
+			cfs_atomic_inc(&page->cp_ref);
                 page->cp_obj = o;
                 cl_object_get(o);
                 page->cp_obj_ref = lu_object_ref_add(&o->co_lu,
                                                      "cl_page", page);
                 page->cp_index = ind;
                 cl_page_state_set_trust(page, CPS_CACHED);
-		spin_lock_init(&page->cp_lock);
 		page->cp_type = type;
 		CFS_INIT_LIST_HEAD(&page->cp_layers);
 		CFS_INIT_LIST_HEAD(&page->cp_batch);
@@ -376,7 +369,6 @@ static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
                         }
                 }
                 if (err == NULL) {
-			CS_PAGE_INC(o, busy);
 			CS_PAGE_INC(o, total);
 			CS_PAGE_INC(o, create);
 			CS_PAGESTATE_DEC(o, CPS_CACHED);
@@ -422,10 +414,8 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
                idx, PFID(&hdr->coh_lu.loh_fid), vmpage, vmpage->private, type);
         /* fast path. */
         if (type == CPT_CACHEABLE) {
-		/* cl_page::cp_lock is used to protect the page state and
-		 * refcount, but need an external lock to protect the
-		 * child/parent relationship, so vmpage lock must be held for
-		 * this purpose. */
+		/* vmpage lock is used to protect the child/parent
+		 * relationship */
 		KLASSERT(PageLocked(vmpage));
                 /*
                  * cl_vmpage_page() can be called here without any locks as
@@ -498,7 +488,6 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
 	spin_unlock(&hdr->coh_page_guard);
 
         if (unlikely(ghost != NULL)) {
-		CS_PAGE_DEC(o, busy);
                 cl_page_delete0(env, ghost, 0);
                 cl_page_free(env, ghost);
         }
@@ -539,7 +528,7 @@ static inline int cl_page_invariant(const struct cl_page *pg)
         child  = pg->cp_child;
         owner  = pg->cp_owner;
 
-        return cfs_atomic_read(&pg->cp_ref) > 0 &&
+        return cl_page_in_use(pg) &&
                 ergo(parent != NULL, parent->cp_child == pg) &&
                 ergo(child != NULL, child->cp_parent == pg) &&
                 ergo(child != NULL, pg->cp_obj != child->cp_obj) &&
@@ -660,32 +649,17 @@ void cl_page_put(const struct lu_env *env, struct cl_page *page)
         CL_PAGE_HEADER(D_TRACE, env, page, "%d\n",
                        cfs_atomic_read(&page->cp_ref));
 
-        if (cfs_atomic_dec_and_lock(&page->cp_ref, &page->cp_lock)) {
-		CS_PAGE_DEC(page->cp_obj, busy);
-                /* We're going to access the page w/o a reference, but it's
-                 * ok because we have grabbed the lock cp_lock, which
-                 * means nobody is able to free this page behind us.
-                 */
-                if (page->cp_state == CPS_FREEING) {
-                        /* We drop the page reference and check the page state
-                         * inside the cp_lock. So that if it gets here,
-                         * it is the REALLY last reference to this page.
-                         */
-			spin_unlock(&page->cp_lock);
+	if (cfs_atomic_dec_and_test(&page->cp_ref)) {
+		LASSERT(page->cp_state == CPS_FREEING);
 
-                        LASSERT(cfs_atomic_read(&page->cp_ref) == 0);
-                        PASSERT(env, page, page->cp_owner == NULL);
-                        PASSERT(env, page, cfs_list_empty(&page->cp_batch));
-                        /*
-                         * Page is no longer reachable by other threads. Tear
-                         * it down.
-                         */
-                        cl_page_free(env, page);
-
-                        EXIT;
-                        return;
-                }
-		spin_unlock(&page->cp_lock);
+		LASSERT(cfs_atomic_read(&page->cp_ref) == 0);
+		PASSERT(env, page, page->cp_owner == NULL);
+		PASSERT(env, page, cfs_list_empty(&page->cp_batch));
+		/*
+		 * Page is no longer reachable by other threads. Tear
+		 * it down.
+		 */
+		cl_page_free(env, page);
 	}
 
 	EXIT;
@@ -740,14 +714,12 @@ struct cl_page *cl_vmpage_page(cfs_page_t *vmpage, struct cl_object *obj)
 	if (top == NULL)
 		RETURN(NULL);
 
-	spin_lock(&top->cp_lock);
 	for (page = top; page != NULL; page = page->cp_child) {
 		if (cl_object_same(page->cp_obj, obj)) {
 			cl_page_get_trust(page);
 			break;
 		}
 	}
-	spin_unlock(&top->cp_lock);
 	LASSERT(ergo(page, page->cp_type == CPT_CACHEABLE));
 	RETURN(page);
 }
@@ -1147,6 +1119,9 @@ static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg,
         cl_page_export(env, pg, 0);
         cl_page_state_set0(env, pg, CPS_FREEING);
 
+        CL_PAGE_INVOID(env, pg, CL_PAGE_OP(cpo_delete),
+                       (const struct lu_env *, const struct cl_page_slice *));
+
         if (tmp->cp_type == CPT_CACHEABLE) {
                 if (!radix)
                         /* !radix means that @pg is not yet in the radix tree,
@@ -1165,11 +1140,10 @@ static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg,
 			PASSERT(env, tmp, hdr->coh_pages > 0);
 			hdr->coh_pages--;
 			spin_unlock(&hdr->coh_page_guard);
+			cl_page_put(env, tmp);
                 }
         }
 
-        CL_PAGE_INVOID(env, pg, CL_PAGE_OP(cpo_delete),
-                       (const struct lu_env *, const struct cl_page_slice *));
         EXIT;
 }
 

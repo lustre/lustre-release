@@ -156,7 +156,7 @@ static int ll_releasepage(struct page *vmpage, RELEASEPAGE_ARG_TYPE gfp_mask)
         page = cl_vmpage_page(vmpage, obj);
         result = page == NULL;
         if (page != NULL) {
-                if (cfs_atomic_read(&page->cp_ref) == 1) {
+                if (!cl_page_in_use(page)) {
                         result = 1;
                         cl_page_delete(env, page);
                 }

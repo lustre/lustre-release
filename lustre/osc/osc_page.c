@@ -647,7 +647,7 @@ static int discard_pagevec(const struct lu_env *env, struct cl_io *io,
 			 * This check is necessary to avoid freeing the pages
 			 * having already been removed from LRU and pinned
 			 * for IO. */
-			if (cfs_atomic_read(&page->cp_ref) == 1) {
+			if (!cl_page_in_use(page)) {
 				cl_page_unmap(env, io, page);
 				cl_page_discard(env, io, page);
 				++count;
@@ -700,8 +700,7 @@ int osc_lru_shrink(struct client_obd *cli, int target)
 		opg = cfs_list_entry(cli->cl_lru_list.next, struct osc_page,
 				     ops_lru);
 		page = cl_page_top(opg->ops_cl.cpl_page);
-		if (page->cp_state == CPS_FREEING ||
-		    cfs_atomic_read(&page->cp_ref) > 0) {
+		if (cl_page_in_use_noref(page)) {
 			cfs_list_move_tail(&opg->ops_lru, &cli->cl_lru_list);
 			continue;
 		}

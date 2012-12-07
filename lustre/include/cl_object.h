@@ -718,8 +718,6 @@ struct cl_page {
          * modified only internally within cl_page.c. Protected by a VM lock.
          */
         const enum cl_page_state cp_state;
-	/** Protect to get and put page, see cl_page_put and cl_vmpage_page */
-	spinlock_t		cp_lock;
 	/** Linkage of pages within group. Protected by cl_page::cp_mutex. */
 	cfs_list_t		cp_batch;
 	/** Mutex serializing membership of a page in a batch. */
@@ -1096,6 +1094,16 @@ do {                                                                          \
                 CDEBUG(mask, format , ## __VA_ARGS__);                        \
         }                                                                     \
 } while (0)
+
+static inline int __page_in_use(const struct cl_page *page, int refc)
+{
+	if (page->cp_type == CPT_CACHEABLE)
+		++refc;
+	LASSERT(cfs_atomic_read(&page->cp_ref) > 0);
+	return (cfs_atomic_read(&page->cp_ref) > refc);
+}
+#define cl_page_in_use(pg)       __page_in_use(pg, 1)
+#define cl_page_in_use_noref(pg) __page_in_use(pg, 0)
 
 /** @} cl_page */
 
