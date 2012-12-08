@@ -2676,12 +2676,10 @@ mgsdevname() {
 	local fstype=$(facet_fstype mds1)
 
 	case $fstype in
-		ldiskfs )
+		ldiskfs|zfs )
 			#if $MGSDEV isn't defined, default is $MDSDEV1
+			#ZFS independent mgsdev should be ${FSNAME}-mgs/mgs
 			eval DEVPTR=${!DEVNAME:=${MDSDEV1}};;
-		zfs )
-			#dataset name is independent of vdev device names
-			eval DEVPTR=${FSNAME}-mgs/mgs;;
 		* )
 			error "unknown fstype!";;
 	esac
