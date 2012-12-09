@@ -15,7 +15,7 @@ my $V = '0.31';
 use Getopt::Long qw(:config no_auto_abbrev);
 
 my $quiet = 0;
-my $tabs = 0;
+my $tabs = -1;	# allow either tabs or spaces for b2_1
 my $tree = 0;
 my $chk_signoff = 0;
 my $chk_patch = 1;
@@ -1509,13 +1509,13 @@ sub process {
 
 # at the beginning of a line any tabs must come first and anything
 # more than 8 must use tabs.
-		if ($tabs && ($rawline =~ /^\+\s* \t\s*\S/ ||
+		if ($tabs == 1 && ($rawline =~ /^\+\s* \t\s*\S/ ||
 			      $rawline =~ /^\+\s*        \s*/)) {
 			my $herevet = "$here\n" . cat_vet($rawline) . "\n";
 			ERROR("code indent should use tabs where possible\n" . $herevet);
 			$rpt_cleaners = 1;
 
-		} elsif (! $tabs && $rawline =~ /^\+.*\t/) {
+		} elsif ($tabs == 0 && $rawline =~ /^\+.*\t/) {
 			my $herevet = "$here\n" . cat_vet($rawline) . "\n";
 			ERROR("code indent should use spaces where possible\n" . $herevet);
 			$rpt_cleaners = 1;
@@ -1532,7 +1532,8 @@ sub process {
 #  1) within comments
 #  2) indented preprocessor commands
 #  3) hanging labels
-		if ($tabs && $rawline =~ /^\+ / && $line !~ /\+ *(?:$;|#|$Ident:)/)  {
+		if ($tabs == 1 && $rawline =~ /^\+ / &&
+		    $line !~ /\+ *(?:$;|#|$Ident:)/)  {
 			my $herevet = "$here\n" . cat_vet($rawline) . "\n";
 			WARN("please, no spaces at the start of a line\n" . $herevet);
 		}

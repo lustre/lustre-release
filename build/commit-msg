@@ -1,0 +1,291 @@
+#!/bin/bash
+#
+# A hook script to check the commit log message to ensure that it has
+# a well-formed commit summary and body, a valid Signed-off-by: line,
+# and a Gerrit Change-Id: line (added automatically if missing).
+#
+# Called by git-commit with one argument, the name of the file
+# that has the commit message.  The hook should exit with non-zero
+# status after issuing an appropriate message if it wants to stop the
+# commit.  The hook is allowed to edit the commit message file.
+#
+# Should be installed as .git/hooks/commit-msg.
+#
+
+init() {
+        set -a
+        readonly ORIGINAL="$1"
+        readonly REVISED="$(mktemp "$ORIGINAL.XXXXXX")"
+        readonly SAVE="$(basename $ORIGINAL).$(date +%Y%m%d.%H%M%S)"
+        readonly SIGNOFF="Signed-off-by:"
+        readonly CHANGEID="Change-Id:"
+        readonly TESTPARAMS="Test-Parameters:"
+        readonly INNOCUOUS=$(echo \
+                        Acked-by \
+                        Tested-by \
+                        Reported-by \
+                        Reviewed-by \
+                        CC \
+                | tr ' ' '|')
+        readonly WIDTH_SUM=62
+        readonly WIDTH_REG=70
+        readonly JIRA_FMT_A="^[A-Z]\{2,5\}-[0-9]\{1,5\} [-a-z0-9]\{2,11\}: "
+        readonly JIRA_FMT_B="^[A-Z]\{2,5\}-[0-9]\{1,5\} "
+
+        # Identify a name followed by an email address.
+        #
+        readonly EMAILPAT=$'[ \t]*[^<> ]* [^<>]* <[^@ \t>]+@[a-zA-Z0-9.-]+\.[a-z]+>'
+
+        HAS_ERROR=false
+        HAS_SUMMARY=false
+        HAS_LAST_BLANK=false
+        HAS_BODY=false
+        HAS_SIGNOFF=false
+        HAS_CHANGEID=false
+
+        IS_WRAPPING_UP=false
+
+        LINE=""
+        NUM=0
+        set +a
+}
+
+# die: commit-msg fatal error: script error or empty input message
+# All output redirected to stderr.
+#
+die() {
+        echo "commit-msg fatal error:  $*"
+        test -f "$REVISED" && rm -f "$REVISED"
+        exit 1
+} 1>&2
+
+# Called when doing the final "wrap up" clause because we've found
+# one of the tagged lines that belongs in the final section.
+#
+function ck_wrapup() {
+        $IS_WRAPPING_UP && return
+
+        $HAS_LAST_BLANK || error "blank line must preceed signoff section"
+        $HAS_SUMMARY    || error "missing commit summary line."
+        $HAS_BODY       || error "missing commit description."
+
+        HAS_LAST_BLANK=false
+        IS_WRAPPING_UP=true
+}
+
+function do_signoff() {
+        ck_wrapup
+        # Signed-off-by: First Last <email@host.domain>
+        local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
+        if (( ${#txt} == 0 )); then
+                error "$SIGNOFF line requires name and email address"
+        else
+                HAS_SIGNOFF=true # require at least one
+        fi
+}
+
+function do_changeid() {
+        ck_wrapup
+        $HAS_CHANGEID && error "multiple $CHANGEID lines are not allowed"
+
+        # Change-Id: I1234567890123456789012345678901234567890
+        # capital "I" plus 40 hex digits
+        #
+        local txt=$(echo "$LINE" | grep "^$CHANGEID I[0-9a-fA-F]\{40\}\$")
+        (( ${#txt} > 0 )) ||
+                error "has invalid $CHANGEID line for Gerrit tracking"
+
+        HAS_CHANGEID=true
+}
+
+# All "innocuous" lines specify a person and email address
+#
+function do_innocuous() {
+        ck_wrapup
+        local txt=$(echo "${LINE#*: }" | grep -E "${EMAILPAT}")
+        (( ${#txt} == 0 )) && error "invalid name and address"
+}
+
+function do_default_line() {
+        $IS_WRAPPING_UP && {
+                error "invalid signoff section line"
+                return
+        }
+        if (( NUM == 1 )); then
+                HAS_JIRA_COMPONENT=$(echo "$LINE" | grep "$JIRA_FMT_A")
+
+                if (( ${#HAS_JIRA_COMPONENT} == 0 )); then
+                        HAS_JIRA=$(echo "$LINE" | grep "$JIRA_FMT_B")
+                        if (( ${#HAS_JIRA} > 0 )); then
+                                error "has no component in summary."
+                        else
+                                error "missing JIRA ticket number."
+                        fi
+                elif (( ${#LINE} > WIDTH_SUM )); then
+                        error "summary longer than $WIDTH_SUM columns."
+                else
+                        HAS_SUMMARY=true
+                fi
+
+        elif (( ${#LINE} > WIDTH_REG )); then
+                error "has line longer than $WIDTH_REG columns."
+        elif ! $HAS_BODY && ! $HAS_LAST_BLANK; then
+                error "has no blank line after summary."
+        else
+                HAS_BODY=true
+        fi
+        HAS_LAST_BLANK=false
+}
+
+# Add a new unique Change-Id
+#
+new_changeid() {
+        local NEWID=$({
+                        git var GIT_AUTHOR_IDENT
+                        git var GIT_COMMITTER_IDENT
+                        git write-tree
+                        git rev-parse HEAD 2>/dev/null
+                        grep -v "^$SIGNOFF" "$ORIGINAL" | git stripspace -s
+                } | git hash-object --stdin)
+        (( ${#NEWID} > 0 )) ||
+                die "git hash-object failed for $CHANGEID:"
+
+        echo "$CHANGEID I$NEWID"
+}
+
+# A commit message error was encountered.
+# All output redirected to stderr.
+#
+error() {
+        (( ${#LINE} > 0 )) && echo "line $NUM: $LINE"
+        echo "error: commit message $*" | fmt
+        HAS_ERROR=true
+} 1>&2
+
+usage() {
+        exec 1>&2
+        cat <<- EOF
+
+	See http://wiki.whamcloud.com/display/PUB/Commit+Comments
+	for full details.  An example valid commit comment is:
+
+	LU-nnn component: short description of change under 64 columns
+
+	The "component:" should be a lower-case single-word subsystem of the
+	Lustre code that best encompasses the change being made.  Examples of
+	components include modules like: llite, lov, lmv, osc, mdc, ldlm, lnet,
+	ptlrpc, mds, oss, osd, ldiskfs, libcfs, socklnd, o2iblnd; functional
+	subsystems like: recovery, quota, grant; and auxilliary areas like:
+	build, tests, docs.  This list is not exhaustive, but is a guideline.
+
+	The commit comment should contain a detailed explanation of the change
+	being made.  This can be as long as you'd like.  Please give details
+	of what problem was solved (including error messages or problems that
+	were seen), a good high-level description of how it was solved, and
+	which parts of the code were changed (including important functions
+	that were changed, if this is useful to understand the patch, and
+	for easier searching).  Wrap lines at/under $WIDTH_REG columns.
+
+	Finish the comment with a blank line and a blank-line-free
+	sign off section:
+
+	$SIGNOFF Your Real Name <your_email@domain.name>
+	$CHANGEID Ixxxx(added automatically if missing)xxxx
+
+	The "$CHANGEID" line should only be there when updating a previous
+	commit/submission.  Copy the one from the original commit.
+
+	The "sign off section" may also include several other tag lines:
+	$(for T in $(tr '|' ' ' <<< "$INNOCUOUS"); do       \
+	     echo "    $T: Some Person <email@domain.com>"; \
+	  done)
+	$TESTPARAMS optional additional test parameters
+	{Organization}-bug-id: associated external change identifier
+	EOF
+
+        mv "$ORIGINAL" "$SAVE" &&
+                echo "$0: saved original commit comment to $SAVE" 1>&2
+}
+
+init ${1+"$@"}
+exec 3< "$ORIGINAL" 4> "$REVISED" || exit 1
+
+while IFS= read -u3 LINE; do
+        ((NUM += 1))
+        case "$LINE" in
+        $SIGNOFF* )   do_signoff   ;;
+        $CHANGEID* )  do_changeid  ;;
+        $TESTPARAMS* ) ck_wrapup   ;;
+
+        "")
+                HAS_LAST_BLANK=true
+                $IS_WRAPPING_UP && continue
+                ;;
+
+        \#*)
+                continue ## ignore and suppress comments
+                ;;
+
+        "diff --git a/"* )
+                # Beginning of uncommented diffstat from "commit -v".  If
+                # there are diff and index lines, skip the rest of the input:
+                #   diff --git a/build/commit-msg b/build/commit-msg
+                #   index 80a3442..acb4c50 100755
+                #   deleted file mode 100644
+                #   old mode 100644
+                # If a "diff --git" line is not followed by one of these
+                # lines, do the default line processing on both lines.
+                #
+                IFS= read -u3 INDEX || break
+                ((NUM += 1))
+                case "$INDEX" in
+                "index "[0-9a-fA-F]*) break ;;
+                "deleted file mode "*) break  ;;
+                "old mode "*) break ;;
+                esac
+                LINE=${LINE}$'\n'${INDEX}
+                do_default_line
+                ;;
+
+        *)
+                if [[ "$LINE" =~ ^($INNOCUOUS): ]]; then
+                        do_innocuous
+                elif [[ "$LINE" =~ ^[A-Za-z0-9_-]+-bug-id: ]]; then
+                        ck_wrapup
+                else
+                        # Allow arbitrary external bug identifiers for tracking.
+                        # I can't seem to find a pattern for the "case" that
+                        # checks for "*-bug-id", so this is checked here.
+                        do_default_line
+                fi
+                ;;
+        esac
+
+        echo "$LINE" >&4
+done
+
+(( NUM <= 0 )) && die "empty commit message"
+
+unset LINE
+$HAS_SIGNOFF || error "missing valid $SIGNOFF: line."
+
+if $HAS_ERROR; then
+        exec 3<&- 4>&-
+        usage
+        rm "$REVISED"
+        exit 1
+fi
+
+$HAS_CHANGEID || new_changeid >&4
+exec 3<&- 4>&-
+
+mv "$REVISED" "$ORIGINAL"
+
+## Local Variables:
+## Mode: shell-script
+## sh-basic-offset:          8
+## sh-indent-after-do:       8
+## sh-indentation:           8
+## sh-indent-for-case-label: 0
+## sh-indent-for-case-alt:   8
+## End:
