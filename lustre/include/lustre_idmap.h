@@ -78,7 +78,7 @@ struct lustre_idmap_table {
 
 extern void lustre_groups_from_list(cfs_group_info_t *ginfo, gid_t *glist);
 extern void lustre_groups_sort(cfs_group_info_t *group_info);
-extern int lustre_in_group_p(struct md_ucred *mu, gid_t grp);
+extern int lustre_in_group_p(struct lu_ucred *mu, gid_t grp);
 
 extern int lustre_idmap_add(struct lustre_idmap_table *t,
                             uid_t ruid, uid_t luid,
@@ -86,12 +86,12 @@ extern int lustre_idmap_add(struct lustre_idmap_table *t,
 extern int lustre_idmap_del(struct lustre_idmap_table *t,
                             uid_t ruid, uid_t luid,
                             gid_t rgid, gid_t lgid);
-extern int lustre_idmap_lookup_uid(struct md_ucred *mu,
-                                   struct lustre_idmap_table *t,
-                                   int reverse, uid_t uid);
-extern int lustre_idmap_lookup_gid(struct md_ucred *mu,
-                                   struct lustre_idmap_table *t,
-                                   int reverse, gid_t gid);
+extern int lustre_idmap_lookup_uid(struct lu_ucred *mu,
+				   struct lustre_idmap_table *t,
+				   int reverse, uid_t uid);
+extern int lustre_idmap_lookup_gid(struct lu_ucred *mu,
+				   struct lustre_idmap_table *t,
+				   int reverse, gid_t gid);
 extern struct lustre_idmap_table *lustre_idmap_init(void);
 extern void lustre_idmap_fini(struct lustre_idmap_table *t);
 

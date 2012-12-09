@@ -345,31 +345,31 @@ int mdd_may_unlink(const struct lu_env *env, struct mdd_object *pobj,
  * VTX feature has been checked already, no need check again.
  */
 static inline int mdd_is_sticky(const struct lu_env *env,
-                                struct mdd_object *pobj,
-                                struct mdd_object *cobj)
+				struct mdd_object *pobj,
+				struct mdd_object *cobj)
 {
-        struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
-        struct md_ucred *uc = md_ucred(env);
-        int rc;
+	struct lu_attr *tmp_la = &mdd_env_info(env)->mti_la;
+	struct lu_ucred *uc = lu_ucred_assert(env);
+	int rc;
 
-        if (pobj) {
-                rc = mdd_la_get(env, pobj, tmp_la, BYPASS_CAPA);
-                if (rc)
-                        return rc;
+	if (pobj) {
+		rc = mdd_la_get(env, pobj, tmp_la, BYPASS_CAPA);
+		if (rc)
+			return rc;
 
-                if (!(tmp_la->la_mode & S_ISVTX) ||
-                     (tmp_la->la_uid == uc->mu_fsuid))
-                        return 0;
-        }
+		if (!(tmp_la->la_mode & S_ISVTX) ||
+		    (tmp_la->la_uid == uc->uc_fsuid))
+			return 0;
+	}
 
-        rc = mdd_la_get(env, cobj, tmp_la, BYPASS_CAPA);
-        if (rc)
-                return rc;
+	rc = mdd_la_get(env, cobj, tmp_la, BYPASS_CAPA);
+	if (rc)
+		return rc;
 
-        if (tmp_la->la_uid == uc->mu_fsuid)
-                return 0;
+	if (tmp_la->la_uid == uc->uc_fsuid)
+		return 0;
 
-        return !mdd_capable(uc, CFS_CAP_FOWNER);
+	return !mdd_capable(uc, CFS_CAP_FOWNER);
 }
 
 /*
@@ -499,27 +499,28 @@ static int __mdd_index_delete_only(const struct lu_env *env, struct mdd_object *
 }
 
 static int __mdd_index_insert_only(const struct lu_env *env,
-                                   struct mdd_object *pobj,
-                                   const struct lu_fid *lf, const char *name,
-                                   struct thandle *handle,
-                                   struct lustre_capa *capa)
+				   struct mdd_object *pobj,
+				   const struct lu_fid *lf, const char *name,
+				   struct thandle *handle,
+				   struct lustre_capa *capa)
 {
-        struct dt_object *next = mdd_object_child(pobj);
-        int               rc;
-        ENTRY;
+	struct dt_object *next = mdd_object_child(pobj);
+	int               rc;
+	ENTRY;
 
-        if (dt_try_as_dir(env, next)) {
-                struct md_ucred  *uc = md_ucred(env);
+	if (dt_try_as_dir(env, next)) {
+		struct lu_ucred  *uc = lu_ucred_check(env);
+		int ignore_quota;
 
-                rc = next->do_index_ops->dio_insert(env, next,
-                                                    (struct dt_rec*)lf,
-                                                    (const struct dt_key *)name,
-                                                    handle, capa, uc->mu_cap &
-                                                    CFS_CAP_SYS_RESOURCE_MASK);
-        } else {
-                rc = -ENOTDIR;
-        }
-        RETURN(rc);
+		ignore_quota = uc ? uc->uc_cap & CFS_CAP_SYS_RESOURCE_MASK : 1;
+		rc = next->do_index_ops->dio_insert(env, next,
+						    (struct dt_rec*)lf,
+						    (const struct dt_key *)name,
+						    handle, capa, ignore_quota);
+	} else {
+		rc = -ENOTDIR;
+	}
+	RETURN(rc);
 }
 
 /* insert named index, add reference if isdir */
@@ -1795,7 +1796,7 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
         inserted = 1;
 
         if (S_ISLNK(attr->la_mode)) {
-                struct md_ucred  *uc = md_ucred(env);
+		struct lu_ucred  *uc = lu_ucred_assert(env);
                 struct dt_object *dt = mdd_object_child(son);
                 const char *target_name = spec->u.sp_symname;
                 int sym_len = strlen(target_name);
@@ -1803,10 +1804,10 @@ static int mdd_create(const struct lu_env *env, struct md_object *pobj,
                 loff_t pos = 0;
 
                 buf = mdd_buf_get_const(env, target_name, sym_len);
-                rc = dt->do_body_ops->dbo_write(env, dt, buf, &pos, handle,
-                                                mdd_object_capa(env, son),
-                                                uc->mu_cap &
-                                                CFS_CAP_SYS_RESOURCE_MASK);
+		rc = dt->do_body_ops->dbo_write(env, dt, buf, &pos, handle,
+						mdd_object_capa(env, son),
+						uc->uc_cap &
+						CFS_CAP_SYS_RESOURCE_MASK);
 
                 if (rc == sym_len)
                         rc = 0;

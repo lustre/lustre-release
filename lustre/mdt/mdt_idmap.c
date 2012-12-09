@@ -387,7 +387,7 @@ int ptlrpc_user_desc_do_idmap(struct ptlrpc_request *req,
 void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
 {
         struct ptlrpc_request     *req = mdt_info_req(info);
-        struct md_ucred           *uc = mdt_ucred(info);
+	struct lu_ucred           *uc = mdt_ucred(info);
         struct mdt_export_data    *med = mdt_req2med(req);
         struct lustre_idmap_table *idmap = med->med_idmap;
 
@@ -425,21 +425,21 @@ void mdt_body_reverse_idmap(struct mdt_thread_info *info, struct mdt_body *body)
 int mdt_fix_attr_ucred(struct mdt_thread_info *info, __u32 op)
 {
         struct ptlrpc_request     *req = mdt_info_req(info);
-        struct md_ucred           *uc = mdt_ucred(info);
+	struct lu_ucred           *uc = mdt_ucred_check(info);
         struct lu_attr            *attr = &info->mti_attr.ma_attr;
         struct mdt_export_data    *med = mdt_req2med(req);
         struct lustre_idmap_table *idmap = med->med_idmap;
 
-        if ((uc->mu_valid != UCRED_OLD) && (uc->mu_valid != UCRED_NEW))
-                return -EINVAL;
+	if (uc == NULL)
+		return -EINVAL;
 
         if (op != REINT_SETATTR) {
-                if ((attr->la_valid & LA_UID) && (attr->la_uid != -1))
-                        attr->la_uid = uc->mu_fsuid;
-                /* for S_ISGID, inherit gid from his parent, such work will be
-                 * done in cmm/mdd layer, here set all cases as uc->mu_fsgid. */
-                if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
-                        attr->la_gid = uc->mu_fsgid;
+		if ((attr->la_valid & LA_UID) && (attr->la_uid != -1))
+			attr->la_uid = uc->uc_fsuid;
+		/* for S_ISGID, inherit gid from his parent, such work will be
+		 * done in cmm/mdd layer, here set all cases as uc->uc_fsgid. */
+		if ((attr->la_valid & LA_GID) && (attr->la_gid != -1))
+			attr->la_gid = uc->uc_fsgid;
         } else if (exp_connect_rmtclient(info->mti_exp)) {
                 /* NB: -1 case will be handled by mdt_fix_attr() later. */
                 if ((attr->la_valid & LA_UID) && (attr->la_uid != -1)) {

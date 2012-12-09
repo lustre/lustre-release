@@ -111,7 +111,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct mdt_export_data *med = mdt_req2med(req);
-        struct md_ucred        *uc  = mdt_ucred(info);
+	struct lu_ucred        *uc  = mdt_ucred(info);
         struct mdt_body        *reqbody;
         struct mdt_body        *repbody = NULL;
         struct md_object       *next;
@@ -130,7 +130,7 @@ int mdt_getxattr(struct mdt_thread_info *info)
         if (reqbody == NULL)
                 RETURN(err_serious(-EFAULT));
 
-        rc = mdt_init_ucred(info, reqbody);
+	rc = mdt_init_ucred(info, reqbody);
         if (rc)
                 RETURN(err_serious(rc));
 
@@ -140,8 +140,8 @@ int mdt_getxattr(struct mdt_thread_info *info)
                 if (unlikely(!remote))
                         GOTO(out, rc = err_serious(-EINVAL));
 
-                perm = mdt_identity_get_perm(uc->mu_identity, remote,
-                                             req->rq_peer.nid);
+		perm = mdt_identity_get_perm(uc->uc_identity, remote,
+					     req->rq_peer.nid);
                 if (!(perm & CFS_RMTACL_PERM))
                         GOTO(out, rc = err_serious(-EPERM));
 
@@ -226,7 +226,7 @@ static int mdt_rmtlsetfacl(struct mdt_thread_info *info,
 {
         struct ptlrpc_request  *req = mdt_info_req(info);
         struct mdt_export_data *med = mdt_req2med(req);
-        struct md_ucred        *uc = mdt_ucred(info);
+	struct lu_ucred        *uc = mdt_ucred(info);
         struct lu_buf          *buf = &info->mti_buf;
         int                     rc;
         ENTRY;
@@ -269,7 +269,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                        struct mdt_lock_handle *unused)
 {
         struct ptlrpc_request   *req = mdt_info_req(info);
-        struct md_ucred         *uc  = mdt_ucred(info);
+	struct lu_ucred         *uc  = mdt_ucred(info);
         struct mdt_lock_handle  *lh;
         const struct lu_env     *env  = info->mti_env;
         struct lu_buf           *buf  = &info->mti_buf;
@@ -296,7 +296,7 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         CDEBUG(D_INODE, "%s xattr %s\n",
                valid & OBD_MD_FLXATTR ? "set" : "remove", xattr_name);
 
-        rc = mdt_init_ucred_reint(info);
+	rc = mdt_init_ucred_reint(info);
         if (rc != 0)
                 RETURN(rc);
 
@@ -304,8 +304,8 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
                 if (unlikely(!remote))
                         GOTO(out, rc = err_serious(-EINVAL));
 
-                perm = mdt_identity_get_perm(uc->mu_identity, remote,
-                                             req->rq_peer.nid);
+		perm = mdt_identity_get_perm(uc->uc_identity, remote,
+					     req->rq_peer.nid);
                 if (!(perm & CFS_RMTACL_PERM))
                         GOTO(out, rc = err_serious(-EPERM));
         }
@@ -422,6 +422,6 @@ out_unlock:
         if (unlikely(new_xattr != NULL))
                 lustre_posix_acl_xattr_free(new_xattr, xattr_len);
 out:
-        mdt_exit_ucred(info);
-        return rc;
+	mdt_exit_ucred(info);
+	return rc;
 }

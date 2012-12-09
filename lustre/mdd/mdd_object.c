@@ -720,7 +720,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 			struct lu_attr *la, const unsigned long flags)
 {
         struct lu_attr   *tmp_la     = &mdd_env_info(env)->mti_la;
-        struct md_ucred  *uc;
+	struct lu_ucred  *uc;
         int               rc;
         ENTRY;
 
@@ -735,12 +735,11 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         if (la->la_valid & (LA_NLINK | LA_RDEV | LA_BLKSIZE))
                 RETURN(-EPERM);
 
-        /* export destroy does not have ->le_ses, but we may want
-         * to drop LUSTRE_SOM_FL. */
-        if (!env->le_ses)
-                RETURN(0);
-
-        uc = md_ucred(env);
+	/* export destroy does not have ->le_ses, but we may want
+	 * to drop LUSTRE_SOM_FL. */
+	uc = lu_ucred_check(env);
+	if (uc == NULL)
+		RETURN(0);
 
         rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
         if (rc)
@@ -771,9 +770,9 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                 unsigned int newflags = la->la_flags &
                                 (LUSTRE_IMMUTABLE_FL | LUSTRE_APPEND_FL);
 
-                if ((uc->mu_fsuid != tmp_la->la_uid) &&
-                    !mdd_capable(uc, CFS_CAP_FOWNER))
-                        RETURN(-EPERM);
+		if ((uc->uc_fsuid != tmp_la->la_uid) &&
+		    !mdd_capable(uc, CFS_CAP_FOWNER))
+			RETURN(-EPERM);
 
                 /* XXX: the IMMUTABLE and APPEND_ONLY flags can
                  * only be changed by the relevant capability. */
@@ -794,17 +793,17 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
 	    !(flags & MDS_PERM_BYPASS))
                 RETURN(-EPERM);
 
-        /* Check for setting the obj time. */
-        if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
-            !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
-                if ((uc->mu_fsuid != tmp_la->la_uid) &&
-                    !mdd_capable(uc, CFS_CAP_FOWNER)) {
+	/* Check for setting the obj time. */
+	if ((la->la_valid & (LA_MTIME | LA_ATIME | LA_CTIME)) &&
+	    !(la->la_valid & ~(LA_MTIME | LA_ATIME | LA_CTIME))) {
+		if ((uc->uc_fsuid != tmp_la->la_uid) &&
+		    !mdd_capable(uc, CFS_CAP_FOWNER)) {
 			rc = mdd_permission_internal(env, obj, tmp_la,
 						     MAY_WRITE);
-                        if (rc)
-                                RETURN(rc);
-                }
-        }
+			if (rc)
+				RETURN(rc);
+		}
+	}
 
         if (la->la_valid & LA_KILL_SUID) {
                 la->la_valid &= ~LA_KILL_SUID;
@@ -830,9 +829,9 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         /* Make sure a caller can chmod. */
         if (la->la_valid & LA_MODE) {
 		if (!(flags & MDS_PERM_BYPASS) &&
-                    (uc->mu_fsuid != tmp_la->la_uid) &&
-                    !mdd_capable(uc, CFS_CAP_FOWNER))
-                        RETURN(-EPERM);
+		    (uc->uc_fsuid != tmp_la->la_uid) &&
+		    !mdd_capable(uc, CFS_CAP_FOWNER))
+			RETURN(-EPERM);
 
                 if (la->la_mode == (cfs_umode_t) -1)
                         la->la_mode = tmp_la->la_mode;
@@ -853,10 +852,10 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         if (la->la_valid & LA_UID) {
                 if (la->la_uid == (uid_t) -1)
                         la->la_uid = tmp_la->la_uid;
-                if (((uc->mu_fsuid != tmp_la->la_uid) ||
-                    (la->la_uid != tmp_la->la_uid)) &&
-                    !mdd_capable(uc, CFS_CAP_CHOWN))
-                        RETURN(-EPERM);
+		if (((uc->uc_fsuid != tmp_la->la_uid) ||
+		     (la->la_uid != tmp_la->la_uid)) &&
+		    !mdd_capable(uc, CFS_CAP_CHOWN))
+			RETURN(-EPERM);
 
                 /* If the user or group of a non-directory has been
                  * changed by a non-root user, remove the setuid bit.
@@ -878,11 +877,11 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         if (la->la_valid & LA_GID) {
                 if (la->la_gid == (gid_t) -1)
                         la->la_gid = tmp_la->la_gid;
-                if (((uc->mu_fsuid != tmp_la->la_uid) ||
-                    ((la->la_gid != tmp_la->la_gid) &&
-                    !lustre_in_group_p(uc, la->la_gid))) &&
-                    !mdd_capable(uc, CFS_CAP_CHOWN))
-                        RETURN(-EPERM);
+		if (((uc->uc_fsuid != tmp_la->la_uid) ||
+		     ((la->la_gid != tmp_la->la_gid) &&
+		      !lustre_in_group_p(uc, la->la_gid))) &&
+		    !mdd_capable(uc, CFS_CAP_CHOWN))
+			RETURN(-EPERM);
 
                 /* Likewise, if the user or group of a non-directory
                  * has been changed by a non-root user, remove the
@@ -920,7 +919,7 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
         } else {
                 if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
 			if (!((flags & MDS_OPEN_OWNEROVERRIDE) &&
-                              (uc->mu_fsuid == tmp_la->la_uid)) &&
+			      (uc->uc_fsuid == tmp_la->la_uid)) &&
 			    !(flags & MDS_PERM_BYPASS)) {
 				rc = mdd_permission_internal(env, obj,
 							     tmp_la, MAY_WRITE);
@@ -1160,25 +1159,25 @@ stop:
 }
 
 static int mdd_xattr_sanity_check(const struct lu_env *env,
-                                  struct mdd_object *obj)
+				  struct mdd_object *obj)
 {
-        struct lu_attr  *tmp_la = &mdd_env_info(env)->mti_la;
-        struct md_ucred *uc     = md_ucred(env);
-        int rc;
-        ENTRY;
+	struct lu_attr  *tmp_la = &mdd_env_info(env)->mti_la;
+	struct lu_ucred *uc     = lu_ucred_assert(env);
+	int rc;
+	ENTRY;
 
-        if (mdd_is_immutable(obj) || mdd_is_append(obj))
-                RETURN(-EPERM);
+	if (mdd_is_immutable(obj) || mdd_is_append(obj))
+		RETURN(-EPERM);
 
-        rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
-        if (rc)
-                RETURN(rc);
+	rc = mdd_la_get(env, obj, tmp_la, BYPASS_CAPA);
+	if (rc)
+		RETURN(rc);
 
-        if ((uc->mu_fsuid != tmp_la->la_uid) &&
-            !mdd_capable(uc, CFS_CAP_FOWNER))
-                RETURN(-EPERM);
+	if ((uc->uc_fsuid != tmp_la->la_uid) &&
+	    !mdd_capable(uc, CFS_CAP_FOWNER))
+		RETURN(-EPERM);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 static int mdd_declare_xattr_set(const struct lu_env *env,
@@ -1351,28 +1350,27 @@ void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
  */
 int accmode(const struct lu_env *env, struct lu_attr *la, int flags)
 {
-        int res = 0;
+	int res = 0;
 
-        /* Sadly, NFSD reopens a file repeatedly during operation, so the
-         * "acc_mode = 0" allowance for newly-created files isn't honoured.
-         * NFSD uses the MDS_OPEN_OWNEROVERRIDE flag to say that a file
-         * owner can write to a file even if it is marked readonly to hide
-         * its brokenness. (bug 5781) */
-        if (flags & MDS_OPEN_OWNEROVERRIDE) {
-                struct md_ucred *uc = md_ucred(env);
+	/* Sadly, NFSD reopens a file repeatedly during operation, so the
+	 * "acc_mode = 0" allowance for newly-created files isn't honoured.
+	 * NFSD uses the MDS_OPEN_OWNEROVERRIDE flag to say that a file
+	 * owner can write to a file even if it is marked readonly to hide
+	 * its brokenness. (bug 5781) */
+	if (flags & MDS_OPEN_OWNEROVERRIDE) {
+		struct lu_ucred *uc = lu_ucred_check(env);
 
-                if ((uc == NULL) || (uc->mu_valid == UCRED_INIT) ||
-                    (la->la_uid == uc->mu_fsuid))
-                        return 0;
-        }
+		if ((uc == NULL) || (la->la_uid == uc->uc_fsuid))
+			return 0;
+	}
 
-        if (flags & FMODE_READ)
-                res |= MAY_READ;
-        if (flags & (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
-                res |= MAY_WRITE;
-        if (flags & MDS_FMODE_EXEC)
-                res = MAY_EXEC;
-        return res;
+	if (flags & FMODE_READ)
+		res |= MAY_READ;
+	if (flags & (FMODE_WRITE | MDS_OPEN_TRUNC | MDS_OPEN_APPEND))
+		res |= MAY_WRITE;
+	if (flags & MDS_FMODE_EXEC)
+		res = MAY_EXEC;
+	return res;
 }
 
 static int mdd_open_sanity_check(const struct lu_env *env,
@@ -1421,13 +1419,13 @@ static int mdd_open_sanity_check(const struct lu_env *env,
          * Now, flag -- O_NOATIME does not be packed by client.
          */
         if (flag & O_NOATIME) {
-                struct md_ucred *uc = md_ucred(env);
+		struct lu_ucred *uc = lu_ucred(env);
 
-                if (uc && ((uc->mu_valid == UCRED_OLD) ||
-                    (uc->mu_valid == UCRED_NEW)) &&
-                    (uc->mu_fsuid != tmp_la->la_uid) &&
-                    !mdd_capable(uc, CFS_CAP_FOWNER))
-                        RETURN(-EPERM);
+		if (uc && ((uc->uc_valid == UCRED_OLD) ||
+			   (uc->uc_valid == UCRED_NEW)) &&
+		    (uc->uc_fsuid != tmp_la->la_uid) &&
+		    !mdd_capable(uc, CFS_CAP_FOWNER))
+			RETURN(-EPERM);
         }
 #endif
 

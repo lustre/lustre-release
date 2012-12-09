@@ -74,9 +74,9 @@ typedef struct {
 #define CFS_ACL_XATTR_COUNT(size, prefix) \
         (((size) - sizeof(prefix ## _header)) / sizeof(prefix ## _entry))
 
-extern int lustre_posix_acl_permission(struct md_ucred *mu, struct lu_attr *la,
-                                       int want, posix_acl_xattr_entry *entry,
-                                       int count);
+extern int lustre_posix_acl_permission(struct lu_ucred *mu, struct lu_attr *la,
+				       int want, posix_acl_xattr_entry *entry,
+				       int count);
 extern int lustre_posix_acl_chmod_masq(posix_acl_xattr_entry *entry,
                                        __u32 mode, int count);
 extern int lustre_posix_acl_create_masq(posix_acl_xattr_entry *entry,
@@ -90,16 +90,16 @@ extern int
 lustre_posix_acl_xattr_filter(posix_acl_xattr_header *header, int size,
                               posix_acl_xattr_header **out);
 extern int
-lustre_posix_acl_xattr_id2client(struct md_ucred *mu,
-                                 struct lustre_idmap_table *t,
-                                 posix_acl_xattr_header *header,
-                                 int size, int flags);
+lustre_posix_acl_xattr_id2client(struct lu_ucred *mu,
+				 struct lustre_idmap_table *t,
+				 posix_acl_xattr_header *header,
+				 int size, int flags);
 extern void
 lustre_posix_acl_xattr_free(posix_acl_xattr_header *header, int size);
 extern int
-lustre_ext_acl_xattr_id2server(struct md_ucred *mu,
-                               struct lustre_idmap_table *t,
-                               ext_acl_xattr_header *header);
+lustre_ext_acl_xattr_id2server(struct lu_ucred *mu,
+			       struct lustre_idmap_table *t,
+			       ext_acl_xattr_header *header);
 extern void
 lustre_ext_acl_xattr_free(ext_acl_xattr_header *header);
 extern int

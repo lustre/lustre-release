@@ -1675,6 +1675,7 @@ int mdt_close(struct mdt_thread_info *info)
                 mdt_client_compatibility(info);
                 if (rc == 0)
                         mdt_fix_reply(info);
+		mdt_exit_ucred(info);
                 RETURN(lustre_msg_get_status(req->rq_repmsg));
         }
 
@@ -1728,6 +1729,7 @@ int mdt_close(struct mdt_thread_info *info)
                 rc = mdt_fix_reply(info);
         }
 
+	mdt_exit_ucred(info);
         if (OBD_FAIL_CHECK(OBD_FAIL_MDS_CLOSE_PACK))
                 RETURN(err_serious(-ENOMEM));
 
@@ -1768,8 +1770,10 @@ int mdt_done_writing(struct mdt_thread_info *info)
         if (rc)
                 RETURN(err_serious(rc));
 
-        if (mdt_check_resent(info, mdt_reconstruct_generic, NULL))
-                RETURN(lustre_msg_get_status(req->rq_repmsg));
+	if (mdt_check_resent(info, mdt_reconstruct_generic, NULL)) {
+		mdt_exit_ucred(info);
+		RETURN(lustre_msg_get_status(req->rq_repmsg));
+	}
 
         med = &info->mti_exp->exp_mdt_data;
 	spin_lock(&med->med_open_lock);
@@ -1786,9 +1790,9 @@ int mdt_done_writing(struct mdt_thread_info *info)
                         rc = info->mti_ioepoch->flags & MF_SOM_AU ?
                              -EAGAIN : 0;
                         mdt_empty_transno(info, rc);
-                        RETURN(rc);
-                }
-                RETURN(-ESTALE);
+		} else
+			rc = -ESTALE;
+		GOTO(error_ucred, rc);
         }
 
         LASSERT(mfd->mfd_mode == MDS_FMODE_EPOCH ||
@@ -1803,12 +1807,14 @@ int mdt_done_writing(struct mdt_thread_info *info)
 
         info->mti_attr.ma_lmm_size = info->mti_mdt->mdt_max_mdsize;
         OBD_ALLOC_LARGE(info->mti_attr.ma_lmm, info->mti_mdt->mdt_max_mdsize);
-        if (info->mti_attr.ma_lmm == NULL)
-                RETURN(-ENOMEM);
+	if (info->mti_attr.ma_lmm == NULL)
+		GOTO(error_ucred, rc = -ENOMEM);
 
         rc = mdt_mfd_close(info, mfd);
 
         OBD_FREE_LARGE(info->mti_attr.ma_lmm, info->mti_mdt->mdt_max_mdsize);
         mdt_empty_transno(info, rc);
-        RETURN(rc);
+error_ucred:
+	mdt_exit_ucred(info);
+	RETURN(rc);
 }

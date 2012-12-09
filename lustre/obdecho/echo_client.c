@@ -2091,6 +2091,33 @@ static struct lu_object *echo_resolve_path(const struct lu_env *env,
         RETURN(parent);
 }
 
+static void echo_ucred_init(struct lu_env *env)
+{
+	struct lu_ucred *ucred = lu_ucred(env);
+
+	ucred->uc_valid = UCRED_INVALID;
+
+	ucred->uc_suppgids[0] = -1;
+	ucred->uc_suppgids[1] = -1;
+
+	ucred->uc_uid   = ucred->uc_o_uid   = cfs_curproc_uid();
+	ucred->uc_gid   = ucred->uc_o_gid   = cfs_curproc_gid();
+	ucred->uc_fsuid = ucred->uc_o_fsuid = cfs_curproc_fsuid();
+	ucred->uc_fsgid = ucred->uc_o_fsgid = cfs_curproc_fsgid();
+	ucred->uc_cap   = cfs_curproc_cap_pack();
+
+	/* remove fs privilege for non-root user. */
+	if (ucred->uc_fsuid)
+		ucred->uc_cap &= ~CFS_CAP_FS_MASK;
+	ucred->uc_valid = UCRED_NEW;
+}
+
+static void echo_ucred_fini(struct lu_env *env)
+{
+	struct lu_ucred *ucred = lu_ucred(env);
+	ucred->uc_valid = UCRED_INIT;
+}
+
 #define ECHO_MD_CTX_TAG (LCT_REMEMBER | LCT_MD_THREAD)
 #define ECHO_MD_SES_TAG (LCT_REMEMBER | LCT_SESSION)
 static int echo_md_handler(struct echo_device *ed, int command,
@@ -2148,6 +2175,8 @@ static int echo_md_handler(struct echo_device *ed, int command,
 			GOTO(out_name, rc = -EFAULT);
         }
 
+	echo_ucred_init(env);
+
         switch (command) {
         case ECHO_MD_CREATE:
         case ECHO_MD_MKDIR: {
@@ -2190,6 +2219,8 @@ static int echo_md_handler(struct echo_device *ed, int command,
                 rc = -EINVAL;
                 break;
         }
+	echo_ucred_fini(env);
+
 out_name:
         if (name != NULL)
                 OBD_FREE(name, namelen + 1);

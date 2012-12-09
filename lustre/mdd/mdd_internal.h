@@ -453,11 +453,11 @@ struct lu_object *mdd_object_alloc(const struct lu_env *env,
 #define mdd_cap_raised(c, flag) (mdd_cap_t(c) & MDD_CAP_TO_MASK(flag))
 
 /* capable() is copied from linux kernel! */
-static inline int mdd_capable(struct md_ucred *uc, cfs_cap_t cap)
+static inline int mdd_capable(struct lu_ucred *uc, cfs_cap_t cap)
 {
-        if (mdd_cap_raised(uc->mu_cap, cap))
-                return 1;
-        return 0;
+	if (mdd_cap_raised(uc->uc_cap, cap))
+		return 1;
+	return 0;
 }
 
 int mdd_acl_chmod(const struct lu_env *env, struct mdd_object *o, __u32 mode,
@@ -846,7 +846,7 @@ int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
                    struct thandle *handle)
 {
         struct dt_object *next = mdd_object_child(o);
-	struct md_ucred *uc = md_ucred(env);
+	struct lu_ucred *uc = lu_ucred(env);
 	__u32 saved;
 	int rc;
 
@@ -854,7 +854,7 @@ int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
 	 *  LU-974 enforce client umask in creation.
 	 * TODO: CMD needs to handle this for remote object.
 	 */
-        saved = xchg(&current->fs->umask, uc->mu_umask & S_IRWXUGO);
+	saved = xchg(&current->fs->umask, uc->uc_umask & S_IRWXUGO);
 
 	rc = next->do_ops->do_create(env, next, attr, hint, dof, handle);
 

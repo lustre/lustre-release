@@ -709,7 +709,8 @@ static inline int mdt_check_resent(struct mdt_thread_info *info,
         RETURN(0);
 }
 
-struct md_ucred *mdt_ucred(const struct mdt_thread_info *info);
+struct lu_ucred *mdt_ucred(const struct mdt_thread_info *info);
+struct lu_ucred *mdt_ucred_check(const struct mdt_thread_info *info);
 
 static inline int is_identity_get_disabled(struct upcall_cache *cache)
 {

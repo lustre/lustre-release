@@ -6249,9 +6249,14 @@ static void mdt_key_fini(const struct lu_context *ctx,
 /* context key: mdt_thread_key */
 LU_CONTEXT_KEY_DEFINE(mdt, LCT_MD_THREAD);
 
-struct md_ucred *mdt_ucred(const struct mdt_thread_info *info)
+struct lu_ucred *mdt_ucred(const struct mdt_thread_info *info)
 {
-        return md_ucred(info->mti_env);
+	return lu_ucred(info->mti_env);
+}
+
+struct lu_ucred *mdt_ucred_check(const struct mdt_thread_info *info)
+{
+	return lu_ucred_check(info->mti_env);
 }
 
 /**

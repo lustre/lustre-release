@@ -60,22 +60,23 @@ typedef enum ucred_init_type {
 
 void mdt_exit_ucred(struct mdt_thread_info *info)
 {
-        struct md_ucred   *uc  = mdt_ucred(info);
-        struct mdt_device *mdt = info->mti_mdt;
+	struct lu_ucred   *uc  = mdt_ucred(info);
+	struct mdt_device *mdt = info->mti_mdt;
 
-        if (uc->mu_valid != UCRED_INIT) {
-                uc->mu_suppgids[0] = uc->mu_suppgids[1] = -1;
-                if (uc->mu_ginfo) {
-                        cfs_put_group_info(uc->mu_ginfo);
-                        uc->mu_ginfo = NULL;
-                }
-                if (uc->mu_identity) {
-                        mdt_identity_put(mdt->mdt_identity_cache,
-                                         uc->mu_identity);
-                        uc->mu_identity = NULL;
-                }
-                uc->mu_valid = UCRED_INIT;
-        }
+	LASSERT(uc != NULL);
+	if (uc->uc_valid != UCRED_INIT) {
+		uc->uc_suppgids[0] = uc->uc_suppgids[1] = -1;
+		if (uc->uc_ginfo) {
+			cfs_put_group_info(uc->uc_ginfo);
+			uc->uc_ginfo = NULL;
+		}
+		if (uc->uc_identity) {
+			mdt_identity_put(mdt->mdt_identity_cache,
+					 uc->uc_identity);
+			uc->uc_identity = NULL;
+		}
+		uc->uc_valid = UCRED_INIT;
+	}
 }
 
 static int match_nosquash_list(struct rw_semaphore *sem,
@@ -93,11 +94,12 @@ static int match_nosquash_list(struct rw_semaphore *sem,
 /* root_squash for inter-MDS operations */
 static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
 {
-        struct md_ucred *ucred = mdt_ucred(info);
-        ENTRY;
+	struct lu_ucred *ucred = mdt_ucred(info);
+	ENTRY;
 
-        if (!info->mti_mdt->mdt_squash_uid || ucred->mu_fsuid)
-                RETURN(0);
+	LASSERT(ucred != NULL);
+	if (!info->mti_mdt->mdt_squash_uid || ucred->uc_fsuid)
+		RETURN(0);
 
         if (match_nosquash_list(&info->mti_mdt->mdt_squash_sem,
                                 &info->mti_mdt->mdt_nosquash_nids,
@@ -107,19 +109,19 @@ static int mdt_root_squash(struct mdt_thread_info *info, lnet_nid_t peernid)
                 RETURN(0);
         }
 
-        CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
-               libcfs_nid2str(peernid),
-               ucred->mu_fsuid, ucred->mu_fsgid, ucred->mu_cap,
-               info->mti_mdt->mdt_squash_uid, info->mti_mdt->mdt_squash_gid,
-               0);
+	CDEBUG(D_OTHER, "squash req from %s, (%d:%d/%x)=>(%d:%d/%x)\n",
+	       libcfs_nid2str(peernid),
+	       ucred->uc_fsuid, ucred->uc_fsgid, ucred->uc_cap,
+	       info->mti_mdt->mdt_squash_uid, info->mti_mdt->mdt_squash_gid,
+	       0);
 
-        ucred->mu_fsuid = info->mti_mdt->mdt_squash_uid;
-        ucred->mu_fsgid = info->mti_mdt->mdt_squash_gid;
-        ucred->mu_cap = 0;
-        ucred->mu_suppgids[0] = -1;
-        ucred->mu_suppgids[1] = -1;
+	ucred->uc_fsuid = info->mti_mdt->mdt_squash_uid;
+	ucred->uc_fsgid = info->mti_mdt->mdt_squash_gid;
+	ucred->uc_cap = 0;
+	ucred->uc_suppgids[0] = -1;
+	ucred->uc_suppgids[1] = -1;
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
@@ -128,7 +130,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_device       *mdt = info->mti_mdt;
         struct ptlrpc_user_desc *pud = req->rq_user_desc;
-        struct md_ucred         *ucred = mdt_ucred(info);
+	struct lu_ucred         *ucred = mdt_ucred(info);
         lnet_nid_t               peernid = req->rq_peer.nid;
         __u32                    perm = 0;
         __u32                    remote = exp_connect_rmtclient(info->mti_exp);
@@ -141,20 +143,21 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
         LASSERT(req->rq_auth_gss);
         LASSERT(!req->rq_auth_usr_mdt);
         LASSERT(req->rq_user_desc);
+	LASSERT(ucred != NULL);
 
-        ucred->mu_valid = UCRED_INVALID;
+	ucred->uc_valid = UCRED_INVALID;
 
-        ucred->mu_o_uid   = pud->pud_uid;
-        ucred->mu_o_gid   = pud->pud_gid;
-        ucred->mu_o_fsuid = pud->pud_fsuid;
-        ucred->mu_o_fsgid = pud->pud_fsgid;
+	ucred->uc_o_uid   = pud->pud_uid;
+	ucred->uc_o_gid   = pud->pud_gid;
+	ucred->uc_o_fsuid = pud->pud_fsuid;
+	ucred->uc_o_fsgid = pud->pud_fsgid;
 
-        if (type == BODY_INIT) {
-                struct mdt_body *body = (struct mdt_body *)buf;
+	if (type == BODY_INIT) {
+		struct mdt_body *body = (struct mdt_body *)buf;
 
-                ucred->mu_suppgids[0] = body->suppgid;
-                ucred->mu_suppgids[1] = -1;
-        }
+		ucred->uc_suppgids[0] = body->suppgid;
+		ucred->uc_suppgids[1] = -1;
+	}
 
         /* sanity check: we expect the uid which client claimed is true */
         if (remote) {
@@ -192,7 +195,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                                "enabled!\n");
                         RETURN(-EACCES);
                 } else {
-                        ucred->mu_identity = NULL;
+			ucred->uc_identity = NULL;
                         perm = CFS_SETUID_PERM | CFS_SETGID_PERM |
                                CFS_SETGRP_PERM;
                 }
@@ -204,7 +207,7 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                 if (IS_ERR(identity)) {
                         if (unlikely(PTR_ERR(identity) == -EREMCHG &&
                                      !remote)) {
-                                ucred->mu_identity = NULL;
+				ucred->uc_identity = NULL;
                                 perm = CFS_SETUID_PERM | CFS_SETGID_PERM |
                                        CFS_SETGRP_PERM;
                         } else {
@@ -213,17 +216,17 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
                                 RETURN(-EACCES);
                         }
                 } else {
-                        ucred->mu_identity = identity;
-                        perm = mdt_identity_get_perm(ucred->mu_identity,
-                                                     remote, peernid);
+			ucred->uc_identity = identity;
+			perm = mdt_identity_get_perm(ucred->uc_identity,
+						     remote, peernid);
                 }
         }
 
         /* find out the setuid/setgid attempt */
         setuid = (pud->pud_uid != pud->pud_fsuid);
-        setgid = ((pud->pud_gid != pud->pud_fsgid) ||
-                  (ucred->mu_identity &&
-                  (pud->pud_gid != ucred->mu_identity->mi_gid)));
+	setgid = ((pud->pud_gid != pud->pud_fsgid) ||
+		  (ucred->uc_identity &&
+		   (pud->pud_gid != ucred->uc_identity->mi_gid)));
 
         /* check permission of setuid */
         if (setuid && !(perm & CFS_SETUID_PERM)) {
@@ -234,72 +237,72 @@ static int new_init_ucred(struct mdt_thread_info *info, ucred_init_type_t type,
 
         /* check permission of setgid */
         if (setgid && !(perm & CFS_SETGID_PERM)) {
-                CDEBUG(D_SEC, "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
-                       "from %s\n", pud->pud_uid, pud->pud_gid,
-                       pud->pud_fsuid, pud->pud_fsgid,
-                       ucred->mu_identity->mi_gid, libcfs_nid2str(peernid));
-                GOTO(out, rc = -EACCES);
+		CDEBUG(D_SEC, "mdt blocked setgid attempt (%u:%u/%u:%u -> %u) "
+		       "from %s\n", pud->pud_uid, pud->pud_gid,
+		       pud->pud_fsuid, pud->pud_fsgid,
+		       ucred->uc_identity->mi_gid, libcfs_nid2str(peernid));
+		GOTO(out, rc = -EACCES);
         }
 
         /*
          * NB: remote client not allowed to setgroups anyway.
          */
-        if (!remote && perm & CFS_SETGRP_PERM) {
-                if (pud->pud_ngroups) {
-                        /* setgroups for local client */
-                        ucred->mu_ginfo = cfs_groups_alloc(pud->pud_ngroups);
-                        if (!ucred->mu_ginfo) {
-                                CERROR("failed to alloc %d groups\n",
-                                       pud->pud_ngroups);
-                                GOTO(out, rc = -ENOMEM);
-                        }
+	if (!remote && perm & CFS_SETGRP_PERM) {
+		if (pud->pud_ngroups) {
+			/* setgroups for local client */
+			ucred->uc_ginfo = cfs_groups_alloc(pud->pud_ngroups);
+			if (!ucred->uc_ginfo) {
+				CERROR("failed to alloc %d groups\n",
+				       pud->pud_ngroups);
+				GOTO(out, rc = -ENOMEM);
+			}
 
-                        lustre_groups_from_list(ucred->mu_ginfo,
-                                                pud->pud_groups);
-                        lustre_groups_sort(ucred->mu_ginfo);
-                } else {
-                        ucred->mu_ginfo = NULL;
-                }
-        } else {
-                ucred->mu_suppgids[0] = -1;
-                ucred->mu_suppgids[1] = -1;
-                ucred->mu_ginfo = NULL;
-        }
+			lustre_groups_from_list(ucred->uc_ginfo,
+						pud->pud_groups);
+			lustre_groups_sort(ucred->uc_ginfo);
+		} else {
+			ucred->uc_ginfo = NULL;
+		}
+	} else {
+		ucred->uc_suppgids[0] = -1;
+		ucred->uc_suppgids[1] = -1;
+		ucred->uc_ginfo = NULL;
+	}
 
-        ucred->mu_uid   = pud->pud_uid;
-        ucred->mu_gid   = pud->pud_gid;
-        ucred->mu_fsuid = pud->pud_fsuid;
-        ucred->mu_fsgid = pud->pud_fsgid;
+	ucred->uc_uid   = pud->pud_uid;
+	ucred->uc_gid   = pud->pud_gid;
+	ucred->uc_fsuid = pud->pud_fsuid;
+	ucred->uc_fsgid = pud->pud_fsgid;
 
-        /* process root_squash here. */
-        mdt_root_squash(info, peernid);
+	/* process root_squash here. */
+	mdt_root_squash(info, peernid);
 
-        /* remove fs privilege for non-root user. */
-        if (ucred->mu_fsuid)
-                ucred->mu_cap = pud->pud_cap & ~CFS_CAP_FS_MASK;
-        else
-                ucred->mu_cap = pud->pud_cap;
-        if (remote && !(perm & CFS_RMTOWN_PERM))
-                ucred->mu_cap &= ~(CFS_CAP_SYS_RESOURCE_MASK |
-                                   CFS_CAP_CHOWN_MASK);
-        ucred->mu_valid = UCRED_NEW;
+	/* remove fs privilege for non-root user. */
+	if (ucred->uc_fsuid)
+		ucred->uc_cap = pud->pud_cap & ~CFS_CAP_FS_MASK;
+	else
+		ucred->uc_cap = pud->pud_cap;
+	if (remote && !(perm & CFS_RMTOWN_PERM))
+		ucred->uc_cap &= ~(CFS_CAP_SYS_RESOURCE_MASK |
+				   CFS_CAP_CHOWN_MASK);
+	ucred->uc_valid = UCRED_NEW;
 
-        EXIT;
+	EXIT;
 
 out:
-        if (rc) {
-                if (ucred->mu_ginfo) {
-                        cfs_put_group_info(ucred->mu_ginfo);
-                        ucred->mu_ginfo = NULL;
-                }
-                if (ucred->mu_identity) {
-                        mdt_identity_put(mdt->mdt_identity_cache,
-                                         ucred->mu_identity);
-                        ucred->mu_identity = NULL;
-                }
-        }
+	if (rc) {
+		if (ucred->uc_ginfo) {
+			cfs_put_group_info(ucred->uc_ginfo);
+			ucred->uc_ginfo = NULL;
+		}
+		if (ucred->uc_identity) {
+			mdt_identity_put(mdt->mdt_identity_cache,
+					 ucred->uc_identity);
+			ucred->uc_identity = NULL;
+		}
+	}
 
-        return rc;
+	return rc;
 }
 
 int mdt_check_ucred(struct mdt_thread_info *info)
@@ -307,7 +310,7 @@ int mdt_check_ucred(struct mdt_thread_info *info)
         struct ptlrpc_request   *req = mdt_info_req(info);
         struct mdt_device       *mdt = info->mti_mdt;
         struct ptlrpc_user_desc *pud = req->rq_user_desc;
-        struct md_ucred         *ucred = mdt_ucred(info);
+	struct lu_ucred         *ucred = mdt_ucred(info);
         struct md_identity      *identity = NULL;
         lnet_nid_t               peernid = req->rq_peer.nid;
         __u32                    perm = 0;
@@ -318,8 +321,9 @@ int mdt_check_ucred(struct mdt_thread_info *info)
 
         ENTRY;
 
-        if ((ucred->mu_valid == UCRED_OLD) || (ucred->mu_valid == UCRED_NEW))
-                RETURN(0);
+	LASSERT(ucred != NULL);
+	if ((ucred->uc_valid == UCRED_OLD) || (ucred->uc_valid == UCRED_NEW))
+		RETURN(0);
 
         if (!req->rq_auth_gss || req->rq_auth_usr_mdt || !req->rq_user_desc)
                 RETURN(0);
@@ -406,95 +410,98 @@ out:
 }
 
 static int old_init_ucred(struct mdt_thread_info *info,
-                          struct mdt_body *body)
+			  struct mdt_body *body)
 {
-        struct md_ucred *uc = mdt_ucred(info);
-        struct mdt_device  *mdt = info->mti_mdt;
-        struct md_identity *identity = NULL;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct mdt_device  *mdt = info->mti_mdt;
+	struct md_identity *identity = NULL;
 
-        ENTRY;
+	ENTRY;
 
-        uc->mu_valid = UCRED_INVALID;
-        uc->mu_o_uid = uc->mu_uid = body->uid;
-        uc->mu_o_gid = uc->mu_gid = body->gid;
-        uc->mu_o_fsuid = uc->mu_fsuid = body->fsuid;
-        uc->mu_o_fsgid = uc->mu_fsgid = body->fsgid;
-        uc->mu_suppgids[0] = body->suppgid;
-        uc->mu_suppgids[1] = -1;
-        uc->mu_ginfo = NULL;
-        if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
-                identity = mdt_identity_get(mdt->mdt_identity_cache,
-                                            uc->mu_fsuid);
-                if (IS_ERR(identity)) {
-                        if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
-                                identity = NULL;
-                        } else {
-                                CDEBUG(D_SEC, "Deny access without identity: "
-                                       "uid %u\n", uc->mu_fsuid);
-                                RETURN(-EACCES);
-                        }
-                }
-        }
-        uc->mu_identity = identity;
+	LASSERT(uc != NULL);
+	uc->uc_valid = UCRED_INVALID;
+	uc->uc_o_uid = uc->uc_uid = body->uid;
+	uc->uc_o_gid = uc->uc_gid = body->gid;
+	uc->uc_o_fsuid = uc->uc_fsuid = body->fsuid;
+	uc->uc_o_fsgid = uc->uc_fsgid = body->fsgid;
+	uc->uc_suppgids[0] = body->suppgid;
+	uc->uc_suppgids[1] = -1;
+	uc->uc_ginfo = NULL;
+	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
+		identity = mdt_identity_get(mdt->mdt_identity_cache,
+					    uc->uc_fsuid);
+		if (IS_ERR(identity)) {
+			if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
+				identity = NULL;
+			} else {
+				CDEBUG(D_SEC, "Deny access without identity: "
+				       "uid %u\n", uc->uc_fsuid);
+				RETURN(-EACCES);
+			}
+		}
+	}
+	uc->uc_identity = identity;
 
-        /* process root_squash here. */
-        mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
+	/* process root_squash here. */
+	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
-        /* remove fs privilege for non-root user. */
-        if (uc->mu_fsuid)
-                uc->mu_cap = body->capability & ~CFS_CAP_FS_MASK;
-        else
-                uc->mu_cap = body->capability;
-        uc->mu_valid = UCRED_OLD;
+	/* remove fs privilege for non-root user. */
+	if (uc->uc_fsuid)
+		uc->uc_cap = body->capability & ~CFS_CAP_FS_MASK;
+	else
+		uc->uc_cap = body->capability;
+	uc->uc_valid = UCRED_OLD;
 
-        RETURN(0);
+	RETURN(0);
 }
 
 static int old_init_ucred_reint(struct mdt_thread_info *info)
 {
-        struct md_ucred *uc = mdt_ucred(info);
-        struct mdt_device  *mdt = info->mti_mdt;
-        struct md_identity *identity = NULL;
+	struct lu_ucred *uc = mdt_ucred(info);
+	struct mdt_device  *mdt = info->mti_mdt;
+	struct md_identity *identity = NULL;
 
-        ENTRY;
+	ENTRY;
 
-        uc->mu_valid = UCRED_INVALID;
-        uc->mu_o_uid = uc->mu_o_fsuid = uc->mu_uid = uc->mu_fsuid;
-        uc->mu_o_gid = uc->mu_o_fsgid = uc->mu_gid = uc->mu_fsgid;
-        uc->mu_ginfo = NULL;
-        if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
-                identity = mdt_identity_get(mdt->mdt_identity_cache,
-                                            uc->mu_fsuid);
-                if (IS_ERR(identity)) {
-                        if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
-                                identity = NULL;
-                        } else {
-                                CDEBUG(D_SEC, "Deny access without identity: "
-                                       "uid %u\n", uc->mu_fsuid);
-                                RETURN(-EACCES);
-                        }
-                }
-        }
-        uc->mu_identity = identity;
+	LASSERT(uc != NULL);
+	uc->uc_valid = UCRED_INVALID;
+	uc->uc_o_uid = uc->uc_o_fsuid = uc->uc_uid = uc->uc_fsuid;
+	uc->uc_o_gid = uc->uc_o_fsgid = uc->uc_gid = uc->uc_fsgid;
+	uc->uc_ginfo = NULL;
+	if (!is_identity_get_disabled(mdt->mdt_identity_cache)) {
+		identity = mdt_identity_get(mdt->mdt_identity_cache,
+					    uc->uc_fsuid);
+		if (IS_ERR(identity)) {
+			if (unlikely(PTR_ERR(identity) == -EREMCHG)) {
+				identity = NULL;
+			} else {
+				CDEBUG(D_SEC, "Deny access without identity: "
+				       "uid %u\n", uc->uc_fsuid);
+				RETURN(-EACCES);
+			}
+		}
+	}
+	uc->uc_identity = identity;
 
-        /* process root_squash here. */
-        mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
+	/* process root_squash here. */
+	mdt_root_squash(info, mdt_info_req(info)->rq_peer.nid);
 
-        /* remove fs privilege for non-root user. */
-        if (uc->mu_fsuid)
-                uc->mu_cap &= ~CFS_CAP_FS_MASK;
-        uc->mu_valid = UCRED_OLD;
+	/* remove fs privilege for non-root user. */
+	if (uc->uc_fsuid)
+		uc->uc_cap &= ~CFS_CAP_FS_MASK;
+	uc->uc_valid = UCRED_OLD;
 
-        RETURN(0);
+	RETURN(0);
 }
 
 int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
-        struct md_ucred       *uc  = mdt_ucred(info);
+	struct lu_ucred       *uc  = mdt_ucred(info);
 
-        if ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))
-                return 0;
+	LASSERT(uc != NULL);
+	if ((uc->uc_valid == UCRED_OLD) || (uc->uc_valid == UCRED_NEW))
+		return 0;
 
         mdt_exit_ucred(info);
 
@@ -507,10 +514,11 @@ int mdt_init_ucred(struct mdt_thread_info *info, struct mdt_body *body)
 int mdt_init_ucred_reint(struct mdt_thread_info *info)
 {
         struct ptlrpc_request *req = mdt_info_req(info);
-        struct md_ucred       *uc  = mdt_ucred(info);
+	struct lu_ucred       *uc  = mdt_ucred(info);
 
-        if ((uc->mu_valid == UCRED_OLD) || (uc->mu_valid == UCRED_NEW))
-                return 0;
+	LASSERT(uc != NULL);
+	if ((uc->uc_valid == UCRED_OLD) || (uc->uc_valid == UCRED_NEW))
+		return 0;
 
         mdt_exit_ucred(info);
 
@@ -798,7 +806,7 @@ static __u64 mdt_attr_valid_xlate(__u64 in, struct mdt_reint_record *rr,
 
 static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc  = mdt_ucred(info);
+	struct lu_ucred         *uc  = mdt_ucred(info);
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *la = &ma->ma_attr;
         struct req_capsule      *pill = info->mti_pill;
@@ -811,11 +819,12 @@ static int mdt_setattr_unpack_rec(struct mdt_thread_info *info)
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        uc->mu_fsuid = rec->sa_fsuid;
-        uc->mu_fsgid = rec->sa_fsgid;
-        uc->mu_cap   = rec->sa_cap;
-        uc->mu_suppgids[0] = rec->sa_suppgid;
-        uc->mu_suppgids[1] = -1;
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid = rec->sa_fsuid;
+	uc->uc_fsgid = rec->sa_fsgid;
+	uc->uc_cap   = rec->sa_cap;
+	uc->uc_suppgids[0] = rec->sa_suppgid;
+	uc->uc_suppgids[1] = -1;
 
         rr->rr_fid1 = &rec->sa_fid;
         la->la_valid = mdt_attr_valid_xlate(attr_unpack(rec->sa_valid), rr, ma);
@@ -901,12 +910,15 @@ int mdt_close_unpack(struct mdt_thread_info *info)
         if (rc)
                 RETURN(rc);
 
-        RETURN(mdt_setattr_unpack_rec(info));
+	rc = mdt_setattr_unpack_rec(info);
+	if (rc)
+		RETURN(rc);
+	RETURN(mdt_init_ucred_reint(info));
 }
 
 static int mdt_create_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc  = mdt_ucred(info);
+	struct lu_ucred         *uc  = mdt_ucred(info);
         struct mdt_rec_create   *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -920,12 +932,13 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        uc->mu_fsuid = rec->cr_fsuid;
-        uc->mu_fsgid = rec->cr_fsgid;
-        uc->mu_cap   = rec->cr_cap;
-        uc->mu_suppgids[0] = rec->cr_suppgid1;
-        uc->mu_suppgids[1] = -1;
-        uc->mu_umask = rec->cr_umask;
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid = rec->cr_fsuid;
+	uc->uc_fsgid = rec->cr_fsgid;
+	uc->uc_cap   = rec->cr_cap;
+	uc->uc_suppgids[0] = rec->cr_suppgid1;
+	uc->uc_suppgids[1] = -1;
+	uc->uc_umask = rec->cr_umask;
 
         rr->rr_fid1 = &rec->cr_fid1;
         rr->rr_fid2 = &rec->cr_fid2;
@@ -971,7 +984,7 @@ static int mdt_create_unpack(struct mdt_thread_info *info)
 
 static int mdt_link_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc  = mdt_ucred(info);
+	struct lu_ucred         *uc  = mdt_ucred(info);
         struct mdt_rec_link     *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct mdt_reint_record *rr = &info->mti_rr;
@@ -984,11 +997,12 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        uc->mu_fsuid = rec->lk_fsuid;
-        uc->mu_fsgid = rec->lk_fsgid;
-        uc->mu_cap   = rec->lk_cap;
-        uc->mu_suppgids[0] = rec->lk_suppgid1;
-        uc->mu_suppgids[1] = rec->lk_suppgid2;
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid = rec->lk_fsuid;
+	uc->uc_fsgid = rec->lk_fsgid;
+	uc->uc_cap   = rec->lk_cap;
+	uc->uc_suppgids[0] = rec->lk_suppgid1;
+	uc->uc_suppgids[1] = rec->lk_suppgid2;
 
         attr->la_uid = rec->lk_fsuid;
         attr->la_gid = rec->lk_fsgid;
@@ -1018,7 +1032,7 @@ static int mdt_link_unpack(struct mdt_thread_info *info)
 
 static int mdt_unlink_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc  = mdt_ucred(info);
+	struct lu_ucred         *uc  = mdt_ucred(info);
         struct mdt_rec_unlink   *rec;
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
@@ -1032,11 +1046,12 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        uc->mu_fsuid = rec->ul_fsuid;
-        uc->mu_fsgid = rec->ul_fsgid;
-        uc->mu_cap   = rec->ul_cap;
-        uc->mu_suppgids[0] = rec->ul_suppgid1;
-        uc->mu_suppgids[1] = -1;
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid = rec->ul_fsuid;
+	uc->uc_fsgid = rec->ul_fsgid;
+	uc->uc_cap   = rec->ul_cap;
+	uc->uc_suppgids[0] = rec->ul_suppgid1;
+	uc->uc_suppgids[1] = -1;
 
         attr->la_uid = rec->ul_fsuid;
         attr->la_gid = rec->ul_fsgid;
@@ -1069,7 +1084,7 @@ static int mdt_unlink_unpack(struct mdt_thread_info *info)
 
 static int mdt_rename_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc = mdt_ucred(info);
+	struct lu_ucred         *uc = mdt_ucred(info);
         struct mdt_rec_rename   *rec;
         struct md_attr          *ma = &info->mti_attr;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
@@ -1083,11 +1098,12 @@ static int mdt_rename_unpack(struct mdt_thread_info *info)
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        uc->mu_fsuid = rec->rn_fsuid;
-        uc->mu_fsgid = rec->rn_fsgid;
-        uc->mu_cap   = rec->rn_cap;
-        uc->mu_suppgids[0] = rec->rn_suppgid1;
-        uc->mu_suppgids[1] = rec->rn_suppgid2;
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid = rec->rn_fsuid;
+	uc->uc_fsgid = rec->rn_fsgid;
+	uc->uc_cap   = rec->rn_cap;
+	uc->uc_suppgids[0] = rec->rn_suppgid1;
+	uc->uc_suppgids[1] = rec->rn_suppgid2;
 
         attr->la_uid = rec->rn_fsuid;
         attr->la_gid = rec->rn_fsgid;
@@ -1151,7 +1167,7 @@ static void mdt_fix_lov_magic(struct mdt_thread_info *info)
 
 static int mdt_open_unpack(struct mdt_thread_info *info)
 {
-        struct md_ucred         *uc = mdt_ucred(info);
+	struct lu_ucred         *uc = mdt_ucred(info);
         struct mdt_rec_create   *rec;
         struct lu_attr          *attr = &info->mti_attr.ma_attr;
         struct req_capsule      *pill = info->mti_pill;
@@ -1165,12 +1181,13 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        uc->mu_fsuid = rec->cr_fsuid;
-        uc->mu_fsgid = rec->cr_fsgid;
-        uc->mu_cap   = rec->cr_cap;
-        uc->mu_suppgids[0] = rec->cr_suppgid1;
-        uc->mu_suppgids[1] = rec->cr_suppgid2;
-        uc->mu_umask = rec->cr_umask;
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid = rec->cr_fsuid;
+	uc->uc_fsgid = rec->cr_fsgid;
+	uc->uc_cap   = rec->cr_cap;
+	uc->uc_suppgids[0] = rec->cr_suppgid1;
+	uc->uc_suppgids[1] = rec->cr_suppgid2;
+	uc->uc_umask = rec->cr_umask;
 
         rr->rr_fid1   = &rec->cr_fid1;
         rr->rr_fid2   = &rec->cr_fid2;
@@ -1244,7 +1261,7 @@ static int mdt_open_unpack(struct mdt_thread_info *info)
 static int mdt_setxattr_unpack(struct mdt_thread_info *info)
 {
         struct mdt_reint_record   *rr   = &info->mti_rr;
-        struct md_ucred           *uc   = mdt_ucred(info);
+	struct lu_ucred           *uc   = mdt_ucred(info);
         struct lu_attr            *attr = &info->mti_attr.ma_attr;
         struct req_capsule        *pill = info->mti_pill;
         struct mdt_rec_setxattr   *rec;
@@ -1258,11 +1275,12 @@ static int mdt_setxattr_unpack(struct mdt_thread_info *info)
         if (rec == NULL)
                 RETURN(-EFAULT);
 
-        uc->mu_fsuid  = rec->sx_fsuid;
-        uc->mu_fsgid  = rec->sx_fsgid;
-        uc->mu_cap    = rec->sx_cap;
-        uc->mu_suppgids[0] = rec->sx_suppgid1;
-        uc->mu_suppgids[1] = -1;
+	/* This prior initialization is needed for old_init_ucred_reint() */
+	uc->uc_fsuid  = rec->sx_fsuid;
+	uc->uc_fsgid  = rec->sx_fsgid;
+	uc->uc_cap    = rec->sx_cap;
+	uc->uc_suppgids[0] = rec->sx_suppgid1;
+	uc->uc_suppgids[1] = -1;
 
         rr->rr_opcode = rec->sx_opcode;
         rr->rr_fid1   = &rec->sx_fid;

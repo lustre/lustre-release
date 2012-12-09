@@ -75,23 +75,6 @@ enum {
         UCRED_NEW       = 2
 };
 
-struct md_ucred {
-        __u32               mu_valid;
-        __u32               mu_o_uid;
-        __u32               mu_o_gid;
-        __u32               mu_o_fsuid;
-        __u32               mu_o_fsgid;
-        __u32               mu_uid;
-        __u32               mu_gid;
-        __u32               mu_fsuid;
-        __u32               mu_fsgid;
-        __u32               mu_suppgids[2];
-        cfs_cap_t           mu_cap;
-        __u32               mu_umask;
-        cfs_group_info_t   *mu_ginfo;
-        struct md_identity *mu_identity;
-};
-
 enum {
         MD_CAPAINFO_MAX = 5
 };
@@ -115,7 +98,6 @@ struct md_quota {
  * XXX should be moved into separate .h/.c together with all md security
  * related definitions.
  */
-struct md_ucred *md_ucred(const struct lu_env *env);
 struct md_capainfo *md_capainfo(const struct lu_env *env);
 struct md_quota *md_quota(const struct lu_env *env);
 

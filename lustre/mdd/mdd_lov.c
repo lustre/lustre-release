@@ -81,4 +81,3 @@ int mdd_get_md(const struct lu_env *env, struct mdd_object *obj,
 
         RETURN(rc);
 }
-
