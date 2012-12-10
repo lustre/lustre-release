@@ -1242,7 +1242,7 @@ test_23b() {
     add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
     create_dir $dir $POOL
 
-    AVAIL=$($LFS df -p $POOL $dir | awk '/summary/ { print $4 }')
+    local AVAIL=$(lfs_df -p $POOL $dir | awk '/summary/ { print $4 }')
     [ $AVAIL -gt $MAXFREE ] &&
         skip_env "Filesystem space $AVAIL is larger than $MAXFREE limit" &&
 			return 0

@@ -236,7 +236,7 @@ space_check () {
     local stripe=$($LFS getstripe -c $testdir)
 
     # if stripe_count = 1 the size should be less than min ost size, bug 24294
-    local space=$($LFS df $testdir | grep "filesystem summary:"  | awk '{print $3}')
+    local space=$(lfs_df $testdir | grep "summary" | awk '{print $2}')
     [ $stripe -eq 1 ] && space=$(min_ost_size)
 
     local size=$(pios_file_size)
