@@ -129,6 +129,20 @@ static int check_mtab_entry(char *spec1, char *spec2, char *mtpt, char *type)
         return(0);
 }
 
+#define PROC_DIR       "/proc/"
+static int mtab_is_proc(const char *mtab)
+{
+	char path[16];
+
+	if (readlink(mtab, path, sizeof(path)) < 0)
+		return 0;
+
+	if (strncmp(path, PROC_DIR, strlen(PROC_DIR)))
+		return 0;
+
+	return 1;
+}
+
 static int
 update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
                   int flags, int freq, int pass)
@@ -136,6 +150,10 @@ update_mtab_entry(char *spec, char *mtpt, char *type, char *opts,
         FILE *fp;
         struct mntent mnt;
         int rc = 0;
+
+	/* Don't update mtab if it is linked to any file in /proc direcotry.*/
+	if (mtab_is_proc(MOUNTED))
+		return 0;
 
         mnt.mnt_fsname = spec;
         mnt.mnt_dir = mtpt;
