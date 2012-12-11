@@ -109,10 +109,6 @@ do {                                    \
 
 #ifdef HAVE_PROCFS_DELETED
 
-#ifdef HAVE_PROCFS_USERS
-#error proc_dir_entry->deleted is conflicted with proc_dir_entry->pde_users
-#endif
-
 static inline
 int LPROCFS_ENTRY_AND_CHECK(struct proc_dir_entry *dp)
 {
