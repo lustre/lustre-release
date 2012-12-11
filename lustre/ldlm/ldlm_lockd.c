@@ -2366,7 +2366,6 @@ int __init ldlm_init(void)
         init_mutex(&ldlm_ref_sem);
         init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_SERVER));
         init_mutex(ldlm_namespace_lock(LDLM_NAMESPACE_CLIENT));
-        sema_init(&ldlm_pool_shrink_lock, LDLM_POOL_SHRINK_THREAD_LIMIT);
         ldlm_resource_slab = cfs_mem_cache_create("ldlm_resources",
                                                sizeof(struct ldlm_resource), 0,
                                                SLAB_HWCACHE_ALIGN);
