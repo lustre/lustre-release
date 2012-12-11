@@ -13,7 +13,7 @@ set -e
 export TF_FAIL=/tmp/tf.fail
 
 usage() {
-    less -F <<EOF 
+    less -F <<EOF
 Usage ${0##*/} [options]  suite [suite optoins] [suite [suite options]]
 Run Lustre regression tests suites.
       -c CONFIG Test environment config file
@@ -28,7 +28,7 @@ Run Lustre regression tests suites.
       -r        Reformat (during initial configuration if needed)
       -s        SLOW=yes
       -v        Verbose mode
-      -l        Send logs to the Maloo database after run 
+      -l        Send logs to the Maloo database after run
                   (can be done later by running maloo_upload.sh)
       -h        This help.
 
@@ -51,7 +51,7 @@ the default "local" configuration.
 
 Run all tests in the regression group 5 times using large config.
 
-  auster -f large -g test-groups/regression  -r 5 
+  auster -f large -g test-groups/regression  -r 5
 
 EOF
     exit
@@ -69,19 +69,19 @@ export ${NAME:=local}
 while getopts "c:d:D:nkf:g:i:rRslhv" opt
 do
     case "$opt" in
-	c) CONFIG=$OPTARG;;
-	d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
-	D) test_logs_dir=$OPTARG;;
-	g) test_group_file=$OPTARG;;
-	k) export FAIL_ON_ERROR=false;;
+        c) CONFIG=$OPTARG;;
+        d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
+        D) test_logs_dir=$OPTARG;;
+        g) test_group_file=$OPTARG;;
+        k) export FAIL_ON_ERROR=false;;
         n) dry_run=:;;
         v) verbose=:;;
-	i) repeat_count=$OPTARG;;
-	f) NAME=$OPTARG;;
-	R) do_reset=:;;
-	r) reformat=:;;
-	s) SLOW=yes;;
-	l) upload_logs=true;;
+        i) repeat_count=$OPTARG;;
+        f) NAME=$OPTARG;;
+        R) do_reset=:;;
+        r) reformat=:;;
+        s) SLOW=yes;;
+        l) upload_logs=true;;
         h|\?) usage;;
     esac
 done
@@ -96,7 +96,7 @@ fi
 
 #
 # Various paramters for the tests scripts
-# 
+#
 #: ${SIZE:=$((RAMKB * 2))}
 #: ${RSIZE:=512}
 #: ${UID:=1000}
@@ -107,8 +107,8 @@ fi
 
 reset_lustre() {
     if $do_reset; then
-	stopall
-	setupall
+        stopall
+        setupall
     fi
 }
 
@@ -153,7 +153,7 @@ setup_if_needed() {
 
 cleanup_if_needed() {
     if $auster_cleanup; then
-	cleanupall
+        cleanupall
     fi
 }
 
@@ -161,14 +161,14 @@ find_script_in_path() {
     target=$1
     path=$2
     for dir in $(tr : " " <<< $path); do
-      if [ -e $dir/$target ]; then
-	  echo $dir/$target
-          return 0
-      fi
-      if [ -e $dir/$target.sh ]; then
-	  echo $dir/$target.sh
-          return 0
-      fi
+        if [ -f $dir/$target ]; then
+            echo $dir/$target
+            return 0
+        fi
+        if [ -f $dir/$target.sh ]; then
+            echo $dir/$target.sh
+            return 0
+        fi
     done
     return 1
 }
@@ -183,7 +183,7 @@ doit() {
         return 0
     fi
     if $verbose; then
-        printf "Running: %s\n" "$*" 
+        printf "Running: %s\n" "$*"
     fi
     "$@"
 }
@@ -214,19 +214,19 @@ run_suite_logged() {
     local suite_name=${1%.sh}
     local suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
 
-    suite_script=$(find_script_in_path $suite_name $PATH:$LUSTRE/tests)
+    suite_script=$(find_script_in_path $suite_name $LUSTRE/tests)
 
     if [[ -z $suite_script ]]; then
         echo "Can't find test script for $suite_name"
         return 1
     fi
-    
+
     echo "run_suite $suite_name $suite_script"
     local log_name=${suite_name}.suite_log.$(hostname -s).log
     if $verbose; then
-	run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
+        run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
     else
-	run_suite $suite_name $suite_script > $LOGDIR/$log_name 2>&1
+        run_suite $suite_name $suite_script > $LOGDIR/$log_name 2>&1
     fi
 
 }
@@ -247,52 +247,52 @@ run_suites() {
     local n=0
     local argv=("$@")
     while ((n < repeat_count)); do
-	local RC=0
-	local logdir=${test_logs_dir}
-	((repeat_count > 1)) && logdir="$logdir/$n"
-	reset_logging $logdir
-	set -- "${argv[@]}"
-	while [[ -n $1 ]]; do
-	    unset ONLY EXCEPT START_AT STOP_AT
-	    local opts=""
-	    local time_limit=""
-#	    echo "argv: $*"
-	    suite=$1
-	    shift;
-	    while [[ -n $1 ]]; do
-		case "$1" in
-		    --only)
-			shift;
-			export ONLY=$(split_commas $1)
-			opts+="ONLY=$ONLY ";;
-		    --except)
-			shift;
-			export EXCEPT=$(split_commas $1)
-			opts+="EXCEPT=$EXCEPT ";;
-		    --start-at)
-			shift;
-			export START_AT=$1
-			opts+="START_AT=$START_AT ";;
-	            --stop-at)
-			shift;
-			export STOP_AT=$1
-			opts+="STOP_AT=$STOP_AT ";;
-		    --time-limit)
-			shift;
-			time_limit=$1;;
-		    *)
-			break;;
-		esac
-		shift
-	    done
-	    echo "running: $suite $opts"
-	    run_suite_logged $suite || RC=$?
-	    echo $suite returned $RC
-	done
-	if $upload_logs; then
-	    $upload_script $LOGDIR
-	fi
-	n=$((n + 1))
+        local RC=0
+        local logdir=${test_logs_dir}
+        ((repeat_count > 1)) && logdir="$logdir/$n"
+        reset_logging $logdir
+        set -- "${argv[@]}"
+        while [[ -n $1 ]]; do
+            unset ONLY EXCEPT START_AT STOP_AT
+            local opts=""
+            local time_limit=""
+            #echo "argv: $*"
+            suite=$1
+            shift;
+            while [[ -n $1 ]]; do
+                case "$1" in
+                    --only)
+                        shift;
+                        export ONLY=$(split_commas $1)
+                        opts+="ONLY=$ONLY ";;
+                    --except)
+                        shift;
+                        export EXCEPT=$(split_commas $1)
+                        opts+="EXCEPT=$EXCEPT ";;
+                    --start-at)
+                        shift;
+                        export START_AT=$1
+                        opts+="START_AT=$START_AT ";;
+                    --stop-at)
+                        shift;
+                        export STOP_AT=$1
+                        opts+="STOP_AT=$STOP_AT ";;
+                    --time-limit)
+                        shift;
+                        time_limit=$1;;
+                    *)
+                        break;;
+                esac
+                shift
+            done
+            echo "running: $suite $opts"
+            run_suite_logged $suite || RC=$?
+            echo $suite returned $RC
+        done
+        if $upload_logs; then
+            $upload_script $LOGDIR
+        fi
+        n=$((n + 1))
     done
 }
 
@@ -300,7 +300,7 @@ if [ $upload_logs = true ] ; then
     upload_script=$(find_script_in_path maloo_upload.sh $PATH:$LUSTRE/tests)
     if [[ -z $upload_script ]]; then
         echo "Can't find maloo_upload.sh script"
-        exit 1 
+        exit 1
     fi
 
     if [ ! -r ~/.maloorc ] ; then
