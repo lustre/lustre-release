@@ -61,15 +61,8 @@
 #include <lustre_mds.h>
 #include <lustre_mdt.h>
 #include <lprocfs_status.h>
-#include <lu_time.h>
 #include "mdt_internal.h"
 #include <lnet/lib-lnet.h>
-
-enum {
-        LPROC_MDT_NR
-};
-static const char *mdt_proc_names[LPROC_MDT_NR] = {
-};
 
 /**
  * The rename stats output would be YAML formats, like
@@ -243,19 +236,6 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
         }
         ptlrpc_lprocfs_register_obd(obd);
 
-        mdt->mdt_proc_entry = obd->obd_proc_entry;
-        LASSERT(mdt->mdt_proc_entry != NULL);
-
-        rc = lu_time_init(&mdt->mdt_stats, mdt->mdt_proc_entry,
-                          mdt_proc_names, ARRAY_SIZE(mdt_proc_names));
-        if (rc == 0)
-                rc = lu_time_named_init(&ld->ld_site->ls_time_stats,
-                                        "site_time", mdt->mdt_proc_entry,
-                                         lu_time_names,
-                                         ARRAY_SIZE(lu_time_names));
-        if (rc)
-                return rc;
-
         obd->obd_proc_exports_entry = proc_mkdir("exports",
                                                  obd->obd_proc_entry);
         if (obd->obd_proc_exports_entry)
@@ -292,25 +272,10 @@ int mdt_procfs_fini(struct mdt_device *mdt)
         lprocfs_free_per_client_stats(obd);
         lprocfs_obd_cleanup(obd);
         ptlrpc_lprocfs_unregister_obd(obd);
-        if (mdt->mdt_proc_entry) {
-                lu_time_fini(&ld->ld_site->ls_time_stats);
-                lu_time_fini(&mdt->mdt_stats);
-                mdt->mdt_proc_entry = NULL;
-        }
         lprocfs_free_md_stats(obd);
         lprocfs_free_obd_stats(obd);
 
         RETURN(0);
-}
-
-void mdt_time_start(const struct mdt_thread_info *info)
-{
-        lu_lprocfs_time_start(info->mti_env);
-}
-
-void mdt_time_end(const struct mdt_thread_info *info, int idx)
-{
-        lu_lprocfs_time_end(info->mti_env, info->mti_mdt->mdt_stats, idx);
 }
 
 static int lprocfs_rd_identity_expire(char *page, char **start, off_t off,

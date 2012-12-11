@@ -46,8 +46,6 @@
 #include <obd.h>
 #include <obd_class.h>
 #include <lprocfs_status.h>
-#include <lu_time.h>
-
 #include <lustre/lustre_idl.h>
 
 #include "udmu.h"

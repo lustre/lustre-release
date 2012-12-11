@@ -647,7 +647,6 @@ struct lu_site {
 	 * lu_site stats
 	 */
 	struct lprocfs_stats	*ls_stats;
-	struct lprocfs_stats	*ls_time_stats;
 	/**
 	 * XXX: a hack! fld has to find md_site via site, remove when possible
 	 */
@@ -1342,15 +1341,6 @@ int lu_global_init(void);
  * Dual to lu_global_init().
  */
 void lu_global_fini(void);
-
-enum {
-        LU_TIME_FIND_LOOKUP,
-        LU_TIME_FIND_ALLOC,
-        LU_TIME_FIND_INSERT,
-        LU_TIME_NR
-};
-
-extern const char *lu_time_names[LU_TIME_NR];
 
 struct lu_kmem_descr {
         cfs_mem_cache_t **ckd_cache;

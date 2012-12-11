@@ -47,7 +47,6 @@
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include "mdt_internal.h"
-#include "lu_time.h"
 
 static inline void mdt_reint_init_ma(struct mdt_thread_info *info,
                                      struct md_attr *ma)

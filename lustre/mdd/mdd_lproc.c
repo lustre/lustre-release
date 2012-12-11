@@ -46,13 +46,8 @@
 #include <obd_class.h>
 #include <obd_support.h>
 #include <lprocfs_status.h>
-#include <lu_time.h>
 #include <libcfs/libcfs_string.h>
-
 #include "mdd_internal.h"
-
-static const char *mdd_counter_names[LPROC_MDD_NR] = {
-};
 
 int mdd_procfs_init(struct mdd_device *mdd, const char *name)
 {
@@ -80,9 +75,7 @@ int mdd_procfs_init(struct mdd_device *mdd, const char *name)
                 GOTO(out, rc);
         }
 
-        rc = lu_time_init(&mdd->mdd_stats,
-                          mdd->mdd_proc_entry,
-                          mdd_counter_names, ARRAY_SIZE(mdd_counter_names));
+	rc = 0;
 
         EXIT;
 out:
@@ -93,25 +86,11 @@ out:
 
 int mdd_procfs_fini(struct mdd_device *mdd)
 {
-        if (mdd->mdd_stats)
-                lu_time_fini(&mdd->mdd_stats);
-
         if (mdd->mdd_proc_entry) {
                  lprocfs_remove(&mdd->mdd_proc_entry);
                  mdd->mdd_proc_entry = NULL;
         }
         RETURN(0);
-}
-
-void mdd_lprocfs_time_start(const struct lu_env *env)
-{
-        lu_lprocfs_time_start(env);
-}
-
-void mdd_lprocfs_time_end(const struct lu_env *env, struct mdd_device *mdd,
-                          int idx)
-{
-        lu_lprocfs_time_end(env, mdd->mdd_stats, idx);
 }
 
 static int lprocfs_wr_atime_diff(struct file *file, const char *buffer,

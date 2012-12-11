@@ -41,8 +41,6 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <lprocfs_status.h>
-#include <lu_time.h>
-
 #include <lustre/lustre_idl.h>
 
 #include "osd_internal.h"
@@ -239,14 +237,6 @@ out:
         RETURN(result);
 }
 
-static const char *osd_counter_names[] = {
-#if OSD_THANDLE_STATS
-        [LPROC_OSD_THANDLE_STARTING] = "thandle starting",
-        [LPROC_OSD_THANDLE_OPEN]     = "thandle open",
-        [LPROC_OSD_THANDLE_CLOSING]  = "thandle closing"
-#endif
-};
-
 int osd_procfs_init(struct osd_device *osd, const char *name)
 {
         struct lprocfs_static_vars lvars;
@@ -273,10 +263,6 @@ int osd_procfs_init(struct osd_device *osd, const char *name)
                 GOTO(out, rc);
         }
 
-        rc = lu_time_init(&osd->od_stats,
-                          osd->od_proc_entry,
-                          osd_counter_names, ARRAY_SIZE(osd_counter_names));
-
         rc = osd_stats_init(osd);
 
         EXIT;
@@ -288,8 +274,8 @@ out:
 
 int osd_procfs_fini(struct osd_device *osd)
 {
-        if (osd->od_stats)
-                lu_time_fini(&osd->od_stats);
+	if (osd->od_stats)
+		lprocfs_free_stats(&osd->od_stats);
 
         if (osd->od_proc_entry) {
                  lprocfs_remove(&osd->od_proc_entry);
@@ -297,19 +283,6 @@ int osd_procfs_fini(struct osd_device *osd)
         }
         RETURN(0);
 }
-
-void osd_lprocfs_time_start(const struct lu_env *env)
-{
-        lu_lprocfs_time_start(env);
-}
-
-void osd_lprocfs_time_end(const struct lu_env *env, struct osd_device *osd,
-                          int idx)
-{
-        lu_lprocfs_time_end(env, osd->od_stats, idx);
-}
-
-
 
 static int lprocfs_osd_rd_fstype(char *page, char **start, off_t off, int count,
 				 int *eof, void *data)

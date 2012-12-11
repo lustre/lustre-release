@@ -175,8 +175,6 @@ struct mdt_device {
         int                        mdt_nosquash_strlen;
 	struct rw_semaphore	   mdt_squash_sem;
 
-        cfs_proc_dir_entry_t      *mdt_proc_entry;
-        struct lprocfs_stats      *mdt_stats;
         int                        mdt_sec_level;
         struct rename_stats        mdt_rename_stats;
 	struct lu_fid		   mdt_md_root_fid;
@@ -930,9 +928,6 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 			      struct mdt_device *mdt,
 			      struct ptlrpc_request *req,
 			      struct mdt_object *src, struct mdt_object *tgt);
-
-void mdt_time_start(const struct mdt_thread_info *info);
-void mdt_time_end(const struct mdt_thread_info *info, int idx);
 
 /* Capability */
 int mdt_ck_thread_start(struct mdt_device *mdt);

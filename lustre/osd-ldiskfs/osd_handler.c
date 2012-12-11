@@ -533,8 +533,7 @@ static void osd_th_started(struct osd_thandle *oth)
 
 /**
  * Helper function to convert time interval to microseconds packed in
- * long int (default time units for the counter in "stats" initialized
- * by lu_time_init() )
+ * long int.
  */
 static long interval_to_usec(cfs_time_t start, cfs_time_t end)
 {

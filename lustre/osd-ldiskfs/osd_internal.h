@@ -650,9 +650,6 @@ extern int ldiskfs_pdo;
 void lprocfs_osd_init_vars(struct lprocfs_static_vars *lvars);
 int osd_procfs_init(struct osd_device *osd, const char *name);
 int osd_procfs_fini(struct osd_device *osd);
-void osd_lprocfs_time_start(const struct lu_env *env);
-void osd_lprocfs_time_end(const struct lu_env *env,
-                          struct osd_device *osd, int op);
 void osd_brw_stats_update(struct osd_device *osd, struct osd_iobuf *iobuf);
 
 #endif

@@ -125,7 +125,6 @@ struct mdd_device {
         struct dt_object                *mdd_orphans; /* PENDING directory */
         struct dt_object                *mdd_capa;
         cfs_proc_dir_entry_t            *mdd_proc_entry;
-        struct lprocfs_stats            *mdd_stats;
         struct mdd_changelog             mdd_cl;
         unsigned long                    mdd_atime_diff;
         struct mdd_object               *mdd_dot_lustre;
@@ -370,9 +369,6 @@ int orph_declare_index_delete(const struct lu_env *, struct mdd_object *,
 void lprocfs_mdd_init_vars(struct lprocfs_static_vars *lvars);
 int mdd_procfs_init(struct mdd_device *mdd, const char *name);
 int mdd_procfs_fini(struct mdd_device *mdd);
-void mdd_lprocfs_time_start(const struct lu_env *env);
-void mdd_lprocfs_time_end(const struct lu_env *env,
-                          struct mdd_device *mdd, int op);
 
 /* mdd_object.c */
 int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj);

@@ -58,8 +58,6 @@
 #include <lustre_fid.h>
 #include <lu_object.h>
 #include <libcfs/list.h>
-/* lu_time_global_{init,fini}() */
-#include <lu_time.h>
 
 static void lu_object_free(const struct lu_env *env, struct lu_object *o);
 
@@ -2027,21 +2025,16 @@ int lu_global_init(void)
         if (lu_site_shrinker == NULL)
                 return -ENOMEM;
 
-        result = lu_time_global_init();
-        if (result)
-                GOTO(out, result);
-
 #ifdef __KERNEL__
-        result = dt_global_init();
-        if (result)
-                GOTO(out, result);
+	result = dt_global_init();
+	if (result != 0)
+		return result;
 
-        result = llo_global_init();
-        if (result)
-                GOTO(out, result);
+	result = llo_global_init();
+	if (result != 0)
+		return result;
 #endif
         result = cl_global_init();
-out:
 
         return result;
 }
@@ -2056,7 +2049,6 @@ void lu_global_fini(void)
         llo_global_fini();
         dt_global_fini();
 #endif
-        lu_time_global_fini();
         if (lu_site_shrinker != NULL) {
                 cfs_remove_shrinker(lu_site_shrinker);
                 lu_site_shrinker = NULL;
@@ -2119,13 +2111,6 @@ int lu_site_stats_print(const struct lu_site *s, char *page, int count)
                         ls_stats_read(s->ls_stats, LU_SS_LRU_PURGED));
 }
 EXPORT_SYMBOL(lu_site_stats_print);
-
-const char *lu_time_names[LU_TIME_NR] = {
-        [LU_TIME_FIND_LOOKUP] = "find_lookup",
-        [LU_TIME_FIND_ALLOC]  = "find_alloc",
-        [LU_TIME_FIND_INSERT] = "find_insert"
-};
-EXPORT_SYMBOL(lu_time_names);
 
 /**
  * Helper function to initialize a number of kmem slab caches at once.

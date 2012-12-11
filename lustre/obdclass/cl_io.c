@@ -44,9 +44,6 @@
 #include <obd_support.h>
 #include <lustre_fid.h>
 #include <libcfs/list.h>
-/* lu_time_global_{init,fini}() */
-#include <lu_time.h>
-
 #include <cl_object.h>
 #include "cl_internal.h"
 
