@@ -3753,6 +3753,63 @@ setstripe_nfsserver () {
     do_nodev $nfsserver lfs setstripe "$@"
 }
 
+# Check and add a test group.
+add_group() {
+	local group_id=$1
+	local group_name=$2
+	local rc=0
+
+	local gid=$(getent group $group_name | cut -d: -f3)
+	if [[ -n "$gid" ]]; then
+		[[ "$gid" -eq "$group_id" ]] || {
+			error_noexit "inconsistent group ID:" \
+				     "new: $group_id, old: $gid"
+			rc=1
+		}
+	else
+		groupadd -g $group_id $group_name
+		rc=${PIPESTATUS[0]}
+	fi
+
+	return $rc
+}
+
+# Check and add a test user.
+add_user() {
+	local user_id=$1
+	shift
+	local user_name=$1
+	shift
+	local group_name=$1
+	shift
+	local home=$1
+	shift
+	local opts="$@"
+	local rc=0
+
+	local uid=$(getent passwd $user_name | cut -d: -f3)
+	if [[ -n "$uid" ]]; then
+		if [[ "$uid" -eq "$user_id" ]]; then
+			local dir=$(getent passwd $user_name | cut -d: -f6)
+			if [[ "$dir" != "$home" ]]; then
+				mkdir -p $home
+				usermod -d $home $user_name
+				rc=${PIPESTATUS[0]}
+			fi
+		else
+			error_noexit "inconsistent user ID:" \
+				     "new: $user_id, old: $uid"
+			rc=1
+		fi
+	else
+		mkdir -p $home
+		useradd -M -u $user_id -d $home -g $group_name $opts $user_name
+		rc=${PIPESTATUS[0]}
+	fi
+
+	return $rc
+}
+
 check_runas_id_ret() {
     local myRC=0
     local myRUNAS_UID=$1
