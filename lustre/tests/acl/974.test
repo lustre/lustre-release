@@ -1,18 +1,20 @@
 LU-974 ignore umask when default acl with mask is set
 
 	$ umask 022
-	$ mkdir d
+	$ mkdir 974
 
-	$ touch d/f1
-	$ ls -dl d/f1 | awk '{ print $1 }'
+	$ touch 974/f1
+	$ ls -dl 974/f1 | awk '{ print $1 }'
 	> -rw-r--r--
 
-	$ setfacl -R -d -m mask:007 d
-	$ touch d/f2
-	$ ls -dl d/f2 | awk '{ print $1 }'
+	$ setfacl -R -d -m mask:007 974
+	$ touch 974/f2
+	$ ls -dl 974/f2 | awk '{ print $1 }'
 	> -rw-rw-r--+
 
 	$ umask 077
 	$ touch f3
 	$ ls -dl f3 | awk '{ print $1 }'
 	> -rw-------
+
+	$ rm -rf 974

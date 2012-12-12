@@ -1556,8 +1556,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 			      struct thandle *handle,
 			      const struct md_op_spec *spec)
 {
-	struct mdd_thread_info *info = mdd_env_info(env);
-        int            rc = 0;
+	int rc;
 
 	rc = mdd_declare_object_create_internal(env, p, c, attr, handle, spec);
         if (rc)
@@ -1577,7 +1576,7 @@ static int mdd_declare_create(const struct lu_env *env, struct mdd_device *mdd,
 				GOTO(out, rc);
 		}
 
-		rc = mdo_declare_attr_set(env, c, &info->mti_pattr, handle);
+		rc = mdo_declare_attr_set(env, c, attr, handle);
 		if (rc)
 			GOTO(out, rc);
 

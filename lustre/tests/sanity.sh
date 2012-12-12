@@ -6133,10 +6133,10 @@ test_103 () {
     rm -f make-tree
 
     echo "LU-974 ignore umask when acl is enabled..."
-    mkdir $DIR/974
-    cd $DIR/974
     run_acl_subtest 974 || error "LU-974 test failed"
-    rm -rf $DIR/974
+
+    echo "LU-2561 newly created file is same size as directory..."
+    run_acl_subtest 2561 || error "LU-2561 test failed"
 
     cd $SAVE_PWD
     umask $SAVE_UMASK
