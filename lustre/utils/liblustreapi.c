@@ -1130,10 +1130,11 @@ static int common_param_init(struct find_param *param, char *path)
                 return -ENOMEM;
         }
 
-        param->got_uuids = 0;
-        param->obdindexes = NULL;
-        param->obdindex = OBD_NOT_FOUND;
-        return 0;
+	param->got_uuids = 0;
+	param->obdindexes = NULL;
+	param->obdindex = OBD_NOT_FOUND;
+	param->mdtindex = OBD_NOT_FOUND;
+	return 0;
 }
 
 static void find_param_fini(struct find_param *param)
