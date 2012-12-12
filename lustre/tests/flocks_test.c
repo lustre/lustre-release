@@ -357,6 +357,86 @@ out:
         return rc;
 }
 
+int t4(int argc, char *argv[])
+{
+	struct flock lock = {
+		.l_type = F_WRLCK,
+		.l_whence = SEEK_SET,
+		.l_start = 0,
+		.l_len = 10,
+	};
+
+	int fd, fd2;
+	int pid;
+	int rc = EXIT_SUCCESS;
+
+	if (argc != 4) {
+		fprintf(stderr, "Usage: ./flocks_test 4 file1 file2\n");
+		return EXIT_FAILURE;
+	}
+
+	if ((fd = open(argv[2], O_RDWR)) < 0) {
+		fprintf(stderr, "Couldn't open file: %s\n", argv[2]);
+		return EXIT_FAILURE;
+	}
+	if ((fd2 = open(argv[3], O_RDWR)) < 0) {
+		fprintf(stderr, "Couldn't open file: %s\n", argv[3]);
+		rc = EXIT_FAILURE;
+		goto out;
+	}
+
+	pid = fork();
+	if (pid == -1) {
+		perror("fork");
+		rc = EXIT_FAILURE;
+		goto out;
+	}
+
+	if (pid == 0) {
+		printf("%d: get lock1\n", getpid());
+		fflush(stdout);
+		if (t_fcntl(fd, F_SETLKW, &lock) < 0) {
+			perror("first flock failed");
+			rc = EXIT_FAILURE;
+			goto out_child;
+		}
+		printf("%d: done\n", getpid());
+		sleep(3);
+		printf("%d: get lock2\n", getpid());
+		fflush(stdout);
+		if (t_fcntl(fd2, F_SETLKW, &lock) < 0) {
+			perror("first flock failed");
+			rc = EXIT_FAILURE;
+			goto out_child;
+		}
+		printf("%d: done\n", getpid());
+out_child:
+		printf("%d: exit rc=%d\n", getpid(), rc);
+		exit(rc);
+	} else {
+		printf("%d: get lock2\n", getpid());
+		fflush(stdout);
+		if (t_fcntl(fd2, F_SETLKW, &lock) < 0) {
+			perror("first flock failed");
+			rc = EXIT_FAILURE;
+			goto out;
+		}
+		printf("%d: done\n", getpid());
+		sleep(3);
+		printf("%d: get lock1\n", getpid());
+		fflush(stdout);
+		if (t_fcntl(fd, F_SETLKW, &lock) < 0) {
+			perror("first flock failed");
+			rc = EXIT_FAILURE;
+			goto out;
+		}
+		printf("%d: done\n", getpid());
+	}
+
+out:
+	printf("%d: exit rc=%d\n", getpid(), rc);
+	return rc;
+}
 
 /** ==============================================================
  * program entry
@@ -387,6 +467,9 @@ int main(int argc, char* argv[])
         case 3:
                 rc = t3(argc, argv);
                 break;
+	case 4:
+		rc = t4(argc, argv);
+		break;
         default:
                 fprintf(stderr, "unknow test number %s\n", argv[1]);
                 break;

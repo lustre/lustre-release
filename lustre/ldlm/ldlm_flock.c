@@ -169,6 +169,31 @@ ldlm_flock_destroy(struct ldlm_lock *lock, ldlm_mode_t mode, __u64 flags)
  * one client holds a lock on something and want a lock on something
  * else and at the same time another client has the opposite situation).
  */
+
+struct ldlm_flock_lookup_cb_data {
+	__u64 *bl_owner;
+	struct ldlm_lock *lock;
+	struct obd_export *exp;
+};
+
+static int ldlm_flock_lookup_cb(cfs_hash_t *hs, cfs_hash_bd_t *bd,
+				cfs_hlist_node_t *hnode, void *data)
+{
+	struct ldlm_flock_lookup_cb_data *cb_data = data;
+	struct obd_export *exp = cfs_hash_object(hs, hnode);
+	struct ldlm_lock *lock;
+
+	lock = cfs_hash_lookup(exp->exp_flock_hash, cb_data->bl_owner);
+	if (lock == NULL)
+		return 0;
+
+	/* Stop on first found lock. Same process can't sleep twice */
+	cb_data->lock = lock;
+	cb_data->exp = class_export_get(exp);
+
+	return 1;
+}
+
 static int
 ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 {
@@ -183,15 +208,25 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 
         class_export_get(bl_exp);
 	while (1) {
+		struct ldlm_flock_lookup_cb_data cb_data = {
+					.bl_owner = &bl_owner,
+					.lock = NULL,
+					.exp = NULL };
 		struct obd_export *bl_exp_new;
 		struct ldlm_lock *lock = NULL;
 		struct ldlm_flock *flock;
 
-		if (bl_exp->exp_flock_hash != NULL)
-			lock = cfs_hash_lookup(bl_exp->exp_flock_hash,
-					       &bl_owner);
+		if (bl_exp->exp_flock_hash != NULL) {
+			cfs_hash_for_each_key(bl_exp->exp_obd->obd_nid_hash,
+				&bl_exp->exp_connection->c_peer.nid,
+				ldlm_flock_lookup_cb, &cb_data);
+			lock = cb_data.lock;
+		}
 		if (lock == NULL)
 			break;
+
+		class_export_put(bl_exp);
+		bl_exp = cb_data.exp;
 
 		LASSERT(req != lock);
 		flock = &lock->l_policy_data.l_flock;
@@ -206,7 +241,9 @@ ldlm_flock_deadlock(struct ldlm_lock *req, struct ldlm_lock *bl_lock)
 		if (bl_exp->exp_failed)
 			break;
 
-                if (bl_owner == req_owner && bl_exp == req_exp) {
+		if (bl_owner == req_owner &&
+		    (bl_exp->exp_connection->c_peer.nid ==
+		     req_exp->exp_connection->c_peer.nid)) {
                         class_export_put(bl_exp);
                         return 1;
                 }
