@@ -1262,10 +1262,12 @@ static int lod_qos_parse_config(const struct lu_env *env,
 	v1 = buf->lb_buf;
 	magic = v1->lmm_magic;
 
-	if (magic == __swab32(LOV_USER_MAGIC_V1))
+	if (magic == __swab32(LOV_USER_MAGIC_V1)) {
 		lustre_swab_lov_user_md_v1(v1);
-	else if (magic == __swab32(LOV_USER_MAGIC_V3))
+	} else if (magic == __swab32(LOV_USER_MAGIC_V3)) {
+		v3 = buf->lb_buf;
 		lustre_swab_lov_user_md_v3(v3);
+	}
 
 	if (unlikely(magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3)) {
 		/* try to use as fully defined striping */
