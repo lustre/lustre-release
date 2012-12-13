@@ -1307,8 +1307,11 @@ int ll_setattr_raw(struct inode *inode, struct iattr *attr)
         int rc = 0, rc1 = 0;
         ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu valid %x\n", inode->i_ino,
+        CDEBUG(D_VFSTRACE,
+               "Setattr inode %p/fid:"DFID" from %llu to %llu, valid %x\n",
+               inode, PFID(&lli->lli_fid), i_size_read(inode), attr->ia_size,
                attr->ia_valid);
+
         ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_SETATTR, 1);
 
         if (ia_valid & ATTR_SIZE) {

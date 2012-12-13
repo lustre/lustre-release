@@ -984,6 +984,11 @@ static int lov_lock_fits_into(const struct lu_env *env,
 
         ENTRY;
 
+	/* for top lock, it's necessary to match enq flags otherwise it will
+	 * run into problem if a sublock is missing and reenqueue. */
+	if (need->cld_enq_flags != lov->lls_orig.cld_enq_flags)
+		return 0;
+
         if (need->cld_mode == CLM_GROUP)
                 /*
                  * always allow to match group lock.
