@@ -119,25 +119,25 @@ get_ost_node() {
 
 # Get the OST target device (given the OST facet name and OST index).
 get_ost_dev() {
-    local node=$1
-    local obdidx=$2
-    local ost_name
-    local ost_dev
+	local node=$1
+	local obdidx=$2
+	local ost_name
+	local ost_dev
 
-    ost_name=$($LFS osts | grep "^$obdidx: " | cut -d' ' -f2 | \
-                head -n1 | sed -e 's/_UUID$//')
+	ost_name=$($LFS osts | grep "^$obdidx: " | cut -d' ' -f2 |
+		   head -n1 | sed -e 's/_UUID$//')
+	ost_dev=$(get_obdfilter_param $node $ost_name mntdev)
+	if [ $? -ne 0 ]; then
+		printf "unable to find OST%04x on $facet\n" $obdidx
+		return 1
+	fi
 
-    ost_dev=$(do_node $node "lctl get_param -n obdfilter.$ost_name.mntdev")
-    [ ${PIPESTATUS[0]} -ne 0 ] && \
-        echo "failed to find the OST device with index $obdidx on $facet" && \
-        return 1
+	if [[ $ost_dev = *loop* ]]; then
+		ost_dev=$(do_node $node "losetup $ost_dev" |
+		          sed -e "s/.*(//" -e "s/).*//")
+	fi
 
-    if [[ $ost_dev = *loop* ]]; then
-        ost_dev=$(do_node $node "losetup $ost_dev" | \
-                sed -e "s/.*(//" -e "s/).*//")
-    fi
-
-    echo $ost_dev
+	echo $ost_dev
 }
 
 # Get the file names to be duplicated or removed on the MDS.

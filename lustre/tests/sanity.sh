@@ -1942,6 +1942,7 @@ run_test 33b "test open file with malformed flags (No panic and return error)"
 test_33c() {
         local ostnum
         local ostname
+        local ostnode
         local write_bytes
         local all_zeros
 
@@ -1958,8 +1959,8 @@ test_33c() {
                 # Parsing llobdstat's output sucks; we could grep the /proc
                 # path, but that's likely to not be as portable as using the
                 # llobdstat utility.  So we parse lctl output instead.
-                write_bytes=$(do_facet ost$ostnum lctl get_param -n \
-                        obdfilter/$ostname/stats |
+                ostnode=$(facet_active_host ost$ostnum)
+                write_bytes=$(get_obdfilter_param $ostnode $ostname stats |
                         awk '/^write_bytes/ {print $7}' )
                 echo "baseline_write_bytes@$OSTnum/$ostname=$write_bytes"
                 if (( ${write_bytes:-0} > 0 ))
@@ -1979,8 +1980,8 @@ test_33c() {
         # Total up write_bytes after writing.  We'd better find non-zeros.
         for ostnum in $(seq $OSTCOUNT); do
                 ostname=$(printf "$FSNAME-OST%.4d" $((ostnum - 1)))
-                write_bytes=$(do_facet ost$ostnum lctl get_param -n \
-                        obdfilter/$ostname/stats |
+                ostnode=$(facet_active_host ost$ostnum)
+                write_bytes=$(get_obdfilter_param $ostnode $ostname stats |
                         awk '/^write_bytes/ {print $7}' )
                 echo "write_bytes@$OSTnum/$ostname=$write_bytes"
                 if (( ${write_bytes:-0} > 0 ))
@@ -1994,9 +1995,9 @@ test_33c() {
         then
                 for ostnum in $(seq $OSTCOUNT); do
                         ostname=$(printf "$FSNAME-OST%.4d" $((ostnum - 1)))
+                        ostnode=$(facet_active_host ost$ostnum)
                         echo "Check that write_bytes is present in obdfilter/*/stats:"
-                        do_facet ost$ostnum lctl get_param -n \
-                                obdfilter/$ostname/stats
+                        get_obdfilter_param $ostnode $ostname stats
                 done
                 error "OST not keeping write_bytes stats (b22312)"
         fi
@@ -4692,8 +4693,8 @@ setup_test101bc() {
 	STRIPE_OFFSET=0
 
 	local list=$(comma_list $(osts_nodes))
-	do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable=0
-	do_nodes $list $LCTL set_param -n obdfilter.*.writethrough_cache_enable=0
+	set_obdfilter_param $list '' read_cache_enable 0
+	set_obdfilter_param $list '' writethrough_cache_enable 0
 
 	trap cleanup_test101bc EXIT
 	# prepare the read-ahead file
@@ -4708,8 +4709,8 @@ cleanup_test101bc() {
 	rm -f $DIR/$tfile
 
 	local list=$(comma_list $(osts_nodes))
-	do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable=1
-	do_nodes $list $LCTL set_param -n obdfilter.*.writethrough_cache_enable=1
+	set_obdfilter_param $list '' read_cache_enable 1
+	set_obdfilter_param $list '' writethrough_cache_enable 1
 }
 
 calc_total() {
@@ -7005,7 +7006,8 @@ check_stats() {
 	case $1 in
 	$SINGLEMDS) res=`do_facet $SINGLEMDS $LCTL get_param mdt.$FSNAME-MDT0000.md_stats | grep "$2"`
 		 ;;
-	ost) res=`do_facet ost $LCTL get_param obdfilter.$FSNAME-OST0000.stats | grep "$2"`
+	ost) res=$(get_obdfilter_param $(facet_active_host ost1) \
+		   $FSNAME-OST0000 stats | grep "$2")
 		 ;;
 	*) error "Wrong argument $1" ;;
 	esac
@@ -7024,7 +7026,7 @@ test_133a() {
 
 	# clear stats.
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	set_obdfilter_param $(facet_active_host ost1) '' stats clear
 
 	# verify mdt stats first.
 	mkdir ${testdir} || error "mkdir failed"
@@ -7055,7 +7057,7 @@ test_133b() {
 
 	# clear stats.
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	set_obdfilter_param $(facet_active_host ost1) '' stats clear
 
 	# extra mdt stats verification.
 	chmod 444 ${testdir}/${tfile} || error "chmod failed"
@@ -7081,7 +7083,7 @@ test_133c() {
 
 	# clear stats.
 	do_facet $SINGLEMDS $LCTL set_param mdt.*.md_stats=clear
-	do_facet ost $LCTL set_param obdfilter.*.stats=clear
+	set_obdfilter_param $(facet_active_host ost1) '' stats clear
 
 	dd if=/dev/zero of=${testdir}/${tfile} conv=notrunc bs=1024k count=1 || error "dd failed"
 	sync
@@ -7163,44 +7165,43 @@ test_150() {
 run_test 150 "truncate/append tests"
 
 function roc_hit() {
-    local list=$(comma_list $(osts_nodes))
+	local list=$(comma_list $(osts_nodes))
 
-    ACCNUM=$(do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
-        awk '/'cache_hit'/ {sum+=$2} END {print sum}')
-    echo $ACCNUM
+	echo $(get_obdfilter_param $list '' stats |
+	       awk '/'cache_hit'/ {sum+=$2} END {print sum}')
 }
 
 function set_cache() {
-    local on=1
+	local on=1
 
-    if [ "$2" == "off" ]; then
-        on=0;
-    fi
-    local list=$(comma_list $(osts_nodes))
-    do_nodes $list lctl set_param obdfilter.*.${1}_cache_enable $on
+	if [ "$2" == "off" ]; then
+		on=0
+	fi
+	local list=$(comma_list $(osts_nodes))
+	set_obdfilter_param $list '' $1_cache_enable $on
 
-    cancel_lru_locks osc
+	cancel_lru_locks osc
 }
 
 test_151() {
-        remote_ost_nodsh && skip "remote OST with nodsh" && return
+	remote_ost_nodsh && skip "remote OST with nodsh" && return
 
-        local CPAGES=3
-        local list=$(comma_list $(osts_nodes))
+	local CPAGES=3
+	local list=$(comma_list $(osts_nodes))
 
-        # check whether obdfilter is cache capable at all
-        if ! do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable > /dev/null; then
-                echo "not cache-capable obdfilter"
-                return 0
-        fi
+	# check whether obdfilter is cache capable at all
+	if ! get_obdfilter_param $list '' read_cache_enable >/dev/null; then
+		echo "not cache-capable obdfilter"
+		return 0
+	fi
 
-        # check cache is enabled on all obdfilters
-        if do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable | grep 0 >&/dev/null; then
-                echo "oss cache is disabled"
-                return 0
-        fi
+	# check cache is enabled on all obdfilters
+	if get_obdfilter_param $list '' read_cache_enable | grep 0; then
+		echo "oss cache is disabled"
+		return 0
+	fi
 
-        do_nodes $list $LCTL set_param -n obdfilter.*.writethrough_cache_enable 1
+	set_obdfilter_param $list '' writethrough_cache_enable 1
 
         # pages should be in the case right after write
         dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
@@ -7214,7 +7215,7 @@ test_151() {
 
         # the following read invalidates the cache
         cancel_lru_locks osc
-        do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 0
+	set_obdfilter_param $list '' read_cache_enable 0
         cat $DIR/$tfile >/dev/null
 
         # now data shouldn't be found in the cache
@@ -7226,7 +7227,7 @@ test_151() {
                 error "IN CACHE: before: $BEFORE, after: $AFTER"
         fi
 
-        do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 1
+	set_obdfilter_param $list '' read_cache_enable 1
         rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
