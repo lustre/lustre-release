@@ -1645,7 +1645,8 @@ static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
         result = osd_mkfile(info, obj, mode, hint, th);
         if (result == 0) {
                 LASSERT(obj->oo_inode != NULL);
-                init_special_inode(obj->oo_inode, mode, attr->la_rdev);
+                init_special_inode(obj->oo_inode, obj->oo_inode->i_mode,
+                                   attr->la_rdev);
         }
         LINVRNT(osd_invariant(obj));
         return result;
