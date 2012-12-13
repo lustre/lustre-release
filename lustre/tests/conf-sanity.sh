@@ -1052,8 +1052,10 @@ test_29() {
 	    echo "Waiting $(($MAX - $WAIT)) secs for MDT deactivated"
 	done
 
-        # quotacheck should not fail immediately after deactivate
-	[ -n "$ENABLE_QUOTA" ] && { $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
+	# quotacheck should not fail immediately after deactivate
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ] &&
+	[ -n "$ENABLE_QUOTA" ] &&
+	{ $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
 
         # test new client starts deactivated
 	umount_client $MOUNT || return 200
@@ -1066,8 +1068,10 @@ test_29() {
 	    echo "New client success: got $RESULT"
 	fi
 
-        # quotacheck should not fail after umount/mount operation
-	[ -n "$ENABLE_QUOTA" ] && { $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
+	# quotacheck should not fail after umount/mount operation
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ] &&
+	[ -n "$ENABLE_QUOTA" ] &&
+	{ $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
 
 	# make sure it reactivates
 	set_and_check client "lctl get_param -n $PROC_ACT" "$PARAM" $ACTV || return 6
@@ -2653,7 +2657,10 @@ test_56() {
 	mount_client $MOUNT || error "Unable to mount client"
 	echo ok
 	$LFS osts
-	[ -n "$ENABLE_QUOTA" ] && { $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ] &&
+	[ -n "$ENABLE_QUOTA" ] &&
+	{ $LFS quotacheck -ug $MOUNT || error "quotacheck has failed" ; }
+
 	stopall
 	reformat
 }

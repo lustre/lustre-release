@@ -1495,6 +1495,14 @@ wait_update_facet() {
 	wait_update $(facet_active_host $facet) "$@"
 }
 
+sync_all_data() {
+    if [ $(lustre_version_code $SINGLEMDS) -ge $(version_code 2.2.58) ]; then
+        do_nodes $(comma_list $(osts_nodes)) \
+            "lctl set_param -n osd*.*OS*.force_sync 1 2>&1" |
+            grep -v 'Found no match' || true
+    fi
+}
+
 wait_delete_completed () {
     local TOTALPREV=`lctl get_param -n osc.*.kbytesavail | \
                      awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`

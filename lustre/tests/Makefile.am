@@ -7,6 +7,7 @@ AM_CFLAGS = $(LLCFLAGS)
 DIST_SUBDIRS := mpi
 
 noinst_DATA = disk1_8.tar.bz2
+noinst_DATA += admin_quotafile_v2.usr admin_quotafile_v2.grp
 noinst_SCRIPTS = leak_finder.pl llmount.sh llmountcleanup.sh functions.sh
 noinst_SCRIPTS += test-framework.sh runvmstat runiozone runtests
 noinst_SCRIPTS += sanity.sh rundbench acceptance-small.sh compile.sh
@@ -27,7 +28,7 @@ noinst_SCRIPTS += lustre-rsync-test.sh ost-pools.sh rpc.sh yaml.sh liblustre.sh
 noinst_SCRIPTS += lnet-selftest.sh obdfilter-survey.sh mmp.sh mmp_mark.sh
 noinst_SCRIPTS += sgpdd-survey.sh maloo_upload.sh auster setup-nfs.sh
 noinst_SCRIPTS += parallel-scale-nfsv3.sh parallel-scale-nfsv4.sh
-noinst_SCRIPTS += parallel-scale-nfs.sh posix.sh
+noinst_SCRIPTS += parallel-scale-nfs.sh posix.sh sanity-quota-old.sh
 nobase_noinst_SCRIPTS = cfg/local.sh
 nobase_noinst_SCRIPTS += test-groups/regression test-groups/regression-mpi
 nobase_noinst_SCRIPTS += acl/make-tree acl/run cfg/ncli.sh

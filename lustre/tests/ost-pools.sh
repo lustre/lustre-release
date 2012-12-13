@@ -1184,8 +1184,16 @@ test_23a() {
     add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
     create_dir $dir $POOL
 
-    $LFS quotaoff -ug $MOUNT
-    $LFS quotacheck -ug $MOUNT
+    # XXX remove the interoperability code once we drop the old server
+    #     (< 2.3.50) support.
+    if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
+        $LFS quotaoff -ug $MOUNT
+        $LFS quotacheck -ug $MOUNT
+    else
+        do_facet mgs $LCTL conf_param $FSNAME.quota.ost=ug
+        sleep 5
+    fi
+
     $LFS setquota -u $RUNAS_ID -b $LIMIT -B $LIMIT $dir
     sleep 3
     $LFS quota -v -u $RUNAS_ID $dir
@@ -1246,7 +1254,15 @@ test_23b() {
         skip_env "Filesystem space $AVAIL is larger than $maxfree limit" &&
             return 0
 
-    $LFS quotaoff -ug $MOUNT
+    # XXX remove the interoperability code once we drop the old server
+    #     (< 2.3.50) support.
+    if [ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ]; then
+        $LFS quotaoff -ug $MOUNT
+    else
+        do_facet mgs $LCTL conf_param $FSNAME.quota.ost=none
+        sleep 5
+    fi
+
     chown $RUNAS_ID.$RUNAS_ID $dir
     i=0
     local RC=0
