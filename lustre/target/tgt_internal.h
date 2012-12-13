@@ -66,4 +66,18 @@ static inline struct tgt_thread_info *tgt_th_info(const struct lu_env *env)
 	return tti;
 }
 
+#define MGS_SERVICE_WATCHDOG_FACTOR      (2)
+
+int tgt_request_handle(struct ptlrpc_request *req);
+
+/* check if request's xid is equal to last one or not*/
+static inline int req_xid_is_last(struct ptlrpc_request *req)
+{
+	struct lsd_client_data *lcd = req->rq_export->exp_target_data.ted_lcd;
+
+	LASSERT(lcd != NULL);
+	return (req->rq_xid == lcd->lcd_last_xid ||
+		req->rq_xid == lcd->lcd_last_close_xid);
+}
+
 #endif /* _TG_INTERNAL_H */

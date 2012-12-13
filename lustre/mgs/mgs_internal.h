@@ -173,6 +173,7 @@ struct mgs_device {
 	struct obd_device		*mgs_obd;
 	struct local_oid_storage	*mgs_los;
 	struct mutex			 mgs_mutex;
+	struct lu_target		 mgs_lut;
 };
 
 /* this is a top object */
@@ -290,9 +291,16 @@ extern struct lu_context_key mgs_thread_key;
 
 static inline struct mgs_thread_info *mgs_env_info(const struct lu_env *env)
 {
-	struct mgs_thread_info *info;
+	struct mgs_thread_info	*info;
+	int			rc;
 
 	info = lu_context_key_get(&env->le_ctx, &mgs_thread_key);
+	if (info == NULL) {
+		rc = lu_env_refill((struct lu_env *)env);
+		if (rc != 0)
+			return ERR_PTR(rc);
+		info = lu_context_key_get(&env->le_ctx, &mgs_thread_key);
+	}
 	LASSERT(info != NULL);
 	return info;
 }

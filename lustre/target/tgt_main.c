@@ -34,17 +34,18 @@
 #define DEBUG_SUBSYSTEM S_CLASS
 
 #include <obd.h>
-
 #include "tgt_internal.h"
 
 int tgt_init(const struct lu_env *env, struct lu_target *lut,
-	     struct obd_device *obd, struct dt_device *dt)
+	     struct obd_device *obd, struct dt_device *dt,
+	     struct tgt_opc_slice *slice, int request_fail_id,
+	     int reply_fail_id)
 {
-	struct dt_object_format	dof;
-	struct lu_attr		attr;
-	struct lu_fid		fid;
-	struct dt_object       *o;
-	int			rc = 0;
+	struct dt_object_format	 dof;
+	struct lu_attr		 attr;
+	struct lu_fid		 fid;
+	struct dt_object	*o;
+	int			 rc = 0;
 
 	ENTRY;
 
@@ -53,8 +54,24 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	lut->lut_obd = obd;
 	lut->lut_bottom = dt;
 	lut->lut_last_rcvd = NULL;
+	lut->lut_client_bitmap = NULL;
 	obd->u.obt.obt_lut = lut;
 	obd->u.obt.obt_magic = OBT_MAGIC;
+
+	/* set request handler slice and parameters */
+	lut->lut_slice = slice;
+	lut->lut_reply_fail_id = reply_fail_id;
+	lut->lut_request_fail_id = request_fail_id;
+
+	/* sptlrcp variables init */
+	rwlock_init(&lut->lut_sptlrpc_lock);
+	sptlrpc_rule_set_init(&lut->lut_sptlrpc_rset);
+	lut->lut_mds_capa = 1;
+	lut->lut_oss_capa = 1;
+
+	/* last_rcvd initialization is needed by replayable targets only */
+	if (!obd->obd_replayable)
+		RETURN(0);
 
 	spin_lock_init(&lut->lut_translock);
 
@@ -87,6 +104,8 @@ void tgt_fini(const struct lu_env *env, struct lu_target *lut)
 {
 	ENTRY;
 
+	sptlrpc_rule_set_free(&lut->lut_sptlrpc_rset);
+
 	if (lut->lut_client_bitmap) {
 		OBD_FREE(lut->lut_client_bitmap, LR_MAX_CLIENTS >> 3);
 		lut->lut_client_bitmap = NULL;
@@ -106,17 +125,41 @@ LU_KEY_INIT_FINI(tgt, struct tgt_thread_info);
 LU_CONTEXT_KEY_DEFINE(tgt, LCT_MD_THREAD | LCT_DT_THREAD);
 EXPORT_SYMBOL(tgt_thread_key);
 
-LU_KEY_INIT_GENERIC(tg);
+LU_KEY_INIT_GENERIC(tgt);
+
+/* context key constructor/destructor: tgt_ses_key_init, tgt_ses_key_fini */
+LU_KEY_INIT_FINI(tgt_ses, struct tgt_session_info);
+
+/* context key: tgt_session_key */
+struct lu_context_key tgt_session_key = {
+	.lct_tags = LCT_SESSION,
+	.lct_init = tgt_ses_key_init,
+	.lct_fini = tgt_ses_key_fini,
+};
+EXPORT_SYMBOL(tgt_session_key);
+
+LU_KEY_INIT_GENERIC(tgt_ses);
+
+struct lprocfs_vars lprocfs_srv_module_vars[] = {
+	{ 0 },
+};
 
 int tgt_mod_init(void)
 {
-	tg_key_init_generic(&tgt_thread_key, NULL);
+	ENTRY;
+
+	tgt_key_init_generic(&tgt_thread_key, NULL);
 	lu_context_key_register_many(&tgt_thread_key, NULL);
-	return 0;
+
+	tgt_ses_key_init_generic(&tgt_session_key, NULL);
+	lu_context_key_register_many(&tgt_session_key, NULL);
+
+	RETURN(0);
 }
 
 void tgt_mod_exit(void)
 {
 	lu_context_key_degister(&tgt_thread_key);
+	lu_context_key_degister(&tgt_session_key);
 }
 

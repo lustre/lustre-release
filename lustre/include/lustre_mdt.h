@@ -43,7 +43,6 @@
 #include <lustre/lustre_idl.h>
 #include <lustre_req_layout.h>
 #include <md_object.h>
-#include <dt_object.h>
 #include <libcfs/libcfs.h>
 
 /*
@@ -55,28 +54,6 @@ struct com_thread_info {
          */
         struct req_capsule *cti_pill;
 };
-
-enum {
-        ESERIOUS = 0x0001000
-};
-
-static inline int err_serious(int rc)
-{
-        LASSERT(rc < 0);
-        return -(-rc | ESERIOUS);
-}
-
-static inline int clear_serious(int rc)
-{
-        if (rc < 0)
-                rc = -(-rc & ~ESERIOUS);
-        return rc;
-}
-
-static inline int is_serious(int rc)
-{
-        return (rc < 0 && -rc & ESERIOUS);
-}
 
 /** @} mdt */
 

@@ -18,6 +18,7 @@ ptlrpc_objs += sec_null.o sec_plain.o nrs.o nrs_fifo.o nrs_crr.o nrs_orr.o
 ptlrpc_objs += errno.o
 
 target_objs := $(TARGET)tgt_main.o $(TARGET)tgt_lastrcvd.o
+target_objs += $(TARGET)tgt_handler.o
 
 ptlrpc-objs := $(ldlm_objs) $(ptlrpc_objs)
 @SERVER_TRUE@ptlrpc-objs += $(target_objs)

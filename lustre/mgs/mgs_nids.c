@@ -658,10 +658,6 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
         if (pages == NULL)
                 RETURN(-ENOMEM);
 
-        rc = req_capsule_server_pack(&req->rq_pill);
-        if (rc)
-                GOTO(out, rc);
-
         res = req_capsule_server_get(&req->rq_pill, &RMF_MGS_CONFIG_RES);
         if (res == NULL)
                 GOTO(out, rc = -EINVAL);

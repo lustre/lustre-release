@@ -53,6 +53,7 @@
 #include <obd_class.h>
 #include <lustre_net.h>
 #include <lustre/lustre_idl.h>
+#include <obd_class.h>
 #include <lustre_disk.h>
 #include <lu_target.h>
 #include <md_object.h>
@@ -61,7 +62,6 @@
 #include <lustre_mdt.h>
 #include <lustre_req_layout.h>
 #include <lustre_sec.h>
-#include <lvfs.h>
 #include <lustre_idmap.h>
 #include <lustre_eacl.h>
 #include <lustre_quota.h>
@@ -552,36 +552,6 @@ struct mdt_handler {
 	int (*mh_act)(struct mdt_thread_info *info);
 	/* Request format for this request. */
 	const struct req_format *mh_fmt;
-};
-
-enum mdt_handler_flags {
-	/*
-	 * struct mdt_body is passed in the incoming message, and object
-	 * identified by this fid exists on disk.
-	 *
-	 * "habeo corpus" == "I have a body"
-	 */
-	HABEO_CORPUS = (1 << 0),
-	/*
-	 * struct ldlm_request is passed in the incoming message.
-	 *
-	 * "habeo clavis" == "I have a key"
-	 */
-	HABEO_CLAVIS = (1 << 1),
-	/*
-	 * this request has fixed reply format, so that reply message can be
-	 * packed by generic code.
-	 *
-	 * "habeo refero" == "I have a reply"
-	 */
-	HABEO_REFERO = (1 << 2),
-	/*
-	 * this request will modify something, so check whether the filesystem
-	 * is readonly or not, then return -EROFS to client asap if necessary.
-	 *
-	 * "mutabor" == "I shall modify"
-	 */
-	MUTABOR      = (1 << 3)
 };
 
 struct mdt_opc_slice {

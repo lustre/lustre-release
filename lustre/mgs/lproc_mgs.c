@@ -116,30 +116,14 @@ static void seq_show_srpc_rules(struct seq_file *seq, const char *tgtname,
 
 static int mgsself_srpc_seq_show(struct seq_file *seq, void *v)
 {
-        struct obd_device *obd = seq->private;
-	struct mgs_device *mgs;
-        struct fs_db      *fsdb;
-	struct lu_env	   env;
-        int                rc;
+	struct obd_device	*obd = seq->private;
+	struct mgs_device	*mgs = lu2mgs_dev(obd->obd_lu_dev);
+	struct lu_target	*tgt = &mgs->mgs_lut;
 
-	LASSERT(obd != NULL);
-	LASSERT(obd->obd_lu_dev != NULL);
-	mgs = lu2mgs_dev(obd->obd_lu_dev);
+	read_lock(&tgt->lut_sptlrpc_lock);
+	seq_show_srpc_rules(seq, MGSSELF_NAME, &tgt->lut_sptlrpc_rset);
+	read_unlock(&tgt->lut_sptlrpc_lock);
 
-	rc = lu_env_init(&env, LCT_MG_THREAD);
-	if (rc)
-		return rc;
-
-	rc = mgs_find_or_make_fsdb(&env, mgs, MGSSELF_NAME, &fsdb);
-        if (rc)
-		goto out;
-
-	mutex_lock(&fsdb->fsdb_mutex);
-        seq_show_srpc_rules(seq, fsdb->fsdb_name, &fsdb->fsdb_srpc_gen);
-	mutex_unlock(&fsdb->fsdb_mutex);
-
-out:
-	lu_env_fini(&env);
         return 0;
 }
 

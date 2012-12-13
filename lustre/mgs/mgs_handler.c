@@ -49,87 +49,88 @@
 
 #include "mgs_internal.h"
 
-/* Establish a connection to the MGS.*/
-static int mgs_connect(const struct lu_env *env,
-                       struct obd_export **exp, struct obd_device *obd,
-                       struct obd_uuid *cluuid, struct obd_connect_data *data,
-                       void *localdata)
+/*
+ * Regular MGS handlers
+ */
+static int mgs_connect(struct tgt_session_info *tsi)
 {
-        struct obd_export *lexp;
-        struct lustre_handle conn = { 0 };
-        int rc;
-        ENTRY;
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	int			 rc;
 
-        if (!exp || !obd || !cluuid)
-                RETURN(-EINVAL);
+	ENTRY;
 
-        rc = class_connect(&conn, obd, cluuid);
-        if (rc)
-                RETURN(rc);
+	rc = tgt_connect(tsi);
+	if (rc)
+		RETURN(rc);
 
-        lexp = class_conn2export(&conn);
-	if (lexp == NULL)
-		GOTO(out, rc = -EFAULT);
+	if (lustre_msg_get_conn_cnt(req->rq_reqmsg) > 1)
+		lustre_msg_add_op_flags(req->rq_repmsg, MSG_CONNECT_RECONNECT);
 
-        mgs_counter_incr(lexp, LPROC_MGS_CONNECT);
-
-	if (data != NULL) {
-		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
-		data->ocd_version = LUSTRE_VERSION_CODE;
-		lexp->exp_connect_data = *data;
-	}
-
-        rc = mgs_export_stats_init(obd, lexp, localdata);
-
-out:
-        if (rc) {
-                class_disconnect(lexp);
-        } else {
-                *exp = lexp;
-        }
-
-        RETURN(rc);
+	RETURN(0);
 }
 
-static int mgs_reconnect(const struct lu_env *env,
-			 struct obd_export *exp, struct obd_device *obd,
-			 struct obd_uuid *cluuid, struct obd_connect_data *data,
-			 void *localdata)
+static int mgs_disconnect(struct tgt_session_info *tsi)
+{
+	int rc;
+
+	ENTRY;
+
+	LASSERT(tsi->tsi_exp);
+
+	rc = tgt_disconnect(tsi);
+	if (rc)
+		RETURN(err_serious(rc));
+	RETURN(0);
+}
+
+static int mgs_exception(struct tgt_session_info *tsi)
 {
 	ENTRY;
 
-	if (exp == NULL || obd == NULL || cluuid == NULL)
-		RETURN(-EINVAL);
+	tgt_counter_incr(tsi->tsi_exp, LPROC_MGS_EXCEPTION);
 
-	mgs_counter_incr(exp, LPROC_MGS_CONNECT);
+	RETURN(0);
+}
 
-	if (data != NULL) {
-		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
-		data->ocd_version = LUSTRE_VERSION_CODE;
-		exp->exp_connect_data = *data;
+static int mgs_set_info(struct tgt_session_info *tsi)
+{
+	struct mgs_thread_info	*mgi;
+	struct mgs_send_param	*msp, *rep_msp;
+	struct lustre_cfg	*lcfg;
+	int			 rc;
+
+	ENTRY;
+
+	mgi = mgs_env_info(tsi->tsi_env);
+	if (IS_ERR(mgi))
+		RETURN(err_serious(PTR_ERR(mgi)));
+
+	msp = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_SEND_PARAM);
+	if (msp == NULL)
+		RETURN(err_serious(-EFAULT));
+
+	/* Construct lustre_cfg structure to pass to function mgs_setparam */
+	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
+	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, msp->mgs_param);
+	lcfg = lustre_cfg_new(LCFG_PARAM, &mgi->mgi_bufs);
+
+	rc = mgs_setparam(tsi->tsi_env, exp2mgs_dev(tsi->tsi_exp), lcfg,
+			  mgi->mgi_fsname);
+	if (rc) {
+		LCONSOLE_WARN("%s: Unable to set parameter %s for %s: %d\n",
+			      tgt_name(tsi->tsi_tgt), msp->mgs_param,
+			      mgi->mgi_fsname, rc);
+		GOTO(out_cfg, rc);
 	}
 
-	RETURN(mgs_export_stats_init(obd, exp, localdata));
+	/* send back the whole msp in the reply */
+	rep_msp = req_capsule_server_get(tsi->tsi_pill, &RMF_MGS_SEND_PARAM);
+	*rep_msp = *msp;
+	EXIT;
+out_cfg:
+	lustre_cfg_free(lcfg);
+	return rc;
 }
-
-static int mgs_disconnect(struct obd_export *exp)
-{
-        int rc;
-        ENTRY;
-
-        LASSERT(exp);
-
-        mgs_fsc_cleanup(exp);
-
-        class_export_get(exp);
-        mgs_counter_incr(exp, LPROC_MGS_DISCONNECT);
-
-        rc = server_disconnect_export(exp);
-        class_export_put(exp);
-        RETURN(rc);
-}
-
-static int mgs_handle(struct ptlrpc_request *req);
 
 static int mgs_completion_ast_config(struct ldlm_lock *lock, __u64 flags,
 				     void *cbdata)
@@ -295,22 +296,31 @@ static int mgs_check_failover_reg(struct mgs_target_info *mti)
 }
 
 /* Called whenever a target starts up.  Flags indicate first connect, etc. */
-static int mgs_handle_target_reg(struct ptlrpc_request *req)
+static int mgs_target_reg(struct tgt_session_info *tsi)
 {
-        struct obd_device *obd = req->rq_export->exp_obd;
-	struct mgs_device *mgs = exp2mgs_dev(req->rq_export);
-	struct lu_env     *env = req->rq_svc_thread->t_env;
-        struct mgs_target_info *mti, *rep_mti;
-        struct fs_db *fsdb;
-        int opc;
-        int rc = 0;
-        ENTRY;
+	struct obd_device	*obd = tsi->tsi_exp->exp_obd;
+	struct mgs_device	*mgs = exp2mgs_dev(tsi->tsi_exp);
+	struct mgs_target_info	*mti, *rep_mti;
+	struct fs_db		*fsdb;
+	int			 opc;
+	int			 rc = 0;
 
-        mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_REG);
+	ENTRY;
 
-        mti = req_capsule_client_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
+	rc = lu_env_refill((struct lu_env *)tsi->tsi_env);
+	if (rc)
+		return err_serious(rc);
 
-	if (OCD_HAS_FLAG(&req->rq_export->exp_connect_data, IMP_RECOV))
+	tgt_counter_incr(tsi->tsi_exp, LPROC_MGS_TARGET_REG);
+
+	mti = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_TARGET_INFO);
+	if (mti == NULL) {
+		DEBUG_REQ(D_HA, tgt_ses_req(tsi), "no mgs_send_param");
+		RETURN(err_serious(-EFAULT));
+	}
+
+	if (OCD_HAS_FLAG(&tgt_ses_req(tsi)->rq_export->exp_connect_data,
+			 IMP_RECOV))
 		opc = mti->mti_flags & LDD_F_OPC_MASK;
 	else
 		opc = LDD_F_OPC_REG;
@@ -318,7 +328,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         if (opc == LDD_F_OPC_READY) {
                 CDEBUG(D_MGS, "fs: %s index: %d is ready to reconnect.\n",
                        mti->mti_fsname, mti->mti_stripe_index);
-		rc = mgs_ir_update(env, mgs, mti);
+		rc = mgs_ir_update(tsi->tsi_env, mgs, mti);
                 if (rc) {
                         LASSERT(!(mti->mti_flags & LDD_F_IR_CAPABLE));
                         CERROR("Update IR return with %d(ignore and IR "
@@ -341,8 +351,8 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
                                 LDD_F_UPDATE))) {
                 /* We're just here as a startup ping. */
                 CDEBUG(D_MGS, "Server %s is running on %s\n",
-                       mti->mti_svname, obd_export_nid2str(req->rq_export));
-		rc = mgs_check_target(env, mgs, mti);
+		       mti->mti_svname, obd_export_nid2str(tsi->tsi_exp));
+		rc = mgs_check_target(tsi->tsi_env, mgs, mti);
                 /* above will set appropriate mti flags */
                 if (rc <= 0)
                         /* Nothing wrong, or fatal error */
@@ -358,14 +368,15 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
         if (mti->mti_flags & LDD_F_WRITECONF) {
                 if (mti->mti_flags & LDD_F_SV_TYPE_MDT &&
                     mti->mti_stripe_index == 0) {
-			rc = mgs_erase_logs(env, mgs, mti->mti_fsname);
+			rc = mgs_erase_logs(tsi->tsi_env, mgs,
+					    mti->mti_fsname);
                         LCONSOLE_WARN("%s: Logs for fs %s were removed by user "
                                       "request.  All servers must be restarted "
                                       "in order to regenerate the logs."
                                       "\n", obd->obd_name, mti->mti_fsname);
                 } else if (mti->mti_flags &
                            (LDD_F_SV_TYPE_OST | LDD_F_SV_TYPE_MDT)) {
-			rc = mgs_erase_log(env, mgs, mti->mti_svname);
+			rc = mgs_erase_log(tsi->tsi_env, mgs, mti->mti_svname);
                         LCONSOLE_WARN("%s: Regenerating %s log by user "
                                       "request.\n",
                                       obd->obd_name, mti->mti_svname);
@@ -377,7 +388,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 			GOTO(out_nolock, rc);
         }
 
-	rc = mgs_find_or_make_fsdb(env, mgs, mti->mti_fsname, &fsdb);
+	rc = mgs_find_or_make_fsdb(tsi->tsi_env, mgs, mti->mti_fsname, &fsdb);
         if (rc) {
                 CERROR("Can't get db for %s: %d\n", mti->mti_fsname, rc);
                 GOTO(out_nolock, rc);
@@ -402,7 +413,7 @@ static int mgs_handle_target_reg(struct ptlrpc_request *req)
 
                 /* create or update the target log
                    and update the client/mdt logs */
-		rc = mgs_write_log_target(env, mgs, mti, fsdb);
+		rc = mgs_write_log_target(tsi->tsi_env, mgs, mti, fsdb);
                 if (rc) {
                         CERROR("Failed to write %s log (%d)\n",
                                mti->mti_svname, rc);
@@ -419,349 +430,133 @@ out:
 	mgs_revoke_lock(mgs, fsdb, CONFIG_T_CONFIG);
 
 out_nolock:
-        CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname,
-               mti->mti_stripe_index, rc);
-        req->rq_status = rc;
-        if (rc)
-                /* we need an error flag to tell the target what's going on,
-                 * instead of just doing it by error code only. */
-                mti->mti_flags |= LDD_F_ERROR;
+	CDEBUG(D_MGS, "replying with %s, index=%d, rc=%d\n", mti->mti_svname,
+	       mti->mti_stripe_index, rc);
+	 /* An error flag is set in the mti reply rather than an error code */
+	if (rc)
+		mti->mti_flags |= LDD_F_ERROR;
 
-        rc = req_capsule_server_pack(&req->rq_pill);
-        if (rc)
-                RETURN(rc);
+	/* send back the whole mti in the reply */
+	rep_mti = req_capsule_server_get(tsi->tsi_pill, &RMF_MGS_TARGET_INFO);
+	*rep_mti = *mti;
 
-        /* send back the whole mti in the reply */
-        rep_mti = req_capsule_server_get(&req->rq_pill, &RMF_MGS_TARGET_INFO);
-        *rep_mti = *mti;
-
-        /* Flush logs to disk */
-	dt_sync(req->rq_svc_thread->t_env, mgs->mgs_bottom);
-        RETURN(rc);
-}
-
-static int mgs_set_info_rpc(struct ptlrpc_request *req)
-{
-	struct mgs_device *mgs = exp2mgs_dev(req->rq_export);
-	struct lu_env     *env = req->rq_svc_thread->t_env;
-        struct mgs_send_param *msp, *rep_msp;
-	struct mgs_thread_info *mgi = mgs_env_info(env);
-        int rc;
-        struct lustre_cfg *lcfg;
-        ENTRY;
-
-        msp = req_capsule_client_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
-        LASSERT(msp);
-
-        /* Construct lustre_cfg structure to pass to function mgs_setparam */
-	lustre_cfg_bufs_reset(&mgi->mgi_bufs, NULL);
-	lustre_cfg_bufs_set_string(&mgi->mgi_bufs, 1, msp->mgs_param);
-	lcfg = lustre_cfg_new(LCFG_PARAM, &mgi->mgi_bufs);
-	if (IS_ERR(lcfg))
-		GOTO(out, rc = PTR_ERR(lcfg));
-	rc = mgs_setparam(env, mgs, lcfg, mgi->mgi_fsname);
-        if (rc) {
-                CERROR("Error %d in setting the parameter %s for fs %s\n",
-		       rc, msp->mgs_param, mgi->mgi_fsname);
-		GOTO(out_cfg, rc);
-        }
-
-        rc = req_capsule_server_pack(&req->rq_pill);
-        if (rc == 0) {
-                rep_msp = req_capsule_server_get(&req->rq_pill, &RMF_MGS_SEND_PARAM);
-                rep_msp = msp;
-        }
-out_cfg:
-	lustre_cfg_free(lcfg);
-out:
-        RETURN(rc);
-}
-
-static int mgs_config_read(struct ptlrpc_request *req)
-{
-        struct mgs_config_body *body;
-        int rc;
-        ENTRY;
-
-        body = req_capsule_client_get(&req->rq_pill, &RMF_MGS_CONFIG_BODY);
-        if (body == NULL)
-                RETURN(-EINVAL);
-
-        switch (body->mcb_type) {
-        case CONFIG_T_RECOVER:
-                rc = mgs_get_ir_logs(req);
-                break;
-
-        case CONFIG_T_CONFIG:
-                rc = -ENOTSUPP;
-                break;
-
-        default:
-                rc = -EINVAL;
-                break;
-        }
-
-        RETURN(rc);
-}
-
-/*
- * similar as in ost_connect_check_sptlrpc()
- */
-static int mgs_connect_check_sptlrpc(struct ptlrpc_request *req)
-{
-        struct obd_export     *exp = req->rq_export;
-	struct mgs_device     *mgs = exp2mgs_dev(req->rq_export);
-	struct lu_env         *env = req->rq_svc_thread->t_env;
-        struct fs_db          *fsdb;
-        struct sptlrpc_flavor  flvr;
-        int                    rc = 0;
-
-        if (exp->exp_flvr.sf_rpc == SPTLRPC_FLVR_INVALID) {
-		rc = mgs_find_or_make_fsdb(env, mgs, MGSSELF_NAME, &fsdb);
-                if (rc)
-                        return rc;
-
-		mutex_lock(&fsdb->fsdb_mutex);
-		if (sptlrpc_rule_set_choose(&fsdb->fsdb_srpc_gen,
-					    LUSTRE_SP_MGC, LUSTRE_SP_MGS,
-					    req->rq_peer.nid,
-					    &flvr) == 0) {
-			/* by defualt allow any flavors */
-			flvr.sf_rpc = SPTLRPC_FLVR_ANY;
-		}
-		mutex_unlock(&fsdb->fsdb_mutex);
-
-		spin_lock(&exp->exp_lock);
-
-                exp->exp_sp_peer = req->rq_sp_from;
-                exp->exp_flvr = flvr;
-
-                if (exp->exp_flvr.sf_rpc != SPTLRPC_FLVR_ANY &&
-                    exp->exp_flvr.sf_rpc != req->rq_flvr.sf_rpc) {
-                        CERROR("invalid rpc flavor %x, expect %x, from %s\n",
-                               req->rq_flvr.sf_rpc, exp->exp_flvr.sf_rpc,
-                               libcfs_nid2str(req->rq_peer.nid));
-                        rc = -EACCES;
-                }
-
-		spin_unlock(&exp->exp_lock);
-        } else {
-                if (exp->exp_sp_peer != req->rq_sp_from) {
-                        CERROR("RPC source %s doesn't match %s\n",
-                               sptlrpc_part2name(req->rq_sp_from),
-                               sptlrpc_part2name(exp->exp_sp_peer));
-                        rc = -EACCES;
-                } else {
-                        rc = sptlrpc_target_export_check(exp, req);
-                }
-        }
-
-        return rc;
+	/* Flush logs to disk */
+	dt_sync(tsi->tsi_env, mgs->mgs_bottom);
+	RETURN(rc);
 }
 
 /* Called whenever a target cleans up. */
-/* XXX - Currently unused */
-static int mgs_handle_target_del(struct ptlrpc_request *req)
+static int mgs_target_del(struct tgt_session_info *tsi)
 {
-        ENTRY;
-        mgs_counter_incr(req->rq_export, LPROC_MGS_TARGET_DEL);
-        RETURN(0);
+	ENTRY;
+
+	tgt_counter_incr(tsi->tsi_exp, LPROC_MGS_TARGET_DEL);
+
+	RETURN(0);
 }
 
-/* XXX - Currently unused */
-static int mgs_handle_exception(struct ptlrpc_request *req)
+static int mgs_config_read(struct tgt_session_info *tsi)
 {
-        ENTRY;
-        mgs_counter_incr(req->rq_export, LPROC_MGS_EXCEPTION);
-        RETURN(0);
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	struct mgs_config_body	*body;
+	int			 rc;
+
+	ENTRY;
+
+	body = req_capsule_client_get(tsi->tsi_pill, &RMF_MGS_CONFIG_BODY);
+	if (body == NULL) {
+		DEBUG_REQ(D_HA, req, "no mgs_config_body");
+		RETURN(err_serious(-EFAULT));
+	}
+
+	switch (body->mcb_type) {
+	case CONFIG_T_RECOVER:
+		rc = mgs_get_ir_logs(req);
+		break;
+	case CONFIG_T_CONFIG:
+		rc = -EOPNOTSUPP;
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+
+	RETURN(rc);
+}
+
+static int mgs_llog_open(struct tgt_session_info *tsi)
+{
+	struct mgs_thread_info	*mgi;
+	struct ptlrpc_request	*req = tgt_ses_req(tsi);
+	char			*logname;
+	int			 rc;
+
+	ENTRY;
+
+	rc = tgt_llog_open(tsi);
+	if (rc)
+		RETURN(rc);
+
+	/*
+	 * For old clients there is no direct way of knowing which file system
+	 * a client is operating at the MGS side. But we need to pick up those
+	 * clients so that the MGS can mark the corresponding file system as
+	 * non-IR capable because old clients are not ready to be notified.
+	 *
+	 * Therefore we attempt to detect the file systems name by hacking the
+	 * llog operation which is currently used by the clients to fetch
+	 * configuration logs. At present this is fine because this is the
+	 * ONLY llog operation between mgc and the MGS.
+	 *
+	 * If extra llog operation are going to be added, this function needs
+	 * further work.
+	 *
+	 * When releases prior than 2.0 are not supported, the following code
+	 * can be removed.
+	 */
+	mgi = mgs_env_info(tsi->tsi_env);
+	if (IS_ERR(mgi))
+		RETURN(PTR_ERR(mgi));
+
+	logname = req_capsule_client_get(tsi->tsi_pill, &RMF_NAME);
+	if (logname) {
+		char *ptr = strchr(logname, '-');
+		int   len = (int)(ptr - logname);
+
+		if (ptr == NULL || len >= sizeof(mgi->mgi_fsname)) {
+			LCONSOLE_WARN("%s: non-config logname received: %s\n",
+				      tgt_name(tsi->tsi_tgt), logname);
+			/* not error, this can be llog test name */
+		} else {
+			strncpy(mgi->mgi_fsname, logname, len);
+			mgi->mgi_fsname[len] = 0;
+
+			rc = mgs_fsc_attach(tsi->tsi_env, tsi->tsi_exp,
+					    mgi->mgi_fsname);
+			if (rc && rc != -EEXIST) {
+				LCONSOLE_WARN("%s: Unable to add client %s "
+					      "to file system %s: %d\n",
+					      tgt_name(tsi->tsi_tgt),
+					      libcfs_nid2str(req->rq_peer.nid),
+					      mgi->mgi_fsname, rc);
+			} else {
+				rc = 0;
+			}
+		}
+	} else {
+		CERROR("%s: no logname in request\n", tgt_name(tsi->tsi_tgt));
+		RETURN(-EINVAL);
+	}
+	RETURN(rc);
 }
 
 /*
- * For old clients there is no direct way of knowing which filesystems
- * a client is operating at the MGS side. But we need to pick up those
- * clients so that the MGS can mark the corresponding filesystem as
- * non-IR capable because old clients are not ready to be notified.
- *
- * This is why we have this _hack_ function. We detect the filesystem's
- * name by hacking llog operation which is currently used by the clients
- * to fetch configuration logs. At present this is fine because this is
- * the ONLY llog operation between mgc and the MGS.
- *
- * If extra llog operation is going to be added, this function needs fixing.
- *
- * If releases prior than 2.0 are not supported, we can remove this function.
+ * sec context handlers
  */
-static int mgs_handle_fslog_hack(struct ptlrpc_request *req)
+/* XXX: Implement based on mdt_sec_ctx_handle()? */
+static int mgs_sec_ctx_handle(struct tgt_session_info *tsi)
 {
-        char *logname;
-        char fsname[16];
-        char *ptr;
-        int rc;
-
-        /* XXX: We suppose that llog at mgs is only used for
-         * fetching file system log */
-        logname = req_capsule_client_get(&req->rq_pill, &RMF_NAME);
-        if (logname == NULL) {
-                CERROR("No logname, is llog on MGS used for something else?\n");
-                return -EINVAL;
-        }
-
-        ptr = strchr(logname, '-');
-        rc = (int)(ptr - logname);
-        if (ptr == NULL || rc >= sizeof(fsname)) {
-                CERROR("Invalid logname received: %s\n", logname);
-                return -EINVAL;
-        }
-
-        strncpy(fsname, logname, rc);
-        fsname[rc] = 0;
-	rc = mgs_fsc_attach(req->rq_svc_thread->t_env, req->rq_export, fsname);
-        if (rc < 0 && rc != -EEXIST)
-                CERROR("add fs client %s returns %d\n", fsname, rc);
-
-        return rc;
-}
-
-/* TODO: handle requests in a similar way as MDT: see mdt_handle_common() */
-int mgs_handle(struct ptlrpc_request *req)
-{
-        int fail = OBD_FAIL_MGS_ALL_REPLY_NET;
-        int opc, rc = 0;
-        ENTRY;
-
-        req_capsule_init(&req->rq_pill, req, RCL_SERVER);
-        CFS_FAIL_TIMEOUT_MS(OBD_FAIL_MGS_PAUSE_REQ, cfs_fail_val);
-        if (CFS_FAIL_CHECK(OBD_FAIL_MGS_ALL_REQUEST_NET))
-                RETURN(0);
-
-        LASSERT(current->journal_info == NULL);
-        opc = lustre_msg_get_opc(req->rq_reqmsg);
-
-        if (opc == SEC_CTX_INIT ||
-            opc == SEC_CTX_INIT_CONT ||
-            opc == SEC_CTX_FINI)
-                GOTO(out, rc = 0);
-
-        if (opc != MGS_CONNECT) {
-                if (!class_connected_export(req->rq_export)) {
-                        DEBUG_REQ(D_MGS, req, "operation on unconnected MGS\n");
-                        req->rq_status = -ENOTCONN;
-                        GOTO(out, rc = -ENOTCONN);
-                }
-        }
-
-        switch (opc) {
-        case MGS_CONNECT:
-                DEBUG_REQ(D_MGS, req, "connect");
-                /* MGS and MDS have same request format for connect */
-                req_capsule_set(&req->rq_pill, &RQF_MDS_CONNECT);
-                rc = target_handle_connect(req);
-                if (rc == 0)
-                        rc = mgs_connect_check_sptlrpc(req);
-
-                if (!rc && (lustre_msg_get_conn_cnt(req->rq_reqmsg) > 1))
-                        /* Make clients trying to reconnect after a MGS restart
-                           happy; also requires obd_replayable */
-                        lustre_msg_add_op_flags(req->rq_repmsg,
-                                                MSG_CONNECT_RECONNECT);
-                break;
-        case MGS_DISCONNECT:
-                DEBUG_REQ(D_MGS, req, "disconnect");
-                /* MGS and MDS have same request format for disconnect */
-                req_capsule_set(&req->rq_pill, &RQF_MDS_DISCONNECT);
-                rc = target_handle_disconnect(req);
-                req->rq_status = rc;            /* superfluous? */
-                break;
-        case MGS_EXCEPTION:
-                DEBUG_REQ(D_MGS, req, "exception");
-                rc = mgs_handle_exception(req);
-                break;
-        case MGS_TARGET_REG:
-                DEBUG_REQ(D_MGS, req, "target add");
-                req_capsule_set(&req->rq_pill, &RQF_MGS_TARGET_REG);
-                rc = mgs_handle_target_reg(req);
-                break;
-        case MGS_TARGET_DEL:
-                DEBUG_REQ(D_MGS, req, "target del");
-                rc = mgs_handle_target_del(req);
-                break;
-        case MGS_SET_INFO:
-                DEBUG_REQ(D_MGS, req, "set_info");
-                req_capsule_set(&req->rq_pill, &RQF_MGS_SET_INFO);
-                rc = mgs_set_info_rpc(req);
-                break;
-        case MGS_CONFIG_READ:
-                DEBUG_REQ(D_MGS, req, "read config");
-                req_capsule_set(&req->rq_pill, &RQF_MGS_CONFIG_READ);
-                rc = mgs_config_read(req);
-                break;
-        case LDLM_ENQUEUE:
-                DEBUG_REQ(D_MGS, req, "enqueue");
-                req_capsule_set(&req->rq_pill, &RQF_LDLM_ENQUEUE);
-                rc = ldlm_handle_enqueue(req, ldlm_server_completion_ast,
-                                         ldlm_server_blocking_ast, NULL);
-                break;
-        case LDLM_BL_CALLBACK:
-        case LDLM_CP_CALLBACK:
-                DEBUG_REQ(D_MGS, req, "callback");
-                CERROR("callbacks should not happen on MGS\n");
-                LBUG();
-                break;
-
-        case OBD_PING:
-                DEBUG_REQ(D_INFO, req, "ping");
-                req_capsule_set(&req->rq_pill, &RQF_OBD_PING);
-                rc = target_handle_ping(req);
-                break;
-        case OBD_LOG_CANCEL:
-                DEBUG_REQ(D_MGS, req, "log cancel");
-                rc = -ENOTSUPP; /* la la la */
-                break;
-
-        case LLOG_ORIGIN_HANDLE_CREATE:
-		DEBUG_REQ(D_MGS, req, "llog_open");
-		req_capsule_set(&req->rq_pill, &RQF_LLOG_ORIGIN_HANDLE_CREATE);
-		rc = llog_origin_handle_open(req);
-                if (rc == 0)
-                        (void)mgs_handle_fslog_hack(req);
-                break;
-        case LLOG_ORIGIN_HANDLE_NEXT_BLOCK:
-                DEBUG_REQ(D_MGS, req, "llog next block");
-                req_capsule_set(&req->rq_pill,
-                                &RQF_LLOG_ORIGIN_HANDLE_NEXT_BLOCK);
-                rc = llog_origin_handle_next_block(req);
-                break;
-	case LLOG_ORIGIN_HANDLE_PREV_BLOCK:
-		DEBUG_REQ(D_MGS, req, "llog prev block");
-		req_capsule_set(&req->rq_pill,
-				&RQF_LLOG_ORIGIN_HANDLE_PREV_BLOCK);
-		rc = llog_origin_handle_prev_block(req);
-		break;
-        case LLOG_ORIGIN_HANDLE_READ_HEADER:
-                DEBUG_REQ(D_MGS, req, "llog read header");
-                req_capsule_set(&req->rq_pill,
-                                &RQF_LLOG_ORIGIN_HANDLE_READ_HEADER);
-                rc = llog_origin_handle_read_header(req);
-                break;
-        case LLOG_ORIGIN_HANDLE_CLOSE:
-                DEBUG_REQ(D_MGS, req, "llog close");
-                rc = llog_origin_handle_close(req);
-                break;
-	default:
-		rc = -EOPNOTSUPP;
-        }
-
-        LASSERT(current->journal_info == NULL);
-	if (rc) {
-		DEBUG_REQ(D_MGS, req, "MGS fail to handle opc = %d: rc = %d\n",
-			  opc, rc);
-		req->rq_status = rc;
-		rc = ptlrpc_error(req);
-		RETURN(rc);
-	}
-out:
-        target_send_reply(req, rc, fail);
-        RETURN(0);
+	return 0;
 }
 
 static inline int mgs_init_export(struct obd_export *exp)
@@ -1058,15 +853,81 @@ out:
 	RETURN(rc);
 }
 
+static struct tgt_handler mgs_mgs_handlers[] = {
+TGT_RPC_HANDLER(MGS_FIRST_OPC,
+		0,			MGS_CONNECT,	 mgs_connect,
+		&RQF_CONNECT, LUSTRE_OBD_VERSION),
+TGT_RPC_HANDLER(MGS_FIRST_OPC,
+		0,			MGS_DISCONNECT,	 mgs_disconnect,
+		&RQF_MDS_DISCONNECT, LUSTRE_OBD_VERSION),
+TGT_MGS_HDL_VAR(0,			MGS_EXCEPTION,	 mgs_exception),
+TGT_MGS_HDL    (HABEO_REFERO | MUTABOR,	MGS_SET_INFO,	 mgs_set_info),
+TGT_MGS_HDL    (HABEO_REFERO | MUTABOR,	MGS_TARGET_REG,	 mgs_target_reg),
+TGT_MGS_HDL_VAR(0,			MGS_TARGET_DEL,	 mgs_target_del),
+TGT_MGS_HDL    (HABEO_REFERO,		MGS_CONFIG_READ, mgs_config_read),
+};
+
+static struct tgt_handler mgs_obd_handlers[] = {
+TGT_OBD_HDL(0,	OBD_PING,	tgt_obd_ping),
+};
+
+static struct tgt_handler mgs_dlm_handlers[] = {
+TGT_DLM_HDL(HABEO_CLAVIS,	LDLM_ENQUEUE,	tgt_enqueue),
+};
+
+static struct tgt_handler mgs_llog_handlers[] = {
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_CREATE,	mgs_llog_open),
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_NEXT_BLOCK,	tgt_llog_next_block),
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_READ_HEADER,	tgt_llog_read_header),
+TGT_LLOG_HDL_VAR(0,	LLOG_ORIGIN_HANDLE_CLOSE,	tgt_llog_close),
+TGT_LLOG_HDL    (0,	LLOG_ORIGIN_HANDLE_PREV_BLOCK,	tgt_llog_prev_block),
+};
+
+static struct tgt_handler mgs_sec_ctx_handlers[] = {
+TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT,		mgs_sec_ctx_handle),
+TGT_SEC_HDL_VAR(0,	SEC_CTX_INIT_CONT,	mgs_sec_ctx_handle),
+TGT_SEC_HDL_VAR(0,	SEC_CTX_FINI,		mgs_sec_ctx_handle),
+};
+
+static struct tgt_opc_slice mgs_common_slice[] = {
+	{
+		.tos_opc_start = MGS_FIRST_OPC,
+		.tos_opc_end   = MGS_LAST_OPC,
+		.tos_hs        = mgs_mgs_handlers
+	},
+	{
+		.tos_opc_start = OBD_FIRST_OPC,
+		.tos_opc_end   = OBD_LAST_OPC,
+		.tos_hs        = mgs_obd_handlers
+	},
+	{
+		.tos_opc_start = LDLM_FIRST_OPC,
+		.tos_opc_end   = LDLM_LAST_OPC,
+		.tos_hs        = mgs_dlm_handlers
+	},
+	{
+		.tos_opc_start = LLOG_FIRST_OPC,
+		.tos_opc_end   = LLOG_LAST_OPC,
+		.tos_hs        = mgs_llog_handlers
+	},
+	{
+		.tos_opc_start = SEC_FIRST_OPC,
+		.tos_opc_end   = SEC_LAST_OPC,
+		.tos_hs        = mgs_sec_ctx_handlers
+	},
+	{
+		.tos_hs        = NULL
+	}
+};
 
 static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 		     struct lu_device_type *ldt, struct lustre_cfg *lcfg)
 {
-	static struct ptlrpc_service_conf	 conf;
-	struct obd_device			*obd;
-	struct lustre_mount_info		*lmi;
-	struct llog_ctxt			*ctxt;
-	int					 rc;
+	struct ptlrpc_service_conf	 conf;
+	struct obd_device		*obd;
+	struct lustre_mount_info	*lmi;
+	struct llog_ctxt		*ctxt;
+	int				 rc;
 
 	ENTRY;
 
@@ -1096,15 +957,20 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	if (obd->obd_namespace == NULL)
 		GOTO(err_ops, rc = -ENOMEM);
 
-	/* ldlm setup */
-	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
-			   "mgs_ldlm_client", &obd->obd_ldlm_client);
+	/* No recovery for MGCs */
+	obd->obd_replayable = 0;
+
+	rc = tgt_init(env, &mgs->mgs_lut, obd, mgs->mgs_bottom,
+		      mgs_common_slice, OBD_FAIL_MGS_ALL_REQUEST_NET,
+		      OBD_FAIL_MGS_ALL_REPLY_NET);
+	if (rc)
+		GOTO(err_ns, rc);
 
 	rc = mgs_fs_setup(env, mgs);
 	if (rc) {
 		CERROR("%s: MGS filesystem method init failed: rc = %d\n",
 		       obd->obd_name, rc);
-		GOTO(err_ns, rc);
+		GOTO(err_tgt, rc);
 	}
 
 	rc = llog_setup(env, obd, &obd->obd_olg, LLOG_CONFIG_ORIG_CTXT,
@@ -1119,9 +985,6 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	ctxt->loc_dir = mgs->mgs_configs_dir;
 	llog_ctxt_put(ctxt);
 
-	/* No recovery for MGC's */
-	obd->obd_replayable = 0;
-
 	/* Internal mgs setup */
 	mgs_init_fsdb_list(mgs);
 	mutex_init(&mgs->mgs_mutex);
@@ -1134,6 +997,9 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 		       obd->obd_name, rc);
 		GOTO(err_llog, rc);
 	}
+
+	ptlrpc_init_client(LDLM_CB_REQUEST_PORTAL, LDLM_CB_REPLY_PORTAL,
+			   "mgs_ldlm_client", &obd->obd_ldlm_client);
 
 	conf = (typeof(conf)) {
 		.psc_name		= LUSTRE_MGS_NAME,
@@ -1153,15 +1019,17 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 			.tc_ctx_tags		= LCT_MG_THREAD,
 		},
 		.psc_ops		= {
-			.so_req_handler		= mgs_handle,
+			.so_req_handler		= tgt_request_handle,
 			.so_req_printer		= target_print_req,
 		},
 	};
+
 	/* Start the service threads */
 	mgs->mgs_service = ptlrpc_register_service(&conf, obd->obd_proc_entry);
 	if (IS_ERR(mgs->mgs_service)) {
 		rc = PTR_ERR(mgs->mgs_service);
-		CERROR("failed to start service: %d\n", rc);
+		CERROR("failed to start mgs service: %d\n", rc);
+		mgs->mgs_service = NULL;
 		GOTO(err_lproc, rc);
 	}
 
@@ -1172,7 +1040,6 @@ static int mgs_init0(const struct lu_env *env, struct mgs_device *mgs,
 	/* device stack is not yet fully setup to keep no objects behind */
 	lu_site_purge(env, mgs2lu_dev(mgs)->ld_site, ~0);
 	RETURN(0);
-
 err_lproc:
 	lproc_mgs_cleanup(mgs);
 err_llog:
@@ -1181,6 +1048,8 @@ err_llog:
 		ctxt->loc_dir = NULL;
 		llog_cleanup(env, ctxt);
 	}
+err_tgt:
+	tgt_fini(env, &mgs->mgs_lut);
 err_fs:
 	/* No extra cleanup needed for llog_init_commit_thread() */
 	mgs_fs_cleanup(env, mgs);
@@ -1335,6 +1204,8 @@ static struct lu_device *mgs_device_fini(const struct lu_env *env,
 
 	LASSERT(mgs->mgs_bottom);
 
+	class_disconnect_exports(obd);
+
 	ping_evictor_stop();
 
 	ptlrpc_unregister_service(mgs->mgs_service);
@@ -1342,6 +1213,7 @@ static struct lu_device *mgs_device_fini(const struct lu_env *env,
 	obd_exports_barrier(obd);
 	obd_zombie_barrier();
 
+	tgt_fini(env, &mgs->mgs_lut);
 	mgs_cleanup_fsdb_list(mgs);
 	lproc_mgs_cleanup(mgs);
 
@@ -1397,24 +1269,99 @@ static struct lu_device_type mgs_device_type = {
 	.ldt_ctx_tags	= LCT_MG_THREAD
 };
 
+static int mgs_obd_connect(const struct lu_env *env, struct obd_export **exp,
+			   struct obd_device *obd, struct obd_uuid *cluuid,
+			   struct obd_connect_data *data, void *localdata)
+{
+	struct obd_export	*lexp;
+	struct lustre_handle	 conn = { 0 };
+	int			 rc;
+
+	ENTRY;
+
+	if (exp == NULL || obd == NULL || cluuid == NULL)
+		RETURN(-EINVAL);
+
+	rc = class_connect(&conn, obd, cluuid);
+	if (rc)
+		RETURN(rc);
+
+	lexp = class_conn2export(&conn);
+	if (lexp == NULL)
+		RETURN(-EFAULT);
+
+	if (data != NULL) {
+		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
+		data->ocd_version = LUSTRE_VERSION_CODE;
+		lexp->exp_connect_data = *data;
+	}
+
+	tgt_counter_incr(lexp, LPROC_MGS_CONNECT);
+
+	rc = mgs_export_stats_init(obd, lexp, localdata);
+	if (rc)
+		class_disconnect(lexp);
+	else
+		*exp = lexp;
+
+	RETURN(rc);
+}
+
+static int mgs_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
+			     struct obd_device *obd, struct obd_uuid *cluuid,
+			     struct obd_connect_data *data, void *localdata)
+{
+	ENTRY;
+
+	if (exp == NULL || obd == NULL || cluuid == NULL)
+		RETURN(-EINVAL);
+
+	tgt_counter_incr(exp, LPROC_MGS_CONNECT);
+
+	if (data != NULL) {
+		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
+		data->ocd_version = LUSTRE_VERSION_CODE;
+		exp->exp_connect_data = *data;
+	}
+
+	RETURN(mgs_export_stats_init(obd, exp, localdata));
+}
+
+static int mgs_obd_disconnect(struct obd_export *exp)
+{
+	int rc;
+
+	ENTRY;
+
+	LASSERT(exp);
+
+	mgs_fsc_cleanup(exp);
+
+	class_export_get(exp);
+	tgt_counter_incr(exp, LPROC_MGS_DISCONNECT);
+
+	rc = server_disconnect_export(exp);
+	class_export_put(exp);
+	RETURN(rc);
+}
 
 /* use obd ops to offer management infrastructure */
-static struct obd_ops mgs_obd_ops = {
-        .o_owner           = THIS_MODULE,
-        .o_connect         = mgs_connect,
-        .o_reconnect       = mgs_reconnect,
-        .o_disconnect      = mgs_disconnect,
-        .o_init_export     = mgs_init_export,
-        .o_destroy_export  = mgs_destroy_export,
-        .o_iocontrol       = mgs_iocontrol,
+static struct obd_ops mgs_obd_device_ops = {
+	.o_owner		= THIS_MODULE,
+	.o_connect		= mgs_obd_connect,
+	.o_reconnect		= mgs_obd_reconnect,
+	.o_disconnect		= mgs_obd_disconnect,
+	.o_init_export		= mgs_init_export,
+	.o_destroy_export	= mgs_destroy_export,
+	.o_iocontrol		= mgs_iocontrol,
 };
 
 static int __init mgs_init(void)
 {
-        struct lprocfs_static_vars lvars;
+	struct lprocfs_static_vars lvars;
 
-        lprocfs_mgs_init_vars(&lvars);
-	class_register_type(&mgs_obd_ops, NULL, lvars.module_vars,
+	lprocfs_mgs_init_vars(&lvars);
+	class_register_type(&mgs_obd_device_ops, NULL, lvars.module_vars,
 			    LUSTRE_MGS_NAME, &mgs_device_type);
 
 	return 0;
@@ -1422,7 +1369,7 @@ static int __init mgs_init(void)
 
 static void /*__exit*/ mgs_exit(void)
 {
-        class_unregister_type(LUSTRE_MGS_NAME);
+	class_unregister_type(LUSTRE_MGS_NAME);
 }
 
 MODULE_AUTHOR("Sun Microsystems, Inc. <http://www.lustre.org/>");
