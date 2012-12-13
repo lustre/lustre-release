@@ -59,7 +59,7 @@ setup() {
 	log "== test 00: target handle mismatch (bug 5317) === `date +%H:%M:%S`"
 
 	#define OBD_FAIL_OST_ALL_REPLY_NET       0x211
-	do_facet ost "lctl set_param fail_loc=0x80000211"
+	do_facet ost1 "lctl set_param fail_loc=0x80000211"
 
 	zconf_mount `hostname` $MOUNT && df $MOUNT && pass || error "mount fail"
     fi
