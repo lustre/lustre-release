@@ -2306,8 +2306,8 @@ static int mdc_unpin(struct obd_export *exp, struct obd_client_handle *handle,
         RETURN(rc);
 }
 
-int mdc_sync(struct obd_export *exp, const struct lu_fid *fid,
-             struct obd_capa *oc, struct ptlrpc_request **request)
+int mdc_fsync(struct obd_export *exp, const struct lu_fid *fid,
+	      struct obd_capa *oc, struct ptlrpc_request **request)
 {
         struct ptlrpc_request *req;
         int                    rc;
@@ -2460,6 +2460,7 @@ static int mdc_setup(struct obd_device *obd, struct lustre_cfg *cfg)
                 GOTO(err_close_lock, rc);
         lprocfs_mdc_init_vars(&lvars);
         lprocfs_obd_setup(obd, lvars.obd_vars);
+	lprocfs_alloc_md_stats(obd, 0);
         sptlrpc_lprocfs_cliobd_attach(obd);
         ptlrpc_lprocfs_register_obd(obd);
 
@@ -2522,6 +2523,7 @@ static int mdc_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
                 obd_cleanup_client_import(obd);
                 ptlrpc_lprocfs_unregister_obd(obd);
                 lprocfs_obd_cleanup(obd);
+		lprocfs_free_md_stats(obd);
 
                 rc = obd_llog_finish(obd, 0);
                 if (rc != 0)
@@ -2736,7 +2738,7 @@ struct md_ops mdc_md_ops = {
         .m_setattr          = mdc_setattr,
         .m_setxattr         = mdc_setxattr,
         .m_getxattr         = mdc_getxattr,
-        .m_sync             = mdc_sync,
+	.m_fsync	    = mdc_fsync,
         .m_readpage         = mdc_readpage,
         .m_unlink           = mdc_unlink,
         .m_cancel_unused    = mdc_cancel_unused,

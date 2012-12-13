@@ -191,7 +191,6 @@ struct obd_export {
 	 */
         struct obd_import        *exp_imp_reverse;
         struct nid_stat          *exp_nid_stats;
-        struct lprocfs_stats     *exp_md_stats;
         /** Active connetion */
         struct ptlrpc_connection *exp_connection;
         /** Connection count value from last succesful reconnect rpc */

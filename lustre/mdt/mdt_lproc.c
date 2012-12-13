@@ -239,7 +239,7 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 	rc = lprocfs_alloc_md_stats(obd, LPROC_MDT_LAST);
 	if (rc)
 		return rc;
-	mdt_stats_counter_init(obd->md_stats);
+	mdt_stats_counter_init(obd->obd_md_stats);
 
 	rc = lprocfs_job_stats_init(obd, LPROC_MDT_LAST,
 				    mdt_stats_counter_init);
@@ -1045,8 +1045,8 @@ void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
 {
 	struct obd_export *exp = req->rq_export;
 
-	if (exp->exp_obd && exp->exp_obd->md_stats)
-		lprocfs_counter_incr(exp->exp_obd->md_stats, opcode);
+	if (exp->exp_obd && exp->exp_obd->obd_md_stats)
+		lprocfs_counter_incr(exp->exp_obd->obd_md_stats, opcode);
 	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
 		lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
 	if (exp->exp_obd && exp->exp_obd->u.obt.obt_jobstats.ojs_hash &&

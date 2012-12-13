@@ -2819,8 +2819,8 @@ int ll_fsync(struct file *file, struct dentry *dentry, int datasync)
         }
 
         oc = ll_mdscapa_get(inode);
-        err = md_sync(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
-                      &req);
+	err = md_fsync(ll_i2sbi(inode)->ll_md_exp, ll_inode2fid(inode), oc,
+		       &req);
         capa_put(oc);
         if (!rc)
                 rc = err;

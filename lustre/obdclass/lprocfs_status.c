@@ -1619,6 +1619,8 @@ void lprocfs_init_ops_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, pool_del);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, getref);
         LPROCFS_OBD_OP_INIT(num_private_stats, stats, putref);
+
+	CLASSERT(NUM_OBD_STATS == OBD_COUNTER_OFFSET(putref) + 1);
 }
 EXPORT_SYMBOL(lprocfs_init_ops_stats);
 
@@ -1632,8 +1634,7 @@ int lprocfs_alloc_obd_stats(struct obd_device *obd, unsigned num_private_stats)
         LASSERT(obd->obd_proc_entry != NULL);
         LASSERT(obd->obd_cntr_base == 0);
 
-        num_stats = ((int)sizeof(*obd->obd_type->typ_dt_ops) / sizeof(void *)) +
-                num_private_stats - 1 /* o_owner */;
+	num_stats = NUM_OBD_STATS + num_private_stats;
         stats = lprocfs_alloc_stats(num_stats, 0);
         if (stats == NULL)
                 return -ENOMEM;
@@ -1668,12 +1669,18 @@ void lprocfs_free_obd_stats(struct obd_device *obd)
 }
 EXPORT_SYMBOL(lprocfs_free_obd_stats);
 
-#define LPROCFS_MD_OP_INIT(base, stats, op)                             \
-do {                                                                    \
-        unsigned int coffset = base + MD_COUNTER_OFFSET(op);            \
-        LASSERT(coffset < stats->ls_num);                               \
-        lprocfs_counter_init(stats, coffset, 0, #op, "reqs");           \
-} while (0)
+/* Note that we only init md counters for ops whose offset is less
+ * than NUM_MD_STATS. This is explained in a comment in the definition
+ * of struct md_ops. */
+#define LPROCFS_MD_OP_INIT(base, stats, op)				       \
+	do {								       \
+		unsigned int _idx = base + MD_COUNTER_OFFSET(op);	       \
+									       \
+		if (MD_COUNTER_OFFSET(op) < NUM_MD_STATS) {		       \
+			LASSERT(_idx < stats->ls_num);			       \
+			lprocfs_counter_init(stats, _idx, 0, #op, "reqs");     \
+		}							       \
+	} while (0)
 
 void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
 {
@@ -1691,7 +1698,7 @@ void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
         LPROCFS_MD_OP_INIT(num_private_stats, stats, rename);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, is_subdir);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, setattr);
-        LPROCFS_MD_OP_INIT(num_private_stats, stats, sync);
+	LPROCFS_MD_OP_INIT(num_private_stats, stats, fsync);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, readpage);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, unlink);
         LPROCFS_MD_OP_INIT(num_private_stats, stats, setxattr);
@@ -1713,52 +1720,65 @@ void lprocfs_init_mps_stats(int num_private_stats, struct lprocfs_stats *stats)
 EXPORT_SYMBOL(lprocfs_init_mps_stats);
 
 int lprocfs_alloc_md_stats(struct obd_device *obd,
-                           unsigned num_private_stats)
+			   unsigned int num_private_stats)
 {
-        struct lprocfs_stats *stats;
-        unsigned int num_stats;
-        int rc, i;
+	struct lprocfs_stats *stats;
+	unsigned int num_stats;
+	int rc, i;
 
-        LASSERT(obd->md_stats == NULL);
-        LASSERT(obd->obd_proc_entry != NULL);
-        LASSERT(obd->md_cntr_base == 0);
+	CLASSERT(offsetof(struct md_ops, MD_STATS_FIRST_OP) == 0);
+	CLASSERT(_MD_COUNTER_OFFSET(MD_STATS_FIRST_OP) == 0);
+	CLASSERT(_MD_COUNTER_OFFSET(MD_STATS_LAST_OP) > 0);
 
-        num_stats = 1 + MD_COUNTER_OFFSET(revalidate_lock) +
-                    num_private_stats;
-        stats = lprocfs_alloc_stats(num_stats, 0);
-        if (stats == NULL)
-                return -ENOMEM;
+	/* TODO Ensure that this function is only used where
+	 * appropriate by adding an assertion to the effect that
+	 * obd->obd_type->typ_md_ops is not NULL. We can't do this now
+	 * because mdt_procfs_init() uses this function to allocate
+	 * the stats backing /proc/fs/lustre/mdt/.../md_stats but the
+	 * mdt layer does not use the md_ops interface. This is
+	 * confusing and a waste of memory. See LU-2484.
+	 */
+	LASSERT(obd->obd_proc_entry != NULL);
+	LASSERT(obd->obd_md_stats == NULL);
+	LASSERT(obd->obd_md_cntr_base == 0);
 
-        lprocfs_init_mps_stats(num_private_stats, stats);
+	num_stats = NUM_MD_STATS + num_private_stats;
+	stats = lprocfs_alloc_stats(num_stats, 0);
+	if (stats == NULL)
+		return -ENOMEM;
 
-        for (i = num_private_stats; i < num_stats; i++) {
+	lprocfs_init_mps_stats(num_private_stats, stats);
+
+	for (i = num_private_stats; i < num_stats; i++) {
 		if (stats->ls_cnt_header[i].lc_name == NULL) {
-                        CERROR("Missing md_stat initializer md_op "
-                               "operation at offset %d. Aborting.\n",
-                               i - num_private_stats);
-                        LBUG();
-                }
-        }
-        rc = lprocfs_register_stats(obd->obd_proc_entry, "md_stats", stats);
-        if (rc < 0) {
-                lprocfs_free_stats(&stats);
-        } else {
-                obd->md_stats  = stats;
-                obd->md_cntr_base = num_private_stats;
-        }
-        return rc;
+			CERROR("Missing md_stat initializer md_op "
+			       "operation at offset %d. Aborting.\n",
+			       i - num_private_stats);
+			LBUG();
+		}
+	}
+
+	rc = lprocfs_register_stats(obd->obd_proc_entry, "md_stats", stats);
+	if (rc < 0) {
+		lprocfs_free_stats(&stats);
+	} else {
+		obd->obd_md_stats = stats;
+		obd->obd_md_cntr_base = num_private_stats;
+	}
+
+	return rc;
 }
 EXPORT_SYMBOL(lprocfs_alloc_md_stats);
 
 void lprocfs_free_md_stats(struct obd_device *obd)
 {
-        struct lprocfs_stats *stats = obd->md_stats;
+	struct lprocfs_stats *stats = obd->obd_md_stats;
 
-        if (stats != NULL) {
-                obd->md_stats = NULL;
-                obd->md_cntr_base = 0;
-                lprocfs_free_stats(&stats);
-        }
+	if (stats != NULL) {
+		obd->obd_md_stats = NULL;
+		obd->obd_md_cntr_base = 0;
+		lprocfs_free_stats(&stats);
+	}
 }
 EXPORT_SYMBOL(lprocfs_free_md_stats);
 

@@ -1387,6 +1387,7 @@ static int lmv_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 	lprocfs_lmv_init_vars(&lvars);
 
 	lprocfs_obd_setup(obd, lvars.obd_vars);
+	lprocfs_alloc_md_stats(obd, 0);
 #ifdef LPROCFS
 	{
 		rc = lprocfs_seq_create(obd->obd_proc_entry, "target_obd",
@@ -2105,25 +2106,25 @@ static int lmv_setattr(struct obd_export *exp, struct md_op_data *op_data,
 	RETURN(rc);
 }
 
-static int lmv_sync(struct obd_export *exp, const struct lu_fid *fid,
-                    struct obd_capa *oc, struct ptlrpc_request **request)
+static int lmv_fsync(struct obd_export *exp, const struct lu_fid *fid,
+		     struct obd_capa *oc, struct ptlrpc_request **request)
 {
-        struct obd_device         *obd = exp->exp_obd;
-        struct lmv_obd            *lmv = &obd->u.lmv;
-        struct lmv_tgt_desc       *tgt;
-        int                        rc;
-        ENTRY;
+	struct obd_device	*obd = exp->exp_obd;
+	struct lmv_obd		*lmv = &obd->u.lmv;
+	struct lmv_tgt_desc	*tgt;
+	int			 rc;
+	ENTRY;
 
-        rc = lmv_check_connect(obd);
-        if (rc)
-                RETURN(rc);
+	rc = lmv_check_connect(obd);
+	if (rc != 0)
+		RETURN(rc);
 
-        tgt = lmv_find_target(lmv, fid);
-        if (IS_ERR(tgt))
-                RETURN(PTR_ERR(tgt));
+	tgt = lmv_find_target(lmv, fid);
+	if (IS_ERR(tgt))
+		RETURN(PTR_ERR(tgt));
 
-        rc = md_sync(tgt->ltd_exp, fid, oc, request);
-        RETURN(rc);
+	rc = md_fsync(tgt->ltd_exp, fid, oc, request);
+	RETURN(rc);
 }
 
 /*
@@ -2371,6 +2372,7 @@ static int lmv_precleanup(struct obd_device *obd, enum obd_cleanup_stage stage)
         case OBD_CLEANUP_EXPORTS:
                 fld_client_proc_fini(&lmv->lmv_fld);
                 lprocfs_obd_cleanup(obd);
+		lprocfs_free_md_stats(obd);
                 break;
         default:
                 break;
@@ -2917,7 +2919,7 @@ struct md_ops lmv_md_ops = {
         .m_rename               = lmv_rename,
         .m_setattr              = lmv_setattr,
         .m_setxattr             = lmv_setxattr,
-        .m_sync                 = lmv_sync,
+	.m_fsync		= lmv_fsync,
         .m_readpage             = lmv_readpage,
         .m_unlink               = lmv_unlink,
         .m_init_ea_size         = lmv_init_ea_size,
