@@ -88,6 +88,8 @@ sync; sleep 1; sync
 
 sync; sleep 3; sync
 
+wait_delete_completed 300
+
 if [ $SUCCESS -eq 1 ]; then
 	echo "Success!"
 	rm -f $LOG
