@@ -1784,7 +1784,8 @@ static int osd_mknod(struct osd_thread_info *info, struct osd_object *obj,
 		 * This inode should be marked dirty for i_rdev.  Currently
 		 * that is done in the osd_attr_init().
 		 */
-                init_special_inode(obj->oo_inode, mode, attr->la_rdev);
+		init_special_inode(obj->oo_inode, obj->oo_inode->i_mode,
+				   attr->la_rdev);
         }
         LINVRNT(osd_invariant(obj));
         return result;
