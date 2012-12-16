@@ -799,10 +799,11 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 	struct client_obd *cli = osc_cli(ext->oe_obj);
 	struct osc_async_page *oap;
 	struct osc_async_page *tmp;
-	struct osc_async_page *last = NULL;
 	int nr_pages = ext->oe_nr_pages;
 	int lost_grant = 0;
 	int blocksize = cli->cl_import->imp_obd->obd_osfs.os_bsize ? : 4096;
+	__u64 last_off = 0;
+	int last_count = -1;
 	ENTRY;
 
 	OSC_EXTENT_DUMP(D_CACHE, ext, "extent finished.\n");
@@ -813,8 +814,10 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 				     oap_pending_item) {
 		cfs_list_del_init(&oap->oap_rpc_item);
 		cfs_list_del_init(&oap->oap_pending_item);
-		if (last == NULL || last->oap_obj_off < oap->oap_obj_off)
-			last = oap;
+		if (last_off <= oap->oap_obj_off) {
+			last_off = oap->oap_obj_off;
+			last_count = oap->oap_count;
+		}
 
 		--ext->oe_nr_pages;
 		osc_ap_completion(env, cli, oap, sent, rc);
@@ -824,7 +827,7 @@ int osc_extent_finish(const struct lu_env *env, struct osc_extent *ext,
 	if (!sent) {
 		lost_grant = ext->oe_grants;
 	} else if (blocksize < CFS_PAGE_SIZE &&
-		   last->oap_count != CFS_PAGE_SIZE) {
+		   last_count != CFS_PAGE_SIZE) {
 		/* For short writes we shouldn't count parts of pages that
 		 * span a whole chunk on the OST side, or our accounting goes
 		 * wrong.  Should match the code in filter_grant_check. */
