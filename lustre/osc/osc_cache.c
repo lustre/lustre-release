@@ -1440,12 +1440,15 @@ static void osc_free_grant(struct client_obd *cli, unsigned int nr_pages,
 	       cli->cl_avail_grant, cli->cl_dirty);
 }
 
-/* The companion to osc_enter_cache(), called when @oap is no longer part of
- * the dirty accounting.  Writeback completes or truncate happens before
- * writing starts.  Must be called with the loi lock held. */
+/**
+ * The companion to osc_enter_cache(), called when @oap is no longer part of
+ * the dirty accounting due to error.
+ */
 static void osc_exit_cache(struct client_obd *cli, struct osc_async_page *oap)
 {
+	client_obd_list_lock(&cli->cl_loi_list_lock);
 	osc_release_write_grant(cli, &oap->oap_brw_page);
+	client_obd_list_unlock(&cli->cl_loi_list_lock);
 }
 
 /**
@@ -1480,8 +1483,13 @@ static int osc_enter_cache_try(struct client_obd *cli,
 	return rc;
 }
 
-/* Caller must hold loi_list_lock - we drop/regain it if we need to wait for
- * grant or cache space. */
+/**
+ * The main entry to reserve dirty page accounting. Usually the grant reserved
+ * in this function will be freed in bulk in osc_free_grant() unless it fails
+ * to add osc cache, in that case, it will be freed in osc_exit_cache().
+ *
+ * The process will be put into sleep if it's already run out of grant.
+ */
 static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 			   struct osc_async_page *oap, int bytes)
 {
