@@ -71,33 +71,33 @@
  *
  * requires -Wall. Unfortunately this rules out use of likely/unlikely.
  */
-#define LASSERTF(cond, fmt, ...)                                        \
-do {                                                                    \
-        if (cond)                                                       \
-                ;                                                       \
-        else {                                                          \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);     \
-                libcfs_debug_msg(&msgdata,                              \
-                                 "ASSERTION( %s ) failed: " fmt, #cond, \
-                                  ## __VA_ARGS__);                      \
-                LBUG();                                                 \
-        }                                                              \
-} while(0)
+#define LASSERTF(cond, fmt, ...)					\
+do {									\
+	if (cond)							\
+		;							\
+	else {								\
+		LIBCFS_DEBUG_MSG_DATA_DECL(__msg_data, D_EMERG, NULL);	\
+		libcfs_debug_msg(&__msg_data,				\
+				 "ASSERTION( %s ) failed: " fmt, #cond,	\
+				 ## __VA_ARGS__);			\
+		lbug_with_loc(&__msg_data);				\
+	}								\
+} while (0)
 
 #define LASSERT(cond) LASSERTF(cond, "\n")
 
 #else /* !LASSERT_CHECKED */
 
-#define LASSERTF(cond, fmt, ...)                                        \
-do {                                                                    \
-        if (unlikely(!(cond))) {                                        \
-                LIBCFS_DEBUG_MSG_DATA_DECL(msgdata, D_EMERG, NULL);     \
-                libcfs_debug_msg(&msgdata,                              \
-                                 "ASSERTION( %s ) failed: " fmt, #cond, \
-                                 ## __VA_ARGS__ );                      \
-                LBUG();                                                 \
-        }                                                               \
-} while(0)
+#define LASSERTF(cond, fmt, ...)					\
+do {									\
+	if (unlikely(!(cond))) {					\
+		LIBCFS_DEBUG_MSG_DATA_DECL(__msg_data, D_EMERG, NULL);	\
+		libcfs_debug_msg(&__msg_data,				\
+				 "ASSERTION( %s ) failed: " fmt, #cond,	\
+				 ## __VA_ARGS__);			\
+		lbug_with_loc(&__msg_data);				\
+	}								\
+} while (0)
 
 #define LASSERT(cond) LASSERTF(cond, "\n")
 #endif /* !LASSERT_CHECKED */

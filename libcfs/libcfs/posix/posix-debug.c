@@ -214,13 +214,6 @@ libcfs_debug_vmsg2(struct libcfs_debug_msg_data *msgdata,
         return 0;
 }
 
-void
-libcfs_assertion_failed(const char *expr, struct libcfs_debug_msg_data *msgdata)
-{
-        libcfs_debug_msg(msgdata, "ASSERTION(%s) failed\n", expr);
-        abort();
-}
-
 /*
  * a helper function for RETURN(): the sole purpose is to save 8-16 bytes
  * on the stack - function calling RETURN() doesn't need to allocate two

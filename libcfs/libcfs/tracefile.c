@@ -478,15 +478,6 @@ console:
 EXPORT_SYMBOL(libcfs_debug_vmsg2);
 
 void
-libcfs_assertion_failed(const char *expr, struct libcfs_debug_msg_data *msgdata)
-{
-        libcfs_debug_msg(msgdata, "ASSERTION(%s) failed\n", expr);
-        /* cfs_enter_debugger(); */
-        lbug_with_loc(msgdata);
-}
-EXPORT_SYMBOL(libcfs_assertion_failed);
-
-void
 cfs_trace_assertion_failed(const char *str,
                            struct libcfs_debug_msg_data *msgdata)
 {
