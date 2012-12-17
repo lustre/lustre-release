@@ -1,0 +1,83 @@
+/* GPL HEADER START
+ *
+ * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 only,
+ * as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful, but
+ * WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * General Public License version 2 for more details (a copy is included
+ * in the LICENSE file that accompanied this code).
+ *
+ * You should have received a copy of the GNU General Public License
+ * version 2 along with this program; If not, see
+ * http://www.sun.com/software/products/lustre/docs/GPLv2.pdf
+ *
+ * Please contact Sun Microsystems, Inc., 4150 Network Circle, Santa Clara,
+ * CA 95054 USA or visit www.sun.com if you need additional information or
+ * have any questions.
+ *
+ * GPL HEADER END
+ */
+/*
+ * Copyright (c) 2007, 2010, Oracle and/or its affiliates. All rights reserved.
+ * Use is subject to license terms.
+ *
+ * Copyright (c) 2011, 2012, Intel, Inc.
+ */
+/*
+ * This file is part of Lustre, http://www.lustre.org/
+ * Lustre is a trademark of Sun Microsystems, Inc.
+ */
+
+#ifndef __OBD_TARGET_H
+#define __OBD_TARGET_H
+
+/* server-side individual type definitions */
+
+#define OBT_MAGIC       0xBDDECEAE
+/* hold common fields for "target" device */
+struct obd_device_target {
+	__u32			obt_magic;
+	__u32			obt_instance;
+	struct lu_target       *obt_lut;
+	__u64			obt_mount_count;
+	struct obd_job_stats	obt_jobstats;
+};
+
+#define FILTER_SUBDIR_COUNT 32 /* set to zero for no subdirs */
+
+struct filter_obd {
+	/* NB this field MUST be first */
+	struct obd_device_target	fo_obt;
+	rwlock_t			fo_sptlrpc_lock;
+	struct sptlrpc_rule_set		fo_sptlrpc_rset;
+
+	/* capability related */
+	unsigned int			fo_fl_oss_capa;
+	cfs_list_t			fo_capa_keys;
+	cfs_hlist_head_t	       *fo_capa_hash;
+	int				fo_sec_level;
+};
+
+struct echo_obd {
+	struct obd_device_target	eo_obt;
+	struct obdo			eo_oa;
+	spinlock_t			eo_lock;
+	__u64				eo_lastino;
+	struct lustre_handle		eo_nl_lock;
+	cfs_atomic_t			eo_prep;
+};
+
+struct ost_obd {
+	struct ptlrpc_service	       *ost_service;
+	struct ptlrpc_service	       *ost_create_service;
+	struct ptlrpc_service	       *ost_io_service;
+	struct ptlrpc_service	       *ost_seq_service;
+	struct mutex			ost_health_mutex;
+};
+
+#endif /* __OBD_TARGET_H */

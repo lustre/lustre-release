@@ -50,15 +50,8 @@
 
 #if defined(__KERNEL__)
 
-/*
- * struct ptlrpc_client
- */
+#include <obd_class.h>
 #include <lustre_net.h>
-#include <obd.h>
-/*
- * struct obd_connect_data
- * struct lustre_handle
- */
 #include <lustre/lustre_idl.h>
 #include <lustre_disk.h>
 #include <lu_target.h>
@@ -71,7 +64,6 @@
 #include <lvfs.h>
 #include <lustre_idmap.h>
 #include <lustre_eacl.h>
-#include <lustre_fsfilt.h>
 #include <lustre_quota.h>
 
 /* check if request's xid is equal to last one or not*/

@@ -2579,6 +2579,7 @@ int lprocfs_obd_rd_max_pages_per_rpc(char *page, char **start, off_t off,
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_max_pages_per_rpc);
 
+#ifdef HAVE_SERVER_SUPPORT
 int lprocfs_target_rd_instance(char *page, char **start, off_t off,
                                int count, int *eof, void *data)
 {
@@ -2591,4 +2592,5 @@ int lprocfs_target_rd_instance(char *page, char **start, off_t off,
         return snprintf(page, count, "%u\n", obd->u.obt.obt_instance);
 }
 EXPORT_SYMBOL(lprocfs_target_rd_instance);
+#endif
 #endif /* LPROCFS*/

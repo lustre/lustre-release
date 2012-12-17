@@ -48,7 +48,6 @@
 #include <linux/quotaops.h>
 #include <linux/version.h>
 #include <libcfs/libcfs.h>
-#include <lustre_fsfilt.h>
 #include <obd.h>
 #include <linux/module.h>
 #include <linux/init.h>

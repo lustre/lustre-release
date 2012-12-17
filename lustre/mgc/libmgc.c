@@ -49,9 +49,7 @@
 #include <obd_class.h>
 #include <lustre_dlm.h>
 #include <lustre_log.h>
-#include <lustre_fsfilt.h>
 #include <lustre_disk.h>
-
 
 static int mgc_setup(struct obd_device *obd, struct lustre_cfg *lcfg)
 {

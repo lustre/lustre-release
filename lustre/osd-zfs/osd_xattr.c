@@ -49,7 +49,6 @@
 
 #include <lustre_ver.h>
 #include <libcfs/libcfs.h>
-#include <lustre_fsfilt.h>
 #include <obd_support.h>
 #include <lustre_net.h>
 #include <obd.h>

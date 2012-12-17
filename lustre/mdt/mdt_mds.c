@@ -54,7 +54,6 @@
 #include <lustre_quota.h>
 #include <lustre_acl.h>
 #include <lustre_param.h>
-#include <lustre_fsfilt.h>
 
 struct mds_device {
 	/* super-class */

@@ -51,12 +51,8 @@
 #else
 #include <liblustre.h>
 #endif
-
 #include <obd_class.h>
 #include <lustre_log.h>
-#include <libcfs/list.h>
-#include <lvfs.h>
-#include <lustre_fsfilt.h>
 
 int llog_initiator_connect(struct llog_ctxt *ctxt)
 {

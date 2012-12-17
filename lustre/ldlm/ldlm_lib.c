@@ -1627,7 +1627,6 @@ check_and_start_recovery_timer(struct obd_device *obd,
 {
         int service_time = lustre_msg_get_service_time(req->rq_reqmsg);
         struct obd_device_target *obt = &obd->u.obt;
-        struct lustre_sb_info *lsi;
 
         if (!new_client && service_time)
                 /* Teach server about old server's estimates, as first guess
@@ -1647,12 +1646,9 @@ check_and_start_recovery_timer(struct obd_device *obd,
         service_time += 2 * INITIAL_CONNECT_TIMEOUT;
 
         LASSERT(obt->obt_magic == OBT_MAGIC);
-        lsi = s2lsi(obt->obt_sb);
-	if (!(lsi->lsi_flags | LDD_F_IR_CAPABLE))
-                service_time += 2 * (CONNECTION_SWITCH_MAX +
-                                     CONNECTION_SWITCH_INC);
-        if (service_time > obd->obd_recovery_timeout && !new_client)
-                extend_recovery_timer(obd, service_time, false);
+	service_time += 2 * (CONNECTION_SWITCH_MAX + CONNECTION_SWITCH_INC);
+	if (service_time > obd->obd_recovery_timeout && !new_client)
+		extend_recovery_timer(obd, service_time, false);
 }
 
 /** Health checking routines */

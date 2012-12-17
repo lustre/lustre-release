@@ -10,7 +10,7 @@ sources:
 obdclass-all-objs := llog.o llog_cat.o llog_obd.o llog_swab.o
 @LDISKFS_ENABLED_TRUE@ obdclass-all-objs += llog_lvfs.o
 obdclass-all-objs += class_obd.o debug.o genops.o uuid.o llog_ioctl.o
-obdclass-all-objs += lprocfs_status.o lprocfs_jobstats.o lustre_handles.o lustre_peer.o
+obdclass-all-objs += lprocfs_status.o lustre_handles.o lustre_peer.o
 obdclass-all-objs += llog_osd.o local_storage.o
 obdclass-all-objs += statfs_pack.o obdo.o obd_config.o obd_mount.o mea.o
 obdclass-all-objs += lu_object.o dt_object.o capa.o
@@ -19,6 +19,7 @@ obdclass-all-objs += acl.o idmap.o
 obdclass-all-objs += md_attrs.o linkea.o
 obdclass-all-objs += lu_ucred.o
 
+@SERVER_TRUE@obdclass-all-objs += lprocfs_jobstats.o
 @SERVER_TRUE@obdclass-all-objs += obd_mount_server.o
 
 obdclass-objs := $(obdclass-linux-objs) $(obdclass-all-objs)
