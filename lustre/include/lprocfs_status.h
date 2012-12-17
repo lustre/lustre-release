@@ -389,9 +389,15 @@ static inline int lprocfs_stats_lock(struct lprocfs_stats *stats, int opc,
 		if ((stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) == 0) {
 			cpuid = cfs_get_cpu();
 
-			if (unlikely(stats->ls_percpu[cpuid + 1] == NULL))
+			if (unlikely(stats->ls_percpu[cpuid + 1] == NULL)) {
 				rc = lprocfs_stats_alloc_one(stats, cpuid + 1);
-			return rc < 0 ? rc : cpuid + 1;
+				if (rc < 0) {
+					cfs_put_cpu();
+					return rc;
+				}
+			}
+
+			return cpuid + 1;
 		}
 
 		/* non-percpu counter stats */
