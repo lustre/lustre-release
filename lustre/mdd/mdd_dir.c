@@ -2745,16 +2745,22 @@ out:
 	if (rc == 0)
 		rc = rc2;
 	if (rc) {
+		int error = 1;
+		if (rc == -EOVERFLOW || rc == - ENOENT)
+			error = 0;
 		if (oldpfid == NULL)
-			CERROR("link_ea add '%.*s' failed %d "DFID"\n",
+			CDEBUG(error ? D_ERROR : D_OTHER,
+			       "link_ea add '%.*s' failed %d "DFID"\n",
 			       newlname->ln_namelen, newlname->ln_name,
 			       rc, PFID(mdd_object_fid(mdd_obj)));
 		else if (newpfid == NULL)
-			CERROR("link_ea del '%.*s' failed %d "DFID"\n",
+			CDEBUG(error ? D_ERROR : D_OTHER,
+			       "link_ea del '%.*s' failed %d "DFID"\n",
 			       oldlname->ln_namelen, oldlname->ln_name,
 			       rc, PFID(mdd_object_fid(mdd_obj)));
 		else
-			CERROR("link_ea rename '%.*s'->'%.*s' failed %d "
+			CDEBUG(error ? D_ERROR : D_OTHER,
+			       "link_ea rename '%.*s'->'%.*s' failed %d "
 			       DFID"\n",
 			       oldlname->ln_namelen, oldlname->ln_name,
 			       newlname->ln_namelen, newlname->ln_name,
