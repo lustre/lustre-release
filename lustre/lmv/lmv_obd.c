@@ -344,7 +344,6 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
 #endif
         struct lmv_obd          *lmv = &obd->u.lmv;
         struct obd_uuid         *cluuid = &lmv->cluuid;
-        struct obd_connect_data *mdc_data = NULL;
         struct obd_uuid          lmv_mdc_uuid = { "LMV_MDC_UUID" };
         struct obd_device       *mdc_obd;
         struct obd_export       *mdc_exp;
@@ -388,8 +387,6 @@ int lmv_connect_mdc(struct obd_device *obd, struct lmv_tgt_desc *tgt)
         target.ft_idx = tgt->ltd_idx;
 
         fld_client_add_target(&lmv->lmv_fld, &target);
-
-        mdc_data = &class_exp2cliimp(mdc_exp)->imp_connect_data;
 
         rc = obd_register_observer(mdc_obd, obd);
         if (rc) {

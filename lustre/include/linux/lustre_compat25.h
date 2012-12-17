@@ -168,7 +168,7 @@ static inline struct file *ll_dentry_open(struct dentry *dentry,
 
 #endif
 
-#if !defined(HAVE_FILE_LLSEEK_SIZE) || defined(HAVE_FILE_LLSEEK_5ARGS)
+#if !defined(HAVE_FILE_LLSEEK_SIZE) || defined(HAVE_FILE_LLSEEK_SIZE_5ARGS)
 #define ll_generic_file_llseek_size(file, offset, origin, maxbytes, eof) \
 		generic_file_llseek_size(file, offset, origin, maxbytes, eof);
 #else

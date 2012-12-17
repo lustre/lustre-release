@@ -2384,6 +2384,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 # 3.5
 	 LC_HAVE_CLEAR_INODE
 	 LC_HAVE_ENCODE_FH_PARENT
+	 LC_FILE_LLSEEK_SIZE_5ARG
 
 	 # 3.6
 	 LC_HAVE_DENTRY_D_ALIAS_HLIST
@@ -2866,6 +2867,7 @@ lustre/kernel_patches/targets/2.6-oel5.target
 lustre/kernel_patches/targets/2.6-fc11.target
 lustre/kernel_patches/targets/2.6-fc12.target
 lustre/kernel_patches/targets/2.6-fc15.target
+lustre/kernel_patches/targets/3.x-fc18.target
 lustre/ldlm/Makefile
 lustre/fid/Makefile
 lustre/fid/autoMakefile
