@@ -3711,38 +3711,54 @@ int llapi_fid2path(const char *device, const char *fidstr, char *buf,
         return rc;
 }
 
-static int path2fid_from_lma(const char *path, lustre_fid *fid)
+static int fid_from_lma(const char *path, const int fd, lustre_fid *fid)
 {
-        char buf[512];
-        struct lustre_mdt_attrs *lma;
-        int rc;
+	char			 buf[512];
+	struct lustre_mdt_attrs	*lma;
+	int			 rc;
 
-        rc = lgetxattr(path, XATTR_NAME_LMA, buf, sizeof(buf));
-        if (rc < 0)
-                return -errno;
-        lma = (struct lustre_mdt_attrs *)buf;
-        fid_le_to_cpu(fid, &lma->lma_self_fid);
-        return 0;
+	if (path == NULL)
+		rc = fgetxattr(fd, XATTR_NAME_LMA, buf, sizeof(buf));
+	else
+		rc = lgetxattr(path, XATTR_NAME_LMA, buf, sizeof(buf));
+	if (rc < 0)
+		return -errno;
+	lma = (struct lustre_mdt_attrs *)buf;
+	fid_le_to_cpu(fid, &lma->lma_self_fid);
+	return 0;
+}
+
+int llapi_fd2fid(const int fd, lustre_fid *fid)
+{
+	int rc;
+
+	memset(fid, 0, sizeof(*fid));
+
+	rc = ioctl(fd, LL_IOC_PATH2FID, fid) < 0 ? -errno : 0;
+	if (rc == -EINVAL || rc == -ENOTTY)
+		rc = fid_from_lma(NULL, fd, fid);
+
+	return rc;
 }
 
 int llapi_path2fid(const char *path, lustre_fid *fid)
 {
-        int fd, rc;
+	int fd, rc;
 
-        memset(fid, 0, sizeof(*fid));
-        fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
-        if (fd < 0) {
-                if (errno == ELOOP || errno == ENXIO)
-                        return path2fid_from_lma(path, fid);
-                return -errno;
-        }
+	memset(fid, 0, sizeof(*fid));
+	fd = open(path, O_RDONLY | O_NONBLOCK | O_NOFOLLOW);
+	if (fd < 0) {
+		if (errno == ELOOP || errno == ENXIO)
+			return fid_from_lma(path, -1, fid);
+		return -errno;
+	}
 
-        rc = ioctl(fd, LL_IOC_PATH2FID, fid) < 0 ? -errno : 0;
-        if (rc == -EINVAL || rc == -ENOTTY)
-                rc = path2fid_from_lma(path, fid);
+	rc = llapi_fd2fid(fd, fid);
+	if (rc == -EINVAL || rc == -ENOTTY)
+		rc = fid_from_lma(path, -1, fid);
 
-        close(fd);
-        return rc;
+	close(fd);
+	return rc;
 }
 
 /****** HSM Copytool API ********/
@@ -4001,3 +4017,58 @@ int llapi_get_data_version(int fd, __u64 *data_version, __u64 flags)
 
         return rc;
 }
+
+/*
+ * Create a volatile file and open it for write:
+ * - file is created as a standard file in the directory
+ * - file does not appears in directory and directory mtime does not change
+ * - file is removed at close
+ * - file modes are rw-------, if user wants another one it must use fchmod()
+ * \param	directory	Directory where the file is created
+ * \param	idx		MDT index on which the file is created
+ * \param	flags		Std open flags
+ *
+ * \retval	0 on success.
+ * \retval	-errno on error.
+ */
+int llapi_create_volatile_idx(char *directory, int idx, int mode)
+{
+	char	file_path[PATH_MAX];
+	char	filename[PATH_MAX];
+	int	fd;
+	int	random;
+	int	rc;
+
+	fd = open("/dev/urandom", O_RDONLY);
+	if (fd < 0) {
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "Cannot open /dev/urandom\n");
+		return -errno;
+	}
+	rc = read(fd, &random, sizeof(random));
+	close(fd);
+	if (rc < sizeof(random)) {
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "Cannot read %d bytes from /dev/urandom\n",
+			    sizeof(random));
+		return -errno;
+	}
+	if (idx == -1)
+		sprintf(filename, LUSTRE_VOLATILE_HDR"::%.4X", random);
+	else
+		sprintf(filename, LUSTRE_VOLATILE_IDX"%.4X", 0, random);
+
+	sprintf(file_path, "%s/%s", directory, filename);
+
+	fd = open(file_path, O_RDWR|O_CREAT|mode, S_IRUSR|S_IWUSR);
+	if (fd < 0) {
+		llapi_error(LLAPI_MSG_ERROR, errno,
+			    "Cannot create volatile file %s in %s\n",
+			    filename + LUSTRE_VOLATILE_HDR_LEN,
+			    directory);
+		return -errno;
+	}
+	return fd;
+}
+
+

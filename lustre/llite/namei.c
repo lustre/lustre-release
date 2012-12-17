@@ -833,27 +833,30 @@ static struct inode *ll_create_node(struct inode *dir, const char *name,
  * with d_instantiate().
  */
 static int ll_create_it(struct inode *dir, struct dentry *dentry, int mode,
-                        struct lookup_intent *it)
+			struct lookup_intent *it)
 {
-        struct inode *inode;
-        int rc = 0;
-        ENTRY;
+	struct inode *inode;
+	int rc = 0;
+	ENTRY;
 
-        CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),intent=%s\n",
-               dentry->d_name.len, dentry->d_name.name, dir->i_ino,
-               dir->i_generation, dir, LL_IT2STR(it));
+	CDEBUG(D_VFSTRACE, "VFS Op:name=%.*s,dir=%lu/%u(%p),intent=%s\n",
+	       dentry->d_name.len, dentry->d_name.name, dir->i_ino,
+	       dir->i_generation, dir, LL_IT2STR(it));
 
-        rc = it_open_error(DISP_OPEN_CREATE, it);
-        if (rc)
-                RETURN(rc);
+	rc = it_open_error(DISP_OPEN_CREATE, it);
+	if (rc)
+		RETURN(rc);
 
-        inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
-                               NULL, 0, mode, 0, it);
-        if (IS_ERR(inode))
-                RETURN(PTR_ERR(inode));
+	inode = ll_create_node(dir, dentry->d_name.name, dentry->d_name.len,
+			       NULL, 0, mode, 0, it);
+	if (IS_ERR(inode))
+		RETURN(PTR_ERR(inode));
 
-        d_instantiate(dentry, inode);
-        RETURN(0);
+	if (filename_is_volatile(dentry->d_name.name, dentry->d_name.len, NULL))
+		ll_i2info(inode)->lli_volatile = true;
+
+	d_instantiate(dentry, inode);
+	RETURN(0);
 }
 
 static void ll_update_times(struct ptlrpc_request *request,

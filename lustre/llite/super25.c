@@ -111,15 +111,17 @@ void vvp_global_fini(void);
 
 static int __init init_lustre_lite(void)
 {
-        int i, rc, seed[2];
-        struct timeval tv;
-        lnet_process_id_t lnet_id;
+	int i, rc, seed[2];
+	struct timeval tv;
+	lnet_process_id_t lnet_id;
 
-        /* print an address of _any_ initialized kernel symbol from this
-         * module, to allow debugging with gdb that doesn't support data
-         * symbols from modules.*/
-        CDEBUG(D_INFO, "Lustre client module (%p).\n",
-               &lustre_super_operations);
+	CLASSERT(sizeof(LUSTRE_VOLATILE_HDR) == LUSTRE_VOLATILE_HDR_LEN + 1);
+
+	/* print an address of _any_ initialized kernel symbol from this
+	 * module, to allow debugging with gdb that doesn't support data
+	 * symbols from modules.*/
+	CDEBUG(D_INFO, "Lustre client module (%p).\n",
+	       &lustre_super_operations);
 
         rc = ll_init_inodecache();
         if (rc)

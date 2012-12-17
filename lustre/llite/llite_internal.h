@@ -229,6 +229,11 @@ struct ll_inode_info {
 			/* for writepage() only to communicate to fsync */
 			int				f_async_rc;
 
+			/* volatile file criteria is based on file name, this
+			 * flag is used to keep the test result, so the strcmp
+			 * is done only once
+			 */
+			bool				f_volatile;
 			/*
 			 * whenever a process try to read/write the file, the
 			 * jobid of the process will be saved here, and it'll
@@ -252,6 +257,7 @@ struct ll_inode_info {
 #define lli_agl_index		u.f.f_agl_index
 #define lli_async_rc		u.f.f_async_rc
 #define lli_jobid		u.f.f_jobid
+#define lli_volatile		u.f.f_volatile
 
 	} u;
 

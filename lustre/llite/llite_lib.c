@@ -934,6 +934,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 		CFS_INIT_LIST_HEAD(&lli->lli_agl_list);
 		lli->lli_agl_index = 0;
 		lli->lli_async_rc = 0;
+		lli->lli_volatile = false;
 	}
 	mutex_init(&lli->lli_layout_mutex);
 }
@@ -2300,6 +2301,9 @@ struct md_op_data * ll_prep_md_op_data(struct md_op_data *op_data,
 	op_data->op_fsgid = cfs_curproc_fsgid();
 	op_data->op_cap = cfs_curproc_cap_pack();
 	op_data->op_bias = 0;
+	if ((opc == LUSTRE_OPC_CREATE) && (name != NULL) &&
+	     filename_is_volatile(name, namelen, NULL))
+		op_data->op_bias |= MDS_CREATE_VOLATILE;
 	op_data->op_opc = opc;
 	op_data->op_mds = 0;
 	op_data->op_data = data;

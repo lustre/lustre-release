@@ -69,28 +69,37 @@ static int mea_all_chars_hash(int count, char *name, int namelen)
 
 int raw_name2idx(int hashtype, int count, const char *name, int namelen)
 {
-        unsigned int c = 0;
+	unsigned int	c = 0;
+	int		idx;
 
-        LASSERT(namelen > 0);
-        if (count <= 1)
-                return 0;
+	LASSERT(namelen > 0);
 
-        switch (hashtype) {
-                case MEA_MAGIC_LAST_CHAR:
-                        c = mea_last_char_hash(count, (char *)name, namelen);
-                        break;
-                case MEA_MAGIC_ALL_CHARS:
-                        c = mea_all_chars_hash(count, (char *)name, namelen);
-                        break;
-                case MEA_MAGIC_HASH_SEGMENT:
-                        CERROR("Unsupported hash type MEA_MAGIC_HASH_SEGMENT\n");
-                        break;
-                default:
-                        CERROR("Unknown hash type 0x%x\n", hashtype);
-        }
+	if (filename_is_volatile(name, namelen, &idx)) {
+		if ((idx >= 0) && (idx < count))
+			return idx;
+		goto hashchoice;
+	}
 
-        LASSERT(c < count);
-        return c;
+	if (count <= 1)
+		return 0;
+
+hashchoice:
+	switch (hashtype) {
+	case MEA_MAGIC_LAST_CHAR:
+		c = mea_last_char_hash(count, (char *)name, namelen);
+		break;
+	case MEA_MAGIC_ALL_CHARS:
+		c = mea_all_chars_hash(count, (char *)name, namelen);
+		break;
+	case MEA_MAGIC_HASH_SEGMENT:
+		CERROR("Unsupported hash type MEA_MAGIC_HASH_SEGMENT\n");
+		break;
+	default:
+		CERROR("Unknown hash type 0x%x\n", hashtype);
+	}
+
+	LASSERT(c < count);
+	return c;
 }
 EXPORT_SYMBOL(raw_name2idx);
 

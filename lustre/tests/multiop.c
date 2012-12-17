@@ -52,6 +52,7 @@
 #include <semaphore.h>
 #include <time.h>
 
+#include <lustre/lustre_idl.h>
 #include <lustre/lustreapi.h>
 
 #define T1 "write data before unlink\n"
@@ -60,7 +61,7 @@ char msg[] = "yabba dabba doo, I'm coming for you, I live in a shoe, I don't kno
 char *buf, *buf_align;
 int bufsize = 0;
 sem_t sem;
-#define ALIGN 65535
+#define ALIGN_LEN 65535
 
 char usage[] =
 "Usage: %s filename command-sequence\n"
@@ -70,6 +71,7 @@ char usage[] =
 "        d  mkdir\n"
 "        D  open(O_DIRECTORY)\n"
 "        f  statfs\n"
+"	 F  print FID\n"
 "        G gid get grouplock\n"
 "        g gid put grouplock\n"
 "        L  link\n"
@@ -88,6 +90,7 @@ char usage[] =
 "        u  unlink\n"
 "        U  munmap\n"
 "        v  verbose\n"
+"	 V  open a volatile file\n"
 "        w[num] write optional length\n"
 "        W  write entire mmap-ed region\n"
 "        y  fsync\n"
@@ -188,18 +191,19 @@ int get_flags(char *data, int *rflags)
 
 int main(int argc, char **argv)
 {
-        char *fname, *commands;
-        const char *newfile;
-        struct stat st;
-        struct statfs stfs;
-        size_t mmap_len = 0, i;
-        unsigned char *mmap_ptr = NULL, junk = 0;
-        int rc, len, fd = -1;
-        int flags;
-        int save_errno;
-        int verbose = 0;
-        int gid = 0;
-	struct timespec ts;
+	char		*fname, *commands;
+	const char	*newfile;
+	struct stat	 st;
+	struct statfs	 stfs;
+	size_t		 mmap_len = 0, i;
+	unsigned char	*mmap_ptr = NULL, junk = 0;
+	int		 rc, len, fd = -1;
+	int		 flags;
+	int		 save_errno;
+	int		 verbose = 0;
+	int		 gid = 0;
+	lustre_fid	 fid;
+	struct timespec	 ts;
 
         if (argc < 3) {
                 fprintf(stderr, usage, argv[0]);
@@ -268,6 +272,18 @@ int main(int argc, char **argv)
                                 exit(save_errno);
                         }
                         break;
+		case 'F':
+			if (fd == -1)
+				rc = llapi_path2fid(fname, &fid);
+			else
+				rc = llapi_fd2fid(fd, &fid);
+			if (rc != 0)
+				fprintf(stderr,
+					"llapi_path/fd2fid() on %d, rc=%d\n",
+					fd, rc);
+			else
+				printf(DFID"\n", PFID(&fid));
+			break;
                 case 'G':
                         gid = atoi(commands+1);
                         if (ioctl(fd, LL_IOC_GROUP_LOCK, gid) == -1) {
@@ -357,39 +373,39 @@ int main(int argc, char **argv)
                                 exit(save_errno);
                         }
                         break;
-                case 'r':
-                        len = atoi(commands+1);
-                        if (len <= 0)
-                                len = 1;
-                        if (bufsize < len) {
-                                buf = realloc(buf, len + ALIGN);
-                                if (buf == NULL) {
-                                        save_errno = errno;
-                                        perror("allocating buf for read\n");
-                                        exit(save_errno);
-                                }
-                                bufsize = len;
-                                buf_align = (char *)((long)(buf + ALIGN) &
-                                                     ~ALIGN);
-                        }
-                        while (len > 0) {
-                                rc = read(fd, buf_align, len);
-                                if (rc == -1) {
-                                        save_errno = errno;
-                                        perror("read");
-                                        exit(save_errno);
-                                }
+		case 'r':
+			len = atoi(commands+1);
+			if (len <= 0)
+				len = 1;
+			if (bufsize < len) {
+				buf = realloc(buf, len + ALIGN_LEN);
+				if (buf == NULL) {
+					save_errno = errno;
+					perror("allocating buf for read\n");
+					exit(save_errno);
+				}
+				bufsize = len;
+				buf_align = (char *)((long)(buf + ALIGN_LEN) &
+						     ~ALIGN_LEN);
+			}
+			while (len > 0) {
+				rc = read(fd, buf_align, len);
+				if (rc == -1) {
+					save_errno = errno;
+					perror("read");
+					exit(save_errno);
+				}
 				if (rc < len) {
 					fprintf(stderr, "short read: %u/%u\n",
 						rc, len);
 					if (rc == 0)
 						exit(ENODATA);
 				}
-                                len -= rc;
-                                if (verbose >= 2)
-                                        printf("%.*s\n", rc, buf_align);
-                        }
-                        break;
+				len -= rc;
+				if (verbose >= 2)
+					printf("%.*s\n", rc, buf_align);
+			}
+			break;
                 case 'R':
                         for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
                                 junk += mmap_ptr[i];
@@ -441,35 +457,44 @@ int main(int argc, char **argv)
                 case 'v':
                         verbose++;
                         break;
-                case 'w':
-                        len = atoi(commands+1);
-                        if (len <= 0)
-                                len = 1;
-                        if (bufsize < len) {
-                                buf = realloc(buf, len + ALIGN);
-                                if (buf == NULL) {
-                                        save_errno = errno;
-                                        perror("allocating buf for write\n");
-                                        exit(save_errno);
-                                }
-                                bufsize = len;
-                                buf_align = (char *)((long)(buf + ALIGN) &
-                                                     ~ALIGN);
-                                strncpy(buf_align, msg, bufsize);
-                        }
-                        while (len > 0) {
-                                rc = write(fd, buf_align, len);
-                                if (rc == -1) {
-                                        save_errno = errno;
-                                        perror("write");
-                                        exit(save_errno);
-                                }
-                                if (rc < len)
-                                        fprintf(stderr, "short write: %u/%u\n",
-                                                rc, len);
-                                len -= rc;
-                        }
-                        break;
+		case 'V':
+			len = get_flags(commands + 1, &flags);
+			commands += len;
+			fd = llapi_create_volatile(fname, flags);
+			if (fd < 0) {
+				perror("llapi_create_volatile");
+				exit(fd);
+			}
+			break;
+		case 'w':
+			len = atoi(commands+1);
+			if (len <= 0)
+				len = 1;
+			if (bufsize < len) {
+				buf = realloc(buf, len + ALIGN_LEN);
+				if (buf == NULL) {
+					save_errno = errno;
+					perror("allocating buf for write\n");
+					exit(save_errno);
+				}
+				bufsize = len;
+				buf_align = (char *)((long)(buf + ALIGN_LEN) &
+						     ~ALIGN_LEN);
+				strncpy(buf_align, msg, bufsize);
+			}
+			while (len > 0) {
+				rc = write(fd, buf_align, len);
+				if (rc == -1) {
+					save_errno = errno;
+					perror("write");
+					exit(save_errno);
+				}
+				if (rc < len)
+					fprintf(stderr, "short write: %u/%u\n",
+						rc, len);
+				len -= rc;
+			}
+			break;
                 case 'W':
                         for (i = 0; i < mmap_len && mmap_ptr; i += 4096)
                                 mmap_ptr[i] += junk++;

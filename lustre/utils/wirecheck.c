@@ -926,6 +926,7 @@ check_mdt_body(void)
         CHECK_VALUE_O(MDS_OPEN_HAS_OBJS);
         CHECK_VALUE_64O(MDS_OPEN_NORESTORE);
         CHECK_VALUE_64O(MDS_OPEN_NEWSTRIPE);
+	CHECK_VALUE_64O(MDS_OPEN_VOLATILE);
 
         /* these should be identical to their EXT3_*_FL counterparts, and
          * are redefined only to avoid dragging in ext3_fs.h */

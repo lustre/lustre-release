@@ -9266,6 +9266,36 @@ test_183() { # LU-2275
 }
 run_test 183 "No crash or request leak in case of strange dispositions ========"
 
+test_185() { # LU-2441
+	mkdir -p $DIR/$tdir || error "creating dir $DIR/$tdir"
+	touch $DIR/$tdir/spoo
+	local mtime1=$(stat -c "%Y" $DIR/$tdir)
+	local fid=$($MULTIOP $DIR/$tdir VFw4096c) ||
+		error "cannot create/write a volatile file"
+	$CHECKSTAT -t file $MOUNT/.lustre/fid/$fid 2>/dev/null &&
+		error "FID is still valid after close"
+
+	multiop_bg_pause $DIR/$tdir vVw4096_c
+	local multi_pid=$!
+
+	local OLD_IFS=$IFS
+	IFS=":"
+	local fidv=($fid)
+	IFS=$OLD_IFS
+	# assume that the next FID for this client is sequential, since stdout
+	# is unfortunately eaten by multiop_bg_pause
+	local n=$((${fidv[1]} + 1))
+	local next_fid="${fidv[0]}:$(printf "0x%x" $n):${fidv[2]}"
+	$CHECKSTAT -t file $MOUNT/.lustre/fid/$next_fid ||
+		error "FID is missing before close"
+	kill -USR1 $multi_pid
+	# 1 second delay, so if mtime change we will see it
+	sleep 1
+	local mtime2=$(stat -c "%Y" $DIR/$tdir)
+	[[ $mtime1 == $mtime2 ]] || error "mtime has changed"
+}
+run_test 185 "Volatile file support"
+
 # OST pools tests
 check_file_in_pool()
 {

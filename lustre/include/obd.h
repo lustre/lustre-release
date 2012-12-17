@@ -1746,4 +1746,46 @@ static inline const char *lu_dev_name(const struct lu_device *lu_dev)
         return lu_dev->ld_obd->obd_name;
 }
 
+static inline bool filename_is_volatile(const char *name, int namelen, int *idx)
+{
+	const char	*start;
+	char		*end;
+
+	if (strncmp(name, LUSTRE_VOLATILE_HDR, LUSTRE_VOLATILE_HDR_LEN) != 0)
+		return false;
+
+	/* caller does not care of idx */
+	if (idx == NULL)
+		return true;
+
+	/* volatile file, the MDT can be set from name */
+	/* name format is LUSTRE_VOLATILE_HDR:[idx]: */
+	/* if no MDT is specified, use std way */
+	if (namelen < LUSTRE_VOLATILE_HDR_LEN + 2)
+		goto bad_format;
+	/* test for no MDT idx case */
+	if ((*(name + LUSTRE_VOLATILE_HDR_LEN) == ':') &&
+	    (*(name + LUSTRE_VOLATILE_HDR_LEN + 1) == ':')) {
+		*idx = -1;
+		return true;
+	}
+	/* we have an idx, read it */
+	start = name + LUSTRE_VOLATILE_HDR_LEN + 1;
+	*idx = strtoul(start, &end, 0);
+	/* error cases:
+	 * no digit, no trailing :, negative value
+	 */
+	if (((*idx == 0) && (end == start)) ||
+	    (*end != ':') || (*idx < 0))
+		goto bad_format;
+
+	return true;
+bad_format:
+	/* bad format of mdt idx, we cannot return an error
+	 * to caller so we use hash algo */
+	CERROR("Bad volatile file name format: %s\n",
+	       name + LUSTRE_VOLATILE_HDR_LEN);
+	return false;
+}
+
 #endif /* __OBD_H */
