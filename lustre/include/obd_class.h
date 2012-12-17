@@ -2279,11 +2279,12 @@ struct lwp_register_item {
 extern int (*ptlrpc_put_connection_superhack)(struct ptlrpc_connection *c);
 
 /* obd_mount.c */
-int server_name2fsname(char *svname, char *fsname, char **endptr);
-int lustre_register_lwp_item(char *lwpname, struct obd_export **exp,
+#ifdef HAVE_SERVER_SUPPORT
+int lustre_register_lwp_item(const char *lwpname, struct obd_export **exp,
 			     register_lwp_cb cb_func, void *cb_data);
 void lustre_deregister_lwp_item(struct obd_export **exp);
-int tgt_name2lwpname(char *tgt_name, char *lwp_name);
+int tgt_name2lwpname(const char *tgt_name, char *lwp_name);
+#endif /* HAVE_SERVER_SUPPORT */
 
 /* sysctl.c */
 extern void obd_sysctl_init (void);

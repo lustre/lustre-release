@@ -172,12 +172,13 @@ struct lustre_disk_data {
 /*8192*/char       ldd_params[4096];     /* key=value pairs */
 };
 
+
 #define IS_MDT(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_MDT)
 #define IS_OST(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_OST)
 #define IS_MGS(data)    ((data)->lsi_flags & LDD_F_SV_TYPE_MGS)
 #define IS_SERVER(data) ((data)->lsi_flags & (LDD_F_SV_TYPE_MGS | \
-       LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST))
-#define MT_STR(data)   mt_str((data)->ldd_mount_type)
+			 LDD_F_SV_TYPE_MDT | LDD_F_SV_TYPE_OST))
+#define MT_STR(data)    mt_str((data)->ldd_mount_type)
 
 /* Make the mdt/ost server obd name based on the filesystem name */
 static inline int server_make_name(__u32 flags, __u16 index, char *fs,
@@ -198,11 +199,6 @@ static inline int server_make_name(__u32 flags, __u16 index, char *fs,
         }
         return 0;
 }
-
-/* Get the index from the obd name */
-int server_name2index(char *svname, __u32 *idx, char **endptr);
-int server_name2svname(char *label, char *svname, char **endptr, size_t svsize);
-
 
 /****************** mount command *********************/
 
@@ -536,27 +532,35 @@ struct los_ondisk {
 /****************** prototypes *********************/
 
 #ifdef __KERNEL__
-
 /* obd_mount.c */
+int server_name2fsname(const char *svname, char *fsname, const char **endptr);
+int server_name2index(const char *svname, __u32 *idx, const char **endptr);
+int server_name2svname(const char *label, char *svname, const char **endptr,
+		       size_t svsize);
+
+int lustre_put_lsi(struct super_block *sb);
+int lustre_start_simple(char *obdname, char *type, char *uuid,
+			char *s1, char *s2, char *s3, char *s4);
+int lustre_start_mgc(struct super_block *sb);
 void lustre_register_client_fill_super(int (*cfs)(struct super_block *sb,
-                                                  struct vfsmount *mnt));
+						  struct vfsmount *mnt));
 void lustre_register_kill_super_cb(void (*cfs)(struct super_block *sb));
-
-
 int lustre_common_put_super(struct super_block *sb);
-struct lustre_mount_info *server_find_mount_locked(const char *name);
+
+# ifdef HAVE_SERVER_SUPPORT
+/* obd_mount_server.c */
+int server_fill_super(struct super_block *sb);
 struct lustre_mount_info *server_get_mount(const char *name);
 struct lustre_mount_info *server_get_mount_2(const char *name);
 int server_put_mount(const char *name, struct vfsmount *mnt);
 int server_put_mount_2(const char *name, struct vfsmount *mnt);
 struct mgs_target_info;
-int server_mti_print(char *title, struct mgs_target_info *mti);
+int server_mti_print(const char *title, struct mgs_target_info *mti);
 void server_calc_timeout(struct lustre_sb_info *lsi, struct obd_device *obd);
+# endif
 
-/* mgc_request.c */
 int mgc_fsname2resid(char *fsname, struct ldlm_res_id *res_id, int type);
-
-#endif
+#endif /* __KERNEL__ */
 
 /** @} disk */
 

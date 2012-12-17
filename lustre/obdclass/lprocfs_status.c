@@ -2681,6 +2681,7 @@ int lprocfs_obd_wr_recovery_time_hard(struct file *file, const char *buffer,
 }
 EXPORT_SYMBOL(lprocfs_obd_wr_recovery_time_hard);
 
+#ifdef HAVE_SERVER_SUPPORT
 int lprocfs_obd_rd_mntdev(char *page, char **start, off_t off,
                           int count, int *eof, void *data)
 {
@@ -2697,6 +2698,7 @@ int lprocfs_obd_rd_mntdev(char *page, char **start, off_t off,
 	return snprintf(page, count, "%s\n", dev_name);
 }
 EXPORT_SYMBOL(lprocfs_obd_rd_mntdev);
+#endif
 
 int lprocfs_obd_rd_max_pages_per_rpc(char *page, char **start, off_t off,
                                      int count, int *eof, void *data)

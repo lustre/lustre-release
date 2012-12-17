@@ -3790,13 +3790,14 @@ static void print_lustre_cfg(struct lustre_cfg *lcfg)
 int mgs_setparam(const struct lu_env *env, struct mgs_device *mgs,
 		 struct lustre_cfg *lcfg, char *fsname)
 {
-        struct fs_db *fsdb;
-        struct mgs_target_info *mti;
+	struct fs_db *fsdb;
+	struct mgs_target_info *mti;
         char *devname, *param;
-        char *ptr, *tmp;
-        __u32 index;
-        int rc = 0;
-        ENTRY;
+	char *ptr;
+	const char *tmp;
+	__u32 index;
+	int rc = 0;
+	ENTRY;
 
         print_lustre_cfg(lcfg);
 
