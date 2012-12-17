@@ -113,11 +113,7 @@ static int keepalive_idle = 30;
 CFS_MODULE_PARM(keepalive_idle, "i", int, 0644,
                 "# idle seconds before probe");
 
-#ifdef HAVE_BGL_SUPPORT
-#define DEFAULT_KEEPALIVE_COUNT  100
-#else
 #define DEFAULT_KEEPALIVE_COUNT  5
-#endif
 static int keepalive_count = DEFAULT_KEEPALIVE_COUNT;
 CFS_MODULE_PARM(keepalive_count, "i", int, 0644,
                 "# missed probes == dead");

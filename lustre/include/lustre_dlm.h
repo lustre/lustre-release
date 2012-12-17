@@ -70,12 +70,7 @@ struct obd_device;
 
 #define OBD_LDLM_DEVICENAME  "ldlm"
 
-#ifdef HAVE_BGL_SUPPORT
-/* 1.5 times the maximum 128 tasks available in VN mode */
-#define LDLM_DEFAULT_LRU_SIZE 196
-#else
 #define LDLM_DEFAULT_LRU_SIZE (100 * cfs_num_online_cpus())
-#endif
 #define LDLM_DEFAULT_MAX_ALIVE (cfs_time_seconds(36000))
 #define LDLM_CTIME_AGE_LIMIT (10)
 #define LDLM_DEFAULT_PARALLEL_AST_LIMIT 1024

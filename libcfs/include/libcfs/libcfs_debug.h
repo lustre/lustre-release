@@ -383,9 +383,7 @@ extern int cfs_trace_copyin_string(char *knl_buffer, int knl_buffer_nob,
 extern int cfs_trace_copyout_string(char *usr_buffer, int usr_buffer_nob,
 				    const char *knl_buffer, char *append);
 
-#if defined(HAVE_BGL_SUPPORT)
-#define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/bgl/ion/tmp/lustre-log"
-#elif defined(__arch_um__)
+#if defined(__arch_um__)
 #define LIBCFS_DEBUG_FILE_PATH_DEFAULT "/r/tmp/lustre-log"
 #elif defined(__WINNT__)
 #define LIBCFS_DEBUG_FILE_PATH_DEFAULT "\\SystemRoot\\temp\\lustre-log"

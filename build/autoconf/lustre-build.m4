@@ -286,28 +286,6 @@ AC_SUBST(LIBCFS_INCLUDE_DIR)
 ])
 
 #
-# LB_CONFIG_BGL
-#
-# Enable BGL features
-#
-AC_DEFUN([LB_CONFIG_BGL],
-[AC_MSG_CHECKING([whether to build BGL features])
-AC_ARG_ENABLE([bgl],
-	AC_HELP_STRING([--enable-bgl],
-			[enable building of BGL features]),
-	[enable_bgl='yes'],[enable_bgl='no'])
-AC_MSG_RESULT([$enable_bgl])
-if test x$enable_bgl != xno; then
-        AC_DEFINE(HAVE_BGL_SUPPORT, 1, Enable BGL Features)
-        enable_doc='no'
-        enable_tests='no'
-        enable_server='no'
-        enable_liblustre='no'
-        enable_libreadline='no'
-fi
-])
-
-#
 # LB_PATH_SNMP
 #
 # check for in-tree snmp support
@@ -610,7 +588,6 @@ LB_LIBCFS_DIR
 
 LB_INCLUDE_RULES
 
-LB_CONFIG_BGL
 LB_PATH_DEFAULTS
 
 LB_PROG_CC
