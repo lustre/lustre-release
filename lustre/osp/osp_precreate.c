@@ -690,7 +690,7 @@ static int osp_precreate_timeout_condition(void *data)
 		      d->opd_syn_changes, d->opd_syn_rpc_in_progress,
 		      d->opd_pre_status);
 
-	return 0;
+	return 1;
 }
 
 /*
