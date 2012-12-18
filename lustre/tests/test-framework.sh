@@ -697,7 +697,7 @@ cleanup_gss() {
 facet_type() {
 	local facet=$1
 
-	echo -n $facet | sed -e 's/^fs[0-9]\+//' -e 's/[0-9]\+//' |
+	echo -n $facet | sed -e 's/^fs[0-9]\+//' -e 's/[0-9_]\+//' |
 		tr '[:lower:]' '[:upper:]'
 }
 
