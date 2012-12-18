@@ -482,7 +482,7 @@ int lquota_disk_for_each_slv(const struct lu_env *env, struct dt_object *parent,
 	int				 rc;
 	ENTRY;
 
-	OBD_ALLOC(name, sizeof("0x00000000-"));
+	OBD_ALLOC(name, LQUOTA_NAME_MAX);
 	if (name == NULL)
 		RETURN(-ENOMEM);
 
@@ -493,7 +493,7 @@ int lquota_disk_for_each_slv(const struct lu_env *env, struct dt_object *parent,
 	iops = &parent->do_index_ops->dio_it;
 	it = iops->init(env, parent, 0, BYPASS_CAPA);
 	if (IS_ERR(it)) {
-		OBD_FREE(name, sizeof("0x00000000-"));
+		OBD_FREE(name, LQUOTA_NAME_MAX);
 		RETURN(PTR_ERR(it));
 	}
 
@@ -556,7 +556,7 @@ next:
 
 	iops->put(env, it);
 	iops->fini(env, it);
-	OBD_FREE(name, sizeof("0x00000000-"));
+	OBD_FREE(name, LQUOTA_NAME_MAX);
 	if (rc > 0)
 		rc = 0;
 	RETURN(rc);

@@ -52,7 +52,7 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	struct obd_uuid		*uuid;
 	struct lquota_lvb	*lvb;
 	struct ldlm_resource	*res = (*lockp)->l_resource;
-	int			 rc;
+	int			 rc, lvb_len;
 	ENTRY;
 
 	req_capsule_extend(&req->rq_pill, &RQF_LDLM_INTENT_QUOTA);
@@ -135,7 +135,9 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 
 	/* on success, pack lvb in reply */
 	lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
-	ldlm_lvbo_fill(*lockp, lvb, ldlm_lvbo_size(*lockp));
+	lvb_len = ldlm_lvbo_size(*lockp);
+	lvb_len = ldlm_lvbo_fill(*lockp, lvb, lvb_len);
+	req_capsule_shrink(&req->rq_pill, &RMF_DLM_LVB, lvb_len, RCL_SERVER);
 	EXIT;
 out:
 	return rc;

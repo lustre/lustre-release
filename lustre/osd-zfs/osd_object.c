@@ -782,8 +782,9 @@ static inline int qsd_transfer(const struct lu_env *env,
 	/* and one less inode for the current id */
 	qi->lqi_id.qid_uid = orig_id;;
 	qi->lqi_space      = -1;
+	/* can't get EDQUOT when reducing usage */
 	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (rc == -EDQUOT || rc == -EINPROGRESS)
+	if (rc == -EINPROGRESS)
 		rc = 0;
 	if (rc)
 		return rc;
@@ -804,7 +805,8 @@ static inline int qsd_transfer(const struct lu_env *env,
 	qi->lqi_id.qid_uid = orig_id;
 	qi->lqi_space      = -bspace;
 	rc = qsd_op_begin(env, qsd, trans, qi, NULL);
-	if (rc == -EDQUOT || rc == -EINPROGRESS)
+	/* can't get EDQUOT when reducing usage */
+	if (rc == -EINPROGRESS)
 		rc = 0;
 	return rc;
 }
@@ -1037,6 +1039,7 @@ static int osd_declare_object_create(const struct lu_env *env,
 	struct osd_device	*osd = osd_obj2dev(obj);
 	struct osd_thandle	*oh;
 	uint64_t		 zapid;
+	int			 rc;
 	ENTRY;
 
 	LASSERT(dof);
@@ -1090,8 +1093,9 @@ static int osd_declare_object_create(const struct lu_env *env,
 	__osd_xattr_declare_set(env, obj, sizeof(struct lustre_mdt_attrs),
 				XATTR_NAME_LMA, oh);
 
-	RETURN(osd_declare_quota(env, osd, attr->la_uid, attr->la_gid, 1, oh,
-				 false, NULL, false));
+	rc = osd_declare_quota(env, osd, attr->la_uid, attr->la_gid, 1, oh,
+			       false, NULL, false);
+	RETURN(rc);
 }
 
 int __osd_attr_init(const struct lu_env *env, udmu_objset_t *uos,

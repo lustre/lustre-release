@@ -209,7 +209,7 @@ void qsd_bump_version(struct qsd_qtype_info *qqi, __u64 ver, bool global)
  * \param  qid   - quota id
  * \param  rec   - global or slave record to be updated to disk
  * \param  ver   - new index file version
- * \param  global- ture : master record; false : slave record
+ * \param  global- true: master record; false: slave record
  */
 void qsd_upd_schedule(struct qsd_qtype_info *qqi, struct lquota_entry *lqe,
 		      union lquota_id *qid, union lquota_rec *rec, __u64 ver,

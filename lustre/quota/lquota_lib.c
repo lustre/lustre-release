@@ -382,7 +382,7 @@ static void exit_lquota(void)
 	lu_context_key_degister(&lquota_thread_key);
 }
 
-MODULE_AUTHOR("Intel, Inc. <http://www.intel.com/>");
+MODULE_AUTHOR("Intel Corporation <http://www.intel.com/>");
 MODULE_DESCRIPTION("Lustre Quota");
 MODULE_LICENSE("GPL");
 

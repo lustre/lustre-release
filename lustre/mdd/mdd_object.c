@@ -2081,7 +2081,7 @@ out:
 	if (result > 0)
 		/* end of directory */
 		dp->ldp_hash_end = cpu_to_le64(MDS_DIR_END_OFF);
-	if (result < 0)
+	else if (result < 0)
 		CWARN("build page failed: %d!\n", result);
         return result;
 }

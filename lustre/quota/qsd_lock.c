@@ -54,16 +54,19 @@ static struct qsd_qtype_info *qsd_glb_ast_data_get(struct ldlm_lock *lock,
 	qqi = lock->l_ast_data;
 	if (qqi != NULL) {
 		qqi_getref(qqi);
-		lu_ref_add(&qqi->qqi_reference, "ast_data_get", lock);
 		if (reset)
 			lock->l_ast_data = NULL;
 	}
 	unlock_res_and_lock(lock);
 
+	if (qqi != NULL)
+		/* it is not safe to call lu_ref_add() under spinlock */
+		lu_ref_add(&qqi->qqi_reference, "ast_data_get", lock);
+
 	if (reset && qqi != NULL) {
 		/* release qqi reference hold for the lock */
-		qqi_putref(qqi);
 		lu_ref_del(&qqi->qqi_reference, "glb_lock", lock);
+		qqi_putref(qqi);
 	}
 	RETURN(qqi);
 }
@@ -472,6 +475,7 @@ int qsd_id_lock_match(struct lustre_handle *lockh, struct lustre_handle *rlockh)
 	ldlm_lock_dump_handle(D_QUOTA, lockh);
 
 	if (rlockh == NULL)
+		/* caller not interested in remote handle */
 		RETURN(0);
 
 	/* look up lock associated with local handle and extract remote handle

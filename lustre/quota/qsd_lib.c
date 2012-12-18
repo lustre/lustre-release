@@ -362,7 +362,6 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	thread_set_flags(&qqi->qqi_reint_thread, SVC_STOPPED);
 	CFS_INIT_LIST_HEAD(&qqi->qqi_deferred_glb);
 	CFS_INIT_LIST_HEAD(&qqi->qqi_deferred_slv);
-	memset(&qqi->qqi_lockh, 0, sizeof(qqi->qqi_lockh));
 
 	/* open accounting object */
 	LASSERT(qqi->qqi_acct_obj == NULL);
@@ -462,14 +461,6 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	qsd->qsd_stopping = true;
 	write_unlock(&qsd->qsd_lock);
 
-	/* remove from the list of fsinfo */
-	if (!cfs_list_empty(&qsd->qsd_link)) {
-		LASSERT(qsd->qsd_fsinfo != NULL);
-		down(&qsd->qsd_fsinfo->qfs_sem);
-		cfs_list_del_init(&qsd->qsd_link);
-		up(&qsd->qsd_fsinfo->qfs_sem);
-	}
-
 	/* remove qsd proc entry */
 	if (qsd->qsd_proc != NULL) {
 		lprocfs_remove(&qsd->qsd_proc);
@@ -501,8 +492,14 @@ void qsd_fini(const struct lu_env *env, struct qsd_instance *qsd)
 	lustre_deregister_osp_item(&qsd->qsd_exp);
 
 	/* release per-filesystem information */
-	if (qsd->qsd_fsinfo != NULL)
+	if (qsd->qsd_fsinfo != NULL) {
+		down(&qsd->qsd_fsinfo->qfs_sem);
+		/* remove from the list of fsinfo */
+		cfs_list_del_init(&qsd->qsd_link);
+		up(&qsd->qsd_fsinfo->qfs_sem);
 		qsd_put_fsinfo(qsd->qsd_fsinfo);
+		qsd->qsd_fsinfo = NULL;
+	}
 
 	/* release quota root directory */
 	if (qsd->qsd_root != NULL) {
