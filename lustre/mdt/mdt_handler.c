@@ -30,7 +30,7 @@
  * Use is subject to license terms.
  */
 /*
- * Copyright (c) 2011 Whamcloud, Inc.
+ * Copyright (c) 2010, 2012, Intel Corporation.
  */
 /*
  * This file is part of Lustre, http://www.lustre.org/

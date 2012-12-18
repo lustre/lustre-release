@@ -33,7 +33,7 @@
  * Developed under the sponsorship of the US Government under
  * Subcontract No. B514193
  *
- * Copyright (c) 2011 Whamcloud, Inc.
+ * Copyright (c) 2010, 2011, Intel Corporation.
  *
  */
 /*

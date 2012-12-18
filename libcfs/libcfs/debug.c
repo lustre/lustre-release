@@ -37,7 +37,7 @@
  *
  * Author: Phil Schwan <phil@clusterfs.com>
  *
- * Copyright (c) 2011 Whamcloud, Inc.
+ * Copyright (c) 2011, 2012, Intel Corporation.
  *
  */
 
