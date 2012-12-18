@@ -204,51 +204,6 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
 }
 EXPORT_SYMBOL(pop_ctxt);
 
-/* utility to make a file */
-struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix)
-{
-        struct dentry *dchild;
-        int err = 0;
-        ENTRY;
-
-        // ASSERT_KERNEL_CTXT("kernel doing mknod outside kernel context\n");
-        CDEBUG(D_INODE, "creating file %.*s\n", (int)strlen(name), name);
-
-        dchild = ll_lookup_one_len(name, dir, strlen(name));
-        if (IS_ERR(dchild))
-                GOTO(out_up, dchild);
-
-        if (dchild->d_inode) {
-                int old_mode = dchild->d_inode->i_mode;
-                if (!S_ISREG(old_mode))
-                        GOTO(out_err, err = -EEXIST);
-
-                /* Fixup file permissions if necessary */
-                if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
-                        CWARN("fixing permissions on %s from %o to %o\n",
-                              name, old_mode, mode);
-                        dchild->d_inode->i_mode = (mode & S_IALLUGO) |
-                                                  (old_mode & ~S_IALLUGO);
-                        mark_inode_dirty(dchild->d_inode);
-                }
-                GOTO(out_up, dchild);
-        }
-
-	err = vfs_create(dir->d_inode, dchild, (mode & ~S_IFMT) | S_IFREG,
-			    NULL);
-	if (err)
-		GOTO(out_err, err);
-
-        RETURN(dchild);
-
-out_err:
-        dput(dchild);
-        dchild = ERR_PTR(err);
-out_up:
-        return dchild;
-}
-EXPORT_SYMBOL(simple_mknod);
-
 /* utility to make a directory */
 struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
                             const char *name, int mode, int fix)
@@ -331,57 +286,6 @@ put_old:
 }
 EXPORT_SYMBOL(lustre_rename);
 
-/*
- * Read a file from within kernel context.  Prior to calling this
- * function we should already have done a push_ctxt().
- */
-int lustre_fread(struct file *file, void *buf, int len, loff_t *off)
-{
-        ASSERT_KERNEL_CTXT("kernel doing read outside kernel context\n");
-        if (!file || !file->f_op || !file->f_op->read || !off)
-                RETURN(-ENOSYS);
-
-        return file->f_op->read(file, buf, len, off);
-}
-EXPORT_SYMBOL(lustre_fread);
-
-/*
- * Write a file from within kernel context.  Prior to calling this
- * function we should already have done a push_ctxt().
- */
-int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off)
-{
-        ENTRY;
-        ASSERT_KERNEL_CTXT("kernel doing write outside kernel context\n");
-        if (!file)
-                RETURN(-ENOENT);
-        if (!file->f_op)
-                RETURN(-ENOSYS);
-        if (!off)
-                RETURN(-EINVAL);
-
-        if (!file->f_op->write)
-                RETURN(-EROFS);
-
-        RETURN(file->f_op->write(file, buf, len, off));
-}
-EXPORT_SYMBOL(lustre_fwrite);
-
-/*
- * Sync a file from within kernel context.  Prior to calling this
- * function we should already have done a push_ctxt().
- */
-int lustre_fsync(struct file *file)
-{
-        ENTRY;
-        ASSERT_KERNEL_CTXT("kernel doing sync outside kernel context\n");
-        if (!file || !file->f_op || !file->f_op->fsync)
-                RETURN(-ENOSYS);
-
-        RETURN(cfs_do_fsync(file, 0));
-}
-EXPORT_SYMBOL(lustre_fsync);
-
 /* Note: dput(dchild) will be called if there is an error */
 struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
                              int flags)
@@ -390,104 +294,6 @@ struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
         return ll_dentry_open(de, ctxt->pwdmnt, flags, current_cred());
 }
 EXPORT_SYMBOL(l_dentry_open);
-
-static int l_filldir(void *__buf, const char *name, int namlen, loff_t offset,
-                     u64 ino, unsigned int d_type)
-{
-        struct l_linux_dirent *dirent;
-        struct l_readdir_callback *buf = (struct l_readdir_callback *)__buf;
-
-        dirent = buf->lrc_dirent;
-        if (dirent)
-               dirent->lld_off = offset;
-
-        OBD_ALLOC(dirent, sizeof(*dirent));
-
-        if (!dirent)
-                return -ENOMEM;
-
-        cfs_list_add_tail(&dirent->lld_list, buf->lrc_list);
-
-        buf->lrc_dirent = dirent;
-        dirent->lld_ino = ino;
-        LASSERT(sizeof(dirent->lld_name) >= namlen + 1);
-        memcpy(dirent->lld_name, name, namlen);
-
-        return 0;
-}
-
-long l_readdir(struct file *file, cfs_list_t *dentry_list)
-{
-        struct l_linux_dirent *lastdirent;
-        struct l_readdir_callback buf;
-        int error;
-
-        buf.lrc_dirent = NULL;
-        buf.lrc_list = dentry_list;
-
-        error = vfs_readdir(file, l_filldir, &buf);
-        if (error < 0)
-                return error;
-
-        lastdirent = buf.lrc_dirent;
-        if (lastdirent)
-                lastdirent->lld_off = file->f_pos;
-
-        return 0;
-}
-EXPORT_SYMBOL(l_readdir);
-
-int l_notify_change(struct vfsmount *mnt, struct dentry *dchild,
-		    struct iattr *newattrs)
-{
-	int rc;
-
-	mutex_lock(&dchild->d_inode->i_mutex);
-#ifdef HAVE_SECURITY_PLUG
-	rc = notify_change(dchild, mnt, newattrs);
-#else
-	rc = notify_change(dchild, newattrs);
-#endif
-	mutex_unlock(&dchild->d_inode->i_mutex);
-	return rc;
-}
-EXPORT_SYMBOL(l_notify_change);
-
-/* utility to truncate a file */
-int simple_truncate(struct dentry *dir, struct vfsmount *mnt, 
-                 char *name, loff_t length)
-{
-        struct dentry *dchild;
-        struct iattr newattrs;
-        int err = 0;
-        ENTRY;
-
-        CDEBUG(D_INODE, "truncating file %.*s to %lld\n", (int)strlen(name),
-               name, (long long)length);
-        dchild = ll_lookup_one_len(name, dir, strlen(name));
-        if (IS_ERR(dchild))
-                GOTO(out, err = PTR_ERR(dchild));
-
-        if (dchild->d_inode) {
-                int old_mode = dchild->d_inode->i_mode;
-                if (S_ISDIR(old_mode)) {
-                        CERROR("found %s (%lu/%u) is mode %o\n", name,
-                               dchild->d_inode->i_ino,
-                               dchild->d_inode->i_generation, old_mode);
-                        GOTO(out_dput, err = -EISDIR);
-                }
-
-                newattrs.ia_size = length;
-                newattrs.ia_valid = ATTR_SIZE;
-                err = l_notify_change(mnt, dchild, &newattrs);
-        }
-        EXIT;
-out_dput:
-        dput(dchild);
-out:
-        return err;
-}
-EXPORT_SYMBOL(simple_truncate);
 
 int __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev)
 {
@@ -518,26 +324,6 @@ int lvfs_check_rdonly(lvfs_sbdev_type dev)
 #endif
 }
 EXPORT_SYMBOL(lvfs_check_rdonly);
-
-int lvfs_check_io_health(struct obd_device *obd, struct file *file)
-{
-        char *write_page = NULL;
-        loff_t offset = 0;
-        int rc = 0;
-        ENTRY;
-
-        OBD_ALLOC(write_page, CFS_PAGE_SIZE);
-        if (!write_page)
-                RETURN(-ENOMEM);
-
-        rc = fsfilt_write_record(obd, file, write_page, CFS_PAGE_SIZE, &offset, 1);
-
-        OBD_FREE(write_page, CFS_PAGE_SIZE);
-
-        CDEBUG(D_INFO, "write 1 page synchronously for checking io rc %d\n",rc);
-        RETURN(rc);
-}
-EXPORT_SYMBOL(lvfs_check_io_health);
 
 void obd_update_maxusage()
 {

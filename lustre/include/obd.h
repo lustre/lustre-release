@@ -1694,8 +1694,6 @@ static inline const struct lsm_operations *lsm_op_find(int magic)
         }
 }
 
-int lvfs_check_io_health(struct obd_device *obd, struct file *file);
-
 /* Requests for obd_extent_calc() */
 #define OBD_CALC_STRIPE_START   1
 #define OBD_CALC_STRIPE_END     2

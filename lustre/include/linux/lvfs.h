@@ -98,17 +98,8 @@ struct lvfs_run_ctxt {
 
 struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
                             const char *name, int mode, int fix);
-struct dentry *simple_mknod(struct dentry *dir, char *name, int mode, int fix);
 int lustre_rename(struct dentry *dir, struct vfsmount *mnt, char *oldname,
                   char *newname);
-int lustre_fread(struct file *file, void *buf, int len, loff_t *off);
-int lustre_fwrite(struct file *file, const void *buf, int len, loff_t *off);
-int lustre_fsync(struct file *file);
-long l_readdir(struct file * file, cfs_list_t *dentry_list);
-int l_notify_change(struct vfsmount *mnt, struct dentry *dchild,
-                    struct iattr *newattrs);
-int simple_truncate(struct dentry *dir, struct vfsmount *mnt,
-                               char *name, loff_t length);
 
 static inline void l_dput(struct dentry *de)
 {
