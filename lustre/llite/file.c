@@ -1945,39 +1945,96 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         }
 }
 
+#ifndef HAVE_FILE_LLSEEK_SIZE
+static inline loff_t
+llseek_execute(struct file *file, loff_t offset, loff_t maxsize)
+{
+	if (offset < 0 && !(file->f_mode & FMODE_UNSIGNED_OFFSET))
+		return -EINVAL;
+	if (offset > maxsize)
+		return -EINVAL;
+
+	if (offset != file->f_pos) {
+		file->f_pos = offset;
+		file->f_version = 0;
+	}
+	return offset;
+}
+
+static loff_t
+generic_file_llseek_size(struct file *file, loff_t offset, int origin,
+                loff_t maxsize, loff_t eof)
+{
+	struct inode *inode = file->f_dentry->d_inode;
+
+	switch (origin) {
+	case SEEK_END:
+		offset += eof;
+		break;
+	case SEEK_CUR:
+		/*
+		 * Here we special-case the lseek(fd, 0, SEEK_CUR)
+		 * position-querying operation.  Avoid rewriting the "same"
+		 * f_pos value back to the file because a concurrent read(),
+		 * write() or lseek() might have altered it
+		 */
+		if (offset == 0)
+			return file->f_pos;
+		/*
+		 * f_lock protects against read/modify/write race with other
+		 * SEEK_CURs. Note that parallel writes and reads behave
+		 * like SEEK_SET.
+		 */
+		mutex_lock(&inode->i_mutex);
+		offset = llseek_execute(file, file->f_pos + offset, maxsize);
+		mutex_unlock(&inode->i_mutex);
+		return offset;
+	case SEEK_DATA:
+		/*
+		 * In the generic case the entire file is data, so as long as
+		 * offset isn't at the end of the file then the offset is data.
+		 */
+		if (offset >= eof)
+			return -ENXIO;
+		break;
+	case SEEK_HOLE:
+		/*
+		 * There is a virtual hole at the end of the file, so as long as
+		 * offset isn't i_size or larger, return i_size.
+		 */
+		if (offset >= eof)
+			return -ENXIO;
+		offset = eof;
+		break;
+	}
+
+	return llseek_execute(file, offset, maxsize);
+}
+#endif
+
 loff_t ll_file_seek(struct file *file, loff_t offset, int origin)
 {
-        struct inode *inode = file->f_dentry->d_inode;
-        loff_t retval;
-        ENTRY;
-        retval = offset + ((origin == 2) ? i_size_read(inode) :
-                           (origin == 1) ? file->f_pos : 0);
-        CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%llu=%#llx(%s)\n",
-               inode->i_ino, inode->i_generation, inode, retval, retval,
-               origin == 2 ? "SEEK_END": origin == 1 ? "SEEK_CUR" : "SEEK_SET");
-        ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK, 1);
+	struct inode *inode = file->f_dentry->d_inode;
+	loff_t retval, eof = 0;
 
-        if (origin == 2) { /* SEEK_END */
-                int rc;
+	ENTRY;
+	retval = offset + ((origin == SEEK_END) ? i_size_read(inode) :
+			   (origin == SEEK_CUR) ? file->f_pos : 0);
+	CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p), to=%llu=%#llx(%d)\n",
+	       inode->i_ino, inode->i_generation, inode, retval, retval,
+	       origin);
+	ll_stats_ops_tally(ll_i2sbi(inode), LPROC_LL_LLSEEK, 1);
 
-                rc = ll_glimpse_size(inode);
-                if (rc != 0)
-                        RETURN(rc);
+	if (origin == SEEK_END || origin == SEEK_HOLE || origin == SEEK_DATA) {
+		retval = ll_glimpse_size(inode);
+		if (retval != 0)
+			RETURN(retval);
+		eof = i_size_read(inode);
+	}
 
-                offset += i_size_read(inode);
-        } else if (origin == 1) { /* SEEK_CUR */
-                offset += file->f_pos;
-        }
-
-        retval = -EINVAL;
-        if (offset >= 0 && offset <= ll_file_maxbytes(inode)) {
-                if (offset != file->f_pos) {
-                        file->f_pos = offset;
-                }
-                retval = offset;
-        }
-
-        RETURN(retval);
+	retval = generic_file_llseek_size(file, offset, origin,
+					  ll_file_maxbytes(inode), eof);
+	RETURN(retval);
 }
 
 int ll_flush(struct file *file, fl_owner_t id)

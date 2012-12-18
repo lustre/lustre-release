@@ -1239,6 +1239,7 @@ AC_DEFUN([LC_EXPORT_CPUMASK_OF_NODE],
                                              the kernel])]) # x86_64
          ])
 
+
 # 2.6.31 replaces blk_queue_hardsect_size by blk_queue_logical_block_size function
 AC_DEFUN([LC_BLK_QUEUE_LOG_BLK_SIZE],
 [AC_MSG_CHECKING([if blk_queue_logical_block_size is defined])
@@ -1350,7 +1351,7 @@ LB_LINUX_TRY_COMPILE([
 ],[
         AC_MSG_RESULT(no)
 ])
-])  
+])
 
 # 2.6.32 removes blk_queue_max_sectors and add blk_queue_max_hw_sectors
 # check blk_queue_max_sectors and use it until disappear.
@@ -1875,6 +1876,16 @@ LB_LINUX_TRY_COMPILE([
 ])
 
 #
+# 3.1 introduced generic_file_llseek_size()
+#
+AC_DEFUN([LC_FILE_LLSEEK_SIZE],
+	[LB_CHECK_SYMBOL_EXPORT([generic_file_llseek_size],
+	[fs/read_write.c],
+        [AC_DEFINE(HAVE_FILE_LLSEEK_SIZE, 1,
+		   [generic_file_llseek_size is exported by the kernel])])
+])
+
+#
 # 3.2 request_queue.make_request_fn defined as function returns with void
 # see kernel commit 5a7bbad27a410350e64a2d7f5ec18fc73836c14f
 #
@@ -2263,8 +2274,8 @@ AC_DEFUN([LC_PROG_LINUX],
          # 2.6.29
          LC_SB_ANY_QUOTA_LOADED
 
-         # 2.6.30
-         LC_EXPORT_CPUMASK_OF_NODE
+	 # 2.6.30
+	 LC_EXPORT_CPUMASK_OF_NODE
 
          # 2.6.31
          LC_BLK_QUEUE_LOG_BLK_SIZE
@@ -2310,6 +2321,7 @@ AC_DEFUN([LC_PROG_LINUX],
 	 LC_LM_XXX_LOCK_MANAGER_OPS
 	 LC_INODE_DIO_WAIT
 	 LC_IOP_GET_ACL
+	 LC_FILE_LLSEEK_SIZE
 
 	 # 3.1.1
 	 LC_BLOCKS_FOR_TRUNCATE
