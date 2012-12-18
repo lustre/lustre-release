@@ -54,7 +54,6 @@
 #include <linux/init.h>
 #include <linux/lustre_compat25.h>
 #include <lvfs.h>
-#include "lvfs_internal.h"
 
 #include <obd.h>
 #include <lustre_lib.h>

@@ -38,13 +38,9 @@
 
 if LIBLUSTRE
 noinst_LIBRARIES = liblvfs.a
-liblvfs_a_SOURCES = lvfs_userfs.c lvfs_lib.c
+liblvfs_a_SOURCES = lvfs_lib.c
 liblvfs_a_CFLAGS = $(LLCFLAGS)
 liblvfs_a_CPPFLAGS = $(LLCPPFLAGS)
-
-#if MYSQL
-#liblvfs_a_SOURCES += lvfs_user_mysql.c
-#endif
 endif
 
 if MODULES
@@ -74,26 +70,7 @@ ldiskfs_sed_flags = \
 fsfilt_ldiskfs.c: fsfilt_ext3.c
 	sed $(strip $(ldiskfs_sed_flags)) $< > $@
 
-fsfilt_ldiskfs_quota.h: fsfilt_ext3_quota.h
-	sed $(strip $(ldiskfs_sed_flags)) $< > $@
-
 endif # LINUX
-
-if DARWIN
-
-macos_PROGRAMS = lvfs
-
-lvfs_SOURCES = lvfs_darwin.c
-
-lvfs_CFLAGS := $(EXTRA_KCFLAGS)
-lvfs_LDFLAGS := $(EXTRA_KLDFLAGS)
-lvfs_LDADD := $(EXTRA_KLIBS)
-
-plist_DATA = Info.plist
-
-install_data_hook = fix-kext-ownership
-
-endif # DARWIN
 
 else # MODULES
 
@@ -103,5 +80,5 @@ endif # MODULES
 
 install-data-hook: $(install_data_hook)
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@ 
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 CLEANFILES = fsfilt-*.c fsfilt_ldiskfs*.c fsfilt_extN.c sources

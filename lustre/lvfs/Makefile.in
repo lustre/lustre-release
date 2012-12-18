@@ -8,9 +8,7 @@ lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o lvfs_lib.o
 $(obj)/fsfilt-%.c: $(obj)/fsfilt_%.c
 	ln -s $< $@
 
-EXTRA_DIST = $(lvfs-objs:.o=.c)  \
-	fsfilt_ext3.c \
-	lvfs_internal.h lvfs_userfs.c
+EXTRA_DIST = $(lvfs-objs:.o=.c) fsfilt_ext3.c
 
 # for <ext3/xattr.h> on 2.6
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
