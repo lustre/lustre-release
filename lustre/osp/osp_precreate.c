@@ -672,7 +672,7 @@ static int osp_precreate_ready_condition(struct osp_device *d)
 
 	/* ready if OST reported no space and no destoys in progress */
 	if (d->opd_syn_changes + d->opd_syn_rpc_in_progress == 0 &&
-	    d->opd_pre_status != 0)
+	    d->opd_pre_status == -ENOSPC)
 		return 1;
 
 	return 0;
@@ -711,9 +711,6 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 
 	LASSERT(d->opd_pre_last_created >= d->opd_pre_used_id);
 
-	lwi = LWI_TIMEOUT(cfs_time_seconds(obd_timeout),
-			  osp_precreate_timeout_condition, d);
-
 	/*
 	 * wait till:
 	 *  - preallocation is done
@@ -722,10 +719,6 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 	 */
 	while ((rc = d->opd_pre_status) == 0 || rc == -ENOSPC ||
 		rc == -ENODEV) {
-		if (unlikely(rc == -ENODEV)) {
-			if (cfs_time_aftereq(cfs_time_current(), expire))
-				break;
-		}
 
 #if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 90, 0)
 		/*
@@ -791,6 +784,11 @@ int osp_precreate_reserve(const struct lu_env *env, struct osp_device *d)
 
 		/* XXX: don't wake up if precreation is in progress */
 		cfs_waitq_signal(&d->opd_pre_waitq);
+
+		lwi = LWI_TIMEOUT(expire - cfs_time_current(),
+				osp_precreate_timeout_condition, d);
+		if (cfs_time_aftereq(cfs_time_current(), expire))
+			break;
 
 		l_wait_event(d->opd_pre_user_waitq,
 			     osp_precreate_ready_condition(d), &lwi);
