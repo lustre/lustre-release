@@ -11,7 +11,185 @@ MODULE_SYMVERS_DEPS = module-symvers
 @CLIENT_TRUE@BUILD_CLIENT = true
 @CLIENT_FALSE@BUILD_CLIENT = false
 
-include build/autoMakefile.am.toplevel
+AUTOMAKE_OPTIONS = foreign
+
+FIND_TAG_FILES_CMD = find $(top_srcdir) \
+		     -path $(top_srcdir)/ldiskfs/ldiskfs/linux-stage \
+		     -prune -false -o -type f -name '*.[hc]'
+
+MAKEEACHSUBDIR =					\
+	for subdir in $(RPM_SUBDIRS) ; do		\
+		echo "Making $@ in $$subdir" ; 		\
+		cd $$subdir ;				\
+		$(MAKE) $(AM_MAKEFLAGS) $@ ;		\
+		cd - ;					\
+		echo "Finished $@ in $$subdir" ;	\
+	done
+
+# these empty rules are needed so that automake doesn't add its own
+# recursive rules
+etags-recursive:
+
+ctags-recursive:
+
+tags-recursive:
+
+TAGS: etags
+
+tags: ctags etags
+
+etags:
+	$(RM) $(top_srcdir)/TAGS
+	ETAGSF=`etags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	$(FIND_TAG_FILES_CMD) | xargs etags $$ETAGSF -a
+
+ctags:
+	$(RM) $(top_srcdir)/tags
+	CTAGSF=`ctags --version | grep -iq exuberant && \
+		echo "-I __initdata,__exitdata,EXPORT_SYMBOL"`; \
+	$(FIND_TAG_FILES_CMD) | xargs ctags $$CTAGSF -a
+
+cscope-recursive:
+
+cscope:
+	$(RM) $(top_srcdir)/cscope*.out $(top_srcdir)/cscope.files
+	$(FIND_TAG_FILES_CMD) > cscope.files
+	cscope -bRq
+
+mkid:
+	$(FIND_TAG_FILES_CMD) | xargs mkid
+
+
+doxygen:  doxygen-api doxygen-ref
+
+doxygen-%: build/doxyfile.%
+	   doxygen $<
+
+if MODULES
+sources: all-sources
+
+all-sources: $(MODULE_SYMVERS_DEPS)
+	for dir in $(SOURCES_SUBDIRS) ; do \
+		$(MAKE) sources -C $$dir || exit $$? ; \
+	done
+
+if LINUX
+all-am: modules
+
+modules: $(DEP) all-sources
+	$(MAKE) $(ARCH_UM) CC="$(CC)" -C $(LINUX_OBJ) 		     \
+	-f $(PWD)/build/Makefile LUSTRE_LINUX_CONFIG=$(LINUX_CONFIG) \
+        LINUXINCLUDE='$(EXTRA_LNET_INCLUDE) -I$$(srctree)/arch/$$(SRCARCH)/include -I$$(srctree)/arch/$$(SRCARCH)/include/generated -Iinclude $$(if $$(KBUILD_SRC),-Iinclude2 -I$$(srctree)/include) -include $(CONFIG_INCLUDE)' \
+	$(MODULE_TARGET)=$(PWD) -o tmp_include_depends -o scripts -o \
+	include/config/MARKER $@
+endif # LINUX
+
+endif # MODULES
+
+dist-hook:
+	$(RM) $(distdir)/ldiskfs/*.spec
+	$(RM) $(distdir)/lustre-iokit/*.spec
+	find $(distdir) -name .deps -o \
+			-name CVS -o \
+			-name .svn -o \
+			-name .git -o \
+			-name .#* | xargs rm -rf
+	$(MAKE) $(AM_MAKEFLAGS) \
+	  top_distdir="$(top_distdir)" distdir="$(distdir)" \
+	  module-dist-hook
+
+EXTRA_DIST = @PACKAGE_TARNAME@.spec					\
+	build/Makefile build/lbuild*					\
+	build/Rules.in 							\
+	build/update_oldconfig						\
+	build/autoconf/lustre-build-linux.m4				\
+	build/autoconf/lustre-build-darwin.m4				\
+	build/autoconf/lustre-build-ldiskfs.m4				\
+	build/autoconf/lustre-build.m4 build/rdac_spec                  \
+	build/mptlinux.spec.patch build/patches                         \
+	build/funcs.sh build/find_linux_rpms build/exit_traps.sh
+
+rpms-real: @PACKAGE_TARNAME@.spec dist Makefile
+	CONFIGURE_ARGS=$$(echo $$(eval echo $(ac_configure_args)) | \
+		sed -re 's/--(en|dis)able-tests//'); \
+	if [ -n "@LINUX@" ]; then \
+		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
+			sed -re 's/--with-linux=[^ ][^ ]*//'); \
+		RPMARGS="--define \"kdir @LINUX@\""; \
+		CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
+			sed -re 's/--with-linux-obj=[^ ][^ ]*//'); \
+		if [ -n "@LINUX_OBJ@" -a "@LINUX_OBJ@" != "@LINUX@" ]; then \
+			RPMARGS="$$RPMARGS --define \"kobjdir @LINUX_OBJ@\""; \
+		fi; \
+	fi; \
+	CONFIGURE_ARGS=$$(echo $$(eval echo $$CONFIGURE_ARGS) | \
+		sed -re 's/--with-release=[^ ][^ ]*//'); \
+	RPMARGS="$$RPMARGS --define \"configure_args $$CONFIGURE_ARGS\""; \
+	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
+		RPMARGS="$$RPMARGS --define \"build_lustre_tests 0\""; \
+	fi; \
+	if [[ "X$(BUILD_SERVER)" = Xfalse ]]; then \
+		RPMARGS="$$RPMARGS --define \"lustre_name lustre-client\""; \
+	fi; \
+	echo "Building Lustre RPM with $$RPMARGS"; \
+	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
+
+srpm-real: @PACKAGE_TARNAME@.spec dist Makefile
+	if [[ "X$(BUILD_TESTS)" = Xfalse ]]; then \
+		RPMARGS="--define \"build_lustre_tests 0\""; \
+	fi; \
+	eval rpmbuild $$RPMARGS -ta $(distdir).tar.gz
+
+rpms:
+	@$(MAKEEACHSUBDIR)
+	$(MAKE) $(AM_MAKEFLAGS) rpms-real
+
+srpm:
+	@$(MAKEEACHSUBDIR)
+	$(MAKE) $(AM_MAKEFLAGS) srpm-real
+
+# In the debs target, first make sure what's in the changelog reflects
+# the software version.  Here's how we could dig the version out of the
+# autoconf version file directly:
+# lversion=$$(sed -ne 's/m4_define(\[LUSTRE_[A-Z][A-Z]*\],\[\([0-9][0-9]*\)\])$$/\1/p'
+#	lustre/autoconf/lustre-version.ac | tr '\n' '.' | sed -e 's/.$//');
+#
+# However, one cannot really run "make debs" without having done a
+# configure first, so we could use the easier method of digging the
+# version out of the config.h file.
+debs:
+	lversion=$$(sed -ne 's/^#define VERSION "\(.*\)"$$/\1/p' config.h); \
+	cversion=$$(sed -ne '1s/^lustre (\(.*\)-[0-9][0-9]*).*$$/\1/p' debian/changelog); \
+	if [ "$$lversion" != "$$cversion" ]; then \
+		echo -e "1i\nlustre ($$lversion-1) unstable; urgency=low\n\n  * Automated changelog entry update\n\n -- Brian J. Murrell <brian@interlinx.bc.ca>  $$(date -R)\n\n.\nwq" | ed debian/changelog; \
+	fi; \
+	rm -rf debs
+	dpkg-buildpackage -I.git -I\*.out[0-9]\* -I\*.swp || { \
+		rc=$${PIPESTATUS[0]}; \
+		[ $${rc} -gt 1 ] && exit $${rc}; \
+		exit 0; \
+	}
+	export KPKG_DEST_DIR="$$(pwd)/.." && \
+	version=$$(sed -ne '1s/^lustre (\(.*\)).*$$/\1/p' debian/changelog) && \
+	rm -rf debian/tmp/modules-deb && \
+	mkdir debian/tmp/modules-deb && \
+	pushd debian/tmp/modules-deb && \
+	dpkg -x ../../../../lustre-source_$${version}_all.deb $$(pwd) && \
+	mkdir usr_src/ && \
+	tar -C usr_src/ -xjf usr/src/lustre.tar.bz2 && \
+	chmod 755 usr_src/modules/lustre/debian/rules && \
+	mkdir -p usr_share_modass && \
+	ln -s /usr/share/modass/include/ usr_share_modass/ && \
+	ln -s /usr/share/modass/packages/ usr_share_modass/ && \
+	echo "lustre" > usr_share_modass/compliant.list && \
+	export MA_DIR=$$(pwd)/usr_share_modass && \
+	KVERS=$${KVERS:-$(LINUXRELEASE)}; \
+	m-a build $${KVERS:+-l $$KVERS} -i -u $$(pwd) lustre && \
+	popd && \
+	VER=$$(sed -ne '1s/^lustre (\(.*-[0-9][0-9]*\)).*$$/\1/p' debian/changelog); \
+	mkdir -p debs && \
+	mv ../liblustre_$${VER}_*.deb ../linux-patch-lustre_$${VER}_all.deb ../lustre-dev_$${VER}_*.deb ../lustre-source_$${VER}_all.deb ../lustre-tests_$${VER}_*.deb ../lustre-utils_$${VER}_*.deb ../lustre_$${VER}.dsc ../lustre_$${VER}_*.changes ../lustre_$${VER%-[0-9]*}.orig.tar.gz ../lustre_$${VER}.diff.gz ../lustre-client-modules-$${KVERS}_$${VER}_*.deb debs/
 
 EXTRA_DIST += config.h.in
 
