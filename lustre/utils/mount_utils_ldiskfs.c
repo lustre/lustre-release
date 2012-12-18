@@ -82,7 +82,10 @@
 
 #define MAX_HW_SECTORS_KB_PATH	"queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH	"queue/max_sectors_kb"
+#define SCHEDULER_PATH		"queue/scheduler"
 #define STRIPE_CACHE_SIZE	"md/stripe_cache_size"
+
+#define DEFAULT_SCHEDULER	"deadline"
 
 extern char *progname;
 
@@ -787,7 +790,7 @@ int ldiskfs_prepare_lustre(struct mkfs_opts *mop,
 	return 0;
 }
 
-int read_file(char *path, char *buf, int size)
+int read_file(const char *path, char *buf, int size)
 {
 	FILE *fd;
 
@@ -805,7 +808,7 @@ int read_file(char *path, char *buf, int size)
 	return 0;
 }
 
-int write_file(char *path, char *buf)
+int write_file(const char *path, const char *buf)
 {
 	FILE *fd;
 
@@ -816,6 +819,51 @@ int write_file(char *path, char *buf)
 	fputs(buf, fd);
 	fclose(fd);
 	return 0;
+}
+
+int set_blockdev_scheduler(const char *path, const char *scheduler)
+{
+	char buf[PATH_MAX], *c;
+	int rc;
+
+	/* Before setting the scheduler, we need to check to see if it's
+	 * already set to "noop". If it is, we don't want to override
+	 * that setting. If it's set to anything other than "noop", set
+	 * the scheduler to what has been passed in. */
+
+	rc = read_file(path, buf, sizeof(buf));
+	if (rc) {
+		if (verbose)
+			fprintf(stderr, "%s: cannot open '%s': %s\n",
+				progname, path, strerror(errno));
+		return rc;
+	}
+
+	/* The expected format of buf: noop anticipatory deadline [cfq] */
+	c = strchr(buf, '[');
+
+	/* If c is NULL, the format is not what we expect. Play it safe
+	 * and error out. */
+	if (c == NULL) {
+		if (verbose)
+			fprintf(stderr, "%s: cannot parse scheduler "
+					"options for '%s'\n", progname, path);
+		return -EINVAL;
+	}
+
+	if (strncmp(c+1, "noop", 4) == 0)
+		return 0;
+
+	rc = write_file(path, scheduler);
+	if (rc) {
+		if (verbose)
+			fprintf(stderr, "%s: cannot set scheduler on "
+					"'%s': %s\n", progname, path,
+					strerror(errno));
+		return rc;
+	}
+
+	return rc;
 }
 
 /* This is to tune the kernel for good SCSI performance.
@@ -969,6 +1017,12 @@ set_params:
 			rc = 0;
 		}
 	}
+
+	/* Purposely ignore errors reported from set_blockdev_scheduler.
+	 * The worst that will happen is a block device with an "incorrect"
+	 * scheduler. */
+	snprintf(real_path, sizeof(real_path), "%s/%s", path, SCHEDULER_PATH);
+	set_blockdev_scheduler(real_path, DEFAULT_SCHEDULER);
 
 	if (fan_out) {
 		char *slave = NULL;
