@@ -69,7 +69,7 @@ test_0c() {
 	zconf_mount `hostname` $MOUNT || error "mount fails"
 	client_up || error "post-failover df failed"
 	# file shouldn't exist if replay-barrier works as expected
-	rm $DIR/$tfile && return 1
+	rm $DIR/$tfile && error "File exists and it shouldn't"
 	return 0
 }
 run_test 0c "check replay-barrier"
@@ -945,15 +945,15 @@ test_44b() {
 run_test 44b "race in target handle connect"
 
 test_44c() {
-    replay_barrier $SINGLEMDS
-    createmany -m $DIR/$tfile-%d 100
+	replay_barrier $SINGLEMDS
+	createmany -m $DIR/$tfile-%d 100 || error "failed to create directories"
 #define OBD_FAIL_TGT_RCVG_FLAG 0x712
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000712"
-    fail_abort $SINGLEMDS
-    unlinkmany $DIR/$tfile-%d 100 && return 1
-    fail $SINGLEMDS
-    unlinkmany $DIR/$tfile-%d 100 && return 1
-    return 0
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000712"
+	fail_abort $SINGLEMDS
+	unlinkmany $DIR/$tfile-%d 100 && error "unliked after fail abort"
+	fail $SINGLEMDS
+	unlinkmany $DIR/$tfile-%d 100 && error "unliked after fail"
+	return 0
 }
 run_test 44c "race in target handle connect"
 
