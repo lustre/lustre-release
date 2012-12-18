@@ -1556,9 +1556,10 @@ test_61d() { # bug 16002 # bug 17466 # bug 22137
 #   OBD_FAIL_OBD_LLOG_SETUP        0x605
     stop mgs
     do_facet mgs "lctl set_param fail_loc=0x80000605"
-    start mgs $MGSDEV $MGS_MOUNT_OPTS && error "mgs start should have failed"
+    start mgs $(mgsdevname) $MGS_MOUNT_OPTS &&
+	error "mgs start should have failed"
     do_facet mgs "lctl set_param fail_loc=0"
-    start mgs $MGSDEV $MGS_MOUNT_OPTS || error "cannot restart mgs"
+    start mgs $(mgsdevname) $MGS_MOUNT_OPTS || error "cannot restart mgs"
 }
 run_test 61d "error in llog_setup should cleanup the llog context correctly"
 

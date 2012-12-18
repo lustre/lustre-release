@@ -1508,10 +1508,11 @@ test_103()
         stop mds1
 
         # We need this test because mds is like a client in IR context.
-        start mds1 $MDSDEV1 || error "MDS should start w/o mgs"
+        start mds1 $(mdsdevname 1) $MDS_MOUNT_OPTS ||
+		error "MDS should start w/o mgs"
 
         # start mgs and remount mds w/ ir
-        start mgs $MGSDEV
+        start mgs $(mgsdevname) $MGS_MOUNT_OPTS
         clients_up
 
         # remount client so that fsdb will be created on the MGS

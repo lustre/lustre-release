@@ -47,6 +47,10 @@ OST_MOUNT_OPTS=${OST_MOUNT_OPTS:-}
 # OSTDEV1="/dev/sda"
 # on specific hosts with
 # ost1_HOST="uml2"
+#
+# For ZFS, ost devices can be specified via either or both of the following:
+# OSTZFSDEV1="${FSNAME}-ost1/ost1"
+# OSTDEV1="/dev/sdb1"
 
 NETTYPE=${NETTYPE:-tcp}
 MGSNID=${MGSNID:-`h2$NETTYPE $mgs_HOST`}
