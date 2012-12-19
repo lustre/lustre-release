@@ -160,20 +160,17 @@ static void *ll_follow_link(struct dentry *dentry, struct nameidata *nd)
 		rc = ll_readlink_internal(inode, &request, &symname);
 		ll_inode_size_unlock(inode);
         }
-        if (rc) {
-                cfs_path_put(nd); /* Kernel assumes that ->follow_link()
-                                     releases nameidata on error */
-                GOTO(out, rc);
-        }
+	if (rc) {
+		ptlrpc_req_finished(request);
+		request = NULL;
+		symname = ERR_PTR(rc);
+	}
 
 	nd_set_link(nd, symname);
 	/* symname may contain a pointer to the request message buffer,
 	 * we delay request releasing until ll_put_link then.
 	 */
 	RETURN(request);
-out:
-	ptlrpc_req_finished(request);
-	RETURN(ERR_PTR(rc));
 }
 
 static void ll_put_link(struct dentry *dentry, struct nameidata *nd, void *cookie)
