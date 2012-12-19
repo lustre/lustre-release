@@ -622,7 +622,7 @@ LPROC_SEQ_FOPS(ofd_brw_stats);
 
 int lproc_ofd_attach_seqstat(struct obd_device *dev)
 {
-	return lprocfs_obd_seq_create(dev, "brw_stats", 0444,
+	return lprocfs_obd_seq_create(dev, "brw_stats", 0644,
 				      &ofd_brw_stats_fops, dev);
 }
 

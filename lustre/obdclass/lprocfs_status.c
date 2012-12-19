@@ -2343,6 +2343,9 @@ int lprocfs_seq_create(cfs_proc_dir_entry_t *parent,
         struct proc_dir_entry *entry;
         ENTRY;
 
+	/* Disallow secretly (un)writable entries. */
+	LASSERT((seq_fops->write == NULL) == ((mode & 0222) == 0));
+
         LPROCFS_WRITE_ENTRY();
         entry = create_proc_entry(name, mode, parent);
         if (entry) {

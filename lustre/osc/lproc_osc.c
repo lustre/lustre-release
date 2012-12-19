@@ -693,14 +693,15 @@ LPROC_SEQ_FOPS(osc_stats);
 
 int lproc_osc_attach_seqstat(struct obd_device *dev)
 {
-        int rc;
+	int rc;
 
-        rc = lprocfs_seq_create(dev->obd_proc_entry, "osc_stats", 0444,
-                                &osc_stats_fops, dev);
-        if (rc == 0)
-                rc = lprocfs_obd_seq_create(dev, "rpc_stats", 0444,
-                                            &osc_rpc_stats_fops, dev);
-        return rc;
+	rc = lprocfs_seq_create(dev->obd_proc_entry, "osc_stats", 0644,
+				&osc_stats_fops, dev);
+	if (rc == 0)
+		rc = lprocfs_obd_seq_create(dev, "rpc_stats", 0644,
+					    &osc_rpc_stats_fops, dev);
+
+	return rc;
 }
 
 void lprocfs_osc_init_vars(struct lprocfs_static_vars *lvars)

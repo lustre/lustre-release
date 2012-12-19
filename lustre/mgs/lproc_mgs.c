@@ -154,8 +154,8 @@ int lproc_mgs_setup(struct mgs_device *mgs, char *osd_name)
 
         rc = lprocfs_obd_seq_create(obd, "filesystems", 0444,
                                     &mgs_fs_fops, obd);
-        rc = lprocfs_obd_seq_create(obd, "srpc_rules", 0600,
-                                    &mgsself_srpc_fops, obd);
+	rc = lprocfs_obd_seq_create(obd, "srpc_rules", 0400,
+				    &mgsself_srpc_fops, obd);
 
         mgs->mgs_proc_live = lprocfs_register("live", obd->obd_proc_entry,
                                               NULL, NULL);
@@ -282,8 +282,8 @@ int lproc_mgs_add_live(struct mgs_device *mgs, struct fs_db *fsdb)
 
         if (!mgs->mgs_proc_live)
                 return 0;
-        rc = lprocfs_seq_create(mgs->mgs_proc_live, fsdb->fsdb_name, 0444,
-                                &mgs_live_fops, fsdb);
+	rc = lprocfs_seq_create(mgs->mgs_proc_live, fsdb->fsdb_name, 0644,
+				&mgs_live_fops, fsdb);
 
         return 0;
 }
