@@ -2435,7 +2435,8 @@ void ll_dirty_page_discard_warn(cfs_page_t *page, int ioret)
 	struct dentry *dentry = NULL;
 	struct ccc_object *obj = cl_inode2ccc(page->mapping->host);
 
-	buf = (char *)__get_free_page(GFP_KERNEL);
+	/* this can be called inside spin lock so use GFP_ATOMIC. */
+	buf = (char *)__get_free_page(GFP_ATOMIC);
 	if (buf != NULL) {
 		dentry = d_find_alias(page->mapping->host);
 		if (dentry != NULL)
