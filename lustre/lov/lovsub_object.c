@@ -66,6 +66,7 @@ int lovsub_object_init(const struct lu_env *env, struct lu_object *obj,
         below = under->ld_ops->ldo_object_alloc(env, obj->lo_header, under);
         if (below != NULL) {
                 lu_object_add(obj, below);
+		cl_object_page_init(lu2cl(obj), sizeof(struct lovsub_page));
                 result = 0;
         } else
                 result = -ENOMEM;

@@ -368,6 +368,7 @@ int ccc_object_init0(const struct lu_env *env,
 {
         vob->cob_inode = conf->coc_inode;
         vob->cob_transient_pages = 0;
+	cl_object_page_init(&vob->cob_cl, sizeof(struct ccc_page));
         return 0;
 }
 

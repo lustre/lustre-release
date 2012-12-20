@@ -45,14 +45,12 @@
 
 #include "lov_cl_internal.h"
 
-cfs_mem_cache_t *lov_page_kmem;
 cfs_mem_cache_t *lov_lock_kmem;
 cfs_mem_cache_t *lov_object_kmem;
 cfs_mem_cache_t *lov_thread_kmem;
 cfs_mem_cache_t *lov_session_kmem;
 cfs_mem_cache_t *lov_req_kmem;
 
-cfs_mem_cache_t *lovsub_page_kmem;
 cfs_mem_cache_t *lovsub_lock_kmem;
 cfs_mem_cache_t *lovsub_object_kmem;
 cfs_mem_cache_t *lovsub_req_kmem;
@@ -63,11 +61,6 @@ cfs_mem_cache_t *lov_lock_link_kmem;
 struct lock_class_key cl_lov_device_mutex_class;
 
 struct lu_kmem_descr lov_caches[] = {
-        {
-                .ckd_cache = &lov_page_kmem,
-                .ckd_name  = "lov_page_kmem",
-                .ckd_size  = sizeof (struct lov_page)
-        },
         {
                 .ckd_cache = &lov_lock_kmem,
                 .ckd_name  = "lov_lock_kmem",
@@ -92,11 +85,6 @@ struct lu_kmem_descr lov_caches[] = {
                 .ckd_cache = &lov_req_kmem,
                 .ckd_name  = "lov_req_kmem",
                 .ckd_size  = sizeof (struct lov_req)
-        },
-        {
-                .ckd_cache = &lovsub_page_kmem,
-                .ckd_name  = "lovsub_page_kmem",
-                .ckd_size  = sizeof (struct lovsub_page)
         },
         {
                 .ckd_cache = &lovsub_lock_kmem,

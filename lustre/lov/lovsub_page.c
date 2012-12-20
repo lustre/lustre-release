@@ -53,31 +53,20 @@
 static void lovsub_page_fini(const struct lu_env *env,
                              struct cl_page_slice *slice)
 {
-        struct lovsub_page *lsb = cl2lovsub_page(slice);
-        ENTRY;
-        OBD_SLAB_FREE_PTR(lsb, lovsub_page_kmem);
-        EXIT;
 }
 
 static const struct cl_page_operations lovsub_page_ops = {
         .cpo_fini   = lovsub_page_fini
 };
 
-struct cl_page *lovsub_page_init(const struct lu_env *env,
-                                 struct cl_object *obj,
-                                 struct cl_page *page, cfs_page_t *unused)
+int lovsub_page_init(const struct lu_env *env, struct cl_object *obj,
+			struct cl_page *page, cfs_page_t *unused)
 {
-        struct lovsub_page *lsb;
-        int result;
-
+        struct lovsub_page *lsb = cl_object_page_slice(obj, page);
         ENTRY;
-        OBD_SLAB_ALLOC_PTR_GFP(lsb, lovsub_page_kmem, CFS_ALLOC_IO);
-        if (lsb != NULL) {
-                cl_page_slice_add(page, &lsb->lsb_cl, obj, &lovsub_page_ops);
-                result = 0;
-        } else
-                result = -ENOMEM;
-        RETURN(ERR_PTR(result));
+
+	cl_page_slice_add(page, &lsb->lsb_cl, obj, &lovsub_page_ops);
+        RETURN(0);
 }
 
 /** @} lov */

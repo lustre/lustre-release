@@ -62,7 +62,6 @@ static void vvp_page_fini_common(struct ccc_page *cp)
 
         LASSERT(vmpage != NULL);
         page_cache_release(vmpage);
-        OBD_SLAB_FREE_PTR(cp, vvp_page_kmem);
 }
 
 static void vvp_page_fini(const struct lu_env *env,
@@ -534,36 +533,30 @@ static const struct cl_page_operations vvp_transient_page_ops = {
         }
 };
 
-struct cl_page *vvp_page_init(const struct lu_env *env, struct cl_object *obj,
-			      struct cl_page *page, cfs_page_t *vmpage)
+int vvp_page_init(const struct lu_env *env, struct cl_object *obj,
+		struct cl_page *page, cfs_page_t *vmpage)
 {
-	struct ccc_page *cpg;
-	int result;
+	struct ccc_page *cpg = cl_object_page_slice(obj, page);
 
 	CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-	OBD_SLAB_ALLOC_PTR_GFP(cpg, vvp_page_kmem, CFS_ALLOC_IO);
-	if (cpg != NULL) {
-		cpg->cpg_page = vmpage;
-		page_cache_get(vmpage);
+	cpg->cpg_page = vmpage;
+	page_cache_get(vmpage);
 
-		CFS_INIT_LIST_HEAD(&cpg->cpg_pending_linkage);
-		if (page->cp_type == CPT_CACHEABLE) {
-			SetPagePrivate(vmpage);
-			vmpage->private = (unsigned long)page;
-			cl_page_slice_add(page, &cpg->cpg_cl, obj,
-					  &vvp_page_ops);
-		} else {
-			struct ccc_object *clobj = cl2ccc(obj);
+	CFS_INIT_LIST_HEAD(&cpg->cpg_pending_linkage);
+	if (page->cp_type == CPT_CACHEABLE) {
+		SetPagePrivate(vmpage);
+		vmpage->private = (unsigned long)page;
+		cl_page_slice_add(page, &cpg->cpg_cl, obj,
+				&vvp_page_ops);
+	} else {
+		struct ccc_object *clobj = cl2ccc(obj);
 
-			LASSERT(!mutex_trylock(&clobj->cob_inode->i_mutex));
-			cl_page_slice_add(page, &cpg->cpg_cl, obj,
-					  &vvp_transient_page_ops);
-			clobj->cob_transient_pages++;
-		}
-		result = 0;
-	} else
-		result = -ENOMEM;
-	return ERR_PTR(result);
+		LASSERT(!mutex_trylock(&clobj->cob_inode->i_mutex));
+		cl_page_slice_add(page, &cpg->cpg_cl, obj,
+				&vvp_transient_page_ops);
+		clobj->cob_transient_pages++;
+	}
+	return 0;
 }
 

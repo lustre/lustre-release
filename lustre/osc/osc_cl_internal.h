@@ -403,7 +403,6 @@ struct osc_page {
         struct cl_lock       *ops_lock;
 };
 
-extern cfs_mem_cache_t *osc_page_kmem;
 extern cfs_mem_cache_t *osc_lock_kmem;
 extern cfs_mem_cache_t *osc_object_kmem;
 extern cfs_mem_cache_t *osc_thread_kmem;
@@ -427,9 +426,8 @@ int osc_req_init (const struct lu_env *env, struct cl_device *dev,
 struct lu_object *osc_object_alloc(const struct lu_env *env,
                                    const struct lu_object_header *hdr,
                                    struct lu_device *dev);
-struct cl_page   *osc_page_init   (const struct lu_env *env,
-                                   struct cl_object *obj,
-                                   struct cl_page *page, cfs_page_t *vmpage);
+int osc_page_init(const struct lu_env *env, struct cl_object *obj,
+		  struct cl_page *page, cfs_page_t *vmpage);
 
 void osc_lock_build_res(const struct lu_env *env, const struct osc_object *obj,
                         struct ldlm_res_id *resname);

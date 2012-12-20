@@ -51,7 +51,7 @@ int               vvp_io_init     (const struct lu_env *env,
 int               vvp_lock_init   (const struct lu_env *env,
                                    struct cl_object *obj, struct cl_lock *lock,
                                    const struct cl_io *io);
-struct cl_page   *vvp_page_init   (const struct lu_env *env,
+int		  vvp_page_init   (const struct lu_env *env,
                                    struct cl_object *obj,
                                    struct cl_page *page, cfs_page_t *vmpage);
 struct lu_object *vvp_object_alloc(const struct lu_env *env,
@@ -60,7 +60,6 @@ struct lu_object *vvp_object_alloc(const struct lu_env *env,
 
 struct ccc_object *cl_inode2ccc(struct inode *inode);
 
-extern cfs_mem_cache_t *vvp_page_kmem;
 extern cfs_mem_cache_t *vvp_thread_kmem;
 
 #endif /* VVP_INTERNAL_H */

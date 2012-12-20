@@ -554,14 +554,12 @@ extern struct lu_device_type lovsub_device_type;
 extern struct lu_context_key lov_key;
 extern struct lu_context_key lov_session_key;
 
-extern cfs_mem_cache_t *lov_page_kmem;
 extern cfs_mem_cache_t *lov_lock_kmem;
 extern cfs_mem_cache_t *lov_object_kmem;
 extern cfs_mem_cache_t *lov_thread_kmem;
 extern cfs_mem_cache_t *lov_session_kmem;
 extern cfs_mem_cache_t *lov_req_kmem;
 
-extern cfs_mem_cache_t *lovsub_page_kmem;
 extern cfs_mem_cache_t *lovsub_lock_kmem;
 extern cfs_mem_cache_t *lovsub_object_kmem;
 extern cfs_mem_cache_t *lovsub_req_kmem;
@@ -598,17 +596,17 @@ int   lov_sublock_modify  (const struct lu_env *env, struct lov_lock *lov,
                            const struct cl_lock_descr *d, int idx);
 
 
-struct cl_page *lov_page_init   (const struct lu_env *env, struct cl_object *ob,
-                                 struct cl_page *page, cfs_page_t *vmpage);
-struct cl_page *lovsub_page_init(const struct lu_env *env, struct cl_object *ob,
-                                 struct cl_page *page, cfs_page_t *vmpage);
+int   lov_page_init       (const struct lu_env *env, struct cl_object *ob,
+                           struct cl_page *page, cfs_page_t *vmpage);
+int   lovsub_page_init    (const struct lu_env *env, struct cl_object *ob,
+                           struct cl_page *page, cfs_page_t *vmpage);
 
-struct cl_page   *lov_page_init_empty(const struct lu_env *env,
-                                      struct cl_object *obj,
-                                      struct cl_page *page, cfs_page_t *vmpage);
-struct cl_page   *lov_page_init_raid0(const struct lu_env *env,
-                                      struct cl_object *obj,
-                                      struct cl_page *page, cfs_page_t *vmpage);
+int   lov_page_init_empty (const struct lu_env *env,
+                           struct cl_object *obj,
+                           struct cl_page *page, cfs_page_t *vmpage);
+int   lov_page_init_raid0 (const struct lu_env *env,
+                           struct cl_object *obj,
+                           struct cl_page *page, cfs_page_t *vmpage);
 struct lu_object *lov_object_alloc   (const struct lu_env *env,
                                       const struct lu_object_header *hdr,
                                       struct lu_device *dev);

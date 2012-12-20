@@ -248,7 +248,7 @@ static int do_bio_lustrebacked(struct lloop_device *lo, struct bio *head)
 	 * Unfortunately this is NOT easy to fix.
 	 * Thoughts on solution:
 	 * 0. Define a reserved pool for cl_pages, which could be a list of
-	 *    pre-allocated cl_pages from cl_page_kmem;
+	 *    pre-allocated cl_pages;
 	 * 1. Define a new operation in cl_object_operations{}, says clo_depth,
 	 *    which measures how many layers for this lustre object. Generally
 	 *    speaking, the depth would be 2, one for llite, and one for lovsub.

@@ -51,19 +51,6 @@
 static void cl_page_delete0(const struct lu_env *env, struct cl_page *pg,
                             int radix);
 
-static cfs_mem_cache_t      *cl_page_kmem = NULL;
-
-static struct lu_kmem_descr cl_page_caches[] = {
-        {
-                .ckd_cache = &cl_page_kmem,
-                .ckd_name  = "cl_page_kmem",
-                .ckd_size  = sizeof (struct cl_page)
-        },
-        {
-                .ckd_cache = NULL
-        }
-};
-
 #ifdef LIBCFS_DEBUG
 # define PASSERT(env, page, expr)                                       \
   do {                                                                    \
@@ -289,6 +276,7 @@ EXPORT_SYMBOL(cl_page_gang_lookup);
 static void cl_page_free(const struct lu_env *env, struct cl_page *page)
 {
         struct cl_object *obj  = page->cp_obj;
+	int pagesize = cl_object_header(obj)->coh_page_bufsize;
 
         PASSERT(env, page, cfs_list_empty(&page->cp_batch));
         PASSERT(env, page, page->cp_owner == NULL);
@@ -311,7 +299,7 @@ static void cl_page_free(const struct lu_env *env, struct cl_page *page)
         lu_object_ref_del_at(&obj->co_lu, page->cp_obj_ref, "cl_page", page);
         cl_object_put(env, obj);
         lu_ref_fini(&page->cp_reference);
-        OBD_SLAB_FREE_PTR(page, cl_page_kmem);
+        OBD_FREE(page, pagesize);
         EXIT;
 }
 
@@ -326,58 +314,55 @@ static inline void cl_page_state_set_trust(struct cl_page *page,
         *(enum cl_page_state *)&page->cp_state = state;
 }
 
-static int cl_page_alloc(const struct lu_env *env, struct cl_object *o,
-                         pgoff_t ind, struct page *vmpage,
-                         enum cl_page_type type, struct cl_page **out)
+static struct cl_page *cl_page_alloc(const struct lu_env *env,
+		struct cl_object *o, pgoff_t ind, struct page *vmpage,
+		enum cl_page_type type)
 {
-        struct cl_page          *page;
-        struct cl_page          *err  = NULL;
-        struct lu_object_header *head;
-        int                      result;
+	struct cl_page          *page;
+	struct lu_object_header *head;
 
-        ENTRY;
-        result = +1;
-        OBD_SLAB_ALLOC_PTR_GFP(page, cl_page_kmem, CFS_ALLOC_IO);
-        if (page != NULL) {
-                cfs_atomic_set(&page->cp_ref, 1);
+	ENTRY;
+	OBD_ALLOC_GFP(page, cl_object_header(o)->coh_page_bufsize,
+			CFS_ALLOC_IO);
+	if (page != NULL) {
+		int result;
+		cfs_atomic_set(&page->cp_ref, 1);
 		if (type == CPT_CACHEABLE) /* for radix tree */
 			cfs_atomic_inc(&page->cp_ref);
-                page->cp_obj = o;
-                cl_object_get(o);
-                page->cp_obj_ref = lu_object_ref_add(&o->co_lu,
-                                                     "cl_page", page);
-                page->cp_index = ind;
-                cl_page_state_set_trust(page, CPS_CACHED);
+		page->cp_obj = o;
+		cl_object_get(o);
+		page->cp_obj_ref = lu_object_ref_add(&o->co_lu, "cl_page",page);
+		page->cp_index = ind;
+		cl_page_state_set_trust(page, CPS_CACHED);
 		page->cp_type = type;
 		CFS_INIT_LIST_HEAD(&page->cp_layers);
 		CFS_INIT_LIST_HEAD(&page->cp_batch);
 		CFS_INIT_LIST_HEAD(&page->cp_flight);
 		mutex_init(&page->cp_mutex);
-                lu_ref_init(&page->cp_reference);
-                head = o->co_lu.lo_header;
-                cfs_list_for_each_entry(o, &head->loh_layers,
-                                        co_lu.lo_linkage) {
-                        if (o->co_ops->coo_page_init != NULL) {
-                                err = o->co_ops->coo_page_init(env, o,
-                                                               page, vmpage);
-                                if (err != NULL) {
-                                        cl_page_delete0(env, page, 0);
-                                        cl_page_free(env, page);
-                                        page = err;
-                                        break;
-                                }
-                        }
-                }
-                if (err == NULL) {
+		lu_ref_init(&page->cp_reference);
+		head = o->co_lu.lo_header;
+		cfs_list_for_each_entry(o, &head->loh_layers,
+					co_lu.lo_linkage) {
+			if (o->co_ops->coo_page_init != NULL) {
+				result = o->co_ops->coo_page_init(env, o,
+								  page, vmpage);
+				if (result != 0) {
+					cl_page_delete0(env, page, 0);
+					cl_page_free(env, page);
+					page = ERR_PTR(result);
+					break;
+				}
+			}
+		}
+		if (result == 0) {
 			CS_PAGE_INC(o, total);
 			CS_PAGE_INC(o, create);
 			CS_PAGESTATE_DEC(o, CPS_CACHED);
-                        result = 0;
-                }
-        } else
-                page = ERR_PTR(-ENOMEM);
-        *out = page;
-        RETURN(result);
+		}
+	} else {
+		page = ERR_PTR(-ENOMEM);
+	}
+	RETURN(page);
 }
 
 /**
@@ -440,8 +425,8 @@ static struct cl_page *cl_page_find0(const struct lu_env *env,
         }
 
         /* allocate and initialize cl_page */
-        err = cl_page_alloc(env, o, idx, vmpage, type, &page);
-        if (err != 0)
+        page = cl_page_alloc(env, o, idx, vmpage, type);
+        if (IS_ERR(page))
                 RETURN(page);
 
         if (type == CPT_TRANSIENT) {
@@ -1620,10 +1605,9 @@ EXPORT_SYMBOL(cl_page_slice_add);
 
 int  cl_page_init(void)
 {
-        return lu_kmem_init(cl_page_caches);
+        return 0;
 }
 
 void cl_page_fini(void)
 {
-        lu_kmem_fini(cl_page_caches);
 }

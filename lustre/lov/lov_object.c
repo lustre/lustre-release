@@ -67,10 +67,8 @@ struct lov_layout_operations {
                             union lov_layout_state *state);
         int  (*llo_print)(const struct lu_env *env, void *cookie,
                           lu_printer_t p, const struct lu_object *o);
-        struct cl_page *(*llo_page_init)(const struct lu_env *env,
-                                         struct cl_object *obj,
-                                         struct cl_page *page,
-                                         cfs_page_t *vmpage);
+        int  (*llo_page_init)(const struct lu_env *env, struct cl_object *obj,
+				struct cl_page *page, cfs_page_t *vmpage);
         int  (*llo_lock_init)(const struct lu_env *env,
                               struct cl_object *obj, struct cl_lock *lock,
                               const struct cl_io *io);
@@ -635,6 +633,8 @@ int lov_object_init(const struct lu_env *env, struct lu_object *obj,
 	init_rwsem(&lov->lo_type_guard);
 	cfs_waitq_init(&lov->lo_waitq);
 
+	cl_object_page_init(lu2cl(obj), sizeof(struct lov_page));
+
         /* no locking is necessary, as object is being created */
         lov->lo_type = cconf->u.coc_md->lsm != NULL ? LLT_RAID0 : LLT_EMPTY;
         ops = &lov_dispatch[lov->lo_type];
@@ -733,8 +733,8 @@ static int lov_object_print(const struct lu_env *env, void *cookie,
         return LOV_2DISPATCH(lu2lov(o), llo_print, env, cookie, p, o);
 }
 
-struct cl_page *lov_page_init(const struct lu_env *env, struct cl_object *obj,
-                              struct cl_page *page, cfs_page_t *vmpage)
+int lov_page_init(const struct lu_env *env, struct cl_object *obj,
+		struct cl_page *page, cfs_page_t *vmpage)
 {
         return LOV_2DISPATCH_NOLOCK(cl2lov(obj),
 				    llo_page_init, env, obj, page, vmpage);

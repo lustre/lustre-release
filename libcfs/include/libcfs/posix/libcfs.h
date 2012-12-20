@@ -198,6 +198,10 @@ typedef struct dirent64 cfs_dirent_t;
 #define __swab64s(x)                            do { *(x) = __swab64(*(x)); } while (0)
 #endif
 
+#if !defined(ALIGN)
+#define __ALIGN_MASK(x, mask)	(((x) + (mask)) & ~(mask))
+#define ALIGN(x, a)		__ALIGN_MASK(x, (typeof(x))(a) - 1)
+#endif
 
 # ifndef THREAD_SIZE /* x86_64 linux has THREAD_SIZE in userspace */
 #  define CFS_THREAD_SIZE 8192

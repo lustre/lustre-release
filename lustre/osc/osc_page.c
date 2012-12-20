@@ -168,7 +168,6 @@ static void osc_page_fini(const struct lu_env *env,
         struct osc_page *opg = cl2osc_page(slice);
         CDEBUG(D_TRACE, "%p\n", opg);
         LASSERT(opg->ops_lock == NULL);
-        OBD_SLAB_FREE_PTR(opg, osc_page_kmem);
 }
 
 static void osc_page_transfer_get(struct osc_page *opg, const char *label)
@@ -508,46 +507,41 @@ static const struct cl_page_operations osc_page_ops = {
 	.cpo_flush          = osc_page_flush
 };
 
-struct cl_page *osc_page_init(const struct lu_env *env,
-                              struct cl_object *obj,
-                              struct cl_page *page, cfs_page_t *vmpage)
+int osc_page_init(const struct lu_env *env, struct cl_object *obj,
+		struct cl_page *page, cfs_page_t *vmpage)
 {
-        struct osc_object *osc = cl2osc(obj);
-        struct osc_page   *opg;
-        int result;
+	struct osc_object *osc = cl2osc(obj);
+	struct osc_page   *opg = cl_object_page_slice(obj, page);
+	int result;
 
-        OBD_SLAB_ALLOC_PTR_GFP(opg, osc_page_kmem, CFS_ALLOC_IO);
-        if (opg != NULL) {
-                opg->ops_from = 0;
-                opg->ops_to   = CFS_PAGE_SIZE;
+	opg->ops_from = 0;
+	opg->ops_to   = CFS_PAGE_SIZE;
 
-		result = osc_prep_async_page(osc, opg, vmpage,
-					     cl_offset(obj, page->cp_index));
-                if (result == 0) {
-                        struct osc_io *oio = osc_env_io(env);
-                        opg->ops_srvlock = osc_io_srvlock(oio);
-                        cl_page_slice_add(page, &opg->ops_cl, obj,
-                                          &osc_page_ops);
-                }
-                /*
-                 * Cannot assert osc_page_protected() here as read-ahead
-                 * creates temporary pages outside of a lock.
-                 */
+	result = osc_prep_async_page(osc, opg, vmpage,
+					cl_offset(obj, page->cp_index));
+	if (result == 0) {
+		struct osc_io *oio = osc_env_io(env);
+		opg->ops_srvlock = osc_io_srvlock(oio);
+		cl_page_slice_add(page, &opg->ops_cl, obj,
+				&osc_page_ops);
+	}
+	/*
+	 * Cannot assert osc_page_protected() here as read-ahead
+	 * creates temporary pages outside of a lock.
+	 */
 #ifdef INVARIANT_CHECK
-                opg->ops_temp = !osc_page_protected(env, opg, CLM_READ, 1);
+	opg->ops_temp = !osc_page_protected(env, opg, CLM_READ, 1);
 #endif
-		/* ops_inflight and ops_lru are the same field, but it doesn't
-		 * hurt to initialize it twice :-) */
-                CFS_INIT_LIST_HEAD(&opg->ops_inflight);
-		CFS_INIT_LIST_HEAD(&opg->ops_lru);
-	} else
-		result = -ENOMEM;
+	/* ops_inflight and ops_lru are the same field, but it doesn't
+	 * hurt to initialize it twice :-) */
+	CFS_INIT_LIST_HEAD(&opg->ops_inflight);
+	CFS_INIT_LIST_HEAD(&opg->ops_lru);
 
 	/* reserve an LRU space for this page */
 	if (page->cp_type == CPT_CACHEABLE && result == 0)
 		result = osc_lru_reserve(env, osc, opg);
 
-	return ERR_PTR(result);
+	return result;
 }
 
 /**

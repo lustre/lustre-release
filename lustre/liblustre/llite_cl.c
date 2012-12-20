@@ -57,9 +57,8 @@
 static int   slp_type_init     (struct lu_device_type *t);
 static void  slp_type_fini     (struct lu_device_type *t);
 
-static struct cl_page * slp_page_init(const struct lu_env *env,
-                                     struct cl_object *obj,
-                                     struct cl_page *page, cfs_page_t *vmpage);
+static int slp_page_init(const struct lu_env *env, struct cl_object *obj,
+			 struct cl_page *page, cfs_page_t *vmpage);
 static int   slp_attr_get     (const struct lu_env *env, struct cl_object *obj,
                                struct cl_attr *attr);
 
@@ -224,32 +223,26 @@ void slp_global_fini(void)
  *
  */
 
-static struct cl_page *slp_page_init(const struct lu_env *env,
-                                     struct cl_object *obj,
-                                     struct cl_page *page, cfs_page_t *vmpage)
+static int slp_page_init(const struct lu_env *env, struct cl_object *obj,
+			struct cl_page *page, cfs_page_t *vmpage)
 {
-        struct ccc_page *cpg;
-        int result;
+        struct ccc_page *cpg = cl_object_page_slice(obj, page);
 
         CLOBINVRNT(env, obj, ccc_object_invariant(obj));
 
-        OBD_ALLOC_PTR(cpg);
-        if (cpg != NULL) {
-                cpg->cpg_page = vmpage;
+	cpg->cpg_page = vmpage;
 
-                if (page->cp_type == CPT_CACHEABLE) {
-                        LBUG();
-                } else {
-                        struct ccc_object *clobj = cl2ccc(obj);
+	if (page->cp_type == CPT_CACHEABLE) {
+		LBUG();
+	} else {
+		struct ccc_object *clobj = cl2ccc(obj);
 
-                        cl_page_slice_add(page, &cpg->cpg_cl, obj,
-                                          &slp_transient_page_ops);
-                        clobj->cob_transient_pages++;
-                }
-                result = 0;
-        } else
-                result = -ENOMEM;
-        return ERR_PTR(result);
+		cl_page_slice_add(page, &cpg->cpg_cl, obj,
+				&slp_transient_page_ops);
+		clobj->cob_transient_pages++;
+	}
+
+        return 0;
 }
 
 static int slp_io_init(const struct lu_env *env, struct cl_object *obj,

@@ -251,6 +251,8 @@ struct cl_object {
         struct lu_object                   co_lu;
         /** per-object-layer operations */
         const struct cl_object_operations *co_ops;
+	/** offset of page slice in cl_page buffer */
+	int				   co_slice_off;
 };
 
 /**
@@ -319,10 +321,8 @@ struct cl_object_operations {
          * \retval valid-pointer pointer to already existing referenced page
          *         to be used instead of newly created.
          */
-        struct cl_page *(*coo_page_init)(const struct lu_env *env,
-                                         struct cl_object *obj,
-                                         struct cl_page *page,
-                                         cfs_page_t *vmpage);
+	int  (*coo_page_init)(const struct lu_env *env, struct cl_object *obj,
+				struct cl_page *page, cfs_page_t *vmpage);
         /**
          * Initialize lock slice for this layer. Called top-to-bottom through
          * every object layer when a new cl_lock is instantiated. Layer
@@ -431,10 +431,14 @@ struct cl_object_header {
          */
 	spinlock_t		 coh_attr_guard;
 	/**
+	 * Size of cl_page + page slices
+	 */
+	unsigned short		 coh_page_bufsize;
+	/**
 	 * Number of objects above this one: 0 for a top-object, 1 for its
 	 * sub-object, etc.
 	 */
-	unsigned                 coh_nesting;
+	unsigned char		 coh_nesting;
 };
 
 /**
@@ -2754,6 +2758,18 @@ int  cl_object_has_locks  (struct cl_object *obj);
 static inline int cl_object_same(struct cl_object *o0, struct cl_object *o1)
 {
         return cl_object_header(o0) == cl_object_header(o1);
+}
+
+static inline void cl_object_page_init(struct cl_object *clob, int size)
+{
+	clob->co_slice_off = cl_object_header(clob)->coh_page_bufsize;
+	cl_object_header(clob)->coh_page_bufsize += ALIGN(size, 8);
+}
+
+static inline void *cl_object_page_slice(struct cl_object *clob,
+					 struct cl_page *page)
+{
+	return (void *)((char *)page + clob->co_slice_off);
 }
 
 /** @} cl_object */

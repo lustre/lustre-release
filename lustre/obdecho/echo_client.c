@@ -222,7 +222,6 @@ struct echo_session_info {
         unsigned long dummy;
 };
 
-static cfs_mem_cache_t *echo_page_kmem;
 static cfs_mem_cache_t *echo_lock_kmem;
 static cfs_mem_cache_t *echo_object_kmem;
 static cfs_mem_cache_t *echo_thread_kmem;
@@ -230,11 +229,6 @@ static cfs_mem_cache_t *echo_session_kmem;
 //static cfs_mem_cache_t *echo_req_kmem;
 
 static struct lu_kmem_descr echo_caches[] = {
-        {
-                .ckd_cache = &echo_page_kmem,
-                .ckd_name  = "echo_page_kmem",
-                .ckd_size  = sizeof (struct echo_page)
-        },
         {
                 .ckd_cache = &echo_lock_kmem,
                 .ckd_name  = "echo_lock_kmem",
@@ -334,7 +328,6 @@ static void echo_page_fini(const struct lu_env *env,
 
         cfs_atomic_dec(&eco->eo_npages);
         page_cache_release(vmpage);
-        OBD_SLAB_FREE_PTR(ep, echo_page_kmem);
         EXIT;
 }
 
@@ -422,23 +415,19 @@ static struct cl_lock_operations echo_lock_ops = {
  *
  * @{
  */
-static struct cl_page *echo_page_init(const struct lu_env *env,
-                                      struct cl_object *obj,
-                                      struct cl_page *page, cfs_page_t *vmpage)
+static int echo_page_init(const struct lu_env *env, struct cl_object *obj,
+			struct cl_page *page, cfs_page_t *vmpage)
 {
-        struct echo_page *ep;
+        struct echo_page *ep = cl_object_page_slice(obj, page);
+	struct echo_object *eco = cl2echo_obj(obj);
         ENTRY;
 
-        OBD_SLAB_ALLOC_PTR_GFP(ep, echo_page_kmem, CFS_ALLOC_IO);
-        if (ep != NULL) {
-                struct echo_object *eco = cl2echo_obj(obj);
-                ep->ep_vmpage = vmpage;
-                page_cache_get(vmpage);
-		mutex_init(&ep->ep_lock);
-                cl_page_slice_add(page, &ep->ep_cl, obj, &echo_page_ops);
-                cfs_atomic_inc(&eco->eo_npages);
-        }
-        RETURN(ERR_PTR(ep ? 0 : -ENOMEM));
+	ep->ep_vmpage = vmpage;
+	page_cache_get(vmpage);
+	mutex_init(&ep->ep_lock);
+	cl_page_slice_add(page, &ep->ep_cl, obj, &echo_page_ops);
+	cfs_atomic_inc(&eco->eo_npages);
+        RETURN(0);
 }
 
 static int echo_io_init(const struct lu_env *env, struct cl_object *obj,
@@ -518,6 +507,7 @@ static int echo_object_init(const struct lu_env *env, struct lu_object *obj,
 
         eco->eo_dev = ed;
         cfs_atomic_set(&eco->eo_npages, 0);
+	cl_object_page_init(lu2cl(obj), sizeof(struct echo_page));
 
 	spin_lock(&ec->ec_lock);
 	cfs_list_add_tail(&eco->eo_obj_chain, &ec->ec_objects);

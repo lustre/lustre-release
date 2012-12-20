@@ -60,15 +60,9 @@
  * "llite_" (var. "ll_") prefix.
  */
 
-cfs_mem_cache_t *vvp_page_kmem;
 cfs_mem_cache_t *vvp_thread_kmem;
 static cfs_mem_cache_t *vvp_session_kmem;
 static struct lu_kmem_descr vvp_caches[] = {
-        {
-                .ckd_cache = &vvp_page_kmem,
-                .ckd_name  = "vvp_page_kmem",
-                .ckd_size  = sizeof (struct ccc_page)
-        },
         {
                 .ckd_cache = &vvp_thread_kmem,
                 .ckd_name  = "vvp_thread_kmem",
