@@ -354,27 +354,28 @@ static int ptlrpc_at_recv_early_reply(struct ptlrpc_request *req)
 
         sptlrpc_cli_finish_early_reply(early_req);
 
+	if (rc != 0) {
+		spin_lock(&req->rq_lock);
+		RETURN(rc);
+	}
+
+	/* Adjust the local timeout for this req */
+	ptlrpc_at_set_req_timeout(req);
+
 	spin_lock(&req->rq_lock);
+	olddl = req->rq_deadline;
+	/* server assumes it now has rq_timeout from when it sent the
+	 * early reply, so client should give it at least that long. */
+	req->rq_deadline = cfs_time_current_sec() + req->rq_timeout +
+			   ptlrpc_at_get_net_latency(req);
 
-        if (rc == 0) {
-                /* Adjust the local timeout for this req */
-                ptlrpc_at_set_req_timeout(req);
+	DEBUG_REQ(D_ADAPTTO, req,
+		  "Early reply #%d, new deadline in "CFS_DURATION_T"s "
+		  "("CFS_DURATION_T"s)", req->rq_early_count,
+		  cfs_time_sub(req->rq_deadline, cfs_time_current_sec()),
+		  cfs_time_sub(req->rq_deadline, olddl));
 
-                olddl = req->rq_deadline;
-                /* server assumes it now has rq_timeout from when it sent the
-                   early reply, so client should give it at least that long. */
-                req->rq_deadline = cfs_time_current_sec() + req->rq_timeout +
-                            ptlrpc_at_get_net_latency(req);
-
-                DEBUG_REQ(D_ADAPTTO, req,
-                          "Early reply #%d, new deadline in "CFS_DURATION_T"s "
-                          "("CFS_DURATION_T"s)", req->rq_early_count,
-                          cfs_time_sub(req->rq_deadline,
-                                       cfs_time_current_sec()),
-                          cfs_time_sub(req->rq_deadline, olddl));
-        }
-
-        RETURN(rc);
+	RETURN(rc);
 }
 
 /**
