@@ -1896,12 +1896,12 @@ wait_mds_ost_sync () {
     local MAX=$(( TIMEOUT * 2 ))
     local WAIT=0
     while [ $WAIT -lt $MAX ]; do
-        local -a sync=($(do_nodes $(comma_list $(osts_nodes)) \
-            "$LCTL get_param -n obdfilter.*.mds_sync"))
+        local -a sync=($(do_nodes $(comma_list $(mdts_nodes)) \
+            "$LCTL get_param -n osp.*osc*.old_sync_processed"))
         local con=1
         local i
         for ((i=0; i<${#sync[@]}; i++)); do
-            [ ${sync[$i]} -eq 0 ] && continue
+            [ ${sync[$i]} -eq 1 ] && continue
             # there is a not finished MDS-OST synchronization
             con=0
             break;
