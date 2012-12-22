@@ -4376,6 +4376,10 @@ static int osd_mount(const struct lu_env *env,
 	if (o->od_mnt != NULL)
 		RETURN(0);
 
+	if (strlen(dev) >= sizeof(o->od_mntdev))
+		RETURN(-E2BIG);
+	strcpy(o->od_mntdev, dev);
+
         o->od_fsops = fsfilt_get_ops(mt_str(LDD_MT_LDISKFS));
         if (o->od_fsops == NULL) {
                 CERROR("Can't find fsfilt_ldiskfs\n");

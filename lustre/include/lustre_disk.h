@@ -509,6 +509,7 @@ struct lustre_sb_info {
 
 #define     get_profile_name(sb)   (s2lsi(sb)->lsi_lmd->lmd_profile)
 #define	    get_mount_flags(sb)	   (s2lsi(sb)->lsi_lmd->lmd_flags)
+#define	    get_mntdev_name(sb)	   (s2lsi(sb)->lsi_lmd->lmd_dev)
 
 #endif /* __KERNEL__ */
 

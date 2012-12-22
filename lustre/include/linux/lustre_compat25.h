@@ -180,37 +180,6 @@ static inline struct file *ll_dentry_open(struct dentry *dentry,
 # define inode_dio_done(i)		up_read(&(i)->i_alloc_sem)
 #endif
 
-#ifdef HAVE_HIDE_VFSMOUNT_GUTS
-# include <../fs/mount.h>
-#else
-# define real_mount(mnt)	(mnt)
-#endif
-
-static inline const char *mnt_get_devname(struct vfsmount *mnt)
-{
-	return real_mount(mnt)->mnt_devname;
-}
-
-#ifndef HAVE_ATOMIC_MNT_COUNT
-static inline unsigned int mnt_get_count(struct vfsmount *mnt)
-{
-#ifdef CONFIG_SMP
-	unsigned int count = 0;
-	int cpu;
-
-	for_each_possible_cpu(cpu) {
-		count += per_cpu_ptr(real_mount(mnt)->mnt_pcp, cpu)->mnt_count;
-	}
-
-	return count;
-#else
-	return real_mount(mnt)->mnt_count;
-#endif
-}
-#else
-# define mnt_get_count(mnt)      cfs_atomic_read(&(real_mount(mnt)->mnt_count))
-#endif
-
 #ifdef HAVE_RW_TREE_LOCK
 #define TREE_READ_LOCK_IRQ(mapping)	read_lock_irq(&(mapping)->tree_lock)
 #define TREE_READ_UNLOCK_IRQ(mapping)	read_unlock_irq(&(mapping)->tree_lock)
