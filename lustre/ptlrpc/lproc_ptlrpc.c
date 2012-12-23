@@ -428,7 +428,10 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
                  * Since the service history is LRU (i.e. culled reqs will
                  * be near the head), we shouldn't have to do long
                  * re-scans */
-                LASSERT (srhi->srhi_seq == srhi->srhi_req->rq_history_seq);
+		LASSERTF(srhi->srhi_seq == srhi->srhi_req->rq_history_seq,
+			 "%s:%d: seek seq "LPU64", request seq "LPU64"\n",
+			 svcpt->scp_service->srv_name, svcpt->scp_cpt,
+			 srhi->srhi_seq, srhi->srhi_req->rq_history_seq);
 		LASSERTF(!cfs_list_empty(&svcpt->scp_hist_reqs),
 			 "%s:%d: seek offset "LPU64", request seq "LPU64", "
 			 "last culled "LPU64"\n",
@@ -454,14 +457,54 @@ ptlrpc_lprocfs_svc_req_history_seek(struct ptlrpc_service_part *svcpt,
         return -ENOENT;
 }
 
+/*
+ * ptlrpc history sequence is used as "position" of seq_file, in some case,
+ * seq_read() will increase "position" to indicate reading the next
+ * element, however, low bits of history sequence are reserved for CPT id
+ * (check the details from comments before ptlrpc_req_add_history), which
+ * means seq_read() might change CPT id of history sequence and never
+ * finish reading of requests on a CPT. To make it work, we have to shift
+ * CPT id to high bits and timestamp to low bits, so seq_read() will only
+ * increase timestamp which can correctly indicate the next position.
+ */
+
+/* convert seq_file pos to cpt */
+#define PTLRPC_REQ_POS2CPT(svc, pos)			\
+	((svc)->srv_cpt_bits == 0 ? 0 :			\
+	 (__u64)(pos) >> (64 - (svc)->srv_cpt_bits))
+
+/* make up seq_file pos from cpt */
+#define PTLRPC_REQ_CPT2POS(svc, cpt)			\
+	((svc)->srv_cpt_bits == 0 ? 0 :			\
+	 (cpt) << (64 - (svc)->srv_cpt_bits))
+
+/* convert sequence to position */
+#define PTLRPC_REQ_SEQ2POS(svc, seq)			\
+	((svc)->srv_cpt_bits == 0 ? (seq) :		\
+	 ((seq) >> (svc)->srv_cpt_bits) |		\
+	 ((seq) << (64 - (svc)->srv_cpt_bits)))
+
+/* convert position to sequence */
+#define PTLRPC_REQ_POS2SEQ(svc, pos)			\
+	((svc)->srv_cpt_bits == 0 ? (pos) :		\
+	 ((__u64)(pos) << (svc)->srv_cpt_bits) |	\
+	 ((__u64)(pos) >> (64 - (svc)->srv_cpt_bits)))
+
 static void *
 ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 {
 	struct ptlrpc_service		*svc = s->private;
 	struct ptlrpc_service_part	*svcpt;
 	struct ptlrpc_srh_iterator	*srhi;
+	unsigned int			cpt;
 	int				rc;
 	int				i;
+
+	if (sizeof(loff_t) != sizeof(__u64)) { /* can't support */
+		CWARN("Failed to read request history because size of loff_t "
+		      "%d can't match size of u64\n", (int)sizeof(loff_t));
+		return NULL;
+	}
 
 	OBD_ALLOC(srhi, sizeof(*srhi));
 	if (srhi == NULL)
@@ -470,14 +513,21 @@ ptlrpc_lprocfs_svc_req_history_start(struct seq_file *s, loff_t *pos)
 	srhi->srhi_seq = 0;
 	srhi->srhi_req = NULL;
 
+	cpt = PTLRPC_REQ_POS2CPT(svc, *pos);
+
 	ptlrpc_service_for_each_part(svcpt, i, svc) {
-		srhi->srhi_idx = i;
+		if (i < cpt) /* skip */
+			continue;
+		if (i > cpt) /* make up the lowest position for this CPT */
+			*pos = PTLRPC_REQ_CPT2POS(svc, i);
 
 		spin_lock(&svcpt->scp_lock);
-		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, *pos);
+		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi,
+				PTLRPC_REQ_POS2SEQ(svc, *pos));
 		spin_unlock(&svcpt->scp_lock);
 		if (rc == 0) {
-			*pos = srhi->srhi_seq;
+			*pos = PTLRPC_REQ_SEQ2POS(svc, srhi->srhi_seq);
+			srhi->srhi_idx = i;
 			return srhi;
 		}
 	}
@@ -502,28 +552,32 @@ ptlrpc_lprocfs_svc_req_history_next(struct seq_file *s,
 	struct ptlrpc_service		*svc = s->private;
 	struct ptlrpc_srh_iterator	*srhi = iter;
 	struct ptlrpc_service_part	*svcpt;
-	int				rc = 0;
+	__u64				seq;
+	int				rc;
 	int				i;
 
 	for (i = srhi->srhi_idx; i < svc->srv_ncpts; i++) {
 		svcpt = svc->srv_parts[i];
 
-		srhi->srhi_idx = i;
+		if (i > srhi->srhi_idx) { /* reset iterator for a new CPT */
+			srhi->srhi_req = NULL;
+			seq = srhi->srhi_seq = 0;
+		} else { /* the next sequence */
+			seq = srhi->srhi_seq + (1 << svc->srv_cpt_bits);
+		}
 
 		spin_lock(&svcpt->scp_lock);
-		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, *pos + 1);
+		rc = ptlrpc_lprocfs_svc_req_history_seek(svcpt, srhi, seq);
 		spin_unlock(&svcpt->scp_lock);
-		if (rc == 0)
-			break;
+		if (rc == 0) {
+			*pos = PTLRPC_REQ_SEQ2POS(svc, srhi->srhi_seq);
+			srhi->srhi_idx = i;
+			return srhi;
+		}
 	}
 
-        if (rc != 0) {
-                OBD_FREE(srhi, sizeof(*srhi));
-                return NULL;
-        }
-
-        *pos = srhi->srhi_seq;
-        return srhi;
+	OBD_FREE(srhi, sizeof(*srhi));
+	return NULL;
 }
 
 /* common ost/mdt so_req_printer */
