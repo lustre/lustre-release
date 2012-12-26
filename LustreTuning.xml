@@ -105,7 +105,7 @@
 	<note><para>Default values for the thread counts are automatically selected. The values are chosen to best exploit the number of CPUs present in the system and to provide best overall performance for typical workloads.</para></note>
     </section>
   </section>
-    <section xml:id="dbdoclet.mdsbinding" condition='l24'>
+    <section xml:id="dbdoclet.mdsbinding" condition='l23'>
       <title><indexterm><primary>tuning</primary><secondary>MDS binding</secondary></indexterm>Binding MDS Service Thread to CPU Partitions</title>
 	<para>With the introduction of Node Affinity (<xref linkend="nodeaffdef"/>) in Lustre 2.3, MDS threads can be bound to particular CPU Partitions (CPTs). Default values for bindings are selected automatically to provide good overall performance for a given CPU count. However, an administrator can deviate from these setting if they choose.</para>
 	    <itemizedlist>

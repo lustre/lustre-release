@@ -25,6 +25,7 @@ XSL=$(or $(shell ls -d $(XSL_UBN) 2> /dev/null), \
 	 $(shell ls -d $(XSL_REL) 2> /dev/null), \
 	 $(shell ls -d $(XSL_F16) 2> /dev/null), \
 	 $(shell ls -d $(XSL_MAC) 2> /dev/null))
+PRIMARYXSL=$(XSL)/$(subst $(TGT_BASE).,,$@)/docbook.xsl
 
 .PHONY: all
 all: clean check xhtml html pdf epub
@@ -34,13 +35,16 @@ check: $(SRC_XML)
 	xmllint --noout --xinclude --noent --relaxng $(RNG) ./index.xml
 
 # Note: can't use "suffix" instead of "subst", because it keeps the '.'
-$(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).epub $(TGT_BASE).fo: $(SRCS)
-	xsltproc --stringparam fop1.extensions  1 \
-		--stringparam section.label.includes.component.label 1 \
-		--stringparam section.autolabel 1 \
-		--stringparam chapter.autolabel 1 \
-		--stringparam appendix.autolabel 1 \
-		--xinclude -o $@ $(XSL)/$(subst $(TGT_BASE).,,$@)/docbook.xsl ./index.xml
+# Note: xsl:import is resolved at compile time, so the primary xsl
+#   is substituted into the custom xsl with sed before compliation.
+$(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).epub: $(SRCS)
+	sed -e 's;PRIMARYXSL;${PRIMARYXSL};' ./style/customstyle.xsl | \
+	xsltproc --xinclude -o $@ - ./index.xml
+
+$(TGT_BASE).fo: $(SRCS)
+	sed -e 's;PRIMARYXSL;${PRIMARYXSL};' ./style/customstyle_fo.xsl | \
+	xsltproc --xinclude -o $@ - ./index.xml
+
 
 $(TGT_BASE).pdf: $(TGT_BASE).fo
 		fop $< $@
@@ -58,6 +62,8 @@ pdf: $(TGT_BASE).pdf
 epub: $(TGT_BASE).epub
 	echo "application/epub+zip" > mimetype
 	cp -r ./figures ./OEBPS/
+	mkdir ./OEBPS/style
+	cp ./style/manual.css ./OEBPS/style/
 	zip -0Xq $(TGT_BASE).epub mimetype
 	zip -Xr9D $(TGT_BASE).epub OEBPS/*
 	zip -Xr9D $(TGT_BASE).epub META-INF/*
@@ -90,5 +96,5 @@ push:
 clean:
 	rm -f $(TGT_BASE).html $(TGT_BASE).xhtml $(TGT_BASE).pdf\
 		mastermanual.revision mastermanual.index mimetype\
-		$(TGT_BASE).diff.html $(TGT_BASE).epub
+		$(TGT_BASE).diff.html $(TGT_BASE).epub $(TGT_BASE).fo
 	rm -rf ./META-INF ./OEBPS

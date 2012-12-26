@@ -61,7 +61,7 @@
           <para>See <xref linkend="dbdoclet.50438194_88063"/> for more details.</para> 
         </note>
       </listitem>
-      <listitem xml:id="dbdoclet.addmdtindex" condition='l24'>
+      <listitem xml:id="dbdoclet.addmdtindex">
 		<para>Optional for Lustre 2.4 and later. Add in additional MDTs.</para>
         <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>nid</replaceable> --mdt --index=1 <replaceable>/dev/block_device</replaceable></screen>
 		<note><para>Up to 4095 additional MDTs can be added.</para></note>

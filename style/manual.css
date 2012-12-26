@@ -1,0 +1,20 @@
+pre.programlisting, pre.screen
+{   background-color: #e0e0e0;
+    padding: 5px;
+}
+
+span.versionlabel {
+  display: inline-block;
+  position: relative;
+  top: -10px;
+  left: 10px;
+  background-color: white;
+  border: 1px solid gray;
+}
+div.versioncontent {
+  border: 1px solid gray;
+}
+
+span.floatright {
+  float: right;
+}

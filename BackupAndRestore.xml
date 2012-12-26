@@ -193,7 +193,7 @@ Changelog records consumed: 42</screen>
     <note>
       <para>Keeping an updated full backup of the MDT is especially important because a permanent failure of the MDT file system renders the much larger amount of data in all the OSTs largely inaccessible and unusable.</para>
     </note>
-    <warning>
+    <warning condition='l23'>
         <para>In Lustre 2.0 through 2.2, the only successful way to backup and restore an MDT is to do a device-level backup as is described in this section. File-level restore of an MDT is not possible before Lustre 2.3, as the Object Index (OI) file cannot be rebuilt after restore without the OI Scrub functionality. <emphasis role='bold'>Since Lustre 2.3</emphasis>, Object Index files are automatically rebuilt at first mount after a restore is detected (see <link xl:href='http://jira.whamcloud.com/browse/LU-957'>LU-957</link>), and file-level backup is supported (see <xref linkend='dbdoclet.50438207_21638'/>).</para>
     </warning>
     <para>If hardware replacement is the reason for the backup or if a spare storage device is available, it is possible to do a raw copy of the MDT or OST from one block device to the other, as long as the new device is at least as large as the original device. To do this, run:</para>
