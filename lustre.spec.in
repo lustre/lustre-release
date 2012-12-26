@@ -242,7 +242,7 @@ cat >lustre.files <<EOF
 
 %attr(-, root, root) %{_sysconfdir}/init.d/lnet
 %attr(-, root, root) %{_sysconfdir}/init.d/lustre
-%attr(-, root, root) %{_sysconfdir}/ldev.conf
+%attr(-, root, root) %config(noreplace) %{_sysconfdir}/ldev.conf
 %attr(-, root, root) %{_sysconfdir}/sysconfig/lustre
 %attr(-, root, root) %{_libexecdir}/lustre/haconfig
 %attr(-, root, root) %{_sysconfdir}/ha.d/resource.d/Lustre.ha_v2
