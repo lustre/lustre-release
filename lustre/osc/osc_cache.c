@@ -2625,6 +2625,8 @@ again:
 			break;
 		}
 
+		OSC_EXTENT_DUMP(D_CACHE, ext, "try to trunc:"LPU64".\n", size);
+
 		osc_extent_get(ext);
 		if (ext->oe_state == OES_ACTIVE) {
 			/* though we grab inode mutex for write path, but we
@@ -2689,13 +2691,17 @@ again:
 		osc_extent_put(env, ext);
 	}
 	if (waiting != NULL) {
-		if (result == 0)
-			result = osc_extent_wait(env, waiting, OES_INV);
+		int rc;
+
+		/* ignore the result of osc_extent_wait the write initiator
+		 * should take care of it. */
+		rc = osc_extent_wait(env, waiting, OES_INV);
+		if (rc < 0)
+			OSC_EXTENT_DUMP(D_CACHE, ext, "wait error: %d.\n", rc);
 
 		osc_extent_put(env, waiting);
 		waiting = NULL;
-		if (result == 0)
-			goto again;
+		goto again;
 	}
 	RETURN(result);
 }
