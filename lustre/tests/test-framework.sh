@@ -1873,15 +1873,30 @@ combined_mgs_mds () {
     [[ $MDSDEV = $MGSDEV ]] && [[ $mds_HOST = $mgs_HOST ]]
 }
 
-mkfs_opts () {
+facet_number() {
     local facet=$1
 
+    local number=$(echo -n $facet | sed -e 's/^fs[0-9]\+//' |
+                   sed -e 's/^[a-z]\+//')
+
+    [[ -z $number ]] && number=1
+
+    echo -n $number
+}
+
+mkfs_opts() {
+    local facet=$1
+
+    local index=$(($(facet_number $facet) - 1))
     local tgt=$(echo $facet | tr -d [:digit:] | tr "[:lower:]" "[:upper:]")
     local optvar=${tgt}_MKFS_OPTS
     local opt=${!optvar}
 
     # FIXME: ! combo  mgs/mds + mgsfailover is not supported yet
     [[ $facet = mgs ]] && echo $opt && return
+
+    # --index option
+    [[ $opt != *--index* ]] && opt+=" --index=$index"
 
     # 1.
     # --failnode options
