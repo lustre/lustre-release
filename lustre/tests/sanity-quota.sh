@@ -1204,7 +1204,7 @@ check_whether_skip () {
 
 # run for fixing bug10707, it needs a big room. test for 64bit
 test_9() {
-	local filesize=$((1024 * 1024 * 1024 * 9 / 2)) # 4.5G
+	local filesize=$((1024 * 9 / 2)) # 4.5G
 
 	check_whether_skip && return 0
 
