@@ -70,20 +70,20 @@ export ${NAME:=local}
 while getopts "c:d:D:nkf:S:g:i:rRslhv" opt
 do
     case "$opt" in
-	c) CONFIG=$OPTARG;;
-	d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
-	D) test_logs_dir=$OPTARG;;
-	g) test_group_file=$OPTARG;;
+        c) CONFIG=$OPTARG;;
+        d) test_logs_dir=$OPTARG/$(date +%Y-%m-%d)/$(date +%H%M%S);;
+        D) test_logs_dir=$OPTARG;;
+        g) test_group_file=$OPTARG;;
         S) FIRST_SUITE=$OPTARG;;
-	k) export FAIL_ON_ERROR=false;;
+        k) export FAIL_ON_ERROR=false;;
         n) dry_run=:;;
         v) verbose=:;;
-	i) repeat_count=$OPTARG;;
-	f) NAME=$OPTARG;;
-	R) do_reset=:;;
-	r) reformat=:;;
-	s) SLOW=yes;;
-	l) upload_logs=true;;
+        i) repeat_count=$OPTARG;;
+        f) NAME=$OPTARG;;
+        R) do_reset=:;;
+        r) reformat=:;;
+        s) SLOW=yes;;
+        l) upload_logs=true;;
         h|\?) usage;;
     esac
 done
@@ -98,8 +98,8 @@ fi
 
 reset_lustre() {
     if $do_reset; then
-	stopall
-	setupall
+        stopall
+        setupall
     fi
 }
 
@@ -144,7 +144,7 @@ setup_if_needed() {
 
 cleanup_if_needed() {
     if $auster_cleanup; then
-	cleanupall
+        cleanupall
     fi
 }
 
@@ -152,14 +152,14 @@ find_script_in_path() {
     target=$1
     path=$2
     for dir in $(tr : " " <<< $path); do
-      if [ -e $dir/$target ]; then
-	  echo $dir/$target
-          return 0
-      fi
-      if [ -e $dir/$target.sh ]; then
-	  echo $dir/$target.sh
-          return 0
-      fi
+        if [ -f $dir/$target ]; then
+            echo $dir/$target
+            return 0
+        fi
+        if [ -f $dir/$target.sh ]; then
+            echo $dir/$target.sh
+            return 0
+        fi
     done
     return 1
 }
@@ -205,7 +205,7 @@ run_suite_logged() {
     local suite_name=${1%.sh}
     local suite=$(echo ${suite_name} | tr "[:lower:]-" "[:upper:]_")
 
-    suite_script=$(find_script_in_path $suite_name $PATH:$LUSTRE/tests)
+    suite_script=$(find_script_in_path $suite_name $LUSTRE/tests)
 
     if [[ -z $suite_script ]]; then
         echo "Can't find test script for $suite_name"
@@ -215,9 +215,9 @@ run_suite_logged() {
     echo "run_suite $suite_name $suite_script"
     local log_name=${suite_name}.suite_log.$(hostname -s).log
     if $verbose; then
-	run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
+        run_suite $suite_name $suite_script 2>&1 |tee  $LOGDIR/$log_name
     else
-	run_suite $suite_name $suite_script > $LOGDIR/$log_name 2>&1
+        run_suite $suite_name $suite_script > $LOGDIR/$log_name 2>&1
     fi
 
 }
@@ -238,56 +238,56 @@ run_suites() {
     local n=0
     local argv=("$@")
     while ((n < repeat_count)); do
-	local RC=0
-	local logdir=${test_logs_dir}
+        local RC=0
+        local logdir=${test_logs_dir}
         local first_suite=$FIRST_SUITE
-	((repeat_count > 1)) && logdir="$logdir/$n"
-	reset_logging $logdir
-	set -- "${argv[@]}"
-	while [[ -n $1 ]]; do
-	    unset ONLY EXCEPT START_AT STOP_AT
-	    local opts=""
-	    local time_limit=""
-#	    echo "argv: $*"
-	    suite=$1
-	    shift;
-	    while [[ -n $1 ]]; do
-		case "$1" in
-		    --only)
-			shift;
-			export ONLY=$(split_commas $1)
-			opts+="ONLY=$ONLY ";;
-		    --except)
-			shift;
-			export EXCEPT=$(split_commas $1)
-			opts+="EXCEPT=$EXCEPT ";;
-		    --start-at)
-			shift;
-			export START_AT=$1
-			opts+="START_AT=$START_AT ";;
-	            --stop-at)
-			shift;
-			export STOP_AT=$1
-			opts+="STOP_AT=$STOP_AT ";;
-		    --time-limit)
-			shift;
-			time_limit=$1;;
-		    *)
-			break;;
-		esac
-		shift
-	    done
-	    if [ "x"$first_suite == "x" ] || [ $first_suite == $suite ]; then   # If first_suite not set or this is the first suite
-	        echo "running: $suite $opts"
-	        run_suite_logged $suite || RC=$?
-	        unset first_suite
-	        echo $suite returned $RC
-	    fi
-	done
-	if $upload_logs; then
-	    $upload_script $LOGDIR
-	fi
-	n=$((n + 1))
+        ((repeat_count > 1)) && logdir="$logdir/$n"
+        reset_logging $logdir
+        set -- "${argv[@]}"
+        while [[ -n $1 ]]; do
+            unset ONLY EXCEPT START_AT STOP_AT
+            local opts=""
+            local time_limit=""
+#           echo "argv: $*"
+            suite=$1
+            shift;
+            while [[ -n $1 ]]; do
+                case "$1" in
+                    --only)
+                        shift;
+                        export ONLY=$(split_commas $1)
+                        opts+="ONLY=$ONLY ";;
+                    --except)
+                        shift;
+                        export EXCEPT=$(split_commas $1)
+                        opts+="EXCEPT=$EXCEPT ";;
+                    --start-at)
+                        shift;
+                        export START_AT=$1
+                        opts+="START_AT=$START_AT ";;
+                    --stop-at)
+                        shift;
+                        export STOP_AT=$1
+                        opts+="STOP_AT=$STOP_AT ";;
+                    --time-limit)
+                        shift;
+                        time_limit=$1;;
+                    *)
+                        break;;
+                esac
+                shift
+            done
+            if [ "x"$first_suite == "x" ] || [ $first_suite == $suite ]; then   # If first_suite not set or this is the first suite
+                echo "running: $suite $opts"
+                run_suite_logged $suite || RC=$?
+                unset first_suite
+                echo $suite returned $RC
+            fi
+        done
+        if $upload_logs; then
+            $upload_script $LOGDIR
+        fi
+        n=$((n + 1))
     done
 }
 
