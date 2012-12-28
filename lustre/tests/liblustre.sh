@@ -21,7 +21,9 @@ export LIBLUSTRE_TIMEOUT=`lctl get_param -n timeout`
 
 test_1() {
     if ! check_versions; then
-	skip "liblustre version mismatch: cli $CLIVER, mds $MDSVER, ost $OSTVER"
+        skip "liblustre version mismatch: cli $(lustre_version_code client), \
+              mds $(lustre_version_code mds), \
+              ost $(lustre_version_code ost1)"
     elif ! [ "$NETTYPE" = "tcp" -o "$NETTYPE" = "ptl" ]; then
 	skip "NETTYPE=$NETTYPE unsupported for liblustre"
     elif [ ! -x $LIBLUSTRETESTS/sanity ]; then

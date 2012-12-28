@@ -528,18 +528,26 @@ stop() {
 }
 
 # set quota version (both administrative and operational quotas)
+#
+# XXX This function is kept for interoperability with old server (< 2.3.50),
+#     it should be removed whenever we drop the interoperability for such
+#     server.
 quota_set_version() {
-        do_facet mds "lctl set_param lquota.${FSNAME}-MDT*.quota_type=$1"
-        local varsvc
-        local osts=$(get_facets OST)
-        for ost in ${osts//,/ }; do
-                varsvc=${ost}_svc
-                do_facet $ost "lctl set_param lquota.${!varsvc}.quota_type=$1"
-        done
+    do_facet mds "lctl set_param lquota.${FSNAME}-MDT*.quota_type=$1"
+    local varsvc
+    local osts=$(get_facets OST)
+    for ost in ${osts//,/ }; do
+        varsvc=${ost}_svc
+        do_facet $ost "lctl set_param lquota.${!varsvc}.quota_type=$1"
+    done
 }
 
 # save quota version (both administrative and operational quotas)
 # the function will also switch to the new version and the new type
+#
+# XXX This function is kept for interoperability with old server (< 2.3.50),
+#     it should be removed whenever we drop the interoperability for such
+#     server.
 quota_save_version() {
     local spec=$1
     local ver=$(tr -c -d "123" <<< $spec)
@@ -554,9 +562,10 @@ quota_save_version() {
         [ -n "$ver" -a "$ver" != "3" ] && error "wrong quota version specifier"
     fi
 
-    [ -n "$type" ] && { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
+    [ -n "$type" ] &&
+        { $LFS quotacheck -$type $MOUNT || error "quotacheck has failed"; }
 
-    do_facet mgs "lctl conf_param ${FSNAME}-MDT*.$(get_md_name).quota_type=$spec"
+    do_facet mgs "lctl conf_param $FSNAME-MDT*.$(get_md_name).quota_type=$spec"
     local varsvc
     local osts=$(get_facets OST)
     for ost in ${osts//,/ }; do
@@ -566,25 +575,36 @@ quota_save_version() {
 }
 
 # client could mount several lustre
-quota_type () {
+#
+# XXX This function is kept for interoperability with old server (< 2.3.50),
+#     it should be removed whenever we drop the interoperability for such
+#     server.
+quota_type() {
     local fsname=${1:-$FSNAME}
     local rc=0
-    do_facet mgs lctl get_param md*.${fsname}-MDT*.quota_type || rc=$?
+    do_facet mds lctl get_param md*.${fsname}-MDT*.quota_type ||
+        rc=$?
     do_nodes $(comma_list $(osts_nodes)) \
         lctl get_param obdfilter.${fsname}-OST*.quota_type || rc=$?
     return $rc
 }
 
-restore_quota_type () {
-   local mntpt=${1:-$MOUNT}
-   local quota_type=$(quota_type $FSNAME | grep MDT | cut -d "=" -f2)
-   if [ ! "$old_QUOTA_TYPE" ] || [ "$quota_type" = "$old_QUOTA_TYPE" ]; then
+# XXX This function is kept for interoperability with old server (< 2.3.50),
+#     it should be removed whenever we drop the interoperability for such
+#     server.
+restore_quota_old() {
+    local mntpt=${1:-$MOUNT}
+    local quota_type=$(quota_type $FSNAME | grep MDT | cut -d "=" -f2)
+    if [ ! "$old_QUOTA_TYPE" ] || [ "$quota_type" = "$old_QUOTA_TYPE" ]; then
         return
-   fi
-   quota_save_version $old_QUOTA_TYPE
+    fi
+    quota_save_version $old_QUOTA_TYPE
 }
 
-setup_quota(){
+# XXX This function is kept for interoperability with old server (< 2.3.50),
+#     it should be removed whenever we drop the interoperability for such
+#     server.
+setup_quota_old() {
     local mntpt=$1
 
     # We need:
@@ -616,7 +636,7 @@ setup_quota(){
 
     local cmd
     for usr in $quota_usrs; do
-        echo "Setting up quota on $client:$mntpt for $usr..."
+        echo "Setting up quota on $HOSTNAME:$mntpt for $usr..."
         for type in u g; do
             cmd="$LFS setquota -$type $usr -b $blk_soft -B $blk_hard -i $i_soft -I $i_hard $mntpt"
             echo "+ $cmd"
@@ -626,6 +646,94 @@ setup_quota(){
         echo "Quota settings for $usr : "
         $LFS quota -v -u $usr $mntpt || true
     done
+}
+
+# get mdt quota type
+mdt_quota_type() {
+    local varsvc=mds_svc
+    do_facet mds $LCTL get_param -n \
+        osd-$FSTYPE.${!varsvc}.quota_slave.enabled
+}
+
+# get ost quota type
+ost_quota_type() {
+    # All OSTs should have same quota type
+    local varsvc=ost1_svc
+    do_facet ost1 $LCTL get_param -n \
+        osd-$FSTYPE.${!varsvc}.quota_slave.enabled
+}
+
+# restore old quota type settings
+restore_quota() {
+    if [ $(lustre_version_code mds) -lt $(version_code 2.3.50) ]; then
+        restore_quota_old
+        return
+    fi
+
+    if [ "$old_MDT_QUOTA_TYPE" ]; then
+        do_facet mgs $LCTL conf_param \
+            $FSNAME.quota.mdt=$old_MDT_QUOTA_TYPE
+    fi
+
+    if [ "$old_OST_QUOTA_TYPE" ]; then
+        do_facet mgs $LCTL conf_param \
+            $FSNAME.quota.ost=$old_OST_QUOTA_TYPE
+    fi
+}
+
+setup_quota() {
+	if [ $(lustre_version_code mds) -lt $(version_code 2.3.50) ]; then
+		setup_quota_old $1
+		return
+	fi
+
+	local mntpt=$1
+
+	# save old quota type & set new quota type
+	local mdt_qtype=$(mdt_quota_type)
+	local ost_qtype=$(ost_quota_type)
+
+	echo "[HOST:$HOSTNAME] [old_mdt_qtype:$mdt_qtype]" \
+		"[old_ost_qtype:$ost_qtype] [new_qtype:$QUOTA_TYPE]"
+
+	export old_MDT_QUOTA_TYPE=$mdt_qtype
+	export old_OST_QUOTA_TYPE=$ost_qtype
+
+	do_facet mgs $LCTL conf_param $FSNAME.quota.mdt=$QUOTA_TYPE ||
+		error "set mdt quota type failed"
+	do_facet mgs $LCTL conf_param $FSNAME.quota.ost=$QUOTA_TYPE ||
+		error "set ost quota type failed"
+
+	local quota_usrs=$QUOTA_USERS
+
+	# get_filesystem_size
+	local disksz=$(lfs df $mntpt | grep "filesystem summary:" |
+		     awk '{print $3}')
+	local blk_soft=$((disksz + 1024))
+	local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
+
+	local inodes=$(lfs df -i $mntpt | grep "filesystem summary:" |
+		     awk '{print $3}')
+	local i_soft=$inodes
+	local i_hard=$((i_soft + i_soft / 20))
+
+	echo "Total disk size: $disksz  block-softlimit: $blk_soft" \
+		"block-hardlimit: $blk_hard inode-softlimit: $i_soft" \
+		"inode-hardlimit: $i_hard"
+
+	local cmd
+	for usr in $quota_usrs; do
+		echo "Setting up quota on $HOSTNAME:$mntpt for $usr..."
+		for type in u g; do
+			cmd="$LFS setquota -$type $usr -b $blk_soft"
+			cmd="$cmd -B $blk_hard -i $i_soft -I $i_hard $mntpt"
+			echo "+ $cmd"
+			eval $cmd || error "$cmd FAILED!"
+		done
+		# display the quota status
+		echo "Quota settings for $usr : "
+		$LFS quota -v -u $usr $mntpt || true
+	done
 }
 
 zconf_mount() {
@@ -838,12 +946,12 @@ facets_on_host () {
     echo $(comma_list $affected)
 }
 
-facet_up () {
+facet_up() {
     local facet=$1
     local host=${2:-$(facet_host $facet)}
 
     local label=$(convert_facet2label $facet)
-    do_node $host lctl dl | awk '{print $4}' | grep -q $label
+    do_node $host $LCTL dl | awk '{print $4}' | grep -q -x $label
 }
 
 facets_up_on_host () {
@@ -2101,12 +2209,6 @@ init_facets_vars () {
 }
 
 init_param_vars () {
-    if ! remote_ost_nodsh && ! remote_mds_nodsh; then
-        export MDSVER=$(do_facet mds "lctl get_param version" | cut -d. -f1,2)
-        export OSTVER=$(do_facet ost1 "lctl get_param version" | cut -d. -f1,2)
-        export CLIVER=$(lctl get_param version | cut -d. -f 1,2)
-    fi
-
     remote_mds_nodsh ||
         TIMEOUT=$(do_facet mds "lctl get_param -n timeout")
 
@@ -2417,7 +2519,7 @@ check_and_cleanup_lustre() {
     if is_mounted $MOUNT; then
         [ -n "$DIR" ] && rm -rf $DIR/[Rdfs][0-9]* ||
             error "remove sub-test dirs failed"
-        [ "$ENABLE_QUOTA" ] && restore_quota_type || true
+        [ "$ENABLE_QUOTA" ] && restore_quota || true
     fi
 
     if [ "$I_UMOUNTED2" = "yes" ]; then
@@ -3228,8 +3330,9 @@ is_patchless ()
     lctl get_param version | grep -q patchless
 }
 
-check_versions () {
-    [ "$MDSVER" = "$CLIVER" -a "$OSTVER" = "$CLIVER" ]
+check_versions() {
+    [ "$(lustre_version_code client)" = "$(lustre_version_code mds)" -a \
+      "$(lustre_version_code client)" = "$(lustre_version_code ost1)" ]
 }
 
 get_node_count() {
@@ -3504,9 +3607,21 @@ delayed_recovery_enabled () {
 # mdt osc: fsname-OSTXXXX-osc -> fsname-OSTXXXX-osc-MDTXXXX
 ################################################################################
 
-get_lustre_version () {
-    local node=${1:-"mds"}
-    do_facet $node $LCTL get_param -n version |  awk '/^lustre:/ {print $2}'
+version_code() {
+    # split arguments like "1.8.6-wc3" into "1", "8", "6", "wc3"
+    eval set -- $(tr "[:punct:]" " " <<< $*)
+
+    echo -n $((($1 << 16) | ($2 << 8) | $3))
+}
+
+get_lustre_version() {
+    local facet=${1:-"mds"}
+    do_facet $facet $LCTL get_param -n version | awk '/^lustre:/ {print $2}'
+}
+
+lustre_version_code() {
+    local facet=${1:-"mds"}
+    version_code $(get_lustre_version $1)
 }
 
 get_mds_version_major () {
