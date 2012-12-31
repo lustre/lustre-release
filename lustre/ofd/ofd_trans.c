@@ -244,9 +244,9 @@ int ofd_txn_stop_cb(const struct lu_env *env, struct thandle *txn,
 	       info->fti_transno, ofd_obd(ofd)->obd_last_committed);
 
 	/* if can't add callback, do sync write */
-	txn->th_sync = !!tgt_last_commit_cb_add(txn, &ofd->ofd_lut,
-						info->fti_exp,
-						info->fti_transno);
+	txn->th_sync |= !!tgt_last_commit_cb_add(txn, &ofd->ofd_lut,
+						 info->fti_exp,
+						 info->fti_transno);
 
 	return ofd_last_rcvd_update(info, txn);
 }

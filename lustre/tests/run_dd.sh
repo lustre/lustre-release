@@ -17,7 +17,7 @@ set -x
 
 . $(dirname $0)/functions.sh
 
-assert_env MOUNT END_RUN_FILE LOAD_PID_FILE
+assert_env MOUNT END_RUN_FILE LOAD_PID_FILE LFS
 
 trap signaled TERM
 
@@ -28,30 +28,36 @@ TESTDIR=$MOUNT/d0.dd-$(hostname)
 
 CONTINUE=true
 while [ ! -e "$END_RUN_FILE" ] && $CONTINUE; do
-    echoerr "$(date +'%F %H:%M:%S'): dd run starting"
-    mkdir -p $TESTDIR
-    cd $TESTDIR
-    # suppress dd xfer stat to workaround buggy coreutils/gettext
-    # combination in RHEL5 and OEL5, see BZ 21264
-    dd bs=4k count=1000000 status=noxfer if=/dev/zero of=$TESTDIR/dd-file 1>$LOG &
-    load_pid=$!
-    wait $load_pid
+	echoerr "$(date +'%F %H:%M:%S'): dd run starting"
+	mkdir -p $TESTDIR
+	$LFS setstripe -c -1 $TESTDIR
+	cd $TESTDIR
+	# suppress dd xfer stat to workaround buggy coreutils/gettext
+	# combination in RHEL5 and OEL5, see BZ 21264
+	FREE_SPACE=$($LFS df $TESTDIR|awk '/filesystem summary:/ {print $5}')
+	BLKS=$((FREE_SPACE * 9 / 40))
+	echo "Free disk space is $FREE_SPACE, 4k blocks to dd is $BLKS"
 
-    if [ $? -eq 0 ]; then
-        echoerr "$(date +'%F %H:%M:%S'): dd succeeded"
-        cd $TMP
-        rm -rf $TESTDIR
-        echoerr "$(date +'%F %H:%M:%S'): dd run finished"
-    else
-        echoerr "$(date +'%F %H:%M:%S'): dd failed"
-        if [ -z "$ERRORS_OK" ]; then
-            echo $(hostname) >> $END_RUN_FILE
-        fi
-        if [ $BREAK_ON_ERROR ]; then
-            # break
-            CONTINUE=false
-        fi
-    fi
+	dd bs=4k count=$BLKS status=noxfer if=/dev/zero of=$TESTDIR/dd-file \
+								1>$LOG &
+	load_pid=$!
+	wait $load_pid
+
+	if [ $? -eq 0 ]; then
+		echoerr "$(date +'%F %H:%M:%S'): dd succeeded"
+		cd $TMP
+		rm -rf $TESTDIR
+		echoerr "$(date +'%F %H:%M:%S'): dd run finished"
+	else
+		echoerr "$(date +'%F %H:%M:%S'): dd failed"
+        	if [ -z "$ERRORS_OK" ]; then
+			echo $(hostname) >> $END_RUN_FILE
+		fi
+		if [ $BREAK_ON_ERROR ]; then
+			# break
+			CONTINUE=false
+		fi
+	fi
 done
 
 echoerr "$(date +'%F %H:%M:%S'): dd run exiting"
