@@ -783,9 +783,8 @@ ptlrpc_register_service(struct ptlrpc_service_conf *conf,
 	CFS_INIT_LIST_HEAD(&service->srv_list); /* for safty of cleanup */
 
 	/* buffer configuration */
-	service->srv_nbuf_per_group	= test_req_buffer_pressure ?  1 :
-					  max(conf->psc_buf.bc_nbufs /
-					      service->srv_ncpts, 1U);
+	service->srv_nbuf_per_group	= test_req_buffer_pressure ?
+					  1 : conf->psc_buf.bc_nbufs;
 	service->srv_max_req_size	= conf->psc_buf.bc_req_max_size +
 					  SPTLRPC_MAX_PAYLOAD;
 	service->srv_buf_size		= conf->psc_buf.bc_buf_size;
