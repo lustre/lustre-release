@@ -125,9 +125,25 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service_part *svcpt, int post)
         int                                rc = 0;
         int                                i;
 
+	if (svcpt->scp_rqbd_allocating)
+		goto try_post;
+
+	spin_lock(&svcpt->scp_lock);
+	/* check again with lock */
+	if (svcpt->scp_rqbd_allocating) {
+		/* NB: we might allow more than one thread in the future */
+		LASSERT(svcpt->scp_rqbd_allocating == 1);
+		spin_unlock(&svcpt->scp_lock);
+		goto try_post;
+	}
+
+	svcpt->scp_rqbd_allocating++;
+	spin_unlock(&svcpt->scp_lock);
+
+
         for (i = 0; i < svc->srv_nbuf_per_group; i++) {
-                /* NB: another thread might be doing this as well, we need to
-                 * make sure that it wouldn't over-allocate, see LU-1212. */
+                /* NB: another thread might have recycled enough rqbds, we
+		 * need to make sure it wouldn't over-allocate, see LU-1212. */
 		if (svcpt->scp_nrqbds_posted >= svc->srv_nbuf_per_group)
 			break;
 
@@ -141,11 +157,19 @@ ptlrpc_grow_req_bufs(struct ptlrpc_service_part *svcpt, int post)
                 }
 	}
 
+	spin_lock(&svcpt->scp_lock);
+
+	LASSERT(svcpt->scp_rqbd_allocating == 1);
+	svcpt->scp_rqbd_allocating--;
+
+	spin_unlock(&svcpt->scp_lock);
+
 	CDEBUG(D_RPCTRACE,
 	       "%s: allocate %d new %d-byte reqbufs (%d/%d left), rc = %d\n",
 	       svc->srv_name, i, svc->srv_buf_size, svcpt->scp_nrqbds_posted,
 	       svcpt->scp_nrqbds_total, rc);
 
+ try_post:
 	if (post && rc == 0)
 		rc = ptlrpc_server_post_idle_rqbds(svcpt);
 
