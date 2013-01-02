@@ -16,7 +16,7 @@
   <section xml:id="dbdoclet.50438223_91742">
     <title><indexterm><primary>LNET</primary><secondary>self-test</secondary></indexterm>
 LNET Self-Test Overview</title>
-    <para>LNET self-test is a kernel module that runs over LNET and the Lustre network drivers (LNDs. It is designed to:</para>
+    <para>LNET self-test is a kernel module that runs over LNET and the Lustre network drivers (LNDs). It is designed to:</para>
     <itemizedlist>
       <listitem>
         <para>Test the connection ability of the Lustre network</para>

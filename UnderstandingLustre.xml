@@ -330,7 +330,7 @@
     </section>
     <section remap="h3">
       <title><indexterm><primary>Lustre</primary><secondary>LNET</secondary></indexterm>Lustre Networking (LNET)</title>
-      <para>Lustre Networking (LNET) is a custom networking API that provides the communication infrastructure that handles metadata and file I/O data for the Lustre file system servers and clients. For more information about LNET, see something <xref linkend="understandinglustrenetworking"/>.</para>
+      <para>Lustre Networking (LNET) is a custom networking API that provides the communication infrastructure that handles metadata and file I/O data for the Lustre file system servers and clients. For more information about LNET, see <xref linkend="understandinglustrenetworking"/>.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>Lustre</primary><secondary>cluster</secondary></indexterm>Lustre Cluster</title>

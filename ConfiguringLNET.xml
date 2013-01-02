@@ -52,7 +52,7 @@
         <para><literal>ip2nets</literal>  - Lists globally-available networks, each with a range of IP addresses. LNET then identifies locally-available networks through address list-matching lookup.</para>
       </listitem>
     </itemizedlist>
-    <para>See <xref linkend="dbdoclet.50438216_46279"/> and <xref linkend="dbdoclet.50438216_31414"/>Setting the LNET Module ip2nets Parameter for more details.</para>
+    <para>See <xref linkend="dbdoclet.50438216_46279"/> and <xref linkend="dbdoclet.50438216_31414"/> for more details.</para>
     <para>To set up routing between networks, use:</para>
     <itemizedlist>
       <listitem>
