@@ -16,11 +16,6 @@ ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_GSS_EXCEPT"}
 CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
 [ "$CPU" = "UML" ] && EXCEPT="$EXCEPT"
 
-case `uname -r` in
-2.6*) ALWAYS_EXCEPT="$ALWAYS_EXCEPT " ;;
-*) error "unsupported kernel (gss only works with 2.6.x)" ;;
-esac
-
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$SRCDIR/../utils/gss:$PATH:/sbin
 export NAME=${NAME:-local}
