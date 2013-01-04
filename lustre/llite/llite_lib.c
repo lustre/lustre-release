@@ -595,6 +595,8 @@ out_lock_cn_cb:
 out_dt:
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
+	/* Make sure all OScs are gone, since cl_cache is accessing sbi. */
+	obd_zombie_barrier();
 out_md_fid:
         obd_fid_fini(sbi->ll_md_exp);
 out_md:
@@ -687,6 +689,9 @@ void client_common_put_super(struct super_block *sb)
         obd_fid_fini(sbi->ll_dt_exp);
         obd_disconnect(sbi->ll_dt_exp);
         sbi->ll_dt_exp = NULL;
+	/* wait till all OSCs are gone, since cl_cache is accessing sbi.
+	 * see LU-2543. */
+	obd_zombie_barrier();
 
         lprocfs_unregister_mountpoint(sbi);
 
