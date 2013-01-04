@@ -34,8 +34,6 @@ init_test_env $@
 init_logging
 DIRECTIO=${DIRECTIO:-$LUSTRE/tests/directio}
 
-[ $MDSCOUNT -gt 1 ] && skip "CMD case" && exit 0
-
 require_dsh_mds || exit 0
 require_dsh_ost || exit 0
 
@@ -192,21 +190,26 @@ getquota() {
 # usage: set_mdt_qtype ug|u|g|none
 set_mdt_qtype() {
 	local qtype=$1
-	local varsvc=${SINGLEMDS}_svc
+	local varsvc
+	local mdts=$(get_facets MDS)
 	local cmd
 	do_facet mgs $LCTL conf_param $FSNAME.quota.mdt=$qtype
-	if $(facet_up $SINGLEMDS); then
+	# we have to make sure each MDT received config changes
+	for mdt in ${mdts//,/ }; do
+		varsvc=${mdt}_svc
 		cmd="$LCTL get_param -n "
-		cmd=${cmd}osd-$(facet_fstype $SINGLEMDS).${!varsvc}
+		cmd=${cmd}osd-$(facet_fstype $mdt).${!varsvc}
 		cmd=${cmd}.quota_slave.enabled
 
-		wait_update_facet $SINGLEMDS "$cmd" "$qtype" || return 1
-	fi
+		if $(facet_up $mdt); then
+			wait_update_facet $mdt "$cmd" "$qtype" || return 1
+		fi
+	done
 	return 0
 }
 
 # set ost quota type
-# usage: set_ost_quota_type ug|u|g|none
+# usage: set_ost_qtype ug|u|g|none
 set_ost_qtype() {
 	local qtype=$1
 	local varsvc
@@ -234,33 +237,26 @@ wait_reintegration() {
 	local result="glb[1],slv[1],reint[0]"
 	local varsvc
 	local cmd
+	local tgts
 
 	if [ $ntype == "mdt" ]; then
-		varsvc=${SINGLEMDS}_svc
+		tgts=$(get_facets MDS)
+	else
+		tgts=$(get_facets OST)
+	fi
+
+	for tgt in ${tgts//,/ }; do
+		varsvc=${tgt}_svc
 		cmd="$LCTL get_param -n "
-		cmd=${cmd}osd-$(facet_fstype $SINGLEMDS).${!varsvc}
+		cmd=${cmd}osd-$(facet_fstype $tgt).${!varsvc}
 		cmd=${cmd}.quota_slave.info
 
-		if $(facet_up $SINGLEMDS); then
-			wait_update_facet $SINGLEMDS "$cmd |
-			grep "$qtype" | awk '{ print \\\$3 }'" \
-				"$result" $max || return 1
-		fi
-	else
-		local osts=$(get_facets OST)
-		for ost in ${osts//,/ }; do
-			varsvc=${ost}_svc
-			cmd="$LCTL get_param -n "
-			cmd=${cmd}osd-$(facet_fstype $ost).${!varsvc}
-			cmd=${cmd}.quota_slave.info
-
-			if $(facet_up $ost); then
-				wait_update_facet $ost "$cmd |
+		if $(facet_up $tgt); then
+			wait_update_facet $tgt "$cmd |
 				grep "$qtype" | awk '{ print \\\$3 }'" \
 					"$result" $max || return 1
-			fi
-		done
-	fi
+		fi
+	done
 	return 0
 }
 
@@ -297,7 +293,7 @@ setup_quota_test() {
 	wait_delete_completed
 	echo "Creating test directory"
 	mkdir -p $DIR/$tdir
-	chmod 077 $DIR/$tdir
+	chmod 0777 $DIR/$tdir
 	# always clear fail_loc in case of fail_loc isn't cleared
 	# properly when previous test failed
 	lustre_fail mds_ost 0
@@ -1159,6 +1155,82 @@ test_7d(){
 }
 run_test 7d "Quota reintegration (Transfer index in multiple bulks)"
 
+# quota reintegration (inode limits)
+test_7e() {
+	[ "$MDSCOUNT" -lt "2" ] && skip "Required more MDTs" && return
+
+	local ilimit=$((1024 * 2)) # 2k inodes
+	local TESTFILE=$DIR/${tdir}-1/$tfile
+
+	setup_quota_test
+	trap cleanup_quota_test EXIT
+
+	# make sure the system is clean
+	local USED=$(getquota -u $TSTUSR global curinodes)
+	[ $USED -ne 0 ] && error "Used inode($USED) for user $TSTUSR isn't 0."
+
+	# make sure no granted quota on mdt1
+	set_mdt_qtype "ug" || error "enable mdt quota failed"
+	resetquota -u $TSTUSR
+	set_mdt_qtype "none" || error "disable mdt quota failed"
+
+	local MDTUUID=$(mdtuuid_from_index $((MDSCOUNT - 1)))
+	USED=$(getquota -u $TSTUSR $MDTUUID ihardlimit)
+	[ $USED -ne 0 ] && error "limit($USED) on $MDTUUID for user" \
+		"$TSTUSR isn't 0."
+
+	echo "Stop mds${MDSCOUNT}..."
+	stop mds${MDSCOUNT}
+
+	echo "Enable quota & set quota limit for $TSTUSR"
+	set_mdt_qtype "ug" || error "enable mdt quota failed"
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $ilimit  $DIR ||
+		error "set quota failed"
+
+	echo "Start mds${MDSCOUNT}..."
+	start mds${MDSCOUNT} $(mdsdevname $MDSCOUNT) $MDS_MOUNT_OPTS
+	quota_init
+
+	wait_mdt_reint "ug" || error "reintegration failed"
+
+	echo "create remote dir"
+	$LFS mkdir -i $((MDSCOUNT - 1)) $DIR/${tdir}-1 ||
+		error "create remote dir failed"
+	chmod 0777 $DIR/${tdir}-1
+
+	# hardlimit should have been fetched by slave during global
+	# reintegration, create will exceed quota
+	$RUNAS createmany -m $TESTFILE $((ilimit + 1)) &&
+		quota_error u $TSTUSR "create succeeded, expect EDQUOT"
+
+	$RUNAS unlinkmany $TESTFILE $ilimit || "unlink files failed"
+	wait_delete_completed
+	sync_all_data || true
+
+	echo "Stop mds${MDSCOUNT}..."
+	stop mds${MDSCOUNT}
+
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I 0 $DIR ||
+		error "clear quota failed"
+
+	echo "Start mds${MDSCOUNT}..."
+	start mds${MDSCOUNT} $(mdsdevname $MDSCOUNT) $MDS_MOUNT_OPTS
+	quota_init
+
+	wait_mdt_reint "ug" || error "reintegration failed"
+
+	# hardlimit should be cleared on slave during reintegration
+	$RUNAS createmany -m $TESTFILE $((ilimit + 1)) ||
+		quota_error -u $TSTUSR "create failed, expect success"
+
+	$RUNAS unlinkmany $TESTFILE $((ilimit + 1)) || "unlink failed"
+	$LFS rmdir $DIR/${tdir}-1 || "unlink remote dir failed"
+
+	cleanup_quota_test
+	resetquota -u $TSTUSR
+}
+run_test 7e "Quota reintegration (inode limits)"
+
 # run dbench with quota enabled
 test_8() {
 	local BLK_LIMIT="100g" #100G
@@ -1306,7 +1378,7 @@ test_11() {
 }
 run_test 11 "Chown/chgrp ignores quota"
 
-test_12() {
+test_12a() {
 	[ "$OSTCOUNT" -lt "2" ] && skip "skipping rebalancing test" && return
 
 	local blimit=22 # 22M
@@ -1348,7 +1420,52 @@ test_12() {
 	cleanup_quota_test
 	resetquota -u $TSTUSR
 }
-run_test 12 "Block quota rebalancing"
+run_test 12a "Block quota rebalancing"
+
+test_12b() {
+	[ "$MDSCOUNT" -lt "2" ] && skip "skipping rebalancing test" && return
+
+	local ilimit=$((1024 * 2)) # 2k inodes
+	local TESTFILE0=$DIR/$tdir/$tfile
+	local TESTFILE1=$DIR/${tdir}-1/$tfile
+
+	setup_quota_test
+	trap cleanup_quota_test EXIT
+
+	$LFS mkdir -i 1 $DIR/${tdir}-1 || error "create remote dir failed"
+	chmod 0777 $DIR/${tdir}-1
+
+	set_mdt_qtype "u" || "enable mdt quota failed"
+	quota_show_check f u $TSTUSR
+
+	$LFS setquota -u $TSTUSR -b 0 -B 0 -i 0 -I $ilimit $DIR ||
+		error "set quota failed"
+
+	echo "Create $ilimit files on mdt0..."
+	$RUNAS createmany -m $TESTFILE0 $ilimit ||
+		quota_error u $TSTUSR "create failed, but expect success"
+
+	echo "Create files on mdt1..."
+	$RUNAS createmany -m $TESTFILE1 1 &&
+		quota_error a $TSTUSR "create succeeded, expect EDQUOT"
+
+	echo "Free space from mdt0..."
+	$RUNAS unlinkmany $TESTFILE0 $ilimit || error "unlink mdt0 files failed"
+	wait_delete_completed
+	sync_all_data || true
+
+	echo "Create files on mdt1 after space freed from mdt0..."
+	$RUNAS createmany -m $TESTFILE1 $((ilimit / 2)) ||
+		quota_error a $TSTUSR "rebalancing failed"
+
+	$RUNAS unlinkmany $TESTFILE1 $((ilimit / 2)) ||
+		error "unlink mdt1 files failed"
+	$LFS rmdir $DIR/${tdir}-1 || error "unlink remote dir failed"
+
+	cleanup_quota_test
+	resetquota -u $TSTUSR
+}
+run_test 12b "Inode quota rebalancing"
 
 test_13(){
 	local TESTFILE=$DIR/$tdir/$tfile
