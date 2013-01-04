@@ -732,6 +732,11 @@ facet_fstype() {
 		return
 	fi
 
+	if [[ $facet == mgs ]] && combined_mgs_mds; then
+		facet_fstype mds1
+		return
+	fi
+
 	return 1
 }
 
@@ -2669,37 +2674,50 @@ mdsvdevname() {
 }
 
 mgsdevname() {
-	local DEVNAME=MGSDEV
-	local MDSDEV1=$(mdsdevname 1)
-
-	local fstype=$(facet_fstype mds1)
+	local DEVPTR
+	local fstype=$(facet_fstype mgs)
 
 	case $fstype in
-		ldiskfs|zfs )
-			#if $MGSDEV isn't defined, default is $MDSDEV1
-			#ZFS independent mgsdev should be ${FSNAME}-mgs/mgs
-			eval DEVPTR=${!DEVNAME:=${MDSDEV1}};;
-		* )
-			error "unknown fstype!";;
+	ldiskfs )
+		if [ $(facet_host mgs) = $(facet_host mds1) ] &&
+		   ( [ -z "$MGSDEV" ] || [ $MGSDEV = $(mdsdevname 1) ] ); then
+			DEVPTR=$(mdsdevname 1)
+		else
+			DEVPTR=$MGSDEV
+		fi;;
+	zfs )
+		if [ $(facet_host mgs) = $(facet_host mds1) ] &&
+		   ( [ -z "$MGSDEV" ] || [ $MGSDEV = $(mdsvdevname 1) ] ); then
+			DEVPTR=$(mdsdevname 1)
+		else
+			DEVPTR=${FSNAME}-mgs/mgs
+		fi;;
+	* )
+		error "unknown fstype!";;
 	esac
 
-    echo -n $DEVPTR
+	echo -n $DEVPTR
 }
 
 mgsvdevname() {
+	local VDEVPTR
 	DEVNAME=MGSDEV
 
-	local fstype=$(facet_fstype mds1)
+	local fstype=$(facet_fstype mgs)
 
 	case $fstype in
-		ldiskfs )
-			# vdevs are not supported by ldiskfs
-			eval VDEVPTR="";;
-		zfs )
-			#if $MGSDEV isn't defined, default is $MGSDEV1
-			eval VDEVPTR=${!DEVNAME:=${MDSDEV1}};;
-		* )
-			error "unknown fstype!";;
+	ldiskfs )
+		# vdevs are not supported by ldiskfs
+		;;
+	zfs )
+		if [ $(facet_host mgs) = $(facet_host mds1) ] &&
+		   ( [ -z "$MGSDEV" ] || [ $MGSDEV = $(mdsvdevname 1) ] ); then
+			VDEVPTR=$(mdsvdevname 1)
+		else
+			VDEVPTR=$MGSDEV
+		fi;;
+	* )
+		error "unknown fstype!";;
 	esac
 
 	echo -n $VDEVPTR
