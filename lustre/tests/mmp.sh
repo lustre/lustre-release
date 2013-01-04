@@ -138,9 +138,9 @@ get_mmp_update_interval() {
     local device=$2
     local interval
 
-    interval=$(do_facet $facet "$DEBUGFS -c -R dump_mmp $device 2>/dev/null \
-                | grep 'MMP Update Interval' | cut -d' ' -f4")
-    [ -z "$interval" ] && interval=1
+    interval=$(do_facet $facet "$DEBUGFS -c -R dump_mmp $device 2>/dev/null" |
+               awk 'tolower($0) ~ /update.interval/ { print $NF }')
+    [ -z "$interval" ] && interval=5
 
     echo $interval
 }
@@ -151,11 +151,22 @@ get_mmp_check_interval() {
     local device=$2
     local interval
 
-    interval=$(do_facet $facet "$DEBUGFS -c -R dump_mmp $device 2>/dev/null \
-                | grep 'MMP Check Interval' | cut -d' ' -f4")
+    interval=$(do_facet $facet "$DEBUGFS -c -R dump_mmp $device 2>/dev/null" |
+               awk 'tolower($0) ~ /check.interval/ { print $NF }')
     [ -z "$interval" ] && interval=5
 
     echo $interval
+}
+
+# Adjust the MMP update interval (in seconds) on the Lustre server target.
+# Specifying an interval of 0 means to use the default interval.
+set_mmp_update_interval() {
+    local facet=$1
+    local device=$2
+    local interval=${3:-0}
+
+    do_facet $facet "$TUNE2FS -E mmp_update_interval=$interval $device"
+    return ${PIPESTATUS[0]}
 }
 
 # Enable the MMP feature on the Lustre server targets.
@@ -167,14 +178,14 @@ mmp_init() {
     # Otherwise, the Lustre administrator has to manually enable
     # this feature when the file system is unmounted.
 
-    if [ -z "$mdsfailover_HOST" ]; then
+    local var=${MMP_MDS}failover_HOST
+    if [ -z "${!var}" ]; then
         log "Failover is not used on MDS, enabling MMP manually..."
         enable_mmp $MMP_MDS $MMP_MDSDEV || \
             error "failed to enable MMP on $MMP_MDSDEV on $MMP_MDS"
     fi
 
-    local var=${MMP_OSS}failover_HOST
-
+    var=${MMP_OSS}failover_HOST
     if [ -z "${!var}" ]; then
         log "Failover is not used on OSS, enabling MMP manually..."
         enable_mmp $MMP_OSS $MMP_OSTDEV || \
@@ -193,7 +204,8 @@ mmp_init() {
 # which did not use failover.
 mmp_fini() {
 
-    if [ -z "$mdsfailover_HOST" ]; then
+    local var=${MMP_MDS}failover_HOST
+    if [ -z "${!var}" ]; then
         log "Failover is not used on MDS, disabling MMP manually..."
         disable_mmp $MMP_MDS $MMP_MDSDEV || \
             error "failed to disable MMP on $MMP_MDSDEV on $MMP_MDS"
@@ -201,8 +213,7 @@ mmp_fini() {
             error "MMP was not disabled on $MMP_MDSDEV on $MMP_MDS"
     fi
 
-    local var=${MMP_OSS}failover_HOST
-
+    var=${MMP_OSS}failover_HOST
     if [ -z "${!var}" ]; then
         log "Failover is not used on OSS, disabling MMP manually..."
         disable_mmp $MMP_OSS $MMP_OSTDEV || \
@@ -253,7 +264,7 @@ mount_after_interval_sub() {
             return ${PIPESTATUS[0]}
         return 1
     elif [ $second_mount_rc -ne 0 -a $first_mount_rc -ne 0 ]; then
-        error_noexit "failed to mount on the failover pair $facet,$failover_facet"
+        error_noexit "mount failure on failover pair $facet,$failover_facet"
         return $first_mount_rc
     fi
 
@@ -383,7 +394,7 @@ run_e2fsck() {
     shift
     local opts="$@"
 
-    log "Running e2fsck on the device $device on $facet..."
+    echo "Running e2fsck on the device $device on $facet..."
     do_facet $facet "$E2FSCK $opts $device"
     return ${PIPESTATUS[0]}
 }
@@ -514,33 +525,51 @@ run_test 7 "mount after reboot"
 # Test 8 - mount during e2fsck (should never succeed).
 test_8() {
     local e2fsck_pid
+    local saved_interval
+    local new_interval
+
+    # After writing a new sequence number into the MMP block, e2fsck will sleep
+    # at least (2 * new_interval + 1) seconds before it goes into e2fsck passes.
+    new_interval=30
+
+    # MDT
+    saved_interval=$(get_mmp_update_interval $MMP_MDS $MMP_MDSDEV)
+    set_mmp_update_interval $MMP_MDS $MMP_MDSDEV $new_interval
 
     run_e2fsck $MMP_MDS $MMP_MDSDEV "-fy" &
     e2fsck_pid=$!
-    sleep 1
+    sleep 5
 
-    log "Mounting $MMP_MDSDEV on $MMP_MDS_FAILOVER..."
     if start $MMP_MDS_FAILOVER $MMP_MDSDEV $MDS_MOUNT_OPTS; then
-        error_noexit "mount $MMP_MDSDEV on $MMP_MDS_FAILOVER should fail"
+        error_noexit \
+            "mount $MMP_MDSDEV on $MMP_MDS_FAILOVER should fail"
         stop $MMP_MDS_FAILOVER || return ${PIPESTATUS[0]}
+        set_mmp_update_interval $MMP_MDS $MMP_MDSDEV $saved_interval
         return 1
     fi
 
     wait $e2fsck_pid
+    set_mmp_update_interval $MMP_MDS $MMP_MDSDEV $saved_interval
 
+    # OST
     echo
+    saved_interval=$(get_mmp_update_interval $MMP_OSS $MMP_OSTDEV)
+    set_mmp_update_interval $MMP_OSS $MMP_OSTDEV $new_interval
+
     run_e2fsck $MMP_OSS $MMP_OSTDEV "-fy" &
     e2fsck_pid=$!
-    sleep 1
+    sleep 5
 
-    log "Mounting $MMP_OSTDEV on $MMP_OSS_FAILOVER..."
     if start $MMP_OSS_FAILOVER $MMP_OSTDEV $OST_MOUNT_OPTS; then
-        error_noexit "mount $MMP_OSTDEV on $MMP_OSS_FAILOVER should fail"
+        error_noexit \
+            "mount $MMP_OSTDEV on $MMP_OSS_FAILOVER should fail"
         stop $MMP_OSS_FAILOVER || return ${PIPESTATUS[0]}
+        set_mmp_update_interval $MMP_OSS $MMP_OSTDEV $saved_interval
         return 2
     fi
 
     wait $e2fsck_pid
+    set_mmp_update_interval $MMP_OSS $MMP_OSTDEV $saved_interval
     return 0
 }
 run_test 8 "mount during e2fsck"
@@ -556,7 +585,7 @@ test_9() {
     stop_services primary || return ${PIPESTATUS[0]}
 
     mark_mmp_block $MMP_MDS $MMP_MDSDEV || return ${PIPESTATUS[0]}
-    
+
     log "Mounting $MMP_MDSDEV on $MMP_MDS..."
     if start $MMP_MDS $MMP_MDSDEV $MDS_MOUNT_OPTS; then
         error_noexit "mount $MMP_MDSDEV on $MMP_MDS should fail"
@@ -590,9 +619,9 @@ test_10() {
     run_e2fsck $MMP_MDS_FAILOVER $MMP_MDSDEV "-fn"
     rc=${PIPESTATUS[0]}
 
-    # e2fsck is always called with -n, i.e.
-    # 0 (No errors) and 4 (File system errors left uncorrected) are the only acceptable
-    # e2fsck exit codes in case
+    # e2fsck is called with -n option (Open the filesystem read-only), so
+    # 0 (No errors) and 4 (File system errors left uncorrected) are the only
+    # acceptable exit codes in this case
     if [ $rc -ne 0 ] && [ $rc -ne 4 ]; then
         error_noexit "e2fsck $MMP_MDSDEV on $MMP_MDS_FAILOVER returned $rc"
         stop $MMP_MDS || return ${PIPESTATUS[0]}
