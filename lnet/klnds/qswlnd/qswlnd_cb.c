@@ -1,6 +1,8 @@
 /*
  * Copyright (c) 2003, 2010, Oracle and/or its affiliates. All rights reserved.
  *
+ * Copyright (c) 2012, Intel Corporation.
+ *
  * Author: Eric Barton <eric@bartonsoftware.com>
  *
  * This file is part of Portals, http://www.lustre.org

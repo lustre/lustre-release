@@ -19,7 +19,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2011 Whamcloud, Inc.
+ * Copyright (c) 2011, 2012, Intel Corporation.
  * Use is subject to license terms.
  *
  * Author: Niu Yawei <niu@whamcloud.com>

@@ -21,7 +21,7 @@
  * GPL HEADER END
  */
 /*
- * Copyright (c) 2011, 2012, Intel Corporation.
+ * Copyright (c) 2012, Intel Corporation.
  */
 /*
  * lustre/target/tgt_internal.h

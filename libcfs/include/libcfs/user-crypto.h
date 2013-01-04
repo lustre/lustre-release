@@ -24,6 +24,8 @@
 /*
  * Copyright 2012 Xyratex Technology Limited
  *
+ * Copyright (c) 2012, Intel Corporation.
+ *
  */
 
 #if (defined i386) || (defined __amd64__)

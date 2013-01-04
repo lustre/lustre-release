@@ -23,7 +23,7 @@
 /*
  * Copyright (c) 2009, 2010, Oracle and/or its affiliates. All rights reserved.
  *
- * Copyright (c) 2012, Whamcloud, Inc.
+ * Copyright (c) 2011, 2012, Intel Corporation.
  *
  * Code originally extracted from quota directory
  */
