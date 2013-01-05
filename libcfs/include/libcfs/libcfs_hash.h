@@ -686,6 +686,8 @@ static inline cfs_hlist_head_t *cfs_hash_bd_hhead(cfs_hash_t *hs,
 
 cfs_hlist_node_t *cfs_hash_bd_lookup_locked(cfs_hash_t *hs,
                                             cfs_hash_bd_t *bd, const void *key);
+cfs_hlist_node_t *cfs_hash_bd_peek_locked(cfs_hash_t *hs,
+					  cfs_hash_bd_t *bd, const void *key);
 cfs_hlist_node_t *cfs_hash_bd_findadd_locked(cfs_hash_t *hs,
                                              cfs_hash_bd_t *bd, const void *key,
                                              cfs_hlist_node_t *hnode,

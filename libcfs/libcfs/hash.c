@@ -665,6 +665,14 @@ cfs_hash_bd_lookup_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd, const void *key)
 CFS_EXPORT_SYMBOL(cfs_hash_bd_lookup_locked);
 
 cfs_hlist_node_t *
+cfs_hash_bd_peek_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd, const void *key)
+{
+	return cfs_hash_bd_lookup_intent(hs, bd, key, NULL,
+					 CFS_HS_LOOKUP_IT_PEEK);
+}
+CFS_EXPORT_SYMBOL(cfs_hash_bd_peek_locked);
+
+cfs_hlist_node_t *
 cfs_hash_bd_findadd_locked(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                            const void *key, cfs_hlist_node_t *hnode,
                            int noref)

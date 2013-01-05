@@ -519,9 +519,9 @@ static struct lu_object *htable_lookup(struct lu_site *s,
 
         *version = ver;
         bkt = cfs_hash_bd_extra_get(s->ls_obj_hash, bd);
-        /* cfs_hash_bd_lookup_intent is a somehow "internal" function
-         * of cfs_hash, but we don't want refcount on object right now */
-        hnode = cfs_hash_bd_lookup_locked(s->ls_obj_hash, bd, (void *)f);
+	/* cfs_hash_bd_peek_locked is a somehow "internal" function
+	 * of cfs_hash, it doesn't add refcount on object. */
+	hnode = cfs_hash_bd_peek_locked(s->ls_obj_hash, bd, (void *)f);
         if (hnode == NULL) {
                 lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_MISS);
                 return NULL;
@@ -529,6 +529,7 @@ static struct lu_object *htable_lookup(struct lu_site *s,
 
         h = container_of0(hnode, struct lu_object_header, loh_hash);
         if (likely(!lu_object_is_dying(h))) {
+		cfs_hash_get(s->ls_obj_hash, hnode);
                 lprocfs_counter_incr(s->ls_stats, LU_SS_CACHE_HIT);
                 cfs_list_del_init(&h->loh_lru);
                 return lu_object_top(h);
@@ -539,7 +540,6 @@ static struct lu_object *htable_lookup(struct lu_site *s,
          * returned (to assure that references to dying objects are eventually
          * drained), and moreover, lookup has to wait until object is freed.
          */
-        cfs_atomic_dec(&h->loh_ref);
 
         cfs_waitlink_init(waiter);
         cfs_waitq_add(&bkt->lsb_marche_funebre, waiter);
