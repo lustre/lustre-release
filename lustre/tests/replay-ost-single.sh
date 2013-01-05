@@ -197,7 +197,7 @@ test_6() {
     sync
     # let the delete happen
     wait_mds_ost_sync || return 4
-    wait_destroy_complete || return 5
+    wait_delete_completed || return 5
     after=`kbytesfree`
     log "before: $before after: $after"
     (( $before <= $after + 40 )) || return 3	# take OST logs into account
@@ -224,7 +224,7 @@ test_7() {
     sync
     # let the delete happen
     wait_mds_ost_sync || return 4
-    wait_destroy_complete || return 5
+    wait_delete_completed || return 5
     after=`kbytesfree`
     log "before: $before after: $after"
     (( $before <= $after + 40 )) || return 3 # take OST logs into account
@@ -302,7 +302,7 @@ test_8d() {
     [ -z "$(lctl get_param -n mdc.${FSNAME}-*.connect_flags|grep einprogress)" \
         ] && skip_env "MDS doesn't support EINPROGRESS" && return
 #define OBD_FAIL_MDS_DQACQ_NET           0x187
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x187"
+    do_facet mds "lctl set_param fail_loc=0x187"
     # test the non-intent create path
     mcreate $TDIR/$tfile &
     cpid=$!
@@ -311,14 +311,14 @@ test_8d() {
             error "mknod finished incorrectly"
             return 1
     fi
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     wait $cpid || return 2
     stat $TDIR/$tfile || error "mknod failed"
 
     rm $TDIR/$tfile
 
 #define OBD_FAIL_MDS_DQACQ_NET           0x187
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x187"
+    do_facet mds "lctl set_param fail_loc=0x187"
     # test the intent create path
     openfile -f O_RDWR:O_CREAT $TDIR/$tfile &
     cpid=$!
@@ -327,7 +327,7 @@ test_8d() {
             error "open finished incorrectly"
             return 3
     fi
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0"
+    do_facet mds "lctl set_param fail_loc=0"
     wait $cpid || return 4
     stat $TDIR/$tfile || error "open failed"
 }

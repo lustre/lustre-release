@@ -275,6 +275,8 @@ test_14a() {
 run_test 14a "timeouts waiting for lost client during replay"
 
 test_14b() {
+    wait_mds_ost_sync
+    wait_delete_completed
     BEFOREUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     #lfs setstripe --index=0 --count=1 $MOUNT1
     mkdir -p $MOUNT1/$tdir
@@ -295,7 +297,7 @@ test_14b() {
     zconf_mount `hostname` $MOUNT2 || error "mount $MOUNT2 fail"
 
     wait_mds_ost_sync || return 5
-    wait_destroy_complete || return 6
+    wait_delete_completed || return 6
 
     AFTERUSED=`df -P $DIR | tail -1 | awk '{ print $3 }'`
     log "before $BEFOREUSED, after $AFTERUSED"

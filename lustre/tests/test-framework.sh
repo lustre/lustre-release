@@ -1186,23 +1186,55 @@ wait_update_facet () {
     wait_update  $(facet_active_host $facet) "$@"
 }
 
-wait_delete_completed () {
-    local TOTALPREV=`lctl get_param -n osc.*.kbytesavail | \
-                     awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
+wait_delete_completed_mds() {
+	[[ $(lustre_version_code mds) -lt $(version_code 2.2.58) ]] &&
+		return 0
 
-    local WAIT=0
-    local MAX_WAIT=20
-    while [ "$WAIT" -ne "$MAX_WAIT" ]; do
-        sleep 1
-        TOTAL=`lctl get_param -n osc.*.kbytesavail | \
-               awk 'BEGIN{total=0}; {total+=$1}; END{print total}'`
-        [ "$TOTAL" -eq "$TOTALPREV" ] && return 0
-        echo "Waiting delete completed ... prev: $TOTALPREV current: $TOTAL "
-        TOTALPREV=$TOTAL
-        WAIT=$(( WAIT + 1))
-    done
-    echo "Delete is not completed in $MAX_WAIT sec"
-    return 1
+	local MAX_WAIT=${1:-20}
+	local mds2sync=""
+	local stime=`date +%s`
+	local etime
+	local node
+	local changes
+
+	# find MDS with pending deletions
+	for node in $(mdts_nodes); do
+		changes=$(do_node $node "lctl get_param -n osc.*MDT*.sync_*" \
+			2>/dev/null | calc_sum)
+		if [ -z "$changes" ] || [ $changes -eq 0 ]; then
+			continue
+		fi
+		mds2sync="$mds2sync $node"
+	done
+	if [ "$mds2sync" == "" ]; then
+		return
+	fi
+	mds2sync=$(comma_list $mds2sync)
+
+	# sync MDS transactions
+	do_nodes $mds2sync "lctl set_param -n osd*.*MD*.force_sync 1"
+
+	# wait till all changes are sent and commmitted by OSTs
+	# for ldiskfs space is released upon execution, but DMU
+	# do this upon commit
+
+	local WAIT=0
+	while [ "$WAIT" -ne "$MAX_WAIT" ]; do
+		changes=$(do_nodes $mds2sync "lctl get_param -n osc.*MDT*.sync_*" \
+			| calc_sum)
+		#echo "$node: $changes changes on all"
+		if [ "$changes" -eq "0" ]; then
+			etime=`date +%s`
+			#echo "delete took $((etime - stime)) seconds"
+			return
+		fi
+		sleep 1
+		WAIT=$(( WAIT + 1))
+	done
+
+	etime=`date +%s`
+	echo "Delete is not completed in $((etime - stime)) seconds"
+	do_nodes $mds2sync "lctl get_param osc.*MDT*.sync_*"
 }
 
 wait_for_host() {
@@ -1295,28 +1327,35 @@ wait_mds_ost_sync () {
 }
 
 wait_destroy_complete () {
-    echo "Waiting for destroy to be done..."
-    # MAX value shouldn't be big as this mean server responsiveness
-    # never increase this just to make test pass but investigate
-    # why it takes so long time
-    local MAX=5
-    local WAIT=0
-    while [ $WAIT -lt $MAX ]; do
-        local -a RPCs=($($LCTL get_param -n osc.*.destroys_in_flight))
-        local con=1
-        for ((i=0; i<${#RPCs[@]}; i++)); do
-            [ ${RPCs[$i]} -eq 0 ] && continue
-            # there are still some destroy RPCs in flight
-            con=0
-            break;
-        done
-        sleep 1
-        [ ${con} -eq 1 ] && return 0 # done waiting
-        echo "Waiting $WAIT secs for destroys to be done."
-        WAIT=$((WAIT + 1))
-    done
-    echo "Destroys weren't done in $MAX sec."
-    return 1
+	echo "Waiting for local destroys to complete"
+	# MAX value shouldn't be big as this mean server responsiveness
+	# never increase this just to make test pass but investigate
+	# why it takes so long time
+	local MAX=5
+	local WAIT=0
+	while [ $WAIT -lt $MAX ]; do
+		local -a RPCs=($($LCTL get_param -n osc.*.destroys_in_flight))
+		local con=1
+		local i
+
+		for ((i=0; i<${#RPCs[@]}; i++)); do
+			[ ${RPCs[$i]} -eq 0 ] && continue
+			# there are still some destroy RPCs in flight
+			con=0
+			break;
+		done
+		sleep 1
+		[ ${con} -eq 1 ] && return 0 # done waiting
+		echo "Waiting ${WAIT}s for local destroys to complete"
+		WAIT=$((WAIT + 1))
+	done
+	echo "Local destroys weren't done in $MAX sec."
+	return 1
+}
+
+wait_delete_completed() {
+	wait_delete_completed_mds $1 || return $?
+	wait_destroy_complete
 }
 
 wait_exit_ST () {
