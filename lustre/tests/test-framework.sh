@@ -2942,10 +2942,19 @@ skip_env () {
     $FAIL_ON_SKIP_ENV && error false $@ || skip $@
 }
 
-skip () {
-	log " SKIP: ${TESTSUITE} ${TESTNAME} $@"
-	[ "$TESTSUITELOG" ] && \
-		echo "${TESTSUITE}: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
+skip() {
+    echo
+    log " SKIP: $TESTSUITE $TESTNAME $@"
+
+    if [[ -n "$ALWAYS_SKIPPED" ]]; then
+        skip_logged $TESTNAME "$@"
+    else
+        mkdir -p $LOGDIR
+        echo "$@" > $LOGDIR/skip
+    fi
+
+    [[ -n "$TESTSUITELOG" ]] &&
+        echo "$TESTSUITE: SKIP: $TESTNAME $@" >> $TESTSUITELOG || true
 }
 
 build_test_filter() {
@@ -2959,8 +2968,11 @@ build_test_filter() {
         log "excepting tests: `echo $EXCEPT $ALWAYS_EXCEPT`"
     [ "$EXCEPT_SLOW" ] && \
         log "skipping tests SLOW=no: `echo $EXCEPT_SLOW`"
-    for E in $EXCEPT $ALWAYS_EXCEPT; do
+    for E in $EXCEPT; do
         eval EXCEPT_${E}=true
+    done
+    for E in $ALWAYS_EXCEPT; do
+        eval EXCEPT_ALWAYS_${E}=true
     done
     for E in $EXCEPT_SLOW; do
         eval EXCEPT_SLOW_${E}=true
@@ -2980,6 +2992,8 @@ basetest() {
 
 # print a newline if the last test was skipped
 export LAST_SKIPPED=
+export ALWAYS_SKIPPED=
+
 run_test() {
     assert_DIR
 
@@ -3001,32 +3015,42 @@ run_test() {
         echo -n "."
         return 0
     fi
+
+    LAST_SKIPPED="y"
+    ALWAYS_SKIPPED="y"
     testname=EXCEPT_$1
     if [ ${!testname}x != x ]; then
-        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1"
         return 0
     fi
     testname=EXCEPT_$base
     if [ ${!testname}x != x ]; then
-        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping excluded test $1 (base $base)"
+        return 0
+    fi
+    testname=EXCEPT_ALWAYS_$1
+    if [ ${!testname}x != x ]; then
+        TESTNAME=test_$1 skip "skipping ALWAYS excluded test $1"
+        return 0
+    fi
+    testname=EXCEPT_ALWAYS_$base
+    if [ ${!testname}x != x ]; then
+        TESTNAME=test_$1 skip "skipping ALWAYS excluded test $1 (base $base)"
         return 0
     fi
     testname=EXCEPT_SLOW_$1
     if [ ${!testname}x != x ]; then
-        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1"
         return 0
     fi
     testname=EXCEPT_SLOW_$base
     if [ ${!testname}x != x ]; then
-        LAST_SKIPPED="y"
         TESTNAME=test_$1 skip "skipping SLOW test $1 (base $base)"
         return 0
     fi
 
     LAST_SKIPPED=
+    ALWAYS_SKIPPED=
     run_one_logged $1 "$2"
 
     return $?
@@ -3073,13 +3097,15 @@ complete () {
 }
 
 pass() {
-    # Set TEST_STATUS here; will be used for logging the result
-    if [ -f $LOGDIR/err ]; then
+    # Set TEST_STATUS here. It will be used for logging the result.
+    TEST_STATUS="PASS"
+
+    if [[ -f $LOGDIR/err ]]; then
         TEST_STATUS="FAIL"
-    else
-        TEST_STATUS="PASS"
+    elif [[ -f $LOGDIR/skip ]]; then
+        TEST_STATUS="SKIP"
     fi
-    echo $TEST_STATUS " " $@
+    echo "$TEST_STATUS $@" 2>&1 | tee -a $TESTSUITELOG
 }
 
 check_mds() {
@@ -3123,9 +3149,11 @@ run_one_logged() {
     local name=${TESTSUITE}.test_${1}.test_log.$(hostname -s).log
     local test_log=$LOGDIR/$name
     rm -rf $LOGDIR/err
+    rm -rf $LOGDIR/skip
     local SAVE_UMASK=`umask`
     umask 0022
 
+    echo
     log_sub_test_begin test_${1}
     (run_one $1 "$2") 2>&1 | tee $test_log
     local RC=${PIPESTATUS[0]}
@@ -3134,8 +3162,13 @@ run_one_logged() {
         echo "test_$1 returned $RC" | tee $LOGDIR/err
 
     duration=$((`date +%s` - $BEFORE))
-    pass "(${duration}s)"
-    [ -f $LOGDIR/err ] && TEST_ERROR=$(cat $LOGDIR/err)
+    pass "$1" "(${duration}s)"
+
+    if [[ -f $LOGDIR/err ]]; then
+        TEST_ERROR=$(cat $LOGDIR/err)
+    elif [[ -f $LOGDIR/skip ]]; then
+        TEST_ERROR=$(cat $LOGDIR/skip)
+    fi
     log_sub_test_end $TEST_STATUS $duration "$RC" "$TEST_ERROR"
 
     if [ -f $LOGDIR/err ]; then
@@ -3146,6 +3179,16 @@ run_one_logged() {
 
     return 0
 }
+
+#
+# Print information of skipped tests to result.yml
+#
+skip_logged() {
+    log_sub_test_begin $1
+    shift
+    log_sub_test_end "SKIP" "0" "0" "$@"
+}
+
 
 canonical_path() {
     (cd `dirname $1`; echo $PWD/`basename $1`)
