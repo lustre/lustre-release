@@ -337,6 +337,11 @@ static inline void sg_set_page(struct scatterlist *sg, struct page *page,
         sg->offset = offset;
         sg->length = len;
 }
+
+static inline void sg_assign_page(struct scatterlist *sg, struct page *page)
+{
+	sg->page = page;
+}
 #endif
 
 #define cfs_smp_processor_id()  smp_processor_id()
