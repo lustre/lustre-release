@@ -417,6 +417,9 @@ else
 		        #include <linux/version.h>
 		        #include <linux/pci.h>
 			#include <linux/gfp.h>
+			#ifdef HAVE_COMPAT_RDMA
+			#include <linux/compat-2.6.h>
+			#endif
 		        #include <rdma/rdma_cm.h>
 		        #include <rdma/ib_cm.h>
 		        #include <rdma/ib_verbs.h>
@@ -482,6 +485,9 @@ AC_SUBST(O2IBLND)
 if test $ENABLEO2IB -ne 0; then
 	AC_MSG_CHECKING([if rdma_create_id wants four args])
 	LB_LINUX_TRY_COMPILE([
+		#ifdef HAVE_COMPAT_RDMA
+		#include <linux/compat-2.6.h>
+		#endif
 		#include <rdma/rdma_cm.h>
 	],[
 		rdma_create_id(NULL, NULL, 0, 0);
