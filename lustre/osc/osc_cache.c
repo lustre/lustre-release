@@ -1483,6 +1483,15 @@ static int osc_enter_cache_try(struct client_obd *cli,
 	return rc;
 }
 
+static int ocw_granted(struct client_obd *cli, struct osc_cache_waiter *ocw)
+{
+	int rc;
+	client_obd_list_lock(&cli->cl_loi_list_lock);
+	rc = cfs_list_empty(&ocw->ocw_entry) || cli->cl_w_in_flight == 0;
+	client_obd_list_unlock(&cli->cl_loi_list_lock);
+	return rc;
+}
+
 /**
  * The main entry to reserve dirty page accounting. Usually the grant reserved
  * in this function will be freed in bulk in osc_free_grant() unless it fails
@@ -1524,34 +1533,47 @@ static int osc_enter_cache(const struct lu_env *env, struct client_obd *cli,
 	cfs_waitq_init(&ocw.ocw_waitq);
 	ocw.ocw_oap   = oap;
 	ocw.ocw_grant = bytes;
-	while (cli->cl_dirty > 0 || cli->cl_w_in_flight > 0) {
+	if (cli->cl_dirty > 0 || cli->cl_w_in_flight > 0) {
 		cfs_list_add_tail(&ocw.ocw_entry, &cli->cl_cache_waiters);
 		ocw.ocw_rc = 0;
 		client_obd_list_unlock(&cli->cl_loi_list_lock);
 
+		/* First osc_io_unplug() tries to put current object
+		 * on ready list, second osc_io_unplug() makes sure that
+		 * dirty flush can still be triggered even if current
+		 * object hasn't any dirty pages */
 		osc_io_unplug(env, cli, osc, PDL_POLICY_ROUND);
+		osc_io_unplug(env, cli, NULL, PDL_POLICY_ROUND);
 
 		CDEBUG(D_CACHE, "%s: sleeping for cache space @ %p for %p\n",
 		       cli->cl_import->imp_obd->obd_name, &ocw, oap);
 
-		rc = l_wait_event(ocw.ocw_waitq,
-				  cfs_list_empty(&ocw.ocw_entry), &lwi);
+		rc = l_wait_event(ocw.ocw_waitq, ocw_granted(cli, &ocw), &lwi);
 
 		client_obd_list_lock(&cli->cl_loi_list_lock);
-		cfs_list_del_init(&ocw.ocw_entry);
-		if (rc < 0)
-			break;
 
-		rc = ocw.ocw_rc;
-		if (rc != -EDQUOT)
-			break;
-		if (osc_enter_cache_try(cli, oap, bytes, 0)) {
-			rc = 0;
-			break;
+		/* l_wait_event is interrupted by signal */
+		if (rc < 0) {
+			cfs_list_del_init(&ocw.ocw_entry);
+			GOTO(out, rc);
 		}
+
+		/* If ocw_entry isn't empty, which means it's not waked up
+		 * by osc_wake_cache_waiters(), then the page must not be
+		 * granted yet. */
+		if (!cfs_list_empty(&ocw.ocw_entry)) {
+			rc = -EDQUOT;
+			cfs_list_del_init(&ocw.ocw_entry);
+		} else {
+			rc = ocw.ocw_rc;
+		}
+
+		if (rc != -EDQUOT)
+			GOTO(out, rc);
+		if (osc_enter_cache_try(cli, oap, bytes, 0))
+			rc = 0;
 	}
 	EXIT;
-
 out:
 	client_obd_list_unlock(&cli->cl_loi_list_lock);
 	OSC_DUMP_GRANT(cli, "returned %d.\n", rc);

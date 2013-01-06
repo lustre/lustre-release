@@ -147,7 +147,7 @@ static int osc_wr_max_dirty_mb(struct file *file, const char *buffer,
         if (rc)
                 return rc;
 
-        if (pages_number < 0 ||
+        if (pages_number <= 0 ||
             pages_number > OSC_MAX_DIRTY_MB_MAX << (20 - CFS_PAGE_SHIFT) ||
             pages_number > cfs_num_physpages / 4) /* 1/4 of RAM */
                 return -ERANGE;
