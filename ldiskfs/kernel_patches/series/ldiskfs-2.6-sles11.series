@@ -39,3 +39,4 @@ ext4_pdirop-rhel6.patch
 ext4-quota-force-block-alloc-quotaoff.patch
 ext4-quota-dont-update-cmtime.patch
 ext4-quota-first-class.patch
+ext4-fix-ext4_mb_add_n_trim.patch
