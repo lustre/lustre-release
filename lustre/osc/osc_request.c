@@ -1691,6 +1691,7 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
         CFS_INIT_LIST_HEAD(&new_aa->aa_oaps);
         list_splice(&aa->aa_oaps, &new_aa->aa_oaps);
         CFS_INIT_LIST_HEAD(&aa->aa_oaps);
+        new_aa->aa_resends = aa->aa_resends;
 
         list_for_each_entry(oap, &new_aa->aa_oaps, oap_rpc_item) {
                 if (oap->oap_request) {
