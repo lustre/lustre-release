@@ -71,10 +71,10 @@
 #include <sys/sa_impl.h>
 #include <sys/txg.h>
 
-static struct dt_it *osd_zap_it_init(const struct lu_env *env,
-				     struct dt_object *dt,
-				     __u32 unused,
-				     struct lustre_capa *capa)
+static struct dt_it *osd_index_it_init(const struct lu_env *env,
+				       struct dt_object *dt,
+				       __u32 unused,
+				       struct lustre_capa *capa)
 {
 	struct osd_thread_info  *info = osd_oti_get(env);
 	struct osd_zap_it       *it;
@@ -104,7 +104,7 @@ static struct dt_it *osd_zap_it_init(const struct lu_env *env,
 	RETURN((struct dt_it *)it);
 }
 
-static void osd_zap_it_fini(const struct lu_env *env, struct dt_it *di)
+static void osd_index_it_fini(const struct lu_env *env, struct dt_it *di)
 {
 	struct osd_zap_it *it = (struct osd_zap_it *)di;
 	struct osd_object *obj;
@@ -121,42 +121,8 @@ static void osd_zap_it_fini(const struct lu_env *env, struct dt_it *di)
 	EXIT;
 }
 
-/**
- *  Move Iterator to record specified by \a key
- *
- *  \param  di      osd iterator
- *  \param  key     key for index
- *
- *  \retval +ve  di points to record with least key not larger than key
- *  \retval  0   di points to exact matched key
- *  \retval -ve  failure
- */
 
-static int osd_zap_it_get(const struct lu_env *env,
-			  struct dt_it *di, const struct dt_key *key)
-{
-	struct osd_zap_it *it = (struct osd_zap_it *)di;
-	struct osd_object *obj = it->ozi_obj;
-	struct osd_device *osd = osd_obj2dev(obj);
-	ENTRY;
-
-	LASSERT(it);
-	LASSERT(it->ozi_zc);
-
-	/* XXX: API is broken at the moment */
-	LASSERT(((const char *)key)[0] == '\0');
-
-	udmu_zap_cursor_fini(it->ozi_zc);
-	if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
-				 obj->oo_db->db_object, 0))
-		RETURN(-ENOMEM);
-
-	it->ozi_reset = 1;
-
-	RETURN(+1);
-}
-
-static void osd_zap_it_put(const struct lu_env *env, struct dt_it *di)
+static void osd_index_it_put(const struct lu_env *env, struct dt_it *di)
 {
 	/* PBS: do nothing : ref are incremented at retrive and decreamented
 	 *      next/finish. */
@@ -166,82 +132,15 @@ int udmu_zap_cursor_retrieve_key(const struct lu_env *env,
 				 zap_cursor_t *zc, char *key, int max)
 {
 	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
-	int             err;
+	int		 err;
 
 	if ((err = zap_cursor_retrieve(zc, za)))
 		return err;
 
-	if (key) {
-		if (strlen(za->za_name) > max)
-			return EOVERFLOW;
+	if (key)
 		strcpy(key, za->za_name);
-	}
 
 	return 0;
-}
-
-/**
- * to load a directory entry at a time and stored it in
- * iterator's in-memory data structure.
- *
- * \param di, struct osd_it_ea, iterator's in memory structure
- *
- * \retval +ve, iterator reached to end
- * \retval   0, iterator not reached to end
- * \retval -ve, on error
- */
-static int osd_zap_it_next(const struct lu_env *env, struct dt_it *di)
-{
-	struct osd_zap_it *it = (struct osd_zap_it *)di;
-	int                rc;
-	ENTRY;
-
-	if (it->ozi_reset == 0)
-		zap_cursor_advance(it->ozi_zc);
-	it->ozi_reset = 0;
-
-	/*
-	 * According to current API we need to return error if its last entry.
-	 * zap_cursor_advance() does return any value. So we need to call
-	 * retrieve to check if there is any record.  We should make
-	 * changes to Iterator API to not return status for this API
-	 */
-	rc = -udmu_zap_cursor_retrieve_key(env, it->ozi_zc, NULL, NAME_MAX);
-	if (rc == -ENOENT) /* end of dir*/
-		RETURN(+1);
-
-	RETURN((rc));
-}
-
-static struct dt_key *osd_zap_it_key(const struct lu_env *env,
-					const struct dt_it *di)
-{
-	struct osd_zap_it *it = (struct osd_zap_it *)di;
-	int                rc = 0;
-	ENTRY;
-
-	it->ozi_reset = 0;
-	rc = -udmu_zap_cursor_retrieve_key(env, it->ozi_zc, it->ozi_name,
-					   NAME_MAX + 1);
-	if (!rc)
-		RETURN((struct dt_key *)it->ozi_name);
-	else
-		RETURN(ERR_PTR(rc));
-}
-
-static int osd_zap_it_key_size(const struct lu_env *env, const struct dt_it *di)
-{
-	struct osd_zap_it *it = (struct osd_zap_it *)di;
-	int                rc;
-	ENTRY;
-
-	it->ozi_reset = 0;
-	rc = -udmu_zap_cursor_retrieve_key(env, it->ozi_zc, it->ozi_name,
-					   NAME_MAX + 1);
-	if (!rc)
-		RETURN(strlen(it->ozi_name));
-	else
-		RETURN(rc);
 }
 
 /*
@@ -249,12 +148,11 @@ static int osd_zap_it_key_size(const struct lu_env *env, const struct dt_it *di)
  * to read bytes we need to call zap_lookup explicitly.
  */
 int udmu_zap_cursor_retrieve_value(const struct lu_env *env,
-				   zap_cursor_t *zc,  char *buf,
-				   int buf_size, int *bytes_read)
+		zap_cursor_t *zc,  char *buf,
+		int buf_size, int *bytes_read)
 {
 	zap_attribute_t *za = &osd_oti_get(env)->oti_za;
 	int err, actual_size;
-
 
 	if ((err = zap_cursor_retrieve(zc, za)))
 		return err;
@@ -272,8 +170,8 @@ int udmu_zap_cursor_retrieve_value(const struct lu_env *env,
 	}
 
 	err = -zap_lookup(zc->zc_objset, zc->zc_zapobj,
-			  za->za_name, za->za_integer_length,
-			  buf_size, buf);
+			za->za_name, za->za_integer_length,
+			buf_size, buf);
 
 	if (!err)
 		*bytes_read = actual_size;
@@ -299,92 +197,54 @@ static inline void osd_it_append_attrs(struct lu_dirent *ent, __u32 attr,
 	ent->lde_attrs = cpu_to_le32(ent->lde_attrs);
 }
 
-static int osd_zap_it_rec(const struct lu_env *env, const struct dt_it *di,
-			  struct dt_rec *dtrec, __u32 attr)
+static int osd_find_parent_fid(const struct lu_env *env, struct dt_object *o,
+			       struct lu_fid *fid)
 {
-	struct luz_direntry *zde = &osd_oti_get(env)->oti_zde;
-	zap_attribute_t     *za = &osd_oti_get(env)->oti_za;
-	struct osd_zap_it   *it = (struct osd_zap_it *)di;
-	struct lu_dirent    *lde = (struct lu_dirent *)dtrec;
-	int                  rc, namelen;
+	struct link_ea_header  *leh;
+	struct link_ea_entry   *lee;
+	struct lu_buf		buf;
+	int			rc;
 	ENTRY;
 
-	it->ozi_reset = 0;
-	LASSERT(lde);
+	buf.lb_buf = osd_oti_get(env)->oti_buf;
+	buf.lb_len = sizeof(osd_oti_get(env)->oti_buf);
 
-	lde->lde_hash = cpu_to_le64(udmu_zap_cursor_serialize(it->ozi_zc));
-
-	if ((rc = -zap_cursor_retrieve(it->ozi_zc, za)))
-		GOTO(out, rc);
-
-	namelen = strlen(za->za_name);
-	if (namelen > NAME_MAX)
-		GOTO(out, rc = -EOVERFLOW);
-	strcpy(lde->lde_name, za->za_name);
-	lde->lde_namelen = cpu_to_le16(namelen);
-
-	if (za->za_integer_length != 8 || za->za_num_integers < 3) {
-		CERROR("%s: unsupported direntry format: %d %d\n",
-		       osd_obj2dev(it->ozi_obj)->od_svname,
-		       za->za_integer_length, (int)za->za_num_integers);
-
-		GOTO(out, rc = -EIO);
+	rc = osd_xattr_get(env, o, &buf, XATTR_NAME_LINK, BYPASS_CAPA);
+	if (rc == -ERANGE) {
+		rc = osd_xattr_get(env, o, &LU_BUF_NULL,
+				   XATTR_NAME_LINK, BYPASS_CAPA);
+		if (rc < 0)
+			RETURN(rc);
+		LASSERT(rc > 0);
+		OBD_ALLOC(buf.lb_buf, rc);
+		if (buf.lb_buf == NULL)
+			RETURN(-ENOMEM);
+		buf.lb_len = rc;
+		rc = osd_xattr_get(env, o, &buf, XATTR_NAME_LINK, BYPASS_CAPA);
 	}
-
-	rc = -zap_lookup(it->ozi_zc->zc_objset, it->ozi_zc->zc_zapobj,
-			 za->za_name, za->za_integer_length, 3, zde);
-	if (rc)
+	if (rc < 0)
 		GOTO(out, rc);
+	if (rc < sizeof(*leh) + sizeof(*lee))
+		GOTO(out, rc = -EINVAL);
 
-	lde->lde_fid = zde->lzd_fid;
-	lde->lde_attrs = LUDA_FID;
+	leh = buf.lb_buf;
+	if (leh->leh_magic == __swab32(LINK_EA_MAGIC)) {
+		leh->leh_magic = LINK_EA_MAGIC;
+		leh->leh_reccount = __swab32(leh->leh_reccount);
+		leh->leh_len = __swab64(leh->leh_len);
+	}
+	if (leh->leh_magic != LINK_EA_MAGIC)
+		GOTO(out, rc = -EINVAL);
+	if (leh->leh_reccount == 0)
+		GOTO(out, rc = -ENODATA);
 
-	/* append lustre attributes */
-	osd_it_append_attrs(lde, attr, namelen, zde->lzd_reg.zde_type);
-
-	lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(namelen, attr));
+	lee = (struct link_ea_entry *)(leh + 1);
+	fid_be_to_cpu(fid, (const struct lu_fid *)&lee->lee_parent_fid);
+	rc = 0;
 
 out:
-	RETURN(rc);
-}
-
-static __u64 osd_zap_it_store(const struct lu_env *env, const struct dt_it *di)
-{
-	struct osd_zap_it *it = (struct osd_zap_it *)di;
-
-	it->ozi_reset = 0;
-	RETURN(udmu_zap_cursor_serialize(it->ozi_zc));
-}
-
-/*
- * return status :
- *  rc == 0 -> ok, proceed.
- *  rc >  0 -> end of directory.
- *  rc <  0 -> error.  ( EOVERFLOW  can be masked.)
- */
-static int osd_zap_it_load(const struct lu_env *env,
-			const struct dt_it *di, __u64 hash)
-{
-	struct osd_zap_it *it = (struct osd_zap_it *)di;
-	struct osd_object *obj = it->ozi_obj;
-	struct osd_device *osd = osd_obj2dev(obj);
-	int                rc;
-	ENTRY;
-
-	udmu_zap_cursor_fini(it->ozi_zc);
-	if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
-				 obj->oo_db->db_object, hash))
-		RETURN(-ENOMEM);
-	it->ozi_reset = 0;
-
-	/* same as osd_zap_it_next()*/
-	rc = -udmu_zap_cursor_retrieve_key(env, it->ozi_zc, NULL,
-					   NAME_MAX + 1);
-	if (rc == 0)
-		RETURN(+1);
-	else if (rc == -ENOENT) /* end of dir*/
-		RETURN(0);
-
+	if (buf.lb_buf != osd_oti_get(env)->oti_buf)
+		OBD_FREE(buf.lb_buf, buf.lb_len);
 	RETURN(rc);
 }
 
@@ -395,10 +255,22 @@ static int osd_dir_lookup(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thread_info *oti = osd_oti_get(env);
 	struct osd_object  *obj = osd_dt_obj(dt);
 	struct osd_device  *osd = osd_obj2dev(obj);
+	char		   *name = (char *)key;
 	int                 rc;
 	ENTRY;
 
 	LASSERT(udmu_object_is_zap(obj->oo_db));
+
+	if (name[0] == '.') {
+		if (name[1] == 0) {
+			const struct lu_fid *f = lu_object_fid(&dt->do_lu);
+			memcpy(rec, f, sizeof(*f));
+			RETURN(1);
+		} else if (name[1] == '.' && name[2] == 0) {
+			rc = osd_find_parent_fid(env, dt, (struct lu_fid *)rec);
+			RETURN(rc == 0 ? 1 : rc);
+		}
+	}
 
 	rc = -zap_lookup(osd->od_objset.os, obj->oo_db->db_object,
 			 (char *)key, 8, sizeof(oti->oti_zde) / 8,
@@ -523,6 +395,7 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle  *oh;
 	struct osd_object   *child;
 	__u32                attr;
+	char		    *name = (char *)key;
 	int                  rc;
 	ENTRY;
 
@@ -532,14 +405,6 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(dt_object_exists(dt));
 	LASSERT(osd_invariant(parent));
 
-	/*
-	 * zfs_readdir() generates ./.. on fly, but
-	 * we want own entries (.. at least) with a fid
-	 */
-#if LUSTRE_VERSION_CODE >= OBD_OCD_VERSION(2, 3, 61, 0)
-#warning "fix '.' and '..' handling"
-#endif
-
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
@@ -547,7 +412,35 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 	if (IS_ERR(child))
 		RETURN(PTR_ERR(child));
 
+/*
+ * to simulate old Orion setups with ./..  stored in the directories
+ */
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 91, 0)
+#define OSD_ZFS_INSERT_DOTS_FOR_TESTING__
+#endif
+
 	LASSERT(child->oo_db);
+	if (name[0] == '.') {
+		if (name[1] == 0) {
+			/* do not store ".", instead generate it
+			 * during iteration */
+#ifndef OSD_ZFS_INSERT_DOTS_FOR_TESTING
+			GOTO(out, rc = 0);
+#endif
+		} else if (name[1] == '.' && name[2] == 0) {
+			/* update parent dnode in the child.
+			 * later it will be used to generate ".." */
+			udmu_objset_t *uos = &osd->od_objset;
+			rc = osd_object_sa_update(child,
+						  SA_ZPL_PARENT(uos),
+						  &parent->oo_db->db_object,
+						  8, oh);
+
+#ifndef OSD_ZFS_INSERT_DOTS_FOR_TESTING
+			GOTO(out, rc);
+#endif
+		}
+	}
 
 	CLASSERT(sizeof(oti->oti_zde.lzd_reg) == 8);
 	CLASSERT(sizeof(oti->oti_zde) % 8 == 0);
@@ -561,6 +454,9 @@ static int osd_dir_insert(const struct lu_env *env, struct dt_object *dt,
 		      (char *)key, 8, sizeof(oti->oti_zde) / 8,
 		      (void *)&oti->oti_zde, oh->ot_tx);
 
+#ifndef OSD_ZFS_INSERT_DOTS_FOR_TESTING
+out:
+#endif
 	osd_object_put(env, child);
 
 	RETURN(rc);
@@ -597,6 +493,7 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	struct osd_device *osd = osd_obj2dev(obj);
 	struct osd_thandle *oh;
 	dmu_buf_t *zap_db = obj->oo_db;
+	char	  *name = (char *)key;
 	int rc;
 	ENTRY;
 
@@ -606,12 +503,383 @@ static int osd_dir_delete(const struct lu_env *env, struct dt_object *dt,
 	LASSERT(th != NULL);
 	oh = container_of0(th, struct osd_thandle, ot_super);
 
+#ifndef OSD_ZFS_INSERT_DOTS_FOR_TESTING
+	/*
+	 * in Orion . and .. were stored in the directory (not generated up on
+	 * request as now. we preserve them for backward compatibility
+	 */
+	if (name[0] == '.') {
+		if (name[1] == 0) {
+			RETURN(0);
+		} else if (name[1] == '.' && name[2] == 0) {
+			RETURN(0);
+		}
+	}
+#endif
+
 	/* Remove key from the ZAP */
 	rc = -zap_remove(osd->od_objset.os, zap_db->db_object,
 			 (char *) key, oh->ot_tx);
 
-	if (rc && rc != -ENOENT)
+#if LUSTRE_VERSION_CODE <= OBD_OCD_VERSION(2, 4, 53, 0)
+	if (unlikely(rc == -ENOENT && name[0] == '.' &&
+	    (name[1] == 0 || (name[1] == '.' && name[2] == 0))))
+		rc = 0;
+#endif
+	if (unlikely(rc && rc != -ENOENT))
 		CERROR("%s: zap_remove failed: rc = %d\n", osd->od_svname, rc);
+
+	RETURN(rc);
+}
+
+static struct dt_it *osd_dir_it_init(const struct lu_env *env,
+				     struct dt_object *dt,
+				     __u32 unused,
+				     struct lustre_capa *capa)
+{
+	struct osd_zap_it *it;
+
+	it = (struct osd_zap_it *)osd_index_it_init(env, dt, unused, capa);
+	if (!IS_ERR(it))
+		it->ozi_pos = 0;
+
+	RETURN((struct dt_it *)it);
+}
+
+/**
+ *  Move Iterator to record specified by \a key
+ *
+ *  \param  di      osd iterator
+ *  \param  key     key for index
+ *
+ *  \retval +ve  di points to record with least key not larger than key
+ *  \retval  0   di points to exact matched key
+ *  \retval -ve  failure
+ */
+static int osd_dir_it_get(const struct lu_env *env,
+			  struct dt_it *di, const struct dt_key *key)
+{
+	struct osd_zap_it *it = (struct osd_zap_it *)di;
+	struct osd_object *obj = it->ozi_obj;
+	struct osd_device *osd = osd_obj2dev(obj);
+	char		  *name = (char *)key;
+	int		   rc;
+	ENTRY;
+
+	LASSERT(it);
+	LASSERT(it->ozi_zc);
+
+	udmu_zap_cursor_fini(it->ozi_zc);
+
+	if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
+				 obj->oo_db->db_object, 0))
+		RETURN(-ENOMEM);
+
+	/* XXX: implementation of the API is broken at the moment */
+	LASSERT(((const char *)key)[0] == 0);
+
+	if (name[0] == 0) {
+		it->ozi_pos = 0;
+		RETURN(1);
+	}
+
+	if (name[0] == '.') {
+		if (name[1] == 0) {
+			it->ozi_pos = 1;
+			GOTO(out, rc = 1);
+		} else if (name[1] == '.' && name[2] == 0) {
+			it->ozi_pos = 2;
+			GOTO(out, rc = 1);
+		}
+	}
+
+	/* neither . nor .. - some real record */
+	it->ozi_pos = 3;
+	rc = +1;
+
+out:
+	RETURN(rc);
+}
+
+static void osd_dir_it_put(const struct lu_env *env, struct dt_it *di)
+{
+	/* PBS: do nothing : ref are incremented at retrive and decreamented
+	 *      next/finish. */
+}
+
+/*
+ * in Orion . and .. were stored in the directory, while ZPL
+ * and current osd-zfs generate them up on request. so, we
+ * need to ignore previously stored . and ..
+ */
+static int osd_index_retrieve_skip_dots(struct osd_zap_it *it,
+					zap_attribute_t *za)
+{
+	int rc, isdot;
+
+	do {
+		rc = -zap_cursor_retrieve(it->ozi_zc, za);
+
+		isdot = 0;
+		if (unlikely(rc == 0 && za->za_name[0] == '.')) {
+			if (za->za_name[1] == 0) {
+				isdot = 1;
+			} else if (za->za_name[1] == '.' &&
+				   za->za_name[2] == 0) {
+				isdot = 1;
+			}
+			if (unlikely(isdot))
+				zap_cursor_advance(it->ozi_zc);
+		}
+	} while (unlikely(rc == 0 && isdot));
+
+	return rc;
+}
+
+/**
+ * to load a directory entry at a time and stored it in
+ * iterator's in-memory data structure.
+ *
+ * \param di, struct osd_it_ea, iterator's in memory structure
+ *
+ * \retval +ve, iterator reached to end
+ * \retval   0, iterator not reached to end
+ * \retval -ve, on error
+ */
+static int osd_dir_it_next(const struct lu_env *env, struct dt_it *di)
+{
+	struct osd_zap_it *it = (struct osd_zap_it *)di;
+	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
+	int		   rc;
+
+	/* temp. storage should be enough for any key supported by ZFS */
+	CLASSERT(sizeof(za->za_name) <= sizeof(it->ozi_name));
+
+	/*
+	 * the first ->next() moves the cursor to .
+	 * the second ->next() moves the cursor to ..
+	 * then we get to the real records and have to verify any exist
+	 */
+	if (it->ozi_pos <= 2) {
+		it->ozi_pos++;
+		if (it->ozi_pos <=2)
+			RETURN(0);
+	}
+
+	zap_cursor_advance(it->ozi_zc);
+
+	/*
+	 * According to current API we need to return error if its last entry.
+	 * zap_cursor_advance() does not return any value. So we need to call
+	 * retrieve to check if there is any record.  We should make
+	 * changes to Iterator API to not return status for this API
+	 */
+	rc = osd_index_retrieve_skip_dots(it, za);
+
+	if (rc == -ENOENT) /* end of dir */
+		RETURN(+1);
+
+	RETURN(rc);
+}
+
+static struct dt_key *osd_dir_it_key(const struct lu_env *env,
+				     const struct dt_it *di)
+{
+	struct osd_zap_it *it = (struct osd_zap_it *)di;
+	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
+	int		   rc = 0;
+	ENTRY;
+
+	if (it->ozi_pos <= 1) {
+		it->ozi_pos = 1;
+		RETURN((struct dt_key *)".");
+	} else if (it->ozi_pos == 2) {
+		RETURN((struct dt_key *)"..");
+	}
+
+	if ((rc = -zap_cursor_retrieve(it->ozi_zc, za)))
+		RETURN(ERR_PTR(rc));
+
+	strcpy(it->ozi_name, za->za_name);
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 91, 0)
+	if (za->za_name[0] == '.') {
+		if (za->za_name[1] == 0 || (za->za_name[1] == '.' &&
+		    za->za_name[2] == 0)) {
+			/* we should not get onto . and ..
+			 * stored in the directory. ->next() and
+			 * other methods should prevent this
+			 */
+			LBUG();
+		}
+	}
+#endif
+
+	RETURN((struct dt_key *)it->ozi_name);
+}
+
+static int osd_dir_it_key_size(const struct lu_env *env, const struct dt_it *di)
+{
+	struct osd_zap_it *it = (struct osd_zap_it *)di;
+	zap_attribute_t	  *za = &osd_oti_get(env)->oti_za;
+	int		   rc;
+	ENTRY;
+
+	if (it->ozi_pos <= 1) {
+		it->ozi_pos = 1;
+		RETURN(2);
+	} else if (it->ozi_pos == 2) {
+		RETURN(3);
+	}
+
+	if ((rc = -zap_cursor_retrieve(it->ozi_zc, za)) == 0)
+		rc = strlen(za->za_name);
+
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 99, 0)
+	if (rc == 0 && za->za_name[0] == '.') {
+		if (za->za_name[1] == 0 || (za->za_name[1] == '.' &&
+		    za->za_name[2] == 0)) {
+			/* we should not get onto . and ..
+			 * stored in the directory. ->next() and
+			 * other methods should prevent this
+			 */
+			LBUG();
+		}
+	}
+#endif
+	RETURN(rc);
+}
+
+static int osd_dir_it_rec(const struct lu_env *env, const struct dt_it *di,
+			  struct dt_rec *dtrec, __u32 attr)
+{
+	struct osd_zap_it   *it = (struct osd_zap_it *)di;
+	struct lu_dirent    *lde = (struct lu_dirent *)dtrec;
+	struct luz_direntry *zde = &osd_oti_get(env)->oti_zde;
+	zap_attribute_t     *za = &osd_oti_get(env)->oti_za;
+	int		     rc, namelen;
+	ENTRY;
+
+	if (it->ozi_pos <= 1) {
+		lde->lde_hash = cpu_to_le64(1);
+		strcpy(lde->lde_name, ".");
+		lde->lde_namelen = cpu_to_le16(1);
+		lde->lde_fid = *lu_object_fid(&it->ozi_obj->oo_dt.do_lu);
+		lde->lde_attrs = LUDA_FID;
+		/* append lustre attributes */
+		osd_it_append_attrs(lde, attr, 1, IFTODT(S_IFDIR));
+		lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(1, attr));
+		it->ozi_pos = 1;
+		GOTO(out, rc = 0);
+
+	} else if (it->ozi_pos == 2) {
+		lde->lde_hash = cpu_to_le64(2);
+		strcpy(lde->lde_name, "..");
+		lde->lde_namelen = cpu_to_le16(2);
+		lde->lde_attrs = LUDA_FID;
+		/* append lustre attributes */
+		osd_it_append_attrs(lde, attr, 2, IFTODT(S_IFDIR));
+		lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(2, attr));
+		rc = osd_find_parent_fid(env, &it->ozi_obj->oo_dt, &lde->lde_fid);
+		/*
+		 * early Orion code was not setting LinkEA, so it's possible
+		 * some setups still have objects with no LinkEA set.
+		 * but at that time .. was a real record in the directory
+		 * so we should try to lookup .. in ZAP
+		 */
+		if (rc != -ENOENT)
+			GOTO(out, rc);
+	}
+
+	LASSERT(lde);
+
+	lde->lde_hash = cpu_to_le64(udmu_zap_cursor_serialize(it->ozi_zc));
+
+	if ((rc = -zap_cursor_retrieve(it->ozi_zc, za)))
+		GOTO(out, rc);
+
+	namelen = strlen(za->za_name);
+	if (namelen > NAME_MAX)
+		GOTO(out, rc = -EOVERFLOW);
+	strcpy(lde->lde_name, za->za_name);
+	lde->lde_namelen = cpu_to_le16(namelen);
+
+	if (za->za_integer_length != 8 || za->za_num_integers < 3) {
+		CERROR("%s: unsupported direntry format: %d %d\n",
+		       osd_obj2dev(it->ozi_obj)->od_svname,
+		       za->za_integer_length, (int)za->za_num_integers);
+
+		GOTO(out, rc = -EIO);
+	}
+
+	rc = -zap_lookup(it->ozi_zc->zc_objset, it->ozi_zc->zc_zapobj,
+			 za->za_name, za->za_integer_length, 3, zde);
+	if (rc)
+		GOTO(out, rc);
+
+	lde->lde_fid = zde->lzd_fid;
+	lde->lde_attrs = LUDA_FID;
+
+	/* append lustre attributes */
+	osd_it_append_attrs(lde, attr, namelen, zde->lzd_reg.zde_type);
+
+	lde->lde_reclen = cpu_to_le16(lu_dirent_calc_size(namelen, attr));
+
+out:
+	RETURN(rc);
+}
+
+static __u64 osd_dir_it_store(const struct lu_env *env, const struct dt_it *di)
+{
+	struct osd_zap_it *it = (struct osd_zap_it *)di;
+	__u64		   pos;
+	ENTRY;
+
+	if (it->ozi_pos <= 2)
+		pos = it->ozi_pos;
+	else
+		pos = udmu_zap_cursor_serialize(it->ozi_zc);
+
+	RETURN(pos);
+}
+
+/*
+ * return status :
+ *  rc == 0 -> end of directory.
+ *  rc >  0 -> ok, proceed.
+ *  rc <  0 -> error.  ( EOVERFLOW  can be masked.)
+ */
+static int osd_dir_it_load(const struct lu_env *env,
+			const struct dt_it *di, __u64 hash)
+{
+	struct osd_zap_it *it = (struct osd_zap_it *)di;
+	struct osd_object *obj = it->ozi_obj;
+	struct osd_device *osd = osd_obj2dev(obj);
+	zap_attribute_t   *za = &osd_oti_get(env)->oti_za;
+	int		   rc;
+	ENTRY;
+
+	if (it->ozi_pos != 0) {
+		/* the cursor wasn't at the beginning
+		 * so we should reset ZAP cursor as well */
+		udmu_zap_cursor_fini(it->ozi_zc);
+		if (udmu_zap_cursor_init(&it->ozi_zc, &osd->od_objset,
+					 obj->oo_db->db_object, hash))
+			RETURN(-ENOMEM);
+	}
+
+	if (hash <= 2) {
+		it->ozi_pos = hash;
+		rc = +1;
+	} else {
+		it->ozi_pos = 3;
+		/* to return whether the end has been reached */
+		rc = osd_index_retrieve_skip_dots(it, za);
+		if (rc == 0)
+			rc = +1;
+		else if (rc == -ENOENT)
+			rc = 0;
+	}
 
 	RETURN(rc);
 }
@@ -623,16 +891,16 @@ static struct dt_index_operations osd_dir_ops = {
 	.dio_declare_delete = osd_declare_dir_delete,
 	.dio_delete         = osd_dir_delete,
 	.dio_it     = {
-		.init     = osd_zap_it_init,
-		.fini     = osd_zap_it_fini,
-		.get      = osd_zap_it_get,
-		.put      = osd_zap_it_put,
-		.next     = osd_zap_it_next,
-		.key      = osd_zap_it_key,
-		.key_size = osd_zap_it_key_size,
-		.rec      = osd_zap_it_rec,
-		.store    = osd_zap_it_store,
-		.load     = osd_zap_it_load
+		.init     = osd_dir_it_init,
+		.fini     = osd_index_it_fini,
+		.get      = osd_dir_it_get,
+		.put      = osd_dir_it_put,
+		.next     = osd_dir_it_next,
+		.key      = osd_dir_it_key,
+		.key_size = osd_dir_it_key_size,
+		.rec      = osd_dir_it_rec,
+		.store    = osd_dir_it_store,
+		.load     = osd_dir_it_load
 	}
 };
 
@@ -883,10 +1151,10 @@ static struct dt_index_operations osd_index_ops = {
 	.dio_declare_delete	= osd_declare_index_delete,
 	.dio_delete		= osd_index_delete,
 	.dio_it	= {
-		.init		= osd_zap_it_init,
-		.fini		= osd_zap_it_fini,
+		.init		= osd_index_it_init,
+		.fini		= osd_index_it_fini,
 		.get		= osd_index_it_get,
-		.put		= osd_zap_it_put,
+		.put		= osd_index_it_put,
 		.next		= osd_index_it_next,
 		.key		= osd_index_it_key,
 		.key_size	= osd_index_it_key_size,

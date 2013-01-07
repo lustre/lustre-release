@@ -76,12 +76,22 @@ struct osd_it_quota {
 
 /**
  * Iterator's in-memory data structure for ZAPs
+ *
+ * ZFS does not store . and .. on a disk, instead they are
+ * generated up on request
+ * to follow this format we do the same
  */
 struct osd_zap_it {
 	zap_cursor_t		*ozi_zc;
 	struct osd_object	*ozi_obj;
 	struct lustre_capa	*ozi_capa;
-	unsigned		 ozi_reset:1;     /* 1 -- no need to advance */
+	unsigned		 ozi_reset:1;	/* 1 -- no need to advance */
+	/* ozi_pos - position of the cursor:
+	 * 0 - before any record
+	 * 1 - "."
+	 * 2 - ".."
+	 * 3 - real records */
+	unsigned		 ozi_pos:3;
 	union {
 		char		 ozi_name[NAME_MAX + 1]; /* file name for dir */
 		__u64		 ozi_key; /* binary key for index files */
