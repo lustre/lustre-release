@@ -428,14 +428,14 @@ test_19() { # bug3811
 	local node=$(facet_active_host ost1)
 
 	# check whether obdfilter is cache capable at all
-	if ! get_obdfilter_param $node '' read_cache_enable >/dev/null; then
+	if ! get_osd_param $node '' read_cache_enable >/dev/null; then
 		echo "not cache-capable obdfilter"
 		return 0
 	fi
 
-	local MAX=$(get_obdfilter_param $node '' readcache_max_filesize | \
+	local MAX=$(get_osd_param $node '' readcache_max_filesize | \
 		    head -n 1)
-	set_obdfilter_param $node '' readcache_max_filesize 4096
+	set_osd_param $node '' readcache_max_filesize 4096
 	dd if=/dev/urandom of=$TMP/$tfile bs=512k count=32
 	local SUM=$(cksum $TMP/$tfile | cut -d" " -f 1,2)
 	cp $TMP/$tfile $DIR1/$tfile
@@ -450,7 +450,7 @@ test_19() { # bug3811
 		[ "$(cat $TMP/sum2)" = "$SUM" ] || \
 			error "$DIR2/$tfile $(cat $TMP/sum2) != $SUM"
 	done
-	set_obdfilter_param $node '' readcache_max_filesize $MAX
+	set_osd_param $node '' readcache_max_filesize $MAX
 	rm $DIR1/$tfile
 }
 run_test 19 "test concurrent uncached read races ==============="

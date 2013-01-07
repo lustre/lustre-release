@@ -793,7 +793,7 @@ ostdevlabel() {
 }
 
 #
-# This and set_obdfilter_param() shall be used to access OSD parameters
+# This and set_osd_param() shall be used to access OSD parameters
 # once existed under "obdfilter":
 #
 #   mntdev
@@ -801,7 +801,7 @@ ostdevlabel() {
 #   read_cache_enable
 #   writethrough_cache_enable
 #
-get_obdfilter_param() {
+get_osd_param() {
 	local nodes=$1
 	local device=${2:-$FSNAME-OST*}
 	local name=$3
@@ -810,7 +810,7 @@ get_obdfilter_param() {
 		osd-*.$device.$name 2>&1" | grep -v 'Found no match'
 }
 
-set_obdfilter_param() {
+set_osd_param() {
 	local nodes=$1
 	local device=${2:-$FSNAME-OST*}
 	local name=$3
@@ -3453,7 +3453,7 @@ get_mnt_devs() {
 	local dev
 
 	if [ "$type" == ost ]; then
-		devs=$(get_obdfilter_param $node "" mntdev)
+		devs=$(get_osd_param $node "" mntdev)
 	else
 		devs=$(do_node $node \
 		       "lctl get_param -n osd-*.$FSNAME-M*.mntdev")

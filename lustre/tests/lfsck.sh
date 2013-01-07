@@ -131,7 +131,7 @@ get_ost_dev() {
 	local ost_dev
 
 	ost_name=$(ostname_from_index $obdidx)
-	ost_dev=$(get_obdfilter_param $node $ost_name mntdev)
+	ost_dev=$(get_osd_param $node $ost_name mntdev)
 	if [ $? -ne 0 ]; then
 		printf "unable to find OST%04x on $facet\n" $obdidx
 		return 1
