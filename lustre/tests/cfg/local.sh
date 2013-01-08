@@ -36,7 +36,16 @@ STRIPE_BYTES=${STRIPE_BYTES:-1048576}
 STRIPES_PER_OBJ=${STRIPES_PER_OBJ:-0}
 TIMEOUT=${TIMEOUT:-20}
 PTLDEBUG=${PTLDEBUG:-0x33f1504}
-DEBUG_SIZE=${DEBUG_SIZE:-10}
+
+# promise 2MB for every cpu
+if [ -f /sys/devices/system/cpu/possible ]; then
+    _debug_mb=$((($(cut -d "-" -f 2 /sys/devices/system/cpu/possible)+1)*2))
+else
+    _debug_mb=$(($(getconf _NPROCESSORS_CONF)*2))
+fi
+
+DEBUG_SIZE=${DEBUG_SIZE:-$_debug_mb}
+
 SUBSYSTEM=${SUBSYSTEM:- 0xffb7e3ff}
 
 L_GETGROUPS=${L_GETGROUPS:-`do_facet mds which l_getgroups || echo`}
