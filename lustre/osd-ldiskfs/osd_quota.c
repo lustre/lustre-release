@@ -906,7 +906,8 @@ out:
 }
 
 static int set_quota_index_version(const struct lu_env *env,
-				   struct dt_object *dt)
+				   struct dt_object *dt,
+				   dt_obj_version_t version)
 {
 	struct osd_device	*osd = osd_obj2dev(osd_dt_obj(dt));
 	struct thandle		*th;
@@ -926,7 +927,7 @@ static int set_quota_index_version(const struct lu_env *env,
 		GOTO(out, rc);
 
 	th->th_sync = 1;
-	dt_version_set(env, dt, 1, th);
+	dt_version_set(env, dt, version, th);
 out:
 	dt_trans_stop(env, &osd->od_dt_dev, th);
 	RETURN(rc);
@@ -1064,10 +1065,10 @@ out:
 			       PFID(lu_object_fid(&dt->do_lu)), rc);
 	}
 
-	/* bump index version to 1, so the migration will be skipped
-	 * next time. */
+	/* bump index version to 1 (or 2 if migration happened), so the
+	 * migration will be skipped next time. */
 	if (rc == 0) {
-		rc = set_quota_index_version(env , dt);
+		rc = set_quota_index_version(env , dt, converted ? 2 : 1);
 		if (rc)
 			CERROR("%s: Failed to set quota index("DFID") "
 			       "version, rc:%d\n", osd->od_svname,
