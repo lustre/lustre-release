@@ -1322,6 +1322,14 @@ wait_update_facet () {
     wait_update  $(facet_active_host $facet) "$@"
 }
 
+sync_all_data() {
+    if [ $(lustre_version_code mds) -ge $(version_code 2.2.58) ]; then
+        do_nodes $(comma_list $(osts_nodes)) \
+            "lctl set_param -n osd*.*OS*.force_sync 1 2>&1" |
+            grep -v 'Found no match' || true
+    fi
+}
+
 wait_delete_completed_mds() {
 	[[ $(lustre_version_code mds) -lt $(version_code 2.2.58) ]] &&
 		return 0

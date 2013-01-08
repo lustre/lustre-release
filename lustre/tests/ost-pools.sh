@@ -1173,8 +1173,16 @@ test_23() {
     add_pool $POOL "$FSNAME-OST[$TGT_FIRST-$TGT_MAX/3]" "$TGT"
     create_dir $dir $POOL
 
-    $LFS quotaoff -ug $MOUNT
-    $LFS quotacheck -ug $MOUNT
+    # XXX remove the interoperability code once we drop the old server
+    #     (< 2.3.50) support.
+    if [ $(lustre_version_code mds) -lt $(version_code 2.3.50) ]; then
+        $LFS quotaoff -ug $MOUNT
+        $LFS quotacheck -ug $MOUNT
+    else
+        do_facet mgs $LCTL conf_param $FSNAME.quota.ost=ug
+        sleep 5
+    fi
+
     LIMIT=$((BUNIT_SZ * (OSTCOUNT + 1)))
     $LFS setquota -u $TSTUSR -b $LIMIT -B $LIMIT $dir
     sleep 3
@@ -1197,7 +1205,14 @@ test_23() {
     $LFS quota -v -u $TSTUSR $dir
 
     echo "second run"
-    $LFS quotaoff -ug $MOUNT
+    # XXX remove the interoperability code once we drop the old server
+    #     (< 2.3.50) support.
+    if [ $(lustre_version_code mds) -lt $(version_code 2.3.50) ]; then
+        $LFS quotaoff -ug $MOUNT
+    else
+        do_facet mgs $LCTL conf_param $FSNAME.quota.ost=none
+        sleep 5
+    fi
     # $LFS setquota -u $TSTUSR -b $LIMIT -B $LIMIT $dir
     chown $TSTUSR.$TSTUSR $dir
     i=0
