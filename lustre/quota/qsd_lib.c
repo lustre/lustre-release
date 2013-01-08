@@ -367,11 +367,9 @@ static int qsd_qtype_init(const struct lu_env *env, struct qsd_instance *qsd,
 	LASSERT(qqi->qqi_acct_obj == NULL);
 	qqi->qqi_acct_obj = acct_obj_lookup(env, qsd->qsd_dev, qtype);
 	if (IS_ERR(qqi->qqi_acct_obj)) {
-		LCONSOLE_WARN("%s: No %s space accounting support. Please "
-			      "consider running tunefs.lustre --quota on an "
-			      "unmounted filesystem to enable quota accounting."
-			      "\n", qsd->qsd_svname,
-			      QTYPE_NAME(qtype));
+		CDEBUG(D_QUOTA, "%s: no %s space accounting support rc:%ld\n",
+		       qsd->qsd_svname, QTYPE_NAME(qtype),
+		       PTR_ERR(qqi->qqi_acct_obj));
 		qqi->qqi_acct_obj = NULL;
 		qsd->qsd_acct_failed = true;
 	}
