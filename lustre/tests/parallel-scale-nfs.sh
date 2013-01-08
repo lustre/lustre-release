@@ -49,19 +49,19 @@ generate_machine_file $clients $MACHINEFILE || \
 num_clients=$(get_node_count ${clients//,/ })
 
 # compilbench
-if [ "$SLOW" = "no" ]; then
-    cbench_IDIRS=2
-    cbench_RUNS=2
-fi
+# Run short iteration in nfs mode
+cbench_IDIRS=${cbench_IDIRS:-2}
+cbench_RUNS=${cbench_RUNS:-2}
 
 # metabench
-[ "$SLOW" = "no" ] && mbench_NFILES=10000
+# Run quick in nfs mode
+mbench_NFILES=${mbench_NFILES:-10000}
 
 # connectathon
 [ "$SLOW" = "no" ] && cnt_NRUN=2
 
 # IOR
-[ "$SLOW" = "no" ] && ior_DURATION=30
+ior_DURATION=${ior_DURATION:-30}
 
 # source the common file after all parameters are set to take affect
 . $LUSTRE/tests/functions.sh
