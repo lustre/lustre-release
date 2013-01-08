@@ -4092,8 +4092,10 @@ setup_test101bc() {
 	STRIPE_COUNT=$OSTCOUNT
 	STRIPE_OFFSET=0
 
-	$LCTL set_param -n obdfilter.*.read_cache_enable=0
-	$LCTL set_param -n obdfilter.*.writethrough_cache_enable=0
+	local list=$(comma_list $(osts_nodes))
+	set_obdfilter_param $list '' read_cache_enable 0
+	set_obdfilter_param $list '' writethrough_cache_enable 0
+
 	trap cleanup_test101bc EXIT
 	# prepare the read-ahead file
 	$SETSTRIPE $DIR/$tfile -s $STRIPE_SIZE -i $STRIPE_OFFSET -c $OSTCOUNT
@@ -4105,8 +4107,10 @@ cleanup_test101bc() {
 	trap 0
 	rm -rf $DIR/$tdir
 	rm -f $DIR/$tfile
-	$LCTL set_param -n obdfilter.*.read_cache_enable=1
-	$LCTL set_param -n obdfilter.*.writethrough_cache_enable=1
+
+	local list=$(comma_list $(osts_nodes))
+	set_obdfilter_param $list '' read_cache_enable 1
+	set_obdfilter_param $list '' writethrough_cache_enable 1
 }
 
 calc_total() {
@@ -6335,9 +6339,8 @@ run_test 150 "truncate/append tests"
 function roc_hit() {
     local list=$(comma_list $(osts_nodes))
 
-    ACCNUM=$(do_nodes $list $LCTL get_param -n obdfilter.*.stats | \
+    echo $(get_obdfilter_param $list '' stats |
         awk '/'cache_hit'/ {sum+=$2} END {print sum}')
-    echo $ACCNUM
 }
 
 function set_cache() {
@@ -6347,7 +6350,7 @@ function set_cache() {
         on=0;
     fi
     local list=$(comma_list $(osts_nodes))
-    do_nodes $list lctl set_param obdfilter.*.${1}_cache_enable $on
+    set_obdfilter_param $list '' $1_cache_enable $on
 
     cancel_lru_locks osc
 }
@@ -6363,14 +6366,14 @@ test_151() {
 	local CPAGES=3
 
 	# check whether obdfilter is cache capable at all
-	if ! do_nodes $list $LCTL get_param -n obdfilter.*.read_cache_enable > /dev/null; then
+	if ! get_obdfilter_param $list '' read_cache_enable >/dev/null; then
 		echo "not cache-capable obdfilter"
 		return 0
 	fi
 
 	# make sure cache is enabled on all obdfilters
-	do_nodes $list $LCTL set_param obdfilter.*.read_cache_enable=1
-	do_nodes $list $LCTL set_param obdfilter.*.writethrough_cache_enable=1
+	set_obdfilter_param $list '' read_cache_enable 1
+	set_obdfilter_param $list '' writethrough_cache_enable 1
 
 	# pages should be in the case right after write
 	dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
@@ -6384,7 +6387,7 @@ test_151() {
 
 	# the following read invalidates the cache
 	cancel_lru_locks osc
-	do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable 0
+	set_obdfilter_param $list '' read_cache_enable 0
 	cat $DIR/$tfile >/dev/null
 
 	# now data shouldn't be found in the cache
@@ -6396,8 +6399,8 @@ test_151() {
 		error "IN CACHE: before: $BEFORE, after: $AFTER"
 	fi
 
-	do_nodes $list $LCTL set_param -n obdfilter.*.read_cache_enable=1
-	do_nodes $list $LCTL set_param obdfilter.*.writethrough_cache_enable=1
+	set_obdfilter_param $list '' read_cache_enable 1
+	set_obdfilter_param $list '' writethrough_cache_enable 1
 	rm -f $DIR/$tfile
 }
 run_test 151 "test cache on oss and controls ==============================="
