@@ -209,6 +209,22 @@ struct ptlrpc_nrs_policy *nrs_request_policy(struct ptlrpc_nrs_request *nrq)
 	return nrs_request_resource(nrq)->res_policy;
 }
 
+#define NRS_LPROCFS_QUANTUM_NAME_REG	"reg_quantum:"
+#define NRS_LPROCFS_QUANTUM_NAME_HP	"hp_quantum:"
+
+/**
+ * the maximum size of nrs_crrn_client::cc_quantum
+ */
+#define LPROCFS_NRS_QUANTUM_MAX		65535
+
+/**
+ * Max valid command string is the size of the labels, plus "65535" twice, plus
+ * a separating space character.
+ */
+#define LPROCFS_NRS_WR_QUANTUM_MAX_CMD					       \
+ sizeof(NRS_LPROCFS_QUANTUM_NAME_REG __stringify(LPROCFS_NRS_QUANTUM_MAX) " "  \
+        NRS_LPROCFS_QUANTUM_NAME_HP __stringify(LPROCFS_NRS_QUANTUM_MAX))
+
 /* recovd_thread.c */
 
 int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink);

@@ -1741,6 +1741,10 @@ out:
 
 /* ptlrpc/nrs_fifo.c */
 extern struct ptlrpc_nrs_pol_conf nrs_conf_fifo;
+#if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
+/* ptlrpc/nrs_crr.c */
+extern struct ptlrpc_nrs_pol_conf nrs_conf_crrn;
+#endif
 
 /**
  * Adds all policies that ship with the ptlrpc module, to NRS core's list of
@@ -1760,6 +1764,12 @@ int ptlrpc_nrs_init(void)
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_fifo);
 	if (rc != 0)
 		GOTO(fail, rc);
+
+#if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
+	rc = ptlrpc_nrs_policy_register(&nrs_conf_crrn);
+	if (rc != 0)
+		GOTO(fail, rc);
+#endif
 
 	RETURN(rc);
 fail:
