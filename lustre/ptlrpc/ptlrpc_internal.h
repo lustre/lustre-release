@@ -213,7 +213,7 @@ struct ptlrpc_nrs_policy *nrs_request_policy(struct ptlrpc_nrs_request *nrq)
 #define NRS_LPROCFS_QUANTUM_NAME_HP	"hp_quantum:"
 
 /**
- * the maximum size of nrs_crrn_client::cc_quantum
+ * the maximum size of nrs_crrn_client::cc_quantum and nrs_orr_data::od_quantum.
  */
 #define LPROCFS_NRS_QUANTUM_MAX		65535
 

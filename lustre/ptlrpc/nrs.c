@@ -1744,6 +1744,9 @@ extern struct ptlrpc_nrs_pol_conf nrs_conf_fifo;
 #if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
 /* ptlrpc/nrs_crr.c */
 extern struct ptlrpc_nrs_pol_conf nrs_conf_crrn;
+/* ptlrpc/nrs_orr.c */
+extern struct ptlrpc_nrs_pol_conf nrs_conf_orr;
+extern struct ptlrpc_nrs_pol_conf nrs_conf_trr;
 #endif
 
 /**
@@ -1767,6 +1770,14 @@ int ptlrpc_nrs_init(void)
 
 #if defined HAVE_SERVER_SUPPORT && defined(__KERNEL__)
 	rc = ptlrpc_nrs_policy_register(&nrs_conf_crrn);
+	if (rc != 0)
+		GOTO(fail, rc);
+
+	rc = ptlrpc_nrs_policy_register(&nrs_conf_orr);
+	if (rc != 0)
+		GOTO(fail, rc);
+
+	rc = ptlrpc_nrs_policy_register(&nrs_conf_trr);
 	if (rc != 0)
 		GOTO(fail, rc);
 #endif

@@ -824,7 +824,7 @@ do {                                                                          \
 #define OBD_SLAB_ALLOC_PTR_GFP(ptr, slab, flags)			      \
 	OBD_SLAB_ALLOC_GFP(ptr, slab, sizeof *(ptr), flags)
 
-#define OBD_SLAB_CPT_ALLOC_PTR_GFP(ptr, slab, ctab, cpt, flags)		      \
+#define OBD_SLAB_CPT_ALLOC_PTR_GFP(ptr, slab, cptab, cpt, flags)		      \
 	OBD_SLAB_CPT_ALLOC_GFP(ptr, slab, cptab, cpt, sizeof *(ptr), flags)
 
 #define OBD_SLAB_FREE_PTR(ptr, slab)					      \

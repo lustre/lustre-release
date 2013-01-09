@@ -1778,7 +1778,8 @@ got_request:
  * ptlrpc_server_handle_req later on.
  */
 static int
-ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt)
+ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt,
+			    struct ptlrpc_thread *thread)
 {
 	struct ptlrpc_service	*svc = svcpt->scp_service;
 	struct ptlrpc_request	*req;
@@ -1897,6 +1898,8 @@ ptlrpc_server_handle_req_in(struct ptlrpc_service_part *svcpt)
                 DEBUG_REQ(D_ERROR, req, "Dropping request with 0 timeout");
                 goto err_req;
         }
+
+        req->rq_svc_thread = thread;
 
         ptlrpc_at_add_timed(req);
 
@@ -2239,7 +2242,7 @@ liblustre_check_services (void *arg)
 		svcpt->scp_nthrs_running++;
 
 		do {
-			rc = ptlrpc_server_handle_req_in(svcpt);
+			rc = ptlrpc_server_handle_req_in(svcpt, NULL);
 			rc |= ptlrpc_server_handle_reply(svcpt);
 			rc |= ptlrpc_at_check_timed(svcpt);
 			rc |= ptlrpc_server_handle_request(svcpt, NULL);
@@ -2501,7 +2504,10 @@ static int ptlrpc_main(void *arg)
 
 		/* Process all incoming reqs before handling any */
 		if (ptlrpc_server_request_incoming(svcpt)) {
-			ptlrpc_server_handle_req_in(svcpt);
+			lu_context_enter(&env->le_ctx);
+			ptlrpc_server_handle_req_in(svcpt, thread);
+			lu_context_exit(&env->le_ctx);
+
 			/* but limit ourselves in case of flood */
 			if (counter++ < 100)
 				continue;
