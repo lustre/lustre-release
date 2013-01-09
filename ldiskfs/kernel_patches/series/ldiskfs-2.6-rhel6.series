@@ -31,3 +31,4 @@ ext4-back-dquot-to-rhel6.patch
 ext4-nocmtime-2.6-rhel5.patch
 ext4-vmalloc-rhel6.patch
 ext4-store-tree-generation-at-find.patch
+ext4-fix-ext4_mb_add_n_trim.patch

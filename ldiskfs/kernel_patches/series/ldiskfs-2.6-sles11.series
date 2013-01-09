@@ -34,3 +34,4 @@ ext4-hash-indexed-dir-dotdot-update.patch
 ext4-disable-write-bar-by-default.patch
 ext4-mballoc-pa_free-mismatch.patch
 ext4-export-64bit-name-hash.patch
+ext4-fix-ext4_mb_add_n_trim.patch
