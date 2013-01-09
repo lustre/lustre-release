@@ -6,3 +6,4 @@ blkdev_tunables-2.6-rhel6.patch
 export-2.6.32-vanilla.patch
 jbd2-jcberr-2.6-rhel6.patch
 bh_lru_size_config.patch
+replace_dqptr_sem.patch
