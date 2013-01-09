@@ -1240,10 +1240,22 @@ LB_LINUX_TRY_COMPILE([
         pde.pde_users   = 0;
 ],[
         AC_MSG_RESULT([yes])
-        AC_DEFINE(HAVE_PROCFS_USERS, 1, 
+        AC_DEFINE(HAVE_PROCFS_USERS, 1,
                 [kernel has pde_users member in procfs entry struct])
 ],[
-        AC_MSG_RESULT([no])
+	LB_LINUX_TRY_COMPILE([
+		#include "$LINUX/fs/proc/internal.h"
+	],[
+		struct proc_dir_entry_aux pde_aux;
+
+		pde_aux.pde_users = 0;
+	],[
+		AC_MSG_RESULT([yes])
+		AC_DEFINE(HAVE_PROCFS_USERS, 1,
+			[kernel has pde_users member in proc_dir_entry_aux])
+	],[
+		AC_MSG_RESULT([no])
+	])
 ])
 ])
 
