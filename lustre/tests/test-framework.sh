@@ -224,6 +224,33 @@ case `uname -r` in
     *) EXT=".ko"; USE_QUOTA=yes;;
 esac
 
+oos_full() {
+	local -a AVAILA
+	local -a GRANTA
+	local -a TOTALA
+	local OSCFULL=1
+	AVAILA=($(do_nodes $(comma_list $(osts_nodes)) \
+	          $LCTL get_param obdfilter.*.kbytesavail))
+	GRANTA=($(do_nodes $(comma_list $(osts_nodes)) \
+	          $LCTL get_param -n obdfilter.*.tot_granted))
+	TOTALA=($(do_nodes $(comma_list $(osts_nodes)) \
+	          $LCTL get_param -n obdfilter.*.kbytestotal))
+	for ((i=0; i<${#AVAILA[@]}; i++)); do
+		local -a AVAIL1=(${AVAILA[$i]//=/ })
+		local -a TOTAL=(${TOTALA[$i]//=/ })
+		GRANT=$((${GRANTA[$i]}/1024))
+		# allow 1% of total space in bavail because of delayed
+		# allocation with ZFS which might release some free space after
+		# txg commit.  For small devices, we set a mininum of 8MB
+		local LIMIT=$((${TOTAL} / 100 + 8000))
+		echo -n $(echo ${AVAIL1[0]} | cut -d"." -f2) avl=${AVAIL1[1]} \
+			grnt=$GRANT diff=$((AVAIL1[1] - GRANT)) limit=${LIMIT}
+		[ $((AVAIL1[1] - GRANT)) -lt $LIMIT ] && OSCFULL=0 && \
+			echo " FULL" || echo
+	done
+	return $OSCFULL
+}
+
 pool_list () {
    do_facet mgs lctl pool_list $1
 }
@@ -1355,7 +1382,7 @@ wait_delete_completed_mds() {
 	local changes
 
 	# find MDS with pending deletions
-	for node in $(mdts_nodes); do
+	for node in $(facet_host mds); do
 		changes=$(do_node $node "lctl get_param -n osc.*MDT*.sync_*" \
 			2>/dev/null | calc_sum)
 		if [ -z "$changes" ] || [ $changes -eq 0 ]; then

@@ -4,6 +4,7 @@ set -e
 
 LUSTRE=${LUSTRE:-$(cd $(dirname $0)/..; echo $PWD)}
 . $LUSTRE/tests/test-framework.sh
+. ${CONFIG:=$LUSTRE/tests/cfg/${NAME}.sh}
 
 export PATH=$LUSTRE/utils:$PATH
 LFS=${LFS:-lfs}
@@ -60,25 +61,8 @@ fi
 # flush cache to OST(s) so avail numbers are correct
 sync; sleep 1 ; sync
 
-for OSC in `$LCTL get_param -N osc.*-osc-*.kbytesavail | cut -d"." -f1-2`; do
-	AVAIL=`$LCTL get_param -n $OSC.kbytesavail`
-	GRANT=$((`$LCTL get_param -n $OSC.cur_grant_bytes` / 1024))
-	echo -n "$(echo $OSC | cut -d"." -f2) avl=$AVAIL grnt=$GRANT diff=$(($AVAIL - $GRANT))"
-	[ $(($AVAIL - $GRANT)) -lt 400 ] && OSCFULL=full && echo -n " FULL"
-	echo " "
-done
-
-# FIXME - This test reports false failures
-# The grants from multiple clients need to be added together and compared 
-# against the kbytesavail.
-#/proc/fs/lustre/osc/lustre-OST0001-osc-c3b04200/kbytesavail:16248
-#/proc/fs/lustre/osc/lustre-OST0001-osc-c3b04200/cur_grant_bytes:4313088
-#/proc/fs/lustre/osc/lustre-OST0001-osc-c3b04e00/cur_grant_bytes:12660736
-
-if [ -z "$OSCFULL" ]; then
+if ! oos_full; then
 	echo "no OSTs are close to full"
-	$LCTL get_param "osc.*-osc-*.kbytesavail"
-	$LCTL get_param "osc.*-osc-*.cur*"
 	SUCCESS=0
 fi
 
