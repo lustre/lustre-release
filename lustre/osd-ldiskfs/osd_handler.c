@@ -89,6 +89,22 @@ static const struct dt_object_operations      osd_obj_otable_it_ops;
 static const struct dt_index_operations       osd_index_iam_ops;
 static const struct dt_index_operations       osd_index_ea_ops;
 
+#ifdef OSD_TRACK_DECLARES
+int osd_trans_declare_op2rb[] = {
+	[OSD_OT_ATTR_SET]	= OSD_OT_ATTR_SET,
+	[OSD_OT_PUNCH]		= OSD_OT_MAX,
+	[OSD_OT_XATTR_SET]	= OSD_OT_XATTR_SET,
+	[OSD_OT_CREATE]		= OSD_OT_DESTROY,
+	[OSD_OT_DESTROY]	= OSD_OT_CREATE,
+	[OSD_OT_REF_ADD]	= OSD_OT_REF_DEL,
+	[OSD_OT_REF_DEL]	= OSD_OT_REF_ADD,
+	[OSD_OT_WRITE]		= OSD_OT_WRITE,
+	[OSD_OT_INSERT]		= OSD_OT_DELETE,
+	[OSD_OT_DELETE]		= OSD_OT_INSERT,
+	[OSD_OT_QUOTA]		= OSD_OT_MAX,
+};
+#endif
+
 static int osd_has_index(const struct osd_object *obj)
 {
         return obj->oo_dt.do_index_ops != NULL;
@@ -662,6 +678,11 @@ static struct thandle *osd_trans_create(const struct lu_env *env,
                 oti->oti_dev = osd_dt_dev(d);
                 CFS_INIT_LIST_HEAD(&oh->ot_dcb_list);
                 osd_th_alloced(oh);
+
+		memset(oti->oti_declare_ops, 0, OSD_OT_MAX);
+		memset(oti->oti_declare_ops_rb, 0, OSD_OT_MAX);
+		memset(oti->oti_declare_ops_cred, 0, OSD_OT_MAX);
+		oti->oti_rollback = false;
         }
         RETURN(th);
 }
@@ -700,22 +721,34 @@ int osd_trans_start(const struct lu_env *env, struct dt_device *d,
 		      osd_journal(dev)->j_max_transaction_buffers);
 #ifdef OSD_TRACK_DECLARES
 		CWARN("  create: %u/%u, delete: %u/%u, destroy: %u/%u\n",
-		      oh->ot_declare_create, oh->ot_declare_create_cred,
-		      oh->ot_declare_delete, oh->ot_declare_delete_cred,
-		      oh->ot_declare_destroy, oh->ot_declare_destroy_cred);
+		      oti->oti_declare_ops[OSD_OT_CREATE],
+		      oti->oti_declare_ops_cred[OSD_OT_CREATE],
+		      oti->oti_declare_ops[OSD_OT_DELETE],
+		      oti->oti_declare_ops_cred[OSD_OT_DELETE],
+		      oti->oti_declare_ops[OSD_OT_DESTROY],
+		      oti->oti_declare_ops_cred[OSD_OT_DESTROY]);
 		CWARN("  attr_set: %u/%u, xattr_set: %u/%u\n",
-		      oh->ot_declare_attr_set, oh->ot_declare_attr_set_cred,
-		      oh->ot_declare_xattr_set, oh->ot_declare_xattr_set_cred);
+		      oti->oti_declare_ops[OSD_OT_ATTR_SET],
+		      oti->oti_declare_ops_cred[OSD_OT_ATTR_SET],
+		      oti->oti_declare_ops[OSD_OT_XATTR_SET],
+		      oti->oti_declare_ops_cred[OSD_OT_XATTR_SET]);
 		CWARN("  write: %u/%u, punch: %u/%u, quota %u/%u\n",
-		      oh->ot_declare_write, oh->ot_declare_write_cred,
-		      oh->ot_declare_punch, oh->ot_declare_punch_cred,
-		      oh->ot_declare_quota, oh->ot_declare_quota_cred);
+		      oti->oti_declare_ops[OSD_OT_WRITE],
+		      oti->oti_declare_ops_cred[OSD_OT_WRITE],
+		      oti->oti_declare_ops[OSD_OT_PUNCH],
+		      oti->oti_declare_ops_cred[OSD_OT_PUNCH],
+		      oti->oti_declare_ops[OSD_OT_QUOTA],
+		      oti->oti_declare_ops_cred[OSD_OT_QUOTA]);
 		CWARN("  insert: %u/%u, delete: %u/%u\n",
-		      oh->ot_declare_insert, oh->ot_declare_insert_cred,
-		      oh->ot_declare_delete, oh->ot_declare_destroy_cred);
+		      oti->oti_declare_ops[OSD_OT_INSERT],
+		      oti->oti_declare_ops_cred[OSD_OT_INSERT],
+		      oti->oti_declare_ops[OSD_OT_DESTROY],
+		      oti->oti_declare_ops_cred[OSD_OT_DESTROY]);
 		CWARN("  ref_add: %u/%u, ref_del: %u/%u\n",
-		      oh->ot_declare_ref_add, oh->ot_declare_ref_add_cred,
-		      oh->ot_declare_ref_del, oh->ot_declare_ref_del_cred);
+		      oti->oti_declare_ops[OSD_OT_REF_ADD],
+		      oti->oti_declare_ops_cred[OSD_OT_REF_ADD],
+		      oti->oti_declare_ops[OSD_OT_REF_DEL],
+		      oti->oti_declare_ops_cred[OSD_OT_REF_DEL]);
 
 		if (last_credits != oh->ot_credits &&
 		    time_after(jiffies, last_printed + 60 * HZ)) {
@@ -1395,8 +1428,8 @@ static int osd_declare_attr_set(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, attr_set,
-		       osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
+	osd_trans_declare_op(env, oh, OSD_OT_ATTR_SET,
+			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
 
 	if (attr == NULL || obj->oo_inode == NULL)
 		RETURN(rc);
@@ -1601,7 +1634,7 @@ static int osd_attr_set(const struct lu_env *env,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
-        OSD_EXEC_OP(handle, attr_set);
+	osd_trans_exec_op(env, handle, OSD_OT_ATTR_SET);
 
         inode = obj->oo_inode;
 	ll_vfs_dq_init(inode);
@@ -1969,7 +2002,8 @@ static int osd_declare_object_create(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, create, osd_dto_credits_noquota[DTO_OBJECT_CREATE]);
+	osd_trans_declare_op(env, oh, OSD_OT_CREATE,
+			     osd_dto_credits_noquota[DTO_OBJECT_CREATE]);
 	/* XXX: So far, only normal fid needs be inserted into the oi,
 	 *      things could be changed later. Revise following code then. */
 	if (fid_is_norm(lu_object_fid(&dt->do_lu)) &&
@@ -1977,8 +2011,8 @@ static int osd_declare_object_create(const struct lu_env *env,
 			   lu_object_fid(&dt->do_lu))) {
 		/* Reuse idle OI block may cause additional one OI block
 		 * to be changed. */
-		OSD_DECLARE_OP(oh, insert,
-			       osd_dto_credits_noquota[DTO_INDEX_INSERT] + 1);
+		osd_trans_declare_op(env, oh, OSD_OT_INSERT,
+				osd_dto_credits_noquota[DTO_INDEX_INSERT] + 1);
 	}
 	/* If this is directory, then we expect . and .. to be inserted as
 	 * well. The one directory block always needs to be created for the
@@ -1986,9 +2020,9 @@ static int osd_declare_object_create(const struct lu_env *env,
 	 * block), there is no danger of needing a tree for the first block.
 	 */
 	if (attr && S_ISDIR(attr->la_mode)) {
-		OSD_DECLARE_OP(oh, insert,
-			       osd_dto_credits_noquota[DTO_WRITE_BASE]);
-		OSD_DECLARE_OP(oh, insert, 0);
+		osd_trans_declare_op(env, oh, OSD_OT_INSERT,
+				     osd_dto_credits_noquota[DTO_WRITE_BASE]);
+		osd_trans_declare_op(env, oh, OSD_OT_INSERT, 0);
 	}
 
 	if (!attr)
@@ -2035,7 +2069,8 @@ static int osd_object_create(const struct lu_env *env, struct dt_object *dt,
 		 * 'tune2fs -O quota' will take care of creating them */
 		RETURN(-EPERM);
 
-        OSD_EXEC_OP(th, create);
+	osd_trans_exec_op(env, th, OSD_OT_CREATE);
+	osd_trans_declare_rb(env, th, OSD_OT_REF_ADD);
 
         result = __osd_object_create(info, obj, attr, hint, dof, th);
         if (result == 0)
@@ -2065,13 +2100,15 @@ static int osd_declare_object_destroy(const struct lu_env *env,
 	LASSERT(oh->ot_handle == NULL);
 	LASSERT(inode);
 
-	OSD_DECLARE_OP(oh, delete, osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
+	osd_trans_declare_op(env, oh, OSD_OT_DELETE,
+			     osd_dto_credits_noquota[DTO_OBJECT_DELETE]);
 	/* XXX: So far, only normal fid needs to be inserted into the OI,
 	 *      so only normal fid needs to be removed from the OI also.
 	 * Recycle idle OI leaf may cause additional three OI blocks
 	 * to be changed. */
-	OSD_DECLARE_OP(oh, destroy, fid_is_norm(lu_object_fid(&dt->do_lu)) ?
-			osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3 : 0);
+	osd_trans_declare_op(env, oh, OSD_OT_DESTROY,
+			     fid_is_norm(lu_object_fid(&dt->do_lu)) ?
+			     osd_dto_credits_noquota[DTO_INDEX_DELETE] + 3 : 0);
 
 	/* one less inode */
 	rc = osd_declare_inode_qid(env, inode->i_uid, inode->i_gid, -1, oh,
@@ -2116,7 +2153,7 @@ static int osd_object_destroy(const struct lu_env *env,
 		inode->i_sb->s_op->dirty_inode(inode);
 	}
 
-        OSD_EXEC_OP(th, destroy);
+	osd_trans_exec_op(env, th, OSD_OT_DESTROY);
 
         result = osd_oi_delete(osd_oti_get(env), osd, fid, th);
 	mutex_unlock(&inode->i_mutex);
@@ -2257,7 +2294,8 @@ static int osd_object_ea_create(const struct lu_env *env, struct dt_object *dt,
 		 * 'tune2fs -O quota' will take care of creating them */
 		RETURN(-EPERM);
 
-        OSD_EXEC_OP(th, create);
+	osd_trans_exec_op(env, th, OSD_OT_CREATE);
+	osd_trans_declare_rb(env, th, OSD_OT_REF_ADD);
 
         result = __osd_object_create(info, obj, attr, hint, dof, th);
         /* objects under osd root shld have igif fid, so dont add fid EA */
@@ -2286,7 +2324,8 @@ static int osd_declare_object_ref_add(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, ref_add, osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
+	osd_trans_declare_op(env, oh, OSD_OT_REF_ADD,
+			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
 
 	return 0;
 }
@@ -2305,7 +2344,7 @@ static int osd_object_ref_add(const struct lu_env *env,
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
-        OSD_EXEC_OP(th, ref_add);
+	osd_trans_exec_op(env, th, OSD_OT_REF_ADD);
 
 	/*
 	 * DIR_NLINK feature is set for compatibility reasons if:
@@ -2348,7 +2387,8 @@ static int osd_declare_object_ref_del(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, ref_del, osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
+	osd_trans_declare_op(env, oh, OSD_OT_REF_DEL,
+			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE]);
 
 	return 0;
 }
@@ -2367,7 +2407,7 @@ static int osd_object_ref_del(const struct lu_env *env, struct dt_object *dt,
         LASSERT(osd_write_locked(env, obj));
         LASSERT(th != NULL);
 
-        OSD_EXEC_OP(th, ref_del);
+	osd_trans_exec_op(env, th, OSD_OT_REF_DEL);
 
 	spin_lock(&obj->oo_guard);
 	LASSERT(inode->i_nlink > 0);
@@ -2442,9 +2482,10 @@ static int osd_declare_xattr_set(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, xattr_set, strcmp(name, XATTR_NAME_VERSION) == 0 ?
-		       osd_dto_credits_noquota[DTO_ATTR_SET_BASE] :
-		       osd_dto_credits_noquota[DTO_XATTR_SET]);
+	osd_trans_declare_op(env, oh, OSD_OT_XATTR_SET,
+			     strcmp(name, XATTR_NAME_VERSION) == 0 ?
+			     osd_dto_credits_noquota[DTO_ATTR_SET_BASE] :
+			     osd_dto_credits_noquota[DTO_XATTR_SET]);
 
 	return 0;
 }
@@ -2488,8 +2529,8 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
-        OSD_EXEC_OP(handle, xattr_set);
-        return __osd_xattr_set(env, dt, buf, name, fl);
+	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
+	return __osd_xattr_set(env, dt, buf, name, fl);
 }
 
 /*
@@ -2526,7 +2567,8 @@ static int osd_declare_xattr_del(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, xattr_set, osd_dto_credits_noquota[DTO_XATTR_SET]);
+	osd_trans_declare_op(env, oh, OSD_OT_XATTR_SET,
+			     osd_dto_credits_noquota[DTO_XATTR_SET]);
 
 	return 0;
 }
@@ -2552,7 +2594,7 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
                 return -EACCES;
 
-        OSD_EXEC_OP(handle, xattr_set);
+	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
 
 	ll_vfs_dq_init(inode);
         dentry->d_inode = inode;
@@ -2898,7 +2940,8 @@ static int osd_index_declare_iam_delete(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, delete, osd_dto_credits_noquota[DTO_INDEX_DELETE]);
+	osd_trans_declare_op(env, oh, OSD_OT_DELETE,
+			     osd_dto_credits_noquota[DTO_INDEX_DELETE]);
 
 	return 0;
 }
@@ -2937,7 +2980,7 @@ static int osd_index_iam_delete(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_DELETE))
                 RETURN(-EACCES);
 
-        OSD_EXEC_OP(handle, delete);
+	osd_trans_exec_op(env, handle, OSD_OT_DELETE);
 
         ipd = osd_idx_ipd_get(env, bag);
         if (unlikely(ipd == NULL))
@@ -2975,7 +3018,8 @@ static int osd_index_declare_ea_delete(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, delete, osd_dto_credits_noquota[DTO_INDEX_DELETE]);
+	osd_trans_declare_op(env, oh, OSD_OT_DELETE,
+			     osd_dto_credits_noquota[DTO_INDEX_DELETE]);
 
 	inode = osd_dt_obj(dt)->oo_inode;
 	LASSERT(inode);
@@ -3028,7 +3072,7 @@ static int osd_index_ea_delete(const struct lu_env *env, struct dt_object *dt,
         LASSERT(dt_object_exists(dt));
         LASSERT(handle != NULL);
 
-        OSD_EXEC_OP(handle, delete);
+	osd_trans_exec_op(env, handle, OSD_OT_DELETE);
 
         oh = container_of(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle != NULL);
@@ -3150,7 +3194,8 @@ static int osd_index_declare_iam_insert(const struct lu_env *env,
         oh = container_of0(handle, struct osd_thandle, ot_super);
         LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, insert, osd_dto_credits_noquota[DTO_INDEX_INSERT]);
+	osd_trans_declare_op(env, oh, OSD_OT_INSERT,
+			     osd_dto_credits_noquota[DTO_INDEX_INSERT]);
 
 	return 0;
 }
@@ -3189,7 +3234,7 @@ static int osd_index_iam_insert(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
 		RETURN(-EACCES);
 
-        OSD_EXEC_OP(th, insert);
+	osd_trans_exec_op(env, th, OSD_OT_INSERT);
 
         ipd = osd_idx_ipd_get(env, bag);
         if (unlikely(ipd == NULL))
@@ -3582,7 +3627,8 @@ static int osd_index_declare_ea_insert(const struct lu_env *env,
 	oh = container_of0(handle, struct osd_thandle, ot_super);
 	LASSERT(oh->ot_handle == NULL);
 
-	OSD_DECLARE_OP(oh, insert, osd_dto_credits_noquota[DTO_INDEX_INSERT]);
+	osd_trans_declare_op(env, oh, OSD_OT_INSERT,
+			     osd_dto_credits_noquota[DTO_INDEX_INSERT]);
 
 	inode = osd_dt_obj(dt)->oo_inode;
 	LASSERT(inode);
@@ -3633,6 +3679,8 @@ static int osd_index_ea_insert(const struct lu_env *env, struct dt_object *dt,
         LASSERT(osd_invariant(obj));
         LASSERT(dt_object_exists(dt));
         LASSERT(th != NULL);
+
+	osd_trans_exec_op(env, th, OSD_OT_INSERT);
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_INDEX_INSERT))
                 RETURN(-EACCES);

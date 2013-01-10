@@ -272,26 +272,6 @@ struct osd_device {
 	struct qsd_instance      *od_quota_slave;
 };
 
-#define OSD_TRACK_DECLARES
-#ifdef OSD_TRACK_DECLARES
-#define OSD_DECLARE_OP(oh, op, credits)					\
-do {									\
-	LASSERT((oh)->ot_handle == NULL);				\
-	((oh)->ot_declare_ ##op)++;					\
-	((oh)->ot_declare_ ##op ##_cred) += (credits);			\
-	(oh)->ot_credits += (credits);					\
-} while (0)
-#define OSD_EXEC_OP(handle, op)						\
-do {									\
-	struct osd_thandle *oh = container_of(handle, typeof(*oh), ot_super); \
-	LASSERT((oh)->ot_declare_ ##op > 0);				\
-	((oh)->ot_declare_ ##op)--;					\
-} while (0)
-#else
-#define OSD_DECLARE_OP(oh, op, credits) (oh)->ot_credits += (credits)
-#define OSD_EXEC_OP(oh, op)
-#endif
-
 /* There are at most 10 uid/gids are affected in a transaction, and
  * that's rename case:
  * - 2 for source parent uid & gid;
@@ -305,6 +285,23 @@ do {									\
  */
 #define OSD_MAX_UGID_CNT        10
 
+enum {
+	OSD_OT_ATTR_SET		= 0,
+	OSD_OT_PUNCH		= 1,
+	OSD_OT_XATTR_SET	= 2,
+	OSD_OT_CREATE		= 3,
+	OSD_OT_DESTROY		= 4,
+	OSD_OT_REF_ADD		= 5,
+	OSD_OT_REF_DEL		= 6,
+	OSD_OT_WRITE		= 7,
+	OSD_OT_INSERT		= 8,
+	OSD_OT_DELETE		= 9,
+	OSD_OT_QUOTA		= 10,
+	OSD_OT_MAX		= 11
+};
+
+#define OSD_TRACK_DECLARES
+
 struct osd_thandle {
         struct thandle          ot_super;
         handle_t               *ot_handle;
@@ -317,36 +314,6 @@ struct osd_thandle {
         unsigned short          ot_id_type;
         uid_t                   ot_id_array[OSD_MAX_UGID_CNT];
 	struct lquota_trans    *ot_quota_trans;
-
-#ifdef OSD_TRACK_DECLARES
-	/* Tracking for transaction credits, to allow debugging and optimizing
-	 * cases where a large number of credits are being allocated for
-	 * single transaction. */
-	unsigned char		ot_declare_attr_set;
-	unsigned char		ot_declare_punch;
-	unsigned char		ot_declare_xattr_set;
-	unsigned char		ot_declare_create;
-	unsigned char		ot_declare_destroy;
-	unsigned char		ot_declare_ref_add;
-	unsigned char		ot_declare_ref_del;
-	unsigned char		ot_declare_write;
-	unsigned char		ot_declare_insert;
-	unsigned char		ot_declare_delete;
-	unsigned char		ot_declare_quota;
-
-	unsigned short		ot_declare_attr_set_cred;
-	unsigned short		ot_declare_punch_cred;
-	unsigned short		ot_declare_xattr_set_cred;
-	unsigned short		ot_declare_create_cred;
-	unsigned short		ot_declare_destroy_cred;
-	unsigned short		ot_declare_ref_add_cred;
-	unsigned short		ot_declare_ref_del_cred;
-	unsigned short		ot_declare_write_cred;
-	unsigned short		ot_declare_insert_cred;
-	unsigned short		ot_declare_delete_cred;
-	unsigned short		ot_declare_quota_cred;
-#endif
-
 #if OSD_THANDLE_STATS
         /** time when this handle was allocated */
         cfs_time_t oth_alloced;
@@ -598,6 +565,17 @@ struct osd_thread_info {
 	union lquota_rec	oti_quota_rec;
 	__u64			oti_quota_id;
 	struct lu_seq_range	oti_seq_range;
+
+#ifdef OSD_TRACK_DECLARES
+	/* Tracking for transaction credits, to allow debugging and optimizing
+	 * cases where a large number of credits are being allocated for
+	 * single transaction. */
+	unsigned char		oti_declare_ops[OSD_OT_MAX];
+	unsigned char		oti_declare_ops_rb[OSD_OT_MAX];
+	unsigned short		oti_declare_ops_cred[OSD_OT_MAX];
+	bool			oti_rollback;
+#endif
+
 };
 
 extern int ldiskfs_pdo;
@@ -852,6 +830,78 @@ struct dentry *osd_child_dentry_by_inode(const struct lu_env *env,
         child_dentry->d_name.len = namelen;
         return child_dentry;
 }
+
+#ifdef OSD_TRACK_DECLARES
+extern int osd_trans_declare_op2rb[];
+
+static inline void osd_trans_declare_op(const struct lu_env *env,
+					struct osd_thandle *oh,
+					unsigned int op, int credits)
+{
+	struct osd_thread_info *oti = osd_oti_get(env);
+
+	LASSERT(oh->ot_handle == NULL);
+	LASSERT(op < OSD_OT_MAX);
+
+	oti->oti_declare_ops[op]++;
+	oti->oti_declare_ops_cred[op] += credits;
+	oh->ot_credits += credits;
+}
+
+static inline void osd_trans_exec_op(const struct lu_env *env,
+				     struct thandle *th, unsigned int op)
+{
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_thandle     *oh  = container_of(th, struct osd_thandle,
+						   ot_super);
+	unsigned int		rb;
+
+	LASSERT(oh->ot_handle != NULL);
+	LASSERT(op < OSD_OT_MAX);
+
+	if (likely(!oti->oti_rollback && oti->oti_declare_ops[op] > 0)) {
+		oti->oti_declare_ops[op]--;
+		oti->oti_declare_ops_rb[op]++;
+	} else {
+		/* all future updates are considered rollback */
+		oti->oti_rollback = true;
+		rb = osd_trans_declare_op2rb[op];
+		LASSERTF(rb < OSD_OT_MAX, "op = %u\n", op);
+		LASSERTF(oti->oti_declare_ops_rb[rb] > 0, "rb = %u\n", rb);
+		oti->oti_declare_ops_rb[rb]--;
+	}
+}
+
+static inline void osd_trans_declare_rb(const struct lu_env *env,
+					struct thandle *th, unsigned int op)
+{
+	struct osd_thread_info *oti = osd_oti_get(env);
+	struct osd_thandle     *oh  = container_of(th, struct osd_thandle,
+						   ot_super);
+
+	LASSERT(oh->ot_handle != NULL);
+	LASSERT(op < OSD_OT_MAX);
+
+	oti->oti_declare_ops_rb[op]++;
+}
+#else
+static inline void osd_trans_declare_op(const struct lu_env *env,
+					struct osd_thandle *oh,
+					unsigned int op, int credits)
+{
+	oh->ot_credits += credits;
+}
+
+static inline void osd_trans_exec_op(const struct lu_env *env,
+				     struct thandle *th, unsigned int op)
+{
+}
+
+static inline void osd_trans_declare_rb(const struct lu_env *env,
+					struct thandle *th, unsigned int op)
+{
+}
+#endif
 
 /**
  * Helper function to pack the fid, ldiskfs stores fid in packed format.
