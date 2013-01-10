@@ -110,34 +110,34 @@ int main(int argc, char **argv) {
         signal(SIGINT, handler);
 
         while(1) {
-                struct hsm_action_list *hal;
-                struct hsm_action_item *hai;
-                int msgsize, i = 0;
+		struct hsm_action_list *hal;
+		struct hsm_action_item *hai;
+		int msgsize, i = 0;
 
 		rc = llapi_hsm_copytool_recv(ctdata, &hal, &msgsize);
-                if (rc == -ESHUTDOWN) {
-                        fprintf(stderr, "shutting down");
-                        break;
-                }
-                if (rc < 0) {
-                        fprintf(stderr, "Message receive: %s", strerror(-rc));
-                        break;
-                }
-                if (msgsize == 0)
-                        continue; /* msg not for us */
+		if (rc == -ESHUTDOWN) {
+			fprintf(stderr, "shutting down");
+			break;
+		}
+		if (rc < 0) {
+			fprintf(stderr, "Message receive: %s", strerror(-rc));
+			break;
+		}
+		if (msgsize == 0)
+			continue; /* msg not for us */
 
-                printf("Copytool fs=%s archive#=%d item_count=%d\n",
-                       hal->hal_fsname, hal->hal_archive_num, hal->hal_count);
+		printf("Copytool fs=%s archive#=%d item_count=%d\n",
+			hal->hal_fsname, hal->hal_archive_id, hal->hal_count);
 
-                hai = hai_zero(hal);
-                while (++i <= hal->hal_count) {
-                        printf("Item %d: action %d reclen %d\n", i,
-                               hai->hai_action, hai->hai_len);
-                        printf(" "DFID" gid="LPU64" cookie="LPU64"\n",
-                               PFID(&hai->hai_fid), hai->hai_gid,
-                               hai->hai_cookie);
-                        hai = hai_next(hai);
-                }
+		hai = hai_zero(hal);
+		while (++i <= hal->hal_count) {
+			printf("Item %d: action %d reclen %d\n", i,
+				hai->hai_action, hai->hai_len);
+			printf(" "DFID" gid="LPU64" cookie="LPU64"\n",
+				PFID(&hai->hai_fid), hai->hai_gid,
+				hai->hai_cookie);
+			hai = hai_next(hai);
+		}
 
 		llapi_hsm_copytool_free(&hal);
         }

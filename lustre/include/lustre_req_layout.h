@@ -193,6 +193,7 @@ extern struct req_format RQF_MDS_HSM_ACTION;
 extern struct req_format RQF_MDS_HSM_PROGRESS;
 extern struct req_format RQF_MDS_HSM_CT_REGISTER;
 extern struct req_format RQF_MDS_HSM_CT_UNREGISTER;
+extern struct req_format RQF_MDS_HSM_REQUEST;
 /* OST req_format */
 extern struct req_format RQF_OST_CONNECT;
 extern struct req_format RQF_OST_DISCONNECT;
@@ -286,6 +287,7 @@ extern struct req_msg_field RMF_MDS_HSM_ARCHIVE;
 extern struct req_msg_field RMF_HSM_USER_STATE;
 extern struct req_msg_field RMF_HSM_STATE_SET;
 extern struct req_msg_field RMF_MDS_HSM_CURRENT_ACTION;
+extern struct req_msg_field RMF_MDS_HSM_REQUEST;
 
 /* seq-mgr fields */
 extern struct req_msg_field RMF_SEQ_OPC;

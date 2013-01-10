@@ -235,12 +235,12 @@ int llapi_hsm_copytool_recv(void *priv, struct hsm_action_list **halh,
 	/* Check that we have registered for this archive #
 	 * if 0 registered, we serve any archive */
 	if (ct->archives &&
-	    ((1 << (hal->hal_archive_num - 1)) & ct->archives) == 0) {
+	    ((1 << (hal->hal_archive_id - 1)) & ct->archives) == 0) {
 		llapi_err_noerrno(LLAPI_MSG_INFO,
 				  "This copytool does not service archive #%d,"
 				  " ignoring this request."
 				  " Mask of served archive is 0x%.8X",
-				  hal->hal_archive_num, ct->archives);
+				  hal->hal_archive_id, ct->archives);
 		rc = -EAGAIN;
 
 		goto out_free;
@@ -532,6 +532,49 @@ int llapi_hsm_current_action(const char *path, struct hsm_current_action *hca)
 		return -errno;
 
 	rc = ioctl(fd, LL_IOC_HSM_ACTION, hca);
+	/* If error, save errno value */
+	rc = rc ? -errno : 0;
+
+	close(fd);
+	return rc;
+}
+
+/**
+ * Allocate a hsm_user_request with the specified carateristics.
+ * This structure should be freed with free().
+ *
+ * \return an allocated structure on success, NULL otherwise.
+ */
+struct hsm_user_request *llapi_hsm_user_request_alloc(int itemcount,
+						      int data_len)
+{
+	int len = 0;
+
+	len += sizeof(struct hsm_user_request);
+	len += sizeof(struct hsm_user_item) * itemcount;
+	len += data_len;
+
+	return (struct hsm_user_request *)malloc(len);
+}
+
+/**
+ * Send a HSM request to Lustre, described in \param request.
+ *
+ * This request should be allocated with llapi_hsm_user_request_alloc().
+ *
+ * \param mnt Should be the Lustre moint point.
+ * \return 0 on success, an error code otherwise.
+ */
+int llapi_hsm_request(char *mnt, struct hsm_user_request *request)
+{
+	int rc;
+	int fd;
+
+	rc = get_root_path(WANT_FD, NULL, &fd, mnt, -1);
+	if (rc)
+		return rc;
+
+	rc = ioctl(fd, LL_IOC_HSM_REQUEST, request);
 	/* If error, save errno value */
 	rc = rc ? -errno : 0;
 

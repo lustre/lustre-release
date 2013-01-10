@@ -613,6 +613,14 @@ static const struct req_msg_field *mdt_hsm_state_set[] = {
 	&RMF_HSM_STATE_SET,
 };
 
+static const struct req_msg_field *mdt_hsm_request[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_MDS_HSM_REQUEST,
+	&RMF_MDS_HSM_USER_ITEM,
+	&RMF_GENERIC_DATA,
+};
+
 static struct req_format *req_formats[] = {
         &RQF_OBD_PING,
         &RQF_OBD_SET_INFO,
@@ -658,6 +666,7 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_HSM_STATE_GET,
 	&RQF_MDS_HSM_STATE_SET,
 	&RQF_MDS_HSM_ACTION,
+	&RQF_MDS_HSM_REQUEST,
         &RQF_QC_CALLBACK,
         &RQF_OST_CONNECT,
         &RQF_OST_DISCONNECT,
@@ -1067,6 +1076,11 @@ struct req_msg_field RMF_MDS_HSM_ARCHIVE =
 		    sizeof(__u32), lustre_swab_generic_32s, NULL);
 EXPORT_SYMBOL(RMF_MDS_HSM_ARCHIVE);
 
+struct req_msg_field RMF_MDS_HSM_REQUEST =
+	DEFINE_MSGF("hsm_request", 0, sizeof(struct hsm_request),
+		    lustre_swab_hsm_request, NULL);
+EXPORT_SYMBOL(RMF_MDS_HSM_REQUEST);
+
 /*
  * Request formats.
  */
@@ -1390,6 +1404,10 @@ EXPORT_SYMBOL(RQF_MDS_HSM_STATE_GET);
 struct req_format RQF_MDS_HSM_STATE_SET =
 	DEFINE_REQ_FMT0("MDS_HSM_STATE_SET", mdt_hsm_state_set, empty);
 EXPORT_SYMBOL(RQF_MDS_HSM_STATE_SET);
+
+struct req_format RQF_MDS_HSM_REQUEST =
+	DEFINE_REQ_FMT0("MDS_HSM_REQUEST", mdt_hsm_request, empty);
+EXPORT_SYMBOL(RQF_MDS_HSM_REQUEST);
 
 /* This is for split */
 struct req_format RQF_MDS_WRITEPAGE =

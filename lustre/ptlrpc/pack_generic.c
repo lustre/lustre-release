@@ -2534,3 +2534,13 @@ void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk)
 }
 EXPORT_SYMBOL(lustre_swab_hsm_progress_kernel);
 
+void lustre_swab_hsm_request(struct hsm_request *hr)
+{
+	__swab32s(&hr->hr_action);
+	__swab32s(&hr->hr_archive_id);
+	__swab64s(&hr->hr_flags);
+	__swab32s(&hr->hr_itemcount);
+	__swab32s(&hr->hr_data_len);
+}
+EXPORT_SYMBOL(lustre_swab_hsm_request);
+

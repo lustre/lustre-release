@@ -855,35 +855,52 @@ static inline char *hsm_user_action2name(enum hsm_user_action  a)
         }
 }
 
+/*
+ * List of hr_flags (bit field)
+ */
+#define HSM_FORCE_ACTION 0x0001
+/* used by CT, connot be set by user */
+#define HSM_GHOST_COPY   0x0002
+
+/**
+ * Contains all the fixed part of struct hsm_user_request.
+ *
+ */
+struct hsm_request {
+	__u32 hr_action;	/* enum hsm_user_action */
+	__u32 hr_archive_id;	/* archive id, used only with HUA_ARCHIVE */
+	__u64 hr_flags;		/* request flags */
+	__u32 hr_itemcount;	/* item count in hur_user_item vector */
+	__u32 hr_data_len;
+};
+
 struct hsm_user_item {
        lustre_fid        hui_fid;
        struct hsm_extent hui_extent;
 } __attribute__((packed));
 
 struct hsm_user_request {
-        __u32 hur_action;    /* enum hsm_user_action */
-        __u32 hur_archive_num; /* archive number, used only with HUA_ARCHIVE */
-        __u32 hur_itemcount;
-        __u32 hur_data_len;
-        struct hsm_user_item hur_user_item[0];
-        /* extra data blob at end of struct (after all
-         * hur_user_items), only use helpers to access it
-         */
+	struct hsm_request	hur_request;
+	struct hsm_user_item	hur_user_item[0];
+	/* extra data blob at end of struct (after all
+	 * hur_user_items), only use helpers to access it
+	 */
 } __attribute__((packed));
 
 /** Return pointer to data field in a hsm user request */
 static inline void *hur_data(struct hsm_user_request *hur)
 {
-        return &(hur->hur_user_item[hur->hur_itemcount]);
+	return &(hur->hur_user_item[hur->hur_request.hr_itemcount]);
 }
 
 /** Compute the current length of the provided hsm_user_request. */
 static inline int hur_len(struct hsm_user_request *hur)
 {
-        int data_offset;
+	int data_offset;
 
-        data_offset = hur_data(hur) - (void *)hur;
-        return (data_offset + hur->hur_data_len);
+	data_offset = hur_data(hur) - (void *)hur;
+	data_offset += hur->hur_request.hr_data_len;
+	return data_offset;
 }
 
 /****** HSM RPCs to copytool *****/
@@ -963,7 +980,7 @@ struct hsm_action_list {
 	__u32 hal_count;       /* number of hai's to follow */
 	__u64 hal_compound_id; /* returned by coordinator */
 	__u64 hal_flags;
-	__u32 hal_archive_num; /* which archive backend */
+	__u32 hal_archive_id; /* which archive backend */
 	__u32 padding1;
 	char  hal_fsname[0];   /* null-terminated */
 	/* struct hsm_action_item[hal_count] follows, aligned on 8-byte

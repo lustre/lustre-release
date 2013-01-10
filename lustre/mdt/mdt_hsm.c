@@ -75,6 +75,14 @@ static int mdt_hsm_coordinator_get_actions(struct mdt_thread_info *mti,
 	return 0;
 }
 
+static int mdt_hsm_coordinator_actions(struct mdt_thread_info *info,
+				       struct hsm_action_list *hal,
+				       __u64 *compound_id,
+				       int mti_attr_is_valid)
+{
+	return 0;
+}
+
 /**
  * Update on-disk HSM attributes.
  */
@@ -349,7 +357,7 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 		GOTO(out_ucred, -ENOMEM);
 
 	hal->hal_version = HAL_VERSION;
-	hal->hal_archive_num = 0;
+	hal->hal_archive_id = 0;
 	hal->hal_flags = 0;
 	obd_uuid2fsname(hal->hal_fsname, mdt2obd_dev(info->mti_mdt)->obd_name,
 			MTI_NAME_MAXLEN);
@@ -404,3 +412,110 @@ out_ucred:
 	mdt_exit_ucred(info);
 	return rc;
 }
+
+/**
+ * Process the HSM actions described in a struct hsm_user_request.
+ *
+ * The action described in hur will be send to coordinator to be saved and
+ * processed later or either handled directly if hur.hur_action is HUA_RELEASE.
+ *
+ * This is MDS_HSM_REQUEST RPC handler.
+ */
+int mdt_hsm_request(struct mdt_thread_info *info)
+{
+	struct req_capsule		*pill = info->mti_pill;
+	struct mdt_body			*body;
+	struct hsm_request		*hr;
+	struct hsm_user_item		*hui;
+	struct hsm_action_list		*hal;
+	struct hsm_action_item		*hai;
+	char				*opaque;
+	enum hsm_copytool_action	 action = HSMA_NONE;
+	__u64				 compound_id;
+	int				 len, i, rc;
+	ENTRY;
+
+	body = req_capsule_client_get(pill, &RMF_MDT_BODY);
+	LASSERT(body);
+
+	hr = req_capsule_client_get(pill, &RMF_MDS_HSM_REQUEST);
+	LASSERT(hr);
+
+	hui = req_capsule_client_get(pill, &RMF_MDS_HSM_USER_ITEM);
+	LASSERT(hui);
+
+	opaque = req_capsule_client_get(pill, &RMF_GENERIC_DATA);
+	LASSERT(opaque);
+
+	/* Sanity check. Nothing to do with an empty list */
+	if (hr->hr_itemcount == 0)
+		RETURN(0);
+
+	/* Only valid if client is remote */
+	rc = mdt_init_ucred(info, body);
+	if (rc)
+		RETURN(err_serious(rc));
+
+	switch (hr->hr_action) {
+	/* code to be removed in hsm1_merge and final patch */
+	case HUA_RELEASE:
+		CERROR("Release action is not working in hsm1_coord\n");
+		GOTO(out_ucred, rc = -EINVAL);
+		break;
+	/* end of code to be removed */
+	case HUA_ARCHIVE:
+		action = HSMA_ARCHIVE;
+		break;
+	case HUA_RESTORE:
+		action = HSMA_RESTORE;
+		break;
+	case HUA_REMOVE:
+		action = HSMA_REMOVE;
+		break;
+	case HUA_CANCEL:
+		action = HSMA_CANCEL;
+		break;
+	default:
+		CERROR("Unknown hsm action: %d\n", hr->hr_action);
+		GOTO(out_ucred, rc = -EINVAL);
+	}
+
+	len = sizeof(*hal) + MTI_NAME_MAXLEN /* fsname */ +
+		cfs_size_round(sizeof(*hai) * hr->hr_itemcount) +
+		cfs_size_round(hr->hr_data_len * hr->hr_itemcount);
+
+	OBD_ALLOC(hal, len);
+	if (hal == NULL)
+		GOTO(out_ucred, rc = -ENOMEM);
+
+	hal->hal_version = HAL_VERSION;
+	hal->hal_archive_id = hr->hr_archive_id;
+	hal->hal_flags = hr->hr_flags;
+	obd_uuid2fsname(hal->hal_fsname, mdt2obd_dev(info->mti_mdt)->obd_name,
+			MTI_NAME_MAXLEN);
+
+	hal->hal_count = hr->hr_itemcount;
+	hai = hai_zero(hal);
+	for (i = 0; i < hr->hr_itemcount; i++) {
+		hai->hai_action = action;
+		hai->hai_cookie = 0;
+		hai->hai_gid = 0;
+		hai->hai_fid = hui[i].hui_fid;
+		hai->hai_extent = hui[i].hui_extent;
+		memcpy(hai->hai_data, opaque, hr->hr_data_len);
+		hai->hai_len = sizeof(*hai) + hr->hr_data_len;
+		hai = hai_next(hai);
+	}
+
+	rc = mdt_hsm_coordinator_actions(info, hal, &compound_id, 0);
+	/* ENODATA error code is needed only for implicit requests */
+	if (rc == -ENODATA)
+		rc = 0;
+
+	OBD_FREE(hal, len);
+	EXIT;
+out_ucred:
+	mdt_exit_ucred(info);
+	return rc;
+}
+

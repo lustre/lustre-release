@@ -108,7 +108,7 @@ static int mdc_wr_kuc(struct file *file, const char *buffer,
 
 	hal = (struct hsm_action_list *)(lh + 1);
 	hal->hal_version = HAL_VERSION;
-	hal->hal_archive_num = 1;
+	hal->hal_archive_id = 1;
 	hal->hal_flags = 0;
 	obd_uuid2fsname(hal->hal_fsname, obd->obd_name, MTI_NAME_MAXLEN);
 

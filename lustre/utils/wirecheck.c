@@ -1891,7 +1891,7 @@ check_hsm_action_list(void)
 	CHECK_MEMBER(hsm_action_list, hal_count);
 	CHECK_MEMBER(hsm_action_list, hal_compound_id);
 	CHECK_MEMBER(hsm_action_list, hal_flags);
-	CHECK_MEMBER(hsm_action_list, hal_archive_num);
+	CHECK_MEMBER(hsm_action_list, hal_archive_id);
 	CHECK_MEMBER(hsm_action_list, padding1);
 	CHECK_MEMBER(hsm_action_list, hal_fsname);
 }
@@ -1974,6 +1974,29 @@ check_hsm_current_action(void)
 	CHECK_MEMBER(hsm_current_action, hca_state);
 	CHECK_MEMBER(hsm_current_action, hca_action);
 	CHECK_MEMBER(hsm_current_action, hca_location);
+}
+
+static void
+check_hsm_request(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(hsm_request);
+	CHECK_MEMBER(hsm_request, hr_action);
+	CHECK_MEMBER(hsm_request, hr_archive_id);
+	CHECK_MEMBER(hsm_request, hr_flags);
+	CHECK_MEMBER(hsm_request, hr_itemcount);
+	CHECK_MEMBER(hsm_request, hr_data_len);
+	CHECK_VALUE_X(HSM_FORCE_ACTION);
+	CHECK_VALUE_X(HSM_GHOST_COPY);
+}
+
+static void
+check_hsm_user_request(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(hsm_user_request);
+	CHECK_MEMBER(hsm_user_request, hur_request);
+	CHECK_MEMBER(hsm_user_request, hur_user_item);
 }
 
 static void
@@ -2344,6 +2367,8 @@ main(int argc, char **argv)
 	check_hsm_user_state();
 	check_hsm_state_set();
 	check_hsm_current_action();
+	check_hsm_request();
+	check_hsm_user_request();
 
 	printf("}\n\n");
 

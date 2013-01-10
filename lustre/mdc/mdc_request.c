@@ -1322,7 +1322,6 @@ static int mdc_ioc_hsm_state_get(struct obd_export *exp,
 				 struct md_op_data *op_data)
 {
 	struct hsm_user_state	*hus = op_data->op_data;
-	struct obd_import	*imp = class_exp2cliimp(exp);
 	struct hsm_user_state	*req_hus;
 	struct ptlrpc_request	*req;
 	int			 rc;
@@ -1347,12 +1346,8 @@ static int mdc_ioc_hsm_state_get(struct obd_export *exp,
 	ptlrpc_request_set_replen(req);
 
 	rc = ptlrpc_queue_wait(req);
-	if (rc) {
-		/* check connection error first */
-		if (imp->imp_connect_error)
-			rc = imp->imp_connect_error;
+	if (rc)
 		GOTO(out, rc);
-	}
 
 	req_hus = req_capsule_server_get(&req->rq_pill, &RMF_HSM_USER_STATE);
 	if (req_hus == NULL)
@@ -1370,7 +1365,6 @@ static int mdc_ioc_hsm_state_set(struct obd_export *exp,
 				 struct md_op_data *op_data)
 {
 	struct hsm_state_set	*hss = op_data->op_data;
-	struct obd_import	*imp = class_exp2cliimp(exp);
 	struct hsm_state_set	*req_hss;
 	struct ptlrpc_request	*req;
 	int			 rc;
@@ -1400,12 +1394,7 @@ static int mdc_ioc_hsm_state_set(struct obd_export *exp,
 	ptlrpc_request_set_replen(req);
 
 	rc = ptlrpc_queue_wait(req);
-	if (rc) {
-		/* check connection error first */
-		if (imp->imp_connect_error)
-			rc = imp->imp_connect_error;
-		GOTO(out, rc);
-	}
+	GOTO(out, rc);
 
 	EXIT;
 out:
@@ -1413,6 +1402,60 @@ out:
 	return rc;
 }
 
+static int mdc_ioc_hsm_request(struct obd_export *exp,
+			       struct hsm_user_request *hur)
+{
+	struct obd_import	*imp = class_exp2cliimp(exp);
+	struct ptlrpc_request	*req;
+	struct hsm_request	*req_hr;
+	struct hsm_user_item	*req_hui;
+	char			*req_opaque;
+	int			 rc;
+	ENTRY;
+
+	req = ptlrpc_request_alloc(imp, &RQF_MDS_HSM_REQUEST);
+	if (req == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	req_capsule_set_size(&req->rq_pill, &RMF_MDS_HSM_USER_ITEM, RCL_CLIENT,
+			     hur->hur_request.hr_itemcount
+			     * sizeof(struct hsm_user_item));
+	req_capsule_set_size(&req->rq_pill, &RMF_GENERIC_DATA, RCL_CLIENT,
+			     hur->hur_request.hr_data_len);
+
+	rc = ptlrpc_request_pack(req, LUSTRE_MDS_VERSION, MDS_HSM_REQUEST);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	mdc_pack_body(req, NULL, NULL, OBD_MD_FLRMTPERM, 0, 0, 0);
+
+	/* Copy hsm_request struct */
+	req_hr = req_capsule_client_get(&req->rq_pill, &RMF_MDS_HSM_REQUEST);
+	LASSERT(req_hr);
+	*req_hr = hur->hur_request;
+
+	/* Copy hsm_user_item structs */
+	req_hui = req_capsule_client_get(&req->rq_pill, &RMF_MDS_HSM_USER_ITEM);
+	LASSERT(req_hui);
+	memcpy(req_hui, hur->hur_user_item,
+	       hur->hur_request.hr_itemcount * sizeof(struct hsm_user_item));
+
+	/* Copy opaque field */
+	req_opaque = req_capsule_client_get(&req->rq_pill, &RMF_GENERIC_DATA);
+	LASSERT(req_opaque);
+	memcpy(req_opaque, hur_data(hur), hur->hur_request.hr_data_len);
+
+	ptlrpc_request_set_replen(req);
+
+	rc = ptlrpc_queue_wait(req);
+	GOTO(out, rc);
+
+out:
+	ptlrpc_req_finished(req);
+	return rc;
+}
 
 static struct kuc_hdr *changelog_kuc_hdr(char *buf, int len, int flags)
 {
@@ -1703,6 +1746,9 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 	case LL_IOC_HSM_ACTION:
 		rc = mdc_ioc_hsm_current_action(exp, karg);
 		GOTO(out, rc);
+	case LL_IOC_HSM_REQUEST:
+		rc = mdc_ioc_hsm_request(exp, karg);
+		GOTO(out, rc);
         case OBD_IOC_CLIENT_RECOVER:
                 rc = ptlrpc_recover_import(imp, data->ioc_inlbuf1, 0);
                 if (rc < 0)
@@ -1868,7 +1914,7 @@ static void lustre_swab_hal(struct hsm_action_list *h)
 
 	__swab32s(&h->hal_version);
 	__swab32s(&h->hal_count);
-	__swab32s(&h->hal_archive_num);
+	__swab32s(&h->hal_archive_id);
 	__swab64s(&h->hal_flags);
 	hai = hai_zero(h);
 	for (i = 0; i < h->hal_count; i++) {

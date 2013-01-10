@@ -108,6 +108,12 @@ static int lfs_hsm_state(int argc, char **argv);
 static int lfs_hsm_set(int argc, char **argv);
 static int lfs_hsm_clear(int argc, char **argv);
 static int lfs_hsm_action(int argc, char **argv);
+static int lfs_hsm_archive(int argc, char **argv);
+static int lfs_hsm_restore(int argc, char **argv);
+static int lfs_hsm_release(int argc, char **argv);
+static int lfs_hsm_remove(int argc, char **argv);
+static int lfs_hsm_cancel(int argc, char **argv);
+
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -253,6 +259,22 @@ command_t cmdlist[] = {
 	 "[--archived] [--lost] <file> ..."},
 	{"hsm_action", lfs_hsm_action, 0, "Display current HSM request for "
 	 "given files.\n" "usage: hsm_action <file> ..."},
+	{"hsm_archive", lfs_hsm_archive, 0,
+	 "Archive file to external storage.\n"
+	 "usage: hsm_archive [--filelist FILELIST] [--data DATA] [--archive NUM] "
+	 "<file> ..."},
+	{"hsm_restore", lfs_hsm_restore, 0,
+	 "Restore file from external storage.\n"
+	 "usage: hsm_restore [--filelist FILELIST] [--data DATA] <file> ..."},
+	{"hsm_release", lfs_hsm_release, 0,
+	 "Release files from Lustre.\n"
+	 "usage: hsm_release [--filelist FILELIST] [--data DATA] <file> ..."},
+	{"hsm_remove", lfs_hsm_remove, 0,
+	 "Remove file copy from external storage.\n"
+	 "usage: hsm_remove [--filelist FILELIST] [--data DATA] <file> ..."},
+	{"hsm_cancel", lfs_hsm_cancel, 0,
+	 "Cancel requests related to specified files.\n"
+	 "usage: hsm_cancel [--filelist FILELIST] [--data DATA] <file> ..."},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -2915,6 +2937,240 @@ static int lfs_hsm_set(int argc, char **argv)
 static int lfs_hsm_clear(int argc, char **argv)
 {
 	return lfs_hsm_change_flags(argc, argv, LFS_HSM_CLEAR);
+}
+
+/**
+ * Check file state and return its fid, to be used by lfs_hsm_request().
+ *
+ * \param[in]     file      Path to file to check
+ * \param[in,out] fid       Pointer to allocated lu_fid struct.
+ * \param[in,out] last_dev  Pointer to last device id used.
+ *
+ * \return 0 on success.
+ */
+static int lfs_hsm_prepare_file(char *file, struct lu_fid *fid,
+				dev_t *last_dev)
+{
+	struct stat	st;
+	int		rc;
+
+	rc = lstat(file, &st);
+	if (rc) {
+		fprintf(stderr, "Cannot stat %s: %s\n", file, strerror(-errno));
+		return -errno;
+	}
+	/* A request should be ... */
+	if (*last_dev != st.st_dev && *last_dev != 0) {
+		fprintf(stderr, "All files should be "
+			"on the same filesystem: %s\n", file);
+		return -EINVAL;
+	}
+	*last_dev = st.st_dev;
+
+	rc = llapi_path2fid(file, fid);
+	if (rc) {
+		fprintf(stderr, "Cannot read FID of %s: %s\n",
+			file, strerror(-rc));
+		return rc;
+	}
+	return 0;
+}
+
+static int lfs_hsm_request(int argc, char **argv, int action)
+{
+	struct option		 long_opts[] = {
+		{"filelist", 1, 0, 'l'},
+		{"data", 1, 0, 'D'},
+		{"archive", 1, 0, 'a'},
+		{0, 0, 0, 0}
+	};
+	dev_t			 last_dev = 0;
+	char			 short_opts[] = "l:D:a:";
+	struct hsm_user_request	*hur, *oldhur;
+	int			 c, i;
+	size_t			 len;
+	int			 nbfile;
+	char			*line = NULL;
+	char			*filelist = NULL;
+	char			 fullpath[PATH_MAX];
+	char			*opaque = NULL;
+	int			 opaque_len = 0;
+	int			 archive_id = 0;
+	FILE			*fp;
+	int			 nbfile_alloc = 0;
+	char			 some_file[PATH_MAX+1] = "";
+	int			 rc;
+
+	if (argc < 2)
+		return CMD_HELP;
+
+	optind = 0;
+	while ((c = getopt_long(argc, argv, short_opts,
+				long_opts, NULL)) != -1) {
+		switch (c) {
+		case 'l':
+			filelist = optarg;
+			break;
+		case 'D':
+			opaque = optarg;
+			break;
+		case 'a':
+			if (action != HUA_ARCHIVE) {
+				fprintf(stderr,
+					"error: -a is supported only "
+					"when archiving\n");
+				return CMD_HELP;
+			}
+			archive_id = atoi(optarg);
+			break;
+		case '?':
+			return CMD_HELP;
+		default:
+			fprintf(stderr, "error: %s: option '%s' unrecognized\n",
+				argv[0], argv[optind - 1]);
+			return CMD_HELP;
+		}
+	}
+
+	/* All remaining args are files, so we have at least nbfile */
+	nbfile = argc - optind;
+
+	if ((nbfile == 0) && (filelist == NULL))
+		return CMD_HELP;
+
+	if (opaque != NULL)
+		opaque_len = strlen(opaque);
+
+	/* Alloc the request structure with enough place to store all files
+	 * from command line. */
+	hur = llapi_hsm_user_request_alloc(nbfile, opaque_len);
+	if (hur == NULL) {
+		fprintf(stderr, "Cannot create the request: %s\n",
+			strerror(errno));
+		return errno;
+	}
+	nbfile_alloc = nbfile;
+
+	hur->hur_request.hr_action = action;
+	hur->hur_request.hr_archive_id = archive_id;
+	hur->hur_request.hr_flags = 0;
+
+	/* All remaining args are files, add them */
+	if (nbfile != 0)
+		strcpy(some_file, argv[optind]);
+
+	for (i = 0; i < nbfile; i++) {
+		hur->hur_user_item[i].hui_extent.length = -1;
+		rc = lfs_hsm_prepare_file(argv[optind + i],
+					  &hur->hur_user_item[i].hui_fid,
+					  &last_dev);
+		hur->hur_request.hr_itemcount++;
+		if (rc)
+			goto out_free;
+	}
+
+	/* from here stop using nb_file, use hur->hur_request.hr_itemcount */
+
+	/* If a filelist was specified, read the filelist from it. */
+	if (filelist != NULL) {
+		fp = fopen(filelist, "r");
+		if (fp == NULL) {
+			fprintf(stderr, "Cannot read the file list %s: %s\n",
+				filelist, strerror(errno));
+			rc = -errno;
+			goto out_free;
+		}
+
+		while ((rc = getline(&line, &len, fp)) != -1) {
+			struct hsm_user_item *hui;
+
+			/* If allocated buffer was too small, gets something
+			 * bigger */
+			if (nbfile_alloc <= hur->hur_request.hr_itemcount) {
+				nbfile_alloc = nbfile_alloc * 2 + 1;
+				oldhur = hur;
+				hur = llapi_hsm_user_request_alloc(nbfile_alloc,
+								   opaque_len);
+				if (hur == NULL) {
+					fprintf(stderr, "Cannot allocate "
+						"the request: %s\n",
+						strerror(errno));
+					hur = oldhur;
+					rc = -errno;
+					goto out_free;
+				}
+				memcpy(hur, oldhur, hur_len(oldhur));
+				free(oldhur);
+			}
+
+			/* Chop CR */
+			if (line[strlen(line) - 1] == '\n')
+				line[strlen(line) - 1] = '\0';
+
+			hui =
+			     &hur->hur_user_item[hur->hur_request.hr_itemcount];
+			hui->hui_extent.length = -1;
+			rc = lfs_hsm_prepare_file(line, &hui->hui_fid,
+						  &last_dev);
+			hur->hur_request.hr_itemcount++;
+			if (rc)
+				goto out_free;
+
+			if ((some_file[0] == '\0') &&
+			    (strlen(line) < sizeof(some_file)))
+				strcpy(some_file, line);
+		}
+
+		rc = fclose(fp);
+		if (line)
+			free(line);
+	}
+
+	/* If a --data was used, add it to the request */
+	hur->hur_request.hr_data_len = opaque_len;
+	if (opaque != NULL)
+		memcpy(hur_data(hur), opaque, opaque_len);
+
+	/* Send the HSM request */
+	if (realpath(some_file, fullpath) == NULL) {
+		fprintf(stderr, "Could not find path '%s': %s\n",
+			some_file, strerror(errno));
+	}
+	rc = llapi_hsm_request(fullpath, hur);
+	if (rc) {
+		fprintf(stderr, "Cannot send HSM request (use of %s): %s\n",
+			some_file, strerror(-rc));
+		goto out_free;
+	}
+
+out_free:
+	free(hur);
+	return rc;
+}
+
+static int lfs_hsm_archive(int argc, char **argv)
+{
+	return lfs_hsm_request(argc, argv, HUA_ARCHIVE);
+}
+
+static int lfs_hsm_restore(int argc, char **argv)
+{
+	return lfs_hsm_request(argc, argv, HUA_RESTORE);
+}
+
+static int lfs_hsm_release(int argc, char **argv)
+{
+	return lfs_hsm_request(argc, argv, HUA_RELEASE);
+}
+
+static int lfs_hsm_remove(int argc, char **argv)
+{
+	return lfs_hsm_request(argc, argv, HUA_REMOVE);
+}
+
+static int lfs_hsm_cancel(int argc, char **argv)
+{
+	return lfs_hsm_request(argc, argv, HUA_CANCEL);
 }
 
 int main(int argc, char **argv)

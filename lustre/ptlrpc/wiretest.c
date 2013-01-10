@@ -4209,10 +4209,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct hsm_action_list, hal_flags));
 	LASSERTF((int)sizeof(((struct hsm_action_list *)0)->hal_flags) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_action_list *)0)->hal_flags));
-	LASSERTF((int)offsetof(struct hsm_action_list, hal_archive_num) == 24, "found %lld\n",
-		 (long long)(int)offsetof(struct hsm_action_list, hal_archive_num));
-	LASSERTF((int)sizeof(((struct hsm_action_list *)0)->hal_archive_num) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct hsm_action_list *)0)->hal_archive_num));
+	LASSERTF((int)offsetof(struct hsm_action_list, hal_archive_id) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_action_list, hal_archive_id));
+	LASSERTF((int)sizeof(((struct hsm_action_list *)0)->hal_archive_id) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_action_list *)0)->hal_archive_id));
 	LASSERTF((int)offsetof(struct hsm_action_list, padding1) == 28, "found %lld\n",
 		 (long long)(int)offsetof(struct hsm_action_list, padding1));
 	LASSERTF((int)sizeof(((struct hsm_action_list *)0)->padding1) == 4, "found %lld\n",
@@ -4382,5 +4382,45 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct hsm_current_action, hca_location));
 	LASSERTF((int)sizeof(((struct hsm_current_action *)0)->hca_location) == 16, "found %lld\n",
 		 (long long)(int)sizeof(((struct hsm_current_action *)0)->hca_location));
+
+	/* Checks for struct hsm_request */
+	LASSERTF((int)sizeof(struct hsm_request) == 24, "found %lld\n",
+		 (long long)(int)sizeof(struct hsm_request));
+	LASSERTF((int)offsetof(struct hsm_request, hr_action) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_request, hr_action));
+	LASSERTF((int)sizeof(((struct hsm_request *)0)->hr_action) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_request *)0)->hr_action));
+	LASSERTF((int)offsetof(struct hsm_request, hr_archive_id) == 4, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_request, hr_archive_id));
+	LASSERTF((int)sizeof(((struct hsm_request *)0)->hr_archive_id) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_request *)0)->hr_archive_id));
+	LASSERTF((int)offsetof(struct hsm_request, hr_flags) == 8, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_request, hr_flags));
+	LASSERTF((int)sizeof(((struct hsm_request *)0)->hr_flags) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_request *)0)->hr_flags));
+	LASSERTF((int)offsetof(struct hsm_request, hr_itemcount) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_request, hr_itemcount));
+	LASSERTF((int)sizeof(((struct hsm_request *)0)->hr_itemcount) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_request *)0)->hr_itemcount));
+	LASSERTF((int)offsetof(struct hsm_request, hr_data_len) == 20, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_request, hr_data_len));
+	LASSERTF((int)sizeof(((struct hsm_request *)0)->hr_data_len) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_request *)0)->hr_data_len));
+	LASSERTF(HSM_FORCE_ACTION == 0x00000001UL, "found 0x%.8xUL\n",
+		(unsigned)HSM_FORCE_ACTION);
+	LASSERTF(HSM_GHOST_COPY == 0x00000002UL, "found 0x%.8xUL\n",
+		(unsigned)HSM_GHOST_COPY);
+
+	/* Checks for struct hsm_user_request */
+	LASSERTF((int)sizeof(struct hsm_user_request) == 24, "found %lld\n",
+		 (long long)(int)sizeof(struct hsm_user_request));
+	LASSERTF((int)offsetof(struct hsm_user_request, hur_request) == 0, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_user_request, hur_request));
+	LASSERTF((int)sizeof(((struct hsm_user_request *)0)->hur_request) == 24, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_user_request *)0)->hur_request));
+	LASSERTF((int)offsetof(struct hsm_user_request, hur_user_item) == 24, "found %lld\n",
+		 (long long)(int)offsetof(struct hsm_user_request, hur_user_item));
+	LASSERTF((int)sizeof(((struct hsm_user_request *)0)->hur_user_item) == 0, "found %lld\n",
+		 (long long)(int)sizeof(((struct hsm_user_request *)0)->hur_user_item));
 }
 

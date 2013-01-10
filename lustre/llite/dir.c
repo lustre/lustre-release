@@ -1630,6 +1630,40 @@ out_free:
                 RETURN(rc);
         case OBD_IOC_FID2PATH:
 		RETURN(ll_fid2path(inode, (void *)arg));
+	case LL_IOC_HSM_REQUEST: {
+		struct hsm_user_request	*hur;
+		int			 totalsize;
+
+		OBD_ALLOC_PTR(hur);
+		if (hur == NULL)
+			RETURN(-ENOMEM);
+
+		/* We don't know the true size yet; copy the fixed-size part */
+		if (cfs_copy_from_user(hur, (void *)arg, sizeof(*hur))) {
+			OBD_FREE_PTR(hur);
+			RETURN(-EFAULT);
+		}
+
+		/* Compute the whole struct size */
+		totalsize = hur_len(hur);
+		OBD_FREE_PTR(hur);
+		OBD_ALLOC_LARGE(hur, totalsize);
+		if (hur == NULL)
+			RETURN(-ENOMEM);
+
+		/* Copy the whole struct */
+		if (cfs_copy_from_user(hur, (void *)arg, totalsize)) {
+			OBD_FREE_LARGE(hur, totalsize);
+			RETURN(-EFAULT);
+		}
+
+		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), totalsize,
+				   hur, NULL);
+
+		OBD_FREE_LARGE(hur, totalsize);
+
+		RETURN(rc);
+	}
 	case LL_IOC_HSM_PROGRESS: {
 		struct hsm_progress_kernel	hpk;
 		struct hsm_progress		hp;
