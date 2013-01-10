@@ -173,38 +173,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	return -ENOMEM;
  }
  
-@@ -2502,14 +2518,6 @@ int ext4_mb_init(struct super_block *sb,
- 		i++;
- 	} while (i <= sb->s_blocksize_bits + 1);
- 
--	/* init file for buddy data */
--	ret = ext4_mb_init_backend(sb);
--	if (ret != 0) {
--		kfree(sbi->s_mb_offsets);
--		kfree(sbi->s_mb_maxs);
--		return ret;
--	}
--
- 	spin_lock_init(&sbi->s_md_lock);
- 	spin_lock_init(&sbi->s_bal_lock);
- 
-@@ -2579,6 +2587,15 @@ int ext4_mb_init(struct super_block *sb,
- 		spin_lock_init(&lg->lg_prealloc_lock);
- 	}
- 
-+	/* init file for buddy data */
-+	ret = ext4_mb_init_backend(sb);
-+	if (ret != 0) {
-+		kfree(sbi->s_mb_prealloc_table);
-+		kfree(sbi->s_mb_offsets);
-+		kfree(sbi->s_mb_maxs);
-+		return ret;
-+	}
-+
- 	if (sbi->s_proc) {
- 		struct proc_dir_entry *p;
- 		proc_create_data("mb_groups", S_IRUGO, sbi->s_proc,
-@@ -2639,7 +2656,10 @@ int ext4_mb_release(struct super_block *
+@@ -2639,7 +2647,10 @@ int ext4_mb_release(struct super_block *
  			EXT4_DESC_PER_BLOCK_BITS(sb);
  		for (i = 0; i < num_meta_group_infos; i++)
  			kfree(sbi->s_group_info[i]);
@@ -214,5 +183,5 @@ Index: linux-stage/fs/ext4/mballoc.c
 +		else
 +			kfree(sbi->s_group_info);
  	}
+ 	kfree(sbi->s_mb_prealloc_table);
  	kfree(sbi->s_mb_offsets);
- 	kfree(sbi->s_mb_maxs);

@@ -143,6 +143,21 @@ Index: linux-stage/fs/ext4/mballoc.c
  static int ext4_mb_seq_groups_open(struct inode *inode, struct file *file)
  {
  	struct super_block *sb = PDE(inode)->data;
+@@ -2397,14 +2497,6 @@ int ext4_mb_init(struct super_block *sb,
+ 		i++;
+ 	} while (i <= sb->s_blocksize_bits + 1);
+ 
+-	/* init file for buddy data */
+-	ret = ext4_mb_init_backend(sb);
+-	if (ret != 0) {
+-		kfree(sbi->s_mb_offsets);
+-		kfree(sbi->s_mb_maxs);
+-		return ret;
+-	}
+-
+ 	spin_lock_init(&sbi->s_md_lock);
+ 	spin_lock_init(&sbi->s_bal_lock);
+ 
 @@ -2411,12 +2505,56 @@
  	sbi->s_mb_max_to_scan = MB_DEFAULT_MAX_TO_SCAN;
  	sbi->s_mb_min_to_scan = MB_DEFAULT_MIN_TO_SCAN;
@@ -202,10 +217,19 @@ Index: linux-stage/fs/ext4/mballoc.c
  		kfree(sbi->s_mb_offsets);
  		kfree(sbi->s_mb_maxs);
  		return -ENOMEM;
-@@ -2430,9 +2568,18 @@
+@@ -2430,9 +2568,27 @@
  		spin_lock_init(&lg->lg_prealloc_lock);
  	}
  
++	/* init file for buddy data */
++	ret = ext4_mb_init_backend(sb);
++	if (ret != 0) {
++		kfree(sbi->s_mb_prealloc_table);
++		kfree(sbi->s_mb_offsets);
++		kfree(sbi->s_mb_maxs);
++		return ret;
++	}
++
 -	if (sbi->s_proc)
 +	if (sbi->s_proc) {
 +		struct proc_dir_entry *p;
@@ -222,7 +246,15 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	if (sbi->s_journal)
  		sbi->s_journal->j_commit_callback = release_blocks_on_commit;
-@@ -2512,8 +2659,10 @@
+@@ -2483,6 +2639,7 @@
+ 			kfree(sbi->s_group_info[i]);
+ 		kfree(sbi->s_group_info);
+ 	}
++	kfree(sbi->s_mb_prealloc_table);
+ 	kfree(sbi->s_mb_offsets);
+ 	kfree(sbi->s_mb_maxs);
+ 	if (sbi->s_buddy_cache)
+@@ -2512,8 +2668,10 @@
  	}
  
  	free_percpu(sbi->s_locality_groups);
@@ -234,7 +266,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	return 0;
  }
-@@ -2807,11 +2956,12 @@
+@@ -2807,11 +2965,12 @@
  ext4_mb_normalize_request(struct ext4_allocation_context *ac,
  				struct ext4_allocation_request *ar)
  {
@@ -249,7 +281,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  	struct ext4_prealloc_space *pa;
  
  	/* do normalize only data requests, metadata requests
-@@ -2841,49 +2991,35 @@
+@@ -2841,49 +3000,35 @@
  	size = size << bsbits;
  	if (size < i_size_read(ac->ac_inode))
  		size = i_size_read(ac->ac_inode);
@@ -324,7 +356,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	/* don't cover already allocated blocks in selected range */
  	if (ar->pleft && start <= ar->lleft) {
-@@ -2955,7 +3091,6 @@
+@@ -2955,7 +3100,6 @@
  	}
  	BUG_ON(start + size <= ac->ac_o_ex.fe_logical &&
  			start > ac->ac_o_ex.fe_logical);
@@ -332,7 +364,7 @@ Index: linux-stage/fs/ext4/mballoc.c
  
  	/* now prepare goal request */
  
-@@ -3939,11 +4074,19 @@
+@@ -3939,11 +4083,19 @@
  
  	/* don't use group allocation for large files */
  	size = max(size, isize);
