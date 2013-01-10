@@ -2599,9 +2599,8 @@ ostdevname() {
 			#if $OSTDEVn isn't defined, default is $OSTDEVBASE + num
 			eval DEVPTR=${!DEVNAME:=${OSTDEVBASE}${num}};;
 		zfs )
-			#try $OSTDEVn then $OSTDEVBASE + num then zfs default
-			local foo=${OSTDEVBASE:-${FSNAME}-ost${num}/ost}${num}
-			eval DEVPTR=${!DEVNAME:=$foo};;
+			#dataset name is independent of vdev device names
+			eval DEVPTR=${FSNAME}-ost${num}/ost${num};;
 		* )
 			error "unknown fstype!";;
 	esac
@@ -2640,9 +2639,8 @@ mdsdevname() {
 			#if $MDSDEVn isn't defined, default is $MDSDEVBASE + num
 			eval DEVPTR=${!DEVNAME:=${MDSDEVBASE}${num}};;
 		zfs )
-			# try $MDSDEVn then $MDSDEVBASE + num then zfs default
-			local foo=${MDSDEVBASE:-${FSNAME}-mdt${num}/mdt}${num}
-			eval DEVPTR=${!DEVNAME:=$foo};;
+			#dataset name is independent of vdev device names
+			eval DEVPTR=${FSNAME}-mdt${num}/mdt${num};;
 		* )
 			error "unknown fstype!";;
 	esac
