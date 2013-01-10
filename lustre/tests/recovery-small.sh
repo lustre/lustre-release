@@ -411,11 +411,10 @@ test_19a() {
 
 	mount_client $DIR2
 
-	do_facet client mcreate $DIR/$tfile        || return 1
+	do_facet client "stat $DIR > /dev/null"  || return 1
 	drop_ldlm_cancel "chmod 0777 $DIR2"
 
 	umount_client $DIR2
-	do_facet client "munlink $DIR/$tfile"
 
 	# let the client reconnect
 	client_reconnect
