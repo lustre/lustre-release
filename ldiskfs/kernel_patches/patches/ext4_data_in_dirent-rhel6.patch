@@ -420,12 +420,13 @@ Index: linux-stage/fs/ext4/namei.c
  	else
 -		assert(le16_to_cpu(de->rec_len) >= EXT4_DIR_REC_LEN(2));
 +		assert(le16_to_cpu(de->rec_len) >= __EXT4_DIR_REC_LEN(2));
- 	de->name_len = 2;
- 	strcpy (de->name, "..");
- 	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
-+	if (data) {
+	de->name_len = 2;
+	strcpy (de->name, "..");
+-	ext4_set_de_type(dir->i_sb, de, S_IFDIR);
++	if (data != NULL && ext4_get_dirent_data_len(de) >= dlen) {
 +		de->name[2] = 0;
-+		memcpy(&de->name[2 + 1], data, dlen);
++		memcpy(&de->name[2 + 1], data, *data);
++		ext4_set_de_type(dir->i_sb, de, S_IFDIR);
 +		de->file_type |= EXT4_DIRENT_LUFID;
 +	}
  
