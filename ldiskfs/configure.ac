@@ -81,8 +81,6 @@ LB_LDISKFS_EXT_SOURCE
 LB_LDISKFS_DEFINE_OPTIONS
 fi
 
-AM_CONDITIONAL(LDISKFS_PDO, test x$with_ldiskfs_pdo = xyes)
-
 AC_SUBST(ac_configure_args)
 
 AC_CONFIG_FILES([Makefile ldiskfs/Makefile]

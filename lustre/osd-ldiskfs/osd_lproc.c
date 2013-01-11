@@ -388,7 +388,6 @@ static int lprocfs_osd_wr_force_sync(struct file *file, const char *buffer,
 	return rc == 0 ? count : rc;
 }
 
-#ifdef HAVE_LDISKFS_PDO
 static int lprocfs_osd_rd_pdo(char *page, char **start, off_t off, int count,
                               int *eof, void *data)
 {
@@ -411,7 +410,6 @@ static int lprocfs_osd_wr_pdo(struct file *file, const char *buffer,
 
         return count;
 }
-#endif
 
 static int lprocfs_osd_rd_auto_scrub(char *page, char **start, off_t off,
 				     int count, int *eof, void *data)
@@ -501,9 +499,7 @@ struct lprocfs_vars lprocfs_osd_obd_vars[] = {
         { "fstype",          lprocfs_osd_rd_fstype,      0, 0 },
         { "mntdev",          lprocfs_osd_rd_mntdev,      0, 0 },
 	{ "force_sync",      0, lprocfs_osd_wr_force_sync     },
-#ifdef HAVE_LDISKFS_PDO
         { "pdo",             lprocfs_osd_rd_pdo, lprocfs_osd_wr_pdo, 0 },
-#endif
 	{ "auto_scrub",      lprocfs_osd_rd_auto_scrub,
 			     lprocfs_osd_wr_auto_scrub,  0 },
 	{ "oi_scrub",	     lprocfs_osd_rd_oi_scrub,    0, 0 },

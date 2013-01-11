@@ -616,21 +616,6 @@ fi
 #
 AC_DEFUN([LB_LDISKFS_DEFINE_OPTIONS],
 [
-AC_DEFINE(HAVE_LDISKFS_OSD, 1, Enable ldiskfs osd)
-
-with_ldiskfs_pdo=no
-case $LINUXRELEASE in
-2.6.32*)
-	if test x$RHEL_KERNEL = xyes; then
-		with_ldiskfs_pdo=yes
-		AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
-	fi
-	if test x$SUSE_KERNEL = xyes; then
-		with_ldiskfs_pdo=yes
-		AC_DEFINE(HAVE_LDISKFS_PDO, 1, [have ldiskfs PDO patch])
-	fi
-	;;
-esac
 LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET
 
 AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1,
@@ -734,11 +719,6 @@ AC_DEFUN([LB_LDISKFS_SERIES],
 if $1; then
 	AC_MSG_CHECKING([which ldiskfs series to use])
 	case $LINUXRELEASE in
-	2.6.18*)
-		if test x$RHEL_KERNEL = xyes; then
-			LDISKFS_SERIES="2.6-rhel5-ext4.series"
-		fi
-		;;
 	2.6.32*)
 		if test x$RHEL_KERNEL = xyes; then
 			LDISKFS_SERIES="2.6-rhel6.series"

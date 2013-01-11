@@ -74,13 +74,9 @@
 #include <md_object.h>
 #include <lustre_quota.h>
 
-#ifdef HAVE_LDISKFS_PDO
 int ldiskfs_pdo = 1;
 CFS_MODULE_PARM(ldiskfs_pdo, "i", int, 0644,
                 "ldiskfs with parallel directory operations");
-#else
-int ldiskfs_pdo = 0;
-#endif
 
 static const char dot[] = ".";
 static const char dotdot[] = "..";
