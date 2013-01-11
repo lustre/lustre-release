@@ -1264,9 +1264,11 @@ static int lod_qos_parse_config(const struct lu_env *env,
 
 	if (magic == __swab32(LOV_USER_MAGIC_V1)) {
 		lustre_swab_lov_user_md_v1(v1);
+		magic = v1->lmm_magic;
 	} else if (magic == __swab32(LOV_USER_MAGIC_V3)) {
 		v3 = buf->lb_buf;
 		lustre_swab_lov_user_md_v3(v3);
+		magic = v3->lmm_magic;
 	}
 
 	if (unlikely(magic != LOV_MAGIC_V1 && magic != LOV_MAGIC_V3)) {
