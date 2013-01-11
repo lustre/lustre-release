@@ -788,7 +788,8 @@ test_24b() {
 	lctl set_param fail_loc=0x0
 	client_reconnect
 	[ $rc1 -eq 0 -o $rc2 -eq 0 ] &&
-	error_ignore "multiop didn't fail fsync: $rc1 or close: $rc2" || true
+	error_ignore 5494 "multiop didn't fail fsync: $rc1 or close: $rc2" ||
+		true
 
 	dmesg | grep "dirty page discard:" || \
 		error "no discarded dirty page found!"
