@@ -566,13 +566,24 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
                 RETURN_EXIT;
 
         cfs_spin_lock(&mdt->mdt_lut.lut_translock);
-        if (info->mti_transno == 0) {
+	if (rc != 0) {
+		if (info->mti_transno != 0) {
+			struct obd_export *exp = req->rq_export;
+
+			CERROR("%s: replay trans "LPU64" NID %s: rc = %d\n",
+				mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name,
+				info->mti_transno,
+				libcfs_nid2str(exp->exp_connection->c_peer.nid),
+				rc);
+			RETURN_EXIT;
+		}
+	} else if (info->mti_transno == 0) {
                 info->mti_transno = ++ mdt->mdt_lut.lut_last_transno;
         } else {
                 /* should be replay */
                 if (info->mti_transno > mdt->mdt_lut.lut_last_transno)
                         mdt->mdt_lut.lut_last_transno = info->mti_transno;
-        }
+	}
         cfs_spin_unlock(&mdt->mdt_lut.lut_translock);
 
         CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
@@ -587,10 +598,23 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
         LASSERT(ted);
         cfs_mutex_down(&ted->ted_lcd_lock);
         lcd = ted->ted_lcd;
+	if (info->mti_transno < lcd->lcd_last_transno &&
+	    info->mti_transno != 0) {
+		/* This should happen during replay. Do not update
+		 * last rcvd info if replay req transno < last transno,
+		 * otherwise the following resend(after replay) can not
+		 * be checked correctly by xid */
+		cfs_mutex_up(&ted->ted_lcd_lock);
+		CDEBUG(D_HA, "%s: transno = "LPU64" < last_transno = "LPU64"\n",
+			mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name,
+			info->mti_transno, lcd->lcd_last_transno);
+		RETURN_EXIT;
+	}
+
         if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
             lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
-                if (info->mti_transno != 0)
-                        lcd->lcd_last_close_transno = info->mti_transno;
+		if (info->mti_transno != 0)
+			lcd->lcd_last_close_transno = info->mti_transno;
                 lcd->lcd_last_close_xid = req->rq_xid;
                 lcd->lcd_last_close_result = rc;
         } else {
@@ -602,9 +626,10 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
                         lcd->lcd_pre_versions[2] = pre_versions[2];
                         lcd->lcd_pre_versions[3] = pre_versions[3];
                 }
-                if (info->mti_transno != 0)
-                        lcd->lcd_last_transno = info->mti_transno;
-                lcd->lcd_last_xid = req->rq_xid;
+		if (info->mti_transno != 0)
+			lcd->lcd_last_transno = info->mti_transno;
+
+		lcd->lcd_last_xid = req->rq_xid;
                 lcd->lcd_last_result = rc;
                 lcd->lcd_last_data = info->mti_opdata;
         }
