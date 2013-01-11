@@ -1735,13 +1735,11 @@ static int check_for_next_transno(struct obd_device *obd)
         } else if (obd->obd_recovery_expired) {
                 CDEBUG(D_HA, "waking for expired recovery\n");
                 wake_up = 1;
-        } else if (cfs_atomic_read(&obd->obd_req_replay_clients) == 0) {
-                CDEBUG(D_HA, "waking for completed recovery\n");
-                wake_up = 1;
         } else if (req_transno == next_transno) {
                 CDEBUG(D_HA, "waking for next ("LPD64")\n", next_transno);
                 wake_up = 1;
-        } else if (queue_len == cfs_atomic_read(&obd->obd_req_replay_clients)) {
+	} else if (queue_len > 0 &&
+		   queue_len == cfs_atomic_read(&obd->obd_req_replay_clients)) {
                 int d_lvl = D_HA;
                 /** handle gaps occured due to lost reply or VBR */
                 LASSERTF(req_transno >= next_transno,
@@ -1759,6 +1757,9 @@ static int check_for_next_transno(struct obd_device *obd)
                        req_transno, obd->obd_last_committed);
                 obd->obd_next_recovery_transno = req_transno;
                 wake_up = 1;
+	} else if (cfs_atomic_read(&obd->obd_req_replay_clients) == 0) {
+		CDEBUG(D_HA, "waking for completed recovery\n");
+		wake_up = 1;
         } else if (OBD_FAIL_CHECK(OBD_FAIL_MDS_RECOVERY_ACCEPTS_GAPS)) {
                 CDEBUG(D_HA, "accepting transno gaps is explicitly allowed"
                        " by fail_lock, waking up ("LPD64")\n", next_transno);
