@@ -553,10 +553,12 @@ static void mdt_write_allow(struct mdt_object *o)
 }
 
 /* there can be no real transaction so prepare the fake one */
-static void mdt_empty_transno(struct mdt_thread_info* info)
+static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 {
-        struct mdt_device *mdt = info->mti_mdt;
-        struct ptlrpc_request *req = mdt_info_req(info);
+        struct mdt_device      *mdt = info->mti_mdt;
+        struct ptlrpc_request  *req = mdt_info_req(info);
+        struct tg_export_data  *ted;
+        struct lsd_client_data *lcd;
 
         ENTRY;
         /* transaction has occurred already */
@@ -579,6 +581,35 @@ static void mdt_empty_transno(struct mdt_thread_info* info)
 
         req->rq_transno = info->mti_transno;
         lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
+
+        /* update lcd in memory only for resent cases */
+        ted = &req->rq_export->exp_target_data;
+        LASSERT(ted);
+        cfs_mutex_down(&ted->ted_lcd_lock);
+        lcd = ted->ted_lcd;
+        if (lustre_msg_get_opc(req->rq_reqmsg) == MDS_CLOSE ||
+            lustre_msg_get_opc(req->rq_reqmsg) == MDS_DONE_WRITING) {
+                if (info->mti_transno != 0)
+                        lcd->lcd_last_close_transno = info->mti_transno;
+                lcd->lcd_last_close_xid = req->rq_xid;
+                lcd->lcd_last_close_result = rc;
+        } else {
+                /* VBR: save versions in last_rcvd for reconstruct. */
+                __u64 *pre_versions = lustre_msg_get_versions(req->rq_repmsg);
+                if (pre_versions) {
+                        lcd->lcd_pre_versions[0] = pre_versions[0];
+                        lcd->lcd_pre_versions[1] = pre_versions[1];
+                        lcd->lcd_pre_versions[2] = pre_versions[2];
+                        lcd->lcd_pre_versions[3] = pre_versions[3];
+                }
+                if (info->mti_transno != 0)
+                        lcd->lcd_last_transno = info->mti_transno;
+                lcd->lcd_last_xid = req->rq_xid;
+                lcd->lcd_last_result = rc;
+                lcd->lcd_last_data = info->mti_opdata;
+        }
+        cfs_mutex_up(&ted->ted_lcd_lock);
+
         EXIT;
 }
 
@@ -714,7 +745,7 @@ static int mdt_mfd_open(struct mdt_thread_info *info, struct mdt_object *p,
                         cfs_spin_unlock(&med->med_open_lock);
                 }
 
-                mdt_empty_transno(info);
+                mdt_empty_transno(info, rc);
         } else
                 GOTO(err_out, rc = -ENOMEM);
 
@@ -1630,7 +1661,7 @@ int mdt_close(struct mdt_thread_info *info)
                 ret = mdt_mfd_close(info, mfd);
                 if (repbody != NULL)
                         rc = mdt_handle_last_unlink(info, o, ma);
-                mdt_empty_transno(info);
+                mdt_empty_transno(info, rc);
                 mdt_object_put(info->mti_env, o);
         }
         if (repbody != NULL)
@@ -1691,9 +1722,10 @@ int mdt_done_writing(struct mdt_thread_info *info)
                        info->mti_ioepoch->ioepoch);
                 /* If this is a replay, reconstruct the transno. */
                 if (lustre_msg_get_flags(req->rq_reqmsg) & MSG_REPLAY) {
-                        mdt_empty_transno(info);
-                        RETURN(info->mti_ioepoch->flags & MF_SOM_AU ?
-                               -EAGAIN : 0);
+                        rc = info->mti_ioepoch->flags & MF_SOM_AU ?
+                             -EAGAIN : 0;
+                        mdt_empty_transno(info, rc);
+                        RETURN(rc);
                 }
                 RETURN(-ESTALE);
         }
@@ -1716,6 +1748,6 @@ int mdt_done_writing(struct mdt_thread_info *info)
         rc = mdt_mfd_close(info, mfd);
 
         OBD_FREE_LARGE(info->mti_attr.ma_lmm, info->mti_mdt->mdt_max_mdsize);
-        mdt_empty_transno(info);
+        mdt_empty_transno(info, rc);
         RETURN(rc);
 }
