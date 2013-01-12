@@ -89,7 +89,7 @@ Required Software</title>
                 <para> &#160;</para>
               </entry>
               <entry>
-                <para>kernel-&lt;ver&gt;_lustre.&lt;arch&gt;</para>
+                <para>kernel-<replaceable>ver</replaceable>_lustre.<replaceable>arch</replaceable></para>
               </entry>
               <entry>
                 <para>Lustre patched server kernel.</para>
@@ -120,7 +120,7 @@ Required Software</title>
                 <para> &#160;</para>
               </entry>
               <entry>
-                <para> lustre-modules-&lt;ver&gt;</para>
+                <para> lustre-modules-<replaceable>ver</replaceable></para>
               </entry>
               <entry>
                 <para> For Lustre-patched kernel.</para>
@@ -137,7 +137,7 @@ Required Software</title>
                 <para> &#160;</para>
               </entry>
               <entry>
-                <para> lustre-client-modules-&lt;ver&gt;</para>
+                <para> lustre-client-modules-<replaceable>ver</replaceable></para>
               </entry>
               <entry>
                 <para> For clients.</para>
@@ -168,7 +168,7 @@ Required Software</title>
                 <para> &#160;</para>
               </entry>
               <entry>
-                <para> lustre-&lt;ver&gt;</para>
+                <para> lustre-<replaceable>ver</replaceable></para>
               </entry>
               <entry>
                 <para> Lustre utilities package. This includes userspace utilities to configure and run Lustre.</para>
@@ -188,7 +188,7 @@ Required Software</title>
                 <para> &#160;</para>
               </entry>
               <entry>
-                <para> lustre-client-&lt;ver&gt;</para>
+                <para> lustre-client-<replaceable>ver</replaceable></para>
               </entry>
               <entry>
                 <para> Lustre utilities for clients.</para>
@@ -205,7 +205,7 @@ Required Software</title>
                 <para> &#160;</para>
               </entry>
               <entry>
-                <para> lustre-ldiskfs-&lt;ver&gt;</para>
+                <para> lustre-ldiskfs-<replaceable>ver</replaceable></para>
               </entry>
               <entry>
                 <para> Lustre-patched backing file system kernel module package for the ldiskfs file system.</para>
@@ -223,7 +223,7 @@ Required Software</title>
                 <para> &#160;</para>
               </entry>
               <entry>
-                <para> e2fsprogs-&lt;ver&gt;</para>
+                <para> e2fsprogs-<replaceable>ver</replaceable></para>
               </entry>
               <entry>
                 <para> Utilities package used to maintain the ldiskfs backing file system.</para>
@@ -361,8 +361,8 @@ Environmental Requirements</title>
               <para>It is not recommended that you use the <literal>rpm -Uvh</literal> command to install a kernel, because this may leave you with an unbootable system if the new kernel doesn&apos;t work for some reason.</para>
             </note>
             <para>For example, the command in the following example would install required packages on a server with Infiniband networking</para>
-            <screen>$ rpm -ivh kernel-&lt;ver&gt;_lustre-&lt;ver&gt; kernel-ib-&lt;ver&gt; \
-lustre-modules-&lt;ver&gt; lustre-ldiskfs-&lt;ver&gt;
+            <screen>$ rpm -ivh kernel-<replaceable>ver</replaceable>_lustre-<replaceable>ver</replaceable> kernel-ib-<replaceable>ver</replaceable> \
+lustre-modules-<replaceable>ver</replaceable> lustre-ldiskfs-<replaceable>ver</replaceable>
 </screen>
           </listitem>
           <listitem>
@@ -382,17 +382,17 @@ lustre-modules-&lt;ver&gt; lustre-ldiskfs-&lt;ver&gt;
           <listitem>
             <para>Install the utilities/userspace packages.</para>
             <para>Use the <literal>rpm -ivh</literal> command to install the utilities packages. For example:</para>
-            <screen>$ rpm -ivh lustre-&lt;ver&gt;
+            <screen>$ rpm -ivh lustre-<replaceable>ver</replaceable>
 </screen>
           </listitem>
           <listitem>
             <para>Install the <literal>e2fsprogs</literal> package.</para>
             <para>Use the <literal>rpm -ivh</literal> command to install the <literal>e2fsprogs</literal> package. For example:</para>
-            <screen>$ rpm -ivh e2fsprogs-&lt;ver&gt;
+            <screen>$ rpm -ivh e2fsprogs-<replaceable>ver</replaceable>
  
 </screen>
             <para>If <literal>e2fsprogs</literal> is already installed on your Linux system, install the Lustre-specific <literal>e2fsprogs</literal> version by using <literal>rpm -Uvh</literal> to upgrade the existing <literal>e2fsprogs</literal> package. For example:</para>
-            <screen>$ rpm -Uvh e2fsprogs-&lt;ver&gt; </screen>
+            <screen>$ rpm -Uvh e2fsprogs-<replaceable>ver</replaceable> </screen>
             <note>
               <para>The <literal>rpm</literal> command options <literal>--force</literal> or <literal>--nodeps</literal> should not be used to install or update the Lustre-specific <literal>e2fsprogs</literal> package. If errors are reported, file a bug (for instructions see the topic
                   <link xl:href="http://wiki.lustre.org/index.php/Reporting_Bugs">Reporting Bugs</link>
@@ -415,8 +415,8 @@ lustre-modules-&lt;ver&gt; lustre-ldiskfs-&lt;ver&gt;
           </listitem>
           <listitem>
             <para>Install the module packages for clients.</para>
-            <para>Use the <literal>rpm -ivh</literal> command to install the lustre-client and <literal>lustre-client-modules-&lt;ver&gt;</literal> packages. For example:</para>
-            <screen>$ rpm -ivh lustre-client-modules-&lt;ver&gt; kernel-ib-&lt;ver&gt;</screen>
+            <para>Use the <literal>rpm -ivh</literal> command to install the lustre-client and <literal>lustre-client-modules-<replaceable>ver</replaceable></literal> packages. For example:</para>
+            <screen>$ rpm -ivh lustre-client-modules-<replaceable>ver</replaceable> kernel-ib-<replaceable>ver</replaceable></screen>
           </listitem>
           <listitem>
             <para>Install the utilities/userspace packages for clients.</para>

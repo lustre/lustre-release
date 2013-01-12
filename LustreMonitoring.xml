@@ -190,7 +190,7 @@ Working with Changelogs</title>
         </title>
         <para>Because changelog records take up space on the MDT, the system administration must register changelog users. The registrants specify which records they are &quot;done with&quot;, and the system purges up to the greatest common record.</para>
         <para>To register a new changelog user, run:</para>
-        <screen>lctl --device &lt;mdt_device&gt; changelog_register
+        <screen>lctl --device /dev/<replaceable>mdt_device</replaceable> changelog_register
 </screen>
         <para>Changelog entries are not purged beyond a registered user&apos;s set point (see <literal>lfs changelog_clear</literal>).</para>
       </section>
@@ -199,7 +199,7 @@ Working with Changelogs</title>
           <literal>lfs changelog</literal>
         </title>
         <para>To display the metadata changes on an MDT (the changelog records), run:</para>
-        <screen>lfs changelog &lt;MDT name&gt; [startrec [endrec]] </screen>
+        <screen>lfs changelog <replaceable>fsname</replaceable>-<replaceable>MDTnumber</replaceable> [startrec [endrec]] </screen>
         <para>It is optional whether to specify the start and end records.</para>
         <para>These are sample changelog records:</para>
         <screen>2 02MKDIR 4298396676 0x0 t=[0x200000405:0x15f9:0x0] p=[0x13:0x15e5a7a3:0x0]\
@@ -216,8 +216,8 @@ x0] chloe.jpg
           <literal>lfs changelog_clear</literal>
         </title>
         <para>To clear old changelog records for a specific user (records that the user no longer needs), run:</para>
-        <screen>lfs changelog_clear &lt;MDT name&gt; &lt;user ID&gt; &lt;endrec&gt;</screen>
-        <para>The <literal>changelog_clear</literal> command indicates that changelog records previous to &lt;endrec&gt; are no longer of interest to a particular user &lt;user ID&gt;, potentially allowing the MDT to free up disk space. An <literal>&lt;endrec&gt;</literal> value of 0 indicates the current last record. To run <literal>changelog_clear</literal>, the changelog user must be registered on the MDT node using <literal>lctl</literal>.</para>
+        <screen>lfs changelog_clear <replaceable>mdt_name</replaceable> <replaceable>userid</replaceable> <replaceable>endrec</replaceable></screen>
+        <para>The <literal>changelog_clear</literal> command indicates that changelog records previous to <replaceable>endrec</replaceable> are no longer of interest to a particular user <replaceable>userid</replaceable>, potentially allowing the MDT to free up disk space. An <literal><replaceable>endrec</replaceable></literal> value of 0 indicates the current last record. To run <literal>changelog_clear</literal>, the changelog user must be registered on the MDT node using <literal>lctl</literal>.</para>
         <para>When all changelog users are done with records &lt; X, the records are deleted.</para>
       </section>
       <section remap="h5">
@@ -225,7 +225,7 @@ x0] chloe.jpg
           <literal>lctl changelog_deregister</literal>
         </title>
         <para>To deregister (unregister) a changelog user, run:</para>
-        <screen>lctl --device &lt;mdt_device&gt; changelog_deregister &lt;user ID&gt;       </screen>
+        <screen>lctl --device <replaceable>mdt_device</replaceable> changelog_deregister <replaceable>userid</replaceable>       </screen>
         <para> <literal>changelog_deregister cl1</literal> effectively does a <literal>changelog_clear cl1 0</literal> as it deregisters.</para>
       </section>
     </section>

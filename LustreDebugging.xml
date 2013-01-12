@@ -42,7 +42,7 @@ Lustre Debugging Tools</title>
             </emphasis>  - This tool is used with the debug_kernel option to manually dump the Lustre debugging log or post-process debugging logs that are dumped automatically. For more information about the lctl tool, see <xref linkend="dbdoclet.50438274_62472"/> and <xref linkend="dbdoclet.50438219_38274"/>.</para>
         </listitem>
         <listitem>
-          <para><replaceable role="bold">Lustre subsystem asserts</replaceable>  - A panic-style assertion (LBUG) in the kernel causes Lustre to dump the debug log to the file <literal>/tmp/lustre-log.<replaceable>&lt;timestamp&gt;</replaceable></literal> where it can be retrieved after a reboot. For more information, see <xref linkend="dbdoclet.50438198_40669"/>.</para>
+          <para>Lustre subsystem asserts - A panic-style assertion (LBUG) in the kernel causes Lustre to dump the debug log to the file <literal>/tmp/lustre-log.<replaceable>timestamp</replaceable></literal> where it can be retrieved after a reboot. For more information, see <xref linkend="dbdoclet.50438198_40669"/>.</para>
         </listitem>
         <listitem>
           <para>
@@ -105,7 +105,7 @@ Lustre Debugging Tools</title>
         <itemizedlist>
           <listitem>
             <para><literal>
-                <replaceable role="bold">leak_finder.pl</replaceable>
+                <replaceable>leak_finder.pl</replaceable>
               </literal> . This program provided with Lustre is useful for finding memory leaks in the code.</para>
           </listitem>
         </itemizedlist>
@@ -471,13 +471,13 @@ Lustre Debugging Tools</title>
       <itemizedlist>
         <listitem>
           <para>Obtain a list of all the types and subsystems:</para>
-          <screen>lctl &gt; debug_list <emphasis>{subs | types}</emphasis></screen>
+          <screen>lctl &gt; debug_list <replaceable>subsystems|types</replaceable></screen>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
           <para>Filter the debug log:</para>
-          <screen>lctl &gt; filter <emphasis>{subsystem name | debug type}</emphasis></screen>
+          <screen>lctl &gt; filter <replaceable>subsystem_name|debug_type</replaceable></screen>
         </listitem>
       </itemizedlist>
       <note>
@@ -486,16 +486,16 @@ Lustre Debugging Tools</title>
       <itemizedlist>
         <listitem>
           <para>Show debug messages belonging to certain subsystem or type:</para>
-          <screen>lctl &gt; show <emphasis>{subsystem name | debug type}</emphasis></screen>
+          <screen>lctl &gt; show <replaceable>subsystem_name|debug_type</replaceable></screen>
           <para><literal>debug_kernel</literal> pulls the data from the kernel logs, filters it appropriately, and displays or saves it as per the specified options</para>
-          <screen>lctl &gt; debug_kernel [<emphasis>output filename</emphasis>]</screen>
+          <screen>lctl &gt; debug_kernel [<replaceable>output filename</replaceable>]</screen>
           <para>If the debugging is being done on User Mode Linux (UML), it might be useful to save the logs on the host machine so that they can be used at a later time.</para>
         </listitem>
       </itemizedlist>
       <itemizedlist>
         <listitem>
           <para>Filter a log on disk, if you already have a debug log saved to disk (likely from a crash):</para>
-          <screen>lctl &gt; debug_file <emphasis>{input filename}</emphasis> [<emphasis>output filename</emphasis>] </screen>
+          <screen>lctl &gt; debug_file <replaceable>input_file</replaceable> [<replaceable>output_file</replaceable>] </screen>
           <para>During the debug session, you can add markers or breaks to the log for any reason:</para>
           <screen>lctl &gt; mark [marker text] </screen>
           <para>The marker text defaults to the current date and time in the debug log (similar to the example shown below):</para>
@@ -540,10 +540,10 @@ Debug log: 324 lines, 258 kept, 66 dropped.
       <section remap="h4">
         <title><literal>lctl debug_daemon</literal> Commands</title>
         <para>To initiate the <literal>debug_daemon</literal> to start dumping the <literal>debug_buffer</literal> into a file, run as the root user:</para>
-        <screen>lctl debug_daemon start {filename} [{megabytes}]</screen>
+        <screen>lctl debug_daemon start <replaceable>filename</replaceable> [<replaceable>megabytes</replaceable>]</screen>
         <para>The debug log will be written to the specified filename from the kernel.  The file will be limited to the optionally specified number of megabytes.</para>
         <para>The daemon wraps around and dumps data to the beginning of the file when the output file size is over the limit of the user-specified file size. To decode the dumped file to ASCII and sort the log entries by time, run:</para>
-        <screen>lctl debug_file {filename} &gt; {newfile}</screen>
+        <screen>lctl debug_file <replaceable>filename</replaceable> &gt; <replaceable>newfile</replaceable></screen>
         <para>The output is internally sorted by the <literal>lctl</literal> command.</para>
         <para>To stop the <literal>debug_daemon</literal> operation and flush the file output, run:</para>
         <screen>lctl debug_daemon stop</screen>
@@ -551,7 +551,7 @@ Debug log: 324 lines, 258 kept, 66 dropped.
         <para>This is an example using <literal>debug_daemon</literal> with the interactive mode of <literal>lctl</literal> to dump debug logs to a 40 MB file.</para>
         <screen>lctl</screen>
         <screen>lctl &gt; debug_daemon start /var/log/lustre.40.bin 40 </screen>
-        <screen>{run filesystem operations to debug}</screen>
+        <screen><replaceable>run filesystem operations to debug</replaceable></screen>
         <screen>lctl &gt; debug_daemon stop </screen>
         <screen>lctl &gt; debug_file /var/log/lustre.bin /var/log/lustre.log</screen>
         <para>To start another daemon with an unlimited file size, run:</para>
@@ -561,7 +561,7 @@ Debug log: 324 lines, 258 kept, 66 dropped.
     </section>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>kernel debug log</secondary></indexterm>Controlling Information Written to the Kernel Debug Log</title>
-      <para>The <literal>lctl set_param subsystem_debug={subsystem_mask}</literal> and <literal>lctl set_param debug={debug_mask}</literal> are used to determine which information is written to the debug log. The subsystem_debug mask determines the information written to the log based on the functional area of the code (such as lnet, osc, or ldlm). The debug mask controls information based on the message type (such as info, error, trace, or malloc).</para>
+      <para>The <literal>lctl set_param subsystem_debug=<replaceable>subsystem_mask</replaceable></literal> and <literal>lctl set_param debug=<replaceable>debug_mask</replaceable></literal> are used to determine which information is written to the debug log. The subsystem_debug mask determines the information written to the log based on the functional area of the code (such as lnet, osc, or ldlm). The debug mask controls information based on the message type (such as info, error, trace, or malloc).</para>
       <para>To turn off Lustre debugging completely:</para>
       <screen>lctl set_param debug=0 </screen>
       <para>To turn on full Lustre debugging:</para>
@@ -578,11 +578,11 @@ Debug log: 324 lines, 258 kept, 66 dropped.
       <title><indexterm><primary>debugging</primary><secondary>using strace</secondary></indexterm>Troubleshooting with <literal>strace</literal></title>
       <para>The <literal>strace</literal> utility provided with the Linux distribution enables system calls to be traced by intercepting all the system calls made by a process and recording the system call name, arguments, and return values.</para>
       <para>To invoke <literal>strace</literal> on a program, enter:</para>
-      <screen>$ strace <emphasis>{program} {args}</emphasis> </screen>
+      <screen>$ strace <replaceable>program</replaceable> <replaceable>[arguments]</replaceable> </screen>
       <para>Sometimes, a system call may fork child processes. In this situation, use the <literal>-f</literal> option of <literal>strace</literal> to trace the child processes:</para>
-      <screen>$ strace -f <emphasis>{program} {args}</emphasis> </screen>
+      <screen>$ strace -f <replaceable>program</replaceable> <replaceable>[arguments]</replaceable> </screen>
       <para>To redirect the <literal>strace</literal> output to a file, enter:</para>
-      <screen>$ strace -o <emphasis>{filename} {program} {args}</emphasis> </screen>
+      <screen>$ strace -o <replaceable>filename</replaceable> <replaceable>program</replaceable> <replaceable>[arguments]</replaceable> </screen>
       <para>Use the <literal>-ff</literal> option, along with <literal>-o</literal>, to save the trace output in <literal>filename.pid</literal>, where <literal>pid</literal> is the process ID of the process being traced. Use the <literal>-ttt</literal> option to timestamp all lines in the strace output, so they can be correlated to operations in the lustre kernel debug log.</para>
     </section>
     <section remap="h3">
@@ -648,7 +648,7 @@ Filesystem volume name:   myth-OST0004
       <para>Lustre has a specific debug type category for tracing lock traffic. Use:</para>
       <screen>lctl&gt; filter all_types 
 lctl&gt; show dlmtrace 
-lctl&gt; debug_kernel [filename] </screen>
+lctl&gt; debug_kernel [<replaceable>filename</replaceable>] </screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438274_80443">
@@ -829,7 +829,7 @@ lctl&gt; debug_kernel [filename] </screen>
                   </emphasis></para>
               </entry>
               <entry>
-                <para>Allows insertion of failure points into the Lustre code. This is useful to generate regression tests that can hit a very specific sequence of events. This works in conjunction with &quot;<literal>lctl set_param fail_loc={fail_loc}</literal>&quot; to set a specific failure point for which a given <literal>OBD_FAIL_CHECK()</literal> will test.</para>
+                <para>Allows insertion of failure points into the Lustre code. This is useful to generate regression tests that can hit a very specific sequence of events. This works in conjunction with &quot;<literal>lctl set_param fail_loc=<replaceable>fail_loc</replaceable></literal>&quot; to set a specific failure point for which a given <literal>OBD_FAIL_CHECK()</literal> will test.</para>
               </entry>
             </row>
             <row>
@@ -932,7 +932,7 @@ lctl&gt; debug_kernel [filename] </screen>
         </listitem>
       </itemizedlist>
       <para>Requests in the history include &quot;live&quot; requests that are currently being handled. Each line in <literal>req_history</literal> looks like:</para>
-      <screen>&lt;seq&gt;:&lt;target NID&gt;:&lt;client ID&gt;:&lt;xid&gt;:&lt;length&gt;:&lt;phase&gt; &lt;svc specific&gt; </screen>
+      <screen><replaceable>sequence</replaceable>:<replaceable>target_NID</replaceable>:<replaceable>client_NID</replaceable>:<replaceable>cliet_xid</replaceable>:<replaceable>request_length</replaceable>:<replaceable>rpc_phase</replaceable> <replaceable>service_specific_data</replaceable> </screen>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -961,7 +961,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">target NID</replaceable>
+                    <replaceable>target NID</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -971,7 +971,7 @@ lctl&gt; debug_kernel [filename] </screen>
             <row>
               <entry>
                 <para> <literal>
-                    <replaceable role="bold">client ID</replaceable>
+                    <replaceable>client ID</replaceable>
                   </literal></para>
               </entry>
               <entry>
@@ -1046,7 +1046,7 @@ lctl&gt; debug_kernel [filename] </screen>
         </listitem>
         <listitem>
           <para>Run the leak finder on the newly-created log dump:</para>
-          <screen>perl leak_finder.pl {ascii-logname}</screen>
+          <screen>perl leak_finder.pl <replaceable>ascii-logname</replaceable></screen>
         </listitem>
       </orderedlist>
       <para>The output is:</para>

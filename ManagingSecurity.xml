@@ -79,7 +79,7 @@ other::---</screen>
   </section>
   <section xml:id="dbdoclet.50438221_64726">
     <title><indexterm><primary>root squash</primary></indexterm>Using Root Squash</title>
-    <para>Lustre 1.6 introduced root squash functionality, a security feature which controls super user access rights to an Lustre file system. Before the root squash feature was added, Lustre users could run <literal>rm -rf *</literal> as root, and remove data which should not be deleted. Using the root squash feature prevents this outcome.</para>
+    <para>Root squash is a security feature which restricts super-user access rights to a Lustre file system. Without the root squash feature enabled, Lustre users on untrusted clients could access or modify files owned by root on the filesystem, including deleting them. Using the root squash feature restricts file access/modifications as the root user to only the specified clients.  Note, however, that this does <emphasis>not</emphasis> prevent users on insecure clients from accessing files owned by <emphasis>other</emphasis> users.</para>
     <para>The root squash feature works by re-mapping the user ID (UID) and group ID (GID) of the root user to a UID and GID specified by the system administrator, via the Lustre configuration management server (MGS). The root squash feature also enables the Lustre administrator to specify a set of client for which UID/GID re-mapping does not apply.</para>
     <section remap="h3">
         <title><indexterm><primary>root squash</primary><secondary>configuring</secondary></indexterm>Configuring Root Squash</title>
@@ -99,7 +99,7 @@ other::---</screen>
         <title><indexterm><primary>root squash</primary><secondary>enabling</secondary></indexterm>Enabling and Tuning Root Squash</title>
       <para>The default value for <literal>nosquash_nids</literal> is NULL, which means that root squashing applies to all clients. Setting the root squash UID and GID to 0 turns root squash off.</para>
       <para>Root squash parameters can be set when the MDT is created (<literal>mkfs.lustre --mdt</literal>). For example:</para>
-      <screen>mkfs.lustre --reformat --fsname=Lustre --mdt --mgs \
+      <screen>mds# mkfs.lustre --reformat --fsname=testfs --mdt --mgs \
        --param &quot;mdt.root_squash=500:501&quot; \
        --param &quot;mdt.nosquash_nids=&apos;0@elan1 192.168.1.[10,11]&apos;&quot; /dev/sda1</screen>
       <para>Root squash parameters can also be changed on an unmounted device with <literal>tunefs.lustre</literal>. For example:</para>
@@ -107,8 +107,8 @@ other::---</screen>
 --param &quot;mdt.nosquash_nids=192.168.0.13@tcp0&quot; /dev/sda1
 </screen>
       <para>Root squash parameters can also be changed with the <literal>lctl conf_param</literal> command. For example:</para>
-      <screen>lctl conf_param Lustre.mdt.root_squash=&quot;1000:101&quot;
-lctl conf_param Lustre.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
+      <screen>mgs# lctl conf_param testfs.mdt.root_squash=&quot;1000:101&quot;
+mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
       <note>
         <para>When using the lctl conf_param command, keep in mind:</para>
         <itemizedlist>
@@ -124,17 +124,17 @@ lctl conf_param Lustre.mdt.nosquash_nids=&quot;*@tcp&quot;</screen>
         </itemizedlist>
       </note>
       <para>The <literal>nosquash_nids</literal> list can be cleared with:</para>
-      <screen>lctl conf_param Lustre.mdt.nosquash_nids=&quot;NONE&quot;</screen>
+      <screen>mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;NONE&quot;</screen>
       <para>- OR -</para>
-      <screen>lctl conf_param Lustre.mdt.nosquash_nids=&quot;clear&quot;</screen>
+      <screen>mgs# lctl conf_param testfs.mdt.nosquash_nids=&quot;clear&quot;</screen>
       <para>If the <literal>nosquash_nids</literal> value consists of several NID ranges (e.g. <literal>0@elan</literal>, <literal>1@elan1</literal>), the list of NID ranges must be quoted with single (&apos;) or double (&apos;&apos;) quotation marks. List elements must be separated with a space. For example:</para>
-      <screen>mkfs.lustre ... --param &quot;mdt.nosquash_nids=&apos;0@elan1 1@elan2&apos;&quot; /dev/sda1
-lctl conf_param Lustre.mdt.nosquash_nids=&quot;24@elan 15@elan1&quot;</screen>
+      <screen>mds# mkfs.lustre ... --param &quot;mdt.nosquash_nids=&apos;0@elan1 1@elan2&apos;&quot; /dev/sda1
+lctl conf_param testfs.mdt.nosquash_nids=&quot;24@elan 15@elan1&quot;</screen>
       <para>These are examples of incorrect syntax:</para>
-      <screen>mkfs.lustre ... --param &quot;mdt.nosquash_nids=0@elan1 1@elan2&quot; /dev/sda1
-lctl conf_param Lustre.mdt.nosquash_nids=24@elan 15@elan1</screen>
+      <screen>mds# mkfs.lustre ... --param &quot;mdt.nosquash_nids=0@elan1 1@elan2&quot; /dev/sda1
+lctl conf_param testfs.mdt.nosquash_nids=24@elan 15@elan1</screen>
       <para>To check root squash parameters, use the lctl get_param command:</para>
-      <screen>lctl get_param mdt.Lustre-MDT0000.root_squash
+      <screen>mds# lctl get_param mdt.testfs-MDT0000.root_squash
 lctl get_param mdt.*.nosquash_nids</screen>
       <note>
         <para>An empty nosquash_nids list is reported as NONE.</para>
@@ -151,7 +151,7 @@ lctl get_param mdt.*.nosquash_nids</screen>
           <para><literal>mkfs.lustre</literal> and <literal>tunefs.lustre</literal> do not perform parameter syntax checking. If the root squash parameters are incorrect, they are ignored on mount and the default values are used instead.</para>
         </listitem>
         <listitem>
-          <para>Root squash parameters are parsed with rigorous syntax checking. The root_squash parameter should be specified as <literal>&lt;decnum&gt;&apos;:&apos;&lt;decnum&gt;</literal>. The <literal>nosquash_nids</literal> parameter should follow LNET NID range list syntax.</para>
+          <para>Root squash parameters are parsed with rigorous syntax checking. The root_squash parameter should be specified as <literal>&lt;decnum&gt;:&lt;decnum&gt;</literal>. The <literal>nosquash_nids</literal> parameter should follow LNET NID range list syntax.</para>
         </listitem>
       </itemizedlist>
       <para>LNET NID range syntax:</para>

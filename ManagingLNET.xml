@@ -54,8 +54,8 @@ $ lctl network up</screen>
       <para>This command tells you the network(s) configured to work with Lustre</para>
       <para>If the networks are not correctly setup, see the <literal>modules.conf</literal> &quot;<literal>networks=</literal>&quot; line and make sure the network layer modules are correctly installed and configured.</para>
       <para>To get the best remote NID, run:</para>
-      <screen>$ lctl which_nid &lt;NID list&gt;</screen>
-      <para>where <literal>&lt;NID list&gt;</literal> is the list of available NIDs.</para>
+      <screen>$ lctl which_nid <replaceable>NIDs</replaceable></screen>
+      <para>where <literal><replaceable>NIDs</replaceable></literal> is the list of available NIDs.</para>
       <para>This command takes the &quot;best&quot; NID from a list of the NIDs of a remote host. The &quot;best&quot; NID is the one that the local node uses when trying to communicate with the remote node.</para>
       <section remap="h4">
         <title>Starting Clients</title>
@@ -73,7 +73,7 @@ $ lctl network up</screen>
         <para>Attempting to remove Lustre modules prior to stopping the network may result in a crash or an LNET hang. if this occurs, the node must be rebooted (in most cases). Make sure that the Lustre network and Lustre are stopped prior to unloading the modules. Be extremely careful using rmmod -f.</para>
       </note>
       <para>To unconfigure the LNET network, run:</para>
-      <screen>modprobe -r &lt;any lnd and the lnet modules&gt;</screen>
+      <screen>modprobe -r <replaceable>lnd_and_lnet_modules</replaceable></screen>
       <note>
         <para>
 To remove all Lustre modules, run:</para>
@@ -138,32 +138,27 @@ To remove all Lustre modules, run:</para>
         </listitem>
         <listitem>
           <para>Run the modprobe lnet command and create a combined MGS/MDT file system.</para>
-          <para>The following commands create the MGS/MDT file system and mount the servers (MGS/MDT and OSS).</para>
+          <para>The following commands create an MGS/MDT or OST file system and mount the targets on the servers.</para>
           <screen>modprobe lnet
-$ mkfs.lustre --fsname lustre --mgs --mdt &lt;block device name&gt;
-$ mkdir -p &lt;mount point&gt;
-$ mount -t lustre &lt;block device&gt; &lt;mount point&gt;
-$ mount -t lustre &lt;block device&gt; &lt;mount point&gt;
-$ mkfs.lustre --fsname lustre --mgs --mdt &lt;block device name&gt;
-$ mkdir -p &lt;mount point&gt;
-$ mount -t lustre &lt;block device&gt; &lt;mount point&gt;
-$ mount -t lustre &lt;block device&gt; &lt;mount point&gt; </screen>
+# mkfs.lustre --fsname lustre --mgs --mdt <replaceable>/dev/mdt_device</replaceable>
+# mkdir -p <replaceable>/mount_point</replaceable>
+# mount -t lustre /dev/<replaceable>mdt_device</replaceable> <replaceable>/mount_point</replaceable></screen>
           <para>For example:</para>
           <screen>modprobe lnet
-$ mkfs.lustre --fsname lustre --mdt --mgs /dev/sda
-$ mkdir -p /mnt/test/mdt
-$ mount -t lustre /dev/sda /mnt/test/mdt   
-$ mount -t lustre mgs@o2ib0:/lustre /mnt/mdt
-$ mkfs.lustre --fsname lustre --mgsnode=mds@o2ib0 --ost --index=0 /dev/sda
-$ mkdir -p /mnt/test/mdt
-$ mount -t lustre /dev/sda /mnt/test/ost   
-$ mount -t lustre mgs@o2ib0:/lustre /mnt/ost0</screen>
+mds# mkfs.lustre --fsname lustre --mdt --mgs /dev/sda
+mds# mkdir -p /mnt/test/mdt
+mds# mount -t lustre /dev/sda /mnt/test/mdt   
+mds# mount -t lustre mgs@o2ib0:/lustre /mnt/mdt
+oss# mkfs.lustre --fsname lustre --mgsnode=mds@o2ib0 --ost --index=0 /dev/sda
+oss# mkdir -p /mnt/test/mdt
+oss# mount -t lustre /dev/sda /mnt/test/ost   
+oss# mount -t lustre mgs@o2ib0:/lustre /mnt/ost0</screen>
         </listitem>
         <listitem>
           <para>Mount the clients.</para>
-          <screen>mount -t lustre &lt;MGS node&gt;:/&lt;fsname&gt; &lt;mount point&gt;</screen>
+          <screen>client# mount -t lustre <replaceable>mgs_node</replaceable>:/<replaceable>fsname</replaceable> <replaceable>/mount_point</replaceable></screen>
           <para>This example shows an IB client being mounted.</para>
-          <screen>mount -t lustre
+          <screen>client# mount -t lustre
 192.168.10.101@o2ib0,192.168.10.102@o2ib1:/mds/client /mnt/lustre</screen>
         </listitem>
       </orderedlist>
@@ -174,7 +169,7 @@ Clients            192.168.[2-127].*               192.168.[128-253].*</screen>
       <para>You could create these configurations:</para>
       <itemizedlist>
         <listitem>
-          <para>A cluster with more clients than servers. The fact that an individual client cannot get two rails of bandwidth is unimportant because the servers are the actual bottleneck.</para>
+          <para>A cluster with more clients than servers. The fact that an individual client cannot get two rails of bandwidth is unimportant because the servers are typically the actual bottleneck.</para>
         </listitem>
       </itemizedlist>
       <screen>ip2nets=&quot;o2ib0(ib0),    o2ib1(ib1)      192.168.[0-1].*                     \

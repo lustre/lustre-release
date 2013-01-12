@@ -203,7 +203,7 @@ forwarding (&quot;&quot;)</title>
                   <para>The acceptor is a TCP/IP service that some LNDs use to establish communications. If a local network requires it and it has not been disabled, the acceptor listens on a single port for connection requests that it redirects to the appropriate local network. The acceptor is part of the LNET module and configured by the following options:</para>
                   <itemizedlist>
                     <listitem>
-                      <para><literal>secure</literal>  - Accept connections only from reserved TCP ports (&lt; 1023).</para>
+                      <para><literal>secure</literal>  - Accept connections only from reserved TCP ports (below 1023).</para>
                     </listitem>
                     <listitem>
                       <para><literal>all</literal>  - Accept connections from any TCP port. </para>
@@ -428,7 +428,7 @@ forwarding (&quot;&quot;)</title>
       <para><emphasis role="bold">TX Descriptors</emphasis></para>
       <para>The <literal>ptllnd</literal> has a pool of so-called &quot;tx descriptors&quot;, which it uses not only for outgoing messages, but also to hold state for bulk transfers requested by incoming messages. This pool should scale with the total number of peers.</para>
       <para>To enable the building of the Portals LND (<literal>ptllnd.ko</literal>) configure with this option:</para>
-      <screen>./configure --with-portals=&lt;path-to-portals-headers&gt;</screen>
+      <screen>./configure --with-portals=<replaceable>/path/to/portals/headers</replaceable></screen>
       <informaltable frame="all">
         <tgroup cols="2">
           <colspec colname="c1" colwidth="50*"/>
@@ -577,7 +577,7 @@ forwarding (&quot;&quot;)</title>
                 <para> <literal>cksum</literal></para>
               </entry>
               <entry>
-                <para>Enables small message (&lt; 4 KB) checksums if set to a non-zero value.</para>
+                <para>Enables small message (below 4 KB) checksums if set to a non-zero value.</para>
               </entry>
             </row>
             <row>
@@ -617,7 +617,7 @@ forwarding (&quot;&quot;)</title>
                 <para> <literal>polling</literal></para>
               </entry>
               <entry>
-                <para>Use zero (0) to block (wait). A value &gt; 0 will poll that many times before blocking.</para>
+                <para>Use zero (0) to block (wait). A value greater than 0 will poll that many times before blocking.</para>
               </entry>
             </row>
             <row>

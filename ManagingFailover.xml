@@ -28,22 +28,22 @@
     </itemizedlist>
     <para>With MMP enabled, mounting a clean file system takes at least 10 seconds. If the file system was not cleanly unmounted, then the file system mount may require additional time.</para>
     <note>
-      <para>The MMP feature is only supported on Linux kernel versions &gt;= 2.6.9.</para>
+      <para>The MMP feature is only supported on Linux kernel versions newer than 2.6.9.</para>
     </note>
     <section remap="h3">
       <title><indexterm><primary>failover</primary><secondary>multiple-mount protection</secondary></indexterm>Working with Multiple-Mount Protection</title>
       <para>On a new Lustre file system, MMP is automatically enabled by mkfs.lustre at format time if failover is being used and the kernel and <literal>e2fsprogs</literal> version support it. On an existing file system, a Lustre administrator can manually enable MMP when the file system is unmounted.</para>
       <para>Use the following commands to determine whether MMP is running in Lustre and to enable or disable the MMP feature.</para>
       <para>To determine if MMP is enabled, run:</para>
-      <screen>dumpe2fs -h &lt;device&gt;|grep mmp</screen>
+      <screen>dumpe2fs -h <replaceable>/dev/block_device</replaceable> | grep mmp</screen>
       <para>Here is a sample command:</para>
       <screen>dumpe2fs -h /dev/sdc | grep mmp 
 Filesystem features: has_journal ext_attr resize_inode dir_index 
 filetype extent mmp sparse_super large_file uninit_bg</screen>
       <para>To manually disable MMP, run:</para>
-      <screen>tune2fs -O ^mmp &lt;device&gt; </screen>
+      <screen>tune2fs -O ^mmp <replaceable>/dev/block_device</replaceable></screen>
       <para>To manually enable MMP, run:</para>
-      <screen>tune2fs -O mmp &lt;device&gt;</screen>
+      <screen>tune2fs -O mmp <replaceable>/dev/block_device</replaceable></screen>
       <para>When MMP is enabled, if <literal>ldiskfs</literal> detects multiple mount attempts after the file system is mounted, it blocks these later mount attempts and reports the time when the MMP block was last updated, the node name, and the device name of the node where the file system is currently mounted.</para>
     </section>
   </section>

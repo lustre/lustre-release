@@ -42,7 +42,7 @@
           Overview of LNET Module Parameters</title>
     <para>LNET kernel module (lnet) parameters specify how LNET is to be configured to work with Lustre, including which NICs will be configured to work with Lustre and the routing to be used with Lustre.</para>
     <para>Parameters for LNET can be specified in the <literal>/etc/modprobe.d/lustre.conf</literal> file.  In some cases the parameters may have been stored in <literal>/etc/modprobe.conf</literal>, but this has been deprecated since before RHEL5 and SLES10, and having a separate <literal>/etc/modprobe.d/lustre.conf</literal> file simplifies administration and distribution of the Lustre networking configuration.  This file contains one or more entries with the syntax:</para>
-    <screen>options lnet &lt;<emphasis>parameter</emphasis>&gt;=&lt;<emphasis>parameter value</emphasis>&gt;</screen>
+    <screen>options lnet <replaceable>parameter</replaceable>=<replaceable>value</replaceable></screen>
     <para>To specify the network interfaces that are to be used for Lustre, set either the networks parameter or the <literal>ip2nets</literal> parameter (only one of these parameters can be used at a time):</para>
     <itemizedlist>
       <listitem>
@@ -68,7 +68,7 @@
     <section remap="h3">
       <title><indexterm><primary>LNET</primary><secondary>using NID</secondary></indexterm>Using a Lustre Network Identifier (NID) to Identify a Node</title>
       <para>A Lustre network identifier (NID) is used to uniquely identify a Lustre network endpoint by node ID and network type. The format of the NID is:</para>
-      <screen>&lt;<emphasis>network</emphasis><emphasis>id</emphasis>&gt;@&lt;<emphasis>network</emphasis><emphasis>type</emphasis>&gt;</screen>
+      <screen><replaceable>network_id</replaceable>@<replaceable>network_type</replaceable></screen>
       <para>Examples are:</para>
       <screen>10.67.73.200@tcp0
 10.67.75.100@o2ib</screen>
@@ -77,13 +77,13 @@
       <para>To determine the appropriate NID to specify in the mount command, use the <literal>lctl</literal> command. To display MDS NIDs, run on the MDS :</para>
       <screen>lctl list_nids</screen>
       <para>To determine if a client can reach the MDS using a particular NID, run on the client:</para>
-      <screen>lctl which_nid &lt;<emphasis>MDS NID</emphasis>&gt;</screen>
+      <screen>lctl which_nid <replaceable>MDS_NID</replaceable></screen>
     </section>
   </section>
   <section xml:id="dbdoclet.50438216_46279">
     <title><indexterm><primary>LNET</primary><secondary>module parameters</secondary></indexterm>Setting the LNET Module networks Parameter</title>
     <para>If a node has more than one network interface, you&apos;ll typically want to dedicate a specific interface to Lustre. You can do this by including an entry in the <literal>lustre.conf</literal> file on the node that sets the LNET module <literal>networks</literal> parameter:</para>
-    <screen>options lnet networks=&lt;<emphasis>comma-separated list of networks</emphasis>&gt;</screen>
+    <screen>options lnet networks=<replaceable>comma-separated list of networks</replaceable></screen>
     <para>This example specifies that a Lustre node will use a TCP/IP interface and an InfiniBand interface:</para>
     <screen>options lnet networks=tcp0(eth0),o2ib(ib0)</screen>
     <para>This example specifies that the Lustre node will use the TCP/IP interface <literal>eth1</literal>:</para>
@@ -166,7 +166,7 @@ tcp0 192.168.0.*; o2ib0 132.6.[1-3].[2-8/2]&quot;&apos;</screen>
     <title><indexterm><primary>LNET</primary><secondary>routes</secondary></indexterm>Setting the LNET Module routes Parameter</title>
     <para>The LNET module routes parameter is used to identify routers in a Lustre configuration. These parameters are set in <literal>modprobe.conf</literal> on each Lustre node.</para>
     <para>The LNET routes parameter specifies a colon-separated list of router definitions. Each route is defined as a network number, followed by a list of routers:</para>
-    <screen>routes=&lt;<emphasis>net type</emphasis>&gt; &lt;<emphasis>router NID(s)</emphasis>&gt;</screen>
+    <screen>routes=<replaceable>net_type router_NID(s)</replaceable></screen>
     <para>This example specifies bi-directional routing in which TCP clients can reach Lustre resources on the IB networks and IB servers can access the TCP networks:</para>
     <screen>options lnet &apos;ip2nets=&quot;tcp0 192.168.0.*; \
   o2ib0(ib0) 132.6.1.[1-128]&quot;&apos; &apos;routes=&quot;tcp0   132.6.1.[1-8]@o2ib0; \
@@ -194,7 +194,7 @@ lctl network configure</screen>
     <title><indexterm><primary>LNET</primary><secondary>route checker</secondary></indexterm>Configuring the Router Checker</title>
     <para>In a Lustre configuration in which different types of networks, such as a TCP/IP network and an Infiniband network, are connected by routers, a router checker can be run on the clients and servers in the routed configuration to monitor the status of the routers. In a multi-hop routing configuration, router checkers can be configured on routers to monitor the health of their next-hop routers.</para>
     <para>A router checker is configured by setting lnet parameters in <literal>lustre.conf</literal> by including an entry in this form:</para>
-    <screen>options lnet &lt;<emphasis>router checker parameter</emphasis>&gt;=&lt;<emphasis>parameter value</emphasis>&gt;</screen>
+    <screen>options lnet <replaceable>router_checker_parameter</replaceable>=<replaceable>value</replaceable></screen>
     <para>The router checker parameters are:</para>
     <itemizedlist>
       <listitem>

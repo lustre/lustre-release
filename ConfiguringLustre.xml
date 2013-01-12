@@ -25,7 +25,7 @@
           </emphasis>. For more information about hardware requirements, see <xref linkend="settinguplustresystem"/>.</para>
       </listitem>
       <listitem>
-        <para><emphasis><emphasis role="bold">Downloaded and installed the Lustre software</emphasis>.</emphasis>  For more information about preparing for and installing the Lustre software, see <xref linkend="installinglustre"/>.</para>
+        <para><emphasis role="bold">Downloaded and installed the Lustre software.</emphasis>  For more information about preparing for and installing the Lustre software, see <xref linkend="installinglustre"/>.</para>
       </listitem>
     </itemizedlist>
     <para>The following optional steps should also be completed, if needed, before the Lustre software is configured:</para>
@@ -53,29 +53,29 @@
     <orderedlist>
       <listitem>
         <para>Create a combined MGS/MDT file system on a block device. On the MDS node, run:</para>
-        <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgs --mdt --index=0 &lt;<emphasis>block device name</emphasis>&gt;</screen>
+        <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgs --mdt --index=0 <replaceable>/dev/block_device</replaceable></screen>
         <para>The default file system name (<literal>fsname</literal>) is <literal>lustre</literal>.</para>
         <note>
           <para>If you plan to create multiple file systems, the MGS should be created separately on its own dedicated block device, by running:</para>
-          <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgs &lt;<emphasis>block device name</emphasis>&gt;</screen>
+          <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgs <replaceable>/dev/block_device</replaceable></screen>
           <para>See <xref linkend="dbdoclet.50438194_88063"/> for more details.</para> 
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.addmdtindex" condition='l24'>
 		<para>Optional for Lustre 2.4 and later. Add in additional MDTs.</para>
-        <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgsnode=&lt;nid&gt; --mdt --index=1 &lt;<emphasis>block device name</emphasis>&gt;</screen>
+        <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>nid</replaceable> --mdt --index=1 <replaceable>/dev/block_device</replaceable></screen>
 		<note><para>Up to 4095 additional MDTs can be added.</para></note>
       </listitem>
       <listitem>
         <para>Mount the combined MGS/MDT file system on the block device. On the MDS node, run:</para>
-        <screen>mount -t lustre &lt;<emphasis>block device name</emphasis>&gt; &lt;<emphasis>mount point</emphasis>&gt;</screen>
+        <screen>mount -t lustre <replaceable>/dev/block_device</replaceable> <replaceable>/mount_point</replaceable></screen>
         <note>
           <para>If you have created and MGS and an MDT on separate block devices, mount them both.</para>
         </note>
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1290915">
         <para>Create the OST. On the OSS node, run:</para>
-        <screen>mkfs.lustre --fsname=&lt;<emphasis>fsname</emphasis>&gt; --mgsnode=&lt;<emphasis>NID</emphasis>&gt; --ost --index=&lt;<emphasis>OST index</emphasis>&gt; &lt;<emphasis>block device name</emphasis>&gt;</screen>
+        <screen>mkfs.lustre --fsname=<replaceable>fsname</replaceable> --mgsnode=<replaceable>MGS_NID</replaceable> --ost --index=<replaceable>OST_index</replaceable> <replaceable>/dev/block_device</replaceable></screen>
         <para>When you create an OST, you are formatting a <literal>ldiskfs</literal> file system on a block storage device like you would with any local file system.</para>
         <para>You can have as many OSTs per OSS as the hardware or drivers allow. For more information about storage and memory requirements for a Lustre file system, see <xref linkend="settinguplustresystem"/>.</para>
         <para>You can only configure one OST per block device. You should create an OST that uses the raw block device and does not use partitioning.</para>
@@ -87,7 +87,7 @@
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1293955">
         <para>Mount the OST. On the OSS node where the OST was created, run:</para>
-        <screen>mount -t lustre <emphasis>&lt;block device name&gt; &lt;mount point&gt;</emphasis></screen>
+        <screen>mount -t lustre <replaceable>/dev/block_device</replaceable> <replaceable>/mount_point</replaceable></screen>
         <note>
           <para>
               To create additional OSTs, repeat Step <xref linkend="dbdoclet.50438267_pgfId-1290915"/> and Step <xref linkend="dbdoclet.50438267_pgfId-1293955"/>, specifying the next higher OST index number.</para>
@@ -95,7 +95,7 @@
       </listitem>
       <listitem xml:id="dbdoclet.50438267_pgfId-1290934">
         <para>Mount the Lustre file system on the client. On the client node, run:</para>
-        <screen>mount -t lustre &lt;<emphasis>MGS node</emphasis>&gt;:/&lt;<emphasis>fsname</emphasis>&gt; &lt;<emphasis>mount point</emphasis>&gt; 
+        <screen>mount -t lustre <replaceable>MGS_node</replaceable>:/<replaceable>fsname</replaceable> <replaceable>/mount_point</replaceable> 
 </screen>
         <note>
           <para>To create additional clients, repeat Step <xref linkend="dbdoclet.50438267_pgfId-1290934"/>.</para>

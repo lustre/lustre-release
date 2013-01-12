@@ -232,14 +232,14 @@ lfsck: fixed 0 errors</screen>
             <title>Manually Starting LFSCK</title>
             <section>
                 <title>Synopsis</title>
-                <screen>lctl lfsck_start &lt;-M | --device MDT_device&gt; \
-                    [-e | --error error_handle] \
+                <screen>lctl lfsck_start -M | --device <replaceable>MDT_device</replaceable> \
+                    [-e | --error <replaceable>error_handle</replaceable>] \
                     [-h | --help] \
-                    [-m | --method iteration_method] \
-                    [-n | --dryrun switch] \
+                    [-m | --method <replaceable>iteration_method</replaceable>] \
+                    [-n | --dryrun <replaceable>switch</replaceable>] \
                     [-r | --reset] \
-                    [-s | --speed speed_limit] \
-                    [-t | --type lfsck_type[,lfsck_type...]]
+                    [-s | --speed <replaceable>speed_limit</replaceable>] \
+                    [-t | --type <replaceable>lfsck_type[,lfsck_type...]</replaceable>]
                 </screen>
             </section>
             <section>
@@ -337,7 +337,7 @@ lfsck: fixed 0 errors</screen>
             <title>Manually Stopping <literal>lfsck</literal></title>
             <section>
                 <title>Synopsis</title>
-                <screen>lctl lfsck_stop &lt;-M | --device MDT_device&gt; \
+                <screen>lctl lfsck_stop -M | --device <replaceable>MDT_device</replaceable> \
                     [-h | --help]
                 </screen>
             </section>
@@ -391,7 +391,7 @@ lfsck: fixed 0 errors</screen>
             <title>LFSCK status via <literal>procfs</literal></title>
             <section>
                 <title>Synopsis</title>
-                <screen>lctl get_param -n osd-ldisk.${FSNAME}-${MDT_device}.oi_scrub
+                <screen>lctl get_param -n osd-ldisk.<replaceable>FSNAME</replaceable>-<replaceable>MDT_device</replaceable>.oi_scrub
                 </screen>
             </section>
             <section>

@@ -133,24 +133,24 @@
     <section xml:id="dbdoclet.50438256_pgfId-1293228">
       <title><indexterm><primary>inodes</primary><secondary>MDS</secondary></indexterm><indexterm><primary>setup</primary><secondary>inodes</secondary></indexterm>Setting the Number of Inodes for the MDS</title>
       <para>The number of inodes on the MDT is determined at format time based on the total size of the file system to be created. The default MDT inode ratio is one inode for every 4096 bytes of file system space. To override the inode ratio, use the following option:</para>
-      <screen>-i <emphasis>&lt;bytes per inode&gt;</emphasis></screen>
+      <screen>-i <replaceable>bytes_per_inode</replaceable></screen>
       <para>For example, use the following option to create one inode per 2048 bytes of file system space.</para>
       <screen>--mkfsoptions=&quot;-i 2048&quot; </screen>
       <para>To avoid mke2fs creating an unusable file system, do not specify the -i option with an inode ratio below one inode per 1024 bytes. Instead, specify an absolute number of inodes, using this option:</para>
-      <screen>-N<emphasis> &lt;number of inodes&gt;</emphasis></screen>
+      <screen>-N <replaceable>number_of_inodes</replaceable></screen>
       <para>For example, by default, a 2 TB MDT will have 512M inodes. The largest currently-supported file system size is 16 TB, which would hold 4B inodes, the maximum possible number of inodes in a ldiskfs file system. With an MDS inode ratio of 1024 bytes per inode, a 2 TB MDT would hold 2B inodes, and a 4 TB MDT would hold 4B inodes.</para>
     </section>
     <section remap="h3">
       <title><indexterm><primary>inodes</primary><secondary>MDT</secondary></indexterm>Setting the Inode Size for the MDT</title>
       <para>Lustre uses &quot;large&quot; inodes on backing file systems to efficiently store Lustre metadata with each file. On the MDT, each inode is at least 512 bytes in size (by default), while on the OST each inode is 256 bytes in size.</para>
       <para>The backing ldiskfs file system also needs sufficient space for other metadata like the journal (up to 400 MB), bitmaps and directories and a few files that Lustre uses to maintain cluster consistency.</para>
-      <para>To specify a larger inode size, use the <literal>-I &lt;inodesize&gt;</literal> option. We recommend you do NOT specify a smaller-than-default inode size, as this can lead to serious performance problems; and you cannot change this parameter after formatting the file system. The inode ratio must always be larger than the inode size.</para>
+      <para>To specify a larger inode size, use the <literal>-I <replaceable>inode_size</replaceable></literal> option. We recommend you do NOT specify a smaller-than-default inode size, as this can lead to serious performance problems; and you cannot change this parameter after formatting the file system. The inode ratio must always be larger than the inode size.</para>
     </section>
     <section xml:id="dbdoclet.50438256_53886">
       <title><indexterm><primary>inodes</primary><secondary>OST</secondary></indexterm>Setting the Number of Inodes for an OST</title>
       <para>When formatting OST file systems, it is normally advantageous to take local file system usage into account. Try to minimize the number of inodes on each OST, while keeping enough margin for potential variance in future usage. This helps reduce the format and file system check time, and makes more space available for data.</para>
       <para>The current default is to create one inode per 16 KB of space in the OST file system, but in many environments, this is far too many inodes for the average file size. As a good rule of thumb, the OSTs should have at least:</para>
-      <para>num_ost_inodes = 4 * <emphasis>&lt;num_mds_inodes&gt;</emphasis> * <emphasis>&lt;default_stripe_count&gt;</emphasis> / <emphasis>&lt;number_osts&gt;</emphasis></para>
+      <para>num_ost_inodes = 4 * <replaceable>number_of_mds_inodes</replaceable> * <replaceable>default_stripe_count</replaceable> / <replaceable>number_of_osts</replaceable></para>
       <table frame="all">
             <title xml:id="settinguplustresystem.tab1">Inode Ratio to be considered</title>
             <tgroup cols="3">
@@ -173,7 +173,7 @@
               <tbody>
                 <row>
                   <entry>
-                    <para> &lt; 10GB </para>
+                    <para> over 10GB </para>
                   </entry>
                   <entry>
                     <para> 1 inode/16KB </para>
@@ -206,7 +206,7 @@
                 </row>
                 <row>
                   <entry>
-                    <para> &gt; 8TB </para>
+                    <para> over 8TB </para>
                   </entry>
                   <entry>
                     <para> 1 inode/1MB </para>
@@ -220,9 +220,9 @@
         </table>
       <para>&#160;</para>
       <para>You can specify the number of inodes on the OST file systems using the following option to the <literal>--mkfs</literal> option:</para>
-      <screen>-N <emphasis>&lt;num_inodes&gt;</emphasis></screen>
+      <screen>-N <replaceable>num_inodes</replaceable></screen>
       <para> Alternately, if you know the average file size, then you can specify the OST inode count for the OST file systems using:</para>
-      <screen>-i <emphasis>&lt;average_file_size</emphasis> / (<emphasis>number_of_stripes</emphasis> * 4)<emphasis>&gt;</emphasis></screen>
+      <screen>-i <replaceable>average_file_size</replaceable> / (<replaceable>number_of_stripes</replaceable> * 4)</screen>
       <para>For example, if the average file size is 16 MB and there are, by default 4 stripes per file, then <literal>--mkfsoptions=&apos;-i 1048576&apos;</literal> would be appropriate.</para>
       <note>
         <para>In addition to the number of inodes, file system check time on OSTs is affected by a number of other variables: size of the file system, number of allocated blocks, distribution of allocated blocks on the disk, disk speed, CPU speed, and amount of RAM on the server. Reasonable file system check times (without serious file system problems), are expected to take five and thirty minutes per TB.</para>

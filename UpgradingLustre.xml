@@ -58,18 +58,18 @@
             <listitem>
               <para>Install the kernel, modules and ldiskfs packages. For example:</para>
               <screen>$ rpm -ivh
-kernel-lustre-smp-&lt;ver&gt; \
-kernel-ib-&lt;ver&gt; \
-lustre-modules-&lt;ver&gt; \
-lustre-ldiskfs-&lt;ver&gt;</screen>
+kernel-lustre-smp-<replaceable>ver</replaceable> \
+kernel-ib-<replaceable>ver</replaceable> \
+lustre-modules-<replaceable>ver</replaceable> \
+lustre-ldiskfs-<replaceable>ver</replaceable></screen>
             </listitem>
             <listitem>
               <para>Upgrade the utilities/userspace packages. For example:</para>
-              <screen>$ rpm -Uvh lustre-&lt;ver&gt;</screen>
+              <screen>$ rpm -Uvh lustre-<replaceable>ver</replaceable></screen>
             </listitem>
             <listitem>
               <para>If a new <literal>e2fsprogs</literal> package is available, upgrade it. For example:</para>
-              <screen>$ rpm -Uvh e2fsprogs-&lt;ver&gt;
+              <screen>$ rpm -Uvh e2fsprogs-<replaceable>ver</replaceable>
 </screen>
               <para>Use e2fsprogs-1.41.90-wc3 or later, available at:</para>
               <para><link xl:href="http://downloads.whamcloud.com/public/e2fsprogs/latest/">http://downloads.whamcloud.com/public/e2fsprogs/latest/</link></para>
@@ -106,17 +106,17 @@ lustre-ldiskfs-&lt;ver&gt;</screen>
           <orderedlist>
             <listitem>
               <para>Mount the OSTs (be sure to mount all OSTs). On each OSS node, run:</para>
-              <screen>mount -a -t lustre</screen>
+              <screen>oss# mount -a -t lustre</screen>
               <para>This command assumes that all OSTs are listed in the /etc/fstab file.  If the OSTs are not in the /etc/fstab file, they need to be mounted individually by running the mount command:</para>
-              <screen>mount -t lustre &lt;block device name&gt; &lt;mount point&gt; </screen>
+              <screen>oss# mount -t lustre <replaceable>/dev/block_device</replaceable> <replaceable>/mount_point</replaceable> </screen>
             </listitem>
             <listitem>
               <para>Mount the MDT. On the MDS node, run:</para>
-              <screen>mount -a -t lustre</screen>
+              <screen>mds# mount -a -t lustre</screen>
             </listitem>
             <listitem>
               <para>Mount the file system on the clients. On each client node, run:</para>
-              <screen>mount -a -t lustre</screen>
+              <screen>client# mount -a -t lustre</screen>
             </listitem>
           </orderedlist>
         </listitem>

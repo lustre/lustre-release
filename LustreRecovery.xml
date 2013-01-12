@@ -94,7 +94,7 @@
       <para>To force an OST recovery, unmount the OST and then mount it again. If the OST was connected to clients before it failed, then a recovery process starts after the remount, enabling clients to reconnect to the OST and replay transactions in their queue. When the OST is in recovery mode, all new client connections are refused until the recovery finishes. The recovery is complete when either all previously-connected clients reconnect and their transactions are replayed or a client connection attempt times out. If a connection attempt times out, then all clients waiting to reconnect (and their transactions) are lost.</para>
       <note>
         <para>If you know an OST will not recover a previously-connected client (if, for example, the client has crashed), you can manually abort the recovery using this command:</para>
-        <para><screen>lctl --device &lt;OST device number&gt; abort_recovery</screen></para>
+        <para><screen>oss# lctl --device <replaceable>lustre_device_number</replaceable> abort_recovery</screen></para>
         <para>To determine an OST&apos;s device number and device name, run the <literal>lctl dl</literal> command. Sample <literal>lctl dl</literal> command output is shown below:</para>
         <screen>7 UP obdfilter ddn_data-OST0009 ddn_data-OST0009_UUID 1159 </screen>
         <para>In this example, 7 is the OST device number. The device name is <literal>ddn_data-OST0009</literal>. In most instances, the device name can be used in place of the device number.</para>

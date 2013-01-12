@@ -28,7 +28,7 @@
     <section remap="h3">
       <title><indexterm><primary>I/O</primary><secondary>OST space usage</secondary></indexterm>Checking OST Space Usage</title>
       <para>The example below shows an unbalanced file system:</para>
-      <screen>root@LustreClient01 ~]# lfs df -h
+      <screen>client# lfs df -h
 UUID                       bytes           Used            Available       \
 Use%            Mounted on
 lustre-MDT0000_UUID        4.4G            214.5M          3.9G            \
@@ -49,10 +49,9 @@ lustre-OST0005_UUID        2.0G            743.3M          1.1G            \
 filesystem summary:        11.8G           5.4G            5.8G            \
 45%             /mnt/lustre</screen>
       <para>In this case, OST:2 is almost full and when an attempt is made to write additional information to the file system (even with uniform striping over all the OSTs), the write command fails as follows:</para>
-      <screen>[root@LustreClient01 ~]# lfs setstripe /mnt/lustre 4M 0 -1
-[root@LustreClient01 ~]# dd if=/dev/zero of=/mnt/lustre/test_3 \ bs=10M cou\
-nt=100
-dd: writing `/mnt/lustre/test_3&apos;: No space left on device
+      <screen>client# lfs setstripe /mnt/lustre 4M 0 -1
+client# dd if=/dev/zero of=/mnt/lustre/test_3 bs=10M count=100
+dd: writing &apos;/mnt/lustre/test_3&apos;: No space left on device
 98+0 records in
 97+0 records out
 1017192448 bytes (1.0 GB) copied, 23.2411 seconds, 43.8 MB/s</screen>
@@ -63,13 +62,13 @@ dd: writing `/mnt/lustre/test_3&apos;: No space left on device
       <orderedlist>
         <listitem>
           <para>Log into the MDS server:</para>
-          <screen>[root@LustreClient01 ~]# ssh root@192.168.0.10 
+          <screen>client# ssh root@192.168.0.10 
 root@192.168.0.10&apos;s password: 
 Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6</screen>
         </listitem>
         <listitem>
           <para>Use the <literal>lctl dl</literal> command to show the status of all file system components:</para>
-          <screen>[root@mds ~]# lctl dl 
+          <screen>mds# lctl dl 
 0 UP mgs MGS MGS 9 
 1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
 2 UP mdt MDS MDS_uuid 3
@@ -84,11 +83,11 @@ Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6</screen>
         </listitem>
         <listitem>
           <para>Use <literal>lctl</literal> deactivate to take the full OST offline:</para>
-          <screen>[root@mds ~]# lctl --device 7 deactivate</screen>
+          <screen>mds# lctl --device 7 deactivate</screen>
         </listitem>
         <listitem>
           <para>Display the status of the file system components:</para>
-          <screen>[root@mds ~]# lctl dl 
+          <screen>mds# lctl dl 
 0 UP mgs MGS MGS 9
 1 UP mgc MGC192.168.0.10@tcp e384bb0e-680b-ce25-7bc9-81655dd1e813 5
 2 UP mdt MDS MDS_uuid 3
@@ -114,24 +113,24 @@ Last login: Wed Nov 26 13:35:12 2008 from 192.168.0.6</screen>
         <listitem>
           <para>Identify the file(s) to be moved.</para>
           <para>In the example below, output from the <literal>getstripe</literal> command indicates that the file <literal>test_2</literal> is located entirely on OST2:</para>
-          <screen>[client]# lfs getstripe /mnt/lustre/test_2
+          <screen>client# lfs getstripe /mnt/lustre/test_2
 /mnt/lustre/test_2
 obdidx     objid   objid   group
      2      8     0x8       0</screen>
         </listitem>
         <listitem>
           <para>To move single object(s), create a new copy and remove the original. Enter:</para>
-          <screen>[client]# cp -a /mnt/lustre/test_2 /mnt/lustre/test_2.tmp
-[client]# mv /mnt/lustre/test_2.tmp /mnt/lustre/test_2</screen>
+          <screen>client# cp -a /mnt/lustre/test_2 /mnt/lustre/test_2.tmp
+client# mv /mnt/lustre/test_2.tmp /mnt/lustre/test_2</screen>
         </listitem>
         <listitem>
           <para>To migrate large files from one or more OSTs, enter:</para>
-          <screen>[client]# lfs find --ost {OST_UUID} -size +1G | lfs_migrate -y</screen>
+          <screen>client# lfs find --ost <replaceable>ost_name</replaceable> -size +1G | lfs_migrate -y</screen>
         </listitem>
         <listitem>
           <para>Check the file system balance.</para>
           <para>The <literal>df</literal> output in the example below shows a more balanced system compared to the <literal>df</literal> output in the example in <xref linkend="dbdoclet.50438211_17536"/>.</para>
-          <screen>[client]# lfs df -h
+          <screen>client# lfs df -h
 UUID                 bytes         Used            Available       Use%    \
         Mounted on
 lustre-MDT0000_UUID   4.4G         214.5M          3.9G            4%      \
@@ -226,47 +225,47 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
         <para>Running the <literal>writeconf</literal> command on the MDS erases all pools information (as well as any other parameters set using <literal>lctl conf_param</literal>). We recommend that the pools definitions (and <literal>conf_param</literal> settings) be executed using a script, so they can be reproduced easily after a <literal>writeconf</literal> is performed.</para>
       </caution>
       <para>To create a new pool, run:</para>
-      <screen>lctl pool_new &lt;fsname&gt;.&lt;poolname&gt;</screen>
+      <screen>mgs# lctl pool_new <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable></screen>
       <note>
         <para>The pool name is an ASCII string up to 16 characters.</para>
       </note>
       <para>To add the named OST to a pool, run:</para>
-      <screen>lctl pool_add &lt;fsname&gt;.&lt;poolname&gt; &lt;ost_list&gt;</screen>
+      <screen>mgs# lctl pool_add <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable> <replaceable>ost_list</replaceable></screen>
       <para>Where:</para>
       <itemizedlist>
         <listitem>
-          <para><literal>&lt;ost_list&gt; is &lt;fsname-&gt;OST&lt;index_range&gt;[_UUID]</literal></para>
+          <para><literal><replaceable>ost_list</replaceable> is <replaceable>fsname</replaceable>-OST<replaceable>index_range</replaceable></literal></para>
         </listitem>
         <listitem>
-          <para><literal>&lt;index_range&gt; is &lt;ost_index_start&gt;-&lt;ost_index_end&gt;[,&lt;index_range&gt;]</literal> or <literal>&lt;ost_index_start&gt;-&lt;ost_index_end&gt;/&lt;step&gt;</literal></para>
+          <para><literal><replaceable>index_range</replaceable> is <replaceable>ost_index_start</replaceable>-<replaceable>ost_index_end[,index_range]</replaceable></literal> or <literal><replaceable>ost_index_start</replaceable>-<replaceable>ost_index_end/step</replaceable></literal></para>
         </listitem>
       </itemizedlist>
-      <para>If the leading <literal>&lt;fsname&gt;</literal> and/or ending <literal>_UUID</literal> are missing, they are automatically added.</para>
+      <para>If the leading <literal><replaceable>fsname</replaceable></literal> and/or ending <literal>_UUID</literal> are missing, they are automatically added.</para>
       <para> For example, to add even-numbered OSTs to pool1 on file system <literal>lustre</literal>, run a single command (add) to add many OSTs to the pool at one time:</para>
       <para><screen>lctl pool_add lustre.pool1 OST[0-10/2]</screen></para>
       <note>
         <para>Each time an OST is added to a pool, a new <literal>llog</literal> configuration record is created. For convenience, you can run a single command.</para>
       </note>
       <para>To remove a named OST from a pool, run:</para>
-      <screen>lctl pool_remove &lt;fsname&gt;.&lt;poolname&gt; &lt;ost_list&gt;</screen>
+      <screen>mgs# lctl pool_remove <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable> <replaceable>ost_list</replaceable></screen>
       <para>To destroy a pool, run:</para>
-      <screen>lctl pool_destroy &lt;fsname&gt;.&lt;poolname&gt;</screen>
+      <screen>mgs# lctl pool_destroy <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable></screen>
       <note>
         <para>All OSTs must be removed from a pool before it can be destroyed.</para>
       </note>
       <para>To list pools in the named file system, run:</para>
-      <screen>lctl pool_list &lt;fsname&gt; | &lt;pathname&gt;</screen>
+      <screen>mgs# lctl pool_list <replaceable>fsname|pathname</replaceable></screen>
       <para>To list OSTs in a named pool, run:</para>
-      <screen>lctl pool_list &lt;fsname&gt;.&lt;poolname&gt;</screen>
+      <screen>lctl pool_list <replaceable>fsname</replaceable>.<replaceable>poolname</replaceable></screen>
       <section remap="h4">
         <title>Using the lfs Command with OST Pools</title>
         <para>Several lfs commands can be run with OST pools. Use the <literal>lfs setstripe</literal> command to associate a directory with an OST pool. This causes all new regular files and directories in the directory to be created in the pool. The lfs command can be used to list pools in a file system and OSTs in a named pool.</para>
         <para>To associate a directory with a pool, so all new files and directories will be created in the pool, run:</para>
-        <screen>lfs setstripe --pool|-p pool_name &lt;filename|dirname&gt; </screen>
+        <screen>client# lfs setstripe --pool|-p pool_name <replaceable>filename|dirname</replaceable> </screen>
         <para>To set striping patterns, run:</para>
-        <screen>lfs setstripe        [--size|-s stripe_size] [--offset|-o start_ost]
+        <screen>client# lfs setstripe [--size|-s stripe_size] [--offset|-o start_ost]
            [--count|-c stripe_count] [--pool|-p pool_name]
-           &lt;dir|filename&gt;</screen>
+           <replaceable>dir|filename</replaceable></screen>
         <note>
           <para>If you specify striping with an invalid pool name, because the pool does not exist or the pool name was mistyped, <literal>lfs setstripe</literal> returns an error. Run <literal>lfs pool_list</literal> to make sure the pool exists and the pool name is entered correctly.</para>
         </note>
@@ -297,9 +296,9 @@ filesystem summary:  11.8G 7.3G            3.9G    61%                     \
     <orderedlist>
       <listitem>
         <para>Add a new OST by passing on the following commands, run:</para>
-        <screen>$ mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
-$ mkdir -p /mnt/test/ost12
-$ mount -t lustre /dev/sda /mnt/test/ost12</screen>
+        <screen>oss# mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
+oss# mkdir -p /mnt/test/ost12
+oss# mount -t lustre /dev/sda /mnt/test/ost12</screen>
       </listitem>
       <listitem>
         <para>Migrate the data (possibly).</para>
@@ -334,7 +333,7 @@ $ mount -t lustre /dev/sda /mnt/test/ost12</screen>
     <section remap="h3">
       <title>Making File System Objects Immutable</title>
       <para>An immutable file or directory is one that cannot be modified, renamed or removed. To do this:</para>
-      <screen>chattr +i &lt;file&gt;</screen>
+      <screen>chattr +i <replaceable>file</replaceable></screen>
       <para>To remove this flag, use <literal>chattr -i</literal></para>
     </section>
   </section>
@@ -361,7 +360,7 @@ from 192.168.1.1@tcp inum 8991479/2386814769 object 1127239/0 extent [10240\
         <para>To check which checksum algorithm is being used by Lustre, run:</para>
         <screen>$ lctl get_param osc.*.checksum_type</screen>
         <para>To change the wire checksum algorithm used by Lustre, run:</para>
-        <screen>$ lctl set_param osc.*.checksum_type=&lt;algorithm name&gt;</screen>
+        <screen>$ lctl set_param osc.*.checksum_type=<replaceable>algorithm</replaceable></screen>
         <note>
           <para>The in-memory checksum always uses the adler32 algorithm, if available, and only falls back to crc32 if adler32 cannot be used.</para>
         </note>

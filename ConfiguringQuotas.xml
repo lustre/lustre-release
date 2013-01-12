@@ -77,8 +77,8 @@
       <para>The ldiskfs OSD relies on the standard Linux quota to maintain accounting information on disk. As a consequence, the Linux kernel running on the Lustre servers using ldiskfs backend must have <literal>CONFIG_QUOTA</literal>, <literal>CONFIG_QUOTACTL</literal> and <literal>CONFIG_QFMT_V2</literal> enabled.</para>
     </caution>
 
-    <para>As of Lustre 2.4.0, quota enforcement is thus turned on/off independently of space accounting which is always enabled. <literal>lfs quota&lt;on|off&gt;</literal> as well as the per-target <literal>quota_type</literal> parameter are deprecated in favor of a single per-filesystem quota parameter controlling inode/block quota enforcement. Like all permanent parameters, this quota parameter can be set via <literal>lctl conf_param</literal> on the MGS via the following syntax:</para>
-    <screen>lctl conf_param ${FSNAME}.quota.&lt;ost|mdt&gt;=&lt;u|g|ug|none&gt;</screen>
+    <para>As of Lustre 2.4.0, quota enforcement is thus turned on/off independently of space accounting which is always enabled. <literal>lfs quota<replaceable>on|off</replaceable></literal> as well as the per-target <literal>quota_type</literal> parameter are deprecated in favor of a single per-filesystem quota parameter controlling inode/block quota enforcement. Like all permanent parameters, this quota parameter can be set via <literal>lctl conf_param</literal> on the MGS via the following syntax:</para>
+    <screen>lctl conf_param <replaceable>fsname</replaceable>.quota.<replaceable>ost|mdt</replaceable>=<replaceable>u|g|ug|none</replaceable></screen>
     <itemizedlist>
       <listitem>
         <para><literal>ost</literal> -- to configure block quota managed by OSTs</para>
@@ -170,11 +170,11 @@ group uptodate: glb[1],slv[1],reint[0]</screen>
       </listitem>
     </itemizedlist>
     <para> Usage:</para>
-    <screen>lfs quota [-q] [-v] [-o obd_uuid] [-u|-g &lt;uname&gt;|uid|gname|gid&gt;]  &lt;filesystem&gt;
-lfs quota -t &lt;-u|-g&gt; &lt;filesystem&gt;
-lfs setquota &lt;-u|--user|-g|--group&gt; &lt;username|groupname&gt; [-b &lt;block-softlimit&gt;] \
-             [-B &lt;block-hardlimit&gt;] [-i &lt;inode-softlimit&gt;] \
-             [-I &lt;inode-hardlimit&gt;] &lt;filesystem&gt;</screen>
+    <screen>lfs quota [-q] [-v] [-o obd_uuid] [-u|-g <replaceable>uname|uid|gname|gid</replaceable>]  <replaceable>/mount_point</replaceable>
+lfs quota -t <replaceable>-u|-g</replaceable> <replaceable>/mount_point</replaceable>
+lfs setquota <replaceable>-u|--user|-g|--group</replaceable> <replaceable>username|groupname</replaceable> [-b <replaceable>block-softlimit</replaceable>] \
+             [-B <replaceable>block_hardlimit</replaceable>] [-i <replaceable>inode_softlimit</replaceable>] \
+             [-I <replaceable>inode_hardlimit</replaceable>] <replaceable>/mount_point</replaceable></screen>
     <para>To display general quota information (disk usage and limits) for the user running the command and his primary group, run:</para>
     <screen>$ lfs quota /mnt/testfs </screen>
     <para>To display general quota information for a specific user (&quot;<literal>bob</literal>&quot; in this example), run:</para>

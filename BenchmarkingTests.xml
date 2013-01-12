@@ -132,16 +132,16 @@
       <itemizedlist>
         <listitem>
           <para>File containing standard output data (same as <literal>stdout</literal>)</para>
-          <screen>${rslt}_<emphasis>&lt;date/time&gt;</emphasis>.summary</screen>
+          <screen><replaceable>rslt_date_time</replaceable>.summary</screen>
         </listitem>
         <listitem>
           <para>Temporary (tmp) files</para>
-          <screen>${rslt}_<emphasis>&lt;date/time&gt;</emphasis>_*
+          <screen><replaceable>rslt_date_time</replaceable>_*
 </screen>
         </listitem>
         <listitem>
           <para>Collected tmp files for post-mortem</para>
-          <screen>${rslt}_<emphasis>&lt;date/time&gt;</emphasis>.detail
+          <screen><replaceable>rslt_date_time</replaceable>.detail
 </screen>
         </listitem>
       </itemizedlist>
@@ -189,7 +189,7 @@
       </listitem>
       <listitem>
         <para><emphasis role="bold">Network</emphasis>  - In this mode, the Lustre client generates I/O requests over the network but these requests are not sent to the OST file system. The OSS node runs the obdecho server to receive the requests but discards them before they are sent to the disk.</para>
-        <para>Pass the parameters <literal>case=network</literal> and <literal>target=<replaceable>&lt;hostname</replaceable>|<replaceable>IP_of_server&gt;</replaceable></literal> to the script. For each network case, the script does the required setup.</para>
+        <para>Pass the parameters <literal>case=network</literal> and <literal>target=<replaceable>hostname|IP_of_server</replaceable></literal> to the script. For each network case, the script does the required setup.</para>
         <para>For more details, see <xref linkend="dbdoclet.50438212_36037"/></para>
       </listitem>
       <listitem>
@@ -252,9 +252,9 @@
         </listitem>
         <listitem>
           <para>List all OSTs you want to test.</para>
-          <para>Use the <literal>target=parameter</literal> to list the OSTs separated by spaces. List the individual OSTs by name using the format <emphasis>
-              <literal>&lt;fsname&gt;-&lt;OSTnumber&gt;</literal>
-            </emphasis> (for example, lustre-OST0001). You do not have to specify an MDS or LOV.</para>
+          <para>Use the <literal>target=parameter</literal> to list the OSTs separated by spaces. List the individual OSTs by name using the format
+              <literal><replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable></literal>
+            (for example, <literal>lustre-OST0001</literal>). You do not have to specify an MDS or LOV.</para>
         </listitem>
         <listitem>
           <para>Run the <literal>obdfilter_survey</literal> script with the <literal>target=parameter</literal>.</para>
@@ -283,16 +283,15 @@
           <screen>lctl dl</screen>
         </listitem>
         <listitem>
-          <para>Run the <literal>obdfilter_survey</literal> script with the parameters <literal>case=network</literal> and <literal>targets=<replaceable>&lt;hostname</replaceable>|<replaceable>ip_of_server&gt;</replaceable></literal>. For example:</para>
+          <para>Run the <literal>obdfilter_survey</literal> script with the parameters <literal>case=network</literal> and <literal>targets=<replaceable>hostname|ip_of_server</replaceable></literal>. For example:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 targets=&quot;oss0 oss1&quot; \
 	   case=network sh odbfilter-survey</screen>
         </listitem>
         <listitem>
           <para>On the server side, view the statistics at:</para>
-          <screen>/proc/fs/lustre/obdecho/<emphasis>&lt;echo_srv&gt;</emphasis>/stats</screen>
-          <para>where <emphasis>
-              <literal>&lt;echo_srv&gt;</literal>
-            </emphasis> is the <literal>obdecho</literal> server created by the script.</para>
+          <screen>/proc/fs/lustre/obdecho/<replaceable>echo_srv</replaceable>/stats</screen>
+          <para>where <literal><replaceable>echo_srv</replaceable></literal>
+            is the <literal>obdecho</literal> server created by the script.</para>
         </listitem>
       </orderedlist>
     </section>
@@ -338,10 +337,10 @@
         </listitem>
         <listitem>
           <para>List all OSCs you want to test.</para>
-          <para>Use the <literal>target=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name separated by spaces using the format <literal><replaceable>&lt;fsname&gt;-&lt;OST_name&gt;</replaceable>-osc-<replaceable>&lt;OSC_number&gt;</replaceable></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <replaceable role="bold">do not have to specify an MDS or LOV.</replaceable></para>
+          <para>Use the <literal>target=parameter</literal> to list the OSCs separated by spaces. List the individual OSCs by name separated by spaces using the format <literal><replaceable>fsname</replaceable>-<replaceable>OST_name</replaceable>-osc-<replaceable>instance</replaceable></literal> (for example, <literal>lustre-OST0000-osc-ffff88007754bc00</literal>). You <emphasis>do not have to specify an MDS or LOV.</emphasis></para>
         </listitem>
         <listitem>
-          <para>Run the <literal><replaceable role="bold">o</replaceable>bdfilter_survey</literal> script with the <literal>target=parameter</literal> and <literal>case=netdisk</literal>.</para>
+          <para>Run the <literal>obdfilter_survey</literal> script with the <literal>target=<replaceable>osc</replaceable></literal> and <literal>case=netdisk</literal>.</para>
           <para>An example of a local test run with up to two objects (<literal>nobjhi</literal>), up to two threads (<literal>thrhi</literal>), and 1024 Mb (size) transfer size is shown below:</para>
           <screen>$ nobjhi=2 thrhi=2 size=1024 \
            targets=&quot;lustre-OST0000-osc-ffff88007754bc00 \
@@ -779,7 +778,7 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
     <section remap="h3">
       <title>Using <literal>stats-collect</literal></title>
       <para>The stats-collect utility is configured by including profiling configuration variables in the config.sh script. Each configuration variable takes the following form, where 0 indicates statistics are to be collected only when the script starts and stops and <emphasis>n</emphasis> indicates the interval in seconds at which statistics are to be collected:</para>
-      <screen><emphasis>&lt;statistic&gt;</emphasis>_INTERVAL=<emphasis>[</emphasis>0<emphasis>|n]</emphasis></screen>
+      <screen><replaceable>statistic</replaceable>_INTERVAL=<replaceable>0|n</replaceable></screen>
       <para>Statistics that can be collected include:</para>
       <itemizedlist>
         <listitem>
@@ -821,10 +820,9 @@ performance</secondary></indexterm>Testing MDS Performance (<literal>mds-survey<
         <listitem>
           <para>Stop collecting statistics on each node, clean up the temporary file, and create a profiling tarball.</para>
           <para>Enter:</para>
-          <screen>sh gather_stats_everywhere.sh config.sh stop <emphasis>&lt;log_name.tgz&gt;</emphasis></screen>
-          <para>When <emphasis>
-              <literal>&lt;log_name.tgz&gt;</literal>
-            </emphasis> is specified, a profile tarball <literal>/tmp/<replaceable>&lt;log_name.tgz&gt;</replaceable></literal> is created.</para>
+          <screen>sh gather_stats_everywhere.sh config.sh stop <replaceable>log_name</replaceable>.tgz</screen>
+          <para>When <literal><replaceable>log_name</replaceable>.tgz</literal>
+            is specified, a profile tarball <literal><replaceable>/tmp/log_name</replaceable>.tgz</literal> is created.</para>
         </listitem>
         <listitem>
           <para>Analyze the collected statistics and create a csv tarball for the specified profiling data.</para>

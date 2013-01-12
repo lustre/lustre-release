@@ -158,7 +158,7 @@ $ quilt push -av</screen>
     <orderedlist>
       <listitem>
         <para>Configure the patched kernel to run with Lustre. Run:</para>
-        <screen>$ cd &lt;path to kernel tree&gt;
+        <screen>$ cd <replaceable>/path/to/kernel/tree</replaceable>
 $ cp /boot/config-`uname -r` .config
 $ make oldconfig || make menuconfig
 $ make include/asm
@@ -168,10 +168,10 @@ $ make include/linux/utsrelease.h</screen>
       </listitem>
       <listitem>
         <para>Run the Lustre configure script against the patched kernel and create the Lustre packages.</para>
-        <screen>$ cd &lt;path to lustre source tree&gt;
-$ ./configure --with-linux=&lt;path to kernel tree&gt;
+        <screen>$ cd <replaceable>/path/to/lustre/source/tree</replaceable>
+$ ./configure --with-linux=<replaceable>/path/to/kernel/tree</replaceable>
 $ make rpms</screen>
-        <para>This creates a set of <literal>.rpms</literal> in <literal>/usr/src/redhat/RPMS/&lt;arch&gt;</literal> with an appended date-stamp. The SuSE path is <literal>/usr/src/packages</literal>.</para>
+        <para>This creates a set of <literal>.rpms</literal> in <literal>/usr/src/redhat/RPMS/<replaceable>arch</replaceable></literal> with an appended date-stamp. The SuSE path is <literal>/usr/src/packages</literal>.</para>
         <note>
           <para>You do not need to run the Lustre configure script against an unpatched kernel.</para>
         </note>
@@ -210,20 +210,20 @@ lustre-source-1.6.5.1-\2.6.18_53.xx.xx.el5_lustre.1.6.5.1.custom_20081021.i686.r
           <listitem>
             <para>Install the kernel, modules and <literal>ldiskfs</literal> packages.</para>
             <para>Navigate to the directory where the RPMs are stored, and use the <literal>rpm -ivh</literal> command to install the kernel, module and ldiskfs packages.</para>
-            <screen>$ rpm -ivh kernel-lustre-smp-&lt;ver&gt; \
-kernel-ib-&lt;ver&gt; \
-lustre-modules-&lt;ver&gt; \
-lustre-ldiskfs-&lt;ver&gt;</screen>
+            <screen>$ rpm -ivh kernel-lustre-smp-<replaceable>ver</replaceable> \
+kernel-ib-<replaceable>ver</replaceable> \
+lustre-modules-<replaceable>ver</replaceable> \
+lustre-ldiskfs-<replaceable>ver</replaceable></screen>
           </listitem>
           <listitem>
             <para>Install the utilities/userspace packages.</para>
             <para>Use the <literal>rpm -ivh</literal> command to install the utilities packages. For example:</para>
-            <screen>$ rpm -ivh lustre-&lt;ver&gt;</screen>
+            <screen>$ rpm -ivh lustre-<replaceable>ver</replaceable></screen>
           </listitem>
           <listitem>
             <para>Install the <literal>e2fsprogs</literal> package.</para>
             <para>Make sure the <literal>e2fsprogs</literal> package is unpacked, and use the <literal>rpm -i</literal> command to install it. For example:</para>
-            <screen>$ rpm -i e2fsprogs-&lt;ver&gt;</screen>
+            <screen>$ rpm -i e2fsprogs-<replaceable>ver</replaceable></screen>
           </listitem>
           <listitem>
             <para>(Optional) If you want to add optional packages to your Lustre system, install them now.</para>

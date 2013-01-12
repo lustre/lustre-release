@@ -23,7 +23,7 @@
       <itemizedlist>
         <listitem>
           <para> All known file systems</para>
-          <screen># cat /proc/fs/lustre/mgs/MGS/filesystems
+          <screen>mgs# cat /proc/fs/lustre/mgs/MGS/filesystems
 spfs
 lustre</screen>
         </listitem>
@@ -31,15 +31,15 @@ lustre</screen>
       <itemizedlist>
         <listitem>
           <para> The server names participating in a file system (for each file system that has at least one server running)</para>
-          <screen># cat /proc/fs/lustre/mgs/MGS/live/spfs
+          <screen>mgs# cat /proc/fs/lustre/mgs/MGS/live/spfs
 fsname: spfs
 flags: 0x0         gen: 7
 spfs-MDT0000
 spfs-OST0000</screen>
         </listitem>
       </itemizedlist>
-      <para>All servers are named according to this convention: <literal>&lt;fsname&gt;-&lt;MDT|OST&gt;&lt;XXXX&gt;</literal>. This can be shown for live servers under <literal>/proc/fs/lustre/devices</literal>:</para>
-      <screen># cat /proc/fs/lustre/devices 
+      <para>All servers are named according to this convention: <literal><replaceable>fsname</replaceable>-<replaceable>MDT|OSTnumber</replaceable></literal>. This can be shown for live servers under <literal>/proc/fs/lustre/devices</literal>:</para>
+      <screen>mds# cat /proc/fs/lustre/devices 
 0 UP mgs MGS MGS 11
 1 UP mgc MGC192.168.10.34@tcp 1f45bb57-d9be-2ddb-c0b0-5431a49226705
 2 UP mdt MDS MDS_uuid 3
@@ -52,7 +52,7 @@ spfs-OST0000</screen>
 9 UP osc lustre-OST0000-osc-ce63ca00 08ac6584-6c4a-3536-2c6d-b36cf9cbdaa05
 10 UP osc lustre-OST0001-osc-ce63ca00 08ac6584-6c4a-3536-2c6d-b36cf9cbdaa05</screen>
       <para>Or from the device label at any time:</para>
-      <screen># e2label /dev/sda
+      <screen>mds# e2label /dev/sda
 lustre-MDT0000</screen>
     </section>
     <section remap="h3">
@@ -60,7 +60,7 @@ lustre-MDT0000</screen>
       <para>Lustre uses two types of timeouts.</para>
       <itemizedlist>
         <listitem>
-          <para>LND timeouts that ensure point-to-point communications complete in finite time in the presence of failures. These timeouts are logged with the <literal>S_LND</literal> flag set. They may <emphasis>not</emphasis> be printed as console messages, so you should check the Lustre log for <literal>D_NETERROR</literal> messages, or enable printing of <literal>D_NETERROR</literal> messages to the console (<literal>echo + neterror &gt; /proc/sys/lnet/printk</literal>).</para>
+          <para>LND timeouts that ensure point-to-point communications complete in finite time in the presence of failures. These timeouts are logged with the <literal>S_LND</literal> flag set. They may <emphasis>not</emphasis> be printed as console messages, so you should check the Lustre log for <literal>D_NETERROR</literal> messages, or enable printing of <literal>D_NETERROR</literal> messages to the console (<literal>lctl set_param printk=+neterror</literal>).</para>
         </listitem>
       </itemizedlist>
       <para>Congested routers can be a source of spurious LND timeouts. To avoid this, increase the number of LNET router buffers to reduce back-pressure and/or increase LND timeouts on all nodes on all connected networks. You should also consider increasing the total number of LNET router nodes in the system so that the aggregate router bandwidth matches the aggregate server bandwidth.</para>
@@ -174,7 +174,7 @@ lustre-MDT0000</screen>
           </tgroup>
         </informaltable>
         <para>Adaptive timeouts are enabled, by default. To disable adaptive timeouts, at run time, set <literal>at_max</literal> to 0. On the MGS, run:</para>
-        <screen>$ lctl conf_param &lt;fsname&gt;.sys.at_max=0</screen>
+        <screen>$ lctl conf_param <replaceable>fsname</replaceable>.sys.at_max=0</screen>
         <note>
           <para>Changing adaptive timeouts status at runtime may cause transient timeout, reconnect, recovery, etc.</para>
         </note>
@@ -416,9 +416,9 @@ nid                                refs            peer            max          
     <section remap="h3">
       <title><indexterm><primary>proc</primary><secondary>free space</secondary></indexterm>Free Space Distribution</title>
       <para>Free-space stripe weighting, as set, gives a priority of &quot;0&quot; to free space (versus trying to place the stripes &quot;widely&quot; -- nicely distributed across OSSs and OSTs to maximize network balancing). To adjust this priority (as a percentage), use the <literal>qos_prio_free</literal> proc tunable:</para>
-      <screen>$ cat /proc/fs/lustre/lov/&lt;fsname&gt;-mdtlov/qos_prio_free</screen>
+      <screen>$ cat /proc/fs/lustre/lov/<replaceable>fsname</replaceable>-mdtlov/qos_prio_free</screen>
       <para>Currently, the default is 90%. You can permanently set this value by running this command on the MGS:</para>
-      <screen>$ lctl conf_param &lt;fsname&gt;-MDT0000.lov.qos_prio_free=90</screen>
+      <screen>$ lctl conf_param <replaceable>fsname</replaceable>-MDT0000.lov.qos_prio_free=90</screen>
       <para>Setting the priority to 100% means that OSS distribution does not count in the weighting, but the stripe assignment is still done via weighting. If OST 2 has twice as much free space as OST 1, it is twice as likely to be used, but it is NOT guaranteed to be used.</para>
       <para>Also note that free-space stripe weighting does not activate until two OSTs are imbalanced by more than 20%. Until then, a faster round-robin stripe allocator is used. (The new round-robin order also maximizes network balancing.)</para>
       <section remap="h4">
@@ -454,8 +454,9 @@ nid                                refs            peer            max          
   <section xml:id="dbdoclet.50438271_78950">
       <title><indexterm><primary>proc</primary><secondary>I/O tunables</secondary></indexterm>Lustre I/O Tunables</title>
     <para>The section describes I/O tunables.</para>
-    <para><literal> /proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_cache_mb </literal></para>
-    <screen># cat /proc/fs/lustre/llite/lustre-ce63ca00/max_cached_mb 128</screen>
+    <para><literal> llite.<replaceable>fsname-instance</replaceable>/max_cache_mb</literal></para>
+    <screen>client# lctl get_param llite.lustre-ce63ca00.max_cached_mb
+128</screen>
     <para>This tunable is the maximum amount of inactive data cached by the client (default is 3/4 of RAM).</para>
     <section remap="h3">
       <title><indexterm><primary>proc</primary><secondary>RPC tunables</secondary></indexterm>Client I/O RPC Stream Tunables</title>
@@ -468,21 +469,21 @@ $ ls /proc/fs/lustre/osc/OSC_uml0_ost1_MNT_localhost
 blocksizefilesfree max_dirty_mb ost_server_uuid stats</screen>
       <para>... and so on.</para>
       <para>RPC stream tunables are described below.</para>
-      <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/max_dirty_mb </literal></para>
+      <para><literal> osc.<replaceable>osc_instance</replaceable>.max_dirty_mb </literal></para>
       <para xml:id='lustreproc.maxdirtymb'>This tunable controls how many MBs of dirty data can be written and queued up in the OSC. POSIX file writes that are cached contribute to this count. When the limit is reached, additional writes stall until previously-cached writes are written to the server. This may be changed by writing a single ASCII integer to the file. Only values between 0 and 512 are allowable. If 0 is given, no writes are cached. Performance suffers noticeably unless you use large writes (1 MB or more).</para>
-      <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/cur_dirty_bytes </literal></para>
+      <para><literal> osc.<replaceable>osc_instance</replaceable>.cur_dirty_bytes </literal></para>
       <para>This tunable is a read-only value that returns the current amount of bytes written and cached on this OSC.</para>
-      <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/max_pages_per_rpc </literal></para>
+      <para><literal> osc.<replaceable>osc_instance</replaceable>.max_pages_per_rpc </literal></para>
       <para>This tunable is the maximum number of pages that will undergo I/O in a single RPC to the OST. The minimum is a single page and the maximum for this setting is platform dependent (256 for i386/x86_64, possibly less for ia64/PPC with larger <literal>PAGE_SIZE</literal>), though generally amounts to a total of 1 MB in the RPC.</para>
-      <para><literal> /proc/fs/lustre/osc/&lt;object name&gt;/max_rpcs_in_flight </literal></para>
+      <para><literal> osc.<replaceable>osc_instance</replaceable>.max_rpcs_in_flight </literal></para>
       <para>This tunable is the maximum number of concurrent RPCs in flight from an OSC to its OST. If the OSC tries to initiate an RPC but finds that it already has the same number of RPCs outstanding, it will wait to issue further RPCs until some complete. The minimum setting is 1 and maximum setting is 256. If you are looking to improve small file I/O performance, increase the <literal>max_rpcs_in_flight</literal> value.</para>
       <para>To maximize performance, the value for <literal>max_dirty_mb</literal> is recommended to be 4 * <literal>max_pages_per_rpc</literal> * <literal>max_rpcs_in_flight</literal>.</para>
       <note>
         <para>The 
             <literal>
-            <replaceable>&lt;object name&gt;</replaceable>
+            <replaceable>osc_instance</replaceable>
           </literal>
-           varies depending on the specific Lustre configuration. For <literal>&lt;object name&gt;</literal> examples, refer to the sample command output.</para>
+           is typically <literal><replaceable>fsname</replaceable>-OST<replaceable>ost_index</replaceable>-osc-<replaceable>mountpoint_instance</replaceable></literal>. The <literal><replaceable>mountpoint_instance</replaceable></literal> is a unique value per mountpoint to allow associating osc, mdc, lov, lmv, and llite parameters for the same mountpoint. For <literal><replaceable>osc_instance</replaceable></literal> examples, refer to the sample command output.</para>
       </note>
     </section>
     <section remap="h3">
@@ -645,7 +646,7 @@ R          8385            500                     600                     100  
                 <para>Difference from the previous range end to the current range start.</para>
                 <para>For example, Smallest-Extent indicates that the writes in the range 100 to 1110 were sequential, with a minimum write of 10 and a maximum write of 500. This range was started with an offset of -150. That means this is the difference between the last entry&apos;s range-end and this entry&apos;s range-start for the same file.</para>
                 <para>The <literal>rw_offset_stats</literal> file can be cleared by writing to it:</para>
-                <screen>echo &gt; /proc/fs/lustre/llite/lustre-f57dee00/rw_offset_stats</screen>
+                <screen>lctl set_param llite.*.rw_offset_stats=0</screen>
               </entry>
             </row>
           </tbody>
@@ -656,7 +657,7 @@ R          8385            500                     600                     100  
         <title><indexterm><primary>proc</primary><secondary>client stats</secondary></indexterm>Client stats</title>
       <para>The stats parameter maintains statistics of activity across the VFS interface of the Lustre file system. Only non-zero parameters are displayed in the file. This section of the manual covers the statistics that will accumulate during typical operation of a client.</para>
       <para>Client statistics are enabled by default. The statistics can be cleared by echoing an empty string into the <literal>stats</literal> file or with the command: <literal>lctl set_param llite.*.stats=0</literal>. Statistics for an individual file system can be displayed, for example:</para>
-      <screen># cat /proc/fs/lustre/llite/lustre-ffff88000449a800/stats
+      <screen>client# lctl get_param llite.*.stats
 snapshot_time             1308343279.169704 secs.usecs
 dirty_pages_hits          14819716 samples [regs]
 dirty_pages_misses        81473472 samples [regs]
@@ -860,7 +861,7 @@ getxattr                  61169 samples [regs]
       <para><emphasis role="bold">Client-Based I/O Extent Size Survey</emphasis></para>
       <para>The <literal>rw_extent_stats</literal> histogram in the <literal>llite</literal> directory shows you the statistics for the sizes of the read-write I/O extents. This file does not maintain the per-process statistics.</para>
       <para>Example:</para>
-      <screen>$ cat /proc/fs/lustre/llite/lustre-ee5af200/extents_stats
+      <screen>client# lctl get_param llite.testfs-*.extents_stats
 snapshot_time:                     1213828728.348516 (secs.usecs)
                            read            |               write
 extents                    calls   %       cum%    |       calls   %       cum%
@@ -876,11 +877,11 @@ extents                    calls   %       cum%    |       calls   %       cum%
 512K - 1024K :             0       0       0       |       0       0       86
 1M - 2M :          0       0       0       |       11      13      100</screen>
       <para>The file can be cleared by issuing the following command:</para>
-      <screen>$ echo &gt; cat /proc/fs/lustre/llite/lustre-ee5af200/extents_stats</screen>
+      <screen>client# lctl set_param llite.testfs-*.extents_stats=0</screen>
       <para><emphasis role="bold">Per-Process Client I/O Statistics</emphasis></para>
       <para>The <literal>extents_stats_per_process</literal> file maintains the I/O extent size statistics on a per-process basis. So you can track the per-process statistics for the last <literal>MAX_PER_PROCESS_HIST</literal> processes.</para>
       <para>Example:</para>
-      <screen>$ cat /proc/fs/lustre/llite/lustre-ee5af200/extents_stats_per_process
+      <screen>lctl get_param llite.testfs-*.extents_stats_per_process
 snapshot_time:                     1213828762.204440 (secs.usecs)
                            read            |               write
 extents                    calls   %       cum%    |       calls   %       cum%
@@ -922,7 +923,7 @@ PID: 11429
     <section xml:id="dbdoclet.50438271_55057">
         <title><indexterm><primary>proc</primary><secondary>block I/O</secondary></indexterm>Watching the OST Block I/O Stream</title>
       <para>Similarly, there is a <literal>brw_stats</literal> histogram in the obdfilter directory which shows you the statistics for number of I/O requests sent to the disk, their size and whether they are contiguous on the disk or not.</para>
-      <screen>cat /proc/fs/lustre/obdfilter/lustre-OST0000/brw_stats 
+      <screen>oss# lctl get_param obdfilter.testfs-OST0000.brw_stats 
 snapshot_time:                     1174875636.764630 (secs:usecs)
                            read                            write
 pages per brw              brws    %       cum %   |       rpcs    %       cum %
@@ -1028,9 +1029,9 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
       <section remap="h4">
         <title>Tuning File Readahead</title>
         <para>File readahead is triggered when two or more sequential reads by an application fail to be satisfied by the Linux buffer cache. The size of the initial readahead is 1 MB. Additional readaheads grow linearly, and increment until the readahead cache on the client is full at 40 MB.</para>
-        <para><literal> /proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_read_ahead_mb </literal></para>
+        <para><literal> llite.<replaceable>fsname-instance</replaceable>.max_read_ahead_mb </literal></para>
         <para>This tunable controls the maximum amount of data readahead on a file. Files are read ahead in RPC-sized chunks (1 MB or the size of read() call, if larger) after the second sequential read on a file descriptor. Random reads are done at the size of the read() call only (no readahead). Reads to non-contiguous regions of the file reset the readahead algorithm, and readahead is not triggered again until there are sequential reads again. To disable readahead, set this tunable to 0. The default value is 40 MB.</para>
-        <para><literal> /proc/fs/lustre/llite/&lt;fsname&gt;-&lt;uid&gt;/max_read_ahead_whole_mb </literal></para>
+        <para><literal> llite.<replaceable>fsname-instance</replaceable>.max_read_ahead_whole_mb </literal></para>
         <para>This tunable controls the maximum size of a file that is read in its entirety, regardless of the size of the <literal>read()</literal>.</para>
       </section>
       <section remap="h4">
@@ -1039,17 +1040,11 @@ disk io size               rpcs    %       cum %   |       rpcs    %       cum %
         <para><literal> /proc/fs/lustre/llite/*/statahead_max </literal></para>
         <para>This proc interface controls whether directory statahead is enabled and the maximum statahead windows size (which means how many files can be pre-fetched by the statahead thread). By default, statahead is enabled and the value of <literal>statahead_max</literal> is 32.</para>
         <para>To disable statahead, run:</para>
-        <screen>echo 0 &gt; /proc/fs/lustre/llite/*/statahead_max</screen>
-        <para>or</para>
         <screen>lctl set_param llite.*.statahead_max=0</screen>
         <para>To set the maximum statahead windows size (n), run:</para>
-        <screen>echo n &gt; /proc/fs/lustre/llite/*/statahead_max</screen>
-        <para>or</para>
         <screen>lctl set_param llite.*.statahead_max=n</screen>
         <para>The maximum value of n is 8192.</para>
         <para>The AGL can be controlled as follows:</para>
-        <screen>echo n &gt; /proc/fs/lustre/llite/*/statahead_agl</screen>
-        <para>or</para>
         <screen>lctl set_param llite.*.statahead_agl=n</screen>
         <para>If &quot;n&quot; is 0, then the AGL is disabled, else the AGL is enabled.</para>
         <para><literal> /proc/fs/lustre/llite/*/statahead_stats </literal></para>
@@ -1140,7 +1135,7 @@ obdfilter.{OST_name}.readcache_max_filesize=-1</screen>
       <note>
         <para>Asynchronous journal commit cannot work with O_DIRECT writes, a journal flush is still forced.</para>
       </note>
-      <para>When asynchronous journal commit is enabled, client nodes keep data in the page cache (a page reference). Lustre clients monitor the last committed transaction number (transno) in messages sent from the OSS to the clients. When a client sees that the last committed transno reported by the OSS is &gt;=bulk write transno, it releases the reference on the corresponding pages. To avoid page references being held for too long on clients after a bulk write, a 7 second ping request is scheduled (jbd commit time is 5 seconds) after the bulk write reply is received, so the OSS has an opportunity to report the last committed transno.</para>
+      <para>When asynchronous journal commit is enabled, client nodes keep data in the page cache (a page reference). Lustre clients monitor the last committed transaction number (transno) in messages sent from the OSS to the clients. When a client sees that the last committed transno reported by the OSS is at least the bulk write transno, it releases the reference on the corresponding pages. To avoid page references being held for too long on clients after a bulk write, a 7 second ping request is scheduled (jbd commit time is 5 seconds) after the bulk write reply is received, so the OSS has an opportunity to report the last committed transno.</para>
       <para>If the OSS crashes before the journal commit occurs, then the intermediate data is lost. However, new OSS recovery functionality (introduced in the asynchronous journal commit feature), causes clients to replay their write requests and compensate for the missing disk updates by restoring the state of the file system.</para>
       <para>To enable asynchronous journal commit, set the <literal>sync_journal parameter</literal> to zero (<literal>sync_journal=0</literal>):</para>
       <screen>$ lctl set_param obdfilter.*.sync_journal=0 
@@ -1355,18 +1350,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
           <tbody>
             <row>
               <entry>
-                <para> <emphasis role="bold">
-                    <literal>stats</literal>
-                  </emphasis></para>
-              </entry>
-              <entry>
-                <para>Enables/disables the collection of statistics. Collected statistics can be found</para>
-                <para>in <literal>/proc/fs/ldiskfs2/&lt;dev&gt;/mb_history</literal>.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> max_to_scan </literal></para>
+                <para> <literal>mb_max_to_scan</literal></para>
               </entry>
               <entry>
                 <para>Maximum number of free chunks that <literal>mballoc</literal> finds before a final decision to avoid livelock.</para>
@@ -1374,15 +1358,15 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             </row>
             <row>
               <entry>
-                <para> <literal> min_to_scan </literal></para>
+                <para> <literal>mb_min_to_scan</literal></para>
               </entry>
               <entry>
-                <para>Minimum number of free chunks that <literal>mballoc</literal> finds before a final decision. This is useful for a very small request, to resist fragmentation of big free chunks.</para>
+                <para>Minimum number of free chunks that <literal>mballoc</literal> searches before picking the best chunk for allocation. This is useful for a very small request, to resist fragmentation of big free chunks.</para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal> order2_req </literal></para>
+                <para> <literal>mb_order2_req</literal></para>
               </entry>
               <entry>
                 <para>For requests equal to 2^N (where N &gt;= <literal>order2_req</literal>), a very fast search via buddy structures is used.</para>
@@ -1390,66 +1374,7 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             </row>
             <row>
               <entry>
-                <para> <literal> stream_req </literal></para>
-              </entry>
-              <entry>
-                <para>Requests smaller or equal to this value are packed together to form large write I/Os.</para>
-              </entry>
-            </row>
-          </tbody>
-        </tgroup>
-      </informaltable>
-      <para>The following tunables, providing more control over allocation policy, will be available in the next version:</para>
-      <informaltable frame="all">
-        <tgroup cols="2">
-          <colspec colname="c1" colwidth="50*"/>
-          <colspec colname="c2" colwidth="50*"/>
-          <thead>
-            <row>
-              <entry>
-                <para><emphasis role="bold">Field</emphasis></para>
-              </entry>
-              <entry>
-                <para><emphasis role="bold">Description</emphasis></para>
-              </entry>
-            </row>
-          </thead>
-          <tbody>
-            <row>
-              <entry>
-                <para> <literal> stats </literal></para>
-              </entry>
-              <entry>
-                <para>Enables/disables the collection of statistics. Collected statistics can be found in <literal>/proc/fs/ldiskfs2/&lt;dev&gt;/mb_history</literal>.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> max_to_scan </literal></para>
-              </entry>
-              <entry>
-                <para>Maximum number of free chunks that <literal>mballoc</literal> finds before a final decision to avoid livelock.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> min_to_scan </literal></para>
-              </entry>
-              <entry>
-                <para>Minimum number of free chunks that <literal>mballoc</literal> finds before a final decision. This is useful for a very small request, to resist fragmentation of big free chunks.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> order2_req </literal></para>
-              </entry>
-              <entry>
-                <para>For requests equal to 2^N (where N &gt;= <literal>order2_req</literal>), a very fast search via buddy structures is used.</para>
-              </entry>
-            </row>
-            <row>
-              <entry>
-                <para> <literal> small_req </literal></para>
+                <para> <literal>mb_small_req</literal></para>
               </entry>
               <entry morerows="1">
                 <para>All requests are divided into 3 categories:</para>
@@ -1461,12 +1386,12 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             </row>
             <row>
               <entry>
-                <para> <literal> large_req </literal></para>
+                <para> <literal>mb_large_req</literal></para>
               </entry>
             </row>
             <row>
               <entry>
-                <para> <literal> prealloc_table </literal></para>
+                <para> <literal>mb_prealloc_table</literal></para>
               </entry>
               <entry>
                 <para>The amount of space to preallocate depends on the current file size. The idea is that for small files we do not need 1 MB preallocations and for large files, 1 MB preallocations are not large enough; it is better to preallocate 4 MB.</para>
@@ -1474,10 +1399,10 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
             </row>
             <row>
               <entry>
-                <para> <literal> group_prealloc </literal></para>
+                <para> <literal>mb_group_prealloc</literal></para>
               </entry>
               <entry>
-                <para>The amount of space preallocated for small requests to be grouped.</para>
+                <para>The amount of space (in kilobytes) preallocated for groups of small requests.</para>
               </entry>
             </row>
           </tbody>
@@ -1486,19 +1411,19 @@ obdfilter.lol-OST0001.sync_on_lock_cancel=never</screen>
     </section>
     <section remap="h3">
       <title><indexterm><primary>proc</primary><secondary>locking</secondary></indexterm>Locking</title>
-      <para><literal> /proc/fs/lustre/ldlm/ldlm/namespaces/&lt;OSC name|MDC name&gt;/lru_size </literal></para>
+      <para><literal> ldlm.namespaces.<replaceable>osc_name|mdc_name</replaceable>.lru_size </literal></para>
       <para>The <literal>lru_size</literal> parameter is used to control the number of client-side locks in an LRU queue. LRU size is dynamic, based on load. This optimizes the number of locks available to nodes that have different workloads (e.g., login/build nodes vs. compute nodes vs. backup nodes).</para>
-      <para>The total number of locks available is a function of the server&apos;s RAM. The default limit is 50 locks/1 MB of RAM. If there is too much memory pressure, then the LRU size is shrunk. The number of locks on the server is limited to {number of OST/MDT on node} * {number of clients} * {client lru_size}.</para>
+      <para>The total number of locks available is a function of the server&apos;s RAM. The default limit is 50 locks/1 MB of RAM. If there is too much memory pressure, then the LRU size is shrunk. The number of locks on the server is limited to <replaceable>targets_on_server</replaceable> * <replaceable>client_count</replaceable> * <replaceable>client_lru_size</replaceable>.</para>
       <itemizedlist>
         <listitem>
           <para>To enable automatic LRU sizing, set the <literal>lru_size</literal> parameter to 0. In this case, the <literal>lru_size</literal> parameter shows the current number of locks being used on the export.  LRU sizing is enabled by default starting with Lustre 1.6.5.1.</para>
         </listitem>
         <listitem>
-          <para>To specify a maximum number of locks, set the lru_size parameter to a value &gt; 0 (former numbers are okay, 100 * CPU_NR). We recommend that you only increase the LRU size on a few login nodes where users access the file system interactively.</para>
+          <para>To specify a maximum number of locks, set the lru_size parameter to a value other than 0 (former numbers are okay, 100 * <replaceable>core_count</replaceable>). We recommend that you only increase the LRU size on a few login nodes where users access the file system interactively.</para>
         </listitem>
       </itemizedlist>
       <para>To clear the LRU on a single client, and as a result flush client cache, without changing the <literal>lru_size</literal> value:</para>
-      <screen>$ lctl set_param ldlm.namespaces.&lt;osc_name|mdc_name&gt;.lru_size=clear</screen>
+      <screen>$ lctl set_param ldlm.namespaces.<replaceable>osc_name|mdc_name</replaceable>.lru_size=clear</screen>
       <para>If you shrink the LRU size below the number of existing unused locks, then the unused locks are canceled immediately. Use echo clear to cancel all locks without changing the value.</para>
       <note>
         <para>Currently, the lru_size parameter can only be set temporarily with <literal>lctl set_param</literal>; it cannot be set permanently.</para>
@@ -1678,13 +1603,16 @@ lnet.debug = -ha
 # sysctl lnet.debug 
 lnet.debug = neterror warning</screen>
     <para>You can verify and change the debug level using the <literal>/proc</literal> interface in Lustre. To use the flags with <literal>/proc</literal>, run:</para>
-    <screen># cat /proc/sys/lnet/debug 
+    <screen># lctl get_param debug
+debug=
 neterror warning
-# echo &quot;+ha&quot; &gt; /proc/sys/lnet/debug 
-# cat /proc/sys/lnet/debug 
+# lctl set_param debug=+ha
+# lctl get_param debug
+debug=
 neterror warning ha
-# echo &quot;-warning&quot; &gt; /proc/sys/lnet/debug
-# cat /proc/sys/lnet/debug 
+# lctl set_param debug=-warning
+# lctl get_param debug
+debug=
 neterror ha</screen>
     <para><literal> /proc/sys/lnet/subsystem_debug </literal></para>
     <para>This controls the debug logs for subsystems (see <literal>S_*</literal> definitions).</para>

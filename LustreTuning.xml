@@ -164,7 +164,7 @@
 	<para>Portal round-robin defines the policy LNet applies to deliver events and messages to the upper layers. The upper layers are ptlrpc service or LNet selftest.</para>
 	<para>If portal round-robin is disabled, LNet will deliver messages to CPTs based on a hash of the source NID. Hence, all messages from a specific peer will be handled by the same CPT. This can reduce data traffic between CPUs. However, for some workloads, this behavior may result in poorly balancing loads across the CPU.</para>
 	<para>If portal round-robin is enabled, LNet will round-robin incoming events across all CPTs. This may balance load better across the CPU but can incur a cross CPU overhead.</para>
-	<para>The current policy can be changed by an administrator with <literal>echo &lt;VALUE&gt; &gt; /proc/sys/lnet/portal_rotor</literal>. There are four options for <literal>&lt;VALUE&gt;</literal>:</para>
+	<para>The current policy can be changed by an administrator with <literal>echo <replaceable>value</replaceable> &gt; /proc/sys/lnet/portal_rotor</literal>. There are four options for <literal><replaceable>value</replaceable></literal>:</para>
     <itemizedlist>
       <listitem>
         <para><literal>OFF</literal></para>

@@ -52,9 +52,9 @@
           <indexterm><primary>maintenance</primary><secondary>inactive OSTs</secondary></indexterm>
           Working with Inactive OSTs</title>
     <para>To mount a client or an MDT with one or more inactive OSTs, run commands similar to this:</para>
-    <screen>client&gt; mount -o exclude=testfs-OST0000 -t lustre \
+    <screen>client# mount -o exclude=testfs-OST0000 -t lustre \
            uml1:/testfs /mnt/testfs
-            client&gt; cat /proc/fs/lustre/lov/testfs-clilov-*/target_obd</screen>
+            client# cat /proc/fs/lustre/lov/testfs-clilov-*/target_obd</screen>
     <para>To activate an inactive OST on a live client or MDT, use the <literal>lctl activate</literal> command on the OSC device. For example:</para>
     <screen>lctl --device 7 activate</screen>
     <note>
@@ -79,7 +79,7 @@ Finding Nodes in the Lustre File System</title>
                 lustre-OST0000 
                 lustre-OST0001 </screen>
       <para>To get the names of all OSTs, run this command on the MDS:</para>
-      <screen># cat /proc/fs/lustre/lov/&lt;fsname&gt;-mdtlov/target_obd </screen>
+      <screen># cat /proc/fs/lustre/lov/<replaceable>fsname</replaceable>-mdtlov/target_obd </screen>
       <note>
         <para>This command must be run on the MDS.
                 </para>
@@ -93,8 +93,8 @@ Finding Nodes in the Lustre File System</title>
       <title><indexterm><primary>maintenance</primary><secondary>mounting a server</secondary></indexterm>
 Mounting a Server Without Lustre Service</title>
       <para>If you are using a combined MGS/MDT, but you only want to start the MGS and not the MDT, run this command:</para>
-      <screen>mount -t lustre &lt;MDT partition&gt; -o nosvc &lt;mount point&gt;</screen>
-      <para>The <literal>&lt;MDT partition&gt;</literal> variable is the combined MGS/MDT.</para>
+      <screen>mount -t lustre <replaceable>/dev/mdt_partition</replaceable> -o nosvc <replaceable>/mount_point</replaceable></screen>
+      <para>The <literal><replaceable>mdt_partition</replaceable></literal> variable is the combined MGS/MDT block device.</para>
       <para>In this example, the combined MGS/MDT is <literal>testfs-MDT0000</literal> and the mount point is <literal>/mnt/test/mdt</literal>.</para>
       <screen>$ mount -t lustre -L testfs-MDT0000 -o nosvc /mnt/test/mdt</screen>
     </section>
@@ -165,13 +165,13 @@ Regenerating Lustre Configuration Logs</title>
           <orderedlist>
             <listitem>
               <para>On the MDT, run:</para>
-              <screen>&lt;mdt node&gt;$ tunefs.lustre --writeconf &lt;device&gt;</screen>
+              <screen>mdt# tunefs.lustre --writeconf <replaceable>/dev/mdt_device</replaceable></screen>
             </listitem>
             <listitem>
               <para>
               On each OST, run:
               
-          <screen>&lt;ost node&gt;$ tunefs.lustre --writeconf &lt;device&gt;</screen>
+          <screen>ost# tunefs.lustre --writeconf <replaceable>/dev/ost_device</replaceable></screen>
           </para>
             </listitem>
           </orderedlist>
@@ -238,15 +238,15 @@ Changing a Server NID</title>
           <orderedlist>
             <listitem>
               <para>On the MDT, run:</para>
-              <screen>&lt;mdt node&gt;$ tunefs.lustre --writeconf &lt;device&gt;  </screen>
+              <screen>mdt# tunefs.lustre --writeconf <replaceable>/dev/mdt_device</replaceable>  </screen>
             </listitem>
             <listitem>
               <para>On each OST, run:</para>
-              <screen>&lt;ost node&gt;$ tunefs.lustre --writeconf &lt;device&gt;</screen>
+              <screen>ost# tunefs.lustre --writeconf <replaceable>/dev/ost_device</replaceable></screen>
             </listitem>
             <listitem>
               <para>If the NID on the MGS was changed, communicate the new MGS location to each server. Run:</para>
-              <screen>tunefs.lustre --erase-param --mgsnode=&lt;new_nid(s)&gt; --writeconf /dev/..                            </screen>
+              <screen>tunefs.lustre --erase-param --mgsnode=<replaceable>new_nid(s)</replaceable> --writeconf <replaceable>/dev/device</replaceable></screen>
             </listitem>
           </orderedlist>
         </listitem>
@@ -287,13 +287,13 @@ client$ lctl dl | grep mdc
         <listitem>
 			<para>Add the new block device as a new MDT at the next available index. In this example, the next available index is 4.</para>
 		<screen>
-mkfs.lustre --reformat --fsname=&lt;filesystemname&gt; --mdt --mgsnode=&lt;mgsnode&gt; --index 4 &lt;blockdevice&gt;
+mds# mkfs.lustre --reformat --fsname=<replaceable>filesystem_name</replaceable> --mdt --mgsnode=<replaceable>mgsnode</replaceable> --index 4 <replaceable>/dev/mdt4_device</replaceable>
 		</screen>
         </listitem>
         <listitem>
 			<para>Mount the MDTs.</para>
 		<screen>
-mount –t lustre &lt;blockdevice&gt; /mnt/mdt4
+mds# mount –t lustre <replaceable>/dev/mdt4_blockdevice</replaceable> /mnt/mdt4
 		</screen>
         </listitem>
       </orderedlist>
@@ -305,9 +305,9 @@ Adding a New OST to a Lustre File System</title>
       <orderedlist>
         <listitem>
           <para> Add a new OST by passing on the following commands, run:</para>
-          <screen>$ mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
-$ mkdir -p /mnt/test/ost12
-$ mount -t lustre /dev/sda /mnt/test/ost12</screen>
+          <screen>oss# mkfs.lustre --fsname=spfs --mgsnode=mds16@tcp0 --ost --index=12 /dev/sda
+oss# mkdir -p /mnt/test/ost12
+oss# mount -t lustre /dev/sda /mnt/test/ost12</screen>
         </listitem>
         <listitem>
           <para> Migrate the data (possibly).</para>
@@ -315,9 +315,9 @@ $ mount -t lustre /dev/sda /mnt/test/ost12</screen>
           <para>New files being created will preferentially be placed on the empty OST. As old files are deleted, they will release space on the old OST.</para>
           <para>Files existing prior to the expansion can optionally be rebalanced with an in-place copy, which can be done with a simple script. The basic method is to copy existing files to a temporary file, then move the temp file over the old one. This should not be attempted with files which are currently being written to by users or applications. This operation redistributes the stripes over the entire set of OSTs.</para>
           <para>For example, to rebalance all files within <literal>/mnt/lustre/dir</literal>, enter:</para>
-          <screen>lfs_migrate /mnt/lustre/file</screen>
+          <screen>client# lfs_migrate /mnt/lustre/file</screen>
           <para>To migrate files within the <literal>/test</literal> filesystem on <literal>OST0004</literal> that are larger than 4GB in size, enter:</para>
-          <screen>lfs find /test -obd test-OST0004 -size +4G | lfs_migrate -y</screen>
+          <screen>client# lfs find /test -obd test-OST0004 -size +4G | lfs_migrate -y</screen>
           <para>See <xref linkend="dbdoclet.50438206_42260"/>  for more details.</para>
         </listitem>
       </orderedlist>
@@ -370,7 +370,7 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
             <orderedlist>
               <listitem>
                 <para>List all OSCs on the node, along with their device numbers. Run:</para>
-                <screen>lctl dl|grep &quot; osc &quot;</screen>
+                <screen>lctl dl|grep osc</screen>
                 <para>This is sample <literal>lctl dl | grep</literal></para>
                 <screen>11 UP osc lustre-OST-0000-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
 12 UP osc lustre-OST-0001-osc-cac94211 4ea5b30f-6a8e-55a0-7519-2f20318ebdb4 5
@@ -384,10 +384,10 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
           </listitem>
           <listitem>
             <para>Temporarily deactivate the OSC on the MDT. On the MDT, run: </para>
-            <screen>$ mdt&gt; lctl --device &lt;devno&gt; deactivate</screen>
+            <screen>mds# lctl --device <replaceable>lustre_devno</replaceable> deactivate</screen>
             <para>For example, based on the command output in Step 1, to deactivate device 13 (the MDT’s OSC for <literal>OST-0000</literal>), the command would be: 
 </para>
-            <screen>$ mdt&gt; lctl --device 13 deactivate</screen>
+            <screen>mds# lctl --device 13 deactivate</screen>
             <para>This marks the OST as inactive on the MDS, so no new objects are assigned to the OST. This does not prevent use of existing objects for reads or writes. 
 </para>
             <note>
@@ -405,11 +405,11 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
               <listitem>
                 <para>If the OST is still online and available, find all files with objects on the deactivated OST, and copy them to other OSTs in the file system to:
 </para>
-                <screen>[client]# lfs find --obd &lt;OST UUID&gt; &lt;mount_point&gt; | lfs_migrate -y</screen>
+                <screen>client# lfs find --obd <replaceable>ost_name</replaceable> <replaceable>/mount/point</replaceable> | lfs_migrate -y</screen>
               </listitem>
               <listitem>
                 <para>If the OST is no longer available, delete the files on that OST and restore them from backup:
-		  <screen>[client]# lfs find --obd &lt;OST UUID&gt; -print0 &lt;mount_point&gt; | \
+		  <screen>client# lfs find --obd <replaceable>ost_uuid</replaceable> -print0 <replaceable>/mount/point</replaceable> | \
            tee /tmp/files_to_restore | xargs -0 -n 1 unlink</screen>
 	          The list of files that need to be restored from backup is stored in <literal>/tmp/files_to_restore</literal>. Restoring these files is beyond the scope of this document.</para>
               </listitem>
@@ -419,12 +419,12 @@ client$ lfs getstripe -M /mnt/lustre/local_dir0
             <para>Deactivate the OST.</para>
             <orderedlist>
               <listitem>
-                <para>To temporarily disable the deactivated OST, enter: <screen>[client]# lctl set_param osc.&lt;fsname&gt;-&lt;OST name&gt;-*.active=0</screen>If there is expected to be a replacement OST in some short time (a few days), the OST can temporarily be deactivated on the clients: <note>
+                <para>To temporarily disable the deactivated OST, enter: <screen>[client]# lctl set_param osc.<replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>-*.active=0</screen>If there is expected to be a replacement OST in some short time (a few days), the OST can temporarily be deactivated on the clients: <note>
                     <para>This setting is only temporary and will be reset if the clients or MDS are rebooted. It needs to be run on all clients.</para>
                   </note></para>
               </listitem>
             </orderedlist>
-            <para>If there is not expected to be a replacement for this OST in the near future, permanently deactivate the OST on all clients and the MDS: <screen>[mgs]# lctl conf_param {OST name}.osc.active=0</screen></para>
+            <para>If there is not expected to be a replacement for this OST in the near future, permanently deactivate the OST on all clients and the MDS: <screen>[mgs]# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=0</screen></para>
             <note>
               <para>A removed OST still appears in the file system; do not create a new OST with the same name.</para>
             </note>
@@ -439,20 +439,20 @@ Backing Up OST Configuration Files</title>
         <orderedlist>
           <listitem>
             <para>Mount the OST filesystem.
-             <screen>[oss]# mkdir -p /mnt/ost
-[oss]# mount -t ldiskfs {ostdev} /mnt/ost</screen>
+             <screen>oss# mkdir -p /mnt/ost
+[oss]# mount -t ldiskfs <replaceable>/dev/ost_device</replaceable> /mnt/ost</screen>
           </para>
           </listitem>
           <listitem>
             <para>Back up the OST configuration files.
-             <screen>[oss]# tar cvf {ostname}.tar -C /mnt/ost last_rcvd \
+             <screen>oss# tar cvf <replaceable>ost_name</replaceable>.tar -C /mnt/ost last_rcvd \
            CONFIGS/ O/0/LAST_ID</screen>
               </para>
           </listitem>
           <listitem>
             <para>
              Unmount the OST filesystem.
-             <screen>[oss]# umount /mnt/ost</screen>
+             <screen>oss# umount /mnt/ost</screen>
               </para>
           </listitem>
         </orderedlist>
@@ -471,20 +471,20 @@ Restoring OST Configuration Files</title>
           <listitem>
             <para>
             Format the OST file system. 
-            <screen>[oss]# mkfs.lustre --ost --index={old OST index} {other options} \
-            {newdev}</screen>
+            <screen>oss# mkfs.lustre --ost --index=<replaceable>old_ost_index</replaceable> <replaceable>other_options</replaceable> \
+           <replaceable>/dev/new_ost_dev</replaceable></screen>
             </para>
           </listitem>
           <listitem>
             <para>
              Mount the OST filesystem. 
-            <screen>[oss]# mkdir /mnt/ost
-[oss]# mount -t ldiskfs {newdev} /mnt/ost</screen>
+            <screen>oss# mkdir /mnt/ost
+oss# mount -t ldiskfs <replaceable>/dev/new_ost_dev</replaceable> <replaceable>/mnt/ost</replaceable></screen>
             </para>
           </listitem>
           <listitem>
             <para>Restore the OST configuration files, if available. 
-            <screen>[oss]# tar xvf {ostname}.tar -C /mnt/ost</screen></para>
+            <screen>oss# tar xvf <replaceable>ost_name</replaceable>.tar -C /mnt/ost</screen></para>
           </listitem>
           <listitem>
             <para>Recreate the OST configuration files, if unavailable.
@@ -493,14 +493,14 @@ Restoring OST Configuration Files</title>
 
 The <literal>CONFIGS/mountdata</literal> file is created by <literal>mkfs.lustre</literal> at format time, but has flags set that request it to register itself with the MGS. It is possible to copy these flags from another working OST (which should be the same):
 
-<screen>[oss1]# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp/ldd&quot; {other_osdev}
-[oss1]# scp /tmp/ldd oss:/tmp/ldd
-[oss0]# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5</screen></para>
+<screen>oss1# debugfs -c -R &quot;dump CONFIGS/mountdata /tmp/ldd&quot; <replaceable>/dev/other_osdev</replaceable>
+oss1# scp /tmp/ldd oss0:/tmp/ldd
+oss0# dd if=/tmp/ldd of=/mnt/ost/CONFIGS/mountdata bs=4 count=1 seek=5 skip=5</screen></para>
           </listitem>
           <listitem>
             <para>
             Unmount the OST filesystem.
-             <screen>[oss]# umount /mnt/ost</screen>
+             <screen>oss# umount /mnt/ost</screen>
             </para>
           </listitem>
         </orderedlist>
@@ -508,15 +508,15 @@ The <literal>CONFIGS/mountdata</literal> file is created by <literal>mkfs.lustre
       <section>
         <title><indexterm><primary>maintenance</primary><secondary>reintroducing an OSTs</secondary></indexterm>
 Returning a Deactivated OST to Service</title>
-        <para> If the OST was permanently deactivated, it needs to be reactivated in the MGS configuration. <screen>[mgs]# lctl conf_param {OST name}.osc.active=1</screen> If the OST was temporarily deactivated, it needs to be reactivated on the MDS and clients. <screen>[mds]# lctl --device &lt;devno&gt; activate
-                    [client]# lctl set_param osc.&lt;fsname&gt;-&lt;OST name&gt;-*.active=0</screen></para>
+        <para> If the OST was permanently deactivated, it needs to be reactivated in the MGS configuration. <screen>mgs# lctl conf_param <replaceable>ost_name</replaceable>.osc.active=1</screen> If the OST was temporarily deactivated, it needs to be reactivated on the MDS and clients. <screen>mds# lctl --device <replaceable>lustre_devno</replaceable> activate
+                    client# lctl set_param osc.<replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>-*.active=0</screen></para>
       </section>
     </section>
     <section xml:id="dbdoclet.50438199_77819">
       <title><indexterm><primary>maintenance</primary><secondary>aborting recovery</secondary></indexterm>
       <indexterm><primary>backup</primary><secondary>aborting recovery</secondary></indexterm>
 Aborting Recovery</title>
-      <para>You can abort recovery with either the <literal>lctl</literal> utility or by mounting the target with the <literal>abort_recov</literal> option (<literal>mount -o abort_recov</literal>). When starting a target, run: <screen>$ mount -t lustre -L &lt;MDT name&gt; -o abort_recov &lt;mount_point&gt;</screen></para>
+      <para>You can abort recovery with either the <literal>lctl</literal> utility or by mounting the target with the <literal>abort_recov</literal> option (<literal>mount -o abort_recov</literal>). When starting a target, run: <screen>mds# mount -t lustre -L <replaceable>mdt_name</replaceable> -o abort_recov <replaceable>/mount_point</replaceable></screen></para>
       <note>
         <para>The recovery process is blocked until all OSTs are available. </para>
       </note>
@@ -524,7 +524,7 @@ Aborting Recovery</title>
     <section xml:id="dbdoclet.50438199_12607">
       <title><indexterm><primary>maintenance</primary><secondary>identifying OST host</secondary></indexterm>
 Determining Which Machine is Serving an OST </title>
-      <para>In the course of administering a Lustre file system, you may need to determine which machine is serving a specific OST. It is not as simple as identifying the machine’s IP address, as IP is only one of several networking protocols that Lustre uses and, as such, LNET does not use IP addresses as node identifiers, but NIDs instead. To identify the NID that is serving a specific OST, run one of the following commands on a client (you do not need to be a root user): <screen>client$ lctl get_param osc.${fsname}-${OSTname}*.ost_conn_uuid</screen>For example: <screen>client$ lctl get_param osc.*-OST0000*.ost_conn_uuid 
+      <para>In the course of administering a Lustre file system, you may need to determine which machine is serving a specific OST. It is not as simple as identifying the machine’s IP address, as IP is only one of several networking protocols that Lustre uses and, as such, LNET does not use IP addresses as node identifiers, but NIDs instead. To identify the NID that is serving a specific OST, run one of the following commands on a client (you do not need to be a root user): <screen>client$ lctl get_param osc.<replaceable>fsname</replaceable>-<replaceable>OSTnumber</replaceable>*.ost_conn_uuid</screen>For example: <screen>client$ lctl get_param osc.*-OST0000*.ost_conn_uuid 
 osc.lustre-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen>- OR - <screen>client$ lctl get_param osc.*.ost_conn_uuid 
 osc.lustre-OST0000-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
 osc.lustre-OST0001-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp
@@ -536,9 +536,9 @@ osc.lustre-OST0004-osc-f1579000.ost_conn_uuid=192.168.20.1@tcp</screen></para>
       <title><indexterm><primary>maintenance</primary><secondary>changing failover node address</secondary></indexterm>
 Changing the Address of a Failover Node</title>
       <para>To change the address of a failover node (e.g, to use node X instead of node Y), run this command on the OSS/OST partition:
-	      <screen>tunefs.lustre --erase-params --failnode=&lt;NID&gt; &lt;device&gt; </screen>
+	      <screen>oss# tunefs.lustre --erase-params --failnode=<replaceable>NID</replaceable> <replaceable>/dev/ost_device</replaceable></screen>
 	      or
-	      <screen>tunefs.lustre --erase-params --servicenode=&lt;NID&gt; &lt;device&gt; </screen>
+	      <screen>oss# tunefs.lustre --erase-params --servicenode=<replaceable>NID</replaceable> <replaceable>/dev/ost_device</replaceable></screen>
       </para>
     </section>
     <section xml:id="dbdoclet.50438199_62545">
@@ -550,36 +550,36 @@ Separate a combined MGS/MDT</title>
         <listitem>
           <para>Stop the MDS.</para>
           <para>Unmount the MDT</para>
-	      <screen>umount -f &lt;device&gt; </screen>
+	      <screen>umount -f <replaceable>/dev/mdt_device</replaceable> </screen>
         </listitem>
         <listitem>
           <para>Create the MGS.</para>
-	      <screen>mkfs.lustre --mgs --device-size=&lt;size&gt; &lt;mgs-device&gt; </screen>
+	      <screen>mds# mkfs.lustre --mgs --device-size=<replaceable>size</replaceable> <replaceable>/dev/mgs_device</replaceable></screen>
         </listitem>
         <listitem>
           <para>Copy the configuration data from MDT disk to the new MGS disk.</para>
-	      <screen>mount -t ldiskfs -o ro &lt;mdt-device&gt; &lt;mdt-mount-point&gt; </screen>
-	      <screen>mount -t ldiskfs -o rw &lt;mgs-device&gt; &lt;mgs-mount-point&gt; </screen>
-	      <screen>cp -r &lt;mdt-mount-point&gt;/CONFIGS/&lt;filesystem-name&gt;-* &lt;mgs-mount-point&gt;/CONFIGS/. </screen>
-	      <screen>umount &lt;mgs-mount-point&gt; </screen>
-	      <screen>umount &lt;mdt-mount-point&gt; </screen>
+	      <screen>mds# mount -t ldiskfs -o ro <replaceable>/dev/mdt_device</replaceable> <replaceable>/mdt_mount_point</replaceable></screen>
+	      <screen>mds# mount -t ldiskfs -o rw <replaceable>/dev/mgs_device</replaceable> <replaceable>/mgs_mount_point</replaceable> </screen>
+	      <screen>mds# cp -r <replaceable>/mdt_mount_point</replaceable>/CONFIGS/<replaceable>filesystem_name</replaceable>-* <replaceable>/mgs_mount_point</replaceable>/CONFIGS/. </screen>
+	      <screen>mds# umount <replaceable>/mgs_mount_point</replaceable></screen>
+	      <screen>mds# umount <replaceable>/mdt_mount_point</replaceable></screen>
           <para>See <xref linkend="dbdoclet.50438199_54623"/> for alternative method.</para>
         </listitem>
         <listitem>
           <para>Start the MGS.</para>
-	      <screen>mount -t lustre &lt;mgs-device&gt; &lt;mgs-mount-point&gt;</screen>
+	      <screen>mgs# mount -t lustre <replaceable>/dev/mgs_device</replaceable> <replaceable>/mgs_mount_point</replaceable></screen>
           <para>Check to make sure it knows about all your filesystem</para>
 	      <screen>cat /proc/fs/lustre/mgs/MGS/filesystems</screen>
         </listitem>
         <listitem>
           <para>Remove the MGS option from the MDT, and set the new MGS nid.</para>
-	      <screen>tunefs.lustre --nomgs --mgsnode=&lt;new-MGS-nid&gt; &lt;mdt-device&gt;</screen>
+	      <screen>mds# tunefs.lustre --nomgs --mgsnode=<replaceable>new_mgs_nid</replaceable> <replaceable>/dev/mdt-device</replaceable></screen>
         </listitem>
         <listitem>
           <para>Start the MDT.</para>
-	      <screen>mount -t lustre &lt;mdt-device&gt; &lt;mdt-mount-point&gt;</screen>
+	      <screen>mds# mount -t lustre <replaceable>/dev/mdt_device /mdt_mount_point</replaceable></screen>
           <para>Check to make sure the MGS configuration look right</para>
-	      <screen>cat /proc/fs/lustre/mgs/MGS/live/&lt;filesystem-name&gt;</screen>
+	      <screen>mds# cat /proc/fs/lustre/mgs/MGS/live/<replaceable>filesystem_name</replaceable></screen>
         </listitem>
       </orderedlist>
     </section>
