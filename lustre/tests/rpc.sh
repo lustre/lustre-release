@@ -9,7 +9,7 @@ if [ ! -f $LUSTRE/tests/rpc.sh ]; then
 fi
 
 . $LUSTRE/tests/test-framework.sh
-init_test_env
+RPC_MODE=true init_test_env
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 
 # Reset the trap on ERR set by the framework.  Noticing this failure is the
