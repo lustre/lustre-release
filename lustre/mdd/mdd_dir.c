@@ -1077,6 +1077,19 @@ int mdd_unlink_sanity_check(const struct lu_env *env, struct mdd_object *pobj,
         RETURN(rc);
 }
 
+static inline int mdd_declare_links_del(const struct lu_env *env,
+					struct mdd_object *c,
+					struct thandle *handle)
+{
+	int rc = 0;
+
+	/* For directory, the linkEA will be removed together with the object. */
+	if (!S_ISDIR(mdd_object_type(c)))
+		rc = mdd_declare_links_add(env, c, handle);
+
+	return rc;
+}
+
 static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
                               struct mdd_object *p, struct mdd_object *c,
                               const struct lu_name *name, struct md_attr *ma,
@@ -1112,13 +1125,13 @@ static int mdd_declare_unlink(const struct lu_env *env, struct mdd_device *mdd,
         if (rc)
                 return rc;
 
-        rc = mdd_declare_links_add(env, c, handle);
-        if (rc)
-                return rc;
+	rc = mdd_declare_links_del(env, c, handle);
+	if (rc != 0)
+		return rc;
 
-        rc = mdd_declare_changelog_store(env, mdd, name, handle);
+	rc = mdd_declare_changelog_store(env, mdd, name, handle);
 
-        return rc;
+	return rc;
 }
 
 static int mdd_unlink(const struct lu_env *env, struct md_object *pobj,
@@ -1877,7 +1890,7 @@ cleanup:
 
         mdd_pdo_write_unlock(env, mdd_pobj, dlh);
 out_trans:
-        if (rc == 0)
+	if (rc == 0 && fid_is_client_mdt_visible(mdo2fid(son)))
 		rc = mdd_changelog_ns_store(env, mdd,
 			S_ISDIR(attr->la_mode) ? CL_MKDIR :
 			S_ISREG(attr->la_mode) ? CL_CREATE :

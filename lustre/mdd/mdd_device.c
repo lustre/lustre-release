@@ -744,12 +744,12 @@ static int dot_lustre_mdd_lookup(const struct lu_env *env, struct md_object *p,
                                  const struct lu_name *lname, struct lu_fid *f,
                                  struct md_op_spec *spec)
 {
-        if (strcmp(lname->ln_name, mdd_obf_dir_name) == 0)
-                *f = LU_OBF_FID;
-        else
-                return -ENOENT;
+	if (strcmp(lname->ln_name, mdd_obf_dir_name) == 0) {
+		*f = LU_OBF_FID;
+		return 0;
+	}
 
-        return 0;
+	return -ENOENT;
 }
 
 static mdl_mode_t dot_lustre_mdd_lock_mode(const struct lu_env *env,
@@ -1084,6 +1084,7 @@ static int mdd_dot_lustre_setup(const struct lu_env *env, struct mdd_device *m)
         struct dt_object *dt_dot_lustre;
         struct lu_fid *fid = &mdd_env_info(env)->mti_fid;
         int rc;
+	ENTRY;
 
         rc = create_dot_lustre_dir(env, m);
         if (rc)

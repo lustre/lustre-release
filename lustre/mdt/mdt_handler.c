@@ -5329,7 +5329,7 @@ static int mdt_fid2path(const struct lu_env *env, struct mdt_device *mdt,
 	if (!fid_is_sane(&fp->gf_fid))
 		RETURN(-EINVAL);
 
-	if (!fid_is_norm(&fp->gf_fid) && !fid_is_igif(&fp->gf_fid)) {
+	if (!fid_is_client_mdt_visible(&fp->gf_fid)) {
 		CWARN("%s: "DFID" is invalid, sequence should be "
 			">= "LPX64"\n", obd->obd_name,
 			PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);

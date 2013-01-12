@@ -704,21 +704,6 @@ static inline ino_t lu_igif_ino(const struct lu_fid *fid)
 }
 
 /**
- * Build igif from the inode number/generation.
- */
-#define LU_IGIF_BUILD(fid, ino, gen)                    \
-do {                                                    \
-        fid->f_seq = ino;                               \
-        fid->f_oid = gen;                               \
-        fid->f_ver = 0;                                 \
-} while(0)
-static inline void lu_igif_build(struct lu_fid *fid, __u32 ino, __u32 gen)
-{
-        LU_IGIF_BUILD(fid, ino, gen);
-        LASSERT(fid_is_igif(fid));
-}
-
-/**
  * Get inode generation from a igif.
  * \param fid a igif to get inode generation from.
  * \return inode generation for the igif.
@@ -726,6 +711,16 @@ static inline void lu_igif_build(struct lu_fid *fid, __u32 ino, __u32 gen)
 static inline __u32 lu_igif_gen(const struct lu_fid *fid)
 {
         return fid_oid(fid);
+}
+
+/**
+ * Build igif from the inode number/generation.
+ */
+static inline void lu_igif_build(struct lu_fid *fid, __u32 ino, __u32 gen)
+{
+	fid->f_seq = ino;
+	fid->f_oid = gen;
+	fid->f_ver = 0;
 }
 
 /*

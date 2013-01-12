@@ -63,12 +63,9 @@
 #include <obd_support.h>
 /* struct ptlrpc_thread */
 #include <lustre_net.h>
-
-/* fid_is_local() */
 #include <lustre_fid.h>
 
 #include "osd_internal.h"
-#include "osd_igif.h"
 
 /* llo_* api support */
 #include <md_object.h>
@@ -270,7 +267,10 @@ struct inode *osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
 	if (rc == 0) {
 		*fid = lma->lma_self_fid;
 	} else if (rc == -ENODATA) {
-		LU_IGIF_BUILD(fid, inode->i_ino, inode->i_generation);
+		if (unlikely(inode == osd_sb(dev)->s_root->d_inode))
+			lu_local_obj_fid(fid, OSD_FS_ROOT_OID);
+		else
+			lu_igif_build(fid, inode->i_ino, inode->i_generation);
 	} else {
 		iput(inode);
 		inode = ERR_PTR(rc);
@@ -457,17 +457,17 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 
 	LINVRNT(osd_invariant(obj));
 
+	if (fid_is_otable_it(&l->lo_header->loh_fid)) {
+		obj->oo_dt.do_ops = &osd_obj_otable_it_ops;
+		l->lo_header->loh_attr |= LOHA_EXISTS;
+		return 0;
+	}
+
 	result = osd_fid_lookup(env, obj, lu_object_fid(l), conf);
 	obj->oo_dt.do_body_ops = &osd_body_ops_new;
-	if (result == 0) {
-		if (obj->oo_inode != NULL) {
-			osd_object_init0(obj);
-		} else if (fid_is_otable_it(&l->lo_header->loh_fid)) {
-			obj->oo_dt.do_ops = &osd_obj_otable_it_ops;
-			/* LFSCK iterator object is special without inode */
-			l->lo_header->loh_attr |= LOHA_EXISTS;
-		}
-	}
+	if (result == 0 && obj->oo_inode != NULL)
+		osd_object_init0(obj);
+
 	LINVRNT(osd_invariant(obj));
 	return result;
 }
@@ -2229,13 +2229,19 @@ static int osd_ea_fid_set(const struct lu_env *env, struct dt_object *dt,
  * its inmemory API.
  */
 void osd_get_ldiskfs_dirent_param(struct ldiskfs_dentry_param *param,
-                                  const struct dt_rec *fid)
+				  const struct dt_rec *fid)
 {
-        param->edp_magic = LDISKFS_LUFID_MAGIC;
-        param->edp_len =  sizeof(struct lu_fid) + 1;
+	/* XXX: replace the check with "!fid_is_client_mdt_visible()"
+	 *	when FID in OI file introduced for local object. */
+	if (!fid_is_norm((const struct lu_fid *)fid) &&
+	    !fid_is_igif((const struct lu_fid *)fid)) {
+		param->edp_magic = 0;
+		return;
+	}
 
-        fid_cpu_to_be((struct lu_fid *)param->edp_data,
-                      (struct lu_fid *)fid);
+	param->edp_magic = LDISKFS_LUFID_MAGIC;
+	param->edp_len =  sizeof(struct lu_fid) + 1;
+	fid_cpu_to_be((struct lu_fid *)param->edp_data, (struct lu_fid *)fid);
 }
 
 /**
@@ -2801,7 +2807,7 @@ static int osd_index_try(const struct lu_env *env, struct dt_object *dt,
 	} else if (unlikely(feat == &dt_otable_features)) {
 		dt->do_index_ops = &osd_otable_ops;
 		return 0;
-	} else if (feat == &dt_acct_features) {
+	} else if (unlikely(feat == &dt_acct_features)) {
 		dt->do_index_ops = &osd_acct_index_ops;
 		result = 0;
 		skip_iam = 1;
@@ -3285,27 +3291,20 @@ static int __osd_ea_add_rec(struct osd_thread_info *info,
         oth = container_of(th, struct osd_thandle, ot_super);
         LASSERT(oth->ot_handle != NULL);
         LASSERT(oth->ot_handle->h_transaction != NULL);
-
-        child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
-
-        /* XXX: remove fid_is_igif() check here.
-         * IGIF check is just to handle insertion of .. when it is 'ROOT',
-         * it is IGIF now but needs FID in dir entry as well for readdir
-         * to work.
-         * LU-838 should fix that and remove fid_is_igif() check */
-        if (fid_is_igif((struct lu_fid *)fid) ||
-            fid_is_norm((struct lu_fid *)fid)) {
-                ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
-                osd_get_ldiskfs_dirent_param(ldp, fid);
-                child->d_fsdata = (void *)ldp;
-        } else {
-                child->d_fsdata = NULL;
-        }
 	LASSERT(pobj->oo_inode);
-	ll_vfs_dq_init(pobj->oo_inode);
-        rc = osd_ldiskfs_add_entry(oth->ot_handle, child, cinode, hlock);
 
-        RETURN(rc);
+	ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
+	if (unlikely(pobj->oo_inode ==
+		     osd_sb(osd_obj2dev(pobj))->s_root->d_inode))
+		ldp->edp_magic = 0;
+	else
+		osd_get_ldiskfs_dirent_param(ldp, fid);
+	child = osd_child_dentry_get(info->oti_env, pobj, name, strlen(name));
+	child->d_fsdata = (void *)ldp;
+	ll_vfs_dq_init(pobj->oo_inode);
+	rc = osd_ldiskfs_add_entry(oth->ot_handle, child, cinode, hlock);
+
+	RETURN(rc);
 }
 
 /**
@@ -3346,31 +3345,25 @@ static int osd_add_dot_dotdot(struct osd_thread_info *info,
                         result = 0;
                 }
         } else if(strcmp(name, dotdot) == 0) {
-                dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
-                dot_dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp2;
+		if (!dir->oo_compat_dot_created)
+			return -EINVAL;
 
-                if (!dir->oo_compat_dot_created)
-                        return -EINVAL;
-                if (!fid_is_igif((struct lu_fid *)dot_fid)) {
-                        osd_get_ldiskfs_dirent_param(dot_ldp, dot_fid);
-                        osd_get_ldiskfs_dirent_param(dot_dot_ldp, dot_dot_fid);
-                } else {
-                        dot_ldp = NULL;
-                        dot_dot_ldp = NULL;
-                }
-                /* in case of rename, dotdot is already created */
-                if (dir->oo_compat_dotdot_created) {
-                        return __osd_ea_add_rec(info, dir, parent_dir, name,
-                                                dot_dot_fid, NULL, th);
-                }
+		dot_dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp2;
+		osd_get_ldiskfs_dirent_param(dot_dot_ldp, dot_dot_fid);
+		/* in case of rename, dotdot is already created */
+		if (dir->oo_compat_dotdot_created)
+			return __osd_ea_add_rec(info, dir, parent_dir, name,
+						dot_dot_fid, NULL, th);
 
-                result = ldiskfs_add_dot_dotdot(oth->ot_handle, parent_dir,
-                                                inode, dot_ldp, dot_dot_ldp);
-                if (result == 0)
-                       dir->oo_compat_dotdot_created = 1;
-        }
+		dot_ldp = (struct ldiskfs_dentry_param *)info->oti_ldp;
+		dot_ldp->edp_magic = 0;
+		result = ldiskfs_add_dot_dotdot(oth->ot_handle, parent_dir,
+						inode, dot_ldp, dot_dot_ldp);
+		if (result == 0)
+			dir->oo_compat_dotdot_created = 1;
+	}
 
-        return result;
+	return result;
 }
 
 
@@ -3486,6 +3479,7 @@ static int osd_ea_lookup_rec(const struct lu_env *env, struct osd_object *obj,
         struct htree_lock          *hlock = NULL;
         int                         ino;
         int                         rc;
+	ENTRY;
 
         LASSERT(dir->i_op != NULL && dir->i_op->lookup != NULL);
 
@@ -4083,6 +4077,7 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
                                unsigned d_type)
 {
         struct osd_it_ea        *it   = (struct osd_it_ea *)buf;
+	struct osd_object	*obj  = it->oie_obj;
         struct osd_it_ea_dirent *ent  = it->oie_dirent;
         struct lu_fid           *fid  = &ent->oied_fid;
         struct osd_fid_pack     *rec;
@@ -4098,16 +4093,23 @@ static int osd_ldiskfs_filldir(char *buf, const char *name, int namelen,
             OSD_IT_EA_BUFSIZE)
                 RETURN(1);
 
-        if (d_type & LDISKFS_DIRENT_LUFID) {
-                rec = (struct osd_fid_pack*) (name + namelen + 1);
+	/* "." is just the object itself. */
+	if (namelen == 1 && name[0] == '.') {
+		*fid = obj->oo_dt.do_lu.lo_header->loh_fid;
+	} else if (d_type & LDISKFS_DIRENT_LUFID) {
+		rec = (struct osd_fid_pack*) (name + namelen + 1);
+		if (osd_fid_unpack(fid, rec) != 0)
+			fid_zero(fid);
+	} else {
+		fid_zero(fid);
+	}
+	d_type &= ~LDISKFS_DIRENT_LUFID;
 
-                if (osd_fid_unpack(fid, rec) != 0)
-                        fid_zero(fid);
-
-                d_type &= ~LDISKFS_DIRENT_LUFID;
-        } else {
-                fid_zero(fid);
-        }
+	/* NOT export local root. */
+	if (unlikely(osd_sb(osd_obj2dev(obj))->s_root->d_inode->i_ino == ino)) {
+		ino = obj->oo_inode->i_ino;
+		*fid = obj->oo_dt.do_lu.lo_header->loh_fid;
+	}
 
         ent->oied_ino     = ino;
         ent->oied_off     = offset;

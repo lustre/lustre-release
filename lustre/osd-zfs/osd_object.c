@@ -364,6 +364,12 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 
 	LASSERT(osd_invariant(obj));
 
+	if (fid_is_otable_it(&l->lo_header->loh_fid)) {
+		obj->oo_dt.do_ops = &osd_obj_otable_it_ops;
+		l->lo_header->loh_attr |= LOHA_EXISTS;
+		RETURN(0);
+	}
+
 	rc = osd_fid_lookup(env, osd, lu_object_fid(l), &oid);
 	if (rc == 0) {
 		LASSERT(obj->oo_db == NULL);
@@ -376,13 +382,6 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 			CERROR("%s: lookup "DFID"/"LPX64" failed: rc = %d\n",
 			       osd->od_svname, PFID(lu_object_fid(l)), oid, rc);
 		}
-	} else if (rc == -ENOENT) {
-		if (fid_is_otable_it(&l->lo_header->loh_fid)) {
-			obj->oo_dt.do_ops = &osd_obj_otable_it_ops;
-			/* LFSCK iterator object is special without inode */
-			l->lo_header->loh_attr |= LOHA_EXISTS;
-                }
-		rc = 0;
 	}
 	LASSERT(osd_invariant(obj));
 	RETURN(rc);

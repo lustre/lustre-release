@@ -69,7 +69,6 @@
 #include "osd_oi.h"
 /* osd_lookup(), struct osd_thread_info */
 #include "osd_internal.h"
-#include "osd_igif.h"
 #include "osd_scrub.h"
 
 static unsigned int osd_oi_count = OSD_OI_FID_NR;
@@ -534,7 +533,7 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		/* FIXME: actually for all of the OST object */
 		rc = osd_obj_map_lookup(info, osd, fid, id);
 	} else if (fid_is_igif(fid)) {
-		lu_igif_to_id(fid, id);
+		osd_id_gen(id, lu_igif_ino(fid), lu_igif_gen(fid));
 	} else if (fid_is_fs_root(fid)) {
 		osd_id_gen(id, osd_sb(osd)->s_root->d_inode->i_ino,
 			   osd_sb(osd)->s_root->d_inode->i_generation);

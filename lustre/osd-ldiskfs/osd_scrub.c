@@ -265,7 +265,7 @@ static int osd_scrub_prep(struct osd_device *dev)
 	if (sf->sf_pos_last_checkpoint != 0)
 		sf->sf_pos_latest_start = sf->sf_pos_last_checkpoint + 1;
 	else
-		sf->sf_pos_latest_start = LDISKFS_FIRST_INO(osd_sb(dev));
+		sf->sf_pos_latest_start = LDISKFS_FIRST_INO(osd_sb(dev)) + 1;
 
 	scrub->os_pos_current = sf->sf_pos_latest_start;
 	sf->sf_status = SS_SCANNING;
@@ -1076,7 +1076,7 @@ int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev)
 	if (sf->sf_pos_last_checkpoint != 0)
 		scrub->os_pos_current = sf->sf_pos_last_checkpoint + 1;
 	else
-		scrub->os_pos_current = LDISKFS_FIRST_INO(sb);
+		scrub->os_pos_current = LDISKFS_FIRST_INO(sb) + 1;
 
 	if (dirty != 0) {
 		rc = osd_scrub_file_store(scrub);
@@ -1364,8 +1364,8 @@ static int osd_otable_it_load(const struct lu_env *env,
 	if (it->ooi_user_ready)
 		return 0;
 
-	if (ooc->ooc_pos_preload < LDISKFS_FIRST_INO(osd_sb(dev)))
-		ooc->ooc_pos_preload = LDISKFS_FIRST_INO(osd_sb(dev));
+	if (ooc->ooc_pos_preload <= LDISKFS_FIRST_INO(osd_sb(dev)))
+		ooc->ooc_pos_preload = LDISKFS_FIRST_INO(osd_sb(dev)) + 1;
 	it->ooi_user_ready = 1;
 	if (!scrub->os_full_speed)
 		cfs_waitq_broadcast(&scrub->os_thread.t_ctl_waitq);

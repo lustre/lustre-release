@@ -249,6 +249,18 @@ static inline void lu_local_name_obj_fid(struct lu_fid *fid, __u32 oid)
         fid->f_ver = 0;
 }
 
+static inline int fid_is_root(const struct lu_fid *fid)
+{
+	return unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
+			fid_oid(fid) == MDD_ROOT_INDEX_OID);
+}
+
+static inline int fid_is_dot_lustre(const struct lu_fid *fid)
+{
+	return unlikely(fid_seq(fid) == FID_SEQ_DOT_LUSTRE &&
+			fid_oid(fid) == FID_OID_DOT_LUSTRE);
+}
+
 static inline int fid_is_otable_it(const struct lu_fid *fid)
 {
 	return unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE &&
@@ -266,6 +278,22 @@ static inline int fid_is_quota(const struct lu_fid *fid)
 {
 	return fid_seq(fid) == FID_SEQ_QUOTA ||
 	       fid_seq(fid) == FID_SEQ_QUOTA_GLB;
+}
+
+static inline int fid_is_client_mdt_visible(const struct lu_fid *fid)
+{
+	const __u64 seq = fid_seq(fid);
+
+	/* Here, we cannot distinguish whether the normal FID is for OST
+	 * object or not. It is caller's duty to check more if needed. */
+	return (!fid_is_last_id(fid) &&
+		(fid_seq_is_norm(seq) || fid_seq_is_igif(seq))) ||
+	       fid_is_root(fid) || fid_is_dot_lustre(fid);
+}
+
+static inline int fid_is_client_visible(const struct lu_fid *fid)
+{
+	return fid_is_client_mdt_visible(fid) || fid_is_idif(fid);
 }
 
 static inline void lu_last_id_fid(struct lu_fid *fid, __u64 seq)
