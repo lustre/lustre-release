@@ -167,7 +167,6 @@ static void mdd_device_shutdown(const struct lu_env *env,
                                 struct mdd_device *m, struct lustre_cfg *cfg)
 {
         ENTRY;
-        mdd_changelog_fini(env, m);
         if (m->mdd_dot_lustre_objs.mdd_obf)
                 mdd_object_put(env, m->mdd_dot_lustre_objs.mdd_obf);
         if (m->mdd_dot_lustre)
@@ -1140,6 +1139,7 @@ static int mdd_process_config(const struct lu_env *env,
                 break;
         case LCFG_CLEANUP:
 		mdd_lfsck_cleanup(env, m);
+		mdd_changelog_fini(env, m);
 		rc = next->ld_ops->ldo_process_config(env, next, cfg);
 		lu_dev_del_linkage(d->ld_site, d);
                 mdd_device_shutdown(env, m, cfg);
@@ -1211,13 +1211,14 @@ static int mdd_prepare(const struct lu_env *env,
 
 	mdd->mdd_capa = root;
 
+	rc = mdd_changelog_init(env, mdd);
+	if (rc != 0)
+		GOTO(out, rc);
+
 	rc = mdd_lfsck_setup(env, mdd);
-	if (rc) {
+	if (rc != 0)
 		CERROR("%s: failed to initialize lfsck: rc = %d\n",
 		       mdd2obd_dev(mdd)->obd_name, rc);
-		GOTO(out, rc);
-	}
-	rc = mdd_changelog_init(env, mdd);
 
 	GOTO(out, rc);
 

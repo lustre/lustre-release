@@ -40,15 +40,6 @@
  * Author: Nikita Danilov <nikita@clusterfs.com>
  */
 
-/*
- * oi uses two mechanisms to implement fid->cookie mapping:
- *
- *     - persistent index, where cookie is a record and fid is a key, and
- *
- *     - algorithmic mapping for "igif" fids.
- *
- */
-
 #define DEBUG_SUBSYSTEM S_MDS
 
 #include <linux/module.h>
@@ -476,6 +467,9 @@ int fid_is_on_ost(struct osd_thread_info *info, struct osd_device *osd,
 	int rc;
 	ENTRY;
 
+	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
+		RETURN(0);
+
 	if (fid_is_idif(fid) || fid_is_last_id(fid))
 		RETURN(1);
 
@@ -517,64 +511,57 @@ int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		  const struct lu_fid *fid, struct osd_inode_id *id,
 		  bool check_fld)
 {
-	int                  rc = 0;
+	if (unlikely(fid_is_last_id(fid)))
+		return osd_obj_spec_lookup(info, osd, fid, id);
 
-	if ((!fid_is_last_id(fid) && check_fld &&
-	     fid_is_on_ost(info, osd, fid)) ||
-	    fid_is_llog(fid)) {
+	if ((check_fld && fid_is_on_ost(info, osd, fid)) || fid_is_llog(fid))
 		/* old OSD obj id */
 		/* FIXME: actually for all of the OST object */
-		rc = osd_obj_map_lookup(info, osd, fid, id);
-	} else if (fid_is_igif(fid)) {
-		osd_id_gen(id, lu_igif_ino(fid), lu_igif_gen(fid));
-	} else if (fid_is_fs_root(fid)) {
+		return osd_obj_map_lookup(info, osd, fid, id);
+
+	if (fid_is_fs_root(fid)) {
 		osd_id_gen(id, osd_sb(osd)->s_root->d_inode->i_ino,
 			   osd_sb(osd)->s_root->d_inode->i_generation);
-	} else {
-		if (unlikely(fid_is_acct(fid)))
-			return osd_acct_obj_lookup(info, osd, fid, id);
-		else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE) ||
-			 fid_is_last_id(fid))
-			return osd_obj_spec_lookup(info, osd, fid, id);
-
-		rc = __osd_oi_lookup(info, osd, fid, id);
+		return 0;
 	}
-	return rc;
+
+	if (unlikely(fid_is_acct(fid)))
+		return osd_acct_obj_lookup(info, osd, fid, id);
+
+	return __osd_oi_lookup(info, osd, fid, id);
 }
 
-static int osd_oi_iam_insert(struct osd_thread_info *oti, struct osd_oi *oi,
+static int osd_oi_iam_refresh(struct osd_thread_info *oti, struct osd_oi *oi,
 			     const struct dt_rec *rec, const struct dt_key *key,
-			     struct thandle *th)
+			     struct thandle *th, bool insert)
 {
-        struct iam_container  *bag;
-        struct iam_rec        *iam_rec = (struct iam_rec *)oti->oti_ldp;
-        struct iam_path_descr *ipd;
-        struct osd_thandle    *oh;
-        int                    rc;
-        ENTRY;
+	struct iam_container	*bag;
+	struct iam_path_descr	*ipd;
+	struct osd_thandle	*oh;
+	int			rc;
+	ENTRY;
 
-        LASSERT(oi);
-        LASSERT(oi->oi_inode);
+	LASSERT(oi);
+	LASSERT(oi->oi_inode);
 	ll_vfs_dq_init(oi->oi_inode);
 
-        bag = &oi->oi_dir.od_container;
-        ipd = osd_idx_ipd_get(oti->oti_env, bag);
-        if (unlikely(ipd == NULL))
-                RETURN(-ENOMEM);
+	bag = &oi->oi_dir.od_container;
+	ipd = osd_idx_ipd_get(oti->oti_env, bag);
+	if (unlikely(ipd == NULL))
+		RETURN(-ENOMEM);
 
-        oh = container_of0(th, struct osd_thandle, ot_super);
-        LASSERT(oh->ot_handle != NULL);
-        LASSERT(oh->ot_handle->h_transaction != NULL);
-        if (S_ISDIR(oi->oi_inode->i_mode))
-                osd_fid_pack((struct osd_fid_pack *)iam_rec, rec,
-                             &oti->oti_fid);
-        else
-                iam_rec = (struct iam_rec *) rec;
-        rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
-                        iam_rec, ipd);
-        osd_ipd_put(oti->oti_env, bag, ipd);
-        LINVRNT(osd_invariant(obj));
-        RETURN(rc);
+	oh = container_of0(th, struct osd_thandle, ot_super);
+	LASSERT(oh->ot_handle != NULL);
+	LASSERT(oh->ot_handle->h_transaction != NULL);
+	if (insert)
+		rc = iam_insert(oh->ot_handle, bag, (const struct iam_key *)key,
+				(const struct iam_rec *)rec, ipd);
+	else
+		rc = iam_update(oh->ot_handle, bag, (const struct iam_key *)key,
+				(const struct iam_rec *)rec, ipd);
+	osd_ipd_put(oti->oti_env, bag, ipd);
+	LINVRNT(osd_invariant(obj));
+	RETURN(rc);
 }
 
 int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
@@ -582,25 +569,76 @@ int osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 		  struct thandle *th)
 {
 	struct lu_fid	    *oi_fid = &info->oti_fid2;
-	struct osd_inode_id *oi_id = &info->oti_id2;
+	struct osd_inode_id *oi_id  = &info->oti_id2;
+	int		     rc     = 0;
 
-	if (fid_is_igif(fid) || unlikely(fid_seq(fid) == FID_SEQ_DOT_LUSTRE))
-		return 0;
-
-	if ((fid_is_on_ost(info, osd, fid) && !fid_is_last_id(fid)) ||
-	     fid_is_llog(fid))
-		return osd_obj_map_insert(info, osd, fid, id, th);
-
-	/* Server mount should not depends on OI files */
-	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE) ||
-	    fid_is_last_id(fid))
+	if (unlikely(fid_is_last_id(fid)))
 		return osd_obj_spec_insert(info, osd, fid, id, th);
+
+	if (fid_is_on_ost(info, osd, fid) || fid_is_llog(fid))
+		return osd_obj_map_insert(info, osd, fid, id, th);
 
 	fid_cpu_to_be(oi_fid, fid);
 	osd_id_pack(oi_id, id);
-	return osd_oi_iam_insert(info, osd_fid2oi(osd, fid),
-				 (const struct dt_rec *)oi_id,
-				 (const struct dt_key *)oi_fid, th);
+	rc = osd_oi_iam_refresh(info, osd_fid2oi(osd, fid),
+			       (const struct dt_rec *)oi_id,
+			       (const struct dt_key *)oi_fid, th, true);
+	if (rc != 0) {
+		struct inode *inode;
+		struct lustre_mdt_attrs *lma = &info->oti_mdt_attrs;
+
+		if (rc != -EEXIST)
+			return rc;
+
+		rc = osd_oi_lookup(info, osd, fid, oi_id, false);
+		if (unlikely(rc != 0))
+			return rc;
+
+		if (osd_id_eq(id, oi_id)) {
+			CERROR("%.16s: the FID "DFID" is there already:%u/%u\n",
+			       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name,
+			       PFID(fid), id->oii_ino, id->oii_gen);
+			return -EEXIST;
+		}
+
+		/* Check whether the mapping for oi_id is valid or not. */
+		inode = osd_iget(info, osd, oi_id);
+		if (IS_ERR(inode)) {
+			rc = PTR_ERR(inode);
+			if (rc == -ENOENT || rc == -ESTALE)
+				goto update;
+			return rc;
+		}
+
+		rc = osd_get_lma(info, inode, &info->oti_obj_dentry, lma);
+		iput(inode);
+		if (rc == -ENODATA)
+			goto update;
+
+		if (rc != 0)
+			return rc;
+
+		if (lu_fid_eq(fid, &lma->lma_self_fid)) {
+			CERROR("%.16s: the FID "DFID" is used by two objects: "
+			       "%u/%u %u/%u\n",
+			       LDISKFS_SB(osd_sb(osd))->s_es->s_volume_name,
+			       PFID(fid), oi_id->oii_ino, oi_id->oii_gen,
+			       id->oii_ino, id->oii_gen);
+			return -EEXIST;
+		}
+
+update:
+		osd_id_pack(oi_id, id);
+		rc = osd_oi_iam_refresh(info, osd_fid2oi(osd, fid),
+					(const struct dt_rec *)oi_id,
+					(const struct dt_key *)oi_fid, th, false);
+		if (rc != 0)
+			return rc;
+	}
+
+	if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE))
+		rc = osd_obj_spec_insert(info, osd, fid, id, th);
+	return rc;
 }
 
 static int osd_oi_iam_delete(struct osd_thread_info *oti, struct osd_oi *oi,
@@ -637,10 +675,8 @@ int osd_oi_delete(struct osd_thread_info *info,
 {
 	struct lu_fid *oi_fid = &info->oti_fid2;
 
-	if (fid_is_igif(fid) || fid_is_last_id(fid))
+	if (fid_is_last_id(fid))
 		return 0;
-
-	LASSERT(fid_seq(fid) != FID_SEQ_LOCAL_FILE);
 
 	if (fid_is_on_ost(info, osd, fid) || fid_is_llog(fid))
 		return osd_obj_map_delete(info, osd, fid, th);

@@ -261,13 +261,6 @@ int local_object_create(const struct lu_env *env,
 	if (rc)
 		RETURN(rc);
 
-	lustre_lma_init(&dti->dti_lma, lu_object_fid(&o->do_lu));
-	lustre_lma_swab(&dti->dti_lma);
-	dti->dti_lb.lb_buf = &dti->dti_lma;
-	dti->dti_lb.lb_len = sizeof(dti->dti_lma);
-	rc = dt_xattr_set(env, o, &dti->dti_lb, XATTR_NAME_LMA, 0, th,
-			  BYPASS_CAPA);
-
 	if (los == NULL)
 		RETURN(rc);
 
@@ -384,13 +377,6 @@ out:
 	if (rc) {
 		lu_object_put_nocache(env, &dto->do_lu);
 		dto = ERR_PTR(rc);
-	} else {
-		struct lu_fid dti_fid;
-		/* since local files FIDs are not in OI the directory entry
-		 * is used to get inode number/generation, we need to do lookup
-		 * again to cache this data after create */
-		rc = dt_lookup_dir(env, parent, name, &dti_fid);
-		LASSERT(rc == 0);
 	}
 	RETURN(dto);
 }
@@ -721,15 +707,6 @@ int local_oid_storage_init(const struct lu_env *env, struct dt_device *dev,
 		if (rc)
 			GOTO(out_trans, rc);
 		LASSERT(dt_object_exists(o));
-
-		lustre_lma_init(&dti->dti_lma, lu_object_fid(&o->do_lu));
-		lustre_lma_swab(&dti->dti_lma);
-		dti->dti_lb.lb_buf = &dti->dti_lma;
-		dti->dti_lb.lb_len = sizeof(dti->dti_lma);
-		rc = dt_xattr_set(env, o, &dti->dti_lb, XATTR_NAME_LMA, 0,
-				  th, BYPASS_CAPA);
-		if (rc)
-			GOTO(out_trans, rc);
 
 		losd.lso_magic = cpu_to_le32(LOS_MAGIC);
 		losd.lso_next_oid = cpu_to_le32(fid_oid(first_fid) + 1);

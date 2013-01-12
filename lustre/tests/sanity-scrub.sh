@@ -84,6 +84,46 @@ run_test 0 "Do not auto trigger OI scrub for non-backup/restore case"
 
 test_1a() {
 	scrub_prep 0
+	echo "start $SINGLEMDS without disabling OI scrub"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(2) Expect 'init', but got '$STATUS'"
+
+	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
+	[ -z "$FLAGS" ] || error "(3) Expect empty flags, but got '$FLAGS'"
+
+	mount_client $MOUNT || error "(4) Fail to start client!"
+
+	#define OBD_FAIL_OSD_FID_MAPPING			0x193
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x193
+	# update .lustre OI mapping
+	touch $MOUNT/.lustre
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+
+	umount_client $MOUNT || error "(5) Fail to stop client!"
+
+	echo "stop $SINGLEMDS"
+	stop $SINGLEMDS > /dev/null || error "(6) Fail to stop MDS!"
+
+	echo "start $SINGLEMDS with disabling OI scrub"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(7) Fail to start MDS!"
+
+	local STATUS=$($SHOW_SCRUB | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(8) Expect 'init', but got '$STATUS'"
+
+	local FLAGS=$($SHOW_SCRUB | awk '/^flags/ { print $2 }')
+	[ "$FLAGS" == "inconsistent" ] ||
+		error "(9) Expect 'inconsistent', but got '$FLAGS'"
+}
+run_test 1a "Auto trigger initial OI scrub when server mounts"
+
+test_1b() {
+	scrub_prep 0
 	mds_remove_ois || error "(1) Fail to remove/recreate!"
 
 	echo "start $SINGLEMDS without disabling OI scrub"
@@ -100,9 +140,9 @@ test_1a() {
 	diff -q $LUSTRE/tests/test-framework.sh $DIR/$tdir/test-framework.sh ||
 		error "(5) File diff failed unexpected!"
 }
-run_test 1a "Trigger OI scrub when MDT mounts for OI files remove/recreate case"
+run_test 1b "Trigger OI scrub when MDT mounts for OI files remove/recreate case"
 
-test_1b() {
+test_1c() {
 	local index
 
 	# OI files to be removed:
@@ -135,7 +175,7 @@ test_1b() {
 			error "(6) Expect empty flags, but got '$FLAGS'"
 	done
 }
-run_test 1b "Auto detect kinds of OI file(s) removed/recreated cases"
+run_test 1c "Auto detect kinds of OI file(s) removed/recreated cases"
 
 test_2() {
 	scrub_prep 0
