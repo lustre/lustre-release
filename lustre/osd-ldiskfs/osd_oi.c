@@ -237,6 +237,7 @@ static int osd_oi_open(struct osd_thread_info *info, struct osd_device *osd,
         if (IS_ERR(inode))
                 RETURN(PTR_ERR(inode));
 
+	ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NO_OI);
         OBD_ALLOC_PTR(oi);
         if (oi == NULL)
                 GOTO(out_inode, rc = -ENOMEM);
@@ -441,7 +442,6 @@ static int osd_oi_iam_lookup(struct osd_thread_info *oti,
 {
         struct iam_container  *bag;
         struct iam_iterator   *it = &oti->oti_idx_it;
-        struct iam_rec        *iam_rec;
         struct iam_path_descr *ipd;
         int                    rc;
         ENTRY;
@@ -458,17 +458,8 @@ static int osd_oi_iam_lookup(struct osd_thread_info *oti,
         iam_it_init(it, bag, 0, ipd);
 
         rc = iam_it_get(it, (struct iam_key *)key);
-        if (rc >= 0) {
-                if (S_ISDIR(oi->oi_inode->i_mode))
-                        iam_rec = (struct iam_rec *)oti->oti_ldp;
-                else
-                        iam_rec = (struct iam_rec *)rec;
-
-                iam_reccpy(&it->ii_path.ip_leaf, (struct iam_rec *)iam_rec);
-                if (S_ISDIR(oi->oi_inode->i_mode))
-                        osd_fid_unpack((struct lu_fid *)rec,
-                                       (struct osd_fid_pack *)iam_rec);
-        }
+	if (rc > 0)
+		iam_reccpy(&it->ii_path.ip_leaf, (struct iam_rec *)rec);
         iam_it_put(it);
         iam_it_fini(it);
         osd_ipd_put(oti->oti_env, bag, ipd);
@@ -523,12 +514,14 @@ int __osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 }
 
 int osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
-		  const struct lu_fid *fid, struct osd_inode_id *id)
+		  const struct lu_fid *fid, struct osd_inode_id *id,
+		  bool check_fld)
 {
 	int                  rc = 0;
 
-	if ((!fid_is_last_id(fid) && fid_is_on_ost(info, osd, fid)) ||
-	     fid_is_llog(fid)) {
+	if ((!fid_is_last_id(fid) && check_fld &&
+	     fid_is_on_ost(info, osd, fid)) ||
+	    fid_is_llog(fid)) {
 		/* old OSD obj id */
 		/* FIXME: actually for all of the OST object */
 		rc = osd_obj_map_lookup(info, osd, fid, id);

@@ -170,14 +170,20 @@ static struct lu_object *osd_object_alloc(const struct lu_env *env,
         }
 }
 
-static int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
-		       struct dentry *dentry, struct lustre_mdt_attrs *lma)
+static inline int __osd_xattr_get(struct inode *inode, struct dentry *dentry,
+				  const char *name, void *buf, int len)
+{
+	dentry->d_inode = inode;
+	return inode->i_op->getxattr(dentry, name, buf, len);
+}
+
+int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
+		struct dentry *dentry, struct lustre_mdt_attrs *lma)
 {
 	int rc;
 
-	dentry->d_inode = inode;
-	rc = inode->i_op->getxattr(dentry, XATTR_NAME_LMA, (void *)lma,
-				   sizeof(*lma));
+	rc = __osd_xattr_get(inode, dentry, XATTR_NAME_LMA, (void *)lma,
+			     sizeof(*lma));
 	if (rc == -ERANGE) {
 		/* try with old lma size */
 		rc = inode->i_op->getxattr(dentry, XATTR_NAME_LMA,
@@ -252,8 +258,9 @@ struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 	return inode;
 }
 
-struct inode *osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
-			   struct osd_inode_id *id, struct lu_fid *fid)
+static struct inode *
+osd_iget_fid(struct osd_thread_info *info, struct osd_device *dev,
+	     struct osd_inode_id *id, struct lu_fid *fid)
 {
 	struct lustre_mdt_attrs *lma   = &info->oti_mdt_attrs;
 	struct inode		*inode;
@@ -367,7 +374,7 @@ static int osd_fid_lookup(const struct lu_env *env, struct osd_object *obj,
 		GOTO(out, result = 0);
 
 	/* Search order: 3. OI files. */
-	result = osd_oi_lookup(info, dev, fid, id);
+	result = osd_oi_lookup(info, dev, fid, id, true);
 	if (result == -ENOENT) {
 		if (!fid_is_norm(fid) ||
 		    !ldiskfs_test_bit(osd_oi_fid2idx(dev,fid),
@@ -1035,19 +1042,6 @@ static void osd_conf_get(const struct lu_env *env,
 
 }
 
-/**
- * Helper function to get and fill the buffer with input values.
- */
-static struct lu_buf *osd_buf_get(const struct lu_env *env, void *area, ssize_t len)
-{
-        struct lu_buf *buf;
-
-        buf = &osd_oti_get(env)->oti_buf;
-        buf->lb_buf = area;
-        buf->lb_len = len;
-        return buf;
-}
-
 /*
  * Concurrency: shouldn't matter.
  */
@@ -1695,7 +1689,10 @@ static int osd_mkfile(struct osd_thread_info *info, struct osd_object *obj,
                  * NB: don't need any lock because no contention at this
                  * early stage */
                 inode->i_flags |= S_NOCMTIME;
-		inode->i_state |= I_LUSTRE_NOSCRUB;
+
+		/* For new created object, it must be consistent,
+		 * and it is unnecessary to scrub against it. */
+		ldiskfs_set_inode_state(inode, LDISKFS_STATE_LUSTRE_NOSCRUB);
                 obj->oo_inode = inode;
                 result = 0;
         } else {
@@ -2167,33 +2164,15 @@ static int osd_object_destroy(const struct lu_env *env,
         RETURN(0);
 }
 
-/**
- * Helper function for osd_xattr_set()
- */
-static int __osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
-                           const struct lu_buf *buf, const char *name, int fl)
+static inline int __osd_xattr_set(struct osd_thread_info *info,
+				  struct inode *inode, const char *name,
+				  const void *buf, int buflen, int fl)
 {
-        struct osd_object      *obj      = osd_dt_obj(dt);
-        struct inode           *inode    = obj->oo_inode;
-        struct osd_thread_info *info     = osd_oti_get(env);
-        struct dentry          *dentry   = &info->oti_child_dentry;
-        int                     fs_flags = 0;
-        int                     rc;
-
-        LASSERT(dt_object_exists(dt));
-        LASSERT(inode->i_op != NULL && inode->i_op->setxattr != NULL);
-
-        if (fl & LU_XATTR_REPLACE)
-                fs_flags |= XATTR_REPLACE;
-
-        if (fl & LU_XATTR_CREATE)
-                fs_flags |= XATTR_CREATE;
+	struct dentry *dentry = &info->oti_child_dentry;
 
 	ll_vfs_dq_init(inode);
-        dentry->d_inode = inode;
-        rc = inode->i_op->setxattr(dentry, name, buf->lb_buf,
-                                   buf->lb_len, fs_flags);
-        return rc;
+	dentry->d_inode = inode;
+	return inode->i_op->setxattr(dentry, name, buf, buflen, fl);
 }
 
 /**
@@ -2209,15 +2188,17 @@ static int __osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
 static int osd_ea_fid_set(const struct lu_env *env, struct dt_object *dt,
                           const struct lu_fid *fid)
 {
-        struct osd_thread_info  *info      = osd_oti_get(env);
-        struct lustre_mdt_attrs *mdt_attrs = &info->oti_mdt_attrs;
+	struct osd_thread_info  *info	= osd_oti_get(env);
+	struct inode		*inode	= osd_dt_obj(dt)->oo_inode;
+	struct lustre_mdt_attrs	*lma	= &info->oti_mdt_attrs;
+	int			 rc;
 
-        lustre_lma_init(mdt_attrs, fid);
-        lustre_lma_swab(mdt_attrs);
-        return __osd_xattr_set(env, dt,
-                               osd_buf_get(env, mdt_attrs, sizeof *mdt_attrs),
-                               XATTR_NAME_LMA, LU_XATTR_CREATE);
+	lustre_lma_init(lma, fid);
+	lustre_lma_swab(lma);
 
+	rc = __osd_xattr_set(info, inode, XATTR_NAME_LMA, lma, sizeof(*lma),
+			     XATTR_CREATE);
+	return rc;
 }
 
 /**
@@ -2471,8 +2452,7 @@ static int osd_xattr_get(const struct lu_env *env, struct dt_object *dt,
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_READ))
                 return -EACCES;
 
-        dentry->d_inode = inode;
-        return inode->i_op->getxattr(dentry, name, buf->lb_buf, buf->lb_len);
+	return __osd_xattr_get(inode, dentry, name, buf->lb_buf, buf->lb_len);
 }
 
 
@@ -2521,6 +2501,11 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
                          const struct lu_buf *buf, const char *name, int fl,
                          struct thandle *handle, struct lustre_capa *capa)
 {
+	struct osd_object      *obj      = osd_dt_obj(dt);
+	struct inode	       *inode    = obj->oo_inode;
+	struct osd_thread_info *info     = osd_oti_get(env);
+	int			fs_flags = 0;
+
         LASSERT(handle != NULL);
 
         /* version set is not real XATTR */
@@ -2536,7 +2521,14 @@ static int osd_xattr_set(const struct lu_env *env, struct dt_object *dt,
                 return -EACCES;
 
 	osd_trans_exec_op(env, handle, OSD_OT_XATTR_SET);
-	return __osd_xattr_set(env, dt, buf, name, fl);
+	if (fl & LU_XATTR_REPLACE)
+		fs_flags |= XATTR_REPLACE;
+
+	if (fl & LU_XATTR_CREATE)
+		fs_flags |= XATTR_CREATE;
+
+	return __osd_xattr_set(info, inode, name, buf->lb_buf, buf->lb_len,
+			       fs_flags);
 }
 
 /*
@@ -2594,7 +2586,6 @@ static int osd_xattr_del(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(dt_object_exists(dt));
         LASSERT(inode->i_op != NULL && inode->i_op->removexattr != NULL);
-        LASSERT(osd_write_locked(env, obj));
         LASSERT(handle != NULL);
 
         if (osd_object_auth(env, dt, capa, CAPA_OPC_META_WRITE))
@@ -3426,7 +3417,7 @@ osd_consistency_check(struct osd_thread_info *oti, struct osd_device *dev,
 		RETURN_EXIT;
 
 again:
-	rc = osd_oi_lookup(oti, dev, fid, id);
+	rc = osd_oi_lookup(oti, dev, fid, id, true);
 	if (rc != 0 && rc != -ENOENT)
 		RETURN_EXIT;
 
@@ -4552,6 +4543,8 @@ static int osd_mount(const struct lu_env *env,
 		GOTO(out, rc = -EINVAL);
 	}
 
+	ldiskfs_set_inode_state(osd_sb(o)->s_root->d_inode,
+				LDISKFS_STATE_LUSTRE_NO_OI);
 	if (lmd_flags & LMD_FLG_NOSCRUB)
 		o->od_noscrub = 1;
 

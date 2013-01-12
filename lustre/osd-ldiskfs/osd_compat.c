@@ -158,6 +158,7 @@ int osd_ost_init(struct osd_device *dev)
 	if (IS_ERR(d))
 		GOTO(cleanup, rc = PTR_ERR(d));
 
+	ldiskfs_set_inode_state(d->d_inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	dev->od_ost_map->om_root = d;
 
 cleanup:
@@ -373,6 +374,7 @@ static int osd_seq_load_locked(struct osd_device *osd,
 	else if (seq_dir->d_inode == NULL)
 		GOTO(out_put, rc = -EFAULT);
 
+	ldiskfs_set_inode_state(seq_dir->d_inode, LDISKFS_STATE_LUSTRE_NO_OI);
 	osd_seq->oos_root = seq_dir;
 
 	LASSERT(osd_seq->oos_dirs == NULL);
@@ -391,6 +393,8 @@ static int osd_seq_load_locked(struct osd_device *osd,
 		if (IS_ERR(dir)) {
 			rc = PTR_ERR(dir);
 		} else if (dir->d_inode) {
+			ldiskfs_set_inode_state(dir->d_inode,
+						LDISKFS_STATE_LUSTRE_NO_OI);
 			osd_seq->oos_dirs[i] = dir;
 			rc = 0;
 		} else {

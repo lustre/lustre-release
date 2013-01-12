@@ -933,10 +933,6 @@ out:
 	RETURN(rc);
 }
 
-#define OBJECTS		"OBJECTS"
-#define ADMIN_USR	"admin_quotafile_v2.usr"
-#define ADMIN_GRP	"admin_quotafile_v2.grp"
-
 int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
 			const struct dt_index_features *feat)
 {

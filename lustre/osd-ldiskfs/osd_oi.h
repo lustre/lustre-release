@@ -131,7 +131,8 @@ void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd);
 int __osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		    const struct lu_fid *fid, struct osd_inode_id *id);
 int  osd_oi_lookup(struct osd_thread_info *info, struct osd_device *osd,
-		   const struct lu_fid *fid, struct osd_inode_id *id);
+		   const struct lu_fid *fid, struct osd_inode_id *id,
+		   bool check_fld);
 int  osd_oi_insert(struct osd_thread_info *info, struct osd_device *osd,
 		   const struct lu_fid *fid, const struct osd_inode_id *id,
 		   struct thandle *th);
