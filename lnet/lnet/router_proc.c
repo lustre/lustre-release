@@ -199,37 +199,45 @@ int LL_PROC_PROTO(proc_lnet_routes)
 		lnet_route_t		*route = NULL;
 		lnet_remotenet_t	*rnet  = NULL;
 		int			skip  = off - 1;
+		cfs_list_t		*rn_list;
+		int			i;
 
 		lnet_net_lock(0);
 
 		if (ver != LNET_PROC_VERSION(the_lnet.ln_remote_nets_version)) {
 			lnet_net_unlock(0);
-                        LIBCFS_FREE(tmpstr, tmpsiz);
-                        return -ESTALE;
-                }
+			LIBCFS_FREE(tmpstr, tmpsiz);
+			return -ESTALE;
+		}
 
-                n = the_lnet.ln_remote_nets.next;
+		for (i = 0; i < LNET_REMOTE_NETS_HASH_SIZE && route == NULL;
+		     i++) {
+			rn_list = &the_lnet.ln_remote_nets_hash[i];
 
-                while (n != &the_lnet.ln_remote_nets && route == NULL) {
-                        rnet = cfs_list_entry(n, lnet_remotenet_t, lrn_list);
+			n = rn_list->next;
 
-                        r = rnet->lrn_routes.next;
+			while (n != rn_list && route == NULL) {
+				rnet = cfs_list_entry(n, lnet_remotenet_t,
+						      lrn_list);
 
-                        while (r != &rnet->lrn_routes) {
-                                lnet_route_t *re =
-                                        cfs_list_entry(r, lnet_route_t,
-                                                       lr_list);
-                                if (skip == 0) {
-                                        route = re;
-                                        break;
-                                }
+				r = rnet->lrn_routes.next;
 
-                                skip--;
-                                r = r->next;
-                        }
+				while (r != &rnet->lrn_routes) {
+					lnet_route_t *re =
+						cfs_list_entry(r, lnet_route_t,
+							       lr_list);
+					if (skip == 0) {
+						route = re;
+						break;
+					}
 
-                        n = n->next;
-                }
+					skip--;
+					r = r->next;
+				}
+
+				n = n->next;
+			}
+		}
 
                 if (route != NULL) {
                         __u32        net   = rnet->lrn_net;

@@ -532,8 +532,12 @@ typedef struct {
 	unsigned int		lr_hops;	/* how far I am */
 } lnet_route_t;
 
+#define LNET_REMOTE_NETS_HASH_DEFAULT	(1U << 7)
+#define LNET_REMOTE_NETS_HASH_MAX	(1U << 16)
+#define LNET_REMOTE_NETS_HASH_SIZE	(1 << the_lnet.ln_remote_nets_hbits)
+
 typedef struct {
-        cfs_list_t              lrn_list;       /* chain on ln_remote_nets */
+        cfs_list_t              lrn_list;       /* chain on ln_remote_nets_hash */
         cfs_list_t              lrn_routes;     /* routes to me */
         __u32                   lrn_net;        /* my net number */
 } lnet_remotenet_t;
@@ -732,6 +736,8 @@ typedef struct
 	pthread_mutex_t			ln_eq_wait_lock;
 # endif
 #endif
+	unsigned int			ln_remote_nets_hbits;
+
 	/* protect NI, peer table, credits, routers, rtrbuf... */
 	struct cfs_percpt_lock		*ln_net_lock;
 	/* percpt message containers for active/finalizing/freed message */
@@ -751,7 +757,7 @@ typedef struct
 	lnet_ni_t			*ln_eq_waitni;
 
 	/* remote networks with routes to them */
-	cfs_list_t			ln_remote_nets;
+	cfs_list_t			*ln_remote_nets_hash;
 	/* validity stamp */
 	__u64				ln_remote_nets_version;
 	/* list of all known routers */

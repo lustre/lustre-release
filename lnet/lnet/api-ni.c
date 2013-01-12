@@ -36,6 +36,9 @@
 
 #define DEBUG_SUBSYSTEM S_LNET
 #include <lnet/lib-lnet.h>
+#ifdef __KERNEL__
+#include <linux/log2.h>
+#endif
 
 #ifdef __KERNEL__
 #define D_LNI D_CONSOLE
@@ -59,6 +62,10 @@ CFS_MODULE_PARM(networks, "s", charp, 0444,
 static char *routes = "";
 CFS_MODULE_PARM(routes, "s", charp, 0444,
                 "routes to non-local networks");
+
+static int rnet_htable_size = LNET_REMOTE_NETS_HASH_DEFAULT;
+CFS_MODULE_PARM(rnet_htable_size, "i", int, 0444,
+		"size of remote network hash table");
 
 char *
 lnet_get_routes(void)
@@ -206,6 +213,43 @@ void lnet_fini_locks(void)
 
 # endif
 #endif
+
+static int
+lnet_create_remote_nets_table(void)
+{
+	int		i;
+	cfs_list_t	*hash;
+
+	LASSERT(the_lnet.ln_remote_nets_hash == NULL);
+	LASSERT(the_lnet.ln_remote_nets_hbits > 0);
+	LIBCFS_ALLOC(hash, LNET_REMOTE_NETS_HASH_SIZE * sizeof(*hash));
+	if (hash == NULL) {
+		CERROR("Failed to create remote nets hash table\n");
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < LNET_REMOTE_NETS_HASH_SIZE; i++)
+		CFS_INIT_LIST_HEAD(&hash[i]);
+	the_lnet.ln_remote_nets_hash = hash;
+	return 0;
+}
+
+static void
+lnet_destroy_remote_nets_table(void)
+{
+	int		i;
+	cfs_list_t	*hash;
+
+	if (the_lnet.ln_remote_nets_hash == NULL)
+		return;
+
+	for (i = 0; i < LNET_REMOTE_NETS_HASH_SIZE; i++)
+		LASSERT(cfs_list_empty(&the_lnet.ln_remote_nets_hash[i]));
+
+	LIBCFS_FREE(the_lnet.ln_remote_nets_hash,
+		    LNET_REMOTE_NETS_HASH_SIZE * sizeof(*hash));
+	the_lnet.ln_remote_nets_hash = NULL;
+}
 
 static int
 lnet_create_locks(void)
@@ -724,8 +768,11 @@ lnet_prepare(lnet_pid_t requested_pid)
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_nis);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_nis_cpt);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_nis_zombie);
-	CFS_INIT_LIST_HEAD(&the_lnet.ln_remote_nets);
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_routers);
+
+	rc = lnet_create_remote_nets_table();
+	if (rc != 0)
+		goto failed;
 
 	the_lnet.ln_interface_cookie = lnet_create_interface_cookie();
 
@@ -816,6 +863,7 @@ lnet_unprepare (void)
 		cfs_percpt_free(the_lnet.ln_counters);
 		the_lnet.ln_counters = NULL;
 	}
+	lnet_destroy_remote_nets_table();
 
 	return 0;
 }
@@ -1022,7 +1070,6 @@ lnet_shutdown_lndnis (void)
 	LASSERT(!the_lnet.ln_shutdown);
 	LASSERT(the_lnet.ln_refcount == 0);
 	LASSERT(cfs_list_empty(&the_lnet.ln_nis_zombie));
-	LASSERT(cfs_list_empty(&the_lnet.ln_remote_nets));
 
 	lnet_net_lock(LNET_LOCK_EX);
 	the_lnet.ln_shutdown = 1;	/* flag shutdown */
@@ -1348,10 +1395,22 @@ LNetInit(void)
 	CFS_INIT_LIST_HEAD(&the_lnet.ln_rcd_deathrow);
 
 #ifdef __KERNEL__
+	/* The hash table size is the number of bits it takes to express the set
+	 * ln_num_routes, minus 1 (better to under estimate than over so we
+	 * don't waste memory). */
+	if (rnet_htable_size <= 0)
+		rnet_htable_size = LNET_REMOTE_NETS_HASH_DEFAULT;
+	else if (rnet_htable_size > LNET_REMOTE_NETS_HASH_MAX)
+		rnet_htable_size = LNET_REMOTE_NETS_HASH_MAX;
+	the_lnet.ln_remote_nets_hbits = max_t(int, 1,
+					   order_base_2(rnet_htable_size) - 1);
+
         /* All LNDs apart from the LOLND are in separate modules.  They
          * register themselves when their module loads, and unregister
          * themselves when their module is unloaded. */
 #else
+	the_lnet.ln_remote_nets_hbits = 8;
+
         /* Register LNDs
          * NB the order here determines default 'networks=' order */
 # ifdef HAVE_LIBPTHREAD

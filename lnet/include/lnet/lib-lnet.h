@@ -689,6 +689,14 @@ lnet_nid2peerhash(lnet_nid_t nid)
 	return cfs_hash_long(nid, LNET_PEER_HASH_BITS);
 }
 
+static inline cfs_list_t *
+lnet_net2rnethash(__u32 net)
+{
+	return &the_lnet.ln_remote_nets_hash[(LNET_NETNUM(net) +
+		LNET_NETTYP(net)) &
+		((1U << the_lnet.ln_remote_nets_hbits) - 1)];
+}
+
 extern lnd_t the_lolnd;
 
 #ifndef __KERNEL__
