@@ -398,12 +398,6 @@ void mdt_pack_attr2body(struct mdt_thread_info *info, struct mdt_body *b,
         if (fid) {
                 b->fid1 = *fid;
                 b->valid |= OBD_MD_FLID;
-
-                /* FIXME: these should be fixed when new igif ready.*/
-                b->ino  =  fid_oid(fid);       /* 1.6 compatibility */
-                b->generation = fid_ver(fid);  /* 1.6 compatibility */
-                b->valid |= OBD_MD_FLGENER;    /* 1.6 compatibility */
-
                 CDEBUG(D_INODE, DFID": nlink=%d, mode=%o, size="LPU64"\n",
                                 PFID(fid), b->nlink, b->mode, b->size);
         }

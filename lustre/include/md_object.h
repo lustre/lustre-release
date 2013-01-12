@@ -196,14 +196,14 @@ struct md_op_spec {
                         int  eadatalen;
                 } sp_ea;
         } u;
-        /** don't create lov objects or llog cookie - this replay */
-        int no_create;
 
         /** Create flag from client: such as MDS_OPEN_CREAT, and others. */
         __u64      sp_cr_flags;
 
-        /** Should mdd do lookup sanity check or not. */
-        int        sp_cr_lookup;
+		     /** don't create lov objects or llog cookie - this replay */
+	unsigned int no_create:1,
+		     /** Should mdd do lookup sanity check or not. */
+		     sp_cr_lookup:1;
 
         /** Current lock mode for parent dir where create is performing. */
         mdl_mode_t sp_cr_mode;

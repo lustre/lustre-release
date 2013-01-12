@@ -704,7 +704,7 @@ test_11() {
 	# that the number of skipped files is less than 1.5x the number of files
 	local MAXIMUM=$((CREATED * 3 / 2))
 	local MINIMUM=$((CREATED + 1)) # files + directory
-	[ $SKIPPED -ge $MAXIMUM -o $SKIPPED -lt $MINIMUM] &&
+	[ $SKIPPED -ge $MAXIMUM -o $SKIPPED -lt $MINIMUM ] &&
 	error "(5) Expect [ $MINIMUM , $MAXIMUM ) objects skipped, got $SKIPPED"
 
 	# reset OI scrub start point by force
@@ -722,14 +722,6 @@ test_11() {
 	rm -rf $MOUNT/$tname > /dev/null
 }
 run_test 11 "OI scrub skips the new created objects only once"
-
-# restore the ${facet}_MKFS_OPTS variables
-for facet in MGS MDS OST; do
-	opts=SAVED_${facet}_MKFS_OPTS
-	if [[ -n ${!opts} ]]; then
-		eval ${facet}_MKFS_OPTS=\"${!opts}\"
-	fi
-done
 
 # restore MDS/OST size
 MDSSIZE=${SAVED_MDSSIZE}

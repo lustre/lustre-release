@@ -1952,10 +1952,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_body, blocks));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->blocks) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_body *)0)->blocks));
-	LASSERTF((int)offsetof(struct mdt_body, ino) == 96, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_body, ino));
-	LASSERTF((int)sizeof(((struct mdt_body *)0)->ino) == 8, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_body *)0)->ino));
+	LASSERTF((int)offsetof(struct mdt_body, unused1) == 96, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, unused1));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->unused1) == 8, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->unused1));
 	LASSERTF((int)offsetof(struct mdt_body, fsuid) == 104, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_body, fsuid));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->fsuid) == 4, "found %lld\n",
@@ -1992,10 +1992,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct mdt_body, nlink));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->nlink) == 4, "found %lld\n",
 		 (long long)(int)sizeof(((struct mdt_body *)0)->nlink));
-	LASSERTF((int)offsetof(struct mdt_body, generation) == 140, "found %lld\n",
-		 (long long)(int)offsetof(struct mdt_body, generation));
-	LASSERTF((int)sizeof(((struct mdt_body *)0)->generation) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct mdt_body *)0)->generation));
+	LASSERTF((int)offsetof(struct mdt_body, unused2) == 140, "found %lld\n",
+		 (long long)(int)offsetof(struct mdt_body, unused2));
+	LASSERTF((int)sizeof(((struct mdt_body *)0)->unused2) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct mdt_body *)0)->unused2));
 	LASSERTF((int)offsetof(struct mdt_body, suppgid) == 144, "found %lld\n",
 		 (long long)(int)offsetof(struct mdt_body, suppgid));
 	LASSERTF((int)sizeof(((struct mdt_body *)0)->suppgid) == 4, "found %lld\n",

@@ -5497,7 +5497,9 @@ function get_named_value()
     done
 }
 
-export CACHE_MAX=`$LCTL get_param -n llite.*.max_cached_mb | head -n 1`
+export CACHE_MAX=$($LCTL get_param -n llite.*.max_cached_mb |
+		   awk '/^max_cached_mb/ { print $2 }')
+
 cleanup_101a() {
 	$LCTL set_param -n llite.*.max_cached_mb $CACHE_MAX
 	trap 0

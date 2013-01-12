@@ -1878,7 +1878,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab64s (&b->ctime);
         __swab64s (&b->blocks);
         __swab64s (&b->ioepoch);
-        __swab64s (&b->ino);
+	CLASSERT(offsetof(typeof(*b), unused1) != 0);
         __swab32s (&b->fsuid);
         __swab32s (&b->fsgid);
         __swab32s (&b->capability);
@@ -1888,7 +1888,7 @@ void lustre_swab_mdt_body (struct mdt_body *b)
         __swab32s (&b->flags);
         __swab32s (&b->rdev);
         __swab32s (&b->nlink);
-        __swab32s (&b->generation);
+	CLASSERT(offsetof(typeof(*b), unused2) != 0);
         __swab32s (&b->suppgid);
         __swab32s (&b->eadatasize);
         __swab32s (&b->aclsize);

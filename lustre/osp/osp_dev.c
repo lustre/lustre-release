@@ -733,7 +733,7 @@ out_last_used:
 out_proc:
 	ptlrpc_lprocfs_unregister_obd(obd);
 	lprocfs_obd_cleanup(obd);
-	class_destroy_import(obd->u.cli.cl_import);
+	obd_cleanup_client_import(obd);
 	client_obd_cleanup(obd);
 out_ref:
 	ptlrpcd_decref();

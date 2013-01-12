@@ -875,7 +875,7 @@ check_mdt_body(void)
 	CHECK_MEMBER(mdt_body, atime);
 	CHECK_MEMBER(mdt_body, ctime);
 	CHECK_MEMBER(mdt_body, blocks);
-	CHECK_MEMBER(mdt_body, ino);
+	CHECK_MEMBER(mdt_body, unused1);
 	CHECK_MEMBER(mdt_body, fsuid);
 	CHECK_MEMBER(mdt_body, fsgid);
 	CHECK_MEMBER(mdt_body, capability);
@@ -885,7 +885,7 @@ check_mdt_body(void)
 	CHECK_MEMBER(mdt_body, flags);
 	CHECK_MEMBER(mdt_body, rdev);
 	CHECK_MEMBER(mdt_body, nlink);
-	CHECK_MEMBER(mdt_body, generation);
+	CHECK_MEMBER(mdt_body, unused2);
 	CHECK_MEMBER(mdt_body, suppgid);
 	CHECK_MEMBER(mdt_body, eadatasize);
 	CHECK_MEMBER(mdt_body, aclsize);

@@ -918,14 +918,14 @@ static int mdd_fix_attr(const struct lu_env *env, struct mdd_object *obj,
                         la->la_valid &= ~(LA_MTIME | LA_CTIME);
         } else {
                 if (la->la_valid & (LA_SIZE | LA_BLOCKS)) {
-			if (!((flags & MDS_OPEN_OWNEROVERRIDE) &&
+			if (!((flags & MDS_OWNEROVERRIDE) &&
 			      (uc->uc_fsuid == tmp_la->la_uid)) &&
 			    !(flags & MDS_PERM_BYPASS)) {
 				rc = mdd_permission_internal(env, obj,
 							     tmp_la, MAY_WRITE);
-                                if (rc)
-                                        RETURN(rc);
-                        }
+				if (rc != 0)
+					RETURN(rc);
+			}
                 }
                 if (la->la_valid & LA_CTIME) {
                         /* The pure setattr, it has the priority over what is
