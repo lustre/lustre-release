@@ -67,7 +67,7 @@ int tgt_init(const struct lu_env *env, struct lu_target *lut,
 	attr.la_mode = S_IFREG | S_IRUGO | S_IWUSR;
 	dof.dof_type = dt_mode_to_dft(S_IFREG);
 
-	lu_local_obj_fid(&fid, MDT_LAST_RECV_OID);
+	lu_local_obj_fid(&fid, LAST_RECV_OID);
 
 	o = dt_find_or_create(env, lut->lut_bottom, &fid, &dof, &attr);
 	if (!IS_ERR(o)) {

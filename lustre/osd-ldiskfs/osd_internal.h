@@ -257,6 +257,7 @@ struct osd_device {
 	spinlock_t		  od_osfs_lock;
 
 	unsigned int		  od_noscrub:1,
+				  od_init_scrub:1,
 				  od_handle_nolma:1;
 
 	struct fsfilt_operations *od_fsops;
@@ -276,6 +277,7 @@ struct osd_device {
 	struct mutex		  od_otable_mutex;
 	struct osd_otable_it	 *od_otable_it;
 	struct osd_scrub	  od_scrub;
+	cfs_list_t		  od_ios_list;
 
 	/* service name associated with the osd device */
 	char                      od_svname[MAX_OBD_NAME];
@@ -607,6 +609,8 @@ int osd_object_auth(const struct lu_env *env, struct dt_object *dt,
                     struct lustre_capa *capa, __u64 opc);
 struct inode *osd_iget(struct osd_thread_info *info, struct osd_device *dev,
 		       struct osd_inode_id *id);
+int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
+		   const struct lu_fid *fid);
 int osd_get_lma(struct osd_thread_info *info, struct inode *inode,
 		struct dentry *dentry, struct lustre_mdt_attrs *lma);
 
@@ -627,6 +631,7 @@ int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 
 void osd_scrub_file_reset(struct osd_scrub *scrub, __u8 *uuid, __u64 flags);
 int osd_scrub_file_store(struct osd_scrub *scrub);
+char *osd_lf_fid2name(const struct lu_fid *fid);
 int osd_scrub_start(struct osd_device *dev);
 int osd_scrub_setup(const struct lu_env *env, struct osd_device *dev);
 void osd_scrub_cleanup(const struct lu_env *env, struct osd_device *dev);
@@ -661,6 +666,9 @@ const struct dt_rec *osd_quota_pack(struct osd_object *obj,
 void osd_quota_unpack(struct osd_object *obj, const struct dt_rec *rec);
 int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
 			const struct dt_index_features *feat);
+
+/* osd_compat.c */
+struct osd_obj_seq *osd_seq_load(struct osd_device *osd, obd_seq seq);
 
 static inline bool is_quota_glb_feat(const struct dt_index_features *feat)
 {

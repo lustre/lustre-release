@@ -472,7 +472,7 @@ All the objects are listed in the local_oid enum, which includes:
   objects.
 - ACCT_USER_OID/ACCT_GROUP_OID are used for accessing space accounting
   information for respectively users and groups.
-- MDT_LAST_RECV_OID/OFD_LAST_RECV_OID is the last_rcvd file for respectively
+- LAST_RECV_OID is the last_rcvd file for respectively
   the MDT and OST.
 
 iv. Object Operations

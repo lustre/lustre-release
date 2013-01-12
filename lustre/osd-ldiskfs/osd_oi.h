@@ -125,6 +125,12 @@ static inline int osd_id_eq(const struct osd_inode_id *id0,
 		id1->oii_gen == OSD_OII_NOGEN);
 }
 
+static inline int osd_id_eq_strict(const struct osd_inode_id *id0,
+				   const struct osd_inode_id *id1)
+{
+	return (id0->oii_ino == id1->oii_ino && id0->oii_gen == id1->oii_gen);
+}
+
 int osd_oi_mod_init(void);
 int osd_oi_init(struct osd_thread_info *info, struct osd_device *osd);
 void osd_oi_fini(struct osd_thread_info *info, struct osd_device *osd);

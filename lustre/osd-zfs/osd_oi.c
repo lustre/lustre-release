@@ -90,7 +90,7 @@ struct named_oid {
 };
 
 static const struct named_oid oids[] = {
-	{ OFD_LAST_RECV_OID,		LAST_RCVD },
+	{ LAST_RECV_OID,		LAST_RCVD },
 	{ OFD_LAST_GROUP_OID,		"LAST_GROUP" },
 	{ LLOG_CATALOGS_OID,		"CATALOGS" },
 	{ MGS_CONFIGS_OID,              NULL /*MOUNT_CONFIGS_DIR*/ },
@@ -99,7 +99,6 @@ static const struct named_oid oids[] = {
 	{ MDD_CAPA_KEYS_OID,            NULL /*CAPA_KEYS*/ },
 	{ FLD_INDEX_OID,                "fld" },
 	{ MDD_LOV_OBJ_OID,		LOV_OBJID },
-	{ MDT_LAST_RECV_OID,		LAST_RCVD },
 	{ OFD_HEALTH_CHECK_OID,		HEALTH_CHECK },
 	{ ACCT_USER_OID,		"acct_usr_inode" },
 	{ ACCT_GROUP_OID,		"acct_grp_inode" },

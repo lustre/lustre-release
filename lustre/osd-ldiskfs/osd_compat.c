@@ -413,7 +413,7 @@ out_err:
 	RETURN(rc);
 }
 
-static struct osd_obj_seq *osd_seq_load(struct osd_device *osd, obd_seq seq)
+struct osd_obj_seq *osd_seq_load(struct osd_device *osd, obd_seq seq)
 {
 	struct osd_obj_map	*map;
 	struct osd_obj_seq	*osd_seq;
@@ -592,43 +592,6 @@ cleanup:
         RETURN(rc);
 }
 
-struct named_oid {
-        unsigned long  oid;
-        char          *name;
-};
-
-static const struct named_oid oids[] = {
-	{ FLD_INDEX_OID,        "fld" },
-	{ FID_SEQ_CTL_OID,      "seq_ctl" },
-	{ FID_SEQ_SRV_OID,      "seq_srv" },
-	{ MDD_ROOT_INDEX_OID,   "" /* "ROOT" */ },
-	{ MDD_ORPHAN_OID,       "" /* "PENDING" */ },
-	{ MDD_LOV_OBJ_OID,      LOV_OBJID },
-	{ MDD_CAPA_KEYS_OID,    "" /* CAPA_KEYS */ },
-	{ MDT_LAST_RECV_OID,    LAST_RCVD },
-	{ LFSCK_BOOKMARK_OID,   "" /* "lfsck_bookmark" */ },
-	{ OTABLE_IT_OID,	"" /* "otable iterator" */},
-	{ OFD_LAST_RECV_OID,    LAST_RCVD },
-	{ OFD_LAST_GROUP_OID,   "LAST_GROUP" },
-	{ LLOG_CATALOGS_OID,    "CATALOGS" },
-	{ MGS_CONFIGS_OID,      "" /* MOUNT_CONFIGS_DIR */ },
-	{ OFD_HEALTH_CHECK_OID, HEALTH_CHECK },
-	{ MDD_LOV_OBJ_OSEQ,     LOV_OBJSEQ },
-	{ 0,                    NULL }
-};
-
-static char *oid2name(const unsigned long oid)
-{
-        int i = 0;
-
-        while (oids[i].oid) {
-                if (oids[i].oid == oid)
-                        return oids[i].name;
-                i++;
-        }
-        return NULL;
-}
-
 int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid,
 			const struct osd_inode_id *id,
@@ -651,7 +614,7 @@ int osd_obj_spec_insert(struct osd_thread_info *info, struct osd_device *osd,
 		rc = osd_obj_add_entry(info, osd, osd_seq->oos_root,
 				       "LAST_ID", id, th);
 	} else {
-		name = oid2name(fid_oid(fid));
+		name = osd_lf_fid2name(fid);
 		if (name == NULL)
 			CWARN("UNKNOWN COMPAT FID "DFID"\n", PFID(fid));
 		else if (name[0])
@@ -681,7 +644,7 @@ int osd_obj_spec_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		name = "LAST_ID";
 	} else {
 		root = osd_sb(osd)->s_root;
-		name = oid2name(fid_oid(fid));
+		name = osd_lf_fid2name(fid);
 		if (name == NULL || strlen(name) == 0)
 			RETURN(-ENOENT);
 	}
