@@ -216,10 +216,8 @@ struct osd_otable_cache {
 
 struct osd_otable_it {
 	struct osd_device       *ooi_dev;
+	pid_t			 ooi_pid;
 	struct osd_otable_cache  ooi_cache;
-
-	/* For osd_otable_it_key. */
-	__u8			 ooi_key[16];
 
 	/* The following bits can be updated/checked w/o lock protection.
 	 * If more bits will be introduced in the future and need lock to
@@ -230,7 +228,9 @@ struct osd_otable_it {
 						    * filled into cache. */
 				 ooi_user_ready:1, /* The user out of OSD is
 						    * ready to iterate. */
-				 ooi_waiting:1; /* it::next is waiting. */
+				 ooi_waiting:1, /* it::next is waiting. */
+				 ooi_stopping:1; /* Someone is stopping
+						  * the iteration. */
 };
 
 extern const int osd_dto_credits_noquota[];

@@ -125,17 +125,12 @@ static int mdd_lfsck_main(void *args)
 	CDEBUG(D_LFSCK, "LFSCK: flags = 0x%x, pid = %d\n",
 	       lfsck->ml_args, cfs_curproc_pid());
 
-	/* XXX: Prepare before wakeup the sponsor.
-	 *      Each lfsck component should call iops->get() API with
-	 *      every bookmark, then low layer module can decide the
-	 *      start point for current iteration. */
-
 	spin_lock(&lfsck->ml_lock);
 	thread_set_flags(thread, SVC_RUNNING);
 	spin_unlock(&lfsck->ml_lock);
 	cfs_waitq_broadcast(&thread->t_ctl_waitq);
 
-	/* Call iops->load() to finish the choosing start point. */
+	/* The call iops->load() will unplug low layer iteration. */
 	rc = iops->load(&env, di, 0);
 	if (rc != 0)
 		GOTO(out, rc);
