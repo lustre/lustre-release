@@ -382,6 +382,8 @@ static int osd_object_init(const struct lu_env *env, struct lu_object *l,
 			CERROR("%s: lookup "DFID"/"LPX64" failed: rc = %d\n",
 			       osd->od_svname, PFID(lu_object_fid(l)), oid, rc);
 		}
+	} else if (rc == -ENOENT) {
+		rc = 0;
 	}
 	LASSERT(osd_invariant(obj));
 	RETURN(rc);
