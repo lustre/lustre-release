@@ -348,8 +348,9 @@ int llog_cat_add_rec(const struct lu_env *env, struct llog_handle *cathandle,
 	}
 	/* now let's try to add the record */
 	rc = llog_write_rec(env, loghandle, rec, reccookie, 1, buf, -1, th);
-        if (rc < 0)
-                CERROR("llog_write_rec %d: lh=%p\n", rc, loghandle);
+	if (rc < 0)
+		CDEBUG_LIMIT(rc == -ENOSPC ? D_HA : D_ERROR,
+			     "llog_write_rec %d: lh=%p\n", rc, loghandle);
 	up_write(&loghandle->lgh_lock);
         if (rc == -ENOSPC) {
 		/* try to use next log */
