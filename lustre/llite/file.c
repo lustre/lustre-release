@@ -1285,37 +1285,36 @@ out:
 
 static int ll_lov_recreate_obj(struct inode *inode, unsigned long arg)
 {
-        struct ll_recreate_obj ucreat;
-        ENTRY;
+	struct ll_recreate_obj ucreat;
+	ENTRY;
 
-        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
-                RETURN(-EPERM);
+	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+		RETURN(-EPERM);
 
-        if (cfs_copy_from_user(&ucreat, (struct ll_recreate_obj *)arg,
-                               sizeof(struct ll_recreate_obj)))
-                RETURN(-EFAULT);
+	if (copy_from_user(&ucreat, (struct ll_recreate_obj *)arg,
+			   sizeof(ucreat)))
+		RETURN(-EFAULT);
 
-        RETURN(ll_lov_recreate(inode, ucreat.lrc_id, 0,
-                               ucreat.lrc_ost_idx));
+	RETURN(ll_lov_recreate(inode, ucreat.lrc_id, 0,
+			       ucreat.lrc_ost_idx));
 }
 
 static int ll_lov_recreate_fid(struct inode *inode, unsigned long arg)
 {
-        struct lu_fid fid;
-        obd_id id;
-        obd_count ost_idx;
+	struct lu_fid	fid;
+	obd_id		id;
+	obd_count	ost_idx;
         ENTRY;
 
-        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
-                RETURN(-EPERM);
+	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+		RETURN(-EPERM);
 
-        if (cfs_copy_from_user(&fid, (struct lu_fid *)arg,
-                               sizeof(struct lu_fid)))
-                RETURN(-EFAULT);
+	if (copy_from_user(&fid, (struct lu_fid *)arg, sizeof(fid)))
+		RETURN(-EFAULT);
 
-        id = fid_oid(&fid) | ((fid_seq(&fid) & 0xffff) << 32);
-        ost_idx = (fid_seq(&fid) >> 16) & 0xffff;
-        RETURN(ll_lov_recreate(inode, id, 0, ost_idx));
+	id = fid_oid(&fid) | ((fid_seq(&fid) & 0xffff) << 32);
+	ost_idx = (fid_seq(&fid) >> 16) & 0xffff;
+	RETURN(ll_lov_recreate(inode, id, 0, ost_idx));
 }
 
 int ll_lov_setstripe_ea_info(struct inode *inode, struct file *file,
@@ -1435,56 +1434,55 @@ out:
 static int ll_lov_setea(struct inode *inode, struct file *file,
                             unsigned long arg)
 {
-        int flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
-        struct lov_user_md  *lump;
-        int lum_size = sizeof(struct lov_user_md) +
-                       sizeof(struct lov_user_ost_data);
-        int rc;
-        ENTRY;
+	int			 flags = MDS_OPEN_HAS_OBJS | FMODE_WRITE;
+	struct lov_user_md	*lump;
+	int			 lum_size = sizeof(struct lov_user_md) +
+					    sizeof(struct lov_user_ost_data);
+	int			 rc;
+	ENTRY;
 
-        if (!cfs_capable(CFS_CAP_SYS_ADMIN))
-                RETURN(-EPERM);
+	if (!cfs_capable(CFS_CAP_SYS_ADMIN))
+		RETURN(-EPERM);
 
-        OBD_ALLOC_LARGE(lump, lum_size);
-        if (lump == NULL) {
+	OBD_ALLOC_LARGE(lump, lum_size);
+	if (lump == NULL)
                 RETURN(-ENOMEM);
-        }
-        if (cfs_copy_from_user(lump, (struct lov_user_md  *)arg, lum_size)) {
-                OBD_FREE_LARGE(lump, lum_size);
-                RETURN(-EFAULT);
-        }
 
-        rc = ll_lov_setstripe_ea_info(inode, file, flags, lump, lum_size);
+	if (copy_from_user(lump, (struct lov_user_md  *)arg, lum_size)) {
+		OBD_FREE_LARGE(lump, lum_size);
+		RETURN(-EFAULT);
+	}
 
-        OBD_FREE_LARGE(lump, lum_size);
-        RETURN(rc);
+	rc = ll_lov_setstripe_ea_info(inode, file, flags, lump, lum_size);
+
+	OBD_FREE_LARGE(lump, lum_size);
+	RETURN(rc);
 }
 
 static int ll_lov_setstripe(struct inode *inode, struct file *file,
-                            unsigned long arg)
+			    unsigned long arg)
 {
-        struct lov_user_md_v3 lumv3;
-        struct lov_user_md_v1 *lumv1 = (struct lov_user_md_v1 *)&lumv3;
-        struct lov_user_md_v1 *lumv1p = (struct lov_user_md_v1 *)arg;
-        struct lov_user_md_v3 *lumv3p = (struct lov_user_md_v3 *)arg;
-        int lum_size;
-        int rc;
-        int flags = FMODE_WRITE;
-        ENTRY;
+	struct lov_user_md_v3	 lumv3;
+	struct lov_user_md_v1	*lumv1 = (struct lov_user_md_v1 *)&lumv3;
+	struct lov_user_md_v1	*lumv1p = (struct lov_user_md_v1 *)arg;
+	struct lov_user_md_v3	*lumv3p = (struct lov_user_md_v3 *)arg;
+	int			 lum_size, rc;
+	int			 flags = FMODE_WRITE;
+	ENTRY;
 
-        /* first try with v1 which is smaller than v3 */
-        lum_size = sizeof(struct lov_user_md_v1);
-        if (cfs_copy_from_user(lumv1, lumv1p, lum_size))
-                RETURN(-EFAULT);
+	/* first try with v1 which is smaller than v3 */
+	lum_size = sizeof(struct lov_user_md_v1);
+	if (copy_from_user(lumv1, lumv1p, lum_size))
+		RETURN(-EFAULT);
 
-        if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
-                lum_size = sizeof(struct lov_user_md_v3);
-                if (cfs_copy_from_user(&lumv3, lumv3p, lum_size))
-                        RETURN(-EFAULT);
-        }
+	if (lumv1->lmm_magic == LOV_USER_MAGIC_V3) {
+		lum_size = sizeof(struct lov_user_md_v3);
+		if (copy_from_user(&lumv3, lumv3p, lum_size))
+			RETURN(-EFAULT);
+	}
 
-        rc = ll_lov_setstripe_ea_info(inode, file, flags, lumv1, lum_size);
-        if (rc == 0) {
+	rc = ll_lov_setstripe_ea_info(inode, file, flags, lumv1, lum_size);
+	if (rc == 0) {
 		struct lov_stripe_md *lsm;
 		__u32 gen;
 
@@ -1697,43 +1695,43 @@ out:
 
 int ll_fid2path(struct inode *inode, void *arg)
 {
-	struct obd_export *exp = ll_i2mdexp(inode);
-        struct getinfo_fid2path *gfout, *gfin;
-        int outsize, rc;
-        ENTRY;
+	struct obd_export	*exp = ll_i2mdexp(inode);
+	struct getinfo_fid2path	*gfout, *gfin;
+	int			 outsize, rc;
+	ENTRY;
 
 	if (!cfs_capable(CFS_CAP_DAC_READ_SEARCH) &&
 	    !(ll_i2sbi(inode)->ll_flags & LL_SBI_USER_FID2PATH))
 		RETURN(-EPERM);
 
-        /* Need to get the buflen */
-        OBD_ALLOC_PTR(gfin);
-        if (gfin == NULL)
-                RETURN(-ENOMEM);
-        if (cfs_copy_from_user(gfin, arg, sizeof(*gfin))) {
-                OBD_FREE_PTR(gfin);
-                RETURN(-EFAULT);
-        }
+	/* Need to get the buflen */
+	OBD_ALLOC_PTR(gfin);
+	if (gfin == NULL)
+		RETURN(-ENOMEM);
+	if (copy_from_user(gfin, arg, sizeof(*gfin))) {
+		OBD_FREE_PTR(gfin);
+		RETURN(-EFAULT);
+	}
 
-        outsize = sizeof(*gfout) + gfin->gf_pathlen;
-        OBD_ALLOC(gfout, outsize);
-        if (gfout == NULL) {
-                OBD_FREE_PTR(gfin);
-                RETURN(-ENOMEM);
-        }
-        memcpy(gfout, gfin, sizeof(*gfout));
-        OBD_FREE_PTR(gfin);
+	outsize = sizeof(*gfout) + gfin->gf_pathlen;
+	OBD_ALLOC(gfout, outsize);
+	if (gfout == NULL) {
+		OBD_FREE_PTR(gfin);
+		RETURN(-ENOMEM);
+	}
+	memcpy(gfout, gfin, sizeof(*gfout));
+	OBD_FREE_PTR(gfin);
 
-        /* Call mdc_iocontrol */
-        rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
-        if (rc)
-                GOTO(gf_free, rc);
-        if (cfs_copy_to_user(arg, gfout, outsize))
-                rc = -EFAULT;
+	/* Call mdc_iocontrol */
+	rc = obd_iocontrol(OBD_IOC_FID2PATH, exp, outsize, gfout, NULL);
+	if (rc)
+		GOTO(gf_free, rc);
+	if (copy_to_user(arg, gfout, outsize))
+		rc = -EFAULT;
 
 gf_free:
-        OBD_FREE(gfout, outsize);
-        RETURN(rc);
+	OBD_FREE(gfout, outsize);
+	RETURN(rc);
 }
 
 static int ll_ioctl_fiemap(struct inode *inode, unsigned long arg)
@@ -1755,10 +1753,10 @@ static int ll_ioctl_fiemap(struct inode *inode, unsigned long arg)
         if (fiemap_s == NULL)
                 RETURN(-ENOMEM);
 
-        /* get the fiemap value */
-        if (copy_from_user(fiemap_s,(struct ll_user_fiemap __user *)arg,
-                           sizeof(*fiemap_s)))
-                GOTO(error, rc = -EFAULT);
+	/* get the fiemap value */
+	if (copy_from_user(fiemap_s, (struct ll_user_fiemap __user *)arg,
+			   sizeof(*fiemap_s)))
+		GOTO(error, rc = -EFAULT);
 
         /* If fm_extent_count is non-zero, read the first extent since
          * it is used to calculate end_offset and device from previous
@@ -1780,8 +1778,8 @@ static int ll_ioctl_fiemap(struct inode *inode, unsigned long arg)
                 ret_bytes += (fiemap_s->fm_mapped_extents *
                                  sizeof(struct ll_fiemap_extent));
 
-        if (copy_to_user((void *)arg, fiemap_s, ret_bytes))
-                rc = -EFAULT;
+	if (copy_to_user((void *)arg, fiemap_s, ret_bytes))
+		rc = -EFAULT;
 
 error:
         OBD_FREE_LARGE(fiemap_s, num_bytes);
@@ -1907,33 +1905,32 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
         case FSFILT_IOC_SETVERSION_OLD:
         case FSFILT_IOC_SETVERSION:
         */
-        case LL_IOC_FLUSHCTX:
-                RETURN(ll_flush_ctx(inode));
-        case LL_IOC_PATH2FID: {
-                if (cfs_copy_to_user((void *)arg, ll_inode2fid(inode),
-                                     sizeof(struct lu_fid)))
-                        RETURN(-EFAULT);
+	case LL_IOC_FLUSHCTX:
+		RETURN(ll_flush_ctx(inode));
+	case LL_IOC_PATH2FID: {
+		if (copy_to_user((void *)arg, ll_inode2fid(inode),
+				 sizeof(struct lu_fid)))
+			RETURN(-EFAULT);
 
-                RETURN(0);
-        }
-        case OBD_IOC_FID2PATH:
+		RETURN(0);
+	}
+	case OBD_IOC_FID2PATH:
 		RETURN(ll_fid2path(inode, (void *)arg));
-        case LL_IOC_DATA_VERSION: {
-                struct ioc_data_version idv;
-                int rc;
+	case LL_IOC_DATA_VERSION: {
+		struct ioc_data_version	idv;
+		int			rc;
 
-                if (cfs_copy_from_user(&idv, (char *)arg, sizeof(idv)))
-                        RETURN(-EFAULT);
+		if (copy_from_user(&idv, (char *)arg, sizeof(idv)))
+			RETURN(-EFAULT);
 
-                rc = ll_data_version(inode, &idv.idv_version,
-                                     !(idv.idv_flags & LL_DV_NOFLUSH));
+		rc = ll_data_version(inode, &idv.idv_version,
+				!(idv.idv_flags & LL_DV_NOFLUSH));
 
-                if (rc == 0 &&
-                    cfs_copy_to_user((char *) arg, &idv, sizeof(idv)))
-                        RETURN(-EFAULT);
+		if (rc == 0 && copy_to_user((char *) arg, &idv, sizeof(idv)))
+			RETURN(-EFAULT);
 
-                RETURN(rc);
-        }
+		RETURN(rc);
+	}
 
         case LL_IOC_GET_MDTIDX: {
                 int mdtidx;
@@ -1947,20 +1944,83 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
                 RETURN(0);
         }
-        case OBD_IOC_GETDTNAME:
-        case OBD_IOC_GETMDNAME:
-                RETURN(ll_get_obd_name(inode, cmd, arg));
-        default: {
-                int err;
+	case OBD_IOC_GETDTNAME:
+	case OBD_IOC_GETMDNAME:
+		RETURN(ll_get_obd_name(inode, cmd, arg));
+	case LL_IOC_HSM_STATE_GET: {
+		struct md_op_data	*op_data;
+		struct hsm_user_state	*hus;
+		int			 rc;
 
-                if (LLIOC_STOP ==
-                    ll_iocontrol_call(inode, file, cmd, arg, &err))
-                        RETURN(err);
+		OBD_ALLOC_PTR(hus);
+		if (hus == NULL)
+			RETURN(-ENOMEM);
 
-                RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
-                                     (void *)arg));
-        }
-        }
+		op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+					     LUSTRE_OPC_ANY, hus);
+		if (op_data == NULL) {
+			OBD_FREE_PTR(hus);
+			RETURN(-ENOMEM);
+		}
+
+		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
+				   op_data, NULL);
+
+		if (copy_to_user((void *)arg, hus, sizeof(*hus)))
+			rc = -EFAULT;
+
+		ll_finish_md_op_data(op_data);
+		OBD_FREE_PTR(hus);
+		RETURN(rc);
+	}
+	case LL_IOC_HSM_STATE_SET: {
+		struct md_op_data	*op_data;
+		struct hsm_state_set	*hss;
+		int			 rc;
+
+		OBD_ALLOC_PTR(hss);
+		if (hss == NULL)
+			RETURN(-ENOMEM);
+		if (copy_from_user(hss, (char *)arg, sizeof(*hss))) {
+			OBD_FREE_PTR(hss);
+			RETURN(-EFAULT);
+		}
+
+		/* Non-root users are forbidden to set or clear flags which are
+		 * NOT defined in HSM_USER_MASK. */
+		if (((hss->hss_setmask | hss->hss_clearmask) & ~HSM_USER_MASK)
+		    && !cfs_capable(CFS_CAP_SYS_ADMIN)) {
+			OBD_FREE_PTR(hss);
+			RETURN(-EPERM);
+		}
+
+		op_data = ll_prep_md_op_data(NULL, inode, NULL, NULL, 0, 0,
+					     LUSTRE_OPC_ANY, hss);
+		if (op_data == NULL) {
+			OBD_FREE_PTR(hss);
+			RETURN(-ENOMEM);
+		}
+
+		rc = obd_iocontrol(cmd, ll_i2mdexp(inode), sizeof(*op_data),
+				   op_data, NULL);
+
+		ll_finish_md_op_data(op_data);
+
+		OBD_FREE_PTR(hss);
+		RETURN(rc);
+	}
+
+	default: {
+		int err;
+
+		if (LLIOC_STOP ==
+			ll_iocontrol_call(inode, file, cmd, arg, &err))
+			RETURN(err);
+
+		RETURN(obd_iocontrol(cmd, ll_i2dtexp(inode), 0, NULL,
+				     (void *)arg));
+	}
+	}
 }
 
 #ifndef HAVE_FILE_LLSEEK_SIZE

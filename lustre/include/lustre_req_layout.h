@@ -282,6 +282,8 @@ extern struct req_msg_field RMF_MDS_HSM_PROGRESS;
 extern struct req_msg_field RMF_MDS_HSM_REQUEST;
 extern struct req_msg_field RMF_MDS_HSM_USER_ITEM;
 extern struct req_msg_field RMF_MDS_HSM_ARCHIVE;
+extern struct req_msg_field RMF_HSM_USER_STATE;
+extern struct req_msg_field RMF_HSM_STATE_SET;
 
 /* seq-mgr fields */
 extern struct req_msg_field RMF_SEQ_OPC;

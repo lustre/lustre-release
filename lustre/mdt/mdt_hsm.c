@@ -157,3 +157,151 @@ int mdt_hsm_ct_unregister(struct mdt_thread_info *info)
 
 	RETURN(rc);
 }
+
+
+/**
+ * Retrieve the current HSM flags, archive id and undergoing HSM requests for
+ * the fid provided in RPC body.
+ *
+ * Current requests are read from coordinator states.
+ *
+ * This is MDS_HSM_STATE_GET RPC handler.
+ */
+int mdt_hsm_state_get(struct mdt_thread_info *info)
+{
+	struct mdt_object	*obj = info->mti_object;
+	struct md_attr		*ma  = &info->mti_attr;
+	struct hsm_user_state	*hus;
+	struct mdt_lock_handle	*lh;
+	int			 rc;
+	ENTRY;
+
+	lh = &info->mti_lh[MDT_LH_CHILD];
+	mdt_lock_reg_init(lh, LCK_PR);
+	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP,
+			     MDT_LOCAL_LOCK);
+	if (rc)
+		RETURN(rc);
+
+	/* Only valid if client is remote */
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc)
+		GOTO(out_unlock, rc = err_serious(rc));
+
+	ma->ma_valid = 0;
+	ma->ma_need = MA_HSM;
+	rc = mdt_attr_get_complex(info, obj, ma);
+	if (rc)
+		GOTO(out_ucred, rc);
+
+	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
+		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
+			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
+
+	hus = req_capsule_server_get(info->mti_pill, &RMF_HSM_USER_STATE);
+	LASSERT(hus);
+
+	/* Current HSM flags */
+	hus->hus_states = ma->ma_hsm.mh_flags;
+	hus->hus_archive_id = ma->ma_hsm.mh_arch_id;
+
+	EXIT;
+out_ucred:
+	mdt_exit_ucred(info);
+out_unlock:
+	mdt_object_unlock(info, obj, lh, 1);
+	return rc;
+}
+
+/**
+ * Change HSM state and archive number of a file.
+ *
+ * Archive number is changed iif the value is not 0.
+ * The new flagset that will be computed should result in a coherent state.
+ * This function checks that are flags are compatible.
+ *
+ * This is MDS_HSM_STATE_SET RPC handler.
+ */
+int mdt_hsm_state_set(struct mdt_thread_info *info)
+{
+	struct mdt_object	*obj = info->mti_object;
+	struct md_attr          *ma = &info->mti_attr;
+	struct hsm_state_set	*hss;
+	struct mdt_lock_handle	*lh;
+	int			 rc;
+	__u64			 flags;
+	ENTRY;
+
+	lh = &info->mti_lh[MDT_LH_CHILD];
+	mdt_lock_reg_init(lh, LCK_PW);
+	rc = mdt_object_lock(info, obj, lh, MDS_INODELOCK_LOOKUP,
+			     MDT_LOCAL_LOCK);
+	if (rc)
+		RETURN(rc);
+
+	/* Only valid if client is remote */
+	rc = mdt_init_ucred(info, (struct mdt_body *)info->mti_body);
+	if (rc)
+		GOTO(out_obj, rc = err_serious(rc));
+
+	/* Read current HSM info */
+	ma->ma_valid = 0;
+	ma->ma_need = MA_HSM;
+	rc = mdt_attr_get_complex(info, obj, ma);
+	if (rc)
+		GOTO(out_ucred, rc);
+
+	hss = req_capsule_client_get(info->mti_pill, &RMF_HSM_STATE_SET);
+	LASSERT(hss);
+
+	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
+		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
+			    req_capsule_client_get(info->mti_pill, &RMF_CAPA1));
+
+	/* Change HSM flags depending on provided masks */
+	if (hss->hss_valid & HSS_SETMASK)
+		ma->ma_hsm.mh_flags |= hss->hss_setmask;
+	if (hss->hss_valid & HSS_CLEARMASK)
+		ma->ma_hsm.mh_flags &= ~hss->hss_clearmask;
+
+	/* Change archive_id if provided. */
+	if (hss->hss_valid & HSS_ARCHIVE_ID) {
+		if (!(ma->ma_hsm.mh_flags & HS_EXISTS)) {
+			CDEBUG(D_HSM, "Could not set an archive number for "
+			       DFID "if HSM EXISTS flag is not set.\n",
+			       PFID(&info->mti_body->fid1));
+			GOTO(out_ucred, rc);
+		}
+		ma->ma_hsm.mh_arch_id = hss->hss_archive_id;
+	}
+
+	/* Check for inconsistant HSM flagset.
+	 * DIRTY without EXISTS: no dirty if no archive was created.
+	 * DIRTY and RELEASED: a dirty file could not be released.
+	 * RELEASED without ARCHIVED: do not release a non-archived file.
+	 * LOST without ARCHIVED: cannot lost a non-archived file.
+	 */
+	flags = ma->ma_hsm.mh_flags;
+	if (((flags & HS_DIRTY) && !(flags & HS_EXISTS)) ||
+	    ((flags & HS_RELEASED) && (flags & HS_DIRTY)) ||
+	    ((flags & HS_RELEASED) && !(flags & HS_ARCHIVED)) ||
+	    ((flags & HS_LOST)     && !(flags & HS_ARCHIVED))) {
+		CDEBUG(D_HSM, "Incompatible flag change on "DFID
+			      "flags="LPX64"\n",
+		       PFID(&info->mti_body->fid1), flags);
+		GOTO(out_ucred, rc = -EINVAL);
+	}
+
+	/* Save the modified flags */
+	rc = mdt_hsm_attr_set(info, obj, &ma->ma_hsm);
+	if (rc)
+		GOTO(out_ucred, rc);
+
+	EXIT;
+
+out_ucred:
+	mdt_exit_ucred(info);
+out_obj:
+	mdt_object_unlock(info, obj, lh, 1);
+	return rc;
+}

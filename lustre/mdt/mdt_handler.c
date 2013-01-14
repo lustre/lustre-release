@@ -713,7 +713,7 @@ static int mdt_getattr_internal(struct mdt_thread_info *info,
         } else {
                 ma->ma_lmm = buffer->lb_buf;
                 ma->ma_lmm_size = buffer->lb_len;
-                ma->ma_need = MA_LOV | MA_INODE;
+		ma->ma_need = MA_LOV | MA_INODE | MA_HSM;
         }
 
         if (S_ISDIR(lu_object_attr(&next->mo_lu)) &&
@@ -3104,6 +3104,8 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
 	case MDS_HSM_REQUEST:
 	case MDS_HSM_CT_REGISTER:
 	case MDS_HSM_CT_UNREGISTER:
+	case MDS_HSM_STATE_GET:
+	case MDS_HSM_STATE_SET:
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
         case QUOTA_DQACQ:

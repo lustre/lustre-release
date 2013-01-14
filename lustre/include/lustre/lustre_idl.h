@@ -1553,6 +1553,21 @@ struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */
 /* don't forget obdo_fid which is way down at the bottom so it can
  * come after the definition of llog_cookie */
 
+enum hss_valid {
+	HSS_SETMASK	= 0x01,
+	HSS_CLEARMASK	= 0x02,
+	HSS_ARCHIVE_ID	= 0x04,
+};
+
+struct hsm_state_set {
+	__u32	hss_valid;
+	__u32	hss_archive_id;
+	__u64	hss_setmask;
+	__u64	hss_clearmask;
+};
+
+extern void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
+extern void lustre_swab_hsm_state_set(struct hsm_state_set *hss);
 
 extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 
@@ -3318,8 +3333,8 @@ struct hsm_progress_kernel {
 	__u64			hpk_padding2;
 } __attribute__((packed));
 
-extern void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
 extern void lustre_swab_hsm_progress_kernel(struct hsm_progress_kernel *hpk);
+extern void lustre_swab_hsm_user_state(struct hsm_user_state *hus);
 extern void lustre_swab_hsm_user_item(struct hsm_user_item *hui);
 
 #endif

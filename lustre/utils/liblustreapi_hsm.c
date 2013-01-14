@@ -58,15 +58,6 @@
 #include <lustre/lustreapi.h>
 #include "lustreapi_internal.h"
 
-/*
- * fake functions, real one will come with HSM flags patch
- */
-static int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
-			       __u32 archive_num)
-{
-	return 0;
-}
-
 /****** HSM Copytool API ********/
 #define CT_PRIV_MAGIC 0xC0BE2001
 struct hsm_copytool_private {
@@ -449,6 +440,76 @@ int llapi_hsm_import(const char *dst, int archive, struct stat *st,
 out_unlink:
 	if (rc)
 		unlink(dst);
+	return rc;
+}
+
+
+/**
+ * Return the current HSM states and HSM requests related to file pointed by \a
+ * path.
+ *
+ * \param hus  Should be allocated by caller. Will be filled with current file
+ *             states.
+ *
+ * \retval 0 on success.
+ * \retval -errno on error.
+ */
+int llapi_hsm_state_get(const char *path, struct hsm_user_state *hus)
+{
+	int fd;
+	int rc;
+
+	fd = open(path, O_RDONLY | O_NONBLOCK);
+	if (fd < 0)
+		return -errno;
+
+	rc = ioctl(fd, LL_IOC_HSM_STATE_GET, hus);
+	/* If error, save errno value */
+	rc = rc ? -errno : 0;
+
+	close(fd);
+	return rc;
+}
+
+/**
+ * Set HSM states of file pointed by \a path.
+ *
+ * Using the provided bitmasks, the current HSM states for this file will be
+ * changed. \a archive_id could be used to change the archive number also. Set
+ * it to 0 if you do not want to change it.
+ *
+ * \param setmask      Bitmask for flag to be set.
+ * \param clearmask    Bitmask for flag to be cleared.
+ * \param archive_id  Archive number identifier to use. 0 means no change.
+ *
+ * \retval 0 on success.
+ * \retval -errno on error.
+ */
+int llapi_hsm_state_set(const char *path, __u64 setmask, __u64 clearmask,
+			__u32 archive_id)
+{
+	struct hsm_state_set hss;
+	int fd;
+	int rc;
+
+	fd = open(path, O_WRONLY | O_LOV_DELAY_CREATE | O_NONBLOCK);
+	if (fd < 0)
+		return -errno;
+
+	hss.hss_valid = HSS_SETMASK|HSS_CLEARMASK;
+	hss.hss_setmask = setmask;
+	hss.hss_clearmask = clearmask;
+	/* Change archive_id if provided. We can only change
+	 * to set something different than 0. */
+	if (archive_id > 0) {
+		hss.hss_valid |= HSS_ARCHIVE_ID;
+		hss.hss_archive_id = archive_id;
+	}
+	rc = ioctl(fd, LL_IOC_HSM_STATE_SET, &hss);
+	/* If error, save errno value */
+	rc = rc ? -errno : 0;
+
+	close(fd);
 	return rc;
 }
 

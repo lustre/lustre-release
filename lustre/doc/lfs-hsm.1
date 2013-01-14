@@ -1,0 +1,74 @@
+.TH lfs-hsm 1 "November 9, 2012" Lustre "Lustre/HSM binding utility"
+.SH NAME
+.Blfs hsm_command
+lfs commands used to interact with HSM features
+.SH SYNOPSIS
+.B lfs hsm_state
+.RB <FILE> ...
+.br
+.B  lfs hsm_set|hsm_clear
+.RB [ --norelease ]
+.RB [ --noarchive ]
+.RB [ --dirty ]
+.RB [ --exists ]
+.RB [ --archived ]
+.RB [ --lost ]
+.RB <FILE> ...
+.br
+.SH DESCRIPTION
+These are a set of lfs commands used to interact with Lustre/HSM binding feature.
+.TP
+.B lfs hsm_state <FILE> ...
+Display the current HSM flags and archive ID for provided files.
+.TP
+.B lfs hsm_set <FILE>...
+Set provided HSM flags on file list.
+.TP
+.B lfs hsm_clear <FILE>...
+Clear the HSM related flags on file list.
+.PP
+Non-privileged user can only change the following flags:
+.B norelease
+,
+.B noarchive
+and
+.B dirty.
+.PP
+.SH OPTIONS
+.TP
+.B \\--norelease
+File should never be released. File data will stay in Lustre even if a copy exists in HSM backend.
+.TP
+.B \\--noarchive
+File should never be archived. Useful if this is a temporary file, for example.
+.TP
+.B \\--dirty
+File content is not in sync with HSM backend. File should be archived again. (root only)
+.TP
+.B \\--exists
+A file copy exists in HSM backend. Useful mostly for debugging. (root only)
+.TP
+.B \\--archived
+An up-to-date file copy exists in HSM backend. Useful mostly for debugging. (root only)
+.TP
+.B \\--lost
+File copy in HSM backend is not usable anymore and file could not be restored. It should be archived again. (root only)
+.SH EXAMPLES
+.TP
+.B Display current HSM flag for foo:
+$ lfs hsm_state /mnt/lustre/foo
+
+/mnt/lustre/foo: (0x0000000b) exists dirty archived, archive_id: 1
+
+.TP
+.B Force a file to be considered as modified in lustre (dirty)
+$ lfs hsm_set --dirty /mnt/lustre/motd
+
+.SH AUTHOR
+Written by Aurelien Degremont.
+
+.SH KNOWN BUGS
+.PP
+Please report all bugs to http://jira.whamcloud.com/
+.SH SEE ALSO
+.BR lfs (1)

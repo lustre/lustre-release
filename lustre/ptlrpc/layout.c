@@ -596,6 +596,18 @@ static const struct req_msg_field *mdt_hsm_ct_register[] = {
 	&RMF_MDS_HSM_ARCHIVE,
 };
 
+static const struct req_msg_field *mdt_hsm_state_get_server[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_HSM_USER_STATE,
+};
+
+static const struct req_msg_field *mdt_hsm_state_set[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
+	&RMF_CAPA1,
+	&RMF_HSM_STATE_SET,
+};
+
 static struct req_format *req_formats[] = {
         &RQF_OBD_PING,
         &RQF_OBD_SET_INFO,
@@ -638,6 +650,8 @@ static struct req_format *req_formats[] = {
 	&RQF_MDS_HSM_PROGRESS,
 	&RQF_MDS_HSM_CT_REGISTER,
 	&RQF_MDS_HSM_CT_UNREGISTER,
+	&RQF_MDS_HSM_STATE_GET,
+	&RQF_MDS_HSM_STATE_SET,
         &RQF_QC_CALLBACK,
         &RQF_OST_CONNECT,
         &RQF_OST_DISCONNECT,
@@ -1016,6 +1030,15 @@ struct req_msg_field RMF_IDX_INFO =
 	DEFINE_MSGF("idx_info", 0, sizeof(struct idx_info),
 		    lustre_swab_idx_info, NULL);
 EXPORT_SYMBOL(RMF_IDX_INFO);
+struct req_msg_field RMF_HSM_USER_STATE =
+	DEFINE_MSGF("hsm_user_state", 0, sizeof(struct hsm_user_state),
+		    lustre_swab_hsm_user_state, NULL);
+EXPORT_SYMBOL(RMF_HSM_USER_STATE);
+
+struct req_msg_field RMF_HSM_STATE_SET =
+	DEFINE_MSGF("hsm_state_set", 0, sizeof(struct hsm_state_set),
+		    lustre_swab_hsm_state_set, NULL);
+EXPORT_SYMBOL(RMF_HSM_STATE_SET);
 
 struct req_msg_field RMF_MDS_HSM_PROGRESS =
 	DEFINE_MSGF("hsm_progress", 0, sizeof(struct hsm_progress_kernel),
@@ -1343,6 +1366,15 @@ EXPORT_SYMBOL(RQF_MDS_HSM_CT_REGISTER);
 struct req_format RQF_MDS_HSM_CT_UNREGISTER =
 	DEFINE_REQ_FMT0("MDS_HSM_CT_UNREGISTER", empty, empty);
 EXPORT_SYMBOL(RQF_MDS_HSM_CT_UNREGISTER);
+
+struct req_format RQF_MDS_HSM_STATE_GET =
+	DEFINE_REQ_FMT0("MDS_HSM_STATE_GET",
+			mdt_body_capa, mdt_hsm_state_get_server);
+EXPORT_SYMBOL(RQF_MDS_HSM_STATE_GET);
+
+struct req_format RQF_MDS_HSM_STATE_SET =
+	DEFINE_REQ_FMT0("MDS_HSM_STATE_SET", mdt_hsm_state_set, empty);
+EXPORT_SYMBOL(RQF_MDS_HSM_STATE_SET);
 
 /* This is for split */
 struct req_format RQF_MDS_WRITEPAGE =

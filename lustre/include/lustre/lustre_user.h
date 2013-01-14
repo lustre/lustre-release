@@ -745,13 +745,13 @@ struct ioc_data_version {
  * See HSM_FLAGS below.
  */
 enum hsm_states {
-        HS_EXISTS    = 0x00000001,
-        HS_DIRTY     = 0x00000002,
-        HS_RELEASED  = 0x00000004,
-        HS_ARCHIVED  = 0x00000008,
-        HS_NORELEASE = 0x00000010,
-        HS_NOARCHIVE = 0x00000020,
-        HS_LOST      = 0x00000040,
+	HS_EXISTS	= 0x00000001,
+	HS_DIRTY	= 0x00000002,
+	HS_RELEASED	= 0x00000004,
+	HS_ARCHIVED	= 0x00000008,
+	HS_NORELEASE	= 0x00000010,
+	HS_NOARCHIVE	= 0x00000020,
+	HS_LOST		= 0x00000040,
 };
 
 /* HSM user-setable flags. */
@@ -770,25 +770,25 @@ enum hsm_states {
  * HSM request progress state
  */
 enum hsm_progress_states {
-        HPS_WAITING     = 1,
-        HPS_RUNNING     = 2,
-        HPS_DONE        = 3,
+	HPS_WAITING	= 1,
+	HPS_RUNNING	= 2,
+	HPS_DONE	= 3,
 };
-#define HPS_NONE        0
+#define HPS_NONE	0
 
 static inline char *hsm_progress_state2name(enum hsm_progress_states s)
 {
-        switch  (s) {
-        case HPS_WAITING: return "waiting";
-        case HPS_RUNNING: return "running";
-        case HPS_DONE:    return "done";
-        default:          return "unknown";
-        }
+	switch  (s) {
+	case HPS_WAITING:	return "waiting";
+	case HPS_RUNNING:	return "running";
+	case HPS_DONE:		return "done";
+	default:		return "unknown";
+	}
 }
 
 struct hsm_extent {
-        __u64 offset;
-        __u64 length;
+	__u64 offset;
+	__u64 length;
 } __attribute__((packed));
 
 /**
@@ -798,20 +798,20 @@ struct hsm_extent {
  * current HSM flags and in-progress action.
  */
 struct hsm_user_state {
-        /** Current HSM states, from enum hsm_states. */
-        __u32              hus_states;
-        __u32              hus_archive_num;
-        /**  The current undergoing action, if there is one */
-        __u32              hus_in_progress_state;
-        __u32              hus_in_progress_action;
-        struct hsm_extent  hus_in_progress_location;
-        char               hus_extended_info[];
+	/** Current HSM states, from enum hsm_states. */
+	__u32			hus_states;
+	__u32			hus_archive_id;
+	/**  The current undergoing action, if there is one */
+	__u32			hus_in_progress_state;
+	__u32			hus_in_progress_action;
+	struct hsm_extent	hus_in_progress_location;
+	char			hus_extended_info[];
 };
 
 struct hsm_state_set_ioc {
-        struct lu_fid  hssi_fid;
-        __u64          hssi_setmask;
-        __u64          hssi_clearmask;
+	struct lu_fid	hssi_fid;
+	__u64		hssi_setmask;
+	__u64		hssi_clearmask;
 };
 
 /***** HSM user requests ******/

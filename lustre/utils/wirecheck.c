@@ -1861,7 +1861,7 @@ check_hsm_user_state(void)
 	BLANK_LINE();
 	CHECK_STRUCT(hsm_user_state);
 	CHECK_MEMBER(hsm_user_state, hus_states);
-	CHECK_MEMBER(hsm_user_state, hus_archive_num);
+	CHECK_MEMBER(hsm_user_state, hus_archive_id);
 	CHECK_MEMBER(hsm_user_state, hus_in_progress_state);
 	CHECK_MEMBER(hsm_user_state, hus_in_progress_action);
 	CHECK_MEMBER(hsm_user_state, hus_in_progress_location);
@@ -1953,6 +1953,17 @@ static void check_layout_intent(void)
 	CHECK_VALUE(LAYOUT_INTENT_TRUNC);
 	CHECK_VALUE(LAYOUT_INTENT_RELEASE);
 	CHECK_VALUE(LAYOUT_INTENT_RESTORE);
+}
+
+static void
+check_hsm_state_set(void)
+{
+	BLANK_LINE();
+	CHECK_STRUCT(hsm_state_set);
+	CHECK_MEMBER(hsm_state_set, hss_valid);
+	CHECK_MEMBER(hsm_state_set, hss_archive_id);
+	CHECK_MEMBER(hsm_state_set, hss_setmask);
+	CHECK_MEMBER(hsm_state_set, hss_clearmask);
 }
 
 static void
@@ -2321,6 +2332,7 @@ main(int argc, char **argv)
 	check_hsm_progress_kernel();
 	check_hsm_user_item();
 	check_hsm_user_state();
+	check_hsm_state_set();
 
 	printf("}\n\n");
 

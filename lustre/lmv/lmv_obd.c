@@ -864,6 +864,18 @@ static int lmv_iocontrol(unsigned int cmd, struct obd_export *exp,
 		rc = obd_iocontrol(cmd, tgt->ltd_exp, len, karg, uarg);
 		break;
 	}
+	case LL_IOC_HSM_STATE_GET:
+	case LL_IOC_HSM_STATE_SET: {
+		struct md_op_data	*op_data = karg;
+		struct lmv_tgt_desc	*tgt;
+
+		tgt = lmv_find_target(lmv, &op_data->op_fid1);
+		if (!tgt->ltd_exp)
+			RETURN(-EINVAL);
+
+		rc = obd_iocontrol(cmd, lmv->tgts[0]->ltd_exp, len, karg, uarg);
+		break;
+	}
 	default:
 		for (i = 0; i < count; i++) {
 			struct obd_device *mdc_obd;

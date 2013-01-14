@@ -134,6 +134,10 @@ typedef enum {
         MDT_PDO_LOCK = (1 << 1)
 } mdl_type_t;
 
+/* memory structure for hsm attributes
+ * for fields description see the on disk structure hsm_attrs
+ * which is defined in lustre_idl.h
+ */
 struct md_hsm {
 	__u32	mh_compat;
 	__u32	mh_flags;
@@ -143,6 +147,10 @@ struct md_hsm {
 
 #define IOEPOCH_INVAL 0
 
+/* memory structure for som attributes
+ * for fields description see the on disk structure som_attrs
+ * which is defined in lustre_idl.h
+ */
 struct md_som_data {
 	__u32	msd_compat;
 	__u32	msd_incompat;

@@ -1,0 +1,95 @@
+.TH lustreapi 3 "2012 Dec 21" Lustre "Lustre Application Interface Library"
+.SH NAME
+llapi_hsm_state_set \- set HSM flags for a file on Lustre filesystem
+.SH SYNOPSIS
+.nf
+.B #include <lustre/lustreapi.h>
+.sp
+.BI "int llapi_hsm_state_set(const char *" path ", __u64 " setmask ",
+.BI "                        __u64 " clearmask ", __u32 " archive_id ");"
+.sp
+.fi
+.SH DESCRIPTION
+.LP
+.B llapi_hsm_state_set(\|)
+sets, clears HSM flags and modifies archive ID for file pointed by
+.IR path .
+
+.TP 20
+.I setmask
+Mask of flags to be added.
+.TP 20
+.I clearmask
+Mask of flags to be removed.
+.TP 20
+.I archive_id
+Archive ID (greater than 0) used for this file. Use 0 if you do not want to
+change it.
+.LP
+See
+.BR llapi_hsm_state_get (3)
+for available flags.
+.LP
+.SH RETURN VALUES
+.LP
+.B llapi_hsm_state_set(\|)
+returns:
+.TP
+0
+on success
+.TP
+!= 0
+on failure,
+.I errno
+is set appropriately.
+.SH ERRORS
+.TP 15
+.SM ENOMEM
+failed to allocate memory.
+.TP 15
+.SM ENAMETOOLONG
+.I path
+was too long.
+.TP 15
+.SM ENOENT
+.I path
+does not point to a file or a directory.
+.TP 15
+.SM ENOTTY
+.I path
+does not point to a Lustre filesystem.
+.TP 15
+.SM EINVAL
+Provided masks resulted in an incompatible set of flags.
+.SH EXAMPLE
+
+.nf
+#include <stdlib.h>
+#include <stdio.h>
+#include <errno.h>
+
+#include <lustre/lustreapi.h>
+
+int main(int argc, char **argv)
+{
+	int rc;
+
+	if (argc < 2) {
+		fprintf(stderr, "usage: prog FILEPATH\\n");
+		exit(1);
+	}
+
+	rc = llapi_hsm_state_set(argv[1], HS_DIRTY|HS_NORELEASE, 0, 0);
+	if (rc != 0) {
+		fprintf(stderr, "Can't change hsm flags for %s: %s\\n",
+			argv[1], strerror(errno = -rc));
+		exit(rc);
+	}
+
+	exit(0);
+}
+.fi
+.SH "SEE ALSO"
+.BR lustre (7),
+.BR lustreapi (7),
+.BR llapi_hsm_state_get (3)
