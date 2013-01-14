@@ -376,8 +376,7 @@ test_0() {
 	local MB=100 # 100M
 	[ "$SLOW" = "no" ] && MB=10
 
-	local free_space=$(lfs df | grep "filesystem summary" | \
-				awk '{print $5}')
+	local free_space=$(lfs_df | grep "summary" | awk '{print $5}')
 	[ $free_space -le $((MB * 1024)) ] &&
 		skip "not enough space ${free_space} KB, " \
 			"required $((MB * 1024)) KB" && return
@@ -481,8 +480,7 @@ test_2() {
 
 	[ "$SLOW" = "no" ] && LIMIT=1024 # 1k inodes
 
-	local FREE_INODES=$(lfs df -i | grep "filesystem summary" | \
-				awk '{print $5}')
+	local FREE_INODES=$(lfs_df -i | grep "summary" | awk '{print $5}')
 	[ $FREE_INODES -lt $LIMIT ] &&
 		skip "not enough free inodes $FREE_INODES required $LIMIT" &&
 		return
@@ -503,7 +501,7 @@ test_2() {
 	[ $USED -ne 0 ] && error "Used inodes($USED) for user $TSTUSR isn't 0."
 
 	log "Create $LIMIT files ..."
-	$RUNAS createmany -m ${TESTFILE} $LIMIT || \
+	$RUNAS createmany -m ${TESTFILE} $LIMIT ||
 		quota_error u $TSTUSR "user create failure, but expect success"
 	log "Create out of file quota ..."
 	$RUNAS touch ${TESTFILE}_xxx && \

@@ -634,6 +634,13 @@ restore_quota_old() {
     quota_save_version $old_QUOTA_TYPE
 }
 
+# Handle the case when there is a space in the lfs df
+# "filesystem summary" line the same as when there is no space.
+# This will allow fixing the "lfs df" summary line in the future.
+lfs_df() {
+    $LFS df $* | sed -e 's/filesystem /filesystem_/'
+}
+
 # XXX This function is kept for interoperability with old server (< 2.3.50),
 #     it should be removed whenever we drop the interoperability for such
 #     server.
@@ -656,11 +663,11 @@ setup_quota_old() {
     local quota_usrs=$QUOTA_USERS
 
     # get_filesystem_size
-    local disksz=$(lfs df $mntpt | grep "filesystem summary:"  | awk '{print $3}')
+    local disksz=$(lfs_df $mntpt | grep "summary" | awk '{print $2}')
     local blk_soft=$((disksz + 1024))
     local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
 
-    local Inodes=$(lfs df -i $mntpt | grep "filesystem summary:"  | awk '{print $3}')
+    local Inodes=$(lfs_df -i $mntpt | grep "summary" | awk '{print $2}')
     local i_soft=$Inodes
     local i_hard=$((i_soft + i_soft / 20))
 
@@ -740,12 +747,12 @@ setup_quota() {
 	local quota_usrs=$QUOTA_USERS
 
 	# get_filesystem_size
-	local disksz=$(lfs df $mntpt | grep "filesystem summary:" |
+	local disksz=$(lfs_df $mntpt | grep "summary" |
 		     awk '{print $3}')
 	local blk_soft=$((disksz + 1024))
 	local blk_hard=$((blk_soft + blk_soft / 20)) # Go 5% over
 
-	local inodes=$(lfs df -i $mntpt | grep "filesystem summary:" |
+	local inodes=$(lfs_df -i $mntpt | grep "summary" |
 		     awk '{print $3}')
 	local i_soft=$inodes
 	local i_hard=$((i_soft + i_soft / 20))
@@ -1309,7 +1316,8 @@ wait_update () {
         while [ true ]; do
             RESULT=$(do_node $node "$TEST")
             if [ "$RESULT" == "$FINAL" ]; then
-                echo "Updated after $WAIT sec: wanted '$FINAL' got '$RESULT'"
+                [ -z "$RESULT" -o $WAIT -le $sleep ] ||
+                    echo "Updated after ${WAIT}s: wanted '$FINAL' got '$RESULT'"
                 return 0
             fi
             [ $WAIT -ge $MAX ] && break
@@ -1317,7 +1325,7 @@ wait_update () {
             WAIT=$((WAIT + sleep))
             sleep $sleep
         done
-        echo "Update not seen after $MAX sec: wanted '$FINAL' got '$RESULT'"
+        echo "Update not seen after ${MAX}s: wanted '$FINAL' got '$RESULT'"
         return 3
 }
 
