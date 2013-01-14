@@ -1897,30 +1897,44 @@ wait_recovery_complete () {
 }
 
 wait_mds_ost_sync () {
-    # just because recovery is done doesn't mean we've finished
-    # orphan cleanup. Wait for llogs to get synchronized.
-    echo "Waiting for orphan cleanup..."
-    # MAX value includes time needed for MDS-OST reconnection
-    local MAX=$(( TIMEOUT * 2 ))
-    local WAIT=0
-    while [ $WAIT -lt $MAX ]; do
-        local -a sync=($(do_nodes $(comma_list $(mdts_nodes)) \
-            "$LCTL get_param -n osp.*osc*.old_sync_processed"))
-        local con=1
-        local i
-        for ((i=0; i<${#sync[@]}; i++)); do
-            [ ${sync[$i]} -eq 1 ] && continue
-            # there is a not finished MDS-OST synchronization
-            con=0
-            break;
-        done
-        sleep 2 # increase waiting time and cover statfs cache
-        [ ${con} -eq 1 ] && return 0
-        echo "Waiting $WAIT secs for $facet mds-ost sync done."
-        WAIT=$((WAIT + 2))
-    done
-    echo "$facet recovery not done in $MAX sec. $STATUS"
-    return 1
+	# just because recovery is done doesn't mean we've finished
+	# orphan cleanup. Wait for llogs to get synchronized.
+	echo "Waiting for orphan cleanup..."
+	# MAX value includes time needed for MDS-OST reconnection
+	local MAX=$(( TIMEOUT * 2 ))
+	local WAIT=0
+	local new_wait=true
+	local list=$(comma_list $(mdts_nodes))
+	local cmd="$LCTL get_param -n osp.*osc*.old_sync_processed"
+	if ! do_facet $SINGLEMDS \
+		"$LCTL list_param osp.*osc*.old_sync_processed 2> /dev/null"
+	then
+		# old way, use mds_sync
+		new_wait=false
+		list=$(comma_list $(osts_nodes))
+		cmd="$LCTL get_param -n obdfilter.*.mds_sync"
+	fi
+	while [ $WAIT -lt $MAX ]; do
+		local -a sync=($(do_nodes $list "$cmd"))
+		local con=1
+		local i
+		for ((i=0; i<${#sync[@]}; i++)); do
+			if $new_wait; then
+				[ ${sync[$i]} -eq 1 ] && continue
+			else
+				[ ${sync[$i]} -eq 0 ] && continue
+			fi
+			# there is a not finished MDS-OST synchronization
+			con=0
+			break;
+		done
+		sleep 2 # increase waiting time and cover statfs cache
+		[ ${con} -eq 1 ] && return 0
+		echo "Waiting $WAIT secs for $facet mds-ost sync done."
+		WAIT=$((WAIT + 2))
+	done
+	echo "$facet recovery not done in $MAX sec. $STATUS"
+	return 1
 }
 
 wait_destroy_complete () {
