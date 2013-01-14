@@ -3221,8 +3221,15 @@ static int filter_handle_precreate(struct obd_export *exp, struct obdo *oa,
                 CDEBUG(D_RPCTRACE, "filter_last_id() = "LPU64" -> diff = %d\n",
                        filter_last_id(filter, group), diff);
 
-                LASSERTF(diff >= 0,"%s: "LPU64" - "LPU64" = %d\n",obd->obd_name,
-                         oa->o_id, filter_last_id(filter, group), diff);
+		/*
+		 * Check obd->obd_recovering to handle the race condition
+		 * while recreating missing precreated objects through
+		 * filter_preprw_write() and mds_lov_clear_orphans()
+		 * at the same time.
+		 */
+		LASSERTF(ergo(!obd->obd_recovering, diff >= 0),
+			 "%s: "LPU64" - "LPU64" = %d\n", obd->obd_name,
+			 oa->o_id, filter_last_id(filter, group), diff);
         }
 
         if (diff > 0) {
