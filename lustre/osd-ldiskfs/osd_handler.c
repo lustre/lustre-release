@@ -2222,6 +2222,9 @@ int osd_ea_fid_set(struct osd_thread_info *info, struct inode *inode,
 	if (OBD_FAIL_CHECK(OBD_FAIL_FID_INLMA))
 		return 0;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF) && fid_is_client_visible(fid))
+		return 0;
+
 	lustre_lma_init(lma, fid);
 	lustre_lma_swab(lma);
 

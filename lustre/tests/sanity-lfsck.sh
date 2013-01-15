@@ -47,9 +47,15 @@ MOUNT_OPTS_NOSCRUB="-o user_xattr,noscrub"
 lfsck_prep() {
 	local ndirs=$1
 	local nfiles=$2
+	local igif=$3
 
 	echo "formatall"
 	formatall > /dev/null
+
+	if [ ! -z $igif ]; then
+		#define OBD_FAIL_FID_IGIF	0x1504
+		do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1504
+	fi
 
 	echo "setupall"
 	setupall > /dev/null
@@ -65,6 +71,11 @@ lfsck_prep() {
 		done
 		mkdir $DIR/$tdir/e${i}
 	done
+
+	if [ ! -z $igif ]; then
+		touch $DIR/$tdir/dummy
+		do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	fi
 
 	echo "prepared."
 	cleanup_mount $MOUNT > /dev/null || error "Fail to stop client!"
@@ -241,6 +252,63 @@ test_4()
 	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
 }
 run_test 4 "FID-in-dirent can be rebuilt after MDT file-level backup/restore"
+
+test_5()
+{
+	lfsck_prep 1 1 1
+	mds_backup_restore 1 || error "(1) Fail to backup/restore!"
+	echo "start $SINGLEMDS with disabling OI scrub"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(2) Fail to start MDS!"
+
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(3) Expect 'init', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_DELAY2		0x1601
+	do_facet $SINGLEMDS $LCTL set_param fail_val=1
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1601
+	$START_NAMESPACE || error "(4) Fail to start LFSCK for namespace!"
+
+	sleep 5
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(5) Expect 'scanning-phase1', but got '$STATUS'"
+
+	local FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
+	[ "$FLAGS" == "inconsistent,upgrade" ] ||
+		error "(6) Expect 'inconsistent,upgrade', but got '$FLAGS'"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	sleep 3
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(7) Expect 'completed', but got '$STATUS'"
+
+	FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
+	[ -z "$FLAGS" ] || error "(8) Expect empty flags, but got '$FLAGS'"
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^updated_phase1/ { print $2 }')
+	[ $repaired -ge 2 ] ||
+		error "(9) Fail to repair crashed linkEA: $repaired"
+
+	mount_client $MOUNT || error "(10) Fail to start client!"
+
+	#define OBD_FAIL_FID_LOOKUP	0x1505
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1505
+	stat $DIR/$tdir/dummy > /dev/null || error "(11) no FID-in-LMA."
+
+	ls $DIR/$tdir/ > /dev/null || error "(12) no FID-in-dirent."
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	local dummyfid=$($LFS path2fid $DIR/$tdir/dummy)
+	local dummyname=$($LFS fid2path $DIR $dummyfid)
+	[ "$dummyname" == "$DIR/$tdir/dummy" ] ||
+		error "(13) Fail to generate linkEA: $dummyfid $dummyname"
+}
+run_test 5 "LFSCK can handle IFIG object upgrading"
 
 test_6a() {
 	lfsck_prep 10 10

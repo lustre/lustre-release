@@ -312,4 +312,12 @@ struct md_lfsck {
 				 ml_initialized:1; /* lfsck_setup is called. */
 };
 
+enum lfsck_linkea_flags {
+	/* The linkea entries does not match the object nlinks. */
+	LLF_UNMATCH_NLINKS	= 0x01,
+
+	/* Fail to repair the multiple-linked objects during the double scan. */
+	LLF_REPAIR_FAILED	= 0x02,
+};
+
 #endif /* _MDD_LFSCK_H */

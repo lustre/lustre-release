@@ -2748,6 +2748,9 @@ static int mdd_links_rename(const struct lu_env *env,
 	int rc = 0;
 	ENTRY;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_FID_IGIF))
+		return 0;
+
 	LASSERT(oldpfid != NULL || newpfid != NULL);
 
 	if (mdd_obj->mod_flags & DEAD_OBJ)
