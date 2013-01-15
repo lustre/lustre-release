@@ -126,14 +126,14 @@ run_compilebench() {
 # Takes:
 # 5 min * cbench_RUNS
 #        SLOW=no     10 mins
-#        SLOW=yes    50 mins
+#        SLOW=yes    10 mins
 # Space estimation:
 #        compile dir kernel-1 680MB
 #        required space       680MB * cbench_IDIRS = ~7 Gb
 
     cbench_DIR=${cbench_DIR:-""}
-    cbench_IDIRS=${cbench_IDIRS:-4}
-    cbench_RUNS=${cbench_RUNS:-4}
+    cbench_IDIRS=${cbench_IDIRS:-2}
+    cbench_RUNS=${cbench_RUNS:-2}
 
     print_opts cbench_DIR cbench_IDIRS cbench_RUNS
 
