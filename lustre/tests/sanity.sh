@@ -3484,7 +3484,7 @@ run_test 50 "special situations: /proc symlinks  ==============="
 
 test_51a() {	# was test_51
 	# bug 1516 - create an empty entry right after ".." then split dir
-	test_mkdir $DIR/$tdir
+	test_mkdir -p $DIR/$tdir
 	touch $DIR/$tdir/foo
 	$MCREATE $DIR/$tdir/bar
 	rm $DIR/$tdir/foo
@@ -3504,6 +3504,9 @@ export NUMTEST=70000
 test_51b() {
 	[ $PARALLEL == "yes" ] && skip "skip parallel run" && return
 	local BASE=$DIR/$tdir
+
+	# cleanup the directory
+	rm -fr $BASE
 
 	test_mkdir -p $BASE
 
