@@ -1746,6 +1746,13 @@ static struct lu_local_obj_desc llod_lfsck_bookmark = {
 	.llod_is_index  = 0,
 };
 
+static struct lu_local_obj_desc llod_lfsck_namespace = {
+	.llod_name	= lfsck_namespace_name,
+	.llod_oid	= LFSCK_NAMESPACE_OID,
+	.llod_is_index	= 1,
+	.llod_feat	= &dt_lfsck_features,
+};
+
 static int __init mdd_mod_init(void)
 {
 	struct lprocfs_static_vars lvars;
@@ -1766,6 +1773,7 @@ static int __init mdd_mod_init(void)
 	llo_local_obj_register(&llod_mdd_orphan);
 	llo_local_obj_register(&llod_mdd_root);
 	llo_local_obj_register(&llod_lfsck_bookmark);
+	llo_local_obj_register(&llod_lfsck_namespace);
 
 	rc = class_register_type(&mdd_obd_device_ops, NULL, lvars.module_vars,
 				 LUSTRE_MDD_NAME, &mdd_device_type);
@@ -1780,6 +1788,7 @@ static void __exit mdd_mod_exit(void)
 	llo_local_obj_unregister(&llod_mdd_orphan);
 	llo_local_obj_unregister(&llod_mdd_root);
 	llo_local_obj_unregister(&llod_lfsck_bookmark);
+	llo_local_obj_unregister(&llod_lfsck_namespace);
 
 	class_unregister_type(LUSTRE_MDD_NAME);
 	lu_kmem_fini(mdd_caches);

@@ -94,6 +94,7 @@ struct mdd_dot_lustre_objs {
 };
 
 extern const char lfsck_bookmark_name[];
+extern const char lfsck_namespace_name[];
 
 struct mdd_device {
         struct md_device                 mdd_md_dev;

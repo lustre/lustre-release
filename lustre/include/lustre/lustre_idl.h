@@ -1481,6 +1481,7 @@ struct lov_mds_md_v1 {            /* LOV EA mds/wire data (little-endian) */
 #define XATTR_NAME_VERSION      "trusted.version"
 #define XATTR_NAME_SOM		"trusted.som"
 #define XATTR_NAME_HSM		"trusted.hsm"
+#define XATTR_NAME_LFSCK_NAMESPACE "trusted.lfsck_namespace"
 
 
 struct lov_mds_md_v3 {            /* LOV EA mds/wire data (little-endian) */

@@ -1136,6 +1136,10 @@ static const struct osd_lf_map osd_lf_maps[] = {
 	{ HEALTH_CHECK, { FID_SEQ_LOCAL_FILE, OFD_HEALTH_CHECK_OID, 0 },
 		OLF_SHOW_NAME, NULL, NULL },
 
+	/* lfsck_namespace */
+	{ "lfsck_namespace", { FID_SEQ_LOCAL_FILE, LFSCK_NAMESPACE_OID, 0 }, 0,
+		NULL, NULL },
+
 	/* OBJECTS, upgrade from old device */
 	{ OBJECTS, { 0, 0, 0 }, OLF_SCAN_SUBITEMS, osd_ios_OBJECTS_scan, NULL },
 

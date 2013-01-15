@@ -213,6 +213,7 @@ enum dt_index_flags {
  */
 extern const struct dt_index_features dt_directory_features;
 extern const struct dt_index_features dt_otable_features;
+extern const struct dt_index_features dt_lfsck_features;
 
 /* index features supported by the accounting objects */
 extern const struct dt_index_features dt_acct_features;
@@ -810,6 +811,10 @@ typedef int (*dt_entry_func_t)(const struct lu_env *env,
 int dt_path_parser(const struct lu_env *env,
                    char *local, dt_entry_func_t entry_func,
                    void *data);
+
+struct dt_object *
+dt_store_resolve(const struct lu_env *env, struct dt_device *dt,
+		 const char *path, struct lu_fid *fid);
 
 struct dt_object *dt_store_open(const struct lu_env *env,
                                 struct dt_device *dt,

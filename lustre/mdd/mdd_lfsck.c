@@ -50,6 +50,7 @@
 #define MDS_DIR_DUMMY_START		0xffffffffffffffffULL
 
 const char lfsck_bookmark_name[] = "lfsck_bookmark";
+const char lfsck_namespace_name[] = "lfsck_namespace";
 
 /* misc functions */
 
@@ -63,6 +64,11 @@ static inline char *mdd_lfsck2name(struct md_lfsck *lfsck)
 	struct mdd_device *mdd = mdd_lfsck2mdd(lfsck);
 
 	return mdd2obd_dev(mdd)->obd_name;
+}
+
+static inline void mdd_lfsck_component_get(struct lfsck_component *com)
+{
+	atomic_inc(&com->lc_ref);
 }
 
 static inline void mdd_lfsck_component_put(const struct lu_env *env,
@@ -144,6 +150,11 @@ static void mdd_lfsck_pos_fill(const struct lu_env *env, struct md_lfsck *lfsck,
 		pos->lp_dir_cookie = 0;
 	}
 	spin_unlock(&lfsck->ml_lock);
+}
+
+static inline void mdd_lfsck_pos_set_zero(struct lfsck_position *pos)
+{
+	memset(pos, 0, sizeof(*pos));
 }
 
 static inline int mdd_lfsck_pos_is_zero(const struct lfsck_position *pos)
@@ -355,6 +366,694 @@ static int mdd_lfsck_bookmark_init(const struct lu_env *env,
 	mutex_lock(&lfsck->ml_mutex);
 	rc = mdd_lfsck_bookmark_store(env, lfsck);
 	mutex_unlock(&lfsck->ml_mutex);
+	return rc;
+}
+
+/* lfsck_namespace file ops */
+
+static void inline mdd_lfsck_position_to_cpu(struct lfsck_position *des,
+					     struct lfsck_position *src)
+{
+	des->lp_oit_cookie = le64_to_cpu(src->lp_oit_cookie);
+	fid_le_to_cpu(&des->lp_dir_parent, &src->lp_dir_parent);
+	des->lp_dir_cookie = le64_to_cpu(src->lp_dir_cookie);
+}
+
+static void inline mdd_lfsck_position_to_le(struct lfsck_position *des,
+					     struct lfsck_position *src)
+{
+	des->lp_oit_cookie = cpu_to_le64(src->lp_oit_cookie);
+	fid_cpu_to_le(&des->lp_dir_parent, &src->lp_dir_parent);
+	des->lp_dir_cookie = cpu_to_le64(src->lp_dir_cookie);
+}
+
+static void inline mdd_lfsck_namespace_to_cpu(struct lfsck_namespace *des,
+					      struct lfsck_namespace *src)
+{
+	des->ln_magic = le32_to_cpu(src->ln_magic);
+	des->ln_status = le32_to_cpu(src->ln_status);
+	des->ln_flags = le32_to_cpu(src->ln_flags);
+	des->ln_success_count = le32_to_cpu(src->ln_success_count);
+	des->ln_run_time_phase1 = le32_to_cpu(src->ln_run_time_phase1);
+	des->ln_run_time_phase2 = le32_to_cpu(src->ln_run_time_phase2);
+	des->ln_time_last_complete = le64_to_cpu(src->ln_time_last_complete);
+	des->ln_time_latest_start = le64_to_cpu(src->ln_time_latest_start);
+	des->ln_time_last_checkpoint =
+				le64_to_cpu(src->ln_time_last_checkpoint);
+	mdd_lfsck_position_to_cpu(&des->ln_pos_latest_start,
+				  &src->ln_pos_latest_start);
+	mdd_lfsck_position_to_cpu(&des->ln_pos_last_checkpoint,
+				  &src->ln_pos_last_checkpoint);
+	mdd_lfsck_position_to_cpu(&des->ln_pos_first_inconsistent,
+				  &src->ln_pos_first_inconsistent);
+	des->ln_items_checked = le64_to_cpu(src->ln_items_checked);
+	des->ln_items_repaired = le64_to_cpu(src->ln_items_repaired);
+	des->ln_items_failed = le64_to_cpu(src->ln_items_failed);
+	des->ln_dirs_checked = le64_to_cpu(src->ln_dirs_checked);
+	des->ln_mlinked_checked = le64_to_cpu(src->ln_mlinked_checked);
+	des->ln_objs_checked_phase2 = le64_to_cpu(src->ln_objs_checked_phase2);
+	des->ln_objs_repaired_phase2 =
+				le64_to_cpu(src->ln_objs_repaired_phase2);
+	des->ln_objs_failed_phase2 = le64_to_cpu(src->ln_objs_failed_phase2);
+	des->ln_objs_nlink_repaired = le64_to_cpu(src->ln_objs_nlink_repaired);
+	des->ln_objs_lost_found = le64_to_cpu(src->ln_objs_lost_found);
+	fid_le_to_cpu(&des->ln_fid_latest_scanned_phase2,
+		      &src->ln_fid_latest_scanned_phase2);
+}
+
+static void inline mdd_lfsck_namespace_to_le(struct lfsck_namespace *des,
+					     struct lfsck_namespace *src)
+{
+	des->ln_magic = cpu_to_le32(src->ln_magic);
+	des->ln_status = cpu_to_le32(src->ln_status);
+	des->ln_flags = cpu_to_le32(src->ln_flags);
+	des->ln_success_count = cpu_to_le32(src->ln_success_count);
+	des->ln_run_time_phase1 = cpu_to_le32(src->ln_run_time_phase1);
+	des->ln_run_time_phase2 = cpu_to_le32(src->ln_run_time_phase2);
+	des->ln_time_last_complete = cpu_to_le64(src->ln_time_last_complete);
+	des->ln_time_latest_start = cpu_to_le64(src->ln_time_latest_start);
+	des->ln_time_last_checkpoint =
+				cpu_to_le64(src->ln_time_last_checkpoint);
+	mdd_lfsck_position_to_le(&des->ln_pos_latest_start,
+				 &src->ln_pos_latest_start);
+	mdd_lfsck_position_to_le(&des->ln_pos_last_checkpoint,
+				 &src->ln_pos_last_checkpoint);
+	mdd_lfsck_position_to_le(&des->ln_pos_first_inconsistent,
+				 &src->ln_pos_first_inconsistent);
+	des->ln_items_checked = cpu_to_le64(src->ln_items_checked);
+	des->ln_items_repaired = cpu_to_le64(src->ln_items_repaired);
+	des->ln_items_failed = cpu_to_le64(src->ln_items_failed);
+	des->ln_dirs_checked = cpu_to_le64(src->ln_dirs_checked);
+	des->ln_mlinked_checked = cpu_to_le64(src->ln_mlinked_checked);
+	des->ln_objs_checked_phase2 = cpu_to_le64(src->ln_objs_checked_phase2);
+	des->ln_objs_repaired_phase2 =
+				cpu_to_le64(src->ln_objs_repaired_phase2);
+	des->ln_objs_failed_phase2 = cpu_to_le64(src->ln_objs_failed_phase2);
+	des->ln_objs_nlink_repaired = cpu_to_le64(src->ln_objs_nlink_repaired);
+	des->ln_objs_lost_found = cpu_to_le64(src->ln_objs_lost_found);
+	fid_cpu_to_le(&des->ln_fid_latest_scanned_phase2,
+		      &src->ln_fid_latest_scanned_phase2);
+}
+
+/**
+ * \retval +ve: the lfsck_namespace is broken, the caller should reset it.
+ * \retval 0: succeed.
+ * \retval -ve: failed cases.
+ */
+static int mdd_lfsck_namespace_load(const struct lu_env *env,
+				    struct lfsck_component *com)
+{
+	int len = com->lc_file_size;
+	int rc;
+
+	rc = dt_xattr_get(env, com->lc_obj,
+			  mdd_buf_get(env, com->lc_file_disk, len),
+			  XATTR_NAME_LFSCK_NAMESPACE, BYPASS_CAPA);
+	if (rc == len) {
+		struct lfsck_namespace *ns = com->lc_file_ram;
+
+		mdd_lfsck_namespace_to_cpu(ns,
+				(struct lfsck_namespace *)com->lc_file_disk);
+		if (ns->ln_magic != LFSCK_NAMESPACE_MAGIC) {
+			CWARN("%.16s: invalid lfsck_namespace magic "
+			      "0x%x != 0x%x\n",
+			      mdd_lfsck2name(com->lc_lfsck),
+			      ns->ln_magic, LFSCK_NAMESPACE_MAGIC);
+			rc = 1;
+		} else {
+			rc = 0;
+		}
+	} else if (rc != -ENODATA) {
+		CERROR("%.16s: fail to load lfsck_namespace, expected = %d, "
+		       "rc = %d\n", mdd_lfsck2name(com->lc_lfsck), len, rc);
+		if (rc >= 0)
+			rc = 1;
+	}
+	return rc;
+}
+
+static int mdd_lfsck_namespace_store(const struct lu_env *env,
+				     struct lfsck_component *com, bool init)
+{
+	struct dt_object  *obj    = com->lc_obj;
+	struct md_lfsck   *lfsck  = com->lc_lfsck;
+	struct mdd_device *mdd    = mdd_lfsck2mdd(lfsck);
+	struct thandle    *handle;
+	int		   len    = com->lc_file_size;
+	int		   rc;
+	ENTRY;
+
+	mdd_lfsck_namespace_to_le((struct lfsck_namespace *)com->lc_file_disk,
+				  (struct lfsck_namespace *)com->lc_file_ram);
+	handle = dt_trans_create(env, mdd->mdd_bottom);
+	if (IS_ERR(handle)) {
+		rc = PTR_ERR(handle);
+		CERROR("%.16s: fail to create trans for storing "
+		       "lfsck_namespace: %d\n,", mdd_lfsck2name(lfsck), rc);
+		RETURN(rc);
+	}
+
+	rc = dt_declare_xattr_set(env, obj,
+				  mdd_buf_get(env, com->lc_file_disk, len),
+				  XATTR_NAME_LFSCK_NAMESPACE, 0, handle);
+	if (rc != 0) {
+		CERROR("%.16s: fail to declare trans for storing "
+		       "lfsck_namespace: %d\n,", mdd_lfsck2name(lfsck), rc);
+		GOTO(out, rc);
+	}
+
+	rc = dt_trans_start_local(env, mdd->mdd_bottom, handle);
+	if (rc != 0) {
+		CERROR("%.16s: fail to start trans for storing "
+		       "lfsck_namespace: %d\n,", mdd_lfsck2name(lfsck), rc);
+		GOTO(out, rc);
+	}
+
+	rc = dt_xattr_set(env, obj,
+			  mdd_buf_get(env, com->lc_file_disk, len),
+			  XATTR_NAME_LFSCK_NAMESPACE,
+			  init ? LU_XATTR_CREATE : LU_XATTR_REPLACE,
+			  handle, BYPASS_CAPA);
+	if (rc != 0)
+		CERROR("%.16s: fail to store lfsck_namespace, len = %d, "
+		       "rc = %d\n", mdd_lfsck2name(lfsck), len, rc);
+
+	GOTO(out, rc);
+
+out:
+	dt_trans_stop(env, mdd->mdd_bottom, handle);
+	return rc;
+}
+
+static int mdd_lfsck_namespace_init(const struct lu_env *env,
+				    struct lfsck_component *com)
+{
+	struct lfsck_namespace *ns = (struct lfsck_namespace *)com->lc_file_ram;
+	int rc;
+
+	memset(ns, 0, sizeof(*ns));
+	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
+	ns->ln_status = LS_INIT;
+	down_write(&com->lc_sem);
+	rc = mdd_lfsck_namespace_store(env, com, true);
+	up_write(&com->lc_sem);
+	return rc;
+}
+
+static int mdd_declare_lfsck_namespace_unlink(const struct lu_env *env,
+					      struct mdd_device *mdd,
+					      struct dt_object *p,
+					      struct dt_object *c,
+					      const char *name,
+					      struct thandle *handle)
+{
+	int rc;
+
+	rc = dt_declare_delete(env, p, (const struct dt_key *)name, handle);
+	if (rc != 0)
+		return rc;
+
+	rc = dt_declare_ref_del(env, c, handle);
+	if (rc != 0)
+		return rc;
+
+	rc = dt_declare_destroy(env, c, handle);
+	return rc;
+}
+
+static int mdd_lfsck_namespace_unlink(const struct lu_env *env,
+				      struct mdd_device *mdd,
+				      struct lfsck_component *com)
+{
+	struct mdd_thread_info	*info	= mdd_env_info(env);
+	struct lu_fid		*fid	= &info->mti_fid;
+	struct dt_object	*child  = com->lc_obj;
+	struct dt_object	*parent;
+	struct thandle		*handle;
+	int			 rc;
+	ENTRY;
+
+	parent = dt_store_resolve(env, mdd->mdd_bottom, "", fid);
+	if (IS_ERR(parent))
+		RETURN(rc = PTR_ERR(parent));
+
+	if (dt_try_as_dir(env, parent))
+		GOTO(out, rc = -ENOTDIR);
+
+	handle = dt_trans_create(env, mdd->mdd_bottom);
+	if (IS_ERR(handle))
+		GOTO(out, rc = PTR_ERR(handle));
+
+	rc = mdd_declare_lfsck_namespace_unlink(env, mdd, parent, child,
+						lfsck_namespace_name, handle);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_trans_start_local(env, mdd->mdd_bottom, handle);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = dt_delete(env, parent, (struct dt_key *)lfsck_namespace_name,
+		       handle, BYPASS_CAPA);
+	if (rc != 0)
+		GOTO(stop, rc);
+
+	rc = child->do_ops->do_ref_del(env, child, handle);
+	if (rc != 0) {
+		lu_local_obj_fid(fid, LFSCK_NAMESPACE_OID);
+		rc = dt_insert(env, parent,
+			       (const struct dt_rec*)fid,
+			       (const struct dt_key *)lfsck_namespace_name,
+			       handle, BYPASS_CAPA, 1);
+
+		GOTO(stop, rc);
+	}
+
+
+	rc = dt_destroy(env, child, handle);
+	if (rc == 0) {
+		lu_object_put(env, &child->do_lu);
+		com->lc_obj = NULL;
+	}
+
+	GOTO(stop, rc);
+
+stop:
+	dt_trans_stop(env, mdd->mdd_bottom, handle);
+
+out:
+	lu_object_put(env, &parent->do_lu);
+	return rc;
+}
+
+/* namespace APIs */
+
+static int mdd_lfsck_namespace_reset(const struct lu_env *env,
+				     struct lfsck_component *com, bool init)
+{
+	struct mdd_thread_info	*info = mdd_env_info(env);
+	struct lu_fid		*fid  = &info->mti_fid;
+	struct lfsck_namespace	*ns   = (struct lfsck_namespace *)com->lc_file_ram;
+	struct mdd_device	*mdd  = mdd_lfsck2mdd(com->lc_lfsck);
+	struct md_object	*mdo;
+	struct dt_object	*dto;
+	int			 rc;
+	ENTRY;
+
+	down_write(&com->lc_sem);
+	if (init) {
+		memset(ns, 0, sizeof(*ns));
+	} else {
+		__u32 count = ns->ln_success_count;
+		__u64 last_time = ns->ln_time_last_complete;
+
+		memset(ns, 0, sizeof(*ns));
+		ns->ln_success_count = count;
+		ns->ln_time_last_complete = last_time;
+	}
+	ns->ln_magic = LFSCK_NAMESPACE_MAGIC;
+	ns->ln_status = LS_INIT;
+
+	rc = mdd_lfsck_namespace_unlink(env, mdd, com);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	lu_local_obj_fid(fid, LFSCK_NAMESPACE_OID);
+	mdo = llo_store_create_index(env, &mdd->mdd_md_dev, mdd->mdd_bottom, "",
+				     lfsck_namespace_name, fid,
+				     &dt_lfsck_features);
+	if (IS_ERR(mdo))
+		GOTO(out, rc = PTR_ERR(mdo));
+
+	lu_object_put(env, &mdo->mo_lu);
+	dto = dt_store_open(env, mdd->mdd_bottom, "", lfsck_namespace_name, fid);
+	if (IS_ERR(dto))
+		GOTO(out, rc = PTR_ERR(dto));
+
+	com->lc_obj = dto;
+	rc = dto->do_ops->do_index_try(env, dto, &dt_lfsck_features);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = mdd_lfsck_namespace_store(env, com, true);
+
+	GOTO(out, rc);
+
+out:
+	up_write(&com->lc_sem);
+	return rc;
+}
+
+static void
+mdd_lfsck_namespace_fail(const struct lu_env *env, struct lfsck_component *com,
+			 bool oit, bool new_checked)
+{
+	struct lfsck_namespace *ns = (struct lfsck_namespace *)com->lc_file_ram;
+
+	down_write(&com->lc_sem);
+	if (new_checked)
+		com->lc_new_checked++;
+	ns->ln_items_failed++;
+	if (mdd_lfsck_pos_is_zero(&ns->ln_pos_first_inconsistent))
+		mdd_lfsck_pos_fill(env, com->lc_lfsck,
+				   &ns->ln_pos_first_inconsistent, oit, !oit);
+	up_write(&com->lc_sem);
+}
+
+static int mdd_lfsck_namespace_checkpoint(const struct lu_env *env,
+					  struct lfsck_component *com,
+					  bool init)
+{
+	struct md_lfsck		*lfsck = com->lc_lfsck;
+	struct lfsck_namespace	*ns    =
+				(struct lfsck_namespace *)com->lc_file_ram;
+	int			 rc;
+
+	if (com->lc_new_checked == 0 && !init)
+		return 0;
+
+	down_write(&com->lc_sem);
+
+	ns->ln_pos_last_checkpoint = lfsck->ml_pos_current;
+	if (init) {
+		ns->ln_time_last_checkpoint = ns->ln_time_latest_start;
+		ns->ln_pos_latest_start = lfsck->ml_pos_current;
+	} else {
+		ns->ln_run_time_phase1 += cfs_duration_sec(cfs_time_current() +
+				HALF_SEC - lfsck->ml_time_last_checkpoint);
+		ns->ln_time_last_checkpoint = cfs_time_current_sec();
+		ns->ln_items_checked += com->lc_new_checked;
+		com->lc_new_checked = 0;
+	}
+
+	rc = mdd_lfsck_namespace_store(env, com, false);
+
+	up_write(&com->lc_sem);
+	return rc;
+}
+
+static int mdd_lfsck_namespace_prep(const struct lu_env *env,
+				    struct lfsck_component *com)
+{
+	struct md_lfsck		*lfsck	= com->lc_lfsck;
+	struct lfsck_namespace	*ns	=
+				(struct lfsck_namespace *)com->lc_file_ram;
+	struct lfsck_position	*pos	= &com->lc_pos_start;
+
+	if (ns->ln_status == LS_COMPLETED) {
+		int rc;
+
+		rc = mdd_lfsck_namespace_reset(env, com, false);
+		if (rc != 0)
+			return rc;
+	}
+
+	down_write(&com->lc_sem);
+
+	ns->ln_time_latest_start = cfs_time_current_sec();
+
+	spin_lock(&lfsck->ml_lock);
+	if (ns->ln_flags & LF_SCANNED_ONCE) {
+		if (!lfsck->ml_drop_dryrun ||
+		    mdd_lfsck_pos_is_zero(&ns->ln_pos_first_inconsistent)) {
+			ns->ln_status = LS_SCANNING_PHASE2;
+			cfs_list_del_init(&com->lc_link);
+			cfs_list_add_tail(&com->lc_link,
+					  &lfsck->ml_list_double_scan);
+			if (!cfs_list_empty(&com->lc_link_dir))
+				cfs_list_del_init(&com->lc_link_dir);
+			mdd_lfsck_pos_set_zero(pos);
+		} else {
+			ns->ln_status = LS_SCANNING_PHASE1;
+			ns->ln_run_time_phase1 = 0;
+			ns->ln_run_time_phase2 = 0;
+			ns->ln_items_checked = 0;
+			ns->ln_items_repaired = 0;
+			ns->ln_items_failed = 0;
+			ns->ln_dirs_checked = 0;
+			ns->ln_mlinked_checked = 0;
+			ns->ln_objs_checked_phase2 = 0;
+			ns->ln_objs_repaired_phase2 = 0;
+			ns->ln_objs_failed_phase2 = 0;
+			ns->ln_objs_nlink_repaired = 0;
+			ns->ln_objs_lost_found = 0;
+			fid_zero(&ns->ln_fid_latest_scanned_phase2);
+			if (cfs_list_empty(&com->lc_link_dir))
+				cfs_list_add_tail(&com->lc_link_dir,
+						  &lfsck->ml_list_dir);
+			*pos = ns->ln_pos_first_inconsistent;
+		}
+	} else {
+		ns->ln_status = LS_SCANNING_PHASE1;
+		if (cfs_list_empty(&com->lc_link_dir))
+			cfs_list_add_tail(&com->lc_link_dir,
+					  &lfsck->ml_list_dir);
+		if (!lfsck->ml_drop_dryrun ||
+		    mdd_lfsck_pos_is_zero(&ns->ln_pos_first_inconsistent)) {
+			*pos = ns->ln_pos_last_checkpoint;
+			pos->lp_oit_cookie++;
+			if (!fid_is_zero(&pos->lp_dir_parent)) {
+				if (pos->lp_dir_cookie == MDS_DIR_END_OFF) {
+					fid_zero(&pos->lp_dir_parent);
+				} else {
+					pos->lp_dir_cookie++;
+				}
+			}
+		} else {
+			*pos = ns->ln_pos_first_inconsistent;
+		}
+	}
+	spin_unlock(&lfsck->ml_lock);
+
+	up_write(&com->lc_sem);
+	return 0;
+}
+
+static int mdd_lfsck_namespace_exec_oit(const struct lu_env *env,
+					struct lfsck_component *com,
+					struct mdd_object *obj)
+{
+	down_write(&com->lc_sem);
+	com->lc_new_checked++;
+	if (S_ISDIR(mdd_object_type(obj)))
+		((struct lfsck_namespace *)com->lc_file_ram)->ln_dirs_checked++;
+	up_write(&com->lc_sem);
+	return 0;
+}
+
+/* XXX: to be implemented in other patch.  */
+static int mdd_lfsck_namespace_exec_dir(const struct lu_env *env,
+					struct lfsck_component *com,
+					struct mdd_object *obj,
+					struct lu_dirent *ent)
+{
+	struct lfsck_namespace	   *ns	     =
+				(struct lfsck_namespace *)com->lc_file_ram;
+	const struct lu_name	   *cname;
+	int			    repaired;
+
+	cname = mdd_name_get_const(env, ent->lde_name, ent->lde_namelen);
+	down_write(&com->lc_sem);
+	com->lc_new_checked++;
+
+	if (ent->lde_attrs & LUDA_UPGRADE) {
+		ns->ln_flags |= LF_UPGRADE;
+		repaired = 1;
+	} else if (ent->lde_attrs & LUDA_REPAIR) {
+		ns->ln_flags |= LF_INCONSISTENT;
+		repaired = 1;
+	} else {
+		repaired = 0;
+	}
+
+	ns->ln_items_repaired += repaired;
+	up_write(&com->lc_sem);
+	return 0;
+}
+
+static int mdd_lfsck_namespace_post(const struct lu_env *env,
+				    struct lfsck_component *com,
+				    int result)
+{
+	struct md_lfsck		*lfsck = com->lc_lfsck;
+	struct lfsck_namespace	*ns    =
+				(struct lfsck_namespace *)com->lc_file_ram;
+	int			 rc;
+
+	down_write(&com->lc_sem);
+
+	spin_lock(&lfsck->ml_lock);
+	if (result > 0) {
+		ns->ln_status = LS_SCANNING_PHASE2;
+		ns->ln_flags |= LF_SCANNED_ONCE;
+		ns->ln_flags &= ~LF_UPGRADE;
+		cfs_list_del_init(&com->lc_link);
+		cfs_list_del_init(&com->lc_link_dir);
+		cfs_list_add_tail(&com->lc_link, &lfsck->ml_list_double_scan);
+	} else if (result == 0) {
+		if (lfsck->ml_paused) {
+			ns->ln_status = LS_PAUSED;
+		} else {
+			ns->ln_status = LS_STOPPED;
+			cfs_list_del_init(&com->lc_link);
+			cfs_list_del_init(&com->lc_link_dir);
+			cfs_list_add_tail(&com->lc_link, &lfsck->ml_list_idle);
+		}
+	} else {
+		ns->ln_status = LS_FAILED;
+		cfs_list_del_init(&com->lc_link);
+		cfs_list_del_init(&com->lc_link_dir);
+		cfs_list_add_tail(&com->lc_link, &lfsck->ml_list_idle);
+	}
+	spin_unlock(&lfsck->ml_lock);
+
+	ns->ln_run_time_phase1 += cfs_duration_sec(cfs_time_current() +
+				HALF_SEC - lfsck->ml_time_last_checkpoint);
+	ns->ln_time_last_checkpoint = cfs_time_current_sec();
+	ns->ln_items_checked += com->lc_new_checked;
+	com->lc_new_checked = 0;
+
+	rc = mdd_lfsck_namespace_store(env, com, false);
+
+	up_write(&com->lc_sem);
+	return rc;
+}
+
+/* XXX: to be implemented in other patch.  */
+static int
+mdd_lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
+			 char *buf, int len)
+{
+	return 0;
+}
+
+/* XXX: to be implemented in other patch.  */
+static int mdd_lfsck_namespace_double_scan(const struct lu_env *env,
+					   struct lfsck_component *com)
+{
+	struct md_lfsck		*lfsck	= com->lc_lfsck;
+	struct lfsck_bookmark	*bk	= &lfsck->ml_bookmark_ram;
+	struct lfsck_namespace	*ns	=
+				(struct lfsck_namespace *)com->lc_file_ram;
+	int			 rc;
+
+	down_write(&com->lc_sem);
+
+	ns->ln_time_last_checkpoint = cfs_time_current_sec();
+	com->lc_new_checked = 0;
+	com->lc_journal = 0;
+
+	ns->ln_status = LS_COMPLETED;
+	if (!(bk->lb_param & LPF_DRYRUN))
+		ns->ln_flags &=
+		~(LF_SCANNED_ONCE | LF_INCONSISTENT | LF_UPGRADE);
+	ns->ln_time_last_complete = ns->ln_time_last_checkpoint;
+	ns->ln_success_count++;
+
+	spin_lock(&lfsck->ml_lock);
+	cfs_list_del_init(&com->lc_link);
+	cfs_list_add_tail(&com->lc_link, &lfsck->ml_list_idle);
+	spin_unlock(&lfsck->ml_lock);
+
+	rc = mdd_lfsck_namespace_store(env, com, false);
+
+	up_write(&com->lc_sem);
+	return rc;
+}
+
+static struct lfsck_operations mdd_lfsck_namespace_ops = {
+	.lfsck_reset		= mdd_lfsck_namespace_reset,
+	.lfsck_fail		= mdd_lfsck_namespace_fail,
+	.lfsck_checkpoint	= mdd_lfsck_namespace_checkpoint,
+	.lfsck_prep		= mdd_lfsck_namespace_prep,
+	.lfsck_exec_oit		= mdd_lfsck_namespace_exec_oit,
+	.lfsck_exec_dir		= mdd_lfsck_namespace_exec_dir,
+	.lfsck_post		= mdd_lfsck_namespace_post,
+	.lfsck_dump		= mdd_lfsck_namespace_dump,
+	.lfsck_double_scan	= mdd_lfsck_namespace_double_scan,
+};
+
+/* LFSCK component setup/cleanup functions */
+
+static int mdd_lfsck_namespace_setup(const struct lu_env *env,
+				     struct md_lfsck *lfsck)
+{
+	struct mdd_device      *mdd = mdd_lfsck2mdd(lfsck);
+	struct lfsck_component *com;
+	struct lfsck_namespace *ns;
+	struct dt_object       *obj;
+	int			rc;
+	ENTRY;
+
+	OBD_ALLOC_PTR(com);
+	if (com == NULL)
+		RETURN(-ENOMEM);
+
+	CFS_INIT_LIST_HEAD(&com->lc_link);
+	CFS_INIT_LIST_HEAD(&com->lc_link_dir);
+	init_rwsem(&com->lc_sem);
+	atomic_set(&com->lc_ref, 1);
+	com->lc_lfsck = lfsck;
+	com->lc_type = LT_NAMESPACE;
+	com->lc_ops = &mdd_lfsck_namespace_ops;
+	com->lc_file_size = sizeof(struct lfsck_namespace);
+	OBD_ALLOC(com->lc_file_ram, com->lc_file_size);
+	if (com->lc_file_ram == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	OBD_ALLOC(com->lc_file_disk, com->lc_file_size);
+	if (com->lc_file_disk == NULL)
+		GOTO(out, rc = -ENOMEM);
+
+	obj = dt_store_open(env, mdd->mdd_bottom, "", lfsck_namespace_name,
+			    &mdd_env_info(env)->mti_fid);
+	if (IS_ERR(obj))
+		GOTO(out, rc = PTR_ERR(obj));
+
+	com->lc_obj = obj;
+	rc = obj->do_ops->do_index_try(env, obj, &dt_lfsck_features);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	rc = mdd_lfsck_namespace_load(env, com);
+	if (rc > 0)
+		rc = mdd_lfsck_namespace_reset(env, com, true);
+	else if (rc == -ENODATA)
+		rc = mdd_lfsck_namespace_init(env, com);
+	if (rc != 0)
+		GOTO(out, rc);
+
+	ns = (struct lfsck_namespace *)com->lc_file_ram;
+	switch (ns->ln_status) {
+	case LS_INIT:
+	case LS_COMPLETED:
+	case LS_FAILED:
+	case LS_STOPPED:
+		cfs_list_add_tail(&com->lc_link, &lfsck->ml_list_idle);
+		break;
+	default:
+		CERROR("%s: unknown status: %u\n",
+		       mdd_lfsck2name(lfsck), ns->ln_status);
+		/* fall through */
+	case LS_SCANNING_PHASE1:
+	case LS_SCANNING_PHASE2:
+		/* No need to store the status to disk right now.
+		 * If the system crashed before the status stored,
+		 * it will be loaded back when next time. */
+		ns->ln_status = LS_CRASHED;
+		/* fall through */
+	case LS_PAUSED:
+	case LS_CRASHED:
+		cfs_list_add_tail(&com->lc_link, &lfsck->ml_list_scan);
+		cfs_list_add_tail(&com->lc_link_dir, &lfsck->ml_list_dir);
+		break;
+	}
+
+	GOTO(out, rc = 0);
+
+out:
+	if (rc != 0)
+		mdd_lfsck_component_cleanup(env, com);
 	return rc;
 }
 
@@ -1200,7 +1899,10 @@ int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd)
 	rc = mdd_lfsck_bookmark_load(env, lfsck);
 	if (rc == -ENODATA)
 		rc = mdd_lfsck_bookmark_init(env, lfsck);
+	if (rc != 0)
+		RETURN(rc);
 
+	rc = mdd_lfsck_namespace_setup(env, lfsck);
 	/* XXX: LFSCK components initialization to be added here. */
 
 	RETURN(rc);

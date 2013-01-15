@@ -286,10 +286,9 @@ int dt_path_parser(const struct lu_env *env,
         return rc;
 }
 
-static struct dt_object *dt_store_resolve(const struct lu_env *env,
-                                          struct dt_device *dt,
-                                          const char *path,
-                                          struct lu_fid *fid)
+struct dt_object *
+dt_store_resolve(const struct lu_env *env, struct dt_device *dt,
+		 const char *path, struct lu_fid *fid)
 {
 	struct dt_thread_info *info = dt_info(env);
 	struct dt_find_hint   *dfh = &info->dti_dfh;
@@ -320,6 +319,7 @@ static struct dt_object *dt_store_resolve(const struct lu_env *env,
         }
         return obj;
 }
+EXPORT_SYMBOL(dt_store_resolve);
 
 static struct dt_object *dt_reg_open(const struct lu_env *env,
                                      struct dt_device *dt,
@@ -563,6 +563,17 @@ EXPORT_SYMBOL(dt_directory_features);
 /* scrub iterator */
 const struct dt_index_features dt_otable_features;
 EXPORT_SYMBOL(dt_otable_features);
+
+/* lfsck */
+const struct dt_index_features dt_lfsck_features = {
+	.dif_flags		= DT_IND_UPDATE,
+	.dif_keysize_min	= sizeof(struct lu_fid),
+	.dif_keysize_max	= sizeof(struct lu_fid),
+	.dif_recsize_min	= sizeof(__u8),
+	.dif_recsize_max	= sizeof(__u8),
+	.dif_ptrsize		= 4
+};
+EXPORT_SYMBOL(dt_lfsck_features);
 
 /* accounting indexes */
 const struct dt_index_features dt_acct_features = {
