@@ -272,7 +272,8 @@ static int lprocfs_rd_lfsck_speed_limit(char *page, char **start, off_t off,
 
 	LASSERT(mdd != NULL);
 	*eof = 1;
-	return snprintf(page, count, "%u\n", mdd->mdd_lfsck.ml_speed_limit);
+	return snprintf(page, count, "%u\n",
+			mdd->mdd_lfsck.ml_bookmark_ram.lb_speed_limit);
 }
 
 static int lprocfs_wr_lfsck_speed_limit(struct file *file, const char *buffer,
@@ -285,13 +286,21 @@ static int lprocfs_wr_lfsck_speed_limit(struct file *file, const char *buffer,
 
 	LASSERT(mdd != NULL);
 	rc = lprocfs_write_helper(buffer, count, &val);
-	if (rc)
+	if (rc != 0)
 		return rc;
 
 	lfsck = &mdd->mdd_lfsck;
-	if (val != lfsck->ml_speed_limit)
-		mdd_lfsck_set_speed(lfsck, val);
-	return count;
+	if (val != lfsck->ml_bookmark_ram.lb_speed_limit) {
+		struct lu_env env;
+
+		rc = lu_env_init(&env, LCT_MD_THREAD | LCT_DT_THREAD);
+		if (rc != 0)
+			return rc;
+
+		rc = mdd_lfsck_set_speed(&env, lfsck, val);
+		lu_env_fini(&env);
+	}
+	return rc != 0 ? rc : count;
 }
 
 static struct lprocfs_vars lprocfs_mdd_obd_vars[] = {

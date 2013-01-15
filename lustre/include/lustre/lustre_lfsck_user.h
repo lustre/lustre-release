@@ -56,6 +56,7 @@ enum lfsck_type {
 
 #define LFSCK_TYPES_ALL 	((__u16)(~0))
 #define LFSCK_TYPES_DEF 	((__u16)0)
+#define LFSCK_TYPES_SUPPORTED	0
 
 #define LFSCK_SPEED_NO_LIMIT	0
 #define LFSCK_SPEED_LIMIT_DEF	LFSCK_SPEED_NO_LIMIT

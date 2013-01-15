@@ -561,6 +561,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_START_LFSCK	       _IOWR('f', 230, OBD_IOC_DATA_TYPE)
 #define OBD_IOC_STOP_LFSCK	       _IOW('f', 231, OBD_IOC_DATA_TYPE)
+#define OBD_IOC_PAUSE_LFSCK	       _IOW('f', 232, OBD_IOC_DATA_TYPE)
 
 /* XXX _IOWR('f', 250, long) has been defined in
  * libcfs/include/libcfs/libcfs_private.h for debug, don't use it

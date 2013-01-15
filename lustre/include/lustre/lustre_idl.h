@@ -833,10 +833,26 @@ static inline int lu_fid_cmp(const struct lu_fid *f0,
  * enumeration.
  */
 enum lu_dirent_attrs {
-        LUDA_FID        = 0x0001,
-        LUDA_TYPE       = 0x0002,
-        LUDA_64BITHASH  = 0x0004,
+	LUDA_FID		= 0x0001,
+	LUDA_TYPE		= 0x0002,
+	LUDA_64BITHASH		= 0x0004,
+
+	/* The following attrs are used for MDT interanl only,
+	 * not visible to client */
+
+	/* Verify the dirent consistency */
+	LUDA_VERIFY		= 0x8000,
+	/* Only check but not repair the dirent inconsistency */
+	LUDA_VERIFY_DRYRUN	= 0x4000,
+	/* The dirent has been repaired, or to be repaired (dryrun). */
+	LUDA_REPAIR		= 0x2000,
+	/* The system is upgraded, has beed or to be repaired (dryrun). */
+	LUDA_UPGRADE		= 0x1000,
+	/* Ignore this record, go to next directly. */
+	LUDA_IGNORE		= 0x0800,
 };
+
+#define LU_DIRENT_ATTRS_MASK	0xf800
 
 /**
  * Layout of readdir pages, as transmitted on wire.
