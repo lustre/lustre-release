@@ -121,6 +121,7 @@ struct mdd_device {
         struct dt_device                *mdd_child;
 	struct dt_device		*mdd_bottom;
         struct lu_fid                    mdd_root_fid;
+	struct lu_fid			 mdd_local_root_fid;
         struct dt_device_param           mdd_dt_conf;
         struct dt_object                *mdd_orphans; /* PENDING directory */
         struct dt_object                *mdd_capa;
@@ -167,10 +168,10 @@ struct mdd_thread_info {
 	struct lu_attr            mti_cattr;
         struct md_attr            mti_ma;
         struct obd_info           mti_oi;
-	/* mti_orph_ent and mti_orph_key must be conjoint,
-	 * then mti_orph_ent::lde_name will be mti_orph_key. */
-	struct lu_dirent	  mti_orph_ent;
-        char                      mti_orph_key[NAME_MAX + 1];
+	/* mti_ent and mti_key must be conjoint,
+	 * then mti_ent::lde_name will be mti_key. */
+	struct lu_dirent	  mti_ent;
+	char			  mti_key[NAME_MAX + 16];
         struct obd_trans_info     mti_oti;
         struct lu_buf             mti_buf;
         struct lu_buf             mti_big_buf; /* biggish persistent buf */
@@ -185,6 +186,22 @@ struct mdd_thread_info {
         int                       mti_max_cookie_size;
         struct dt_object_format   mti_dof;
         struct obd_quotactl       mti_oqctl;
+};
+
+/**
+ * The data that link search is done on.
+ */
+struct mdd_link_data {
+	/**
+	 * Buffer to keep link EA body.
+	 */
+	struct lu_buf           *ml_buf;
+	/**
+	 * The matched header, entry and its lenght in the EA
+	 */
+	struct link_ea_header   *ml_leh;
+	struct link_ea_entry    *ml_lee;
+	int                      ml_reclen;
 };
 
 extern const char orph_index_name[];
@@ -289,6 +306,8 @@ void mdd_pdo_write_unlock(const struct lu_env *env, struct mdd_object *obj,
 void mdd_pdo_read_unlock(const struct lu_env *env, struct mdd_object *obj,
                          void *dlh);
 /* mdd_dir.c */
+int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
+		   struct lu_fid *fid);
 int mdd_is_subdir(const struct lu_env *env, struct md_object *mo,
                   const struct lu_fid *fid, struct lu_fid *sfid);
 int mdd_may_create(const struct lu_env *env, struct mdd_object *pobj,
@@ -312,6 +331,21 @@ int mdd_is_root(struct mdd_device *mdd, const struct lu_fid *fid);
 int mdd_lookup(const struct lu_env *env,
                struct md_object *pobj, const struct lu_name *lname,
                struct lu_fid* fid, struct md_op_spec *spec);
+int mdd_links_read(const struct lu_env *env, struct mdd_object *mdd_obj,
+		   struct mdd_link_data *ldata);
+int mdd_links_find(const struct lu_env *env, struct mdd_object *mdd_obj,
+		   struct mdd_link_data *ldata, const struct lu_name *lname,
+		   const struct lu_fid  *pfid);
+int mdd_links_new(const struct lu_env *env, struct mdd_link_data *ldata);
+int mdd_links_add_buf(const struct lu_env *env, struct mdd_link_data *ldata,
+		      const struct lu_name *lname, const struct lu_fid *pfid);
+void mdd_links_del_buf(const struct lu_env *env, struct mdd_link_data *ldata,
+		       const struct lu_name *lname);
+int mdd_declare_links_add(const struct lu_env *env,
+			  struct mdd_object *mdd_obj,
+			  struct thandle *handle);
+int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
+		    struct mdd_link_data *ldata, struct thandle *handle);
 struct lu_buf *mdd_links_get(const struct lu_env *env,
                              struct mdd_object *mdd_obj);
 void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
@@ -341,6 +375,8 @@ int mdd_lovobj_unlink(const struct lu_env *env, struct mdd_device *mdd,
 
 struct mdd_thread_info *mdd_env_info(const struct lu_env *env);
 
+const struct lu_name *mdd_name_get_const(const struct lu_env *env,
+					 const void *area, ssize_t len);
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len);
 const struct lu_buf *mdd_buf_get_const(const struct lu_env *env,
                                        const void *area, ssize_t len);
@@ -389,6 +425,10 @@ int mdd_declare_changelog_store(const struct lu_env *env,
 				struct thandle *handle);
 int mdd_changelog_store(const struct lu_env *env, struct mdd_device *mdd,
 			struct llog_changelog_rec *rec, struct thandle *th);
+int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
+			   enum changelog_rec_type type, unsigned flags,
+			   struct mdd_object *target, struct mdd_object *parent,
+			   const struct lu_name *tname, struct thandle *handle);
 int mdd_declare_object_create_internal(const struct lu_env *env,
 				       struct mdd_object *p,
 				       struct mdd_object *c,
@@ -402,6 +442,11 @@ int mdd_lov_destroy(const struct lu_env *env, struct mdd_device *mdd,
 
 void mdd_object_make_hint(const struct lu_env *env, struct mdd_object *parent,
 			  struct mdd_object *child, struct lu_attr *attr);
+
+static inline void mdd_object_get(struct mdd_object *o)
+{
+	lu_object_get(&o->mod_obj.mo_lu);
+}
 
 static inline void mdd_object_put(const struct lu_env *env,
                                   struct mdd_object *o)
@@ -838,12 +883,14 @@ int mdo_create_obj(const struct lu_env *env, struct mdd_object *o,
 	 *  LU-974 enforce client umask in creation.
 	 * TODO: CMD needs to handle this for remote object.
 	 */
-	saved = xchg(&current->fs->umask, uc->uc_umask & S_IRWXUGO);
+	if (likely(uc != NULL))
+		saved = xchg(&current->fs->umask, uc->uc_umask & S_IRWXUGO);
 
 	rc = next->do_ops->do_create(env, next, attr, hint, dof, handle);
 
 	/* restore previous umask value */
-	current->fs->umask = saved;
+	if (likely(uc != NULL))
+		current->fs->umask = saved;
 
 	return rc;
 }

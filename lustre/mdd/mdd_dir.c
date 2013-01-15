@@ -60,9 +60,6 @@ static struct lu_name lname_dotdot = {
 static int __mdd_lookup(const struct lu_env *env, struct md_object *pobj,
                         const struct lu_name *lname, struct lu_fid* fid,
                         int mask);
-static int mdd_declare_links_add(const struct lu_env *env,
-                                 struct mdd_object *mdd_obj,
-                                 struct thandle *handle);
 static inline int mdd_links_add(const struct lu_env *env,
 				struct mdd_object *mdd_obj,
 				const struct lu_fid *pfid,
@@ -110,8 +107,8 @@ int mdd_lookup(const struct lu_env *env,
         RETURN(rc);
 }
 
-static int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
-                          struct lu_fid *fid)
+int mdd_parent_fid(const struct lu_env *env, struct mdd_object *obj,
+		   struct lu_fid *fid)
 {
         return __mdd_lookup_locked(env, &obj->mod_obj, &lname_dotdot, fid, 0);
 }
@@ -788,14 +785,10 @@ int mdd_changelog_ext_store(const struct lu_env *env, struct mdd_device *mdd,
  * \param tname - target name string
  * \param handle - transacion handle
  */
-static int mdd_changelog_ns_store(const struct lu_env  *env,
-				  struct mdd_device    *mdd,
-				  enum changelog_rec_type type,
-				  unsigned flags,
-				  struct mdd_object    *target,
-				  struct mdd_object    *parent,
-				  const struct lu_name *tname,
-				  struct thandle *handle)
+int mdd_changelog_ns_store(const struct lu_env *env, struct mdd_device *mdd,
+			   enum changelog_rec_type type, unsigned flags,
+			   struct mdd_object *target, struct mdd_object *parent,
+			   const struct lu_name *tname, struct thandle *handle)
 {
 	struct llog_changelog_rec *rec;
 	struct lu_buf *buf;
@@ -1477,7 +1470,8 @@ static int mdd_declare_object_initialize(const struct lu_env *env,
 					      dotdot, handle);
         }
 
-        if (rc == 0)
+	if (rc == 0 && (fid_is_norm(mdo2fid(child)) ||
+			fid_is_dot_lustre(mdo2fid(child))))
                 mdd_declare_links_add(env, child, handle);
 
 	RETURN(rc);
@@ -1525,10 +1519,12 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
                 if (rc != 0)
                         mdo_ref_del(env, child, handle);
         }
-        if (rc == 0)
-                mdd_links_add(env, child, pfid, lname, handle, 1);
 
-        RETURN(rc);
+	if (rc == 0 && (fid_is_norm(mdo2fid(child)) ||
+			fid_is_dot_lustre(mdo2fid(child))))
+		mdd_links_add(env, child, pfid, lname, handle, 1);
+
+	RETURN(rc);
 }
 
 /* has not lock on pobj yet */
@@ -2453,30 +2449,12 @@ cleanup_unlocked:
 
 stop:
         mdd_trans_stop(env, mdd, rc, handle);
-        if (mdd_sobj)
-                mdd_object_put(env, mdd_sobj);
 out_pending:
-        return rc;
+	mdd_object_put(env, mdd_sobj);
+	return rc;
 }
 
-/**
- * The data that link search is done on.
- */
-struct mdd_link_data {
-	/**
-	 * Buffer to keep link EA body.
-	 */
-	struct lu_buf           *ml_buf;
-	/**
-	 * The matched header, entry and its lenght in the EA
-	 */
-	struct link_ea_header   *ml_leh;
-	struct link_ea_entry    *ml_lee;
-	int                      ml_reclen;
-};
-
-static int mdd_links_new(const struct lu_env *env,
-			 struct mdd_link_data *ldata)
+int mdd_links_new(const struct lu_env *env, struct mdd_link_data *ldata)
 {
 	ldata->ml_buf = mdd_buf_alloc(env, CFS_PAGE_SIZE);
 	if (ldata->ml_buf->lb_buf == NULL)
@@ -2494,8 +2472,7 @@ static int mdd_links_new(const struct lu_env *env,
  *
  * \retval 0 or error
  */
-int mdd_links_read(const struct lu_env *env,
-		   struct mdd_object *mdd_obj,
+int mdd_links_read(const struct lu_env *env, struct mdd_object *mdd_obj,
 		   struct mdd_link_data *ldata)
 {
 	struct lustre_capa *capa;
@@ -2561,10 +2538,8 @@ struct lu_buf *mdd_links_get(const struct lu_env *env,
 	return rc ? ERR_PTR(rc) : ldata.ml_buf;
 }
 
-static int mdd_links_write(const struct lu_env *env,
-			   struct mdd_object *mdd_obj,
-			   struct mdd_link_data *ldata,
-			   struct thandle *handle)
+int mdd_links_write(const struct lu_env *env, struct mdd_object *mdd_obj,
+		    struct mdd_link_data *ldata, struct thandle *handle)
 {
 	const struct lu_buf *buf = mdd_buf_get_const(env, ldata->ml_buf->lb_buf,
 						     ldata->ml_leh->leh_len);
@@ -2603,9 +2578,9 @@ void mdd_lee_unpack(const struct link_ea_entry *lee, int *reclen,
         lname->ln_namelen = *reclen - sizeof(struct link_ea_entry);
 }
 
-static int mdd_declare_links_add(const struct lu_env *env,
-                                 struct mdd_object *mdd_obj,
-                                 struct thandle *handle)
+int mdd_declare_links_add(const struct lu_env *env,
+			  struct mdd_object *mdd_obj,
+			  struct thandle *handle)
 {
         int rc;
 
@@ -2617,26 +2592,14 @@ static int mdd_declare_links_add(const struct lu_env *env,
         return rc;
 }
 
-/* For pathologic linkers, we don't want to spend lots of time scanning the
- * link ea.  Limit ourseleves to something reasonable; links not in the EA
- * can be looked up via (slower) parent lookup.
- */
-#define LINKEA_MAX_COUNT 128
-
 /** Add a record to the end of link ea buf */
-static int mdd_links_add_buf(const struct lu_env *env,
-			     struct mdd_link_data *ldata,
-			     const struct lu_name *lname,
-			     const struct lu_fid *pfid)
+int mdd_links_add_buf(const struct lu_env *env, struct mdd_link_data *ldata,
+		      const struct lu_name *lname, const struct lu_fid *pfid)
 {
 	LASSERT(ldata->ml_leh != NULL);
 
 	if (lname == NULL || pfid == NULL)
 		return -EINVAL;
-
-	/* Make sure our buf is big enough for the new one */
-	if (ldata->ml_leh->leh_reccount > LINKEA_MAX_COUNT)
-		return -EOVERFLOW;
 
 	ldata->ml_reclen = lname->ln_namelen + sizeof(struct link_ea_entry);
 	if (ldata->ml_leh->leh_len + ldata->ml_reclen >
@@ -2657,9 +2620,8 @@ static int mdd_links_add_buf(const struct lu_env *env,
 }
 
 /** Del the current record from the link ea buf */
-static void mdd_links_del_buf(const struct lu_env *env,
-			      struct mdd_link_data *ldata,
-			      const struct lu_name *lname)
+void mdd_links_del_buf(const struct lu_env *env, struct mdd_link_data *ldata,
+		       const struct lu_name *lname)
 {
 	LASSERT(ldata->ml_leh != NULL);
 
@@ -2685,11 +2647,9 @@ static void mdd_links_del_buf(const struct lu_env *env,
  * \retval -ENOENT link does not exist
  * \retval -ve on error
  */
-static int mdd_links_find(const struct lu_env  *env,
-			  struct mdd_object    *mdd_obj,
-			  struct mdd_link_data *ldata,
-			  const struct lu_name *lname,
-			  const struct lu_fid  *pfid)
+int mdd_links_find(const struct lu_env *env, struct mdd_object *mdd_obj,
+		   struct mdd_link_data *ldata, const struct lu_name *lname,
+		   const struct lu_fid  *pfid)
 {
 	struct lu_name *tmpname = &mdd_env_info(env)->mti_name2;
 	struct lu_fid  *tmpfid = &mdd_env_info(env)->mti_fid;

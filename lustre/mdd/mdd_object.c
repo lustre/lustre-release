@@ -107,6 +107,17 @@ struct mdd_thread_info *mdd_env_info(const struct lu_env *env)
         return info;
 }
 
+const struct lu_name *mdd_name_get_const(const struct lu_env *env,
+					 const void *area, ssize_t len)
+{
+	struct lu_name *lname;
+
+	lname = &mdd_env_info(env)->mti_name;
+	lname->ln_name = area;
+	lname->ln_namelen = len;
+	return lname;
+}
+
 struct lu_buf *mdd_buf_get(const struct lu_env *env, void *area, ssize_t len)
 {
         struct lu_buf *buf;

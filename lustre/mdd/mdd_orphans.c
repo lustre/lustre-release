@@ -64,7 +64,7 @@ enum {
 static struct dt_key* orph_key_fill(const struct lu_env *env,
                                     const struct lu_fid *lf, __u32 op)
 {
-        char *key = mdd_env_info(env)->mti_orph_key;
+	char *key = mdd_env_info(env)->mti_key;
         int rc;
 
         LASSERT(key);
@@ -80,7 +80,7 @@ static struct dt_key* orph_key_fill(const struct lu_env *env,
 static struct dt_key* orph_key_fill_18(const struct lu_env *env,
                                        const struct lu_fid *lf)
 {
-        char *key = mdd_env_info(env)->mti_orph_key;
+	char *key = mdd_env_info(env)->mti_key;
         int rc;
 
         LASSERT(key);
@@ -427,7 +427,7 @@ static int orph_index_iterate(const struct lu_env *env,
 			      struct mdd_device *mdd)
 {
 	struct dt_object *dor = mdd->mdd_orphans;
-	struct lu_dirent *ent = &mdd_env_info(env)->mti_orph_ent;
+	struct lu_dirent *ent = &mdd_env_info(env)->mti_ent;
 	const struct dt_it_ops *iops;
 	struct dt_it     *it;
 	struct lu_fid     fid;
