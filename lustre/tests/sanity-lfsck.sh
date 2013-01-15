@@ -21,6 +21,7 @@ init_logging
 	skip "test LFSCK only for ldiskfs" && exit 0
 require_dsh_mds || exit 0
 
+MCREATE=${MCREATE:-mcreate}
 SAVED_MDSSIZE=${MDSSIZE}
 SAVED_OSTSIZE=${OSTSIZE}
 # use small MDS + OST size to speed formatting time
@@ -113,6 +114,133 @@ test_0() {
 		error "(10) Expect nothing to be repaired, but got: $repaired"
 }
 run_test 0 "Control LFSCK manually"
+
+test_1a() {
+	lfsck_prep 1 1
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	#define OBD_FAIL_FID_INDIR	0x1501
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1501
+	touch $DIR/$tdir/dummy
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	umount_client $MOUNT
+	$START_NAMESPACE || error "(3) Fail to start LFSCK for namespace!"
+
+	sleep 3
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(4) Expect 'completed', but got '$STATUS'"
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^updated_phase1/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(5) Fail to repair crashed FID-in-dirent: $repaired"
+
+	mount_client $MOUNT || error "(6) Fail to start client!"
+
+	#define OBD_FAIL_FID_LOOKUP	0x1505
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1505
+	ls $DIR/$tdir/ > /dev/null || error "(7) no FID-in-dirent."
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+}
+run_test 1a "LFSCK can find out and repair crashed FID-in-dirent"
+
+test_1b()
+{
+	lfsck_prep 1 1
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	#define OBD_FAIL_FID_INLMA	0x1502
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1502
+	touch $DIR/$tdir/dummy
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	umount_client $MOUNT
+	#define OBD_FAIL_FID_NOLMA	0x1506
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1506
+	$START_NAMESPACE || error "(3) Fail to start LFSCK for namespace!"
+
+	sleep 3
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(4) Expect 'completed', but got '$STATUS'"
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^updated_phase1/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(5) Fail to repair missed FID-in-LMA: $repaired"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	mount_client $MOUNT || error "(6) Fail to start client!"
+
+	#define OBD_FAIL_FID_LOOKUP	0x1505
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1505
+	stat $DIR/$tdir/dummy > /dev/null || error "(7) no FID-in-LMA."
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+}
+run_test 1b "LFSCK can find out and repair missed FID-in-LMA"
+
+test_4()
+{
+	lfsck_prep 3 3
+	mds_backup_restore || error "(1) Fail to backup/restore!"
+	echo "start $SINGLEMDS with disabling OI scrub"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_NOSCRUB > /dev/null ||
+		error "(2) Fail to start MDS!"
+
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(3) Expect 'init', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_DELAY2		0x1601
+	do_facet $SINGLEMDS $LCTL set_param fail_val=1
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1601
+	$START_NAMESPACE || error "(4) Fail to start LFSCK for namespace!"
+
+	sleep 5
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(5) Expect 'scanning-phase1', but got '$STATUS'"
+
+	local FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
+	[ "$FLAGS" == "inconsistent" ] ||
+		error "(6) Expect 'inconsistent', but got '$FLAGS'"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	sleep 3
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(7) Expect 'completed', but got '$STATUS'"
+
+	FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
+	[ -z "$FLAGS" ] || error "(8) Expect empty flags, but got '$FLAGS'"
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^updated_phase1/ { print $2 }')
+	[ $repaired -ge 9 ] ||
+		error "(9) Fail to repair crashed linkEA: $repaired"
+
+	mount_client $MOUNT || error "(10) Fail to start client!"
+
+	#define OBD_FAIL_FID_LOOKUP	0x1505
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1505
+	ls $DIR/$tdir/ > /dev/null || error "(11) no FID-in-dirent."
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+}
+run_test 4 "FID-in-dirent can be rebuilt after MDT file-level backup/restore"
 
 test_6a() {
 	lfsck_prep 10 10

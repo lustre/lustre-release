@@ -196,7 +196,6 @@ static struct lu_object *lu_object_alloc(const struct lu_env *env,
          * This is the only place where object fid is assigned. It's constant
          * after this point.
          */
-        LASSERT(fid_is_igif(f) || fid_ver(f) == 0);
         top->lo_header->loh_fid = *f;
         layers = &top->lo_header->loh_layers;
         do {

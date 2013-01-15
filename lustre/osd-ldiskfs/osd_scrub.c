@@ -417,7 +417,8 @@ osd_scrub_check_update(struct osd_thread_info *info, struct osd_device *dev,
 	if (fid_is_igif(fid))
 		sf->sf_items_igif++;
 
-	if (val == SCRUB_NEXT_NOLMA && !dev->od_handle_nolma)
+	if ((val == SCRUB_NEXT_NOLMA) &&
+	    (!dev->od_handle_nolma || OBD_FAIL_CHECK(OBD_FAIL_FID_NOLMA)))
 		GOTO(out, rc = 0);
 
 	if ((oii != NULL && oii->oii_insert) || (val == SCRUB_NEXT_NOLMA))
