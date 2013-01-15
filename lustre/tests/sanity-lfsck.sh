@@ -202,6 +202,83 @@ test_1b()
 }
 run_test 1b "LFSCK can find out and repair missed FID-in-LMA"
 
+test_2a() {
+	lfsck_prep 1 1
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	#define OBD_FAIL_LFSCK_LINKEA_CRASH	0x1603
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1603
+	touch $DIR/$tdir/dummy
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	umount_client $MOUNT
+	$START_NAMESPACE || error "(3) Fail to start LFSCK for namespace!"
+
+	sleep 3
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(4) Expect 'completed', but got '$STATUS'"
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^updated_phase1/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(5) Fail to repair crashed linkEA: $repaired"
+
+	mount_client $MOUNT || error "(6) Fail to start client!"
+
+	stat $DIR/$tdir/dummy | grep "Links: 1" > /dev/null ||
+		error "(7) Fail to stat $DIR/$tdir/dummy"
+
+	local dummyfid=$($LFS path2fid $DIR/$tdir/dummy)
+	local dummyname=$($LFS fid2path $DIR $dummyfid)
+	[ "$dummyname" == "$DIR/$tdir/dummy" ] ||
+		error "(8) Fail to repair linkEA: $dummyfid $dummyname"
+}
+run_test 2a "LFSCK can find out and repair crashed linkEA entry"
+
+test_2b()
+{
+	lfsck_prep 1 1
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	#define OBD_FAIL_LFSCK_LINKEA_MORE	0x1604
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1604
+	touch $DIR/$tdir/dummy
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	umount_client $MOUNT
+	$START_NAMESPACE || error "(3) Fail to start LFSCK for namespace!"
+
+	sleep 3
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(4) Expect 'completed', but got '$STATUS'"
+
+	local repaired=$($SHOW_NAMESPACE |
+			 awk '/^updated_phase2/ { print $2 }')
+	[ $repaired -eq 1 ] ||
+		error "(5) Fail to repair crashed linkEA: $repaired"
+
+	mount_client $MOUNT || error "(6) Fail to start client!"
+
+	stat $DIR/$tdir/dummy | grep "Links: 1" > /dev/null ||
+		error "(7) Fail to stat $DIR/$tdir/dummy"
+
+	local dummyfid=$($LFS path2fid $DIR/$tdir/dummy)
+	local dummyname=$($LFS fid2path $DIR $dummyfid)
+	[ "$dummyname" == "$DIR/$tdir/dummy" ] ||
+		error "(8) Fail to repair linkEA: $dummyfid $dummyname"
+}
+run_test 2b "LFSCK can find out and remove invalid linkEA entry"
+
 test_4()
 {
 	lfsck_prep 3 3
@@ -454,6 +531,177 @@ test_7a()
 }
 run_test 7a "non-stopped LFSCK should auto restarts after MDS remount (1)"
 
+test_7b()
+{
+	lfsck_prep 2 2
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	#define OBD_FAIL_LFSCK_LINKEA_MORE	0x1604
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1604
+	for ((i=0; i<10; i++)); do
+		touch $DIR/$tdir/dummy${i}
+	done
+
+	#define OBD_FAIL_LFSCK_DELAY3		0x1602
+	do_facet $SINGLEMDS $LCTL set_param fail_val=1
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1602
+	$START_NAMESPACE || error "(3) Fail to start LFSCK for namespace!"
+
+	sleep 3
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase2" ] ||
+		error "(4) Expect 'scanning-phase2', but got '$STATUS'"
+
+	echo "stop $SINGLEMDS"
+	stop $SINGLEMDS > /dev/null || error "(5) Fail to stop MDS!"
+
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(6) Fail to start MDS!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase2" ] ||
+		error "(7) Expect 'scanning-phase2', but got '$STATUS'"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	sleep 3
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(8) Expect 'completed', but got '$STATUS'"
+}
+run_test 7b "non-stopped LFSCK should auto restarts after MDS remount (2)"
+
+test_8()
+{
+	lfsck_prep 20 20
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(2) Expect 'init', but got '$STATUS'"
+
+	mount_client $MOUNT || error "(3) Fail to start client!"
+
+	#define OBD_FAIL_LFSCK_LINKEA_CRASH	0x1603
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1603
+	mkdir $DIR/$tdir/crashed
+
+	#define OBD_FAIL_LFSCK_LINKEA_MORE	0x1604
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1604
+	for ((i=0; i<5; i++)); do
+		touch $DIR/$tdir/dummy${i}
+	done
+
+	#define OBD_FAIL_LFSCK_DELAY2		0x1601
+	do_facet $SINGLEMDS $LCTL set_param fail_val=2
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1601
+	$START_NAMESPACE || error "(4) Fail to start LFSCK for namespace!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(5) Expect 'scanning-phase1', but got '$STATUS'"
+
+	$STOP_LFSCK || error "(6) Fail to stop LFSCK!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "stopped" ] ||
+		error "(7) Expect 'stopped', but got '$STATUS'"
+
+	$START_NAMESPACE || error "(8) Fail to start LFSCK for namespace!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(9) Expect 'scanning-phase1', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_FATAL2		0x1609
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x80001609
+	sleep 3
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "failed" ] ||
+		error "(10) Expect 'failed', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_DELAY1		0x1600
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1600
+	$START_NAMESPACE || error "(11) Fail to start LFSCK for namespace!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(12) Expect 'scanning-phase1', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_CRASH		0x160a
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160a
+	sleep 5
+
+	echo "stop $SINGLEMDS"
+	stop $SINGLEMDS > /dev/null || error "(13) Fail to stop MDS!"
+
+	#define OBD_FAIL_LFSCK_NO_AUTO		0x160b
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160b
+
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(14) Fail to start MDS!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "crashed" ] ||
+		error "(15) Expect 'crashed', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_DELAY2		0x1601
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1601
+	$START_NAMESPACE || error "(16) Fail to start LFSCK for namespace!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(17) Expect 'scanning-phase1', but got '$STATUS'"
+
+	echo "stop $SINGLEMDS"
+	stop $SINGLEMDS > /dev/null || error "(18) Fail to stop MDS!"
+
+	#define OBD_FAIL_LFSCK_NO_AUTO		0x160b
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160b
+
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(19) Fail to start MDS!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "paused" ] ||
+		error "(20) Expect 'paused', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_DELAY3		0x1602
+	do_facet $SINGLEMDS $LCTL set_param fail_val=2
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1602
+
+	$START_NAMESPACE || error "(21) Fail to start LFSCK for namespace!"
+	sleep 2
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase2" ] ||
+		error "(22) Expect 'scanning-phase2', but got '$STATUS'"
+
+	local FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
+	[ "$FLAGS" == "scanned-once,inconsistent" ] ||
+		error "(23) Expect 'scanned-once,inconsistent',but got '$FLAGS'"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	do_facet $SINGLEMDS $LCTL set_param fail_val=0
+	sleep 2
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(24) Expect 'completed', but got '$STATUS'"
+
+	FLAGS=$($SHOW_NAMESPACE | awk '/^flags/ { print $2 }')
+	[ -z "$FLAGS" ] || error "(25) Expect empty flags, but got '$FLAGS'"
+
+}
+run_test 8 "LFSCK state machine"
+
 test_9a() {
 	if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
 		skip "Testing on UP system, the speed may be inaccurate."
@@ -504,6 +752,157 @@ test_9a() {
 		error "(7) Expect 'completed', but got '$STATUS'"
 }
 run_test 9a "LFSCK speed control (1)"
+
+test_9b() {
+	if [ -z "$(grep "processor.*: 1" /proc/cpuinfo)" ]; then
+		skip "Testing on UP system, the speed may be inaccurate."
+		return 0
+	fi
+
+	lfsck_prep 0 0
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	echo "Another preparing... 50 * 50 files (with error) will be created."
+	#define OBD_FAIL_LFSCK_LINKEA_MORE	0x1604
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1604
+	for ((i=0; i<50; i++)); do
+		mkdir -p $DIR/$tdir/d${i}
+		touch $DIR/$tdir/f${i}
+		for ((j=0; j<50; j++)); do
+			touch $DIR/$tdir/d${i}/f${j}
+		done
+	done
+
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(3) Expect 'init', but got '$STATUS'"
+
+	#define OBD_FAIL_LFSCK_NO_DOUBLESCAN	0x160c
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x160c
+	$START_NAMESPACE || error "(4) Fail to start LFSCK!"
+
+	sleep 10
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "stopped" ] ||
+		error "(5) Expect 'stopped', but got '$STATUS'"
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	$START_NAMESPACE -s 50 || error "(6) Fail to start LFSCK!"
+
+	sleep 10
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase2" ] ||
+		error "(7) Expect 'scanning-phase2', but got '$STATUS'"
+
+	local SPEED=$($SHOW_NAMESPACE |
+		      awk '/^average_speed_phase2/ { print $2 }')
+	# (50 * (10 + 1)) / 10 = 55
+	[ $SPEED -lt 60 ] ||
+		error "(8) Unexpected speed $SPEED, should not more than 60"
+
+	# adjust speed limit
+	do_facet $SINGLEMDS \
+		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 150
+	sleep 10
+
+	SPEED=$($SHOW_NAMESPACE | awk '/^average_speed_phase2/ { print $2 }')
+	# (50 * (10 - 1) + 150 * (10 - 1)) / 20 = 90
+	[ $SPEED -lt 85 ] &&
+		error "(9) Unexpected speed $SPEED, should not less than 85"
+
+	# (50 * (10 + 1) + 150 * (10 + 1)) / 20 = 110
+	[ $SPEED -lt 115 ] ||
+		error "(10) Unexpected speed $SPEED, should not more than 115"
+
+	do_facet $SINGLEMDS \
+		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
+	sleep 5
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(11) Expect 'completed', but got '$STATUS'"
+}
+run_test 9b "LFSCK speed control (2)"
+
+test_10()
+{
+	lfsck_prep 1 1
+	echo "start $SINGLEMDS"
+	start $SINGLEMDS $MDT_DEVNAME $MOUNT_OPTS_SCRUB > /dev/null ||
+		error "(1) Fail to start MDS!"
+
+	mount_client $MOUNT || error "(2) Fail to start client!"
+
+	#define OBD_FAIL_LFSCK_LINKEA_CRASH	0x1603
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1603
+	for ((i=0; i<1000; i=$((i+2)))); do
+		mkdir -p $DIR/$tdir/d${i}
+		touch $DIR/$tdir/f${i}
+		for ((j=0; j<5; j++)); do
+			touch $DIR/$tdir/d${i}/f${j}
+		done
+	done
+
+	#define OBD_FAIL_LFSCK_LINKEA_MORE	0x1604
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0x1604
+	for ((i=1; i<1000; i=$((i+2)))); do
+		mkdir -p $DIR/$tdir/d${i}
+		touch $DIR/$tdir/f${i}
+		for ((j=0; j<5; j++)); do
+			touch $DIR/$tdir/d${i}/f${j}
+		done
+	done
+
+	do_facet $SINGLEMDS $LCTL set_param fail_loc=0
+	ln $DIR/$tdir/f200 $DIR/$tdir/d200/dummy
+
+	umount_client $MOUNT
+	mount_client $MOUNT || error "(3) Fail to start client!"
+
+	local STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "init" ] ||
+		error "(4) Expect 'init', but got '$STATUS'"
+
+	$START_NAMESPACE -s 100 || error "(5) Fail to start LFSCK!"
+
+	sleep 10
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(6) Expect 'scanning-phase1', but got '$STATUS'"
+
+	ls -ailR $MOUNT > /dev/null || error "(7) Fail to ls!"
+
+	touch $DIR/$tdir/d198/a0 || error "(8) Fail to touch!"
+
+	mkdir $DIR/$tdir/d199/a1 || error "(9) Fail to mkdir!"
+
+	unlink $DIR/$tdir/f200 || error "(10) Fail to unlink!"
+
+	rm -rf $DIR/$tdir/d201 || error "(11) Fail to rmdir!"
+
+	mv $DIR/$tdir/f202 $DIR/$tdir/d203/ || error "(12) Fail to rename!"
+
+	ln $DIR/$tdir/f204 $DIR/$tdir/d205/a3 || error "(13) Fail to hardlink!"
+
+	ln -s $DIR/$tdir/d206 $DIR/$tdir/d207/a4 ||
+		error "(14) Fail to softlink!"
+
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "scanning-phase1" ] ||
+		error "(15) Expect 'scanning-phase1', but got '$STATUS'"
+
+	do_facet $SINGLEMDS \
+		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
+	umount_client $MOUNT
+	sleep 10
+	STATUS=$($SHOW_NAMESPACE | awk '/^status/ { print $2 }')
+	[ "$STATUS" == "completed" ] ||
+		error "(16) Expect 'completed', but got '$STATUS'"
+}
+run_test 10 "System is available during LFSCK scanning"
 
 $LCTL set_param debug=-lfsck > /dev/null || true
 

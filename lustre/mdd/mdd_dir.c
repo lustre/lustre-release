@@ -2559,6 +2559,8 @@ static int mdd_lee_pack(struct link_ea_entry *lee, const struct lu_name *lname,
         int             reclen;
 
         fid_cpu_to_be(&tmpfid, pfid);
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_CRASH))
+		tmpfid.f_ver = ~0;
         memcpy(&lee->lee_parent_fid, &tmpfid, sizeof(tmpfid));
         memcpy(lee->lee_name, lname->ln_name, lname->ln_namelen);
         reclen = sizeof(struct link_ea_entry) + lname->ln_namelen;
@@ -2706,6 +2708,14 @@ static int __mdd_links_add(const struct lu_env *env,
 			return rc;
 		if (rc == 0)
 			return -EEXIST;
+	}
+
+	if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_LINKEA_MORE)) {
+		struct lu_fid *tfid = &mdd_env_info(env)->mti_fid2;
+
+		*tfid = *pfid;
+		tfid->f_ver = ~0;
+		mdd_links_add_buf(env, ldata, lname, tfid);
 	}
 
 	return mdd_links_add_buf(env, ldata, lname, pfid);
