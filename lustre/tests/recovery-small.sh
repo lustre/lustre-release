@@ -764,7 +764,7 @@ wait_client_evicted () {
 test_24b() {
 	remote_ost_nodsh && skip "remote OST with nodsh" && return 0
 
-	dmesg -c
+	dmesg -c > /dev/null
 	mkdir -p $DIR/$tdir
 	lfs setstripe $DIR/$tdir -s 0 -i 0 -c 1
 	cancel_lru_locks osc
