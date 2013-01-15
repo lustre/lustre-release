@@ -124,8 +124,6 @@ static struct dt_it *lod_it_init(const struct lu_env *env,
 
 #define LOD_CHECK_IT(env, it)					\
 {								\
-	/* IT is supposed to be in thread info always */	\
-	LASSERT((it) == &lod_env_info(env)->lti_it);		\
 	LASSERT((it)->lit_obj != NULL);				\
 	LASSERT((it)->lit_it != NULL);				\
 } while(0)
