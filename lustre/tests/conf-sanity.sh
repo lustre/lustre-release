@@ -1798,14 +1798,22 @@ run_test 41b "mount mds with --nosvc and --nomgs on first mount"
 
 test_42() { #bug 14693
         setup
-        check_mount || return 2
-        do_facet mgs $LCTL conf_param lustre.llite.some_wrong_param=10
-        umount_client $MOUNT
-        mount_client $MOUNT || return 1
-        cleanup
+        check_mount || error "client was not mounted"
+
+        do_facet mgs $LCTL conf_param $FSNAME.llite.some_wrong_param=10
+        umount_client $MOUNT ||
+                error "unmounting client failed with invalid llite param"
+        mount_client $MOUNT ||
+                error "mounting client failed with invalid llite param"
+
+        do_facet mgs $LCTL conf_param $FSNAME.sys.some_wrong_param=20
+        cleanup || error "stopping $FSNAME failed with invalid sys param"
+        setup
+        check_mount || "client was not mounted with invalid sys param"
+        cleanup || error "stopping $FSNAME failed with invalid sys param"
         return 0
 }
-run_test 42 "invalid config param should not prevent client from mounting"
+run_test 42 "allow client/server mount/unmount with invalid config param"
 
 test_43() {
     [ $UID -ne 0 -o $RUNAS_ID -eq 0 ] && skip_env "run as root"
