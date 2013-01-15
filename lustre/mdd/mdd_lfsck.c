@@ -52,6 +52,31 @@
 const char lfsck_bookmark_name[] = "lfsck_bookmark";
 const char lfsck_namespace_name[] = "lfsck_namespace";
 
+static const char *lfsck_status_names[] = {
+	"init",
+	"scanning-phase1",
+	"scanning-phase2",
+	"completed",
+	"failed",
+	"stopped",
+	"paused",
+	"crashed",
+	NULL
+};
+
+static const char *lfsck_flags_names[] = {
+	"scanned-once",
+	"inconsistent",
+	"upgrade",
+	NULL
+};
+
+static const char *lfsck_param_names[] = {
+	"failout",
+	"dryrun",
+	NULL
+};
+
 /* misc functions */
 
 static inline struct mdd_device *mdd_lfsck2mdd(struct md_lfsck *lfsck)
@@ -97,6 +122,30 @@ __mdd_lfsck_component_find(struct md_lfsck *lfsck, __u16 type, cfs_list_t *list)
 	return NULL;
 }
 
+static struct lfsck_component *
+mdd_lfsck_component_find(struct md_lfsck *lfsck, __u16 type)
+{
+	struct lfsck_component *com;
+
+	spin_lock(&lfsck->ml_lock);
+	com = __mdd_lfsck_component_find(lfsck, type, &lfsck->ml_list_scan);
+	if (com != NULL)
+		goto unlock;
+
+	com = __mdd_lfsck_component_find(lfsck, type,
+					 &lfsck->ml_list_double_scan);
+	if (com != NULL)
+		goto unlock;
+
+	com = __mdd_lfsck_component_find(lfsck, type, &lfsck->ml_list_idle);
+
+unlock:
+	if (com != NULL)
+		mdd_lfsck_component_get(com);
+	spin_unlock(&lfsck->ml_lock);
+	return com;
+}
+
 static void mdd_lfsck_component_cleanup(const struct lu_env *env,
 					struct lfsck_component *com)
 {
@@ -106,6 +155,77 @@ static void mdd_lfsck_component_cleanup(const struct lu_env *env,
 		cfs_list_del_init(&com->lc_link_dir);
 
 	mdd_lfsck_component_put(env, com);
+}
+
+static int lfsck_bits_dump(char **buf, int *len, int bits, const char *names[],
+			   const char *prefix)
+{
+	int save = *len;
+	int flag;
+	int rc;
+	int i;
+
+	rc = snprintf(*buf, *len, "%s:%c", prefix, bits != 0 ? ' ' : '\n');
+	if (rc <= 0)
+		return -ENOSPC;
+
+	*buf += rc;
+	*len -= rc;
+	for (i = 0, flag = 1; bits != 0; i++, flag = 1 << i) {
+		if (flag & bits) {
+			bits &= ~flag;
+			rc = snprintf(*buf, *len, "%s%c", names[i],
+				      bits != 0 ? ',' : '\n');
+			if (rc <= 0)
+				return -ENOSPC;
+
+			*buf += rc;
+			*len -= rc;
+		}
+	}
+	return save - *len;
+}
+
+static int lfsck_time_dump(char **buf, int *len, __u64 time, const char *prefix)
+{
+	int rc;
+
+	if (time != 0)
+		rc = snprintf(*buf, *len, "%s: "LPU64" seconds\n", prefix,
+			      cfs_time_current_sec() - time);
+	else
+		rc = snprintf(*buf, *len, "%s: N/A\n", prefix);
+	if (rc <= 0)
+		return -ENOSPC;
+
+	*buf += rc;
+	*len -= rc;
+	return rc;
+}
+
+static int lfsck_pos_dump(char **buf, int *len, struct lfsck_position *pos,
+			  const char *prefix)
+{
+	int rc;
+
+	if (fid_is_zero(&pos->lp_dir_parent)) {
+		if (pos->lp_oit_cookie == 0)
+			rc = snprintf(*buf, *len, "%s: N/A, N/A, N/A\n",
+				      prefix);
+		else
+			rc = snprintf(*buf, *len, "%s: "LPU64", N/A, N/A\n",
+				      prefix, pos->lp_oit_cookie);
+	} else {
+		rc = snprintf(*buf, *len, "%s: "LPU64", "DFID", "LPU64"\n",
+			      prefix, pos->lp_oit_cookie,
+			      PFID(&pos->lp_dir_parent), pos->lp_dir_cookie);
+	}
+	if (rc <= 0)
+		return -ENOSPC;
+
+	*buf += rc;
+	*len -= rc;
+	return rc;
 }
 
 static void mdd_lfsck_pos_fill(const struct lu_env *env, struct md_lfsck *lfsck,
@@ -362,7 +482,7 @@ static int mdd_lfsck_bookmark_init(const struct lu_env *env,
 
 	memset(mb, 0, sizeof(mb));
 	mb->lb_magic = LFSCK_BOOKMARK_MAGIC;
-	mb->lb_version = LFSCK_VERSION_V1;
+	mb->lb_version = LFSCK_VERSION_V2;
 	mutex_lock(&lfsck->ml_mutex);
 	rc = mdd_lfsck_bookmark_store(env, lfsck);
 	mutex_unlock(&lfsck->ml_mutex);
@@ -919,12 +1039,239 @@ static int mdd_lfsck_namespace_post(const struct lu_env *env,
 	return rc;
 }
 
-/* XXX: to be implemented in other patch.  */
 static int
 mdd_lfsck_namespace_dump(const struct lu_env *env, struct lfsck_component *com,
 			 char *buf, int len)
 {
-	return 0;
+	struct md_lfsck		*lfsck = com->lc_lfsck;
+	struct lfsck_bookmark	*bk    = &lfsck->ml_bookmark_ram;
+	struct lfsck_namespace	*ns    =
+				(struct lfsck_namespace *)com->lc_file_ram;
+	int			 save  = len;
+	int			 ret   = -ENOSPC;
+	int			 rc;
+
+	down_read(&com->lc_sem);
+	rc = snprintf(buf, len,
+		      "name: lfsck_namespace\n"
+		      "magic: 0x%x\n"
+		      "version: %d\n"
+		      "status: %s\n",
+		      ns->ln_magic,
+		      bk->lb_version,
+		      lfsck_status_names[ns->ln_status]);
+	if (rc <= 0)
+		goto out;
+
+	buf += rc;
+	len -= rc;
+	rc = lfsck_bits_dump(&buf, &len, ns->ln_flags, lfsck_flags_names,
+			     "flags");
+	if (rc < 0)
+		goto out;
+
+	rc = lfsck_bits_dump(&buf, &len, bk->lb_param, lfsck_param_names,
+			     "param");
+	if (rc < 0)
+		goto out;
+
+	rc = lfsck_time_dump(&buf, &len, ns->ln_time_last_complete,
+			     "time_since_last_completed");
+	if (rc < 0)
+		goto out;
+
+	rc = lfsck_time_dump(&buf, &len, ns->ln_time_latest_start,
+			     "time_since_latest_start");
+	if (rc < 0)
+		goto out;
+
+	rc = lfsck_time_dump(&buf, &len, ns->ln_time_last_checkpoint,
+			     "time_since_last_checkpoint");
+	if (rc < 0)
+		goto out;
+
+	rc = lfsck_pos_dump(&buf, &len, &ns->ln_pos_latest_start,
+			    "latest_start_position");
+	if (rc < 0)
+		goto out;
+
+	rc = lfsck_pos_dump(&buf, &len, &ns->ln_pos_last_checkpoint,
+			    "last_checkpoint_position");
+	if (rc < 0)
+		goto out;
+
+	rc = lfsck_pos_dump(&buf, &len, &ns->ln_pos_first_inconsistent,
+			    "first_failure_position");
+	if (rc < 0)
+		goto out;
+
+	if (ns->ln_status == LS_SCANNING_PHASE1) {
+		struct lfsck_position pos;
+		cfs_duration_t duration = cfs_time_current() -
+					  lfsck->ml_time_last_checkpoint;
+		__u64 checked = ns->ln_items_checked + com->lc_new_checked;
+		__u64 speed = checked;
+		__u64 new_checked = com->lc_new_checked * CFS_HZ;
+		__u32 rtime = ns->ln_run_time_phase1 +
+			      cfs_duration_sec(duration + HALF_SEC);
+
+		if (duration != 0)
+			do_div(new_checked, duration);
+		if (rtime != 0)
+			do_div(speed, rtime);
+		rc = snprintf(buf, len,
+			      "checked_phase1: "LPU64"\n"
+			      "checked_phase2: "LPU64"\n"
+			      "updated_phase1: "LPU64"\n"
+			      "updated_phase2: "LPU64"\n"
+			      "failed_phase1: "LPU64"\n"
+			      "failed_phase2: "LPU64"\n"
+			      "dirs: "LPU64"\n"
+			      "M-linked: "LPU64"\n"
+			      "nlinks_repaired: "LPU64"\n"
+			      "lost_found: "LPU64"\n"
+			      "success_count: %u\n"
+			      "run_time_phase1: %u seconds\n"
+			      "run_time_phase2: %u seconds\n"
+			      "average_speed_phase1: "LPU64" items/sec\n"
+			      "average_speed_phase2: N/A\n"
+			      "real-time_speed_phase1: "LPU64" items/sec\n"
+			      "real-time_speed_phase2: N/A\n",
+			      checked,
+			      ns->ln_objs_checked_phase2,
+			      ns->ln_items_repaired,
+			      ns->ln_objs_repaired_phase2,
+			      ns->ln_items_failed,
+			      ns->ln_objs_failed_phase2,
+			      ns->ln_dirs_checked,
+			      ns->ln_mlinked_checked,
+			      ns->ln_objs_nlink_repaired,
+			      ns->ln_objs_lost_found,
+			      ns->ln_success_count,
+			      rtime,
+			      ns->ln_run_time_phase2,
+			      speed,
+			      new_checked);
+		if (rc <= 0)
+			goto out;
+
+		buf += rc;
+		len -= rc;
+		mdd_lfsck_pos_fill(env, lfsck, &pos, true, true);
+		rc = lfsck_pos_dump(&buf, &len, &pos, "current_position");
+		if (rc <= 0)
+			goto out;
+	} else if (ns->ln_status == LS_SCANNING_PHASE2) {
+		cfs_duration_t duration = cfs_time_current() -
+					  lfsck->ml_time_last_checkpoint;
+		__u64 checked = ns->ln_objs_checked_phase2 +
+				com->lc_new_checked;
+		__u64 speed1 = ns->ln_items_checked;
+		__u64 speed2 = checked;
+		__u64 new_checked = com->lc_new_checked * CFS_HZ;
+		__u32 rtime = ns->ln_run_time_phase2 +
+			      cfs_duration_sec(duration + HALF_SEC);
+
+		if (duration != 0)
+			do_div(new_checked, duration);
+		if (ns->ln_run_time_phase1 != 0)
+			do_div(speed1, ns->ln_run_time_phase1);
+		if (rtime != 0)
+			do_div(speed2, rtime);
+		rc = snprintf(buf, len,
+			      "checked_phase1: "LPU64"\n"
+			      "checked_phase2: "LPU64"\n"
+			      "updated_phase1: "LPU64"\n"
+			      "updated_phase2: "LPU64"\n"
+			      "failed_phase1: "LPU64"\n"
+			      "failed_phase2: "LPU64"\n"
+			      "dirs: "LPU64"\n"
+			      "M-linked: "LPU64"\n"
+			      "nlinks_repaired: "LPU64"\n"
+			      "lost_found: "LPU64"\n"
+			      "success_count: %u\n"
+			      "run_time_phase1: %u seconds\n"
+			      "run_time_phase2: %u seconds\n"
+			      "average_speed_phase1: "LPU64" items/sec\n"
+			      "average_speed_phase2: "LPU64" objs/sec\n"
+			      "real-time_speed_phase1: N/A\n"
+			      "real-time_speed_phase2: "LPU64" objs/sec\n"
+			      "current_position: "DFID"\n",
+			      ns->ln_items_checked,
+			      checked,
+			      ns->ln_items_repaired,
+			      ns->ln_objs_repaired_phase2,
+			      ns->ln_items_failed,
+			      ns->ln_objs_failed_phase2,
+			      ns->ln_dirs_checked,
+			      ns->ln_mlinked_checked,
+			      ns->ln_objs_nlink_repaired,
+			      ns->ln_objs_lost_found,
+			      ns->ln_success_count,
+			      ns->ln_run_time_phase1,
+			      rtime,
+			      speed1,
+			      speed2,
+			      new_checked,
+			      PFID(&ns->ln_fid_latest_scanned_phase2));
+		if (rc <= 0)
+			goto out;
+
+		buf += rc;
+		len -= rc;
+	} else {
+		__u64 speed1 = ns->ln_items_checked;
+		__u64 speed2 = ns->ln_objs_checked_phase2;
+
+		if (ns->ln_run_time_phase1 != 0)
+			do_div(speed1, ns->ln_run_time_phase1);
+		if (ns->ln_run_time_phase2 != 0)
+			do_div(speed2, ns->ln_run_time_phase2);
+		rc = snprintf(buf, len,
+			      "checked_phase1: "LPU64"\n"
+			      "checked_phase2: "LPU64"\n"
+			      "updated_phase1: "LPU64"\n"
+			      "updated_phase2: "LPU64"\n"
+			      "failed_phase1: "LPU64"\n"
+			      "failed_phase2: "LPU64"\n"
+			      "dirs: "LPU64"\n"
+			      "M-linked: "LPU64"\n"
+			      "nlinks_repaired: "LPU64"\n"
+			      "lost_found: "LPU64"\n"
+			      "success_count: %u\n"
+			      "run_time_phase1: %u seconds\n"
+			      "run_time_phase2: %u seconds\n"
+			      "average_speed_phase1: "LPU64" items/sec\n"
+			      "average_speed_phase2: "LPU64" objs/sec\n"
+			      "real-time_speed_phase1: N/A\n"
+			      "real-time_speed_phase2: N/A\n"
+			      "current_position: N/A\n",
+			      ns->ln_items_checked,
+			      ns->ln_objs_checked_phase2,
+			      ns->ln_items_repaired,
+			      ns->ln_objs_repaired_phase2,
+			      ns->ln_items_failed,
+			      ns->ln_objs_failed_phase2,
+			      ns->ln_dirs_checked,
+			      ns->ln_mlinked_checked,
+			      ns->ln_objs_nlink_repaired,
+			      ns->ln_objs_lost_found,
+			      ns->ln_success_count,
+			      ns->ln_run_time_phase1,
+			      ns->ln_run_time_phase2,
+			      speed1,
+			      speed2);
+		if (rc <= 0)
+			goto out;
+
+		buf += rc;
+		len -= rc;
+	}
+	ret = save - len;
+
+out:
+	up_read(&com->lc_sem);
+	return ret;
 }
 
 /* XXX: to be implemented in other patch.  */
@@ -1422,6 +1769,17 @@ static int mdd_lfsck_dir_engine(const struct lu_env *env,
 	do {
 		struct mdd_object *child;
 
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY2) &&
+		    cfs_fail_val > 0) {
+			struct l_wait_info lwi;
+
+			lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val),
+					  NULL, NULL);
+			l_wait_event(thread->t_ctl_waitq,
+				     !thread_is_running(thread),
+				     &lwi);
+		}
+
 		lfsck->ml_new_scanned++;
 		rc = iops->rec(env, di, (struct dt_rec *)ent,
 			       lfsck->ml_args_dir);
@@ -1466,6 +1824,13 @@ checkpoint:
 		if (unlikely(!thread_is_running(thread)))
 			RETURN(0);
 
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL2)) {
+			spin_lock(&lfsck->ml_lock);
+			thread_set_flags(thread, SVC_STOPPING);
+			spin_unlock(&lfsck->ml_lock);
+			RETURN(-EINVAL);
+		}
+
 		rc = iops->next(env, di);
 	} while (rc == 0);
 
@@ -1500,6 +1865,17 @@ static int mdd_lfsck_oit_engine(const struct lu_env *env,
 
 		if (unlikely(lfsck->ml_oit_over))
 			RETURN(1);
+
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_DELAY1) &&
+		    cfs_fail_val > 0) {
+			struct l_wait_info lwi;
+
+			lwi = LWI_TIMEOUT(cfs_time_seconds(cfs_fail_val),
+					  NULL, NULL);
+			l_wait_event(thread->t_ctl_waitq,
+				     !thread_is_running(thread),
+				     &lwi);
+		}
 
 		lfsck->ml_new_scanned++;
 		rc = iops->rec(env, di, (struct dt_rec *)fid, 0);
@@ -1538,6 +1914,13 @@ checkpoint:
 
 		/* Rate control. */
 		mdd_lfsck_control_speed(lfsck);
+
+		if (OBD_FAIL_CHECK(OBD_FAIL_LFSCK_FATAL1)) {
+			spin_lock(&lfsck->ml_lock);
+			thread_set_flags(thread, SVC_STOPPING);
+			spin_unlock(&lfsck->ml_lock);
+			RETURN(-EINVAL);
+		}
 
 		rc = iops->next(env, di);
 		if (rc > 0)
@@ -1655,6 +2038,24 @@ int mdd_lfsck_set_speed(const struct lu_env *env, struct md_lfsck *lfsck,
 	__mdd_lfsck_set_speed(lfsck, limit);
 	rc = mdd_lfsck_bookmark_store(env, lfsck);
 	mutex_unlock(&lfsck->ml_mutex);
+	return rc;
+}
+
+int mdd_lfsck_dump(const struct lu_env *env, struct md_lfsck *lfsck,
+		   __u16 type, char *buf, int len)
+{
+	struct lfsck_component *com;
+	int			rc;
+
+	if (!lfsck->ml_initialized)
+		return -ENODEV;
+
+	com = mdd_lfsck_component_find(lfsck, type);
+	if (com == NULL)
+		return -ENOTSUPP;
+
+	rc = com->lc_ops->lfsck_dump(env, com, buf, len);
+	mdd_lfsck_component_put(env, com);
 	return rc;
 }
 

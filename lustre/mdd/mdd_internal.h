@@ -455,6 +455,8 @@ int mdd_lfsck_stop(const struct lu_env *env, struct md_lfsck *lfsck,
 		   bool pause);
 int mdd_lfsck_setup(const struct lu_env *env, struct mdd_device *mdd);
 void mdd_lfsck_cleanup(const struct lu_env *env, struct mdd_device *mdd);
+int mdd_lfsck_dump(const struct lu_env *env, struct md_lfsck *lfsck,
+		   __u16 type, char *buf, int len);
 
 /* mdd_device.c */
 struct lu_object *mdd_object_alloc(const struct lu_env *env,

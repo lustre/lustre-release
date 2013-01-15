@@ -463,6 +463,12 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 
 #define OBD_FAIL_UPDATE_OBJ_NET				0x1500
 
+/* LFSCK */
+#define OBD_FAIL_LFSCK_DELAY1		0x1600
+#define OBD_FAIL_LFSCK_DELAY2		0x1601
+#define OBD_FAIL_LFSCK_FATAL1		0x1608
+#define OBD_FAIL_LFSCK_FATAL2		0x1609
+
 /* Assign references to moved code to reduce code changes */
 #define OBD_FAIL_PRECHECK(id)                   CFS_FAIL_PRECHECK(id)
 #define OBD_FAIL_CHECK(id)                      CFS_FAIL_CHECK(id)

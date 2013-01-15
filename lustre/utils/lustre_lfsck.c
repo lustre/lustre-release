@@ -62,16 +62,31 @@ static struct option long_opt_stop[] = {
 	{0,		0,		   0,   0}
 };
 
-struct lfsck_types_names {
-	char   *name;
-	__u16   type;
+struct lfsck_type_name {
+	char		*name;
+	int		 namelen;
+	enum lfsck_type  type;
 };
 
-static struct lfsck_types_names lfsck_types_names[3] = {
-	{ "layout",     LT_LAYOUT },
-	{ "DNE",	LT_DNE },
-	{ 0,		0 }
+static struct lfsck_type_name lfsck_types_names[] = {
+	{ "layout",     6,	LT_LAYOUT },
+	{ "DNE",	3,	LT_DNE },
+	{ "namespace",	9,	LT_NAMESPACE},
+	{ 0,		0,	0 }
 };
+
+static inline int lfsck_name2type(const char *name, int namelen)
+{
+	int i = 0;
+
+	while (lfsck_types_names[i].name != NULL) {
+		if (namelen == lfsck_types_names[i].namelen &&
+		    strncmp(lfsck_types_names[i].name, name, namelen) == 0)
+			return lfsck_types_names[i].type;
+		i++;
+	}
+	return 0;
+}
 
 static void usage_start(void)
 {
@@ -128,7 +143,7 @@ int jt_lfsck_start(int argc, char **argv)
 	char device[MAX_OBD_NAME];
 	struct lfsck_start start;
 	char *optstring = "M:e:hn:rs:t:";
-	int opt, index, rc, val, i;
+	int opt, index, rc, val, i, type;
 
 	memset(&data, 0, sizeof(data));
 	memset(&start, 0, sizeof(start));
@@ -197,29 +212,25 @@ int jt_lfsck_start(int argc, char **argv)
 
 				c = *p;
 				*p = 0;
-				for (i = 0; i < 3; i++) {
-					if (strcmp(str,
-						   lfsck_types_names[i].name)
-						   == 0) {
-						start.ls_active |=
-						    lfsck_types_names[i].type;
-						break;
-					}
+				type = lfsck_name2type(str, strlen(str));
+				if (type == 0) {
+					fprintf(stderr, "Invalid type (%s).\n"
+						"The valid value should be "
+						"'layout', 'DNE' or "
+						"'namespace'.\n", str);
+					*p = c;
+					return -EINVAL;
 				}
+
 				*p = c;
 				str = p;
 
-				if (i >= 3 ) {
-					fprintf(stderr, "Invalid LFSCK type.\n"
-						"The valid value should be "
-						"'layout' or 'DNE'.\n");
-					return -EINVAL;
-				}
+				start.ls_active |= type;
 			}
 			if (start.ls_active == 0) {
 				fprintf(stderr, "Miss LFSCK type(s).\n"
 					"The valid value should be "
-					"'layout' or 'DNE'.\n");
+					"'layout', 'DNE' or 'namespace'.\n");
 				return -EINVAL;
 			}
 			break;
@@ -256,11 +267,13 @@ int jt_lfsck_start(int argc, char **argv)
 		printf("Started LFSCK on the MDT device %s", device);
 	} else {
 		printf("Started LFSCK on the MDT device %s:", device);
-		for (i = 0; i < 2; i++) {
+		i = 0;
+		while (lfsck_types_names[i].name != NULL) {
 			if (start.ls_active & lfsck_types_names[i].type) {
 				printf(" %s", lfsck_types_names[i].name);
 				start.ls_active &= ~lfsck_types_names[i].type;
 			}
+			i++;
 		}
 		if (start.ls_active != 0)
 			printf(" unknown(0x%x)", start.ls_active);
