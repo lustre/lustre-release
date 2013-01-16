@@ -28,9 +28,9 @@ unload_dep_module() {
     return 0
 }
 
-lsmod | grep libcfs > /dev/null && $LCTL dl
-lsmod | grep $FSTYPE && unload_dep_module $FSTYPE
-unload_dep_module libcfs
+lsmod | grep obdclass > /dev/null && $LCTL dl
+lsmod | grep $FSTYPE > /dev/null && unload_dep_module $FSTYPE
+lsmod | grep libcfs > /dev/null && unload_dep_module libcfs
 
 MODULES=$($LCTL modules | awk '{ print $2 }')
 if [ -n "$MODULES" ]; then
