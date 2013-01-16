@@ -2001,6 +2001,22 @@ test_31m() {
 }
 run_test 31m "link to file: the same, non-existing, dir==============="
 
+test_31n() {
+	[ -e /proc/self/fd/173 ] && echo "skipping, fd 173 is in use" && return
+	touch $DIR/$tfile || error "cannot create '$DIR/$tfile'"
+	nlink=$(stat --format=%h $DIR/$tfile)
+	[ ${nlink:--1} -eq 1 ] || error "nlink is $nlink, expected 1"
+	exec 173<$DIR/$tfile
+	trap "exec 173<&-" EXIT
+	nlink=$(stat --dereference --format=%h /proc/self/fd/173)
+	[ ${nlink:--1} -eq 1 ] || error "nlink is $nlink, expected 1"
+	rm $DIR/$tfile || error "cannot remove '$DIR/$tfile'"
+	nlink=$(stat --dereference --format=%h /proc/self/fd/173)
+	[ ${nlink:--1} -eq 0 ] || error "nlink is $nlink, expected 0"
+	exec 173<&-
+}
+run_test 31n "check link count of unlinked file"
+
 cleanup_test32_mount() {
 	trap 0
 	$UMOUNT $DIR/$tdir/ext2-mountpoint

@@ -532,12 +532,17 @@ int mdd_get_flags(const struct lu_env *env, struct mdd_object *obj)
 int mdd_attr_get(const struct lu_env *env, struct md_object *obj,
 		 struct md_attr *ma)
 {
-	int rc;
-        ENTRY;
+	struct mdd_object *mdd_obj = md2mdd_obj(obj);
+	int		  rc;
 
-	return mdd_la_get(env, md2mdd_obj(obj), &ma->ma_attr,
-			  mdd_object_capa(env, md2mdd_obj(obj)));
-        RETURN(rc);
+	ENTRY;
+
+	rc = mdd_la_get(env, mdd_obj, &ma->ma_attr,
+			mdd_object_capa(env, md2mdd_obj(obj)));
+	if ((ma->ma_need & MA_INODE) != 0 && mdd_is_dead_obj(mdd_obj))
+		ma->ma_attr.la_nlink = 0;
+
+	RETURN(rc);
 }
 
 /*
