@@ -425,6 +425,7 @@ void llog_recov_thread_stop(struct llog_commit_master *lcm, int force)
          * for processing now.
          */
         ptlrpcd_stop(&lcm->lcm_pc, force);
+	ptlrpcd_free(&lcm->lcm_pc);
 
         /*
          * By this point no alive inflight llcds should be left. Only

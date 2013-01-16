@@ -479,11 +479,6 @@ static int ptlrpcd(void *arg)
                 ptlrpc_set_wait(set);
         lu_context_fini(&env.le_ctx);
 
-	clear_bit(LIOD_START, &pc->pc_flags);
-	clear_bit(LIOD_STOP, &pc->pc_flags);
-	clear_bit(LIOD_FORCE, &pc->pc_flags);
-	clear_bit(LIOD_BIND, &pc->pc_flags);
-
 	complete(&pc->pc_finishing);
 
         return 0;
@@ -758,18 +753,32 @@ out:
 
 void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force)
 {
-       struct ptlrpc_request_set *set = pc->pc_set;
-        ENTRY;
+	ENTRY;
 
 	if (!test_bit(LIOD_START, &pc->pc_flags)) {
-                CWARN("Thread for pc %p was not started\n", pc);
-                goto out;
-        }
+		CWARN("Thread for pc %p was not started\n", pc);
+		goto out;
+	}
 
 	set_bit(LIOD_STOP, &pc->pc_flags);
 	if (force)
 		set_bit(LIOD_FORCE, &pc->pc_flags);
 	cfs_waitq_signal(&pc->pc_set->set_waitq);
+
+out:
+	EXIT;
+}
+
+void ptlrpcd_free(struct ptlrpcd_ctl *pc)
+{
+	struct ptlrpc_request_set *set = pc->pc_set;
+	ENTRY;
+
+	if (!test_bit(LIOD_START, &pc->pc_flags)) {
+		CWARN("Thread for pc %p was not started\n", pc);
+		goto out;
+	}
+
 #ifdef __KERNEL__
 	wait_for_completion(&pc->pc_finishing);
 #else
@@ -782,6 +791,11 @@ void ptlrpcd_stop(struct ptlrpcd_ctl *pc, int force)
 	pc->pc_set = NULL;
 	spin_unlock(&pc->pc_lock);
 	ptlrpc_set_destroy(set);
+
+	clear_bit(LIOD_START, &pc->pc_flags);
+	clear_bit(LIOD_STOP, &pc->pc_flags);
+	clear_bit(LIOD_FORCE, &pc->pc_flags);
+	clear_bit(LIOD_BIND, &pc->pc_flags);
 
 out:
 #ifdef __KERNEL__
@@ -799,18 +813,21 @@ out:
 
 static void ptlrpcd_fini(void)
 {
-        int i;
-        ENTRY;
+	int i;
+	ENTRY;
 
-        if (ptlrpcds != NULL) {
-                for (i = 0; i < ptlrpcds->pd_nthreads; i++)
-                        ptlrpcd_stop(&ptlrpcds->pd_threads[i], 0);
-                ptlrpcd_stop(&ptlrpcds->pd_thread_rcv, 0);
-                OBD_FREE(ptlrpcds, ptlrpcds->pd_size);
-                ptlrpcds = NULL;
-        }
+	if (ptlrpcds != NULL) {
+		for (i = 0; i < ptlrpcds->pd_nthreads; i++)
+			ptlrpcd_stop(&ptlrpcds->pd_threads[i], 0);
+		for (i = 0; i < ptlrpcds->pd_nthreads; i++)
+			ptlrpcd_free(&ptlrpcds->pd_threads[i]);
+		ptlrpcd_stop(&ptlrpcds->pd_thread_rcv, 0);
+		ptlrpcd_free(&ptlrpcds->pd_thread_rcv);
+		OBD_FREE(ptlrpcds, ptlrpcds->pd_size);
+		ptlrpcds = NULL;
+	}
 
-        EXIT;
+	EXIT;
 }
 
 static int ptlrpcd_init(void)
@@ -871,7 +888,10 @@ out:
         if (rc != 0 && ptlrpcds != NULL) {
                 for (j = 0; j <= i; j++)
                         ptlrpcd_stop(&ptlrpcds->pd_threads[j], 0);
-                ptlrpcd_stop(&ptlrpcds->pd_thread_rcv, 0);
+		for (j = 0; j <= i; j++)
+			ptlrpcd_free(&ptlrpcds->pd_threads[j]);
+		ptlrpcd_stop(&ptlrpcds->pd_thread_rcv, 0);
+		ptlrpcd_free(&ptlrpcds->pd_thread_rcv);
                 OBD_FREE(ptlrpcds, size);
                 ptlrpcds = NULL;
         }
