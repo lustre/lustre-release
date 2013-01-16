@@ -162,6 +162,7 @@ test_5() {
     rc=$?
     log "iozone rc=$rc"
     rm -f $TDIR/$tfile
+    wait_delete_completed_mds
     [ $rc -eq 0 ] || error "iozone failed"
     return $rc
 }
