@@ -17,6 +17,7 @@ set -e
 RSYNC=${RSYNC:-rsync}
 ECHO=echo
 LFS=${LFS:-lfs}
+LFS_SIZE_OPT="-s"
 
 usage() {
     cat -- <<USAGE 1>&2
@@ -96,6 +97,9 @@ strings $(which $RSYNC) 2>&1 | grep -q lustre && LFS=:
 # access the temporary file.
 umask 0077
 
+# This is needed for 1.8 Interoperability and can be removed in the future
+$LFS getstripe --help 2>&1 | grep -q stripe-size && LFS_SIZE_OPT="-S"
+
 lfs_migrate() {
 	while IFS='' read -d '' OLDNAME; do
 		$ECHO -n "$OLDNAME: "
@@ -138,7 +142,8 @@ lfs_migrate() {
 			[ "$OPT_STRIPE_COUNT" ] && COUNT=$OPT_STRIPE_COUNT ||
 				COUNT=$($LFS getstripe -c "$OLDNAME" \
 					2> /dev/null)
-			SIZE=$($LFS getstripe -S "$OLDNAME" 2> /dev/null)
+			SIZE=$($LFS getstripe $LFS_SIZE_OPT "$OLDNAME" \
+			       2> /dev/null)
 
 			[ -z "$COUNT" -o -z "$SIZE" ] && UNLINK=""
 		fi
@@ -148,7 +153,8 @@ lfs_migrate() {
 			continue
 		fi
 
-		[ "$UNLINK" ] && $LFS setstripe -c${COUNT} -S${SIZE} "$NEWNAME"
+		[ "$UNLINK" ] && $LFS setstripe -c${COUNT} \
+		                      ${LFS_SIZE_OPT}${SIZE} "$NEWNAME"
 
 		# we use --inplace, since we created our own temp file already
 		if ! $RSYNC -a --inplace $RSYNC_OPTS "$OLDNAME" "$NEWNAME";then
