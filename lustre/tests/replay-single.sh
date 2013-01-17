@@ -796,36 +796,40 @@ count_ost_writes() {
 
 #b=2477,2532
 test_40(){
-    $LCTL mark multiop $MOUNT/$tfile OS_c
-    multiop $MOUNT/$tfile OS_c  &
-    PID=$!
-    writeme -s $MOUNT/${tfile}-2 &
-    WRITE_PID=$!
-    sleep 1
-    facet_failover $SINGLEMDS
-#define OBD_FAIL_MDS_CONNECT_NET         0x117
-    do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000117"
-    kill -USR1 $PID
-    stat1=`count_ost_writes`
-    sleep $TIMEOUT
-    stat2=`count_ost_writes`
-    echo "$stat1, $stat2"
-    if [ $stat1 -lt $stat2 ]; then
-       echo "writes continuing during recovery"
-       RC=0
-    else
-       echo "writes not continuing during recovery, bug 2477"
-       RC=4
-    fi
-    echo "waiting for writeme $WRITE_PID"
-    kill $WRITE_PID
-    wait $WRITE_PID
+	# always need connection to MDS to verify layout during IO. LU-2628.
+	lctl get_param mdc.*.connect_flags | grep -q layout_lock &&
+		skip "layout_lock needs MDS connection for IO" && return 0
 
-    echo "waiting for multiop $PID"
-    wait $PID || return 2
-    do_facet client munlink $MOUNT/$tfile  || return 3
-    do_facet client munlink $MOUNT/${tfile}-2  || return 3
-    return $RC
+	$LCTL mark multiop $MOUNT/$tfile OS_c
+	multiop $MOUNT/$tfile OS_c  &
+	PID=$!
+	writeme -s $MOUNT/${tfile}-2 &
+	WRITE_PID=$!
+	sleep 1
+	facet_failover $SINGLEMDS
+#define OBD_FAIL_MDS_CONNECT_NET         0x117
+	do_facet $SINGLEMDS "lctl set_param fail_loc=0x80000117"
+	kill -USR1 $PID
+	stat1=`count_ost_writes`
+	sleep $TIMEOUT
+	stat2=`count_ost_writes`
+	echo "$stat1, $stat2"
+	if [ $stat1 -lt $stat2 ]; then
+		echo "writes continuing during recovery"
+		RC=0
+	else
+		echo "writes not continuing during recovery, bug 2477"
+		RC=4
+	fi
+	echo "waiting for writeme $WRITE_PID"
+	kill $WRITE_PID
+	wait $WRITE_PID
+
+	echo "waiting for multiop $PID"
+	wait $PID || return 2
+	do_facet client munlink $MOUNT/$tfile  || return 3
+	do_facet client munlink $MOUNT/${tfile}-2  || return 3
+	return $RC
 }
 run_test 40 "cause recovery in ptlrpc, ensure IO continues"
 
