@@ -558,6 +558,7 @@ else
 		if test -n "$BACKPORT_INCLUDES"; then
 			OFED_BACKPORT_PATH="$O2IBPATH/${BACKPORT_INCLUDES/*\/kernel_addons/kernel_addons}/"
 			EXTRA_LNET_INCLUDE="-I$OFED_BACKPORT_PATH $EXTRA_LNET_INCLUDE"
+			AC_DEFINE(HAVE_OFED_BACKPORT_H, 1, [found OFED backport headers])
 			AC_MSG_RESULT([yes])
 		else
 			AC_MSG_RESULT([no])

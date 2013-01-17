@@ -87,6 +87,9 @@
 typedef int gfp_t;
 #endif
 
+#if !defined(HAVE_OFED_BACKPORT_H) && defined(HAVE_SCSI_FC_COMPAT_H)
+#include <scsi/fc_compat.h>
+#endif
 #include <rdma/rdma_cm.h>
 #include <rdma/ib_cm.h>
 #include <rdma/ib_verbs.h>
