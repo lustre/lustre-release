@@ -5483,8 +5483,10 @@ test_122() { #bug 11544
         #define OBD_FAIL_PTLRPC_CLIENT_BULK_CB   0x508
         lctl set_param fail_loc=0x508
         dd if=/dev/zero of=$DIR/$tfile count=1
-        sync
+        sync &
+        sleep 2
         lctl set_param fail_loc=0
+        wait
 }
 run_test 122 "fail client bulk callback (shouldn't LBUG) ======="
 
