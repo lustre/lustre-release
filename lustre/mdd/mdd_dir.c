@@ -1442,10 +1442,13 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
 	 * because below function doesn't consider umask).
 	 * I'd suggest set all object attributes in creation time, see above.
 	 */
+	LASSERT(attr->la_valid & LA_MODE);
 	attr->la_valid &= ~LA_MODE;
 	rc = mdd_attr_set_internal(env, child, attr, handle, 0);
-        if (rc != 0)
-                RETURN(rc);
+	/* arguments are supposed to stay the same */
+	attr->la_valid |= LA_MODE;
+	if (rc != 0)
+		RETURN(rc);
 
 	if (S_ISDIR(attr->la_mode)) {
                 /* Add "." and ".." for newly created dir */
