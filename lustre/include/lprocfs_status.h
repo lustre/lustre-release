@@ -564,10 +564,6 @@ extern struct rw_semaphore _lprocfs_lock;
 
 #ifdef HAVE_PROCFS_DELETED
 
-#ifdef HAVE_PROCFS_USERS
-#error proc_dir_entry->deleted is conflicted with proc_dir_entry->pde_users
-#endif
-
 #define LPROCFS_ENTRY_AND_CHECK(dp) do {        \
         typecheck(struct proc_dir_entry *, dp); \
         LPROCFS_ENTRY();                        \
