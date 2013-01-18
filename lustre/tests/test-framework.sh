@@ -118,10 +118,11 @@ print_summary () {
 }
 
 init_test_env() {
-    export LUSTRE=`absolute_path $LUSTRE`
-    export TESTSUITE=`basename $0 .sh`
-    export TEST_FAILED=false
-    export FAIL_ON_SKIP_ENV=${FAIL_ON_SKIP_ENV:-false}
+	export LUSTRE=$(absolute_path $LUSTRE)
+	export TESTSUITE=$(basename $0 .sh)
+	export TEST_FAILED=false
+	export FAIL_ON_SKIP_ENV=${FAIL_ON_SKIP_ENV:-false}
+	export RPC_MODE=${RPC_MODE:-false}
 
     export MKE2FS=$MKE2FS
     if [ -z "$MKE2FS" ]; then
@@ -312,10 +313,12 @@ init_test_env() {
     shift $((OPTIND - 1))
     ONLY=${ONLY:-$*}
 
-    # print the durations of each test if "true"
-    DDETAILS=${DDETAILS:-false}
-    [ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
-    rm -f $TMP/*active
+	# print the durations of each test if "true"
+	DDETAILS=${DDETAILS:-false}
+	[ "$TESTSUITELOG" ] && rm -f $TESTSUITELOG || true
+	if ! $RPC_MODE; then
+		rm -f $TMP/*active
+	fi
 }
 
 check_cpt_number() {
