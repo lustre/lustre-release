@@ -137,6 +137,10 @@ void osd_fini_iobuf(struct osd_device *d, struct osd_iobuf *iobuf)
         }
 }
 
+#ifndef __REQ_WRITE /* pre-2.6.35 */
+#define __REQ_WRITE BIO_RW
+#endif
+
 #ifdef HAVE_BIO_ENDIO_2ARG
 #define DIO_RETURN(a)
 static void dio_complete_routine(struct bio *bio, int error)
@@ -171,7 +175,7 @@ static int dio_complete_routine(struct bio *bio, unsigned int done, int error)
         }
 
         /* the check is outside of the cycle for performance reason -bzzz */
-	if (!test_bit(BIO_RW, &bio->bi_rw)) {
+	if (!test_bit(__REQ_WRITE, &bio->bi_rw)) {
                 bio_for_each_segment(bvl, bio, i) {
                         if (likely(error == 0))
                                 SetPageUptodate(bvl->bv_page);
