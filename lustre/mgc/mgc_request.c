@@ -1264,8 +1264,10 @@ static int mgc_apply_recover_logs(struct obd_device *mgc,
         } else {
 		LASSERT(IS_MDT(lsi));
 		rc = server_name2svname(lsi->lsi_svname, inst, NULL);
-		if (rc)
+		if (rc) {
+			OBD_FREE(inst, CFS_PAGE_SIZE);
 			RETURN(-EINVAL);
+		}
 		pos = strlen(inst);
         }
 

@@ -218,7 +218,7 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 		       int type, uint blk, uint index,
 		       struct osd_it_quota *it)
 {
-	dqbuf_t				 buf = getdqbuf();
+	dqbuf_t				 buf;
 	loff_t				 ret = 0;
 	struct lustre_disk_dqdbheader	*dqhead;
 	int				 i, dqblk_sz;
@@ -232,6 +232,7 @@ int walk_block_dqentry(const struct lu_env *env, struct osd_object *obj,
 			RETURN(1);
 	}
 
+	buf = getdqbuf();
 	dqhead = (struct lustre_disk_dqdbheader *)buf;
 	dqblk_sz = sizeof(struct lustre_disk_dqblk_v2);
 	if (!buf)

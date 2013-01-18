@@ -2269,7 +2269,7 @@ static int lov_fiemap(struct lov_obd *lov, __u32 keylen, void *key,
 	fm_end_offset = fiemap_calc_fm_end_offset(fiemap, lsm, fm_start,
 						  fm_end, &start_stripe);
 	if (fm_end_offset == -EINVAL)
-		return -EINVAL;
+		GOTO(out, rc = -EINVAL);
 
         if (fiemap->fm_extent_count == 0) {
                 get_num_extents = 1;

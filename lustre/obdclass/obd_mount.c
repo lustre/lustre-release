@@ -969,6 +969,7 @@ int lustre_register_osp_item(char *ospname, struct obd_export **exp,
 		OBD_ALLOC_PTR(uuid);
 		if (uuid == NULL) {
 			mutex_unlock(&osp_register_list_lock);
+			OBD_FREE_PTR(ori);
 			RETURN(-ENOMEM);
 		}
 		memcpy(uuid->uuid, ospname, strlen(ospname));
@@ -1178,7 +1179,7 @@ static int lustre_osp_add_conn(struct lustre_cfg *cfg,
 
 	OBD_ALLOC_PTR(bufs);
 	if (bufs == NULL)
-		RETURN(-ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	lustre_cfg_bufs_reset(bufs, ospname);
 	lustre_cfg_bufs_set_string(bufs, 1,
