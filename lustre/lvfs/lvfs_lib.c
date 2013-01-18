@@ -71,15 +71,18 @@ int obd_alloc_fail(const void *ptr, const char *name, const char *type,
 EXPORT_SYMBOL(obd_alloc_fail);
 
 #ifdef LPROCFS
-void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
-                                       long amount)
+void lprocfs_counter_add(struct lprocfs_stats *stats, int idx, long amount)
 {
-	struct lprocfs_counter *percpu_cntr;
-	int			smp_id;
-	unsigned long		flags = 0;
+	struct lprocfs_counter		*percpu_cntr;
+	struct lprocfs_counter_header	*header;
+	int				smp_id;
+	unsigned long			flags = 0;
 
-        if (stats == NULL)
-                return;
+	if (stats == NULL)
+		return;
+
+	LASSERT(ergo((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) == 0,
+		     !cfs_in_interrupt()));
 
 	/* With per-client stats, statistics are allocated only for
 	 * single CPU area, so the smp_id should be 0 always. */
@@ -87,9 +90,11 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
 	if (smp_id < 0)
 		return;
 
-        percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
-        percpu_cntr->lc_count++;
-        if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
+	header = &stats->ls_cnt_header[idx];
+	percpu_cntr = lprocfs_stats_counter_get(stats, smp_id, idx);
+	percpu_cntr->lc_count++;
+
+	if (header->lc_config & LPROCFS_CNTR_AVGMINMAX) {
 		/*
 		 * lprocfs_counter_add() can be called in interrupt context,
 		 * as memory allocation could trigger memory shrinker call
@@ -100,25 +105,30 @@ void lprocfs_counter_add(struct lprocfs_stats *stats, int idx,
 			percpu_cntr->lc_sum_irq += amount;
 		else
 			percpu_cntr->lc_sum += amount;
-                if (percpu_cntr->lc_config & LPROCFS_CNTR_STDDEV)
-                        percpu_cntr->lc_sumsquare += (__s64)amount * amount;
-                if (amount < percpu_cntr->lc_min)
-                        percpu_cntr->lc_min = amount;
-                if (amount > percpu_cntr->lc_max)
-                        percpu_cntr->lc_max = amount;
-        }
-        lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
+
+		if (header->lc_config & LPROCFS_CNTR_STDDEV)
+			percpu_cntr->lc_sumsquare += (__s64)amount * amount;
+		if (amount < percpu_cntr->lc_min)
+			percpu_cntr->lc_min = amount;
+		if (amount > percpu_cntr->lc_max)
+			percpu_cntr->lc_max = amount;
+	}
+	lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
 }
 EXPORT_SYMBOL(lprocfs_counter_add);
 
 void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
 {
-	struct lprocfs_counter *percpu_cntr;
-	int			smp_id;
-	unsigned long		flags = 0;
+	struct lprocfs_counter		*percpu_cntr;
+	struct lprocfs_counter_header	*header;
+	int				smp_id;
+	unsigned long			flags = 0;
 
-        if (stats == NULL)
-                return;
+	if (stats == NULL)
+		return;
+
+	LASSERT(ergo((stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) == 0,
+		     !cfs_in_interrupt()));
 
 	/* With per-client stats, statistics are allocated only for
 	 * single CPU area, so the smp_id should be 0 always. */
@@ -126,8 +136,9 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
 	if (smp_id < 0)
 		return;
 
-        percpu_cntr = &(stats->ls_percpu[smp_id]->lp_cntr[idx]);
-        if (percpu_cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
+	header = &stats->ls_cnt_header[idx];
+	percpu_cntr = lprocfs_stats_counter_get(stats, smp_id, idx);
+	if (header->lc_config & LPROCFS_CNTR_AVGMINMAX) {
 		/*
 		 * Sometimes we use RCU callbacks to free memory which calls
 		 * lprocfs_counter_sub(), and RCU callbacks may execute in
@@ -135,50 +146,48 @@ void lprocfs_counter_sub(struct lprocfs_stats *stats, int idx, long amount)
 		 * softirq context here, use separate counter for that.
 		 * bz20650.
 		 */
-                if (cfs_in_interrupt())
-                        percpu_cntr->lc_sum_irq -= amount;
-                else
-                        percpu_cntr->lc_sum -= amount;
-        }
-        lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
+		if (cfs_in_interrupt())
+			percpu_cntr->lc_sum_irq -= amount;
+		else
+			percpu_cntr->lc_sum -= amount;
+	}
+	lprocfs_stats_unlock(stats, LPROCFS_GET_SMP_ID, &flags);
 }
 EXPORT_SYMBOL(lprocfs_counter_sub);
 
-int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int idx)
+int lprocfs_stats_alloc_one(struct lprocfs_stats *stats, unsigned int cpuid)
 {
-	unsigned int	percpusize;
-	int		rc	= -ENOMEM;
-	unsigned long	flags	= 0;
+	struct lprocfs_counter	*cntr;
+	unsigned int		percpusize;
+	int			rc = -ENOMEM;
+	unsigned long		flags = 0;
+	int			i;
 
-	/* the 1st percpu entry was statically allocated in
-	 * lprocfs_alloc_stats() */
-	LASSERT(idx != 0 && stats->ls_percpu[0] != NULL);
-	LASSERT(stats->ls_percpu[idx] == NULL);
+	LASSERT(stats->ls_percpu[cpuid] == NULL);
 	LASSERT((stats->ls_flags & LPROCFS_STATS_FLAG_NOPERCPU) == 0);
 
-	percpusize = CFS_L1_CACHE_ALIGN(offsetof(struct lprocfs_percpu,
-						 lp_cntr[stats->ls_num]));
-	OBD_ALLOC_GFP(stats->ls_percpu[idx], percpusize, CFS_ALLOC_ATOMIC);
-	if (stats->ls_percpu[idx] != NULL) {
+	percpusize = lprocfs_stats_counter_size(stats);
+	LIBCFS_ALLOC_ATOMIC(stats->ls_percpu[cpuid], percpusize);
+	if (stats->ls_percpu[cpuid] != NULL) {
 		rc = 0;
-		if (unlikely(stats->ls_biggest_alloc_num <= idx)) {
+		if (unlikely(stats->ls_biggest_alloc_num <= cpuid)) {
 			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE)
 				spin_lock_irqsave(&stats->ls_lock, flags);
 			else
 				spin_lock(&stats->ls_lock);
-			if (stats->ls_biggest_alloc_num <= idx)
-				stats->ls_biggest_alloc_num = idx + 1;
+			if (stats->ls_biggest_alloc_num <= cpuid)
+				stats->ls_biggest_alloc_num = cpuid + 1;
 			if (stats->ls_flags & LPROCFS_STATS_FLAG_IRQ_SAFE) {
 				spin_unlock_irqrestore(&stats->ls_lock, flags);
 			} else {
 				spin_unlock(&stats->ls_lock);
 			}
 		}
-
-		/* initialize the ls_percpu[idx] by copying the 0th template
-		 * entry */
-		memcpy(stats->ls_percpu[idx], stats->ls_percpu[0],
-		       percpusize);
+		/* initialize the ls_percpu[cpuid] non-zero counter */
+		for (i = 0; i < stats->ls_num; ++i) {
+			cntr = lprocfs_stats_counter_get(stats, cpuid, i);
+			cntr->lc_min = LC_MIN_INIT;
+		}
 	}
 
 	return rc;

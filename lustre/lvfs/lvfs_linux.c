@@ -368,19 +368,23 @@ EXPORT_SYMBOL(obd_pages_max);
 
 #ifdef LPROCFS
 __s64 lprocfs_read_helper(struct lprocfs_counter *lc,
-                          enum lprocfs_fields_flags field)
+			  struct lprocfs_counter_header *header,
+			  enum lprocfs_stats_flags flags,
+			  enum lprocfs_fields_flags field)
 {
 	__s64 ret = 0;
 
-	if (lc == NULL)
+	if (lc == NULL || header == NULL)
 		RETURN(0);
 
 	switch (field) {
 		case LPROCFS_FIELDS_FLAGS_CONFIG:
-			ret = lc->lc_config;
+			ret = header->lc_config;
 			break;
 		case LPROCFS_FIELDS_FLAGS_SUM:
-			ret = lc->lc_sum + lc->lc_sum_irq;
+			ret = lc->lc_sum;
+			if ((flags & LPROCFS_STATS_FLAG_IRQ_SAFE) != 0)
+				ret += lc->lc_sum_irq;
 			break;
 		case LPROCFS_FIELDS_FLAGS_MIN:
 			ret = lc->lc_min;

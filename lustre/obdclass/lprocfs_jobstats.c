@@ -366,10 +366,12 @@ static int inline width(const char *str, int len)
 
 static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 {
-	struct job_stat *job = v;
-	struct lprocfs_stats *s;
-	struct lprocfs_counter ret, *cntr;
-	int i;
+	struct job_stat			*job = v;
+	struct lprocfs_stats		*s;
+	struct lprocfs_counter		ret;
+	struct lprocfs_counter		*cntr;
+	struct lprocfs_counter_header	*cntr_header;
+	int				i;
 
 	if (v == SEQ_START_TOKEN) {
 		seq_printf(p, "job_stats:\n");
@@ -381,23 +383,25 @@ static int lprocfs_jobstats_seq_show(struct seq_file *p, void *v)
 
 	s = job->js_stats;
 	for (i = 0; i < s->ls_num; i++) {
-		cntr = &(s->ls_percpu[0]->lp_cntr[i]);
+		cntr = lprocfs_stats_counter_get(s, 0, i);
+		cntr_header = &s->ls_cnt_header[i];
 		lprocfs_stats_collect(s, i, &ret);
 
 		seq_printf(p, "  %s:%.*s { samples: %11"LPF64"u",
-			   cntr->lc_name, width(cntr->lc_name, 15), spaces,
+			   cntr_header->lc_name,
+			   width(cntr_header->lc_name, 15), spaces,
 			   ret.lc_count);
-		if (cntr->lc_units[0] != '\0')
-			seq_printf(p, ", unit: %5s", cntr->lc_units);
+		if (cntr_header->lc_units[0] != '\0')
+			seq_printf(p, ", unit: %5s", cntr_header->lc_units);
 
-		if (cntr->lc_config & LPROCFS_CNTR_AVGMINMAX) {
+		if (cntr_header->lc_config & LPROCFS_CNTR_AVGMINMAX) {
 			seq_printf(p, ", min:%8"LPF64"u, max:%8"LPF64"u,"
 				   " sum:%16"LPF64"u",
 				   ret.lc_count ? ret.lc_min : 0,
 				   ret.lc_count ? ret.lc_max : 0,
 				   ret.lc_count ? ret.lc_sum : 0);
 		}
-		if (cntr->lc_config & LPROCFS_CNTR_STDDEV) {
+		if (cntr_header->lc_config & LPROCFS_CNTR_STDDEV) {
 			seq_printf(p, ", sumsq: %18"LPF64"u",
 				   ret.lc_count ? ret.lc_sumsquare : 0);
 		}
