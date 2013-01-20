@@ -79,6 +79,11 @@ Requires: %{name}-modules = %{version}
 Requires: lustre-osd
 %endif
 # GSS requires this: BuildRequires: pkgconfig, libgssapi-devel >= 0.10
+%if %{_vendor}=="redhat" || %{_vendor}=="fedora"
+#suse don't support selinux
+BuildRequires: libselinux-devel
+Requires: libselinux
+%endif
 
 %description
 Userspace tools and files for the Lustre file system.

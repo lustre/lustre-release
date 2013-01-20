@@ -80,6 +80,10 @@
 #include <lnet/lnetctl.h>
 #include <lustre_ver.h>
 
+#ifdef HAVE_SELINUX
+#include <selinux/selinux.h>
+#endif
+
 #define MAX_HW_SECTORS_KB_PATH	"queue/max_hw_sectors_kb"
 #define MAX_SECTORS_KB_PATH	"queue/max_sectors_kb"
 #define SCHEDULER_PATH		"queue/scheduler"
@@ -93,6 +97,29 @@ extern char *progname;
 /* keep it less than LL_FID_NAMELEN */
 #define DUMMY_FILE_NAME_LEN             25
 #define EXT3_DIRENT_SIZE                DUMMY_FILE_NAME_LEN
+
+/*
+ * Concatenate context of the temporary mount point iff selinux is enabled
+ */
+#ifdef HAVE_SELINUX
+void append_context_for_mount(char *mntpt, struct mkfs_opts *mop)
+{
+	security_context_t fcontext;
+
+	if (getfilecon(mntpt, &fcontext) < 0) {
+		/* Continuing with default behaviour */
+		fprintf(stderr, "%s: Get file context failed : %s\n",
+			progname, strerror(errno));
+		return;
+	}
+
+	if (fcontext != NULL) {
+		strcat(mop->mo_ldd.ldd_mount_opts, ",context=");
+		strcat(mop->mo_ldd.ldd_mount_opts, fcontext);
+		freecon(fcontext);
+	}
+}
+#endif
 
 /* Write the server config files */
 int ldiskfs_write_ldd(struct mkfs_opts *mop)
@@ -110,6 +137,14 @@ int ldiskfs_write_ldd(struct mkfs_opts *mop)
 			progname, mntpt, strerror(errno));
 		return errno;
 	}
+
+	/*
+	 * Append file context to mount options if SE Linux is enabled
+	 */
+	#ifdef HAVE_SELINUX
+	if (is_selinux_enabled() > 0)
+		append_context_for_mount(mntpt, mop);
+	#endif
 
 	dev = mop->mo_device;
 	if (mop->mo_flags & MO_IS_LOOP)

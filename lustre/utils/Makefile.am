@@ -125,7 +125,7 @@ lr_reader_SOURCES = lr_reader.c
 
 mount_lustre_SOURCES = mount_lustre.c mount_utils.c mount_utils.h
 mount_lustre_CPPFLAGS = $(AM_CPPFLAGS)
-mount_lustre_LDADD := $(LIBPTLCTL)
+mount_lustre_LDADD := $(LIBPTLCTL) $(SELINUX)
 mount_lustre_DEPENDENCIES := $(LIBPTLCTL)
 if LDISKFS_ENABLED
 mount_lustre_SOURCES += mount_utils_ldiskfs.c

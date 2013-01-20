@@ -2758,6 +2758,21 @@ AC_CHECK_LIB([z],
 )
 AC_SUBST(ZLIB)
 
+SELINUX=""
+AC_CHECK_LIB([selinux],
+		[is_selinux_enabled],
+		[AC_CHECK_HEADERS([selinux.h],
+				[SELINUX="-lselinux"
+				AC_DEFINE([HAVE_SELINUX], 1,
+						[support for selinux ])],
+				[AC_MSG_WARN([No selinux-devel package found,
+						unable to build selinux enabled
+						tools])])],
+		[AC_MSG_WARN([No selinux package found, unable to build selinux
+				enabled tools])]
+)
+AC_SUBST(SELINUX)
+
 # Super safe df
 AC_ARG_ENABLE([mindf],
       AC_HELP_STRING([--enable-mindf],
