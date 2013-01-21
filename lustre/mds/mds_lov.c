@@ -258,46 +258,11 @@ int mds_lov_prepare_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 }
 EXPORT_SYMBOL(mds_lov_prepare_objids);
 
-/*
- * write llog orphan record about lost ost object,
- * Special lsm is allocated with single stripe, caller should deallocated it
- * after use
- */
-static int noinline mds_log_lost_precreated(struct obd_device *obd,
-                                   struct lov_stripe_md **lsmp, int *stripes,
-                                   obd_id id, obd_count count, int idx)
-{
-        struct lov_stripe_md *lsm = *lsmp;
-        int rc;
-        ENTRY;
-
-        if (*lsmp == NULL) {
-                rc = obd_alloc_memmd(obd->u.mds.mds_lov_exp, &lsm);
-                if (rc < 0)
-                        RETURN(rc);
-                /* need only one stripe, save old value */
-                *stripes = lsm->lsm_stripe_count;
-                lsm->lsm_stripe_count = 1;
-                *lsmp = lsm;
-        }
-
-        lsm->lsm_oinfo[0]->loi_id = id;
-        lsm->lsm_oinfo[0]->loi_gr = 0; /* needed in 2.0 */
-        lsm->lsm_oinfo[0]->loi_ost_idx = idx;
-
-        rc = mds_log_op_orphan(obd, lsm, count);
-        RETURN(rc);
-}
-
 void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
 {
         struct mds_obd *mds = &obd->u.mds;
         int j;
         struct lov_ost_data_v1 *lmm_objects;
-#ifndef HAVE_DELAYED_RECOVERY
-        struct lov_stripe_md *lsm = NULL;
-        int stripes = 0;
-#endif
         ENTRY;
 
         /* if we create file without objects - lmm is NULL */
@@ -321,29 +286,19 @@ void mds_lov_update_objids(struct obd_device *obd, struct lov_mds_md *lmm)
                 CDEBUG(D_INODE,"update last object for ost %u"
                        " - new "LPU64" old "LPU64"\n", i, id, data[idx]);
                 if (id > data[idx]) {
-#ifndef HAVE_DELAYED_RECOVERY
                         int lost = id - data[idx] - 1;
                         /* we might have lost precreated objects due to VBR */
                         if (lost > 0 && obd->obd_recovering) {
-                                CDEBUG(D_HA, "GAP in objids is %u\n", lost);
-                                if (!obd->obd_version_recov)
-                                        CWARN("Unexpected gap in objids\n");
-                                /* lsm is allocated if NULL */
-                                mds_log_lost_precreated(obd, &lsm, &stripes,
-                                                        data[idx] + 1, lost, i);
+                                CDEBUG(obd->obd_version_recov ? D_HA:D_WARNING,
+                                       "GAP in objids for OST%d, "
+                                       "next_id on disk: "LPU64", "
+                                       "id to be allocated: "LPU64", "
+                                       "lost: %d\n", i, data[idx], id, lost);
                         }
-#endif
                         data[idx] = id;
                         cfs_bitmap_set(mds->mds_lov_page_dirty, page);
                 }
         }
-#ifndef HAVE_DELAYED_RECOVERY
-        if (lsm) {
-                /* restore stripes number */
-                lsm->lsm_stripe_count = stripes;
-                obd_free_memmd(mds->mds_lov_exp, &lsm);
-        }
-#endif
         EXIT;
         return;
 }
