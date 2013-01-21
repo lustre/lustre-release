@@ -1880,10 +1880,11 @@ test_70b () {
 	zconf_mount_clients $clients $MOUNT
 
 	local duration=300
-	[ "$SLOW" = "no" ] && duration=60
+	[ "$SLOW" = "no" ] && duration=120
 	# set duration to 900 because it takes some time to boot node
 	[ "$FAILURE_MODE" = HARD ] && duration=900
 
+	local start_ts=$(date +%s)
 	local cmd="rundbench 1 -t $duration"
 	local pid=""
 	do_nodesv $clients "set -x; MISSING_DBENCH_OK=$MISSING_DBENCH_OK \
@@ -1895,12 +1896,11 @@ test_70b () {
 
 	# give rundbench a chance to start, bug 24118
 	sleep 12
-	local elapsed=0
+	local elapsed=$(($(date +%s) - start_ts))
 	local num_failovers=0
-	local start_ts=$(date +%s)
 	while [ $elapsed -lt $duration ]; do
 		if ! check_for_process $clients dbench; then
-			error_noexit "dbench not found on some of $clients!"
+			error_noexit "dbench not running on some of $clients!"
 			killall_process $clients dbench
 			break
 		fi
