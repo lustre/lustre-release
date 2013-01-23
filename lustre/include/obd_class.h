@@ -753,11 +753,21 @@ static inline int obd_alloc_diskmd(struct obd_export *exp,
 }
 
 static inline int obd_free_diskmd(struct obd_export *exp,
-                                  struct lov_mds_md **disk_tgt)
+				  struct lov_mds_md **disk_tgt)
 {
-        LASSERT(disk_tgt);
-        LASSERT(*disk_tgt);
-        return obd_packmd(exp, disk_tgt, NULL);
+	LASSERT(disk_tgt);
+	LASSERT(*disk_tgt);
+	/*
+	 * LU-2590, for caller's convenience, *disk_tgt could be host
+	 * endianness, it needs swab to LE if necessary, while just
+	 * lov_mds_md header needs it for figuring out how much memory
+	 * needs to be freed.
+	 */
+	if ((cpu_to_le32(LOV_MAGIC) != LOV_MAGIC) &&
+	    (((*disk_tgt)->lmm_magic == LOV_MAGIC_V1) ||
+	     ((*disk_tgt)->lmm_magic == LOV_MAGIC_V3)))
+		lustre_swab_lov_mds_md(*disk_tgt);
+	return obd_packmd(exp, disk_tgt, NULL);
 }
 
 /* Unpack an MD struct from disk to in-memory format.
