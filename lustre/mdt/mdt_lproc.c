@@ -258,12 +258,10 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
         RETURN(rc);
 }
 
-int mdt_procfs_fini(struct mdt_device *mdt)
+void mdt_procfs_fini(struct mdt_device *mdt)
 {
         struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
         struct obd_device *obd = ld->ld_obd;
-
-	lprocfs_job_stats_fini(obd);
 
         if (obd->obd_proc_exports_entry) {
                 lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
@@ -274,8 +272,7 @@ int mdt_procfs_fini(struct mdt_device *mdt)
         ptlrpc_lprocfs_unregister_obd(obd);
         lprocfs_free_md_stats(obd);
         lprocfs_free_obd_stats(obd);
-
-        RETURN(0);
+	lprocfs_job_stats_fini(obd);
 }
 
 static int lprocfs_rd_identity_expire(char *page, char **start, off_t off,

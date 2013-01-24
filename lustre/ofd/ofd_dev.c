@@ -430,7 +430,7 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 	rc = lproc_ofd_attach_seqstat(obd);
 	if (rc) {
 		CERROR("%s: create seqstat failed: %d.\n", obd->obd_name, rc);
-		GOTO(free_obd_stats, rc);
+		GOTO(obd_cleanup, rc);
 	}
 
 	entry = lprocfs_register("exports", obd->obd_proc_entry, NULL, NULL);
@@ -438,7 +438,7 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 		rc = PTR_ERR(entry);
 		CERROR("%s: error %d setting up lprocfs for %s\n",
 		       obd->obd_name, rc, "exports");
-		GOTO(free_obd_stats, rc);
+		GOTO(obd_cleanup, rc);
 	}
 	obd->obd_proc_exports_entry = entry;
 
@@ -449,7 +449,7 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 		rc = PTR_ERR(entry);
 		CERROR("%s: add proc entry 'clear' failed: %d.\n",
 		       obd->obd_name, rc);
-		GOTO(free_obd_stats, rc);
+		GOTO(obd_cleanup, rc);
 	}
 
 	rc = lprocfs_job_stats_init(obd, LPROC_OFD_STATS_LAST,
@@ -459,23 +459,22 @@ static int ofd_procfs_init(struct ofd_device *ofd)
 	RETURN(0);
 remove_entry_clear:
 	lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
-free_obd_stats:
-	lprocfs_free_obd_stats(obd);
 obd_cleanup:
 	lprocfs_obd_cleanup(obd);
+	lprocfs_free_obd_stats(obd);
+
 	return rc;
 }
 
-static int ofd_procfs_fini(struct ofd_device *ofd)
+static void ofd_procfs_fini(struct ofd_device *ofd)
 {
 	struct obd_device *obd = ofd_obd(ofd);
 
-	lprocfs_job_stats_fini(obd);
 	lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
 	lprocfs_free_per_client_stats(obd);
-	lprocfs_free_obd_stats(obd);
 	lprocfs_obd_cleanup(obd);
-	return 0;
+	lprocfs_free_obd_stats(obd);
+	lprocfs_job_stats_fini(obd);
 }
 
 extern int ost_handle(struct ptlrpc_request *req);
