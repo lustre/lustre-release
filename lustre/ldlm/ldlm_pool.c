@@ -743,11 +743,13 @@ static int ldlm_pool_proc_init(struct ldlm_pool *pl)
         }
         pl->pl_proc_dir = lprocfs_register("pool", parent_ns_proc,
                                            NULL, NULL);
-        if (IS_ERR(pl->pl_proc_dir)) {
-                CERROR("LProcFS failed in ldlm-pool-init\n");
-                rc = PTR_ERR(pl->pl_proc_dir);
-                GOTO(out_free_name, rc);
-        }
+	if (IS_ERR(pl->pl_proc_dir)) {
+		rc = PTR_ERR(pl->pl_proc_dir);
+		pl->pl_proc_dir = NULL;
+		CERROR("%s: cannot create 'pool' proc entry: rc = %d\n",
+		       ldlm_ns_name(ns), rc);
+		GOTO(out_free_name, rc);
+	}
 
         var_name[MAX_STRING_SIZE] = '\0';
         memset(pool_vars, 0, sizeof(pool_vars));

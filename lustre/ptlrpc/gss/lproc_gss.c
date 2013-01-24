@@ -196,28 +196,31 @@ void gss_exit_lproc(void)
 
 int gss_init_lproc(void)
 {
-	int     rc;
+	int	rc;
 
 	spin_lock_init(&gss_stat_oos.oos_lock);
 
-        gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
-                                         gss_lprocfs_vars, NULL);
-        if (IS_ERR(gss_proc_root)) {
-                gss_proc_root = NULL;
-                GOTO(err_out, rc = PTR_ERR(gss_proc_root));
-        }
+	gss_proc_root = lprocfs_register("gss", sptlrpc_proc_root,
+					 gss_lprocfs_vars, NULL);
+	if (IS_ERR(gss_proc_root)) {
+		rc = PTR_ERR(gss_proc_root);
+		gss_proc_root = NULL;
+		GOTO(out, rc);
+	}
 
-        gss_proc_lk = lprocfs_register("lgss_keyring", gss_proc_root,
-                                       gss_lk_lprocfs_vars, NULL);
-        if (IS_ERR(gss_proc_lk)) {
-                gss_proc_lk = NULL;
-                GOTO(err_out, rc = PTR_ERR(gss_proc_root));
-        }
+	gss_proc_lk = lprocfs_register("lgss_keyring", gss_proc_root,
+				       gss_lk_lprocfs_vars, NULL);
+	if (IS_ERR(gss_proc_lk)) {
+		rc = PTR_ERR(gss_proc_lk);
+		gss_proc_lk = NULL;
+		GOTO(out, rc);
+	}
 
-        return 0;
+	return 0;
 
-err_out:
-        CERROR("failed to initialize gss lproc entries: %d\n", rc);
-        gss_exit_lproc();
-        return rc;
+out:
+	CERROR("failed to initialize gss lproc entries: %d\n", rc);
+	gss_exit_lproc();
+
+	return rc;
 }

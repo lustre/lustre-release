@@ -294,26 +294,15 @@ struct file_operations lprocfs_evict_client_fops = {
 };
 EXPORT_SYMBOL(lprocfs_evict_client_fops);
 
-/**
- * Add /proc entries.
- *
- * \param root [in]  The parent proc entry on which new entry will be added.
- * \param list [in]  Array of proc entries to be added.
- * \param data [in]  The argument to be passed when entries read/write routines
- *                   are called through /proc file.
- *
- * \retval 0   on success
- *         < 0 on error
- */
-int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
-                     void *data)
+static int __lprocfs_add_vars(struct proc_dir_entry *root,
+			      struct lprocfs_vars *list,
+			      void *data)
 {
         int rc = 0;
 
         if (root == NULL || list == NULL)
                 return -EINVAL;
 
-        LPROCFS_WRITE_ENTRY();
         while (list->name != NULL) {
                 struct proc_dir_entry *cur_root, *proc;
                 char *pathcopy, *cur, *next, pathbuf[64];
@@ -378,21 +367,43 @@ int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
                 list++;
         }
 out:
-        LPROCFS_WRITE_EXIT();
         return rc;
+}
+
+/**
+ * Add /proc entries.
+ *
+ * \param root [in]  The parent proc entry on which new entry will be added.
+ * \param list [in]  Array of proc entries to be added.
+ * \param data [in]  The argument to be passed when entries read/write routines
+ *                   are called through /proc file.
+ *
+ * \retval 0   on success
+ *         < 0 on error
+ */
+int lprocfs_add_vars(struct proc_dir_entry *root, struct lprocfs_vars *list,
+		     void *data)
+{
+	int rc;
+
+	LPROCFS_WRITE_ENTRY();
+	rc = __lprocfs_add_vars(root, list, data);
+	LPROCFS_WRITE_EXIT();
+
+	return rc;
 }
 EXPORT_SYMBOL(lprocfs_add_vars);
 
-void lprocfs_remove_nolock(struct proc_dir_entry **rooth)
+void lprocfs_remove_nolock(struct proc_dir_entry **proot)
 {
-        struct proc_dir_entry *root = *rooth;
-        struct proc_dir_entry *temp = root;
-        struct proc_dir_entry *rm_entry;
-        struct proc_dir_entry *parent;
+	struct proc_dir_entry *root = *proot;
+	struct proc_dir_entry *temp = root;
+	struct proc_dir_entry *rm_entry;
+	struct proc_dir_entry *parent;
 
-        if (!root)
-                return;
-        *rooth = NULL;
+	*proot = NULL;
+	if (root == NULL || IS_ERR(root))
+		return;
 
         parent = root->parent;
         LASSERT(parent != NULL);
@@ -478,27 +489,34 @@ void lprocfs_try_remove_proc_entry(const char *name,
 EXPORT_SYMBOL(lprocfs_try_remove_proc_entry);
 
 struct proc_dir_entry *lprocfs_register(const char *name,
-                                        struct proc_dir_entry *parent,
-                                        struct lprocfs_vars *list, void *data)
+					struct proc_dir_entry *parent,
+					struct lprocfs_vars *list, void *data)
 {
-        struct proc_dir_entry *newchild;
+	struct proc_dir_entry *entry;
+	int rc;
 
-        newchild = lprocfs_srch(parent, name);
-        if (newchild != NULL) {
-                CERROR(" Lproc: Attempting to register %s more than once \n",
-                       name);
-                return ERR_PTR(-EALREADY);
-        }
+	LPROCFS_WRITE_ENTRY();
+	entry = __lprocfs_srch(parent, name);
+	if (entry != NULL) {
+		CERROR("entry '%s' already registered\n", name);
+		GOTO(out, entry = ERR_PTR(-EALREADY));
+	}
 
-        newchild = proc_mkdir(name, parent);
-        if (newchild != NULL && list != NULL) {
-                int rc = lprocfs_add_vars(newchild, list, data);
-                if (rc) {
-                        lprocfs_remove(&newchild);
-                        return ERR_PTR(rc);
-                }
-        }
-        return newchild;
+	entry = proc_mkdir(name, parent);
+	if (entry == NULL)
+		GOTO(out, entry = ERR_PTR(-ENOMEM));
+
+	if (list != NULL) {
+		rc = __lprocfs_add_vars(entry, list, data);
+		if (rc != 0) {
+			lprocfs_remove_nolock(&entry);
+			GOTO(out, entry = ERR_PTR(rc));
+		}
+	}
+out:
+	LPROCFS_WRITE_EXIT();
+
+	return entry;
 }
 EXPORT_SYMBOL(lprocfs_register);
 
@@ -1983,11 +2001,13 @@ int lprocfs_exp_setup(struct obd_export *exp, lnet_nid_t *nid, int *newnid)
                                               NULL, NULL);
         OBD_FREE(buffer, LNET_NIDSTR_SIZE);
 
-        if (new_stat->nid_proc == NULL) {
-                CERROR("Error making export directory for nid %s\n",
-                       libcfs_nid2str(*nid));
-                GOTO(destroy_new_ns, rc = -ENOMEM);
-        }
+	if (IS_ERR(new_stat->nid_proc)) {
+		rc = PTR_ERR(new_stat->nid_proc);
+		new_stat->nid_proc = NULL;
+		CERROR("%s: cannot create proc entry for export %s: rc = %d\n",
+		       obd->obd_name, libcfs_nid2str(*nid), rc);
+		GOTO(destroy_new_ns, rc);
+	}
 
         entry = lprocfs_add_simple(new_stat->nid_proc, "uuid",
                                    lprocfs_exp_rd_uuid, NULL, new_stat, NULL);
