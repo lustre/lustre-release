@@ -780,7 +780,7 @@ int ll_fsync(struct file *file, struct dentry *dentry, int data);
 #endif
 int ll_do_fiemap(struct inode *inode, struct ll_user_fiemap *fiemap,
               int num_bytes);
-int ll_merge_lvb(struct inode *inode);
+int ll_merge_lvb(const struct lu_env *env, struct inode *inode);
 int ll_get_grouplock(struct inode *inode, struct file *file, unsigned long arg);
 int ll_put_grouplock(struct inode *inode, struct file *file, unsigned long arg);
 int ll_fid2path(struct inode *inode, void *arg);
@@ -1436,9 +1436,9 @@ static inline void cl_isize_write(struct inode *inode, loff_t kms)
 
 #define cl_isize_read(inode)             i_size_read(inode)
 
-static inline int cl_merge_lvb(struct inode *inode)
+static inline int cl_merge_lvb(const struct lu_env *env, struct inode *inode)
 {
-        return ll_merge_lvb(inode);
+	return ll_merge_lvb(env, inode);
 }
 
 #define cl_inode_atime(inode) LTIME_S((inode)->i_atime)

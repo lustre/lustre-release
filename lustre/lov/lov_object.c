@@ -389,12 +389,10 @@ static int lov_attr_get_empty(const struct lu_env *env, struct cl_object *obj,
 static int lov_attr_get_raid0(const struct lu_env *env, struct cl_object *obj,
                               struct cl_attr *attr)
 {
-	struct lov_object       *lov = cl2lov(obj);
+	struct lov_object	*lov = cl2lov(obj);
 	struct lov_layout_raid0 *r0 = lov_r0(lov);
-	struct lov_stripe_md    *lsm = lov->lo_lsm;
-        struct ost_lvb          *lvb = &lov_env_info(env)->lti_lvb;
-        __u64                    kms;
-        int                      result = 0;
+	struct cl_attr		*lov_attr = &r0->lo_attr;
+	int			 result = 0;
 
         ENTRY;
 
@@ -408,38 +406,51 @@ static int lov_attr_get_raid0(const struct lu_env *env, struct cl_object *obj,
 	 * can't go if locks exist. */
 	/* LASSERT(cfs_atomic_read(&lsm->lsm_refc) > 1); */
 
-        if (!r0->lo_attr_valid) {
-                /*
-                 * Fill LVB with attributes already initialized by the upper
-                 * layer.
-                 */
-                cl_attr2lvb(lvb, attr);
-                kms = attr->cat_kms;
+	if (!r0->lo_attr_valid) {
+		struct lov_stripe_md    *lsm = lov->lo_lsm;
+		struct ost_lvb          *lvb = &lov_env_info(env)->lti_lvb;
+		__u64                    kms = 0;
 
-                /*
-                 * XXX that should be replaced with a loop over sub-objects,
-                 * doing cl_object_attr_get() on them. But for now, let's
-                 * reuse old lov code.
-                 */
+		memset(lvb, 0, sizeof(*lvb));
+		/* XXX: timestamps can be negative by sanity:test_39m,
+		 * how can it be? */
+		lvb->lvb_atime = LLONG_MIN;
+		lvb->lvb_ctime = LLONG_MIN;
+		lvb->lvb_mtime = LLONG_MIN;
 
-                /*
-                 * XXX take lsm spin-lock to keep lov_merge_lvb_kms()
-                 * happy. It's not needed, because new code uses
-                 * ->coh_attr_guard spin-lock to protect consistency of
-                 * sub-object attributes.
-                 */
-                lov_stripe_lock(lsm);
-                result = lov_merge_lvb_kms(lsm, lvb, &kms);
-                lov_stripe_unlock(lsm);
-                if (result == 0) {
-                        cl_lvb2attr(attr, lvb);
-                        attr->cat_kms = kms;
-                        r0->lo_attr_valid = 1;
-                        r0->lo_attr = *attr;
-                }
-        } else
-                *attr = r0->lo_attr;
-        RETURN(result);
+		/*
+		 * XXX that should be replaced with a loop over sub-objects,
+		 * doing cl_object_attr_get() on them. But for now, let's
+		 * reuse old lov code.
+		 */
+
+		/*
+		 * XXX take lsm spin-lock to keep lov_merge_lvb_kms()
+		 * happy. It's not needed, because new code uses
+		 * ->coh_attr_guard spin-lock to protect consistency of
+		 * sub-object attributes.
+		 */
+		lov_stripe_lock(lsm);
+		result = lov_merge_lvb_kms(lsm, lvb, &kms);
+		lov_stripe_unlock(lsm);
+		if (result == 0) {
+			cl_lvb2attr(lov_attr, lvb);
+			lov_attr->cat_kms = kms;
+			r0->lo_attr_valid = 1;
+		}
+	}
+	if (result == 0) { /* merge results */
+		attr->cat_blocks = lov_attr->cat_blocks;
+		attr->cat_size = lov_attr->cat_size;
+		attr->cat_kms = lov_attr->cat_kms;
+		if (attr->cat_atime < lov_attr->cat_atime)
+			attr->cat_atime = lov_attr->cat_atime;
+		if (attr->cat_ctime < lov_attr->cat_ctime)
+			attr->cat_ctime = lov_attr->cat_ctime;
+		if (attr->cat_mtime < lov_attr->cat_mtime)
+			attr->cat_mtime = lov_attr->cat_mtime;
+	}
+	RETURN(result);
 }
 
 const static struct lov_layout_operations lov_dispatch[] = {

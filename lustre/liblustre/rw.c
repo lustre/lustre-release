@@ -203,38 +203,41 @@ static int llu_glimpse_callback(struct ldlm_lock *lock, void *reqp)
         return rc;
 }
 
-int llu_merge_lvb(struct inode *inode)
+int llu_merge_lvb(const struct lu_env *env, struct inode *inode)
 {
 	struct llu_inode_info *lli = llu_i2info(inode);
-	struct llu_sb_info *sbi = llu_i2sbi(inode);
+	struct cl_object *obj = lli->lli_clob;
 	struct intnl_stat *st = llu_i2stat(inode);
+	struct cl_attr *attr = ccc_env_thread_attr(env);
 	struct ost_lvb lvb;
-	struct lov_stripe_md *lsm;
 	int rc;
 	ENTRY;
 
-	lsm = ccc_inode_lsm_get(inode);
-	if (lsm == NULL)
-		RETURN(0);
+	/* merge timestamps the most recently obtained from mds with
+	   timestamps obtained from osts */
+	LTIME_S(inode->i_atime) = lli->lli_lvb.lvb_atime;
+	LTIME_S(inode->i_mtime) = lli->lli_lvb.lvb_mtime;
+	LTIME_S(inode->i_ctime) = lli->lli_lvb.lvb_ctime;
 
-	lov_stripe_lock(lsm);
-        inode_init_lvb(inode, &lvb);
-        /* merge timestamps the most resently obtained from mds with
-           timestamps obtained from osts */
-        lvb.lvb_atime = lli->lli_lvb.lvb_atime;
-        lvb.lvb_mtime = lli->lli_lvb.lvb_mtime;
-        lvb.lvb_ctime = lli->lli_lvb.lvb_ctime;
-	rc = obd_merge_lvb(sbi->ll_dt_exp, lsm, &lvb, 0);
-        st->st_size = lvb.lvb_size;
-        st->st_blocks = lvb.lvb_blocks;
-        /* handle st_blocks overflow gracefully */
-        if (st->st_blocks < lvb.lvb_blocks)
-                st->st_blocks = ~0UL;
-        st->st_mtime = lvb.lvb_mtime;
-        st->st_atime = lvb.lvb_atime;
-        st->st_ctime = lvb.lvb_ctime;
-	lov_stripe_unlock(lsm);
-	ccc_inode_lsm_put(inode, lsm);
+	inode_init_lvb(inode, &lvb);
+
+	cl_object_attr_lock(obj);
+	rc = cl_object_attr_get(env, obj, attr);
+	cl_object_attr_unlock(obj);
+	if (rc == 0) {
+		if (lvb.lvb_atime < attr->cat_atime)
+			lvb.lvb_atime = attr->cat_atime;
+		if (lvb.lvb_ctime < attr->cat_ctime)
+			lvb.lvb_ctime = attr->cat_ctime;
+		if (lvb.lvb_mtime < attr->cat_mtime)
+			lvb.lvb_mtime = attr->cat_mtime;
+
+		st->st_size = lvb.lvb_size;
+		st->st_blocks = lvb.lvb_blocks;
+		st->st_mtime = lvb.lvb_mtime;
+		st->st_atime = lvb.lvb_atime;
+		st->st_ctime = lvb.lvb_ctime;
+	}
 
 	RETURN(rc);
 }

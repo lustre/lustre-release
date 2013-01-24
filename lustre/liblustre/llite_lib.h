@@ -329,7 +329,7 @@ static inline struct ext2_dirent *ext2_next_entry(struct ext2_dirent *p)
         return (struct ext2_dirent*)((char*) p + le16_to_cpu(p->rec_len));
 }
 
-int llu_merge_lvb(struct inode *inode);
+int llu_merge_lvb(const struct lu_env *env, struct inode *inode);
 
 static inline void inode_init_lvb(struct inode *inode, struct ost_lvb *lvb)
 {
@@ -415,9 +415,9 @@ static inline void cl_isize_unlock(struct inode *inode)
 {
 }
 
-static inline int cl_merge_lvb(struct inode *inode)
+static inline int cl_merge_lvb(const struct lu_env *env, struct inode *inode)
 {
-        return llu_merge_lvb(inode);
+	return llu_merge_lvb(env, inode);
 }
 
 #define cl_inode_atime(inode) (llu_i2stat(inode)->st_atime)
