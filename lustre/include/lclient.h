@@ -99,7 +99,6 @@ struct ccc_io {
 
         union {
                 struct {
-                        int                        cui_locks_released;
                         enum ccc_setattr_lock_type cui_local_lock;
                 } setattr;
         } u;

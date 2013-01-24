@@ -1475,9 +1475,6 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 			inode_dio_write_done(inode);
 		mutex_unlock(&inode->i_mutex);
 		down_write(&lli->lli_trunc_sem);
-		mutex_lock(&inode->i_mutex);
-		if (ia_valid & ATTR_SIZE)
-			inode_dio_wait(inode);
 	}
 
 	/* We need a steady stripe configuration for setattr to avoid
@@ -1535,13 +1532,17 @@ out:
                 }
                 ll_finish_md_op_data(op_data);
         }
-        if (!S_ISDIR(inode->i_mode))
+	if (!S_ISDIR(inode->i_mode)) {
 		up_write(&lli->lli_trunc_sem);
+		mutex_lock(&inode->i_mutex);
+		if (ia_valid & ATTR_SIZE)
+			inode_dio_wait(inode);
+	}
 
-        ll_stats_ops_tally(ll_i2sbi(inode), (ia_valid & ATTR_SIZE) ?
-                           LPROC_LL_TRUNC : LPROC_LL_SETATTR, 1);
+	ll_stats_ops_tally(ll_i2sbi(inode), (ia_valid & ATTR_SIZE) ?
+			LPROC_LL_TRUNC : LPROC_LL_SETATTR, 1);
 
-        return rc;
+	return rc;
 }
 
 int ll_setattr(struct dentry *de, struct iattr *attr)
