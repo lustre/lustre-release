@@ -1054,11 +1054,9 @@ static int lustre_osp_connect(struct obd_device *osp)
 
 	data->ocd_connect_flags = OBD_CONNECT_VERSION | OBD_CONNECT_INDEX;
 	data->ocd_version = LUSTRE_VERSION_CODE;
-	data->ocd_ibits_known = MDS_INODELOCK_UPDATE;
-	data->ocd_connect_flags |= OBD_CONNECT_ACL | OBD_CONNECT_IBITS |
-				   OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID |
-				   OBD_CONNECT_AT | OBD_CONNECT_FULL20 |
-				   OBD_CONNECT_LVB_TYPE |
+	data->ocd_connect_flags |= OBD_CONNECT_MDS_MDS | OBD_CONNECT_FID |
+				   OBD_CONNECT_AT | OBD_CONNECT_LRU_RESIZE |
+				   OBD_CONNECT_FULL20 | OBD_CONNECT_LVB_TYPE |
 				   OBD_CONNECT_LIGHTWEIGHT;
 	OBD_ALLOC_PTR(uuid);
 	if (uuid == NULL)
