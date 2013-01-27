@@ -318,6 +318,7 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
         static char           dotdot[] = "..";
         struct md_op_data     *op_data;
         int                   rc;
+	int		      lmmsize;
         ENTRY;
 
         LASSERT(dir && S_ISDIR(dir->i_mode));
@@ -327,8 +328,12 @@ static struct dentry *ll_get_parent(struct dentry *dchild)
         CDEBUG(D_INFO, "getting parent for (%lu,"DFID")\n",
                         dir->i_ino, PFID(ll_inode2fid(dir)));
 
-        op_data = ll_prep_md_op_data(NULL, dir, NULL, dotdot,
-                                     strlen(dotdot), 0,
+	rc = ll_get_max_mdsize(sbi, &lmmsize);
+	if (rc != 0)
+		RETURN(ERR_PTR(rc));
+
+	op_data = ll_prep_md_op_data(NULL, dir, NULL, dotdot,
+				     strlen(dotdot), lmmsize,
                                      LUSTRE_OPC_ANY, NULL);
         if (IS_ERR(op_data))
                 RETURN((void *)op_data);
