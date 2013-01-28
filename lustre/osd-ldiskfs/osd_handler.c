@@ -623,12 +623,8 @@ static int osd_param_is_not_sane(const struct osd_device *dev,
 /*
  * Concurrency: shouldn't matter.
  */
-#ifdef HAVE_LDISKFS_JOURNAL_CALLBACK_ADD
 static void osd_trans_commit_cb(struct super_block *sb,
-                                struct journal_callback *jcb, int error)
-#else
-static void osd_trans_commit_cb(struct journal_callback *jcb, int error)
-#endif
+                                struct ldiskfs_journal_cb_entry *jcb, int error)
 {
         struct osd_thandle *oh = container_of0(jcb, struct osd_thandle, ot_jcb);
         struct thandle     *th  = &oh->ot_super;
@@ -825,7 +821,7 @@ static int osd_trans_stop(const struct lu_env *env, struct thandle *th)
                  * notice we don't do this in osd_trans_start()
                  * as underlying transaction can change during truncate
                  */
-                osd_journal_callback_set(hdl, osd_trans_commit_cb,
+                ldiskfs_journal_callback_add(hdl, osd_trans_commit_cb,
                                          &oh->ot_jcb);
 
                 LASSERT(oti->oti_txns == 1);

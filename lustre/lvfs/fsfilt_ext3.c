@@ -71,25 +71,14 @@
 #define fsfilt_log_start_commit(journal, tid) jbd2_log_start_commit(journal, tid)
 #define fsfilt_log_wait_commit(journal, tid) jbd2_log_wait_commit(journal, tid)
 
-#ifdef HAVE_EXT4_JOURNAL_CALLBACK_ADD
-# define journal_callback ext4_journal_cb_entry
-# define fsfilt_journal_callback_set(handle, func, jcb) \
-         ext4_journal_callback_add(handle, func, jcb)
-#elif defined(HAVE_JBD2_JOURNAL_CALLBACK_SET)
-# define fsfilt_journal_callback_set(handle, func, jcb) \
-         jbd2_journal_callback_set(handle, func, jcb)
-#else
-# error missing journal commit callback
-#endif /* HAVE_EXT4_JOURNAL_CALLBACK_ADD */
-
 static cfs_mem_cache_t *fcb_cache;
 
 struct fsfilt_cb_data {
-        struct journal_callback cb_jcb; /* jbd private data - MUST BE FIRST */
-        fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
-        struct obd_device *cb_obd;      /* MDS/OBD completion device */
-        __u64 cb_last_rcvd;             /* MDS/OST last committed operation */
-        void *cb_data;                  /* MDS/OST completion function data */
+	struct ext4_journal_cb_entry cb_jcb; /* private data - MUST BE FIRST */
+	fsfilt_cb_t cb_func;            /* MDS/OBD completion function */
+	struct obd_device *cb_obd;      /* MDS/OBD completion device */
+	__u64 cb_last_rcvd;             /* MDS/OST last committed operation */
+	void *cb_data;                  /* MDS/OST completion function data */
 };
 
 static char *fsfilt_ext3_get_label(struct super_block *sb)

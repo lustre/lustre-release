@@ -54,14 +54,6 @@
 
 #include <ldiskfs/ldiskfs.h>
 #include <ldiskfs/ldiskfs_jbd2.h>
-#ifdef HAVE_LDISKFS_JOURNAL_CALLBACK_ADD
-# define journal_callback ldiskfs_journal_cb_entry
-# define osd_journal_callback_set(handle, func, jcb) \
-         ldiskfs_journal_callback_add(handle, func, jcb)
-#else
-# define osd_journal_callback_set(handle, func, jcb) \
-         jbd2_journal_callback_set(handle, func, jcb)
-#endif
 
 /* fsfilt_{get|put}_ops */
 #include <lustre_fsfilt.h>
@@ -331,7 +323,7 @@ enum {
 struct osd_thandle {
         struct thandle          ot_super;
         handle_t               *ot_handle;
-        struct journal_callback ot_jcb;
+        struct ldiskfs_journal_cb_entry ot_jcb;
         cfs_list_t              ot_dcb_list;
         /* Link to the device, for debugging. */
         struct lu_ref_link     *ot_dev_link;

@@ -616,8 +616,6 @@ fi
 #
 AC_DEFUN([LB_LDISKFS_DEFINE_OPTIONS],
 [
-LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET
-
 AC_DEFINE(CONFIG_LDISKFS_FS_XATTR, 1,
 	[enable extended attributes for ldiskfs])
 AC_DEFINE(CONFIG_LDISKFS_FS_POSIX_ACL, 1,
@@ -631,20 +629,6 @@ AC_DEFINE(CONFIG_LDISKFSDEV_FS_XATTR, 1,
 AC_DEFINE(CONFIG_LDISKFSDEV_FS_SECURITY, 1,
 	[enable fs security for ldiskfs])
 ])
-
-#
-# Check for jbd2_journal_callback_set(), which is needed for commit
-# callbacks.  When LU-433 lands jbd2_journal_callback_set() will only
-# remain for legacy reasons and AC_MSG_ERROR can be removed.
-#
-AC_DEFUN([LB_LDISKFS_JBD2_JOURNAL_CALLBACK_SET],
-[
-	LB_CHECK_SYMBOL_EXPORT([jbd2_journal_callback_set],
-		[fs/jbd2/journal.c],
-		[AC_DEFINE(HAVE_JBD2_JOURNAL_CALLBACK_SET, 1,
-			[kernel exports jbd2_journal_callback_set])])
-])
-
 
 AC_DEFUN([LB_LDISKFS_SYMVERS],
 [
