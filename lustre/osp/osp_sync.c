@@ -844,7 +844,7 @@ static int osp_sync_thread(void *_arg)
 		RETURN(rc);
 	}
 
-	sprintf(pname, "osp-syn-%u\n", d->opd_index);
+	sprintf(pname, "osp-syn-%u", d->opd_index);
 	cfs_daemonize(pname);
 
 	spin_lock(&d->opd_syn_lock);

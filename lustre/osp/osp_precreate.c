@@ -881,7 +881,7 @@ static int osp_precreate_thread(void *_arg)
 
 	ENTRY;
 
-	sprintf(pname, "osp-pre-%u\n", d->opd_index);
+	sprintf(pname, "osp-pre-%u", d->opd_index);
 	cfs_daemonize(pname);
 
 	rc = lu_env_init(&env, d->opd_dt_dev.dd_lu_dev.ld_type->ldt_ctx_tags);
