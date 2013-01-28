@@ -88,14 +88,6 @@ static inline char *fsfilt_get_label(struct obd_device *obd,
 }
 
 #define FSFILT_OP_UNLINK                1
-#define FSFILT_OP_RMDIR                 2
-#define FSFILT_OP_RENAME                3
-#define FSFILT_OP_CREATE                4
-#define FSFILT_OP_MKDIR                 5
-#define FSFILT_OP_SYMLINK               6
-#define FSFILT_OP_MKNOD                 7
-#define FSFILT_OP_SETATTR               8
-#define FSFILT_OP_LINK                  9
 #define FSFILT_OP_CANCEL_UNLINK         10
 
 #define __fsfilt_check_slow(obd, start, msg)                              \

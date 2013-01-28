@@ -135,46 +135,12 @@ static void *fsfilt_ext3_start(struct inode *inode, int op, void *desc_private,
         }
 
         switch(op) {
-        case FSFILT_OP_RMDIR:
         case FSFILT_OP_UNLINK:
 		/* delete one file + create/update logs for each stripe */
 		nblocks += EXT3_DELETE_TRANS_BLOCKS(inode->i_sb);
 		nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
 			    FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
 		break;
-        case FSFILT_OP_RENAME:
-                /* modify additional directory */
-                nblocks += FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb);
-                /* no break */
-        case FSFILT_OP_SYMLINK:
-                /* additional block + block bitmap + GDT for long symlink */
-                nblocks += 3;
-                /* no break */
-        case FSFILT_OP_CREATE: {
-                /* no break */
-        }
-        case FSFILT_OP_MKDIR:
-        case FSFILT_OP_MKNOD:
-                /* modify one inode + block bitmap + GDT */
-                nblocks += 3;
-                /* no break */
-        case FSFILT_OP_LINK:
-                /* modify parent directory */
-		nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-			   EXT3_DATA_TRANS_BLOCKS(inode->i_sb);
-                /* create/update logs for each stripe */
-                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
-                break;
-        case FSFILT_OP_SETATTR:
-                /* Setattr on inode */
-		nblocks += 1;
-		nblocks += EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-			   EXT3_DATA_TRANS_BLOCKS(inode->i_sb);
-                /* quota chown log for each stripe */
-                nblocks += (EXT3_INDEX_EXTRA_TRANS_BLOCKS +
-                            FSFILT_SINGLEDATA_TRANS_BLOCKS(inode->i_sb)) * logs;
-                break;
         case FSFILT_OP_CANCEL_UNLINK:
 		LASSERT(logs == 1);
 
