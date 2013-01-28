@@ -68,14 +68,12 @@ static int osc_wr_active(struct file *file, const char *buffer,
         if (val < 0 || val > 1)
                 return -ERANGE;
 
-        LPROCFS_CLIMP_CHECK(dev);
         /* opposite senses */
         if (dev->u.cli.cl_import->imp_deactive == val)
                 rc = ptlrpc_set_import_active(dev->u.cli.cl_import, val);
         else
                 CDEBUG(D_CONFIG, "activate %d: ignoring repeat request\n", val);
 
-        LPROCFS_CLIMP_EXIT(dev);
         return count;
 }
 

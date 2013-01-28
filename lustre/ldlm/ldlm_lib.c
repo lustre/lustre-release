@@ -488,12 +488,12 @@ int client_connect_import(const struct lu_env *env,
                           struct obd_device *obd, struct obd_uuid *cluuid,
                           struct obd_connect_data *data, void *localdata)
 {
-        struct client_obd *cli = &obd->u.cli;
-        struct obd_import *imp = cli->cl_import;
-        struct obd_connect_data *ocd;
-        struct lustre_handle conn = { 0 };
-        int rc;
-        ENTRY;
+	struct client_obd       *cli    = &obd->u.cli;
+	struct obd_import       *imp    = cli->cl_import;
+	struct obd_connect_data *ocd;
+	struct lustre_handle    conn    = { 0 };
+	int                     rc;
+	ENTRY;
 
         *exp = NULL;
 	down_write(&cli->cl_sem);
@@ -547,7 +547,7 @@ out_ldlm:
 out_sem:
 	up_write(&cli->cl_sem);
 
-        return rc;
+	return rc;
 }
 EXPORT_SYMBOL(client_connect_import);
 
