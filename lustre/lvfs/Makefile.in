@@ -1,7 +1,7 @@
 MODULES := lvfs
 @LDISKFS_ENABLED_TRUE@MODULES += fsfilt_ldiskfs
 
-lvfs-objs := lvfs_common.o lvfs_linux.o fsfilt.o lvfs_lib.o
+lvfs-objs := lvfs_linux.o fsfilt.o lvfs_lib.o
 
 @LDISKFS_ENABLED_TRUE@fsfilt_ldiskfs-objs := fsfilt-ldiskfs.o
 
