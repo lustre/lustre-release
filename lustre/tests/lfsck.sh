@@ -177,28 +177,29 @@ get_files() {
 
 # Remove objects associated with files.
 remove_objects() {
-    local node=$1
-    shift
-    local ostdev=$1
-    shift
-    local group=$1
-    shift
-    local objids="$@"
-    local tmp
-    local i
-    local rc
+	local ostdev=$1
+	shift
+	local group=$1
+	shift
+	local objids="$@"
+	local facet=ost$((OSTIDX + 1))
+	local mntpt=$(facet_mntpt $facet)
+	local opts=$OST_MOUNT_OPTS
+	local i
+	local rc
 
-    echo "removing objects from $ostdev on $facet: $objids"
-    tmp=$(mktemp $SHARED_DIRECTORY/debugfs.XXXXXXXXXX)
-    for i in $objids; do
-        echo "rm O/$group/d$((i % 32))/$i" >> $tmp
-    done
-
-    do_node $node "$DEBUGFS -w -f $tmp $ostdev"
-    rc=${PIPESTATUS[0]}
-    rm -f $tmp
-
-    return $rc
+	echo "removing objects from $ostdev on $facet: $objids"
+	if ! do_facet $facet test -b $ostdev; then
+		opts=$(csa_add "$opts" -o loop)
+	fi
+	mount -t $(facet_fstype $facet) $opts $ostdev $mntpt ||
+		return $?
+	rc=0;
+	for i in $objids; do
+		rm $mntpt/O/$group/d$((i % 32))/$i || { rc=$?; break; }
+	done
+	umount -f $mntpt || return $?
+	return $rc
 }
 
 # Remove files from MDS.
@@ -232,7 +233,7 @@ if is_empty_fs $MOUNT; then
 
     # get the node name and target device for the OST with index $OSTIDX
     OSTNODE=$(get_ost_node $OSTIDX) || error "get_ost_node by index $OSTIDX failed"
-    OSTDEV=$(get_ost_dev $OSTNODE $OSTIDX) || \
+    OSTDEV=$(get_ost_dev $OSTNODE $OSTIDX) ||
 	error "get_ost_dev $OSTNODE $OSTIDX failed"
 
     # get the file names to be duplicated on the MDS
@@ -244,14 +245,14 @@ if is_empty_fs $MOUNT; then
 
     # remove objects associated with files in group $OBJGRP
     # on the OST with index $OSTIDX
-    remove_objects $OSTNODE $OSTDEV $OBJGRP $OST_REMOVE || \
+    remove_objects $OSTDEV $OBJGRP $OST_REMOVE ||
         error "removing objects failed"
 
     # remove files from MDS
     remove_files $SINGLEMDS $MDTDEV $MDS_REMOVE || error "removing files failed"
 
     # create EAs on files so objects are referenced from different files
-    duplicate_files $SINGLEMDS $MDTDEV $MDS_DUPE || \
+    duplicate_files $SINGLEMDS $MDTDEV $MDS_DUPE ||
         error "duplicating files failed"
     FSCK_MAX_ERR=1   # file system errors corrected
 else # is_empty_fs $MOUNT

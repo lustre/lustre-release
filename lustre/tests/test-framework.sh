@@ -5711,7 +5711,7 @@ remove_mdt_files() {
 
 	echo "removing files from $mdtdev on $facet: $files"
 	if [ $(facet_fstype $facet) == ldiskfs ] &&
-	   ! do_facet $facet test -b ${!dev}; then
+	   ! do_facet $facet test -b $mdtdev; then
 		opts=$(csa_add "$opts" -o loop)
 	fi
 	mount -t $(facet_fstype $facet) $opts $mdtdev $mntpt ||
@@ -5735,7 +5735,7 @@ duplicate_mdt_files() {
 	echo "duplicating files on $mdtdev on $facet: $files"
 	mkdir -p $mntpt || return $?
 	if [ $(facet_fstype $facet) == ldiskfs ] &&
-	   ! do_facet $facet test -b ${!dev}; then
+	   ! do_facet $facet test -b $mdtdev; then
 		opts=$(csa_add "$opts" -o loop)
 	fi
 	mount -t $(facet_fstype $facet) $opts $mdtdev $mntpt ||

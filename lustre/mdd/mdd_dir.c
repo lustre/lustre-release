@@ -1315,21 +1315,12 @@ static int mdd_create_data(const struct lu_env *env, struct md_object *pobj,
 	       spec->u.sp_ea.eadata, spec->u.sp_ea.eadatalen,
 	       spec->sp_cr_flags, spec->no_create);
 
-	if (spec->no_create) {
-		/* replay case */
+	if (spec->no_create || spec->sp_cr_flags & MDS_OPEN_HAS_EA) {
+		/* replay case or lfs setstripe */
 		buf = mdd_buf_get_const(env, spec->u.sp_ea.eadata,
 					spec->u.sp_ea.eadatalen);
-	} else  if (!(spec->sp_cr_flags & MDS_OPEN_HAS_OBJS)) {
-		if (spec->sp_cr_flags & MDS_OPEN_HAS_EA) {
-			/* lfs setstripe */
-			buf = mdd_buf_get_const(env, spec->u.sp_ea.eadata,
-						spec->u.sp_ea.eadatalen);
-		} else {
-			buf = &LU_BUF_NULL;
-		}
 	} else {
-		/* MDS_OPEN_HAS_OBJS is not used anymore ? */
-		LBUG();
+		buf = &LU_BUF_NULL;
 	}
 
 	rc = dt_declare_xattr_set(env, mdd_object_child(son), buf,
