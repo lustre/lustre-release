@@ -3440,6 +3440,9 @@ test_65() { # LU-2237
 run_test 65 "re-create the lost last_rcvd file when server mount"
 
 test_66() {
+	[[ $(lustre_version_code mgs) -ge $(version_code 2.3.59) ]] ||
+		{ skip "Need MGS version at least 2.3.59"; return 0; }
+
 	setup
 	local OST1_NID=$(do_facet ost1 $LCTL list_nids | head -1)
 	local MDS_NID=$(do_facet $SINGLEMDS $LCTL list_nids | head -1)
