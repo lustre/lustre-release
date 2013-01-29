@@ -526,7 +526,7 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
         </tgroup>
       </informaltable>
       <note>
-        <para>Lustre tunables are not always accessible using the procfs interface, as it is platform-specific. As a solution, lctl {get,set,list}_param has been introduced as a platform-independent interface to the Lustre tunables. Avoid direct references to /proc/{fs,sys}/{lustre,lnet}. For future portability, use lctl {get,set,list}_param instead.</para>
+        <para>Lustre tunables are not always accessible using the procfs interface, as it is platform-specific. As a solution, <literal>lctl {get,set,list}_param</literal> has been introduced as a platform-independent interface to the Lustre tunables. Avoid direct references to <literal>/proc/{fs,sys}/{lustre,lnet}</literal>. For future portability, use <literal>lctl {get,set,list}_param</literal> instead.</para>
       </note>
       <para><emphasis role="bold">Virtual Block Device Operations</emphasis></para>
       <para>Lustre can emulate a virtual block device upon a regular file. This emulation is needed when you are trying to set up a swap space via the file.</para>
@@ -547,10 +547,10 @@ $ lctl conf_param testfs.llite.max_read_ahead_mb=16 </screen>
           <tbody>
             <row>
               <entry>
-                <para>blockdev_attach <replaceable>filename</replaceable> <replaceable>/dev/lloop_device</replaceable></para>
+                <para><literal>blockdev_attach <replaceable>filename</replaceable> <replaceable>/dev/lloop_device</replaceable></literal></para>
               </entry>
               <entry>
-                <para> Attaches a regular Lustre file to a block device. If the device node does not exist, <literal>lctl</literal> creates it. We recommend that you create the device node by <literal>lctl</literal> since the emulator uses a dynamical major number.</para>
+                <para> Attaches a regular Lustre file to a block device. If the device node does not exist, <literal>lctl</literal> creates it. It is recommend that a device node is created by <literal>lctl</literal> since the emulator uses a dynamical major number.</para>
               </entry>
             </row>
             <row>
