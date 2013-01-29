@@ -1,0 +1,63 @@
+This directory contains the patches needed to convert ext4 into ldiskfs.
+
+We need to be able to create a version of ldiskfs from the ext4 source
+code found in multiple versions of the kernel.  That ext4 source code can
+vary quite a bit between different versions of the kernel, which means
+that it is impossible to maintain one set of patches that will cleanly
+apply to all versions of ext4.
+
+Where to put a new patch
+------------------------
+
+Therefore, we split the patches into multiple subdirectories in the
+"patches" directory.  These subdirecotories are named after the
+version of the Linux distribution against which they were developed.
+For instance, "patches/rhel6.3" and "patches/sles11sp1".
+
+When creating a new patch, put it in the subdirectory for the
+distribution for which it was first created.
+
+Sharing patches
+---------------
+
+Often a patch will apply cleanly to multiple kernel's ext4 code.
+
+If a patch from a different distribution's subdirectory applies cleanly,
+it should be included directly in that distribution's series file rather
+than making a copy of the patch.  As an example, lets consider two
+distribution directories:
+
+  patches/rhel6.3
+  patches/sles11sp1
+
+If a patch named "patches/rhel6.3/foo.patch" applies cleanly and is
+needed by the sles11sp1 ext4 code, the sles11sp1 series file should
+directly list "patches/rhel6.3/foo.patch".  A copy of the same patch
+should only be made when the patch will not apply without changes.
+
+Refreshing patches for a new kernel/distribution
+------------------------------------------------
+
+When adding support for a new OS distribution release and its new
+version of the kernel, it is common to begin by copying the patch
+series file from a similar OS release.  For instance, when beginning
+to add support for the RHEL 6.4 kernel, one might copy the
+series/ldiskfs-2.6-rhel6.3.series file to the new name
+series/ldiskfs-2.6-rhel6.4.series.
+
+When applying that series, some patches are likely to succeed and others
+to fail to apply.  When a patch fails to apply, a copy of it should be
+made into a new distribution subdirectory before refreshing that patch.
+In this way, support for the new kernel may be added without breaking
+support for the previous kernel.  As an example, if the patch:
+
+  patches/rhel6.3/foo.patch
+
+fails to apply as part of series/ldiskfs-2.6-rhel6.4.series, the developer
+would copy the patch to:
+
+  patches/rhel6.4/foo.patch
+
+The next step would be to edit series/ldiskfs-2.6-rhel6.4.series to point
+to the new patch.  Finally, the developer may edit files and "quilt refresh"
+the new patch.
