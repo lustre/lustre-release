@@ -108,7 +108,7 @@
 #include <lustre_lite.h>
 #include "llite_internal.h"
 
-#define LLOOP_MAX_SEGMENTS        PTLRPC_MAX_BRW_PAGES
+#define LLOOP_MAX_SEGMENTS        LNET_MAX_IOV
 
 /* Possible states of device */
 enum {

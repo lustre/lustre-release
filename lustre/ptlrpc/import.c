@@ -834,10 +834,9 @@ static int ptlrpc_connect_interpret(const struct lu_env *env,
 		       imp->imp_obd->obd_name);
 		GOTO(out, rc = -ENODEV);
 	}
-	old_connect_flags = exp->exp_connect_flags;
-	exp->exp_connect_flags = ocd->ocd_connect_flags;
-	imp->imp_obd->obd_self_export->exp_connect_flags =
-						ocd->ocd_connect_flags;
+	old_connect_flags = exp_connect_flags(exp);
+	exp->exp_connect_data = *ocd;
+	imp->imp_obd->obd_self_export->exp_connect_data = *ocd;
 	class_export_put(exp);
 
 	obd_import_event(imp->imp_obd, imp, IMP_EVENT_OCD);
@@ -1093,12 +1092,12 @@ finish:
                          imp->imp_connect_op == MGS_CONNECT)
                         cli->cl_max_pages_per_rpc = 1;
 
-                /* Reset ns_connect_flags only for initial connect. It might be
-                 * changed in while using FS and if we reset it in reconnect
-                 * this leads to losing user settings done before such as
-                 * disable lru_resize, etc. */
-                if (old_connect_flags != exp->exp_connect_flags ||
-                    aa->pcaa_initial_connect) {
+		/* Reset ns_connect_flags only for initial connect. It might be
+		 * changed in while using FS and if we reset it in reconnect
+		 * this leads to losing user settings done before such as
+		 * disable lru_resize, etc. */
+		if (old_connect_flags != exp_connect_flags(exp) ||
+		    aa->pcaa_initial_connect) {
                         CDEBUG(D_HA, "%s: Resetting ns_connect_flags to server "
                                "flags: "LPX64"\n", imp->imp_obd->obd_name,
                               ocd->ocd_connect_flags);

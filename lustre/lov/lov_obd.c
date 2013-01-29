@@ -721,16 +721,16 @@ static void __lov_del_obd(struct obd_device *obd, struct lov_tgt_desc *tgt)
 
 void lov_fix_desc_stripe_size(__u64 *val)
 {
-        if (*val < PTLRPC_MAX_BRW_SIZE) {
-                LCONSOLE_WARN("Increasing default stripe size to min %u\n",
-                              PTLRPC_MAX_BRW_SIZE);
-                *val = PTLRPC_MAX_BRW_SIZE;
-        } else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
-                *val &= ~(LOV_MIN_STRIPE_SIZE - 1);
-                LCONSOLE_WARN("Changing default stripe size to "LPU64" (a "
-                              "multiple of %u)\n",
-                              *val, LOV_MIN_STRIPE_SIZE);
-        }
+	if (*val < LOV_DEFAULT_STRIPE_SIZE) {
+		LCONSOLE_WARN("Increasing default stripe size to min %u\n",
+			      LOV_DEFAULT_STRIPE_SIZE);
+		*val = LOV_DEFAULT_STRIPE_SIZE;
+	} else if (*val & (LOV_MIN_STRIPE_SIZE - 1)) {
+		*val &= ~(LOV_MIN_STRIPE_SIZE - 1);
+		LCONSOLE_WARN("Changing default stripe size to "LPU64" (a "
+			      "multiple of %u)\n",
+			      *val, LOV_MIN_STRIPE_SIZE);
+	}
 }
 
 void lov_fix_desc_stripe_count(__u32 *val)
@@ -2524,7 +2524,7 @@ static int lov_get_info(const struct lu_env *env, struct obd_export *exp,
                 if (!tgt || !tgt->ltd_exp)
                         GOTO(out, rc = -ESRCH);
 
-                *((__u64*)val) = tgt->ltd_exp->exp_connect_flags;
+		*((__u64 *)val) = exp_connect_flags(tgt->ltd_exp);
                 GOTO(out, rc = 0);
         } else if (KEY_IS(KEY_TGT_COUNT)) {
                 *((int *)val) = lov->desc.ld_tgt_count;

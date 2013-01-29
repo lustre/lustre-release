@@ -1224,7 +1224,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
                 GOTO(out, rc = -EFAULT);
         }
 
-        if (req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS) {
+	if (exp_connect_flags(req->rq_export) & OBD_CONNECT_IBITS) {
                 if (unlikely(dlm_req->lock_desc.l_resource.lr_type ==
                              LDLM_PLAIN)) {
                         DEBUG_REQ(D_ERROR, req,
@@ -1245,7 +1245,7 @@ int ldlm_handle_enqueue0(struct ldlm_namespace *ns,
 
         /* INODEBITS_INTEROP: Perform conversion from plain lock to
          * inodebits lock if client does not support them. */
-        if (!(req->rq_export->exp_connect_flags & OBD_CONNECT_IBITS) &&
+	if (!(exp_connect_flags(req->rq_export) & OBD_CONNECT_IBITS) &&
             (dlm_req->lock_desc.l_resource.lr_type == LDLM_PLAIN)) {
                 dlm_req->lock_desc.l_resource.lr_type = LDLM_IBITS;
                 dlm_req->lock_desc.l_policy_data.l_inodebits.bits =

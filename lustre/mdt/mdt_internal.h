@@ -557,8 +557,8 @@ static inline int req_is_replay(struct ptlrpc_request *req)
 
 static inline __u64 mdt_conn_flags(struct mdt_thread_info *info)
 {
-        LASSERT(info->mti_exp);
-        return info->mti_exp->exp_connect_flags;
+	LASSERT(info->mti_exp);
+	return exp_connect_flags(info->mti_exp);
 }
 
 static inline void mdt_object_get(const struct lu_env *env,
@@ -1009,20 +1009,20 @@ void mdt_ck_timer_callback(unsigned long castmeharder);
 int mdt_capa_keys_init(const struct lu_env *env, struct mdt_device *mdt);
 
 static inline void mdt_set_capainfo(struct mdt_thread_info *info, int offset,
-                                    const struct lu_fid *fid,
-                                    struct lustre_capa *capa)
+				    const struct lu_fid *fid,
+				    struct lustre_capa *capa)
 {
-        struct md_capainfo *ci;
+	struct md_capainfo *ci;
 
 	LASSERT(offset >= 0 && offset < MD_CAPAINFO_MAX);
-        if (!info->mti_mdt->mdt_opts.mo_mds_capa ||
-            !(info->mti_exp->exp_connect_flags & OBD_CONNECT_MDS_CAPA))
-                return;
+	if (!info->mti_mdt->mdt_opts.mo_mds_capa ||
+	    !(exp_connect_flags(info->mti_exp) & OBD_CONNECT_MDS_CAPA))
+		return;
 
-        ci = md_capainfo(info->mti_env);
-        LASSERT(ci);
-        ci->mc_fid[offset]  = *fid;
-        ci->mc_capa[offset] = capa;
+	ci = md_capainfo(info->mti_env);
+	LASSERT(ci);
+	ci->mc_fid[offset]  = *fid;
+	ci->mc_capa[offset] = capa;
 }
 
 static inline void mdt_dump_capainfo(struct mdt_thread_info *info)

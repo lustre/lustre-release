@@ -216,9 +216,9 @@ static int osc_getattr_interpret(const struct lu_env *env,
                 CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
                 lustre_get_wire_obdo(aa->aa_oi->oi_oa, &body->oa);
 
-                /* This should really be sent by the OST */
-                aa->aa_oi->oi_oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
-                aa->aa_oi->oi_oa->o_valid |= OBD_MD_FLBLKSZ;
+		/* This should really be sent by the OST */
+		aa->aa_oi->oi_oa->o_blksize = DT_MAX_BRW_SIZE;
+		aa->aa_oi->oi_oa->o_valid |= OBD_MD_FLBLKSZ;
         } else {
                 CDEBUG(D_INFO, "can't unpack ost_body\n");
                 rc = -EPROTO;
@@ -295,9 +295,9 @@ static int osc_getattr(const struct lu_env *env, struct obd_export *exp,
         CDEBUG(D_INODE, "mode: %o\n", body->oa.o_mode);
         lustre_get_wire_obdo(oinfo->oi_oa, &body->oa);
 
-        /* This should really be sent by the OST */
-        oinfo->oi_oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
-        oinfo->oi_oa->o_valid |= OBD_MD_FLBLKSZ;
+	/* This should really be sent by the OST */
+	oinfo->oi_oa->o_blksize = exp_brw_size(exp);
+	oinfo->oi_oa->o_valid |= OBD_MD_FLBLKSZ;
 
         EXIT;
  out:
@@ -478,9 +478,9 @@ int osc_real_create(struct obd_export *exp, struct obdo *oa,
 
         lustre_get_wire_obdo(oa, &body->oa);
 
-        /* This should really be sent by the OST */
-        oa->o_blksize = PTLRPC_MAX_BRW_SIZE;
-        oa->o_valid |= OBD_MD_FLBLKSZ;
+	/* This should really be sent by the OST */
+	oa->o_blksize = exp_brw_size(exp);
+	oa->o_valid |= OBD_MD_FLBLKSZ;
 
         /* XXX LOV STACKING: the lsm that is passed to us from LOV does not
          * have valid lsm_oinfo data structs, so don't go touching that.
@@ -988,7 +988,6 @@ int osc_shrink_grant_to_target(struct client_obd *cli, long target)
         RETURN(rc);
 }
 
-#define GRANT_SHRINK_LIMIT PTLRPC_MAX_BRW_SIZE
 static int osc_should_shrink_grant(struct client_obd *client)
 {
         cfs_time_t time = cfs_time_current();
@@ -998,13 +997,16 @@ static int osc_should_shrink_grant(struct client_obd *client)
              OBD_CONNECT_GRANT_SHRINK) == 0)
                 return 0;
 
-        if (cfs_time_aftereq(time, next_shrink - 5 * CFS_TICK)) {
-                if (client->cl_import->imp_state == LUSTRE_IMP_FULL &&
-                    client->cl_avail_grant > GRANT_SHRINK_LIMIT)
-                        return 1;
-                else
-                        osc_update_next_shrink(client);
-        }
+	if (cfs_time_aftereq(time, next_shrink - 5 * CFS_TICK)) {
+		int brw_size = exp_brw_size(
+			client->cl_import->imp_obd->obd_self_export);
+
+		if (client->cl_import->imp_state == LUSTRE_IMP_FULL &&
+		    client->cl_avail_grant > brw_size)
+			return 1;
+		else
+			osc_update_next_shrink(client);
+	}
         return 0;
 }
 

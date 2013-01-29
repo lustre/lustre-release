@@ -264,7 +264,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         if (sbi->ll_flags & LL_SBI_RMT_CLIENT)
                 data->ocd_connect_flags |= OBD_CONNECT_RMT_CLIENT_FORCE;
 
-        data->ocd_brw_size = PTLRPC_MAX_BRW_SIZE;
+	data->ocd_brw_size = MD_MAX_BRW_SIZE;
 
         err = obd_connect(NULL, &sbi->ll_md_exp, obd, &sbi->ll_sb_uuid, data, NULL);
         if (err == -EBUSY) {
@@ -277,6 +277,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
                 CERROR("cannot connect to %s: rc = %d\n", md, err);
                 GOTO(out, err);
         }
+
+	sbi->ll_md_exp->exp_connect_data = *data;
 
 	/* For mount, we only need fs info from MDT0, and also in DNE, it
 	 * can make sure the client can be mounted as long as MDT0 is
@@ -294,8 +296,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 	 * be non-zero, but if accessing an upgraded 2.1 server it will
 	 * have the correct flags filled in.
 	 * XXX: fill in the LMV exp_connect_flags from MDC(s). */
-	valid = sbi->ll_md_exp->exp_connect_flags & CLIENT_CONNECT_MDT_REQD;
-	if (sbi->ll_md_exp->exp_connect_flags != 0 &&
+	valid = exp_connect_flags(sbi->ll_md_exp) & CLIENT_CONNECT_MDT_REQD;
+	if (exp_connect_flags(sbi->ll_md_exp) != 0 &&
 	    valid != CLIENT_CONNECT_MDT_REQD) {
 		char *buf;
 
@@ -374,10 +376,10 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         if (data->ocd_connect_flags & OBD_CONNECT_64BITHASH)
                 sbi->ll_flags |= LL_SBI_64BIT_HASH;
 
-        if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
-                sbi->ll_md_brw_size = data->ocd_brw_size;
-        else
-                sbi->ll_md_brw_size = CFS_PAGE_SIZE;
+	if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE)
+		sbi->ll_md_brw_size = data->ocd_brw_size;
+	else
+		sbi->ll_md_brw_size = CFS_PAGE_SIZE;
 
 	if (data->ocd_connect_flags & OBD_CONNECT_LAYOUTLOCK) {
 		LCONSOLE_INFO("Layout lock feature supported.\n");
@@ -431,7 +433,7 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
         obd->obd_upcall.onu_owner = &sbi->ll_lco;
         obd->obd_upcall.onu_upcall = cl_ocd_update;
 
-        data->ocd_brw_size = PTLRPC_MAX_BRW_SIZE;
+	data->ocd_brw_size = DT_MAX_BRW_SIZE;
 
 	err = obd_connect(NULL, &sbi->ll_dt_exp, obd, &sbi->ll_sb_uuid, data,
 			  NULL);
@@ -446,6 +448,8 @@ static int client_common_fill_super(struct super_block *sb, char *md, char *dt,
 		       sbi->ll_dt_exp->exp_obd->obd_name, dt, err);
 		GOTO(out_md, err);
 	}
+
+	sbi->ll_dt_exp->exp_connect_data = *data;
 
 	mutex_lock(&sbi->ll_lco.lco_lock);
 	sbi->ll_lco.lco_flags = data->ocd_connect_flags;

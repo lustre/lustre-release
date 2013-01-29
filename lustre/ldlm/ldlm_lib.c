@@ -385,10 +385,10 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 #endif
         cfs_atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
 
-        /* This value may be changed at connect time in
-           ptlrpc_connect_interpret. */
-        cli->cl_max_pages_per_rpc = min((int)PTLRPC_MAX_BRW_PAGES,
-                                        (int)(1024 * 1024 >> CFS_PAGE_SHIFT));
+	/* This value may be changed at connect time in
+	   ptlrpc_connect_interpret. */
+	cli->cl_max_pages_per_rpc = min((int)PTLRPC_MAX_BRW_PAGES,
+					(int)(LNET_MTU >> CFS_PAGE_SHIFT));
 
         if (!strcmp(name, LUSTRE_MDC_NAME)) {
                 cli->cl_max_rpcs_in_flight = MDC_MAX_RIF_DEFAULT;

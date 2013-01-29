@@ -174,8 +174,7 @@ static int lmv_notify(struct obd_device *obd, struct obd_device *watched,
 		 * the same. Otherwise one of MDTs runs wrong version or
 		 * something like this.  --umka
 		 */
-		obd->obd_self_export->exp_connect_flags =
-			conn_data->ocd_connect_flags;
+		obd->obd_self_export->exp_connect_data = *conn_data;
 	}
 #if 0
         else if (ev == OBD_NOTIFY_DISCON) {
@@ -2069,10 +2068,8 @@ static int lmv_get_info(const struct lu_env *env, struct obd_export *exp,
 		 */
 		rc = obd_get_info(env, lmv->tgts[0]->ltd_exp, keylen, key,
 				  vallen, val, NULL);
-		if (!rc && KEY_IS(KEY_CONN_DATA)) {
-			exp->exp_connect_flags =
-			((struct obd_connect_data *)val)->ocd_connect_flags;
-		}
+		if (!rc && KEY_IS(KEY_CONN_DATA))
+			exp->exp_connect_data = *(struct obd_connect_data *)val;
                 RETURN(rc);
         } else if (KEY_IS(KEY_TGT_COUNT)) {
                 *((int *)val) = lmv->desc.ld_tgt_count;

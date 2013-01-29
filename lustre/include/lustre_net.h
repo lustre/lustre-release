@@ -87,8 +87,14 @@
  * CAVEAT EMPTOR, with multinet (i.e. routers forwarding between networks)
  * these limits are system wide and not interface-local. */
 #define PTLRPC_MAX_BRW_BITS     LNET_MTU_BITS
-#define PTLRPC_MAX_BRW_SIZE     (1<<LNET_MTU_BITS)
+#define PTLRPC_MAX_BRW_SIZE     (1 << LNET_MTU_BITS)
 #define PTLRPC_MAX_BRW_PAGES    (PTLRPC_MAX_BRW_SIZE >> CFS_PAGE_SHIFT)
+
+#define ONE_MB_BRW_SIZE		(1 << LNET_MTU_BITS)
+#define MD_MAX_BRW_SIZE		(1 << LNET_MTU_BITS)
+#define MD_MAX_BRW_PAGES	(MD_MAX_BRW_SIZE >> CFS_PAGE_SHIFT)
+#define DT_MAX_BRW_SIZE		(1 << LNET_MTU_BITS)
+#define OFD_MAX_BRW_SIZE	(1 << LNET_MTU_BITS)
 
 /* When PAGE_SIZE is a constant, we can check our arithmetic here with cpp! */
 #ifdef __KERNEL__

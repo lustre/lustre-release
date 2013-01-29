@@ -852,7 +852,7 @@ int mdt_finish_open(struct mdt_thread_info *info,
                 }
         }
 #ifdef CONFIG_FS_POSIX_ACL
-        else if (exp->exp_connect_flags & OBD_CONNECT_ACL) {
+	else if (exp_connect_flags(exp) & OBD_CONNECT_ACL) {
                 const struct lu_env *env = info->mti_env;
                 struct md_object *next = mdt_object_child(o);
                 struct lu_buf *buf = &info->mti_buf;
@@ -882,8 +882,8 @@ int mdt_finish_open(struct mdt_thread_info *info,
         }
 #endif
 
-        if (info->mti_mdt->mdt_opts.mo_mds_capa &&
-            exp->exp_connect_flags & OBD_CONNECT_MDS_CAPA) {
+	if (info->mti_mdt->mdt_opts.mo_mds_capa &&
+	    exp_connect_flags(exp) & OBD_CONNECT_MDS_CAPA) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA1);
@@ -894,9 +894,9 @@ int mdt_finish_open(struct mdt_thread_info *info,
                         RETURN(rc);
                 repbody->valid |= OBD_MD_FLMDSCAPA;
         }
-        if (info->mti_mdt->mdt_opts.mo_oss_capa &&
-            exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA &&
-            S_ISREG(lu_object_attr(&o->mot_obj.mo_lu))) {
+	if (info->mti_mdt->mdt_opts.mo_oss_capa &&
+	    exp_connect_flags(exp) & OBD_CONNECT_OSS_CAPA &&
+	    S_ISREG(lu_object_attr(&o->mot_obj.mo_lu))) {
                 struct lustre_capa *capa;
 
                 capa = req_capsule_server_get(info->mti_pill, &RMF_CAPA2);
@@ -912,11 +912,11 @@ int mdt_finish_open(struct mdt_thread_info *info,
          * If we are following a symlink, don't open; and do not return open
          * handle for special nodes as client required.
          */
-        if (islnk || (!isreg && !isdir &&
-            (req->rq_export->exp_connect_flags & OBD_CONNECT_NODEVOH))) {
-                lustre_msg_set_transno(req->rq_repmsg, 0);
-                RETURN(0);
-        }
+	if (islnk || (!isreg && !isdir &&
+	    (exp_connect_flags(req->rq_export) & OBD_CONNECT_NODEVOH))) {
+		lustre_msg_set_transno(req->rq_repmsg, 0);
+		RETURN(0);
+	}
 
         /*
          * We need to return the existing object's fid back, so it is done here,

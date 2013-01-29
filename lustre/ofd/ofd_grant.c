@@ -42,8 +42,9 @@
 
 #include "ofd_internal.h"
 
-#define OFD_GRANT_CHUNK (2ULL * PTLRPC_MAX_BRW_SIZE)
-#define OFD_GRANT_SHRINK_LIMIT (16ULL * OFD_GRANT_CHUNK)
+#define OFD_GRANT_CHUNK (2ULL * DT_MAX_BRW_SIZE)
+#define OFD_GRANT_CHUNK_EXP(rexp) (2ULL * exp_brw_size((rexp)))
+#define OFD_GRANT_SHRINK_LIMIT(rexp) (16ULL * OFD_GRANT_CHUNK_EXP((rexp)))
 
 static inline obd_size ofd_grant_from_cli(struct obd_export *exp,
 					  struct ofd_device *ofd, obd_size val)
@@ -73,7 +74,7 @@ static inline obd_size ofd_grant_chunk(struct obd_export *exp,
 
 	if (exp && ofd_grant_compat(exp, ofd))
 		/* Try to grant enough space to send a full-size RPC */
-		return PTLRPC_MAX_BRW_SIZE <<
+		return exp_brw_size(exp) <<
 		       (ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT);
 	return OFD_GRANT_CHUNK;
 }
@@ -371,9 +372,9 @@ static void ofd_grant_shrink(struct obd_export *exp,
 	long				 grant_shrink;
 
 	LASSERT_SPIN_LOCKED(&ofd->ofd_grant_lock);
-
+	LASSERT(exp);
 	if (left_space >= ofd->ofd_tot_granted_clients *
-			  OFD_GRANT_SHRINK_LIMIT)
+			  OFD_GRANT_SHRINK_LIMIT(exp))
 		return;
 
 	grant_shrink = ofd_grant_from_cli(exp, ofd, oa->o_grant);
@@ -630,7 +631,7 @@ static long ofd_grant(struct obd_export *exp, obd_size curgrant,
 	if (!grant)
 		RETURN(0);
 
-	/* Allow >OFD_GRANT_CHUNK size when clients reconnect due to a
+	/* Allow >OFD_GRANT_CHUNK_EXP size when clients reconnect due to a
 	 * server reboot. */
 	if ((grant > grant_chunk) && (!obd->obd_recovering))
 		grant = grant_chunk;
@@ -677,7 +678,7 @@ long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
 	int				 force = 0; /* can use cached data */
 
 	/* don't grant space to client with read-only access */
-	if ((exp->exp_connect_flags & OBD_CONNECT_RDONLY) ||
+	if ((exp_connect_flags(exp) & OBD_CONNECT_RDONLY) ||
 	    ofd_grant_prohibit(exp, ofd))
 		return 0;
 

@@ -271,7 +271,7 @@ static inline void lqe_read_unlock(struct lquota_entry *lqe)
 
 /* minimum qunit size, 1K inode for metadata pool and 1MB for data pool */
 #define LQUOTA_LEAST_QUNIT(type) \
-	(type == LQUOTA_RES_MD ? (1 << 10) : toqb(PTLRPC_MAX_BRW_SIZE))
+	(type == LQUOTA_RES_MD ? (1 << 10) : toqb(OFD_MAX_BRW_SIZE))
 
 #define LQUOTA_OVER_FL(type) \
 	(type == USRQUOTA ? QUOTA_FL_OVER_USRQUOTA : QUOTA_FL_OVER_GRPQUOTA)

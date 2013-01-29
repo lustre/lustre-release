@@ -433,7 +433,7 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
                 lcd->lcd_last_data = mti->mti_opdata;
         }
 
-	if ((mti->mti_exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0) {
+	if (exp_connect_flags(mti->mti_exp) & OBD_CONNECT_LIGHTWEIGHT) {
 		/* Although lightweight (LW) connections have no slot in
 		 * last_rcvd, we still want to maintain the in-memory
 		 * lsd_client_data structure in order to properly handle reply

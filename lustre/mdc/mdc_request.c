@@ -1829,13 +1829,14 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 OBD_FREE_PTR(oqctl);
                 break;
         }
-        case LL_IOC_GET_CONNECT_FLAGS: {
-                if (cfs_copy_to_user(uarg, &exp->exp_connect_flags,
-                                     sizeof(__u64)))
-                        GOTO(out, rc = -EFAULT);
-                else
-                        GOTO(out, rc = 0);
-        }
+	case LL_IOC_GET_CONNECT_FLAGS: {
+		if (cfs_copy_to_user(uarg,
+				     exp_connect_flags_ptr(exp),
+				     sizeof(__u64)))
+			GOTO(out, rc = -EFAULT);
+		else
+			GOTO(out, rc = 0);
+	}
         default:
                 CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);
                 GOTO(out, rc = -ENOTTY);

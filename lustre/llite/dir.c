@@ -165,7 +165,7 @@ static int ll_dir_filler(void *_hash, struct page *page0)
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p) hash "LPU64"\n",
                inode->i_ino, inode->i_generation, inode, hash);
 
-        LASSERT(max_pages > 0 && max_pages <= PTLRPC_MAX_BRW_PAGES);
+	LASSERT(max_pages > 0 && max_pages <= MD_MAX_BRW_PAGES);
 
         OBD_ALLOC(page_pool, sizeof(page) * max_pages);
         if (page_pool != NULL) {

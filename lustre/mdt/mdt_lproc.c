@@ -885,8 +885,8 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
         cfs_list_for_each_entry(exp, &obd->obd_exports, exp_obd_chain) {
                 if (exp == obd->obd_self_export)
                         continue;
-                if (exp->exp_connect_flags & OBD_CONNECT_MDS_MDS)
-                        continue;
+		if (exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS)
+			continue;
                 /* Some clients are already connected, skip the change */
                 LCONSOLE_INFO("%s is already connected, SOM will be %s on "
                               "the next mount\n", exp->exp_client_uuid.uuid,
@@ -1048,7 +1048,7 @@ void mdt_counter_incr(struct ptlrpc_request *req, int opcode)
 	if (exp->exp_nid_stats && exp->exp_nid_stats->nid_stats != NULL)
 		lprocfs_counter_incr(exp->exp_nid_stats->nid_stats, opcode);
 	if (exp->exp_obd && exp->exp_obd->u.obt.obt_jobstats.ojs_hash &&
-	    (exp->exp_connect_flags & OBD_CONNECT_JOBSTATS))
+	    (exp_connect_flags(exp) & OBD_CONNECT_JOBSTATS))
 		lprocfs_job_stats_log(exp->exp_obd,
 				      lustre_msg_get_jobid(req->rq_reqmsg),
 				      opcode, 1);

@@ -455,7 +455,7 @@ int tgt_last_commit_cb_add(struct thandle *th, struct lu_target *tgt,
 		OBD_FREE_PTR(ccb);
 	}
 
-	if ((exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
+	if (exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
 		/* report failure to force synchronous operation */
 		return -EPERM;
 
@@ -535,7 +535,7 @@ int tgt_client_new(const struct lu_env *env, struct obd_export *exp)
 
 	mutex_init(&ted->ted_lcd_lock);
 
-	if ((exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
+	if (exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
 		RETURN(0);
 
 	/* the bitmap operations can handle cl_idx > sizeof(long) * 8, so
@@ -599,7 +599,7 @@ int tgt_client_add(const struct lu_env *env,  struct obd_export *exp, int idx)
 	LASSERTF(idx >= 0, "%d\n", idx);
 
 	if (!strcmp(ted->ted_lcd->lcd_uuid, tgt->lut_obd->obd_uuid.uuid) ||
-	    (exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
+	    exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
 		RETURN(0);
 
 	if (test_and_set_bit(idx, tgt->lut_client_bitmap)) {
@@ -636,7 +636,7 @@ int tgt_client_del(const struct lu_env *env, struct obd_export *exp)
 	/* XXX if lcd_uuid were a real obd_uuid, I could use obd_uuid_equals */
 	if (!strcmp((char *)ted->ted_lcd->lcd_uuid,
 		    (char *)tgt->lut_obd->obd_uuid.uuid) ||
-	    (exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) != 0)
+	    exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT)
 		RETURN(0);
 
 	CDEBUG(D_INFO, "%s: del client at idx %u, off %lld, UUID '%s'\n",

@@ -146,7 +146,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	fed->fed_group = data->ocd_group;
 
 	data->ocd_connect_flags &= OST_CONNECT_SUPPORTED;
-	exp->exp_connect_flags = data->ocd_connect_flags;
+	exp->exp_connect_data = *data;
 	data->ocd_version = LUSTRE_VERSION_CODE;
 
 	/* Kindly make sure the SKIP_ORPHAN flag is from MDS. */
@@ -165,7 +165,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		data->ocd_grant_extent = ofd->ofd_dt_conf.ddp_grant_frag >> 10;
 	}
 
-	if (exp->exp_connect_flags & OBD_CONNECT_GRANT)
+	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
 		data->ocd_grant = ofd_grant_connect(env, exp, data->ocd_grant);
 
 	if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
@@ -193,7 +193,7 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 		data->ocd_brw_size = 65536;
 	} else if (data->ocd_connect_flags & OBD_CONNECT_BRW_SIZE) {
 		data->ocd_brw_size = min(data->ocd_brw_size,
-			      (__u32)(PTLRPC_MAX_BRW_PAGES << CFS_PAGE_SHIFT));
+					 (__u32)DT_MAX_BRW_SIZE);
 		if (data->ocd_brw_size == 0) {
 			CERROR("%s: cli %s/%p ocd_connect_flags: "LPX64
 			       " ocd_version: %x ocd_grant: %d ocd_index: %u "
@@ -409,7 +409,7 @@ static int ofd_destroy_export(struct obd_export *exp)
 	ofd_grant_discard(exp);
 	ofd_fmd_cleanup(exp);
 
-	if (exp->exp_connect_flags & OBD_CONNECT_GRANT_SHRINK) {
+	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT_SHRINK) {
 		if (ofd->ofd_tot_granted_clients > 0)
 			ofd->ofd_tot_granted_clients --;
 	}
@@ -769,7 +769,7 @@ static int ofd_statfs(const struct lu_env *env,  struct obd_export *exp,
 
 	/* The QoS code on the MDS does not care about space reserved for
 	 * precreate, so take it out. */
-	if (exp->exp_connect_flags & OBD_CONNECT_MDS) {
+	if (exp_connect_flags(exp) & OBD_CONNECT_MDS) {
 		struct filter_export_data *fed;
 
 		fed = &obd->obd_self_export->exp_filter_data;
@@ -1115,7 +1115,7 @@ static int ofd_orphans_destroy(const struct lu_env *env,
 	}
 
 	LASSERT(exp != NULL);
-	skip_orphan = !!(exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN);
+	skip_orphan = !!(exp_connect_flags(exp) & OBD_CONNECT_SKIP_ORPHAN);
 
 	last = ofd_seq_last_oid(oseq);
 	LCONSOLE_INFO("%s: deleting orphan objects from "LPX64":"LPU64

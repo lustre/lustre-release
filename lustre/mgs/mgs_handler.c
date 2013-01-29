@@ -73,11 +73,11 @@ static int mgs_connect(const struct lu_env *env,
 
         mgs_counter_incr(lexp, LPROC_MGS_CONNECT);
 
-        if (data != NULL) {
-                data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
-                lexp->exp_connect_flags = data->ocd_connect_flags;
-                data->ocd_version = LUSTRE_VERSION_CODE;
-        }
+	if (data != NULL) {
+		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
+		data->ocd_version = LUSTRE_VERSION_CODE;
+		lexp->exp_connect_data = *data;
+	}
 
         rc = mgs_export_stats_init(obd, lexp, localdata);
 
@@ -92,24 +92,24 @@ out:
 }
 
 static int mgs_reconnect(const struct lu_env *env,
-                         struct obd_export *exp, struct obd_device *obd,
-                         struct obd_uuid *cluuid, struct obd_connect_data *data,
-                         void *localdata)
+			 struct obd_export *exp, struct obd_device *obd,
+			 struct obd_uuid *cluuid, struct obd_connect_data *data,
+			 void *localdata)
 {
-        ENTRY;
+	ENTRY;
 
-        if (exp == NULL || obd == NULL || cluuid == NULL)
-                RETURN(-EINVAL);
+	if (exp == NULL || obd == NULL || cluuid == NULL)
+		RETURN(-EINVAL);
 
-        mgs_counter_incr(exp, LPROC_MGS_CONNECT);
+	mgs_counter_incr(exp, LPROC_MGS_CONNECT);
 
-        if (data != NULL) {
-                data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
-                exp->exp_connect_flags = data->ocd_connect_flags;
-                data->ocd_version = LUSTRE_VERSION_CODE;
-        }
+	if (data != NULL) {
+		data->ocd_connect_flags &= MGS_CONNECT_SUPPORTED;
+		data->ocd_version = LUSTRE_VERSION_CODE;
+		exp->exp_connect_data = *data;
+	}
 
-        RETURN(mgs_export_stats_init(obd, exp, localdata));
+	RETURN(mgs_export_stats_init(obd, exp, localdata));
 }
 
 static int mgs_disconnect(struct obd_export *exp)

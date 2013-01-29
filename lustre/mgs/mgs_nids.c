@@ -877,14 +877,14 @@ int mgs_fsc_attach(const struct lu_env *env, struct obd_export *exp,
         if (new_fsc == NULL)
                 RETURN(-ENOMEM);
 
-        CFS_INIT_LIST_HEAD(&new_fsc->mfc_export_list);
-        CFS_INIT_LIST_HEAD(&new_fsc->mfc_fsdb_list);
-        new_fsc->mfc_fsdb       = fsdb;
-        new_fsc->mfc_export     = class_export_get(exp);
-        new_fsc->mfc_ir_capable =
-                        !!(exp->exp_connect_flags & OBD_CONNECT_IMP_RECOV);
+	CFS_INIT_LIST_HEAD(&new_fsc->mfc_export_list);
+	CFS_INIT_LIST_HEAD(&new_fsc->mfc_fsdb_list);
+	new_fsc->mfc_fsdb       = fsdb;
+	new_fsc->mfc_export     = class_export_get(exp);
+	new_fsc->mfc_ir_capable = !!(exp_connect_flags(exp) &
+				     OBD_CONNECT_IMP_RECOV);
 
-        rc = -EEXIST;
+	rc = -EEXIST;
 	mutex_lock(&fsdb->fsdb_mutex);
 
 	/* tend to find it in export list because this list is shorter. */

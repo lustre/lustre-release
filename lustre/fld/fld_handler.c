@@ -239,11 +239,10 @@ static int fld_req_handle(struct ptlrpc_request *req,
                 *out = *in;
 
 		/* For old 2.0 client, the 'lsr_flags' is uninitialized.
-		 * Set it as 'LU_SEQ_RANGE_MDT' by default.
-		 * Old 2.0 liblustre client cannot talk with new 2.1 server. */
-		if (!(exp->exp_connect_flags & OBD_CONNECT_64BITHASH) &&
-		    !(exp->exp_connect_flags & OBD_CONNECT_MDS_MDS) &&
-		    !(exp->exp_connect_flags & OBD_CONNECT_LIGHTWEIGHT) &&
+		 * Set it as 'LU_SEQ_RANGE_MDT' by default. */
+		if (!(exp_connect_flags(exp) & OBD_CONNECT_64BITHASH) &&
+		    !(exp_connect_flags(exp) & OBD_CONNECT_MDS_MDS) &&
+		    !(exp_connect_flags(exp) & OBD_CONNECT_LIGHTWEIGHT) &&
 		    !exp->exp_libclient)
 			out->lsr_flags = LU_SEQ_RANGE_MDT;
 

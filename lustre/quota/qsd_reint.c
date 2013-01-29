@@ -197,7 +197,7 @@ static int qsd_reint_index(const struct lu_env *env, struct qsd_qtype_info *qqi,
 	fid = global ? &qqi->qqi_fid : &qqi->qqi_slv_fid;
 
 	/* let's do a 1MB bulk */
-	npages = min_t(unsigned int, PTLRPC_MAX_BRW_SIZE, 1 << 20);
+	npages = min_t(unsigned int, OFD_MAX_BRW_SIZE, 1 << 20);
 	npages /= CFS_PAGE_SIZE;
 
 	/* allocate pages for bulk index read */

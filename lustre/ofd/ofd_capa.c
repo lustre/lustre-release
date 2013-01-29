@@ -123,7 +123,7 @@ int ofd_auth_capa(struct obd_export *exp, struct lu_fid *fid, obd_seq seq,
 	if (!filter->fo_fl_oss_capa)
 		RETURN(0);
 
-	if (!(exp->exp_connect_flags & OBD_CONNECT_OSS_CAPA))
+	if (!(exp_connect_flags(exp) & OBD_CONNECT_OSS_CAPA))
 		RETURN(0);
 
 	if (capa == NULL) {

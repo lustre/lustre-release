@@ -1414,7 +1414,7 @@ do {									\
 				      OBD_CONNECT_RMT_CLIENT_FORCE |	\
 				      OBD_CONNECT_OSS_CAPA);		\
 	spin_lock(&exp->exp_lock);					\
-	exp->exp_connect_flags = reply->ocd_connect_flags;		\
+	*exp_connect_flags_ptr(exp) = reply->ocd_connect_flags;		\
 	spin_unlock(&exp->exp_lock);					\
 } while (0)
 
@@ -1513,7 +1513,7 @@ static int ost_init_sec_level(struct ptlrpc_request *req)
                                 reply->ocd_connect_flags &= ~OBD_CONNECT_OSS_CAPA;
 
 			spin_lock(&exp->exp_lock);
-			exp->exp_connect_flags = reply->ocd_connect_flags;
+			*exp_connect_flags_ptr(exp) = reply->ocd_connect_flags;
 			spin_unlock(&exp->exp_lock);
                 }
                 break;
@@ -2201,7 +2201,7 @@ int ost_handle(struct ptlrpc_request *req)
                 RETURN(rc);
 
 	if (req && req->rq_reqmsg && req->rq_export &&
-	    (req->rq_export->exp_connect_flags & OBD_CONNECT_JOBSTATS))
+	    (exp_connect_flags(req->rq_export) & OBD_CONNECT_JOBSTATS))
 		oti->oti_jobid = lustre_msg_get_jobid(req->rq_reqmsg);
 
         switch (lustre_msg_get_opc(req->rq_reqmsg)) {
