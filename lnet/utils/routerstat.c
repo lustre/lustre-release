@@ -106,7 +106,7 @@ do_stat (int fd)
 
    lseek (fd, 0, SEEK_SET);
    now = timenow();
-   n = read (fd, buffer, sizeof (buffer));
+   n = read(fd, buffer, sizeof(buffer) - 1);
    if (n < 0)
    {
       fprintf (stderr, "Can't read statfile\n");

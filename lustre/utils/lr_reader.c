@@ -192,8 +192,8 @@ int main(int argc, char *const argv[])
 		/* If neither is set, we're pre-1.4.6, make a guess. */
 		/* Construct debugfs command line. */
 		memset(cmd, 0, sizeof(cmd));
-		sprintf(cmd, "%s -c -R 'rdump /%s %s' %s",
-			DEBUGFS, MDT_LOGS_DIR, tmpdir, dev);
+		snprintf(cmd, sizeof(cmd), "%s -c -R 'rdump /%s %s' %s",
+			 DEBUGFS, MDT_LOGS_DIR, tmpdir, dev);
 
 		run_command(cmd);
 
