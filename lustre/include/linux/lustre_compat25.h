@@ -538,6 +538,7 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 #define blk_queue_logical_block_size(q, sz) blk_queue_hardsect_size(q, sz)
 #endif
 
+#ifndef HAVE_DQUOT_SUSPEND
 #ifndef HAVE_VFS_DQ_OFF
 # define ll_vfs_dq_init             DQUOT_INIT
 # define ll_vfs_dq_drop             DQUOT_DROP
@@ -548,6 +549,12 @@ static inline int ll_quota_off(struct super_block *sb, int off, int remount)
 # define ll_vfs_dq_drop             vfs_dq_drop
 # define ll_vfs_dq_transfer         vfs_dq_transfer
 # define ll_vfs_dq_off(sb, remount) vfs_dq_off(sb, remount)
+#endif
+#else
+# define ll_vfs_dq_init             dquot_initialize
+# define ll_vfs_dq_drop             dquot_drop
+# define ll_vfs_dq_transfer         dquot_transfer
+# define ll_vfs_dq_off(sb, remount) dquot_suspend(sb, -1)
 #endif
 
 #ifndef HAVE_BDI_INIT
