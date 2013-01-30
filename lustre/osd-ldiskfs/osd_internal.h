@@ -575,7 +575,11 @@ struct osd_thread_info {
 
 	/* used by quota code */
 	union {
+#ifdef HAVE_DQUOT_FS_DISK_QUOTA
+		struct fs_disk_quota    oti_fdq;
+#else
 		struct if_dqblk		oti_dqblk;
+#endif
 		struct if_dqinfo	oti_dqinfo;
 	};
 	struct lquota_id_info	oti_qi;

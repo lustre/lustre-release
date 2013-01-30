@@ -100,7 +100,11 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 				 struct lustre_capa *capa)
 {
 	struct osd_thread_info	*info = osd_oti_get(env);
+#ifdef HAVE_DQUOT_FS_DISK_QUOTA
+	struct fs_disk_quota	*dqblk = &info->oti_fdq;
+#else
 	struct if_dqblk		*dqblk = &info->oti_dqblk;
+#endif
 	struct super_block	*sb = osd_sb(osd_obj2dev(osd_dt_obj(dtobj)));
 	struct lquota_acct_rec	*rec = (struct lquota_acct_rec *)dtrec;
 	__u64			 id = *((__u64 *)dtkey);
@@ -112,8 +116,13 @@ static int osd_acct_index_lookup(const struct lu_env *env,
 	rc = sb->s_qcop->get_dqblk(sb, obj2type(dtobj), (qid_t) id, dqblk);
 	if (rc)
 		RETURN(rc);
+#ifdef HAVE_DQUOT_FS_DISK_QUOTA
+	rec->bspace = dqblk->d_bcount;
+	rec->ispace = dqblk->d_icount;
+#else
 	rec->bspace = dqblk->dqb_curspace;
 	rec->ispace = dqblk->dqb_curinodes;
+#endif
 	RETURN(+1);
 }
 

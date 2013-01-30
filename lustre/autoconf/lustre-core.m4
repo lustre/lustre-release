@@ -1114,6 +1114,27 @@ LB_LINUX_TRY_COMPILE([
 ])
 ])
 
+# 2.6.34 has quotactl_ops->[sg]et_dqblk that take struct fs_disk_quota
+AC_DEFUN([LC_HAVE_DQUOT_FS_DISK_QUOTA],
+tmp_flags="$EXTRA_KCFLAGS"
+EXTRA_KCFLAGS="-Werror"
+[AC_MSG_CHECKING([if quotactl_ops.set_dqblk takes struct fs_disk_quota])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+	#include <linux/quota.h>
+],[
+	struct quotactl_ops qops = {};
+	struct fs_disk_quota fdq;
+	qops.set_dqblk(NULL, 0, 0, &fdq);
+],[
+	AC_DEFINE(HAVE_DQUOT_FS_DISK_QUOTA, 1, [quotactl_ops.set_dqblk takes struct fs_disk_quota])
+	AC_MSG_RESULT([yes])
+],[
+	AC_MSG_RESULT([no])
+])
+EXTRA_KCFLAGS="$tmp_flags"
+])
+
 # LC_LOCK_MAP_ACQUIRE
 # after 2.6.27 lock_map_acquire replaces lock_acquire
 AC_DEFUN([LC_LOCK_MAP_ACQUIRE],
@@ -2277,6 +2298,9 @@ AC_DEFUN([LC_PROG_LINUX],
          LC_SELINUX_IS_ENABLED
          LC_EXPORT_ACCESS_PROCESS_VM
 	 LC_VFS_INODE_NEWSIZE_OK
+
+	 # 2.6.34
+	 LC_HAVE_DQUOT_FS_DISK_QUOTA
 
          # 2.6.35, 3.0.0
          LC_FILE_FSYNC
