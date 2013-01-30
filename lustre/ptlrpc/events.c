@@ -261,7 +261,9 @@ static void ptlrpc_req_add_history(struct ptlrpc_service_part *svcpt,
 	 * it must be called with hold svcpt::scp_lock */
 
 	new_seq = (sec << REQS_SEC_SHIFT) |
-		  (usec << REQS_USEC_SHIFT) | svcpt->scp_cpt;
+		  (usec << REQS_USEC_SHIFT) |
+		  (svcpt->scp_cpt < 0 ? 0 : svcpt->scp_cpt);
+
 	if (new_seq > svcpt->scp_hist_seq) {
 		/* This handles the initial case of scp_hist_seq == 0 or
 		 * we just jumped into a new time window */
