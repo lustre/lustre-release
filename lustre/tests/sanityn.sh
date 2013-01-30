@@ -44,7 +44,7 @@ init_logging
 # bug number for skipped test:        LU-2840 LU-2776
 	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 21      51a"
 
-[ "$SLOW" = "no" ] && EXCEPT_SLOW="12 23 33a"
+[ "$SLOW" = "no" ] && EXCEPT_SLOW="33a"
 
 FAIL_ON_ERROR=false
 
