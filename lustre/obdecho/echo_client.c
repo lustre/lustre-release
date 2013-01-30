@@ -1748,6 +1748,9 @@ static struct lu_object *echo_md_lookup(const struct lu_env *env,
                 RETURN(ERR_PTR(rc));
         }
 
+	/* In the function below, .hs_keycmp resolves to
+	 * lu_obj_hop_keycmp() */
+	/* coverity[overrun-buffer-val] */
         child = lu_object_find_at(env, &ed->ed_cl.cd_lu_dev, fid, NULL);
 
         RETURN(child);
@@ -2041,6 +2044,9 @@ static struct lu_object *echo_resolve_path(const struct lu_env *env,
                 RETURN(ERR_PTR(rc));
         }
 
+	/* In the function below, .hs_keycmp resolves to
+	 * lu_obj_hop_keycmp() */
+	/* coverity[overrun-buffer-val] */
         parent = lu_object_find_at(env, &ed->ed_cl.cd_lu_dev, fid, NULL);
         if (IS_ERR(parent)) {
                 CERROR("Can not find the parent "DFID": rc = %ld\n",

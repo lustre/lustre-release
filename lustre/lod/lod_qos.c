@@ -1315,6 +1315,9 @@ static int lod_qos_parse_config(const struct lu_env *env,
 		v3 = buf->lb_buf;
 		lod_object_set_pool(lo, v3->lmm_pool_name);
 
+		/* In the function below, .hs_keycmp resolves to
+		 * pool_hashkey_keycmp() */
+		/* coverity[overrun-buffer-val] */
 		pool = lod_find_pool(d, v3->lmm_pool_name);
 		if (pool != NULL) {
 			if (lo->ldo_def_stripe_offset !=

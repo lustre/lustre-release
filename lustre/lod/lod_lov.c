@@ -700,6 +700,9 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 		nd = &OST_TGT(md,idx)->ltd_ost->dd_lu_dev;
 		lod_putref(md, &md->lod_ost_descs);
 
+		/* In the function below, .hs_keycmp resolves to
+		 * u_obj_hop_keycmp() */
+		/* coverity[overrun-buffer-val] */
 		o = lu_object_find_at(env, nd, &info->lti_fid, NULL);
 		if (IS_ERR(o))
 			GOTO(out, rc = PTR_ERR(o));
@@ -865,6 +868,9 @@ int lod_verify_striping(struct lod_device *d, const struct lu_buf *buf,
 		v3 = buf->lb_buf;
 
 	if (v3)
+		/* In the function below, .hs_keycmp resolves to
+		 * pool_hashkey_keycmp() */
+		/* coverity[overrun-buffer-val] */
 		pool = lod_find_pool(d, v3->lmm_pool_name);
 
 	if (pool != NULL) {
@@ -1036,6 +1042,9 @@ int lod_pools_fini(struct lod_device *lod)
 		pool = cfs_list_entry(pos, struct pool_desc, pool_list);
 		/* free pool structs */
 		CDEBUG(D_INFO, "delete pool %p\n", pool);
+		/* In the function below, .hs_keycmp resolves to
+		 * pool_hashkey_keycmp() */
+		/* coverity[overrun-buffer-val] */
 		lod_pool_del(obd, pool->pool_name);
 	}
 
