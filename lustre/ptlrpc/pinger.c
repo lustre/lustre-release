@@ -48,9 +48,14 @@
 #include <obd_class.h>
 #include "ptlrpc_internal.h"
 
+int suppress_pings;
+EXPORT_SYMBOL(suppress_pings);
+CFS_MODULE_PARM(suppress_pings, "i", int, 0644, "Suppress pings");
+
 struct mutex pinger_mutex;
 static CFS_LIST_HEAD(pinger_imports);
 static cfs_list_t timeout_list = CFS_LIST_HEAD_INIT(timeout_list);
+
 struct ptlrpc_request *
 ptlrpc_prep_ping(struct obd_import *imp)
 {
@@ -225,23 +230,39 @@ int ptlrpc_check_and_wait_suspend(struct ptlrpc_request *req)
 static void ptlrpc_pinger_process_import(struct obd_import *imp,
                                          unsigned long this_ping)
 {
-	int force, level;
+	int level;
+	int force;
+	int force_next;
+	int suppress;
 
 	spin_lock(&imp->imp_lock);
+
 	level = imp->imp_state;
 	force = imp->imp_force_verify;
-	if (force)
-		imp->imp_force_verify = 0;
+	force_next = imp->imp_force_next_verify;
+	/*
+	 * This will be used below only if the import is "FULL".
+	 */
+	suppress = !!(imp->imp_connect_data.ocd_connect_flags &
+		      OBD_CONNECT_PINGLESS);
+
+	imp->imp_force_verify = 0;
+
+	if (cfs_time_aftereq(imp->imp_next_ping - 5 * CFS_TICK, this_ping) &&
+	    !force) {
+		spin_unlock(&imp->imp_lock);
+		return;
+	}
+
+	imp->imp_force_next_verify = 0;
+
 	spin_unlock(&imp->imp_lock);
 
-        CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA,
-               "level %s/%u force %u deactive %u pingable %u\n",
-               ptlrpc_import_state_name(level), level,
-               force, imp->imp_deactive, imp->imp_pingable);
-
-        if (cfs_time_aftereq(imp->imp_next_ping - 5 * CFS_TICK,
-                             this_ping) && force == 0)
-                return;
+	CDEBUG(level == LUSTRE_IMP_FULL ? D_INFO : D_HA, "%s->%s: level %s/%u "
+	       "force %u force_next %u deactive %u pingable %u suppress %u\n",
+	       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
+	       ptlrpc_import_state_name(level), level, force, force_next,
+	       imp->imp_deactive, imp->imp_pingable, suppress);
 
         if (level == LUSTRE_IMP_DISCON && !imp_is_deactive(imp)) {
                 /* wait for a while before trying recovery again */
@@ -251,13 +272,13 @@ static void ptlrpc_pinger_process_import(struct obd_import *imp,
         } else if (level != LUSTRE_IMP_FULL ||
                    imp->imp_obd->obd_no_recov ||
                    imp_is_deactive(imp)) {
-                CDEBUG(D_HA, "not pinging %s (in recovery "
-                       " or recovery disabled: %s)\n",
-                       obd2cli_tgt(imp->imp_obd),
-                       ptlrpc_import_state_name(level));
-        } else if (imp->imp_pingable || force) {
-                ptlrpc_ping(imp);
-        }
+		CDEBUG(D_HA, "%s->%s: not pinging (in recovery "
+		       "or recovery disabled: %s)\n",
+		       imp->imp_obd->obd_uuid.uuid, obd2cli_tgt(imp->imp_obd),
+		       ptlrpc_import_state_name(level));
+	} else if ((imp->imp_pingable && !suppress) || force_next || force) {
+		ptlrpc_ping(imp);
+	}
 }
 
 static int ptlrpc_pinger_main(void *arg)
@@ -372,7 +393,14 @@ int ptlrpc_start_pinger(void)
         l_wait_event(pinger_thread->t_ctl_waitq,
                      thread_is_running(pinger_thread), &lwi);
 
-        RETURN(0);
+	if (suppress_pings)
+		CWARN("Pings will be suppressed at the request of the "
+		      "administrator.  The configuration shall meet the "
+		      "additional requirements described in the manual.  "
+		      "(Search for the \"suppress_pings\" kernel module "
+		      "parameter.)\n");
+
+	RETURN(0);
 }
 
 int ptlrpc_pinger_remove_timeouts(void);
@@ -411,7 +439,17 @@ EXPORT_SYMBOL(ptlrpc_pinger_sending_on_import);
 
 void ptlrpc_pinger_commit_expected(struct obd_import *imp)
 {
-        ptlrpc_update_next_ping(imp, 1);
+	ptlrpc_update_next_ping(imp, 1);
+	LASSERT_SPIN_LOCKED(&imp->imp_lock);
+	/*
+	 * Avoid reading stale imp_connect_data.  When not sure if pings are
+	 * expected or not on next connection, we assume they are not and force
+	 * one anyway to guarantee the chance of updating
+	 * imp_peer_committed_transno.
+	 */
+	if (imp->imp_state != LUSTRE_IMP_FULL ||
+	    imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_PINGLESS)
+		imp->imp_force_next_verify = 1;
 }
 
 int ptlrpc_pinger_add_import(struct obd_import *imp)

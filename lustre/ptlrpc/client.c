@@ -1334,10 +1334,22 @@ static int after_reply(struct ptlrpc_request *req)
                         imp->imp_peer_committed_transno =
                                 lustre_msg_get_last_committed(req->rq_repmsg);
                 }
-                ptlrpc_free_committed(imp);
 
-                if (req->rq_transno > imp->imp_peer_committed_transno)
-                        ptlrpc_pinger_commit_expected(imp);
+		ptlrpc_free_committed(imp);
+
+		if (!cfs_list_empty(&imp->imp_replay_list)) {
+			struct ptlrpc_request *last;
+
+			last = cfs_list_entry(imp->imp_replay_list.prev,
+					      struct ptlrpc_request,
+					      rq_replay_list);
+			/*
+			 * Requests with rq_replay stay on the list even if no
+			 * commit is expected.
+			 */
+			if (last->rq_transno > imp->imp_peer_committed_transno)
+				ptlrpc_pinger_commit_expected(imp);
+		}
 
 		spin_unlock(&imp->imp_lock);
 	}

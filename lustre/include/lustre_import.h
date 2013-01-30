@@ -261,6 +261,7 @@ struct obd_import {
                                   imp_no_lock_replay:1,   /* VBR: if gap was found then no lock replays */
                                   imp_vbr_failed:1,       /* recovery by versions was failed */
                                   imp_force_verify:1,     /* force an immidiate ping */
+				  imp_force_next_verify:1,/* force a scheduled ping */
                                   imp_pingable:1,         /* pingable */
                                   imp_resend_replay:1,    /* resend for replay */
                                   imp_no_pinger_recover:1,/* disable normal recovery, for test only. */

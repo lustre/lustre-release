@@ -2956,6 +2956,7 @@ int server_disconnect_export(struct obd_export *exp);
  * Pinger API (client side only)
  * @{
  */
+extern int suppress_pings;
 enum timeout_event {
         TIMEOUT_GRANT = 1
 };
