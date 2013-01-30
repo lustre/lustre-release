@@ -652,8 +652,19 @@ static int lov_lock_enqueue(const struct lu_env *env,
                                                                    sublock);
                                         break;
                                 case CLS_CACHED:
+					cl_lock_get(sublock);
+                                        /* take recursive mutex of sublock */
+                                        cl_lock_mutex_get(env, sublock);
+					/* need to release all locks in closure
+					 * otherwise it may deadlock. LU-2683.*/
+                                        lov_sublock_unlock(env, sub, closure,
+                                                           subenv);
+					/* sublock and parent are held. */
                                         rc = lov_sublock_release(env, lck, i,
                                                                  1, rc);
+					cl_lock_mutex_put(env, sublock);
+					cl_lock_put(env, sublock);
+					break;
                                 default:
                                         lov_sublock_unlock(env, sub, closure,
                                                            subenv);
