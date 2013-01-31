@@ -1946,7 +1946,7 @@ static int ost_rw_hpreq_check(struct ptlrpc_request *req)
         CDEBUG(D_DLMTRACE, "%s: refreshed %u locks timeout for req %p.\n",
                obd->obd_name, opd.opd_locks, req);
 
-        RETURN(opd.opd_locks);
+        RETURN(opd.opd_locks > 0);
 }
 
 static void ost_rw_hpreq_fini(struct ptlrpc_request *req)
