@@ -765,6 +765,8 @@ static const char *obd_connect_names[] = {
         "lvb_type",
 	"nanoseconds_times",
         "lightweight_conn",
+        "unknown", /* "shortio" */
+        "pingless",
 	"unknown",
         NULL
 };
