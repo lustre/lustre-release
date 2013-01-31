@@ -1319,8 +1319,17 @@ void cl_page_completion(const struct lu_env *env,
                 LASSERT(cl_page_is_vmlocked(env, pg));
                 LASSERT(pg->cp_sync_io == anchor);
                 pg->cp_sync_io = NULL;
+	}
+	/*
+	 * As page->cp_obj is pinned by a reference from page->cp_req, it is
+	 * safe to call cl_page_put() without risking object destruction in a
+	 * non-blocking context.
+	 */
+	cl_page_put(env, pg);
+
+	if (anchor)
                 cl_sync_io_note(anchor, ioret);
-        }
+
         EXIT;
 }
 EXPORT_SYMBOL(cl_page_completion);

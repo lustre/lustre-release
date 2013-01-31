@@ -1283,8 +1283,6 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 	opg->ops_submit_time = 0;
 	srvlock = oap->oap_brw_flags & OBD_BRW_SRVLOCK;
 
-	cl_page_completion(env, page, crt, rc);
-
 	/* statistic */
 	if (rc == 0 && srvlock) {
 		struct lu_device *ld    = opg->ops_cl.cpl_obj->co_lu.lo_dev;
@@ -1303,12 +1301,9 @@ static int osc_completion(const struct lu_env *env, struct osc_async_page *oap,
 	 * reference counter protects page from concurrent reclaim.
 	 */
 	lu_ref_del(&page->cp_reference, "transfer", page);
-	/*
-	 * As page->cp_obj is pinned by a reference from page->cp_req, it is
-	 * safe to call cl_page_put() without risking object destruction in a
-	 * non-blocking context.
-	 */
-	cl_page_put(env, page);
+
+	cl_page_completion(env, page, crt, rc);
+
 	RETURN(0);
 }
 
