@@ -498,6 +498,7 @@ stop_services ()
 {
 	local labels=$*
 	local result=0
+	local pids=""
 	local dir dev label
 
 	for label in $labels; do
@@ -512,9 +513,22 @@ stop_services ()
 			# no error
 			continue
 		fi
+
 		echo "Unmounting $dir"
-		umount $dir || result=2
+		umount $dir &
+
+		if [ -z "$pids" ]; then
+			pids="$!"
+		else
+			pids="$pids $!"
+		fi
 	done
+
+	# wait for all umount processes to complete, report any errors
+	for pid in $pids; do
+		wait $pid || result=2
+	done
+
 	# double check!
 	for label in $labels; do
 		if mountpt_is_active $label; then
