@@ -251,6 +251,7 @@ static void check_obd_connect_data(void)
         CHECK_CDEFINE(OBD_CONNECT_NANOSEC_TIME);
         CHECK_CDEFINE(OBD_CONNECT_LIGHTWEIGHT);
         CHECK_CDEFINE(OBD_CONNECT_SHORTIO);
+        CHECK_CDEFINE(OBD_CONNECT_PINGLESS);
 }
 
 static void

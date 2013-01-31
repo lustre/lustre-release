@@ -828,6 +828,7 @@ static const char *obd_connect_names[] = {
         "nanosecond_times",
         "lightweight_conn",
         "short_io",
+        "pingless",
         NULL
 };
 
