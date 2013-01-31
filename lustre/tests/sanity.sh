@@ -17,11 +17,6 @@ ALWAYS_EXCEPT="                27u   42a  42b  42c  42d  45   51d   68b   $SANIT
 ALWAYS_EXCEPT="                 76     $ALWAYS_EXCEPT"
 
 
-# Tests that fail on uml
-CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
-#                                    buffer i/o errs             sock spc runas
-[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 27m 27n 27o 27p 27q 27r 31d 54a  64b 99a 99b 99c 99d 99e 99f 101a"
-
 SRCDIR=$(cd $(dirname $0); echo $PWD)
 export PATH=$PATH:/sbin
 
@@ -5513,7 +5508,6 @@ test_101a() {
 	local s
 	local discard
 	local nreads=10000
-	[ "$CPU" = "UML" ] && nreads=1000
 	local cache_limit=32
 
 	$LCTL set_param -n osc.*-osc*.rpc_stats 0

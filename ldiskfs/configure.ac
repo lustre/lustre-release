@@ -46,9 +46,7 @@ if test x$enable_modules = xyes ; then
 	])
 	LB_LINUX_CONFIG([MODVERSIONS])
 	LB_LINUX_CONFIG([KALLSYMS],[],[
-		if test "x$ARCH_UM" = "x" ; then
-			AC_MSG_ERROR([ldiskfs requires that CONFIG_KALLSYMS is enabled in your kernel.])
-		fi
+		AC_MSG_ERROR([ldiskfs requires that CONFIG_KALLSYMS is enabled in your kernel.])
 	])
 	LB_LINUX_MODPOST
 fi

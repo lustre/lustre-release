@@ -19,10 +19,6 @@ init_logging
 
 require_dsh_ost || exit 0
 
-# Tests that fail on uml
-CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
-[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT 6"
-
 # Skip these tests
 # BUG NUMBER: 
 ALWAYS_EXCEPT="$REPLAY_OST_SINGLE_EXCEPT"

@@ -254,8 +254,6 @@ void cfs_enter_debugger(void)
 {
 #if defined(CONFIG_KGDB)
 //        BREAKPOINT();
-#elif defined(__arch_um__)
-        asm("int $3");
 #else
         /* nothing */
 #endif

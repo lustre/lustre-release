@@ -160,18 +160,6 @@ void libcfs_run_lbug_upcall(struct libcfs_debug_msg_data *msgdata)
         libcfs_run_upcall (argv);
 }
 
-#ifdef __arch_um__
-void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
-{
-        libcfs_catastrophe = 1;
-        libcfs_debug_msg(msgdata, "LBUG - trying to dump log to %s\n",
-                         libcfs_debug_file_path);
-        libcfs_debug_dumplog();
-        libcfs_run_lbug_upcall(msgdata);
-        asm("int $3");
-        panic("LBUG");
-}
-#else
 /* coverity[+kill] */
 void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
 {
@@ -193,7 +181,6 @@ void lbug_with_loc(struct libcfs_debug_msg_data *msgdata)
         while (1)
                 schedule();
 }
-#endif /* __arch_um__ */
 
 #ifdef __KERNEL__
 
@@ -254,12 +241,7 @@ static DUMP_TRACE_CONST struct stacktrace_ops print_trace_ops = {
 
 void libcfs_debug_dumpstack(struct task_struct *tsk)
 {
-#if defined(__arch_um__)
-        if (tsk != NULL)
-                CWARN("stack dump for pid %d (%d) requested; wake up gdb.\n",
-                      tsk->pid, UML_PID(tsk));
-        //asm("int $3");
-#elif defined(HAVE_DUMP_TRACE)
+#if defined(HAVE_DUMP_TRACE)
         /* dump_stack() */
         /* show_trace() */
         if (tsk == NULL)

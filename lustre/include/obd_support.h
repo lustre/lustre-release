@@ -649,15 +649,6 @@ do {									      \
 #define OBD_CPT_ALLOC_PTR(ptr, cptab, cpt)				      \
 	OBD_CPT_ALLOC(ptr, cptab, cpt, sizeof *(ptr))
 
-#ifdef __arch_um__
-
-# define OBD_VMALLOC(ptr, size)						      \
-	 OBD_ALLOC(ptr, size)
-# define OBD_CPT_VMALLOC(ptr, cptab, cpt, size)				      \
-	 OBD_CPT_ALLOC(ptr, cptab, cpt, size)
-
-#else /* !__arch_um__ */
-
 # define __OBD_VMALLOC_VEROBSE(ptr, cptab, cpt, size)			      \
 do {									      \
 	(ptr) = cptab == NULL ?						      \
@@ -678,8 +669,6 @@ do {									      \
 	 __OBD_VMALLOC_VEROBSE(ptr, NULL, 0, size)
 # define OBD_CPT_VMALLOC(ptr, cptab, cpt, size)				      \
 	 __OBD_VMALLOC_VEROBSE(ptr, cptab, cpt, size)
-
-#endif
 
 #ifdef __KERNEL__
 
@@ -767,16 +756,12 @@ do {									      \
 #define OBD_FREE_RCU(ptr, size, handle) (OBD_FREE(ptr, size))
 #endif /* ifdef __KERNEL__ */
 
-#ifdef __arch_um__
-# define OBD_VFREE(ptr, size) OBD_FREE(ptr, size)
-#else
-# define OBD_VFREE(ptr, size)                                                 \
-do {                                                                          \
-        OBD_FREE_PRE(ptr, size, "vfreed");                                    \
-        cfs_free_large(ptr);                                                  \
-        POISON_PTR(ptr);                                                      \
-} while(0)
-#endif
+#define OBD_VFREE(ptr, size)				\
+	do {						\
+		OBD_FREE_PRE(ptr, size, "vfreed");	\
+		cfs_free_large(ptr);			\
+		POISON_PTR(ptr);			\
+	} while (0)
 
 /* we memset() the slab object to 0 when allocation succeeds, so DO NOT
  * HAVE A CTOR THAT DOES ANYTHING.  its work will be cleared here.  we'd

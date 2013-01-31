@@ -63,8 +63,6 @@
 #define cfs_wait_event_interruptible_exclusive(wq, condition, ret)     \
         ret = wait_event_interruptible_exclusive(wq, condition)
 
-#define UML_PID(tsk) ((tsk)->pid)
-
 #define THREAD_NAME(comm, len, fmt, a...)                              \
         snprintf(comm, len, fmt, ## a)
 

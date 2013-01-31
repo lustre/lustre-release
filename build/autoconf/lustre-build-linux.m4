@@ -255,7 +255,6 @@ if grep rhconfig $LINUX_OBJ/include/linux/version.h >/dev/null ; then
 fi
 
 # this is needed before we can build modules
-LB_LINUX_UML
 LB_LINUX_VERSION
 
 # --- check that we can build modules at all
@@ -324,32 +323,6 @@ fi
 AC_SUBST(MODPOST_ARGS)
 ])
 
-#
-# LB_LINUX_UML
-#
-# check for a uml kernel
-#
-AC_DEFUN([LB_LINUX_UML],
-[ARCH_UM=
-UML_CFLAGS=
-
-AC_MSG_CHECKING([if you are running user mode linux for $target_cpu])
-if test -e $LINUX/include/asm-um ; then
-	if test  X`ls -id $LINUX/include/asm/ 2>/dev/null | awk '{print [$]1}'` = X`ls -id $LINUX/include/asm-um 2>/dev/null | awk '{print [$]1}'` ; then
-		ARCH_UM='ARCH=um'
-		# see notes in Rules.in
-		UML_CFLAGS='-O0'
-		AC_MSG_RESULT(yes)
-	else
-		AC_MSG_RESULT([no])
-	fi
-else
-	AC_MSG_RESULT([no (asm-um missing)])
-fi
-AC_SUBST(ARCH_UM)
-AC_SUBST(UML_CFLAGS)
-])
-
 # these are like AC_TRY_COMPILE, but try to build modules against the
 # kernel, inside the build directory
 
@@ -377,7 +350,7 @@ $2
 AC_DEFUN([LB_LINUX_COMPILE_IFELSE],
 [m4_ifvaln([$1], [AC_LANG_CONFTEST([$1])])dnl
 rm -f build/conftest.o build/conftest.mod.c build/conftest.ko
-AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/`echo $target_cpu|sed -e 's/powerpc64/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -I$LINUX/arch/`echo $target_cpu|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 -include $CONFIG_INCLUDE" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $ARCH_UM $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
+AS_IF([AC_TRY_COMMAND(cp conftest.c build && make -d [$2] ${LD:+"LD=$LD"} CC="$CC" -f $PWD/build/Makefile LUSTRE_LINUX_CONFIG=$LINUX_CONFIG LINUXINCLUDE="$EXTRA_LNET_INCLUDE -I$LINUX/arch/`echo $target_cpu|sed -e 's/powerpc64/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include -I$LINUX/arch/`echo $target_cpu|sed -e 's/ppc.*/powerpc/' -e 's/x86_64/x86/' -e 's/i.86/x86/'`/include/generated -I$LINUX_OBJ/include -I$LINUX/include -I$LINUX_OBJ/include2 -include $CONFIG_INCLUDE" -o tmp_include_depends -o scripts -o include/config/MARKER -C $LINUX_OBJ EXTRA_CFLAGS="-Werror-implicit-function-declaration $EXTRA_KCFLAGS" $MODULE_TARGET=$PWD/build) >/dev/null && AC_TRY_COMMAND([$3])],
 	[$4],
 	[_AC_MSG_LOG_CONFTEST
 m4_ifvaln([$5],[$5])dnl])
@@ -393,7 +366,7 @@ AC_DEFUN([LB_LINUX_ARCH],
          [AC_MSG_CHECKING([Linux kernel architecture])
           AS_IF([rm -f $PWD/build/arch
                  make -s --no-print-directory echoarch -f $PWD/build/Makefile \
-                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX $ARCH_UM \
+                     LUSTRE_LINUX_CONFIG=$LINUX_CONFIG -C $LINUX \
                      ARCHFILE=$PWD/build/arch && LINUX_ARCH=`cat $PWD/build/arch`],
                 [AC_MSG_RESULT([$LINUX_ARCH])],
                 [AC_MSG_ERROR([Could not determine the kernel architecture.])])
@@ -579,9 +552,7 @@ LB_LINUX_CONFIG([MODULES],[],[
 LB_LINUX_CONFIG([MODVERSIONS])
 
 LB_LINUX_CONFIG([KALLSYMS],[],[
-if test "x$ARCH_UM" = "x" ; then
 	AC_MSG_ERROR([Lustre requires that CONFIG_KALLSYMS is enabled in your kernel.])
-fi
 ])
 
 # 2.6.28

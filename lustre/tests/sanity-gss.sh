@@ -12,10 +12,6 @@ ONLY=${ONLY:-"$*"}
 ALWAYS_EXCEPT=${ALWAYS_EXCEPT:-"$SANITY_GSS_EXCEPT"}
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
-# Tests that fail on uml
-CPU=`awk '/model/ {print $4}' /proc/cpuinfo`
-[ "$CPU" = "UML" ] && EXCEPT="$EXCEPT"
-
 SRCDIR=`dirname $0`
 export PATH=$PWD/$SRCDIR:$SRCDIR:$SRCDIR/../utils:$SRCDIR/../utils/gss:$PATH:/sbin
 export NAME=${NAME:-local}
