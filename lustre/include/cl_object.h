@@ -2275,9 +2275,7 @@ enum cl_io_lock_dmd {
         /** Layers are free to decide between local and global locking. */
         CILR_MAYBE,
         /** Never lock: there is no cache (e.g., liblustre). */
-        CILR_NEVER,
-        /** Peek lock: use existing locks, don't queue new ones */
-        CILR_PEEK
+        CILR_NEVER
 };
 
 enum cl_fsync_mode {

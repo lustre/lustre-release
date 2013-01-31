@@ -192,11 +192,6 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 	if (result < 0)
 		GOTO(out, result);
 
-	/* Don't enqueue new locks for page_mkwrite().
-	 * If the lock has been cancelled then page must have been
-	 * truncated, in that case, kernel will handle it.
-	 */
-	io->ci_lockreq = CILR_PEEK;
 	io->u.ci_fault.ft_mkwrite = 1;
 	io->u.ci_fault.ft_writable = 1;
 
@@ -219,11 +214,7 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
 
 	cfs_restore_sigs(set);
 
-        if (result == -ENODATA) /* peek failed, no lock caching. */
-                CDEBUG(D_MMAP, "race on page_mkwrite: %lx (%lu %p)\n",
-                       vma->vm_flags, io->u.ci_fault.ft_index, vmpage);
-
-        if (result == 0 || result == -ENODATA) {
+        if (result == 0) {
 		struct inode *inode = vma->vm_file->f_dentry->d_inode;
 		struct ll_inode_info *lli = ll_i2info(inode);
 
@@ -236,18 +227,6 @@ static int ll_page_mkwrite0(struct vm_area_struct *vma, struct page *vmpage,
                          * to handle_mm_fault(). */
                         if (result == 0)
                                 result = -ENODATA;
-                } else if (result == -ENODATA) {
-                        /* Invalidate it if the cl_lock is being revoked.
-                         * This piece of code is definitely needed for RHEL5,
-                         * otherwise, SIGBUS will be wrongly returned to
-                         * applications. */
-                        write_one_page(vmpage, 1);
-                        lock_page(vmpage);
-                        if (vmpage->mapping != NULL) {
-                                ll_invalidate_page(vmpage);
-                                LASSERT(vmpage->mapping == NULL);
-                        }
-                        unlock_page(vmpage);
                 } else if (!PageDirty(vmpage)) {
                         /* race, the page has been cleaned by ptlrpcd after
                          * it was unlocked, it has to be added into dirty
