@@ -553,7 +553,7 @@ static inline void obd_ioctl_freedata(char *buf, int len)
 
 #define OBD_IOC_GET_OBJ_VERSION        _IOR('f', 210, OBD_IOC_DATA_TYPE)
 
-/* <lustre/lustre_user.h> defines ioctl number 218 */
+/* <lustre/lustre_user.h> defines ioctl number 218-219 */
 #define OBD_IOC_GET_MNTOPT             _IOW('f', 220, mntopt_t)
 
 #define OBD_IOC_ECHO_MD                _IOR('f', 221, struct obd_ioctl_data)

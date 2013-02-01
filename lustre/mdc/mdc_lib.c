@@ -94,6 +94,21 @@ void mdc_is_subdir_pack(struct ptlrpc_request *req, const struct lu_fid *pfid,
         b->flags = flags;
 }
 
+void mdc_swap_layouts_pack(struct ptlrpc_request *req,
+			   struct md_op_data *op_data)
+{
+	struct mdt_body *b = req_capsule_client_get(&req->rq_pill,
+						    &RMF_MDT_BODY);
+
+	__mdc_pack_body(b, op_data->op_suppgids[0]);
+	b->fid1 = op_data->op_fid1;
+	b->fid2 = op_data->op_fid2;
+	b->valid |= OBD_MD_FLID;
+
+	mdc_pack_capa(req, &RMF_CAPA1, op_data->op_capa1);
+	mdc_pack_capa(req, &RMF_CAPA2, op_data->op_capa2);
+}
+
 void mdc_pack_body(struct ptlrpc_request *req,
                    const struct lu_fid *fid, struct obd_capa *oc,
                    __u64 valid, int ea_size, __u32 suppgid, int flags)

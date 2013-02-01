@@ -162,13 +162,28 @@ static int lov_init_sub(const struct lu_env *env, struct lov_object *lov,
                 r0->lo_sub[idx]->lso_index = idx;
                 result = 0;
         } else {
-                CERROR("Stripe is already owned by other file (%d).\n", idx);
-                LU_OBJECT_DEBUG(D_ERROR, env, &stripe->co_lu, "\n");
-                LU_OBJECT_DEBUG(D_ERROR, env, lu_object_top(&parent->coh_lu),
-                                "old\n");
-                LU_OBJECT_HEADER(D_ERROR, env, lov2lu(lov), "new\n");
-                cl_object_put(env, stripe);
-                result = -EIO;
+		struct lu_object  *old_obj;
+		struct lov_object *old_lov;
+		unsigned int mask = D_INODE;
+
+		old_obj = lu_object_locate(&parent->coh_lu, &lov_device_type);
+		LASSERT(old_obj != NULL);
+		old_lov = cl2lov(lu2cl(old_obj));
+		if (old_lov->lo_layout_invalid) {
+			/* the object's layout has already changed but isn't
+			 * refreshed */
+			lu_object_unhash(env, &stripe->co_lu);
+			result = -EAGAIN;
+		} else {
+			mask = D_ERROR;
+			result = -EIO;
+		}
+
+		LU_OBJECT_DEBUG(mask, env, &stripe->co_lu,
+				"stripe %d is already owned.\n", idx);
+		LU_OBJECT_DEBUG(mask, env, old_obj, "owned.\n");
+		LU_OBJECT_HEADER(mask, env, lov2lu(lov), "try to own.\n");
+		cl_object_put(env, stripe);
         }
         return result;
 }
@@ -223,10 +238,15 @@ static int lov_init_raid0(const struct lu_env *env,
 			 * lu_obj_hop_keycmp() */
 			/* coverity[overrun-buffer-val] */
                         stripe = lov_sub_find(env, subdev, ofid, subconf);
-                        if (!IS_ERR(stripe))
+                        if (!IS_ERR(stripe)) {
                                 result = lov_init_sub(env, lov, stripe, r0, i);
-                        else
+				if (result == -EAGAIN) { /* try again */
+					--i;
+					result = 0;
+				}
+                        } else {
                                 result = PTR_ERR(stripe);
+			}
                 }
         } else
                 result = -ENOMEM;
@@ -348,7 +368,7 @@ static void lov_fini_raid0(const struct lu_env *env, struct lov_object *lov,
 static int lov_print_empty(const struct lu_env *env, void *cookie,
                            lu_printer_t p, const struct lu_object *o)
 {
-        (*p)(env, cookie, "empty\n");
+        (*p)(env, cookie, "empty %d\n", lu2lov(o)->lo_layout_invalid);
         return 0;
 }
 
@@ -357,9 +377,13 @@ static int lov_print_raid0(const struct lu_env *env, void *cookie,
 {
         struct lov_object       *lov = lu2lov(o);
         struct lov_layout_raid0 *r0  = lov_r0(lov);
+	struct lov_stripe_md    *lsm = lov->lo_lsm;
         int i;
 
-        (*p)(env, cookie, "stripes: %d:\n", r0->lo_nr);
+        (*p)(env, cookie, "stripes: %d, %svalid, lsm{%p 0x%08X %d %u %u}: \n",
+		r0->lo_nr, lov->lo_layout_invalid ? "in" : "", lsm,
+		lsm->lsm_magic, cfs_atomic_read(&lsm->lsm_refc),
+		lsm->lsm_stripe_count, lsm->lsm_layout_gen);
         for (i = 0; i < r0->lo_nr; ++i) {
                 struct lu_object *sub;
 
@@ -573,10 +597,11 @@ static int lov_layout_wait(const struct lu_env *env, struct lov_object *lov)
 }
 
 static int lov_layout_change(const struct lu_env *unused,
-                             struct lov_object *lov, enum lov_layout_type llt,
+                             struct lov_object *lov,
                              const struct cl_object_conf *conf)
 {
 	int result;
+	enum lov_layout_type llt = LLT_EMPTY;
 	union lov_layout_state *state = &lov->u;
 	const struct lov_layout_operations *old_ops;
 	const struct lov_layout_operations *new_ops;
@@ -585,10 +610,13 @@ static int lov_layout_change(const struct lu_env *unused,
 	void *cookie;
 	struct lu_env *env;
 	int refcheck;
+	ENTRY;
 
 	LASSERT(0 <= lov->lo_type && lov->lo_type < ARRAY_SIZE(lov_dispatch));
+
+	if (conf->u.coc_md != NULL && conf->u.coc_md->lsm != NULL)
+		llt = LLT_RAID0; /* only raid0 is supported. */
 	LASSERT(0 <= llt && llt < ARRAY_SIZE(lov_dispatch));
-	ENTRY;
 
 	cookie = cl_env_reenter();
 	env = cl_env_get(&refcheck);
@@ -605,7 +633,6 @@ static int lov_layout_change(const struct lu_env *unused,
 		old_ops->llo_fini(env, lov, &lov->u);
 
 		LASSERT(cfs_atomic_read(&lov->lo_active_ios) == 0);
-		LASSERT(cfs_list_empty(&hdr->coh_locks));
 		LASSERT(hdr->coh_tree.rnode == NULL);
 		LASSERT(hdr->coh_pages == 0);
 
@@ -697,24 +724,7 @@ static int lov_conf_set(const struct lu_env *env, struct cl_object *obj,
 		GOTO(out, result = -EBUSY);
 	}
 
-	/*
-	 * Only LLT_EMPTY <-> LLT_RAID0 transitions are supported.
-	 */
-	switch (lov->lo_type) {
-	case LLT_EMPTY:
-		if (lsm != NULL)
-			result = lov_layout_change(env, lov, LLT_RAID0, conf);
-		break;
-	case LLT_RAID0:
-		if (lsm == NULL)
-			result = lov_layout_change(env, lov, LLT_EMPTY, conf);
-		else if (lov_stripe_md_cmp(lov->lo_lsm, lsm))
-			result = -EOPNOTSUPP;
-		break;
-	default:
-		LBUG();
-	}
-	lov->lo_layout_invalid = result != 0;
+	lov->lo_layout_invalid = lov_layout_change(env, lov, conf);
 	EXIT;
 
 out:
@@ -745,7 +755,7 @@ static void lov_object_free(const struct lu_env *env, struct lu_object *obj)
 static int lov_object_print(const struct lu_env *env, void *cookie,
                             lu_printer_t p, const struct lu_object *o)
 {
-        return LOV_2DISPATCH(lu2lov(o), llo_print, env, cookie, p, o);
+        return LOV_2DISPATCH_NOLOCK(lu2lov(o), llo_print, env, cookie, p, o);
 }
 
 int lov_page_init(const struct lu_env *env, struct cl_object *obj,

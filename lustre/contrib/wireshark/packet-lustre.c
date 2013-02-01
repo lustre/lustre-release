@@ -187,6 +187,9 @@ typedef enum {
 } obd_cmd_t;
 #define OBD_FIRST_OPC OBD_PING
 
+/* must be coherent with same declaration
+ * in lustre/include/lustre/lustre_idl.h
+ */
 typedef enum {
   MDS_GETATTR      = 33,
   MDS_GETATTR_NAME = 34,

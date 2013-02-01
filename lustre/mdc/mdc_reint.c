@@ -105,13 +105,6 @@ int mdc_resource_get_unused(struct obd_export *exp, struct lu_fid *fid,
         RETURN(count);
 }
 
-static int mdc_prep_elc_req(struct obd_export *exp, struct ptlrpc_request *req,
-                            cfs_list_t *cancels, int count)
-{
-        return ldlm_prep_elc_req(exp, req, LUSTRE_MDS_VERSION, MDS_REINT,
-                                 0, cancels, count);
-}
-
 int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
                 void *ea, int ealen, void *ea2, int ea2len,
                 struct ptlrpc_request **request, struct md_open_data **mod)
@@ -148,11 +141,11 @@ int mdc_setattr(struct obd_export *exp, struct md_op_data *op_data,
         req_capsule_set_size(&req->rq_pill, &RMF_LOGCOOKIES, RCL_CLIENT,
                              ea2len);
 
-        rc = mdc_prep_elc_req(exp, req, &cancels, count);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
         rpc_lock = obd->u.cli.cl_rpc_lock;
 
@@ -263,11 +256,11 @@ rebuild:
         req_capsule_set_size(&req->rq_pill, &RMF_EADATA, RCL_CLIENT,
                              data && datalen ? datalen : 0);
 
-        rc = mdc_prep_elc_req(exp, req, &cancels, count);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
         /*
          * mdc_create_pack() fills msg->bufs[1] with name and msg->bufs[2] with
@@ -362,11 +355,11 @@ int mdc_unlink(struct obd_export *exp, struct md_op_data *op_data,
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
                              op_data->op_namelen + 1);
 
-        rc = mdc_prep_elc_req(exp, req, &cancels, count);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
         mdc_unlink_pack(req, op_data);
 
@@ -414,11 +407,11 @@ int mdc_link(struct obd_export *exp, struct md_op_data *op_data,
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT,
                              op_data->op_namelen + 1);
 
-        rc = mdc_prep_elc_req(exp, req, &cancels, count);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
         mdc_link_pack(req, op_data);
         ptlrpc_request_set_replen(req);
@@ -474,11 +467,11 @@ int mdc_rename(struct obd_export *exp, struct md_op_data *op_data,
         req_capsule_set_size(&req->rq_pill, &RMF_NAME, RCL_CLIENT, oldlen + 1);
         req_capsule_set_size(&req->rq_pill, &RMF_SYMTGT, RCL_CLIENT, newlen+1);
 
-        rc = mdc_prep_elc_req(exp, req, &cancels, count);
-        if (rc) {
-                ptlrpc_request_free(req);
-                RETURN(rc);
-        }
+	rc = mdc_prep_elc_req(exp, req, MDS_REINT, &cancels, count);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
 
         if (exp_connect_cancelset(exp) && req)
                 ldlm_cli_cancel_list(&cancels, count, req, 0);

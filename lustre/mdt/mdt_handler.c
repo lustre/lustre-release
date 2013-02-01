@@ -427,7 +427,7 @@ void mdt_client_compatibility(struct mdt_thread_info *info)
         struct lu_attr        *la = &ma->ma_attr;
         ENTRY;
 
-	if (exp_connect_flags(exp) & OBD_CONNECT_LAYOUTLOCK)
+	if (exp_connect_layout(exp))
 		/* the client can deal with 16-bit lmm_stripe_count */
 		RETURN_EXIT;
 
@@ -1003,6 +1003,95 @@ int mdt_is_subdir(struct mdt_thread_info *info)
 	if (rc == 0 || rc == -EREMOTE)
 		repbody->valid |= OBD_MD_FLID;
 
+	RETURN(rc);
+}
+
+int mdt_swap_layouts(struct mdt_thread_info *info)
+{
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	struct obd_export	*exp = req->rq_export;
+	struct mdt_object	*o1, *o2, *o;
+	struct mdt_lock_handle	*lh1, *lh2;
+	struct mdc_swap_layouts *msl;
+	int			 rc;
+	ENTRY;
+
+	/* client does not support layout lock, so layout swaping
+	 * is disabled.
+	 * FIXME: there is a problem for old clients which don't support
+	 * layout lock yet. If those clients have already opened the file
+	 * they won't be notified at all so that old layout may still be
+	 * used to do IO. This can be fixed after file release is landed by
+	 * doing exclusive open and taking full EX ibits lock. - Jinshan */
+	if (!exp_connect_layout(exp))
+		RETURN(-EOPNOTSUPP);
+
+	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA1, RCL_CLIENT))
+		mdt_set_capainfo(info, 0, &info->mti_body->fid1,
+				 req_capsule_client_get(info->mti_pill,
+							&RMF_CAPA1));
+
+	if (req_capsule_get_size(info->mti_pill, &RMF_CAPA2, RCL_CLIENT))
+		mdt_set_capainfo(info, 1, &info->mti_body->fid2,
+				 req_capsule_client_get(info->mti_pill,
+							&RMF_CAPA2));
+
+	o1 = info->mti_object;
+	o = o2 = mdt_object_find(info->mti_env, info->mti_mdt,
+				&info->mti_body->fid2);
+	if (IS_ERR(o))
+		GOTO(out, rc = PTR_ERR(o));
+
+	if (mdt_object_exists(o) < 0) /* remote object */
+		GOTO(put, rc = -ENOENT);
+
+	rc = lu_fid_cmp(&info->mti_body->fid1, &info->mti_body->fid2);
+	if (unlikely(rc == 0)) /* same file, you kidding me? no-op. */
+		GOTO(put, rc);
+
+	if (rc < 0)
+		swap(o1, o2);
+
+	/* permission check. Make sure the calling process having permission
+	 * to write both files. */
+	rc = mo_permission(info->mti_env, NULL, mdt_object_child(o1), NULL,
+				MAY_WRITE);
+	if (rc < 0)
+		GOTO(put, rc);
+
+	rc = mo_permission(info->mti_env, NULL, mdt_object_child(o2), NULL,
+				MAY_WRITE);
+	if (rc < 0)
+		GOTO(put, rc);
+
+	msl = req_capsule_client_get(info->mti_pill, &RMF_SWAP_LAYOUTS);
+	LASSERT(msl != NULL);
+
+	lh1 = &info->mti_lh[MDT_LH_NEW];
+	mdt_lock_reg_init(lh1, LCK_EX);
+	lh2 = &info->mti_lh[MDT_LH_OLD];
+	mdt_lock_reg_init(lh2, LCK_EX);
+
+	rc = mdt_object_lock(info, o1, lh1, MDS_INODELOCK_LAYOUT,
+			     MDT_LOCAL_LOCK);
+	if (rc < 0)
+		GOTO(put, rc);
+
+	rc = mdt_object_lock(info, o2, lh2, MDS_INODELOCK_LAYOUT,
+			     MDT_LOCAL_LOCK);
+	if (rc < 0)
+		GOTO(unlock1, rc);
+
+	rc = mo_swap_layouts(info->mti_env, mdt_object_child(o1),
+			     mdt_object_child(o2), msl->msl_flags);
+	GOTO(unlock2, rc);
+unlock2:
+	mdt_object_unlock(info, o2, lh2, rc);
+unlock1:
+	mdt_object_unlock(info, o1, lh1, rc);
+put:
+	mdt_object_put(info->mti_env, o);
+out:
 	RETURN(rc);
 }
 
@@ -3167,6 +3256,7 @@ static int mdt_msg_check_version(struct lustre_msg *msg)
         case MDS_QUOTACHECK:
         case MDS_QUOTACTL:
 	case UPDATE_OBJ:
+	case MDS_SWAP_LAYOUTS:
         case QUOTA_DQACQ:
         case QUOTA_DQREL:
         case SEQ_QUERY:

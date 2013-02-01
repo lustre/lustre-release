@@ -52,11 +52,13 @@ static inline void lprocfs_mdc_init_vars(struct lprocfs_static_vars *lvars)
 void mdc_pack_body(struct ptlrpc_request *req, const struct lu_fid *fid,
                    struct obd_capa *oc, __u64 valid, int ea_size,
                    __u32 suppgid, int flags);
-void mdc_pack_capa(struct ptlrpc_request *req, const struct req_msg_field *field,
-                   struct obd_capa *oc);
+void mdc_pack_capa(struct ptlrpc_request *req,
+		   const struct req_msg_field *field, struct obd_capa *oc);
 int mdc_pack_req(struct ptlrpc_request *req, int version, int opc);
 void mdc_is_subdir_pack(struct ptlrpc_request *req, const struct lu_fid *pfid,
                         const struct lu_fid *cfid, int flags);
+void mdc_swap_layouts_pack(struct ptlrpc_request *req,
+			   struct md_op_data *op_data);
 void mdc_readdir_pack(struct ptlrpc_request *req, __u64 pgoff, __u32 size,
                       const struct lu_fid *fid, struct obd_capa *oc);
 void mdc_getattr_pack(struct ptlrpc_request *req, __u64 valid, int flags,
@@ -167,5 +169,13 @@ ldlm_mode_t mdc_lock_match(struct obd_export *exp, __u64 flags,
                            const struct lu_fid *fid, ldlm_type_t type,
                            ldlm_policy_data_t *policy, ldlm_mode_t mode,
                            struct lustre_handle *lockh);
+
+static inline int mdc_prep_elc_req(struct obd_export *exp,
+				   struct ptlrpc_request *req, int opc,
+				   cfs_list_t *cancels, int count)
+{
+	return ldlm_prep_elc_req(exp, req, LUSTRE_MDS_VERSION, opc, 0, cancels,
+				 count);
+}
 
 #endif

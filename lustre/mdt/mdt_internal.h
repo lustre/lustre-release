@@ -798,6 +798,7 @@ extern struct mdt_opc_slice mdt_fld_handlers[];
 int mdt_quotacheck(struct mdt_thread_info *info);
 int mdt_quotactl(struct mdt_thread_info *info);
 int mdt_quota_dqacq(struct mdt_thread_info *info);
+int mdt_swap_layouts(struct mdt_thread_info *info);
 
 extern struct lprocfs_vars lprocfs_mds_module_vars[];
 extern struct lprocfs_vars lprocfs_mds_obd_vars[];

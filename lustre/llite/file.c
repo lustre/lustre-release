@@ -861,6 +861,7 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
         ssize_t               result;
         ENTRY;
 
+restart:
         io = ccc_env_thread_io(env);
         ll_io_init(io, file, iot == CIT_WRITE);
 
@@ -919,6 +920,8 @@ ll_file_io_generic(const struct lu_env *env, struct vvp_io_args *args,
         GOTO(out, result);
 out:
         cl_io_fini(env, io);
+	if (result == 0 && io->ci_need_restart) /* need to restart whole IO */
+		goto restart;
 
         if (iot == CIT_READ) {
                 if (result >= 0)
@@ -929,7 +932,7 @@ out:
                         ll_stats_ops_tally(ll_i2sbi(file->f_dentry->d_inode),
                                            LPROC_LL_WRITE_BYTES, result);
 			fd->fd_write_failed = false;
-		} else {
+		} else if (result != -ERESTARTSYS) {
 			fd->fd_write_failed = true;
 		}
 	}
@@ -1843,13 +1846,74 @@ int ll_data_version(struct inode *inode, __u64 *data_version,
 	RETURN(rc);
 }
 
+static int ll_swap_layout(struct file *file, struct file *file2,
+			struct lustre_swap_layouts *lsl)
+{
+	struct mdc_swap_layouts	 msl = { .msl_flags = lsl->sl_flags };
+	struct md_op_data 	*op_data;
+	struct inode 		*inode = file->f_dentry->d_inode;
+	struct inode 		*inode2 = file2->f_dentry->d_inode;
+	__u32 gid;
+	int rc;
+
+	if (!S_ISREG(inode2->i_mode))
+		RETURN(-EINVAL);
+
+	if (inode_permission(inode, MAY_WRITE) ||
+	    inode_permission(inode2, MAY_WRITE))
+		RETURN(-EPERM);
+
+	if (inode2->i_sb != inode->i_sb)
+		RETURN(-EXDEV);
+
+	rc = lu_fid_cmp(ll_inode2fid(inode), ll_inode2fid(inode2));
+	if (rc == 0) /* same file, done! */
+		RETURN(0);
+
+	if (rc < 0) { /* sequentialize it */
+		swap(inode, inode2);
+		swap(file, file2);
+	}
+
+	gid = lsl->sl_gid;
+	if (gid != 0) { /* application asks to flush dirty cache */
+		rc = ll_get_grouplock(inode, file, gid);
+		if (rc < 0)
+			RETURN(rc);
+
+		rc = ll_get_grouplock(inode2, file2, gid);
+		if (rc < 0) {
+			ll_put_grouplock(inode, file, gid);
+			RETURN(rc);
+		}
+	}
+
+	/* struct md_op_data is used to send the swap args to the mdt
+	 * only flags is missing, so we use struct mdc_swap_layouts
+	 * through the md_op_data->op_data */
+	rc = -ENOMEM;
+	op_data = ll_prep_md_op_data(NULL, inode, inode2, NULL, 0, 0,
+					LUSTRE_OPC_ANY, &msl);
+	if (op_data != NULL) {
+		rc = obd_iocontrol(LL_IOC_LOV_SWAP_LAYOUTS, ll_i2mdexp(inode),
+					sizeof(*op_data), op_data, NULL);
+		ll_finish_md_op_data(op_data);
+	}
+
+	if (gid != 0) {
+		ll_put_grouplock(inode2, file2, gid);
+		ll_put_grouplock(inode, file, gid);
+	}
+
+	RETURN(rc);
+}
+
 long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 {
-        struct inode *inode = file->f_dentry->d_inode;
-        struct ll_file_data *fd = LUSTRE_FPRIVATE(file);
-        int flags;
-
-        ENTRY;
+	struct inode		*inode = file->f_dentry->d_inode;
+	struct ll_file_data	*fd = LUSTRE_FPRIVATE(file);
+	int			 flags, rc;
+	ENTRY;
 
         CDEBUG(D_VFSTRACE, "VFS Op:inode=%lu/%u(%p),cmd=%x\n", inode->i_ino,
                inode->i_generation, inode, cmd);
@@ -1889,6 +1953,27 @@ long ll_file_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
                 RETURN(ll_lov_setstripe(inode, file, arg));
         case LL_IOC_LOV_SETEA:
                 RETURN(ll_lov_setea(inode, file, arg));
+	case LL_IOC_LOV_SWAP_LAYOUTS: {
+		struct file *file2;
+		struct lustre_swap_layouts lsl;
+
+		if (cfs_copy_from_user(&lsl, (char *)arg,
+				       sizeof(struct lustre_swap_layouts)))
+			RETURN(-EFAULT);
+
+		if ((file->f_flags & O_ACCMODE) == 0) /* O_RDONLY */
+			RETURN(-EPERM);
+
+		file2 = cfs_get_fd(lsl.sl_fd);
+		if (file2 == NULL)
+			RETURN(-EBADF);
+
+		rc = -EPERM;
+		if ((file2->f_flags & O_ACCMODE) != 0) /* O_WRONLY or O_RDWR */
+			rc = ll_swap_layout(file, file2, &lsl);
+		cfs_put_file(file2);
+		RETURN(rc);
+	}
         case LL_IOC_LOV_GETSTRIPE:
                 RETURN(ll_lov_getstripe(inode, arg));
         case LL_IOC_RECREATE_OBJ:
@@ -3086,6 +3171,7 @@ static int ll_layout_lock_set(struct lustre_handle *lockh, ldlm_mode_t mode,
 		rc = obd_unpackmd(sbi->ll_dt_exp, &md.lsm,
 				  lock->l_lvb_data, lock->l_lvb_len);
 		if (rc >= 0) {
+			*gen = LL_LAYOUT_GEN_EMPTY;
 			if (md.lsm != NULL)
 				*gen = md.lsm->lsm_layout_gen;
 			rc = 0;
@@ -3165,7 +3251,7 @@ int ll_layout_refresh(struct inode *inode, __u32 *gen)
 	int rc;
 	ENTRY;
 
-	*gen = LL_LAYOUT_GEN_ZERO;
+	*gen = LL_LAYOUT_GEN_NONE;
 	if (!(sbi->ll_flags & LL_SBI_LAYOUT_LOCK))
 		RETURN(0);
 

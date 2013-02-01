@@ -714,6 +714,32 @@ static int ll_rd_maxea_size(char *page, char **start, off_t off,
         return snprintf(page, count, "%u\n", ealen);
 }
 
+static int ll_rd_sbi_flags(char *page, char **start, off_t off,
+				int count, int *eof, void *data)
+{
+	const char *str[] = LL_SBI_FLAGS;
+	struct super_block *sb = data;
+	int flags = ll_s2sbi(sb)->ll_flags;
+	int i = 0;
+	int rc = 0;
+
+	while (flags != 0) {
+		if (ARRAY_SIZE(str) <= i) {
+			CERROR("%s: Revise array LL_SBI_FLAGS to match sbi "
+				"flags please.\n", ll_get_fsname(sb, NULL, 0));
+			return -EINVAL;
+		}
+
+		if (flags & 0x1)
+			rc += snprintf(page + rc, count - rc, "%s ", str[i]);
+		flags >>= 1;
+		++i;
+	}
+	if (rc > 0)
+		rc += snprintf(page + rc, count - rc, "\b\n");
+	return rc;
+}
+
 static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "uuid",         ll_rd_sb_uuid,          0, 0 },
         //{ "mntpt_path",   ll_rd_path,             0, 0 },
@@ -744,6 +770,7 @@ static struct lprocfs_vars lprocfs_llite_obd_vars[] = {
         { "statahead_stats",  ll_rd_statahead_stats, 0, 0 },
         { "lazystatfs",       ll_rd_lazystatfs, ll_wr_lazystatfs, 0 },
         { "max_easize",       ll_rd_maxea_size, 0, 0 },
+	{ "sbi_flags",        ll_rd_sbi_flags, 0, 0 },
         { 0 }
 };
 

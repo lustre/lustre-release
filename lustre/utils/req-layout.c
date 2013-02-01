@@ -82,6 +82,7 @@
 #define lustre_swab_gl_desc NULL
 #define lustre_swab_mgs_config_body NULL
 #define lustre_swab_mgs_config_res NULL
+#define lustre_swab_swap_layouts NULL
 #define lustre_swab_lu_fid NULL
 #define lustre_swab_hsm_progress_kernel NULL
 #define lustre_swab_hsm_user_item NULL

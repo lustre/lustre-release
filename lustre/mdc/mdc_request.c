@@ -1702,6 +1702,63 @@ static int mdc_quotactl(struct obd_device *unused, struct obd_export *exp,
         RETURN(rc);
 }
 
+static int mdc_ioc_swap_layouts(struct obd_export *exp,
+				struct md_op_data *op_data)
+{
+	CFS_LIST_HEAD(cancels);
+	struct ptlrpc_request	*req;
+	int			 rc, count;
+	struct mdc_swap_layouts *msl, *payload;
+	ENTRY;
+
+	msl = op_data->op_data;
+
+	/* When the MDT will get the MDS_SWAP_LAYOUTS RPC the
+	 * first thing it will do is to cancel the 2 layout
+	 * locks hold by this client.
+	 * So the client must cancel its layout locks on the 2 fids
+	 * with the request RPC to avoid extra RPC round trips
+	 */
+	count = mdc_resource_get_unused(exp, &op_data->op_fid1, &cancels,
+					LCK_CR, MDS_INODELOCK_LAYOUT);
+	count += mdc_resource_get_unused(exp, &op_data->op_fid2, &cancels,
+					 LCK_CR, MDS_INODELOCK_LAYOUT);
+
+	req = ptlrpc_request_alloc(class_exp2cliimp(exp),
+				   &RQF_MDS_SWAP_LAYOUTS);
+	if (req == NULL) {
+		ldlm_lock_list_put(&cancels, l_bl_ast, count);
+		RETURN(-ENOMEM);
+	}
+
+	mdc_set_capa_size(req, &RMF_CAPA1, op_data->op_capa1);
+	mdc_set_capa_size(req, &RMF_CAPA2, op_data->op_capa2);
+
+	rc = mdc_prep_elc_req(exp, req, MDS_SWAP_LAYOUTS, &cancels, count);
+	if (rc) {
+		ptlrpc_request_free(req);
+		RETURN(rc);
+	}
+
+	mdc_swap_layouts_pack(req, op_data);
+
+	payload = req_capsule_client_get(&req->rq_pill, &RMF_SWAP_LAYOUTS);
+	LASSERT(payload);
+
+	*payload = *msl;
+
+	ptlrpc_request_set_replen(req);
+
+	rc = ptlrpc_queue_wait(req);
+	if (rc)
+		GOTO(out, rc);
+	EXIT;
+
+out:
+	ptlrpc_req_finished(req);
+	return rc;
+}
+
 static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                          void *karg, void *uarg)
 {
@@ -1836,6 +1893,10 @@ static int mdc_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
 			GOTO(out, rc = -EFAULT);
 		else
 			GOTO(out, rc = 0);
+	}
+	case LL_IOC_LOV_SWAP_LAYOUTS: {
+		rc = mdc_ioc_swap_layouts(exp, karg);
+		break;
 	}
         default:
                 CERROR("mdc_ioctl(): unrecognised ioctl %#x\n", cmd);

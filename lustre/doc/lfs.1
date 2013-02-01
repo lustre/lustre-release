@@ -73,6 +73,9 @@ lfs \- Lustre utility to create a file with specific striping pattern, find the 
              \fB[-b <block-grace>] [-i <inode-grace>]
              \fB<filesystem>\fR
 .br
+.br
+.B lfs swap_layouts <filename1> <filename2>
+.br
 .B lfs data_version [-n] \fB<filename>\fR
 .br
 .B lfs help
@@ -221,6 +224,13 @@ To set filesystem quotas for users or groups. Limits can be specified with -b, -
 .TP
 .B setquota -t [-u|-g] [--block-grace <block-grace>] [--inode-grace <inode-grace>] <filesystem>
 To set filesystem quota grace times for users or groups. Grace time is specified in "XXwXXdXXhXXmXXs" format or as an integer seconds value, see EXAMPLES
+.TP
+.B swap_layouts <filename1> <filename2>
+Swap the data (layout and OST objects) of two regular files. The
+two files have to be in the same filesystem, owned by the same user,
+reside on the same MDT and writable by the user.
+
+Swapping the layout of two directories is not permitted.
 .TP
 .B data_version [-n] <filename>
 Display current version of file data. If -n is specified, data version is read

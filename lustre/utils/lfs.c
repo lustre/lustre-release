@@ -116,7 +116,7 @@ static int lfs_hsm_restore(int argc, char **argv);
 static int lfs_hsm_release(int argc, char **argv);
 static int lfs_hsm_remove(int argc, char **argv);
 static int lfs_hsm_cancel(int argc, char **argv);
-
+static int lfs_swap_layouts(int argc, char **argv);
 
 /* all avaialable commands */
 command_t cmdlist[] = {
@@ -299,6 +299,8 @@ command_t cmdlist[] = {
 	{"hsm_cancel", lfs_hsm_cancel, 0,
 	 "Cancel requests related to specified files.\n"
 	 "usage: hsm_cancel [--filelist FILELIST] [--data DATA] <file> ..."},
+	{"swap_layouts", lfs_swap_layouts, 0, "Swap layouts between 2 files.\n"
+	 "usage: swap_layouts <path1> <path2>"},
         {"help", Parser_help, 0, "help"},
         {"exit", Parser_quit, 0, "quit"},
         {"quit", Parser_quit, 0, "quit"},
@@ -2899,7 +2901,7 @@ static int lfs_hsm_state(int argc, char **argv)
 		if (rc) {
 			fprintf(stderr, "can't get hsm state for %s: %s\n",
 				path, strerror(errno = -rc));
-                	return rc;
+			return rc;
 		}
 
 		/* Display path name and status flags */
@@ -3306,6 +3308,14 @@ static int lfs_hsm_remove(int argc, char **argv)
 static int lfs_hsm_cancel(int argc, char **argv)
 {
 	return lfs_hsm_request(argc, argv, HUA_CANCEL);
+}
+
+static int lfs_swap_layouts(int argc, char **argv)
+{
+	if (argc != 3)
+		return CMD_HELP;
+
+	return llapi_swap_layouts(argv[1], argv[2]);
 }
 
 int main(int argc, char **argv)

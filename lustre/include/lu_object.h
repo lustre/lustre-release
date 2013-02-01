@@ -501,12 +501,16 @@ struct lu_object {
 };
 
 enum lu_object_header_flags {
-        /**
-         * Don't keep this object in cache. Object will be destroyed as soon
-         * as last reference to it is released. This flag cannot be cleared
-         * once set.
-         */
-        LU_OBJECT_HEARD_BANSHEE = 0
+	/**
+	 * Don't keep this object in cache. Object will be destroyed as soon
+	 * as last reference to it is released. This flag cannot be cleared
+	 * once set.
+	 */
+	LU_OBJECT_HEARD_BANSHEE = 0,
+	/**
+	 * Mark this object has already been taken out of cache.
+	 */
+	LU_OBJECT_UNHASHED = 1
 };
 
 enum lu_object_header_attr {
@@ -723,6 +727,7 @@ static inline int lu_object_is_dying(const struct lu_object_header *h)
 
 void lu_object_put(const struct lu_env *env, struct lu_object *o);
 void lu_object_put_nocache(const struct lu_env *env, struct lu_object *o);
+void lu_object_unhash(const struct lu_env *env, struct lu_object *o);
 
 int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr);
 

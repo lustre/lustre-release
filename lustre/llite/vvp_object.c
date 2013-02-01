@@ -128,6 +128,11 @@ int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 {
 	struct ll_inode_info *lli = ll_i2info(conf->coc_inode);
 
+	if (conf->coc_opc == OBJECT_CONF_INVALIDATE) {
+		lli->lli_layout_gen = LL_LAYOUT_GEN_NONE;
+		return 0;
+	}
+
 	if (conf->coc_opc != OBJECT_CONF_SET)
 		return 0;
 
@@ -143,7 +148,7 @@ int vvp_conf_set(const struct lu_env *env, struct cl_object *obj,
 			lli->lli_layout_gen);
 
 		lli->lli_has_smd = false;
-		lli->lli_layout_gen = LL_LAYOUT_GEN_ZERO;
+		lli->lli_layout_gen = LL_LAYOUT_GEN_EMPTY;
 	}
 	return 0;
 }

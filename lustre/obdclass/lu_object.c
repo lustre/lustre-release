@@ -143,7 +143,8 @@ void lu_object_put(const struct lu_env *env, struct lu_object *o)
          * and LRU lock, no race with concurrent object lookup is possible
          * and we can safely destroy object below.
          */
-        cfs_hash_bd_del_locked(site->ls_obj_hash, &bd, &top->loh_hash);
+	if (!test_and_set_bit(LU_OBJECT_UNHASHED, &top->loh_flags))
+		cfs_hash_bd_del_locked(site->ls_obj_hash, &bd, &top->loh_hash);
         cfs_hash_bd_unlock(site->ls_obj_hash, &bd, 1);
         /*
          * Object was already removed from hash and lru above, can
@@ -159,11 +160,32 @@ EXPORT_SYMBOL(lu_object_put);
  */
 void lu_object_put_nocache(const struct lu_env *env, struct lu_object *o)
 {
-	set_bit(LU_OBJECT_HEARD_BANSHEE,
-		    &o->lo_header->loh_flags);
+	set_bit(LU_OBJECT_HEARD_BANSHEE, &o->lo_header->loh_flags);
 	return lu_object_put(env, o);
 }
 EXPORT_SYMBOL(lu_object_put_nocache);
+
+/**
+ * Kill the object and take it out of LRU cache.
+ * Currently used by client code for layout change.
+ */
+void lu_object_unhash(const struct lu_env *env, struct lu_object *o)
+{
+	struct lu_object_header *top;
+
+	top = o->lo_header;
+	set_bit(LU_OBJECT_HEARD_BANSHEE, &top->loh_flags);
+	if (!test_and_set_bit(LU_OBJECT_UNHASHED, &top->loh_flags)) {
+		cfs_hash_t *obj_hash = o->lo_dev->ld_site->ls_obj_hash;
+		cfs_hash_bd_t bd;
+
+		cfs_hash_bd_get_and_lock(obj_hash, &top->loh_fid, &bd, 1);
+		cfs_list_del_init(&top->loh_lru);
+		cfs_hash_bd_del_locked(obj_hash, &bd, &top->loh_hash);
+		cfs_hash_bd_unlock(obj_hash, &bd, 1);
+	}
+}
+EXPORT_SYMBOL(lu_object_unhash);
 
 /**
  * Allocate new object.

@@ -916,7 +916,7 @@ void ll_lli_init(struct ll_inode_info *lli)
 	mutex_init(&lli->lli_och_mutex);
 	spin_lock_init(&lli->lli_agl_lock);
 	lli->lli_has_smd = false;
-	lli->lli_layout_gen = LL_LAYOUT_GEN_ZERO;
+	lli->lli_layout_gen = LL_LAYOUT_GEN_NONE;
 	lli->lli_clob = NULL;
 
 	LASSERT(lli->lli_vfs_inode.i_mode != 0);

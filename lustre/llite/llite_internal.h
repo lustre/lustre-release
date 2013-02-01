@@ -402,6 +402,26 @@ enum stats_track_type {
 #define LL_SBI_LAYOUT_LOCK    0x20000 /* layout lock support */
 #define LL_SBI_USER_FID2PATH  0x40000 /* allow fid2path by unprivileged users */
 
+#define LL_SBI_FLAGS { 	\
+	"nolck",	\
+	"checksum",	\
+	"flock",	\
+	"xattr",	\
+	"acl",		\
+	"rmt_client",	\
+	"mds_capa",	\
+	"oss_capa",	\
+	"flock",	\
+	"lru_resize",	\
+	"lazy_statfs",	\
+	"som",		\
+	"32bit_api",	\
+	"64bit_hash",	\
+	"agl",		\
+	"verbose",	\
+	"layout",	\
+	"user_fid2path" }
+
 /* default value for ll_sb_info->contention_time */
 #define SBI_DEFAULT_CONTENTION_SECONDS     60
 /* default value for lockless_truncate_enable */
@@ -1605,7 +1625,11 @@ struct if_quotactl_18 {
 #warning "remove old LL_IOC_QUOTACTL_18 compatibility code"
 #endif /* LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 7, 50, 0) */
 
-#define LL_LAYOUT_GEN_ZERO	((__u32)-1)
+enum {
+	LL_LAYOUT_GEN_NONE  = ((__u32)-2),	/* layout lock was cancelled */
+	LL_LAYOUT_GEN_EMPTY = ((__u32)-1) 	/* for empty layout */
+};
+
 int ll_layout_conf(struct inode *inode, const struct cl_object_conf *conf);
 int ll_layout_refresh(struct inode *inode, __u32 *gen);
 

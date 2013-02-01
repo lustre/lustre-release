@@ -9298,6 +9298,115 @@ test_185() { # LU-2441
 }
 run_test 185 "Volatile file support"
 
+check_swap_layouts_support()
+{
+	$LCTL get_param -n llite.*.sbi_flags | grep -q layout ||
+		{ skip "Does not support layout lock."; return 0; }
+	return 1
+}
+
+# test suite 184 is for LU-2016, LU-2017
+test_184a() {
+	check_swap_layouts_support && return 0
+
+	dir0=$DIR/$tdir/$testnum
+	test_mkdir -p $dir0 || error "creating dir $dir0"
+	ref1=/etc/passwd
+	ref2=/etc/group
+	file1=$dir0/f1
+	file2=$dir0/f2
+	$SETSTRIPE -c1 $file1
+	cp $ref1 $file1
+	$SETSTRIPE -c2 $file2
+	cp $ref2 $file2
+	gen1=$($GETSTRIPE -g $file1)
+	gen2=$($GETSTRIPE -g $file2)
+
+	$LFS swap_layouts $file1 $file2 || error "swap of file layout failed"
+	gen=$($GETSTRIPE -g $file1)
+	[[ $gen1 != $gen ]] ||
+		"Layout generation on $file1 does not change"
+	gen=$($GETSTRIPE -g $file2)
+	[[ $gen2 != $gen ]] ||
+		"Layout generation on $file2 does not change"
+
+	cmp $ref1 $file2 || error "content compare failed ($ref1 != $file2)"
+	cmp $ref2 $file1 || error "content compare failed ($ref2 != $file1)"
+}
+run_test 184a "Basic layout swap"
+
+test_184b() {
+	check_swap_layouts_support && return 0
+
+	dir0=$DIR/$tdir/$testnum
+	mkdir -p $dir0 || error "creating dir $dir0"
+	file1=$dir0/f1
+	file2=$dir0/f2
+	file3=$dir0/f3
+	dir1=$dir0/d1
+	dir2=$dir0/d2
+	mkdir $dir1 $dir2
+	$SETSTRIPE -c1 $file1
+	$SETSTRIPE -c2 $file2
+	$SETSTRIPE -c1 $file3
+	chown $RUNAS_ID $file3
+	gen1=$($GETSTRIPE -g $file1)
+	gen2=$($GETSTRIPE -g $file2)
+
+	$LFS swap_layouts $dir1 $dir2 &&
+		error "swap of directories layouts should fail"
+	$LFS swap_layouts $dir1 $file1 &&
+		error "swap of directory and file layouts should fail"
+	$RUNAS $LFS swap_layouts $file1 $file2 &&
+		error "swap of file we cannot write should fail"
+	$LFS swap_layouts $file1 $file3 &&
+		error "swap of file with different owner should fail"
+	/bin/true # to clear error code
+}
+run_test 184b "Forbidden layout swap (will generate errors)"
+
+test_184c() {
+	check_swap_layouts_support && return 0
+
+	dir0=$DIR/$tdir/$testnum
+	mkdir -p $dir0 || error "creating dir $dir0"
+	ref1=$dir0/ref1
+	ref2=$dir0/ref2
+	file1=$dir0/file1
+	file2=$dir0/file2
+	# create a file large enough for the concurent test
+	dd if=/dev/urandom of=$ref1 bs=1M count=$((RANDOM % 50 + 20))
+	dd if=/dev/urandom of=$ref2 bs=1M count=$((RANDOM % 50 + 20))
+	echo "ref file size: ref1(`stat -c %s $ref1`), ref2(`stat -c %s $ref2`)"
+
+	cp $ref2 $file2
+	dd if=$ref1 of=$file1 bs=64k &
+	sleep 0.$((RANDOM % 5 + 1))
+
+	$LFS swap_layouts $file1 $file2
+	rc=$?
+	wait $DD_PID
+	[[ $? == 0 ]] || error "concurrent write on $file1 failed"
+	[[ $rc == 0 ]] || error "swap of $file1 and $file2 failed"
+
+	# how many bytes copied before swapping layout
+	local copied=`stat -c %s $file2`
+	local remaining=`stat -c %s $ref1`
+	remaining=$((remaining - copied))
+	echo "Copied $copied bytes before swapping layout..."
+
+	cmp -n $copied $file1 $ref2 ||
+		error "Content mismatch [0, $copied) of ref2 and file1"
+	cmp -n $copied $file2 $ref1 ||
+		error "Content mismatch [0, $copied) of ref1 and file2"
+	cmp -i $copied:$copied -n $remaining $file1 $ref1 ||
+		error "Content mismatch [$copied, EOF) of ref1 and file1"
+
+	# clean up
+	rm -f $ref1 $ref2 $file1 $file2
+}
+run_test 184c "Concurrent write and layout swap"
+
 # OST pools tests
 check_file_in_pool()
 {
