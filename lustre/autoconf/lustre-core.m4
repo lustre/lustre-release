@@ -2126,6 +2126,22 @@ LB_LINUX_TRY_COMPILE([
 EXTRA_KCFLAGS="$tmp_flags"
 ])
 
+# 3.5 has generic_file_llseek_size with 5 args
+AC_DEFUN([LC_FILE_LLSEEK_SIZE_5ARG],
+[AC_MSG_CHECKING([if kernel has generic_file_llseek_size with 5 args])
+LB_LINUX_TRY_COMPILE([
+	#include <linux/fs.h>
+],[
+	generic_file_llseek_size(NULL, 0, 0, 0, 0);
+], [
+	AC_MSG_RESULT([yes])
+	AC_DEFINE(HAVE_FILE_LLSEEK_SIZE_5ARGS, 1,
+		[kernel has generic_file_llseek_size with 5 args])
+],[
+	AC_MSG_RESULT([no])
+])
+])
+
 #
 # 3.6 switch i_dentry/d_alias from list to hlist
 #

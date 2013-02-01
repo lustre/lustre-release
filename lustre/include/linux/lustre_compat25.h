@@ -168,6 +168,14 @@ static inline struct file *ll_dentry_open(struct dentry *dentry,
 
 #endif
 
+#if !defined(HAVE_FILE_LLSEEK_SIZE) || defined(HAVE_FILE_LLSEEK_5ARGS)
+#define ll_generic_file_llseek_size(file, offset, origin, maxbytes, eof) \
+		generic_file_llseek_size(file, offset, origin, maxbytes, eof);
+#else
+#define ll_generic_file_llseek_size(file, offset, origin, maxbytes, eof) \
+		generic_file_llseek_size(file, offset, origin, maxbytes);
+#endif
+
 #ifdef HAVE_INODE_DIO_WAIT
 /* inode_dio_wait(i) use as-is for write lock */
 # define inode_dio_write_done(i)	do {} while (0) /* for write unlock */
