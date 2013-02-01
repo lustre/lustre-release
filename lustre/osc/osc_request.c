@@ -1061,12 +1061,12 @@ static void osc_init_grant(struct client_obd *cli, struct obd_connect_data *ocd)
                 cli->cl_avail_grant = ocd->ocd_grant - cli->cl_dirty;
 
         if (cli->cl_avail_grant < 0) {
-                CWARN("%s: available grant < 0, the OSS is probably not running"
-                      " with patch from bug20278 (%ld) \n",
-                      cli->cl_import->imp_obd->obd_name, cli->cl_avail_grant);
-                /* workaround for 1.6 servers which do not have
-                 * the patch from bug20278 */
-                cli->cl_avail_grant = ocd->ocd_grant;
+		CWARN("%s: available grant < 0: avail/ocd/dirty %ld/%u/%ld\n",
+		      cli->cl_import->imp_obd->obd_name, cli->cl_avail_grant,
+		      ocd->ocd_grant, cli->cl_dirty);
+		/* workaround for servers which do not have the patch from
+		 * LU-2679 */
+		cli->cl_avail_grant = ocd->ocd_grant;
         }
 
 	/* determine the appropriate chunk size used by osc_extent. */

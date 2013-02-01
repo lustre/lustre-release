@@ -383,7 +383,8 @@ static int ofd_recovery_complete(const struct lu_env *env,
 	 * precreate request size (see ofd_grant_create()
 	 */
 	ofd_grant_connect(env, dev->ld_obd->obd_self_export,
-			  OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace);
+			  OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace,
+			  false);
 	rc = next->ld_ops->ldo_recovery_complete(env, next);
 	RETURN(rc);
 }

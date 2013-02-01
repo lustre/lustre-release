@@ -585,9 +585,11 @@ static void ofd_grant_check(const struct lu_env *env, struct obd_export *exp,
  * \param curgrant - is the current grant claimed by the client
  * \param want - is how much grant space the client would like to have
  * \param left - is the remaining free space with granted space taken out
+ * \param conservative - is how server grants, if true, a certain amount, else
+ *        server will grant as client requested.
  */
 static long ofd_grant(struct obd_export *exp, obd_size curgrant,
-		      obd_size want, obd_size left)
+		      obd_size want, obd_size left, bool conservative)
 {
 	struct obd_device		*obd = exp->exp_obd;
 	struct ofd_device		*ofd = ofd_exp(exp);
@@ -624,7 +626,10 @@ static long ofd_grant(struct obd_export *exp, obd_size curgrant,
 	if (curgrant >= want || curgrant >= fed->fed_grant + grant_chunk)
 		   RETURN(0);
 
-	if (!obd->obd_recovering)
+	if (obd->obd_recovering)
+		conservative = false;
+
+	if (conservative)
 		/* don't grant more than 1/8th of the remaining free space in
 		 * one chunk */
 		left >>= 3;
@@ -635,8 +640,8 @@ static long ofd_grant(struct obd_export *exp, obd_size curgrant,
 	if (!grant)
 		RETURN(0);
 
-	/* Limit to ofd_grant_chunk() if client is not reconnecting */
-	if ((grant > grant_chunk) && (!obd->obd_recovering))
+	/* Limit to ofd_grant_chunk() if not reconnect/recovery */
+	if ((grant > grant_chunk) && conservative)
 		grant = grant_chunk;
 
 	ofd->ofd_tot_granted += grant;
@@ -669,9 +674,12 @@ static long ofd_grant(struct obd_export *exp, obd_size curgrant,
  * \param env - is the lu environment provided by the caller
  * \param exp - is the client's export which is reconnecting
  * \param want - is how much the client would like to get
+ * \param conservative - is how server grants to client, if true server will
+ *        only grant certain amount, else server will grant client requested
+ *        amount.
  */
 long ofd_grant_connect(const struct lu_env *env, struct obd_export *exp,
-		       obd_size want)
+		       obd_size want, bool conservative)
 {
 	struct ofd_device		*ofd = ofd_exp(exp);
 	struct filter_export_data	*fed = &exp->exp_filter_data;
@@ -703,7 +711,7 @@ refresh:
 	}
 
 	ofd_grant(exp, ofd_grant_to_cli(exp, ofd, (obd_size)fed->fed_grant),
-		  want, left);
+		  want, left, conservative);
 
 	/* return to client its current grant */
 	grant = ofd_grant_to_cli(exp, ofd, (obd_size)fed->fed_grant);
@@ -902,7 +910,8 @@ refresh:
 		ofd_grant_shrink(exp, oa, left);
 	else
 		/* grant more space back to the client if possible */
-		oa->o_grant = ofd_grant(exp, oa->o_grant, oa->o_undirty, left);
+		oa->o_grant = ofd_grant(exp, oa->o_grant, oa->o_undirty, left,
+					true);
 	spin_unlock(&ofd->ofd_grant_lock);
 }
 
@@ -987,7 +996,7 @@ int ofd_grant_create(const struct lu_env *env, struct obd_export *exp, int *nr)
 
 	/* grant more space (twice as much as needed for this request) for
 	 * precreate purpose if possible */
-	ofd_grant(exp, fed->fed_grant, wanted * 2, left);
+	ofd_grant(exp, fed->fed_grant, wanted * 2, left, true);
 	spin_unlock(&ofd->ofd_grant_lock);
 	RETURN(0);
 }

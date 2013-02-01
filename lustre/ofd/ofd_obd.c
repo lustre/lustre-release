@@ -108,7 +108,8 @@ clean:
 
 static int ofd_parse_connect_data(const struct lu_env *env,
 				  struct obd_export *exp,
-				  struct obd_connect_data *data)
+				  struct obd_connect_data *data,
+				  bool new_connection)
 {
 	struct ofd_device		 *ofd = ofd_exp(exp);
 	struct filter_export_data	 *fed = &exp->exp_filter_data;
@@ -155,7 +156,8 @@ static int ofd_parse_connect_data(const struct lu_env *env,
 	}
 
 	if (exp_connect_flags(exp) & OBD_CONNECT_GRANT)
-		data->ocd_grant = ofd_grant_connect(env, exp, data->ocd_grant);
+		data->ocd_grant = ofd_grant_connect(env, exp, data->ocd_grant,
+						    new_connection);
 
 	if (data->ocd_connect_flags & OBD_CONNECT_INDEX) {
 		struct lr_server_data *lsd = &ofd->ofd_lut.lut_lsd;
@@ -260,7 +262,7 @@ static int ofd_obd_reconnect(const struct lu_env *env, struct obd_export *exp,
 	}
 
 	ofd_info_init(env, exp);
-	rc = ofd_parse_connect_data(env, exp, data);
+	rc = ofd_parse_connect_data(env, exp, data, false);
 	if (rc == 0)
 		ofd_export_stats_init(ofd, exp, localdata);
 
@@ -297,7 +299,7 @@ static int ofd_obd_connect(const struct lu_env *env, struct obd_export **_exp,
 
 	ofd_info_init(env, exp);
 
-	rc = ofd_parse_connect_data(env, exp, data);
+	rc = ofd_parse_connect_data(env, exp, data, true);
 	if (rc)
 		GOTO(out, rc);
 
