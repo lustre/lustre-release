@@ -189,13 +189,15 @@ static void fldb_seq_stop(struct seq_file *p, void *v)
 	struct lu_server_fld	*fld;
 	struct dt_object	*obj;
 
+	if (param == NULL)
+		return;
+
 	fld = param->fsp_fld;
 	obj = fld->lsf_obj;
 	LASSERT(obj != NULL);
 	iops = &obj->do_index_ops->dio_it;
 
 	iops->put(&param->fsp_env, param->fsp_it);
-	return;
 }
 
 static void *fldb_seq_next(struct seq_file *p, void *v, loff_t *pos)
