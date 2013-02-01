@@ -810,8 +810,8 @@ static void ldlm_lock_reorder_req(struct ldlm_lock *lock)
 				rq_exp_list) {
 		/* Do not process requests that were not yet added to there
 		 * incoming queue or were already removed from there for
-		 * processing. We evaluate ptlrpc_request_reorderable() without
-		 * holding svcpt->scp_req_lock, and then redo the checks with
+		 * processing. We evaluate ptlrpc_nrs_req_can_move() without
+		 * holding svcpt->scp_req_lock, and then redo the check with
 		 * the lock held once we need to obtain a reliable result.
 		 */
 		if (ptlrpc_nrs_req_can_move(req) &&

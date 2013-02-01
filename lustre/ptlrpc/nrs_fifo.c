@@ -64,6 +64,8 @@
  * @{
  */
 
+#define NRS_POL_NAME_FIFO	"fifo"
+
 /**
  * Is called before the policy transitions into
  * ptlrpc_nrs_pol_state::NRS_POL_STATE_STARTED; allocates and initializes a
@@ -77,8 +79,7 @@
  * \see nrs_policy_register()
  * \see nrs_policy_ctl()
  */
-static int
-nrs_fifo_start(struct ptlrpc_nrs_policy *policy)
+static int nrs_fifo_start(struct ptlrpc_nrs_policy *policy)
 {
 	struct nrs_fifo_head *head;
 
@@ -100,8 +101,7 @@ nrs_fifo_start(struct ptlrpc_nrs_policy *policy)
  *
  * \see nrs_policy_stop0()
  */
-static void
-nrs_fifo_stop(struct ptlrpc_nrs_policy *policy)
+static void nrs_fifo_stop(struct ptlrpc_nrs_policy *policy)
 {
 	struct nrs_fifo_head *head = policy->pol_private;
 
@@ -129,11 +129,10 @@ nrs_fifo_stop(struct ptlrpc_nrs_policy *policy)
  *
  * \see nrs_resource_get_safe()
  */
-static int
-nrs_fifo_res_get(struct ptlrpc_nrs_policy *policy,
-		 struct ptlrpc_nrs_request *nrq,
-		 struct ptlrpc_nrs_resource *parent,
-		 struct ptlrpc_nrs_resource **resp, bool moving_req)
+static int nrs_fifo_res_get(struct ptlrpc_nrs_policy *policy,
+			    struct ptlrpc_nrs_request *nrq,
+			    const struct ptlrpc_nrs_resource *parent,
+			    struct ptlrpc_nrs_resource **resp, bool moving_req)
 {
 	/**
 	 * Just return the resource embedded inside nrs_fifo_head, and end this
@@ -144,24 +143,46 @@ nrs_fifo_res_get(struct ptlrpc_nrs_policy *policy,
 }
 
 /**
- * Called when polling the fifo policy for a request.
+ * Called when getting a request from the FIFO policy for handling, or just
+ * peeking; removes the request from the policy when it is to be handled.
  *
- * \param[in] policy The policy being polled
+ * \param[in] policy The policy
+ * \param[in] peek   When set, signifies that we just want to examine the
+ *		     request, and not handle it, so the request is not removed
+ *		     from the policy.
+ * \param[in] force  Force the policy to return a request; unused in this
+ *		     policy
  *
  * \retval The request to be handled; this is the next request in the FIFO
  *	   queue
- * \see ptlrpc_nrs_req_poll_nolock()
+ *
+ * \see ptlrpc_nrs_req_get_nolock()
+ * \see nrs_request_get()
  */
-static struct ptlrpc_nrs_request *
-nrs_fifo_req_poll(struct ptlrpc_nrs_policy *policy)
+static
+struct ptlrpc_nrs_request * nrs_fifo_req_get(struct ptlrpc_nrs_policy *policy,
+					     bool peek, bool force)
 {
-	struct nrs_fifo_head *head = policy->pol_private;
+	struct nrs_fifo_head	  *head = policy->pol_private;
+	struct ptlrpc_nrs_request *nrq;
 
-	LASSERT(head != NULL);
+	nrq = unlikely(cfs_list_empty(&head->fh_list)) ? NULL :
+	      cfs_list_entry(head->fh_list.next, struct ptlrpc_nrs_request,
+			     nr_u.fifo.fr_list);
 
-	return cfs_list_empty(&head->fh_list) ? NULL :
-	       cfs_list_entry(head->fh_list.next, struct ptlrpc_nrs_request,
-			      nr_u.fifo.fr_list);
+	if (likely(!peek && nrq != NULL)) {
+		struct ptlrpc_request *req = container_of(nrq,
+							  struct ptlrpc_request,
+							  rq_nrq);
+
+		cfs_list_del_init(&nrq->nr_u.fifo.fr_list);
+
+		CDEBUG(D_RPCTRACE, "NRS start %s request from %s, seq: "LPU64
+		       "\n", policy->pol_desc->pd_name,
+		       libcfs_id2str(req->rq_peer), nrq->nr_u.fifo.fr_sequence);
+	}
+
+	return nrq;
 }
 
 /**
@@ -173,9 +194,8 @@ nrs_fifo_req_poll(struct ptlrpc_nrs_policy *policy)
  * \retval 0 success; nrs_request_enqueue() assumes this function will always
  *		      succeed
  */
-static int
-nrs_fifo_req_add(struct ptlrpc_nrs_policy *policy,
-		 struct ptlrpc_nrs_request *nrq)
+static int nrs_fifo_req_add(struct ptlrpc_nrs_policy *policy,
+			    struct ptlrpc_nrs_request *nrq)
 {
 	struct nrs_fifo_head *head;
 
@@ -196,31 +216,11 @@ nrs_fifo_req_add(struct ptlrpc_nrs_policy *policy,
  * \param[in] policy The policy
  * \param[in] nrq    The request to remove
  */
-static void
-nrs_fifo_req_del(struct ptlrpc_nrs_policy *policy,
-		 struct ptlrpc_nrs_request *nrq)
+static void nrs_fifo_req_del(struct ptlrpc_nrs_policy *policy,
+			     struct ptlrpc_nrs_request *nrq)
 {
 	LASSERT(!cfs_list_empty(&nrq->nr_u.fifo.fr_list));
 	cfs_list_del_init(&nrq->nr_u.fifo.fr_list);
-}
-
-/**
- * Prints a debug statement right before the request \a nrq starts being
- * handled.
- *
- * \param[in] policy The policy handling the request
- * \param[in] nrq    The request being handled
- */
-static void
-nrs_fifo_req_start(struct ptlrpc_nrs_policy *policy,
-		   struct ptlrpc_nrs_request *nrq)
-{
-	struct ptlrpc_request *req = container_of(nrq, struct ptlrpc_request,
-						  rq_nrq);
-
-	CDEBUG(D_RPCTRACE, "NRS start %s request from %s, seq: "LPU64"\n",
-	       nrs_request_policy(nrq)->pol_name, libcfs_id2str(req->rq_peer),
-	       nrq->nr_u.fifo.fr_sequence);
 }
 
 /**
@@ -233,40 +233,38 @@ nrs_fifo_req_start(struct ptlrpc_nrs_policy *policy,
  * \see ptlrpc_server_finish_request()
  * \see ptlrpc_nrs_req_stop_nolock()
  */
-static void
-nrs_fifo_req_stop(struct ptlrpc_nrs_policy *policy,
-		  struct ptlrpc_nrs_request *nrq)
+static void nrs_fifo_req_stop(struct ptlrpc_nrs_policy *policy,
+			      struct ptlrpc_nrs_request *nrq)
 {
 	struct ptlrpc_request *req = container_of(nrq, struct ptlrpc_request,
 						  rq_nrq);
 
 	CDEBUG(D_RPCTRACE, "NRS stop %s request from %s, seq: "LPU64"\n",
-	       nrs_request_policy(nrq)->pol_name, libcfs_id2str(req->rq_peer),
+	       policy->pol_desc->pd_name, libcfs_id2str(req->rq_peer),
 	       nrq->nr_u.fifo.fr_sequence);
 }
 
 /**
  * FIFO policy operations
  */
-static struct ptlrpc_nrs_pol_ops nrs_fifo_ops = {
+static const struct ptlrpc_nrs_pol_ops nrs_fifo_ops = {
 	.op_policy_start	= nrs_fifo_start,
 	.op_policy_stop		= nrs_fifo_stop,
 	.op_res_get		= nrs_fifo_res_get,
-	.op_req_poll		= nrs_fifo_req_poll,
+	.op_req_get		= nrs_fifo_req_get,
 	.op_req_enqueue		= nrs_fifo_req_add,
 	.op_req_dequeue		= nrs_fifo_req_del,
-	.op_req_start		= nrs_fifo_req_start,
 	.op_req_stop		= nrs_fifo_req_stop,
 };
 
 /**
- * FIFO policy descriptor
+ * FIFO policy configuration
  */
-struct ptlrpc_nrs_pol_desc ptlrpc_nrs_fifo_desc = {
-	.pd_name		= "fifo",
-	.pd_ops			= &nrs_fifo_ops,
-	.pd_compat		= nrs_policy_compat_all,
-	.pd_flags		= PTLRPC_NRS_FL_FALLBACK |
+struct ptlrpc_nrs_pol_conf nrs_conf_fifo = {
+	.nc_name		= NRS_POL_NAME_FIFO,
+	.nc_ops			= &nrs_fifo_ops,
+	.nc_compat		= nrs_policy_compat_all,
+	.nc_flags		= PTLRPC_NRS_FL_FALLBACK |
 				  PTLRPC_NRS_FL_REG_START
 };
 

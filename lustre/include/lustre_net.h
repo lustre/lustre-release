@@ -767,6 +767,10 @@ struct ptlrpc_nrs_request;
  */
 enum ptlrpc_nrs_ctl {
 	/**
+	 * Not a valid opcode.
+	 */
+	PTLRPC_NRS_CTL_INVALID,
+	/**
 	 * Activate the policy.
 	 */
 	PTLRPC_NRS_CTL_START,
@@ -775,14 +779,6 @@ enum ptlrpc_nrs_ctl {
 	 * in the future.
 	 */
 	PTLRPC_NRS_CTL_STOP,
-	/**
-	 * Recycle resources for inactive policies.
-	 */
-	PTLRPC_NRS_CTL_SHRINK,
-	/**
-	 * Not a valid opcode.
-	 */
-	PTLRPC_NRS_CTL_INVALID,
 	/**
 	 * Policies can start using opcodes from this value and onwards for
 	 * their own purposes; the assigned value itself is arbitrary.
@@ -800,20 +796,20 @@ struct ptlrpc_nrs_pol_ops {
 	/**
 	 * Called during policy registration; this operation is optional.
 	 *
-	 * \param[in] policy The policy being initialized
+	 * \param[in,out] policy The policy being initialized
 	 */
 	int	(*op_policy_init) (struct ptlrpc_nrs_policy *policy);
 	/**
 	 * Called during policy unregistration; this operation is optional.
 	 *
-	 * \param[in] policy The policy being unregistered/finalized
+	 * \param[in,out] policy The policy being unregistered/finalized
 	 */
 	void	(*op_policy_fini) (struct ptlrpc_nrs_policy *policy);
 	/**
 	 * Called when activating a policy via lprocfs; policies allocate and
 	 * initialize their resources here; this operation is optional.
 	 *
-	 * \param[in] policy The policy being started
+	 * \param[in,out] policy The policy being started
 	 *
 	 * \see nrs_policy_start_locked()
 	 */
@@ -822,9 +818,9 @@ struct ptlrpc_nrs_pol_ops {
 	 * Called when deactivating a policy via lprocfs; policies deallocate
 	 * their resources here; this operation is optional
 	 *
-	 * \param[in] policy The policy being stopped
+	 * \param[in,out] policy The policy being stopped
 	 *
-	 * \see nrs_policy_stop_final()
+	 * \see nrs_policy_stop0()
 	 */
 	void	(*op_policy_stop) (struct ptlrpc_nrs_policy *policy);
 	/**
@@ -832,7 +828,7 @@ struct ptlrpc_nrs_pol_ops {
 	 * \e PTLRPC_NRS_CTL_START and \e PTLRPC_NRS_CTL_GET_INFO; analogous
 	 * to an ioctl; this operation is optional.
 	 *
-	 * \param[in]	  policy The policy carrying out operation \a opc
+	 * \param[in,out]	 policy The policy carrying out operation \a opc
 	 * \param[in]	  opc	 The command operation being carried out
 	 * \param[in,out] arg	 An generic buffer for communication between the
 	 *			 user and the control operation
@@ -851,11 +847,11 @@ struct ptlrpc_nrs_pol_ops {
 	 * service. Policies should return -ve for requests they do not wish
 	 * to handle. This operation is mandatory.
 	 *
-	 * \param[in]  policy	  The policy we're getting resources for.
-	 * \param[in]  nrq	  The request we are getting resources for.
-	 * \param[in]  parent	  The parent resource of the resource being
+	 * \param[in,out] policy  The policy we're getting resources for.
+	 * \param[in,out] nrq	  The request we are getting resources for.
+	 * \param[in]	  parent  The parent resource of the resource being
 	 *			  requested; set to NULL if none.
-	 * \param[out] resp	  The resource is to be returned here; the
+	 * \param[out]	  resp	  The resource is to be returned here; the
 	 *			  fallback policy in an NRS head should
 	 *			  \e always return a non-NULL pointer value.
 	 * \param[in]  moving_req When set, signifies that this is an attempt
@@ -883,42 +879,48 @@ struct ptlrpc_nrs_pol_ops {
 	 */
 	int	(*op_res_get) (struct ptlrpc_nrs_policy *policy,
 			       struct ptlrpc_nrs_request *nrq,
-			       struct ptlrpc_nrs_resource *parent,
+			       const struct ptlrpc_nrs_resource *parent,
 			       struct ptlrpc_nrs_resource **resp,
 			       bool moving_req);
 	/**
 	 * Called when releasing references taken for resources in the resource
 	 * hierarchy for the request; this operation is optional.
 	 *
-	 * \param[in] policy   The policy the resource belongs to
-	 * \param[in] res      The resource to be freed
+	 * \param[in,out] policy The policy the resource belongs to
+	 * \param[in] res	 The resource to be freed
 	 *
 	 * \see ptlrpc_nrs_req_finalize()
 	 * \see ptlrpc_nrs_hpreq_add_nolock()
 	 * \see ptlrpc_nrs_req_hp_move()
 	 */
 	void	(*op_res_put) (struct ptlrpc_nrs_policy *policy,
-			       struct ptlrpc_nrs_resource *res);
+			       const struct ptlrpc_nrs_resource *res);
 
 	/**
-	 * Obtain a request for handling from the policy via polling; this
-	 * operation is mandatory.
+	 * Obtains a request for handling from the policy, and optionally
+	 * removes the request from the policy; this operation is mandatory.
 	 *
-	 * \param[in] policy The policy to poll
+	 * \param[in,out] policy The policy to poll
+	 * \param[in]	  peek	 When set, signifies that we just want to
+	 *			 examine the request, and not handle it, so the
+	 *			 request is not removed from the policy.
+	 * \param[in]	  force	 When set, it will force a policy to return a
+	 *			 request if it has one queued.
 	 *
-	 * \retval NULL No erquest available for handling
+	 * \retval NULL No request available for handling
 	 * \retval valid-pointer The request polled for handling
 	 *
-	 * \see ptlrpc_nrs_req_poll_nolock()
+	 * \see ptlrpc_nrs_req_get_nolock()
 	 */
 	struct ptlrpc_nrs_request *
-		(*op_req_poll) (struct ptlrpc_nrs_policy *policy);
+		(*op_req_get) (struct ptlrpc_nrs_policy *policy, bool peek,
+			       bool force);
 	/**
 	 * Called when attempting to add a request to a policy for later
 	 * handling; this operation is mandatory.
 	 *
-	 * \param[in] policy The policy on which to enqueue \a nrq
-	 * \param[in] nrq    The request to enqueue
+	 * \param[in,out] policy  The policy on which to enqueue \a nrq
+	 * \param[in,out] nrq The request to enqueue
 	 *
 	 * \retval 0	success
 	 * \retval != 0	error
@@ -932,34 +934,20 @@ struct ptlrpc_nrs_pol_ops {
 	 * called after a request has been polled successfully from the policy
 	 * for handling; this operation is mandatory.
 	 *
-	 * \param[in] policy The policy the request \a nrq belongs to
-	 * \param[in] nrq    The request to dequeue
+	 * \param[in,out] policy The policy the request \a nrq belongs to
+	 * \param[in,out] nrq    The request to dequeue
 	 *
 	 * \see ptlrpc_nrs_req_del_nolock()
 	 */
 	void	(*op_req_dequeue) (struct ptlrpc_nrs_policy *policy,
 				   struct ptlrpc_nrs_request *nrq);
 	/**
-	 * Called before carrying out the request; should not block. Could be
-	 * used for job/resource control; this operation is optional.
-	 *
-	 * \param[in] policy The policy which is starting to handle request
-	 *		     \a nrq
-	 * \param[in] nrq    The request
-	 *
-	 * \pre spin_is_locked(&svcpt->scp_req_lock)
-	 *
-	 * \see ptlrpc_nrs_req_start_nolock()
-	 */
-	void	(*op_req_start) (struct ptlrpc_nrs_policy *policy,
-				 struct ptlrpc_nrs_request *nrq);
-	/**
 	 * Called after the request being carried out. Could be used for
 	 * job/resource control; this operation is optional.
 	 *
-	 * \param[in] policy The policy which is stopping to handle request
-	 *		     \a nrq
-	 * \param[in] nrq    The request
+	 * \param[in,out] policy The policy which is stopping to handle request
+	 *			 \a nrq
+	 * \param[in,out] nrq	 The request
 	 *
 	 * \pre spin_is_locked(&svcpt->scp_req_lock)
 	 *
@@ -979,6 +967,12 @@ struct ptlrpc_nrs_pol_ops {
 	/**
 	 * Unegisters the policy's lprocfs interface with a PTLRPC service.
 	 *
+	 * In cases of failed policy registration in
+	 * \e ptlrpc_nrs_policy_register(), this function may be called for a
+	 * service which has not registered the policy successfully, so
+	 * implementations of this method should make sure their operations are
+	 * safe in such cases.
+	 *
 	 * \param[in] svc The service
 	 */
 	void	(*op_lprocfs_fini) (struct ptlrpc_service *svc);
@@ -990,9 +984,8 @@ struct ptlrpc_nrs_pol_ops {
 enum nrs_policy_flags {
 	/**
 	 * Fallback policy, use this flag only on a single supported policy per
-	 * service. Do not use this flag for policies registering using
-	 * ptlrpc_nrs_policy_register() (i.e. ones that are not in
-	 * \e nrs_pols_builtin).
+	 * service. The flag cannot be used on policies that use
+	 * \e PTLRPC_NRS_FL_REG_EXTERN
 	 */
 	PTLRPC_NRS_FL_FALLBACK		= (1 << 0),
 	/**
@@ -1000,10 +993,8 @@ enum nrs_policy_flags {
 	 */
 	PTLRPC_NRS_FL_REG_START		= (1 << 1),
 	/**
-	 * This is a polciy registering externally with NRS core, via
-	 * ptlrpc_nrs_policy_register(), (i.e. one that is not in
-	 * \e nrs_pols_builtin. Used to avoid ptlrpc_nrs_policy_register()
-	 * racing with a policy start operation issued by the user via lprocfs.
+	 * This is a policy registering from a module different to the one NRS
+	 * core ships in (currently ptlrpc).
 	 */
 	PTLRPC_NRS_FL_REG_EXTERN	= (1 << 2),
 };
@@ -1016,9 +1007,9 @@ enum nrs_policy_flags {
  * in a service.
  */
 enum ptlrpc_nrs_queue_type {
-	PTLRPC_NRS_QUEUE_REG,
-	PTLRPC_NRS_QUEUE_HP,
-	PTLRPC_NRS_QUEUE_BOTH,
+	PTLRPC_NRS_QUEUE_REG	= (1 << 0),
+	PTLRPC_NRS_QUEUE_HP	= (1 << 1),
+	PTLRPC_NRS_QUEUE_BOTH	= (PTLRPC_NRS_QUEUE_REG | PTLRPC_NRS_QUEUE_HP)
 };
 
 /**
@@ -1050,10 +1041,6 @@ enum ptlrpc_nrs_queue_type {
 struct ptlrpc_nrs {
 	spinlock_t			nrs_lock;
 	/** XXX Possibly replace svcpt->scp_req_lock with another lock here. */
-	/**
-	 * Linkage into nrs_core_heads_list
-	 */
-	cfs_list_t			nrs_heads;
 	/**
 	 * List of registered policies
 	 */
@@ -1093,7 +1080,6 @@ struct ptlrpc_nrs {
 	unsigned long			nrs_req_started;
 	/**
 	 * # policies on this NRS
-	 * TODO: Can we avoid having this?
 	 */
 	unsigned			nrs_num_pols;
 	/**
@@ -1109,6 +1095,52 @@ struct ptlrpc_nrs {
 
 #define NRS_POL_NAME_MAX		16
 
+struct ptlrpc_nrs_pol_desc;
+
+/**
+ * Service compatibility predicate; this determines whether a policy is adequate
+ * for handling RPCs of a particular PTLRPC service.
+ *
+ * XXX:This should give the same result during policy registration and
+ * unregistration, and for all partitions of a service; so the result should not
+ * depend on temporal service or other properties, that may influence the
+ * result.
+ */
+typedef bool (*nrs_pol_desc_compat_t) (const struct ptlrpc_service *svc,
+				       const struct ptlrpc_nrs_pol_desc *desc);
+
+struct ptlrpc_nrs_pol_conf {
+	/**
+	 * Human-readable policy name
+	 */
+	char				   nc_name[NRS_POL_NAME_MAX];
+	/**
+	 * NRS operations for this policy
+	 */
+	const struct ptlrpc_nrs_pol_ops	  *nc_ops;
+	/**
+	 * Service compatibility predicate
+	 */
+	nrs_pol_desc_compat_t		   nc_compat;
+	/**
+	 * Set for policies that support a single ptlrpc service, i.e. ones that
+	 * have \a pd_compat set to nrs_policy_compat_one(). The variable value
+	 * depicts the name of the single service that such policies are
+	 * compatible with.
+	 */
+	const char			  *nc_compat_svc_name;
+	/**
+	 * Owner module for this policy descriptor; policies registering from a
+	 * different module to the one the NRS framework is held within
+	 * (currently ptlrpc), should set this field to THIS_MODULE.
+	 */
+	cfs_module_t			  *nc_owner;
+	/**
+	 * Policy registration flags; a bitmast of \e nrs_policy_flags
+	 */
+	unsigned			   nc_flags;
+};
+
 /**
  * NRS policy registering descriptor
  *
@@ -1119,35 +1151,73 @@ struct ptlrpc_nrs_pol_desc {
 	/**
 	 * Human-readable policy name
 	 */
-	char				pd_name[NRS_POL_NAME_MAX];
-	/**
-	 * NRS operations for this policy
-	 */
-	struct ptlrpc_nrs_pol_ops      *pd_ops;
-	/**
-	 * Service Compatibility function; this determines whether a policy is
-	 * adequate for handling RPCs of a particular PTLRPC service.
-	 *
-	 * XXX:This should give the same result during policy
-	 * registration and unregistration, and for all partitions of a
-	 * service; so the result should not depend on temporal service
-	 * or other properties, that may influence the result.
-	 */
-	bool	(*pd_compat) (struct ptlrpc_service *svc,
-			      const struct ptlrpc_nrs_pol_desc *desc);
-	/**
-	 * Optionally set for policies that support a single ptlrpc service,
-	 * i.e. ones that have \a pd_compat set to nrs_policy_compat_one()
-	 */
-	char			       *pd_compat_svc_name;
-	/**
-	 * Bitmask of nrs_policy_flags
-	 */
-	unsigned			pd_flags;
+	char					pd_name[NRS_POL_NAME_MAX];
 	/**
 	 * Link into nrs_core::nrs_policies
 	 */
-	cfs_list_t			pd_list;
+	cfs_list_t				pd_list;
+	/**
+	 * NRS operations for this policy
+	 */
+	const struct ptlrpc_nrs_pol_ops	       *pd_ops;
+	/**
+	 * Service compatibility predicate
+	 */
+	nrs_pol_desc_compat_t			pd_compat;
+	/**
+	 * Set for policies that are compatible with only one PTLRPC service.
+	 *
+	 * \see ptlrpc_nrs_pol_conf::nc_compat_svc_name
+	 */
+	const char			       *pd_compat_svc_name;
+	/**
+	 * Owner module for this policy descriptor.
+	 *
+	 * We need to hold a reference to the module whenever we might make use
+	 * of any of the module's contents, i.e.
+	 * - If one or more instances of the policy are at a state where they
+	 *   might be handling a request, i.e.
+	 *   ptlrpc_nrs_pol_state::NRS_POL_STATE_STARTED or
+	 *   ptlrpc_nrs_pol_state::NRS_POL_STATE_STOPPING as we will have to
+	 *   call into the policy's ptlrpc_nrs_pol_ops() handlers. A reference
+	 *   is taken on the module when
+	 *   \e ptlrpc_nrs_pol_desc::pd_refs becomes 1, and released when it
+	 *   becomes 0, so that we hold only one reference to the module maximum
+	 *   at any time.
+	 *
+	 *   We do not need to hold a reference to the module, even though we
+	 *   might use code and data from the module, in the following cases:
+	 * - During external policy registration, because this should happen in
+	 *   the module's init() function, in which case the module is safe from
+	 *   removal because a reference is being held on the module by the
+	 *   kernel, and iirc kmod (and I guess module-init-tools also) will
+	 *   serialize any racing processes properly anyway.
+	 * - During external policy unregistration, because this should happen
+	 *   in a module's exit() function, and any attempts to start a policy
+	 *   instance would need to take a reference on the module, and this is
+	 *   not possible once we have reached the point where the exit()
+	 *   handler is called.
+	 * - During service registration and unregistration, as service setup
+	 *   and cleanup, and policy registration, unregistration and policy
+	 *   instance starting, are serialized by \e nrs_core::nrs_mutex, so
+	 *   as long as users adhere to the convention of registering policies
+	 *   in init() and unregistering them in module exit() functions, there
+	 *   should not be a race between these operations.
+	 * - During any policy-specific lprocfs operations, because a reference
+	 *   is held by the kernel on a proc entry that has been entered by a
+	 *   syscall, so as long as proc entries are removed during unregistration time,
+	 *   then unregistration and lprocfs operations will be properly
+	 *   serialized.
+	 */
+	cfs_module_t			       *pd_owner;
+	/**
+	 * Bitmask of \e nrs_policy_flags
+	 */
+	unsigned				pd_flags;
+	/**
+	 * # of references on this descriptor
+	 */
+	cfs_atomic_t				pd_refs;
 };
 
 /**
@@ -1160,17 +1230,6 @@ enum ptlrpc_nrs_pol_state {
 	 * Not a valid policy state.
 	 */
 	NRS_POL_STATE_INVALID,
-	/**
-	 * For now, this state is used exclusively for policies that register
-	 * externally to NRS core, i.e. ones that do so via
-	 * ptlrpc_nrs_policy_register() and are not part of nrs_pols_builtin;
-	 * it is used to prevent a race condition between the policy registering
-	 * with more than one service partition while service is operational,
-	 * and the user starting the policy via lprocfs.
-	 *
-	 * \see nrs_pol_make_avail()
-	 */
-	NRS_POL_STATE_UNAVAIL,
 	/**
 	 * Policies are at this state either at the start of their life, or
 	 * transition here when the user selects a different policy to act
@@ -1263,17 +1322,13 @@ struct ptlrpc_nrs_policy {
 	 */
 	struct ptlrpc_nrs	       *pol_nrs;
 	/**
-	 * NRS operations for this policy; points to ptlrpc_nrs_pol_desc::pd_ops
-	 */
-	struct ptlrpc_nrs_pol_ops      *pol_ops;
-	/**
 	 * Private policy data; varies by policy type
 	 */
 	void			       *pol_private;
 	/**
-	 * Human-readable policy name; point to ptlrpc_nrs_pol_desc::pd_name
+	 * Policy descriptor for this policy instance.
 	 */
-	char			       *pol_name;
+	struct ptlrpc_nrs_pol_desc     *pol_desc;
 };
 
 /**
@@ -1351,7 +1406,6 @@ struct nrs_fifo_head {
 };
 
 struct nrs_fifo_req {
-	/** request header, must be the first member of structure */
 	cfs_list_t		fr_list;
 	__u64			fr_sequence;
 };
@@ -1380,7 +1434,6 @@ struct ptlrpc_nrs_request {
 	unsigned			nr_res_idx;
 	unsigned			nr_initialized:1;
 	unsigned			nr_enqueued:1;
-	unsigned			nr_dequeued:1;
 	unsigned			nr_started:1;
 	unsigned			nr_finalized:1;
 	cfs_binheap_node_t		nr_node;
@@ -1715,8 +1768,8 @@ static inline int ptlrpc_req_interpret(const struct lu_env *env,
 /** \addtogroup  nrs
  * @{
  */
-int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_desc *desc);
-int ptlrpc_nrs_policy_unregister(struct ptlrpc_nrs_pol_desc *desc);
+int ptlrpc_nrs_policy_register(struct ptlrpc_nrs_pol_conf *conf);
+int ptlrpc_nrs_policy_unregister(struct ptlrpc_nrs_pol_conf *conf);
 void ptlrpc_nrs_req_hp_move(struct ptlrpc_request *req);
 void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
 				struct ptlrpc_nrs_pol_info *info);
@@ -1727,8 +1780,7 @@ void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
  *
  * For a reliable result, this should be checked under svcpt->scp_req lock.
  */
-static inline bool
-ptlrpc_nrs_req_can_move(struct ptlrpc_request *req)
+static inline bool ptlrpc_nrs_req_can_move(struct ptlrpc_request *req)
 {
 	struct ptlrpc_nrs_request *nrq = &req->rq_nrq;
 
@@ -2436,38 +2488,36 @@ enum ptlrpcd_ctl_flags {
  * \addtogroup nrs
  * @{
  *
- * Service compatibility function; policy is compatible with all services.
+ * Service compatibility function; the policy is compatible with all services.
  *
  * \param[in] svc  The service the policy is attempting to register with.
  * \param[in] desc The policy descriptor
  *
- * \retval true The policy is compatible with the NRS head
+ * \retval true The policy is compatible with the service
  *
  * \see ptlrpc_nrs_pol_desc::pd_compat()
  */
-static inline bool
-nrs_policy_compat_all(struct ptlrpc_service *svc,
-		      const struct ptlrpc_nrs_pol_desc *desc)
+static inline bool nrs_policy_compat_all(const struct ptlrpc_service *svc,
+					 const struct ptlrpc_nrs_pol_desc *desc)
 {
 	return true;
 }
 
 /**
- * Service compatibility function; policy is compatible with only a specific
+ * Service compatibility function; the policy is compatible with only a specific
  * service which is identified by its human-readable name at
  * ptlrpc_service::srv_name.
  *
  * \param[in] svc  The service the policy is attempting to register with.
  * \param[in] desc The policy descriptor
  *
- * \retval false The policy is not compatible with the NRS head
- * \retval true	 The policy is compatible with the NRS head
+ * \retval false The policy is not compatible with the service
+ * \retval true	 The policy is compatible with the service
  *
  * \see ptlrpc_nrs_pol_desc::pd_compat()
  */
-static inline bool
-nrs_policy_compat_one(struct ptlrpc_service *svc,
-		      const struct ptlrpc_nrs_pol_desc *desc)
+static inline bool nrs_policy_compat_one(const struct ptlrpc_service *svc,
+					 const struct ptlrpc_nrs_pol_desc *desc)
 {
 	LASSERT(desc->pd_compat_svc_name != NULL);
 	return strcmp(svc->srv_name, desc->pd_compat_svc_name) == 0;

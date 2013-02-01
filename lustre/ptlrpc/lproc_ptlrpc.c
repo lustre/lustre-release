@@ -424,16 +424,13 @@ extern struct nrs_core nrs_core;
  *
  * \param[in] state The policy state
  */
-static const char *
-nrs_state2str(enum ptlrpc_nrs_pol_state state)
+static const char *nrs_state2str(enum ptlrpc_nrs_pol_state state)
 {
 	switch (state) {
 	default:
 		LBUG();
 	case NRS_POL_STATE_INVALID:
 		return "invalid";
-	case NRS_POL_STATE_UNAVAIL:
-		return "unavail";
 	case NRS_POL_STATE_STOPPED:
 		return "stopped";
 	case NRS_POL_STATE_STOPPING:
@@ -453,15 +450,14 @@ nrs_state2str(enum ptlrpc_nrs_pol_state state)
  * \param[in] policy The policy
  * \param[out] info  Holds returned status information
  */
-void
-nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
-			   struct ptlrpc_nrs_pol_info *info)
+void nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
+				struct ptlrpc_nrs_pol_info *info)
 {
 	LASSERT(policy != NULL);
 	LASSERT(info != NULL);
 	LASSERT(spin_is_locked(&policy->pol_nrs->nrs_lock));
 
-	memcpy(info->pi_name, policy->pol_name, NRS_POL_NAME_MAX);
+	memcpy(info->pi_name, policy->pol_desc->pd_name, NRS_POL_NAME_MAX);
 
 	info->pi_fallback    = !!(policy->pol_flags & PTLRPC_NRS_FL_FALLBACK);
 	info->pi_state	     = policy->pol_state;
@@ -477,9 +473,8 @@ nrs_policy_get_info_locked(struct ptlrpc_nrs_policy *policy,
  * Reads and prints policy status information for all policies of a PTLRPC
  * service.
  */
-static int
-ptlrpc_lprocfs_rd_nrs(char *page, char **start, off_t off,
-		      int count, int *eof, void *data)
+static int ptlrpc_lprocfs_rd_nrs(char *page, char **start, off_t off,
+				 int count, int *eof, void *data)
 {
 	struct ptlrpc_service	       *svc = data;
 	struct ptlrpc_service_part     *svcpt;
@@ -662,9 +657,8 @@ out:
  * if the optional token is omitted, the operation is performed on both the
  * regular and high-priority (if the service has one) NRS head.
  */
-static int
-ptlrpc_lprocfs_wr_nrs(struct file *file, const char *buffer,
-		      unsigned long count, void *data)
+static int ptlrpc_lprocfs_wr_nrs(struct file *file, const char *buffer,
+				 unsigned long count, void *data)
 {
 	struct ptlrpc_service	       *svc = data;
 	enum ptlrpc_nrs_queue_type	queue = PTLRPC_NRS_QUEUE_BOTH;

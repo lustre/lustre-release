@@ -1583,16 +1583,16 @@ static int ptlrpc_server_request_add(struct ptlrpc_service_part *svcpt,
  * User can call it w/o any lock but need to hold
  * ptlrpc_service_part::scp_req_lock to get reliable result
  */
-static int ptlrpc_server_allow_high(struct ptlrpc_service_part *svcpt,
-				    int force)
+static bool ptlrpc_server_allow_high(struct ptlrpc_service_part *svcpt,
+				     bool force)
 {
 	int running = svcpt->scp_nthrs_running;
 
 	if (!nrs_svcpt_has_hp(svcpt))
-		return 0;
+		return false;
 
 	if (force)
-		return 1;
+		return true;
 
 	if (unlikely(svcpt->scp_service->srv_req_portal == MDS_REQUEST_PORTAL &&
 		     CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CANCEL_RESEND))) {
@@ -1603,17 +1603,17 @@ static int ptlrpc_server_allow_high(struct ptlrpc_service_part *svcpt,
 	}
 
 	if (svcpt->scp_nreqs_active >= running - 1)
-		return 0;
+		return false;
 
 	if (svcpt->scp_nhreqs_active == 0)
-		return 1;
+		return true;
 
 	return !ptlrpc_nrs_req_pending_nolock(svcpt, false) ||
 	       svcpt->scp_hreq_count < svcpt->scp_service->srv_hpreq_ratio;
 }
 
-static int ptlrpc_server_high_pending(struct ptlrpc_service_part *svcpt,
-				      int force)
+static bool ptlrpc_server_high_pending(struct ptlrpc_service_part *svcpt,
+				       bool force)
 {
 	return ptlrpc_server_allow_high(svcpt, force) &&
 	       ptlrpc_nrs_req_pending_nolock(svcpt, true);
@@ -1628,13 +1628,13 @@ static int ptlrpc_server_high_pending(struct ptlrpc_service_part *svcpt,
  * User can call it w/o any lock but need to hold
  * ptlrpc_service_part::scp_req_lock to get reliable result
  */
-static int ptlrpc_server_allow_normal(struct ptlrpc_service_part *svcpt,
-				      int force)
+static bool ptlrpc_server_allow_normal(struct ptlrpc_service_part *svcpt,
+				       bool force)
 {
 	int running = svcpt->scp_nthrs_running;
 #ifndef __KERNEL__
 	if (1) /* always allow to handle normal request for liblustre */
-		return 1;
+		return true;
 #endif
 	if (unlikely(svcpt->scp_service->srv_req_portal == MDS_REQUEST_PORTAL &&
 		     CFS_FAIL_PRECHECK(OBD_FAIL_PTLRPC_CANCEL_RESEND))) {
@@ -1646,17 +1646,16 @@ static int ptlrpc_server_allow_normal(struct ptlrpc_service_part *svcpt,
 
 	if (force ||
 	    svcpt->scp_nreqs_active < running - 2)
-		return 1;
+		return true;
 
 	if (svcpt->scp_nreqs_active >= running - 1)
-		return 0;
+		return false;
 
-	return svcpt->scp_nhreqs_active > 0 ||
-	       !nrs_svcpt_has_hp(svcpt);
+	return svcpt->scp_nhreqs_active > 0 || !nrs_svcpt_has_hp(svcpt);
 }
 
-static int ptlrpc_server_normal_pending(struct ptlrpc_service_part *svcpt,
-					int force)
+static bool ptlrpc_server_normal_pending(struct ptlrpc_service_part *svcpt,
+					 bool force)
 {
 	return ptlrpc_server_allow_normal(svcpt, force) &&
 	       ptlrpc_nrs_req_pending_nolock(svcpt, false);
@@ -1670,8 +1669,8 @@ static int ptlrpc_server_normal_pending(struct ptlrpc_service_part *svcpt,
  * \see ptlrpc_server_allow_normal
  * \see ptlrpc_server_allow high
  */
-static inline int
-ptlrpc_server_request_pending(struct ptlrpc_service_part *svcpt, int force)
+static inline bool
+ptlrpc_server_request_pending(struct ptlrpc_service_part *svcpt, bool force)
 {
 	return ptlrpc_server_high_pending(svcpt, force) ||
 	       ptlrpc_server_normal_pending(svcpt, force);
@@ -1683,21 +1682,25 @@ ptlrpc_server_request_pending(struct ptlrpc_service_part *svcpt, int force)
  * Returns a pointer to fetched request.
  */
 static struct ptlrpc_request *
-ptlrpc_server_request_get(struct ptlrpc_service_part *svcpt, int force)
+ptlrpc_server_request_get(struct ptlrpc_service_part *svcpt, bool force)
 {
 	struct ptlrpc_request *req;
 	ENTRY;
 
 	if (ptlrpc_server_high_pending(svcpt, force)) {
-		req = ptlrpc_nrs_req_poll_nolock(svcpt, true);
-		svcpt->scp_hreq_count++;
-		RETURN(req);
+		req = ptlrpc_nrs_req_get_nolock(svcpt, true, force);
+		if (req != NULL) {
+			svcpt->scp_hreq_count++;
+			RETURN(req);
+		}
 	}
 
 	if (ptlrpc_server_normal_pending(svcpt, force)) {
-		req = ptlrpc_nrs_req_poll_nolock(svcpt, false);
-		svcpt->scp_hreq_count = 0;
-		RETURN(req);
+		req = ptlrpc_nrs_req_get_nolock(svcpt, false, force);
+		if (req != NULL) {
+			svcpt->scp_hreq_count = 0;
+			RETURN(req);
+		}
 	}
 	RETURN(NULL);
 }
@@ -1878,8 +1881,8 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 		RETURN(0);
 	}
 #endif
-	request = ptlrpc_server_request_get(svcpt, 0);
-	if  (request == NULL) {
+	request = ptlrpc_server_request_get(svcpt, false);
+	if (request == NULL) {
 		spin_unlock(&svcpt->scp_req_lock);
                 RETURN(0);
         }
@@ -1896,19 +1899,12 @@ ptlrpc_server_handle_request(struct ptlrpc_service_part *svcpt,
 			OBD_FAIL_TIMEOUT(fail_opc, 4);
 
 			spin_lock(&svcpt->scp_req_lock);
-			request = ptlrpc_server_request_get(svcpt, 0);
-			if  (request == NULL) {
-				spin_unlock(&svcpt->scp_req_lock);
-				RETURN(0);
-			}
 		}
 	}
-	ptlrpc_nrs_req_del_nolock(request);
 	svcpt->scp_nreqs_active++;
 	if (request->rq_hp)
 		svcpt->scp_nhreqs_active++;
 
-	ptlrpc_nrs_req_start_nolock(request);
 	spin_unlock(&svcpt->scp_req_lock);
 
         ptlrpc_rqphase_move(request, RQ_PHASE_INTERPRET);
@@ -2334,7 +2330,7 @@ ptlrpc_wait_event(struct ptlrpc_service_part *svcpt,
 	l_wait_event_exclusive_head(svcpt->scp_waitq,
 				ptlrpc_thread_stopping(thread) ||
 				ptlrpc_server_request_incoming(svcpt) ||
-				ptlrpc_server_request_pending(svcpt, 0) ||
+				ptlrpc_server_request_pending(svcpt, false) ||
 				ptlrpc_rqbd_pending(svcpt) ||
 				ptlrpc_at_check(svcpt), &lwi);
 
@@ -2480,7 +2476,7 @@ static int ptlrpc_main(void *arg)
 		if (ptlrpc_at_check(svcpt))
 			ptlrpc_at_check_timed(svcpt);
 
-		if (ptlrpc_server_request_pending(svcpt, 0)) {
+		if (ptlrpc_server_request_pending(svcpt, false)) {
 			lu_context_enter(&env->le_ctx);
 			ptlrpc_server_handle_request(svcpt, thread);
 			lu_context_exit(&env->le_ctx);
@@ -3046,9 +3042,8 @@ ptlrpc_service_purge_all(struct ptlrpc_service *svc)
 			ptlrpc_server_finish_request(svcpt, req);
 		}
 
-		while (ptlrpc_server_request_pending(svcpt, 1)) {
-			req = ptlrpc_server_request_get(svcpt, 1);
-			ptlrpc_nrs_req_del_nolock(req);
+		while (ptlrpc_server_request_pending(svcpt, true)) {
+			req = ptlrpc_server_request_get(svcpt, true);
 			svcpt->scp_nreqs_active++;
 			ptlrpc_server_hpreq_fini(req);
 
@@ -3166,10 +3161,10 @@ int ptlrpc_svcpt_health_check(struct ptlrpc_service_part *svcpt)
 
 	spin_lock(&svcpt->scp_req_lock);
         /* How long has the next entry been waiting? */
-	if (ptlrpc_server_high_pending(svcpt, 1))
-		request = ptlrpc_nrs_req_poll_nolock(svcpt, true);
-	else if (ptlrpc_server_normal_pending(svcpt, 1))
-		request = ptlrpc_nrs_req_poll_nolock(svcpt, false);
+	if (ptlrpc_server_high_pending(svcpt, true))
+		request = ptlrpc_nrs_req_peek_nolock(svcpt, true);
+	else if (ptlrpc_server_normal_pending(svcpt, true))
+		request = ptlrpc_nrs_req_peek_nolock(svcpt, false);
 
 	if (request == NULL) {
 		spin_unlock(&svcpt->scp_req_lock);

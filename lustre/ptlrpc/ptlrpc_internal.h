@@ -95,26 +95,19 @@ void ptlrpc_lprocfs_do_request_stat (struct ptlrpc_request *req,
  */
 struct nrs_core {
 	/**
-	 * Protects nrs_core::nrs_heads, nrs_core::nrs_policies, serializes
-	 * external policy registration/unregistration, and NRS core lprocfs
-	 * operations.
+	 * Protects nrs_core::nrs_policies, serializes external policy
+	 * registration/unregistration, and NRS core lprocfs operations.
 	 */
 	struct mutex nrs_mutex;
 	/* XXX: This is just for liblustre. Remove the #if defined directive
 	 * when the * "cfs_" prefix is dropped from cfs_list_head. */
 #if defined (__linux__) && defined(__KERNEL__)
 	/**
-	 * List of all NRS heads on all service partitions of all services;
-	 * protected by nrs_core::nrs_mutex.
-	 */
-	struct list_head nrs_heads;
-	/**
 	 * List of all policy descriptors registered with NRS core; protected
 	 * by nrs_core::nrs_mutex.
 	 */
 	struct list_head nrs_policies;
 #else
-	struct cfs_list_head nrs_heads;
 	struct cfs_list_head nrs_policies;
 #endif
 
@@ -126,31 +119,43 @@ void ptlrpc_service_nrs_cleanup(struct ptlrpc_service *svc);
 void ptlrpc_nrs_req_initialize(struct ptlrpc_service_part *svcpt,
 			       struct ptlrpc_request *req, bool hp);
 void ptlrpc_nrs_req_finalize(struct ptlrpc_request *req);
-void ptlrpc_nrs_req_start_nolock(struct ptlrpc_request *req);
 void ptlrpc_nrs_req_stop_nolock(struct ptlrpc_request *req);
 void ptlrpc_nrs_req_add(struct ptlrpc_service_part *svcpt,
 			struct ptlrpc_request *req, bool hp);
+
 struct ptlrpc_request *
-ptlrpc_nrs_req_poll_nolock(struct ptlrpc_service_part *svcpt,
-						  bool hp);
+ptlrpc_nrs_req_get_nolock0(struct ptlrpc_service_part *svcpt, bool hp,
+			   bool peek, bool force);
+
+static inline struct ptlrpc_request *
+ptlrpc_nrs_req_get_nolock(struct ptlrpc_service_part *svcpt, bool hp,
+			  bool force)
+{
+	return ptlrpc_nrs_req_get_nolock0(svcpt, hp, false, force);
+}
+
+static inline struct ptlrpc_request *
+ptlrpc_nrs_req_peek_nolock(struct ptlrpc_service_part *svcpt, bool hp)
+{
+	return ptlrpc_nrs_req_get_nolock0(svcpt, hp, true, false);
+}
+
 void ptlrpc_nrs_req_del_nolock(struct ptlrpc_request *req);
 bool ptlrpc_nrs_req_pending_nolock(struct ptlrpc_service_part *svcpt, bool hp);
 
-int ptlrpc_nrs_policy_control(struct ptlrpc_service *svc,
+int ptlrpc_nrs_policy_control(const struct ptlrpc_service *svc,
 			      enum ptlrpc_nrs_queue_type queue, char *name,
 			      enum ptlrpc_nrs_ctl opc, bool single, void *arg);
 
 int ptlrpc_nrs_init(void);
 void ptlrpc_nrs_fini(void);
 
-static inline int
-nrs_svcpt_has_hp(struct ptlrpc_service_part *svcpt)
+static inline bool nrs_svcpt_has_hp(const struct ptlrpc_service_part *svcpt)
 {
 	return svcpt->scp_nrs_hp != NULL;
 }
 
-static inline int
-nrs_svc_has_hp(struct ptlrpc_service *svc)
+static inline bool nrs_svc_has_hp(const struct ptlrpc_service *svc)
 {
 	/**
 	 * If the first service partition has an HP NRS head, all service
@@ -159,33 +164,32 @@ nrs_svc_has_hp(struct ptlrpc_service *svc)
 	return nrs_svcpt_has_hp(svc->srv_parts[0]);
 }
 
-static inline struct ptlrpc_nrs *
-nrs_svcpt2nrs(struct ptlrpc_service_part *svcpt, bool hp)
+static inline
+struct ptlrpc_nrs *nrs_svcpt2nrs(struct ptlrpc_service_part *svcpt, bool hp)
 {
 	LASSERT(ergo(hp, nrs_svcpt_has_hp(svcpt)));
 	return hp ? svcpt->scp_nrs_hp : &svcpt->scp_nrs_reg;
 }
 
-static inline int
-nrs_pol2cptid(struct ptlrpc_nrs_policy *policy)
+static inline int nrs_pol2cptid(const struct ptlrpc_nrs_policy *policy)
 {
 	return policy->pol_nrs->nrs_svcpt->scp_cpt;
 }
 
-static inline struct ptlrpc_service *
-nrs_pol2svc(struct ptlrpc_nrs_policy *policy)
+static inline
+struct ptlrpc_service *nrs_pol2svc(struct ptlrpc_nrs_policy *policy)
 {
 	return policy->pol_nrs->nrs_svcpt->scp_service;
 }
 
-static inline struct ptlrpc_service_part *
-nrs_pol2svcpt(struct ptlrpc_nrs_policy *policy)
+static inline
+struct ptlrpc_service_part *nrs_pol2svcpt(struct ptlrpc_nrs_policy *policy)
 {
 	return policy->pol_nrs->nrs_svcpt;
 }
 
-static inline struct cfs_cpt_table *
-nrs_pol2cptab(struct ptlrpc_nrs_policy *policy)
+static inline
+struct cfs_cpt_table *nrs_pol2cptab(struct ptlrpc_nrs_policy *policy)
 {
 	return nrs_pol2svc(policy)->srv_cptable;
 }
@@ -199,8 +203,8 @@ nrs_request_resource(struct ptlrpc_nrs_request *nrq)
 	return nrq->nr_res_ptrs[nrq->nr_res_idx];
 }
 
-static inline struct ptlrpc_nrs_policy *
-nrs_request_policy(struct ptlrpc_nrs_request *nrq)
+static inline
+struct ptlrpc_nrs_policy *nrs_request_policy(struct ptlrpc_nrs_request *nrq)
 {
 	return nrs_request_resource(nrq)->res_policy;
 }
