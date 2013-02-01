@@ -22,12 +22,7 @@ obdclass-objs := $(obdclass-linux-objs) $(obdclass-all-objs)
 
 EXTRA_PRE_CFLAGS := -I@LINUX@/fs -I@LDISKFS_DIR@ -I@LDISKFS_DIR@/ldiskfs
 
-llog_test-objs := llog-test.o
-
-$(obj)/llog-test.c: $(obj)/llog_test.c
-	ln -sf $< $@
-
-EXTRA_DIST  = $(filter-out llog-test.c,$(obdclass-all-objs:.o=.c)) $(llog-test-objs:.o=.c) llog_test.c llog_internal.h
+EXTRA_DIST = $(obdclass-all-objs:.o=.c) llog_test.c llog_internal.h
 EXTRA_DIST += cl_internal.h local_storage.h
 
 @INCLUDE_RULES@

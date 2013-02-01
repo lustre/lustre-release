@@ -10,9 +10,6 @@ load_llog_test() {
     # But maybe we're running from a developer tree...
     insmod $LUSTRE/obdclass/llog_test.ko
     grep -q llog_test /proc/modules && return
-    # This is for 2.4 kernels (deprecated!)
-    insmod $LUSTRE/obdclass/llog_test.o
-    grep -q llog_test /proc/modules && return
     echo "Unable to load llog_test module!"
     false
     return

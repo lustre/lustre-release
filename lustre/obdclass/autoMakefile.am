@@ -52,5 +52,5 @@ endif # MODULES
 
 install-data-hook: $(install_data_hook)
 
-MOSTLYCLEANFILES := @MOSTLYCLEANFILES@  llog-test.c
+MOSTLYCLEANFILES := @MOSTLYCLEANFILES@
 MOSTLYCLEANFILES += linux/*.o darwin/*.o
