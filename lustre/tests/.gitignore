@@ -36,7 +36,6 @@
 /fchdir_test
 /getdents
 /o_directory
-/mkdirdeep
 /utime
 /small_write
 /multiop
