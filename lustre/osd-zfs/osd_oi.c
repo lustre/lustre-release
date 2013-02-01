@@ -341,7 +341,7 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 		fid_seq_is_mdt0(seq)) ?  LPU64 : LPX64i,
 		fid_seq_is_idif(seq) ? 0 : seq);
 
-	rc = osd_oi_create(env, osd, oi.oi_zapid, seq_name, &odb);
+	rc = osd_oi_find_or_create(env, osd, oi.oi_zapid, seq_name, &odb);
 	if (rc != 0) {
 		CERROR("%s: Can not create %s : rc = %d\n",
 		       osd_name(osd), seq_name, rc);
