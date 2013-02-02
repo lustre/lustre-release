@@ -158,12 +158,12 @@ static ssize_t lprocfs_fops_read(struct file *f, char __user *buf, size_t size,
         if (page == NULL)
                 return -ENOMEM;
 
-        LPROCFS_ENTRY();
-        OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
-        if (!LPROCFS_CHECK_DELETED(dp) && dp->read_proc)
+        if (LPROCFS_ENTRY_AND_CHECK(dp) == 0 && dp->read_proc != NULL) {
+                OBD_FAIL_TIMEOUT(OBD_FAIL_LPROC_REMOVE, 10);
                 rc = dp->read_proc(page, &start, *ppos, PAGE_SIZE,
                         &eof, dp->data);
-        LPROCFS_EXIT();
+                LPROCFS_EXIT();
+        }
         if (rc <= 0)
                 goto out;
 
@@ -199,10 +199,10 @@ static ssize_t lprocfs_fops_write(struct file *f, const char __user *buf,
         struct proc_dir_entry *dp = PDE(f->f_dentry->d_inode);
         int rc = -EIO;
 
-        LPROCFS_ENTRY();
-        if (!LPROCFS_CHECK_DELETED(dp) && dp->write_proc)
+        if (LPROCFS_ENTRY_AND_CHECK(dp) == 0 && dp->write_proc != NULL) {
                 rc = dp->write_proc(f, buf, size, dp->data);
-        LPROCFS_EXIT();
+                LPROCFS_EXIT();
+        }
         return rc;
 }
 
