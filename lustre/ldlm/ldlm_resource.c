@@ -797,6 +797,7 @@ static int ldlm_resource_complain(cfs_hash_t *hs, cfs_hash_bd_t *bd,
 {
         struct ldlm_resource  *res = cfs_hash_object(hs, hnode);
 
+	lock_res(res);
         CERROR("Namespace %s resource refcount nonzero "
                "(%d) after lock cleanup; forcing "
                "cleanup.\n",
@@ -810,6 +811,7 @@ static int ldlm_resource_complain(cfs_hash_t *hs, cfs_hash_bd_t *bd,
                cfs_atomic_read(&res->lr_refcount) - 1);
 
 	ldlm_resource_dump(D_ERROR, res);
+	unlock_res(res);
         return 0;
 }
 
