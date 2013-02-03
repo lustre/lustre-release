@@ -317,6 +317,12 @@ int ptlrpc_register_bulk(struct ptlrpc_request *req)
 	LASSERT(desc->bd_type == BULK_PUT_SINK ||
 		desc->bd_type == BULK_GET_SOURCE);
 
+	/* cleanup the state of the bulk for it will be reused */
+	if (req->rq_resend || req->rq_send_state == LUSTRE_IMP_REPLAY)
+		desc->bd_nob_transferred = 0;
+	else
+		LASSERT(desc->bd_nob_transferred == 0);
+
 	desc->bd_failure = 0;
 
 	peer = desc->bd_import->imp_connection->c_peer;
