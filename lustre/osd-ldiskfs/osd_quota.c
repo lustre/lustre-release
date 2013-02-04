@@ -857,6 +857,8 @@ static int truncate_quota_index(const struct lu_env *env, struct dt_object *dt,
 	int			 rc;
 	ENTRY;
 
+	LASSERT(fid_seq(lu_object_fid(&dt->do_lu)) == FID_SEQ_QUOTA_GLB);
+
 	OBD_ALLOC_PTR(attr);
 	if (attr == NULL)
 		RETURN(-ENOMEM);
