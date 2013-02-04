@@ -65,6 +65,10 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 			const struct lu_fid *fid, struct osd_inode_id *id)
 {
 	struct super_block *sb = osd_sb(osd);
+        unsigned long qf_inums[2] = {
+		le32_to_cpu(LDISKFS_SB(sb)->s_es->s_usr_quota_inum),
+		le32_to_cpu(LDISKFS_SB(sb)->s_es->s_grp_quota_inum)
+	};
 
 	ENTRY;
 	LASSERT(fid_is_acct(fid));
@@ -74,7 +78,7 @@ int osd_acct_obj_lookup(struct osd_thread_info *info, struct osd_device *osd,
 		RETURN(-ENOENT);
 
 	id->oii_gen = OSD_OII_NOGEN;
-	id->oii_ino = LDISKFS_SB(sb)->s_qf_inums[fid2type(fid)];
+	id->oii_ino = qf_inums[fid2type(fid)];
 	if (!ldiskfs_valid_inum(sb, id->oii_ino))
 		RETURN(-ENOENT);
 	RETURN(0);
