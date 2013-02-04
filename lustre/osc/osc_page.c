@@ -718,11 +718,13 @@ int osc_lru_shrink(struct client_obd *cli, int target)
 			clobj = tmp;
 			io->ci_obj = clobj;
 			rc = cl_io_init(env, io, CIT_MISC, clobj);
+
+			client_obd_list_lock(&cli->cl_lru_list_lock);
+
 			if (rc != 0)
 				break;
 
 			++maxscan;
-			client_obd_list_lock(&cli->cl_lru_list_lock);
 			continue;
 		}
 
