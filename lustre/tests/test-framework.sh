@@ -3155,18 +3155,15 @@ init_facets_vars () {
 	if ! remote_mds_nodsh; then
 		for num in $(seq $MDSCOUNT); do
 			DEVNAME=`mdsdevname $num`
-			eval export MDSDEV${num}=$DEVNAME
 			init_facet_vars mds$num $DEVNAME $MDS_MOUNT_OPTS
 		done
 	fi
 
-	eval export MGSDEV=$(mgsdevname)
 	combined_mgs_mds || init_facet_vars mgs $(mgsdevname) $MGS_MOUNT_OPTS
 
 	if ! remote_ost_nodsh; then
 		for num in $(seq $OSTCOUNT); do
 			DEVNAME=$(ostdevname $num)
-			eval export OSTDEV${num}=$DEVNAME
 			init_facet_vars ost$num $DEVNAME $OST_MOUNT_OPTS
 		done
 	fi
