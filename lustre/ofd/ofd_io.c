@@ -223,9 +223,10 @@ int ofd_preprw(const struct lu_env* env, int cmd, struct obd_export *exp,
 	if (OBD_FAIL_CHECK(OBD_FAIL_OST_ENOENT)) {
 		struct ofd_seq		*oseq;
 		oseq = ofd_seq_load(env, ofd, oa->o_seq);
-		if (oseq == NULL) {
-			CERROR("%s: Can not find seq for "LPU64":"LPU64"\n",
-				ofd_name(ofd), oa->o_seq, oa->o_id);
+		if (IS_ERR(oseq)) {
+			CERROR("%s: Can not find seq for "LPU64":"LPU64
+			       ": rc = %ld\n", ofd_name(ofd), oa->o_seq,
+			       oa->o_id, PTR_ERR(oseq));
 			RETURN(-EINVAL);
 		}
 

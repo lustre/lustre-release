@@ -252,6 +252,10 @@ void ofd_seqs_fini(const struct lu_env *env, struct ofd_device *ofd)
 	return;
 }
 
+/**
+ *
+ * \retval the seq with seq number or errno (never NULL)
+ */
 struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 			     obd_seq seq)
 {
@@ -323,7 +327,7 @@ struct ofd_seq *ofd_seq_load(const struct lu_env *env, struct ofd_device *ofd,
 	}
 
 	oseq = ofd_seq_add(env, ofd, oseq);
-	RETURN(oseq);
+	RETURN((oseq != NULL) ? oseq : ERR_PTR(-ENOENT));
 cleanup:
 	ofd_seq_put(env, oseq);
 	return ERR_PTR(rc);

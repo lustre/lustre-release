@@ -577,7 +577,7 @@ static int ofd_get_info(const struct lu_env *env, struct obd_export *exp,
 		ofd_info_init(env, exp);
 		oseq = ofd_seq_load(env, ofd,
 				    (obd_seq)exp->exp_filter_data.fed_group);
-		LASSERT(oseq != NULL);
+		LASSERT(!IS_ERR(oseq));
 		if (last_id) {
 			if (*vallen < sizeof(*last_id)) {
 				ofd_seq_put(env, oseq);
@@ -1183,8 +1183,9 @@ int ofd_create(const struct lu_env *env, struct obd_export *exp,
 	       seq, oa->o_id);
 
 	oseq = ofd_seq_load(env, ofd, seq);
-	if (oseq == NULL) {
-		CERROR("%s: Can't find oseq "LPX64"\n", ofd_name(ofd), seq);
+	if (IS_ERR(oseq)) {
+		CERROR("%s: Can't find FID Sequence "LPX64": rc = %ld\n",
+		       ofd_name(ofd), seq, PTR_ERR(oseq));
 		RETURN(-EINVAL);
 	}
 
