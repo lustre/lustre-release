@@ -815,7 +815,7 @@ static int mgc_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *desc,
                 /* mgs wants the lock, give it up... */
                 LDLM_DEBUG(lock, "MGC blocking CB");
                 ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
+		rc = ldlm_cli_cancel(&lockh, LCF_ASYNC);
                 break;
         case LDLM_CB_CANCELING:
                 /* We've given up the lock, prepare ourselves to update. */

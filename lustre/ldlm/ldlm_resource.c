@@ -203,8 +203,8 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                         int canceled, unused  = ns->ns_nr_unused;
 
                         /* Try to cancel all @ns_nr_unused locks. */
-                        canceled = ldlm_cancel_lru(ns, unused, LDLM_SYNC,
-                                                   LDLM_CANCEL_PASSED);
+			canceled = ldlm_cancel_lru(ns, unused, 0,
+						   LDLM_CANCEL_PASSED);
                         if (canceled < unused) {
                                 CDEBUG(D_DLMTRACE,
                                        "not all requested locks are canceled, "
@@ -215,7 +215,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                 } else {
                         tmp = ns->ns_max_unused;
                         ns->ns_max_unused = 0;
-                        ldlm_cancel_lru(ns, 0, LDLM_SYNC, LDLM_CANCEL_PASSED);
+			ldlm_cancel_lru(ns, 0, 0, LDLM_CANCEL_PASSED);
                         ns->ns_max_unused = tmp;
                 }
                 return count;
@@ -240,7 +240,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                        "changing namespace %s unused locks from %u to %u\n",
                        ldlm_ns_name(ns), ns->ns_nr_unused,
                        (unsigned int)tmp);
-                ldlm_cancel_lru(ns, tmp, LDLM_ASYNC, LDLM_CANCEL_PASSED);
+		ldlm_cancel_lru(ns, tmp, LCF_ASYNC, LDLM_CANCEL_PASSED);
 
                 if (!lru_resize) {
                         CDEBUG(D_DLMTRACE,
@@ -254,7 +254,7 @@ static int lprocfs_wr_lru_size(struct file *file, const char *buffer,
                        ldlm_ns_name(ns), ns->ns_max_unused,
                        (unsigned int)tmp);
                 ns->ns_max_unused = (unsigned int)tmp;
-                ldlm_cancel_lru(ns, 0, LDLM_ASYNC, LDLM_CANCEL_PASSED);
+		ldlm_cancel_lru(ns, 0, LCF_ASYNC, LDLM_CANCEL_PASSED);
 
 		/* Make sure that LRU resize was originally supported before
 		 * turning it on here. */
@@ -765,7 +765,7 @@ static void cleanup_resource(struct ldlm_resource *res, cfs_list_t *q,
 
                         unlock_res(res);
                         ldlm_lock2handle(lock, &lockh);
-                        rc = ldlm_cli_cancel(&lockh);
+			rc = ldlm_cli_cancel(&lockh, LCF_ASYNC);
                         if (rc)
                                 CERROR("ldlm_cli_cancel: %d\n", rc);
                 } else {

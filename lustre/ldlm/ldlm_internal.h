@@ -62,11 +62,6 @@ static inline struct mutex *ldlm_namespace_lock(ldlm_side_t client)
 }
 
 /* ldlm_request.c */
-typedef enum {
-        LDLM_ASYNC,
-        LDLM_SYNC,
-} ldlm_sync_t;
-
 /* Cancel lru flag, it indicates we cancel aged locks. */
 enum {
         LDLM_CANCEL_AGED   = 1 << 0, /* Cancel aged locks (non lru resize). */
@@ -77,8 +72,8 @@ enum {
                                       * sending nor waiting for any rpcs) */
 };
 
-int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t sync,
-                    int flags);
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr,
+		    ldlm_cancel_flags_t sync, int flags);
 int ldlm_cancel_lru_local(struct ldlm_namespace *ns,
                           cfs_list_t *cancels, int count, int max,
                           ldlm_cancel_flags_t cancel_flags, int flags);
@@ -144,8 +139,10 @@ void ldlm_cancel_locks_for_export(struct obd_export *export);
 /* ldlm_lockd.c */
 int ldlm_bl_to_thread_lock(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
                            struct ldlm_lock *lock);
-int ldlm_bl_to_thread_list(struct ldlm_namespace *ns, struct ldlm_lock_desc *ld,
-                           cfs_list_t *cancels, int count, int mode);
+int ldlm_bl_to_thread_list(struct ldlm_namespace *ns,
+			   struct ldlm_lock_desc *ld,
+			   cfs_list_t *cancels, int count,
+			   ldlm_cancel_flags_t cancel_flags);
 
 void ldlm_handle_bl_callback(struct ldlm_namespace *ns,
                              struct ldlm_lock_desc *ld, struct ldlm_lock *lock);

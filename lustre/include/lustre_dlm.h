@@ -1611,7 +1611,8 @@ int ldlm_server_ast(struct lustre_handle *lockh, struct ldlm_lock_desc *new,
                     void *data, __u32 data_len);
 int ldlm_cli_convert(struct lustre_handle *, int new_mode, __u32 *flags);
 int ldlm_cli_update_pool(struct ptlrpc_request *req);
-int ldlm_cli_cancel(struct lustre_handle *lockh);
+int ldlm_cli_cancel(struct lustre_handle *lockh,
+		    ldlm_cancel_flags_t cancel_flags);
 int ldlm_cli_cancel_unused(struct ldlm_namespace *, const struct ldlm_res_id *,
                            ldlm_cancel_flags_t flags, void *opaque);
 int ldlm_cli_cancel_unused_resource(struct ldlm_namespace *ns,

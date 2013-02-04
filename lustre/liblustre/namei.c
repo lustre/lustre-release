@@ -121,7 +121,7 @@ int llu_md_blocking_ast(struct ldlm_lock *lock,
         switch (flag) {
         case LDLM_CB_BLOCKING:
                 ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
+		rc = ldlm_cli_cancel(&lockh, 0);
                 if (rc < 0) {
                         CDEBUG(D_INODE, "ldlm_cli_cancel: %d\n", rc);
                         RETURN(rc);

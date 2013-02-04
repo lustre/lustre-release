@@ -99,7 +99,7 @@ int llu_extent_lock_cancel_cb(struct ldlm_lock *lock,
         switch (flag) {
         case LDLM_CB_BLOCKING:
                 ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
+		rc = ldlm_cli_cancel(&lockh, 0);
                 if (rc != ELDLM_OK)
                         CERROR("ldlm_cli_cancel failed: %d\n", rc);
                 break;

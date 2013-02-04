@@ -681,7 +681,7 @@ static int osc_dlm_blocking_ast0(const struct lu_env *env,
 
                 lockh = &osc_env_info(env)->oti_handle;
                 ldlm_lock2handle(dlmlock, lockh);
-                result = ldlm_cli_cancel(lockh);
+		result = ldlm_cli_cancel(lockh, LCF_ASYNC);
         } else
                 result = 0;
         return result;
@@ -1379,7 +1379,7 @@ static void osc_lock_cancel(const struct lu_env *env,
                 dlmlock->l_flags |= LDLM_FL_CBPENDING;
                 unlock_res_and_lock(dlmlock);
                 if (do_cancel)
-                        result = ldlm_cli_cancel(&olck->ols_handle);
+			result = ldlm_cli_cancel(&olck->ols_handle, LCF_ASYNC);
                 if (result < 0)
                         CL_LOCK_DEBUG(D_ERROR, env, lock,
                                       "lock %p cancel failure with error(%d)\n",

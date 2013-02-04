@@ -166,7 +166,7 @@ static int qsd_glb_blocking_ast(struct ldlm_lock *lock,
 
 		LDLM_DEBUG(lock, "blocking AST on global quota lock");
 		ldlm_lock2handle(lock, &lockh);
-		rc = ldlm_cli_cancel(&lockh);
+		rc = ldlm_cli_cancel(&lockh, LCF_ASYNC);
 		break;
 	}
 	case LDLM_CB_CANCELING: {
@@ -290,7 +290,7 @@ static int qsd_id_blocking_ast(struct ldlm_lock *lock, struct ldlm_lock_desc *de
 
 		LDLM_DEBUG(lock, "blocking AST on ID quota lock");
 		ldlm_lock2handle(lock, &lockh);
-		rc = ldlm_cli_cancel(&lockh);
+		rc = ldlm_cli_cancel(&lockh, LCF_ASYNC);
 		break;
 	}
 	case LDLM_CB_CANCELING: {

@@ -332,7 +332,7 @@ int ldlm_blocking_ast_nocheck(struct ldlm_lock *lock)
 
                 LDLM_DEBUG(lock, "already unused, calling ldlm_cli_cancel");
                 ldlm_lock2handle(lock, &lockh);
-                rc = ldlm_cli_cancel(&lockh);
+		rc = ldlm_cli_cancel(&lockh, LCF_ASYNC);
                 if (rc < 0)
                         CERROR("ldlm_cli_cancel: %d\n", rc);
         } else {
@@ -1341,7 +1341,8 @@ EXPORT_SYMBOL(ldlm_cli_update_pool);
  *
  * Lock must not have any readers or writers by this time.
  */
-int ldlm_cli_cancel(struct lustre_handle *lockh)
+int ldlm_cli_cancel(struct lustre_handle *lockh,
+		    ldlm_cancel_flags_t cancel_flags)
 {
         struct obd_export *exp;
 	int avail, flags, count = 1;
@@ -1382,7 +1383,7 @@ int ldlm_cli_cancel(struct lustre_handle *lockh)
                 count += ldlm_cancel_lru_local(ns, &cancels, 0, avail - 1,
                                                LCF_BL_AST, flags);
         }
-        ldlm_cli_cancel_list(&cancels, count, NULL, 0);
+	ldlm_cli_cancel_list(&cancels, count, NULL, cancel_flags);
         RETURN(0);
 }
 EXPORT_SYMBOL(ldlm_cli_cancel);
@@ -1774,29 +1775,30 @@ int ldlm_cancel_lru_local(struct ldlm_namespace *ns, cfs_list_t *cancels,
 /**
  * Cancel at least \a nr locks from given namespace LRU.
  *
- * When called with LDLM_ASYNC the blocking callback will be handled
+ * When called with LCF_ASYNC the blocking callback will be handled
  * in a thread and this function will return after the thread has been
- * asked to call the callback.  When called with LDLM_SYNC the blocking
+ * asked to call the callback.  When called with LCF_ASYNC the blocking
  * callback will be performed in this function.
  */
-int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr, ldlm_sync_t mode,
-                    int flags)
+int ldlm_cancel_lru(struct ldlm_namespace *ns, int nr,
+		    ldlm_cancel_flags_t cancel_flags,
+		    int flags)
 {
-        CFS_LIST_HEAD(cancels);
-        int count, rc;
-        ENTRY;
+	CFS_LIST_HEAD(cancels);
+	int count, rc;
+	ENTRY;
 
 #ifndef __KERNEL__
-        mode = LDLM_SYNC; /* force to be sync in user space */
+	cancel_flags &= ~LCF_ASYNC; /* force to be sync in user space */
 #endif
-        /* Just prepare the list of locks, do not actually cancel them yet.
-         * Locks are cancelled later in a separate thread. */
-        count = ldlm_prepare_lru_list(ns, &cancels, nr, 0, flags);
-        rc = ldlm_bl_to_thread_list(ns, NULL, &cancels, count, mode);
-        if (rc == 0)
-                RETURN(count);
+	/* Just prepare the list of locks, do not actually cancel them yet.
+	 * Locks are cancelled later in a separate thread. */
+	count = ldlm_prepare_lru_list(ns, &cancels, nr, 0, flags);
+	rc = ldlm_bl_to_thread_list(ns, NULL, &cancels, count, cancel_flags);
+	if (rc == 0)
+		RETURN(count);
 
-        RETURN(0);
+	RETURN(0);
 }
 
 /**
