@@ -194,10 +194,10 @@ static int mdt_server_data_init(const struct lu_env *env,
         CLASSERT(offsetof(struct lsd_client_data, lcd_padding) +
                 sizeof(lcd->lcd_padding) == LR_CLIENT_SIZE);
 
-	rc = server_name2index(obd->obd_name, &index, NULL);
+	rc = server_name2index(mdt_obd_name(mdt), &index, NULL);
 	if (rc < 0) {
 		CERROR("%s: Can not get index from obd_name: rc = %d\n",
-		       obd->obd_name, rc);
+		       mdt_obd_name(mdt), rc);
 		RETURN(rc);
 	}
 
@@ -210,105 +210,106 @@ static int mdt_server_data_init(const struct lu_env *env,
         if (rc)
                 RETURN(rc);
 
-        last_rcvd_size = (unsigned long)la->la_size;
+	last_rcvd_size = (unsigned long)la->la_size;
 
-        if (last_rcvd_size == 0) {
-                LCONSOLE_WARN("%s: new disk, initializing\n", obd->obd_name);
+	if (last_rcvd_size == 0) {
+		LCONSOLE_WARN("%s: new disk, initializing\n",
+			      mdt_obd_name(mdt));
 
-                memcpy(lsd->lsd_uuid, obd->obd_uuid.uuid,
-                       sizeof(lsd->lsd_uuid));
-                lsd->lsd_last_transno = 0;
-                lsd->lsd_mount_count = 0;
-                lsd->lsd_server_size = LR_SERVER_SIZE;
-                lsd->lsd_client_start = LR_CLIENT_START;
-                lsd->lsd_client_size = LR_CLIENT_SIZE;
-                lsd->lsd_feature_compat = OBD_COMPAT_MDT;
-                lsd->lsd_feature_rocompat = OBD_ROCOMPAT_LOVOBJID;
+		memcpy(lsd->lsd_uuid, obd->obd_uuid.uuid,
+		       sizeof(lsd->lsd_uuid));
+		lsd->lsd_last_transno = 0;
+		lsd->lsd_mount_count = 0;
+		lsd->lsd_server_size = LR_SERVER_SIZE;
+		lsd->lsd_client_start = LR_CLIENT_START;
+		lsd->lsd_client_size = LR_CLIENT_SIZE;
+		lsd->lsd_feature_compat = OBD_COMPAT_MDT;
+		lsd->lsd_feature_rocompat = OBD_ROCOMPAT_LOVOBJID;
 		lsd->lsd_feature_incompat = OBD_INCOMPAT_MDT |
 					    OBD_INCOMPAT_COMMON_LR |
 					    OBD_INCOMPAT_MULTI_OI;
 		lsd->lsd_osd_index = index;
 	} else {
-		LCONSOLE_WARN("%s: used disk, loading\n", obd->obd_name);
+		LCONSOLE_WARN("%s: used disk, loading\n", mdt_obd_name(mdt));
 		rc = tgt_server_data_read(env, &mdt->mdt_lut);
-                if (rc) {
-                        CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
-                        GOTO(out, rc);
-                }
-                if (strcmp(lsd->lsd_uuid, obd->obd_uuid.uuid) != 0) {
-                        LCONSOLE_ERROR_MSG(0x157, "Trying to start OBD %s using"
-                                           "the wrong disk %s. Were the /dev/ "
-                                           "assignments rearranged?\n",
-                                           obd->obd_uuid.uuid, lsd->lsd_uuid);
-                        GOTO(out, rc = -EINVAL);
-                }
-                lsd->lsd_feature_compat |= OBD_COMPAT_MDT;
-                lsd->lsd_feature_incompat |= OBD_INCOMPAT_MDT |
-                                             OBD_INCOMPAT_COMMON_LR;
+		if (rc) {
+			CERROR("error reading MDS %s: rc %d\n", LAST_RCVD, rc);
+			GOTO(out, rc);
+		}
+		if (strcmp(lsd->lsd_uuid, obd->obd_uuid.uuid) != 0) {
+			LCONSOLE_ERROR_MSG(0x157, "Trying to start OBD %s using"
+					   "the wrong disk %s. Were the /dev/ "
+					   "assignments rearranged?\n",
+					   obd->obd_uuid.uuid, lsd->lsd_uuid);
+			GOTO(out, rc = -EINVAL);
+		}
+		lsd->lsd_feature_compat |= OBD_COMPAT_MDT;
+		lsd->lsd_feature_incompat |= OBD_INCOMPAT_MDT |
+						OBD_INCOMPAT_COMMON_LR;
 		if (lsd->lsd_osd_index != index) {
 			LCONSOLE_ERROR_MSG(0x157, "%s: index %d in last rcvd is"
 					   "different with the index %d in"
 					   "config log, It might be disk"
-					   "corruption!\n", obd->obd_name,
+					   "corruption!\n", mdt_obd_name(mdt),
 					   lsd->lsd_osd_index, index);
 			GOTO(out, rc = -EINVAL);
 		}
 	}
-        mount_count = lsd->lsd_mount_count;
+	mount_count = lsd->lsd_mount_count;
 
-        if (lsd->lsd_feature_incompat & ~MDT_INCOMPAT_SUPP) {
-                CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
-                       obd->obd_name,
-                       lsd->lsd_feature_incompat & ~MDT_INCOMPAT_SUPP);
-                GOTO(out, rc = -EINVAL);
-        }
-        if (lsd->lsd_feature_rocompat & ~MDT_ROCOMPAT_SUPP) {
-                CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
-                       obd->obd_name,
-                       lsd->lsd_feature_rocompat & ~MDT_ROCOMPAT_SUPP);
-                /* XXX: Do something like remount filesystem read-only */
-                GOTO(out, rc = -EINVAL);
-        }
-        /** Interop: evict all clients at first boot with 1.8 last_rcvd */
-        if (!(lsd->lsd_feature_compat & OBD_COMPAT_20)) {
-                if (last_rcvd_size > lsd->lsd_client_start) {
-                        LCONSOLE_WARN("Mounting %s at first time on 1.8 FS, "
-                                      "remove all clients for interop needs\n",
-                                      obd->obd_name);
+	if (lsd->lsd_feature_incompat & ~MDT_INCOMPAT_SUPP) {
+		CERROR("%s: unsupported incompat filesystem feature(s) %x\n",
+		       mdt_obd_name(mdt),
+		       lsd->lsd_feature_incompat & ~MDT_INCOMPAT_SUPP);
+		GOTO(out, rc = -EINVAL);
+	}
+	if (lsd->lsd_feature_rocompat & ~MDT_ROCOMPAT_SUPP) {
+		CERROR("%s: unsupported read-only filesystem feature(s) %x\n",
+		       mdt_obd_name(mdt),
+		       lsd->lsd_feature_rocompat & ~MDT_ROCOMPAT_SUPP);
+		/* XXX: Do something like remount filesystem read-only */
+		GOTO(out, rc = -EINVAL);
+	}
+	/** Interop: evict all clients at first boot with 1.8 last_rcvd */
+	if (!(lsd->lsd_feature_compat & OBD_COMPAT_20)) {
+		if (last_rcvd_size > lsd->lsd_client_start) {
+			LCONSOLE_WARN("Mounting %s at first time on 1.8 FS, "
+				      "remove all clients for interop needs\n",
+				      mdt_obd_name(mdt));
 			rc = tgt_truncate_last_rcvd(env, &mdt->mdt_lut,
 						    lsd->lsd_client_start);
 			if (rc)
 				GOTO(out, rc);
-                        last_rcvd_size = lsd->lsd_client_start;
-                }
-                /** set 2.0 flag to upgrade/downgrade between 1.8 and 2.0 */
-                lsd->lsd_feature_compat |= OBD_COMPAT_20;
-        }
+			last_rcvd_size = lsd->lsd_client_start;
+		}
+		/** set 2.0 flag to upgrade/downgrade between 1.8 and 2.0 */
+		lsd->lsd_feature_compat |= OBD_COMPAT_20;
+	}
 
-        lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
+	lsd->lsd_feature_incompat |= OBD_INCOMPAT_FID;
 
 	spin_lock(&mdt->mdt_lut.lut_translock);
 	mdt->mdt_lut.lut_last_transno = lsd->lsd_last_transno;
 	spin_unlock(&mdt->mdt_lut.lut_translock);
 
-        CDEBUG(D_INODE, "========BEGIN DUMPING LAST_RCVD========\n");
-        CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
-               obd->obd_name, mdt->mdt_lut.lut_last_transno);
-        CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
-               obd->obd_name, mount_count + 1);
-        CDEBUG(D_INODE, "%s: server data size: %u\n",
-               obd->obd_name, lsd->lsd_server_size);
-        CDEBUG(D_INODE, "%s: per-client data start: %u\n",
-               obd->obd_name, lsd->lsd_client_start);
-        CDEBUG(D_INODE, "%s: per-client data size: %u\n",
-               obd->obd_name, lsd->lsd_client_size);
-        CDEBUG(D_INODE, "%s: last_rcvd size: %lu\n",
-               obd->obd_name, last_rcvd_size);
-        CDEBUG(D_INODE, "%s: last_rcvd clients: %lu\n", obd->obd_name,
-               last_rcvd_size <= lsd->lsd_client_start ? 0 :
-               (last_rcvd_size - lsd->lsd_client_start) /
-                lsd->lsd_client_size);
-        CDEBUG(D_INODE, "========END DUMPING LAST_RCVD========\n");
+	CDEBUG(D_INODE, "=======,=BEGIN DUMPING LAST_RCVD========\n");
+	CDEBUG(D_INODE, "%s: server last_transno: "LPU64"\n",
+	       mdt_obd_name(mdt), mdt->mdt_lut.lut_last_transno);
+	CDEBUG(D_INODE, "%s: server mount_count: "LPU64"\n",
+	       mdt_obd_name(mdt), mount_count + 1);
+	CDEBUG(D_INODE, "%s: server data size: %u\n",
+	       mdt_obd_name(mdt), lsd->lsd_server_size);
+	CDEBUG(D_INODE, "%s: per-client data start: %u\n",
+	       mdt_obd_name(mdt), lsd->lsd_client_start);
+	CDEBUG(D_INODE, "%s: per-client data size: %u\n",
+	       mdt_obd_name(mdt), lsd->lsd_client_size);
+	CDEBUG(D_INODE, "%s: last_rcvd size: %lu\n",
+	       mdt_obd_name(mdt), last_rcvd_size);
+	CDEBUG(D_INODE, "%s: last_rcvd clients: %lu\n", mdt_obd_name(mdt),
+	       last_rcvd_size <= lsd->lsd_client_start ? 0 :
+	       (last_rcvd_size - lsd->lsd_client_start) /
+		lsd->lsd_client_size);
+	CDEBUG(D_INODE, "========END DUMPING LAST_RCVD========\n");
 
         if (!lsd->lsd_server_size || !lsd->lsd_client_start ||
             !lsd->lsd_client_size) {
@@ -457,7 +458,7 @@ static int mdt_last_rcvd_update(struct mdt_thread_info *mti,
 			err = tgt_server_data_write(mti->mti_env, tg, th);
 	} else if (off <= 0) {
 		CERROR("%s: client idx %d has offset %lld\n",
-		       mdt2obd_dev(mdt)->obd_name, ted->ted_lr_idx, off);
+		       mdt_obd_name(mdt), ted->ted_lr_idx, off);
 		mutex_unlock(&ted->ted_lcd_lock);
 		err = -EINVAL;
 	} else {

@@ -3724,8 +3724,8 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 	ENTRY;
 
 	if (opcode != MDT_IT_LAYOUT) {
-		CERROR("%s: Unknown intent (%d)\n",
-			info->mti_exp->exp_obd->obd_name, opcode);
+		CERROR("%s: Unknown intent (%d)\n", mdt_obd_name(info->mti_mdt),
+			opcode);
 		RETURN(-EINVAL);
 	}
 
@@ -3743,7 +3743,7 @@ static int mdt_intent_layout(enum mdt_it_code opcode,
 		RETURN(0);
 
 	CERROR("%s: Unsupported layout intent (%d)\n",
-		info->mti_exp->exp_obd->obd_name, layout->li_opc);
+		mdt_obd_name(info->mti_mdt), layout->li_opc);
 	RETURN(-EINVAL);
 }
 
@@ -4145,7 +4145,7 @@ static void mdt_stack_pre_fini(const struct lu_env *env,
 	 * objects (some of them are pinned by osd, for example *
 	 * the proper solution should be a model where object used
 	 * by osd only doesn't have mdt/mdd slices -bzzz */
-	lustre_cfg_bufs_reset(bufs, obd->obd_name);
+	lustre_cfg_bufs_reset(bufs, mdt_obd_name(m));
 	lustre_cfg_bufs_set_string(bufs, 1, NULL);
 	lcfg = lustre_cfg_new(LCFG_PRE_CLEANUP, bufs);
 	if (!lcfg) {
@@ -4158,44 +4158,44 @@ static void mdt_stack_pre_fini(const struct lu_env *env,
 }
 
 static void mdt_stack_fini(const struct lu_env *env,
-                           struct mdt_device *m, struct lu_device *top)
+			   struct mdt_device *m, struct lu_device *top)
 {
-        struct obd_device       *obd = mdt2obd_dev(m);
-        struct lustre_cfg_bufs  *bufs;
-        struct lustre_cfg       *lcfg;
-        struct mdt_thread_info  *info;
-        char flags[3]="";
-        ENTRY;
+	struct obd_device	*obd = mdt2obd_dev(m);
+	struct lustre_cfg_bufs	*bufs;
+	struct lustre_cfg	*lcfg;
+	struct mdt_thread_info	*info;
+	char			 flags[3] = "";
+	ENTRY;
 
-        info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
-        LASSERT(info != NULL);
+	info = lu_context_key_get(&env->le_ctx, &mdt_thread_key);
+	LASSERT(info != NULL);
 
 	lu_dev_del_linkage(top->ld_site, top);
 
 	lu_site_purge(env, top->ld_site, -1);
 
-        bufs = &info->mti_u.bufs;
-        /* process cleanup, pass mdt obd name to get obd umount flags */
+	bufs = &info->mti_u.bufs;
+	/* process cleanup, pass mdt obd name to get obd umount flags */
 	/* another purpose is to let all layers to release their objects */
-        lustre_cfg_bufs_reset(bufs, obd->obd_name);
-        if (obd->obd_force)
-                strcat(flags, "F");
-        if (obd->obd_fail)
-                strcat(flags, "A");
-        lustre_cfg_bufs_set_string(bufs, 1, flags);
-        lcfg = lustre_cfg_new(LCFG_CLEANUP, bufs);
-        if (!lcfg) {
-                CERROR("Cannot alloc lcfg!\n");
-                return;
-        }
-        LASSERT(top);
-        top->ld_ops->ldo_process_config(env, top, lcfg);
-        lustre_cfg_free(lcfg);
+	lustre_cfg_bufs_reset(bufs, mdt_obd_name(m));
+	if (obd->obd_force)
+		strcat(flags, "F");
+	if (obd->obd_fail)
+		strcat(flags, "A");
+	lustre_cfg_bufs_set_string(bufs, 1, flags);
+	lcfg = lustre_cfg_new(LCFG_CLEANUP, bufs);
+	if (!lcfg) {
+		CERROR("Cannot alloc lcfg!\n");
+		return;
+	}
+	LASSERT(top);
+	top->ld_ops->ldo_process_config(env, top, lcfg);
+	lustre_cfg_free(lcfg);
 
 	lu_site_purge(env, top->ld_site, -1);
 
-        m->mdt_child = NULL;
-        m->mdt_bottom = NULL;
+	m->mdt_child = NULL;
+	m->mdt_bottom = NULL;
 
 	obd_disconnect(m->mdt_child_exp);
 	m->mdt_child_exp = NULL;
@@ -4219,7 +4219,7 @@ static int mdt_connect_to_next(const struct lu_env *env, struct mdt_device *m,
 	obd = class_name2obd(next);
 	if (obd == NULL) {
 		CERROR("%s: can't locate next device: %s\n",
-		       m->mdt_md_dev.md_lu_dev.ld_obd->obd_name, next);
+		       mdt_obd_name(m), next);
 		GOTO(out, rc = -ENOTCONN);
 	}
 
@@ -4229,7 +4229,7 @@ static int mdt_connect_to_next(const struct lu_env *env, struct mdt_device *m,
 	rc = obd_connect(NULL, exp, obd, &obd->obd_uuid, data, NULL);
 	if (rc) {
 		CERROR("%s: cannot connect to next dev %s (%d)\n",
-		       m->mdt_md_dev.md_lu_dev.ld_obd->obd_name, next, rc);
+		       mdt_obd_name(m), next, rc);
 		GOTO(out, rc);
 	}
 
@@ -4345,7 +4345,7 @@ static int mdt_stack_init(const struct lu_env *env, struct mdt_device *mdt,
 
 	site = mdt->mdt_child_exp->exp_obd->obd_lu_dev->ld_site;
 	LASSERT(site);
-	LASSERT(mdt->mdt_md_dev.md_lu_dev.ld_site == NULL);
+	LASSERT(mdt_lu_site(mdt) == NULL);
 	mdt->mdt_md_dev.md_lu_dev.ld_site = site;
 	site->ls_top_dev = &mdt->mdt_md_dev.md_lu_dev;
 	mdt->mdt_child = lu2md_dev(mdt->mdt_child_exp->exp_obd->obd_lu_dev);
@@ -4579,40 +4579,40 @@ static void mdt_fini(const struct lu_env *env, struct mdt_device *m)
         cfs_timer_disarm(&m->mdt_ck_timer);
         mdt_ck_thread_stop(m);
 
-        /*
-         * Finish the stack
-         */
-        mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
+	/*
+	 * Finish the stack
+	 */
+	mdt_stack_fini(env, m, md2lu_dev(m->mdt_child));
 
-        LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
+	LASSERT(cfs_atomic_read(&d->ld_ref) == 0);
 
-	server_put_mount(mdt2obd_dev(m)->obd_name, NULL);
+	server_put_mount(mdt_obd_name(m), NULL);
 
-        EXIT;
+	EXIT;
 }
 
 static int mdt_adapt_sptlrpc_conf(struct obd_device *obd, int initial)
 {
-        struct mdt_device       *m = mdt_dev(obd->obd_lu_dev);
-        struct sptlrpc_rule_set  tmp_rset;
-        int                      rc;
+	struct mdt_device	*m = mdt_dev(obd->obd_lu_dev);
+	struct sptlrpc_rule_set	 tmp_rset;
+	int			 rc;
 
-        sptlrpc_rule_set_init(&tmp_rset);
-        rc = sptlrpc_conf_target_get_rules(obd, &tmp_rset, initial);
-        if (rc) {
-                CERROR("mdt %s: failed get sptlrpc rules: %d\n",
-                       obd->obd_name, rc);
-                return rc;
-        }
+	sptlrpc_rule_set_init(&tmp_rset);
+	rc = sptlrpc_conf_target_get_rules(obd, &tmp_rset, initial);
+	if (rc) {
+		CERROR("mdt %s: failed get sptlrpc rules: %d\n",
+		       mdt_obd_name(m), rc);
+		return rc;
+	}
 
-        sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
+	sptlrpc_target_update_exp_flavor(obd, &tmp_rset);
 
 	write_lock(&m->mdt_sptlrpc_lock);
-        sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
-        m->mdt_sptlrpc_rset = tmp_rset;
+	sptlrpc_rule_set_free(&m->mdt_sptlrpc_rset);
+	m->mdt_sptlrpc_rset = tmp_rset;
 	write_unlock(&m->mdt_sptlrpc_lock);
 
-        return 0;
+	return 0;
 }
 
 int mdt_postrecov(const struct lu_env *, struct mdt_device *);
@@ -4700,12 +4700,13 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
 	/* init the stack */
 	rc = mdt_stack_init((struct lu_env *)env, m, cfg);
 	if (rc) {
-		CERROR("Can't init device stack, rc %d\n", rc);
+		CERROR("%s: Can't init device stack, rc %d\n",
+		       mdt_obd_name(m), rc);
 		GOTO(err_lmi, rc);
 	}
 
-	s = m->mdt_md_dev.md_lu_dev.ld_site;
-	ss_site = &m->mdt_seq_site;
+	s = mdt_lu_site(m);
+	ss_site = mdt_seq_site(m);
 	s->ld_seq_site = ss_site;
 	ss_site->ss_lu = s;
 
@@ -4720,23 +4721,23 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         /* No connection accepted until configurations will finish */
         obd->obd_no_conn = 1;
 
-        if (cfg->lcfg_bufcount > 4 && LUSTRE_CFG_BUFLEN(cfg, 4) > 0) {
-                char *str = lustre_cfg_string(cfg, 4);
-                if (strchr(str, 'n')) {
-                        CWARN("%s: recovery disabled\n", obd->obd_name);
-                        obd->obd_replayable = 0;
-                }
-        }
+	if (cfg->lcfg_bufcount > 4 && LUSTRE_CFG_BUFLEN(cfg, 4) > 0) {
+		char *str = lustre_cfg_string(cfg, 4);
+		if (strchr(str, 'n')) {
+			CWARN("%s: recovery disabled\n", mdt_obd_name(m));
+			obd->obd_replayable = 0;
+		}
+	}
 
         rc = tgt_init(env, &m->mdt_lut, obd, m->mdt_bottom);
         if (rc)
                 GOTO(err_fini_stack, rc);
 
-	rc = mdt_fld_init(env, obd->obd_name, m);
+	rc = mdt_fld_init(env, mdt_obd_name(m), m);
 	if (rc)
 		GOTO(err_lut, rc);
 
-	rc = mdt_seq_init(env, obd->obd_name, m);
+	rc = mdt_seq_init(env, mdt_obd_name(m), m);
 	if (rc)
 		GOTO(err_fini_fld, rc);
 
@@ -4784,18 +4785,19 @@ static int mdt_init0(const struct lu_env *env, struct mdt_device *m,
         else
                 m->mdt_opts.mo_acl = 0;
 
-        /* XXX: to support suppgid for ACL, we enable identity_upcall
-         * by default, otherwise, maybe got unexpected -EACCESS. */
-        if (m->mdt_opts.mo_acl)
-                identity_upcall = MDT_IDENTITY_UPCALL_PATH;
+	/* XXX: to support suppgid for ACL, we enable identity_upcall
+	 * by default, otherwise, maybe got unexpected -EACCESS. */
+	if (m->mdt_opts.mo_acl)
+		identity_upcall = MDT_IDENTITY_UPCALL_PATH;
 
-        m->mdt_identity_cache = upcall_cache_init(obd->obd_name,identity_upcall,
-                                                &mdt_identity_upcall_cache_ops);
-        if (IS_ERR(m->mdt_identity_cache)) {
-                rc = PTR_ERR(m->mdt_identity_cache);
-                m->mdt_identity_cache = NULL;
+	m->mdt_identity_cache = upcall_cache_init(mdt_obd_name(m),
+						identity_upcall,
+						&mdt_identity_upcall_cache_ops);
+	if (IS_ERR(m->mdt_identity_cache)) {
+		rc = PTR_ERR(m->mdt_identity_cache);
+		m->mdt_identity_cache = NULL;
 		GOTO(err_llog_cleanup, rc);
-        }
+	}
 
         rc = mdt_procfs_init(m, dev);
         if (rc) {
@@ -5148,7 +5150,7 @@ static int mdt_connect_internal(struct obd_export *exp,
 			       "unexpectedly zero, network data "
 			       "corruption? Refusing connection of this"
 			       " client\n",
-			       exp->exp_obd->obd_name,
+			       mdt_obd_name(mdt),
 			       exp->exp_client_uuid.uuid,
 			       exp, data->ocd_connect_flags, data->ocd_version,
 			       data->ocd_grant, data->ocd_index);
@@ -5173,7 +5175,7 @@ static int mdt_connect_internal(struct obd_export *exp,
 
 	if ((data->ocd_connect_flags & OBD_CONNECT_FID) == 0) {
 		CWARN("%s: MDS requires FID support, but client not\n",
-		      mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
+		      mdt_obd_name(mdt));
 		return -EBADE;
 	}
 
@@ -5182,7 +5184,7 @@ static int mdt_connect_internal(struct obd_export *exp,
 					 OBD_CONNECT_MDS_MDS |
 					 OBD_CONNECT_SOM))) {
 		CWARN("%s: MDS has SOM enabled, but client does not support "
-		      "it\n", mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name);
+		      "it\n", mdt_obd_name(mdt));
 		return -EBADE;
 	}
 
@@ -5680,7 +5682,6 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 			struct getinfo_fid2path *fp)
 {
 	struct mdt_device *mdt = info->mti_mdt;
-	struct obd_device *obd = mdt2obd_dev(mdt);
 	struct mdt_object *obj;
 	int    rc;
 	ENTRY;
@@ -5693,15 +5694,15 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 
 	if (!fid_is_namespace_visible(&fp->gf_fid)) {
 		CWARN("%s: "DFID" is invalid, sequence should be "
-			">= "LPX64"\n", obd->obd_name,
-			PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);
+		      ">= "LPX64"\n", mdt_obd_name(mdt),
+		      PFID(&fp->gf_fid), (__u64)FID_SEQ_NORMAL);
 		RETURN(-EINVAL);
 	}
 
 	obj = mdt_object_find(info->mti_env, mdt, &fp->gf_fid);
 	if (obj == NULL || IS_ERR(obj)) {
 		CDEBUG(D_IOCTL, "no object "DFID": %ld\n", PFID(&fp->gf_fid),
-			PTR_ERR(obj));
+		       PTR_ERR(obj));
 		RETURN(-EINVAL);
 	}
 
@@ -5715,7 +5716,7 @@ static int mdt_fid2path(struct mdt_thread_info *info,
 	if (rc < 0) {
 		mdt_object_put(info->mti_env, obj);
 		CDEBUG(D_IOCTL, "nonlocal object "DFID": %d\n",
-			PFID(&fp->gf_fid), rc);
+		       PFID(&fp->gf_fid), rc);
 		RETURN(rc);
 	}
 
@@ -5887,11 +5888,11 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
         case OBD_IOC_SET_READONLY:
                 rc = dt->dd_ops->dt_ro(&env, dt);
                 break;
-        case OBD_IOC_ABORT_RECOVERY:
-                CERROR("Aborting recovery for device %s\n", obd->obd_name);
-                target_stop_recovery_thread(obd);
-                rc = 0;
-                break;
+	case OBD_IOC_ABORT_RECOVERY:
+		CERROR("%s: Aborting recovery for device\n", mdt_obd_name(mdt));
+		target_stop_recovery_thread(obd);
+		rc = 0;
+		break;
         case OBD_IOC_CHANGELOG_REG:
         case OBD_IOC_CHANGELOG_DEREG:
         case OBD_IOC_CHANGELOG_CLEAR:
@@ -5923,11 +5924,11 @@ static int mdt_iocontrol(unsigned int cmd, struct obd_export *exp, int len,
                 rc = mdt_ioc_version_get(mti, karg);
                 break;
         }
-        default:
-                CERROR("Not supported cmd = %d for device %s\n",
-                       cmd, obd->obd_name);
-                rc = -EOPNOTSUPP;
-        }
+	default:
+		rc = -EOPNOTSUPP;
+		CERROR("%s: Not supported cmd = %d, rc = %d\n",
+			mdt_obd_name(mdt), cmd, rc);
+	}
 
         lu_env_fini(&env);
         RETURN(rc);

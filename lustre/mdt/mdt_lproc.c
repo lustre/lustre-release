@@ -162,14 +162,12 @@ LPROC_SEQ_FOPS(mdt_rename_stats);
 
 static int lproc_mdt_attach_rename_seqstat(struct mdt_device *mdt)
 {
-	struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
-	struct obd_device *obd = ld->ld_obd;
 	int i;
 
 	for (i = 0; i < RENAME_LAST; i++)
 		spin_lock_init(&mdt->mdt_rename_stats.hist[i].oh_lock);
 
-	return lprocfs_obd_seq_create(obd, "rename_stats", 0644,
+	return lprocfs_obd_seq_create(mdt2obd_dev(mdt), "rename_stats", 0644,
 				      &mdt_rename_stats_fops, mdt);
 }
 
@@ -188,8 +186,7 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
         rc = mo_attr_get(info->mti_env, mdt_object_child(src), ma);
         if (rc) {
                 CERROR("%s: "DFID" attr_get, rc = %d\n",
-		       req->rq_export->exp_obd->obd_name,
-		       PFID(mdt_object_fid(src)), rc);
+		       mdt_obd_name(mdt), PFID(mdt_object_fid(src)), rc);
                 return;
         }
 
@@ -209,8 +206,7 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
         rc = mo_attr_get(info->mti_env, mdt_object_child(tgt), ma);
         if (rc) {
                 CERROR("%s: "DFID" attr_get, rc = %d\n",
-		       req->rq_export->exp_obd->obd_name,
-		       PFID(mdt_object_fid(tgt)), rc);
+		       mdt_obd_name(mdt), PFID(mdt_object_fid(tgt)), rc);
                 return;
         }
 
@@ -220,29 +216,28 @@ void mdt_rename_counter_tally(struct mdt_thread_info *info,
 
 int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 {
-        struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
-        struct obd_device *obd = ld->ld_obd;
-        struct lprocfs_static_vars lvars;
-        int rc;
-        ENTRY;
+	struct obd_device		*obd = mdt2obd_dev(mdt);
+	struct lprocfs_static_vars	 lvars;
+	int				 rc;
+	ENTRY;
 
-        LASSERT(name != NULL);
+	LASSERT(name != NULL);
 
-        lprocfs_mdt_init_vars(&lvars);
-        rc = lprocfs_obd_setup(obd, lvars.obd_vars);
-        if (rc) {
-                CERROR("Can't init lprocfs, rc %d\n", rc);
-                return rc;
-        }
-        ptlrpc_lprocfs_register_obd(obd);
+	lprocfs_mdt_init_vars(&lvars);
+	rc = lprocfs_obd_setup(obd, lvars.obd_vars);
+	if (rc) {
+		CERROR("Can't init lprocfs, rc %d\n", rc);
+		return rc;
+	}
+	ptlrpc_lprocfs_register_obd(obd);
 
-        obd->obd_proc_exports_entry = proc_mkdir("exports",
-                                                 obd->obd_proc_entry);
-        if (obd->obd_proc_exports_entry)
-                lprocfs_add_simple(obd->obd_proc_exports_entry,
-                                   "clear", lprocfs_nid_stats_clear_read,
-                                   lprocfs_nid_stats_clear_write, obd, NULL);
-        rc = lprocfs_alloc_md_stats(obd, LPROC_MDT_LAST);
+	obd->obd_proc_exports_entry = proc_mkdir("exports",
+						 obd->obd_proc_entry);
+	if (obd->obd_proc_exports_entry)
+		lprocfs_add_simple(obd->obd_proc_exports_entry,
+				   "clear", lprocfs_nid_stats_clear_read,
+				   lprocfs_nid_stats_clear_write, obd, NULL);
+	rc = lprocfs_alloc_md_stats(obd, LPROC_MDT_LAST);
 	if (rc)
 		return rc;
 	mdt_stats_counter_init(obd->md_stats);
@@ -250,18 +245,17 @@ int mdt_procfs_init(struct mdt_device *mdt, const char *name)
 	rc = lprocfs_job_stats_init(obd, LPROC_MDT_LAST,
 				    mdt_stats_counter_init);
 
-        rc = lproc_mdt_attach_rename_seqstat(mdt);
-        if (rc)
-                CERROR("%s: MDT can not create rename stats rc = %d\n",
-                       obd->obd_name, rc);
+	rc = lproc_mdt_attach_rename_seqstat(mdt);
+	if (rc)
+		CERROR("%s: MDT can not create rename stats rc = %d\n",
+		       mdt_obd_name(mdt), rc);
 
-        RETURN(rc);
+	RETURN(rc);
 }
 
 void mdt_procfs_fini(struct mdt_device *mdt)
 {
-        struct lu_device *ld = &mdt->mdt_md_dev.md_lu_dev;
-        struct obd_device *obd = ld->ld_obd;
+	struct obd_device *obd = mdt2obd_dev(mdt);
 
         if (obd->obd_proc_exports_entry) {
                 lprocfs_remove_proc_entry("clear", obd->obd_proc_exports_entry);
@@ -346,45 +340,46 @@ static int lprocfs_rd_identity_upcall(char *page, char **start, off_t off,
 }
 
 static int lprocfs_wr_identity_upcall(struct file *file, const char *buffer,
-                                      unsigned long count, void *data)
+				      unsigned long count, void *data)
 {
-        struct obd_device *obd = data;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        struct upcall_cache *hash = mdt->mdt_identity_cache;
-        int rc;
-        char *kernbuf;
+	struct obd_device	*obd = data;
+	struct mdt_device	*mdt = mdt_dev(obd->obd_lu_dev);
+	struct upcall_cache	*hash = mdt->mdt_identity_cache;
+	int			 rc;
+	char			*kernbuf;
 
-        if (count >= UC_CACHE_UPCALL_MAXPATH) {
-                CERROR("%s: identity upcall too long\n", obd->obd_name);
-                return -EINVAL;
-        }
-        OBD_ALLOC(kernbuf, count + 1);
-        if (kernbuf == NULL)
-                GOTO(failed, rc = -ENOMEM);
-        if (cfs_copy_from_user(kernbuf, buffer, count))
-                GOTO(failed, rc = -EFAULT);
+	if (count >= UC_CACHE_UPCALL_MAXPATH) {
+		CERROR("%s: identity upcall too long\n", mdt_obd_name(mdt));
+		return -EINVAL;
+	}
+	OBD_ALLOC(kernbuf, count + 1);
+	if (kernbuf == NULL)
+		GOTO(failed, rc = -ENOMEM);
+	if (cfs_copy_from_user(kernbuf, buffer, count))
+		GOTO(failed, rc = -EFAULT);
 
-        /* Remove any extraneous bits from the upcall (e.g. linefeeds) */
+	/* Remove any extraneous bits from the upcall (e.g. linefeeds) */
 	write_lock(&hash->uc_upcall_rwlock);
 	sscanf(kernbuf, "%s", hash->uc_upcall);
 	write_unlock(&hash->uc_upcall_rwlock);
 
-        if (strcmp(hash->uc_name, obd->obd_name) != 0)
-                CWARN("%s: write to upcall name %s\n",
-                      obd->obd_name, hash->uc_upcall);
+	if (strcmp(hash->uc_name, mdt_obd_name(mdt)) != 0)
+		CWARN("%s: write to upcall name %s\n",
+		      mdt_obd_name(mdt), hash->uc_upcall);
 
-        if (strcmp(hash->uc_upcall, "NONE") == 0 && mdt->mdt_opts.mo_acl)
-                CWARN("%s: disable \"identity_upcall\" with ACL enabled maybe "
-                      "cause unexpected \"EACCESS\"\n", obd->obd_name);
+	if (strcmp(hash->uc_upcall, "NONE") == 0 && mdt->mdt_opts.mo_acl)
+		CWARN("%s: disable \"identity_upcall\" with ACL enabled maybe "
+		      "cause unexpected \"EACCESS\"\n", mdt_obd_name(mdt));
 
-        CWARN("%s: identity upcall set to %s\n", obd->obd_name, hash->uc_upcall);
-        OBD_FREE(kernbuf, count + 1);
-        RETURN(count);
+	CWARN("%s: identity upcall set to %s\n", mdt_obd_name(mdt),
+	      hash->uc_upcall);
+	OBD_FREE(kernbuf, count + 1);
+	RETURN(count);
 
  failed:
-        if (kernbuf)
-                OBD_FREE(kernbuf, count + 1);
-        RETURN(rc);
+	if (kernbuf)
+		OBD_FREE(kernbuf, count + 1);
+	RETURN(rc);
 }
 
 static int lprocfs_wr_identity_flush(struct file *file, const char *buffer,
@@ -403,66 +398,68 @@ static int lprocfs_wr_identity_flush(struct file *file, const char *buffer,
 }
 
 static int lprocfs_wr_identity_info(struct file *file, const char *buffer,
-                                    unsigned long count, void *data)
+				    unsigned long count, void *data)
 {
-        struct obd_device *obd = data;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        struct identity_downcall_data *param;
-        int size = sizeof(*param), rc, checked = 0;
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	struct identity_downcall_data *param;
+	int size = sizeof(*param), rc, checked = 0;
 
 again:
-        if (count < size) {
-                CERROR("%s: invalid data count = %lu, size = %d\n",
-                       obd->obd_name, count, size);
-                return -EINVAL;
-        }
+	if (count < size) {
+		CERROR("%s: invalid data count = %lu, size = %d\n",
+		       mdt_obd_name(mdt), count, size);
+		return -EINVAL;
+	}
 
-        OBD_ALLOC(param, size);
-        if (param == NULL)
-                return -ENOMEM;
+	OBD_ALLOC(param, size);
+	if (param == NULL)
+		return -ENOMEM;
 
-        if (cfs_copy_from_user(param, buffer, size)) {
-                CERROR("%s: bad identity data\n", obd->obd_name);
-                GOTO(out, rc = -EFAULT);
-        }
+	if (cfs_copy_from_user(param, buffer, size)) {
+		CERROR("%s: bad identity data\n", mdt_obd_name(mdt));
+		GOTO(out, rc = -EFAULT);
+	}
 
-        if (checked == 0) {
-                checked = 1;
-                if (param->idd_magic != IDENTITY_DOWNCALL_MAGIC) {
-                        CERROR("%s: MDS identity downcall bad params\n",
-                               obd->obd_name);
-                        GOTO(out, rc = -EINVAL);
-                }
+	if (checked == 0) {
+		checked = 1;
+		if (param->idd_magic != IDENTITY_DOWNCALL_MAGIC) {
+			CERROR("%s: MDS identity downcall bad params\n",
+			       mdt_obd_name(mdt));
+			GOTO(out, rc = -EINVAL);
+		}
 
-                if (param->idd_nperms > N_PERMS_MAX) {
-                        CERROR("%s: perm count %d more than maximum %d\n",
-                               obd->obd_name, param->idd_nperms, N_PERMS_MAX);
-                        GOTO(out, rc = -EINVAL);
-                }
+		if (param->idd_nperms > N_PERMS_MAX) {
+			CERROR("%s: perm count %d more than maximum %d\n",
+			       mdt_obd_name(mdt), param->idd_nperms,
+			       N_PERMS_MAX);
+			GOTO(out, rc = -EINVAL);
+		}
 
-                if (param->idd_ngroups > NGROUPS_MAX) {
-                        CERROR("%s: group count %d more than maximum %d\n",
-                               obd->obd_name, param->idd_ngroups, NGROUPS_MAX);
-                        GOTO(out, rc = -EINVAL);
-                }
+		if (param->idd_ngroups > NGROUPS_MAX) {
+			CERROR("%s: group count %d more than maximum %d\n",
+			       mdt_obd_name(mdt), param->idd_ngroups,
+			       NGROUPS_MAX);
+			GOTO(out, rc = -EINVAL);
+		}
 
-                if (param->idd_ngroups) {
-                        rc = param->idd_ngroups; /* save idd_ngroups */
-                        OBD_FREE(param, size);
-                        size = offsetof(struct identity_downcall_data,
-                                        idd_groups[rc]);
-                        goto again;
-                }
-        }
+		if (param->idd_ngroups) {
+			rc = param->idd_ngroups; /* save idd_ngroups */
+			OBD_FREE(param, size);
+			size = offsetof(struct identity_downcall_data,
+					idd_groups[rc]);
+			goto again;
+		}
+	}
 
-        rc = upcall_cache_downcall(mdt->mdt_identity_cache, param->idd_err,
-                                   param->idd_uid, param);
+	rc = upcall_cache_downcall(mdt->mdt_identity_cache, param->idd_err,
+				   param->idd_uid, param);
 
 out:
-        if (param != NULL)
-                OBD_FREE(param, size);
+	if (param != NULL)
+		OBD_FREE(param, size);
 
-        return rc ? rc : count;
+	return rc ? rc : count;
 }
 
 /* for debug only */
@@ -478,42 +475,42 @@ static int lprocfs_rd_capa(char *page, char **start, off_t off,
 }
 
 static int lprocfs_wr_capa(struct file *file, const char *buffer,
-                           unsigned long count, void *data)
+			   unsigned long count, void *data)
 {
-        struct obd_device *obd = data;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        int val, rc;
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	int val, rc;
 
-        rc = lprocfs_write_helper(buffer, count, &val);
-        if (rc)
-                return rc;
+	rc = lprocfs_write_helper(buffer, count, &val);
+	if (rc)
+		return rc;
 
-        if (val < 0 || val > 3) {
-                CERROR("invalid capability mode, only 0/2/3 is accepted.\n"
-                       " 0:  disable fid capability\n"
-                       " 2:  enable MDS fid capability\n"
-                       " 3:  enable both MDS and OSS fid capability\n");
-                return -EINVAL;
-        }
+	if (val < 0 || val > 3) {
+		CERROR("invalid capability mode, only 0/2/3 is accepted.\n"
+		       " 0:  disable fid capability\n"
+		       " 2:  enable MDS fid capability\n"
+		       " 3:  enable both MDS and OSS fid capability\n");
+		return -EINVAL;
+	}
 
-        /* OSS fid capability needs enable both MDS and OSS fid capability on
-         * MDS */
-        if (val == 1) {
-                CERROR("can't enable OSS fid capability only, you should use "
-                       "'3' to enable both MDS and OSS fid capability.\n");
-                return -EINVAL;
-        }
+	/* OSS fid capability needs enable both MDS and OSS fid capability on
+	 * MDS */
+	if (val == 1) {
+		CERROR("can't enable OSS fid capability only, you should use "
+		       "'3' to enable both MDS and OSS fid capability.\n");
+		return -EINVAL;
+	}
 
-        mdt->mdt_opts.mo_oss_capa = (val & 0x1);
-        mdt->mdt_opts.mo_mds_capa = !!(val & 0x2);
-        mdt->mdt_capa_conf = 1;
-        LCONSOLE_INFO("MDS %s %s MDS fid capability.\n",
-                      obd->obd_name,
-                      mdt->mdt_opts.mo_mds_capa ? "enabled" : "disabled");
-        LCONSOLE_INFO("MDS %s %s OSS fid capability.\n",
-                      obd->obd_name,
-                      mdt->mdt_opts.mo_oss_capa ? "enabled" : "disabled");
-        return count;
+	mdt->mdt_opts.mo_oss_capa = (val & 0x1);
+	mdt->mdt_opts.mo_mds_capa = !!(val & 0x2);
+	mdt->mdt_capa_conf = 1;
+	LCONSOLE_INFO("MDS %s %s MDS fid capability.\n",
+		      mdt_obd_name(mdt),
+		      mdt->mdt_opts.mo_mds_capa ? "enabled" : "disabled");
+	LCONSOLE_INFO("MDS %s %s OSS fid capability.\n",
+		      mdt_obd_name(mdt),
+		      mdt->mdt_opts.mo_oss_capa ? "enabled" : "disabled");
+	return count;
 }
 
 static int lprocfs_rd_capa_count(char *page, char **start, off_t off,
@@ -703,61 +700,61 @@ static int safe_strtoul(const char *str, char **endp, unsigned long *res)
 }
 
 static int lprocfs_wr_root_squash(struct file *file, const char *buffer,
-                                  unsigned long count, void *data)
+				  unsigned long count, void *data)
 {
-        struct obd_device *obd = data;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        int rc;
-        char kernbuf[50], *tmp, *end, *errmsg;
-        unsigned long uid, gid;
-        int nouid, nogid;
-        ENTRY;
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	int rc;
+	char kernbuf[50], *tmp, *end, *errmsg;
+	unsigned long uid, gid;
+	int nouid, nogid;
+	ENTRY;
 
-        if (count >= sizeof(kernbuf)) {
-                errmsg = "string too long";
-                GOTO(failed, rc = -EINVAL);
-        }
-        if (cfs_copy_from_user(kernbuf, buffer, count)) {
-                errmsg = "bad address";
-                GOTO(failed, rc = -EFAULT);
-        }
-        kernbuf[count] = '\0';
+	if (count >= sizeof(kernbuf)) {
+		errmsg = "string too long";
+		GOTO(failed, rc = -EINVAL);
+	}
+	if (cfs_copy_from_user(kernbuf, buffer, count)) {
+		errmsg = "bad address";
+		GOTO(failed, rc = -EFAULT);
+	}
+	kernbuf[count] = '\0';
 
-        nouid = nogid = 0;
-        if (safe_strtoul(buffer, &tmp, &uid)) {
-                uid = mdt->mdt_squash_uid;
-                nouid = 1;
-        }
+	nouid = nogid = 0;
+	if (safe_strtoul(buffer, &tmp, &uid)) {
+		uid = mdt->mdt_squash_uid;
+		nouid = 1;
+	}
 
-        /* skip ':' */
-        if (*tmp == ':') {
-                tmp++;
-                if (safe_strtoul(tmp, &end, &gid)) {
-                        gid = mdt->mdt_squash_gid;
-                        nogid = 1;
-                }
-        } else {
-                gid = mdt->mdt_squash_gid;
-                nogid = 1;
-        }
+	/* skip ':' */
+	if (*tmp == ':') {
+		tmp++;
+		if (safe_strtoul(tmp, &end, &gid)) {
+			gid = mdt->mdt_squash_gid;
+			nogid = 1;
+		}
+	} else {
+		gid = mdt->mdt_squash_gid;
+		nogid = 1;
+	}
 
-        mdt->mdt_squash_uid = uid;
-        mdt->mdt_squash_gid = gid;
+	mdt->mdt_squash_uid = uid;
+	mdt->mdt_squash_gid = gid;
 
-        if (nouid && nogid) {
-                errmsg = "needs uid:gid format";
-                GOTO(failed, rc = -EINVAL);
-        }
+	if (nouid && nogid) {
+		errmsg = "needs uid:gid format";
+		GOTO(failed, rc = -EINVAL);
+	}
 
-        LCONSOLE_INFO("%s: root_squash is set to %u:%u\n",
-                      obd->obd_name,
-                      mdt->mdt_squash_uid,  mdt->mdt_squash_gid);
-        RETURN(count);
+	LCONSOLE_INFO("%s: root_squash is set to %u:%u\n",
+		      mdt_obd_name(mdt),
+		      mdt->mdt_squash_uid,  mdt->mdt_squash_gid);
+	RETURN(count);
 
- failed:
-        CWARN("%s: failed to set root_squash to \"%s\", %s: rc %d\n",
-              obd->obd_name, buffer, errmsg, rc);
-        RETURN(rc);
+failed:
+	CWARN("%s: failed to set root_squash to \"%s\", %s: rc %d\n",
+	      mdt_obd_name(mdt), buffer, errmsg, rc);
+	RETURN(rc);
 }
 
 static int lprocfs_rd_nosquash_nids(char *page, char **start, off_t off,
@@ -772,69 +769,69 @@ static int lprocfs_rd_nosquash_nids(char *page, char **start, off_t off,
 }
 
 static int lprocfs_wr_nosquash_nids(struct file *file, const char *buffer,
-                                    unsigned long count, void *data)
+				    unsigned long count, void *data)
 {
-        struct obd_device *obd = data;
-        struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
-        int rc;
-        char *kernbuf, *errmsg;
-        cfs_list_t tmp;
-        ENTRY;
+	struct obd_device *obd = data;
+	struct mdt_device *mdt = mdt_dev(obd->obd_lu_dev);
+	int rc;
+	char *kernbuf, *errmsg;
+	cfs_list_t tmp;
+	ENTRY;
 
-        OBD_ALLOC(kernbuf, count + 1);
-        if (kernbuf == NULL) {
-                errmsg = "no memory";
-                GOTO(failed, rc = -ENOMEM);
-        }
-        if (cfs_copy_from_user(kernbuf, buffer, count)) {
-                errmsg = "bad address";
-                GOTO(failed, rc = -EFAULT);
-        }
-        kernbuf[count] = '\0';
+	OBD_ALLOC(kernbuf, count + 1);
+	if (kernbuf == NULL) {
+		errmsg = "no memory";
+		GOTO(failed, rc = -ENOMEM);
+	}
+	if (cfs_copy_from_user(kernbuf, buffer, count)) {
+		errmsg = "bad address";
+		GOTO(failed, rc = -EFAULT);
+	}
+	kernbuf[count] = '\0';
 
-        if (!strcmp(kernbuf, "NONE") || !strcmp(kernbuf, "clear")) {
-                /* empty string is special case */
+	if (!strcmp(kernbuf, "NONE") || !strcmp(kernbuf, "clear")) {
+		/* empty string is special case */
 		down_write(&mdt->mdt_squash_sem);
-                if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
-                        cfs_free_nidlist(&mdt->mdt_nosquash_nids);
-                        OBD_FREE(mdt->mdt_nosquash_str,
-                                 mdt->mdt_nosquash_strlen);
-                        mdt->mdt_nosquash_str = NULL;
-                        mdt->mdt_nosquash_strlen = 0;
-                }
+		if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
+			cfs_free_nidlist(&mdt->mdt_nosquash_nids);
+			OBD_FREE(mdt->mdt_nosquash_str,
+				 mdt->mdt_nosquash_strlen);
+			mdt->mdt_nosquash_str = NULL;
+			mdt->mdt_nosquash_strlen = 0;
+		}
 		up_write(&mdt->mdt_squash_sem);
-                LCONSOLE_INFO("%s: nosquash_nids is cleared\n",
-                              obd->obd_name);
-                OBD_FREE(kernbuf, count + 1);
-                RETURN(count);
-        }
+		LCONSOLE_INFO("%s: nosquash_nids is cleared\n",
+			      mdt_obd_name(mdt));
+		OBD_FREE(kernbuf, count + 1);
+		RETURN(count);
+	}
 
-        CFS_INIT_LIST_HEAD(&tmp);
-        if (cfs_parse_nidlist(kernbuf, count, &tmp) <= 0) {
-                errmsg = "can't parse";
-                GOTO(failed, rc = -EINVAL);
-        }
+	CFS_INIT_LIST_HEAD(&tmp);
+	if (cfs_parse_nidlist(kernbuf, count, &tmp) <= 0) {
+		errmsg = "can't parse";
+		GOTO(failed, rc = -EINVAL);
+	}
 
 	down_write(&mdt->mdt_squash_sem);
-        if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
-                cfs_free_nidlist(&mdt->mdt_nosquash_nids);
-                OBD_FREE(mdt->mdt_nosquash_str, mdt->mdt_nosquash_strlen);
-        }
-        mdt->mdt_nosquash_str = kernbuf;
-        mdt->mdt_nosquash_strlen = count + 1;
-        cfs_list_splice(&tmp, &mdt->mdt_nosquash_nids);
+	if (!cfs_list_empty(&mdt->mdt_nosquash_nids)) {
+		cfs_free_nidlist(&mdt->mdt_nosquash_nids);
+		OBD_FREE(mdt->mdt_nosquash_str, mdt->mdt_nosquash_strlen);
+	}
+	mdt->mdt_nosquash_str = kernbuf;
+	mdt->mdt_nosquash_strlen = count + 1;
+	cfs_list_splice(&tmp, &mdt->mdt_nosquash_nids);
 
-        LCONSOLE_INFO("%s: nosquash_nids is set to %s\n",
-                      obd->obd_name, kernbuf);
+	LCONSOLE_INFO("%s: nosquash_nids is set to %s\n",
+		      mdt_obd_name(mdt), kernbuf);
 	up_write(&mdt->mdt_squash_sem);
-        RETURN(count);
+	RETURN(count);
 
- failed:
-        CWARN("%s: failed to set nosquash_nids to \"%s\", %s: rc %d\n",
-              obd->obd_name, kernbuf, errmsg, rc);
-        if (kernbuf)
-                OBD_FREE(kernbuf, count + 1);
-        RETURN(rc);
+failed:
+	CWARN("%s: failed to set nosquash_nids to \"%s\", %s: rc %d\n",
+	      mdt_obd_name(mdt), kernbuf, errmsg, rc);
+	if (kernbuf)
+		OBD_FREE(kernbuf, count + 1);
+	RETURN(rc);
 }
 
 static int lprocfs_rd_mdt_som(char *page, char **start, off_t off,
@@ -899,50 +896,50 @@ static int lprocfs_wr_mdt_som(struct file *file, const char *buffer,
 
 /* Temporary; for testing purposes only */
 static int lprocfs_mdt_wr_mdc(struct file *file, const char *buffer,
-                              unsigned long count, void *data)
+			      unsigned long count, void *data)
 {
-        struct obd_device *obd = data;
-        struct obd_export *exp = NULL;
-        struct obd_uuid   *uuid;
-        char              *kbuf;
-        char              *tmpbuf;
+	struct obd_device *obd = data;
+	struct obd_export *exp = NULL;
+	struct obd_uuid   *uuid;
+	char		  *kbuf;
+	char		  *tmpbuf;
 
-        OBD_ALLOC(kbuf, UUID_MAX);
-        if (kbuf == NULL)
-                return -ENOMEM;
+	OBD_ALLOC(kbuf, UUID_MAX);
+	if (kbuf == NULL)
+		return -ENOMEM;
 
-        /*
-         * OBD_ALLOC() will zero kbuf, but we only copy UUID_MAX - 1
-         * bytes into kbuf, to ensure that the string is NUL-terminated.
-         * UUID_MAX should include a trailing NUL already.
-         */
-        if (cfs_copy_from_user(kbuf, buffer,
-                               min_t(unsigned long, UUID_MAX - 1, count))) {
-                count = -EFAULT;
-                goto out;
-        }
-        tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, UUID_MAX - 1, count));
+	/*
+	 * OBD_ALLOC() will zero kbuf, but we only copy UUID_MAX - 1
+	 * bytes into kbuf, to ensure that the string is NUL-terminated.
+	 * UUID_MAX should include a trailing NUL already.
+	 */
+	if (cfs_copy_from_user(kbuf, buffer,
+			       min_t(unsigned long, UUID_MAX - 1, count))) {
+		count = -EFAULT;
+		goto out;
+	}
+	tmpbuf = cfs_firststr(kbuf, min_t(unsigned long, UUID_MAX - 1, count));
 
-        OBD_ALLOC(uuid, UUID_MAX);
-        if (uuid == NULL) {
-                count = -ENOMEM;
-                goto out;
-        }
+	OBD_ALLOC(uuid, UUID_MAX);
+	if (uuid == NULL) {
+		count = -ENOMEM;
+		goto out;
+	}
 
-        obd_str2uuid(uuid, tmpbuf);
-        exp = cfs_hash_lookup(obd->obd_uuid_hash, uuid);
-        if (exp == NULL) {
-                CERROR("%s: no export %s found\n",
-                       obd->obd_name, obd_uuid2str(uuid));
-        } else {
-                mdt_hsm_copytool_send(exp);
-                class_export_put(exp);
-        }
+	obd_str2uuid(uuid, tmpbuf);
+	exp = cfs_hash_lookup(obd->obd_uuid_hash, uuid);
+	if (exp == NULL) {
+		CERROR("%s: no export %s found\n",
+		       obd->obd_name, obd_uuid2str(uuid));
+	} else {
+		mdt_hsm_copytool_send(exp);
+		class_export_put(exp);
+	}
 
-        OBD_FREE(uuid, UUID_MAX);
+	OBD_FREE(uuid, UUID_MAX);
 out:
-        OBD_FREE(kbuf, UUID_MAX);
-        return count;
+	OBD_FREE(kbuf, UUID_MAX);
+	return count;
 }
 
 static int lprocfs_rd_enable_remote_dir(char *page, char **start, off_t off,

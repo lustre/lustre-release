@@ -318,8 +318,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
 					       " permitted for administrator or"
 					       " set mdt_enable_remote_dir_gid:"
 					       " rc = %d\n",
-						mdt2obd_dev(mdt)->obd_name,
-						-EPERM);
+						mdt_obd_name(mdt), -EPERM);
 					GOTO(out_put_child, rc = -EPERM);
 				}
 			}
@@ -330,7 +329,7 @@ static int mdt_md_create(struct mdt_thread_info *info)
 				CERROR("%s: remote dir is only permitted on"
 				       " MDT0 or set_param"
 				       " mdt.*.enable_remote_dir=1\n",
-				       mdt2obd_dev(mdt)->obd_name);
+				       mdt_obd_name(mdt));
 				GOTO(out_put_child, rc = -EPERM);
 			}
 			if (!mdt_is_dne_client(mdt_info_req(info)->rq_export)) {
@@ -654,7 +653,7 @@ static int mdt_reint_create(struct mdt_thread_info *info,
 		break;
 	default:
 		CERROR("%s: Unsupported mode %o\n",
-		       mdt2obd_dev(info->mti_mdt)->obd_name,
+		       mdt_obd_name(info->mti_mdt),
 		       info->mti_attr.ma_attr.la_mode);
 		RETURN(err_serious(-EOPNOTSUPP));
 	}
@@ -772,12 +771,12 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 
 		if (!fid_is_zero(rr->rr_fid2)) {
 			CDEBUG(D_INFO, "%s: name %s can not find "DFID"\n",
-			       mdt2obd_dev(info->mti_mdt)->obd_name,
+			       mdt_obd_name(info->mti_mdt),
 			       (char *)rr->rr_name, PFID(mdt_object_fid(mc)));
 			GOTO(put_child, rc = -ENOENT);
 		}
 		CDEBUG(D_INFO, "%s: name %s: "DFID" is another MDT\n",
-		       mdt2obd_dev(info->mti_mdt)->obd_name,
+		       mdt_obd_name(info->mti_mdt),
 		       (char *)rr->rr_name, PFID(mdt_object_fid(mc)));
 
 		if (!mdt_is_dne_client(req->rq_export))
@@ -790,7 +789,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 			if (!md_capable(uc, CFS_CAP_SYS_ADMIN)) {
 				CERROR("%s: unlink remote entry is only "
 				       "permitted for administrator: rc = %d\n",
-					mdt2obd_dev(info->mti_mdt)->obd_name,
+					mdt_obd_name(info->mti_mdt),
 					-EPERM);
 				GOTO(put_child, rc = -EPERM);
 			}
@@ -816,7 +815,7 @@ static int mdt_reint_unlink(struct mdt_thread_info *info,
 		GOTO(unlock_child, rc = -EREMOTE);
 	} else if (info->mti_spec.sp_rm_entry) {
 		CERROR("%s: lfs rmdir should not be used on local dir %s\n",
-		       mdt2obd_dev(info->mti_mdt)->obd_name,
+		       mdt_obd_name(info->mti_mdt),
 		       (char *)rr->rr_name);
 		GOTO(put_child, rc = -EPERM);
 	}

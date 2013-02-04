@@ -393,7 +393,7 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 	hal->hal_version = HAL_VERSION;
 	hal->hal_archive_id = 0;
 	hal->hal_flags = 0;
-	obd_uuid2fsname(hal->hal_fsname, mdt2obd_dev(info->mti_mdt)->obd_name,
+	obd_uuid2fsname(hal->hal_fsname, mdt_obd_name(info->mti_mdt),
 			MTI_NAME_MAXLEN);
 	hal->hal_count = 1;
 	hai = hai_zero(hal);
@@ -432,7 +432,7 @@ int mdt_hsm_action(struct mdt_thread_info *info)
 	default:
 		hca->hca_action = HUA_NONE;
 		CERROR("%s: Unknown hsm action: %d on "DFID"\n",
-		       mdt2obd_dev(info->mti_mdt)->obd_name,
+		       mdt_obd_name(info->mti_mdt),
 		       hai->hai_action, PFID(&hai->hai_fid));
 		break;
 	}
@@ -532,7 +532,7 @@ int mdt_hsm_request(struct mdt_thread_info *info)
 	hal->hal_version = HAL_VERSION;
 	hal->hal_archive_id = hr->hr_archive_id;
 	hal->hal_flags = hr->hr_flags;
-	obd_uuid2fsname(hal->hal_fsname, mdt2obd_dev(info->mti_mdt)->obd_name,
+	obd_uuid2fsname(hal->hal_fsname, mdt_obd_name(info->mti_mdt),
 			MTI_NAME_MAXLEN);
 
 	hal->hal_count = hr->hr_itemcount;

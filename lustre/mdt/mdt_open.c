@@ -582,10 +582,9 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 			struct obd_export *exp = req->rq_export;
 
 			CERROR("%s: replay trans "LPU64" NID %s: rc = %d\n",
-				mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name,
-				info->mti_transno,
-				libcfs_nid2str(exp->exp_connection->c_peer.nid),
-				rc);
+			       mdt_obd_name(mdt), info->mti_transno,
+			       libcfs_nid2str(exp->exp_connection->c_peer.nid),
+			       rc);
 			RETURN_EXIT;
 		}
 	} else if (info->mti_transno == 0) {
@@ -597,18 +596,18 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 	}
 	spin_unlock(&mdt->mdt_lut.lut_translock);
 
-        CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
-                        info->mti_transno,
-                        req->rq_export->exp_obd->obd_last_committed);
+	CDEBUG(D_INODE, "transno = "LPU64", last_committed = "LPU64"\n",
+	       info->mti_transno,
+	       req->rq_export->exp_obd->obd_last_committed);
 
-        req->rq_transno = info->mti_transno;
-        lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
+	req->rq_transno = info->mti_transno;
+	lustre_msg_set_transno(req->rq_repmsg, info->mti_transno);
 
-        /* update lcd in memory only for resent cases */
-        ted = &req->rq_export->exp_target_data;
-        LASSERT(ted);
+	/* update lcd in memory only for resent cases */
+	ted = &req->rq_export->exp_target_data;
+	LASSERT(ted);
 	mutex_lock(&ted->ted_lcd_lock);
-        lcd = ted->ted_lcd;
+	lcd = ted->ted_lcd;
 	if (info->mti_transno < lcd->lcd_last_transno &&
 	    info->mti_transno != 0) {
 		/* This should happen during replay. Do not update
@@ -617,8 +616,8 @@ static void mdt_empty_transno(struct mdt_thread_info *info, int rc)
 		 * be checked correctly by xid */
 		mutex_unlock(&ted->ted_lcd_lock);
 		CDEBUG(D_HA, "%s: transno = "LPU64" < last_transno = "LPU64"\n",
-			mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name,
-			info->mti_transno, lcd->lcd_last_transno);
+		       mdt_obd_name(mdt), info->mti_transno,
+		       lcd->lcd_last_transno);
 		RETURN_EXIT;
 	}
 
@@ -1301,7 +1300,7 @@ int mdt_open_by_fid_lock(struct mdt_thread_info *info, struct ldlm_reply *rep,
 
 	if (mdt_object_remote(o)) {
 		CDEBUG(D_INFO, "%s: "DFID" is on remote MDT.\n",
-		       info->mti_mdt->mdt_md_dev.md_lu_dev.ld_obd->obd_name,
+		       mdt_obd_name(info->mti_mdt),
 		       PFID(rr->rr_fid2));
 		GOTO(out, rc = -EREMOTE);
 	} else if (!mdt_object_exists(o)) {

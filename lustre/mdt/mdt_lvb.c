@@ -154,7 +154,7 @@ static int mdt_lvbo_fill(struct ldlm_lock *lock, void *lvb, int lvblen)
 
 		if (lvblen < rc) {
 			CERROR("%s: expected %d actual %d.\n",
-				info->mti_exp->exp_obd->obd_name, rc, lvblen);
+				mdt_obd_name(mdt), rc, lvblen);
 			GOTO(out, rc = -ERANGE);
 		}
 

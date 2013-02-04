@@ -354,15 +354,15 @@ int mdt_reint_setxattr(struct mdt_thread_info *info,
         if (rc)
                 GOTO(out_unlock, rc);
 
-        if (unlikely(!(valid & OBD_MD_FLCTIME))) {
-                /* This isn't strictly an error, but all current clients
-                 * should set OBD_MD_FLCTIME when setting attributes. */
-                CWARN("%s: client miss to set OBD_MD_FLCTIME when "
-                      "setxattr %s: [object "DFID"] [valid "LPU64"]\n",
-                      info->mti_exp->exp_obd->obd_name, xattr_name,
-                      PFID(rr->rr_fid1), valid);
-                attr->la_ctime = cfs_time_current_sec();
-        }
+	if (unlikely(!(valid & OBD_MD_FLCTIME))) {
+		/* This isn't strictly an error, but all current clients
+		 * should set OBD_MD_FLCTIME when setting attributes. */
+		CWARN("%s: client miss to set OBD_MD_FLCTIME when "
+		      "setxattr %s: [object "DFID"] [valid "LPU64"]\n",
+		      mdt_obd_name(info->mti_mdt), xattr_name,
+		      PFID(rr->rr_fid1), valid);
+		attr->la_ctime = cfs_time_current_sec();
+	}
         attr->la_valid = LA_CTIME;
         child = mdt_object_child(obj);
         if (valid & OBD_MD_FLXATTR) {
