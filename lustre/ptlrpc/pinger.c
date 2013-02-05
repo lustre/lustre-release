@@ -48,13 +48,18 @@
 #include <obd_class.h>
 #include "ptlrpc_internal.h"
 
-int suppress_pings;
-EXPORT_SYMBOL(suppress_pings);
+static int suppress_pings;
 CFS_MODULE_PARM(suppress_pings, "i", int, 0644, "Suppress pings");
 
 struct mutex pinger_mutex;
 static CFS_LIST_HEAD(pinger_imports);
 static cfs_list_t timeout_list = CFS_LIST_HEAD_INIT(timeout_list);
+
+int ptlrpc_pinger_suppress_pings()
+{
+	return suppress_pings;
+}
+EXPORT_SYMBOL(ptlrpc_pinger_suppress_pings);
 
 struct ptlrpc_request *
 ptlrpc_prep_ping(struct obd_import *imp)
