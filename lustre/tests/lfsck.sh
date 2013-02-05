@@ -28,11 +28,6 @@ which can be accessable on all of the nodes" && exit 0; }
 which getfattr &>/dev/null || { skip_env "could not find getfattr" && exit 0; }
 which setfattr &>/dev/null || { skip_env "could not find setfattr" && exit 0; }
 
-if [ ! -x `which $LFSCK_BIN` ]; then
-    log "$($E2FSCK -V)"
-    error "e2fsprogs does not support lfsck"
-fi
-
 MOUNT_2=""
 check_and_setup_lustre
 
