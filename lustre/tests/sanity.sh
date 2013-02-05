@@ -8456,15 +8456,29 @@ test_151() {
 
 	set_osd_param $list '' writethrough_cache_enable 1
 
-        # pages should be in the case right after write
-        dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES || error "dd failed"
-        local BEFORE=`roc_hit`
-        cancel_lru_locks osc
-        cat $DIR/$tfile >/dev/null
-        local AFTER=`roc_hit`
-        if ! let "AFTER - BEFORE == CPAGES"; then
-                error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
-        fi
+	# check write cache is enabled on all obdfilters
+	if get_osd_param $list '' writethrough_cache_enable | grep 0; then
+		echo "oss write cache is NOT enabled"
+		return 0
+	fi
+
+#define OBD_FAIL_OBD_NO_LRU  0x609
+	do_nodes $list $LCTL set_param fail_loc=0x609
+
+	# pages should be in the case right after write
+	dd if=/dev/urandom of=$DIR/$tfile bs=4k count=$CPAGES ||
+		error "dd failed"
+
+	local BEFORE=`roc_hit`
+	cancel_lru_locks osc
+	cat $DIR/$tfile >/dev/null
+	local AFTER=`roc_hit`
+
+	do_nodes $list $LCTL set_param fail_loc=0
+
+	if ! let "AFTER - BEFORE == CPAGES"; then
+		error "NOT IN CACHE: before: $BEFORE, after: $AFTER"
+	fi
 
         # the following read invalidates the cache
         cancel_lru_locks osc

@@ -317,6 +317,9 @@ int lu_site_purge(const struct lu_env *env, struct lu_site *s, int nr)
         int                      bnr;
         int                      i;
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_OBD_NO_LRU))
+		RETURN(0);
+
         CFS_INIT_LIST_HEAD(&dispose);
         /*
          * Under LRU list lock, scan LRU list and move unreferenced objects to
