@@ -107,25 +107,35 @@ static void ost_drop_id(struct obd_export *exp, struct obdo *oa)
  *    b. for CMD, seq = FID_SEQ_OST_MDT0, FID_SEQ_OST_MDT1 - FID_SEQ_OST_MAX
  */
 static int ost_validate_obdo(struct obd_export *exp, struct obdo *oa,
-                             struct obd_ioobj *ioobj)
+			     struct obd_ioobj *ioobj)
 {
-        if (oa != NULL && !(oa->o_valid & OBD_MD_FLGROUP)) {
-                oa->o_seq = FID_SEQ_OST_MDT0;
-                if (ioobj)
-                        ioobj->ioo_seq = FID_SEQ_OST_MDT0;
-        /* remove fid_seq_is_rsvd() after FID-on-OST allows SEQ > 9 */
-	} else if (oa == NULL ||
-		   !(fid_seq_is_norm(oa->o_seq) || fid_seq_is_mdt(oa->o_seq) ||
-		     fid_seq_is_echo(oa->o_seq))) {
-                CERROR("%s: client %s sent invalid object "POSTID"\n",
-                       exp->exp_obd->obd_name, obd_export_nid2str(exp),
-                       oa ? oa->o_id : -1, oa ? oa->o_seq : -1);
-                return -EPROTO;
-        }
-        obdo_from_ostid(oa, &oa->o_oi);
-        if (ioobj)
+	if (unlikely(oa != NULL && !(oa->o_valid & OBD_MD_FLGROUP))) {
+		oa->o_seq = FID_SEQ_OST_MDT0;
+		if (ioobj)
+			ioobj->ioo_seq = FID_SEQ_OST_MDT0;
+	} else if (unlikely(oa == NULL || !(fid_seq_is_idif(oa->o_seq) ||
+					    fid_seq_is_mdt(oa->o_seq) ||
+					    fid_seq_is_echo(oa->o_seq)))) {
+		CERROR("%s: client %s sent bad object "POSTID": rc = -EPROTO\n",
+		       exp->exp_obd->obd_name, obd_export_nid2str(exp),
+		       oa ? oa->o_id : -1, oa ? oa->o_seq : -1);
+		return -EPROTO;
+	}
+
+	obdo_from_ostid(oa, &oa->o_oi);
+	if (ioobj != NULL) {
+		unsigned max_brw = ioobj_max_brw_get(ioobj);
+
+		if (unlikely((max_brw & (max_brw - 1)) != 0)) {
+			CERROR("%s: client %s sent bad ioobj max %u for "POSTID
+			       ": rc = -EPROTO\n", exp->exp_obd->obd_name,
+			       obd_export_nid2str(exp), max_brw,
+			       oa->o_id, oa->o_seq);
+			return -EPROTO;
+		}
                 ioobj_from_obdo(ioobj, oa);
-        return 0;
+	}
+	return 0;
 }
 
 void oti_to_request(struct obd_trans_info *oti, struct ptlrpc_request *req)
@@ -807,10 +817,10 @@ static int ost_brw_read(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
-        desc = ptlrpc_prep_bulk_exp(req, npages,
-                                     BULK_PUT_SOURCE, OST_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(out_commitrw, rc = -ENOMEM);
+	desc = ptlrpc_prep_bulk_exp(req, npages, ioobj_max_brw_get(ioo),
+				    BULK_PUT_SOURCE, OST_BULK_PORTAL);
+	if (desc == NULL)
+		GOTO(out_commitrw, rc = -ENOMEM);
 
         nob = 0;
         for (i = 0; i < npages; i++) {
@@ -1097,14 +1107,13 @@ static int ost_brw_write(struct ptlrpc_request *req, struct obd_trans_info *oti)
         if (rc != 0)
                 GOTO(out_lock, rc);
 
-        desc = ptlrpc_prep_bulk_exp(req, npages,
-                                     BULK_GET_SINK, OST_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(skip_transfer, rc = -ENOMEM);
+	desc = ptlrpc_prep_bulk_exp(req, npages, ioobj_max_brw_get(ioo),
+				    BULK_GET_SINK, OST_BULK_PORTAL);
+	if (desc == NULL)
+		GOTO(skip_transfer, rc = -ENOMEM);
 
-        /* NB Having prepped, we must commit... */
-
-        for (i = 0; i < npages; i++)
+	/* NB Having prepped, we must commit... */
+	for (i = 0; i < npages; i++)
 		ptlrpc_prep_bulk_page_nopin(desc, local_nb[i].page,
 					    local_nb[i].lnb_page_offset,
 					    local_nb[i].len);

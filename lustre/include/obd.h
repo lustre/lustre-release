@@ -494,7 +494,7 @@ struct client_obd {
         /* just a sum of the loi/lop pending numbers to be exported by /proc */
 	cfs_atomic_t             cl_pending_w_pages;
 	cfs_atomic_t             cl_pending_r_pages;
-	int                      cl_max_pages_per_rpc;
+	__u32			 cl_max_pages_per_rpc;
         int                      cl_max_rpcs_in_flight;
         struct obd_histogram     cl_read_rpc_hist;
         struct obd_histogram     cl_write_rpc_hist;
@@ -1731,6 +1731,12 @@ bad_format:
 	CERROR("Bad volatile file name format: %s\n",
 	       name + LUSTRE_VOLATILE_HDR_LEN);
 	return false;
+}
+
+static inline int cli_brw_size(struct obd_device *obd)
+{
+	LASSERT(obd != NULL);
+	return obd->u.cli.cl_max_pages_per_rpc << CFS_PAGE_SHIFT;
 }
 
 #endif /* __OBD_H */

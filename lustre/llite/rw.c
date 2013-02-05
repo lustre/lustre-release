@@ -572,7 +572,11 @@ static int ll_read_ahead_page(const struct lu_env *env, struct cl_io *io,
         ria->ria_start, ria->ria_end, ria->ria_stoff, ria->ria_length,\
         ria->ria_pages)
 
-#define RAS_INCREASE_STEP PTLRPC_MAX_BRW_PAGES
+/* Limit this to the blocksize instead of PTLRPC_BRW_MAX_SIZE, since we don't
+ * know what the actual RPC size is.  If this needs to change, it makes more
+ * sense to tune the i_blkbits value for the file based on the OSTs it is
+ * striped over, rather than having a constant value for all files here. */
+#define RAS_INCREASE_STEP(inode) (1UL << inode->i_blkbits)
 
 static inline int stride_io_mode(struct ll_readahead_state *ras)
 {
@@ -843,22 +847,24 @@ int ll_readahead(const struct lu_env *env, struct cl_io *io,
 	RETURN(ret);
 }
 
-static void ras_set_start(struct ll_readahead_state *ras, unsigned long index)
+static void ras_set_start(struct inode *inode, struct ll_readahead_state *ras,
+			  unsigned long index)
 {
-        ras->ras_window_start = index & (~(RAS_INCREASE_STEP - 1));
+	ras->ras_window_start = index & (~(RAS_INCREASE_STEP(inode) - 1));
 }
 
 /* called with the ras_lock held or from places where it doesn't matter */
-static void ras_reset(struct ll_readahead_state *ras, unsigned long index)
+static void ras_reset(struct inode *inode, struct ll_readahead_state *ras,
+		      unsigned long index)
 {
-        ras->ras_last_readpage = index;
-        ras->ras_consecutive_requests = 0;
-        ras->ras_consecutive_pages = 0;
-        ras->ras_window_len = 0;
-        ras_set_start(ras, index);
-        ras->ras_next_readahead = max(ras->ras_window_start, index);
+	ras->ras_last_readpage = index;
+	ras->ras_consecutive_requests = 0;
+	ras->ras_consecutive_pages = 0;
+	ras->ras_window_len = 0;
+	ras_set_start(inode, ras, index);
+	ras->ras_next_readahead = max(ras->ras_window_start, index);
 
-        RAS_CDEBUG(ras);
+	RAS_CDEBUG(ras);
 }
 
 /* called with the ras_lock held or from places where it doesn't matter */
@@ -873,7 +879,7 @@ static void ras_stride_reset(struct ll_readahead_state *ras)
 void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
 {
 	spin_lock_init(&ras->ras_lock);
-	ras_reset(ras, 0);
+	ras_reset(inode, ras, 0);
 	ras->ras_requests = 0;
 	CFS_INIT_LIST_HEAD(&ras->ras_read_beads);
 }
@@ -882,23 +888,24 @@ void ll_readahead_init(struct inode *inode, struct ll_readahead_state *ras)
  * Check whether the read request is in the stride window.
  * If it is in the stride window, return 1, otherwise return 0.
  */
-static int index_in_stride_window(unsigned long index,
-                                  struct ll_readahead_state *ras,
-                                  struct inode *inode)
+static int index_in_stride_window(struct ll_readahead_state *ras,
+				  unsigned long index)
 {
-        unsigned long stride_gap = index - ras->ras_last_readpage - 1;
+	unsigned long stride_gap;
 
-        if (ras->ras_stride_length == 0 || ras->ras_stride_pages == 0 ||
-            ras->ras_stride_pages == ras->ras_stride_length)
-                return 0;
+	if (ras->ras_stride_length == 0 || ras->ras_stride_pages == 0 ||
+	    ras->ras_stride_pages == ras->ras_stride_length)
+		return 0;
 
-        /* If it is contiguous read */
-        if (stride_gap == 0)
-                return ras->ras_consecutive_pages + 1 <= ras->ras_stride_pages;
+	stride_gap = index - ras->ras_last_readpage - 1;
 
-        /*Otherwise check the stride by itself */
-        return (ras->ras_stride_length - ras->ras_stride_pages) == stride_gap &&
-             ras->ras_consecutive_pages == ras->ras_stride_pages;
+	/* If it is contiguous read */
+	if (stride_gap == 0)
+		return ras->ras_consecutive_pages + 1 <= ras->ras_stride_pages;
+
+	/* Otherwise check the stride by itself */
+	return (ras->ras_stride_length - ras->ras_stride_pages) == stride_gap &&
+		ras->ras_consecutive_pages == ras->ras_stride_pages;
 }
 
 static void ras_update_stride_detector(struct ll_readahead_state *ras,
@@ -974,19 +981,20 @@ static void ras_stride_increase_window(struct ll_readahead_state *ras,
         RAS_CDEBUG(ras);
 }
 
-static void ras_increase_window(struct ll_readahead_state *ras,
-                                struct ll_ra_info *ra, struct inode *inode)
+static void ras_increase_window(struct inode *inode,
+				struct ll_readahead_state *ras,
+				struct ll_ra_info *ra)
 {
-        /* The stretch of ra-window should be aligned with max rpc_size
-         * but current clio architecture does not support retrieve such
-         * information from lower layer. FIXME later
-         */
-        if (stride_io_mode(ras))
-                ras_stride_increase_window(ras, ra, RAS_INCREASE_STEP);
-        else
-                ras->ras_window_len = min(ras->ras_window_len +
-                                          RAS_INCREASE_STEP,
-                                          ra->ra_max_pages_per_file);
+	/* The stretch of ra-window should be aligned with max rpc_size
+	 * but current clio architecture does not support retrieve such
+	 * information from lower layer. FIXME later
+	 */
+	if (stride_io_mode(ras))
+		ras_stride_increase_window(ras, ra, RAS_INCREASE_STEP(inode));
+	else
+		ras->ras_window_len = min(ras->ras_window_len +
+					  RAS_INCREASE_STEP(inode),
+					  ra->ra_max_pages_per_file);
 }
 
 void ras_update(struct ll_sb_info *sbi, struct inode *inode,
@@ -1042,97 +1050,96 @@ void ras_update(struct ll_sb_info *sbi, struct inode *inode,
                         GOTO(out_unlock, 0);
                 }
         }
-        if (zero) {
-                /* check whether it is in stride I/O mode*/
-                if (!index_in_stride_window(index, ras, inode)) {
-                        if (ras->ras_consecutive_stride_requests == 0 &&
-                            ras->ras_request_index == 0) {
-                                ras_update_stride_detector(ras, index);
-                                ras->ras_consecutive_stride_requests ++;
-                        } else {
-                                ras_stride_reset(ras);
-                        }
-                        ras_reset(ras, index);
-                        ras->ras_consecutive_pages++;
-                        GOTO(out_unlock, 0);
-                } else {
-                        ras->ras_consecutive_pages = 0;
-                        ras->ras_consecutive_requests = 0;
-                        if (++ras->ras_consecutive_stride_requests > 1)
-                                stride_detect = 1;
-                        RAS_CDEBUG(ras);
-                }
-        } else {
-                if (ra_miss) {
-                        if (index_in_stride_window(index, ras, inode) &&
-                            stride_io_mode(ras)) {
-                                /*If stride-RA hit cache miss, the stride dector
-                                 *will not be reset to avoid the overhead of
-                                 *redetecting read-ahead mode */
-                                if (index != ras->ras_last_readpage + 1)
-                                       ras->ras_consecutive_pages = 0;
-                                ras_reset(ras, index);
-                                RAS_CDEBUG(ras);
-                        } else {
-                                /* Reset both stride window and normal RA
-                                 * window */
-                                ras_reset(ras, index);
-                                ras->ras_consecutive_pages++;
-                                ras_stride_reset(ras);
-                                GOTO(out_unlock, 0);
-                        }
-                } else if (stride_io_mode(ras)) {
-                        /* If this is contiguous read but in stride I/O mode
-                         * currently, check whether stride step still is valid,
-                         * if invalid, it will reset the stride ra window*/
-                        if (!index_in_stride_window(index, ras, inode)) {
-                                /* Shrink stride read-ahead window to be zero */
-                                ras_stride_reset(ras);
-                                ras->ras_window_len = 0;
-                                ras->ras_next_readahead = index;
-                        }
-                }
-        }
-        ras->ras_consecutive_pages++;
-        ras->ras_last_readpage = index;
-        ras_set_start(ras, index);
+	if (zero) {
+		/* check whether it is in stride I/O mode*/
+		if (!index_in_stride_window(ras, index)) {
+			if (ras->ras_consecutive_stride_requests == 0 &&
+			    ras->ras_request_index == 0) {
+				ras_update_stride_detector(ras, index);
+				ras->ras_consecutive_stride_requests++;
+			} else {
+				ras_stride_reset(ras);
+			}
+			ras_reset(inode, ras, index);
+			ras->ras_consecutive_pages++;
+			GOTO(out_unlock, 0);
+		} else {
+			ras->ras_consecutive_pages = 0;
+			ras->ras_consecutive_requests = 0;
+			if (++ras->ras_consecutive_stride_requests > 1)
+				stride_detect = 1;
+			RAS_CDEBUG(ras);
+		}
+	} else {
+		if (ra_miss) {
+			if (index_in_stride_window(ras, index) &&
+			    stride_io_mode(ras)) {
+				/*If stride-RA hit cache miss, the stride dector
+				 *will not be reset to avoid the overhead of
+				 *redetecting read-ahead mode */
+				if (index != ras->ras_last_readpage + 1)
+					ras->ras_consecutive_pages = 0;
+				ras_reset(inode, ras, index);
+				RAS_CDEBUG(ras);
+			} else {
+				/* Reset both stride window and normal RA
+				 * window */
+				ras_reset(inode, ras, index);
+				ras->ras_consecutive_pages++;
+				ras_stride_reset(ras);
+				GOTO(out_unlock, 0);
+			}
+		} else if (stride_io_mode(ras)) {
+			/* If this is contiguous read but in stride I/O mode
+			 * currently, check whether stride step still is valid,
+			 * if invalid, it will reset the stride ra window*/
+			if (!index_in_stride_window(ras, index)) {
+				/* Shrink stride read-ahead window to be zero */
+				ras_stride_reset(ras);
+				ras->ras_window_len = 0;
+				ras->ras_next_readahead = index;
+			}
+		}
+	}
+	ras->ras_consecutive_pages++;
+	ras->ras_last_readpage = index;
+	ras_set_start(inode, ras, index);
 
-        if (stride_io_mode(ras))
-                /* Since stride readahead is sentivite to the offset
-                 * of read-ahead, so we use original offset here,
-                 * instead of ras_window_start, which is 1M aligned*/
-                ras->ras_next_readahead = max(index,
-                                              ras->ras_next_readahead);
-        else
-                ras->ras_next_readahead = max(ras->ras_window_start,
-                                              ras->ras_next_readahead);
-        RAS_CDEBUG(ras);
+	if (stride_io_mode(ras))
+		/* Since stride readahead is sentivite to the offset
+		 * of read-ahead, so we use original offset here,
+		 * instead of ras_window_start, which is RPC aligned */
+		ras->ras_next_readahead = max(index, ras->ras_next_readahead);
+	else
+		ras->ras_next_readahead = max(ras->ras_window_start,
+					      ras->ras_next_readahead);
+	RAS_CDEBUG(ras);
 
-        /* Trigger RA in the mmap case where ras_consecutive_requests
-         * is not incremented and thus can't be used to trigger RA */
-        if (!ras->ras_window_len && ras->ras_consecutive_pages == 4) {
-                ras->ras_window_len = RAS_INCREASE_STEP;
-                GOTO(out_unlock, 0);
-        }
+	/* Trigger RA in the mmap case where ras_consecutive_requests
+	 * is not incremented and thus can't be used to trigger RA */
+	if (!ras->ras_window_len && ras->ras_consecutive_pages == 4) {
+		ras->ras_window_len = RAS_INCREASE_STEP(inode);
+		GOTO(out_unlock, 0);
+	}
 
-        /* Initially reset the stride window offset to next_readahead*/
-        if (ras->ras_consecutive_stride_requests == 2 && stride_detect) {
-                /**
-                 * Once stride IO mode is detected, next_readahead should be
-                 * reset to make sure next_readahead > stride offset
-                 */
-                ras->ras_next_readahead = max(index, ras->ras_next_readahead);
-                ras->ras_stride_offset = index;
-                ras->ras_window_len = RAS_INCREASE_STEP;
-        }
+	/* Initially reset the stride window offset to next_readahead*/
+	if (ras->ras_consecutive_stride_requests == 2 && stride_detect) {
+		/**
+		 * Once stride IO mode is detected, next_readahead should be
+		 * reset to make sure next_readahead > stride offset
+		 */
+		ras->ras_next_readahead = max(index, ras->ras_next_readahead);
+		ras->ras_stride_offset = index;
+		ras->ras_window_len = RAS_INCREASE_STEP(inode);
+	}
 
-        /* The initial ras_window_len is set to the request size.  To avoid
-         * uselessly reading and discarding pages for random IO the window is
-         * only increased once per consecutive request received. */
-        if ((ras->ras_consecutive_requests > 1 || stride_detect) &&
-            !ras->ras_request_index)
-                ras_increase_window(ras, ra, inode);
-        EXIT;
+	/* The initial ras_window_len is set to the request size.  To avoid
+	 * uselessly reading and discarding pages for random IO the window is
+	 * only increased once per consecutive request received. */
+	if ((ras->ras_consecutive_requests > 1 || stride_detect) &&
+	    !ras->ras_request_index)
+		ras_increase_window(inode, ras, ra);
+	EXIT;
 out_unlock:
 	RAS_CDEBUG(ras);
 	ras->ras_request_index++;

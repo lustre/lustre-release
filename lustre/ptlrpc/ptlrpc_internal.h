@@ -53,7 +53,8 @@ int ptlrpc_start_thread(struct ptlrpc_service_part *svcpt, int wait);
 int ptlrpcd_start(int index, int max, const char *name, struct ptlrpcd_ctl *pc);
 
 /* client.c */
-struct ptlrpc_bulk_desc *new_bulk(int npages, int type, int portal);
+struct ptlrpc_bulk_desc *ptlrpc_new_bulk(unsigned npages, unsigned max_brw,
+					 unsigned type, unsigned portal);
 void ptlrpc_init_xid(void);
 
 /* events.c */
@@ -209,9 +210,10 @@ nrs_request_policy(struct ptlrpc_nrs_request *nrq)
 int ptlrpc_expire_one_request(struct ptlrpc_request *req, int async_unlink);
 
 /* pers.c */
-void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc);
+void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc,
+			 int mdcnt);
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
-                          int pageoffset, int len);
+			  int pageoffset, int len);
 
 /* pack_generic.c */
 struct ptlrpc_reply_state *

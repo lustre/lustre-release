@@ -101,6 +101,14 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
         RETURN (0);
 }
 
+static void mdunlink_iterate_helper(lnet_handle_md_t *bd_mds, int count)
+{
+	int i;
+
+	for (i = 0; i < count; i++)
+		LNetMDUnlink(bd_mds[i]);
+}
+
 #ifdef HAVE_SERVER_SUPPORT
 /**
  * Prepare bulk descriptor for specified incoming request \a req that
@@ -111,17 +119,18 @@ static int ptl_send_buf (lnet_handle_md_t *mdh, void *base, int len,
  * error.
  */
 struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
-                                              int npages, int type, int portal)
+					      unsigned npages, unsigned max_brw,
+					      unsigned type, unsigned portal)
 {
-        struct obd_export *exp = req->rq_export;
-        struct ptlrpc_bulk_desc *desc;
+	struct obd_export *exp = req->rq_export;
+	struct ptlrpc_bulk_desc *desc;
 
-        ENTRY;
-        LASSERT(type == BULK_PUT_SOURCE || type == BULK_GET_SINK);
+	ENTRY;
+	LASSERT(type == BULK_PUT_SOURCE || type == BULK_GET_SINK);
 
-        desc = new_bulk(npages, type, portal);
-        if (desc == NULL)
-                RETURN(NULL);
+	desc = ptlrpc_new_bulk(npages, max_brw, type, portal);
+	if (desc == NULL)
+		RETURN(NULL);
 
         desc->bd_export = class_export_get(exp);
         desc->bd_req = req;
@@ -137,74 +146,103 @@ struct ptlrpc_bulk_desc *ptlrpc_prep_bulk_exp(struct ptlrpc_request *req,
 EXPORT_SYMBOL(ptlrpc_prep_bulk_exp);
 
 /**
- * Starts bulk transfer for descriptor \a desc
+ * Starts bulk transfer for descriptor \a desc on the server.
  * Returns 0 on success or error code.
  */
 int ptlrpc_start_bulk_transfer(struct ptlrpc_bulk_desc *desc)
 {
-        struct ptlrpc_connection *conn = desc->bd_export->exp_connection;
-        int                       rc;
-        int                       rc2;
-        lnet_md_t                 md;
-        __u64                     xid;
-        ENTRY;
+	struct obd_export        *exp = desc->bd_export;
+	struct ptlrpc_connection *conn = exp->exp_connection;
+	int                       rc = 0;
+	__u64                     xid;
+	int                       posted_md;
+	int                       total_md;
+	lnet_md_t                 md;
+	ENTRY;
 
-        if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_PUT_NET))
-                RETURN(0);
+	if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_PUT_NET))
+		RETURN(0);
 
-        /* NB no locking required until desc is on the network */
-        LASSERT (!desc->bd_network_rw);
-        LASSERT (desc->bd_type == BULK_PUT_SOURCE ||
-                 desc->bd_type == BULK_GET_SINK);
-        desc->bd_success = 0;
+	/* NB no locking required until desc is on the network */
+	LASSERT(desc->bd_md_count == 0);
+	LASSERT(desc->bd_type == BULK_PUT_SOURCE ||
+		desc->bd_type == BULK_GET_SINK);
 
-        md.user_ptr = &desc->bd_cbid;
-        md.eq_handle = ptlrpc_eq_h;
-        md.threshold = 2; /* SENT and ACK/REPLY */
-        md.options = PTLRPC_MD_OPTIONS;
-        ptlrpc_fill_bulk_md(&md, desc);
+	LASSERT(desc->bd_cbid.cbid_fn == server_bulk_callback);
+	LASSERT(desc->bd_cbid.cbid_arg == desc);
 
-        LASSERT (desc->bd_cbid.cbid_fn == server_bulk_callback);
-        LASSERT (desc->bd_cbid.cbid_arg == desc);
+	/* NB total length may be 0 for a read past EOF, so we send 0
+	 * length bulks, since the client expects bulk events.
+	 *
+	 * The client may not need all of the bulk XIDs for the RPC.  The RPC
+	 * used the XID of the highest bulk XID needed, and the server masks
+	 * off high bits to get bulk count for this RPC. LU-1431 */
+	xid = desc->bd_req->rq_xid & ~((__u64)desc->bd_md_max_brw - 1);
+	total_md = desc->bd_req->rq_xid - xid + 1;
 
-        /* NB total length may be 0 for a read past EOF, so we send a 0
-         * length bulk, since the client expects a bulk event. */
+	desc->bd_md_count = total_md;
+	desc->bd_failure = 0;
 
-        rc = LNetMDBind(md, LNET_UNLINK, &desc->bd_md_h);
-        if (rc != 0) {
-                CERROR("LNetMDBind failed: %d\n", rc);
-                LASSERT (rc == -ENOMEM);
-                RETURN(-ENOMEM);
-        }
+	md.user_ptr = &desc->bd_cbid;
+	md.eq_handle = ptlrpc_eq_h;
+	md.threshold = 2; /* SENT and ACK/REPLY */
 
-        /* Client's bulk and reply matchbits are the same */
-        xid = desc->bd_req->rq_xid;
-        CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d "
-               "id %s xid "LPX64"\n", desc->bd_iov_count,
-               desc->bd_nob, desc->bd_portal,
-               libcfs_id2str(conn->c_peer), xid);
+	for (posted_md = 0; posted_md < total_md; xid++) {
+		md.options = PTLRPC_MD_OPTIONS;
 
-        /* Network is about to get at the memory */
-        desc->bd_network_rw = 1;
+		/* NB it's assumed that source and sink buffer frags are
+		 * page-aligned. Otherwise we'd have to send client bulk
+		 * sizes over and split server buffer accordingly */
+		ptlrpc_fill_bulk_md(&md, desc, posted_md);
+		rc = LNetMDBind(md, LNET_UNLINK, &desc->bd_mds[posted_md]);
+		if (rc != 0) {
+			CERROR("%s: LNetMDBind failed for MD %u: rc = %d\n",
+			       exp->exp_obd->obd_name, posted_md, rc);
+			LASSERT(rc == -ENOMEM);
+			if (posted_md == 0) {
+				desc->bd_md_count = 0;
+				RETURN(-ENOMEM);
+			}
+			break;
+		}
+		/* Network is about to get at the memory */
+		if (desc->bd_type == BULK_PUT_SOURCE)
+			rc = LNetPut(conn->c_self, desc->bd_mds[posted_md],
+				     LNET_ACK_REQ, conn->c_peer,
+				     desc->bd_portal, xid, 0, 0);
+		else
+			rc = LNetGet(conn->c_self, desc->bd_mds[posted_md],
+				     conn->c_peer, desc->bd_portal, xid, 0);
 
-        if (desc->bd_type == BULK_PUT_SOURCE)
-                rc = LNetPut (conn->c_self, desc->bd_md_h, LNET_ACK_REQ,
-                              conn->c_peer, desc->bd_portal, xid, 0, 0);
-        else
-                rc = LNetGet (conn->c_self, desc->bd_md_h,
-                              conn->c_peer, desc->bd_portal, xid, 0);
+		posted_md++;
+		if (rc != 0) {
+			CERROR("%s: failed bulk transfer with %s:%u x"LPU64": "
+			       "rc = %d\n", exp->exp_obd->obd_name,
+			       libcfs_id2str(conn->c_peer), desc->bd_portal,
+			       xid, rc);
+			break;
+		}
+	}
 
-        if (rc != 0) {
-                /* Can't send, so we unlink the MD bound above.  The UNLINK
-                 * event this creates will signal completion with failure,
-                 * so we return SUCCESS here! */
-                CERROR("Transfer(%s, %d, "LPX64") failed: %d\n",
-                       libcfs_id2str(conn->c_peer), desc->bd_portal, xid, rc);
-                rc2 = LNetMDUnlink(desc->bd_md_h);
-                LASSERT (rc2 == 0);
-        }
+	if (rc != 0) {
+		/* Can't send, so we unlink the MD bound above.  The UNLINK
+		 * event this creates will signal completion with failure,
+		 * so we return SUCCESS here! */
+		spin_lock(&desc->bd_lock);
+		desc->bd_md_count -= total_md - posted_md;
+		spin_unlock(&desc->bd_lock);
+		LASSERT(desc->bd_md_count >= 0);
 
-        RETURN(0);
+		mdunlink_iterate_helper(desc->bd_mds, posted_md);
+		RETURN(0);
+	}
+
+	CDEBUG(D_NET, "Transferring %u pages %u bytes via portal %d "
+	       "id %s xid "LPX64"-"LPX64"\n", desc->bd_iov_count,
+	       desc->bd_nob, desc->bd_portal, libcfs_id2str(conn->c_peer),
+	       xid - posted_md, xid - 1);
+
+	RETURN(0);
 }
 EXPORT_SYMBOL(ptlrpc_start_bulk_transfer);
 
@@ -231,8 +269,7 @@ void ptlrpc_abort_bulk(struct ptlrpc_bulk_desc *desc)
          * one.  If it fails, it must be because completion just happened,
          * but we must still l_wait_event() in this case, to give liblustre
          * a chance to run server_bulk_callback()*/
-
-        LNetMDUnlink(desc->bd_md_h);
+	mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_count);
 
         for (;;) {
                 /* Network access will complete in finite time but the HUGE
@@ -252,84 +289,124 @@ EXPORT_SYMBOL(ptlrpc_abort_bulk);
 #endif /* HAVE_SERVER_SUPPORT */
 
 /**
- * Register bulk for later transfer
+ * Register bulk at the sender for later transfer.
  * Returns 0 on success or error code.
  */
 int ptlrpc_register_bulk(struct ptlrpc_request *req)
 {
-        struct ptlrpc_bulk_desc *desc = req->rq_bulk;
-        lnet_process_id_t peer;
-        int rc;
-        int rc2;
-        lnet_handle_me_t  me_h;
-        lnet_md_t         md;
-        ENTRY;
+	struct ptlrpc_bulk_desc *desc = req->rq_bulk;
+	lnet_process_id_t peer;
+	int rc = 0;
+	int rc2;
+	int posted_md;
+	int total_md;
+	__u64 xid;
+	lnet_handle_me_t  me_h;
+	lnet_md_t         md;
+	ENTRY;
 
         if (OBD_FAIL_CHECK(OBD_FAIL_PTLRPC_BULK_GET_NET))
                 RETURN(0);
 
-        /* NB no locking required until desc is on the network */
-        LASSERT (desc->bd_nob > 0);
-        LASSERT (!desc->bd_network_rw);
-        LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
-        LASSERT (desc->bd_req != NULL);
-        LASSERT (desc->bd_type == BULK_PUT_SINK ||
-                 desc->bd_type == BULK_GET_SOURCE);
+	/* NB no locking required until desc is on the network */
+	LASSERT(desc->bd_nob > 0);
+	LASSERT(desc->bd_md_count == 0);
+	LASSERT(desc->bd_md_max_brw <= PTLRPC_BULK_OPS_COUNT);
+	LASSERT(desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
+	LASSERT(desc->bd_req != NULL);
+	LASSERT(desc->bd_type == BULK_PUT_SINK ||
+		desc->bd_type == BULK_GET_SOURCE);
 
-        desc->bd_success = 0;
+	desc->bd_failure = 0;
 
-        peer = desc->bd_import->imp_connection->c_peer;
+	peer = desc->bd_import->imp_connection->c_peer;
 
-        md.user_ptr = &desc->bd_cbid;
-        md.eq_handle = ptlrpc_eq_h;
-        md.threshold = 1;                       /* PUT or GET */
-        md.options = PTLRPC_MD_OPTIONS |
-                     ((desc->bd_type == BULK_GET_SOURCE) ?
-                      LNET_MD_OP_GET : LNET_MD_OP_PUT);
-        ptlrpc_fill_bulk_md(&md, desc);
+	LASSERT(desc->bd_cbid.cbid_fn == client_bulk_callback);
+	LASSERT(desc->bd_cbid.cbid_arg == desc);
 
-        LASSERT (desc->bd_cbid.cbid_fn == client_bulk_callback);
-        LASSERT (desc->bd_cbid.cbid_arg == desc);
+	/* An XID is only used for a single request from the client.
+	 * For retried bulk transfers, a new XID will be allocated in
+	 * in ptlrpc_check_set() if it needs to be resent, so it is not
+	 * using the same RDMA match bits after an error.
+	 *
+	 * For multi-bulk RPCs, rq_xid is the last XID needed for bulks. The
+	 * first bulk XID is power-of-two aligned before rq_xid. LU-1431 */
+	xid = req->rq_xid & ~((__u64)desc->bd_md_max_brw - 1);
+	LASSERTF(!(desc->bd_registered &&
+		   req->rq_send_state != LUSTRE_IMP_REPLAY) ||
+		 xid != desc->bd_last_xid,
+		 "registered: %d  rq_xid: "LPU64" bd_last_xid: "LPU64"\n",
+		 desc->bd_registered, xid, desc->bd_last_xid);
 
-        /* XXX Registering the same xid on retried bulk makes my head
-         * explode trying to understand how the original request's bulk
-         * might interfere with the retried request -eeb
-         * On the other hand replaying with the same xid is fine, since
-         * we are guaranteed old request have completed. -green */
-        LASSERTF(!(desc->bd_registered &&
-                 req->rq_send_state != LUSTRE_IMP_REPLAY) ||
-                 req->rq_xid != desc->bd_last_xid,
-                 "registered: %d  rq_xid: "LPU64" bd_last_xid: "LPU64"\n",
-                 desc->bd_registered, req->rq_xid, desc->bd_last_xid);
-        desc->bd_registered = 1;
-        desc->bd_last_xid = req->rq_xid;
+	total_md = (desc->bd_iov_count + LNET_MAX_IOV - 1) / LNET_MAX_IOV;
+	desc->bd_registered = 1;
+	desc->bd_last_xid = xid;
+	desc->bd_md_count = total_md;
+	md.user_ptr = &desc->bd_cbid;
+	md.eq_handle = ptlrpc_eq_h;
+	md.threshold = 1;                       /* PUT or GET */
 
-        rc = LNetMEAttach(desc->bd_portal, peer,
-                         req->rq_xid, 0, LNET_UNLINK, LNET_INS_AFTER, &me_h);
-        if (rc != 0) {
-                CERROR("LNetMEAttach failed: %d\n", rc);
-                LASSERT (rc == -ENOMEM);
-                RETURN (-ENOMEM);
-        }
+	for (posted_md = 0; posted_md < total_md; posted_md++, xid++) {
+		md.options = PTLRPC_MD_OPTIONS |
+			     ((desc->bd_type == BULK_GET_SOURCE) ?
+			      LNET_MD_OP_GET : LNET_MD_OP_PUT);
+		ptlrpc_fill_bulk_md(&md, desc, posted_md);
 
-        /* About to let the network at it... */
-        desc->bd_network_rw = 1;
-        rc = LNetMDAttach(me_h, md, LNET_UNLINK, &desc->bd_md_h);
-        if (rc != 0) {
-                CERROR("LNetMDAttach failed: %d\n", rc);
-                LASSERT (rc == -ENOMEM);
-                desc->bd_network_rw = 0;
-                rc2 = LNetMEUnlink (me_h);
-                LASSERT (rc2 == 0);
-                RETURN (-ENOMEM);
-        }
+		rc = LNetMEAttach(desc->bd_portal, peer, xid, 0,
+				  LNET_UNLINK, LNET_INS_AFTER, &me_h);
+		if (rc != 0) {
+			CERROR("%s: LNetMEAttach failed x"LPU64"/%d: rc = %d\n",
+			       desc->bd_export->exp_obd->obd_name, xid,
+			       posted_md, rc);
+			break;
+		}
 
-        CDEBUG(D_NET, "Setup bulk %s buffers: %u pages %u bytes, xid "LPU64", "
-               "portal %u\n",
-               desc->bd_type == BULK_GET_SOURCE ? "get-source" : "put-sink",
-               desc->bd_iov_count, desc->bd_nob,
-               req->rq_xid, desc->bd_portal);
-        RETURN(0);
+		/* About to let the network at it... */
+		rc = LNetMDAttach(me_h, md, LNET_UNLINK,
+				  &desc->bd_mds[posted_md]);
+		if (rc != 0) {
+			CERROR("%s: LNetMDAttach failed x"LPU64"/%d: rc = %d\n",
+			       desc->bd_export->exp_obd->obd_name, xid,
+			       posted_md, rc);
+			rc2 = LNetMEUnlink(me_h);
+			LASSERT(rc2 == 0);
+			break;
+		}
+	}
+
+	if (rc != 0) {
+		LASSERT(rc == -ENOMEM);
+		spin_lock(&desc->bd_lock);
+		desc->bd_md_count -= total_md - posted_md;
+		spin_unlock(&desc->bd_lock);
+		LASSERT(desc->bd_md_count >= 0);
+		mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_max_brw);
+		req->rq_status = -ENOMEM;
+		RETURN(-ENOMEM);
+	}
+
+	/* Set rq_xid to matchbits of the final bulk so that server can
+	 * infer the number of bulks that were prepared */
+	req->rq_xid = --xid;
+	LASSERTF(desc->bd_last_xid == (req->rq_xid & PTLRPC_BULK_OPS_MASK),
+		 "bd_last_xid = x"LPU64", rq_xid = x"LPU64"\n",
+		 desc->bd_last_xid, req->rq_xid);
+
+	spin_lock(&desc->bd_lock);
+	/* Holler if peer manages to touch buffers before he knows the xid */
+	if (desc->bd_md_count != total_md)
+		CWARN("%s: Peer %s touched %d buffers while I registered\n",
+		      desc->bd_export->exp_obd->obd_name, libcfs_id2str(peer),
+		      total_md - desc->bd_md_count);
+	spin_unlock(&desc->bd_lock);
+
+	CDEBUG(D_NET, "Setup %u bulk %s buffers: %u pages %u bytes, "
+	       "xid x"LPX64"-"LPX64", portal %u\n", desc->bd_md_count,
+	       desc->bd_type == BULK_GET_SOURCE ? "get-source" : "put-sink",
+	       desc->bd_iov_count, desc->bd_nob,
+	       desc->bd_last_xid, req->rq_xid, desc->bd_portal);
+
+	RETURN(0);
 }
 EXPORT_SYMBOL(ptlrpc_register_bulk);
 
@@ -354,20 +431,19 @@ int ptlrpc_unregister_bulk(struct ptlrpc_request *req, int async)
             async && req->rq_bulk_deadline == 0)
                 req->rq_bulk_deadline = cfs_time_current_sec() + LONG_UNLINK;
 
-        if (!ptlrpc_client_bulk_active(req))  /* completed or */
-                RETURN(1);                    /* never registered */
+	if (ptlrpc_client_bulk_active(req) == 0)	/* completed or */
+		RETURN(1);				/* never registered */
 
-        LASSERT(desc->bd_req == req);  /* bd_req NULL until registered */
+	LASSERT(desc->bd_req == req);  /* bd_req NULL until registered */
 
-        /* the unlink ensures the callback happens ASAP and is the last
-         * one.  If it fails, it must be because completion just happened,
-         * but we must still l_wait_event() in this case to give liblustre
-         * a chance to run client_bulk_callback() */
+	/* the unlink ensures the callback happens ASAP and is the last
+	 * one.  If it fails, it must be because completion just happened,
+	 * but we must still l_wait_event() in this case to give liblustre
+	 * a chance to run client_bulk_callback() */
+	mdunlink_iterate_helper(desc->bd_mds, desc->bd_md_max_brw);
 
-        LNetMDUnlink(desc->bd_md_h);
-
-        if (!ptlrpc_client_bulk_active(req))  /* completed or */
-                RETURN(1);                    /* never registered */
+	if (ptlrpc_client_bulk_active(req) == 0)	/* completed or */
+		RETURN(1);				/* never registered */
 
         /* Move to "Unregistering" phase as bulk was not unlinked yet. */
         ptlrpc_rqphase_move(req, RQ_PHASE_UNREGISTERING);

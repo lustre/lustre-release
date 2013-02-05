@@ -385,10 +385,12 @@ int client_obd_setup(struct obd_device *obddev, struct lustre_cfg *lcfg)
 #endif
         cfs_atomic_set(&cli->cl_resends, OSC_DEFAULT_RESENDS);
 
-	/* This value may be changed at connect time in
-	   ptlrpc_connect_interpret. */
-	cli->cl_max_pages_per_rpc = min((int)PTLRPC_MAX_BRW_PAGES,
-					(int)(LNET_MTU >> CFS_PAGE_SHIFT));
+	/* This value may be reduced at connect time in
+	 * ptlrpc_connect_interpret() . We initialize it to only
+	 * 1MB until we know what the performance looks like.
+	 * In the future this should likely be increased. LU-1431 */
+	cli->cl_max_pages_per_rpc = min_t(int, PTLRPC_MAX_BRW_PAGES,
+					  LNET_MTU >> CFS_PAGE_SHIFT);
 
         if (!strcmp(name, LUSTRE_MDC_NAME)) {
                 cli->cl_max_rpcs_in_flight = MDC_MAX_RIF_DEFAULT;
@@ -2713,16 +2715,16 @@ int target_bulk_io(struct obd_export *exp, struct ptlrpc_bulk_desc *desc,
 			/* We don't reply anyway. */
                         rc = -ETIMEDOUT;
                         ptlrpc_abort_bulk(desc);
-                } else if (!desc->bd_success ||
-                           desc->bd_nob_transferred != desc->bd_nob) {
-                        DEBUG_REQ(D_ERROR, req, "%s bulk %s %d(%d)",
-                                  desc->bd_success ?
-                                  "truncated" : "network error on",
-                                  bulk2type(desc),
-                                  desc->bd_nob_transferred,
-                                  desc->bd_nob);
+		} else if (desc->bd_failure ||
+			   desc->bd_nob_transferred != desc->bd_nob) {
+			DEBUG_REQ(D_ERROR, req, "%s bulk %s %d(%d)",
+				  desc->bd_failure ?
+				  "network error on" : "truncated",
+				  bulk2type(desc),
+				  desc->bd_nob_transferred,
+				  desc->bd_nob);
 			/* XXX Should this be a different errno? */
-                        rc = -ETIMEDOUT;
+			rc = -ETIMEDOUT;
                 } else if (desc->bd_type == BULK_GET_SINK) {
                         rc = sptlrpc_svc_unwrap_bulk(req, desc);
                 }

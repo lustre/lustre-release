@@ -42,9 +42,11 @@
 
 #include "ofd_internal.h"
 
-#define OFD_GRANT_CHUNK (2ULL * DT_MAX_BRW_SIZE)
-#define OFD_GRANT_CHUNK_EXP(rexp) (2ULL * exp_brw_size((rexp)))
-#define OFD_GRANT_SHRINK_LIMIT(rexp) (16ULL * OFD_GRANT_CHUNK_EXP((rexp)))
+/* At least enough to send a couple of 1MB RPCs, even if not max sized */
+#define OFD_GRANT_CHUNK			(2ULL * DT_MAX_BRW_SIZE)
+
+/* Clients typically hold 2x their max_rpcs_in_flight of grant space */
+#define OFD_GRANT_SHRINK_LIMIT(exp)	(2ULL * 8 * exp_max_brw_size(exp))
 
 static inline obd_size ofd_grant_from_cli(struct obd_export *exp,
 					  struct ofd_device *ofd, obd_size val)
@@ -68,15 +70,17 @@ static inline obd_size ofd_grant_to_cli(struct obd_export *exp,
 static inline obd_size ofd_grant_chunk(struct obd_export *exp,
 				       struct ofd_device *ofd)
 {
-	if (exp && ofd_obd(ofd)->obd_self_export == exp)
+	if (ofd_obd(ofd)->obd_self_export == exp)
 		/* Grant enough space to handle a big precreate request */
 		return OST_MAX_PRECREATE * ofd->ofd_dt_conf.ddp_inodespace;
 
-	if (exp && ofd_grant_compat(exp, ofd))
+	if (ofd_grant_compat(exp, ofd))
 		/* Try to grant enough space to send a full-size RPC */
-		return exp_brw_size(exp) <<
+		return exp_max_brw_size(exp) <<
 		       (ofd->ofd_blockbits - COMPAT_BSIZE_SHIFT);
-	return OFD_GRANT_CHUNK;
+
+	/* Try to return enough to send two full RPCs, if needed */
+	return exp_max_brw_size(exp) * 2;
 }
 
 /**
@@ -631,8 +635,7 @@ static long ofd_grant(struct obd_export *exp, obd_size curgrant,
 	if (!grant)
 		RETURN(0);
 
-	/* Allow >OFD_GRANT_CHUNK_EXP size when clients reconnect due to a
-	 * server reboot. */
+	/* Limit to ofd_grant_chunk() if client is not reconnecting */
 	if ((grant > grant_chunk) && (!obd->obd_recovering))
 		grant = grant_chunk;
 
@@ -859,8 +862,7 @@ refresh:
 	/* When close to free space exhaustion, trigger a sync to force
 	 * writeback cache to consume required space immediately and release as
 	 * much space as possible. */
-	if (!obd->obd_recovering && force != 2 &&
-	    left < ofd_grant_chunk(NULL, ofd)) {
+	if (!obd->obd_recovering && force != 2 && left < OFD_GRANT_CHUNK) {
 		bool from_grant = true;
 		int  i;
 

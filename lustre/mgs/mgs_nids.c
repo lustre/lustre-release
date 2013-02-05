@@ -669,18 +669,18 @@ int mgs_get_ir_logs(struct ptlrpc_request *req)
         unit_size = min_t(int, 1 << body->mcb_bits, CFS_PAGE_SIZE);
 	bytes = mgs_nidtbl_read(req->rq_export, &fsdb->fsdb_nidtbl, res,
 				pages, nrpages, bufsize / unit_size, unit_size);
-        if (bytes < 0)
-                GOTO(out, rc = bytes);
+	if (bytes < 0)
+		GOTO(out, rc = bytes);
 
-        /* start bulk transfer */
-        page_count = (bytes + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
-        LASSERT(page_count <= nrpages);
-        desc = ptlrpc_prep_bulk_exp(req, page_count,
-                                    BULK_PUT_SOURCE, MGS_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(out, rc = -ENOMEM);
+	/* start bulk transfer */
+	page_count = (bytes + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT;
+	LASSERT(page_count <= nrpages);
+	desc = ptlrpc_prep_bulk_exp(req, page_count, 1,
+				    BULK_PUT_SOURCE, MGS_BULK_PORTAL);
+	if (desc == NULL)
+		GOTO(out, rc = -ENOMEM);
 
-        for (i = 0; i < page_count && bytes > 0; i++) {
+	for (i = 0; i < page_count && bytes > 0; i++) {
 		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0,
 					  min_t(int, bytes, CFS_PAGE_SIZE));
                 bytes -= CFS_PAGE_SIZE;

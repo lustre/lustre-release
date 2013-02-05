@@ -374,7 +374,7 @@ int qsd_fetch_index(const struct lu_env *env, struct obd_export *exp,
 	ptlrpc_at_set_req_timeout(req);
 
 	/* allocate bulk descriptor */
-	desc = ptlrpc_prep_bulk_imp(req, npages, BULK_PUT_SINK,
+	desc = ptlrpc_prep_bulk_imp(req, npages, 1, BULK_PUT_SINK,
 				    MDS_BULK_PORTAL);
 	if (desc == NULL) {
 		ptlrpc_request_free(req);

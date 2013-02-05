@@ -281,13 +281,18 @@ static inline __u64 exp_connect_flags(struct obd_export *exp)
 	return *exp_connect_flags_ptr(exp);
 }
 
-static inline int exp_brw_size(struct obd_export *exp)
+static inline int exp_max_brw_size(struct obd_export *exp)
 {
 	LASSERT(exp != NULL);
 	if (exp_connect_flags(exp) & OBD_CONNECT_BRW_SIZE)
 		return exp->exp_connect_data.ocd_brw_size;
 
 	return ONE_MB_BRW_SIZE;
+}
+
+static inline int exp_connect_multibulk(struct obd_export *exp)
+{
+	return exp_max_brw_size(exp) > ONE_MB_BRW_SIZE;
 }
 
 static inline int exp_expired(struct obd_export *exp, cfs_duration_t age)

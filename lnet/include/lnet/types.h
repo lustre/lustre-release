@@ -269,9 +269,11 @@ typedef struct {
         lnet_handle_eq_t eq_handle;
 } lnet_md_t;
 
-/* Max Transfer Unit (minimum supported everywhere) */
-#define LNET_MTU_BITS   20
-#define LNET_MTU        (1<<LNET_MTU_BITS)
+/* Max Transfer Unit (minimum supported everywhere).
+ * CAVEAT EMPTOR, with multinet (i.e. routers forwarding between networks)
+ * these limits are system wide and not interface-local. */
+#define LNET_MTU_BITS	20
+#define LNET_MTU	(1 << LNET_MTU_BITS)
 
 /** limit on the number of fragments in discontiguous MDs */
 #define LNET_MAX_IOV    256

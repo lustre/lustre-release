@@ -1786,12 +1786,12 @@ void lustre_swab_obd_statfs (struct obd_statfs *os)
 }
 EXPORT_SYMBOL(lustre_swab_obd_statfs);
 
-void lustre_swab_obd_ioobj (struct obd_ioobj *ioo)
+void lustre_swab_obd_ioobj(struct obd_ioobj *ioo)
 {
-        __swab64s (&ioo->ioo_id);
-        __swab64s (&ioo->ioo_seq);
-        __swab32s (&ioo->ioo_type);
-        __swab32s (&ioo->ioo_bufcnt);
+	__swab64s(&ioo->ioo_id);
+	__swab64s(&ioo->ioo_seq);
+	__swab32s(&ioo->ioo_max_brw);
+	__swab32s(&ioo->ioo_bufcnt);
 }
 EXPORT_SYMBOL(lustre_swab_obd_ioobj);
 
@@ -2311,10 +2311,10 @@ void lustre_swab_quota_body(struct quota_body *b)
 /* Dump functions */
 void dump_ioo(struct obd_ioobj *ioo)
 {
-        CDEBUG(D_RPCTRACE,
-               "obd_ioobj: ioo_id="LPD64", ioo_seq="LPD64", ioo_type=%d, "
-               "ioo_bufct=%d\n", ioo->ioo_id, ioo->ioo_seq, ioo->ioo_type,
-               ioo->ioo_bufcnt);
+	CDEBUG(D_RPCTRACE,
+	       "obd_ioobj: ioo_id="LPD64", ioo_seq="LPD64", ioo_max_brw=%#x, "
+	       "ioo_bufct=%d\n", ioo->ioo_id, ioo->ioo_seq, ioo->ioo_max_brw,
+	       ioo->ioo_bufcnt);
 }
 EXPORT_SYMBOL(dump_ioo);
 

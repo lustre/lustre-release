@@ -1602,10 +1602,10 @@ void lustre_assert_wire_constants(void)
 		 (long long)(int)offsetof(struct obd_ioobj, ioo_oid.oi_seq));
 	LASSERTF((int)sizeof(((struct obd_ioobj *)0)->ioo_oid.oi_seq) == 8, "found %lld\n",
 		 (long long)(int)sizeof(((struct obd_ioobj *)0)->ioo_oid.oi_seq));
-	LASSERTF((int)offsetof(struct obd_ioobj, ioo_type) == 16, "found %lld\n",
-		 (long long)(int)offsetof(struct obd_ioobj, ioo_type));
-	LASSERTF((int)sizeof(((struct obd_ioobj *)0)->ioo_type) == 4, "found %lld\n",
-		 (long long)(int)sizeof(((struct obd_ioobj *)0)->ioo_type));
+	LASSERTF((int)offsetof(struct obd_ioobj, ioo_max_brw) == 16, "found %lld\n",
+		 (long long)(int)offsetof(struct obd_ioobj, ioo_max_brw));
+	LASSERTF((int)sizeof(((struct obd_ioobj *)0)->ioo_max_brw) == 4, "found %lld\n",
+		 (long long)(int)sizeof(((struct obd_ioobj *)0)->ioo_max_brw));
 	LASSERTF((int)offsetof(struct obd_ioobj, ioo_bufcnt) == 20, "found %lld\n",
 		 (long long)(int)offsetof(struct obd_ioobj, ioo_bufcnt));
 	LASSERTF((int)sizeof(((struct obd_ioobj *)0)->ioo_bufcnt) == 4, "found %lld\n",

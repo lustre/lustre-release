@@ -992,9 +992,9 @@ int mdc_sendpage(struct obd_export *exp, const struct lu_fid *fid,
         req->rq_request_portal = MDS_READPAGE_PORTAL;
         ptlrpc_at_set_req_timeout(req);
 
-        desc = ptlrpc_prep_bulk_imp(req, 1, BULK_GET_SOURCE, MDS_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(out, rc = -ENOMEM);
+	desc = ptlrpc_prep_bulk_imp(req, 1, 1,BULK_GET_SOURCE, MDS_BULK_PORTAL);
+	if (desc == NULL)
+		GOTO(out, rc = -ENOMEM);
 
         /* NB req now owns desc and will free it when it gets freed. */
         ptlrpc_prep_bulk_page(desc, (struct page *)page, 0, offset);
@@ -1044,8 +1044,8 @@ restart_bulk:
         req->rq_request_portal = MDS_READPAGE_PORTAL;
         ptlrpc_at_set_req_timeout(req);
 
-        desc = ptlrpc_prep_bulk_imp(req, op_data->op_npages, BULK_PUT_SINK,
-                                    MDS_BULK_PORTAL);
+	desc = ptlrpc_prep_bulk_imp(req, op_data->op_npages, 1, BULK_PUT_SINK,
+				    MDS_BULK_PORTAL);
         if (desc == NULL) {
                 ptlrpc_request_free(req);
                 RETURN(-ENOMEM);

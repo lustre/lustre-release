@@ -1490,13 +1490,13 @@ again:
         body->mcb_bits   = CFS_PAGE_SHIFT;
         body->mcb_units  = nrpages;
 
-        /* allocate bulk transfer descriptor */
-        desc = ptlrpc_prep_bulk_imp(req, nrpages, BULK_PUT_SINK,
-                                    MGS_BULK_PORTAL);
-        if (desc == NULL)
-                GOTO(out, rc = -ENOMEM);
+	/* allocate bulk transfer descriptor */
+	desc = ptlrpc_prep_bulk_imp(req, nrpages, 1, BULK_PUT_SINK,
+				    MGS_BULK_PORTAL);
+	if (desc == NULL)
+		GOTO(out, rc = -ENOMEM);
 
-        for (i = 0; i < nrpages; i++)
+	for (i = 0; i < nrpages; i++)
 		ptlrpc_prep_bulk_page_pin(desc, pages[i], 0, CFS_PAGE_SIZE);
 
         ptlrpc_request_set_replen(req);

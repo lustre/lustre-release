@@ -716,7 +716,7 @@ check_obd_ioobj(void)
 	CHECK_STRUCT(obd_ioobj);
 	CHECK_MEMBER(obd_ioobj, ioo_id);
 	CHECK_MEMBER(obd_ioobj, ioo_seq);
-	CHECK_MEMBER(obd_ioobj, ioo_type);
+	CHECK_MEMBER(obd_ioobj, ioo_max_brw);
 	CHECK_MEMBER(obd_ioobj, ioo_bufcnt);
 }
 

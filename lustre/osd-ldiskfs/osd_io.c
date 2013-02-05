@@ -352,10 +352,10 @@ static int osd_do_bio(struct osd_device *osd, struct inode *inode,
                                 osd_submit_bio(iobuf->dr_rw, bio);
                         }
 
-                        /* allocate new bio, limited by max BIO size, b=9945 */
-                        bio = bio_alloc(GFP_NOIO, max(BIO_MAX_PAGES,
-                                                      (npages - page_idx) *
-                                                      blocks_per_page));
+			/* allocate new bio */
+			bio = bio_alloc(GFP_NOIO, min(BIO_MAX_PAGES,
+						      (npages - page_idx) *
+						      blocks_per_page));
                         if (bio == NULL) {
                                 CERROR("Can't allocate bio %u*%u = %u pages\n",
                                        (npages - page_idx), blocks_per_page,

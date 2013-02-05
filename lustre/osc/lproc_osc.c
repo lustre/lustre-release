@@ -468,11 +468,16 @@ static int lprocfs_osc_wr_max_pages_per_rpc(struct file *file,
 	struct obd_device *dev = data;
 	struct client_obd *cli = &dev->u.cli;
 	struct obd_connect_data *ocd = &cli->cl_import->imp_connect_data;
-	int chunk_mask, val, rc;
+	int chunk_mask, rc;
+	__u64 val;
 
-	rc = lprocfs_write_helper(buffer, count, &val);
+	rc = lprocfs_write_u64_helper(buffer, count, &val);
 	if (rc)
 		return rc;
+
+	/* if the max_pages is specified in bytes, convert to pages */
+	if (val >= ONE_MB_BRW_SIZE)
+		val >>= CFS_PAGE_SHIFT;
 
 	LPROCFS_CLIMP_CHECK(dev);
 

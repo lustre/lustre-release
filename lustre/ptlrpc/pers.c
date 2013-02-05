@@ -49,17 +49,23 @@
 
 #ifdef __KERNEL__
 
-void ptlrpc_fill_bulk_md (lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
+void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc,
+			 int mdidx)
 {
-        LASSERT (desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
-        LASSERT (!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV | LNET_MD_PHYS)));
+	CLASSERT(PTLRPC_MAX_BRW_PAGES < LI_POISON);
 
-        md->options |= LNET_MD_KIOV;
-        md->length = desc->bd_iov_count;
-        if (desc->bd_enc_iov)
-                md->start = desc->bd_enc_iov;
-        else
-                md->start = desc->bd_iov;
+	LASSERT(mdidx < desc->bd_md_max_brw);
+	LASSERT(desc->bd_iov_count <= PTLRPC_MAX_BRW_PAGES);
+	LASSERT(!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV |
+				 LNET_MD_PHYS)));
+
+	md->options |= LNET_MD_KIOV;
+	md->length = max(0, desc->bd_iov_count - mdidx * LNET_MAX_IOV);
+	md->length = min_t(unsigned int, LNET_MAX_IOV, md->length);
+	if (desc->bd_enc_iov)
+		md->start = &desc->bd_enc_iov[mdidx * LNET_MAX_IOV];
+	else
+		md->start = &desc->bd_iov[mdidx * LNET_MAX_IOV];
 }
 
 void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
@@ -76,18 +82,23 @@ void ptlrpc_add_bulk_page(struct ptlrpc_bulk_desc *desc, cfs_page_t *page,
 
 #else /* !__KERNEL__ */
 
-void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc)
+void ptlrpc_fill_bulk_md(lnet_md_t *md, struct ptlrpc_bulk_desc *desc,
+			 int mdidx)
 {
-        LASSERT (!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV | LNET_MD_PHYS)));
-        if (desc->bd_iov_count == 1) {
-                md->start = desc->bd_iov[0].iov_base;
-                md->length = desc->bd_iov[0].iov_len;
-                return;
-        }
+	LASSERT(mdidx < desc->bd_md_max_brw);
+	LASSERT(desc->bd_iov_count > mdidx * LNET_MAX_IOV);
+	LASSERT(!(md->options & (LNET_MD_IOVEC | LNET_MD_KIOV | LNET_MD_PHYS)));
 
-        md->options |= LNET_MD_IOVEC;
-        md->start = &desc->bd_iov[0];
-        md->length = desc->bd_iov_count;
+	if (desc->bd_iov_count == 1) {
+		md->start = desc->bd_iov[0].iov_base;
+		md->length = desc->bd_iov[0].iov_len;
+		return;
+	}
+
+	md->options |= LNET_MD_IOVEC;
+	md->start = &desc->bd_iov[mdidx * LNET_MAX_IOV];
+	md->length = min(LNET_MAX_IOV, desc->bd_iov_count - mdidx *
+				       LNET_MAX_IOV);
 }
 
 static int can_merge_iovs(lnet_md_iovec_t *existing, lnet_md_iovec_t *candidate)

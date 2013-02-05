@@ -207,12 +207,14 @@ EXPORT_SYMBOL(obdo_cmp_md);
 
 void obdo_to_ioobj(struct obdo *oa, struct obd_ioobj *ioobj)
 {
-        ioobj->ioo_id = oa->o_id;
-        if (oa->o_valid & OBD_MD_FLGROUP)
-                ioobj->ioo_seq = oa->o_seq;
-        else
-                ioobj->ioo_seq = 0;
-        ioobj->ioo_type = oa->o_mode;
+	ioobj->ioo_id = oa->o_id;
+	if (oa->o_valid & OBD_MD_FLGROUP)
+		ioobj->ioo_seq = oa->o_seq;
+	else
+		ioobj->ioo_seq = 0;
+	/* Since 2.4 this does not contain o_mode in the low 16 bits.
+	 * Instead, it holds (bd_md_max_brw - 1) for multi-bulk BRW RPCs */
+	ioobj->ioo_max_brw = 0;
 }
 EXPORT_SYMBOL(obdo_to_ioobj);
 

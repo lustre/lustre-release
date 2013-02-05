@@ -852,7 +852,7 @@ static int hf_lustre_obd_statfs_os_spare3 = -1;
 static int hf_lustre_lustre_msg_v2_lm_magic = -1;
 static int hf_lustre_lov_mds_md_v1_lmm_object_id = -1;
 static int hf_lustre_ptlrpc_body_pb_last_seen = -1;
-static int hf_lustre_obd_ioobj_ioo_type = -1;
+static int hf_lustre_obd_ioobj_ioo_max_brw = -1;
 static int hf_lustre_ptlrpc_body_pb_last_xid = -1;
 static int hf_lustre_ptlrpc_body_pb_status = -1;
 static int hf_lustre_niobuf_remote_flags = -1;
@@ -2167,7 +2167,7 @@ lustre_dissect_struct_obd_statfs(tvbuff_t *tvb _U_, int offset _U_, packet_info 
 /* IDL: struct obd_ioobj { */
 /* IDL: 	uint64 ioo_id; */
 /* IDL: 	uint64 ioo_seq; */
-/* IDL: 	uint32 ioo_type; */
+/* IDL: 	uint32 ioo_max_brw; */
 /* IDL: 	uint32 ioo_bufcnt; */
 /* IDL: } */
 
@@ -2188,9 +2188,9 @@ lustre_dissect_element_obd_ioobj_ioo_seq(tvbuff_t *tvb _U_, int offset _U_, pack
 }
 
 static int
-lustre_dissect_element_obd_ioobj_ioo_type(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
+lustre_dissect_element_obd_ioobj_ioo_max_brw(tvbuff_t *tvb _U_, int offset _U_, packet_info *pinfo _U_, proto_tree *tree _U_)
 {
-  offset=dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_obd_ioobj_ioo_type);
+  offset=dissect_uint32(tvb, offset, pinfo, tree, hf_lustre_obd_ioobj_ioo_max_brw);
 
   return offset;
 }
@@ -2223,7 +2223,7 @@ lustre_dissect_struct_obd_ioobj(tvbuff_t *tvb _U_, int offset _U_, packet_info *
 
   offset=lustre_dissect_element_obd_ioobj_ioo_seq(tvb, offset, pinfo, tree);
 
-  offset=lustre_dissect_element_obd_ioobj_ioo_type(tvb, offset, pinfo, tree);
+  offset=lustre_dissect_element_obd_ioobj_ioo_max_brw(tvb, offset, pinfo, tree);
 
   offset=lustre_dissect_element_obd_ioobj_ioo_bufcnt(tvb, offset, pinfo, tree);
 
@@ -10611,9 +10611,9 @@ void proto_register_dcerpc_lustre(void)
       { "Lmm Object Id", "lustre.lov_mds_md_v1.lmm_object_id", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ptlrpc_body_pb_last_seen,
       { "Pb Last Seen", "lustre.ptlrpc_body.pb_last_seen", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
-    { &hf_lustre_obd_ioobj_ioo_type,  /* TODO : create the
+    { &hf_lustre_obd_ioobj_ioo_max_brw,  /* TODO : create the
 						   corresponding value_string */
-		  { "Ioo Type", "lustre.obd_ioobj.ioo_type", FT_UINT32, BASE_HEX, NULL, 0, "", HFILL } },
+		  { "Ioo Max BRW Size", "lustre.obd_ioobj.ioo_max_brw", FT_UINT32, BASE_HEX, NULL, 0, "", HFILL } },
     { &hf_lustre_ptlrpc_body_pb_last_xid,
       { "Pb Last Xid", "lustre.ptlrpc_body.pb_last_xid", FT_UINT64, BASE_DEC, NULL, 0, "", HFILL }},
     { &hf_lustre_ptlrpc_body_pb_status,

@@ -1605,10 +1605,10 @@ static int mdt_sendpage(struct mdt_thread_info *info,
         int                      rc;
         ENTRY;
 
-        desc = ptlrpc_prep_bulk_exp(req, rdpg->rp_npages, BULK_PUT_SOURCE,
-                                    MDS_BULK_PORTAL);
-        if (desc == NULL)
-                RETURN(-ENOMEM);
+	desc = ptlrpc_prep_bulk_exp(req, rdpg->rp_npages, 1, BULK_PUT_SOURCE,
+				    MDS_BULK_PORTAL);
+	if (desc == NULL)
+		RETURN(-ENOMEM);
 
 	if (!(exp_connect_flags(exp) & OBD_CONNECT_BRW_SIZE))
 		/* old client requires reply size in it's PAGE_SIZE,
@@ -1661,7 +1661,7 @@ int mdt_readpage(struct mdt_thread_info *info)
 	if (exp_connect_flags(info->mti_exp) & OBD_CONNECT_64BITHASH)
 		rdpg->rp_attrs |= LUDA_64BITHASH;
 	rdpg->rp_count  = min_t(unsigned int, reqbody->nlink,
-				exp_brw_size(info->mti_exp));
+				exp_max_brw_size(info->mti_exp));
         rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE - 1) >>
                           CFS_PAGE_SHIFT;
         OBD_ALLOC(rdpg->rp_pages, rdpg->rp_npages * sizeof rdpg->rp_pages[0]);
@@ -2095,7 +2095,7 @@ int mdt_obd_idx_read(struct mdt_thread_info *info)
 	if (req_ii->ii_count <= 0)
 		GOTO(out, rc = -EFAULT);
 	rdpg->rp_count = min_t(unsigned int, req_ii->ii_count << LU_PAGE_SHIFT,
-			       exp_brw_size(info->mti_exp));
+			       exp_max_brw_size(info->mti_exp));
 	rdpg->rp_npages = (rdpg->rp_count + CFS_PAGE_SIZE -1) >> CFS_PAGE_SHIFT;
 
 	/* allocate pages to store the containers */
