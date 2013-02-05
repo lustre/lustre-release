@@ -1244,8 +1244,9 @@ extern void lustre_swab_ptlrpc_body(struct ptlrpc_body *pb);
  * Please DO NOT add flag values here before first ensuring that this same
  * flag value is not in use on some other branch.  Please clear any such
  * changes with senior engineers before starting to use a new flag.  Then,
- * submit a small patch against EVERY branch that ONLY adds the new flag
- * and updates obd_connect_names[] for lprocfs_rd_connect_flags(), so it
+ * submit a small patch against EVERY branch that ONLY adds the new flag,
+ * updates obd_connect_names[] for lprocfs_rd_connect_flags(), adds the
+ * flag to check_obd_connect_data(), and updates wiretests accordingly, so it
  * can be approved and landed easily to reserve the flag for future use. */
 
 /* The MNE_SWAB flag is overloading the MDS_MDS bit only for the MGS
