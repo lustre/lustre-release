@@ -63,12 +63,4 @@ struct l_readdir_callback {
         cfs_list_t            *lrc_list;
 };
 
-#define BDEVNAME_DECLARE_STORAGE(foo) char foo[BDEVNAME_SIZE]
-#define lvfs_sbdev(SB)       ((SB)->s_bdev)
-#define lvfs_sbdev_type      struct block_device *
-
-int __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev);
-
-int lvfs_check_rdonly(lvfs_sbdev_type dev);
-
 #endif /*  __LVFS_LINUX_H__ */

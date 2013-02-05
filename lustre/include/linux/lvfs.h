@@ -96,8 +96,6 @@ struct lvfs_run_ctxt {
 
 #ifdef __KERNEL__
 
-struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
-                            const char *name, int mode, int fix);
 int lustre_rename(struct dentry *dir, struct vfsmount *mnt, char *oldname,
                   char *newname);
 

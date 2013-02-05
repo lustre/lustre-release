@@ -204,55 +204,6 @@ void pop_ctxt(struct lvfs_run_ctxt *saved, struct lvfs_run_ctxt *new_ctx,
 }
 EXPORT_SYMBOL(pop_ctxt);
 
-/* utility to make a directory */
-struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt, 
-                            const char *name, int mode, int fix)
-{
-        struct dentry *dchild;
-        int err = 0;
-        ENTRY;
-
-        // ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
-        CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
-        dchild = ll_lookup_one_len(name, dir, strlen(name));
-        if (IS_ERR(dchild))
-                GOTO(out_up, dchild);
-
-        if (dchild->d_inode) {
-                int old_mode = dchild->d_inode->i_mode;
-                if (!S_ISDIR(old_mode)) {
-                        CERROR("found %s (%lu/%u) is mode %o\n", name,
-                               dchild->d_inode->i_ino,
-                               dchild->d_inode->i_generation, old_mode);
-                        GOTO(out_err, err = -ENOTDIR);
-                }
-
-                /* Fixup directory permissions if necessary */
-                if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
-                        CDEBUG(D_CONFIG,
-                               "fixing permissions on %s from %o to %o\n",
-                               name, old_mode, mode);
-                        dchild->d_inode->i_mode = (mode & S_IALLUGO) |
-                                                  (old_mode & ~S_IALLUGO);
-                        mark_inode_dirty(dchild->d_inode);
-                }
-                GOTO(out_up, dchild);
-        }
-
-        err = ll_vfs_mkdir(dir->d_inode, dchild, mnt, mode);
-        if (err)
-                GOTO(out_err, err);
-
-        RETURN(dchild);
-
-out_err:
-        dput(dchild);
-        dchild = ERR_PTR(err);
-out_up:
-        return dchild;
-}
-EXPORT_SYMBOL(simple_mkdir);
-
 /* utility to rename a file */
 int lustre_rename(struct dentry *dir, struct vfsmount *mnt,
                   char *oldname, char *newname)
@@ -294,36 +245,6 @@ struct l_file *l_dentry_open(struct lvfs_run_ctxt *ctxt, struct l_dentry *de,
         return ll_dentry_open(de, ctxt->pwdmnt, flags, current_cred());
 }
 EXPORT_SYMBOL(l_dentry_open);
-
-int __lvfs_set_rdonly(lvfs_sbdev_type dev, lvfs_sbdev_type jdev)
-{
-#ifdef HAVE_DEV_SET_RDONLY
-        if (jdev && (jdev != dev)) {
-                CDEBUG(D_IOCTL | D_HA, "set journal dev %lx rdonly\n",
-                       (long)jdev);
-                dev_set_rdonly(jdev);
-        }
-        CDEBUG(D_IOCTL | D_HA, "set dev %lx rdonly\n", (long)dev);
-        dev_set_rdonly(dev);
-
-        return 0;
-#else
-        CERROR("DEV %lx CANNOT BE SET READONLY\n", (long)dev);
-
-        return -EOPNOTSUPP;
-#endif
-}
-EXPORT_SYMBOL(__lvfs_set_rdonly);
-
-int lvfs_check_rdonly(lvfs_sbdev_type dev)
-{
-#ifdef HAVE_DEV_SET_RDONLY
-        return dev_check_rdonly(dev);
-#else
-        return 0;
-#endif
-}
-EXPORT_SYMBOL(lvfs_check_rdonly);
 
 void obd_update_maxusage()
 {

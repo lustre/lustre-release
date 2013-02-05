@@ -52,7 +52,6 @@
  * OBD_FAIL_CHECK
  */
 #include <obd_support.h>
-#include <lvfs.h>
 
 #include "osd_internal.h"
 #include "osd_oi.h"
@@ -74,6 +73,54 @@ static void osd_pop_ctxt(const struct osd_device *dev,
 			 struct lvfs_run_ctxt *save)
 {
 	pop_ctxt(save, new, NULL);
+}
+
+/* utility to make a directory */
+static struct dentry *simple_mkdir(struct dentry *dir, struct vfsmount *mnt,
+				   const char *name, int mode, int fix)
+{
+	struct dentry *dchild;
+	int err = 0;
+	ENTRY;
+
+	// ASSERT_KERNEL_CTXT("kernel doing mkdir outside kernel context\n");
+	CDEBUG(D_INODE, "creating directory %.*s\n", (int)strlen(name), name);
+	dchild = ll_lookup_one_len(name, dir, strlen(name));
+	if (IS_ERR(dchild))
+		GOTO(out_up, dchild);
+
+	if (dchild->d_inode) {
+		int old_mode = dchild->d_inode->i_mode;
+		if (!S_ISDIR(old_mode)) {
+			CERROR("found %s (%lu/%u) is mode %o\n", name,
+			       dchild->d_inode->i_ino,
+			       dchild->d_inode->i_generation, old_mode);
+			GOTO(out_err, err = -ENOTDIR);
+		}
+
+		/* Fixup directory permissions if necessary */
+		if (fix && (old_mode & S_IALLUGO) != (mode & S_IALLUGO)) {
+			CDEBUG(D_CONFIG,
+			       "fixing permissions on %s from %o to %o\n",
+			       name, old_mode, mode);
+			dchild->d_inode->i_mode = (mode & S_IALLUGO) |
+						  (old_mode & ~S_IALLUGO);
+			mark_inode_dirty(dchild->d_inode);
+		}
+		GOTO(out_up, dchild);
+	}
+
+	err = ll_vfs_mkdir(dir->d_inode, dchild, mnt, mode);
+	if (err)
+		GOTO(out_err, err);
+
+	RETURN(dchild);
+
+out_err:
+	dput(dchild);
+	dchild = ERR_PTR(err);
+out_up:
+	return dchild;
 }
 
 int osd_last_rcvd_subdir_count(struct osd_device *osd)
