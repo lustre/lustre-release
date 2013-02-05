@@ -281,7 +281,13 @@ static int ofd_lvbo_size(struct ldlm_lock *lock)
 static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int buflen)
 {
 	struct ldlm_resource *res = lock->l_resource;
-	int lvb_len = min_t(int, res->lr_lvb_len, buflen);
+	int lvb_len;
+
+	lvb_len = ofd_lvbo_size(lock);
+	LASSERT(lvb_len <= res->lr_lvb_len);
+
+	if (lvb_len > buflen)
+		lvb_len = buflen;
 
 	lock_res(res);
 	memcpy(buf, res->lr_lvb_data, lvb_len);
