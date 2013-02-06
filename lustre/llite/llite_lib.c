@@ -1279,16 +1279,12 @@ int ll_md_setattr(struct dentry *dentry, struct md_op_data *op_data,
                 RETURN(rc);
         }
 
-        /* We want to adjust timestamps.
-         * If there is at least some data in file, we cleared ATTR_SIZE
-         * to avoid update size, otherwise it is important to do.(SOM case)
-         * (bug 6196) */
-        ia_valid = op_data->op_attr.ia_valid;
-        /* Since we set ATTR_*_SET flags above, and already done permission
-         * check, So don't let inode_change_ok() check it again.  */
-        op_data->op_attr.ia_valid &= ~TIMES_SET_FLAGS;
-        rc = simple_setattr(dentry, &op_data->op_attr);
-        op_data->op_attr.ia_valid = ia_valid;
+	ia_valid = op_data->op_attr.ia_valid;
+	/* inode size will be in ll_setattr_ost, can't do it now since dirty
+	 * cache is not cleared yet. */
+	op_data->op_attr.ia_valid &= ~(TIMES_SET_FLAGS | ATTR_SIZE);
+	rc = simple_setattr(dentry, &op_data->op_attr);
+	op_data->op_attr.ia_valid = ia_valid;
 
         /* Extract epoch data if obtained. */
         op_data->op_handle = md.body->handle;
@@ -1411,12 +1407,10 @@ out_big:
  */
 int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 {
-	struct lov_stripe_md *lsm;
         struct inode *inode = dentry->d_inode;
         struct ll_inode_info *lli = ll_i2info(inode);
         struct md_op_data *op_data = NULL;
         struct md_open_data *mod = NULL;
-        int ia_valid = attr->ia_valid;
         int rc = 0, rc1 = 0;
         ENTRY;
 
@@ -1425,7 +1419,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 		PFID(&lli->lli_fid), i_size_read(inode), attr->ia_size,
 		attr->ia_valid);
 
-        if (ia_valid & ATTR_SIZE) {
+	if (attr->ia_valid & ATTR_SIZE) {
                 /* Check new size against VFS/VM file size limit and rlimit */
                 rc = inode_newsize_ok(inode, attr->ia_size);
                 if (rc)
@@ -1445,7 +1439,7 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
         }
 
         /* POSIX: check before ATTR_*TIME_SET set (from inode_change_ok) */
-        if (ia_valid & TIMES_SET_FLAGS) {
+	if (attr->ia_valid & TIMES_SET_FLAGS) {
                 if (cfs_curproc_fsuid() != inode->i_uid &&
                     !cfs_capable(CFS_CAP_FOWNER))
                         RETURN(-EPERM);
@@ -1456,11 +1450,13 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
                 attr->ia_ctime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_CTIME_SET;
         }
-        if (!(ia_valid & ATTR_ATIME_SET) && (attr->ia_valid & ATTR_ATIME)) {
+	if (!(attr->ia_valid & ATTR_ATIME_SET) &&
+	    (attr->ia_valid & ATTR_ATIME)) {
                 attr->ia_atime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_ATIME_SET;
         }
-        if (!(ia_valid & ATTR_MTIME_SET) && (attr->ia_valid & ATTR_MTIME)) {
+	if (!(attr->ia_valid & ATTR_MTIME_SET) &&
+	    (attr->ia_valid & ATTR_MTIME)) {
                 attr->ia_mtime = CFS_CURRENT_TIME;
                 attr->ia_valid |= ATTR_MTIME_SET;
         }
@@ -1485,28 +1481,17 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
                 RETURN(-ENOMEM);
 
 	if (!S_ISDIR(inode->i_mode)) {
-		if (ia_valid & ATTR_SIZE)
+		if (attr->ia_valid & ATTR_SIZE)
 			inode_dio_write_done(inode);
 		mutex_unlock(&inode->i_mutex);
 		down_write(&lli->lli_trunc_sem);
 	}
 
-	/* We need a steady stripe configuration for setattr to avoid
-	 * confusion. */
-	lsm = ccc_inode_lsm_get(inode);
-
-	/* NB: ATTR_SIZE will only be set after this point if the size
-	 * resides on the MDS, ie, this file has no objects. */
-	if (lsm != NULL)
-		attr->ia_valid &= ~ATTR_SIZE;
-	/* can't call ll_setattr_ost() while holding a refcount of lsm */
-	ccc_inode_lsm_put(inode, lsm);
-
         memcpy(&op_data->op_attr, attr, sizeof(*attr));
 
         /* Open epoch for truncate. */
         if (exp_connect_som(ll_i2mdexp(inode)) &&
-            (ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)))
+            (attr->ia_valid & (ATTR_SIZE | ATTR_MTIME | ATTR_MTIME_SET)))
                 op_data->op_flags = MF_EPOCH_OPEN;
 
         rc = ll_md_setattr(dentry, op_data, &mod);
@@ -1524,11 +1509,9 @@ int ll_setattr_raw(struct dentry *dentry, struct iattr *attr)
 	if (!S_ISREG(inode->i_mode))
                 GOTO(out, rc = 0);
 
-        if (ia_valid & ATTR_SIZE)
-                attr->ia_valid |= ATTR_SIZE;
-        if (ia_valid & (ATTR_SIZE |
-                        ATTR_ATIME | ATTR_ATIME_SET |
-                        ATTR_MTIME | ATTR_MTIME_SET))
+	if (attr->ia_valid & (ATTR_SIZE |
+			      ATTR_ATIME | ATTR_ATIME_SET |
+			      ATTR_MTIME | ATTR_MTIME_SET))
                 /* For truncate and utimes sending attributes to OSTs, setting
                  * mtime/atime to the past will be performed under PW [0:EOF]
                  * extent lock (new_size:EOF for truncate).  It may seem
@@ -1549,11 +1532,11 @@ out:
 	if (!S_ISDIR(inode->i_mode)) {
 		up_write(&lli->lli_trunc_sem);
 		mutex_lock(&inode->i_mutex);
-		if (ia_valid & ATTR_SIZE)
+		if (attr->ia_valid & ATTR_SIZE)
 			inode_dio_wait(inode);
 	}
 
-	ll_stats_ops_tally(ll_i2sbi(inode), (ia_valid & ATTR_SIZE) ?
+	ll_stats_ops_tally(ll_i2sbi(inode), (attr->ia_valid & ATTR_SIZE) ?
 			LPROC_LL_TRUNC : LPROC_LL_SETATTR, 1);
 
 	return rc;
@@ -1788,7 +1771,7 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
         if (body->valid & OBD_MD_FLSIZE) {
                 if (exp_connect_som(ll_i2mdexp(inode)) &&
-		    S_ISREG(inode->i_mode) && lli->lli_has_smd) {
+		    S_ISREG(inode->i_mode)) {
                         struct lustre_handle lockh;
                         ldlm_mode_t mode;
 

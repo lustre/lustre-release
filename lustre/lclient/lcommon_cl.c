@@ -670,25 +670,20 @@ void ccc_lock_state(const struct lu_env *env,
                     const struct cl_lock_slice *slice,
                     enum cl_lock_state state)
 {
-        struct cl_lock   *lock;
-        struct cl_object *obj;
-        struct inode     *inode;
-        struct cl_attr   *attr;
+	struct cl_lock *lock = slice->cls_lock;
+	ENTRY;
 
-        ENTRY;
-        lock = slice->cls_lock;
-
-        /*
-         * Refresh inode attributes when the lock is moving into CLS_HELD
-         * state, and only when this is a result of real enqueue, rather than
-         * of finding lock in the cache.
-         */
-        if (state == CLS_HELD && lock->cll_state < CLS_HELD) {
-		int rc;
+	/*
+	 * Refresh inode attributes when the lock is moving into CLS_HELD
+	 * state, and only when this is a result of real enqueue, rather than
+	 * of finding lock in the cache.
+	 */
+	if (state == CLS_HELD && lock->cll_state < CLS_HELD) {
+		struct cl_object *obj;
+		struct inode     *inode;
 
 		obj   = slice->cls_obj;
 		inode = ccc_object_inode(obj);
-		attr  = ccc_env_thread_attr(env);
 
 		/* vmtruncate() sets the i_size
 		 * under both a DLM lock and the
@@ -699,24 +694,9 @@ void ccc_lock_state(const struct lu_env *env,
 		 * cancel the result of the truncate.  Getting the
 		 * ll_inode_size_lock() after the enqueue maintains the DLM
 		 * -> ll_inode_size_lock() acquiring order. */
-		ccc_object_size_lock(obj);
-                rc = cl_object_attr_get(env, obj, attr);
-                if (rc == 0) {
-                        if (lock->cll_descr.cld_start == 0 &&
-                            lock->cll_descr.cld_end == CL_PAGE_EOF) {
-                                cl_isize_write_nolock(inode, attr->cat_kms);
-                                CDEBUG(D_INODE|D_VFSTRACE,
-                                       DFID" updating i_size "LPU64"\n",
-                                       PFID(lu_object_fid(&obj->co_lu)),
-                                       (__u64)cl_isize_read(inode));
-                        }
-                        cl_inode_mtime(inode) = attr->cat_mtime;
-                        cl_inode_atime(inode) = attr->cat_atime;
-                        cl_inode_ctime(inode) = attr->cat_ctime;
-                } else {
-                        CL_LOCK_DEBUG(D_INFO, env, lock, "attr_get: %d\n", rc);
-                }
-		ccc_object_size_unlock(obj);
+		if (lock->cll_descr.cld_start == 0 &&
+		    lock->cll_descr.cld_end == CL_PAGE_EOF)
+			cl_merge_lvb(env, inode);
 	}
 	EXIT;
 }

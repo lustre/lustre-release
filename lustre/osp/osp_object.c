@@ -94,7 +94,8 @@ static int osp_declare_attr_set(const struct lu_env *env, struct dt_object *dt,
 	if (attr == NULL)
 		RETURN(0);
 
-	if (attr->la_valid & LA_SIZE && attr->la_size > 0) {
+	if (attr->la_valid & LA_SIZE && attr->la_size > 0 &&
+	    fid_is_zero(lu_object_fid(&o->opo_obj.do_lu))) {
 		LASSERT(!dt_object_exists(dt));
 		osp_object_assign_fid(env, d, o);
 		rc = osp_object_truncate(env, dt, attr->la_size);
