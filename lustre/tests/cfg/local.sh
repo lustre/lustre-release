@@ -66,12 +66,6 @@ FSTYPE=${FSTYPE:-ldiskfs}
 LDISKFS_MKFS_OPTS=${LDISKFS_MKFS_OPTS:-}
 ZFS_MKFS_OPTS=${ZFS_MKFS_OPTS:-}
 
-#
-# If any OST is "remote" and the non-default implementation (e.g.,
-# current OFD) is desired, then make sure that either a)
-# LOAD_MODULES_REMOTE is true or b) modprobe(8) is configured to
-# blacklist the undesired (and aliased the other, if necessary).
-#
 LOAD_MODULES_REMOTE=${LOAD_MODULES_REMOTE:-false}
 
 STRIPE_BYTES=${STRIPE_BYTES:-1048576}
