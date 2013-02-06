@@ -17,10 +17,6 @@ init_test_env $@
 . ${CONFIG:=$LUSTRE/tests/cfg/$NAME.sh}
 init_logging
 
-[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
-	skip "test OI scrub only for ldiskfs" && exit 0
-[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
-	skip "Need MDS version at least 2.2.90" && exit 0
 require_dsh_mds || exit 0
 
 SAVED_MDSSIZE=${MDSSIZE}
@@ -31,6 +27,14 @@ MDSSIZE=100000
 OSTSIZE=100000
 
 check_and_setup_lustre
+
+[ $(facet_fstype $SINGLEMDS) != ldiskfs ] &&
+	skip "test OI scrub only for ldiskfs" && check_and_cleanup_lustre &&
+	exit 0
+[[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.2.90) ]] &&
+	skip "Need MDS version at least 2.2.90" && check_and_cleanup_lustre &&
+	exit 0
+
 build_test_filter
 
 MDT_DEV="${FSNAME}-MDT0000"
@@ -563,12 +567,15 @@ test_9() {
 	[ "$STATUS" == "scanning" ] ||
 		error "(9) Expect 'scanning', but got '$STATUS'"
 
-	# Do NOT ignore that there are 1024 pre-fetched items.
-	# So the max speed may be (1024 + 100 * 10) / 10.
-	# And there may be time error, so the max speed may be more large.
 	local SPEED=$($SHOW_SCRUB | awk '/^average_speed/ { print $2 }')
-	[ $SPEED -gt 220 ] &&
-		error "(10) Unexpected speed $SPEED, should not more than 220"
+	# Do NOT ignore that there are 1024 pre-fetched items.
+	# And there may be time error, normally it should be less than 2.
+	# We allow another 10% schedule error.
+	#
+	# SPEED1 = (pre-fetched + 100 * (time - 2)) / time * 1.1
+	local SPEED1=$(((1024 + 100 * (10 + 2)) / 10 * 11 / 10))
+	[ $SPEED -lt $SPEED1 ] ||
+		error "(10) Got speed $SPEED, expected less than $SPEED1"
 
 	# adjust speed limit
 	do_facet $SINGLEMDS \
@@ -576,11 +583,19 @@ test_9() {
 	sleep 10
 
 	SPEED=$($SHOW_SCRUB | awk '/^average_speed/ { print $2 }')
-	[ $SPEED -lt 220 ] &&
-		error "(11) Unexpected speed $SPEED, should not less than 220"
+	# SPEED1 = (pre-fetched + 100 * (time1 - 2) + 300 * (time2 - 2)) / \
+	#	   (time1 + time2) * 0.9
+	SPEED1=$(((1024 + 100 * (10 - 2) + 300 * (10 - 2)) / \
+		  (10 + 10) * 9 / 10))
+	[ $SPEED -gt $SPEED1 ] ||
+		error "(11) Got speed $SPEED, expected more than $SPEED1"
 
-	[ $SPEED -gt 300 ] &&
-		error "(12) Unexpected speed $SPEED, should not more than 300"
+	# SPEED1 = (pre-fetched + 100 * (time1 + 2) + 300 * (time2 + 2)) / \
+	#	   (time1 + time2) * 1.1
+	SPEED1=$(((1024 + 100 * (10 + 2) + 300 * (10 + 2)) / \
+		  (10 + 10) * 11 / 10))
+	[ $SPEED -lt $SPEED1 ] ||
+		error "(12) Got speed $SPEED, expected less than $SPEED1"
 
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
@@ -720,6 +735,8 @@ run_test 10b "non-stopped OI scrub should auto restarts after MDS remount (2)"
 test_11() {
 	echo "stopall"
 	stopall > /dev/null
+	echo "formatall"
+	formatall > /dev/null
 	echo "setupall"
 	setupall > /dev/null
 
@@ -741,8 +758,8 @@ test_11() {
 	local SKIPPED=$($SHOW_SCRUB | awk '/^noscrub/ { print $2 }')
 	# notice we're creating a new llog for every OST on every startup
 	# new features can make this even less stable, so we only check
-	# that the number of skipped files is less than 1.5x the number of files
-	local MAXIMUM=$((CREATED * 3 / 2))
+	# that the number of skipped files is less than 2x the number of files
+	local MAXIMUM=$((CREATED * 2))
 	local MINIMUM=$((CREATED + 1)) # files + directory
 	[ $SKIPPED -ge $MAXIMUM -o $SKIPPED -lt $MINIMUM ] &&
 	error "(5) Expect [ $MINIMUM , $MAXIMUM ) objects skipped, got $SKIPPED"

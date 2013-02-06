@@ -480,7 +480,7 @@ test_6b() {
 	local POSITION1=$($SHOW_NAMESPACE |
 			  awk '/^latest_start_position/ { print $4 }')
 	if [ $POSITION0 -gt $POSITION1 ]; then
-		[ $POSITION1 -eq 0 -a $POSITINO0 -eq $((POSITION1 + 1)) ] ||
+		[ $POSITION1 -eq 0 -a $POSITION0 -eq $((POSITION1 + 1)) ] ||
 		error "(7) Expect larger than: $POSITION0, but got $POSITION1"
 	fi
 
@@ -726,9 +726,13 @@ test_9a() {
 
 	local SPEED=$($SHOW_NAMESPACE |
 		      awk '/^average_speed_phase1/ { print $2 }')
-	# (100 * (10 + 1)) / 10 = 110
-	[ $SPEED -lt 120 ] ||
-		error "(4) Unexpected speed $SPEED, should not more than 120"
+	# There may be time error, normally it should be less than 2.
+	# We allow another 10% schedule error.
+	#
+	# SPEED1 = (100 * (time + 2)) / time * 1.1
+	SPEED1=$((100 * (10 + 2) / 10 * 11 / 10))
+	[ $SPEED -lt $SPEED1 ] ||
+		error "(4) Got speed $SPEED, expected less than $SPEED1"
 
 	# adjust speed limit
 	do_facet $SINGLEMDS \
@@ -736,13 +740,15 @@ test_9a() {
 	sleep 10
 
 	SPEED=$($SHOW_NAMESPACE | awk '/^average_speed_phase1/ { print $2 }')
-	# (100 * (10 - 1) + 300 * (10 - 1)) / 20 = 180
-	[ $SPEED -lt 170 ] &&
-		error "(5) Unexpected speed $SPEED, should not less than 170"
+	# SPEED1=(100 * (time1 - 2) + 300 * (time2 - 2)) / (time1 + time2) * 0.9
+	SPEED1=$(((100 * (10 - 2) + 300 * (10 - 2)) / (10 + 10) * 9 / 10))
+	[ $SPEED -gt $SPEED1 ] ||
+		error "(5) Got speed $SPEED, expected more than $SPEED1"
 
-	# (100 * (10 + 1) + 300 * (10 + 1)) / 20 = 220
-	[ $SPEED -lt 230 ] ||
-		error "(6) Unexpected speed $SPEED, should not more than 230"
+	# SPEED1=(100 * (time1 + 2) + 300 * (time2 + 2)) / (time1 + time2) * 1.1
+	SPEED1=$(((100 * (10 + 2) + 300 * (10 + 2)) / (10 + 10) * 11 / 10))
+	[ $SPEED -lt $SPEED1 ] ||
+		error "(6) Got speed $SPEED, expected less than $SPEED1"
 
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
@@ -800,9 +806,13 @@ test_9b() {
 
 	local SPEED=$($SHOW_NAMESPACE |
 		      awk '/^average_speed_phase2/ { print $2 }')
-	# (50 * (10 + 1)) / 10 = 55
-	[ $SPEED -lt 60 ] ||
-		error "(8) Unexpected speed $SPEED, should not more than 60"
+	# There may be time error, normally it should be less than 2.
+	# We allow another 10% schedule error.
+	#
+	# SPEED1 = (50 * (time + 2)) / time * 1.1
+	SPEED1=$((50 * (10 + 2) / 10 * 11 / 10))
+	[ $SPEED -lt $SPEED1 ] ||
+		error "(8) Got speed $SPEED, expected less than $SPEED1"
 
 	# adjust speed limit
 	do_facet $SINGLEMDS \
@@ -810,13 +820,15 @@ test_9b() {
 	sleep 10
 
 	SPEED=$($SHOW_NAMESPACE | awk '/^average_speed_phase2/ { print $2 }')
-	# (50 * (10 - 1) + 150 * (10 - 1)) / 20 = 90
-	[ $SPEED -lt 85 ] &&
-		error "(9) Unexpected speed $SPEED, should not less than 85"
+	# SPEED1=(50 * (time1 - 2) + 150 * (time2 - 2)) / (time1 + time2) * 0.9
+	SPEED1=$(((50 * (10 - 2) + 150 * (10 - 2)) / (10 + 10) * 9 / 10))
+	[ $SPEED -gt $SPEED1 ] ||
+		error "(9) Got speed $SPEED, expected more than $SPEED1"
 
-	# (50 * (10 + 1) + 150 * (10 + 1)) / 20 = 110
-	[ $SPEED -lt 115 ] ||
-		error "(10) Unexpected speed $SPEED, should not more than 115"
+	# SPEED1=(50 * (time1 + 2) + 150 * (time2 + 2)) / (time1 + time2) * 1.1
+	SPEED1=$(((50 * (10 + 2) + 150 * (10 + 2)) / (10 + 10) * 11 / 10))
+	[ $SPEED -lt $SPEED1 ] ||
+		error "(10) Got speed $SPEED, expected less than $SPEED1"
 
 	do_facet $SINGLEMDS \
 		$LCTL set_param -n mdd.${MDT_DEV}.lfsck_speed_limit 0
