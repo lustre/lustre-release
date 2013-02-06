@@ -1210,6 +1210,11 @@ test_31() { # bug 10734
 }
 run_test 31 "Connect to non-existent node (shouldn't crash)"
 
+
+T32_QID=60000
+T32_BLIMIT=20480 # Kbytes
+T32_ILIMIT=2
+
 #
 # This is not really a test but a tool to create new disk
 # image tarballs for the upgrade tests.
@@ -1240,10 +1245,19 @@ test_32newtarball() {
 
 	mkdir $tmp/src
 	tar cf - -C $src . | tar xf - -C $tmp/src
+	dd if=/dev/zero of=$tmp/src/t32_qf_old bs=1M \
+		count=$(($T32_BLIMIT / 1024 / 2))
+	chown $T32_QID.$T32_QID $tmp/src/t32_qf_old
 
 	formatall
 
 	setupall
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ] &&
+		$LFS quotacheck -ug /mnt/$FSNAME
+	$LFS setquota -u $T32_QID -b 0 -B $T32_BLIMIT -i 0 -I $T32_ILIMIT \
+		/mnt/$FSNAME
+
 	tar cf - -C $tmp/src . | tar xf - -C /mnt/$FSNAME
 	stopall
 
@@ -1257,6 +1271,19 @@ test_32newtarball() {
 	popd
 	$LCTL get_param -n version | head -n 1 |
 		sed -e 's/^lustre: *//' >$tmp/img/commit
+
+	[ $(lustre_version_code $SINGLEMDS) -lt $(version_code 2.3.50) ] &&
+		$LFS quotaon -ug /mnt/$FSNAME
+	$LFS quota -u $T32_QID -v /mnt/$FSNAME
+	$LFS quota -v -u $T32_QID /mnt/$FSNAME |
+		awk 'BEGIN { num='1' } { if ($1 == "'/mnt/$FSNAME'") \
+		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
+		| tr -d "*" > $tmp/img/bspace
+	$LFS quota -v -u $T32_QID /mnt/$FSNAME |
+		awk 'BEGIN { num='5' } { if ($1 == "'/mnt/$FSNAME'") \
+		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
+		| tr -d "*" > $tmp/img/ispace
+
 	stopall
 
 	pushd $tmp/src
@@ -1390,6 +1417,86 @@ t32_wait_til_devices_gone() {
 	return 1
 }
 
+t32_verify_quota() {
+	local node=$1
+	local fsname=$2
+	local mnt=$3
+	local fstype=$(facet_fstype $SINGLEMDS)
+	local qval
+	local cmd
+
+	$LFS quota -u $T32_QID -v $mnt
+
+	qval=$($LFS quota -v -u $T32_QID $mnt |
+		awk 'BEGIN { num='1' } { if ($1 == "'$mnt'") \
+		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
+		| tr -d "*")
+	[ $qval -eq $img_bspace ] || {
+		echo "bspace, act:$qval, exp:$img_bspace"
+		return 1
+	}
+
+	qval=$($LFS quota -v -u $T32_QID $mnt |
+		awk 'BEGIN { num='5' } { if ($1 == "'$mnt'") \
+		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
+		| tr -d "*")
+	[ $qval -eq $img_ispace ] || {
+		echo "ispace, act:$qval, exp:$img_ispace"
+		return 1
+	}
+
+	qval=$($LFS quota -v -u $T32_QID $mnt |
+		awk 'BEGIN { num='3' } { if ($1 == "'$mnt'") \
+		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
+		| tr -d "*")
+	[ $qval -eq $T32_BLIMIT ] || {
+		echo "blimit, act:$qval, exp:$T32_BLIMIT"
+		return 1
+	}
+
+	qval=$($LFS quota -v -u $T32_QID $mnt |
+		awk 'BEGIN { num='7' } { if ($1 == "'$mnt'") \
+		{ if (NF == 1) { getline } else { num++ } ; print $num;} }' \
+		| tr -d "*")
+	[ $qval -eq $T32_ILIMIT ] || {
+		echo "ilimit, act:$qval, exp:$T32_ILIMIT"
+		return 1
+	}
+
+	do_node $node $LCTL conf_param $fsname.quota.mdt=ug
+	cmd="$LCTL get_param -n osd-$fstype.$fsname-MDT0000"
+	cmd=$cmd.quota_slave.enabled
+	wait_update $node "$cmd" "ug" || {
+		echo "Enable mdt quota failed"
+		return 1
+	}
+
+	do_node $node $LCTL conf_param $fsname.quota.ost=ug
+	cmd="$LCTL get_param -n osd-$fstype.$fsname-OST0000"
+	cmd=$cmd.quota_slave.enabled
+	wait_update $node "$cmd" "ug" || {
+		echo "Enable ost quota failed"
+		return 1
+	}
+
+	chmod 0777 $mnt
+	runas -u $T32_QID -g $T32_QID dd if=/dev/zero of=$mnt/t32_qf_new \
+		bs=1M count=$(($T32_BLIMIT / 1024)) oflag=sync && {
+		echo "Write succeed, but expect -EDQUOT"
+		return 1
+	}
+	rm -f $mnt/t32_qf_new
+
+	runas -u $T32_QID -g $T32_QID createmany -m $mnt/t32_qf_ \
+		$T32_ILIMIT && {
+		echo "Create succeed, but expect -EDQUOT"
+		return 1
+	}
+	unlinkmany $mnt/t32_qf_ $T32_ILIMIT
+
+	return 0
+}
+
 t32_test() {
 	local tarball=$1
 	local writeconf=$2
@@ -1406,6 +1513,8 @@ t32_test() {
 	local img_commit
 	local img_kernel
 	local img_arch
+	local img_bspace
+	local img_ispace
 	local fsname=t32fs
 	local nid=$($r $LCTL list_nids | head -1)
 	local mopts
@@ -1413,6 +1522,7 @@ t32_test() {
 	local nrpcs_orig
 	local nrpcs
 	local list
+	local fstype=$(facet_fstype $SINGLEMDS)
 
 	trap 'trap - RETURN; t32_test_cleanup' RETURN
 
@@ -1425,6 +1535,8 @@ t32_test() {
 	img_commit=$($r cat $tmp/commit)
 	img_kernel=$($r cat $tmp/kernel)
 	img_arch=$($r cat $tmp/arch)
+	img_bspace=$($r cat $tmp/bspace)
+	img_ispace=$($r cat $tmp/ispace)
 	echo "Upgrading from $(basename $tarball), created with:"
 	echo "  Commit: $img_commit"
 	echo "  Kernel: $img_kernel"
@@ -1438,6 +1550,12 @@ t32_test() {
 	}
 	if [ "$writeconf" ]; then
 		mopts=loop,writeconf
+		if [ $fstype == "ldiskfs" ]; then
+			$r $TUNEFS --quota $tmp/mdt || {
+				error_noexit "Enable mdt quota feature"
+				return 1
+			}
+		fi
 	else
 		mopts=loop,exclude=$fsname-OST0000
 	fi
@@ -1487,6 +1605,12 @@ t32_test() {
 	}
 	if [ "$writeconf" ]; then
 		mopts=loop,mgsnode=$nid,$writeconf
+		if [ $fstype == "ldiskfs" ]; then
+			$r $TUNEFS --quota $tmp/ost || {
+				error_noexit "Enable ost quota feature"
+				return 1
+			}
+		fi
 	else
 		mopts=loop,mgsnode=$nid
 	fi
@@ -1554,6 +1678,12 @@ t32_test() {
 		}
 		shall_cleanup_lustre=true
 		$LCTL set_param debug="$PTLDEBUG"
+
+		t32_verify_quota $node $fsname $tmp/mnt/lustre || {
+			error_noexit "verify quota failed"
+			return 1
+		}
+
 		if [ "$dne_upgrade" != "no" ]; then
 			$LFS mkdir -i 1 $tmp/mnt/lustre/remote_dir || {
 				error_noexit "set remote dir failed"
