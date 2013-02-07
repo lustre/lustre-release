@@ -6142,6 +6142,10 @@ static int __init mdt_mod_init(void)
 	struct lprocfs_static_vars lvars;
 	int rc;
 
+	CLASSERT(sizeof("0x0123456789ABCDEF:0x01234567:0x01234567") ==
+		 FID_NOBRACE_LEN + 1);
+	CLASSERT(sizeof("[0x0123456789ABCDEF:0x01234567:0x01234567]") ==
+		 FID_LEN + 1);
 	rc = lu_kmem_init(mdt_caches);
 	if (rc)
 		return rc;
