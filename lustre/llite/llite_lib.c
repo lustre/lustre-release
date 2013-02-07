@@ -1697,6 +1697,10 @@ void ll_update_inode(struct inode *inode, struct lustre_md *md)
 
 	LASSERT ((lsm != NULL) == ((body->valid & OBD_MD_FLEASIZE) != 0));
 	if (lsm != NULL) {
+		if (!lli->lli_has_smd &&
+		    !(sbi->ll_flags & LL_SBI_LAYOUT_LOCK))
+			cl_file_inode_init(inode, md);
+
 		lli->lli_maxbytes = lsm->lsm_maxbytes;
 		if (lli->lli_maxbytes > MAX_LFS_FILESIZE)
 			lli->lli_maxbytes = MAX_LFS_FILESIZE;

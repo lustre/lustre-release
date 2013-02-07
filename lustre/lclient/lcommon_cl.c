@@ -1200,7 +1200,10 @@ int cl_file_inode_init(struct inode *inode, struct lustre_md *md)
                         lu_object_ref_add(&clob->co_lu, "inode", inode);
                 } else
                         result = PTR_ERR(clob);
-        }
+	} else {
+		result = cl_conf_set(env, lli->lli_clob, &conf);
+	}
+
         cl_env_put(env, &refcheck);
 
         if (result != 0)
