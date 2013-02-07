@@ -846,6 +846,8 @@ out:
 	return rc;
 }
 
+/* Nobdy else can access the global index now, it's safe to truncate and
+ * reinitialize it */
 static int truncate_quota_index(const struct lu_env *env, struct dt_object *dt,
 				const struct dt_index_features *feat)
 {
@@ -855,7 +857,11 @@ static int truncate_quota_index(const struct lu_env *env, struct dt_object *dt,
 	struct osd_thandle	*oth;
 	struct inode		*inode;
 	int			 rc;
+	struct iam_container	*bag = &(osd_dt_obj(dt))->oo_dir->od_container;
 	ENTRY;
+
+	LASSERT(bag->ic_root_bh != NULL);
+	iam_container_fini(bag);
 
 	LASSERT(fid_seq(lu_object_fid(&dt->do_lu)) == FID_SEQ_QUOTA_GLB);
 
@@ -917,6 +923,12 @@ out_lock:
 out:
 	dt_trans_stop(env, &osd->od_dt_dev, th);
 	OBD_FREE_PTR(attr);
+
+	if (rc == 0) {
+		rc  = iam_container_setup(bag);
+		if (rc != 0)
+			iam_container_fini(bag);
+	}
 	RETURN(rc);
 }
 
@@ -1041,7 +1053,7 @@ int osd_quota_migration(const struct lu_env *env, struct dt_object *dt,
 	if (rc) {
 		CERROR("%s: Failed to truncate the quota index "DFID", rc:%d\n",
 		       osd->od_svname, PFID(lu_object_fid(&dt->do_lu)), rc);
-		RETURN(rc);
+		GOTO(out, rc);
 	}
 
 	/* set up indexing operations for the admin file */
