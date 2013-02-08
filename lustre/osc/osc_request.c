@@ -1690,10 +1690,12 @@ static int osc_brw_redo_request(struct ptlrpc_request *request,
 
         new_aa = ptlrpc_req_async_args(new_req);
 
-        CFS_INIT_LIST_HEAD(&new_aa->aa_oaps);
-        list_splice(&aa->aa_oaps, &new_aa->aa_oaps);
-        CFS_INIT_LIST_HEAD(&aa->aa_oaps);
-        new_aa->aa_resends = aa->aa_resends;
+	CFS_INIT_LIST_HEAD(&new_aa->aa_oaps);
+	list_splice(&aa->aa_oaps, &new_aa->aa_oaps);
+	CFS_INIT_LIST_HEAD(&aa->aa_oaps);
+	new_aa->aa_resends = aa->aa_resends;
+	new_aa->aa_handle_count = aa->aa_handle_count;
+	new_aa->aa_handle = aa->aa_handle;
 
         list_for_each_entry(oap, &new_aa->aa_oaps, oap_rpc_item) {
                 if (oap->oap_request) {
@@ -2290,9 +2292,10 @@ static void osc_ap_completion(struct client_obd *cli, struct obdo *oa,
 
 static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
 {
-        struct osc_brw_async_args *aa = data;
-        struct client_obd *cli;
-        ENTRY;
+	struct osc_brw_async_args *aa = data;
+	struct client_obd *cli;
+	int index = 0;
+	ENTRY;
 
         rc = osc_brw_fini_request(request, rc);
         CDEBUG(D_INODE, "request %p aa %p rc %d\n", request, aa, rc);
@@ -2342,13 +2345,21 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
                 else
                         cli->cl_r_in_flight--;
 
-                /* the caller may re-use the oap after the completion call so
-                 * we need to clean it up a little */
-                list_for_each_entry_safe(oap, tmp, &aa->aa_oaps, oap_rpc_item) {
-                        list_del_init(&oap->oap_rpc_item);
-                        osc_ap_completion(cli, aa->aa_oa, oap, 1, rc);
-                }
-                OBDO_FREE(aa->aa_oa);
+		/* the caller may re-use the oap after the completion call so
+		 * we need to clean it up a little */
+		list_for_each_entry_safe(oap, tmp, &aa->aa_oaps, oap_rpc_item) {
+			list_del_init(&oap->oap_rpc_item);
+
+			aa->aa_oa->o_flags &= ~OBD_FL_HAVE_LOCK;
+			osc_ap_completion(cli, aa->aa_oa, oap, 1, rc);
+			if (aa->aa_oa->o_flags & OBD_FL_HAVE_LOCK) {
+				LASSERT(!(aa->aa_oa->o_valid &
+					  OBD_MD_FLHANDLE));
+				LASSERT(index < aa->aa_handle_count);
+				aa->aa_handle[index++] = aa->aa_oa->o_handle;
+			}
+		}
+		OBDO_FREE(aa->aa_oa);
         } else { /* from async_internal() */
                 obd_count i;
                 for (i = 0; i < aa->aa_page_count; i++)
@@ -2367,25 +2378,40 @@ static int brw_interpret(struct ptlrpc_request *request, void *data, int rc)
         osc_check_rpcs(cli);
         client_obd_list_unlock(&cli->cl_loi_list_lock);
 
-        osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
+	if (index > 0) {
+		obd_count i;
 
-        RETURN(rc);
+		LASSERT(index <= aa->aa_handle_count);
+		for (i = 0; i < index; i++)
+			ldlm_lock_decref(aa->aa_handle + i, LCK_PR);
+	
+		OBD_FREE(aa->aa_handle,
+			 sizeof(struct lustre_handle) * aa->aa_handle_count);
+	} else {
+		LASSERT(aa->aa_handle_count == 0 && aa->aa_handle == NULL);
+	}
+
+	osc_release_ppga(aa->aa_ppga, aa->aa_page_count);
+
+	RETURN(rc);
 }
 
 static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                                             struct list_head *rpc_list,
                                             int page_count, int cmd)
 {
-        struct ptlrpc_request *req;
-        struct brw_page **pga = NULL;
-        struct osc_brw_async_args *aa;
-        struct obdo *oa = NULL;
-        struct obd_async_page_ops *ops = NULL;
-        void *caller_data = NULL;
-        struct osc_async_page *oap;
-        struct ldlm_lock *lock = NULL;
-        obd_valid valid;
-        int i, rc, mpflag = 0;
+	struct ptlrpc_request *req;
+	struct brw_page **pga = NULL;
+	struct osc_brw_async_args *aa;
+	struct obdo *oa = NULL;
+	struct obd_async_page_ops *ops = NULL;
+	void *caller_data = NULL;
+	struct osc_async_page *oap;
+	struct ldlm_lock *lock = NULL;
+	obd_valid valid;
+	int handle_count = 0;
+	struct lustre_handle *handles = NULL;
+	int i, rc, mpflag = 0;
 
         ENTRY;
         LASSERT(!list_empty(rpc_list));
@@ -2408,12 +2434,21 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
                         caller_data = oap->oap_caller_data;
                         lock = oap->oap_ldlm_lock;
                 }
+		if (oap->oap_cmd & OBD_BRW_READA)
+			handle_count++;
+
                 pga[i] = &oap->oap_brw_page;
                 pga[i]->off = oap->oap_obj_off + oap->oap_page_off;
                 CDEBUG(0, "put page %p index %lu oap %p flg %x to pga\n",
                        pga[i]->pg, cfs_page_index(oap->oap_page), oap, pga[i]->flag);
                 i++;
         }
+
+	if (handle_count > 0) {
+		OBD_ALLOC(handles, sizeof(struct lustre_handle) * handle_count);
+		if (handles == NULL)
+			GOTO(out, req = ERR_PTR(-ENOMEM));
+	}
 
         /* always get the data for the obdo for the rpc */
         LASSERT(ops != NULL);
@@ -2460,11 +2495,13 @@ static struct ptlrpc_request *osc_build_req(struct client_obd *cli,
         }
         ops->ap_update_obdo(caller_data, cmd, oa, valid);
 
-        CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
-        aa = ptlrpc_req_async_args(req);
-        CFS_INIT_LIST_HEAD(&aa->aa_oaps);
-        list_splice(rpc_list, &aa->aa_oaps);
-        CFS_INIT_LIST_HEAD(rpc_list);
+	CLASSERT(sizeof(*aa) <= sizeof(req->rq_async_args));
+	aa = ptlrpc_req_async_args(req);
+	aa->aa_handle_count = handle_count;
+	aa->aa_handle = handles;
+	CFS_INIT_LIST_HEAD(&aa->aa_oaps);
+	list_splice(rpc_list, &aa->aa_oaps);
+	CFS_INIT_LIST_HEAD(rpc_list);
 
 out:
         if (cmd & OBD_BRW_MEMALLOC)
@@ -2475,6 +2512,9 @@ out:
                         OBDO_FREE(oa);
                 if (pga)
                         OBD_FREE(pga, sizeof(*pga) * page_count);
+		if (handles)
+			OBD_FREE(handles,
+				 sizeof(struct lustre_handle) * handle_count);
         }
         RETURN(req);
 }

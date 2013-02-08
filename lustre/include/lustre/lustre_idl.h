@@ -537,6 +537,9 @@ enum obdo_flags {
         OBD_FL_LOCAL_MASK   = 0xF0000000,
         /* temporary OBDO used by osc_brw_async (see bug 18364) */
         OBD_FL_TEMPORARY    = 0x10000000,
+	/* during calling *_ap_completion, top layer sets this flag to indicate
+	 * there is a lock needed to cancel (see bug LU-2703) */
+	OBD_FL_HAVE_LOCK    = 0x20000000,
 };
 
 #define LOV_MAGIC_V1      0x0BD10BD0
@@ -673,6 +676,7 @@ extern void lustre_swab_obd_statfs (struct obd_statfs *os);
 #define OBD_BRW_SRVLOCK        0x200 /* Client holds no lock over this page */
 #define OBD_BRW_ASYNC          0x400 /* Server may delay commit to disk */
 #define OBD_BRW_MEMALLOC       0x800 /* Client runs in the "kswapd" context */
+#define OBD_BRW_READA         0x1000 /* read ahead */
 
 #define OBD_OBJECT_EOF 0xffffffffffffffffULL
 

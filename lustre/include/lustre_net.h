@@ -190,8 +190,8 @@ union ptlrpc_async_args {
          * big enough.  For _tons_ of context, OBD_ALLOC a struct and store
          * a pointer to it here.  The pointer_arg ensures this struct is at
          * least big enough for that. */
-        void      *pointer_arg[9];
-        __u64      space[5];
+        void      *pointer_arg[10];
+        __u64      space[6];
 };
 
 struct ptlrpc_request_set;
