@@ -433,7 +433,7 @@ enum fid_seq {
 #define IDIF_OID_MASK               ((1ULL << IDIF_OID_MAX_BITS) - 1)
 
 
-static inline int fid_seq_is_mdt0(obd_seq seq)
+static inline int fid_seq_is_mdt0(const __u64 seq)
 {
         return (seq == FID_SEQ_OST_MDT0);
 }
@@ -441,12 +441,6 @@ static inline int fid_seq_is_mdt0(obd_seq seq)
 static inline int fid_seq_is_cmd(const __u64 seq)
 {
         return (seq >= FID_SEQ_OST_MDT1 && seq <= FID_SEQ_OST_MAX);
-};
-
-static inline int fid_seq_is_mdt(const __u64 seq)
-{
-        return seq == FID_SEQ_OST_MDT0 ||
-               (seq >= FID_SEQ_OST_MDT1 && seq <= FID_SEQ_OST_MAX);
 };
 
 static inline int fid_seq_is_rsvd(const __u64 seq)
@@ -502,6 +496,12 @@ static inline int fid_seq_is_norm(const __u64 seq)
 static inline int fid_is_norm(const struct lu_fid *fid)
 {
         return fid_seq_is_norm(fid_seq(fid));
+}
+
+static inline int fid_seq_is_mdt(const __u64 seq)
+{
+        return fid_seq_is_mdt0(seq) || fid_seq_is_cmd(seq) ||
+               fid_seq_is_norm(seq);
 }
 
 /* convert an OST objid into an IDIF FID SEQ number */

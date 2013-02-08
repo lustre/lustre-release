@@ -469,7 +469,6 @@ int mdd_lov_create(const struct lu_env *env, struct mdd_device *mdd,
                         }
                         GOTO(out_oti, rc);
                 }
-                LASSERT_SEQ_IS_MDT(lsm->lsm_object_seq);
         } else {
                 LASSERT(eadata != NULL);
                 rc = obd_iocontrol(OBD_IOC_LOV_SETEA, lov_exp, 0, &lsm,

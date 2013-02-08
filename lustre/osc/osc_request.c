@@ -89,6 +89,8 @@ static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
                 OBD_FREE(*lmmp, lmm_size);
                 *lmmp = NULL;
                 RETURN(0);
+        } else if (unlikely(lsm != NULL && lsm->lsm_object_id == 0)) {
+                RETURN(-EBADF);
         }
 
         if (!*lmmp) {
@@ -98,8 +100,6 @@ static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
         }
 
         if (lsm) {
-                LASSERT(lsm->lsm_object_id);
-                LASSERT_SEQ_IS_MDT(lsm->lsm_object_seq);
                 (*lmmp)->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
                 (*lmmp)->lmm_object_seq = cpu_to_le64(lsm->lsm_object_seq);
         }
@@ -150,14 +150,14 @@ static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
                         RETURN(-ENOMEM);
                 }
                 loi_init((*lsmp)->lsm_oinfo[0]);
+        } else if (unlikely((*lsmp)->lsm_object_id == 0)) {
+                RETURN(-EBADF);
         }
 
         if (lmm != NULL) {
                 /* XXX zero *lsmp? */
                 (*lsmp)->lsm_object_id = le64_to_cpu (lmm->lmm_object_id);
                 (*lsmp)->lsm_object_seq = le64_to_cpu (lmm->lmm_object_seq);
-                LASSERT((*lsmp)->lsm_object_id);
-                LASSERT_SEQ_IS_MDT((*lsmp)->lsm_object_seq);
         }
 
         if (imp != NULL &&

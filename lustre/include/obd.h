@@ -951,7 +951,8 @@ struct target_recovery_data {
   * 2. The group number indexing starts from 0 instead of 3
   */
 
-#define LASSERT_SEQ_IS_MDT(seq) LASSERT(fid_seq_is_mdt(seq))
+#define LASSERT_SEQ_IS_MDT(seq)					\
+	LASSERTF(fid_seq_is_mdt0(seq) || fid_seq_is_cmd(seq), LPX64"\n", seq)
 
 static inline __u64 objseq_to_mdsno(obd_seq seq)
 {

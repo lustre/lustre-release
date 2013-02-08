@@ -1787,7 +1787,6 @@ static int lov_change_cbdata(struct obd_export *exp,
                         continue;
                 }
 
-                LASSERT_SEQ_IS_MDT(loi->loi_seq);
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_object_seq = loi->loi_seq;
                 submd.lsm_stripe_count = 0;
@@ -1824,7 +1823,6 @@ static int lov_find_cbdata(struct obd_export *exp,
                         continue;
                 }
 
-                LASSERT_SEQ_IS_MDT(loi->loi_seq);
                 submd.lsm_object_id = loi->loi_id;
                 submd.lsm_object_seq = loi->loi_seq;
                 submd.lsm_stripe_count = 0;
@@ -1853,7 +1851,6 @@ static int lov_cancel(struct obd_export *exp, struct lov_stripe_md *lsm,
         if (!exp || !exp->exp_obd)
                 RETURN(-ENODEV);
 
-        LASSERT_SEQ_IS_MDT(lsm->lsm_object_seq);
         LASSERT(lockh);
         lov = &exp->exp_obd->u.lov;
         rc = lov_prep_cancel_set(exp, &oinfo, lsm, mode, lockh, &set);
@@ -1909,7 +1906,6 @@ static int lov_cancel_unused(struct obd_export *exp,
 
         ASSERT_LSM_MAGIC(lsm);
 
-        LASSERT_SEQ_IS_MDT(lsm->lsm_object_seq);
         for (i = 0; i < lsm->lsm_stripe_count; i++) {
                 struct lov_stripe_md submd;
                 struct lov_oinfo *loi = lsm->lsm_oinfo[i];

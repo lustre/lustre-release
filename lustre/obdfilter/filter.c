@@ -4517,11 +4517,11 @@ static int filter_set_mds_conn(struct obd_export *exp, void *val)
 
         /* setup llog imports */
         if (val != NULL)
-                group = (int)(*(__u32 *)val);
+                group = *(__u32 *)val;
         else
                 group = 0; /* default value */
 
-        LASSERT_SEQ_IS_MDT(group);
+        LASSERT_SEQ_IS_MDT((__u64)group);
         rc = filter_setup_llog_group(exp, obd, group);
         if (rc)
                 goto out;
