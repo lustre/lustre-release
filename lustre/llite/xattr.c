@@ -239,10 +239,12 @@ int ll_setxattr(struct dentry *dentry, const char *name,
                 if (lump != NULL && S_ISREG(inode->i_mode)) {
                         struct file f;
                         int flags = FMODE_WRITE;
+			int lum_size = (lump->lmm_magic == LOV_USER_MAGIC_V1) ?
+				sizeof(*lump) : sizeof(struct lov_user_md_v3);
 
-                        f.f_dentry = dentry;
-                        rc = ll_lov_setstripe_ea_info(inode, &f, flags,
-                                                      lump, sizeof(*lump));
+			f.f_dentry = dentry;
+			rc = ll_lov_setstripe_ea_info(inode, &f, flags, lump,
+						      lum_size);
                         /* b10667: rc always be 0 here for now */
                         rc = 0;
                 } else if (S_ISDIR(inode->i_mode)) {
