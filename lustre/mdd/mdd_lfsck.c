@@ -2118,10 +2118,15 @@ static int object_is_client_visible(const struct lu_env *env,
 		else if (IS_ERR(obj))
 			return PTR_ERR(obj);
 
-		/* XXX: need more processing for remote object in the future. */
-		if (!mdd_object_exists(obj) || mdd_object_remote(obj)) {
+		if (!mdd_object_exists(obj)) {
 			mdd_object_put(env, obj);
 			return 0;
+		}
+
+		/* Currently, only client visible directory can be remote. */
+		if (mdd_object_remote(obj)) {
+			mdd_object_put(env, obj);
+			return 1;
 		}
 
 		depth++;
@@ -2213,12 +2218,19 @@ static int mdd_lfsck_prep(struct lu_env *env, struct md_lfsck *lfsck)
 	/* Init otable-based iterator. */
 	if (pos == NULL) {
 		rc = iops->load(env, lfsck->ml_di_oit, 0);
-		GOTO(out, rc = (rc >= 0 ? 0 : rc));
+		if (rc > 0) {
+			lfsck->ml_oit_over = 1;
+			rc = 0;
+		}
+
+		GOTO(out, rc);
 	}
 
 	rc = iops->load(env, lfsck->ml_di_oit, pos->lp_oit_cookie);
 	if (rc < 0)
 		GOTO(out, rc);
+	else if (rc > 0)
+		lfsck->ml_oit_over = 1;
 
 	if (fid_is_zero(&pos->lp_dir_parent))
 		GOTO(out, rc = 0);
