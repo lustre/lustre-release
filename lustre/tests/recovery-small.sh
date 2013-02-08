@@ -415,6 +415,9 @@ test_19a() {
 
 	mount_client $DIR2 || error "failed to mount $DIR2"
 
+	# cancel cached locks from OST to avoid eviction from it
+	cancel_lru_locks osc
+
 	do_facet client "stat $DIR > /dev/null"  ||
 		error "failed to stat $DIR: $?"
 	drop_ldlm_cancel "chmod 0777 $DIR2" ||
@@ -438,6 +441,9 @@ test_19b() {
 	local EVICT
 
 	mount_client $DIR2 || error "failed to mount $DIR2: $?"
+
+	# cancel cached locks from MDT to avoid eviction from it
+	cancel_lru_locks mdc
 
 	do_facet client $MULTIOP $DIR/$tfile Ow ||
 		error "failed to run multiop: $?"
