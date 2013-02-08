@@ -1166,23 +1166,23 @@ static int mdd_find_or_create_root(const struct lu_env *env,
 {
 	struct dt_object	*root;
 	struct md_object	*mroot;
-	struct lu_fid		*fid = &mdd_env_info(env)->mti_fid;
+	struct lu_fid		fid;
 	int			rc = 0;
 
 	ENTRY;
 
 	/* Check if the "ROOT" entry exists already */
 	root = dt_store_open(env, mdd->mdd_child, "", mdd_root_dir_name,
-		             fid);
+			     &fid);
 	if (!IS_ERR(root)) {
 		lu_object_put(env, &root->do_lu);
 		GOTO(out, rc = 0);
 	}
 
-	lu_root_fid(fid);
+	lu_root_fid(&fid);
 	/* New Filesystem, create /ROOT */
 	mroot = llo_store_create_index(env, &mdd->mdd_md_dev, mdd->mdd_bottom,
-				       "", mdd_root_dir_name, fid,
+				       "", mdd_root_dir_name, &fid,
 				       &dt_directory_features);
 	if (IS_ERR(mroot))
 		GOTO(out, rc = PTR_ERR(mroot));
@@ -1190,7 +1190,7 @@ static int mdd_find_or_create_root(const struct lu_env *env,
 	lu_object_put(env, &mroot->mo_lu);
 out:
 	if (rc == 0)
-		mdd->mdd_root_fid = *fid;
+		mdd->mdd_root_fid = fid;
 
 	RETURN(rc);
 }
@@ -1202,7 +1202,7 @@ static int mdd_prepare(const struct lu_env *env,
 	struct mdd_device	*mdd = lu2mdd_dev(cdev);
 	struct lu_device	*next = &mdd->mdd_child->dd_lu_dev;
 	struct dt_object	*root;
-	struct lu_fid		*fid = &mdd_env_info(env)->mti_fid;
+	struct lu_fid		 fid;
 	int			rc;
 
         ENTRY;
@@ -1237,7 +1237,7 @@ static int mdd_prepare(const struct lu_env *env,
 
         /* we use capa file to declare llog changes,
          * will be fixed with new llog in 2.3 */
-        root = dt_store_open(env, mdd->mdd_child, "", CAPA_KEYS, fid);
+	root = dt_store_open(env, mdd->mdd_child, "", CAPA_KEYS, &fid);
 	if (IS_ERR(root))
 		GOTO(out, rc = PTR_ERR(root));
 
