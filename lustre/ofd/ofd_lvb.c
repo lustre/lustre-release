@@ -72,13 +72,16 @@ static int ofd_lvbo_init(struct ldlm_resource *res)
 	ofd = ldlm_res_to_ns(res)->ns_lvbp;
 	LASSERT(ofd != NULL);
 
+	if (OBD_FAIL_CHECK(OBD_FAIL_LDLM_OST_LVB))
+		RETURN(-ENOMEM);
+
 	rc = lu_env_init(&env, LCT_DT_THREAD);
 	if (rc)
 		RETURN(rc);
 
 	OBD_ALLOC_PTR(lvb);
 	if (lvb == NULL)
-		RETURN(-ENOMEM);
+		GOTO(out, rc = -ENOMEM);
 
 	res->lr_lvb_data = lvb;
 	res->lr_lvb_len = sizeof(*lvb);
@@ -109,7 +112,7 @@ out_put:
 	ofd_object_put(&env, fo);
 out:
 	lu_env_fini(&env);
-	if (rc)
+	if (rc && lvb != NULL)
 		OST_LVB_SET_ERR(lvb->lvb_blocks, rc);
 	/* Don't free lvb data on lookup error */
 	return rc;
@@ -282,6 +285,10 @@ static int ofd_lvbo_fill(struct ldlm_lock *lock, void *buf, int buflen)
 {
 	struct ldlm_resource *res = lock->l_resource;
 	int lvb_len;
+
+	/* Former lvbo_init not allocate the "LVB". */
+	if (unlikely(res->lr_lvb_len == 0))
+		return 0;
 
 	lvb_len = ofd_lvbo_size(lock);
 	LASSERT(lvb_len <= res->lr_lvb_len);

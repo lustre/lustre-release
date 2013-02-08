@@ -137,6 +137,9 @@ int qmt_intent_policy(const struct lu_env *env, struct lu_device *ld,
 	lvb = req_capsule_server_get(&req->rq_pill, &RMF_DLM_LVB);
 	lvb_len = ldlm_lvbo_size(*lockp);
 	lvb_len = ldlm_lvbo_fill(*lockp, lvb, lvb_len);
+	if (lvb_len < 0)
+		GOTO(out, rc = lvb_len);
+
 	req_capsule_shrink(&req->rq_pill, &RMF_DLM_LVB, lvb_len, RCL_SERVER);
 	EXIT;
 out:

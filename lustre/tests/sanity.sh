@@ -10864,6 +10864,20 @@ test_231b() {
 }
 run_test 231b "must not assert on fully utilized OST request buffer"
 
+test_232() {
+	mkdir -p $DIR/$tdir
+	#define OBD_FAIL_LDLM_OST_LVB		 0x31c
+	$LCTL set_param fail_loc=0x31c
+
+	# ignore dd failure
+	dd if=/dev/zero of=$DIR/$tdir/$tfile bs=1M count=1 || true
+
+	$LCTL set_param fail_loc=0
+	umount_client $MOUNT || error "umount failed"
+	mount_client $MOUNT || error "mount failed"
+}
+run_test 232 "failed lock should not block umount"
+
 #
 # tests that do cleanup/setup should be run at the end
 #

@@ -976,8 +976,20 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 		void *lvb = req_capsule_client_get(&req->rq_pill, &RMF_DLM_LVB);
 
 		lvb_len = ldlm_lvbo_fill(lock, lvb, lvb_len);
-		req_capsule_shrink(&req->rq_pill, &RMF_DLM_LVB,
-				   lvb_len, RCL_CLIENT);
+		if (lvb_len < 0) {
+			/* We still need to send the RPC to wake up the blocked
+			 * enqueue thread on the client.
+			 *
+			 * Consider old client, there is no better way to notify
+			 * the failure, just zero-sized the LVB, then the client
+			 * will fail out as "-EPROTO". */
+			req_capsule_shrink(&req->rq_pill, &RMF_DLM_LVB, 0,
+					   RCL_CLIENT);
+			instant_cancel = 1;
+		} else {
+			req_capsule_shrink(&req->rq_pill, &RMF_DLM_LVB, lvb_len,
+					   RCL_CLIENT);
+		}
         }
 
         LDLM_DEBUG(lock, "server preparing completion AST (after %lds wait)",
@@ -1038,7 +1050,7 @@ int ldlm_server_completion_ast(struct ldlm_lock *lock, __u64 flags, void *data)
 
 	rc = ldlm_ast_fini(req, arg, lock, instant_cancel);
 
-        RETURN(rc);
+	RETURN(lvb_len < 0 ? lvb_len : rc);
 }
 EXPORT_SYMBOL(ldlm_server_completion_ast);
 
@@ -1427,8 +1439,12 @@ existing_lock:
 				buflen = req_capsule_get_size(&req->rq_pill,
 						&RMF_DLM_LVB, RCL_SERVER);
 				buflen = ldlm_lvbo_fill(lock, buf, buflen);
-				req_capsule_shrink(&req->rq_pill, &RMF_DLM_LVB,
-						   buflen, RCL_SERVER);
+				if (buflen >= 0)
+					req_capsule_shrink(&req->rq_pill,
+							   &RMF_DLM_LVB,
+							   buflen, RCL_SERVER);
+				else
+					rc = buflen;
 			}
                 } else {
                         lock_res_and_lock(lock);

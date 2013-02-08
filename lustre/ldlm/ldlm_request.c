@@ -678,8 +678,10 @@ int ldlm_cli_enqueue_fini(struct obd_export *exp, struct ptlrpc_request *req,
 			rc = ldlm_fill_lvb(lock, &req->rq_pill, RCL_SERVER,
 					   lock->l_lvb_data, size);
 		unlock_res_and_lock(lock);
-		if (rc < 0)
+		if (rc < 0) {
+			cleanup_phase = 1;
 			GOTO(cleanup, rc);
+		}
         }
 
         if (!is_replay) {
