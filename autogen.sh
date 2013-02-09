@@ -4,7 +4,9 @@
 
 # install Lustre Git commit hooks by default - LU-2083
 for HOOK in commit-msg prepare-commit-msg; do
-	[ -e .git/hooks/$HOOK ] || ln -sf ../../build/$HOOK .git/hooks/
+	if [ -d .git/hooks -a ! -e .git/hooks/$HOOK ]; then
+		ln -sf ../../build/$HOOK .git/hooks/
+	fi
 done
 
 echo "Checking for a complete tree..."
