@@ -102,7 +102,6 @@ if test x$with_ldiskfs = xyes; then
 	AC_SUBST(LDISKFS_OBJ)
 
 	LB_LDISKFS_SYMVERS
-	LB_LDISKFS_RELEASE
 	LB_LDISKFS_EXT_DIR
 	LB_LDISKFS_BUILD
 	AC_DEFINE(HAVE_LDISKFS_OSD, 1, Enable ldiskfs osd)
@@ -262,55 +261,6 @@ fi
 
 AC_MSG_RESULT([$LDISKFS_SYMBOLS])
 AC_SUBST(LDISKFS_SYMBOLS)
-])
-
-AC_DEFUN([LB_LDISKFS_RELEASE],
-[
-AC_MSG_CHECKING([ldiskfs source release])
-if test -r $LDISKFS_OBJ/config.h; then
-	tmp_flags="$EXTRA_KCFLAGS"
-	EXTRA_KCFLAGS="-I$LDISKFS_DIR $EXTRA_KCFLAGS"
-	LB_LINUX_TRY_MAKE([
-		#undef PACKAGE_NAME
-		#undef PACKAGE_TARNAME
-		#undef PACKAGE_VERSION
-		#undef PACKAGE_STRING
-		#undef PACKAGE_BUGREPORT
-		#undef PACKAGE
-		#undef VERSION
-		#undef STDC_HEADERS
-
-		#include <$LDISKFS_OBJ/config.h>
-	],[
-		char *LDISKFS_RELEASE;
-		LDISKFS_RELEASE=VERSION;
-	],[
-		$makerule LUSTRE_KERNEL_TEST=conftest.i
-	],[
-		test -s build/conftest.i
-	],[
-		eval $(grep "LDISKFS_RELEASE=" build/conftest.i)
-	],[
-		AC_MSG_RESULT([unknown])
-		AC_MSG_ERROR([Could not preprocess test program.])
-	])
-	EXTRA_KCFLAGS="$tmp_flags"
-	rm build/conftest.i
-elif test -r $LDISKFS_DIR/configure.ac; then
-	LDISKFS_RELEASE=$(awk '/AC\_INIT/ { print [$]3 }' \
-		 $LDISKFS_DIR/configure.ac | tr ',' '\n')
-else
-	AC_MSG_RESULT([unknown])
-	AC_MSG_ERROR([Could not locate config.h, META, or configure.ac to check release.])
-fi
-
-if test x$LDISKFS_RELEASE = x; then
-	AC_MSG_RESULT([unknown])
-	AC_MSG_ERROR([Could not determine ldiskfs release.])
-fi
-
-AC_MSG_RESULT([$LDISKFS_RELEASE])
-AC_SUBST(LDISKFS_RELEASE)
 ])
 
 #
