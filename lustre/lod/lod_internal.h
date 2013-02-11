@@ -157,7 +157,7 @@ struct lod_object {
 	int		   ldo_stripes_allocated;
 	/* default striping for directory represented by this object
 	 * is cached in stripenr/stripe_size */
-	int		   ldo_striping_cached:1,
+	unsigned int	   ldo_striping_cached:1,
 			   ldo_def_striping_set:1;
 	__u32		   ldo_def_stripe_size;
 	__u16		   ldo_def_stripenr;

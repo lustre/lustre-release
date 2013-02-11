@@ -97,7 +97,7 @@ struct osp_device {
 	int				 opd_got_disconnected;
 	int				 opd_imp_connected;
 	int				 opd_imp_active;
-	int				 opd_imp_seen_connected:1,
+	unsigned int			 opd_imp_seen_connected:1,
 					 opd_connect_mdt:1;
 
 	/* whether local recovery is completed:
@@ -186,7 +186,7 @@ extern cfs_mem_cache_t *osp_object_kmem;
 struct osp_object {
 	struct lu_object_header	opo_header;
 	struct dt_object	opo_obj;
-	int			opo_reserved:1,
+	unsigned int		opo_reserved:1,
 				opo_new:1,
 				opo_empty:1;
 

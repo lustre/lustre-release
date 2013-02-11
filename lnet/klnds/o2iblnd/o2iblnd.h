@@ -606,9 +606,9 @@ typedef struct kib_conn
         int                  ibc_outstanding_credits; /* # credits to return */
         int                  ibc_reserved_credits;/* # ACK/DONE msg credits */
         int                  ibc_comms_error;   /* set on comms error */
-        int                  ibc_nrx:16;        /* receive buffers owned */
-        int                  ibc_scheduled:1;   /* scheduled for attention */
-        int                  ibc_ready:1;       /* CQ callback fired */
+	unsigned int	     ibc_nrx:16;        /* receive buffers owned */
+	unsigned int	     ibc_scheduled:1;   /* scheduled for attention */
+	unsigned int	     ibc_ready:1;       /* CQ callback fired */
         /* time of last send */
         unsigned long        ibc_last_send;
         /** link chain for kiblnd_check_conns only */

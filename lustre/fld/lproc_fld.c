@@ -158,7 +158,7 @@ struct fld_seq_param {
 	struct lu_env		fsp_env;
 	struct dt_it		*fsp_it;
 	struct lu_server_fld	*fsp_fld;
-	int			fsp_stop:1;
+	unsigned int		fsp_stop:1;
 };
 
 static void *fldb_seq_start(struct seq_file *p, loff_t *pos)

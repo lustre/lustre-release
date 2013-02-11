@@ -148,7 +148,7 @@ struct fs_db {
 	struct completion	fsdb_notify_comp;
         cfs_time_t           fsdb_notify_start;
         cfs_atomic_t         fsdb_notify_phase;
-        volatile int         fsdb_notify_async:1,
+	volatile unsigned int fsdb_notify_async:1,
                              fsdb_notify_stop:1;
         /* statistic data */
         unsigned int         fsdb_notify_total;

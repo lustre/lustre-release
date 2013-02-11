@@ -1503,7 +1503,7 @@ struct mdd_changelog_user_data {
         __u32 mcud_id;
         __u32 mcud_minid;  /**< user id with lowest rec reference */
         __u32 mcud_usercount;
-        int   mcud_found:1;
+	unsigned int mcud_found:1;
 };
 #define MCUD_UNREGISTER -1LL
 

@@ -303,7 +303,7 @@ struct lov_lock {
          * Set when sub-lock was canceled, while top-lock was being
          * used, or unused.
          */
-        int                    lls_cancel_race:1;
+	unsigned int	       lls_cancel_race:1;
         /**
          * An array of sub-locks
          *

@@ -837,7 +837,7 @@ struct obd_trans_info {
         struct llog_cookie      *oti_logcookies;
         int                      oti_numcookies;
 	/** synchronous write is needed */
-	long			 oti_sync_write:1;
+	unsigned long		 oti_sync_write:1;
 
         /* initial thread handling transaction */
         struct ptlrpc_thread *   oti_thread;

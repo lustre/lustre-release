@@ -70,11 +70,11 @@ typedef struct lstcon_rpc {
         struct lstcon_node      *crp_node;       /* destination node */
         struct lstcon_rpc_trans *crp_trans;     /* conrpc transaction */
 
-        int                      crp_posted:1;   /* rpc is posted */
-        int                      crp_finished:1; /* rpc is finished */
-        int                      crp_unpacked:1; /* reply is unpacked */
+	unsigned int		 crp_posted:1;   /* rpc is posted */
+	unsigned int		 crp_finished:1; /* rpc is finished */
+	unsigned int		 crp_unpacked:1; /* reply is unpacked */
 	/** RPC is embedded in other structure and can't free it */
-	int                      crp_embedded:1;
+	unsigned int		 crp_embedded:1;
         int                      crp_status;     /* console rpc errors */
         cfs_time_t               crp_stamp;      /* replied time stamp */
 } lstcon_rpc_t;

@@ -296,10 +296,11 @@ typedef struct ksock_conn
         __u32               ksnc_myipaddr;   /* my IP */
         __u32               ksnc_ipaddr;     /* peer's IP */
         int                 ksnc_port;       /* peer's port */
-        int                 ksnc_type:3;     /* type of connection, should be signed value */
-        int                 ksnc_closing:1;  /* being shut down */
-        int                 ksnc_flip:1;     /* flip or not, only for V2.x */
-        int                 ksnc_zc_capable:1; /* enable to ZC */
+	signed int          ksnc_type:3;     /* type of connection,
+					      * should be signed value */
+	unsigned int	    ksnc_closing:1;  /* being shut down */
+	unsigned int	    ksnc_flip:1;     /* flip or not, only for V2.x */
+	unsigned int	    ksnc_zc_capable:1; /* enable to ZC */
         struct ksock_proto *ksnc_proto;      /* protocol for the connection */
 
         /* reader */

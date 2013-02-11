@@ -378,15 +378,15 @@ typedef struct sfw_test_instance {
         sfw_batch_t            *tsi_batch;        /* batch */
         sfw_test_client_ops_t  *tsi_ops;          /* test client operations */
 
-        /* public parameter for all test units */
-        int                     tsi_is_client:1;     /* is test client */
-        int                     tsi_stoptsu_onerr:1; /* stop tsu on error */
+	/* public parameter for all test units */
+	unsigned int		tsi_is_client:1;     /* is test client */
+	unsigned int		tsi_stoptsu_onerr:1; /* stop tsu on error */
         int                     tsi_concur;          /* concurrency */
         int                     tsi_loop;            /* loop count */
 
 	/* status of test instance */
 	spinlock_t		tsi_lock;	  /* serialize */
-        int                     tsi_stopping:1;   /* test is stopping */
+	unsigned int		tsi_stopping:1;   /* test is stopping */
         cfs_atomic_t            tsi_nactive;      /* # of active test unit */
         cfs_list_t              tsi_units;        /* test units */
         cfs_list_t              tsi_free_rpcs;    /* free rpcs */
