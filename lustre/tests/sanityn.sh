@@ -2286,7 +2286,7 @@ test_51a() {
 	# open and sleep 2 seconds then read
 	$MULTIOP $DIR2/$tfile o_2r${filesize}c &
 	local pid=$!
-	sleep 0.1
+	sleep 1
 
 	# create the layout of testing file
 	dd if=$origfile of=$DIR1/$tfile conv=notrunc > /dev/null
@@ -2311,7 +2311,7 @@ test_51b() {
 	$LCTL set_param fail_loc=0x1404
 	stat -c %s $DIR2/$tfile |tee $tmpfile &
 	local pid=$!
-	sleep 0.1
+	sleep 1
 
 	# create layout of testing file
 	dd if=/dev/zero of=$DIR1/$tfile bs=1k count=1 conv=notrunc > /dev/null
@@ -2336,7 +2336,7 @@ test_51c() {
 	echo "Setting layout ..."
 	$LFS setstripe -c $OSTCOUNT $DIR1/$tfile &
 	pid=$!
-	sleep 0.1
+	sleep 1
 
 	# get layout of this file should wait until dd is finished
 	local stripecnt=`$LFS getstripe -c $DIR2/$tfile`
