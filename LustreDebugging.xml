@@ -574,11 +574,13 @@ Debug log: 324 lines, 258 kept, 66 dropped.
     </section>
     <section remap="h3">
       <title><indexterm><primary>debugging</primary><secondary>kernel debug log</secondary></indexterm>Controlling Information Written to the Kernel Debug Log</title>
-      <para>The <literal>lctl set_param subsystem_debug=<replaceable>subsystem_mask</replaceable></literal> and <literal>lctl set_param debug=<replaceable>debug_mask</replaceable></literal> are used to determine which information is written to the debug log. The subsystem_debug mask determines the information written to the log based on the functional area of the code (such as lnet, osc, or ldlm). The debug mask controls information based on the message type (such as info, error, trace, or malloc).</para>
+      <para>The <literal>lctl set_param subsystem_debug=<replaceable>subsystem_mask</replaceable></literal> and <literal>lctl set_param debug=<replaceable>debug_mask</replaceable></literal> are used to determine which information is written to the debug log. The subsystem_debug mask determines the information written to the log based on the functional area of the code (such as lnet, osc, or ldlm). The debug mask controls information based on the message type (such as info, error, trace, or malloc). For a complete list of possible debug masks use the <literal>lctl debug_list types</literal> command.</para>
       <para>To turn off Lustre debugging completely:</para>
       <screen>lctl set_param debug=0 </screen>
       <para>To turn on full Lustre debugging:</para>
       <screen>lctl set_param debug=-1 </screen>
+      <para>To list all possible debug masks:</para>
+      <screen>lctl debug_list types</screen>
       <para>To log only messages related to network communications:</para>
       <screen>lctl set_param debug=net </screen>
       <para>To turn on logging of messages related to network communications and existing debug flags:</para>
