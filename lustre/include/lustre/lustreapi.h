@@ -280,11 +280,13 @@ extern int llapi_changelog_clear(const char *mdtname, const char *idstr,
 /* HSM copytool interface.
  * priv is private state, managed internally by these functions
  */
-extern int llapi_hsm_copytool_start(void **priv, char *fsname, int flags,
+struct hsm_copytool_private;
+extern int llapi_hsm_copytool_start(struct hsm_copytool_private **priv,
+				    char *fsname, int flags,
 				    int archive_count, int *archives);
-extern int llapi_hsm_copytool_fini(void **priv);
-extern int llapi_hsm_copytool_recv(void *priv, struct hsm_action_list **hal,
-				   int *msgsize);
+extern int llapi_hsm_copytool_fini(struct hsm_copytool_private **priv);
+extern int llapi_hsm_copytool_recv(struct hsm_copytool_private *priv,
+				   struct hsm_action_list **hal, int *msgsize);
 extern int llapi_hsm_copytool_free(struct hsm_action_list **hal);
 extern int llapi_hsm_copy_start(char *mnt, struct hsm_copy *copy,
 				const struct hsm_action_item *hai);

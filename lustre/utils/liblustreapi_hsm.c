@@ -76,8 +76,8 @@ struct hsm_copytool_private {
  * \param archive_count
  * \param archives Which archive numbers this copytool is responsible for
  */
-int llapi_hsm_copytool_start(void **priv, char *fsname, int flags,
-			     int archive_count, int *archives)
+int llapi_hsm_copytool_start(struct hsm_copytool_private **priv, char *fsname,
+			     int flags, int archive_count, int *archives)
 {
 	struct hsm_copytool_private	*ct;
 	int				 rc;
@@ -152,11 +152,11 @@ out_err:
  * killed), the libcfs module will be referenced and unremovable,
  * even after Lustre services stop.
  */
-int llapi_hsm_copytool_fini(void **priv)
+int llapi_hsm_copytool_fini(struct hsm_copytool_private **priv)
 {
 	struct hsm_copytool_private *ct;
 
-	ct = (struct hsm_copytool_private *)priv;
+	ct = *priv;
 	if (!ct || (ct->magic != CT_PRIV_MAGIC))
 		return -EINVAL;
 
@@ -174,21 +174,19 @@ int llapi_hsm_copytool_fini(void **priv)
 }
 
 /** Wait for the next hsm_action_list
- * \param priv Opaque private control structure
+ * \param ct Opaque private control structure
  * \param halh Action list handle, will be allocated here
  * \param msgsize Number of bytes in the message, will be set here
  * \return 0 valid message received; halh and msgsize are set
  *	   <0 error code
  */
-int llapi_hsm_copytool_recv(void *priv, struct hsm_action_list **halh,
-			    int *msgsize)
+int llapi_hsm_copytool_recv(struct hsm_copytool_private *ct,
+			    struct hsm_action_list **halh, int *msgsize)
 {
-	struct hsm_copytool_private	*ct;
 	struct kuc_hdr			*kuch;
 	struct hsm_action_list		*hal;
 	int				 rc = 0;
 
-	ct = (struct hsm_copytool_private *)priv;
 	if (!ct || (ct->magic != CT_PRIV_MAGIC))
 		return -EINVAL;
 	if (halh == NULL || msgsize == NULL)

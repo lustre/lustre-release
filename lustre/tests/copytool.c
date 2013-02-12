@@ -55,7 +55,7 @@
 #include <libcfs/libcfs.h>
 #include <lustre/lustreapi.h>
 
-void *ctdata;
+struct hsm_copytool_private *ctdata;
 
 void handler(int signal ) {
         psignal(signal, "exiting");
