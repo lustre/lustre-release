@@ -1,4 +1,4 @@
-2012-xx-xx Whamcloud, Inc.
+2013-02-28 Intel Corporation
 	* version 1.8.9-wc1
 	* Support for networks:
 	  socklnd   - any kernel supported by Lustre,
