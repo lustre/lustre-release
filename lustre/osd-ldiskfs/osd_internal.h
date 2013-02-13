@@ -318,7 +318,9 @@ enum {
 	OSD_OT_MAX		= 11
 };
 
-#define OSD_TRACK_DECLARES
+#if LUSTRE_VERSION_CODE < OBD_OCD_VERSION(2, 3, 90, 0)
+# define OSD_TRACK_DECLARES
+#endif
 
 struct osd_thandle {
         struct thandle          ot_super;
