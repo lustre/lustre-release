@@ -9394,23 +9394,26 @@ run_test 184b "Forbidden layout swap (will generate errors)"
 test_184c() {
 	check_swap_layouts_support && return 0
 
-	dir0=$DIR/$tdir/$testnum
+	local dir0=$DIR/$tdir/$testnum
 	mkdir -p $dir0 || error "creating dir $dir0"
-	ref1=$dir0/ref1
-	ref2=$dir0/ref2
-	file1=$dir0/file1
-	file2=$dir0/file2
+
+	local ref1=$dir0/ref1
+	local ref2=$dir0/ref2
+	local file1=$dir0/file1
+	local file2=$dir0/file2
 	# create a file large enough for the concurent test
 	dd if=/dev/urandom of=$ref1 bs=1M count=$((RANDOM % 50 + 20))
 	dd if=/dev/urandom of=$ref2 bs=1M count=$((RANDOM % 50 + 20))
 	echo "ref file size: ref1(`stat -c %s $ref1`), ref2(`stat -c %s $ref2`)"
 
 	cp $ref2 $file2
-	dd if=$ref1 of=$file1 bs=64k &
+	dd if=$ref1 of=$file1 bs=16k &
+	local DD_PID=$!
+
 	sleep 0.$((RANDOM % 5 + 1))
 
 	$LFS swap_layouts $file1 $file2
-	rc=$?
+	local rc=$?
 	wait $DD_PID
 	[[ $? == 0 ]] || error "concurrent write on $file1 failed"
 	[[ $rc == 0 ]] || error "swap of $file1 and $file2 failed"
@@ -9421,7 +9424,7 @@ test_184c() {
 	remaining=$((remaining - copied))
 	echo "Copied $copied bytes before swapping layout..."
 
-	cmp -n $copied $file1 $ref2 ||
+	cmp -n $copied $file1 $ref2 | grep differ &&
 		error "Content mismatch [0, $copied) of ref2 and file1"
 	cmp -n $copied $file2 $ref1 ||
 		error "Content mismatch [0, $copied) of ref1 and file2"
