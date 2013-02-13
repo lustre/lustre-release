@@ -1471,7 +1471,8 @@ static int mdd_declare_object_initialize(const struct lu_env *env,
         }
 
 	if (rc == 0 && (fid_is_norm(mdo2fid(child)) ||
-			fid_is_dot_lustre(mdo2fid(child))))
+			fid_is_dot_lustre(mdo2fid(child)) ||
+			fid_is_root(mdo2fid(child))))
                 mdd_declare_links_add(env, child, handle);
 
 	RETURN(rc);
@@ -1521,7 +1522,8 @@ int mdd_object_initialize(const struct lu_env *env, const struct lu_fid *pfid,
         }
 
 	if (rc == 0 && (fid_is_norm(mdo2fid(child)) ||
-			fid_is_dot_lustre(mdo2fid(child))))
+			fid_is_dot_lustre(mdo2fid(child)) ||
+			fid_is_root(mdo2fid(child))))
 		mdd_links_add(env, child, pfid, lname, handle, 1);
 
 	RETURN(rc);
