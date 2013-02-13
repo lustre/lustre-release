@@ -1,0 +1,48 @@
+---
+ fs/ext4/ext4.h         |    1 +
+ fs/ext4/ext4_extents.h |    5 +++++
+ fs/ext4/extents.c      |    2 ++
+ 3 files changed, 8 insertions(+)
+
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -821,6 +821,7 @@ struct ext4_inode_info {
+ 	struct inode vfs_inode;
+ 	struct jbd2_inode *jinode;
+ 
++	unsigned long i_ext_generation;
+ 	struct ext4_ext_cache i_cached_extent;
+ 	/*
+ 	 * File creation time. Its function is same as that of
+--- a/fs/ext4/ext4_extents.h
++++ b/fs/ext4/ext4_extents.h
+@@ -193,6 +193,11 @@ static inline unsigned short ext_depth(s
+ 	return le16_to_cpu(ext_inode_hdr(inode)->eh_depth);
+ }
+ 
++static inline void ext4_ext_tree_changed(struct inode *inode)
++{
++	EXT4_I(inode)->i_ext_generation++;
++}
++
+ static inline void
+ ext4_ext_invalidate_cache(struct inode *inode)
+ {
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -1874,6 +1874,7 @@ cleanup:
+ 		ext4_ext_drop_refs(npath);
+ 		kfree(npath);
+ 	}
++	ext4_ext_tree_changed(inode);
+ 	ext4_ext_invalidate_cache(inode);
+ 	return err;
+ }
+@@ -2681,6 +2682,7 @@ again:
+ 		}
+ 	}
+ out:
++	ext4_ext_tree_changed(inode);
+ 	ext4_ext_drop_refs(path);
+ 	kfree(path);
+ 	if (err == -EAGAIN)

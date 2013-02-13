@@ -1,0 +1,34 @@
+From: Jeff Mahoney <jeffm@suse.com>
+Subject: ext4: cleanup sbi->s_kobj after quota initialization failure
+
+If ext4_enable_quotas fails, it jumps to failed_mount7, which doesn't
+tear down the kobj. If the user tries to mount the file system again,
+they'll get big scary WARN_ONs from sysfs.
+
+Signed-off-by: Jeff Mahoney <jeffm@suse.com>
+---
+ fs/ext4/super.c |    6 +++++-
+ 1 file changed, 5 insertions(+), 1 deletion(-)
+
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -3794,7 +3794,7 @@ no_journal:
+ 	    !(sb->s_flags & MS_RDONLY)) {
+ 		ret = ext4_enable_quotas(sb);
+ 		if (ret)
+-			goto failed_mount7;
++			goto failed_mount8;
+ 	}
+ #endif  /* CONFIG_QUOTA */
+ 
+@@ -3813,6 +3813,10 @@ cantfind_ext4:
+ 		ext4_msg(sb, KERN_ERR, "VFS: Can't find ext4 filesystem");
+ 	goto failed_mount;
+ 
++failed_mount8:
++	kobject_del(&sbi->s_kobj);
++	kobject_put(&sbi->s_kobj);
++	wait_for_completion(&sbi->s_kobj_unregister);
+ failed_mount7:
+ 	ext4_unregister_li_request(sb);
+ failed_mount6:

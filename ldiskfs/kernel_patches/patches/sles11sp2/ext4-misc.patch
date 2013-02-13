@@ -1,0 +1,196 @@
+---
+ fs/ext4/ext4.h         |    6 +++++
+ fs/ext4/ext4_extents.h |   10 +++++++++
+ fs/ext4/ext4_jbd2.h    |    3 ++
+ fs/ext4/extents.c      |   50 +++++++++++++++++++++++++++++++++++++++++++++++++
+ fs/ext4/super.c        |   12 +++++++++++
+ 5 files changed, 81 insertions(+)
+
+--- a/fs/ext4/ext4.h
++++ b/fs/ext4/ext4.h
+@@ -1308,6 +1308,9 @@ static inline void ext4_clear_state_flag
+
+ #define NEXT_ORPHAN(inode) EXT4_I(inode)->i_dtime
+
++/* Has been moved to linux/magic.h but we need it for Lustre */
++#define EXT4_SUPER_MAGIC	0xEF53
++
+ /*
+  * Codes for operating systems
+  */
+@@ -1826,6 +1829,9 @@ extern void ext4_add_groupblocks(handle_
+ 				ext4_fsblk_t block, unsigned long count);
+ extern int ext4_trim_fs(struct super_block *, struct fstrim_range *);
+
++extern void ext4_mb_discard_inode_preallocations(struct inode *);
++
++
+ /* inode.c */
+ struct buffer_head *ext4_getblk(handle_t *, struct inode *,
+ 						ext4_lblk_t, int, int *);
+--- a/fs/ext4/ext4_extents.h
++++ b/fs/ext4/ext4_extents.h
+@@ -58,6 +58,13 @@
+  */
+ #define EXT_STATS_
+
++/*
++ * define EXT4_ALLOC_NEEDED to 0 since block bitmap, group desc. and sb
++ * are now accounted in ext4_ext_calc_credits_for_insert()
++ */
++#define EXT4_ALLOC_NEEDED 0
++#define HAVE_EXT_PREPARE_CB_EXTENT
++#define HAVE_EXT4_EXT_PBLOCK
+
+ /*
+  * ext4_inode has i_block array (60 bytes total).
+@@ -241,6 +248,7 @@ static inline ext4_fsblk_t ext4_ext_pblo
+ 	block |= ((ext4_fsblk_t) le16_to_cpu(ex->ee_start_hi) << 31) << 1;
+ 	return block;
+ }
++#define ext_pblock(ex) ext4_ext_pblock(ex)
+
+ /*
+  * ext4_idx_pblock:
+@@ -287,6 +295,8 @@ extern int ext4_extent_tree_init(handle_
+ extern int ext4_ext_calc_credits_for_single_extent(struct inode *inode,
+ 						   int num,
+ 						   struct ext4_ext_path *path);
++extern int ext4_ext_calc_credits_for_insert(struct inode *,
++					    struct ext4_ext_path *);
+ extern int ext4_can_extents_be_merged(struct inode *inode,
+ 				      struct ext4_extent *ex1,
+ 				      struct ext4_extent *ex2);
+--- a/fs/ext4/ext4_jbd2.h
++++ b/fs/ext4/ext4_jbd2.h
+@@ -35,6 +35,8 @@
+ 	(EXT4_HAS_INCOMPAT_FEATURE(sb, EXT4_FEATURE_INCOMPAT_EXTENTS)   \
+ 	 ? 27U : 8U)
+
++#define ext4_journal_dirty_metadata(handle, bh)  \
++		ext4_handle_dirty_metadata(handle, NULL, bh)
+ /* Extended attribute operations touch at most two data buffers,
+  * two bitmap buffers, and two group summaries, in addition to the inode
+  * and the superblock, which are already accounted for. */
+@@ -175,6 +177,7 @@ static inline void ext4_journal_callback
+ 	list_del_init(&jce->jce_list);
+ 	spin_unlock(&sbi->s_md_lock);
+ }
++#define HAVE_EXT4_JOURNAL_CALLBACK_ADD
+
+ int
+ ext4_mark_iloc_dirty(handle_t *handle,
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -2205,6 +2205,56 @@ int ext4_ext_calc_credits_for_single_ext
+ }
+
+ /*
++ * This routine returns max. credits extent tree can consume.
++ * It should be OK for low-performance paths like ->writepage()
++ * To allow many writing process to fit a single transaction,
++ * caller should calculate credits under truncate_mutex and
++ * pass actual path.
++ */
++int ext4_ext_calc_credits_for_insert(struct inode *inode,
++				     struct ext4_ext_path *path)
++{
++	int depth, needed;
++
++	if (path) {
++		/* probably there is space in leaf? */
++		depth = ext_depth(inode);
++		if (le16_to_cpu(path[depth].p_hdr->eh_entries)
++				< le16_to_cpu(path[depth].p_hdr->eh_max))
++			return 1;
++	}
++
++	/*
++	 * given 32bit logical block (4294967296 blocks), max. tree
++	 * can be 4 levels in depth -- 4 * 340^4 == 53453440000.
++	 * let's also add one more level for imbalance.
++	 */
++	depth = 5;
++
++	/* allocation of new data block(s) */
++	needed = 2;
++
++	/*
++	 * tree can be full, so it'd need to grow in depth:
++	 * we need one credit to modify old root, credits for
++	 * new root will be added in split accounting
++	 */
++	needed += 1;
++	/*
++	 * Index split can happen, we'd need:
++	 *    allocate intermediate indexes (bitmap + group)
++	 *  + change two blocks at each level, but root (already included)
++	 */
++	needed += (depth * 2) + (depth * 2);
++
++	/* any allocation modifies superblock */
++	needed += 1;
++
++	return needed;
++}
++EXPORT_SYMBOL(ext4_ext_calc_credits_for_insert);
++
++/*
+  * How many index/leaf blocks need to change/allocate to modify nrblocks?
+  *
+  * if nrblocks are fit in a single extent (chunk flag is 1), then
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -1332,12 +1332,14 @@ enum {
+ 	Opt_data_err_abort, Opt_data_err_ignore,
+ 	Opt_usrjquota, Opt_grpjquota, Opt_offusrjquota, Opt_offgrpjquota,
+ 	Opt_jqfmt_vfsold, Opt_jqfmt_vfsv0, Opt_jqfmt_vfsv1, Opt_quota,
++	Opt_iopen, Opt_noiopen, Opt_iopen_nopriv,
+ 	Opt_noquota, Opt_ignore, Opt_barrier, Opt_nobarrier, Opt_err,
+ 	Opt_resize, Opt_usrquota, Opt_grpquota, Opt_i_version,
+ 	Opt_stripe, Opt_delalloc, Opt_nodelalloc, Opt_mblk_io_submit,
+ 	Opt_nomblk_io_submit, Opt_block_validity, Opt_noblock_validity,
+ 	Opt_inode_readahead_blks, Opt_journal_ioprio,
+ 	Opt_dioread_nolock, Opt_dioread_lock,
++	Opt_mballoc,
+ 	Opt_discard, Opt_nodiscard, Opt_init_itable, Opt_noinit_itable,
+ };
+
+@@ -1390,6 +1392,9 @@ static const match_table_t tokens = {
+ 	{Opt_noquota, "noquota"},
+ 	{Opt_quota, "quota"},
+ 	{Opt_usrquota, "usrquota"},
++	{Opt_iopen, "iopen"},
++	{Opt_noiopen, "noiopen"},
++	{Opt_iopen_nopriv, "iopen_nopriv"},
+ 	{Opt_barrier, "barrier=%u"},
+ 	{Opt_barrier, "barrier"},
+ 	{Opt_nobarrier, "nobarrier"},
+@@ -1409,6 +1414,7 @@ static const match_table_t tokens = {
+ 	{Opt_noauto_da_alloc, "noauto_da_alloc"},
+ 	{Opt_dioread_nolock, "dioread_nolock"},
+ 	{Opt_dioread_lock, "dioread_lock"},
++	{Opt_mballoc, "mballoc"},
+ 	{Opt_discard, "discard"},
+ 	{Opt_nodiscard, "nodiscard"},
+ 	{Opt_init_itable, "init_itable=%u"},
+@@ -1793,6 +1799,10 @@ set_qf_format:
+ 			else
+ 				clear_opt(sb, BARRIER);
+ 			break;
++		case Opt_iopen:
++		case Opt_noiopen:
++		case Opt_iopen_nopriv:
++			break;
+ 		case Opt_ignore:
+ 			break;
+ 		case Opt_resize:
+@@ -1904,6 +1914,8 @@ set_qf_format:
+ 		case Opt_noinit_itable:
+ 			clear_opt(sb, INIT_INODE_TABLE);
+ 			break;
++		case Opt_mballoc:
++			break;
+ 		default:
+ 			ext4_msg(sb, KERN_ERR,
+ 			       "Unrecognized mount option \"%s\" "

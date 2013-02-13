@@ -711,6 +711,11 @@ if $1; then
 			LDISKFS_SERIES="2.6-sles11.series"
 		fi
 		;;
+	3.0.*)
+		if test x$SUSE_KERNEL = xyes; then
+			LDISKFS_SERIES="3.0-sles11.series"
+		fi
+		;;
 	*)
 		AC_MSG_WARN([Unknown kernel version $LINUXRELEASE])
 		LDISKFS_SERIES=

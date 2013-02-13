@@ -1,0 +1,71 @@
+From dcf2d804ed6ffe5e942b909ed5e5b74628be6ee4 Mon Sep 17 00:00:00 2001
+From: Tao Ma <boyu.mt@taobao.com>
+Date: Thu, 6 Oct 2011 12:10:11 -0400
+Subject: ext4: Free resources in some error path in ext4_fill_super
+Git-commit: dcf2d804
+Patch-mainline: v3.2-rc1
+
+Some of the error path in ext4_fill_super don't release the
+resouces properly. So this patch just try to release them
+in the right way.
+
+Upstream-Signed-off-by: Tao Ma <boyu.mt@taobao.com>
+Upstream-Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+Signed-off-by: Jeff Mahoney <jeffm@suse.com>
+---
+ fs/ext4/super.c |   19 +++++++++++--------
+ 1 file changed, 11 insertions(+), 8 deletions(-)
+
+diff --git a/fs/ext4/super.c b/fs/ext4/super.c
+index 07f3de3..db2cd3f 100644
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -3785,22 +3785,19 @@ no_journal:
+ 	if (err) {
+ 		ext4_msg(sb, KERN_ERR, "failed to initialize mballoc (%d)",
+ 			 err);
+-		goto failed_mount4;
++		goto failed_mount5;
+ 	}
+
+ 	err = ext4_register_li_request(sb, first_not_zeroed);
+ 	if (err)
+-		goto failed_mount4;
++		goto failed_mount6;
+
+ 	sbi->s_kobj.kset = ext4_kset;
+ 	init_completion(&sbi->s_kobj_unregister);
+ 	err = kobject_init_and_add(&sbi->s_kobj, &ext4_ktype, NULL,
+ 				   "%s", sb->s_id);
+-	if (err) {
+-		ext4_mb_release(sb);
+-		ext4_ext_release(sb);
+-		goto failed_mount4;
+-	};
++	if (err)
++		goto failed_mount7;
+
+ 	EXT4_SB(sb)->s_mount_state |= EXT4_ORPHAN_FS;
+ 	ext4_orphan_cleanup(sb, es);
+@@ -3834,13 +3831,19 @@ cantfind_ext4:
+ 		ext4_msg(sb, KERN_ERR, "VFS: Can't find ext4 filesystem");
+ 	goto failed_mount;
+
++failed_mount7:
++	ext4_unregister_li_request(sb);
++failed_mount6:
++	ext4_ext_release(sb);
++failed_mount5:
++	ext4_mb_release(sb);
++	ext4_release_system_zone(sb);
+ failed_mount4:
+ 	iput(root);
+ 	sb->s_root = NULL;
+ 	ext4_msg(sb, KERN_ERR, "mount failed");
+ 	destroy_workqueue(EXT4_SB(sb)->dio_unwritten_wq);
+ failed_mount_wq:
+-	ext4_release_system_zone(sb);
+ 	if (sbi->s_journal) {
+ 		jbd2_journal_destroy(sbi->s_journal);
+ 		sbi->s_journal = NULL;
+

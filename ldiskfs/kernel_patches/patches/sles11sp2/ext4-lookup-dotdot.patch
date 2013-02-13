@@ -1,0 +1,62 @@
+---
+ fs/ext4/namei.c |   42 ++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 42 insertions(+)
+
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -1031,6 +1031,16 @@ errout:
+ 	return NULL;
+ }
+ 
++static inline int
++is_dot_or_dot_dot(const struct qstr *name)
++{
++	if (name->name[0] != '.')
++		return 0;
++	if (name->len == 1 || (name->len == 2 && name->name[1] == '.'))
++		return 1;
++	return 0;
++}
++
+ static struct dentry *ext4_lookup(struct inode *dir, struct dentry *dentry, struct nameidata *nd)
+ {
+ 	struct inode *inode;
+@@ -1061,6 +1071,38 @@ static struct dentry *ext4_lookup(struct
+ 			}
+ 		}
+ 	}
++
++	/* ".." shouldn't go into dcache to preserve dcache hierarchy
++	 * otherwise we'll get parent being a child of actual child.
++	 * see bug 10458 for details -bzzz */
++	if (inode && is_dot_or_dot_dot(&dentry->d_name)) {
++		struct dentry *tmp, *goal = NULL;
++		struct list_head *lp;
++
++		/* first, look for an existing dentry - any one is good */
++		spin_lock(&inode->i_lock);
++		list_for_each(lp, &inode->i_dentry) {
++			tmp = list_entry(lp, struct dentry, d_alias);
++			goal = tmp;
++			dget(goal);
++			break;
++		}
++		if (goal == NULL) {
++			/* there is no alias, we need to make current dentry:
++			 *  a) inaccessible for __d_lookup()
++			 *  b) inaccessible for iopen */
++			J_ASSERT(list_empty(&dentry->d_alias));
++			dentry->d_flags |= DCACHE_NFSFS_RENAMED;
++			/* this is d_instantiate() ... */
++			list_add(&dentry->d_alias, &inode->i_dentry);
++			dentry->d_inode = inode;
++		}
++		spin_unlock(&inode->i_lock);
++		if (goal)
++			iput(inode);
++		return goal;
++	}
++
+ 	return d_splice_alias(inode, dentry);
+ }
+ 

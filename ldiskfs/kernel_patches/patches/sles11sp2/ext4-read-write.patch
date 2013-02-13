@@ -1,0 +1,32 @@
+---
+ fs/ext4/super.c |   12 ------------
+ 1 file changed, 12 deletions(-)
+
+--- a/fs/ext4/super.c
++++ b/fs/ext4/super.c
+@@ -3216,10 +3216,6 @@ static int ext4_fill_super(struct super_
+ 		goto cantfind_ext4;
+ 	sbi->s_kbytes_written = le64_to_cpu(es->s_kbytes_written);
+
+-#ifndef CONFIG_EXT4_FS_RW
+-	sb->s_flags |= MS_RDONLY;
+-	ext4_msg(sb, KERN_INFO, "ext4 is supported in read-only mode only");
+-#endif
+ 	/* Set defaults before we parse the mount options */
+ 	def_mount_opts = le32_to_cpu(es->s_default_mount_opts);
+ 	set_opt(sb, INIT_INODE_TABLE);
+@@ -4487,14 +4483,6 @@ static int ext4_remount(struct super_blo
+ 	if (sbi->s_journal && sbi->s_journal->j_task->io_context)
+ 		journal_ioprio = sbi->s_journal->j_task->io_context->ioprio;
+
+-#ifndef CONFIG_EXT4_FS_RW
+-	if (!(*flags & MS_RDONLY)) {
+-		*flags |= MS_RDONLY;
+-		ext4_msg(sb, KERN_INFO,
+-			 "ext4 is supported in read-only mode only");
+-	}
+-#endif
+-
+ 	/*
+ 	 * Allow the "check" option to be passed as a remount option.
+ 	 */

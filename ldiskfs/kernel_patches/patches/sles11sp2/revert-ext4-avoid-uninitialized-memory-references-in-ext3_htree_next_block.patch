@@ -1,0 +1,107 @@
+From: Jeff Mahoney <jeffm@suse.com>
+Subject: revert: ext4: avoid uninitialized memory references in ext3_htree_next_block()
+
+The data in dirent code depends on being able to store data in the
+.. entry.  We need to revert this commit because it will skip the dx
+lookup on . and ..
+
+  Original commit message:
+  ---->8----
+  From: Theodore Ts'o <tytso@mit.edu>
+  Date: Wed, 27 Oct 2010 21:30:08 -0400
+  Subject: ext4: avoid uninitialized memory references in ext3_htree_next_block()
+  Git-commit: 8941ec8b
+  Patch-mainline: v2.6.37-rc1
+
+  If the first block of htree directory is missing '.' or '..' but is
+  otherwise a valid directory, and we do a lookup for '.' or '..', it's
+  possible to dereference an uninitialized memory pointer in
+  ext4_htree_next_block().
+
+  We avoid this by moving the special case from ext4_dx_find_entry() to
+  ext4_find_entry(); this also means we can optimize ext4_find_entry()
+  slightly when NFS looks up "..".
+
+  Thanks to Brad Spengler for pointing a Clang warning that led me to
+  look more closely at this code.  The warning was harmless, but it was
+  useful in pointing out code that was too ugly to live.  This warning was
+  also reported by Roman Borisov.
+
+  Signed-off-by: "Theodore Ts'o" <tytso@mit.edu>
+  Cc: Brad Spengler <spender@grsecurity.net>
+  ----8<----
+
+Signed-off-by: Jeff Mahoney <jeffm@suse.com>
+--
+
+ fs/ext4/namei.c |   32 +++++++++++++++++---------------
+ 1 file changed, 17 insertions(+), 15 deletions(-)
+
+--- a/fs/ext4/namei.c
++++ b/fs/ext4/namei.c
+@@ -857,7 +857,6 @@ static struct buffer_head * ext4_find_en
+ 	struct buffer_head *bh_use[NAMEI_RA_SIZE];
+ 	struct buffer_head *bh, *ret = NULL;
+ 	ext4_lblk_t start, block, b;
+-	const u8 *name = d_name->name;
+ 	int ra_max = 0;		/* Number of bh's in the readahead
+ 				   buffer, bh_use[] */
+ 	int ra_ptr = 0;		/* Current index into readahead
+@@ -872,16 +871,6 @@ static struct buffer_head * ext4_find_en
+ 	namelen = d_name->len;
+ 	if (namelen > EXT4_NAME_LEN)
+ 		return NULL;
+-	if ((namelen <= 2) && (name[0] == '.') &&
+-	    (name[1] == '.' || name[1] == '\0')) {
+-		/*
+-		 * "." or ".." will only be in the first block
+-		 * NFS may look up ".."; "." should be handled by the VFS
+-		 */
+-		block = start = 0;
+-		nblocks = 1;
+-		goto restart;
+-	}
+ 	if (is_dx(dir)) {
+ 		bh = ext4_dx_find_entry(dir, d_name, res_dir, &err);
+ 		/*
+@@ -972,15 +961,28 @@ cleanup_and_exit:
+ static struct buffer_head * ext4_dx_find_entry(struct inode *dir, const struct qstr *d_name,
+ 		       struct ext4_dir_entry_2 **res_dir, int *err)
+ {
+-	struct super_block * sb = dir->i_sb;
++	struct super_block * sb;
+ 	struct dx_hash_info	hinfo;
++	u32 hash;
+ 	struct dx_frame frames[2], *frame;
+ 	struct buffer_head *bh;
+ 	ext4_lblk_t block;
+ 	int retval;
++	int namelen = d_name->len;
++	const u8 *name = d_name->name;
+
+-	if (!(frame = dx_probe(d_name, dir, &hinfo, frames, err)))
+-		return NULL;
++	sb = dir->i_sb;
++	/* NFS may look up ".." - look at dx_root directory block */
++	if (namelen > 2 || name[0] != '.'||(name[1] != '.' && name[1] != '\0')){
++		if (!(frame = dx_probe(d_name, dir, &hinfo, frames, err)))
++			return NULL;
++	} else {
++		frame = frames;
++		frame->bh = NULL;			/* for dx_release() */
++		frame->at = (struct dx_entry *)frames;	/* hack for zero entry*/
++		dx_set_block(frame->at, 0);		/* dx_root block is 0 */
++	}
++	hash = hinfo.hash;
+ 	do {
+ 		block = dx_get_block(frame->at);
+ 		if (!(bh = ext4_bread(NULL, dir, block, 0, err)))
+@@ -1000,7 +1002,7 @@ static struct buffer_head * ext4_dx_find
+ 		}
+
+ 		/* Check to see if we should continue to search */
+-		retval = ext4_htree_next_block(dir, hinfo.hash, frame,
++		retval = ext4_htree_next_block(dir, hash, frame,
+ 					       frames, NULL);
+ 		if (retval < 0) {
+ 			ext4_warning(sb,

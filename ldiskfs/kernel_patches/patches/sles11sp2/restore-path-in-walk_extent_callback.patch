@@ -1,0 +1,58 @@
+From: Jeff Mahoney <jeffm@suse.com>
+Subject: ext4: restore path parameter to ext_prepare_callback
+
+This patch partially reverts commit c03f8aa9
+(ext4: use FIEMAP_EXTENT_LAST flag for last extent in fiemap)
+
+The bug that commit fixed is still eliminated but we restore the
+struct ext4_ext_path *path parameter to the callback for Lustre.
+
+next is calculated in ext4_ext_walk_space and can also be calculated in the
+callback.
+
+Signed-off-by: Jeff Mahoney <jeffm@suse.com>
+--
+
+ fs/ext4/ext4_extents.h |    2 +-
+ fs/ext4/extents.c      |    5 +++--
+ 2 files changed, 4 insertions(+), 3 deletions(-)
+
+--- a/fs/ext4/ext4_extents.h
++++ b/fs/ext4/ext4_extents.h
+@@ -125,7 +125,7 @@ struct ext4_ext_path {
+  * positive retcode - signal for ext4_ext_walk_space(), see below
+  * callback must return valid extent (passed or newly created)
+  */
+-typedef int (*ext_prepare_callback)(struct inode *, ext4_lblk_t,
++typedef int (*ext_prepare_callback)(struct inode *, struct ext4_ext_path *,
+ 					struct ext4_ext_cache *,
+ 					struct ext4_extent *, void *);
+
+--- a/fs/ext4/extents.c
++++ b/fs/ext4/extents.c
+@@ -1964,7 +1964,7 @@ extern int ext4_ext_walk_space(struct in
+ 			err = -EIO;
+ 			break;
+ 		}
+-		err = func(inode, next, &cbex, ex, cbdata);
++		err = func(inode, path, &cbex, ex, cbdata);
+ 		ext4_ext_drop_refs(path);
+
+ 		if (err < 0)
+@@ -3954,7 +3954,7 @@ int ext4_convert_unwritten_extents(struc
+ /*
+  * Callback function called for each extent to gather FIEMAP information.
+  */
+-static int ext4_ext_fiemap_cb(struct inode *inode, ext4_lblk_t next,
++static int ext4_ext_fiemap_cb(struct inode *inode, struct ext4_ext_path *path,
+ 		       struct ext4_ext_cache *newex, struct ext4_extent *ex,
+ 		       void *data)
+ {
+@@ -3965,6 +3965,7 @@ static int ext4_ext_fiemap_cb(struct ino
+ 	int		ret = 0;
+ 	struct fiemap_extent_info *fieinfo = data;
+ 	unsigned char blksize_bits;
++	ext4_lblk_t next = ext4_ext_next_allocated_block(path);
+
+ 	blksize_bits = inode->i_sb->s_blocksize_bits;
+ 	logical = (__u64)newex->ec_block << blksize_bits;
