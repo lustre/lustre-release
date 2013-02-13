@@ -348,9 +348,6 @@ static struct osd_seq *osd_find_or_add_seq(const struct lu_env *env,
 		GOTO(out, rc);
 	}
 
-	if (seq == 0)
-		osd->od_ost_compat_grp0 = odb;
-
 	for (i = 0; i < OSD_OST_MAP_SIZE; i++) {
 		sprintf(key, "d%d", i);
 		rc = osd_oi_find_or_create(env, osd, odb, key, &sdb);
@@ -437,10 +434,8 @@ uint64_t osd_get_name_n_idx(const struct lu_env *env, struct osd_device *osd,
 	LASSERT(fid);
 	LASSERT(buf);
 
-	if (fid_is_on_ost(env, osd, fid) == 1) {
+	if (fid_is_on_ost(env, osd, fid) == 1 || fid_seq(fid) == FID_SEQ_ECHO) {
 		zapid = osd_get_idx_for_ost_obj(env, osd, fid, buf);
-	} else if (fid_is_last_id(fid)) {
-		zapid = osd->od_ost_compat_grp0;
 	} else if (unlikely(fid_seq(fid) == FID_SEQ_LOCAL_FILE)) {
 		/* special objects with fixed known fids get their name */
 		char *name = oid2name(fid_oid(fid));

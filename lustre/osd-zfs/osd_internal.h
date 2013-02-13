@@ -236,7 +236,6 @@ struct osd_device {
 	uint64_t		 od_root;
 	struct osd_oi		**od_oi_table;
 	unsigned int		 od_oi_count;
-	uint64_t		od_ost_compat_grp0;
 	struct osd_seq_list	od_seq_list;
 
 	unsigned int		 od_rdonly:1,
