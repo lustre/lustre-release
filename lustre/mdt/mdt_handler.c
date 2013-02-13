@@ -1770,24 +1770,28 @@ out_shrink:
 }
 
 static long mdt_reint_opcode(struct mdt_thread_info *info,
-                             const struct req_format **fmt)
+			     const struct req_format **fmt)
 {
-        struct mdt_rec_reint *rec;
-        long opc;
+	struct mdt_rec_reint *rec;
+	long opc;
 
-        opc = err_serious(-EFAULT);
-        rec = req_capsule_client_get(info->mti_pill, &RMF_REC_REINT);
-        if (rec != NULL) {
-                opc = rec->rr_opcode;
-                DEBUG_REQ(D_INODE, mdt_info_req(info), "reint opt = %ld", opc);
-                if (opc < REINT_MAX && fmt[opc] != NULL)
-                        req_capsule_extend(info->mti_pill, fmt[opc]);
-                else {
-                        CERROR("Unsupported opc: %ld\n", opc);
-                        opc = err_serious(opc);
-                }
-        }
-        return opc;
+	rec = req_capsule_client_get(info->mti_pill, &RMF_REC_REINT);
+	if (rec != NULL) {
+		opc = rec->rr_opcode;
+		DEBUG_REQ(D_INODE, mdt_info_req(info), "reint opt = %ld", opc);
+		if (opc < REINT_MAX && fmt[opc] != NULL)
+			req_capsule_extend(info->mti_pill, fmt[opc]);
+		else {
+			CERROR("%s: Unsupported opcode '%ld' from client '%s': "
+			       "rc = %d\n", mdt_obd_name(info->mti_mdt), opc,
+			       info->mti_mdt->mdt_ldlm_client->cli_name,
+			       -EFAULT);
+			opc = err_serious(-EFAULT);
+		}
+	} else {
+		opc = err_serious(-EFAULT);
+	}
+	return opc;
 }
 
 int mdt_reint(struct mdt_thread_info *info)
