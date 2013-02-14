@@ -132,9 +132,14 @@ int mdt_hsm_attr_set(struct mdt_thread_info *info, struct mdt_object *obj,
  */
 int mdt_hsm_progress(struct mdt_thread_info *info)
 {
+	struct mdt_body			*body;
 	struct hsm_progress_kernel	*hpk;
 	int				 rc;
 	ENTRY;
+
+	body = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
+	if (body == NULL)
+		RETURN(-EPROTO);
 
 	hpk = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_PROGRESS);
 	if (hpk == NULL)
@@ -159,10 +164,15 @@ int mdt_hsm_progress(struct mdt_thread_info *info)
 
 int mdt_hsm_ct_register(struct mdt_thread_info *info)
 {
-	struct ptlrpc_request *req = mdt_info_req(info);
-	__u32 *archives;
-	int rc;
+	struct mdt_body		*body;
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	__u32			*archives;
+	int			 rc;
 	ENTRY;
+
+	body = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
+	if (body == NULL)
+		RETURN(-EPROTO);
 
 	archives = req_capsule_client_get(info->mti_pill, &RMF_MDS_HSM_ARCHIVE);
 	if (archives == NULL)
@@ -177,9 +187,14 @@ int mdt_hsm_ct_register(struct mdt_thread_info *info)
 
 int mdt_hsm_ct_unregister(struct mdt_thread_info *info)
 {
-	struct ptlrpc_request *req = mdt_info_req(info);
-	int rc;
+	struct mdt_body		*body;
+	struct ptlrpc_request	*req = mdt_info_req(info);
+	int			 rc;
 	ENTRY;
+
+	body = req_capsule_client_get(info->mti_pill, &RMF_MDT_BODY);
+	if (body == NULL)
+		RETURN(-EPROTO);
 
 	/* XXX: directly include this function here? */
 	rc = mdt_hsm_agent_unregister(info, &req->rq_export->exp_client_uuid);

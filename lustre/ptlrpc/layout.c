@@ -608,21 +608,30 @@ static const struct req_msg_field *ost_get_fiemap_server[] = {
 
 static const struct req_msg_field *mdt_hsm_progress[] = {
 	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
 	&RMF_MDS_HSM_PROGRESS,
 };
 
 static const struct req_msg_field *mdt_hsm_ct_register[] = {
 	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
 	&RMF_MDS_HSM_ARCHIVE,
+};
+
+static const struct req_msg_field *mdt_hsm_ct_unregister[] = {
+	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
 };
 
 static const struct req_msg_field *mdt_hsm_action_server[] = {
 	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
 	&RMF_MDS_HSM_CURRENT_ACTION,
 };
 
 static const struct req_msg_field *mdt_hsm_state_get_server[] = {
 	&RMF_PTLRPC_BODY,
+	&RMF_MDT_BODY,
 	&RMF_HSM_USER_STATE,
 };
 
@@ -1438,7 +1447,7 @@ struct req_format RQF_MDS_HSM_CT_REGISTER =
 EXPORT_SYMBOL(RQF_MDS_HSM_CT_REGISTER);
 
 struct req_format RQF_MDS_HSM_CT_UNREGISTER =
-	DEFINE_REQ_FMT0("MDS_HSM_CT_UNREGISTER", empty, empty);
+	DEFINE_REQ_FMT0("MDS_HSM_CT_UNREGISTER", mdt_hsm_ct_unregister, empty);
 EXPORT_SYMBOL(RQF_MDS_HSM_CT_UNREGISTER);
 
 struct req_format RQF_MDS_HSM_STATE_GET =
