@@ -1254,7 +1254,14 @@ LB_LINUX_TRY_COMPILE([
 		AC_DEFINE(HAVE_PROCFS_USERS, 1,
 			[kernel has pde_users member in proc_dir_entry_aux])
 	],[
-		AC_MSG_RESULT([no])
+		if test x$RHEL_KERNEL = xyes; then
+			AC_MSG_RESULT([yes])
+			AC_DEFINE(HAVE_PROCFS_USERS, 1,
+				[assuming kernel has pde_users member in proc_dir_entry_aux])
+			AC_MSG_WARN([Assuming kernel has proc_dir_entry_aux])
+		else
+			AC_MSG_RESULT([no])
+		fi
 	])
 ])
 ])
