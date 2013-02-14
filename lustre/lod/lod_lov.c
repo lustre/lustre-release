@@ -677,7 +677,9 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	struct lod_device	*md = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct lu_object	*o, *n;
 	struct lu_device	*nd;
-	int			i, idx, rc = 0;
+	struct dt_object       **stripe;
+	int			 stripe_len;
+	int			 i, idx, rc = 0;
 	ENTRY;
 
 	LASSERT(lo);
@@ -685,11 +687,10 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 	LASSERT(lo->ldo_stripenr > 0);
 	LASSERT(lo->ldo_stripe_size > 0);
 
-	i = sizeof(struct dt_object *) * lo->ldo_stripenr;
-	OBD_ALLOC(lo->ldo_stripe, i);
-	if (lo->ldo_stripe == NULL)
-		GOTO(out, rc = -ENOMEM);
-	lo->ldo_stripes_allocated = lo->ldo_stripenr;
+	stripe_len = lo->ldo_stripenr;
+	OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
+	if (stripe == NULL)
+		RETURN(-ENOMEM);
 
 	for (i = 0; i < lo->ldo_stripenr; i++) {
 		info->lti_ostid.oi_id = le64_to_cpu(objs[i].l_object_id);
@@ -721,10 +722,21 @@ int lod_initialize_objects(const struct lu_env *env, struct lod_object *lo,
 		n = lu_object_locate(o->lo_header, nd->ld_type);
 		LASSERT(n);
 
-		lo->ldo_stripe[i] = container_of(n, struct dt_object, do_lu);
+		stripe[i] = container_of(n, struct dt_object, do_lu);
 	}
 
 out:
+	if (rc != 0) {
+		for (i = 0; i < stripe_len; i++)
+			if (stripe[i] != NULL)
+				lu_object_put(env, &stripe[i]->do_lu);
+
+		OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
+	} else {
+		lo->ldo_stripe = stripe;
+		lo->ldo_stripes_allocated = stripe_len;
+	}
+
 	RETURN(rc);
 }
 

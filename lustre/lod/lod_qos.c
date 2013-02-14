@@ -657,7 +657,8 @@ static int lod_qos_is_ost_used(const struct lu_env *env, int ost, int stripes)
 
 /* Allocate objects on OSTs with round-robin algorithm */
 static int lod_alloc_rr(const struct lu_env *env, struct lod_object *lo,
-			int flags, struct thandle *th)
+			struct dt_object **stripe, int flags,
+			struct thandle *th)
 {
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
@@ -790,7 +791,7 @@ repeat_find:
 		 * We've successfuly declared (reserved) an object
 		 */
 		lod_qos_ost_in_use(env, stripe_idx, ost_idx);
-		lo->ldo_stripe[stripe_idx] = o;
+		stripe[stripe_idx] = o;
 		stripe_idx++;
 
 	}
@@ -824,7 +825,8 @@ out:
 
 /* alloc objects on osts with specific stripe offset */
 static int lod_alloc_specific(const struct lu_env *env, struct lod_object *lo,
-			      int flags, struct thandle *th)
+			      struct dt_object **stripe, int flags,
+			      struct thandle *th)
 {
 	struct lod_device *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs *sfs = &lod_env_info(env)->lti_osfs;
@@ -916,7 +918,7 @@ repeat_find:
 		/*
 		 * We've successfuly declared (reserved) an object
 		 */
-		lo->ldo_stripe[stripe_num] = o;
+		stripe[stripe_num] = o;
 		stripe_num++;
 
 		/* We have enough stripes */
@@ -971,7 +973,8 @@ static inline int lod_qos_is_usable(struct lod_device *lod)
    - network resources (shared OSS's)
  */
 static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
-			 int flags, struct thandle *th)
+			 struct dt_object **stripe, int flags,
+			 struct thandle *th)
 {
 	struct lod_device   *m = lu2lod_dev(lo->ldo_obj.do_lu.lo_dev);
 	struct obd_statfs   *sfs = &lod_env_info(env)->lti_osfs;
@@ -1132,7 +1135,7 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 					  idx, (int) PTR_ERR(o));
 				continue;
 			}
-			lo->ldo_stripe[nfound++] = o;
+			stripe[nfound++] = o;
 			lod_qos_used(m, osts, idx, &total_weight);
 			rc = 0;
 			break;
@@ -1154,9 +1157,9 @@ static int lod_alloc_qos(const struct lu_env *env, struct lod_object *lo,
 		 */
 		LCONSOLE_INFO("wanted %d, found %d\n", stripe_cnt, nfound);
 		for (i = 0; i < nfound; i++) {
-			LASSERT(lo->ldo_stripe[i]);
-			lu_object_put(env, &lo->ldo_stripe[i]->do_lu);
-			lo->ldo_stripe[i] = NULL;
+			LASSERT(stripe[i] != NULL);
+			lu_object_put(env, &stripe[i]->do_lu);
+			stripe[i] = NULL;
 		}
 
 		/* makes sense to rebalance next time */
@@ -1349,9 +1352,11 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 			struct lu_attr *attr, const struct lu_buf *buf,
 			struct thandle *th)
 {
-	struct lod_device *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
-	int flag = LOV_USES_ASSIGNED_STRIPE;
-	int i, rc = 0;
+	struct lod_device      *d = lu2lod_dev(lod2lu_obj(lo)->lo_dev);
+	struct dt_object      **stripe;
+	int			stripe_len;
+	int			flag = LOV_USES_ASSIGNED_STRIPE;
+	int			i, rc;
 	ENTRY;
 
 	LASSERT(lo);
@@ -1381,22 +1386,34 @@ int lod_qos_prep_create(const struct lu_env *env, struct lod_object *lo,
 		LASSERT(lo->ldo_stripenr > 0);
 		lo->ldo_stripenr = lod_get_stripecnt(d, LOV_MAGIC,
 				lo->ldo_stripenr);
-		i = sizeof(struct dt_object *) * lo->ldo_stripenr;
-		OBD_ALLOC(lo->ldo_stripe, i);
-		if (lo->ldo_stripe == NULL)
+
+		stripe_len = lo->ldo_stripenr;
+		OBD_ALLOC(stripe, sizeof(stripe[0]) * stripe_len);
+		if (stripe == NULL)
 			GOTO(out, rc = -ENOMEM);
-		lo->ldo_stripes_allocated = lo->ldo_stripenr;
 
 		lod_getref(&d->lod_ost_descs);
 		/* XXX: support for non-0 files w/o objects */
 		if (lo->ldo_def_stripe_offset >= d->lod_desc.ld_tgt_count) {
 			lod_qos_statfs_update(env, d);
-			rc = lod_alloc_qos(env, lo, flag, th);
+			rc = lod_alloc_qos(env, lo, stripe, flag, th);
 			if (rc == -EAGAIN)
-				rc = lod_alloc_rr(env, lo, flag, th);
-		} else
-			rc = lod_alloc_specific(env, lo, flag, th);
+				rc = lod_alloc_rr(env, lo, stripe, flag, th);
+		} else {
+			rc = lod_alloc_specific(env, lo, stripe, flag, th);
+		}
 		lod_putref(d, &d->lod_ost_descs);
+
+		if (rc < 0) {
+			for (i = 0; i < stripe_len; i++)
+				if (stripe[i] != NULL)
+					lu_object_put(env, &stripe[i]->do_lu);
+
+			OBD_FREE(stripe, sizeof(stripe[0]) * stripe_len);
+		} else {
+			lo->ldo_stripe = stripe;
+			lo->ldo_stripes_allocated = stripe_len;
+		}
 	} else {
 		/*
 		 * lod_qos_parse_config() found supplied buf as a predefined
