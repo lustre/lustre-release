@@ -195,7 +195,6 @@ static int fsfilt_ext3_commit(struct inode *inode, void *h, int force_sync)
 
 struct bpointers {
         unsigned long *blocks;
-        int *created;
         unsigned long start;
         int num;
         int init_num;
@@ -317,8 +316,6 @@ static int ext3_ext_new_extent_cb(struct ext3_ext_base *base,
                         CERROR("nothing to do?! i = %d, e_num = %u\n",
                                         i, cex->ec_len);
                 for (; i < cex->ec_len && bp->num; i++) {
-                        *(bp->created) = 0;
-                        bp->created++;
                         *(bp->blocks) = 0;
                         bp->blocks++;
                         bp->num--;
@@ -418,20 +415,16 @@ map:
                 for (; i < cex->ec_len && bp->num; i++) {
                         *(bp->blocks) = cex->ec_start + i;
 #ifdef EXT3_EXT_CACHE_EXTENT
-                        if (cex->ec_type == EXT3_EXT_CACHE_EXTENT)
+			if (cex->ec_type != EXT3_EXT_CACHE_EXTENT)
 #else
-                        if ((cex->ec_len != 0) && (cex->ec_start != 0))
+			if ((cex->ec_len == 0) || (cex->ec_start == 0))
 #endif
-								   {
-                                *(bp->created) = 0;
-                        } else {
-                                *(bp->created) = 1;
+									{
                                 /* unmap any possible underlying metadata from
                                  * the block device mapping.  bug 6998. */
                                 ll_unmap_underlying_metadata(inode->i_sb,
                                                              *(bp->blocks));
                         }
-                        bp->created++;
                         bp->blocks++;
                         bp->num--;
                         bp->start++;
@@ -441,8 +434,8 @@ map:
 }
 
 int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
-                       unsigned long num, unsigned long *blocks,
-                       int *created, int create)
+		       unsigned long num, unsigned long *blocks,
+		       int create)
 {
         struct ext3_ext_base *base = inode;
         struct bpointers bp;
@@ -452,7 +445,6 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
                block, block + num - 1, (unsigned) inode->i_ino);
 
         bp.blocks = blocks;
-        bp.created = created;
         bp.start = block;
         bp.init_num = bp.num = num;
         bp.create = create;
@@ -465,8 +457,8 @@ int fsfilt_map_nblocks(struct inode *inode, unsigned long block,
 }
 
 int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
-                                    int pages, unsigned long *blocks,
-                                    int *created, int create)
+				    int pages, unsigned long *blocks,
+				    int create)
 {
         int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
         int rc = 0, i = 0;
@@ -495,65 +487,61 @@ int fsfilt_ext3_map_ext_inode_pages(struct inode *inode, struct page **page,
 
                 /* process found extent */
                 rc = fsfilt_map_nblocks(inode, fp->index * blocks_per_page,
-                                        clen * blocks_per_page, blocks,
-                                        created, create);
+					clen * blocks_per_page, blocks,
+					create);
                 if (rc)
                         GOTO(cleanup, rc);
 
                 /* look for next extent */
                 fp = NULL;
                 blocks += blocks_per_page * clen;
-                created += blocks_per_page * clen;
         }
 
         if (fp)
                 rc = fsfilt_map_nblocks(inode, fp->index * blocks_per_page,
-                                        clen * blocks_per_page, blocks,
-                                        created, create);
+					clen * blocks_per_page, blocks,
+					create);
 cleanup:
         return rc;
 }
 
 extern int ext3_map_inode_page(struct inode *inode, struct page *page,
-                               unsigned long *blocks, int *created, int create);
+			       unsigned long *blocks, int create);
 int fsfilt_ext3_map_bm_inode_pages(struct inode *inode, struct page **page,
-                                   int pages, unsigned long *blocks,
-                                   int *created, int create)
+				   int pages, unsigned long *blocks,
+				   int create)
 {
-        int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
-        unsigned long *b;
-        int rc = 0, i, *cr;
+	int blocks_per_page = CFS_PAGE_SIZE >> inode->i_blkbits;
+	unsigned long *b;
+	int rc = 0, i;
 
-        for (i = 0, cr = created, b = blocks; i < pages; i++, page++) {
-                rc = ext3_map_inode_page(inode, *page, b, cr, create);
+	for (i = 0, b = blocks; i < pages; i++, page++) {
+		rc = ext3_map_inode_page(inode, *page, b, create);
                 if (rc) {
-                        CERROR("ino %lu, blk %lu cr %u create %d: rc %d\n",
-                               inode->i_ino, *b, *cr, create, rc);
+			CERROR("ino %lu, blk %lu create %d: rc %d\n",
+			       inode->i_ino, *b, create, rc);
                         break;
                 }
 
                 b += blocks_per_page;
-                cr += blocks_per_page;
         }
         return rc;
 }
 
 int fsfilt_ext3_map_inode_pages(struct inode *inode, struct page **page,
-                                int pages, unsigned long *blocks,
-                                int *created, int create,
-				struct mutex *optional_mutex)
+				int pages, unsigned long *blocks,
+				int create, struct mutex *optional_mutex)
 {
         int rc;
 
         if (EXT3_I(inode)->i_flags & EXT3_EXTENTS_FL) {
-                rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
-                                                     blocks, created, create);
+		rc = fsfilt_ext3_map_ext_inode_pages(inode, page, pages,
+						     blocks, create);
                 return rc;
         }
         if (optional_mutex != NULL)
 		mutex_lock(optional_mutex);
-        rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks,
-                                            created, create);
+	rc = fsfilt_ext3_map_bm_inode_pages(inode, page, pages, blocks, create);
         if (optional_mutex != NULL)
 		mutex_unlock(optional_mutex);
 

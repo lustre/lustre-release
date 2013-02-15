@@ -463,20 +463,22 @@ struct osd_it_quota {
 #define MAX_BLOCKS_PER_PAGE (CFS_PAGE_SIZE / 512)
 
 struct osd_iobuf {
-        cfs_waitq_t        dr_wait;
-        cfs_atomic_t       dr_numreqs;  /* number of reqs being processed */
-        int                dr_max_pages;
-        int                dr_npages;
-        int                dr_error;
-        int                dr_frags;
-        unsigned int       dr_ignore_quota:1;
-        unsigned int       dr_elapsed_valid:1; /* we really did count time */
-        unsigned int       dr_rw:1;
-        struct page       *dr_pages[PTLRPC_MAX_BRW_PAGES];
-        unsigned long      dr_blocks[PTLRPC_MAX_BRW_PAGES*MAX_BLOCKS_PER_PAGE];
-        unsigned long      dr_start_time;
-        unsigned long      dr_elapsed;  /* how long io took */
-        struct osd_device *dr_dev;
+	cfs_waitq_t        dr_wait;
+	cfs_atomic_t       dr_numreqs;  /* number of reqs being processed */
+	int                dr_max_pages;
+	int                dr_npages;
+	int                dr_error;
+	int                dr_frags;
+	unsigned int       dr_ignore_quota:1;
+	unsigned int       dr_elapsed_valid:1; /* we really did count time */
+	unsigned int       dr_rw:1;
+	struct lu_buf	   dr_pg_buf;
+	struct page      **dr_pages;
+	struct lu_buf	   dr_bl_buf;
+	unsigned long     *dr_blocks;
+	unsigned long      dr_start_time;
+	unsigned long      dr_elapsed;  /* how long io took */
+	struct osd_device *dr_dev;
 	unsigned int	   dr_init_at;	/* the line iobuf was initialized */
 };
 
@@ -564,14 +566,12 @@ struct osd_thread_info {
 		/* old LMA for compatibility */
 		char			oti_mdt_attrs_old[LMA_OLD_SIZE];
 	};
-        /** 0-copy IO */
-        struct osd_iobuf       oti_iobuf;
-        struct inode           oti_inode;
-        int                    oti_created[PTLRPC_MAX_BRW_PAGES];
-        struct lu_env          oti_obj_delete_tx_env;
+	/** 0-copy IO */
+	struct osd_iobuf       oti_iobuf;
+	struct inode           oti_inode;
 #define OSD_FID_REC_SZ 32
-        char                   oti_ldp[OSD_FID_REC_SZ];
-        char                   oti_ldp2[OSD_FID_REC_SZ];
+	char		       oti_ldp[OSD_FID_REC_SZ];
+	char		       oti_ldp2[OSD_FID_REC_SZ];
 
 	/* used by quota code */
 	union {

@@ -5038,12 +5038,14 @@ static void *osd_key_init(const struct lu_context *ctx,
 static void osd_key_fini(const struct lu_context *ctx,
                          struct lu_context_key *key, void* data)
 {
-        struct osd_thread_info *info = data;
+	struct osd_thread_info *info = data;
 
-        if (info->oti_hlock != NULL)
-                ldiskfs_htree_lock_free(info->oti_hlock);
-        OBD_FREE(info->oti_it_ea_buf, OSD_IT_EA_BUFSIZE);
-        OBD_FREE_PTR(info);
+	if (info->oti_hlock != NULL)
+		ldiskfs_htree_lock_free(info->oti_hlock);
+	OBD_FREE(info->oti_it_ea_buf, OSD_IT_EA_BUFSIZE);
+	lu_buf_free(&info->oti_iobuf.dr_pg_buf);
+	lu_buf_free(&info->oti_iobuf.dr_bl_buf);
+	OBD_FREE_PTR(info);
 }
 
 static void osd_key_exit(const struct lu_context *ctx,

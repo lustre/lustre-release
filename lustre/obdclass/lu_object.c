@@ -2226,3 +2226,33 @@ struct lu_object *lu_object_anon(const struct lu_env *env,
 	return o;
 }
 EXPORT_SYMBOL(lu_object_anon);
+
+void lu_buf_free(struct lu_buf *buf)
+{
+	LASSERT(buf);
+	if (buf->lb_buf) {
+		LASSERT(buf->lb_len > 0);
+		OBD_FREE_LARGE(buf->lb_buf, buf->lb_len);
+		buf->lb_buf = NULL;
+		buf->lb_len = 0;
+	}
+}
+EXPORT_SYMBOL(lu_buf_free);
+
+void lu_buf_alloc(struct lu_buf *buf, int size)
+{
+	LASSERT(buf);
+	LASSERT(buf->lb_buf == NULL);
+	LASSERT(buf->lb_len == 0);
+	OBD_ALLOC_LARGE(buf->lb_buf, size);
+	if (likely(buf->lb_buf))
+		buf->lb_len = size;
+}
+EXPORT_SYMBOL(lu_buf_alloc);
+
+void lu_buf_realloc(struct lu_buf *buf, int size)
+{
+	lu_buf_free(buf);
+	lu_buf_alloc(buf, size);
+}
+EXPORT_SYMBOL(lu_buf_realloc);

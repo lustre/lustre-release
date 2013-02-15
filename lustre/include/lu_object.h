@@ -1356,5 +1356,9 @@ struct lu_object *lu_object_anon(const struct lu_env *env,
 				 struct lu_device *dev,
 				 const struct lu_object_conf *conf);
 
+void lu_buf_free(struct lu_buf *buf);
+void lu_buf_alloc(struct lu_buf *buf, int size);
+void lu_buf_realloc(struct lu_buf *buf, int size);
+
 /** @} lu */
 #endif /* __LUSTRE_LU_OBJECT_H */

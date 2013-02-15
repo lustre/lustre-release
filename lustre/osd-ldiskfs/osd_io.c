@@ -93,17 +93,19 @@ int generic_error_remove_page(struct address_space *mapping, struct page *page)
 }
 #endif
 
-static void __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
-			     int rw, int line)
+static int __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
+			    int rw, int line, int pages)
 {
+	int blocks, i;
+
 	LASSERTF(iobuf->dr_elapsed_valid == 0,
 		 "iobuf %p, reqs %d, rw %d, line %d\n", iobuf,
 		 cfs_atomic_read(&iobuf->dr_numreqs), iobuf->dr_rw,
 		 iobuf->dr_init_at);
+	LASSERT(pages <= PTLRPC_MAX_BRW_PAGES);
 
         cfs_waitq_init(&iobuf->dr_wait);
         cfs_atomic_set(&iobuf->dr_numreqs, 0);
-        iobuf->dr_max_pages = PTLRPC_MAX_BRW_PAGES;
         iobuf->dr_npages = 0;
         iobuf->dr_error = 0;
         iobuf->dr_dev = d;
@@ -112,8 +114,43 @@ static void __osd_init_iobuf(struct osd_device *d, struct osd_iobuf *iobuf,
         /* must be counted before, so assert */
         iobuf->dr_rw = rw;
 	iobuf->dr_init_at = line;
+
+	blocks = pages * (CFS_PAGE_SIZE >> osd_sb(d)->s_blocksize_bits);
+	if (iobuf->dr_bl_buf.lb_len >= blocks * sizeof(iobuf->dr_blocks[0])) {
+		LASSERT(iobuf->dr_pg_buf.lb_len >=
+			pages * sizeof(iobuf->dr_pages[0]));
+		return 0;
+	}
+
+	/* start with 1MB for 4K blocks */
+	i = 256;
+	while (i <= PTLRPC_MAX_BRW_PAGES && i < pages)
+		i <<= 1;
+
+	CDEBUG(D_OTHER, "realloc %u for %u (%u) pages\n",
+	       (unsigned)(pages * sizeof(iobuf->dr_pages[0])), i, pages);
+	pages = i;
+	blocks = pages * (CFS_PAGE_SIZE >> osd_sb(d)->s_blocksize_bits);
+	iobuf->dr_max_pages = 0;
+	CDEBUG(D_OTHER, "realloc %u for %u blocks\n",
+	       (unsigned)(blocks * sizeof(iobuf->dr_blocks[0])), blocks);
+
+	lu_buf_realloc(&iobuf->dr_bl_buf, blocks * sizeof(iobuf->dr_blocks[0]));
+	iobuf->dr_blocks = iobuf->dr_bl_buf.lb_buf;
+	if (unlikely(iobuf->dr_blocks == NULL))
+		return -ENOMEM;
+
+	lu_buf_realloc(&iobuf->dr_pg_buf, pages * sizeof(iobuf->dr_pages[0]));
+	iobuf->dr_pages = iobuf->dr_pg_buf.lb_buf;
+	if (unlikely(iobuf->dr_pages == NULL))
+		return -ENOMEM;
+
+	iobuf->dr_max_pages = pages;
+
+	return 0;
 }
-#define osd_init_iobuf(dev,iobuf,rw) __osd_init_iobuf(dev, iobuf, rw, __LINE__)
+#define osd_init_iobuf(dev, iobuf, rw, pages) \
+	__osd_init_iobuf(dev, iobuf, rw, __LINE__, pages)
 
 static void osd_iobuf_add_page(struct osd_iobuf *iobuf, struct page *page)
 {
@@ -550,9 +587,11 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(inode);
 
-        osd_init_iobuf(osd, iobuf, 0);
+	rc = osd_init_iobuf(osd, iobuf, 0, npages);
+	if (unlikely(rc != 0))
+		RETURN(rc);
 
-        isize = i_size_read(inode);
+	isize = i_size_read(inode);
         maxidx = ((isize + CFS_PAGE_SIZE - 1) >> CFS_PAGE_SHIFT) - 1;
 
         if (osd->od_writethrough_cache)
@@ -598,11 +637,10 @@ static int osd_write_prep(const struct lu_env *env, struct dt_object *dt,
         lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
         if (iobuf->dr_npages) {
-                rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
-                                                       iobuf->dr_npages,
-                                                       iobuf->dr_blocks,
-                                                       oti->oti_created,
-                                                       0, NULL);
+		rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
+						       iobuf->dr_npages,
+						       iobuf->dr_blocks,
+						       0, NULL);
                 if (likely(rc == 0)) {
                         rc = osd_do_bio(osd, inode, iobuf);
                         /* do IO stats for preparation reads */
@@ -754,8 +792,11 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(inode);
 
-        osd_init_iobuf(osd, iobuf, 1);
-        isize = i_size_read(inode);
+	rc = osd_init_iobuf(osd, iobuf, 1, npages);
+	if (unlikely(rc != 0))
+		RETURN(rc);
+
+	isize = i_size_read(inode);
 	ll_vfs_dq_init(inode);
 
         for (i = 0; i < npages; i++) {
@@ -796,10 +837,9 @@ static int osd_write_commit(const struct lu_env *env, struct dt_object *dt,
                 rc = -ENOSPC;
         } else if (iobuf->dr_npages > 0) {
                 rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
-                                                       iobuf->dr_npages,
-                                                       iobuf->dr_blocks,
-                                                       oti->oti_created,
-                                                       1, NULL);
+						       iobuf->dr_npages,
+						       iobuf->dr_blocks,
+						       1, NULL);
         } else {
                 /* no pages to write, no transno is needed */
                 thandle->th_local = 1;
@@ -843,12 +883,14 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
 
         LASSERT(inode);
 
-        osd_init_iobuf(osd, iobuf, 0);
+	rc = osd_init_iobuf(osd, iobuf, 0, npages);
+	if (unlikely(rc != 0))
+		RETURN(rc);
 
-        if (osd->od_read_cache)
-                cache = 1;
-        if (i_size_read(inode) > osd->od_readcache_max_filesize)
-                cache = 0;
+	if (osd->od_read_cache)
+		cache = 1;
+	if (i_size_read(inode) > osd->od_readcache_max_filesize)
+		cache = 0;
 
         cfs_gettimeofday(&start);
         for (i = 0; i < npages; i++) {
@@ -882,11 +924,10 @@ static int osd_read_prep(const struct lu_env *env, struct dt_object *dt,
         lprocfs_counter_add(osd->od_stats, LPROC_OSD_GET_PAGE, timediff);
 
         if (iobuf->dr_npages) {
-                rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
-                                                       iobuf->dr_npages,
-                                                       iobuf->dr_blocks,
-                                                       oti->oti_created,
-                                                       0, NULL);
+		rc = osd->od_fsops->fs_map_inode_pages(inode, iobuf->dr_pages,
+						       iobuf->dr_npages,
+						       iobuf->dr_blocks,
+						       0, NULL);
                 rc = osd_do_bio(osd, inode, iobuf);
 
                 /* IO stats will be done in osd_bufs_put() */
