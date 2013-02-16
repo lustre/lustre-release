@@ -603,10 +603,10 @@ ptlrpc_server_nthreads_check(struct ptlrpc_service *svc,
 	svc->srv_nthrs_cpt_init = init;
 
 	if (nthrs * svc->srv_ncpts > tc->tc_nthrs_max) {
-		LCONSOLE_WARN("%s: This service may have more threads (%d) "
-			      "than the given soft limit (%d)\n",
-			      svc->srv_name, nthrs * svc->srv_ncpts,
-			      tc->tc_nthrs_max);
+		CDEBUG(D_OTHER, "%s: This service may have more threads (%d) "
+		       "than the given soft limit (%d)\n",
+		       svc->srv_name, nthrs * svc->srv_ncpts,
+		       tc->tc_nthrs_max);
 	}
 #endif
 }
