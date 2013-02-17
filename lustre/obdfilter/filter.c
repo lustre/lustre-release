@@ -3115,18 +3115,20 @@ static int filter_destroy_precreated(struct obd_export *exp, struct obdo *oa,
         }
         doa.o_mode = S_IFREG;
 
-        if (!filter->fo_destroy_in_progress) {
-                CERROR("%s: destroy_in_progress already cleared\n",
-                        exp->exp_obd->obd_name);
-                RETURN(0);
-        }
-
         last = filter_last_id(filter, doa.o_gr);
         skip_orphan = !!(exp->exp_connect_flags & OBD_CONNECT_SKIP_ORPHAN);
 
         CWARN("%s: deleting orphan objects from "LPU64" to "LPU64"%s\n",
                exp->exp_obd->obd_name, oa->o_id + 1, last,
                skip_orphan ? ", orphan objids won't be reused any more." : ".");
+
+        if (!filter->fo_destroy_in_progress) {
+                CWARN("%s: destroy_in_progress already cleared to "LPU64"\n",
+                      exp->exp_obd->obd_name, last);
+                if (skip_orphan)
+                        oa->o_id = last;
+                RETURN(0);
+        }
 
         for (id = last; id > oa->o_id; id--) {
                 doa.o_id = id;
