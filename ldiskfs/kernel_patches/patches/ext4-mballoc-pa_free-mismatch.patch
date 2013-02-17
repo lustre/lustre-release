@@ -85,10 +85,13 @@ Index: linux-stage/fs/ext4/mballoc.c
 	ac = kmem_cache_alloc(ext4_ac_cachep, GFP_NOFS);
 	if (!ac) {
 		ar->len = 0;
-@@ -4850,6 +4881,25 @@
- 			ac->ac_b_ex.fe_len = 0;
- 			ar->len = 0;
- 			ext4_mb_show_ac(ac);
+@@ -4850,10 +4881,29 @@
+			ac->ac_b_ex.fe_len = 0;
+			ac->ac_status = AC_STATUS_CONTINUE;
+			goto repeat;
+-		} else if (*errp)
++		} else if (*errp) {
+		errout:
 +                        if (ac->ac_pa) {
 +                        	struct ext4_prealloc_space *pa = ac->ac_pa;
 +
@@ -108,10 +111,13 @@ Index: linux-stage/fs/ext4/mballoc.c
 +                                            (unsigned)pa->pa_error,
 +                			pa->pa_inode ? pa->pa_inode->i_ino : 0);
 +                        }
- 		} else {
+			ext4_discard_allocated_blocks(ac);
+-		else {
++		} else {
  			block = ext4_grp_offs_to_block(sb, &ac->ac_b_ex);
  			ar->len = ac->ac_b_ex.fe_len;
-@@ -5025,6 +5075,15 @@
+ 		}
+@@ -5025,6 +5075,16 @@
  		goto error_return;
  	}
  
@@ -121,7 +127,8 @@ Index: linux-stage/fs/ext4/mballoc.c
 +                printk(KERN_WARNING "Release to readonly device %s (%#x): "
 +                       "[inode %lu] [block %lu] [count %lu] [is_meta %d]\n",
 +                       bdev->bd_disk ? bdev->bd_disk->disk_name : "",
-+                       bdev->bd_dev, inode->i_ino, (unsigned long)block, count, metadata);
++                       bdev->bd_dev, inode->i_ino, (unsigned long)block, count,
++			(flags & EXT4_FREE_BLOCKS_METADATA));
 +        }
 +
  	ext4_debug("freeing block %llu\n", block);
