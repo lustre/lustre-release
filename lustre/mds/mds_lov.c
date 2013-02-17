@@ -1015,14 +1015,18 @@ static int __mds_lov_synchronize(void *data)
 
         EXIT;
 out:
-        if (rc) {
-                /* Deactivate it for safety */
-                CERROR("%s sync failed %d, deactivating\n", obd_uuid2str(uuid),
-                       rc);
-                if (!obd->obd_stopping && mds->mds_lov_obd &&
-                    !mds->mds_lov_obd->obd_stopping && !watched->obd_stopping)
-                        obd_notify(mds->mds_lov_obd, watched,
-                                   OBD_NOTIFY_INACTIVE, NULL);
+        if (rc != 0) {
+                CERROR("%s sync failed: %d\n", obd_uuid2str(uuid), rc);
+
+                if (rc != -EBUSY) {
+                        /* Deactivate it for safety */
+                        CERROR("deactivating %s\n", obd_uuid2str(uuid));
+                        if (!obd->obd_stopping && mds->mds_lov_obd &&
+                            !mds->mds_lov_obd->obd_stopping &&
+                            !watched->obd_stopping)
+                                obd_notify(mds->mds_lov_obd, watched,
+                                           OBD_NOTIFY_INACTIVE, NULL);
+                }
         } else {
                 /* We've successfully synced at least 1 OST and are ready
                    to handle client requests */
