@@ -958,37 +958,6 @@ struct target_recovery_data {
 	struct completion	trd_finishing;
 };
 
-/**
-  * In HEAD for CMD, the object is created in group number which is 3>=
-  * or indexing starts from 3. To test this assertions are added to disallow
-  * group 0. But to run 2.0 mds server on 1.8.x disk format (i.e. interop_mode)
-  * object in group 0 needs to be allowed.
-  * So for interop mode following changes needs to be done:
-  * 1. No need to assert on group 0 or allow group 0
-  * 2. The group number indexing starts from 0 instead of 3
-  */
-
-#define LASSERT_SEQ_IS_MDT(seq) LASSERT(fid_seq_is_mdt(seq))
-
-static inline __u64 objseq_to_mdsno(obd_seq seq)
-{
-        LASSERT_SEQ_IS_MDT(seq);
-        if (seq == FID_SEQ_OST_MDT0)
-                return 0;
-        return seq - FID_SEQ_OST_MDT1 + 1;
-}
-
-static inline int mdt_to_obd_objseq(int mdtid)
-{
-        /**
-         * MDS0 uses seq 0 pre FID-on-OST, other MDSes will use seq from
-         * FID_SEQ_OST_MDT1
-         */
-        if (mdtid)
-                return FID_SEQ_OST_MDT1 + mdtid - 1;
-        return 0;
-}
-
 struct obd_llog_group {
         cfs_list_t         olg_list;
         int                olg_seq;

@@ -69,97 +69,99 @@ int osc_cleanup(struct obd_device *obd);
 
 /* Pack OSC object metadata for disk storage (LE byte order). */
 static int osc_packmd(struct obd_export *exp, struct lov_mds_md **lmmp,
-                      struct lov_stripe_md *lsm)
+		      struct lov_stripe_md *lsm)
 {
-        int lmm_size;
-        ENTRY;
+	int lmm_size;
+	ENTRY;
 
-        lmm_size = sizeof(**lmmp);
-        if (!lmmp)
-                RETURN(lmm_size);
+	lmm_size = sizeof(**lmmp);
+	if (lmmp == NULL)
+		RETURN(lmm_size);
 
-        if (*lmmp && !lsm) {
-                OBD_FREE(*lmmp, lmm_size);
-                *lmmp = NULL;
-                RETURN(0);
-        }
+	if (*lmmp != NULL && lsm == NULL) {
+		OBD_FREE(*lmmp, lmm_size);
+		*lmmp = NULL;
+		RETURN(0);
+	} else if (unlikely(lsm != NULL && lsm->lsm_object_id == 0)) {
+		RETURN(-EBADF);
+	}
 
-        if (!*lmmp) {
-                OBD_ALLOC(*lmmp, lmm_size);
-                if (!*lmmp)
-                        RETURN(-ENOMEM);
-        }
+	if (*lmmp == NULL) {
+		OBD_ALLOC(*lmmp, lmm_size);
+		if (*lmmp == NULL)
+			RETURN(-ENOMEM);
+	}
 
-        if (lsm) {
-                LASSERT(lsm->lsm_object_id);
-                LASSERT_SEQ_IS_MDT(lsm->lsm_object_seq);
-                (*lmmp)->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
-                (*lmmp)->lmm_object_seq = cpu_to_le64(lsm->lsm_object_seq);
-        }
+	if (lsm != NULL) {
+		(*lmmp)->lmm_object_id = cpu_to_le64(lsm->lsm_object_id);
+		(*lmmp)->lmm_object_seq = cpu_to_le64(lsm->lsm_object_seq);
+	}
 
-        RETURN(lmm_size);
+	RETURN(lmm_size);
 }
 
 /* Unpack OSC object metadata from disk storage (LE byte order). */
 static int osc_unpackmd(struct obd_export *exp, struct lov_stripe_md **lsmp,
-                        struct lov_mds_md *lmm, int lmm_bytes)
+			struct lov_mds_md *lmm, int lmm_bytes)
 {
-        int lsm_size;
-        struct obd_import *imp = class_exp2cliimp(exp);
-        ENTRY;
+	int lsm_size;
+	struct obd_import *imp = class_exp2cliimp(exp);
+	ENTRY;
 
-        if (lmm != NULL) {
-                if (lmm_bytes < sizeof (*lmm)) {
-                        CERROR("lov_mds_md too small: %d, need %d\n",
-                               lmm_bytes, (int)sizeof(*lmm));
-                        RETURN(-EINVAL);
-                }
-                /* XXX LOV_MAGIC etc check? */
+	if (lmm != NULL) {
+		if (lmm_bytes < sizeof(*lmm)) {
+			CERROR("%s: lov_mds_md too small: %d, need %d\n",
+			       exp->exp_obd->obd_name, lmm_bytes,
+			       (int)sizeof(*lmm));
+			RETURN(-EINVAL);
+		}
+		/* XXX LOV_MAGIC etc check? */
 
-                if (lmm->lmm_object_id == 0) {
-                        CERROR("lov_mds_md: zero lmm_object_id\n");
-                        RETURN(-EINVAL);
-                }
-        }
+		if (unlikely(lmm->lmm_object_id == 0)) {
+			CERROR("%s: zero lmm_object_id\n",
+			       exp->exp_obd->obd_name);
+			RETURN(-EINVAL);
+		}
+	}
 
-        lsm_size = lov_stripe_md_size(1);
-        if (lsmp == NULL)
-                RETURN(lsm_size);
+	lsm_size = lov_stripe_md_size(1);
+	if (lsmp == NULL)
+		RETURN(lsm_size);
 
-        if (*lsmp != NULL && lmm == NULL) {
-                OBD_FREE((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
-                OBD_FREE(*lsmp, lsm_size);
-                *lsmp = NULL;
-                RETURN(0);
-        }
+	if (*lsmp != NULL && lmm == NULL) {
+		OBD_FREE((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
+		OBD_FREE(*lsmp, lsm_size);
+		*lsmp = NULL;
+		RETURN(0);
+	}
 
-        if (*lsmp == NULL) {
-                OBD_ALLOC(*lsmp, lsm_size);
-                if (*lsmp == NULL)
-                        RETURN(-ENOMEM);
-                OBD_ALLOC((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
-                if ((*lsmp)->lsm_oinfo[0] == NULL) {
-                        OBD_FREE(*lsmp, lsm_size);
-                        RETURN(-ENOMEM);
-                }
-                loi_init((*lsmp)->lsm_oinfo[0]);
-        }
+	if (*lsmp == NULL) {
+		OBD_ALLOC(*lsmp, lsm_size);
+		if (unlikely(*lsmp == NULL))
+			RETURN(-ENOMEM);
+		OBD_ALLOC((*lsmp)->lsm_oinfo[0], sizeof(struct lov_oinfo));
+		if (unlikely((*lsmp)->lsm_oinfo[0] == NULL)) {
+			OBD_FREE(*lsmp, lsm_size);
+			RETURN(-ENOMEM);
+		}
+		loi_init((*lsmp)->lsm_oinfo[0]);
+	} else if (unlikely((*lsmp)->lsm_object_id == 0)) {
+		RETURN(-EBADF);
+	}
 
-        if (lmm != NULL) {
-                /* XXX zero *lsmp? */
-                (*lsmp)->lsm_object_id = le64_to_cpu (lmm->lmm_object_id);
-                (*lsmp)->lsm_object_seq = le64_to_cpu (lmm->lmm_object_seq);
-                LASSERT((*lsmp)->lsm_object_id);
-                LASSERT_SEQ_IS_MDT((*lsmp)->lsm_object_seq);
-        }
+	if (lmm != NULL) {
+		/* XXX zero *lsmp? */
+		(*lsmp)->lsm_object_id = le64_to_cpu(lmm->lmm_object_id);
+		(*lsmp)->lsm_object_seq = le64_to_cpu(lmm->lmm_object_seq);
+	}
 
-        if (imp != NULL &&
-            (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MAXBYTES))
-                (*lsmp)->lsm_maxbytes = imp->imp_connect_data.ocd_maxbytes;
-        else
-                (*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
+	if (imp != NULL &&
+	    (imp->imp_connect_data.ocd_connect_flags & OBD_CONNECT_MAXBYTES))
+		(*lsmp)->lsm_maxbytes = imp->imp_connect_data.ocd_maxbytes;
+	else
+		(*lsmp)->lsm_maxbytes = LUSTRE_STRIPE_MAXBYTES;
 
-        RETURN(lsm_size);
+	RETURN(lsm_size);
 }
 
 static inline void osc_pack_capa(struct ptlrpc_request *req,
