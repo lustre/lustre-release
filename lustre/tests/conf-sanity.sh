@@ -2807,6 +2807,42 @@ test_65() { # LU-2237
 }
 run_test 65 "re-create the lost last_rcvd file when server mount"
 
+test_66() { #LU-2634
+	local mdsdev=$(mdsdevname 1)
+	local ostdev=$(ostdevname 1)
+	local cmd="$E2FSCK -fnvd $mdsdev"
+	local fn=3
+
+	#tune MDT with "-O extents"
+	add $SINGLEMDS \
+		$(mkfs_opts $SINGLEMDS ${mdsdev}) --reformat $mdsdev ||
+			error "add $SINGLEMDS failed"
+	$TUNE2FS -O extents $mdsdev
+	add ost1 $(mkfs_opts ost1 $ostdev) --reformat $ostdev ||
+		error "add $ostdev failed"
+	start_mgsmds || error "start mds failed"
+	start_ost || error "start ost failed"
+	mount_client $MOUNT || error "mount client failed"
+
+	#create some short symlinks
+	mkdir -p $DIR/$tdir
+	createmany -o $DIR/$tdir/$tfile-%d $fn
+	echo "create $fn short symlinks"
+	for i in $(seq -w 1 $fn); do
+		ln -s $DIR/$tdir/$tfile-$i $MOUNT/$tfile-$i
+	done
+	ls -al $MOUNT
+
+	#umount
+	umount_client $MOUNT || error "umount client failed"
+	stop_mds || error "stop mds failed"
+	stop_ost || error "stop ost failed"
+
+	#run e2fsck
+	run_e2fsck $(facet_active_host $SINGLEMDS) $mdsdev "-n"
+}
+run_test 66 "test fast symlink with extents flag enabled"
+
 if ! combined_mgs_mds ; then
 	stop mgs
 fi
