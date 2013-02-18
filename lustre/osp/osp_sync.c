@@ -316,25 +316,15 @@ int osp_sync_gap(const struct lu_env *env, struct osp_device *d,
 static void osp_sync_request_commit_cb(struct ptlrpc_request *req)
 {
 	struct osp_device *d = req->rq_cb_data;
-	struct obd_import *imp = req->rq_import;
 
 	CDEBUG(D_HA, "commit req %p, transno "LPU64"\n", req, req->rq_transno);
 
 	if (unlikely(req->rq_transno == 0))
 		return;
 
-	if (unlikely(req->rq_transno > imp->imp_peer_committed_transno)) {
-		/* this request was aborted by the shutdown procedure,
-		 * not committed by the peer.  we should preserve llog
-		 * record */
-		spin_lock(&d->opd_syn_lock);
-		d->opd_syn_rpc_in_progress--;
-		spin_unlock(&d->opd_syn_lock);
-		cfs_waitq_signal(&d->opd_syn_waitq);
-		return;
-	}
+	/* do not do any opd_dyn_rpc_* accounting here
+	 * it's done in osp_sync_interpret sooner or later */
 
-	/* XXX: what if request isn't committed for very long? */
 	LASSERT(d);
 	LASSERT(req->rq_svc_thread == (void *) OSP_JOB_MAGIC);
 	LASSERT(cfs_list_empty(&req->rq_exp_list));
@@ -354,7 +344,6 @@ static int osp_sync_interpret(const struct lu_env *env,
 {
 	struct osp_device *d = req->rq_cb_data;
 
-	/* XXX: error handling here */
 	if (req->rq_svc_thread != (void *) OSP_JOB_MAGIC)
 		DEBUG_REQ(D_ERROR, req, "bad magic %p\n", req->rq_svc_thread);
 	LASSERT(req->rq_svc_thread == (void *) OSP_JOB_MAGIC);
@@ -390,11 +379,11 @@ static int osp_sync_interpret(const struct lu_env *env,
 			 "transno "LPU64", rc %d, gen: req %d, imp %d\n",
 			 req->rq_transno, rc, req->rq_import_generation,
 			 imp->imp_generation);
-		LASSERT(d->opd_syn_rpc_in_progress > 0);
 		if (req->rq_transno == 0) {
 			/* this is the last time we see the request
 			 * if transno is not zero, then commit cb
 			 * will be called at some point */
+			LASSERT(d->opd_syn_rpc_in_progress > 0);
 			spin_lock(&d->opd_syn_lock);
 			d->opd_syn_rpc_in_progress--;
 			spin_unlock(&d->opd_syn_lock);
