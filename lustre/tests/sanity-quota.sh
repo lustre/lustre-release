@@ -49,6 +49,10 @@ if [ $(facet_fstype $SINGLEMDS) == ldiskfs ] && \
 	skip "e2fsprogs doesn't support quota" && exit 0
 fi
 
+[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
+# bug number for skipped test:        LU-2836 LU-2837 LU-2059
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 3       6       7d"
+
 [ "$SLOW" = "no" ] && EXCEPT_SLOW="9 18 21"
 
 QUOTALOG=${TESTSUITELOG:-$TMP/$(basename $0 .sh).log}

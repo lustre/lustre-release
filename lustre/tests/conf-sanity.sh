@@ -9,8 +9,8 @@ set -e
 
 ONLY=${ONLY:-"$*"}
 
-# bug number for skipped test:
-ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT"
+# bug number for skipped test:     LU-2828
+ALWAYS_EXCEPT="$CONF_SANITY_EXCEPT 59 64"
 # UPDATE THE COMMENT ABOVE WITH BUG NUMBERS WHEN CHANGING ALWAYS_EXCEPT!
 
 is_sles11()						# LU-2181
@@ -74,6 +74,10 @@ fi
 if [[ "$LDISKFS_MKFS_OPTS" != *lazy_itable_init* ]]; then
 	LDISKFS_MKFS_OPTS=$(csa_add "$LDISKFS_MKFS_OPTS" -E lazy_itable_init)
 fi
+
+[ $(facet_fstype $SINGLEMDS) = "zfs" ] &&
+# bug number for skipped test:        LU-2778 LU-2059
+	ALWAYS_EXCEPT="$ALWAYS_EXCEPT 57b     50h"
 
 init_logging
 
